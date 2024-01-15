@@ -45,8 +45,7 @@ body.main2: [regular, 23:0-23:10] {
     ['background-position-x':'initial !important' is-important] @[undefined-undefined] 
     ['background-position-y':'initial !important' is-important] @[undefined-undefined] 
     ['background-size':'initial !important' is-important] @[undefined-undefined] 
-    ['background-repeat-x':'initial !important' is-important] @[undefined-undefined] 
-    ['background-repeat-y':'initial !important' is-important] @[undefined-undefined] 
+    ['background-repeat':'initial !important' is-important] @[undefined-undefined] 
     ['background-attachment':'initial !important' is-important] @[undefined-undefined] 
     ['background-origin':'initial !important' is-important] @[undefined-undefined] 
     ['background-clip':'initial !important' is-important] @[undefined-undefined] 
@@ -77,6 +76,9 @@ Level=1
 [NO STYLE]
 html: [user-agent] {
     ['display':'block'] @[undefined-undefined] 
+}
+:root: [user-agent] {
+    ['view-transition-name':'root'] @[undefined-undefined] 
 }
 html: [regular, 4:0-4:4] {
     ['font-weight':'400'] @[5:4-5:21] 
@@ -131,8 +133,7 @@ body.main2: [regular, 23:0-23:10] {
     ['background-position-x':'initial !important' is-important] @[undefined-undefined] 
     ['background-position-y':'initial !important' is-important] @[undefined-undefined] 
     ['background-size':'initial !important' is-important] @[undefined-undefined] 
-    ['background-repeat-x':'initial !important' is-important] @[undefined-undefined] 
-    ['background-repeat-y':'initial !important' is-important] @[undefined-undefined] 
+    ['background-repeat':'initial !important' is-important] @[undefined-undefined] 
     ['background-attachment':'initial !important' is-important] @[undefined-undefined] 
     ['background-origin':'initial !important' is-important] @[undefined-undefined] 
     ['background-clip':'initial !important' is-important] @[undefined-undefined] 
@@ -171,8 +172,7 @@ p: [user-agent] {
     ['background-position-x':'initial'] @[undefined-undefined] 
     ['background-position-y':'initial'] @[undefined-undefined] 
     ['background-size':'initial'] @[undefined-undefined] 
-    ['background-repeat-x':'initial'] @[undefined-undefined] 
-    ['background-repeat-y':'initial'] @[undefined-undefined] 
+    ['background-repeat':'initial'] @[undefined-undefined] 
     ['background-attachment':'initial'] @[undefined-undefined] 
     ['background-origin':'initial'] @[undefined-undefined] 
     ['background-clip':'initial'] @[undefined-undefined] 
@@ -243,8 +243,7 @@ body.main2: [regular, 23:0-23:10] {
     ['background-position-x':'initial !important' is-important] @[undefined-undefined] 
     ['background-position-y':'initial !important' is-important] @[undefined-undefined] 
     ['background-size':'initial !important' is-important] @[undefined-undefined] 
-    ['background-repeat-x':'initial !important' is-important] @[undefined-undefined] 
-    ['background-repeat-y':'initial !important' is-important] @[undefined-undefined] 
+    ['background-repeat':'initial !important' is-important] @[undefined-undefined] 
     ['background-attachment':'initial !important' is-important] @[undefined-undefined] 
     ['background-origin':'initial !important' is-important] @[undefined-undefined] 
     ['background-clip':'initial !important' is-important] @[undefined-undefined] 

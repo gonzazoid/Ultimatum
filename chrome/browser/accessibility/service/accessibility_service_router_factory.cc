@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/accessibility/service/accessibility_service_router_factory.h"
 #include "chrome/browser/accessibility/service/accessibility_service_router.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "content/public/browser/browser_context.h"
 
 namespace ax {
@@ -25,16 +25,33 @@ AccessibilityServiceRouterFactory::GetInstance() {
 }
 
 AccessibilityServiceRouterFactory::AccessibilityServiceRouterFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AccessibilityService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              // TODO(b/262637071): Ensure A11yService can run on all profiles,
+              // there should be no UI surface that doesn't allow the
+              // A11yService, as it is required to run A11y features like
+              // ChromeVox.
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .WithSystem(ProfileSelection::kOriginalOnly)
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 AccessibilityServiceRouterFactory::~AccessibilityServiceRouterFactory() =
     default;
 
-KeyedService* AccessibilityServiceRouterFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AccessibilityServiceRouterFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new AccessibilityServiceRouter();
+  return std::make_unique<AccessibilityServiceRouter>();
+}
+
+// static
+void AccessibilityServiceRouterFactory::EnsureFactoryBuilt() {
+  GetInstance();
 }
 
 }  // namespace ax

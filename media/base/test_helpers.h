@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -95,32 +95,37 @@ class TestVideoConfig {
   // Returns a configuration that is invalid.
   static VideoDecoderConfig Invalid();
 
-  static VideoDecoderConfig Normal(VideoCodec codec = VideoCodec::kVP8);
+  static VideoDecoderConfig Normal(VideoCodec codec = VideoCodec::kAV1);
   static VideoDecoderConfig NormalWithColorSpace(
       VideoCodec codec,
       const VideoColorSpace& color_space);
   static VideoDecoderConfig NormalH264(VideoCodecProfile = H264PROFILE_MIN);
   static VideoDecoderConfig NormalCodecProfile(
-      VideoCodec codec = VideoCodec::kVP8,
+      VideoCodec codec = VideoCodec::kAV1,
       VideoCodecProfile profile = VP8PROFILE_MIN);
-  static VideoDecoderConfig NormalEncrypted(VideoCodec codec = VideoCodec::kVP8,
-                                            VideoCodecProfile = VP8PROFILE_MIN);
+  static VideoDecoderConfig NormalEncrypted(
+      VideoCodec codec = VideoCodec::kAV1);
+  static VideoDecoderConfig NormalEncrypted(VideoCodec codec,
+                                            VideoCodecProfile);
   static VideoDecoderConfig NormalRotated(VideoRotation rotation);
+  static VideoDecoderConfig NormalHdr(VideoCodec codec = VideoCodec::kAV1);
+  static VideoDecoderConfig NormalHdrEncrypted(
+      VideoCodec codec = VideoCodec::kAV1);
 
   // Returns a configuration that is larger in dimensions than Normal().
-  static VideoDecoderConfig Large(VideoCodec codec = VideoCodec::kVP8);
-  static VideoDecoderConfig LargeEncrypted(VideoCodec codec = VideoCodec::kVP8);
+  static VideoDecoderConfig Large(VideoCodec codec = VideoCodec::kAV1);
+  static VideoDecoderConfig LargeEncrypted(VideoCodec codec = VideoCodec::kAV1);
 
   // Returns a configuration that is larger in dimensions that Large().
-  static VideoDecoderConfig ExtraLarge(VideoCodec codec = VideoCodec::kVP8);
+  static VideoDecoderConfig ExtraLarge(VideoCodec codec = VideoCodec::kAV1);
   static VideoDecoderConfig ExtraLargeEncrypted(
-      VideoCodec codec = VideoCodec::kVP8);
+      VideoCodec codec = VideoCodec::kAV1);
 
   static VideoDecoderConfig Custom(gfx::Size size,
-                                   VideoCodec codec = VideoCodec::kVP8);
+                                   VideoCodec codec = VideoCodec::kAV1);
   static VideoDecoderConfig CustomEncrypted(
       gfx::Size size,
-      VideoCodec codec = VideoCodec::kVP8);
+      VideoCodec codec = VideoCodec::kAV1);
 
   // Returns coded size for Normal and Large config.
   static gfx::Size NormalCodedSize();
@@ -227,6 +232,16 @@ scoped_refptr<DecoderBuffer> CreateFakeVideoBufferForTest(
     base::TimeDelta timestamp,
     base::TimeDelta duration);
 
+// Create a mismatched DecoderBuffer to verify in unit tests that we error
+// out and do not continue to decode or decrypt if subsamples do not match.
+scoped_refptr<DecoderBuffer> CreateMismatchedBufferForTest();
+
+// Create fake encrypted buffer for testing purposes.
+scoped_refptr<DecoderBuffer> CreateFakeEncryptedBuffer();
+
+// Create fake clear buffer for testing purposes.
+scoped_refptr<DecoderBuffer> CreateClearBuffer();
+
 // Verify if a fake video DecoderBuffer is valid.
 bool VerifyFakeVideoBufferForTest(const DecoderBuffer& buffer,
                                   const VideoDecoderConfig& config);
@@ -270,13 +285,19 @@ MATCHER_P(DecoderConfigEq, config, "") {
   return arg.Matches(config);
 }
 
-MATCHER_P(HasTimestamp, timestamp_in_ms, "") {
-  return arg.get() && !arg->end_of_stream() &&
-         arg->timestamp().InMilliseconds() == timestamp_in_ms;
+MATCHER_P(ReadOneAndHasTimestamp, timestamp_in_ms, "") {
+  DCHECK_EQ(arg.size(), 1u);
+  return !arg[0]->end_of_stream() &&
+         arg[0]->timestamp().InMilliseconds() == timestamp_in_ms;
 }
 
-MATCHER(IsEndOfStream, "") {
-  return arg.get() && arg->end_of_stream();
+MATCHER(ReadOneAndIsEndOfStream, "") {
+  DCHECK_EQ(arg.size(), 1u);
+  return arg[0]->end_of_stream();
+}
+
+MATCHER(IsEmpty, "") {
+  return arg.empty();
 }
 
 MATCHER(EosBeforeHaveMetadata, "") {
@@ -556,6 +577,10 @@ MATCHER_P(FrameEndTimestampOutOfRange, frame_type, "") {
   return CONTAINS_STRING(arg,
                          "Frame end timestamp for " + std::string(frame_type) +
                              " frame exceeds range allowed by implementation");
+}
+
+MATCHER(HlsDemuxerCtor, "") {
+  return CONTAINS_STRING(arg, "HlsDemuxer");
 }
 
 }  // namespace media

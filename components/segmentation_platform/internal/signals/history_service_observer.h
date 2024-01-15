@@ -26,13 +26,14 @@ class HistoryServiceObserver : public history::HistoryServiceObserver {
  public:
   HistoryServiceObserver(history::HistoryService* history_service,
                          StorageService* storage_service,
+                         const std::string& profile_id,
                          base::RepeatingClosure models_refresh_callback);
   // For tests.
   HistoryServiceObserver();
   ~HistoryServiceObserver() override;
 
-  HistoryServiceObserver(HistoryServiceObserver&) = delete;
-  HistoryServiceObserver& operator=(HistoryServiceObserver&) = delete;
+  HistoryServiceObserver(const HistoryServiceObserver&) = delete;
+  HistoryServiceObserver& operator=(const HistoryServiceObserver&) = delete;
 
   // history::HistoryServiceObserver impl:
   void OnURLVisited(history::HistoryService* history_service,
@@ -43,7 +44,7 @@ class HistoryServiceObserver : public history::HistoryServiceObserver {
 
   // Sets the list of segment IDs that are based on history data.
   virtual void SetHistoryBasedSegments(
-      base::flat_set<proto::SegmentId>&& history_based_segments);
+      base::flat_set<proto::SegmentId> history_based_segments);
 
  private:
   void DeleteResultsForHistoryBasedSegments();
@@ -59,6 +60,7 @@ class HistoryServiceObserver : public history::HistoryServiceObserver {
   base::RepeatingClosure models_refresh_callback_;
   std::unique_ptr<base::CancelableOnceClosure> posted_model_refresh_task_;
 
+  const std::string profile_id_;
   std::unique_ptr<HistoryDelegateImpl> history_delegate_;
   base::ScopedObservation<history::HistoryService,
                           history::HistoryServiceObserver>

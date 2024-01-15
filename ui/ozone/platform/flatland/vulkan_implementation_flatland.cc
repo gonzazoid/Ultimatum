@@ -10,9 +10,9 @@
 #include <memory>
 #include <tuple>
 
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/callback_helpers.h"
 #include "gpu/ipc/common/vulkan_ycbcr_info.h"
 #include "gpu/vulkan/fuchsia/vulkan_fuchsia_ext.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
@@ -73,7 +73,6 @@ bool VulkanImplementationFlatland::GetPhysicalDevicePresentationSupport(
 std::vector<const char*>
 VulkanImplementationFlatland::GetRequiredDeviceExtensions() {
   std::vector<const char*> result = {
-      VK_FUCHSIA_BUFFER_COLLECTION_EXTENSION_NAME,
       VK_FUCHSIA_EXTERNAL_MEMORY_EXTENSION_NAME,
       VK_FUCHSIA_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
       VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
@@ -82,8 +81,13 @@ VulkanImplementationFlatland::GetRequiredDeviceExtensions() {
       VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
       VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
       VK_KHR_MAINTENANCE1_EXTENSION_NAME,
-      VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
   };
+
+  // Following extensions are not supported by Swiftshader.
+  if (!use_swiftshader()) {
+    result.push_back(VK_FUCHSIA_BUFFER_COLLECTION_EXTENSION_NAME);
+    result.push_back(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME);
+  }
 
   return result;
 }
@@ -106,29 +110,9 @@ VulkanImplementationFlatland::ExportVkFenceToGpuFence(VkDevice vk_device,
   return nullptr;
 }
 
-VkSemaphore VulkanImplementationFlatland::CreateExternalSemaphore(
-    VkDevice vk_device) {
-  return gpu::CreateExternalVkSemaphore(
-      vk_device, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA);
-}
-
-VkSemaphore VulkanImplementationFlatland::ImportSemaphoreHandle(
-    VkDevice vk_device,
-    gpu::SemaphoreHandle handle) {
-  return gpu::ImportVkSemaphoreHandle(vk_device, std::move(handle));
-}
-
-gpu::SemaphoreHandle VulkanImplementationFlatland::GetSemaphoreHandle(
-    VkDevice vk_device,
-    VkSemaphore vk_semaphore) {
-  return gpu::GetVkSemaphoreHandle(
-      vk_device, vk_semaphore,
-      VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA);
-}
-
-VkExternalMemoryHandleTypeFlagBits
-VulkanImplementationFlatland::GetExternalImageHandleType() {
-  return VK_EXTERNAL_MEMORY_HANDLE_TYPE_ZIRCON_VMO_BIT_FUCHSIA;
+VkExternalSemaphoreHandleTypeFlagBits
+VulkanImplementationFlatland::GetExternalSemaphoreHandleType() {
+  return VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_ZIRCON_EVENT_BIT_FUCHSIA;
 }
 
 bool VulkanImplementationFlatland::CanImportGpuMemoryBuffer(

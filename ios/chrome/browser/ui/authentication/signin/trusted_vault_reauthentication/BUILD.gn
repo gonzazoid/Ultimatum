@@ -5,7 +5,6 @@
 import("//build/config/chrome_build.gni")
 
 source_set("trusted_vault_reauthentication") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "trusted_vault_reauthentication_coordinator.h",
     "trusted_vault_reauthentication_coordinator.mm",
@@ -14,11 +13,11 @@ source_set("trusted_vault_reauthentication") {
     "//components/strings",
     "//components/sync",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/signin:trusted_vault",
-    "//ios/chrome/browser/signin:trusted_vault_factory",
-    "//ios/chrome/browser/ui/alert_coordinator",
+    "//ios/chrome/browser/shared/coordinator/alert",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:trusted_vault",
+    "//ios/chrome/browser/signin/model:trusted_vault_factory",
     "//ios/chrome/browser/ui/authentication/signin:signin_protected",
     "//ui/base",
   ]
@@ -27,22 +26,22 @@ source_set("trusted_vault_reauthentication") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [ "trusted_vault_reauthentication_coordinator_unittest.mm" ]
   deps = [
     ":trusted_vault_reauthentication",
     "//base/test:test_support",
-    "//components/sync/driver",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/main:test_support",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/signin:fake_system_identity",
-    "//ios/chrome/browser/signin:test_support",
-    "//ios/chrome/browser/signin:trusted_vault_factory",
+    "//components/sync/service",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:fake_system_identity",
+    "//ios/chrome/browser/signin/model:fake_system_identity_manager",
+    "//ios/chrome/browser/signin/model:test_support",
+    "//ios/chrome/browser/signin/model:trusted_vault_factory",
     "//ios/chrome/test:test_support",
     "//ios/chrome/test/providers/signin:trusted_vault",
-    "//ios/public/provider/chrome/browser/signin:test_support",
     "//ios/web/common:uikit",
     "//ios/web/public/test",
     "//testing/gmock",

@@ -3,12 +3,14 @@
 // found in the LICENSE file.
 
 #include <algorithm>
+#include <string>
 #include <tuple>
 
 #include "base/json/json_reader.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/trace_event_analyzer.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/webrtc/webrtc_browsertest_base.h"
 #include "chrome/browser/media/webrtc/webrtc_browsertest_common.h"
@@ -116,58 +118,6 @@ void AssociateEvents(trace_analyzer::TraceAnalyzer* analyzer,
   }
 }
 
-content::WebContents* OpenWebrtcInternalsTab(Browser* browser) {
-  chrome::AddTabAt(browser, GURL(url::kAboutBlankURL), -1, true);
-  EXPECT_TRUE(
-      ui_test_utils::NavigateToURL(browser, GURL("chrome://webrtc-internals")));
-  return browser->tab_strip_model()->GetActiveWebContents();
-}
-
-std::vector<double> ParseGoogMaxDecodeFromWebrtcInternalsTab(
-    const std::string& webrtc_internals_stats_json) {
-  std::vector<double> goog_decode_ms;
-
-  absl::optional<base::Value> parsed_json =
-      base::JSONReader::Read(webrtc_internals_stats_json);
-  if (!parsed_json || !parsed_json->is_dict())
-    return goog_decode_ms;
-  const base::Value::Dict& dictionary = parsed_json->GetDict();
-
-  // |dictionary| should have exactly two entries, one per ssrc.
-  if (dictionary.size() != 2u)
-    return goog_decode_ms;
-
-  // Only a given |dictionary| entry will have a "stats" entry that has a key
-  // that ends with "recv-googMaxDecodeMs" inside (it will start with the ssrc
-  // id, but we don't care about that). Then collect the string of "values" out
-  // of that key and convert those into the |goog_decode_ms| vector of doubles.
-  for (auto dictionary_entry : dictionary) {
-    for (auto ssrc_entry : dictionary_entry.second.GetDict()) {
-      if (ssrc_entry.first != "stats")
-        continue;
-
-      for (auto stat_entry : ssrc_entry.second.GetDict()) {
-        if (!base::EndsWith(stat_entry.first, "recv-googMaxDecodeMs",
-                            base::CompareCase::SENSITIVE)) {
-          continue;
-        }
-        const base::Value* values_entry = stat_entry.second.FindKey({"values"});
-        if (!values_entry)
-          continue;
-        base::StringTokenizer values_tokenizer(values_entry->GetString(),
-                                               "[,]");
-        while (values_tokenizer.GetNext()) {
-          if (values_tokenizer.token_is_delim())
-            continue;
-          goog_decode_ms.push_back(atof(values_tokenizer.token().c_str()) *
-                                   base::Time::kMicrosecondsPerMillisecond);
-        }
-      }
-    }
-  }
-  return goog_decode_ms;
-}
-
 }  // anonymous namespace
 
 // Tests the performance of Chrome displaying remote video.
@@ -212,13 +162,6 @@ class WebRtcVideoDisplayPerfBrowserTest
 
   void TestVideoDisplayPerf(const std::string& video_codec) {
     ASSERT_TRUE(embedded_test_server()->Start());
-    // chrome:webrtc-internals doesn't start tracing anything until the
-    // connection(s) are up.
-    content::WebContents* webrtc_internals_tab =
-        OpenWebrtcInternalsTab(browser());
-    EXPECT_TRUE(content::ExecuteScript(
-        webrtc_internals_tab,
-        "currentGetStatsMethod = OPTION_GETSTATS_LEGACY"));
 
     content::WebContents* left_tab =
         OpenPageAndGetUserMediaInNewTabWithConstraints(
@@ -260,14 +203,6 @@ class WebRtcVideoDisplayPerfBrowserTest
     ASSERT_TRUE(tracing::BeginTracing("media,viz,webrtc"));
     // Run the connection for 5 seconds to collect metrics.
     test::SleepInJavascript(left_tab, 5000);
-
-    const std::string webrtc_internals_stats_json = ExecuteJavascript(
-        "window.domAutomationController.send("
-        "    JSON.stringify(peerConnectionDataStore));",
-        webrtc_internals_tab);
-    webrtc_decode_latencies_ =
-        ParseGoogMaxDecodeFromWebrtcInternalsTab(webrtc_internals_stats_json);
-    chrome::CloseWebContents(browser(), webrtc_internals_tab, false);
 
     std::string json_events;
     ASSERT_TRUE(tracing::EndTracing(&json_events));
@@ -438,8 +373,6 @@ class WebRtcVideoDisplayPerfBrowserTest
 
     PrintMeanAndMax("Post-decode-to-raster latency", name_modifier,
                     video_frame_submmitter_latencies_);
-    PrintMeanAndMax("WebRTC decode latency", name_modifier,
-                    webrtc_decode_latencies_);
   }
 
   VideoDisplayPerfTestConfig test_config_;
@@ -456,7 +389,6 @@ class WebRtcVideoDisplayPerfBrowserTest
   // These two put together represent the whole delay from encoded video frames
   // to OS swap buffers call (or callback, depending on the platform).
   std::vector<double> video_frame_submmitter_latencies_;
-  std::vector<double> webrtc_decode_latencies_;
 };
 
 INSTANTIATE_TEST_SUITE_P(WebRtcVideoDisplayPerfBrowserTests,

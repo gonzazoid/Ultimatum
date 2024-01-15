@@ -2,31 +2,25 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-source_set("infobar_banner") {
-  public = [ "infobar_banner_supported_overlay_coordinator_classes.h" ]
-  sources = [ "infobar_banner_supported_overlay_coordinator_classes.mm" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
-
-  deps = [
-    ":coordinators",
-    "//ios/chrome/browser/ui/overlays/infobar_banner/translate:coordinators",
-  ]
-}
-
 source_set("coordinators") {
   sources = [
+    "features.h",
+    "features.mm",
     "infobar_banner_overlay_coordinator.h",
     "infobar_banner_overlay_coordinator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":mediators",
     "//base",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/common/infobars",
+    "//ios/chrome/browser/infobars/model",
+    "//ios/chrome/browser/infobars/model:public",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/common/infobars",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/shared/coordinator/layout_guide",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/infobars:constants",
     "//ios/chrome/browser/ui/infobars/banners",
     "//ios/chrome/browser/ui/infobars/presentation",
@@ -34,14 +28,14 @@ source_set("coordinators") {
     "//ios/chrome/browser/ui/overlays:util",
     "//ios/chrome/browser/ui/overlays/infobar_banner/autofill_address_profile",
     "//ios/chrome/browser/ui/overlays/infobar_banner/confirm",
+    "//ios/chrome/browser/ui/overlays/infobar_banner/parcel_tracking",
     "//ios/chrome/browser/ui/overlays/infobar_banner/passwords",
     "//ios/chrome/browser/ui/overlays/infobar_banner/permissions",
-    "//ios/chrome/browser/ui/overlays/infobar_banner/reading_list",
     "//ios/chrome/browser/ui/overlays/infobar_banner/save_card",
     "//ios/chrome/browser/ui/overlays/infobar_banner/sync_error",
+    "//ios/chrome/browser/ui/overlays/infobar_banner/tab_pickup",
     "//ios/chrome/browser/ui/overlays/infobar_banner/tailored_security",
     "//ios/chrome/browser/ui/overlays/infobar_banner/translate:mediators",
-    "//ios/chrome/browser/ui/util",
   ]
 }
 
@@ -52,13 +46,11 @@ source_set("mediators") {
     "infobar_banner_overlay_mediator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
     "//components/infobars/core",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
     "//ios/chrome/browser/ui/infobars/banners",
     "//ios/chrome/browser/ui/infobars/banners:public",
     "//ios/chrome/browser/ui/overlays:coordinators",
@@ -69,15 +61,13 @@ source_set("unit_tests") {
   testonly = true
   sources = [ "infobar_banner_overlay_mediator_unittest.mm" ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":mediators",
     "//components/infobars/core",
-    "//ios/chrome/browser/infobars/test",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/overlays/test",
+    "//ios/chrome/browser/infobars/model/test",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model/test",
     "//ios/chrome/browser/ui/overlays/test",
     "//testing/gmock",
     "//testing/gtest",

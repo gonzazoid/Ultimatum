@@ -8,18 +8,24 @@
 #include <memory>
 #include <vector>
 
+#include "ash/assistant/ui/main_stage/launcher_search_iph_view.h"
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/public/cpp/ash_typography.h"
+#include "ash/public/cpp/style/color_provider.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "ash/style/ash_color_id.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/strcat.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/base/ime/text_input_flags.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/events/event.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
-#include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -35,10 +41,13 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
+#include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/layout_provider.h"
+#include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
@@ -50,8 +59,6 @@ constexpr base::TimeDelta kSearchIconAnimationDuration =
     base::Milliseconds(150);
 
 constexpr int kInnerPadding = 16;
-
-constexpr int kFocusBorderThickness = 2;
 
 // Padding to make autocomplete ghost text line up with search box text.
 constexpr gfx::Insets kGhostTextLabelPadding = gfx::Insets::TLBR(0, 0, 1, 0);
@@ -79,14 +86,17 @@ constexpr base::TimeDelta kButtonFadeInDuration = base::Milliseconds(100);
 
 void SetupLabelView(views::Label* label,
                     const gfx::FontList& font_list,
-                    gfx::Insets border_insets) {
+                    gfx::Insets border_insets,
+                    ui::ColorId color_id) {
   label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   label->GetViewAccessibility().OverrideIsIgnored(true);
   label->SetBackgroundColor(SK_ColorTRANSPARENT);
+  label->SetAutoColorReadabilityEnabled(false);
+  label->SetEnabledColorId(color_id);
+  label->SetFontList(font_list);
   label->SetVisible(true);
   label->SetElideBehavior(gfx::ELIDE_TAIL);
   label->SetMultiLine(false);
-  label->SetFontList(font_list);
   label->SetBorder(views::CreateEmptyBorder(border_insets));
 }
 
@@ -123,26 +133,20 @@ class SearchBoxBackground : public views::Background {
 // To paint grey background on mic and back buttons, and close buttons for
 // fullscreen launcher.
 class SearchBoxImageButton : public views::ImageButton {
+  METADATA_HEADER(SearchBoxImageButton, views::ImageButton)
+
  public:
   explicit SearchBoxImageButton(PressedCallback callback)
       : ImageButton(std::move(callback)) {
     SetFocusBehavior(FocusBehavior::ALWAYS);
 
-    // Avoid drawing default dashed focus and draw customized focus in
-    // OnPaintBackground();
-    SetInstallFocusRingOnFocus(false);
-
-    // Inkdrop only on click.
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
     SetHasInkDropActionOnClick(true);
     views::InkDrop::UseInkDropForFloodFillRipple(views::InkDrop::Get(this),
-                                                 /*highlight_on_hover=*/false);
+                                                 /*highlight_on_hover=*/true);
 
-    SetPaintToLayer();
-    layer()->SetFillsBoundsOpaquely(false);
-
-    SetPreferredSize(gfx::Size(kClassicSearchBoxButtonSizeDip,
-                               kClassicSearchBoxButtonSizeDip));
+    SetPreferredSize(gfx::Size(kBubbleLauncherSearchBoxButtonSizeDip,
+                               kBubbleLauncherSearchBoxButtonSizeDip));
     SetImageHorizontalAlignment(ALIGN_CENTER);
     SetImageVerticalAlignment(ALIGN_MIDDLE);
 
@@ -176,56 +180,29 @@ class SearchBoxImageButton : public views::ImageButton {
     SchedulePaint();
   }
 
-  void OnThemeChanged() override {
-    views::View::OnThemeChanged();
-    UpdateInkDropColors();
+  void UpdateInkDropColorAndOpacity(SkColor background_color) {
+    const std::pair<SkColor, float> base_color_and_opacity =
+        ash::ColorProvider::Get()->GetInkDropBaseColorAndOpacity(
+            background_color);
+    auto* ink_drop = views::InkDrop::Get(this);
+    ink_drop->SetBaseColor(base_color_and_opacity.first);
+    ink_drop->SetVisibleOpacity(base_color_and_opacity.second);
   }
-
-  void set_is_showing(bool is_showing) { is_showing_ = is_showing; }
-  bool is_showing() { return is_showing_; }
 
  private:
   int GetButtonRadius() const { return width() / 2; }
-
-  // Whether the button is showing/shown or hiding/hidden.
-  bool is_showing_ = false;
-
-  void UpdateInkDropColors() {
-    const views::Widget* app_list_widget = GetWidget();
-    SkColor search_box_card_background_color =
-        AppListColorProvider::Get()->GetSearchBoxCardBackgroundColor(
-            app_list_widget);
-
-    views::InkDrop::Get(this)->SetBaseColor(
-        AppListColorProvider::Get()->GetInkDropBaseColor(
-            app_list_widget, search_box_card_background_color));
-    views::InkDrop::Get(this)->SetVisibleOpacity(
-        AppListColorProvider::Get()->GetInkDropOpacity(
-            app_list_widget, search_box_card_background_color));
-  }
-
-  // views::View:
-  void OnPaintBackground(gfx::Canvas* canvas) override {
-    if (HasFocus()) {
-      cc::PaintFlags circle_flags;
-      circle_flags.setAntiAlias(true);
-      circle_flags.setColor(
-          AppListColorProvider::Get()->GetFocusRingColor(GetWidget()));
-      circle_flags.setStyle(cc::PaintFlags::kStroke_Style);
-      circle_flags.setStrokeWidth(kFocusBorderThickness);
-      canvas->DrawCircle(GetLocalBounds().CenterPoint(),
-                         GetButtonRadius() - kFocusBorderThickness,
-                         circle_flags);
-    }
-  }
-
-  const char* GetClassName() const override { return "SearchBoxImageButton"; }
 };
+
+BEGIN_METADATA(SearchBoxImageButton)
+END_METADATA
 
 // To show context menu of selected view instead of that of focused view which
 // is always this view when the user uses keyboard shortcut to open context
 // menu.
 class SearchBoxTextfield : public views::Textfield {
+  // TODO (kylixrd): Add metadata here once the Tast tests are updated.
+  // METADATA_HEADER(SearchBoxTextfield, views::Textfield)
+
  public:
   explicit SearchBoxTextfield(SearchBoxViewBase* search_box_view)
       : search_box_view_(search_box_view) {}
@@ -295,14 +272,22 @@ class SearchBoxTextfield : public views::Textfield {
   }
 
  private:
-  SearchBoxViewBase* const search_box_view_;
+  const raw_ptr<SearchBoxViewBase> search_box_view_;
 };
+
+// TODO (kylixrd): Enable the following once tast-tests are fixed. Metadata
+// on this class causes failures since the return value of GetClassName() no
+// longer lies and returns the correct class name.
+// BEGIN_METADATA(SearchBoxTextfield)
+// END_METADATA
 
 // Used to animate the transition between icon images. When a new icon is set,
 // this view will temporarily store the layer of the previous icon and animate
 // its opacity to fade out, while keeping the correct bounds for the fading out
 // layer. At the same time the new icon will fade in.
 class SearchIconImageView : public views::ImageView {
+  METADATA_HEADER(SearchIconImageView, views::ImageView)
+
  public:
   SearchIconImageView() = default;
 
@@ -365,6 +350,9 @@ class SearchIconImageView : public views::ImageView {
   base::WeakPtrFactory<SearchIconImageView> weak_factory_{this};
 };
 
+BEGIN_METADATA(SearchIconImageView)
+END_METADATA
+
 SearchBoxViewBase::InitParams::InitParams() = default;
 
 SearchBoxViewBase::InitParams::~InitParams() = default;
@@ -376,7 +364,15 @@ SearchBoxViewBase::SearchBoxViewBase()
   const int between_child_spacing =
       kInnerPadding - views::LayoutProvider::Get()->GetDistanceMetric(
                           views::DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING);
-  content_container_ = AddChildView(std::make_unique<views::BoxLayoutView>());
+  main_container_ = AddChildView(std::make_unique<views::BoxLayoutView>());
+  main_container_->SetOrientation(views::BoxLayout::Orientation::kVertical);
+  main_container_->SetCrossAxisAlignment(
+      views::BoxLayout::CrossAxisAlignment::kStretch);
+  main_container_->SetMainAxisAlignment(
+      views::BoxLayout::MainAxisAlignment::kCenter);
+
+  content_container_ =
+      main_container_->AddChildView(std::make_unique<views::BoxLayoutView>());
   content_container_->SetCrossAxisAlignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
   content_container_->SetMinimumCrossAxisSize(kSearchBoxPreferredHeight);
@@ -392,13 +388,12 @@ SearchBoxViewBase::SearchBoxViewBase()
   search_icon_->layer()->SetFillsBoundsOpaquely(false);
 
   search_box_->SetBorder(views::NullBorder());
-  search_box_->SetTextColor(kSearchTextColor);
   search_box_->SetBackgroundColor(SK_ColorTRANSPARENT);
   search_box_->set_controller(this);
   search_box_->SetTextInputType(ui::TEXT_INPUT_TYPE_SEARCH);
   search_box_->SetTextInputFlags(ui::TEXT_INPUT_FLAG_AUTOCORRECT_OFF);
   auto font_list = search_box_->GetFontList().DeriveWithSizeDelta(2);
-  search_box_->SetFontList(font_list);
+  SetPreferredStyleForSearchboxText(font_list, kSearchTextColor);
   search_box_->SetCursorEnabled(is_search_box_active_);
 
   text_container_ = content_container_->AddChildView(
@@ -407,9 +402,10 @@ SearchBoxViewBase::SearchBoxViewBase()
       views::BoxLayout::CrossAxisAlignment::kCenter);
   text_container_->SetMinimumCrossAxisSize(kSearchBoxPreferredHeight);
   text_container_->SetOrientation(views::BoxLayout::Orientation::kHorizontal);
-  content_container_->SetFlexForView(text_container_, 1, true);
+  content_container_->SetFlexForView(text_container_, 1,
+                                     /*use_min_size=*/false);
 
-  text_container_->AddChildView(search_box_);
+  text_container_->AddChildView(search_box_.get());
   ghost_text_container_ =
       text_container_->AddChildView(std::make_unique<views::BoxLayoutView>());
   ghost_text_container_->SetCrossAxisAlignment(
@@ -434,10 +430,7 @@ SearchBoxViewBase::SearchBoxViewBase()
   category_ghost_text_ =
       ghost_text_container_->AddChildView(std::make_unique<views::Label>());
 
-  SetupLabelView(separator_label_, font_list, kGhostTextLabelPadding);
-  SetupLabelView(autocomplete_ghost_text_, font_list, kGhostTextLabelPadding);
-  SetupLabelView(category_separator_label_, font_list, kGhostTextLabelPadding);
-  SetupLabelView(category_ghost_text_, font_list, kGhostTextLabelPadding);
+  SetPreferredStyleForAutocompleteText(font_list, kColorAshTextColorSuggestion);
 
   separator_label_->SetText(
       l10n_util::GetStringUTF16(IDS_ASH_SEARCH_RESULT_SEPARATOR));
@@ -457,6 +450,8 @@ SearchBoxViewBase::SearchBoxViewBase()
       content_container_->AddChildView(std::make_unique<views::View>());
   search_box_button_container_->SetLayoutManager(
       std::make_unique<views::FillLayout>());
+  content_container_->SetFlexForView(search_box_button_container_, 0,
+                                     /*use_min_size=*/true);
 }
 
 SearchBoxViewBase::~SearchBoxViewBase() = default;
@@ -485,20 +480,44 @@ void SearchBoxViewBase::Init(const InitParams& params) {
 
 views::ImageButton* SearchBoxViewBase::CreateCloseButton(
     const base::RepeatingClosure& button_callback) {
+  MaybeCreateFilterAndCloseButtonContainer();
+
   DCHECK(!close_button_);
-  close_button_ = search_box_button_container_->AddChildView(
+  close_button_ = filter_and_close_button_container_->AddChildView(
       std::make_unique<SearchBoxImageButton>(button_callback));
-  close_button_->SetVisible(false);
   return close_button_;
 }
 
 views::ImageButton* SearchBoxViewBase::CreateAssistantButton(
     const base::RepeatingClosure& button_callback) {
+  // `assistant_button_container_` is used to align the assistant button to the
+  // end of the `search_box_button_container_`.
+  assistant_button_container_ = search_box_button_container_->AddChildView(
+      std::make_unique<views::BoxLayoutView>());
+  assistant_button_container_->SetMainAxisAlignment(
+      views::BoxLayout::MainAxisAlignment::kEnd);
+  assistant_button_container_->SetPaintToLayer();
+  assistant_button_container_->layer()->SetFillsBoundsOpaquely(false);
+  assistant_button_container_->SetVisible(false);
+
   DCHECK(!assistant_button_);
-  assistant_button_ = search_box_button_container_->AddChildView(
+  assistant_button_ = assistant_button_container_->AddChildView(
       std::make_unique<SearchBoxImageButton>(button_callback));
-  assistant_button_->SetVisible(false);
   return assistant_button_;
+}
+
+views::ImageButton* SearchBoxViewBase::CreateFilterButton(
+    const base::RepeatingClosure& button_callback) {
+  MaybeCreateFilterAndCloseButtonContainer();
+
+  DCHECK(!filter_button_);
+  filter_button_ = filter_and_close_button_container_->AddChildView(
+      std::make_unique<SearchBoxImageButton>(button_callback));
+  filter_button_->GetViewAccessibility().OverrideRole(
+      ax::mojom::Role::kPopUpButton);
+  filter_button_->GetViewAccessibility().OverrideHasPopup(
+      ax::mojom::HasPopup::kMenu);
+  return filter_button_;
 }
 
 bool SearchBoxViewBase::HasSearch() const {
@@ -513,23 +532,62 @@ gfx::Rect SearchBoxViewBase::GetViewBoundsForSearchBoxContentsBounds(
 }
 
 views::ImageButton* SearchBoxViewBase::assistant_button() {
-  return static_cast<views::ImageButton*>(assistant_button_);
+  return views::AsViewClass<views::ImageButton>(assistant_button_);
+}
+
+views::View* SearchBoxViewBase::assistant_button_container() {
+  return views::AsViewClass<views::View>(assistant_button_container_);
 }
 
 views::ImageButton* SearchBoxViewBase::close_button() {
-  return static_cast<views::ImageButton*>(close_button_);
+  return views::AsViewClass<views::ImageButton>(close_button_);
+}
+
+views::ImageButton* SearchBoxViewBase::filter_button() {
+  return views::AsViewClass<views::ImageButton>(filter_button_);
+}
+
+views::View* SearchBoxViewBase::filter_and_close_button_container() {
+  return views::AsViewClass<views::View>(filter_and_close_button_container_);
 }
 
 views::ImageView* SearchBoxViewBase::search_icon() {
   return search_icon_;
 }
 
+void SearchBoxViewBase::SetIphView(
+    std::unique_ptr<LauncherSearchIphView> view) {
+  if (GetIphView()) {
+    DCHECK(false) << "SetIphView gets called with an IPH view being shown.";
+
+    DeleteIphView();
+  }
+
+  iph_view_tracker_.SetView(main_container_->AddChildView(std::move(view)));
+}
+
+LauncherSearchIphView* SearchBoxViewBase::GetIphView() {
+  views::View* view = iph_view_tracker_.view();
+  if (!view) {
+    return nullptr;
+  }
+
+  CHECK(views::IsViewClass<LauncherSearchIphView>(view))
+      << "Only LaunchserSearchIph view is supported now";
+  return static_cast<LauncherSearchIphView*>(view);
+}
+
+void SearchBoxViewBase::DeleteIphView() {
+  main_container_->RemoveChildViewT(GetIphView());
+}
+
+void SearchBoxViewBase::TriggerSearch() {
+  HandleQueryChange(search_box_->GetText(), /*initiated_by_user=*/false);
+}
+
 void SearchBoxViewBase::MaybeSetAutocompleteGhostText(
     const std::u16string& title,
     const std::u16string& category) {
-  if (!features::IsAutocompleteExtendedSuggestionsEnabled())
-    return;
-
   if (title.empty() && category.empty()) {
     ghost_text_container_->SetVisible(false);
     autocomplete_ghost_text_->SetText(std::u16string());
@@ -543,6 +601,16 @@ void SearchBoxViewBase::MaybeSetAutocompleteGhostText(
   }
 }
 
+std::string SearchBoxViewBase::GetSearchBoxGhostTextForTest() {
+  if (!autocomplete_ghost_text_->GetText().empty()) {
+    return base::UTF16ToUTF8(base::StrCat(
+        {autocomplete_ghost_text_->GetText(),
+         l10n_util::GetStringUTF16(IDS_ASH_SEARCH_RESULT_SEPARATOR),
+         category_ghost_text_->GetText()}));
+  }
+  return base::UTF16ToUTF8(category_ghost_text_->GetText());
+}
+
 void SearchBoxViewBase::SetSearchBoxActive(bool active,
                                            ui::EventType event_type) {
   if (active == is_search_box_active_)
@@ -554,7 +622,6 @@ void SearchBoxViewBase::SetSearchBoxActive(bool active,
 
   if (active) {
     search_box_->RequestFocus();
-    RecordSearchBoxActivationHistogram(event_type);
   } else {
     search_box_->DestroyTouchSelection();
   }
@@ -580,7 +647,12 @@ bool SearchBoxViewBase::OnTextfieldEvent(ui::EventType type) {
 }
 
 gfx::Size SearchBoxViewBase::CalculatePreferredSize() const {
-  return gfx::Size(kSearchBoxPreferredWidth, kSearchBoxPreferredHeight);
+  const int iph_height =
+      iph_view_tracker_.view()
+          ? iph_view_tracker_.view()->GetPreferredSize().height()
+          : 0;
+  return gfx::Size(kSearchBoxPreferredWidth,
+                   kSearchBoxPreferredHeight + iph_height);
 }
 
 void SearchBoxViewBase::OnEnabledChanged() {
@@ -590,10 +662,9 @@ void SearchBoxViewBase::OnEnabledChanged() {
     close_button_->SetEnabled(enabled);
   if (assistant_button_)
     assistant_button_->SetEnabled(enabled);
-}
-
-const char* SearchBoxViewBase::GetClassName() const {
-  return "SearchBoxView";
+  if (filter_button_) {
+    filter_button_->SetEnabled(enabled);
+  }
 }
 
 void SearchBoxViewBase::OnGestureEvent(ui::GestureEvent* event) {
@@ -606,26 +677,8 @@ void SearchBoxViewBase::OnMouseEvent(ui::MouseEvent* event) {
 
 void SearchBoxViewBase::OnThemeChanged() {
   views::View::OnThemeChanged();
-  const views::Widget* app_list_widget = GetWidget();
-
-  if (features::IsAutocompleteExtendedSuggestionsEnabled()) {
-    auto ghost_text_color =
-        AppListColorProvider::Get()->GetSearchBoxSuggestionTextColor(
-            app_list_widget);
-    autocomplete_ghost_text_->SetEnabledColor(ghost_text_color);
-    separator_label_->SetEnabledColor(ghost_text_color);
-    category_ghost_text_->SetEnabledColor(ghost_text_color);
-    category_separator_label_->SetEnabledColor(ghost_text_color);
-    search_box_->SetSelectionBackgroundColor(
-        AppListColorProvider::Get()->GetFolderNameSelectionColor(GetWidget()));
-  }
-
-  auto* background = GetBackground();
-  if (background) {
-    background->SetNativeControlColor(
-        AppListColorProvider::Get()->GetSearchBoxBackgroundColor(
-            app_list_widget));
-  }
+  search_box_->SetSelectionBackgroundColor(
+      GetWidget()->GetColorProvider()->GetColor(kColorAshFocusAuraColor));
   UpdatePlaceholderTextStyle();
 }
 
@@ -660,6 +713,26 @@ void SearchBoxViewBase::OnSearchBoxActiveChanged(bool active) {}
 
 void SearchBoxViewBase::UpdateSearchBoxFocusPaint() {}
 
+void SearchBoxViewBase::SetPreferredStyleForAutocompleteText(
+    const gfx::FontList& font_list,
+    ui::ColorId text_color_id) {
+  SetupLabelView(separator_label_, font_list, kGhostTextLabelPadding,
+                 text_color_id);
+  SetupLabelView(autocomplete_ghost_text_, font_list, kGhostTextLabelPadding,
+                 text_color_id);
+  SetupLabelView(category_separator_label_, font_list, kGhostTextLabelPadding,
+                 text_color_id);
+  SetupLabelView(category_ghost_text_, font_list, kGhostTextLabelPadding,
+                 text_color_id);
+}
+
+void SearchBoxViewBase::SetPreferredStyleForSearchboxText(
+    const gfx::FontList& font_list,
+    ui::ColorId text_color_id) {
+  search_box_->SetTextColor(text_color_id);
+  search_box_->SetFontList(font_list);
+}
+
 void SearchBoxViewBase::UpdateButtonsVisibility() {
   DCHECK(close_button_);
 
@@ -668,28 +741,31 @@ void SearchBoxViewBase::UpdateButtonsVisibility() {
       (show_close_button_when_active_ && is_search_box_active_);
 
   if (should_show_close_button) {
-    MaybeFadeButtonIn(close_button_);
+    MaybeFadeContainerIn(filter_and_close_button_container_);
   } else {
-    MaybeFadeButtonOut(close_button_);
+    MaybeFadeContainerOut(filter_and_close_button_container_);
   }
 
   if (assistant_button_) {
     const bool should_show_assistant_button =
         show_assistant_button_ && !should_show_close_button;
     if (should_show_assistant_button) {
-      MaybeFadeButtonIn(assistant_button_);
+      MaybeFadeContainerIn(assistant_button_container_);
     } else {
-      MaybeFadeButtonOut(assistant_button_);
+      MaybeFadeContainerOut(assistant_button_container_);
     }
   }
+
+  // Explicitly call Layout as the number of the buttons showing may change.
+  InvalidateLayout();
 }
 
-void SearchBoxViewBase::MaybeFadeButtonIn(SearchBoxImageButton* button) {
-  if (button->GetVisible() && button->is_showing())
+void SearchBoxViewBase::MaybeFadeContainerIn(views::View* container) {
+  CHECK(container);
+  if (container->GetVisible() &&
+      container->layer()->GetTargetOpacity() == 1.0f) {
     return;
-
-  if (!button->layer()->GetAnimator()->is_animating())
-    button->layer()->SetOpacity(0.0f);
+  }
 
   views::AnimationBuilder()
       .SetPreemptionStrategy(
@@ -697,34 +773,34 @@ void SearchBoxViewBase::MaybeFadeButtonIn(SearchBoxImageButton* button) {
       .Once()
       .At(kButtonFadeInDelay)
       .SetDuration(kButtonFadeInDuration)
-      .SetOpacity(button->layer(), 1.0f, gfx::Tween::LINEAR);
+      .SetOpacity(container->layer(), 1.0f, gfx::Tween::LINEAR);
 
-  // Set the button visible after scheduling the animation because scheduling
-  // the animation might abort a fade-out, which sets the button invisible.
-  button->SetVisible(true);
-  button->set_is_showing(true);
+  // Set the container visible after scheduling the animation because scheduling
+  // the animation might abort a fade-out, which sets the container invisible.
+  container->SetVisible(true);
 }
 
-void SearchBoxViewBase::MaybeFadeButtonOut(SearchBoxImageButton* button) {
-  if (!button->GetVisible() || !button->is_showing())
+void SearchBoxViewBase::MaybeFadeContainerOut(views::View* container) {
+  CHECK(container);
+  if (!container->GetVisible() || container->layer()->GetTargetOpacity() == 0) {
     return;
+  }
 
   views::AnimationBuilder()
       .SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
-      .OnEnded(base::BindOnce(&SearchBoxViewBase::SetVisibilityHidden,
-                              weak_factory_.GetWeakPtr(), button))
-      .OnAborted(base::BindOnce(&SearchBoxViewBase::SetVisibilityHidden,
-                                weak_factory_.GetWeakPtr(), button))
+      .OnEnded(base::BindOnce(&SearchBoxViewBase::SetContainerVisibilityHidden,
+                              weak_factory_.GetWeakPtr(), container))
+      .OnAborted(
+          base::BindOnce(&SearchBoxViewBase::SetContainerVisibilityHidden,
+                         weak_factory_.GetWeakPtr(), container))
       .Once()
       .SetDuration(kButtonFadeOutDuration)
-      .SetOpacity(button->layer(), 0.0f, gfx::Tween::LINEAR);
-
-  button->set_is_showing(false);
+      .SetOpacity(container->layer(), 0.0f, gfx::Tween::LINEAR);
 }
 
-void SearchBoxViewBase::SetVisibilityHidden(SearchBoxImageButton* button) {
-  button->SetVisible(false);
+void SearchBoxViewBase::SetContainerVisibilityHidden(views::View* container) {
+  container->SetVisible(false);
 }
 
 void SearchBoxViewBase::ContentsChanged(views::Textfield* sender,
@@ -768,11 +844,11 @@ void SearchBoxViewBase::HandleSearchBoxEvent(ui::LocatedEvent* located_event) {
   if (located_event->type() == ui::ET_MOUSE_PRESSED ||
       located_event->type() == ui::ET_GESTURE_TAP) {
     const bool event_is_in_searchbox_bounds =
-        GetWidget()->GetWindowBoundsInScreen().Contains(
-            located_event->root_location());
-    // Don't handle an event out of the searchbox bounds.
+        GetBoundsInScreen().Contains(located_event->root_location());
     if (!event_is_in_searchbox_bounds)
       return;
+
+    located_event->SetHandled();
 
     // If the event is in an inactive empty search box, enable the search box.
     if (!is_search_box_active_ && search_box_->GetText().empty()) {
@@ -786,11 +862,31 @@ void SearchBoxViewBase::HandleSearchBoxEvent(ui::LocatedEvent* located_event) {
   }
 }
 
-// TODO(crbug.com/755219): Unify this with SetBackgroundColor.
 void SearchBoxViewBase::UpdateBackgroundColor(SkColor color) {
   auto* search_box_background = background();
   if (search_box_background)
     search_box_background->SetNativeControlColor(color);
+  if (close_button_)
+    close_button_->UpdateInkDropColorAndOpacity(color);
+  if (assistant_button_)
+    assistant_button_->UpdateInkDropColorAndOpacity(color);
+  if (filter_button_) {
+    filter_button_->UpdateInkDropColorAndOpacity(color);
+  }
 }
+
+void SearchBoxViewBase::MaybeCreateFilterAndCloseButtonContainer() {
+  if (!filter_and_close_button_container_) {
+    filter_and_close_button_container_ =
+        search_box_button_container_->AddChildView(
+            std::make_unique<views::BoxLayoutView>());
+    filter_and_close_button_container_->SetPaintToLayer();
+    filter_and_close_button_container_->layer()->SetFillsBoundsOpaquely(false);
+    filter_and_close_button_container_->SetVisible(false);
+  }
+}
+
+BEGIN_METADATA(SearchBoxViewBase)
+END_METADATA
 
 }  // namespace ash

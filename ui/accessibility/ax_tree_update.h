@@ -52,6 +52,8 @@ struct AX_BASE_EXPORT AXTreeUpdate {
   AXTreeUpdate(const AXTreeUpdate& other);
   ~AXTreeUpdate();
 
+  void AccumulateSize(AXNodeData::AXNodeDataSize& node_data_size) const;
+
   // If |has_tree_data| is true, the value of |tree_data| should be used
   // to update the tree data, otherwise it should be ignored.
   bool has_tree_data = false;
@@ -83,15 +85,11 @@ struct AX_BASE_EXPORT AXTreeUpdate {
   std::vector<AXEventIntent> event_intents;
 
   // Return a multi-line indented string representation, for logging.
-  std::string ToString() const;
-};
+  std::string ToString(bool verbose = true) const;
 
-// Two tree updates can be merged into one if the second one
-// doesn't clear a subtree, doesn't have new tree data, and
-// doesn't have a new root id - in other words the second tree
-// update consists of only changes to nodes.
-bool AX_BASE_EXPORT TreeUpdatesCanBeMerged(const AXTreeUpdate& u1,
-                                           const AXTreeUpdate& u2);
+  // Returns the approximate size in bytes.
+  size_t ByteSize() const;
+};
 
 }  // namespace ui
 

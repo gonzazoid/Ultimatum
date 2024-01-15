@@ -4,11 +4,16 @@
 
 #include "components/omnibox/browser/actions/history_clusters_action.h"
 
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/history_clusters/core/config.h"
@@ -21,14 +26,13 @@
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_result.h"
 #include "components/optimization_guide/core/entity_metadata.h"
-#include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
 #include "net/base/url_util.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "components/omnibox/browser/actions/omnibox_pedal_jni_wrapper.h"
+#include "components/omnibox/browser/actions/omnibox_action_factory_android.h"
 #include "url/android/gurl_android.h"
 #endif
 
@@ -43,27 +47,23 @@ namespace {
 // A template function for recording enum metrics for shown and used journey
 // chips as well as their CTR metrics.
 template <class EnumT>
-void RecordShownUsedEnumAndCtrMetrics(const std::string& metric_name,
+void RecordShownUsedEnumAndCtrMetrics(std::string_view metric_name,
                                       EnumT val,
-                                      const std::string& label,
+                                      std::string_view label,
                                       bool executed) {
-  base::UmaHistogramEnumeration("Omnibox.ResumeJourneyShown." + metric_name,
-                                val);
+  base::UmaHistogramEnumeration(
+      base::StrCat({"Omnibox.ResumeJourneyShown.", metric_name}), val);
   if (executed) {
     base::UmaHistogramEnumeration(
-        "Omnibox.SuggestionUsed.ResumeJourney." + metric_name, val);
+        base::StrCat({"Omnibox.SuggestionUsed.ResumeJourney.", metric_name}),
+        val);
   }
 
   // Record the CTR metric.
   std::string ctr_metric_name =
-      base::StringPrintf("Omnibox.SuggestionUsed.ResumeJourney.%s.%s.CTR",
-                         metric_name.c_str(), label.c_str());
+      base::StrCat({"Omnibox.SuggestionUsed.ResumeJourney.", metric_name, ".",
+                    label, ".CTR"});
   base::UmaHistogramBoolean(ctr_metric_name, executed);
-}
-
-// Multiplies a keyword score by 100, and converts it to int.
-int TransformKeywordScoreForUma(float keyword_score) {
-  return static_cast<int>(keyword_score * 100);
 }
 
 }  // namespace
@@ -92,8 +92,8 @@ bool IsNavigationIntent(int top_search_relevance,
 }
 
 GURL GetFullJourneysUrlForQuery(const std::string& query) {
-  return net::AppendOrReplaceQueryParameter(GURL(kChromeUIHistoryClustersURL),
-                                            "q", query);
+  return net::AppendOrReplaceQueryParameter(
+      GURL(GetChromeUIHistoryClustersURL()), "q", query);
 }
 
 HistoryClustersAction::HistoryClustersAction(
@@ -107,11 +107,7 @@ HistoryClustersAction::HistoryClustersAction(
               IDS_ACC_OMNIBOX_ACTION_HISTORY_CLUSTERS_SEARCH),
           GetFullJourneysUrlForQuery(query)),
       matched_keyword_data_(matched_keyword_data),
-      query_(query) {
-#if BUILDFLAG(IS_ANDROID)
-    CreateOrUpdateJavaObject(query);
-#endif
-}
+      query_(query) {}
 
 void HistoryClustersAction::RecordActionShown(size_t position,
                                               bool executed) const {
@@ -127,16 +123,6 @@ void HistoryClustersAction::RecordActionShown(size_t position,
 
   base::UmaHistogramBoolean("Omnibox.SuggestionUsed.ResumeJourneyCTR",
                             executed);
-
-  // Record cluster keyword score UMA metrics.
-  base::UmaHistogramCounts1000(
-      "Omnibox.ResumeJourneyShown.ClusterKeywordScore",
-      TransformKeywordScoreForUma(matched_keyword_data_.score));
-  if (executed) {
-    base::UmaHistogramCounts1000(
-        "Omnibox.SuggestionUsed.ResumeJourney.ClusterKeywordScore",
-        TransformKeywordScoreForUma(matched_keyword_data_.score));
-  }
 
   // Record cluster keyword type UMA metrics.
   RecordShownUsedEnumAndCtrMetrics<
@@ -158,7 +144,7 @@ void HistoryClustersAction::RecordActionShown(size_t position,
 }
 
 void HistoryClustersAction::Execute(ExecutionContext& context) const {
-  if (context.client_.OpenJourneys(query_)) {
+  if (context.client_->OpenJourneys(query_)) {
     // If the client opens Journeys in the Side Panel, we are done.
     return;
   }
@@ -166,8 +152,8 @@ void HistoryClustersAction::Execute(ExecutionContext& context) const {
   OmniboxAction::Execute(context);
 }
 
-int32_t HistoryClustersAction::GetID() const {
-  return static_cast<int32_t>(OmniboxActionId::HISTORY_CLUSTERS);
+OmniboxActionId HistoryClustersAction::ActionId() const {
+  return OmniboxActionId::HISTORY_CLUSTERS;
 }
 
 #if defined(SUPPORT_PEDALS_VECTOR_ICONS)
@@ -177,15 +163,14 @@ const gfx::VectorIcon& HistoryClustersAction::GetVectorIcon() const {
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
-base::android::ScopedJavaGlobalRef<jobject>
-HistoryClustersAction::GetJavaObject() const {
-  return j_omnibox_action_;
-}
-
-void HistoryClustersAction::CreateOrUpdateJavaObject(const std::string& query) {
-  j_omnibox_action_.Reset(BuildHistoryClustersAction(
-      GetID(), strings_.hint, strings_.suggestion_contents,
-      strings_.accessibility_suffix, strings_.accessibility_hint, url_, query));
+base::android::ScopedJavaLocalRef<jobject>
+HistoryClustersAction::GetOrCreateJavaObject(JNIEnv* env) const {
+  if (!j_omnibox_action_) {
+    j_omnibox_action_.Reset(BuildHistoryClustersAction(
+        env, reinterpret_cast<intptr_t>(this), strings_.hint,
+        strings_.accessibility_hint, query_));
+  }
+  return base::android::ScopedJavaLocalRef<jobject>(j_omnibox_action_);
 }
 #endif
 
@@ -194,7 +179,6 @@ HistoryClustersAction::~HistoryClustersAction() = default;
 // Should be invoked after `AutocompleteResult::AttachPedalsToMatches()`.
 void AttachHistoryClustersActions(
     history_clusters::HistoryClustersService* service,
-    PrefService* prefs,
     AutocompleteResult& result) {
 #if BUILDFLAG(IS_IOS)
   // Compile out this method for Mobile, which doesn't omnibox actions yet.
@@ -202,8 +186,9 @@ void AttachHistoryClustersActions(
   return;
 #else
 
-  if (!IsJourneysEnabledInOmnibox(service, prefs))
+  if (!service || !service->IsJourneysEnabledAndVisible()) {
     return;
+  }
 
   if (!GetConfig().omnibox_action)
     return;
@@ -211,11 +196,11 @@ void AttachHistoryClustersActions(
   if (result.empty())
     return;
 
-  // If there's a pedal in `result`, don't add a history cluster action to avoid
-  // over-crowding.
+  // If there's any action in `result`, don't add a history cluster action to
+  // avoid over-crowding.
   if (!GetConfig().omnibox_action_with_pedals &&
-      base::ranges::any_of(result,
-                           [](const auto& match) { return match.action; })) {
+      base::ranges::any_of(
+          result, [](const auto& match) { return !match.actions.empty(); })) {
     return;
   }
 
@@ -233,16 +218,14 @@ void AttachHistoryClustersActions(
 
   for (auto& match : result) {
     // Skip incompatible matches (like entities) or ones with existing actions.
-    // TODO(manukh): We don't use `AutocompleteMatch::IsActionCompatibleType()`
+    // TODO(manukh): We don't use `AutocompleteMatch::IsActionCompatible()`
     //  because we're not sure if we want to show on entities or not. Once we
-    //  decide, either share `IsActionCompatibleType()` or inline it to its
+    //  decide, either share `IsActionCompatible()` or inline it to its
     //  remaining callsite.
-    if (match.action)
+    if (!match.actions.empty()) {
       continue;
-    if (match.type == AutocompleteMatchType::SEARCH_SUGGEST_TAIL)
-      continue;
-    if (!GetConfig().omnibox_action_on_entities &&
-        match.type == AutocompleteMatchType::SEARCH_SUGGEST_ENTITY) {
+    }
+    if (match.type == AutocompleteMatchType::SEARCH_SUGGEST_TAIL) {
       continue;
     }
 
@@ -251,24 +234,14 @@ void AttachHistoryClustersActions(
       absl::optional<history::ClusterKeywordData> matched_keyword_data =
           service->DoesQueryMatchAnyCluster(query);
       if (matched_keyword_data) {
-        match.action = base::MakeRefCounted<HistoryClustersAction>(
-            query, std::move(matched_keyword_data.value()));
-      }
-    } else if (GetConfig().omnibox_action_on_urls) {
-      // We do the URL stripping here, because we need it to both execute the
-      // query, as well as to feed it into the action chip so the chip navigates
-      // to the right place (with the query pre-populated).
-      std::string url_keyword =
-          history_clusters::ComputeURLKeywordForLookup(match.destination_url);
-      if (service->DoesURLMatchAnyCluster(url_keyword)) {
-        match.action = base::MakeRefCounted<HistoryClustersAction>(
-            url_keyword, history::ClusterKeywordData());
+        match.actions.push_back(base::MakeRefCounted<HistoryClustersAction>(
+            query, std::move(matched_keyword_data.value())));
       }
     }
 
     // Only ever attach one action (to the highest match), to not overwhelm
     // the user with multiple "Resume Journey" action buttons.
-    if (match.action) {
+    if (!match.actions.empty()) {
       return;
     }
   }

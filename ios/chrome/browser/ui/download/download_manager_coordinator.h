@@ -5,8 +5,8 @@
 #ifndef IOS_CHROME_BROWSER_UI_DOWNLOAD_DOWNLOAD_MANAGER_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_DOWNLOAD_DOWNLOAD_MANAGER_COORDINATOR_H_
 
-#import "ios/chrome/browser/download/download_manager_tab_helper_delegate.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/download/model/download_manager_tab_helper_delegate.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 namespace web {
 class DownloadTask;
@@ -27,9 +27,6 @@ class DownloadTask;
 // Download Manager supports only one download task at a time. Set to null when
 // stop method is called.
 @property(nonatomic) web::DownloadTask* downloadTask;
-
-// Controls the height of the bottom margin.
-@property(nonatomic) NSLayoutDimension* bottomMarginHeightAnchor;
 
 // Underlying UIViewController presented by this coordinator.
 @property(nonatomic, readonly) UIViewController* viewController;

@@ -12,6 +12,8 @@
 #include <string>
 #include <utility>
 
+#include "base/feature_list.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -20,17 +22,22 @@
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_match.h"
+#include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/location_bar_model.h"
-#include "components/omnibox/browser/omnibox_edit_controller.h"
+#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/common/omnibox_features.h"
+#include "components/search/search.h"
+#include "components/search_engines/template_url_service.h"
 #include "extensions/buildflags/buildflags.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/ui_base_features.h"
 #include "url/url_constants.h"
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
+#include "components/omnibox/browser/vector_icons.h"  // nogncheck
 #include "ui/gfx/paint_vector_icon.h"
 
 #endif
@@ -48,6 +55,15 @@ bool RichAutocompletionEitherNonPrefixEnabled() {
          OmniboxFieldTrial::
              kRichAutocompletionAutocompleteNonPrefixShortcutProvider.Get();
 }
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+// Return true if the given match uses a vector icon with a background.
+bool HasVectorIconBackground(const AutocompleteMatch& match) {
+  return OmniboxFieldTrial::IsActionsUISimplificationEnabled() &&
+         (match.type == AutocompleteMatchType::HISTORY_CLUSTER ||
+          match.type == AutocompleteMatchType::PEDAL);
+}
+#endif
 
 }  // namespace
 
@@ -161,22 +177,8 @@ std::u16string OmniboxView::SanitizeTextForPaste(const std::u16string& text) {
 
 OmniboxView::~OmniboxView() = default;
 
-void OmniboxView::OpenMatch(const AutocompleteMatch& match,
-                            WindowOpenDisposition disposition,
-                            const GURL& alternate_nav_url,
-                            const std::u16string& pasted_text,
-                            size_t selected_line,
-                            base::TimeTicks match_selection_timestamp) {
-  // Invalid URLs such as chrome://history can end up here.
-  if (!match.destination_url.is_valid() || !model_)
-    return;
-  model_->OpenMatch(match, disposition, alternate_nav_url, pasted_text,
-                    selected_line, match_selection_timestamp);
-}
-
 bool OmniboxView::IsEditingOrEmpty() const {
-  return (model_.get() && model_->user_input_in_progress()) ||
-      (GetOmniboxTextLength() == 0);
+  return model()->user_input_in_progress() || GetOmniboxTextLength() == 0;
 }
 
 // TODO (manukh) OmniboxView::GetIcon is very similar to
@@ -186,56 +188,88 @@ bool OmniboxView::IsEditingOrEmpty() const {
 // provider icons. It's possible they have other inconsistencies as well. We may
 // want to consider reusing the same code for both the popup and omnibox icons.
 ui::ImageModel OmniboxView::GetIcon(int dip_size,
-                                    SkColor color,
-                                    IconFetchedCallback on_icon_fetched) const {
+                                    SkColor color_current_page_icon,
+                                    SkColor color_vectors,
+                                    SkColor color_bright_vectors,
+                                    SkColor color_vectors_with_background,
+                                    IconFetchedCallback on_icon_fetched,
+                                    bool dark_mode) const {
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   // This is used on desktop only.
   NOTREACHED();
   return ui::ImageModel();
 #else
 
-  // For tests, model_ will be null.
-  if (!model_) {
-    AutocompleteMatch fake_match;
-    fake_match.type = AutocompleteMatchType::URL_WHAT_YOU_TYPED;
-    const gfx::VectorIcon& vector_icon = fake_match.GetVectorIcon(false);
-    return ui::ImageModel::FromVectorIcon(vector_icon, color, dip_size);
-  }
-
-  if (model_->ShouldShowCurrentPageIcon()) {
-    LocationBarModel* location_bar_model = controller_->GetLocationBarModel();
-    return ui::ImageModel::FromVectorIcon(location_bar_model->GetVectorIcon(),
-                                          color, dip_size);
+  if (model()->ShouldShowCurrentPageIcon()) {
+    return ui::ImageModel::FromVectorIcon(
+        GetLocationBarModel()->GetVectorIcon(), color_current_page_icon,
+        dip_size);
   }
 
   gfx::Image favicon;
-  AutocompleteMatch match = model_->CurrentMatch(nullptr);
+  AutocompleteMatch match = model()->CurrentMatch(nullptr);
   if (AutocompleteMatch::IsSearchType(match.type)) {
-    // For search queries, display default search engine's favicon.
-    favicon = model_->client()->GetFaviconForDefaultSearchProvider(
+    // For search queries, display default search engine's favicon. If the
+    // default search engine is google return the icon instead of favicon for
+    // search queries with the chrome refresh feature.
+    if (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+      if (search::DefaultSearchProviderIsGoogle(
+              controller_->client()->GetTemplateURLService())) {
+        // For non chrome builds this would return an empty image model. In
+        // those cases revert to using the favicon.
+        ui::ImageModel icon = model()->GetSuperGIcon(dip_size, dark_mode);
+        if (!icon.IsEmpty()) {
+          return icon;
+        }
+      }
+    }
+
+    favicon = controller_->client()->GetFaviconForDefaultSearchProvider(
         std::move(on_icon_fetched));
 
-  } else {
-    // For site suggestions, display site's favicon.
-    favicon = model_->client()->GetFaviconForPageUrl(
-        match.destination_url, std::move(on_icon_fetched));
+  } else if (match.type != AutocompleteMatchType::HISTORY_CLUSTER) {
+    // The starter pack suggestions are a unique case. These suggestions
+    // normally use a favicon image that cannot be styled further by client
+    // code. In order to apply custom styling to the icon (e.g. colors), we
+    // ignore this favicon in favor of using a vector icon which has better
+    // styling support.
+    if (!AutocompleteMatch::IsStarterPackType(match.type)) {
+      // For site suggestions, display site's favicon.
+      favicon = controller_->client()->GetFaviconForPageUrl(
+          match.destination_url, std::move(on_icon_fetched));
+    }
   }
 
   if (!favicon.IsEmpty())
-    return ui::ImageModel::FromImage(model_->client()->GetSizedIcon(favicon));
+    return ui::ImageModel::FromImage(
+        controller_->client()->GetSizedIcon(favicon));
   // If the client returns an empty favicon, fall through to provide the
   // generic vector icon. |on_icon_fetched| may or may not be called later.
   // If it's never called, the vector icon we provide below should remain.
 
   // For bookmarked suggestions, display bookmark icon.
   bookmarks::BookmarkModel* bookmark_model =
-      model_->client()->GetBookmarkModel();
+      controller_->client()->GetBookmarkModel();
   const bool is_bookmarked =
       bookmark_model && bookmark_model->IsBookmarked(match.destination_url);
 
-  const gfx::VectorIcon& vector_icon = match.GetVectorIcon(is_bookmarked);
-
-  return ui::ImageModel::FromVectorIcon(vector_icon, color, dip_size);
+  // For starter pack suggestions, use template url to generate proper vector
+  // icon.
+  const TemplateURL* turl =
+      match.associated_keyword
+          ? controller_->client()
+                ->GetTemplateURLService()
+                ->GetTemplateURLForKeyword(match.associated_keyword->keyword)
+          : nullptr;
+  const gfx::VectorIcon& vector_icon = match.GetVectorIcon(is_bookmarked, turl);
+  const auto& color = (match.type == AutocompleteMatchType::HISTORY_CLUSTER ||
+                       match.type == AutocompleteMatchType::STARTER_PACK)
+                          ? color_bright_vectors
+                          : color_vectors;
+  return ui::ImageModel::FromVectorIcon(
+      vector_icon,
+      HasVectorIconBackground(match) ? color_vectors_with_background : color,
+      dip_size);
 #endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 }
 
@@ -244,21 +278,26 @@ void OmniboxView::SetUserText(const std::u16string& text) {
 }
 
 void OmniboxView::SetUserText(const std::u16string& text, bool update_popup) {
-  if (model_)
-    model_->SetUserText(text);
+  model()->SetUserText(text);
   SetWindowTextAndCaretPos(text, text.length(), update_popup, true);
 }
 
 void OmniboxView::RevertAll() {
+  // This will clear the model's `user_input_in_progress_`.
+  model()->Revert();
+
+  // This will stop the `AutocompleteController`. This should happen after
+  // `user_input_in_progress_` is cleared above; otherwise, closing the popup
+  // will trigger unnecessary `AutocompleteClassifier::Classify()` calls to
+  // try to update the views which are unnecessary since they'll be thrown
+  // away during the model revert anyways.
   CloseOmniboxPopup();
-  if (model_)
-    model_->Revert();
+
   TextChanged();
 }
 
 void OmniboxView::CloseOmniboxPopup() {
-  if (model_)
-    model_->StopAutocomplete();
+  controller()->StopAutocomplete(/*clear_result=*/true);
 }
 
 bool OmniboxView::IsImeShowingPopup() const {
@@ -327,20 +366,36 @@ OmniboxView::StateChanges OmniboxView::GetStateChanges(const State& before,
   return state_changes;
 }
 
-OmniboxView::OmniboxView(OmniboxEditController* controller,
-                         std::unique_ptr<OmniboxClient> client)
-    : controller_(controller) {
-  // |client| can be null in tests.
-  if (client) {
-    model_ =
-        std::make_unique<OmniboxEditModel>(this, controller, std::move(client));
-  }
+OmniboxView::OmniboxView(std::unique_ptr<OmniboxClient> client)
+    : controller_(std::make_unique<OmniboxController>(
+          /*view=*/this,
+          std::move(client))) {}
+
+const LocationBarModel* OmniboxView::GetLocationBarModel() const {
+  return controller_->client()->GetLocationBarModel();
+}
+
+OmniboxEditModel* OmniboxView::model() {
+  return const_cast<OmniboxEditModel*>(
+      const_cast<const OmniboxView*>(this)->model());
+}
+
+const OmniboxEditModel* OmniboxView::model() const {
+  return controller_->edit_model();
+}
+
+OmniboxController* OmniboxView::controller() {
+  return const_cast<OmniboxController*>(
+      const_cast<const OmniboxView*>(this)->controller());
+}
+
+const OmniboxController* OmniboxView::controller() const {
+  return controller_.get();
 }
 
 void OmniboxView::TextChanged() {
   EmphasizeURLComponents();
-  if (model_)
-    model_->OnChanged();
+  model()->OnChanged();
 }
 
 void OmniboxView::UpdateTextStyle(
@@ -368,7 +423,7 @@ void OmniboxView::UpdateTextStyle(
 
   const bool is_extension_url =
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-      url_scheme == base::UTF8ToUTF16(extensions::kExtensionScheme);
+      base::EqualsASCII(url_scheme, extensions::kExtensionScheme);
 #else
       false;
 #endif

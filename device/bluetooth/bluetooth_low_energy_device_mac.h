@@ -9,8 +9,8 @@
 #include <stdint.h>
 
 #include <set>
+#include <string_view>
 
-#include "base/mac/scoped_nsobject.h"
 #include "build/build_config.h"
 #include "crypto/sha2.h"
 #include "device/bluetooth/bluetooth_device_mac.h"
@@ -24,7 +24,8 @@
 
 namespace device {
 
-class BluetoothAdapterMac;
+class BluetoothAdapter;
+class BluetoothLowEnergyAdapterApple;
 class BluetoothRemoteGattServiceMac;
 class BluetoothRemoteGattCharacteristicMac;
 class BluetoothRemoteGattDescriptorMac;
@@ -33,7 +34,7 @@ class BluetoothUUID;
 class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
     : public BluetoothDeviceMac {
  public:
-  BluetoothLowEnergyDeviceMac(BluetoothAdapterMac* adapter,
+  BluetoothLowEnergyDeviceMac(BluetoothAdapter* adapter,
                               CBPeripheral* peripheral);
 
   BluetoothLowEnergyDeviceMac(const BluetoothLowEnergyDeviceMac&) = delete;
@@ -88,7 +89,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
  protected:
   // BluetoothDevice override.
   void CreateGattConnectionImpl(
-      absl::optional<BluetoothUUID> serivce_uuid) override;
+      absl::optional<BluetoothUUID> service_uuid) override;
   void DisconnectGatt() override;
 
   // Methods used by BluetoothLowEnergyPeripheralBridge.
@@ -111,11 +112,11 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
   // http://crbug.com/507824
   static std::string GetPeripheralHashAddress(CBPeripheral* peripheral);
   static std::string GetPeripheralHashAddress(
-      base::StringPiece device_identifier);
+      std::string_view device_identifier);
 
  private:
-  friend class BluetoothAdapterMac;
-  friend class BluetoothAdapterMacTest;
+  friend class BluetoothLowEnergyAdapterApple;
+  friend class BluetoothLowEnergyAdapterAppleTest;
   friend class BluetoothLowEnergyPeripheralBridge;
   friend class BluetoothRemoteGattServiceMac;
   friend class BluetoothTestMac;
@@ -131,8 +132,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
   void SendNotificationIfDiscoveryComplete();
 
   // Returns the Bluetooth adapter.
-  BluetoothAdapterMac* GetMacAdapter();
-  BluetoothAdapterMac* GetMacAdapter() const;
+  BluetoothLowEnergyAdapterApple* GetLowEnergyAdapter();
+  BluetoothLowEnergyAdapterApple* GetLowEnergyAdapter() const;
 
   // Returns the CoreBluetooth Peripheral.
   CBPeripheral* GetPeripheral();
@@ -153,11 +154,10 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyDeviceMac
   void DidDisconnectPeripheral(NSError* error);
 
   // CoreBluetooth data structure.
-  base::scoped_nsobject<CBPeripheral> peripheral_;
+  CBPeripheral* __strong peripheral_;
 
   // Objective-C delegate for the CBPeripheral.
-  base::scoped_nsobject<BluetoothLowEnergyPeripheralDelegate>
-      peripheral_delegate_;
+  BluetoothLowEnergyPeripheralDelegate* __strong peripheral_delegate_;
 
   // Whether the device is connected.
   bool connected_;

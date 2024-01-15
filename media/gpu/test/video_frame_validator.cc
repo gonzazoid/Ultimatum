@@ -6,9 +6,9 @@
 
 #include <sys/mman.h>
 
-#include "base/bind.h"
 #include "base/cpu.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/hash/md5.h"
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
@@ -20,6 +20,7 @@
 #include "media/gpu/buildflags.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/test/image_quality_metrics.h"
+#include "media/gpu/test/video_frame_helpers.h"
 #include "media/gpu/test/video_test_helpers.h"
 #include "media/gpu/video_frame_mapper.h"
 #include "media/gpu/video_frame_mapper_factory.h"
@@ -27,12 +28,18 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
+#if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
+#include "media/gpu/chromeos/chromeos_compressed_gpu_memory_buffer_video_frame_utils.h"
+#endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
+
 namespace media {
 namespace test {
 
 VideoFrameValidator::VideoFrameValidator(
-    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor)
+    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
+    CropHelper crop_helper)
     : corrupt_frame_processor_(std::move(corrupt_frame_processor)),
+      crop_helper_(crop_helper),
       num_frames_validating_(0),
       frame_validator_thread_("FrameValidatorThread"),
       frame_validator_cv_(&frame_validator_lock_) {
@@ -145,31 +152,54 @@ void VideoFrameValidator::ProcessVideoFrameTask(
   scoped_refptr<const VideoFrame> frame = video_frame;
   // If this is a DMABuf-backed memory frame we need to map it before accessing.
 #if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
-  if (frame->storage_type() == VideoFrame::STORAGE_GPU_MEMORY_BUFFER) {
-    // TODO(andrescj): This is a workaround. ClientNativePixmapFactoryDmabuf
-    // creates ClientNativePixmapOpaque for SCANOUT_VDA_WRITE buffers which does
-    // not allow us to map GpuMemoryBuffers easily for testing. Therefore, we
-    // extract the dma-buf FDs. Alternatively, we could consider creating our
-    // own ClientNativePixmapFactory for testing.
-    frame = CreateDmabufVideoFrame(frame.get());
-    if (!frame) {
-      LOG(ERROR) << "Failed to create Dmabuf-backed VideoFrame from "
-                 << "GpuMemoryBuffer-based VideoFrame";
-      return;
+  const uint64_t modifier = frame->layout().modifier();
+  const bool is_intel_media_compressed_buffer =
+      IsIntelMediaCompressedModifier(modifier);
+  EXPECT_TRUE(!is_intel_media_compressed_buffer ||
+              (frame->format() == PIXEL_FORMAT_NV12 ||
+               frame->format() == PIXEL_FORMAT_P016LE));
+
+  if (!is_intel_media_compressed_buffer) {
+    if (frame->storage_type() == VideoFrame::STORAGE_GPU_MEMORY_BUFFER) {
+      // TODO(andrescj): This is a workaround. ClientNativePixmapFactoryDmabuf
+      // creates ClientNativePixmapOpaque for SCANOUT_VDA_WRITE buffers which
+      // does not allow us to map GpuMemoryBuffers easily for testing.
+      // Therefore, we extract the dma-buf FDs. Alternatively, we could consider
+      // creating our own ClientNativePixmapFactory for testing.
+      //
+      // Note: this workaround is not needed for Intel media compressed
+      // VideoFrames because we can tell the VideoFrameMapperFactory to expect
+      // them, and it will be able to return a VideoFrameMapper that can handle
+      // them as they are.
+      frame = CreateDmabufVideoFrame(frame.get());
+      if (!frame) {
+        LOG(ERROR) << "Failed to create Dmabuf-backed VideoFrame from "
+                   << "GpuMemoryBuffer-based VideoFrame";
+        return;
+      }
     }
   }
 
-  if (frame->storage_type() == VideoFrame::STORAGE_DMABUFS) {
+  if (frame->storage_type() == VideoFrame::STORAGE_DMABUFS ||
+      is_intel_media_compressed_buffer) {
     // Create VideoFrameMapper if not yet created. The decoder's output pixel
     // format is not known yet when creating the VideoFrameValidator. We can
     // only create the VideoFrameMapper upon receiving the first video frame.
     if (!video_frame_mapper_) {
+      // TODO(b/286091514): here, we're assuming that we don't switch from
+      // regular buffers to Intel-media-compressed buffers. If that were to
+      // happen, it's possible that the cached |video_frame_mapper_| won't
+      // support the latter. Therefore, we might need to recreate
+      // |video_frame_mapper_| in that scenario.
       video_frame_mapper_ = VideoFrameMapperFactory::CreateMapper(
-          frame->format(), frame->storage_type());
+          frame->format(),
+          frame
+              ->storage_type(), /*must_support_intel_media_compressed_buffers=*/
+          is_intel_media_compressed_buffer);
       ASSERT_TRUE(video_frame_mapper_) << "Failed to create VideoFrameMapper";
     }
 
-    frame = video_frame_mapper_->Map(std::move(frame), PROT_READ | PROT_WRITE);
+    frame = video_frame_mapper_->Map(std::move(frame), PROT_READ);
     if (!frame) {
       LOG(ERROR) << "Failed to map video frame";
       return;
@@ -178,6 +208,9 @@ void VideoFrameValidator::ProcessVideoFrameTask(
 #endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 
   ASSERT_TRUE(frame->IsMappable());
+
+  if (ShouldCrop())
+    frame = CloneAndCropFrame(std::move(frame));
 
   auto mismatched_info = Validate(frame, frame_index);
 
@@ -193,6 +226,36 @@ void VideoFrameValidator::ProcessVideoFrameTask(
 
   num_frames_validating_--;
   frame_validator_cv_.Signal();
+}
+
+scoped_refptr<VideoFrame> VideoFrameValidator::CloneAndCropFrame(
+    scoped_refptr<const VideoFrame> frame) const {
+  const auto crop = crop_helper_.Run(*frame);
+  const auto& visible = frame->visible_rect();
+  auto cloned_frame = CloneVideoFrame(frame.get(), frame->layout());
+  // Ensures that the crop is within the previous visible rectangle.
+  if (!visible.Contains(crop)) {
+    LOG(ERROR) << "Crop " << crop.ToString()
+               << "must be contained by the visible area of the input frame: "
+               << visible.ToString() << ".";
+    return cloned_frame;
+  }
+  return VideoFrame::WrapVideoFrame(cloned_frame, frame->format(), crop,
+                                    crop.size());
+}
+
+gfx::Rect BottomRowCrop(int row_height, const VideoFrame& frame) {
+  const auto& visible = frame.visible_rect();
+  // Performs bounds checking on the row_height to ensure that the returned
+  // crop is contained by the current visible area.
+  if (visible.size().height() < row_height) {
+    LOG(ERROR) << "Could not get a row of height " << row_height
+               << " from a visible area of height " << visible.size().height();
+    return visible;
+  }
+
+  return gfx::Rect{visible.x(), visible.bottom() - row_height, visible.width(),
+                   row_height};
 }
 
 struct MD5VideoFrameValidator::MD5MismatchedFrameInfo
@@ -218,10 +281,11 @@ struct MD5VideoFrameValidator::MD5MismatchedFrameInfo
 std::unique_ptr<MD5VideoFrameValidator> MD5VideoFrameValidator::Create(
     const std::vector<std::string>& expected_frame_checksums,
     VideoPixelFormat validation_format,
-    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor) {
-  auto video_frame_validator = base::WrapUnique(
-      new MD5VideoFrameValidator(expected_frame_checksums, validation_format,
-                                 std::move(corrupt_frame_processor)));
+    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
+    CropHelper crop_helper) {
+  auto video_frame_validator = base::WrapUnique(new MD5VideoFrameValidator(
+      expected_frame_checksums, validation_format,
+      std::move(corrupt_frame_processor), std::move(crop_helper)));
   if (!video_frame_validator->Initialize()) {
     LOG(ERROR) << "Failed to initialize MD5VideoFrameValidator.";
     return nullptr;
@@ -233,8 +297,10 @@ std::unique_ptr<MD5VideoFrameValidator> MD5VideoFrameValidator::Create(
 MD5VideoFrameValidator::MD5VideoFrameValidator(
     const std::vector<std::string>& expected_frame_checksums,
     VideoPixelFormat validation_format,
-    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor)
-    : VideoFrameValidator(std::move(corrupt_frame_processor)),
+    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
+    CropHelper crop_helper)
+    : VideoFrameValidator(std::move(corrupt_frame_processor),
+                          std::move(crop_helper)),
       expected_frame_checksums_(expected_frame_checksums),
       validation_format_(validation_format) {}
 
@@ -325,9 +391,11 @@ struct RawVideoFrameValidator::RawMismatchedFrameInfo
 std::unique_ptr<RawVideoFrameValidator> RawVideoFrameValidator::Create(
     const GetModelFrameCB& get_model_frame_cb,
     std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
-    uint8_t tolerance) {
+    uint8_t tolerance,
+    CropHelper crop_helper) {
   auto video_frame_validator = base::WrapUnique(new RawVideoFrameValidator(
-      get_model_frame_cb, std::move(corrupt_frame_processor), tolerance));
+      get_model_frame_cb, std::move(corrupt_frame_processor), tolerance,
+      std::move(crop_helper)));
   if (!video_frame_validator->Initialize()) {
     LOG(ERROR) << "Failed to initialize RawVideoFrameValidator.";
     return nullptr;
@@ -339,8 +407,10 @@ std::unique_ptr<RawVideoFrameValidator> RawVideoFrameValidator::Create(
 RawVideoFrameValidator::RawVideoFrameValidator(
     const GetModelFrameCB& get_model_frame_cb,
     std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
-    uint8_t tolerance)
-    : VideoFrameValidator(std::move(corrupt_frame_processor)),
+    uint8_t tolerance,
+    CropHelper crop_helper)
+    : VideoFrameValidator(std::move(corrupt_frame_processor),
+                          std::move(crop_helper)),
       get_model_frame_cb_(get_model_frame_cb),
       tolerance_(tolerance) {}
 
@@ -352,6 +422,10 @@ RawVideoFrameValidator::Validate(scoped_refptr<const VideoFrame> frame,
   DCHECK_CALLED_ON_VALID_SEQUENCE(validator_thread_sequence_checker_);
   auto model_frame = get_model_frame_cb_.Run(frame_index);
   CHECK(model_frame);
+
+  if (ShouldCrop())
+    model_frame = CloneAndCropFrame(std::move(model_frame));
+
   size_t diff_cnt =
       CompareFramesWithErrorDiff(*frame, *model_frame, tolerance_);
   if (diff_cnt > 0)
@@ -376,15 +450,15 @@ std::unique_ptr<PSNRVideoFrameValidator> PSNRVideoFrameValidator::Create(
     const GetModelFrameCB& get_model_frame_cb,
     std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
     ValidationMode validation_mode,
-    double tolerance) {
+    double tolerance,
+    CropHelper crop_helper) {
   auto video_frame_validator = base::WrapUnique(new PSNRVideoFrameValidator(
       get_model_frame_cb, std::move(corrupt_frame_processor), validation_mode,
-      tolerance));
+      tolerance, std::move(crop_helper)));
   if (!video_frame_validator->Initialize()) {
     LOG(ERROR) << "Failed to initialize PSNRVideoFrameValidator.";
     return nullptr;
   }
-
   return video_frame_validator;
 }
 
@@ -392,8 +466,10 @@ PSNRVideoFrameValidator::PSNRVideoFrameValidator(
     const GetModelFrameCB& get_model_frame_cb,
     std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
     ValidationMode validation_mode,
-    double tolerance)
-    : VideoFrameValidator(std::move(corrupt_frame_processor)),
+    double tolerance,
+    CropHelper crop_helper)
+    : VideoFrameValidator(std::move(corrupt_frame_processor),
+                          std::move(crop_helper)),
       get_model_frame_cb_(get_model_frame_cb),
       tolerance_(tolerance),
       validation_mode_(validation_mode) {}
@@ -406,6 +482,10 @@ PSNRVideoFrameValidator::Validate(scoped_refptr<const VideoFrame> frame,
   DCHECK_CALLED_ON_VALID_SEQUENCE(validator_thread_sequence_checker_);
   auto model_frame = get_model_frame_cb_.Run(frame_index);
   CHECK(model_frame);
+
+  if (ShouldCrop())
+    model_frame = CloneAndCropFrame(std::move(model_frame));
+
   double psnr = ComputePSNR(*frame, *model_frame);
   DVLOGF(4) << "frame_index: " << frame_index << ", psnr: " << psnr;
   psnr_[frame_index] = psnr;
@@ -425,6 +505,7 @@ bool PSNRVideoFrameValidator::Passed() const {
     average += psnr.second;
   }
   average /= psnr_.size();
+  DVLOGF(4) << "Average PSNR: " << average;
   if (average < tolerance_) {
     LOG(ERROR) << "Average PSNR is too low: " << average;
     return false;
@@ -449,15 +530,15 @@ std::unique_ptr<SSIMVideoFrameValidator> SSIMVideoFrameValidator::Create(
     const GetModelFrameCB& get_model_frame_cb,
     std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
     ValidationMode validation_mode,
-    double tolerance) {
+    double tolerance,
+    CropHelper crop_helper) {
   auto video_frame_validator = base::WrapUnique(new SSIMVideoFrameValidator(
       get_model_frame_cb, std::move(corrupt_frame_processor), validation_mode,
-      tolerance));
+      tolerance, std::move(crop_helper)));
   if (!video_frame_validator->Initialize()) {
     LOG(ERROR) << "Failed to initialize SSIMVideoFrameValidator.";
     return nullptr;
   }
-
   return video_frame_validator;
 }
 
@@ -465,8 +546,10 @@ SSIMVideoFrameValidator::SSIMVideoFrameValidator(
     const GetModelFrameCB& get_model_frame_cb,
     std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
     ValidationMode validation_mode,
-    double tolerance)
-    : VideoFrameValidator(std::move(corrupt_frame_processor)),
+    double tolerance,
+    CropHelper crop_helper)
+    : VideoFrameValidator(std::move(corrupt_frame_processor),
+                          std::move(crop_helper)),
       get_model_frame_cb_(get_model_frame_cb),
       tolerance_(tolerance),
       validation_mode_(validation_mode) {}
@@ -478,8 +561,11 @@ SSIMVideoFrameValidator::Validate(scoped_refptr<const VideoFrame> frame,
                                   size_t frame_index) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(validator_thread_sequence_checker_);
   auto model_frame = get_model_frame_cb_.Run(frame_index);
-
   CHECK(model_frame);
+
+  if (ShouldCrop())
+    model_frame = CloneAndCropFrame(std::move(model_frame));
+
   double ssim = ComputeSSIM(*frame, *model_frame);
   DVLOGF(4) << "frame_index: " << frame_index << ", ssim: " << ssim;
   ssim_[frame_index] = ssim;
@@ -499,11 +585,86 @@ bool SSIMVideoFrameValidator::Passed() const {
     average += ssim.second;
   }
   average /= ssim_.size();
+  DVLOGF(4) << "Average SSIM: " << average;
   if (average < tolerance_) {
     LOG(ERROR) << "Average SSIM is too low: " << average;
     return false;
   }
   return true;
 }
+
+struct LogLikelihoodRatioVideoFrameValidator::
+    LogLikelihoodRatioMismatchedFrameInfo
+    : public VideoFrameValidator::MismatchedFrameInfo {
+  LogLikelihoodRatioMismatchedFrameInfo(size_t frame_index, double ratio)
+      : MismatchedFrameInfo(frame_index), ratio(ratio) {}
+  ~LogLikelihoodRatioMismatchedFrameInfo() override = default;
+  void Print() const override {
+    LOG(ERROR) << "frame_index: " << frame_index
+               << ", log likelihood ratio: " << ratio;
+  }
+
+  double ratio;
+};
+
+// static
+std::unique_ptr<LogLikelihoodRatioVideoFrameValidator>
+LogLikelihoodRatioVideoFrameValidator::Create(
+    const GetModelFrameCB& get_model_frame_cb,
+    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
+    ValidationMode validation_mode,
+    double tolerance,
+    CropHelper crop_helper) {
+  auto video_frame_validator =
+      base::WrapUnique(new LogLikelihoodRatioVideoFrameValidator(
+          get_model_frame_cb, std::move(corrupt_frame_processor),
+          validation_mode, tolerance, std::move(crop_helper)));
+  if (!video_frame_validator->Initialize()) {
+    LOG(ERROR) << "Failed to initialize LogLikelihoodRatioVideoFrameValidator.";
+    return nullptr;
+  }
+
+  return video_frame_validator;
+}
+
+LogLikelihoodRatioVideoFrameValidator::LogLikelihoodRatioVideoFrameValidator(
+    const GetModelFrameCB& get_model_frame_cb,
+    std::unique_ptr<VideoFrameProcessor> corrupt_frame_processor,
+    ValidationMode validation_mode,
+    double tolerance,
+    CropHelper crop_helper)
+    : VideoFrameValidator(std::move(corrupt_frame_processor),
+                          std::move(crop_helper)),
+      get_model_frame_cb_(get_model_frame_cb),
+      tolerance_(tolerance) {}
+
+LogLikelihoodRatioVideoFrameValidator::
+    ~LogLikelihoodRatioVideoFrameValidator() = default;
+
+std::unique_ptr<VideoFrameValidator::MismatchedFrameInfo>
+LogLikelihoodRatioVideoFrameValidator::Validate(
+    scoped_refptr<const VideoFrame> frame,
+    size_t frame_index) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(validator_thread_sequence_checker_);
+  auto model_frame = get_model_frame_cb_.Run(frame_index);
+
+  CHECK(model_frame);
+
+  if (ShouldCrop()) {
+    model_frame = CloneAndCropFrame(std::move(model_frame));
+  }
+
+  double ratio = ComputeLogLikelihoodRatio(model_frame, frame);
+  DVLOGF(4) << "frame_index: " << frame_index
+            << ", log likelihood ratio: " << ratio;
+  log_likelihood_ratios_[frame_index] = ratio;
+  if (ratio >= tolerance_) {
+    return std::make_unique<LogLikelihoodRatioMismatchedFrameInfo>(frame_index,
+                                                                   ratio);
+  }
+
+  return nullptr;
+}
+
 }  // namespace test
 }  // namespace media

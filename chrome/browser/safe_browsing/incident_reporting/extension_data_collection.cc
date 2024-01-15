@@ -9,6 +9,7 @@
 #include "base/time/time.h"
 #include "base/version.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/extensions/chrome_content_browser_client_extensions_part.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/extensions/install_signer.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -67,22 +68,20 @@ void PopulateExtensionInfo(
       extension.converted_from_user_script());
   extension_info->set_may_be_untrusted(extension.may_be_untrusted());
   extension_info->set_install_time_msec(
-      extension_prefs.GetInstallTime(extension.id()).ToJavaTime());
+      extension_prefs.GetLastUpdateTime(extension.id())
+          .InMillisecondsSinceUnixEpoch());
 
-  const base::DictionaryValue* signature =
-      extension_prefs.GetInstallSignature();
-  if (signature) {
-    std::unique_ptr<extensions::InstallSignature> signature_from_prefs =
-        extensions::InstallSignature::FromValue(*signature);
-    if (signature_from_prefs) {
-      if (base::Contains(signature_from_prefs->ids, extension_id)) {
-        extension_info->set_has_signature_validation(true);
-        extension_info->set_signature_is_valid(true);
-      } else if (base::Contains(signature_from_prefs->invalid_ids,
-                                extension_id)) {
-        extension_info->set_has_signature_validation(true);
-        extension_info->set_signature_is_valid(false);
-      }
+  std::unique_ptr<extensions::InstallSignature> signature_from_prefs =
+      extensions::InstallSignature::FromDict(
+          extension_prefs.GetInstallSignature());
+  if (signature_from_prefs) {
+    if (base::Contains(signature_from_prefs->ids, extension_id)) {
+      extension_info->set_has_signature_validation(true);
+      extension_info->set_signature_is_valid(true);
+    } else if (base::Contains(signature_from_prefs->invalid_ids,
+                              extension_id)) {
+      extension_info->set_has_signature_validation(true);
+      extension_info->set_signature_is_valid(false);
     }
   }
 
@@ -108,17 +107,22 @@ void CollectExtensionData(ClientIncidentReport_ExtensionData* data) {
   for (Profile* profile :
        g_browser_process->profile_manager()->GetLoadedProfiles()) {
     // Skip profiles for which the incident reporting service is not enabled.
-    if (!IncidentReportingService::IsEnabledForProfile(profile))
+    //
+    // Some profiles cannot have extensions, such as the System Profile.
+    if (!IncidentReportingService::IsEnabledForProfile(profile) ||
+        extensions::ChromeContentBrowserClientExtensionsPart::
+            AreExtensionsDisabledForProfile(profile)) {
       continue;
+    }
 
-    std::unique_ptr<const extensions::ExtensionSet> extensions(
+    const extensions::ExtensionSet extensions =
         extensions::ExtensionRegistryFactory::GetForBrowserContext(profile)
-            ->GenerateInstalledExtensionsSet());
+            ->GenerateInstalledExtensionsSet();
     extensions::ExtensionPrefs* extension_prefs =
         extensions::ExtensionPrefsFactory::GetForBrowserContext(profile);
-    for (const auto& extension : *extensions) {
+    for (const auto& extension : extensions) {
       base::Time install_time =
-          extension_prefs->GetInstallTime(extension->id());
+          extension_prefs->GetLastUpdateTime(extension->id());
       if (install_time > last_install_time) {
         last_install_time = install_time;
         last_installed_extension = extension;

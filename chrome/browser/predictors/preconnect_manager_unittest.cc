@@ -14,11 +14,10 @@
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/predictors/loading_test_util.h"
 #include "chrome/browser/predictors/proxy_lookup_client_impl.h"
 #include "chrome/browser/predictors/resolve_host_client_impl.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -53,9 +52,7 @@ net::ProxyInfo GetDirectProxyInfo() {
   return proxy_info;
 }
 
-class MockPreconnectManagerDelegate
-    : public PreconnectManager::Delegate,
-      public base::SupportsWeakPtr<MockPreconnectManagerDelegate> {
+class MockPreconnectManagerDelegate : public PreconnectManager::Delegate {
  public:
   // Gmock doesn't support mocking methods with move-only argument types.
   void PreconnectFinished(std::unique_ptr<PreconnectStats> stats) override {
@@ -65,6 +62,13 @@ class MockPreconnectManagerDelegate
   MOCK_METHOD1(PreconnectFinishedProxy, void(const GURL& url));
   MOCK_METHOD2(PreconnectInitiated,
                void(const GURL& url, const GURL& preconnect_url));
+
+  base::WeakPtr<MockPreconnectManagerDelegate> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockPreconnectManagerDelegate> weak_ptr_factory_{this};
 };
 
 class MockNetworkContext : public network::TestNetworkContext {
@@ -184,7 +188,7 @@ class MockNetworkContext : public network::TestNetworkContext {
 net::NetworkAnonymizationKey CreateNetworkAnonymizationKey(
     const GURL& main_frame_url) {
   net::SchemefulSite site = net::SchemefulSite(main_frame_url);
-  return net::NetworkAnonymizationKey(site, site);
+  return net::NetworkAnonymizationKey::CreateSameSite(site);
 }
 
 }  // namespace
@@ -861,7 +865,7 @@ TEST_F(PreconnectManagerTest, TestStartPreresolveHosts) {
 
   EXPECT_CALL(*mock_network_context_, ResolveHostProxy(cdn.host()));
   EXPECT_CALL(*mock_network_context_, ResolveHostProxy(fonts.host()));
-  preconnect_manager_->StartPreresolveHosts({cdn.host(), fonts.host()},
+  preconnect_manager_->StartPreresolveHosts({cdn, fonts},
                                             network_anonymization_key);
   mock_network_context_->CompleteHostLookup(cdn.host(),
                                             network_anonymization_key, net::OK);
@@ -879,7 +883,7 @@ TEST_F(PreconnectManagerTest, TestStartPreresolveHostsDisabledViaUI) {
 
   // mock_network_context_.ResolveHostProxy shouldn't be called. The StrictMock
   // will raise an error if it happens.
-  preconnect_manager_->StartPreresolveHosts({cdn.host(), fonts.host()},
+  preconnect_manager_->StartPreresolveHosts({cdn, fonts},
                                             network_anonymization_key);
 }
 
@@ -927,8 +931,8 @@ TEST_F(PreconnectManagerTest, TestStartPreconnectUrlWithNetworkIsolationKey) {
   bool allow_credentials = false;
   net::SchemefulSite requesting_site =
       net::SchemefulSite(GURL("http://foo.test"));
-  net::NetworkAnonymizationKey network_anonymization_key(requesting_site,
-                                                         requesting_site);
+  auto network_anonymization_key =
+      net::NetworkAnonymizationKey::CreateSameSite(requesting_site);
 
   EXPECT_CALL(*mock_network_context_, ResolveHostProxy(origin.host()));
   preconnect_manager_->StartPreconnectUrl(url, allow_credentials,

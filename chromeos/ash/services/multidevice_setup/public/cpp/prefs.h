@@ -29,7 +29,6 @@ enum class EcheSupportReceivedFromPhoneHub {
 extern const char kInstantTetheringAllowedPrefName[];
 extern const char kMessagesAllowedPrefName[];
 extern const char kSmartLockAllowedPrefName[];
-extern const char kSmartLockSigninAllowedPrefName[];
 extern const char kPhoneHubAllowedPrefName[];
 extern const char kPhoneHubCameraRollAllowedPrefName[];
 extern const char kPhoneHubNotificationsAllowedPrefName[];
@@ -72,10 +71,5 @@ bool IsDefaultFeatureEnabledValue(mojom::Feature feature,
 }  // namespace multidevice_setup
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::multidevice_setup {
-using ::ash::multidevice_setup::AreAnyMultiDeviceFeaturesAllowed;
-}
 
 #endif  // CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_PUBLIC_CPP_PREFS_H_

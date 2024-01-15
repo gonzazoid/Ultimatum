@@ -7,12 +7,14 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "build/build_config.h"
 #include "components/policy/core/browser/configuration_policy_pref_store.h"
 #include "components/policy/core/browser/configuration_policy_pref_store_test.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
 #include "components/search_engines/default_search_manager.h"
 #include "components/search_engines/search_engines_pref_names.h"
+#include "components/search_engines/template_url_data.h"
 
 namespace policy {
 
@@ -33,7 +35,6 @@ class DefaultSearchPolicyHandlerTest
  protected:
   static const char kSearchURL[];
   static const char kSuggestURL[];
-  static const char kIconURL[];
   static const char kName[];
   static const char kKeyword[];
   static const char kReplacementKey[];
@@ -55,8 +56,6 @@ const char DefaultSearchPolicyHandlerTest::kSearchURL[] =
     "http://test.com/search?t={searchTerms}";
 const char DefaultSearchPolicyHandlerTest::kSuggestURL[] =
     "http://test.com/sugg?={searchTerms}";
-const char DefaultSearchPolicyHandlerTest::kIconURL[] =
-    "http://test.com/icon.jpg";
 const char DefaultSearchPolicyHandlerTest::kName[] =
     "MyName";
 const char DefaultSearchPolicyHandlerTest::kKeyword[] =
@@ -73,7 +72,7 @@ const char DefaultSearchPolicyHandlerTest::kHostName[] = "test.com";
 
 void DefaultSearchPolicyHandlerTest::
     BuildDefaultSearchPolicy(PolicyMap* policy) {
-  base::Value encodings(base::Value::Type::LIST);
+  base::Value::List encodings;
   encodings.Append("UTF-16");
   encodings.Append("UTF-8");
   policy->Set(key::kDefaultSearchProviderEnabled, POLICY_LEVEL_MANDATORY,
@@ -91,12 +90,9 @@ void DefaultSearchPolicyHandlerTest::
   policy->Set(key::kDefaultSearchProviderSuggestURL, POLICY_LEVEL_MANDATORY,
               POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(kSuggestURL),
               nullptr);
-  policy->Set(key::kDefaultSearchProviderIconURL, POLICY_LEVEL_MANDATORY,
-              POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(kIconURL),
-              nullptr);
   policy->Set(key::kDefaultSearchProviderEncodings, POLICY_LEVEL_MANDATORY,
-              POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(encodings),
-              nullptr);
+              POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+              base::Value(std::move(encodings)), nullptr);
   policy->Set(key::kDefaultSearchProviderAlternateURLs, POLICY_LEVEL_MANDATORY,
               POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
               base::Value(default_alternate_urls_.Clone()), nullptr);
@@ -150,7 +146,6 @@ TEST_F(DefaultSearchPolicyHandlerTest, InvalidType) {
       key::kDefaultSearchProviderKeyword,
       key::kDefaultSearchProviderSearchURL,
       key::kDefaultSearchProviderSuggestURL,
-      key::kDefaultSearchProviderIconURL,
       key::kDefaultSearchProviderEncodings,
       key::kDefaultSearchProviderAlternateURLs,
       key::kDefaultSearchProviderImageURL,
@@ -199,6 +194,9 @@ TEST_F(DefaultSearchPolicyHandlerTest, FullyDefined) {
   const base::Value::Dict* dictionary = temp->GetIfDict();
   ASSERT_TRUE(dictionary);
 
+  ASSERT_EQ(dictionary->FindInt(DefaultSearchManager::kCreatedByPolicy),
+            static_cast<int>(
+                TemplateURLData::CreatedByPolicy::kDefaultSearchProvider));
   const std::string* value = nullptr;
   ASSERT_TRUE(value = dictionary->FindString(DefaultSearchManager::kURL));
   EXPECT_EQ(kSearchURL, *value);
@@ -210,9 +208,6 @@ TEST_F(DefaultSearchPolicyHandlerTest, FullyDefined) {
   ASSERT_TRUE(
       value = dictionary->FindString(DefaultSearchManager::kSuggestionsURL));
   EXPECT_EQ(kSuggestURL, *value);
-  EXPECT_TRUE(value =
-                  dictionary->FindString(DefaultSearchManager::kFaviconURL));
-  EXPECT_EQ(kIconURL, *value);
 
   base::Value::List encodings;
   encodings.Append("UTF-16");
@@ -300,6 +295,9 @@ TEST_F(DefaultSearchPolicyHandlerTest, MinimallyDefined) {
   ASSERT_TRUE(dictionary);
 
   // Name and keyword should be derived from host.
+  ASSERT_EQ(dictionary->FindInt(DefaultSearchManager::kCreatedByPolicy),
+            static_cast<int>(
+                TemplateURLData::CreatedByPolicy::kDefaultSearchProvider));
   const std::string* value = nullptr;
   ASSERT_TRUE(value = dictionary->FindString(DefaultSearchManager::kURL));
   EXPECT_EQ(kSearchURL, *value);
@@ -311,9 +309,6 @@ TEST_F(DefaultSearchPolicyHandlerTest, MinimallyDefined) {
   // Everything else should be set to the default value.
   ASSERT_TRUE(
       value = dictionary->FindString(DefaultSearchManager::kSuggestionsURL));
-  EXPECT_EQ(std::string(), *value);
-  ASSERT_TRUE(value =
-                  dictionary->FindString(DefaultSearchManager::kFaviconURL));
   EXPECT_EQ(std::string(), *value);
   const base::Value::List* list_value = nullptr;
   ASSERT_TRUE(list_value =
@@ -354,6 +349,9 @@ TEST_F(DefaultSearchPolicyHandlerTest, FileURL) {
   const base::Value::Dict* dictionary = temp->GetIfDict();
   ASSERT_TRUE(dictionary);
 
+  ASSERT_EQ(dictionary->FindInt(DefaultSearchManager::kCreatedByPolicy),
+            static_cast<int>(
+                TemplateURLData::CreatedByPolicy::kDefaultSearchProvider));
   const std::string* value = nullptr;
   ASSERT_TRUE(value = dictionary->FindString(DefaultSearchManager::kURL));
   EXPECT_EQ(kFileSearchURL, *value);

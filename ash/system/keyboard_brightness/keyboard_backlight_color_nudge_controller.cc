@@ -13,8 +13,8 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -55,10 +55,9 @@ void KeyboardBacklightColorNudgeController::HandleWallpaperColorNudgeShown() {
 
 void KeyboardBacklightColorNudgeController::MaybeShowEducationNudge(
     views::View* keyboard_brightness_slider_view) {
-  if (!keyboard_brightness_slider_view)
+  if (!keyboard_brightness_slider_view || education_nudge_) {
     return;
-  if (education_nudge_)
-    return;
+  }
   if (!contextual_tooltip::ShouldShowNudge(
           GetActivePrefService(),
           contextual_tooltip::TooltipType::kKeyboardBacklightColor,
@@ -94,6 +93,7 @@ void KeyboardBacklightColorNudgeController::MaybeShowEducationNudge(
   layer->SetRoundedCornerRadius(
       gfx::RoundedCornersF{static_cast<float>(kBubbleCornerRadius)});
   layer->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+  layer->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
 
   gfx::Rect anchor_rect =
       keyboard_brightness_slider_view->GetAnchorBoundsInScreen();

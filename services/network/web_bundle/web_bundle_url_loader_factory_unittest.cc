@@ -4,7 +4,7 @@
 
 #include "services/network/web_bundle/web_bundle_url_loader_factory.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "components/web_package/web_bundle_builder.h"
@@ -256,7 +256,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, Basic) {
 
   EXPECT_EQ(net::OK, request.client->completion_status().error_code);
   EXPECT_FALSE(last_bundle_error().has_value());
-  EXPECT_EQ(request.client->response_head()->web_bundle_url, GURL(kBundleUrl));
+  EXPECT_TRUE(request.client->response_head()->is_web_bundle_inner_response);
   std::string body;
   EXPECT_TRUE(mojo::BlockingCopyToString(
       request.client->response_body_release(), &body));

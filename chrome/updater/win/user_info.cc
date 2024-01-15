@@ -7,7 +7,7 @@
 #include <string>
 
 #include "base/check.h"
-#include "chrome/updater/win/win_util.h"
+#include "chrome/updater/util/win_util.h"
 
 namespace updater {
 
@@ -24,27 +24,31 @@ HRESULT GetProcessUser(std::wstring* name,
   CSid current_sid;
 
   HRESULT hr = GetProcessUserSid(&current_sid);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
     return hr;
+  }
 
-  if (sid)
+  if (sid) {
     *sid = current_sid.Sid();
-  if (name)
+  }
+  if (name) {
     *name = current_sid.AccountName();
-  if (domain)
+  }
+  if (domain) {
     *domain = current_sid.Domain();
+  }
 
   return S_OK;
 }
 
 HRESULT GetProcessUserSid(CSid* sid) {
-  DCHECK(sid);
+  CHECK(sid);
 
   CAccessToken token;
   if (!token.GetProcessToken(TOKEN_QUERY) || !token.GetUser(sid)) {
     HRESULT hr = HRESULTFromLastError();
     std::wstring thread_sid;
-    DCHECK(FAILED(GetThreadUserSid(&thread_sid)));
+    CHECK(FAILED(GetThreadUserSid(&thread_sid)));
     return hr;
   }
 
@@ -58,7 +62,7 @@ bool IsLocalSystemUser() {
 }
 
 HRESULT GetThreadUserSid(std::wstring* sid) {
-  DCHECK(sid);
+  CHECK(sid);
   CAccessToken access_token;
   CSid user_sid;
   if (access_token.GetThreadToken(TOKEN_READ) &&

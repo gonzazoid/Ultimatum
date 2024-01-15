@@ -9,12 +9,21 @@ import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {DomRepeat, flush, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {EditDialogCompletedActions, UserAction} from '../mojom-webui/ash/webui/shortcut_customization_ui/mojom/shortcut_customization.mojom-webui.js';
 
 import {getTemplate} from './accelerator_edit_dialog.html.js';
 import {ViewState} from './accelerator_view.js';
-import {AcceleratorInfo, AcceleratorSource} from './shortcut_types.js';
+import {getShortcutProvider} from './mojo_interface_provider.js';
+import {AcceleratorConfigResult, AcceleratorInfo, AcceleratorSource, AcceleratorState, EditAction} from './shortcut_types.js';
+import {compareAcceleratorInfos, getAccelerator, isStandardAcceleratorInfo} from './shortcut_utils.js';
+
+export type DefaultConflictResolvedEvent = CustomEvent<{accelerator: string}>;
 
 export interface AcceleratorEditDialogElement {
   $: {
@@ -26,8 +35,12 @@ declare global {
   interface HTMLElementEventMap {
     'accelerator-capturing-started': CustomEvent<void>;
     'accelerator-capturing-ended': CustomEvent<void>;
+    'default-conflict-resolved': DefaultConflictResolvedEvent;
   }
 }
+
+// A maximum of 5 accelerators are allowed.
+const MAX_NUM_ACCELERATORS = 5;
 
 /**
  * @fileoverview
@@ -35,16 +48,19 @@ declare global {
  * a given shortcut. Allows users to edit the accelerators.
  * TODO(jimmyxgong): Implement editing accelerators.
  */
-export class AcceleratorEditDialogElement extends PolymerElement {
-  static get is() {
+const AcceleratorEditDialogElementBase = I18nMixin(PolymerElement);
+
+export class AcceleratorEditDialogElement extends
+    AcceleratorEditDialogElementBase {
+  static get is(): string {
     return 'accelerator-edit-dialog';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       description: {
         type: String,
@@ -53,10 +69,12 @@ export class AcceleratorEditDialogElement extends PolymerElement {
 
       acceleratorInfos: {
         type: Array,
-        value: () => {},
+        value: () => [],
+        observer:
+            AcceleratorEditDialogElement.prototype.onAcceleratorInfosChanged,
       },
 
-      pendingNewAcceleratorState_: {
+      pendingNewAcceleratorState: {
         type: Number,
         value: ViewState.VIEW,
       },
@@ -71,9 +89,22 @@ export class AcceleratorEditDialogElement extends PolymerElement {
         value: 0,
       },
 
-      isAcceleratorCapturing_: {
+      isAcceleratorCapturing: {
         type: Boolean,
         value: false,
+      },
+
+      // `Set` is not an observable type in Polymer, so this `Array` mirrors
+      // `defaultAcceleratorsWithConflict` but is observable to template
+      // observers functions.
+      observableDefaultAcceleratorsWithConflict: {
+        type: Array,
+        value: () => [],
+      },
+
+      shouldHideRestoreButton: {
+        type: Boolean,
+        value: true,
       },
     };
   }
@@ -82,63 +113,117 @@ export class AcceleratorEditDialogElement extends PolymerElement {
   acceleratorInfos: AcceleratorInfo[];
   action: number;
   source: AcceleratorSource;
-  protected isAcceleratorCapturing_: boolean;
-  private pendingNewAcceleratorState_: number;
-  private acceleratorCapturingStartedListener_ = () =>
-      this.onAcceleratorCapturingStarted_();
-  private acceleratorCapturingEndedListener_ = () =>
-      this.onAcceleratorCapturingEnded_();
+  protected isAcceleratorCapturing: boolean;
+  protected shouldHideRestoreButton: boolean;
+  protected observableDefaultAcceleratorsWithConflict: string[];
+  private pendingNewAcceleratorState: number;
+  private shouldSnapshotConflictDefaults: boolean;
+  private defaultAcceleratorsWithConflict: Set<string> = new Set<string>();
+  private eventTracker: EventTracker = new EventTracker();
+  // Represents bitwise actions done in the dialog.
+  private completedActions: number = EditDialogCompletedActions.kNoAction;
 
-  override connectedCallback() {
+  override connectedCallback(): void {
     super.connectedCallback();
     this.$.editDialog.showModal();
 
-    window.addEventListener(
-        'accelerator-capturing-started',
-        this.acceleratorCapturingStartedListener_);
-    window.addEventListener(
-        'accelerator-capturing-ended', this.acceleratorCapturingEndedListener_);
+    // Update the aria-label of editDialog, by default, it would include all the
+    // content within the dialog.
+    // 1. Remove 'aria-describedby' to avoid redundant information.
+    // 2. Set a custom aria-label indicating the dialog for certain shortcut is
+    // open.
+    this.$.editDialog.shadowRoot!.querySelector('#dialog')!.removeAttribute(
+        'aria-describedby');
+    this.$.editDialog.setTitleAriaLabel(
+        this.i18n('editDialogAriaLabel', this.description));
+
+    this.eventTracker.add(
+        window, 'accelerator-capturing-started',
+        () => this.onAcceleratorCapturingStarted());
+    this.eventTracker.add(
+        window, 'accelerator-capturing-ended',
+        () => this.onAcceleratorCapturingEnded());
+    this.eventTracker.add(
+        this, 'default-conflict-resolved',
+        (e: CustomEvent<{stringifiedAccelerator: string}>) =>
+            this.onDefaultConflictResolved(e));
+
+    getShortcutProvider().recordUserAction(UserAction.kOpenEditDialog);
   }
 
-  override disconnectedCallback() {
+  override disconnectedCallback(): void {
     super.disconnectedCallback();
-    window.removeEventListener(
-        'accelerator-capturing-started',
-        this.acceleratorCapturingStartedListener_);
-    window.removeEventListener(
-        'accelerator-capturing-ended', this.acceleratorCapturingEndedListener_);
+    this.completedActions = 0;
+    this.eventTracker.removeAll();
+    this.set('acceleratorInfos', []);
+    this.shouldSnapshotConflictDefaults = false;
+    this.defaultAcceleratorsWithConflict.clear();
+    this.updateObservableAcceleratorsWithConflict();
   }
 
-  private getViewList_(): DomRepeat {
+  private getViewList(): DomRepeat {
     const viewList = this.shadowRoot!.querySelector('#viewList') as DomRepeat;
     assert(viewList);
     return viewList;
   }
 
-  updateDialogAccelerators(updatedAccels: AcceleratorInfo[]) {
+  updateDialogAccelerators(updatedAccelerators: AcceleratorInfo[]): void {
+    // After accelerators have been updated from restoring defaults, snapshot
+    // default accelerators that have been disabled.
+    if (this.shouldSnapshotConflictDefaults) {
+      this.shouldSnapshotConflictDefaults = false;
+      for (const acceleratorInfo of updatedAccelerators) {
+        if (acceleratorInfo.state === AcceleratorState.kDisabledByUser &&
+            isStandardAcceleratorInfo(acceleratorInfo)) {
+          this.defaultAcceleratorsWithConflict.add(
+              JSON.stringify(getAccelerator(acceleratorInfo)));
+          this.updateObservableAcceleratorsWithConflict();
+        }
+      }
+    }
+
     this.set('acceleratorInfos', []);
-    this.getViewList_().render();
-    this.acceleratorInfos = updatedAccels;
+    this.getViewList().render();
+    this.acceleratorInfos = updatedAccelerators.filter(
+        accel => accel.state !== AcceleratorState.kDisabledByUnavailableKeys);
   }
 
-  protected onDoneButtonClicked_() {
+  protected onDoneButtonClicked(): void {
     this.$.editDialog.close();
   }
 
-  protected onDialogClose_() {
+  protected onDialogClose(): void {
+    getShortcutProvider().recordEditDialogCompletedActions(
+        this.completedActions as EditDialogCompletedActions);
     this.dispatchEvent(
         new CustomEvent('edit-dialog-closed', {bubbles: true, composed: true}));
   }
 
-  private onAcceleratorCapturingStarted_() {
-    this.isAcceleratorCapturing_ = true;
+  private onAcceleratorCapturingStarted(): void {
+    this.isAcceleratorCapturing = true;
   }
 
-  private onAcceleratorCapturingEnded_() {
-    this.isAcceleratorCapturing_ = false;
+  private onAcceleratorCapturingEnded(): void {
+    this.isAcceleratorCapturing = false;
   }
 
-  private focusAcceleratorItemContainer_() {
+  private onDefaultConflictResolved(
+      e: CustomEvent<{stringifiedAccelerator: string}>): void {
+    assert(this.defaultAcceleratorsWithConflict.delete(
+        e.detail.stringifiedAccelerator));
+    this.updateObservableAcceleratorsWithConflict();
+  }
+
+  private onEditActionCompleted(e: CustomEvent<{editAction: EditAction}>):
+      void {
+    this.updateCompletedActions(e.detail.editAction);
+  }
+
+  private updateCompletedActions(editAction: EditAction): void {
+    this.completedActions |= editAction;
+  }
+
+  private focusAcceleratorItemContainer(): void {
     const editView = this.$.editDialog.querySelector('#pendingAccelerator');
     assert(editView);
     const accelItem = editView.shadowRoot!.querySelector('#acceleratorItem');
@@ -149,21 +234,126 @@ export class AcceleratorEditDialogElement extends PolymerElement {
     container!.focus();
   }
 
-  protected onAddAcceleratorClicked_() {
-    this.pendingNewAcceleratorState_ = ViewState.ADD;
+  protected onAddAcceleratorClicked(): void {
+    this.pendingNewAcceleratorState = ViewState.ADD;
 
     // Flush the dom so that the AcceleratorEditView is ready to be focused.
     flush();
-    this.focusAcceleratorItemContainer_();
+    this.focusAcceleratorItemContainer();
+    getShortcutProvider().recordUserAction(UserAction.kStartAddAccelerator);
   }
 
-  protected showAddButton_(): boolean {
-    // If the state is VIEW, no new pending accelerators are being added.
-    return this.pendingNewAcceleratorState_ === ViewState.VIEW;
+  protected showNewAccelerator(): boolean {
+    // Show new pending accelerators when ViewState is ADD.
+    return this.pendingNewAcceleratorState === ViewState.ADD &&
+        this.acceleratorLimitNotReached();
   }
 
-  protected onRestoreDefaultButtonClicked_() {
-    // TODO(jimmyxgong): Implement this function.
+  protected showAddButton(): boolean {
+    // Show addbutton if the state is not ADD and there is no conflict during
+    // restore default process.
+    return this.pendingNewAcceleratorState !== ViewState.ADD &&
+        this.acceleratorLimitNotReached() &&
+        this.defaultAcceleratorsWithConflict.size === 0;
+  }
+
+  protected isEmptyState(): boolean {
+    return this.pendingNewAcceleratorState === ViewState.VIEW &&
+        this.getSortedFilteredAccelerators(this.acceleratorInfos).length === 0;
+  }
+
+  protected acceleratorLimitNotReached(): boolean {
+    let originalAcceleratorsCount = 0;
+    for (const acceleratorInfo of this.acceleratorInfos) {
+      if (isStandardAcceleratorInfo(acceleratorInfo)) {
+        // Check if this is an aliased accelerator, if so do not count it since
+        // we only care about the original accelerator that the user or system
+        // originally provided.
+        if (acceleratorInfo.layoutProperties.standardAccelerator
+                    ?.originalAccelerator !== undefined ||
+            acceleratorInfo.state !== AcceleratorState.kEnabled) {
+          continue;
+        }
+        ++originalAcceleratorsCount;
+      }
+    }
+
+    return originalAcceleratorsCount < MAX_NUM_ACCELERATORS;
+  }
+
+  protected onRestoreDefaultButtonClicked(): void {
+    getShortcutProvider()
+        .restoreDefault(this.source, this.action)
+        .then(({result}) => {
+          getShortcutProvider().recordUserAction(UserAction.kResetAction);
+          if (result.result === AcceleratorConfigResult.kSuccess) {
+            this.requestUpdateAccelerator(this.source, this.action);
+            this.updateCompletedActions(EditAction.RESET);
+          } else if (
+              result.result ===
+              AcceleratorConfigResult.kRestoreSuccessWithConflicts) {
+            this.shouldSnapshotConflictDefaults = true;
+            this.requestUpdateAccelerator(this.source, this.action);
+          }
+        });
+  }
+
+  protected getSortedFilteredAccelerators(accelerators: AcceleratorInfo[]):
+      AcceleratorInfo[] {
+    const filteredAccelerators = accelerators.filter(accel => {
+      // If restore default is clicked, we allow `kDisabledByUser`.
+      const hasDefaultConflicts =
+          this.defaultAcceleratorsWithConflict.size !== 0;
+      if (hasDefaultConflicts && isStandardAcceleratorInfo(accel)) {
+        return this.defaultAcceleratorsWithConflict.has(
+                   JSON.stringify(getAccelerator(accel))) &&
+            accel.state !== AcceleratorState.kDisabledByUnavailableKeys;
+      }
+
+      return accel.state !== AcceleratorState.kDisabledByUser &&
+          accel.state !== AcceleratorState.kDisabledByUnavailableKeys;
+    });
+    return filteredAccelerators.sort(compareAcceleratorInfos);
+  }
+
+  private requestUpdateAccelerator(source: number, action: number): void {
+    this.dispatchEvent(new CustomEvent('request-update-accelerator', {
+      bubbles: true,
+      composed: true,
+      detail: {source, action},
+    }));
+  }
+
+  private updateObservableAcceleratorsWithConflict(): void {
+    this.set(
+        'observableDefaultAcceleratorsWithConflict',
+        Array.from(this.defaultAcceleratorsWithConflict));
+  }
+
+  protected async onAcceleratorInfosChanged(): Promise<void> {
+    // Hide restoreButton when current accelerators in the dialog are the same
+    // as default accelerators.
+    this.shouldHideRestoreButton = await this.areAcceleratorsDefault();
+  }
+
+  // Check if current accelerators match the default accelerators for given
+  // action id.
+  protected async areAcceleratorsDefault(): Promise<boolean> {
+    const currentAccelerators =
+        this.getSortedFilteredAccelerators(this.acceleratorInfos);
+    const defaultAccelerators =
+        await getShortcutProvider().getDefaultAcceleratorsForId(this.action);
+
+    if (currentAccelerators.length != defaultAccelerators.accelerators.length) {
+      return false;
+    }
+    // Check if the current accelerators are strictly matched with the default
+    // accelerators.
+    return currentAccelerators.every(
+        acceleratorInfo => isStandardAcceleratorInfo(acceleratorInfo) &&
+            defaultAccelerators.accelerators.some(
+                defaultAccelerator => JSON.stringify(defaultAccelerator) ===
+                    JSON.stringify(getAccelerator(acceleratorInfo))));
   }
 }
 

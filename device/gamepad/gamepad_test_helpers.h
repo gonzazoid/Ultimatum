@@ -83,10 +83,10 @@ class GamepadServiceTestConstructor : public GamepadTestHelper {
 
  private:
   // Owning pointer (can't be a scoped_ptr due to private destructor).
-  raw_ptr<GamepadService> gamepad_service_;
+  raw_ptr<GamepadService, AcrossTasksDanglingUntriaged> gamepad_service_;
 
   // Pointer owned by the provider (which is owned by the gamepad service).
-  raw_ptr<MockGamepadDataFetcher> data_fetcher_;
+  raw_ptr<MockGamepadDataFetcher, AcrossTasksDanglingUntriaged> data_fetcher_;
 };
 
 }  // namespace device

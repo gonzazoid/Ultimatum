@@ -7,44 +7,45 @@
 
 #include <memory>
 
-#include "base/sequence_checker.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/weak_ptr.h"
 #include "base/thread_annotations.h"
+#include "base/threading/sequence_bound.h"
+#include "base/time/time.h"
 #include "services/device/compute_pressure/cpu_probe.h"
-#include "services/device/compute_pressure/pressure_sample.h"
-#include "services/device/compute_pressure/scoped_pdh_query.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/device/public/mojom/pressure_update.mojom-shared.h"
 
 namespace device {
 
 class CpuProbeWin : public CpuProbe {
  public:
   // Factory method for production instances.
-  static std::unique_ptr<CpuProbeWin> Create();
+  static std::unique_ptr<CpuProbeWin> Create(
+      base::TimeDelta,
+      base::RepeatingCallback<void(mojom::PressureState)>);
 
   ~CpuProbeWin() override;
 
   CpuProbeWin(const CpuProbeWin&) = delete;
   CpuProbeWin& operator=(const CpuProbeWin&) = delete;
 
-  // CpuProbe implementation.
-  void Update() override;
-  PressureSample LastSample() override;
+ protected:
+  CpuProbeWin(base::TimeDelta,
+              base::RepeatingCallback<void(mojom::PressureState)>);
 
  private:
-  CpuProbeWin();
+  FRIEND_TEST_ALL_PREFIXES(CpuProbeWinTest, ProductionDataNoCrash);
 
-  absl::optional<PressureSample> GetPdhData();
+  class BlockingTaskRunnerHelper;
 
-  SEQUENCE_CHECKER(sequence_checker_);
+  // CpuProbe implementation.
+  void Update() override;
 
-  // Used to derive CPU utilization.
-  ScopedPdhQuery cpu_query_;
-  // This "handle" doesn't need to be freed but its lifetime is associated
-  // with cpu_query_.
-  PDH_HCOUNTER cpu_percent_utilization_;
+  base::SequenceBound<BlockingTaskRunnerHelper> helper_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
-  PressureSample last_sample_ GUARDED_BY_CONTEXT(sequence_checker_) =
-      kUnsupportedValue;
+  base::WeakPtrFactory<CpuProbeWin> weak_factory_
+      GUARDED_BY_CONTEXT(sequence_checker_){this};
 };
 
 }  // namespace device

@@ -12,7 +12,6 @@
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/string_util.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/system_notification_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -20,7 +19,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "content/public/browser/notification_service.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
@@ -61,7 +59,7 @@ void ReleaseNotesNotification::ShowReleaseNotesNotification() {
   std::u16string message =
       l10n_util::GetStringUTF16(IDS_RELEASE_NOTES_NOTIFICATION_MESSAGE);
 
-  release_notes_available_notification_ = ash::CreateSystemNotification(
+  release_notes_available_notification_ = ash::CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, kShowNotificationID,
       std::move(title), std::move(message),
       l10n_util::GetStringUTF16(IDS_HELP_APP_EXPLORE), GURL(),

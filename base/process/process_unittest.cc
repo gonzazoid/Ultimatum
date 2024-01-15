@@ -4,6 +4,8 @@
 
 #include "base/process/process.h"
 
+#include <memory>
+#include <string>
 #include <utility>
 
 #include "base/at_exit.h"
@@ -12,18 +14,21 @@
 #include "base/test/multiprocess_test.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
+#include "base/threading/platform_thread_internal_posix.h"
 #include "base/threading/thread_local.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/multiprocess_func_list.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
+#include <sys/resource.h>
 #include <unistd.h>
 
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/process/internal_linux.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -35,7 +40,6 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/base_win_buildflags.h"
-#include "base/win/windows_version.h"
 
 #include <windows.h>
 #endif
@@ -91,7 +95,8 @@ std::string GetProcessCpuCgroup(const base::Process& process) {
   return std::string();
 }
 
-bool AddProcessToCpuCgroup(const base::Process& process, std::string& cgroup) {
+bool AddProcessToCpuCgroup(const base::Process& process,
+                           const std::string& cgroup) {
   base::FilePath path(cgroup);
   path = path.Append("cgroup.procs");
   return base::WriteFile(path, base::NumberToString(process.Pid()));
@@ -249,6 +254,7 @@ void AtExitHandler(void*) {
 }
 
 class ThreadLocalObject {
+ public:
   ~ThreadLocalObject() {
     // Thread-local storage should not be destructed at
     // Process::TerminateCurrentProcessImmediately.
@@ -257,7 +263,8 @@ class ThreadLocalObject {
 };
 
 MULTIPROCESS_TEST_MAIN(TerminateCurrentProcessImmediatelyWithCode0) {
-  base::ThreadLocalPointer<ThreadLocalObject> object;
+  base::ThreadLocalOwnedPointer<ThreadLocalObject> object;
+  object.Set(std::make_unique<ThreadLocalObject>());
   base::AtExitManager::RegisterCallback(&AtExitHandler, nullptr);
   Process::TerminateCurrentProcessImmediately(0);
 }
@@ -343,12 +350,13 @@ TEST_F(ProcessTest, WaitForExitOrEventWithEventSet) {
 // Ensure that the priority of a process is restored correctly after
 // backgrounding and restoring.
 // Note: a platform may not be willing or able to lower the priority of
-// a process. The calls to SetProcessBackground should be noops then.
-TEST_F(ProcessTest, SetProcessBackgrounded) {
-  if (!Process::CanBackgroundProcesses())
+// a process. The calls to SetProcessPriority should be noops then.
+TEST_F(ProcessTest, SetProcessPriority) {
+  if (!Process::CanSetPriority()) {
     return;
+  }
   Process process(SpawnChild("SimpleChildProcess"));
-  int old_priority = process.GetPriority();
+  int old_os_priority = process.GetOSPriority();
 #if BUILDFLAG(IS_APPLE)
   // On the Mac, backgrounding a process requires a port to that process.
   // In the browser it's available through the MachBroker class, which is not
@@ -357,46 +365,263 @@ TEST_F(ProcessTest, SetProcessBackgrounded) {
   // the ability to background/foreground a process, we can use the current
   // process's port instead.
   FakePortProvider provider;
-  EXPECT_TRUE(process.SetProcessBackgrounded(&provider, true));
-  EXPECT_TRUE(process.IsProcessBackgrounded(&provider));
-  EXPECT_TRUE(process.SetProcessBackgrounded(&provider, false));
-  EXPECT_FALSE(process.IsProcessBackgrounded(&provider));
+  EXPECT_TRUE(process.SetPriority(&provider, Process::Priority::kBestEffort));
+  EXPECT_EQ(process.GetPriority(&provider), Process::Priority::kBestEffort);
+  EXPECT_TRUE(process.SetPriority(&provider, Process::Priority::kUserBlocking));
+  EXPECT_EQ(process.GetPriority(&provider), Process::Priority::kUserBlocking);
 
 #else
-  EXPECT_TRUE(process.SetProcessBackgrounded(true));
-  EXPECT_TRUE(process.IsProcessBackgrounded());
-  EXPECT_TRUE(process.SetProcessBackgrounded(false));
-  EXPECT_FALSE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(base::Process::Priority::kBestEffort));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kBestEffort);
+  EXPECT_TRUE(process.SetPriority(base::Process::Priority::kUserBlocking));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kUserBlocking);
 #endif
-  int new_priority = process.GetPriority();
-  EXPECT_EQ(old_priority, new_priority);
+  int new_os_priority = process.GetOSPriority();
+  EXPECT_EQ(old_os_priority, new_os_priority);
 }
 
-// Same as SetProcessBackgrounded but to this very process. It uses
-// a different code path at least for Windows.
-TEST_F(ProcessTest, SetProcessBackgroundedSelf) {
-  if (!Process::CanBackgroundProcesses())
+#if BUILDFLAG(IS_CHROMEOS)
+
+namespace {
+
+class FunctionTestThread : public PlatformThread::Delegate {
+ public:
+  FunctionTestThread() = default;
+
+  FunctionTestThread(const FunctionTestThread&) = delete;
+  FunctionTestThread& operator=(const FunctionTestThread&) = delete;
+
+  void ThreadMain() override {
+    PlatformThread::SetCurrentThreadType(ThreadType::kCompositing);
+    while (true) {
+      PlatformThread::Sleep(Milliseconds(100));
+    }
+  }
+};
+
+class RTFunctionTestThread : public PlatformThread::Delegate {
+ public:
+  RTFunctionTestThread() = default;
+
+  RTFunctionTestThread(const RTFunctionTestThread&) = delete;
+  RTFunctionTestThread& operator=(const RTFunctionTestThread&) = delete;
+
+  void ThreadMain() override {
+    PlatformThread::SetCurrentThreadType(ThreadType::kRealtimeAudio);
+    while (true) {
+      PlatformThread::Sleep(Milliseconds(100));
+    }
+  }
+};
+
+int create_threads_after_bg;
+bool bg_threads_created;
+bool prebg_threads_created;
+bool rt_threads_created;
+
+void sig_create_threads_after_bg(int signum) {
+  if (signum == SIGUSR1) {
+    create_threads_after_bg = true;
+  }
+}
+
+void sig_prebg_threads_created_handler(int signum) {
+  if (signum == SIGUSR1) {
+    prebg_threads_created = true;
+  }
+}
+
+void sig_bg_threads_created_handler(int signum) {
+  if (signum == SIGUSR2) {
+    bg_threads_created = true;
+  }
+}
+
+void sig_rt_threads_created_handler(int signum) {
+  if (signum == SIGUSR1) {
+    rt_threads_created = true;
+  }
+}
+
+}  // namespace
+
+MULTIPROCESS_TEST_MAIN(ProcessThreadBackgroundingMain) {
+  PlatformThreadHandle handle1, handle2, handle3;
+  FunctionTestThread thread1, thread2, thread3;
+  PlatformThread::SetCurrentThreadType(ThreadType::kCompositing);
+
+  // Register signal handler to be notified to create threads after backgrounding.
+  signal(SIGUSR1, sig_create_threads_after_bg);
+
+  if (!PlatformThread::Create(0, &thread1, &handle1)) {
+    ADD_FAILURE() << "ProcessThreadBackgroundingMain: Failed to create thread1";
+    return 1;
+  }
+
+  if (!PlatformThread::Create(0, &thread2, &handle2)) {
+    ADD_FAILURE() << "ProcessThreadBackgroundingMain: Failed to create thread2";
+    return 1;
+  }
+
+  // Signal that the pre-backgrounding threads were created.
+  kill(getppid(), SIGUSR1);
+
+  // Wait for the signal to background.
+  while (create_threads_after_bg == 0) {
+    PlatformThread::Sleep(Milliseconds(100));
+  }
+
+  // Test creation of thread while process is backgrounded.
+  if (!PlatformThread::Create(0, &thread3, &handle3)) {
+    ADD_FAILURE() << "ProcessThreadBackgroundingMain: Failed to create thread3";
+    return 1;
+  }
+
+  // Signal that the thread after backgrounding was created.
+  kill(getppid(), SIGUSR2);
+
+  while (true) {
+    PlatformThread::Sleep(Milliseconds(100));
+  }
+}
+
+void AssertCompositingThreadProperties(int process_id, bool backgrounded) {
+  internal::ForEachProcessTask(
+      process_id, [process_id, backgrounded](PlatformThreadId tid,
+                                             const FilePath& path) {
+        EXPECT_EQ(PlatformThread::GetThreadTypeFromThreadId(process_id, tid),
+                  ThreadType::kCompositing);
+        EXPECT_EQ(PlatformThreadLinux::IsThreadBackgroundedForTest(tid),
+                  backgrounded);
+      });
+}
+
+// ProcessThreadBackgrounding: A test to create a process and verify
+// that the threads in the process are backgrounded correctly.
+TEST_F(ProcessTest, ProcessThreadBackgrounding) {
+  if (!PlatformThread::CanChangeThreadType(ThreadType::kDefault,
+                                           ThreadType::kCompositing)) {
     return;
-  Process process = Process::Current();
-  int old_priority = process.GetPriority();
-#if BUILDFLAG(IS_WIN)
-  EXPECT_TRUE(process.SetProcessBackgrounded(true));
-  EXPECT_TRUE(process.IsProcessBackgrounded());
-  EXPECT_TRUE(process.SetProcessBackgrounded(false));
-  EXPECT_FALSE(process.IsProcessBackgrounded());
-#elif BUILDFLAG(IS_APPLE)
-  FakePortProvider provider;
-  EXPECT_TRUE(process.SetProcessBackgrounded(&provider, true));
-  EXPECT_TRUE(process.IsProcessBackgrounded(&provider));
-  EXPECT_TRUE(process.SetProcessBackgrounded(&provider, false));
-  EXPECT_FALSE(process.IsProcessBackgrounded(&provider));
-#else
-  process.SetProcessBackgrounded(true);
-  process.SetProcessBackgrounded(false);
-#endif
-  int new_priority = process.GetPriority();
-  EXPECT_EQ(old_priority, new_priority);
+  }
+
+  // Register signal handlers to be notified of events in child process.
+  signal(SIGUSR1, sig_prebg_threads_created_handler);
+  signal(SIGUSR2, sig_bg_threads_created_handler);
+
+  Process process(SpawnChild("ProcessThreadBackgroundingMain"));
+  EXPECT_TRUE(process.IsValid());
+
+  // Wait for the signal that the initial pre-backgrounding
+  // threads were created.
+  while (!prebg_threads_created) {
+    PlatformThread::Sleep(Milliseconds(100));
+  }
+
+  AssertCompositingThreadProperties(process.Pid(), false);
+
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kBestEffort));
+
+  // Send a signal to create a thread while the process is backgrounded.
+  kill(process.Pid(), SIGUSR1);
+
+  // Wait for the signal that backgrounding completed
+  while (!bg_threads_created) {
+    PlatformThread::Sleep(Milliseconds(100));
+  }
+
+  AssertCompositingThreadProperties(process.Pid(), true);
+
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kUserBlocking));
+  EXPECT_TRUE(process.GetPriority() == base::Process::Priority::kUserBlocking);
+
+  // Verify that type is restored to default after foregrounding.
+  AssertCompositingThreadProperties(process.Pid(), false);
 }
+
+bool IsThreadRT(PlatformThreadId thread_id) {
+  PlatformThreadId syscall_tid = thread_id;
+  int sched;
+
+  if (thread_id == PlatformThread::CurrentId()) {
+    syscall_tid = 0;
+  }
+
+  // Check if the thread is running in real-time mode
+  sched = sched_getscheduler(syscall_tid);
+  if (sched == -1) {
+    // The thread may disappear for any reason so ignore ESRCH.
+    DPLOG_IF(ERROR, errno != ESRCH)
+        << "Failed to call sched_getscheduler for thread id " << thread_id;
+    return false;
+  }
+  return sched == SCHED_RR || sched == SCHED_FIFO;
+}
+
+// Verify that all the threads in a process are kRealtimeAudio
+// and not backgrounded even though the process may be backgrounded.
+void AssertRTAudioThreadProperties(int process_id) {
+  internal::ForEachProcessTask(
+      process_id, [process_id](PlatformThreadId tid, const FilePath& path) {
+        EXPECT_EQ(PlatformThread::GetThreadTypeFromThreadId(process_id, tid),
+                  ThreadType::kRealtimeAudio);
+        EXPECT_EQ(IsThreadRT(tid), true);
+        EXPECT_EQ(PlatformThreadLinux::IsThreadBackgroundedForTest(tid), false);
+      });
+}
+
+MULTIPROCESS_TEST_MAIN(ProcessRTThreadBackgroundingMain) {
+  PlatformThreadHandle handle1;
+  RTFunctionTestThread thread1;
+  PlatformThread::SetCurrentThreadType(ThreadType::kRealtimeAudio);
+
+  if (!PlatformThread::Create(0, &thread1, &handle1)) {
+    ADD_FAILURE()
+        << "ProcessRTThreadBackgroundingMain: Failed to create thread1";
+    return 1;
+  }
+
+  // Signal that the RT thread was created.
+  kill(getppid(), SIGUSR1);
+
+  while (true) {
+    PlatformThread::Sleep(Milliseconds(100));
+  }
+}
+
+// Test the property of kRealTimeAudio threads in a backgrounded process.
+TEST_F(ProcessTest, ProcessRTThreadBackgrounding) {
+  if (!PlatformThread::CanChangeThreadType(ThreadType::kDefault,
+                                           ThreadType::kCompositing)) {
+    return;
+  }
+
+  // Register signal handler to check if RT thread was created by child process.
+  signal(SIGUSR1, sig_rt_threads_created_handler);
+
+  Process process(SpawnChild("ProcessRTThreadBackgroundingMain"));
+  EXPECT_TRUE(process.IsValid());
+
+  // Wait for signal that threads were spawned
+  while (!rt_threads_created) {
+    PlatformThread::Sleep(Milliseconds(100));
+  }
+
+  AssertRTAudioThreadProperties(process.Pid());
+
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kBestEffort));
+  EXPECT_TRUE(process.GetPriority() == base::Process::Priority::kBestEffort);
+
+  // Verify that nothing changed when process is kBestEffort
+  AssertRTAudioThreadProperties(process.Pid());
+
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kUserBlocking));
+  EXPECT_TRUE(process.GetPriority() == base::Process::Priority::kUserBlocking);
+
+  // Verify that nothing changed when process is kUserBlocking
+  AssertRTAudioThreadProperties(process.Pid());
+}
+
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // Consumers can use WaitForExitWithTimeout(base::TimeDelta(), nullptr) to check
 // whether the process is still running. This may not be safe because of the
@@ -437,9 +662,6 @@ TEST_F(ProcessTest, MAYBE_HeapCorruption) {
 #define MAYBE_ControlFlowViolation DISABLED_ControlFlowViolation
 #endif
 TEST_F(ProcessTest, MAYBE_ControlFlowViolation) {
-  // CFG is only supported on Windows 8.1 or greater.
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return;
   // CFG causes ntdll!RtlFailFast2 to be called resulting in uncatchable
   // 0xC0000409 (STATUS_STACK_BUFFER_OVERRUN) exception.
   EXPECT_EXIT(base::debug::win::TerminateWithControlFlowViolation(),
@@ -459,16 +681,18 @@ TEST_F(ProcessTest, ChildProcessIsRunning) {
 
 #if BUILDFLAG(IS_CHROMEOS)
 
-// Tests that the function IsProcessBackgroundedCGroup() can parse the contents
+// Tests that the function GetProcessPriorityCGroup() can parse the contents
 // of the /proc/<pid>/cgroup file successfully.
-TEST_F(ProcessTest, TestIsProcessBackgroundedCGroup) {
-  const char kNotBackgrounded[] = "5:cpuacct,cpu,cpuset:/daemons\n";
-  const char kBackgrounded[] =
+TEST_F(ProcessTest, TestGetProcessPriorityCGroup) {
+  const char kNotBackgroundedCGroup[] = "5:cpuacct,cpu,cpuset:/daemons\n";
+  const char kBackgroundedCGroup[] =
       "2:freezer:/chrome_renderers/to_be_frozen\n"
       "1:cpu:/chrome_renderers/background\n";
 
-  EXPECT_FALSE(IsProcessBackgroundedCGroup(kNotBackgrounded));
-  EXPECT_TRUE(IsProcessBackgroundedCGroup(kBackgrounded));
+  EXPECT_EQ(GetProcessPriorityCGroup(kNotBackgroundedCGroup),
+            Process::Priority::kUserBlocking);
+  EXPECT_EQ(GetProcessPriorityCGroup(kBackgroundedCGroup),
+            Process::Priority::kBestEffort);
 }
 
 TEST_F(ProcessTest, InitializePriorityEmptyProcess) {
@@ -495,14 +719,14 @@ TEST_F(ProcessTest, SetProcessBackgroundedOneCgroupPerRender) {
   const std::string unique_token = process.unique_token();
   ASSERT_FALSE(unique_token.empty());
 
-  EXPECT_TRUE(process.SetProcessBackgrounded(false));
-  EXPECT_FALSE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kUserBlocking));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kUserBlocking);
   std::string cgroup = GetProcessCpuCgroup(process);
   EXPECT_FALSE(cgroup.empty());
   EXPECT_NE(cgroup.find(unique_token), std::string::npos);
 
-  EXPECT_TRUE(process.SetProcessBackgrounded(true));
-  EXPECT_TRUE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kBestEffort));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kBestEffort);
 
   EXPECT_TRUE(process.Terminate(0, false));
   // Terminate should post a task, wait for it to run
@@ -523,8 +747,8 @@ TEST_F(ProcessTest, CleanUpBusyProcess) {
   const std::string unique_token = process.unique_token();
   ASSERT_FALSE(unique_token.empty());
 
-  EXPECT_TRUE(process.SetProcessBackgrounded(false));
-  EXPECT_FALSE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kUserBlocking));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kUserBlocking);
   std::string cgroup = GetProcessCpuCgroup(process);
   EXPECT_FALSE(cgroup.empty());
   EXPECT_NE(cgroup.find(unique_token), std::string::npos);
@@ -563,9 +787,9 @@ TEST_F(ProcessTest, SetProcessBackgroundedEmptyToken) {
   const std::string unique_token = process.unique_token();
   ASSERT_TRUE(unique_token.empty());
 
-  // Moving to the foreground should use the default foregorund path
-  EXPECT_TRUE(process.SetProcessBackgrounded(false));
-  EXPECT_FALSE(process.IsProcessBackgrounded());
+  // Moving to the foreground should use the default foreground path.
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kUserBlocking));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kUserBlocking);
   std::string cgroup = GetProcessCpuCgroup(process);
   EXPECT_FALSE(cgroup.empty());
   EXPECT_EQ(cgroup, kForeground);
@@ -583,8 +807,8 @@ TEST_F(ProcessTest, CleansUpStaleGroups) {
   const std::string unique_token = process.unique_token();
   ASSERT_FALSE(unique_token.empty());
 
-  EXPECT_TRUE(process.SetProcessBackgrounded(true));
-  EXPECT_TRUE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kBestEffort));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kBestEffort);
 
   // Create a stale cgroup
   std::string root = kFullRendererCgroupRoot;
@@ -627,8 +851,8 @@ TEST_F(ProcessTest, OneCgroupDoesNotCleanUpGroupsWithWrongPrefix) {
   const std::string unique_token = process.unique_token();
   ASSERT_FALSE(unique_token.empty());
 
-  EXPECT_TRUE(process.SetProcessBackgrounded(false));
-  EXPECT_FALSE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kUserBlocking));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kUserBlocking);
   std::string cgroup = GetProcessCpuCgroup(process);
   EXPECT_FALSE(cgroup.empty());
   EXPECT_NE(cgroup.find(unique_token), std::string::npos);
@@ -646,8 +870,8 @@ TEST_F(ProcessTest, OneCgroupDoesNotCleanUpGroupsWithWrongPrefix) {
   EXPECT_TRUE(base::DirectoryExists(cgroup_path));
 
   // clean up the process
-  EXPECT_TRUE(process.SetProcessBackgrounded(true));
-  EXPECT_TRUE(process.IsProcessBackgrounded());
+  EXPECT_TRUE(process.SetPriority(Process::Priority::kBestEffort));
+  EXPECT_EQ(process.GetPriority(), Process::Priority::kBestEffort);
   EXPECT_TRUE(process.Terminate(0, false));
   task_env.RunUntilIdle();
   EXPECT_FALSE(base::DirectoryExists(cgroup_path));

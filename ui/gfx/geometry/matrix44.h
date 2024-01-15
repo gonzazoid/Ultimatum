@@ -43,27 +43,17 @@ class GEOMETRY_SKIA_EXPORT Matrix44 {
       : matrix_{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}} {}
 
   // The parameters are in col-major order.
-  Matrix44(double r0c0,
-           double r1c0,
-           double r2c0,
-           double r3c0,
-           double r0c1,
-           double r1c1,
-           double r2c1,
-           double r3c1,
-           double r0c2,
-           double r1c2,
-           double r2c2,
-           double r3c2,
-           double r0c3,
-           double r1c3,
-           double r2c3,
-           double r3c3)
+  // clang-format off
+  constexpr Matrix44(double r0c0, double r1c0, double r2c0, double r3c0,
+                     double r0c1, double r1c1, double r2c1, double r3c1,
+                     double r0c2, double r1c2, double r2c2, double r3c2,
+                     double r0c3, double r1c3, double r2c3, double r3c3)
       // matrix_ is indexed by [col][row] (i.e. col-major).
       : matrix_{{r0c0, r1c0, r2c0, r3c0},
                 {r0c1, r1c1, r2c1, r3c1},
                 {r0c2, r1c2, r2c2, r3c2},
                 {r0c3, r1c3, r2c3, r3c3}} {}
+  // clang-format on
 
   bool operator==(const Matrix44& other) const {
     return AllTrue(Col(0) == other.Col(0)) && AllTrue(Col(1) == other.Col(1)) &&
@@ -109,7 +99,7 @@ class GEOMETRY_SKIA_EXPORT Matrix44 {
   bool Is2dTransform() const { return IsFlat() && !HasPerspective(); }
 
   // Gets a value at |row|, |col| from the matrix.
-  double rc(int row, int col) const {
+  constexpr double rc(int row, int col) const {
     DCHECK_LE(static_cast<unsigned>(row), 3u);
     DCHECK_LE(static_cast<unsigned>(col), 3u);
     return matrix_[col][row];
@@ -126,14 +116,18 @@ class GEOMETRY_SKIA_EXPORT Matrix44 {
   void GetColMajorF(float[16]) const;
 
   // this = this * translation.
-  void PreTranslate(double dx, double dy, double dz);
+  void PreTranslate(double dx, double dy);
+  void PreTranslate3d(double dx, double dy, double dz);
   // this = translation * this.
-  void PostTranslate(double dx, double dy, double dz);
+  void PostTranslate(double dx, double dy);
+  void PostTranslate3d(double dx, double dy, double dz);
 
   // this = this * scale.
-  void PreScale(double sx, double sy, double sz);
+  void PreScale(double sx, double sy);
+  void PreScale3d(double sx, double sy, double sz);
   // this = scale * this.
-  void PostScale(double sx, double sy, double sz);
+  void PostScale(double sx, double sy);
+  void PostScale3d(double sx, double sy, double sz);
 
   // Rotates this matrix about the specified unit-length axis vector,
   // by an angle specified by its sin() and cos(). This does not attempt to
@@ -166,6 +160,8 @@ class GEOMETRY_SKIA_EXPORT Matrix44 {
   void PreConcat(const Matrix44& m) { SetConcat(*this, m); }
   // this = m * this.
   void PostConcat(const Matrix44& m) { SetConcat(m, *this); }
+  // this = a * b.
+  void SetConcat(const Matrix44& a, const Matrix44& b);
 
   // Returns true and set |inverse| to the inverted matrix if this matrix
   // is invertible. Otherwise return false and leave the |inverse| parameter
@@ -178,15 +174,21 @@ class GEOMETRY_SKIA_EXPORT Matrix44 {
   // Transposes this matrix in place.
   void Transpose();
 
-  // Applies the matrix to the vector in place.
-  void MapScalars(double vec[4]) const;
+  // See Transform::Zoom().
+  void Zoom(double zoom_factor);
 
-  void FlattenTo2d();
+  // Applies the matrix to the vector in place.
+  void MapVector4(double vec[4]) const;
+
+  // Same as above, but assumes the vec[2] is 0 and vec[3] is 1, discards
+  // vec[2], and returns vec[3].
+  double MapVector2(double vec[2]) const;
+
+  void Flatten();
 
   absl::optional<DecomposedTransform> Decompose() const;
 
  private:
-  void SetConcat(const Matrix44& a, const Matrix44& b);
   absl::optional<DecomposedTransform> Decompose2d() const;
 
   ALWAYS_INLINE Double4 Col(int i) const { return LoadDouble4(matrix_[i]); }

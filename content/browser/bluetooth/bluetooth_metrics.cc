@@ -37,7 +37,7 @@ int HashUUID(const std::string& canonical_uuid) {
   return static_cast<int>(data & 0x7fffffff);
 }
 
-int HashUUID(const absl::optional<BluetoothUUID>& uuid) {
+int HashUUID(const std::optional<BluetoothUUID>& uuid) {
   return uuid ? HashUUID(uuid->canonical_value()) : 0;
 }
 
@@ -89,44 +89,11 @@ void RecordConnectGATTOutcome(CacheQueryOutcome outcome) {
   RecordConnectGATTOutcome(UMAConnectGATTOutcome::NO_DEVICE);
 }
 
-void RecordConnectGATTTimeSuccess(const base::TimeDelta& duration) {
-  UMA_HISTOGRAM_MEDIUM_TIMES("Bluetooth.Web.ConnectGATT.TimeSuccess", duration);
-}
-
-void RecordConnectGATTTimeFailed(const base::TimeDelta& duration) {
-  UMA_HISTOGRAM_MEDIUM_TIMES("Bluetooth.Web.ConnectGATT.TimeFailed", duration);
-}
-
 // getPrimaryService & getPrimaryServices
-
-void RecordGetPrimaryServicesOutcome(
-    blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    UMAGetPrimaryServiceOutcome outcome) {
-  switch (quantity) {
-    case blink::mojom::WebBluetoothGATTQueryQuantity::SINGLE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Bluetooth.Web.GetPrimaryService.Outcome", static_cast<int>(outcome),
-          static_cast<int>(UMAGetPrimaryServiceOutcome::COUNT));
-      return;
-    case blink::mojom::WebBluetoothGATTQueryQuantity::MULTIPLE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Bluetooth.Web.GetPrimaryServices.Outcome", static_cast<int>(outcome),
-          static_cast<int>(UMAGetPrimaryServiceOutcome::COUNT));
-      return;
-  }
-}
-
-void RecordGetPrimaryServicesOutcome(
-    blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    CacheQueryOutcome outcome) {
-  DCHECK(outcome == CacheQueryOutcome::NO_DEVICE);
-  RecordGetPrimaryServicesOutcome(quantity,
-                                  UMAGetPrimaryServiceOutcome::NO_DEVICE);
-}
 
 void RecordGetPrimaryServicesServices(
     blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    const absl::optional<BluetoothUUID>& service) {
+    const std::optional<BluetoothUUID>& service) {
   // TODO(ortuno): Use a macro to histogram strings.
   // http://crbug.com/520284
   switch (quantity) {
@@ -143,7 +110,7 @@ void RecordGetPrimaryServicesServices(
 
 void RecordGetCharacteristicsCharacteristic(
     blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    const absl::optional<BluetoothUUID>& characteristic) {
+    const std::optional<BluetoothUUID>& characteristic) {
   switch (quantity) {
     case blink::mojom::WebBluetoothGATTQueryQuantity::SINGLE:
       base::UmaHistogramSparse("Bluetooth.Web.GetCharacteristic.Characteristic",

@@ -8,22 +8,22 @@
 #include "chrome/browser/ui/webui/certificate_viewer_webui.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/browser_resources.h"
+#include "chrome/grit/certificate_viewer_resources.h"
+#include "chrome/grit/certificate_viewer_resources_map.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
-#include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 
 namespace {
 
-content::WebUIDataSource* GetWebUIDataSource(const std::string& host) {
+void CreateAndAddWebUIDataSource(Profile* profile, const std::string& host) {
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(host);
+      content::WebUIDataSource::CreateAndAdd(profile, host);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"general", IDS_CERT_INFO_GENERAL_TAB_LABEL},
@@ -41,7 +41,7 @@ content::WebUIDataSource* GetWebUIDataSource(const std::string& host) {
       {"expiresOn", IDS_CERT_INFO_EXPIRES_ON_LABEL},
       {"fingerprints", IDS_CERT_INFO_FINGERPRINTS_GROUP},
       {"sha256", IDS_CERT_INFO_SHA256_FINGERPRINT_LABEL},
-      {"sha1", IDS_CERT_INFO_SHA1_FINGERPRINT_LABEL},
+      {"spki", IDS_CERT_INFO_SHA256_SPKI_FINGERPRINT_LABEL},
       {"hierarchy", IDS_CERT_DETAILS_CERTIFICATE_HIERARCHY_LABEL},
       {"certFields", IDS_CERT_DETAILS_CERTIFICATE_FIELDS_LABEL},
       {"certFieldVal", IDS_CERT_DETAILS_CERTIFICATE_FIELD_VALUE_LABEL},
@@ -49,22 +49,10 @@ content::WebUIDataSource* GetWebUIDataSource(const std::string& host) {
   };
   html_source->AddLocalizedStrings(kStrings);
 
-  html_source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::TrustedTypes,
-      "trusted-types static-types certificate-test-script;");
-  html_source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://webui-test 'self';");
-
-  html_source->UseStringsJs();
-
-  // Add required resources.
-  html_source->AddResourcePath("certificate_viewer.js",
-      IDR_CERTIFICATE_VIEWER_JS);
-  html_source->AddResourcePath("certificate_viewer.css",
-      IDR_CERTIFICATE_VIEWER_CSS);
-  html_source->SetDefaultResource(IDR_CERTIFICATE_VIEWER_HTML);
-  return html_source;
+  webui::SetupWebUIDataSource(html_source,
+                              base::make_span(kCertificateViewerResources,
+                                              kCertificateViewerResourcesSize),
+                              IDR_CERTIFICATE_VIEWER_CERTIFICATE_VIEWER_HTML);
 }
 
 }  // namespace
@@ -72,10 +60,8 @@ content::WebUIDataSource* GetWebUIDataSource(const std::string& host) {
 CertificateViewerUI::CertificateViewerUI(content::WebUI* web_ui)
     : ConstrainedWebDialogUI(web_ui) {
   // Set up the chrome://view-cert source.
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(
-      profile,
-      GetWebUIDataSource(chrome::kChromeUICertificateViewerHost));
+  CreateAndAddWebUIDataSource(Profile::FromWebUI(web_ui),
+                              chrome::kChromeUICertificateViewerHost);
 }
 
 CertificateViewerUI::~CertificateViewerUI() {

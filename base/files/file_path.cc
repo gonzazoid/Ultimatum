@@ -17,11 +17,12 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/strings/utf_ostream_operators.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/base_tracing.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/third_party/icu/icu_utf.h"
 #endif
 
@@ -338,8 +339,22 @@ FilePath FilePath::DirName() const {
     // separator intact indicating alternate root.
     new_path.path_.resize(letter + 3);
   } else if (last_separator != 0) {
-    // path_ is somewhere else, trim the basename.
-    new_path.path_.resize(last_separator);
+    bool trim_to_basename = true;
+#if BUILDFLAG(IS_POSIX)
+    // On Posix, more than two leading separators are always collapsed to one.
+    // See
+    // https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_13
+    // So, do not strip any of the separators, let
+    // StripTrailingSeparatorsInternal() take care of the extra.
+    if (AreAllSeparators(new_path.path_.substr(0, last_separator + 1))) {
+      new_path.path_.resize(last_separator + 1);
+      trim_to_basename = false;
+    }
+#endif  // BUILDFLAG(IS_POSIX)
+    if (trim_to_basename) {
+      // path_ is somewhere else, trim the basename.
+      new_path.path_.resize(last_separator);
+    }
   }
 
   new_path.StripTrailingSeparatorsInternal();
@@ -447,7 +462,7 @@ FilePath FilePath::AddExtension(StringPieceType extension) const {
       *(str.end() - 1) != kExtensionSeparator) {
     str.append(1, kExtensionSeparator);
   }
-  str.append(extension.data(), extension.size());
+  str.append(extension);
   return FilePath(str);
 }
 
@@ -473,7 +488,7 @@ FilePath FilePath::ReplaceExtension(StringPieceType extension) const {
   StringType str = no_ext.value();
   if (extension[0] != kExtensionSeparator)
     str.append(1, kExtensionSeparator);
-  str.append(extension.data(), extension.size());
+  str.append(extension);
   return FilePath(str);
 }
 
@@ -539,7 +554,7 @@ FilePath FilePath::Append(StringPieceType component) const {
     }
   }
 
-  new_path.path_.append(appended.data(), appended.size());
+  new_path.path_.append(appended);
   return new_path;
 }
 
@@ -649,7 +664,7 @@ FilePath FilePath::FromUTF8Unsafe(StringPiece utf8) {
 
 // static
 FilePath FilePath::FromUTF16Unsafe(StringPiece16 utf16) {
-  return FilePath(AsWStringPiece(utf16));
+  return FilePath(AsWStringView(utf16));
 }
 
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
@@ -775,7 +790,7 @@ int FilePath::CompareIgnoreCase(StringPieceType string1,
 #elif BUILDFLAG(IS_APPLE)
 // Mac OS X specific implementation of file string comparisons.
 
-// cf. http://developer.apple.com/mac/library/technotes/tn/tn1150.html#UnicodeSubtleties
+// cf. https://developer.apple.com/library/archive/technotes/tn/tn1150.html#UnicodeSubtleties
 //
 // "When using CreateTextEncoding to create a text encoding, you should set
 // the TextEncodingBase to kTextEncodingUnicodeV2_0, set the
@@ -801,11 +816,12 @@ int FilePath::CompareIgnoreCase(StringPieceType string1,
 // Ignored characters are mapped to zero.
 //
 // cf. downloadable file linked in
-// http://developer.apple.com/mac/library/technotes/tn/tn1150.html#StringComparisonAlgorithm
+// https://developer.apple.com/library/archive/technotes/tn/tn1150.html#Downloads
 
 namespace {
 
-const UInt16 lower_case_table[] = {
+// clang-format off
+const UInt16 lower_case_table[11 * 256] = {
   // High-byte indices ( == 0 iff no case mapping and no ignorables )
 
   /* 0 */ 0x0100, 0x0200, 0x0000, 0x0300, 0x0400, 0x0500, 0x0000, 0x0000,
@@ -1191,11 +1207,12 @@ const UInt16 lower_case_table[] = {
   /* F */ 0xFFF0, 0xFFF1, 0xFFF2, 0xFFF3, 0xFFF4, 0xFFF5, 0xFFF6, 0xFFF7,
           0xFFF8, 0xFFF9, 0xFFFA, 0xFFFB, 0xFFFC, 0xFFFD, 0xFFFE, 0xFFFF,
 };
+// clang-format on
 
-// Returns the next non-ignorable codepoint within string starting from the
-// position indicated by index, or zero if there are no more.
-// The passed-in index is automatically advanced as the characters in the input
-// HFS-decomposed UTF-8 strings are read.
+// Returns the next non-ignorable codepoint within `string` starting from the
+// position indicated by `index`, or zero if there are no more.
+// The passed-in `index` is automatically advanced as the characters in the
+// input HFS-decomposed UTF-8 strings are read.
 inline base_icu::UChar32 HFSReadNextNonIgnorableCodepoint(const char* string,
                                                           size_t length,
                                                           size_t* index) {
@@ -1206,12 +1223,16 @@ inline base_icu::UChar32 HFSReadNextNonIgnorableCodepoint(const char* string,
     CBU8_NEXT(reinterpret_cast<const uint8_t*>(string), *index, length,
               codepoint);
     DCHECK_GT(codepoint, 0);
-    if (codepoint > 0) {
+
+    // Note: Here, there are no lower case conversion implemented in the
+    // Supplementary Multilingual Plane (codepoint > 0xFFFF).
+
+    if (codepoint > 0 && codepoint <= 0xFFFF) {
       // Check if there is a subtable for this upper byte.
       int lookup_offset = lower_case_table[codepoint >> 8];
       if (lookup_offset != 0)
         codepoint = lower_case_table[lookup_offset + (codepoint & 0x00FF)];
-      // Note: codepoint1 may be again 0 at this point if the character was
+      // Note: `codepoint` may be again 0 at this point if the character was
       // an ignorable.
     }
   }
@@ -1247,7 +1268,7 @@ int FilePath::HFSFastUnicodeCompare(StringPieceType string1,
 
 StringType FilePath::GetHFSDecomposedForm(StringPieceType string) {
   StringType result;
-  ScopedCFTypeRef<CFStringRef> cfstring(CFStringCreateWithBytesNoCopy(
+  apple::ScopedCFTypeRef<CFStringRef> cfstring(CFStringCreateWithBytesNoCopy(
       NULL, reinterpret_cast<const UInt8*>(string.data()),
       checked_cast<CFIndex>(string.length()), kCFStringEncodingUTF8, false,
       kCFAllocatorNull));
@@ -1255,16 +1276,16 @@ StringType FilePath::GetHFSDecomposedForm(StringPieceType string) {
     // Query the maximum length needed to store the result. In most cases this
     // will overestimate the required space. The return value also already
     // includes the space needed for a terminating 0.
-    CFIndex length = CFStringGetMaximumSizeOfFileSystemRepresentation(cfstring);
+    CFIndex length =
+        CFStringGetMaximumSizeOfFileSystemRepresentation(cfstring.get());
     DCHECK_GT(length, 0);  // should be at least 1 for the 0-terminator.
     // Reserve enough space for CFStringGetFileSystemRepresentation to write
     // into. Also set the length to the maximum so that we can shrink it later.
     // (Increasing rather than decreasing it would clobber the string contents!)
     result.reserve(static_cast<size_t>(length));
     result.resize(static_cast<size_t>(length) - 1);
-    Boolean success = CFStringGetFileSystemRepresentation(cfstring,
-                                                          &result[0],
-                                                          length);
+    Boolean success =
+        CFStringGetFileSystemRepresentation(cfstring.get(), &result[0], length);
     if (success) {
       // Reduce result.length() to actual string length.
       result.resize(strlen(result.c_str()));
@@ -1290,11 +1311,11 @@ int FilePath::CompareIgnoreCase(StringPieceType string1,
 
   // GetHFSDecomposedForm() returns an empty string in an error case.
   if (hfs1.empty() || hfs2.empty()) {
-    ScopedCFTypeRef<CFStringRef> cfstring1(CFStringCreateWithBytesNoCopy(
+    apple::ScopedCFTypeRef<CFStringRef> cfstring1(CFStringCreateWithBytesNoCopy(
         NULL, reinterpret_cast<const UInt8*>(string1.data()),
         checked_cast<CFIndex>(string1.length()), kCFStringEncodingUTF8, false,
         kCFAllocatorNull));
-    ScopedCFTypeRef<CFStringRef> cfstring2(CFStringCreateWithBytesNoCopy(
+    apple::ScopedCFTypeRef<CFStringRef> cfstring2(CFStringCreateWithBytesNoCopy(
         NULL, reinterpret_cast<const UInt8*>(string2.data()),
         checked_cast<CFIndex>(string2.length()), kCFStringEncodingUTF8, false,
         kCFAllocatorNull));
@@ -1311,8 +1332,8 @@ int FilePath::CompareIgnoreCase(StringPieceType string1,
       return 0;
     }
 
-    return static_cast<int>(
-        CFStringCompare(cfstring1, cfstring2, kCFCompareCaseInsensitive));
+    return static_cast<int>(CFStringCompare(cfstring1.get(), cfstring2.get(),
+                                            kCFCompareCaseInsensitive));
   }
 
   return HFSFastUnicodeCompare(hfs1, hfs2);

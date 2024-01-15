@@ -5,18 +5,19 @@
 #ifndef CHROME_BROWSER_ASH_ARC_KEYMASTER_ARC_KEYMASTER_BRIDGE_H_
 #define CHROME_BROWSER_ASH_ARC_KEYMASTER_ARC_KEYMASTER_BRIDGE_H_
 
-#include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/mojom/keymaster.mojom.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/arc/keymaster/cert_store_bridge.h"
-#include "chrome/services/keymaster/public/mojom/cert_store.mojom.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace content {
 class BrowserContext;
 }  // namespace content
+
+class BrowserContextKeyedServiceFactory;
 
 namespace arc {
 
@@ -48,7 +49,7 @@ class ArcKeymasterBridge : public KeyedService, public mojom::KeymasterHost {
   // Return the factory instance for this class.
   static BrowserContextKeyedServiceFactory* GetFactory();
 
-  // Update the list of placeholder keys to be instlaled in arc-keymasterd.
+  // Update the list of placeholder keys to be installed in arc-keymasterd.
   //
   // Made virtual for override in tests.
   virtual void UpdatePlaceholderKeys(
@@ -57,6 +58,8 @@ class ArcKeymasterBridge : public KeyedService, public mojom::KeymasterHost {
 
   // KeymasterHost mojo interface.
   void GetServer(GetServerCallback callback) override;
+
+  static void EnsureFactoryBuilt();
 
  private:
   using BootstrapMojoConnectionCallback = base::OnceCallback<void(bool)>;
@@ -71,7 +74,8 @@ class ArcKeymasterBridge : public KeyedService, public mojom::KeymasterHost {
   void GetServerAfterBootstrap(GetServerCallback callback,
                                bool bootstrapResult);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // Points to a proxy bound to the implementation in arc-keymasterd.
   mojo::Remote<mojom::KeymasterServer> keymaster_server_proxy_;

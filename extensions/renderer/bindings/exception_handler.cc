@@ -42,7 +42,7 @@ gin::WrapperInfo WrappedExceptionHandler::kWrapperInfo = {
 ExceptionHandler::ExceptionHandler(
     const binding::AddConsoleError& add_console_error)
     : add_console_error_(add_console_error) {}
-ExceptionHandler::~ExceptionHandler() {}
+ExceptionHandler::~ExceptionHandler() = default;
 
 v8::Local<v8::Value> ExceptionHandler::GetV8Wrapper(v8::Isolate* isolate) {
   auto handle = gin::CreateHandle(isolate, new WrappedExceptionHandler);
@@ -121,7 +121,7 @@ void ExceptionHandler::SetHandlerForContext(v8::Local<v8::Context> context,
 void ExceptionHandler::RunExtensionCallback(
     v8::Local<v8::Context> context,
     v8::Local<v8::Function> extension_callback,
-    std::vector<v8::Local<v8::Value>> callback_arguments,
+    v8::LocalVector<v8::Value> callback_arguments,
     const std::string& message) {
   v8::TryCatch try_catch(context->GetIsolate());
 

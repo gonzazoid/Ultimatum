@@ -17,28 +17,11 @@
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_entry_restore_context.h"
-#include "content/public/browser/replaced_navigation_entry_data.h"
 #include "content/public/common/referrer.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/blink/public/common/page_state/page_state.h"
 
 namespace sessions {
-namespace {
-
-absl::optional<SerializedNavigationEntry::ReplacedNavigationEntryData>
-ConvertReplacedEntryData(
-    const absl::optional<content::ReplacedNavigationEntryData>& input_data) {
-  if (!input_data.has_value())
-    return absl::nullopt;
-
-  SerializedNavigationEntry::ReplacedNavigationEntryData output_data;
-  output_data.first_committed_url = input_data->first_committed_url;
-  output_data.first_timestamp = input_data->first_timestamp;
-  output_data.first_transition_type = input_data->first_transition_type;
-  return output_data;
-}
-
-}  // namespace
 
 // static
 SerializedNavigationEntry
@@ -66,8 +49,6 @@ ContentSerializedNavigationBuilder::FromNavigationEntry(
     navigation.favicon_url_ = entry->GetFavicon().url;
   navigation.http_status_code_ = entry->GetHttpStatusCode();
   navigation.redirect_chain_ = entry->GetRedirectChain();
-  navigation.replaced_entry_data_ =
-      ConvertReplacedEntryData(entry->GetReplacedEntryData());
   navigation.password_state_ = GetPasswordStateFromNavigation(entry);
   navigation.task_id_ = NavigationTaskId::Get(entry)->id();
   navigation.parent_task_id_ = NavigationTaskId::Get(entry)->parent_id();
@@ -96,18 +77,27 @@ ContentSerializedNavigationBuilder::ToNavigationEntry(
   DCHECK(browser_context);
   DCHECK(restore_context);
 
-  // The initial values of the NavigationEntry are only temporary - they
-  // will get cloberred by one of the SetPageState calls below.
+  // The initial values of the NavigationEntry are usually temporary - they will
+  // normally get clobbered by one of the SetPageState calls below.
   //
   // This means that things like |navigation->referrer_url| are ignored
   // in favor of using the data stored in |navigation->encoded_page_state|.
-  GURL temporary_url;
-  content::Referrer temporary_referrer;
+  //
+  // We still use the URL and referrer from |navigation| here for the temporary
+  // values, though, in case the PageState fails to decode and clobber them.
+  // This allows us to load the original URL and referrer even if other state is
+  // lost.
+  GURL temporary_url = navigation->virtual_url_;
+  content::Referrer temporary_referrer(
+      navigation->referrer_url(),
+      content::Referrer::ConvertToPolicy(navigation->referrer_policy()));
   absl::optional<url::Origin> temporary_initiator_origin;
+  absl::optional<GURL> temporary_initiator_base_url;
 
   std::unique_ptr<content::NavigationEntry> entry(
       content::NavigationController::CreateNavigationEntry(
           temporary_url, temporary_referrer, temporary_initiator_origin,
+          temporary_initiator_base_url,
           // Use a transition type of reload so that we don't incorrectly
           // increase the typed count.
           ui::PAGE_TRANSITION_RELOAD, false,
@@ -137,14 +127,12 @@ ContentSerializedNavigationBuilder::ToNavigationEntry(
     // PageState set above + drop the SetReferrer call below.  This will
     // slightly change the legacy behavior, but will make PageState and
     // Referrer consistent.
-    content::Referrer referrer(
-        navigation->referrer_url(),
-        content::Referrer::ConvertToPolicy(navigation->referrer_policy()));
-    entry->SetReferrer(referrer);
+    entry->SetReferrer(temporary_referrer);
   } else {
     // Note that PageState covers some of the values inside |navigation| (e.g.
     // URL, Referrer).  Calling SetPageState will clobber these values in
-    // content::NavigationEntry (and FrameNavigationEntry(s) below).
+    // content::NavigationEntry (and FrameNavigationEntry(s) below), as long as
+    // the PageState successfully decodes.
     entry->SetPageState(blink::PageState::CreateFromEncodedData(
                             navigation->encoded_page_state_),
                         restore_context);

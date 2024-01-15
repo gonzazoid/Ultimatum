@@ -9,8 +9,8 @@ assert(is_chromeos_ash,
 
 source_set("repository") {
   sources = [
-    "fast_pair/device_id_map.cc",
-    "fast_pair/device_id_map.h",
+    "fast_pair/device_address_map.cc",
+    "fast_pair/device_address_map.h",
     "fast_pair/device_image_store.cc",
     "fast_pair/device_image_store.h",
     "fast_pair/device_metadata.cc",
@@ -45,12 +45,14 @@ source_set("repository") {
   ]
 
   deps = [
+    "//ash/constants:constants",
     "//ash/quick_pair/common",
     "//ash/quick_pair/proto:fastpair_proto",
     "//base",
     "//chromeos/ash/components/network",
     "//chromeos/ash/services/bluetooth_config/public/cpp",
     "//chromeos/ash/services/quick_pair/public/cpp",
+    "//components/cross_device/logging:logging",
     "//components/image_fetcher/core",
     "//components/prefs",
     "//components/signin/public/identity_manager",
@@ -107,7 +109,7 @@ source_set("unit_tests") {
   testonly = true
 
   sources = [
-    "fast_pair/device_id_map_unittest.cc",
+    "fast_pair/device_address_map_unittest.cc",
     "fast_pair/device_image_store_unittest.cc",
     "fast_pair/device_metadata_fetcher_unittest.cc",
     "fast_pair/pending_write_store_unittest.cc",

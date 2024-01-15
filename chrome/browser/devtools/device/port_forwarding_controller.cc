@@ -8,8 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/singleton.h"
@@ -18,7 +18,6 @@
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
@@ -68,20 +67,22 @@ const char kPortParam[] = "port";
 const char kConnectionIdParam[] = "connectionId";
 
 static bool ParseNotification(const std::string& json,
-                              std::string* method,
-                              absl::optional<base::Value>* params) {
+                              std::string& method,
+                              absl::optional<base::Value::Dict>& params) {
   absl::optional<base::Value> value = base::JSONReader::Read(json);
   if (!value || !value->is_dict())
     return false;
 
-  const std::string* method_value = value->FindStringKey(kMethodParam);
+  base::Value::Dict& dict = value->GetDict();
+  std::string* method_value = dict.FindString(kMethodParam);
   if (!method_value)
     return false;
-  *method = *method_value;
+  method = std::move(*method_value);
 
-  auto extracted_param = value->ExtractKey(kParamsParam);
-  if (extracted_param && extracted_param->is_dict())
-    *params = std::move(extracted_param);
+  base::Value::Dict* param_dict = dict.FindDict(kParamsParam);
+  if (param_dict) {
+    params = std::move(*param_dict);
+  }
   return true;
 }
 
@@ -91,12 +92,13 @@ static bool ParseResponse(const std::string& json,
   absl::optional<base::Value> value = base::JSONReader::Read(json);
   if (!value || !value->is_dict())
     return false;
-  absl::optional<int> command_id_opt = value->FindIntKey(kIdParam);
+  const base::Value::Dict& dict = value->GetDict();
+  absl::optional<int> command_id_opt = dict.FindInt(kIdParam);
   if (!command_id_opt)
     return false;
   *command_id = *command_id_opt;
 
-  absl::optional<int> error_value = value->FindIntPath(kErrorCodePath);
+  absl::optional<int> error_value = dict.FindIntByDottedPath(kErrorCodePath);
   if (error_value)
     *error_code = *error_value;
 
@@ -106,10 +108,10 @@ static bool ParseResponse(const std::string& json,
 static std::string SerializeCommand(int command_id,
                                     const std::string& method,
                                     base::Value params) {
-  base::Value command(base::Value::Type::DICTIONARY);
-  command.SetIntKey(kIdParam, command_id);
-  command.SetStringKey(kMethodParam, method);
-  command.SetKey(kParamsParam, std::move(params));
+  base::Value::Dict command;
+  command.Set(kIdParam, command_id);
+  command.Set(kMethodParam, method);
+  command.Set(kParamsParam, std::move(params));
 
   std::string json_command;
   base::JSONWriter::Write(command, &json_command);
@@ -241,7 +243,7 @@ class SocketTunnel {
       : remote_socket_(std::move(socket)),
         pending_writes_(0),
         pending_destruction_(false),
-        adb_thread_runner_(base::ThreadTaskRunnerHandle::Get()) {
+        adb_thread_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
     ResolveHostCallback resolve_host_callback = base::BindOnce(
         &SocketTunnel::OnResolveHostComplete, base::Unretained(this));
     content::GetUIThreadTaskRunner({})->PostTask(
@@ -294,8 +296,7 @@ class SocketTunnel {
   void Pump(net::StreamSocket* from, net::StreamSocket* to) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-    scoped_refptr<net::IOBuffer> buffer =
-        base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+    auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
     int result =
         from->Read(buffer.get(), kBufferSize,
                    base::BindOnce(&SocketTunnel::OnRead, base::Unretained(this),
@@ -494,9 +495,9 @@ void PortForwardingController::Connection::SerializeChanges(
 void PortForwardingController::Connection::SendCommand(
     const std::string& method, int port) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  base::Value params(base::Value::Type::DICTIONARY);
+  base::Value::Dict params;
   DCHECK(method == kBindMethod || kUnbindMethod == method);
-  params.SetIntKey(kPortParam, port);
+  params.Set(kPortParam, port);
   int id = ++command_id_;
 
   if (method == kBindMethod) {
@@ -514,7 +515,8 @@ void PortForwardingController::Connection::SendCommand(
                                             base::Unretained(this), port);
   }
 
-  web_socket_->SendFrame(SerializeCommand(id, method, std::move(params)));
+  web_socket_->SendFrame(
+      SerializeCommand(id, method, base::Value(std::move(params))));
 }
 
 bool PortForwardingController::Connection::ProcessResponse(
@@ -572,17 +574,18 @@ void PortForwardingController::Connection::OnFrameRead(
     return;
 
   std::string method;
-  absl::optional<base::Value> params;
-  if (!ParseNotification(message, &method, &params))
+  absl::optional<base::Value::Dict> params;
+  if (!ParseNotification(message, method, params)) {
     return;
+  }
 
   if (method != kAcceptedEvent || !params)
     return;
 
-  absl::optional<int> port = params->FindIntKey(kPortParam);
+  absl::optional<int> port = params->FindInt(kPortParam);
   if (!port)
     return;
-  const std::string* connection_id = params->FindStringKey(kConnectionIdParam);
+  const std::string* connection_id = params->FindString(kConnectionIdParam);
   if (!connection_id)
     return;
 

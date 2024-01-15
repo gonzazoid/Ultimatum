@@ -8,16 +8,16 @@
 
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_split.h"
 #include "base/time/time.h"
 
-namespace chromeos::trash_service {
+namespace ash::trash_service {
 
 namespace {
 
@@ -168,4 +168,4 @@ void TrashServiceImpl::ParseTrashInfoFile(base::File trash_info_file,
                           std::move(deletion_date));
 }
 
-}  // namespace chromeos::trash_service
+}  // namespace ash::trash_service

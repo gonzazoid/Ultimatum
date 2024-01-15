@@ -6,9 +6,12 @@
 
 #import "ios/chrome/browser/ui/keyboard/UIKeyCommand+Chrome.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+// Note: this class can be called very early on in the start process, before
+// resource bundles are loaded. This means that to get localized strings, one
+// shouldn't use `l10n_util::GetNSString()` and instead should use
+// `NSLocalizedString(@"IDS_IOS_MY_STRING", @"")`, with
+// `IDS_IOS_MY_STRING` present in the allowlist at
+// //ios/chrome/app/resources/chrome_localize_strings_config.plist.
 
 @implementation MenuBuilder
 
@@ -23,17 +26,19 @@
     UIKeyCommand.cr_openNewTab,
     UIKeyCommand.cr_openNewIncognitoTab,
     UIKeyCommand.cr_openNewWindow,
-    UIKeyCommand.cr_focusOmnibox,
+    UIKeyCommand.cr_openNewIncognitoWindow,
+    UIKeyCommand.cr_openLocation,
     UIKeyCommand.cr_closeTab,
-    UIKeyCommand.cr_startVoiceSearch,
+    UIKeyCommand.cr_voiceSearch,
+    UIKeyCommand.cr_closeAll,
   ]];
   [builder insertChildMenu:fileMenu atStartOfMenuForIdentifier:UIMenuFile];
 
   // Edit
   UIMenu* editMenu = [UIMenu menuWithChildren:@[
-    UIKeyCommand.cr_openFindInPage,
-    UIKeyCommand.cr_findNextStringInPage,
-    UIKeyCommand.cr_findPreviousStringInPage,
+    UIKeyCommand.cr_find,
+    UIKeyCommand.cr_findNext,
+    UIKeyCommand.cr_findPrevious,
   ]];
   // Remove the conflicting Find commands.
   [builder removeMenuForIdentifier:UIMenuFind];
@@ -48,24 +53,26 @@
   [builder insertChildMenu:viewMenu atStartOfMenuForIdentifier:UIMenuView];
 
   // History
-  UIMenu* historyMenu = [UIMenu menuWithTitle:@"History"
-                                     children:@[
-                                       UIKeyCommand.cr_goBack,
-                                       UIKeyCommand.cr_goForward,
-                                       UIKeyCommand.cr_reopenLastClosedTab,
-                                       UIKeyCommand.cr_showHistory,
-                                       UIKeyCommand.cr_clearBrowsingData,
-                                     ]];
+  UIMenu* historyMenu =
+      [UIMenu menuWithTitle:NSLocalizedString(@"IDS_IOS_KEYBOARD_HISTORY", @"")
+                   children:@[
+                     UIKeyCommand.cr_back,
+                     UIKeyCommand.cr_forward,
+                     UIKeyCommand.cr_reopenLastClosedTab,
+                     UIKeyCommand.cr_showHistory,
+                     UIKeyCommand.cr_clearBrowsingData,
+                   ]];
   [builder insertSiblingMenu:historyMenu afterMenuForIdentifier:UIMenuView];
 
   // Bookmarks
-  UIMenu* bookmarksMenu = [UIMenu menuWithTitle:@"Bookmarks"
-                                       children:@[
-                                         UIKeyCommand.cr_showBookmarks,
-                                         UIKeyCommand.cr_addToBookmarks,
-                                         UIKeyCommand.cr_showReadingList,
-                                         UIKeyCommand.cr_addToReadingList,
-                                       ]];
+  UIMenu* bookmarksMenu = [UIMenu
+      menuWithTitle:NSLocalizedString(@"IDS_IOS_KEYBOARD_BOOKMARKS", @"")
+           children:@[
+             UIKeyCommand.cr_showBookmarks,
+             UIKeyCommand.cr_addToBookmarks,
+             UIKeyCommand.cr_showReadingList,
+             UIKeyCommand.cr_addToReadingList,
+           ]];
   [builder insertSiblingMenu:bookmarksMenu
       afterMenuForIdentifier:historyMenu.identifier];
 
@@ -73,9 +80,9 @@
   UIMenu* windowMenu = [UIMenu menuWithChildren:@[
     UIKeyCommand.cr_showNextTab,
     UIKeyCommand.cr_showPreviousTab,
-    UIKeyCommand.cr_showTab0,
-    UIKeyCommand.cr_showLastTab,
-    UIKeyCommand.cr_showDownloadsFolder,
+    UIKeyCommand.cr_select1,
+    UIKeyCommand.cr_select9,
+    UIKeyCommand.cr_showDownloads,
     UIKeyCommand.cr_showSettings,
   ]];
   [builder insertChildMenu:windowMenu atStartOfMenuForIdentifier:UIMenuWindow];

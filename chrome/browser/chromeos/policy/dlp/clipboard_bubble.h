@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/size.h"
@@ -33,6 +33,9 @@ class ClipboardBubbleView : public views::View {
   virtual gfx::Size GetBubbleSize() const = 0;
 
  protected:
+  // views::View:
+  void OnThemeChanged() override;
+
   // This function should get called if the view got updated e.g. AddChildView.
   void UpdateBorderSize(const gfx::Size& size);
 
@@ -52,7 +55,7 @@ class ClipboardBlockBubble : public ClipboardBubbleView {
   // ClipboardBubbleView::
   gfx::Size GetBubbleSize() const override;
 
-  void SetDismissCallback(base::RepeatingCallback<void()> cb);
+  void SetDismissCallback(base::OnceClosure cb);
 
  private:
   raw_ptr<views::LabelButton> button_ = nullptr;
@@ -68,9 +71,9 @@ class ClipboardWarnBubble : public ClipboardBubbleView {
   // ClipboardBubbleView::
   gfx::Size GetBubbleSize() const override;
 
-  void SetDismissCallback(base::RepeatingCallback<void()> cb);
+  void SetDismissCallback(base::OnceClosure cb);
 
-  void SetProceedCallback(base::RepeatingCallback<void()> cb);
+  void SetProceedCallback(base::OnceClosure cb);
 
   void set_paste_cb(base::OnceCallback<void(bool)> paste_cb) {
     paste_cb_ = std::move(paste_cb);

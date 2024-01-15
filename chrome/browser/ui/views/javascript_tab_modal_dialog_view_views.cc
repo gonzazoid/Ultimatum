@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/javascript_tab_modal_dialog_view_views.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/javascript_dialogs/javascript_tab_modal_dialog_manager_delegate_desktop.h"
 #include "chrome/browser/ui/views/title_origin_label.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -137,7 +137,7 @@ JavaScriptTabModalDialogViewViews::CreateAlertDialogForTesting(
       base::NullCallback(), base::NullCallback());
 }
 
-BEGIN_METADATA(JavaScriptTabModalDialogViewViews, views::DialogDelegateView)
+BEGIN_METADATA(JavaScriptTabModalDialogViewViews)
 END_METADATA
 
 // Creates a new JS dialog. Note the two callbacks; |dialog_callback| is for

@@ -7,10 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 #include "components/performance_manager/public/graph/frame_node.h"
@@ -78,7 +78,7 @@ void CheckIsCrossOriginIsolatedOnUISeq(
     return;
   }
   if (rfh->GetWebExposedIsolationLevel() ==
-          content::RenderFrameHost::WebExposedIsolationLevel::kNotIsolated &&
+          content::WebExposedIsolationLevel::kNotIsolated &&
       !base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kDisableWebSecurity)) {
     std::move(bad_message_callback)

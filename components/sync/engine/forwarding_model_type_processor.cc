@@ -5,7 +5,7 @@
 #include "components/sync/engine/forwarding_model_type_processor.h"
 
 #include <utility>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/sync/engine/commit_queue.h"
 
 namespace syncer {
@@ -52,6 +52,11 @@ void ForwardingModelTypeProcessor::OnUpdateReceived(
     absl::optional<sync_pb::GarbageCollectionDirective> gc_directive) {
   processor_->OnUpdateReceived(type_state, std::move(updates),
                                std::move(gc_directive));
+}
+
+void ForwardingModelTypeProcessor::StorePendingInvalidations(
+    std::vector<sync_pb::ModelTypeState::Invalidation> invalidations_to_store) {
+  processor_->StorePendingInvalidations(std::move(invalidations_to_store));
 }
 
 }  // namespace syncer

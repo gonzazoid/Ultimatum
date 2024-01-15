@@ -10,14 +10,14 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/base/oauth_token_getter_impl.h"
 #include "remoting/base/protobuf_http_status.h"
 #include "remoting/base/url_request_context_getter.h"
@@ -101,7 +101,7 @@ void FtlServicesPlayground::StartLoop() {
 
   auto url_request_context_getter =
       base::MakeRefCounted<URLRequestContextGetter>(
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   url_loader_factory_owner_ =
       std::make_unique<network::TransitionalURLLoaderFactoryOwner>(
           url_request_context_getter);
@@ -145,9 +145,8 @@ void FtlServicesPlayground::OnSignInGaiaResponse(
     return;
   }
 
-  std::string registration_id_base64;
-  base::Base64Encode(registration_manager_->GetRegistrationId(),
-                     &registration_id_base64);
+  std::string registration_id_base64 =
+      base::Base64Encode(registration_manager_->GetRegistrationId());
   printf("Service signed in. registration_id(base64)=%s\n",
          registration_id_base64.c_str());
   std::move(on_done).Run();
@@ -300,7 +299,8 @@ void FtlServicesPlayground::HandleStatusError(
     return;
   }
 
-  fprintf(stderr, "RPC failed. Code=%d, Message=%s\n", status.error_code(),
+  fprintf(stderr, "RPC failed. Code=%d, Message=%s\n",
+          static_cast<int>(status.error_code()),
           status.error_message().c_str());
   std::move(on_done).Run();
 }

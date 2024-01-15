@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/strings/string_piece.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -47,6 +48,10 @@ WebUIController* TestWebUI::GetController() {
   return controller_.get();
 }
 
+RenderFrameHost* TestWebUI::GetRenderFrameHost() {
+  return render_frame_host_.get();
+}
+
 void TestWebUI::SetController(std::unique_ptr<WebUIController> controller) {
   controller_ = std::move(controller);
 }
@@ -69,7 +74,8 @@ void TestWebUI::SetBindings(int bindings) {
 
 const std::vector<std::string>& TestWebUI::GetRequestableSchemes() {
   NOTIMPLEMENTED();
-  return std::move(std::vector<std::string>());
+  static base::NoDestructor<std::vector<std::string>> dummy;
+  return *dummy;
 }
 
 void TestWebUI::AddRequestableScheme(const char* scheme) {
@@ -88,6 +94,19 @@ void TestWebUI::RegisterMessageCallback(base::StringPiece message,
                                         MessageCallback callback) {
   message_callbacks_[static_cast<std::string>(message)].push_back(
       std::move(callback));
+}
+
+void TestWebUI::ProcessWebUIMessage(const GURL& source_url,
+                                    const std::string& message,
+                                    base::Value::List args) {
+  auto callback_entry = message_callbacks_.find(message);
+  if (callback_entry == message_callbacks_.end()) {
+    return;
+  }
+
+  for (auto& callback : callback_entry->second) {
+    callback.Run(args);
+  }
 }
 
 bool TestWebUI::CanCallJavascript() {
@@ -126,7 +145,7 @@ TestWebUI::CallData::~CallData() {
 }
 
 void TestWebUI::CallData::AppendArgument(base::Value arg) {
-  args_.push_back(std::move(arg));
+  args_.Append(std::move(arg));
 }
 
 }  // namespace content

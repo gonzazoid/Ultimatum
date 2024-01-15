@@ -3,18 +3,49 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
+
+android_library("delegate_java") {
+  deps = [
+    "//base:base_java",
+    "//third_party/androidx:androidx_annotation_annotation_java",
+  ]
+
+  sources = [
+    "java/src/org/chromium/components/search_engines/SearchEngineCountryDelegate.java",
+    "java/src/org/chromium/components/search_engines/SearchEngineCountryDelegateImpl.java",
+  ]
+
+  # Add the actual implementation where necessary so that downstream targets
+  # can provide their own implementations.
+  jar_excluded_patterns = [ "*/SearchEngineCountryDelegateImpl.class" ]
+}
+
+android_library("delegate_public_impl_java") {
+  deps = [
+    ":delegate_java",
+    "//base:base_java",
+    "//third_party/androidx:androidx_annotation_annotation_java",
+  ]
+
+  sources = [ "java/src/org/chromium/components/search_engines/SearchEngineCountryDelegateImpl.java" ]
+}
 
 android_library("java") {
   deps = [
+    ":delegate_java",
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//content/public/android:content_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//url:gurl_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 
+  srcjar_deps = [
+    ":jni_headers",
+    "//components/search_engines:search_engine_enums_java",
+  ]
   sources = [
     "java/src/org/chromium/components/search_engines/TemplateUrl.java",
     "java/src/org/chromium/components/search_engines/TemplateUrlService.java",
@@ -25,5 +56,17 @@ generate_jni("jni_headers") {
   sources = [
     "java/src/org/chromium/components/search_engines/TemplateUrl.java",
     "java/src/org/chromium/components/search_engines/TemplateUrlService.java",
+  ]
+}
+
+android_library("test_utils_java") {
+  testonly = true
+  sources = [
+    "java/src/org/chromium/components/search_engines/FakeTemplateUrl.java",
+    "java/src/org/chromium/components/search_engines/TemplateUrlTestHelpers.java",
+  ]
+  deps = [
+    ":java",
+    "//third_party/mockito:mockito_java",
   ]
 }

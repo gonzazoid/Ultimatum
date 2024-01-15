@@ -8,15 +8,17 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -38,7 +40,6 @@
 #include "chromeos/ash/components/network/tether_constants.h"
 #include "dbus/object_path.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 using testing::ElementsAre;
@@ -92,11 +93,10 @@ std::vector<std::string> GetNetworkPaths(
 // Creates a list of cellular SIM slots with a single primary slot whose eid is
 // |eid|.
 base::Value GenerateSimSlotInfosWithEid(const std::string& eid) {
-  base::Value::List sim_slot_infos;
-  base::Value::Dict slot_info_item;
-  slot_info_item.Set(shill::kSIMSlotInfoEID, eid);
-  slot_info_item.Set(shill::kSIMSlotInfoPrimary, true);
-  sim_slot_infos.Append(std::move(slot_info_item));
+  auto sim_slot_infos =
+      base::Value::List().Append(base::Value::Dict()
+                                     .Set(shill::kSIMSlotInfoEID, eid)
+                                     .Set(shill::kSIMSlotInfoPrimary, true));
   return base::Value(std::move(sim_slot_infos));
 }
 
@@ -275,7 +275,7 @@ class TestObserver final : public NetworkStateHandlerObserver {
   }
 
  private:
-  NetworkStateHandler* handler_;
+  raw_ptr<NetworkStateHandler> handler_;
   size_t active_network_change_count_ = 0;
   size_t default_network_change_count_ = 0;
   size_t portal_state_change_count_ = 0;
@@ -295,8 +295,8 @@ class TestObserver final : public NetworkStateHandlerObserver {
   std::map<std::string, int> device_property_updates_;
   std::map<std::string, int> connection_state_changes_;
   std::map<std::string, std::string> network_connection_state_;
-  absl::optional<base::RunLoop> run_loop_scan_started_;
-  absl::optional<base::RunLoop> run_loop_scan_completed_;
+  std::optional<base::RunLoop> run_loop_scan_started_;
+  std::optional<base::RunLoop> run_loop_scan_completed_;
   std::vector<std::pair<std::string, std::string>> service_path_transitions_;
 };
 
@@ -321,7 +321,7 @@ class TestTetherSortDelegate : public NetworkStateHandler::TetherSortDelegate {
                     static_cast<const NetworkState*>(second.get());
 
                 // Sort by reverse-alphabetical order of GUIDs.
-                return first_network->guid() >= second_network->guid();
+                return first_network->guid() > second_network->guid();
               });
   }
 };
@@ -447,14 +447,13 @@ class NetworkStateHandlerTest : public testing::Test {
               kShillManagerClientStubDefaultWifi);
   }
 
-  void SetProperties(NetworkState* network, const base::Value& properties) {
+  void SetProperties(NetworkState* network,
+                     const base::Value::Dict& properties) {
     // UpdateNetworkStateProperties expects 'Type' and 'WiFi.HexSSID' to always
     // be set.
-    base::Value properties_to_set(properties.Clone());
-    properties_to_set.SetKey(shill::kTypeProperty,
-                             base::Value(network->type()));
-    properties_to_set.SetKey(shill::kWifiHexSsid,
-                             base::Value(network->GetHexSsid()));
+    base::Value::Dict properties_to_set = properties.Clone();
+    properties_to_set.Set(shill::kTypeProperty, network->type());
+    properties_to_set.Set(shill::kWifiHexSsid, network->GetHexSsid());
     network_state_handler_->UpdateNetworkStateProperties(network,
                                                          properties_to_set);
   }
@@ -470,10 +469,10 @@ class NetworkStateHandlerTest : public testing::Test {
   std::unique_ptr<NetworkStateHandler> network_state_handler_;
   std::unique_ptr<TestObserver> test_observer_;
   FakeStubCellularNetworksProvider fake_stub_cellular_networks_provider_;
-  ShillDeviceClient::TestInterface* device_test_;
-  ShillManagerClient::TestInterface* manager_test_;
-  ShillProfileClient::TestInterface* profile_test_;
-  ShillServiceClient::TestInterface* service_test_;
+  raw_ptr<ShillDeviceClient::TestInterface, DanglingUntriaged> device_test_;
+  raw_ptr<ShillManagerClient::TestInterface, DanglingUntriaged> manager_test_;
+  raw_ptr<ShillProfileClient::TestInterface, DanglingUntriaged> profile_test_;
+  raw_ptr<ShillServiceClient::TestInterface, DanglingUntriaged> service_test_;
 };
 
 TEST_F(NetworkStateHandlerTest, NetworkStateHandlerStub) {
@@ -847,7 +846,7 @@ TEST_F(NetworkStateHandlerTest, GetVisibleNetworks) {
 TEST_F(NetworkStateHandlerTest, TechnologyChanged) {
   // Disable a technology. Will immediately set the state to DISABLING and
   // notify observers.
-  network_state_handler_->SetTechnologyEnabled(
+  network_state_handler_->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), false, network_handler::ErrorCallback());
   EXPECT_EQ(1u, test_observer_->device_list_changed_count());
   EXPECT_EQ(
@@ -866,7 +865,7 @@ TEST_F(NetworkStateHandlerTest, TechnologyChanged) {
   // Enable a technology. Will immediately set the state to ENABLING and
   // notify observers.
   test_observer_->reset_change_counts();
-  network_state_handler_->SetTechnologyEnabled(
+  network_state_handler_->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), true, network_handler::ErrorCallback());
   EXPECT_EQ(1u, test_observer_->device_list_changed_count());
   EXPECT_EQ(
@@ -902,7 +901,7 @@ TEST_F(NetworkStateHandlerTest, TechnologyState) {
       network_state_handler_->GetTechnologyState(NetworkTypePattern::WiFi()));
 
   manager_test_->SetTechnologyInitializing(shill::kTypeWifi, false);
-  network_state_handler_->SetTechnologyEnabled(
+  network_state_handler_->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), true, network_handler::ErrorCallback());
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(
@@ -940,8 +939,8 @@ TEST_F(NetworkStateHandlerTest, TetherTechnologyState) {
   EXPECT_EQ(tether_device_state, network_state_handler_->GetDeviceStateByType(
                                      NetworkTypePattern::Tether()));
 
-  // Test SetTechnologyEnabled() with a Tether network:
-  network_state_handler_->SetTechnologyEnabled(
+  // Test SetTechnologiesEnabled() with a Tether network:
+  network_state_handler_->SetTechnologiesEnabled(
       NetworkTypePattern::Tether(), true, network_handler::ErrorCallback());
   EXPECT_EQ(2u, test_observer_->device_list_changed_count());
   EXPECT_EQ(
@@ -2123,7 +2122,7 @@ TEST_F(NetworkStateHandlerTest, RequestScan) {
   // Disable cellular, scan request for cellular only should not send a
   // notification
   test_observer_->reset_change_counts();
-  network_state_handler_->SetTechnologyEnabled(
+  network_state_handler_->SetTechnologiesEnabled(
       NetworkTypePattern::Cellular(), false, network_handler::ErrorCallback());
   network_state_handler_->RequestScan(NetworkTypePattern::Cellular());
   EXPECT_EQ(0u, test_observer_->scan_requested_count());
@@ -2132,7 +2131,7 @@ TEST_F(NetworkStateHandlerTest, RequestScan) {
 
   // Disable wifi, scan request for wifi only should not send a notification.
   test_observer_->reset_change_counts();
-  network_state_handler_->SetTechnologyEnabled(
+  network_state_handler_->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), false, network_handler::ErrorCallback());
   network_state_handler_->RequestScan(NetworkTypePattern::WiFi());
   EXPECT_EQ(0u, test_observer_->scan_requested_count());
@@ -2274,12 +2273,12 @@ TEST_F(NetworkStateHandlerTest, IPConfigChanged) {
   ShillIPConfigClient::TestInterface* ip_config_test =
       ShillIPConfigClient::Get()->GetTestInterface();
   const std::string kIPConfigPath = "test_ip_config";
-  base::Value ip_config_properties(base::Value::Type::DICTIONARY);
-  ip_config_test->AddIPConfig(kIPConfigPath, ip_config_properties);
-  base::Value device_ip_configs(base::Value::Type::LIST);
+  ip_config_test->AddIPConfig(kIPConfigPath, base::Value::Dict());
+  base::Value::List device_ip_configs;
   device_ip_configs.Append(kIPConfigPath);
   device_test_->SetDeviceProperty(kShillManagerClientStubWifiDevice,
-                                  shill::kIPConfigsProperty, device_ip_configs,
+                                  shill::kIPConfigsProperty,
+                                  base::Value(std::move(device_ip_configs)),
                                   /*notify_changed=*/true);
   service_test_->SetServiceProperty(kShillManagerClientStubDefaultWifi,
                                     shill::kIPConfigProperty,
@@ -2441,7 +2440,8 @@ TEST_F(NetworkStateHandlerTest,
   EXPECT_EQ(2u, network_list.size());
   EXPECT_EQ(1u, test_observer_->network_list_changed_count());
   EXPECT_EQ(1u, test_observer_->service_path_transitions().size());
-  EXPECT_EQ(GenerateStubCellularServicePath(kTestCellularServiceIccid2),
+  EXPECT_EQ(cellular_utils::GenerateStubCellularServicePath(
+                kTestCellularServiceIccid2),
             test_observer_->service_path_transitions()[0].first);
   EXPECT_EQ(kTestCellularServicePath2,
             test_observer_->service_path_transitions()[0].second);
@@ -2510,9 +2510,9 @@ TEST_F(NetworkStateHandlerTest, BlockedWifiByPolicyBlocked) {
   // Emulate 'wifi1' being a managed network.
   std::unique_ptr<NetworkUIData> ui_data =
       NetworkUIData::CreateFromONC(::onc::ONCSource::ONC_SOURCE_USER_POLICY);
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kProfileProperty, base::Value(kProfilePath));
-  properties.SetKey(shill::kUIDataProperty, base::Value(ui_data->GetAsJson()));
+  auto properties = base::Value::Dict()
+                        .Set(shill::kProfileProperty, kProfilePath)
+                        .Set(shill::kUIDataProperty, ui_data->GetAsJson());
   SetProperties(wifi1, properties);
 
   EXPECT_FALSE(network_state_handler_->OnlyManagedWifiNetworksAllowed());
@@ -2544,9 +2544,9 @@ TEST_F(NetworkStateHandlerTest, BlockedWifiByPolicyOnlyManaged) {
   // Emulate 'wifi1' being a managed network.
   std::unique_ptr<NetworkUIData> ui_data =
       NetworkUIData::CreateFromONC(::onc::ONCSource::ONC_SOURCE_USER_POLICY);
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kProfileProperty, base::Value(kProfilePath));
-  properties.SetKey(shill::kUIDataProperty, base::Value(ui_data->GetAsJson()));
+  auto properties = base::Value::Dict()
+                        .Set(shill::kProfileProperty, kProfilePath)
+                        .Set(shill::kUIDataProperty, ui_data->GetAsJson());
   SetProperties(wifi1, properties);
 
   EXPECT_TRUE(network_state_handler_->OnlyManagedWifiNetworksAllowed());
@@ -2582,9 +2582,9 @@ TEST_F(NetworkStateHandlerTest, BlockedCellularByPolicyOnlyManaged) {
   // Emulate 'cellular1' being a managed network.
   std::unique_ptr<NetworkUIData> ui_data =
       NetworkUIData::CreateFromONC(::onc::ONCSource::ONC_SOURCE_DEVICE_POLICY);
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kProfileProperty, base::Value(kProfilePath));
-  properties.SetKey(shill::kUIDataProperty, base::Value(ui_data->GetAsJson()));
+  auto properties = base::Value::Dict()
+                        .Set(shill::kProfileProperty, kProfilePath)
+                        .Set(shill::kUIDataProperty, ui_data->GetAsJson());
   SetProperties(cellular1, properties);
 
   EXPECT_TRUE(cellular1->IsManagedByPolicy());
@@ -2623,9 +2623,9 @@ TEST_F(NetworkStateHandlerTest,
   // Emulate 'cellular1' being a managed network.
   std::unique_ptr<NetworkUIData> ui_data =
       NetworkUIData::CreateFromONC(::onc::ONCSource::ONC_SOURCE_DEVICE_POLICY);
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kProfileProperty, base::Value(kProfilePath));
-  properties.SetKey(shill::kUIDataProperty, base::Value(ui_data->GetAsJson()));
+  auto properties = base::Value::Dict()
+                        .Set(shill::kProfileProperty, kProfilePath)
+                        .Set(shill::kUIDataProperty, ui_data->GetAsJson());
   SetProperties(cellular1, properties);
 
   EXPECT_TRUE(cellular1->IsManagedByPolicy());
@@ -2656,9 +2656,9 @@ TEST_F(NetworkStateHandlerTest, BlockedWifiByPolicyOnlyManagedIfAvailable) {
   // Emulate 'wifi1' being a managed network.
   std::unique_ptr<NetworkUIData> ui_data =
       NetworkUIData::CreateFromONC(::onc::ONCSource::ONC_SOURCE_USER_POLICY);
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kProfileProperty, base::Value(kProfilePath));
-  properties.SetKey(shill::kUIDataProperty, base::Value(ui_data->GetAsJson()));
+  auto properties = base::Value::Dict()
+                        .Set(shill::kProfileProperty, kProfilePath)
+                        .Set(shill::kUIDataProperty, ui_data->GetAsJson());
   SetProperties(wifi1, properties);
   network_state_handler_->UpdateManagedWifiNetworkAvailable();
 
@@ -2668,6 +2668,13 @@ TEST_F(NetworkStateHandlerTest, BlockedWifiByPolicyOnlyManagedIfAvailable) {
   EXPECT_FALSE(wifi2->IsManagedByPolicy());
   EXPECT_FALSE(wifi1->blocked_by_policy());
   EXPECT_TRUE(wifi2->blocked_by_policy());
+}
+
+// Regression test for b/269169473.
+TEST_F(NetworkStateHandlerTest, GetAvailableManagedWifiNetworkNoWifiDevice) {
+  RemoveDevice(kShillManagerClientStubWifiDevice);
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(nullptr, network_state_handler_->GetAvailableManagedWifiNetwork());
 }
 
 TEST_F(NetworkStateHandlerTest, SetNetworkConnectRequested) {
@@ -2793,36 +2800,50 @@ TEST_F(NetworkStateHandlerTest, GetNetworkListAfterUpdateManagedList) {
 
 TEST_F(NetworkStateHandlerTest, RequestTrafficCounters) {
   // Set up the traffic counters.
-  base::Value traffic_counters(base::Value::Type::LIST);
+  auto chrome_dict = base::Value::Dict()
+                         .Set("source", shill::kTrafficCounterSourceChrome)
+                         .Set("rx_bytes", 12)
+                         .Set("tx_bytes", 32);
 
-  base::Value chrome_dict(base::Value::Type::DICTIONARY);
-  chrome_dict.SetKey("source", base::Value(shill::kTrafficCounterSourceChrome));
-  chrome_dict.SetKey("rx_bytes", base::Value(12));
-  chrome_dict.SetKey("tx_bytes", base::Value(32));
-  traffic_counters.Append(std::move(chrome_dict));
+  auto user_dict = base::Value::Dict()
+                       .Set("source", shill::kTrafficCounterSourceUser)
+                       .Set("rx_bytes", 90)
+                       .Set("tx_bytes", 87);
 
-  base::Value user_dict(base::Value::Type::DICTIONARY);
-  user_dict.SetKey("source", base::Value(shill::kTrafficCounterSourceUser));
-  user_dict.SetKey("rx_bytes", base::Value(90));
-  user_dict.SetKey("tx_bytes", base::Value(87));
-  traffic_counters.Append(std::move(user_dict));
+  auto traffic_counters = base::Value::List()
+                              .Append(std::move(chrome_dict))
+                              .Append(std::move(user_dict));
 
   service_test_->SetFakeTrafficCounters(traffic_counters.Clone());
-  ASSERT_TRUE(traffic_counters.is_list());
 
-  base::RunLoop run_loop;
+  // Expect traffic counters to be returned for a WiFi network backed by shill.
+  base::RunLoop shill_backed_network_run_loop;
   network_state_handler_->RequestTrafficCounters(
-      kWifiName1, base::BindOnce(
-                      [](base::Value* expected_traffic_counters,
-                         base::OnceClosure quit_closure,
-                         absl::optional<base::Value> actual_traffic_counters) {
-                        ASSERT_TRUE(actual_traffic_counters);
-                        EXPECT_EQ(*expected_traffic_counters,
-                                  *actual_traffic_counters);
-                        std::move(quit_closure).Run();
-                      },
-                      &traffic_counters, run_loop.QuitClosure()));
-  run_loop.Run();
+      kShillManagerClientStubDefaultWifi,
+      base::BindOnce(
+          [](base::Value::List* expected_traffic_counters,
+             base::OnceClosure quit_closure,
+             std::optional<base::Value> actual_traffic_counters) {
+            ASSERT_TRUE(actual_traffic_counters);
+            EXPECT_EQ(*expected_traffic_counters, *actual_traffic_counters);
+            std::move(quit_closure).Run();
+          },
+          &traffic_counters, shill_backed_network_run_loop.QuitClosure()));
+  shill_backed_network_run_loop.Run();
+
+  // No traffic counters are returned for a network not backed by shill.
+  base::RunLoop non_shill_backed_network_run_loop;
+  network_state_handler_->RequestTrafficCounters(
+      kWifiName1,
+      base::BindOnce(
+          [](base::Value::List* expected_traffic_counters,
+             base::OnceClosure quit_closure,
+             std::optional<base::Value> actual_traffic_counters) {
+            ASSERT_FALSE(actual_traffic_counters);
+            std::move(quit_closure).Run();
+          },
+          &traffic_counters, non_shill_backed_network_run_loop.QuitClosure()));
+  non_shill_backed_network_run_loop.Run();
 }
 
 TEST_F(NetworkStateHandlerTest, RequestPortalDetection) {

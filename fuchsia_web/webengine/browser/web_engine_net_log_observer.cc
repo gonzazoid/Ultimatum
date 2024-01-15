@@ -7,10 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "net/log/file_net_log_observer.h"
 #include "net/log/net_log.h"
@@ -18,7 +18,9 @@
 
 namespace {
 
-std::unique_ptr<base::Value> GetWebEngineConstants() {
+// TODO(https://crbug.com/1418110): This should be updated to pass a
+// base::Value::Dict instead of a std::unique_ptr.
+std::unique_ptr<base::Value::Dict> GetWebEngineConstants() {
   base::Value::Dict constants_dict = net::GetNetConstants();
 
   base::Value::Dict dict;
@@ -28,7 +30,7 @@ std::unique_ptr<base::Value> GetWebEngineConstants() {
 
   constants_dict.Set("clientInfo", std::move(dict));
 
-  return std::make_unique<base::Value>(std::move(constants_dict));
+  return std::make_unique<base::Value::Dict>(std::move(constants_dict));
 }
 
 }  // namespace

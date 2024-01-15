@@ -11,9 +11,9 @@
 #include <utility>
 
 #include "base/base_paths_posix.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/time_formatting.h"
 #include "base/observer_list.h"
 #include "base/path_service.h"
@@ -26,7 +26,6 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/media_galleries/media_file_system_registry.h"
-#include "chrome/browser/media_galleries/media_galleries_histograms.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/apps/platform_apps/media_galleries_permission.h"
 #include "chrome/common/chrome_paths.h"
@@ -87,23 +86,6 @@ const char kMediaGalleriesDefaultGalleryTypePicturesDefaultValue[] = "pictures";
 const char kMediaGalleriesDefaultGalleryTypeVideosDefaultValue[] = "videos";
 
 const int kCurrentPrefsVersion = 3;
-
-int NumberExtensionsUsingMediaGalleries(Profile* profile) {
-  int count = 0;
-  if (!profile)
-    return count;
-
-  for (const scoped_refptr<const extensions::Extension>& extension :
-       extensions::ExtensionRegistry::Get(profile)->enabled_extensions()) {
-    const extensions::PermissionsData* permissions_data =
-        extension->permissions_data();
-    if (permissions_data->HasAPIPermission(
-            extensions::mojom::APIPermissionID::kMediaGalleries)) {
-      count++;
-    }
-  }
-  return count;
-}
 
 bool GetPrefId(const base::Value::Dict& dict, MediaGalleryPrefId* value) {
   const std::string* string_id = dict.FindString(kMediaGalleriesPrefIdKey);
@@ -409,7 +391,7 @@ std::u16string MediaGalleryPrefInfo::GetGalleryDisplayName() const {
       return display_name;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    // See chrome/browser/chromeos/fileapi/file_system_backend.cc
+    // See chrome/browser/ash/fileapi/file_system_backend.cc
     base::FilePath download_path;
     if (base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS_SAFE,
                                &download_path)) {
@@ -484,13 +466,6 @@ void MediaGalleriesPreferences::EnsureInitialized(base::OnceClosure callback) {
   on_initialize_callbacks_.push_back(std::move(callback));
   if (on_initialize_callbacks_.size() > 1)
     return;
-
-  // Check whether we should be initializing -- are there any extensions that
-  // are using media galleries?
-  media_galleries::UsageCount(media_galleries::PREFS_INITIALIZED);
-  if (NumberExtensionsUsingMediaGalleries(profile_) == 0) {
-    media_galleries::UsageCount(media_galleries::PREFS_INITIALIZED_ERROR);
-  }
 
   // We determine the freshness of the profile here, before any of the finders
   // return and add media galleries to it (hence why the APIHasBeenUsed check
@@ -1221,14 +1196,12 @@ MediaGalleriesPreferences::GetGalleryPermissionsFromPrefs(
     const std::string& extension_id) const {
   DCHECK(IsInitialized());
   std::vector<MediaGalleryPermission> result;
-  const base::ListValue* permissions;
-  if (!GetExtensionPrefs()->ReadPrefAsList(extension_id,
-                                           kMediaGalleriesPermissions,
-                                           &permissions)) {
+  const base::Value::List* permissions = GetExtensionPrefs()->ReadPrefAsList(
+      extension_id, kMediaGalleriesPermissions);
+  if (!permissions)
     return result;
-  }
 
-  for (const auto& permission : permissions->GetList()) {
+  for (const auto& permission : *permissions) {
     if (!permission.is_dict())
       continue;
     MediaGalleryPermission perm;

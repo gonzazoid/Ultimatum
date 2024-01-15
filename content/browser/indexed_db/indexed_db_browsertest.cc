@@ -8,25 +8,30 @@
 #include <functional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/test_future.h"
 #include "base/test/thread_test_helper.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "components/services/storage/indexed_db/transactional_leveldb/transactional_leveldb_database.h"
 #include "components/services/storage/privileged/mojom/indexed_db_control.mojom-test-utils.h"
 #include "components/services/storage/privileged/mojom/indexed_db_control_test.mojom.h"
@@ -57,6 +62,7 @@
 #include "storage/browser/blob/blob_storage_context.h"
 #include "storage/browser/database/database_util.h"
 #include "storage/browser/quota/quota_manager.h"
+#include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/quota/quota_settings.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/common/switches.h"
@@ -88,6 +94,13 @@ class IndexedDBBrowserTest : public ContentBrowserTest {
 
     GetControlTest()->BindMockFailureSingletonForTesting(
         failure_injector_.BindNewPipeAndPassReceiver());
+  }
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    // Enable experimental web platform features to enable write access.
+    command_line->AppendSwitch(
+        switches::kEnableExperimentalWebPlatformFeatures);
+    ContentBrowserTest::SetUpCommandLine(command_line);
   }
 
   void TearDownOnMainThread() override { failure_injector_.reset(); }
@@ -162,15 +175,19 @@ class IndexedDBBrowserTest : public ContentBrowserTest {
     return partition->GetIndexedDBControl();
   }
 
-  mojo::Remote<storage::mojom::IndexedDBControlTest> GetControlTest() {
+  mojo::Remote<storage::mojom::IndexedDBControlTest> GetControlTest(
+      Shell* browser = nullptr) {
     mojo::Remote<storage::mojom::IndexedDBControlTest> idb_control_test;
-    BindControlTest(idb_control_test.BindNewPipeAndPassReceiver());
+    BindControlTest(browser, idb_control_test.BindNewPipeAndPassReceiver());
     return idb_control_test;
   }
 
   void BindControlTest(
+      Shell* browser,
       mojo::PendingReceiver<storage::mojom::IndexedDBControlTest> receiver) {
-    auto* browser = shell();
+    if (!browser) {
+      browser = shell();
+    }
     StoragePartition* partition = browser->web_contents()
                                       ->GetBrowserContext()
                                       ->GetDefaultStoragePartition();
@@ -214,32 +231,18 @@ class IndexedDBBrowserTest : public ContentBrowserTest {
     return result;
   }
 
-  int64_t RequestUsage(const blink::StorageKey& storage_key,
-                       Shell* browser = nullptr) {
-    base::RunLoop loop;
-    int64_t size = 0;
-    auto& control = GetControl(browser);
-    control.GetUsage(base::BindLambdaForTesting(
-        [&](std::vector<storage::mojom::StorageUsageInfoPtr> usages) {
-          for (auto& usage : usages)
-            size += usage->total_size_bytes;
-          loop.Quit();
-        }));
-    loop.Run();
-    return size;
+  int64_t RequestUsage(Shell* browser = nullptr) {
+    base::test::TestFuture<int64_t> future;
+    auto control = GetControlTest(browser);
+    control->GetUsageForTesting(future.GetCallback());
+    return future.Take();
   }
 
   int64_t RequestBlobFileCount(const storage::BucketLocator& bucket_locator) {
-    base::RunLoop loop;
-    int64_t count = 0;
-    auto control_test = GetControlTest();
-    control_test->GetBlobCountForTesting(
-        bucket_locator, base::BindLambdaForTesting([&](int64_t returned_count) {
-          count = returned_count;
-          loop.Quit();
-        }));
-    loop.Run();
-    return count;
+    base::test::TestFuture<int64_t> future;
+    auto control = GetControlTest();
+    control->GetBlobCountForTesting(bucket_locator, future.GetCallback());
+    return future.Take();
   }
 
   bool RequestSchemaDowngrade(const storage::BucketLocator& bucket_locator) {
@@ -282,17 +285,35 @@ class IndexedDBBrowserTest : public ContentBrowserTest {
     loop.Run();
   }
 
+  storage::QuotaErrorOr<storage::BucketInfo> GetOrCreateBucket(
+      const storage::BucketInitParams& params) {
+    base::test::TestFuture<storage::QuotaErrorOr<storage::BucketInfo>> future;
+    shell()
+        ->web_contents()
+        ->GetBrowserContext()
+        ->GetDefaultStoragePartition()
+        ->GetQuotaManager()
+        ->proxy()
+        ->UpdateOrCreateBucket(
+            params, base::SingleThreadTaskRunner::GetCurrentDefault(),
+            future.GetCallback());
+    return future.Take();
+  }
+
  private:
   mojo::Remote<storage::mojom::MockFailureInjector> failure_injector_;
 };
 
-IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, CursorTest) {
-  SimpleTest(GetTestUrl("indexeddb", "cursor_test.html"));
-}
+class IndexedDBIncognitoTest : public IndexedDBBrowserTest,
+                               public ::testing::WithParamInterface<bool> {
+ public:
+  IndexedDBIncognitoTest() = default;
 
-IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, CursorTestIncognito) {
-  SimpleTest(GetTestUrl("indexeddb", "cursor_test.html"),
-             /*incognito=*/true);
+  bool IsIncognito() { return GetParam(); }
+};
+
+IN_PROC_BROWSER_TEST_P(IndexedDBIncognitoTest, CursorTest) {
+  SimpleTest(GetTestUrl("indexeddb", "cursor_test.html"), IsIncognito());
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, CursorPrefetch) {
@@ -316,7 +337,62 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, KeyTypesTest) {
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, ObjectStoreTest) {
+  base::HistogramTester tester;
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.Open", 0);
+
+  // This test opens a database and does 3 adds and 3 gets in the versionchange
+  // transaction (no readonly or readwrite transactions).
   SimpleTest(GetTestUrl("indexeddb", "object_store_test.html"));
+  content::FetchHistogramsFromChildProcesses();
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.Open", 1);
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.ObjectStorePut",
+                          0);
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.ObjectStoreAdd",
+                          3);
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.ObjectStoreGet",
+                          3);
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadWrite.TimeQueued",
+                          0);
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadOnly.TimeQueued",
+                          0);
+  tester.ExpectTotalCount(
+      "WebCore.IndexedDB.Transaction.VersionChange.TimeQueued", 1);
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadWrite.TimeActive2",
+                          0);
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadOnly.TimeActive2",
+                          0);
+  tester.ExpectTotalCount(
+      "WebCore.IndexedDB.Transaction.VersionChange.TimeActive2", 1);
+
+  // This test opens a database and does 2 gets in one readonly transaction.
+  SimpleTest(GetTestUrl("indexeddb", "transaction_get_test.html"));
+  content::FetchHistogramsFromChildProcesses();
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.Open", 2);
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.ObjectStorePut",
+                          0);
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.ObjectStoreAdd",
+                          4);
+  tester.ExpectTotalCount("WebCore.IndexedDB.RequestDuration.ObjectStoreGet",
+                          5);
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadWrite.TimeQueued",
+                          0);
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadOnly.TimeQueued",
+                          1);
+  tester.ExpectTotalCount(
+      "WebCore.IndexedDB.Transaction.VersionChange.TimeQueued", 2);
+
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadWrite.TimeActive2",
+                          0);
+  tester.ExpectTotalCount("WebCore.IndexedDB.Transaction.ReadOnly.TimeActive2",
+                          1);
+  tester.ExpectTotalCount(
+      "WebCore.IndexedDB.Transaction.VersionChange.TimeActive2", 2);
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, DatabaseTest) {
@@ -382,17 +458,12 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, NegativeDBSchemaVersion) {
   std::string value = "\xF6\xFF\xFF\xFF\xFF\xFF\xFF\xFF";
 
   // Find the bucket that was created.
-  const auto maybe_bucket_info =
-      shell()
-          ->web_contents()
-          ->GetBrowserContext()
-          ->GetDefaultStoragePartition()
-          ->GetQuotaManager()
-          ->proxy()
-          ->GetOrCreateBucketSync(storage::BucketInitParams::ForDefaultBucket(
-              blink::StorageKey(url::Origin::Create(database_open_url))));
-  ASSERT_TRUE(maybe_bucket_info.ok());
-  const auto bucket_locator = maybe_bucket_info->ToBucketLocator();
+  ASSERT_OK_AND_ASSIGN(
+      const auto bucket_info,
+      GetOrCreateBucket(storage::BucketInitParams::ForDefaultBucket(
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(database_open_url)))));
+  const auto bucket_locator = bucket_info.ToBucketLocator();
 
   auto control_test = GetControlTest();
   base::RunLoop loop;
@@ -420,17 +491,12 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, NegativeDBDataVersion) {
   std::string value = "\xF6\xFF\xFF\xFF\xFF\xFF\xFF\xFF";
 
   // Find the bucket that was created.
-  const auto maybe_bucket_info =
-      shell()
-          ->web_contents()
-          ->GetBrowserContext()
-          ->GetDefaultStoragePartition()
-          ->GetQuotaManager()
-          ->proxy()
-          ->GetOrCreateBucketSync(storage::BucketInitParams::ForDefaultBucket(
-              blink::StorageKey(url::Origin::Create(database_open_url))));
-  ASSERT_TRUE(maybe_bucket_info.ok());
-  const auto bucket_locator = maybe_bucket_info->ToBucketLocator();
+  ASSERT_OK_AND_ASSIGN(
+      const auto bucket_info,
+      GetOrCreateBucket(storage::BucketInitParams::ForDefaultBucket(
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(database_open_url)))));
+  const auto bucket_locator = bucket_info.ToBucketLocator();
 
   auto control_test = GetControlTest();
   base::RunLoop loop;
@@ -583,11 +649,11 @@ class IndexedDBBrowserTestWithVersion3Schema
   std::vector<BlobModificationTime> CustomModificationTimes() override {
     return {
         {base::FilePath(FILE_PATH_LITERAL("1/00/3")),
-         base::Time::FromJsTime(1579809038000)},
+         base::Time::FromMillisecondsSinceUnixEpoch(1579809038000)},
         {base::FilePath(FILE_PATH_LITERAL("1/00/4")),
-         base::Time::FromJsTime(1579808985000)},
+         base::Time::FromMillisecondsSinceUnixEpoch(1579808985000)},
         {base::FilePath(FILE_PATH_LITERAL("1/00/5")),
-         base::Time::FromJsTime(1579199256000)},
+         base::Time::FromMillisecondsSinceUnixEpoch(1579199256000)},
     };
   }
 };
@@ -611,12 +677,10 @@ class IndexedDBBrowserTestWithVersion123456Schema : public
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestWithVersion123456Schema,
                        DestroyTest) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "open_bad_db.html");
-  const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
-  int64_t original_size = RequestUsage(kTestStorageKey);
+  int64_t original_size = RequestUsage();
   EXPECT_GT(original_size, 0);
   SimpleTest(kTestUrl);
-  int64_t new_size = RequestUsage(kTestStorageKey);
+  int64_t new_size = RequestUsage();
   EXPECT_GT(new_size, 0);
   EXPECT_NE(original_size, new_size);
 }
@@ -629,12 +693,10 @@ class IndexedDBBrowserTestWithVersion987654SSVData : public
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestWithVersion987654SSVData,
                        DestroyTest) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "open_bad_db.html");
-  const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
-  int64_t original_size = RequestUsage(kTestStorageKey);
+  int64_t original_size = RequestUsage();
   EXPECT_GT(original_size, 0);
   SimpleTest(kTestUrl);
-  int64_t new_size = RequestUsage(kTestStorageKey);
+  int64_t new_size = RequestUsage();
   EXPECT_GT(new_size, 0);
   EXPECT_NE(original_size, new_size);
 }
@@ -647,12 +709,10 @@ class IndexedDBBrowserTestWithCorruptLevelDB : public
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestWithCorruptLevelDB,
                        DestroyTest) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "open_bad_db.html");
-  const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
-  int64_t original_size = RequestUsage(kTestStorageKey);
+  int64_t original_size = RequestUsage();
   EXPECT_GT(original_size, 0);
   SimpleTest(kTestUrl);
-  int64_t new_size = RequestUsage(kTestStorageKey);
+  int64_t new_size = RequestUsage();
   EXPECT_GT(new_size, 0);
   EXPECT_NE(original_size, new_size);
 }
@@ -665,12 +725,10 @@ class IndexedDBBrowserTestWithMissingSSTFile : public
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestWithMissingSSTFile,
                        DestroyTest) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "open_missing_table.html");
-  const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
-  int64_t original_size = RequestUsage(kTestStorageKey);
+  int64_t original_size = RequestUsage();
   EXPECT_GT(original_size, 0);
   SimpleTest(kTestUrl);
-  int64_t new_size = RequestUsage(kTestStorageKey);
+  int64_t new_size = RequestUsage();
   EXPECT_GT(new_size, 0);
   EXPECT_NE(original_size, new_size);
 }
@@ -687,14 +745,7 @@ class IndexedDBBrowserTestWithCrbug899446
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestWithCrbug899446, StableTest) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "crbug899446.html");
-  const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
-  int64_t original_size = RequestUsage(kTestStorageKey);
-  EXPECT_GT(original_size, 0);
   SimpleTest(kTestUrl);
-  int64_t new_size = RequestUsage(kTestStorageKey);
-  EXPECT_GT(new_size, 0);
-  EXPECT_NE(original_size, new_size);
 }
 
 class IndexedDBBrowserTestWithCrbug899446Noai
@@ -704,13 +755,7 @@ class IndexedDBBrowserTestWithCrbug899446Noai
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestWithCrbug899446Noai, StableTest) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "crbug899446_noai.html");
-  const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
-  int64_t original_size = RequestUsage(kTestStorageKey);
   SimpleTest(kTestUrl);
-  int64_t new_size = RequestUsage(kTestStorageKey);
-  EXPECT_GT(new_size, 0);
-  EXPECT_NE(original_size, new_size);
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, LevelDBLogFileTest) {
@@ -738,12 +783,10 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, LevelDBLogFileTest) {
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, CanDeleteWhenOverQuotaTest) {
-  const GURL kTestUrl = GetTestUrl("indexeddb", "fill_up_5k.html");
+  SetQuota(5);
+  const GURL kTestUrl = GetTestUrl("indexeddb", "fill_quota.html");
   SimpleTest(kTestUrl);
-  int64_t size = RequestUsage(blink::StorageKey(url::Origin::Create(kTestUrl)));
-  const int kQuotaKilobytes = 2;
-  EXPECT_GT(size, kQuotaKilobytes * 1024);
-  SetQuota(kQuotaKilobytes);
+  SetQuota(1);
   SimpleTest(GetTestUrl("indexeddb", "delete_over_quota.html"));
 }
 
@@ -751,19 +794,13 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, EmptyBlob) {
   // First delete all IDB's for the test storage_key
   const GURL kTestUrl = GetTestUrl("indexeddb", "empty_blob.html");
   const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kTestUrl));
   DeleteForStorageKey(kTestStorageKey);
-  const auto maybe_bucket_info =
-      shell()
-          ->web_contents()
-          ->GetBrowserContext()
-          ->GetDefaultStoragePartition()
-          ->GetQuotaManager()
-          ->proxy()
-          ->GetOrCreateBucketSync(
-              storage::BucketInitParams::ForDefaultBucket(kTestStorageKey));
-  ASSERT_TRUE(maybe_bucket_info.ok());
-  const auto bucket_locator = maybe_bucket_info->ToBucketLocator();
+  ASSERT_OK_AND_ASSIGN(
+      const auto bucket_info,
+      GetOrCreateBucket(
+          storage::BucketInitParams::ForDefaultBucket(kTestStorageKey)));
+  const auto bucket_locator = bucket_info.ToBucketLocator();
   EXPECT_EQ(0,
             RequestBlobFileCount(bucket_locator));  // Start with no blob files.
   // For some reason Android's futimes fails (EPERM) in this test. Do not assert
@@ -783,28 +820,28 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, BlobsCountAgainstQuota) {
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, DeleteForStorageKeyDeletesBlobs) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "write_4mb_blob.html");
   const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kTestUrl));
   SimpleTest(kTestUrl);
-  int64_t size = RequestUsage(kTestStorageKey);
+  int64_t size = RequestUsage();
   // This assertion assumes that we do not compress blobs.
   EXPECT_GT(size, 4 << 20 /* 4 MB */);
   DeleteForStorageKey(kTestStorageKey);
-  EXPECT_EQ(0, RequestUsage(kTestStorageKey));
+  EXPECT_EQ(0, RequestUsage());
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, DeleteForStorageKeyIncognito) {
   const GURL test_url = GetTestUrl("indexeddb", "fill_up_5k.html");
   const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(test_url));
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(test_url));
 
-  Shell* browser = CreateOffTheRecordBrowser();
-  NavigateToURLBlockUntilNavigationsComplete(browser, test_url, 2);
+  Shell* browser = nullptr;
+  SimpleTest(test_url, /*incognito=*/true, &browser);
 
-  EXPECT_GT(RequestUsage(kTestStorageKey, browser), 5 * 1024);
+  EXPECT_GT(RequestUsage(browser), 5 * 1024);
 
   DeleteForStorageKey(kTestStorageKey, browser);
 
-  EXPECT_EQ(0, RequestUsage(kTestStorageKey, browser));
+  EXPECT_EQ(0, RequestUsage(browser));
 }
 
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, DiskFullOnCommit) {
@@ -897,7 +934,7 @@ std::unique_ptr<net::test_server::HttpResponse> CorruptDBRequestHandler(
     mojo::Remote<storage::mojom::IndexedDBControlTest> control_test;
     task_runner->PostTask(
         FROM_HERE, base::BindOnce(&IndexedDBBrowserTest::BindControlTest,
-                                  base::Unretained(test),
+                                  base::Unretained(test), nullptr,
                                   control_test.BindNewPipeAndPassReceiver()));
 
     // TODO(enne): this is a nested message loop on the embedded test server's
@@ -1041,7 +1078,7 @@ IN_PROC_BROWSER_TEST_P(IndexedDBBrowserTestWithCorruption,
                        OperationOnCorruptedOpenDatabase) {
   ASSERT_TRUE(embedded_test_server()->Started() ||
               embedded_test_server()->InitializeAndListen());
-  const blink::StorageKey storage_key = blink::StorageKey(
+  const blink::StorageKey storage_key = blink::StorageKey::CreateFirstParty(
       url::Origin::Create(embedded_test_server()->base_url()));
   base::RunLoop loop;
   storage::BucketLocator bucket_locator;
@@ -1053,16 +1090,16 @@ IN_PROC_BROWSER_TEST_P(IndexedDBBrowserTestWithCorruption,
       ->proxy()
       ->UpdateOrCreateBucket(
           storage::BucketInitParams::ForDefaultBucket(storage_key),
-          base::SequencedTaskRunnerHandle::Get(),
+          base::SequencedTaskRunner::GetCurrentDefault(),
           base::BindLambdaForTesting(
               [&](storage::QuotaErrorOr<storage::BucketInfo> result) {
-                ASSERT_TRUE(result.ok());
+                ASSERT_TRUE(result.has_value());
                 bucket_locator = result->ToBucketLocator();
                 loop.Quit();
               }));
   loop.Run();
   embedded_test_server()->RegisterRequestHandler(base::BindRepeating(
-      &CorruptDBRequestHandler, base::SequencedTaskRunnerHandle::Get(),
+      &CorruptDBRequestHandler, base::SequencedTaskRunner::GetCurrentDefault(),
       bucket_locator, s_corrupt_db_test_prefix, this));
   embedded_test_server()->StartAcceptingConnections();
 
@@ -1081,14 +1118,14 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest,
                        DISABLED_DeleteCompactsBackingStore) {
   const GURL kTestUrl = GetTestUrl("indexeddb", "delete_compact.html");
   const blink::StorageKey kTestStorageKey =
-      blink::StorageKey(url::Origin::Create(kTestUrl));
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kTestUrl));
   SimpleTest(GURL(kTestUrl.spec() + "#fill"));
 
-  int64_t after_filling = RequestUsage(kTestStorageKey);
+  int64_t after_filling = RequestUsage();
   EXPECT_GT(after_filling, 0);
 
   SimpleTest(GURL(kTestUrl.spec() + "#purge"));
-  int64_t after_deleting = RequestUsage(kTestStorageKey);
+  int64_t after_deleting = RequestUsage();
   EXPECT_LT(after_deleting, after_filling);
 
   // The above tests verify basic assertions - that filling writes data and
@@ -1184,7 +1221,7 @@ IN_PROC_BROWSER_TEST_F(
 IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTest, ForceCloseEventTest) {
   constexpr char kFilename[] = "force_close_event.html";
   NavigateAndWaitForTitle(shell(), kFilename, nullptr, "connection ready");
-  DeleteForStorageKey(blink::StorageKey(
+  DeleteForStorageKey(blink::StorageKey::CreateFirstParty(
       url::Origin::Create(GetTestUrl("indexeddb", kFilename))));
   std::u16string expected_title16(u"connection closed");
   TitleWatcher title_watcher(shell()->web_contents(), expected_title16);
@@ -1217,18 +1254,12 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestV2SchemaCorruption, LifecycleTest) {
   SimpleTest(embedded_test_server()->GetURL(test_file));
 
   // Find the bucket that was created.
-  const auto maybe_bucket_info =
-      shell()
-          ->web_contents()
-          ->GetBrowserContext()
-          ->GetDefaultStoragePartition()
-          ->GetQuotaManager()
-          ->proxy()
-          ->GetOrCreateBucketSync(
-              storage::BucketInitParams::ForDefaultBucket(blink::StorageKey(
-                  url::Origin::Create(embedded_test_server()->base_url()))));
-  ASSERT_TRUE(maybe_bucket_info.ok());
-  const auto bucket_locator = maybe_bucket_info->ToBucketLocator();
+  ASSERT_OK_AND_ASSIGN(
+      const auto bucket_info,
+      GetOrCreateBucket(storage::BucketInitParams::ForDefaultBucket(
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(embedded_test_server()->base_url())))));
+  const auto bucket_locator = bucket_info.ToBucketLocator();
 
   // Verify the backing store does not have corruption.
   storage::mojom::V2SchemaCorruptionStatus has_corruption =
@@ -1313,18 +1344,12 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestBlobKeyCorruption, LifecycleTest) {
   SimpleTest(embedded_test_server()->GetURL(test_file));
 
   // Find the bucket that was created.
-  const auto maybe_bucket_info =
-      shell()
-          ->web_contents()
-          ->GetBrowserContext()
-          ->GetDefaultStoragePartition()
-          ->GetQuotaManager()
-          ->proxy()
-          ->GetOrCreateBucketSync(
-              storage::BucketInitParams::ForDefaultBucket(blink::StorageKey(
-                  url::Origin::Create(embedded_test_server()->base_url()))));
-  ASSERT_TRUE(maybe_bucket_info.ok());
-  const auto bucket_locator = maybe_bucket_info->ToBucketLocator();
+  ASSERT_OK_AND_ASSIGN(
+      const auto bucket_info,
+      GetOrCreateBucket(storage::BucketInitParams::ForDefaultBucket(
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(embedded_test_server()->base_url())))));
+  const auto bucket_locator = bucket_info.ToBucketLocator();
   int64_t next_blob_number = GetNextBlobNumber(bucket_locator, 1);
 
   base::FilePath first_blob =
@@ -1336,10 +1361,30 @@ IN_PROC_BROWSER_TEST_F(IndexedDBBrowserTestBlobKeyCorruption, LifecycleTest) {
     EXPECT_TRUE(base::PathExists(first_blob));
     EXPECT_FALSE(base::PathExists(corrupt_blob));
     const char kCorruptData[] = "corrupt";
-    base::WriteFile(corrupt_blob, kCorruptData, sizeof(kCorruptData));
+    base::WriteFile(corrupt_blob, kCorruptData);
   }
 
   SimpleTest(embedded_test_server()->GetURL(test_file));
 }
+
+IN_PROC_BROWSER_TEST_P(IndexedDBIncognitoTest, BucketDurabilityStrict) {
+  FailOperation(FailClass::LEVELDB_TRANSACTION, FailMethod::COMMIT_SYNC, 2, 1);
+  SimpleTest(GetTestUrl("indexeddb", "bucket_durability_strict.html"),
+             IsIncognito());
+}
+
+IN_PROC_BROWSER_TEST_P(IndexedDBIncognitoTest, BucketDurabilityRelaxed) {
+  FailOperation(FailClass::LEVELDB_TRANSACTION, FailMethod::COMMIT_SYNC, 2, 1);
+  SimpleTest(GetTestUrl("indexeddb", "bucket_durability_relaxed.html"),
+             IsIncognito());
+}
+
+IN_PROC_BROWSER_TEST_P(IndexedDBIncognitoTest, BucketDurabilityOverride) {
+  FailOperation(FailClass::LEVELDB_TRANSACTION, FailMethod::COMMIT_SYNC, 2, 1);
+  SimpleTest(GetTestUrl("indexeddb", "bucket_durability_override.html"),
+             IsIncognito());
+}
+
+INSTANTIATE_TEST_SUITE_P(All, IndexedDBIncognitoTest, testing::Bool());
 
 }  // namespace content

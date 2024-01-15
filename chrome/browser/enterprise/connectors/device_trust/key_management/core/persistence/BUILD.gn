@@ -10,6 +10,7 @@ source_set("persistence") {
   ]
 
   sources = [
+    "key_persistence_delegate.cc",
     "key_persistence_delegate_factory.cc",
     "metrics_utils.cc",
   ]
@@ -17,6 +18,7 @@ source_set("persistence") {
   deps = [ "//base" ]
 
   public_deps = [
+    "//chrome/browser/enterprise/connectors/device_trust/key_management/common",
     "//chrome/browser/enterprise/connectors/device_trust/key_management/core",
     "//components/policy/proto",
     "//crypto",
@@ -42,7 +44,6 @@ source_set("persistence") {
       "//chrome/browser/enterprise/connectors/device_trust/key_management/core:constants",
       "//chrome/browser/enterprise/connectors/device_trust/key_management/core/mac",
     ]
-
     friend = [ ":unit_tests" ]
   }
 
@@ -54,6 +55,7 @@ source_set("persistence") {
     deps += [
       "//build:branding_buildflags",
       "//chrome/browser/enterprise/connectors/device_trust/key_management/core:constants",
+      "//components/policy/core/common:policy_path_constants",
     ]
 
     friend = [ ":unit_tests" ]

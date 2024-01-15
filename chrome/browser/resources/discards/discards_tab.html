@@ -155,9 +155,6 @@
       <div is="action-link" on-click="discardUrgentNow_">
         [Urgent discard a tab now]
       </div>
-      <div is="action-link" on-click="toggleHighEfficiencyMode_">
-        [Toggle high efficiency mode]
-      </div>
       <div is="action-link" on-click="toggleBatterySaverMode_">
         [Toggle battery saver mode]
       </div>
@@ -169,15 +166,7 @@
               <div class="header-cell-container">
                 <div>
                   <div>Utility</div>
-                  <div>Rank<div>
-                </div>
-              </div>
-            </th>
-            <th data-sort-key="reactivationScore" on-click="onSortClick">
-              <div class="header-cell-container">
-                <div>
-                  <div>Reactivation</div>
-                  <div>Score</div>
+                  <div>Rank</div>
                 </div>
               </div>
             </th>
@@ -225,7 +214,7 @@
                   <div>Count</div>
                 </div>
               </div>
-            </div></th>
+            </th>
             <th data-sort-key="isAutoDiscardable" on-click="onSortClick">
               <div class="header-cell-container">
                 <div>
@@ -252,7 +241,6 @@
               items="[[tabInfos_]]">
             <tr>
               <td>[[item.utilityRank]]</td>
-              <td>[[getReactivationScore_(item)]]</td>
               <td>[[getSiteEngagementScore_(item)]]</td>
               <td>
                 <div class="title-cell-container">
@@ -283,6 +271,10 @@
                 <div is="action-link" on-click="urgentDiscardTab_"
                     disabled$="[[!canDiscard_(item)]]">
                   [Urgent Discard]
+                </div>
+                <div is="action-link" on-click="proactiveDiscardTab_"
+                    disabled$="[[!canDiscard_(item)]]">
+                  [Proactive Discard]
                 </div>
               </td>
             </tr>

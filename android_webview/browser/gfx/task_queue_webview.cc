@@ -9,11 +9,12 @@
 
 #include "android_webview/common/aw_features.h"
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/threading/thread_checker.h"
 #include "base/threading/thread_local.h"
@@ -29,6 +30,8 @@ namespace {
 // other way around. This achieves viz scheduling tasks to gpu by first blocking
 // render thread on the viz thread so render thread is ready to receive and run
 // tasks.
+//
+// Lifetime: Singleton
 class TaskQueueViz : public TaskQueueWebView {
  public:
   TaskQueueViz();
@@ -46,6 +49,9 @@ class TaskQueueViz : public TaskQueueWebView {
   void InitializeVizThread(const scoped_refptr<base::SingleThreadTaskRunner>&
                                viz_task_runner) override;
   void ScheduleOnVizAndBlock(VizTask viz_task) override;
+  void ResetRenderThreadForTesting() override {
+    DETACH_FROM_THREAD(render_thread_checker_);
+  }
 
  private:
   void RunOnViz(VizTask viz_task);

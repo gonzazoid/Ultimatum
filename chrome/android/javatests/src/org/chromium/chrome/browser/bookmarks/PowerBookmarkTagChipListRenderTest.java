@@ -26,10 +26,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.Restriction;
-import org.chromium.chrome.R;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
 import org.chromium.components.power_bookmarks.PowerBookmarkMeta;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
@@ -37,9 +38,7 @@ import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
 
 import java.io.IOException;
 
-/**
- * Tests for the power bookmark experience.
- */
+/** Tests for the power bookmark experience. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestCase {
     @Rule
@@ -55,25 +54,33 @@ public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestC
     public void setUpTest() throws Exception {
         super.setUpTest();
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mContentView = new LinearLayout(getActivity());
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mContentView = new LinearLayout(getActivity());
 
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    FrameLayout.LayoutParams params =
+                            new FrameLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.WRAP_CONTENT);
 
-            getActivity().setContentView(mContentView, params);
-            mTagChipList =
-                    (PowerBookmarkTagChipList) getActivity()
-                            .getLayoutInflater()
-                            .inflate(R.layout.power_bookmark_tag_chip_list, mContentView, true)
-                            .findViewById(R.id.power_bookmark_tag_chip_list);
-            mTagChipList.setVisibility(View.VISIBLE);
-        });
+                    getActivity().setContentView(mContentView, params);
+                    mTagChipList =
+                            (PowerBookmarkTagChipList)
+                                    getActivity()
+                                            .getLayoutInflater()
+                                            .inflate(
+                                                    R.layout.power_bookmark_tag_chip_list,
+                                                    mContentView,
+                                                    true)
+                                            .findViewById(R.id.power_bookmark_tag_chip_list);
+                    mTagChipList.setVisibility(View.VISIBLE);
+                });
     }
 
     @Test
     @MediumTest
     @Feature({"RenderTest"})
+    @DisabledTest(message = "https://crbug.com/1394244")
     public void testTagList() throws IOException {
         PowerBookmarkMeta.Builder meta = PowerBookmarkMeta.newBuilder();
         PowerBookmarkMeta.Tag.Builder tag = PowerBookmarkMeta.Tag.newBuilder();
@@ -85,10 +92,11 @@ public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestC
         tag = PowerBookmarkMeta.Tag.newBuilder();
         tag.setDisplayName("baz");
         meta.addTags(tag);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
-            mTagChipList.populateChipListFromCurrentTagMap();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
+                    mTagChipList.populateChipListFromCurrentTagMap();
+                });
 
         onView(withText(allOf(containsString("foo")))).check(matches(isDisplayed()));
         onView(withText(allOf(containsString("bar")))).check(matches(isDisplayed()));
@@ -100,6 +108,7 @@ public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestC
     @MediumTest
     @Feature({"RenderTest"})
     @Restriction(RESTRICTION_TYPE_NON_LOW_END_DEVICE)
+    @DisabledTest(message = "https://crbug.com/1429103")
     public void testTagListLarge() throws IOException {
         PowerBookmarkMeta.Builder meta = PowerBookmarkMeta.newBuilder();
         PowerBookmarkMeta.Tag.Builder tag = PowerBookmarkMeta.Tag.newBuilder();
@@ -114,10 +123,11 @@ public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestC
         tag = PowerBookmarkMeta.Tag.newBuilder();
         tag.setDisplayName("test");
         meta.addTags(tag);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
-            mTagChipList.populateChipListFromCurrentTagMap();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
+                    mTagChipList.populateChipListFromCurrentTagMap();
+                });
 
         onView(withText(allOf(containsString("heeeeeeelllllllooooooo"))))
                 .check(matches(isDisplayed()));
@@ -139,10 +149,11 @@ public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestC
         tag = PowerBookmarkMeta.Tag.newBuilder();
         tag.setDisplayName("baz");
         meta.addTags(tag);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
-            mTagChipList.populateChipListFromCurrentTagMap();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
+                    mTagChipList.populateChipListFromCurrentTagMap();
+                });
 
         onView(withText(allOf(containsString("foo")))).check(matches(isDisplayed()));
         onView(withText(allOf(containsString("foo")))).perform(click());
@@ -168,10 +179,11 @@ public class PowerBookmarkTagChipListRenderTest extends BlankUiTestActivityTestC
         tag = PowerBookmarkMeta.Tag.newBuilder();
         tag.setDisplayName("baz");
         meta.addTags(tag);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
-            mTagChipList.populateChipListFromCurrentTagMap();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTagChipList.populateTagMapForPowerBookmarkMeta(meta.build());
+                    mTagChipList.populateChipListFromCurrentTagMap();
+                });
 
         onView(withText(allOf(containsString("foo")))).check(matches(isDisplayed()));
         onView(withText(allOf(containsString("bar")))).check(matches(isDisplayed()));

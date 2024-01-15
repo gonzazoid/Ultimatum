@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -25,15 +26,15 @@ namespace remoting {
 
 namespace {
 
-base::Value CreateWebAuthnExceptionDetailsDict(const std::string& name,
-                                               const std::string& message) {
-  base::Value details(base::Value::Type::DICTIONARY);
-  details.SetStringKey(kWebAuthnErrorNameKey, name);
-  details.SetStringKey(kWebAuthnErrorMessageKey, message);
-  return details;
+base::Value::Dict CreateWebAuthnExceptionDetailsDict(
+    const std::string& name,
+    const std::string& message) {
+  return base::Value::Dict()
+      .Set(kWebAuthnErrorNameKey, name)
+      .Set(kWebAuthnErrorMessageKey, message);
 }
 
-base::Value MojoErrorToErrorDict(
+base::Value::Dict MojoErrorToErrorDict(
     const mojom::WebAuthnExceptionDetailsPtr& mojo_error) {
   return CreateWebAuthnExceptionDetailsDict(mojo_error->name,
                                             mojo_error->message);
@@ -82,7 +83,7 @@ void RemoteWebAuthnNativeMessagingHost::OnMessage(const std::string& message) {
     return;
   }
 
-  absl::optional<base::Value::Dict> response =
+  std::optional<base::Value::Dict> response =
       CreateNativeMessageResponse(request);
   if (!response.has_value()) {
     return;

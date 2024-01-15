@@ -9,9 +9,11 @@
 
 namespace updater {
 
+const char kInstallerVersion[] = "installer_version";
+
 // App ids.
-const char kUpdaterAppId[] = "{44FC7FE2-65CE-487C-93F4-EDEE46EEAAAB}";
-const char kQualificationAppId[] = "{6f0f9a34-a0ab-4a75-a0eb-6eab78d0dc4b}";
+const char kUpdaterAppId[] = UPDATER_APPID;
+const char kQualificationAppId[] = QUALIFICATION_APPID;
 
 const char kNullVersion[] = "0.0.0.0";
 
@@ -46,12 +48,13 @@ const char kEnableLoggingSwitch[] = "enable-logging";
 const char kLoggingModuleSwitch[] = "vmodule";
 const char kLoggingModuleSwitchValue[] =
 #if BUILDFLAG(IS_WIN)
-    "*/components/winhttp/*=2,"
+    "*/components/winhttp/*=1,"
 #endif
     "*/components/update_client/*=2,*/chrome/updater/*=2";
 const char kAppIdSwitch[] = "app-id";
 const char kAppVersionSwitch[] = "app-version";
 const char kWakeSwitch[] = "wake";
+const char kWakeAllSwitch[] = "wake-all";
 const char kTagSwitch[] = "tag";
 const char kInstallerDataSwitch[] = "installerdata";
 
@@ -70,6 +73,7 @@ const char kHealthCheckSwitch[] = "healthcheck";
 
 const char kEnterpriseSwitch[] = "enterprise";  // backward-compatibility.
 const char kSilentSwitch[] = "silent";          // backward-compatibility.
+const char kAlwaysLaunchCmdSwitch[] = "alwayslaunchcmd";
 const char kHandoffSwitch[] = "handoff";        // backward-compatibility.
 const char kOfflineDirSwitch[] = "offlinedir";  // backward-compatibility.
 const char kAppArgsSwitch[] = "appargs";        // backward-compatibility.
@@ -80,21 +84,28 @@ const char kCmdLineExpectDeElevated[] = "expect-de-elevated";
 
 const char kCmdLinePrefersUser[] = "prefers-user";
 
+// Environment variables.
+const char kUsageStatsEnabled[] =
+    COMPANY_SHORTNAME_UPPERCASE_STRING "_USAGE_STATS_ENABLED";
+const char kUsageStatsEnabledValueEnabled[] = "1";
+
 // Path names.
 const char kAppsDir[] = "apps";
 const char kUninstallScript[] = "uninstall.cmd";
 
 // Developer override key names.
 const char kDevOverrideKeyUrl[] = "url";
+const char kDevOverrideKeyCrashUploadUrl[] = "crash_upload_url";
+const char kDevOverrideKeyDeviceManagementUrl[] = "device_management_url";
 const char kDevOverrideKeyUseCUP[] = "use_cup";
 const char kDevOverrideKeyInitialDelay[] = "initial_delay";
 const char kDevOverrideKeyServerKeepAliveSeconds[] = "server_keep_alive";
 const char kDevOverrideKeyCrxVerifierFormat[] = "crx_verifier_format";
 const char kDevOverrideKeyGroupPolicies[] = "group_policies";
 const char kDevOverrideKeyOverinstallTimeout[] = "overinstall_timeout";
-
-// Developer override file name, relative to app data directory.
-const char kDevOverrideFileName[] = "overrides.json";
+const char kDevOverrideKeyIdleCheckPeriodSeconds[] = "idle_check_period";
+const char kDevOverrideKeyManagedDevice[] = "managed_device";
+const char kDevOverrideKeyEnableDiffUpdates[] = "enable_diff_updates";
 
 // Policy Management constants.
 const char kProxyModeDirect[] = "direct";
@@ -107,6 +118,14 @@ const char kProxyModeSystem[] = "system";
 const char kDownloadPreferenceCacheable[] = "cacheable";
 
 const char kUTF8BOM[] = "\xEF\xBB\xBF";
+
+const char kSourceGroupPolicyManager[] = "Group Policy";
+const char kSourceDMPolicyManager[] = "Device Management";
+const char kSourceManagedPreferencePolicyManager[] = "Managed Preferences";
+const char kSourceDefaultValuesPolicyManager[] = "Default";
+const char kSourceDictValuesPolicyManager[] = "DictValuePolicy";
+
+const char kSetupMutex[] = SETUP_MUTEX;
 
 #if BUILDFLAG(IS_MAC)
 // The user defaults suite name.

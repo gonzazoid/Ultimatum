@@ -31,19 +31,10 @@
 namespace payments {
 namespace {
 
-// Records UMA metric for the authentication dialog result.
-void RecordAuthenticationDialogResult(
-    const SecurePaymentConfirmationAuthenticationDialogResult result) {
-  base::UmaHistogramEnumeration(
-      "PaymentRequest.SecurePaymentConfirmation.Funnel."
-      "AuthenticationDialogResult",
-      result);
-}
-
 class BorderedRowView : public views::View {
- public:
-  METADATA_HEADER(BorderedRowView);
+  METADATA_HEADER(BorderedRowView, views::View)
 
+ public:
   void OnThemeChanged() override {
     View::OnThemeChanged();
     SetBorder(views::CreateSolidSidedBorder(
@@ -52,7 +43,7 @@ class BorderedRowView : public views::View {
   }
 };
 
-BEGIN_METADATA(BorderedRowView, views::View)
+BEGIN_METADATA(BorderedRowView)
 END_METADATA
 
 }  // namespace
@@ -115,10 +106,6 @@ void SecurePaymentConfirmationDialogView::ShowDialog(
 
   constrained_window::ShowWebModalDialogViews(this, web_contents);
 
-  // observer_for_test_ is used in views browsertests.
-  if (observer_for_test_)
-    observer_for_test_->OnDialogOpened();
-
   // ui_observer_for_test_ is used in platform browsertests.
   if (ui_observer_for_test_)
     ui_observer_for_test_->OnUIDisplayed();
@@ -126,9 +113,6 @@ void SecurePaymentConfirmationDialogView::ShowDialog(
 
 void SecurePaymentConfirmationDialogView::OnDialogAccepted() {
   std::move(verify_callback_).Run();
-  RecordAuthenticationDialogResult(
-      SecurePaymentConfirmationAuthenticationDialogResult::kAccepted);
-
   if (observer_for_test_) {
     observer_for_test_->OnConfirmButtonPressed();
     observer_for_test_->OnDialogClosed();
@@ -137,9 +121,6 @@ void SecurePaymentConfirmationDialogView::OnDialogAccepted() {
 
 void SecurePaymentConfirmationDialogView::OnDialogCancelled() {
   std::move(cancel_callback_).Run();
-  RecordAuthenticationDialogResult(
-      SecurePaymentConfirmationAuthenticationDialogResult::kCanceled);
-
   if (observer_for_test_) {
     observer_for_test_->OnCancelButtonPressed();
     observer_for_test_->OnDialogClosed();
@@ -151,10 +132,8 @@ void SecurePaymentConfirmationDialogView::OnDialogClosed() {
   // WebAuthn dialog after clicking 'Verify', or when the user chooses to
   // opt-out. We should only run the cancellation callback in the former case;
   // in the latter the opt-out callback will trigger from OnOptOutClicked.
-  if (!opt_out_clicked_) {
+  if (!model_->opt_out_clicked()) {
     std::move(cancel_callback_).Run();
-    RecordAuthenticationDialogResult(
-        SecurePaymentConfirmationAuthenticationDialogResult::kClosed);
   }
 
   if (observer_for_test_) {
@@ -163,15 +142,10 @@ void SecurePaymentConfirmationDialogView::OnDialogClosed() {
 }
 
 void SecurePaymentConfirmationDialogView::OnOptOutClicked() {
-  opt_out_clicked_ = true;
-
   if (observer_for_test_) {
     observer_for_test_->OnOptOutClicked();
   }
-
   std::move(opt_out_callback_).Run();
-  RecordAuthenticationDialogResult(
-      SecurePaymentConfirmationAuthenticationDialogResult::kOptOut);
 }
 
 void SecurePaymentConfirmationDialogView::OnModelUpdated() {
@@ -195,20 +169,26 @@ void SecurePaymentConfirmationDialogView::OnModelUpdated() {
   UpdateLabelView(DialogViewID::INSTRUMENT_VALUE, model_->instrument_value());
 
   // Update the instrument icon only if it's changed
-  if (model_->instrument_icon() &&
-      (model_->instrument_icon() != instrument_icon_ ||
-       model_->instrument_icon()->getGenerationID() !=
-           instrument_icon_generation_id_)) {
-    instrument_icon_generation_id_ =
-        model_->instrument_icon()->getGenerationID();
-    gfx::ImageSkia image =
-        gfx::ImageSkia::CreateFrom1xBitmap(*model_->instrument_icon())
-            .DeepCopy();
-
-    static_cast<views::ImageView*>(
-        GetViewByID(static_cast<int>(DialogViewID::INSTRUMENT_ICON)))
-        ->SetImage(image);
+  if (model_->instrument_icon()) {
+    auto* image_view = static_cast<views::ImageView*>(
+        GetViewByID(static_cast<int>(DialogViewID::INSTRUMENT_ICON)));
+    if (model_->instrument_icon() != instrument_icon_ ||
+        model_->instrument_icon()->getGenerationID() !=
+            instrument_icon_generation_id_) {
+      instrument_icon_generation_id_ =
+          model_->instrument_icon()->getGenerationID();
+      gfx::ImageSkia image =
+          gfx::ImageSkia::CreateFrom1xBitmap(*model_->instrument_icon())
+              .DeepCopy();
+      image_view->SetImage(ui::ImageModel::FromImageSkia(image));
+    }
+    if (model_->instrument_icon()->drawsNothing()) {
+      image_view->SetImage(ui::ImageModel::FromVectorIcon(
+          kCreditCardIcon, ui::kColorDialogForeground,
+          kSecurePaymentConfirmationInstrumentIconDefaultWidthPx));
+    }
   }
+
   instrument_icon_ = model_->instrument_icon();
 
   UpdateLabelView(DialogViewID::TOTAL_LABEL, model_->total_label());
@@ -420,22 +400,7 @@ std::unique_ptr<views::View> SecurePaymentConfirmationDialogView::CreateRowView(
   return row;
 }
 
-void SecurePaymentConfirmationDialogView::OnThemeChanged() {
-  View::OnThemeChanged();
-  // If we're using the default credit card icon, it is able to respond
-  // to theme changes (e.g., dark mode). Caller-provided icons are not
-  // responsive.
-  if (instrument_icon_ && instrument_icon_->drawsNothing()) {
-    static_cast<views::ImageView*>(
-        GetViewByID(static_cast<int>(DialogViewID::INSTRUMENT_ICON)))
-        ->SetImage(gfx::CreateVectorIcon(
-            kCreditCardIcon,
-            kSecurePaymentConfirmationInstrumentIconDefaultWidthPx,
-            GetColorProvider()->GetColor(ui::kColorDialogForeground)));
-  }
-}
-
-BEGIN_METADATA(SecurePaymentConfirmationDialogView, views::DialogDelegateView)
+BEGIN_METADATA(SecurePaymentConfirmationDialogView)
 END_METADATA
 
 }  // namespace payments

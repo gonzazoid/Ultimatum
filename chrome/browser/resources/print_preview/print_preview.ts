@@ -7,7 +7,7 @@ export {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_c
 export {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 export {PluralStringProxyImpl as PrintPreviewPluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 export {IronMeta} from 'chrome://resources/polymer/v3_0/iron-meta/iron-meta.js';
-export {Cdd, MediaSizeCapability, MediaSizeOption, VendorCapabilityValueType} from './data/cdd.js';
+export {Cdd, ColorOption, DpiOption, DuplexOption, MediaSizeCapability, MediaSizeOption, MediaTypeCapability, MediaTypeOption, PageOrientationOption, SelectOption, VendorCapabilityValueType} from './data/cdd.js';
 export {ColorMode, createDestinationKey, Destination, DestinationOrigin, GooglePromotedDestinationId, makeRecentDestination, PDF_DESTINATION_KEY, PrinterType, RecentDestination} from './data/destination.js';
 // <if expr="is_chromeos">
 export {SAVE_TO_DRIVE_CROS_DESTINATION_KEY} from './data/destination.js';
@@ -43,7 +43,7 @@ export {DEFAULT_MAX_COPIES, PrintPreviewCopiesSettingsElement} from './ui/copies
 export {PrintPreviewDestinationDialogElement} from './ui/destination_dialog.js';
 // </if>
 // <if expr="is_chromeos">
-export {PrintPreviewDestinationDialogCrosElement} from './ui/destination_dialog_cros.js';
+export {DESTINATION_DIALOG_CROS_LOADING_TIMER_IN_MS, PrintPreviewDestinationDialogCrosElement} from './ui/destination_dialog_cros.js';
 export {PrintPreviewDestinationDropdownCrosElement} from './ui/destination_dropdown_cros.js';
 // </if>
 export {PrintPreviewDestinationListElement} from './ui/destination_list.js';
@@ -71,6 +71,7 @@ export {PrintPreviewMarginControlElement} from './ui/margin_control.js';
 export {PrintPreviewMarginControlContainerElement} from './ui/margin_control_container.js';
 export {PrintPreviewMarginsSettingsElement} from './ui/margins_settings.js';
 export {PrintPreviewMediaSizeSettingsElement} from './ui/media_size_settings.js';
+export {PrintPreviewMediaTypeSettingsElement} from './ui/media_type_settings.js';
 export {PrintPreviewNumberSettingsSectionElement} from './ui/number_settings_section.js';
 export {PrintPreviewOtherOptionsSettingsElement} from './ui/other_options_settings.js';
 export {PrintPreviewPagesPerSheetSettingsElement} from './ui/pages_per_sheet_settings.js';
@@ -81,6 +82,9 @@ export {PrintPreviewPinSettingsElement} from './ui/pin_settings.js';
 export {PluginProxy, PluginProxyImpl, ViewportChangedCallback} from './ui/plugin_proxy.js';
 export {PreviewAreaState, PreviewTicket, PrintPreviewPreviewAreaElement} from './ui/preview_area.js';
 export {PrintPreviewSearchBoxElement} from './ui/print_preview_search_box.js';
+// <if expr="is_chromeos">
+export {PrinterSetupInfoMessageType, PrinterSetupInfoMetricsSource, PrintPreviewPrinterSetupInfoCrosElement} from './ui/printer_setup_info_cros.js';
+// </if>
 export {PrintPreviewScalingSettingsElement} from './ui/scaling_settings.js';
 export {SelectMixin, SelectMixinInterface} from './ui/select_mixin.js';
 export {SettingsMixinInterface} from './ui/settings_mixin.js';

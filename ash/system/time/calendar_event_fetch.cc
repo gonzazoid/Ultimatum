@@ -6,10 +6,11 @@
 
 #include "ash/calendar/calendar_client.h"
 #include "ash/calendar/calendar_controller.h"
+#include "ash/glanceables/post_login_glanceables_metrics_recorder.h"
 #include "ash/shell.h"
 #include "ash/system/time/calendar_utils.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -31,6 +32,9 @@ CalendarEventFetch::CalendarEventFetch(
       fetch_start_time_(base::Time::Now()),
       timeout_(tick_clock) {
   SendFetchRequest();
+  Shell::Get()
+      ->post_login_glanceables_metrics_reporter()
+      ->RecordCalendarFetch();
 }
 
 CalendarEventFetch::~CalendarEventFetch() = default;
@@ -45,11 +49,6 @@ void CalendarEventFetch::SendFetchRequest() {
 
   CalendarClient* client = Shell::Get()->calendar_controller()->GetClient();
   DCHECK(client);
-
-  if (ash::features::IsCalendarModelDebugModeEnabled()) {
-    VLOG(1) << __FUNCTION__ << ": " << time_range_.first << " => "
-            << time_range_.second;
-  }
 
   cancel_closure_ =
       client->GetEventList(base::BindOnce(&CalendarEventFetch::OnResultReceived,

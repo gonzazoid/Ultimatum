@@ -17,7 +17,7 @@ cc_library_with_tflite(
         "nl_classifier.h",
     ],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
         "//tensorflow_lite_support/cc/task/core:base_task_api",
         "//tensorflow_lite_support/cc/task/core:task_api_factory",
         "//tensorflow_lite_support/cc/task/processor:regex_preprocessor",

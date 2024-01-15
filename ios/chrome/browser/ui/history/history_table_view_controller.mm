@@ -4,51 +4,53 @@
 
 #import "ios/chrome/browser/ui/history/history_table_view_controller.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/i18n/time_formatting.h"
 #import "base/ios/ios_util.h"
-#import "base/mac/foundation_util.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/strings/grit/components_strings.h"
+#import "components/sync/base/model_type.h"
+#import "components/sync/service/sync_service.h"
 #import "components/url_formatter/elide_url.h"
 #import "components/url_formatter/url_formatter.h"
 #import "ios/chrome/app/tests_hook.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/drag_and_drop/drag_item_util.h"
-#import "ios/chrome/browser/drag_and_drop/table_view_url_drag_drop_handler.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/metrics/new_tab_page_uma.h"
-#import "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/policy/policy_util.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
-#import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
+#import "ios/chrome/browser/drag_and_drop/model/drag_item_util.h"
+#import "ios/chrome/browser/drag_and_drop/model/table_view_url_drag_drop_handler.h"
+#import "ios/chrome/browser/metrics/model/new_tab_page_uma.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/policy/model/policy_util.h"
+#import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_link_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_url_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_favicon_data_source.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_navigation_controller_constants.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/pasteboard_util.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/history/history_entries_status_item.h"
 #import "ios/chrome/browser/ui/history/history_entries_status_item_delegate.h"
 #import "ios/chrome/browser/ui/history/history_entry_inserter.h"
 #import "ios/chrome/browser/ui/history/history_entry_item.h"
 #import "ios/chrome/browser/ui/history/history_menu_provider.h"
+#import "ios/chrome/browser/ui/history/history_table_view_controller_delegate.h"
 #import "ios/chrome/browser/ui/history/history_ui_constants.h"
-#import "ios/chrome/browser/ui/history/history_ui_delegate.h"
 #import "ios/chrome/browser/ui/history/history_util.h"
 #import "ios/chrome/browser/ui/history/public/history_presentation_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_link_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_url_item.h"
-#import "ios/chrome/browser/ui/table_view/table_view_favicon_data_source.h"
-#import "ios/chrome/browser/ui/table_view/table_view_navigation_controller_constants.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/util/pasteboard_util.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/window_activities/window_activity_helpers.h"
+#import "ios/chrome/browser/ui/keyboard/UIKeyCommand+Chrome.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/browser/window_activities/model/window_activity_helpers.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/favicon/favicon_view.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
@@ -58,10 +60,7 @@
 #import "ios/web/public/navigation/referrer.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/strings/grit/ui_strings.h"
 
 using history::BrowsingHistoryService;
 
@@ -141,30 +140,6 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   return [super initWithStyle:style];
 }
 
-- (void)viewWillAppear:(BOOL)animated {
-  [super viewWillAppear:animated];
-
-  // Center search bar's cancel button vertically so it looks centered.
-  // We change the cancel button proxy styles, so we will return it to
-  // default in viewDidDisappear.
-  UIOffset offset =
-      UIOffsetMake(0.0f, kTableViewNavigationVerticalOffsetForSearchHeader);
-  UIBarButtonItem* cancelButton = [UIBarButtonItem
-      appearanceWhenContainedInInstancesOfClasses:@[ [UISearchBar class] ]];
-  [cancelButton setTitlePositionAdjustment:offset
-                             forBarMetrics:UIBarMetricsDefault];
-}
-
-- (void)viewWillDisappear:(BOOL)animated {
-  [super viewWillDisappear:animated];
-
-  // Restore to default origin offset for cancel button proxy style.
-  UIBarButtonItem* cancelButton = [UIBarButtonItem
-      appearanceWhenContainedInInstancesOfClasses:@[ [UISearchBar class] ]];
-  [cancelButton setTitlePositionAdjustment:UIOffsetZero
-                             forBarMetrics:UIBarMetricsDefault];
-}
-
 - (void)viewDidLoad {
   [super viewDidLoad];
   [self loadModel];
@@ -234,13 +209,13 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   // Place the search bar in the navigation bar.
   [self updateNavigationBar];
   self.navigationItem.hidesSearchBarWhenScrolling = NO;
+}
 
-  // Center search bar and cancel button vertically so it looks centered
-  // in the header when searching.
-  UIOffset offset =
-      UIOffsetMake(0.0f, kTableViewNavigationVerticalOffsetForSearchHeader);
-  self.searchController.searchBar.searchFieldBackgroundPositionAdjustment =
-      offset;
+- (void)detachFromBrowser {
+  // Clear C++ ivars.
+  _browser = nullptr;
+  _historyService = nullptr;
+  [self dismissContextMenuCoordinator];
 }
 
 #pragma mark - TableViewModel
@@ -277,11 +252,10 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 
   // If history sync is enabled and there hasn't been a response from synced
   // history, try fetching again.
-  SyncSetupService* syncSetupService =
-      SyncSetupServiceFactory::GetForBrowserState(
-          self.browser->GetBrowserState());
-  if (syncSetupService->CanSyncFeatureStart() &&
-      syncSetupService->IsDataTypeActive(syncer::HISTORY_DELETE_DIRECTIVES) &&
+  syncer::SyncService* syncService =
+      SyncServiceFactory::GetForBrowserState(self.browser->GetBrowserState());
+  if (syncService->GetActiveDataTypes().Has(
+          syncer::HISTORY_DELETE_DIRECTIVES) &&
       queryResultsInfo.sync_timed_out) {
     [self showHistoryMatchingQuery:_currentQuery];
     return;
@@ -512,9 +486,9 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 - (void)presentationControllerDidDismiss:
     (UIPresentationController*)presentationController {
   base::RecordAction(base::UserMetricsAction("IOSHistoryCloseWithSwipe"));
-  // Call the delegate dismissHistoryWithCompletion to clean up state and
-  // stop the Coordinator.
-  [self.delegate dismissHistoryWithCompletion:nil];
+  // Call the delegate dismissHistoryTableViewController:withCompletion: to
+  // clean up state and stop the Coordinator.
+  [self.delegate dismissHistoryTableViewController:self withCompletion:nil];
 }
 
 #pragma mark - History Data Updates
@@ -536,12 +510,19 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   if (!self.historyService)
     return;
 
+  // Validate indexes of items to delete and abort if any have been made invalid
+  // by a crossing actions (like query refresh or animations).
   NSArray* toDeleteIndexPaths = self.tableView.indexPathsForSelectedRows;
+  for (NSIndexPath* indexPath in toDeleteIndexPaths) {
+    if (![self.tableViewModel hasItemAtIndexPath:indexPath]) {
+      return;
+    }
+  }
 
   // Delete items from Browser History.
   std::vector<BrowsingHistoryService::HistoryEntry> entries;
   for (NSIndexPath* indexPath in toDeleteIndexPaths) {
-    HistoryEntryItem* object = base::mac::ObjCCastStrict<HistoryEntryItem>(
+    HistoryEntryItem* object = base::apple::ObjCCastStrict<HistoryEntryItem>(
         [self.tableViewModel itemAtIndexPath:indexPath]);
     BrowsingHistoryService::HistoryEntry entry;
     entry.url = object.URL;
@@ -606,7 +587,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
             base::UserMetricsAction("HistoryPage_EntryLinkClick"));
       }
       HistoryEntryItem* historyItem =
-          base::mac::ObjCCastStrict<HistoryEntryItem>(item);
+          base::apple::ObjCCastStrict<HistoryEntryItem>(item);
       [self openURL:historyItem.URL];
     }
   }
@@ -632,14 +613,18 @@ const CGFloat kButtonHorizontalPadding = 30.0;
     // Don't show the context menu when currently in editing mode.
     return nil;
   }
-
+  if (![self.tableViewModel hasItemAtIndexPath:indexPath]) {
+    // It's possible that indexPath is invalid due to crossing action (like
+    // query refresh or animations).
+    return nil;
+  }
   if (indexPath.section ==
       [self.tableViewModel
           sectionForSectionIdentifier:kEntriesStatusSectionIdentifier]) {
     return nil;
   }
 
-  HistoryEntryItem* entry = base::mac::ObjCCastStrict<HistoryEntryItem>(
+  HistoryEntryItem* entry = base::apple::ObjCCastStrict<HistoryEntryItem>(
       [self.tableViewModel itemAtIndexPath:indexPath]);
   UIView* cell = [self.tableView cellForRowAtIndexPath:indexPath];
   return [self.menuProvider contextMenuConfigurationForItem:entry
@@ -657,7 +642,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
     case kEntriesStatusSectionIdentifier: {
       // Might be a different type of header.
       TableViewLinkHeaderFooterView* linkView =
-          base::mac::ObjCCast<TableViewLinkHeaderFooterView>(view);
+          base::apple::ObjCCast<TableViewLinkHeaderFooterView>(view);
       linkView.delegate = self;
     } break;
     default:
@@ -674,20 +659,20 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   cellToReturn.userInteractionEnabled = !(item.type == ItemTypeEntriesStatus);
   if (item.type == ItemTypeHistoryEntry) {
     HistoryEntryItem* URLItem =
-        base::mac::ObjCCastStrict<HistoryEntryItem>(item);
+        base::apple::ObjCCastStrict<HistoryEntryItem>(item);
     TableViewURLCell* URLCell =
-        base::mac::ObjCCastStrict<TableViewURLCell>(cellToReturn);
+        base::apple::ObjCCastStrict<TableViewURLCell>(cellToReturn);
     CrURL* crurl = [[CrURL alloc] initWithGURL:URLItem.URL];
     [self.imageDataSource
-        faviconForURL:crurl
-           completion:^(FaviconAttributes* attributes) {
-             // Only set favicon if the cell hasn't been reused.
-             if ([URLCell.cellUniqueIdentifier
-                     isEqualToString:URLItem.uniqueIdentifier]) {
-               DCHECK(attributes);
-               [URLCell.faviconView configureWithAttributes:attributes];
-             }
-           }];
+        faviconForPageURL:crurl
+               completion:^(FaviconAttributes* attributes) {
+                 // Only set favicon if the cell hasn't been reused.
+                 if ([URLCell.cellUniqueIdentifier
+                         isEqualToString:URLItem.uniqueIdentifier]) {
+                   DCHECK(attributes);
+                   [URLCell.faviconView configureWithAttributes:attributes];
+                 }
+               }];
   }
   return cellToReturn;
 }
@@ -722,6 +707,23 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   }
 }
 
+#pragma mark - UIResponder
+
+// To always be able to register key commands via -keyCommands, the VC must be
+// able to become first responder.
+- (BOOL)canBecomeFirstResponder {
+  return YES;
+}
+
+- (NSArray*)keyCommands {
+  return @[ UIKeyCommand.cr_close ];
+}
+
+- (void)keyCommand_close {
+  base::RecordAction(base::UserMetricsAction("MobileKeyCommandClose"));
+  [self.delegate dismissHistoryTableViewController:self withCompletion:nil];
+}
+
 #pragma mark - TableViewURLDragDataSource
 
 - (URLInfo*)tableView:(UITableView*)tableView
@@ -733,7 +735,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   switch (item.type) {
     case ItemTypeHistoryEntry: {
       HistoryEntryItem* URLItem =
-          base::mac::ObjCCastStrict<HistoryEntryItem>(item);
+          base::apple::ObjCCastStrict<HistoryEntryItem>(item);
       return [[URLInfo alloc] initWithURL:URLItem.URL title:URLItem.text];
     }
     case ItemTypeEntriesStatus:
@@ -745,6 +747,11 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 }
 
 #pragma mark - Private methods
+
+- (void)dismissContextMenuCoordinator {
+  [self.contextMenuCoordinator stop];
+  self.contextMenuCoordinator = nil;
+}
 
 // Fetches history for search text `query`. If `query` is nil or the empty
 // string, all history is fetched. If continuation is false, then the most
@@ -900,7 +907,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
           [self.tableViewModel itemsInSectionWithIdentifier:sectionIdentifier];
       for (id item in items) {
         HistoryEntryItem* historyItem =
-            base::mac::ObjCCastStrict<HistoryEntryItem>(item);
+            base::apple::ObjCCastStrict<HistoryEntryItem>(item);
         if (![entries containsObject:historyItem]) {
           NSIndexPath* indexPath =
               [self.tableViewModel indexPathForItem:historyItem];
@@ -1016,6 +1023,9 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 // Displays a context menu on the cell pressed with gestureRecognizer.
 - (void)displayContextMenuInvokedByGestureRecognizer:
     (UILongPressGestureRecognizer*)gestureRecognizer {
+  if (!self.browser) {
+    return;
+  }
   if (gestureRecognizer.numberOfTouches != 1 || self.editing ||
       gestureRecognizer.state != UIGestureRecognizerStateBegan) {
     return;
@@ -1036,7 +1046,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
           isEqual:[NSIndexPath indexPathForItem:0 inSection:0]])
     return;
 
-  HistoryEntryItem* entry = base::mac::ObjCCastStrict<HistoryEntryItem>(
+  HistoryEntryItem* entry = base::apple::ObjCCastStrict<HistoryEntryItem>(
       [self.tableViewModel itemAtIndexPath:touchedItemIndexPath]);
 
   __weak HistoryTableViewController* weakSelf = self;
@@ -1056,6 +1066,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
       l10n_util::GetNSStringWithFixup(IDS_IOS_CONTENT_CONTEXT_OPENLINKNEWTAB);
   ProceduralBlock openInNewTabAction = ^{
     [weakSelf openURLInNewTab:entry.URL];
+    [weakSelf dismissContextMenuCoordinator];
   };
   [self.contextMenuCoordinator addItemWithTitle:openInNewTabTitle
                                          action:openInNewTabAction
@@ -1078,6 +1089,7 @@ const CGFloat kButtonHorizontalPadding = 30.0;
       IDS_IOS_CONTENT_CONTEXT_OPENLINKNEWINCOGNITOTAB);
   ProceduralBlock openInNewIncognitoTabAction = ^{
     [weakSelf openURLInNewIncognitoTab:entry.URL];
+    [weakSelf dismissContextMenuCoordinator];
   };
   BOOL incognitoEnabled =
       !IsIncognitoModeDisabled(self.browser->GetBrowserState()->GetPrefs());
@@ -1091,10 +1103,18 @@ const CGFloat kButtonHorizontalPadding = 30.0;
       l10n_util::GetNSStringWithFixup(IDS_IOS_CONTENT_CONTEXT_COPY);
   ProceduralBlock copyURLAction = ^{
     StoreURLInPasteboard(entry.URL);
+    [weakSelf dismissContextMenuCoordinator];
   };
   [self.contextMenuCoordinator addItemWithTitle:copyURLTitle
                                          action:copyURLAction
                                           style:UIAlertActionStyleDefault];
+
+  [self.contextMenuCoordinator
+      addItemWithTitle:l10n_util::GetNSString(IDS_APP_CANCEL)
+                action:^{
+                  [weakSelf dismissContextMenuCoordinator];
+                }
+                 style:UIAlertActionStyleCancel];
   [self.contextMenuCoordinator start];
 }
 
@@ -1104,14 +1124,21 @@ const CGFloat kButtonHorizontalPadding = 30.0;
       base::UserMetricsAction("MobileHistoryPage_EntryLinkOpenNewTab"));
   UrlLoadParams params = UrlLoadParams::InNewTab(URL);
   __weak __typeof(self) weakSelf = self;
-  [self.delegate dismissHistoryWithCompletion:^{
-    [weakSelf loadAndActivateTabFromHistoryWithParams:params incognito:NO];
-  }];
+  [self.delegate
+      dismissHistoryTableViewController:self
+                         withCompletion:^{
+                           [weakSelf
+                               loadAndActivateTabFromHistoryWithParams:params
+                                                             incognito:NO];
+                         }];
 }
 
 // Opens URL in a new non-incognito tab in a new window and dismisses the
 // history view.
 - (void)openURLInNewWindow:(const GURL&)URL {
+  if (!self.browser) {
+    return;
+  }
   id<ApplicationCommands> windowOpener = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), ApplicationCommands);
   [windowOpener
@@ -1126,9 +1153,13 @@ const CGFloat kButtonHorizontalPadding = 30.0;
   UrlLoadParams params = UrlLoadParams::InNewTab(URL);
   params.in_incognito = YES;
   __weak __typeof(self) weakSelf = self;
-  [self.delegate dismissHistoryWithCompletion:^{
-    [weakSelf loadAndActivateTabFromHistoryWithParams:params incognito:YES];
-  }];
+  [self.delegate
+      dismissHistoryTableViewController:self
+                         withCompletion:^{
+                           [weakSelf
+                               loadAndActivateTabFromHistoryWithParams:params
+                                                             incognito:YES];
+                         }];
 }
 
 #pragma mark Helper Methods
@@ -1195,35 +1226,42 @@ const CGFloat kButtonHorizontalPadding = 30.0;
 
 // Opens URL in the current tab and dismisses the history view.
 - (void)openURL:(const GURL&)URL {
+  if (!self.browser) {
+    return;
+  }
   new_tab_page_uma::RecordAction(
-      self.browser->GetBrowserState(),
+      self.browser->GetBrowserState()->IsOffTheRecord(),
       self.browser->GetWebStateList()->GetActiveWebState(),
       new_tab_page_uma::ACTION_OPENED_HISTORY_ENTRY);
   UrlLoadParams params = UrlLoadParams::InCurrentTab(URL);
   params.web_params.transition_type = ui::PAGE_TRANSITION_AUTO_BOOKMARK;
   params.load_strategy = self.loadStrategy;
   __weak __typeof(self) weakSelf = self;
-  [self.delegate dismissHistoryWithCompletion:^{
-    [weakSelf loadAndActivateTabFromHistoryWithParams:params incognito:NO];
-  }];
+  [self.delegate
+      dismissHistoryTableViewController:self
+                         withCompletion:^{
+                           [weakSelf
+                               loadAndActivateTabFromHistoryWithParams:params
+                                                             incognito:NO];
+                         }];
 }
 
 // Dismisses this ViewController.
 - (void)dismissHistory {
   base::RecordAction(base::UserMetricsAction("MobileHistoryClose"));
-  [self.delegate dismissHistoryWithCompletion:nil];
+  [self.delegate dismissHistoryTableViewController:self withCompletion:nil];
 }
 
 - (void)openPrivacySettings {
   base::RecordAction(
       base::UserMetricsAction("HistoryPage_InitClearBrowsingData"));
-  [self.delegate displayPrivacySettings];
+  [self.delegate displayClearHistoryData];
 }
 
 #pragma mark - Accessibility
 
 - (BOOL)accessibilityPerformEscape {
-  [self.delegate dismissHistoryWithCompletion:nil];
+  [self.delegate dismissHistoryTableViewController:self withCompletion:nil];
   return YES;
 }
 

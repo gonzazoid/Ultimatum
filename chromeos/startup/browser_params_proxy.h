@@ -16,8 +16,17 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserParamsProxy {
  public:
   static BrowserParamsProxy* Get();
 
+  // Wait for the user to login and post-login parameters to be available.
+  // NOTE: This needs to be called before post-login parameters are accessed.
+  // Please note that this method is not thread-safe and should be called
+  // before any threads are created in the browser process.
+  static void WaitForLogin();
+
+  // Returns true if the user has logged in, false if not.
+  static bool IsLoggedIn();
+
   // Init and post-login parameters' accessors are listed starting from here.
-  bool DisableCrosapiForTesting() const;
+  bool IsCrosapiDisabledForTesting() const;
 
   uint32_t CrosapiVersion() const;
 
@@ -29,20 +38,18 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserParamsProxy {
 
   crosapi::mojom::DeviceMode DeviceMode() const;
 
-  const absl::optional<base::flat_map<base::Token, uint32_t>>&
+  const std::optional<base::flat_map<base::Token, uint32_t>>&
   InterfaceVersions() const;
 
   const crosapi::mojom::DefaultPathsPtr& DefaultPaths() const;
-
-  const absl::optional<std::string>& DeviceAccountGaiaId() const;
 
   crosapi::mojom::MetricsReportingManaged AshMetricsManaged() const;
 
   crosapi::mojom::ExoImeSupport ExoImeSupport() const;
 
-  const absl::optional<std::string>& CrosUserIdHash() const;
+  const std::optional<std::string>& CrosUserIdHash() const;
 
-  const absl::optional<std::vector<uint8_t>>& DeviceAccountPolicy() const;
+  const std::optional<std::vector<uint8_t>>& DeviceAccountPolicy() const;
 
   uint64_t LastPolicyFetchAttemptTimestamp() const;
 
@@ -52,30 +59,24 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserParamsProxy {
 
   const crosapi::mojom::AccountPtr& DeviceAccount() const;
 
-  bool WebAppsEnabled() const;
-
-  bool StandaloneBrowserIsPrimary() const;
-
   const crosapi::mojom::NativeThemeInfoPtr& NativeThemeInfo() const;
 
   const crosapi::mojom::DevicePropertiesPtr& DeviceProperties() const;
 
   crosapi::mojom::OndeviceHandwritingSupport OndeviceHandwritingSupport() const;
 
-  const absl::optional<std::vector<crosapi::mojom::BuildFlag>>& BuildFlags()
+  const std::optional<std::vector<crosapi::mojom::BuildFlag>>& BuildFlags()
       const;
 
   crosapi::mojom::OpenUrlFrom StartupUrlsFrom() const;
 
-  const absl::optional<std::vector<GURL>>& StartupUrls() const;
-
   const crosapi::mojom::DeviceSettingsPtr& DeviceSettings() const;
 
-  const absl::optional<std::string>& MetricsServiceClientId() const;
+  const std::optional<std::string>& MetricsServiceClientId() const;
+
+  const crosapi::mojom::EntropySourcePtr& EntropySource() const;
 
   uint64_t UkmClientId() const;
-
-  bool StandaloneBrowserIsOnlyBrowser() const;
 
   bool PublishChromeApps() const;
 
@@ -85,13 +86,9 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserParamsProxy {
 
   bool IsUnfilteredBluetoothDeviceEnabled() const;
 
-  const absl::optional<std::vector<std::string>>& AshCapabilities() const;
+  const std::optional<std::vector<std::string>>& AshCapabilities() const;
 
-  const absl::optional<std::vector<GURL>>& AcceptedInternalAshUrls() const;
-
-  bool IsHoldingSpaceIncognitoProfileIntegrationEnabled() const;
-
-  bool IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled() const;
+  const std::optional<std::vector<GURL>>& AcceptedInternalAshUrls() const;
 
   bool IsDeviceEnterprisedManaged() const;
 
@@ -99,24 +96,26 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserParamsProxy {
 
   bool IsOndeviceSpeechSupported() const;
 
-  const absl::optional<base::flat_map<policy::PolicyNamespace, base::Value>>&
+  const std::optional<base::flat_map<policy::PolicyNamespace, base::Value>>&
   DeviceAccountComponentPolicy() const;
 
-  const absl::optional<std::string>& AshChromeVersion() const;
+  const std::optional<std::string>& AshChromeVersion() const;
 
   bool UseCupsForPrinting() const;
 
   bool UseFlossBluetooth() const;
 
+  bool IsFlossAvailable() const;
+
+  bool IsFlossAvailabilityCheckNeeded() const;
+
   bool IsCurrentUserDeviceOwner() const;
 
-  bool DoNotMuxExtensionAppIds() const;
+  bool IsCurrentUserEphemeral() const;
 
   bool EnableLacrosTtsSupport() const;
 
   crosapi::mojom::BrowserInitParams::LacrosSelection LacrosSelection() const;
-
-  bool IsFloatWindowEnabled() const;
 
   bool IsCloudGamingDevice() const;
 
@@ -124,6 +123,39 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserParamsProxy {
       const;
 
   const crosapi::mojom::ExtensionKeepListPtr& ExtensionKeepList() const;
+
+  bool VcControlsUiEnabled() const;
+
+  const crosapi::mojom::StandaloneBrowserAppServiceBlockList*
+  StandaloneBrowserAppServiceBlockList() const;
+
+  bool EnableCpuMappableNativeGpuMemoryBuffers() const;
+
+  bool OopVideoDecodingEnabled() const;
+
+  bool IsUploadOfficeToCloudEnabled() const;
+
+  bool EnableClipboardHistoryRefresh() const;
+
+  bool IsVariableRefreshRateAlwaysOn() const;
+
+  bool IsPdfOcrEnabled() const;
+
+  bool IsDriveFsBulkPinningAvailable() const;
+
+  bool IsSysUiDownloadsIntegrationV2Enabled() const;
+
+  bool IsCrosBatterySaverAvailable() const;
+
+  bool IsAppInstallServiceUriEnabled() const;
+
+  bool IsDeskProfilesEnabled() const;
+
+  bool IsCrosWebAppShortcutUiUpdateEnabled() const;
+
+  bool IsCrosShortstandEnabled() const;
+
+  bool ShouldDisableChromeComposeOnChromeOS() const;
 
  private:
   friend base::NoDestructor<BrowserParamsProxy>;

@@ -7,132 +7,102 @@
 #include <shellapi.h>
 #include <windows.h>
 
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/base_paths_win.h"
-#include "base/check.h"
-#include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/path_service.h"
+#include "base/process/launch.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_util.h"
+#include "base/strings/string_util_impl_helpers.h"
+#include "base/strings/utf_string_conversions.h"
+#include "base/version.h"
 #include "base/win/registry.h"
-#include "chrome/updater/constants.h"
+#include "base/win/scoped_localalloc.h"
+#include "chrome/updater/updater_branding.h"
 #include "chrome/updater/updater_scope.h"
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/win_constants.h"
-#include "chrome/updater/win/win_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace updater {
 
 namespace {
 
-// Formats a single `parameter` and returns the result. Any placeholder `%N` in
-// `parameter` is replaced with substitutions[N - 1]. Any literal `%` needs to
-// be escaped with a `%`.
-//
-// Returns `absl::nullopt` if:
-// * a placeholder %N is encountered where N > substitutions.size().
-// * a literal `%` is not escaped with a `%`.
-//
-// See examples in the WinUtil*FormatAppCommandLine unit tests.
-absl::optional<std::wstring> FormatParameter(
-    const std::vector<std::wstring>& substitutions,
-    const std::wstring& parameter) {
-  DCHECK_LE(substitutions.size(), 9U);
-
-  std::wstring formatted_parameter;
-  for (auto i = parameter.begin(); i != parameter.end(); ++i) {
-    if (*i != '%') {
-      formatted_parameter.push_back(*i);
-      continue;
-    }
-
-    if (++i == parameter.end())
-      return absl::nullopt;
-
-    if (*i == '%') {
-      formatted_parameter.push_back('%');
-      continue;
-    }
-
-    if (*i < '1' || *i > '9')
-      return absl::nullopt;
-
-    const size_t index = *i - '1';
-    if (index >= substitutions.size())
-      return absl::nullopt;
-
-    formatted_parameter.append(substitutions[index]);
-  }
-
-  return formatted_parameter;
+// Loads the AppCommand under:
+//     Update\Clients\{`app_id`}\Commands\`command_id`
+//         REG_SZ "CommandLine" == {command format}
+HRESULT LoadAppCommandFormat(UpdaterScope scope,
+                             const std::wstring& app_id,
+                             const std::wstring& command_id,
+                             std::wstring& command_format) {
+  base::win::RegKey command_key;
+  HRESULT hr = HRESULT_FROM_WIN32(command_key.Open(
+      UpdaterScopeToHKeyRoot(scope),
+      GetAppCommandKey(app_id, command_id).c_str(), Wow6432(KEY_QUERY_VALUE)));
+  return SUCCEEDED(hr) ? HRESULT_FROM_WIN32(command_key.ReadValue(
+                             kRegValueCommandLine, &command_format))
+                       : hr;
 }
 
-// Quotes `input` if necessary so that it will be interpreted as a single
-// command-line parameter according to the rules for ::CommandLineToArgvW.
+// Loads the ProcessLauncher command in HKLM under:
+//     Update\Clients\{`app_id`}
+//         REG_SZ `command_id` == {command format}
 //
-// ::CommandLineToArgvW has a special interpretation of backslash characters
-// when they are followed by a quotation mark character ("). This interpretation
-// assumes that any preceding argument is a valid file system path, or else it
-// may behave unpredictably.
-//
-// This special interpretation controls the "in quotes" mode tracked by the
-// parser. When this mode is off, whitespace terminates the current argument.
-// When on, whitespace is added to the argument like all other characters.
+// The legacy process launcher format is only supported for Google Chrome
+// versions 110.0.5435.0 and below with the "cmd" command id. This is because
+// the legacy process launcher command layout format can be used to interpret
+// and/or execute unrelated registry entries. For instance, if the app_id is
+// `{8A69D345-D564-463c-AFF1-A69D9E530F96}`, the older command would be
+// registered under
+// `SOFTWARE\Google\Update\Clients\{8A69D345-D564-463c-AFF1-A69D9E530F96}`
+// REG_SZ `cmd`. Along with `cmd`, there are other properties of the app
+// registered, such as the version "pv"="107.0.5304.107". So, `pv` is also a
+// potential "command" for `IProcessLauncher`, which is unexpected.
+// TODO(crbug.com/1399177): Parameterize `LoadLegacyProcessLauncherFormat`.
+HRESULT LoadLegacyProcessLauncherFormat(const std::wstring& app_id,
+                                        const std::wstring& command_id,
+                                        std::wstring& command_format) {
+  constexpr wchar_t kAllowedLegacyProcessLauncherAppNamePrefix[] =
+      L"" BROWSER_PRODUCT_NAME_STRING;
+  constexpr char kAllowedLegacyProcessLauncherMaxAppVersion[] = "110.0.5435.0";
+  constexpr wchar_t kAllowedLegacyProcessLauncherCommandId[] = L"cmd";
 
-// * 2n backslashes followed by a quotation mark produce n backslashes followed
-// by begin/end quote. This does not become part of the parsed argument, but
-// toggles the "in quotes" mode.
-// * (2n) + 1 backslashes followed by a quotation mark again produce n
-// backslashes followed by a quotation mark literal ("). This does not toggle
-// the "in quotes" mode.
-// * n backslashes not followed by a quotation mark simply produce n
-// backslashes.
-//
-// See examples in the WinUtil*FormatAppCommandLine unit tests.
-std::wstring QuoteForCommandLineToArgvW(const std::wstring& input) {
-  if (input.empty())
-    return L"\"\"";
+  std::wstring pv;
+  std::wstring name;
+  if (command_id == kAllowedLegacyProcessLauncherCommandId) {
+    base::win::RegKey app_key;
+    HRESULT hr = HRESULT_FROM_WIN32(
+        app_key.Open(HKEY_LOCAL_MACHINE, GetAppClientsKey(app_id).c_str(),
+                     Wow6432(KEY_QUERY_VALUE)));
+    if (FAILED(hr)) {
+      return hr;
+    }
 
-  std::wstring output;
-  const bool contains_whitespace =
-      input.find_first_of(L" \t") != std::wstring::npos;
-  if (contains_whitespace)
-    output.push_back(L'"');
+    app_key.ReadValue(kRegValuePV, &pv);
+    app_key.ReadValue(kRegValueName, &name);
+    const base::Version app_version(base::WideToASCII(pv));
 
-  size_t slash_count = 0;
-  for (auto i = input.begin(); i != input.end(); ++i) {
-    if (*i == L'"') {
-      // Before a quote, output 2n backslashes.
-      while (slash_count > 0) {
-        output.append(L"\\\\");
-        --slash_count;
-      }
-      output.append(L"\\\"");
-    } else if (*i != L'\\' || i + 1 == input.end()) {
-      // At the end of the string, or before a regular character, output queued
-      // slashes.
-      while (slash_count > 0) {
-        output.push_back(L'\\');
-        --slash_count;
-      }
-      // If this is a slash, it's also the last character. Otherwise, it is just
-      // a regular non-quote/non-slash character.
-      output.push_back(*i);
-    } else if (*i == L'\\') {
-      // This is a slash, possibly followed by a quote, not the last character.
-      // Queue it up and output it later.
-      ++slash_count;
+    if (app_version.IsValid() &&
+        app_version.CompareTo(
+            base::Version(kAllowedLegacyProcessLauncherMaxAppVersion)) <= 0 &&
+        base::StartsWith(name, kAllowedLegacyProcessLauncherAppNamePrefix)) {
+      return HRESULT_FROM_WIN32(
+          app_key.ReadValue(command_id.c_str(), &command_format));
     }
   }
 
-  if (contains_whitespace)
-    output.push_back(L'"');
-
-  return output;
+  LOG(WARNING)
+      << __func__
+      << "Legacy ProcessLauncher format not supported, use more secure "
+         "AppCommand format: "
+      << app_id << ": " << pv << ": " << name << ": " << command_id;
+  return E_INVALIDARG;
 }
 
 bool IsParentOf(int key, const base::FilePath& child) {
@@ -143,7 +113,8 @@ bool IsParentOf(int key, const base::FilePath& child) {
 bool IsSecureAppCommandExePath(UpdaterScope scope,
                                const base::FilePath& exe_path) {
   return exe_path.IsAbsolute() &&
-         (scope == UpdaterScope::kUser ||
+         (!IsSystemInstall(scope) ||
+          IsParentOf(base::DIR_PROGRAM_FILES, exe_path) ||
           IsParentOf(base::DIR_PROGRAM_FILESX86, exe_path) ||
           IsParentOf(base::DIR_PROGRAM_FILES6432, exe_path));
 }
@@ -156,46 +127,34 @@ AppCommandRunner& AppCommandRunner::operator=(const AppCommandRunner&) =
     default;
 AppCommandRunner::~AppCommandRunner() = default;
 
-HRESULT AppCommandRunner::LoadAppCommand(UpdaterScope scope,
-                                         const std::wstring& app_id,
-                                         const std::wstring& command_id,
-                                         AppCommandRunner& app_command_runner) {
-  const HKEY root = UpdaterScopeToHKeyRoot(scope);
+// static
+HResultOr<AppCommandRunner> AppCommandRunner::LoadAppCommand(
+    UpdaterScope scope,
+    const std::wstring& app_id,
+    const std::wstring& command_id) {
   std::wstring command_format;
-
-  if (const base::win::RegKey command_key(
-          root, GetAppCommandKey(app_id, command_id).c_str(),
-          Wow6432(KEY_QUERY_VALUE));
-      !command_key.Valid()) {
-    const base::win::RegKey app_key(root, GetAppClientsKey(app_id).c_str(),
-                                    Wow6432(KEY_QUERY_VALUE));
-    if (!app_key.HasValue(command_id.c_str()))
-      return HRESULT_FROM_WIN32(ERROR_BAD_COMMAND);
-
-    // Older command layout format:
-    //     Update\Clients\{`app_id`}
-    //         REG_SZ `command_id` == {command format}
-    if (const LONG result =
-            app_key.ReadValue(command_id.c_str(), &command_format);
-        result != ERROR_SUCCESS) {
-      return HRESULT_FROM_WIN32(result);
+  HRESULT hr = LoadAppCommandFormat(scope, app_id, command_id, command_format);
+  if (FAILED(hr)) {
+    if (IsSystemInstall(scope)) {
+      hr = LoadLegacyProcessLauncherFormat(app_id, command_id, command_format);
     }
-  } else {
-    // New command layout format:
-    //     Update\Clients\{`app_id`}\Commands\`command_id`
-    //         REG_SZ "CommandLine" == {command format}
-    if (const LONG result =
-            command_key.ReadValue(kRegValueCommandLine, &command_format);
-        result != ERROR_SUCCESS) {
-      return HRESULT_FROM_WIN32(result);
+    if (FAILED(hr)) {
+      return base::unexpected(hr);
     }
   }
 
-  return GetAppCommandFormatComponents(scope, command_format,
-                                       app_command_runner.executable_,
-                                       app_command_runner.parameters_);
+  AppCommandRunner app_command_runner;
+  hr = GetAppCommandFormatComponents(scope, command_format,
+                                     app_command_runner.executable_,
+                                     app_command_runner.parameters_);
+  if (FAILED(hr)) {
+    return base::unexpected(hr);
+  }
+
+  return app_command_runner;
 }
 
+// static
 std::vector<AppCommandRunner>
 AppCommandRunner::LoadAutoRunOnOsUpgradeAppCommands(
     UpdaterScope scope,
@@ -210,8 +169,9 @@ AppCommandRunner::LoadAutoRunOnOsUpgradeAppCommands(
     const base::win::RegKey command_key(
         root, base::StrCat({commands_key_name, it.Name()}).c_str(),
         Wow6432(KEY_QUERY_VALUE));
-    if (!command_key.Valid())
+    if (!command_key.Valid()) {
       continue;
+    }
 
     DWORD auto_run = 0;
     if (command_key.ReadValueDW(kRegValueAutoRunOnOSUpgrade, &auto_run) !=
@@ -220,9 +180,11 @@ AppCommandRunner::LoadAutoRunOnOsUpgradeAppCommands(
       continue;
     }
 
-    AppCommandRunner runner;
-    if (SUCCEEDED(LoadAppCommand(scope, app_id, it.Name(), runner)))
-      app_command_runners.push_back(runner);
+    HResultOr<AppCommandRunner> runner =
+        LoadAppCommand(scope, app_id, it.Name());
+    if (runner.has_value()) {
+      app_command_runners.push_back(*std::move(runner));
+    }
   }
 
   return app_command_runners;
@@ -237,94 +199,134 @@ HRESULT AppCommandRunner::Run(const std::vector<std::wstring>& substitutions,
   return ExecuteAppCommand(executable_, parameters_, substitutions, process);
 }
 
+// static
 HRESULT AppCommandRunner::StartProcess(const base::FilePath& executable,
-                                       const std::wstring& command_line,
+                                       const std::wstring& parameters,
                                        base::Process& process) {
+  VLOG(2) << __func__ << ": " << executable << ": " << parameters;
+
   if (executable.empty() || process.IsValid()) {
     return E_UNEXPECTED;
   }
 
-  if (!executable.IsAbsolute())
+  // `executable` needs to be a full path to prevent `::CreateProcess` (which
+  // `base::LaunchProcess` uses internally) from using the search path for path
+  // resolution.
+  if (!executable.IsAbsolute()) {
+    LOG(ERROR) << __func__ << "!executable.IsAbsolute(): " << executable;
     return E_INVALIDARG;
-
-  STARTUPINFOW si = {sizeof(si)};
-  PROCESS_INFORMATION pi = {0};
-  std::wstring parameters = command_line;
-
-  // In contrast to the following call to `::CreateProcess`,
-  // `base::Process::LaunchProcess` passes the `executable` in the
-  // `lpCommandLine` parameter to `::CreateProcess`, which uses the search path
-  // for path resolution of `executable`.
-  if (!::CreateProcess(executable.value().c_str(), &parameters[0], nullptr,
-                       nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si,
-                       &pi)) {
-    return HRESULTFromLastError();
   }
 
-  ::CloseHandle(pi.hThread);
+  base::LaunchOptions options = {};
+  options.feedback_cursor_off = true;
+  options.start_hidden = true;
 
-  process = base::Process(pi.hProcess);
-  CHECK(process.IsValid());
+  process = base::LaunchProcess(
+      base::StrCat(
+          {base::CommandLine::QuoteForCommandLineToArgvW(executable.value()),
+           L" ", parameters}),
+      options);
+  if (!process.IsValid()) {
+    const HRESULT hr = HRESULTFromLastError();
+    LOG(ERROR) << __func__ << "base::LaunchProcess failed: " << hr;
+    return hr;
+  }
+
+  VLOG(2) << __func__ << "Started process with PID: " << process.Pid();
   return S_OK;
 }
 
+// static
 HRESULT AppCommandRunner::GetAppCommandFormatComponents(
     UpdaterScope scope,
     std::wstring command_format,
     base::FilePath& executable,
     std::vector<std::wstring>& parameters) {
-  int num_args = 0;
-  ScopedLocalAlloc args(::CommandLineToArgvW(&command_format[0], &num_args));
-  if (!args.is_valid() || num_args < 1)
-    return E_INVALIDARG;
+  VLOG(2) << __func__ << ": " << scope << ": " << command_format;
 
-  const wchar_t** argv = reinterpret_cast<const wchar_t**>(args.get());
-  const base::FilePath exe = base::FilePath(argv[0]);
-  if (!IsSecureAppCommandExePath(scope, exe))
+  int num_args = 0;
+  base::win::ScopedLocalAllocTyped<wchar_t*> argv(
+      ::CommandLineToArgvW(&command_format[0], &num_args));
+  if (!argv || num_args < 1) {
+    LOG(ERROR) << __func__ << "!argv || num_args < 1: " << num_args;
     return E_INVALIDARG;
+  }
+
+  const base::FilePath exe = base::FilePath(argv.get()[0]);
+  if (!IsSecureAppCommandExePath(scope, exe)) {
+    LOG(WARNING) << __func__
+                 << ": !IsSecureAppCommandExePath(scope, exe): " << exe;
+    return E_INVALIDARG;
+  }
 
   executable = exe;
   parameters.clear();
-  for (int i = 1; i < num_args; ++i)
-    parameters.push_back(argv[i]);
+  for (int i = 1; i < num_args; ++i) {
+    parameters.push_back(argv.get()[i]);
+  }
 
   return S_OK;
 }
 
-absl::optional<std::wstring> AppCommandRunner::FormatAppCommandLine(
+// static
+std::optional<std::wstring> AppCommandRunner::FormatParameter(
+    const std::wstring& parameter,
+    const std::vector<std::wstring>& substitutions) {
+  return base::internal::DoReplaceStringPlaceholders(
+      /*format_string*/ parameter, /*subst*/ substitutions,
+      /*placeholder_prefix*/ L'%',
+      /*should_escape_multiple_placeholder_prefixes*/ false,
+      /*is_strict_mode*/ true, /*offsets*/ nullptr);
+}
+
+// static
+std::optional<std::wstring> AppCommandRunner::FormatAppCommandLine(
     const std::vector<std::wstring>& parameters,
     const std::vector<std::wstring>& substitutions) {
   std::wstring formatted_command_line;
   for (size_t i = 0; i < parameters.size(); ++i) {
-    absl::optional<std::wstring> formatted_parameter =
-        FormatParameter(substitutions, parameters[i]);
+    std::optional<std::wstring> formatted_parameter =
+        FormatParameter(parameters[i], substitutions);
     if (!formatted_parameter) {
       VLOG(1) << __func__ << " FormatParameter failed: " << parameters[i]
               << ": " << substitutions.size();
-      return absl::nullopt;
+      return std::nullopt;
     }
 
+    constexpr wchar_t kQuotableCharacters[] = L" \t\\\"";
     formatted_command_line.append(
-        QuoteForCommandLineToArgvW(*formatted_parameter));
+        formatted_parameter->find_first_of(kQuotableCharacters) ==
+                std::wstring::npos
+            ? *formatted_parameter  // no quoting needed, use as-is.
+            : base::CommandLine::QuoteForCommandLineToArgvW(
+                  *formatted_parameter));
 
-    if (i + 1 < parameters.size())
+    if (i + 1 < parameters.size()) {
       formatted_command_line.push_back(L' ');
+    }
   }
 
   return formatted_command_line;
 }
 
+// static
 HRESULT AppCommandRunner::ExecuteAppCommand(
     const base::FilePath& executable,
     const std::vector<std::wstring>& parameters,
     const std::vector<std::wstring>& substitutions,
     base::Process& process) {
-  const absl::optional<std::wstring> command_line =
-      FormatAppCommandLine(parameters, substitutions);
-  if (!command_line)
-    return E_INVALIDARG;
+  VLOG(2) << __func__ << ": " << executable << ": "
+          << base::JoinString(parameters, L",")
+          << base::JoinString(substitutions, L",");
 
-  return StartProcess(executable, command_line.value(), process);
+  const std::optional<std::wstring> command_line_parameters =
+      FormatAppCommandLine(parameters, substitutions);
+  if (!command_line_parameters) {
+    LOG(ERROR) << __func__ << "!command_line_parameters";
+    return E_INVALIDARG;
+  }
+
+  return StartProcess(executable, command_line_parameters.value(), process);
 }
 
 }  // namespace updater

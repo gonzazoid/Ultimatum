@@ -4,19 +4,24 @@
 
 #include "services/network/private_network_access_checker.h"
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "net/base/transport_info.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/ip_address_space_util.h"
+#include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/mojom/client_security_state.mojom.h"
 #include "services/network/public/mojom/ip_address_space.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
+#include "url/gurl.h"
 
 namespace network {
 namespace {
 
-using Policy = mojom::PrivateNetworkRequestPolicy;
 using Result = PrivateNetworkAccessCheckResult;
+using Policy = mojom::PrivateNetworkRequestPolicy;
 
 mojom::ClientSecurityStatePtr GetRequestClientSecurityState(
     const ResourceRequest& request) {
@@ -30,10 +35,9 @@ mojom::ClientSecurityStatePtr GetRequestClientSecurityState(
 // WARNING: This should be kept in sync with similar logic in
 // `network::cors::CorsURLLoader::GetClientSecurityState()`.
 const mojom::ClientSecurityState* ChooseClientSecurityState(
-    const mojom::URLLoaderFactoryParams* factory_params,
+    const mojom::ClientSecurityState* factory_client_security_state,
     const mojom::ClientSecurityState* request_client_security_state) {
-  DCHECK(factory_params);
-  if (factory_params->client_security_state) {
+  if (factory_client_security_state) {
     // Enforce that only one ClientSecurityState is ever given to us, as this
     // is an invariant in the current codebase. In case of a compromised
     // renderer process, we might be passed both, in which case we prefer to
@@ -43,25 +47,41 @@ const mojom::ClientSecurityState* ChooseClientSecurityState(
         << "Must not provide a ClientSecurityState in both "
            "URLLoaderFactoryParams and ResourceRequest::TrustedParams.";
 
-    return factory_params->client_security_state.get();
+    return factory_client_security_state;
   }
 
   return request_client_security_state;
+}
+
+absl::optional<net::IPAddress> ParsePrivateIpFromUrl(const GURL& url) {
+  net::IPAddress address;
+  if (!address.AssignFromIPLiteral(url.HostNoBracketsPiece())) {
+    return absl::nullopt;
+  }
+
+  if (IPAddressToIPAddressSpace(address) != mojom::IPAddressSpace::kPrivate) {
+    return absl::nullopt;
+  }
+
+  return address;
 }
 
 }  // namespace
 
 PrivateNetworkAccessChecker::PrivateNetworkAccessChecker(
     const ResourceRequest& request,
-    const mojom::URLLoaderFactoryParams* factory_params,
+    const mojom::ClientSecurityState* factory_client_security_state,
     int32_t url_load_options)
     : request_client_security_state_(GetRequestClientSecurityState(request)),
       client_security_state_(
-          ChooseClientSecurityState(factory_params,
+          ChooseClientSecurityState(factory_client_security_state,
                                     request_client_security_state_.get())),
       should_block_local_request_(url_load_options &
                                   mojom::kURLLoadOptionBlockLocalRequest),
-      target_address_space_(request.target_ip_address_space) {
+      target_address_space_(request.target_ip_address_space),
+      request_initiator_(request.request_initiator) {
+  SetRequestUrl(request.url);
+
   if (!client_security_state_ ||
       client_security_state_->private_network_request_policy ==
           mojom::PrivateNetworkRequestPolicy::kAllow) {
@@ -73,34 +93,51 @@ PrivateNetworkAccessChecker::PrivateNetworkAccessChecker(
   }
 }
 
-PrivateNetworkAccessChecker::~PrivateNetworkAccessChecker() {
-  base::UmaHistogramBoolean(
-      "Security.PrivateNetworkAccess.MismatchedAddressSpacesDuringRequest",
-      has_connected_to_mismatched_address_spaces_);
-}
+PrivateNetworkAccessChecker::~PrivateNetworkAccessChecker() = default;
 
 PrivateNetworkAccessCheckResult PrivateNetworkAccessChecker::Check(
     const net::TransportInfo& transport_info) {
+  // If the request URL host was a private IP, record whether we ended up
+  // connecting to that IP address, unless connecting through a proxy.
+  // See https://crbug.com/1381471#c2.
+  if (request_url_private_ip_.has_value() &&
+      transport_info.type != net::TransportType::kProxied) {
+    base::UmaHistogramBoolean(
+        "Security.PrivateNetworkAccess.PrivateIpResolveMatch",
+        *request_url_private_ip_ == transport_info.endpoint.address());
+  }
+
   mojom::IPAddressSpace resource_address_space =
       TransportInfoToIPAddressSpace(transport_info);
+
+  // If we are connecting to a private IP endpoint over HTTP without a target IP
+  // address space, record whether we could have successfully inferred the
+  // target IP address space from the request URL.
+  if (resource_address_space == mojom::IPAddressSpace::kPrivate &&
+      is_request_url_scheme_http_ &&
+      target_address_space_ == mojom::IPAddressSpace::kUnknown) {
+    base::UmaHistogramBoolean(
+        "Security.PrivateNetworkAccess.PrivateIpInferrable",
+        request_url_private_ip_.has_value());
+  }
 
   auto result = CheckInternal(resource_address_space);
 
   base::UmaHistogramEnumeration("Security.PrivateNetworkAccess.CheckResult",
                                 result);
 
-  if (transport_info.type == net::TransportType::kCached) {
-    base::UmaHistogramEnumeration(
-        "Security.PrivateNetworkAccess.CachedResourceCheckResult", result);
-  }
-
   response_address_space_ = resource_address_space;
   return result;
 }
 
-void PrivateNetworkAccessChecker::Reset() {
+void PrivateNetworkAccessChecker::ResetForRedirect(const GURL& new_url) {
+  SetRequestUrl(new_url);
+  ResetForRetry();
+}
+
+void PrivateNetworkAccessChecker::ResetForRetry() {
   // The target IP address space is no longer relevant, it only applied to the
-  // URL before the first redirect. Consider the following scenario:
+  // URL before the first redirect/retry. Consider the following scenario:
   //
   // 1. `https://public.example` fetches `http://localhost/foo`
   // 2. `OnConnected()` notices that the remote endpoint's IP address space is
@@ -151,23 +188,11 @@ Result PrivateNetworkAccessChecker::CheckInternal(
     return Result::kBlockedByLoadOption;
   }
 
-  // `response_address_space_` behaves similarly to `target_address_space_`,
-  // except `kUnknown` is also subject to checks (instead
-  // `response_address_space_ == absl::nullopt` indicates that no check
-  // should be performed).
-  bool is_inconsistent_address_space =
-      response_address_space_.has_value() &&
-      resource_address_space != *response_address_space_;
-
-  // A single response may connect to two different IP address spaces without
-  // a redirect in between. This can happen due to split range requests, where
-  // a single `URLRequest` issues multiple network transactions, or when we
-  // create a new connection after auth credentials have been provided, etc.
-  //
-  // We record this even if there is no client security state or the policy is
-  // `kAllow` in order to estimate the compatibility risk of this check without
-  // having to enable PNA.
-  has_connected_to_mismatched_address_spaces_ |= is_inconsistent_address_space;
+  if (is_potentially_trustworthy_same_origin_ &&
+      base::FeatureList::IsEnabled(
+          features::kLocalNetworkAccessAllowPotentiallyTrustworthySameOrigin)) {
+    return Result::kAllowedPotentiallyTrustworthySameOrigin;
+  }
 
   if (!client_security_state_) {
     return Result::kAllowedMissingClientSecurityState;
@@ -192,19 +217,28 @@ Result PrivateNetworkAccessChecker::CheckInternal(
     return Result::kBlockedByTargetIpAddressSpace;
   }
 
-  if (is_inconsistent_address_space) {
-    // If the policy is `kPreflightWarn`, the request should not fail just
-    // because of this check - PNA checks are only experimentally turned on
+  // A single response may connect to two different IP address spaces without
+  // a redirect in between. This can happen due to split range requests, where
+  // a single `URLRequest` issues multiple network transactions, or when we
+  // create a new connection after auth credentials have been provided, etc.
+  //
+  // `response_address_space_` behaves similarly to `target_address_space_`,
+  // except `kUnknown` is also subject to checks (instead
+  // `response_address_space_ == absl::nullopt` indicates that no check
+  // should be performed).
+  if (response_address_space_.has_value() &&
+      resource_address_space != *response_address_space_) {
+    // If the policy is `kWarn` or `kPreflightWarn`, the request should not fail
+    // just because of this check - PNA checks are only experimentally turned on
     // for this request. Further checks should not be run, otherwise we might
     // return `kBlockedByPolicyPreflightWarn` and trigger a new preflight to be
     // sent, thus causing https://crbug.com/1279376 all over again.
-    //
-    // Redirection blocked by PNA check in https://crbug.com/1334689.
-    // A request with HTTPS is under PNA warning mode other than allow mode.
-    // Private network access checker should not be applied to these requests.
     if (policy == mojom::PrivateNetworkRequestPolicy::kPreflightWarn) {
       return Result::kAllowedByPolicyPreflightWarn;
-    } else if (policy == mojom::PrivateNetworkRequestPolicy::kWarn) {
+    }
+
+    // See also https://crbug.com/1334689.
+    if (policy == mojom::PrivateNetworkRequestPolicy::kWarn) {
       return Result::kAllowedByPolicyWarn;
     }
 
@@ -231,6 +265,26 @@ Result PrivateNetworkAccessChecker::CheckInternal(
     case Policy::kPreflightBlock:
       return Result::kBlockedByPolicyPreflightBlock;
   }
+}
+
+void PrivateNetworkAccessChecker::SetRequestUrl(const GURL& url) {
+  is_request_url_scheme_http_ = url.scheme_piece() == url::kHttpScheme;
+  request_url_private_ip_ = ParsePrivateIpFromUrl(url);
+
+  is_potentially_trustworthy_same_origin_ =
+      IsUrlPotentiallyTrustworthy(url) && request_initiator_.has_value() &&
+      request_initiator_.value().IsSameOriginWith(url);
+}
+
+bool PrivateNetworkAccessChecker::NeedPermission(
+    const GURL& url,
+    bool is_web_secure_context,
+    mojom::IPAddressSpace target_address_space) {
+  return base::FeatureList::IsEnabled(
+             network::features::kPrivateNetworkAccessPermissionPrompt) &&
+         is_web_secure_context && !network::IsUrlPotentiallyTrustworthy(url) &&
+         (target_address_space == mojom::IPAddressSpace::kLocal ||
+          target_address_space == mojom::IPAddressSpace::kPrivate);
 }
 
 }  // namespace network

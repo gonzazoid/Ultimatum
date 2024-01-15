@@ -4,15 +4,14 @@
 
 package org.chromium.chrome.browser.signin.services;
 
-import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.profiles.Profile;
 
-/**
- * Bridge to UnifiedConsentService.
- */
+/** Bridge to UnifiedConsentService. */
 public class UnifiedConsentServiceBridge {
     private static Boolean sUrlKeyedAnonymizedDataCollectionEnabledForTesting;
 
@@ -23,21 +22,21 @@ public class UnifiedConsentServiceBridge {
         if (sUrlKeyedAnonymizedDataCollectionEnabledForTesting != null) {
             return sUrlKeyedAnonymizedDataCollectionEnabledForTesting;
         }
-        return UnifiedConsentServiceBridgeJni.get().isUrlKeyedAnonymizedDataCollectionEnabled(
-                profile);
+        return UnifiedConsentServiceBridgeJni.get()
+                .isUrlKeyedAnonymizedDataCollectionEnabled(profile);
     }
 
     /** Sets whether collection of URL-keyed anonymized data is enabled. */
     public static void setUrlKeyedAnonymizedDataCollectionEnabled(
             Profile profile, boolean enabled) {
-        UnifiedConsentServiceBridgeJni.get().setUrlKeyedAnonymizedDataCollectionEnabled(
-                profile, enabled);
+        UnifiedConsentServiceBridgeJni.get()
+                .setUrlKeyedAnonymizedDataCollectionEnabled(profile, enabled);
     }
 
     /** Returns whether collection of URL-keyed anonymized data is configured by policy. */
     public static boolean isUrlKeyedAnonymizedDataCollectionManaged(Profile profile) {
-        return UnifiedConsentServiceBridgeJni.get().isUrlKeyedAnonymizedDataCollectionManaged(
-                profile);
+        return UnifiedConsentServiceBridgeJni.get()
+                .isUrlKeyedAnonymizedDataCollectionManaged(profile);
     }
 
     /**
@@ -48,18 +47,22 @@ public class UnifiedConsentServiceBridge {
         UnifiedConsentServiceBridgeJni.get().recordSyncSetupDataTypesHistogram(profile);
     }
 
-    /** Sets whether collection of URL-keyed anonymized data is enabled. */
-    public static void setUrlKeyedAnonymizedDataCollectionEnabledForTesting(
-            @Nullable Boolean enabled) {
-        sUrlKeyedAnonymizedDataCollectionEnabledForTesting = enabled;
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    public static void setUrlKeyedAnonymizedDataCollectionEnabled(Boolean isEnabled) {
+        sUrlKeyedAnonymizedDataCollectionEnabledForTesting = isEnabled;
+        ResettersForTesting.register(
+                () -> sUrlKeyedAnonymizedDataCollectionEnabledForTesting = null);
     }
 
     @NativeMethods
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public interface Natives {
         boolean isUrlKeyedAnonymizedDataCollectionEnabled(Profile profile);
+
         void setUrlKeyedAnonymizedDataCollectionEnabled(Profile profile, boolean enabled);
+
         boolean isUrlKeyedAnonymizedDataCollectionManaged(Profile profile);
+
         void recordSyncSetupDataTypesHistogram(Profile profile);
     }
 }

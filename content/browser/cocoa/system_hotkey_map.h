@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_COCOA_SYSTEM_HOTKEY_MAP_H_
 
 #import <Cocoa/Cocoa.h>
+
 #include <vector>
 
 #include "base/gtest_prod_util.h"
@@ -15,7 +16,7 @@ namespace content {
 
 struct SystemHotkey;
 
-// Maintains a listing of all OSX system hotkeys. e.g. (cmd + `) These hotkeys
+// Maintains a listing of all macOS system hotkeys (e.g. cmd+`). These hotkeys
 // should have higher priority than web content, so NSEvents that correspond to
 // a system hotkey should not be passed to the renderer.
 class CONTENT_EXPORT SystemHotkeyMap {
@@ -43,15 +44,19 @@ class CONTENT_EXPORT SystemHotkeyMap {
   FRIEND_TEST_ALL_PREFIXES(SystemHotkeyMapTest, Parse);
   FRIEND_TEST_ALL_PREFIXES(SystemHotkeyMapTest, ParseCustomEntries);
   FRIEND_TEST_ALL_PREFIXES(SystemHotkeyMapTest, ParseMouse);
+  FRIEND_TEST_ALL_PREFIXES(SystemHotkeyMapTest,
+                           ReverseWindowCyclingHotkeyExists);
+  FRIEND_TEST_ALL_PREFIXES(SystemHotkeyMapTest,
+                           IgnoreUndocumentedShortcutEntries);
 
   // Whether the hotkey has been reserved by the user.
   bool IsHotkeyReserved(unsigned short key_code, NSUInteger modifiers) const;
 
-  // Create at least one record of a hotkey that is reserved by the user.
+  // Creates at least one record of a hotkey that is reserved by the user.
   // Certain system hotkeys automatically reserve multiple key combinations.
   void ReserveHotkey(unsigned short key_code,
                      NSUInteger modifiers,
-                     NSString* system_effect);
+                     NSString* system_hotkey_identifier);
 
   // Create a record of a hotkey that is reserved by the user.
   void ReserveHotkey(unsigned short key_code, NSUInteger modifiers);

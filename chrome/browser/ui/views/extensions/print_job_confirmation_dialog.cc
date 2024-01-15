@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/browser/ui/views/extensions/extensions_dialogs_utils.h"
 #include "chrome/grit/generated_resources.h"
 #include "extensions/common/constants.h"
@@ -56,14 +56,16 @@ void ShowPrintJobConfirmationDialog(gfx::NativeWindow parent,
               base::BindOnce(
                   &PrintJobConfirmationDialogDelegate::OnDialogAccepted,
                   base::Unretained(bubble_delegate)),
-              l10n_util::GetStringUTF16(
-                  IDS_EXTENSIONS_PRINTING_API_PRINT_REQUEST_ALLOW))
+              ui::DialogModel::Button::Params().SetLabel(
+                  l10n_util::GetStringUTF16(
+                      IDS_EXTENSIONS_PRINTING_API_PRINT_REQUEST_ALLOW)))
           .AddCancelButton(
               base::BindOnce(
                   &PrintJobConfirmationDialogDelegate::OnDialogClosed,
                   base::Unretained(bubble_delegate)),
-              l10n_util::GetStringUTF16(
-                  IDS_EXTENSIONS_PRINTING_API_PRINT_REQUEST_DENY))
+              ui::DialogModel::Button::Params().SetLabel(
+                  l10n_util::GetStringUTF16(
+                      IDS_EXTENSIONS_PRINTING_API_PRINT_REQUEST_DENY)))
           .AddParagraph(
               ui::DialogModelLabel(
                   l10n_util::GetStringFUTF16(

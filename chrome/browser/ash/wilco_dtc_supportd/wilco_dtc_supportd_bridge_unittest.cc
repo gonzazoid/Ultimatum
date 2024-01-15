@@ -6,8 +6,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/fake_wilco_dtc_supportd_client.h"
@@ -160,7 +161,7 @@ class FakeWilcoDtcSupportdBridgeDelegate final
   }
 
  private:
-  FakeMojoWilcoDtcSupportdServiceFactory* const
+  const raw_ptr<FakeMojoWilcoDtcSupportdServiceFactory>
       mojo_wilco_dtc_supportd_service_factory_;
 };
 
@@ -262,7 +263,8 @@ class WilcoDtcSupportdBridgeTest : public testing::Test {
       mojo_wilco_dtc_supportd_service_receiver_{
           &mojo_wilco_dtc_supportd_service_};
 
-  StrictMock<MockWilcoDtcSupportdNotificationController>*
+  raw_ptr<StrictMock<MockWilcoDtcSupportdNotificationController>,
+          DanglingUntriaged>
       notification_controller_;
 
   std::unique_ptr<WilcoDtcSupportdBridge> wilco_dtc_supportd_bridge_;

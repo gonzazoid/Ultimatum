@@ -5,9 +5,9 @@
 #include "base/memory/raw_ptr.h"
 #include "components/offline_items_collection/core/offline_content_aggregator.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/offline_items_collection/core/offline_item.h"
 #include "components/offline_items_collection/core/test_support/mock_offline_content_provider.h"
@@ -60,7 +60,7 @@ class ThrottledOfflineContentProviderTest : public testing::Test {
  public:
   ThrottledOfflineContentProviderTest()
       : task_runner_(new base::TestMockTimeTaskRunner),
-        handle_(task_runner_),
+        current_default_handle_(task_runner_),
         delay_(base::Seconds(1)),
         provider_(delay_, &wrapped_provider_) {}
   ~ThrottledOfflineContentProviderTest() override {}
@@ -75,7 +75,7 @@ class ThrottledOfflineContentProviderTest : public testing::Test {
   }
 
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle current_default_handle_;
 
   base::TimeDelta delay_;
   MockOfflineContentProvider wrapped_provider_;
@@ -98,14 +98,14 @@ TEST_F(ThrottledOfflineContentProviderTest, TestBasicPassthrough) {
   EXPECT_CALL(wrapped_provider_, RemoveItem(id));
   EXPECT_CALL(wrapped_provider_, CancelDownload(id));
   EXPECT_CALL(wrapped_provider_, PauseDownload(id));
-  EXPECT_CALL(wrapped_provider_, ResumeDownload(id, true));
+  EXPECT_CALL(wrapped_provider_, ResumeDownload(id));
   EXPECT_CALL(wrapped_provider_, GetVisualsForItem_(id, _, _));
   wrapped_provider_.SetItems(items);
   provider_.OpenItem(OpenParams(LaunchLocation::DOWNLOAD_HOME), id);
   provider_.RemoveItem(id);
   provider_.CancelDownload(id);
   provider_.PauseDownload(id);
-  provider_.ResumeDownload(id, true);
+  provider_.ResumeDownload(id);
   provider_.GetVisualsForItem(id, GetVisualsOptions::IconOnly(),
                               OfflineContentProvider::VisualsCallback());
 
@@ -349,7 +349,7 @@ TEST_F(ThrottledOfflineContentProviderTest, TestPokingProviderFlushesQueue) {
       .WillRepeatedly(InvokeWithoutArgs([=]() {
         wrapped_provider_.NotifyOnItemUpdated(item5, absl::nullopt);
       }));
-  EXPECT_CALL(wrapped_provider_, ResumeDownload(_, _))
+  EXPECT_CALL(wrapped_provider_, ResumeDownload(_))
       .WillRepeatedly(InvokeWithoutArgs([=]() {
         wrapped_provider_.NotifyOnItemUpdated(item6, absl::nullopt);
       }));
@@ -391,7 +391,7 @@ TEST_F(ThrottledOfflineContentProviderTest, TestPokingProviderFlushesQueue) {
     EXPECT_CALL(observer, OnItemUpdated(item6, Eq(absl::nullopt))).Times(1);
     provider_.set_last_update_time(base::TimeTicks::Now());
     wrapped_provider_.NotifyOnItemUpdated(item1, absl::nullopt);
-    provider_.ResumeDownload(id1, false);
+    provider_.ResumeDownload(id1);
   }
 }
 

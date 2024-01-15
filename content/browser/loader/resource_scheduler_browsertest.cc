@@ -5,11 +5,16 @@
 #include <map>
 #include <string>
 
+#include "base/test/scoped_feature_list.h"
+#include "build/buildflag.h"
+#include "content/public/browser/visibility.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/shell/browser/shell.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "services/network/public/cpp/features.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -38,8 +43,7 @@ IN_PROC_BROWSER_TEST_F(ResourceSchedulerBrowserTest,
 
   Shell* otr_browser = CreateOffTheRecordBrowser();
   EXPECT_TRUE(NavigateToURL(otr_browser, url));
-  EXPECT_EQ(9, EvalJs(otr_browser, "getResourceNumber()",
-                      EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_EQ(9, EvalJs(otr_browser, "getResourceNumber()"));
 }
 
 IN_PROC_BROWSER_TEST_F(ResourceSchedulerBrowserTest,
@@ -48,8 +52,7 @@ IN_PROC_BROWSER_TEST_F(ResourceSchedulerBrowserTest,
       "/resource_loading/resource_loading_non_mobile.html"));
   Shell* browser = shell();
   EXPECT_TRUE(NavigateToURL(browser, url));
-  EXPECT_EQ(9, EvalJs(browser, "getResourceNumber()",
-                      EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_EQ(9, EvalJs(browser, "getResourceNumber()"));
 }
 
 }  // anonymous namespace

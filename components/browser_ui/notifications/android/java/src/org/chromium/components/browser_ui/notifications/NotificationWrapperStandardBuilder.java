@@ -19,23 +19,22 @@ import android.widget.RemoteViews;
 import androidx.core.app.NotificationCompat;
 
 import org.chromium.base.Log;
-import org.chromium.base.compat.ApiHelperForM;
-import org.chromium.base.compat.ApiHelperForN;
 import org.chromium.base.compat.ApiHelperForO;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.components.browser_ui.notifications.channels.ChannelsInitializer;
 
-/**
- * Wraps a {@link Notification.Builder} object.
- */
+/** Wraps a {@link Notification.Builder} object. */
 public class NotificationWrapperStandardBuilder implements NotificationWrapperBuilder {
     private static final String TAG = "NotifStandardBuilder";
     private final Notification.Builder mBuilder;
     private final Context mContext;
     private final NotificationMetadata mMetadata;
 
-    public NotificationWrapperStandardBuilder(Context context, String channelId,
-            ChannelsInitializer channelsInitializer, NotificationMetadata metadata) {
+    public NotificationWrapperStandardBuilder(
+            Context context,
+            String channelId,
+            ChannelsInitializer channelsInitializer,
+            NotificationMetadata metadata) {
         mContext = context;
         mBuilder = new Notification.Builder(mContext);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -83,9 +82,7 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
 
     @Override
     public NotificationWrapperBuilder setSmallIcon(Icon icon) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            ApiHelperForM.setSmallIcon(mBuilder, icon);
-        }
+        mBuilder.setSmallIcon(icon);
         return this;
     }
 
@@ -147,12 +144,11 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
     @SuppressWarnings("deprecation")
     public NotificationWrapperBuilder addAction(
             int icon, CharSequence title, PendingIntent intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && icon != 0) {
-            mBuilder.addAction(ApiHelperForM
-                                       .newNotificationActionBuilder(
-                                               ApiHelperForM.createIconWithResource(mContext, icon),
-                                               title, intent)
-                                       .build());
+        if (icon != 0) {
+            mBuilder.addAction(
+                    new Notification.Action.Builder(
+                                    Icon.createWithResource(mContext, icon), title, intent)
+                            .build());
         } else {
             mBuilder.addAction(icon, title, intent);
         }
@@ -160,8 +156,11 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
     }
 
     @Override
-    public NotificationWrapperBuilder addAction(int icon, CharSequence title,
-            PendingIntentProvider pendingIntentProvider, int actionType) {
+    public NotificationWrapperBuilder addAction(
+            int icon,
+            CharSequence title,
+            PendingIntentProvider pendingIntentProvider,
+            int actionType) {
         addAction(icon, title, pendingIntentProvider.getPendingIntent());
         return this;
     }
@@ -175,8 +174,9 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
     @Override
     public NotificationWrapperBuilder addAction(
             Notification.Action action, int flags, int actionType, int requestCode) {
-        action.actionIntent = new PendingIntentProvider(action.actionIntent, flags, requestCode)
-                                      .getPendingIntent();
+        action.actionIntent =
+                new PendingIntentProvider(action.actionIntent, flags, requestCode)
+                        .getPendingIntent();
         addAction(action);
         return this;
     }
@@ -224,17 +224,6 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
     @Override
     public NotificationWrapperBuilder setSubText(CharSequence text) {
         mBuilder.setSubText(text);
-        return this;
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public NotificationWrapperBuilder setContentInfo(String info) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            mBuilder.setContentInfo(info);
-        } else {
-            mBuilder.setSubText(info);
-        }
         return this;
     }
 
@@ -289,11 +278,7 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
     @Override
     @SuppressWarnings("deprecation")
     public NotificationWrapperBuilder setContent(RemoteViews views) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ApiHelperForN.setCustomContentView(mBuilder, views);
-        } else {
-            mBuilder.setContent(views);
-        }
+        mBuilder.setCustomContentView(views);
         return this;
     }
 
@@ -302,11 +287,11 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
             Bitmap bigPicture, CharSequence summaryText) {
         Notification.BigPictureStyle style =
                 new Notification.BigPictureStyle().bigPicture(bigPicture);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            // Android N doesn't show content text when expanded, so duplicate body text as a
-            // summary for the big picture.
-            style.setSummaryText(summaryText);
-        }
+
+        // Android N doesn't show content text when expanded, so duplicate body text as a
+        // summary for the big picture.
+        style.setSummaryText(summaryText);
+
         mBuilder.setStyle(style);
         return this;
     }
@@ -344,14 +329,7 @@ public class NotificationWrapperStandardBuilder implements NotificationWrapperBu
     @SuppressWarnings("deprecation")
     public NotificationWrapper buildWithBigContentView(RemoteViews view) {
         assert mMetadata != null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            return new NotificationWrapper(
-                    ApiHelperForN.setCustomBigContentView(mBuilder, view).build(), mMetadata);
-        } else {
-            Notification notification = mBuilder.build();
-            notification.bigContentView = view;
-            return new NotificationWrapper(notification, mMetadata);
-        }
+        return new NotificationWrapper(mBuilder.setCustomBigContentView(view).build(), mMetadata);
     }
 
     @Override

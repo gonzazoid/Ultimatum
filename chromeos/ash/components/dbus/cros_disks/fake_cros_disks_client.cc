@@ -6,13 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "url/gurl.h"
 
 namespace ash {
@@ -41,9 +40,7 @@ MountError PerformFakeMount(const std::string& source_path,
   const base::FilePath dummy_file_path =
       mounted_path.Append("SUCCESSFULLY_PERFORMED_FAKE_MOUNT.txt");
   const std::string dummy_file_content = "This is a dummy file.";
-  const int write_result = base::WriteFile(
-      dummy_file_path, dummy_file_content.data(), dummy_file_content.size());
-  if (write_result != static_cast<int>(dummy_file_content.size())) {
+  if (!base::WriteFile(dummy_file_path, dummy_file_content)) {
     DLOG(ERROR) << "Failed to put a dummy file at " << dummy_file_path.value();
     return MountError::kMountProgramFailed;
   }
@@ -155,7 +152,7 @@ void FakeCrosDisksClient::Unmount(const std::string& device_path,
             base::OnceCallback<void(bool)>(base::DoNothing())
                 .Then(base::BindOnce(std::move(callback), unmount_error_))));
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), unmount_error_));
   }
   if (!unmount_listener_.is_null())
@@ -179,7 +176,7 @@ void FakeCrosDisksClient::Format(const std::string& device_path,
   last_format_device_path_ = device_path;
   last_format_filesystem_ = filesystem;
   last_format_label_ = label;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), format_success_));
 }
 
@@ -189,7 +186,7 @@ void FakeCrosDisksClient::SinglePartitionFormat(const std::string& device_path,
 
   partition_call_count_++;
   last_partition_device_path_ = device_path;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), partition_error_));
 }
 
@@ -201,7 +198,7 @@ void FakeCrosDisksClient::Rename(const std::string& device_path,
   rename_call_count_++;
   last_rename_device_path_ = device_path;
   last_rename_volume_name_ = volume_name;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), rename_success_));
 }
 
@@ -212,13 +209,13 @@ void FakeCrosDisksClient::GetDeviceProperties(
   DCHECK(!callback.is_null());
   if (!next_get_device_properties_disk_info_ ||
       next_get_device_properties_disk_info_->device_path() != device_path) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(error_callback));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(error_callback));
     return;
   }
 
   get_device_properties_success_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback),
                      std::cref(*next_get_device_properties_disk_info_)));

@@ -17,7 +17,6 @@ mojom("mojom") {
     "geolocation_config.mojom",
     "geolocation_context.mojom",
     "geolocation_control.mojom",
-    "geoposition.mojom",
     "hid.mojom",
     "input_service.mojom",
     "nfc.mojom",
@@ -29,6 +28,7 @@ mojom("mojom") {
     "screen_orientation.mojom",
     "screen_orientation_lock_types.mojom",
     "serial.mojom",
+    "smart_card.mojom",
     "time_zone_monitor.mojom",
     "vibration_manager.mojom",
     "wake_lock.mojom",
@@ -37,11 +37,15 @@ mojom("mojom") {
   ]
 
   public_deps = [
+    ":geoposition",
+    "//device/bluetooth/public/mojom",
     "//mojo/public/mojom/base",
     "//services/network/public/mojom",
     "//services/network/public/mojom:mojom_proxy_config",
     "//services/network/public/mojom:url_loader_base",
+    "//ui/gfx/geometry/mojom",
     "//url/mojom:url_mojom_gurl",
+    "//url/mojom:url_mojom_origin",
   ]
 
   if (is_chromeos_ash) {
@@ -86,6 +90,11 @@ mojom("device_service") {
   # non-Blink variant as a dependency. Blink can never use the DeviceService
   # interface directly anyway, so don't generate bindings for it.
   disable_variants = true
+  cpp_only = true
+
+  # The interfaces defined here are privileged, and not vended to a renderer, so
+  # they are not fuzzable by javascript-based fuzzers.
+  enable_js_fuzzing = false
 
   enabled_features = []
   if ((is_linux || is_chromeos) && use_udev) {
@@ -96,15 +105,9 @@ mojom("device_service") {
     enabled_features += [ "enable_hid" ]
   }
 
-  # While the device posture API applies to all platforms, only Android and
-  # Windows can fetch posture information so we only build mojo bindings on
-  # these platforms
-  if (is_android || is_win) {
-    enabled_features += [ "enable_device_posture" ]
-  }
-
   public_deps = [
     ":generic_sensor",
+    ":geolocation_internals",
     ":mojom",
     ":usb",
     ":usb_test",
@@ -124,6 +127,7 @@ mojom("generic_sensor") {
 
   visibility_blink = [
     ":mojom_blink",
+    "//third_party/blink/public/mojom:mojom_platform_blink",
     "//third_party/blink/renderer/platform:blink_platform_public_deps",
   ]
 
@@ -139,6 +143,10 @@ mojom("generic_sensor") {
           mojom = "device.mojom.SensorConfiguration"
           cpp = "::device::PlatformSensorConfiguration"
         },
+        {
+          mojom = "device.mojom.SensorReadingRaw"
+          cpp = "::device::SensorReading"
+        },
       ]
       traits_headers = [
         "//services/device/public/cpp/generic_sensor/sensor_mojom_traits.h",
@@ -146,8 +154,10 @@ mojom("generic_sensor") {
       traits_sources = [
         "//services/device/public/cpp/generic_sensor/sensor_mojom_traits.cc",
       ]
-      traits_public_deps =
-          [ "//services/device/public/cpp/generic_sensor:sensor_configuration" ]
+      traits_public_deps = [
+        "//services/device/public/cpp/generic_sensor:sensor_configuration",
+        "//services/device/public/cpp/generic_sensor:sensor_reading",
+      ]
     },
   ]
 
@@ -190,6 +200,10 @@ mojom("usb") {
   ]
 
   webui_module_path = "/"
+
+  # Generate legacy JS bindings in addition to WebUI TS bindings for Blink Web
+  # Tests.
+  generate_legacy_js_bindings = true
 }
 
 mojom("usb_test") {
@@ -197,4 +211,30 @@ mojom("usb_test") {
   sources = [ "usb_manager_test.mojom" ]
   public_deps = [ "//url/mojom:url_mojom_gurl" ]
   webui_module_path = "/"
+}
+
+mojom("geoposition") {
+  generate_java = true
+  sources = [ "geoposition.mojom" ]
+  public_deps = [ "//mojo/public/mojom/base:base" ]
+
+  # The blink variant of the geoposition mojom is depended on by the blink
+  # platform target. All blink variant mojoms use WTF types, which are part of
+  # the blink platform component. In order to avoid a dependency cycle, these
+  # targets must be part of that component.
+  export_class_attribute_blink = "BLINK_PLATFORM_EXPORT"
+  export_define_blink = "BLINK_PLATFORM_IMPLEMENTATION=1"
+  export_header_blink = "third_party/blink/public/platform/web_common.h"
+
+  webui_module_path = "/"
+  generate_legacy_js_bindings = true
+}
+
+mojom("geolocation_internals") {
+  sources = [ "geolocation_internals.mojom" ]
+  webui_module_path = "/"
+  public_deps = [
+    ":geoposition",
+    "//mojo/public/mojom/base",
+  ]
 }

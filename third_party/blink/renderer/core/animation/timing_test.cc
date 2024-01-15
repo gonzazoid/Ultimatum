@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/animation/timing.h"
 
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -18,9 +19,9 @@ class AnimationTimingTest : public testing::Test {
         playback_rate < 0 ? Timing::AnimationDirection::kBackwards
                           : Timing::AnimationDirection::kForwards;
     return timing_.CalculateTimings(local_time,
-                                    /* at_progress_timeline_boundary */ false,
-                                    normalized_timing_, animation_direction,
-                                    is_keyframe_effect, playback_rate);
+                                    /* is_idle */ false, normalized_timing_,
+                                    animation_direction, is_keyframe_effect,
+                                    playback_rate);
   }
   bool IsCurrent(absl::optional<double> local_time, double playback_rate) {
     absl::optional<AnimationTimeDelta> local_time_delta;
@@ -40,6 +41,7 @@ class AnimationTimingTest : public testing::Test {
     normalized_timing_.active_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(1);
     normalized_timing_.end_time = ANIMATION_TIME_DELTA_FROM_SECONDS(1);
   }
+  test::TaskEnvironment task_environment_;
   Timing timing_;
   Timing::NormalizedTiming normalized_timing_;
 };

@@ -10,7 +10,7 @@ import re
 import unittest
 
 import run
-from test_runner import SimulatorNotFoundError
+from test_runner import HostIsDownError, MIGServerDiedError, SimulatorNotFoundError
 import test_runner_test
 
 
@@ -43,6 +43,7 @@ class UnitTest(unittest.TestCase):
     self.assertTrue(runner.args.xcode_path == 'some/Xcode.app')
     self.assertTrue(runner.args.repeat == 2)
     self.assertTrue(runner.args.record_video == None)
+    self.assertFalse(runner.args.output_disabled_tests)
 
   def test_isolated_repeat_ok(self):
     cmd = [
@@ -180,12 +181,12 @@ class UnitTest(unittest.TestCase):
     json_args = {
         'test_cases': ['test1'],
         'restart': 'true',
-        'xcode_parallelization': True,
-        'shards': 2
+        'xcodebuild_sim_runner': True,
+        'clones': 2
     }
 
     cmd = [
-        '--shards',
+        '--clones',
         '1',
         '--platform',
         'iPhone X',
@@ -201,14 +202,14 @@ class UnitTest(unittest.TestCase):
         'some/dir'
     ]
 
-    # shards should be 2, since json arg takes precedence over cmd line
+    # clones should be 2, since json arg takes precedence over cmd line
     runner = run.Runner()
     runner.parse_args(cmd)
     # Empty array
     self.assertEquals(len(runner.args.env_var), 0)
-    self.assertTrue(runner.args.xcode_parallelization)
+    self.assertTrue(runner.args.xcodebuild_sim_runner)
     self.assertTrue(runner.args.restart)
-    self.assertEquals(runner.args.shards, 2)
+    self.assertEquals(runner.args.clones, 2)
 
   def test_parse_args_record_video_without_xcode_parallelization(self):
     """
@@ -240,6 +241,34 @@ class UnitTest(unittest.TestCase):
       runner.parse_args(cmd)
       self.assertTrue(re.match('is only supported on EG tests', ctx.message))
       self.assertEqual(ctx.exception.code, 2)
+
+  def test_parse_args_output_disabled_tests(self):
+    """
+    report disabled tests to resultdb
+    """
+    cmd = [
+        '--app',
+        './foo-Runner.app',
+        '--host-app',
+        './bar.app',
+        '--runtime-cache-prefix',
+        'some/dir',
+        '--xcode-path',
+        'some/Xcode.app',
+        '--gtest_repeat',
+        '2',
+        '--output-disabled-tests',
+
+        # Required
+        '--xcode-build-version',
+        '123abc',
+        '--out-dir',
+        'some/dir',
+    ]
+
+    runner = run.Runner()
+    runner.parse_args(cmd)
+    self.assertTrue(runner.args.output_disabled_tests)
 
   def test_merge_test_cases(self):
     """Tests test cases are merges in --test-cases and --args-json."""
@@ -451,9 +480,11 @@ class RunnerInstallXcodeTest(test_runner_test.TestCase):
   @mock.patch('xcode_util.construct_runtime_cache_folder', autospec=True)
   @mock.patch('xcode_util.install', autospec=True, return_value=True)
   @mock.patch('xcode_util.move_runtime', autospec=True)
-  def test_legacy_xcode(self, mock_move_runtime, mock_install,
-                        mock_construct_runtime_cache_folder, mock_tr, _1, _2,
-                        _3, _4):
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  def test_legacy_xcode(self, mock_macos_13_or_higher, mock_move_runtime,
+                        mock_install, mock_construct_runtime_cache_folder,
+                        mock_tr, _1, _2, _3, _4):
+    mock_macos_13_or_higher.return_value = False
     mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
     test_runner = mock_tr.return_value
     test_runner.launch.return_value = True
@@ -478,11 +509,95 @@ class RunnerInstallXcodeTest(test_runner_test.TestCase):
   @mock.patch('os.path.exists', autospec=True, return_value=True)
   @mock.patch('xcodebuild_runner.SimulatorParallelTestRunner')
   @mock.patch('xcode_util.construct_runtime_cache_folder', autospec=True)
-  @mock.patch('xcode_util.install', autospec=True, return_value=False)
+  @mock.patch('xcode_util.install', autospec=True, return_value=True)
+  @mock.patch('xcode_util.install_runtime_dmg')
   @mock.patch('xcode_util.move_runtime', autospec=True)
-  def test_not_legacy_xcode(self, mock_move_runtime, mock_install,
+  @mock.patch(
+      'xcode_util.is_runtime_builtin', autospec=True, return_value=False)
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  def test_legacy_xcode_macos13_runtime_not_builtin(
+      self, mock_macos_13_or_higher, mock_is_runtime_builtin, mock_move_runtime,
+      mock_install_runtime_dmg, mock_install,
+      mock_construct_runtime_cache_folder, mock_tr, _1, _2, _3, _4):
+    mock_macos_13_or_higher.return_value = True
+    mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
+    test_runner = mock_tr.return_value
+    test_runner.launch.return_value = True
+    test_runner.logs = {}
+
+    with mock.patch('run.open', mock.mock_open()):
+      self.runner.run(None)
+
+    mock_install.assert_called_with(
+        'mac_toolchain',
+        'testXcodeVersion',
+        'test/xcode/path',
+        runtime_cache_folder='test/runtime-ios-14.4',
+        ios_version='14.4')
+    mock_construct_runtime_cache_folder.assert_called_once_with(
+        'test/runtime-ios-', '14.4')
+    mock_install_runtime_dmg.assert_called_with('mac_toolchain',
+                                                'test/runtime-ios-14.4', '14.4',
+                                                'testXcodeVersion')
+    self.assertFalse(mock_move_runtime.called)
+
+  @mock.patch('test_runner.defaults_delete')
+  @mock.patch('json.dump')
+  @mock.patch('xcode_util.select', autospec=True)
+  @mock.patch('os.path.exists', autospec=True, return_value=True)
+  @mock.patch('xcodebuild_runner.SimulatorParallelTestRunner')
+  @mock.patch('xcode_util.construct_runtime_cache_folder', autospec=True)
+  @mock.patch('xcode_util.install', autospec=True, return_value=True)
+  @mock.patch('xcode_util.install_runtime_dmg')
+  @mock.patch('xcode_util.move_runtime', autospec=True)
+  @mock.patch('xcode_util.is_runtime_builtin', autospec=True, return_value=True)
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  @mock.patch('iossim_util.delete_simulator_runtime_and_wait', autospec=True)
+  def test_legacy_xcode_macos13_runtime_builtin(
+      self, mock_delete_simulator_runtime_and_wait, mock_macos_13_or_higher,
+      mock_is_runtime_builtin, mock_move_runtime, mock_install_runtime_dmg,
+      mock_install, mock_construct_runtime_cache_folder, mock_tr, _1, _2, _3,
+      _4):
+    mock_macos_13_or_higher.return_value = True
+    mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
+    test_runner = mock_tr.return_value
+    test_runner.launch.return_value = True
+    test_runner.logs = {}
+
+    with mock.patch('run.open', mock.mock_open()):
+      self.runner.run(None)
+
+    mock_install.assert_called_with(
+        'mac_toolchain',
+        'testXcodeVersion',
+        'test/xcode/path',
+        runtime_cache_folder='test/runtime-ios-14.4',
+        ios_version='14.4')
+    mock_construct_runtime_cache_folder.assert_called_once_with(
+        'test/runtime-ios-', '14.4')
+    mock_install_runtime_dmg.assert_called_with('mac_toolchain',
+                                                'test/runtime-ios-14.4', '14.4',
+                                                'testXcodeVersion')
+    self.assertFalse(mock_move_runtime.called)
+    self.assertFalse(mock_delete_simulator_runtime_and_wait.called)
+
+  @mock.patch('test_runner.defaults_delete')
+  @mock.patch('json.dump')
+  @mock.patch('xcode_util.select', autospec=True)
+  @mock.patch('os.path.exists', autospec=True, return_value=True)
+  @mock.patch('xcodebuild_runner.SimulatorParallelTestRunner')
+  @mock.patch('xcode_util.construct_runtime_cache_folder', autospec=True)
+  @mock.patch('xcode_util.install', autospec=True, return_value=False)
+  @mock.patch('xcode_util.install_runtime_dmg')
+  @mock.patch('xcode_util.move_runtime', autospec=True)
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  @mock.patch('iossim_util.delete_simulator_runtime_and_wait', autospec=True)
+  def test_not_legacy_xcode(self, mock_delete_simulator_runtime_and_wait,
+                            mock_macos_13_or_higher, mock_move_runtime,
+                            mock_install_runtime_dmg, mock_install,
                             mock_construct_runtime_cache_folder, mock_tr, _1,
                             _2, _3, _4):
+    mock_macos_13_or_higher.return_value = False
     mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
     test_runner = mock_tr.return_value
     test_runner.launch.return_value = True
@@ -502,8 +617,10 @@ class RunnerInstallXcodeTest(test_runner_test.TestCase):
         mock.call('test/runtime-ios-', '14.4'),
         mock.call('test/runtime-ios-', '14.4'),
     ])
+    self.assertFalse(mock_install_runtime_dmg.called)
     mock_move_runtime.assert_called_with('test/runtime-ios-14.4',
                                          'test/xcode/path', False)
+    self.assertFalse(mock_delete_simulator_runtime_and_wait.called)
 
   @mock.patch('test_runner.defaults_delete')
   @mock.patch('json.dump')
@@ -514,10 +631,13 @@ class RunnerInstallXcodeTest(test_runner_test.TestCase):
   @mock.patch('xcode_util.install', autospec=True, return_value=False)
   @mock.patch('xcode_util.move_runtime', autospec=True)
   @mock.patch('xcode_util.remove_runtimes', autospec=True)
-  def test_error_runtime_deleted(self, mock_remove_runtimes, mock_move_runtime,
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  def test_error_runtime_deleted(self, mock_macos_13_or_higher,
+                                 mock_remove_runtimes, mock_move_runtime,
                                  mock_install,
                                  mock_construct_runtime_cache_folder, mock_tr,
                                  _1, _2, _3, _4):
+    mock_macos_13_or_higher.return_value = False
     mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
     mock_tr.side_effect = SimulatorNotFoundError('Test')
 
@@ -534,6 +654,72 @@ class RunnerInstallXcodeTest(test_runner_test.TestCase):
     self.assertEqual(0, mock_move_runtime.call_count)
     self.assertFalse(self.runner.should_move_xcode_runtime_to_cache)
     mock_remove_runtimes.assert_called_with('test/xcode/path')
+
+  @mock.patch('test_runner.defaults_delete')
+  @mock.patch('json.dump')
+  @mock.patch('xcode_util.select', autospec=True)
+  @mock.patch('os.path.exists', autospec=True, return_value=True)
+  @mock.patch('xcodebuild_runner.SimulatorParallelTestRunner')
+  @mock.patch('xcode_util.construct_runtime_cache_folder', autospec=True)
+  @mock.patch('xcode_util.install', autospec=True, return_value=False)
+  @mock.patch('xcode_util.move_runtime', autospec=True)
+  @mock.patch('xcode_util.remove_runtimes', autospec=True)
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  def test_error_host_is_down(self, mock_macos_13_or_higher,
+                              mock_remove_runtimes, mock_move_runtime,
+                              mock_install, mock_construct_runtime_cache_folder,
+                              mock_tr, _1, _2, _3, _4):
+    mock_macos_13_or_higher.return_value = False
+    mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
+    mock_tr.side_effect = HostIsDownError
+
+    with mock.patch('run.open', mock.mock_open()):
+      self.runner.run(None)
+
+    mock_install.assert_called_with(
+        'mac_toolchain',
+        'testXcodeVersion',
+        'test/xcode/path',
+        runtime_cache_folder='test/runtime-ios-14.4',
+        ios_version='14.4')
+    self.assertEqual(1, mock_construct_runtime_cache_folder.call_count)
+    self.assertEqual(0, mock_move_runtime.call_count)
+    self.assertFalse(self.runner.should_move_xcode_runtime_to_cache)
+    self.assertFalse(self.runner.should_delete_xcode_cache)
+    mock_remove_runtimes.assert_called_with('test/xcode/path')
+
+  @mock.patch('test_runner.defaults_delete')
+  @mock.patch('json.dump')
+  @mock.patch('xcode_util.select', autospec=True)
+  @mock.patch('os.path.exists', autospec=True, return_value=True)
+  @mock.patch('xcodebuild_runner.SimulatorParallelTestRunner')
+  @mock.patch('xcode_util.construct_runtime_cache_folder', autospec=True)
+  @mock.patch('xcode_util.install', autospec=True, return_value=False)
+  @mock.patch('xcode_util.move_runtime', autospec=True)
+  @mock.patch('shutil.rmtree', autospec=True)
+  @mock.patch('mac_util.is_macos_13_or_higher', autospec=True)
+  def test_error_mig_server_died(self, mock_macos_13_or_higher,
+                                 mock_shutil_rmtree, mock_move_runtime,
+                                 mock_install,
+                                 mock_construct_runtime_cache_folder, mock_tr,
+                                 _1, _2, _3, _4):
+    mock_macos_13_or_higher.return_value = False
+    mock_construct_runtime_cache_folder.side_effect = lambda a, b: a + b
+    mock_tr.side_effect = MIGServerDiedError
+
+    with mock.patch('run.open', mock.mock_open()):
+      self.runner.run(None)
+
+    mock_install.assert_called_with(
+        'mac_toolchain',
+        'testXcodeVersion',
+        'test/xcode/path',
+        runtime_cache_folder='test/runtime-ios-14.4',
+        ios_version='14.4')
+    self.assertEqual(2, mock_construct_runtime_cache_folder.call_count)
+    self.assertEqual(1, mock_move_runtime.call_count)
+    self.assertTrue(self.runner.should_delete_xcode_cache)
+    mock_shutil_rmtree.assert_called_with('test/xcode/path')
 
   @mock.patch('test_runner.defaults_delete')
   @mock.patch('json.dump')

@@ -16,25 +16,31 @@ void FakeAssistantManagerServiceImpl::FinishStart() {
   SetStateAndInformObservers(State::RUNNING);
 }
 
-void FakeAssistantManagerServiceImpl::Start(
-    const absl::optional<UserInfo>& user,
-    bool enable_hotword) {
+void FakeAssistantManagerServiceImpl::Start(const std::optional<UserInfo>& user,
+                                            bool enable_hotword) {
   SetStateAndInformObservers(State::STARTING);
   SetUser(user);
 }
 
 void FakeAssistantManagerServiceImpl::Stop() {
+  SetStateAndInformObservers(State::STOPPING);
   SetStateAndInformObservers(State::STOPPED);
+  state_observers_.Clear();
+}
+
+void FakeAssistantManagerServiceImpl::Disconnected() {
+  SetStateAndInformObservers(State::DISCONNECTED);
+  state_observers_.Clear();
 }
 
 void FakeAssistantManagerServiceImpl::SetUser(
-    const absl::optional<UserInfo>& user) {
+    const std::optional<UserInfo>& user) {
   if (user) {
     gaia_id_ = user.value().gaia_id;
     access_token_ = user.value().access_token;
   } else {
-    gaia_id_ = absl::nullopt;
-    access_token_ = absl::nullopt;
+    gaia_id_ = std::nullopt;
+    access_token_ = std::nullopt;
   }
 }
 
@@ -72,9 +78,6 @@ void FakeAssistantManagerServiceImpl::UpdateInternalMediaPlayerStatus(
 
 void FakeAssistantManagerServiceImpl::StartEditReminderInteraction(
     const std::string& client_id) {}
-
-void FakeAssistantManagerServiceImpl::StartScreenContextInteraction(
-    const std::vector<uint8_t>& assistant_screenshot) {}
 
 void FakeAssistantManagerServiceImpl::StartTextInteraction(
     const std::string& query,
@@ -132,10 +135,19 @@ void FakeAssistantManagerServiceImpl::SetStateAndInformObservers(
   // In reality we will not skip states, i.e. we will always get |STARTING|
   // before ever encountering |STARTED|. As such our fake implementation will
   // send out all intermediate states between |old_state| and |new_state|.
+  // |DISCONNECTED| is different, could be sent before |STARTED| and |RUNNING|.
+  if (new_state == State::DISCONNECTED) {
+    for (auto& observer : state_observers_) {
+      observer.OnStateChanged(state_);
+    }
+    return;
+  }
+
   MaybeSendStateChange(State::STOPPED, old_state, new_state);
   MaybeSendStateChange(State::STARTING, old_state, new_state);
   MaybeSendStateChange(State::STARTED, old_state, new_state);
   MaybeSendStateChange(State::RUNNING, old_state, new_state);
+  MaybeSendStateChange(State::STOPPING, old_state, new_state);
 }
 
 void FakeAssistantManagerServiceImpl::MaybeSendStateChange(State state,

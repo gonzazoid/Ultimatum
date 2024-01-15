@@ -44,11 +44,11 @@ views::View* GetActiveWindowRootView(const Browser* browser) {
 
 namespace chrome {
 
-absl::optional<int> GetKeyboardFocusedTabIndex(const Browser* browser) {
+std::optional<int> GetKeyboardFocusedTabIndex(const Browser* browser) {
   BrowserView* view = BrowserView::GetBrowserViewForBrowser(browser);
   if (view && view->tabstrip())
     return view->tabstrip()->GetFocusedTabIndex();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void ExecuteUIDebugCommand(int id, const Browser* browser) {
@@ -72,8 +72,7 @@ void ExecuteUIDebugCommand(int id, const Browser* browser) {
         PrintViewHierarchy(view, /* verbose= */ true);
       break;
     default:
-      NOTREACHED() << "Unimplemented UI Debug command: " << id;
-      break;
+      NOTREACHED_NORETURN() << "Unimplemented UI Debug command: " << id;
   }
 }
 

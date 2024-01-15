@@ -15,22 +15,23 @@ PlatformKeyboardLayout GetPlatformKeyboardLayout(KeyboardLayout layout) {
 
   const char kUsInputSourceId[] = "com.apple.keylayout.US";
 
-  base::ScopedCFTypeRef<CFMutableDictionaryRef> input_source_list_filter(
+  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> input_source_list_filter(
       CFDictionaryCreateMutable(kCFAllocatorDefault, 1,
                                 &kCFTypeDictionaryKeyCallBacks,
                                 &kCFTypeDictionaryValueCallBacks));
-  base::ScopedCFTypeRef<CFStringRef> input_source_id_ref(
+  base::apple::ScopedCFTypeRef<CFStringRef> input_source_id_ref(
       CFStringCreateWithCString(kCFAllocatorDefault, kUsInputSourceId,
                                 kCFStringEncodingUTF8));
-  CFDictionaryAddValue(input_source_list_filter, kTISPropertyInputSourceID,
-                       input_source_id_ref);
-  base::ScopedCFTypeRef<CFArrayRef> input_source_list(
-      TISCreateInputSourceList(input_source_list_filter, true));
-  if (CFArrayGetCount(input_source_list) != 1)
+  CFDictionaryAddValue(input_source_list_filter.get(),
+                       kTISPropertyInputSourceID, input_source_id_ref.get());
+  base::apple::ScopedCFTypeRef<CFArrayRef> input_source_list(
+      TISCreateInputSourceList(input_source_list_filter.get(), true));
+  if (CFArrayGetCount(input_source_list.get()) != 1) {
     return PlatformKeyboardLayout();
+  }
 
-  return base::ScopedCFTypeRef<TISInputSourceRef>(
-      (TISInputSourceRef)CFArrayGetValueAtIndex(input_source_list, 0),
+  return base::apple::ScopedCFTypeRef<TISInputSourceRef>(
+      (TISInputSourceRef)CFArrayGetValueAtIndex(input_source_list.get(), 0),
       base::scoped_policy::RETAIN);
 }
 
@@ -48,9 +49,9 @@ void ScopedKeyboardLayout::ActivateLayout(PlatformKeyboardLayout layout) {
   // "enabled" even though it is present - we aren't sure why this happens,
   // perhaps if input sources have never been switched on this bot before? In
   // any case, it's harmless to re-enable it here if it's already enabled.
-  OSStatus result = TISEnableInputSource(layout);
+  OSStatus result = TISEnableInputSource(layout.get());
   DCHECK_EQ(noErr, result);
-  result = TISSelectInputSource(layout);
+  result = TISSelectInputSource(layout.get());
   DCHECK_EQ(noErr, result);
 }
 

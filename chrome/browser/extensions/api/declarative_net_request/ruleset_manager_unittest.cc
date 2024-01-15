@@ -76,7 +76,7 @@ class RulesetManagerTest : public DNRTestBase {
 
     constexpr char kRulesetID[] = "id";
     constexpr char kJSONRulesFilename[] = "rules_file.json";
-    TestRulesetInfo info(kRulesetID, kJSONRulesFilename, *ToListValue(rules));
+    TestRulesetInfo info(kRulesetID, kJSONRulesFilename, ToListValue(rules));
     WriteManifestAndRuleset(extension_dir, info, host_permissions, flags);
 
     last_loaded_extension_ =
@@ -184,7 +184,8 @@ TEST_P(RulesetManagerTest, MultipleRulesets) {
 
     ASSERT_EQ(0u, manager()->GetMatcherCountForTest());
 
-    std::string extension_id_one, extension_id_two;
+    ExtensionId extension_id_one;
+    ExtensionId extension_id_two;
     size_t expected_matcher_count = 0;
 
     // Add the required rulesets.
@@ -285,14 +286,21 @@ TEST_P(RulesetManagerTest, IncognitoRequests) {
 // Tests that
 // Extensions.DeclarativeNetRequest.EvaluateRequestTime.AllExtensions3
 // is only emitted when there are active rulesets.
-TEST_P(RulesetManagerTest, TotalEvaluationTimeHistogram) {
+TEST_P(RulesetManagerTest, EvaluationHistograms) {
   WebRequestInfo example_com_request(
       GetRequestParamsForURL("http://example.com"));
   WebRequestInfo google_com_request(
       GetRequestParamsForURL("http://google.com"));
   bool is_incognito_context = false;
-  const char* kHistogramName =
+  static constexpr char kEvaluationTimeHistogramName[] =
       "Extensions.DeclarativeNetRequest.EvaluateRequestTime.AllExtensions3";
+  static constexpr char kBeforeRequestRegexTimeHistogramName[] =
+      "Extensions.DeclarativeNetRequest.RegexRulesBeforeRequestActionTime."
+      "LessThan15Rules";
+  static constexpr char kBeforeRequestRulesetTimeHistogramName[] =
+      "Extensions.DeclarativeNetRequest."
+      "RulesetMatchingBeforeRequestActionTime."
+      "LessThan1000Rules";
   {
     base::HistogramTester tester;
 
@@ -302,17 +310,20 @@ TEST_P(RulesetManagerTest, TotalEvaluationTimeHistogram) {
     manager()->EvaluateRequest(google_com_request, is_incognito_context);
     EXPECT_TRUE(google_com_request.dnr_actions->empty());
 
-    tester.ExpectTotalCount(kHistogramName, 0);
+    tester.ExpectTotalCount(kEvaluationTimeHistogramName, 0);
+    tester.ExpectTotalCount(kBeforeRequestRegexTimeHistogramName, 0);
+    tester.ExpectTotalCount(kBeforeRequestRulesetTimeHistogramName, 0);
     example_com_request.dnr_actions.reset();
     google_com_request.dnr_actions.reset();
   }
 
   // Add an extension ruleset which blocks requests to "example.com".
   TestRule rule = CreateGenericRule();
+  TestRule regex_rule = CreateRegexRule(2);
   rule.condition->url_filter = std::string("example.com");
   std::unique_ptr<CompositeMatcher> matcher;
   ASSERT_NO_FATAL_FAILURE(
-      CreateMatcherForRules({rule}, "test_extension", &matcher));
+      CreateMatcherForRules({rule, regex_rule}, "test_extension", &matcher));
   manager()->AddRuleset(last_loaded_extension()->id(), std::move(matcher));
 
   {
@@ -325,12 +336,17 @@ TEST_P(RulesetManagerTest, TotalEvaluationTimeHistogram) {
                   kMinValidStaticRulesetID, last_loaded_extension()->id()),
               (*example_com_request.dnr_actions)[0]);
 
-    tester.ExpectTotalCount(kHistogramName, 1);
+    tester.ExpectTotalCount(kEvaluationTimeHistogramName, 1);
+    tester.ExpectTotalCount(kBeforeRequestRegexTimeHistogramName, 1);
+    tester.ExpectTotalCount(kBeforeRequestRulesetTimeHistogramName, 1);
 
     manager()->EvaluateRequest(google_com_request, is_incognito_context);
     EXPECT_TRUE(google_com_request.dnr_actions->empty());
 
-    tester.ExpectTotalCount(kHistogramName, 2);
+    tester.ExpectTotalCount(kEvaluationTimeHistogramName, 2);
+    tester.ExpectTotalCount(kBeforeRequestRegexTimeHistogramName, 2);
+    tester.ExpectTotalCount(kBeforeRequestRulesetTimeHistogramName, 2);
+
     example_com_request.dnr_actions.reset();
     google_com_request.dnr_actions.reset();
   }
@@ -510,18 +526,18 @@ TEST_P(RulesetManagerTest, ModifyHeaders) {
       RequestActionType::MODIFY_HEADERS, kMinValidID, kDefaultPriority,
       kMinValidStaticRulesetID, extension_2->id());
   expected_action_1.request_headers_to_modify = {RequestAction::HeaderInfo(
-      "header1", dnr_api::HEADER_OPERATION_REMOVE, absl::nullopt)};
+      "header1", dnr_api::HeaderOperation::kRemove, absl::nullopt)};
   expected_action_1.response_headers_to_modify = {RequestAction::HeaderInfo(
-      "header3", dnr_api::HEADER_OPERATION_APPEND, "value3")};
+      "header3", dnr_api::HeaderOperation::kAppend, "value3")};
 
   // Create the expected RequestAction for |extension_1|.
   RequestAction expected_action_2 = CreateRequestActionForTesting(
       RequestActionType::MODIFY_HEADERS, kMinValidID, kDefaultPriority,
       kMinValidStaticRulesetID, extension_1->id());
   expected_action_2.request_headers_to_modify = {
-      RequestAction::HeaderInfo("header1", dnr_api::HEADER_OPERATION_REMOVE,
+      RequestAction::HeaderInfo("header1", dnr_api::HeaderOperation::kRemove,
                                 absl::nullopt),
-      RequestAction::HeaderInfo("header2", dnr_api::HEADER_OPERATION_SET,
+      RequestAction::HeaderInfo("header2", dnr_api::HeaderOperation::kSet,
                                 "value2")};
 
   // Verify that the list of actions is sorted in descending order of extension
@@ -574,7 +590,7 @@ TEST_P(RulesetManagerTest, ModifyHeadersWithAllowRules) {
         RequestActionType::MODIFY_HEADERS, *rule1.id, *rule1.priority,
         kMinValidStaticRulesetID, extension->id());
     expected_action.request_headers_to_modify = {RequestAction::HeaderInfo(
-        "header", dnr_api::HEADER_OPERATION_SET, "value")};
+        "header", dnr_api::HeaderOperation::kSet, "value")};
     EXPECT_THAT(actions, ::testing::ElementsAre(
                              ::testing::Eq(::testing::ByRef(expected_action))));
   }
@@ -622,7 +638,7 @@ TEST_P(RulesetManagerTest, ModifyHeaders_HostPermissions) {
         RequestActionType::MODIFY_HEADERS, kMinValidID, kDefaultPriority,
         kMinValidStaticRulesetID, extension->id());
     expected_action.request_headers_to_modify = {RequestAction::HeaderInfo(
-        "header1", dnr_api::HEADER_OPERATION_REMOVE, absl::nullopt)};
+        "header1", dnr_api::HeaderOperation::kRemove, absl::nullopt)};
 
     EXPECT_THAT(actual_actions, ::testing::ElementsAre(::testing::Eq(
                                     ::testing::ByRef(expected_action))));

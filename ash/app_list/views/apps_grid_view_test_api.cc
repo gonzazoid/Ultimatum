@@ -7,7 +7,6 @@
 #include <memory>
 #include <vector>
 
-#include "ash/app_list/paged_view_structure.h"
 #include "ash/app_list/views/app_drag_icon_proxy.h"
 #include "ash/app_list/views/app_list_item_view.h"
 #include "ash/app_list/views/apps_grid_view.h"
@@ -54,8 +53,13 @@ void AppsGridViewTestApi::PressItemAt(int index) {
       ui::KeyEvent(ui::ET_KEY_PRESSED, ui::VKEY_RETURN, ui::EF_NONE));
 }
 
-size_t AppsGridViewTestApi::TilesPerPage(int page) const {
-  return view_->TilesPerPage(page);
+size_t AppsGridViewTestApi::TilesPerPageInPagedGrid(int page) const {
+  return *view_->TilesPerPage(page);
+}
+
+size_t AppsGridViewTestApi::TilesPerPageOr(int page,
+                                           size_t default_value) const {
+  return view_->TilesPerPage(page).value_or(default_value);
 }
 
 int AppsGridViewTestApi::AppsOnPage(int page) const {
@@ -68,13 +72,7 @@ AppListItemView* AppsGridViewTestApi::GetViewAtIndex(GridIndex index) const {
 
 AppListItemView* AppsGridViewTestApi::GetViewAtVisualIndex(int page,
                                                            int slot) const {
-  const std::vector<std::vector<AppListItemView*>>& view_structure =
-      view_->view_structure_.pages();
-  if (page >= static_cast<int>(view_structure.size()) ||
-      slot >= static_cast<int>(view_structure[page].size())) {
-    return nullptr;
-  }
-  return view_structure[page][slot];
+  return GetViewAtIndex(GridIndex(page, slot));
 }
 
 const std::string& AppsGridViewTestApi::GetNameAtVisualIndex(int page,

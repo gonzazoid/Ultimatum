@@ -4,13 +4,14 @@
 
 #include "ash/components/arc/ime/key_event_result_receiver.h"
 
+#include <optional>
+
 #include "ash/components/arc/ime/arc_ime_util.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
 #include "ui/events/event_dispatcher.h"
@@ -31,7 +32,7 @@ KeyEventResultReceiver::KeyEventResultReceiver() = default;
 KeyEventResultReceiver::~KeyEventResultReceiver() = default;
 
 bool KeyEventResultReceiver::DispatchKeyEventPostIME(ui::KeyEvent* event) {
-  // This method is called by `ui::InputMethodAsh` when IME finishes
+  // This method is called by `ash::InputMethodAsh` when IME finishes
   // handling a key event coming from |ArcImeService::SendKeyEvent()|. If the
   // key event seems not to be consumed by IME, it's sent back to ARC to give it
   // to the focused View in ARC side.
@@ -80,7 +81,7 @@ void KeyEventResultReceiver::SetCallback(KeyEventDoneCallback callback,
   callback_ = std::move(callback);
   expected_key_event_ = *event;
   // Start expiring timer for the callback.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&KeyEventResultReceiver::ExpireCallback,
                      weak_ptr_factory_.GetWeakPtr()),

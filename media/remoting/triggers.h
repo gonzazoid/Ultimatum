@@ -23,17 +23,20 @@ enum StartTrigger {
   ENABLED_BY_PAGE = 3,          // The page re-allowed remote playback.
 
   // User actions, such as connecting to a receiver or pressing play.
-  SINK_AVAILABLE = 4,  // A receiver (sink) became available.
-  PLAY_COMMAND = 5,    // The media element was issued a play command.
+  SINK_AVAILABLE = 4,         // A receiver (sink) became available.
+  PLAY_COMMAND = 5,           // The media element was issued a play command.
+  REQUESTED_BY_BROWSER = 10,  // The browser requested to start Media Remoting
+                              // without fullscreen-in-tab.
 
   // Met requirements for playback of the media.
   SUPPORTED_AUDIO_CODEC = 6,  // Stream began using a supported audio codec.
   SUPPORTED_VIDEO_CODEC = 7,  // Stream began using a supported video codec.
   SUPPORTED_AUDIO_AND_VIDEO_CODECS = 8,  // Both now using a supported codec.
   CDM_READY = 9,  // The CDM required for decrypting the content became ready.
+  PIXEL_RATE_READY = 11,  // The pixel rate was calculated.
 
   // Change this to the highest value.
-  START_TRIGGER_MAX = 9,
+  START_TRIGGER_MAX = 11,
 };
 
 // Events and conditions that can result in a start failure, or trigger remoting

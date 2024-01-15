@@ -7,12 +7,12 @@
 #include <inttypes.h>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/cronet/cronet_upload_data_stream.h"
 #include "components/cronet/native/engine.h"
 #include "components/cronet/native/generated/cronet.idl_impl_struct.h"
@@ -53,7 +53,8 @@ class Cronet_UploadDataSinkImpl::NetworkTasks
 
   // The upload data sink that is owned by url request and always accessed on
   // the client thread. It always outlives |this| callback.
-  const raw_ptr<Cronet_UploadDataSinkImpl> upload_data_sink_ = nullptr;
+  const raw_ptr<Cronet_UploadDataSinkImpl, AcrossTasksDanglingUntriaged>
+      upload_data_sink_ = nullptr;
 
   // Executor for provider callback, used, but not owned, by |this|. Always
   // outlives |this| callback.
@@ -263,7 +264,7 @@ void Cronet_UploadDataSinkImpl::NetworkTasks::InitializeOnNetworkThread(
   PostTaskToExecutor(
       base::BindOnce(&Cronet_UploadDataSinkImpl::InitializeUploadDataStream,
                      base::Unretained(upload_data_sink_), upload_data_stream,
-                     base::ThreadTaskRunnerHandle::Get()));
+                     base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 void Cronet_UploadDataSinkImpl::NetworkTasks::Read(

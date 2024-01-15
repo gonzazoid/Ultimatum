@@ -10,9 +10,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/task_runner.h"
 #include "base/types/pass_key.h"
@@ -43,7 +43,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) LocalFileStreamWriter
             int buf_len,
             net::CompletionOnceCallback callback) override;
   int Cancel(net::CompletionOnceCallback callback) override;
-  int Flush(net::CompletionOnceCallback callback) override;
+  int Flush(FlushMode flush_mode,
+            net::CompletionOnceCallback callback) override;
 
  private:
   // Opens |file_path_| and if it succeeds, proceeds to InitiateSeek().

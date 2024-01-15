@@ -15,7 +15,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_websocket_close_info.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_websocket_connection.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_websocket_open_info.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_websocket_stream_options.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -42,8 +42,10 @@ class WebSocketStream::UnderlyingSource final : public UnderlyingSourceBase {
       : UnderlyingSourceBase(script_state), creator_(creator) {}
 
   // UnderlyingSourceBase implementation.
-  ScriptPromise pull(ScriptState*) override;
-  ScriptPromise Cancel(ScriptState*, ScriptValue reason) override;
+  ScriptPromise Pull(ScriptState*, ExceptionState&) override;
+  ScriptPromise Cancel(ScriptState*,
+                       ScriptValue reason,
+                       ExceptionState&) override;
 
   // API for WebSocketStream.
   void DidReceiveTextMessage(const String&);
@@ -115,19 +117,20 @@ class WebSocketStream::UnderlyingSink final : public UnderlyingSinkBase {
   bool is_writing_ = false;
 };
 
-ScriptPromise WebSocketStream::UnderlyingSource::pull(
-    ScriptState* script_state) {
-  DVLOG(1) << "WebSocketStream::UnderlyingSource " << this << " pull()";
+ScriptPromise WebSocketStream::UnderlyingSource::Pull(ScriptState* script_state,
+                                                      ExceptionState&) {
+  DVLOG(1) << "WebSocketStream::UnderlyingSource " << this << " Pull()";
   creator_->channel_->RemoveBackpressure();
   return ScriptPromise::CastUndefined(script_state);
 }
 
 ScriptPromise WebSocketStream::UnderlyingSource::Cancel(
     ScriptState* script_state,
-    ScriptValue reason) {
+    ScriptValue reason,
+    ExceptionState& exception_state) {
   DVLOG(1) << "WebSocketStream::UnderlyingSource " << this << " Cancel()";
   closed_ = true;
-  creator_->CloseMaybeWithReason(reason);
+  creator_->CloseMaybeWithReason(reason, exception_state);
   return ScriptPromise::CastUndefined(script_state);
 }
 
@@ -195,7 +198,8 @@ ScriptPromise WebSocketStream::UnderlyingSink::write(
     ExceptionState& exception_state) {
   DVLOG(1) << "WebSocketStream::UnderlyingSink " << this << " write()";
   is_writing_ = true;
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
   base::OnceClosure callback =
       WTF::BindOnce(&UnderlyingSink::FinishWriteCallback,
@@ -213,9 +217,10 @@ ScriptPromise WebSocketStream::UnderlyingSink::close(
     ExceptionState& exception_state) {
   DVLOG(1) << "WebSocketStream::UnderlyingSink " << this << " close()";
   closed_ = true;
-  creator_->CloseWithUnspecifiedCode();
+  creator_->CloseWithUnspecifiedCode(exception_state);
   DCHECK(!close_resolver_);
-  close_resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  close_resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   return close_resolver_->Promise();
 }
 
@@ -226,7 +231,7 @@ ScriptPromise WebSocketStream::UnderlyingSink::abort(
   DVLOG(1) << "WebSocketStream::UnderlyingSink " << this << " abort()";
 
   closed_ = true;
-  creator_->CloseMaybeWithReason(reason);
+  creator_->CloseMaybeWithReason(reason, exception_state);
   return ScriptPromise::CastUndefined(script_state);
 }
 
@@ -434,22 +439,22 @@ WebSocketStream* WebSocketStream::CreateInternal(
 
 WebSocketStream::WebSocketStream(ExecutionContext* execution_context,
                                  ScriptState* script_state)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : ActiveScriptWrappable<WebSocketStream>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       script_state_(script_state),
-      connection_resolver_(
+      opened_resolver_(
           MakeGarbageCollected<ScriptPromiseResolver>(script_state)),
       closed_resolver_(
           MakeGarbageCollected<ScriptPromiseResolver>(script_state)),
-      connection_(script_state->GetIsolate(),
-                  connection_resolver_->Promise().V8Promise()),
+      opened_(script_state->GetIsolate(),
+              opened_resolver_->Promise().V8Promise()),
       closed_(script_state->GetIsolate(),
               closed_resolver_->Promise().V8Promise()) {}
 
 WebSocketStream::~WebSocketStream() = default;
 
-ScriptPromise WebSocketStream::connection(ScriptState* script_state) const {
-  return ScriptPromise(script_state,
-                       connection_.Get(script_state->GetIsolate()));
+ScriptPromise WebSocketStream::opened(ScriptState* script_state) const {
+  return ScriptPromise(script_state, opened_.Get(script_state->GetIsolate()));
 }
 
 ScriptPromise WebSocketStream::closed(ScriptState* script_state) const {
@@ -483,18 +488,18 @@ void WebSocketStream::DidConnect(const String& subprotocol,
     return;
   common_.SetState(WebSocketCommon::kOpen);
   was_ever_connected_ = true;
-  auto* connection = MakeGarbageCollected<WebSocketConnection>();
-  connection->setProtocol(subprotocol);
-  connection->setExtensions(extensions);
+  auto* open_info = MakeGarbageCollected<WebSocketOpenInfo>();
+  open_info->setProtocol(subprotocol);
+  open_info->setExtensions(extensions);
   source_ = MakeGarbageCollected<UnderlyingSource>(script_state_, this);
   auto* readable = ReadableStream::CreateWithCountQueueingStrategy(
       script_state_, source_, 1);
   sink_ = MakeGarbageCollected<UnderlyingSink>(this);
   auto* writable =
       WritableStream::CreateWithCountQueueingStrategy(script_state_, sink_, 1);
-  connection->setReadable(readable);
-  connection->setWritable(writable);
-  connection_resolver_->Resolve(connection);
+  open_info->setReadable(readable);
+  open_info->setWritable(writable);
+  opened_resolver_->Resolve(open_info);
   abort_handle_.Clear();
 }
 
@@ -552,7 +557,7 @@ void WebSocketStream::DidClose(
 
   ScriptState::Scope scope(script_state_);
   if (!was_ever_connected_) {
-    connection_resolver_->Reject(CreateNetworkErrorDOMException());
+    opened_resolver_->Reject(CreateNetworkErrorDOMException());
   }
   bool all_data_was_consumed = sink_ ? sink_->AllDataHasBeenConsumed() : true;
   bool was_clean = common_.GetState() == WebSocketCommon::kClosing &&
@@ -587,14 +592,14 @@ void WebSocketStream::ContextDestroyed() {
 }
 
 bool WebSocketStream::HasPendingActivity() const {
-  return channel_;
+  return channel_ != nullptr;
 }
 
 void WebSocketStream::Trace(Visitor* visitor) const {
   visitor->Trace(script_state_);
-  visitor->Trace(connection_resolver_);
+  visitor->Trace(opened_resolver_);
   visitor->Trace(closed_resolver_);
-  visitor->Trace(connection_);
+  visitor->Trace(opened_);
   visitor->Trace(closed_);
   visitor->Trace(channel_);
   visitor->Trace(source_);
@@ -621,7 +626,7 @@ void WebSocketStream::Connect(ScriptState* script_state,
       auto exception = V8ThrowDOMException::CreateOrEmpty(
           script_state->GetIsolate(), DOMExceptionCode::kAbortError,
           "WebSocket handshake was aborted");
-      connection_resolver_->Reject(exception);
+      opened_resolver_->Reject(exception);
       closed_resolver_->Reject(exception);
       return;
     }
@@ -645,7 +650,7 @@ void WebSocketStream::Connect(ScriptState* script_state,
       channel_ = nullptr;
       // These need to be resolved to stop ScriptPromiseResolver::Dispose() from
       // DCHECKing. It's not actually visible to JavaScript.
-      connection_resolver_->Resolve();
+      opened_resolver_->Resolve();
       closed_resolver_->Resolve();
       return;
 
@@ -656,7 +661,7 @@ void WebSocketStream::Connect(ScriptState* script_state,
           "An attempt was made to break through the security policy of the "
           "user agent.",
           "WebSocket mixed content check failed.");
-      connection_resolver_->Reject(exception);
+      opened_resolver_->Reject(exception);
       closed_resolver_->Reject(exception);
       return;
   }
@@ -664,12 +669,9 @@ void WebSocketStream::Connect(ScriptState* script_state,
 
 // If |maybe_reason| contains a valid code and reason, then closes with it,
 // otherwise closes with unspecified code and reason.
-void WebSocketStream::CloseMaybeWithReason(ScriptValue maybe_reason) {
+void WebSocketStream::CloseMaybeWithReason(ScriptValue maybe_reason,
+                                           ExceptionState& exception_state) {
   DVLOG(1) << "WebSocketStream " << this << " CloseMaybeWithReason()";
-
-  // Exceptions thrown here are ignored.
-  ExceptionState exception_state(script_state_->GetIsolate(),
-                                 ExceptionState::kUnknownContext, "", "");
   WebSocketCloseInfo* info = NativeValueTraits<WebSocketCloseInfo>::NativeValue(
       script_state_->GetIsolate(), maybe_reason.V8Value(), exception_state);
   if (!exception_state.HadException() && info->hasCode()) {
@@ -682,14 +684,12 @@ void WebSocketStream::CloseMaybeWithReason(ScriptValue maybe_reason) {
   if (exception_state.HadException()) {
     exception_state.ClearException();
   }
-  CloseWithUnspecifiedCode();
+  CloseWithUnspecifiedCode(exception_state);
 }
 
-void WebSocketStream::CloseWithUnspecifiedCode() {
+void WebSocketStream::CloseWithUnspecifiedCode(
+    ExceptionState& exception_state) {
   DVLOG(1) << "WebSocketStream " << this << " CloseWithUnspecifiedCode()";
-
-  ExceptionState exception_state(script_state_->GetIsolate(),
-                                 ExceptionState::kUnknownContext, "", "");
   CloseInternal(WebSocketChannel::kCloseEventCodeNotSpecified, String(),
                 exception_state);
   DCHECK(!exception_state.HadException());
@@ -722,7 +722,7 @@ void WebSocketStream::OnAbort() {
   auto exception = V8ThrowDOMException::CreateOrEmpty(
       script_state_->GetIsolate(), DOMExceptionCode::kAbortError,
       "WebSocket handshake was aborted");
-  connection_resolver_->Reject(exception);
+  opened_resolver_->Reject(exception);
   closed_resolver_->Reject(exception);
   abort_handle_.Clear();
 }

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "sql/database.h"
 
@@ -24,6 +24,16 @@ void TableManager::ScheduleDBTask(const base::Location& from_here,
   GetTaskRunner()->PostTask(
       from_here, base::BindOnce(&TableManager::ExecuteDBTaskOnDBSequence, this,
                                 std::move(task)));
+}
+
+void TableManager::ScheduleDBTaskWithReply(const base::Location& from_here,
+                                           DBTask task,
+                                           base::OnceClosure reply) {
+  GetTaskRunner()->PostTaskAndReply(
+      from_here,
+      base::BindOnce(&TableManager::ExecuteDBTaskOnDBSequence, this,
+                     std::move(task)),
+      std::move(reply));
 }
 
 void TableManager::ExecuteDBTaskOnDBSequence(DBTask task) {

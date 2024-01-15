@@ -22,6 +22,7 @@ class RunLoop;
 
 namespace content {
 
+class BrowserAccessibilityManager;
 class RenderFrameHost;
 class RenderFrameHostImpl;
 class WebContents;
@@ -52,7 +53,10 @@ class AccessibilityNotificationWaiter : public WebContentsObserver {
   // AccessibilityNotificationWaiter is received. Ignores notifications for
   // "about:blank". Returns true if an event was received, false if waiting
   // ended for some other reason.
-  [[nodiscard]] bool WaitForNotification();
+  // Pass true for |all_frames| to wait for a notification on all frames
+  // before returning, rather than waiting for only a single notification
+  // from any frame.
+  [[nodiscard]] bool WaitForNotification(bool all_frames = false);
 
   // Blocks until the notification is received, or the given timeout passes.
   // Returns true if an event was received, false if waiting ended for some
@@ -67,10 +71,12 @@ class AccessibilityNotificationWaiter : public WebContentsObserver {
   // node that was the target of the event.
   int event_target_id() const { return event_target_id_; }
 
+  bool notification_received() const { return notification_received_; }
+
   // After WaitForNotification returns, use this to retrieve the
-  // RenderFrameHostImpl that was the target of the event.
-  RenderFrameHostImpl* event_render_frame_host() const {
-    return event_render_frame_host_;
+  // `BrowserAccessibilityManager` that was the target of the event.
+  BrowserAccessibilityManager* event_browser_accessibility_manager() const {
+    return event_browser_accessibility_manager_;
   }
 
   // WebContentsObserver override:
@@ -83,10 +89,6 @@ class AccessibilityNotificationWaiter : public WebContentsObserver {
  private:
   // Listen to all frames within the frame tree of this WebContents.
   void ListenToAllFrames(WebContents* web_contents);
-
-  // Called when iterating over guest web contents so we can listen to
-  // all frames within guests.
-  bool ListenToGuestWebContents(WebContents* web_contents);
 
   // Bind either the OnAccessibilityEvent or OnGeneratedEvent callback
   // for a given frame within the WebContent's frame tree.
@@ -125,14 +127,16 @@ class AccessibilityNotificationWaiter : public WebContentsObserver {
   // GetAXTree() is about the page with the url "about:blank".
   bool IsAboutBlank();
 
-  absl::optional<ax::mojom::Event> event_to_wait_for_;
-  absl::optional<ui::AXEventGenerator::Event> generated_event_to_wait_for_;
+  std::optional<ax::mojom::Event> event_to_wait_for_;
+  std::optional<ui::AXEventGenerator::Event> generated_event_to_wait_for_;
   std::unique_ptr<base::RunLoop> loop_runner_;
   base::RepeatingClosure loop_runner_quit_closure_;
   int event_target_id_ = 0;
-  raw_ptr<RenderFrameHostImpl, DanglingUntriaged> event_render_frame_host_ =
-      nullptr;
+  raw_ptr<BrowserAccessibilityManager, AcrossTasksDanglingUntriaged>
+      event_browser_accessibility_manager_ = nullptr;
   bool notification_received_ = false;
+  int frame_count_ = 0;
+  int notification_count_ = 0;
 
   base::WeakPtrFactory<AccessibilityNotificationWaiter> weak_factory_{this};
 };

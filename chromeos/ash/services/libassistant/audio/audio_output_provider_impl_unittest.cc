@@ -8,9 +8,10 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
+#include "base/task/bind_post_task.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -19,16 +20,16 @@
 #include "chromeos/ash/services/libassistant/test_support/fake_platform_delegate.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "media/base/audio_bus.h"
-#include "media/base/bind_to_current_loop.h"
+#include "media/base/audio_glitch_info.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash::libassistant {
 namespace {
+using assistant::FakePlatformDelegate;
 using assistant::mojom::AssistantAudioDecoderFactory;
 using ::assistant_client::OutputStreamMetadata;
 using ::base::test::ScopedFeatureList;
 using ::base::test::SingleThreadTaskEnvironment;
-using ::chromeos::assistant::FakePlatformDelegate;
 
 constexpr char kFakeDeviceId[] = "device_id";
 }  // namespace
@@ -75,8 +76,9 @@ class FakeAudioOutputDelegate : public assistant_client::AudioOutput::Delegate {
     // Otherwise, the |run_loop_| may not block because the QuitClosure() is
     // called before Run(), right after it is created in Reset(), which will
     // cause timing issue in the test.
-    if (num_bytes == 0)
+    if (num_bytes == 0) {
       quit_closure_.Run();
+    }
   }
 
   bool end_of_stream() { return end_of_stream_; }
@@ -85,7 +87,8 @@ class FakeAudioOutputDelegate : public assistant_client::AudioOutput::Delegate {
 
   void Reset() {
     run_loop_ = std::make_unique<base::RunLoop>();
-    quit_closure_ = media::BindToCurrentLoop(run_loop_->QuitClosure());
+    quit_closure_ =
+        base::BindPostTaskToCurrentDefault(run_loop_->QuitClosure());
   }
 
   void Wait() { run_loop_->Run(); }
@@ -145,7 +148,10 @@ class AssistantAudioDeviceOwnerTest : public testing::Test {
 };
 
 TEST(AudioOutputProviderImplTest, StartDecoderServiceWithBindCall) {
-  ASSERT_FALSE(features::IsStartAssistantAudioDecoderOnDemandEnabled());
+  ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(
+      features::kStartAssistantAudioDecoderOnDemand);
+
   SingleThreadTaskEnvironment task_environment;
 
   auto provider = std::make_unique<AudioOutputProviderImpl>(kFakeDeviceId);
@@ -181,8 +187,7 @@ TEST(AudioOutputProviderImplTest, StartDecoderServiceWithBindCall) {
 }
 
 TEST(AudioOutputProviderImplTest, StartDecoderServiceOnDemand) {
-  ScopedFeatureList scoped_feature_list(
-      features::kStartAssistantAudioDecoderOnDemand);
+  ASSERT_TRUE(features::IsStartAssistantAudioDecoderOnDemandEnabled());
   SingleThreadTaskEnvironment task_environment;
 
   auto provider = std::make_unique<AudioOutputProviderImpl>(kFakeDeviceId);
@@ -333,7 +338,7 @@ TEST_F(AssistantAudioDeviceOwnerTest, BufferFilling) {
   audio_output_delegate.Reset();
   audio_bus->Zero();
   // On first render, it will push the data to |audio_bus|.
-  owner->Render(base::Microseconds(0), base::TimeTicks::Now(), 0,
+  owner->Render(base::Microseconds(0), base::TimeTicks::Now(), {},
                 audio_bus.get());
   audio_output_delegate.Wait();
   EXPECT_FALSE(audio_bus->AreFramesZero());
@@ -341,7 +346,7 @@ TEST_F(AssistantAudioDeviceOwnerTest, BufferFilling) {
 
   // The subsequent Render call will detect no data available and notify
   // delegate for OnEndOfStream().
-  owner->Render(base::Microseconds(0), base::TimeTicks::Now(), 0,
+  owner->Render(base::Microseconds(0), base::TimeTicks::Now(), {},
                 audio_bus.get());
   EXPECT_TRUE(audio_output_delegate.end_of_stream());
 }

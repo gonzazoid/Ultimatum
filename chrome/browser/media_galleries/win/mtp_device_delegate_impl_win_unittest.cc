@@ -7,10 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/browser_process.h"
@@ -74,7 +74,7 @@ class MTPDeviceDelegateImplWinTest : public ChromeRenderViewHostTestHarness {
                         bool media_device);
 
   // Pointer to the storage monitor. Owned by TestingBrowserProcess.
-  raw_ptr<TestStorageMonitorWin> monitor_;
+  raw_ptr<TestStorageMonitorWin, DanglingUntriaged> monitor_;
   scoped_refptr<extensions::Extension> extension_;
 
   EnsureMediaDirectoriesExists media_directories_;
@@ -160,8 +160,7 @@ void MTPDeviceDelegateImplWinTest::CheckGalleryInfo(
     EXPECT_EQ(0UL, info.transient_device_id.size());
 }
 
-// TODO(https://crbug.com/868254): Failing on Win7 Tests (1). Fix and enable.
-TEST_F(MTPDeviceDelegateImplWinTest, DISABLED_GalleryNameMTP) {
+TEST_F(MTPDeviceDelegateImplWinTest, GalleryNameMTP) {
   base::FilePath location(
       PortableDeviceWatcherWin::GetStoragePathFromStorageId(
           TestPortableDeviceWatcherWin::kStorageUniqueIdA));

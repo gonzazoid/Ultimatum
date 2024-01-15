@@ -84,8 +84,6 @@ void BackgroundThumbnailVideoCapturer::Stop() {
 
   TRACE_EVENT_NESTABLE_ASYNC_END0("ui", "Tab.Preview.VideoCapture",
                                   TRACE_ID_LOCAL(cur_capture_num_));
-  UMA_HISTOGRAM_MEDIUM_TIMES("Tab.Preview.VideoCaptureDuration",
-                             base::TimeTicks::Now() - start_time_);
   start_time_ = base::TimeTicks();
   cur_capture_num_ = 0;
 }
@@ -99,7 +97,6 @@ void BackgroundThumbnailVideoCapturer::OnFrameCaptured(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   CHECK(video_capturer_);
-  const base::TimeTicks time_of_call = base::TimeTicks::Now();
 
   mojo::Remote<::viz::mojom::FrameSinkVideoConsumerFrameCallbacks>
       callbacks_remote(std::move(callbacks));
@@ -126,14 +123,7 @@ void BackgroundThumbnailVideoCapturer::OnFrameCaptured(
     DLOG(ERROR) << "Shared memory size was less than expected.";
     return;
   }
-  if (!info->color_space) {
-    DLOG(ERROR) << "Missing mandatory color space info.";
-    return;
-  }
 
-  if (num_received_frames_ == 0)
-    UMA_HISTOGRAM_TIMES("Tab.Preview.TimeToFirstUsableFrameAfterStartCapture",
-                        time_of_call - start_time_);
   TRACE_EVENT_INSTANT1("ui", "Tab.Preview.VideoCaptureFrameReceived",
                        TRACE_EVENT_SCOPE_THREAD, "frame_number",
                        num_received_frames_);
@@ -176,7 +166,7 @@ void BackgroundThumbnailVideoCapturer::OnFrameCaptured(
   frame.installPixels(
       SkImageInfo::MakeN32(bitmap_size.width(), bitmap_size.height(),
                            kPremul_SkAlphaType,
-                           info->color_space->ToSkColorSpace()),
+                           info->color_space.ToSkColorSpace()),
       pixels,
       media::VideoFrame::RowBytes(media::VideoFrame::kARGBPlane,
                                   info->pixel_format, info->coded_size.width()),
@@ -192,16 +182,11 @@ void BackgroundThumbnailVideoCapturer::OnFrameCaptured(
     return;
   }
 
-  UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
-      "Tab.Preview.TimeToStoreAfterFrameReceived",
-      base::TimeTicks::Now() - time_of_call, base::Microseconds(10),
-      base::Milliseconds(10), 50);
-
   got_frame_callback_.Run(cropped_frame, frame_id);
 }
 
-void BackgroundThumbnailVideoCapturer::OnNewCropVersion(uint32_t crop_version) {
-}
+void BackgroundThumbnailVideoCapturer::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {}
 
 void BackgroundThumbnailVideoCapturer::OnFrameWithEmptyRegionCapture() {}
 

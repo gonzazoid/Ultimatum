@@ -7,10 +7,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "net/base/completion_once_callback.h"
@@ -81,7 +81,8 @@ class Http1Connection : public HttpConnection, public HttpResponseDelegate {
                           int rv);
 
   std::unique_ptr<StreamSocket> socket_;
-  raw_ptr<EmbeddedTestServerConnectionListener> connection_listener_;
+  raw_ptr<EmbeddedTestServerConnectionListener, AcrossTasksDanglingUntriaged>
+      connection_listener_;
   raw_ptr<EmbeddedTestServer> server_delegate_;
   HttpRequestParser request_parser_;
   scoped_refptr<IOBufferWithSize> read_buf_;

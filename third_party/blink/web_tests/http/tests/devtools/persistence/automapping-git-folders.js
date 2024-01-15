@@ -2,12 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(
       `Verify that automapping is able to map ambiguous resources based on the selected project folder.\n`);
-  await TestRunner.loadTestModule('bindings_test_runner');
 
-  var automappingTest = new BindingsTestRunner.AutomappingTest(new Workspace.Workspace());
+  var automappingTest = new BindingsTestRunner.AutomappingTest(new Workspace.Workspace.WorkspaceImpl());
 
   var reset_css = {content: '* { margin: 0 }', time: new Date('April 29, 1959')};
   var jquery_js = {content: 'window.superb = 1;', time: new Date('August 26, 2006')};

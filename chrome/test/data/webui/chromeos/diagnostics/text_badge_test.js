@@ -3,20 +3,20 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/text_badge.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {BadgeType, TextBadgeElement} from 'chrome://diagnostics/text_badge.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function textBadgeTestSuite() {
+suite('textBadgeTestSuite', function() {
   /** @type {?TextBadgeElement} */
   let textBadgeElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -52,4 +52,4 @@ export function textBadgeTestSuite() {
       dx_utils.assertTextContains(textBadge.textContent, value);
     });
   });
-}
+});

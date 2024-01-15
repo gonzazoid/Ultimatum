@@ -31,7 +31,6 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_switches.h"
-#include "ui/gl/gl_workarounds.h"
 #include "ui/gl/init/gl_factory.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -75,12 +74,6 @@ gpu::ContextResult RasterCommandBufferStub::Initialize(
     return ContextResult::kFatalFailure;
   }
 
-  if (surface_handle_ != kNullSurfaceHandle) {
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-                  "RasterInterface clients must render offscreen.";
-    return ContextResult::kFatalFailure;
-  }
-
   if (init_params.attribs.gpu_preference != gl::GpuPreference::kLowPower ||
       init_params.attribs.context_type != CONTEXT_TYPE_OPENGLES2 ||
       init_params.attribs.bind_generates_resource) {
@@ -109,14 +102,10 @@ gpu::ContextResult RasterCommandBufferStub::Initialize(
 
   command_buffer_ =
       std::make_unique<CommandBufferService>(this, memory_tracker_.get());
-  ImageFactory* image_factory =
-      manager->gpu_memory_buffer_factory()
-          ? manager->gpu_memory_buffer_factory()->AsImageFactory()
-          : nullptr;
   std::unique_ptr<raster::RasterDecoder> decoder(raster::RasterDecoder::Create(
       this, command_buffer_.get(), manager->outputter(),
       manager->gpu_feature_info(), manager->gpu_preferences(),
-      memory_tracker_.get(), manager->shared_image_manager(), image_factory,
+      memory_tracker_.get(), manager->shared_image_manager(),
       shared_context_state, channel()->is_gpu_host()));
 
   sync_point_client_state_ =

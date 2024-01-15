@@ -5,12 +5,15 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_INTEREST_GROUP_INTEREST_GROUP_MOJOM_TRAITS_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_INTEREST_GROUP_INTEREST_GROUP_MOJOM_TRAITS_H_
 
+#include <stdint.h>
+
 #include <string>
 #include <vector>
 
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
+#include "third_party/blink/public/common/interest_group/ad_display_size.h"
 #include "third_party/blink/public/common/interest_group/interest_group.h"
 #include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom.h"
 #include "url/gurl.h"
@@ -21,8 +24,23 @@ namespace mojo {
 template <>
 struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::InterestGroupAdDataView,
                                         blink::InterestGroup::Ad> {
-  static const GURL& render_url(const blink::InterestGroup::Ad& ad) {
-    return ad.render_url;
+  static const std::string& render_url(const blink::InterestGroup::Ad& ad) {
+    return ad.render_url_;
+  }
+
+  static const absl::optional<std::string>& size_group(
+      const blink::InterestGroup::Ad& ad) {
+    return ad.size_group;
+  }
+
+  static const absl::optional<std::string>& buyer_reporting_id(
+      const blink::InterestGroup::Ad& ad) {
+    return ad.buyer_reporting_id;
+  }
+
+  static const absl::optional<std::string>& buyer_and_seller_reporting_id(
+      const blink::InterestGroup::Ad& ad) {
+    return ad.buyer_and_seller_reporting_id;
   }
 
   static const absl::optional<std::string>& metadata(
@@ -30,8 +48,54 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::InterestGroupAdDataView,
     return ad.metadata;
   }
 
+  static const absl::optional<std::string>& ad_render_id(
+      const blink::InterestGroup::Ad& ad) {
+    return ad.ad_render_id;
+  }
+
+  static const absl::optional<std::vector<url::Origin>>&
+  allowed_reporting_origins(const blink::InterestGroup::Ad& ad) {
+    return ad.allowed_reporting_origins;
+  }
+
   static bool Read(blink::mojom::InterestGroupAdDataView data,
                    blink::InterestGroup::Ad* out);
+};
+
+template <>
+struct BLINK_COMMON_EXPORT
+    StructTraits<blink::mojom::SellerCapabilitiesDataView,
+                 blink::SellerCapabilitiesType> {
+  static bool allows_interest_group_counts(
+      const blink::SellerCapabilitiesType& capabilities) {
+    return capabilities.Has(blink::SellerCapabilities::kInterestGroupCounts);
+  }
+
+  static bool allows_latency_stats(
+      const blink::SellerCapabilitiesType& capabilities) {
+    return capabilities.Has(blink::SellerCapabilities::kLatencyStats);
+  }
+
+  static bool Read(blink::mojom::SellerCapabilitiesDataView data,
+                   blink::SellerCapabilitiesType* out);
+};
+
+template <>
+struct BLINK_COMMON_EXPORT
+    StructTraits<blink::mojom::AuctionServerRequestFlagsDataView,
+                 blink::AuctionServerRequestFlags> {
+  static bool omit_ads(const blink::AuctionServerRequestFlags& capabilities) {
+    return capabilities.Has(blink::AuctionServerRequestFlagsEnum::kOmitAds);
+  }
+
+  static bool include_full_ads(
+      const blink::AuctionServerRequestFlags& capabilities) {
+    return capabilities.Has(
+        blink::AuctionServerRequestFlagsEnum::kIncludeFullAds);
+  }
+
+  static bool Read(blink::mojom::AuctionServerRequestFlagsDataView data,
+                   blink::AuctionServerRequestFlags* out);
 };
 
 template <>
@@ -68,6 +132,17 @@ struct BLINK_COMMON_EXPORT
     return interest_group.priority_signals_overrides;
   }
 
+  static const absl::optional<
+      base::flat_map<url::Origin, blink::SellerCapabilitiesType>>&
+  seller_capabilities(const blink::InterestGroup& interest_group) {
+    return interest_group.seller_capabilities;
+  }
+
+  static blink::SellerCapabilitiesType all_sellers_capabilities(
+      const blink::InterestGroup& interest_group) {
+    return interest_group.all_sellers_capabilities;
+  }
+
   static blink::InterestGroup::ExecutionMode execution_mode(
       const blink::InterestGroup& interest_group) {
     return interest_group.execution_mode;
@@ -83,9 +158,9 @@ struct BLINK_COMMON_EXPORT
     return interest_group.bidding_wasm_helper_url;
   }
 
-  static const absl::optional<GURL>& daily_update_url(
+  static const absl::optional<GURL>& update_url(
       const blink::InterestGroup& interest_group) {
-    return interest_group.daily_update_url;
+    return interest_group.update_url;
   }
 
   static const absl::optional<GURL>& trusted_bidding_signals_url(
@@ -96,6 +171,12 @@ struct BLINK_COMMON_EXPORT
   static const absl::optional<std::vector<std::string>>&
   trusted_bidding_signals_keys(const blink::InterestGroup& interest_group) {
     return interest_group.trusted_bidding_signals_keys;
+  }
+
+  static blink::InterestGroup::TrustedBiddingSignalsSlotSizeMode
+  trusted_bidding_signals_slot_size_mode(
+      const blink::InterestGroup& interest_group) {
+    return interest_group.trusted_bidding_signals_slot_size_mode;
   }
 
   static const absl::optional<std::string>& user_bidding_signals(
@@ -111,6 +192,32 @@ struct BLINK_COMMON_EXPORT
   static const absl::optional<std::vector<blink::InterestGroup::Ad>>&
   ad_components(const blink::InterestGroup& interest_group) {
     return interest_group.ad_components;
+  }
+
+  static const absl::optional<base::flat_map<std::string, blink::AdSize>>&
+  ad_sizes(const blink::InterestGroup& interest_group) {
+    return interest_group.ad_sizes;
+  }
+
+  static const absl::optional<
+      base::flat_map<std::string, std::vector<std::string>>>&
+  size_groups(const blink::InterestGroup& interest_group) {
+    return interest_group.size_groups;
+  }
+
+  static blink::AuctionServerRequestFlags auction_server_request_flags(
+      const blink::InterestGroup& interest_group) {
+    return interest_group.auction_server_request_flags;
+  }
+
+  static const absl::optional<blink::InterestGroup::AdditionalBidKey>&
+  additional_bid_key(const blink::InterestGroup& interest_group) {
+    return interest_group.additional_bid_key;
+  }
+
+  static const absl::optional<url::Origin>& aggregation_coordinator_origin(
+      const blink::InterestGroup& interest_group) {
+    return interest_group.aggregation_coordinator_origin;
   }
 
   static bool Read(blink::mojom::InterestGroupDataView data,

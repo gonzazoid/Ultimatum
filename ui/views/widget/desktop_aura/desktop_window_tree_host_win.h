@@ -24,7 +24,7 @@ class FocusClient;
 }  // namespace aura
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 class InputMethod;
 class KeyboardHook;
 }  // namespace ui
@@ -37,10 +37,6 @@ namespace views {
 class DesktopDragDropClientWin;
 class HWNDMessageHandler;
 class NonClientFrameView;
-
-namespace corewm {
-class TooltipWin;
-}
 
 namespace test {
 class DesktopWindowTreeHostWinTestApi;
@@ -121,9 +117,11 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   std::string GetWorkspace() const override;
   gfx::Rect GetWorkAreaBoundsInScreen() const override;
   void SetShape(std::unique_ptr<Widget::ShapeRects> native_shape) override;
+  void SetParent(gfx::AcceleratedWidget parent) override;
   void Activate() override;
   void Deactivate() override;
   bool IsActive() const override;
+  void PaintAsActiveChanged() override;
   void Maximize() override;
   void Minimize() override;
   void Restore() override;
@@ -149,13 +147,13 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   void SetFullscreen(bool fullscreen, int64_t target_display_id) override;
   bool IsFullscreen() const override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void SetWindowIcons(const gfx::ImageSkia& window_icon,
                       const gfx::ImageSkia& app_icon) override;
   void InitModalType(ui::ModalType modal_type) override;
   void FlashFrame(bool flash_frame) override;
   bool IsAnimatingClosed() const override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   void SizeConstraintsChanged() override;
   bool ShouldUpdateWindowTransparency() const override;
   bool ShouldUseDesktopNativeCursorManager() const override;
@@ -251,9 +249,6 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   void HandleInputLanguageChange(DWORD character_set,
                                  HKL input_language_id) override;
   void HandlePaintAccelerated(const gfx::Rect& invalid_rect) override;
-  bool HandleTooltipNotify(int w_param,
-                           NMHDR* l_param,
-                           LRESULT* l_result) override;
   void HandleMenuLoop(bool in_menu_loop) override;
   bool PreHandleMSG(UINT message,
                     WPARAM w_param,
@@ -265,6 +260,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
   void HandleWindowSizeChanging() override;
   void HandleWindowSizeUnchanged() override;
   void HandleWindowScaleFactorChanged(float window_scale_factor) override;
+  void HandleHeadlessWindowBoundsChanged(const gfx::Rect& bounds) override;
 
   Widget* GetWidget();
   const Widget* GetWidget() const;
@@ -325,10 +321,6 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
 
   // True if the window should have the frame removed.
   bool remove_standard_frame_;
-
-  // Owned by TooltipController, but we need to forward events to it so we keep
-  // a reference.
-  raw_ptr<corewm::TooltipWin> tooltip_;
 
   // Visibility of the cursor. On Windows we can have multiple root windows and
   // the implementation of ::ShowCursor() is based on a counter, so making this

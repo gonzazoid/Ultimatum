@@ -8,14 +8,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
-#include "base/path_service.h"
 #include "base/test/scoped_run_loop_timeout.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -24,6 +23,7 @@
 #include "components/crx_file/crx_verifier.h"
 #include "components/services/unzip/content/unzip_service.h"
 #include "components/services/unzip/in_process_unzipper.h"
+#include "components/update_client/test_utils.h"
 #include "components/update_client/update_client_errors.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
@@ -56,6 +56,8 @@ class TestActionHandler : public RecoveryComponentActionHandler {
       : RecoveryComponentActionHandler(
             {std::begin(kKeyHashTest), std::end(kKeyHashTest)},
             crx_file::VerifierFormat::CRX3) {}
+  TestActionHandler(const TestActionHandler&) = delete;
+  TestActionHandler& operator=(const TestActionHandler&) = delete;
 
  protected:
   ~TestActionHandler() override = default;
@@ -64,10 +66,8 @@ class TestActionHandler : public RecoveryComponentActionHandler {
   // Overrides for RecoveryComponentActionHandler.
   base::CommandLine MakeCommandLine(
       const base::FilePath& unpack_path) const override;
+  void PrepareFiles(const base::FilePath& unpack_path) const override;
   void Elevate(Callback callback) override;
-
-  TestActionHandler(const TestActionHandler&) = delete;
-  TestActionHandler& operator=(const TestActionHandler&) = delete;
 };
 
 base::CommandLine TestActionHandler::MakeCommandLine(
@@ -76,6 +76,8 @@ base::CommandLine TestActionHandler::MakeCommandLine(
       unpack_path.Append(FILE_PATH_LITERAL("ChromeRecovery.exe")));
   return command_line;
 }
+
+void TestActionHandler::PrepareFiles(const base::FilePath& unpack_path) const {}
 
 // This test fixture only tests the per-user execution flow.
 void TestActionHandler::Elevate(Callback callback) {
@@ -114,14 +116,9 @@ TEST_F(RecoveryImprovedActionHandlerTest, HandleSuccess) {
 
   // Tests that the recovery program runs and it returns an expected value.
   constexpr char kActionRunFileName[] = "ChromeRecovery.crx3";
-  base::FilePath from_path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &from_path);
-  from_path = from_path.AppendASCII("components")
-                  .AppendASCII("test")
-                  .AppendASCII("data")
-                  .AppendASCII("update_client")
-                  .AppendASCII(kActionRunFileName);
   ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
+  const base::FilePath from_path =
+      update_client::GetTestFilePath(kActionRunFileName);
   const base::FilePath to_path =
       temp_dir_.GetPath().AppendASCII(kActionRunFileName);
   ASSERT_TRUE(base::CopyFile(from_path, to_path));
@@ -147,6 +144,6 @@ TEST_F(RecoveryImprovedActionHandlerTest, HandleSuccess) {
     runloop.Run();
   }
 }
-#endif  //  OS_WIN
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace component_updater

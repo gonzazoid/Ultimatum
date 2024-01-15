@@ -5,6 +5,7 @@
 #ifndef NET_WEBSOCKETS_WEBSOCKET_FRAME_H_
 #define NET_WEBSOCKETS_WEBSOCKET_FRAME_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include <memory>
@@ -50,13 +51,10 @@ struct NET_EXPORT WebSocketFrameHeader {
            opcode == kOpCodePong;
   }
 
-  // These values must be a compile-time constant. "enum hack" is used here
-  // to make MSVC happy.
-  enum {
-    kBaseHeaderSize = 2,
-    kMaximumExtendedLengthSize = 8,
-    kMaskingKeyLength = 4
-  };
+  // These values must be compile-time constants.
+  static constexpr size_t kBaseHeaderSize = 2;
+  static constexpr size_t kMaximumExtendedLengthSize = 8;
+  static constexpr size_t kMaskingKeyLength = 4;
 
   // Contains four-byte data representing "masking key" of WebSocket frames.
   struct WebSocketMaskingKey {
@@ -108,7 +106,7 @@ struct NET_EXPORT_PRIVATE WebSocketFrame {
   // responsibility of the creator to ensure it remains valid for the lifetime
   // of this object. This should be documented in the code that creates this
   // object.
-  // TODO(yoicho): Find more better way to clarify the life cycle.
+  // TODO(crbug.com/1001915): Find more better way to clarify the life cycle.
   const char* payload = nullptr;
 };
 
@@ -150,7 +148,7 @@ struct NET_EXPORT WebSocketFrameChunk {
   // responsibility of the creator to ensure it remains valid for the lifetime
   // of this object. This should be documented in the code that creates this
   // object.
-  // TODO(yoicho): Find more better way to clarify the life cycle.
+  // TODO(crbug.com/1001915): Find more better way to clarify the life cycle.
   base::span<const char> payload;
 };
 

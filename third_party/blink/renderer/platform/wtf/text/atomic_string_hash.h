@@ -35,24 +35,12 @@
 
 namespace WTF {
 
-struct AtomicStringHash {
-  static unsigned GetHash(const AtomicString& key) {
-    return key.Impl()->ExistingHash();
-  }
-
-  static bool Equal(const AtomicString& a, const AtomicString& b) {
-    return a == b;
-  }
-
-  static const bool safe_to_compare_to_empty_or_deleted = false;
-};
-
-// AtomicStringHash is the default hash for AtomicString
-template <>
-struct DefaultHash<AtomicString> : AtomicStringHash {};
-
 template <>
 struct HashTraits<AtomicString> : SimpleClassHashTraits<AtomicString> {
+  static unsigned GetHash(const AtomicString& key) { return key.Hash(); }
+
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
+
   // Unlike other types, we can return a const reference for AtomicString's
   // empty value (g_null_atom).
   typedef const AtomicString& PeekOutType;
@@ -60,20 +48,17 @@ struct HashTraits<AtomicString> : SimpleClassHashTraits<AtomicString> {
   static const AtomicString& EmptyValue() { return g_null_atom; }
   static PeekOutType Peek(const AtomicString& value) { return value; }
 
-  static const bool kHasIsEmptyValueFunction = true;
   static bool IsEmptyValue(const AtomicString& value) { return value.IsNull(); }
 
   static bool IsDeletedValue(const AtomicString& value) {
     return HashTraits<String>::IsDeletedValue(value.string_);
   }
 
-  static void ConstructDeletedValue(AtomicString& slot, bool zero_value) {
-    HashTraits<String>::ConstructDeletedValue(slot.string_, zero_value);
+  static void ConstructDeletedValue(AtomicString& slot) {
+    HashTraits<String>::ConstructDeletedValue(slot.string_);
   }
 };
 
 }  // namespace WTF
-
-using WTF::AtomicStringHash;
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_TEXT_ATOMIC_STRING_HASH_H_

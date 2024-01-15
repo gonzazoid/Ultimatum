@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace chromeos {
 namespace sensors {
@@ -69,7 +69,7 @@ void FakeSensorService::GetDeviceIds(mojom::DeviceType type,
     ids.push_back(device.first);
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(ids)));
 }
 
@@ -83,7 +83,7 @@ void FakeSensorService::GetAllDeviceIds(GetAllDeviceIdsCallback callback) {
                                                     device.second.types.end()));
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(id_types)));
 }
 

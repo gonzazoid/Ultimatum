@@ -5,17 +5,20 @@
 #ifndef ASH_COMPONENTS_ARC_COMPAT_MODE_RESIZE_CONFIRMATION_DIALOG_VIEW_H_
 #define ASH_COMPONENTS_ARC_COMPAT_MODE_RESIZE_CONFIRMATION_DIALOG_VIEW_H_
 
-#include "base/callback_forward.h"
-#include "ui/views/layout/box_layout_view.h"
-
-namespace aura {
-class Window;
-}  // namespace aura
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/aura/window.h"
+#include "ui/aura/window_delegate.h"
+#include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
 namespace views {
-class MdTextButton;
 class Checkbox;
+class LabelButton;
 }  // namespace views
+
+namespace ash {
+class Checkbox;
+}  // namespace ash
 
 namespace arc {
 
@@ -25,24 +28,25 @@ namespace arc {
 // If the user marked the "Don't ask me again", 2nd argument will be true.
 using ResizeConfirmationCallback = base::OnceCallback<void(bool, bool)>;
 
-class ResizeConfirmationDialogView : public views::BoxLayoutView {
+class ResizeConfirmationDialogView : public views::BubbleDialogDelegateView,
+                                     public views::WidgetObserver {
  public:
+  METADATA_HEADER(ResizeConfirmationDialogView);
   // TestApi is used only in tests to get internal views.
   class TestApi {
    public:
     explicit TestApi(ResizeConfirmationDialogView* view) : view_(view) {}
 
-    views::MdTextButton* accept_button() const { return view_->accept_button_; }
-    views::MdTextButton* cancel_button() const { return view_->cancel_button_; }
-    views::Checkbox* do_not_ask_checkbox() const {
-      return view_->do_not_ask_checkbox_;
-    }
+    views::LabelButton* accept_button() const { return view_->accept_button_; }
+    views::LabelButton* cancel_button() const { return view_->cancel_button_; }
+    void SelectDoNotAskCheckbox();
 
    private:
-    ResizeConfirmationDialogView* const view_;
+    const raw_ptr<ResizeConfirmationDialogView> view_;
   };
 
-  explicit ResizeConfirmationDialogView(ResizeConfirmationCallback callback);
+  ResizeConfirmationDialogView(views::Widget* parent,
+                               ResizeConfirmationCallback callback);
   ResizeConfirmationDialogView(const ResizeConfirmationDialogView&) = delete;
   ResizeConfirmationDialogView& operator=(const ResizeConfirmationDialogView&) =
       delete;
@@ -50,24 +54,31 @@ class ResizeConfirmationDialogView : public views::BoxLayoutView {
 
   // Shows confirmation dialog for asking user if really want to enable resizing
   // for the resize-locked ARC app.
-  static void Show(aura::Window* parent, ResizeConfirmationCallback callback);
+  static void Show(views::Widget* parent, ResizeConfirmationCallback callback);
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
   void AddedToWidget() override;
   void OnThemeChanged() override;
 
+  // views::WidgetObserver:
+  void OnWidgetClosing(views::Widget* widget) override;
+
  private:
   std::unique_ptr<views::View> MakeContentsView();
   std::unique_ptr<views::View> MakeButtonsView();
 
-  void OnButtonClicked(bool accept);
+  void OnButtonClicked(bool accept, views::Widget::ClosedReason close_reason);
 
   ResizeConfirmationCallback callback_;
 
-  views::Checkbox* do_not_ask_checkbox_{nullptr};
-  views::MdTextButton* accept_button_{nullptr};
-  views::MdTextButton* cancel_button_{nullptr};
+  base::ScopedObservation<views::Widget, views::WidgetObserver>
+      widget_observation_{this};
+
+  raw_ptr<views::Checkbox> do_not_ask_checkbox_{nullptr};
+  raw_ptr<ash::Checkbox> do_not_ask_checkbox_jelly_{nullptr};
+  raw_ptr<views::LabelButton> accept_button_{nullptr};
+  raw_ptr<views::LabelButton> cancel_button_{nullptr};
 };
 
 }  // namespace arc

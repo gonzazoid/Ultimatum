@@ -5,15 +5,33 @@
 #ifndef CHROME_UPDATER_TAG_H_
 #define CHROME_UPDATER_TAG_H_
 
+#include <cstdint>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
 
+#include "base/files/file_path.h"
 #include "base/strings/string_piece.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace updater {
 namespace tagging {
+namespace internal {
+
+// Advances the iterator by |distance| and makes sure that it remains valid,
+// else returns |end|.
+std::vector<uint8_t>::const_iterator AdvanceIt(
+    std::vector<uint8_t>::const_iterator it,
+    size_t distance,
+    std::vector<uint8_t>::const_iterator end);
+
+// Checks that the range [it, it + size) is found within the binary. |size| must
+// be > 0.
+bool CheckRange(std::vector<uint8_t>::const_iterator it,
+                size_t size,
+                std::vector<uint8_t>::const_iterator end);
+
+}  // namespace internal
 
 // This struct contains the attributes for a given app parsed from a part of the
 // metainstaller tag. It contains minimal policy and is intended to be a
@@ -51,7 +69,7 @@ struct AppArgs {
   std::string install_data_index;
   std::string experiment_labels;
   std::string untrusted_data;
-  absl::optional<NeedsAdmin> needs_admin;
+  std::optional<NeedsAdmin> needs_admin;
 };
 
 std::ostream& operator<<(std::ostream&, const AppArgs::NeedsAdmin&);
@@ -87,12 +105,18 @@ struct TagArgs {
   std::string experiment_labels;
   std::string referral_id;
   std::string language;
-  absl::optional<BrowserType> browser_type;
-  absl::optional<bool> flighting = false;
-  absl::optional<bool> usage_stats_enable;
+  std::optional<BrowserType> browser_type;
+  std::optional<bool> flighting = false;
+  std::optional<bool> usage_stats_enable;
 
   // List of apps to install.
   std::vector<AppArgs> apps;
+
+  // The original tag string.
+  std::string tag_string;
+
+  // Vector of name/value attributes from the tag.
+  std::vector<std::pair<std::string, std::string>> attributes;
 };
 
 std::ostream& operator<<(std::ostream&, const TagArgs::BrowserType&);
@@ -218,8 +242,52 @@ std::ostream& operator<<(std::ostream&, const ErrorCode&);
 //
 // Note: This method assumes all attribute names are ASCII.
 ErrorCode Parse(base::StringPiece tag,
-                absl::optional<base::StringPiece> app_installer_data_args,
+                std::optional<base::StringPiece> app_installer_data_args,
                 TagArgs* args);
+
+std::string ReadTag(std::vector<uint8_t>::const_iterator begin,
+                    std::vector<uint8_t>::const_iterator end);
+std::vector<uint8_t> GetTagFromTagString(const std::string& tag_string);
+
+// Utilities for reading and writing tags to Windows PE and MSI files.
+//
+//
+// The tag specification is as follows:
+//   - The tag area begins with a magic signature 'Gact2.0Omaha'.
+//   - The next 2 bytes are the tag string length in big endian.
+//   - Then comes the tag string in the format "key1=value1&key2=value2".
+//   - The key is alphanumeric, the value allows special characters such as '*'.
+//
+// A sample layout:
+// +-------------------------------------+
+// ~    ..............................   ~
+// |    ..............................   |
+// |    Other parts of the file          |
+// +-------------------------------------+
+// | Start of the certificate            |
+// ~    ..............................   ~
+// ~    ..............................   ~
+// | Magic signature 'Gact2.0Omaha'      | Tag starts
+// | Tag length (2 bytes in big-endian)) |
+// | tag string                          |
+// +-------------------------------------+
+//
+// A real example (an MSI file tagged with 'brand=CDCD&key2=Test'):
+// +-----------------------------------------------------------------+
+// |  G   a   c   t   2   .   0   O   m   a   h   a  0x0 0x14 b   r  |
+// |  a   n   d   =   C   D   C   D   &   k   e   y   2   =   T   e  |
+// |  s   t                                                          |
+// +-----------------------------------------------------------------+
+// Extracts a tag from `filename`.
+std::string BinaryReadTagString(const base::FilePath& file);
+std::optional<tagging::TagArgs> BinaryReadTag(const base::FilePath& file);
+
+// Tags `file` with `tag_string` and writes the result to `file` by default, or
+// to `out_file` if `out_file` is provided.
+bool BinaryWriteTag(const base::FilePath& in_file,
+                    const std::string& tag_string,
+                    int padded_length,
+                    base::FilePath out_file);
 
 }  // namespace tagging
 }  // namespace updater

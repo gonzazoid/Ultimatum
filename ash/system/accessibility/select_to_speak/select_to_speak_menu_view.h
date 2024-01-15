@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
 #include "ui/views/controls/button/button.h"
@@ -69,15 +70,15 @@ class SelectToSpeakMenuView : public views::BoxLayoutView {
   void OnKeyEvent(ui::KeyEvent* key_event) override;
 
   // Owned by views hierarchy.
-  FloatingMenuButton* prev_paragraph_button_ = nullptr;
-  FloatingMenuButton* prev_sentence_button_ = nullptr;
-  FloatingMenuButton* pause_button_ = nullptr;
-  FloatingMenuButton* next_sentence_button_ = nullptr;
-  FloatingMenuButton* next_paragraph_button_ = nullptr;
-  FloatingMenuButton* stop_button_ = nullptr;
-  FloatingMenuButton* speed_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> prev_paragraph_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> prev_sentence_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> pause_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> next_sentence_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> next_paragraph_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> stop_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> speed_button_ = nullptr;
 
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
   bool is_paused_ = false;
 };
 

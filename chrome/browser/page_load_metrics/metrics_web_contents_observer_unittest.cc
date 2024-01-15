@@ -22,6 +22,7 @@
 #include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "base/values.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "extensions/browser/extension_registry.h"
@@ -29,7 +30,6 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/manifest_constants.h"
-#include "extensions/common/value_builder.h"
 #endif
 
 using content::NavigationSimulator;
@@ -70,7 +70,8 @@ class MetricsWebContentsObserverTest : public ChromeRenderViewHostTestHarness {
     observer->OnVisibilityChanged(content::Visibility::VISIBLE);
   }
 
-  raw_ptr<TestMetricsWebContentsObserverEmbedder> embedder_interface_ = nullptr;
+  raw_ptr<TestMetricsWebContentsObserverEmbedder, DanglingUntriaged>
+      embedder_interface_ = nullptr;
 };
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -78,15 +79,15 @@ TEST_F(MetricsWebContentsObserverTest,
        RecordFeatureUsageIgnoresChromeExtensionUpdates) {
   // Register our fake extension. The URL we access must be part of the
   // 'web_accessible_resources' for the network commit to work.
-  extensions::DictionaryBuilder manifest;
-  manifest.Set(extensions::manifest_keys::kVersion, "1.0.0.0")
-      .Set(extensions::manifest_keys::kName, "TestExtension")
-      .Set(extensions::manifest_keys::kManifestVersion, 2)
-      .Set("web_accessible_resources",
-           extensions::ListBuilder().Append("main.html").Build());
+  auto manifest = base::Value::Dict()
+                      .Set(extensions::manifest_keys::kVersion, "1.0.0.0")
+                      .Set(extensions::manifest_keys::kName, "TestExtension")
+                      .Set(extensions::manifest_keys::kManifestVersion, 2)
+                      .Set("web_accessible_resources",
+                           base::Value::List().Append("main.html"));
   scoped_refptr<const extensions::Extension> extension =
       extensions::ExtensionBuilder()
-          .SetManifest(manifest.Build())
+          .SetManifest(std::move(manifest))
           .SetID("mbflcebpggnecokmikipoihdbecnjfoj")
           .Build();
   ASSERT_TRUE(extension);

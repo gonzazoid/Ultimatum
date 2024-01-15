@@ -121,7 +121,7 @@ enum class MediaStatus {
 // typically used to capture an ad creative. It stores frame-specific
 // information (such as size, activation status, and origin), which is typically
 // specific to the top frame in the tree.
-class FrameTreeData : public base::SupportsWeakPtr<FrameTreeData> {
+class FrameTreeData final {
  public:
   using FrameTreeNodeId = PageLoadMetricsObserver::FrameTreeNodeId;
 
@@ -203,10 +203,6 @@ class FrameTreeData : public base::SupportsWeakPtr<FrameTreeData> {
   // Sets the display state of the frame and updates its visibility state.
   void SetDisplayState(bool is_display_none);
 
-  uint64_t v8_max_memory_bytes_used() const {
-    return memory_usage_.max_bytes_used();
-  }
-
   UserActivationStatus user_activation_status() const {
     return user_activation_status_;
   }
@@ -257,6 +253,10 @@ class FrameTreeData : public base::SupportsWeakPtr<FrameTreeData> {
   // Accessor for the peak windowed cpu usage of the frame tree.
   int peak_windowed_cpu_percent() const {
     return peak_cpu_.peak_windowed_percent();
+  }
+
+  base::WeakPtr<FrameTreeData> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
   }
 
  private:
@@ -349,6 +349,9 @@ class FrameTreeData : public base::SupportsWeakPtr<FrameTreeData> {
 
   // Memory usage by v8 in this ad frame tree.
   MemoryUsageAggregator memory_usage_;
+
+  // Owns weak pointers to the instance.
+  base::WeakPtrFactory<FrameTreeData> weak_ptr_factory_{this};
 };
 
 }  // namespace page_load_metrics

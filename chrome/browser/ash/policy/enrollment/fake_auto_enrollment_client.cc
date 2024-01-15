@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/policy/enrollment/fake_auto_enrollment_client.h"
 
+#include "chrome/browser/ash/policy/enrollment/auto_enrollment_state.h"
 #include "chrome/browser/ash/policy/enrollment/psm/rlwe_dmserver_client.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
@@ -39,8 +40,6 @@ FakeAutoEnrollmentClient::FactoryImpl::CreateForInitialEnrollment(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& device_serial_number,
     const std::string& device_brand_code,
-    int power_initial,
-    int power_limit,
     std::unique_ptr<psm::RlweDmserverClient> psm_rlwe_dmserver_client) {
   std::unique_ptr<FakeAutoEnrollmentClient> fake_client =
       std::make_unique<FakeAutoEnrollmentClient>(progress_callback);
@@ -50,20 +49,16 @@ FakeAutoEnrollmentClient::FactoryImpl::CreateForInitialEnrollment(
 
 FakeAutoEnrollmentClient::FakeAutoEnrollmentClient(
     const ProgressCallback& progress_callback)
-    : progress_callback_(progress_callback),
-      state_(AUTO_ENROLLMENT_STATE_IDLE) {}
+    : progress_callback_(progress_callback) {}
 
 FakeAutoEnrollmentClient::~FakeAutoEnrollmentClient() {}
 
-void FakeAutoEnrollmentClient::Start() {
-  SetState(AUTO_ENROLLMENT_STATE_PENDING);
-}
+void FakeAutoEnrollmentClient::Start() {}
 
 void FakeAutoEnrollmentClient::Retry() {}
 
 void FakeAutoEnrollmentClient::SetState(AutoEnrollmentState target_state) {
-  state_ = target_state;
-  progress_callback_.Run(state_);
+  progress_callback_.Run(target_state);
 }
 
 }  // namespace policy

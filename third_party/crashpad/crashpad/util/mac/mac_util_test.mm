@@ -19,20 +19,8 @@
 
 #include <string>
 
-#include "base/mac/scoped_nsobject.h"
 #include "base/strings/stringprintf.h"
 #include "gtest/gtest.h"
-
-#ifdef __GLIBCXX__
-// When C++ exceptions are disabled, libstdc++ from GCC 4.2 defines |try| and
-// |catch| so as to allow exception-expecting C++ code to build properly when
-// language support for exceptions is not present. These macros interfere with
-// the use of |@try| and |@catch| in Objective-C files such as this one.
-// Undefine these macros here, after everything has been #included, since there
-// will be no C++ uses and only Objective-C uses from this point on.
-#undef try
-#undef catch
-#endif
 
 namespace crashpad {
 namespace test {
@@ -44,8 +32,8 @@ namespace {
 // check for with ASSERT_NO_FATAL_FAILURE() or testing::Test::HasFatalFailure().
 void SwVers(NSString* argument, std::string* output) {
   @autoreleasepool {
-    base::scoped_nsobject<NSPipe> pipe([[NSPipe alloc] init]);
-    base::scoped_nsobject<NSTask> task([[NSTask alloc] init]);
+    NSPipe* pipe = [[NSPipe alloc] init];
+    NSTask* task = [[NSTask alloc] init];
     [task setStandardOutput:pipe];
     [task setLaunchPath:@"/usr/bin/sw_vers"];
     [task setArguments:@[ argument ]];
@@ -76,10 +64,9 @@ TEST(MacUtil, MacOSVersionComponents) {
   int minor;
   int bugfix;
   std::string build;
-  bool server;
   std::string version_string;
-  ASSERT_TRUE(MacOSVersionComponents(
-      &major, &minor, &bugfix, &build, &server, &version_string));
+  ASSERT_TRUE(
+      MacOSVersionComponents(&major, &minor, &bugfix, &build, &version_string));
 
   EXPECT_GE(major, 10);
   EXPECT_LE(major, 99);
@@ -127,10 +114,9 @@ TEST(MacUtil, MacOSVersionNumber) {
   int minor;
   int bugfix;
   std::string build;
-  bool server;
   std::string version_string;
-  ASSERT_TRUE(MacOSVersionComponents(
-      &major, &minor, &bugfix, &build, &server, &version_string));
+  ASSERT_TRUE(
+      MacOSVersionComponents(&major, &minor, &bugfix, &build, &version_string));
 
   EXPECT_EQ(macos_version_number,
             major * 1'00'00 + minor * 1'00 +

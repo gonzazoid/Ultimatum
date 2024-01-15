@@ -25,17 +25,17 @@ namespace diagnostics {
 // This is the count of diagnostic tests on each platform.  This should
 // only be used by testing code.
 #if BUILDFLAG(IS_WIN)
-const int DiagnosticsModel::kDiagnosticsTestCount = 17;
+const int DiagnosticsModel::kDiagnosticsTestCount = 18;
 #elif BUILDFLAG(IS_MAC)
-const int DiagnosticsModel::kDiagnosticsTestCount = 14;
+const int DiagnosticsModel::kDiagnosticsTestCount = 15;
 #elif BUILDFLAG(IS_POSIX)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-const int DiagnosticsModel::kDiagnosticsTestCount = 18;
+const int DiagnosticsModel::kDiagnosticsTestCount = 19;
 #else
-const int DiagnosticsModel::kDiagnosticsTestCount = 16;
+const int DiagnosticsModel::kDiagnosticsTestCount = 17;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 #elif BUILDFLAG(IS_FUCHSIA)
-const int DiagnosticsModel::kDiagnosticsTestCount = 16;
+const int DiagnosticsModel::kDiagnosticsTestCount = 17;
 #endif  // BUILDFLAG(IS_WIN)
 
 namespace {
@@ -65,20 +65,12 @@ class DiagnosticsModelImpl : public DiagnosticsModel {
     size_t test_count = tests_.size();
     bool continue_running = true;
     for (size_t i = 0; i != test_count; ++i) {
-      // If one of the diagnostic steps returns false, we want to
-      // mark the rest of them as "skipped" in the UMA stats.
       if (continue_running) {
         continue_running = RunTest(tests_[i].get(), observer, i);
         ++tests_run_;
       } else {
-#if BUILDFLAG(IS_CHROMEOS_ASH)  // Only collecting UMA stats on ChromeOS
-        RecordUMATestResult(static_cast<DiagnosticsTestId>(tests_[i]->GetId()),
-                            RESULT_SKIPPED);
-#else
-        // On other platforms, we can just bail out if a diagnostic step returns
-        // false.
+        // Just bail out if a recovery step returns false.
         break;
-#endif
       }
     }
     if (observer)
@@ -89,19 +81,11 @@ class DiagnosticsModelImpl : public DiagnosticsModel {
     size_t test_count = tests_.size();
     bool continue_running = true;
     for (size_t i = 0; i != test_count; ++i) {
-      // If one of the recovery steps returns false, we want to
-      // mark the rest of them as "skipped" in the UMA stats.
       if (continue_running) {
         continue_running = RunRecovery(tests_[i].get(), observer, i);
       } else {
-#if BUILDFLAG(IS_CHROMEOS_ASH)  // Only collecting UMA stats on ChromeOS
-        RecordUMARecoveryResult(
-            static_cast<DiagnosticsTestId>(tests_[i]->GetId()), RESULT_SKIPPED);
-#else
-        // On other platforms, we can just bail out if a recovery step returns
-        // false.
+        // Just bail out if a recovery step returns false.
         break;
-#endif
       }
     }
     if (observer)
@@ -113,7 +97,6 @@ class DiagnosticsModelImpl : public DiagnosticsModel {
   }
 
   bool GetTestInfo(int id, const TestInfo** result) const override {
-    DCHECK(id < DIAGNOSTICS_TEST_ID_COUNT);
     DCHECK(id >= 0);
     for (const auto& test : tests_) {
       if (test->GetId() == id) {
@@ -161,7 +144,8 @@ class DiagnosticsModelWin : public DiagnosticsModelImpl {
     tests_.push_back(MakeDiskSpaceTest());
     tests_.push_back(MakePreferencesTest());
     tests_.push_back(MakeLocalStateTest());
-    tests_.push_back(MakeBookMarksTest());
+    tests_.push_back(MakeLocalOrSyncableBookmarksTest());
+    tests_.push_back(MakeAccountBookmarksTest());
     tests_.push_back(MakeSqliteWebDataDbTest());
     tests_.push_back(MakeSqliteCookiesDbTest());
     tests_.push_back(MakeSqliteFaviconsDbTest());
@@ -185,7 +169,8 @@ class DiagnosticsModelMac : public DiagnosticsModelImpl {
     tests_.push_back(MakeDiskSpaceTest());
     tests_.push_back(MakePreferencesTest());
     tests_.push_back(MakeLocalStateTest());
-    tests_.push_back(MakeBookMarksTest());
+    tests_.push_back(MakeLocalOrSyncableBookmarksTest());
+    tests_.push_back(MakeAccountBookmarksTest());
     tests_.push_back(MakeSqliteWebDataDbTest());
     tests_.push_back(MakeSqliteCookiesDbTest());
     tests_.push_back(MakeSqliteFaviconsDbTest());
@@ -211,7 +196,8 @@ class DiagnosticsModelPosix : public DiagnosticsModelImpl {
     tests_.push_back(MakeDiskSpaceTest());
     tests_.push_back(MakePreferencesTest());
     tests_.push_back(MakeLocalStateTest());
-    tests_.push_back(MakeBookMarksTest());
+    tests_.push_back(MakeLocalOrSyncableBookmarksTest());
+    tests_.push_back(MakeAccountBookmarksTest());
     tests_.push_back(MakeSqliteWebDataDbTest());
     tests_.push_back(MakeSqliteCookiesDbTest());
     tests_.push_back(MakeSqliteFaviconsDbTest());
@@ -242,7 +228,8 @@ class DiagnosticsModelFuchsia : public DiagnosticsModelImpl {
     tests_.push_back(MakeDiskSpaceTest());
     tests_.push_back(MakePreferencesTest());
     tests_.push_back(MakeLocalStateTest());
-    tests_.push_back(MakeBookMarksTest());
+    tests_.push_back(MakeLocalOrSyncableBookmarksTest());
+    tests_.push_back(MakeAccountBookmarksTest());
     tests_.push_back(MakeSqliteWebDataDbTest());
     tests_.push_back(MakeSqliteCookiesDbTest());
     tests_.push_back(MakeSqliteFaviconsDbTest());

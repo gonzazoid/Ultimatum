@@ -7,8 +7,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "chromeos/ash/components/audio/audio_device.h"
@@ -29,42 +30,42 @@ namespace {
 api::audio::DeviceType GetAsAudioApiDeviceType(AudioDeviceType type) {
   switch (type) {
     case AudioDeviceType::kHeadphone:
-      return api::audio::DEVICE_TYPE_HEADPHONE;
+      return api::audio::DeviceType::kHeadphone;
     case AudioDeviceType::kMic:
-      return api::audio::DEVICE_TYPE_MIC;
+      return api::audio::DeviceType::kMic;
     case AudioDeviceType::kUsb:
-      return api::audio::DEVICE_TYPE_USB;
+      return api::audio::DeviceType::kUsb;
     case AudioDeviceType::kBluetooth:
     case AudioDeviceType::kBluetoothNbMic:
-      return api::audio::DEVICE_TYPE_BLUETOOTH;
+      return api::audio::DeviceType::kBluetooth;
     case AudioDeviceType::kHdmi:
-      return api::audio::DEVICE_TYPE_HDMI;
+      return api::audio::DeviceType::kHdmi;
     case AudioDeviceType::kInternalSpeaker:
-      return api::audio::DEVICE_TYPE_INTERNAL_SPEAKER;
+      return api::audio::DeviceType::kInternalSpeaker;
     case AudioDeviceType::kInternalMic:
-      return api::audio::DEVICE_TYPE_INTERNAL_MIC;
+      return api::audio::DeviceType::kInternalMic;
     case AudioDeviceType::kFrontMic:
-      return api::audio::DEVICE_TYPE_FRONT_MIC;
+      return api::audio::DeviceType::kFrontMic;
     case AudioDeviceType::kRearMic:
-      return api::audio::DEVICE_TYPE_REAR_MIC;
+      return api::audio::DeviceType::kRearMic;
     case AudioDeviceType::kKeyboardMic:
-      return api::audio::DEVICE_TYPE_KEYBOARD_MIC;
+      return api::audio::DeviceType::kKeyboardMic;
     case AudioDeviceType::kHotword:
-      return api::audio::DEVICE_TYPE_HOTWORD;
+      return api::audio::DeviceType::kHotword;
     case AudioDeviceType::kLineout:
-      return api::audio::DEVICE_TYPE_LINEOUT;
+      return api::audio::DeviceType::kLineout;
     case AudioDeviceType::kPostMixLoopback:
-      return api::audio::DEVICE_TYPE_POST_MIX_LOOPBACK;
+      return api::audio::DeviceType::kPostMixLoopback;
     case AudioDeviceType::kPostDspLoopback:
-      return api::audio::DEVICE_TYPE_POST_DSP_LOOPBACK;
+      return api::audio::DeviceType::kPostDspLoopback;
     case AudioDeviceType::kAlsaLoopback:
-      return api::audio::DEVICE_TYPE_ALSA_LOOPBACK;
+      return api::audio::DeviceType::kAlsaLoopback;
     case AudioDeviceType::kOther:
-      return api::audio::DEVICE_TYPE_OTHER;
+      return api::audio::DeviceType::kOther;
   }
 
   NOTREACHED();
-  return api::audio::DEVICE_TYPE_OTHER;
+  return api::audio::DeviceType::kOther;
 }
 
 }  // namespace
@@ -125,9 +126,9 @@ class AudioServiceImpl : public AudioService,
   // List of observers.
   base::ObserverList<AudioService::Observer>::Unchecked observer_list_;
 
-  CrasAudioHandler* cras_audio_handler_;
+  raw_ptr<CrasAudioHandler, DanglingUntriaged> cras_audio_handler_;
 
-  AudioDeviceIdCalculator* id_calculator_;
+  raw_ptr<AudioDeviceIdCalculator> id_calculator_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate the weak pointers before any other members are destroyed.
@@ -172,10 +173,10 @@ void AudioServiceImpl::GetDevices(
 
   bool accept_input =
       !(filter && filter->stream_types) ||
-      base::Contains(*filter->stream_types, api::audio::STREAM_TYPE_INPUT);
+      base::Contains(*filter->stream_types, api::audio::StreamType::kInput);
   bool accept_output =
       !(filter && filter->stream_types) ||
-      base::Contains(*filter->stream_types, api::audio::STREAM_TYPE_OUTPUT);
+      base::Contains(*filter->stream_types, api::audio::StreamType::kOutput);
 
   for (const auto& device : devices) {
     if (filter && filter->is_active && *filter->is_active != device.active)
@@ -311,8 +312,8 @@ AudioDeviceInfo AudioServiceImpl::ToAudioDeviceInfo(const AudioDevice& device) {
   AudioDeviceInfo info;
   info.id = base::NumberToString(device.id);
   info.stream_type = device.is_input
-                         ? extensions::api::audio::STREAM_TYPE_INPUT
-                         : extensions::api::audio::STREAM_TYPE_OUTPUT;
+                         ? extensions::api::audio::StreamType::kInput
+                         : extensions::api::audio::StreamType::kOutput;
   info.device_type = GetAsAudioApiDeviceType(device.type);
   info.display_name = device.display_name;
   info.device_name = device.device_name;

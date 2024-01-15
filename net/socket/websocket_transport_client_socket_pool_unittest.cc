@@ -4,20 +4,19 @@
 
 #include "net/socket/websocket_transport_client_socket_pool.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/features.h"
 #include "net/base/ip_endpoint.h"
@@ -25,6 +24,7 @@
 #include "net/base/load_timing_info_test_util.h"
 #include "net/base/net_errors.h"
 #include "net/base/privacy_mode.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/proxy_server.h"
 #include "net/base/schemeful_site.h"
 #include "net/base/test_completion_callback.h"
@@ -71,7 +71,7 @@ IPAddress ParseIP(const std::string& ip) {
 void RunLoopForTimePeriod(base::TimeDelta period) {
   base::RunLoop run_loop;
   base::OnceClosure quit_closure(run_loop.QuitClosure());
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, std::move(quit_closure), period);
   run_loop.Run();
 }
@@ -92,21 +92,25 @@ class WebSocketTransportClientSocketPoolTest : public TestWithTaskEnvironment {
         common_connect_job_params_(
             &client_socket_factory_,
             host_resolver_.get(),
-            nullptr /* http_auth_cache */,
-            nullptr /* http_auth_handler_factory */,
-            nullptr /* spdy_session_pool */,
-            nullptr /* quic_supported_versions */,
-            nullptr /* quic_stream_factory */,
-            nullptr /* proxy_delegate */,
-            nullptr /* http_user_agent_settings */,
-            nullptr /* ssl_client_context */,
-            nullptr /* socket_performance_watcher_factory */,
-            nullptr /* network_quality_estimator */,
-            nullptr /* netlog */,
-            &websocket_endpoint_lock_manager_),
+            /*http_auth_cache=*/nullptr,
+            /*http_auth_handler_factory=*/nullptr,
+            /*spdy_session_pool=*/nullptr,
+            /*quic_supported_versions=*/nullptr,
+            /*quic_stream_factory=*/nullptr,
+            /*proxy_delegate=*/nullptr,
+            /*http_user_agent_settings=*/nullptr,
+            /*ssl_client_context=*/nullptr,
+            /*socket_performance_watcher_factory=*/nullptr,
+            /*network_quality_estimator=*/nullptr,
+            /*net_log=*/nullptr,
+            &websocket_endpoint_lock_manager_,
+            /*http_server_properties=*/nullptr,
+            /*alpn_protos=*/nullptr,
+            /*application_settings=*/nullptr,
+            /*ignore_certificate_errors=*/nullptr),
         pool_(kMaxSockets,
               kMaxSocketsPerGroup,
-              ProxyServer::Direct(),
+              ProxyChain::Direct(),
               &common_connect_job_params_) {
     websocket_endpoint_lock_manager_.SetUnlockDelayForTesting(
         base::TimeDelta());
@@ -912,7 +916,7 @@ TEST_F(WebSocketTransportClientSocketPoolTest, Suspend) {
       MockTransportClientSocketFactory::Type::kFailing,
       std::vector{IPEndPoint(ParseIP("1:abcd::3:4:ff"), 80)},
       ERR_NETWORK_IO_SUSPENDED);
-  client_socket_factory_.SetRules(base::make_span(&rule, 1));
+  client_socket_factory_.SetRules(base::make_span(&rule, 1u));
 
   TestCompletionCallback callback;
   ClientSocketHandle handle;
@@ -943,7 +947,7 @@ TEST_F(WebSocketTransportClientSocketPoolTest, SuspendAsync) {
       MockTransportClientSocketFactory::Type::kPendingFailing,
       std::vector{IPEndPoint(ParseIP("1:abcd::3:4:ff"), 80)},
       ERR_NETWORK_IO_SUSPENDED);
-  client_socket_factory_.SetRules(base::make_span(&rule, 1));
+  client_socket_factory_.SetRules(base::make_span(&rule, 1u));
 
   TestCompletionCallback callback;
   ClientSocketHandle handle;
@@ -1243,8 +1247,8 @@ TEST_F(WebSocketTransportClientSocketPoolTest, EndpointLockIsOnlyReleasedOnce) {
 // Make sure that WebSocket requests use the correct NetworkAnonymizationKey.
 TEST_F(WebSocketTransportClientSocketPoolTest, NetworkAnonymizationKey) {
   const SchemefulSite kSite(GURL("https://foo.test/"));
-  const NetworkAnonymizationKey kNetworkAnonymizationKey(
-      kSite, kSite, /*is_cross_site=*/false);
+  const auto kNetworkAnonymizationKey =
+      NetworkAnonymizationKey::CreateSameSite(kSite);
 
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitWithFeatures(

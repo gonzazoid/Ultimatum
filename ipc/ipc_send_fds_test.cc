@@ -26,7 +26,6 @@ extern "C" {
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ipc/ipc_message_attachment_set.h"
 #include "ipc/ipc_message_utils.h"
 #include "ipc/ipc_test_base.h"
@@ -75,10 +74,8 @@ class MyChannelDescriptorListener : public MyChannelDescriptorListenerBase {
   unsigned num_fds_received() const {
     return num_fds_received_;
   }
-
-  void OnChannelError() override {
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
-  }
+  void Run() { loop_.Run(); }
+  void OnChannelError() override { loop_.QuitWhenIdle(); }
 
  protected:
   void HandleFD(int fd) override {
@@ -99,13 +96,15 @@ class MyChannelDescriptorListener : public MyChannelDescriptorListenerBase {
     ASSERT_EQ(expected_inode_num_, st.st_ino);
 
     ++num_fds_received_;
-    if (num_fds_received_ == kNumFDsToSend * kNumMessages)
-      base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    if (num_fds_received_ == kNumFDsToSend * kNumMessages) {
+      loop_.QuitWhenIdle();
+    }
   }
 
  private:
   ino_t expected_inode_num_;
   unsigned num_fds_received_;
+  base::RunLoop loop_;
 };
 
 class IPCSendFdsTest : public IPCChannelMojoTestBase {
@@ -135,7 +134,7 @@ class IPCSendFdsTest : public IPCChannelMojoTestBase {
     }
 
     // Run message loop.
-    base::RunLoop().Run();
+    listener.Run();
 
     // Close the channel so the client's OnChannelError() gets fired.
     channel()->Close();
@@ -171,7 +170,7 @@ class SendFdsTestClientFixture : public IpcChannelMojoTestClient {
     Connect(&listener);
 
     // Run message loop.
-    base::RunLoop().Run();
+    listener.Run();
 
     // Verify that the message loop was exited due to getting the correct number
     // of descriptors, and not because of the channel closing unexpectedly.
@@ -208,13 +207,10 @@ DEFINE_IPC_CHANNEL_MOJO_TEST_CLIENT_WITH_CUSTOM_FIXTURE(
   ASSERT_LE(0, IGNORE_EINTR(close(fd)));
 
   // Enable the sandbox.
-  char* error_buff = NULL;
-  int error = sandbox::Seatbelt::Init(
-      sandbox::Seatbelt::kProfilePureComputation, SANDBOX_NAMED, &error_buff);
-  ASSERT_EQ(0, error);
-  ASSERT_FALSE(error_buff);
-
-  sandbox::Seatbelt::FreeError(error_buff);
+  std::string error;
+  ASSERT_TRUE(sandbox::Seatbelt::Init(
+      sandbox::Seatbelt::kProfilePureComputation, SANDBOX_NAMED, &error))
+      << error;
 
   // Make sure sandbox is really enabled.
   ASSERT_EQ(-1, open(kDevZeroPath, O_RDONLY))

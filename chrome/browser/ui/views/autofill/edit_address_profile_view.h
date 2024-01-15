@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_VIEWS_AUTOFILL_EDIT_ADDRESS_PROFILE_VIEW_H_
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/autofill/address_editor_controller.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
 #include "components/autofill/core/browser/autofill_client.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -26,6 +25,8 @@ class AddressEditorView;
 class EditAddressProfileView : public AutofillBubbleBase,
                                public views::DialogDelegateView {
  public:
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kTopViewId);
+
   explicit EditAddressProfileView(
       EditAddressProfileDialogController* controller);
 
@@ -47,10 +48,13 @@ class EditAddressProfileView : public AutofillBubbleBase,
  private:
   void OnUserDecision(
       AutofillClient::SaveAddressProfileOfferUserDecision decision);
+  void UpdateActionButtonState(bool is_valid);
 
   raw_ptr<EditAddressProfileDialogController> controller_;
   raw_ptr<AddressEditorView> address_editor_view_ = nullptr;
-  std::unique_ptr<AddressEditorController> address_editor_controller_;
+  base::CallbackListSubscription on_is_valid_change_subscription_;
+  AutofillClient::SaveAddressProfileOfferUserDecision decision_ =
+      AutofillClient::SaveAddressProfileOfferUserDecision::kIgnored;
 };
 
 }  // namespace autofill

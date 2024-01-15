@@ -108,6 +108,7 @@ KNOWN_COMPUTED_USERS = (
     'devtools_ui_bindings.cc',  # see AddDevToolsActions()
     'sharing_hub_bubble_controller.cc',  # share targets
     'sharing_hub_sub_menu_model.cc',  # share targets
+    'bookmark_metrics.cc',  # see AddBookmarkUsageActions()
 )
 
 # The path to the root of the repository.
@@ -203,6 +204,27 @@ def AddBookmarkManagerActions(actions):
   actions.add('BookmarkManager_NavigateTo_Recent')
   actions.add('BookmarkManager_NavigateTo_Search')
   actions.add('BookmarkManager_NavigateTo_SubFolder')
+
+
+def AddBookmarkUsageActions(actions):
+  """Add actions related to bookmarks usage.
+
+  Arguments
+    actions: set of actions to add to.
+  """
+  actions.add('Bookmarks.Added')
+  actions.add('Bookmarks.Added.AccountStorage')
+  actions.add('Bookmarks.Added.LocalStorage')
+  actions.add('Bookmarks.Added.LocalStorageSyncing')
+  actions.add('Bookmarks.FolderAdded')
+  actions.add('Bookmarks.FolderAdded.AccountStorage')
+  actions.add('Bookmarks.FolderAdded.LocalStorage')
+  actions.add('Bookmarks.FolderAdded.LocalStorageSyncing')
+  actions.add('Bookmarks.Opened')
+  actions.add('Bookmarks.Opened.AccountStorage')
+  actions.add('Bookmarks.Opened.LocalStorage')
+  actions.add('Bookmarks.Opened.LocalStorageSyncing')
+
 
 def AddChromeOSActions(actions):
   """Add actions reported by non-Chrome processes in Chrome OS.
@@ -306,6 +328,14 @@ def GrepForActions(path, actions):
     action_re = USER_METRICS_ACTION_RE_JS
   else:
     action_re = USER_METRICS_ACTION_RE
+
+  if os.name == 'nt':
+    # TODO(crbug.com/1500917): Remove when Windows bots have LongPathsEnabled.
+    # Windows APIs limits path names to 260 characters unless the Windows
+    # property LongPathsEnabled is set to 1. As a workaround, the "\\?\"
+    # disables all string parsing by the Windows API and thus allows us to
+    # exceed Windows' path length limit of 260 characters.
+    path = '\\\\?\\' + os.path.abspath(path)
 
   finder = ActionNameFinder(path,
                             open(path, encoding='utf-8').read(), action_re)
@@ -741,6 +771,7 @@ def UpdateXml(original_xml):
   AddLiteralActions(actions)
   AddAutomaticResetBannerActions(actions)
   AddBookmarkManagerActions(actions)
+  AddBookmarkUsageActions(actions)
   AddChromeOSActions(actions)
   AddExtensionActions(actions)
   AddHistoryPageActions(actions)

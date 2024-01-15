@@ -12,7 +12,7 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/user_manager/user.h"
@@ -42,9 +42,8 @@ class DiagnosticsBrowserDelegateImplTest : public testing::Test {
   ~DiagnosticsBrowserDelegateImplTest() override = default;
 
   void SetUp() override {
-    user_manager_ = std::make_unique<ash::FakeChromeUserManager>();
+    user_manager_ = std::make_unique<FakeChromeUserManager>();
     user_manager_->Initialize();
-    ProfileHelper::Get()->Initialize();
     LoginState::Initialize();
 
     task_env_.RunUntilIdle();
@@ -104,11 +103,11 @@ class DiagnosticsBrowserDelegateImplTest : public testing::Test {
   }
 
  protected:
-  ash::diagnostics::DiagnosticsBrowserDelegateImpl delegate_;
+  diagnostics::DiagnosticsBrowserDelegateImpl delegate_;
 
  private:
   content::BrowserTaskEnvironment task_env_{};
-  std::unique_ptr<ash::FakeChromeUserManager> user_manager_;
+  std::unique_ptr<FakeChromeUserManager> user_manager_;
   TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
   TestingPrefServiceSimple local_state_;
 };

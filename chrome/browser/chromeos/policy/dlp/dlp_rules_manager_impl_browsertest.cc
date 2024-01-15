@@ -9,7 +9,7 @@
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager_factory.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager_impl.h"
-#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager_test_utils.h"
+#include "chrome/browser/chromeos/policy/dlp/test/dlp_rules_manager_test_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -26,8 +26,8 @@ constexpr char kUrlStr1[] = "https://wwww.example.com";
 
 class FakeDlpRulesManager : public DlpRulesManagerImpl {
  public:
-  explicit FakeDlpRulesManager(PrefService* local_state)
-      : DlpRulesManagerImpl(local_state) {}
+  explicit FakeDlpRulesManager(PrefService* local_state, Profile* profile)
+      : DlpRulesManagerImpl(local_state, profile) {}
   ~FakeDlpRulesManager() override = default;
 };
 }  // namespace
@@ -46,36 +46,28 @@ class DlpRulesPolicyTest : public InProcessBrowserTest {
 
   std::unique_ptr<KeyedService> SetDlpRulesManager(
       content::BrowserContext* context) {
-    auto new_rules_manager =
-        std::make_unique<FakeDlpRulesManager>(g_browser_process->local_state());
+    auto new_rules_manager = std::make_unique<FakeDlpRulesManager>(
+        g_browser_process->local_state(), Profile::FromBrowserContext(context));
     rules_manager_ = new_rules_manager.get();
     return new_rules_manager;
   }
 
-  raw_ptr<DlpRulesManager> rules_manager_;
+  raw_ptr<DlpRulesManager, DanglingUntriaged> rules_manager_;
 };
 
 IN_PROC_BROWSER_TEST_F(DlpRulesPolicyTest, ParsePolicyPref) {
   InitializeRulesManager();
 
-  {
+  {  // Do not remove the brackets, policy update is triggered on
+     // ScopedListPrefUpdate destructor.
     ScopedListPrefUpdate update(g_browser_process->local_state(),
                                 policy_prefs::kDlpRulesList);
 
-    base::Value rules(base::Value::Type::LIST);
+    dlp_test_util::DlpRule rule("rule #1", "Block", "testid1");
+    rule.AddSrcUrl(kUrlStr1).AddRestriction(
+        data_controls::kRestrictionScreenshot, data_controls::kLevelBlock);
 
-    base::Value src_urls(base::Value::Type::LIST);
-    src_urls.Append(kUrlStr1);
-
-    base::Value restrictions(base::Value::Type::LIST);
-    restrictions.Append(dlp_test_util::CreateRestrictionWithLevel(
-        dlp::kScreenshotRestriction, dlp::kBlockLevel));
-
-    update->Append(dlp_test_util::CreateRule(
-        "rule #1", "Block", std::move(src_urls),
-        /*dst_urls=*/base::Value(base::Value::Type::LIST),
-        /*dst_components=*/base::Value(base::Value::Type::LIST),
-        std::move(restrictions)));
+    update->Append(rule.Create());
   }
 
   EXPECT_EQ(DlpRulesManager::Level::kBlock,

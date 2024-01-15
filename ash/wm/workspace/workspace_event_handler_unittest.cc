@@ -13,8 +13,9 @@
 #include "ash/wm/workspace_controller.h"
 #include "ash/wm/workspace_controller_test_api.h"
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/window.h"
@@ -97,8 +98,8 @@ class WindowPropertyObserver : public aura::WindowObserver {
     properties_changed_.push_back(key);
   }
 
-  aura::Window* window_;
-  std::vector<const void*> properties_changed_;
+  raw_ptr<aura::Window> window_;
+  std::vector<raw_ptr<const void, VectorExperimental>> properties_changed_;
 };
 
 TEST_F(WorkspaceEventHandlerTest, DoubleClickSingleAxisResizeEdge) {
@@ -547,10 +548,14 @@ TEST_F(WorkspaceEventHandlerTest, DeleteWhileInRunLoop) {
   delegate.set_window_component(HTCAPTION);
 
   ASSERT_TRUE(::wm::GetWindowMoveClient(window->GetRootWindow()));
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, window.get());
-  ::wm::GetWindowMoveClient(window->GetRootWindow())
-      ->RunMoveLoop(window.release(), gfx::Vector2d(),
-                    ::wm::WINDOW_MOVE_SOURCE_MOUSE);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                window.get());
+
+  aura::Env::GetInstance()->set_mouse_button_flags(ui::EF_LEFT_MOUSE_BUTTON);
+  EXPECT_EQ(::wm::GetWindowMoveClient(window->GetRootWindow())
+                ->RunMoveLoop(window.release(), gfx::Vector2d(),
+                              ::wm::WINDOW_MOVE_SOURCE_MOUSE),
+            ::wm::MOVE_CANCELED);
 }
 
 // Verifies that double clicking in the header does not maximize if the target

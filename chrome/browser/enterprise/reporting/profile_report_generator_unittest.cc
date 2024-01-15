@@ -6,7 +6,6 @@
 
 #include <string>
 
-#include "base/feature_list.h"
 #include "base/json/json_reader.h"
 #include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
@@ -17,8 +16,6 @@
 #include "chrome/browser/profiles/profile_attributes_init_params.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
-#include "chrome/common/chrome_features.h"
-#include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -28,13 +25,14 @@
 #include "components/policy/core/common/policy_map.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "content/public/test/browser_task_environment.h"
-#include "extensions/browser/pref_names.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/enterprise/reporting/reporting_delegate_factory_android.h"
 #else
 #include "chrome/browser/enterprise/reporting/reporting_delegate_factory_desktop.h"
+#include "chrome/common/extensions/extension_constants.h"
+#include "extensions/browser/pref_names.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
 using ::testing::NiceMock;
@@ -137,21 +135,18 @@ class ProfileReportGeneratorTest : public ::testing::Test {
     return report;
   }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_EXTENSIONS)
   void SetExtensionToPendingList(const std::vector<std::string>& ids) {
-    std::unique_ptr<base::Value> id_values =
-        std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
+    base::Value::Dict id_values;
     for (const auto& id : ids) {
-      base::Value request_data(base::Value::Type::DICTIONARY);
-      request_data.SetKey(
-          extension_misc::kExtensionRequestTimestamp,
-          ::base::TimeToValue(base::Time::FromJavaTime(kFakeTime)));
-      if (base::FeatureList::IsEnabled(
-              features::kExtensionWorkflowJustification)) {
-        request_data.SetKey(extension_misc::kExtensionWorkflowJustification,
-                            base::Value(kJustification));
-      }
-      id_values->SetKey(id, std::move(request_data));
+      id_values.Set(
+          id,
+          base::Value::Dict()
+              .Set(extension_misc::kExtensionRequestTimestamp,
+                   ::base::TimeToValue(
+                       base::Time::FromMillisecondsSinceUnixEpoch(kFakeTime)))
+              .Set(extension_misc::kExtensionWorkflowJustification,
+                   base::Value(kJustification)));
     }
     profile()->GetTestingPrefService()->SetUserPref(
         prefs::kCloudExtensionRequestIds, std::move(id_values));
@@ -165,15 +160,13 @@ class ProfileReportGeneratorTest : public ::testing::Test {
         extensions::pref_names::kExtensionManagement,
         base::Value::ToUniquePtrValue(std::move(*settings)));
   }
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   TestingProfile* profile() { return profile_; }
   TestingProfileManager* profile_manager() { return &profile_manager_; }
 
   PlatformReportingDelegateFactory reporting_delegate_factory_;
   ProfileReportGenerator generator_;
-
-  base::test::ScopedFeatureList feature_list_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
@@ -239,7 +232,7 @@ TEST_F(ProfileReportGeneratorTest, ProfileIdObfuscate) {
   EXPECT_NE(report->id(), report3->id());
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(ProfileReportGeneratorTest, PoliciesDisabled) {
   // Users' profile info is collected by default.
   std::unique_ptr<em::ChromeUserProfileInfo> report = GenerateReport();
@@ -258,22 +251,6 @@ TEST_F(ProfileReportGeneratorTest, PoliciesDisabled) {
 }
 
 TEST_F(ProfileReportGeneratorTest, PendingRequest) {
-  profile()->GetTestingPrefService()->SetManagedPref(
-      prefs::kCloudExtensionRequestEnabled,
-      std::make_unique<base::Value>(true));
-  std::vector<std::string> ids = {kExtensionId};
-  SetExtensionToPendingList(ids);
-
-  auto report = GenerateReport();
-  ASSERT_EQ(1, report->extension_requests_size());
-  EXPECT_EQ(kExtensionId, report->extension_requests(0).id());
-  EXPECT_EQ(kFakeTime, report->extension_requests(0).request_timestamp());
-  EXPECT_EQ(std::string(), report->extension_requests(0).justification());
-}
-
-TEST_F(ProfileReportGeneratorTest, PendingRequest_Justification) {
-  feature_list_.InitAndEnableFeature(features::kExtensionWorkflowJustification);
-
   profile()->GetTestingPrefService()->SetManagedPref(
       prefs::kCloudExtensionRequestEnabled,
       std::make_unique<base::Value>(true));
@@ -347,6 +324,6 @@ TEST_F(ProfileReportGeneratorTest, TooManyRequests) {
               report2->extension_requests(id).id());
 }
 
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 }  // namespace enterprise_reporting

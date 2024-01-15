@@ -33,8 +33,6 @@ static constexpr gfx::Size kPrimaryIconSize{16, 16};
 static_assert(kPrimaryIconSize.width() == kPrimaryIconSize.height());
 
 ui::ImageModel ImageForAction(const SharingHubAction& action_info) {
-  if (!action_info.third_party_icon.isNull())
-    return ui::ImageModel::FromImageSkia(action_info.third_party_icon);
   return ui::ImageModel::FromVectorIcon(*action_info.icon, ui::kColorMenuIcon,
                                         kPrimaryIconSize.width());
 }
@@ -44,9 +42,7 @@ ui::ImageModel ImageForAction(const SharingHubAction& action_info) {
 SharingHubBubbleActionButton::SharingHubBubbleActionButton(
     SharingHubBubbleViewImpl* bubble,
     const SharingHubAction& action_info)
-    : action_command_id_(action_info.command_id),
-      action_is_first_party_(action_info.is_first_party),
-      action_name_for_metrics_(action_info.feature_name_for_metrics) {
+    : action_info_(action_info) {
   auto* layout = SetLayoutManager(std::make_unique<views::FlexLayout>());
   layout->SetOrientation(views::LayoutOrientation::kHorizontal)
       .SetMainAxisAlignment(views::LayoutAlignment::kStart)
@@ -55,7 +51,20 @@ SharingHubBubbleActionButton::SharingHubBubbleActionButton(
       .SetDefault(views::kMarginsKey, kDefaultMargin)
       .SetCollapseMargins(true);
 
-  SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
+  // Even though this is a button, which would normally use ACCESSIBLE_ONLY,
+  // we really do want ALWAYS here. Visually, these buttons are presented as
+  // a menu, which means we need these to be keyboard-traversable with the
+  // arrow keys to match the behavior of other menus, and they're only keyboard
+  // traversable when focusable.
+  //
+  // This creates a different divergence from menu behavior: the individual
+  // items in the sharing hub are also tab-traversable, while items in a menu
+  // are not. That's annoying, but not as bad as the surface being keyboard
+  // inaccessible, so we live with it.
+  //
+  // See https://crbug.com/1404226 and https://crbug.com/1323053.
+  SetFocusBehavior(FocusBehavior::ALWAYS);
+
   SetEnabled(true);
   SetBackground(views::CreateThemedSolidBackground(ui::kColorMenuBackground));
   SetCallback(base::BindRepeating(&SharingHubBubbleViewImpl::OnActionSelected,
@@ -71,12 +80,7 @@ SharingHubBubbleActionButton::SharingHubBubbleActionButton(
       action_info.title, views::style::CONTEXT_MENU));
   title_->SetCanProcessEventsWithinSubtree(false);
 
-  if (action_is_first_party_) {
-    GetViewAccessibility().OverrideName(title_->GetText());
-  } else {
-    GetViewAccessibility().OverrideName(l10n_util::GetStringFUTF16(
-        IDS_SHARING_HUB_SHARE_LABEL_ACCESSIBILITY, title_->GetText()));
-  }
+  GetViewAccessibility().OverrideName(title_->GetText());
 }
 
 SharingHubBubbleActionButton::~SharingHubBubbleActionButton() = default;
@@ -118,7 +122,7 @@ void SharingHubBubbleActionButton::UpdateColors() {
                                   : views::style::STYLE_PRIMARY);
 }
 
-BEGIN_METADATA(SharingHubBubbleActionButton, Button)
+BEGIN_METADATA(SharingHubBubbleActionButton)
 END_METADATA
 
 }  // namespace sharing_hub

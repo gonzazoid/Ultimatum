@@ -11,16 +11,18 @@
 #include "ash/components/arc/compat_mode/metrics.h"
 #include "ash/components/arc/compat_mode/resize_confirmation_dialog_view.h"
 #include "ash/constants/notifier_catalogs.h"
+#include "ash/public/cpp/arc_compat_mode_util.h"
 #include "ash/public/cpp/arc_resize_lock_type.h"
 #include "ash/public/cpp/system/toast_data.h"
 #include "ash/public/cpp/system/toast_manager.h"
 #include "ash/public/cpp/window_properties.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/stl_util.h"
 #include "components/exo/shell_surface_base.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/strings/grit/components_strings.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
@@ -68,16 +70,27 @@ gfx::Size GetPossibleSizeInWorkArea(views::Widget* widget,
 }
 
 void ResizeToPhone(views::Widget* widget) {
-  if (widget->IsMaximized())
-    widget->Restore();
+  // Clear the restore state/bounds key to make sure it's going to be restored
+  // to normal state.
+  widget->GetNativeWindow()->ClearProperty(aura::client::kRestoreShowStateKey);
+  widget->GetNativeWindow()->ClearProperty(aura::client::kRestoreBoundsKey);
+  // Always make sure the window is in normal state because the window might be
+  // maximized/snapped.
+  widget->Restore();
+
   widget->CenterWindow(GetPossibleSizeInWorkArea(widget, kPortraitPhoneDp));
 
   RecordResizeLockAction(ResizeLockActionType::ResizeToPhone);
 }
 
 void ResizeToTablet(views::Widget* widget) {
-  if (widget->IsMaximized())
-    widget->Restore();
+  // Clear the restore state/bounds key to make sure it's going to be restored
+  // to normal state.
+  widget->GetNativeWindow()->ClearProperty(aura::client::kRestoreShowStateKey);
+  widget->GetNativeWindow()->ClearProperty(aura::client::kRestoreBoundsKey);
+  // Always make sure the window is in normal state because the window might be
+  // maximized/snapped.
+  widget->Restore();
 
   // We here don't shrink the preferred size according to the available workarea
   // bounds like ResizeToPhone, because we'd like to let Android decide if the
@@ -121,7 +134,7 @@ void TurnOffResizeLock(views::Widget* target_widget,
   ash::ToastData toast(
       kTurnOffResizeLockToastId, ash::ToastCatalogName::kAppResizable,
       l10n_util::GetStringUTF16(IDS_ARC_COMPAT_MODE_DISABLE_RESIZE_LOCK_TOAST));
-  toast_manager->Show(toast);
+  toast_manager->Show(std::move(toast));
 }
 
 void TurnOffResizeLockWithConfirmationIfNeeded(
@@ -137,7 +150,7 @@ void TurnOffResizeLockWithConfirmationIfNeeded(
   // Set target app window as parent so that the dialog will be destroyed
   // together when the app window is destroyed (e.g. app crashed).
   ResizeConfirmationDialogView::Show(
-      /*parent=*/target_widget->GetNativeWindow(),
+      /*parent=*/target_widget,
       base::BindOnce(
           [](views::Widget* widget, ArcResizeLockPrefDelegate* delegate,
              bool accepted, bool do_not_ask_again) {
@@ -170,28 +183,6 @@ void EnableResizingWithConfirmationIfNeeded(
     views::Widget* widget,
     ArcResizeLockPrefDelegate* pref_delegate) {
   TurnOffResizeLockWithConfirmationIfNeeded(widget, pref_delegate);
-}
-
-ResizeCompatMode PredictCurrentMode(const views::Widget* widget) {
-  return PredictCurrentMode(widget->GetNativeWindow());
-}
-
-ResizeCompatMode PredictCurrentMode(const aura::Window* window) {
-  const auto resize_lock_type = window->GetProperty(ash::kArcResizeLockTypeKey);
-  if (resize_lock_type == ash::ArcResizeLockType::NONE ||
-      resize_lock_type == ash::ArcResizeLockType::RESIZE_ENABLED_TOGGLABLE) {
-    return ResizeCompatMode::kResizable;
-  }
-
-  const int width = window->bounds().width();
-  const int height = window->bounds().height();
-  // We don't use the exact size here to predict tablet or phone size because
-  // the window size might be bigger than it due to the ARC app-side minimum
-  // size constraints.
-  if (width <= height)
-    return ResizeCompatMode::kPhone;
-
-  return ResizeCompatMode::kTablet;
 }
 
 bool ShouldShowSplashScreenDialog(ArcResizeLockPrefDelegate* pref_delegate) {

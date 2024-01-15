@@ -23,11 +23,13 @@ BLINK_COMMON_EXPORT extern const char
 
 struct BLINK_COMMON_EXPORT TrackControls {
   TrackControls();
-  explicit TrackControls(bool request, mojom::MediaStreamType type);
+  explicit TrackControls(mojom::MediaStreamType type);
   TrackControls(const TrackControls& other);
   ~TrackControls();
 
-  bool requested = false;
+  bool requested() const {
+    return stream_type != mojom::MediaStreamType::NO_SERVICE;
+  }
 
   // Represents the requested  stream type.
   mojom::MediaStreamType stream_type = mojom::MediaStreamType::NO_SERVICE;
@@ -54,6 +56,7 @@ struct BLINK_COMMON_EXPORT StreamControls {
   // TODO(crbug.com/577627): this is now never set and needs to be removed.
   bool hotword_enabled = false;
   bool disable_local_echo = false;
+  bool suppress_local_audio_playback = false;
   bool exclude_system_audio = false;
   bool exclude_self_browser_surface = false;
   bool request_pan_tilt_zoom_permission = false;
@@ -63,6 +66,7 @@ struct BLINK_COMMON_EXPORT StreamControls {
   // Flag to request that a "Share this tab instead" button is shown to change
   // the target of the tab-capture to the other tab.
   bool dynamic_surface_switching_requested = true;
+  bool exclude_monitor_type_surfaces = false;
 };
 
 }  // namespace blink

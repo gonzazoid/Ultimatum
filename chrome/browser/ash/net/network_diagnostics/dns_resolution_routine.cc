@@ -5,10 +5,11 @@
 #include "chrome/browser/ash/net/network_diagnostics/dns_resolution_routine.h"
 
 #include <iterator>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -17,14 +18,13 @@
 #include "net/base/host_port_pair.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_anonymization_key.h"
+#include "services/network/public/cpp/simple_host_resolver.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace ash {
-namespace network_diagnostics {
+namespace ash::network_diagnostics {
+
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 constexpr char kHostname[] = "ccd-testing-v4.gstatic.com";
@@ -77,21 +77,12 @@ void DnsResolutionRoutine::AnalyzeResultsAndExecuteCallback() {
 }
 
 void DnsResolutionRoutine::CreateHostResolver() {
-  host_resolver_.reset();
-  network_context()->CreateHostResolver(
-      net::DnsConfigOverrides(), host_resolver_.BindNewPipeAndPassReceiver());
-}
-
-void DnsResolutionRoutine::OnMojoConnectionError() {
-  host_resolver_.reset();
-  OnComplete(net::ERR_NAME_NOT_RESOLVED, net::ResolveErrorInfo(net::ERR_FAILED),
-             /*resolved_addresses=*/absl::nullopt,
-             /*endpoint_results_with_metadata=*/absl::nullopt);
+  CHECK(!host_resolver_);
+  host_resolver_ = network::SimpleHostResolver::Create(network_context());
 }
 
 void DnsResolutionRoutine::AttemptResolution() {
-  DCHECK(host_resolver_);
-  DCHECK(!receiver_.is_bound());
+  CHECK(host_resolver_);
 
   network::mojom::ResolveHostParametersPtr parameters =
       network::mojom::ResolveHostParameters::New();
@@ -103,29 +94,24 @@ void DnsResolutionRoutine::AttemptResolution() {
   // Intentionally using a HostPortPair not to trigger ERR_DNS_NAME_HTTPS_ONLY
   // error while resolving http:// scheme host when a HTTPS resource record
   // exists.
+  // Unretained(this) is safe here because the callback is invoked directly by
+  // |host_resolver_| which is owned by |this|.
   host_resolver_->ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
                                   net::HostPortPair(kHostname, kHttpPort)),
                               net::NetworkAnonymizationKey::CreateTransient(),
                               std::move(parameters),
-                              receiver_.BindNewPipeAndPassRemote());
-  // The host resolver is part of the network service, which may be run inside
-  // the browser process (in-process) or a dedicated utility process
-  // (out-of-process). If the network service crashes, the disconnect handler
-  // below will be invoked. See README in services/network for more information.
-  receiver_.set_disconnect_handler(base::BindOnce(
-      &DnsResolutionRoutine::OnMojoConnectionError, base::Unretained(this)));
+                              base::BindOnce(&DnsResolutionRoutine::OnComplete,
+                                             base::Unretained(this)));
 }
 
 void DnsResolutionRoutine::OnComplete(
     int result,
     const net::ResolveErrorInfo& resolve_error_info,
-    const absl::optional<net::AddressList>& resolved_addresses,
-    const absl::optional<net::HostResolverEndpointResults>&
+    const std::optional<net::AddressList>& resolved_addresses,
+    const std::optional<net::HostResolverEndpointResults>&
         endpoint_results_with_metadata) {
-  receiver_.reset();
-
-  if (result == net::OK && !resolved_addresses->empty() &&
-      resolved_addresses.has_value()) {
+  if (result == net::OK) {
+    CHECK(resolved_addresses);
     resolved_address_received_ = true;
     AnalyzeResultsAndExecuteCallback();
     return;
@@ -138,5 +124,4 @@ void DnsResolutionRoutine::OnComplete(
   }
 }
 
-}  // namespace network_diagnostics
-}  // namespace ash
+}  // namespace ash::network_diagnostics

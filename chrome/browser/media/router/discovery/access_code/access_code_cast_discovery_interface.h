@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_MEDIA_ROUTER_DISCOVERY_ACCESS_CODE_ACCESS_CODE_CAST_DISCOVERY_INTERFACE_H_
 #define CHROME_BROWSER_MEDIA_ROUTER_DISCOVERY_ACCESS_CODE_ACCESS_CODE_CAST_DISCOVERY_INTERFACE_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/media/router/discovery/access_code/discovery_resources.pb.h"
@@ -56,10 +57,22 @@ class AccessCodeCastDiscoveryInterface {
   // AddSinkResultCode::OK is returned.
   void ValidateDiscoveryAccessCode(DiscoveryDeviceCallback callback);
 
+  void SetCallbackForTesting(DiscoveryDeviceCallback callback) {
+    callback_ = std::move(callback);
+  }
+
  private:
   friend class AccessCodeCastDiscoveryInterfaceTest;
   FRIEND_TEST_ALL_PREFIXES(AccessCodeCastDiscoveryInterfaceTest,
                            CommandLineSwitch);
+  FRIEND_TEST_ALL_PREFIXES(AccessCodeCastDiscoveryInterfaceTest,
+                           HandleServerErrorProfileSyncError);
+  FRIEND_TEST_ALL_PREFIXES(AccessCodeCastDiscoveryInterfaceTest,
+                           HandleServerErrorAuthError);
+  FRIEND_TEST_ALL_PREFIXES(AccessCodeCastDiscoveryInterfaceTest,
+                           HandleServerErrorServerError);
+  FRIEND_TEST_ALL_PREFIXES(AccessCodeCastDiscoveryInterfaceTest,
+                           HandleServerErrorResponseMalformedError);
 
   std::unique_ptr<EndpointFetcher> CreateEndpointFetcher(
       const std::string& access_code);
@@ -84,18 +97,23 @@ class AccessCodeCastDiscoveryInterface {
   ConstructDiscoveryDeviceFromJson(base::Value json_response);
   void HandleDiscoveryDeviceJsonError(const std::string& field_missing);
   void HandleServerResponse(std::unique_ptr<EndpointResponse> response);
-  void ReportError(AddSinkResultCode error);
+
+  // Should only be called if the response has a error_type set in the struct.
+  void HandleServerError(std::unique_ptr<EndpointResponse> response);
+
+  // Function that runs the member variable callback with the given error.
+  void ReportErrorViaCallback(AddSinkResultCode error);
 
   AddSinkResultCode GetErrorFromResponse(const base::Value& response);
   AddSinkResultCode IsResponseValid(
       const absl::optional<base::Value>& response);
 
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   // Access code passed down from the WebUI and used in the construction of the
   // discovery interface object.
   const std::string access_code_;
 
-  const raw_ptr<LoggerImpl> logger_;
+  const raw_ptr<LoggerImpl, DanglingUntriaged> logger_;
 
   const raw_ptr<signin::IdentityManager> identity_manager_;
 

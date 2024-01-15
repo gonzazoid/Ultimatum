@@ -8,9 +8,9 @@
 #include <limits>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -422,8 +422,7 @@ const char* VideoCaptureOracle::EventAsString(Event event) {
     case kNumEvents:
       break;
   }
-  NOTREACHED();
-  return "unknown";
+  NOTREACHED_NORETURN();
 }
 
 base::TimeTicks VideoCaptureOracle::GetFrameTimestamp(int frame_number) const {

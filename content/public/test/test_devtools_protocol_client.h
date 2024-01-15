@@ -6,14 +6,15 @@
 #define CONTENT_PUBLIC_TEST_TEST_DEVTOOLS_PROTOCOL_CLIENT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/functional/function_ref.h"
 #include "base/values.h"
 #include "content/public/browser/devtools_agent_host.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -53,6 +54,7 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
                                               bool wait);
 
   void AttachToWebContents(WebContents* web_contents);
+  void AttachToTabTarget(WebContents* web_contents);
   void AttachToBrowserTarget();
 
   void DetachProtocolClient() {
@@ -64,6 +66,8 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
 
   bool HasExistingNotification() const { return !notifications_.empty(); }
   bool HasExistingNotification(const std::string& notification) const;
+  bool HasExistingNotificationMatching(
+      base::FunctionRef<bool(const base::Value::Dict&)> pred) const;
 
   base::Value::Dict WaitForNotification(const std::string& notification,
                                         bool allow_existing);
@@ -95,6 +99,10 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
     may_read_local_files_ = may_read_local_files;
   }
 
+  void SetMayWriteLocalFiles(bool may_write_local_files) {
+    may_write_local_files_ = may_write_local_files;
+  }
+
   const base::Value::Dict* result() const;
   const base::Value::Dict* error() const;
   int received_responses_count() const { return received_responses_count_; }
@@ -110,10 +118,11 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
   void DispatchProtocolMessage(DevToolsAgentHost* agent_host,
                                base::span<const uint8_t> message) override;
   void AgentHostClosed(DevToolsAgentHost* agent_host) override;
-  absl::optional<url::Origin> GetNavigationInitiatorOrigin() override;
+  std::optional<url::Origin> GetNavigationInitiatorOrigin() override;
   bool AllowUnsafeOperations() override;
   bool IsTrusted() override;
   bool MayReadLocalFiles() override;
+  bool MayWriteLocalFiles() override;
 
   int last_sent_id_ = 0;
   int waiting_for_command_result_id_ = 0;
@@ -131,8 +140,9 @@ class TestDevToolsProtocolClient : public DevToolsAgentHostClient {
 
   bool allow_unsafe_operations_ = true;
   bool is_trusted_ = true;
-  absl::optional<url::Origin> navigation_initiator_origin_;
+  std::optional<url::Origin> navigation_initiator_origin_;
   bool may_read_local_files_ = true;
+  bool may_write_local_files_ = true;
 };
 
 }  // namespace content

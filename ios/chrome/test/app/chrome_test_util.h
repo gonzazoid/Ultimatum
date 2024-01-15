@@ -6,10 +6,11 @@
 #define IOS_CHROME_TEST_APP_CHROME_TEST_UTIL_H_
 
 #import "base/ios/block_types.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
 
 @protocol ApplicationCommands;
+@protocol UnitConversionCommands;
 class Browser;
 class ChromeBrowserState;
 @class MainController;
@@ -47,7 +48,10 @@ Browser* GetMainBrowser();
 UIViewController* GetActiveViewController();
 
 // Returns the dispatcher for the active Browser.
-id<ApplicationCommands, BrowserCommands, BrowserCoordinatorCommands>
+id<ApplicationCommands,
+   BrowserCommands,
+   BrowserCoordinatorCommands,
+   UnitConversionCommands>
 HandlerForActiveBrowser();
 
 // Removes all presented infobars.
@@ -56,6 +60,10 @@ void RemoveAllInfoBars();
 // Dismisses all presented views and modal dialogs. `completion` is invoked when
 // all the views are dismissed.
 void ClearPresentedState(ProceduralBlock completion);
+
+// Presents the signed in accounts view controller if conditions to be presented
+// are met.
+void PresentSignInAccountsViewControllerIfNecessary();
 
 // Sets the value of a boolean local state pref.
 // TODO(crbug.com/647022): Clean up other tests that use this helper function.

@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/files/file_error_or.h"
@@ -15,12 +16,11 @@
 #include "base/time/time.h"
 #include "chrome/browser/ash/file_manager/file_manager_copy_or_move_hook_delegate.h"
 #include "chrome/browser/ash/file_manager/io_task.h"
-#include "chrome/browser/ash/file_manager/speedometer.h"
 #include "chrome/browser/ash/file_manager/trash_common_util.h"
+#include "chromeos/ash/components/file_manager/speedometer.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/file_system_url.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -192,7 +192,7 @@ class TrashIOTask : public IOTask {
 
   // Stores the id of the operations currently behind undertaken by Trash,
   // including directory creation. Enables cancelling an inflight operation.
-  absl::optional<storage::FileSystemOperationRunner::OperationID> operation_id_;
+  std::optional<storage::FileSystemOperationRunner::OperationID> operation_id_;
 
   ProgressCallback progress_callback_;
   CompleteCallback complete_callback_;

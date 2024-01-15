@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/policy/handlers/lock_to_single_user_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
@@ -150,7 +150,7 @@ void LockToSingleUserManager::LockToSingleUser() {
 }
 
 void LockToSingleUserManager::OnLockToSingleUserMountUntilRebootDone(
-    absl::optional<RebootOnSignOutReply> reply) {
+    std::optional<RebootOnSignOutReply> reply) {
   if (!reply.has_value()) {
     LOG(ERROR) << "Signing out user: no reply from "
                   "LockToSingleUserMountUntilReboot D-Bus call.";

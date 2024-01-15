@@ -8,9 +8,11 @@
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history_clusters/core/config.h"
+#include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/history_clusters_prefs.h"
 #include "components/history_clusters/core/history_clusters_service.h"
 #include "components/history_clusters/core/history_clusters_service_test_api.h"
@@ -25,6 +27,7 @@
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/metrics_proto/omnibox_event.pb.h"
 #include "third_party/omnibox_proto/groups.pb.h"
 
 AutocompleteMatch CreateMatch(std::u16string contents,
@@ -42,13 +45,26 @@ class HistoryClustersProviderTest : public testing::Test,
                                     public AutocompleteProviderListener {
  public:
   void SetUp() override {
+    scoped_feature_list_.InitAndDisableFeature(
+        history_clusters::kRenameJourneys);
+
     config_.is_journeys_enabled_no_locale_check = true;
     config_.omnibox_history_cluster_provider = true;
+    // Setting this to false even though users see true behavior so that we do
+    // not need to register history clusters specific prefs in this test.
+    config_.persist_caches_to_prefs = false;
     history_clusters::SetConfigForTesting(config_);
 
     CHECK(history_dir_.CreateUniqueTempDir());
     history_service_ =
         history::CreateHistoryService(history_dir_.GetPath(), true);
+
+    autocomplete_provider_client_ =
+        std::make_unique<FakeAutocompleteProviderClient>();
+    static_cast<TestingPrefServiceSimple*>(
+        autocomplete_provider_client_->GetPrefs())
+        ->registry()
+        ->RegisterBooleanPref(history_clusters::prefs::kVisible, true);
 
     history_clusters_service_ =
         std::make_unique<history_clusters::HistoryClustersService>(
@@ -56,22 +72,17 @@ class HistoryClustersProviderTest : public testing::Test,
             /*entity_metadata_provider=*/nullptr,
             /*url_loader_factory=*/nullptr,
             /*engagement_score_provider=*/nullptr,
-            /*optimization_guide_decider=*/nullptr);
+            /*template_url_service=*/nullptr,
+            /*optimization_guide_decider=*/nullptr,
+            autocomplete_provider_client_->GetPrefs());
 
     history_clusters_service_test_api_ =
         std::make_unique<history_clusters::HistoryClustersServiceTestApi>(
             history_clusters_service_.get(), history_service_.get());
     history_clusters_service_test_api_->SetAllKeywordsCache(
         {{u"keyword", {}}, {u"keyword2", {}}});
-
-    autocomplete_provider_client_ =
-        std::make_unique<FakeAutocompleteProviderClient>();
     autocomplete_provider_client_->set_history_clusters_service(
         history_clusters_service_.get());
-    static_cast<TestingPrefServiceSimple*>(
-        autocomplete_provider_client_->GetPrefs())
-        ->registry()
-        ->RegisterBooleanPref(history_clusters::prefs::kVisible, true);
 
     search_provider_ =
         new FakeAutocompleteProvider(AutocompleteProvider::Type::TYPE_SEARCH);
@@ -82,6 +93,10 @@ class HistoryClustersProviderTest : public testing::Test,
     provider_ = new HistoryClusterProvider(
         autocomplete_provider_client_.get(), this, search_provider_.get(),
         history_url_provider_.get(), history_quick_provider_.get());
+  }
+
+  void TearDown() override {
+    autocomplete_provider_client_->set_history_clusters_service(nullptr);
   }
 
   ~HistoryClustersProviderTest() override {
@@ -98,18 +113,11 @@ class HistoryClustersProviderTest : public testing::Test,
   }
 
   void VerifyFeatureTriggered(bool expected) {
-    auto* triggered_feature_service =
-        autocomplete_provider_client_->GetOmniboxTriggeredFeatureService();
-    OmniboxTriggeredFeatureService::Features triggered_features;
-    triggered_feature_service->RecordToLogs(&triggered_features);
-    triggered_feature_service->ResetSession();
-    if (expected) {
-      ASSERT_TRUE(!triggered_features.empty());
-      EXPECT_EQ(
-          *triggered_features.begin(),
-          OmniboxTriggeredFeatureService::Feature::kHistoryClusterSuggestion);
-    } else
-      EXPECT_TRUE(triggered_features.empty());
+    EXPECT_EQ(
+        autocomplete_provider_client_->GetOmniboxTriggeredFeatureService()
+            ->GetFeatureTriggeredInSession(
+                metrics::OmniboxEventProto_Feature_HISTORY_CLUSTER_SUGGESTION),
+        expected);
   }
 
   // Tracks `OnProviderUpdate()` invocations.
@@ -117,12 +125,14 @@ class HistoryClustersProviderTest : public testing::Test,
 
   base::test::TaskEnvironment task_environment_;
 
+  base::test::ScopedFeatureList scoped_feature_list_;
+
+  std::unique_ptr<FakeAutocompleteProviderClient> autocomplete_provider_client_;
+
   base::ScopedTempDir history_dir_;
   std::unique_ptr<history::HistoryService> history_service_;
   std::unique_ptr<history_clusters::HistoryClustersService>
       history_clusters_service_;
-
-  std::unique_ptr<FakeAutocompleteProviderClient> autocomplete_provider_client_;
 
   scoped_refptr<FakeAutocompleteProvider> search_provider_;
   scoped_refptr<FakeAutocompleteProvider> history_url_provider_;
@@ -161,10 +171,8 @@ TEST_F(HistoryClustersProviderTest, SyncSearchMatches) {
   ASSERT_EQ(provider_->matches().size(), 1u);
   EXPECT_EQ(provider_->matches()[0].relevance, 900);
   EXPECT_EQ(provider_->matches()[0].description, u"keyword");
-  EXPECT_EQ(provider_->matches()[0].contents,
-            u"chrome://history/journeys?q=keyword");
-  EXPECT_EQ(provider_->matches()[0].fill_into_edit,
-            u"chrome://history/journeys?q=keyword");
+  EXPECT_EQ(provider_->matches()[0].contents, u"Resume your journey");
+  EXPECT_EQ(provider_->matches()[0].fill_into_edit, u"keyword");
   EXPECT_EQ(provider_->matches()[0].destination_url,
             GURL("chrome://history/journeys?q=keyword"));
 
@@ -447,25 +455,8 @@ TEST_F(HistoryClustersProviderTest, Counterfactual_Enabled) {
   VerifyFeatureTriggered(true);
 }
 
-TEST_F(HistoryClustersProviderTest, Grouping) {
-  // By default, should have groups.
-  AutocompleteInput input;
-  input.set_omit_asynchronous_matches(false);
-  search_provider_->matches_ = {CreateMatch(u"keyword")};
-  search_provider_->done_ = true;
-
-  provider_->Start(input, false);
-  ASSERT_EQ(provider_->matches().size(), 1u);
-  EXPECT_EQ(provider_->matches()[0].suggestion_group_id,
-            omnibox::GROUP_HISTORY_CLUSTER);
-}
-
-TEST_F(HistoryClustersProviderTest, Grouping_FreeRanking) {
-  // When `omnibox_history_cluster_provider_free_ranking` is enabled, should not
-  // have groups.
-  config_.omnibox_history_cluster_provider_free_ranking = true;
-  history_clusters::SetConfigForTesting(config_);
-
+TEST_F(HistoryClustersProviderTest, Grouping_Ranking) {
+  // Should not have groups.
   AutocompleteInput input;
   input.set_omit_asynchronous_matches(false);
   search_provider_->matches_ = {CreateMatch(u"keyword")};

@@ -4,10 +4,10 @@
 
 #include "chromeos/ash/components/dbus/upstart/fake_upstart_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "chromeos/ash/components/dbus/authpolicy/fake_authpolicy_client.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/dbus/kerberos/fake_kerberos_client.h"
 #include "chromeos/ash/components/dbus/kerberos/kerberos_client.h"
 #include "chromeos/ash/components/dbus/media_analytics/fake_media_analytics_client.h"
@@ -34,12 +34,26 @@ FakeUpstartClient* FakeUpstartClient::Get() {
   return g_instance;
 }
 
+FakeUpstartClient::StartJobResult::StartJobResult(
+    bool success,
+    std::optional<std::string> error_name,
+    std::optional<std::string> error_message)
+    : success(success),
+      error_name(std::move(error_name)),
+      error_message(std::move(error_message)) {}
+
+FakeUpstartClient::StartJobResult::~StartJobResult() = default;
+
 void FakeUpstartClient::StartJob(const std::string& job,
                                  const std::vector<std::string>& upstart_env,
                                  chromeos::VoidDBusMethodCallback callback) {
+  if (is_recording_) {
+    upstart_operations_.emplace_back(job, upstart_env,
+                                     UpstartOperationType::START);
+  }
   const bool result =
-      start_job_cb_ ? start_job_cb_.Run(job, upstart_env) : true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      start_job_cb_ ? start_job_cb_.Run(job, upstart_env).success : true;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), result));
 }
 
@@ -47,33 +61,29 @@ void FakeUpstartClient::StartJobWithErrorDetails(
     const std::string& job,
     const std::vector<std::string>& upstart_env,
     StartJobWithErrorDetailsCallback callback) {
-  const bool result =
-      start_job_cb_ ? start_job_cb_.Run(job, upstart_env) : true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), result, absl::nullopt,
-                                absl::nullopt));
+  if (is_recording_) {
+    upstart_operations_.emplace_back(job, upstart_env,
+                                     UpstartOperationType::START);
+  }
+  const StartJobResult result = start_job_cb_
+                                    ? start_job_cb_.Run(job, upstart_env)
+                                    : StartJobResult(true /* success */);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), result.success,
+                                result.error_name, result.error_message));
 }
 
 void FakeUpstartClient::StopJob(const std::string& job,
                                 const std::vector<std::string>& upstart_env,
                                 chromeos::VoidDBusMethodCallback callback) {
+  if (is_recording_) {
+    upstart_operations_.emplace_back(job, upstart_env,
+                                     UpstartOperationType::STOP);
+  }
   const bool result = stop_job_cb_ ? stop_job_cb_.Run(job, upstart_env) : true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), result));
 }
-
-void FakeUpstartClient::StartAuthPolicyService() {
-  FakeAuthPolicyClient::Get()->SetStarted(true);
-}
-
-void FakeUpstartClient::RestartAuthPolicyService() {
-  DLOG_IF(WARNING, !FakeAuthPolicyClient::Get()->started())
-      << "Trying to restart authpolicyd which is not started";
-  FakeAuthPolicyClient::Get()->SetStarted(true);
-}
-
-void FakeUpstartClient::StartLacrosChrome(
-    const std::vector<std::string>& upstart_env) {}
 
 void FakeUpstartClient::StartMediaAnalytics(
     const std::vector<std::string>& /* upstart_env */,
@@ -81,7 +91,7 @@ void FakeUpstartClient::StartMediaAnalytics(
   DLOG_IF(WARNING, FakeMediaAnalyticsClient::Get()->process_running())
       << "Trying to start media analytics which is already started.";
   FakeMediaAnalyticsClient::Get()->set_process_running(true);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
@@ -90,7 +100,7 @@ void FakeUpstartClient::RestartMediaAnalytics(
   FakeMediaAnalyticsClient::Get()->set_process_running(false);
   FakeMediaAnalyticsClient::Get()->set_process_running(true);
   FakeMediaAnalyticsClient::Get()->SetStateSuspended();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
@@ -103,33 +113,51 @@ void FakeUpstartClient::StopMediaAnalytics() {
 void FakeUpstartClient::StopMediaAnalytics(
     chromeos::VoidDBusMethodCallback callback) {
   FakeMediaAnalyticsClient::Get()->set_process_running(false);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeUpstartClient::StartWilcoDtcService(
     chromeos::VoidDBusMethodCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeUpstartClient::StopWilcoDtcService(
     chromeos::VoidDBusMethodCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
-void FakeUpstartClient::StartArcDataSnapshotd(
-    const std::vector<std::string>& upstart_env,
-    chromeos::VoidDBusMethodCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+void FakeUpstartClient::StartRecordingUpstartOperations() {
+  if (is_recording_) {
+    LOG(WARNING) << "Already recording Upstart operations";
+  }
+  is_recording_ = true;
 }
 
-void FakeUpstartClient::StopArcDataSnapshotd(
-    chromeos::VoidDBusMethodCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+std::vector<FakeUpstartClient::UpstartOperation>
+FakeUpstartClient::GetRecordedUpstartOperationsForJob(const std::string& name) {
+  std::vector<FakeUpstartClient::UpstartOperation> filtered_ops;
+  base::ranges::copy_if(
+      upstart_operations_, std::back_inserter(filtered_ops),
+      [&name](const UpstartOperation& op) { return op.name == name; });
+  return filtered_ops;
 }
+
+FakeUpstartClient::UpstartOperation::UpstartOperation(
+    const std::string& name,
+    const std::vector<std::string>& env,
+    UpstartOperationType type)
+    : name(name), env(env), type(type) {}
+
+FakeUpstartClient::UpstartOperation::UpstartOperation(
+    const FakeUpstartClient::UpstartOperation& other) = default;
+
+FakeUpstartClient::UpstartOperation&
+FakeUpstartClient::UpstartOperation::operator=(
+    const FakeUpstartClient::UpstartOperation&) = default;
+
+FakeUpstartClient::UpstartOperation::~UpstartOperation() = default;
 
 }  // namespace ash

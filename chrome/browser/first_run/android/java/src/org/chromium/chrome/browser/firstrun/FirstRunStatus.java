@@ -6,19 +6,17 @@ package org.chromium.chrome.browser.firstrun;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 
-/**
- * Gets and sets preferences related to the status of the first run experience.
- */
+/** Gets and sets preferences related to the status of the first run experience. */
 public class FirstRunStatus {
     // Whether the first run flow is triggered in the current browser session.
     private static boolean sFirstRunTriggered;
 
     /** @param triggered whether the first run flow is triggered in the current browser session. */
-    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
-    public static void setFirstRunTriggered(boolean triggered) {
+    static void setFirstRunTriggered(boolean triggered) {
         sFirstRunTriggered = triggered;
     }
 
@@ -28,13 +26,22 @@ public class FirstRunStatus {
     }
 
     /**
+     * Test only setter for #setFirstRunTriggered, which will be reset to false after test.
+     * @see #setFirstRunTriggered(boolean).
+     */
+    public static void setFirstRunTriggeredForTesting(boolean triggered) {
+        setFirstRunTriggered(triggered);
+        ResettersForTesting.register(() -> sFirstRunTriggered = false);
+    }
+
+    /**
      * Sets the "main First Run Experience flow complete" preference.
      * @param isComplete Whether the main First Run Experience flow is complete
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void setFirstRunFlowComplete(boolean isComplete) {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.FIRST_RUN_FLOW_COMPLETE, isComplete);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.FIRST_RUN_FLOW_COMPLETE, isComplete);
     }
 
     /**
@@ -43,8 +50,8 @@ public class FirstRunStatus {
      * includes ToS and Sign In pages if necessary.
      */
     public static boolean getFirstRunFlowComplete() {
-        return SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.FIRST_RUN_FLOW_COMPLETE, false);
+        return ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.FIRST_RUN_FLOW_COMPLETE, false);
     }
 
     /**
@@ -53,16 +60,14 @@ public class FirstRunStatus {
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void setSkipWelcomePage(boolean isSkip) {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.FIRST_RUN_SKIP_WELCOME_PAGE, isSkip);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.FIRST_RUN_SKIP_WELCOME_PAGE, isSkip);
     }
 
-    /**
-     * Checks whether the welcome page should be skipped from the main First Run Experience.
-     */
+    /** Checks whether the welcome page should be skipped from the main First Run Experience. */
     public static boolean shouldSkipWelcomePage() {
-        return SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.FIRST_RUN_SKIP_WELCOME_PAGE, false);
+        return ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.FIRST_RUN_SKIP_WELCOME_PAGE, false);
     }
 
     /**
@@ -71,16 +76,14 @@ public class FirstRunStatus {
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void setLightweightFirstRunFlowComplete(boolean isComplete) {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.FIRST_RUN_LIGHTWEIGHT_FLOW_COMPLETE, isComplete);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.FIRST_RUN_LIGHTWEIGHT_FLOW_COMPLETE, isComplete);
     }
 
-    /**
-     * Returns whether the "lightweight First Run Experience flow" is complete.
-     */
+    /** Returns whether the "lightweight First Run Experience flow" is complete. */
     public static boolean getLightweightFirstRunFlowComplete() {
-        return SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.FIRST_RUN_LIGHTWEIGHT_FLOW_COMPLETE, false);
+        return ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.FIRST_RUN_LIGHTWEIGHT_FLOW_COMPLETE, false);
     }
 
     /**
@@ -95,8 +98,8 @@ public class FirstRunStatus {
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void setFirstRunSkippedByPolicy(boolean isSkipped) {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.FIRST_RUN_SKIPPED_BY_POLICY, isSkipped);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.FIRST_RUN_SKIPPED_BY_POLICY, isSkipped);
     }
 
     /**
@@ -104,7 +107,7 @@ public class FirstRunStatus {
      * @see #setFirstRunSkippedByPolicy
      * */
     public static boolean isFirstRunSkippedByPolicy() {
-        return SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.FIRST_RUN_SKIPPED_BY_POLICY, false);
+        return ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.FIRST_RUN_SKIPPED_BY_POLICY, false);
     }
 }

@@ -26,7 +26,7 @@ class NetworkError {
     ERROR_STATE_PORTAL,
     ERROR_STATE_OFFLINE,
     ERROR_STATE_PROXY,
-    ERROR_STATE_AUTH_EXT_TIMEOUT,
+    ERROR_STATE_LOADING_TIMEOUT,
     ERROR_STATE_NONE,
     // States above are being logged to histograms.
     // Please keep ERROR_STATE_NONE as the last one of the histogram values.
@@ -42,7 +42,7 @@ class NetworkError {
     ERROR_REASON_PROXY_CONNECTION_FAILED = 2,
     ERROR_REASON_PROXY_CONFIG_CHANGED = 3,
     ERROR_REASON_LOADING_TIMEOUT = 4,
-    ERROR_REASON_PORTAL_DETECTED = 5,
+    // ERROR_REASON_PORTAL_DETECTED = 5,  // Deprecated.
 
     // Reason for a case when default network has changed.
     ERROR_REASON_NETWORK_STATE_CHANGED = 6,
@@ -70,11 +70,5 @@ std::ostream& operator<<(std::ostream& stream,
                          const NetworkError::ErrorState& error_state);
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::NetworkError;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_NETWORK_ERROR_H_

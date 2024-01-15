@@ -27,6 +27,9 @@ class SaveUpdateAddressProfileBubbleController;
 class SaveAddressProfileView : public AutofillBubbleBase,
                                public LocationBarBubbleDelegateView {
  public:
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kTopViewId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kEditButtonViewId);
+
   SaveAddressProfileView(views::View* anchor_view,
                          content::WebContents* web_contents,
                          SaveUpdateAddressProfileBubbleController* controller);
@@ -46,7 +49,6 @@ class SaveAddressProfileView : public AutofillBubbleBase,
 
   // View:
   void AddedToWidget() override;
-  void OnThemeChanged() override;
 
  private:
   // Sets the proper margins for icons (and other views) in the UI to make sure
@@ -57,7 +59,8 @@ class SaveAddressProfileView : public AutofillBubbleBase,
 
   // The following are used for UI elements alignment upon changes in theme.
   raw_ptr<views::View> address_components_view_;
-  std::vector<views::ImageView*> address_section_icons_;
+  std::vector<raw_ptr<views::ImageView, VectorExperimental>>
+      address_section_icons_;
   raw_ptr<views::ImageButton> edit_button_;
 };
 

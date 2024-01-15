@@ -8,6 +8,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/printing/cups_print_job_manager.h"
 
 class Profile;
@@ -45,12 +46,16 @@ class CupsPrintJobNotificationManager : public CupsPrintJobManager::Observer {
 
   void OnPrintJobNotificationRemoved(CupsPrintJobNotification* notification);
 
+  // Return the notification for the given print job, or nullptr if not found.
+  std::optional<CupsPrintJobNotification*> GetNotificationForTesting(
+      CupsPrintJob* job);
+
  private:
   void UpdateNotification(base::WeakPtr<CupsPrintJob> job);
 
   PrintJobNotificationMap notification_map_;
-  CupsPrintJobManager* print_job_manager_;
-  Profile* profile_;
+  raw_ptr<CupsPrintJobManager> print_job_manager_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 };
 
 }  // namespace ash

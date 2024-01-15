@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,13 +17,13 @@
 #include "base/one_shot_event.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_background_task.h"
+#include "chrome/browser/ash/system_web_apps/system_web_app_icon_checker.h"
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate.h"
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate_map.h"
 #include "chrome/browser/web_applications/externally_managed_app_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_ui_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/webapps/common/web_app_id.h"
 #include "url/gurl.h"
 
 namespace base {
@@ -57,10 +58,15 @@ class SystemWebAppManager : public KeyedService,
     kOnVersionChange,
   };
 
+  static constexpr char kSystemWebAppSessionHasBrokenIconsPrefName[] =
+      "web_apps.system_web_app_has_broken_icons_in_session";
+
   static constexpr char kInstallResultHistogramName[] =
       "Webapp.InstallResult.System";
   static constexpr char kInstallDurationHistogramName[] =
       "Webapp.SystemApps.FreshInstallDuration";
+  static constexpr char kIconsFixedOnReinstallHistogramName[] =
+      "Webapp.SystemApps.IconsFixedOnReinstall";
 
   // Returns whether the given app type is enabled.
   bool IsAppEnabled(SystemWebAppType type) const;
@@ -70,25 +76,16 @@ class SystemWebAppManager : public KeyedService,
   SystemWebAppManager& operator=(const SystemWebAppManager&) = delete;
   ~SystemWebAppManager() override;
 
-  // On Chrome OS: returns the SystemWebAppManager that hosts System Web Apps in
-  // Ash; In Lacros, returns nullptr (unless
-  // EnableSystemWebAppInLacrosForTesting). On other platforms, always returns a
-  // SystemWebAppManager.
+  // Return the SystemWebAppManager that hosts system web apps in profile.
+  // Returns nullptr if the profile doesn't support system web apps (e.g. Kiosk,
+  // lock-screen, system profile).
   static SystemWebAppManager* Get(Profile* profile);
   // Gets the associated WebAppProvider for system web apps. `WebAppProvider` is
-  // always presented in the `profile` if the `Get` above returns non-nullptr.
+  // always present in the `profile` if the `Get` above returns non-nullptr.
   static web_app::WebAppProvider* GetWebAppProvider(Profile* profile);
 
-  // Returns the SystemWebAppManager object for the current process.
-  // Avoid using this function where possible and prefer `Get` which guarantees
-  // it is being called from the correct process. Only use
-  // `GetForLocalAppsUnchecked` if the calling code is shared between Ash/Lacros
-  // and expects that some SystemWebAppManager always exists. In Lacros, this
-  // function returns an empty SWA manager with no concrete apps.
-  static SystemWebAppManager* GetForLocalAppsUnchecked(Profile* profile);
-
-  // Returns the SystemWebAppManager for tests, regardless of whether this is
-  // running in Lacros/Ash. Blocks if the web app registry is not yet ready.
+  // Returns the SystemWebAppManager for tests. Blocks if the web app registry
+  // is not yet ready.
   static SystemWebAppManager* GetForTest(Profile* profile);
 
   // Calls `Start` when `WebAppProvider` is ready.
@@ -100,37 +97,43 @@ class SystemWebAppManager : public KeyedService,
   // KeyedService:
   void Shutdown() override;
 
-  // The SystemWebAppManager is disabled in browser tests by default because it
-  // pollutes the startup state (several tests expect the Extensions state to be
-  // clean).
+  // By default, we don't install system web apps in browser tests to avoid
+  // running installation tasks (inefficient because most browser tests don't
+  // need SWAs).
   //
-  // Call this to install apps for SystemWebApp specific tests, e.g if a test
-  // needs to open OS Settings.
+  // Call this to install default enabled system apps if the test needs them.
+  // (e.g. test opening OS Settings from an Ash views button).
   //
-  // This can also be called multiple times to simulate reinstallation from
-  // system restart, e.g.
+  // This can be called multiple times to simulate reinstallation from system
+  // restart.
   void InstallSystemAppsForTesting();
 
   // Returns the app id for the given System App |type|.
-  absl::optional<web_app::AppId> GetAppIdForSystemApp(
+  std::optional<webapps::AppId> GetAppIdForSystemApp(
       SystemWebAppType type) const;
 
   // Returns the System App Type for the given |app_id|.
-  absl::optional<SystemWebAppType> GetSystemAppTypeForAppId(
-      const web_app::AppId& app_id) const;
+  std::optional<SystemWebAppType> GetSystemAppTypeForAppId(
+      const webapps::AppId& app_id) const;
 
   // Returns the System App Delegate for the given App |type|.
   const SystemWebAppDelegate* GetSystemApp(SystemWebAppType type) const;
 
   // Returns the App Ids for all installed System Web Apps.
-  std::vector<web_app::AppId> GetAppIds() const;
+  std::vector<webapps::AppId> GetAppIds() const;
 
   // Returns whether |app_id| points to an installed System App.
-  bool IsSystemWebApp(const web_app::AppId& app_id) const;
+  bool IsSystemWebApp(const webapps::AppId& app_id) const;
 
-  // Returns the SystemWebAppType that should capture the navigation to
-  // |url|.
-  absl::optional<SystemWebAppType> GetCapturingSystemAppForURL(
+  // Returns the SystemWebAppType that should handle |url|.
+  //
+  // Under the hood, it returns the system web app whose `start_url` shares
+  // the same origin with the given |url|. It does not take
+  // `SystemWebAppDelegate::IsURLInSystemAppScope` into account.
+  std::optional<SystemWebAppType> GetSystemAppForURL(const GURL& url) const;
+
+  // Returns the SystemWebAppType that should capture the navigation to |url|.
+  std::optional<SystemWebAppType> GetCapturingSystemAppForURL(
       const GURL& url) const;
 
   const base::OneShotEvent& on_apps_synchronized() const {
@@ -143,13 +146,16 @@ class SystemWebAppManager : public KeyedService,
     return *on_tasks_started_;
   }
 
+  // Returns the OneShotEvent that is fired after icon checks are complete.
+  const base::OneShotEvent& on_icon_check_completed() const {
+    return *on_icon_check_completed_;
+  }
+
   // Returns a map of registered system app types and infos, these apps will be
   // installed on the system.
   const SystemWebAppDelegateMap& system_app_delegates() const {
     return system_app_delegates_;
   }
-
-  base::WeakPtr<SystemWebAppManager> GetWeakPtr();
 
   // This call will override default System Apps configuration. You should call
   // Start() after this call to install |system_apps|.
@@ -159,17 +165,20 @@ class SystemWebAppManager : public KeyedService,
   // enabled, this method does nothing, and system apps will be reinstalled.
   void SetUpdatePolicyForTesting(UpdatePolicy policy);
 
-  void ResetOnAppsSynchronizedForTesting();
+  void ResetForTesting();
 
   // Get the timers. Only use this for testing.
   const std::vector<std::unique_ptr<SystemWebAppBackgroundTask>>&
   GetBackgroundTasksForTesting();
+  void StopBackgroundTasksForTesting();
 
   const Profile* profile() const { return profile_; }
 
  protected:
   virtual const base::Version& CurrentVersion() const;
   virtual const std::string& CurrentLocale() const;
+  virtual bool PreviousSessionHadBrokenIcons() const;
+  void StopBackgroundTasks();
 
  private:
   // Returns the list of origin trials to enable for |url| loaded in System
@@ -178,8 +187,6 @@ class SystemWebAppManager : public KeyedService,
   const std::vector<std::string>* GetEnabledOriginTrials(
       const SystemWebAppDelegate* system_app,
       const GURL& url) const;
-
-  void StopBackgroundTasks();
 
   void OnAppsSynchronized(
       bool did_force_install_apps,
@@ -202,9 +209,11 @@ class SystemWebAppManager : public KeyedService,
 
   void StartBackgroundTasks() const;
 
+  void OnIconCheckResult(SystemWebAppIconChecker::IconState result);
+
   // web_app::WebAppUiManagerObserver:
   void OnReadyToCommitNavigation(
-      const web_app::AppId& app_id,
+      const webapps::AppId& app_id,
       content::NavigationHandle* navigation_handle) override;
   void OnWebAppUiManagerDestroyed() override;
 
@@ -218,8 +227,11 @@ class SystemWebAppManager : public KeyedService,
 
   std::unique_ptr<base::OneShotEvent> on_apps_synchronized_;
   std::unique_ptr<base::OneShotEvent> on_tasks_started_;
+  std::unique_ptr<base::OneShotEvent> on_icon_check_completed_;
 
   bool shutting_down_ = false;
+
+  bool previous_session_had_broken_icons_ = false;
 
   std::string install_result_per_profile_histogram_name_;
 
@@ -239,6 +251,10 @@ class SystemWebAppManager : public KeyedService,
   base::ScopedObservation<web_app::WebAppUiManager,
                           web_app::WebAppUiManagerObserver>
       ui_manager_observation_{this};
+
+  // Always a valid pointer, has the same lifecycle as `this` in production.
+  // Might be reset in tests.
+  std::unique_ptr<SystemWebAppIconChecker> icon_checker_;
 
   base::WeakPtrFactory<SystemWebAppManager> weak_ptr_factory_{this};
 };

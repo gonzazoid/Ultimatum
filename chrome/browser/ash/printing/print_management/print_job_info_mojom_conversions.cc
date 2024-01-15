@@ -18,7 +18,7 @@ namespace printing {
 namespace print_management {
 namespace {
 
-namespace mojom = printing_manager::mojom;
+namespace mojom = ::chromeos::printing::printing_manager::mojom;
 
 using ::chromeos::PrinterErrorCode;
 
@@ -88,6 +88,8 @@ mojom::PrinterErrorCode PrinterErrorCodeProtoToMojom(
       return mojom::PrinterErrorCode::kUnknownError;
     case proto::PrintJobInfo_PrinterErrorCode_CLIENT_UNAUTHORIZED:
       return mojom::PrinterErrorCode::kClientUnauthorized;
+    case proto::PrintJobInfo_PrinterErrorCode_EXPIRED_CERTIFICATE:
+      return mojom::PrinterErrorCode::kExpiredCertificate;
     case proto::
         PrintJobInfo_PrinterErrorCode_PrintJobInfo_PrinterErrorCode_INT_MIN_SENTINEL_DO_NOT_USE_:
     case proto::
@@ -124,6 +126,8 @@ mojom::PrinterErrorCode PrinterErrorCodeToMojom(PrinterErrorCode error_code) {
       return mojom::PrinterErrorCode::kUnknownError;
     case PrinterErrorCode::CLIENT_UNAUTHORIZED:
       return mojom::PrinterErrorCode::kClientUnauthorized;
+    case PrinterErrorCode::EXPIRED_CERTIFICATE:
+      return mojom::PrinterErrorCode::kExpiredCertificate;
   }
   return mojom::PrinterErrorCode::kUnknownError;
 }
@@ -141,8 +145,8 @@ mojom::PrintJobInfoPtr PrintJobProtoToMojom(
   mojom::PrintJobInfoPtr print_job_mojom = mojom::PrintJobInfo::New();
   print_job_mojom->id = print_job_info_proto.id();
   print_job_mojom->title = base::UTF8ToUTF16(print_job_info_proto.title());
-  print_job_mojom->creation_time =
-      base::Time::FromJsTime(print_job_info_proto.creation_time());
+  print_job_mojom->creation_time = base::Time::FromMillisecondsSinceUnixEpoch(
+      print_job_info_proto.creation_time());
   print_job_mojom->number_of_pages = print_job_info_proto.number_of_pages();
   print_job_mojom->printer_id = print_job_info_proto.printer().id();
   print_job_mojom->printer_name =

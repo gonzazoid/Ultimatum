@@ -15,20 +15,25 @@
 #include "ash/public/cpp/new_window_delegate.h"
 #include "ash/public/cpp/system_tray.h"
 #include "ash/public/cpp/update_types.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "ash/webui/settings/public/constants/setting.mojom.h"
 #include "base/command_line.h"
+#include "base/i18n/time_formatting.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
-#include "base/strings/stringprintf.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
+#include "chrome/browser/ash/eol_incentive_util.h"
 #include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.h"
@@ -36,7 +41,7 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/set_time_dialog.h"
 #include "chrome/browser/ash/system/system_clock.h"
-#include "chrome/browser/ash/web_applications/personalization_app/personalization_app_metrics.h"
+#include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_app_metrics.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/chromeos/extensions/vpn_provider/vpn_service_factory.h"
@@ -54,13 +59,12 @@
 #include "chrome/browser/ui/webui/ash/internet_config_dialog.h"
 #include "chrome/browser/ui/webui/ash/internet_detail_dialog.h"
 #include "chrome/browser/ui/webui/ash/multidevice_setup/multidevice_setup_dialog.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/setting.mojom.h"
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -68,16 +72,17 @@
 #include "chromeos/ash/components/network/network_util.h"
 #include "chromeos/ash/components/network/onc/network_onc_utils.h"
 #include "chromeos/ash/components/network/tether_constants.h"
+#include "chromeos/ash/components/phonehub/util/histogram_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/user_manager/user_manager.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
-#include "ui/accessibility/accessibility_features.h"
+#include "third_party/icu/source/i18n/unicode/timezone.h"
 #include "ui/events/event_constants.h"
 #include "url/gurl.h"
+
 using session_manager::SessionManager;
 using session_manager::SessionState;
 
@@ -87,7 +92,7 @@ SystemTrayClientImpl* g_system_tray_client_instance = nullptr;
 
 // The prefix a calendar event URL *must* have in order to be launched by the
 // calendar web app.
-const char* kOfficialCalendarUrlPrefix =
+constexpr char kOfficialCalendarUrlPrefix[] =
     "https://calendar.google.com/calendar/";
 
 void ShowSettingsSubPageForActiveUser(const std::string& sub_page) {
@@ -96,12 +101,7 @@ void ShowSettingsSubPageForActiveUser(const std::string& sub_page) {
 }
 
 // Returns the severity of a pending update.
-ash::UpdateSeverity GetUpdateSeverity(ash::UpdateType update_type,
-                                      UpgradeDetector* detector) {
-  // Lacros is always "low", which is the same severity OS updates start with.
-  if (update_type == ash::UpdateType::kLacros)
-    return ash::UpdateSeverity::kLow;
-
+ash::UpdateSeverity GetUpdateSeverity(UpgradeDetector* detector) {
   // OS updates use UpgradeDetector's severity mapping.
   switch (detector->upgrade_notification_stage()) {
     case UpgradeDetector::UPGRADE_ANNOYANCE_NONE:
@@ -176,21 +176,9 @@ bool IsAppInstalled(std::string app_id) {
 }
 
 void OpenInBrowser(const GURL& event_url) {
-  if (crosapi::browser_util::IsLacrosPrimaryBrowser()) {
-    auto* browser_manager = crosapi::BrowserManager::Get();
-    browser_manager->SwitchToTab(
-        event_url,
-        /*path_behavior=*/NavigateParams::IGNORE_AND_NAVIGATE);
-    return;
-  }
-
-  // Lacros is not the primary browser, so use this workaround.
-  chrome::ScopedTabbedBrowserDisplayer displayer(
-      ProfileManager::GetActiveUserProfile());
-  NavigateParams params(
-      GetSingletonTabNavigateParams(displayer.browser(), event_url));
-  params.path_behavior = NavigateParams::IGNORE_AND_NAVIGATE;
-  ShowSingletonTabOverwritingNTP(displayer.browser(), &params);
+  ShowSingletonTabOverwritingNTP(ProfileManager::GetActiveUserProfile(),
+                                 event_url,
+                                 NavigateParams::IGNORE_AND_NAVIGATE);
 }
 
 ash::ManagementDeviceMode GetManagementDeviceMode(
@@ -234,14 +222,11 @@ class SystemTrayClientImpl::EnterpriseAccountObserver
   ~EnterpriseAccountObserver() override = default;
 
  private:
-  SystemTrayClientImpl* const owner_;
-  Profile* profile_ = nullptr;
+  const raw_ptr<SystemTrayClientImpl> owner_;
+  raw_ptr<Profile> profile_ = nullptr;
 
-  base::ScopedObservation<
-      user_manager::UserManager,
-      user_manager::UserManager::UserSessionStateObserver,
-      &user_manager::UserManager::AddSessionStateObserver,
-      &user_manager::UserManager::RemoveSessionStateObserver>
+  base::ScopedObservation<user_manager::UserManager,
+                          user_manager::UserManager::UserSessionStateObserver>
       session_state_observation_{this};
   base::ScopedObservation<session_manager::SessionManager,
                           session_manager::SessionManagerObserver>
@@ -256,7 +241,12 @@ class SystemTrayClientImpl::EnterpriseAccountObserver
   }
 
   // session_manager::SessionManagerObserver:
-  void OnSessionStateChanged() override { UpdateProfile(); }
+  void OnSessionStateChanged() override {
+    TRACE_EVENT0("ui",
+                 "SystemTrayClientImpl::EnterpriseAccountObserver::"
+                 "OnSessionStateChanged");
+    UpdateProfile();
+  }
 
   // policy::CloudPolicyStore::Observer
   void OnStoreLoaded(policy::CloudPolicyStore* store) override {
@@ -293,14 +283,14 @@ SystemTrayClientImpl::SystemTrayClientImpl()
           std::make_unique<EnterpriseAccountObserver>(this)) {
   // If this observes clock setting changes before ash comes up the IPCs will
   // be queued on |system_tray_|.
-  chromeos::system::SystemClock* clock =
+  ash::system::SystemClock* clock =
       g_browser_process->platform_part()->GetSystemClock();
   clock->AddObserver(this);
   system_tray_->SetUse24HourClock(clock->ShouldUse24HourClock());
 
   // If an upgrade is available at startup then tell ash about it.
   if (UpgradeDetector::GetInstance()->notify_upgrade())
-    HandleUpdateAvailable(ash::UpdateType::kSystem);
+    HandleUpdateAvailable();
 
   // If the device is enterprise managed then send ash the enterprise domain.
   policy::BrowserPolicyConnectorAsh* policy_connector =
@@ -347,16 +337,12 @@ SystemTrayClientImpl* SystemTrayClientImpl::Get() {
 void SystemTrayClientImpl::SetRelaunchNotificationState(
     const ash::RelaunchNotificationState& relaunch_notification_state) {
   relaunch_notification_state_ = relaunch_notification_state;
-  HandleUpdateAvailable(ash::UpdateType::kSystem);
+  HandleUpdateAvailable();
 }
 
 void SystemTrayClientImpl::ResetUpdateState() {
   relaunch_notification_state_ = {};
   system_tray_->ResetUpdateState();
-}
-
-void SystemTrayClientImpl::SetLacrosUpdateAvailable() {
-  HandleUpdateAvailable(ash::UpdateType::kLacros);
 }
 
 void SystemTrayClientImpl::SetPrimaryTrayEnabled(bool enabled) {
@@ -377,6 +363,11 @@ void SystemTrayClientImpl::SetLocaleList(
   system_tray_->SetLocaleList(std::move(locale_list), current_locale_iso_code);
 }
 
+void SystemTrayClientImpl::SetShowEolNotice(bool show,
+                                            bool eol_passed_recently) {
+  eol_incentive_recently_passed_ = eol_passed_recently;
+  system_tray_->SetShowEolNotice(show);
+}
 ////////////////////////////////////////////////////////////////////////////////
 // ash::SystemTrayClient:
 
@@ -385,6 +376,12 @@ void SystemTrayClientImpl::ShowSettings(int64_t display_id) {
   base::RecordAction(base::UserMetricsAction("ShowOptions"));
   chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
       ProfileManager::GetActiveUserProfile(), display_id);
+}
+
+void SystemTrayClientImpl::ShowAccountSettings() {
+  // The "Accounts" section is called "People" for historical reasons.
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kPeopleSectionPath);
 }
 
 void SystemTrayClientImpl::ShowBluetoothSettings() {
@@ -401,7 +398,7 @@ void SystemTrayClientImpl::ShowBluetoothSettings(const std::string& device_id) {
 }
 
 void SystemTrayClientImpl::ShowBluetoothPairingDialog(
-    absl::optional<base::StringPiece> device_address) {
+    std::optional<base::StringPiece> device_address) {
   if (ash::BluetoothPairingDialog::ShowDialog(device_address)) {
     base::RecordAction(
         base::UserMetricsAction("StatusArea_Bluetooth_Connect_Unknown"));
@@ -447,6 +444,19 @@ void SystemTrayClientImpl::ShowPowerSettings() {
 void SystemTrayClientImpl::ShowPrivacyAndSecuritySettings() {
   ShowSettingsSubPageForActiveUser(
       chromeos::settings::mojom::kPrivacyAndSecuritySectionPath);
+}
+
+void SystemTrayClientImpl::ShowPrivacyHubSettings() {
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kPrivacyHubSubpagePath);
+}
+
+void SystemTrayClientImpl::ShowSpeakOnMuteDetectionSettings() {
+  ShowSettingsSubPageForActiveUser(
+      std::string(chromeos::settings::mojom::kPrivacyHubSubpagePath) +
+      "?settingId=" +
+      base::NumberToString(static_cast<int32_t>(
+          chromeos::settings::mojom::Setting::kSpeakOnMuteDetectionOnOff)));
 }
 
 void SystemTrayClientImpl::ShowSmartPrivacySettings() {
@@ -507,14 +517,20 @@ void SystemTrayClientImpl::ShowAccessibilitySettings() {
   // mode, so users can't get to other OS Settings (such as Wi-Fi, Date / Time).
   // We plan to remove this after we add a standalone OS Accessibility page for
   // kiosk mode, which blocks access to other OS settings.
-  bool is_kiosk = user_manager::UserManager::Get()->IsLoggedInAsAnyKioskApp();
-  if (!is_kiosk && ::features::IsAccessibilityOSSettingsVisibilityEnabled()) {
-    ShowSettingsSubPageForActiveUser(
-        chromeos::settings::mojom::kAccessibilitySectionPath);
-  } else {
-    ShowSettingsSubPageForActiveUser(
-        chromeos::settings::mojom::kManageAccessibilitySubpagePath);
+  ShowSettingsSubPageForActiveUser(
+      user_manager::UserManager::Get()->IsLoggedInAsAnyKioskApp()
+          ? chromeos::settings::mojom::kManageAccessibilitySubpagePath
+          : chromeos::settings::mojom::kAccessibilitySectionPath);
+}
+
+void SystemTrayClientImpl::ShowColorCorrectionSettings() {
+  if (user_manager::UserManager::Get()->IsLoggedInAsAnyKioskApp()) {
+    // TODO(b/259370808): Color correction settings subpage not available in
+    // Kiosk.
+    return;
   }
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kDisplayAndMagnificationSubpagePath);
 }
 
 void SystemTrayClientImpl::ShowGestureEducationHelp() {
@@ -530,16 +546,8 @@ void SystemTrayClientImpl::ShowGestureEducationHelp() {
 }
 
 void SystemTrayClientImpl::ShowPaletteHelp() {
-  if (crosapi::browser_util::IsLacrosPrimaryBrowser()) {
-    crosapi::BrowserManager::Get()->SwitchToTab(
-        GURL(chrome::kChromePaletteHelpURL),
-        /*path_behavior=*/NavigateParams::RESPECT);
-    return;
-  }
-
-  chrome::ScopedTabbedBrowserDisplayer displayer(
-      ProfileManager::GetActiveUserProfile());
-  ShowSingletonTab(displayer.browser(), GURL(chrome::kChromePaletteHelpURL));
+  ShowSingletonTab(ProfileManager::GetActiveUserProfile(),
+                   GURL(chrome::kChromePaletteHelpURL));
 }
 
 void SystemTrayClientImpl::ShowPaletteSettings() {
@@ -557,7 +565,7 @@ void SystemTrayClientImpl::ShowEnterpriseInfo() {
   }
 
   // Otherwise show enterprise management info page.
-  if (crosapi::browser_util::IsLacrosPrimaryBrowser()) {
+  if (crosapi::browser_util::IsLacrosEnabled()) {
     crosapi::BrowserManager::Get()->SwitchToTab(
         GURL(chrome::kChromeUIManagementURL),
         /*path_behavior=*/NavigateParams::RESPECT);
@@ -626,13 +634,8 @@ void SystemTrayClientImpl::ShowArcVpnCreate(const std::string& app_id) {
     return;
   }
 
-  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-    apps::AppServiceProxyFactory::GetForProfile(profile)->Launch(
-        app_id, ui::EF_NONE, apps::LaunchSource::kFromParentalControls);
-  } else {
-    apps::AppServiceProxyFactory::GetForProfile(profile)->Launch(
-        app_id, ui::EF_NONE, apps::mojom::LaunchSource::kFromParentalControls);
-  }
+  apps::AppServiceProxyFactory::GetForProfile(profile)->Launch(
+      app_id, ui::EF_NONE, apps::LaunchSource::kFromParentalControls);
 }
 
 void SystemTrayClientImpl::ShowSettingsSimUnlock() {
@@ -645,8 +648,21 @@ void SystemTrayClientImpl::ShowSettingsSimUnlock() {
   ShowSettingsSubPageForActiveUser(page);
 }
 
+void SystemTrayClientImpl::ShowApnSubpage(const std::string& network_id) {
+  CHECK(ash::features::IsApnRevampEnabled());
+  std::string page = chromeos::settings::mojom::kApnSubpagePath +
+                     std::string("?guid=") +
+                     base::EscapeUrlEncodedData(network_id, /*use_plus=*/true);
+  ShowSettingsSubPageForActiveUser(page);
+}
+
 void SystemTrayClientImpl::ShowNetworkSettings(const std::string& network_id) {
   ShowNetworkSettingsHelper(network_id, false /* show_configure */);
+}
+
+void SystemTrayClientImpl::ShowHotspotSubpage() {
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kHotspotSubpagePath);
 }
 
 void SystemTrayClientImpl::ShowNetworkSettingsHelper(
@@ -694,6 +710,9 @@ void SystemTrayClientImpl::ShowNetworkSettingsHelper(
 
 void SystemTrayClientImpl::ShowMultiDeviceSetup() {
   ash::multidevice_setup::MultiDeviceSetupDialog::Show();
+  ash::phonehub::util::LogMultiDeviceSetupDialogEntryPoint(
+      ash::phonehub::util::MultiDeviceSetupDialogEntrypoint::
+          kSetupNotification);
 }
 
 void SystemTrayClientImpl::ShowFirmwareUpdate() {
@@ -713,7 +732,7 @@ void SystemTrayClientImpl::ShowAccessCodeCastingDialog(
 }
 
 void SystemTrayClientImpl::ShowCalendarEvent(
-    const absl::optional<GURL>& event_url,
+    const std::optional<GURL>& event_url,
     const base::Time& date,
     bool& opened_pwa,
     GURL& final_event_url) {
@@ -733,14 +752,9 @@ void SystemTrayClientImpl::ShowCalendarEvent(
     official_url = event_url->ReplaceComponents(replacements);
   } else {
     // No event URL provided, so fall back on opening calendar with `date`.
-    std::string calendar_url_str = kOfficialCalendarUrlPrefix;
-    base::Time::Exploded date_exp;
-    date.UTCExplode(&date_exp);
-    std::string date_url =
-        base::StringPrintf("r/week/%d/%d/%d", date_exp.year, date_exp.month,
-                           date_exp.day_of_month);
-    calendar_url_str.append(date_url);
-    official_url = GURL(calendar_url_str);
+    official_url = GURL(kOfficialCalendarUrlPrefix +
+                        base::UnlocalizedTimeFormatWithPattern(
+                            date, "'r/week/'y/M/d", icu::TimeZone::getGMT()));
   }
 
   // Return the URL we actually opened.
@@ -762,20 +776,20 @@ void SystemTrayClientImpl::ShowCalendarEvent(
   }
 
   // Launch web app.
-  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-    proxy->LaunchAppWithUrl(
-        web_app::kGoogleCalendarAppId,
-        apps::GetEventFlags(WindowOpenDisposition::NEW_WINDOW,
-                            /*prefer_container=*/true),
-        official_url, apps::LaunchSource::kFromShelf);
-  } else {
-    proxy->LaunchAppWithUrl(
-        web_app::kGoogleCalendarAppId,
-        apps::GetEventFlags(WindowOpenDisposition::NEW_WINDOW,
-                            /*prefer_container=*/true),
-        official_url, apps::mojom::LaunchSource::kFromShelf);
-  }
+  proxy->LaunchAppWithUrl(web_app::kGoogleCalendarAppId, ui::EF_NONE,
+                          official_url, apps::LaunchSource::kFromShelf);
   opened_pwa = true;
+}
+
+// TODO(b/269075177): Reuse existing Google Meet PWA instead of opening a new
+// one for each call to `LaunchAppWithUrl`.
+void SystemTrayClientImpl::ShowVideoConference(
+    const GURL& video_conference_url) {
+  if (auto* profile = ProfileManager::GetActiveUserProfile()) {
+    apps::MaybeLaunchPreferredAppForUrl(
+        profile, video_conference_url,
+        apps::LaunchSource::kFromSysTrayCalendar);
+  }
 }
 
 void SystemTrayClientImpl::ShowChannelInfoAdditionalDetails() {
@@ -788,6 +802,73 @@ void SystemTrayClientImpl::ShowChannelInfoAdditionalDetails() {
 void SystemTrayClientImpl::ShowChannelInfoGiveFeedback() {
   ash::NewWindowDelegate::GetInstance()->OpenFeedbackPage(
       ash::NewWindowDelegate::kFeedbackSourceChannelIndicator);
+}
+
+void SystemTrayClientImpl::ShowAudioSettings() {
+  base::RecordAction(base::UserMetricsAction("ShowAudioSettingsPage"));
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kAudioSubpagePath);
+}
+
+void SystemTrayClientImpl::ShowGraphicsTabletSettings() {
+  DCHECK(ash::features::IsPeripheralCustomizationEnabled());
+  base::RecordAction(base::UserMetricsAction("ShowGraphicsTabletSettingsPage"));
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kGraphicsTabletSubpagePath);
+}
+
+void SystemTrayClientImpl::ShowMouseSettings() {
+  DCHECK(ash::features::IsPeripheralCustomizationEnabled());
+  base::RecordAction(base::UserMetricsAction("ShowMouseSettingsPage"));
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kPerDeviceMouseSubpagePath);
+}
+
+void SystemTrayClientImpl::ShowTouchpadSettings() {
+  DCHECK(ash::features::IsInputDeviceSettingsSplitEnabled());
+  base::RecordAction(base::UserMetricsAction("ShowTouchpadSettingsPage"));
+  ShowSettingsSubPageForActiveUser(
+      chromeos::settings::mojom::kPerDeviceTouchpadSubpagePath);
+}
+
+void SystemTrayClientImpl::ShowRemapKeysSubpage(int device_id) {
+  DCHECK(ash::features::IsInputDeviceSettingsSplitEnabled());
+  base::RecordAction(base::UserMetricsAction("ShowRemapKeysSettingsSubpage"));
+  ShowSettingsSubPageForActiveUser(base::StrCat({
+      chromeos::settings::mojom::kPerDeviceKeyboardRemapKeysSubpagePath,
+      "?keyboardId=",
+      base::NumberToString(device_id),
+  }));
+}
+
+void SystemTrayClientImpl::ShowEolInfoPage() {
+  const bool use_offer_url = ash::features::kEolIncentiveParam.Get() !=
+                                 ash::features::EolIncentiveParam::kNoOffer &&
+                             eol_incentive_recently_passed_;
+
+  if (eol_incentive_recently_passed_) {
+    ash::eol_incentive_util::RecordButtonClicked(
+        use_offer_url ? ash::eol_incentive_util::EolIncentiveButtonType::
+                            kQuickSettings_Offer_RecentlyPassed
+                      : ash::eol_incentive_util::EolIncentiveButtonType::
+                            kQuickSettings_NoOffer_RecentlyPassed);
+  } else {
+    DCHECK(!use_offer_url);
+    ash::eol_incentive_util::RecordButtonClicked(
+        ash::eol_incentive_util::EolIncentiveButtonType::
+            kQuickSettings_NoOffer_Passed);
+  }
+
+  ash::NewWindowDelegate::GetPrimary()->OpenUrl(
+      GURL(use_offer_url ? chrome::kEolIncentiveNotificationOfferURL
+                         : chrome::kEolIncentiveNotificationNoOfferURL),
+      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kNewForegroundTab);
+}
+
+void SystemTrayClientImpl::RecordEolNoticeShown() {
+  ash::eol_incentive_util::RecordShowSourceHistogram(
+      ash::eol_incentive_util::EolIncentiveShowSource::kQuickSettings);
 }
 
 bool SystemTrayClientImpl::IsUserFeedbackEnabled() {
@@ -808,7 +889,7 @@ SystemTrayClientImpl::SystemTrayClientImpl(SystemTrayClientImpl* mock_instance)
   g_system_tray_client_instance = mock_instance;
 }
 
-void SystemTrayClientImpl::HandleUpdateAvailable(ash::UpdateType update_type) {
+void SystemTrayClientImpl::HandleUpdateAvailable() {
   UpgradeDetector* detector = UpgradeDetector::GetInstance();
   if (detector->upgrade_notification_stage() ==
       UpgradeDetector::UPGRADE_ANNOYANCE_NONE) {
@@ -817,26 +898,25 @@ void SystemTrayClientImpl::HandleUpdateAvailable(ash::UpdateType update_type) {
     return;
   }
 
-  if (update_type == ash::UpdateType::kSystem && !detector->notify_upgrade()) {
+  if (!detector->notify_upgrade()) {
     LOG(ERROR) << "Tried to show update notification when no update available";
     return;
   }
 
   // Show the system tray icon.
-  ash::UpdateSeverity severity = GetUpdateSeverity(update_type, detector);
+  ash::UpdateSeverity severity = GetUpdateSeverity(detector);
   system_tray_->ShowUpdateIcon(severity, detector->is_factory_reset_required(),
-                               detector->is_rollback(), update_type);
+                               detector->is_rollback());
 
-  // Only overwrite title and body for system updates.
-  if (update_type == ash::UpdateType::kSystem)
-    system_tray_->SetRelaunchNotificationState(relaunch_notification_state_);
+  // Overwrite title and body.
+  system_tray_->SetRelaunchNotificationState(relaunch_notification_state_);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // chromeos::system::SystemClockObserver:
 
 void SystemTrayClientImpl::OnSystemClockChanged(
-    chromeos::system::SystemClock* clock) {
+    ash::system::SystemClock* clock) {
   system_tray_->SetUse24HourClock(clock->ShouldUse24HourClock());
 }
 
@@ -859,7 +939,7 @@ void SystemTrayClientImpl::OnUpdateOverCellularOneTimePermissionGranted() {
 }
 
 void SystemTrayClientImpl::OnUpgradeRecommended() {
-  HandleUpdateAvailable(ash::UpdateType::kSystem);
+  HandleUpdateAvailable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -878,8 +958,7 @@ void SystemTrayClientImpl::UpdateDeviceEnterpriseInfo() {
   ash::DeviceEnterpriseInfo device_enterprise_info;
   device_enterprise_info.enterprise_domain_manager =
       connector->GetEnterpriseDomainManager();
-  device_enterprise_info.active_directory_managed =
-      connector->IsActiveDirectoryManaged();
+  device_enterprise_info.active_directory_managed = false;
   device_enterprise_info.management_device_mode =
       GetManagementDeviceMode(connector);
   if (!last_device_enterprise_info_) {

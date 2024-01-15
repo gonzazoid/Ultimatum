@@ -32,23 +32,24 @@ absl::optional<SiteDerivedFeatures> ParseSiteDerivedFeatures(
   if (!json.is_dict())
     return absl::nullopt;
 
-  const std::string* url = json.FindStringKey("url");
+  const std::string* url = json.GetDict().FindString("url");
   if (!url)
     return absl::nullopt;
 
-  const base::Value* derived_features_json = json.FindListKey("features");
+  const base::Value::List* derived_features_json =
+      json.GetDict().FindList("features");
   if (!derived_features_json)
     return absl::nullopt;
 
   // For every feature name at index 2*N, their value is at 2*N+1. In particular
   // the size must be an even number.
-  size_t size = derived_features_json->GetList().size();
+  size_t size = derived_features_json->size();
   if (size % 2 != 0)
     return absl::nullopt;
 
   std::vector<double> derived_features;
   for (size_t i = 1; i < size; i += 2) {
-    const base::Value& feature_value = derived_features_json->GetList()[i];
+    const base::Value& feature_value = (*derived_features_json)[i];
     // If the value is a bool, convert it to 1.0 or 0.0.
     double numerical_feature_value;
     if (feature_value.is_double() || feature_value.is_int())
@@ -67,13 +68,15 @@ absl::optional<SiteDerivedFeatures> ParseSiteDerivedFeatures(
 // Reads a JSON "{[....]}" into a base::Value::List. Returns an empty
 // list in case of failure.
 base::Value::List ReadJsonList(const std::string& file_name) {
-  base::FilePath dir_source_root;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &dir_source_root))
+  base::FilePath dir_src_test_data_root;
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT,
+                              &dir_src_test_data_root)) {
     return base::Value::List();
+  }
 
   std::string raw_content;
   bool read_success = base::ReadFileToString(
-      dir_source_root.AppendASCII(file_name), &raw_content);
+      dir_src_test_data_root.AppendASCII(file_name), &raw_content);
   if (!read_success)
     return base::Value::List();
 
@@ -117,16 +120,17 @@ TEST(DomDistillerPageFeaturesTest, TestCalculateDerivedFeatures) {
   for (; input_iter != input_sites_feature_info.end();
        input_iter++, expectation_iter++) {
     ASSERT_TRUE(input_iter->is_dict());
-    ASSERT_TRUE(input_iter->FindStringKey("url"));
-    ASSERT_TRUE(input_iter->FindDictKey("features"));
+    const auto& input_iter_dict = input_iter->GetDict();
+    ASSERT_TRUE(input_iter_dict.FindString("url"));
+    ASSERT_TRUE(input_iter_dict.FindDict("features"));
     // The JSON must be stringified for CalculateDerivedFeaturesFromJSON().
     base::Value stringified_json(base::Value::Type::STRING);
-    bool success = base::JSONWriter::Write(*input_iter->FindDictKey("features"),
-                                           &stringified_json.GetString());
+    bool success = base::JSONWriter::Write(
+        *input_iter_dict.FindDict("features"), &stringified_json.GetString());
     ASSERT_TRUE(success);
 
     // Check the URL and the vector of features match the expectation.
-    EXPECT_EQ(expectation_iter->url, *input_iter->FindStringKey("url"));
+    EXPECT_EQ(expectation_iter->url, *input_iter_dict.FindString("url"));
     EXPECT_EQ(expectation_iter->derived_features,
               CalculateDerivedFeaturesFromJSON(&stringified_json));
   }

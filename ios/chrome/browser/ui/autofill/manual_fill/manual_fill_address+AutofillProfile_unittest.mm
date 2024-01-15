@@ -6,15 +6,11 @@
 
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
+#import "components/autofill/core/browser/data_model/autofill_i18n_api.h"
 #import "components/autofill/core/browser/data_model/autofill_profile.h"
-#import "components/autofill/core/browser/geo/country_names.h"
-#import "ios/chrome/browser/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "testing/platform_test.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using autofill::AutofillProfile;
 using ManualFillAddressFormAutofilliOSTest = PlatformTest;
@@ -22,7 +18,7 @@ using ManualFillAddressFormAutofilliOSTest = PlatformTest;
 namespace {
 
 void SetProfileFieldTypeValue(AutofillProfile* profile,
-                              const autofill::ServerFieldType fieldType,
+                              const autofill::FieldType fieldType,
                               NSString* value) {
   const std::u16string v = base::SysNSStringToUTF16(value);
   const std::string& app_locale =
@@ -47,9 +43,8 @@ TEST_F(ManualFillAddressFormAutofilliOSTest, CreationWithMiddleName) {
   NSString* phoneNumber = @"6502345678";
   NSString* emailAddress = @"john@doe";
 
-  autofill::CountryNames::SetLocaleString("en-US");
-
-  AutofillProfile* profile = new AutofillProfile();
+  AutofillProfile* profile = new AutofillProfile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   SetProfileFieldTypeValue(profile, autofill::NAME_FIRST, firstName);
   SetProfileFieldTypeValue(profile, autofill::NAME_MIDDLE, middleName);
   SetProfileFieldTypeValue(profile, autofill::NAME_LAST, lastName);
@@ -98,9 +93,8 @@ TEST_F(ManualFillAddressFormAutofilliOSTest, CreationWithMiddleInitial) {
   NSString* phoneNumber = @"6502345678";
   NSString* emailAddress = @"john@doe";
 
-  autofill::CountryNames::SetLocaleString("en-US");
-
-  AutofillProfile* profile = new AutofillProfile();
+  AutofillProfile* profile = new AutofillProfile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   SetProfileFieldTypeValue(profile, autofill::NAME_FIRST, firstName);
   SetProfileFieldTypeValue(profile, autofill::NAME_MIDDLE_INITIAL,
                            middleInitial);

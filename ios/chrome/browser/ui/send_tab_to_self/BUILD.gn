@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("send_tab_to_self") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "send_tab_to_self_coordinator.h",
     "send_tab_to_self_coordinator.mm",
@@ -14,19 +13,19 @@ source_set("send_tab_to_self") {
     "//components/send_tab_to_self",
     "//components/signin/public/identity_manager",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main",
-    "//ios/chrome/browser/send_tab_to_self",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/signin:system_identity",
-    "//ios/chrome/browser/sync",
+    "//ios/chrome/browser/main/model",
+    "//ios/chrome/browser/send_tab_to_self/model",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:system_identity",
+    "//ios/chrome/browser/sync/model",
     "//ios/chrome/browser/ui/authentication:signin_presenter",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
+    "//ios/chrome/browser/ui/authentication/signin:constants",
     "//ios/chrome/browser/ui/infobars/presentation",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/url:constants",
-    "//ios/public/provider/chrome/browser/signin",
     "//ios/third_party/material_components_ios",
     "//ui/base",
     "//url",
@@ -34,7 +33,6 @@ source_set("send_tab_to_self") {
 }
 
 source_set("send_tab_to_self_ui") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "send_tab_to_self_image_detail_text_item.h",
     "send_tab_to_self_image_detail_text_item.mm",
@@ -47,21 +45,17 @@ source_set("send_tab_to_self_ui") {
     "send_tab_to_self_table_view_controller.mm",
   ]
   deps = [
-    "resources:send_tab_to_self_devices",
-    "resources:send_tab_to_self_laptop",
-    "resources:send_tab_to_self_smartphone",
-    "resources:send_tab_to_self_tablet",
     "//base",
     "//components/send_tab_to_self",
     "//components/sync_device_info",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/shared/ui/table_view/cells",
     "//ios/chrome/browser/ui/infobars/presentation:positioner",
     "//ios/chrome/browser/ui/overlays:util",
     "//ios/chrome/browser/ui/settings/cells",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:styler",
-    "//ios/chrome/browser/ui/table_view/cells",
     "//ios/chrome/common:string_util",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/table_view:cells_constants",
@@ -71,21 +65,19 @@ source_set("send_tab_to_self_ui") {
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [ "send_tab_to_self_coordinator_egtest.mm" ]
   deps = [
     "//base",
     "//components/send_tab_to_self",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/signin:fake_system_identity",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/signin/model:fake_system_identity",
     "//ios/chrome/browser/ui/authentication:eg_test_support+eg2",
+    "//ios/chrome/browser/ui/authentication/signin:constants",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//net:test_support",
     "//ui/base",
   ]

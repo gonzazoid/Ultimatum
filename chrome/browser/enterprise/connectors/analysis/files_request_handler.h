@@ -7,11 +7,15 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/files/scoped_file.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/enterprise/connectors/analysis/request_handler_base.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/binary_upload_service.h"
+#include "chrome/browser/safe_browsing/cloud_content_scanning/file_opening_job.h"
+#include "components/enterprise/common/proto/connectors.pb.h"
+#include "components/file_access/scoped_file_access.h"
 
 namespace safe_browsing {
 
@@ -59,7 +63,9 @@ class FilesRequestHandler : public RequestHandlerBase {
       const std::string& source,
       const std::string& destination,
       const std::string& user_action_id,
+      const std::string& tab_title,
       safe_browsing::DeepScanAccessPoint access_point,
+      ContentAnalysisRequest::Reason reason,
       const std::vector<base::FilePath>& paths,
       CompletionCallback callback)>;
 
@@ -76,7 +82,9 @@ class FilesRequestHandler : public RequestHandlerBase {
       const std::string& source,
       const std::string& destination,
       const std::string& user_action_id,
+      const std::string& tab_title,
       safe_browsing::DeepScanAccessPoint access_point,
+      ContentAnalysisRequest::Reason reason,
       const std::vector<base::FilePath>& paths,
       CompletionCallback callback);
 
@@ -98,7 +106,9 @@ class FilesRequestHandler : public RequestHandlerBase {
       const std::string& source,
       const std::string& destination,
       const std::string& user_action_id,
+      const std::string& tab_title,
       safe_browsing::DeepScanAccessPoint access_point,
+      ContentAnalysisRequest::Reason reason,
       const std::vector<base::FilePath>& paths,
       CompletionCallback callback);
 
@@ -143,7 +153,15 @@ class FilesRequestHandler : public RequestHandlerBase {
       safe_browsing::BinaryUploadService::Result result,
       enterprise_connectors::ContentAnalysisResponse response);
 
+  void FileRequestStartCallback(
+      size_t index,
+      const safe_browsing::BinaryUploadService::Request& request);
+
   void MaybeCompleteScanRequest();
+
+  void CreateFileOpeningJob(
+      std::vector<safe_browsing::FileOpeningJob::FileOpeningTask> tasks,
+      file_access::ScopedFileAccess file_access);
 
   // Owner of the FileOpeningJob responsible for opening files on parallel
   // threads. Always nullptr for non-file content scanning.
@@ -168,6 +186,10 @@ class FilesRequestHandler : public RequestHandlerBase {
   bool throttled_ = false;
 
   CompletionCallback callback_;
+
+  std::vector<base::TimeTicks> start_times_;
+
+  std::unique_ptr<file_access::ScopedFileAccess> scoped_file_access_;
 
   base::WeakPtrFactory<FilesRequestHandler> weak_ptr_factory_{this};
 };

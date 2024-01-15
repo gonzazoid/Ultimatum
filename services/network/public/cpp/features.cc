@@ -10,15 +10,10 @@
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/miracle_parameter/common/public/miracle_parameter.h"
 #include "net/base/mime_sniffer.h"
 
 namespace network::features {
-
-// Enables Expect CT reporting, which sends reports for opted-in sites
-// that don't serve sufficient Certificate Transparency information.
-BASE_FEATURE(kExpectCTReporting,
-             "ExpectCTReporting",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kNetworkErrorLogging,
              "NetworkErrorLogging",
@@ -56,12 +51,6 @@ BASE_FEATURE(kPauseBrowserInitiatedHeavyTrafficForP2P,
              "PauseBrowserInitiatedHeavyTrafficForP2P",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-// When kCORBProtectionSniffing is enabled CORB sniffs additional same-origin
-// resources if they look sensitive.
-BASE_FEATURE(kCORBProtectionSniffing,
-             "CORBProtectionSniffing",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 // When kProactivelyThrottleLowPriorityRequests is enabled,
 // resource scheduler proactively throttles low priority requests to avoid
 // network contention with high priority requests that may arrive soon.
@@ -92,6 +81,13 @@ BASE_FEATURE(kCoopRestrictProperties,
              "CoopRestrictProperties",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// Enables the origin trial for COOP: restrict-properties. We need a new feature
+// because token validation is not possible in the network process. This also
+// allows us to keep using CoopRestrictProperties to enable COOP: RP for WPTs.
+BASE_FEATURE(kCoopRestrictPropertiesOriginTrial,
+             "CoopRestrictPropertiesOriginTrial",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 // Enables or defaults splittup up server (not proxy) entries in the
 // HttpAuthCache.
 BASE_FEATURE(kSplitAuthCacheByNetworkIsolationKey,
@@ -109,6 +105,25 @@ BASE_FEATURE(kDnsOverHttpsUpgrade,
 #endif
 );
 
+// When enabled, the requests in a third party context to domains included in
+// the Masked Domain List Component will use the Privacy Proxy to shield the
+// client's IP.
+BASE_FEATURE(kMaskedDomainList,
+             "MaskedDomainList",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When set, only resources in the MDL that are part of the experiment group
+// will be loaded into the proxy's allow list.
+const base::FeatureParam<int> kMaskedDomainListExperimentGroup{
+    &kMaskedDomainList, /*name=*/"MaskedDomainListExperimentGroup",
+    /*default_value=*/0};
+
+// Used to build the MDL component's installer attributes and possibly control
+// which release version is retrieved. Does not have any effect for WebView.
+const base::FeatureParam<std::string> kMaskedDomainListExperimentalVersion{
+    &kMaskedDomainList, /*name=*/"MaskedDomainListExperimentalVersion",
+    /*default_value=*/""};
+
 // If this feature is enabled, the mDNS responder service responds to queries
 // for TXT records associated with
 // "Generated-Names._mdns_name_generator._udp.local" with a list of generated
@@ -117,35 +132,47 @@ BASE_FEATURE(kMdnsResponderGeneratedNameListing,
              "MdnsResponderGeneratedNameListing",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Switches Cross-Origin Read Blocking (CORB) to use an early implementation of
-// Opaque Response Blocking (ORB, aka CORB++) behind the scenes.
-//
-// This is ORB v0.1 - it doesn't implement the full spec from
-// https://github.com/annevk/orb:
-// - No Javascript sniffing is done.  Instead the implementation uses all
-//   of CORB's confirmation sniffers (for HTML, XML and JSON).
-// - Blocking is still done by injecting an empty response rather than erroring
-//   out the network request
-// - Other differences and more details can be found in
-//   //services/network/public/cpp/corb/README.md
-//
-// Implementing ORB in Chromium is tracked in https://crbug.com/1178928
-BASE_FEATURE(kOpaqueResponseBlockingV01,
-             "OpaqueResponseBlockingV01",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
 // Enables ORB blocked responses being treated as errors (according to the spec)
 // rather than the current, CORB-style handling of injecting an empty response.
+// This exempts fetches initiated by scripts. (Technically, fetches with an
+// empty destination.)
 // This is ORB v0.2.
-// This should only be enabled when ORB v0.1 is, too.
+// Implementing ORB in Chromium is tracked in https://crbug.com/1178928
 BASE_FEATURE(kOpaqueResponseBlockingV02,
              "OpaqueResponseBlockingV02",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Enables preprocessing requests with the Trust Tokens API Fetch flags set,
-// and handling their responses, according to the protocol.
+// Treat ORB blocked responses to script-initiated fetches as errors too.
+// Complements ORB v0.2, which exempts script-initiated fetches.
+// Implementing ORB in Chromium is tracked in https://crbug.com/1178928
+BASE_FEATURE(kOpaqueResponseBlockingErrorsForAllFetches,
+             "OpaqueResponseBlockingErrorsForAllFetches",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables preprocessing the Attribution API's trigger registration ping
+// requests, potentially adding verification headers, and handling their
+// responses. (See
+// https://github.com/WICG/attribution-reporting-api/blob/main/report_verification.md)
+BASE_FEATURE(kAttributionReportingReportVerification,
+             "AttributionReportingReportVerification",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Gate access to Attribution Reporting cross app and web APIs that allow
+// registering with a native attribution API.
+BASE_FEATURE(kAttributionReportingCrossAppWeb,
+             "AttributionReportingCrossAppWeb",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables preprocessing requests with the Private State Tokens API Fetch flags
+// set, and handling their responses, according to the protocol.
 // (See https://github.com/WICG/trust-token-api.)
-BASE_FEATURE(kTrustTokens, "TrustTokens", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kPrivateStateTokens,
+             "PrivateStateTokens",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Secondary flag used by the FLEDGE ads experiment in the interim before
+// PSTs are fully rolled out to stable.
+BASE_FEATURE(kFledgePst, "TrustTokens", base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Determines which Trust Tokens operations require the TrustTokens origin trial
 // active in order to be used. This is runtime-configurable so that the Trust
@@ -173,18 +200,9 @@ const base::FeatureParam<TrustTokenOriginTrialSpec>::Option
          "only-issuance-requires-origin-trial"}};
 const base::FeatureParam<TrustTokenOriginTrialSpec>
     kTrustTokenOperationsRequiringOriginTrial{
-        &kTrustTokens, "TrustTokenOperationsRequiringOriginTrial",
+        &kFledgePst, "TrustTokenOperationsRequiringOriginTrial",
         TrustTokenOriginTrialSpec::kOriginTrialNotRequired,
         &kTrustTokenOriginTrialParamOptions};
-
-// Determines whether Trust Tokens issuance requests should be diverted, at the
-// corresponding issuers' request, to the operating system instead of sent
-// to the issuers' servers.
-//
-// WARNING: If you rename this param, you must update the corresponding flag
-// entry in about_flags.cc.
-const base::FeatureParam<bool> kPlatformProvidedTrustTokenIssuance{
-    &kTrustTokens, "PlatformProvidedTrustTokenIssuance", false};
 
 BASE_FEATURE(kWebSocketReassembleShortMessages,
              "WebSocketReassembleShortMessages",
@@ -195,81 +213,100 @@ BASE_FEATURE(kWebSocketReassembleShortMessages,
 // https://tools.ietf.org/html/draft-davidben-http-client-hint-reliability-02#section-4.3
 BASE_FEATURE(kAcceptCHFrame, "AcceptCHFrame", base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kSCTAuditingRetryReports,
-             "SCTAuditingRetryReports",
+// Enable
+BASE_FEATURE(kGetCookiesStringUma,
+             "GetCookiesStringUma",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kSCTAuditingPersistReports,
-             "SCTAuditingPersistReports",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
 namespace {
+
+BASE_FEATURE(kDefaultDataPipeAllocationSizeFeature,
+             "DefaultDataPipeAllocationSizeFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kLargerDataPipeAllocationSizeFeature,
+             "LargerDataPipeAllocationSizeFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kNetAdapterMaxBufSizeFeature,
+             "NetAdapterMaxBufSizeFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kMaxNumConsumedBytesInTaskFeature,
+             "MaxNumConsumedBytesInTaskFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 // The default Mojo ring buffer size, used to send the content body.
-static constexpr uint32_t kDefaultDataPipeAllocationSize = 512 * 1024;
+MIRACLE_PARAMETER_FOR_INT(GetDefaultDataPipeAllocationSize,
+                          kDefaultDataPipeAllocationSizeFeature,
+                          "DefaultDataPipeAllocationSize",
+                          512 * 1024)
+
 // The larger ring buffer size, used primarily for network::URLLoader loads.
 // This value was optimized via Finch: see crbug.com/1041006.
-static constexpr uint32_t kLargerDataPipeAllocationSize = 2 * 1024 * 1024;
+MIRACLE_PARAMETER_FOR_INT(GetLargerDataPipeAllocationSize,
+                          kLargerDataPipeAllocationSizeFeature,
+                          "LargerDataPipeAllocationSize",
+                          2 * 1024 * 1024)
+
+// The max buffer size of NetToMojoPendingBuffer. This buffer size should be
+// smaller than the mojo ring buffer size.
+MIRACLE_PARAMETER_FOR_INT(GetNetAdapterMaxBufSizeParam,
+                          kNetAdapterMaxBufSizeFeature,
+                          "NetAdapterMaxBufSize",
+                          64 * 1024)
 
 // The maximal number of bytes consumed in a loading task. When there are more
 // bytes in the data pipe, they will be consumed in following tasks. Setting too
 // small of a number will generate many tasks but setting a too large of a
 // number will lead to thread janks. This value was optimized via Finch:
 // see crbug.com/1041006.
-static constexpr uint32_t kMaxNumConsumedBytesInTask = 1024 * 1024;
+MIRACLE_PARAMETER_FOR_INT(GetMaxNumConsumedBytesInTask,
+                          kMaxNumConsumedBytesInTaskFeature,
+                          "MaxNumConsumedBytesInTask",
+                          1024 * 1024)
 
-// The smallest buffer size must be larger than the maximum MIME sniffing
-// chunk size. This is assumed several places in content/browser/loader.
-static_assert(kDefaultDataPipeAllocationSize < kLargerDataPipeAllocationSize);
-static_assert(kDefaultDataPipeAllocationSize >= net::kMaxBytesToSniff,
-              "Smallest data pipe size must be at least as large as a "
-              "MIME-type sniffing buffer.");
 }  // namespace
 
 // static
 uint32_t GetDataPipeDefaultAllocationSize(DataPipeAllocationSize option) {
+  // The smallest buffer size must be larger than the maximum MIME sniffing
+  // chunk size. This is assumed several places in content/browser/loader.
+  CHECK_LE(GetDefaultDataPipeAllocationSize(),
+           GetLargerDataPipeAllocationSize());
+  CHECK_GE(GetDefaultDataPipeAllocationSize(), net::kMaxBytesToSniff)
+      << "Smallest data pipe size must be at least as large as a "
+         "MIME-type sniffing buffer.";
+
 #if BUILDFLAG(IS_CHROMEOS)
   // TODO(crbug.com/1306998): ChromeOS experiences a much higher OOM crash
   // rate if the larger data pipe size is used.
-  return kDefaultDataPipeAllocationSize;
+  return GetDefaultDataPipeAllocationSize();
 #else
   // For low-memory devices, always use the (smaller) default buffer size.
   if (base::SysInfo::AmountOfPhysicalMemoryMB() <= 512)
-    return kDefaultDataPipeAllocationSize;
+    return GetDefaultDataPipeAllocationSize();
   switch (option) {
     case DataPipeAllocationSize::kDefaultSizeOnly:
-      return kDefaultDataPipeAllocationSize;
+      return GetDefaultDataPipeAllocationSize();
     case DataPipeAllocationSize::kLargerSizeIfPossible:
-      return kLargerDataPipeAllocationSize;
+      return GetLargerDataPipeAllocationSize();
   }
 #endif
 }
 
+uint32_t GetNetAdapterMaxBufSize() {
+  return GetNetAdapterMaxBufSizeParam();
+}
+
 // static
 uint32_t GetLoaderChunkSize() {
-  return kMaxNumConsumedBytesInTask;
+  return GetMaxNumConsumedBytesInTask();
 }
 
 // https://fetch.spec.whatwg.org/#cors-non-wildcard-request-header-name
 BASE_FEATURE(kCorsNonWildcardRequestHeadersSupport,
              "CorsNonWildcardRequestHeadersSupport",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Whether the sync client optimization is used for communication between the
-// CorsURLLoader and URLLoader.
-BASE_FEATURE(kURLLoaderSyncClient,
-             "URLLoaderSyncClient",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-// Don't wait for database write before responding to
-// RestrictedCookieManager::SetCookieFromString.
-BASE_FEATURE(kFasterSetCookie,
-             "FasterSetCookie",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-// Allow batching SimpleURLLoaders when the underlying network state is
-// inactive.
-BASE_FEATURE(kBatchSimpleURLLoader,
-             "BatchSimpleURLLoader",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kNetworkServiceMemoryCache,
@@ -306,37 +343,133 @@ BASE_FEATURE(kReduceAcceptLanguage,
              "ReduceAcceptLanguage",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Disable ResourceScheduler.
-BASE_FEATURE(kDisableResourceScheduler,
-             "DisableResourceScheduler",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+const base::FeatureParam<base::TimeDelta> kReduceAcceptLanguageCacheDuration{
+    &kReduceAcceptLanguage, "reduce-accept-language-cache-duration",
+    base::Days(30)};
+
+// Gate access to ReduceAcceptLanguage origin trial major code. Currently, All
+// ReduceAcceptLanguage feature codes are guarded by the feature flag
+// kReduceAcceptLanguage. This feature flag is useful on control major code
+// which required to do origin trial. It allows Chrome developers to mitigate
+// issues when exposed codes cause impacts.
+BASE_FEATURE(kReduceAcceptLanguageOriginTrial,
+             "ReduceAcceptLanguageOriginTrial",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Reduce PNA preflight response waiting time to 200ms.
 // See: https://wicg.github.io/private-network-access/#cors-preflight
 BASE_FEATURE(kPrivateNetworkAccessPreflightShortTimeout,
-             "PrivateNetworkAccessPreflightReduceTimeout",
+             "PrivateNetworkAccessPreflightShortTimeout",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-// Handle the Link header DNS prefetches and preconnects in the network
-// service instead of through the renderer process.
-BASE_FEATURE(kPreconnectInNetworkService,
-             "PreconnectInNetworkService",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+// Allow potentially trustworthy same origin local network requests without
+// preflights.
+BASE_FEATURE(kLocalNetworkAccessAllowPotentiallyTrustworthySameOrigin,
+             "LocalNetworkAccessAllowPotentiallyTrustworthySameOrigin",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// Preconnect to a new origin right when a redirect starts.
-BASE_FEATURE(kPreconnectOnRedirect,
-             "PreconnectOnRedirect",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Enables out-of-process system DNS resolution so getaddrinfo() never runs in
-// the network service sandbox. System DNS resolution will instead be brokered
-// out over Mojo, likely to run in the browser process.
-BASE_FEATURE(kOutOfProcessSystemDnsResolution,
-             "OutOfProcessSystemDnsResolution",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+// When kPrivateNetworkAccessPermissionPrompt is enabled, public secure websites
+// are allowed to access private insecure subresources with user's permission.
+BASE_FEATURE(kPrivateNetworkAccessPermissionPrompt,
+             "PrivateNetworkAccessPermissionPrompt",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kAccessControlAllowMethodsInCORSPreflightSpecConformant,
              "AccessControlAllowMethodsInCORSPreflightSpecConformant",
              base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPrefetchNoVarySearch,
+             "PrefetchNoVarySearch",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+const base::FeatureParam<bool> kPrefetchNoVarySearchShippedByDefault{
+    &kPrefetchNoVarySearch, "shipped_by_default", true};
+
+// Enables the backend of the compression dictionary transport feature.
+// When this feature is enabled, the following will happen:
+//   * The network service loads the metadata database.
+//   * If there is a matching dictionary for a sending request, it adds the
+//     `sec-available-dictionary` header.
+//   * And if the `content-encoding` header of the response is `sbr`, it
+//     decompresses the response body using the dictionary.
+BASE_FEATURE(kCompressionDictionaryTransportBackend,
+             "CompressionDictionaryTransportBackend",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+const base::FeatureParam<CompressionDictionaryTransportBackendVersion>::Option
+    kCompressionDictionaryTransportBackendVersionOptions[] = {
+        {CompressionDictionaryTransportBackendVersion::kV1, "v1"},
+        {CompressionDictionaryTransportBackendVersion::kV2, "v2"}};
+const base::FeatureParam<CompressionDictionaryTransportBackendVersion>
+    kCompressionDictionaryTransportBackendVersion{
+        &kCompressionDictionaryTransportBackend,
+        "CompressionDictionaryTransportBackendVersion",
+        CompressionDictionaryTransportBackendVersion::kV1,
+        &kCompressionDictionaryTransportBackendVersionOptions};
+
+// When both this feature and the kCompressionDictionaryTransportBackend feature
+// are enabled, the following will happen:
+//   * A <link rel=dictionary> HTML tag and a `Link: rel=dictionary` HTTP header
+//     will trigger dictionary download.
+//   * HTMLLinkElement.relList.supports('dictionary') will return true.
+//   * The network service may register a HTTP response as a dictionary if the
+//     response header contains a `use-as-dictionary` header.
+// This feature can be enabled by an Origin Trial token in Blink. To propagate
+// the enabled state to the network service, Blink sets the
+// `shared_dictionary_writer_enabled` flag in resource requests.
+BASE_FEATURE(kCompressionDictionaryTransport,
+             "CompressionDictionaryTransport",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When this feature is enabled, Chromium can use stored shared dictionaries
+// even when the connection is using HTTP/1 for non-localhost requests.
+BASE_FEATURE(kCompressionDictionaryTransportOverHttp1,
+             "CompressionDictionaryTransportOverHttp1",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When this feature is enabled, Chromium will use stored shared dictionaries
+// only if the request URL is a localhost URL or the transport layer is using a
+// certificate rooted at a standard CA root.
+BASE_FEATURE(kCompressionDictionaryTransportRequireKnownRootCert,
+             "CompressionDictionaryTransportRequireKnownRootCert",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kVisibilityAwareResourceScheduler,
+             "VisibilityAwareResourceScheduler",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kSharedZstd, "SharedZstd", base::FEATURE_ENABLED_BY_DEFAULT);
+
+// This feature will permits de-duplicating cookie access details that are sent
+// to observers via OnCookiesAccessed.
+BASE_FEATURE(kCookieAccessDetailsNotificationDeDuping,
+             "CookieAccessDetailsNotificationDeDuping",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// This feature will reduce TransferSizeUpdated IPC from the network service.
+// When enabled, the network service will send the IPC only when DevTools is
+// attached or the request is for an ad request.
+BASE_FEATURE(kReduceTransferSizeUpdatedIPC,
+             "ReduceTransferSizeUpdatedIPC",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// This feature allows skipping TPCD mitigation checks when the cookie access
+// is tagged as being used for advertising purposes. This means that cookies
+// will continue to be blocked for cookie accesses on ad requests even if the
+// 3PC mitigations would otherwise allow the access.
+BASE_FEATURE(kSkipTpcdMitigationsForAds,
+             "SkipTpcdMitigationsForAds",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+// Controls whether we ignore opener heuristic grants for 3PC accesses.
+const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsHeuristics{
+    &kSkipTpcdMitigationsForAds, /*name=*/"SkipTpcdMitigationsForAdsHeuristics",
+    /*default_value=*/false};
+// Controls whether we ignore checks on the metadata allowlist for 3PC cookies.
+const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsMetadata{
+    &kSkipTpcdMitigationsForAds, /*name=*/"SkipTpcdMitigationsForAdsMetadata",
+    /*default_value=*/false};
+// Controls whether we ignore checks on the deprecation trial for 3PC.
+const base::FeatureParam<bool> kSkipTpcdMitigationsForAdsSupport{
+    &kSkipTpcdMitigationsForAds, /*name=*/"SkipTpcdMitigationsForAdsSupport",
+    /*default_value=*/false};
 
 }  // namespace network::features

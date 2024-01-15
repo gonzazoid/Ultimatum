@@ -12,6 +12,7 @@
 
 #include "base/files/file_path.h"
 #include "build/build_config.h"
+#include "components/safe_browsing/content/common/proto/download_file_types.pb.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 
 namespace base {
@@ -36,7 +37,25 @@ enum class ArchiveAnalysisResult {
   kFailedToOpenTempFile = 6,
   kDmgNoPartitions = 7,
   kFailedDuringIteration = 8,
-  kMaxValue = kFailedDuringIteration,
+  kDiskError = 9,
+  kMaxValue = kDiskError,
+};
+
+struct EncryptionInfo {
+  // True if the metadata is encrypted or there is at least one encrypted entry
+  // in the archive.
+  bool is_encrypted = false;
+
+  enum PasswordStatus {
+    kUnknown = 0,
+    kKnownIncorrect = 1,
+    kKnownCorrect = 2,
+    kMaxValue = kKnownCorrect,
+  };
+
+  // Set to kKnownCorrect if the archive unpacks correctly with the given
+  // password.
+  PasswordStatus password_status = kUnknown;
 };
 
 struct ArchiveAnalyzerResults {
@@ -56,20 +75,40 @@ struct ArchiveAnalyzerResults {
   int directory_count = 0;
   ArchiveAnalysisResult analysis_result = ArchiveAnalysisResult::kUnspecified;
 
+  // TODO(crbug/1466284): Populate this information for RAR archives as well.
+  EncryptionInfo encryption_info;
+
   ArchiveAnalyzerResults();
   ArchiveAnalyzerResults(const ArchiveAnalyzerResults& other);
   ~ArchiveAnalyzerResults();
 };
 
-// Updates |results| with the results of inspecting |file|, given that it will
-// be extracted to |path|. Due to complications with the utility process sandbox
+// Updates `results` with the results of inspecting `file`, given that it will
+// be extracted to `path`. Due to complications with the utility process sandbox
 // (see https://crbug.com/944633), the file inspection is limited to the first
-// |file_length| bytes of |file|.
+// `file_length` bytes of `file`.
 void UpdateArchiveAnalyzerResultsWithFile(base::FilePath path,
                                           base::File* file,
                                           int file_length,
                                           bool is_encrypted,
+                                          bool is_directory,
+                                          bool contents_valid,
                                           ArchiveAnalyzerResults* results);
+
+// Returns the `DownloadFileType_InspectionType` of the file path.
+safe_browsing::DownloadFileType_InspectionType GetFileType(base::FilePath path);
+
+// Update the `archived_binary` with the string value path name.
+void SetNameForContainedFile(
+    const base::FilePath& path,
+    ClientDownloadRequest::ArchivedBinary* archived_binary);
+
+// Update the `archived_binary` with the `file_length` and the
+// `mutable_digests` fields
+void SetLengthAndDigestForContainedFile(
+    base::File* temp_file,
+    int file_length,
+    ClientDownloadRequest::ArchivedBinary* archived_binary);
 
 }  // namespace safe_browsing
 

@@ -54,6 +54,18 @@ def main(raw_args):
   subparser.set_defaults(func=install_cmd)
 
   subparser = subparsers.add_parser(
+      'uninstall',
+      help='Uninstall all the artifacts associated with the given config.')
+  _add_common_arguments(subparser)
+  _add_avd_config_argument(subparser)
+
+  def uninstall_cmd(args):
+    avd.AvdConfig(args.avd_config).Uninstall()
+    return 0
+
+  subparser.set_defaults(func=uninstall_cmd)
+
+  subparser = subparsers.add_parser(
       'create',
       help='Create an AVD CIPD package according to the given config.')
   _add_common_arguments(subparser)
@@ -149,7 +161,6 @@ def main(raw_args):
       help='Enable graphical window display on the emulator.')
   subparser.add_argument(
       '--gpu-mode',
-      default='swiftshader_indirect',
       help='Override the mode of hardware OpenGL ES emulation indicated by the '
       'AVD. See "emulator -help-gpu" for a full list of modes. Note when set '
       'to "host", it needs a valid DISPLAY env, even if "--emulator-window" is '
@@ -159,8 +170,20 @@ def main(raw_args):
       '--debug-tags',
       help='Comma-separated list of debug tags. This can be used to enable or '
       'disable debug messages from specific parts of the emulator, e.g. '
-      'init, snapshot. See "emulator -help-debug-tags" '
+      'init,snapshot. See "emulator -help-debug-tags" '
       'for a full list of tags.')
+  subparser.add_argument(
+      '--disk-size',
+      help='Override the default disk size for the emulator instance.')
+  subparser.add_argument(
+      '--enable-network',
+      action='store_true',
+      help='Enable the network (WiFi and mobile data) on the emulator.')
+  subparser.add_argument(
+      '--require-fast-start',
+      action='store_true',
+      help='Shortens the start-up timeout. Used by bots to avoid startup '
+      'regressions.')
 
   def start_cmd(args):
     avd_config = avd.AvdConfig(args.avd_config)
@@ -171,7 +194,7 @@ def main(raw_args):
 
     debug_tags = args.debug_tags
     if not debug_tags and args.verbose:
-      debug_tags = 'init'
+      debug_tags = 'time,init'
 
     inst = avd_config.CreateInstance()
     inst.Start(read_only=args.read_only,
@@ -179,7 +202,10 @@ def main(raw_args):
                writable_system=args.writable_system,
                gpu_mode=args.gpu_mode,
                wipe_data=args.wipe_data,
-               debug_tags=debug_tags)
+               debug_tags=debug_tags,
+               disk_size=args.disk_size,
+               enable_network=args.enable_network,
+               require_fast_start=args.require_fast_start)
     print('%s started (pid: %d)' % (str(inst), inst._emulator_proc.pid))
     return 0
 

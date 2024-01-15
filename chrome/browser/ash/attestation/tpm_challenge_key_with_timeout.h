@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ATTESTATION_TPM_CHALLENGE_KEY_WITH_TIMEOUT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/weak_ptr.h"
@@ -13,7 +14,7 @@
 #include "base/time/time.h"
 #include "chrome/browser/ash/attestation/tpm_challenge_key.h"
 #include "chrome/browser/profiles/profile.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/components/dbus/attestation/attestation_ca.pb.h"
 
 namespace ash {
 namespace attestation {
@@ -33,14 +34,14 @@ class TpmChallengeKeyWithTimeout final {
   // Tries to build a response for the |challenge|. Returns either timeout
   // error or result from |TpmChallengeKey::BuildResponse| via |callback|.
   void BuildResponse(base::TimeDelta timeout,
-                     AttestationKeyType key_type,
+                     ::attestation::VerifiedAccessFlow flow_type,
                      Profile* profile,
                      TpmChallengeKeyCallback callback,
                      const std::string& challenge,
                      bool register_key,
                      ::attestation::KeyType key_crypto_type,
                      const std::string& key_name_for_spkac,
-                     const absl::optional<std::string>& signals);
+                     const std::optional<std::string>& signals);
 
  private:
   void ResolveCallback(const TpmChallengeKeyResult& result);
@@ -53,13 +54,5 @@ class TpmChallengeKeyWithTimeout final {
 
 }  // namespace attestation
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace attestation {
-using ::ash::attestation::TpmChallengeKeyWithTimeout;
-}  // namespace attestation
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_ATTESTATION_TPM_CHALLENGE_KEY_WITH_TIMEOUT_H_

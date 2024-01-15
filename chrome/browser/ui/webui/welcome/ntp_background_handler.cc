@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/profiles/profile.h"
@@ -132,14 +132,13 @@ void NtpBackgroundHandler::HandleSetBackground(const base::Value::List& args) {
 
   switch (background_index) {
     case static_cast<int>(NtpBackgrounds::kArt):
-      service->SetCustomBackgroundInfo(
-          NtpBackgrounds[background_index], "Universe Cosmic Vacum",
-          "Philipp Rietz — Walli",
-          GURL("https://walli.shanga.co/image/view/?id=370"), "");
+      service->SetCustomBackgroundInfo(NtpBackgrounds[background_index], GURL(),
+                                       "Universe Cosmic Vacum",
+                                       "Philipp Rietz — Walli", GURL(), "");
       break;
     case static_cast<int>(NtpBackgrounds::kCityscape):
       service->SetCustomBackgroundInfo(
-          NtpBackgrounds[background_index],
+          NtpBackgrounds[background_index], GURL(),
           l10n_util::GetStringFUTF8(IDS_WELCOME_NTP_BACKGROUND_PHOTO_BY_LABEL,
                                     u"Ev Tchebotarev"),
           "",
@@ -149,20 +148,19 @@ void NtpBackgroundHandler::HandleSetBackground(const base::Value::List& args) {
       break;
     case static_cast<int>(NtpBackgrounds::kEarth):
       service->SetCustomBackgroundInfo(
-          NtpBackgrounds[background_index],
+          NtpBackgrounds[background_index], GURL(),
           l10n_util::GetStringFUTF8(IDS_WELCOME_NTP_BACKGROUND_PHOTO_BY_LABEL,
                                     u"NASA Image Library"),
           "", GURL("https://www.google.com/sky/"), "");
       break;
     case static_cast<int>(NtpBackgrounds::kGeometricShapes):
-      service->SetCustomBackgroundInfo(
-          NtpBackgrounds[background_index], "Tessellation 15",
-          "Justin Prno — Walli",
-          GURL("https://walli.shanga.co/image/view/?id=1375"), "");
+      service->SetCustomBackgroundInfo(NtpBackgrounds[background_index], GURL(),
+                                       "Tessellation 15", "Justin Prno — Walli",
+                                       GURL(), "");
       break;
     case static_cast<int>(NtpBackgrounds::kLandscape):
       service->SetCustomBackgroundInfo(
-          NtpBackgrounds[background_index],
+          NtpBackgrounds[background_index], GURL(),
           l10n_util::GetStringFUTF8(IDS_WELCOME_NTP_BACKGROUND_PHOTO_BY_LABEL,
                                     u"Giulio Rosso Chioso"),
           "",

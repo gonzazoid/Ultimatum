@@ -49,8 +49,6 @@ std::string GetStringNameForOptimizationType(
       return "LinkPerformance";
     case proto::OptimizationType::SHOPPING_PAGE_PREDICTOR:
       return "ShoppingPagePredictor";
-    case proto::OptimizationType::LOGIN_DETECTION:
-      return "LoginDetection";
     case proto::OptimizationType::MERCHANT_TRUST_SIGNALS:
       return "MerchantTrustSignals";
     case proto::OptimizationType::PRICE_TRACKING:
@@ -69,6 +67,52 @@ std::string GetStringNameForOptimizationType(
       return "ThankCreatorEligible";
     case proto::OptimizationType::IBAN_AUTOFILL_BLOCKED:
       return "IBANAutofillBlocked";
+    case proto::OptimizationType::SALIENT_IMAGE:
+      return "SalientImage";
+    case proto::OptimizationType::AUTOFILL_SAMPLING_RATE:
+      return "AutofillSamplingRate";
+    case proto::OptimizationType::VCN_MERCHANT_OPT_OUT_VISA:
+      return "VcnMerchantOptOutVisa";
+    case proto::OptimizationType::PRICE_INSIGHTS:
+      return "PriceInsights";
+    case proto::OptimizationType::V8_COMPILE_HINTS:
+      return "V8CompileHints";
+    case proto::OptimizationType::PAGE_INSIGHTS:
+      return "PageInsights";
+    case proto::OptimizationType::SHOPPING_PAGE_TYPES:
+      return "ShoppingPageTypes";
+    case proto::OptimizationType::SHOPPING_DISCOUNTS:
+      return "ShoppingDiscounts";
+    case proto::OptimizationType::COMPOSE:
+      return "Compose";
+    case proto::OptimizationType::PIX_PAYMENT_MERCHANT_ALLOWLIST:
+      return "PixPaymentMerchantAllowlist";
+    case proto::OptimizationType::SHARED_CREDIT_CARD_FLIGHT_BENEFITS:
+      return "SharedCreditCardFlightBenefits";
+    case proto::OptimizationType::SHARED_CREDIT_CARD_DINING_BENEFITS:
+      return "SharedCreditCardDiningBenefits";
+    case proto::OptimizationType::SHARED_CREDIT_CARD_GROCERY_BENEFITS:
+      return "SharedCreditCardGroceryBenefits";
+    case proto::OptimizationType::SHARED_CREDIT_CARD_ENTERTAINMENT_BENEFITS:
+      return "SharedCreditCardEntertainmentBenefits";
+    case proto::OptimizationType::SHARED_CREDIT_CARD_STREAMING_BENEFITS:
+      return "SharedCreditCardStreamingBenefits";
+    case proto::OptimizationType::SHARED_CREDIT_CARD_SUBSCRIPTION_BENEFITS:
+      return "SharedCreditCardSubscriptionBenefits";
+    case proto::OptimizationType::CAPITAL_ONE_CREDIT_CARD_DINING_BENEFITS:
+      return "CapitalOneCreditCardDiningBenefits";
+    case proto::OptimizationType::CAPITAL_ONE_CREDIT_CARD_GROCERY_BENEFITS:
+      return "CapitalOneCreditCardGroceryBenefits";
+    case proto::OptimizationType::
+        CAPITAL_ONE_CREDIT_CARD_ENTERTAINMENT_BENEFITS:
+      return "CapitalOneCreditCardEntertainmentBenefits";
+    case proto::OptimizationType::CAPITAL_ONE_CREDIT_CARD_STREAMING_BENEFITS:
+      return "CapitalOneCreditCardStreamingBenefits";
+    case proto::OptimizationType::AMERICAN_EXPRESS_CREDIT_CARD_FLIGHT_BENEFITS:
+      return "AmericanExpressCreditCardFlightBenefits";
+    case proto::OptimizationType::
+        AMERICAN_EXPRESS_CREDIT_CARD_SUBSCRIPTION_BENEFITS:
+      return "AmericanExpressCreditCardSubscriptionBenefits";
   }
 
   // The returned string is used to record histograms for the optimization type.
@@ -102,24 +146,6 @@ const proto::PageHint* FindPageHintForURL(const GURL& gurl,
 
 std::string HashHostForDictionary(const std::string& host) {
   return base::StringPrintf("%x", base::PersistentHash(host));
-}
-
-net::EffectiveConnectionType ConvertProtoEffectiveConnectionType(
-    proto::EffectiveConnectionType proto_ect) {
-  switch (proto_ect) {
-    case proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_UNKNOWN:
-      return net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_UNKNOWN;
-    case proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_OFFLINE:
-      return net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_OFFLINE;
-    case proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_SLOW_2G:
-      return net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_SLOW_2G;
-    case proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_2G:
-      return net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_2G;
-    case proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_3G:
-      return net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_3G;
-    case proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_4G:
-      return net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_4G;
-  }
 }
 
 bool IsValidURLForURLKeyedHint(const GURL& url) {

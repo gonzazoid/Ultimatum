@@ -4,9 +4,9 @@
 
 #include "components/subresource_filter/content/browser/fake_safe_browsing_database_manager.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "url/gurl.h"
@@ -60,16 +60,20 @@ bool FakeSafeBrowsingDatabaseManager::CheckUrlForSubresourceFilter(
   if (simulate_timeout_)
     return false;
   content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&FakeSafeBrowsingDatabaseManager::
-                                    OnCheckUrlForSubresourceFilterComplete,
-                                weak_factory_.GetWeakPtr(),
-                                base::Unretained(client), url));
+      FROM_HERE,
+      base::BindOnce(&FakeSafeBrowsingDatabaseManager::
+                         OnCheckUrlForSubresourceFilterComplete,
+                     weak_factory_.GetWeakPtr(), client->GetWeakPtr(), url));
   return false;
 }
 
 void FakeSafeBrowsingDatabaseManager::OnCheckUrlForSubresourceFilterComplete(
-    Client* client,
+    base::WeakPtr<Client> client_weak_ptr,
     const GURL& url) {
+  if (!client_weak_ptr) {
+    return;
+  }
+  Client* client = client_weak_ptr.get();
   // Check to see if the request was cancelled to avoid use-after-free.
   if (checks_.find(client) == checks_.end())
     return;
@@ -106,8 +110,14 @@ bool FakeSafeBrowsingDatabaseManager::CanCheckRequestDestination(
   return true;
 }
 
-safe_browsing::ThreatSource FakeSafeBrowsingDatabaseManager::GetThreatSource()
-    const {
+safe_browsing::ThreatSource
+FakeSafeBrowsingDatabaseManager::GetBrowseUrlThreatSource(
+    safe_browsing::CheckBrowseUrlType check_type) const {
+  return safe_browsing::ThreatSource::LOCAL_PVER4;
+}
+
+safe_browsing::ThreatSource
+FakeSafeBrowsingDatabaseManager::GetNonBrowseUrlThreatSource() const {
   return safe_browsing::ThreatSource::LOCAL_PVER4;
 }
 

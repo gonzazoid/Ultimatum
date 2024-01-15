@@ -7,6 +7,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_sink.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_transferring_optimizer.h"
 #include "third_party/blink/renderer/modules/breakout_box/frame_queue_underlying_source.h"
@@ -65,7 +66,6 @@ class MODULES_EXPORT MediaStreamVideoTrackUnderlyingSource
 
   void OnFrameFromTrack(
       scoped_refptr<media::VideoFrame> media_frame,
-      std::vector<scoped_refptr<media::VideoFrame>> scaled_media_frames,
       base::TimeTicks estimated_capture_time);
 
   // Only used to prevent the gargabe collector from reclaiming the media

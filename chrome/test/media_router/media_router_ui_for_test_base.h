@@ -5,7 +5,7 @@
 #ifndef CHROME_TEST_MEDIA_ROUTER_MEDIA_ROUTER_UI_FOR_TEST_BASE_H_
 #define CHROME_TEST_MEDIA_ROUTER_MEDIA_ROUTER_UI_FOR_TEST_BASE_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/scoped_feature_list.h"
@@ -26,7 +26,12 @@ class MediaRouterUiForTestBase {
  public:
   virtual void SetUp() = 0;
 
-  // Cleans up after a test.
+  // Destruction of the test helper happens in two phases: the user of this
+  // helper must first call `TearDown()` before destroying it. `TearDown()`
+  // itself needs to call virtual functions, so that logic cannot live in the
+  // destructor itself: by the time the destructor of this base class runs, the
+  // virtual methods will not work as expected, because the derived class's
+  // destructor will have already completed.
   void TearDown();
 
   virtual void ShowDialog() = 0;
@@ -39,8 +44,8 @@ class MediaRouterUiForTestBase {
 
   // These methods require that the dialog is shown and the specified sink is
   // shown in the dialog.
-  void StartCasting(const std::string& sink_name);
-  void StopCasting(const std::string& sink_name);
+  virtual void StartCasting(const std::string& sink_name) = 0;
+  virtual void StopCasting(const std::string& sink_name) = 0;
 
   // Waits until a condition is met. Requires that the dialog is shown.
   virtual void WaitForSink(const std::string& sink_name) = 0;
@@ -52,14 +57,19 @@ class MediaRouterUiForTestBase {
 
   // These methods require that the dialog is shown, and the sink specified by
   // |sink_name| is in the dialog.
-  MediaRoute::Id GetRouteIdForSink(const std::string& sink_name) const;
-  std::string GetStatusTextForSink(const std::string& sink_name) const;
-  std::string GetIssueTextForSink(const std::string& sink_name) const;
+  virtual MediaRoute::Id GetRouteIdForSink(
+      const std::string& sink_name) const = 0;
+  virtual std::string GetStatusTextForSink(
+      const std::string& sink_name) const = 0;
+  virtual std::string GetIssueTextForSink(
+      const std::string& sink_name) const = 0;
 
   // Called by MediaRouterDialogControllerViews.
   virtual void OnDialogCreated();
 
   content::WebContents* web_contents() const { return web_contents_; }
+
+  virtual ~MediaRouterUiForTestBase();
 
  protected:
   enum class WatchType {
@@ -73,18 +83,11 @@ class MediaRouterUiForTestBase {
   };
 
   explicit MediaRouterUiForTestBase(content::WebContents* web_contents);
-  virtual ~MediaRouterUiForTestBase();
   void WaitForAnyDialogShown();
 
-  void StartCasting(CastDialogSinkButton* sink_button);
-  void StopCasting(CastDialogSinkButton* sink_button);
+  static void ClickOnView(views::View* view);
 
-  static CastDialogSinkButton* GetSinkButtonWithName(
-      const std::vector<CastDialogSinkButton*>& sink_buttons,
-      const std::string& sink_name);
-
-  virtual CastDialogSinkButton* GetSinkButton(
-      const std::string& sink_name) const = 0;
+  virtual views::View* GetSinkButton(const std::string& sink_name) const = 0;
 
   // Registers itself as an observer to the dialog, and waits until an event
   // of |watch_type| is observed. |sink_name| should be set only if observing
@@ -99,6 +102,8 @@ class MediaRouterUiForTestBase {
   WatchType watch_type_ = WatchType::kNone;
   absl::optional<base::OnceClosure> watch_callback_;
   base::test::ScopedFeatureList feature_list_;
+  bool torn_down_ = false;
+
   base::WeakPtrFactory<MediaRouterUiForTestBase> weak_factory_{this};
 };
 

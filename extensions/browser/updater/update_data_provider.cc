@@ -4,12 +4,12 @@
 
 #include "extensions/browser/updater/update_data_provider.h"
 
+#include <optional>
 #include <utility>
-
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
 #include "components/crx_file/crx_verifier.h"
@@ -27,7 +27,6 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/verifier_formats.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -58,20 +57,27 @@ void UpdateDataProvider::Shutdown() {
   browser_context_ = nullptr;
 }
 
-std::vector<absl::optional<update_client::CrxComponent>>
-UpdateDataProvider::GetData(bool install_immediately,
-                            const ExtensionUpdateDataMap& update_crx_component,
-                            const std::vector<std::string>& ids) {
-  std::vector<absl::optional<update_client::CrxComponent>> data;
-  if (!browser_context_)
-    return data;
+void UpdateDataProvider::GetData(
+    bool install_immediately,
+    const ExtensionUpdateDataMap& update_crx_component,
+    const std::vector<std::string>& ids,
+    base::OnceCallback<
+        void(const std::vector<std::optional<update_client::CrxComponent>>&)>
+        callback) {
+  std::vector<std::optional<update_client::CrxComponent>> data;
+  if (!browser_context_) {
+    for (size_t i = 0; i < ids.size(); i++) {
+      data.push_back(std::nullopt);
+    }
+    std::move(callback).Run(data);
+    return;
+  }
   const ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context_);
   const ExtensionPrefs* extension_prefs = ExtensionPrefs::Get(browser_context_);
   for (const auto& id : ids) {
     const Extension* extension = registry->GetInstalledExtension(id);
-    data.push_back(extension
-                       ? absl::make_optional<update_client::CrxComponent>()
-                       : absl::nullopt);
+    data.push_back(extension ? std::make_optional<update_client::CrxComponent>()
+                             : std::nullopt);
     if (!extension)
       continue;
     DCHECK_NE(0u, update_crx_component.count(id));
@@ -120,7 +126,7 @@ UpdateDataProvider::GetData(bool install_immediately,
     crx_component->install_location =
         ManifestFetchData::GetSimpleLocationString(extension->location());
   }
-  return data;
+  std::move(callback).Run(data);
 }
 
 void UpdateDataProvider::RunInstallCallback(
@@ -164,7 +170,7 @@ void UpdateDataProvider::InstallUpdateCallback(
           extension_id, public_key, unpacked_dir, install_immediately,
           base::BindOnce(
               [](UpdateClientCallback callback,
-                 const absl::optional<CrxInstallError>& error) {
+                 const std::optional<CrxInstallError>& error) {
                 DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
                 update_client::CrxInstaller::Result result(0);
                 if (error.has_value()) {

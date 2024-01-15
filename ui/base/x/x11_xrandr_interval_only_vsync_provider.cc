@@ -4,9 +4,9 @@
 
 #include "ui/base/x/x11_xrandr_interval_only_vsync_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/base/x/x11_display_util.h"
 #include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/event.h"
@@ -17,8 +17,8 @@ namespace ui {
 namespace {
 
 bool IsXrandrAvailable() {
-  constexpr int kMinXrandrVersion = 103;  // Need at least xrandr version 1.3
-  return GetXrandrVersion() >= kMinXrandrVersion;
+  constexpr std::pair<uint32_t, uint32_t> kMinXrandrVersion{1, 3};
+  return x11::Connection::Get()->randr_version() >= kMinXrandrVersion;
 }
 
 class XRandrHelper : public x11::EventObserver {
@@ -72,7 +72,7 @@ XrandrIntervalOnlyVSyncProvider::~XrandrIntervalOnlyVSyncProvider() = default;
 
 void XrandrIntervalOnlyVSyncProvider::GetVSyncParameters(
     UpdateVSyncCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), base::TimeTicks(),
                                 XRandrHelper::GetInterval()));
 }

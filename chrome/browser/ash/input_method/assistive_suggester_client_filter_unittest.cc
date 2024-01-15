@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/input_method/assistive_suggester_client_filter.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/bind.h"
 #include "chrome/browser/ash/input_method/assistive_suggester_switch.h"
 #include "chrome/browser/ash/input_method/get_current_window_properties.h"
@@ -40,6 +40,47 @@ struct VerifySuggesterTestCase {
   EnabledSuggestions enabled_suggestions;
 };
 
+class SuggesterContextBasedTest : public testing::Test {
+ protected:
+  SuggesterContextBasedTest() {}
+};
+
+TEST_F(SuggesterContextBasedTest, NoDiacriticsInPassword) {
+  AssistiveSuggesterClientFilter filter(ReturnUrl("https://www.discord.com"),
+                                        ReturnWindowProperty({}));
+  EnabledSuggestions enabled_suggestions;
+
+  filter.FetchEnabledSuggestionsThen(
+      base::BindLambdaForTesting([&](const EnabledSuggestions& enabled) {
+        enabled_suggestions = enabled;
+      }),
+      TextInputMethod::InputContext(ui::TEXT_INPUT_TYPE_PASSWORD));
+
+  EnabledSuggestions expected = {.emoji_suggestions = true,
+                                 .multi_word_suggestions = true,
+                                 .personal_info_suggestions = true,
+                                 .diacritic_suggestions = false};
+  EXPECT_EQ(enabled_suggestions, expected);
+}
+
+TEST_F(SuggesterContextBasedTest, YesDiacriticsNormally) {
+  AssistiveSuggesterClientFilter filter(ReturnUrl("https://www.discord.com"),
+                                        ReturnWindowProperty({}));
+  EnabledSuggestions enabled_suggestions;
+
+  filter.FetchEnabledSuggestionsThen(
+      base::BindLambdaForTesting([&](const EnabledSuggestions& enabled) {
+        enabled_suggestions = enabled;
+      }),
+      TextInputMethod::InputContext(ui::TEXT_INPUT_TYPE_TEXT));
+
+  EnabledSuggestions expected = {.emoji_suggestions = true,
+                                 .multi_word_suggestions = true,
+                                 .personal_info_suggestions = true,
+                                 .diacritic_suggestions = true};
+  EXPECT_EQ(enabled_suggestions, expected);
+}
+
 using SuggesterAllowlist = testing::TestWithParam<VerifySuggesterTestCase>;
 
 TEST_P(SuggesterAllowlist, VerifySuggesterAllowedState) {
@@ -55,7 +96,8 @@ TEST_P(SuggesterAllowlist, VerifySuggesterAllowedState) {
   filter.FetchEnabledSuggestionsThen(
       base::BindLambdaForTesting([&](const EnabledSuggestions& enabled) {
         enabled_suggestions = enabled;
-      }));
+      }),
+      TextInputMethod::InputContext(ui::TEXT_INPUT_TYPE_NONE));
 
   EXPECT_EQ(enabled_suggestions, test_case.enabled_suggestions);
 }
@@ -80,7 +122,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"WhatsappHttps", /* url=*/"https://web.whatsapp.com", /* app_id=*/"",
          /* arc_package_name=*/"",
          EnabledSuggestions{.emoji_suggestions = true,
-                            .multi_word_suggestions = true,
+                            .multi_word_suggestions = false,
                             .personal_info_suggestions = true,
                             .diacritic_suggestions = true}},
         {"SkypeHttps", /* url=*/"https://web.skype.com", /* app_id=*/"",
@@ -128,7 +170,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"RandomHttps", /* url=*/"https://www.abc.com", /* app_id=*/"",
          /* arc_package_name=*/"",
          EnabledSuggestions{.emoji_suggestions = false,
-                            .multi_word_suggestions = false,
+                            .multi_word_suggestions = true,
                             .personal_info_suggestions = false,
                             .diacritic_suggestions = true}},
         {"GmailHttps", /* url=*/"https://mail.google.com", /* app_id=*/"",
@@ -180,7 +222,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"WhatsappHttp", /* url=*/"http://web.whatsapp.com", /* app_id=*/"",
          /* arc_package_name=*/"",
          EnabledSuggestions{.emoji_suggestions = true,
-                            .multi_word_suggestions = true,
+                            .multi_word_suggestions = false,
                             .personal_info_suggestions = true,
                             .diacritic_suggestions = true}},
         {"SkypeHttp", /* url=*/"http://web.skype.com", /* app_id=*/"",
@@ -228,7 +270,7 @@ INSTANTIATE_TEST_SUITE_P(
         {"RandomHttp", /* url=*/"http://www.abc.com", /* app_id=*/"",
          /* arc_package_name=*/"",
          EnabledSuggestions{.emoji_suggestions = false,
-                            .multi_word_suggestions = false,
+                            .multi_word_suggestions = true,
                             .personal_info_suggestions = false,
                             .diacritic_suggestions = true}},
         {"GmailHttp", /* url=*/"http://mail.google.com", /* app_id=*/"",
@@ -276,7 +318,7 @@ INSTANTIATE_TEST_SUITE_P(
          EnabledSuggestions{.emoji_suggestions = false,
                             .multi_word_suggestions = false,
                             .personal_info_suggestions = false,
-                            .diacritic_suggestions = false}},
+                            .diacritic_suggestions = true}},
         {"SlidesWithFullPath",
          /* url=*/
          "https://docs.google.com/presentation/d/"
@@ -286,13 +328,13 @@ INSTANTIATE_TEST_SUITE_P(
          EnabledSuggestions{.emoji_suggestions = false,
                             .multi_word_suggestions = false,
                             .personal_info_suggestions = false,
-                            .diacritic_suggestions = false}},
+                            .diacritic_suggestions = true}},
         {"SystemTextApp",
          /* url=*/"chrome-extension://mmfbcljfglbokpmkimbfghdkjmjhdgbg",
          /* app_id=*/"mmfbcljfglbokpmkimbfghdkjmjhdgbg",
          /* arc_package_name=*/"",
          EnabledSuggestions{.emoji_suggestions = true,
-                            .multi_word_suggestions = true,
+                            .multi_word_suggestions = false,
                             .personal_info_suggestions = true,
                             .diacritic_suggestions = false}},
         {"ChromeTerminalViaUrl",
@@ -461,6 +503,24 @@ INSTANTIATE_TEST_SUITE_P(
                             .multi_word_suggestions = false,
                             .personal_info_suggestions = false,
                             .diacritic_suggestions = true}},
+        {"Cider", /* url=*/"https://cider.corp.google.com", /* app_id=*/"",
+         /* arc_package_name=*/"",
+         EnabledSuggestions{.emoji_suggestions = false,
+                            .multi_word_suggestions = false,
+                            .personal_info_suggestions = false,
+                            .diacritic_suggestions = false}},
+        {"Cider_v", /* url=*/"https://cider-v.corp.google.com", /* app_id=*/"",
+         /* arc_package_name=*/"",
+         EnabledSuggestions{.emoji_suggestions = false,
+                            .multi_word_suggestions = true,
+                            .personal_info_suggestions = false,
+                            .diacritic_suggestions = false}},
+        {"Localhost", /* url=*/"http://localhost/some_url", /* app_id=*/"",
+         /* arc_package_name=*/"",
+         EnabledSuggestions{.emoji_suggestions = false,
+                            .multi_word_suggestions = true,
+                            .personal_info_suggestions = false,
+                            .diacritic_suggestions = false}},
     }),
     [](const testing::TestParamInfo<SuggesterAllowlist::ParamType>& info) {
       return info.param.test_name;

@@ -23,9 +23,6 @@ using base::TimeTicks;
 namespace translate {
 namespace {
 
-const int kTrue = 1;
-const int kFalse = 0;
-
 class MetricsRecorder {
  public:
   explicit MetricsRecorder(const char* key) : key_(key) {
@@ -55,31 +52,28 @@ class MetricsRecorder {
     EXPECT_EQ(expected_model_only,
               GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_ONLY));
     EXPECT_EQ(expected_unknown,
-              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_UNKNOWN));
+              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_UNKNOWN));
     EXPECT_EQ(expected_model_agree,
-              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_AGREE));
+              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_AGREES));
     EXPECT_EQ(expected_model_disagree,
-              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_DISAGREE));
+              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_DISAGREES));
     EXPECT_EQ(expected_trust_model,
-              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_TRUST_MODEL));
+              GetCountWithoutSnapshot(LANGUAGE_VERIFICATION_MODEL_OVERRIDES));
     EXPECT_EQ(expected_model_complement_sub_code,
               GetCountWithoutSnapshot(
-                  LANGUAGE_VERIFICATION_MODEL_COMPLEMENT_SUB_CODE));
-  }
-
-  void CheckScheme(int expected_http, int expected_https, int expected_others) {
-    ASSERT_EQ(metrics_internal::kTranslatePageScheme, key_);
-
-    Snapshot();
-
-    EXPECT_EQ(expected_http, GetCountWithoutSnapshot(SCHEME_HTTP));
-    EXPECT_EQ(expected_https, GetCountWithoutSnapshot(SCHEME_HTTPS));
-    EXPECT_EQ(expected_others, GetCountWithoutSnapshot(SCHEME_OTHERS));
+                  LANGUAGE_VERIFICATION_MODEL_COMPLEMENTS_COUNTRY));
   }
 
   void CheckTotalCount(int count) {
     Snapshot();
     EXPECT_EQ(count, GetTotalCount());
+  }
+
+  void CheckCount(HistogramBase::Sample value, int expected) {
+    if (!samples_) {
+      Snapshot();
+    }
+    EXPECT_EQ(expected, GetCountWithoutSnapshot(value));
   }
 
   void CheckValueInLogs(double value) {
@@ -95,11 +89,6 @@ class MetricsRecorder {
         return;
     }
     EXPECT_FALSE(true);
-  }
-
-  HistogramBase::Count GetCount(HistogramBase::Sample value) {
-    Snapshot();
-    return GetCountWithoutSnapshot(value);
   }
 
  private:
@@ -142,15 +131,15 @@ TEST(TranslateMetricsTest, ReportLanguageVerification) {
   recorder.CheckLanguageVerification(1, 0, 0, 0, 0, 0, 0);
   ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_ONLY);
   recorder.CheckLanguageVerification(1, 1, 0, 0, 0, 0, 0);
-  ReportLanguageVerification(LANGUAGE_VERIFICATION_UNKNOWN);
+  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_UNKNOWN);
   recorder.CheckLanguageVerification(1, 1, 1, 0, 0, 0, 0);
-  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_AGREE);
+  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_AGREES);
   recorder.CheckLanguageVerification(1, 1, 1, 1, 0, 0, 0);
-  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_DISAGREE);
+  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_DISAGREES);
   recorder.CheckLanguageVerification(1, 1, 1, 1, 1, 0, 0);
-  ReportLanguageVerification(LANGUAGE_VERIFICATION_TRUST_MODEL);
+  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_OVERRIDES);
   recorder.CheckLanguageVerification(1, 1, 1, 1, 1, 1, 0);
-  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_COMPLEMENT_SUB_CODE);
+  ReportLanguageVerification(LANGUAGE_VERIFICATION_MODEL_COMPLEMENTS_COUNTRY);
   recorder.CheckLanguageVerification(1, 1, 1, 1, 1, 1, 1);
 }
 
@@ -178,40 +167,6 @@ TEST(TranslateMetricsTest, ReportTimeToTranslate) {
   recorder.CheckTotalCount(1);
 }
 
-TEST(TranslateMetricsTest, ReportUserActionDuration) {
-  MetricsRecorder recorder(metrics_internal::kTranslateUserActionDuration);
-  recorder.CheckTotalCount(0);
-  TimeTicks begin = TimeTicks::Now();
-  TimeTicks end = begin + base::Seconds(3776);
-  ReportUserActionDuration(begin, end);
-  recorder.CheckValueInLogs(3776000.0);
-  recorder.CheckTotalCount(1);
-}
-
-TEST(TranslateMetricsTest, ReportPageScheme) {
-  MetricsRecorder recorder(metrics_internal::kTranslatePageScheme);
-  recorder.CheckScheme(0, 0, 0);
-  ReportPageScheme("http");
-  recorder.CheckScheme(1, 0, 0);
-  ReportPageScheme("https");
-  recorder.CheckScheme(1, 1, 0);
-  ReportPageScheme("ftp");
-  recorder.CheckScheme(1, 1, 1);
-}
-
-TEST(TranslateMetricsTest, ReportSimilarLanguageMatch) {
-  MetricsRecorder recorder(metrics_internal::kTranslateSimilarLanguageMatch);
-  recorder.CheckTotalCount(0);
-  EXPECT_EQ(0, recorder.GetCount(kTrue));
-  EXPECT_EQ(0, recorder.GetCount(kFalse));
-  ReportSimilarLanguageMatch(true);
-  EXPECT_EQ(1, recorder.GetCount(kTrue));
-  EXPECT_EQ(0, recorder.GetCount(kFalse));
-  ReportSimilarLanguageMatch(false);
-  EXPECT_EQ(1, recorder.GetCount(kTrue));
-  EXPECT_EQ(1, recorder.GetCount(kFalse));
-}
-
 TEST(TranslateMetricsTest, ReportTranslatedLanguageDetectionContentLength) {
   MetricsRecorder recorder(
       metrics_internal::kTranslatedLanguageDetectionContentLength);
@@ -219,6 +174,25 @@ TEST(TranslateMetricsTest, ReportTranslatedLanguageDetectionContentLength) {
   ReportTranslatedLanguageDetectionContentLength(12345);
   recorder.CheckValueInLogs(12345);
   recorder.CheckTotalCount(1);
+}
+
+TEST(TranslateMetricsTest, ReportCompactInfobarEvent) {
+  MetricsRecorder recorder(metrics_internal::kTranslateCompactInfobarEvent);
+  recorder.CheckTotalCount(0);
+  ReportCompactInfobarEvent(InfobarEvent::INFOBAR_IMPRESSION);
+  ReportCompactInfobarEvent(InfobarEvent::INFOBAR_IMPRESSION);
+  ReportCompactInfobarEvent(InfobarEvent::INFOBAR_IMPRESSION);
+  ReportCompactInfobarEvent(InfobarEvent::INFOBAR_REVERT);
+  ReportCompactInfobarEvent(InfobarEvent::INFOBAR_REVERT);
+  ReportCompactInfobarEvent(
+      InfobarEvent::INFOBAR_SNACKBAR_AUTO_ALWAYS_IMPRESSION);
+
+  recorder.CheckTotalCount(6);
+  recorder.CheckCount(static_cast<int>(InfobarEvent::INFOBAR_IMPRESSION), 3);
+  recorder.CheckCount(static_cast<int>(InfobarEvent::INFOBAR_REVERT), 2);
+  recorder.CheckCount(
+      static_cast<int>(InfobarEvent::INFOBAR_SNACKBAR_AUTO_ALWAYS_IMPRESSION),
+      1);
 }
 
 }  // namespace

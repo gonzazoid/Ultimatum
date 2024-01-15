@@ -4,13 +4,16 @@
 
 #include "third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.h"
 
+#include <cstring>
 #include <limits>
 #include <memory>
 
 #include "base/compiler_specific.h"
 #include "base/numerics/checked_math.h"
 #include "build/build_config.h"
+#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/cpu/arm/webgl_image_conversion_neon.h"
+#include "third_party/blink/renderer/platform/graphics/cpu/loongarch64/webgl_image_conversion_lsx.h"
 #include "third_party/blink/renderer/platform/graphics/cpu/mips/webgl_image_conversion_msa.h"
 #include "third_party/blink/renderer/platform/graphics/cpu/x86/webgl_image_conversion_sse.h"
 #include "third_party/blink/renderer/platform/graphics/image_observer.h"
@@ -416,7 +419,8 @@ const unsigned char g_shift_table[512] = {
     24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 13};
 
 uint16_t ConvertFloatToHalfFloat(float f) {
-  unsigned temp = *(reinterpret_cast<unsigned*>(&f));
+  unsigned temp;
+  std::memcpy(&temp, &f, 4);
   uint16_t signexp = (temp >> 23) & 0x1ff;
   return g_base_table[signexp] +
          ((temp & 0x007fffff) >> g_shift_table[signexp]);
@@ -834,7 +838,9 @@ float ConvertHalfFloatToFloat(uint16_t half) {
   uint32_t temp =
       g_mantissa_table[g_offset_table[half >> 10] + (half & 0x3ff)] +
       g_exponent_table[half >> 10];
-  return *(reinterpret_cast<float*>(&temp));
+  float ret;
+  std::memcpy(&ret, &temp, 4);
+  return ret;
 }
 
 /* BEGIN CODE SHARED WITH MOZILLA FIREFOX */
@@ -898,6 +904,10 @@ void Unpack<WebGLImageConversion::kDataFormatBGRA8, uint8_t, uint8_t>(
   simd::unpackOneRowOfBGRA8LittleToRGBA8MSA(source32, destination32,
                                             pixels_per_row);
 #endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::UnpackOneRowOfBGRA8LittleToRGBA8(source32, destination32,
+                                         pixels_per_row);
+#endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     uint32_t bgra = source32[i];
 #if defined(ARCH_CPU_BIG_ENDIAN)
@@ -928,6 +938,10 @@ void Unpack<WebGLImageConversion::kDataFormatRGBA5551, uint16_t, uint8_t>(
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::unpackOneRowOfRGBA5551ToRGBA8MSA(source, destination, pixels_per_row);
 #endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::UnpackOneRowOfRGBA5551LittleToRGBA8(source, destination,
+                                            pixels_per_row);
+#endif
 
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     uint16_t packed_value = source[0];
@@ -957,6 +971,10 @@ void Unpack<WebGLImageConversion::kDataFormatRGBA4444, uint16_t, uint8_t>(
 #endif
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::unpackOneRowOfRGBA4444ToRGBA8MSA(source, destination, pixels_per_row);
+#endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::UnpackOneRowOfRGBA4444LittleToRGBA8(source, destination,
+                                            pixels_per_row);
 #endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     uint16_t packed_value = source[0];
@@ -1272,6 +1290,9 @@ void Pack<WebGLImageConversion::kDataFormatR8,
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::packOneRowOfRGBA8LittleToR8MSA(source, destination, pixels_per_row);
 #endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::PackOneRowOfRGBA8LittleToR8(source, destination, pixels_per_row);
+#endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     float scale_factor = source[3] ? 255.0f / source[3] : 1.0f;
     uint8_t source_r =
@@ -1373,6 +1394,9 @@ void Pack<WebGLImageConversion::kDataFormatRA8,
 #endif
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::packOneRowOfRGBA8LittleToRA8MSA(source, destination, pixels_per_row);
+#endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::PackOneRowOfRGBA8LittleToRA8(source, destination, pixels_per_row);
 #endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     float scale_factor = source[3] ? 255.0f / source[3] : 1.0f;
@@ -1566,6 +1590,9 @@ void Pack<WebGLImageConversion::kDataFormatRGBA8,
 #endif
 #if defined(HAVE_MIPS_MSA_INTRINSICS)
   simd::packOneRowOfRGBA8LittleToRGBA8MSA(source, destination, pixels_per_row);
+#endif
+#if defined(ARCH_CPU_LOONGARCH_FAMILY)
+  simd::PackOneRowOfRGBA8LittleToRGBA8(source, destination, pixels_per_row);
 #endif
   for (unsigned i = 0; i < pixels_per_row; ++i) {
     float scale_factor = source[3] ? 255.0f / source[3] : 1.0f;
@@ -3509,8 +3536,17 @@ void FormatConverter::Convert() {
 }
 
 bool FrameIsValid(const SkBitmap& frame_bitmap) {
-  return !frame_bitmap.isNull() && !frame_bitmap.empty() &&
-         frame_bitmap.colorType() == kN32_SkColorType;
+  if (frame_bitmap.isNull()) {
+    return false;
+  }
+  if (frame_bitmap.empty()) {
+    return false;
+  }
+  if (frame_bitmap.colorType() != kN32_SkColorType &&
+      frame_bitmap.colorType() != kRGBA_F16_SkColorType) {
+    return false;
+  }
+  return true;
 }
 
 }  // anonymous namespace
@@ -3765,47 +3801,96 @@ WebGLImageConversion::ImageExtractor::ImageExtractor(
   if (!image)
     return;
 
-  sk_sp<SkImage> skia_image = image->PaintImageForCurrentFrame().GetSwSkImage();
+  const auto& paint_image = image->PaintImageForCurrentFrame();
+  sk_sp<SkImage> skia_image = paint_image.GetSwSkImage();
   if (skia_image && !skia_image->colorSpace())
     skia_image = skia_image->reinterpretColorSpace(SkColorSpace::MakeSRGB());
 
   if (image->HasData()) {
-    bool has_alpha = skia_image ? !skia_image->isOpaque() : true;
-    bool need_unpremultiplied = has_alpha && !premultiply_alpha;
-    bool need_color_conversion =
-        skia_image && target_color_space &&
-        !SkColorSpace::Equals(skia_image->colorSpace(),
-                              target_color_space.get());
-    if (!skia_image || !target_color_space || need_unpremultiplied ||
-        need_color_conversion) {
-      // Attempt to get raw unpremultiplied image data.
+    bool paint_image_is_f16 =
+        paint_image.GetColorType() == kRGBA_F16_SkColorType;
+
+    // If there already exists a decoded image in `skia_image`, determine if we
+    // can re-use that image. If we can't, then we need to re-decode the image
+    // here.
+    bool needs_redecode = false;
+    if (skia_image) {
+      // The `target_color_space` is set to nullptr iff
+      // UNPACK_COLORSPACE_CONVERSION is NONE, which means that the color
+      // profile of the image should be ignored. In this case, always re-decode,
+      // because we can't reliably know that `skia_image` ignored the image's
+      // color profile when it was created.
+      if (!target_color_space) {
+        needs_redecode = true;
+      }
+
+      // If there is a target color space, but the SkImage that was decoded is
+      // not already in this color space, then re-decode the image. The reason
+      // for this is that repeated color converisons may accumulate clamping and
+      // rounding errors.
+      if (target_color_space &&
+          !SkColorSpace::Equals(skia_image->colorSpace(),
+                                target_color_space.get())) {
+        needs_redecode = true;
+      }
+
+      // If the image was decoded with premultipled alpha and unpremultipled
+      // alpha was requested, then re-decode without premultiplying alpha. Don't
+      // bother re-decoding if premultiply alpha was requested, because we will
+      // do that lossy conversion later.
+      if (skia_image->alphaType() == kPremul_SkAlphaType &&
+          !premultiply_alpha) {
+        needs_redecode = true;
+      }
+
+      // If the image is high bit depth, but was not decoded as high bit depth,
+      // then re-decode the image.
+      if (paint_image_is_f16 &&
+          skia_image->colorType() != kRGBA_F16_SkColorType) {
+        needs_redecode = true;
+      }
+    } else {
+      // If the image has not been decoded yet, then it needs to be decoded.
+      needs_redecode = true;
+    }
+
+    if (needs_redecode) {
       const bool data_complete = true;
+
       // Always decode as unpremultiplied. If premultiplication is desired, it
       // will be applied later.
       const auto alpha_option = ImageDecoder::kAlphaNotPremultiplied;
-      // Decode to the default 8-bit depth (as opposed to floating-point).
-      // TODO(1320812): This is not always the correct choice.
-      auto bit_depth = ImageDecoder::kDefaultBitDepth;
+
+      // Decode to the paint image's bit depth. If conversion is needed, it will
+      // be applied later.
+      const auto bit_depth = paint_image_is_f16
+                                 ? ImageDecoder::kHighBitDepthToHalfFloat
+                                 : ImageDecoder::kDefaultBitDepth;
+
       // If we are not ignoring the color space, then tag the image with the
       // target color space. It will be converted later on.
-      auto color_behavior =
-          target_color_space ? ColorBehavior::Tag() : ColorBehavior::Ignore();
-      std::unique_ptr<ImageDecoder> decoder(
-          ImageDecoder::Create(image->Data(), data_complete, alpha_option,
-                               bit_depth, color_behavior));
-      if (!decoder || !decoder->FrameCount())
+      const auto color_behavior =
+          target_color_space ? ColorBehavior::kTag : ColorBehavior::kIgnore;
+
+      // Decode the image here on the main thread.
+      std::unique_ptr<ImageDecoder> decoder(ImageDecoder::Create(
+          image->Data(), data_complete, alpha_option, bit_depth, color_behavior,
+          Platform::GetMaxDecodedImageBytes()));
+      if (!decoder || !decoder->FrameCount()) {
         return;
+      }
       ImageFrame* frame = decoder->DecodeFrameBufferAtIndex(0);
-      if (!frame || frame->GetStatus() != ImageFrame::kFrameComplete)
+      if (!frame || frame->GetStatus() != ImageFrame::kFrameComplete) {
         return;
-      has_alpha = frame->HasAlpha();
+      }
       SkBitmap bitmap = frame->Bitmap();
-      if (!FrameIsValid(bitmap))
+      if (!FrameIsValid(bitmap)) {
         return;
+      }
 
       // TODO(fmalita): Partial frames are not supported currently: only fully
       // decoded frames make it through.  We could potentially relax this and
-      // use SkImage::MakeFromBitmap(bitmap) to make a copy.
+      // use SkImages::RasterFromBitmap(bitmap) to make a copy.
       skia_image = frame->FinalizePixelsAndGetImage();
     }
   }

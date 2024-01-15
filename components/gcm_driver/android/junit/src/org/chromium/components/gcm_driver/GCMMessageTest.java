@@ -17,9 +17,7 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Unit tests for GCMMessage.
- */
+/** Unit tests for GCMMessage. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class GCMMessageTest {
@@ -97,7 +95,8 @@ public class GCMMessageTest {
 
         GCMMessage message = new GCMMessage("senderId", extras);
 
-        assertArrayEquals(new String[] {"collapse_key2", "secondCollapseKey", "myString", "foobar"},
+        assertArrayEquals(
+                new String[] {"collapse_key2", "secondCollapseKey", "myString", "foobar"},
                 message.getDataKeysAndValuesArray());
     }
 
@@ -115,8 +114,11 @@ public class GCMMessageTest {
 
         {
             GCMMessage message = new GCMMessage("MySenderId", extras);
-            GCMMessage copiedMessage = GCMMessage.createFromBundle(message.toBundle());
-            assertMessageEquals(message, copiedMessage);
+            GCMMessage copiedBundleMessage = GCMMessage.createFromBundle(message.toBundle());
+            assertMessageEquals(message, copiedBundleMessage);
+            GCMMessage copiedPersistableBundleMessage =
+                    GCMMessage.createFromPersistableBundle(message.toPersistableBundle());
+            assertMessageEquals(message, copiedPersistableBundleMessage);
         }
 
         // Add the optional fields: collapse key, raw binary data and a custom property.
@@ -126,16 +128,19 @@ public class GCMMessageTest {
 
         {
             GCMMessage message = new GCMMessage("MySenderId", extras);
-            GCMMessage copiedMessage = GCMMessage.createFromBundle(message.toBundle());
-            assertMessageEquals(message, copiedMessage);
+            GCMMessage copiedBundleMessage = GCMMessage.createFromBundle(message.toBundle());
+            assertMessageEquals(message, copiedBundleMessage);
+            GCMMessage copiedPersistableBundleMessage =
+                    GCMMessage.createFromPersistableBundle(message.toPersistableBundle());
+            assertMessageEquals(message, copiedPersistableBundleMessage);
         }
     }
 
     /**
      * Tests that the raw data field can be serialized and deserialized as expected. It should be
-     * NULL when undefined, an empty byte array when defined but empty, and a regular, filled
-     * byte array when data has been provided. Only run on Android L and beyond because it depends
-     * on PersistableBundle.
+     * NULL when undefined, an empty byte array when defined but empty, and a regular, filled byte
+     * array when data has been provided. Only run on Android L and beyond because it depends on
+     * PersistableBundle.
      */
     @Test
     public void testRawDataSerializationBehaviour() {
@@ -145,10 +150,13 @@ public class GCMMessageTest {
         // Case 1: No raw data supplied. Should be NULL.
         {
             GCMMessage message = new GCMMessage("MySenderId", extras);
-            GCMMessage copiedMessage = GCMMessage.createFromBundle(message.toBundle());
+            GCMMessage copiedBundleMessage = GCMMessage.createFromBundle(message.toBundle());
+            GCMMessage copiedPersistableBundleMessage =
+                    GCMMessage.createFromPersistableBundle(message.toPersistableBundle());
 
             assertArrayEquals(null, message.getRawData());
-            assertArrayEquals(null, copiedMessage.getRawData());
+            assertArrayEquals(null, copiedBundleMessage.getRawData());
+            assertArrayEquals(null, copiedPersistableBundleMessage.getRawData());
         }
 
         extras.putByteArray("rawData", new byte[] {});
@@ -156,10 +164,13 @@ public class GCMMessageTest {
         // Case 2: Empty byte array of raw data supplied. Should be just that.
         {
             GCMMessage message = new GCMMessage("MySenderId", extras);
-            GCMMessage copiedMessage = GCMMessage.createFromBundle(message.toBundle());
+            GCMMessage copiedBundleMessage = GCMMessage.createFromBundle(message.toBundle());
+            GCMMessage copiedPersistableBundleMessage =
+                    GCMMessage.createFromPersistableBundle(message.toPersistableBundle());
 
             assertArrayEquals(new byte[] {}, message.getRawData());
-            assertArrayEquals(new byte[] {}, copiedMessage.getRawData());
+            assertArrayEquals(new byte[] {}, copiedBundleMessage.getRawData());
+            assertArrayEquals(new byte[] {}, copiedPersistableBundleMessage.getRawData());
         }
 
         extras.putByteArray("rawData", new byte[] {0x00, 0x15, 0x30, 0x45});
@@ -167,16 +178,22 @@ public class GCMMessageTest {
         // Case 3: Byte array with data supplied.
         {
             GCMMessage message = new GCMMessage("MySenderId", extras);
-            GCMMessage copiedMessage = GCMMessage.createFromBundle(message.toBundle());
+            GCMMessage copiedBundleMessage = GCMMessage.createFromBundle(message.toBundle());
+            GCMMessage copiedPersistableBundleMessage =
+                    GCMMessage.createFromPersistableBundle(message.toPersistableBundle());
 
             assertArrayEquals(new byte[] {0x00, 0x15, 0x30, 0x45}, message.getRawData());
-            assertArrayEquals(new byte[] {0x00, 0x15, 0x30, 0x45}, copiedMessage.getRawData());
+            assertArrayEquals(
+                    new byte[] {0x00, 0x15, 0x30, 0x45}, copiedBundleMessage.getRawData());
+            assertArrayEquals(
+                    new byte[] {0x00, 0x15, 0x30, 0x45},
+                    copiedPersistableBundleMessage.getRawData());
         }
     }
 
     /**
-     * Tests that a GCMMessage object can be serialized to and deserialized from
-     * a JSONObject. Note that the raw data field is tested separately.
+     * Tests that a GCMMessage object can be serialized to and deserialized from a JSONObject. Note
+     * that the raw data field is tested separately.
      */
     @Test
     public void testSerializationToJSON() throws JSONException {
@@ -251,9 +268,7 @@ public class GCMMessageTest {
         }
     }
 
-    /**
-     * Tests that getOriginalPriority returns Priority.NONE if it was not set in the bundle.
-     */
+    /** Tests that getOriginalPriority returns Priority.NONE if it was not set in the bundle. */
     @Test
     public void testNullOriginalPriority() {
         Bundle extras = new Bundle();

@@ -8,34 +8,21 @@
 #include <memory>
 #include <string>
 
+#include "chrome/updater/lock.h"
 #include "chrome/updater/prefs.h"
 
 namespace base {
-class TimeDelta;
-}  // namespace base
+class FilePath;
+}
 
 namespace updater {
 
 enum class UpdaterScope;
-class ScopedPrefsLockImpl;
-
-// ScopedPrefsLock represents a held lock. Destroying the ScopedPrefsLock
-// releases the lock. Implementors cannot depend on a ScopedPrefsLock being
-// reentrant. The definition of ScopedPrefsLockImpl is platform-specific.
-class ScopedPrefsLock {
- public:
-  explicit ScopedPrefsLock(std::unique_ptr<ScopedPrefsLockImpl> impl);
-  ScopedPrefsLock(const ScopedPrefsLock&) = delete;
-  ScopedPrefsLock& operator=(const ScopedPrefsLock&) = delete;
-  ~ScopedPrefsLock();
-
- private:
-  std::unique_ptr<ScopedPrefsLockImpl> impl_;
-};
 
 class UpdaterPrefsImpl : public LocalPrefs, public GlobalPrefs {
  public:
-  UpdaterPrefsImpl(std::unique_ptr<ScopedPrefsLock> lock,
+  UpdaterPrefsImpl(const base::FilePath& prefs_dir_,
+                   std::unique_ptr<ScopedLock> lock,
                    std::unique_ptr<PrefService> prefs);
 
   // Overrides for UpdaterPrefs.
@@ -58,16 +45,11 @@ class UpdaterPrefsImpl : public LocalPrefs, public GlobalPrefs {
   ~UpdaterPrefsImpl() override;
 
  private:
-  std::unique_ptr<ScopedPrefsLock> lock_;
+  // `prefs_dir_` is used for logging purposes and it may be deprecated later.
+  const base::FilePath prefs_dir_;
+  std::unique_ptr<ScopedLock> lock_;
   std::unique_ptr<PrefService> prefs_;
 };
-
-// Returns a ScopedPrefsLock, or nullptr if the lock could not be acquired
-// within the timeout. While the ScopedPrefsLock exists, no other process on
-// the machine may access global prefs.
-std::unique_ptr<ScopedPrefsLock> AcquireGlobalPrefsLock(
-    UpdaterScope scope,
-    base::TimeDelta timeout);
 
 }  // namespace updater
 

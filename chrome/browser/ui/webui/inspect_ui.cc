@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/user_metrics.h"
@@ -83,6 +83,17 @@ base::Value::List GetUiDevToolsTargets() {
     targets.Append(std::move(target_data));
   }
   return targets;
+}
+
+void CreateAndAddInspectUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIInspectHost);
+  source->AddResourcePath("inspect.css", IDR_INSPECT_CSS);
+  source->AddResourcePath("inspect.js", IDR_INSPECT_JS);
+  source->SetDefaultResource(IDR_INSPECT_HTML);
+  source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::ScriptSrc,
+      "script-src chrome://resources chrome://webui-test 'self';");
 }
 
 // DevToolsFrontEndObserver ----------------------------------------
@@ -401,7 +412,8 @@ void InspectMessageHandler::HandleOpenNodeFrontendCommand(
   Profile* profile = Profile::FromWebUI(web_ui());
   if (!profile)
     return;
-  DevToolsWindow::OpenNodeFrontendWindow(profile);
+  DevToolsWindow::OpenNodeFrontendWindow(profile,
+                                         DevToolsOpenedByAction::kInspectLink);
 }
 
 void InspectMessageHandler::HandleLaunchUIDevToolsCommand(
@@ -460,7 +472,7 @@ InspectUI::InspectUI(content::WebUI* web_ui)
     : WebUIController(web_ui), WebContentsObserver(web_ui->GetWebContents()) {
   web_ui->AddMessageHandler(std::make_unique<InspectMessageHandler>(this));
   Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateInspectUIHTMLSource());
+  CreateAndAddInspectUIHTMLSource(profile);
 
   // Set up the chrome://theme/ source.
   content::URLDataSource::Add(profile, std::make_unique<ThemeSource>(profile));
@@ -485,7 +497,8 @@ void InspectUI::Inspect(const std::string& source_id,
   scoped_refptr<DevToolsAgentHost> target = FindTarget(source_id, target_id);
   if (target) {
     Profile* profile = Profile::FromWebUI(web_ui());
-    DevToolsWindow::OpenDevToolsWindow(target, profile);
+    DevToolsWindow::OpenDevToolsWindow(target, profile,
+                                       DevToolsOpenedByAction::kInspectLink);
   }
 }
 
@@ -494,7 +507,8 @@ void InspectUI::InspectFallback(const std::string& source_id,
   scoped_refptr<DevToolsAgentHost> target = FindTarget(source_id, target_id);
   if (target) {
     Profile* profile = Profile::FromWebUI(web_ui());
-    DevToolsWindow::OpenDevToolsWindowWithBundledFrontend(target, profile);
+    DevToolsWindow::OpenDevToolsWindowWithBundledFrontend(
+        target, profile, DevToolsOpenedByAction::kInspectLink);
   }
 }
 
@@ -537,7 +551,8 @@ void InspectUI::Pause(const std::string& source_id,
   content::WebContents* web_contents = target->GetWebContents();
   if (web_contents) {
     DevToolsWindow::OpenDevToolsWindow(web_contents,
-                                       DevToolsToggleAction::PauseInDebugger());
+                                       DevToolsToggleAction::PauseInDebugger(),
+                                       DevToolsOpenedByAction::kInspectLink);
   }
 }
 
@@ -577,10 +592,8 @@ void InspectUI::InspectBrowserWithCustomFrontend(
 
 void InspectUI::InspectDevices(Browser* browser) {
   base::RecordAction(base::UserMetricsAction("InspectDevices"));
-  NavigateParams params(GetSingletonTabNavigateParams(
-      browser, GURL(chrome::kChromeUIInspectURL)));
-  params.path_behavior = NavigateParams::IGNORE_AND_NAVIGATE;
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(chrome::kChromeUIInspectURL),
+                                 NavigateParams::IGNORE_AND_NAVIGATE);
 }
 
 void InspectUI::WebContentsDestroyed() {
@@ -651,15 +664,6 @@ void InspectUI::StopListeningNotifications() {
   pref_change_registrar_.RemoveAll();
 }
 
-content::WebUIDataSource* InspectUI::CreateInspectUIHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIInspectHost);
-  source->AddResourcePath("inspect.css", IDR_INSPECT_CSS);
-  source->AddResourcePath("inspect.js", IDR_INSPECT_JS);
-  source->SetDefaultResource(IDR_INSPECT_HTML);
-  return source;
-}
-
 void InspectUI::UpdateDiscoverUsbDevicesEnabled() {
   web_ui()->CallJavascriptFunctionUnsafe(
       "updateDiscoverUsbDevicesEnabled",
@@ -717,10 +721,11 @@ void InspectUI::SetPortForwardingDefaults() {
   if (enabled.value() || !config->empty())
     return;
 
-  base::DictionaryValue default_config;
-  default_config.SetStringPath(kInspectUiPortForwardingDefaultPort,
-                               kInspectUiPortForwardingDefaultLocation);
-  prefs->Set(prefs::kDevToolsPortForwardingConfig, default_config);
+  base::Value::Dict default_config;
+  default_config.Set(kInspectUiPortForwardingDefaultPort,
+                     kInspectUiPortForwardingDefaultLocation);
+  prefs->SetDict(prefs::kDevToolsPortForwardingConfig,
+                 std::move(default_config));
 }
 
 const base::Value* InspectUI::GetPrefValue(const char* name) {

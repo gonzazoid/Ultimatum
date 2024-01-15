@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "base/android/library_loader/anchor_functions.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/work_id_provider.h"
@@ -19,21 +19,25 @@
 #include "base/profiler/sample_metadata.h"
 #include "base/profiler/sampling_profiler_thread_token.h"
 #include "base/rand_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/sequence_local_storage_slot.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/common/profiler/process_type.h"
 #include "chrome/common/profiler/thread_profiler_configuration.h"
 #include "chrome/common/profiler/unwind_util.h"
-#include "components/metrics/call_stack_profile_builder.h"
-#include "components/metrics/call_stack_profile_metrics_provider.h"
+#include "components/metrics/call_stacks/call_stack_profile_builder.h"
+#include "components/metrics/call_stacks/call_stack_profile_metrics_provider.h"
 #include "content/public/common/content_switches.h"
 #include "sandbox/policy/sandbox.h"
 
 #if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARM_CFI_TABLE)
 #include "chrome/android/modules/stack_unwinder/public/module.h"
 #endif  // BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARM_CFI_TABLE)
+
+#if BUILDFLAG(IS_MAC)
+#include "base/process/port_provider_mac.h"
+#endif  // BUILDFLAG(IS_MAC)
 
 using CallStackProfileBuilder = metrics::CallStackProfileBuilder;
 using CallStackProfileParams = metrics::CallStackProfileParams;
@@ -51,17 +55,12 @@ constexpr double kFractionOfExecutionTimeToSample = 0.02;
 
 bool IsCurrentProcessBackgrounded() {
 #if BUILDFLAG(IS_MAC)
-  // Port provider that returns the calling process's task port, ignoring its
-  // argument.
-  class SelfPortProvider : public base::PortProvider {
-    mach_port_t TaskForPid(base::ProcessHandle process) const override {
-      return mach_task_self();
-    }
-  };
-  SelfPortProvider provider;
-  return base::Process::Current().IsProcessBackgrounded(&provider);
+  base::SelfPortProvider provider;
+  return base::Process::Current().GetPriority(&provider) ==
+         base::Process::Priority::kBestEffort;
 #else   // BUILDFLAG(IS_MAC)
-  return base::Process::Current().IsProcessBackgrounded();
+  return base::Process::Current().GetPriority() ==
+         base::Process::Priority::kBestEffort;
 #endif  // BUILDFLAG(IS_MAC)
 }
 
@@ -199,8 +198,8 @@ void ThreadProfiler::StartOnChildThread(CallStackProfileParams::Thread thread) {
     return;
   }
 
-  child_thread_profiler_sequence_local_storage.emplace(
-      new ThreadProfiler(thread, base::ThreadTaskRunnerHandle::Get()));
+  child_thread_profiler_sequence_local_storage.emplace(new ThreadProfiler(
+      thread, base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 // static
@@ -254,7 +253,12 @@ ThreadProfiler::ThreadProfiler(
               process_, thread,
               CallStackProfileParams::Trigger::kProcessStartup),
           work_id_recorder_.get()),
+#if BUILDFLAG(IS_ANDROID)
+      CreateCoreUnwindersFactory(
+          ThreadProfilerConfiguration::Get()->IsJavaNameHashingEnabled()),
+#else
       CreateCoreUnwindersFactory(),
+#endif  // BUILDFLAG(IS_ANDROID)
       GetApplyPerSampleMetadataCallback(process_));
 
   startup_profiler_->Start();
@@ -323,7 +327,12 @@ void ThreadProfiler::StartPeriodicSamplingCollection() {
           base::BindOnce(&ThreadProfiler::OnPeriodicCollectionCompleted,
                          owning_thread_task_runner_,
                          weak_factory_.GetWeakPtr())),
+#if BUILDFLAG(IS_ANDROID)
+      CreateCoreUnwindersFactory(
+          ThreadProfilerConfiguration::Get()->IsJavaNameHashingEnabled()),
+#else
       CreateCoreUnwindersFactory(),
+#endif  // BUILDFLAG(IS_ANDROID)
       GetApplyPerSampleMetadataCallback(process_));
   if (aux_unwinder_factory_)
     periodic_profiler_->AddAuxUnwinder(aux_unwinder_factory_.Run());

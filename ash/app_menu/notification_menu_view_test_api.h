@@ -7,6 +7,8 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+
 namespace ash {
 
 class NotificationMenuView;
@@ -34,7 +36,8 @@ class NotificationMenuViewTestAPI {
   NotificationOverflowView* GetOverflowView() const;
 
  private:
-  NotificationMenuView* const notification_menu_view_;
+  const raw_ptr<NotificationMenuView, DanglingUntriaged>
+      notification_menu_view_;
 };
 
 }  // namespace ash

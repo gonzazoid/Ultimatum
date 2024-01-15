@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/compiler_specific.h"
+#include "cc/paint/color_filter.h"
 #include "cc/paint/paint_export.h"
-#include "third_party/skia/include/core/SkColorFilter.h"
 #include "third_party/skia/include/core/SkDrawLooper.h"
 #include "third_party/skia/include/core/SkMaskFilter.h"
 #include "third_party/skia/include/core/SkPaint.h"
@@ -41,29 +41,25 @@ class CC_PAINT_EXPORT PaintFlags {
     return static_cast<Style>(bitfields_.style_);
   }
   ALWAYS_INLINE void setStyle(Style style) { bitfields_.style_ = style; }
-  // TODO(crbug.com/1308932): Remove this function
+  // TODO(crbug.com/1399566): Remove this function
   ALWAYS_INLINE SkColor getColor() const { return color_.toSkColor(); }
   ALWAYS_INLINE SkColor4f getColor4f() const { return color_; }
   ALWAYS_INLINE void setColor(SkColor color) {
     color_ = SkColor4f::FromColor(color);
   }
   ALWAYS_INLINE void setColor(SkColor4f color) { color_ = color; }
-  ALWAYS_INLINE uint8_t getAlpha() const {
-    return SkColorGetA(color_.toSkColor());
-  }
   ALWAYS_INLINE float getAlphaf() const { return color_.fA; }
-  ALWAYS_INLINE void setAlpha(uint8_t a) {
-    color_ = SkColor4f::FromColor(SkColorSetA(color_.toSkColor(), a));
-  }
+  ALWAYS_INLINE bool isFullyTransparent() const { return color_.fA == 0.0f; }
+  ALWAYS_INLINE bool isOpaque() const { return color_.fA >= 1.0f; }
   template <class F, class = std::enable_if_t<std::is_same_v<F, float>>>
   ALWAYS_INLINE void setAlphaf(F a) {
     color_.fA = a;
   }
   ALWAYS_INLINE void setBlendMode(SkBlendMode mode) {
-    blend_mode_ = static_cast<uint32_t>(mode);
+    bitfields_.blend_mode_ = static_cast<uint32_t>(mode);
   }
   ALWAYS_INLINE SkBlendMode getBlendMode() const {
-    return static_cast<SkBlendMode>(blend_mode_);
+    return static_cast<SkBlendMode>(bitfields_.blend_mode_);
   }
   ALWAYS_INLINE bool isAntiAlias() const { return bitfields_.antialias_; }
   ALWAYS_INLINE void setAntiAlias(bool aa) { bitfields_.antialias_ = aa; }
@@ -82,6 +78,52 @@ class CC_PAINT_EXPORT PaintFlags {
   }
   ALWAYS_INLINE FilterQuality getFilterQuality() const {
     return static_cast<FilterQuality>(bitfields_.filter_quality_);
+  }
+  enum class DynamicRangeLimit {
+    kStandard,
+    kHigh,
+    kConstrainedHigh,
+    kLast = kConstrainedHigh,
+  };
+  // Represents a weighted arithmetic mean of "standard", "constrained-high" and
+  // "high" in log-luminance space (which is equivalent to a geometric mean in
+  // linear luminance).
+  struct DynamicRangeLimitMixture {
+    explicit DynamicRangeLimitMixture(DynamicRangeLimit limit) {
+      switch (limit) {
+        case DynamicRangeLimit::kStandard:
+          standard_mix = 1.f;
+          break;
+        case DynamicRangeLimit::kConstrainedHigh:
+          constrained_high_mix = 1.f;
+          break;
+        case DynamicRangeLimit::kHigh:
+          break;
+      }
+    }
+    DynamicRangeLimitMixture(float standard_mix, float constrained_high_mix)
+        : standard_mix(standard_mix),
+          constrained_high_mix(constrained_high_mix) {}
+    friend bool operator==(const DynamicRangeLimitMixture&,
+                           const DynamicRangeLimitMixture&) = default;
+    float standard_mix = 0.f;
+    float constrained_high_mix = 0.f;
+    // The weight for "high" is implicit and calculated as "one minus the
+    // others".
+  };
+  ALWAYS_INLINE void setDynamicRangeLimit(DynamicRangeLimitMixture limit) {
+    bitfields_.dynamic_range_limit_standard_mix_ =
+        static_cast<uint32_t>(.5f + ((1 << 7) - 1) * limit.standard_mix);
+    bitfields_.dynamic_range_limit_constrained_high_mix_ =
+        static_cast<uint32_t>(.5f +
+                              ((1 << 7) - 1) * limit.constrained_high_mix);
+  }
+  ALWAYS_INLINE DynamicRangeLimitMixture getDynamicRangeLimit() const {
+    return DynamicRangeLimitMixture(
+        /*standard_mix=*/(1.f / ((1 << 7) - 1)) *
+            bitfields_.dynamic_range_limit_standard_mix_,
+        /*constrained_high_mix=*/(1.f / ((1 << 7) - 1)) *
+            bitfields_.dynamic_range_limit_constrained_high_mix_);
   }
   ALWAYS_INLINE bool useDarkModeForImage() const {
     return bitfields_.use_dark_mode_for_image_;
@@ -118,10 +160,10 @@ class CC_PAINT_EXPORT PaintFlags {
   }
   ALWAYS_INLINE void setStrokeJoin(Join join) { bitfields_.join_type_ = join; }
 
-  ALWAYS_INLINE const sk_sp<SkColorFilter>& getColorFilter() const {
+  ALWAYS_INLINE const sk_sp<ColorFilter>& getColorFilter() const {
     return color_filter_;
   }
-  ALWAYS_INLINE void setColorFilter(sk_sp<SkColorFilter> filter) {
+  ALWAYS_INLINE void setColorFilter(sk_sp<ColorFilter> filter) {
     color_filter_ = std::move(filter);
   }
   ALWAYS_INLINE const sk_sp<SkMaskFilter>& getMaskFilter() const {
@@ -165,13 +207,9 @@ class CC_PAINT_EXPORT PaintFlags {
     draw_looper_ = std::move(looper);
   }
 
-  // Returns true if this just represents an opacity blend when used as
-  // saveLayer flags, thus the saveLayer can be converted to a saveLayerAlpha.
-  bool IsSimpleOpacity() const;
-
   // Returns true if this (of a drawOp) allows the sequence
-  // saveLayerAlpha/drawOp/restore to be folded into a single drawOp by baking
-  // the alpha in the saveLayerAlpha into the flags of the drawOp.
+  // saveLayerAlphaf/drawOp/restore to be folded into a single drawOp by baking
+  // the alpha in the saveLayerAlphaf into the flags of the drawOp.
   bool SupportsFoldingAlpha() const;
 
   // SkPaint does not support loopers, so callers of SkToPaint need
@@ -191,12 +229,9 @@ class CC_PAINT_EXPORT PaintFlags {
       FilterQuality filter_quality);
 
   bool IsValid() const;
-  bool operator==(const PaintFlags& other) const;
-  bool operator!=(const PaintFlags& other) const { return !(*this == other); }
+  bool EqualsForTesting(const PaintFlags& other) const;
 
   bool HasDiscardableImages() const;
-
-  size_t GetSerializedSize() const;
 
  private:
   friend class PaintOpReader;
@@ -205,7 +240,7 @@ class CC_PAINT_EXPORT PaintFlags {
   sk_sp<SkPathEffect> path_effect_;
   sk_sp<PaintShader> shader_;
   sk_sp<SkMaskFilter> mask_filter_;
-  sk_sp<SkColorFilter> color_filter_;
+  sk_sp<ColorFilter> color_filter_;
   sk_sp<SkDrawLooper> draw_looper_;
   sk_sp<PaintFilter> image_filter_;
 
@@ -214,7 +249,6 @@ class CC_PAINT_EXPORT PaintFlags {
   SkColor4f color_ = SkColors::kBlack;
   float width_ = 0.f;
   float miter_limit_ = 4.f;
-  uint32_t blend_mode_ = static_cast<uint32_t>(SkBlendMode::kSrcOver);
 
   struct PaintFlagsBitfields {
     uint32_t antialias_ : 1;
@@ -222,7 +256,10 @@ class CC_PAINT_EXPORT PaintFlags {
     uint32_t cap_type_ : 2;
     uint32_t join_type_ : 2;
     uint32_t style_ : 2;
+    uint32_t blend_mode_ : 5;
     uint32_t filter_quality_ : 2;
+    uint32_t dynamic_range_limit_standard_mix_ : 7;
+    uint32_t dynamic_range_limit_constrained_high_mix_ : 7;
     // Specifies whether the compositor should use a dark mode filter when
     // rasterizing image on the draw op with this PaintFlags.
     uint32_t use_dark_mode_for_image_ : 1;

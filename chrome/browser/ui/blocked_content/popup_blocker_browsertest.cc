@@ -4,10 +4,10 @@
 
 #include <stdint.h>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -16,7 +16,6 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/history/history_test_utils.h"
 #include "chrome/browser/policy/profile_policy_connector_builder.h"
-#include "chrome/browser/printing/print_preview_dialog_controller.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/ui/browser.h"
@@ -26,7 +25,6 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/login/login_handler.h"
-#include "chrome/browser/ui/login/login_handler_test_utils.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/common/chrome_paths.h"
@@ -54,7 +52,6 @@
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/policy_constants.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -63,6 +60,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_features.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
@@ -81,6 +79,10 @@
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
 #include "third_party/blink/public/common/switches.h"
+#endif
+
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+#include "chrome/browser/printing/print_preview_dialog_controller.h"
 #endif
 
 using content::NativeWebKeyboardEvent;
@@ -134,7 +136,8 @@ class PopupBlockerBrowserTest : public InProcessBrowserTest {
     // Do a round trip to the renderer first to flush any in-flight IPCs to
     // create a to-be-blocked window.
     WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
-    if (!content::ExecuteScriptWithoutUserGesture(tab, std::string())) {
+    if (!content::ExecJs(tab, std::string(),
+                         content::EXECUTE_SCRIPT_NO_USER_GESTURE)) {
       ADD_FAILURE() << "Failed to execute script in active tab.";
       return -1;
     }
@@ -280,59 +283,6 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
   RunCheckTest(browser(), "/popup_blocker/popup-fake-click-on-anchor2.html",
                WindowOpenDisposition::CURRENT_TAB, kExpectForegroundTab,
                kDontCheckTitle);
-}
-
-IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, PopupPositionMetrics) {
-  const GURL url(
-      embedded_test_server()->GetURL("/popup_blocker/popup-many.html"));
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-  EXPECT_EQ(2, GetBlockedContentsCount());
-
-  // Open two more popups.
-  content::WebContents* web_contents =
-      browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptWithoutUserGesture(web_contents, "test()"));
-  EXPECT_EQ(4, GetBlockedContentsCount());
-
-  auto* popup_blocker =
-      blocked_content::PopupBlockerTabHelper::FromWebContents(web_contents);
-  std::vector<int32_t> ids;
-  for (const auto& it : popup_blocker->GetBlockedPopupRequests())
-    ids.push_back(it.first);
-  ASSERT_EQ(4u, ids.size());
-
-  WindowOpenDisposition disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
-
-  base::HistogramTester tester;
-  const char kClickThroughPosition[] =
-      "ContentSettings.Popups.ClickThroughPosition";
-
-  popup_blocker->ShowBlockedPopup(ids[1], disposition);
-  tester.ExpectBucketCount(
-      kClickThroughPosition,
-      static_cast<int>(blocked_content::ListItemPosition::kMiddleItem), 1);
-
-  popup_blocker->ShowBlockedPopup(ids[0], disposition);
-  tester.ExpectBucketCount(
-      kClickThroughPosition,
-      static_cast<int>(blocked_content::ListItemPosition::kFirstItem), 1);
-
-  popup_blocker->ShowBlockedPopup(ids[3], disposition);
-  tester.ExpectBucketCount(
-      kClickThroughPosition,
-      static_cast<int>(blocked_content::ListItemPosition::kLastItem), 1);
-
-  popup_blocker->ShowBlockedPopup(ids[2], disposition);
-  tester.ExpectBucketCount(
-      kClickThroughPosition,
-      static_cast<int>(blocked_content::ListItemPosition::kOnlyItem), 1);
-
-  tester.ExpectTotalCount(kClickThroughPosition, 4);
-
-  // Requests to show popups not on the list should do nothing.
-  EXPECT_FALSE(base::Contains(ids, 5));
-  popup_blocker->ShowBlockedPopup(5, disposition);
-  tester.ExpectTotalCount(kClickThroughPosition, 4);
 }
 
 IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, PopupMetrics) {
@@ -704,7 +654,7 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MAYBE_PrintPreviewPopUnder) {
   printing::PrintPreviewDialogController* dialog_controller =
       printing::PrintPreviewDialogController::GetInstance();
   WebContents* print_preview_dialog =
-      dialog_controller->GetOrCreatePreviewDialog(original_tab);
+      dialog_controller->GetOrCreatePreviewDialogForTesting(original_tab);
   observer.Wait();
   observer.StopWatchingNewWebContents();
   EXPECT_EQ(popup_browser, chrome::FindLastActive());
@@ -720,14 +670,9 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MAYBE_PrintPreviewPopUnder) {
 }
 #endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
 
-// Times out Windows 7. https://crbug.com/1291800
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_CtrlEnterKey DISABLED_CtrlEnterKey
-#else
-#define MAYBE_CtrlEnterKey CtrlEnterKey
-#endif
 // Tests that Ctrl+Enter/Cmd+Enter keys on a link open the background tab.
-IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MAYBE_CtrlEnterKey) {
+// TODO(crbug.com/1430472): Re-enable this test
+IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, DISABLED_CtrlEnterKey) {
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
 
   GURL url(embedded_test_server()->GetURL(
@@ -789,10 +734,7 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, MultiplePopupsViaPostMessage) {
                      "/popup_blocker/post-message-popup.html")));
   content::WebContents* opener =
       browser()->tab_strip_model()->GetActiveWebContents();
-  int popups = 0;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractInt(
-      opener, "openPopupsAndReport();", &popups));
-  EXPECT_EQ(1, popups);
+  EXPECT_EQ(1, content::EvalJs(opener, "openPopupsAndReport();"));
 }
 
 // Test that popup blocker can show blocked contents in new foreground tab.
@@ -849,18 +791,17 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest, PopupsDisableBackForwardCache) {
   ASSERT_TRUE(rfh.WaitUntilRenderFrameDeleted());
 }
 
+// Make sure the poput is attributed to the right WebContents when it is
+// triggered from a different WebContents. Regression test for
+// https://crbug.com/1128495
+// Flaky on windows: crbug.com/1422005.
 #if BUILDFLAG(IS_WIN)
-// Frequently timing out on Win7 CI builder. See https://crbug.com/1251717.
 #define MAYBE_PopupTriggeredFromDifferentWebContents \
   DISABLED_PopupTriggeredFromDifferentWebContents
 #else
 #define MAYBE_PopupTriggeredFromDifferentWebContents \
   PopupTriggeredFromDifferentWebContents
 #endif
-
-// Make sure the poput is attributed to the right WebContents when it is
-// triggered from a different WebContents. Regression test for
-// https://crbug.com/1128495
 IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
                        MAYBE_PopupTriggeredFromDifferentWebContents) {
   const GURL url(
@@ -884,7 +825,8 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
   // before we perform the checks further down. Since we have no control over
   // that script we just run some more (that we do control) and wait for it to
   // finish.
-  EXPECT_TRUE(content::ExecuteScriptWithoutUserGesture(tab_2, ""));
+  EXPECT_TRUE(
+      content::ExecJs(tab_2, "", content::EXECUTE_SCRIPT_NO_USER_GESTURE));
 
   EXPECT_FALSE(content_settings::PageSpecificContentSettings::GetForFrame(
                    tab_1->GetPrimaryMainFrame())

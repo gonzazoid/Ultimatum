@@ -21,19 +21,22 @@ static_library("diagnostics_ui") {
 
   deps = [
     "//ash/constants",
+    "//ash/webui/common:chrome_os_webui_config",
     "//ash/webui/common:keyboard_diagram_strings",
+    "//ash/webui/common:trusted_types_util",
     "//ash/webui/common/backend",
     "//ash/webui/diagnostics_ui/backend",
     "//ash/webui/diagnostics_ui/mojom",
     "//ash/webui/resources:diagnostics_app_resources",
     "//chromeos/ash/components/feature_usage",
-    "//chromeos/login/login_state",
+    "//chromeos/ash/components/login/login_state",
     "//chromeos/strings/",
     "//content/public/browser",
     "//ui/base",
     "//ui/chromeos/strings:strings_provider",
     "//ui/resources",
     "//ui/web_dialogs",
+    "//ui/webui",
   ]
 }
 

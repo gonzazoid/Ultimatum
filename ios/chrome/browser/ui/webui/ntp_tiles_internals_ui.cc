@@ -12,11 +12,11 @@
 #include "components/ntp_tiles/most_visited_sites.h"
 #include "components/ntp_tiles/webui/ntp_tiles_internals_message_handler.h"
 #include "components/ntp_tiles/webui/ntp_tiles_internals_message_handler_client.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/favicon/favicon_service_factory.h"
-#include "ios/chrome/browser/ntp_tiles/ios_most_visited_sites_factory.h"
-#include "ios/chrome/browser/ntp_tiles/ios_popular_sites_factory.h"
-#include "ios/chrome/browser/url/chrome_url_constants.h"
+#include "ios/chrome/browser/ntp_tiles/model/ios_most_visited_sites_factory.h"
+#include "ios/chrome/browser/ntp_tiles/model/ios_popular_sites_factory.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "ios/web/public/webui/web_ui_ios.h"
 #include "ios/web/public/webui/web_ui_ios_data_source.h"
@@ -77,7 +77,6 @@ bool IOSNTPTilesInternalsMessageHandlerBridge::DoesSourceExist(
       return true;
     case ntp_tiles::TileSource::CUSTOM_LINKS:
     case ntp_tiles::TileSource::ALLOWLIST:
-    case ntp_tiles::TileSource::EXPLORE:
       return false;
   }
   NOTREACHED();

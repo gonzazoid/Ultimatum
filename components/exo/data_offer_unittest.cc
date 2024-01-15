@@ -11,13 +11,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_forward.h"
 #include "base/pickle.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
-#include "build/chromeos_buildflags.h"
 #include "cc/test/pixel_comparator.h"
 #include "cc/test/pixel_test_utils.h"
 #include "components/exo/data_device.h"
@@ -26,6 +25,7 @@
 #include "components/exo/test/exo_test_base.h"
 #include "components/exo/test/exo_test_data_exchange_delegate.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
@@ -95,24 +95,28 @@ class TestDataTransferPolicyController : ui::DataTransferPolicyController {
 
  private:
   // ui::DataTransferPolicyController:
-  bool IsClipboardReadAllowed(const ui::DataTransferEndpoint* const data_src,
-                              const ui::DataTransferEndpoint* const data_dst,
-                              const absl::optional<size_t> size) override {
-    if (data_src)
+  bool IsClipboardReadAllowed(
+      base::optional_ref<const ui::DataTransferEndpoint> data_src,
+      base::optional_ref<const ui::DataTransferEndpoint> data_dst,
+      const absl::optional<size_t> size) override {
+    if (data_src.has_value()) {
       last_src_type_ = data_src->type();
+    }
     last_dst_type_ = data_dst->type();
     return true;
   }
 
-  void PasteIfAllowed(const ui::DataTransferEndpoint* const data_src,
-                      const ui::DataTransferEndpoint* const data_dst,
-                      const absl::optional<size_t> size,
-                      content::RenderFrameHost* web_contents,
-                      base::OnceCallback<void(bool)> callback) override {}
+  void PasteIfAllowed(
+      base::optional_ref<const ui::DataTransferEndpoint> data_src,
+      base::optional_ref<const ui::DataTransferEndpoint> data_dst,
+      absl::variant<size_t, std::vector<base::FilePath>> pasted_content,
+      content::RenderFrameHost* web_contents,
+      base::OnceCallback<void(bool)> callback) override {}
 
-  void DropIfAllowed(const ui::DataTransferEndpoint* const data_src,
-                     const ui::DataTransferEndpoint* const data_dst,
-                     base::OnceClosure drop_cb) override {
+  void DropIfAllowed(
+      const ui::OSExchangeData* const drag_data,
+      base::optional_ref<const ui::DataTransferEndpoint> data_dst,
+      base::OnceClosure drop_cb) override {
     std::move(drop_cb).Run();
   }
 
@@ -491,7 +495,6 @@ TEST_F(DataOfferTest, SetClipboardDataPlainText) {
   EXPECT_EQ("Test data", base::UTF16ToUTF8(result16));
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 TEST_F(DataOfferTest, SetClipboardDataOfferDteToLacros) {
   TestDataOfferDelegate delegate;
   DataOffer data_offer(&delegate);
@@ -748,7 +751,6 @@ TEST_F(DataOfferTest, SetDropDataDoNotOfferDteToNonLacros) {
   ASSERT_TRUE(ReadString(std::move(read_pipe), &dte_json_result));
   EXPECT_EQ("", dte_json_result);
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 TEST_F(DataOfferTest, SetClipboardDataHTML) {
   TestDataOfferDelegate delegate;
@@ -757,7 +759,7 @@ TEST_F(DataOfferTest, SetClipboardDataHTML) {
   TestDataExchangeDelegate data_exchange_delegate;
   {
     ui::ScopedClipboardWriter writer(ui::ClipboardBuffer::kCopyPaste);
-    writer.WriteHTML(u"Test data", "");
+    writer.WriteHTML(u"Test data", "", ui::ClipboardContentType::kSanitized);
   }
 
   auto* window = CreateTestWindowInShellWithBounds(gfx::Rect());
@@ -853,8 +855,7 @@ TEST_F(DataOfferTest, SetClipboardDataImage) {
   ASSERT_TRUE(gfx::PNGCodec::Decode(
       reinterpret_cast<const unsigned char*>(result.data()), result.size(),
       &decoded));
-  EXPECT_TRUE(cc::MatchesBitmap(
-      image, decoded, cc::ExactPixelComparator(/*discard_alpha=*/false)));
+  EXPECT_TRUE(cc::MatchesBitmap(image, decoded, cc::ExactPixelComparator()));
   std::string good = result;
   ASSERT_TRUE(ReadString(std::move(read_pipe2), &result));
   EXPECT_EQ(good, result);
@@ -870,13 +871,10 @@ TEST_F(DataOfferTest, SetClipboardDataFilenames) {
   TestDataOfferDelegate delegate;
   DataOffer data_offer(&delegate);
 
-  base::Pickle pickle;
-  pickle.WriteString("file:///test/path");
   TestDataExchangeDelegate data_exchange_delegate;
   {
     ui::ScopedClipboardWriter writer(ui::ClipboardBuffer::kCopyPaste);
-    writer.WritePickledData(pickle,
-                            ui::ClipboardFormatType::WebCustomDataType());
+    writer.WriteFilenames("file:///test/path");
   }
 
   auto* window = CreateTestWindowInShellWithBounds(gfx::Rect());

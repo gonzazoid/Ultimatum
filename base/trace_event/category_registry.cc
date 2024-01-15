@@ -20,7 +20,9 @@ namespace trace_event {
 namespace {
 
 // |categories_| might end up causing creating dynamic initializers if not POD.
-static_assert(std::is_pod<TraceCategory>::value, "TraceCategory must be POD");
+static_assert(std::is_trivial_v<TraceCategory> &&
+                  std::is_standard_layout_v<TraceCategory>,
+              "TraceCategory must be POD");
 
 }  // namespace
 
@@ -130,12 +132,12 @@ bool CategoryRegistry::IsMetaCategory(const TraceCategory* category) {
 }
 
 // static
-CategoryRegistry::Range CategoryRegistry::GetAllCategories() {
+base::span<TraceCategory> CategoryRegistry::GetAllCategories() {
   // The |categories_| array is append only. We have to only guarantee to
   // not return an index to a category which is being initialized by
   // GetOrCreateCategoryByName().
   size_t category_index = category_index_.load(std::memory_order_acquire);
-  return CategoryRegistry::Range(&categories_[0], &categories_[category_index]);
+  return base::make_span(categories_).first(category_index);
 }
 
 // static

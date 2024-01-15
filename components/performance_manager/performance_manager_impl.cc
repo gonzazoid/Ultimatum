@@ -8,15 +8,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/flat_set.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner_thread_mode.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
@@ -41,27 +42,24 @@ PerformanceManagerImpl* g_performance_manager = nullptr;
 // |g_performance_manager|. Should only be accessed on the main thread.
 bool g_pm_is_available = false;
 
-bool RunningOnUIThread() {
-  // This doesn't change from test to test, so we cache the value for
-  // efficiency.
-  static const bool kRunningOnUIThread =
-      base::FeatureList::IsEnabled(features::kRunOnMainThread);
-  return kRunningOnUIThread;
-}
+constexpr base::TaskPriority kPmTaskPriority = base::TaskPriority::USER_VISIBLE;
 
-// Task traits appropriate for the PM task runner. This is a macro because it
-// is used to build both content::BrowserTaskTraits and base::TaskTraits, which
-// are type incompatible.
+// Task traits appropriate for the PM task runner.
 // NOTE: The PM task runner has to block shutdown as some of the tasks posted to
 // it should be guaranteed to run before shutdown (e.g. removing some entries
 // from the site data store).
-#define PM_TASK_TRAITS              \
-  base::TaskPriority::USER_VISIBLE, \
-      base::TaskShutdownBehavior::BLOCK_SHUTDOWN, base::MayBlock()
+constexpr base::TaskTraits kPMTaskTraits = {
+    kPmTaskPriority, base::TaskShutdownBehavior::BLOCK_SHUTDOWN,
+    base::MayBlock()};
 
 // Builds a UI task runner with the appropriate traits for the PM.
+// TODO(crbug.com/1189677): The PM task runner has to block shutdown as some of
+// the tasks posted to it should be guaranteed to run before shutdown (e.g.
+// removing some entries from the site data store). The UI thread ignores
+// MayBlock and TaskShutdownBehavior, so these tasks and any blocking tasks must
+// be found and migrated to a worker thread.
 scoped_refptr<base::SequencedTaskRunner> GetUITaskRunner() {
-  return content::GetUIThreadTaskRunner({PM_TASK_TRAITS});
+  return content::GetUIThreadTaskRunner({kPmTaskPriority});
 }
 
 }  // namespace
@@ -107,10 +105,17 @@ std::unique_ptr<PerformanceManagerImpl> PerformanceManagerImpl::Create(
   std::unique_ptr<PerformanceManagerImpl> instance =
       base::WrapUnique(new PerformanceManagerImpl());
 
-  GetTaskRunner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&PerformanceManagerImpl::OnStartImpl,
-                     base::Unretained(instance.get()), std::move(on_start)));
+  if (base::FeatureList::IsEnabled(features::kRunOnMainThread)) {
+    // Invoke `OnStartImpl()` synchronously instead of via a posted task, so
+    // that any call to `CallOnGraphImpl()` that follows can access
+    // `g_performance_manager->ui_task_runner_`.
+    instance->OnStartImpl(std::move(on_start));
+  } else {
+    GetTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&PerformanceManagerImpl::OnStartImpl,
+                       base::Unretained(instance.get()), std::move(on_start)));
+  }
 
   return instance;
 }
@@ -128,14 +133,17 @@ std::unique_ptr<FrameNodeImpl> PerformanceManagerImpl::CreateFrameNode(
     ProcessNodeImpl* process_node,
     PageNodeImpl* page_node,
     FrameNodeImpl* parent_frame_node,
+    FrameNodeImpl* outer_document_for_fenced_frame,
     int render_frame_id,
     const blink::LocalFrameToken& frame_token,
     content::BrowsingInstanceId browsing_instance_id,
     content::SiteInstanceId site_instance_id,
+    bool is_current,
     FrameNodeCreationCallback creation_callback) {
   return CreateNodeImpl<FrameNodeImpl>(
       std::move(creation_callback), process_node, page_node, parent_frame_node,
-      render_frame_id, frame_token, browsing_instance_id, site_instance_id);
+      outer_document_for_fenced_frame, render_frame_id, frame_token,
+      browsing_instance_id, site_instance_id, is_current);
 }
 
 // static
@@ -143,22 +151,38 @@ std::unique_ptr<PageNodeImpl> PerformanceManagerImpl::CreatePageNode(
     const WebContentsProxy& contents_proxy,
     const std::string& browser_context_id,
     const GURL& visible_url,
-    bool is_visible,
-    bool is_audible,
+    PagePropertyFlags initial_property_flags,
     base::TimeTicks visibility_change_time,
     PageNode::PageState page_state) {
   return CreateNodeImpl<PageNodeImpl>(base::OnceCallback<void(PageNodeImpl*)>(),
                                       contents_proxy, browser_context_id,
-                                      visible_url, is_visible, is_audible,
+                                      visible_url, initial_property_flags,
                                       visibility_change_time, page_state);
 }
 
 // static
 std::unique_ptr<ProcessNodeImpl> PerformanceManagerImpl::CreateProcessNode(
-    content::ProcessType process_type,
-    RenderProcessHostProxy proxy) {
+    BrowserProcessNodeTag tag) {
   return CreateNodeImpl<ProcessNodeImpl>(
-      base::OnceCallback<void(ProcessNodeImpl*)>(), process_type, proxy);
+      base::OnceCallback<void(ProcessNodeImpl*)>(), tag);
+}
+
+// static
+std::unique_ptr<ProcessNodeImpl> PerformanceManagerImpl::CreateProcessNode(
+    RenderProcessHostProxy render_process_host_proxy,
+    base::TaskPriority priority) {
+  return CreateNodeImpl<ProcessNodeImpl>(
+      base::OnceCallback<void(ProcessNodeImpl*)>(),
+      std::move(render_process_host_proxy), priority);
+}
+
+// static
+std::unique_ptr<ProcessNodeImpl> PerformanceManagerImpl::CreateProcessNode(
+    content::ProcessType process_type,
+    BrowserChildProcessHostProxy browser_child_process_host_proxy) {
+  return CreateNodeImpl<ProcessNodeImpl>(
+      base::OnceCallback<void(ProcessNodeImpl*)>(), process_type,
+      std::move(browser_child_process_host_proxy));
 }
 
 // static
@@ -201,7 +225,7 @@ void PerformanceManagerImpl::SetOnDestroyedCallbackForTesting(
   // Bind the callback in one that can be called on the PM sequence (it also
   // binds the main thread, and bounces a task back to that thread).
   scoped_refptr<base::SequencedTaskRunner> main_thread =
-      base::SequencedTaskRunnerHandle::Get();
+      base::SequencedTaskRunner::GetCurrentDefault();
   base::OnceClosure pm_callback = base::BindOnce(
       [](scoped_refptr<base::SequencedTaskRunner> main_thread,
          base::OnceClosure callback) {
@@ -218,19 +242,17 @@ void PerformanceManagerImpl::SetOnDestroyedCallbackForTesting(
 
 PerformanceManagerImpl::PerformanceManagerImpl() {
   DETACH_FROM_SEQUENCE(sequence_checker_);
-  if (RunningOnUIThread())
+  if (base::FeatureList::IsEnabled(features::kRunOnMainThread)) {
     ui_task_runner_ = GetUITaskRunner();
+  }
 }
 
 // static
 scoped_refptr<base::SequencedTaskRunner>
 PerformanceManagerImpl::GetTaskRunner() {
-  // The performance manager TaskRunner. Thread-safe.
-  static base::LazyThreadPoolSequencedTaskRunner
-      performance_manager_task_runner =
-          LAZY_THREAD_POOL_SEQUENCED_TASK_RUNNER_INITIALIZER(
-              base::TaskTraits{PM_TASK_TRAITS});
-  if (RunningOnUIThread()) {
+  if (base::FeatureList::IsEnabled(features::kRunOnMainThread)) {
+    CHECK(!base::FeatureList::IsEnabled(
+        features::kRunOnDedicatedThreadPoolThread));
     // Used the cached runner, if available. This prevents doing repeated
     // lookups.
     if (g_performance_manager)
@@ -244,6 +266,18 @@ PerformanceManagerImpl::GetTaskRunner() {
     // |g_performance_manager| while it was alive.
     return GetUITaskRunner();
   }
+  if (base::FeatureList::IsEnabled(features::kRunOnDedicatedThreadPoolThread)) {
+    CHECK(!base::FeatureList::IsEnabled(features::kRunOnMainThread));
+    // Use a dedicated thread so that all tasks on the PM sequence can be
+    // identified in traces.
+    static base::LazyThreadPoolSingleThreadTaskRunner task_runner =
+        LAZY_THREAD_POOL_SINGLE_THREAD_TASK_RUNNER_INITIALIZER(
+            kPMTaskTraits, base::SingleThreadTaskRunnerThreadMode::DEDICATED);
+    return task_runner.Get();
+  }
+  static base::LazyThreadPoolSequencedTaskRunner
+      performance_manager_task_runner =
+          LAZY_THREAD_POOL_SEQUENCED_TASK_RUNNER_INITIALIZER(kPMTaskTraits);
   return performance_manager_task_runner.Get();
 }
 
@@ -363,6 +397,11 @@ void PerformanceManagerImpl::BatchDeleteNodesImpl(
 void PerformanceManagerImpl::OnStartImpl(GraphImplCallback on_start) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!g_performance_manager);
+
+  if (base::FeatureList::IsEnabled(features::kRunOnDedicatedThreadPoolThread)) {
+    // This should be the first task that runs on the dedicated thread.
+    base::PlatformThread::SetName("Performance Manager");
+  }
 
   g_performance_manager = this;
   graph_.SetUp();

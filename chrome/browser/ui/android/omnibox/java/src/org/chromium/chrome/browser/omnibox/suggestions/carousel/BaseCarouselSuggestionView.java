@@ -5,29 +5,27 @@
 package org.chromium.chrome.browser.omnibox.suggestions.carousel;
 
 import android.content.Context;
-import android.graphics.Rect;
 import android.view.KeyEvent;
-import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 
+import androidx.annotation.VisibleForTesting;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import androidx.recyclerview.widget.RecyclerView.ItemDecoration;
 
+import org.chromium.build.annotations.CheckDiscard;
+import org.chromium.build.annotations.MockedInTests;
+import org.chromium.chrome.browser.omnibox.OmniboxFeatures;
 import org.chromium.chrome.browser.omnibox.R;
-import org.chromium.chrome.browser.omnibox.suggestions.header.HeaderView;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
+import org.chromium.chrome.browser.omnibox.suggestions.RecyclerViewSelectionController;
+import org.chromium.chrome.browser.omnibox.suggestions.base.DynamicSpacingRecyclerViewItemDecoration;
 import org.chromium.chrome.browser.util.KeyNavigationUtil;
 import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
 
-/**
- * View for Carousel Suggestions.
- */
-public class BaseCarouselSuggestionView extends LinearLayout {
-    private final HeaderView mHeader;
-    private final RecyclerView mRecyclerView;
-    private final BaseCarouselSuggestionSelectionManager mSelectionManager;
-    private int mItemSpacingPx;
+/** View for Carousel Suggestions. */
+@MockedInTests
+public class BaseCarouselSuggestionView extends RecyclerView {
+    private RecyclerViewSelectionController mSelectionController;
+    private DynamicSpacingRecyclerViewItemDecoration mDecoration;
 
     /**
      * Constructs a new carousel suggestion view.
@@ -36,51 +34,30 @@ public class BaseCarouselSuggestionView extends LinearLayout {
      */
     public BaseCarouselSuggestionView(Context context, SimpleRecyclerViewAdapter adapter) {
         super(context);
-        setClickable(false);
-        setFocusable(false);
-        setOrientation(VERTICAL);
-        final int verticalPad =
-                getResources().getDimensionPixelSize(R.dimen.omnibox_carousel_suggestion_padding);
-        setPaddingRelative(0, verticalPad, 0, verticalPad);
 
-        mHeader = new HeaderView(context);
-        mHeader.setLayoutParams(
-                new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-        mHeader.getIconView().setVisibility(GONE);
-        mHeader.setClickable(false);
-        mHeader.setFocusable(false);
-        mHeader.setVisibility(View.GONE);
-        addView(mHeader);
+        setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        setItemAnimator(null);
+        setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false));
 
-        mRecyclerView = new RecyclerView(context);
-        mRecyclerView.setLayoutParams(
-                new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-        mRecyclerView.setFocusable(true);
-        mRecyclerView.setFocusableInTouchMode(true);
-        mRecyclerView.setItemAnimator(null);
-        mRecyclerView.setLayoutManager(
-                new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false));
-        mRecyclerView.setClipToPadding(false);
-        mRecyclerView.setPaddingRelative(
-                getResources().getDimensionPixelSize(R.dimen.omnibox_suggestion_side_spacing),
-                mRecyclerView.getPaddingTop(), mRecyclerView.getPaddingEnd(),
-                mRecyclerView.getPaddingBottom());
+        mSelectionController = new RecyclerViewSelectionController(getLayoutManager());
+        addOnChildAttachStateChangeListener(mSelectionController);
 
-        mSelectionManager =
-                new BaseCarouselSuggestionSelectionManager(mRecyclerView.getLayoutManager());
-        mRecyclerView.addOnChildAttachStateChangeListener(mSelectionManager);
+        int initialSpacing =
+                OmniboxFeatures.shouldShowModernizeVisualUpdate(context)
+                        ? OmniboxResourceProvider.getHeaderStartPadding(context)
+                                - getResources().getDimensionPixelSize(R.dimen.tile_view_padding)
+                        : OmniboxResourceProvider.getSideSpacing(context);
+        int baseSpacing =
+                getResources()
+                        .getDimensionPixelSize(
+                                R.dimen.omnibox_carousel_suggestion_minimum_item_spacing);
+        mDecoration =
+                new DynamicSpacingRecyclerViewItemDecoration(this, initialSpacing, baseSpacing / 2);
+        addItemDecoration(mDecoration);
 
-        mRecyclerView.addItemDecoration(new ItemDecoration() {
-            @Override
-            public void getItemOffsets(
-                    Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
-                outRect.left = 0;
-                outRect.right = mItemSpacingPx;
-            }
-        });
-
-        mRecyclerView.setAdapter(adapter);
-        addView(mRecyclerView);
+        setAdapter(adapter);
     }
 
     @Override
@@ -88,61 +65,60 @@ public class BaseCarouselSuggestionView extends LinearLayout {
         boolean isRtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
         if ((!isRtl && KeyNavigationUtil.isGoRight(event))
                 || (isRtl && KeyNavigationUtil.isGoLeft(event))) {
-            mSelectionManager.selectNextItem();
+            mSelectionController.selectNextItem();
             return true;
         } else if ((isRtl && KeyNavigationUtil.isGoRight(event))
                 || (!isRtl && KeyNavigationUtil.isGoLeft(event))) {
-            mSelectionManager.selectPreviousItem();
+            mSelectionController.selectPreviousItem();
             return true;
+        } else if (KeyNavigationUtil.isEnter(event)) {
+            var tile = mSelectionController.getSelectedView();
+            if (tile != null) return tile.performClick();
         }
+        return superOnKeyDown(keyCode, event);
+    }
+
+    /**
+     * Proxy calls to super.onKeyDown; call exposed for testing purposes. There is no way to detect
+     * calls to super using robolectric.
+     */
+    @CheckDiscard("Should be inlined except for testing")
+    @VisibleForTesting
+    public boolean superOnKeyDown(int keyCode, KeyEvent event) {
         return super.onKeyDown(keyCode, event);
     }
 
     @Override
     public void setSelected(boolean isSelected) {
         if (isSelected) {
-            mSelectionManager.setSelectedItem(0, true);
+            mSelectionController.setSelectedItem(0, true);
         } else {
-            mSelectionManager.setSelectedItem(RecyclerView.NO_POSITION, false);
+            mSelectionController.setSelectedItem(RecyclerView.NO_POSITION, false);
         }
     }
 
-    /** @return Header TextView element. */
-    TextView getHeaderTextView() {
-        return mHeader.getTextView();
+    @Override
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
+    public void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        mDecoration.notifyViewMeasuredSizeChanged();
     }
 
-    /** @return Header element. */
-    View getHeaderView() {
-        return mHeader;
+    /* package */ void setSelectionControllerForTesting(
+            RecyclerViewSelectionController controller) {
+        removeOnChildAttachStateChangeListener(mSelectionController);
+        mSelectionController = controller;
+        addOnChildAttachStateChangeListener(mSelectionController);
     }
 
-    /** @return Adapter used with the embedded RecyclerView. */
-    SimpleRecyclerViewAdapter getAdapter() {
-        return (SimpleRecyclerViewAdapter) mRecyclerView.getAdapter();
+    /* package */ DynamicSpacingRecyclerViewItemDecoration getItemDecoration() {
+        return mDecoration;
     }
 
-    /** @return Recycler view used by the Carousel suggestion. */
-    public RecyclerView getRecyclerViewForTest() {
-        return mRecyclerView;
-    }
-
-    /**
-     * Applies a new item spacing to the carousel.
-     *
-     * @param itemSpacingPx The requested item spacing, expressed in Pixels.
-     */
-    public void setItemSpacingPx(int itemSpacingPx) {
-        mItemSpacingPx = itemSpacingPx;
-        mRecyclerView.requestLayout();
-    }
-
-    /**
-     * Set the carousel to have horizontal fade effect.
-     *
-     * @param enableFade whether we should enable horizontal fade.
-     */
-    public void setCarouselHorizontalFade(boolean enableFade) {
-        mRecyclerView.setHorizontalFadingEdgeEnabled(enableFade);
+    /* package */ void setItemDecorationForTesting(
+            DynamicSpacingRecyclerViewItemDecoration decoration) {
+        removeItemDecoration(mDecoration);
+        mDecoration = decoration;
+        addItemDecoration(mDecoration);
     }
 }

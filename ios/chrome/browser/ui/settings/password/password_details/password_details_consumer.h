@@ -12,8 +12,22 @@
 // Sets the Password details for consumer.
 @protocol PasswordDetailsConsumer <NSObject>
 
-// Displays provided password details.
-- (void)setPassword:(PasswordDetails*)password;
+// Displays provided array of password details and the title for the Password
+// Details view.
+- (void)setPasswords:(NSArray<PasswordDetails*>*)passwords
+            andTitle:(NSString*)title;
+
+// Determine if this is a details view for a blocked site (never saved
+// password).
+- (void)setIsBlockedSite:(BOOL)isBlockedSite;
+
+// Set the signed in user email.
+- (void)setUserEmail:(NSString*)userEmail;
+
+// Sets up the share button next to the navigation's right bar button. Tapping
+// on the button results in entering the sharing flow when `enabled`. Otherwise,
+// info popup is displayed explaining that the feature is disabled by policy.
+- (void)setupRightShareButton:(BOOL)enabled;
 
 @end
 

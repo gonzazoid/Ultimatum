@@ -12,15 +12,14 @@
 #include "ash/app_list/views/app_list_toast_container_view.h"
 #include "ash/app_list/views/apps_container_view.h"
 #include "ash/app_list/views/search_box_view.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/callback.h"
-#include "base/test/scoped_feature_list.h"
+#include "base/functional/callback.h"
 #include "base/test/task_environment.h"
+#include "ui/display/screen.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/wm/core/window_util.h"
 
@@ -29,7 +28,7 @@ namespace ash {
 namespace {
 
 bool IsTabletMode() {
-  return Shell::Get()->tablet_mode_controller()->InTabletMode();
+  return display::Screen::GetScreen()->InTabletMode();
 }
 
 // Returns the number of times the nudge has been shown. Note that the count
@@ -46,12 +45,7 @@ int GetReorderNudgeShownCount() {
 class AppListNudgeControllerTest : public AshTestBase {
  public:
   AppListNudgeControllerTest()
-      : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kLauncherAppSort, features::kProductivityLauncher,
-         features::kLauncherDismissButtonsOnSortNudgeAndToast},
-        {});
-  }
+      : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
   AppListNudgeControllerTest(const AppListNudgeControllerTest&) = delete;
   AppListNudgeControllerTest& operator=(const AppListNudgeControllerTest&) =
       delete;
@@ -86,14 +80,12 @@ class AppListNudgeControllerTest : public AshTestBase {
 
   // Show app list and wait long enough for the nudge to be considered shown.
   void ShowAppListAndWait() {
-    Shell::Get()->app_list_controller()->ShowAppList();
+    Shell::Get()->app_list_controller()->ShowAppList(
+        AppListShowSource::kSearchKey);
     task_environment()->AdvanceClock(base::Seconds(1));
   }
 
   void DismissAppList() { GetAppListTestHelper()->Dismiss(); }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(AppListNudgeControllerTest, Basic) {

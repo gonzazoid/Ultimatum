@@ -5,20 +5,22 @@
 #ifndef UI_GFX_OVERLAY_TRANSFORM_H_
 #define UI_GFX_OVERLAY_TRANSFORM_H_
 
+#include <stdint.h>
+
 namespace gfx {
 
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.ui.gfx
 // Describes transformation to be applied to the buffer before presenting
-// to screen.  Rotations are expressed anticlockwise.
-enum OverlayTransform {
+// to screen. Rotations are expressed in clockwise degrees.
+enum OverlayTransform : uint8_t {
   OVERLAY_TRANSFORM_INVALID,
   OVERLAY_TRANSFORM_NONE,
   OVERLAY_TRANSFORM_FLIP_HORIZONTAL,
   OVERLAY_TRANSFORM_FLIP_VERTICAL,
-  OVERLAY_TRANSFORM_ROTATE_90,
-  OVERLAY_TRANSFORM_ROTATE_180,
-  OVERLAY_TRANSFORM_ROTATE_270,
-  OVERLAY_TRANSFORM_LAST = OVERLAY_TRANSFORM_ROTATE_270
+  OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90,
+  OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_180,
+  OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270,
+  OVERLAY_TRANSFORM_LAST = OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270
 };
 
 }  // namespace gfx

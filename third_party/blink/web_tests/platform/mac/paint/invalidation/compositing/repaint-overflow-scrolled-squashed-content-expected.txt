@@ -16,7 +16,6 @@
       "name": "HorizontalScrollbar",
       "position": [0, 185],
       "bounds": [200, 15],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {
@@ -38,9 +37,6 @@
       "bounds": [100, 1000],
       "contentsOpaque": true,
       "backgroundColor": "#FF0000",
-      "invalidations": [
-        [0, 0, 100, 1000]
-      ],
       "transform": 1
     }
   ],

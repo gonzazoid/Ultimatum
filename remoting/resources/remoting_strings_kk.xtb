@@ -18,7 +18,7 @@
 <translation id="2038229918502634450">Саясат өзгерісін есепке алу үшін хост қайта іске қосылуда.</translation>
 <translation id="2078880767960296260">Хост процесі</translation>
 <translation id="20876857123010370">Сенсорлық аймақ режимі</translation>
-<translation id="2198363917176605566"><ph name="PRODUCT_NAME" /> қызметін пайдалану үшін экранды жазуға рұқсат беруіңіз керек, сонда осы Mac экранындағы мазмұнды қашықтағы құрылғыға жіберуге болады.
+<translation id="2198363917176605566"><ph name="PRODUCT_NAME" /> қызметін пайдалану үшін экранды жазуға рұқсат беруіңіз керек, сонда осы Mac экранындағы контентті қашықтағы құрылғыға жіберуге болады.
 
 Рұқсат беру үшін төмендегі "<ph name="BUTTON_NAME" />" түймесін басып, "Экранды жазу" параметрлері панелін ашыңыз және "<ph name="SERVICE_SCRIPT_NAME" />" ұяшығын белгілеңіз.
 
@@ -36,7 +36,6 @@
 <translation id="2599300881200251572">Бұл қызмет Chrome Remote Desktop клиенттерінен қосылу мүмкіндігін береді.</translation>
 <translation id="2647232381348739934">Chromoting Service</translation>
 <translation id="2676780859508944670">Жұмыс істеуде…</translation>
-<translation id="2692522824157224199">Copyright 2022 Google LLC, Барлық құқығы қорғалған.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">Аутентификациялау кезінде ақау пайда болды. Жүйеге қайта кіріңіз.</translation>
 <translation id="2803375539583399270">PIN кодын енгізіңіз</translation>
@@ -73,7 +72,6 @@
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> пайдаланатын URL бағытын өзгерту қолданбасы</translation>
 <translation id="4277736576214464567">Рұқсат коды жарамсыз. Әрекетті қайталап көріңіз.</translation>
 <translation id="4281844954008187215">Қызмет көрсету шарттары</translation>
-<translation id="4372650392690220936">Copyright 2022 The Chromium Authors. Барлық құқығы қорғалған.</translation>
 <translation id="4405930547258349619">Негізгі кітапхана</translation>
 <translation id="443560535555262820">Арнайы мүмкіндіктер параметрлерін ашу</translation>
 <translation id="4450893287417543264">Қайта көрсетілмесін</translation>
@@ -154,6 +152,7 @@
 <translation id="7693372326588366043">Хосттар тізімін жаңарту</translation>
 <translation id="7714222945760997814">Осы жөнінде хабарлау</translation>
 <translation id="7868137160098754906">Қашықтағы компьютерге арналған PIN кодын енгізіңіз.</translation>
+<translation id="7881455334687220899">Copyright 2024 The Chromium Authors. Барлық құқығы қорғалған.</translation>
 <translation id="7895403300744144251">Қашықтағы компьютердегі қауіпсіздік саясаттары аккаунтыңыздан байланыс орнатуға тыйым салады.</translation>
 <translation id="7936528439960309876">Оң жаққа қондыру</translation>
 <translation id="7970576581263377361">Аутентификация сәтсіз аяқталды. Chromium жүйесіне қайта кіріңіз.</translation>
@@ -183,8 +182,9 @@
 <translation id="858006550102277544">Пікір</translation>
 <translation id="8743328882720071828"><ph name="CLIENT_USERNAME" /> деген пайдаланушыға компьютерді көруге және басқаруға рұқсат бергіңіз келе ме?</translation>
 <translation id="8747048596626351634">Сеанс бұзылды немесе басталмады. Егер қашықтағы компьютерде ~/.chrome-remote-desktop-session сеансы жүріп жатса, онда жұмыс үстелінің ортасы немесе терезе менеджері сияқты ұзақ мерзімді басымдыққа ие процесс іске қосылып жатқанына көз жеткізіңіз.</translation>
-<translation id="8804164990146287819">Құпиялылық саясаты</translation>
+<translation id="8804164990146287819">Құпиялық саясаты</translation>
 <translation id="8906511416443321782">Аудио жазып, оны Chrome Remote Desktop клиентіне трансляциялау үшін микрофонды пайдалану рұқсаты болуы керек.</translation>
+<translation id="9042277333359847053">Copyright 2024 Google LLC, Барлық құқығы қорғалған.</translation>
 <translation id="9111855907838866522">Қашықтағы құрылғыға қосылдыңыз. Мәзірді ашу үшін экранды төрт саусағыңызбен түртіңіз.</translation>
 <translation id="9126115402994542723">Бұл құрылғыдан осы хостқа қосылу кезінде PIN коды енді сұралмасын.</translation>
 <translation id="916856682307586697">Әдепкі XSession сеансын іске қосу</translation>

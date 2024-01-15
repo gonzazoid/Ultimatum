@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests the way service workers don't enable DOM agent and does enable Debugger agent.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
     // Note: every test that uses a storage API must manually clean-up state from previous tests.
   await ApplicationTestRunner.resetState();
 
@@ -13,9 +17,9 @@
   var scriptURL = 'http://127.0.0.1:8000/devtools/service-workers/resources/service-worker-empty.js';
   var scope = 'http://127.0.0.1:8000/devtools/service-workers/resources/scope1/';
 
-  TestRunner.addSniffer(SDK.MainConnection.prototype, 'sendRawMessage', function(messageString) {
+  TestRunner.addSniffer(SDK.Connections.MainConnection.prototype, 'sendRawMessage', function(messageString) {
     var message = JSON.parse(messageString);
-    if (!message.sessionId)
+    if (!message.sessionId || message.sessionId === SDK.TargetManager.TargetManager.instance().primaryPageTarget().sessionId)
       return;
     if (messageString.includes('DOM.'))
       TestRunner.addResult('DOM-related command should NOT be issued: ' + messageString);
@@ -32,9 +36,9 @@
 
   async function step1(target) {
     TestRunner.addResult('Suspending targets.');
-    await SDK.targetManager.suspendAllTargets();
+    await SDK.TargetManager.TargetManager.instance().suspendAllTargets();
     TestRunner.addResult('Resuming targets.');
-    await SDK.targetManager.resumeAllTargets();
+    await SDK.TargetManager.TargetManager.instance().resumeAllTargets();
     TestRunner.completeTest();
   }
 

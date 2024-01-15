@@ -2,11 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Console from 'devtools/panels/console/console.js';
+
 (async function() {
   TestRunner.addResult(
       `Tests that evaluating an expression with an exception in the console provide correct exception information.\n`);
 
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
 
   ConsoleTestRunner.evaluateInConsole('\
@@ -22,7 +26,7 @@
 
   async function afterEvaluate() {
     await ConsoleTestRunner.dumpConsoleMessages();
-    var viewMessages = Console.ConsoleView.instance().visibleViewMessages;
+    var viewMessages = Console.ConsoleView.ConsoleView.instance().visibleViewMessages;
     var uiMessage = viewMessages[viewMessages.length - 1];
     var message = uiMessage.consoleMessage();
     var stackTrace = message.stackTrace;

@@ -7,8 +7,8 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "dbus/object_proxy.h"
 
 namespace dbus {
@@ -50,6 +50,13 @@ class COMPONENT_EXPORT(SYSTEM_CLOCK) SystemClockClient {
     // WaitForServiceToBeAvailable will pile up, until |is_available| is set
     // back to true.
     virtual void SetServiceIsAvailable(bool is_available) = 0;
+
+    // Configures service to be permanently disabled. Callbacks passed to
+    // WaitForServiceToBeAvailable are immediately invoked with
+    // |service_is_available| set to false. This includes any callbacks that
+    // piled up after SetServiceIsAvailable(false). To enable service again,
+    // invoke SetServiceIsAvailable(true);
+    virtual void DisableService() = 0;
   };
 
   // Creates and initializes the global instance. |bus| must not be null.
@@ -97,10 +104,5 @@ class COMPONENT_EXPORT(SYSTEM_CLOCK) SystemClockClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::SystemClockClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SYSTEM_CLOCK_SYSTEM_CLOCK_CLIENT_H_

@@ -14,8 +14,10 @@ static_library("report_queue_configuration") {
     "//base",
     "//components/reporting/proto:record_constants",
     "//components/reporting/proto:record_proto",
+    "//components/reporting/util:rate_limiter_interface",
     "//components/reporting/util:status",
     "//components/reporting/util:status_macros",
+    "//components/reporting/util:wrapped_rate_limiter",
   ]
 }
 
@@ -31,14 +33,18 @@ static_library("report_queue_factory") {
     ":report_queue_provider",
     "//base",
     "//components/reporting/proto:record_constants",
+    "//components/reporting/proto:record_proto",
     "//components/reporting/util:backoff_settings",
+    "//components/reporting/util:rate_limiter_interface",
     "//components/reporting/util:status",
+    "//components/reporting/util:wrapped_rate_limiter",
     "//net:net",
   ]
 }
 
 static_library("report_queue") {
   sources = [
+    "filtered_report_queue.h",
     "report_queue.cc",
     "report_queue.h",
     "report_queue_impl.cc",
@@ -47,15 +53,19 @@ static_library("report_queue") {
   deps = [
     ":report_queue_configuration",
     "//base",
-    "//components/reporting/encryption:encryption_module",
+    "//components/reporting/proto:metric_data_proto",
     "//components/reporting/proto:record_constants",
     "//components/reporting/proto:record_proto",
-    "//components/reporting/storage:storage_module",
     "//components/reporting/storage:storage_module_interface",
     "//components/reporting/storage:storage_uploader_interface",
+    "//components/reporting/util:rate_limiter_interface",
     "//components/reporting/util:status",
     "//components/reporting/util:status_macros",
+    "//components/reporting/util:wrapped_rate_limiter",
   ]
+  if (!is_chromeos) {
+    deps += [ "//components/reporting/storage:storage_module" ]
+  }
 }
 
 static_library("report_queue_provider") {
@@ -72,12 +82,13 @@ static_library("report_queue_provider") {
     "//base",
     "//components/reporting/proto:record_constants",
     "//components/reporting/proto:record_proto",
-    "//components/reporting/storage:storage_module",
     "//components/reporting/storage:storage_module_interface",
-    "//components/reporting/storage_selector",
     "//components/reporting/util:status",
     "//components/reporting/util:status_macros",
   ]
+  if (!is_chromeos) {
+    deps += [ "//components/reporting/storage:storage_module" ]
+  }
 }
 
 static_library("test_support") {
@@ -98,8 +109,10 @@ static_library("test_support") {
     "//components/reporting/proto:record_proto",
     "//components/reporting/proto:test_proto",
     "//components/reporting/storage:test_support",
+    "//components/reporting/util:rate_limiter_interface",
     "//components/reporting/util:status",
     "//components/reporting/util:status_macros",
+    "//components/reporting/util:wrapped_rate_limiter",
     "//testing/gmock",
     "//testing/gtest",
   ]
@@ -134,6 +147,7 @@ source_set("unit_tests") {
   testonly = true
   sources = [
     "empty_dm_token_retriever_unittest.cc",
+    "filtered_report_queue_unittest.cc",
     "report_queue_configuration_unittest.cc",
     "report_queue_factory_unittest.cc",
     "report_queue_impl_unittest.cc",
@@ -154,9 +168,11 @@ source_set("unit_tests") {
     "//components/reporting/proto:test_proto",
     "//components/reporting/storage:storage_module_interface",
     "//components/reporting/storage:test_support",
+    "//components/reporting/util:rate_limiter_interface",
     "//components/reporting/util:status",
     "//components/reporting/util:status_macros",
     "//components/reporting/util:test_callbacks_support",
+    "//components/reporting/util:wrapped_rate_limiter",
     "//testing/gmock",
     "//testing/gtest",
   ]

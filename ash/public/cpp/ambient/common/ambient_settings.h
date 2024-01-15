@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 
 namespace ash {
 
@@ -20,16 +21,6 @@ ASH_PUBLIC_EXPORT extern const char kAmbientModeFineArtAlbumId[];
 ASH_PUBLIC_EXPORT extern const char kAmbientModeEarthAndSpaceAlbumId[];
 ASH_PUBLIC_EXPORT extern const char kAmbientModeStreetArtAlbumId[];
 ASH_PUBLIC_EXPORT extern const char kAmbientModeCapturedOnPixelAlbumId[];
-
-// Enumeration of the topic source, i.e. where the photos come from.
-// Values need to stay in sync with the |topicSource_| in ambient_mode_page.js.
-// Art gallery is a super set of art related topic sources in Backdrop service.
-enum class AmbientModeTopicSource {
-  kMinValue = 0,
-  kGooglePhotos = kMinValue,
-  kArtGallery = 1,
-  kMaxValue = kArtGallery
-};
 
 // Subsettings of Art gallery.
 struct ASH_PUBLIC_EXPORT ArtSetting {
@@ -59,9 +50,6 @@ struct ASH_PUBLIC_EXPORT ArtSetting {
   std::string description;
 
   std::string preview_image_url;
-
-  // Image blob in PNG format used on Settings UI.
-  std::string png_data_url;
 };
 
 enum class AmbientModeTemperatureUnit {
@@ -79,7 +67,8 @@ struct ASH_PUBLIC_EXPORT AmbientSettings {
   AmbientSettings& operator=(AmbientSettings&&);
   ~AmbientSettings();
 
-  AmbientModeTopicSource topic_source = AmbientModeTopicSource::kArtGallery;
+  personalization_app::mojom::TopicSource topic_source =
+      personalization_app::mojom::TopicSource::kArtGallery;
 
   // Only a subset Settings of Art gallery.
   std::vector<ArtSetting> art_settings;
@@ -122,9 +111,6 @@ struct ASH_PUBLIC_EXPORT PersonalAlbum {
 
   // Preview images if this album is Recent highlights.
   std::vector<std::string> preview_image_urls;
-
-  // Image blob in PNG format used on Settings UI.
-  std::string png_data_url;
 };
 
 struct ASH_PUBLIC_EXPORT PersonalAlbums {

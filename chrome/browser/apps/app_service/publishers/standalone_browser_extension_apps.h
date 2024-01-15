@@ -8,26 +8,21 @@
 #include <memory>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "chrome/browser/apps/app_service/launch_result_type.h"
 #include "chrome/browser/apps/app_service/publishers/app_publisher.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/crosapi/mojom/app_service.mojom.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/capability_access.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/services/app_service/public/cpp/menu.h"
-#include "components/services/app_service/public/cpp/publisher_base.h"
-#include "components/services/app_service/public/mojom/app_service.mojom-forward.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "mojo/public/cpp/bindings/remote_set.h"
 
 class StandaloneBrowserPublisherTest;
 
@@ -50,15 +45,10 @@ struct AppLaunchParams;
 // is almost always running in the background. This is enforced via
 // ScopedKeepAlive. We would like to eventually remove this assumption. This
 // requires caching a copy of installed apps in this class.
-//
-// TODO(crbug.com/1253250):
-// 1. Remove the parent class apps::PublisherBase.
-// 2. Remove all apps::mojom related code.
 class StandaloneBrowserExtensionApps : public KeyedService,
-                                       public apps::PublisherBase,
                                        public AppPublisher,
                                        public crosapi::mojom::AppPublisher,
-                                       public chromeos::LoginState::Observer {
+                                       public ash::LoginState::Observer {
  public:
   StandaloneBrowserExtensionApps(AppServiceProxy* proxy, AppType app_type);
   ~StandaloneBrowserExtensionApps() override;
@@ -81,12 +71,10 @@ class StandaloneBrowserExtensionApps : public KeyedService,
                            StandaloneBrowserExtensionAppsUpdated);
 
   // apps::AppPublisher overrides.
-  void LoadIcon(const std::string& app_id,
-                const IconKey& icon_key,
-                IconType icon_type,
-                int32_t size_hint_in_dip,
-                bool allow_placeholder_icon,
-                apps::LoadIconCallback callback) override;
+  void GetCompressedIconData(const std::string& app_id,
+                             int32_t size_in_dip,
+                             ui::ResourceScaleFactor scale_factor,
+                             LoadIconCallback callback) override;
   void Launch(const std::string& app_id,
               int32_t event_flags,
               LaunchSource launch_source,
@@ -113,31 +101,8 @@ class StandaloneBrowserExtensionApps : public KeyedService,
                     base::OnceCallback<void(MenuItems)> callback) override;
   void SetWindowMode(const std::string& app_id,
                      WindowMode window_mode) override;
-
-  // apps::PublisherBase:
-  void Connect(mojo::PendingRemote<apps::mojom::Subscriber> subscriber_remote,
-               apps::mojom::ConnectOptionsPtr opts) override;
-  void Launch(const std::string& app_id,
-              int32_t event_flags,
-              apps::mojom::LaunchSource launch_source,
-              apps::mojom::WindowInfoPtr window_info) override;
-  void LaunchAppWithIntent(const std::string& app_id,
-                           int32_t event_flags,
-                           apps::mojom::IntentPtr intent,
-                           apps::mojom::LaunchSource launch_source,
-                           apps::mojom::WindowInfoPtr window_info,
-                           LaunchAppWithIntentCallback callback) override;
-  void LaunchAppWithFiles(const std::string& app_id,
-                          int32_t event_flags,
-                          apps::mojom::LaunchSource launch_source,
-                          apps::mojom::FilePathsPtr file_paths) override;
-  void GetMenuModel(const std::string& app_id,
-                    apps::mojom::MenuType menu_type,
-                    int64_t display_id,
-                    GetMenuModelCallback callback) override;
   void StopApp(const std::string& app_id) override;
-  void SetWindowMode(const std::string& app_id,
-                     apps::mojom::WindowMode window_mode) override;
+  void UpdateAppSize(const std::string& app_id) override;
   void OpenNativeSettings(const std::string& app_id) override;
 
   // crosapi::mojom::AppPublisher overrides.
@@ -146,7 +111,7 @@ class StandaloneBrowserExtensionApps : public KeyedService,
       mojo::PendingRemote<crosapi::mojom::AppController> controller) override;
   void OnCapabilityAccesses(std::vector<CapabilityAccessPtr> deltas) override;
 
-  // chromeos::LoginState::Observer
+  // ash::LoginState::Observer
   void LoggedInStateChanged() override;
 
   // Called when the crosapi termination is terminated [e.g. Lacros is closed].
@@ -156,16 +121,7 @@ class StandaloneBrowserExtensionApps : public KeyedService,
   void OnReceiverDisconnected();
   void OnControllerDisconnected();
 
-  // When Lacros returns an icon for an app, ash must then apply icon effects.
-  // This function does that.
-  void OnLoadIcon(uint32_t icon_effects,
-                  int size_hint_in_dip,
-                  apps::LoadIconCallback callback,
-                  IconValuePtr icon_value);
-
   const AppType app_type_;
-
-  mojo::RemoteSet<apps::mojom::Subscriber> subscribers_;
 
   // This class stores a copy of the latest apps received for each app_id, which
   // haven't been published to AppRegistryCache yet. When the crosapi is bound
@@ -176,7 +132,6 @@ class StandaloneBrowserExtensionApps : public KeyedService,
   // Thus, this class can simply keep the latest copy, without doing any
   // merging.
   std::map<std::string, apps::AppPtr> app_cache_;
-  std::map<std::string, apps::mojom::AppPtr> app_mojom_cache_;
 
   bool should_notify_initialized_ = true;
 
@@ -188,7 +143,7 @@ class StandaloneBrowserExtensionApps : public KeyedService,
 
   std::unique_ptr<crosapi::BrowserManager::ScopedKeepAlive> keep_alive_;
 
-  base::ScopedObservation<chromeos::LoginState, chromeos::LoginState::Observer>
+  base::ScopedObservation<ash::LoginState, ash::LoginState::Observer>
       login_observation_{this};
 
   base::WeakPtrFactory<StandaloneBrowserExtensionApps> weak_factory_{this};

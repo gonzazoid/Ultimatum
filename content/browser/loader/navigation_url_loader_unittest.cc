@@ -5,8 +5,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/unguessable_token.h"
@@ -81,21 +81,26 @@ class NavigationURLLoaderTest : public testing::Test {
       NavigationURLLoaderDelegate* delegate) {
     blink::mojom::BeginNavigationParamsPtr begin_params =
         blink::mojom::BeginNavigationParams::New(
-            absl::nullopt /* initiator_frame_token */,
+            std::nullopt /* initiator_frame_token */,
             std::string() /* headers */, net::LOAD_NORMAL,
             false /* skip_service_worker */,
             blink::mojom::RequestContextType::LOCATION,
             blink::mojom::MixedContentContextType::kBlockable,
             false /* is_form_submission */,
             false /* was_initiated_by_link_click */,
+            blink::mojom::ForceHistoryPush::kNo,
             GURL() /* searchable_form_url */,
             std::string() /* searchable_form_encoding */,
             GURL() /* client_side_redirect_url */,
-            absl::nullopt /* devtools_initiator_info */,
-            nullptr /* trust_token_params */, absl::nullopt /* impression */,
+            std::nullopt /* devtools_initiator_info */,
+            nullptr /* trust_token_params */, std::nullopt /* impression */,
             base::TimeTicks() /* renderer_before_unload_start */,
             base::TimeTicks() /* renderer_before_unload_end */,
-            absl::nullopt /* web_bundle_token */);
+            blink::mojom::NavigationInitiatorActivationAndAdStatus::
+                kDidNotStartWithTransientActivation,
+            false /* is_container_initiated */,
+            false /* is_fullscreen_requested */,
+            false /* has_storage_access */);
     auto common_params = blink::CreateCommonNavigationParams();
     common_params->url = url;
     common_params->initiator_origin = url::Origin::Create(url);
@@ -125,13 +130,20 @@ class NavigationURLLoaderTest : public testing::Test {
             base::UnguessableToken::Create() /* devtools_frame_token */,
             net::HttpRequestHeaders() /* cors_exempt_headers */,
             nullptr /* client_security_state */,
-            absl::nullopt /* devtools_accepted_stream_types */,
+            std::nullopt /* devtools_accepted_stream_types */,
             false /* is_pdf */,
-            content::WeakDocumentPtr() /* initiator_document */));
+            ChildProcessHost::kInvalidUniqueID /* initiator_process_id */,
+            std::nullopt /* initiator_document_token */,
+            GlobalRenderFrameHostId() /* previous_render_frame_host_id */,
+            nullptr /* serving_page_metrics_container */,
+            false /* allow_cookies_from_browser */, 0 /* navigation_id */,
+            false /* shared_storage_writable */, false /* is_ad_tagged */));
     return NavigationURLLoader::Create(
         browser_context_.get(), storage_partition, std::move(request_info),
         nullptr, nullptr, nullptr, delegate,
         NavigationURLLoader::LoaderType::kRegular, mojo::NullRemote(),
+        /* trust_token_observer=*/mojo::NullRemote(),
+        /* shared_dictionary_observer=*/mojo::NullRemote(),
         /* url_loader_network_observer */ mojo::NullRemote(),
         /*devtools_observer=*/mojo::NullRemote());
   }

@@ -13,7 +13,6 @@ source_set("ui") {
     ":crw_web_view_navigation_proxy",
     ":web_view_handler",
     "//base",
-    "//base/ios",
     "//build:branding_buildflags",
     "//ios/net",
     "//ios/third_party/webkit",
@@ -29,26 +28,27 @@ source_set("ui") {
     "//ios/web/js_features/scroll_helper",
     "//ios/web/js_messaging",
     "//ios/web/js_messaging:java_script_feature_util",
-    "//ios/web/js_messaging:web_frames_manager_impl_header",
+    "//ios/web/js_messaging:web_view_js_utils",
     "//ios/web/navigation",
     "//ios/web/navigation:core",
     "//ios/web/navigation:navigation_manager_util",
     "//ios/web/navigation:wk_navigation_util",
     "//ios/web/net:net",
     "//ios/web/public",
+    "//ios/web/public/annotations",
     "//ios/web/public/deprecated",
     "//ios/web/public/download",
+    "//ios/web/public/find_in_page",
     "//ios/web/public/js_messaging",
+    "//ios/web/public/permissions",
     "//ios/web/public/security",
     "//ios/web/public/webui",
     "//ios/web/security",
     "//ios/web/session",
     "//ios/web/text_fragments",
-    "//ios/web/web_state:page_viewport_state",
     "//ios/web/web_state:user_interaction",
     "//ios/web/web_state:web_state_impl_header",
     "//ios/web/web_state:web_view_internal_creation_util",
-    "//ios/web/web_state/js",
     "//ios/web/web_state/ui:wk_web_view_configuration_provider",
     "//ios/web/web_view:util",
     "//ios/web/webui:webui",
@@ -59,8 +59,8 @@ source_set("ui") {
   ]
 
   sources = [
-    "crw_context_menu_item.mm",
-    "crw_swipe_recognizer_provider.h",
+    "crw_media_capture_permission_request.h",
+    "crw_media_capture_permission_request.mm",
     "crw_touch_tracking_recognizer.mm",
     "crw_web_controller.mm",
     "crw_web_controller_container_view.h",
@@ -77,23 +77,20 @@ source_set("ui") {
     "crw_wk_ui_handler.mm",
     "crw_wk_ui_handler_delegate.h",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("web_controller_header") {
-  deps = [
-    ":crw_web_view_navigation_proxy",
-    "//base",
-    "//ios/web/public/deprecated",
-  ]
-
   sources = [
     "crw_touch_tracking_recognizer.h",
     "crw_web_controller.h",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
+  deps = [
+    ":crw_web_view_navigation_proxy",
+    "//ios/web/public/deprecated",
+  ]
+
+  public_deps = [ "//base" ]
 }
 
 source_set("web_view_handler") {
@@ -102,15 +99,12 @@ source_set("web_view_handler") {
     "crw_web_view_handler.mm",
     "crw_web_view_handler_delegate.h",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("crw_web_view_navigation_proxy") {
   sources = [ "crw_web_view_navigation_proxy.h" ]
 
   deps = [ "//ios/third_party/webkit" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("crw_context_menu_controller") {
@@ -118,7 +112,6 @@ source_set("crw_context_menu_controller") {
     ":wk_web_view_configuration_provider",
     "//base",
     "//ios/web/common",
-    "//ios/web/common:features",
     "//ios/web/js_features/context_menu",
     "//ios/web/js_messaging",
     "//ios/web/public",
@@ -136,14 +129,11 @@ source_set("crw_context_menu_controller") {
     "crw_html_element_fetch_request.h",
     "crw_html_element_fetch_request.mm",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("wk_web_view_configuration_provider_header") {
   deps = [ "//base" ]
   sources = [ "wk_web_view_configuration_provider.h" ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("wk_web_view_configuration_provider") {
@@ -151,6 +141,7 @@ source_set("wk_web_view_configuration_provider") {
   deps = [
     "//base",
     "//components/safe_browsing/core/common",
+    "//ios/components/security_interstitials/https_only_mode:feature",
     "//ios/third_party/webkit",
     "//ios/web/common",
     "//ios/web/js_messaging",
@@ -158,7 +149,6 @@ source_set("wk_web_view_configuration_provider") {
     "//ios/web/js_messaging:java_script_feature_util",
     "//ios/web/navigation:session_restore_feature",
     "//ios/web/public",
-    "//ios/web/web_state/js",
     "//ios/web/webui",
   ]
 
@@ -170,6 +160,4 @@ source_set("wk_web_view_configuration_provider") {
     "wk_web_view_configuration_provider.mm",
     "wk_web_view_configuration_provider_observer.h",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

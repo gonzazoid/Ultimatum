@@ -7,12 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
 #include "gpu/command_buffer/service/command_buffer_task_executor.h"
+#include "gpu/command_buffer/service/dawn_context_provider.h"
 #include "gpu/command_buffer/service/gpu_task_scheduler_helper.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/scheduler_sequence.h"
@@ -26,7 +27,8 @@ SkiaOutputSurfaceDependencyImpl::SkiaOutputSurfaceDependencyImpl(
     gpu::SurfaceHandle surface_handle)
     : gpu_service_impl_(gpu_service_impl),
       surface_handle_(surface_handle),
-      client_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      client_thread_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 SkiaOutputSurfaceDependencyImpl::~SkiaOutputSurfaceDependencyImpl() = default;
 
@@ -73,7 +75,8 @@ SkiaOutputSurfaceDependencyImpl::GetVulkanContextProvider() {
   return gpu_service_impl_->vulkan_context_provider();
 }
 
-DawnContextProvider* SkiaOutputSurfaceDependencyImpl::GetDawnContextProvider() {
+gpu::DawnContextProvider*
+SkiaOutputSurfaceDependencyImpl::GetDawnContextProvider() {
   return gpu_service_impl_->dawn_context_provider();
 }
 
@@ -91,10 +94,6 @@ gpu::MailboxManager* SkiaOutputSurfaceDependencyImpl::GetMailboxManager() {
   return gpu_service_impl_->mailbox_manager();
 }
 
-gpu::ImageFactory* SkiaOutputSurfaceDependencyImpl::GetGpuImageFactory() {
-  return gpu_service_impl_->gpu_image_factory();
-}
-
 bool SkiaOutputSurfaceDependencyImpl::IsOffscreen() {
   return surface_handle_ == gpu::kNullSurfaceHandle;
 }
@@ -103,20 +102,66 @@ gpu::SurfaceHandle SkiaOutputSurfaceDependencyImpl::GetSurfaceHandle() {
   return surface_handle_;
 }
 
+scoped_refptr<gl::Presenter> SkiaOutputSurfaceDependencyImpl::CreatePresenter(
+    base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub) {
+  DCHECK(!IsOffscreen());
+
+  auto context_state = GetSharedContextState();
+#if BUILDFLAG(IS_WIN)
+  // DirectComposition is only supported with dawn D3D11 backend.
+  if (context_state->gr_context_type() == gpu::GrContextType::kGraphiteDawn &&
+      context_state->dawn_context_provider()->backend_type() !=
+          wgpu::BackendType::D3D11) {
+    return {};
+  }
+#endif
+
+  auto presenter = gpu::ImageTransportSurface::CreatePresenter(
+      context_state->display(), stub, surface_handle_);
+  if (presenter &&
+      GetGpuDriverBugWorkarounds().rely_on_implicit_sync_for_swap_buffers) {
+    presenter->SetRelyOnImplicitSync();
+  }
+  return presenter;
+}
+
 scoped_refptr<gl::GLSurface> SkiaOutputSurfaceDependencyImpl::CreateGLSurface(
     base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub,
     gl::GLSurfaceFormat format) {
-  if (IsOffscreen()) {
-    return gl::init::CreateOffscreenGLSurfaceWithFormat(
-        GetSharedContextState()->display(), gfx::Size(), format);
-  } else {
-    return gpu::ImageTransportSurface::CreateNativeSurface(
-        GetSharedContextState()->display(), stub, surface_handle_, format);
-  }
+  CHECK(!IsOffscreen());
+  return gpu::ImageTransportSurface::CreateNativeGLSurface(
+      GetSharedContextState()->display(), stub, surface_handle_, format);
+}
+
+base::ScopedClosureRunner SkiaOutputSurfaceDependencyImpl::CachePresenter(
+    gl::Presenter* presenter) {
+  // We're running on the viz thread here. We want to release ref on the
+  // compositor gpu thread because presenters are generally not thread-safe. For
+  // the same reason we don't want to mark them as RefCountedThreadSafe to avoid
+  // confusion and so have to AddRef() on the compositor gpu thread too. It's
+  // safe to just PostTask here because SkiaOutputSurfaceImplOnGpu keeps ref on
+  // its Presenter and can be only destroyed by PostTask from viz thread to gpu
+  // thread which will run after this one.
+  gpu_service_impl_->compositor_gpu_task_runner()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&gl::Presenter::AddRef, base::Unretained(presenter)));
+
+  auto release_callback = base::BindPostTask(
+      gpu_service_impl_->compositor_gpu_task_runner(),
+      base::BindOnce(&gl::Presenter::Release, base::Unretained(presenter)));
+
+  return base::ScopedClosureRunner(std::move(release_callback));
 }
 
 base::ScopedClosureRunner SkiaOutputSurfaceDependencyImpl::CacheGLSurface(
     gl::GLSurface* surface) {
+  // We're running on the viz thread here. We want to release ref on the
+  // compositor gpu thread because presenters are generally not thread-safe. For
+  // the same reason we don't want to mark them as RefCountedThreadSafe to avoid
+  // confusion and so have to AddRef() on the compositor gpu thread too. It's
+  // safe to just PostTask here because SkiaOutputSurfaceImplOnGpu keeps ref on
+  // its GLSurface and can be only destroyed by PostTask from viz thread to gpu
+  // thread which will run after this one.
   gpu_service_impl_->compositor_gpu_task_runner()->PostTask(
       FROM_HERE,
       base::BindOnce(&gl::GLSurface::AddRef, base::Unretained(surface)));
@@ -134,7 +179,7 @@ SkiaOutputSurfaceDependencyImpl::GetClientTaskRunner() {
 }
 
 void SkiaOutputSurfaceDependencyImpl::ScheduleGrContextCleanup() {
-  GetSharedContextState()->ScheduleGrContextCleanup();
+  GetSharedContextState()->ScheduleSkiaCleanup();
 }
 
 void SkiaOutputSurfaceDependencyImpl::ScheduleDelayedGPUTaskFromGPUThread(
@@ -144,29 +189,18 @@ void SkiaOutputSurfaceDependencyImpl::ScheduleDelayedGPUTaskFromGPUThread(
       FROM_HERE, std::move(task), kDelayForDelayedWork);
 }
 
-#if BUILDFLAG(IS_WIN)
-void SkiaOutputSurfaceDependencyImpl::DidCreateAcceleratedSurfaceChildWindow(
-    gpu::SurfaceHandle parent_window,
-    gpu::SurfaceHandle child_window) {
-  gpu_service_impl_->SendCreatedChildWindow(parent_window, child_window);
-}
-#endif
-
 void SkiaOutputSurfaceDependencyImpl::DidLoseContext(
     gpu::error::ContextLostReason reason,
     const GURL& active_url) {
-  // |offscreen| is used to determine if it's compositing context or not to
-  // decide if we need to disable webgl and canvas.
-  gpu_service_impl_->DidLoseContext(/*offscreen=*/false, reason, active_url);
-}
-
-base::TimeDelta
-SkiaOutputSurfaceDependencyImpl::GetGpuBlockedTimeSinceLastSwap() {
-  return gpu_service_impl_->GetGpuScheduler()->TakeTotalBlockingTime();
+  gpu_service_impl_->DidLoseContext(reason, active_url);
 }
 
 bool SkiaOutputSurfaceDependencyImpl::NeedsSupportForExternalStencil() {
   return false;
+}
+
+bool SkiaOutputSurfaceDependencyImpl::IsUsingCompositorGpuThread() {
+  return !!gpu_service_impl_->compositor_gpu_thread();
 }
 
 }  // namespace viz

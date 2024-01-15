@@ -7,7 +7,7 @@
 
 #include "ash/shell.h"
 #include "ash/system/tray/system_tray_notifier.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/host/client_session_control.h"
 #include "remoting/host/host_window.h"
 
@@ -32,18 +32,14 @@ class DisconnectWindowAura : public HostWindow {
 DisconnectWindowAura::DisconnectWindowAura() = default;
 
 DisconnectWindowAura::~DisconnectWindowAura() {
-  ash::Shell::Get()->system_tray_notifier()->NotifyScreenShareStop();
+  ash::Shell::Get()->system_tray_notifier()->NotifyRemotingScreenShareStop();
 }
 
 void DisconnectWindowAura::Start(
     const base::WeakPtr<ClientSessionControl>& client_session_control) {
-  // TODO(kelvinp): Clean up the NotifyScreenShareStart interface when we
-  // completely retire Hangout Remote Desktop v1.
-  std::u16string helper_name;
-  ash::Shell::Get()->system_tray_notifier()->NotifyScreenShareStart(
+  ash::Shell::Get()->system_tray_notifier()->NotifyRemotingScreenShareStart(
       base::BindRepeating(&ClientSessionControl::DisconnectSession,
-                          client_session_control, protocol::OK),
-      helper_name);
+                          client_session_control, protocol::OK));
 }
 
 }  // namespace

@@ -5,7 +5,7 @@
 #ifndef REMOTING_PROTOCOL_WEBRTC_VIDEO_TRACK_SOURCE_H_
 #define REMOTING_PROTOCOL_WEBRTC_VIDEO_TRACK_SOURCE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "remoting/codec/webrtc_video_encoder.h"
@@ -36,7 +36,7 @@ class WebrtcVideoTrackSource
   SourceState state() const override;
   bool remote() const override;
   bool is_screencast() const override;
-  absl::optional<bool> needs_denoising() const override;
+  std::optional<bool> needs_denoising() const override;
   bool GetStats(Stats* stats) override;
   void AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink,
                        const rtc::VideoSinkWants& wants) override;

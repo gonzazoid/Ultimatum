@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/socket/tcp_socket.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extensions_browser_client.h"
@@ -60,14 +60,14 @@ TCPServerSocketEventDispatcher::TCPServerSocketEventDispatcher(
   client_sockets_ = client_manager->data_;
 }
 
-TCPServerSocketEventDispatcher::~TCPServerSocketEventDispatcher() {}
+TCPServerSocketEventDispatcher::~TCPServerSocketEventDispatcher() = default;
 
-TCPServerSocketEventDispatcher::AcceptParams::AcceptParams() {}
+TCPServerSocketEventDispatcher::AcceptParams::AcceptParams() = default;
 
 TCPServerSocketEventDispatcher::AcceptParams::AcceptParams(
     const AcceptParams& other) = default;
 
-TCPServerSocketEventDispatcher::AcceptParams::~AcceptParams() {}
+TCPServerSocketEventDispatcher::AcceptParams::~AcceptParams() = default;
 
 void TCPServerSocketEventDispatcher::OnServerSocketListen(
     const std::string& extension_id,
@@ -127,7 +127,7 @@ void TCPServerSocketEventDispatcher::AcceptCallback(
     const AcceptParams& params,
     int result_code,
     mojo::PendingRemote<network::mojom::TCPConnectedSocket> socket,
-    const absl::optional<net::IPEndPoint>& remote_addr,
+    const std::optional<net::IPEndPoint>& remote_addr,
     mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
     mojo::ScopedDataPipeProducerHandle send_pipe_handle) {
   DCHECK_CURRENTLY_ON(params.thread_id);

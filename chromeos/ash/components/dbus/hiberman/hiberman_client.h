@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_HIBERMAN_HIBERMAN_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_HIBERMAN_HIBERMAN_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
 
@@ -39,22 +39,23 @@ class COMPONENT_EXPORT(HIBERMAN_CLIENT) HibermanClient {
   // Returns the global instance which may be null if not initialized.
   static HibermanClient* Get();
 
+  virtual bool IsAlive() const = 0;
+
+  virtual bool IsEnabled() const = 0;
+
   // Actual DBus Methods:
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
       chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
-  // Resume from hibernate, if possible. Upon a successful resume from
-  // hibernation, this function does not return, as execution continues in the
-  // resumed image.
   virtual void ResumeFromHibernate(const std::string& account_id,
-                                   ResumeFromHibernateCallback callback) = 0;
+                                   const std::string& auth_session_id) = 0;
 
-  // Resume from hibernate with an auth session, if possible. Upon a successful
-  // resume from hibernation, this function does not return, as execution
-  // continues in the resumed image.
-  virtual void ResumeFromHibernateAS(const std::string& auth_session_id,
-                                     ResumeFromHibernateCallback callback) = 0;
+  // Abort from hibernate. This will prevent any future hibernate or resume for
+  // this user's session. If a resume was in progress it will be aborted. If a
+  // resume was not in progress no volumes will be created for a future
+  // hibernate.
+  virtual void AbortResumeHibernate(const std::string& reason) = 0;
 
  protected:
   // Initialize/Shutdown should be used instead.

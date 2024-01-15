@@ -10,9 +10,11 @@
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
+#include "cc/input/hit_test_opaqueness.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
-#include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_client.h"
+#include "third_party/blink/renderer/platform/graphics/paint/drawing_display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/hit_test_data.h"
 #include "third_party/blink/renderer/platform/graphics/paint/layer_selection_data.h"
 #include "third_party/blink/renderer/platform/graphics/paint/raster_invalidation_tracking.h"
@@ -22,6 +24,7 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace blink {
@@ -44,8 +47,6 @@ struct PLATFORM_EXPORT PaintChunk {
              bool effectively_invisible = false)
       : begin_index(begin),
         end_index(end),
-        background_color(Color::kTransparent),
-        background_color_area(0u),
         id(id),
         properties(props),
         text_known_to_be_on_opaque_background(true),
@@ -59,9 +60,8 @@ struct PLATFORM_EXPORT PaintChunk {
   PaintChunk(wtf_size_t begin, PaintChunk&& other)
       : begin_index(begin),
         end_index(begin + other.size()),
-        background_color(other.background_color),
-        background_color_area(other.background_color_area),
         id(other.id),
+        background_color(other.background_color),
         properties(other.properties),
         hit_test_data(std::move(other.hit_test_data)),
         region_capture_data(std::move(other.region_capture_data)),
@@ -70,6 +70,7 @@ struct PLATFORM_EXPORT PaintChunk {
         drawable_bounds(other.drawable_bounds),
         rect_known_to_be_opaque(other.rect_known_to_be_opaque),
         raster_effect_outset(other.raster_effect_outset),
+        hit_test_opaqueness(other.hit_test_opaqueness),
         text_known_to_be_on_opaque_background(
             other.text_known_to_be_on_opaque_background),
         has_text(other.has_text),
@@ -135,17 +136,15 @@ struct PLATFORM_EXPORT PaintChunk {
   // |endIndex - beginIndex| drawings in the chunk.
   wtf_size_t end_index;
 
-  // Color to use for checkerboarding, derived from display item's in this
-  // chunk; or Color::kTransparent if no such display item exists.
-  Color background_color;
-
-  // The area that is painted by the paint op that defines background_color.
-  float background_color_area;
-
   // Identifier of this chunk. It should be unique if |is_cacheable| is true.
   // This is used to match a new chunk to a cached old chunk to track changes
   // of chunk contents, so the id should be stable across document cycles.
   Id id;
+
+  // Color to use for checkerboarding, derived from display item's in this
+  // chunk; or Color::kTransparent if no such display item exists.
+  using BackgroundColorInfo = DrawingDisplayItem::BackgroundColorInfo;
+  BackgroundColorInfo background_color;
 
   // The paint properties which apply to this chunk.
   RefCountedPropertyTreeStateOrAlias properties;
@@ -174,6 +173,9 @@ struct PLATFORM_EXPORT PaintChunk {
   // is the maximum DisplayItemClient::VisualRectOutsetForRasterEffects() of
   // all clients of items in this chunk.
   RasterEffectOutset raster_effect_outset = RasterEffectOutset::kNone;
+
+  cc::HitTestOpaqueness hit_test_opaqueness =
+      cc::HitTestOpaqueness::kTransparent;
 
   // True if all text is known to be on top of opaque backgrounds or there is
   // not text. Though in theory the value doesn't matter when there is no text,

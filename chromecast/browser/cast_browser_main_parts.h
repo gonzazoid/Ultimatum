@@ -61,6 +61,7 @@ class ExternalService;
 }  // namespace external_service_support
 
 namespace media {
+struct CodecProfileLevel;
 class MediaCapsImpl;
 class MediaPipelineBackendManager;
 class VideoPlaneController;
@@ -112,6 +113,9 @@ class CastBrowserMainParts : public content::BrowserMainParts {
   void PostDestroyThreads() override;
 
  private:
+  void AddSupportedCodecProfileLevels(
+      base::span<const media::CodecProfileLevel> codec_profile_levels);
+
   std::unique_ptr<CastBrowserProcess> cast_browser_process_;
   // Caches a pointer of the CastContentBrowserClient.
   CastContentBrowserClient* const cast_content_browser_client_ = nullptr;
@@ -141,11 +145,6 @@ class CastBrowserMainParts : public content::BrowserMainParts {
   std::unique_ptr<DisplaySettingsManager> display_settings_manager_;
 
 #if BUILDFLAG(IS_ANDROID)
-  void StartPeriodicCrashReportUpload();
-  void OnStartPeriodicCrashReportUpload();
-  void UploadCrashReport(bool opt_in_stats);
-  scoped_refptr<base::SequencedTaskRunner> crash_reporter_runner_;
-  std::unique_ptr<base::RepeatingTimer> crash_reporter_timer_;
   std::unique_ptr<crash_reporter::ChildExitObserver> child_exit_observer_;
 #endif
 

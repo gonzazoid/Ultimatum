@@ -7,9 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
@@ -53,50 +53,116 @@ void GetResource(const std::string& id,
 }
 
 struct WebUIControllerConfig {
+  WebUIControllerConfig();
+  ~WebUIControllerConfig();
   int bindings = BINDINGS_POLICY_WEB_UI;
   std::string child_src = "child-src 'self' chrome://web-ui-subframe/;";
   bool disable_xfo = false;
   bool disable_trusted_types = false;
   std::vector<std::string> requestable_schemes;
-  absl::optional<std::vector<std::string>> frame_ancestors;
+  std::optional<std::vector<std::string>> frame_ancestors;
+  std::optional<std::string> supported_scheme;
 };
 
 class TestWebUIController : public WebUIController {
  public:
   TestWebUIController(WebUI* web_ui,
                       const GURL& base_url,
-                      const WebUIControllerConfig& config)
-      : WebUIController(web_ui) {
-    web_ui->SetBindings(config.bindings);
+                      const WebUIControllerConfig& config);
 
-    WebUIImpl* web_ui_impl = static_cast<WebUIImpl*>(web_ui);
-    for (const auto& scheme : config.requestable_schemes) {
-      web_ui_impl->AddRequestableScheme(scheme.c_str());
-    }
-
-    WebUIDataSource* data_source = WebUIDataSource::CreateAndAdd(
-        web_ui->GetWebContents()->GetBrowserContext(), base_url.host());
-    data_source->SetRequestFilter(
-        base::BindRepeating([](const std::string& path) { return true; }),
-        base::BindRepeating(&GetResource));
-
-    data_source->OverrideContentSecurityPolicy(
-        network::mojom::CSPDirectiveName::ChildSrc, config.child_src);
-    if (config.frame_ancestors.has_value()) {
-      for (const auto& frame_ancestor : config.frame_ancestors.value()) {
-        data_source->AddFrameAncestor(GURL(frame_ancestor));
-      }
-    }
-    if (config.disable_xfo)
-      data_source->DisableDenyXFrameOptions();
-    if (config.disable_trusted_types)
-      data_source->DisableTrustedTypesCSP();
-  }
   TestWebUIController(const TestWebUIController&) = delete;
   void operator=(const TestWebUIController&) = delete;
 };
 
+std::unique_ptr<WebUIController> CreateTestWebUIControllerForURL(
+    WebUI* web_ui,
+    const GURL& url,
+    bool disable_xfo) {
+  WebUIControllerConfig config;
+  config.disable_xfo = disable_xfo;
+
+  if (url.has_query()) {
+    std::string value;
+    bool has_value = net::GetValueForKeyInQuery(url, "bindings", &value);
+    if (has_value)
+      CHECK(base::StringToInt(value, &(config.bindings)));
+
+    has_value = net::GetValueForKeyInQuery(url, "noxfo", &value);
+    if (has_value && value == "true")
+      config.disable_xfo = true;
+
+    has_value = net::GetValueForKeyInQuery(url, "notrustedtypes", &value);
+    if (has_value && value == "true")
+      config.disable_trusted_types = true;
+
+    has_value = net::GetValueForKeyInQuery(url, "childsrc", &value);
+    if (has_value)
+      config.child_src = value;
+
+    has_value = net::GetValueForKeyInQuery(url, "requestableschemes", &value);
+    if (has_value) {
+      DCHECK(!value.empty());
+      std::vector<std::string> schemes = base::SplitString(
+          value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+
+      config.requestable_schemes.insert(config.requestable_schemes.end(),
+                                        schemes.begin(), schemes.end());
+    }
+
+    has_value = net::GetValueForKeyInQuery(url, "frameancestors", &value);
+    if (has_value) {
+      std::vector<std::string> frame_ancestors = base::SplitString(
+          value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+
+      config.frame_ancestors.emplace(frame_ancestors.begin(),
+                                     frame_ancestors.end());
+    }
+    has_value = net::GetValueForKeyInQuery(url, "supported_scheme", &value);
+    if (has_value) {
+      config.supported_scheme = value;
+    }
+  }
+
+  return std::make_unique<TestWebUIController>(web_ui, url, config);
+}
+
 }  // namespace
+
+WebUIControllerConfig::WebUIControllerConfig() = default;
+WebUIControllerConfig::~WebUIControllerConfig() = default;
+
+TestWebUIController::TestWebUIController(WebUI* web_ui,
+                                         const GURL& base_url,
+                                         const WebUIControllerConfig& config)
+    : WebUIController(web_ui) {
+  web_ui->SetBindings(config.bindings);
+
+  WebUIImpl* web_ui_impl = static_cast<WebUIImpl*>(web_ui);
+  for (const auto& scheme : config.requestable_schemes) {
+    web_ui_impl->AddRequestableScheme(scheme.c_str());
+  }
+
+  WebUIDataSource* data_source = WebUIDataSource::CreateAndAdd(
+      web_ui->GetWebContents()->GetBrowserContext(), base_url.host());
+  data_source->SetRequestFilter(
+      base::BindRepeating([](const std::string& path) { return true; }),
+      base::BindRepeating(&GetResource));
+
+  data_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::ChildSrc, config.child_src);
+  if (config.frame_ancestors.has_value()) {
+    for (const auto& frame_ancestor : config.frame_ancestors.value()) {
+      data_source->AddFrameAncestor(GURL(frame_ancestor));
+    }
+  }
+  if (config.disable_xfo)
+    data_source->DisableDenyXFrameOptions();
+  if (config.disable_trusted_types)
+    data_source->DisableTrustedTypesCSP();
+  if (config.supported_scheme) {
+    data_source->SetSupportedScheme(config.supported_scheme.value());
+  }
+}
 
 TestUntrustedDataSourceHeaders::TestUntrustedDataSourceHeaders() = default;
 TestUntrustedDataSourceHeaders::TestUntrustedDataSourceHeaders(
@@ -106,7 +172,7 @@ TestUntrustedDataSourceHeaders::~TestUntrustedDataSourceHeaders() = default;
 void AddUntrustedDataSource(
     BrowserContext* browser_context,
     const std::string& host,
-    absl::optional<TestUntrustedDataSourceHeaders> headers) {
+    std::optional<TestUntrustedDataSourceHeaders> headers) {
   auto* untrusted_data_source = WebUIDataSource::CreateAndAdd(
       browser_context, GetChromeUntrustedUIURL(host).spec());
   untrusted_data_source->SetRequestFilter(
@@ -167,63 +233,38 @@ GURL GetChromeUntrustedUIURL(const std::string& host_and_path) {
               url::kStandardSchemeSeparator + host_and_path);
 }
 
-TestWebUIControllerFactory::TestWebUIControllerFactory() = default;
+TestWebUIConfig::TestWebUIConfig(base::StringPiece host)
+    : WebUIConfig(content::kChromeUIScheme, host) {}
+
+std::unique_ptr<WebUIController> TestWebUIConfig::CreateWebUIController(
+    content::WebUI* web_ui,
+    const GURL& url) {
+  if (!url.SchemeIs(scheme())) {
+    return nullptr;
+  }
+
+  return CreateTestWebUIControllerForURL(web_ui, GURL(host()), true);
+}
+
+TestWebUIControllerFactory::TestWebUIControllerFactory()
+    : supported_scheme_(kChromeUIScheme) {}
 
 std::unique_ptr<WebUIController>
 TestWebUIControllerFactory::CreateWebUIControllerForURL(WebUI* web_ui,
                                                         const GURL& url) {
-  if (!url.SchemeIs(kChromeUIScheme))
+  if (!url.SchemeIs(supported_scheme_)) {
     return nullptr;
-
-  WebUIControllerConfig config;
-  config.disable_xfo = disable_xfo_;
-
-  if (url.has_query()) {
-    std::string value;
-    bool has_value = net::GetValueForKeyInQuery(url, "bindings", &value);
-    if (has_value)
-      CHECK(base::StringToInt(value, &(config.bindings)));
-
-    has_value = net::GetValueForKeyInQuery(url, "noxfo", &value);
-    if (has_value && value == "true")
-      config.disable_xfo = true;
-
-    has_value = net::GetValueForKeyInQuery(url, "notrustedtypes", &value);
-    if (has_value && value == "true")
-      config.disable_trusted_types = true;
-
-    has_value = net::GetValueForKeyInQuery(url, "childsrc", &value);
-    if (has_value)
-      config.child_src = value;
-
-    has_value = net::GetValueForKeyInQuery(url, "requestableschemes", &value);
-    if (has_value) {
-      DCHECK(!value.empty());
-      std::vector<std::string> schemes = base::SplitString(
-          value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-
-      config.requestable_schemes.insert(config.requestable_schemes.end(),
-                                        schemes.begin(), schemes.end());
-    }
-
-    has_value = net::GetValueForKeyInQuery(url, "frameancestors", &value);
-    if (has_value) {
-      std::vector<std::string> frame_ancestors = base::SplitString(
-          value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-
-      config.frame_ancestors.emplace(frame_ancestors.begin(),
-                                     frame_ancestors.end());
-    }
   }
 
-  return std::make_unique<TestWebUIController>(web_ui, url, config);
+  return CreateTestWebUIControllerForURL(web_ui, url, disable_xfo_);
 }
 
 WebUI::TypeID TestWebUIControllerFactory::GetWebUIType(
     BrowserContext* browser_context,
     const GURL& url) {
-  if (!url.SchemeIs(kChromeUIScheme))
+  if (!url.SchemeIs(supported_scheme_)) {
     return WebUI::kNoWebUI;
+  }
 
   return reinterpret_cast<WebUI::TypeID>(base::FastHash(url.host()));
 }
@@ -231,6 +272,10 @@ WebUI::TypeID TestWebUIControllerFactory::GetWebUIType(
 bool TestWebUIControllerFactory::UseWebUIForURL(BrowserContext* browser_context,
                                                 const GURL& url) {
   return GetWebUIType(browser_context, url) != WebUI::kNoWebUI;
+}
+
+void TestWebUIControllerFactory::SetSupportedScheme(const std::string& scheme) {
+  supported_scheme_ = scheme;
 }
 
 }  // namespace content

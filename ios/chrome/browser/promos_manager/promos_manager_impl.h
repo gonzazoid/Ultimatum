@@ -8,24 +8,45 @@
 #import "ios/chrome/browser/promos_manager/promos_manager.h"
 
 #import <Foundation/Foundation.h>
+
 #import <map>
+#import <optional>
 #import <set>
 #import <vector>
 
 #import "base/containers/small_map.h"
+#import "base/time/clock.h"
 #import "base/values.h"
 #import "components/prefs/pref_service.h"
 #import "ios/chrome/browser/promos_manager/constants.h"
 #import "ios/chrome/browser/promos_manager/impression_limit.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
+#import "ios/chrome/browser/promos_manager/promo_config.h"
+
+namespace feature_engagement {
+class Tracker;
+}
+
+class PromosManagerEventExporter;
 
 // Centralized promos manager for coordinating and scheduling the display of
 // app-wide promos. Feature teams should not use this directly, use
 // promo_manager.h instead.
 class PromosManagerImpl : public PromosManager {
  public:
-  explicit PromosManagerImpl(PrefService* local_state);
+  // Context for a promo registration, internally used.
+  struct PromoContext {
+    // The promo has had pending status.
+    bool was_pending;
+  };
+
+  PromosManagerImpl(PrefService* local_state,
+                    base::Clock* clock,
+                    feature_engagement::Tracker* tracker,
+                    PromosManagerEventExporter* event_exporter);
   ~PromosManagerImpl() override;
+
+  // Loads and sorts impression history from prefs.
+  void RefreshImpressionHistoryFromPrefs();
 
   // `promo`-specific impression limits, if defined. May return an empty
   // NSArray, indicating no promo-specific impression limits were defined for
@@ -33,26 +54,10 @@ class PromosManagerImpl : public PromosManager {
   NSArray<ImpressionLimit*>* PromoImpressionLimits(
       promos_manager::Promo promo) const;
 
-  // Returns a std::vector<promos_manager::Promo> that only includes promos in
-  // `active_promos`, sorted by day (least recent -> most recent).
-  //
-  // Assumes that `sorted_impressions` is sorted by day (most recent -> least
-  // recent).
-  //
-  // When `active_promos` or `sorted_impressions` is empty, returns an empty
-  // array.
-  //
-  // Promos that have never been shown before are considered less recently shown
-  // than promos that have been shown.
-  //
-  // Promos shown on the same day will be sorted by relative position. More
-  // concretely, even if two promos are shown on the same day, the promos with
-  // the lower index in the impressions history list will be considered more
-  // recently seen, as `sorted_impressions` is sorted by day (most recent ->
-  // least recent).
-  std::vector<promos_manager::Promo> LeastRecentlyShown(
-      const std::set<promos_manager::Promo>& active_promos,
-      const std::vector<promos_manager::Impression>& sorted_impressions) const;
+  // Sorts the active promos in the order that they will be displayed.
+  std::vector<promos_manager::Promo> SortPromos(
+      const std::map<promos_manager::Promo, PromoContext>&
+          promos_to_sort_with_context) const;
 
   // Impression limits that count against all promos.
   NSArray<ImpressionLimit*>* GlobalImpressionLimits() const;
@@ -68,7 +73,12 @@ class PromosManagerImpl : public PromosManager {
   // Loops over the stored active promos list (base::Value::List) and returns
   // a corresponding std::set<promos_manager::Promo>.
   std::set<promos_manager::Promo> ActivePromos(
-      const base::Value::List& stored_active_promos);
+      const base::Value::List& stored_active_promos) const;
+
+  // Initializes the `single_display_pending_promos_`, constructs it from Pref.
+  void InitializePendingPromos();
+
+  void OnFeatureEngagementTrackerInitialized(bool success);
 
   // Returns true if any impression limit from `impression_limits` is triggered,
   // and false otherwise.
@@ -104,14 +114,17 @@ class PromosManagerImpl : public PromosManager {
       promos_manager::Promo promo,
       const std::vector<promos_manager::Impression>& sorted_impressions) const;
 
+  // Checks whether a promo can currently be shown using the feature engagement
+  // system to check any impression limits.
+  bool CanShowPromoUsingFeatureEngagementTracker(
+      promos_manager::Promo promo) const;
+
+  // Returns the corresponding base::Feature for the given Promo.
+  const base::Feature* FeatureForPromo(promos_manager::Promo promo) const;
+
   // Returns a list of impression counts (std::vector<int>) from a promo
   // impression counts map.
   std::vector<int> ImpressionCounts(
-      std::map<promos_manager::Promo, int>& promo_impression_counts) const;
-
-  // Returns the greatest impression count (int) from a promo impression counts
-  // map.
-  int MaxImpressionCount(
       std::map<promos_manager::Promo, int>& promo_impression_counts) const;
 
   // Returns the total number of impressions (int) from a promo impression
@@ -121,18 +134,24 @@ class PromosManagerImpl : public PromosManager {
 
   // PromosManager implementation.
   void Init() override;
-  void InitializePromoImpressionLimits(
-      base::small_map<
-          std::map<promos_manager::Promo, NSArray<ImpressionLimit*>*>>
-          promo_impression_limits) override;
+  void InitializePromoConfigs(PromoConfigsSet promo_configs) override;
   void RecordImpression(promos_manager::Promo promo) override;
-  absl::optional<promos_manager::Promo> NextPromoForDisplay() const override;
+  std::optional<promos_manager::Promo> NextPromoForDisplay() override;
   void RegisterPromoForContinuousDisplay(promos_manager::Promo promo) override;
   void RegisterPromoForSingleDisplay(promos_manager::Promo promo) override;
+  void RegisterPromoForSingleDisplay(
+      promos_manager::Promo promo,
+      base::TimeDelta becomes_active_after_period) override;
   void DeregisterPromo(promos_manager::Promo promo) override;
 
   // Weak pointer to the local state prefs store.
   const raw_ptr<PrefService> local_state_;
+
+  // The time provider.
+  const raw_ptr<base::Clock> clock_;
+
+  // The feature engagement tracker.
+  raw_ptr<feature_engagement::Tracker> tracker_;
 
   // The set of currently active, continuous-display promos.
   std::set<promos_manager::Promo> active_promos_;
@@ -140,13 +159,20 @@ class PromosManagerImpl : public PromosManager {
   // The set of currently active, single-display promos.
   std::set<promos_manager::Promo> single_display_active_promos_;
 
+  // The map from registered single-display pending promos to the time that they
+  // can become active.
+  std::map<promos_manager::Promo, base::Time> single_display_pending_promos_;
+
   // The impression history sorted by `day` (most recent -> least recent).
   std::vector<promos_manager::Impression> impression_history_;
 
-  // Promo-specific impression limits (promos_manager::Promo : [Impression
-  // Limits]).
-  base::small_map<std::map<promos_manager::Promo, NSArray<ImpressionLimit*>*>>
-      promo_impression_limits_;
+  // Promo-specific configuration.
+  PromoConfigsSet promo_configs_;
+
+  // The class to handle migrating events to the Feature Engagement Tracker.
+  PromosManagerEventExporter* event_exporter_;
+
+  base::WeakPtrFactory<PromosManagerImpl> weak_ptr_factory_{this};
 };
 
 #endif  // IOS_CHROME_BROWSER_PROMOS_MANAGER_PROMOS_MANAGER_IMPL_H_

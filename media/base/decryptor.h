@@ -7,8 +7,8 @@
 
 #include <list>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/media_export.h"
 
@@ -37,7 +37,6 @@ class MEDIA_EXPORT Decryptor {
 
   static const char* GetStatusName(Status status);
 
-  // TODO(xhwang): Unify this with DemuxerStream::Type.
   enum StreamType { kAudio, kVideo, kStreamTypeMax = kVideo };
 
   Decryptor();

@@ -6,18 +6,18 @@
 
 #include <limits>
 #include <set>
+#include <string_view>
 
 #include "base/android/library_loader/anchor_functions.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/debug/leak_annotations.h"
 #include "base/debug/stack_trace.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/hash.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/process/process.h"
-#include "base/process/process_handle.h"
 #include "base/profiler/sampling_profiler_thread_token.h"
 #include "base/profiler/stack_sampling_profiler.h"
 #include "base/strings/strcat.h"
@@ -25,6 +25,7 @@
 #include "base/thread_annotations.h"
 #include "base/threading/sequence_local_storage_slot.h"
 #include "base/trace_event/trace_event.h"
+#include "base/trace_event/trace_log.h"
 #include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
 #include "services/tracing/public/cpp/buildflags.h"
@@ -36,6 +37,13 @@
 #include "third_party/perfetto/protos/perfetto/trace/trace_packet.pbzero.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/process_descriptor.pbzero.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/thread_descriptor.pbzero.h"
+
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_APPLE)
+#include "base/profiler/thread_delegate_posix.h"
+#define INITIALIZE_THREAD_DELEGATE_POSIX 1
+#else  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_APPLE)
+#define INITIALIZE_THREAD_DELEGATE_POSIX 0
+#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_APPLE)
 
 #if ANDROID_ARM64_UNWINDING_SUPPORTED || ANDROID_CFI_UNWINDING_SUPPORTED
 #include <dlfcn.h>
@@ -96,19 +104,11 @@ class TracingSamplerProfilerDataSource
 
     if (is_started_) {
       profiler->StartTracing(
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-          false /* is_startup_tracing */,
-#else
-          producer_->CreateTraceWriter(data_source_config_.target_buffer()),
-#endif
+          CreateTraceWriter(),
           data_source_config_.chrome_config().privacy_filtering_enabled());
     } else if (is_startup_tracing_) {
       profiler->StartTracing(
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-          true /* is_startup_tracing */,
-#else
           nullptr,
-#endif
           /*should_enable_filtering=*/true);
     }
   }
@@ -139,13 +139,7 @@ class TracingSamplerProfilerDataSource
         data_source_config.chrome_config().privacy_filtering_enabled();
 
     for (auto* profiler : profilers_) {
-      profiler->StartTracing(
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-          false /* is_startup_tracing */,
-#else
-          producer->CreateTraceWriter(data_source_config.target_buffer()),
-#endif
-          should_enable_filtering);
+      profiler->StartTracing(CreateTraceWriter(), should_enable_filtering);
     }
   }
 
@@ -183,11 +177,7 @@ class TracingSamplerProfilerDataSource
     for (auto* profiler : profilers_) {
       // Enable filtering for startup tracing always to be safe.
       profiler->StartTracing(
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-          true /* is_startup_tracing */,
-#else
           nullptr,
-#endif
           /*should_enable_filtering=*/true);
     }
   }
@@ -200,11 +190,7 @@ class TracingSamplerProfilerDataSource
     for (auto* profiler : profilers_) {
       // Enable filtering for startup tracing always to be safe.
       profiler->StartTracing(
-#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
           nullptr,
-#else
-          true /* is_startup_tracing */,
-#endif
           /*should_enable_filtering=*/true);
     }
     is_startup_tracing_ = false;
@@ -252,6 +238,12 @@ class TracingSamplerProfilerDataSource
     // Reachable only in case of test mode. See `ResetForTesting()`.
   }
 
+  // We create one trace writer per profiled thread both in SDK and non-SDK
+  // build. This is necessary because each profiler keeps its own interned data
+  // index, so to avoid collisions interned data should go into different
+  // writer sequences.
+  std::unique_ptr<perfetto::TraceWriterBase> CreateTraceWriter();
+
   // TODO(eseckler): Use GUARDED_BY annotations for all members below.
   base::Lock lock_;  // Protects subsequent members.
   raw_ptr<tracing::PerfettoProducer> producer_ GUARDED_BY(lock_) = nullptr;
@@ -288,8 +280,7 @@ struct FrameDetails {
   // True if the module of the stack frame will be considered valid by the trace
   // processor.
   bool has_valid_module() const {
-    return !module_name.empty() && !module_id.empty() &&
-           module_base_address > 0;
+    return !module_name.empty() && module_base_address > 0;
   }
 
   bool has_valid_frame() const {
@@ -317,9 +308,7 @@ struct FrameDetails {
     if (module_base_address == 0) {
       module_base_address = 1;
     }
-    if (module_id.empty()) {
-      module_id = "missing";
-    }
+    // TODO(crbug/1393372): Investigate and maybe cleanup this logic.
     if (module_name.empty()) {
       module_name = "missing";
     }
@@ -331,7 +320,7 @@ struct FrameDetails {
   // Sets Chrome's module info for the frame.
   void SetChromeModuleInfo() {
     module_base_address = executable_start_addr();
-    static const absl::optional<base::StringPiece> library_name =
+    static const absl::optional<std::string_view> library_name =
         base::debug::ReadElfLibraryName(
             reinterpret_cast<void*>(executable_start_addr()));
     static const base::NoDestructor<std::string> chrome_debug_id([] {
@@ -362,12 +351,6 @@ struct FrameDetails {
     }
     module_base_address = reinterpret_cast<uintptr_t>(info.dli_fbase);
     rel_pc = frame_ip - module_base_address;
-    // We have already symbolized these frames, so module ID is not necessary.
-    // Reading the real ID can cause crashes and we can't symbolize these
-    // server-side anyways.
-    // TODO(ssid): Remove this once perfetto can keep the frames without module
-    // ID.
-    module_id = "system";
 
     DCHECK(has_valid_frame());
     DCHECK(has_valid_module());
@@ -375,8 +358,9 @@ struct FrameDetails {
 #endif
 };
 
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) && defined(_WIN64) || \
-    ANDROID_ARM64_UNWINDING_SUPPORTED || ANDROID_CFI_UNWINDING_SUPPORTED
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN) && defined(_WIN64) ||          \
+    ANDROID_ARM64_UNWINDING_SUPPORTED || ANDROID_CFI_UNWINDING_SUPPORTED || \
+    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
 // Returns whether stack sampling is supported on the current platform.
 bool IsStackSamplingSupported() {
   return base::StackSamplingProfiler::IsSupportedForCurrentPlatform();
@@ -413,28 +397,18 @@ TracingSamplerProfiler::TracingProfileBuilder::BufferedSample::BufferedSample(
 
 TracingSamplerProfiler::TracingProfileBuilder::TracingProfileBuilder(
     base::PlatformThreadId sampled_thread_id,
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    bool is_startup_tracing,
-#else
-    std::unique_ptr<perfetto::TraceWriter> trace_writer,
-#endif
+    std::unique_ptr<perfetto::TraceWriterBase> trace_writer,
     bool should_enable_filtering,
     const base::RepeatingClosure& sample_callback_for_testing)
     : sampled_thread_id_(sampled_thread_id),
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-      is_startup_tracing_(is_startup_tracing),
-#else
       trace_writer_(std::move(trace_writer)),
-#endif
       stack_profile_writer_(should_enable_filtering),
-      sample_callback_for_testing_(sample_callback_for_testing) {
-}
+      sample_callback_for_testing_(sample_callback_for_testing) {}
 
 TracingSamplerProfiler::TracingProfileBuilder::~TracingProfileBuilder() {
-#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   // Deleting a TraceWriter can end up triggering a Mojo call which calls
-  // TaskRunnerHandle::Get() and isn't safe on thread shutdown, which is when
-  // TracingProfileBuilder gets destructed, so we make sure this happens on
+  // task runner GetCurrentDefault() and isn't safe on thread shutdown, which is
+  // when TracingProfileBuilder gets destructed, so we make sure this happens on
   // a different sequence.
   if (base::ThreadPoolInstance::Get()) {
     PerfettoTracedProcess::GetTaskRunner()->GetOrCreateTaskRunner()->DeleteSoon(
@@ -445,7 +419,6 @@ TracingSamplerProfiler::TracingProfileBuilder::~TracingProfileBuilder() {
     ANNOTATE_LEAKING_OBJECT_PTR(trace_writer_.get());
     trace_writer_.release();
   }
-#endif
 }
 
 base::ModuleCache*
@@ -459,12 +432,8 @@ using SampleDebugProto =
 void TracingSamplerProfiler::TracingProfileBuilder::OnSampleCompleted(
     std::vector<base::Frame> frames,
     base::TimeTicks sample_timestamp) {
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-  bool is_startup_tracing = is_startup_tracing_;
-#else
   base::AutoLock l(trace_writer_lock_);
   bool is_startup_tracing = (trace_writer_ == nullptr);
-#endif
 
   if (is_startup_tracing) {
     if (buffered_samples_.size() < kMaxBufferedSamples) {
@@ -500,69 +469,50 @@ void TracingSamplerProfiler::TracingProfileBuilder::WriteSampleToTrace(
   if (reset_incremental_state_) {
     stack_profile_writer_.ResetEmittedState();
 
-    auto update_packet = [&](TracePacketHandle trace_packet) {
-      trace_packet->set_sequence_flags(
-          perfetto::protos::pbzero::TracePacket::SEQ_INCREMENTAL_STATE_CLEARED);
+    TracePacketHandle trace_packet = trace_writer_->NewTracePacket();
+    trace_packet->set_sequence_flags(
+        perfetto::protos::pbzero::TracePacket::SEQ_INCREMENTAL_STATE_CLEARED);
 
-      // Note: Make sure ThreadDescriptors we emit here won't cause
-      // metadata events to be emitted from the JSON exporter which conflict
-      // with the metadata events emitted by the regular TrackEventDataSource.
-      auto* thread_descriptor = trace_packet->set_thread_descriptor();
-      thread_descriptor->set_pid(base::GetCurrentProcId());
-      thread_descriptor->set_tid(sampled_thread_id_);
-      last_timestamp_ = sample.timestamp;
-      thread_descriptor->set_reference_timestamp_us(
-          last_timestamp_.since_origin().InMicroseconds());
-    };
+    // Note: Make sure ThreadDescriptors we emit here won't cause
+    // metadata events to be emitted from the JSON exporter which conflict
+    // with the metadata events emitted by the regular TrackEventDataSource.
+    auto* thread_descriptor = trace_packet->set_thread_descriptor();
+    thread_descriptor->set_pid(
+        base::trace_event::TraceLog::GetInstance()->process_id());
+    thread_descriptor->set_tid(sampled_thread_id_);
+    last_timestamp_ = sample.timestamp;
+    thread_descriptor->set_reference_timestamp_us(
+        last_timestamp_.since_origin().InMicroseconds());
 
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    DataSourceProxy::Trace([&](DataSourceProxy::TraceContext ctx) {
-      update_packet(ctx.NewTracePacket());
-    });
-#else
-    update_packet(trace_writer_->NewTracePacket());
-#endif
     TRACE_EVENT_INSTANT(TRACE_DISABLED_BY_DEFAULT("cpu_profiler"),
                         UnwinderTypeToString(unwinder_type_));
     reset_incremental_state_ = false;
   }
 
-  auto update_packet = [&](TracePacketHandle trace_packet) {
-    // Delta encoded timestamps and interned data require incremental state.
-    trace_packet->set_sequence_flags(
-        perfetto::protos::pbzero::TracePacket::SEQ_NEEDS_INCREMENTAL_STATE);
-    auto callstack_id =
-        stack_profile_writer_.GetCallstackIDAndMaybeEmit(frames, &trace_packet);
-    auto* streaming_profile_packet =
-        trace_packet->set_streaming_profile_packet();
-    streaming_profile_packet->add_callstack_iid(callstack_id);
+  TracePacketHandle trace_packet = trace_writer_->NewTracePacket();
+  // Delta encoded timestamps and interned data require incremental state.
+  trace_packet->set_sequence_flags(
+      perfetto::protos::pbzero::TracePacket::SEQ_NEEDS_INCREMENTAL_STATE);
+  auto callstack_id =
+      stack_profile_writer_.GetCallstackIDAndMaybeEmit(frames, &trace_packet);
+  auto* streaming_profile_packet = trace_packet->set_streaming_profile_packet();
+  streaming_profile_packet->add_callstack_iid(callstack_id);
 
-    int32_t current_process_priority = base::Process::Current().GetPriority();
-    if (current_process_priority != 0) {
-      streaming_profile_packet->set_process_priority(current_process_priority);
-    }
+  int32_t current_process_priority = base::Process::Current().GetOSPriority();
+  if (current_process_priority != 0) {
+    streaming_profile_packet->set_process_priority(current_process_priority);
+  }
 
-    streaming_profile_packet->add_timestamp_delta_us(
-        (sample.timestamp - last_timestamp_).InMicroseconds());
-    last_timestamp_ = sample.timestamp;
-  };
-
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-  DataSourceProxy::Trace([&](DataSourceProxy::TraceContext ctx) {
-    update_packet(ctx.NewTracePacket());
-  });
-#else
-  update_packet(trace_writer_->NewTracePacket());
-#endif
+  streaming_profile_packet->add_timestamp_delta_us(
+      (sample.timestamp - last_timestamp_).InMicroseconds());
+  last_timestamp_ = sample.timestamp;
 }
 
-#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 void TracingSamplerProfiler::TracingProfileBuilder::SetTraceWriter(
-    std::unique_ptr<perfetto::TraceWriter> writer) {
+    std::unique_ptr<perfetto::TraceWriterBase> writer) {
   base::AutoLock l(trace_writer_lock_);
   trace_writer_ = std::move(writer);
 }
-#endif
 
 void TracingSamplerProfiler::TracingProfileBuilder::SetUnwinderType(
     const TracingSamplerProfiler::UnwinderType unwinder_type) {
@@ -622,7 +572,11 @@ TracingSamplerProfiler::StackProfileWriter::GetCallstackIDAndMaybeEmit(
         // TODO(ssid): This frame is currently skipped from inserting. Find a
         // way to specify that this frame is scanned in the trace.
         frame_details.frame_name = "Scanned";
-      } else if (!frame_details.has_valid_module()) {
+      } else if (frame_details.module_id.empty() ||
+                 !frame_details.has_valid_module()) {
+        // For AOT modules the build id is empty. Set full pathname for these
+        // modules, so that deobfuscation logic can work, since it depends on
+        // getting full path name to extract package name.
         frame_details.SetSystemModuleInfo(frame.instruction_pointer);
       }
     }
@@ -636,8 +590,12 @@ TracingSamplerProfiler::StackProfileWriter::GetCallstackIDAndMaybeEmit(
       frame_details.FillWithDummyFields(frame.instruction_pointer);
     }
 
-    frame_details.module_id =
-        base::TransformModuleIDToBreakpadFormat(frame_details.module_id);
+    if (!frame_details.module_id.empty()) {
+      // TODO(b/270470700): Remove this on all platforms once tools/tracing is
+      // fixed.
+      frame_details.module_id =
+          base::TransformModuleIDToSymbolServerFormat(frame_details.module_id);
+    }
 
     // Allow uploading function names passed from unwinder, which would be
     // coming from static compile time strings.
@@ -785,6 +743,7 @@ void TracingSamplerProfiler::DeleteOnChildThreadForTesting() {
 // static
 void TracingSamplerProfiler::ResetDataSourceForTesting() {
   TracingSamplerProfilerDataSource::Get()->ResetForTesting();
+  RegisterDataSource();
 }
 
 // static
@@ -796,8 +755,9 @@ void TracingSamplerProfiler::RegisterDataSource() {
 
 // static
 bool TracingSamplerProfiler::IsStackUnwindingSupportedForTesting() {
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) && defined(_WIN64) || \
-    ANDROID_ARM64_UNWINDING_SUPPORTED || ANDROID_CFI_UNWINDING_SUPPORTED
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN) && defined(_WIN64) ||          \
+    ANDROID_ARM64_UNWINDING_SUPPORTED || ANDROID_CFI_UNWINDING_SUPPORTED || \
+    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
   return IsStackSamplingSupported();
 #else
   return false;
@@ -840,6 +800,13 @@ TracingSamplerProfiler::TracingSamplerProfiler(
           std::move(core_unwinders_factory_function)),
       unwinder_type_(unwinder_type) {
   DCHECK_NE(sampled_thread_token_.id, base::kInvalidThreadId);
+#if INITIALIZE_THREAD_DELEGATE_POSIX
+  // Since StackSamplingProfiler is scoped to a tracing session and lives on the
+  // thread where `StartTracing` is called, we use `ThreadDelegatePosix` to
+  // initialize global data, like the thread stack base address, that has to be
+  // created on the profiled thread. See crbug.com/1392158#c26 for details.
+  base::ThreadDelegatePosix::Create(sampled_thread_token_);
+#endif  // INITIALIZE_THREAD_DELEGATE_POSIX
   TracingSamplerProfilerDataSource::Get()->RegisterProfiler(this);
 }
 
@@ -864,23 +831,13 @@ void TracingSamplerProfiler::SetSampleCallbackForTesting(
 }
 
 void TracingSamplerProfiler::StartTracing(
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    bool is_startup_tracing,
-#else
-    std::unique_ptr<perfetto::TraceWriter> trace_writer,
-#endif
+    std::unique_ptr<perfetto::TraceWriterBase> trace_writer,
     bool should_enable_filtering) {
   base::AutoLock lock(lock_);
   if (profiler_) {
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    if (!is_startup_tracing) {
-      profile_builder_->SetIsStartupTracing(is_startup_tracing);
-    }
-#else
     if (trace_writer) {
       profile_builder_->SetTraceWriter(std::move(trace_writer));
     }
-#endif
     return;
   }
 
@@ -894,11 +851,7 @@ void TracingSamplerProfiler::StartTracing(
 
   auto profile_builder = std::make_unique<TracingProfileBuilder>(
       sampled_thread_token_.id,
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-      is_startup_tracing,
-#else
       std::move(trace_writer),
-#endif
       should_enable_filtering, sample_callback_for_testing_);
 
   profile_builder_ = profile_builder.get();
@@ -965,3 +918,23 @@ PERFETTO_DEFINE_DATA_SOURCE_STATIC_MEMBERS_WITH_ATTRS(
     COMPONENT_EXPORT(TRACING_CPP),
     tracing::TracingSamplerProfilerDataSource::DataSourceProxy);
 #endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+
+// This should go after PERFETTO_DEFINE_DATA_SOURCE_STATIC_MEMBERS_WITH_ATTRS
+// to avoid instantiation of type() template method before specialization.
+std::unique_ptr<perfetto::TraceWriterBase>
+tracing::TracingSamplerProfilerDataSource::CreateTraceWriter() {
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+  perfetto::internal::DataSourceStaticState* static_state =
+      perfetto::DataSourceHelper<DataSourceProxy>::type().static_state();
+  // DataSourceProxy disallows multiple instances, so our instance will always
+  // have index 0.
+  perfetto::internal::DataSourceState* instance_state = static_state->TryGet(0);
+  CHECK(instance_state);
+  return perfetto::internal::TracingMuxer::Get()->CreateTraceWriter(
+      static_state, data_source_config_.target_buffer(), instance_state,
+      perfetto::BufferExhaustedPolicy::kDrop);
+#else
+  lock_.AssertAcquired();
+  return producer_->CreateTraceWriter(data_source_config_.target_buffer());
+#endif
+}

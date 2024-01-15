@@ -9,8 +9,10 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/time.h"
+#include "ui/gfx/paint_vector_icon.h"
 
 namespace ash {
 
@@ -41,9 +43,11 @@ struct ASH_PUBLIC_EXPORT ToastData {
             base::TimeDelta duration = kDefaultToastDuration,
             bool visible_on_lock_screen = false,
             bool has_dismiss_button = false,
-            const std::u16string& custom_dismiss_text = std::u16string());
-
-  ToastData(const ToastData& other);
+            const std::u16string& custom_dismiss_text = std::u16string(),
+            base::RepeatingClosure dismiss_callback = base::RepeatingClosure(),
+            const gfx::VectorIcon& leading_icon = gfx::kNoneIcon);
+  ToastData(ToastData&& other);
+  ToastData& operator=(ToastData&& other);
   ~ToastData();
 
   std::string id;
@@ -52,11 +56,14 @@ struct ASH_PUBLIC_EXPORT ToastData {
   base::TimeDelta duration;
   bool visible_on_lock_screen;
   std::u16string dismiss_text;
-  bool is_managed = false;
   bool persist_on_hover = false;
   bool show_on_all_root_windows = false;
+  // TODO(b/259100049): We should turn this into a `OnceClosure`.
   base::RepeatingClosure dismiss_callback;
-  base::RepeatingClosure expired_callback;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #union
+  RAW_PTR_EXCLUSION const gfx::VectorIcon* leading_icon;
+  base::OnceClosure expired_callback;
   base::TimeTicks time_created;
   base::TimeTicks time_start_showing;
 };

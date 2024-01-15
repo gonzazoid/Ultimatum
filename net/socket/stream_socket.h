@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/net_errors.h"
 #include "net/base/net_export.h"
 #include "net/dns/public/resolve_error_info.h"
@@ -108,9 +108,6 @@ class NET_EXPORT StreamSocket : public Socket {
   // layered on top of transport sockets should return if their own Read() or
   // Write() methods had been called, not the underlying transport's.
   virtual bool WasEverUsed() const = 0;
-
-  // Returns true if ALPN was negotiated during the connection of this socket.
-  virtual bool WasAlpnNegotiated() const = 0;
 
   // Returns the protocol negotiated via ALPN for this socket, or
   // kProtoUnknown will be returned if ALPN is not applicable.

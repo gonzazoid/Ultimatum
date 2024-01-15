@@ -127,11 +127,11 @@ struct FromValue<std::string> {
 
 template <>
 struct FromValue<base::Value::Dict> {
-  static absl::optional<base::Value::Dict> Parse(const base::Value& value,
-                                                 ErrorReporter* errors) {
+  static std::optional<base::Value::Dict> Parse(const base::Value& value,
+                                                ErrorReporter* errors) {
     if (!value.is_dict()) {
       errors->AddError("dictionary value expected");
-      return absl::nullopt;
+      return std::nullopt;
     }
     return value.GetDict().Clone();
   }
@@ -179,7 +179,7 @@ struct FromValue<std::vector<T>> {
       return result;
     }
     errors->Push();
-    for (const auto& item : value.GetListDeprecated())
+    for (const auto& item : value.GetList())
       result.push_back(FromValue<T>::Parse(item, errors));
     errors->Pop();
     return result;

@@ -10,7 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/files/file_path.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -52,6 +54,21 @@ enum class SettingsButtonHandler {
 
 enum class SystemNotificationWarningLevel { NORMAL, WARNING, CRITICAL_WARNING };
 
+enum class NotificationScenario {
+  DEFAULT = 0,
+  INCOMING_CALL = 1,  // When created by an installed origin, the notification
+                      // should have increased priority, colored buttons, a
+                      // ringtone, and a default "close" button. If the origin
+                      // is not installed, it should behave like `DEFAULT`, but
+                      // with the added "Close" button.
+};
+
+enum class ButtonType {
+  DEFAULT = 0,      // Default notification button.
+  ACKNOWLEDGE = 1,  // Incoming call acknowledge button.
+  DISMISS = 2,      // Incoming call dismiss button.
+};
+
 // Represents a button to be shown as part of a notification.
 struct MESSAGE_CENTER_PUBLIC_EXPORT ButtonInfo {
   explicit ButtonInfo(const std::u16string& title);
@@ -73,6 +90,10 @@ struct MESSAGE_CENTER_PUBLIC_EXPORT ButtonInfo {
   // text input type buttons until the user has entered a response themselves.
   // If the value is null, there is no input field associated with the button.
   absl::optional<std::u16string> placeholder;
+
+  // Describes the button intended usage. This is used by the underlying
+  // platform to take behavioral and stylistic decisions.
+  ButtonType type = ButtonType::DEFAULT;
 };
 
 enum class FullscreenVisibility {
@@ -106,6 +127,11 @@ class MESSAGE_CENTER_PUBLIC_EXPORT RichNotificationData {
   // Large image to display on the notification. Optional.
   gfx::Image image;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // The path to the file that backs `image`. Set if `image` is file backed.
+  absl::optional<base::FilePath> image_path;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
   // Small badge to display on the notification to illustrate the source of the
   // notification. Optional.
   gfx::Image small_image;
@@ -133,13 +159,18 @@ class MESSAGE_CENTER_PUBLIC_EXPORT RichNotificationData {
   // and only pass globally defined constants.
   // TODO(tetsui): Remove the pointer, after fixing VectorIconSource not to
   // retain VectorIcon reference.  https://crbug.com/760866
-  const gfx::VectorIcon* vector_small_image = &gfx::kNoneIcon;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union
+  RAW_PTR_EXCLUSION const gfx::VectorIcon* vector_small_image = &gfx::kNoneIcon;
 
   // Vector image to display on the parent notification of this notification,
   // illustrating the source of the group notification that this notification
   // belongs to. Optional. Note that all notification belongs to the same group
   // should have the same `parent_vector_small_image`.
-  const gfx::VectorIcon* parent_vector_small_image = &gfx::kNoneIcon;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union
+  RAW_PTR_EXCLUSION const gfx::VectorIcon* parent_vector_small_image =
+      &gfx::kNoneIcon;
 
   // Items to display on the notification. Only applicable for notifications
   // that have type NOTIFICATION_TYPE_MULTIPLE.
@@ -163,11 +194,11 @@ class MESSAGE_CENTER_PUBLIC_EXPORT RichNotificationData {
   // depending on visual assistance systems.
   bool should_make_spoken_feedback_for_popup_updates = true;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Flag if the notification is pinned. If true, the notification is pinned
   // and the user can't remove it.
   bool pinned = false;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Vibration pattern to play when displaying the notification. There must be
   // an odd number of entries in this pattern when it's set: numbers of
@@ -210,6 +241,14 @@ class MESSAGE_CENTER_PUBLIC_EXPORT RichNotificationData {
   bool ignore_accent_color_for_text = false;
 
   FullscreenVisibility fullscreen_visibility = FullscreenVisibility::NONE;
+
+  // Whether the notification should be removed from the MessageCenter when it's
+  // clicked after the delegate has been executed (if any).
+  bool remove_on_click = false;
+
+  // Changes notification behavior and look depending on the selected scenario
+  // and on whether the notification was created by an installed origin.
+  NotificationScenario scenario = NotificationScenario::DEFAULT;
 };
 
 class MESSAGE_CENTER_PUBLIC_EXPORT Notification {
@@ -295,6 +334,9 @@ class MESSAGE_CENTER_PUBLIC_EXPORT Notification {
 
   // A display string for the source of the notification.
   const std::u16string& display_source() const { return display_source_; }
+  void set_display_source(const std::u16string display_source) {
+    display_source_ = display_source;
+  }
 
   bool allow_group() const { return allow_group_; }
   void set_allow_group(bool allow_group) { allow_group_ = allow_group; }
@@ -374,6 +416,12 @@ class MESSAGE_CENTER_PUBLIC_EXPORT Notification {
   const gfx::Image& image() const { return optional_fields_.image; }
   void set_image(const gfx::Image& image) { optional_fields_.image = image; }
 
+#if BUILDFLAG(IS_CHROMEOS)
+  void set_image_path(const base::FilePath& image_path) {
+    optional_fields_.image_path = image_path;
+  }
+#endif
+
   const gfx::Image& small_image() const { return optional_fields_.small_image; }
   void set_small_image(const gfx::Image& image) {
     optional_fields_.small_image = image;
@@ -438,15 +486,15 @@ class MESSAGE_CENTER_PUBLIC_EXPORT Notification {
   }
 
   bool pinned() const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     return optional_fields_.pinned;
 #else
     return false;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
   }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   void set_pinned(bool pinned) { optional_fields_.pinned = pinned; }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Gets a text for spoken feedback.
   const std::u16string& accessible_name() const {
@@ -485,6 +533,11 @@ class MESSAGE_CENTER_PUBLIC_EXPORT Notification {
   }
   void set_fullscreen_visibility(FullscreenVisibility visibility) {
     optional_fields_.fullscreen_visibility = visibility;
+  }
+
+  NotificationScenario scenario() const { return optional_fields_.scenario; }
+  void set_scenario(NotificationScenario scenario) {
+    optional_fields_.scenario = scenario;
   }
 
   NotificationDelegate* delegate() const { return delegate_.get(); }

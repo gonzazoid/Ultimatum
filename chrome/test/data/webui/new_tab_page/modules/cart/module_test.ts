@@ -2,24 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
 import {CartHandlerRemote, ConsentStatus} from 'chrome://new-tab-page/chrome_cart.mojom-webui.js';
 import {chromeCartDescriptor, ChromeCartModuleElement, ChromeCartProxy, DiscountConsentCard, DiscountConsentVariation} from 'chrome://new-tab-page/lazy_load.js';
 import {$$, CrAutoImgElement} from 'chrome://new-tab-page/new_tab_page.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
 
-import {fakeMetricsPrivate, MetricsTracker} from '../../metrics_test_support.js';
 import {assertNotStyle, installMock} from '../../test_support.js';
 
 import {clickAcceptButton, clickCloseButton, clickRejectButton, nextStep} from './discount_consent_card_test_utils.js';
 
 suite('NewTabPageModulesChromeCartModuleTest', () => {
-  let handler: TestBrowserProxy;
+  let handler: TestMock<CartHandlerRemote>;
   let metrics: MetricsTracker;
 
   setup(() => {
@@ -148,8 +146,8 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
       assertEquals(null, cartItems[2]!.querySelector('.thumbnail-list'));
       assertEquals(
           'chrome://new-tab-page/modules/cart/icons/cart_fallback.svg',
-          cartItems[2]!.querySelector<HTMLImageElement>(
-                           '.thumbnail-fallback')!.src);
+          cartItems[2]!
+              .querySelector<HTMLImageElement>('.thumbnail-fallback-img')!.src);
 
       assertEquals('https://walmart.com/', cartItems[3]!.href);
       assertEquals(
@@ -978,52 +976,52 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
     checkVisibleRange(moduleElement, 0, 1);
   }
 
-    function checkScrollButtonVisibility(
-        moduleElement: ChromeCartModuleElement, isLeftVisible: boolean,
-        isRightVisible: boolean) {
-      assertEquals(
-          isLeftVisible,
-          isVisible(
-              moduleElement.shadowRoot!.querySelector('#leftScrollShadow')));
-      assertEquals(
-          isLeftVisible,
-          isVisible(
-              moduleElement.shadowRoot!.querySelector('#leftScrollButton')));
-      assertEquals(
-          isRightVisible,
-          isVisible(
-              moduleElement.shadowRoot!.querySelector('#rightScrollShadow')));
-      assertEquals(
-          isRightVisible,
-          isVisible(
-              moduleElement.shadowRoot!.querySelector('#rightScrollButton')));
-    }
+  function checkScrollButtonVisibility(
+      moduleElement: ChromeCartModuleElement, isLeftVisible: boolean,
+      isRightVisible: boolean) {
+    assertEquals(
+        isLeftVisible,
+        isVisible(
+            moduleElement.shadowRoot!.querySelector('#leftScrollShadow')));
+    assertEquals(
+        isLeftVisible,
+        isVisible(
+            moduleElement.shadowRoot!.querySelector('#leftScrollButton')));
+    assertEquals(
+        isRightVisible,
+        isVisible(
+            moduleElement.shadowRoot!.querySelector('#rightScrollShadow')));
+    assertEquals(
+        isRightVisible,
+        isVisible(
+            moduleElement.shadowRoot!.querySelector('#rightScrollButton')));
+  }
 
-    function checkVisibleRange(
-        moduleElement: ChromeCartModuleElement, startIndex: number,
-        endIndex: number) {
-      const carts =
-          moduleElement.$.cartCarousel.querySelectorAll('.cart-container');
-      assertTrue(startIndex >= 0);
-      assertTrue(endIndex < carts.length);
-      for (let i = 0; i < carts.length; i++) {
-        if (i >= startIndex && i <= endIndex) {
-          assertTrue(getVisibilityForIndex(moduleElement, i));
-        } else {
-          assertFalse(getVisibilityForIndex(moduleElement, i));
-        }
+  function checkVisibleRange(
+      moduleElement: ChromeCartModuleElement, startIndex: number,
+      endIndex: number) {
+    const carts =
+        moduleElement.$.cartCarousel.querySelectorAll('.cart-container');
+    assertTrue(startIndex >= 0);
+    assertTrue(endIndex < carts.length);
+    for (let i = 0; i < carts.length; i++) {
+      if (i >= startIndex && i <= endIndex) {
+        assertTrue(getVisibilityForIndex(moduleElement, i));
+      } else {
+        assertFalse(getVisibilityForIndex(moduleElement, i));
       }
     }
+  }
 
-    function getVisibilityForIndex(
-        moduleElement: ChromeCartModuleElement, index: number) {
-      const cartCarousel = moduleElement.$.cartCarousel;
-      const cart =
-          cartCarousel.querySelectorAll<HTMLElement>('.cart-container')[index]!;
-      return (cart.offsetLeft > cartCarousel.scrollLeft) &&
-          (cartCarousel.scrollLeft + cartCarousel.clientWidth) >
-          (cart.offsetLeft + cart.offsetWidth);
-    }
+  function getVisibilityForIndex(
+      moduleElement: ChromeCartModuleElement, index: number) {
+    const cartCarousel = moduleElement.$.cartCarousel;
+    const cart =
+        cartCarousel.querySelectorAll<HTMLElement>('.cart-container')[index]!;
+    return (cart.offsetLeft > cartCarousel.scrollLeft) &&
+        (cartCarousel.scrollLeft + cartCarousel.clientWidth) >
+        (cart.offsetLeft + cart.offsetWidth);
+  }
 
   suite('rule-based discount', () => {
     suiteSetup(() => {

@@ -18,6 +18,10 @@
 #include "base/ranges/algorithm.h"
 #include "base/template_util.h"
 
+#if DCHECK_IS_ON()
+#include <ostream>
+#endif
+
 // base::circular_deque is similar to std::deque. Unlike std::deque, the
 // storage is provided in a flat circular buffer conceptually similar to a
 // vector. The beginning and end will wrap around as necessary so that
@@ -204,7 +208,8 @@ class circular_deque_const_iterator {
   friend std::ptrdiff_t operator-(const circular_deque_const_iterator& lhs,
                                   const circular_deque_const_iterator& rhs) {
     lhs.CheckComparable(rhs);
-    return lhs.OffsetFromBegin() - rhs.OffsetFromBegin();
+    return static_cast<std::ptrdiff_t>(lhs.OffsetFromBegin() -
+                                       rhs.OffsetFromBegin());
   }
 
   // Comparisons.
@@ -213,27 +218,13 @@ class circular_deque_const_iterator {
     lhs.CheckComparable(rhs);
     return lhs.index_ == rhs.index_;
   }
-  friend bool operator!=(const circular_deque_const_iterator& lhs,
-                         const circular_deque_const_iterator& rhs) {
-    return !(lhs == rhs);
-  }
-  friend bool operator<(const circular_deque_const_iterator& lhs,
-                        const circular_deque_const_iterator& rhs) {
+  friend std::strong_ordering operator<=>(
+      const circular_deque_const_iterator& lhs,
+      const circular_deque_const_iterator& rhs) {
     lhs.CheckComparable(rhs);
-    return lhs.OffsetFromBegin() < rhs.OffsetFromBegin();
-  }
-  friend bool operator<=(const circular_deque_const_iterator& lhs,
-                         const circular_deque_const_iterator& rhs) {
-    return !(lhs > rhs);
-  }
-  friend bool operator>(const circular_deque_const_iterator& lhs,
-                        const circular_deque_const_iterator& rhs) {
-    lhs.CheckComparable(rhs);
-    return lhs.OffsetFromBegin() > rhs.OffsetFromBegin();
-  }
-  friend bool operator>=(const circular_deque_const_iterator& lhs,
-                         const circular_deque_const_iterator& rhs) {
-    return !(lhs < rhs);
+    // The order is based on the position of the element in the circular_dequeue
+    // rather than `index_` at which the element is stored in the ring buffer.
+    return lhs.OffsetFromBegin() <=> rhs.OffsetFromBegin();
   }
 
  protected:
@@ -427,7 +418,7 @@ class circular_deque {
   constexpr circular_deque() = default;
 
   // Constructs with |count| copies of |value| or default constructed version.
-  circular_deque(size_type count) { resize(count); }
+  explicit circular_deque(size_type count) { resize(count); }
   circular_deque(size_type count, const T& value) { resize(count, value); }
 
   // Range constructor.
@@ -498,8 +489,7 @@ class circular_deque {
 
   // This variant should be enabled only when InputIterator is an iterator.
   template <typename InputIterator>
-  typename std::enable_if<::base::internal::is_iterator<InputIterator>::value,
-                          void>::type
+  std::enable_if_t<::base::internal::is_iterator<InputIterator>::value, void>
   assign(InputIterator first, InputIterator last) {
     // Possible future enhancement, dispatch on iterator tag type. For forward
     // iterators we can use std::difference to preallocate the space required
@@ -714,8 +704,7 @@ class circular_deque {
   // This enable_if keeps this call from getting confused with the (pos, count,
   // value) version when value is an integer.
   template <class InputIterator>
-  typename std::enable_if<::base::internal::is_iterator<InputIterator>::value,
-                          void>::type
+  std::enable_if_t<::base::internal::is_iterator<InputIterator>::value, void>
   insert(const_iterator pos, InputIterator first, InputIterator last) {
     ValidateIterator(pos);
 

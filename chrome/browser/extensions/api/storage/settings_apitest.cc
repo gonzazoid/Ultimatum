@@ -4,7 +4,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -27,11 +27,9 @@
 #include "components/policy/core/common/schema_registry.h"
 #include "components/sync/model/sync_change.h"
 #include "components/sync/model/sync_change_processor.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/sync/test/fake_sync_change_processor.h"
 #include "components/sync/test/sync_change_processor_wrapper_for_test.h"
-#include "components/sync/test/sync_error_factory_mock.h"
 #include "components/version_info/channel.h"
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/api/storage/backend_task_runner.h"
@@ -40,7 +38,6 @@
 #include "extensions/browser/api/storage/storage_frontend.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/features/feature_channel.h"
-#include "extensions/common/value_builder.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
 #include "extensions/test/test_extension_dir.h"
@@ -142,8 +139,7 @@ class ExtensionSettingsApiTest : public ExtensionApiTest {
             ->MergeDataAndStartSyncing(
                 kModelType, syncer::SyncDataList(),
                 std::make_unique<syncer::SyncChangeProcessorWrapperForTest>(
-                    sync_processor),
-                std::make_unique<NiceMock<syncer::SyncErrorFactoryMock>>())
+                    sync_processor))
             .has_value());
   }
 
@@ -231,10 +227,10 @@ class ExtensionSettingsApiTest : public ExtensionApiTest {
   std::string CreateMessage(StorageAreaNamespace storage_area,
                             const std::string& action,
                             bool is_final_action) {
-    base::DictionaryValue message;
-    message.SetStringKey("namespace", StorageAreaToString(storage_area));
-    message.SetStringKey("action", action);
-    message.SetBoolKey("isFinalAction", is_final_action);
+    base::Value::Dict message;
+    message.Set("namespace", StorageAreaToString(storage_area));
+    message.Set("action", action);
+    message.Set("isFinalAction", is_final_action);
     std::string message_json;
     base::JSONWriter::Write(message, &message_json);
     return message_json;
@@ -659,7 +655,7 @@ IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest,
   ASSERT_TRUE(schema);
 
   ASSERT_TRUE(schema->valid());
-  ASSERT_EQ(base::Value::Type::DICTIONARY, schema->type());
+  ASSERT_EQ(base::Value::Type::DICT, schema->type());
   ASSERT_TRUE(schema->GetKnownProperty("string-policy").valid());
   EXPECT_EQ(base::Value::Type::STRING,
             schema->GetKnownProperty("string-policy").type());
@@ -687,13 +683,13 @@ IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest,
 
   policy::Schema dict = schema->GetKnownProperty("dict-policy");
   ASSERT_TRUE(dict.valid());
-  ASSERT_EQ(base::Value::Type::DICTIONARY, dict.type());
+  ASSERT_EQ(base::Value::Type::DICT, dict.type());
   list = dict.GetKnownProperty("list");
   ASSERT_TRUE(list.valid());
   ASSERT_EQ(base::Value::Type::LIST, list.type());
   dict = list.GetItems();
   ASSERT_TRUE(dict.valid());
-  ASSERT_EQ(base::Value::Type::DICTIONARY, dict.type());
+  ASSERT_EQ(base::Value::Type::DICT, dict.type());
   ASSERT_TRUE(dict.GetProperty("anything").valid());
   EXPECT_EQ(base::Value::Type::INTEGER, dict.GetProperty("anything").type());
 }
@@ -702,8 +698,8 @@ IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest,
 // details.
 IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest, ManagedStorage) {
   // Set policies for the test extension.
-  std::unique_ptr<base::DictionaryValue> policy =
-      extensions::DictionaryBuilder()
+  base::Value::Dict policy =
+      base::Value::Dict()
           .Set("string-policy", "value")
           .Set("string-enum-policy", "value-1")
           .Set("another-string-policy", 123)  // Test invalid policy value.
@@ -711,25 +707,15 @@ IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest, ManagedStorage) {
           .Set("int-enum-policy", 1)
           .Set("double-policy", 456e7)
           .Set("boolean-policy", true)
-          .Set("list-policy", extensions::ListBuilder()
-                                  .Append("one")
-                                  .Append("two")
-                                  .Append("three")
-                                  .Build())
+          .Set("list-policy",
+               base::Value::List().Append("one").Append("two").Append("three"))
           .Set("dict-policy",
-               extensions::DictionaryBuilder()
-                   .Set("list", extensions::ListBuilder()
-                                    .Append(extensions::DictionaryBuilder()
-                                                .Set("one", 1)
-                                                .Set("two", 2)
-                                                .Build())
-                                    .Append(extensions::DictionaryBuilder()
-                                                .Set("three", 3)
-                                                .Build())
-                                    .Build())
-                   .Build())
-          .Build();
-  SetPolicies(policy->GetDict());
+               base::Value::Dict().Set(
+                   "list",
+                   base::Value::List()
+                       .Append(base::Value::Dict().Set("one", 1).Set("two", 2))
+                       .Append(base::Value::Dict().Set("three", 3))));
+  SetPolicies(policy);
   // Now run the extension.
   ASSERT_TRUE(RunExtensionTest("settings/managed_storage")) << message_;
 }
@@ -743,13 +729,11 @@ IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest,
   message_.clear();
 
   // Set policies for the test extension.
-  std::unique_ptr<base::DictionaryValue> policy =
-      extensions::DictionaryBuilder()
-          .Set("constant-policy", "aaa")
-          .Set("changes-policy", "bbb")
-          .Set("deleted-policy", "ccc")
-          .Build();
-  SetPolicies(policy->GetDict());
+  base::Value::Dict policy = base::Value::Dict()
+                                 .Set("constant-policy", "aaa")
+                                 .Set("changes-policy", "bbb")
+                                 .Set("deleted-policy", "ccc");
+  SetPolicies(policy);
 
   ExtensionTestMessageListener ready_listener("ready");
   // Load the extension to install the event listener and wait for the
@@ -764,12 +748,11 @@ IN_PROC_BROWSER_TEST_P(ExtensionSettingsManagedStorageApiTest,
   ASSERT_TRUE(ready_listener.WaitUntilSatisfied());
 
   // Now change the policies and wait until the extension is done.
-  policy = extensions::DictionaryBuilder()
-      .Set("constant-policy", "aaa")
-      .Set("changes-policy", "ddd")
-      .Set("new-policy", "eee")
-      .Build();
-  SetPolicies(policy->GetDict());
+  policy = base::Value::Dict()
+               .Set("constant-policy", "aaa")
+               .Set("changes-policy", "ddd")
+               .Set("new-policy", "eee");
+  SetPolicies(policy);
   EXPECT_TRUE(events_result_catcher_.GetNextResult())
       << events_result_catcher_.message();
 }

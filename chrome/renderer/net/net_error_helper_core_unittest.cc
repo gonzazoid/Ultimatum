@@ -13,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
@@ -97,7 +97,8 @@ error_page::LocalizedError::PageState GetErrorPageState(int error_code,
       /*offline_content_feature_enabled=*/false,
       /*auto_fetch_feature_enabled=*/false, /*is_kiosk_mode=*/is_kiosk_mode,
       /*locale=*/"",
-      /*is_blocked_by_extension=*/false);
+      /*is_blocked_by_extension=*/false,
+      /*error_page_params=*/nullptr);
 }
 
 class NetErrorHelperCoreTest : public testing::Test,
@@ -218,7 +219,7 @@ class NetErrorHelperCoreTest : public testing::Test,
       bool can_show_network_diagnostics_dialog,
       content::mojom::AlternativeErrorPageOverrideInfoPtr
           alternative_error_page_info,
-      std::string* html) const override {
+      std::string* html) override {
     last_can_show_network_diagnostics_dialog_ =
         can_show_network_diagnostics_dialog;
 
@@ -253,6 +254,8 @@ class NetErrorHelperCoreTest : public testing::Test,
     diagnose_error_count_++;
     diagnose_error_url_ = page_url;
   }
+
+  void PortalSignin() override {}
 
   void DownloadPageLater() override { download_count_++; }
 
@@ -378,12 +381,12 @@ TEST_F(NetErrorHelperCoreTest,
 
   auto* suggestions_details = page_state.strings.FindList("suggestionsDetails");
   ASSERT_TRUE(suggestions_details);
-  EXPECT_FALSE(suggestions_details->empty());
+  ASSERT_TRUE(suggestions_details->empty());
 
   auto* suggestions_summary_list =
       page_state.strings.FindList("suggestionsSummaryList");
   ASSERT_TRUE(suggestions_summary_list);
-  EXPECT_FALSE(suggestions_summary_list->empty());
+  EXPECT_TRUE(suggestions_summary_list->empty());
 }
 
 TEST_F(NetErrorHelperCoreTest,
@@ -895,10 +898,10 @@ TEST_F(NetErrorHelperCoreTest, AlternativeErrorPageNoUpdates) {
            skia::SkColorToHexString(SK_ColorYELLOW));
   dict.Set("app_short_name", "Test Short Name");
   dict.Set(
-      "web_app_default_offline_message",
+      "web_app_error_page_message",
       l10n_util::GetStringUTF16(IDS_ERRORPAGES_HEADING_INTERNET_DISCONNECTED));
   alternative_error_page_info->alternative_error_page_params = std::move(dict);
-  alternative_error_page_info->resource_id = IDR_WEBAPP_DEFAULT_OFFLINE_HTML;
+  alternative_error_page_info->resource_id = IDR_WEBAPP_ERROR_PAGE_HTML;
 
   // Loading fails, and an error page is requested.
   std::string html;
@@ -1052,14 +1055,6 @@ TEST_F(NetErrorHelperCoreAvailableOfflineContentTest, ListAvailableContent) {
   EXPECT_TRUE(list_visible_by_prefs());
   EXPECT_EQ(GetExpectedAvailableContentAsJson(), offline_content_json());
 
-  histogram_tester_.ExpectTotalCount("Net.ErrorPageCounts.SuggestionPresented",
-                                     2);
-  histogram_tester_.ExpectBucketCount(
-      "Net.ErrorPageCounts.SuggestionPresented",
-      chrome::mojom::AvailableContentType::kPrefetchedPage, 1);
-  histogram_tester_.ExpectBucketCount(
-      "Net.ErrorPageCounts.SuggestionPresented",
-      chrome::mojom::AvailableContentType::kOtherPage, 1);
   histogram_tester_.ExpectBucketCount(
       "Net.ErrorPageCounts",
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTIONS_SHOWN, 1);
@@ -1068,9 +1063,6 @@ TEST_F(NetErrorHelperCoreAvailableOfflineContentTest, ListAvailableContent) {
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTIONS_SHOWN_COLLAPSED, 0);
 
   core()->LaunchOfflineItem("ID", "name_space");
-  histogram_tester_.ExpectBucketCount(
-      "Net.ErrorPageCounts.SuggestionPresented",
-      chrome::mojom::AvailableContentType::kPrefetchedPage, 1);
   histogram_tester_.ExpectBucketCount(
       "Net.ErrorPageCounts",
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTION_CLICKED, 1);
@@ -1091,14 +1083,6 @@ TEST_F(NetErrorHelperCoreAvailableOfflineContentTest, ListHiddenByPrefs) {
   EXPECT_FALSE(list_visible_by_prefs());
   EXPECT_EQ(GetExpectedAvailableContentAsJson(), offline_content_json());
 
-  histogram_tester_.ExpectTotalCount("Net.ErrorPageCounts.SuggestionPresented",
-                                     2);
-  histogram_tester_.ExpectBucketCount(
-      "Net.ErrorPageCounts.SuggestionPresented",
-      chrome::mojom::AvailableContentType::kPrefetchedPage, 1);
-  histogram_tester_.ExpectBucketCount(
-      "Net.ErrorPageCounts.SuggestionPresented",
-      chrome::mojom::AvailableContentType::kOtherPage, 1);
   histogram_tester_.ExpectBucketCount(
       "Net.ErrorPageCounts",
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTIONS_SHOWN, 0);
@@ -1107,9 +1091,6 @@ TEST_F(NetErrorHelperCoreAvailableOfflineContentTest, ListHiddenByPrefs) {
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTIONS_SHOWN_COLLAPSED, 1);
 
   core()->LaunchOfflineItem("ID", "name_space");
-  histogram_tester_.ExpectBucketCount(
-      "Net.ErrorPageCounts.SuggestionPresented",
-      chrome::mojom::AvailableContentType::kPrefetchedPage, 1);
   histogram_tester_.ExpectBucketCount(
       "Net.ErrorPageCounts",
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTION_CLICKED, 1);
@@ -1146,8 +1127,6 @@ TEST_F(NetErrorHelperCoreAvailableOfflineContentTest, NotAllowed) {
 
   EXPECT_TRUE(list_visible_by_prefs());
   EXPECT_EQ("", offline_content_json());
-  histogram_tester_.ExpectTotalCount("Net.ErrorPageCounts.SuggestionPresented",
-                                     0);
   histogram_tester_.ExpectBucketCount(
       "Net.ErrorPageCounts",
       error_page::NETWORK_ERROR_PAGE_OFFLINE_SUGGESTIONS_SHOWN, 0);

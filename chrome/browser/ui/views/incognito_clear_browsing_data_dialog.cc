@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/views/incognito_clear_browsing_data_dialog.h"
 
 #include "base/metrics/histogram_functions.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/views/accessibility/theme_tracking_non_accessible_image_view.h"
@@ -20,6 +21,7 @@
 #include "ui/views/layout/flex_layout.h"
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 
 IncognitoClearBrowsingDataDialog::IncognitoClearBrowsingDataDialog(
     views::View* anchor_view,
@@ -64,12 +66,13 @@ IncognitoClearBrowsingDataDialog::IncognitoClearBrowsingDataDialog(
 
 void IncognitoClearBrowsingDataDialog::SetDialogForDefaultBubbleType() {
   // Text
+  const auto& typography_provider = views::TypographyProvider::Get();
   AddChildView(
       views::Builder<views::Label>()
           .SetText(l10n_util::GetStringUTF16(
               IDS_INCOGNITO_CLEAR_BROWSING_DATA_DIALOG_PRIMARY_TEXT))
-          .SetFontList(views::style::GetFont(views::style::CONTEXT_LABEL,
-                                             views::style::STYLE_EMPHASIZED))
+          .SetFontList(typography_provider.GetFont(
+              views::style::CONTEXT_LABEL, views::style::STYLE_EMPHASIZED))
           .SetHorizontalAlignment(gfx::ALIGN_LEFT)
           .Build());
 
@@ -77,8 +80,8 @@ void IncognitoClearBrowsingDataDialog::SetDialogForDefaultBubbleType() {
       views::Builder<views::Label>()
           .SetText(l10n_util::GetStringUTF16(
               IDS_INCOGNITO_CLEAR_BROWSING_DATA_DIALOG_SECONDARY_TEXT))
-          .SetFontList(views::style::GetFont(views::style::CONTEXT_LABEL,
-                                             views::style::STYLE_SECONDARY))
+          .SetFontList(typography_provider.GetFont(
+              views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY))
           .SetHorizontalAlignment(gfx::ALIGN_LEFT)
           .Build());
 
@@ -100,12 +103,13 @@ void IncognitoClearBrowsingDataDialog::SetDialogForDefaultBubbleType() {
 void IncognitoClearBrowsingDataDialog::
     SetDialogForHistoryDisclaimerBubbleType() {
   // Text
+  const auto& typography_provider = views::TypographyProvider::Get();
   AddChildView(
       views::Builder<views::Label>()
           .SetText(l10n_util::GetStringUTF16(
               IDS_INCOGNITO_HISTORY_BUBBLE_PRIMARY_TEXT))
-          .SetFontList(views::style::GetFont(views::style::CONTEXT_LABEL,
-                                             views::style::STYLE_EMPHASIZED))
+          .SetFontList(typography_provider.GetFont(
+              views::style::CONTEXT_LABEL, views::style::STYLE_EMPHASIZED))
           .SetHorizontalAlignment(gfx::ALIGN_LEFT)
           .Build());
 
@@ -113,8 +117,8 @@ void IncognitoClearBrowsingDataDialog::
       views::Builder<views::Label>()
           .SetText(l10n_util::GetStringUTF16(
               IDS_INCOGNITO_HISTORY_BUBBLE_SECONDARY_TEXT))
-          .SetFontList(views::style::GetFont(views::style::CONTEXT_LABEL,
-                                             views::style::STYLE_SECONDARY))
+          .SetFontList(typography_provider.GetFont(
+              views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY))
           .SetHorizontalAlignment(gfx::ALIGN_LEFT)
           .SetMultiLine(true)
           .Build());
@@ -164,6 +168,5 @@ void IncognitoClearBrowsingDataDialog::OnCancelButtonClicked() {
       views::Widget::ClosedReason::kCloseButtonClicked);
 }
 
-BEGIN_METADATA(IncognitoClearBrowsingDataDialog,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(IncognitoClearBrowsingDataDialog)
 END_METADATA

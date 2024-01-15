@@ -79,9 +79,15 @@ const CouponProto kEmptyExpected = {};
 
 struct CouponDataStruct {
   const int64_t id;
-  const GURL& origin;
-  const std::string& description;
-  const std::string& coupon_code;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const GURL& origin;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const std::string& description;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const std::string& coupon_code;
 };
 
 }  // namespace
@@ -149,7 +155,7 @@ class CouponServiceTest : public testing::Test {
     EXPECT_TRUE(result);
     DCHECK_EQ(found.size(), 1u);
     DCHECK_EQ(found[0].second.free_listing_coupons()[0].last_display_time() ==
-                  time_to_compare.ToJavaTime(),
+                  time_to_compare.InMillisecondsSinceUnixEpoch(),
               should_be_equal);
     std::move(closure).Run();
   }

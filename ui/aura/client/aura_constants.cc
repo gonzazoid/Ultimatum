@@ -7,10 +7,10 @@
 #include "ui/base/class_property.h"
 #include "ui/base/owned_window_anchor.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/image/image_skia.h"
 
-DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(AURA_EXPORT, bool)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(AURA_EXPORT, base::TimeDelta)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(AURA_EXPORT, base::UnguessableToken*)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(AURA_EXPORT, std::u16string*)
@@ -44,7 +44,9 @@ DEFINE_UI_CLASS_PROPERTY_KEY(bool,
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kActivateOnPointerKey, true)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kAnimationsDisabledKey, false)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::ImageSkia, kAppIconKey, nullptr)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 DEFINE_UI_CLASS_PROPERTY_KEY(int, kAppType, 0)
+#endif
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::SizeF, kAspectRatio, nullptr)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::ImageSkia, kAvatarIconKey, nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kWindowLayerDrawn, false)
@@ -52,6 +54,7 @@ DEFINE_UI_CLASS_PROPERTY_KEY(bool, kConstrainedWindowKey, false)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kCreatedByUserGesture, false)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kDrawAttentionKey, false)
 DEFINE_UI_CLASS_PROPERTY_KEY(FocusClient*, kFocusClientKey, nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Rect, kHeadlessBoundsKey, nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(Window*, kHostWindowKey, nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(ui::MenuType,
                              kMenuType,
@@ -74,9 +77,13 @@ DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Rect, kRestoreBoundsKey, nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(ui::WindowShowState,
                              kShowStateKey,
                              ui::SHOW_STATE_DEFAULT)
+DEFINE_UI_CLASS_PROPERTY_KEY(int64_t,
+                             kFullscreenTargetDisplayIdKey,
+                             display::kInvalidDisplayId)
 DEFINE_UI_CLASS_PROPERTY_KEY(ui::WindowShowState,
                              kRestoreShowStateKey,
                              ui::SHOW_STATE_NORMAL)
+DEFINE_UI_CLASS_PROPERTY_KEY(float, kRasterScale, 1.0f)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kIsRestoringKey, false)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kSkipImeProcessing, false)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::u16string, kTitleKey, nullptr)
@@ -86,6 +93,7 @@ DEFINE_UI_CLASS_PROPERTY_KEY(int, kWindowCornerRadiusKey, -1)
 DEFINE_UI_CLASS_PROPERTY_KEY(int,
                              kWindowWorkspaceKey,
                              kWindowWorkspaceUnassignedWorkspace)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kDeskUuidKey, nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(ui::ZOrderLevel,
                              kZOrderingKey,
                              ui::ZOrderLevel::kNormal)

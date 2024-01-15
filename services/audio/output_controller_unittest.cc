@@ -7,19 +7,19 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/test_message_loop.h"
@@ -83,7 +83,7 @@ class MockOutputControllerEventHandler : public OutputController::EventHandler {
   MOCK_METHOD0(OnControllerPlaying, void());
   MOCK_METHOD0(OnControllerPaused, void());
   MOCK_METHOD0(OnControllerError, void());
-  void OnLog(base::StringPiece) override {}
+  void OnLog(std::string_view) override {}
 };
 
 class MockOutputControllerSyncReader : public OutputController::SyncReader {
@@ -98,7 +98,7 @@ class MockOutputControllerSyncReader : public OutputController::SyncReader {
   MOCK_METHOD3(RequestMoreData,
                void(base::TimeDelta delay,
                     base::TimeTicks delay_timestamp,
-                    int prior_frames_skipped));
+                    const media::AudioGlitchInfo& glitch_info));
   MOCK_METHOD2(Read, void(AudioBus* dest, bool is_mixing));
   MOCK_METHOD0(Close, void());
 };
@@ -199,7 +199,7 @@ class MockAudioOutputStream : public AudioOutputStream,
   // Calls OnMoreData() and then posts a delayed task to call itself again soon.
   void RunDataLoop(scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
     auto bus = AudioBus::Create(GetTestParams());
-    OnMoreData(base::TimeDelta(), base::TimeTicks::Now(), 0, bus.get());
+    OnMoreData(base::TimeDelta(), base::TimeTicks::Now(), {}, bus.get());
     task_runner->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&MockAudioOutputStream::RunDataLoop,
@@ -209,10 +209,9 @@ class MockAudioOutputStream : public AudioOutputStream,
 
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks delay_timestamp,
-                 int prior_frames_skipped,
+                 const media::AudioGlitchInfo& glitch_info,
                  AudioBus* dest) override {
-    int res = callback_->OnMoreData(delay, delay_timestamp,
-                                    prior_frames_skipped, dest);
+    int res = callback_->OnMoreData(delay, delay_timestamp, glitch_info, dest);
     EXPECT_EQ(dest->channel(0)[0], kBufferNonZeroData);
     return res;
   }
@@ -222,7 +221,7 @@ class MockAudioOutputStream : public AudioOutputStream,
     NOTREACHED();
   }
 
-  raw_ptr<AudioOutputStream> impl_;
+  raw_ptr<AudioOutputStream, DanglingUntriaged> impl_;
   const AudioParameters::Format format_;
   base::OnceClosure close_callback_;
   raw_ptr<AudioOutputStream::AudioSourceCallback> callback_ = nullptr;
@@ -313,10 +312,9 @@ class AudioManagerForControllerTest final : public media::FakeAudioManager {
   }
 
   media::FakeAudioLogFactory fake_audio_log_factory_;
-  // TODO(crbug.com/1298696): Breaks services_unittests.
-  raw_ptr<MockAudioOutputStream, DegradeToNoOpWhenMTE> last_created_stream_ =
+  raw_ptr<MockAudioOutputStream, DanglingUntriaged> last_created_stream_ =
       nullptr;
-  raw_ptr<MockAudioOutputStream, DegradeToNoOpWhenMTE> last_closed_stream_ =
+  raw_ptr<MockAudioOutputStream, DanglingUntriaged> last_closed_stream_ =
       nullptr;
 };
 
@@ -756,11 +754,13 @@ class MockAudioOutputStreamForMixing : public AudioOutputStream {
     DidStart();
   }
 
-  void SimulateOnMoreDataCalled(const AudioParameters& params, bool is_mixing) {
+  void SimulateOnMoreDataCalled(const AudioParameters& params,
+                                media::AudioGlitchInfo glitch_info,
+                                bool is_mixing) {
     DCHECK(callback_);
     auto audio_bus = media::AudioBus::Create(params);
-    callback_->OnMoreData(base::TimeDelta(), base::TimeTicks::Now(), 0,
-                          audio_bus.get(), is_mixing);
+    callback_->OnMoreData(base::TimeDelta(), base::TimeTicks::Now(),
+                          glitch_info, audio_bus.get(), is_mixing);
   }
 
  private:
@@ -854,7 +854,8 @@ TEST(OutputControllerMixingTest,
   audio_manager.Shutdown();
 }
 
-TEST(OutputControllerMixingTest, ControllerForwardsMixingFlagToSyncReader) {
+TEST(OutputControllerMixingTest,
+     ControllerForwardsMixingFlagAndGlitchesToSyncReader) {
   base::TestMessageLoop message_loop_;
   // Controller creation parameters.
   AudioManagerForControllerTest audio_manager;
@@ -906,14 +907,24 @@ TEST(OutputControllerMixingTest, ControllerForwardsMixingFlagToSyncReader) {
   // Verify OutputController forwards the mixing flag from OnMoreDataCalled when
   // it is true.
   EXPECT_CALL(mock_sync_reader, Read(_, /*is_mixing=*/true)).Times(1);
-  mock_output_stream.SimulateOnMoreDataCalled(controller_params, true);
+  mock_output_stream.SimulateOnMoreDataCalled(controller_params, {}, true);
 
   Mock::VerifyAndClearExpectations(&mock_sync_reader);
 
   // Verify OutputController forwards the mixing flag from OnMoreDataCalled when
   // it is false.
   EXPECT_CALL(mock_sync_reader, Read(_, /*is_mixing=*/false)).Times(1);
-  mock_output_stream.SimulateOnMoreDataCalled(controller_params, false);
+  mock_output_stream.SimulateOnMoreDataCalled(controller_params, {}, false);
+
+  Mock::VerifyAndClearExpectations(&mock_sync_reader);
+
+  // Verify OutputController forwards glitch info.
+  media::AudioGlitchInfo glitch_info{.duration = base::Seconds(5),
+                                     .count = 123};
+  EXPECT_CALL(mock_sync_reader, Read(_, /*is_mixing=*/false)).Times(1);
+  EXPECT_CALL(mock_sync_reader, RequestMoreData(_, _, glitch_info)).Times(1);
+  mock_output_stream.SimulateOnMoreDataCalled(controller_params, glitch_info,
+                                              false);
 
   Mock::VerifyAndClearExpectations(&mock_sync_reader);
 

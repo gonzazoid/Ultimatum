@@ -80,8 +80,20 @@ class CORE_EXPORT CSSParserToken {
     kBlockEnd,
   };
 
-  CSSParserToken(CSSParserTokenType type, BlockType block_type = kNotBlock)
-      : type_(type), block_type_(block_type), value_is_inline_(false) {}
+  // NOTE: There are some fields that we don't actually use (marked here
+  // as “Don't care”), but we still set them explicitly, since otherwise,
+  // Clang works really hard to preserve their contents.
+  explicit CSSParserToken(CSSParserTokenType type,
+                          BlockType block_type = kNotBlock)
+      : type_(type),
+        block_type_(block_type),
+        numeric_value_type_(0),  // Don't care.
+        numeric_sign_(0),        // Don't care.
+        unit_(0),                // Don't care.
+        value_is_inline_(false),
+        value_is_8bit_(false),  // Don't care.
+        padding_(0)             // Don't care.
+  {}
   CSSParserToken(CSSParserTokenType type,
                  StringView value,
                  BlockType block_type = kNotBlock)
@@ -121,9 +133,10 @@ class CORE_EXPORT CSSParserToken {
       return StringView(reinterpret_cast<const LChar*>(value_data_char_inline_),
                         value_length_);
     }
-    if (value_is_8bit_)
+    if (value_is_8bit_) {
       return StringView(reinterpret_cast<const LChar*>(value_data_char_raw_),
                         value_length_);
+    }
     return StringView(reinterpret_cast<const UChar*>(value_data_char_raw_),
                       value_length_);
   }
@@ -219,6 +232,10 @@ class CORE_EXPORT CSSParserToken {
   // value_... is an unpacked StringView so that we can pack it
   // tightly with the rest of this object for a smaller object size.
   bool value_is_8bit_ : 1;
+
+  // These are free bits. You may take from them if you need.
+  unsigned padding_ : 12;
+
   unsigned value_length_;
   union {
     char value_data_char_inline_[8];   // If value_is_inline_ is true.
@@ -228,6 +245,12 @@ class CORE_EXPORT CSSParserToken {
   union {
     UChar delimiter_;
     HashTokenType hash_token_type_;
+    // NOTE: For DimensionToken, this value stores the numeric part,
+    // value_data_char_raw_ (or value_data_char_inline_) stores the
+    // unit as text, and unit_ stores the unit as enum (assuming it
+    // is a valid unit). So for e.g. “100px”, numeric_value_ = 100.0,
+    // value_length_ = 2, value_data_char_inline_ = "px", and
+    // unit_ = kPixels.
     double numeric_value_;
     mutable int id_;
 

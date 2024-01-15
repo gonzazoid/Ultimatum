@@ -19,15 +19,21 @@ class AppDeduplicationService;
 class AppDeduplicationServiceFactory
     : public BrowserContextKeyedServiceFactory {
  public:
-  static AppDeduplicationService* GetForProfile(Profile* profile);
-  static AppDeduplicationServiceFactory* GetInstance();
-
-  static bool IsAppDeduplicationServiceAvailableForProfile(Profile* profile);
-
   AppDeduplicationServiceFactory(const AppDeduplicationServiceFactory&) =
       delete;
   AppDeduplicationServiceFactory& operator=(
       const AppDeduplicationServiceFactory&) = delete;
+
+  static AppDeduplicationService* GetForProfile(Profile* profile);
+
+  static AppDeduplicationServiceFactory* GetInstance();
+
+  static bool IsAppDeduplicationServiceAvailableForProfile(Profile* profile);
+
+  // For testing
+  // Marks whether or not we should skip the api key check, which must be done
+  // during testing for tests to run.
+  static void SkipApiKeyCheckForTesting(bool skip_api_key_check);
 
  private:
   friend base::NoDestructor<AppDeduplicationServiceFactory>;
@@ -36,10 +42,11 @@ class AppDeduplicationServiceFactory
   ~AppDeduplicationServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;
+  bool ServiceIsCreatedWithBrowserContext() const override;
 };
 
 }  // namespace apps::deduplication

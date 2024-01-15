@@ -8,6 +8,8 @@ component("tab_groups") {
     "tab_group_color.h",
     "tab_group_id.cc",
     "tab_group_id.h",
+    "tab_group_info.cc",
+    "tab_group_info.h",
     "tab_group_visual_data.cc",
     "tab_group_visual_data.h",
   ]
@@ -17,7 +19,7 @@ component("tab_groups") {
   deps = [
     "//base",
     "//components/strings",
-    "//components/tab_groups/public/mojom:mojo_bindings_webui_js",
+    "//components/tab_groups/public/mojom:mojo_bindings_ts__generator",
     "//skia",
     "//ui/base",
     "//ui/gfx",

@@ -14,8 +14,9 @@
 - (void)viewControllerTraitCollectionDidChange:
     (UITraitCollection*)previousTraitCollection;
 
-// Exits fullscreen.
-- (void)exitFullscreen;
+// Called when the user requires to close the toolbar (typically with the ESC/⎋
+// keyboard shortcut).
+- (void)close;
 
 @end
 

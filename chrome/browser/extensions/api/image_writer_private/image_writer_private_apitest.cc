@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/pattern.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -10,7 +10,6 @@
 #include "chrome/browser/extensions/api/image_writer_private/removable_storage_provider.h"
 #include "chrome/browser/extensions/api/image_writer_private/test_utils.h"
 #include "chrome/browser/extensions/extension_apitest.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/common/extensions/api/image_writer_private.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -21,7 +20,6 @@
 namespace extensions {
 
 using api::image_writer_private::RemovableStorageDevice;
-using extension_function_test_utils::RunFunctionAndReturnError;
 using extensions::image_writer::FakeImageWriterClient;
 
 class ImageWriterPrivateApiTest : public ExtensionApiTest {
@@ -88,8 +86,10 @@ IN_PROC_BROWSER_TEST_F(ImageWriterPrivateApiTest, TestWriteFromFile) {
       "test_temp", test_utils_.GetTempDir());
 
   base::FilePath selected_image(test_utils_.GetImagePath());
-  FileSystemChooseEntryFunction::SkipPickerAndAlwaysSelectPathForTest picker(
-      selected_image);
+  const FileSystemChooseEntryFunction::TestOptions test_options{
+      .path_to_be_picked = &selected_image};
+  auto reset_options =
+      FileSystemChooseEntryFunction::SetOptionsForTesting(test_options);
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   auto set_up_utility_client_callbacks = [](FakeImageWriterClient* client) {

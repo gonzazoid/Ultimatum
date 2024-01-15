@@ -4,6 +4,7 @@
 
 import("//build/buildflag_header.gni")
 import("//build/config/ios/ios_sdk.gni")
+import("//build/config/ios/swift_source_set.gni")
 
 source_set("util") {
   sources = [
@@ -17,6 +18,7 @@ source_set("util") {
     "device_util.mm",
     "pointer_interaction_util.h",
     "pointer_interaction_util.mm",
+    "sdk_forward_declares.h",
     "text_view_util.h",
     "text_view_util.mm",
     "ui_util.h",
@@ -24,15 +26,14 @@ source_set("util") {
   ]
   deps = [
     "//base",
+    "//ios/chrome/common:button_config",
     "//ios/chrome/common:constants",
     "//ios/chrome/common/ui/colors",
-    "//ui/gfx",
+    "//ui/gfx/ios:uikit_util",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("dynamic_type_util") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "dynamic_type_util.h",
     "dynamic_type_util.mm",
@@ -41,7 +42,6 @@ source_set("dynamic_type_util") {
 }
 
 source_set("image_util") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "image_util.h",
     "image_util.mm",
@@ -54,7 +54,6 @@ source_set("image_util") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "dynamic_type_util_unittest.mm",

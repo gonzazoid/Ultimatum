@@ -22,18 +22,60 @@ there.
 
 To make sure the inclusion of a new third_party project makes sense for the
 Chromium project, you should first obtain
-[Chrome Eng Review](../ENG_REVIEW_OWNERS) approval. Please include the following information in an
-email to chrome-eng-review@google.com:
+[Chrome ATL](../ATL_OWNERS) approval. Please include the following information in an
+email to chrome-atls-discuss@google.com:
 * Motivation of your project
 * Design docs
 * Additional checkout size
+   * If the increase is significant (e.g., 20+ MB), can we consider limiting the
+   files to be checked in?
 * Build time increase
-* Binary size increase on Android ([official](https://www.chromium.org/developers/gn-build-configuration)  builds)
+   * If the increase is significant (e.g., 30+ seconds), can we consider making
+   this an optional build target?
+* Binary size increase on Android ([official](https://www.chromium.org/developers/gn-build-configuration) builds)
+   * Any 16 KB increase on Android is flagged on the build bots and
+   justification is needed.
 * Binary size increase on Windows
+* Is this library maintained on all platforms that we will use it on?
+   * If not, will the Chrome org be expected to maintain this for some or all
+   platforms?
+* Does it have any performance / memory implications (esp. on Android)? Was the
+library designed with intended use on Android?
+* Do we really need the library? Is there any alternative such as an existing
+library already in Chromium? If introducing a library with similar functionality
+as existing, will it be easy for another developer to understand which should be
+used where? Will you commit to consolidating uses in Chromium and remove the
+alternative libraries?
+* For desktop (Win/Mac/Linux/ChromeOS), does the dependency introduce closed
+source components (e.g., binaries, WASM binaries, obfuscated code)? If yes,
+please reach out to Chrome ATLs.
 
-Googlers can access [go/chrome-eng-review](https://goto.google.com/chrome-eng-review) and review
-existing topics in g/chrome-eng-review, and can also come to office hours to ask
+
+Googlers can access [go/chrome-atls](https://goto.google.com/chrome-atls) and review
+existing topics in g/chrome-atls, and can also come to office hours to ask
 questions.
+
+### Rust
+
+Rust is allowed for third-party libraries as long as there is a business need,
+which includes the following:
+
+* The Rust implementation is the best (e.g., speed, memory, lack of bugs) or
+only existing implementation available for the third-party library.
+* The Rust implementation allows the operation to move to a higher privileged
+process, and this benefits the product by improving on guardrail metrics (e.g.
+through avoiding process startup, IPC overheads, or C++ memory-unsafety
+mitigations).
+* The Rust implementation can meaningfully reduce our expected risk of
+(memory/crashes/undefined behavior) bugs, when compared to the existing
+third-party library and related C++ code required to use the library. We realize
+assessing risk is quite complex and very nuanced. If this is the criteria by
+which the third-party library is being added, chrome-atls-discuss@google.com and
+chrome-rust@google.com may ask for more data.
+
+Support for third-party libraries written in Rust is in active development. If
+the library you wish to add is in Rust, reach out to chrome-rust@google.com
+first.
 
 ### A note on size constraints
 
@@ -43,8 +85,32 @@ have experience from Windows of the binary size impacting successful patch rate 
 as constraints from the Android Ecosystem where APKs included in the system image have hard
 limits on their size due to allocation size of the system partition. For more details and
 guidelines on size increases see
-[//docs/speed/binary_size/binary_size_explainer.md](binary_size_explainer) and Googlers can
-additionally check [go/chrome-binary-size](go/chrome-binary-size)
+[//docs/speed/binary_size/binary_size_explainer.md](speed/binary_size/binary_size_explainer.md) and Googlers can
+additionally check [go/chrome-binary-size](https://goto.google.com/chrome-binary-size)
+
+### Binaries, obfuscated or minified code
+
+The addition of third-party dependencies that contain binaries, obfuscated
+code, or minified code is strongly discouraged. Code review is an important
+part of reducing risk to Chromium and a reviewer asked to approve a change
+that contains any of these has no way to determine the legitimacy of what
+they are approving. Minification for performance optimization is
+[usually not necessary](speed/binary_size/optimization_advice.md), and the
+trade-off in terms of understandability and security is rarely worth
+it.
+
+Where your dependency will form part of a release binary where size is a concern,
+there are existing tools which handle [compression for distribution](speed/binary_size/optimization_advice.md).
+
+You should not check in any pre-built binaries where there is an alternate,
+supported solution for getting them. If you need to compile from source,
+consider using [CIPD](cipd_and_3pp.md) instead.
+
+_Accessible to Googlers only. Non-Googlers can email one of the people in
+third_party/OWNERS for help.
+
+See [Chrome Code Policy](https://goto.google.com/chrome-code-policy)
+
 
 ## Get the code
 
@@ -161,6 +227,7 @@ into the product and does any of the following:
 * Collects new data
 * Influences or sets security-related policy (including the user experience)
 
+**CPE Prefix**
 One of the fields is CPEPrefix. This is used by Chromium and Google systems to
 spot known upstream security vulnerabilities, and ensure we merge the fixes
 into our third-party copy. These systems are not foolproof, so as the OWNER,
@@ -169,30 +236,56 @@ automated systems. But, adding CPEs decreases the chances of us missing
 vulnerabilities, so they should always be added if possible.
 
 The CPE is a common format shared across the industry; you can look up the CPE
-for your package [here](https://nvd.nist.gov/products/cpe/search). Please use
-CPE format 2.2. When searching for a CPE, you may find that there is not yet
-a CPE for the specific upstream version you're using. This is normal, as CPEs
-are typically allocated only when a vulnerability is found. You should follow
-the version number convention such that, when that does occur in future, we'll
-be notified. If no CPE is available, please specify "unknown".
+for your package [here](https://nvd.nist.gov/products/cpe/search).
+* Use CPE format 2.3 (preferred) or CPE format 2.2 (supported).
+* If the CPE uses the 2.3 URI binding or 2.2 format (i.e. starts with "cpe:/"),
+and no version is explicitly specified within the `CPEPrefix`, the `Version`
+in the `README.chromium` file will be appended to the `CPEPrefix`, if available.
+  * Note: if the `Version` field is set to a git hash value, version matching
+  for vulnerabilities will fail.
+
+When searching for a CPE, you may find that there is not yet a CPE for the
+specific upstream version you're using. This is normal, as CPEs are typically
+allocated only when a vulnerability is found. You should follow the version
+number convention such that, when that does occur in future, we'll be notified.
+If no CPE is available, please specify "unknown".
 
 If you're using a patched or modified version which is halfway between two
 public versions, please "round downwards" to the lower of the public versions
 (it's better for us to be notified of false-positive vulnerabilities than
 false-negatives).
 
+
+**Shipped**
+Your README.chromium should also specify whether your third party dependency
+will be shipped as part of a final binary. The "Shipped" field replaces the now
+deprecated special value of "NOT_SHIPPED" which was previously allowed in the
+"License File" field. This use is no longer supported and if your third party
+dependency includes a license you should also use the "Licence File" field to
+reference it, regardless of whether it is shipped or not.
+
+
+**Multiple packages**
+Each package should have its own README.chromium. However, if this is not
+possible and the information for multiple packages must be placed in a single
+README.chromium, use the below line to separate the data for each package:
+```
+-------------------- DEPENDENCY DIVIDER --------------------
+```
+
+
 ### Add a LICENSE file and run related checks
 
 You need a LICENSE file. Example:
 [//third_party/libjpeg/LICENSE](../third_party/libjpeg/LICENSE).
 
-Run `//tools/licenses.py scan`; this will complain about incomplete or missing
+Run `//tools/licenses/licenses.py scan`; this will complain about incomplete or missing
 data for third_party checkins. We use `licenses.py credits` to generate the
 about:credits page in Google Chrome builds.
 
 If the library will never be shipped as a part of Chrome (e.g. build-time tools,
-testing tools), make sure to set "License File" as "NOT_SHIPPED" so that the
-license is not included in about:credits page ([more on this below](#credits)).
+testing tools), make sure to set the "Shipped" field to "no" so that the license
+is not included in about:credits page ([more on this below](#credits)).
 
 ## Get a review
 
@@ -201,7 +294,7 @@ following sign-offs. Some of these are accessible to Googlers only.
 Non-Googlers can email one of the people in
 [//third_party/OWNERS](../third_party/OWNERS) for help.
 
-* Make sure you have the approval from Chrome Eng Review as mentioned
+* Make sure you have the approval from Chrome ATLs as mentioned
   [above](#before-you-start).
 * Get security@chromium.org (or chrome-security@google.com, Google-only)
   approval. Email the list with relevant details and a link to the CL.
@@ -214,14 +307,14 @@ Non-Googlers can email one of the people in
   licensing matters. These reviewers may not be able to +1 a change so look for
   verbal approval in the comments. (This list does not receive or deliver
   email, so only use it as a reviewer, not for other communication. Internally,
-  see [cl/221704656](https://cl/221704656) for details about how
+  see [cl/221704656](http://cl/221704656) for details about how
   this is configured.). If you have questions about the third-party process,
   ask one of the [//third_party/OWNERS](../third_party/OWNERS) instead.
 * Lastly, if all other steps are complete, get a positive code review from a
   member of [//third_party/OWNERS](../third_party/OWNERS) to land the change.
 
-Please send separate emails to the eng review and security@chromium.org.
-You can skip the eng review and security@chromium.org when you are only moving
+Please send separate emails to the ATLs and security@chromium.org.
+You can skip the ATL review and security@chromium.org when you are only moving
 existing directories in Chromium to //third_party/.
 
 Subsequent changes don't normally require third-party-owners or security
@@ -241,6 +334,7 @@ That page displays a resource embedded in the browser as part of the
 GRIT file; the actual HTML text is generated in the
 [//components/resources:about_credits](../components/resources/BUILD.gn)
 build target using a template from the output of the
-[//tools/licenses.py](../tools/licenses.py) script. Assuming you've followed
-the rules above to ensure that you have the proper LICENSE file and it passes
-the checks, it'll be included automatically.
+[//tools/licenses/licenses.py](../tools/licenses/licenses.py) script. Assuming
+you‘ve followed the rules above to ensure that you have the proper path to the
+LICENSE file and set the Shipped value, if it passes the checks, it’ll be
+included automatically.

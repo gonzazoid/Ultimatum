@@ -10,10 +10,10 @@ import {setNetworkConfigServiceForTesting, setShimlessRmaServiceForTesting} from
 import {OnboardingNetworkPage} from 'chrome://shimless-rma/onboarding_network_page.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {FakeNetworkConfig} from '../fake_network_config_mojom.js';
 
-export function onboardingNetworkPageTest() {
+suite('onboardingNetworkPageTest', function() {
   /** @type {?OnboardingNetworkPage} */
   let component = null;
 
@@ -24,7 +24,7 @@ export function onboardingNetworkPageTest() {
   let networkConfigService = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
     shimlessRmaService = new FakeShimlessRmaService();
     setShimlessRmaServiceForTesting(shimlessRmaService);
     networkConfigService = new FakeNetworkConfig();
@@ -60,7 +60,7 @@ export function onboardingNetworkPageTest() {
 
     const networkList = component.shadowRoot.querySelector('#networkList');
     const network = networkList.networks[1];
-    component.showConfig_(
+    component.showConfig(
         network.type,
         /* empty guid since network_config.js is not mocked */ undefined,
         'eth0');
@@ -92,7 +92,7 @@ export function onboardingNetworkPageTest() {
     await initializeOnboardingNetworkPage();
 
     const networkList = component.shadowRoot.querySelector('#networkList');
-    component.onNetworkSelected_({detail: networkList.networks[1]});
+    component.onNetworkSelected({detail: networkList.networks[1]});
     await flushTasks();
 
     const networkDialog = component.shadowRoot.querySelector('#networkConfig');
@@ -158,12 +158,12 @@ export function onboardingNetworkPageTest() {
     const dialog = /** @type {!CrDialogElement} */ (
         component.shadowRoot.querySelector('#dialog'));
     assertFalse(dialog.open);
-    component.showConfig_(network.type, network.guid, network.name);
+    component.showConfig(network.type, network.guid, network.name);
     assertTrue(dialog.open);
     await flushTasks();
 
     // Click connect button and dialog will be closed.
-    component.onNetworkSelected_({detail: network});
+    component.onNetworkSelected({detail: network});
     const connectButton = /** @type {!CrDialogElement} */ (
         component.shadowRoot.querySelector('#connectButton'));
     assertFalse(connectButton.hidden);
@@ -176,7 +176,7 @@ export function onboardingNetworkPageTest() {
     const dialog2 = /** @type {!CrDialogElement} */ (
         component.shadowRoot.querySelector('#dialog'));
     assertFalse(dialog2.open);
-    component.showConfig_(network.type, network.guid, network.name);
+    component.showConfig(network.type, network.guid, network.name);
     assertTrue(dialog2.open);
   });
 
@@ -198,7 +198,7 @@ export function onboardingNetworkPageTest() {
     assertEquals(network.connectionState, ConnectionStateType.kConnected);
 
     // Show the 'disconnect' button instead of 'connect'.
-    component.onNetworkSelected_({detail: network});
+    component.onNetworkSelected({detail: network});
     const connectButton = /** @type {!CrDialogElement} */ (
         component.shadowRoot.querySelector('#connectButton'));
     const disconnectButton = /** @type {!CrDialogElement} */ (
@@ -252,4 +252,4 @@ export function onboardingNetworkPageTest() {
     // 'onboarding-network-page' initialization.
     assertTrue(shimlessRmaService.getTrackConfiguredNetworks());
   });
-}
+});

@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -19,25 +19,23 @@
 #include "services/network/public/mojom/p2p.mojom-blink.h"
 #include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/p2p/socket_client.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
-namespace base {
-class TimeTicks;
-}  // namespace base
-
 namespace blink {
+
+using network::mojom::blink::P2PReceivedPacketPtr;
 
 class P2PSocketDispatcher;
 
 // P2P socket that routes all calls over Mojo.
 //
 // The object is created and runs on the WebRTC worker thread.
-class P2PSocketClientImpl : public blink::P2PSocketClient,
-                            public network::mojom::blink::P2PSocketClient {
+class PLATFORM_EXPORT P2PSocketClientImpl
+    : public blink::P2PSocketClient,
+      public network::mojom::blink::P2PSocketClient {
  public:
-  P2PSocketClientImpl(
-      P2PSocketDispatcher* dispatcher,
-      const net::NetworkTrafficAnnotationTag& traffic_annotation);
+  explicit P2PSocketClientImpl(bool batch_packets);
   P2PSocketClientImpl(const P2PSocketClientImpl&) = delete;
   P2PSocketClientImpl& operator=(const P2PSocketClientImpl&) = delete;
   ~P2PSocketClientImpl() override;
@@ -45,18 +43,14 @@ class P2PSocketClientImpl : public blink::P2PSocketClient,
   // Initialize socket of the specified |type| and connected to the
   // specified |address|. |address| matters only when |type| is set to
   // P2P_SOCKET_TCP_CLIENT.
-  virtual void Init(network::P2PSocketType type,
-                    const net::IPEndPoint& local_address,
-                    uint16_t min_port,
-                    uint16_t max_port,
-                    const network::P2PHostAndIPEndPoint& remote_address,
-                    blink::P2PSocketClientDelegate* delegate);
+  virtual void Init(blink::P2PSocketClientDelegate* delegate);
 
   // Send the |data| to the |address| using Differentiated Services Code Point
   // |dscp|. Return value is the unique packet_id for this packet.
   uint64_t Send(const net::IPEndPoint& address,
-                const Vector<int8_t>& data,
+                base::span<const uint8_t> data,
                 const rtc::PacketOptions& options) override;
+  void FlushBatch() override;
 
   // Setting socket options.
   void SetOption(network::P2PSocketOption option, int value) override;
@@ -68,6 +62,15 @@ class P2PSocketClientImpl : public blink::P2PSocketClient,
   int GetSocketID() const override;
 
   void SetDelegate(blink::P2PSocketClientDelegate* delegate) override;
+
+  mojo::PendingReceiver<network::mojom::blink::P2PSocket>
+  CreatePendingReceiver() {
+    return socket_.BindNewPipeAndPassReceiver();
+  }
+  mojo::PendingRemote<network::mojom::blink::P2PSocketClient>
+  CreatePendingRemote() {
+    return receiver_.BindNewPipeAndPassRemote();
+  }
 
  private:
   enum State {
@@ -83,7 +86,7 @@ class P2PSocketClientImpl : public blink::P2PSocketClient,
   // Helper function to be called by Send to handle different threading
   // condition.
   void SendWithPacketId(const net::IPEndPoint& address,
-                        const Vector<int8_t>& data,
+                        base::span<const uint8_t> data,
                         const rtc::PacketOptions& options,
                         uint64_t packet_id);
 
@@ -91,20 +94,26 @@ class P2PSocketClientImpl : public blink::P2PSocketClient,
   void SocketCreated(const net::IPEndPoint& local_address,
                      const net::IPEndPoint& remote_address) override;
   void SendComplete(const network::P2PSendPacketMetrics& send_metrics) override;
-  void DataReceived(const net::IPEndPoint& socket_address,
-                    const Vector<int8_t>& data,
-                    base::TimeTicks timestamp) override;
+  void SendBatchComplete(const WTF::Vector<::network::P2PSendPacketMetrics>&
+                             in_send_metrics_batch) override;
+  void DataReceived(WTF::Vector<P2PReceivedPacketPtr> packets) override;
+  void DoSendBatch();
 
   void OnConnectionError();
 
-  // `P2PSocketDispatcher` is owned by the main thread, and must be accessed in
-  // a thread-safe way.
-  CrossThreadWeakPersistent<P2PSocketDispatcher> dispatcher_;
   THREAD_CHECKER(thread_checker_);
+  const bool batch_packets_;
   int socket_id_;
-  blink::P2PSocketClientDelegate* delegate_;
+  raw_ptr<blink::P2PSocketClientDelegate, ExperimentalRenderer> delegate_;
   State state_;
-  const net::NetworkTrafficAnnotationTag traffic_annotation_;
+
+  // Packets sent with rtc::PacketOptions::batchable being true are collected
+  // here until a packet with rtc::PacketOptions::last_packet_in_batch is
+  // signalled.
+  WTF::Vector<network::mojom::blink::P2PSendPacketPtr> batched_send_packets_;
+  WTF::Vector<WTF::Vector<uint8_t>> batched_packets_storage_;
+  // Attribute recording if we're currently awaiting OnSendWatchComplete.
+  bool awaiting_batch_complete_ = false;
 
   // These two fields are used to identify packets for tracing.
   uint32_t random_socket_id_;

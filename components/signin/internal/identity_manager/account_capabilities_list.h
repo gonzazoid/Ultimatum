@@ -16,13 +16,11 @@
 // expanded differently in some places. The macro has the following signature:
 // ACCOUNT_CAPABILITY(cpp_label, java_label, name).
 
-ACCOUNT_CAPABILITY(kIsSubjectToParentalControlsCapabilityName,
-                   IS_SUBJECT_TO_PARENTAL_CONTROLS_CAPABILITY_NAME,
-                   "accountcapabilities/guydolldmfya")
+// Please keep the list alphabetically sorted by the capability identifiers.
 
-ACCOUNT_CAPABILITY(kIsAllowedForMachineLearningCapabilityName,
-                   IS_ALLOWED_FOR_MACHINE_LEARNING_CAPABILITY_NAME,
-                   "accountcapabilities/g42tslldmfya")
+ACCOUNT_CAPABILITY(kCanHaveEmailAddressDisplayedCapabilityName,
+                   CAN_HAVE_EMAIL_ADDRESS_DISPLAYED_CAPABILITY_NAME,
+                   "accountcapabilities/haytqlldmfya")
 
 ACCOUNT_CAPABILITY(kCanOfferExtendedChromeSyncPromosCapabilityName,
                    CAN_OFFER_EXTENDED_CHROME_SYNC_PROMOS_CAPABILITY_NAME,
@@ -32,10 +30,35 @@ ACCOUNT_CAPABILITY(kCanRunChromePrivacySandboxTrialsCapabilityName,
                    CAN_RUN_CHROME_PRIVACY_SANDBOX_TRIALS_CAPABILITY_NAME,
                    "accountcapabilities/gu2dqlldmfya")
 
-ACCOUNT_CAPABILITY(kCanStopParentalSupervisionCapabilityName,
-                   CAN_STOP_PARENTAL_SUPERVISION_CAPABILITY_NAME,
+ACCOUNT_CAPABILITY(kIsOptedInToParentalSupervisionCapabilityName,
+                   IS_OPTED_IN_TO_PARENTAL_SUPERVISION_CAPABILITY_NAME,
                    "accountcapabilities/guzdslldmfya")
 
 ACCOUNT_CAPABILITY(kCanToggleAutoUpdatesName,
                    CAN_TOGGLE_AUTO_UPDATES_NAME,
                    "accountcapabilities/gu4dmlldmfya")
+
+ACCOUNT_CAPABILITY(kCanUseChromeIpProtectionName,
+                   CAN_USE_CHROME_IP_PROTECTION_NAME,
+                   "accountcapabilities/geydgnznmnqxa")
+
+ACCOUNT_CAPABILITY(kCanUseModelExecutionFeaturesName,
+                   CAN_USE_MODEL_EXECUTION_FEATURES_NAME,
+                   "accountcapabilities/gezdcnbnmnqxa")
+
+ACCOUNT_CAPABILITY(kIsAllowedForMachineLearningCapabilityName,
+                   IS_ALLOWED_FOR_MACHINE_LEARNING_CAPABILITY_NAME,
+                   "accountcapabilities/g42tslldmfya")
+
+ACCOUNT_CAPABILITY(
+    kIsSubjectToChromePrivacySandboxRestrictedMeasurementNotice,
+    IS_SUBJECT_TO_CHROME_PRIVACY_SANDBOX_RESTRICTED_MEASUREMENT_NOTICE,
+    "accountcapabilities/he4tolldmfya")
+
+ACCOUNT_CAPABILITY(kIsSubjectToEnterprisePoliciesCapabilityName,
+                   IS_SUBJECT_TO_ENTERPRISE_POLICIES_CAPABILITY_NAME,
+                   "accountcapabilities/g44tilldmfya")
+
+ACCOUNT_CAPABILITY(kIsSubjectToParentalControlsCapabilityName,
+                   IS_SUBJECT_TO_PARENTAL_CONTROLS_CAPABILITY_NAME,
+                   "accountcapabilities/guydolldmfya")

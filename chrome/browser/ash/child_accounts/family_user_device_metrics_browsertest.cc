@@ -5,8 +5,10 @@
 #include "chrome/browser/ash/child_accounts/family_user_device_metrics.h"
 
 #include <memory>
+#include <optional>
 #include <tuple>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
@@ -19,7 +21,6 @@
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_type.h"
 #include "content/public/test/browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -45,7 +46,7 @@ class FamilyUserDeviceMetricsTest
   }
   bool IsUserExisting() const { return std::get<1>(GetParam()); }
 
-  FakeChromeUserManager* user_manager_ = nullptr;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> user_manager_ = nullptr;
 
   LoggedInUserMixin logged_in_user_mixin_{
       &mixin_host_,
@@ -53,7 +54,7 @@ class FamilyUserDeviceMetricsTest
       embedded_test_server(),
       this,
       /*should_launch_browser=*/false,
-      /*account_id=*/absl::nullopt,
+      /*account_id=*/std::nullopt,
       /*include_initial_user=*/IsUserExisting()};
 
   // MixinBasedInProcessBrowserTest:
@@ -74,7 +75,10 @@ class FamilyUserDeviceMetricsTest
   UserPolicyMixin user_policy_mixin_{&mixin_host_, kDefaultOwnerAccountId};
 };
 
-IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, IsDeviceOwner) {
+// TODO(crbug.com/1414899): Test is flaky. Too many histogram entries are
+// sometimes generated.
+#define MAYBE_IsDeviceOwner DISABLED_IsDeviceOwner
+IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, MAYBE_IsDeviceOwner) {
   base::HistogramTester histogram_tester;
 
   // Set the device owner to the logged in user.
@@ -86,7 +90,10 @@ IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, IsDeviceOwner) {
       /*sample=*/true, /*expected_count=*/1);
 }
 
-IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, IsNotDeviceOwner) {
+// TODO(crbug.com/1414899): Test is flaky. Too many histogram entries are
+// sometimes generated.
+#define MAYBE_IsNotDeviceOwner DISABLED_IsNotDeviceOwner
+IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, MAYBE_IsNotDeviceOwner) {
   base::HistogramTester histogram_tester;
 
   // Set the device owner to an arbitrary account that's not logged in.
@@ -140,6 +147,7 @@ IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, SingleUserCount) {
 IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, LoginAsNewChildUser) {
   base::HistogramTester histogram_tester;
 
+  logged_in_user_mixin_.GetLoginManagerMixin()->SkipPostLoginScreens();
   logged_in_user_mixin_.GetLoginManagerMixin()->LoginAsNewChildUser();
   logged_in_user_mixin_.GetLoginManagerMixin()->WaitForActiveSession();
 
@@ -165,6 +173,7 @@ IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, LoginAsNewChildUser) {
 IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, LoginAsNewRegularUser) {
   base::HistogramTester histogram_tester;
 
+  logged_in_user_mixin_.GetLoginManagerMixin()->SkipPostLoginScreens();
   logged_in_user_mixin_.GetLoginManagerMixin()->LoginAsNewRegularUser();
   logged_in_user_mixin_.GetLoginManagerMixin()->WaitForActiveSession();
 
@@ -192,25 +201,7 @@ IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, GuestUser) {
 
   user_manager_->AddGuestUser();
 
-  logged_in_user_mixin_.GetLoginManagerMixin()->LoginAsNewRegularUser();
-  logged_in_user_mixin_.GetLoginManagerMixin()->WaitForActiveSession();
-
-  size_t total_user_count = IsUserExisting() ? 3 : 2;
-  EXPECT_EQ(total_user_count, user_manager_->GetUsers().size());
-
-  // If no existing users on login screen, then this user is the first and only.
-  const int gaia_users_count = IsUserExisting() ? 2 : 1;
-
-  histogram_tester.ExpectUniqueSample(
-      FamilyUserDeviceMetrics::GetGaiaUsersCountHistogramNameForTest(),
-      /*sample=*/gaia_users_count,
-      /*expected_count=*/1);
-}
-
-IN_PROC_BROWSER_TEST_P(FamilyUserDeviceMetricsTest, ActiveDirectoryUser) {
-  base::HistogramTester histogram_tester;
-
-  user_manager_->AddActiveDirectoryUser(kActiveDirectoryUserAccountId);
+  logged_in_user_mixin_.GetLoginManagerMixin()->SkipPostLoginScreens();
   logged_in_user_mixin_.GetLoginManagerMixin()->LoginAsNewRegularUser();
   logged_in_user_mixin_.GetLoginManagerMixin()->WaitForActiveSession();
 
@@ -237,6 +228,7 @@ class FamilyUserDeviceMetricsManagedDeviceTest
     : public FamilyUserDeviceMetricsTest {
  protected:
   void LoginAsNewRegularUser() {
+    logged_in_user_mixin_.GetLoginManagerMixin()->SkipPostLoginScreens();
     logged_in_user_mixin_.GetLoginManagerMixin()->LoginAsNewRegularUser();
     logged_in_user_mixin_.GetLoginManagerMixin()->WaitForActiveSession();
   }

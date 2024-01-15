@@ -10,11 +10,11 @@
 #include <vector>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
@@ -22,6 +22,7 @@
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_constants.h"
+#include "chrome/test/chromedriver/constants/version.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/base_paths_win.h"
@@ -49,6 +50,10 @@ void GetApplicationDirs(std::vector<base::FilePath>* locations) {
         installation_locations[i].Append(L"Google\\Chrome\\Application"));
   }
   for (size_t i = 0; i < installation_locations.size(); ++i) {
+    locations->push_back(installation_locations[i].Append(
+        L"Google\\Chrome for Testing\\Application"));
+  }
+  for (size_t i = 0; i < installation_locations.size(); ++i) {
     locations->push_back(
         installation_locations[i].Append(L"Chromium\\Application"));
   }
@@ -57,15 +62,15 @@ void GetApplicationDirs(std::vector<base::FilePath>* locations) {
 void GetApplicationDirs(std::vector<base::FilePath>* locations) {
   // TODO: Respect users' PATH variables.
   // Until then, we use an approximation of the most common defaults.
-  locations->push_back(base::FilePath("/usr/local/sbin"));
-  locations->push_back(base::FilePath("/usr/local/bin"));
-  locations->push_back(base::FilePath("/usr/sbin"));
-  locations->push_back(base::FilePath("/usr/bin"));
-  locations->push_back(base::FilePath("/sbin"));
-  locations->push_back(base::FilePath("/bin"));
+  locations->emplace_back("/usr/local/sbin");
+  locations->emplace_back("/usr/local/bin");
+  locations->emplace_back("/usr/sbin");
+  locations->emplace_back("/usr/bin");
+  locations->emplace_back("/sbin");
+  locations->emplace_back("/bin");
   // Lastly, try the default installation location.
-  locations->push_back(base::FilePath("/opt/google/chrome"));
-  locations->push_back(base::FilePath("/opt/chromium.org/chromium"));
+  locations->emplace_back("/opt/google/chrome");
+  locations->emplace_back("/opt/chromium.org/chromium");
 }
 #elif BUILDFLAG(IS_ANDROID)
 void GetApplicationDirs(std::vector<base::FilePath>* locations) {
@@ -75,7 +80,7 @@ void GetApplicationDirs(std::vector<base::FilePath>* locations) {
 
 void GetPathsFromEnvironment(std::vector<base::FilePath>* paths) {
   base::FilePath::StringType delimiter;
-  base::FilePath::StringType commonPath;
+  base::FilePath::StringType common_path;
   std::string path;
   std::unique_ptr<base::Environment> env(base::Environment::Create());
 
@@ -84,15 +89,15 @@ void GetPathsFromEnvironment(std::vector<base::FilePath>* paths) {
   }
 
 #if BUILDFLAG(IS_WIN)
-  commonPath = base::UTF8ToWide(path);
+  common_path = base::UTF8ToWide(path);
   delimiter = L";";
 #else
-  commonPath = path;
+  common_path = path;
   delimiter = ":";
 #endif
 
   std::vector<base::FilePath::StringType> path_entries = base::SplitString(
-      commonPath, delimiter, base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
+      common_path, delimiter, base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
 
   for (auto& path_entry : path_entries) {
 #if BUILDFLAG(IS_WIN)
@@ -107,6 +112,44 @@ void GetPathsFromEnvironment(std::vector<base::FilePath>* paths) {
   }
 }
 
+std::vector<base::FilePath> GetChromeProgramNames() {
+  return {
+#if BUILDFLAG(IS_WIN)
+    base::FilePath(chrome::kBrowserProcessExecutablePath),
+        base::FilePath(FILE_PATH_LITERAL(
+            "chrome.exe")),  // Chrome for Testing or Google Chrome
+        base::FilePath(FILE_PATH_LITERAL("chromium.exe")),
+#elif BUILDFLAG(IS_MAC)
+    base::FilePath(chrome::kBrowserProcessExecutablePath),
+        base::FilePath(
+            chrome::kGoogleChromeForTestingBrowserProcessExecutablePath),
+        base::FilePath(chrome::kGoogleChromeBrowserProcessExecutablePath),
+        base::FilePath(chrome::kChromiumBrowserProcessExecutablePath),
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+    base::FilePath(chrome::kBrowserProcessExecutablePath),
+        base::FilePath("chrome"),  // Chrome for Testing or Google Chrome
+        base::FilePath("google-chrome"), base::FilePath("chromium"),
+        base::FilePath("chromium-browser"),
+#else
+    // it will compile but won't work on other OSes
+    base::FilePath()
+#endif
+  };
+}
+
+std::vector<base::FilePath> GetHeadlessShellProgramNames() {
+  return {
+#if BUILDFLAG(IS_WIN)
+    base::FilePath(FILE_PATH_LITERAL("chrome-headless-shell.exe")),
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS)
+    base::FilePath("chrome-headless-shell"),
+#else
+    // it will compile but won't work on other OSes
+    base::FilePath()
+#endif
+  };
+}
+
 }  // namespace
 
 namespace internal {
@@ -115,12 +158,14 @@ bool FindExe(
     const base::RepeatingCallback<bool(const base::FilePath&)>& exists_func,
     const std::vector<base::FilePath>& rel_paths,
     const std::vector<base::FilePath>& locations,
-    base::FilePath* out_path) {
+    base::FilePath& out_path) {
   for (auto& rel_path : rel_paths) {
     for (auto& location : locations) {
       base::FilePath path = location.Append(rel_path);
+      VLOG(logging::LOGGING_INFO) << "Browser search. Trying... " << path;
       if (exists_func.Run(path)) {
-        *out_path = path;
+        VLOG(logging::LOGGING_INFO) << "Browser search. Found at  " << path;
+        out_path = path;
         return true;
       }
     }
@@ -134,25 +179,39 @@ bool FindExe(
 void GetApplicationDirs(std::vector<base::FilePath>* locations);
 #endif
 
-bool FindChrome(base::FilePath* browser_exe) {
-  base::FilePath browser_exes_array[] = {
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-    base::FilePath(chrome::kBrowserProcessExecutablePath),
-#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-    base::FilePath("google-chrome"),
-    base::FilePath(chrome::kBrowserProcessExecutablePath),
-    base::FilePath("chromium"),
-    base::FilePath("chromium-browser")
-#else
-    // it will compile but won't work on other OSes
-    base::FilePath()
-#endif
-  };
+bool FindBrowser(const std::string& browser_name, base::FilePath& browser_exe) {
+  return FindBrowser(browser_name, base::BindRepeating(&base::PathExists),
+                     browser_exe);
+}
 
-  LOG_IF(ERROR, browser_exes_array[0].empty()) << "Unsupported platform.";
+/**
+ * Finds a browser executable for the provided |browser_name|.
+ * For "chrome" each directory is searched in the following flavour priority:
+ *   - `PRODUCT_STRING`
+ *   - google chrome for testing
+ *   - google chrome
+ *   - chromium
+ * For "chrome-headless-shell" the executable name without extension is always
+ * expected to be chrome-headless-shell.
+ */
+bool FindBrowser(
+    const std::string& browser_name,
+    const base::RepeatingCallback<bool(const base::FilePath&)>& exists_func,
+    base::FilePath& browser_exe) {
+  std::vector<base::FilePath> browser_exes;
+  if (browser_name == kHeadlessShellCapabilityName) {
+    browser_exes = GetHeadlessShellProgramNames();
+  } else if (browser_name == kBrowserCapabilityName || browser_name.empty()) {
+    // Empty browser_name means that "browserName" capability was not provided.
+    // In this case ChromeDriver defaults to "chrome".
+    browser_exes = GetChromeProgramNames();
+  } else {
+    VLOG(logging::LOGGING_ERROR) << "Unknown browser name: " << browser_name;
+    return false;
+  }
 
-  std::vector<base::FilePath> browser_exes(
-      browser_exes_array, browser_exes_array + std::size(browser_exes_array));
+  LOG_IF(ERROR, browser_exes[0].empty()) << "Unsupported platform.";
+
   base::FilePath module_dir;
 #if BUILDFLAG(IS_FUCHSIA)
   // Use -1 to allow this to compile.
@@ -164,8 +223,10 @@ bool FindChrome(base::FilePath* browser_exe) {
 #endif
     for (const base::FilePath& file_path : browser_exes) {
       base::FilePath path = module_dir.Append(file_path);
-      if (base::PathExists(path)) {
-        *browser_exe = path;
+      VLOG(logging::LOGGING_INFO) << "Browser search. Trying... " << path;
+      if (exists_func.Run(path)) {
+        browser_exe = path;
+        VLOG(logging::LOGGING_INFO) << "Browser search. Found at  " << path;
         return true;
       }
     }
@@ -174,6 +235,10 @@ bool FindChrome(base::FilePath* browser_exe) {
   std::vector<base::FilePath> locations;
   GetApplicationDirs(&locations);
   GetPathsFromEnvironment(&locations);
-  return internal::FindExe(base::BindRepeating(&base::PathExists), browser_exes,
-                           locations, browser_exe);
+  bool found =
+      internal::FindExe(exists_func, browser_exes, locations, browser_exe);
+  if (!found) {
+    VLOG(logging::LOGGING_INFO) << "Browser search. Not found.";
+  }
+  return found;
 }

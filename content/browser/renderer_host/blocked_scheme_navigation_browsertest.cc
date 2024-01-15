@@ -18,10 +18,10 @@
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "content/browser/site_per_process_browsertest.h"
+#include "content/common/features.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/content_paths.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
@@ -34,6 +34,11 @@
 #include "content/shell/browser/shell_download_manager_delegate.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "pdf/buildflags.h"
+#include "storage/browser/file_system/external_mount_points.h"
+#include "storage/common/file_system/file_system_mount_option.h"
+#include "storage/common/file_system/file_system_types.h"
+#include "third_party/blink/public/common/features.h"
 
 #if BUILDFLAG(ENABLE_PLUGINS)
 #include "content/public/browser/plugin_service.h"
@@ -212,21 +217,22 @@ class BlockedSchemeNavigationBrowserTest
                            const std::string& mime_type) {
     const char kCreateFilesystemUrlScript[] =
         "var contents = `%s`;"
-        "webkitRequestFileSystem(window.TEMPORARY, 1024, fs => {"
-        "  fs.root.getFile('%s', {create: true}, entry => {"
-        "    entry.createWriter(w => {"
-        "      w.write(new Blob([contents], {type: '%s'}));"
-        "      w.onwrite = function(evt) {"
-        "        domAutomationController.send(entry.toURL());"
-        "      }"
+        "new Promise(resolve => {"
+        "    webkitRequestFileSystem(window.TEMPORARY, 1024, fs => {"
+        "    fs.root.getFile('%s', {create: true}, entry => {"
+        "      entry.createWriter(w => {"
+        "        w.write(new Blob([contents], {type: '%s'}));"
+        "        w.onwrite = function(evt) {"
+        "          resolve(entry.toURL());"
+        "        }"
+        "      });"
         "    });"
         "  });"
         "});";
     std::string filesystem_url_string =
         EvalJs(shell()->web_contents()->GetPrimaryMainFrame(),
                base::StringPrintf(kCreateFilesystemUrlScript, content.c_str(),
-                                  filename.c_str(), mime_type.c_str()),
-               EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+                                  filename.c_str(), mime_type.c_str()))
             .ExtractString();
     GURL filesystem_url(filesystem_url_string);
     EXPECT_TRUE(filesystem_url.is_valid());
@@ -367,7 +373,7 @@ class BlockedSchemeNavigationBrowserTest
             ? std::string()
             : base::StringPrintf(kNavigationBlockedMessage, scheme.c_str());
 
-    absl::optional<WebContentsConsoleObserver> console_observer;
+    std::optional<WebContentsConsoleObserver> console_observer;
     if (!expected_message.empty()) {
       console_observer.emplace(shell()->web_contents());
       console_observer->SetPattern(expected_message);
@@ -453,9 +459,10 @@ class BlockedSchemeNavigationBrowserTest
     EXPECT_TRUE(
         new_shell->web_contents()->GetLastCommittedURL().spec().empty());
     // No navigation should commit.
-    NavigationEntry* current_entry =
-        new_shell->web_contents()->GetController().GetLastCommittedEntry();
-    EXPECT_TRUE(!current_entry || current_entry->IsInitialEntry());
+    EXPECT_TRUE(new_shell->web_contents()
+                    ->GetController()
+                    .GetLastCommittedEntry()
+                    ->IsInitialEntry());
     // Original page shouldn't navigate away.
     EXPECT_EQ(original_url, shell()->web_contents()->GetLastCommittedURL());
   }
@@ -700,8 +707,15 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
 
 // Tests that opening a new window with a blocked scheme from a subframe is
 // blocked.
+// TODO(crbug.com/1503148): Enable the flaky test.
+#if BUILDFLAG(IS_FUCHSIA)
+#define MAYBE_HTML_WindowOpenFromFrame_Block \
+  DISABLED_HTML_WindowOpenFromFrame_Block
+#else
+#define MAYBE_HTML_WindowOpenFromFrame_Block HTML_WindowOpenFromFrame_Block
+#endif
 IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
-                       HTML_WindowOpenFromFrame_Block) {
+                       MAYBE_HTML_WindowOpenFromFrame_Block) {
   EXPECT_TRUE(NavigateToURL(
       shell(), embedded_test_server()->GetURL("a.com", "/simple_page.html")));
   AddIFrame(
@@ -943,8 +957,16 @@ IN_PROC_BROWSER_TEST_F(BlockedSchemeNavigationBrowserTest,
 
 // Tests navigation of the main frame to a filesystem URL with a binary mimetype
 // from a subframe. Navigations to filesystem URLs never end up as downloads.
+// TODO(crbug.com/1503148): Enable the flaky test.
+#if BUILDFLAG(IS_FUCHSIA)
+#define MAYBE_FilesystemUrl_OctetStream_NavigationFromFrame \
+  DISABLED_FilesystemUrl_OctetStream_NavigationFromFrame
+#else
+#define MAYBE_FilesystemUrl_OctetStream_NavigationFromFrame \
+  FilesystemUrl_OctetStream_NavigationFromFrame
+#endif
 IN_PROC_BROWSER_TEST_F(BlockedSchemeNavigationBrowserTest,
-                       FilesystemUrl_OctetStream_NavigationFromFrame) {
+                       MAYBE_FilesystemUrl_OctetStream_NavigationFromFrame) {
   EXPECT_TRUE(NavigateToURL(
       shell(), embedded_test_server()->GetURL("a.com", "/simple_page.html")));
   AddIFrame(shell()->web_contents()->GetPrimaryMainFrame(),
@@ -1072,8 +1094,17 @@ IN_PROC_BROWSER_TEST_F(BlockedSchemeNavigationBrowserTest,
 // Test navigation of the main frame to a filesystem URL with an unknown
 // mimetype from a subframe. Navigations to filesystem URLs don't end up as
 // downloads.
-IN_PROC_BROWSER_TEST_F(BlockedSchemeNavigationBrowserTest,
-                       FilesystemUrl_UnknownMimeType_NavigationFromFrame) {
+// TODO(crbug.com/1503148): Enable the flaky test.
+#if BUILDFLAG(IS_FUCHSIA)
+#define MAYBE_FilesystemUrl_UnknownMimeType_NavigationFromFrame \
+  DISABLED_FilesystemUrl_UnknownMimeType_NavigationFromFrame
+#else
+#define MAYBE_FilesystemUrl_UnknownMimeType_NavigationFromFrame \
+  FilesystemUrl_UnknownMimeType_NavigationFromFrame
+#endif
+IN_PROC_BROWSER_TEST_F(
+    BlockedSchemeNavigationBrowserTest,
+    MAYBE_FilesystemUrl_UnknownMimeType_NavigationFromFrame) {
   EXPECT_TRUE(NavigateToURL(
       shell(), embedded_test_server()->GetURL("a.com", "/simple_page.html")));
   AddIFrame(shell()->web_contents()->GetPrimaryMainFrame(),
@@ -1098,7 +1129,7 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
   const GURL kPDFUrl(CreateURLWithBlockedScheme(
       "test.pdf", IsDataURLTest() ? pdf_base64 : kPDF, "application/pdf"));
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   TestNavigationObserver observer(shell()->web_contents());
   EXPECT_TRUE(NavigateToURL(shell(), kPDFUrl));
   EXPECT_EQ(kPDFUrl, observer.last_navigation_url());
@@ -1116,18 +1147,20 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
                        PDF_WindowOpen_Block) {
   Navigate(GetTestURL());
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   ExecuteScriptAndCheckWindowOpen(
       shell()->web_contents()->GetPrimaryMainFrame(), GetParam(),
       "document.getElementById('window-open-pdf').click()", NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     ExecuteScriptAndCheckDownload(
         shell()->web_contents()->GetPrimaryMainFrame(),
         "document.getElementById('window-open-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated and
+    // should be blocked.
     ExecuteScriptAndCheckWindowOpen(
         shell()->web_contents()->GetPrimaryMainFrame(), GetParam(),
         "document.getElementById('window-open-pdf').click()",
@@ -1142,19 +1175,21 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
                        PDF_Navigation_Block) {
   Navigate(GetTestURL());
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   ExecuteScriptAndCheckPDFNavigation(
       shell()->web_contents()->GetPrimaryMainFrame(), GetParam(),
       "document.getElementById('navigate-top-frame-to-pdf').click()",
       NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     ExecuteScriptAndCheckDownload(
         shell()->web_contents()->GetPrimaryMainFrame(),
         "document.getElementById('navigate-top-frame-to-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated and
+    // should be blocked.
     ExecuteScriptAndCheckPDFNavigation(
         shell()->web_contents()->GetPrimaryMainFrame(), GetParam(),
         "document.getElementById('navigate-top-frame-to-pdf').click()",
@@ -1168,19 +1203,21 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
 IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest, PDF_FormPost_Block) {
   Navigate(GetTestURL());
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   ExecuteScriptAndCheckPDFNavigation(
       shell()->web_contents()->GetPrimaryMainFrame(), GetParam(),
       "document.getElementById('form-post-to-pdf').click()",
       NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     ExecuteScriptAndCheckDownload(
         shell()->web_contents()->GetPrimaryMainFrame(),
         "document.getElementById('form-post-to-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated and
+    // should be blocked.
     ExecuteScriptAndCheckPDFNavigation(
         shell()->web_contents()->GetPrimaryMainFrame(), GetParam(),
         "document.getElementById('form-post-to-pdf').click()",
@@ -1200,14 +1237,15 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
       embedded_test_server()->GetURL(
           "b.com", base::StringPrintf("/%s_url_navigations.html", GetParam())));
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   TestPDFNavigationFromFrame(
       GetParam(),
       "document.getElementById('navigate-top-frame-to-pdf').click()",
       NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     RenderFrameHost* child =
         ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0);
     ASSERT_TRUE(child);
@@ -1217,7 +1255,8 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
     ExecuteScriptAndCheckDownload(
         child, "document.getElementById('navigate-top-frame-to-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated and
+    // should be blocked.
     TestPDFNavigationFromFrame(
         GetParam(),
         "document.getElementById('navigate-top-frame-to-pdf').click()",
@@ -1236,13 +1275,14 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
             embedded_test_server()->GetURL(
                 base::StringPrintf("/%s_url_navigations.html", GetParam())));
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   TestWindowOpenFromFrame(GetParam(),
                           "document.getElementById('window-open-pdf').click()",
                           NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     RenderFrameHost* child =
         ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0);
     ASSERT_TRUE(child);
@@ -1252,7 +1292,8 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
     ExecuteScriptAndCheckDownload(
         child, "document.getElementById('window-open-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated and
+    // should be blocked.
     TestWindowOpenFromFrame(
         GetParam(), "document.getElementById('window-open-pdf').click()",
         NAVIGATION_BLOCKED);
@@ -1268,14 +1309,15 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), CreateEmptyURLWithBlockedScheme()));
   AddIFrame(shell()->web_contents()->GetPrimaryMainFrame(), GetTestURL());
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   TestPDFNavigationFromFrame(
       GetParam(),
       "document.getElementById('navigate-top-frame-to-pdf').click()",
       NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     RenderFrameHost* child =
         ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0);
     ASSERT_TRUE(child);
@@ -1285,7 +1327,8 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
     ExecuteScriptAndCheckDownload(
         child, "document.getElementById('navigate-top-frame-to-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated and
+    // should be blocked.
     TestPDFNavigationFromFrame(
         GetParam(),
         "document.getElementById('navigate-top-frame-to-pdf').click()",
@@ -1301,13 +1344,14 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), CreateEmptyURLWithBlockedScheme()));
   AddIFrame(shell()->web_contents()->GetPrimaryMainFrame(), GetTestURL());
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_PDF)
   TestWindowOpenFromFrame(GetParam(),
                           "document.getElementById('window-open-pdf').click()",
                           NAVIGATION_BLOCKED);
 #else
   if (IsDataURLTest()) {
-    // On Android, data URL PDFs are downloaded upon navigation.
+    // When PDF Viewer is not available, data URL PDFs are downloaded upon
+    // navigation.
     RenderFrameHost* child =
         ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0);
     ASSERT_TRUE(child);
@@ -1317,7 +1361,8 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
     ExecuteScriptAndCheckDownload(
         child, "document.getElementById('window-open-pdf').click()");
   } else {
-    // On Android, filesystem PDF URLs are navigated to and should be blocked.
+    // When PDF Viewer is not available, filesystem PDF URLs are navigated to
+    // and should be blocked.
     TestWindowOpenFromFrame(
         GetParam(), "document.getElementById('window-open-pdf').click()",
         NAVIGATION_BLOCKED);
@@ -1400,5 +1445,59 @@ IN_PROC_BROWSER_TEST_P(BlockedSchemeNavigationBrowserTest,
     EXPECT_EQ(entry->GetURL(), entry->GetVirtualURL());
   }
 }
+
+class FilesystemUrlNavigationBrowserTest
+    : public ContentBrowserTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  FilesystemUrlNavigationBrowserTest() {
+    if (GetParam()) {
+      scoped_feature_list_.InitWithFeatureState(
+          blink::features::kFileSystemUrlNavigation, GetParam());
+    }
+  }
+
+  FilesystemUrlNavigationBrowserTest(
+      const FilesystemUrlNavigationBrowserTest&) = delete;
+  FilesystemUrlNavigationBrowserTest& operator=(
+      const FilesystemUrlNavigationBrowserTest&) = delete;
+
+  ~FilesystemUrlNavigationBrowserTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Tests that navigation to external mounted filesystem: URLs are blocked
+// unless FileSystemUrlNavigation feature flag is enabled (b/291526810).
+IN_PROC_BROWSER_TEST_P(FilesystemUrlNavigationBrowserTest, External) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedTempDir mount_point;
+  ASSERT_TRUE(mount_point.CreateUniqueTempDir());
+  ASSERT_TRUE(
+      base::WriteFile(mount_point.GetPath().AppendASCII("file.html"),
+                      "<html><script>console.log('success')</script></html>"));
+  storage::ExternalMountPoints::GetSystemInstance()->RegisterFileSystem(
+      "mount-name", storage::kFileSystemTypeLocal,
+      storage::FileSystemMountOption(), mount_point.GetPath());
+
+  WebContentsConsoleObserver console_observer(shell()->web_contents());
+  console_observer.SetPattern(
+      GetParam() ? "success" : "Not allowed to navigate to filesystem URL:*");
+  EXPECT_EQ(GetParam(),
+            NavigateToURL(shell(), GURL("filesystem:http://remote/"
+                                        "external/mount-name/file.html")));
+  ASSERT_TRUE(console_observer.Wait());
+
+  storage::ExternalMountPoints::GetSystemInstance()->RevokeFileSystem(
+      "mount-name");
+}
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         FilesystemUrlNavigationBrowserTest,
+                         testing::Bool(),
+                         [](const testing::TestParamInfo<bool> info) {
+                           return info.param ? "FlagOn" : "FlagOff";
+                         });
 
 }  // namespace content

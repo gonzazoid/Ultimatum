@@ -4,14 +4,15 @@
 
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_controller.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "ash/public/cpp/shelf_model.h"
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "chrome/browser/ash/crostini/crostini_shelf_utils.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
+#include "chrome/browser/ash/guest_os/guest_os_shelf_utils.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
@@ -40,7 +41,7 @@ constexpr double kInactiveTransparency = 0.5;
 double TimeProportionSince(const base::Time& t1,
                            const base::Time& t2,
                            const base::TimeDelta& d) {
-  return base::clamp((t2 - t1) / d, 0.0, 1.0);
+  return std::clamp((t2 - t1) / d, 0.0, 1.0);
 }
 
 }  // namespace
@@ -89,7 +90,7 @@ class ShelfSpinnerController::ShelfSpinnerData {
   base::Time removal_time() const { return removal_time_; }
 
  private:
-  ShelfSpinnerItemController* controller_;
+  raw_ptr<ShelfSpinnerItemController, DanglingUntriaged> controller_;
   base::Time creation_time_;
   base::Time removal_time_;
 };
@@ -238,8 +239,9 @@ void ShelfSpinnerController::CloseCrostiniSpinners() {
   const Profile* profile =
       ash::ProfileHelper::Get()->GetProfileByAccountId(current_account_id_);
   for (const auto& app_id_controller_pair : app_controller_map_) {
-    if (crostini::IsCrostiniShelfAppId(profile, app_id_controller_pair.first))
+    if (guest_os::IsCrostiniShelfAppId(profile, app_id_controller_pair.first)) {
       app_ids_to_close.push_back(app_id_controller_pair.first);
+    }
   }
   for (const auto& app_id : app_ids_to_close)
     CloseSpinner(app_id);
@@ -328,7 +330,7 @@ void ShelfSpinnerController::UpdateApps() {
 }
 
 void ShelfSpinnerController::RegisterNextUpdate() {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ShelfSpinnerController::UpdateApps,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -348,7 +350,8 @@ void ShelfSpinnerController::AddSpinnerToShelf(
   controller->SetHost(weak_ptr_factory_.GetWeakPtr());
   ShelfSpinnerItemController* item_controller = controller.get();
   if (!item) {
-    owner_->CreateAppItem(std::move(controller), ash::STATUS_RUNNING);
+    owner_->CreateAppItem(std::move(controller), ash::STATUS_RUNNING,
+                          /*pinned=*/false);
   } else {
     owner_->shelf_model()->ReplaceShelfItemDelegate(shelf_id,
                                                     std::move(controller));

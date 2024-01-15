@@ -7,10 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/values.h"
+#include "components/attribution_reporting/suitable_origin.h"
 #include "content/browser/attribution_reporting/attribution_debug_report.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
 #include "content/browser/attribution_reporting/attribution_utils.h"
@@ -25,7 +26,9 @@
 #include "services/network/public/cpp/resource_request_body.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace content {
 
@@ -57,38 +60,48 @@ void AttributionReportNetworkSender::SendReport(
     bool is_debug_report,
     ReportSentCallback sent_callback) {
   GURL url = report.ReportURL(is_debug_report);
-  base::Value::Dict body = report.ReportBody();
+  std::string body = SerializeAttributionJson(report.ReportBody());
+  net::HttpRequestHeaders headers;
+  report.PopulateAdditionalHeaders(headers);
 
-  SendReport(std::move(url), body,
+  url::Origin origin(report.GetReportingOrigin());
+  SendReport(std::move(url), std::move(origin), body, std::move(headers),
              base::BindOnce(&AttributionReportNetworkSender::OnReportSent,
                             base::Unretained(this), std::move(report),
                             is_debug_report, std::move(sent_callback)));
 }
 
-void AttributionReportNetworkSender::SendReport(AttributionDebugReport report) {
-  GURL url = report.ReportURL();
-  base::Value::List body = report.ReportBody();
-  SendReport(std::move(url), body,
-             base::BindOnce(&AttributionReportNetworkSender::OnDebugReportSent,
-                            base::Unretained(this)));
+void AttributionReportNetworkSender::SendReport(
+    AttributionDebugReport report,
+    DebugReportSentCallback callback) {
+  GURL url(report.ReportUrl());
+  url::Origin origin(report.reporting_origin());
+  std::string body = SerializeAttributionJson(report.ReportBody());
+  SendReport(
+      std::move(url), std::move(origin), body, net::HttpRequestHeaders(),
+      base::BindOnce(&AttributionReportNetworkSender::OnVerboseDebugReportSent,
+                     base::Unretained(this),
+                     base::BindOnce(std::move(callback), std::move(report))));
 }
 
 void AttributionReportNetworkSender::SendReport(GURL url,
-                                                base::ValueView report_body,
+                                                url::Origin origin,
+                                                const std::string& body,
+                                                net::HttpRequestHeaders headers,
                                                 UrlLoaderCallback callback) {
   auto resource_request = std::make_unique<network::ResourceRequest>();
   resource_request->url = std::move(url);
+  resource_request->headers = std::move(headers);
   resource_request->method = net::HttpRequestHeaders::kPostMethod;
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  resource_request->mode = network::mojom::RequestMode::kSameOrigin;
+  resource_request->request_initiator = std::move(origin);
   resource_request->load_flags =
       net::LOAD_DISABLE_CACHE | net::LOAD_BYPASS_CACHE;
   resource_request->trusted_params = network::ResourceRequest::TrustedParams();
   resource_request->trusted_params->isolation_info =
       net::IsolationInfo::CreateTransient();
 
-  // TODO(https://crbug.com/1058018): Update the "policy" field in the traffic
-  // annotation when a setting to disable the API is properly
-  // surfaced/implemented.
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("conversion_measurement_report", R"(
         semantics {
@@ -98,20 +111,29 @@ void AttributionReportNetworkSender::SendReport(GURL url,
             "views with event-level and aggregatable reports without using "
             "cross-site persistent identifiers like third-party cookies."
           trigger:
-            "When a triggered attribution has become eligible for reporting."
+            "When a triggered attribution has become eligible for reporting "
+            "or when an attribution source or trigger registration has failed "
+            "and is eligible for error reporting."
           data:
             "Event-level reports include a high-entropy identifier declared "
             "by the site on which the user clicked on or viewed a source and "
             "a noisy low-entropy data value declared on the destination site."
             "Aggregatable reports include encrypted information generated "
             "from both source-side and trigger-side registrations."
+            "Verbose debug reports include data related to attribution source "
+            "or trigger registration failures."
           destination:OTHER
         }
         policy {
           cookies_allowed: NO
           setting:
-            "This feature cannot be disabled by settings."
-          policy_exception_justification: "Not implemented."
+            "This feature can be controlled via the 'Ad measurement' setting "
+            "in the 'Ad privacy' section of 'Privacy and Security'."
+          chrome_policy {
+            PrivacySandboxAdMeasurementEnabled {
+              PrivacySandboxAdMeasurementEnabled: false
+            }
+          }
         })");
 
   auto simple_url_loader = network::SimpleURLLoader::Create(
@@ -122,8 +144,7 @@ void AttributionReportNetworkSender::SendReport(GURL url,
                                         std::move(simple_url_loader));
   simple_url_loader_ptr->SetTimeoutDuration(base::Seconds(30));
 
-  simple_url_loader_ptr->AttachStringForUpload(
-      SerializeAttributionJson(report_body), "application/json");
+  simple_url_loader_ptr->AttachStringForUpload(body, "application/json");
 
   // Retry once on network change. A network change during DNS resolution
   // results in a DNS error rather than a network change error, so retry in
@@ -138,7 +159,7 @@ void AttributionReportNetworkSender::SendReport(GURL url,
 }
 
 void AttributionReportNetworkSender::OnReportSent(
-    AttributionReport report,
+    const AttributionReport& report,
     bool is_debug_report,
     ReportSentCallback sent_callback,
     UrlLoaderList::iterator it,
@@ -152,14 +173,13 @@ void AttributionReportNetworkSender::OnReportSent(
 
   int response_code = headers ? headers->response_code() : -1;
   bool external_ok = response_code >= 200 && response_code <= 299;
-  Status status =
-      internal_ok && external_ok
-          ? Status::kOk
-          : !internal_ok ? Status::kInternalError : Status::kExternalError;
+  Status status = internal_ok && external_ok ? Status::kOk
+                  : !internal_ok             ? Status::kInternalError
+                                             : Status::kExternalError;
 
-  const char* status_metric;
-  const char* http_response_or_net_error_code_metric;
-  const char* retry_succeed_metric;
+  const char* status_metric = nullptr;
+  const char* http_response_or_net_error_code_metric = nullptr;
+  const char* retry_succeed_metric = nullptr;
 
   switch (report.GetReportType()) {
     case AttributionReport::Type::kEventLevel:
@@ -188,17 +208,21 @@ void AttributionReportNetworkSender::OnReportSent(
               ? "Conversions.DebugReport.ReportRetrySucceedAggregatable"
               : "Conversions.ReportRetrySucceedAggregatable";
       break;
+    case AttributionReport::Type::kNullAggregatable:
+      break;
   }
 
-  base::UmaHistogramEnumeration(status_metric, status);
+  if (status_metric) {
+    base::UmaHistogramEnumeration(status_metric, status);
 
-  // Since net errors are always negative and HTTP errors are always positive,
-  // it is fine to combine these in a single histogram.
-  base::UmaHistogramSparse(http_response_or_net_error_code_metric,
-                           internal_ok ? response_code : net_error);
+    // Since net errors are always negative and HTTP errors are always positive,
+    // it is fine to combine these in a single histogram.
+    base::UmaHistogramSparse(http_response_or_net_error_code_metric,
+                             internal_ok ? response_code : net_error);
 
-  if (loader->GetNumRetries() > 0) {
-    base::UmaHistogramBoolean(retry_succeed_metric, status == Status::kOk);
+    if (loader->GetNumRetries() > 0) {
+      base::UmaHistogramBoolean(retry_succeed_metric, status == Status::kOk);
+    }
   }
 
   loaders_in_progress_.erase(it);
@@ -222,18 +246,24 @@ void AttributionReportNetworkSender::OnReportSent(
                           : SendResult::Status::kFailure);
 
   std::move(sent_callback)
-      .Run(std::move(report),
-           SendResult(report_status, net_error,
-                      headers ? headers->response_code() : 0));
+      .Run(report, SendResult(report_status, net_error,
+                              headers ? headers->response_code() : 0));
 }
 
-void AttributionReportNetworkSender::OnDebugReportSent(
+void AttributionReportNetworkSender::OnVerboseDebugReportSent(
+    base::OnceCallback<void(int status)> callback,
     UrlLoaderList::iterator it,
     scoped_refptr<net::HttpResponseHeaders> headers) {
-  loaders_in_progress_.erase(it);
+  // HTTP statuses are positive; network errors are negative.
+  int status = headers ? headers->response_code() : (*it)->NetError();
 
-  // TODO(crbug.com/1371970): Consider recording metric for debug report
-  // sending.
+  // Since net errors are always negative and HTTP errors are always positive,
+  // it is fine to combine these in a single histogram.
+  base::UmaHistogramSparse(
+      "Conversions.VerboseDebugReport.HttpResponseOrNetErrorCode", status);
+
+  loaders_in_progress_.erase(it);
+  std::move(callback).Run(status);
 }
 
 }  // namespace content

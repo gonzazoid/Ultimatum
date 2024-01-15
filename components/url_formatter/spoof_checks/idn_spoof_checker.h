@@ -11,7 +11,7 @@
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "components/url_formatter/spoof_checks/idna_metrics.h"
 #include "components/url_formatter/spoof_checks/skeleton_generator.h"
 #include "net/extras/preload_data/decoder.h"
@@ -52,10 +52,12 @@ const uint8_t kSkeletonTypeBitLength = 1;
 
 // Represents a top domain entry in the trie.
 struct TopDomainEntry {
-  // The domain name.
+  // The domain in ASCII (punycode for IDN).
   std::string domain;
-  // True if the domain is in the top 500.
-  bool is_top_500 = false;
+  // True if the domain is in the top bucket (i.e. in the most popular subset of
+  // top domains). These domains can have additional skeletons associated with
+  // them.
+  bool is_top_bucket = false;
   // Type of the skeleton stored in the trie node.
   SkeletonType skeleton_type;
 };
@@ -218,7 +220,7 @@ class IDNSpoofChecker {
   // characters that look like digits (but not exclusively actual digits).
   bool IsDigitLookalike(const icu::UnicodeString& label);
 
-  raw_ptr<USpoofChecker> checker_;
+  raw_ptr<USpoofChecker, DanglingUntriaged> checker_;
   icu::UnicodeSet deviation_characters_;
   icu::UnicodeSet non_ascii_latin_letters_;
   icu::UnicodeSet kana_letters_exceptions_;

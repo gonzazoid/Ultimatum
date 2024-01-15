@@ -11,15 +11,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/discardable_memory.h"
 #include "base/memory/discardable_memory_allocator.h"
 #include "base/memory/madv_free_discardable_memory_allocator_posix.h"
 #include "base/memory/madv_free_discardable_memory_posix.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/test/bind.h"
+#include "base/test/run_until.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/discardable_memory/client/client_discardable_shared_memory_manager.h"
@@ -149,7 +150,7 @@ IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
 #endif
 
 IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
-                       ReleaseFreeDiscardableMemory) {
+                       ReleaseFreeDiscardableMemory_Explicitly) {
   const size_t kSize = 1024 * 1024;  // 1MiB.
 
   base::DiscardableMemoryBacking impl = base::GetDiscardableMemoryBacking();
@@ -159,11 +160,14 @@ IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
 
   EXPECT_TRUE(memory);
   EXPECT_GE(discardable_memory_allocator()->GetBytesAllocated(), kSize);
-  memory.reset();
 
+  memory.reset();
   EXPECT_EQ(discardable_memory_allocator()->GetBytesAllocated(), 0U);
-  if (impl != base::DiscardableMemoryBacking::kSharedMemory)
+
+  if (impl != base::DiscardableMemoryBacking::kSharedMemory) {
+    LOG(INFO) << "Not using shared-memory backing. Skipping test.";
     return;
+  }
 
   EXPECT_GE(discardable_memory::DiscardableSharedMemoryManager::Get()
                 ->GetBytesAllocated(),
@@ -173,39 +177,48 @@ IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
       discardable_memory_allocator())
       ->ReleaseFreeMemory();
 
-  // Busy wait for host memory usage to be reduced.
-  base::TimeTicks end = base::TimeTicks::Now() + base::Seconds(5);
-  while (base::TimeTicks::Now() < end) {
-    if (!discardable_memory::DiscardableSharedMemoryManager::Get()
-             ->GetBytesAllocated())
-      break;
-    base::RunLoop().RunUntilIdle();
-  }
-
-  EXPECT_LT(base::TimeTicks::Now(), end);
+  // ReleaseFreeMemory() should result in the allocated bytes dropping to zero
+  // within a shorter time than the RunLoop timeout.
+  EXPECT_TRUE(base::test::RunUntil([]() {
+    return discardable_memory::DiscardableSharedMemoryManager::Get()
+               ->GetBytesAllocated() == 0;
+  }));
 }
 
-// TODO(crbug.com/974850): Flaky on all platforms.
 IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,
-                       DISABLED_ReleaseFreeMemory) {
+                       ReleaseFreeDiscardableMemory_ByCriticalPressure) {
   const size_t kSize = 1024 * 1024;  // 1MiB.
+
+  base::DiscardableMemoryBacking impl = base::GetDiscardableMemoryBacking();
 
   std::unique_ptr<base::DiscardableMemory> memory =
       AllocateLockedDiscardableMemory(kSize);
 
   EXPECT_TRUE(memory);
-  memory.reset();
-
   EXPECT_GE(discardable_memory_allocator()->GetBytesAllocated(), kSize);
 
+  memory.reset();
+  EXPECT_EQ(discardable_memory_allocator()->GetBytesAllocated(), 0U);
+
+  if (impl != base::DiscardableMemoryBacking::kSharedMemory) {
+    LOG(INFO) << "Not using shared-memory backing. Skipping test.";
+    return;
+  }
+
+  EXPECT_GE(discardable_memory::DiscardableSharedMemoryManager::Get()
+                ->GetBytesAllocated(),
+            kSize);
+
   // Call RenderThreadImpl::ReleaseFreeMemory through a fake memory pressure
-  // notification.
+  // notification. The pressure notification will be handled on the test
+  // main thread, so it is sufficient to RunAllTasksUntilIdle(), after which
+  // the manager should report that the memory has been freed.
   base::MemoryPressureListener::SimulatePressureNotification(
       base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
-  base::RunLoop().RunUntilIdle();
-  RunAllTasksUntilIdle();
 
-  EXPECT_EQ(0U, discardable_memory_allocator()->GetBytesAllocated());
+  RunAllTasksUntilIdle();
+  EXPECT_EQ(0u, discardable_memory::DiscardableSharedMemoryManager::Get()
+                    ->GetBytesAllocated());
 }
 
 IN_PROC_BROWSER_TEST_F(RenderThreadImplDiscardableMemoryBrowserTest,

@@ -7,8 +7,8 @@
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -26,11 +26,13 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/keyed_service/core/simple_factory_key.h"
 #include "components/offline_pages/core/stub_offline_page_model.h"
+#include "content/public/browser/background_tracing_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/origin.h"
 
 namespace {
@@ -66,6 +68,9 @@ class SigninManagerAndroidTest : public ::testing::Test {
         BookmarkModelFactory::GetDefaultFactory());
     profile_ = profile_builder.Build();
 
+    background_tracing_manager_ =
+        content::BackgroundTracingManager::CreateInstance();
+
     // Creating a BookmarkModel also a creates a StubOfflinePageModel.
     // We need to replace this with a mock that responds to deletions.
     offline_pages::OfflinePageModelFactory::GetInstance()->SetTestingFactory(
@@ -77,6 +82,8 @@ class SigninManagerAndroidTest : public ::testing::Test {
         ->SetDownloadManagerDelegateForTesting(
             std::make_unique<ChromeDownloadManagerDelegate>(profile_.get()));
   }
+
+  void TearDown() override { background_tracing_manager_.reset(); }
 
   TestingProfile* profile() { return profile_.get(); }
 
@@ -105,6 +112,8 @@ class SigninManagerAndroidTest : public ::testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
+  std::unique_ptr<content::BackgroundTracingManager>
+      background_tracing_manager_;
 };
 
 // TODO(crbug.com/929456): This test does not actually test anything; the
@@ -141,7 +150,8 @@ TEST_F(SigninManagerAndroidTest, DISABLED_DeleteGoogleServiceWorkerCaches) {
       profile()->GetDefaultStoragePartition());
 
   for (const TestCase& test_case : kTestCases)
-    helper->Add(url::Origin::Create(GURL(test_case.worker_url)));
+    helper->Add(blink::StorageKey::CreateFirstParty(
+        url::Origin::Create(GURL(test_case.worker_url))));
 
   ASSERT_EQ(std::size(kTestCases), helper->GetCount());
 
@@ -153,13 +163,15 @@ TEST_F(SigninManagerAndroidTest, DISABLED_DeleteGoogleServiceWorkerCaches) {
   run_loop.Run();
 
   // Test whether the correct service worker caches were deleted.
-  std::set<url::Origin> remaining_cache_storages = helper->GetOrigins();
+  std::set<blink::StorageKey> remaining_cache_storages =
+      helper->GetStorageKeys();
 
   // TODO(crbug.com/929456): If deleted, the key should not be present.
   for (const TestCase& test_case : kTestCases) {
     EXPECT_EQ(test_case.should_be_deleted,
               base::Contains(remaining_cache_storages,
-                             url::Origin::Create(GURL(test_case.worker_url))))
+                             blink::StorageKey::CreateFromStringForTesting(
+                                 test_case.worker_url)))
         << test_case.worker_url << " should "
         << (test_case.should_be_deleted ? "" : "NOT ")
         << "be deleted, but it was"

@@ -35,15 +35,10 @@ class FullRestoreServiceFactory : public ProfileKeyedServiceFactory {
       delete;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
 }  // namespace ash::full_restore
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos::full_restore {
-using ::ash::full_restore::FullRestoreServiceFactory;
-}  // namespace chromeos::full_restore
 
 #endif  // CHROME_BROWSER_ASH_APP_RESTORE_FULL_RESTORE_SERVICE_FACTORY_H_

@@ -9,6 +9,7 @@
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/policy/status_provider/status_provider_util.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/lacros/lacros_service.h"
 #include "components/policy/core/browser/cloud/message_util.h"
 #include "components/policy/core/browser/webui/policy_status_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -18,9 +19,19 @@
 UserPolicyStatusProviderLacros::UserPolicyStatusProviderLacros(
     policy::PolicyLoaderLacros* loader,
     Profile* profile)
-    : profile_(profile), loader_(loader) {}
+    : profile_(profile), loader_(loader) {
+  auto* lacros_service = chromeos::LacrosService::Get();
+  if (lacros_service) {
+    lacros_service->AddObserver(this);
+  }
+}
 
-UserPolicyStatusProviderLacros::~UserPolicyStatusProviderLacros() = default;
+UserPolicyStatusProviderLacros::~UserPolicyStatusProviderLacros() {
+  auto* lacros_service = chromeos::LacrosService::Get();
+  if (lacros_service) {
+    lacros_service->RemoveObserver(this);
+  }
+}
 
 base::Value::Dict UserPolicyStatusProviderLacros::GetStatus() {
   enterprise_management::PolicyData* policy = loader_->GetPolicyData();
@@ -32,13 +43,13 @@ base::Value::Dict UserPolicyStatusProviderLacros::GetStatus() {
     return error_dict;
   }
   base::Value::Dict dict = GetStatusFromPolicyData(policy);
-  ExtractDomainFromUsername(&dict);
+  SetDomainExtractedFromUsername(dict);
   GetUserAffiliationStatus(&dict, profile_);
 
   // Get last fetched time from policy, since we have no refresh scheduler here.
   base::Time last_refresh_time =
       policy && policy->has_timestamp()
-          ? base::Time::FromJavaTime(policy->timestamp())
+          ? base::Time::FromMillisecondsSinceUnixEpoch(policy->timestamp())
           : base::Time();
   dict.Set("timeSinceLastRefresh",
            GetTimeSinceLastActionString(last_refresh_time));
@@ -55,6 +66,20 @@ base::Value::Dict UserPolicyStatusProviderLacros::GetStatus() {
                policy::CloudPolicyStore::STATUS_OK,
                policy::CloudPolicyValidatorBase::Status::VALIDATION_OK));
   dict.Set(policy::kPolicyDescriptionKey, kUserPolicyStatusDescription);
-  SetDomainInUserStatus(dict);
+  SetProfileId(&dict, profile_);
   return dict;
+}
+
+void UserPolicyStatusProviderLacros::OnPolicyUpdated(
+    const std::vector<uint8_t>& policy_fetch_response) {
+  NotifyStatusChange();
+}
+
+void UserPolicyStatusProviderLacros::OnPolicyFetchAttempt() {
+  NotifyStatusChange();
+}
+
+void UserPolicyStatusProviderLacros::OnComponentPolicyUpdated(
+    const policy::ComponentPolicyMap& component_policy) {
+  NotifyStatusChange();
 }

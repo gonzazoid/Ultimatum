@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "components/offline_items_collection/core/offline_item.h"
 
@@ -56,9 +56,8 @@ void ThrottledOfflineContentProvider::PauseDownload(const ContentId& id) {
   FlushUpdates();
 }
 
-void ThrottledOfflineContentProvider::ResumeDownload(const ContentId& id,
-                                                     bool has_user_gesture) {
-  wrapped_provider_->ResumeDownload(id, has_user_gesture);
+void ThrottledOfflineContentProvider::ResumeDownload(const ContentId& id) {
+  wrapped_provider_->ResumeDownload(id);
   FlushUpdates();
 }
 
@@ -145,7 +144,7 @@ void ThrottledOfflineContentProvider::OnItemUpdated(
   // Queue the update so we wait for the proper amount of time before notifying
   // observers.
   update_queued_ = true;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ThrottledOfflineContentProvider::FlushUpdates,
                      weak_ptr_factory_.GetWeakPtr()),

@@ -5,20 +5,22 @@
 #import "ios/chrome/browser/sessions/test_session_service.h"
 
 #import "base/memory/ref_counted.h"
-#import "base/threading/thread_task_runner_handle.h"
-#import "ios/chrome/browser/sessions/session_ios_factory.h"
+#import "base/task/single_thread_task_runner.h"
+#import "ios/chrome/browser/sessions/session_window_ios_factory.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+namespace {
+constexpr base::TimeDelta kTestSaveDelay = base::Seconds(2.5);
+}
 
 @implementation TestSessionService
 
 - (instancetype)init {
-  return [super initWithTaskRunner:base::ThreadTaskRunnerHandle::Get()];
+  return [super
+      initWithSaveDelay:kTestSaveDelay
+             taskRunner:base::SingleThreadTaskRunner::GetCurrentDefault()];
 }
 
-- (void)saveSession:(__weak SessionIOSFactory*)factory
+- (void)saveSession:(__weak SessionWindowIOSFactory*)factory
           sessionID:(NSString*)sessionID
           directory:(const base::FilePath&)directory
         immediately:(BOOL)immediately {
@@ -29,8 +31,14 @@
                             requiringSecureCoding:NO
                                             error:nil];
   if (self.performIO)
-    [self performSaveSessionData:data tabContents:@{} sessionPath:sessionPath];
+    [self performSaveSessionData:data sessionPath:sessionPath];
   _saveSessionCallsCount++;
+}
+
+- (SessionWindowIOS*)loadSessionWithSessionID:(NSString*)sessionID
+                                    directory:(const base::FilePath&)directory {
+  _loadSessionCallsCount++;
+  return [super loadSessionWithSessionID:sessionID directory:directory];
 }
 
 @end

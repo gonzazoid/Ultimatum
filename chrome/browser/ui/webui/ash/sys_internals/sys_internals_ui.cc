@@ -7,14 +7,16 @@
 #include <memory>
 
 #include "base/feature_list.h"
+#include "base/metrics/user_metrics.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/ash/sys_internals/sys_internals_message_handler.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 
 namespace ash {
 
@@ -23,11 +25,13 @@ SysInternalsUI::SysInternalsUI(content::WebUI* web_ui)
   web_ui->AddMessageHandler(std::make_unique<SysInternalsMessageHandler>());
 
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUISysInternalsHost);
-  html_source->DisableTrustedTypesCSP();
+      content::WebUIDataSource::CreateAndAdd(Profile::FromWebUI(web_ui),
+                                             chrome::kChromeUISysInternalsHost);
+  webui::EnableTrustedTypesCSP(html_source);
+
   html_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://test 'self';");
+      "script-src chrome://resources chrome://webui-test 'self';");
 
   html_source->AddResourcePath("", IDR_SYS_INTERNALS_HTML);
   html_source->AddResourcePath("index.html", IDR_SYS_INTERNALS_HTML);
@@ -67,9 +71,7 @@ SysInternalsUI::SysInternalsUI(content::WebUI* web_ui)
 
   html_source->AddResourcePath("test_loader_util.js",
                                IDR_WEBUI_JS_TEST_LOADER_UTIL_JS);
-
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html_source);
+  base::RecordAction(base::UserMetricsAction("Open_Sys_Internals"));
 }
 
 SysInternalsUI::~SysInternalsUI() {}

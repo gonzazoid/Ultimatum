@@ -5,6 +5,7 @@
 #include "chrome/browser/content_settings/content_settings_manager_delegate.h"
 
 #include "base/feature_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
@@ -24,28 +25,32 @@ namespace {
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 void OnFileSystemAccessedInGuestViewContinuation(
-    int render_process_id,
-    int render_frame_id,
+    const content::GlobalRenderFrameHostToken& frame_token,
     const GURL& url,
     base::OnceCallback<void(bool)> callback,
     bool allowed) {
-  content_settings::PageSpecificContentSettings::StorageAccessed(
-      content_settings::mojom::ContentSettingsManager::StorageType::FILE_SYSTEM,
-      render_process_id, render_frame_id, url, !allowed);
+  auto* rfh = content::RenderFrameHost::FromFrameToken(frame_token);
+  if (rfh) {
+    content_settings::PageSpecificContentSettings::StorageAccessed(
+        content_settings::mojom::ContentSettingsManager::StorageType::
+            FILE_SYSTEM,
+        frame_token, rfh->GetStorageKey(), !allowed);
+  }
+
   std::move(callback).Run(allowed);
 }
 
-void OnFileSystemAccessedInGuestView(int render_process_id,
-                                     int render_frame_id,
-                                     const GURL& url,
-                                     bool allowed,
-                                     base::OnceCallback<void(bool)> callback) {
+void OnFileSystemAccessedInGuestView(
+    const content::GlobalRenderFrameHostToken& frame_token,
+    const GURL& url,
+    bool allowed,
+    base::OnceCallback<void(bool)> callback) {
   extensions::WebViewPermissionHelper* web_view_permission_helper =
-      extensions::WebViewPermissionHelper::FromRenderFrameHostId(
-          content::GlobalRenderFrameHostId(render_process_id, render_frame_id));
-  auto continuation = base::BindOnce(
-      &OnFileSystemAccessedInGuestViewContinuation, render_process_id,
-      render_frame_id, url, std::move(callback));
+      extensions::WebViewPermissionHelper::FromRenderFrameHost(
+          content::RenderFrameHost::FromFrameToken(frame_token));
+  auto continuation =
+      base::BindOnce(&OnFileSystemAccessedInGuestViewContinuation, frame_token,
+                     url, std::move(callback));
   if (!web_view_permission_helper) {
     std::move(continuation).Run(allowed);
     return;
@@ -54,21 +59,9 @@ void OnFileSystemAccessedInGuestView(int render_process_id,
       url, allowed, std::move(continuation));
 }
 
-// TODO(crbug.com/1187753): Simplify this once NavigationThreadingOptimizations
-// is launched.
-void RunOrPostTaskOnSequence(
-    scoped_refptr<base::SequencedTaskRunner> task_runner,
-    base::OnceCallback<void(bool)> callback,
-    bool result) {
-  if (task_runner->RunsTasksInCurrentSequence()) {
-    DCHECK(!base::FeatureList::IsEnabled(
-        features::kNavigationThreadingOptimizations));
-    std::move(callback).Run(result);
-    return;
-  }
-
-  DCHECK(base::FeatureList::IsEnabled(
-      features::kNavigationThreadingOptimizations));
+void PostTaskOnSequence(scoped_refptr<base::SequencedTaskRunner> task_runner,
+                        base::OnceCallback<void(bool)> callback,
+                        bool result) {
   task_runner->PostTask(FROM_HERE, base::BindOnce(std::move(callback), result));
 }
 #endif
@@ -87,8 +80,7 @@ ContentSettingsManagerDelegate::GetCookieSettings(
 }
 
 bool ContentSettingsManagerDelegate::AllowStorageAccess(
-    int render_process_id,
-    int render_frame_id,
+    const content::GlobalRenderFrameHostToken& frame_token,
     content_settings::mojom::ContentSettingsManager::StorageType storage_type,
     const GURL& url,
     bool allowed,
@@ -97,21 +89,14 @@ bool ContentSettingsManagerDelegate::AllowStorageAccess(
   if (storage_type == content_settings::mojom::ContentSettingsManager::
                           StorageType::FILE_SYSTEM &&
       extensions::WebViewRendererState::GetInstance()->IsGuest(
-          render_process_id)) {
-    base::OnceClosure task =
-        base::BindOnce(&OnFileSystemAccessedInGuestView, render_process_id,
-                       render_frame_id, url, allowed,
-                       base::BindOnce(&RunOrPostTaskOnSequence,
-                                      base::SequencedTaskRunnerHandle::Get(),
-                                      std::move(*callback)));
-    // We may or may not be on the UI thread depending on whether the
-    // NavigationThreadingOptimizations feature is enabled.
-    // TODO(https://crbug.com/1187753): Clean this up once the feature is
-    // shipped and the code path is removed.
-    if (content::BrowserThread::CurrentlyOn(content::BrowserThread::UI))
-      std::move(task).Run();
-    else
-      content::GetUIThreadTaskRunner({})->PostTask(FROM_HERE, std::move(task));
+          frame_token.child_id)) {
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &OnFileSystemAccessedInGuestView, frame_token, url, allowed,
+            base::BindOnce(&PostTaskOnSequence,
+                           base::SequencedTaskRunner::GetCurrentDefault(),
+                           std::move(*callback))));
 
     return true;
   }

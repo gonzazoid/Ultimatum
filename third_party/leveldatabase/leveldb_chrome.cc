@@ -8,18 +8,17 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -41,10 +40,11 @@ namespace leveldb_chrome {
 namespace {
 
 size_t DefaultBlockCacheSize() {
-  if (base::SysInfo::IsLowEndDevice())
+  if (base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()) {
     return 1 << 20;  // 1MB
-  else
+  } else {
     return 8 << 20;  // 8MB
+  }
 }
 
 std::string GetDumpNameForMemEnv(const leveldb::Env* memenv) {
@@ -61,9 +61,10 @@ class Globals {
   }
 
   Globals()
-      : web_block_cache_(base::SysInfo::IsLowEndDevice()
-                             ? nullptr
-                             : NewLRUCache(DefaultBlockCacheSize())),
+      : web_block_cache_(
+            base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()
+                ? nullptr
+                : NewLRUCache(DefaultBlockCacheSize())),
         browser_block_cache_(NewLRUCache(DefaultBlockCacheSize())),
         // Using |this| here (when Globals is only partially constructed) is
         // safe because base::MemoryPressureListener calls our callback
@@ -226,7 +227,7 @@ class ChromeMemEnv : public leveldb::EnvWrapper {
                         size());
 
     if (dump_args.level_of_detail !=
-        base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+        base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
       env_dump->AddString("name", "", name());
     }
 

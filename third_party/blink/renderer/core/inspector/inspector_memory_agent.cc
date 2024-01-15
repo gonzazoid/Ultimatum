@@ -49,26 +49,25 @@ namespace blink {
 
 constexpr int kDefaultNativeMemorySamplingInterval = 128 * 1024;
 
-using protocol::Response;
-
 InspectorMemoryAgent::InspectorMemoryAgent(InspectedFrames* inspected_frames)
     : frames_(inspected_frames),
       sampling_profile_interval_(&agent_state_, /*default_value=*/0) {}
 
 InspectorMemoryAgent::~InspectorMemoryAgent() = default;
 
-Response InspectorMemoryAgent::getDOMCounters(int* documents,
-                                              int* nodes,
-                                              int* js_event_listeners) {
+protocol::Response InspectorMemoryAgent::getDOMCounters(
+    int* documents,
+    int* nodes,
+    int* js_event_listeners) {
   *documents =
       InstanceCounters::CounterValue(InstanceCounters::kDocumentCounter);
   *nodes = InstanceCounters::CounterValue(InstanceCounters::kNodeCounter);
   *js_event_listeners =
       InstanceCounters::CounterValue(InstanceCounters::kJSEventListenerCounter);
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorMemoryAgent::forciblyPurgeJavaScriptMemory() {
+protocol::Response InspectorMemoryAgent::forciblyPurgeJavaScriptMemory() {
   for (const auto& page : Page::OrdinaryPages()) {
     for (Frame* frame = page->MainFrame(); frame;
          frame = frame->Tree().TraverseNext()) {
@@ -78,9 +77,10 @@ Response InspectorMemoryAgent::forciblyPurgeJavaScriptMemory() {
       local_frame->ForciblyPurgeV8Memory();
     }
   }
-  V8PerIsolateData::MainThreadIsolate()->MemoryPressureNotification(
-      v8::MemoryPressureLevel::kCritical);
-  return Response::Success();
+  v8::Isolate* isolate =
+      frames_->Root()->GetPage()->GetAgentGroupScheduler().Isolate();
+  isolate->MemoryPressureNotification(v8::MemoryPressureLevel::kCritical);
+  return protocol::Response::Success();
 }
 
 void InspectorMemoryAgent::Trace(Visitor* visitor) const {
@@ -94,42 +94,42 @@ void InspectorMemoryAgent::Restore() {
                 protocol::Maybe<bool>());
 }
 
-Response InspectorMemoryAgent::startSampling(
+protocol::Response InspectorMemoryAgent::startSampling(
     protocol::Maybe<int> in_sampling_interval,
     protocol::Maybe<bool> in_suppressRandomness) {
   int interval =
-      in_sampling_interval.fromMaybe(kDefaultNativeMemorySamplingInterval);
+      in_sampling_interval.value_or(kDefaultNativeMemorySamplingInterval);
   if (interval <= 0)
-    return Response::ServerError("Invalid sampling rate.");
+    return protocol::Response::ServerError("Invalid sampling rate.");
   base::SamplingHeapProfiler::Get()->SetSamplingInterval(interval);
   sampling_profile_interval_.Set(interval);
-  if (in_suppressRandomness.fromMaybe(false)) {
+  if (in_suppressRandomness.value_or(false)) {
     randomness_suppressor_ = std::make_unique<
         base::PoissonAllocationSampler::ScopedSuppressRandomnessForTesting>();
   }
   profile_id_ = base::SamplingHeapProfiler::Get()->Start();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorMemoryAgent::stopSampling() {
+protocol::Response InspectorMemoryAgent::stopSampling() {
   if (sampling_profile_interval_.Get() == 0)
-    return Response::ServerError("Sampling profiler is not started.");
+    return protocol::Response::ServerError("Sampling profiler is not started.");
   base::SamplingHeapProfiler::Get()->Stop();
   sampling_profile_interval_.Clear();
   randomness_suppressor_.reset();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorMemoryAgent::getAllTimeSamplingProfile(
+protocol::Response InspectorMemoryAgent::getAllTimeSamplingProfile(
     std::unique_ptr<protocol::Memory::SamplingProfile>* out_profile) {
   *out_profile = GetSamplingProfileById(0);
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorMemoryAgent::getSamplingProfile(
+protocol::Response InspectorMemoryAgent::getSamplingProfile(
     std::unique_ptr<protocol::Memory::SamplingProfile>* out_profile) {
   *out_profile = GetSamplingProfileById(profile_id_);
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 std::unique_ptr<protocol::Memory::SamplingProfile>
@@ -159,7 +159,9 @@ InspectorMemoryAgent::GetSamplingProfileById(uint32_t id) {
   // TODO(alph): Add workers' heap sizes.
   if (!id) {
     v8::HeapStatistics heap_stats;
-    v8::Isolate::GetCurrent()->GetHeapStatistics(&heap_stats);
+    v8::Isolate* isolate =
+        frames_->Root()->GetPage()->GetAgentGroupScheduler().Isolate();
+    isolate->GetHeapStatistics(&heap_stats);
     size_t total_bytes = heap_stats.total_heap_size();
     auto stack = std::make_unique<protocol::Array<protocol::String>>();
     stack->emplace_back("<V8 Heap>");
@@ -189,14 +191,14 @@ InspectorMemoryAgent::GetSamplingProfileById(uint32_t id) {
 }
 
 Vector<String> InspectorMemoryAgent::Symbolize(
-    const WebVector<void*>& addresses) {
+    const WebVector<const void*>& addresses) {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // TODO(alph): Move symbolization to the client.
-  Vector<void*> addresses_to_symbolize;
-  for (size_t i = 0; i < addresses.size(); i++) {
-    void* address = addresses[i];
-    if (!symbols_cache_.Contains(address))
+  Vector<const void*> addresses_to_symbolize;
+  for (const void* address : addresses) {
+    if (!symbols_cache_.Contains(address)) {
       addresses_to_symbolize.push_back(address);
+    }
   }
 
   String text(base::debug::StackTrace(addresses_to_symbolize.data(),
@@ -217,7 +219,7 @@ Vector<String> InspectorMemoryAgent::Symbolize(
 #endif
 
   Vector<String> result;
-  for (void* address : addresses) {
+  for (const void* address : addresses) {
     char buffer[20];
     std::snprintf(buffer, sizeof(buffer), "0x%" PRIxPTR,
                   reinterpret_cast<uintptr_t>(address));

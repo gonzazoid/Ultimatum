@@ -10,21 +10,23 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/debug/stack_trace.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/ostream_operators.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "cc/base/devtools_instrumentation.h"
 #include "cc/base/features.h"
 #include "cc/base/histograms.h"
 #include "cc/raster/tile_task.h"
 #include "cc/tiles/mipmap_util.h"
+#include "components/miracle_parameter/common/public/miracle_parameter.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 
 using base::trace_event::MemoryAllocatorDump;
@@ -33,12 +35,18 @@ using base::trace_event::MemoryDumpLevelOfDetail;
 namespace cc {
 namespace {
 
+BASE_FEATURE(kNormalMaxItemsInCacheForSoftwareFeature,
+             "NormalMaxItemsInCacheForSoftwareFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // The number of entries to keep around in the cache. This limit can be breached
 // if more items are locked. That is, locked items ignore this limit.
 // Depending on the memory state of the system, we limit the amount of items
 // differently.
-const size_t kNormalMaxItemsInCacheForSoftware = 1000;
+MIRACLE_PARAMETER_FOR_INT(GetNormalMaxItemsInCacheForSoftware,
+                          kNormalMaxItemsInCacheForSoftwareFeature,
+                          "NormalMaxItemsInCacheForSoftware",
+                          1000)
 
 class AutoRemoveKeyFromTaskMap {
  public:
@@ -48,14 +56,14 @@ class AutoRemoveKeyFromTaskMap {
                          SoftwareImageDecodeCache::CacheKeyHash>* task_map,
       const SoftwareImageDecodeCache::CacheKey& key)
       : task_map_(task_map), key_(key) {}
-  ~AutoRemoveKeyFromTaskMap() { task_map_->erase(key_); }
+  ~AutoRemoveKeyFromTaskMap() { task_map_->erase(*key_); }
 
  private:
   raw_ptr<std::unordered_map<SoftwareImageDecodeCache::CacheKey,
                              scoped_refptr<TileTask>,
                              SoftwareImageDecodeCache::CacheKeyHash>>
       task_map_;
-  const SoftwareImageDecodeCache::CacheKey& key_;
+  const raw_ref<const SoftwareImageDecodeCache::CacheKey> key_;
 };
 
 class SoftwareImageDecodeTaskImpl : public TileTask {
@@ -92,7 +100,7 @@ class SoftwareImageDecodeTaskImpl : public TileTask {
         image_metadata ? image_metadata->image_type : ImageType::kInvalid;
     devtools_instrumentation::ScopedImageDecodeTask image_decode_task(
         paint_image_.GetSwSkImage().get(),
-        devtools_instrumentation::ScopedImageDecodeTask::kSoftware,
+        devtools_instrumentation::ScopedImageDecodeTask::DecodeType::kSoftware,
         ImageDecodeCache::ToScopedTaskType(tracing_info_.task_type),
         ImageDecodeCache::ToScopedImageType(image_type));
     SoftwareImageDecodeCache::TaskProcessingResult result =
@@ -119,7 +127,7 @@ class SoftwareImageDecodeTaskImpl : public TileTask {
   ~SoftwareImageDecodeTaskImpl() override = default;
 
  private:
-  raw_ptr<SoftwareImageDecodeCache, DanglingUntriaged> cache_;
+  raw_ptr<SoftwareImageDecodeCache, AcrossTasksDanglingUntriaged> cache_;
   SoftwareImageDecodeCache::CacheKey image_key_;
   PaintImage paint_image_;
   SoftwareImageDecodeCache::DecodeTaskType task_type_;
@@ -159,14 +167,14 @@ SoftwareImageDecodeCache::SoftwareImageDecodeCache(
       locked_images_budget_(locked_memory_limit_bytes),
       color_type_(color_type),
       generator_client_id_(PaintImage::GetNextGeneratorClientId()),
-      max_items_in_cache_(kNormalMaxItemsInCacheForSoftware) {
+      max_items_in_cache_(GetNormalMaxItemsInCacheForSoftware()) {
   DCHECK_NE(generator_client_id_, PaintImage::kDefaultGeneratorClientId);
-  // In certain cases, ThreadTaskRunnerHandle isn't set (Android Webview).
-  // Don't register a dump provider in these cases.
-  if (base::ThreadTaskRunnerHandle::IsSet()) {
+  // In certain cases, SingleThreadTaskRunner::CurrentDefaultHandle isn't set
+  // (Android Webview).  Don't register a dump provider in these cases.
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
     base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
         this, "cc::SoftwareImageDecodeCache",
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -177,16 +185,22 @@ SoftwareImageDecodeCache::~SoftwareImageDecodeCache() {
 }
 
 ImageDecodeCache::TaskResult SoftwareImageDecodeCache::GetTaskForImageAndRef(
+    ClientId client_id,
     const DrawImage& image,
     const TracingInfo& tracing_info) {
   DCHECK_EQ(tracing_info.task_type, TaskType::kInRaster);
+  DCHECK_EQ(client_id, ImageDecodeCache::kDefaultClientId)
+      << "SoftwareImageDecodeCache cannot be shared between multiple clients.";
   return GetTaskForImageAndRefInternal(image, tracing_info,
                                        DecodeTaskType::USE_IN_RASTER_TASKS);
 }
 
 ImageDecodeCache::TaskResult
 SoftwareImageDecodeCache::GetOutOfRasterDecodeTaskForImageAndRef(
+    ClientId client_id,
     const DrawImage& image) {
+  DCHECK_EQ(client_id, ImageDecodeCache::kDefaultClientId)
+      << "SoftwareImageDecodeCache cannot be shared between multiple clients.";
   return GetTaskForImageAndRefInternal(
       image, TracingInfo(0, TilePriority::NOW, TaskType::kOutOfRaster),
       DecodeTaskType::USE_OUT_OF_RASTER_TASKS);
@@ -313,6 +327,8 @@ void SoftwareImageDecodeCache::UnrefImage(const CacheKey& key) {
       RemoveBudgetForImage(key, entry);
     if (entry->is_locked)
       entry->Unlock();
+
+    ReduceCacheUsageUntilWithinLimit(max_items_in_cache_);
   }
 }
 
@@ -376,7 +392,7 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
   } else {
     // Attempt to find a cached decode to generate a scaled/subrected decode
     // from.
-    absl::optional<CacheKey> candidate_key = FindCachedCandidate(key);
+    std::optional<CacheKey> candidate_key = FindCachedCandidate(key);
 
     SkISize desired_size = gfx::SizeToSkISize(key.target_size());
     const bool should_decode_to_scale =
@@ -484,7 +500,7 @@ SoftwareImageDecodeCache::DecodeImageIfNecessary(const CacheKey& key,
   return TaskProcessingResult::kFullDecode;
 }
 
-absl::optional<SoftwareImageDecodeCache::CacheKey>
+std::optional<SoftwareImageDecodeCache::CacheKey>
 SoftwareImageDecodeCache::FindCachedCandidate(const CacheKey& key) {
   auto image_keys_it = frame_key_to_image_keys_.find(key.frame_key());
   // We know that we must have at least our own |entry| in this list, so it
@@ -518,7 +534,7 @@ SoftwareImageDecodeCache::FindCachedCandidate(const CacheKey& key) {
     }
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool SoftwareImageDecodeCache::UseCacheForDrawImage(
@@ -543,6 +559,15 @@ bool SoftwareImageDecodeCache::UseCacheForDrawImage(
   }
 
   return false;
+}
+
+ImageDecodeCache::ClientId SoftwareImageDecodeCache::GenerateClientId() {
+  ClientId next_client_id = ImageDecodeCache::GenerateClientId();
+  // The software decode cache cannot be shared between multiple clients. Thus,
+  // this DCHECK helps us to verify the software cache has only a single client
+  // that generated a client id for itself only oce.
+  DCHECK_EQ(ImageDecodeCache::kDefaultClientId, next_client_id);
+  return next_client_id;
 }
 
 DecodedDrawImage SoftwareImageDecodeCache::GetDecodedImageForDraw(
@@ -659,7 +684,7 @@ bool SoftwareImageDecodeCache::OnMemoryDump(
     base::trace_event::ProcessMemoryDump* pmd) {
   base::AutoLock lock(lock_);
 
-  if (args.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     std::string dump_name = base::StringPrintf(
         "cc/image_memory/cache_0x%" PRIXPTR, reinterpret_cast<uintptr_t>(this));
     MemoryAllocatorDump* dump = pmd->CreateAllocatorDump(dump_name);
@@ -709,20 +734,24 @@ size_t SoftwareImageDecodeCache::GetNumCacheEntriesForTesting() {
   base::AutoLock lock(lock_);
   return decoded_images_.size();
 }
+size_t SoftwareImageDecodeCache::GetMaxNumCacheEntriesForTesting() {
+  return GetNormalMaxItemsInCacheForSoftware();
+}
 
 SkColorType SoftwareImageDecodeCache::GetColorTypeForPaintImage(
     const TargetColorParams& target_color_params,
     const PaintImage& paint_image) {
   const gfx::ColorSpace& target_color_space = target_color_params.color_space;
-  // Decode HDR images to half float when targeting HDR.
-  //
   // TODO(crbug.com/1076568): Once we have access to the display's buffer format
   // via gfx::DisplayColorSpaces, we should also do this for HBD images.
-  if (paint_image.GetContentColorUsage() == gfx::ContentColorUsage::kHDR &&
+  // Do not decode an image to F16 unless the PaintImage reports that its type
+  // is F16. Otherwise, image decode will fail.
+  // https://crbug.com/1488786
+  if (paint_image.GetColorType() == kRGBA_F16_SkColorType &&
+      paint_image.GetContentColorUsage() == gfx::ContentColorUsage::kHDR &&
       target_color_space.IsHDR()) {
     return kRGBA_F16_SkColorType;
   }
-
   return color_type_;
 }
 

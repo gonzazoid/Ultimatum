@@ -8,7 +8,7 @@
 
 #include <limits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #include "mojo/core/core_test_base.h"
@@ -33,6 +33,10 @@ const MojoHandleSignals kAllSignals =
 using CoreTest = test::CoreTestBase;
 
 TEST_F(CoreTest, GetTimeTicksNow) {
+  if (IsMojoIpczEnabled()) {
+    GTEST_SKIP() << "Not relevant when MojoIpcz is enabled.";
+  }
+
   const MojoTimeTicks start = core()->GetTimeTicksNow();
   ASSERT_NE(static_cast<MojoTimeTicks>(0), start)
       << "GetTimeTicksNow should return nonzero value";

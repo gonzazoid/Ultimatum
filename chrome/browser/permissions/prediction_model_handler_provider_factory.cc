@@ -4,7 +4,7 @@
 
 #include "chrome/browser/permissions/prediction_model_handler_provider_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -16,7 +16,8 @@
 // static
 PredictionModelHandlerProviderFactory*
 PredictionModelHandlerProviderFactory::GetInstance() {
-  return base::Singleton<PredictionModelHandlerProviderFactory>::get();
+  static base::NoDestructor<PredictionModelHandlerProviderFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -30,14 +31,20 @@ PredictionModelHandlerProviderFactory::GetForBrowserContext(
 PredictionModelHandlerProviderFactory::PredictionModelHandlerProviderFactory()
     : ProfileKeyedServiceFactory(
           "PredictionModelHandlerProvider",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
 }
 
 PredictionModelHandlerProviderFactory::
     ~PredictionModelHandlerProviderFactory() = default;
 
-KeyedService* PredictionModelHandlerProviderFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PredictionModelHandlerProviderFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   OptimizationGuideKeyedService* optimization_guide =
@@ -45,5 +52,11 @@ KeyedService* PredictionModelHandlerProviderFactory::BuildServiceInstanceFor(
 
   if (!optimization_guide)
     return nullptr;
-  return new permissions::PredictionModelHandlerProvider(optimization_guide);
+  return std::make_unique<permissions::PredictionModelHandlerProvider>(
+      optimization_guide);
+}
+
+bool PredictionModelHandlerProviderFactory::ServiceIsCreatedWithBrowserContext()
+    const {
+  return true;
 }

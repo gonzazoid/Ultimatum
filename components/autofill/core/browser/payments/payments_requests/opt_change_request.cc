@@ -16,10 +16,10 @@ const char kOptChangeRequestPath[] =
 }  // namespace
 
 OptChangeRequest::OptChangeRequest(
-    const PaymentsClient::OptChangeRequestDetails& request_details,
-    base::OnceCallback<void(AutofillClient::PaymentsRpcResult,
-                            PaymentsClient::OptChangeResponseDetails&)>
-        callback,
+    const PaymentsNetworkInterface::OptChangeRequestDetails& request_details,
+    base::OnceCallback<
+        void(AutofillClient::PaymentsRpcResult,
+             PaymentsNetworkInterface::OptChangeResponseDetails&)> callback,
     const bool full_sync_enabled)
     : request_details_(request_details),
       callback_(std::move(callback)),
@@ -39,7 +39,7 @@ std::string OptChangeRequest::GetRequestContent() {
   base::Value::Dict request_dict;
   base::Value::Dict context;
   context.Set("language_code", request_details_.app_locale);
-  context.Set("billable_service", kUnmaskCardBillableServiceNumber);
+  context.Set("billable_service", kUnmaskPaymentMethodBillableServiceNumber);
   request_dict.Set("context", std::move(context));
 
   base::Value::Dict chrome_user_context;
@@ -48,13 +48,14 @@ std::string OptChangeRequest::GetRequestContent() {
 
   std::string reason;
   switch (request_details_.reason) {
-    case PaymentsClient::OptChangeRequestDetails::ENABLE_FIDO_AUTH:
+    case PaymentsNetworkInterface::OptChangeRequestDetails::ENABLE_FIDO_AUTH:
       reason = "ENABLE_FIDO_AUTH";
       break;
-    case PaymentsClient::OptChangeRequestDetails::DISABLE_FIDO_AUTH:
+    case PaymentsNetworkInterface::OptChangeRequestDetails::DISABLE_FIDO_AUTH:
       reason = "DISABLE_FIDO_AUTH";
       break;
-    case PaymentsClient::OptChangeRequestDetails::ADD_CARD_FOR_FIDO_AUTH:
+    case PaymentsNetworkInterface::OptChangeRequestDetails::
+        ADD_CARD_FOR_FIDO_AUTH:
       reason = "ADD_CARD_FOR_FIDO_AUTH";
       break;
     default:
@@ -85,24 +86,23 @@ std::string OptChangeRequest::GetRequestContent() {
   return request_content;
 }
 
-void OptChangeRequest::ParseResponse(const base::Value& response) {
-  const auto* fido_authentication_info = response.FindKeyOfType(
-      "fido_authentication_info", base::Value::Type::DICTIONARY);
+void OptChangeRequest::ParseResponse(const base::Value::Dict& response) {
+  const auto* fido_authentication_info =
+      response.FindDict("fido_authentication_info");
   if (!fido_authentication_info)
     return;
 
-  const auto* user_status =
-      fido_authentication_info->FindStringKey("user_status");
+  const auto* user_status = fido_authentication_info->FindString("user_status");
   if (user_status && *user_status != "UNKNOWN_USER_STATUS")
     response_details_.user_is_opted_in = (*user_status == "FIDO_AUTH_ENABLED");
 
-  const auto* fido_creation_options = fido_authentication_info->FindKeyOfType(
-      "fido_creation_options", base::Value::Type::DICTIONARY);
+  const auto* fido_creation_options =
+      fido_authentication_info->FindDict("fido_creation_options");
   if (fido_creation_options)
     response_details_.fido_creation_options = fido_creation_options->Clone();
 
-  const auto* fido_request_options = fido_authentication_info->FindKeyOfType(
-      "fido_request_options", base::Value::Type::DICTIONARY);
+  const auto* fido_request_options =
+      fido_authentication_info->FindDict("fido_request_options");
   if (fido_request_options)
     response_details_.fido_request_options = fido_request_options->Clone();
 }

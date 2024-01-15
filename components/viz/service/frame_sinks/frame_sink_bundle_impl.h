@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ref.h"
 #include "build/build_config.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/surfaces/frame_sink_bundle_id.h"
@@ -66,6 +67,7 @@ class FrameSinkBundleImpl : public mojom::FrameSinkBundle {
       uint32_t sink_id,
       mojom::CompositorFrameSinkType type) override;
   void SetNeedsBeginFrame(uint32_t sink_id, bool needs_begin_frame) override;
+  void SetWantsBeginFrameAcks(uint32_t sink_id) override;
   void Submit(
       std::vector<mojom::BundledFrameSubmissionPtr> submissions) override;
   void DidAllocateSharedBitmap(uint32_t sink_id,
@@ -84,7 +86,9 @@ class FrameSinkBundleImpl : public mojom::FrameSinkBundle {
   void EnqueueOnBeginFrame(
       uint32_t sink_id,
       const BeginFrameArgs& args,
-      const base::flat_map<uint32_t, FrameTimingDetails>& details);
+      const base::flat_map<uint32_t, FrameTimingDetails>& details,
+      bool frame_ack,
+      std::vector<ReturnedResource> resources);
   void EnqueueReclaimResources(uint32_t sink_id,
                                std::vector<ReturnedResource> resources);
   void SendOnBeginFramePausedChanged(uint32_t sink_id, bool paused);
@@ -102,7 +106,7 @@ class FrameSinkBundleImpl : public mojom::FrameSinkBundle {
 
   void OnDisconnect();
 
-  FrameSinkManagerImpl& manager_;
+  const raw_ref<FrameSinkManagerImpl> manager_;
   const FrameSinkBundleId id_;
 
   mojo::Receiver<mojom::FrameSinkBundle> receiver_;

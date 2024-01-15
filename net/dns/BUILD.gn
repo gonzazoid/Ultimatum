@@ -6,7 +6,7 @@ import("//net/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//third_party/protobuf/proto_library.gni")
 
-enable_built_in_dns = !is_ios
+enable_built_in_dns = use_blink
 
 source_set("dns") {
   # Due to circular dependencies, should only be depended on through //net.
@@ -43,6 +43,8 @@ source_set("dns") {
     "dns_config_service.h",
     "dns_hosts.cc",
     "dns_hosts.h",
+    "dns_names_util.cc",
+    "dns_names_util.h",
     "dns_query.cc",
     "dns_query.h",
     "dns_reloader.cc",
@@ -61,6 +63,10 @@ source_set("dns") {
     "dns_util.h",
     "host_cache.cc",
     "host_resolver.cc",
+    "host_resolver_cache.cc",
+    "host_resolver_cache.h",
+    "host_resolver_internal_result.cc",
+    "host_resolver_internal_result.h",
     "host_resolver_manager.cc",
     "host_resolver_mdns_listener_impl.cc",
     "host_resolver_mdns_listener_impl.h",
@@ -75,6 +81,8 @@ source_set("dns") {
     "https_record_rdata.cc",
     "httpssvc_metrics.cc",
     "httpssvc_metrics.h",
+    "loopback_only.cc",
+    "loopback_only.h",
     "mapped_host_resolver.cc",
     "nsswitch_reader.cc",
     "nsswitch_reader.h",
@@ -396,6 +404,7 @@ source_set("tests") {
     "dns_alias_utility_unittest.cc",
     "dns_config_service_unittest.cc",
     "dns_hosts_unittest.cc",
+    "dns_names_util_unittest.cc",
     "dns_query_unittest.cc",
     "dns_response_result_extractor_unittest.cc",
     "dns_response_unittest.cc",
@@ -403,9 +412,12 @@ source_set("tests") {
     "dns_udp_tracker_unittest.cc",
     "dns_util_unittest.cc",
     "host_cache_unittest.cc",
+    "host_resolver_cache_unittest.cc",
+    "host_resolver_internal_result_unittest.cc",
     "host_resolver_manager_unittest.cc",
     "https_record_rdata_unittest.cc",
     "httpssvc_metrics_unittest.cc",
+    "loopback_only_unittest.cc",
     "mapped_host_resolver_unittest.cc",
     "nsswitch_reader_unittest.cc",
     "opt_record_rdata_unittest.cc",
@@ -459,11 +471,13 @@ source_set("test_support") {
   testonly = true
   sources = [
     "dns_test_util.cc",
+    "host_resolver_internal_result_test_util.cc",
     "host_resolver_results_test_util.cc",
     "mock_host_resolver.cc",
   ]
   public = [
     "dns_test_util.h",
+    "host_resolver_internal_result_test_util.h",
     "host_resolver_results_test_util.h",
     "mock_host_resolver.h",
   ]
@@ -534,6 +548,18 @@ fuzzer_test("net_dns_hosts_parse_fuzzer") {
   dict = "//net/data/fuzzer_dictionaries/net_dns_hosts_parse_fuzzer.dict"
 }
 
+fuzzer_test("net_dns_host_resolver_cache_fuzzer") {
+  sources = [ "host_resolver_cache_fuzzer.cc" ]
+  deps = [
+    "//base",
+    "//net",
+    "//net:net_fuzzer_test_support",
+    "//testing/libfuzzer/proto:json_proto",
+    "//testing/libfuzzer/proto:json_proto_converter",
+    "//third_party/libprotobuf-mutator",
+  ]
+}
+
 fuzzer_test("net_dns_https_record_rdata_fuzzer") {
   sources = [ "https_record_rdata_fuzzer.cc" ]
   deps = [
@@ -593,6 +619,7 @@ fuzzer_test("net_host_resolver_manager_fuzzer") {
     "//net:test_support",
   ]
   dict = "//net/data/fuzzer_dictionaries/net_host_resolver_manager_fuzzer.dict"
+  libfuzzer_options = [ "max_len=4096" ]
 }
 
 if (is_win) {

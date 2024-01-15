@@ -14,7 +14,7 @@
 #include "cc/paint/paint_filter.h"
 #include "third_party/skia/include/core/SkColorFilter.h"
 #include "third_party/skia/include/core/SkRegion.h"
-#include "ui/gfx/geometry/size_f.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 
 namespace cc {
@@ -141,11 +141,7 @@ void GetSepiaMatrix(float amount, float matrix[20]) {
 
 sk_sp<PaintFilter> CreateMatrixImageFilter(const float matrix[20],
                                            sk_sp<PaintFilter> input) {
-  auto color_filter = SkColorFilters::Matrix(matrix);
-  if (!color_filter)
-    return nullptr;
-
-  return sk_make_sp<ColorFilterPaintFilter>(std::move(color_filter),
+  return sk_make_sp<ColorFilterPaintFilter>(ColorFilter::MakeMatrix(matrix),
                                             std::move(input));
 }
 
@@ -153,8 +149,7 @@ sk_sp<PaintFilter> CreateMatrixImageFilter(const float matrix[20],
 
 sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
     const FilterOperations& filters,
-    const gfx::SizeF& size,
-    const gfx::Vector2dF& offset) {
+    const gfx::Rect& layer_bounds) {
   sk_sp<PaintFilter> image_filter;
   float matrix[20];
   for (size_t i = 0; i < filters.size(); ++i) {
@@ -192,15 +187,32 @@ sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
         GetContrastMatrix(op.amount(), matrix);
         image_filter = CreateMatrixImageFilter(matrix, std::move(image_filter));
         break;
-      case FilterOperation::BLUR:
-        image_filter = sk_make_sp<BlurPaintFilter>(op.amount(), op.amount(),
-                                                   op.blur_tile_mode(),
-                                                   std::move(image_filter));
+      case FilterOperation::BLUR: {
+        // SkImageFilters::Blur requires a crop rect for well-defined tiling
+        // behavior when the blur_tile_mode() is not kDecal. When that is not
+        // kDecal, setting the crop to the provided layer bounds means that
+        // tile mode will be applied to the layer's pixels inside its bounds,
+        // but pixels outside its bounds will not be read. Its output will still
+        // be cropped to the layer bounds automatically.
+        // TODO(b/1451898): The software_renderer does not calculate correct
+        // layer bounds (it's always empty), so rely on the legacy clamp
+        // handling in Skia for now. Once software_renderer does provide layer
+        // bounds, FilterOperations::MapRect could be updated to reflect this
+        // cropping, since a clamped blur doesn't actually move pixels.
+        SkRect sk_layer_bounds = gfx::RectToSkRect(layer_bounds);
+        const PaintFilter::CropRect* crop_rect = nullptr;
+        if (!sk_layer_bounds.isEmpty() &&
+            op.blur_tile_mode() != SkTileMode::kDecal) {
+          crop_rect = &sk_layer_bounds;
+        }
+        image_filter = sk_make_sp<BlurPaintFilter>(
+            op.amount(), op.amount(), op.blur_tile_mode(),
+            std::move(image_filter), crop_rect);
         break;
+      }
       case FilterOperation::DROP_SHADOW:
         image_filter = sk_make_sp<DropShadowPaintFilter>(
-            SkIntToScalar(op.drop_shadow_offset().x()),
-            SkIntToScalar(op.drop_shadow_offset().y()),
+            SkIntToScalar(op.offset().x()), SkIntToScalar(op.offset().y()),
             SkIntToScalar(op.amount()), SkIntToScalar(op.amount()),
             op.drop_shadow_color(),
             DropShadowPaintFilter::ShadowMode::kDrawShadowAndForeground,
@@ -211,44 +223,15 @@ sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
                                                std::move(image_filter));
         break;
       case FilterOperation::ZOOM: {
-        // The center point, always the midpoint of the unclipped rectangle.
-        // When we go to either edge of the screen, the width/height will shrink
-        // at the same rate the offset changes. Use abs on the offset since we
-        // do not care about the offset direction.
-        gfx::Vector2dF center =
-            gfx::Vector2dF((size.width() + std::abs(offset.x())) / 2,
-                           (size.height() + std::abs(offset.y())) / 2);
-
-        // The dimensions of the source content. This shrinks as the texture
-        // rectangle gets clipped.
-        gfx::Vector2d src_dimensions =
-            gfx::Vector2d((size.width() + std::abs(offset.x())) / op.amount(),
-                          (size.height() + std::abs(offset.y())) / op.amount());
-
-        // When the magnifier goes to the left/top border of the screen, we need
-        // to adjust the x/y position of the rect. The rate the position gets
-        // updated currently only works properly for a 2x magnification.
-        DCHECK_EQ(op.amount(), 2.f);
-        gfx::Vector2dF center_offset = gfx::Vector2dF(0, 0);
-        if (offset.x() >= 0)
-          center_offset.set_x(-offset.x() / op.amount());
-        if (offset.y() <= 0)
-          center_offset.set_y(offset.y() / op.amount());
-
-        sk_sp<PaintFilter> zoom_filter = sk_make_sp<MagnifierPaintFilter>(
-            SkRect::MakeXYWH(
-                (center.x() - src_dimensions.x() / 2.f) + center_offset.x(),
-                (center.y() - src_dimensions.y() / 2.f) + center_offset.y(),
-                size.width() / op.amount(), size.height() / op.amount()),
-            op.zoom_inset(), nullptr);
-        if (image_filter) {
-          // TODO(ajuma): When there's a 1-input version of
-          // SkMagnifierImageFilter, use that to handle the input filter
-          // instead of using an SkComposeImageFilter.
-          image_filter = sk_make_sp<ComposePaintFilter>(
-              std::move(zoom_filter), std::move(image_filter));
+        DCHECK_GE(op.amount(), 1.0);
+        // ZOOM limits its output to the layer bounds automatically, so if it's
+        // empty, then it produces nothing (regardless of prior filter ops).
+        if (layer_bounds.IsEmpty()) {
+          image_filter = nullptr;
         } else {
-          image_filter = std::move(zoom_filter);
+          image_filter = sk_make_sp<MagnifierPaintFilter>(
+              gfx::RectToSkRect(layer_bounds), op.amount(), op.zoom_inset(),
+              std::move(image_filter));
         }
         break;
       }
@@ -260,7 +243,7 @@ sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
         if (!op.image_filter())
           break;
 
-        sk_sp<SkColorFilter> cf;
+        sk_sp<ColorFilter> cf;
         bool has_input = false;
         if (op.image_filter()->type() == PaintFilter::Type::kColorFilter &&
             !op.image_filter()->GetCropRect()) {
@@ -270,9 +253,9 @@ sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
           has_input = !!color_paint_filter->input();
         }
 
-        if (cf && cf->asAColorMatrix(matrix) && !has_input) {
-          image_filter =
-              CreateMatrixImageFilter(matrix, std::move(image_filter));
+        if (cf && !has_input) {
+          image_filter = sk_make_sp<ColorFilterPaintFilter>(
+              std::move(cf), std::move(image_filter));
         } else if (image_filter) {
           image_filter = sk_make_sp<ComposePaintFilter>(
               op.image_filter(), std::move(image_filter));
@@ -285,19 +268,13 @@ sk_sp<PaintFilter> RenderSurfaceFilters::BuildImageFilter(
         SkRegion region;
         for (const gfx::Rect& rect : op.shape())
           region.op(gfx::RectToSkIRect(rect), SkRegion::kUnion_Op);
-        sk_sp<PaintFilter> alpha_filter = sk_make_sp<AlphaThresholdPaintFilter>(
-            region, op.amount(), op.outer_threshold(), nullptr);
-        if (image_filter) {
-          image_filter = sk_make_sp<ComposePaintFilter>(
-              std::move(alpha_filter), std::move(image_filter));
-        } else {
-          image_filter = std::move(alpha_filter);
-        }
+        image_filter = sk_make_sp<AlphaThresholdPaintFilter>(
+            region, std::move(image_filter));
         break;
       }
-      case FilterOperation::STRETCH: {
-        image_filter = sk_make_sp<StretchPaintFilter>(
-            op.amount(), op.outer_threshold(), size.width(), size.height(),
+      case FilterOperation::OFFSET: {
+        image_filter = sk_make_sp<OffsetPaintFilter>(
+            SkIntToScalar(op.offset().x()), SkIntToScalar(op.offset().y()),
             std::move(image_filter));
         break;
       }

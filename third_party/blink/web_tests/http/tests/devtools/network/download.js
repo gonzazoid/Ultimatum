@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {NetworkTestRunner} from 'network_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that responseReceived is called on NetworkDispatcher for downloads.\n`);
-  await TestRunner.loadTestModule('network_test_runner');
   await TestRunner.showPanel('network');
 
   await TestRunner.evaluateInPagePromise(`
@@ -16,9 +20,9 @@
     };
   `);
 
-  TestRunner.addSniffer(SDK.NetworkDispatcher.prototype, 'responseReceived', responseReceived);
-  TestRunner.addSniffer(SDK.NetworkDispatcher.prototype, 'loadingFailed', loadingFailed);
-  TestRunner.addSniffer(SDK.NetworkDispatcher.prototype, 'loadingFinished', loadingFinished);
+  TestRunner.addSniffer(SDK.NetworkManager.NetworkDispatcher.prototype, 'responseReceived', responseReceived);
+  TestRunner.addSniffer(SDK.NetworkManager.NetworkDispatcher.prototype, 'loadingFailed', loadingFailed);
+  TestRunner.addSniffer(SDK.NetworkManager.NetworkDispatcher.prototype, 'loadingFinished', loadingFinished);
   TestRunner.addIframe('resources/download.zzz');
 
   function responseReceived(event) {

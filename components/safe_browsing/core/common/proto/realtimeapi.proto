@@ -106,6 +106,8 @@ message RTLookupResponse {
       UNWANTED_SOFTWARE = 4;
       // Unclear Billing threat type
       UNCLEAR_BILLING = 5;
+      // Enterprise-specific threat type for managed policy related verdicts.
+      MANAGED_POLICY = 6;
 
       reserved 2;
     }
@@ -126,6 +128,8 @@ message RTLookupResponse {
     enum VerdictType {
       VERDICT_TYPE_UNSPECIFIED = 0;
       SAFE = 1;
+      SUSPICIOUS = 50;
+      WARN = 75;
       DANGEROUS = 100;
     }
     optional VerdictType verdict_type = 4;
@@ -155,6 +159,10 @@ message RTLookupResponse {
     // “cache_expression_match_type” is not set, it means this expression is not
     // applicable for caching, and the entry should be ignored.
     optional string cache_expression_using_match_type = 6;
+
+    // Contains information about the detected enterprise rule match. This is
+    // only populated if ‘ThreatType’ is “MANAGED_POLICY”.
+    optional MatchedUrlNavigationRule matched_url_navigation_rule = 7;
   }
 
   // Each matching url can have multiple threats detected, if the response
@@ -162,4 +170,59 @@ message RTLookupResponse {
   // of severity so that the client could choose first applicable threat_info
   // as the most severe one.
   repeated ThreatInfo threat_info = 1;
+
+  // When set, represents the realtime API asking the client side detection
+  // module to send a ping regardless of the scoring found in CSD models.
+  optional ClientSideDetectionType client_side_detection_type = 2;
+
+  // The URL categories associated with the URL in the request. Only populated
+  // for Enterprise Protego and only if categories were found for the URL.
+  repeated string url_categories = 3;
+}
+
+// Contains information about a matched URL Filtering rule defined by
+// enterprise policies.
+message MatchedUrlNavigationRule {
+  // The id of the matched rule that caused this verdict.
+  optional string rule_id = 1;
+  // The name (as defined in the admin console by the admin who defined this
+  // rule) of the matched rule that caused this verdict.
+  optional string rule_name = 2;
+  // If the match was due to an URL category, it is found here.
+  optional string matched_url_category = 3;
+
+  // Action for matched rule not implemented.
+  reserved 4;
+
+  // This represents text segment in a custom message defined for DLP rule.
+  // For eg: “Please learn more (here)[link] and (here)[link]"
+  // is broken into 4 segments.
+  message CustomRuleMessageSegment {
+    // Required. Text to be displayed in this segment.
+    optional string text = 1;
+
+    // Optional. Link to external resource, such as a company's communication
+    // policy. This is supposed to be hyperlink on text field above.
+    optional string link = 2;
+  }
+
+  message CustomMessage {
+    // Custom message provided by admin during rule creation. Contains text
+    // only.
+    optional string custom_message = 1 [deprecated = true];
+
+    // learn more link provided by admin during rule creation. Contains a single
+    // URL.
+    optional string learn_more_link = 2 [deprecated = true];
+
+    // Custom message containing <a> tags wrapping URLs. This is sanitized HTML
+    // restricted to <a> tags with "href" attribute.
+    optional string custom_message_with_links = 3 [deprecated = true];
+
+    // Ordered list of text segments comprised of plain text and URLs. These
+    // combined represent the custom rule message.
+    repeated CustomRuleMessageSegment message_segments = 4;
+  }
+  // Contains custom interstitial message associated with this rule.
+  optional CustomMessage custom_message = 5;
 }

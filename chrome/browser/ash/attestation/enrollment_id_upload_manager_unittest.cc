@@ -9,14 +9,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/attestation/enrollment_id_upload_manager.h"
 #include "chrome/browser/ash/attestation/mock_enrollment_certificate_uploader.h"
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
@@ -25,24 +24,24 @@
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using CertificateStatus =
-    ash::attestation::EnrollmentCertificateUploader::Status;
-using testing::_;
-using testing::Invoke;
-using testing::Return;
-using testing::StrictMock;
-using testing::WithArgs;
-
 namespace ash {
 namespace attestation {
 
 namespace {
 
+using CertificateStatus = EnrollmentCertificateUploader::Status;
+using ::testing::_;
+using ::testing::Invoke;
+using ::testing::StrictMock;
+using ::testing::WithArgs;
+
 constexpr int kRetryLimit = 3;
 
-void StatusCallbackSuccess(policy::CloudPolicyClient::StatusCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+void ResultCallbackSuccess(policy::CloudPolicyClient::ResultCallback callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), policy::CloudPolicyClient::Result(
+                                              policy::DM_STATUS_SUCCESS)));
 }
 
 }  // namespace
@@ -110,7 +109,7 @@ class EnrollmentIdUploadManagerTest : public DeviceSettingsTestBase {
     }
     EXPECT_CALL(policy_client_, UploadEnterpriseEnrollmentId(enrollment_id_, _))
         .Times(times)
-        .WillRepeatedly(WithArgs<1>(Invoke(StatusCallbackSuccess)));
+        .WillRepeatedly(WithArgs<1>(Invoke(ResultCallbackSuccess)));
   }
 
   void SetUpDevicePolicy(bool enrollment_id_needed) {

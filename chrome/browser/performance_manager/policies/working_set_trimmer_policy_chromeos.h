@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
@@ -116,7 +117,7 @@ class WorkingSetTrimmerPolicyChromeOS : public WorkingSetTrimmerPolicy {
   virtual void TrimArcProcesses();
   virtual bool IsArcProcessEligibleForReclaim(
       const arc::ArcProcess& arc_process);
-  virtual bool TrimArcProcess(base::ProcessId pid);
+  virtual void TrimArcProcess(base::ProcessId pid);
 
   // TrimArcVmProcesses will ask the delegate if it is safe to reclaim memory
   // from ARCVM, and do that when it is. These are virtual for testing.
@@ -172,16 +173,7 @@ class WorkingSetTrimmerPolicyChromeOS : public WorkingSetTrimmerPolicy {
   absl::optional<base::MemoryPressureListener> memory_pressure_listener_;
 
  private:
-  static size_t GetArcVmTrimCountForFinalReport(
-      size_t current_arcvm_trim_count,
-      const base::TimeDelta& time_since_last_arcvm_trim_metric_report,
-      const base::TimeDelta& arcvm_trim_backoff_time,
-      const base::TimeDelta& arcvm_trim_metric_report_delay);
-
-  void ReportArcVmTrimMetric();
-  void ReportArcVmTrimMetricOnDestruction();
-
-  Graph* graph_ = nullptr;
+  raw_ptr<Graph> graph_ = nullptr;
 
   bool trim_on_freeze_ = false;
   bool trim_arc_on_memory_pressure_ = false;
@@ -189,13 +181,6 @@ class WorkingSetTrimmerPolicyChromeOS : public WorkingSetTrimmerPolicy {
 
   // This map contains the last trim time of arc processes.
   std::map<base::ProcessId, base::TimeTicks> arc_processes_last_trim_;
-
-  // A timer for periodically reporting UMA stats.
-  base::RepeatingTimer arcvm_trim_metric_report_timer_;
-
-  size_t arcvm_trim_count_ = 0;
-  size_t arcvm_trim_fail_count_ = 0;
-  base::ElapsedTimer time_since_last_arcvm_trim_metric_report_;
 
   base::WeakPtrFactory<WorkingSetTrimmerPolicyChromeOS> weak_ptr_factory_{this};
 };

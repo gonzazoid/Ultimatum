@@ -48,7 +48,7 @@ class V8MIDIPortDeviceState;
 using MIDIPortConnectionState = V8MIDIPortConnectionState::Enum;
 using MIDIPortType = V8MIDIPortType::Enum;
 
-class MIDIPort : public EventTargetWithInlineData,
+class MIDIPort : public EventTarget,
                  public ActiveScriptWrappable<MIDIPort>,
                  public ExecutionContextLifecycleObserver {
   DEFINE_WRAPPERTYPEINFO();
@@ -98,7 +98,7 @@ class MIDIPort : public EventTargetWithInlineData,
 
   void open();
   bool IsOpening() { return running_open_count_; }
-  MIDIAccess* midiAccess() const { return access_; }
+  MIDIAccess* midiAccess() const { return access_.Get(); }
 
  private:
   void OpenAsynchronously(ScriptPromiseResolver*);

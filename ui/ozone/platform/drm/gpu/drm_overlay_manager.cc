@@ -16,6 +16,7 @@
 #include "ui/ozone/public/overlay_surface_candidate.h"
 
 namespace ui {
+
 namespace {
 
 // Maximum number of overlay configurations to keep in MRU cache.
@@ -221,8 +222,11 @@ bool DrmOverlayManager::CanHandleCandidate(
   if (candidate.buffer_size.IsEmpty())
     return false;
 
-  if (candidate.transform == gfx::OVERLAY_TRANSFORM_INVALID)
+  if (!absl::holds_alternative<gfx::OverlayTransform>(candidate.transform) ||
+      absl::get<gfx::OverlayTransform>(candidate.transform) ==
+          gfx::OVERLAY_TRANSFORM_INVALID) {
     return false;
+  }
 
   // The remaining checks are for ensuring consistency between GL compositing
   // and overlays. If we must use an overlay, then skip the remaining checks.

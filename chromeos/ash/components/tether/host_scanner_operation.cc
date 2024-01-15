@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/tether/connection_preserver.h"
@@ -146,7 +147,7 @@ HostScannerOperation::HostScannerOperation(
       tether_host_response_recorder_(tether_host_response_recorder),
       connection_preserver_(connection_preserver),
       clock_(base::DefaultClock::GetInstance()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 HostScannerOperation::~HostScannerOperation() = default;
 

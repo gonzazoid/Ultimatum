@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -16,6 +16,7 @@
 #include "chrome/browser/feedback/system_logs/chrome_system_logs_fetcher.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/simple_message_box.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/feedback/system_logs/system_logs_fetcher.h"
@@ -102,12 +103,15 @@ base::Value::Dict ChromeFeedbackPrivateDelegate::GetStrings(
   // Add the localized strings needed for the "system information" page.
   SET_STRING("sysinfoPageTitle", IDS_FEEDBACK_SYSINFO_PAGE_TITLE);
   SET_STRING("sysinfoPageDescription", IDS_ABOUT_SYS_DESC);
-  SET_STRING("sysinfoPageTableTitle", IDS_ABOUT_SYS_TABLE_TITLE);
-  SET_STRING("sysinfoPageExpandAllBtn", IDS_ABOUT_SYS_EXPAND_ALL);
-  SET_STRING("sysinfoPageCollapseAllBtn", IDS_ABOUT_SYS_COLLAPSE_ALL);
-  SET_STRING("sysinfoPageExpandBtn", IDS_ABOUT_SYS_EXPAND);
-  SET_STRING("sysinfoPageCollapseBtn", IDS_ABOUT_SYS_COLLAPSE);
-  SET_STRING("sysinfoPageStatusLoading", IDS_FEEDBACK_SYSINFO_PAGE_LOADING);
+
+  // Add the localized strings shared by the "autofill metadata" and "system
+  // information" page.
+  SET_STRING("logsMapPageTableTitle", IDS_ABOUT_SYS_TABLE_TITLE);
+  SET_STRING("logsMapPageExpandAllBtn", IDS_ABOUT_SYS_EXPAND_ALL);
+  SET_STRING("logsMapPageCollapseAllBtn", IDS_ABOUT_SYS_COLLAPSE_ALL);
+  SET_STRING("logsMapPageExpandBtn", IDS_ABOUT_SYS_EXPAND);
+  SET_STRING("logsMapPageCollapseBtn", IDS_ABOUT_SYS_COLLAPSE);
+  SET_STRING("logsMapPageStatusLoading", IDS_FEEDBACK_SYSINFO_PAGE_LOADING);
 #undef SET_STRING
 
   const std::string& app_locale = g_browser_process->GetApplicationLocale();
@@ -136,49 +140,49 @@ ChromeFeedbackPrivateDelegate::CreateSingleLogSource(
 
   switch (source_type) {
     // These map to SupportedLogFileSources.
-    case api::feedback_private::LOG_SOURCE_MESSAGES:
+    case api::feedback_private::LogSource::kMessages:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kMessages);
-    case api::feedback_private::LOG_SOURCE_UILATEST:
+    case api::feedback_private::LogSource::kUiLatest:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kUiLatest);
-    case api::feedback_private::LOG_SOURCE_ATRUSLOG:
+    case api::feedback_private::LogSource::kAtrusLog:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kAtrusLog);
-    case api::feedback_private::LOG_SOURCE_NETLOG:
+    case api::feedback_private::LogSource::kNetLog:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kNetLog);
-    case api::feedback_private::LOG_SOURCE_EVENTLOG:
+    case api::feedback_private::LogSource::kEventLog:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kEventLog);
-    case api::feedback_private::LOG_SOURCE_UPDATEENGINELOG:
+    case api::feedback_private::LogSource::kUpdateEngineLog:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kUpdateEngineLog);
-    case api::feedback_private::LOG_SOURCE_POWERDLATEST:
+    case api::feedback_private::LogSource::kPowerdLatest:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kPowerdLatest);
-    case api::feedback_private::LOG_SOURCE_POWERDPREVIOUS:
+    case api::feedback_private::LogSource::kPowerdPrevious:
       return std::make_unique<system_logs::SingleLogFileLogSource>(
           SupportedLogFileSource::kPowerdPrevious);
 
     // These map to SupportedDebugDaemonSources.
-    case api::feedback_private::LOG_SOURCE_DRMMODETEST:
+    case api::feedback_private::LogSource::kDrmModetest:
       return std::make_unique<system_logs::SingleDebugDaemonLogSource>(
           SupportedDebugDaemonSource::kModetest);
-    case api::feedback_private::LOG_SOURCE_LSUSB:
+    case api::feedback_private::LogSource::kLsusb:
       return std::make_unique<system_logs::SingleDebugDaemonLogSource>(
           SupportedDebugDaemonSource::kLsusb);
-    case api::feedback_private::LOG_SOURCE_LSPCI:
+    case api::feedback_private::LogSource::kLspci:
       return std::make_unique<system_logs::SingleDebugDaemonLogSource>(
           SupportedDebugDaemonSource::kLspci);
-    case api::feedback_private::LOG_SOURCE_IFCONFIG:
+    case api::feedback_private::LogSource::kIfconfig:
       return std::make_unique<system_logs::SingleDebugDaemonLogSource>(
           SupportedDebugDaemonSource::kIfconfig);
-    case api::feedback_private::LOG_SOURCE_UPTIME:
+    case api::feedback_private::LogSource::kUptime:
       return std::make_unique<system_logs::SingleDebugDaemonLogSource>(
           SupportedDebugDaemonSource::kUptime);
 
-    case api::feedback_private::LOG_SOURCE_NONE:
+    case api::feedback_private::LogSource::kNone:
     default:
       NOTREACHED() << "Unknown log source type.";
       return nullptr;
@@ -223,13 +227,13 @@ ChromeFeedbackPrivateDelegate::GetLandingPageType(
     const feedback::FeedbackData& feedback_data) const {
   // Googlers using eve get a custom landing page.
   if (!gaia::IsGoogleInternalAccountEmail(feedback_data.user_email()))
-    return api::feedback_private::LANDING_PAGE_TYPE_NORMAL;
+    return api::feedback_private::LandingPageType::kNormal;
 
   const std::vector<std::string> board =
       base::SplitString(base::SysInfo::GetLsbReleaseBoard(), "-",
                         base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-  return board[0] == "eve" ? api::feedback_private::LANDING_PAGE_TYPE_TECHSTOP
-                           : api::feedback_private::LANDING_PAGE_TYPE_NORMAL;
+  return board[0] == "eve" ? api::feedback_private::LandingPageType::kTechstop
+                           : api::feedback_private::LandingPageType::kNormal;
 }
 
 void ChromeFeedbackPrivateDelegate::GetLacrosHistograms(
@@ -267,6 +271,22 @@ feedback::FeedbackUploader*
 ChromeFeedbackPrivateDelegate::GetFeedbackUploaderForContext(
     content::BrowserContext* context) const {
   return feedback::FeedbackUploaderFactoryChrome::GetForBrowserContext(context);
+}
+
+void ChromeFeedbackPrivateDelegate::OpenFeedback(
+    content::BrowserContext* context,
+    api::feedback_private::FeedbackSource source) const {
+  GURL url;
+
+  DCHECK(source == api::feedback_private::FeedbackSource::kQuickoffice);
+
+  Profile* profile = Profile::FromBrowserContext(context);
+  chrome::ShowFeedbackPage(url, profile,
+                           /*source=*/chrome::kFeedbackSourceQuickOffice,
+                           /*description_template=*/std::string(),
+                           /*description_placeholder_text=*/std::string(),
+                           /*category_tag=*/std::string(),
+                           /*extra_diagnostics=*/std::string());
 }
 
 }  // namespace extensions

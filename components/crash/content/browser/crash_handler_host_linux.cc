@@ -15,12 +15,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/linux_util.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -30,10 +30,10 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -45,8 +45,6 @@
 #endif  // ! BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_ANDROID) && !defined(__LP64__)
-#include <sys/syscall.h>
-
 #define SYS_read __NR_read
 #endif
 
@@ -339,7 +337,7 @@ void CrashHandlerHostLinux::FindCrashingThreadAndDump(
       attempt <= kNumAttemptsTranslatingTid) {
     LOG(WARNING) << "Could not translate tid, attempt = " << attempt
                  << " retry ...";
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&CrashHandlerHostLinux::FindCrashingThreadAndDump,
                        base::Unretained(this), crashing_pid,
@@ -446,7 +444,8 @@ void CrashHandlerHostLinux::WriteDumpFile(BreakpadInfo* info,
   // Create a temporary file holding the AddressSanitizer report.
   const base::FilePath log_path =
       base::FilePath(minidump_filename).ReplaceExtension("log");
-  base::WriteFile(log_path, info->asan_report_str, info->asan_report_length);
+  base::WriteFile(log_path, base::StringPiece(info->asan_report_str,
+                                              info->asan_report_length));
 #endif
 
   // Freed in CrashDumpTask().

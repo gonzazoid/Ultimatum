@@ -11,8 +11,10 @@
 #include "chrome/browser/ui/quick_answers/ui/user_consent_view.h"
 #include "chromeos/components/quick_answers/public/cpp/quick_answers_state.h"
 #include "chromeos/components/quick_answers/quick_answers_client.h"
+#include "chromeos/components/quick_answers/quick_answers_model.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
+#include "ui/views/controls/menu/menu_controller.h"
 
 namespace {
 
@@ -58,13 +60,13 @@ class QuickAnswersControllerTest : public ChromeQuickAnswersTestBase {
     // To show the quick answers view, its visibility must be set to 'pending'
     // first.
     if (set_visibility)
-      controller()->SetPendingShowQuickAnswers();
+      controller()->OnContextMenuShown(GetProfile());
 
     // Set up a companion menu before creating the QuickAnswersView.
     CreateAndShowBasicMenu();
 
-    controller()->MaybeShowQuickAnswers(kDefaultAnchorBoundsInScreen,
-                                        kDefaultTitle, {});
+    controller()->OnTextAvailable(kDefaultAnchorBoundsInScreen, kDefaultTitle,
+                                  /*surrounding_text=*/"");
   }
 
   void ShowConsentView() {
@@ -204,7 +206,7 @@ TEST_F(QuickAnswersControllerTest,
   AcceptConsent();
   ShowView();
 
-  controller()->UpdateQuickAnswersAnchorBounds(BoundsWithXPosition(123));
+  controller()->OnAnchorBoundsChanged(BoundsWithXPosition(123));
 
   // We only check the 'x' position as that is guaranteed to be identical
   // between the view and the menu.
@@ -216,10 +218,39 @@ TEST_F(QuickAnswersControllerTest,
        ShouldUpdateConsentViewBoundsWhenMenuBoundsChange) {
   ShowConsentView();
 
-  controller()->UpdateQuickAnswersAnchorBounds(BoundsWithXPosition(123));
+  controller()->OnAnchorBoundsChanged(BoundsWithXPosition(123));
 
   // We only check the 'x' position as that is guaranteed to be identical
   // between the view and the menu.
   const views::View* consent_view = GetConsentView();
   EXPECT_EQ(123, consent_view->GetBoundsInScreen().x());
+}
+
+TEST_F(QuickAnswersControllerTest, ShouldNotCrashWhenContextMenuCloses) {
+  ShowConsentView();
+
+  auto* active_menu_controller = views::MenuController::GetActiveInstance();
+  // Ensure that the context menu currently exists and has a non-null owner.
+  ASSERT_TRUE(active_menu_controller != nullptr);
+  ASSERT_TRUE(active_menu_controller->owner() != nullptr);
+
+  // Simulate closing the context menu.
+  ChromeQuickAnswersTestBase::ResetMenuParent();
+
+  // Simulate returning a quick answers request after the context menu closed.
+  // This should *not* result in a crash.
+  std::unique_ptr<quick_answers::QuickAnswersRequest> processed_request =
+      std::make_unique<quick_answers::QuickAnswersRequest>();
+  processed_request->selected_text = "unfathomable";
+  quick_answers::PreprocessedOutput expected_processed_output;
+  expected_processed_output.intent_info.intent_text = "unfathomable";
+  expected_processed_output.query = "Define unfathomable";
+  expected_processed_output.intent_info.intent_type =
+      quick_answers::IntentType::kDictionary;
+  processed_request->preprocessed_output = expected_processed_output;
+  controller()->OnRequestPreprocessFinished(*processed_request);
+
+  // Confirm that the quick answers views are not showing.
+  EXPECT_FALSE(ui_controller()->IsShowingUserConsentView());
+  EXPECT_FALSE(ui_controller()->IsShowingQuickAnswersView());
 }

@@ -95,6 +95,19 @@ class MockFileSystemAccessPermissionContext
               GetPickerTitle,
               (const blink::mojom::FilePickerOptionsPtr& options),
               (override));
+
+  MOCK_METHOD(void,
+              NotifyEntryMoved,
+              (const url::Origin& origin,
+               const base::FilePath& old_path,
+               const base::FilePath& new_path),
+              (override));
+
+  MOCK_METHOD(void,
+              OnFileCreatedFromShowSaveFilePicker,
+              (const GURL& file_picker_binding_context,
+               const storage::FileSystemURL& url),
+              (override));
 };
 
 }  // namespace content

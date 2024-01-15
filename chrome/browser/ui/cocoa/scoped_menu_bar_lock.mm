@@ -13,10 +13,10 @@
 
 ScopedMenuBarLock::ScopedMenuBarLock() {
   if ([NSMenu instancesRespondToSelector:@selector(_lockMenuPosition)])
-    [[NSApp mainMenu] _lockMenuPosition];
+    [NSApp.mainMenu _lockMenuPosition];
 }
 
 ScopedMenuBarLock::~ScopedMenuBarLock() {
   if ([NSMenu instancesRespondToSelector:@selector(_unlockMenuPosition)])
-    [[NSApp mainMenu] _unlockMenuPosition];
+    [NSApp.mainMenu _unlockMenuPosition];
 }

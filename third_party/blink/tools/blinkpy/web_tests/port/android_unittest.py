@@ -80,7 +80,7 @@ class AndroidPortTest(port_testcase.PortTestCase):
 
         self._mock_battery = mock.patch(
             'devil.android.battery_utils.BatteryUtils.GetBatteryInfo',
-            return_value={'level': 100})
+            return_value={'level': '100'})
         self._mock_battery.start()
 
         self._mock_perf_control = mock.patch(
@@ -123,17 +123,10 @@ class AndroidPortTest(port_testcase.PortTestCase):
     def test_no_bot_expectations_searched(self):
         # We don't support bot expectations at the moment
         host = MockSystemHost()
-        port = android.AndroidPort(host, apk='apks/WebLayerShell.apk')
+        port = android.AndroidPort(host, apk='apks/WebViewShell.apk')
         port.expectations_dict = lambda: {}
         test_expectations = TestExpectations(port)
         self.assertFalse(test_expectations._expectations)
-
-    def test_weblayer_expectation_tags(self):
-        host = MockSystemHost()
-        port = android.AndroidPort(
-            host, product='android_weblayer')
-        self.assertEqual(port.get_platform_tags(),
-                         set(['android', 'android-weblayer']))
 
     def test_default_no_wpt_product_tag(self):
         host = MockSystemHost()
@@ -165,7 +158,7 @@ class ChromiumAndroidDriverTest(unittest.TestCase):
 
         self._mock_battery = mock.patch(
             'devil.android.battery_utils.BatteryUtils.GetBatteryInfo',
-            return_value={'level': 100})
+            return_value={'level': '100'})
         self._mock_battery.start()
 
         self._mock_perf_control = mock.patch(
@@ -213,7 +206,7 @@ class ChromiumAndroidDriverTwoDriversTest(unittest.TestCase):
 
         self._mock_battery = mock.patch(
             'devil.android.battery_utils.BatteryUtils.GetBatteryInfo',
-            return_value={'level': 100})
+            return_value={'level': '100'})
         self._mock_battery.start()
 
         self._mock_perf_control = mock.patch(
@@ -256,7 +249,7 @@ class ChromiumAndroidTwoPortsTest(unittest.TestCase):
 
         self._mock_battery = mock.patch(
             'devil.android.battery_utils.BatteryUtils.GetBatteryInfo',
-            return_value={'level': 100})
+            return_value={'level': '100'})
         self._mock_battery.start()
 
         self._mock_perf_control = mock.patch(
@@ -298,7 +291,7 @@ class ChromiumAndroidDriverTombstoneTest(unittest.TestCase):
 
         self._mock_battery = mock.patch(
             'devil.android.battery_utils.BatteryUtils.GetBatteryInfo',
-            return_value={'level': 100})
+            return_value={'level': '100'})
         self._mock_battery.start()
 
         self._port = android.AndroidPort(

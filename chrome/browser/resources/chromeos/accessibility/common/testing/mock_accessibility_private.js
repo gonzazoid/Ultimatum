@@ -41,7 +41,16 @@ class MockAccessibilityPrivate {
     };
 
     this.AccessibilityFeature = {
-      DICTATION_PUMPKIN_PARSING: 'dictationPumpkinParsing',
+      DICTATION_CONTEXT_CHECKING: 'dictationContextChecking',
+    };
+
+    this.AssistiveTechnologyType = {
+      CHROME_VOX: 'chromeVox',
+      SELECT_TO_SPEAK: 'selectToSpeak',
+      SWITCH_ACCESS: 'switchAccess',
+      AUTO_CLICK: 'autoClick',
+      MAGNIFIER: 'magnifier',
+      DICTATION: 'dictation',
     };
 
     this.DictationBubbleIconType = {
@@ -62,7 +71,40 @@ class MockAccessibilityPrivate {
       COPY: 'copy',
     };
 
+    this.SelectToSpeakPanelAction = {
+      PREVIOUS_PARAGRAPH: 'previousParagraph',
+      PREVIOUS_SENTENCE: 'previousSentence',
+      PAUSE: 'pause',
+      RESUME: 'resume',
+      NEXT_SENTENCE: 'nextSentence',
+      NEXT_PARAGRAPH: 'nextParagraph',
+      EXIT: 'exit',
+      CHANGE_SPEED: 'changeSpeed',
+    };
+
     this.SyntheticKeyboardEventType = {KEYDOWN: 'keydown', KEYUP: 'keyup'};
+
+    this.ToastType = {
+      DICTATION_MIC_MUTED: 'dictationMicMuted',
+      DICTATION_NO_FOCUSED_TEXT_FIELD: 'dictationNoFocusedTextField',
+    };
+
+    this.SyntheticMouseEventType = {
+      PRESS: 'press',
+      RELEASE: 'release',
+      DRAG: 'drag',
+      MOVE: 'move',
+      ENTER: 'enter',
+      EXIT: 'exit',
+    };
+
+    this.SyntheticMouseEventButton = {
+      LEFT: 'left',
+      MIDDLE: 'middle',
+      RIGHT: 'right',
+      BACK: 'back',
+      FOWARD: 'foward',
+    };
 
     /** @private {function<number, number>} */
     this.boundsListener_ = null;
@@ -96,6 +138,9 @@ class MockAccessibilityPrivate {
     /** @private {?string} */
     this.highlightColor_ = null;
 
+    /** @private {!chrome.accessibilityPrivate.ScreenRect} */
+    this.selectToSpeakFocus_ = null;
+
     /** @private {function<boolean>} */
     this.dictationToggleListener_ = null;
 
@@ -107,6 +152,9 @@ class MockAccessibilityPrivate {
      */
     this.dictationBubbleProps_ = null;
 
+    /** @private {Function} */
+    this.onUpdateDictationBubble_ = null;
+
     /** @private {Set<string>} */
     this.enabledFeatures_ = new Set();
 
@@ -115,6 +163,15 @@ class MockAccessibilityPrivate {
 
     /** @private {?MockPumpkinData} */
     this.pumpkinData_ = null;
+
+    /** @private {!Object<chrome.accessibilityPrivate.ToastType, number} */
+    this.showToastData_ = {};
+
+    /** @private {?chrome.accessibilityPrivate.ScreenPoint} */
+    this.latestCursorPosition_ = null;
+
+    /** @private {!Array<chrome.accessibilityPrivate.SyntheticMouseEvent> */
+    this.syntheticMouseEvents_ = [];
 
     // Methods from AccessibilityPrivate API. //
 
@@ -139,6 +196,11 @@ class MockAccessibilityPrivate {
     };
 
     this.onMagnifierBoundsChanged = {
+      addListener: listener => {},
+      removeListener: listener => {},
+    };
+
+    this.onSelectToSpeakFocusChanged = {
       addListener: listener => {},
       removeListener: listener => {},
     };
@@ -216,8 +278,9 @@ class MockAccessibilityPrivate {
    * assume that it is only setting one set of rings at a time, and safely
    * extract focusRingInfos[0].rects.
    * @param {!Array<!chrome.accessibilityPrivate.FocusRingInfo>} focusRingInfos
+   * @param {chrome.accessibilityPrivate.AssistiveTechnologyType} atType
    */
-  setFocusRings(focusRingInfos) {
+  setFocusRings(focusRingInfos, atType) {
     this.focusRings_ = focusRingInfos;
   }
 
@@ -240,6 +303,14 @@ class MockAccessibilityPrivate {
    */
   updateSelectToSpeakPanel(show, anchor, isPaused, speed) {
     this.selectToSpeakPanelState_ = {show, anchor, isPaused, speed};
+  }
+
+  /**
+   * Sets the Select to Speak reading focus.
+   * @param {!chrome.accessibilityPrivate.ScreenRect} bounds
+   */
+  setSelectToSpeakFocus(bounds) {
+    this.selectToSpeakFocus_ = bounds;
   }
 
   /** Called in order to toggle Dictation listening. */
@@ -267,6 +338,16 @@ class MockAccessibilityPrivate {
   /** @return {?PumpkinData} */
   installPumpkinForDictation(callback) {
     callback(MockAccessibilityPrivate.pumpkinData_);
+  }
+
+  /** @param {!chrome.accessibilityPrivate.ScreenPoint} point */
+  setCursorPosition(point) {
+    this.latestCursorPosition_ = point;
+  }
+
+  /** @param {!chrome.accessibilityPrivate.SyntheticMouseEvent} event */
+  sendSyntheticMouseEvent(event) {
+    this.syntheticMouseEvents_.push(event);
   }
 
   // Methods for testing. //
@@ -325,6 +406,10 @@ class MockAccessibilityPrivate {
     return this.highlightRects_;
   }
 
+  clearHighlightRects() {
+    this.highlightRects_ = [];
+  }
+
   /**
    * Gets the color of the last highlight created.
    * @return {?string}
@@ -338,6 +423,17 @@ class MockAccessibilityPrivate {
    */
   getSelectToSpeakPanelState() {
     return this.selectToSpeakPanelState_;
+  }
+
+  /**
+   * @return {?chrome.AccessibilityPrivate.ScreenRect}
+   */
+  getSelectToSpeakFocus() {
+    return this.selectToSpeakFocus_;
+  }
+
+  clearSelectToSpeakFocus() {
+    this.selectToSpeakFocus_ = null;
   }
 
   /**
@@ -380,9 +476,21 @@ class MockAccessibilityPrivate {
     return this.dictationActivated_;
   }
 
+  /** @param {!Function} listener */
+  addUpdateDictationBubbleListener(listener) {
+    this.onUpdateDictationBubble_ = listener;
+  }
+
+  removeUpdateDictationBubbleListener() {
+    this.onUpdateDictationBubble_ = null;
+  }
+
   /** @param {!chrome.accessibilityPrivate.DictationBubbleProperties} props */
   updateDictationBubble(props) {
     this.dictationBubbleProps_ = props;
+    if (this.onUpdateDictationBubble_) {
+      this.onUpdateDictationBubble_();
+    }
   }
 
   /** @return {!chrome.accessibilityPrivate.DictationBubbleProperties|null} */
@@ -398,6 +506,32 @@ class MockAccessibilityPrivate {
   /** @return {number} */
   getSpokenFeedbackSilencedCount() {
     return this.spokenFeedbackSilenceCount_;
+  }
+
+  /** @return {!Array<!chrome.accessibilityPrivate.ScreenRect>} */
+  getDisplayBounds(callback) {
+    callback([{left: 0, top: 0, width: 1200, height: 800}]);
+  }
+
+  /**
+   * @param {!chrome.accessibilityPrivate.ToastType} type
+   * @return {number}
+   */
+  getShowToastCount(type) {
+    if (!this.showToastData_[type]) {
+      return 0;
+    }
+
+    return this.showToastData_[type];
+  }
+
+  /** @return {?chrome.accessibilityPrivate.ScreenPoint} */
+  getLatestCursorPosition() {
+    return this.latestCursorPosition_;
+  }
+
+  clearCursorPosition() {
+    this.latestCursorPosition_ = null;
   }
 
   /**
@@ -430,7 +564,7 @@ class MockAccessibilityPrivate {
     };
 
     const data = {};
-    const pumpkinDir = '../../accessibility_common/dictation/parse/pumpkin';
+    const pumpkinDir = '../../accessibility_common/third_party/pumpkin';
     data.js_pumpkin_tagger_bin_js =
         await getFileBytes(`${pumpkinDir}/js_pumpkin_tagger_bin.js`);
     data.tagger_wasm_main_js =
@@ -458,5 +592,13 @@ class MockAccessibilityPrivate {
     data.es_es_pumpkin_config_binarypb =
         await getFileBytes(`${pumpkinDir}/es_es/pumpkin_config.binarypb`);
     MockAccessibilityPrivate.pumpkinData_ = data;
+  }
+
+  /** @param {!chrome.accessibilityPrivate.ToastType} type */
+  showToast(type) {
+    if (!this.showToastData_[type]) {
+      this.showToastData_[type] = 0;
+    }
+    this.showToastData_[type] += 1;
   }
 }

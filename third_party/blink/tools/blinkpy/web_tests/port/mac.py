@@ -35,23 +35,26 @@ _log = logging.getLogger(__name__)
 
 
 class MacPort(base.Port):
-    SUPPORTED_VERSIONS = ('mac10.13', 'mac10.14', 'mac10.15', 'mac11',
-                          'mac11-arm64', 'mac12', 'mac12-arm64')
+    SUPPORTED_VERSIONS = ('mac10.15', 'mac11', 'mac11-arm64', 'mac12',
+                          'mac12-arm64', 'mac13', 'mac13-arm64')
     port_name = 'mac'
 
     FALLBACK_PATHS = {}
 
-    FALLBACK_PATHS['mac12'] = ['mac']
+    FALLBACK_PATHS['mac13'] = ['mac']
+    FALLBACK_PATHS['mac13-arm64'] = ['mac-mac13-arm64'
+                                     ] + FALLBACK_PATHS['mac13']
+
+    FALLBACK_PATHS['mac12'] = ['mac-mac12'] + FALLBACK_PATHS['mac13']
     FALLBACK_PATHS['mac12-arm64'] = ['mac-mac12-arm64'
                                      ] + FALLBACK_PATHS['mac12']
     FALLBACK_PATHS['mac11'] = ['mac-mac11'] + FALLBACK_PATHS['mac12']
     FALLBACK_PATHS['mac11-arm64'] = ['mac-mac11-arm64'
                                      ] + FALLBACK_PATHS['mac11']
     FALLBACK_PATHS['mac10.15'] = ['mac-mac10.15'] + FALLBACK_PATHS['mac11']
-    FALLBACK_PATHS['mac10.14'] = ['mac-mac10.14'] + FALLBACK_PATHS['mac10.15']
-    FALLBACK_PATHS['mac10.13'] = ['mac-mac10.13'] + FALLBACK_PATHS['mac10.14']
 
     CONTENT_SHELL_NAME = 'Content Shell'
+    CHROME_NAME = 'Chromium'
 
     BUILD_REQUIREMENTS_URL = 'https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md'
 
@@ -110,20 +113,17 @@ class MacPort(base.Port):
         config_file_basename = 'apache2-httpd-%s-php7.conf' % (self._apache_version(),)
         return self._filesystem.join(self.apache_config_directory(), config_file_basename)
 
+    def path_to_driver(self, target=None):
+        return self.build_path(self.driver_name() + '.app',
+                               'Contents',
+                               'MacOS',
+                               self.driver_name(),
+                               target=target)
+
     def default_smoke_test_only(self):
-        # only run platform specific tests on older mac versions
-        if self._version in {'mac10.13', 'mac10.14'}:
-            return True
-        return super().default_smoke_test_only()
+        # only run platform specific tests on Mac 10.15
+        return self._version == 'mac10.15'
 
     def path_to_smoke_tests_file(self):
-        if self._version in {'mac10.13', 'mac10.14'}:
-            return self._filesystem.join(self.web_tests_dir(), 'SmokeTests',
-                                         'Mac.txt')
-        return super().path_to_smoke_tests_file()
-
-    def _path_to_driver(self, target=None):
-        return self._build_path_with_target(target,
-                                            self.driver_name() + '.app',
-                                            'Contents', 'MacOS',
-                                            self.driver_name())
+        return self._filesystem.join(self.web_tests_dir(), 'TestLists',
+                                     'MacOld.txt')

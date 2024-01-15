@@ -43,10 +43,10 @@ class NetworkingPrivateEventRouterFactory
       NetworkingPrivateEventRouterFactory>;
 
   NetworkingPrivateEventRouterFactory();
-  ~NetworkingPrivateEventRouterFactory() override;
+  ~NetworkingPrivateEventRouterFactory() override = default;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
 };
 

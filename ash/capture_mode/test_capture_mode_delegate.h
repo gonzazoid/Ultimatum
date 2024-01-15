@@ -9,10 +9,10 @@
 #include <memory>
 
 #include "ash/public/cpp/capture_mode/capture_mode_delegate.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
@@ -31,6 +31,8 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   TestCaptureModeDelegate(const TestCaptureModeDelegate&) = delete;
   TestCaptureModeDelegate& operator=(const TestCaptureModeDelegate&) = delete;
   ~TestCaptureModeDelegate() override;
+
+  bool is_session_active() const { return is_session_active_; }
 
   recording::RecordingServiceTestApi* recording_service() const {
     return recording_service_.get();
@@ -79,6 +81,13 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   // delivered to the service.
   void RequestAndWaitForVideoFrame();
 
+  // Returns true if there is an ongoing recording and the recording service is
+  // currently recording audio.
+  bool IsDoingAudioRecording() const;
+
+  // Returns the number of audio capturers owned by the recording service.
+  int GetNumberOfAudioCapturers() const;
+
   // CaptureModeDelegate:
   base::FilePath GetUserDefaultDownloadsFolder() const override;
   void ShowScreenCaptureItemInFolder(const base::FilePath& file_path) override;
@@ -116,6 +125,15 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   void GetDriveFsFreeSpaceBytes(OnGotDriveFsFreeSpace callback) override;
   bool IsCameraDisabledByPolicy() const override;
   bool IsAudioCaptureDisabledByPolicy() const override;
+  void RegisterVideoConferenceManagerClient(
+      crosapi::mojom::VideoConferenceManagerClient* client,
+      const base::UnguessableToken& client_id) override;
+  void UnregisterVideoConferenceManagerClient(
+      const base::UnguessableToken& client_id) override;
+  void UpdateVideoConferenceManager(
+      crosapi::mojom::VideoConferenceMediaUsageStatusPtr status) override;
+  void NotifyDeviceUsedWhileDisabled(
+      crosapi::mojom::VideoConferenceMediaDevice device) override;
 
  private:
   std::unique_ptr<recording::RecordingServiceTestApi> recording_service_;
@@ -123,6 +141,7 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   base::ScopedTempDir fake_downloads_dir_;
   base::OnceClosure on_session_state_changed_callback_;
   base::OnceClosure on_recording_started_callback_;
+  bool is_session_active_ = false;
   bool is_allowed_by_dlp_ = true;
   bool is_allowed_by_policy_ = true;
   bool should_save_after_dlp_check_ = true;

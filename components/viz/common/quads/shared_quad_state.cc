@@ -15,7 +15,11 @@
 namespace viz {
 
 SharedQuadState::SharedQuadState() = default;
+
 SharedQuadState::SharedQuadState(const SharedQuadState& other) = default;
+SharedQuadState& SharedQuadState::operator=(const SharedQuadState& other) =
+    default;
+
 SharedQuadState::~SharedQuadState() {
   TRACE_EVENT_OBJECT_DELETED_WITH_ID(TRACE_DISABLED_BY_DEFAULT("viz.quads"),
                                      "viz::SharedQuadState", this);
@@ -32,7 +36,8 @@ bool SharedQuadState::Equals(const SharedQuadState& other) const {
          are_contents_opaque == other.are_contents_opaque &&
          opacity == other.opacity && blend_mode == other.blend_mode &&
          sorting_context_id == other.sorting_context_id &&
-         de_jelly_delta_y == other.de_jelly_delta_y;
+         layer_id == other.layer_id &&
+         layer_namespace_id == other.layer_namespace_id;
 }
 
 void SharedQuadState::SetAll(const SharedQuadState& other) {
@@ -45,6 +50,9 @@ void SharedQuadState::SetAll(const SharedQuadState& other) {
   opacity = other.opacity;
   blend_mode = other.blend_mode;
   sorting_context_id = other.sorting_context_id;
+  layer_id = other.layer_id;
+  layer_namespace_id = other.layer_namespace_id;
+  is_fast_rounded_corner = other.is_fast_rounded_corner;
 }
 
 void SharedQuadState::SetAll(const gfx::Transform& transform,
@@ -55,7 +63,9 @@ void SharedQuadState::SetAll(const gfx::Transform& transform,
                              bool contents_opaque,
                              float opacity_f,
                              SkBlendMode blend,
-                             int sorting_context) {
+                             int sorting_context,
+                             uint32_t layer,
+                             bool fast_rounded_corner) {
   quad_to_target_transform = transform;
   quad_layer_rect = layer_rect;
   visible_quad_layer_rect = visible_layer_rect;
@@ -65,6 +75,8 @@ void SharedQuadState::SetAll(const gfx::Transform& transform,
   opacity = opacity_f;
   blend_mode = blend;
   sorting_context_id = sorting_context;
+  layer_id = layer;
+  is_fast_rounded_corner = fast_rounded_corner;
 }
 
 void SharedQuadState::AsValueInto(base::trace_event::TracedValue* value) const {
@@ -93,8 +105,9 @@ void SharedQuadState::AsValueInto(base::trace_event::TracedValue* value) const {
   value->SetDouble("opacity", opacity);
   value->SetString("blend_mode", SkBlendMode_Name(blend_mode));
   value->SetInteger("sorting_context_id", sorting_context_id);
+  value->SetInteger("layer_id", layer_id);
+  value->SetInteger("layer_namespace_id", layer_id);
   value->SetBoolean("is_fast_rounded_corner", is_fast_rounded_corner);
-  value->SetDouble("de_jelly_delta_y", de_jelly_delta_y);
   TracedValue::MakeDictIntoImplicitSnapshotWithCategory(
       TRACE_DISABLED_BY_DEFAULT("viz.quads"), value, "viz::SharedQuadState",
       this);

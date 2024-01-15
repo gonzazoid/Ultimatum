@@ -5,16 +5,15 @@
 #ifndef SERVICES_AUDIO_PUBLIC_CPP_SOUNDS_AUDIO_STREAM_HANDLER_H_
 #define SERVICES_AUDIO_PUBLIC_CPP_SOUNDS_AUDIO_STREAM_HANDLER_H_
 
-#include <stddef.h>
-#include <memory>
+#include <string_view>
 
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
-#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece.h"
+#include "base/threading/sequence_bound.h"
 #include "base/time/time.h"
 #include "media/audio/audio_io.h"
+#include "media/base/audio_codecs.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/audio_renderer_sink.h"
 #include "media/base/media_export.h"
@@ -39,14 +38,14 @@ class COMPONENT_EXPORT(AUDIO_PUBLIC_CPP) AudioStreamHandler {
     virtual void OnPlay() = 0;
 
     // Called when AudioOutputStreamProxy::Stop() was successfully called.
-    virtual void OnStop(size_t cursor) = 0;
+    virtual void OnStop() = 0;
   };
 
   // C-tor for AudioStreamHandler. |wav_data| should be a raw
   // uncompressed WAVE data which will be sent to the audio output device.
-  explicit AudioStreamHandler(
-      SoundsManager::StreamFactoryBinder stream_factory_binder,
-      const base::StringPiece& wav_data);
+  AudioStreamHandler(SoundsManager::StreamFactoryBinder stream_factory_binder,
+                     std::string_view audio_data,
+                     media::AudioCodec codec);
 
   AudioStreamHandler(const AudioStreamHandler&) = delete;
   AudioStreamHandler& operator=(const AudioStreamHandler&) = delete;
@@ -79,8 +78,8 @@ class COMPONENT_EXPORT(AUDIO_PUBLIC_CPP) AudioStreamHandler {
   class AudioStreamContainer;
 
   base::TimeDelta duration_;
-  std::unique_ptr<AudioStreamContainer> stream_;
-  scoped_refptr<base::SequencedTaskRunner> task_runner_;
+  base::SequenceBound<AudioStreamContainer> stream_;
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 }  // namespace audio

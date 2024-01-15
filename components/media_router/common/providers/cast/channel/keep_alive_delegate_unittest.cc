@@ -41,8 +41,8 @@ CastMessage CreateNonKeepAliveMessage(const std::string& message_type) {
   output.set_payload_type(
       CastMessage::PayloadType::CastMessage_PayloadType_STRING);
 
-  base::DictionaryValue type_dict;
-  type_dict.SetString("type", message_type);
+  base::Value::Dict type_dict;
+  type_dict.Set("type", message_type);
   CHECK(base::JSONWriter::Write(type_dict, output.mutable_payload_utf8()));
   return output;
 }
@@ -109,8 +109,8 @@ class KeepAliveDelegateTest : public testing::Test {
   std::unique_ptr<KeepAliveDelegate> keep_alive_;
   scoped_refptr<Logger> logger_;
   raw_ptr<MockCastTransportDelegate> inner_delegate_;
-  raw_ptr<MockTimerWithMonitoredReset> liveness_timer_;
-  raw_ptr<MockTimerWithMonitoredReset> ping_timer_;
+  raw_ptr<MockTimerWithMonitoredReset, DanglingUntriaged> liveness_timer_;
+  raw_ptr<MockTimerWithMonitoredReset, DanglingUntriaged> ping_timer_;
 };
 
 TEST_F(KeepAliveDelegateTest, TestErrorHandledBeforeStarting) {
@@ -235,6 +235,12 @@ TEST_F(KeepAliveDelegateTest, TestPassthroughMessagesAfterError) {
 TEST_F(KeepAliveDelegateTest, TestLivenessTimerResetAfterSendingMessage) {
   scoped_refptr<base::TestMockTimeTaskRunner> mock_time_task_runner(
       new base::TestMockTimeTaskRunner());
+
+  // Drop unowned references before replacing owned references in
+  // the KeepAliveDelegate.
+  ping_timer_ = nullptr;
+  liveness_timer_ = nullptr;
+
   auto liveness_timer = std::make_unique<base::RetainingOneShotTimer>(
       mock_time_task_runner->GetMockTickClock());
   auto ping_timer = std::make_unique<base::RetainingOneShotTimer>(

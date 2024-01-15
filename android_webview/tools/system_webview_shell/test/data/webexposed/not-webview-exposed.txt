@@ -1,8 +1,10 @@
 # speech synthesis api not enabled in webview
 # but speech recognition is enabled, crbug.com/487255
+interface SpeechSynthesis : EventTarget
 interface SpeechSynthesisErrorEvent : SpeechSynthesisEvent
 interface SpeechSynthesisEvent : Event
 interface SpeechSynthesisUtterance : EventTarget
+interface SpeechSynthesisVoice
 
 # permissions api not enabled in webview, crbug.com/490120
 interface PermissionStatus : EventTarget
@@ -13,7 +15,6 @@ interface Notification : EventTarget
 
 # web payments api not enabled in webiew, crbug.com/667069
 interface PaymentAddress
-interface PaymentInstruments
 interface PaymentManager
 interface PaymentMethodChangeEvent : PaymentRequestUpdateEvent
 interface PaymentRequest : EventTarget
@@ -66,11 +67,12 @@ interface HTMLMediaElement : HTMLElement
 # share API (crbug.com/765923), custom scheme handlers (crbug.com/589502),
 # media session API (crbug.com/925997), Web Serial API (crbug.com/1164036),
 # WebXr API (crbug.com/1012899), WebHID API (crbug.com/1164125), Web
-# Bluetooth API (crbug.com/1100993), and WebUSB API (crbug.com/933055) are
-# not supported in webview.
+# Bluetooth API (crbug.com/1100993), WebUSB API (crbug.com/933055) and
+# the Login Status API (crbug.com/1340252) are not supported in webview.
 interface Navigator
     getter bluetooth                   # crbug.com/1100993
     getter hid                         # crbug.com/1164125
+    getter login                       # crbug.com/1340252
     getter mediaSession                # crbug.com/925997
     getter permissions                 # crbug.com/490120
     getter presentation                # crbug.com/521319
@@ -120,7 +122,9 @@ interface MediaStreamTrack : EventTarget
   setter oncapturehandlechange
   method getCaptureHandle
 interface BrowserCaptureMediaStreamTrack : MediaStreamTrack
+  method cropTo
 interface CropTarget
+interface CaptureController : EventTarget
 
 # WebAuthN API should not be exposed in WebView, crbug.com/828168
 interface AuthenticatorAssertionResponse : AuthenticatorResponse
@@ -130,24 +134,6 @@ interface AuthenticatorAttestationResponse : AuthenticatorResponse
 
 # WebOTP API should not be exposed in WebView, crbug.com/1224417
 interface OTPCredential : Credential
-
-# Picture-in-Picture API is disabled in Android WebView, crbug.com/852449
-interface PictureInPictureEvent : Event
-interface PictureInPictureWindow : EventTarget
-interface Document : Node
-    method exitPictureInPicture
-    getter pictureInPictureElement
-    getter pictureInPictureEnabled
-interface ShadowRoot : DocumentFragment
-    getter pictureInPictureElement
-interface HTMLVideoElement : HTMLMediaElement
-    getter disablePictureInPicture
-    setter disablePictureInPicture
-    method requestPictureInPicture
-    getter onenterpictureinpicture
-    setter onenterpictureinpicture
-    getter onleavepictureinpicture
-    setter onleavepictureinpicture
 
 # Background Fetch API is not enabled in Android webview, crbug.com/766077
 interface BackgroundFetchManager
@@ -160,11 +146,6 @@ interface ServiceWorkerRegistration : EventTarget
 interface PeriodicSyncManager
 interface ServiceWorkerRegistration : EventTarget
     getter periodicSync
-
-# User Agent Client Hints are not enabled in Android WebView, crbug.com/921655
-interface Navigator
-    getter userAgentData
-interface NavigatorUAData
 
 # WebXR dependent interfaces are not supported on WebView crbug.com/1012899
 interface XRView
@@ -258,19 +239,15 @@ interface LaunchQueue
 # crbug.com/1326898
 interface FontData
 
-# The Pop-Up API (crbug.com/1307772) is enabled by the fieldtrial_testing_config,
-# but only for desktop and Android platforms. It is not shipped to stable yet,
-# on any platform.
-interface HTMLElement : Element
-	  getter popUp
-	  method hidePopUp
-	  setter defaultOpen
-	  method showPopUp
-	  setter popUp
-	  getter defaultOpen
-
 # FedCM API is not implemented on WebView. crbug.com/1340252
 interface IdentityCredential : Credential
+interface IdentityCredentialError : DOMException
+interface IdentityProvider
+interface NavigatorLogin
+
+# Document Picture-in-Picture is not implemented in WebView (or Android).
+interface DocumentPictureInPicture : EventTarget
+interface DocumentPictureInPictureEvent : Event
 
 [GLOBAL OBJECT]
     method openDatabase
@@ -281,6 +258,7 @@ interface IdentityCredential : Credential
     attribute textInputController            # test only
     attribute gamepadController              # test only
     attribute GCController                   # test only
+    getter documentPictureInPicture          # Document Picture-in-Picture is desktop-only
     getter launchQueue                       # PWA File Handling API, crbug.com/829689
     getter speechSynthesis                   # Speech API, crbug.com/487255
     attribute chrome                         # crbug.com/618471

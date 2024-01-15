@@ -36,8 +36,15 @@ const char kArrayBufferTooBig[] =
     "The provided ArrayBuffer exceeds the maximum allowed size.";
 const char kContextGone[] = "Script context has shut down.";
 
-bool IsProtected(
-    const device::mojom::blink::HidUsageAndPage& hid_usage_and_page) {
+enum ReportType {
+  kInput,
+  kOutput,
+  kFeature,
+};
+
+bool IsProtectedReportType(
+    const device::mojom::blink::HidUsageAndPage& hid_usage_and_page,
+    ReportType report_type) {
   const uint16_t usage = hid_usage_and_page.usage;
   const uint16_t usage_page = hid_usage_and_page.usage_page;
 
@@ -54,7 +61,7 @@ bool IsProtected(
       usage == device::mojom::blink::kGenericDesktopMouse ||
       usage == device::mojom::blink::kGenericDesktopKeyboard ||
       usage == device::mojom::blink::kGenericDesktopKeypad) {
-    return true;
+    return report_type != ReportType::kFeature;
   }
 
   if (usage >= device::mojom::blink::kGenericDesktopSystemControl &&
@@ -200,6 +207,7 @@ HIDDevice::HIDDevice(ServiceInterface* parent,
                      device::mojom::blink::HidDeviceInfoPtr info,
                      ExecutionContext* context)
     : ExecutionContextLifecycleObserver(context),
+      ActiveScriptWrappable<HIDDevice>({}),
       parent_(parent),
       connection_(context),
       receiver_(this, context) {
@@ -420,9 +428,18 @@ void HIDDevice::UpdateDeviceInfo(device::mojom::blink::HidDeviceInfoPtr info) {
   device_info_ = std::move(info);
   collections_.clear();
   for (const auto& collection : device_info_->collections) {
-    // Omit information about top-level collections with protected usages.
-    if (!IsProtected(*collection->usage))
-      collections_.push_back(ToHIDCollectionInfo(*collection));
+    auto* collection_info = ToHIDCollectionInfo(*collection);
+    // Omit information about protected reports.
+    if (IsProtectedReportType(*collection->usage, ReportType::kInput)) {
+      collection_info->setInputReports(HeapVector<Member<HIDReportInfo>>{});
+    }
+    if (IsProtectedReportType(*collection->usage, ReportType::kOutput)) {
+      collection_info->setOutputReports(HeapVector<Member<HIDReportInfo>>{});
+    }
+    if (IsProtectedReportType(*collection->usage, ReportType::kFeature)) {
+      collection_info->setFeatureReports(HeapVector<Member<HIDReportInfo>>{});
+    }
+    collections_.push_back(collection_info);
   }
 }
 
@@ -436,7 +453,7 @@ void HIDDevice::Trace(Visitor* visitor) const {
   visitor->Trace(receiver_);
   visitor->Trace(device_requests_);
   visitor->Trace(collections_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
@@ -538,7 +555,7 @@ void HIDDevice::FinishReceiveFeatureReport(
 
 void HIDDevice::MarkRequestComplete(ScriptPromiseResolver* resolver) {
   auto find_result = device_requests_.find(resolver);
-  DCHECK_NE(device_requests_.end(), find_result);
+  CHECK_NE(device_requests_.end(), find_result);
   device_requests_.erase(find_result);
 }
 

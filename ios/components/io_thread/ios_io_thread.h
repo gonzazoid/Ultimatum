@@ -14,7 +14,6 @@
 #include <string>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/prefs/pref_member.h"
@@ -92,6 +91,9 @@ class IOSIOThread : public web::WebThreadDelegate {
   IOSIOThread& operator=(const IOSIOThread&) = delete;
 
   ~IOSIOThread() override;
+
+  // Initialize the IO thread with blocking allowed.
+  void InitOnIO();
 
   // Can only be called on the IO thread.
   Globals* globals();

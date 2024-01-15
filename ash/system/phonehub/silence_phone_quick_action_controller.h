@@ -5,8 +5,9 @@
 #ifndef ASH_SYSTEM_PHONEHUB_SILENCE_PHONE_QUICK_ACTION_CONTROLLER_H_
 #define ASH_SYSTEM_PHONEHUB_SILENCE_PHONE_QUICK_ACTION_CONTROLLER_H_
 
-#include "ash/components/phonehub/do_not_disturb_controller.h"
 #include "ash/system/phonehub/quick_action_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/do_not_disturb_controller.h"
 
 namespace base {
 class OneShotTimer;
@@ -33,6 +34,7 @@ class ASH_EXPORT SilencePhoneQuickActionController
   // QuickActionControllerBase:
   QuickActionItem* CreateItem() override;
   void OnButtonPressed(bool is_now_enabled) override;
+  void UpdateQuickActionItemUi() override;
 
   // phonehub::DoNotDisturbController::Observer:
   void OnDndStateChanged() override;
@@ -54,14 +56,14 @@ class ASH_EXPORT SilencePhoneQuickActionController
   // phone. Make changes to item's state if necessary.
   void CheckRequestedState();
 
-  phonehub::DoNotDisturbController* dnd_controller_ = nullptr;
-  QuickActionItem* item_ = nullptr;
+  raw_ptr<phonehub::DoNotDisturbController> dnd_controller_ = nullptr;
+  raw_ptr<QuickActionItem, DanglingUntriaged> item_ = nullptr;
 
   // Keep track the current state of the item.
   ActionState state_;
 
   // State that user requests when clicking the button.
-  absl::optional<ActionState> requested_state_;
+  std::optional<ActionState> requested_state_;
 
   // Timer that fires to prevent showing wrong state in the item. It will check
   // if the requested state is similar to the current state after the button is

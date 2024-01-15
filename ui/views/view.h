@@ -13,18 +13,20 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/safety_checks.h"
 #include "base/observer_list.h"
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkPath.h"
-#include "ui/accessibility/ax_enums.mojom-forward.h"
+#include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/class_property.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
@@ -34,6 +36,7 @@
 #include "ui/base/dragdrop/os_exchange_data.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_types.h"
+#include "ui/base/metadata/metadata_utils.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/compositor/layer_delegate.h"
 #include "ui/compositor/layer_observer.h"
@@ -49,6 +52,7 @@
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/views/action_view_interface.h"
 #include "ui/views/layout/layout_manager.h"
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/metadata/view_factory.h"
@@ -65,11 +69,11 @@ class Insets;
 
 namespace ui {
 struct AXActionData;
-struct AXNodeData;
 class ColorProvider;
 class Compositor;
 class InputMethod;
 class Layer;
+class LayerTreeOwner;
 class NativeTheme;
 class PaintContext;
 class ThemeProvider;
@@ -104,19 +108,16 @@ class ScopedChildrenLock;
 // View::ViewHierarchyChanged.
 // TODO(pbos): Move to a separate view_hierarchy_changed_details.h header.
 struct VIEWS_EXPORT ViewHierarchyChangedDetails {
-  ViewHierarchyChangedDetails() = default;
-
   ViewHierarchyChangedDetails(bool is_add,
                               View* parent,
                               View* child,
                               View* move_view)
       : is_add(is_add), parent(parent), child(child), move_view(move_view) {}
-
-  bool is_add = false;
+  const bool is_add;
   // New parent if |is_add| is true, old parent if |is_add| is false.
-  raw_ptr<View> parent = nullptr;
+  const raw_ptr<View> parent;
   // The view being added or removed.
-  raw_ptr<View> child = nullptr;
+  const raw_ptr<View> child;
   // If this is a move (reparent), meaning AddChildViewAt() is invoked with an
   // existing parent, then a notification for the remove is sent first,
   // followed by one for the add.  This case can be distinguished by a
@@ -125,7 +126,7 @@ struct VIEWS_EXPORT ViewHierarchyChangedDetails {
   // being removed.
   // For the add part of move, |move_view| is the old parent of the View being
   // added.
-  raw_ptr<View> move_view = nullptr;
+  const raw_ptr<View> move_view;
 };
 
 using PropertyChangedCallback = ui::metadata::PropertyChangedCallback;
@@ -144,6 +145,20 @@ enum PropertyEffects {
   // Changes to the property should cause the preferred size to change. This
   // implies kPropertyEffectsLayout.
   kPropertyEffectsPreferredSizeChanged = 0x00000004,
+};
+
+// When adding layers to the view, this indicates the region into which the
+// layer is placed, in the region above or beneath the view.
+enum class LayerRegion {
+  kAbove,
+  kBelow,
+};
+
+// When calling |GetLayersInOrder|, this will indicate whether the View's
+// own layer should be included in the returned vector or not.
+enum class ViewLayer {
+  kInclude,
+  kExclude,
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -246,21 +261,19 @@ enum PropertyEffects {
 //   "script".
 //
 //   For each View class in their respective header declaration, place the macro
-//   METADATA_HEADER(<classname>) in the public section.
+//   METADATA_HEADER(<classname>, <view ancestor class>) in the public section.
 //
 //   In the implementing .cc file, add the following macros to the same
 //   namespace in which the class resides.
 //
-//   BEGIN_METADATA(View, ParentView)
+//   BEGIN_METADATA(View)
 //   ADD_PROPERTY_METADATA(bool, Frobble)
 //   END_METADATA
 //
 //   For each property, add a definition using ADD_PROPERTY_METADATA() between
 //   the begin and end macros.
 //
-//   Descendant classes must specify the parent class as a macro parameter.
-//
-//   BEGIN_METADATA(MyView, views::View)
+//   BEGIN_METADATA(MyView)
 //   ADD_PROPERTY_METADATA(int, Bobble)
 //   END_METADATA
 /////////////////////////////////////////////////////////////////////////////
@@ -272,14 +285,19 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
                           public ui::EventHandler,
                           public ui::PropertyHandler,
                           public ui::metadata::MetaDataProvider {
+  // Do not remove this macro!
+  // The macro is maintained by the memory safety team.
+  ADVANCED_MEMORY_SAFETY_CHECKS();
+
  public:
-  using Views = std::vector<View*>;
+  using Views = std::vector<raw_ptr<View, VectorExperimental>>;
 
   // TODO(crbug.com/1289902): The |event| parameter is being removed. Do not add
   // new callers.
-  using DropCallback =
-      base::OnceCallback<void(const ui::DropTargetEvent& event,
-                              ui::mojom::DragOperation& output_drag_op)>;
+  using DropCallback = base::OnceCallback<void(
+      const ui::DropTargetEvent& event,
+      ui::mojom::DragOperation& output_drag_op,
+      std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner)>;
 
   METADATA_HEADER_BASE(View);
 
@@ -333,7 +351,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
       // |rounded_pixel_offset_| is stored in physical pixel space. Convert it
       // into DIP space before returning.
       gfx::Vector2dF subpixel_offset(rounded_pixel_offset_);
-      subpixel_offset.Scale(1.f / device_scale_factor_);
+      subpixel_offset.InvScale(device_scale_factor_);
       return subpixel_offset;
     }
 
@@ -410,6 +428,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
     DCHECK(!view->owned_by_client())
         << "This should only be called if the client is passing ownership of "
            "|view| to the parent View.";
+    CHECK_CLASS_HAS_METADATA(T)
     return AddChildView<T>(view.release());
   }
   template <typename T>
@@ -417,6 +436,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
     DCHECK(!view->owned_by_client())
         << "This should only be called if the client is passing ownership of "
            "|view| to the parent View.";
+    CHECK_CLASS_HAS_METADATA(T)
     return AddChildViewAt<T>(view.release(), index);
   }
 
@@ -424,12 +444,27 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // for new code.
   template <typename T>
   T* AddChildView(T* view) {
+    CHECK_CLASS_HAS_METADATA(T)
     AddChildViewAtImpl(view, children_.size());
     return view;
   }
   template <typename T>
   T* AddChildViewAt(T* view, size_t index) {
+    CHECK_CLASS_HAS_METADATA(T)
     AddChildViewAtImpl(view, index);
+    return view;
+  }
+
+  template <typename T, base::RawPtrTraits Traits = base::RawPtrTraits::kEmpty>
+  T* AddChildView(raw_ptr<T, Traits> view) {
+    CHECK_CLASS_HAS_METADATA(T)
+    AddChildViewAtImpl(view.get(), children_.size());
+    return view;
+  }
+  template <typename T, base::RawPtrTraits Traits = base::RawPtrTraits::kEmpty>
+  T* AddChildViewAt(raw_ptr<T, Traits> view, size_t index) {
+    CHECK_CLASS_HAS_METADATA(T)
+    AddChildViewAtImpl(view.get(), index);
     return view;
   }
 
@@ -455,8 +490,8 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   }
 
   // Partially specialized version to directly take a raw_ptr<T>.
-  template <typename T>
-  std::unique_ptr<T> RemoveChildViewT(raw_ptr<T> view) {
+  template <typename T, base::RawPtrTraits Traits = base::RawPtrTraits::kEmpty>
+  std::unique_ptr<T> RemoveChildViewT(raw_ptr<T, Traits> view) {
     return RemoveChildViewT(view.get());
   }
 
@@ -664,9 +699,9 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // for another reason.
   void DestroyLayer();
 
-  // Add or remove layers below this view. This view does not take ownership of
-  // the layers. It is the caller's responsibility to keep track of this View's
-  // size and update their layer accordingly.
+  // Add or remove layers above or below this view. This view does not take
+  // ownership of the layers. It is the caller's responsibility to keep track of
+  // this View's size and update their layer accordingly.
   //
   // In very rare cases, it may be necessary to override these. If any of this
   // view's contents must be painted to the same layer as its parent, or can't
@@ -675,23 +710,26 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // layers for subpixel rendering reasons. Overrides should be made
   // judiciously, and generally they should just forward the calls to a child
   // view. They must be overridden together for correctness.
-  virtual void AddLayerBeneathView(ui::Layer* new_layer);
-  virtual void RemoveLayerBeneathView(ui::Layer* old_layer);
+  virtual void AddLayerToRegion(ui::Layer* new_layer, LayerRegion region);
+  virtual void RemoveLayerFromRegions(ui::Layer* old_layer);
 
-  // This is like RemoveLayerBeneathView() but doesn't remove |old_layer| from
+  // This is like RemoveLayerFromRegions() but doesn't remove |old_layer| from
   // its parent. This is useful for when a layer beneth this view is owned by a
   // ui::LayerOwner which just recreated it (by calling RecreateLayer()). In
-  // this case, this function can be called to remove it from |layers_beneath_|,
-  // and to stop observing it, but it remains in the layer tree since the
-  // expectation of ui::LayerOwner::RecreateLayer() is that the old layer
-  // remains under the same parent, and stacked above the newly cloned layer.
-  void RemoveLayerBeneathViewKeepInLayerTree(ui::Layer* old_layer);
+  // this case, this function can be called to remove it from |layers_below_| or
+  // |layers_above_|, and to stop observing it, but it remains in the layer tree
+  // since the expectation of ui::LayerOwner::RecreateLayer() is that the old
+  // layer remains under the same parent, and stacked above the newly cloned
+  // layer.
+  void RemoveLayerFromRegionsKeepInLayerTree(ui::Layer* old_layer);
 
   // Gets the layers associated with this view that should be immediate children
   // of the parent layer. They are returned in bottom-to-top order. This
-  // includes |this->layer()| and any layers added with |AddLayerBeneathView()|.
+  // optionally includes |this->layer()| and any layers added with
+  // |AddLayerToRegion()|.
   // Returns an empty vector if this view doesn't paint to a layer.
-  std::vector<ui::Layer*> GetLayersInOrder();
+  std::vector<ui::Layer*> GetLayersInOrder(
+      ViewLayer view_layer = ViewLayer::kInclude);
 
   // ui::LayerObserver:
   void LayerDestroyed(ui::Layer* layer) override;
@@ -843,53 +881,85 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // group.
   virtual View* GetSelectedViewForGroup(int group);
 
+  // Returns the name of this particular instance of the class. This is useful
+  // to identify multiple instances of the same class within the same view
+  // hierarchy. The default value returned is GetClassName().
+  // Note: GetClassName() will eventually be made non-virtual. Override this
+  // method instead to provide a more unique object name for the instance.
+  virtual std::string GetObjectName() const;
+
   // Coordinate conversion -----------------------------------------------------
 
   // Note that the utility coordinate conversions functions always operate on
   // the mirrored position of the child Views if the parent View uses a
   // right-to-left UI layout.
 
-  // Convert a point from the coordinate system of one View to another.
+  // Converts a point from the coordinate system of one View to another.
   //
-  // |source| and |target| must be in the same widget, but doesn't need to be in
+  // |source| and |target| must be in the same widget, but don't need to be in
   // the same view hierarchy.
-  // Neither |source| nor |target| can be NULL.
+  // Neither |source| nor |target| can be null.
+  [[nodiscard]] static gfx::Point ConvertPointToTarget(const View* source,
+                                                       const View* target,
+                                                       const gfx::Point& point);
+  // The in-place version of this method is strongly discouraged, please use the
+  // by-value version above for improved const-compatability and readability.
   static void ConvertPointToTarget(const View* source,
                                    const View* target,
                                    gfx::Point* point);
 
-  [[nodiscard]] static gfx::Point ConvertPointToTarget(const View* source,
-                                                       const View* target,
-                                                       const gfx::Point& point);
-
-  // Convert |rect| from the coordinate system of |source| to the coordinate
+  // Converts |rect| from the coordinate system of |source| to the coordinate
   // system of |target|.
   //
-  // |source| and |target| must be in the same widget, but doesn't need to be in
+  // |source| and |target| must be in the same widget, but don't need to be in
   // the same view hierarchy.
-  // Neither |source| nor |target| can be NULL.
-  static void ConvertRectToTarget(const View* source,
-                                  const View* target,
-                                  gfx::RectF* rect);
+  // Neither |source| nor |target| can be null.
   [[nodiscard]] static gfx::RectF ConvertRectToTarget(const View* source,
                                                       const View* target,
                                                       const gfx::RectF& rect);
+  // The in-place version of this method is strongly discouraged, please use the
+  // by-value version above for improved const-compatability and readability.
+  static void ConvertRectToTarget(const View* source,
+                                  const View* target,
+                                  gfx::RectF* rect);
 
-  // Convert a point from a View's coordinate system to that of its Widget.
+  // Converts |rect| from the coordinate system of |source| to the
+  // coordinate system of |target|.
+  //
+  // |source| and |target| must be in the same widget, but don't need to be in
+  // the same view hierarchy.
+  // Neither |source| nor |target| can be null.
+  //
+  // Returns the enclosed rect with default allowed conversion error
+  // (0.00001f).
+  static gfx::Rect ConvertRectToTarget(const View* source,
+                                       const View* target,
+                                       const gfx::Rect& rect);
+
+  // Converts a point from a View's coordinate system to that of its Widget.
   static void ConvertPointToWidget(const View* src, gfx::Point* point);
 
-  // Convert a point from the coordinate system of a View's Widget to that
+  // Converts a point from the coordinate system of a View's Widget to that
   // View's coordinate system.
   static void ConvertPointFromWidget(const View* dest, gfx::Point* p);
 
-  // Convert a point from a View's coordinate system to that of the screen.
+  // Converts a point from a View's coordinate system to that of the screen.
+  [[nodiscard]] static gfx::Point ConvertPointToScreen(const View* src,
+                                                       const gfx::Point& point);
+  // The in-place version of this method is strongly discouraged, please use the
+  // by-value version above for improved const-compatability and readability.
   static void ConvertPointToScreen(const View* src, gfx::Point* point);
 
-  // Convert a point from the screen coordinate system to that View's coordinate
-  // system.
+  // Converts a point from the screen coordinate system to that View's
+  // coordinate system.
+  [[nodiscard]] static gfx::Point ConvertPointFromScreen(
+      const View* src,
+      const gfx::Point& point);
+  // The in-place version of this method is strongly discouraged, please use the
+  // by-value version above for improved const-compatability and readability.
   static void ConvertPointFromScreen(const View* dst, gfx::Point* point);
 
-  // Convert a rect from a View's coordinate system to that of the screen.
+  // Converts a rect from a View's coordinate system to that of the screen.
   static void ConvertRectToScreen(const View* src, gfx::Rect* rect);
 
   // Applies transformation on the rectangle, which is in the view's coordinate
@@ -939,16 +1009,12 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // Returns the NativeTheme to use for this View. This calls through to
   // GetNativeTheme() on the Widget this View is in, or provides a default
-  // theme if there's no widget, or returns |native_theme_| if that's
-  // set. Warning: the default theme might not be correct; you should probably
-  // override OnThemeChanged().
+  // theme if there's no widget. Warning: the default theme might not be
+  // correct; you should probably override OnThemeChanged().
   ui::NativeTheme* GetNativeTheme() {
     return const_cast<ui::NativeTheme*>(std::as_const(*this).GetNativeTheme());
   }
   const ui::NativeTheme* GetNativeTheme() const;
-
-  // Sets the native theme and informs descendants.
-  void SetNativeThemeForTesting(ui::NativeTheme* theme);
 
   // RTL painting --------------------------------------------------------------
 
@@ -1298,6 +1364,15 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // |p| provides the coordinates of the mouse (relative to this view).
   virtual std::u16string GetTooltipText(const gfx::Point& p) const;
 
+  // Views will normally display tooltips (if any) when they are focused
+  // (which usually happens via a keyboard event). Because they are both
+  // visible and displayed asynchronously, some tests may wish to disable
+  // them so that they don't interfere with whatever is being tested. If the
+  // tooltips are disabled via a feature flag, these routines will have no
+  // effect (i.e., the feature flag overrides them).
+  static void DisableKeyboardTooltipsForTesting();
+  static void EnableKeyboardTooltipsForTesting();
+
   // Context menus -------------------------------------------------------------
 
   // Sets the ContextMenuController. Setting this to non-null makes the View
@@ -1403,9 +1478,70 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Get the object managing the accessibility interface for this View.
   ViewAccessibility& GetViewAccessibility() const;
 
-  // Modifies |node_data| to reflect the current accessible state of this
-  // view.
-  virtual void GetAccessibleNodeData(ui::AXNodeData* node_data) {}
+  // Modifies |node_data| to reflect the current accessible state of this view.
+  // It accomplishes this by keeping the data up-to-date in response to the use
+  // of the accessible-property setters.
+  // NOTE: View authors should use the available property setters rather than
+  // overriding this function. Views which need to expose accessibility
+  // properties which are currently not supported View properties should ensure
+  // their view's `GetAccessibleNodeData` calls `GetAccessibleNodeData` on the
+  // parent class. This ensures that if an owning view customizes an accessible
+  // property, such as the name, role, or description, that customization is
+  // included in your view's `AXNodeData`.
+  virtual void GetAccessibleNodeData(ui::AXNodeData* node_data);
+
+  // Sets/gets the accessible name.
+  // The value of the accessible name is a localized, end-user-consumable string
+  // which may be derived from visible information (e.g. the text on a button)
+  // or invisible information (e.g. the alternative text describing an icon).
+  // In the case of focusable objects, the name will be presented by the screen
+  // reader when that object gains focus and is critical to understanding the
+  // purpose of that object non-visually.
+  void SetAccessibleName(const std::u16string& name);
+  const std::u16string& GetAccessibleName() const;
+
+  // Sets the accessible name to the specified string and source type.
+  // To indicate that this view should never have an accessible name, e.g. to
+  // prevent screen readers from speaking redundant information, set the type to
+  // `kAttributeExplicitlyEmpty`. NOTE: Do not use `kAttributeExplicitlyEmpty`
+  // on a view which may or may not have a name depending on circumstances. Also
+  // please seek review from accessibility OWNERs when removing the name,
+  // especially for views which are focusable or otherwise interactive.
+  void SetAccessibleName(std::u16string name, ax::mojom::NameFrom name_from);
+
+  // Sets the accessible name of this view to that of `naming_view`. Often
+  // `naming_view` is a `views::Label`, but any view with an accessible name
+  // will work.
+  void SetAccessibleName(View* naming_view);
+
+  // Sets/gets the accessible role.
+  void SetAccessibleRole(const ax::mojom::Role role);
+  ax::mojom::Role GetAccessibleRole() const;
+
+  // Sets the accessible role along with a customized string to be used by
+  // assistive technologies to present the role. When there is no role
+  // description provided, assisitive technologies will use either the default
+  // role descriptions we provide (which are currently located in a number of
+  // places. See crbug.com/1290866) or the value provided by their platform. As
+  // a general rule, it is preferable to not override the role string. Please
+  // seek review from accessibility OWNERs when using this function.
+  void SetAccessibleRole(const ax::mojom::Role role,
+                         const std::u16string& role_description);
+
+  // Sets/gets the accessible description string.
+  void SetAccessibleDescription(const std::u16string& description);
+  const std::u16string& GetAccessibleDescription() const;
+
+  // Sets the accessible description to the specified string and source type.
+  // To remove the description and prevent alternatives (such as tooltip text)
+  // from being used, set the type to `kAttributeExplicitlyEmpty`
+  void SetAccessibleDescription(const std::u16string& description,
+                                ax::mojom::DescriptionFrom description_from);
+
+  // Sets the accessible description of this view to the accessible name of
+  // `describing_view`. Often `describing_view` is a `views::Label`, but any
+  // view with an accessible name will work.
+  void SetAccessibleDescription(View* describing_view);
 
   // Handle a request from assistive technology to perform an action on this
   // view. Returns true on success, but note that the success/failure is
@@ -1448,6 +1584,8 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   void RemoveObserver(ViewObserver* observer);
   bool HasObserver(const ViewObserver* observer) const;
 
+  virtual std::unique_ptr<ActionViewInterface> GetActionViewInterface();
+
   // http://crbug.com/1162949 : Instrumentation that indicates if this is alive.
   // Callers should not depend on this as it is meant to be temporary.
   enum class LifeCycleState : uint32_t {
@@ -1477,6 +1615,32 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
     // Coordinates of the mouse press.
     gfx::Point start_pt;
   };
+
+  // Accessibility -------------------------------------------------------------
+
+  // Convenience function to set common accessibility properties during view
+  // construction/initialization. It should only be used to define property
+  // values as part of the creation of this view; not to provide property-
+  // change updates. This function will only modify properties for which a value
+  // has been explicitly set.
+  void SetAccessibilityProperties(
+      absl::optional<ax::mojom::Role> role = absl::nullopt,
+      absl::optional<std::u16string> name = absl::nullopt,
+      absl::optional<std::u16string> description = absl::nullopt,
+      absl::optional<std::u16string> role_description = absl::nullopt,
+      absl::optional<ax::mojom::NameFrom> name_from = absl::nullopt,
+      absl::optional<ax::mojom::DescriptionFrom> description_from =
+          absl::nullopt);
+
+  // Called when the accessible name of the View changed.
+  virtual void OnAccessibleNameChanged(const std::u16string& new_name) {}
+
+  // Called by `SetAccessibleName` to allow subclasses to adjust the new name.
+  // Potential use cases include setting the accessible name to the tooltip
+  // text when the new name is empty and prepending/appending additional text
+  // to the new name.
+  virtual void AdjustAccessibleName(std::u16string& new_name,
+                                    ax::mojom::NameFrom& name_from) {}
 
   // Size and disposition ------------------------------------------------------
 
@@ -1670,6 +1834,11 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Views must invoke this when the tooltip text they are to display changes.
   void TooltipTextChanged();
 
+  // Propagates UpdateTooltipForFocus() to the TooltipManager for the Widget.
+  // This must be invoked whenever the focus changes in the View hierarchy.
+  // Subclasses may override this to disable keyboard-based tooltips.
+  virtual void UpdateTooltipForFocus();
+
   // Drag and drop -------------------------------------------------------------
 
   // These are cover methods that invoke the method of the same name on
@@ -1716,6 +1885,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   FRIEND_TEST_ALL_PREFIXES(ViewTest, PaintWithMovedViewUsesCache);
   FRIEND_TEST_ALL_PREFIXES(ViewTest, PaintWithMovedViewUsesCacheInRTL);
   FRIEND_TEST_ALL_PREFIXES(ViewTest, PaintWithUnknownInvalidation);
+  FRIEND_TEST_ALL_PREFIXES(ViewTest, PauseAccessibilityEvents);
 
   // This is the default view layout. It is a very simple version of FillLayout,
   // which merely sets the bounds of the children to the content bounds. The
@@ -1853,23 +2023,23 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // Coordinate conversion -----------------------------------------------------
 
-  // Convert a point in the view's coordinate to an ancestor view's coordinate
+  // Converts a point in the view's coordinate to an ancestor view's coordinate
   // system using necessary transformations. Returns whether the point was
   // successfully converted to the ancestor's coordinate system.
   bool ConvertPointForAncestor(const View* ancestor, gfx::Point* point) const;
 
-  // Convert a point in the ancestor's coordinate system to the view's
+  // Converts a point in the ancestor's coordinate system to the view's
   // coordinate system using necessary transformations. Returns whether the
   // point was successfully converted from the ancestor's coordinate system
   // to the view's coordinate system.
   bool ConvertPointFromAncestor(const View* ancestor, gfx::Point* point) const;
 
-  // Convert a rect in the view's coordinate to an ancestor view's coordinate
+  // Converts a rect in the view's coordinate to an ancestor view's coordinate
   // system using necessary transformations. Returns whether the rect was
   // successfully converted to the ancestor's coordinate system.
   bool ConvertRectForAncestor(const View* ancestor, gfx::RectF* rect) const;
 
-  // Convert a rect in the ancestor's coordinate system to the view's
+  // Converts a rect in the ancestor's coordinate system to the view's
   // coordinate system using necessary transformations. Returns whether the
   // rect was successfully converted from the ancestor's coordinate system
   // to the view's coordinate system.
@@ -1932,6 +2102,17 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // Creates a mask layer for the current view using |clip_path_|.
   void CreateMaskLayer();
+
+  // Implementation for adding a layer above or beneath the view layer. Called
+  // from |AddLayerToRegion()|.
+  void AddLayerToRegionImpl(
+      ui::Layer* new_layer,
+      std::vector<raw_ptr<ui::Layer, VectorExperimental>>& layer_vector);
+
+  // Sets this view's layer and the layers above and below's parent to the given
+  // parent_layer. This will also ensure the layers are added to the given
+  // parent in the correct order.
+  void SetLayerParent(ui::Layer* parent_layer);
 
   // Layout --------------------------------------------------------------------
 
@@ -2038,7 +2219,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Tree operations -----------------------------------------------------------
 
   // This view's parent.
-  raw_ptr<View, DanglingUntriaged> parent_ = nullptr;
+  raw_ptr<View> parent_ = nullptr;
 
   // This view's children.
   Views children_;
@@ -2123,13 +2304,6 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Whether SchedulePaintInRect() was invoked on this View.
   bool needs_paint_ = false;
 
-  // Native theme --------------------------------------------------------------
-
-  // A native theme for this view and its descendants. Typically null, in which
-  // case the native theme is drawn from the parent view (eventually the
-  // widget).
-  raw_ptr<ui::NativeTheme, DanglingUntriaged> native_theme_ = nullptr;
-
   // RTL painting --------------------------------------------------------------
 
   // Indicates whether or not the gfx::Canvas object passed to Paint() is going
@@ -2152,10 +2326,11 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Whether we are painting to a layer because of a non-identity transform.
   bool paint_to_layer_for_transform_ = false;
 
-  // Set of layers that should be painted beneath this View's layer. These
-  // layers are maintained as siblings of this View's layer and are stacked
-  // beneath.
-  std::vector<ui::Layer*> layers_beneath_;
+  // Set of layers that should be painted above and beneath this View's layer.
+  // These layers are maintained as siblings of this View's layer and are
+  // stacked above and beneath, respectively.
+  std::vector<raw_ptr<ui::Layer, VectorExperimental>> layers_above_;
+  std::vector<raw_ptr<ui::Layer, VectorExperimental>> layers_below_;
 
   // If painting to a layer |mask_layer_| will mask the current layer and all
   // child layers to within the |clip_path_|.
@@ -2164,7 +2339,7 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Accelerators --------------------------------------------------------------
 
   // Focus manager accelerators registered on.
-  raw_ptr<FocusManager, DanglingUntriaged> accelerator_focus_manager_ = nullptr;
+  raw_ptr<FocusManager> accelerator_focus_manager_ = nullptr;
 
   // The list of accelerators. List elements in the range
   // [0, registered_accelerator_count_) are already registered to FocusManager,
@@ -2175,13 +2350,19 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Focus ---------------------------------------------------------------------
 
   // Next view to be focused when the Tab key is pressed.
-  raw_ptr<View, DanglingUntriaged> next_focusable_view_ = nullptr;
+  raw_ptr<View> next_focusable_view_ = nullptr;
 
   // Next view to be focused when the Shift-Tab key combination is pressed.
-  raw_ptr<View, DanglingUntriaged> previous_focusable_view_ = nullptr;
+  raw_ptr<View> previous_focusable_view_ = nullptr;
 
   // The focus behavior of the view in regular and accessibility mode.
   FocusBehavior focus_behavior_ = FocusBehavior::NEVER;
+
+  // By default, we should show tooltips when a View is focused via a
+  // key event. For testing purposes, we may not want that behavior.
+  // This is controlled by DisableKeyboardTooltipsForTesting() and
+  // EnableKeyboardTooltipsForTesting(), above.
+  static bool kShouldDisableKeyboardTooltipsForTesting;
 
   // This is set when focus events should be skipped after focus reaches this
   // View.
@@ -2190,12 +2371,13 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Context menus -------------------------------------------------------------
 
   // The menu controller.
-  raw_ptr<ContextMenuController, DanglingUntriaged> context_menu_controller_ =
-      nullptr;
+  raw_ptr<ContextMenuController, AcrossTasksDanglingUntriaged>
+      context_menu_controller_ = nullptr;
 
   // Drag and drop -------------------------------------------------------------
 
-  raw_ptr<DragController, DanglingUntriaged> drag_controller_ = nullptr;
+  raw_ptr<DragController, AcrossTasksDanglingUntriaged> drag_controller_ =
+      nullptr;
 
   // Input  --------------------------------------------------------------------
 
@@ -2212,10 +2394,25 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
   // Manages the accessibility interface for this View.
   mutable std::unique_ptr<ViewAccessibility> view_accessibility_;
 
+  // Updated by the accessibility property setters and returned by
+  // `GetAccessibleNodeData`.
+  std::unique_ptr<ui::AXNodeData> ax_node_data_;
+
+  // Used by `SetAccessibilityProperties` and to prevent accessibility
+  // property-change events from being fired during initialization of this view.
+  bool pause_accessibility_events_ = false;
+
   // Keeps track of whether accessibility checks for this View have run yet.
   // They run once inside ::OnPaint() to keep overhead low. The idea is that if
   // a View is ready to paint it should also be set up to be accessible.
   bool has_run_accessibility_paint_checks_ = false;
+
+  // Accessible properties whose values are set by views using the accessible
+  // property setters, and used to populate the `AXNodeData` associated with
+  // this view and provided by `View::GetAccessibleNodeData`.
+  std::u16string accessible_name_;
+  std::u16string accessible_description_;
+  ax::mojom::Role accessible_role_ = ax::mojom::Role::kUnknown;
 
   // Observers -----------------------------------------------------------------
 
@@ -2223,6 +2420,16 @@ class VIEWS_EXPORT View : public ui::LayerDelegate,
 
   // http://crbug.com/1162949 : Instrumentation that indicates if this is alive.
   LifeCycleState life_cycle_state_ = LifeCycleState::kAlive;
+};
+
+class VIEWS_EXPORT BaseActionViewInterface : public ActionViewInterface {
+ public:
+  explicit BaseActionViewInterface(View* action_view);
+  ~BaseActionViewInterface() override = default;
+  void ActionItemChangedImpl(actions::ActionItem* action_item) override;
+
+ private:
+  raw_ptr<View> action_view_;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, View, BaseView)
@@ -2241,6 +2448,21 @@ template <typename LayoutManager>
 BuilderT&& SetLayoutManager(std::unique_ptr<LayoutManager> layout_manager) && {
   return std::move(this->SetLayoutManager(std::move(layout_manager)));
 }
+
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleName, const std::u16string&)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleName, View*)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleName,
+                             std::u16string,
+                             ax::mojom::NameFrom)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleDescription, const std::u16string&)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleDescription, View*)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleDescription,
+                             const std::u16string&,
+                             ax::mojom::DescriptionFrom)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleRole, ax::mojom::Role)
+VIEW_BUILDER_OVERLOAD_METHOD(SetAccessibleRole,
+                             ax::mojom::Role,
+                             const std::u16string&)
 VIEW_BUILDER_PROPERTY(std::unique_ptr<Background>, Background)
 VIEW_BUILDER_PROPERTY(std::unique_ptr<Border>, Border)
 VIEW_BUILDER_PROPERTY(gfx::Rect, BoundsRect)

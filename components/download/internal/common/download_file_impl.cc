@@ -9,10 +9,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/trace_event/trace_event.h"
@@ -55,6 +55,30 @@ const int kNoBytesToWrite = -1;
 
 // Default content length when the potential file size is not yet determined.
 const int kUnknownContentLength = -1;
+
+#if BUILDFLAG(IS_MAC)
+void UnHideFile(const base::FilePath& path) {
+  base::stat_wrapper_t stat;
+  if (base::File::Stat(path.value().c_str(), &stat) < 0) {
+    return;
+  }
+
+  if (!S_ISREG(stat.st_mode)) {
+    return;
+  }
+
+  // Skip files starting with ".".
+  if (base::StartsWith(path.BaseName().value(), ".")) {
+    return;
+  }
+
+  // Update the file's hidden flags.
+  if (stat.st_flags & UF_HIDDEN) {
+    stat.st_flags ^= UF_HIDDEN;
+    chflags(path.value().c_str(), stat.st_flags);
+  }
+}
+#endif
 
 }  // namespace
 
@@ -161,7 +185,7 @@ DownloadFileImpl::DownloadFileImpl(
       num_active_streams_(0),
       is_paused_(false),
       download_id_(download_id),
-      main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       observer_(observer) {
   TRACE_EVENT_INSTANT0("download", "DownloadFileCreated",
                        TRACE_EVENT_SCOPE_THREAD);
@@ -193,7 +217,7 @@ void DownloadFileImpl::Initialize(
   cancel_request_callback_ = cancel_request_callback;
   received_slices_ = received_slices;
   if (!task_runner_)
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 
   // If the last slice is finished, then we know the actual content size.
   if (!received_slices_.empty() && received_slices_.back().finished) {
@@ -472,6 +496,11 @@ void DownloadFileImpl::OnRenameComplete(const base::FilePath& new_path,
     for (auto& stream : source_streams_)
       stream.second->ClearDataReadyCallback();
   }
+#if BUILDFLAG(IS_MAC)
+  else {
+    UnHideFile(new_path);
+  }
+#endif
 
   main_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), reason,

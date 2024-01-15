@@ -1,12 +1,12 @@
 Name: libvpx
 URL: https://chromium.googlesource.com/webm/libvpx
-Version: v1.12.0
-Date: Tuesday October 18 2022
-Revision: 5245f6e9cb7e6bb68ab45fe4d8b00bc9b16857e1
-CPEPrefix: cpe:/a:webmproject:libvpx:1.12.0
+Version: N/A
+Revision: 43bd5679507be19e883d68da52702296ab1738cd
+CPEPrefix: cpe:/a:webmproject:libvpx:1.13.1
 License: BSD
 License File: source/libvpx/LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
 Contains the sources used to compile libvpx binaries used by Google Chrome and
@@ -26,16 +26,18 @@ Please follow these steps to update libvpx source code:
 
    Use the generated commit message for the roll.
 
-2. Generate .gni and config files.
+2. Generate .gni and config files:
 
      cd third_party/libvpx
      ./generate_gni.sh
 
-   Update 'Version' and 'CPEPrefix' in this file if necessary.
+   Update 'Revision' and 'CPEPrefix' in this file if necessary.
 
 3. Amend the commit created by the first step:
 
      git commit -a --amend
+
+   Add `Bug: b:308446709` to the commit message.
 
 4. Upload the change to Gerrit:
 

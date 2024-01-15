@@ -7,10 +7,10 @@
 
 #include <vector>
 
-#include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "net/base/net_export.h"
 #include "net/ssl/ssl_config.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -21,6 +21,14 @@ struct NET_EXPORT SSLContextConfig {
   ~SSLContextConfig();
   SSLContextConfig& operator=(const SSLContextConfig&);
   SSLContextConfig& operator=(SSLContextConfig&&);
+
+  bool operator==(const SSLContextConfig&) const;
+
+  // Returns whether insecure hashes are allowed in TLS handshakes.
+  bool InsecureHashesInTLSHandshakesEnabled() const;
+
+  // Returns whether post-quantum key agreement is enabled in TLS handshakes.
+  bool PostQuantumKeyAgreementEnabled() const;
 
   // The minimum and maximum protocol versions that are enabled.
   // (Use the SSL_PROTOCOL_VERSION_xxx enumerators defined in ssl_config.h.)
@@ -39,14 +47,28 @@ struct NET_EXPORT SSLContextConfig {
   // disable TLS_ECDH_ECDSA_WITH_RC4_128_SHA, specify 0xC002.
   std::vector<uint16_t> disabled_cipher_suites;
 
-  // If false, disables post-quantum key agreement in TLS connections.
-  bool cecpq2_enabled = true;
+  // If specified, controls whether post-quantum key agreement in TLS
+  // connections is allowed. If `absl::nullopt`, this is determined by feature
+  // flags.
+  absl::optional<bool> post_quantum_override;
 
-  // If false, disables TLS Encrypted ClientHello (ECH). If true, the feature
-  // may be enabled or disabled, depending on feature flags.
+  // Controls whether ECH is enabled.
   bool ech_enabled = true;
 
-  // ADDING MORE HERE? Don't forget to update |SSLContextConfigsAreEqual|.
+  // If specified, controls whether insecure hashes are allowed in TLS
+  // handshakes. If `absl::nullopt`, this is determined by feature flags.
+  absl::optional<bool> insecure_hash_override;
+
+  // If specified, controls whether the X.509 keyUsage extension is checked in
+  // TLS 1.2 for RSA certificates that chain to a local trust anchor. If
+  // `absl::nullopt`, this is determined by feature flags.
+  //
+  // Independent of the setting of this value, keyUsage is always checked at TLS
+  // 1.3, for ECDSA certificates, and for all certificates that chain to a known
+  // root.
+  //
+  // TODO(crbug.com/795089): Enable this unconditionally.
+  absl::optional<bool> rsa_key_usage_for_local_anchors_override;
 };
 
 // The interface for retrieving global SSL configuration.  This interface
@@ -106,12 +128,6 @@ class NET_EXPORT SSLConfigService {
   // Calls the OnSSLContextConfigChanged method of registered observers. Should
   // only be called on the IO thread.
   void NotifySSLContextConfigChange();
-
-  // Checks if the config-service managed fields in two SSLContextConfigs are
-  // the same.
-  static bool SSLContextConfigsAreEqualForTesting(
-      const SSLContextConfig& config1,
-      const SSLContextConfig& config2);
 
  protected:
   // Process before/after config update. If |force_notification| is true,

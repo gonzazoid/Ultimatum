@@ -17,18 +17,26 @@ PermissionActionsHistoryFactory::GetForProfile(Profile* profile) {
 // static
 PermissionActionsHistoryFactory*
 PermissionActionsHistoryFactory::GetInstance() {
-  return base::Singleton<PermissionActionsHistoryFactory>::get();
+  static base::NoDestructor<PermissionActionsHistoryFactory> instance;
+  return instance.get();
 }
 
 PermissionActionsHistoryFactory::PermissionActionsHistoryFactory()
     : ProfileKeyedServiceFactory(
           "PermissionActionsHistory",
-          ProfileSelections::BuildForRegularAndIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 PermissionActionsHistoryFactory::~PermissionActionsHistoryFactory() = default;
 
-KeyedService* PermissionActionsHistoryFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PermissionActionsHistoryFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new permissions::PermissionActionsHistory(profile->GetPrefs());
+  return std::make_unique<permissions::PermissionActionsHistory>(
+      profile->GetPrefs());
 }

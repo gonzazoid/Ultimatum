@@ -123,6 +123,13 @@ static_library("zucchini_io") {
     ":zucchini_lib",
     "//base",
   ]
+
+  if (is_win) {
+    sources += [
+      "exception_filter_helper_win.cc",
+      "exception_filter_helper_win.h",
+    ]
+  }
 }
 
 executable("zucchini") {
@@ -152,6 +159,31 @@ if (is_win) {
   process_version_rc_template("zucchini_exe_version") {
     template_file = "zucchini_exe_version.rc.version"
     output = "$target_gen_dir/zucchini_exe_version.rc"
+  }
+
+  if (current_cpu != "x64") {
+    # For 32-bit, zucchini64 is built using the 64-bit toolchain, then copied
+    # from the 64-bit toolchain outdir to the main outdir.
+    zucchini64_toolchain = "//build/toolchain/win:win_clang_x64"
+    zucchini64_label = ":zucchini($zucchini64_toolchain)"
+  } else {
+    zucchini64_label = ":zucchini"
+  }
+
+  zucchini64_out_dir = get_label_info(zucchini64_label, "root_out_dir")
+
+  copy("copy_zucchini_pdb") {
+    visibility = [ ":zucchini64" ]
+    sources = [ "$zucchini64_out_dir/zucchini.exe.pdb" ]
+    outputs = [ "$root_out_dir/zucchini64.exe.pdb" ]
+    deps = [ zucchini64_label ]
+  }
+
+  copy("zucchini64") {
+    sources = [ "$zucchini64_out_dir/zucchini.exe" ]
+    outputs = [ "$root_out_dir/zucchini64.exe" ]
+    deps = [ zucchini64_label ]
+    deps += [ ":copy_zucchini_pdb" ]
   }
 }
 
@@ -206,6 +238,10 @@ test("zucchini_unittests") {
     "//base/test:test_support",
     "//testing/gtest",
   ]
+
+  if (is_win) {
+    sources += [ "exception_filter_helper_win_unittest.cc" ]
+  }
 }
 
 test("zucchini_integration_test") {

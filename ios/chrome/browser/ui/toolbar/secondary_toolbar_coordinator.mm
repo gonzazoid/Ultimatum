@@ -4,36 +4,57 @@
 
 #import "ios/chrome/browser/ui/toolbar/secondary_toolbar_coordinator.h"
 
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/omnibox_commands.h"
-#import "ios/chrome/browser/ui/commands/popup_menu_commands.h"
+#import "ios/chrome/browser/shared/coordinator/layout_guide/layout_guide_util.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/omnibox_commands.h"
+#import "ios/chrome/browser/shared/public/commands/popup_menu_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/fullscreen/fullscreen_controller.h"
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_coordinator+subclassing.h"
+#import "ios/chrome/browser/ui/toolbar/secondary_toolbar_mediator.h"
 #import "ios/chrome/browser/ui/toolbar/secondary_toolbar_view_controller.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface SecondaryToolbarCoordinator ()
 @property(nonatomic, strong) SecondaryToolbarViewController* viewController;
 @end
 
-@implementation SecondaryToolbarCoordinator
+@implementation SecondaryToolbarCoordinator {
+  SecondaryToolbarMediator* _secondaryToolbarMediator;
+}
 
 @dynamic viewController;
 
 #pragma mark - AdaptiveToolbarCoordinator
 
 - (void)start {
+  _secondaryToolbarMediator = [[SecondaryToolbarMediator alloc]
+      initWithWebStateList:self.browser->GetWebStateList()];
+
   self.viewController = [[SecondaryToolbarViewController alloc] init];
-  self.viewController.buttonFactory = [self buttonFactoryWithType:SECONDARY];
+  self.viewController.buttonFactory =
+      [self buttonFactoryWithType:ToolbarType::kSecondary];
   self.viewController.omniboxCommandsHandler =
       HandlerForProtocol(self.browser->GetCommandDispatcher(), OmniboxCommands);
   self.viewController.popupMenuCommandsHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), PopupMenuCommands);
+  self.viewController.layoutGuideCenter =
+      LayoutGuideCenterForBrowser(self.browser);
+  self.viewController.keyboardStateProvider = _secondaryToolbarMediator;
+  FullscreenController* controller =
+      FullscreenController::FromBrowser(self.browser);
+  self.viewController.fullscreenController = controller;
+  self.viewController.toolbarHeightDelegate = self.toolbarHeightDelegate;
 
   [super start];
+}
+
+- (void)stop {
+  [self.viewController disconnect];
+  [_secondaryToolbarMediator disconnect];
+  _secondaryToolbarMediator = nullptr;
+  [super stop];
 }
 
 #pragma mark - ToolbarCommands

@@ -17,28 +17,33 @@ import android.os.Bundle;
 import android.provider.Browser;
 import android.text.TextUtils;
 import android.util.SparseBooleanArray;
+import android.util.SparseIntArray;
 import android.view.Display;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
+import org.chromium.base.BuildInfo;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.ChromeTabbedActivity2;
 import org.chromium.chrome.browser.IntentHandler;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.app.tabmodel.TabWindowManagerSingleton;
+import org.chromium.chrome.browser.partnercustomizations.PartnerBrowserCustomizations;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabWindowManager;
 import org.chromium.chrome.browser.util.AndroidTaskUtils;
 import org.chromium.components.ukm.UkmRecorder;
@@ -47,9 +52,6 @@ import org.chromium.ui.display.DisplayAndroidManager;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Locale;
 
@@ -64,7 +66,10 @@ public class MultiWindowUtils implements ActivityStateListener {
 
     private static MultiWindowUtils sInstance = new MultiWindowUtils();
 
+    private static Integer sMaxInstancesForTesting;
+
     private final boolean mMultiInstanceApi31Enabled;
+    private static Boolean sMultiInstanceApi31EnabledForTesting;
 
     // Used to keep track of whether ChromeTabbedActivity2 is running. A tri-state Boolean is
     // used in case both activities die in the background and MultiWindowUtils is recreated.
@@ -88,6 +93,28 @@ public class MultiWindowUtils implements ActivityStateListener {
         int MULTI_WINDOW = 1;
     }
 
+    @IntDef({
+        InstanceAllocationType.DEFAULT,
+        InstanceAllocationType.EXISTING_INSTANCE_UNMAPPED_TASK,
+        InstanceAllocationType.EXISTING_INSTANCE_MAPPED_TASK,
+        InstanceAllocationType.PREFER_NEW_INSTANCE_NEW_TASK,
+        InstanceAllocationType.PREFER_NEW_INVALID_INSTANCE,
+        InstanceAllocationType.NEW_INSTANCE_NEW_TASK,
+        InstanceAllocationType.EXISTING_INSTANCE_NEW_TASK,
+        InstanceAllocationType.INVALID_INSTANCE
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface InstanceAllocationType {
+        int DEFAULT = 0;
+        int EXISTING_INSTANCE_UNMAPPED_TASK = 1;
+        int EXISTING_INSTANCE_MAPPED_TASK = 2;
+        int PREFER_NEW_INSTANCE_NEW_TASK = 3;
+        int PREFER_NEW_INVALID_INSTANCE = 4;
+        int NEW_INSTANCE_NEW_TASK = 5;
+        int EXISTING_INSTANCE_NEW_TASK = 6;
+        int INVALID_INSTANCE = 7;
+    }
+
     protected MultiWindowUtils() {
         mMultiInstanceApi31Enabled = isMultiInstanceApi31Enabled();
     }
@@ -99,7 +126,7 @@ public class MultiWindowUtils implements ActivityStateListener {
         // Instance switcher is supported on S, and on some R platforms where the new
         // launch mode is backported.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false;
-        return ChromeFeatureList.sInstanceSwitcher.isEnabled();
+        return true;
     }
 
     /**
@@ -107,6 +134,9 @@ public class MultiWindowUtils implements ActivityStateListener {
      *         multiple instantiation of Chrome instance.
      */
     public static boolean isMultiInstanceApi31Enabled() {
+        if (sMultiInstanceApi31EnabledForTesting != null) {
+            return sMultiInstanceApi31EnabledForTesting;
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false;
         Context context = ContextUtils.getApplicationContext();
         String packageName = context.getPackageName();
@@ -121,13 +151,14 @@ public class MultiWindowUtils implements ActivityStateListener {
     }
 
     public static int getMaxInstances() {
-        return isMultiInstanceApi31Enabled() ? TabWindowManager.MAX_SELECTORS_S
-                                             : TabWindowManager.MAX_SELECTORS_LEGACY;
+        return sMaxInstancesForTesting != null
+                ? sMaxInstancesForTesting
+                : (isMultiInstanceApi31Enabled()
+                        ? TabWindowManager.MAX_SELECTORS_S
+                        : TabWindowManager.MAX_SELECTORS_LEGACY);
     }
 
-    /**
-     * Returns the singleton instance of MultiWindowUtils.
-     */
+    /** Returns the singleton instance of MultiWindowUtils. */
     public static MultiWindowUtils getInstance() {
         return sInstance;
     }
@@ -152,19 +183,51 @@ public class MultiWindowUtils implements ActivityStateListener {
         return ApiCompatibilityUtils.getTargetableDisplayIds(activity).size() == 2;
     }
 
-    @VisibleForTesting
     public void setIsInMultiWindowModeForTesting(boolean isInMultiWindowMode) {
         mIsInMultiWindowModeForTesting = isInMultiWindowMode;
+        ResettersForTesting.register(() -> mIsInMultiWindowModeForTesting = false);
+    }
+
+    /** Returns whether the given activity currently supports opening tabs to the other window. */
+    public boolean isOpenInOtherWindowSupported(Activity activity) {
+        if (!isInMultiWindowMode(activity) && !isInMultiDisplayMode(activity)) return false;
+        // Automotive is currently restricted to a single window.
+        if (BuildInfo.getInstance().isAutomotive) return false;
+
+        return getOpenInOtherWindowActivity(activity) != null;
     }
 
     /**
-     * Returns whether the given activity currently supports opening tabs in or moving tabs to the
-     * other window.
+     * @param activity that is initiating tab move.
+     * @param tabModelSelector {@link TabModelSelector} to get total tab count. Returns whether the
+     *     given activity currently supports moving tabs to the other window.
      */
-    public boolean isOpenInOtherWindowSupported(Activity activity) {
-        if (!isInMultiWindowMode(activity) && !isInMultiDisplayMode(activity)) return false;
+    public boolean isMoveToOtherWindowSupported(
+            Activity activity, TabModelSelector tabModelSelector) {
+        // Not supported on automotive devices.
+        if (BuildInfo.getInstance().isAutomotive) return false;
 
-        return getOpenInOtherWindowActivity(activity) != null;
+        // Do not allow move for last tab when partner homepage enabled.
+        if (hasAtMostOneTabWithHomepageEnabled(tabModelSelector)) {
+            return false;
+        }
+        if (instanceSwitcherEnabled() && isMultiInstanceApi31Enabled()) {
+            // Moving tabs should be possible to any other instance.
+            return getInstanceCount() > 1;
+        } else {
+            return isOpenInOtherWindowSupported(activity);
+        }
+    }
+
+    /**
+     * @param tabModelSelector Used to pull total tab count. Returns whether last tab with partner
+     *     homepage enabled.
+     */
+    public boolean hasAtMostOneTabWithHomepageEnabled(TabModelSelector tabModelSelector) {
+        boolean hasAtMostOneTab = tabModelSelector.getTotalTabCount() <= 1;
+        boolean partnerHomepageEnabled =
+                PartnerBrowserCustomizations.getInstance().isHomepageProviderAvailableAndEnabled();
+        return hasAtMostOneTab && partnerHomepageEnabled;
     }
 
     /**
@@ -173,6 +236,9 @@ public class MultiWindowUtils implements ActivityStateListener {
      * @return {@code True} if Chrome can get itself into multi-window mode.
      */
     public boolean canEnterMultiWindowMode(Activity activity) {
+        // Automotive is currently restricted to a single window.
+        if (BuildInfo.getInstance().isAutomotive) return false;
+
         return aospMultiWindowModeSupported() || customMultiWindowModeSupported();
     }
 
@@ -219,7 +285,6 @@ public class MultiWindowUtils implements ActivityStateListener {
      * @param activity The activity firing the intent.
      * @param targetActivity The class of the activity receiving the intent.
      */
-    @RequiresApi(Build.VERSION_CODES.N)
     public static void setOpenInOtherWindowIntentExtras(
             Intent intent, Activity activity, Class<? extends Activity> targetActivity) {
         intent.setClass(activity, targetActivity);
@@ -230,7 +295,8 @@ public class MultiWindowUtils implements ActivityStateListener {
         // LAUNCH_ADJACENT will create another CTA instance with just a single tab. There doesn't
         // seem to be a reliable way to check if an activity was started via an alias, so we're
         // removing the flag if any CTA instance is running. See crbug.com/771516 for details.
-        if (!isMultiInstanceApi31Enabled() && targetActivity.equals(ChromeTabbedActivity.class)
+        if (!isMultiInstanceApi31Enabled()
+                && targetActivity.equals(ChromeTabbedActivity.class)
                 && isPrimaryTabbedActivityRunning()) {
             intent.setFlags(intent.getFlags() & ~Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
         }
@@ -249,10 +315,18 @@ public class MultiWindowUtils implements ActivityStateListener {
      *        new one not loading any tabs from a persistent disk file.
      * @param openAdjacently {@code true} if the new instance shall be created in
      *        the adjacent window of split-screen mode.
+     * @param addTrustedIntentExtras (@code true} if the TRUSTED_APPLICATION_CODE_EXTRA will be
+     *         added to the intent to identify it as coming from a trusted source. This should be
+     *         set to 'false' if the Intent could be received by an app besides Chrome (e.g. when
+     *         attaching to ClipData for a drag event).
      * @return The created intent.
      */
     public static Intent createNewWindowIntent(
-            Context context, int instanceId, boolean preferNew, boolean openAdjacently) {
+            Context context,
+            int instanceId,
+            boolean preferNew,
+            boolean openAdjacently,
+            boolean addTrustedIntentExtras) {
         assert isMultiInstanceApi31Enabled();
         Intent intent = new Intent(context, ChromeTabbedActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -264,7 +338,9 @@ public class MultiWindowUtils implements ActivityStateListener {
         if (openAdjacently) intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
         intent.putExtra(Browser.EXTRA_APPLICATION_ID, context.getPackageName());
         intent.putExtra(Browser.EXTRA_CREATE_NEW_TAB, true);
-        IntentUtils.addTrustedIntentExtras(intent);
+        if (addTrustedIntentExtras) {
+            IntentUtils.addTrustedIntentExtras(intent);
+        }
         return intent;
     }
 
@@ -344,10 +420,7 @@ public class MultiWindowUtils implements ActivityStateListener {
      * Determines the name of an activity from its {@link AppTask}.
      * @param task The AppTask to get the name of.
      */
-    @RequiresApi(Build.VERSION_CODES.M)
     public static String getActivityNameFromTask(AppTask task) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return "";
-
         ActivityManager.RecentTaskInfo taskInfo = AndroidTaskUtils.getTaskInfoFromTask(task);
         if (taskInfo == null || taskInfo.baseActivity == null) return "";
 
@@ -389,9 +462,6 @@ public class MultiWindowUtils implements ActivityStateListener {
      * @return True if multiple instances of Chrome are running.
      */
     public boolean areMultipleChromeInstancesRunning(Context context) {
-        // Exit early if multi-window isn't supported.
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) return false;
-
         // Check if both tasks are running.
         boolean tabbedTaskRunning = false;
         boolean tabbed2TaskRunning = false;
@@ -432,10 +502,8 @@ public class MultiWindowUtils implements ActivityStateListener {
         // 0. Use always ChromeTabbedActivity when multi-instance support in S+ is enabled.
         if (mMultiInstanceApi31Enabled) return ChromeTabbedActivity.class;
 
-        // 1. Exit early if the build version doesn't support Android N+ multi-window mode or
-        // ChromeTabbedActivity2 isn't running.
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M
-                || (mTabbedActivity2TaskRunning != null && !mTabbedActivity2TaskRunning)) {
+        // 1. Exit early if ChromeTabbedActivity2 isn't running.
+        if (mTabbedActivity2TaskRunning != null && !mTabbedActivity2TaskRunning) {
             return ChromeTabbedActivity.class;
         }
 
@@ -447,8 +515,8 @@ public class MultiWindowUtils implements ActivityStateListener {
         }
 
         // 3. If only one ChromeTabbedActivity is currently in Android recents, use it.
-        boolean tabbed2TaskRunning = isActivityTaskInRecents(
-                ChromeTabbedActivity2.class.getName(), context);
+        boolean tabbed2TaskRunning =
+                isActivityTaskInRecents(ChromeTabbedActivity2.class.getName(), context);
 
         // Exit early if ChromeTabbedActivity2 isn't running.
         if (!tabbed2TaskRunning) {
@@ -456,8 +524,8 @@ public class MultiWindowUtils implements ActivityStateListener {
             return ChromeTabbedActivity.class;
         }
 
-        boolean tabbedTaskRunning = isActivityTaskInRecents(
-                ChromeTabbedActivity.class.getName(), context);
+        boolean tabbedTaskRunning =
+                isActivityTaskInRecents(ChromeTabbedActivity.class.getName(), context);
         if (!tabbedTaskRunning) {
             return ChromeTabbedActivity2.class;
         }
@@ -490,8 +558,7 @@ public class MultiWindowUtils implements ActivityStateListener {
             ChromeTabbedActivity lastResumedActivity = mLastResumedTabbedActivity.get();
             if (lastResumedActivity != null) {
                 Class<?> lastResumedClassName = lastResumedActivity.getClass();
-                if (tabbedTaskRunning
-                        && lastResumedClassName.equals(ChromeTabbedActivity.class)) {
+                if (tabbedTaskRunning && lastResumedClassName.equals(ChromeTabbedActivity.class)) {
                     return ChromeTabbedActivity.class;
                 }
                 if (tabbed2TaskRunning
@@ -511,10 +578,9 @@ public class MultiWindowUtils implements ActivityStateListener {
      * @return True if the Activity still has a task in Android recents, regardless of whether
      *         the Activity has been destroyed.
      */
-    @RequiresApi(Build.VERSION_CODES.M)
     private boolean isActivityTaskInRecents(String className, Context context) {
-        ActivityManager activityManager = (ActivityManager)
-                context.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager activityManager =
+                (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         List<AppTask> appTasks = activityManager.getAppTasks();
         for (AppTask task : appTasks) {
             String baseActivity = getActivityNameFromTask(task);
@@ -592,7 +658,7 @@ public class MultiWindowUtils implements ActivityStateListener {
      * @return The time when the instance was last accessed.
      */
     static long readLastAccessedTime(int index) {
-        return SharedPreferencesManager.getInstance().readLong(lastAccessedTimeKey(index));
+        return ChromeSharedPreferences.getInstance().readLong(lastAccessedTimeKey(index));
     }
 
     /**
@@ -601,56 +667,13 @@ public class MultiWindowUtils implements ActivityStateListener {
      */
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void writeLastAccessedTime(int index) {
-        SharedPreferencesManager.getInstance().writeLong(
-                lastAccessedTimeKey(index), System.currentTimeMillis());
+        ChromeSharedPreferences.getInstance()
+                .writeLong(lastAccessedTimeKey(index), System.currentTimeMillis());
     }
 
     @VisibleForTesting
     public Boolean getTabbedActivity2TaskRunning() {
         return mTabbedActivity2TaskRunning;
-    }
-
-    /**
-     * @param activity The {@link Activity} to check.
-     * @return Whether or not {@code activity} is currently in pre-N Samsung multi-window mode.
-     */
-    public boolean isLegacyMultiWindow(Activity activity) {
-        if (activity == null) return false;
-
-        try {
-            // Check if Samsung's multi-window mode is supported on this device.
-            // PackageManager#hasSystemFeature(PackageManager.FEATURE_MULTIWINDOW);
-            PackageManager pm = activity.getPackageManager();
-            Field multiwindowFeatureField = pm.getClass().getField("FEATURE_MULTIWINDOW");
-            if (!pm.hasSystemFeature((String) multiwindowFeatureField.get(null))) return false;
-
-            // Grab the current window mode.
-            // int windowMode = Activity#getWindowMode();
-            Method getWindowMode = activity.getClass().getMethod("getWindowMode", (Class[]) null);
-            int windowMode = (Integer) getWindowMode.invoke(activity, (Object[]) null);
-
-            // Grab the multi-window mode constant.
-            // android.view.WindowManagerPolicy#WINDOW_MODE_FREESTYLE
-            Class<?> windowManagerPolicyClass = Class.forName("android.view.WindowManagerPolicy");
-            Field windowModeFreestyleField =
-                    windowManagerPolicyClass.getField("WINDOW_MODE_FREESTYLE");
-            int featureMultiWindowFreestyle = (Integer) windowModeFreestyleField.get(null);
-
-            // Compare windowMode with WINDOW_MODE_FREESTYLE to see if that flag is set.
-            return (windowMode & featureMultiWindowFreestyle) != 0;
-        } catch (NoSuchFieldException e) {
-            return false;
-        } catch (IllegalAccessException e) {
-            return false;
-        } catch (IllegalArgumentException e) {
-            return false;
-        } catch (NoSuchMethodException e) {
-            return false;
-        } catch (InvocationTargetException e) {
-            return false;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
     }
 
     /**
@@ -665,29 +688,6 @@ public class MultiWindowUtils implements ActivityStateListener {
     }
 
     /**
-     * @return Whether or not activity should run in pre-N Samsung multi-instance mode.
-     */
-    public boolean shouldRunInLegacyMultiInstanceMode(Activity activity, Intent intent) {
-        return Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP
-                && TextUtils.equals(intent.getAction(), Intent.ACTION_MAIN)
-                && isLegacyMultiWindow(activity) && isPrimaryTabbedActivityRunning();
-    }
-
-    /**
-     * Makes |intent| able to support multi-instance in pre-N Samsung multi-window mode.
-     */
-    public void makeLegacyMultiInstanceIntent(Activity activity, Intent intent) {
-        if (isLegacyMultiWindow(activity)) {
-            if (TextUtils.equals(ChromeTabbedActivity.class.getName(),
-                    intent.getComponent().getClassName())) {
-                intent.setClassName(activity, MultiInstanceChromeTabbedActivity.class.getName());
-            }
-            intent.setFlags(intent.getFlags()
-                    & ~(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NEW_DOCUMENT));
-        }
-    }
-
-    /**
      * Records user actions and ukms associated with entering and exiting Android N multi-window
      * mode.
      * For second activity, records separate user actions for entering/exiting multi-window mode to
@@ -698,12 +698,15 @@ public class MultiWindowUtils implements ActivityStateListener {
      * @param isFirstActivity True if the activity is the first activity in multi-window mode.
      * @param tab The current activity {@link Tab}.
      */
-    public void recordMultiWindowModeChanged(boolean isInMultiWindowMode, boolean isDeferredStartup,
-            boolean isFirstActivity, @Nullable Tab tab) {
+    public void recordMultiWindowModeChanged(
+            boolean isInMultiWindowMode,
+            boolean isDeferredStartup,
+            boolean isFirstActivity,
+            @Nullable Tab tab) {
         if (isFirstActivity) {
             if (isInMultiWindowMode) {
                 if (mMultiInstanceApi31Enabled) {
-                    SharedPreferencesManager prefs = SharedPreferencesManager.getInstance();
+                    SharedPreferencesManager prefs = ChromeSharedPreferences.getInstance();
                     long startTime = prefs.readLong(ChromePreferenceKeys.MULTI_WINDOW_START_TIME);
                     if (startTime == 0) {
                         RecordUserAction.record("Android.MultiWindowMode.Enter2");
@@ -715,7 +718,7 @@ public class MultiWindowUtils implements ActivityStateListener {
                 }
             } else {
                 if (mMultiInstanceApi31Enabled) {
-                    SharedPreferencesManager prefs = SharedPreferencesManager.getInstance();
+                    SharedPreferencesManager prefs = ChromeSharedPreferences.getInstance();
                     long startTime = prefs.readLong(ChromePreferenceKeys.MULTI_WINDOW_START_TIME);
                     if (startTime > 0) {
                         long current = System.currentTimeMillis();
@@ -740,9 +743,14 @@ public class MultiWindowUtils implements ActivityStateListener {
 
         if (tab == null || tab.isIncognito() || tab.getWebContents() == null) return;
 
-        new UkmRecorder.Bridge().recordEventWithIntegerMetric(tab.getWebContents(),
-                "Android.MultiWindowChangeActivity", "ActivityType",
-                isInMultiWindowMode ? MultiWindowActivityType.ENTER : MultiWindowActivityType.EXIT);
+        new UkmRecorder.Bridge()
+                .recordEventWithIntegerMetric(
+                        tab.getWebContents(),
+                        "Android.MultiWindowChangeActivity",
+                        "ActivityType",
+                        isInMultiWindowMode
+                                ? MultiWindowActivityType.ENTER
+                                : MultiWindowActivityType.EXIT);
     }
 
     /**
@@ -753,28 +761,81 @@ public class MultiWindowUtils implements ActivityStateListener {
     public void recordMultiWindowStateUkm(Activity activity, Tab tab) {
         if (tab == null || tab.isIncognito() || tab.getWebContents() == null) return;
 
-        new UkmRecorder.Bridge().recordEventWithIntegerMetric(tab.getWebContents(),
-                "Android.MultiWindowState", "WindowState",
-                isInMultiWindowMode(activity) ? MultiWindowState.MULTI_WINDOW
-                                              : MultiWindowState.SINGLE_WINDOW);
+        new UkmRecorder.Bridge()
+                .recordEventWithIntegerMetric(
+                        tab.getWebContents(),
+                        "Android.MultiWindowState",
+                        "WindowState",
+                        isInMultiWindowMode(activity)
+                                ? MultiWindowState.MULTI_WINDOW
+                                : MultiWindowState.SINGLE_WINDOW);
     }
 
     /**
-     * @return The instance ID of the Chrome window that was accessed last if the maximum number of
-     *         instances is open. If fewer than the maximum number is open, the default ID will be
-     *         returned, indicative of an unused window ID that can be potentially allocated to
-     *         launch a VIEW intent.
+     * @param preferNew Whether a new instance is preferred to launch a VIEW intent. {@code true} if
+     *     a new instance is preferred, {@code false} if an existing instance is preferred.
+     * @return The instance ID of the Chrome window with a running activity that was accessed last,
+     *     if an existing instance is preferred to launch the intent, or if the maximum number of
+     *     instances is open. If fewer than the maximum number is open, the default ID will be
+     *     returned if |preferNew| is true, indicative of an unused window ID that can be allocated
+     *     to the new instance launched by the intent.
      */
-    public static int getInstanceIdForViewIntent() {
+    public static int getInstanceIdForViewIntent(boolean preferNew) {
         int windowId = MultiWindowUtils.INVALID_INSTANCE_ID;
         int maxInstances = MultiWindowUtils.getMaxInstances();
-        if (MultiWindowUtils.getInstanceCount() < maxInstances) return windowId;
+        if (preferNew && MultiWindowUtils.getInstanceCount() < maxInstances) return windowId;
+
+        SparseIntArray windowIdsOfRunningTabbedActivities =
+                MultiInstanceManagerApi31.getWindowIdsOfRunningTabbedActivities();
         for (int i = 0; i < maxInstances; i++) {
+            // Exclude instance IDs of non-running activities.
+            if (windowIdsOfRunningTabbedActivities.indexOfValue(i) < 0) continue;
             if (MultiWindowUtils.readLastAccessedTime(i)
                     > MultiWindowUtils.readLastAccessedTime(windowId)) {
                 windowId = i;
             }
         }
         return windowId;
+    }
+
+    /**
+     * Launch the given intent in an existing ChromeTabbedActivity instance.
+     * @param intent The intent to launch.
+     * @param instanceId ID of the instance to launch the intent in.
+     */
+    public static void launchIntentInInstance(Intent intent, int instanceId) {
+        MultiInstanceManagerApi31.launchIntentInInstance(intent, instanceId);
+    }
+
+    /**
+     * @param activity The {@link Activity} associated with the current context.
+     * @return The instance ID of the Chrome window where the link intent will be launched.
+     *     INVALID_INSTANCE_ID will be returned if fewer than the maximum number of instances are
+     *     open. The instance ID associated with the specified, valid activity will be returned if
+     *     the maximum number of instances is open.
+     */
+    public static int getInstanceIdForLinkIntent(Activity activity) {
+        // INVALID_INSTANCE_ID indicates that a new instance will be used to launch the link intent.
+        if (getInstanceCount() < getMaxInstances()) return INVALID_INSTANCE_ID;
+        int windowId = TabWindowManagerSingleton.getInstance().getIndexForWindow(activity);
+        assert windowId != INVALID_INSTANCE_ID
+                : "A valid instance ID was not found for the specified activity.";
+        return windowId;
+    }
+
+    public static void setInstanceForTesting(MultiWindowUtils instance) {
+        var oldValue = sInstance;
+        sInstance = instance;
+        ResettersForTesting.register(() -> sInstance = oldValue);
+    }
+
+    public static void setMaxInstancesForTesting(int maxInstances) {
+        sMaxInstancesForTesting = maxInstances;
+        ResettersForTesting.register(() -> sMaxInstancesForTesting = null);
+    }
+
+    public static void setMultiInstanceApi31EnabledForTesting(boolean value) {
+        sMultiInstanceApi31EnabledForTesting = value;
+        ResettersForTesting.register(() -> sMultiInstanceApi31EnabledForTesting = null);
     }
 }

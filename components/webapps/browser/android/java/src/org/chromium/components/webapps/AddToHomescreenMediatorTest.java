@@ -24,18 +24,13 @@ import org.chromium.base.test.util.JniMocker;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * Tests for the {@link AddToHomescreenMediator} class.
- */
+/** Tests for the {@link AddToHomescreenMediator} class. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class AddToHomescreenMediatorTest {
-    @Rule
-    public JniMocker mocker = new JniMocker();
+    @Rule public JniMocker mocker = new JniMocker();
 
-    @Mock
-    private AddToHomescreenMediator.Natives mNativeMock;
-    @Mock
-    private WindowAndroid mWindowAndroid;
+    @Mock private AddToHomescreenMediator.Natives mNativeMock;
+    @Mock private WindowAndroid mWindowAndroid;
 
     private PropertyModel mPropertyModel =
             new PropertyModel.Builder(AddToHomescreenProperties.ALL_KEYS).build();
@@ -61,7 +56,7 @@ public class AddToHomescreenMediatorTest {
         appData.setPackageInfo("Title", null, 3.4f, "Install", null, null);
 
         addToHomescreenMediator.setNativeAppInfo(appData);
-        addToHomescreenMediator.setIcon(icon, false, false);
+        addToHomescreenMediator.setIcon(icon, false);
 
         // Assert #setNativeAppInfo assigns the correct properties to the model.
         Assert.assertEquals("Title", mPropertyModel.get(AddToHomescreenProperties.TITLE));
@@ -71,7 +66,8 @@ public class AddToHomescreenMediatorTest {
         Assert.assertEquals(
                 3.4f, mPropertyModel.get(AddToHomescreenProperties.NATIVE_APP_RATING), .01);
         Assert.assertEquals(true, mPropertyModel.get(AddToHomescreenProperties.CAN_SUBMIT));
-        Assert.assertEquals("Install",
+        Assert.assertEquals(
+                "Install",
                 mPropertyModel.get(AddToHomescreenProperties.NATIVE_INSTALL_BUTTON_TEXT));
     }
 
@@ -84,14 +80,14 @@ public class AddToHomescreenMediatorTest {
         // Prepare test parameters.
         Bitmap icon = Bitmap.createBitmap(10, 10, Bitmap.Config.ARGB_8888);
         addToHomescreenMediator.setWebAppInfo("Title", "google.com", false);
-        addToHomescreenMediator.setIcon(icon, true, false);
+        addToHomescreenMediator.setIcon(icon, true);
 
         // Assert #setWebAppInfoWithIcon assigns the correct properties to the model.
         Assert.assertEquals("Title", mPropertyModel.get(AddToHomescreenProperties.TITLE));
         Assert.assertEquals("google.com", mPropertyModel.get(AddToHomescreenProperties.URL));
         Assert.assertEquals(AppType.SHORTCUT, mPropertyModel.get(AddToHomescreenProperties.TYPE));
-        Assert.assertEquals(
-                new Pair(icon, true), mPropertyModel.get(AddToHomescreenProperties.ICON));
+        Assert.assertNotEquals(icon, mPropertyModel.get(AddToHomescreenProperties.ICON).first);
+        Assert.assertTrue(mPropertyModel.get(AddToHomescreenProperties.ICON).second);
         Assert.assertEquals(true, mPropertyModel.get(AddToHomescreenProperties.CAN_SUBMIT));
     }
 }

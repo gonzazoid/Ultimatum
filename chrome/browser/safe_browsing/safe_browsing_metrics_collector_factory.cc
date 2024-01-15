@@ -21,16 +21,25 @@ SafeBrowsingMetricsCollectorFactory::GetForProfile(Profile* profile) {
 // static
 SafeBrowsingMetricsCollectorFactory*
 SafeBrowsingMetricsCollectorFactory::GetInstance() {
-  return base::Singleton<SafeBrowsingMetricsCollectorFactory>::get();
+  static base::NoDestructor<SafeBrowsingMetricsCollectorFactory> instance;
+  return instance.get();
 }
 
 SafeBrowsingMetricsCollectorFactory::SafeBrowsingMetricsCollectorFactory()
-    : ProfileKeyedServiceFactory("SafeBrowsingMetricsCollector") {}
+    : ProfileKeyedServiceFactory(
+          "SafeBrowsingMetricsCollector",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-KeyedService* SafeBrowsingMetricsCollectorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SafeBrowsingMetricsCollectorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new SafeBrowsingMetricsCollector(profile->GetPrefs());
+  return std::make_unique<SafeBrowsingMetricsCollector>(profile->GetPrefs());
 }
 
 }  // namespace safe_browsing

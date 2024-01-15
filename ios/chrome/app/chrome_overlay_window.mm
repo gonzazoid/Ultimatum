@@ -5,21 +5,17 @@
 #import "ios/chrome/app/chrome_overlay_window.h"
 
 #import "base/check.h"
-#import "ios/chrome/browser/crash_report/crash_keys_helper.h"
-#import "ios/chrome/browser/metrics/user_interface_style_recorder.h"
+#import "ios/chrome/browser/crash_report/model/crash_keys_helper.h"
+#import "ios/chrome/browser/metrics/model/user_interface_style_recorder.h"
 #import "ui/base/device_form_factor.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface ChromeOverlayWindow ()
 @property(nonatomic, strong)
     UserInterfaceStyleRecorder* userInterfaceStyleRecorder API_AVAILABLE(
         ios(13.0));
 
-// Updates the Breakpad report with the current size class.
-- (void)updateBreakpad;
+// Updates the crash keys with the current size class.
+- (void)updateCrashKeys;
 
 @end
 
@@ -29,7 +25,7 @@
   self = [super initWithFrame:frame];
   if (self) {
     // When not created via a nib, create the recorders immediately.
-    [self updateBreakpad];
+    [self updateCrashKeys];
     _userInterfaceStyleRecorder = [[UserInterfaceStyleRecorder alloc]
         initWithUserInterfaceStyle:self.traitCollection.userInterfaceStyle];
   }
@@ -38,10 +34,10 @@
 
 - (void)awakeFromNib {
   [super awakeFromNib];
-  [self updateBreakpad];
+  [self updateCrashKeys];
 }
 
-- (void)updateBreakpad {
+- (void)updateCrashKeys {
   crash_keys::SetCurrentHorizontalSizeClass(
       self.traitCollection.horizontalSizeClass);
   crash_keys::SetCurrentUserInterfaceStyle(
@@ -64,7 +60,7 @@
   [super traitCollectionDidChange:previousTraitCollection];
   if (previousTraitCollection.horizontalSizeClass !=
       self.traitCollection.horizontalSizeClass) {
-    [self updateBreakpad];
+    [self updateCrashKeys];
   }
   if ([self.traitCollection
           hasDifferentColorAppearanceComparedToTraitCollection:
@@ -72,7 +68,7 @@
     [self.userInterfaceStyleRecorder
         userInterfaceStyleDidChange:self.traitCollection.userInterfaceStyle];
   }
-  [self updateBreakpad];
+  [self updateCrashKeys];
 }
 
 @end

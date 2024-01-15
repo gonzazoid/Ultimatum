@@ -14,9 +14,7 @@
 #include "base/containers/id_map.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/supports_user_data.h"
 #include "base/values.h"
-#include "components/keyed_service/core/keyed_service.h"
 #include "components/wifi/wifi_service.h"
 #include "extensions/browser/api/networking_private/networking_private_delegate.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
@@ -39,6 +37,7 @@ class NetworkingPrivateServiceClient
   // worker thread. The deletion task is posted from the destructor.
   explicit NetworkingPrivateServiceClient(
       std::unique_ptr<wifi::WiFiService> wifi_service);
+  ~NetworkingPrivateServiceClient() override;
 
   NetworkingPrivateServiceClient(const NetworkingPrivateServiceClient&) =
       delete;
@@ -57,12 +56,12 @@ class NetworkingPrivateServiceClient
                 DictionaryCallback success_callback,
                 FailureCallback failure_callback) override;
   void SetProperties(const std::string& guid,
-                     base::Value properties_dict,
+                     base::Value::Dict properties_dict,
                      bool allow_set_shared_config,
                      VoidCallback success_callback,
                      FailureCallback failure_callback) override;
   void CreateNetwork(bool shared,
-                     base::Value properties_dict,
+                     base::Value::Dict properties_dict,
                      StringCallback success_callback,
                      FailureCallback failure_callback) override;
   void ForgetNetwork(const std::string& guid,
@@ -118,7 +117,7 @@ class NetworkingPrivateServiceClient
   // Callbacks to extension api function objects. Keep reference to API object
   // and are released in ShutdownOnUIThread. Run when WiFiService calls back
   // into NetworkingPrivateServiceClient's callback wrappers.
-  typedef int32_t ServiceCallbacksID;
+  using ServiceCallbacksID = int32_t;
   struct ServiceCallbacks {
     ServiceCallbacks();
     ~ServiceCallbacks();
@@ -134,8 +133,6 @@ class NetworkingPrivateServiceClient
     ServiceCallbacksID id;
   };
   using ServiceCallbacksMap = base::IDMap<std::unique_ptr<ServiceCallbacks>>;
-
-  ~NetworkingPrivateServiceClient() override;
 
   // Callback wrappers.
   void AfterGetProperties(PropertiesCallback callback,

@@ -7,13 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/pickle.h"
 #include "build/build_config.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
 #include "ui/base/dragdrop/os_exchange_data_provider_factory.h"
-#include "url/gurl.h"
+#include "url/origin.h"
 
 namespace ui {
 
@@ -27,12 +27,16 @@ OSExchangeData::OSExchangeData(std::unique_ptr<OSExchangeDataProvider> provider)
 OSExchangeData::~OSExchangeData() {
 }
 
-void OSExchangeData::MarkOriginatedFromRenderer() {
-  provider_->MarkOriginatedFromRenderer();
+void OSExchangeData::MarkRendererTaintedFromOrigin(const url::Origin& origin) {
+  provider_->MarkRendererTaintedFromOrigin(origin);
 }
 
-bool OSExchangeData::DidOriginateFromRenderer() const {
-  return provider_->DidOriginateFromRenderer();
+bool OSExchangeData::IsRendererTainted() const {
+  return provider_->IsRendererTainted();
+}
+
+absl::optional<url::Origin> OSExchangeData::GetRendererTaintedOrigin() const {
+  return provider_->GetRendererTaintedOrigin();
 }
 
 void OSExchangeData::MarkAsFromPrivileged() {
@@ -73,10 +77,6 @@ bool OSExchangeData::GetURLAndTitle(FilenameToURLPolicy policy,
                                     GURL* url,
                                     std::u16string* title) const {
   return provider_->GetURLAndTitle(policy, url, title);
-}
-
-bool OSExchangeData::GetFilename(base::FilePath* path) const {
-  return provider_->GetFilename(path);
 }
 
 bool OSExchangeData::GetFilenames(std::vector<FileInfo>* filenames) const {
@@ -150,11 +150,11 @@ bool OSExchangeData::GetVirtualFilenames(
   return provider_->GetVirtualFilenames(filenames);
 }
 
-bool OSExchangeData::GetVirtualFilesAsTempFiles(
+void OSExchangeData::GetVirtualFilesAsTempFiles(
     base::OnceCallback<
         void(const std::vector<std::pair<base::FilePath, base::FilePath>>&)>
         callback) const {
-  return provider_->GetVirtualFilesAsTempFiles(std::move(callback));
+  provider_->GetVirtualFilesAsTempFiles(std::move(callback));
 }
 #endif
 

@@ -4,6 +4,9 @@
 
 #include "ui/accessibility/platform/inspect/ax_inspect_test_helper.h"
 
+#include <string>
+#include <vector>
+
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
@@ -12,18 +15,19 @@
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/accessibility_switches.h"
 #include "ui/accessibility/platform/inspect/ax_api_type.h"
 #include "ui/accessibility/platform/inspect/ax_inspect_scenario.h"
 #include "ui/base/buildflags.h"
 
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
 #if BUILDFLAG(USE_ATK)
 extern "C" {
 #include <atk/atk.h>
 }
+#endif
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/mac_util.h"
 #endif
 
 namespace ui {
@@ -36,14 +40,15 @@ constexpr char kMarkSkipFile[] = "#<skip";
 constexpr char kSignalDiff[] = "*";
 constexpr char kMarkEndOfFile[] = "<-- End-of-file -->";
 
-using SetUpCommandLine = void (*)(base::CommandLine*);
+using InitializeFeatureList =
+    void (*)(base::test::ScopedFeatureList& scoped_feature_list);
 
 struct TypeInfo {
   const char* type;
   struct Mapping {
     const char* directive_prefix;
     const FilePath::CharType* expectations_file_postfix;
-    SetUpCommandLine setup_command_line;
+    InitializeFeatureList initialize_feature_list;
   } mapping;
 };
 
@@ -53,7 +58,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@ANDROID-",
             FILE_PATH_LITERAL("-android"),
-            [](base::CommandLine*) {},
+            [](base::test::ScopedFeatureList&) {},
         },
     },
     {
@@ -61,7 +66,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@BLINK-",
             FILE_PATH_LITERAL("-blink"),
-            [](base::CommandLine*) {},
+            [](base::test::ScopedFeatureList&) {},
         },
     },
     {
@@ -69,7 +74,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@FUCHSIA-",
             FILE_PATH_LITERAL("-fuchsia"),
-            [](base::CommandLine*) {},
+            [](base::test::ScopedFeatureList&) {},
         },
     },
     {
@@ -77,7 +82,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@AURALINUX-",
             FILE_PATH_LITERAL("-auralinux"),
-            [](base::CommandLine*) {},
+            [](base::test::ScopedFeatureList&) {},
         },
     },
     {
@@ -85,7 +90,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@MAC-",
             FILE_PATH_LITERAL("-mac"),
-            [](base::CommandLine*) {},
+            [](base::test::ScopedFeatureList&) {},
         },
     },
     {
@@ -93,7 +98,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@",
             FILE_PATH_LITERAL(""),
-            [](base::CommandLine*) {},
+            [](base::test::ScopedFeatureList&) {},
         },
     },
     {
@@ -101,10 +106,9 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@UIA-WIN-",
             FILE_PATH_LITERAL("-uia-win"),
-            [](base::CommandLine* command_line) {
+            [](base::test::ScopedFeatureList& scoped_feature_list) {
 #if BUILDFLAG(IS_WIN)
-              command_line->AppendSwitch(
-                  ::switches::kEnableExperimentalUIAutomation);
+              scoped_feature_list.InitAndEnableFeature(features::kUiaProvider);
 #endif
             },
         },
@@ -114,12 +118,7 @@ constexpr TypeInfo kTypeInfos[] = {
         {
             "@WIN-",
             FILE_PATH_LITERAL("-win"),
-            [](base::CommandLine* command_line) {
-#if BUILDFLAG(IS_WIN)
-              command_line->RemoveSwitch(
-                  ::switches::kEnableExperimentalUIAutomation);
-#endif
-            },
+            [](base::test::ScopedFeatureList&) {},
         },
     }};
 
@@ -184,12 +183,14 @@ base::FilePath AXInspectTestHelper::GetExpectationFilePath(
   return base::FilePath();
 }
 
-void AXInspectTestHelper::SetUpCommandLine(
-    base::CommandLine* command_line) const {
-  const TypeInfo::Mapping* mapping = TypeMapping(expectation_type_);
-  if (mapping) {
-    mapping->setup_command_line(command_line);
+void AXInspectTestHelper::InitializeFeatureList() {
+  if (const auto* mapping = TypeMapping(expectation_type_); mapping) {
+    mapping->initialize_feature_list(scoped_feature_list_);
   }
+}
+
+void AXInspectTestHelper::ResetFeatureList() {
+  scoped_feature_list_.Reset();
 }
 
 AXInspectScenario AXInspectTestHelper::ParseScenario(
@@ -352,15 +353,6 @@ FilePath::StringType AXInspectTestHelper::GetExpectedFileSuffix(
 
 FilePath::StringType AXInspectTestHelper::GetVersionSpecificExpectedFileSuffix(
     const base::FilePath::StringType& expectations_qualifier) const {
-#if BUILDFLAG(IS_WIN)
-  if (expectation_type_ == "uia" &&
-      base::win::GetVersion() == base::win::Version::WIN7) {
-    FilePath::StringType suffix;
-    if (!expectations_qualifier.empty())
-      suffix = FILE_PATH_LITERAL("-") + expectations_qualifier;
-    return suffix + FILE_PATH_LITERAL("-expected-uia-win7.txt");
-  }
-#endif
 #if BUILDFLAG(USE_ATK)
   if (expectation_type_ == "linux") {
     FilePath::StringType version_name;
@@ -383,6 +375,18 @@ FilePath::StringType AXInspectTestHelper::GetVersionSpecificExpectedFileSuffix(
     if (!expectations_qualifier.empty())
       suffix = FILE_PATH_LITERAL("-") + expectations_qualifier;
     return suffix + FILE_PATH_LITERAL("-expected-blink-cros.txt");
+  }
+#endif
+#if BUILDFLAG(IS_MAC)
+  // When running tests in a platform specific test directory (such as
+  // content/test/data/accessibility/mac/) the expectation_type_ == content.
+  if ((expectation_type_ == "mac" || expectation_type_ == "content") &&
+      base::mac::MacOSMajorVersion() < 11) {
+    FilePath::StringType suffix;
+    if (!expectations_qualifier.empty()) {
+      suffix = FILE_PATH_LITERAL("-") + expectations_qualifier;
+    }
+    return suffix + FILE_PATH_LITERAL("-expected-mac-before-11.txt");
   }
 #endif
   return FILE_PATH_LITERAL("");

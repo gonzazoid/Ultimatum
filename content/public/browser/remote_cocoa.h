@@ -7,7 +7,7 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 
@@ -15,6 +15,7 @@
 
 namespace remote_cocoa {
 
+// This must return an autoreleased object.
 using RenderWidgetHostViewMacDelegateCallback =
     base::OnceCallback<NSObject<RenderWidgetHostViewMacDelegate>*()>;
 

@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
 
 namespace blink {
@@ -39,6 +40,9 @@ class MockDataChannel : public webrtc::DataChannelInterface {
   uint64_t buffered_amount() const override;
   void Close() override;
   bool Send(const webrtc::DataBuffer& buffer) override;
+  void SendAsync(
+      webrtc::DataBuffer buffer,
+      absl::AnyInvocable<void(webrtc::RTCError) &&> on_complete) override;
 
   // For testing.
   void changeState(DataState state);
@@ -51,7 +55,7 @@ class MockDataChannel : public webrtc::DataChannelInterface {
   bool reliable_;
   webrtc::DataChannelInterface::DataState state_;
   webrtc::DataChannelInit config_;
-  webrtc::DataChannelObserver* observer_;
+  raw_ptr<webrtc::DataChannelObserver, ExperimentalRenderer> observer_;
 };
 
 }  // namespace blink

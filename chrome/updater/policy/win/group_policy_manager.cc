@@ -4,15 +4,26 @@
 
 #include "chrome/updater/policy/win/group_policy_manager.h"
 
+#include <userenv.h>
+
+#include <optional>
 #include <ostream>
 #include <string>
 
-#include <userenv.h>
-
 #include "base/check.h"
 #include "base/enterprise_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/logging.h"
+#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/scoped_generic.h"
+#include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 #include "base/win/registry.h"
 #include "chrome/updater/win/win_constants.h"
@@ -24,8 +35,9 @@ namespace {
 struct ScopedHCriticalPolicySectionTraits {
   static HANDLE InvalidValue() { return nullptr; }
   static void Free(HANDLE handle) {
-    if (handle != InvalidValue())
+    if (handle != InvalidValue()) {
       ::LeaveCriticalPolicySection(handle);
+    }
   }
 };
 
@@ -34,17 +46,46 @@ struct ScopedHCriticalPolicySectionTraits {
 using scoped_hpolicy =
     base::ScopedGeneric<HANDLE, updater::ScopedHCriticalPolicySectionTraits>;
 
-base::Value::Dict LoadGroupPolicies() {
-  scoped_hpolicy policy_lock;
+struct PolicySectionEvents
+    : public base::RefCountedThreadSafe<PolicySectionEvents> {
+  base::WaitableEvent enter_policy_section;
+  base::WaitableEvent leave_policy_section;
 
-  if (base::IsManagedDevice()) {
-    // GPO rules mandate a call to EnterCriticalPolicySection() before reading
-    // policies (and a matching LeaveCriticalPolicySection() call after read).
-    // Acquire the lock for managed machines because group policies are
-    // applied only in this case, and the lock acquisition can take a long
-    // time, in the worst case scenarios.
-    policy_lock.reset(::EnterCriticalPolicySection(true));
-    CHECK(policy_lock.is_valid()) << "Failed to get policy lock.";
+ private:
+  friend class base::RefCountedThreadSafe<PolicySectionEvents>;
+  virtual ~PolicySectionEvents() = default;
+};
+
+base::Value::Dict LoadGroupPolicies(bool should_take_policy_critical_section) {
+  base::ScopedClosureRunner leave_policy_section_closure;
+
+  if (should_take_policy_critical_section && base::IsManagedDevice()) {
+    // Only for managed machines, a best effort is made to take the Group Policy
+    // critical section. Lock acquisition can take a long time in the worst case
+    // scenarios, hence a short timed wait is used.
+
+    auto events = base::MakeRefCounted<PolicySectionEvents>();
+    leave_policy_section_closure.ReplaceClosure(base::BindOnce(
+        [](scoped_refptr<PolicySectionEvents> events) {
+          events->leave_policy_section.Signal();
+        },
+        events));
+
+    base::ThreadPool::PostTask(
+        FROM_HERE, {base::MayBlock(), base::WithBaseSyncPrimitives()},
+        base::BindOnce(
+            [](scoped_refptr<PolicySectionEvents> events) {
+              scoped_hpolicy policy_lock(::EnterCriticalPolicySection(true));
+
+              events->enter_policy_section.Signal();
+
+              events->leave_policy_section.Wait();
+            },
+            events));
+
+    if (!events->enter_policy_section.TimedWait(base::Seconds(30))) {
+      VLOG(1) << "Timed out trying to get the policy critical section.";
+    }
   }
 
   base::Value::Dict policies;
@@ -52,7 +93,8 @@ base::Value::Dict LoadGroupPolicies() {
   for (base::win::RegistryValueIterator it(HKEY_LOCAL_MACHINE,
                                            UPDATER_POLICIES_KEY);
        it.Valid(); ++it) {
-    const std::string key_name = base::SysWideToUTF8(it.Name());
+    const std::string key_name =
+        base::ToLowerASCII(base::SysWideToUTF8(it.Name()));
     switch (it.Type()) {
       case REG_SZ:
         policies.Set(key_name, base::SysWideToUTF8(it.Value()));
@@ -73,16 +115,26 @@ base::Value::Dict LoadGroupPolicies() {
 
 }  // namespace
 
-GroupPolicyManager::GroupPolicyManager() : PolicyManager(LoadGroupPolicies()) {}
+GroupPolicyManager::GroupPolicyManager(
+    bool should_take_policy_critical_section,
+    const std::optional<bool>& override_is_managed_device)
+    : PolicyManager(LoadGroupPolicies(should_take_policy_critical_section)),
+      is_managed_device_(override_is_managed_device.value_or(
+          base::IsManagedOrEnterpriseDevice())) {}
 
 GroupPolicyManager::~GroupPolicyManager() = default;
 
+bool GroupPolicyManager::CloudPolicyOverridesPlatformPolicy() const {
+  return GetIntegerPolicy("CloudPolicyOverridesPlatformPolicy").value_or(0) !=
+         0;
+}
+
 bool GroupPolicyManager::HasActiveDevicePolicies() const {
-  return PolicyManager::HasActiveDevicePolicies() && base::IsManagedDevice();
+  return is_managed_device_ && PolicyManager::HasActiveDevicePolicies();
 }
 
 std::string GroupPolicyManager::source() const {
-  return std::string("GroupPolicy");
+  return kSourceGroupPolicyManager;
 }
 
 }  // namespace updater

@@ -6,13 +6,16 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "base/allocator/partition_alloc_features.h"
 #include "base/allocator/partition_alloc_support.h"
-#include "base/allocator/partition_allocator/dangling_raw_ptr_checks.h"
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/dangling_raw_ptr_checks.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_for_testing.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_root.h"
 #include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -36,8 +39,6 @@ using ::testing::StrictMock;
 
 namespace base {
 namespace {
-
-class IncompleteType;
 
 class NoRef {
  public:
@@ -936,9 +937,7 @@ struct RepeatingTestConfig {
   using ClosureType = RepeatingClosure;
 
   template <typename F, typename... Args>
-  static CallbackType<internal::MakeUnboundRunType<F, Args...>> Bind(
-      F&& f,
-      Args&&... args) {
+  static auto Bind(F&& f, Args&&... args) {
     return BindRepeating(std::forward<F>(f), std::forward<Args>(args)...);
   }
 };
@@ -949,9 +948,7 @@ struct OnceTestConfig {
   using ClosureType = OnceClosure;
 
   template <typename F, typename... Args>
-  static CallbackType<internal::MakeUnboundRunType<F, Args...>> Bind(
-      F&& f,
-      Args&&... args) {
+  static auto Bind(F&& f, Args&&... args) {
     return BindOnce(std::forward<F>(f), std::forward<Args>(args)...);
   }
 };
@@ -1081,12 +1078,6 @@ TYPED_TEST(BindVariantsTest, ArgumentBinding) {
   NoRefParent p;
   p.value = 5;
   EXPECT_EQ(5, TypeParam::Bind(&UnwrapNoRefParent, p).Run());
-
-  IncompleteType* incomplete_ptr = reinterpret_cast<IncompleteType*>(123);
-  EXPECT_EQ(
-      incomplete_ptr,
-      TypeParam::Bind(&PolymorphicIdentity<IncompleteType*>, incomplete_ptr)
-          .Run());
 
   NoRefChild c;
   c.value = 6;
@@ -1471,23 +1462,33 @@ TEST_F(BindTest, ArgumentCopiesAndMoves) {
   EXPECT_EQ(0, move_assigns);
 }
 
-TEST_F(BindTest, CapturelessLambda) {
-  EXPECT_FALSE(internal::IsCallableObject<void>::value);
-  EXPECT_FALSE(internal::IsCallableObject<int>::value);
-  EXPECT_FALSE(internal::IsCallableObject<void (*)()>::value);
-  EXPECT_FALSE(internal::IsCallableObject<void (NoRef::*)()>::value);
+TEST_F(BindTest, RepeatingWithoutPassed) {
+  // It should be possible to use a move-only type with `BindRepeating` without
+  // `Passed` if running the callback does not require copying the instance.
+  struct S {
+    S() = default;
+    S(S&&) = default;
+    S& operator=(S&&) = default;
+  } s;
+  BindRepeating([](const S&) {}, std::move(s));
+}
 
-  auto f = []() {};
-  EXPECT_TRUE(internal::IsCallableObject<decltype(f)>::value);
+TEST_F(BindTest, CapturelessLambda) {
+  EXPECT_FALSE(internal::IsCallableObject<void>);
+  EXPECT_FALSE(internal::IsCallableObject<int>);
+  EXPECT_FALSE(internal::IsCallableObject<void (*)()>);
+  EXPECT_FALSE(internal::IsCallableObject<void (NoRef::*)()>);
+
+  auto f = [] {};
+  EXPECT_TRUE(internal::IsCallableObject<decltype(f)>);
 
   int i = 0;
-  auto g = [i]() { (void)i; };
-  EXPECT_TRUE(internal::IsCallableObject<decltype(g)>::value);
+  auto g = [i] { (void)i; };
+  EXPECT_TRUE(internal::IsCallableObject<decltype(g)>);
 
   auto h = [](int, double) { return 'k'; };
-  EXPECT_TRUE(
-      (std::is_same<char(int, double),
-                    internal::ExtractCallableRunType<decltype(h)>>::value));
+  EXPECT_TRUE((std::is_same_v<char(int, double),
+                              internal::ExtractCallableRunType<decltype(h)>>));
 
   EXPECT_EQ(42, BindRepeating([] { return 42; }).Run());
   EXPECT_EQ(42, BindRepeating([](int i) { return i * 7; }, 6).Run());
@@ -1515,9 +1516,9 @@ TEST_F(BindTest, EmptyFunctor) {
     int operator()() const { return 42; }
   };
 
-  EXPECT_TRUE(internal::IsCallableObject<NonEmptyFunctor>::value);
-  EXPECT_TRUE(internal::IsCallableObject<EmptyFunctor>::value);
-  EXPECT_TRUE(internal::IsCallableObject<EmptyFunctorConst>::value);
+  EXPECT_TRUE(internal::IsCallableObject<NonEmptyFunctor>);
+  EXPECT_TRUE(internal::IsCallableObject<EmptyFunctor>);
+  EXPECT_TRUE(internal::IsCallableObject<EmptyFunctorConst>);
   EXPECT_EQ(42, BindOnce(EmptyFunctor()).Run());
   EXPECT_EQ(42, BindOnce(EmptyFunctorConst()).Run());
   EXPECT_EQ(42, BindRepeating(EmptyFunctorConst()).Run());
@@ -1584,56 +1585,51 @@ TEST_F(BindTest, OnceCallback) {
   // Check if Callback variants have declarations of conversions as expected.
   // Copy constructor and assignment of RepeatingCallback.
   static_assert(
-      std::is_constructible<RepeatingClosure, const RepeatingClosure&>::value,
+      std::is_constructible_v<RepeatingClosure, const RepeatingClosure&>,
       "RepeatingClosure should be copyable.");
-  static_assert(
-      std::is_assignable<RepeatingClosure, const RepeatingClosure&>::value,
-      "RepeatingClosure should be copy-assignable.");
+  static_assert(std::is_assignable_v<RepeatingClosure, const RepeatingClosure&>,
+                "RepeatingClosure should be copy-assignable.");
 
   // Move constructor and assignment of RepeatingCallback.
-  static_assert(
-      std::is_constructible<RepeatingClosure, RepeatingClosure&&>::value,
-      "RepeatingClosure should be movable.");
-  static_assert(std::is_assignable<RepeatingClosure, RepeatingClosure&&>::value,
+  static_assert(std::is_constructible_v<RepeatingClosure, RepeatingClosure&&>,
+                "RepeatingClosure should be movable.");
+  static_assert(std::is_assignable_v<RepeatingClosure, RepeatingClosure&&>,
                 "RepeatingClosure should be move-assignable");
 
   // Conversions from OnceCallback to RepeatingCallback.
-  static_assert(
-      !std::is_constructible<RepeatingClosure, const OnceClosure&>::value,
-      "OnceClosure should not be convertible to RepeatingClosure.");
-  static_assert(
-      !std::is_assignable<RepeatingClosure, const OnceClosure&>::value,
-      "OnceClosure should not be convertible to RepeatingClosure.");
+  static_assert(!std::is_constructible_v<RepeatingClosure, const OnceClosure&>,
+                "OnceClosure should not be convertible to RepeatingClosure.");
+  static_assert(!std::is_assignable_v<RepeatingClosure, const OnceClosure&>,
+                "OnceClosure should not be convertible to RepeatingClosure.");
 
   // Destructive conversions from OnceCallback to RepeatingCallback.
-  static_assert(!std::is_constructible<RepeatingClosure, OnceClosure&&>::value,
+  static_assert(!std::is_constructible_v<RepeatingClosure, OnceClosure&&>,
                 "OnceClosure should not be convertible to RepeatingClosure.");
-  static_assert(!std::is_assignable<RepeatingClosure, OnceClosure&&>::value,
+  static_assert(!std::is_assignable_v<RepeatingClosure, OnceClosure&&>,
                 "OnceClosure should not be convertible to RepeatingClosure.");
 
   // Copy constructor and assignment of OnceCallback.
-  static_assert(!std::is_constructible<OnceClosure, const OnceClosure&>::value,
+  static_assert(!std::is_constructible_v<OnceClosure, const OnceClosure&>,
                 "OnceClosure should not be copyable.");
-  static_assert(!std::is_assignable<OnceClosure, const OnceClosure&>::value,
+  static_assert(!std::is_assignable_v<OnceClosure, const OnceClosure&>,
                 "OnceClosure should not be copy-assignable");
 
   // Move constructor and assignment of OnceCallback.
-  static_assert(std::is_constructible<OnceClosure, OnceClosure&&>::value,
+  static_assert(std::is_constructible_v<OnceClosure, OnceClosure&&>,
                 "OnceClosure should be movable.");
-  static_assert(std::is_assignable<OnceClosure, OnceClosure&&>::value,
+  static_assert(std::is_assignable_v<OnceClosure, OnceClosure&&>,
                 "OnceClosure should be move-assignable.");
 
   // Conversions from RepeatingCallback to OnceCallback.
-  static_assert(
-      std::is_constructible<OnceClosure, const RepeatingClosure&>::value,
-      "RepeatingClosure should be convertible to OnceClosure.");
-  static_assert(std::is_assignable<OnceClosure, const RepeatingClosure&>::value,
+  static_assert(std::is_constructible_v<OnceClosure, const RepeatingClosure&>,
+                "RepeatingClosure should be convertible to OnceClosure.");
+  static_assert(std::is_assignable_v<OnceClosure, const RepeatingClosure&>,
                 "RepeatingClosure should be convertible to OnceClosure.");
 
   // Destructive conversions from RepeatingCallback to OnceCallback.
-  static_assert(std::is_constructible<OnceClosure, RepeatingClosure&&>::value,
+  static_assert(std::is_constructible_v<OnceClosure, RepeatingClosure&&>,
                 "RepeatingClosure should be convertible to OnceClosure.");
-  static_assert(std::is_assignable<OnceClosure, RepeatingClosure&&>::value,
+  static_assert(std::is_assignable_v<OnceClosure, RepeatingClosure&&>,
                 "RepeatingClosure should be covretible to OnceClosure.");
 
   OnceClosure cb = BindOnce(&VoidPolymorphic<>::Run);
@@ -1766,6 +1762,66 @@ TEST_F(BindTest, BindAndCallbacks) {
   EXPECT_EQ(123, res);
 }
 
+TEST_F(BindTest, ConvertibleArgs) {
+  // Create two types S and T, such that you can convert a T to an S, but you
+  // cannot construct an S from a T.
+  struct T;
+  class S {
+    friend struct T;
+    explicit S(const T&) {}
+  };
+  struct T {
+    // NOLINTNEXTLINE(google-explicit-constructor)
+    operator S() const { return S(*this); }
+  };
+  static_assert(!std::is_constructible_v<S, T>);
+  static_assert(std::is_convertible_v<T, S>);
+
+  // Ensure it's possible to pass a T to a function expecting an S.
+  void (*foo)(S) = +[](S) {};
+  const T t;
+  auto callback = base::BindOnce(foo, t);
+  std::move(callback).Run();
+}
+
+}  // namespace
+
+// This simulates a race weak pointer that, unlike our `base::WeakPtr<>`,
+// may become invalidated between `operator bool()` is tested and `Lock()`
+// is called in the implementation of `Unwrap()`.
+template <typename T>
+struct MockRacyWeakPtr {
+  explicit MockRacyWeakPtr(T*) {}
+  T* Lock() const { return nullptr; }
+
+  explicit operator bool() const { return true; }
+};
+
+template <typename T>
+struct IsWeakReceiver<MockRacyWeakPtr<T>> : std::true_type {};
+
+template <typename T>
+struct BindUnwrapTraits<MockRacyWeakPtr<T>> {
+  static T* Unwrap(const MockRacyWeakPtr<T>& o) { return o.Lock(); }
+};
+
+template <typename T>
+struct MaybeValidTraits<MockRacyWeakPtr<T>> {
+  static bool MaybeValid(const MockRacyWeakPtr<T>& o) { return true; }
+};
+
+namespace {
+
+// Note this only covers a case of racy weak pointer invalidation. Other
+// weak pointer scenarios (such as a valid pointer) are covered
+// in BindTest.WeakPtrFor{Once,Repeating}.
+TEST_F(BindTest, BindRacyWeakPtrTest) {
+  MockRacyWeakPtr<NoRef> weak(&no_ref_);
+
+  RepeatingClosure cb = base::BindRepeating(&NoRef::VoidMethod0, weak);
+  cb.Run();
+}
+
 // Test null callbacks cause a DCHECK.
 TEST(BindDeathTest, NullCallback) {
   base::RepeatingCallback<void(int)> null_cb;
@@ -1798,7 +1854,7 @@ TEST(BindDeathTest, BanFirstOwnerOfRefCountedType) {
   });
 }
 
-#if BUILDFLAG(USE_BACKUP_REF_PTR)
+#if BUILDFLAG(ENABLE_BACKUP_REF_PTR_SUPPORT)
 
 void HandleOOM(size_t unused_size) {
   LOG(FATAL) << "Out of memory";
@@ -1807,53 +1863,48 @@ void HandleOOM(size_t unused_size) {
 // Basic set of options to mostly only enable `BackupRefPtr::kEnabled`.
 // This avoids the boilerplate of having too much options enabled for simple
 // testing purpose.
-static constexpr partition_alloc::PartitionOptions kOpts = {
-    partition_alloc::PartitionOptions::AlignedAlloc::kDisallowed,
-    partition_alloc::PartitionOptions::ThreadCache::kDisabled,
-    partition_alloc::PartitionOptions::Quarantine::kDisallowed,
-    partition_alloc::PartitionOptions::Cookie::kAllowed,
-    partition_alloc::PartitionOptions::BackupRefPtr::kEnabled,
-    partition_alloc::PartitionOptions::BackupRefPtrZapping::kEnabled,
-    partition_alloc::PartitionOptions::UseConfigurablePool::kNo,
-};
+static constexpr auto kOnlyEnableBackupRefPtrOptions = []() {
+  partition_alloc::PartitionOptions opts;
+  opts.backup_ref_ptr = partition_alloc::PartitionOptions::kEnabled;
+  return opts;
+}();
 
 class BindUnretainedDanglingInternalFixture : public BindTest {
  public:
   void SetUp() override {
     partition_alloc::PartitionAllocGlobalInit(HandleOOM);
-    allocator_.init(kOpts);
     enabled_feature_list_.InitWithFeaturesAndParameters(
         {{features::kPartitionAllocUnretainedDanglingPtr, {{"mode", "crash"}}}},
         {/* disabled_features */});
     allocator::InstallUnretainedDanglingRawPtrChecks();
   }
+
   void TearDown() override {
     enabled_feature_list_.Reset();
     allocator::InstallUnretainedDanglingRawPtrChecks();
-    allocator_.root()->PurgeMemory(
-        partition_alloc::PurgeFlags::kDecommitEmptySlotSpans |
-        partition_alloc::PurgeFlags::kDiscardUnusedSystemPages);
-    partition_alloc::PartitionAllocGlobalUninitForTesting();
   }
 
   // In unit tests, allocations being tested need to live in a separate PA
   // root so the test code doesn't interfere with various counters. Following
   // methods are helpers for managing allocations inside the separate allocator
   // root.
-  template <typename T, typename... Args>
-  raw_ptr<T> Alloc(Args&&... args) {
+  template <typename T,
+            RawPtrTraits Traits = RawPtrTraits::kEmpty,
+            typename... Args>
+  raw_ptr<T, Traits> Alloc(Args&&... args) {
     void* ptr = allocator_.root()->Alloc(sizeof(T), "");
     T* p = new (reinterpret_cast<T*>(ptr)) T(std::forward<Args>(args)...);
-    return raw_ptr<T>(p);
+    return raw_ptr<T, Traits>(p);
   }
-  template <typename T>
-  void Free(raw_ptr<T>& ptr) {
-    allocator_.root()->Free(ptr);
+  template <typename T, RawPtrTraits Traits>
+  void Free(raw_ptr<T, Traits>& ptr) {
+    allocator_.root()->Free(ptr.ExtractAsDangling());
   }
 
  private:
   test::ScopedFeatureList enabled_feature_list_;
-  partition_alloc::PartitionAllocator allocator_;
+  partition_alloc::PartitionAllocatorForTesting allocator_{
+      kOnlyEnableBackupRefPtrOptions};
 };
 
 class BindUnretainedDanglingTest
@@ -1865,10 +1916,24 @@ bool PtrCheckFn(int* p) {
   return p != nullptr;
 }
 
+bool RefCheckFn(const int& p) {
+  return true;
+}
+
+bool MayBeDanglingCheckFn(MayBeDangling<int> p) {
+  return p != nullptr;
+}
+
+bool MayBeDanglingAndDummyTraitCheckFn(
+    MayBeDangling<int, RawPtrTraits::kDummyForTest> p) {
+  return p != nullptr;
+}
+
 class ClassWithWeakPtr {
  public:
   ClassWithWeakPtr() = default;
   void RawPtrArg(int* p) { *p = 123; }
+  void RawRefArg(int& p) { p = 123; }
   WeakPtr<ClassWithWeakPtr> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
  private:
@@ -1884,9 +1949,38 @@ TEST_F(BindUnretainedDanglingTest, UnretainedNoDanglingPtr) {
 
 TEST_F(BindUnretainedDanglingTest, UnsafeDanglingPtr) {
   raw_ptr<int> p = Alloc<int>(3);
-  auto callback = base::BindOnce(PtrCheckFn, base::UnsafeDangling(p));
+  auto callback = base::BindOnce(MayBeDanglingCheckFn, base::UnsafeDangling(p));
   Free(p);
   EXPECT_EQ(std::move(callback).Run(), true);
+}
+
+TEST_F(BindUnretainedDanglingTest, UnsafeDanglingPtrWithDummyTrait) {
+  raw_ptr<int, RawPtrTraits::kDummyForTest> p =
+      Alloc<int, RawPtrTraits::kDummyForTest>(3);
+  auto callback = base::BindOnce(MayBeDanglingAndDummyTraitCheckFn,
+                                 base::UnsafeDangling(p));
+  Free(p);
+  EXPECT_EQ(std::move(callback).Run(), true);
+}
+
+TEST_F(BindUnretainedDanglingTest,
+       UnsafeDanglingPtrWithDummyAndDanglingTraits) {
+  raw_ptr<int, RawPtrTraits::kDummyForTest | RawPtrTraits::kMayDangle> p =
+      Alloc<int, RawPtrTraits::kDummyForTest | RawPtrTraits::kMayDangle>(3);
+  auto callback = base::BindOnce(MayBeDanglingAndDummyTraitCheckFn,
+                                 base::UnsafeDangling(p));
+  Free(p);
+  EXPECT_EQ(std::move(callback).Run(), true);
+}
+
+TEST_F(BindUnretainedDanglingTest, UnsafeDanglingPtrNoRawPtrReceiver) {
+  std::unique_ptr<ClassWithWeakPtr> r = std::make_unique<ClassWithWeakPtr>();
+  int val = 0;
+  auto callback =
+      base::BindOnce(&ClassWithWeakPtr::RawPtrArg,
+                     base::UnsafeDangling(r.get()), base::Unretained(&val));
+  std::move(callback).Run();
+  EXPECT_EQ(val, 123);
 }
 
 TEST_F(BindUnretainedDanglingTest, UnsafeDanglingUntriagedPtr) {
@@ -1906,8 +2000,16 @@ TEST_F(BindUnretainedDanglingTest, UnretainedWeakReceiverValidNoDangling) {
   Free(p);
 }
 
-// Death tests misbehave on Android, http://crbug.com/643760.
-#if defined(GTEST_HAS_DEATH_TEST) && !BUILDFLAG(IS_ANDROID)
+TEST_F(BindUnretainedDanglingTest, UnretainedRefWeakReceiverValidNoDangling) {
+  raw_ptr<int> p = Alloc<int>(3);
+  int& ref = *p;
+  std::unique_ptr<ClassWithWeakPtr> r = std::make_unique<ClassWithWeakPtr>();
+  auto callback = base::BindOnce(&ClassWithWeakPtr::RawRefArg, r->GetWeakPtr(),
+                                 std::ref(ref));
+  std::move(callback).Run();
+  EXPECT_EQ(*p, 123);
+  Free(p);
+}
 
 TEST_F(BindUnretainedDanglingTest, UnretainedWeakReceiverInvalidNoDangling) {
   raw_ptr<int> p = Alloc<int>(3);
@@ -1921,9 +2023,69 @@ TEST_F(BindUnretainedDanglingTest, UnretainedWeakReceiverInvalidNoDangling) {
   // the callback is cancelled because the WeakPtr is already invalidated.
 }
 
+TEST_F(BindUnretainedDanglingTest, UnretainedRefWeakReceiverInvalidNoDangling) {
+  raw_ptr<int> p = Alloc<int>(3);
+  int& ref = *p;
+  std::unique_ptr<ClassWithWeakPtr> r = std::make_unique<ClassWithWeakPtr>();
+  auto callback = base::BindOnce(&ClassWithWeakPtr::RawRefArg, r->GetWeakPtr(),
+                                 std::ref(ref));
+  r.reset();
+  Free(p);
+  std::move(callback).Run();
+  // Should reach this point without crashing; there is a dangling pointer, but
+  // the callback is cancelled because the WeakPtr is already invalidated.
+}
+
+TEST_F(BindUnretainedDanglingTest, UnretainedRefUnsafeDangling) {
+  raw_ptr<int> p = Alloc<int>(3);
+  int& ref = *p;
+  auto callback =
+      base::BindOnce(RefCheckFn, base::UnsafeDangling(base::raw_ref<int>(ref)));
+  Free(p);
+  EXPECT_EQ(std::move(callback).Run(), true);
+  // Should reach this point without crashing; there is a dangling pointer, but
+  // the we marked the reference as `UnsafeDangling`.
+}
+
+TEST_F(BindUnretainedDanglingTest, UnretainedRefUnsafeDanglingUntriaged) {
+  raw_ptr<int> p = Alloc<int>(3);
+  int& ref = *p;
+  auto callback = base::BindOnce(
+      RefCheckFn, base::UnsafeDanglingUntriaged(base::raw_ref<const int>(ref)));
+  Free(p);
+  EXPECT_EQ(std::move(callback).Run(), true);
+  // Should reach this point without crashing; there is a dangling pointer, but
+  // the we marked the reference as `UnsafeDanglingUntriaged`.
+}
+
+// Death tests misbehave on Android, http://crbug.com/643760.
+#if defined(GTEST_HAS_DEATH_TEST) && !BUILDFLAG(IS_ANDROID)
+
+int FuncWithRefArgument(int& i_ptr) {
+  return i_ptr;
+}
+
 TEST_F(BindUnretainedDanglingDeathTest, UnretainedDanglingPtr) {
   raw_ptr<int> p = Alloc<int>(3);
   auto callback = base::BindOnce(PingPong, base::Unretained(p));
+  Free(p);
+  EXPECT_DEATH(std::move(callback).Run(), "");
+}
+
+TEST_F(BindUnretainedDanglingDeathTest, UnretainedRefDanglingPtr) {
+  raw_ptr<int> p = Alloc<int>(3);
+  int& ref = *p;
+  auto callback = base::BindOnce(FuncWithRefArgument, std::ref(ref));
+  Free(p);
+  EXPECT_DEATH(std::move(callback).Run(), "");
+}
+
+TEST_F(BindUnretainedDanglingDeathTest,
+       UnretainedRefWithManualUnretainedDanglingPtr) {
+  raw_ptr<int> p = Alloc<int>(3);
+  int& ref = *p;
+  auto callback = base::BindOnce(FuncWithRefArgument,
+                                 base::Unretained(base::raw_ref<int>(ref)));
   Free(p);
   EXPECT_DEATH(std::move(callback).Run(), "");
 }
@@ -1939,7 +2101,7 @@ TEST_F(BindUnretainedDanglingDeathTest, UnretainedWeakReceiverDangling) {
 
 #endif  // defined(GTEST_HAS_DEATH_TEST) && !BUILDFLAG(IS_ANDROID)
 
-#endif  // BUILDFLAG(USE_BACKUP_REF_PTR)
+#endif  // BUILDFLAG(ENABLE_BACKUP_REF_PTR_SUPPORT)
 
 }  // namespace
 }  // namespace base

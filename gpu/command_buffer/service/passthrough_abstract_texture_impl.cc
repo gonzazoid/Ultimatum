@@ -4,6 +4,7 @@
 
 #include <utility>
 
+#include "build/build_config.h"
 #include "gpu/command_buffer/service/abstract_texture.h"
 #include "gpu/command_buffer/service/context_group.h"
 #include "gpu/command_buffer/service/error_state.h"
@@ -44,54 +45,6 @@ void PassthroughAbstractTextureImpl::SetParameteri(GLenum pname, GLint param) {
 
   gl::ScopedTextureBinder binder(texture_passthrough_->target(), service_id());
   gl_api_->glTexParameteriFn(texture_passthrough_->target(), pname, param);
-}
-
-void PassthroughAbstractTextureImpl::BindImage(gl::GLImage* image,
-                                               bool client_managed) {
-  if (!texture_passthrough_)
-    return;
-
-  const GLuint target = texture_passthrough_->target();
-  const GLuint level = 0;
-
-  // If there is a decoder-managed image bound, release it.
-  if (decoder_managed_image_) {
-    gl::GLImage* current_image =
-        texture_passthrough_->GetLevelImage(target, level);
-    // TODO(sandersd): This isn't correct if CopyTexImage() was used.
-    bool is_bound = !texture_passthrough_->is_bind_pending();
-    if (current_image && is_bound)
-      current_image->ReleaseTexImage(target);
-  }
-
-  // Configure the new image.
-  decoder_managed_image_ = image && !client_managed;
-  texture_passthrough_->set_is_bind_pending(decoder_managed_image_);
-  texture_passthrough_->SetLevelImage(target, level, image);
-}
-
-void PassthroughAbstractTextureImpl::BindStreamTextureImage(gl::GLImage* image,
-                                                            GLuint service_id) {
-  DCHECK(image);
-  DCHECK(!decoder_managed_image_);
-
-  if (!texture_passthrough_)
-    return;
-
-  const GLuint target = texture_passthrough_->target();
-  const GLint level = 0;
-
-  texture_passthrough_->set_is_bind_pending(true);
-  texture_passthrough_->SetStreamLevelImage(target, level, image, service_id);
-}
-
-gl::GLImage* PassthroughAbstractTextureImpl::GetImageForTesting() const {
-  if (!texture_passthrough_)
-    return nullptr;
-
-  const GLint level = 0;
-  return texture_passthrough_->GetLevelImage(texture_passthrough_->target(),
-                                             level);
 }
 
 void PassthroughAbstractTextureImpl::SetCleared() {

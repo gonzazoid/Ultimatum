@@ -9,8 +9,8 @@
 #include "chrome/browser/nearby_sharing/wifi_credentials_attachment.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
-#include "chromeos/services/network_config/cros_network_config.h"
-#include "chromeos/services/network_config/in_process_instance.h"
+#include "chromeos/ash/services/network_config/cros_network_config.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -23,19 +23,20 @@ const char kTestErrorMessage[] = "no_errors";
 const WifiCredentialsAttachment::SecurityType kTestSecurityType =
     sharing::mojom::WifiCredentialsMetadata::SecurityType::kWpaPsk;
 
-class FakeCrosNetworkConfig
-    : public chromeos::network_config::CrosNetworkConfig {
+class FakeCrosNetworkConfig : public ash::network_config::CrosNetworkConfig {
  public:
   explicit FakeCrosNetworkConfig(
       ash::NetworkStateTestHelper* network_state_test_helper)
-      : CrosNetworkConfig(network_state_test_helper->network_state_handler(),
-                          network_state_test_helper->network_device_handler(),
-                          /*cellular_inhibitor=*/nullptr,
-                          /*cellular_esim_profile_handler=*/nullptr,
-                          /*network_configuration_handler=*/nullptr,
-                          /*network_connection_handler=*/nullptr,
-                          /*network_certificate_handler=*/nullptr,
-                          /*network_profile_handler=*/nullptr) {}
+      : CrosNetworkConfig(
+            network_state_test_helper->network_state_handler(),
+            network_state_test_helper->network_device_handler(),
+            /*cellular_inhibitor=*/nullptr,
+            /*cellular_esim_profile_handler=*/nullptr,
+            /*network_configuration_handler=*/nullptr,
+            /*network_connection_handler=*/nullptr,
+            /*network_certificate_handler=*/nullptr,
+            /*network_profile_handler=*/nullptr,
+            network_state_test_helper->technology_state_controller()) {}
 
   ~FakeCrosNetworkConfig() override = default;
 
@@ -82,7 +83,7 @@ TEST(WifiNetworkConfigurationHandlerTest, Success) {
   FakeCrosNetworkConfig fake_cros_network_config{&network_state_test_helper};
 
   fake_cros_network_config.SetOutput(kTestNetworkGuid, kTestErrorMessage);
-  chromeos::network_config::OverrideInProcessInstanceForTesting(
+  ash::network_config::OverrideInProcessInstanceForTesting(
       &fake_cros_network_config);
 
   WifiNetworkConfigurationHandler handler;
@@ -124,7 +125,7 @@ TEST(WifiNetworkConfigurationHandlerTest, Failure) {
 
   fake_cros_network_config.SetOutput(/*network_guid=*/absl::nullopt,
                                      kTestErrorMessage);
-  chromeos::network_config::OverrideInProcessInstanceForTesting(
+  ash::network_config::OverrideInProcessInstanceForTesting(
       &fake_cros_network_config);
 
   WifiNetworkConfigurationHandler handler;

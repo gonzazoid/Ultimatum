@@ -48,6 +48,9 @@ class AnalysisServiceSettings {
   // Get the block_until_verdict setting if the settings are valid.
   bool ShouldBlockUntilVerdict() const;
 
+  // Get the default_action setting if the settings are valid.
+  bool ShouldBlockByDefault() const;
+
   // Get the custom message/learn more URL. Returns absl::nullopt if the
   // settings are invalid or if the message/URL are empty.
   absl::optional<std::u16string> GetCustomMessage(const std::string& tag);
@@ -55,6 +58,10 @@ class AnalysisServiceSettings {
   bool GetBypassJustificationRequired(const std::string& tag);
 
   std::string service_provider_name() const { return service_provider_name_; }
+
+  // Helpers for convenient check of the underlying variant.
+  bool is_cloud_analysis() const;
+  bool is_local_analysis() const;
 
   const AnalysisConfig* GetAnalysisConfig() const { return analysis_config_; }
 
@@ -140,9 +147,9 @@ class AnalysisServiceSettings {
   PatternSettings disabled_patterns_settings_;
 
   BlockUntilVerdict block_until_verdict_ = BlockUntilVerdict::kNoBlock;
+  DefaultAction default_action_ = DefaultAction::kAllow;
   bool block_password_protected_files_ = false;
   bool block_large_files_ = false;
-  bool block_unsupported_file_types_ = false;
   size_t minimum_data_size_ = 100;
   // A map from tag (dlp, malware, etc) to the custom message, "learn more" link
   // and other settings associated to a specific tag.

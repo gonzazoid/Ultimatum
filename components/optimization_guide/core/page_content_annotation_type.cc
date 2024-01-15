@@ -13,12 +13,12 @@ std::string AnnotationTypeToString(AnnotationType type) {
   switch (type) {
     case AnnotationType::kUnknown:
       return "Unknown";
-    case AnnotationType::kPageTopics:
-      return "PageTopics";
     case AnnotationType::kContentVisibility:
       return "ContentVisibility";
     case AnnotationType::kPageEntities:
       return "PageEntities";
+    case AnnotationType::kTextEmbedding:
+      return "TextEmbedding";
   }
 }
 

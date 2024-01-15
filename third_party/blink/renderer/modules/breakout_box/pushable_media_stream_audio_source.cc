@@ -5,6 +5,8 @@
 #include "third_party/blink/renderer/modules/breakout_box/pushable_media_stream_audio_source.h"
 
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-blink.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
@@ -14,8 +16,11 @@
 namespace blink {
 
 PushableMediaStreamAudioSource::Broker::Broker(
-    PushableMediaStreamAudioSource* source)
-    : source_(source), main_task_runner_(source->GetTaskRunner()) {
+    PushableMediaStreamAudioSource* source,
+    scoped_refptr<base::SequencedTaskRunner> audio_task_runner)
+    : source_(source),
+      main_task_runner_(source->GetTaskRunner()),
+      audio_task_runner_(std::move(audio_task_runner)) {
   DCHECK(main_task_runner_);
 }
 
@@ -47,7 +52,16 @@ void PushableMediaStreamAudioSource::Broker::PushAudioData(
   if (!source_)
     return;
 
-  source_->PushAudioData(std::move(data));
+  if (!should_deliver_audio_on_audio_task_runner_ ||
+      audio_task_runner_->RunsTasksInCurrentSequence()) {
+    source_->DeliverData(std::move(data));
+  } else {
+    PostCrossThreadTask(
+        *audio_task_runner_, FROM_HERE,
+        CrossThreadBindOnce(
+            &PushableMediaStreamAudioSource::Broker::PushAudioData,
+            WrapRefCounted(this), std::move(data)));
+  }
 }
 
 void PushableMediaStreamAudioSource::Broker::StopSource() {
@@ -62,13 +76,18 @@ void PushableMediaStreamAudioSource::Broker::StopSource() {
   }
 }
 
-void PushableMediaStreamAudioSource::Broker::DeliverData(
-    scoped_refptr<media::AudioBuffer> data) {
+void PushableMediaStreamAudioSource::Broker::
+    SetShouldDeliverAudioOnAudioTaskRunner(
+        bool should_deliver_audio_on_audio_task_runner) {
   base::AutoLock locker(lock_);
-  if (!source_)
-    return;
+  should_deliver_audio_on_audio_task_runner_ =
+      should_deliver_audio_on_audio_task_runner;
+}
 
-  source_->DeliverData(std::move(data));
+bool PushableMediaStreamAudioSource::Broker::
+    ShouldDeliverAudioOnAudioTaskRunner() {
+  base::AutoLock locker(lock_);
+  return should_deliver_audio_on_audio_task_runner_;
 }
 
 void PushableMediaStreamAudioSource::Broker::OnSourceStarted() {
@@ -95,12 +114,15 @@ void PushableMediaStreamAudioSource::Broker::StopSourceOnMain() {
   source_->StopSource();
 }
 
+void PushableMediaStreamAudioSource::Broker::AssertLockAcquired() const {
+  lock_.AssertAcquired();
+}
+
 PushableMediaStreamAudioSource::PushableMediaStreamAudioSource(
     scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
     scoped_refptr<base::SequencedTaskRunner> audio_task_runner)
     : MediaStreamAudioSource(std::move(main_task_runner), /* is_local */ true),
-      audio_task_runner_(std::move(audio_task_runner)),
-      broker_(AdoptRef(new Broker(this))) {}
+      broker_(AdoptRef(new Broker(this, std::move(audio_task_runner)))) {}
 
 PushableMediaStreamAudioSource::~PushableMediaStreamAudioSource() {
   broker_->OnSourceDestroyedOrStopped();
@@ -108,23 +130,13 @@ PushableMediaStreamAudioSource::~PushableMediaStreamAudioSource() {
 
 void PushableMediaStreamAudioSource::PushAudioData(
     scoped_refptr<media::AudioBuffer> data) {
-  DCHECK(data);
-
-  if (audio_task_runner_->RunsTasksInCurrentSequence()) {
-    DeliverData(std::move(data));
-    return;
-  }
-
-  PostCrossThreadTask(
-      *audio_task_runner_, FROM_HERE,
-      CrossThreadBindOnce(&PushableMediaStreamAudioSource::Broker::DeliverData,
-                          broker_, std::move(data)));
+  broker_->PushAudioData(std::move(data));
 }
 
 void PushableMediaStreamAudioSource::DeliverData(
     scoped_refptr<media::AudioBuffer> data) {
-  DCHECK(audio_task_runner_->RunsTasksInCurrentSequence());
   DCHECK(data);
+  broker_->AssertLockAcquired();
 
   const int sample_rate = data->sample_rate();
   const int frame_count = data->frame_count();
@@ -135,14 +147,17 @@ void PushableMediaStreamAudioSource::DeliverData(
       params.format() != media::AudioParameters::AUDIO_PCM_LOW_LATENCY ||
       last_channels_ != channel_count || last_sample_rate_ != sample_rate ||
       last_frames_ != frame_count) {
-    SetFormat(
+    params =
         media::AudioParameters(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
                                media::ChannelLayoutConfig::Guess(channel_count),
-                               sample_rate, frame_count));
+                               sample_rate, frame_count);
+    SetFormat(params);
     last_channels_ = channel_count;
     last_sample_rate_ = sample_rate;
     last_frames_ = frame_count;
   }
+
+  CHECK(params.IsValid());
 
   // If |data|'s sample format has the same memory layout as a media::AudioBus,
   // |audio_bus| will simply wrap it. Otherwise, |data| will be copied and

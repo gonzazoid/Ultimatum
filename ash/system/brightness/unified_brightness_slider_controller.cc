@@ -4,35 +4,53 @@
 
 #include "ash/system/brightness/unified_brightness_slider_controller.h"
 
+#include <memory>
+#include <utility>
+
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/shell.h"
 #include "ash/system/brightness/unified_brightness_view.h"
 #include "ash/system/brightness_control_delegate.h"
 #include "ash/system/unified/unified_system_tray_model.h"
+#include "base/dcheck_is_on.h"
 #include "base/memory/scoped_refptr.h"
 
 namespace ash {
+
 namespace {
 
 // We don't let the screen brightness go lower than this when it's being
 // adjusted via the slider.  Otherwise, if the user doesn't know about the
-// brightness keys, they may turn the backlight off and not know how to turn it
-// back on.
-constexpr double kMinBrightnessPercent = 5.0;
+// brightness keys, they may turn the backlight off and not know how to turn
+// it back on.
+static constexpr double kMinBrightnessPercent = 5.0;
 
 }  // namespace
 
 UnifiedBrightnessSliderController::UnifiedBrightnessSliderController(
-    scoped_refptr<UnifiedSystemTrayModel> model)
-    : model_(model) {}
+    scoped_refptr<UnifiedSystemTrayModel> model,
+    views::Button::PressedCallback callback)
+    : model_(model), callback_(std::move(callback)) {}
 
 UnifiedBrightnessSliderController::~UnifiedBrightnessSliderController() =
     default;
 
-views::View* UnifiedBrightnessSliderController::CreateView() {
-  DCHECK(!slider_);
-  slider_ = new UnifiedBrightnessView(this, model_);
-  return slider_;
+std::unique_ptr<UnifiedBrightnessView>
+UnifiedBrightnessSliderController::CreateBrightnessSlider() {
+  return std::make_unique<UnifiedBrightnessView>(this, model_);
+}
+
+std::unique_ptr<UnifiedSliderView>
+UnifiedBrightnessSliderController::CreateView() {
+#if DCHECK_IS_ON()
+  DCHECK(!created_view_);
+  created_view_ = true;
+#endif
+  // Consuming `callback_` is safe here; `CreateView()` should only be called
+  // once per controller instance per the DCHECK() above.
+  auto slider = std::make_unique<UnifiedBrightnessView>(this, model_,
+                                                        std::move(callback_));
+  return slider;
 }
 
 QsSliderCatalogName UnifiedBrightnessSliderController::GetCatalogName() {
@@ -44,13 +62,15 @@ void UnifiedBrightnessSliderController::SliderValueChanged(
     float value,
     float old_value,
     views::SliderChangeReason reason) {
-  if (reason != views::SliderChangeReason::kByUser)
+  if (reason != views::SliderChangeReason::kByUser) {
     return;
+  }
 
   BrightnessControlDelegate* brightness_control_delegate =
       Shell::Get()->brightness_control_delegate();
-  if (!brightness_control_delegate)
+  if (!brightness_control_delegate) {
     return;
+  }
 
   double percent = value * 100.;
   // If previous percentage and current percentage are both below the minimum,

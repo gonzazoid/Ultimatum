@@ -8,23 +8,27 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browsing_data/browsing_data_file_system_util.h"
+#include "chrome/browser/browsing_data/chrome_browsing_data_model_delegate.h"
 #include "chrome/browser/browsing_data/counters/site_data_counting_helper.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_paths.h"
+#include "components/browsing_data/content/browsing_data_model.h"
+#include "components/browsing_data/content/browsing_data_test_util.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/download_manager.h"
 #include "content/public/browser/storage_partition.h"
@@ -40,6 +44,7 @@
 #include "ui/base/models/tree_model.h"
 
 #if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/download/download_browsertest_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/ui_test_utils.h"
 #endif
@@ -100,21 +105,8 @@ class CookiesTreeObserver : public CookiesTreeModel::Observer {
       : quit_closure_(std::move(quit_closure)) {}
   ~CookiesTreeObserver() override = default;
 
-  void TreeModelBeginBatch(CookiesTreeModel* model) override {}
-
-  void TreeModelEndBatch(CookiesTreeModel* model) override {
+  void TreeModelEndBatchDeprecated(CookiesTreeModel* model) override {
     std::move(quit_closure_).Run();
-  }
-
-  void TreeNodesAdded(ui::TreeModel* model,
-                      ui::TreeModelNode* parent,
-                      size_t start,
-                      size_t count) override {}
-  void TreeNodesRemoved(ui::TreeModel* model,
-                        ui::TreeModelNode* parent,
-                        size_t start,
-                        size_t count) override {}
-  void TreeNodeChanged(ui::TreeModel* model, ui::TreeModelNode* node) override {
   }
 
  private:
@@ -139,9 +131,10 @@ BrowsingDataRemoverBrowserTestBase::BrowsingDataRemoverBrowserTestBase() =
 BrowsingDataRemoverBrowserTestBase::~BrowsingDataRemoverBrowserTestBase() =
     default;
 
-void BrowsingDataRemoverBrowserTestBase::InitFeatureList(
-    std::vector<base::test::FeatureRef> enabled_features) {
-  feature_list_.InitWithFeatures(enabled_features, {});
+void BrowsingDataRemoverBrowserTestBase::InitFeatureLists(
+    std::vector<base::test::FeatureRef> enabled_features,
+    std::vector<base::test::FeatureRef> disabled_features) {
+  feature_list_.InitWithFeatures(enabled_features, disabled_features);
 }
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -177,20 +170,14 @@ void BrowsingDataRemoverBrowserTestBase::RunScriptAndCheckResult(
     content::WebContents* web_contents) {
   if (!web_contents)
     web_contents = GetActiveWebContents();
-  std::string data;
-  ASSERT_TRUE(
-      content::ExecuteScriptAndExtractString(web_contents, script, &data));
-  ASSERT_EQ(data, result);
+  ASSERT_EQ(result, content::EvalJs(web_contents, script));
 }
 
 bool BrowsingDataRemoverBrowserTestBase::RunScriptAndGetBool(
     const std::string& script,
     content::WebContents* web_contents) {
   EXPECT_TRUE(web_contents);
-  bool data;
-  EXPECT_TRUE(
-      content::ExecuteScriptAndExtractBool(web_contents, script, &data));
-  return data;
+  return content::EvalJs(web_contents, script).ExtractBool();
 }
 
 void BrowsingDataRemoverBrowserTestBase::VerifyDownloadCount(size_t expected,
@@ -200,7 +187,7 @@ void BrowsingDataRemoverBrowserTestBase::VerifyDownloadCount(size_t expected,
   content::DownloadManager* download_manager = profile->GetDownloadManager();
   DownloadManagerWaiter download_manager_waiter(download_manager);
   download_manager_waiter.WaitForInitialized();
-  std::vector<download::DownloadItem*> downloads;
+  std::vector<raw_ptr<download::DownloadItem, VectorExperimental>> downloads;
   download_manager->GetAllDownloads(&downloads);
   EXPECT_EQ(expected, downloads.size());
 }
@@ -221,6 +208,7 @@ void BrowsingDataRemoverBrowserTestBase::DownloadAnItem() {
   GURL download_url =
       ui_test_utils::GetTestUrl(base::FilePath().AppendASCII("downloads"),
                                 base::FilePath().AppendASCII("a_zip_file.zip"));
+  SetPromptForDownload(GetBrowser(), false);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(GetBrowser(), download_url));
 #endif
   observer->WaitForFinished();
@@ -233,7 +221,7 @@ bool BrowsingDataRemoverBrowserTestBase::HasDataForType(
     content::WebContents* web_contents) {
   if (!web_contents)
     web_contents = GetActiveWebContents();
-  return RunScriptAndGetBool("has" + type + "()", web_contents);
+  return browsing_data_test_util::HasDataForType(type, web_contents);
 }
 
 void BrowsingDataRemoverBrowserTestBase::SetDataForType(
@@ -241,8 +229,7 @@ void BrowsingDataRemoverBrowserTestBase::SetDataForType(
     content::WebContents* web_contents) {
   if (!web_contents)
     web_contents = GetActiveWebContents();
-  ASSERT_TRUE(RunScriptAndGetBool("set" + type + "()", web_contents))
-      << "Couldn't create data for: " << type;
+  browsing_data_test_util::SetDataForType(type, web_contents);
 }
 
 int BrowsingDataRemoverBrowserTestBase::GetSiteDataCount(
@@ -385,11 +372,7 @@ int BrowsingDataRemoverBrowserTestBase::GetCookiesTreeModelCount(
   int count = 0;
   for (const auto& node : root->children()) {
     EXPECT_GE(node->children().size(), 1u);
-    count += base::ranges::count_if(node->children(), [](const auto& child) {
-      // TODO(crbug.com/1307796): Include quota nodes.
-      return child->GetDetailedInfo().node_type !=
-             CookieTreeNode::DetailedInfo::TYPE_QUOTA;
-    });
+    count += node->children().size();
   }
   return count;
 }
@@ -401,10 +384,8 @@ std::string BrowsingDataRemoverBrowserTestBase::GetCookiesTreeModelInfo(
   for (const auto& node : root->children()) {
     info << node->GetTitle() << std::endl;
     for (const auto& child : node->children()) {
-      // Quota nodes are not included in the UI due to crbug.com/642955.
       const auto node_type = child->GetDetailedInfo().node_type;
-      if (node_type != CookieTreeNode::DetailedInfo::TYPE_QUOTA)
-        info << "  " << child->GetTitle() << " " << node_type << std::endl;
+      info << "  " << child->GetTitle() << " " << node_type << std::endl;
     }
   }
   return info.str();
@@ -412,33 +393,9 @@ std::string BrowsingDataRemoverBrowserTestBase::GetCookiesTreeModelInfo(
 
 std::unique_ptr<CookiesTreeModel>
 BrowsingDataRemoverBrowserTestBase::GetCookiesTreeModel(Profile* profile) {
-  content::StoragePartition* storage_partition =
-      profile->GetDefaultStoragePartition();
-  content::ServiceWorkerContext* service_worker_context =
-      storage_partition->GetServiceWorkerContext();
-  storage::FileSystemContext* file_system_context =
-      storage_partition->GetFileSystemContext();
-  content::NativeIOContext* native_io_context =
-      storage_partition->GetNativeIOContext();
-  auto container = std::make_unique<LocalDataContainer>(
-      base::MakeRefCounted<browsing_data::CookieHelper>(
-          storage_partition,
-          CookiesTreeModel::GetCookieDeletionDisabledCallback(profile)),
-      base::MakeRefCounted<browsing_data::DatabaseHelper>(profile),
-      base::MakeRefCounted<browsing_data::LocalStorageHelper>(profile),
-      /*session_storage_helper=*/nullptr,
-      base::MakeRefCounted<browsing_data::IndexedDBHelper>(storage_partition),
-      base::MakeRefCounted<browsing_data::FileSystemHelper>(
-          file_system_context,
-          browsing_data_file_system_util::GetAdditionalFileSystemTypes(),
-          native_io_context),
-      BrowsingDataQuotaHelper::Create(profile),
-      base::MakeRefCounted<browsing_data::ServiceWorkerHelper>(
-          service_worker_context),
-      base::MakeRefCounted<browsing_data::SharedWorkerHelper>(
-          storage_partition),
-      base::MakeRefCounted<browsing_data::CacheStorageHelper>(
-          storage_partition));
+  auto container = LocalDataContainer::CreateFromStoragePartition(
+      profile->GetDefaultStoragePartition(),
+      CookiesTreeModel::GetCookieDeletionDisabledCallback(profile));
   base::RunLoop run_loop;
   CookiesTreeObserver observer(run_loop.QuitClosure());
   auto model = std::make_unique<CookiesTreeModel>(
@@ -449,6 +406,16 @@ BrowsingDataRemoverBrowserTestBase::GetCookiesTreeModel(Profile* profile) {
   return model;
 }
 
+std::unique_ptr<BrowsingDataModel>
+BrowsingDataRemoverBrowserTestBase::GetBrowsingDataModel(Profile* profile) {
+  base::test::TestFuture<std::unique_ptr<BrowsingDataModel>>
+      browsing_data_model;
+  BrowsingDataModel::BuildFromDisk(
+      profile, ChromeBrowsingDataModelDelegate::CreateForProfile(profile),
+      browsing_data_model.GetCallback());
+  return browsing_data_model.Take();
+}
+
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
 bool BrowsingDataRemoverBrowserTestBase::SetGaiaCookieForProfile(
     Profile* profile) {
@@ -457,8 +424,7 @@ bool BrowsingDataRemoverBrowserTestBase::SetGaiaCookieForProfile(
       "SAPISID", std::string(), "." + google_url.host(), "/", base::Time(),
       base::Time(), base::Time(), base::Time(), /*secure=*/true,
       /*httponly=*/false, net::CookieSameSite::NO_RESTRICTION,
-      net::COOKIE_PRIORITY_DEFAULT,
-      /*same_party=*/false);
+      net::COOKIE_PRIORITY_DEFAULT);
   bool success = false;
   base::RunLoop loop;
   base::OnceCallback<void(net::CookieAccessResult)> callback =

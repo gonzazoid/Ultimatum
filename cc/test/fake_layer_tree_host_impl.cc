@@ -8,6 +8,7 @@
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
 #include "cc/animation/animation_host.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "components/viz/test/begin_frame_args_test.h"
@@ -40,7 +41,7 @@ FakeLayerTreeHostImpl::FakeLayerTreeHostImpl(
                         task_runner_provider,
                         &stats_instrumentation_,
                         task_graph_runner,
-                        AnimationHost::CreateForTesting(ThreadInstance::IMPL),
+                        AnimationHost::CreateForTesting(ThreadInstance::kImpl),
                         nullptr,
                         0,
                         std::move(image_worker_task_runner),
@@ -77,6 +78,12 @@ void FakeLayerTreeHostImpl::CreatePendingTree() {
 void FakeLayerTreeHostImpl::NotifyTileStateChanged(const Tile* tile) {
   LayerTreeHostImpl::NotifyTileStateChanged(tile);
   notify_tile_state_changed_called_ = true;
+}
+
+TargetColorParams FakeLayerTreeHostImpl::GetTargetColorParams(
+    gfx::ContentColorUsage content_color_usage) const {
+  return target_color_params_.value_or(
+      LayerTreeHostImpl::GetTargetColorParams(content_color_usage));
 }
 
 const viz::BeginFrameArgs& FakeLayerTreeHostImpl::CurrentBeginFrameArgs()

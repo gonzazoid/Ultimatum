@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/lens/lens_region_search_instructions_view.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -13,6 +13,7 @@
 #include "components/lens/lens_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
@@ -33,16 +34,6 @@ constexpr int kTextFontSize = 14;
 constexpr int kCloseButtonExtraMargin = 4;
 constexpr int kCloseButtonSize = 17;
 constexpr int kCornerRadius = 18;
-constexpr int kLabelExtraLeftMargin = 2;
-
-int GetLensInstructionChipString() {
-  if (features::UseAltChipString()) {
-    return IDS_LENS_REGION_SEARCH_BUBBLE_TEXT_ALT2;
-  }
-  return features::IsLensInstructionChipImprovementsEnabled()
-             ? IDS_LENS_REGION_SEARCH_BUBBLE_TEXT_ALT1
-             : IDS_LENS_REGION_SEARCH_BUBBLE_TEXT;
-}
 
 LensRegionSearchInstructionsView::LensRegionSearchInstructionsView(
     views::View* anchor_view,
@@ -55,35 +46,9 @@ LensRegionSearchInstructionsView::LensRegionSearchInstructionsView(
   // The cancel close_callback is called when VKEY_ESCAPE is hit.
   SetCancelCallback(std::move(escape_callback));
 
-  if (features::IsLensInstructionChipImprovementsEnabled()) {
-    // Create a close button that is always white instead of conforming to
-    // native theme.
-    // TODO(crbug/1353948): Refactor/migrate this callback away from using
-    // base::Passed.
-    close_button_ = views::CreateVectorImageButton(base::BindRepeating(
-        [](base::OnceClosure callback) {
-          DCHECK(callback);
-          std::move(callback).Run();
-        },
-        base::Passed(std::move(close_callback))));
-  }
-
-  // Create our own close button to align with label. We need to rebind our
-  // OnceClosure to repeating due tot ImageButton::PressedCallback
-  // inheritance. However, this callback should still only be called once and
-  // this is verified with a DCHECK.
-  if (!close_button_) {
-    // TODO(crbug/1353948): Refactor/migrate this callback away from using
-    // base::Passed.
-    close_button_ = views::CreateVectorImageButtonWithNativeTheme(
-        base::BindRepeating(
-            [](base::OnceClosure callback) {
-              DCHECK(callback);
-              std::move(callback).Run();
-            },
-            base::Passed(std::move(close_callback))),
-        views::kIcCloseIcon, kCloseButtonSize);
-  }
+  // Create a close button that is always white instead of conforming to
+  // native theme.
+  close_button_ = views::CreateVectorImageButton(std::move(close_callback));
   close_button_->SetTooltipText(l10n_util::GetStringUTF16(IDS_ACCNAME_CLOSE));
 }
 
@@ -95,13 +60,8 @@ void LensRegionSearchInstructionsView::Init() {
       .SetCollapseMargins(true);
 
   ChromeLayoutProvider* const layout_provider = ChromeLayoutProvider::Get();
-  int left_margin =
-      features::IsLensInstructionChipImprovementsEnabled()
-          ? layout_provider->GetDistanceMetric(
-                views::DistanceMetric::DISTANCE_RELATED_CONTROL_HORIZONTAL)
-          : layout_provider->GetDistanceMetric(
-                views::DistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL) +
-                kLabelExtraLeftMargin;
+  int left_margin = layout_provider->GetDistanceMetric(
+      views::DistanceMetric::DISTANCE_RELATED_CONTROL_HORIZONTAL);
   set_margins(gfx::Insets::TLBR(
       layout_provider->GetInsetsMetric(views::InsetsMetric::INSETS_LABEL_BUTTON)
           .top(),
@@ -115,19 +75,14 @@ void LensRegionSearchInstructionsView::Init() {
   set_close_on_deactivate(false);
   set_corner_radius(kCornerRadius);
 
-  // Add the leading drag selection icon if enabled.
-  if (features::IsLensInstructionChipImprovementsEnabled()) {
-    const gfx::VectorIcon& selection_icon =
-        features::UseSelectionIconWithImage()
-            ? views::kDragImageSelectionIcon
-            : views::kDragGeneralSelectionIcon;
-    auto selection_icon_view =
-        std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-            selection_icon, kColorFeatureLensPromoBubbleForeground,
-            layout_provider->GetDistanceMetric(
-                DISTANCE_BUBBLE_HEADER_VECTOR_ICON_SIZE)));
-    AddChildView(std::move(selection_icon_view));
-  }
+  // Add the leading drag selection icon.
+  auto selection_icon_view =
+      std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
+          views::kDragGeneralSelectionIcon,
+          kColorFeatureLensPromoBubbleForeground,
+          layout_provider->GetDistanceMetric(
+              DISTANCE_BUBBLE_HEADER_VECTOR_ICON_SIZE)));
+  AddChildView(std::move(selection_icon_view));
 
   gfx::Font default_font;
   // We need to derive a font size delta between our desired font size and the
@@ -135,26 +90,23 @@ void LensRegionSearchInstructionsView::Init() {
   // the font list.
   int font_size_delta = kTextFontSize - default_font.GetFontSize();
   auto label = std::make_unique<views::Label>(
-      l10n_util::GetStringUTF16(GetLensInstructionChipString()));
+      l10n_util::GetStringUTF16(IDS_LENS_REGION_SEARCH_BUBBLE_TEXT));
   label->SetFontList(gfx::FontList().Derive(font_size_delta, gfx::Font::NORMAL,
                                             gfx::Font::Weight::MEDIUM));
   label->SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_CENTER);
   label->SetVerticalAlignment(gfx::VerticalAlignment::ALIGN_MIDDLE);
-  // If chip improvements are enabled, we force the label color to white.
-  if (features::IsLensInstructionChipImprovementsEnabled()) {
-    // Set label margins to vector icons in chips, including adjustments for the
-    // extra margin that the close button sets below.
-    label->SetProperty(
-        views::kMarginsKey,
-        gfx::Insets::TLBR(
-            0,
-            layout_provider->GetDistanceMetric(
-                views::DistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL),
-            0,
-            layout_provider->GetDistanceMetric(
-                views::DistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL) -
-                kCloseButtonExtraMargin));
-  }
+  // Set label margins to vector icons in chips, including adjustments for the
+  // extra margin that the close button sets below.
+  label->SetProperty(
+      views::kMarginsKey,
+      gfx::Insets::TLBR(
+          0,
+          layout_provider->GetDistanceMetric(
+              views::DistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL),
+          0,
+          layout_provider->GetDistanceMetric(
+              views::DistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL) -
+              kCloseButtonExtraMargin));
   label_ = AddChildView(std::move(label));
 
   close_button_->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
@@ -168,8 +120,6 @@ void LensRegionSearchInstructionsView::Init() {
 
 void LensRegionSearchInstructionsView::OnThemeChanged() {
   BubbleDialogDelegateView::OnThemeChanged();
-  if (!features::IsLensInstructionChipImprovementsEnabled())
-    return;
   const auto* const color_provider = GetColorProvider();
   auto foreground_color =
       color_provider->GetColor(kColorFeatureLensPromoBubbleForeground);
@@ -193,5 +143,8 @@ gfx::Rect LensRegionSearchInstructionsView::GetBubbleBounds() {
                         DISTANCE_RELATED_CONTROL_VERTICAL_SMALL));
   return bubble_rect;
 }
+
+BEGIN_METADATA(LensRegionSearchInstructionsView)
+END_METADATA
 
 }  // namespace lens

@@ -7,32 +7,32 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/tray/tray_bubble_base.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/widget/widget_observer.h"
-#include "ui/wm/public/activation_change_observer.h"
 
 namespace ash {
 
 class TrayBackgroundView;
 class TrayBubbleView;
+class TrayEventFilter;
 
-// Creates and manages the Widget and EventFilter components of a bubble.
-// TODO(tetsui): Remove this and use TrayBubbleBase for all bubbles.
-class ASH_EXPORT TrayBubbleWrapper : public TrayBubbleBase,
-                                     public ::wm::ActivationChangeObserver {
+// Creates and manages the Widget components of a bubble.
+class ASH_EXPORT TrayBubbleWrapper : public TrayBubbleBase {
  public:
   // `event_handling` When set to false disables the tray's event filtering
   // and also ignores the activation events. Eche window is an example of a use
   // case in which we do not want the keyboard events (both inside and outside
   // of the bubble) be filtered and also we do not want activaion of other
   // windows closes the bubble.
-  TrayBubbleWrapper(TrayBackgroundView* tray,
-                    TrayBubbleView* bubble_view,
-                    bool event_handling = true);
+  explicit TrayBubbleWrapper(TrayBackgroundView* tray,
+                             bool event_handling = true);
 
   TrayBubbleWrapper(const TrayBubbleWrapper&) = delete;
   TrayBubbleWrapper& operator=(const TrayBubbleWrapper&) = delete;
 
   ~TrayBubbleWrapper() override;
+
+  void ShowBubble(std::unique_ptr<TrayBubbleView> bubble_view);
 
   // TrayBubbleBase overrides:
   TrayBackgroundView* GetTray() const override;
@@ -41,22 +41,19 @@ class ASH_EXPORT TrayBubbleWrapper : public TrayBubbleBase,
 
   // views::WidgetObserver overrides:
   void OnWidgetDestroying(views::Widget* widget) override;
-  void OnWidgetBoundsChanged(views::Widget* widget,
-                             const gfx::Rect& new_bounds) override;
-
-  // ::wm::ActivationChangeObserver overrides:
-  void OnWindowActivated(ActivationReason reason,
-                         aura::Window* gained_active,
-                         aura::Window* lost_active) override;
 
   TrayBackgroundView* tray() { return tray_; }
   TrayBubbleView* bubble_view() { return bubble_view_; }
   views::Widget* bubble_widget() { return bubble_widget_; }
 
  private:
-  TrayBackgroundView* tray_;
-  TrayBubbleView* bubble_view_;  // unowned
-  views::Widget* bubble_widget_;
+  raw_ptr<TrayBackgroundView> tray_;
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
+
+  // Owned by `bubble_widget_`
+  raw_ptr<TrayBubbleView> bubble_view_ = nullptr;
+
+  std::unique_ptr<TrayEventFilter> tray_event_filter_;
 
   // When set to false disables the tray's event filtering
   // and also ignores the activation events. Eche window is an example of a use

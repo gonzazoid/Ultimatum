@@ -8,18 +8,17 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/net_log/chrome_net_log.h"
@@ -110,8 +109,8 @@ void NetExportFileWriter::Initialize() {
 
   NotifyStateObserversAsync();
 
-  base::PostTaskAndReplyWithResult(
-      file_task_runner_.get(), FROM_HERE,
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&SetUpDefaultLogPath, default_log_base_dir_getter_),
       base::BindOnce(&NetExportFileWriter::SetStateAfterSetUpDefaultLogPath,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -147,8 +146,8 @@ void NetExportFileWriter::StartNetLog(
   net_log_exporter_.set_disconnect_handler(base::BindOnce(
       &NetExportFileWriter::OnConnectionError, base::Unretained(this)));
 
-  base::PostTaskAndReplyWithResult(
-      file_task_runner_.get(), FROM_HERE,
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&NetExportFileWriter::CreateOutputFile, log_path_),
       base::BindOnce(&NetExportFileWriter::StartNetLogAfterCreateFile,
                      weak_ptr_factory_.GetWeakPtr(), capture_mode,
@@ -266,7 +265,7 @@ void NetExportFileWriter::GetFilePathToCompletedLog(
     FilePathCallback path_callback) const {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (!(log_exists_ && state_ == STATE_NOT_LOGGING)) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(path_callback), base::FilePath()));
     return;
   }
@@ -274,9 +273,9 @@ void NetExportFileWriter::GetFilePathToCompletedLog(
   DCHECK(file_task_runner_);
   DCHECK(!log_path_.empty());
 
-  base::PostTaskAndReplyWithResult(file_task_runner_.get(), FROM_HERE,
-                                   base::BindOnce(&GetPathIfExists, log_path_),
-                                   std::move(path_callback));
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&GetPathIfExists, log_path_),
+      std::move(path_callback));
 }
 
 std::string NetExportFileWriter::CaptureModeToString(
@@ -318,7 +317,7 @@ void NetExportFileWriter::NotifyStateObservers() {
 
 void NetExportFileWriter::NotifyStateObserversAsync() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&NetExportFileWriter::NotifyStateObservers,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

@@ -4,13 +4,12 @@
 
 #include "chrome/browser/ash/file_system_provider/operations/create_file.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -21,9 +20,7 @@
 #include "storage/browser/file_system/async_file_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -36,8 +33,8 @@ const base::FilePath::CharType kFilePath[] =
 
 class FileSystemProviderOperationsCreateFileTest : public testing::Test {
  protected:
-  FileSystemProviderOperationsCreateFileTest() {}
-  ~FileSystemProviderOperationsCreateFileTest() override {}
+  FileSystemProviderOperationsCreateFileTest() = default;
+  ~FileSystemProviderOperationsCreateFileTest() override = default;
 
   void SetUp() override {
     MountOptions mount_options(kFileSystemId, "" /* display_name */);
@@ -57,11 +54,8 @@ TEST_F(FileSystemProviderOperationsCreateFileTest, Execute) {
   util::StatusCallbackLog callback_log;
 
   CreateFile create_file(
-      nullptr, file_system_info_, base::FilePath(kFilePath),
+      &dispatcher, file_system_info_, base::FilePath(kFilePath),
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(create_file.Execute(kRequestId));
 
@@ -76,12 +70,12 @@ TEST_F(FileSystemProviderOperationsCreateFileTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  CreateFileRequestedOptions options;
-  ASSERT_TRUE(
-      CreateFileRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kFilePath, options.file_path);
+  auto options =
+      CreateFileRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kFilePath, options->file_path);
 }
 
 TEST_F(FileSystemProviderOperationsCreateFileTest, Execute_NoListener) {
@@ -89,11 +83,8 @@ TEST_F(FileSystemProviderOperationsCreateFileTest, Execute_NoListener) {
   util::StatusCallbackLog callback_log;
 
   CreateFile create_file(
-      nullptr, file_system_info_, base::FilePath(kFilePath),
+      &dispatcher, file_system_info_, base::FilePath(kFilePath),
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(create_file.Execute(kRequestId));
 }
@@ -108,11 +99,8 @@ TEST_F(FileSystemProviderOperationsCreateFileTest, Execute_ReadOnly) {
       true /* watchable */, extensions::SOURCE_FILE, IconSet());
 
   CreateFile create_file(
-      nullptr, read_only_file_system_info, base::FilePath(kFilePath),
+      &dispatcher, read_only_file_system_info, base::FilePath(kFilePath),
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(create_file.Execute(kRequestId));
 }
@@ -122,16 +110,12 @@ TEST_F(FileSystemProviderOperationsCreateFileTest, OnSuccess) {
   util::StatusCallbackLog callback_log;
 
   CreateFile create_file(
-      nullptr, file_system_info_, base::FilePath(kFilePath),
+      &dispatcher, file_system_info_, base::FilePath(kFilePath),
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(create_file.Execute(kRequestId));
 
-  create_file.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                        false /* has_more */);
+  create_file.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
@@ -141,20 +125,15 @@ TEST_F(FileSystemProviderOperationsCreateFileTest, OnError) {
   util::StatusCallbackLog callback_log;
 
   CreateFile create_file(
-      nullptr, file_system_info_, base::FilePath(kFilePath),
+      &dispatcher, file_system_info_, base::FilePath(kFilePath),
       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  create_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(create_file.Execute(kRequestId));
 
-  create_file.OnError(kRequestId, std::make_unique<RequestValue>(),
+  create_file.OnError(kRequestId, RequestValue(),
                       base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_TOO_MANY_OPENED, callback_log[0]);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

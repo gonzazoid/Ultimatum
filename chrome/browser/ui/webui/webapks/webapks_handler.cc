@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/android/shortcut_helper.h"
 #include "content/public/browser/web_ui.h"
@@ -66,10 +66,16 @@ void WebApksHandler::OnWebApkInfoRetrieved(const WebApkInfo& webapk_info) {
              ui::OptionalSkColorToString(webapk_info.theme_color));
   result.Set("backgroundColor",
              ui::OptionalSkColorToString(webapk_info.background_color));
-  result.Set("lastUpdateCheckTimeMs",
-             webapk_info.last_update_check_time.ToJsTime());
-  result.Set("lastUpdateCompletionTimeMs",
-             webapk_info.last_update_completion_time.ToJsTime());
+  result.Set("darkThemeColor",
+             ui::OptionalSkColorToString(webapk_info.dark_theme_color));
+  result.Set("darkBackgroundColor",
+             ui::OptionalSkColorToString(webapk_info.dark_background_color));
+  result.Set(
+      "lastUpdateCheckTimeMs",
+      webapk_info.last_update_check_time.InMillisecondsFSinceUnixEpoch());
+  result.Set(
+      "lastUpdateCompletionTimeMs",
+      webapk_info.last_update_completion_time.InMillisecondsFSinceUnixEpoch());
   result.Set("relaxUpdates", webapk_info.relax_updates);
   result.Set("backingBrowser", webapk_info.backing_browser_package_name);
   result.Set("isBackingBrowser", webapk_info.is_backing_browser);

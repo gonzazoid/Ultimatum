@@ -3430,6 +3430,7 @@ interface Headers
     method entries
     method forEach
     method get
+    method getSetCookie
     method has
     method keys
     method set
@@ -4131,6 +4132,14 @@ interface Navigator
     method sendBeacon
     method vibrate
     method webkitGetUserMedia
+interface NavigatorUAData
+    attribute @@toStringTag
+    getter brands
+    getter mobile
+    getter platform
+    method constructor
+    method getHighEntropyValues
+    method toJSON
 interface NetworkInformation : EventTarget
     attribute @@toStringTag
     getter downlink
@@ -4362,11 +4371,9 @@ interface OscillatorNode : AudioScheduledSourceNode
     method constructor
     method setPeriodicWave
     setter type
-interface OverconstrainedError
+interface OverconstrainedError : DOMException
     attribute @@toStringTag
     getter constraint
-    getter message
-    getter name
     method constructor
 interface PageTransitionEvent : Event
     attribute @@toStringTag

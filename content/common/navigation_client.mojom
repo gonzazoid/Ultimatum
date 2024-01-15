@@ -13,12 +13,12 @@ import "services/network/public/mojom/restricted_cookie_manager.mojom";
 import "services/network/public/mojom/url_loader.mojom";
 import "services/network/public/mojom/url_loader_factory.mojom";
 import "services/network/public/mojom/url_response_head.mojom";
-import "third_party/blink/public/mojom/back_forward_cache_not_restored_reasons.mojom";
 import "third_party/blink/public/mojom/commit_result/commit_result.mojom";
 import "third_party/blink/public/mojom/dom_storage/storage_area.mojom";
 import "third_party/blink/public/mojom/frame/policy_container.mojom";
 import "third_party/blink/public/mojom/loader/code_cache.mojom";
 import "third_party/blink/public/mojom/loader/referrer.mojom";
+import "third_party/blink/public/mojom/loader/fetch_later.mojom";
 import "third_party/blink/public/mojom/loader/same_document_navigation_type.mojom";
 import "third_party/blink/public/mojom/loader/transferrable_url_loader.mojom";
 import "third_party/blink/public/mojom/loader/url_loader_factory_bundle.mojom";
@@ -86,9 +86,6 @@ struct DidCommitProvisionalLoadParams {
   // Whether this commit created a new entry.
   bool did_create_new_entry;
 
-  // Whether this commit should replace the current entry.
-  bool should_replace_current_entry;
-
   // The HTTP method used by the navigation.
   string method;
 
@@ -115,6 +112,12 @@ struct DidCommitProvisionalLoadParams {
   // Origin of the document.  This will be replicated to any associated
   // RenderFrameProxies.
   url.mojom.Origin origin;
+
+  // Base url of the document. This value is only used for
+  // CreateNavigationRequestForSynchronousRendererCommit.
+  // TODO(https://crbug.com/1215096): If synchronous about:blank commits are
+  // removed, then this will no longer be needed.
+  url.mojom.Url? initiator_base_url;
 
   // Information about how `origin` was calculated, to help debug if it differs
   // from the origin calculated on the browser side.
@@ -185,6 +188,9 @@ struct DidCommitSameDocumentNavigationParams {
   // TODO(mustaq): Figure out if we can drop this and use the user activation
   // state tracked in the browser instead.
   bool started_with_transient_activation = false;
+
+  // Whether this commit should replace the current entry.
+  bool should_replace_current_entry;
 };
 
 struct CookieManagerInfo {
@@ -203,7 +209,23 @@ struct StorageInfo {
   pending_remote<blink.mojom.StorageArea>? session_storage_area;
 };
 
+// Implemented by the renderer and called by the browser. Used for two purposes:
+//
+// - When the renderer requests a navigation in a RenderFrame in the same
+//   process, the renderer binds a NavigationClient interface. Disconnecting
+//   this interface is used as a signal to potentially cancel the navigation
+//   (because it was replaced or cancelled).
+// - When committing a navigation: the browser asks the targeted RenderFrame to
+//   bind a NavigationClient and makes exactly one call to `CommitNavigation()`
+//   or `CommitFailedNavigation()`. Similar to requesting a navigation above,
+//   disconnecting this interface is used as a signal to cancel the navigation.
 interface NavigationClient {
+  // Explicit reset reason when the NavigationClient needs to be reset when
+  // swapping frames. In this case, it is often desirable to *not* cancel the
+  // navigation: otherwise, this may interfere with the navigation queueing
+  // logic (by unexpectedly cancelling the queued navigation).
+  const uint32 kResetForSwap = 1;
+
   // Tells the renderer that a navigation is ready to commit.
   //
   // The renderer should bind the |url_loader_client_endpoints| to an
@@ -225,9 +247,18 @@ interface NavigationClient {
   // Worker.
   // |container_info| may also be provided if the browser has created a
   // ServiceWorkerContainerHost for this navigation.
-  // |prefetch_loader_factory| is populated only when Network Service is
-  // enabled. The pointer is used to start a prefetch loading via the browser
-  // process.
+  //
+  // |subresource_proxying_loader_factory| is used to proxy prefetch and topics
+  // (https://github.com/patcg-individual-drafts/topics) handling via the
+  // browser process.
+  //
+  // |keep_alive_loader_factory| is used to handle fetch keepalive requests via
+  // the browser process.
+  // See https://docs.google.com/document/d/1ZzxMMBvpqn8VZBZKnb7Go8TWjnrGcXuLS_USwVVRUvY
+  //
+  // |fetch_later_loader_factory| is used to handle fetchLater() requests via
+  // the browser process. See
+  // https://docs.google.com/document/d/1U8XSnICPY3j-fjzG35UVm6zjwL6LvX6ETU3T8WrzLyQ
   //
   // For automation driver-initiated navigations over the devtools protocol,
   // |devtools_navigation_token_| is used to tag the navigation. This navigation
@@ -245,9 +276,13 @@ interface NavigationClient {
   // browser. These may be null if the NavigationThreadingOptimizations feature
   // is disabled. |cookie_manager_info| may also be null for non HTTP/HTTPS
   // navigations, or if the origin is opaque.
-  // |not_restored_reasons| contain the reasons why this navigation is not
-  // served from back/forward cache if applicable. This is only sent for
-  // cross-document main frame history navigations.
+  //
+  // The [SupportsUrgent] attribute enables marking this message as urgent by
+  // calling the method in an UrgentMessageScope. Urgent messages cause the
+  // renderer to prioritize the IPC task queue while there are urgent messages
+  // pending, which increases their priority while maintaining ordering
+  // guarantees. See also mojo/public/tools/bindings/README.md.
+  [SupportsUrgent]
   CommitNavigation(
       blink.mojom.CommonNavigationParams common_params,
       blink.mojom.CommitNavigationParams request_params,
@@ -258,15 +293,17 @@ interface NavigationClient {
       array<blink.mojom.TransferrableURLLoader>? subresource_overrides,
       blink.mojom.ControllerServiceWorkerInfo? controller_service_worker_info,
       blink.mojom.ServiceWorkerContainerInfoForClient? container_info,
-      pending_remote<network.mojom.URLLoaderFactory>? prefetch_loader_factory,
+      pending_remote<network.mojom.URLLoaderFactory>? subresource_proxying_loader_factory,
+      pending_remote<network.mojom.URLLoaderFactory>? keep_alive_loader_factory,
+      pending_associated_remote<blink.mojom.FetchLaterLoaderFactory>? fetch_later_loader_factory,
       blink.mojom.DocumentToken document_token,
       mojo_base.mojom.UnguessableToken devtools_navigation_token,
       array<blink.mojom.ParsedPermissionsPolicyDeclaration>? permissions_policy,
       blink.mojom.PolicyContainer policy_container,
       pending_remote<blink.mojom.CodeCacheHost>? code_cache_host,
+      pending_remote<blink.mojom.CodeCacheHost>? code_cache_host_for_background,
       CookieManagerInfo? cookie_manager_info,
-      StorageInfo? storage_info,
-      blink.mojom.BackForwardCacheNotRestoredReasons? not_restored_reasons)
+      StorageInfo? storage_info)
       => (DidCommitProvisionalLoadParams params,
           DidCommitProvisionalLoadInterfaceParams? interface_params);
 
@@ -282,6 +319,13 @@ interface NavigationClient {
   //
   // |info| contains values used to customise the error page. It may be null if
   // the page which displays an error should not be customized.
+  //
+  // The [SupportsUrgent] attribute enables marking this message as urgent by
+  // calling the method in an UrgentMessageScope. Urgent messages cause the
+  // renderer to prioritize the IPC task queue while there are urgent messages
+  // pending, which increases their priority while maintaining ordering
+  // guarantees. See also mojo/public/tools/bindings/README.md.
+  [SupportsUrgent]
   CommitFailedNavigation(
       blink.mojom.CommonNavigationParams common_params,
       blink.mojom.CommitNavigationParams request_params,

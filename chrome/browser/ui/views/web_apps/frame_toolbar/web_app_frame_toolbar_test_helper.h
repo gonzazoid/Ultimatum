@@ -6,32 +6,35 @@
 #define CHROME_BROWSER_UI_VIEWS_WEB_APPS_FRAME_TOOLBAR_WEB_APP_FRAME_TOOLBAR_TEST_HELPER_H_
 
 #include <memory>
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents.h"
 
-struct WebAppInstallInfo;
 class Browser;
 class BrowserNonClientFrameView;
 class BrowserView;
 class GURL;
 class WebAppFrameToolbarView;
+class WebAppOriginText;
 
 namespace base {
 class ScopedTempDir;
 }  // namespace base
 
-namespace net {
-namespace test_server {
+namespace net::test_server {
 class EmbeddedTestServer;
-}
-}  // namespace net
+}  // namespace net::test_server
 
 namespace views {
 class View;
 }  // namespace views
+
+namespace web_app {
+struct WebAppInstallInfo;
+}  // namespace web_app
 
 // Mixin for setting up and launching a web app in a browser test.
 class WebAppFrameToolbarTestHelper {
@@ -42,18 +45,24 @@ class WebAppFrameToolbarTestHelper {
       delete;
   ~WebAppFrameToolbarTestHelper();
 
-  web_app::AppId InstallAndLaunchWebApp(Browser* browser,
+  webapps::AppId InstallAndLaunchWebApp(Browser* browser,
                                         const GURL& start_url);
-  web_app::AppId InstallAndLaunchCustomWebApp(
+  webapps::AppId InstallAndLaunchCustomWebApp(
       Browser* browser,
-      std::unique_ptr<WebAppInstallInfo> web_app_info,
+      std::unique_ptr<web_app::WebAppInstallInfo> web_app_info,
       const GURL& start_url);
+
+  GURL LoadTestPageWithDataAndGetURL(
+      net::test_server::EmbeddedTestServer* embedded_test_server,
+      base::ScopedTempDir* temp_dir,
+      base::StringPiece test_html);
 
   GURL LoadWindowControlsOverlayTestPageWithDataAndGetURL(
       net::test_server::EmbeddedTestServer* embedded_test_server,
       base::ScopedTempDir* temp_dir);
 
-  GURL LoadBorderlessTestPageWithDataAndGetURL(
+  // Loads a page where the whole WebContents is a draggable region.
+  GURL LoadWholeAppIsDraggableTestPageWithDataAndGetURL(
       net::test_server::EmbeddedTestServer* embedded_test_server,
       base::ScopedTempDir* temp_dir);
 
@@ -74,6 +83,14 @@ class WebAppFrameToolbarTestHelper {
 
   void TestDraggableRegions();
 
+  // Opens a new popup window from |app_browser_| by running
+  // |window_open_script| and returns the |BrowserView| it opened in.
+  BrowserView* OpenPopup(const std::string& window_open_script);
+
+  static void GrantWindowManagementPermission(
+      content::WebContents* web_contents);
+  void GrantWindowManagementPermission();
+
   Browser* app_browser() { return app_browser_; }
   BrowserView* browser_view() { return browser_view_; }
   BrowserNonClientFrameView* frame_view() { return frame_view_; }
@@ -81,19 +98,16 @@ class WebAppFrameToolbarTestHelper {
   WebAppFrameToolbarView* web_app_frame_toolbar() {
     return web_app_frame_toolbar_;
   }
+  WebAppOriginText* origin_text_view();
 
  private:
-  raw_ptr<Browser, DanglingUntriaged> app_browser_ = nullptr;
-  raw_ptr<BrowserView, DanglingUntriaged> browser_view_ = nullptr;
-  raw_ptr<BrowserNonClientFrameView, DanglingUntriaged> frame_view_ = nullptr;
-  raw_ptr<views::View, DanglingUntriaged> root_view_ = nullptr;
-  raw_ptr<WebAppFrameToolbarView, DanglingUntriaged> web_app_frame_toolbar_ =
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> app_browser_ = nullptr;
+  raw_ptr<BrowserView, AcrossTasksDanglingUntriaged> browser_view_ = nullptr;
+  raw_ptr<BrowserNonClientFrameView, AcrossTasksDanglingUntriaged> frame_view_ =
       nullptr;
-
-  GURL LoadTestPageWithDataAndGetURL(
-      net::test_server::EmbeddedTestServer* embedded_test_server,
-      base::ScopedTempDir* temp_dir,
-      const char kTestHTML[]);
+  raw_ptr<views::View, AcrossTasksDanglingUntriaged> root_view_ = nullptr;
+  raw_ptr<WebAppFrameToolbarView, AcrossTasksDanglingUntriaged>
+      web_app_frame_toolbar_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEB_APPS_FRAME_TOOLBAR_WEB_APP_FRAME_TOOLBAR_TEST_HELPER_H_

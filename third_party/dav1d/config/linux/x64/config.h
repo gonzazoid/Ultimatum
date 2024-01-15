@@ -27,6 +27,8 @@
 
 #define HAVE_ASM 1
 
+#define HAVE_C11_GENERIC 1
+
 #define HAVE_CLOCK_GETTIME 1
 
 #define HAVE_DLSYM 1
@@ -35,6 +37,8 @@
 
 // #define HAVE_PTHREAD_GETAFFINITY_NP 1 -- Controlled by Chomium
 
+// #define HAVE_PTHREAD_SETAFFINITY_NP 1 -- Controlled by Chomium
+
 #define HAVE_UNISTD_H 1
 
-// #define STACK_ALIGNMENT 32 -- Stack alignment is controlled by Chromium
+#define TRIM_DSP_FUNCTIONS 1

@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/cast/cast_environment.h"
 #include "media/cast/cast_sender.h"
 #include "media/cast/sender/audio_sender.h"
@@ -30,6 +30,7 @@ class CastSenderImpl final : public CastSender {
                        StatusChangeOnceCallback status_change_cb) final;
   void InitializeVideo(
       const FrameSenderConfig& video_config,
+      std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
       const StatusChangeCallback& status_change_cb,
       const CreateVideoEncodeAcceleratorCallback& create_vea_cb) final;
 

@@ -11,12 +11,13 @@
 
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "third_party/blink/renderer/modules/peerconnection/mock_data_channel_impl.h"
 #include "third_party/blink/renderer/modules/peerconnection/mock_peer_connection_dependency_factory.h"
 #include "third_party/blink/renderer/modules/peerconnection/mock_rtc_peer_connection_handler_platform.h"
-#include "third_party/blink/renderer/platform/peerconnection/webrtc_util.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/webrtc/api/rtp_receiver_interface.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
 
@@ -83,7 +84,10 @@ class MockStreamCollection : public webrtc::StreamCollectionInterface {
   ~MockStreamCollection() override {}
 
  private:
-  typedef std::vector<rtc::scoped_refptr<MediaStreamInterface>> StreamVector;
+  typedef std::vector<rtc::scoped_refptr<MediaStreamInterface>> StreamVector
+      ALLOW_DISCOURAGED_TYPE(
+          "Avoids conversion when implementing "
+          "webrtc::StreamCollectionInterface");
   StreamVector streams_;
 };
 
@@ -107,7 +111,8 @@ class MockDtmfSender : public DtmfSenderInterface {
   int inter_tone_gap() const override { return inter_tone_gap_; }
 
  private:
-  DtmfSenderObserverInterface* observer_ = nullptr;
+  raw_ptr<DtmfSenderObserverInterface, ExperimentalRenderer> observer_ =
+      nullptr;
   std::string tones_;
   int duration_ = 0;
   int inter_tone_gap_ = 0;
@@ -255,10 +260,10 @@ FakeRtpTransceiver::FakeRtpTransceiver(
     : media_type_(media_type),
       sender_(std::move(sender)),
       receiver_(std::move(receiver)),
-      mid_(blink::ToAbslOptional(std::move(mid))),
+      mid_(std::move(mid)),
       stopped_(stopped),
       direction_(direction),
-      current_direction_(blink::ToAbslOptional(current_direction)) {}
+      current_direction_(current_direction) {}
 
 FakeRtpTransceiver::~FakeRtpTransceiver() = default;
 
@@ -301,11 +306,6 @@ bool FakeRtpTransceiver::stopping() const {
 
 webrtc::RtpTransceiverDirection FakeRtpTransceiver::direction() const {
   return direction_;
-}
-
-void FakeRtpTransceiver::SetDirection(
-    webrtc::RtpTransceiverDirection new_direction) {
-  NOTIMPLEMENTED();
 }
 
 absl::optional<webrtc::RtpTransceiverDirection>
@@ -454,8 +454,8 @@ MockPeerConnectionImpl::GetTransceivers() const {
   return transceivers;
 }
 
-rtc::scoped_refptr<webrtc::DataChannelInterface>
-MockPeerConnectionImpl::CreateDataChannel(
+webrtc::RTCErrorOr<rtc::scoped_refptr<webrtc::DataChannelInterface>>
+MockPeerConnectionImpl::CreateDataChannelOrError(
     const std::string& label,
     const webrtc::DataChannelInit* config) {
   return rtc::scoped_refptr<webrtc::DataChannelInterface>(

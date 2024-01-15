@@ -6,7 +6,9 @@ package org.chromium.android_webview.test;
 
 import android.content.Context;
 
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.net.test.EmbeddedTestServerImpl;
 
 /**
@@ -30,11 +32,14 @@ public class AwEmbeddedTestServerImpl extends EmbeddedTestServerImpl {
     @Override
     public void addDefaultHandlers(final String directoryPath) {
         super.addDefaultHandlers(directoryPath);
-        long[] handlers = nativeGetHandlers();
+        long[] handlers = AwEmbeddedTestServerImplJni.get().getHandlers();
         for (long handler : handlers) {
             super.registerRequestHandler(handler);
         }
     }
 
-    private static native long[] nativeGetHandlers();
+    @NativeMethods
+    interface Natives {
+        long[] getHandlers();
+    }
 }

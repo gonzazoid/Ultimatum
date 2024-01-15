@@ -4,12 +4,8 @@
 
 #import "ios/public/provider/chrome/browser/signin/trusted_vault_api.h"
 
-#import "base/callback.h"
+#import "base/functional/callback.h"
 #import "base/notreached.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios {
 namespace provider {
@@ -24,6 +20,8 @@ class ChromiumTrustedVaultClientBackend final
   // TrustedVaultClientBackend implementation.
   void AddObserver(Observer* observer) final;
   void RemoveObserver(Observer* observer) final;
+  void SetDeviceRegistrationPublicKeyVerifierForUMA(
+      VerifierCallback verifier) final;
   void FetchKeys(id<SystemIdentity> identity,
                  KeyFetchedCallback callback) final;
   void MarkLocalKeysAsStale(id<SystemIdentity> identity,
@@ -38,6 +36,10 @@ class ChromiumTrustedVaultClientBackend final
                                  UIViewController* presenting_view_controller,
                                  CompletionBlock callback) final;
   void CancelDialog(BOOL animated, ProceduralBlock callback) final;
+  void ClearLocalData(id<SystemIdentity> identity,
+                      base::OnceCallback<void(bool)> callback) final;
+  void GetPublicKeyForIdentity(id<SystemIdentity> identity,
+                               GetPublicKeyCallback callback) final;
 };
 
 void ChromiumTrustedVaultClientBackend::AddObserver(Observer* observer) {
@@ -45,6 +47,11 @@ void ChromiumTrustedVaultClientBackend::AddObserver(Observer* observer) {
 }
 
 void ChromiumTrustedVaultClientBackend::RemoveObserver(Observer* observer) {
+  // Do nothing.
+}
+
+void ChromiumTrustedVaultClientBackend::
+    SetDeviceRegistrationPublicKeyVerifierForUMA(VerifierCallback verifier) {
   // Do nothing.
 }
 
@@ -81,6 +88,18 @@ void ChromiumTrustedVaultClientBackend::FixDegradedRecoverability(
 
 void ChromiumTrustedVaultClientBackend::CancelDialog(BOOL animated,
                                                      ProceduralBlock callback) {
+  NOTREACHED();
+}
+
+void ChromiumTrustedVaultClientBackend::ClearLocalData(
+    id<SystemIdentity> identity,
+    base::OnceCallback<void(bool)> callback) {
+  // Do nothing.
+}
+
+void ChromiumTrustedVaultClientBackend::GetPublicKeyForIdentity(
+    id<SystemIdentity> identity,
+    GetPublicKeyCallback callback) {
   NOTREACHED();
 }
 

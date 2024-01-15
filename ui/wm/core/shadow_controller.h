@@ -6,10 +6,12 @@
 #define UI_WM_CORE_SHADOW_CONTROLLER_H_
 
 #include <map>
+#include <memory>
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "ui/compositor_extra/shadow.h"
 #include "ui/wm/public/activation_change_observer.h"
 
 namespace aura {
@@ -18,6 +20,7 @@ class Window;
 }
 
 namespace ui {
+class ColorProvider;
 class Shadow;
 }
 
@@ -35,6 +38,9 @@ class COMPONENT_EXPORT(UI_WM) ShadowController
  public:
   // Returns the shadow for the |window|, or NULL if no shadow exists.
   static ui::Shadow* GetShadowForWindow(aura::Window* window);
+  // Generate an elevation to shadow colors map with given color provider.
+  static ui::Shadow::ElevationToColorsMap GenerateShadowColorsMap(
+      const ui::ColorProvider* color_provider);
 
   ShadowController(ActivationClient* activation_client,
                    std::unique_ptr<ShadowControllerDelegate> delegate,

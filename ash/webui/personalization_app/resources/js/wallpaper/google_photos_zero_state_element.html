@@ -7,12 +7,7 @@
     overflow: hidden;
   }
 
-  a {
-    color: var(--cros-link-color);
-    text-decoration: none;
-  }
-
-  div {
+  localized-link {
     color: var(--cros-text-color-secondary);
     font: var(--cros-body-1-font);
     max-width: 236px;
@@ -23,9 +18,23 @@
     margin-bottom: 16px;
     width: 160px;
   }
+
+  iron-icon[icon='personalization-illo:no-google-photos'] {
+    --iron-icon-width: 400px;
+    --iron-icon-height: 100%;
+    top: -10px;
+  }
+
+  :host-context(body.jelly-enabled) #zeroStateImage,
+  :host-context(body:not(.jelly-enabled)) #zeroStateImageJelly {
+    display: none;
+  }
 </style>
 <iron-media-query query="(prefers-color-scheme: dark)"
     query-matches="{{isDarkModeActive_}}">
 </iron-media-query>
-<img src="[[getImageSource_(isDarkModeActive_)]]" aria-hidden="true">
-<div inner-h-t-m-l="[[getMessage_()]]"></div>
+<template is="dom-if" if="[[getMessageLabel_(tab)]]">
+  <img id="zeroStateImage" src="[[getImageSource_(isDarkModeActive_)]]" aria-hidden="true">
+  <iron-icon id="zeroStateImageJelly" icon="personalization-illo:no-google-photos"></iron-icon>
+  <localized-link id="message" localized-string="[[getMessage_(tab)]]"></localized-link>
+</template>

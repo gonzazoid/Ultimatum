@@ -4,7 +4,7 @@
 
 #include "content/public/test/test_navigation_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -74,8 +74,8 @@ TestNavigationObserver::TestNavigationObserver(
     bool ignore_uncommitted_navigations)
     : TestNavigationObserver(web_contents,
                              expected_number_of_navigations,
-                             absl::nullopt /* target_url */,
-                             absl::nullopt /* target_error */,
+                             std::nullopt /* target_url */,
+                             std::nullopt /* target_error */,
                              quit_mode,
                              ignore_uncommitted_navigations) {}
 
@@ -95,7 +95,7 @@ TestNavigationObserver::TestNavigationObserver(
     bool ignore_uncommitted_navigations)
     : TestNavigationObserver(web_contents,
                              1 /* num_of_navigations */,
-                             absl::nullopt,
+                             std::nullopt,
                              expected_target_error,
                              quit_mode,
                              ignore_uncommitted_navigations) {}
@@ -107,7 +107,7 @@ TestNavigationObserver::TestNavigationObserver(
     : TestNavigationObserver(nullptr,
                              1 /* num_of_navigations */,
                              expected_target_url,
-                             absl::nullopt /* target_error */,
+                             std::nullopt /* target_error */,
                              quit_mode,
                              ignore_uncommitted_navigations) {}
 
@@ -158,20 +158,19 @@ void TestNavigationObserver::RegisterAsObserver(WebContents* web_contents) {
 TestNavigationObserver::TestNavigationObserver(
     WebContents* web_contents,
     int expected_number_of_navigations,
-    const absl::optional<GURL>& expected_target_url,
-    absl::optional<net::Error> expected_target_error,
+    const std::optional<GURL>& expected_target_url,
+    std::optional<net::Error> expected_target_error,
     MessageLoopRunner::QuitMode quit_mode,
     bool ignore_uncommitted_navigations)
     : wait_event_(WaitEvent::kLoadStopped),
       navigations_completed_(0),
       expected_number_of_navigations_(expected_number_of_navigations),
       expected_target_url_(expected_target_url),
-      expected_initial_url_(absl::nullopt),
+      expected_initial_url_(std::nullopt),
       expected_target_error_(expected_target_error),
       ignore_uncommitted_navigations_(ignore_uncommitted_navigations),
       last_navigation_succeeded_(false),
       last_net_error_code_(net::OK),
-      last_navigation_type_(NAVIGATION_TYPE_UNKNOWN),
       message_loop_runner_(new MessageLoopRunner(quit_mode)) {
   if (web_contents)
     RegisterAsObserver(web_contents);
@@ -272,16 +271,16 @@ void TestNavigationObserver::OnDidFinishNavigation(
   last_navigation_url_ = navigation_handle->GetURL();
   last_navigation_initiator_origin_ = request->common_params().initiator_origin;
   last_initiator_frame_token_ = navigation_handle->GetInitiatorFrameToken();
-  last_initiator_process_id_ = navigation_handle->GetInitiatorProcessID();
+  last_initiator_process_id_ = navigation_handle->GetInitiatorProcessId();
   last_navigation_succeeded_ =
       navigation_handle->HasCommitted() && !navigation_handle->IsErrorPage();
+  last_navigation_initiator_activation_and_ad_status_ =
+      navigation_handle->GetNavigationInitiatorActivationAndAdStatus();
   last_net_error_code_ = navigation_handle->GetNetErrorCode();
-  last_navigation_type_ = navigation_handle->HasCommitted()
-                              ? request->navigation_type()
-                              : NAVIGATION_TYPE_UNKNOWN;
   last_nav_entry_id_ =
       NavigationRequest::From(navigation_handle)->nav_entry_id();
   last_source_site_instance_ = navigation_handle->GetSourceSiteInstance();
+  next_page_ukm_source_id_ = navigation_handle->GetNextPageUkmSourceId();
 
   // Allow extending classes to fetch data available via navigation_handle.
   NavigationOfInterestDidFinish(navigation_handle);

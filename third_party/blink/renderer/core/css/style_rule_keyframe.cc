@@ -5,14 +5,17 @@
 #include "third_party/blink/renderer/core/css/style_rule_keyframe.h"
 
 #include <memory>
+
+#include "third_party/blink/renderer/core/animation/timing.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
-StyleRuleKeyframe::StyleRuleKeyframe(std::unique_ptr<Vector<double>> keys,
-                                     CSSPropertyValueSet* properties)
+StyleRuleKeyframe::StyleRuleKeyframe(
+    std::unique_ptr<Vector<KeyframeOffset>> keys,
+    CSSPropertyValueSet* properties)
     : StyleRuleBase(kKeyframe), properties_(properties), keys_(*keys) {}
 
 String StyleRuleKeyframe::KeyText() const {
@@ -20,34 +23,45 @@ String StyleRuleKeyframe::KeyText() const {
 
   StringBuilder key_text;
   for (unsigned i = 0; i < keys_.size(); ++i) {
-    if (i)
+    if (i) {
       key_text.Append(", ");
-    key_text.AppendNumber(keys_.at(i) * 100);
+    }
+    if (keys_.at(i).name != TimelineOffset::NamedRange::kNone) {
+      key_text.Append(
+          TimelineOffset::TimelineRangeNameToString(keys_.at(i).name));
+      key_text.Append(" ");
+    }
+    key_text.AppendNumber(keys_.at(i).percent * 100);
     key_text.Append('%');
   }
 
   return key_text.ReleaseString();
 }
 
-bool StyleRuleKeyframe::SetKeyText(const String& key_text) {
+bool StyleRuleKeyframe::SetKeyText(const ExecutionContext* execution_context,
+                                   const String& key_text) {
   DCHECK(!key_text.IsNull());
 
-  std::unique_ptr<Vector<double>> keys =
-      CSSParser::ParseKeyframeKeyList(key_text);
-  if (!keys || keys->empty())
+  auto* context = MakeGarbageCollected<CSSParserContext>(*execution_context);
+
+  std::unique_ptr<Vector<KeyframeOffset>> keys =
+      CSSParser::ParseKeyframeKeyList(context, key_text);
+  if (!keys || keys->empty()) {
     return false;
+  }
 
   keys_ = *keys;
   return true;
 }
 
-const Vector<double>& StyleRuleKeyframe::Keys() const {
+const Vector<KeyframeOffset>& StyleRuleKeyframe::Keys() const {
   return keys_;
 }
 
 MutableCSSPropertyValueSet& StyleRuleKeyframe::MutableProperties() {
-  if (!properties_->IsMutable())
+  if (!properties_->IsMutable()) {
     properties_ = properties_->MutableCopy();
+  }
   return *To<MutableCSSPropertyValueSet>(properties_.Get());
 }
 
@@ -57,8 +71,9 @@ String StyleRuleKeyframe::CssText() const {
   result.Append(" { ");
   String decls = properties_->AsText();
   result.Append(decls);
-  if (!decls.empty())
+  if (!decls.empty()) {
     result.Append(' ');
+  }
   result.Append('}');
   return result.ReleaseString();
 }

@@ -2,13 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(
       `Tests resource content is correctly loaded if Resource.requestContent was called before network request was finished. https://bugs.webkit.org/show_bug.cgi?id=90153\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
   await TestRunner.showPanel('resources');
 
-  TestRunner.addSniffer(SDK.ResourceTreeFrame.prototype, 'addRequest', requestAdded, true);
+  TestRunner.addSniffer(SDK.ResourceTreeModel.ResourceTreeFrame.prototype, 'addRequest', requestAdded, true);
   TestRunner.addSniffer(TestRunner.PageAgent, 'getResourceContent', pageAgentGetResourceContentCalled, true);
   TestRunner.evaluateInPageAsync(`
     (function loadStylesheet() {

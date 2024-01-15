@@ -7,7 +7,7 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -38,16 +38,18 @@ class HyphenationDirectory {
     DVLOG(1) << __func__;
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     callbacks_.push_back(std::move(callback));
-    if (!dir_.empty())
+    if (!dir_.empty()) {
       FireCallbacks();
+    }
   }
 
   void Set(const base::FilePath& new_dir) {
     DVLOG(1) << __func__ << "\"" << new_dir << "\"";
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     CHECK(!new_dir.empty());
-    if (new_dir == dir_)
+    if (new_dir == dir_) {
       return;
+    }
     dir_ = new_dir;
     FireCallbacks();
   }
@@ -62,7 +64,7 @@ class HyphenationDirectory {
     std::swap(callbacks, callbacks_);
     for (base::OnceCallback<void(const base::FilePath&)>& callback :
          callbacks) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), dir_));
     }
   }
@@ -94,7 +96,7 @@ bool HyphenationComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 HyphenationComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -104,7 +106,7 @@ void HyphenationComponentInstallerPolicy::OnCustomUninstall() {}
 void HyphenationComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Hyphenation Component ready, version " << version.GetString()
           << " in " << install_dir.value();
   HyphenationDirectory* hyphenation_directory = HyphenationDirectory::Get();
@@ -113,7 +115,7 @@ void HyphenationComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool HyphenationComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   return true;
 }

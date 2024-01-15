@@ -7,9 +7,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
+#include "build/chromeos_buildflags.h"
 #include "components/prefs/pref_change_registrar.h"
 
 namespace user_prefs {
@@ -24,7 +25,11 @@ struct TemplateURLData;
 // search engine selection to and from prefs.
 class DefaultSearchManager {
  public:
-  static const char kDefaultSearchProviderDataPrefName[];
+  // A dictionary to hold all data related to the Default Search Engine.
+  // Eventually, this should replace all the data stored in the
+  // default_search_provider.* prefs.
+  static constexpr char kDefaultSearchProviderDataPrefName[] =
+      "default_search_provider_data.template_url_data";
 
   static const char kID[];
   static const char kShortName[];
@@ -35,6 +40,7 @@ class DefaultSearchManager {
   static const char kURL[];
   static const char kSuggestionsURL[];
   static const char kImageURL[];
+  static const char kImageTranslateURL[];
   static const char kNewTabURL[];
   static const char kContextualSearchURL[];
   static const char kFaviconURL[];
@@ -48,6 +54,9 @@ class DefaultSearchManager {
   static const char kSideSearchParam[];
   static const char kSideImageSearchParam[];
   static const char kImageSearchBrandingLabel[];
+  static const char kSearchIntentParams[];
+  static const char kImageTranslateSourceLanguageParamKey[];
+  static const char kImageTranslateTargetLanguageParamKey[];
 
   static const char kSafeForAutoReplace[];
   static const char kInputEncodings[];
@@ -61,10 +70,12 @@ class DefaultSearchManager {
   static const char kCreatedByPolicy[];
   static const char kDisabledByPolicy[];
   static const char kCreatedFromPlayAPI[];
+  static const char kFeaturedByPolicy[];
   static const char kPreconnectToSearchUrl[];
   static const char kPrefetchLikelyNavigations[];
   static const char kIsActive[];
   static const char kStarterPackId[];
+  static const char kEnforcedByPolicy[];
 
   enum Source {
     // Default search engine chosen either from prepopulated engines set for
@@ -86,7 +97,11 @@ class DefaultSearchManager {
       base::RepeatingCallback<void(const TemplateURLData*, Source)>;
 
   DefaultSearchManager(PrefService* pref_service,
-                       const ObserverCallback& change_observer);
+                       const ObserverCallback& change_observer
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+                       , bool for_lacros_main_profile
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  );
 
   DefaultSearchManager(const DefaultSearchManager&) = delete;
   DefaultSearchManager& operator=(const DefaultSearchManager&) = delete;
@@ -181,6 +196,11 @@ class DefaultSearchManager {
 
   // True if the default search is currently recommended by policy.
   bool default_search_recommended_by_policy_ = false;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // True if this instance is used for the Lacros primary profile.
+  bool for_lacros_main_profile_ = false;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 };
 
 #endif  // COMPONENTS_SEARCH_ENGINES_DEFAULT_SEARCH_MANAGER_H_

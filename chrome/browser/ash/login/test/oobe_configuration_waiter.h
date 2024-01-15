@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_TEST_OOBE_CONFIGURATION_WAITER_H_
 #define CHROME_BROWSER_ASH_LOGIN_TEST_OOBE_CONFIGURATION_WAITER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/login/oobe_configuration.h"
 
 namespace ash {
@@ -32,11 +32,5 @@ class OOBEConfigurationWaiter : public OobeConfiguration::Observer {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OOBEConfigurationWaiter;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_OOBE_CONFIGURATION_WAITER_H_

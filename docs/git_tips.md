@@ -23,11 +23,21 @@ The following resources can provide background on how Git works:
     explaining the main purpose of Git operations.
 *   [Git User's Manual](http://schacon.github.com/git/user-manual.html) -- a
     great resource to learn more about ho to use Git properly.
-*   [A Visual Git Reference](http://marklodato.github.com/visual-git-guide/index-en.html)
+*   [A Visual Git Reference](https://marklodato.github.io/visual-git-guide/index-en.html)
     -- a resource that explains various Git operations for visual learners.
 *   [Git Cheat Sheet](http://cheat.errtheblog.com/s/git) -- now that you
     understand Git, here's a cheat sheet to quickly remind you of all the
     commands you need.
+
+## Optimizing (Speeding up) Git for a Large Repository
+
+Git has numerous options, among which some are intended to optimize for large
+repositories.
+[feature.manyFiles](https://git-scm.com/docs/git-config#Documentation/git-config.txt-featuremanyFiles)
+is a convenient option that turns on the group of options that optimize for
+large repositories. Run the following inside the Chromium git repository:
+
+    git config feature.manyFiles true
 
 ## Configuring the output of "git log"
 

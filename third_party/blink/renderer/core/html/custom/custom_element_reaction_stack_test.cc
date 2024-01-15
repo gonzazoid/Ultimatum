@@ -10,20 +10,26 @@
 #include "third_party/blink/renderer/core/html/custom/custom_element_reaction.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_reaction_test_helpers.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_test_helpers.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
 
 TEST(CustomElementReactionStackTest, one) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   HeapVector<Member<Command>> commands;
   commands.push_back(MakeGarbageCollected<Log>('a', log));
   stack->EnqueueToCurrentQueue(
-      *CreateElement("a"),
+      *CreateElement(AtomicString("a")),
       *MakeGarbageCollected<TestReaction>(std::move(commands)));
   stack->PopInvokingReactions();
 
@@ -32,23 +38,27 @@ TEST(CustomElementReactionStackTest, one) {
 }
 
 TEST(CustomElementReactionStackTest, multipleElements) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('a', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('b', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   stack->PopInvokingReactions();
@@ -58,15 +68,19 @@ TEST(CustomElementReactionStackTest, multipleElements) {
 }
 
 TEST(CustomElementReactionStackTest, popTopEmpty) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   HeapVector<Member<Command>> commands;
   commands.push_back(MakeGarbageCollected<Log>('a', log));
   stack->EnqueueToCurrentQueue(
-      *CreateElement("a"),
+      *CreateElement(AtomicString("a")),
       *MakeGarbageCollected<TestReaction>(std::move(commands)));
   stack->Push();
   stack->PopInvokingReactions();
@@ -76,16 +90,20 @@ TEST(CustomElementReactionStackTest, popTopEmpty) {
 }
 
 TEST(CustomElementReactionStackTest, popTop) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('a', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   stack->Push();
@@ -93,7 +111,7 @@ TEST(CustomElementReactionStackTest, popTop) {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('b', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   stack->PopInvokingReactions();
@@ -103,12 +121,16 @@ TEST(CustomElementReactionStackTest, popTop) {
 }
 
 TEST(CustomElementReactionStackTest, requeueingDoesNotReorderElements) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
 
-  Element& element = *CreateElement("a");
+  Element& element = *CreateElement(AtomicString("a"));
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   {
     HeapVector<Member<Command>> commands;
@@ -120,7 +142,7 @@ TEST(CustomElementReactionStackTest, requeueingDoesNotReorderElements) {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('z', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   {
@@ -136,12 +158,17 @@ TEST(CustomElementReactionStackTest, requeueingDoesNotReorderElements) {
 }
 
 TEST(CustomElementReactionStackTest, oneReactionQueuePerElement) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
 
-  Element& element = *CreateElement("a");
+  Element& element = *CreateElement(AtomicString("a"));
+
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   {
     HeapVector<Member<Command>> commands;
@@ -153,7 +180,7 @@ TEST(CustomElementReactionStackTest, oneReactionQueuePerElement) {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('z', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   stack->Push();
@@ -161,7 +188,7 @@ TEST(CustomElementReactionStackTest, oneReactionQueuePerElement) {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Log>('y', log));
     stack->EnqueueToCurrentQueue(
-        *CreateElement("a"),
+        *CreateElement(AtomicString("a")),
         *MakeGarbageCollected<TestReaction>(std::move(commands)));
   }
   {
@@ -206,12 +233,16 @@ class EnqueueToStack : public Command {
 };
 
 TEST(CustomElementReactionStackTest, enqueueFromReaction) {
+  test::TaskEnvironment task_environment;
   Vector<char> log;
+  CustomElementTestingScope testing_scope;
 
-  Element& element = *CreateElement("a");
+  Element& element = *CreateElement(AtomicString("a"));
+  ScopedNullExecutionContext execution_context;
 
   CustomElementReactionStack* stack =
-      MakeGarbageCollected<CustomElementReactionStack>();
+      MakeGarbageCollected<CustomElementReactionStack>(
+          *execution_context.GetExecutionContext().GetAgent());
   stack->Push();
   {
     HeapVector<Member<Command>> subcommands;

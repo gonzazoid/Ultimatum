@@ -4,10 +4,10 @@
 
 package org.chromium.components.page_info;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Features;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.build.annotations.MainDex;
 
 /**
  * Provides an API for querying the status of Page Info features.
@@ -15,18 +15,20 @@ import org.chromium.build.annotations.MainDex;
  * TODO(crbug.com/1060097): generate this file.
  */
 @JNINamespace("page_info")
-@MainDex
 public class PageInfoFeatures extends Features {
-    public static final String PAGE_INFO_HISTORY_NAME = "PageInfoHistory";
-    public static final String PAGE_INFO_STORE_INFO_NAME = "PageInfoStoreInfo";
+    public static final String USER_BYPASS_UI_NAME = "UserBypassUI";
 
     // This list must be kept in sync with kFeaturesExposedToJava in page_info_features.cc.
-    public static final PageInfoFeatures PAGE_INFO_HISTORY =
-            new PageInfoFeatures(0, PAGE_INFO_HISTORY_NAME);
-    public static final PageInfoFeatures PAGE_INFO_STORE_INFO =
-            new PageInfoFeatures(1, PAGE_INFO_STORE_INFO_NAME);
+    public static final PageInfoFeatures USER_BYPASS_UI =
+            new PageInfoFeatures(0, USER_BYPASS_UI_NAME);
 
     private final int mOrdinal;
+
+    private static final String PARAM_EXPIRATION = "expiration";
+
+    public static String getUserBypassExpiration() {
+        return USER_BYPASS_UI.getFieldTrialParamByFeatureAsString(PARAM_EXPIRATION);
+    }
 
     private PageInfoFeatures(int ordinal, String name) {
         super(name);

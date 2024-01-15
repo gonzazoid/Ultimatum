@@ -4,7 +4,6 @@
 
 #include "components/payments/core/features.h"
 
-#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 
 namespace payments {
@@ -13,22 +12,6 @@ namespace features {
 BASE_FEATURE(kWebPaymentsExperimentalFeatures,
              "WebPaymentsExperimentalFeatures",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-#if BUILDFLAG(IS_IOS)
-BASE_FEATURE(kWebPaymentsNativeApps,
-             "WebPaymentsNativeApps",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-#endif
-
-// TODO(rouslan): Remove this.
-BASE_FEATURE(kWebPaymentsMethodSectionOrderV2,
-             "WebPaymentsMethodSectionOrderV2",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-// TODO(rouslan): Remove this.
-BASE_FEATURE(kWebPaymentsModifiers,
-             "WebPaymentsModifiers",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // TODO(rouslan): Remove this.
 BASE_FEATURE(kWebPaymentsSingleAppUiSkip,
@@ -40,13 +23,9 @@ BASE_FEATURE(kWebPaymentsJustInTimePaymentApp,
              "WebPaymentsJustInTimePaymentApp",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kWebPaymentsRedactShippingAddress,
-             "WebPaymentsRedactShippingAddress",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 BASE_FEATURE(kAppStoreBilling,
              "AppStoreBilling",
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
              base::FEATURE_DISABLED_BY_DEFAULT
@@ -56,10 +35,6 @@ BASE_FEATURE(kAppStoreBilling,
 BASE_FEATURE(kAppStoreBillingDebug,
              "AppStoreBillingDebug",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kPaymentHandlerPopUpSizeWindow,
-             "PaymentHandlerPopUpSizeWindow",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kAllowJITInstallationWhenAppIconIsMissing,
              "AllowJITInstallationWhenAppIconIsMissing",
@@ -75,7 +50,32 @@ BASE_FEATURE(kGPayAppDynamicUpdate,
 
 BASE_FEATURE(kSecurePaymentConfirmationUseCredentialStoreAPIs,
              "SecurePaymentConfirmationUseCredentialStoreAPIs",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+#if BUILDFLAG(IS_ANDROID)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
+
+#if !BUILDFLAG(IS_ANDROID)
+// The blink-side feature of the same name is disabled by default, and can be
+// enabled directly or via origin trial.
+BASE_FEATURE(kPaymentHandlerMinimalHeaderUX,
+             "PaymentHandlerMinimalHeaderUX",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPaymentHandlerWindowInTaskManager,
+             "PaymentHandlerWindowInTaskManager",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
+
+BASE_FEATURE(kPaymentHandlerAlwaysRefreshIcon,
+             "PaymentHandlerAlwaysRefreshIcon",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPaymentHandlerRequireLinkHeader,
+             "PaymentHandlerRequireLinkHeader",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace features
 }  // namespace payments

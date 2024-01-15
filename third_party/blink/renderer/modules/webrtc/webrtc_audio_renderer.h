@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -22,6 +23,7 @@
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "media/base/audio_decoder.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_power_monitor.h"
 #include "media/base/audio_pull_fifo.h"
 #include "media/base/audio_renderer_sink.h"
@@ -29,6 +31,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_renderer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/webrtc/webrtc_source.h"
@@ -54,10 +57,6 @@ class MODULES_EXPORT WebRtcAudioRenderer
     : public media::AudioRendererSink::RenderCallback,
       public blink::WebMediaStreamAudioRenderer {
  public:
-  // Send the audio to the speech recognition service for caption transcription.
-  using TranscribeAudioCallback = base::RepeatingCallback<
-      void(std::unique_ptr<media::AudioBus>, int, media::ChannelLayout)>;
-
   // This is a little utility class that holds the configured state of an audio
   // stream.
   // It is used by both WebRtcAudioRenderer and SharedAudioRenderer (see cc
@@ -154,7 +153,6 @@ class MODULES_EXPORT WebRtcAudioRenderer
   void Stop() override;
   void SetVolume(float volume) override;
   base::TimeDelta GetCurrentRenderTime() override;
-  bool IsLocalRenderer() override;
   void SwitchOutputDevice(const std::string& device_id,
                           media::OutputDeviceStatusCB callback) override;
 
@@ -244,11 +242,11 @@ class MODULES_EXPORT WebRtcAudioRenderer
  private:
   // Holds raw pointers to PlaingState objects.  Ownership is managed outside
   // of this type.
-  typedef std::vector<PlayingState*> PlayingStates;
+  typedef std::vector<raw_ptr<PlayingState, VectorExperimental>> PlayingStates;
   // Maps an audio source to a list of playing states that collectively hold
   // volume information for that source.
   typedef std::map<webrtc::AudioSourceInterface*, PlayingStates>
-      SourcePlayingStates;
+      SourcePlayingStates ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327");
 
   // Used to DCHECK that we are called on the correct thread.
   THREAD_CHECKER(thread_checker_);
@@ -259,15 +257,11 @@ class MODULES_EXPORT WebRtcAudioRenderer
   // Flag to keep track the state of the renderer.
   State state_;
 
-  void TranscribeAudio(std::unique_ptr<media::AudioBus> audio_bus,
-                       int sample_rate,
-                       media::ChannelLayout channel_layout);
-
   // media::AudioRendererSink::RenderCallback implementation.
   // These two methods are called on the AudioOutputDevice worker thread.
   int Render(base::TimeDelta delay,
              base::TimeTicks delay_timestamp,
-             int prior_frames_skipped,
+             const media::AudioGlitchInfo& glitch_info,
              media::AudioBus* audio_bus) override;
   void OnRenderError() override;
 
@@ -309,8 +303,6 @@ class MODULES_EXPORT WebRtcAudioRenderer
 
   void SendLogMessage(const WTF::String& message);
 
-  void EnableSpeechRecognition();
-
   // The LocalFrame in which the audio is rendered into |sink_|.
   WeakPersistent<LocalFrame> source_frame_;
 
@@ -333,7 +325,7 @@ class MODULES_EXPORT WebRtcAudioRenderer
   // Audio data source from the browser process.
   //
   // TODO(crbug.com/704136): Make it a Member.
-  WebRtcAudioRendererSource* source_;
+  raw_ptr<WebRtcAudioRendererSource, ExperimentalRenderer> source_;
 
   // Protects access to |state_|, |source_|, |audio_fifo_|,
   // |audio_delay_milliseconds_|, |fifo_delay_milliseconds_|, |current_time_|,
@@ -386,7 +378,9 @@ class MODULES_EXPORT WebRtcAudioRenderer
   base::RepeatingCallback<void()> on_render_error_callback_;
 
   std::unique_ptr<media::SpeechRecognitionClient> speech_recognition_client_;
-  TranscribeAudioCallback transcribe_audio_callback_;
+
+  // Accessed only on the rendering thread.
+  media::AudioGlitchInfo::Accumulator glitch_info_accumulator_;
 
   base::WeakPtrFactory<WebRtcAudioRenderer> weak_factory_{this};
 };

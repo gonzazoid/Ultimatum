@@ -12,8 +12,7 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
-class OmniboxEditModel;
-class OmniboxPopupContentsView;
+class OmniboxPopupViewViews;
 class OmniboxSuggestionRowButton;
 
 namespace views {
@@ -22,16 +21,19 @@ class Button;
 
 // A view to contain the button row within a result view.
 class OmniboxSuggestionButtonRowView : public views::View {
+  METADATA_HEADER(OmniboxSuggestionButtonRowView, views::View)
+
  public:
-  METADATA_HEADER(OmniboxSuggestionButtonRowView);
-  explicit OmniboxSuggestionButtonRowView(OmniboxPopupContentsView* view,
-                                          OmniboxEditModel* model,
+  explicit OmniboxSuggestionButtonRowView(OmniboxPopupViewViews* popup_view,
                                           int model_index);
   OmniboxSuggestionButtonRowView(const OmniboxSuggestionButtonRowView&) =
       delete;
   OmniboxSuggestionButtonRowView& operator=(
       const OmniboxSuggestionButtonRowView&) = delete;
   ~OmniboxSuggestionButtonRowView() override;
+
+  // views::View:
+  void Layout() override;
 
   // Called when the theme state may have changed.
   void SetThemeState(OmniboxPartState theme_state);
@@ -45,24 +47,30 @@ class OmniboxSuggestionButtonRowView : public views::View {
   views::Button* GetActiveButton() const;
 
  private:
+  // Indicates whether a match corresponding to `model_index_` exists in
+  // model result. Sometimes result views and button rows exist for
+  // out-of-range matches, for example during tests.
+  bool HasMatch() const;
+
   // Digs into the model with index to get the match for owning result view.
   const AutocompleteMatch& match() const;
+
+  // Clears and builds all child views (buttons in the button row),
+  // taking the current model state (e.g. match) into account.
+  void BuildViews();
 
   void SetPillButtonVisibility(OmniboxSuggestionRowButton* button,
                                OmniboxPopupSelection::LineState state);
 
-  void ButtonPressed(OmniboxPopupSelection::LineState state,
+  void ButtonPressed(const OmniboxPopupSelection selection,
                      const ui::Event& event);
 
-  const raw_ptr<OmniboxPopupContentsView> popup_contents_view_;
-  raw_ptr<OmniboxEditModel> model_;
+  const raw_ptr<OmniboxPopupViewViews> popup_view_;
   size_t const model_index_;
 
   raw_ptr<OmniboxSuggestionRowButton> keyword_button_ = nullptr;
-  // TODO(manukh): Rename `pedal_button_` to `action_button_` as it is shared by
-  //  other actions ('journeys' currently).
-  raw_ptr<OmniboxSuggestionRowButton> pedal_button_ = nullptr;
-  raw_ptr<OmniboxSuggestionRowButton> tab_switch_button_ = nullptr;
+
+  std::vector<raw_ptr<OmniboxSuggestionRowButton>> action_buttons_;
 
   // Which button, if any, was active as of the last call to
   // SelectionStateChanged().

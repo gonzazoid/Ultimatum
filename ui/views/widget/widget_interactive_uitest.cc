@@ -7,23 +7,23 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/base/ime/input_method.h"
 #include "ui/base/ime/text_input_client.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/test/ui_controls.h"
 #include "ui/base/ui_base_features.h"
@@ -43,6 +43,7 @@
 #include "ui/views/widget/root_view.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/widget/widget_interactive_uitest_utils.h"
 #include "ui/views/widget/widget_utils.h"
 #include "ui/views/window/dialog_delegate.h"
 #include "ui/wm/public/activation_client.h"
@@ -52,10 +53,6 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
 #include "ui/views/win/hwnd_util.h"
-#endif
-
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/mac_util.h"
 #endif
 
 namespace views::test {
@@ -84,6 +81,8 @@ class UniqueWidgetPtrT : public views::UniqueWidgetPtr {
 // A View that closes the Widget and exits the current message-loop when it
 // receives a mouse-release event.
 class ExitLoopOnRelease : public View {
+  METADATA_HEADER(ExitLoopOnRelease, View)
+
  public:
   explicit ExitLoopOnRelease(base::OnceClosure quit_closure)
       : quit_closure_(std::move(quit_closure)) {
@@ -105,8 +104,13 @@ class ExitLoopOnRelease : public View {
   base::OnceClosure quit_closure_;
 };
 
+BEGIN_METADATA(ExitLoopOnRelease)
+END_METADATA
+
 // A view that does a capture on ui::ET_GESTURE_TAP_DOWN events.
 class GestureCaptureView : public View {
+  METADATA_HEADER(GestureCaptureView, View)
+
  public:
   GestureCaptureView() = default;
 
@@ -125,8 +129,13 @@ class GestureCaptureView : public View {
   }
 };
 
+BEGIN_METADATA(GestureCaptureView)
+END_METADATA
+
 // A view that always processes all mouse events.
 class MouseView : public View {
+  METADATA_HEADER(MouseView, View)
+
  public:
   MouseView() = default;
 
@@ -167,9 +176,14 @@ class MouseView : public View {
   int pressed_ = 0;
 };
 
+BEGIN_METADATA(MouseView)
+END_METADATA
+
 // A View that shows a different widget, sets capture on that widget, and
 // initiates a nested message-loop when it receives a mouse-press event.
 class NestedLoopCaptureView : public View {
+  METADATA_HEADER(NestedLoopCaptureView, View)
+
  public:
   explicit NestedLoopCaptureView(Widget* widget)
       : run_loop_(base::RunLoop::Type::kNestableTasksAllowed),
@@ -198,6 +212,9 @@ class NestedLoopCaptureView : public View {
 
   raw_ptr<Widget> widget_;
 };
+
+BEGIN_METADATA(NestedLoopCaptureView)
+END_METADATA
 
 ui::WindowShowState GetWidgetShowState(const Widget* widget) {
   // Use IsMaximized/IsMinimized/IsFullScreen instead of GetWindowPlacement
@@ -274,43 +291,6 @@ void ShowInactiveSync(Widget* widget) {
   widget->ShowInactive();
   RunPendingMessagesForActiveStatusChange();
 }
-
-// Wait until |callback| returns |expected_value|, but no longer than 1 second.
-class PropertyWaiter {
- public:
-  PropertyWaiter(base::RepeatingCallback<bool(void)> callback,
-                 bool expected_value)
-      : callback_(std::move(callback)), expected_value_(expected_value) {}
-
-  bool Wait() {
-    if (callback_.Run() == expected_value_) {
-      success_ = true;
-      return success_;
-    }
-    start_time_ = base::TimeTicks::Now();
-    timer_.Start(FROM_HERE, base::TimeDelta(), this, &PropertyWaiter::Check);
-    run_loop_.Run();
-    return success_;
-  }
-
- private:
-  void Check() {
-    DCHECK(!success_);
-    success_ = callback_.Run() == expected_value_;
-    if (success_ || base::TimeTicks::Now() - start_time_ > kTimeout) {
-      timer_.Stop();
-      run_loop_.Quit();
-    }
-  }
-
-  const base::TimeDelta kTimeout = base::Seconds(1);
-  base::RepeatingCallback<bool(void)> callback_;
-  const bool expected_value_;
-  bool success_ = false;
-  base::TimeTicks start_time_;
-  base::RunLoop run_loop_;
-  base::RepeatingTimer timer_;
-};
 
 std::unique_ptr<Textfield> CreateTextfield() {
   auto textfield = std::make_unique<Textfield>();
@@ -465,11 +445,6 @@ class TouchEventHandler : public ui::EventHandler {
 
 // TODO(dtapuska): Disabled due to it being flaky crbug.com/817531
 TEST_F(DesktopWidgetTestInteractive, DISABLED_TouchNoActivateWindow) {
-  // ui_controls::SendTouchEvents which uses InjectTouchInput API only works
-  // on Windows 8 and up.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
-
   View* focusable_view = new View;
   focusable_view->SetFocusBehavior(View::FocusBehavior::ALWAYS);
   WidgetAutoclosePtr widget(CreateTopLevelNativeWidget());
@@ -478,7 +453,8 @@ TEST_F(DesktopWidgetTestInteractive, DISABLED_TouchNoActivateWindow) {
 
   {
     TouchEventHandler touch_event_handler(widget.get());
-    ASSERT_TRUE(ui_controls::SendTouchEvents(ui_controls::PRESS, 1, 100, 100));
+    ASSERT_TRUE(
+        ui_controls::SendTouchEvents(ui_controls::kTouchPress, 1, 100, 100));
     touch_event_handler.WaitForEvents();
   }
 }
@@ -671,12 +647,6 @@ TEST_F(WidgetTestInteractive, MAYBE_ChildStackedRelativeToParent) {
 }
 
 TEST_F(WidgetTestInteractive, ChildWidgetStackAbove) {
-#if BUILDFLAG(IS_MAC)
-  // MacOS 10.13 and before don't report window z-ordering reliably.
-  if (base::mac::IsAtMostOS10_13())
-    GTEST_SKIP();
-#endif
-
   WidgetAutoclosePtr toplevel(CreateTopLevelPlatformWidget());
   Widget* children[] = {CreateChildPlatformWidget(toplevel->GetNativeView()),
                         CreateChildPlatformWidget(toplevel->GetNativeView()),
@@ -703,12 +673,6 @@ TEST_F(WidgetTestInteractive, ChildWidgetStackAbove) {
 }
 
 TEST_F(WidgetTestInteractive, ChildWidgetStackAtTop) {
-#if BUILDFLAG(IS_MAC)
-  // MacOS 10.13 and before don't report window z-ordering reliably.
-  if (base::mac::IsAtMostOS10_13())
-    GTEST_SKIP();
-#endif
-
   WidgetAutoclosePtr toplevel(CreateTopLevelPlatformWidget());
   Widget* children[] = {CreateChildPlatformWidget(toplevel->GetNativeView()),
                         CreateChildPlatformWidget(toplevel->GetNativeView()),
@@ -980,7 +944,7 @@ TEST_F(DesktopWidgetTestInteractive, WindowModalWindowDestroyedActivationTest) {
 
   gfx::NativeView modal_native_view = modal_dialog_widget->GetNativeView();
   ASSERT_EQ(3u, focus_changes.size());
-  EXPECT_EQ(gfx::kNullNativeView, focus_changes[1]);
+  EXPECT_EQ(gfx::NativeView(), focus_changes[1]);
   EXPECT_EQ(modal_native_view, focus_changes[2]);
 
 #if BUILDFLAG(IS_MAC)
@@ -996,7 +960,7 @@ TEST_F(DesktopWidgetTestInteractive, WindowModalWindowDestroyedActivationTest) {
 #endif
 
   ASSERT_EQ(5u, focus_changes.size());
-  EXPECT_EQ(gfx::kNullNativeView, focus_changes[3]);
+  EXPECT_EQ(gfx::NativeView(), focus_changes[3]);
   EXPECT_EQ(top_level_native_view, focus_changes[4]);
 
   top_level_widget->Close();
@@ -1373,6 +1337,13 @@ TEST_F(DesktopWidgetTestInteractive, EventHandlersClearedOnWidgetMinimize) {
   EXPECT_TRUE(GetGestureHandler(root_view));
 
   widget->Minimize();
+  {
+    views::test::PropertyWaiter minimize_waiter(
+        base::BindRepeating(&Widget::IsMinimized,
+                            base::Unretained(widget.get())),
+        true);
+    EXPECT_TRUE(minimize_waiter.Wait());
+  }
   EXPECT_FALSE(GetGestureHandler(root_view));
 }
 #endif
@@ -1471,7 +1442,7 @@ class CaptureLostTrackingWidget : public Widget {
 
  private:
   // Weak. Stores whether OnMouseCaptureLost has been invoked for this widget.
-  raw_ptr<CaptureLostState> capture_lost_state_;
+  raw_ptr<CaptureLostState, AcrossTasksDanglingUntriaged> capture_lost_state_;
 };
 
 }  // namespace
@@ -1739,7 +1710,7 @@ TEST_F(WidgetCaptureTest, DisableCaptureWidgetFromMousePress) {
   first->Show();
 
   gfx::Point location(20, 20);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &Widget::OnMouseEvent, base::Unretained(second),
@@ -2024,6 +1995,9 @@ TEST_F(WidgetCaptureTest, MouseEventDispatchedToRightWindow) {
   UniqueWidgetPtrT widget1 = std::make_unique<MouseEventTrackingWidget>();
   Widget::InitParams params1 =
       CreateParams(views::Widget::InitParams::TYPE_WINDOW);
+  // Not setting bounds on Win64 Arm results in a 0 height window, which
+  // won't get mouse events. See https://crbug.com/1418180.
+  params1.bounds = gfx::Rect(0, 0, 200, 200);
   params1.native_widget = new DesktopNativeWidgetAura(widget1.get());
   widget1->Init(std::move(params1));
   widget1->Show();
@@ -2031,6 +2005,7 @@ TEST_F(WidgetCaptureTest, MouseEventDispatchedToRightWindow) {
   UniqueWidgetPtrT widget2 = std::make_unique<MouseEventTrackingWidget>();
   Widget::InitParams params2 =
       CreateParams(views::Widget::InitParams::TYPE_WINDOW);
+  params2.bounds = gfx::Rect(0, 0, 200, 200);
   params2.native_widget = new DesktopNativeWidgetAura(widget2.get());
   widget2->Init(std::move(params2));
   widget2->Show();
@@ -2083,7 +2058,7 @@ class WidgetInputMethodInteractiveTest : public DesktopWidgetTestInteractive {
   }
 
  private:
-  raw_ptr<Widget> deactivate_widget_ = nullptr;
+  raw_ptr<Widget, AcrossTasksDanglingUntriaged> deactivate_widget_ = nullptr;
 };
 
 #if BUILDFLAG(IS_MAC)

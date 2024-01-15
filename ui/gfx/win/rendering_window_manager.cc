@@ -4,11 +4,10 @@
 
 #include "ui/gfx/win/rendering_window_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace gfx {
 
@@ -73,7 +72,7 @@ bool RenderingWindowManager::HasValidChildWindow(HWND parent) {
 }
 
 RenderingWindowManager::RenderingWindowManager()
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 RenderingWindowManager::~RenderingWindowManager() = default;
 

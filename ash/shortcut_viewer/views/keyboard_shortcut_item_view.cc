@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "ash/accelerators/keyboard_code_util.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/keyboard_shortcut_item.h"
 #include "ash/public/cpp/style/color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
@@ -17,13 +16,15 @@
 #include "ash/shortcut_viewer/views/bubble_view.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/strings/grit/ui_strings.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
@@ -64,8 +65,7 @@ class KSVSeparatorImageView : public views::ImageView {
   void ConfigureImage() {
     DCHECK(color_provider_);
     SkColor kShortcutBubbleSeparatorColor = kShortcutBubbleSeparatorColorLight;
-    if (ash::features::IsDarkLightModeEnabled() &&
-        ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()) {
+    if (ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()) {
       kShortcutBubbleSeparatorColor = color_provider_->GetContentLayerColor(
           ash::ColorProvider::ContentLayerType::kTextColorSecondary);
     }
@@ -74,7 +74,7 @@ class KSVSeparatorImageView : public views::ImageView {
     SetImageSize(gfx::Size(kIconSize, kIconSize));
   }
 
-  ash::ColorProvider* color_provider_;  // Not owned.
+  raw_ptr<ash::ColorProvider> color_provider_;  // Not owned.
 };
 
 // Creates the separator view between bubble views of modifiers and key.
@@ -234,19 +234,15 @@ KeyboardShortcutItemView::KeyboardShortcutItemView(
   SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(kVerticalPadding, 0, kVerticalPadding, 0)));
 
-  // Use leaf list item role so that name is spoken by screen reader, but
-  // redundant child label text is not also spoken. (The role is set in
-  // GetAccessibleNodeData.)
-  GetViewAccessibility().OverrideIsLeaf(true);
-  accessible_name_ =
-      description_label_view_->GetText() + u", " + accessible_string;
-}
+  SetAccessibilityProperties(
+      ax::mojom::Role::kListItem,
+      l10n_util::GetStringFUTF16(IDS_CONCAT_TWO_STRINGS_WITH_COMMA,
+                                 description_label_view_->GetText(),
+                                 accessible_string));
 
-void KeyboardShortcutItemView::GetAccessibleNodeData(
-    ui::AXNodeData* node_data) {
-  // A valid role must be set prior to setting the name.
-  node_data->role = ax::mojom::Role::kListItem;
-  node_data->SetName(accessible_name_);
+  // Use leaf list item role so that name is spoken by screen reader, but
+  // redundant child label text is not also spoken.
+  GetViewAccessibility().OverrideIsLeaf(true);
 }
 
 int KeyboardShortcutItemView::GetHeightForWidth(int w) const {
@@ -342,5 +338,8 @@ void KeyboardShortcutItemView::CalculateLayout(int width) const {
       std::max(shortcut_height, description_height + 2 * description_delta_y);
   calculated_size_ = gfx::Size(width, content_height + insets.height());
 }
+
+BEGIN_METADATA(KeyboardShortcutItemView, views::View)
+END_METADATA
 
 }  // namespace keyboard_shortcut_viewer

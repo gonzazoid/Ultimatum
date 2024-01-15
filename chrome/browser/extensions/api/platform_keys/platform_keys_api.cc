@@ -11,16 +11,17 @@
 #include <vector>
 
 #include "base/strings/string_piece.h"
+#include "chrome/browser/chromeos/platform_keys/extension_platform_keys_service.h"
+#include "chrome/browser/chromeos/platform_keys/extension_platform_keys_service_factory.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chrome/browser/extensions/api/platform_keys/verify_trust_api.h"
-#include "chrome/browser/platform_keys/extension_platform_keys_service.h"
-#include "chrome/browser/platform_keys/extension_platform_keys_service_factory.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/platform_keys_internal.h"
 #include "chromeos/crosapi/cpp/keystore_service_util.h"
 #include "chromeos/crosapi/mojom/keystore_error.mojom-shared.h"
 #include "chromeos/crosapi/mojom/keystore_service.mojom.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
+#include "net/base/net_errors.h"
 #include "net/cert/asn1_util.h"
 #include "net/cert/cert_status_flags.h"
 #include "net/cert/x509_util.h"
@@ -104,7 +105,7 @@ std::string ValidateCrosapi(int min_version, content::BrowserContext* context) {
   if (!service || !service->IsAvailable<crosapi::mojom::KeystoreService>())
     return kUnsupportedByAsh;
 
-  int version = service->GetInterfaceVersion(KeystoreService::Uuid_);
+  int version = service->GetInterfaceVersion<KeystoreService>();
   if (version < min_version)
     return kUnsupportedByAsh;
 
@@ -168,8 +169,8 @@ PlatformKeysInternalSelectClientCertificatesFunction::Run() {
     return RespondNow(Error(kUnsupportedProfile));
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
-  std::unique_ptr<api_pki::SelectClientCertificates::Params> params(
-      api_pki::SelectClientCertificates::Params::Create(args()));
+  absl::optional<api_pki::SelectClientCertificates::Params> params =
+      api_pki::SelectClientCertificates::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   chromeos::platform_keys::ClientCertificateRequest request;
@@ -179,15 +180,15 @@ PlatformKeysInternalSelectClientCertificatesFunction::Run() {
   for (const api_pk::ClientCertificateType& cert_type :
        params->details.request.certificate_types) {
     switch (cert_type) {
-      case api_pk::CLIENT_CERTIFICATE_TYPE_ECDSASIGN:
+      case api_pk::ClientCertificateType::kEcdsaSign:
         request.certificate_key_types.push_back(
             net::X509Certificate::kPublicKeyTypeECDSA);
         break;
-      case api_pk::CLIENT_CERTIFICATE_TYPE_RSASIGN:
+      case api_pk::ClientCertificateType::kRsaSign:
         request.certificate_key_types.push_back(
             net::X509Certificate::kPublicKeyTypeRSA);
         break;
-      case api_pk::CLIENT_CERTIFICATE_TYPE_NONE:
+      case api_pk::ClientCertificateType::kNone:
         NOTREACHED();
     }
   }
@@ -293,12 +294,12 @@ PlatformKeysInternalGetPublicKeyFunction::
 
 ExtensionFunction::ResponseAction
 PlatformKeysInternalGetPublicKeyFunction::Run() {
-  std::unique_ptr<api_pki::GetPublicKey::Params> params(
-      api_pki::GetPublicKey::Params::Create(args()));
+  absl::optional<api_pki::GetPublicKey::Params> params =
+      api_pki::GetPublicKey::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
-  std::string error = ValidateCrosapi(
-      KeystoreService::kDEPRECATED_GetPublicKeyMinVersion, browser_context());
+  std::string error = ValidateCrosapi(KeystoreService::kGetPublicKeyMinVersion,
+                                      browser_context());
   if (!error.empty()) {
     return RespondNow(Error(error));
   }
@@ -313,15 +314,16 @@ PlatformKeysInternalGetPublicKeyFunction::Run() {
   auto cb = base::BindOnce(
       &PlatformKeysInternalGetPublicKeyFunction::OnGetPublicKey, this);
   GetKeystoreService(browser_context())
-      ->DEPRECATED_GetPublicKey(params->certificate, algorithm_name.value(),
-                                std::move(cb));
+      ->GetPublicKey(params->certificate, algorithm_name.value(),
+                     std::move(cb));
   return RespondLater();
 }
 
 void PlatformKeysInternalGetPublicKeyFunction::OnGetPublicKey(
-    crosapi::mojom::DEPRECATED_GetPublicKeyResultPtr result) {
-  if (result->is_error_message()) {
-    Respond(Error(result->get_error_message()));
+    crosapi::mojom::GetPublicKeyResultPtr result) {
+  if (result->is_error()) {
+    Respond(Error(
+        chromeos::platform_keys::KeystoreErrorToString(result->get_error())));
     return;
   }
 
@@ -351,8 +353,8 @@ PlatformKeysInternalGetPublicKeyBySpkiFunction::Run() {
     return RespondNow(Error(kUnsupportedProfile));
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
-  std::unique_ptr<api_pki::GetPublicKeyBySpki::Params> params(
-      api_pki::GetPublicKeyBySpki::Params::Create(args()));
+  absl::optional<api_pki::GetPublicKeyBySpki::Params> params =
+      api_pki::GetPublicKeyBySpki::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   const auto& public_key_spki_der = params->public_key_spki_der;
@@ -398,8 +400,8 @@ ExtensionFunction::ResponseAction PlatformKeysInternalSignFunction::Run() {
     return RespondNow(Error(kUnsupportedProfile));
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
-  std::unique_ptr<api_pki::Sign::Params> params(
-      api_pki::Sign::Params::Create(args()));
+  absl::optional<api_pki::Sign::Params> params =
+      api_pki::Sign::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   absl::optional<chromeos::platform_keys::TokenId> platform_keys_token_id;
@@ -485,9 +487,9 @@ ExtensionFunction::ResponseAction
 PlatformKeysVerifyTLSServerCertificateFunction::Run() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  std::unique_ptr<api_pk::VerifyTLSServerCertificate::Params> params(
-      api_pk::VerifyTLSServerCertificate::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api_pk::VerifyTLSServerCertificate::Params> params =
+      api_pk::VerifyTLSServerCertificate::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   VerifyTrustAPI::GetFactoryInstance()
       ->Get(browser_context())

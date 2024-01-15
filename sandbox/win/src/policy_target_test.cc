@@ -2,26 +2,25 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <ntstatus.h>
+
+#include <string_view>
+
+#include "base/environment.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/writable_shared_memory_region.h"
+#include "base/scoped_environment_variable_override.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/win/scoped_process_information.h"
-#include "base/win/windows_version.h"
-#include "build/build_config.h"
+#include "base/win/win_util.h"
 #include "sandbox/win/src/broker_services.h"
 #include "sandbox/win/src/sandbox.h"
 #include "sandbox/win/src/sandbox_factory.h"
 #include "sandbox/win/src/sandbox_policy.h"
-#include "sandbox/win/src/sandbox_utils.h"
 #include "sandbox/win/src/target_services.h"
 #include "sandbox/win/tests/common/controller.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/win_util.h"
-#endif
 
 namespace sandbox {
 
@@ -177,6 +176,20 @@ SBOX_TESTS_COMMAND int PolicyTargetTest_process(int argc, wchar_t** argv) {
   return SBOX_TEST_FAILED;
 }
 
+// Tests that environment is filtered correctly.
+SBOX_TESTS_COMMAND int PolicyTargetTest_filterEnvironment(int argc,
+                                                          wchar_t** argv) {
+  auto env = base::Environment::Create();
+  // "TMP" should never be filtered. See `TargetProcess::Create`.
+  if (!env->HasVar("TMP")) {
+    return SBOX_TEST_FIRST_ERROR;
+  }
+  if (env->HasVar("SBOX_TEST_ENV")) {
+    return SBOX_TEST_SECOND_ERROR;
+  }
+  return SBOX_TEST_SUCCEEDED;
+}
+
 TEST(PolicyTargetTest, SetInformationThread) {
   TestRunner runner;
   runner.SetTestState(BEFORE_REVERT);
@@ -227,15 +240,6 @@ TEST(PolicyTargetTest, OpenProcess) {
       << "Opens a process";
 }
 
-TEST(PolicyTargetTest, PolicyBaseNoJobLifetime) {
-  TestRunner runner(JobLevel::kNone, USER_RESTRICTED_SAME_ACCESS,
-                    USER_LOCKDOWN);
-  // TargetPolicy and its SharedMemIPCServer should continue to exist until
-  // the child process dies.
-  EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"PolicyTargetTest_thread"))
-      << "Opens the current thread";
-}
-
 // Sets the desktop for the current thread to be one with a null DACL, then
 // launches a sandboxed app. Validates that the sandboxed app has access to the
 // desktop.
@@ -275,7 +279,6 @@ TEST(PolicyTargetTest, InheritedDesktopPolicy) {
 
   // Launch the app.
   ResultCode result = SBOX_ALL_OK;
-  ResultCode warning_result = SBOX_ALL_OK;
   DWORD last_error = ERROR_SUCCESS;
   base::win::ScopedProcessInformation target;
 
@@ -284,9 +287,8 @@ TEST(PolicyTargetTest, InheritedDesktopPolicy) {
   EXPECT_EQ(SBOX_ALL_OK, policy->GetConfig()->SetTokenLevel(USER_INTERACTIVE,
                                                             USER_LOCKDOWN));
   PROCESS_INFORMATION temp_process_info = {};
-  result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
-                          &warning_result, &last_error, &temp_process_info);
+  result = broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                               &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)
@@ -331,7 +333,6 @@ TEST(PolicyTargetTest, DesktopPolicy) {
 
   // Launch the app.
   ResultCode result = SBOX_ALL_OK;
-  ResultCode warning_result = SBOX_ALL_OK;
   DWORD last_error = ERROR_SUCCESS;
   base::win::ScopedProcessInformation target;
 
@@ -343,9 +344,8 @@ TEST(PolicyTargetTest, DesktopPolicy) {
   // Keep the desktop name to test against later (note - it was precreated).
   std::wstring desktop_name =
       broker->GetDesktopName(Desktop::kAlternateDesktop);
-  result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
-                          &warning_result, &last_error, &temp_process_info);
+  result = broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                               &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)
@@ -397,7 +397,6 @@ TEST(PolicyTargetTest, WinstaPolicy) {
 
   // Launch the app.
   ResultCode result = SBOX_ALL_OK;
-  ResultCode warning_result = SBOX_ALL_OK;
   base::win::ScopedProcessInformation target;
 
   auto policy = broker->CreatePolicy();
@@ -409,9 +408,8 @@ TEST(PolicyTargetTest, WinstaPolicy) {
   // Keep the desktop name for later (note - it was precreated).
   std::wstring desktop_name =
       broker->GetDesktopName(Desktop::kAlternateWinstation);
-  result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
-                          &warning_result, &last_error, &temp_process_info);
+  result = broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                               &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)
@@ -484,7 +482,7 @@ TEST(PolicyTargetTest, ShareHandleTest) {
   BrokerServices* broker = GetBroker();
   ASSERT_TRUE(broker);
 
-  base::StringPiece contents = "Hello World";
+  std::string_view contents = "Hello World";
   base::WritableSharedMemoryRegion writable_region =
       base::WritableSharedMemoryRegion::Create(contents.size());
   ASSERT_TRUE(writable_region.IsValid());
@@ -512,16 +510,14 @@ TEST(PolicyTargetTest, ShareHandleTest) {
 
   // Launch the app.
   ResultCode result = SBOX_ALL_OK;
-  ResultCode warning_result = SBOX_ALL_OK;
   base::win::ScopedProcessInformation target;
 
   EXPECT_EQ(SBOX_ALL_OK, policy->GetConfig()->SetTokenLevel(USER_INTERACTIVE,
                                                             USER_LOCKDOWN));
   PROCESS_INFORMATION temp_process_info = {};
   DWORD last_error = ERROR_SUCCESS;
-  result =
-      broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
-                          &warning_result, &last_error, &temp_process_info);
+  result = broker->SpawnTarget(prog_name, arguments.c_str(), std::move(policy),
+                               &last_error, &temp_process_info);
 
   EXPECT_EQ(SBOX_ALL_OK, result);
   if (result == SBOX_ALL_OK)
@@ -535,31 +531,6 @@ TEST(PolicyTargetTest, ShareHandleTest) {
   EXPECT_TRUE(::TerminateProcess(target.process_handle(), 0));
 
   ::WaitForSingleObject(target.process_handle(), INFINITE);
-}
-
-// Dummy target that just reports that's it spawned correctly.
-SBOX_TESTS_COMMAND int PolicyTargetTest_SetEffectiveToken(int argc,
-                                                          wchar_t** argv) {
-  return SBOX_TEST_SUCCEEDED;
-}
-
-// Test whether after using SetEffectiveToken spawning a target works as
-// expected.
-TEST(PolicyTargetTest, SetEffectiveToken) {
-  TestRunner runner;
-  HANDLE token;
-
-  // Get current process token.
-  EXPECT_TRUE(
-      ::OpenProcessToken(::GetCurrentProcess(), TOKEN_ALL_ACCESS, &token));
-
-  // Setup token guard.
-  base::win::ScopedHandle token_guard(token);
-
-  // Set token and run target.
-  runner.GetPolicy()->SetEffectiveToken(token_guard.Get());
-  EXPECT_EQ(SBOX_TEST_SUCCEEDED,
-            runner.RunTest(L"PolicyTargetTest_SetEffectiveToken"));
 }
 
 // Test if shared policies can be created by the broker.
@@ -602,6 +573,23 @@ TEST(SharedTargetConfig, BrokerConfigManagement) {
   // But should be the second time.
   policy_two = broker->CreatePolicy("key-two");
   EXPECT_TRUE(policy_two->GetConfig()->IsConfigured());
+}
+
+// Test that environment for a sandboxed process is filtered correctly.
+TEST(PolicyTargetTest, FilterEnvironment) {
+  base::ScopedEnvironmentVariableOverride scoped_env("SBOX_TEST_ENV", "FOO");
+  {
+    TestRunner runner;
+    runner.GetPolicy()->GetConfig()->SetFilterEnvironment(/*filter=*/true);
+    EXPECT_EQ(SBOX_TEST_SUCCEEDED,
+              runner.RunTest(L"PolicyTargetTest_filterEnvironment"));
+  }
+  {
+    TestRunner runner;
+    runner.GetPolicy()->GetConfig()->SetFilterEnvironment(/*filter=*/false);
+    EXPECT_EQ(SBOX_TEST_SECOND_ERROR,
+              runner.RunTest(L"PolicyTargetTest_filterEnvironment"));
+  }
 }
 
 }  // namespace sandbox

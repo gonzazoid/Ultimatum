@@ -90,14 +90,4 @@ bool PpdResolutionTracker::PrinterStateExists(
   return base::Contains(printer_state_, printer_id);
 }
 
-void PpdResolutionTracker::MarkPrinterAsNotAutoconfigurable(
-    const std::string& printer_id) {
-  printer_state_.at(printer_id).MarkPrinterAsNotAutoconfigurable();
-}
-
-bool PpdResolutionTracker::IsMarkedAsNotAutoconfigurable(
-    const std::string& printer_id) const {
-  return printer_state_.at(printer_id).IsMarkedAsNotAutoconfigurable();
-}
-
 }  // namespace ash

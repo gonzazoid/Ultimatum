@@ -8,7 +8,6 @@
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/bad_message.h"
 #include "chrome/browser/chrome_browser_interface_binders.h"
 #include "chrome/browser/chrome_content_browser_client.h"
@@ -41,14 +40,14 @@ class FooUI : public ui::MojoWebUIController, public ::test::mojom::Foo {
   explicit FooUI(content::WebUI* web_ui)
       : ui::MojoWebUIController(web_ui), foo_receiver_(this) {
     content::WebUIDataSource* data_source =
-        content::WebUIDataSource::Create("foo");
-    data_source->SetDefaultResource(IDR_MOJO_WEB_UI_CONTROLLER_TEST_HTML);
+        content::WebUIDataSource::CreateAndAdd(
+            web_ui->GetWebContents()->GetBrowserContext(), "foo");
+    data_source->SetDefaultResource(
+        IDR_WEBUI_MOJO_MOJO_WEB_UI_CONTROLLER_TEST_HTML);
     data_source->DisableContentSecurityPolicy();
     data_source->AddResourcePath("foobar.mojom-webui.js",
-                                 IDR_FOOBAR_MOJOM_WEBUI_JS);
-    data_source->AddResourcePath("main.js", IDR_MOJO_MAIN_JS);
-    content::WebUIDataSource::Add(web_ui->GetWebContents()->GetBrowserContext(),
-                                  data_source);
+                                 IDR_WEBUI_MOJO_FOOBAR_MOJOM_WEBUI_JS);
+    data_source->AddResourcePath("main.js", IDR_WEBUI_MOJO_MAIN_JS);
   }
 
   FooUI(const FooUI&) = delete;
@@ -81,14 +80,14 @@ class FooBarUI : public ui::MojoWebUIController,
         foo_receiver_(this),
         bar_receiver_(this) {
     content::WebUIDataSource* data_source =
-        content::WebUIDataSource::Create("foobar");
-    data_source->SetDefaultResource(IDR_MOJO_WEB_UI_CONTROLLER_TEST_HTML);
+        content::WebUIDataSource::CreateAndAdd(
+            web_ui->GetWebContents()->GetBrowserContext(), "foobar");
+    data_source->SetDefaultResource(
+        IDR_WEBUI_MOJO_MOJO_WEB_UI_CONTROLLER_TEST_HTML);
     data_source->DisableContentSecurityPolicy();
     data_source->AddResourcePath("foobar.mojom-webui.js",
-                                 IDR_FOOBAR_MOJOM_WEBUI_JS);
-    data_source->AddResourcePath("main.js", IDR_MOJO_MAIN_JS);
-    content::WebUIDataSource::Add(web_ui->GetWebContents()->GetBrowserContext(),
-                                  data_source);
+                                 IDR_WEBUI_MOJO_FOOBAR_MOJOM_WEBUI_JS);
+    data_source->AddResourcePath("main.js", IDR_WEBUI_MOJO_MAIN_JS);
   }
 
   FooBarUI(const FooBarUI&) = delete;

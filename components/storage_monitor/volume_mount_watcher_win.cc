@@ -16,16 +16,16 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/win/scoped_handle.h"
@@ -220,7 +220,6 @@ void EjectDeviceInThreadPool(
     base::OnceCallback<void(StorageMonitor::EjectStatus)> callback,
     scoped_refptr<base::SequencedTaskRunner> task_runner,
     int iteration) {
-  base::FilePath::StringType volume_name;
   base::FilePath::CharType drive_letter = device.value()[0];
   // Don't try to eject if the path isn't a simple one -- we're not
   // sure how to do that yet. Need to figure out how to eject volumes mounted
@@ -232,7 +231,8 @@ void EjectDeviceInThreadPool(
         base::BindOnce(std::move(callback), StorageMonitor::EJECT_FAILURE));
     return;
   }
-  base::SStringPrintf(&volume_name, L"\\\\.\\%lc:", drive_letter);
+  std::wstring volume_name =
+      base::StrCat({L"\\\\.\\", std::wstring(1, drive_letter), L":"});
 
   base::win::ScopedHandle volume_handle(CreateFile(
       volume_name.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -347,8 +347,8 @@ void VolumeMountWatcherWin::Init() {
   // When VolumeMountWatcherWin is created, the message pumps are not running
   // so a posted task from the constructor would never run. Therefore, do all
   // the initializations here.
-  base::PostTaskAndReplyWithResult(
-      device_info_task_runner_.get(), FROM_HERE, GetAttachedDevicesCallback(),
+  device_info_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, GetAttachedDevicesCallback(),
       base::BindOnce(&VolumeMountWatcherWin::AddDevicesOnUIThread,
                      weak_factory_.GetWeakPtr()));
 }

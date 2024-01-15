@@ -7,16 +7,18 @@
 #include <map>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
+#include "cc/base/switches.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
 #include "chrome/browser/metrics/chrome_metrics_service_client.h"
@@ -57,8 +59,6 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/settings/stats_reporting_controller.h"
-#include "components/metrics/structured/neutrino_logging.h"       // nogncheck
-#include "components/metrics/structured/neutrino_logging_util.h"  // nogncheck
 #include "components/metrics/structured/recorder.h"               // nogncheck
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -148,16 +148,6 @@ void OnCrosMetricsReportingSettingChange(
     ChangeMetricsReportingStateCalledFrom called_from) {
   bool enable_metrics = ash::StatsReportingController::Get()->IsEnabled();
   ChangeMetricsReportingState(enable_metrics, called_from);
-
-  // TODO(crbug.com/1234538): This call ensures that structured metrics' state
-  // is deleted when the reporting state is disabled. Long-term this should
-  // happen via a call to all MetricsProviders eg. OnClientStateCleared. This is
-  // temporarily called here because it is close to the settings UI, and doesn't
-  // greatly affect the logging in crbug.com/1227585.
-  auto* recorder = metrics::structured::Recorder::GetInstance();
-  if (recorder) {
-    recorder->OnReportingStateChanged(enable_metrics);
-  }
 }
 #endif
 
@@ -219,6 +209,22 @@ bool ChromeMetricsServicesManagerClient::IsClientInSample() {
   return IsClientInSampleImpl(g_browser_process->local_state());
 }
 
+#if BUILDFLAG(IS_WIN)
+// static
+bool ChromeMetricsServicesManagerClient::IsClientInSampleForCrash() {
+  // If the kMetricsReportingFeature is disabled, we don't send crashes.
+  if (!base::FeatureList::IsEnabled(
+          metrics::internal::kMetricsReportingFeature)) {
+    return false;
+  }
+  // Note we default to disabled being off, i.e. enabled as long as the
+  // feature is on.
+  bool crashpad_disabled = base::GetFieldTrialParamByFeatureAsBool(
+      metrics::internal::kMetricsReportingFeature, "disable_crashes", false);
+  return !crashpad_disabled;
+}
+#endif  // BUILDFLAG(IS_WIN)
+
 // static
 bool ChromeMetricsServicesManagerClient::GetSamplingRatePerMille(int* rate) {
 #if BUILDFLAG(IS_ANDROID)
@@ -229,7 +235,7 @@ bool ChromeMetricsServicesManagerClient::GetSamplingRatePerMille(int* rate) {
 #else
   const base::Feature& feature = metrics::internal::kMetricsReportingFeature;
 #endif  // BUILDFLAG(IS_ANDROID)
-  std::string rate_str = variations::GetVariationParamValueByFeature(
+  std::string rate_str = base::GetFieldTrialParamValueByFeature(
       feature, metrics::internal::kRateParamName);
   if (rate_str.empty())
     return false;
@@ -261,11 +267,6 @@ ChromeMetricsServicesManagerClient::GetEnabledStateProviderForTesting() {
 std::unique_ptr<variations::VariationsService>
 ChromeMetricsServicesManagerClient::CreateVariationsService() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  metrics::structured::NeutrinoDevicesLogWithLocalState(
-      local_state_,
-      metrics::structured::NeutrinoDevicesLocation::kCreateVariationsService);
-#endif
   return variations::VariationsService::Create(
       std::make_unique<ChromeVariationsServiceClient>(), local_state_,
       GetMetricsStateManager(), switches::kDisableBackgroundNetworking,
@@ -276,11 +277,6 @@ ChromeMetricsServicesManagerClient::CreateVariationsService() {
 std::unique_ptr<metrics::MetricsServiceClient>
 ChromeMetricsServicesManagerClient::CreateMetricsServiceClient() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  metrics::structured::NeutrinoDevicesLogWithLocalState(
-      local_state_, metrics::structured::NeutrinoDevicesLocation::
-                        kCreateMetricsServiceClient);
-#endif
   return ChromeMetricsServiceClient::Create(GetMetricsStateManager());
 }
 
@@ -307,12 +303,30 @@ ChromeMetricsServicesManagerClient::GetMetricsStateManager() {
     auto* init_params = chromeos::BrowserParamsProxy::Get();
     if (init_params->MetricsServiceClientId().has_value())
       client_id = init_params->MetricsServiceClientId().value();
+    // Beginning M120 this should always be there. Note:
+    // The LES numbers are kept stable over the lifetime of the session.
+    // They get read when the system is statrting up in Ash. So they do not
+    // need to be updated at a later time in the session.
+    const crosapi::mojom::EntropySourcePtr& entropy_source =
+        init_params->EntropySource();
+    if (entropy_source) {
+      // This needs to be called before `metrics::MetricsStateManager::Create`.
+      metrics::EntropyState::SetExternalPrefs(
+          local_state_, entropy_source->low_entropy,
+          entropy_source->old_low_entropy, entropy_source->pseudo_low_entropy);
+    }
 #endif
 
     metrics_state_manager_ = metrics::MetricsStateManager::Create(
         local_state_, enabled_state_provider_.get(), GetRegistryBackupKey(),
         user_data_dir, startup_visibility,
-        metrics::EntropyProviderType::kDefault,
+        {
+            .default_entropy_provider_type =
+                metrics::EntropyProviderType::kDefault,
+            .force_benchmarking_mode =
+                base::CommandLine::ForCurrentProcess()->HasSwitch(
+                    cc::switches::kEnableGpuBenchmarking),
+        },
         base::BindRepeating(&PostStoreMetricsClientInfo),
         base::BindRepeating(&GoogleUpdateSettings::LoadMetricsClientInfo),
         client_id);
@@ -361,13 +375,21 @@ void ChromeMetricsServicesManagerClient::UpdateRunningServices(
     bool may_record,
     bool may_upload) {
   // First, set the registry value so that Crashpad will have the sampling state
-  // now and for subsequent runs.
-  install_static::SetCollectStatsInSample(IsClientInSample());
+  // now and for subsequent runs. Note that Crashpad uses *both* the registry
+  // value and the value sent from SetUploadConsent below.
+  // We use IsClientInSampleForCrash() which checks the feature for if crashes
+  // are allowed.
+  install_static::SetCollectStatsInSample(IsClientInSampleForCrash());
 
-  // Next, get Crashpad to pick up the sampling state for this session.
-  // Crashpad will use the kRegUsageStatsInSample registry value to apply
-  // sampling correctly, but may_record already reflects the sampling state.
-  // This isn't a problem though, since they will be consistent.
+  // The intent here is to set the value of the consent. However, since right
+  // now we have may_record which is based off both consent and the Feature
+  // state, this is redundant with the above value. This is pretty confusing
+  // right now, and we may want to rethink this. One extra complexity here is we
+  // currently check the disable_crashes parameter, which does not go
+  // into may_record. This is because this is specifically intending to test for
+  // consent, and as mentioned, on the crashpad side we check both. See
+  // SetUploadConsent() in components/crash/core/app/crashpad.cc for how this
+  // gets used.
   SetUploadConsent_ExportThunk(may_record && may_upload);
 }
 #endif  // BUILDFLAG(IS_WIN)

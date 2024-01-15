@@ -29,10 +29,10 @@
 
 #include <atomic>
 
-#include "base/callback_forward.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
@@ -48,8 +48,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_export.h"
 
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_cftyperef.h"
+#if BUILDFLAG(IS_APPLE)
+#include "base/apple/scoped_cftyperef.h"
 
 typedef const struct __CFString* CFStringRef;
 #endif
@@ -59,8 +59,6 @@ typedef const struct __CFString* CFStringRef;
 #endif
 
 namespace WTF {
-
-struct AlreadyHashed;
 
 enum TextCaseSensitivity {
   kTextCaseSensitive,
@@ -76,10 +74,11 @@ enum StripBehavior { kStripExtraWhiteSpace, kDoNotStripWhiteSpace };
 
 typedef bool (*CharacterMatchFunctionPtr)(UChar);
 typedef bool (*IsWhiteSpaceFunctionPtr)(UChar);
-typedef HashMap<wtf_size_t, StringImpl*, AlreadyHashed> StaticStringsTable;
+typedef HashMap<wtf_size_t, StringImpl*, AlreadyHashedTraits>
+    StaticStringsTable;
 
 // You can find documentation about this class in this doc:
-// https://docs.google.com/document/d/1kOCUlJdh2WJMJGDf-WoEQhmnjKLaOYRbiHz5TiGJl14/edit?usp=sharing
+// https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/platform/wtf/text/README.md
 class WTF_EXPORT StringImpl {
  private:
   // StringImpls are allocated out of the WTF buffer partition.
@@ -337,7 +336,9 @@ class WTF_EXPORT StringImpl {
   static void CopyChars(T* destination,
                         const T* source,
                         wtf_size_t num_characters) {
-    memcpy(destination, source, num_characters * sizeof(T));
+    if (num_characters > 0) {
+      memcpy(destination, source, num_characters * sizeof(T));
+    }
   }
 
   ALWAYS_INLINE static void CopyChars(UChar* destination,
@@ -388,6 +389,8 @@ class WTF_EXPORT StringImpl {
   scoped_refptr<StringImpl> FoldCase();
 
   scoped_refptr<StringImpl> Truncate(wtf_size_t length);
+
+  unsigned LengthWithStrippedWhiteSpace() const;
 
   scoped_refptr<StringImpl> StripWhiteSpace();
   scoped_refptr<StringImpl> StripWhiteSpace(IsWhiteSpaceFunctionPtr);
@@ -476,8 +479,8 @@ class WTF_EXPORT StringImpl {
                  wtf_size_t start = 0,
                  wtf_size_t length = UINT_MAX) const;
 
-#if BUILDFLAG(IS_MAC)
-  base::ScopedCFTypeRef<CFStringRef> CreateCFString();
+#if BUILDFLAG(IS_APPLE)
+  base::apple::ScopedCFTypeRef<CFStringRef> CreateCFString();
 #endif
 #ifdef __OBJC__
   operator NSString*();
@@ -572,6 +575,8 @@ class WTF_EXPORT StringImpl {
                                     wtf_size_t replacement_length);
 
   template <class UCharPredicate>
+  unsigned LengthWithStrippedMatchedCharacters(UCharPredicate) const;
+  template <class UCharPredicate>
   scoped_refptr<StringImpl> StripMatchedCharacters(UCharPredicate);
   template <typename CharType, class UCharPredicate>
   scoped_refptr<StringImpl> SimplifyMatchedCharactersToSpace(UCharPredicate,
@@ -661,7 +666,7 @@ template <typename CharType>
 ALWAYS_INLINE bool Equal(const CharType* a,
                          const CharType* b,
                          wtf_size_t length) {
-  return !memcmp(a, b, length * sizeof(CharType));
+  return std::equal(a, a + length, b);
 }
 
 ALWAYS_INLINE bool Equal(const LChar* a, const UChar* b, wtf_size_t length) {
@@ -948,12 +953,12 @@ inline void StringImpl::PrependTo(BufferType& result,
 }
 
 template <typename T>
-struct DefaultHash;
+struct HashTraits;
 // Defined in string_hash.h.
 template <>
-struct DefaultHash<StringImpl*>;
+struct HashTraits<StringImpl*>;
 template <>
-struct DefaultHash<scoped_refptr<StringImpl>>;
+struct HashTraits<scoped_refptr<StringImpl>>;
 
 }  // namespace WTF
 

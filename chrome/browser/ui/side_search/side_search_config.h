@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_SIDE_SEARCH_SIDE_SEARCH_CONFIG_H_
 #define CHROME_BROWSER_UI_SIDE_SEARCH_SIDE_SEARCH_CONFIG_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -64,13 +64,6 @@ class SideSearchConfig : public base::SupportsUserData::Data,
   GURL GenerateSideSearchURL(const GURL& search_url);
   void SetGenerateSideSearchURLCallback(GenerateURLCallback callback);
 
-  // Gets and sets the bit that determines whether or not the SRP is available.
-  // TODO(tluk): Move the code that tests for availability into this class.
-  bool is_side_panel_srp_available() { return is_side_panel_srp_available_; }
-  void set_is_side_panel_srp_available(bool is_side_panel_srp_available) {
-    is_side_panel_srp_available_ = is_side_panel_srp_available;
-  }
-
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
@@ -88,10 +81,6 @@ class SideSearchConfig : public base::SupportsUserData::Data,
   }
 
  private:
-  // Whether or not the service providing the SRP for the side panel is
-  // available or not.
-  bool is_side_panel_srp_available_ = false;
-
   raw_ptr<Profile> const profile_;
 
   base::ObserverList<Observer> observers_;

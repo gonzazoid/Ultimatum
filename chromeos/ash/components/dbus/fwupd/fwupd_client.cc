@@ -8,8 +8,11 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/fwupd/dbus_constants.h"
 #include "chromeos/ash/components/dbus/fwupd/fake_fwupd_client.h"
@@ -35,6 +38,12 @@ const int kSha256Length = 64;
 // "1" is the bitflag for an internal device. Defined here:
 // https://github.com/fwupd/fwupd/blob/main/libfwupd/fwupd-enums.h
 const uint64_t kInternalDeviceFlag = 1;
+// "100000000"(9th bit) is the bit release flag for a trusted report.
+// Defined here: https://github.com/fwupd/fwupd/blob/main/libfwupd/fwupd-enums.h
+const uint64_t kTrustedReportsReleaseFlag = 1llu << 8;
+// "10000"(5th bit) is the fwupd feature flag to allow interactive requests.
+// Defined here: https://github.com/fwupd/fwupd/blob/main/libfwupd/fwupd-enums.h
+const uint64_t kRequestsFeatureFlag = 1llu << 4;
 
 base::FilePath GetFilePathFromUri(const GURL uri) {
   const std::string filepath = uri.spec();
@@ -110,10 +119,27 @@ class FwupdClientImpl : public FwupdClient {
                                     weak_ptr_factory_.GetWeakPtr()));
     properties_->ConnectSignals();
     properties_->GetAll();
+
+    SetFwupdFeatureFlags();
+  }
+
+  void SetFwupdFeatureFlags() override {
+    // Enable interactive updates in fwupd by setting the "requests"
+    // FwupdFeatureFlag when the Firmware Updates v2 feature flag is enabled.
+    if (base::FeatureList::IsEnabled(features::kFirmwareUpdateUIV2)) {
+      dbus::MethodCall method_call(kFwupdServiceInterface,
+                                   kFwupdSetFeatureFlagsMethodName);
+      dbus::MessageWriter writer(&method_call);
+      writer.AppendInt64(kRequestsFeatureFlag);
+
+      proxy_->CallMethodWithErrorResponse(
+          &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+          base::BindOnce(&FwupdClientImpl::SetFeatureFlagsCallback,
+                         weak_ptr_factory_.GetWeakPtr()));
+    }
   }
 
   void RequestUpdates(const std::string& device_id) override {
-    CHECK(features::IsFirmwareUpdaterAppEnabled());
     VLOG(1) << "fwupd: RequestUpdates called for: " << device_id;
     dbus::MethodCall method_call(kFwupdServiceInterface,
                                  kFwupdGetUpgradesMethodName);
@@ -128,7 +154,6 @@ class FwupdClientImpl : public FwupdClient {
   }
 
   void RequestDevices() override {
-    CHECK(features::IsFirmwareUpdaterAppEnabled());
     VLOG(1) << "fwupd: RequestDevices called";
     dbus::MethodCall method_call(kFwupdServiceInterface,
                                  kFwupdGetDevicesMethodName);
@@ -171,16 +196,14 @@ class FwupdClientImpl : public FwupdClient {
 
  private:
   // Pops a string-to-variant-string dictionary from the reader.
-  std::unique_ptr<base::DictionaryValue> PopStringToStringDictionary(
-      dbus::MessageReader* reader) {
+  base::Value::Dict PopStringToStringDictionary(dbus::MessageReader* reader) {
     dbus::MessageReader array_reader(nullptr);
 
     if (!reader->PopArray(&array_reader)) {
       LOG(ERROR) << "Failed to pop array into the array reader.";
-      return nullptr;
+      return base::Value::Dict();
     }
-
-    auto result = std::make_unique<base::DictionaryValue>();
+    base::Value::Dict result;
 
     while (array_reader.HasMoreData()) {
       dbus::MessageReader entry_reader(nullptr);
@@ -195,7 +218,7 @@ class FwupdClientImpl : public FwupdClient {
 
       if (!success) {
         LOG(ERROR) << "Failed to get a dictionary entry. ";
-        return nullptr;
+        return base::Value::Dict();
       }
 
       // Values in the response can have different types. The fields we are
@@ -207,17 +230,25 @@ class FwupdClientImpl : public FwupdClient {
         variant_reader.PopUint32(&value_uint);
         // Value doesn't support unsigned numbers, so this has to be converted
         // to int.
-        result->SetKey(key, base::Value((int)value_uint));
+        result.Set(key, (int)value_uint);
       } else if (variant_reader.GetDataSignature() == "s") {
         variant_reader.PopString(&value_string);
-        result->SetKey(key, base::Value(value_string));
+        result.Set(key, value_string);
       } else if (variant_reader.GetDataSignature() == "t") {
         if (key == "Flags") {
           uint64_t value_uint64 = 0;
           variant_reader.PopUint64(&value_uint64);
           const bool is_internal =
               (value_uint64 & kInternalDeviceFlag) == kInternalDeviceFlag;
-          result->SetKey(key, base::Value(is_internal));
+          result.Set(key, is_internal);
+        }
+        if (key == "TrustFlags") {
+          uint64_t value_uint64 = 0;
+          variant_reader.PopUint64(&value_uint64);
+          const bool has_trusted_report =
+              (value_uint64 & kTrustedReportsReleaseFlag) ==
+              kTrustedReportsReleaseFlag;
+          result.Set(key, has_trusted_report);
         }
       }
     }
@@ -246,57 +277,67 @@ class FwupdClientImpl : public FwupdClient {
     FwupdUpdateList updates;
     while (can_parse && array_reader.HasMoreData()) {
       // Parse update description.
-      std::unique_ptr<base::DictionaryValue> dict =
-          PopStringToStringDictionary(&array_reader);
-      if (!dict) {
+      base::Value::Dict dict = PopStringToStringDictionary(&array_reader);
+      if (dict.empty()) {
         LOG(ERROR) << "Failed to parse the update description.";
         // Ran into an error, exit early.
         break;
       }
 
-      const auto* version = dict->FindKey("Version");
-      const auto* description = dict->FindKey("Description");
-      const auto* priority = dict->FindKey("Urgency");
-      const auto* uri = dict->FindKey("Uri");
-      const auto* checksum = dict->FindKey("Checksum");
+      const std::string* version = dict.FindString("Version");
+      const std::string* description = dict.FindString("Description");
+      std::optional<int> priority = dict.FindInt("Urgency");
+      const std::string* uri = dict.FindString("Uri");
+      const std::string* checksum = dict.FindString("Checksum");
+      const std::string* remote_id = dict.FindString("RemoteId");
+      std::optional<bool> trusted_report = dict.FindBool("TrustFlags");
+      bool has_trusted_report =
+          !base::FeatureList::IsEnabled(
+              features::kUpstreamTrustedReportsFirmware) ||
+          (trusted_report.has_value() && trusted_report.value());
+
+      // Skip release if its coming from LVFS and feature flag not enabled
+      if (remote_id && *remote_id == "lvfs" &&
+          !base::FeatureList::IsEnabled(
+              features::kUpstreamTrustedReportsFirmware)) {
+        continue;
+      }
 
       base::FilePath filepath;
       if (uri) {
-        filepath = GetFilePathFromUri(GURL(uri->GetString()));
+        filepath = GetFilePathFromUri(GURL(*uri));
       }
 
       std::string sha_checksum;
       if (checksum) {
-        sha_checksum = ParseCheckSum(checksum->GetString());
+        sha_checksum = ParseCheckSum(*checksum);
       }
 
       std::string description_value = "";
 
       if (description) {
-        description_value = description->GetString();
+        description_value = *description;
       } else {
         VLOG(1) << "Device: " << device_id
                 << " is missing its description text.";
       }
 
-      // If priority isn't specified we use default of low priority
-      int priority_value = UpdatePriority::kLow;
-      if (priority) {
-        priority_value = priority->GetInt();
-      } else {
+      // If priority isn't specified we use default of low priority.
+      if (!priority) {
         LOG(WARNING)
             << "Device: " << device_id
             << " is missing its priority field, using default of low priority.";
       }
+      int priority_value = priority.value_or(UpdatePriority::kLow);
 
-      const bool success =
-          version && !filepath.empty() && !sha_checksum.empty();
+      const bool success = version && !filepath.empty() &&
+                           !sha_checksum.empty() && has_trusted_report;
       // TODO(michaelcheco): Confirm that this is the expected behavior.
       if (success) {
         VLOG(1) << "fwupd: Found update version for device: " << device_id
-                << " with version: " << version->GetString();
-        updates.emplace_back(version->GetString(), description_value,
-                             priority_value, filepath, sha_checksum);
+                << " with version: " << *version;
+        updates.emplace_back(*version, description_value, priority_value,
+                             filepath, sha_checksum);
       } else {
         if (!version) {
           LOG(ERROR) << "Device: " << device_id
@@ -335,21 +376,24 @@ class FwupdClientImpl : public FwupdClient {
     FwupdDeviceList devices;
     while (array_reader.HasMoreData()) {
       // Parse device description.
-      std::unique_ptr<base::DictionaryValue> dict =
-          PopStringToStringDictionary(&array_reader);
-      if (!dict) {
+      base::Value::Dict dict = PopStringToStringDictionary(&array_reader);
+      if (dict.empty()) {
         LOG(ERROR) << "Failed to parse the device description.";
         return;
       }
 
-      const auto* flags = dict->FindKey("Flags");
-      const auto* name = dict->FindKey("Name");
-      if (flags && flags->GetBool()) {
-        VLOG(1) << "Ignoring internal device: " << name;
+      std::optional<bool> flags = dict.FindBool("Flags");
+      const std::string* name = dict.FindString("Name");
+      if (flags.has_value() && flags.value()) {
+        if (name) {
+          VLOG(1) << "Ignoring internal device: " << *name;
+        } else {
+          VLOG(1) << "Ignoring unnamed internal device.";
+        }
         continue;
       }
 
-      const auto* id = dict->FindKey("DeviceId");
+      const std::string* id = dict.FindString("DeviceId");
 
       // The keys "DeviceId" and "Name" must exist in the dictionary.
       const bool success = id && name;
@@ -358,9 +402,8 @@ class FwupdClientImpl : public FwupdClient {
         return;
       }
 
-      VLOG(1) << "fwupd: Device found: " << id->GetString() << " "
-              << name->GetString();
-      devices.emplace_back(id->GetString(), name->GetString());
+      VLOG(1) << "fwupd: Device found: " << *id << " " << *name;
+      devices.emplace_back(*id, *name);
     }
 
     for (auto& observer : observers_)
@@ -371,8 +414,8 @@ class FwupdClientImpl : public FwupdClient {
                              dbus::ErrorResponse* error_response) {
     bool success = true;
     if (error_response) {
-      LOG(ERROR) << "Firmware install failed with error: "
-                 << error_response->GetErrorName();
+      LOG(ERROR) << "Firmware install failed with error message: "
+                 << error_response->ToString();
       success = false;
     }
 
@@ -391,24 +434,26 @@ class FwupdClientImpl : public FwupdClient {
 
   // TODO(swifton): This is a stub implementation.
   void OnDeviceAddedReceived(dbus::Signal* signal) {
-    // Do nothing if the feature is not enabled.
-    if (!features::IsFirmwareUpdaterAppEnabled())
-      return;
-
     if (client_is_in_testing_mode_) {
       ++device_signal_call_count_for_testing_;
     }
   }
 
   void OnPropertyChanged(const std::string& name) {
-    if (!features::IsFirmwareUpdaterAppEnabled())
-      return;
-
     for (auto& observer : observers_)
       observer.OnPropertiesChangedResponse(properties_.get());
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  void SetFeatureFlagsCallback(dbus::Response* response,
+                               dbus::ErrorResponse* error_response) {
+    // No need to take any specific action here.
+    if (!response) {
+      LOG(ERROR) << "No D-Bus response received from fwupd.";
+      return;
+    }
+  }
+
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

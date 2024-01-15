@@ -5,7 +5,8 @@
 #ifndef CHROME_BROWSER_NEARBY_SHARING_NEARBY_CONNECTION_IMPL_H_
 #define CHROME_BROWSER_NEARBY_SHARING_NEARBY_CONNECTION_IMPL_H_
 
-#include "chrome/browser/nearby_sharing/nearby_connection.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/nearby_sharing/public/cpp/nearby_connection.h"
 
 #include <queue>
 #include <vector>
@@ -17,8 +18,9 @@ class NearbyConnectionsManager;
 
 class NearbyConnectionImpl : public NearbyConnection {
  public:
-  NearbyConnectionImpl(NearbyConnectionsManager* nearby_connections_manager,
-                       const std::string& endpoint_id);
+  NearbyConnectionImpl(
+      base::WeakPtr<NearbyConnectionsManager> nearby_connections_manager,
+      const std::string& endpoint_id);
   ~NearbyConnectionImpl() override;
 
   // NearbyConnection:
@@ -31,12 +33,12 @@ class NearbyConnectionImpl : public NearbyConnection {
   void WriteMessage(std::vector<uint8_t> bytes);
 
  private:
-  using PayloadContent = location::nearby::connections::mojom::PayloadContent;
-  using BytesPayload = location::nearby::connections::mojom::BytesPayload;
+  using PayloadContent = nearby::connections::mojom::PayloadContent;
+  using BytesPayload = nearby::connections::mojom::BytesPayload;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  NearbyConnectionsManager* nearby_connections_manager_;
+  base::WeakPtr<NearbyConnectionsManager> nearby_connections_manager_;
   std::string endpoint_id_;
   ReadCallback read_callback_;
   base::OnceClosure disconnect_listener_;

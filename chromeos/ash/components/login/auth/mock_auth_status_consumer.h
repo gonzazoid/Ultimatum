@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_MOCK_AUTH_STATUS_CONSUMER_H_
 #define CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_MOCK_AUTH_STATUS_CONSUMER_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/login/auth/auth_status_consumer.h"
 #include "chromeos/ash/components/login/auth/public/auth_failure.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
@@ -24,7 +24,9 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
   MOCK_METHOD1(OnRetailModeAuthSuccess, void(const UserContext& user_context));
   MOCK_METHOD1(OnAuthSuccess, void(const UserContext& user_context));
   MOCK_METHOD0(OnOffTheRecordAuthSuccess, void(void));
-  MOCK_METHOD1(OnPasswordChangeDetected, void(const UserContext& user_context));
+  MOCK_METHOD2(OnOnlinePasswordUnusable,
+               void(std::unique_ptr<UserContext> user_context, bool));
+  MOCK_METHOD1(OnPasswordChangeDetectedFor, void(const AccountId& account));
 
   // The following functions can be used in gmock Invoke() clauses.
 
@@ -44,7 +46,7 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
   void OnFailQuit(const AuthFailure& error);
   void OnFailQuitAndFail(const AuthFailure& error);
 
-  // Compatible with AuthStatusConsumer::OnPasswordChangeDetected()
+  // Compatible with AuthStatusConsumer::OnOnlinePasswordUnusable()
   void OnMigrateQuit();
   void OnMigrateQuitAndFail();
 

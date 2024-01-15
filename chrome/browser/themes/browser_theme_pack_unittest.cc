@@ -25,6 +25,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/color/color_mixer.h"
 #include "ui/color/color_provider.h"
+#include "ui/color/color_provider_key.h"
 #include "ui/color/color_recipe.h"
 #include "ui/color/color_test_ids.h"
 #include "ui/gfx/color_utils.h"
@@ -34,7 +35,7 @@
 
 using extensions::Extension;
 using TP = ThemeProperties;
-using ThemeType = ui::ColorProviderManager::ThemeInitializerSupplier::ThemeType;
+using ThemeType = ui::ColorProviderKey::ThemeInitializerSupplier::ThemeType;
 
 // Maps scale factors (enum values) to file path.
 // A similar typedef in BrowserThemePack is private.
@@ -61,14 +62,14 @@ class BrowserThemePackTest : public ::testing::Test {
 
   void VerifyColorMap(const std::map<int, SkColor>& color_map);
   void LoadColorJSON(const std::string& json);
-  void LoadColorDictionary(base::DictionaryValue* value);
+  void LoadColorDictionary(const base::Value::Dict* value);
   void LoadTintJSON(const std::string& json);
-  void LoadTintDictionary(base::DictionaryValue* value);
+  void LoadTintDictionary(const base::Value::Dict* value);
   void LoadDisplayPropertiesJSON(const std::string& json);
-  void LoadDisplayPropertiesDictionary(base::DictionaryValue* value);
+  void LoadDisplayPropertiesDictionary(const base::Value::Dict* value);
   void ParseImageNamesJSON(const std::string& json,
                            TestFilePathMap* out_file_paths);
-  void ParseImageNamesDictionary(base::DictionaryValue* value,
+  void ParseImageNamesDictionary(const base::Value::Dict* value,
                                  TestFilePathMap* out_file_paths);
   bool LoadRawBitmapsTo(const TestFilePathMap& out_file_paths);
 
@@ -116,9 +117,6 @@ class BrowserThemePackTest : public ::testing::Test {
   }
 
  private:
-  using ScopedSetSupportedScaleFactors =
-      std::unique_ptr<ui::test::ScopedSetSupportedResourceScaleFactors>;
-
   // Transformation for link underline colors.
   static SkColor BuildThirdOpacity(SkColor color_link);
 
@@ -130,7 +128,8 @@ class BrowserThemePackTest : public ::testing::Test {
                                         int tint,
                                         bool otr);
 
-  ScopedSetSupportedScaleFactors scoped_set_supported_scale_factors_;
+  ui::test::ScopedSetSupportedResourceScaleFactors
+      scoped_set_supported_scale_factors_{{ui::k100Percent, ui::k200Percent}};
 
   base::ScopedTempDir dir_;
   content::BrowserTaskEnvironment task_environment_;
@@ -139,12 +138,6 @@ class BrowserThemePackTest : public ::testing::Test {
 
 BrowserThemePackTest::BrowserThemePackTest()
     : theme_pack_(new BrowserThemePack(ThemeType::kExtension)) {
-  std::vector<ui::ResourceScaleFactor> scale_factors;
-  scale_factors.push_back(ui::k100Percent);
-  scale_factors.push_back(ui::k200Percent);
-  scoped_set_supported_scale_factors_ =
-      std::make_unique<ui::test::ScopedSetSupportedResourceScaleFactors>(
-          scale_factors);
   theme_pack_->InitEmptyPack();
 }
 
@@ -180,49 +173,40 @@ void BrowserThemePackTest::VerifyColorMap(
 }
 
 void BrowserThemePackTest::LoadColorJSON(const std::string& json) {
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(json);
-  ASSERT_TRUE(value->is_dict());
-  LoadColorDictionary(static_cast<base::DictionaryValue*>(value.get()));
+  LoadColorDictionary(&base::JSONReader::Read(json)->GetDict());
 }
 
-void BrowserThemePackTest::LoadColorDictionary(base::DictionaryValue* value) {
+void BrowserThemePackTest::LoadColorDictionary(const base::Value::Dict* value) {
   theme_pack_->SetColorsFromJSON(value);
   theme_pack_->GenerateFrameColorsFromTints();
 }
 
 void BrowserThemePackTest::LoadTintJSON(const std::string& json) {
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(json);
-  ASSERT_TRUE(value->is_dict());
-  LoadTintDictionary(static_cast<base::DictionaryValue*>(value.get()));
+  LoadTintDictionary(&base::JSONReader::Read(json)->GetDict());
 }
 
-void BrowserThemePackTest::LoadTintDictionary(base::DictionaryValue* value) {
+void BrowserThemePackTest::LoadTintDictionary(const base::Value::Dict* value) {
   theme_pack_->SetTintsFromJSON(value);
 }
 
 void BrowserThemePackTest::LoadDisplayPropertiesJSON(const std::string& json) {
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(json);
-  ASSERT_TRUE(value->is_dict());
-  LoadDisplayPropertiesDictionary(
-      static_cast<base::DictionaryValue*>(value.get()));
+  LoadDisplayPropertiesDictionary(&base::JSONReader::Read(json)->GetDict());
 }
 
 void BrowserThemePackTest::LoadDisplayPropertiesDictionary(
-    base::DictionaryValue* value) {
+    const base::Value::Dict* value) {
   theme_pack_->SetDisplayPropertiesFromJSON(value);
 }
 
 void BrowserThemePackTest::ParseImageNamesJSON(
     const std::string& json,
     TestFilePathMap* out_file_paths) {
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(json);
-  ASSERT_TRUE(value->is_dict());
-  ParseImageNamesDictionary(static_cast<base::DictionaryValue*>(value.get()),
+  ParseImageNamesDictionary(&base::JSONReader::Read(json)->GetDict(),
                             out_file_paths);
 }
 
 void BrowserThemePackTest::ParseImageNamesDictionary(
-    base::DictionaryValue* value,
+    const base::Value::Dict* value,
     TestFilePathMap* out_file_paths) {
   theme_pack_->ParseImageNamesFromJSON(value, base::FilePath(), out_file_paths);
 
@@ -242,13 +226,13 @@ void BrowserThemePackTest::BuildFromUnpackedExtension(
   base::FilePath manifest_path = extension_path.AppendASCII("manifest.json");
   std::string error;
   JSONFileValueDeserializer deserializer(manifest_path);
-  std::unique_ptr<base::DictionaryValue> valid_value =
-      base::DictionaryValue::From(deserializer.Deserialize(nullptr, &error));
+  std::unique_ptr<base::Value> valid_value =
+      deserializer.Deserialize(nullptr, &error);
   EXPECT_EQ("", error);
-  ASSERT_TRUE(valid_value.get());
+  ASSERT_TRUE(valid_value.get() && valid_value->is_dict());
   scoped_refptr<Extension> extension(Extension::Create(
       extension_path, extensions::mojom::ManifestLocation::kInvalidLocation,
-      *valid_value, Extension::NO_FLAGS, &error));
+      valid_value->GetDict(), Extension::NO_FLAGS, &error));
   ASSERT_TRUE(extension.get());
   ASSERT_EQ("", error);
   BrowserThemePack::BuildFromExtension(extension.get(), pack);
@@ -382,7 +366,6 @@ void BrowserThemePackTest::VerifyHiDpiTheme(BrowserThemePack* pack) {
 #if !BUILDFLAG(IS_MAC)
   EXPECT_FALSE(pack->HasCustomImage(IDR_THEME_TAB_BACKGROUND_INCOGNITO));
 #endif
-  EXPECT_FALSE(pack->HasCustomImage(IDR_THEME_TAB_BACKGROUND_V));
   EXPECT_FALSE(pack->HasCustomImage(IDR_THEME_NTP_BACKGROUND));
   EXPECT_FALSE(pack->HasCustomImage(IDR_THEME_FRAME_OVERLAY));
   EXPECT_FALSE(pack->HasCustomImage(IDR_THEME_FRAME_OVERLAY_INACTIVE));
@@ -716,7 +699,7 @@ TEST_F(BrowserThemePackTest, InvalidDisplayProperties) {
       theme_pack().GetDisplayProperty(TP::NTP_BACKGROUND_ALIGNMENT, &out_val));
 }
 
-// These three tests should just not cause a segmentation fault.
+// These four tests should just not cause a segmentation fault.
 TEST_F(BrowserThemePackTest, NullPaths) {
   TestFilePathMap out_file_paths;
   ParseImageNamesDictionary(nullptr, &out_file_paths);
@@ -765,7 +748,7 @@ TEST_F(BrowserThemePackTest, TestCreateColorMixersOmniboxAllValues) {
                                 "omnibox_text": [60, 80, 100],
                                 "omnibox_background": [120, 140, 160] })";
   LoadColorJSON(color_json);
-  theme_pack().AddColorMixers(&provider, ui::ColorProviderManager::Key());
+  theme_pack().AddColorMixers(&provider, ui::ColorProviderKey());
   provider.GenerateColorMap();
   EXPECT_EQ(SkColorSetRGB(0, 20, 40), provider.GetColor(kColorToolbar));
   EXPECT_EQ(SkColorSetRGB(60, 80, 100), provider.GetColor(kColorOmniboxText));
@@ -860,9 +843,9 @@ TEST_F(BrowserThemePackTest, TestWindowControlButtonBGColor_ButtonBGColor) {
   ASSERT_TRUE(has_button_bg_color);
   SkAlpha button_bg_alpha = SkColorGetA(button_bg_color);
 
-  // Account for the alpha modification that happens in Windows10CaptionButton.
+  // Account for the alpha modification that happens in WindowsCaptionButton.
   button_bg_alpha =
-      WindowFrameUtil::CalculateWindows10GlassCaptionButtonBackgroundAlpha(
+      WindowFrameUtil::CalculateWindowsCaptionButtonBackgroundAlpha(
           button_bg_alpha);
 
   struct CaptionButtonColorPair {
@@ -1147,7 +1130,7 @@ TEST_F(BrowserThemePackTest, TestNtpTextCaclulation) {
   EXPECT_TRUE(pack_autogenerated->GetColor(TP::COLOR_NTP_TEXT, &ntp_text));
 }
 
-TEST_F(BrowserThemePackTest, TestLogoAndShortcutColors) {
+TEST_F(BrowserThemePackTest, TestLogoColors) {
   // For themes with no background image and no background color, nothing should
   // be specified.
   scoped_refptr<BrowserThemePack> theme_minimal(
@@ -1155,34 +1138,28 @@ TEST_F(BrowserThemePackTest, TestLogoAndShortcutColors) {
   BuildTestExtensionTheme("theme_minimal", theme_minimal.get());
   SkColor color;
   EXPECT_FALSE(theme_minimal->GetColor(TP::COLOR_NTP_LOGO, &color));
-  EXPECT_FALSE(theme_minimal->GetColor(TP::COLOR_NTP_SHORTCUT, &color));
 
-  // For themes with image logo and shortcut colors shouldn't be set.
+  // For themes with image logo, colors shouldn't be set.
   scoped_refptr<BrowserThemePack> theme_with_image(
       new BrowserThemePack(ThemeType::kExtension));
   BuildTestExtensionTheme("theme_ntp_background_image", theme_with_image.get());
   EXPECT_FALSE(theme_with_image->GetColor(TP::COLOR_NTP_LOGO, &color));
-  EXPECT_FALSE(theme_with_image->GetColor(TP::COLOR_NTP_SHORTCUT, &color));
 
-  // // For themes with no image but with colorful logo, the logo color
-  // shouldn't
-  // // be specified but the shortcut color should be set.
+  // For themes with no image but with colorful logo, the logo color shouldn't
+  // be specified.
   scoped_refptr<BrowserThemePack> theme_colorful_logo(
       new BrowserThemePack(ThemeType::kExtension));
   BuildTestExtensionTheme("theme_color_ntp_colorful_logo",
                           theme_colorful_logo.get());
   EXPECT_FALSE(theme_colorful_logo->GetColor(TP::COLOR_NTP_LOGO, &color));
-  EXPECT_TRUE(theme_colorful_logo->GetColor(TP::COLOR_NTP_SHORTCUT, &color));
 
-  // For themes with no image and with alternate logo, both logo and shortcut
-  // colors should be set.
+  // For themes with no image and with alternate logo, color should be set.
   scoped_refptr<BrowserThemePack> theme_alternate_logo(
       new BrowserThemePack(ThemeType::kExtension));
   BuildTestExtensionTheme("theme_color_ntp_white_logo",
                           theme_alternate_logo.get());
   EXPECT_TRUE(theme_alternate_logo->GetColor(TP::COLOR_NTP_LOGO, &color));
   EXPECT_NE(SK_ColorWHITE, color);
-  EXPECT_TRUE(theme_alternate_logo->GetColor(TP::COLOR_NTP_SHORTCUT, &color));
 
   // For darker then midpoint themes the logo color should be white.
   scoped_refptr<BrowserThemePack> dark_theme(
@@ -1192,14 +1169,12 @@ TEST_F(BrowserThemePackTest, TestLogoAndShortcutColors) {
   EXPECT_TRUE(dark_theme->GetColor(TP::COLOR_NTP_LOGO, &color));
   EXPECT_EQ(SK_ColorWHITE, color);
 
-  // For themes with white NTP background the shortcut color shouldn't be set.
-  // The Logo color shouldn't be set either because the colorful logo should be
-  // used on white background.
+  // For themes with white NTP background the Logo color shouldn't be set
+  // because the colorful logo should be used on white background.
   scoped_refptr<BrowserThemePack> white_theme(
       new BrowserThemePack(ThemeType::kAutogenerated));
   BrowserThemePack::BuildFromColor(SK_ColorWHITE, white_theme.get());
   ASSERT_TRUE(white_theme->GetColor(TP::COLOR_NTP_BACKGROUND, &color));
   ASSERT_EQ(SK_ColorWHITE, color);
   EXPECT_FALSE(white_theme->GetColor(TP::COLOR_NTP_LOGO, &color));
-  EXPECT_FALSE(white_theme->GetColor(TP::COLOR_NTP_SHORTCUT, &color));
 }

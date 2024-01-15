@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,53 +9,77 @@
 
 import '//resources/cr_elements/cr_shared_style.css.js';
 import '//resources/polymer/v3_0/iron-list/iron-list.js';
+import '//resources/cr_components/localized_link/localized_link.js';
 import './base_page.js';
 import './profile_discovery_list_item.js';
 
-import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
-import {Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ESimProfileRemote} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
+import {I18nBehavior, I18nBehaviorInterface} from '//resources/ash/common/i18n_behavior.js';
+import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {ESimProfileProperties} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
 
 import {getTemplate} from './profile_discovery_list_page.html.js';
 
-Polymer({
-  _template: getTemplate(),
-  is: 'profile-discovery-list-page',
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const ProfileDiscoveryListPageElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
 
-  behaviors: [I18nBehavior],
+/** @polymer */
+class ProfileDiscoveryListPageElement extends
+    ProfileDiscoveryListPageElementBase {
+  static get is() {
+    return 'profile-discovery-list-page';
+  }
 
-  properties: {
-    /**
-     * @type {Array<!ESimProfileRemote>}
-     * @private
-     */
-    pendingProfiles: {
-      type: Array,
-    },
+  static get template() {
+    return getTemplate();
+  }
 
-    /**
-     * @type {?ESimProfileRemote}
-     * @private
-     */
-    selectedProfile: {
-      type: Object,
-      notify: true,
-    },
+  static get properties() {
+    return {
+      /**
+       * @type {Array<!ESimProfileProperties>}
+       * @private
+       */
+      pendingProfileProperties: Array,
 
-    /**
-     * Indicates the UI is busy with an operation and cannot be interacted with.
-     */
-    showBusy: {
-      type: Boolean,
-      value: false,
-    },
-  },
+      /**
+       * @type {?ESimProfileProperties}
+       * @private
+       */
+      selectedProfileProperties: {
+        type: Object,
+        notify: true,
+      },
+
+    };
+  }
 
   /**
-   * @param {ESimProfileRemote} profile
+   * @param {ESimProfileProperties} profileProperties
    * @private
    */
-  isProfileSelected_(profile) {
-    return this.selectedProfile === profile;
-  },
-});
+  isProfilePropertiesSelected_(profileProperties) {
+    return this.selectedProfileProperties === profileProperties;
+  }
+
+  /**
+   * @param {Event} e
+   * @private
+   */
+  enterManuallyClicked_(e) {
+    e.detail.event.preventDefault();
+    e.stopPropagation();
+    this.selectedProfileProperties = null;
+    this.dispatchEvent(new CustomEvent('forward-navigation-requested', {
+      bubbles: true,
+      composed: true,
+    }));
+  }
+}
+
+customElements.define(
+    ProfileDiscoveryListPageElement.is, ProfileDiscoveryListPageElement);

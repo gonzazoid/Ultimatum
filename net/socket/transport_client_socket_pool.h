@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -29,7 +29,7 @@
 #include "net/base/net_export.h"
 #include "net/base/network_change_notifier.h"
 #include "net/base/priority_queue.h"
-#include "net/base/proxy_server.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/request_priority.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/client_socket_handle.h"
@@ -68,6 +68,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
  public:
   // Reasons for closing sockets. Exposed here for testing.
   static const char kCertDatabaseChanged[];
+  static const char kCertVerifierChanged[];
   static const char kClosedConnectionReturnedToPool[];
   static const char kDataReceivedUnexpectedly[];
   static const char kIdleTimeLimitExpired[];
@@ -150,7 +151,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
       int max_sockets,
       int max_sockets_per_group,
       base::TimeDelta unused_idle_socket_timeout,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       bool is_for_websockets,
       const CommonConnectJobParams* common_connect_job_params,
       bool cleanup_on_ip_address_change = true);
@@ -169,7 +170,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
       int max_sockets_per_group,
       base::TimeDelta unused_idle_socket_timeout,
       base::TimeDelta used_idle_socket_timeout,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain_,
       bool is_for_websockets,
       const CommonConnectJobParams* common_connect_job_params,
       std::unique_ptr<ConnectJobFactory> connect_job_factory,
@@ -262,8 +263,10 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   void OnIPAddressChanged() override;
 
   // SSLClientContext::Observer methods.
-  void OnSSLConfigChanged(bool is_cert_database_change) override;
-  void OnSSLConfigForServerChanged(const HostPortPair& server) override;
+  void OnSSLConfigChanged(
+      SSLClientContext::SSLConfigChangeType change_type) override;
+  void OnSSLConfigForServersChanged(
+      const base::flat_set<HostPortPair>& servers) override;
 
  private:
   // Entry for a persistent socket which became idle at time |start_time|.
@@ -578,7 +581,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
       int max_sockets_per_group,
       base::TimeDelta unused_idle_socket_timeout,
       base::TimeDelta used_idle_socket_timeout,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       bool is_for_websockets,
       const CommonConnectJobParams* common_connect_job_params,
       bool cleanup_on_ip_address_change,
@@ -636,7 +639,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
 
   Group* GetOrCreateGroup(const GroupId& group_id);
   void RemoveGroup(const GroupId& group_id);
-  void RemoveGroup(GroupMap::iterator it);
+  GroupMap::iterator RemoveGroup(GroupMap::iterator it);
 
   // Called when the number of idle sockets changes.
   void IncrementIdleCount();
@@ -736,7 +739,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   // it's possible that the request has been cancelled, so |handle| may not
   // exist in |pending_callback_map_|.  We look up the callback and result code
   // in |pending_callback_map_|.
-  void InvokeUserCallback(ClientSocketHandle* handle);
+  void InvokeUserCallback(MayBeDangling<ClientSocketHandle> handle);
 
   // Tries to close idle sockets in a higher level socket pool as long as this
   // this pool is stalled.
@@ -753,9 +756,9 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   // The group may be removed if this leaves the group empty. The caller must
   // call CheckForStalledSocketGroups() after all applicable groups have been
   // refreshed.
-  void RefreshGroup(GroupMap::iterator it,
-                    const base::TimeTicks& now,
-                    const char* net_log_reason_utf8);
+  GroupMap::iterator RefreshGroup(GroupMap::iterator it,
+                                  const base::TimeTicks& now,
+                                  const char* net_log_reason_utf8);
 
   GroupMap group_map_;
 
@@ -783,7 +786,7 @@ class NET_EXPORT_PRIVATE TransportClientSocketPool
   const base::TimeDelta unused_idle_socket_timeout_;
   const base::TimeDelta used_idle_socket_timeout_;
 
-  const ProxyServer proxy_server_;
+  const ProxyChain proxy_chain_;
 
   const bool cleanup_on_ip_address_change_;
 

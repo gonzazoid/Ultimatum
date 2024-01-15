@@ -10,15 +10,15 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/multiprocess_test.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "chromeos/ash/components/disks/mock_disk_mount_manager.h"
@@ -108,7 +108,7 @@ class TestSmbFsMounter : public SmbFsMounter {
             [mount_error, mount_path](
                 const std::string& source_path,
                 ash::disks::DiskMountManager::MountPathCallback callback) {
-              base::SequencedTaskRunnerHandle::Get()->PostTask(
+              base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(
                       std::move(callback), mount_error,
@@ -134,7 +134,7 @@ class SmbFsMounterTest : public testing::Test {
       const std::string& mount_path,
       ash::MountError mount_error,
       ash::disks::DiskMountManager::MountPathCallback callback) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), mount_error,
                                   MakeMountPointInfo(source_path, mount_path)));
   }
@@ -305,8 +305,7 @@ TEST_F(SmbFsMounterTest, MountOptions) {
         base::ScopedFD fd =
             mojo::UnwrapPlatformHandle(std::move(options->password->fd))
                 .TakeFD();
-        EXPECT_TRUE(base::ReadFromFD(fd.get(), &(password_buf.front()),
-                                     options->password->length));
+        EXPECT_TRUE(base::ReadFromFD(fd.get(), password_buf));
         EXPECT_EQ(password_buf, kPassword);
         EXPECT_TRUE(options->allow_ntlm);
         EXPECT_FALSE(options->skip_connect);
@@ -475,7 +474,7 @@ TEST_F(SmbFsMounterTest, KerberosAuthentication) {
   // authentication is being used.
   mount_options.password = kPassword;
   mount_options.kerberos_options =
-      absl::make_optional<SmbFsMounter::KerberosOptions>(
+      std::make_optional<SmbFsMounter::KerberosOptions>(
           SmbFsMounter::KerberosOptions::Source::kKerberos, kKerberosIdentity);
   std::unique_ptr<SmbFsMounter> mounter = std::make_unique<TestSmbFsMounter>(
       kSharePath, mount_options, &mock_delegate_, base::FilePath(kMountPath),
@@ -562,7 +561,7 @@ class SmbFsMounterE2eTest : public testing::Test {
       const std::string& source_path,
       const std::string& mount_path,
       ash::disks::DiskMountManager::MountPathCallback callback) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), ash::MountError::kSuccess,
                        MakeMountPointInfo(source_path, mount_path)));
@@ -628,8 +627,7 @@ MULTIPROCESS_TEST_MAIN(SmbFsMain) {
         base::ScopedFD fd =
             mojo::UnwrapPlatformHandle(std::move(options->password->fd))
                 .TakeFD();
-        EXPECT_TRUE(base::ReadFromFD(fd.get(), &(password_buf.front()),
-                                     options->password->length));
+        EXPECT_TRUE(base::ReadFromFD(fd.get(), password_buf));
         EXPECT_EQ(password_buf, kPassword);
 
         EXPECT_FALSE(options->allow_ntlm);
@@ -681,7 +679,7 @@ TEST_F(SmbFsMounterE2eTest, MountSuccess) {
         // providing a Mojo connection endpoint.
         const std::string token =
             source_path.substr(sizeof(kMountUrlPrefix) - 1);
-        base::SequencedTaskRunnerHandle::Get()->PostTask(
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindLambdaForTesting([token, &channel]() {
               mojo_bootstrap::PendingConnectionManager::Get().OpenIpcChannel(
                   token,

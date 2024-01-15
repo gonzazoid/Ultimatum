@@ -9,7 +9,7 @@
 #include "base/sequence_checker.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/time/time.h"
-#include "components/metrics/call_stack_profile_params.h"
+#include "components/metrics/call_stacks/call_stack_profile_params.h"
 #include "components/version_info/channel.h"
 
 namespace heap_profiling {
@@ -46,7 +46,9 @@ class HeapProfilerController {
 
   // Starts periodic heap snapshot collection. Does nothing except record a
   // metric if heap profiling is disabled.
-  void StartIfEnabled();
+  // Returns true if heap profiling is enabled and was successfully started,
+  // false otherwise.
+  bool StartIfEnabled();
 
   // Uses the exact parameter values for the sampling interval and time between
   // samples, instead of a distribution around those values. This must be called

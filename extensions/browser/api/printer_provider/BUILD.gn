@@ -20,10 +20,12 @@ source_set("printer_provider") {
     "printer_provider_print_job.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
+    "//components/device_event_log",
     "//components/keyed_service/content",
     "//content/public/browser",
-    "//extensions/browser/api",
     "//extensions/common",
     "//extensions/common/api",
     "//services/device/public/cpp/usb",

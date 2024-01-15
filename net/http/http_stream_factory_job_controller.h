@@ -7,17 +7,17 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/net_errors.h"
-#include "net/base/privacy_mode.h"
 #include "net/http/http_stream_factory_job.h"
 #include "net/http/http_stream_request.h"
-#include "net/socket/next_proto.h"
 #include "net/spdy/spdy_session_pool.h"
+#include "net/ssl/ssl_config.h"
 
 namespace net {
 
@@ -44,8 +44,7 @@ class HttpStreamFactory::JobController
                 bool enable_ip_based_pooling,
                 bool enable_alternative_services,
                 bool delay_main_job_with_available_spdy_session,
-                const SSLConfig& server_ssl_config,
-                const SSLConfig& proxy_ssl_config);
+                const std::vector<SSLConfig::CertAndStatus>& allowed_bad_certs);
 
   ~JobController() override;
 
@@ -87,25 +86,21 @@ class HttpStreamFactory::JobController
 
   // From HttpStreamFactory::Job::Delegate.
   // Invoked when |job| has an HttpStream ready.
-  void OnStreamReady(Job* job, const SSLConfig& used_ssl_config) override;
+  void OnStreamReady(Job* job) override;
 
   // Invoked when |job| has a BidirectionalStream ready.
   void OnBidirectionalStreamImplReady(
       Job* job,
-      const SSLConfig& used_ssl_config,
       const ProxyInfo& used_proxy_info) override;
 
   // Invoked when |job| has a WebSocketHandshakeStream ready.
   void OnWebSocketHandshakeStreamReady(
       Job* job,
-      const SSLConfig& used_ssl_config,
       const ProxyInfo& used_proxy_info,
       std::unique_ptr<WebSocketHandshakeStreamBase> stream) override;
 
   // Invoked when |job| fails to create a stream.
-  void OnStreamFailed(Job* job,
-                      int status,
-                      const SSLConfig& used_ssl_config) override;
+  void OnStreamFailed(Job* job, int status) override;
 
   // Invoked when |job| fails on the default network.
   void OnFailedOnDefaultNetwork(Job* job) override;
@@ -113,18 +108,14 @@ class HttpStreamFactory::JobController
   // Invoked when |job| has a certificate error for the Request.
   void OnCertificateError(Job* job,
                           int status,
-                          const SSLConfig& used_ssl_config,
                           const SSLInfo& ssl_info) override;
 
   // Invoked when |job| raises failure for SSL Client Auth.
-  void OnNeedsClientAuth(Job* job,
-                         const SSLConfig& used_ssl_config,
-                         SSLCertRequestInfo* cert_info) override;
+  void OnNeedsClientAuth(Job* job, SSLCertRequestInfo* cert_info) override;
 
   // Invoked when |job| needs proxy authentication.
   void OnNeedsProxyAuth(Job* job,
                         const HttpResponseInfo& proxy_response,
-                        const SSLConfig& used_ssl_config,
                         const ProxyInfo& used_proxy_info,
                         HttpAuthController* auth_controller) override;
 
@@ -162,6 +153,10 @@ class HttpStreamFactory::JobController
 
   // Returns true if |this| has a pending alternative job that is not completed.
   bool HasPendingAltJob() const;
+
+  base::TimeDelta get_main_job_wait_time_for_tests() {
+    return main_job_wait_time_;
+  }
 
  private:
   friend class test::JobControllerPeer;
@@ -285,9 +280,9 @@ class HttpStreamFactory::JobController
            (dns_alpn_h3_job_ ? 1 : 0);
   }
 
-  raw_ptr<HttpStreamFactory> factory_;
-  raw_ptr<HttpNetworkSession> session_;
-  raw_ptr<JobFactory> job_factory_;
+  raw_ptr<HttpStreamFactory, DanglingUntriaged> factory_;
+  raw_ptr<HttpNetworkSession, DanglingUntriaged> session_;
+  raw_ptr<JobFactory, DanglingUntriaged> job_factory_;
 
   // Request will be handed out to factory once created. This just keeps an
   // reference and is safe as |request_| will notify |this| JobController
@@ -295,7 +290,8 @@ class HttpStreamFactory::JobController
   // |request_|.
   raw_ptr<HttpStreamRequest, DanglingUntriaged> request_ = nullptr;
 
-  const raw_ptr<HttpStreamRequest::Delegate> delegate_;
+  const raw_ptr<HttpStreamRequest::Delegate, AcrossTasksDanglingUntriaged>
+      delegate_;
 
   // True if this JobController is used to preconnect streams.
   const bool is_preconnect_;
@@ -307,7 +303,8 @@ class HttpStreamFactory::JobController
   // the SpdySessionKey is different.
   const bool enable_ip_based_pooling_;
 
-  // Enable using alternative services for the request.
+  // Enable using alternative services for the request. If false, the
+  // JobController will only create a |main_job_|.
   const bool enable_alternative_services_;
 
   // For normal (non-preconnect) job, |main_job_| is a job waiting to see if
@@ -315,7 +312,7 @@ class HttpStreamFactory::JobController
   // |alternative_job_| and |dns_alpn_h3_job_| are unable to do so, |this| will
   // notify |main_job_| to proceed and then race the two jobs.
   // For preconnect job, |main_job_| is started first, and if it fails with
-  // ERR_DNS_NO_MACHING_SUPPORTED_ALPN, |preconnect_backup_job_| will be
+  // ERR_DNS_NO_MATCHING_SUPPORTED_ALPN, |preconnect_backup_job_| will be
   // started.
   std::unique_ptr<Job> main_job_;
   std::unique_ptr<Job> alternative_job_;
@@ -360,14 +357,13 @@ class HttpStreamFactory::JobController
 
   // At the point where a Job is irrevocably tied to |request_|, we set this.
   // It will be nulled when the |request_| is finished.
-  raw_ptr<Job, DanglingUntriaged> bound_job_ = nullptr;
+  raw_ptr<Job> bound_job_ = nullptr;
 
   State next_state_ = STATE_RESOLVE_PROXY;
   std::unique_ptr<ProxyResolutionRequest> proxy_resolve_request_;
   const HttpRequestInfo request_info_;
   ProxyInfo proxy_info_;
-  const SSLConfig server_ssl_config_;
-  const SSLConfig proxy_ssl_config_;
+  const std::vector<SSLConfig::CertAndStatus> allowed_bad_certs_;
   int num_streams_ = 0;
   HttpStreamRequest::StreamType stream_type_;
   RequestPriority priority_ = IDLE;

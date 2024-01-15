@@ -12,9 +12,12 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/event.h"
 #include "ui/gfx/render_text.h"
+#include "ui/gfx/render_text_test_api.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/controls/textfield/textfield_test_api.h"
 #include "ui/views/controls/textfield/textfield_unittest.h"
@@ -41,6 +44,10 @@ class TextareaTest : public test::TextfieldTest {
 
   // TextfieldTest:
   void SetUp() override {
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+        /*disabled_features=*/{});
+
     TextfieldTest::SetUp();
 
     ASSERT_FALSE(textarea_);
@@ -63,22 +70,26 @@ class TextareaTest : public test::TextfieldTest {
     }
   }
 
-  size_t GetCursorLine() const {
-    return test_api_->GetRenderText()->GetLineContainingCaret(
+  size_t GetCursorLine() {
+    return GetTextfieldTestApi().GetRenderText()->GetLineContainingCaret(
         textarea_->GetSelectionModel());
   }
 
   // TextfieldTest:
+  TextfieldTestApi GetTextfieldTestApi() override {
+    return TextfieldTestApi(textarea_);
+  }
+
   void SendHomeEvent(bool shift) override {
     SendKeyEvent(ui::VKEY_HOME, shift, TestingNativeMac());
   }
 
-  // TextfieldTest:
   void SendEndEvent(bool shift) override {
     SendKeyEvent(ui::VKEY_END, shift, TestingNativeMac());
   }
 
   raw_ptr<Textarea> textarea_ = nullptr;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 }  // namespace
@@ -240,18 +251,20 @@ TEST_F(TextareaTest, MovePageUpDownAndModifySelection) {
   EXPECT_TRUE(textarea_->IsTextEditCommandEnabled(
       ui::TextEditCommand::MOVE_PAGE_DOWN_AND_MODIFY_SELECTION));
 
-  test_api_->ExecuteTextEditCommand(ui::TextEditCommand::MOVE_PAGE_UP);
+  GetTextfieldTestApi().ExecuteTextEditCommand(
+      ui::TextEditCommand::MOVE_PAGE_UP);
   EXPECT_EQ(gfx::Range(0), textarea_->GetSelectedRange());
 
-  test_api_->ExecuteTextEditCommand(ui::TextEditCommand::MOVE_PAGE_DOWN);
+  GetTextfieldTestApi().ExecuteTextEditCommand(
+      ui::TextEditCommand::MOVE_PAGE_DOWN);
   EXPECT_EQ(gfx::Range(11), textarea_->GetSelectedRange());
 
   textarea_->SetEditableSelectionRange(gfx::Range(6));
-  test_api_->ExecuteTextEditCommand(
+  GetTextfieldTestApi().ExecuteTextEditCommand(
       ui::TextEditCommand::MOVE_PAGE_UP_AND_MODIFY_SELECTION);
   EXPECT_EQ(gfx::Range(6, 0), textarea_->GetSelectedRange());
 
-  test_api_->ExecuteTextEditCommand(
+  GetTextfieldTestApi().ExecuteTextEditCommand(
       ui::TextEditCommand::MOVE_PAGE_DOWN_AND_MODIFY_SELECTION);
 
   if (Textarea::kLineSelectionBehavior == gfx::SELECTION_EXTEND)
@@ -298,6 +311,56 @@ TEST_F(TextareaTest, OnBlurTest) {
   // A focus loss should not change the cursor position.
   textarea_->OnBlur();
   EXPECT_EQ(kText.size(), textarea_->GetCursorPosition());
+}
+
+TEST_F(TextareaTest, MoveRangeSelectionExtentExpandByWord) {
+  constexpr int kGlyphHeight = 10;
+  gfx::test::RenderTextTestApi(GetTextfieldTestApi().GetRenderText())
+      .SetGlyphHeight(kGlyphHeight);
+  textarea_->SetText(u"a textarea\nwith multiline text");
+  const int kFirstLineMiddleY = GetCursorYForTesting() + kGlyphHeight / 2;
+  const int kSecondLineMiddleY = kFirstLineMiddleY + kGlyphHeight;
+  textarea_->SelectBetweenCoordinates(
+      gfx::Point(GetCursorPositionX(2), kFirstLineMiddleY),
+      gfx::Point(GetCursorPositionX(3), kFirstLineMiddleY));
+
+  // Expand the selection. The end of the selection should move to the nearest
+  // word boundary.
+  textarea_->MoveRangeSelectionExtent(
+      gfx::Point(GetCursorPositionX(22), kSecondLineMiddleY));
+  gfx::Range range;
+  textarea_->GetEditableSelectionRange(&range);
+  EXPECT_EQ(range, gfx::Range(2, 25));
+  EXPECT_EQ(textarea_->GetSelectedText(), u"textarea\nwith multiline");
+
+  // Shrink then expand the selection again.
+  textarea_->MoveRangeSelectionExtent(
+      gfx::Point(GetCursorPositionX(7), kFirstLineMiddleY));
+  textarea_->MoveRangeSelectionExtent(
+      gfx::Point(GetCursorPositionX(29), kSecondLineMiddleY));
+  textarea_->GetEditableSelectionRange(&range);
+  EXPECT_EQ(range, gfx::Range(2, 30));
+  EXPECT_EQ(textarea_->GetSelectedText(), u"textarea\nwith multiline text");
+}
+
+TEST_F(TextareaTest, MoveRangeSelectionExtentShrinkByCharacter) {
+  constexpr int kGlyphHeight = 10;
+  gfx::test::RenderTextTestApi(GetTextfieldTestApi().GetRenderText())
+      .SetGlyphHeight(kGlyphHeight);
+  textarea_->SetText(u"a textarea\nwith multiline text");
+  const int kFirstLineMiddleY = GetCursorYForTesting() + kGlyphHeight / 2;
+  const int kSecondLineMiddleY = kFirstLineMiddleY + kGlyphHeight;
+  textarea_->SelectBetweenCoordinates(
+      gfx::Point(GetCursorPositionX(2), kFirstLineMiddleY),
+      gfx::Point(GetCursorPositionX(25), kSecondLineMiddleY));
+
+  // Shrink the selection.
+  textarea_->MoveRangeSelectionExtent(
+      gfx::Point(GetCursorPositionX(6), kFirstLineMiddleY));
+  gfx::Range range;
+  textarea_->GetEditableSelectionRange(&range);
+  EXPECT_EQ(range, gfx::Range(2, 6));
+  EXPECT_EQ(textarea_->GetSelectedText(), u"text");
 }
 
 }  // namespace views

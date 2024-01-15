@@ -6,7 +6,7 @@
 #define IOS_CHROME_BROWSER_UI_SETTINGS_CLEAR_BROWSING_DATA_CLEAR_BROWSING_DATA_MANAGER_H_
 
 #include "components/browsing_data/core/counters/browsing_data_counter.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
 
 class Browser;
 class BrowsingDataRemover;
@@ -51,11 +51,8 @@ enum ClearBrowsingDataItemType {
   // Footer noting user will not be signed out of chrome and other forms of
   // browsing history will still be available.
   ItemTypeFooterGoogleAccountAndMyActivity,
-  // Footer noting site settings will remain.
-  ItemTypeFooterSavedSiteData,
-  // Footer noting data will be cleared on all devices except for saved
-  // settings.
-  ItemTypeFooterClearSyncAndSavedSiteData,
+  // Footer offering to sign out of Google account in Chrome.
+  ItemTypeFooterSignoutOfGoogle,
   // Item showing time range to remove data and allowing user to edit time
   // range.
   ItemTypeTimeRange,

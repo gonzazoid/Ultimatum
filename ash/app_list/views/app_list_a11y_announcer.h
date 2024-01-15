@@ -7,6 +7,8 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+
 namespace views {
 class View;
 }
@@ -29,9 +31,8 @@ class AppListA11yAnnouncer {
   // deleted.
   void Shutdown();
 
-  // Modifies the announcement view to verbalize that app list transitioned to
-  // fullscreen state.
-  void AnnounceFullscreenState();
+  // Modifies the announcement view to verbalize that app list is activated.
+  void AnnounceAppListShown();
 
   // Modifies the announcement view to verbalize that the focused view has new
   // updates, based on the item having a notification badge.
@@ -72,7 +73,7 @@ class AppListA11yAnnouncer {
  private:
   // The view used to send accessibility announcements. Owned by the parent's
   // views hierarchy.
-  views::View* announcement_view_;
+  raw_ptr<views::View> announcement_view_;
 };
 
 }  // namespace ash

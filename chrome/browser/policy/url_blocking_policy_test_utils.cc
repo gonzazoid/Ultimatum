@@ -9,9 +9,12 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
 using content::BrowserThread;
@@ -37,14 +40,16 @@ void UrlBlockingPolicyTest::CheckURLIsBlockedInWebContents(
   EXPECT_EQ(blocked_page_title, web_contents->GetTitle());
 
   // Verify that the expected error page is being displayed.
-  bool result = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents,
-      "var textContent = document.body.textContent;"
-      "var hasError = textContent.indexOf('ERR_BLOCKED_BY_ADMINISTRATOR') >= 0;"
-      "domAutomationController.send(hasError);",
-      &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true,
+            content::EvalJs(
+                web_contents,
+                content::JsReplace(
+                    "var textContent = document.body.textContent;"
+                    "var hasError = "
+                    "textContent.indexOf($1) >= 0;"
+                    "hasError;",
+                    l10n_util::GetStringUTF8(
+                        IDS_ERRORPAGES_SUMMARY_BLOCKED_BY_ADMINISTRATOR))));
 }
 
 void UrlBlockingPolicyTest::CheckURLIsBlocked(Browser* browser,

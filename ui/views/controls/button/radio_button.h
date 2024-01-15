@@ -16,9 +16,9 @@ namespace views {
 // A native themed class representing a radio button.  This class does not use
 // platform specific objects to replicate the native platforms looks and feel.
 class VIEWS_EXPORT RadioButton : public Checkbox {
- public:
-  METADATA_HEADER(RadioButton);
+  METADATA_HEADER(RadioButton, Checkbox)
 
+ public:
   explicit RadioButton(const std::u16string& label = std::u16string(),
                        int group_id = 0);
 
@@ -40,6 +40,7 @@ class VIEWS_EXPORT RadioButton : public Checkbox {
   void NotifyClick(const ui::Event& event) override;
 
   // Overridden from LabelButton:
+  gfx::ImageSkia GetImage(ButtonState for_state) const override;
   ui::NativeTheme::Part GetThemePart() const override;
 
   // Overridden from Checkbox:

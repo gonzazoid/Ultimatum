@@ -8,11 +8,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
 #include "base/lazy_instance.h"
-#include "base/strings/string_piece.h"
 #include "device/gamepad/gamepad_export.h"
 
 namespace device {
@@ -41,6 +42,11 @@ enum class GamepadId : uint32_t {
   // Fake IDs for devices which report as 0x0000 0x0000
   kPowerALicPro = 0x0000ff00,
   // ID values for supported devices.
+  k8BitDoProduct3106 = 0x2dc83106,
+  kAcerProduct1304 = 0x05021304,
+  kAcerProduct1305 = 0x05021305,
+  kAcerProduct1316 = 0x05021316,
+  kAcerProduct1317 = 0x05021317,
   kAmazonProduct041a = 0x1949041a,
   kAsusTekProduct4500 = 0x0b054500,
   kBdaProduct6271 = 0x20d66271,
@@ -108,6 +114,7 @@ enum class GamepadId : uint32_t {
   kSonyProduct09cc = 0x054c09cc,
   kSonyProduct0ba0 = 0x054c0ba0,
   kSonyProduct0ce6 = 0x054c0ce6,
+  kSonyProduct0df2 = 0x054c0df2,
   kSteelSeriesBtProduct1419 = 0x01111419,
   kSteelSeriesBtProduct1431 = 0x01111431,
   kSteelSeriesBtProduct1434 = 0x01111434,
@@ -129,7 +136,7 @@ class DEVICE_GAMEPAD_EXPORT GamepadIdList {
   // Returns a GamepadId value suitable for identifying a specific model of
   // gamepad. If the gamepad is not contained in the list of known gamepads,
   // returns kUnknownGamepad.
-  GamepadId GetGamepadId(base::StringPiece product_name,
+  GamepadId GetGamepadId(std::string_view product_name,
                          uint16_t vendor_id,
                          uint16_t product_id) const;
 

@@ -7,22 +7,28 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/containers/circular_deque.h"
 #include "base/files/file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/threading/sequence_bound.h"
 #include "base/values.h"
 #include "chrome/browser/ash/fusebox/fusebox.pb.h"
 #include "chrome/browser/ash/fusebox/fusebox_moniker.h"
-#include "chrome/browser/ash/fusebox/fusebox_staging.pb.h"
+#include "chrome/browser/ash/system_web_apps/apps/files_internals_debug_json_provider.h"
 #include "storage/browser/file_system/async_file_util.h"
 #include "storage/browser/file_system/file_system_context.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 
 class Profile;
 
 namespace fusebox {
 
-class Server {
+class ReadWriter;
+
+class Server : public ash::FilesInternalsDebugJSONProvider {
  public:
   struct Delegate {
     // These methods cause D-Bus signals to be sent that a storage unit (as
@@ -42,10 +48,11 @@ class Server {
   explicit Server(Delegate* delegate);
   Server(const Server&) = delete;
   Server& operator=(const Server&) = delete;
-  ~Server();
+  ~Server() override;
 
   // Manages monikers in the context of the Server's MonikerMap.
-  fusebox::Moniker CreateMoniker(storage::FileSystemURL target, bool read_only);
+  fusebox::Moniker CreateMoniker(const storage::FileSystemURL& target,
+                                 bool read_only);
   void DestroyMoniker(fusebox::Moniker moniker);
 
   void RegisterFSURLPrefix(const std::string& subdir,
@@ -67,8 +74,26 @@ class Server {
   storage::FileSystemURL ResolveFilename(Profile* profile,
                                          const std::string& filename);
 
-  // Returns human-readable debugging information as a JSON value.
-  base::Value GetDebugJSON();
+  // Performs the inverse of ResolveFilename. It converts a FileSystemURL like
+  // "filesystem:origin/external/mount_name/xxx/yyy/p/q.txt" to a FuseBox
+  // filename like "/media/fuse/fusebox/subdir/p/q.txt".
+  //
+  // It returns an empty base::FilePath on failure, such as when there was no
+  // previously registered (subdir, fs_url_prefix) that matched.
+  base::FilePath InverseResolveFSURL(const storage::FileSystemURL& fs_url);
+
+  // Chains GetInstance and InverseResolveFSURL, returning an empty
+  // base::FilePath when there is no instance.
+  static base::FilePath SubstituteFuseboxFilePath(
+      const storage::FileSystemURL& fs_url) {
+    Server* server = GetInstance();
+    return server ? server->InverseResolveFSURL(fs_url) : base::FilePath();
+  }
+
+  // ash::FilesInternalsDebugJSONProvider overrides.
+  void GetDebugJSONForKey(
+      std::string_view key,
+      base::OnceCallback<void(JSONKeyValuePair)> callback) override;
 
   // These methods map 1:1 to the D-Bus methods implemented by
   // fusebox_service_provider.cc.
@@ -78,49 +103,80 @@ class Server {
   // library functions of the same name. For example, the Stat method here
   // corresponds to the standard stat function described by "man 2 stat".
   //
-  // These methods take a fs_url_as_string argument, roughly equivalent to a
-  // POSIX filename that identifies a file or directory, but are a
-  // storage::FileSystemURL (in string form).
-
-  // Close is a placeholder and is not implemented yet.
+  // These methods all take a protobuf argument and return (via a callback)
+  // another protobuf. Many of the request protos have a string-typed
+  // file_system_url field, roughly equivalent to a POSIX filename for a file
+  // or directory. These used to be full storage::FileSystemURL strings (e.g.
+  // "filesystem:chrome://file-manager/external/foo/com.bar/baz/p/q.txt") but
+  // today look like "subdir/p/q.txt". The PrefixMap is used to resolve the
+  // "subdir" prefix to recreate the storage::FileSystemURL.
   //
-  // TODO(crbug.com/1249754) implement MTP device writing.
-  using CloseCallback = base::OnceCallback<void(int32_t posix_error_code)>;
-  void Close(std::string fs_url_as_string, CloseCallback callback);
+  // See system_api/dbus/fusebox/fusebox.proto for more commentary.
 
-  // Open is a placeholder and is not implemented yet.
-  //
-  // TODO(crbug.com/1249754) implement MTP device writing.
-  using OpenCallback = base::OnceCallback<void(int32_t posix_error_code)>;
-  void Open(std::string fs_url_as_string, OpenCallback callback);
+  // Close2 closes a virtual file opened by Open2.
+  using Close2Callback =
+      base::OnceCallback<void(const Close2ResponseProto& response)>;
+  void Close2(const Close2RequestProto& request, Close2Callback callback);
 
-  // Read returns the file's byte contents at the given offset and length.
-  using ReadCallback = base::OnceCallback<
-      void(int32_t posix_error_code, const uint8_t* data_ptr, size_t data_len)>;
-  void Read(std::string fs_url_as_string,
-            int64_t offset,
-            int32_t length,
-            ReadCallback callback);
+  // Create creates a file (not a directory).
+  using CreateCallback =
+      base::OnceCallback<void(const CreateResponseProto& response)>;
+  void Create(const CreateRequestProto& request, CreateCallback callback);
 
-  // ReadDir2 lists the directory's children. The results will be sent back in
-  // the responses of one or more request-response RPC pairs. The first request
-  // and last response have a zero cookie value. The remaining RPCs will have
-  // the same server-chosen, non-zero cookie value.
-  //
-  // The request's cancel_error_code is typically zero but if not, it is echoed
-  // in the response (which becomes the final response) and indicates that the
-  // D-Bus client is cancelling the overall "read a directory" operation.
-  //
-  // TODO(crbug.com/1363861): document the D-Bus protocol separately.
+  // Flush flushes a file, like the C standard library's fsync.
+  using FlushCallback =
+      base::OnceCallback<void(const FlushResponseProto& response)>;
+  void Flush(const FlushRequestProto& request, FlushCallback callback);
+
+  // MkDir is analogous to "/usr/bin/mkdir".
+  using MkDirCallback =
+      base::OnceCallback<void(const MkDirResponseProto& response)>;
+  void MkDir(const MkDirRequestProto& request, MkDirCallback callback);
+
+  // Open2 opens a virtual file for reading and/or writing.
+  using Open2Callback =
+      base::OnceCallback<void(const Open2ResponseProto& response)>;
+  void Open2(const Open2RequestProto& request, Open2Callback callback);
+
+  // Rename is analogous to "/usr/bin/mv".
+  using RenameCallback =
+      base::OnceCallback<void(const RenameResponseProto& response)>;
+  void Rename(const RenameRequestProto& request, RenameCallback callback);
+
+  // Read2 reads from a virtual file opened by Open2.
+  using Read2Callback =
+      base::OnceCallback<void(const Read2ResponseProto& response)>;
+  void Read2(const Read2RequestProto& request, Read2Callback callback);
+
+  // ReadDir2 lists the directory's children.
   using ReadDir2Callback =
-      base::OnceCallback<void(ReadDir2ResponseProto response)>;
-  void ReadDir2(ReadDir2RequestProto request, ReadDir2Callback callback);
+      base::OnceCallback<void(const ReadDir2ResponseProto& response)>;
+  void ReadDir2(const ReadDir2RequestProto& request, ReadDir2Callback callback);
 
-  // Stat returns the file or directory's metadata.
-  using StatCallback = base::OnceCallback<void(int32_t posix_error_code,
-                                               const base::File::Info& info,
-                                               bool read_only)>;
-  void Stat(std::string fs_url_as_string, StatCallback callback);
+  // RmDir is analogous to "/usr/bin/rmdir".
+  using RmDirCallback =
+      base::OnceCallback<void(const RmDirResponseProto& response)>;
+  void RmDir(const RmDirRequestProto& request, RmDirCallback callback);
+
+  // Stat2 returns the file or directory's metadata.
+  using Stat2Callback =
+      base::OnceCallback<void(const Stat2ResponseProto& response)>;
+  void Stat2(const Stat2RequestProto& request, Stat2Callback callback);
+
+  // Truncate sets a file's size.
+  using TruncateCallback =
+      base::OnceCallback<void(const TruncateResponseProto& response)>;
+  void Truncate(const TruncateRequestProto& request, TruncateCallback callback);
+
+  // Unlink deletes a file.
+  using UnlinkCallback =
+      base::OnceCallback<void(const UnlinkResponseProto& response)>;
+  void Unlink(const UnlinkRequestProto& request, UnlinkCallback callback);
+
+  // Write2 writes to a virtual file opened by Open2.
+  using Write2Callback =
+      base::OnceCallback<void(const Write2ResponseProto& response)>;
+  void Write2(const Write2RequestProto& request, Write2Callback callback);
 
   // File operation D-Bus methods above. Meta D-Bus methods below, which do not
   // map 1:1 to FUSE or C standard library file operations.
@@ -128,8 +184,8 @@ class Server {
   // ListStorages returns the active subdir names. Active means passed to
   // RegisterFSURLPrefix without a subsequent UnregisterFSURLPrefix.
   using ListStoragesCallback =
-      base::OnceCallback<void(ListStoragesResponseProto response)>;
-  void ListStorages(ListStoragesRequestProto request,
+      base::OnceCallback<void(const ListStoragesResponseProto& response)>;
+  void ListStorages(const ListStoragesRequestProto& request,
                     ListStoragesCallback callback);
 
   // MakeTempDir makes a temporary directory that has two file paths: an
@@ -158,11 +214,50 @@ class Server {
   // MakeTempDir is like "mkdir" (except the callee randomly generates the file
   // path). RemoveTempDir is like "rm -rf".
   using MakeTempDirCallback =
-      base::OnceCallback<void(std::string error_message,
-                              std::string fusebox_file_path,
-                              std::string underlying_file_path)>;
+      base::OnceCallback<void(const std::string& error_message,
+                              const std::string& fusebox_file_path,
+                              const std::string& underlying_file_path)>;
   void MakeTempDir(MakeTempDirCallback callback);
-  void RemoveTempDir(std::string fusebox_file_path);
+  void RemoveTempDir(const std::string& fusebox_file_path);
+
+  // ----
+
+  using PendingFlush = std::pair<FlushRequestProto, FlushCallback>;
+  using PendingRead2 = std::pair<Read2RequestProto, Read2Callback>;
+  using PendingWrite2 = std::pair<Write2RequestProto, Write2Callback>;
+  using PendingOp = absl::variant<PendingFlush, PendingRead2, PendingWrite2>;
+
+  struct FuseFileMapEntry {
+    FuseFileMapEntry(scoped_refptr<storage::FileSystemContext> fs_context_arg,
+                     storage::FileSystemURL fs_url_arg,
+                     const std::string& profile_path_arg,
+                     bool readable_arg,
+                     bool writable_arg,
+                     bool use_temp_file_arg,
+                     bool temp_file_starts_with_copy_arg);
+    FuseFileMapEntry(FuseFileMapEntry&&);
+    ~FuseFileMapEntry();
+
+    void DoFlush(const FlushRequestProto& request, FlushCallback callback);
+    void DoRead2(const Read2RequestProto& request, Read2Callback callback);
+    void DoWrite2(const Write2RequestProto& request, Write2Callback callback);
+    void Do(PendingOp& op,
+            base::WeakPtr<Server> weak_ptr_server,
+            uint64_t fuse_handle);
+
+    const scoped_refptr<storage::FileSystemContext> fs_context_;
+    const bool readable_;
+    const bool writable_;
+
+    bool has_in_flight_op_ = false;
+    base::circular_deque<PendingOp> pending_ops_;
+
+    base::SequenceBound<ReadWriter> seqbnd_read_writer_;
+  };
+
+  // Maps from fuse_handle uint64_t values to FileStreamReader /
+  // FileStreamWriter state.
+  using FuseFileMap = std::map<uint64_t, FuseFileMapEntry>;
 
   struct PrefixMapEntry {
     PrefixMapEntry(std::string fs_url_prefix_arg, bool read_only_arg);
@@ -215,11 +310,20 @@ class Server {
   // temporary directory.
   using TempSubdirMap = std::map<std::string, base::ScopedTempDir>;
 
+  // ----
+
  private:
-  void MakeTempDirOnWorkerThread(MakeTempDirCallback callback);
   void ReplyToMakeTempDir(base::ScopedTempDir scoped_temp_dir,
                           bool create_succeeded,
                           MakeTempDirCallback callback);
+
+  void OnFlush(uint64_t fuse_handle,
+               FlushCallback callback,
+               const FlushResponseProto& response);
+
+  void OnRead2(uint64_t fuse_handle,
+               Read2Callback callback,
+               const Read2ResponseProto& response);
 
   void OnReadDirectory(scoped_refptr<storage::FileSystemContext> fs_context,
                        bool read_only,
@@ -228,7 +332,17 @@ class Server {
                        storage::AsyncFileUtil::EntryList entry_list,
                        bool has_more);
 
-  Delegate* delegate_;
+  void OnWrite2(uint64_t fuse_handle,
+                Write2Callback callback,
+                const Write2ResponseProto& response);
+
+  // Removes the entry (if present) for the given map key.
+  void EraseFuseFileMapEntry(uint64_t fuse_handle);
+  // Returns the fuse_handle that is the map key.
+  uint64_t InsertFuseFileMapEntry(FuseFileMapEntry&& entry);
+
+  raw_ptr<Delegate> delegate_;
+  FuseFileMap fuse_file_map_;
   fusebox::MonikerMap moniker_map_;
   PrefixMap prefix_map_;
   ReadDir2Map read_dir_2_map_;

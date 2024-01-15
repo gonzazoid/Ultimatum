@@ -11,14 +11,6 @@
 
 namespace download {
 namespace features {
-
-// Whether offline content provider should be used for the downloads UI..
-COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(
-    kUseDownloadOfflineContentProvider);
-
-// Whether download auto-resumptions are enabled in native.
-COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(kDownloadAutoResumptionNative);
-
 // Whether a download can be handled by parallel jobs.
 COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(kParallelDownloading);
 
@@ -30,6 +22,14 @@ COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(kRefreshExpirationDate);
 COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(
     kSmartSuggestionForLargeDownloads);
 #endif
+
+// Whether downloads uses Android Jobs API instead of FGS.
+COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(kDownloadsMigrateToJobsAPI);
+
+// Whether download notification service uses new unified API based on offline
+// item and native persistence of notification IDs.
+COMPONENTS_DOWNLOAD_EXPORT BASE_DECLARE_FEATURE(
+    kDownloadNotificationServiceUnifiedAPI);
 
 // Whether in-progress download manager will be used to initialize download
 // service.

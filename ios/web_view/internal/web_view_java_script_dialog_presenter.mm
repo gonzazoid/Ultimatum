@@ -4,12 +4,9 @@
 
 #import "ios/web_view/internal/web_view_java_script_dialog_presenter.h"
 
+#import "base/functional/callback_helpers.h"
 #import "ios/web_view/public/cwv_ui_delegate.h"
 #import "net/base/mac/url_conversions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -20,95 +17,61 @@ WebViewJavaScriptDialogPresenter::WebViewJavaScriptDialogPresenter(
 
 WebViewJavaScriptDialogPresenter::~WebViewJavaScriptDialogPresenter() = default;
 
-void WebViewJavaScriptDialogPresenter::RunJavaScriptDialog(
+void WebViewJavaScriptDialogPresenter::RunJavaScriptAlertDialog(
     web::WebState* web_state,
     const GURL& origin_url,
-    web::JavaScriptDialogType dialog_type,
     NSString* message_text,
-    NSString* default_prompt_text,
-    web::DialogClosedCallback callback) {
-  switch (dialog_type) {
-    case web::JAVASCRIPT_DIALOG_TYPE_ALERT:
-      HandleJavaScriptAlert(origin_url, message_text, std::move(callback));
-      break;
-    case web::JAVASCRIPT_DIALOG_TYPE_CONFIRM:
-      HandleJavaScriptConfirmDialog(origin_url, message_text,
-                                    std::move(callback));
-      break;
-    case web::JAVASCRIPT_DIALOG_TYPE_PROMPT:
-      HandleJavaScriptTextPrompt(origin_url, message_text, default_prompt_text,
-                                 std::move(callback));
-      break;
-  }
-}
-
-void WebViewJavaScriptDialogPresenter::HandleJavaScriptAlert(
-    const GURL& origin_url,
-    NSString* message_text,
-    web::DialogClosedCallback callback) {
-  if (![ui_delegate_ respondsToSelector:@selector
-                     (webView:runJavaScriptAlertPanelWithMessage:pageURL
-                                :completionHandler:)]) {
-    std::move(callback).Run(NO, nil);
+    base::OnceClosure callback) {
+  SEL delegate_method = @selector(webView:
+       runJavaScriptAlertPanelWithMessage:pageURL:completionHandler:);
+  if (![ui_delegate_ respondsToSelector:delegate_method]) {
+    std::move(callback).Run();
     return;
   }
-  __block web::DialogClosedCallback scoped_callback = std::move(callback);
   [ui_delegate_ webView:web_view_
       runJavaScriptAlertPanelWithMessage:message_text
                                  pageURL:net::NSURLWithGURL(origin_url)
-                       completionHandler:^{
-                         if (!scoped_callback.is_null()) {
-                           std::move(scoped_callback).Run(YES, nil);
-                         }
-                       }];
+                       completionHandler:base::CallbackToBlock(
+                                             std::move(callback))];
 }
 
-void WebViewJavaScriptDialogPresenter::HandleJavaScriptConfirmDialog(
+void WebViewJavaScriptDialogPresenter::RunJavaScriptConfirmDialog(
+    web::WebState* web_state,
     const GURL& origin_url,
     NSString* message_text,
-    web::DialogClosedCallback callback) {
-  if (![ui_delegate_ respondsToSelector:@selector
-                     (webView:runJavaScriptConfirmPanelWithMessage:pageURL
-                                :completionHandler:)]) {
-    std::move(callback).Run(NO, nil);
+    base::OnceCallback<void(bool success)> callback) {
+  SEL delegate_method = @selector(webView:
+      runJavaScriptConfirmPanelWithMessage:pageURL:completionHandler:);
+  if (![ui_delegate_ respondsToSelector:delegate_method]) {
+    std::move(callback).Run(false);
     return;
   }
-  __block web::DialogClosedCallback scoped_callback = std::move(callback);
   [ui_delegate_ webView:web_view_
       runJavaScriptConfirmPanelWithMessage:message_text
                                    pageURL:net::NSURLWithGURL(origin_url)
-                         completionHandler:^(BOOL is_confirmed) {
-                           if (!scoped_callback.is_null()) {
-                             std::move(scoped_callback).Run(is_confirmed, nil);
-                           }
-                         }];
+                         completionHandler:base::CallbackToBlock(
+                                               std::move(callback))];
 }
 
-void WebViewJavaScriptDialogPresenter::HandleJavaScriptTextPrompt(
+void WebViewJavaScriptDialogPresenter::RunJavaScriptPromptDialog(
+    web::WebState* web_state,
     const GURL& origin_url,
     NSString* message_text,
     NSString* default_prompt_text,
-    web::DialogClosedCallback callback) {
-  if (![ui_delegate_ respondsToSelector:@selector
-                     (webView:runJavaScriptTextInputPanelWithPrompt:defaultText
-                                :pageURL:completionHandler:)]) {
-    std::move(callback).Run(NO, nil);
+    base::OnceCallback<void(NSString* user_input)> callback) {
+  SEL delegate_method = @selector(webView:
+      runJavaScriptTextInputPanelWithPrompt:defaultText:pageURL
+                                           :completionHandler:);
+  if (![ui_delegate_ respondsToSelector:delegate_method]) {
+    std::move(callback).Run(nil);
     return;
   }
-  __block web::DialogClosedCallback scoped_callback = std::move(callback);
   [ui_delegate_ webView:web_view_
       runJavaScriptTextInputPanelWithPrompt:message_text
                                 defaultText:default_prompt_text
                                     pageURL:net::NSURLWithGURL(origin_url)
-                          completionHandler:^(NSString* text_input) {
-                            if (!scoped_callback.is_null()) {
-                              if (text_input == nil) {
-                                std::move(scoped_callback).Run(NO, nil);
-                              } else {
-                                std::move(scoped_callback).Run(YES, text_input);
-                              }
-                            }
-                          }];
+                          completionHandler:base::CallbackToBlock(
+                                                std::move(callback))];
 }
 
 void WebViewJavaScriptDialogPresenter::CancelDialogs(web::WebState* web_state) {

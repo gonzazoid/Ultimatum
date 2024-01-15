@@ -9,10 +9,12 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import android.graphics.Point;
+import static org.chromium.cc.mojom.RootScrollOffsetUpdateFrequency.ALL_UPDATES;
+import static org.chromium.cc.mojom.RootScrollOffsetUpdateFrequency.NONE;
+import static org.chromium.cc.mojom.RootScrollOffsetUpdateFrequency.ON_SCROLL_END;
+
 import android.view.ViewGroup;
 
 import org.junit.Assert;
@@ -20,8 +22,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
@@ -34,29 +34,18 @@ import org.chromium.content.browser.selection.SelectionPopupControllerImpl;
 import org.chromium.content.browser.webcontents.WebContentsImpl;
 import org.chromium.content.browser.webcontents.WebContentsImpl.UserDataFactory;
 import org.chromium.content_public.browser.GestureStateListener;
-import org.chromium.content_public.browser.GestureStateListenerWithScroll;
 import org.chromium.ui.base.ViewAndroidDelegate;
 
-/**
- * Unit test for {@link GestureListenerManagerImpl}.
- */
+/** Unit test for {@link GestureListenerManagerImpl}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class GestureListenerManagerImplUnitTest {
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
-    @Mock
-    WebContentsImpl mWebContents;
-    @Mock
-    ViewGroup mViewGroup;
-    @Mock
-    GestureListenerManagerImpl.Natives mMockJniGestureListenerManager;
-    @Mock
-    GestureStateListenerWithScroll mGestureStateListener;
-    @Captor
-    ArgumentCaptor<Point> mPointCaptor;
+    @Mock WebContentsImpl mWebContents;
+    @Mock ViewGroup mViewGroup;
+    @Mock GestureListenerManagerImpl.Natives mMockJniGestureListenerManager;
+    @Mock GestureStateListener mGestureStateListener;
 
     private GestureListenerManagerImpl mGestureManager;
 
@@ -68,7 +57,7 @@ public class GestureListenerManagerImplUnitTest {
         setupMockWebContents();
 
         mGestureManager = new GestureListenerManagerImpl(mWebContents);
-        mGestureManager.addListener(mGestureStateListener);
+        mGestureManager.addListener(mGestureStateListener, ALL_UPDATES);
     }
 
     @Test
@@ -94,22 +83,13 @@ public class GestureListenerManagerImplUnitTest {
         Assert.assertTrue("Scroll should started.", mGestureManager.isScrollInProgress());
         verify(mGestureStateListener).onScrollStarted(anyInt(), anyInt(), eq(true));
 
-        mGestureManager.onEventAck(EventType.GESTURE_SCROLL_UPDATE, /*consumed*/ true,
-                /*scrollOffsetX*/ 0.f, /*scrollOffsetY*/ 1.f);
-        mGestureManager.onEventAck(EventType.GESTURE_SCROLL_UPDATE, /*consumed*/ true,
-                /*scrollOffsetX*/ 1.f, /*scrollOffsetY*/ 0.f);
-        verify(mGestureStateListener, times(2))
-                .onScrollUpdateGestureConsumed(mPointCaptor.capture());
+        mGestureManager.onEventAck(EventType.GESTURE_SCROLL_UPDATE, /* consumed= */ true);
+        verify(mGestureStateListener).onScrollUpdateGestureConsumed();
+        Mockito.reset(mGestureStateListener);
+        mGestureManager.onEventAck(EventType.GESTURE_SCROLL_UPDATE, /* consumed= */ true);
+        verify(mGestureStateListener).onScrollUpdateGestureConsumed();
 
-        Assert.assertEquals(
-                "Number of points captured is different.", 2, mPointCaptor.getAllValues().size());
-        Assert.assertEquals(
-                "Points doesn't match.", new Point(0, 1), mPointCaptor.getAllValues().get(0));
-        Assert.assertEquals(
-                "Points doesn't match.", new Point(1, 0), mPointCaptor.getAllValues().get(1));
-
-        mGestureManager.onEventAck(EventType.GESTURE_SCROLL_END, /*consumed*/ true,
-                /*scrollOffsetX*/ 0.f, /*scrollOffsetY*/ 0.f);
+        mGestureManager.onEventAck(EventType.GESTURE_SCROLL_END, /* consumed= */ true);
         verify(mGestureStateListener).onScrollEnded(anyInt(), anyInt());
     }
 
@@ -137,6 +117,25 @@ public class GestureListenerManagerImplUnitTest {
         verify(mGestureStateListener).onFlingEndGesture(anyInt(), anyInt());
     }
 
+    @Test
+    public void updateFrequency() {
+        // This will be ALL_UPDATES because of the listener we add in setup.
+        Assert.assertEquals(
+                ALL_UPDATES, mGestureManager.getRootScrollOffsetUpdateFrequencyForTesting());
+
+        // Adding listeners with lower frequency will not change the result.
+        mGestureManager.addListener(new GestureStateListener() {}, NONE);
+        mGestureManager.addListener(new GestureStateListener() {}, NONE);
+        mGestureManager.addListener(new GestureStateListener() {}, ON_SCROLL_END);
+        Assert.assertEquals(
+                ALL_UPDATES, mGestureManager.getRootScrollOffsetUpdateFrequencyForTesting());
+
+        // Now, remove the ALL_UPDATES listener. This will leave us with ON_SCROLL_END.
+        mGestureManager.removeListener(mGestureStateListener);
+        Assert.assertEquals(
+                ON_SCROLL_END, mGestureManager.getRootScrollOffsetUpdateFrequencyForTesting());
+    }
+
     private void setupMockWebContents() {
         ViewAndroidDelegate viewAndroidDelegate =
                 ViewAndroidDelegate.createBasicDelegate(mViewGroup);
@@ -145,15 +144,15 @@ public class GestureListenerManagerImplUnitTest {
         doReturn(renderCoordinates).when(mWebContents).getRenderCoordinates();
 
         // Setup UserData involved in the scrolling process.
-        doAnswer(invocation -> {
-            if (invocation.getArgument(0) == SelectionPopupControllerImpl.class) {
-                return SelectionPopupControllerImpl.createForTesting(mWebContents);
-            }
-            UserDataFactory factory = invocation.getArgument(1);
-            return factory.create(mWebContents);
-        })
+        doAnswer(
+                        invocation -> {
+                            if (invocation.getArgument(0) == SelectionPopupControllerImpl.class) {
+                                return SelectionPopupControllerImpl.createForTesting(mWebContents);
+                            }
+                            UserDataFactory factory = invocation.getArgument(1);
+                            return factory.create(mWebContents);
+                        })
                 .when(mWebContents)
-                .getOrSetUserData(/*key=*/any(),
-                        /*userDataFactory*/ any());
+                .getOrSetUserData(/* key= */ any(), /*userDataFactory*/ any());
     }
 }

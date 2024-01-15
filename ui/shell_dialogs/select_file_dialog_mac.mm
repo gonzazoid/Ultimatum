@@ -4,8 +4,8 @@
 
 #include "ui/shell_dialogs/select_file_dialog_mac.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/threading/thread_restrictions.h"
@@ -14,6 +14,7 @@
 #include "components/remote_cocoa/common/native_widget_ns_window.mojom.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "ui/shell_dialogs/select_file_policy.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
 
 using remote_cocoa::mojom::SelectFileDialogType;
@@ -64,9 +65,10 @@ void SelectFileDialogImpl::FileWasSelected(
     listener_->FileSelectionCanceled(params);
   } else {
     if (is_multi) {
-      listener_->MultiFilesSelected(files, params);
+      listener_->MultiFilesSelected(FilePathListToSelectedFileInfoList(files),
+                                    params);
     } else {
-      listener_->FileSelected(files[0], index, params);
+      listener_->FileSelected(SelectedFileInfo(files[0]), index, params);
     }
   }
 }

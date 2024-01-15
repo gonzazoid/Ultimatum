@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_proto.h"
+#include "v8/include/v8-inspector-protocol.h"
 
 namespace blink {
 
@@ -50,7 +51,7 @@ std::unique_ptr<SourceLocation> SourceLocation::CaptureWithFullStackTrace() {
 // static
 std::unique_ptr<v8_inspector::V8StackTrace>
 SourceLocation::CaptureStackTraceInternal(bool full) {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  v8::Isolate* isolate = v8::Isolate::TryGetCurrent();
   ThreadDebugger* debugger = ThreadDebugger::From(isolate);
   if (!debugger || !isolate->InContext())
     return nullptr;
@@ -97,6 +98,10 @@ std::unique_ptr<SourceLocation> SourceLocation::Clone() const {
 
 void SourceLocation::WriteIntoTrace(
     perfetto::TracedProto<SourceLocation::Proto> proto) const {
+  if (!stack_trace_ || stack_trace_->isEmpty()) {
+    return;
+  }
+
   proto->set_function_name(
       ToPlatformString(stack_trace_->topFunctionName()).Utf8());
   proto->set_script_id(stack_trace_->topScriptId());
@@ -104,9 +109,27 @@ void SourceLocation::WriteIntoTrace(
   proto->set_line_number(stack_trace_->topLineNumber());
   proto->set_column_number(stack_trace_->topColumnNumber());
   proto->set_stack_trace(ToString().Utf8());
+
+  // TODO(https://crbug.com/1396277): This should be a WriteIntoTrace function
+  // once v8 has support for perfetto tracing (which is currently missing for v8
+  // chromium).
+  for (const auto& frame : stack_trace_->frames()) {
+    auto& stack_trace_pb = *(proto->add_stack_frames());
+    stack_trace_pb.set_function_name(
+        ToPlatformString(frame.functionName).Utf8());
+
+    auto& script_location = *(stack_trace_pb.set_script_location());
+    script_location.set_source_url(ToPlatformString(frame.sourceURL).Utf8());
+    script_location.set_line_number(frame.lineNumber);
+    script_location.set_column_number(frame.columnNumber);
+  }
 }
 
 void SourceLocation::WriteIntoTrace(perfetto::TracedValue context) const {
+  if (!stack_trace_ || stack_trace_->isEmpty()) {
+    return;
+  }
+
   // TODO(altimin): Consider replacing nested dict-inside-array with just an
   // array here.
   auto array = std::move(context).WriteArray();
@@ -131,6 +154,22 @@ void SourceLocation::ToTracedValue(TracedValue* value, const char* name) const {
   value->SetString("url", ToPlatformString(stack_trace_->topSourceURL()));
   value->SetInteger("lineNumber", stack_trace_->topLineNumber());
   value->SetInteger("columnNumber", stack_trace_->topColumnNumber());
+
+  value->BeginArray("stackFrames");
+  for (const auto& frame : stack_trace_->frames()) {
+    value->BeginDictionary();
+    value->SetString("functionName", ToPlatformString(frame.functionName));
+
+    value->BeginDictionary("scriptLocation");
+    value->SetString("sourceURL", ToPlatformString(frame.sourceURL));
+    value->SetInteger("lineNumber", frame.lineNumber);
+    value->SetInteger("columnNumber", frame.columnNumber);
+    value->EndDictionary(/*scriptLocation*/);
+
+    value->EndDictionary();
+  }
+  value->EndArray(/*stackFrames*/);
+
   value->EndDictionary();
   value->EndArray();
 }
@@ -178,12 +217,13 @@ std::unique_ptr<SourceLocation> CaptureSourceLocation() {
 }
 
 std::unique_ptr<SourceLocation> CaptureSourceLocation(
+    v8::Isolate* isolate,
     v8::Local<v8::Function> function) {
   if (!function.IsEmpty())
     return std::make_unique<SourceLocation>(
         ToCoreStringWithUndefinedOrNullCheck(
-            function->GetScriptOrigin().ResourceName()),
-        ToCoreStringWithUndefinedOrNullCheck(function->GetName()),
+            isolate, function->GetScriptOrigin().ResourceName()),
+        ToCoreStringWithUndefinedOrNullCheck(isolate, function->GetName()),
         function->GetScriptLineNumber() + 1,
         function->GetScriptColumnNumber() + 1, nullptr, function->ScriptId());
   return std::make_unique<SourceLocation>(String(), String(), 0, 0, nullptr, 0);

@@ -5,9 +5,9 @@
 #ifndef MEDIA_GPU_WINDOWS_D3D11_VIDEO_DECODER_CLIENT_H_
 #define MEDIA_GPU_WINDOWS_D3D11_VIDEO_DECODER_CLIENT_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "media/base/video_color_space.h"
-#include "media/gpu/windows/d3d11_com_defs.h"
+#include "media/gpu/windows/d3d11_video_decoder_wrapper.h"
 
 namespace media {
 
@@ -18,8 +18,8 @@ class D3D11PictureBuffer;
 // required methods to D3D11VideoAccelerators.
 class D3D11VideoDecoderClient {
  public:
-  using SetAcceleratorDecoderCB =
-      base::RepeatingCallback<void(ComD3D11VideoDecoder)>;
+  using SetAcceleratorDecoderWrapperCB =
+      base::RepeatingCallback<void(std::unique_ptr<D3DVideoDecoderWrapper>)>;
 
   virtual D3D11PictureBuffer* GetPicture() = 0;
   virtual void UpdateTimestamp(D3D11PictureBuffer* picture_buffer) = 0;
@@ -27,9 +27,9 @@ class D3D11VideoDecoderClient {
                             D3D11PictureBuffer* picture_buffer) = 0;
 
   // Called by the accelerator to provide a callback that can be used to give
-  // the accelerator a D3D11VideoDecoder object.  Must be called during
+  // the accelerator a D3D11VideoDecoderWrapper object.  Must be called during
   // construction of the accelerator.
-  virtual void SetDecoderCB(const SetAcceleratorDecoderCB&) = 0;
+  virtual void SetDecoderWrapperCB(const SetAcceleratorDecoderWrapperCB&) = 0;
 
  protected:
   virtual ~D3D11VideoDecoderClient() = default;

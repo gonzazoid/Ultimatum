@@ -12,7 +12,8 @@
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
 #include "ash/system/holding_space/holding_space_animation_registry.h"
 #include "ash/system/progress_indicator/progress_indicator.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "ash/system/progress_indicator/progress_indicator_animation_registry.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 namespace holding_space_util {
@@ -31,17 +32,17 @@ class HoldingSpaceControllerProgressIndicator
   explicit HoldingSpaceControllerProgressIndicator(
       HoldingSpaceController* controller)
       : ProgressIndicator(
-            /*animation_registry=*/HoldingSpaceAnimationRegistry::GetInstance(),
-            /*animation_key=*/controller),
+            HoldingSpaceAnimationRegistry::GetInstance(),
+            ProgressIndicatorAnimationRegistry::AsAnimationKey(controller)),
         controller_(controller) {
-    controller_observation_.Observe(controller_);
+    controller_observation_.Observe(controller_.get());
     if (controller_->model())
       OnHoldingSpaceModelAttached(controller_->model());
   }
 
  private:
   // ProgressIndicator:
-  absl::optional<float> CalculateProgress() const override {
+  std::optional<float> CalculateProgress() const override {
     // If there is no `model` attached, then there are no in-progress holding
     // space items. Do not paint the progress indication.
     const HoldingSpaceModel* model = controller_->model();
@@ -109,7 +110,7 @@ class HoldingSpaceControllerProgressIndicator
 
   // The associated holding space `controller_` for which to indicate progress
   // of all holding space items in its attached model.
-  HoldingSpaceController* const controller_;
+  const raw_ptr<HoldingSpaceController> controller_;
 
   base::ScopedObservation<HoldingSpaceController,
                           HoldingSpaceControllerObserver>
@@ -129,15 +130,15 @@ class HoldingSpaceItemProgressIndicator : public ProgressIndicator,
  public:
   explicit HoldingSpaceItemProgressIndicator(const HoldingSpaceItem* item)
       : ProgressIndicator(
-            /*animation_registry=*/HoldingSpaceAnimationRegistry::GetInstance(),
-            /*animation_key=*/item),
+            HoldingSpaceAnimationRegistry::GetInstance(),
+            ProgressIndicatorAnimationRegistry::AsAnimationKey(item)),
         item_(item) {
     model_observation_.Observe(HoldingSpaceController::Get()->model());
   }
 
  private:
   // ProgressIndicator:
-  absl::optional<float> CalculateProgress() const override {
+  std::optional<float> CalculateProgress() const override {
     // If `item_` is `nullptr` it is being destroyed. Ensure the progress
     // indication is not painted in this case. Similarly, ensure the progress
     // indication is not painted when progress is hidden.
@@ -164,7 +165,7 @@ class HoldingSpaceItemProgressIndicator : public ProgressIndicator,
 
   // The associated holding space `item` for which to indicate progress.
   // NOTE: May temporarily be `nullptr` during the `item`s destruction sequence.
-  const HoldingSpaceItem* item_ = nullptr;
+  raw_ptr<const HoldingSpaceItem> item_ = nullptr;
 
   base::ScopedObservation<HoldingSpaceModel, HoldingSpaceModelObserver>
       model_observation_{this};

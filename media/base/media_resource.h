@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/media_export.h"
@@ -22,9 +23,9 @@ namespace media {
 // associated with their type, and return a null/empty value for other getters.
 class MEDIA_EXPORT MediaResource {
  public:
-  enum Type {
-    STREAM,  // Indicates GetAllStreams() or GetFirstStream() should be used
-    URL,     // Indicates GetUrl() should be used
+  enum class Type {
+    kStream,  // Indicates GetAllStreams() or GetFirstStream() should be used
+    KUrl,     // Indicates GetUrl() should be used
   };
 
   MediaResource();
@@ -45,7 +46,8 @@ class MEDIA_EXPORT MediaResource {
   //   non-null pointer for the same stream type. In MSE Javascript code can
   //   remove SourceBuffer from a MediaSource at any point and this will make
   //   some previously existing streams inaccessible/unavailable.
-  virtual std::vector<DemuxerStream*> GetAllStreams() = 0;
+  virtual std::vector<raw_ptr<DemuxerStream, VectorExperimental>>
+  GetAllStreams() = 0;
 
   // A helper function that return the first stream of the given `type` if one
   // exists or a null pointer if there is no streams of that type.
@@ -64,6 +66,11 @@ class MEDIA_EXPORT MediaResource {
   // This method could be refactored if WMPI was aware of the concrete type of
   // Demuxer* it is dealing with.
   virtual void ForwardDurationChangeToDemuxerHost(base::TimeDelta duration);
+
+  // This method is only used with the MediaUrlDemuxer, to set headers coming
+  // from media url params.
+  virtual void SetHeaders(
+      const base::flat_map<std::string, std::string>& headers);
 };
 
 }  // namespace media

@@ -17,7 +17,7 @@ status, setting a priority, labeling/categorizing as appropriate (or handing off
 to another component), and (possibly) assigning an owner.  The only reason bugs
 should remain untriaged (i.e., *status=Unconfirmed* or *status=Untriaged*) is
 because of they need additional information from someone.  These bugs should be
-labeled as such (*Needs=Feedback* or *Needs=TestConfirmation*).
+labeled as such (*Needs=Feedback*, *Needs=Investigation*, or *Needs=TestConfirmation*).
 
 ### Non-goals
 
@@ -28,7 +28,7 @@ labeled as such (*Needs=Feedback* or *Needs=TestConfirmation*).
 ## Process
 
 * Every Monday, Wednesday and Friday, the triage engineer looks over [all
-  *Unconfirmed* and *Untriaged* omnibox bugs (without *Needs=Feedback*)](https://bugs.chromium.org/p/chromium/issues/list?can=2&q=component%3AUI%3EBrowser%3EOmnibox+status%3AUnconfirmed%2CUntriaged+-component%3AUI%3EBrowser%3EOmnibox%3ESecurityIndicators+-Needs%3DFeedback&colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&x=m&y=releaseblock&cells=ids)
+  *Unconfirmed* and *Untriaged* omnibox bugs (without *Needs=Feedback*)](https://bugs.chromium.org/p/chromium/issues/list?can=2&q=component:UI>Browser>Omnibox+status:Unconfirmed,Untriaged+-component:UI>Browser>Omnibox>SecurityIndicators+-Needs=Feedback,Investigation,TestConfirmation&colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&x=m&y=releaseblock&cells=ids)
   and triages them.
 * Every week on Tuesday, the triage engineer looks over [all *Unconfirmed* and
   *Untriaged* bugs filed that aren’t categorized as omnibox yet have relevant
@@ -299,6 +299,11 @@ Example request:
   where the omnibox doesn’t do what they want.  Ideally we should be able make
   to make the omnibox smart enough that such a feature isn’t necessary.
 
+* “I want to disable suggestions from appearing entirely”. Dup against [crbug/1470391](https://bugs.chromium.org/p/chromium/issues/detail?id=1470391)
+
+  * Try to understand the motivation of the user making the request. Consider
+  quoting from [pkasting’s comment on this bug](https://bugs.chromium.org/p/chromium/issues/detail?id=702850#c16).
+
 * “I typed in something like go/foo and got redirected to a search results page
   instead.” See
   [this internal page](https://docs.google.com/document/d/140jmrHfC9BiNUbHEmUF4ajJ8Zpbc7qd5fjTBulH3I5g/edit#).
@@ -308,10 +313,6 @@ Example request:
 
   * … and no “Did you mean?” infobar appears.  This is likely prerendering; see
   [crbug/247848](https://bugs.chromium.org/p/chromium/issues/detail?id=247848)
-
-* “I want to disable suggestions from appearing entirely”.  Try to find out
-  why.  Quote freely from
-  [pkasting’s comment on this bug](https://bugs.chromium.org/p/chromium/issues/detail?id=702850#c16).
 
 # References
 

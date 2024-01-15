@@ -13,28 +13,41 @@ import argparse
 import logging
 import optparse
 import os
-from typing import Union
+import subprocess
+import sys
+from typing import Optional, Union
+
+CHROMIUM_SRC_DIR = os.path.realpath(
+    os.path.join(os.path.dirname(__file__), '..', '..'))
 
 ParsedCmdArgs = Union[argparse.Namespace, optparse.Values]
 
 
+def _IsWin() -> bool:
+  return sys.platform == 'win32'
+
+
 class SkiaGoldProperties():
   def __init__(self, args: ParsedCmdArgs):
-    """Abstract class to validate and store properties related to Skia Gold.
+    """Class to validate and store properties related to Skia Gold.
+
+    The base implementation is usable on its own, but is meant to be overridden
+    as necessary.
 
     Args:
       args: The parsed arguments from an argparse.ArgumentParser.
     """
-    self._git_revision = None
-    self._issue = None
-    self._patchset = None
-    self._job_id = None
-    self._local_pixel_tests = None
-    self._no_luci_auth = None
-    self._bypass_skia_gold_functionality = None
-    self._code_review_system = None
-    self._continuous_integration_system = None
-    self._local_png_directory = None
+    self._git_revision: Optional[str] = None
+    self._issue: Optional[int] = None
+    self._patchset: Optional[int] = None
+    self._job_id: Optional[str] = None
+    self._local_pixel_tests: Optional[bool] = None
+    self._no_luci_auth: Optional[bool] = None
+    self._service_account: Optional[str] = None
+    self._bypass_skia_gold_functionality: Optional[bool] = None
+    self._code_review_system: Optional[str] = None
+    self._continuous_integration_system: Optional[str] = None
+    self._local_png_directory: Optional[str] = None
 
     self._InitializeProperties(args)
 
@@ -54,11 +67,11 @@ class SkiaGoldProperties():
     return self._GetGitRevision()
 
   @property
-  def issue(self) -> int:
+  def issue(self) -> Optional[int]:
     return self._issue
 
   @property
-  def job_id(self) -> str:
+  def job_id(self) -> Optional[str]:
     return self._job_id
 
   @property
@@ -66,24 +79,36 @@ class SkiaGoldProperties():
     return self._IsLocalRun()
 
   @property
-  def local_png_directory(self) -> str:
+  def local_png_directory(self) -> Optional[str]:
     return self._local_png_directory
 
   @property
-  def no_luci_auth(self) -> bool:
+  def no_luci_auth(self) -> Optional[bool]:
     return self._no_luci_auth
 
   @property
-  def patchset(self) -> int:
+  def service_account(self) -> Optional[str]:
+    return self._service_account
+
+  @property
+  def patchset(self) -> Optional[int]:
     return self._patchset
 
   @property
-  def bypass_skia_gold_functionality(self) -> bool:
+  def bypass_skia_gold_functionality(self) -> Optional[bool]:
     return self._bypass_skia_gold_functionality
 
-  @staticmethod
-  def _GetGitOriginMainHeadSha1() -> str:
-    raise NotImplementedError()
+  def _GetGitOriginMainHeadSha1(self) -> Optional[str]:
+    try:
+      return subprocess.check_output(
+          ['git', 'rev-parse', 'origin/main'],
+          shell=_IsWin(),
+          cwd=self._GetGitRepoDirectory()).decode('utf-8').strip()
+    except subprocess.CalledProcessError:
+      return None
+
+  def _GetGitRepoDirectory(self) -> str:
+    return CHROMIUM_SRC_DIR
 
   def _GetGitRevision(self) -> str:
     if not self._git_revision:
@@ -105,7 +130,11 @@ class SkiaGoldProperties():
       # heuristic to determine whether we're running on a workstation or a bot.
       # This should always be set on swarming, but would be strange to be set on
       # a workstation.
-      self._local_pixel_tests = 'SWARMING_SERVER' not in os.environ
+      # However, since Skylab technically isn't swarming, we need to look for
+      # an alternative environment variable there.
+      in_swarming = 'SWARMING_SERVER' in os.environ
+      in_skylab = bool(int(os.environ.get('RUNNING_IN_SKYLAB', '0')))
+      self._local_pixel_tests = not (in_swarming or in_skylab)
       if self._local_pixel_tests:
         logging.warning(
             'Automatically determined that test is running on a workstation')
@@ -149,6 +178,11 @@ class SkiaGoldProperties():
 
     if hasattr(args, 'no_luci_auth'):
       self._no_luci_auth = args.no_luci_auth
+
+    if hasattr(args, 'service_account'):
+      self._service_account = args.service_account
+      if self._service_account:
+        self._no_luci_auth = True
 
     if hasattr(args, 'bypass_skia_gold_functionality'):
       self._bypass_skia_gold_functionality = args.bypass_skia_gold_functionality

@@ -11,10 +11,6 @@
 #import "ios/web/navigation/navigation_context_impl.h"
 #import "ios/web/public/web_client.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 // Holds a pair of state and creation order index.
 @interface CRWWKNavigationsStateRecord : NSObject {
   // Backs up `context` property.
@@ -55,7 +51,8 @@
 #ifndef NDEBUG
 - (NSString*)description {
   return [NSString stringWithFormat:@"state: %d, index: %ld, context: %@",
-                                    _state, static_cast<long>(_index),
+                                    static_cast<int>(_state),
+                                    static_cast<long>(_index),
                                     _context->GetDescription()];
 }
 #endif  // NDEBUG
@@ -128,9 +125,6 @@
   id key = [self keyForNavigation:navigation];
   CRWWKNavigationsStateRecord* record = [_records objectForKey:key];
   if (!record) {
-    DCHECK(state == web::WKNavigationState::REQUESTED ||
-           state == web::WKNavigationState::STARTED ||
-           state == web::WKNavigationState::COMMITTED);
     record =
         [[CRWWKNavigationsStateRecord alloc] initWithState:state
                                                      index:++_lastStateIndex];
@@ -171,9 +165,6 @@
     for (id recordKey in navigationsToRemove) {
       [_records removeObjectForKey:recordKey];
     }
-
-    UMA_HISTOGRAM_BOOLEAN("IOS.CRWWKNavigationStatesRemoveOldPending",
-                          navigationsToRemove.count > 0);
   }
 
   [_records setObject:record forKey:key];

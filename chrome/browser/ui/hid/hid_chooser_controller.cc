@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/chooser_controller/title_util.h"
 #include "chrome/browser/hid/hid_chooser_context.h"
@@ -83,10 +83,8 @@ HidChooserController::HidChooserController(
     std::vector<blink::mojom::HidDeviceFilterPtr> filters,
     std::vector<blink::mojom::HidDeviceFilterPtr> exclusion_filters,
     content::HidChooser::Callback callback)
-    : ChooserController(CreateExtensionAwareChooserTitle(
-          render_frame_host,
-          IDS_HID_CHOOSER_PROMPT_ORIGIN,
-          IDS_HID_CHOOSER_PROMPT_EXTENSION_NAME)),
+    : ChooserController(
+          CreateChooserTitle(render_frame_host, IDS_HID_CHOOSER_PROMPT)),
       filters_(std::move(filters)),
       exclusion_filters_(std::move(exclusion_filters)),
       callback_(std::move(callback)),

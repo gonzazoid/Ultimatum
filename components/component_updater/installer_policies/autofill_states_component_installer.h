@@ -34,14 +34,14 @@ class AutofillStatesComponentInstallerPolicy : public ComponentInstallerPolicy {
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
 #if defined(UNIT_TEST)
-  bool VerifyInstallationForTesting(const base::Value& manifest,
+  bool VerifyInstallationForTesting(const base::Value::Dict& manifest,
                                     const base::FilePath& install_dir) {
     return VerifyInstallation(manifest, install_dir);
   }
 
   void ComponentReadyForTesting(const base::Version& version,
                                 const base::FilePath& install_dir,
-                                base::Value manifest) {
+                                base::Value::Dict manifest) {
     ComponentReady(version, install_dir, std::move(manifest));
   }
 #endif
@@ -51,20 +51,20 @@ class AutofillStatesComponentInstallerPolicy : public ComponentInstallerPolicy {
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;
   update_client::InstallerAttributes GetInstallerAttributes() const override;
 
-  raw_ptr<PrefService> pref_service_;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_;
 };
 
 // Call once during startup to make the component update service aware of

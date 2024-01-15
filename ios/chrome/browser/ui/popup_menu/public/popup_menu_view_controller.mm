@@ -4,16 +4,15 @@
 
 #import "ios/chrome/browser/ui/popup_menu/public/popup_menu_view_controller.h"
 
-#import "ios/chrome/browser/ui/image_util/image_util.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "ios/chrome/browser/shared/ui/util/accessibility_close_menu_button.h"
+#import "ios/chrome/browser/shared/ui/util/image/image_util.h"
+#import "ios/chrome/browser/ui/keyboard/UIKeyCommand+Chrome.h"
 #import "ios/chrome/browser/ui/popup_menu/public/popup_menu_ui_constants.h"
 #import "ios/chrome/browser/ui/popup_menu/public/popup_menu_view_controller_delegate.h"
-#import "ios/chrome/browser/ui/util/accessibility_close_menu_button.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kImageMargin = 196;
@@ -51,12 +50,43 @@ const CGFloat kImageMargin = 196;
   return self;
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+  [super viewDidAppear:animated];
+  // Let the view controller become first responder to handle key commands.
+  // See `-keyCommands`.
+  [self becomeFirstResponder];
+}
+
 - (void)addContent:(UIViewController*)content {
   [self addChildViewController:content];
   content.view.translatesAutoresizingMaskIntoConstraints = NO;
   [self.contentContainer addSubview:content.view];
   AddSameConstraints(self.contentContainer, content.view);
   [content didMoveToParentViewController:self];
+}
+
+#pragma mark - UIResponder
+
+// To always be able to register key commands via -keyCommands, the VC must be
+// able to become first responder.
+- (BOOL)canBecomeFirstResponder {
+  return YES;
+}
+
+- (NSArray*)keyCommands {
+  return @[ UIKeyCommand.cr_close, UIKeyCommand.cr_stop ];
+}
+
+- (void)keyCommand_close {
+  base::RecordAction(base::UserMetricsAction("MobileKeyCommandClose"));
+  [self.delegate popupMenuViewControllerWillDismiss:self];
+}
+
+- (void)keyCommand_stop {
+  // Forward to the keyCommand_close action. Usually this is done by the OS
+  // implicitly, but since BVC handles the stop action for stopping loading the
+  // page, the PopupMenuViewController needs to explicitly catch it before.
+  [self keyCommand_close];
 }
 
 #pragma mark - Private

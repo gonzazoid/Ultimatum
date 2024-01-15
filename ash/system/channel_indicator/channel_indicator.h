@@ -8,24 +8,29 @@
 #include <string>
 
 #include "ash/public/cpp/session/session_observer.h"
-#include "ash/shell.h"
 #include "ash/shell_observer.h"
 #include "ash/system/tray/tray_item_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/session_manager/session_manager_types.h"
 #include "components/version_info/channel.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
 class BoxLayout;
-}
+}  // namespace views
 
 namespace ash {
+
+class Shell;
 
 // A view that resides in the system tray, to make it obvious to the user when a
 // device is running on a release track other than "stable."
 class ASH_EXPORT ChannelIndicatorView : public TrayItemView,
                                         public SessionObserver,
                                         public ShellObserver {
+  METADATA_HEADER(ChannelIndicatorView, TrayItemView)
+
  public:
   ChannelIndicatorView(Shelf* shelf, version_info::Channel channel);
   ChannelIndicatorView(const ChannelIndicatorView&) = delete;
@@ -60,11 +65,8 @@ class ASH_EXPORT ChannelIndicatorView : public TrayItemView,
  private:
   void Update();
   void SetImageOrText();
-  void SetAccessibleName();
+  void OnAccessibleNameChanged(const std::u16string& new_name) override;
   void SetTooltip();
-
-  // The localized string used to announce this view in accessibility mode.
-  std::u16string accessible_name_;
 
   // The localized string displayed when this view is hovered-over.
   std::u16string tooltip_;
@@ -76,15 +78,11 @@ class ASH_EXPORT ChannelIndicatorView : public TrayItemView,
   // replaced, owned by `views::View`. `FillLayout` wants to size child views to
   // fit the parent's bounds, but children of `ChannelIndicatorView` need to
   // have specific sizes and insets regardless of the parent's bounds.
-  views::BoxLayout* box_layout_;
+  raw_ptr<views::BoxLayout> box_layout_;
 
   ScopedSessionObserver session_observer_;
 
-  base::ScopedObservation<Shell,
-                          ShellObserver,
-                          &Shell::AddShellObserver,
-                          &Shell::RemoveShellObserver>
-      shell_observer_{this};
+  base::ScopedObservation<Shell, ShellObserver> shell_observer_{this};
 
   base::WeakPtrFactory<ChannelIndicatorView> weak_factory_{this};
 };

@@ -11,7 +11,7 @@ import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_butto
 import {assert} from 'chrome://resources/js/assert.js';
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -92,7 +92,7 @@ export class ProfileTypeChoiceElement extends ProfileTypeChoiceElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'available-accounts-changed',
         (accounts: AvailableAccount[]) =>
             this.handleAvailableAccountsChanged_(accounts));
@@ -102,7 +102,7 @@ export class ProfileTypeChoiceElement extends ProfileTypeChoiceElementBase {
 
   override ready() {
     super.ready();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'load-signin-finished',
         (success: boolean) => this.handleLoadSigninFinished_(success));
     this.manageProfilesBrowserProxy_.recordSignInPromoImpression();
@@ -142,7 +142,7 @@ export class ProfileTypeChoiceElement extends ProfileTypeChoiceElementBase {
   }
 
   private handleLoadSigninFinished_(_success: boolean) {
-    // TODO(crbug.com/1126913): If failed, show some error message to inform the
+    // TODO(crbug.com/1444046): If failed, show some error message to inform the
     // user.
     this.profileCreationInProgress = false;
   }

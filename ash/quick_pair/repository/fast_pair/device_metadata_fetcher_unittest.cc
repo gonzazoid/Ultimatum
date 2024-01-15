@@ -5,6 +5,7 @@
 #include "ash/quick_pair/repository/fast_pair/device_metadata_fetcher.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/quick_pair/common/account_key_failure.h"
 #include "ash/quick_pair/common/device.h"
@@ -14,8 +15,9 @@
 #include "ash/quick_pair/proto/fastpair.pb.h"
 #include "ash/quick_pair/repository/mock_http_fetcher.h"
 #include "base/base64.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -26,7 +28,6 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -94,7 +95,7 @@ class DeviceMetadataFetcherTest : public testing::Test {
   base::test::TaskEnvironment task_environment;
   base::HistogramTester histogram_tester_;
   std::unique_ptr<DeviceMetadataFetcher> device_metadata_fetcher_;
-  MockHttpFetcher* mock_http_fetcher_;
+  raw_ptr<MockHttpFetcher> mock_http_fetcher_;
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
 };
 
@@ -113,7 +114,7 @@ TEST_F(DeviceMetadataFetcherTest, ValidResponse) {
 
   base::MockCallback<GetObservedDeviceCallback> callback;
   EXPECT_CALL(callback, Run)
-      .WillOnce([](absl::optional<nearby::fastpair::GetObservedDeviceResponse>
+      .WillOnce([](std::optional<nearby::fastpair::GetObservedDeviceResponse>
                        response,
                    bool has_retryable_error) {
         ASSERT_EQ("Pixel Buds", response->device().name());
@@ -150,9 +151,9 @@ TEST_F(DeviceMetadataFetcherTest, InvalidResponse) {
   base::MockCallback<GetObservedDeviceCallback> callback;
   EXPECT_CALL(callback, Run)
       .WillOnce(
-          [](absl::optional<nearby::fastpair::GetObservedDeviceResponse>
+          [](std::optional<nearby::fastpair::GetObservedDeviceResponse>
                  response,
-             bool has_retryable_error) { ASSERT_EQ(absl::nullopt, response); });
+             bool has_retryable_error) { ASSERT_EQ(std::nullopt, response); });
 
   device_metadata_fetcher_->LookupDeviceId(kDeviceId, callback.Get());
   task_environment.RunUntilIdle();
@@ -171,9 +172,9 @@ TEST_F(DeviceMetadataFetcherTest, EmptyResponse) {
   base::MockCallback<GetObservedDeviceCallback> callback;
   EXPECT_CALL(callback, Run)
       .WillOnce(
-          [](absl::optional<nearby::fastpair::GetObservedDeviceResponse>
+          [](std::optional<nearby::fastpair::GetObservedDeviceResponse>
                  response,
-             bool has_retryable_error) { ASSERT_EQ(absl::nullopt, response); });
+             bool has_retryable_error) { ASSERT_EQ(std::nullopt, response); });
 
   device_metadata_fetcher_->LookupDeviceId(kDeviceId, callback.Get());
   task_environment.RunUntilIdle();
@@ -191,9 +192,9 @@ TEST_F(DeviceMetadataFetcherTest, NoResponse) {
   base::MockCallback<GetObservedDeviceCallback> callback;
   EXPECT_CALL(callback, Run)
       .WillOnce(
-          [](absl::optional<nearby::fastpair::GetObservedDeviceResponse>
+          [](std::optional<nearby::fastpair::GetObservedDeviceResponse>
                  response,
-             bool has_retryable_error) { ASSERT_EQ(absl::nullopt, response); });
+             bool has_retryable_error) { ASSERT_EQ(std::nullopt, response); });
 
   device_metadata_fetcher_->LookupDeviceId(kDeviceId, callback.Get());
   task_environment.RunUntilIdle();
@@ -222,9 +223,9 @@ TEST_F(DeviceMetadataFetcherTest, RecordNetError) {
   base::MockCallback<GetObservedDeviceCallback> callback;
   EXPECT_CALL(callback, Run)
       .WillOnce(
-          [](absl::optional<nearby::fastpair::GetObservedDeviceResponse>
+          [](std::optional<nearby::fastpair::GetObservedDeviceResponse>
                  response,
-             bool has_retryable_error) { ASSERT_EQ(absl::nullopt, response); });
+             bool has_retryable_error) { ASSERT_EQ(std::nullopt, response); });
 
   device_metadata_fetcher_->LookupDeviceId(kDeviceId, callback.Get());
   task_environment.RunUntilIdle();
@@ -257,9 +258,9 @@ TEST_F(DeviceMetadataFetcherTest, RecordHttpError) {
   base::MockCallback<GetObservedDeviceCallback> callback;
   EXPECT_CALL(callback, Run)
       .WillOnce(
-          [](absl::optional<nearby::fastpair::GetObservedDeviceResponse>
+          [](std::optional<nearby::fastpair::GetObservedDeviceResponse>
                  response,
-             bool has_retryable_error) { ASSERT_EQ(absl::nullopt, response); });
+             bool has_retryable_error) { ASSERT_EQ(std::nullopt, response); });
 
   device_metadata_fetcher_->LookupDeviceId(kDeviceId, callback.Get());
   task_environment.RunUntilIdle();

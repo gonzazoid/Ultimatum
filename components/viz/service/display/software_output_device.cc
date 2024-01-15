@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "skia/ext/legacy_display_globals.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "ui/gfx/vsync_provider.h"
@@ -16,7 +16,7 @@
 namespace viz {
 
 SoftwareOutputDevice::SoftwareOutputDevice()
-    : SoftwareOutputDevice(base::SequencedTaskRunnerHandle::Get()) {}
+    : SoftwareOutputDevice(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 SoftwareOutputDevice::SoftwareOutputDevice(
     scoped_refptr<base::SequencedTaskRunner> task_runner)
@@ -40,7 +40,7 @@ void SoftwareOutputDevice::Resize(const gfx::Size& viewport_pixel_size,
                            viewport_pixel_size.height(), kOpaque_SkAlphaType);
   viewport_pixel_size_ = viewport_pixel_size;
   SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
-  surface_ = SkSurface::MakeRaster(info, &props);
+  surface_ = SkSurfaces::Raster(info, &props);
 }
 
 SkCanvas* SoftwareOutputDevice::BeginPaint(const gfx::Rect& damage_rect) {
@@ -54,8 +54,8 @@ gfx::VSyncProvider* SoftwareOutputDevice::GetVSyncProvider() {
   return vsync_provider_.get();
 }
 
-void SoftwareOutputDevice::OnSwapBuffers(
-    SwapBuffersCallback swap_ack_callback) {
+void SoftwareOutputDevice::OnSwapBuffers(SwapBuffersCallback swap_ack_callback,
+                                         gfx::FrameData data) {
   task_runner_->PostTask(FROM_HERE, base::BindOnce(std::move(swap_ack_callback),
                                                    viewport_pixel_size_));
 }

@@ -15,14 +15,13 @@
 #include <sstream>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromecast/base/cast_paths.h"
 #include "chromecast/base/pref_names.h"
 #include "chromecast/base/version.h"
@@ -62,7 +61,7 @@ std::unique_ptr<PrefService> CreatePrefService() {
 
   PrefServiceFactory prefServiceFactory;
   prefServiceFactory.SetUserPrefsFile(
-      prefs_path, base::ThreadTaskRunnerHandle::Get().get());
+      prefs_path, base::SingleThreadTaskRunner::GetCurrentDefault().get());
   return prefServiceFactory.Create(registry);
 }
 

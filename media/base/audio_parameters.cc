@@ -26,7 +26,8 @@ int ComputeChannelCount(ChannelLayout channel_layout, int channels) {
   }
   const int calculated_channel_count =
       ChannelLayoutToChannelCount(channel_layout);
-  DCHECK_EQ(calculated_channel_count, channels);
+  DCHECK(channel_layout == CHANNEL_LAYOUT_UNSUPPORTED ||
+         calculated_channel_count == channels);
   return calculated_channel_count;
 }
 
@@ -151,7 +152,7 @@ AudioParameters::AudioParameters(Format format,
                                  ChannelLayoutConfig channel_layout_config,
                                  int sample_rate,
                                  int frames_per_buffer)
-    : latency_tag_(AudioLatency::LATENCY_COUNT) {
+    : latency_tag_(AudioLatency::Type::kUnknown) {
   Reset(format, channel_layout_config, sample_rate, frames_per_buffer);
 }
 
@@ -161,7 +162,7 @@ AudioParameters::AudioParameters(
     int sample_rate,
     int frames_per_buffer,
     const HardwareCapabilities& hardware_capabilities)
-    : latency_tag_(AudioLatency::LATENCY_COUNT),
+    : latency_tag_(AudioLatency::Type::kUnknown),
       hardware_capabilities_(hardware_capabilities) {
   Reset(format, channel_layout_config, sample_rate, frames_per_buffer);
 }

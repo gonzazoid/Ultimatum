@@ -7,13 +7,13 @@
 
 #include <vector>
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_finalizer.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
 
 class GURL;
@@ -58,6 +58,11 @@ void UpdateWebAppInfoFromManifest(const blink::mojom::Manifest& manifest,
                                   const GURL& manifest_url,
                                   WebAppInstallInfo* web_app_info);
 
+// Same as above, but returns a fresh WebAppInstallInfo.
+WebAppInstallInfo CreateWebAppInfoFromManifest(
+    const blink::mojom::Manifest& manifest,
+    const GURL& manifest_url);
+
 // Form a list of icons to download: Remove icons with invalid urls.
 base::flat_set<GURL> GetValidIconUrlsToDownload(
     const WebAppInstallInfo& web_app_info);
@@ -76,10 +81,6 @@ void PopulateOtherIcons(WebAppInstallInfo* web_app_info,
 // `web_app_info` may be retained, and even used to generate missing icons.
 void PopulateProductIcons(WebAppInstallInfo* web_app_info,
                           const IconsMap* icons_map);
-
-// Record an app banner added to homescreen event to ensure banners are not
-// shown for this app.
-void RecordAppBanner(content::WebContents* contents, const GURL& app_url);
 
 // Records downloaded icons result and http code and code class.
 void RecordDownloadedIconsResultAndHttpStatusCodes(
@@ -126,16 +127,18 @@ void MaybeUnregisterOsUninstall(const WebApp* web_app,
 
 // Updates |web_app| using |web_app_info|
 void SetWebAppManifestFields(const WebAppInstallInfo& web_app_info,
-                             WebApp& web_app);
+                             WebApp& web_app,
+                             bool skip_icons_on_download_failure = false);
+
+// Updates product icon fields of |web_app| using |web_app_info|.
+void SetWebAppProductIconFields(const WebAppInstallInfo& web_app_info,
+                                WebApp& web_app);
 
 // Possibly updates |options| to disable OS-integrations based on the
 // configuration of the given app.
 void MaybeDisableOsIntegration(const WebAppRegistrar* app_registrar,
-                               const AppId& app_id,
+                               const webapps::AppId& app_id,
                                InstallOsHooksOptions* options);
-
-// Returns true if web app is allowed to update its identity (name and/or icon).
-bool CanWebAppUpdateIdentity(const WebApp* web_app);
 
 // Update |web_app_info| using |install_params|.
 void ApplyParamsToWebAppInstallInfo(const WebAppInstallParams& install_params,

@@ -5,42 +5,48 @@
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "ash/constants/ash_pref_names.h"
+#include "ash/constants/ash_switches.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "chrome/browser/ash/login/demo_mode/demo_mode_test_utils.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
-#include "chrome/browser/ash/login/demo_mode/demo_setup_test_utils.h"
+#include "chrome/browser/ash/login/enrollment/enrollment_launcher.h"
+#include "chrome/browser/ash/login/enrollment/mock_enrollment_launcher.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_requisition_manager.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "chromeos/constants/chromeos_features.h"
-#include "chromeos/system/fake_statistics_provider.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace {
 
 using test::DemoModeSetupResult;
+using test::SetupDemoModeNoEnrollment;
+using test::SetupDemoModeOnlineEnrollment;
 using test::SetupDummyOfflinePolicyDir;
-using test::SetupMockDemoModeNoEnrollmentHelper;
-using test::SetupMockDemoModeOnlineEnrollmentHelper;
 using ::testing::_;
+using ::testing::Mock;
+using ::testing::NiceMock;
 
 class DemoSetupControllerTestHelper {
  public:
@@ -100,9 +106,9 @@ class DemoSetupControllerTestHelper {
   }
 
  private:
-  absl::optional<bool> succeeded_;
-  absl::optional<DemoSetupController::DemoSetupStep> setup_step_;
-  absl::optional<DemoSetupController::DemoSetupError> error_;
+  std::optional<bool> succeeded_;
+  std::optional<DemoSetupController::DemoSetupStep> setup_step_;
+  std::optional<DemoSetupController::DemoSetupError> error_;
   std::unique_ptr<base::RunLoop> run_loop_;
 };
 
@@ -122,12 +128,9 @@ class DemoSetupControllerTest : public testing::Test {
     SessionManagerClient::InitializeFake();
     DeviceSettingsService::Initialize();
     policy::EnrollmentRequisitionManager::Initialize();
-    helper_ = std::make_unique<DemoSetupControllerTestHelper>();
-    tested_controller_ = std::make_unique<DemoSetupController>();
   }
 
   void TearDown() override {
-    EnterpriseEnrollmentHelper::SetEnrollmentHelperMock(nullptr);
     SessionManagerClient::Shutdown();
     DBusThreadManager::Shutdown();
     SystemSaltGetter::Shutdown();
@@ -138,125 +141,154 @@ class DemoSetupControllerTest : public testing::Test {
     return policy::EnrollmentRequisitionManager::GetDeviceRequisition();
   }
 
-  std::unique_ptr<DemoSetupControllerTestHelper> helper_;
-  std::unique_ptr<DemoSetupController> tested_controller_;
+  // Must be created first.
+  base::test::TaskEnvironment task_environment_;
+
+  // Mocks and helpers must outlive `tested_controller_`.
+  NiceMock<MockEnrollmentLauncher> mock_enrollment_launcher_;
+  DemoSetupControllerTestHelper helper_;
+
+  DemoSetupController tested_controller_;
   base::test::ScopedFeatureList feature_list_;
 
  private:
-  base::test::TaskEnvironment task_environment_;
   ScopedTestingLocalState testing_local_state_;
   ScopedStubInstallAttributes test_install_attributes_;
   system::ScopedFakeStatisticsProvider statistics_provider_;
 };
 
 TEST_F(DemoSetupControllerTest, OnlineSuccess) {
-  SetupMockDemoModeOnlineEnrollmentHelper(DemoModeSetupResult::SUCCESS);
+  SetupDemoModeOnlineEnrollment(&mock_enrollment_launcher_,
+                                DemoModeSetupResult::SUCCESS);
+  ScopedEnrollmentLauncherFactoryOverrideForTesting
+      enrollment_launcher_factory_override(base::BindRepeating(
+          FakeEnrollmentLauncher::Create, &mock_enrollment_launcher_));
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->Enroll(
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
   EXPECT_TRUE(
-      helper_->WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
+      helper_.WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
   EXPECT_EQ("", GetDeviceRequisition());
 }
 
 TEST_F(DemoSetupControllerTest, OnlineErrorDefault) {
-  SetupMockDemoModeOnlineEnrollmentHelper(DemoModeSetupResult::ERROR_DEFAULT);
+  NiceMock<MockEnrollmentLauncher> mock_enrollment_launcher;
+  SetupDemoModeOnlineEnrollment(&mock_enrollment_launcher_,
+                                DemoModeSetupResult::ERROR_DEFAULT);
+  ScopedEnrollmentLauncherFactoryOverrideForTesting
+      enrollment_launcher_factory_override(base::BindRepeating(
+          FakeEnrollmentLauncher::Create, &mock_enrollment_launcher_));
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->Enroll(
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
-  EXPECT_TRUE(helper_->WaitResult(
+  EXPECT_TRUE(helper_.WaitResult(
       false, DemoSetupController::DemoSetupStep::kEnrollment));
-  EXPECT_FALSE(helper_->RequiresPowerwash());
+  EXPECT_FALSE(helper_.RequiresPowerwash());
   EXPECT_EQ("", GetDeviceRequisition());
 }
 
 TEST_F(DemoSetupControllerTest, OnlineErrorPowerwashRequired) {
-  SetupMockDemoModeOnlineEnrollmentHelper(
-      DemoModeSetupResult::ERROR_POWERWASH_REQUIRED);
+  NiceMock<MockEnrollmentLauncher> mock_enrollment_launcher;
+  SetupDemoModeOnlineEnrollment(&mock_enrollment_launcher_,
+                                DemoModeSetupResult::ERROR_POWERWASH_REQUIRED);
+  ScopedEnrollmentLauncherFactoryOverrideForTesting
+      enrollment_launcher_factory_override(base::BindRepeating(
+          FakeEnrollmentLauncher::Create, &mock_enrollment_launcher_));
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->Enroll(
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
-  EXPECT_TRUE(helper_->WaitResult(
+  EXPECT_TRUE(helper_.WaitResult(
       false, DemoSetupController::DemoSetupStep::kEnrollment));
-  EXPECT_TRUE(helper_->RequiresPowerwash());
+  EXPECT_TRUE(helper_.RequiresPowerwash());
   EXPECT_EQ("", GetDeviceRequisition());
 }
 
 TEST_F(DemoSetupControllerTest, OnlineComponentError) {
   // Expect no enrollment attempt.
-  SetupMockDemoModeNoEnrollmentHelper();
+  NiceMock<MockEnrollmentLauncher> mock_enrollment_launcher;
+  SetupDemoModeNoEnrollment(&mock_enrollment_launcher_);
+  ScopedEnrollmentLauncherFactoryOverrideForTesting
+      enrollment_launcher_factory_override(base::BindRepeating(
+          FakeEnrollmentLauncher::Create, &mock_enrollment_launcher_));
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->SetCrOSComponentLoadErrorForTest(
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.SetCrOSComponentLoadErrorForTest(
       component_updater::CrOSComponentManager::Error::
           COMPATIBILITY_CHECK_FAILED);
-  tested_controller_->Enroll(
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
-  EXPECT_TRUE(helper_->WaitResult(
+  EXPECT_TRUE(helper_.WaitResult(
       false, DemoSetupController::DemoSetupStep::kEnrollment));
-  EXPECT_FALSE(helper_->RequiresPowerwash());
+  EXPECT_FALSE(helper_.RequiresPowerwash());
   EXPECT_EQ("", GetDeviceRequisition());
 }
 
 TEST_F(DemoSetupControllerTest, EnrollTwice) {
-  SetupMockDemoModeOnlineEnrollmentHelper(DemoModeSetupResult::ERROR_DEFAULT);
+  NiceMock<MockEnrollmentLauncher> mock_enrollment_launcher;
+  SetupDemoModeOnlineEnrollment(&mock_enrollment_launcher_,
+                                DemoModeSetupResult::ERROR_DEFAULT);
+  ScopedEnrollmentLauncherFactoryOverrideForTesting
+      enrollment_launcher_factory_override(base::BindRepeating(
+          FakeEnrollmentLauncher::Create, &mock_enrollment_launcher_));
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->Enroll(
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
-  EXPECT_TRUE(helper_->WaitResult(
+  EXPECT_TRUE(helper_.WaitResult(
       false, DemoSetupController::DemoSetupStep::kEnrollment));
-  EXPECT_FALSE(helper_->RequiresPowerwash());
+  EXPECT_FALSE(helper_.RequiresPowerwash());
   EXPECT_EQ("", GetDeviceRequisition());
 
-  helper_->Reset();
+  helper_.Reset();
+  Mock::VerifyAndClearExpectations(&mock_enrollment_launcher_);
 
-  SetupMockDemoModeOnlineEnrollmentHelper(DemoModeSetupResult::SUCCESS);
+  SetupDemoModeOnlineEnrollment(&mock_enrollment_launcher_,
+                                DemoModeSetupResult::SUCCESS);
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->Enroll(
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
   EXPECT_TRUE(
-      helper_->WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
+      helper_.WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
   EXPECT_EQ("", GetDeviceRequisition());
 }
 
@@ -362,49 +394,81 @@ TEST_F(DemoSetupControllerTest, GetSubOrganizationEmailForBlazeyDevice) {
   EXPECT_EQ(email, "");
 }
 
-TEST_F(DemoSetupControllerTest, OnlineSuccessWithValidRetailerAndStoreId) {
-  SetupMockDemoModeOnlineEnrollmentHelper(DemoModeSetupResult::SUCCESS);
+TEST_F(DemoSetupControllerTest, GetSubOrganizationEmailForCustomOU) {
+  base::test::ScopedCommandLine command_line;
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      switches::kDemoModeEnrollingUsername, "test-user-name");
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->set_retailer_store_id_input("ABC-1234");
-  tested_controller_->Enroll(
+  std::string email = DemoSetupController::GetSubOrganizationEmail();
+  EXPECT_EQ(email, "test-user-name@cros-demo-mode.com");
+}
+
+TEST_F(DemoSetupControllerTest, OnlineSuccessWithValidRetailerAndStore) {
+  NiceMock<MockEnrollmentLauncher> mock_enrollment_launcher;
+  SetupDemoModeOnlineEnrollment(&mock_enrollment_launcher_,
+                                DemoModeSetupResult::SUCCESS);
+  ScopedEnrollmentLauncherFactoryOverrideForTesting
+      enrollment_launcher_factory_override(base::BindRepeating(
+          FakeEnrollmentLauncher::Create, &mock_enrollment_launcher_));
+
+  tested_controller_.set_demo_config(DemoSession::DemoModeConfig::kOnline);
+  tested_controller_.SetAndCanonicalizeRetailerName("Retailer");
+  tested_controller_.set_store_number("1234");
+  tested_controller_.Enroll(
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
+                     base::Unretained(&helper_)),
       base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+                          base::Unretained(&helper_)));
 
   EXPECT_TRUE(
-      helper_->WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
+      helper_.WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
   EXPECT_EQ("", GetDeviceRequisition());
-  EXPECT_EQ("ABC", g_browser_process->local_state()->GetString(
-                       prefs::kDemoModeRetailerId));
+  EXPECT_EQ("retailer", g_browser_process->local_state()->GetString(
+                            prefs::kDemoModeRetailerId));
   EXPECT_EQ("1234", g_browser_process->local_state()->GetString(
                         prefs::kDemoModeStoreId));
 }
 
-TEST_F(DemoSetupControllerTest, OnlineSuccessWithInvalidRetailerAndStoreId) {
-  SetupMockDemoModeOnlineEnrollmentHelper(DemoModeSetupResult::SUCCESS);
-  tested_controller_->set_retailer_store_id_input("ABC");
+struct RetailerNameCanonicalizationTestCase {
+  std::string retailer_name;
+  std::string canonicalized_retailer_name;
+};
 
-  tested_controller_->set_demo_config(DemoSession::DemoModeConfig::kOnline);
-  tested_controller_->Enroll(
-      base::BindOnce(&DemoSetupControllerTestHelper::OnSetupSuccess,
-                     base::Unretained(helper_.get())),
-      base::BindOnce(&DemoSetupControllerTestHelper::OnSetupError,
-                     base::Unretained(helper_.get())),
-      base::BindRepeating(&DemoSetupControllerTestHelper::SetCurrentSetupStep,
-                          base::Unretained(helper_.get())));
+class RetailerNameCanonicalizationTest
+    : public DemoSetupControllerTest,
+      public ::testing::WithParamInterface<
+          RetailerNameCanonicalizationTestCase> {
+ public:
+  RetailerNameCanonicalizationTest() = default;
+  ~RetailerNameCanonicalizationTest() override = default;
+};
 
-  EXPECT_TRUE(
-      helper_->WaitResult(true, DemoSetupController::DemoSetupStep::kComplete));
-  EXPECT_EQ("", GetDeviceRequisition());
-  EXPECT_EQ("", g_browser_process->local_state()->GetString(
-                    prefs::kDemoModeRetailerId));
-  EXPECT_EQ(
-      "", g_browser_process->local_state()->GetString(prefs::kDemoModeStoreId));
+TEST_P(RetailerNameCanonicalizationTest, SetAndCanonicalizeRetailerName) {
+  tested_controller_.SetAndCanonicalizeRetailerName(GetParam().retailer_name);
+  ASSERT_EQ(tested_controller_.get_retailer_name_for_testing(),
+            GetParam().canonicalized_retailer_name);
 }
+
+const RetailerNameCanonicalizationTestCase kRetailerNameTestCases[] = {
+    {"retailer", "retailer"},
+    {"RETAILER", "retailer"},
+    {"ReTaiLeR", "retailer"},
+    {"retailer with spaces", "retailerwithspaces"},
+    {"retailer' w:th $ymbols", "retailerwthymbols"},
+    // Don't remove numeric chars
+    {"r3ta1ler", "r3ta1ler"},
+    // Test various case-sensitive diacritics and non-latin characters
+    {"rétailër", "rétailër"},
+    {"RÉTAILËR", "rétailër"},
+    {"RÆTÅILØR", "rætåilør"},
+    {"بائع تجزئة", "بائعتجزئة"},
+    {"小売業者.com", "小売業者com"}};
+
+INSTANTIATE_TEST_SUITE_P(TestRetailerNameTransformations,
+                         RetailerNameCanonicalizationTest,
+                         testing::ValuesIn(kRetailerNameTestCases));
 
 }  // namespace
 }  //  namespace ash

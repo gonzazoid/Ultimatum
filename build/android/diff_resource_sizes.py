@@ -5,7 +5,6 @@
 
 """Runs resource_sizes.py on two apks and outputs the diff."""
 
-from __future__ import print_function
 
 import argparse
 import json
@@ -15,7 +14,6 @@ import subprocess
 import sys
 
 from pylib.constants import host_paths
-from pylib.utils import shared_preference_utils
 
 with host_paths.SysPath(host_paths.BUILD_COMMON_PATH):
   import perf_tests_results_helper # pylint: disable=import-error
@@ -167,10 +165,10 @@ def main():
       raise
 
     # Combine the separate results
-    base_file = os.path.join(base_dir, _CHARTJSON_FILENAME)
-    diff_file = os.path.join(diff_dir, _CHARTJSON_FILENAME)
-    base_results = shared_preference_utils.ExtractSettingsFromJson(base_file)
-    diff_results = shared_preference_utils.ExtractSettingsFromJson(diff_file)
+    with open(os.path.join(base_dir, _CHARTJSON_FILENAME)) as base_file:
+      base_results = json.load(base_file)
+    with open(os.path.join(diff_dir, _CHARTJSON_FILENAME)) as diff_file:
+      diff_results = json.load(diff_file)
     DiffResults(chartjson, base_results, diff_results)
     if args.include_intermediate_results:
       AddIntermediateResults(chartjson, base_results, diff_results)

@@ -4,24 +4,42 @@
 
 package org.chromium.chrome.browser.dom_distiller;
 
+import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.ObserverList;
 import org.chromium.base.UserData;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.dom_distiller.content.DistillablePageUtils;
 import org.chromium.components.dom_distiller.content.DistillablePageUtils.PageDistillableDelegate;
+import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * A mechanism for clients interested in the distillability of a page to receive updates.
- */
-public class TabDistillabilityProvider
-        extends EmptyTabObserver implements PageDistillableDelegate, UserData {
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+
+/** A mechanism for clients interested in the distillability of a page to receive updates. */
+public class TabDistillabilityProvider extends EmptyTabObserver
+        implements PageDistillableDelegate, UserData {
     public static final Class<TabDistillabilityProvider> USER_DATA_KEY =
             TabDistillabilityProvider.class;
+
+    // These values are persisted to logs. Entries should not be renumbered and
+    // numeric values should never be reused.
+    @IntDef({
+        ContentClassification.OTHER,
+        ContentClassification.LONG_ARTICLE,
+        ContentClassification.COUNT
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ContentClassification {
+        int OTHER = 0;
+        int LONG_ARTICLE = 1;
+        int COUNT = 2;
+    };
 
     /** An observer of the distillable state of a tab and its active web content. */
     public interface DistillabilityObserver {
@@ -51,7 +69,9 @@ public class TabDistillabilityProvider
 
     /** Cached results from the last result from native. */
     private boolean mIsDistillable;
+
     private boolean mIsLast;
+    private boolean mIsLongArticle;
     private boolean mIsMobileOptimized;
 
     public static void createForTab(Tab tab) {
@@ -59,8 +79,7 @@ public class TabDistillabilityProvider
         tab.getUserDataHost().setUserData(USER_DATA_KEY, new TabDistillabilityProvider(tab));
     }
 
-    @Nullable
-    public static TabDistillabilityProvider get(Tab tab) {
+    public static @Nullable TabDistillabilityProvider get(Tab tab) {
         return tab.getUserDataHost().getUserData(USER_DATA_KEY);
     }
 
@@ -117,20 +136,40 @@ public class TabDistillabilityProvider
         mDistillabilityDetermined = false;
         mIsDistillable = false;
         mIsLast = false;
+        mIsLongArticle = false;
         mIsMobileOptimized = false;
 
-        if (mTab != null && mTab.getWebContents() != null
+        if (mTab != null
+                && mTab.getWebContents() != null
                 && mTab.getWebContents() != mWebContents) {
             mWebContents = mTab.getWebContents();
             DistillablePageUtils.setDelegate(mWebContents, this);
         }
     }
 
+    /** Records the Content.Classification metric if the distillability has been determined. */
+    private void recordContentClassificationMetric() {
+        // If the distillability was determined, record the Content Classification. Should be called
+        // before #resetState().
+        if (isDistillabilityDetermined()) {
+            RecordHistogram.recordEnumeratedHistogram(
+                    "Content.Classification",
+                    mIsLongArticle
+                            ? ContentClassification.LONG_ARTICLE
+                            : ContentClassification.OTHER,
+                    ContentClassification.COUNT);
+        }
+    }
+
     @Override
     public void onIsPageDistillableResult(
-            boolean isDistillable, boolean isLast, boolean isMobileOptimized) {
+            boolean isDistillable,
+            boolean isLast,
+            boolean isLongArticle,
+            boolean isMobileOptimized) {
         mIsDistillable = isDistillable;
         mIsLast = isLast;
+        mIsLongArticle = isLongArticle;
         mIsMobileOptimized = isMobileOptimized;
 
         mDistillabilityDetermined = true;
@@ -142,12 +181,19 @@ public class TabDistillabilityProvider
 
     @Override
     public void onContentChanged(Tab tab) {
+        recordContentClassificationMetric();
         resetState();
     }
 
     @Override
     public void onActivityAttachmentChanged(Tab tab, @Nullable WindowAndroid window) {
         if (window != null) return;
+        resetState();
+    }
+
+    @Override
+    public void onDidFinishNavigationInPrimaryMainFrame(Tab tab, NavigationHandle navigation) {
+        recordContentClassificationMetric();
         resetState();
     }
 

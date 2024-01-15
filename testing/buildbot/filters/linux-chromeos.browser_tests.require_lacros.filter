@@ -3,52 +3,88 @@
 # For more information, please see //chrome/test/base/chromeos/README.md.
 *Magn*.*
 AccessibilityExtension*
+AccessibilityHighlightsBrowserTest.*
+AppServiceAppWindowLacrosBrowserTest*
 Autoclick*
 AshTtsApiTest*
 BrowserAppShelfControllerBrowserTest*
+ChromeAppKioskLacrosTest*
 ChromeVox*
 DemoAshRequiresLacrosTest*
 DesksTemplatesClientLacrosTest*
 Dictation*
+*DictationTest*
+ExtensionKeeplistAllowPerfettoTest*
 ExtensionKeeplistTest*
+# Note: Some of FileTaskBrowserTest* runs only on branded ash and lacros builds.
+FileTaskBrowserTest*
+NonKioskAcceleratorLacrosTest*
 SelectToSpeak*
+StickyKeysBrowserTest*
 SwitchAccess*
 VpnExtensionObserverBrowserTest*
 WebAppsCrosapiBrowserTest*
-# TODO(crbug.com/1245416) Enable more accessibility tests.
--ChromeVoxBackgroundTest.SwipeLeftRight4ByContainers
+*WebAppsPreventCloseCrosapiBrowserTest*
+WebAppInstallerLacrosBrowserTest*
+WebAppProviderBridgeBrowserTest*
+WebKioskAcceleratorLacrosTest*
+WebKioskLacrosTest*
+CrosapiSystemLogSourceTest*
+TestAsNormalAndGuestUser/SpokenFeedbackTest.*
+# TODO(b/262789941) Enable more accessibility tests.
+# TODO(b/260289935): Flaky in Lacros.
 -ChromeVoxBackgroundTest.TabSwitchAndRefreshRecovery
--ChromeVoxBackgroundTest.TextSelectionAndLiveRegion
--ChromeVoxBackgroundTest.TouchEditingState
--ChromeVoxDesktopAutomationHandlerTest.TaskManagerTableView
--ChromeVoxISearchTest.Simple
--ChromeVoxPanelTest.FormControlsMenu
--ChromeVoxPanelTest.InternationalFormControlsMenu
--ChromeVoxPanelTest.LinkMenu
 -ChromeVoxPortalsTest.PortalName
 -ChromeVoxPortalsTest.ShouldFocusPortal
-# TODO(crbug.com/1378396) Remove once ash extension context menus are passed through to lacros
--SelectToSpeakContextMenuTest.*
--SelectToSpeakEnhancedNetworkTtsVoicesTest.*
--SelectToSpeakNavigationControlTest.*
+# TODO(b/276914335): Flaky in Lacros.
+-ChromeVoxAutoScrollHandlerTest.RecyclerViewByCharacter
+# TODO(b/301475127): Remove browser() dependency for the following dictation
+# tests.
+-*DictationTest.Help*
+-*DictationTest.WorksWithSelectToSpeak*
+# TODO(b/301253962): Some Switch Access tests fail/flake on Lacros.
 -SwitchAccessItemScanManagerTest.*
 -SwitchAccessPointScanManagerTest.PointScanLeftClick
--ChromeVoxAutoScrollHandlerTest.RecyclerViewByPredicate
--ChromeVoxTutorialTest.Gestures
--ChromeVoxTutorialTest.ExitButtonTest
--ChromeVoxTutorialTest.EscapeTest
-# Flaky (crbug.com/1268842).
--ChromeVoxBackgroundTest.GestureOnPopUpButton
--ChromeVoxBackgroundTest.HitTestOnExoSurface
--ChromeVoxEditingTest.JumpCommandsSyncSelection
+-SwitchAccessTest.NavigateButtonsInTextFieldMenu
 # TODO(https://crbug.com/1378291) Ash and Lacros browser window sizes differ.
 -ChromeVoxEditingTest.SelectAcrossSoftLineWraps
--ChromeVoxBackgroundTest.ListBoxItemsNavigation
--ChromeVoxLiveRegionsTest.FocusThenLiveRegion
--ChromeVoxLiveRegionsTest.LiveRegionAddElement
--ChromeVoxLiveRegionsTest.LiveRegionRemoveElement
--ChromeVoxUserActionMonitorTest.Gestures
-# TODO(crbug.com/1339456) Disabled when switch to LacrosOnly.
--DesksTemplatesClientLacrosTest.SystemUILaunchBrowser
-# TODO(crbug.com/1356103) Disabled when switch to LacrosOnly.
--SwitchAccessPointScanManagerTest.PointScanRightClick
+# TODO(b/277821091) Flaky
+-ChromeVoxEditingTest.GiantTextAreaPerformance
+# TODO(crbug.com/1478586): Flaky.
+-AutoclickWithAccessibilityServiceTest.ScrollableBoundsPlumbing
+# TODO(b/277256412): Test is flaky
+-DictationUIE2ETest.HintsTimeoutWithChromeVox
+# TODO(b/316393493): Figure out how to set home button pref in Lacros.
+-StickyKeysBrowserTest.CtrlClickHomeButton
+# TODO(accessibility): these are native C++ tests that need investigation.
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.NavigateChromeVoxMenu*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.ShowFormControlsList*
+-SelectToSpeakTest.ContinuesReadingDuringResize
+# TODO(b/318357300): Flaky.
+-AccessibilityHighlightsBrowserTest.CaretHighlightOmnibox
+# These tests do not run with the browser and do not need to run with Lacros.
+-AccessibilityCommonTest*
+-AccessibilityPrivateApiTest*
+-MagnificationManagerTest*
+-FullscreenMagnifierControllerTest.MovesContinuouslyWithMouse
+-FullscreenMagnifierControllerTest.MovesWithMouseAtEdge
+-FullscreenMagnifierControllerTest.ChangeZoomWithAccelerator
+-FullscreenMagnifierControllerTest.ChangeZoomWithPrefs
+-AccessibilityHighlightsBrowserTest.CursorHighlightAddsFocusRing
+-SelectToSpeakTest.SelectToSpeakDoesNotDismissTrayBubble
+-SelectToSpeakTest.SpeakStatusTray
+-StickyKeysBrowserTest.OpenTrayMenu
+-StickyKeysBrowserTest.OverlayShown
+-LoggedInSpokenFeedbackTest.OpenLogPage*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.TouchExploreStatusTray*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.ShelfBlockedAppIconBadgeAnnouncement*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.ShelfNotificationBadgeAnnouncement*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.ShelfPausedAppIconBadgeAnnouncement*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.SpeakingTextUnderMouseForShelfItem*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.FocusShelf*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.ShelfIconFocusForward*
+-TestAsNormalAndGuestUser/SpokenFeedbackTest.TouchExploreSecondaryDisplay*
+-TouchExplorationTest
+# TODO(crbug/1484723): Flaky
+-BrowserAppShelfControllerBrowserTest.WindowedApps
+-BrowserAppShelfControllerBrowserTest.TabbedApps

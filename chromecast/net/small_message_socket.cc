@@ -11,12 +11,11 @@
 #include <utility>
 
 #include "base/big_endian.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromecast/net/io_buffer_pool.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -81,7 +80,7 @@ SmallMessageSocket::SmallMessageSocket(Delegate* delegate,
                                        std::unique_ptr<net::Socket> socket)
     : delegate_(delegate),
       socket_(std::move(socket)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       write_storage_(base::MakeRefCounted<net::GrowableIOBuffer>()),
       write_buffer_(base::MakeRefCounted<BufferWrapper>()),
       read_storage_(base::MakeRefCounted<net::GrowableIOBuffer>()),
@@ -123,7 +122,8 @@ void SmallMessageSocket::ActivateBufferPool(char* current_data,
     CHECK(new_buffer);
     new_buffer_size = buffer_pool_->buffer_size();
   } else {
-    new_buffer = base::MakeRefCounted<::net::IOBuffer>(current_size * 2);
+    new_buffer =
+        base::MakeRefCounted<::net::IOBufferWithSize>(current_size * 2);
     new_buffer_size = current_size * 2;
   }
   memcpy(new_buffer->data(), current_data, current_size);
@@ -420,7 +420,8 @@ bool SmallMessageSocket::HandleCompletedMessageBuffers() {
 
     if (read_buffer_->size() < total_size) {
       // Current buffer is not big enough.
-      auto new_buffer = base::MakeRefCounted<::net::IOBuffer>(total_size);
+      auto new_buffer =
+          base::MakeRefCounted<::net::IOBufferWithSize>(total_size);
       memcpy(new_buffer->data(), read_buffer_->StartOfBuffer(), bytes_read);
       read_buffer_->SetUnderlyingBuffer(std::move(new_buffer), total_size);
       read_buffer_->DidConsume(bytes_read);
@@ -439,7 +440,7 @@ bool SmallMessageSocket::HandleCompletedMessageBuffers() {
     if (extra_size > 0) {
       // Copy extra data to new buffer.
       if (extra_size > buffer_pool_->buffer_size()) {
-        new_buffer = base::MakeRefCounted<::net::IOBuffer>(extra_size);
+        new_buffer = base::MakeRefCounted<::net::IOBufferWithSize>(extra_size);
         new_buffer_size = extra_size;
       }
       memcpy(new_buffer->data(), old_buffer->data() + total_size, extra_size);

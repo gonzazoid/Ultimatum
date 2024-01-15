@@ -43,6 +43,7 @@ namespace {{namespace}} {
   (property.is_animation_property and 'kAnimation' or ''),
   (property.supports_incremental_style and 'kSupportsIncrementalStyle' or ''),
   (property.idempotent and 'kIdempotent' or ''),
+  (property.accepts_numeric_literal and 'kAcceptsNumericLiteral' or ''),
   ((property.overlapping or property.legacy_overlapping) and 'kOverlapping' or ''),
   (property.legacy_overlapping and 'kLegacyOverlapping' or ''),
   (property.valid_for_first_letter and 'kValidForFirstLetter' or ''),
@@ -60,24 +61,28 @@ namespace {{namespace}} {
   (property.is_border_radius and 'kBorderRadius' or ''),
   (property.is_highlight_colors and 'kHighlightColors' or ''),
   (property.is_visited_highlight_colors and 'kVisitedHighlightColors' or ''),
-  (property.tree_scoped_value and 'kTreeScopedValue' or ''),
   (property.valid_for_highlight_legacy and 'kValidForHighlightLegacy' or ''),
   (property.valid_for_highlight and 'kValidForHighlight' or ''),
   (property.logical_property_group and 'kInLogicalPropertyGroup' or ''),
 ] | reject('==', '') | join(' | ') %}
 {% set ctor_args = (not is_alias and [property_id, flags, separator] or []) %}
 // {{property.name}}
+// NOTE: Multiple inheritance is not allowed here, since the class must be
+// reinterpret_cast-able to CSSUnresolvedProperty. See css_property_instances.cc.tmpl
+// (the cast happens in GetPropertyInternal()).
 class {{class_name}} final : public {{property.superclass}} {
  public:
   constexpr {{class_name}}() : {{property.superclass}}({{ctor_args | join(', ')}}) { }
   const char* GetPropertyName() const override;
   const WTF::AtomicString& GetPropertyNameAtomicString() const override;
   const char* GetJSPropertyName() const override;
-  {% if property.is_internal or property.runtime_flag and not property.in_origin_trial%}
-  CSSExposure Exposure() const override;
-  {% endif %}
-  {% if property.in_origin_trial %}
+  {% if not property.known_exposed %}
   CSSExposure Exposure(const ExecutionContext*) const override;
+  {% endif %}
+  {% if property.alternative %}
+  CSSPropertyID GetAlternative() const override {
+    return CSSPropertyID::{{property.alternative.enum_key}};
+  }
   {% endif %}
   {% if not is_alias %}
   {% if not property.affected_by_all %}
@@ -86,12 +91,6 @@ class {{class_name}} final : public {{property.superclass}} {
   {% if property.layout_dependent %}
   bool IsLayoutDependentProperty() const override { return true; }
   bool IsLayoutDependent(const ComputedStyle*, LayoutObject*) const override;
-  {% endif %}
-  {% if property.visited_property %}
-  const CSSProperty* GetVisitedProperty() const override;
-  {% endif %}
-  {% if property.unvisited_property %}
-  const CSSProperty* GetUnvisitedProperty() const override;
   {% endif %}
   {% if is_surrogate %}
   const CSSProperty* SurrogateFor(TextDirection, blink::WritingMode) const override;
@@ -102,7 +101,8 @@ class {{class_name}} final : public {{property.superclass}} {
   {% if property.logical_property_group %}
   bool IsInSameLogicalPropertyGroupWithDifferentMappingLogic(CSSPropertyID) const override;
     {% if property.logical_property_group.is_logical %}
-  const CSSProperty& ResolveDirectionAwareProperty(TextDirection, blink::WritingMode) const override;
+  const CSSProperty& ResolveDirectionAwarePropertyInternal(
+      TextDirection, blink::WritingMode) const override;
   const CSSValue* CSSValueFromComputedStyleInternal(
       const ComputedStyle&,
       const LayoutObject*,
@@ -117,10 +117,7 @@ class {{class_name}} final : public {{property.superclass}} {
   {% if property.style_builder_declare %}
   void ApplyInitial(StyleResolverState&) const override;
   void ApplyInherit(StyleResolverState&) const override;
-  void ApplyValue(StyleResolverState&, const CSSValue&) const override;
-  {% if property.tree_scoped_value %}
-  void ApplyValue(StyleResolverState&, const ScopedCSSValue&) const override;
-  {% endif %}
+  void ApplyValue(StyleResolverState&, const CSSValue&, ValueMode) const override;
   {% endif %}
   {% endif %} {# not is_alias #}
 };

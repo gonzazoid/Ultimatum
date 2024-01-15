@@ -7,7 +7,8 @@
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
@@ -78,7 +79,7 @@ class NotificationDelegate : public message_center::NotificationDelegate,
   }
 
   // Not owned.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   // Registrar used to monitor ARC enabled state.
   PrefChangeRegistrar pref_change_registrar_;
@@ -109,18 +110,17 @@ void ShowManagementTransitionNotification(Profile* profile) {
   notifier_id.profile_id =
       multi_user_util::GetAccountIdFromProfile(profile).GetUserEmail();
 
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE,
-          kManagementTransitionNotificationId,
-          l10n_util::GetStringUTF16(IDS_ARC_CHILD_TRANSITION_TITLE),
-          l10n_util::GetStringUTF16(IDS_ARC_CHILD_TRANSITION_MESSAGE),
-          l10n_util::GetStringUTF16(IDS_ARC_NOTIFICATION_DISPLAY_SOURCE),
-          GURL(), notifier_id, message_center::RichNotificationData(),
-          new NotificationDelegate(profile), GetNotificationIcon(transition),
-          message_center::SystemNotificationWarningLevel::NORMAL);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE,
+      kManagementTransitionNotificationId,
+      l10n_util::GetStringUTF16(IDS_ARC_CHILD_TRANSITION_TITLE),
+      l10n_util::GetStringUTF16(IDS_ARC_CHILD_TRANSITION_MESSAGE),
+      l10n_util::GetStringUTF16(IDS_ARC_NOTIFICATION_DISPLAY_SOURCE), GURL(),
+      notifier_id, message_center::RichNotificationData(),
+      new NotificationDelegate(profile), GetNotificationIcon(transition),
+      message_center::SystemNotificationWarningLevel::NORMAL);
   NotificationDisplayService::GetForProfile(profile)->Display(
-      NotificationHandler::Type::TRANSIENT, *notification,
+      NotificationHandler::Type::TRANSIENT, notification,
       /*metadata=*/nullptr);
 }
 

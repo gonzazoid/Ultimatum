@@ -8,8 +8,8 @@
 
 #include "base/at_exit.h"
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/native_library.h"
 #include "base/path_service.h"
@@ -17,11 +17,13 @@
 #include "base/trace_event/trace_event.h"
 #include "base/win/windows_version.h"
 #include "ui/gl/direct_composition_support.h"
+#include "ui/gl/gl_angle_util_win.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_egl_api_implementation.h"
 #include "ui/gl/gl_gl_api_implementation.h"
 #include "ui/gl/gl_utils.h"
+#include "ui/gl/init/gl_display_initializer.h"
 #include "ui/gl/vsync_provider_win.h"
 
 namespace gl {
@@ -123,18 +125,21 @@ bool InitializeStaticEGLInternal(GLImplementationParts implementation) {
 
 }  // namespace
 
-GLDisplay* InitializeGLOneOffPlatform(uint64_t system_device_id) {
+GLDisplay* InitializeGLOneOffPlatform(gl::GpuPreference gpu_preference) {
   VSyncProviderWin::InitializeOneOff();
 
-  GLDisplayEGL* display = GetDisplayEGL(system_device_id);
+  GLDisplayEGL* display = GetDisplayEGL(gpu_preference);
   switch (GetGLImplementation()) {
-    case kGLImplementationEGLANGLE:
-      if (!display->Initialize(EGLDisplayPlatform(GetDC(nullptr)))) {
+    case kGLImplementationEGLANGLE: {
+      if (!InitializeDisplay(display, EGLDisplayPlatform(GetDC(nullptr)))) {
         LOG(ERROR) << "GLDisplayEGL::Initialize failed.";
         return nullptr;
       }
-      InitializeDirectComposition(display);
+      if (auto d3d11_device = QueryD3D11DeviceObjectFromANGLE()) {
+        InitializeDirectComposition(std::move(d3d11_device));
+      }
       break;
+    }
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
       break;
@@ -154,7 +159,7 @@ bool InitializeStaticGLBindings(GLImplementationParts implementation) {
   // after instituting restrictions on I/O. Going forward they will
   // likely be used in the browser process on most platforms. The
   // one-time initialization cost is small, between 2 and 5 ms.
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking allow_blocking;
 
   switch (implementation.gl) {
     case kGLImplementationEGLANGLE:

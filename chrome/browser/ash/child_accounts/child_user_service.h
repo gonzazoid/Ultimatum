@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_report_interface.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_interface.h"
 #include "chrome/browser/ash/child_accounts/website_approval_notifier.h"
@@ -52,7 +53,7 @@ class ChildUserService : public KeyedService,
     app_time::AppTimeController* app_time_controller();
 
    private:
-    ChildUserService* const service_;
+    const raw_ptr<ChildUserService> service_;
   };
 
   // These enum values represent the current Family Link user's time limit
@@ -90,7 +91,7 @@ class ChildUserService : public KeyedService,
   // app_time::AppTimeLimitInterface:
   void PauseWebActivity(const std::string& app_service_id) override;
   void ResumeWebActivity(const std::string& app_service_id) override;
-  absl::optional<base::TimeDelta> GetTimeLimitForApp(
+  std::optional<base::TimeDelta> GetTimeLimitForApp(
       const std::string& app_service_id,
       apps::AppType app_type) override;
 
@@ -111,7 +112,7 @@ class ChildUserService : public KeyedService,
   // KeyedService:
   void Shutdown() override;
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   std::unique_ptr<app_time::AppTimeController> app_time_controller_;
 
@@ -123,10 +124,5 @@ class ChildUserService : public KeyedService,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::ChildUserService;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CHILD_ACCOUNTS_CHILD_USER_SERVICE_H_

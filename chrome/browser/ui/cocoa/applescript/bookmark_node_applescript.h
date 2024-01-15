@@ -5,10 +5,9 @@
 #ifndef CHROME_BROWSER_UI_COCOA_APPLESCRIPT_BOOKMARK_NODE_APPLESCRIPT_H_
 #define CHROME_BROWSER_UI_COCOA_APPLESCRIPT_BOOKMARK_NODE_APPLESCRIPT_H_
 
-#include "base/memory/raw_ptr.h"
+#import <Foundation/Foundation.h>
 
-#import <Cocoa/Cocoa.h>
-
+#include "base/uuid.h"
 #import "chrome/browser/ui/cocoa/applescript/element_applescript.h"
 
 namespace bookmarks {
@@ -18,14 +17,23 @@ class BookmarkNode;
 
 // Contains all the elements that are common to both a bookmark folder and
 // bookmark item.
-@interface BookmarkNodeAppleScript : ElementAppleScript {
- @protected
-  raw_ptr<const bookmarks::BookmarkNode> _bookmarkNode;  // weak.
-  // Contains the temporary title when a scripter creates a new folder/item with
-  // title specified like
-  // |make new bookmark folder with properties {title:"foo"}|.
-  NSString* _tempTitle;
-}
+@interface BookmarkNodeAppleScript : ElementAppleScript
+
+// Gets the node.
+@property(readonly) const bookmarks::BookmarkNode* bookmarkNode;
+
+// Get and Set title.
+@property(copy) NSString* title;
+
+// Returns the index with respect to its parent bookmark folder. 1-based because
+// this is intended for use by AppleScript.
+@property(readonly) NSNumber* index;
+
+// Returns the bookmark model of the browser, returns null if there is an error.
+@property(readonly) bookmarks::BookmarkModel* bookmarkModel;
+
+// Returns the GUID of the bookmark node.
+@property(readonly) base::Uuid bookmarkGUID;
 
 // Does not actually create a folder/item but just sets its ID, the folder is
 // created in insertInBookmarksFolder: in the corresponding bookmarks folder.
@@ -33,20 +41,10 @@ class BookmarkNode;
 
 // Does not make a folder/item but instead uses an existing one.
 - (instancetype)initWithBookmarkNode:
-    (const bookmarks::BookmarkNode*)aBookmarkNode;
+    (const bookmarks::BookmarkNode*)bookmarkNode;
 
-// Assigns a node, sets its unique ID and also copies temporary values.
-- (void)setBookmarkNode:(const bookmarks::BookmarkNode*)aBookmarkNode;
-
-// Get and Set title.
-- (NSString*)title;
-- (void)setTitle:(NSString*)aTitle;
-
-// Returns the index with respect to its parent bookmark folder.
-- (NSNumber*)index;
-
-// Returns the bookmark model of the browser, returns NULL if there is an error.
-- (bookmarks::BookmarkModel*)bookmarkModel;
+// Handles the bookkeeping for when a node is created.
+- (void)didCreateBookmarkNode:(const bookmarks::BookmarkNode*)bookmarkNode;
 
 @end
 

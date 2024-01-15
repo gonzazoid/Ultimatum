@@ -11,7 +11,11 @@
       {
         "id": "AccessLevel",
         "type": "string",
-        "enum": ["TRUSTED_CONTEXTS", "TRUSTED_AND_UNTRUSTED_CONTEXTS"],
+        "enum": [
+          {"name": "TRUSTED_CONTEXTS", "description": "Specifies contexts originating from the extension itself."},
+          {"name": "TRUSTED_AND_UNTRUSTED_CONTEXTS", "description": "Specifies contexts originating from outside the extension."}
+         // 
+         ],
         "description": "The storage area's access level."
       },
       {
@@ -93,7 +97,7 @@
               "parameters": [
                 {
                   "name": "bytesInUse",
-                  "type": "integer",
+                  "type": "number",
                   "description": "Amount of space being used in storage, in bytes."
                 }
               ]
@@ -250,7 +254,7 @@
         "value": [ "local" ],
         "properties": {
           "QUOTA_BYTES": {
-            "value": 5242880,
+            "value": 10485760,
             "description": "The maximum amount (in bytes) of data that can be stored in local storage, as measured by the JSON stringification of every value plus every key's length. This value will be ignored if the extension has the <code>unlimitedStorage</code> permission. Updates that would cause this limit to be exceeded fail immediately and set $(ref:runtime.lastError)."
           }
         }
@@ -266,7 +270,7 @@
         "value": ["session"],
         "properties": {
           "QUOTA_BYTES": {
-            "value": 1048576,
+            "value": 10485760,
             "description": "The maximum amount (in bytes) of data that can be stored in memory, as measured by estimating the dynamically allocated memory usage of every value and key. Updates that would cause this limit to be exceeded fail immediately and set $(ref:runtime.lastError)."
           }
         }

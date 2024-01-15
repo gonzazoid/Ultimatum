@@ -5,8 +5,10 @@
 #ifndef ASH_LOGIN_UI_BOTTOM_STATUS_INDICATOR_H_
 #define ASH_LOGIN_UI_BOTTOM_STATUS_INDICATOR_H_
 
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
+#include "base/memory/weak_ptr.h"
 #include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/view.h"
 
@@ -16,7 +18,9 @@ struct VectorIcon;
 
 namespace ash {
 
-class BottomStatusIndicator : public views::LabelButton {
+class BottomStatusIndicator final : public views::LabelButton {
+  METADATA_HEADER(BottomStatusIndicator, views::LabelButton)
+
  public:
   using TappedCallback = base::RepeatingClosure;
 
@@ -26,15 +30,21 @@ class BottomStatusIndicator : public views::LabelButton {
   ~BottomStatusIndicator() override;
 
   void SetIcon(const gfx::VectorIcon& vector_icon,
-               AshColorProvider::ContentLayerType type);
+               ui::ColorId color_id,
+               int icon_size = 0);
 
   void set_role_for_accessibility(ax::mojom::Role role) { role_ = role; }
 
   // views::View:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
+  base::WeakPtr<BottomStatusIndicator> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   ax::mojom::Role role_ = ax::mojom::Role::kStaticText;
+  base::WeakPtrFactory<BottomStatusIndicator> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

@@ -12,9 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/file_system_provider/abort_callback.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_observer.h"
@@ -31,11 +31,19 @@ namespace net {
 class IOBuffer;
 }  // namespace net
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class ProvidedFileSystemInfo;
-class RequestManager;
+class OperationRequestManager;
+
+// Represents a file or directory in cloud storage.
+struct CloudIdentifier {
+  std::string provider_name;
+  std::string id;
+
+  CloudIdentifier(const std::string& provider_name, const std::string& id);
+  bool operator==(const CloudIdentifier&) const;
+};
 
 // Represents metadata for either a file or a directory.
 struct EntryMetadata {
@@ -54,6 +62,7 @@ struct EntryMetadata {
   std::unique_ptr<base::Time> modification_time;
   std::unique_ptr<std::string> mime_type;
   std::unique_ptr<std::string> thumbnail;
+  std::unique_ptr<CloudIdentifier> cloud_identifier;
 };
 
 // Represents actions for either a file or a directory.
@@ -80,6 +89,18 @@ struct OpenedFile {
 // Map from a file handle to an OpenedFile struct.
 typedef std::map<int, OpenedFile> OpenedFiles;
 
+class ScopedUserInteraction {
+ public:
+  virtual ~ScopedUserInteraction();
+  ScopedUserInteraction(const ScopedUserInteraction&) = delete;
+  ScopedUserInteraction& operator=(const ScopedUserInteraction&) = delete;
+  ScopedUserInteraction(ScopedUserInteraction&&);
+  ScopedUserInteraction& operator=(ScopedUserInteraction&&);
+
+ protected:
+  ScopedUserInteraction();
+};
+
 // Interface for a provided file system. Acts as a proxy between providers
 // and clients. All of the request methods return an abort callback in order to
 // terminate it while running. They must be called on the same thread as the
@@ -96,7 +117,8 @@ class ProvidedFileSystemInterface {
     METADATA_FIELD_SIZE = 1 << 2,
     METADATA_FIELD_MODIFICATION_TIME = 1 << 3,
     METADATA_FIELD_MIME_TYPE = 1 << 4,
-    METADATA_FIELD_THUMBNAIL = 1 << 5
+    METADATA_FIELD_THUMBNAIL = 1 << 5,
+    METADATA_FIELD_CLOUD_IDENTIFIER = 1 << 6
   };
 
   // Callback for OpenFile(). In case of an error, file_handle is equal to 0
@@ -119,7 +141,7 @@ class ProvidedFileSystemInterface {
   // Mask of fields requested from the GetMetadata() call.
   typedef int MetadataFieldMask;
 
-  virtual ~ProvidedFileSystemInterface() {}
+  virtual ~ProvidedFileSystemInterface() = default;
 
   // Requests unmounting of the file system. The callback is called when the
   // request is accepted or rejected, with an error code.
@@ -222,6 +244,13 @@ class ProvidedFileSystemInterface {
       int length,
       storage::AsyncFileUtil::StatusCallback callback) = 0;
 
+  // Requests flushing data written to a file previously opened with
+  // `file_handle`. This is currently only called after the last write
+  // operation.
+  virtual AbortCallback FlushFile(
+      int file_handle,
+      storage::AsyncFileUtil::StatusCallback callback) = 0;
+
   // Requests adding a watcher on an entry. |recursive| must not be true for
   // files. |callback| is optional, but it can't be used for persistent
   // watchers.
@@ -269,7 +298,7 @@ class ProvidedFileSystemInterface {
   virtual const OpenedFiles& GetOpenedFiles() const = 0;
 
   // Returns a request manager for the file system.
-  virtual RequestManager* GetRequestManager() = 0;
+  virtual OperationRequestManager* GetRequestManager() = 0;
 
   // Adds an observer on the file system.
   virtual void AddObserver(ProvidedFileSystemObserver* observer) = 0;
@@ -279,21 +308,12 @@ class ProvidedFileSystemInterface {
 
   // Returns a weak pointer to this object.
   virtual base::WeakPtr<ProvidedFileSystemInterface> GetWeakPtr() = 0;
+
+  // Starts a user interaction with the file system, during which "unresponsive
+  // operation" notifications won't be created.
+  virtual std::unique_ptr<ScopedUserInteraction> StartUserInteraction() = 0;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace file_system_provider {
-using ::ash::file_system_provider::Action;
-using ::ash::file_system_provider::EntryMetadata;
-using ::ash::file_system_provider::OPEN_FILE_MODE_READ;
-using ::ash::file_system_provider::OPEN_FILE_MODE_WRITE;
-using ::ash::file_system_provider::OpenedFiles;
-using ::ash::file_system_provider::OpenFileMode;
-}  // namespace file_system_provider
-}  // namespace chromeos
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_PROVIDED_FILE_SYSTEM_INTERFACE_H_

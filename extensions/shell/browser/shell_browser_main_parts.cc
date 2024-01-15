@@ -8,8 +8,8 @@
 #include <string>
 
 #include "apps/browser_context_keyed_service_factories.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -19,7 +19,7 @@
 #include "components/sessions/core/session_id_generator.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "components/update_client/update_query_params.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/context_factory.h"
 #include "content/public/browser/devtools_agent_host.h"
@@ -265,6 +265,10 @@ void ShellBrowserMainParts::PostMainMessageLoopRun() {
 
   // Close apps before shutting down browser context and extensions system.
   desktop_controller_->CloseAppWindows();
+
+#if BUILDFLAG(ENABLE_NACL)
+  nacl::NaClBrowser::ClearAndDeleteDelegate();
+#endif
 
   // NOTE: Please destroy objects in the reverse order of their creation.
   browser_main_delegate_->Shutdown();

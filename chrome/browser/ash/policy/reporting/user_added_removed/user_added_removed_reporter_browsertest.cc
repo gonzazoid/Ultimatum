@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "ash/constants/ash_switches.h"
@@ -12,10 +13,9 @@
 #include "base/auto_reset.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_apps_mixin.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
-#include "chrome/browser/ash/login/test/kiosk_apps_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
@@ -29,10 +29,12 @@
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/extensions/browsertest_util.h"
 #include "chrome/browser/policy/messaging_layer/proto/synced/add_remove_user_event.pb.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/dbus/missive/missive_client.h"
 #include "chromeos/dbus/missive/missive_client_test_observer.h"
@@ -48,7 +50,6 @@
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using ::chromeos::MissiveClientTestObserver;
 using ::enterprise_management::ChromeDeviceSettingsProto;
@@ -77,7 +78,7 @@ Record GetNextUserAddedRemovedRecord(MissiveClientTestObserver* observer) {
   return record;
 }
 
-absl::optional<Record> MaybeGetEnqueuedUserAddedRemovedRecord() {
+std::optional<Record> MaybeGetEnqueuedUserAddedRemovedRecord() {
   const std::vector<Record>& records =
       chromeos::MissiveClient::Get()->GetTestInterface()->GetEnqueuedRecords(
           Priority::IMMEDIATE);
@@ -86,7 +87,7 @@ absl::optional<Record> MaybeGetEnqueuedUserAddedRemovedRecord() {
       return record;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Waiter used by tests during public session user creation.
@@ -178,6 +179,8 @@ IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterBrowserTest,
   test::WaitForPrimaryUserSessionStart();
 
   const Record& record = GetNextUserAddedRemovedRecord(&observer);
+  ASSERT_TRUE(record.has_source_info());
+  EXPECT_THAT(record.source_info().source(), Eq(::reporting::SourceInfo::ASH));
   ::reporting::UserAddedRemovedRecord record_data;
   ASSERT_TRUE(record_data.ParseFromString(record.data()));
   EXPECT_TRUE(record_data.has_user_added_event());
@@ -191,6 +194,8 @@ IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterBrowserTest,
       login_manager_mixin_.users()[0].account_id));
 
   const Record& record = GetNextUserAddedRemovedRecord(&observer);
+  ASSERT_TRUE(record.has_source_info());
+  EXPECT_THAT(record.source_info().source(), Eq(::reporting::SourceInfo::ASH));
   ::reporting::UserAddedRemovedRecord record_data;
   ASSERT_TRUE(record_data.ParseFromString(record.data()));
   ASSERT_TRUE(record_data.has_user_removed_event());
@@ -208,6 +213,8 @@ IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterBrowserTest,
   test::WaitForPrimaryUserSessionStart();
 
   const Record& record = GetNextUserAddedRemovedRecord(&observer);
+  ASSERT_TRUE(record.has_source_info());
+  EXPECT_THAT(record.source_info().source(), Eq(::reporting::SourceInfo::ASH));
   ::reporting::UserAddedRemovedRecord record_data;
   ASSERT_TRUE(record_data.ParseFromString(record.data()));
   EXPECT_TRUE(record_data.has_user_added_event());
@@ -234,6 +241,8 @@ IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterBrowserTest,
   ASSERT_TRUE(LoginScreenTestApi::RemoveUser(test_account_id_));
 
   const Record& record = GetNextUserAddedRemovedRecord(&observer);
+  ASSERT_TRUE(record.has_source_info());
+  EXPECT_THAT(record.source_info().source(), Eq(::reporting::SourceInfo::ASH));
   ::reporting::UserAddedRemovedRecord record_data;
   ASSERT_TRUE(record_data.ParseFromString(record.data()));
   ASSERT_TRUE(record_data.has_user_removed_event());
@@ -270,8 +279,7 @@ IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterBrowserTest,
       user_manager::UserManager::Get();
   ASSERT_TRUE(user_manager->IsLoggedInAsGuest());
 
-  const absl::optional<Record> record =
-      MaybeGetEnqueuedUserAddedRemovedRecord();
+  const std::optional<Record> record = MaybeGetEnqueuedUserAddedRemovedRecord();
   ASSERT_FALSE(record.has_value());
 }
 
@@ -353,10 +361,9 @@ IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterPublicSessionBrowserTest,
 
   const user_manager::UserManager* const user_manager =
       user_manager::UserManager::Get();
-  ASSERT_TRUE(user_manager->IsLoggedInAsPublicAccount());
+  ASSERT_TRUE(user_manager->IsLoggedInAsManagedGuestSession());
 
-  const absl::optional<Record> record =
-      MaybeGetEnqueuedUserAddedRemovedRecord();
+  const std::optional<Record> record = MaybeGetEnqueuedUserAddedRemovedRecord();
   ASSERT_FALSE(record.has_value());
 }
 
@@ -382,7 +389,6 @@ class UserAddedRemovedReporterKioskBrowserTest
     MixinBasedInProcessBrowserTest::SetUpInProcessBrowserTestFixture();
 
     host_resolver()->AddRule("*", "127.0.0.1");
-    SessionManagerClient::InitializeFakeInMemory();
     FakeSessionManagerClient::Get()->set_supports_browser_restart(true);
 
     ChromeDeviceSettingsProto& proto(policy_helper_.device_policy()->payload());
@@ -412,13 +418,8 @@ class UserAddedRemovedReporterKioskBrowserTest
 
 IN_PROC_BROWSER_TEST_F(UserAddedRemovedReporterKioskBrowserTest,
                        DoesNotReportKioskUser) {
-  test::WaitForPrimaryUserSessionStart();
-  const user_manager::UserManager* const user_manager =
-      user_manager::UserManager::Get();
-  ASSERT_TRUE(user_manager->IsLoggedInAsKioskApp());
-
-  const absl::optional<Record> record =
-      MaybeGetEnqueuedUserAddedRemovedRecord();
+  ASSERT_TRUE(::ash::LoginState::Get()->IsKioskSession());
+  const std::optional<Record> record = MaybeGetEnqueuedUserAddedRemovedRecord();
   ASSERT_FALSE(record.has_value());
 }
 

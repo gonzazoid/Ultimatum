@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/service_worker/service_worker_metrics.h"
 #include "net/http/http_response_headers.h"
@@ -26,7 +27,7 @@ class ServiceWorkerInstalledScriptReader::MetaDataSender {
         handle_(std::move(handle)),
         watcher_(FROM_HERE,
                  mojo::SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                 base::SequencedTaskRunnerHandle::Get()) {}
+                 base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   void Start(base::OnceCallback<void(bool /* success */)> callback) {
     callback_ = std::move(callback);
@@ -114,7 +115,7 @@ void ServiceWorkerInstalledScriptReader::Start() {
 void ServiceWorkerInstalledScriptReader::OnReadResponseHeadComplete(
     int result,
     network::mojom::URLResponseHeadPtr response_head,
-    absl::optional<mojo_base::BigBuffer> metadata) {
+    std::optional<mojo_base::BigBuffer> metadata) {
   DCHECK(client_);
   TRACE_EVENT0(
       "ServiceWorker",
@@ -141,7 +142,7 @@ void ServiceWorkerInstalledScriptReader::OnReadResponseHeadComplete(
 
 void ServiceWorkerInstalledScriptReader::OnReadDataPrepared(
     network::mojom::URLResponseHeadPtr response_head,
-    absl::optional<mojo_base::BigBuffer> metadata,
+    std::optional<mojo_base::BigBuffer> metadata,
     mojo::ScopedDataPipeConsumerHandle body_consumer_handle) {
   if (!body_consumer_handle) {
     CompleteSendIfNeeded(FinishedReason::kCreateDataPipeError);

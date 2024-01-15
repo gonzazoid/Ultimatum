@@ -17,6 +17,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.anything;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
@@ -31,7 +32,6 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.os.Build;
 import android.provider.Settings;
-import android.support.test.InstrumentationRegistry;
 
 import androidx.test.espresso.intent.Intents;
 import androidx.test.espresso.intent.matcher.IntentMatchers;
@@ -40,7 +40,6 @@ import androidx.test.filters.SmallTest;
 
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -52,21 +51,21 @@ import org.chromium.android_webview.devui.R;
 import org.chromium.android_webview.devui.WebViewPackageError;
 import org.chromium.android_webview.nonembedded_util.WebViewPackageHelper;
 import org.chromium.android_webview.test.AwJUnit4ClassRunner;
+import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseActivityTestRule;
-import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.DisableIf;
+import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
 import org.chromium.ui.test.util.ViewUtils;
 
 import java.util.Locale;
 
-/**
- * UI tests for the developer UI's HomeFragment.
- */
+/** UI tests for the developer UI's HomeFragment. */
 @RunWith(AwJUnit4ClassRunner.class)
-@Batch(Batch.PER_CLASS)
+@DoNotBatch(reason = "Batching causes test failures")
 public class HomeFragmentTest {
     public static final PackageInfo FAKE_WEBVIEW_PACKAGE = new PackageInfo();
+
     static {
         FAKE_WEBVIEW_PACKAGE.packageName = "org.chromium.fake_webview";
         FAKE_WEBVIEW_PACKAGE.versionCode = 123456789;
@@ -74,18 +73,18 @@ public class HomeFragmentTest {
     }
 
     @Rule
-    public BaseActivityTestRule mRule = new BaseActivityTestRule<MainActivity>(MainActivity.class);
+    public BaseActivityTestRule<MainActivity> mRule =
+            new BaseActivityTestRule<>(MainActivity.class);
 
     @Before
-    public void setUp() throws Exception {
-        // Espresso is normally configured to automatically wait for the main thread to go idle, but
-        // BaseActivityTestRule turns that behavior off so we must explicitly wait for the View
-        // hierarchy to inflate.
-        ViewUtils.waitForView(withId(R.id.main_info_list));
+    public void setUp() {
+        // Mark popup permission as already requested to suppress the popup
+        MainActivity.markPopupPermissionRequestedInPrefsForTesting();
     }
 
     @After
     public void tearDown() {
+        WebViewPackageHelper.setCurrentWebViewPackageForTesting(null);
         // Activity is launched, i.e the test is not skipped.
         if (mRule.getActivity() != null) {
             // Tests are responsible for verifying every Intent they trigger.
@@ -96,7 +95,7 @@ public class HomeFragmentTest {
 
     private void launchHomeFragment() {
         mRule.launchActivity(null);
-
+        ViewUtils.waitForVisibleView(withId(R.id.fragment_home));
         // Only start recording intents after launching the MainActivity.
         Intents.init();
 
@@ -120,7 +119,7 @@ public class HomeFragmentTest {
     // Test when the system WebView provider is the same package from which the developer UI is
     // launched.
     public void testSameWebViewPackage() throws Throwable {
-        Context context = InstrumentationRegistry.getTargetContext();
+        Context context = ContextUtils.getApplicationContext();
         // Inject test app package as the current WebView package.
         WebViewPackageHelper.setCurrentWebViewPackageForTesting(
                 WebViewPackageHelper.getContextPackageInfo(context));
@@ -133,8 +132,12 @@ public class HomeFragmentTest {
 
         PackageInfo currentWebViewPackage = WebViewPackageHelper.getCurrentWebViewPackage(context);
         String expectedWebViewPackageInfo =
-                String.format(Locale.US, "%s (%s/%s)", currentWebViewPackage.packageName,
-                        currentWebViewPackage.versionName, currentWebViewPackage.versionCode);
+                String.format(
+                        Locale.US,
+                        "%s (%s/%s)",
+                        currentWebViewPackage.packageName,
+                        currentWebViewPackage.versionName,
+                        currentWebViewPackage.versionCode);
         onData(anything())
                 .atPosition(0)
                 .onChildView(withId(android.R.id.text1))
@@ -162,8 +165,8 @@ public class HomeFragmentTest {
     // Test when the system WebView provider is different from the package from which the developer
     // UI is launched.
     public void testDifferentWebViewPackage() throws Throwable {
-        Context context = InstrumentationRegistry.getTargetContext();
-        // Inject a dummy PackageInfo as the current WebView package to make sure it will always be
+        Context context = ContextUtils.getApplicationContext();
+        // Inject a fake PackageInfo as the current WebView package to make sure it will always be
         // different from the test's app package.
         WebViewPackageHelper.setCurrentWebViewPackageForTesting(FAKE_WEBVIEW_PACKAGE);
         launchHomeFragment();
@@ -171,8 +174,12 @@ public class HomeFragmentTest {
         onView(withId(R.id.main_info_list)).check(matches(withCount(3)));
 
         String expectedWebViewPackageInfo =
-                String.format(Locale.US, "%s (%s/%s)", FAKE_WEBVIEW_PACKAGE.packageName,
-                        FAKE_WEBVIEW_PACKAGE.versionName, FAKE_WEBVIEW_PACKAGE.versionCode);
+                String.format(
+                        Locale.US,
+                        "%s (%s/%s)",
+                        FAKE_WEBVIEW_PACKAGE.packageName,
+                        FAKE_WEBVIEW_PACKAGE.versionName,
+                        FAKE_WEBVIEW_PACKAGE.versionCode);
         onData(anything())
                 .atPosition(0)
                 .onChildView(withId(android.R.id.text1))
@@ -183,8 +190,13 @@ public class HomeFragmentTest {
                 .check(matches(withText(expectedWebViewPackageInfo)));
 
         PackageInfo devUiPackage = WebViewPackageHelper.getContextPackageInfo(context);
-        String expectedDevUiInfo = String.format(Locale.US, "%s (%s/%s)", devUiPackage.packageName,
-                devUiPackage.versionName, devUiPackage.versionCode);
+        String expectedDevUiInfo =
+                String.format(
+                        Locale.US,
+                        "%s (%s/%s)",
+                        devUiPackage.packageName,
+                        devUiPackage.versionName,
+                        devUiPackage.versionCode);
         onData(anything())
                 .atPosition(1)
                 .onChildView(withId(android.R.id.text1))
@@ -209,27 +221,35 @@ public class HomeFragmentTest {
     @Test
     @MediumTest
     @Feature({"AndroidWebView"})
-    // clang-format off
-    @DisableIf.Build(sdk_is_greater_than = Build.VERSION_CODES.R,
-        message = "https://crbug.com/1292197")
-    // clang-format on
+    @DisableIf.Build(
+            sdk_is_greater_than = Build.VERSION_CODES.R,
+            message = "https://crbug.com/1292197")
     public void testLongPressCopy() throws Throwable {
-        Context context = InstrumentationRegistry.getTargetContext();
-        // Inject a dummy PackageInfo as the current WebView package to make sure it will always be
+        Context context = ContextUtils.getApplicationContext();
+        // Inject a fake PackageInfo as the current WebView package to make sure it will always be
         // different from the test's app package.
         WebViewPackageHelper.setCurrentWebViewPackageForTesting(FAKE_WEBVIEW_PACKAGE);
         launchHomeFragment();
 
         onView(withText("WebView package")).perform(longClick());
         String expectedWebViewInfo =
-                String.format(Locale.US, "%s (%s/%s)", FAKE_WEBVIEW_PACKAGE.packageName,
-                        FAKE_WEBVIEW_PACKAGE.versionName, FAKE_WEBVIEW_PACKAGE.versionCode);
+                String.format(
+                        Locale.US,
+                        "%s (%s/%s)",
+                        FAKE_WEBVIEW_PACKAGE.packageName,
+                        FAKE_WEBVIEW_PACKAGE.versionName,
+                        FAKE_WEBVIEW_PACKAGE.versionCode);
         assertThat(getClipBoardTextOnUiThread(context), is(equalTo(expectedWebViewInfo)));
 
         onView(withText("DevTools package")).perform(longClick());
         PackageInfo devUiPackage = WebViewPackageHelper.getContextPackageInfo(context);
-        String expectedDevUiInfo = String.format(Locale.US, "%s (%s/%s)", devUiPackage.packageName,
-                devUiPackage.versionName, devUiPackage.versionCode);
+        String expectedDevUiInfo =
+                String.format(
+                        Locale.US,
+                        "%s (%s/%s)",
+                        devUiPackage.packageName,
+                        devUiPackage.versionName,
+                        devUiPackage.versionCode);
         assertThat(getClipBoardTextOnUiThread(context), is(equalTo(expectedDevUiInfo)));
 
         onView(withText("Device info")).perform(longClick());
@@ -242,26 +262,32 @@ public class HomeFragmentTest {
     @MediumTest
     @Feature({"AndroidWebView"})
     public void testDifferentWebViewPackageError_bannerMessage_postNougat() throws Throwable {
-        Assume.assumeTrue("This test verifies behavior introduced in Nougat and above",
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N);
-
-        Context context = InstrumentationRegistry.getTargetContext();
-        // Inject a dummy PackageInfo as the current WebView package to make sure it will always be
+        // Inject a fake PackageInfo as the current WebView package to make sure it will always be
         // different from the test's app package.
         WebViewPackageHelper.setCurrentWebViewPackageForTesting(FAKE_WEBVIEW_PACKAGE);
         launchHomeFragment();
 
-        String expectedErrorMessage = String.format(Locale.US,
-                WebViewPackageError.DIFFERENT_WEBVIEW_PROVIDER_ERROR_MESSAGE,
-                WebViewPackageHelper.loadLabel(context));
-        ViewUtils.waitForView(withId(R.id.main_error_view));
+        Context context = ContextUtils.getApplicationContext();
+        String expectedErrorMessage =
+                String.format(
+                        Locale.US,
+                        WebViewPackageError.DIFFERENT_WEBVIEW_PROVIDER_ERROR_MESSAGE,
+                        WebViewPackageHelper.loadLabel(context));
+        ViewUtils.waitForVisibleView(withId(R.id.main_error_view));
         onView(withId(R.id.main_error_view)).check(matches(isDisplayed()));
         onView(withId(R.id.error_text)).check(matches(withText(expectedErrorMessage)));
         // Since the current provider is set to a fake package not an actual installed WebView
         // provider, the UI should only offer to change the system WebView provider and should not
         // offer to open the current WebView provider dev UI.
+
         onView(withId(R.id.action_button))
-                .check(matches(withText(WebViewPackageError.CHANGE_WEBVIEW_PROVIDER_BUTTON_TEXT)))
+                .check(
+                        matches(
+                                allOf(
+                                        isDisplayed(),
+                                        withText(
+                                                WebViewPackageError
+                                                        .CHANGE_WEBVIEW_PROVIDER_BUTTON_TEXT))))
                 .perform(click());
         intended(IntentMatchers.hasAction(Settings.ACTION_WEBVIEW_SETTINGS));
     }
@@ -271,21 +297,18 @@ public class HomeFragmentTest {
     @Feature({"AndroidWebView"})
     // Test the dialog shown when the WebView package error message is clicked.
     public void testDifferentWebViewPackageError_dialog_postNougat() throws Throwable {
-        Assume.assumeTrue("This test verifies behavior introduced in Nougat and above",
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.N);
-
-        Context context = InstrumentationRegistry.getTargetContext();
-        // Inject a dummy PackageInfo as the current WebView package to make sure it will always be
+        Context context = ContextUtils.getApplicationContext();
+        // Inject a fake PackageInfo as the current WebView package to make sure it will always be
         // different from the test's app package.
         WebViewPackageHelper.setCurrentWebViewPackageForTesting(FAKE_WEBVIEW_PACKAGE);
         launchHomeFragment();
 
-        String dialogExpectedMessage = String.format(Locale.US,
-                WebViewPackageError.DIFFERENT_WEBVIEW_PROVIDER_DIALOG_MESSAGE,
-                WebViewPackageHelper.loadLabel(context));
-        ViewUtils.waitForView(withId(R.id.main_error_view));
-        onView(withId(R.id.main_error_view)).perform(click());
-        ViewUtils.waitForView(withText(dialogExpectedMessage));
+        String dialogExpectedMessage =
+                String.format(
+                        Locale.US,
+                        WebViewPackageError.DIFFERENT_WEBVIEW_PROVIDER_DIALOG_MESSAGE,
+                        WebViewPackageHelper.loadLabel(context));
+        onView(withId(R.id.main_error_view)).check(matches(isDisplayed())).perform(click());
         onView(withText(dialogExpectedMessage)).check(matches(isDisplayed()));
         // Since the current provider is set to a fake package not an actual installed WebView
         // provider, the UI should only offer to change the system WebView provider and should not
@@ -297,66 +320,5 @@ public class HomeFragmentTest {
                 .check(matches(withText(WebViewPackageError.CHANGE_WEBVIEW_PROVIDER_BUTTON_TEXT)))
                 .perform(click());
         intended(IntentMatchers.hasAction(Settings.ACTION_WEBVIEW_SETTINGS));
-    }
-
-    @Test
-    @MediumTest
-    @Feature({"AndroidWebView"})
-    // Test that error message is shown when system's WebView provider package is different from dev
-    // UI's on a preNougat android versions (where WebView provider can't be changed).
-    public void testDifferentWebViewPackageError_bannerMessage_preNougat() throws Throwable {
-        Assume.assumeTrue("This test verifies pre-Nougat behavior",
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.N);
-
-        Context context = InstrumentationRegistry.getTargetContext();
-        // Inject a dummy PackageInfo as the current WebView package to make sure it will always be
-        // different from the test's app package.
-        WebViewPackageHelper.setCurrentWebViewPackageForTesting(FAKE_WEBVIEW_PACKAGE);
-        launchHomeFragment();
-
-        String expectedErrorMessage = String.format(Locale.US,
-                WebViewPackageError.DIFFERENT_WEBVIEW_PROVIDER_ERROR_MESSAGE,
-                WebViewPackageHelper.loadLabel(context));
-        ViewUtils.waitForView(withId(R.id.main_error_view));
-        onView(withId(R.id.main_error_view)).check(matches(isDisplayed()));
-        onView(withId(R.id.error_text)).check(matches(withText(expectedErrorMessage)));
-        // Since the current provider is set to a fake package not an actual installed WebView
-        // provider, the UI shouldn't offer opening current WebView provider dev UI. It should not
-        // offer to change system WebView provider because this is not supported on pre-Nougat
-        // android versions.
-        onView(withId(R.id.action_button)).check(matches(not(isDisplayed())));
-    }
-
-    @Test
-    @MediumTest
-    @Feature({"AndroidWebView"})
-    // Test the dialog shown when the WebView package error message is clicked (where WebView
-    // provider can't be changed).
-    public void testDifferentWebViewPackageError_dialog_preNougat() throws Throwable {
-        Assume.assumeTrue("This test verifies pre-Nougat behavior",
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.N);
-
-        Context context = InstrumentationRegistry.getTargetContext();
-        // Inject a dummy PackageInfo as the current WebView package to make sure it will always be
-        // different from the test's app package.
-        WebViewPackageHelper.setCurrentWebViewPackageForTesting(FAKE_WEBVIEW_PACKAGE);
-        launchHomeFragment();
-
-        String dialogExpectedMessage = String.format(Locale.US,
-                WebViewPackageError.DIFFERENT_WEBVIEW_PROVIDER_DIALOG_MESSAGE,
-                WebViewPackageHelper.loadLabel(context));
-        ViewUtils.waitForView(withId(R.id.main_error_view));
-        onView(withId(R.id.main_error_view)).perform(click());
-        ViewUtils.waitForView(withText(dialogExpectedMessage));
-        onView(withText(dialogExpectedMessage)).check(matches(isDisplayed()));
-        // Since the current provider is set to a fake package not an actual installed WebView
-        // provider, the UI shouldn't offer opening current WebView provider dev UI. It should not
-        // offer to change system WebView provider because this is not supported on pre-Nougat
-        // android versions.
-        //
-        // There should be no buttons in the Dialog.
-        onView(withId(android.R.id.button1)).check(matches(not(isDisplayed())));
-        onView(withId(android.R.id.button2)).check(matches(not(isDisplayed())));
-        onView(withId(android.R.id.button3)).check(matches(not(isDisplayed())));
     }
 }

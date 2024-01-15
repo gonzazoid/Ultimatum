@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_FULLSCREEN_CONTROL_FULLSCREEN_CONTROL_HOST_H_
 #define CHROME_BROWSER_UI_VIEWS_FULLSCREEN_CONTROL_FULLSCREEN_CONTROL_HOST_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "components/fullscreen_control/fullscreen_control_popup.h"
@@ -74,7 +74,9 @@ class FullscreenControlHost : public ui::EventObserver {
                          base::TimeDelta timeout);
   void OnPopupTimeout(InputEntryMethod expected_input_method);
   bool IsExitUiNeeded();
+  bool IsMouseLocked();
   float CalculateCursorBufferHeight() const;
+  void OnExitFullscreenPopupClicked();
 
   InputEntryMethod input_entry_method_ = InputEntryMethod::NOT_ACTIVE;
 

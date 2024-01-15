@@ -14,14 +14,17 @@
 #include "ash/public/cpp/holding_space/holding_space_util.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/system/holding_space/holding_space_item_chip_view.h"
 #include "ash/system/holding_space/holding_space_ui.h"
 #include "ash/system/holding_space/holding_space_util.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/rect_f.h"
@@ -33,37 +36,53 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/flex_layout_types.h"
+#include "ui/views/view_class_properties.h"
 
 namespace ash {
-
 namespace {
+
+// Helpers ---------------------------------------------------------------------
+
+std::unique_ptr<views::BoxLayout> WithCrossAxisAlignment(
+    std::unique_ptr<views::BoxLayout> layout,
+    views::BoxLayout::CrossAxisAlignment cross_axis_alignment) {
+  layout->set_cross_axis_alignment(cross_axis_alignment);
+  return layout;
+}
 
 // Header ----------------------------------------------------------------------
 
 class Header : public views::Button {
+  METADATA_HEADER(Header, views::Button)
+
  public:
   Header() {
-    SetAccessibleName(
-        l10n_util::GetStringUTF16(IDS_ASH_HOLDING_SPACE_DOWNLOADS_TITLE));
-    SetCallback(
-        base::BindRepeating(&Header::OnPressed, base::Unretained(this)));
-    SetID(kHoldingSpaceDownloadsSectionHeaderId);
-
-    auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
-        views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
-        kHoldingSpaceSectionHeaderSpacing));
-
-    // Label.
-    auto* label = AddChildView(
-        holding_space_ui::CreateSectionHeaderLabel(
-            IDS_ASH_HOLDING_SPACE_DOWNLOADS_TITLE)
-            .SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT)
-            .Build());
-    layout->SetFlexForView(label, 1);
-
-    // Chevron.
-    chevron_ = AddChildView(std::make_unique<views::ImageView>());
-    chevron_->SetFlipCanvasOnPaintForRTLUI(true);
+    // Layout/Properties.
+    views::Builder<views::Button>(this)
+        .SetID(kHoldingSpaceDownloadsSectionHeaderId)
+        .SetAccessibleName(
+            l10n_util::GetStringUTF16(IDS_ASH_HOLDING_SPACE_DOWNLOADS_TITLE))
+        .SetCallback(
+            base::BindRepeating(&Header::OnPressed, base::Unretained(this)))
+        .SetLayoutManager(WithCrossAxisAlignment(
+            std::make_unique<views::BoxLayout>(
+                views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
+                kHoldingSpaceSectionHeaderSpacing),
+            views::BoxLayout::CrossAxisAlignment::kCenter))
+        .AddChildren(
+            holding_space_ui::CreateSectionHeaderLabel(
+                IDS_ASH_HOLDING_SPACE_DOWNLOADS_TITLE)
+                .SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT)
+                .SetProperty(views::kBoxLayoutFlexKey,
+                             views::BoxLayoutFlexSpecification()),
+            views::Builder<views::ImageView>()
+                .CopyAddressTo(&chevron_)
+                .SetFlipCanvasOnPaintForRTLUI(true)
+                .SetImage(ui::ImageModel::FromVectorIcon(
+                    kChevronRightSmallIcon, kColorAshIconColorPrimary,
+                    kHoldingSpaceSectionChevronIconSize)))
+        .BuildChildren();
 
     // Focus ring.
     // Though the entirety of the header is focusable and behaves as a single
@@ -85,18 +104,6 @@ class Header : public views::Button {
   }
 
  private:
-  // views::Button:
-  void OnThemeChanged() override {
-    views::Button::OnThemeChanged();
-    AshColorProvider* const ash_color_provider = AshColorProvider::Get();
-
-    // Chevron.
-    chevron_->SetImage(gfx::CreateVectorIcon(
-        kChevronRightSmallIcon, kHoldingSpaceSectionChevronIconSize,
-        ash_color_provider->GetContentLayerColor(
-            AshColorProvider::ContentLayerType::kIconColorPrimary)));
-  }
-
   void OnPressed() {
     holding_space_metrics::RecordDownloadsAction(
         holding_space_metrics::DownloadsAction::kClick);
@@ -105,8 +112,11 @@ class Header : public views::Button {
   }
 
   // Owned by view hierarchy.
-  views::ImageView* chevron_ = nullptr;
+  raw_ptr<views::ImageView> chevron_ = nullptr;
 };
+
+BEGIN_METADATA(Header, views::Button)
+END_METADATA
 
 }  // namespace
 
@@ -117,10 +127,6 @@ DownloadsSection::DownloadsSection(HoldingSpaceViewDelegate* delegate)
                                    HoldingSpaceSectionId::kDownloads) {}
 
 DownloadsSection::~DownloadsSection() = default;
-
-const char* DownloadsSection::GetClassName() const {
-  return "DownloadsSection";
-}
 
 std::unique_ptr<views::View> DownloadsSection::CreateHeader() {
   auto header = std::make_unique<Header>();
@@ -142,5 +148,8 @@ std::unique_ptr<HoldingSpaceItemView> DownloadsSection::CreateView(
     const HoldingSpaceItem* item) {
   return std::make_unique<HoldingSpaceItemChipView>(delegate(), item);
 }
+
+BEGIN_METADATA(DownloadsSection, HoldingSpaceItemViewsSection)
+END_METADATA
 
 }  // namespace ash

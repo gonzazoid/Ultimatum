@@ -52,17 +52,55 @@ enum class FineTunePosition {
   // The initial press was inside the select region. Subsequent drags will
   // move the entire region.
   kCenter,
-  // The initial press was on one of the drag affordance circles. Subsequent
-  // drags will resize the region. These are sorted clockwise starting at the
-  // top left.
-  kTopLeft,
-  kTopCenter,
-  kTopRight,
-  kRightCenter,
-  kBottomRight,
-  kBottomCenter,
-  kBottomLeft,
-  kLeftCenter,
+  // The initial press was on one of the drag affordance circles in the corners.
+  // Subsequent drags will resize the region. These are sorted clockwise
+  // starting at the top left.
+  kTopLeftVertex,
+  kTopRightVertex,
+  kBottomRightVertex,
+  kBottomLeftVertex,
+  // The initial press was along the edges of the region. Subsequent drags will
+  // resize the region, but only along one dimension. These are sorted clockwise
+  // starting at the top.
+  kTopEdge,
+  kRightEdge,
+  kBottomEdge,
+  kLeftEdge,
+};
+
+// Defines the supported recording formats.
+enum class RecordingType {
+  kWebM,
+  kGif,
+};
+
+// Defines the supported audio recording modes. Note that these values are
+// persisted to histograms so existing values should remain unchanged and new
+// values should be added to the end.
+enum class AudioRecordingMode {
+  kOff = 0,
+  kSystem,
+  kMicrophone,
+  kSystemAndMicrophone,
+  kMaxValue = kSystemAndMicrophone,
+};
+
+// Specifies the capture mode behavior types.
+enum class BehaviorType {
+  kDefault,
+  kProjector,
+  kGameDashboard,
+};
+
+// Converts the enum class `RecordingType` to its integer value.
+constexpr int ToInt(RecordingType type) {
+  return static_cast<int>(type);
+}
+
+// The concrete type of the capture session instance.
+enum class SessionType {
+  kNull,
+  kReal,
 };
 
 }  // namespace ash

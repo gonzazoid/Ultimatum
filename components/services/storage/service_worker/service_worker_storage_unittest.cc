@@ -10,14 +10,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/net_errors.h"
@@ -41,7 +41,8 @@ ResourceRecord CreateResourceRecord(int64_t resource_id,
                                     const GURL& url,
                                     int64_t size_bytes) {
   EXPECT_TRUE(url.is_valid());
-  return mojom::ServiceWorkerResourceRecord::New(resource_id, url, size_bytes);
+  return mojom::ServiceWorkerResourceRecord::New(resource_id, url, size_bytes,
+                                                 /*sha256_checksum=*/"");
 }
 
 mojom::ServiceWorkerRegistrationDataPtr CreateRegistrationData(
@@ -85,7 +86,8 @@ class ServiceWorkerStorageTest : public testing::Test {
   void SetUp() override {
     storage_ = ServiceWorkerStorage::Create(
         user_data_directory_path_,
-        /*database_task_runner=*/base::ThreadTaskRunnerHandle::Get());
+        /*database_task_runner=*/base::SingleThreadTaskRunner::
+            GetCurrentDefault());
   }
 
   void TearDown() override {
@@ -326,6 +328,22 @@ class ServiceWorkerStorageTest : public testing::Test {
     return result;
   }
 
+  ServiceWorkerDatabase::Status UpdateResourceSha256Checksums(
+      int64_t registration_id,
+      const blink::StorageKey& key,
+      const base::flat_map<int64_t, std::string>& updated_sha256_checksums) {
+    ServiceWorkerDatabase::Status result;
+    base::RunLoop loop;
+    storage()->UpdateResourceSha256Checksums(
+        registration_id, key, updated_sha256_checksums,
+        base::BindLambdaForTesting([&](ServiceWorkerDatabase::Status status) {
+          result = status;
+          loop.Quit();
+        }));
+    loop.Run();
+    return result;
+  }
+
   ServiceWorkerDatabase::Status FindRegistrationForClientUrl(
       const GURL& document_url,
       const blink::StorageKey& key) {
@@ -333,12 +351,14 @@ class ServiceWorkerStorageTest : public testing::Test {
     base::RunLoop loop;
     storage()->FindRegistrationForClientUrl(
         document_url, key,
-        base::BindLambdaForTesting([&](mojom::ServiceWorkerRegistrationDataPtr,
-                                       std::unique_ptr<ResourceList>,
-                                       ServiceWorkerDatabase::Status status) {
-          result = status;
-          loop.Quit();
-        }));
+        base::BindLambdaForTesting(
+            [&](mojom::ServiceWorkerRegistrationDataPtr,
+                std::unique_ptr<ResourceList>,
+                const absl::optional<std::vector<GURL>>& scopes,
+                ServiceWorkerDatabase::Status status) {
+              result = status;
+              loop.Quit();
+            }));
     loop.Run();
     return result;
   }
@@ -549,10 +569,11 @@ class ServiceWorkerStorageTest : public testing::Test {
 TEST_F(ServiceWorkerStorageTest, DisabledStorage) {
   const GURL kScope("http://www.example.com/scope/");
   const url::Origin kOrigin = url::Origin::Create(kScope);
-  const blink::StorageKey kKey(kOrigin);
+  const blink::StorageKey kKey = blink::StorageKey::CreateFirstParty(kOrigin);
   const GURL kScript("http://www.example.com/script.js");
   const GURL kDocumentUrl("http://www.example.com/scope/document.html");
   const int64_t kRegistrationId = 0;
+  const int64_t kRegistrationId2 = 1;
   const int64_t kVersionId = 0;
   const int64_t kResourceId = 0;
 
@@ -590,6 +611,16 @@ TEST_F(ServiceWorkerStorageTest, DisabledStorage) {
                 kRegistrationId, kKey,
                 blink::mojom::ServiceWorkerFetchHandlerType::kNotSkippable),
             ServiceWorkerDatabase::Status::kErrorDisabled);
+
+  std::vector<ResourceRecord> resources2;
+  resources2.push_back(CreateResourceRecord(kResourceId, kScript, 100));
+  CreateRegistrationData(kRegistrationId2, kVersionId, kScope, kKey, kScript,
+                         resources2);
+  EXPECT_EQ(
+      UpdateResourceSha256Checksums(kRegistrationId2, kKey,
+                                    base::flat_map<int64_t, std::string>(
+                                        {{resources2[0]->resource_id, ""}})),
+      ServiceWorkerDatabase::Status::kErrorDisabled);
 
   EXPECT_EQ(DeleteRegistration(kRegistrationId, kKey),
             ServiceWorkerDatabase::Status::kErrorDisabled);
@@ -630,7 +661,7 @@ TEST_F(ServiceWorkerStorageTest, StoreUserData) {
   const int64_t kRegistrationId = 1;
   const GURL kScope("http://www.test.not/scope/");
   const url::Origin kOrigin = url::Origin::Create(kScope);
-  const blink::StorageKey kKey(kOrigin);
+  const blink::StorageKey kKey = blink::StorageKey::CreateFirstParty(kOrigin);
   const GURL kScript("http://www.test.not/script.js");
   LazyInitialize();
 
@@ -804,7 +835,7 @@ TEST_F(ServiceWorkerStorageTest, StoreUserData) {
 TEST_F(ServiceWorkerStorageTest, StoreUserData_BeforeInitialize) {
   const int kRegistrationId = 0;
   EXPECT_EQ(StoreUserData(kRegistrationId,
-                          blink::StorageKey(
+                          blink::StorageKey::CreateFirstParty(
                               url::Origin::Create(GURL("https://example.com"))),
                           {{"key", "data"}}),
             ServiceWorkerDatabase::Status::kErrorNotFound);
@@ -852,7 +883,8 @@ class ServiceWorkerStorageDiskTest : public ServiceWorkerStorageTest {
     // Store a registration with a resource to make sure disk cache and
     // database directories are created.
     const GURL kScope("http://www.example.com/scope/");
-    const blink::StorageKey kKey(url::Origin::Create(kScope));
+    const blink::StorageKey kKey =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(kScope));
     const GURL kScript("http://www.example.com/script.js");
     const int64_t kScriptSize = 5;
     auto data = mojom::ServiceWorkerRegistrationData::New();
@@ -952,7 +984,8 @@ TEST_F(ServiceWorkerStorageDiskTest, DeleteAndStartOver_OpenedFileExists) {
 TEST_F(ServiceWorkerStorageTest, GetStorageUsageForOrigin) {
   const int64_t kRegistrationId1 = 1;
   const GURL kScope1("https://www.example.com/foo/");
-  const blink::StorageKey kKey1(url::Origin::Create(kScope1));
+  const blink::StorageKey kKey1 =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kScope1));
   const GURL kScript1("https://www.example.com/foo/sw.js");
   const int64_t kRegistrationId2 = 2;
   const GURL kScope2("https://www.example.com/bar/");

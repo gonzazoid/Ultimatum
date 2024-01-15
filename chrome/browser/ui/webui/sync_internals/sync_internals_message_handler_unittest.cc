@@ -8,23 +8,22 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/user_event_service_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/sync/driver/sync_internals_util.h"
-#include "components/sync/driver/sync_service.h"
 #include "components/sync/model/type_entities_count.h"
+#include "components/sync/service/sync_internals_util.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync/test/fake_sync_service.h"
 #include "components/sync_user_events/fake_user_event_service.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/test_web_ui.h"
 
-using base::DictionaryValue;
 using sync_pb::UserEventSpecifics;
 using syncer::FakeUserEventService;
 using syncer::SyncService;
@@ -189,11 +188,12 @@ class SyncInternalsMessageHandlerTest : public ChromeRenderViewHostTestHarness {
 
  private:
   content::TestWebUI web_ui_;
-  raw_ptr<TestSyncService> test_sync_service_;
-  raw_ptr<FakeUserEventService> fake_user_event_service_;
+  raw_ptr<TestSyncService, DanglingUntriaged> test_sync_service_ = nullptr;
+  raw_ptr<FakeUserEventService, DanglingUntriaged> fake_user_event_service_ =
+      nullptr;
   std::unique_ptr<TestableSyncInternalsMessageHandler> handler_;
   int about_sync_data_delegate_call_count_ = 0;
-  raw_ptr<SyncService> last_delegate_sync_service_ = nullptr;
+  raw_ptr<SyncService, DanglingUntriaged> last_delegate_sync_service_ = nullptr;
   // Fake return value for sync_ui_util::ConstructAboutInformation().
   base::Value::Dict about_information_;
 };

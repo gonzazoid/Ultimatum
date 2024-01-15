@@ -8,7 +8,8 @@
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 
 namespace views {
 class Widget;
@@ -41,7 +42,7 @@ class ASH_EXPORT FocusCycler {
   void RemoveWidget(views::Widget* widget);
 
   // Move focus to the next widget.
-  void RotateFocus(Direction direction);
+  void RotateFocus(Direction direction, bool move_onto_next_widget = false);
 
   // Moves focus the specified widget. Returns true if the widget was activated.
   bool FocusWidget(views::Widget* widget);
@@ -52,10 +53,10 @@ class ASH_EXPORT FocusCycler {
       base::RepeatingCallback<bool(views::Widget*)> callback);
 
  private:
-  std::vector<views::Widget*> widgets_;
+  std::vector<raw_ptr<views::Widget, VectorExperimental>> widgets_;
 
   // See description above getter.
-  views::Widget* widget_activating_;
+  raw_ptr<views::Widget> widget_activating_;
 };
 
 }  // namespace ash

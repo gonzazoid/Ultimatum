@@ -10,7 +10,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
@@ -54,11 +55,11 @@ CheckerImagingDecision GetAnimationDecision(const PaintImage& image) {
     return CheckerImagingDecision::kVetoedMultipartImage;
 
   switch (image.animation_type()) {
-    case PaintImage::AnimationType::ANIMATED:
+    case PaintImage::AnimationType::kAnimated:
       return CheckerImagingDecision::kVetoedAnimatedImage;
-    case PaintImage::AnimationType::VIDEO:
+    case PaintImage::AnimationType::kVideo:
       return CheckerImagingDecision::kVetoedVideoFrame;
-    case PaintImage::AnimationType::STATIC:
+    case PaintImage::AnimationType::kStatic:
       return CheckerImagingDecision::kCanChecker;
   }
 
@@ -68,9 +69,9 @@ CheckerImagingDecision GetAnimationDecision(const PaintImage& image) {
 
 CheckerImagingDecision GetLoadDecision(const PaintImage& image) {
   switch (image.completion_state()) {
-    case PaintImage::CompletionState::DONE:
+    case PaintImage::CompletionState::kDone:
       return CheckerImagingDecision::kCanChecker;
-    case PaintImage::CompletionState::PARTIALLY_DONE:
+    case PaintImage::CompletionState::kPartiallyDone:
       return CheckerImagingDecision::kVetoedPartiallyLoadedImage;
   }
 
@@ -289,8 +290,7 @@ bool CheckerImageTracker::ShouldCheckerImage(const DrawImage& draw_image,
 
   // If the image is pending invalidation, continue checkering it. All tiles
   // for these images will be invalidated on the next pending tree.
-  if (images_pending_invalidation_.find(image_id) !=
-      images_pending_invalidation_.end()) {
+  if (base::Contains(images_pending_invalidation_, image_id)) {
     return true;
   }
 

@@ -2,15 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 export interface WhatsNewProxy {
-  initialize(): Promise<string>;
+  initialize(isRefresh: boolean): Promise<string>;
 }
 
 export class WhatsNewProxyImpl implements WhatsNewProxy {
-  initialize(): Promise<string> {
-    return sendWithPromise('initialize');
+  initialize(isRefresh: boolean): Promise<string> {
+    return sendWithPromise('initialize', isRefresh);
   }
 
   static getInstance(): WhatsNewProxy {

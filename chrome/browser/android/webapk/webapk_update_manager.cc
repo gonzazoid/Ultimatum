@@ -12,12 +12,12 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/android/chrome_jni_headers/WebApkUpdateManager_jni.h"
 #include "chrome/browser/android/webapk/webapk_features.h"
 #include "chrome/browser/android/webapk/webapk_install_service.h"
@@ -31,6 +31,8 @@
 #include "ui/android/color_utils_android.h"
 #include "url/gurl.h"
 
+using base::android::ConvertJavaStringToUTF16;
+using base::android::ConvertJavaStringToUTF8;
 using base::android::JavaParamRef;
 using base::android::JavaRef;
 using base::android::ScopedJavaGlobalRef;
@@ -67,10 +69,10 @@ static void JNI_WebApkUpdateManager_StoreWebApkUpdateRequestToFile(
     const JavaParamRef<jstring>& java_manifest_id,
     const JavaParamRef<jstring>& java_app_key,
     const JavaParamRef<jstring>& java_primary_icon_url,
-    const JavaParamRef<jstring>& java_primary_icon_data,
+    const JavaParamRef<jbyteArray>& java_primary_icon_data,
     jboolean java_is_primary_icon_maskable,
     const JavaParamRef<jstring>& java_splash_icon_url,
-    const JavaParamRef<jstring>& java_splash_icon_data,
+    const JavaParamRef<jbyteArray>& java_splash_icon_data,
     jboolean java_is_splash_icon_maskable,
     const JavaParamRef<jobjectArray>& java_icon_urls,
     const JavaParamRef<jobjectArray>& java_icon_hashes,
@@ -78,6 +80,8 @@ static void JNI_WebApkUpdateManager_StoreWebApkUpdateRequestToFile(
     jint java_orientation,
     jlong java_theme_color,
     jlong java_background_color,
+    jlong java_dark_theme_color,
+    jlong java_dark_background_color,
     const JavaParamRef<jstring>& java_share_target_action,
     const JavaParamRef<jstring>& java_share_target_param_title,
     const JavaParamRef<jstring>& java_share_target_param_text,
@@ -110,8 +114,12 @@ static void JNI_WebApkUpdateManager_StoreWebApkUpdateRequestToFile(
       static_cast<device::mojom::ScreenOrientationLockType>(java_orientation);
   info.theme_color = ui::JavaColorToOptionalSkColor(java_theme_color);
   info.background_color = ui::JavaColorToOptionalSkColor(java_background_color);
+  info.dark_theme_color = ui::JavaColorToOptionalSkColor(java_dark_theme_color);
+  info.dark_background_color =
+      ui::JavaColorToOptionalSkColor(java_dark_background_color);
   info.best_primary_icon_url =
       GURL(ConvertJavaStringToUTF8(env, java_primary_icon_url));
+  info.is_primary_icon_maskable = java_is_primary_icon_maskable;
   info.splash_image_url =
       GURL(ConvertJavaStringToUTF8(env, java_splash_icon_url));
   info.is_splash_image_maskable = java_is_splash_icon_maskable;
@@ -170,10 +178,12 @@ static void JNI_WebApkUpdateManager_StoreWebApkUpdateRequestToFile(
         webapps::WebApkIconHasher::Icon{/* data= */ "", icon_hashes[i]};
   }
 
-  std::string primary_icon_data =
-      ConvertJavaStringToUTF8(env, java_primary_icon_data);
-  std::string splash_icon_data =
-      ConvertJavaStringToUTF8(env, java_splash_icon_data);
+  std::string primary_icon_data;
+  base::android::JavaByteArrayToString(env, java_primary_icon_data,
+                                       &primary_icon_data);
+  std::string splash_icon_data;
+  base::android::JavaByteArrayToString(env, java_splash_icon_data,
+                                       &splash_icon_data);
 
   std::string webapk_package;
   ConvertJavaStringToUTF8(env, java_webapk_package, &webapk_package);
@@ -222,7 +232,7 @@ static void JNI_WebApkUpdateManager_StoreWebApkUpdateRequestToFile(
 
   WebApkInstaller::StoreUpdateRequestToFile(
       base::FilePath(update_request_path), info, app_key, primary_icon_data,
-      java_is_primary_icon_maskable, splash_icon_data, webapk_package,
+      splash_icon_data, webapk_package,
       base::NumberToString(java_webapk_version),
       std::move(icon_url_to_murmur2_hash), java_is_manifest_stale,
       java_is_app_identity_update_supported, std::move(update_reasons),
@@ -241,7 +251,7 @@ static void JNI_WebApkUpdateManager_UpdateWebApkFromFile(
 
   Profile* profile = ProfileManager::GetLastUsedProfile();
   if (profile == nullptr) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&OnUpdated, callback_ref,
                        webapps::WebApkInstallResult::FAILURE,

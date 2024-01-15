@@ -22,7 +22,7 @@ source_set("app_shim") {
   ]
 
   deps = [
-    "//base/allocator:early_zone_registration_mac",
+    "//base/allocator:early_zone_registration_apple",
     "//build:chromeos_buildflags",
     "//chrome:strings",
     "//chrome/app:command_ids",
@@ -30,8 +30,10 @@ source_set("app_shim") {
     "//chrome/browser/ui",
     "//chrome/common",
     "//chrome/common:mojo_bindings",
+    "//chrome/services/mac_notifications",
     "//components/crash/core/app",
     "//components/remote_cocoa/app_shim",
+    "//components/variations/field_trial_config",
     "//content/public/browser",
     "//ipc",
     "//mojo/core/embedder",
@@ -77,12 +79,19 @@ executable("app_mode_loader") {
     # Loaders are installed to ~/Applications. In a component build, include
     # the absolute path to the out dir in their library search path so that
     # their components are found at launch.
-    ldflags = [ "-Wl,-rpath," + rebase_path(root_out_dir) ]
+    # Additionally reserve enough space in the header to be able to add
+    # another path to rpath if the build was moved to a different path
+    # before running tests.
+    ldflags = [
+      "-Wl,-rpath," + rebase_path(root_out_dir),
+      "-Wl,-headerpad",
+      "-Wl,100",
+    ]
   }
 
   deps = [
     "//base",
-    "//base/allocator:early_zone_registration_mac",
+    "//base/allocator:early_zone_registration_apple",
     "//chrome/common:app_mode_app_support",
     "//chrome/common:constants",
     "//chrome/common:non_code_constants",

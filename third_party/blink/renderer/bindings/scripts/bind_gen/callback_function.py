@@ -51,7 +51,7 @@ def bind_local_vars(code_node, cg_context, is_construct_call=False):
     local_vars.extend([
         S("exception_state",
           ("ExceptionState ${exception_state}("
-           "${isolate}, ExceptionContext::Context::kOperationInvoke,"
+           "${isolate}, ExceptionContextType::kOperationInvoke,"
            "${class_like_name}, ${property_name});")),
         S("isolate", "v8::Isolate* ${isolate} = GetIsolate();"),
         S("script_state",
@@ -167,7 +167,7 @@ def make_callback_invocation_function(cg_context,
     F = FormatNode
 
     func_like = cg_context.function_like
-    return_type = ("void" if func_like.return_type.unwrap().is_void else
+    return_type = ("void" if func_like.return_type.unwrap().is_undefined else
                    blink_type_info(func_like.return_type).value_t)
     maybe_return_type = "v8::Maybe<{}>".format(return_type)
     arg_type_and_names = _make_arg_type_and_names(func_like)
@@ -222,7 +222,7 @@ def make_callback_invocation_function(cg_context,
         body.add_template_var(arg_name, arg_name)
     bind_local_vars(body, cg_context, is_construct_call)
 
-    if func_like.return_type.unwrap(typedef=True).is_void:
+    if func_like.return_type.unwrap(typedef=True).is_undefined:
         text = "v8::JustVoid()"
     else:
         text = "helper.Result<{}, {}>()".format(
@@ -260,7 +260,7 @@ if (!callback_relevant_script_state) {
         ])
 
     if cg_context.callback_function:
-        template_params = ["CallbackFunctionBase"]
+        template_params = ["${base_class_name}"]
         if is_construct_call:
             template_params.append(
                 "bindings::CallbackInvokeHelperMode::kConstructorCall")
@@ -373,7 +373,7 @@ def make_invoke_and_report_function(cg_context, function_name, api_func_name):
     F = FormatNode
 
     func_like = cg_context.function_like
-    if not (func_like.return_type.unwrap().is_void
+    if not (func_like.return_type.unwrap().is_undefined
             or func_like.identifier == "Function"):
         return None, None
 
@@ -504,9 +504,14 @@ def generate_callback_function(callback_function_identifier):
     # Class names
     class_name = blink_class_name(callback_function)
 
+    if "SupportsTaskAttribution" in callback_function.extended_attributes:
+        base_class_name = "CallbackFunctionWithTaskAttributionBase"
+    else:
+        base_class_name = "CallbackFunctionBase"
+
     cg_context = CodeGenContext(callback_function=callback_function,
                                 class_name=class_name,
-                                base_class_name="CallbackFunctionBase")
+                                base_class_name=base_class_name)
 
     # Filepaths
     header_path = path_manager.api_path(ext="h")
@@ -526,7 +531,7 @@ def generate_callback_function(callback_function_identifier):
 
     # Class definition
     class_def = CxxClassDefNode(cg_context.class_name,
-                                base_class_names=["CallbackFunctionBase"],
+                                base_class_names=[base_class_name],
                                 final=True,
                                 export=component_export(
                                     api_component, for_testing))

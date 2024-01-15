@@ -6,18 +6,25 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include <vector>
+
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/pdf_util.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/focus_changed_observer.h"
 #include "content/public/test/hit_test_region_observer.h"
+#include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
+#include "pdf/pdf_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "url/origin.h"
 
 namespace pdf_extension_test_util {
 
@@ -32,6 +39,32 @@ bool IsPluginFrame(content::RenderFrameHost& frame) {
 }
 
 }  // namespace
+
+content::RenderFrameHost* GetOnlyPdfExtensionHost(
+    content::WebContents* contents) {
+  std::vector<content::RenderFrameHost*> extension_hosts =
+      GetPdfExtensionHosts(contents);
+  return extension_hosts.size() == 1 ? extension_hosts[0] : nullptr;
+}
+
+std::vector<content::RenderFrameHost*> GetPdfExtensionHosts(
+    content::WebContents* contents) {
+  std::vector<content::RenderFrameHost*> extension_hosts;
+  contents->ForEachRenderFrameHost(
+      [&extension_hosts](content::RenderFrameHost* host) {
+        if (IsPdfExtensionOrigin(host->GetLastCommittedOrigin())) {
+          extension_hosts.push_back(host);
+        }
+      });
+  return extension_hosts;
+}
+
+content::RenderFrameHost* GetOnlyPdfPluginFrame(
+    content::WebContents* contents) {
+  std::vector<content::RenderFrameHost*> plugin_frames =
+      GetPdfPluginFrames(contents);
+  return plugin_frames.size() == 1 ? plugin_frames[0] : nullptr;
+}
 
 std::vector<content::RenderFrameHost*> GetPdfPluginFrames(
     content::WebContents* contents) {
@@ -62,47 +95,47 @@ testing::AssertionResult EnsurePDFHasLoaded(
     const content::ToRenderFrameHost& frame,
     bool wait_for_hit_test_data,
     const std::string& pdf_element) {
-  bool load_success = false;
-  if (!content::ExecuteScriptAndExtractBool(
-          frame,
-          content::JsReplace(R"(window.addEventListener('message', event => {
-            if (event.origin !==
-                    'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai') {
-              return;
-            }
-            if (event.data.type === 'documentLoaded') {
-              window.domAutomationController.send(
-                  event.data.load_state === 'success');
-            } else if (event.data.type === 'passwordPrompted') {
-              window.domAutomationController.send(true);
-            }
-          });
-          document.getElementsByTagName($1)[0].postMessage(
-              {type: 'initialize'});)",
-                             pdf_element),
-          &load_success)) {
-    return testing::AssertionFailure()
-           << "Cannot communicate with PDF extension.";
-  }
+  bool load_success = content::EvalJs(frame, content::JsReplace(R"(
+            new Promise(resolve => {
+              window.addEventListener('message', event => {
+                if (event.origin !==
+                        'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai') {
+                  return;
+                }
+                if (event.data.type === 'documentLoaded') {
+                  resolve(
+                      event.data.load_state === 'success');
+                } else if (event.data.type === 'passwordPrompted') {
+                  resolve(true);
+                }
+              });
+              document.getElementsByTagName($1)[0].postMessage(
+                {type: 'initialize'});
+            });
+            )",
+                                                                pdf_element))
+                          .ExtractBool();
 
   if (wait_for_hit_test_data) {
     frame.render_frame_host()->ForEachRenderFrameHost(
-        static_cast<void (*)(content::RenderFrameHost*)>(
-            &content::WaitForHitTestData));
+        [](content::RenderFrameHost* render_frame_host) {
+          return content::WaitForHitTestData(render_frame_host);
+        });
   }
 
   return load_success ? testing::AssertionSuccess()
                       : (testing::AssertionFailure() << "Load failed.");
 }
 
-gfx::Point ConvertPageCoordToScreenCoord(content::WebContents* contents,
-                                         const gfx::Point& point) {
-  if (!contents) {
-    ADD_FAILURE() << "contents needs to be non-null";
+gfx::Point ConvertPageCoordToScreenCoord(
+    content::ToRenderFrameHost guest_main_frame,
+    const gfx::Point& point) {
+  if (!guest_main_frame.render_frame_host()) {
+    ADD_FAILURE() << "The guest main frame needs to be non-null";
     return point;
   }
-  if (!content::ExecuteScript(
-          contents,
+  if (!content::ExecJs(
+          guest_main_frame,
           "var visiblePage = viewer.viewport.getMostVisiblePage();"
           "var visiblePageDimensions ="
           "    viewer.viewport.getPageScreenRect(visiblePage);"
@@ -128,32 +161,49 @@ gfx::Point ConvertPageCoordToScreenCoord(content::WebContents* contents,
     return point;
   }
 
-  int x;
-  if (!content::ExecuteScriptAndExtractInt(
-          contents, "window.domAutomationController.send(linkScreenPositionX);",
-          &x)) {
-    ADD_FAILURE() << "error getting linkScreenPositionX";
-    return point;
-  }
+  int x =
+      content::EvalJs(guest_main_frame, "linkScreenPositionX;").ExtractInt();
 
-  int y;
-  if (!content::ExecuteScriptAndExtractInt(
-          contents, "window.domAutomationController.send(linkScreenPositionY);",
-          &y)) {
-    ADD_FAILURE() << "error getting linkScreenPositionY";
-    return point;
-  }
+  int y =
+      content::EvalJs(guest_main_frame, "linkScreenPositionY;").ExtractInt();
 
   return {x, y};
 }
 
-void SetInputFocusOnPlugin(content::WebContents* guest_contents) {
-  content::FocusChangedObserver focus_observer(guest_contents);
+void SetInputFocusOnPlugin(extensions::MimeHandlerViewGuest* guest) {
+  SetInputFocusOnPlugin(guest->GetGuestMainFrame(),
+                        guest->embedder_web_contents());
+}
+
+void SetInputFocusOnPlugin(content::RenderFrameHost* extension_host,
+                           content::WebContents* embedder_web_contents) {
+  content::WaitForHitTestData(extension_host);
+
+  const gfx::Point point_in_root_coords =
+      extension_host->GetView()->TransformPointToRootCoordSpace(
+          ConvertPageCoordToScreenCoord(extension_host, {1, 1}));
+
+  content::FocusChangedObserver focus_observer(
+      content::WebContents::FromRenderFrameHost(extension_host));
   content::SimulateMouseClickAt(
-      guest_contents, blink::WebInputEvent::kNoModifiers,
-      blink::WebMouseEvent::Button::kLeft,
-      ConvertPageCoordToScreenCoord(guest_contents, {1, 1}));
+      embedder_web_contents, blink::WebInputEvent::kNoModifiers,
+      blink::WebMouseEvent::Button::kLeft, point_in_root_coords);
   focus_observer.Wait();
+}
+
+extensions::MimeHandlerViewGuest* GetOnlyMimeHandlerView(
+    content::WebContents* embedder_contents) {
+  extensions::MimeHandlerViewGuest* result = nullptr;
+  embedder_contents->ForEachRenderFrameHost([&result](
+                                                content::RenderFrameHost* rfh) {
+    auto* guest = extensions::MimeHandlerViewGuest::FromRenderFrameHost(rfh);
+    if (guest && guest->GetGuestMainFrame() == rfh) {
+      // Assume exactly one MimeHandlerView.
+      EXPECT_FALSE(result);
+      result = guest;
+    }
+  });
+  return result;
 }
 
 }  // namespace pdf_extension_test_util

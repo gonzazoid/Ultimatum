@@ -125,7 +125,8 @@ class WorkerMainScriptLoaderTest : public testing::Test {
         int64_t request_id,
         const url::SchemeHostPort& final_url,
         network::mojom::URLResponseHeadPtr head,
-        network::mojom::RequestDestination request_destination) override {}
+        network::mojom::RequestDestination request_destination,
+        bool is_ad_resource) override {}
     void NotifyResourceTransferSizeUpdated(
         int64_t request_id,
         int32_t transfer_size_diff) override {}
@@ -169,12 +170,11 @@ class WorkerMainScriptLoaderTest : public testing::Test {
     MOCK_METHOD2(DidReceiveTransferSizeUpdate,
                  void(uint64_t identifier, int transfer_size_diff));
     MOCK_METHOD2(DidDownloadToBlob, void(uint64_t identifier, BlobDataHandle*));
-    MOCK_METHOD5(DidFinishLoading,
+    MOCK_METHOD4(DidFinishLoading,
                  void(uint64_t identifier,
                       base::TimeTicks finish_time,
                       int64_t encoded_data_length,
-                      int64_t decoded_body_length,
-                      bool should_report_corb_blocking));
+                      int64_t decoded_body_length));
     MOCK_METHOD5(DidFailLoading,
                  void(const KURL&,
                       uint64_t identifier,
@@ -184,7 +184,7 @@ class WorkerMainScriptLoaderTest : public testing::Test {
     MOCK_METHOD2(DidChangeRenderBlockingBehavior,
                  void(Resource* resource, const FetchParameters& params));
     MOCK_METHOD1(EvictFromBackForwardCache,
-                 void(blink::mojom::RendererEvictionReason));
+                 void(mojom::blink::RendererEvictionReason));
   };
 
   MojoCreateDataPipeOptions CreateDataPipeOptions() {
@@ -270,7 +270,7 @@ TEST_F(WorkerMainScriptLoaderTest, ResponseWithSucessThenOnComplete) {
   FakeResourceLoadInfoNotifier fake_resource_load_info_notifier;
   EXPECT_CALL(*mock_observer, DidReceiveResponse(_, _, _, _, _));
   EXPECT_CALL(*mock_observer, DidReceiveData(_, _));
-  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _, _));
+  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _));
   EXPECT_CALL(*mock_observer, DidFailLoading(_, _, _, _, _)).Times(0);
   Persistent<WorkerMainScriptLoader> worker_main_script_loader =
       CreateWorkerMainScriptLoaderAndStartLoading(
@@ -299,7 +299,7 @@ TEST_F(WorkerMainScriptLoaderTest, ResponseWithFailureThenOnComplete) {
       MakeGarbageCollected<MockResourceLoadObserver>();
   FakeResourceLoadInfoNotifier fake_resource_load_info_notifier;
   EXPECT_CALL(*mock_observer, DidReceiveResponse(_, _, _, _, _));
-  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _)).Times(0);
   EXPECT_CALL(*mock_observer, DidFailLoading(_, _, _, _, _));
   Persistent<WorkerMainScriptLoader> worker_main_script_loader =
       CreateWorkerMainScriptLoaderAndStartLoading(
@@ -322,7 +322,7 @@ TEST_F(WorkerMainScriptLoaderTest, DisconnectBeforeOnComplete) {
       MakeGarbageCollected<MockResourceLoadObserver>();
   FakeResourceLoadInfoNotifier fake_resource_load_info_notifier;
   EXPECT_CALL(*mock_observer, DidReceiveResponse(_, _, _, _, _));
-  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _)).Times(0);
   EXPECT_CALL(*mock_observer, DidFailLoading(_, _, _, _, _));
   Persistent<WorkerMainScriptLoader> worker_main_script_loader =
       CreateWorkerMainScriptLoaderAndStartLoading(
@@ -346,7 +346,7 @@ TEST_F(WorkerMainScriptLoaderTest, OnCompleteWithError) {
   FakeResourceLoadInfoNotifier fake_resource_load_info_notifier;
   EXPECT_CALL(*mock_observer, DidReceiveResponse(_, _, _, _, _));
   EXPECT_CALL(*mock_observer, DidReceiveData(_, _));
-  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(*mock_observer, DidFinishLoading(_, _, _, _)).Times(0);
   EXPECT_CALL(*mock_observer, DidFailLoading(_, _, _, _, _));
   Persistent<WorkerMainScriptLoader> worker_main_script_loader =
       CreateWorkerMainScriptLoaderAndStartLoading(

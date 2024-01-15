@@ -16,9 +16,9 @@ import org.chromium.base.DiscardableReferencePool;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.components.browser_ui.util.BitmapCache;
 import org.chromium.components.browser_ui.util.ConversionUtils;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -95,7 +95,9 @@ public class ThumbnailProviderImpl implements ThumbnailProvider, ThumbnailStorag
      * @param bitmapCacheSizeByte The size in bytes of the in-memory LRU bitmap cache.
      * @param client The associated client type.
      */
-    public ThumbnailProviderImpl(DiscardableReferencePool referencePool, int bitmapCacheSizeByte,
+    public ThumbnailProviderImpl(
+            DiscardableReferencePool referencePool,
+            int bitmapCacheSizeByte,
             @ClientType int client) {
         ThreadUtils.assertOnUiThread();
         mBitmapCache = new BitmapCache(referencePool, bitmapCacheSizeByte);
@@ -162,7 +164,7 @@ public class ThumbnailProviderImpl implements ThumbnailProvider, ThumbnailStorag
     }
 
     private void processQueue() {
-        PostTask.postTask(UiThreadTaskTraits.DEFAULT, this::processNextRequest);
+        PostTask.postTask(TaskTraits.UI_DEFAULT, this::processNextRequest);
     }
 
     private String getKey(String contentId, int bitmapSizePx) {
@@ -207,8 +209,9 @@ public class ThumbnailProviderImpl implements ThumbnailProvider, ThumbnailStorag
      * @param request Parameters that describe the thumbnail being retrieved
      */
     private void handleCacheMiss(ThumbnailProvider.ThumbnailRequest request) {
-        boolean providedByThumbnailRequest = request.getThumbnail(
-                bitmap -> onThumbnailRetrieved(request.getContentId(), bitmap));
+        boolean providedByThumbnailRequest =
+                request.getThumbnail(
+                        bitmap -> onThumbnailRetrieved(request.getContentId(), bitmap));
 
         if (!providedByThumbnailRequest) {
             // Asynchronously process the file to make a thumbnail.

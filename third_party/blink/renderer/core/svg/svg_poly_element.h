@@ -47,6 +47,10 @@ class SVGPolyElement : public SVGGeometryElement {
  private:
   void SvgAttributeChanged(const SvgAttributeChangedParams&) final;
 
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+
   Member<SVGAnimatedPointList> points_;
 };
 

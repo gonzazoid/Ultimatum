@@ -4,12 +4,21 @@
     "args": ["--enable-features=BackForwardCache"]
   },
   {
-    "name": "dangling-pointer-detection",
-    "args": ["--enable-features=PartitionAllocDanglingPtr:mode/crash"]
+    "name": "background-resource-fetch",
+    "args": ["--enable-features=BackgroundResourceFetch"],
+    "smoke_file": "TestLists/background-resource-fetch"
   },
   {
-    "name": "disable-layout-ng",
-    "args": ["--disable-blink-features=LayoutNG,LayoutNGBlockFragmentation"]
+    "name": "chrome-for-testing",
+    "args": [],
+    "comments": [
+      "Used to gate Chrome for Testing (goo.gle/chrome-for-testing) ",
+      "expectation differences. Does not require a runtime flag."
+    ]
+  },
+  {
+    "name": "devtools-tab-target",
+    "args": ["--content-shell-devtools-tab-target"]
   },
   {
     "name": "disable-site-isolation-trials",
@@ -38,7 +47,7 @@
   {
     "name": "highdpi",
     "args": ["--force-device-scale-factor=1.5"],
-    "smoke_file": "SmokeTests/highdpi"
+    "smoke_file": "TestLists/highdpi"
   },
   {
     "name": "skia-vulkan-swiftshader",
@@ -48,24 +57,33 @@
           "--use-vulkan=swiftshader",
           "--disable-vulkan-fallback-to-gl-for-testing"
     ],
-    "smoke_file": "SmokeTests/skia-vulkan-swiftshader"
+    "smoke_file": "TestLists/skia-vulkan-swiftshader"
   },
   {
     "name": "webgpu",
     "args": [
           "--enable-unsafe-webgpu",
-          "--disable-dawn-features=disallow_unsafe_apis",
+          "--enable-dawn-features=allow_unsafe_apis",
+          "--disable-dawn-features=use_dxc",
+          "--enable-webgpu-developer-features",
           "--use-gpu-in-tests",
-          "--enable-accelerated-2d-canvas"
+          "--enable-accelerated-2d-canvas",
+          "--use-webgpu-power-preference=default-high-performance"
     ],
     "comments": [
-          "--disable-dawn-features=disallow_unsafe_apis is added so 'unsafe'",
+          "--enable-unsafe-webgpu makes sure WebGPU is enabled even if it",
+          "isn't launched in stable on that configuration yet",
+          "--enable-dawn-features=allow_unsafe_apis is added so 'unsafe'",
           "APIs can be tested with WebGPU CTS",
+          "--enable-webgpu-developer-features exposes extra WebGPU API",
+          "features useful for testing but not generally available.",
           "--use-gpu-in-tests is needed to initialize ANGLE, which in turn is",
           "needed to tell Dawn which ANGLE adapter Chromium is using. This",
           "helps match the test behavior with the browser.",
           "--enable-accelerated-2d-canvas ensures that the canvas reference",
-          "tests are using GPU rather than CPU"
+          "tests are using GPU rather than CPU",
+          "--use-webgpu-power-preference=default-high-performance indicates",
+          "it uses high-performance gpu when not explicitly specified"
     ]
   },
   {
@@ -73,13 +91,19 @@
     "args": [
           "--enable-unsafe-webgpu",
           "--use-webgpu-adapter=swiftshader",
-          "--disable-dawn-features=disallow_unsafe_apis",
+          "--enable-dawn-features=allow_unsafe_apis",
+          "--disable-dawn-features=use_dxc",
+          "--enable-webgpu-developer-features",
           "--use-gpu-in-tests",
           "--enable-accelerated-2d-canvas"
     ],
     "comments": [
-          "--disable-dawn-features=disallow_unsafe_apis is added so 'unsafe'",
+          "--enable-unsafe-webgpu makes sure WebGPU is enabled even if it",
+          "isn't launched in stable on that configuration yet",
+          "--enable-dawn-features=allow_unsafe_apis is added so 'unsafe'",
           "APIs can be tested with WebGPU CTS",
+          "--enable-webgpu-developer-features exposes extra WebGPU API",
+          "features useful for testing but not generally available.",
           "--use-webgpu-adapter=swiftshader forces usage for the SwiftShader adapter",
           "--use-gpu-in-tests is needed to initialize ANGLE, which in turn is",
           "needed to tell Dawn which ANGLE adapter Chromium is using. This",
@@ -94,13 +118,19 @@
           "--enable-unsafe-webgpu",
           "--use-webgpu-adapter=swiftshader",
           "--enable-dawn-backend-validation",
-          "--disable-dawn-features=disallow_unsafe_apis",
+          "--enable-dawn-features=allow_unsafe_apis",
+          "--disable-dawn-features=use_dxc",
+          "--enable-webgpu-developer-features",
           "--use-gpu-in-tests",
           "--enable-accelerated-2d-canvas"
     ],
     "comments": [
-          "--disable-dawn-features=disallow_unsafe_apis is added so 'unsafe'",
+          "--enable-unsafe-webgpu makes sure WebGPU is enabled even if it",
+          "isn't launched in stable on that configuration yet",
+          "--enable-dawn-features=allow_unsafe_apis is added so 'unsafe'",
           "APIs can be tested with WebGPU CTS",
+          "--enable-webgpu-developer-features exposes extra WebGPU API",
+          "features useful for testing but not generally available.",
           "--use-webgpu-adapter=swiftshader forces usage for the SwiftShader adapter",
           "--use-gpu-in-tests is needed to initialize ANGLE, which in turn is",
           "needed to tell Dawn which ANGLE adapter Chromium is using. This",
@@ -114,18 +144,27 @@
     "args": [
           "--enable-unsafe-webgpu",
           "--enable-dawn-backend-validation",
-          "--disable-dawn-features=disallow_unsafe_apis",
+          "--enable-dawn-features=allow_unsafe_apis",
+          "--disable-dawn-features=use_dxc",
+          "--enable-webgpu-developer-features",
           "--use-gpu-in-tests",
-          "--enable-accelerated-2d-canvas"
+          "--enable-accelerated-2d-canvas",
+          "--use-webgpu-power-preference=default-high-performance"
     ],
     "comments": [
-          "--disable-dawn-features=disallow_unsafe_apis is added so 'unsafe'",
+          "--enable-unsafe-webgpu makes sure WebGPU is enabled even if it",
+          "isn't launched in stable on that configuration yet",
+          "--enable-dawn-features=allow_unsafe_apis is added so 'unsafe'",
           "APIs can be tested with WebGPU CTS",
+          "--enable-webgpu-developer-features exposes extra WebGPU API",
+          "features useful for testing but not generally available.",
           "--use-gpu-in-tests is needed to initialize ANGLE, which in turn is",
           "needed to tell Dawn which ANGLE adapter Chromium is using. This",
           "helps match the test behavior with the browser.",
           "--enable-accelerated-2d-canvas ensures that the canvas reference",
-          "tests are using GPU rather than CPU"
+          "tests are using GPU rather than CPU",
+          "--use-webgpu-power-preference=default-high-performance indicates",
+          "it uses high-performance gpu when not explicitly specified"
     ]
   },
   {
@@ -133,18 +172,36 @@
     "args": [
           "--enable-unsafe-webgpu",
           "--enable-dawn-backend-validation=partial",
-          "--disable-dawn-features=disallow_unsafe_apis",
+          "--enable-dawn-features=allow_unsafe_apis",
+          "--disable-dawn-features=use_dxc",
+          "--enable-webgpu-developer-features",
           "--use-gpu-in-tests",
-          "--enable-accelerated-2d-canvas"
+          "--enable-accelerated-2d-canvas",
+          "--use-webgpu-power-preference=default-high-performance"
     ],
     "comments": [
-          "--disable-dawn-features=disallow_unsafe_apis is added so 'unsafe'",
+          "--enable-unsafe-webgpu makes sure WebGPU is enabled even if it",
+          "isn't launched in stable on that configuration yet",
+          "--enable-dawn-features=allow_unsafe_apis is added so 'unsafe'",
           "APIs can be tested with WebGPU CTS",
+          "--enable-webgpu-developer-features exposes extra WebGPU API",
+          "features useful for testing but not generally available.",
           "--use-gpu-in-tests is needed to initialize ANGLE, which in turn is",
           "needed to tell Dawn which ANGLE adapter Chromium is using. This",
           "helps match the test behavior with the browser.",
           "--enable-accelerated-2d-canvas ensures that the canvas reference",
-          "tests are using GPU rather than CPU"
+          "tests are using GPU rather than CPU",
+          "--use-webgpu-power-preference=default-high-performance indicates",
+          "it uses high-performance gpu when not explicitly specified"
+    ]
+  },
+  {
+    "name": "enable-skia-graphite",
+    "args": [
+      "--enable-skia-graphite"
+    ],
+    "comments": [
+      "Used to test Chrome with Skia Graphite."
     ]
   }
 ]

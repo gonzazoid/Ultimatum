@@ -6,26 +6,27 @@
 
 #include <cstdint>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
-#include "chrome/updater/constants.h"
 #include "chrome/updater/device_management/dm_cached_policy_info.h"
 #include "chrome/updater/device_management/dm_message.h"
 #include "chrome/updater/device_management/dm_policy_builder_for_testing.h"
 #include "chrome/updater/device_management/dm_response_validator.h"
 #include "chrome/updater/device_management/dm_storage.h"
+#include "chrome/updater/net/network.h"
 #include "chrome/updater/policy/service.h"
 #include "chrome/updater/protos/omaha_settings.pb.h"
-#include "chrome/updater/unittest_util.h"
+#include "chrome/updater/util/unit_test_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/update_client/network.h"
 #include "net/base/url_util.h"
@@ -35,14 +36,7 @@
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "chrome/updater/win/net/network.h"
-#elif BUILDFLAG(IS_MAC)
-#include "chrome/updater/mac/net/network.h"
-#elif BUILDFLAG(IS_LINUX)
-#include "chrome/updater/linux/net/network.h"
-#endif
+#include "url/gurl.h"
 
 using base::test::RunClosure;
 
@@ -65,6 +59,8 @@ class TestTokenService : public TokenServiceInterface {
     enrollment_token_ = enrollment_token;
     return true;
   }
+
+  bool DeleteEnrollmentToken() override { return StoreEnrollmentToken(""); }
 
   std::string GetEnrollmentToken() const override { return enrollment_token_; }
 
@@ -90,7 +86,7 @@ class TestConfigurator : public DMClient::Configurator {
   explicit TestConfigurator(const GURL& url);
   ~TestConfigurator() override = default;
 
-  std::string GetDMServerUrl() const override { return server_url_; }
+  GURL GetDMServerUrl() const override { return server_url_; }
 
   std::string GetAgentParameter() const override {
     return "Updater-Test-Agent";
@@ -105,14 +101,14 @@ class TestConfigurator : public DMClient::Configurator {
 
  private:
   scoped_refptr<update_client::NetworkFetcherFactory> network_fetcher_factory_;
-  const std::string server_url_;
+  const GURL server_url_;
 };
 
 TestConfigurator::TestConfigurator(const GURL& url)
     : network_fetcher_factory_(base::MakeRefCounted<NetworkFetcherFactory>(
           PolicyServiceProxyConfiguration::Get(
               test::CreateTestPolicyService()))),
-      server_url_(url.spec()) {}
+      server_url_(url) {}
 
 class DMRequestCallbackHandler
     : public base::RefCountedThreadSafe<DMRequestCallbackHandler> {
@@ -223,10 +219,11 @@ class DMPolicyFetchRequestCallbackHandler : public DMRequestCallbackHandler {
 
     std::unique_ptr<CachedPolicyInfo> info = storage_->GetCachedPolicyInfo();
     EXPECT_FALSE(info->public_key().empty());
-    if (expect_new_public_key_)
+    if (expect_new_public_key_) {
       EXPECT_EQ(info->public_key(), GetTestKey2()->GetPublicKeyString());
-    else
+    } else {
       EXPECT_EQ(info->public_key(), GetTestKey1()->GetPublicKeyString());
+    }
 
     if (result == DMClient::RequestResult::kSuccess) {
       std::unique_ptr<::wireless_android_enterprise_devicemanagement::
@@ -327,7 +324,7 @@ class DMClientTest : public ::testing::Test {
   net::HttpStatusCode response_http_status_ = net::HTTP_OK;
   std::string response_body_;
 
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::TaskEnvironment task_environment_;
 };
 
 class DMRegisterClientTest : public DMClientTest {
@@ -808,6 +805,69 @@ TEST_F(DMPolicyValidationReportClientTest, NoPayload) {
       .WillOnce(RunClosure(quit_closure));
   PostRequest(PolicyValidationResult());
   run_loop.Run();
+}
+
+TEST(DMClient, StreamRequestResultEnumValue) {
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kSuccess;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kSuccess");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kNoDeviceID;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kNoDeviceID");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kAlreadyRegistered;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kAlreadyRegistered");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kNotManaged;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kNotManaged");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kDeregistered;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kDeregistered");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kNoDMToken;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kNoDMToken");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kFetcherError;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kFetcherError");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kNetworkError;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kNetworkError");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kHttpError;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kHttpError");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kSerializationError;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kSerializationError");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kUnexpectedResponse;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kUnexpectedResponse");
+  }
+  {
+    std::stringstream output;
+    output << DMClient::RequestResult::kNoPayload;
+    EXPECT_EQ(output.str(), "DMClient::RequestResult::kNoPayload");
+  }
 }
 
 }  // namespace updater

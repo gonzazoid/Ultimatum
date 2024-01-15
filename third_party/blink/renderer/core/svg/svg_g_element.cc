@@ -29,8 +29,7 @@ namespace blink {
 SVGGElement::SVGGElement(Document& document, ConstructionType construction_type)
     : SVGGraphicsElement(svg_names::kGTag, document, construction_type) {}
 
-LayoutObject* SVGGElement::CreateLayoutObject(const ComputedStyle& style,
-                                              LegacyLayout) {
+LayoutObject* SVGGElement::CreateLayoutObject(const ComputedStyle& style) {
   // SVG 1.1 testsuite explicitly uses constructs like
   // <g display="none"><linearGradient>
   // We still have to create layoutObjects for the <g> & <linearGradient>
@@ -43,7 +42,7 @@ LayoutObject* SVGGElement::CreateLayoutObject(const ComputedStyle& style,
   return MakeGarbageCollected<LayoutSVGTransformableContainer>(this);
 }
 
-bool SVGGElement::LayoutObjectIsNeeded(const ComputedStyle&) const {
+bool SVGGElement::LayoutObjectIsNeeded(const DisplayStyle&) const {
   // Unlike SVGElement::layoutObjectIsNeeded(), we still create layoutObjects,
   // even if display is set to 'none' - which is special to SVG <g> container
   // elements.

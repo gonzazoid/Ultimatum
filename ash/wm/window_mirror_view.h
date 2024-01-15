@@ -8,8 +8,11 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "ash/wm/raster_scale/raster_scale_layer_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_observer.h"
 #include "ui/aura/window_occlusion_tracker.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace aura {
@@ -26,9 +29,11 @@ namespace ash {
 class ASH_EXPORT WindowMirrorView : public views::View,
                                     public aura::WindowObserver {
  public:
-  WindowMirrorView(aura::Window* source,
-                   bool trilinear_filtering_on_init,
-                   bool show_non_client_view = false);
+  METADATA_HEADER(WindowMirrorView);
+
+  explicit WindowMirrorView(aura::Window* source,
+                            bool show_non_client_view = false,
+                            bool sync_bounds = false);
 
   WindowMirrorView(const WindowMirrorView&) = delete;
   WindowMirrorView& operator=(const WindowMirrorView&) = delete;
@@ -67,24 +72,27 @@ class ASH_EXPORT WindowMirrorView : public views::View,
   gfx::Rect GetClientAreaBounds() const;
 
   // The original window that is being represented by |this|.
-  aura::Window* source_;
+  raw_ptr<aura::Window> source_;
 
   // The window which contains this mirror view.
-  aura::Window* target_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> target_ = nullptr;
 
   // Retains ownership of the mirror layer tree. This is lazily initialized
   // the first time the view becomes visible.
   std::unique_ptr<ui::LayerTreeOwner> layer_owner_;
 
-  // True if trilinear filtering should be performed on the layer in
-  // InitLayerOwner().
-  const bool trilinear_filtering_on_init_;
-
   // If true, shows the non client view in the mirror.
   const bool show_non_client_view_;
 
+  // If true, synchronize the bounds from the source to the mirrored layers.
+  const bool sync_bounds_;
+
   std::unique_ptr<aura::WindowOcclusionTracker::ScopedForceVisible>
       force_occlusion_tracker_visible_;
+
+  // While a window is mirrored, apply dynamic raster scale to the underlying
+  // window. This is used in e.g. alt-tab and overview mode.
+  std::optional<ScopedRasterScaleLayerObserverLock> raster_scale_observer_lock_;
 };
 
 }  // namespace ash

@@ -8,8 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include <optional>
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/process/process.h"
@@ -26,7 +27,6 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/messaging/web_message_port.h"
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
@@ -35,6 +35,10 @@ namespace content {
 class NavigationHandle;
 class WebContents;
 }  // namespace content
+
+namespace media_control {
+class MediaBlocker;
+}  // namespace media_control
 
 namespace url_rewrite {
 class UrlRequestRewriteRulesManager;
@@ -184,6 +188,7 @@ class CastWebContents : public mojom::CastWebContents {
   virtual PageState page_state() const = 0;
   virtual url_rewrite::UrlRequestRewriteRulesManager*
   url_rewrite_rules_manager() = 0;
+  virtual const media_control::MediaBlocker* media_blocker() const = 0;
 
   // mojom::CastWebContents implementation:
   void SetAppProperties(const std::string& app_id,
@@ -196,7 +201,7 @@ class CastWebContents : public mojom::CastWebContents {
                             additional_feature_permission_origins) override = 0;
   void SetGroupInfo(const std::string& session_id,
                     bool is_multizone_launch) override = 0;
-  void AddRendererFeatures(base::Value features) override = 0;
+  void AddRendererFeatures(base::Value::Dict features) override = 0;
   void SetInterfacesForRenderer(mojo::PendingRemote<mojom::RemoteInterfaces>
                                     remote_interfaces) override = 0;
   void SetUrlRewriteRules(

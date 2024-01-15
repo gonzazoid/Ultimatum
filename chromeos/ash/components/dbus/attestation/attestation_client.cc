@@ -8,13 +8,14 @@
 
 #include <google/protobuf/message_lite.h>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/attestation/fake_attestation_client.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
@@ -125,6 +126,11 @@ class AttestationClientImpl : public AttestationClient {
                     std::move(callback));
   }
 
+  void GetFeatures(const ::attestation::GetFeaturesRequest& request,
+                   GetFeaturesCallback callback) override {
+    CallProtoMethod(attestation::kGetFeatures, request, std::move(callback));
+  }
+
   void GetStatus(const ::attestation::GetStatusRequest& request,
                  GetStatusCallback callback) override {
     CallProtoMethod(attestation::kGetStatus, request, std::move(callback));
@@ -215,6 +221,11 @@ class AttestationClientImpl : public AttestationClient {
                     std::move(callback));
   }
 
+  void WaitForServiceToBeAvailable(
+      chromeos::WaitForServiceToBeAvailableCallback callback) override {
+    proxy_->WaitForServiceToBeAvailable(std::move(callback));
+  }
+
   void Init(dbus::Bus* bus) {
     proxy_ = bus->GetObjectProxy(
         ::attestation::kAttestationServiceName,
@@ -239,7 +250,7 @@ class AttestationClientImpl : public AttestationClient {
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       ReplyType reply;
       reply.set_status(attestation::STATUS_INVALID_PARAMETER);
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), reply));
       return;
     }
@@ -276,7 +287,7 @@ class AttestationClientImpl : public AttestationClient {
   }
 
   // D-Bus proxy for the Attestation daemon, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<AttestationClientImpl> weak_factory_{this};
 };

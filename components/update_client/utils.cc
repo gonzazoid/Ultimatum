@@ -10,13 +10,14 @@
 #include <cstring>
 #include <memory>
 #include <utility>
+#include <vector>
 
-#include "base/callback.h"
+#include "base/check.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/memory_mapped_file.h"
+#include "base/functional/callback.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
@@ -56,14 +57,19 @@ bool IsHttpServerError(int status_code) {
 }
 
 bool DeleteFileAndEmptyParentDirectory(const base::FilePath& filepath) {
-  if (!base::DeleteFile(filepath))
+  if (!base::DeleteFile(filepath)) {
     return false;
+  }
 
-  const base::FilePath dirname(filepath.DirName());
-  if (!base::IsDirectoryEmpty(dirname))
+  return DeleteEmptyDirectory(filepath.DirName());
+}
+
+bool DeleteEmptyDirectory(const base::FilePath& dir_path) {
+  if (!base::IsDirectoryEmpty(dir_path)) {
     return true;
+  }
 
-  return base::DeleteFile(dirname);
+  return base::DeleteFile(dir_path);
 }
 
 std::string GetCrxComponentID(const CrxComponent& component) {
@@ -71,10 +77,9 @@ std::string GetCrxComponentID(const CrxComponent& component) {
                                   : component.app_id;
 }
 
-std::string GetCrxIdFromPublicKeyHash(const std::vector<uint8_t>& pk_hash) {
-  const std::string result =
-      crx_file::id_util::GenerateIdFromHash(&pk_hash[0], pk_hash.size());
-  DCHECK(crx_file::id_util::IdIsValid(result));
+std::string GetCrxIdFromPublicKeyHash(base::span<const uint8_t> pk_hash) {
+  const std::string result = crx_file::id_util::GenerateIdFromHash(pk_hash);
+  CHECK(crx_file::id_util::IdIsValid(result));
   return result;
 }
 
@@ -90,12 +95,14 @@ bool VerifyFileHash256(const base::FilePath& filepath,
       crypto::SecureHash::Create(crypto::SecureHash::SHA256));
 
   int64_t file_size = 0;
-  if (!base::GetFileSize(filepath, &file_size))
+  if (!base::GetFileSize(filepath, &file_size)) {
     return false;
+  }
   if (file_size > 0) {
     base::MemoryMappedFile mmfile;
-    if (!mmfile.Initialize(filepath))
+    if (!mmfile.Initialize(filepath)) {
       return false;
+    }
     hasher->Update(mmfile.data(), mmfile.length());
   }
 
@@ -142,8 +149,8 @@ bool IsValidInstallerAttribute(const InstallerAttribute& attr) {
 }
 
 void RemoveUnsecureUrls(std::vector<GURL>* urls) {
-  DCHECK(urls);
-  base::EraseIf(*urls,
+  CHECK(urls);
+  std::erase_if(*urls,
                 [](const GURL& url) { return !url.SchemeIsCryptographic(); });
 }
 
@@ -154,37 +161,20 @@ CrxInstaller::Result InstallFunctionWrapper(
                                   : InstallError::GENERIC_ERROR);
 }
 
-// TODO(cpu): add a specific attribute check to a component json that the
-// extension unpacker will reject, so that a component cannot be installed
-// as an extension.
-base::Value ReadManifest(const base::FilePath& unpack_path) {
+absl::optional<base::Value::Dict> ReadManifest(
+    const base::FilePath& unpack_path) {
   base::FilePath manifest =
       unpack_path.Append(FILE_PATH_LITERAL("manifest.json"));
-  if (!base::PathExists(manifest))
-    return base::Value();
+  if (!base::PathExists(manifest)) {
+    return absl::nullopt;
+  }
   JSONFileValueDeserializer deserializer(manifest);
   std::string error;
   std::unique_ptr<base::Value> root = deserializer.Deserialize(nullptr, &error);
-  if (!root)
-    return base::Value();
-  return base::Value::FromUniquePtrValue(std::move(root));
-}
-
-bool CreateSecureTempDirectory(const base::FilePath::StringType& prefix,
-                               base::FilePath* temp_dir) {
-  DCHECK(temp_dir);
-
-#if BUILDFLAG(IS_WIN)
-  const int path_key =
-      ::IsUserAnAdmin() ? int{base::DIR_PROGRAM_FILES} : int{base::DIR_TEMP};
-#else   // BUILDFLAG(IS_WIN)
-  const int path_key = base::DIR_TEMP;
-#endif  // BUILDFLAG(IS_WIN)
-
-  base::FilePath parent_dir;
-  return base::PathService::Get(path_key, &parent_dir)
-             ? base::CreateTemporaryDirInDir(parent_dir, prefix, temp_dir)
-             : false;
+  if (!root || !root->is_dict()) {
+    return absl::nullopt;
+  }
+  return std::move(root->GetDict());
 }
 
 std::string GetArchitecture() {

@@ -9,10 +9,6 @@
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
 #import "ios/web/web_state/ui/crw_web_controller.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // Returns the first responder in the subviews of `view`, or nil if no view in
@@ -75,6 +71,7 @@ UIView* GetFirstResponderSubview(UIView* view) {
   CRWWebViewScrollViewProxy* _contentViewScrollViewProxy;
 }
 @synthesize contentView = _contentView;
+@dynamic keyboardVisible;
 
 - (instancetype)initWithWebController:(CRWWebController*)webController {
   self = [super init];
@@ -129,14 +126,6 @@ UIView* GetFirstResponderSubview(UIView* view) {
   return [_contentView gestureRecognizers];
 }
 
-- (void)addGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer {
-  [_contentView addGestureRecognizer:gestureRecognizer];
-}
-
-- (void)removeGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer {
-  [_contentView removeGestureRecognizer:gestureRecognizer];
-}
-
 - (BOOL)shouldUseViewContentInset {
   SEL shouldUseInsetSelector = @selector(shouldUseViewContentInset);
   return [_contentView respondsToSelector:shouldUseInsetSelector] &&
@@ -166,20 +155,32 @@ UIView* GetFirstResponderSubview(UIView* view) {
   [_registeredInsets removeObjectForKey:callerValue];
 }
 
-- (void)setContentView:(CRWContentView*)contentView {
+// Do not use with a `nil` `contentView`. Instead, use
+// `clearContentViewAndAddPlaceholder` whenever `contentView` needs to be set to
+// `nil`. This allows us to evaluate the need of setting up the placeholder
+// scroll view when clearing the content view.
+- (void)setContentView:(nonnull CRWContentView*)contentView {
+  DCHECK(contentView);
   _contentView = contentView;
   [_contentViewScrollViewProxy setScrollView:contentView.scrollView];
+}
+
+- (void)clearContentViewAndAddPlaceholder:(BOOL)addPlaceholder {
+  _contentView = nil;
+  if (addPlaceholder) {
+    [_contentViewScrollViewProxy setScrollView:nil];
+  }
 }
 
 - (void)addSubview:(UIView*)view {
   return [_contentView addSubview:view];
 }
 
-- (UIView*)keyboardAccessory {
+- (BOOL)isKeyboardVisible {
   if (!_contentView)
-    return nil;
+    return NO;
   UIView* firstResponder = GetFirstResponderSubview(_contentView);
-  return firstResponder.inputAccessoryView;
+  return firstResponder.inputAccessoryView != nil;
 }
 
 - (BOOL)becomeFirstResponder {
@@ -190,9 +191,8 @@ UIView* GetFirstResponderSubview(UIView* view) {
   [_webController surfaceSizeChanged];
 }
 
-- (void)showMenuWithItems:(NSArray<CRWContextMenuItem*>*)items
-                     rect:(CGRect)rect {
-  [_webController showMenuWithItems:items rect:rect];
+- (BOOL)isWebPageInFullscreenMode {
+  return [_webController isWebPageInFullscreenMode];
 }
 
 @end

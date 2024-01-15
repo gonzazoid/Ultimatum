@@ -17,6 +17,7 @@ import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.chrome.R;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.AccountUtils;
 import org.chromium.components.signin.base.AccountCapabilities;
@@ -27,7 +28,6 @@ import org.chromium.components.signin.identitymanager.AccountInfoServiceProvider
 import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.signin.test.util.FakeAccountInfoService;
 import org.chromium.components.signin.test.util.FakeAccountManagerFacade;
-import org.chromium.components.signin.test.util.R;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.HashMap;
@@ -43,6 +43,8 @@ import java.util.HashMap;
 public class AccountManagerTestRule implements TestRule {
     public static final String TEST_ACCOUNT_EMAIL = "test@gmail.com";
 
+    public static final String CHILD_ACCOUNT_EMAIL = generateChildEmail(TEST_ACCOUNT_EMAIL);
+
     private final @NonNull FakeAccountManagerFacade mFakeAccountManagerFacade;
     // TODO(https://crbug.com/1352119): Revise this test rule and make this non-nullable.
     private final @Nullable FakeAccountInfoService mFakeAccountInfoService;
@@ -55,7 +57,8 @@ public class AccountManagerTestRule implements TestRule {
         this(fakeAccountManagerFacade, new FakeAccountInfoService());
     }
 
-    public AccountManagerTestRule(@NonNull FakeAccountManagerFacade fakeAccountManagerFacade,
+    public AccountManagerTestRule(
+            @NonNull FakeAccountManagerFacade fakeAccountManagerFacade,
             @Nullable FakeAccountInfoService fakeAccountInfoService) {
         mFakeAccountManagerFacade = fakeAccountManagerFacade;
         mFakeAccountInfoService = fakeAccountInfoService;
@@ -76,21 +79,18 @@ public class AccountManagerTestRule implements TestRule {
         };
     }
 
-    /**
-     * Sets up the AccountManagerFacade mock.
-     */
+    /** Sets up the AccountManagerFacade mock. */
     public void setUpRule() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            if (mFakeAccountInfoService != null) {
-                AccountInfoServiceProvider.setInstanceForTests(mFakeAccountInfoService);
-            }
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (mFakeAccountInfoService != null) {
+                        AccountInfoServiceProvider.setInstanceForTests(mFakeAccountInfoService);
+                    }
+                });
         AccountManagerFacadeProvider.setInstanceForTests(mFakeAccountManagerFacade);
     }
 
-    /**
-     * Tears down the AccountManagerFacade mock and signs out if user is signed in.
-     */
+    /** Tears down the AccountManagerFacade mock and signs out if user is signed in. */
     public void tearDownRule() {
         AccountManagerFacadeProvider.resetInstanceForTests();
         if (mFakeAccountInfoService != null) AccountInfoServiceProvider.resetForTests();
@@ -104,6 +104,8 @@ public class AccountManagerTestRule implements TestRule {
         identityManager.addObserver(mFakeAccountInfoService);
     }
 
+    // TODO(https://crbug.com/1411335): Use the builder pattern here instead of all these
+    // `addAccount` methods.
     /**
      * Adds an account of the given accountName to the fake AccountManagerFacade.
      * @return The CoreAccountInfo for the account added.
@@ -123,6 +125,29 @@ public class AccountManagerTestRule implements TestRule {
     }
 
     /**
+     * Adds an account of the given email and name to the fake AccountManagerFacade.
+     * @return The CoreAccountInfo for the account added.
+     */
+    public AccountInfo addAccount(String email, String baseName) {
+        return addAccount(
+                email,
+                baseName + ".full",
+                baseName + ".given",
+                createAvatar(),
+                new AccountCapabilities(new HashMap<>()));
+    }
+
+    /**
+     * Adds an account of the given accountName and capabilities to the fake AccountManagerFacade.
+     * @return The CoreAccountInfo for the account added.
+     */
+    public AccountInfo addAccount(
+            String accountName, String baseName, @NonNull AccountCapabilities capabilities) {
+        return addAccount(
+                accountName, baseName + ".full", baseName + ".given", createAvatar(), capabilities);
+    }
+
+    /**
      * Adds an account to the fake AccountManagerFacade and {@link AccountInfo} to
      * {@link FakeAccountInfoService}.
      */
@@ -136,11 +161,22 @@ public class AccountManagerTestRule implements TestRule {
      * Adds an account to the fake AccountManagerFacade and {@link AccountInfo} to
      * {@link FakeAccountInfoService}.
      */
-    public AccountInfo addAccount(String email, String fullName, String givenName,
-            @Nullable Bitmap avatar, @NonNull AccountCapabilities capabilities) {
+    public AccountInfo addAccount(
+            String email,
+            String fullName,
+            String givenName,
+            @Nullable Bitmap avatar,
+            @NonNull AccountCapabilities capabilities) {
         String gaiaId = FakeAccountManagerFacade.toGaiaId(email);
-        AccountInfo accountInfo = new AccountInfo(new CoreAccountId(gaiaId), email, gaiaId,
-                fullName, givenName, avatar, capabilities);
+        AccountInfo accountInfo =
+                new AccountInfo(
+                        new CoreAccountId(gaiaId),
+                        email,
+                        gaiaId,
+                        fullName,
+                        givenName,
+                        avatar,
+                        capabilities);
         mFakeAccountManagerFacade.addAccount(AccountUtils.createAccountFromName(email));
         // TODO(https://crbug.com/1352119): Revise this test rule and remove the condition here.
         if (mFakeAccountInfoService != null) mFakeAccountInfoService.addAccountInfo(accountInfo);
@@ -156,16 +192,12 @@ public class AccountManagerTestRule implements TestRule {
         mFakeAccountManagerFacade.setResultForNextAddAccountFlow(result, newAccountName);
     }
 
-    /**
-     * Removes an account with the given account email.
-     */
+    /** Removes an account with the given account email. */
     public void removeAccount(String accountEmail) {
         mFakeAccountManagerFacade.removeAccount(AccountUtils.createAccountFromName(accountEmail));
     }
 
-    /**
-     * Converts an account email to its corresponding CoreAccountInfo object.
-     */
+    /** Converts an account email to its corresponding CoreAccountInfo object. */
     public CoreAccountInfo toCoreAccountInfo(String accountEmail) {
         String accountGaiaId = mFakeAccountManagerFacade.getAccountGaiaId(accountEmail);
         return CoreAccountInfo.createFromEmailAndGaiaId(accountEmail, accountGaiaId);
@@ -181,14 +213,16 @@ public class AccountManagerTestRule implements TestRule {
         return FakeAccountManagerFacade.generateChildEmail(baseName);
     }
 
-    /**
-     * Returns an avatar image created from test resource.
-     */
+    /** Returns an avatar image created from test resource. */
     private static Bitmap createAvatar() {
-        Drawable drawable = AppCompatResources.getDrawable(
-                ContextUtils.getApplicationContext(), R.drawable.test_profile_picture);
-        Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Drawable drawable =
+                AppCompatResources.getDrawable(
+                        ContextUtils.getApplicationContext(), R.drawable.test_profile_picture);
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        drawable.getIntrinsicWidth(),
+                        drawable.getIntrinsicHeight(),
+                        Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);

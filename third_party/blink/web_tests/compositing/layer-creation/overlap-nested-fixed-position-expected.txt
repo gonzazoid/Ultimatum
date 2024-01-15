@@ -7,7 +7,7 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='fixed parent'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='fixed parent'",
       "bounds": [100, 100],
       "contentsOpaque": true,
       "backgroundColor": "#FFFF00"
@@ -22,8 +22,7 @@
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV class='overlapped with-parent'",
       "position": [8, 208],
-      "bounds": [270, 40],
-      "contentsOpaqueForText": true
+      "bounds": [270, 40]
     },
     {
       "name": "VerticalScrollbar",

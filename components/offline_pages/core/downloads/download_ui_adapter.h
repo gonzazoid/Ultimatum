@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_OFFLINE_PAGES_CORE_DOWNLOADS_DOWNLOAD_UI_ADAPTER_H_
 #define COMPONENTS_OFFLINE_PAGES_CORE_DOWNLOADS_DOWNLOAD_UI_ADAPTER_H_
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,7 +18,6 @@
 #include "components/offline_pages/core/offline_page_model.h"
 #include "components/offline_pages/core/offline_page_types.h"
 #include "components/offline_pages/core/offline_page_visuals.h"
-#include "url/gurl.h"
 
 using ContentId = offline_items_collection::ContentId;
 using OpenParams = offline_items_collection::OpenParams;
@@ -93,7 +91,7 @@ class DownloadUIAdapter : public OfflineContentProvider,
   void RemoveItem(const ContentId& id) override;
   void CancelDownload(const ContentId& id) override;
   void PauseDownload(const ContentId& id) override;
-  void ResumeDownload(const ContentId& id, bool has_user_gesture) override;
+  void ResumeDownload(const ContentId& id) override;
   void GetItemById(
       const ContentId& id,
       OfflineContentProvider::SingleItemCallback callback) override;

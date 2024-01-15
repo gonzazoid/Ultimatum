@@ -1,6 +1,7 @@
 # Please consult components/viz/README.md about allowable dependencies.
 
 include_rules = [
+  "+components/startup_metric_utils",
   "-components/viz",
   "+components/viz/common",
   "+ui/base",
@@ -15,5 +16,10 @@ specific_include_rules = {
   # Dependencies specific for fuzz targets and other fuzzing-related code.
   ".*fuzz.*": [
     "+third_party/libFuzzer/src/utils",  # This contains FuzzedDataProvider.
+  ],
+
+  # Exceptionally allow viz debugger header inclusion.
+  "gpu_host_impl.h": [
+    "+components/viz/service/debugger/mojom",
   ],
 }

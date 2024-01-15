@@ -9,7 +9,9 @@
 
 #include "base/cancelable_callback.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/assistant/public/cpp/conversation_observer.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client_observer.h"
 #include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
@@ -17,6 +19,7 @@
 #include "chromeos/ash/services/libassistant/public/mojom/conversation_controller.mojom.h"
 #include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom.h"
 #include "chromeos/assistant/internal/action/assistant_action_observer.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
@@ -35,7 +38,7 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
     : public mojom::ConversationController,
       public AssistantClientObserver,
       public chromeos::assistant::action::AssistantActionObserver,
-      public chromeos::assistant::ConversationObserver {
+      public assistant::ConversationObserver {
  public:
   using AssistantNotification = assistant::AssistantNotification;
   using AssistantQuerySource = assistant::AssistantQuerySource;
@@ -56,7 +59,6 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
       mojo::PendingRemote<mojom::AuthenticationStateObserver> observer);
 
   // AssistantClientObserver:
-  void OnAssistantClientCreated(AssistantClient* assistant_client) override;
   void OnAssistantClientRunning(AssistantClient* assistant_client) override;
   void OnDestroyingAssistantClient(AssistantClient* assistant_client) override;
 
@@ -66,9 +68,6 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
                      bool allow_tts) override;
   void StartVoiceInteraction() override;
   void StartEditReminderInteraction(const std::string& client_id) override;
-  void StartScreenContextInteraction(
-      ax::mojom::AssistantStructurePtr assistant_structure,
-      const std::vector<uint8_t>& screenshot) override;
   void StopActiveInteraction(bool cancel_conversation) override;
   void RetrieveNotification(AssistantNotification notification,
                             int32_t action_index) override;
@@ -81,7 +80,6 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
   void OnShowHtml(const std::string& html_content,
                   const std::string& fallback) override;
   void OnShowText(const std::string& text) override;
-  void OnShowContextualQueryFallback() override;
   void OnShowSuggestions(
       const std::vector<chromeos::assistant::action::Suggestion>& suggestions)
       override;
@@ -93,11 +91,11 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
   void OnShowNotification(
       const chromeos::assistant::action::Notification& notification) override;
 
-  // chromeos::assistant::ConversationObserver:
+  // assistant::ConversationObserver:
   void OnInteractionStarted(
       const assistant::AssistantInteractionMetadata& metadata) override;
   void OnInteractionFinished(
-      chromeos::assistant::AssistantInteractionResolution resolution) override;
+      assistant::AssistantInteractionResolution resolution) override;
 
   const mojo::RemoteSet<mojom::ConversationObserver>* conversation_observers() {
     return &observers_;
@@ -106,6 +104,9 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
   chromeos::assistant::action::CrosActionModule* action_module() {
     return action_module_.get();
   }
+
+  void OnGrpcMessageForTesting(
+      const ::assistant::api::OnDeviceStateEventRequest& request);
 
  private:
   class GrpcEventsObserver;
@@ -121,7 +122,7 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ConversationController
   // Owned by ServiceController.
   // Set in `OnAssistantClientCreated()` and unset in
   // `OnDestroyingAssistantClient()`.
-  AssistantClient* assistant_client_ = nullptr;
+  raw_ptr<AssistantClient> assistant_client_ = nullptr;
 
   // False until libassistant is running for the first time.
   // Any request that comes in before that is an error and will be DCHECK'ed.

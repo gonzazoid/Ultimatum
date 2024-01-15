@@ -8,58 +8,68 @@ assert(is_chromeos_ash)
 
 source_set("connectivity") {
   deps = [
-    ":decoder",
+    "proto",
     "//base",
+    "//chrome/browser:browser_process",
+    "//chrome/browser/ash/login/oobe_quick_start:oobe_quick_start_pref_names",
+    "//chrome/browser/ash/nearby:quick_start_connectivity_service",
+    "//chrome/browser/nearby_sharing/public/cpp",
+    "//chromeos/ash/components/quick_start",
+    "//chromeos/ash/services/nearby/public/cpp",
+    "//chromeos/ash/services/nearby/public/mojom",
+    "//chromeos/constants:constants",
     "//components/cbor",
+    "//components/prefs",
+    "//components/qr_code_generator:qr_code_generator",
     "//crypto",
     "//device/bluetooth",
     "//ui/chromeos",
     "//url",
   ]
   sources = [
-    "authenticated_connection.cc",
-    "authenticated_connection.h",
+    "account_transfer_client_data.cc",
+    "account_transfer_client_data.h",
+    "advertising_id.cc",
+    "advertising_id.h",
     "connection.cc",
     "connection.h",
     "fast_pair_advertiser.cc",
     "fast_pair_advertiser.h",
-    "incoming_connection.cc",
-    "incoming_connection.h",
-    "random_session_id.cc",
-    "random_session_id.h",
+    "fido_assertion_info.cc",
+    "fido_assertion_info.h",
+    "handshake_helpers.cc",
+    "handshake_helpers.h",
+    "qr_code.cc",
+    "qr_code.h",
+    "session_context.cc",
+    "session_context.h",
     "target_device_connection_broker.cc",
     "target_device_connection_broker.h",
     "target_device_connection_broker_factory.cc",
     "target_device_connection_broker_factory.h",
     "target_device_connection_broker_impl.cc",
     "target_device_connection_broker_impl.h",
-    "target_fido_controller.cc",
-    "target_fido_controller.h",
-  ]
-}
-
-source_set("decoder") {
-  sources = [
-    "quick_start_decoder.cc",
-    "quick_start_decoder.h",
-  ]
-
-  deps = [
-    "//base",
-    "//chromeos/ash/services/nearby/public/mojom",
-    "//components/cbor",
-    "//mojo/public/cpp/bindings",
-    "//sandbox/policy",
   ]
 }
 
 source_set("test_support") {
   testonly = true
   public_deps = [ ":connectivity" ]
-  deps = [ "//base" ]
+  deps = [
+    "//base",
+    "//chrome/browser/ash/nearby:quick_start_connectivity_service",
+    "//chrome/browser/nearby_sharing/public/cpp",
+    "//chrome/test:test_support",
+    "//chromeos/ash/components/quick_start:test_support",
+    "//components/cbor",
+  ]
   sources = [
+    "fake_connection.cc",
+    "fake_connection.h",
     "fake_target_device_connection_broker.cc",
     "fake_target_device_connection_broker.h",
+    "fido_authentication_message_helper.cc",
+    "fido_authentication_message_helper.h",
   ]
 }
 
@@ -67,9 +77,14 @@ source_set("unit_tests") {
   testonly = true
   deps = [
     ":connectivity",
-    ":decoder",
+    ":test_support",
+    "proto",
     "//base",
     "//base/test:test_support",
+    "//chrome/browser/nearby_sharing/public/cpp",
+    "//chrome/test:test_support",
+    "//chromeos/ash/components/quick_start",
+    "//chromeos/ash/components/quick_start:test_support",
     "//chromeos/ash/services/nearby/public/mojom",
     "//chromeos/constants",
     "//components/cbor",
@@ -78,10 +93,12 @@ source_set("unit_tests") {
     "//url",
   ]
   sources = [
+    "account_transfer_client_data_unittest.cc",
+    "connection_unittest.cc",
     "fast_pair_advertiser_unittest.cc",
-    "incoming_connection_unittest.cc",
-    "quick_start_decoder_unittest.cc",
+    "handshake_helpers_unittest.cc",
+    "qr_code_unittest.cc",
+    "session_context_unittest.cc",
     "target_device_connection_broker_impl_unittest.cc",
-    "target_fido_controller_unittest.cc",
   ]
 }

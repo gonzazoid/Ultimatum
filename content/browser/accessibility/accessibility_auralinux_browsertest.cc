@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/version.h"
 #include "build/build_config.h"
@@ -22,6 +22,9 @@
 #include "content/shell/browser/shell.h"
 #include "content/test/content_browser_test_utils_internal.h"
 #include "ui/accessibility/platform/ax_platform_node_auralinux.h"
+
+// TODO(https://crbug.com/1394423): Remove this again.
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 namespace content {
 

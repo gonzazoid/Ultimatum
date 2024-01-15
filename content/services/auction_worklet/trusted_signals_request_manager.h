@@ -6,12 +6,13 @@
 #define CONTENT_SERVICES_AUCTION_WORKLET_TRUSTED_SIGNALS_REQUEST_MANAGER_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
@@ -20,8 +21,9 @@
 #include "base/timer/timer.h"
 #include "content/common/content_export.h"
 #include "content/services/auction_worklet/trusted_signals.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -81,15 +83,22 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
   // TrustedSignals request for any pending requests and reset the send
   // interval.
   //
+  // If non-empty the bidder-only parameter,
+  // "&`trusted_bidding_signals_slot_size_param`" is appended to the end of the
+  // query string. It's expected to already be escaped if necessary.
+  //
   // TODO(https://crbug.com/1279643): Investigate improving the
   // `automatically_send_requests` logic.
   TrustedSignalsRequestManager(
       Type type,
       network::mojom::URLLoaderFactory* url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       bool automatically_send_requests,
       const url::Origin& top_level_origin,
       const GURL& trusted_signals_url,
-      absl::optional<uint16_t> experiment_group_id,
+      std::optional<uint16_t> experiment_group_id,
+      const std::string& trusted_bidding_signals_slot_size_param,
       AuctionV8Helper* v8_helper);
 
   explicit TrustedSignalsRequestManager(const TrustedSignalsRequestManager&) =
@@ -104,7 +113,7 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
   // kBiddingSignals.
   std::unique_ptr<Request> RequestBiddingSignals(
       const std::string& interest_group_name,
-      const absl::optional<std::vector<std::string>>& keys,
+      const std::optional<std::vector<std::string>>& keys,
       LoadSignalsCallback load_signals_callback);
 
   // Queues a scoring signals request. Does not start a network request until
@@ -135,7 +144,7 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
                 LoadSignalsCallback load_signals_callback);
 
     RequestImpl(TrustedSignalsRequestManager* trusted_signals_request_manager,
-                const GURL& render_urls,
+                const GURL& render_url,
                 std::set<std::string> ad_component_render_urls,
                 LoadSignalsCallback load_signals_callback);
 
@@ -148,16 +157,16 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
 
     // Used for requests for bidder signals. Must be non-null and non-empty for
     // bidder signals requests, null for scoring signals requests.
-    absl::optional<std::string> interest_group_name_;
-    absl::optional<std::set<std::string>> bidder_keys_;
+    std::optional<std::string> interest_group_name_;
+    std::optional<std::set<std::string>> bidder_keys_;
 
     // Used for requests for scoring signals. `render_url_` must be non-null
     // and non-empty for scoring signals requests, and
     // `ad_component_render_urls_` non-null. Both must be null for bidding
     // signals requests.
-    absl::optional<GURL> render_url_;
+    std::optional<GURL> render_url_;
     // Stored as a std::set for simpler
-    absl::optional<std::set<std::string>> ad_component_render_urls_;
+    std::optional<std::set<std::string>> ad_component_render_urls_;
 
     LoadSignalsCallback load_signals_callback_;
 
@@ -194,7 +203,7 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
 
   void OnSignalsLoaded(BatchedTrustedSignalsRequest* batched_request,
                        scoped_refptr<Result> result,
-                       absl::optional<std::string> error_msg);
+                       std::optional<std::string> error_msg);
 
   // Called when a request is destroyed. If it's in `queued_requests_`, removes
   // it. If there's a BatchedTrustedSignalsRequest for it, disassociates the
@@ -206,7 +215,8 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
   const bool automatically_send_requests_;
   const url::Origin top_level_origin_;
   const GURL trusted_signals_url_;
-  const absl::optional<uint16_t> experiment_group_id_;
+  const std::optional<uint16_t> experiment_group_id_;
+  const std::string trusted_bidding_signals_slot_size_param_;
   const scoped_refptr<AuctionV8Helper> v8_helper_;
 
   // All live requests that haven't yet been assigned to a
@@ -218,6 +228,9 @@ class CONTENT_EXPORT TrustedSignalsRequestManager {
       batched_requests_;
 
   base::OneShotTimer timer_;
+
+  mojo::Remote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+      auction_network_events_handler_;
 
   base::WeakPtrFactory<TrustedSignalsRequestManager> weak_ptr_factory{this};
 };

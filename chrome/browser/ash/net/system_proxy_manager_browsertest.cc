@@ -4,24 +4,26 @@
 
 #include "chrome/browser/ash/net/system_proxy_manager.h"
 
-#include <set>
+#include <array>
 #include <string>
+#include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/current_thread.h"
 #include "base/test/bind.h"
+#include "base/test/gtest_tags.h"
+#include "base/test/run_until.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/notifications/request_system_proxy_credentials_view.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_test_helper.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
-#include "chrome/browser/preloading/prefetch/prefetch_proxy/prefetch_proxy_test_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/login/login_handler.h"
-#include "chrome/browser/ui/login/login_handler_test_utils.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -33,12 +35,12 @@
 #include "chromeos/ash/components/dbus/system_proxy/system_proxy_client.h"
 #include "chromeos/ash/components/dbus/system_proxy/system_proxy_service.pb.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/proxy/proxy_config_handler.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
@@ -49,7 +51,6 @@
 #include "components/proxy_config/proxy_config_pref_names.h"
 #include "components/proxy_config/proxy_prefs.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -237,7 +238,7 @@ IN_PROC_BROWSER_TEST_F(SystemProxyManagerBrowserTest, AuthenticationDialog) {
 
   display_service_tester_->SimulateClick(
       NotificationHandler::Type::TRANSIENT, kSystemProxyNotificationId,
-      /*action_index=*/absl::nullopt, /*reply=*/absl::nullopt);
+      /*action_index=*/std::nullopt, /*reply=*/std::nullopt);
   // Dialog is created.
   ASSERT_TRUE(dialog());
 
@@ -281,7 +282,7 @@ IN_PROC_BROWSER_TEST_F(SystemProxyManagerBrowserTest,
 
   display_service_tester_->SimulateClick(
       NotificationHandler::Type::TRANSIENT, kSystemProxyNotificationId,
-      /*action_index=*/absl::nullopt, /*reply=*/absl::nullopt);
+      /*action_index=*/std::nullopt, /*reply=*/std::nullopt);
 
   // Dialog is created.
   ASSERT_TRUE(dialog());
@@ -325,7 +326,7 @@ IN_PROC_BROWSER_TEST_F(SystemProxyManagerBrowserTest,
 
   display_service_tester_->SimulateClick(
       NotificationHandler::Type::TRANSIENT, kSystemProxyNotificationId,
-      /*action_index=*/absl::nullopt, /*reply=*/absl::nullopt);
+      /*action_index=*/std::nullopt, /*reply=*/std::nullopt);
   ASSERT_TRUE(dialog());
 
   // Expect warning is shown.
@@ -350,14 +351,12 @@ class SystemProxyManagerPolicyCredentialsBrowserTest
     SessionManagerClient::InitializeFakeInMemory();
 
     MixinBasedInProcessBrowserTest::SetUpInProcessBrowserTestFixture();
-    const std::string kAffiliationID = "id";
+    constexpr base::StringPiece kAffiliationID = "id";
     // Initialize device policy.
-    std::set<std::string> device_affiliation_ids;
-    device_affiliation_ids.insert(kAffiliationID);
     auto affiliation_helper = policy::AffiliationTestHelper::CreateForCloud(
         FakeSessionManagerClient::Get());
-    ASSERT_NO_FATAL_FAILURE((affiliation_helper.SetDeviceAffiliationIDs(
-        &policy_helper_, device_affiliation_ids)));
+    ASSERT_NO_FATAL_FAILURE(affiliation_helper.SetDeviceAffiliationIDs(
+        &policy_helper_, std::array{kAffiliationID}));
 
     provider_.SetDefaultReturns(
         /*is_initialization_complete_return=*/true,
@@ -566,11 +565,11 @@ IN_PROC_BROWSER_TEST_F(SystemProxyManagerPolicyCredentialsBrowserTest,
   ExpectSystemCredentialsSent("", "");
 
   // Configure a proxy via user policy.
-  base::Value proxy_config(base::Value::Type::DICTIONARY);
-  proxy_config.SetKey("mode", base::Value(ProxyPrefs::kPacScriptProxyModeName));
-  proxy_config.SetKey("pac_url", base::Value("http://proxy"));
-  browser()->profile()->GetPrefs()->Set(::proxy_config::prefs::kProxy,
-                                        proxy_config);
+  auto proxy_config = base::Value::Dict()
+                          .Set("mode", ProxyPrefs::kPacScriptProxyModeName)
+                          .Set("pac_url", "http://proxy");
+  browser()->profile()->GetPrefs()->SetDict(::proxy_config::prefs::kProxy,
+                                            std::move(proxy_config));
   RunUntilIdle();
   EXPECT_EQ(++set_auth_details_call_count,
             client_test_interface()->GetSetAuthenticationDetailsCallCount());
@@ -582,9 +581,9 @@ IN_PROC_BROWSER_TEST_F(SystemProxyManagerPolicyCredentialsBrowserTest,
 IN_PROC_BROWSER_TEST_F(SystemProxyManagerPolicyCredentialsBrowserTest,
                        UserSetProxy) {
   SetPolicyCredentials(kUsername, kPassword);
-  base::Value::Dict proxy_config;
-  proxy_config.Set("mode", base::Value(ProxyPrefs::kFixedServersProxyModeName));
-  proxy_config.Set("server", base::Value("proxy:8080"));
+  auto proxy_config = base::Value::Dict()
+                          .Set("mode", ProxyPrefs::kFixedServersProxyModeName)
+                          .Set("server", "proxy:8080");
   SetProxyConfigForNetworkService(kDefaultServicePath, std::move(proxy_config));
   RunUntilIdle();
   int set_auth_details_call_count = 0;
@@ -661,13 +660,12 @@ class SystemProxyCredentialsReuseBrowserTest
 
   void SetManagedProxy() {
     // Configure a proxy via user policy.
-    base::Value proxy_config(base::Value::Type::DICTIONARY);
-    proxy_config.SetKey("mode",
-                        base::Value(ProxyPrefs::kFixedServersProxyModeName));
-    proxy_config.SetKey(
-        "server", base::Value(proxy_server_->host_port_pair().ToString()));
-    browser()->profile()->GetPrefs()->Set(::proxy_config::prefs::kProxy,
-                                          proxy_config);
+    auto proxy_config =
+        base::Value::Dict()
+            .Set("mode", ProxyPrefs::kFixedServersProxyModeName)
+            .Set("server", proxy_server_->host_port_pair().ToString());
+    browser()->profile()->GetPrefs()->SetDict(::proxy_config::prefs::kProxy,
+                                              std::move(proxy_config));
     RunUntilIdle();
   }
 
@@ -679,19 +677,14 @@ class SystemProxyCredentialsReuseBrowserTest
   // login dialog with `username` and `password`.
   void LoginWithDialog(const std::u16string& username,
                        const std::u16string& password) {
-    LoginPromptBrowserTestObserver login_observer;
-    login_observer.Register(content::Source<content::NavigationController>(
-        &GetWebContents()->GetController()));
-    WindowedAuthNeededObserver auth_needed(&GetWebContents()->GetController());
     ASSERT_TRUE(
         ui_test_utils::NavigateToURL(browser(), GetServerUrl("/simple.html")));
-    auth_needed.Wait();
-    WindowedAuthSuppliedObserver auth_supplied(
-        &GetWebContents()->GetController());
-    LoginHandler* login_handler = login_observer.handlers().front();
+    ASSERT_TRUE(base::test::RunUntil([]() {
+      return LoginHandler::GetAllLoginHandlersForTest().size() == 1;
+    }));
+    LoginHandler* login_handler =
+        LoginHandler::GetAllLoginHandlersForTest().front();
     login_handler->SetAuth(username, password);
-    auth_supplied.Wait();
-    EXPECT_EQ(1, login_observer.auth_supplied_count());
   }
 
   void CheckEntryInHttpAuthCache(const std::string& auth_scheme,
@@ -709,7 +702,7 @@ class SystemProxyCredentialsReuseBrowserTest
         base::BindOnce(
             [](std::string* username, std::string* password,
                base::OnceClosure closure,
-               const absl::optional<net::AuthCredentials>& credentials) {
+               const std::optional<net::AuthCredentials>& credentials) {
               if (credentials) {
                 *username = base::UTF16ToUTF8(credentials->username());
                 *password = base::UTF16ToUTF8(credentials->password());
@@ -734,6 +727,8 @@ class SystemProxyCredentialsReuseBrowserTest
 
 // Verifies that the policy provided credentials are not used for regular users.
 IN_PROC_BROWSER_TEST_F(SystemProxyCredentialsReuseBrowserTest, RegularUser) {
+  base::AddTagToTestResult("feature_id",
+                             "screenplay-04b4c463-f720-4cd4-9e50-7ee009d9a241");
   SetManagedProxy();
   SetPolicyCredentials(kProxyUsername, kProxyPassword);
   LoginWithDialog(kProxyUsername16, kProxyPassword16);

@@ -6,9 +6,7 @@
  * @fileoverview Tests for the passkeys subpage.
  */
 
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
-import {Passkey, PasskeysBrowserProxy, PasskeysBrowserProxyImpl, SettingsPasskeysDeleteConfirmationDialogElement, SettingsPasskeysSubpageElement} from 'chrome://settings/lazy_load.js';
+import {Passkey, PasskeysBrowserProxy, PasskeysBrowserProxyImpl, SettingsPasskeysSubpageElement, SettingsSimpleConfirmationDialogElement} from 'chrome://settings/lazy_load.js';
 import {assertDeepEquals, assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
@@ -163,9 +161,8 @@ suite('PasskeysSubpage', function() {
 
     assertDeepEquals(getUsernamesFromList(page), [testPasskeys[0].userName]);
     let confirmationDialog =
-        page.shadowRoot!
-            .querySelector<SettingsPasskeysDeleteConfirmationDialogElement>(
-                '#deleteConfirmDialog');
+        page.shadowRoot!.querySelector<SettingsSimpleConfirmationDialogElement>(
+            '#deleteConfirmDialog');
     assertTrue(
         confirmationDialog === null, 'Confirmation dialog should not exist');
 
@@ -181,16 +178,15 @@ suite('PasskeysSubpage', function() {
         browserProxy.getCallCount('delete'), 0,
         'Delete should not have been called yet');
     confirmationDialog =
-        page.shadowRoot!
-            .querySelector<SettingsPasskeysDeleteConfirmationDialogElement>(
-                '#deleteConfirmDialog');
+        page.shadowRoot!.querySelector<SettingsSimpleConfirmationDialogElement>(
+            '#deleteConfirmDialog');
     assertTrue(confirmationDialog !== null, 'Cannot find confirmation dialog');
     assertTrue(
         confirmationDialog.$.dialog.open,
         'Confirmation dialog should be showing');
 
     browserProxy.setNextPasskeys([]);
-    confirmationDialog.$.deleteButton.click();
+    confirmationDialog.$.confirm.click();
     const deletedCredentialId = await browserProxy.whenCalled('delete');
     assertEquals(deletedCredentialId, testPasskeys[0].credentialId);
     await flushTasks();
@@ -208,12 +204,11 @@ suite('PasskeysSubpage', function() {
     await flushTasks();
 
     const confirmationDialog =
-        page.shadowRoot!
-            .querySelector<SettingsPasskeysDeleteConfirmationDialogElement>(
-                '#deleteConfirmDialog');
+        page.shadowRoot!.querySelector<SettingsSimpleConfirmationDialogElement>(
+            '#deleteConfirmDialog');
     assertTrue(confirmationDialog !== null, 'Cannot find confirmation dialog');
 
-    confirmationDialog.$.cancelButton.click();
+    confirmationDialog.$.cancel.click();
     await flushTasks();
 
     assertEquals(
@@ -228,9 +223,7 @@ suite('PasskeysSubpage', function() {
     await flushTasks();
     assertEquals(browserProxy.getCallCount('enumerate'), 1);
 
-    const lazyDialog =
-        page.shadowRoot!.querySelector<CrLazyRenderElement<CrDialogElement>>(
-            '#deleteErrorDialog');
+    const lazyDialog = page.$.deleteErrorDialog;
     assertTrue(lazyDialog !== null, 'Dialog not found');
     assertTrue(
         lazyDialog.getIfExists() === null, 'Dialog should not be showing');
@@ -240,13 +233,12 @@ suite('PasskeysSubpage', function() {
     await flushTasks();
 
     const confirmationDialog =
-        page.shadowRoot!
-            .querySelector<SettingsPasskeysDeleteConfirmationDialogElement>(
-                '#deleteConfirmDialog');
+        page.shadowRoot!.querySelector<SettingsSimpleConfirmationDialogElement>(
+            '#deleteConfirmDialog');
     assertTrue(confirmationDialog !== null, 'Cannot find confirmation dialog');
 
     browserProxy.setNextPasskeys(testPasskeys);
-    confirmationDialog.$.deleteButton.click();
+    confirmationDialog.$.confirm.click();
     const deletedCredentialId = await browserProxy.whenCalled('delete');
     assertEquals(deletedCredentialId, testPasskeys[0].credentialId);
     await flushTasks();

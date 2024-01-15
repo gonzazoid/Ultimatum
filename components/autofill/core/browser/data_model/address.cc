@@ -6,12 +6,12 @@
 
 #include <stddef.h>
 #include <algorithm>
+#include <memory>
 
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/i18n/case_conversion.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -19,9 +19,12 @@
 #include "components/autofill/core/browser/autofill_data_util.h"
 #include "components/autofill/core/browser/autofill_field.h"
 #include "components/autofill/core/browser/autofill_type.h"
+#include "components/autofill/core/browser/data_model/autofill_i18n_api.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/autofill_profile_comparator.h"
+#include "components/autofill/core/browser/data_model/autofill_structured_address_component.h"
 #include "components/autofill/core/browser/data_model/autofill_structured_address_utils.h"
+#include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
 #include "components/autofill/core/browser/geo/country_names.h"
 #include "components/autofill/core/browser/geo/state_names.h"
@@ -30,32 +33,49 @@
 
 namespace autofill {
 
-using structured_address::VerificationStatus;
-
-Address::Address() = default;
-
-Address::Address(const Address& address) = default;
+Address::Address(AddressCountryCode country_code)
+    : structured_address_(
+          i18n_model_definition::CreateAddressComponentModel(country_code)),
+      is_legacy_address_(
+          !i18n_model_definition::IsCustomHierarchyAvailableForCountry(
+              country_code)) {}
 
 Address::~Address() = default;
 
-Address& Address::operator=(const Address& address) = default;
+Address::Address(const Address& address) {
+  *this = address;
+}
+
+Address& Address::operator=(const Address& address) {
+  if (this == &address) {
+    return *this;
+  }
+
+  structured_address_ = i18n_model_definition::CreateAddressComponentModel(
+      address.IsLegacyAddress() ? AddressCountryCode("")
+                                : address.GetAddressCountryCode());
+  is_legacy_address_ = address.IsLegacyAddress();
+
+  structured_address_->CopyFrom(address.GetStructuredAddress());
+  return *this;
+}
 
 bool Address::operator==(const Address& other) const {
   if (this == &other)
     return true;
-  return structured_address_.SameAs(other.structured_address_);
+  return structured_address_->SameAs(*other.structured_address_.get());
 }
 
-bool Address::FinalizeAfterImport(bool profile_is_verified) {
-  structured_address_.MigrateLegacyStructure(profile_is_verified);
-  bool result = structured_address_.CompleteFullTree();
+bool Address::FinalizeAfterImport() {
+  structured_address_->MigrateLegacyStructure();
+  bool result = structured_address_->CompleteFullTree();
   // If the address could not be completed, it is possible that it contains an
   // invalid structure.
   if (!result) {
-    if (structured_address_.WipeInvalidStructure()) {
+    if (structured_address_->WipeInvalidStructure()) {
       // If the structure was wiped because it is invalid, try to complete the
       // address again.
-      result = structured_address_.CompleteFullTree();
+      result = structured_address_->CompleteFullTree();
     }
   }
   return result;
@@ -63,11 +83,11 @@ bool Address::FinalizeAfterImport(bool profile_is_verified) {
 
 bool Address::MergeStructuredAddress(const Address& newer,
                                      bool newer_was_more_recently_used) {
-  return structured_address_.MergeWithComponent(newer.GetStructuredAddress(),
-                                                newer_was_more_recently_used);
+  return structured_address_->MergeWithComponent(newer.GetStructuredAddress(),
+                                                 newer_was_more_recently_used);
 }
 
-absl::optional<AlternativeStateNameMap::CanonicalStateName>
+std::optional<AlternativeStateNameMap::CanonicalStateName>
 Address::GetCanonicalizedStateName() const {
   return AlternativeStateNameMap::GetCanonicalStateName(
       base::UTF16ToUTF8(GetRawInfo(ADDRESS_HOME_COUNTRY)),
@@ -75,50 +95,62 @@ Address::GetCanonicalizedStateName() const {
 }
 
 bool Address::IsStructuredAddressMergeable(const Address& newer) const {
-  return structured_address_.IsMergeableWithComponent(
+  return structured_address_->IsMergeableWithComponent(
       newer.GetStructuredAddress());
 }
 
-const structured_address::Address& Address::GetStructuredAddress() const {
-  return structured_address_;
+const AddressComponent& Address::GetStructuredAddress() const {
+  return *structured_address_.get();
 }
 
-std::u16string Address::GetRawInfo(ServerFieldType type) const {
-  DCHECK_EQ(FieldTypeGroup::kAddressHome, AutofillType(type).group());
-
-  return structured_address_.GetValueForType(type);
+AddressCountryCode Address::GetAddressCountryCode() const {
+  std::string country_code = base::UTF16ToUTF8(
+      structured_address_->GetValueForType(ADDRESS_HOME_COUNTRY));
+  return AddressCountryCode(country_code);
 }
 
-void Address::SetRawInfoWithVerificationStatus(ServerFieldType type,
+std::u16string Address::GetRawInfo(FieldType type) const {
+  DCHECK_EQ(FieldTypeGroup::kAddress, GroupTypeOfFieldType(type));
+
+  return structured_address_->GetValueForType(type);
+}
+
+void Address::SetRawInfoWithVerificationStatus(FieldType type,
                                                const std::u16string& value,
                                                VerificationStatus status) {
-  DCHECK_EQ(FieldTypeGroup::kAddressHome, AutofillType(type).group());
+  DCHECK_EQ(FieldTypeGroup::kAddress, GroupTypeOfFieldType(type));
   // The street address has a structure that may have already been set before
   // using the settings dialog. In case the settings dialog was used to change
   // the address to contain different tokens, the structure must be reset.
   if (type == ADDRESS_HOME_STREET_ADDRESS) {
     const std::u16string current_value =
-        structured_address_.GetValueForType(type);
+        structured_address_->GetValueForType(type);
     if (!current_value.empty()) {
-      bool token_equivalent = structured_address::AreStringTokenEquivalent(
-          value, structured_address_.GetValueForType(type));
-      structured_address_.SetValueForTypeIfPossible(
-          ADDRESS_HOME_STREET_ADDRESS, value, status,
-          /*invalidate_child_nodes=*/!token_equivalent);
+      AreStringTokenEquivalent(value,
+                               structured_address_->GetValueForType(type))
+          ? structured_address_->SetValueForType(ADDRESS_HOME_STREET_ADDRESS,
+                                                 value, status)
+          : structured_address_->SetValueForTypeAndResetSubstructure(
+                ADDRESS_HOME_STREET_ADDRESS, value, status);
       return;
     }
   }
 
-  structured_address_.SetValueForTypeIfPossible(type, value, status);
+  if (type == ADDRESS_HOME_COUNTRY) {
+    SetAddressCountryCode(value, status);
+    return;
+  }
+
+  structured_address_->SetValueForType(type, value, status);
 }
 
 void Address::GetMatchingTypes(const std::u16string& text,
                                const std::string& app_locale,
-                               ServerFieldTypeSet* matching_types) const {
+                               FieldTypeSet* matching_types) const {
   FormGroup::GetMatchingTypes(text, app_locale, matching_types);
 
   std::string country_code = base::UTF16ToUTF8(
-      structured_address_.GetValueForType(ADDRESS_HOME_COUNTRY));
+      structured_address_->GetValueForType(ADDRESS_HOME_COUNTRY));
 
   // Check to see if the |text| canonicalized as a country name is a match.
   std::string entered_country_code =
@@ -128,18 +160,19 @@ void Address::GetMatchingTypes(const std::u16string& text,
     matching_types->insert(ADDRESS_HOME_COUNTRY);
 
   l10n::CaseInsensitiveCompare compare;
-  AutofillProfileComparator comparator(app_locale);
   // Check to see if the |text| could be the full name or abbreviation of a
   // state.
-  std::u16string canon_text = comparator.NormalizeForComparison(text);
+  std::u16string canon_text =
+      AutofillProfileComparator::NormalizeForComparison(text);
   std::u16string state_name;
   std::u16string state_abbreviation;
   state_names::GetNameAndAbbreviation(canon_text, &state_name,
                                       &state_abbreviation);
 
   if (!state_name.empty() || !state_abbreviation.empty()) {
-    std::u16string canon_profile_state = comparator.NormalizeForComparison(
-        GetInfo(AutofillType(ADDRESS_HOME_STATE), app_locale));
+    std::u16string canon_profile_state =
+        AutofillProfileComparator::NormalizeForComparison(
+            GetInfo(AutofillType(ADDRESS_HOME_STATE), app_locale));
     if ((!state_name.empty() &&
          compare.StringsEqual(state_name, canon_profile_state)) ||
         (!state_abbreviation.empty() &&
@@ -149,34 +182,20 @@ void Address::GetMatchingTypes(const std::u16string& text,
   }
 }
 
-void Address::GetSupportedTypes(ServerFieldTypeSet* supported_types) const {
-  supported_types->insert(ADDRESS_HOME_LINE1);
-  supported_types->insert(ADDRESS_HOME_LINE2);
-  supported_types->insert(ADDRESS_HOME_LINE3);
-  supported_types->insert(ADDRESS_HOME_STREET_ADDRESS);
-  supported_types->insert(ADDRESS_HOME_DEPENDENT_LOCALITY);
-  supported_types->insert(ADDRESS_HOME_CITY);
-  supported_types->insert(ADDRESS_HOME_STATE);
-  supported_types->insert(ADDRESS_HOME_ZIP);
-  supported_types->insert(ADDRESS_HOME_SORTING_CODE);
-  supported_types->insert(ADDRESS_HOME_COUNTRY);
-  supported_types->insert(ADDRESS_HOME_STREET_NAME);
-  supported_types->insert(ADDRESS_HOME_DEPENDENT_STREET_NAME);
-  supported_types->insert(ADDRESS_HOME_HOUSE_NUMBER);
-  supported_types->insert(ADDRESS_HOME_PREMISE_NAME);
-  supported_types->insert(ADDRESS_HOME_SUBPREMISE);
+void Address::GetSupportedTypes(FieldTypeSet* supported_types) const {
+  structured_address_->GetSupportedTypes(supported_types);
 }
 
 std::u16string Address::GetInfoImpl(const AutofillType& type,
                                     const std::string& locale) const {
   std::string country_code = base::UTF16ToUTF8(
-      structured_address_.GetValueForType(ADDRESS_HOME_COUNTRY));
+      structured_address_->GetValueForType(ADDRESS_HOME_COUNTRY));
 
   if (type.html_type() == HtmlFieldType::kCountryCode) {
     return base::ASCIIToUTF16(country_code);
   }
 
-  ServerFieldType storable_type = type.GetStorableType();
+  FieldType storable_type = type.GetStorableType();
   if (storable_type == ADDRESS_HOME_COUNTRY && !country_code.empty())
     return AutofillCountry(country_code, locale).name();
 
@@ -188,44 +207,37 @@ bool Address::SetInfoWithVerificationStatusImpl(const AutofillType& type,
                                                 const std::string& locale,
                                                 VerificationStatus status) {
   if (type.html_type() == HtmlFieldType::kCountryCode) {
-    std::string country_code = base::ToUpperASCII(base::UTF16ToASCII(value));
+    std::string country_code =
+        base::IsStringASCII(value)
+            ? base::ToUpperASCII(base::UTF16ToASCII(value))
+            : std::string();
     if (!data_util::IsValidCountryCode(country_code)) {
       // To counteract the misuse of autocomplete=country attribute when used
       // with full country names, if the supplied country code is not a valid,
       // it is tested if a country code can be derived from the value when it is
       // interpreted as a full country name. Otherwise an empty string is
       // assigned to |country_code|.
-      if (!value.empty()) {
-        DetectionOfCountryName source = DetectionOfCountryName::kNotFound;
-        country_code =
-            CountryNames::GetInstance()->GetCountryCodeForLocalizedCountryName(
-                value, locale, &source);
-        base::UmaHistogramEnumeration(
-            "Autofill.CountryCodeResolution.WhenSettingCountryCode", source);
-      }
+      CountryNames* country_names =
+          !value.empty() ? CountryNames::GetInstance() : nullptr;
+      country_code = country_names
+                         ? country_names->GetCountryCodeForLocalizedCountryName(
+                               value, locale)
+                         : std::string();
     }
 
-    structured_address_.SetValueForTypeIfPossible(ADDRESS_HOME_COUNTRY,
-                                                  country_code, status);
+    SetRawInfoWithVerificationStatus(ADDRESS_HOME_COUNTRY,
+                                     base::UTF8ToUTF16(country_code), status);
     return !country_code.empty();
   }
 
-  if (type.html_type() == HtmlFieldType::kFullAddress) {
-    // Parsing a full address is too hard.
-    return false;
-  }
-
-  ServerFieldType storable_type = type.GetStorableType();
+  FieldType storable_type = type.GetStorableType();
   if (storable_type == ADDRESS_HOME_COUNTRY && !value.empty()) {
-    DetectionOfCountryName source = DetectionOfCountryName::kNotFound;
     std::string country_code =
         CountryNames::GetInstance()->GetCountryCodeForLocalizedCountryName(
-            value, locale, &source);
-    base::UmaHistogramEnumeration(
-        "Autofill.CountryCodeResolution.WhenSettingCountryName", source);
+            value, locale);
 
-    structured_address_.SetValueForTypeIfPossible(ADDRESS_HOME_COUNTRY,
-                                                  country_code, status);
+    SetRawInfoWithVerificationStatus(ADDRESS_HOME_COUNTRY,
+                                     base::UTF8ToUTF16(country_code), status);
     return !GetRawInfo(ADDRESS_HOME_COUNTRY).empty();
   }
 
@@ -235,16 +247,70 @@ bool Address::SetInfoWithVerificationStatusImpl(const AutofillType& type,
   // There's a good chance that this formatting is not intentional, but it's
   // also not obviously safe to just strip the newlines.
   if (storable_type == ADDRESS_HOME_STREET_ADDRESS) {
-    return structured_address_.IsValueForTypeValid(ADDRESS_HOME_STREET_ADDRESS,
-                                                   /*wipe_if_not=*/true);
+    return structured_address_->IsValueForTypeValid(ADDRESS_HOME_STREET_ADDRESS,
+                                                    /*wipe_if_not=*/true);
   }
 
   return true;
 }
 
-VerificationStatus Address::GetVerificationStatusImpl(
-    ServerFieldType type) const {
-  return structured_address_.GetVerificationStatusForType(type);
+VerificationStatus Address::GetVerificationStatusImpl(FieldType type) const {
+  return structured_address_->GetVerificationStatusForType(type);
+}
+
+void Address::SetAddressCountryCode(const std::u16string& country_code,
+                                    VerificationStatus verification_status) {
+  if (!base::FeatureList::IsEnabled(features::kAutofillUseI18nAddressModel)) {
+    structured_address_->SetValueForType(ADDRESS_HOME_COUNTRY, country_code,
+                                         verification_status);
+    return;
+  }
+
+  const AddressCountryCode new_address_country_code =
+      AddressCountryCode(base::UTF16ToUTF8(country_code));
+
+  // No restructuring is necessary if the new country is the same as the current
+  // one. Only updating the verification status is required.
+  if (GetAddressCountryCode() == new_address_country_code) {
+    structured_address_->SetValueForType(ADDRESS_HOME_COUNTRY, country_code,
+                                         verification_status);
+    return;
+  }
+
+  // No restructuring is necessary if both countries use the default hierarchy.
+  if (IsLegacyAddress() &&
+      !i18n_model_definition::IsCustomHierarchyAvailableForCountry(
+          new_address_country_code)) {
+    structured_address_->SetValueForType(ADDRESS_HOME_COUNTRY, country_code,
+                                         verification_status);
+    return;
+  }
+
+  // Create an updated version of the internal hierarchy.
+  std::unique_ptr<AddressComponent> updated_structured_address =
+      i18n_model_definition::CreateAddressComponentModel(
+          new_address_country_code);
+  is_legacy_address_ =
+      !i18n_model_definition::IsCustomHierarchyAvailableForCountry(
+          new_address_country_code);
+
+  // Transfer the content from the old model into the new one. Note that it
+  // is possible that some nodes are not present in the updated model. Those
+  // will be ignored.
+  FieldTypeSet prev_supported_types;
+  structured_address_->GetStorableTypes(&prev_supported_types);
+  prev_supported_types.erase(ADDRESS_HOME_COUNTRY);
+
+  for (FieldType type : prev_supported_types) {
+    updated_structured_address->SetValueForType(
+        type, structured_address_->GetValueForType(type),
+        structured_address_->GetVerificationStatusForType(type));
+  }
+
+  structured_address_ = std::move(updated_structured_address);
+  // Update verification status.
+  structured_address_->SetValueForType(ADDRESS_HOME_COUNTRY, country_code,
+                                       verification_status);
 }
 
 }  // namespace autofill

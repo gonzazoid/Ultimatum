@@ -8,17 +8,19 @@
 #include <utility>
 
 #include "ash/app_list/app_list_metrics.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/icon_button.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/animation/throb_animation.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
@@ -43,11 +45,13 @@ constexpr SkScalar kStrokeWidth = SkIntToScalar(2);
 constexpr int kVerticalButtonPadding = 0;
 
 class PageSwitcherButton : public IconButton {
+  METADATA_HEADER(PageSwitcherButton, IconButton)
+
  public:
   PageSwitcherButton(PressedCallback callback,
                      const std::u16string& accesible_name)
       : IconButton(std::move(callback),
-                   IconButton::Type::kSmallFloating,
+                   IconButton::Type::kMediumFloating,
                    /*icon=*/nullptr,
                    accesible_name,
                    /*is_togglable=*/false,
@@ -87,8 +91,7 @@ class PageSwitcherButton : public IconButton {
   // Returns the information of how to paint selected/normal button.
   PaintButtonInfo BuildPaintButtonInfo() {
     PaintButtonInfo info;
-    info.color =
-        AppListColorProvider::Get()->GetPageSwitcherButtonColor(GetWidget());
+    info.color = GetColorProvider()->GetColor(kColorAshButtonIconColor);
     if (selected_) {
       info.style = cc::PaintFlags::kFill_Style;
       info.radius = SkIntToScalar(kSelectedButtonRadius);
@@ -124,6 +127,9 @@ PageSwitcherButton* GetButtonByIndex(views::View* buttons, size_t index) {
   return static_cast<PageSwitcherButton*>(buttons->children()[index]);
 }
 
+BEGIN_METADATA(PageSwitcherButton)
+END_METADATA
+
 }  // namespace
 
 PageSwitcher::PageSwitcher(PaginationModel* model)
@@ -134,7 +140,7 @@ PageSwitcher::PageSwitcher(PaginationModel* model)
       views::BoxLayout::Orientation::kVertical, gfx::Insets(),
       kVerticalButtonPadding));
 
-  AddChildView(buttons_);
+  AddChildView(buttons_.get());
 
   TotalPagesChanged(0, model->total_pages());
   SelectedPageChanged(-1, model->selected_page());
@@ -170,7 +176,7 @@ void PageSwitcher::OnThemeChanged() {
   views::View::OnThemeChanged();
   if (!buttons_)
     return;
-  for (auto* child : buttons_->children()) {
+  for (views::View* child : buttons_->children()) {
     if (child->GetVisible())
       child->SchedulePaint();
   }
@@ -221,5 +227,8 @@ void PageSwitcher::SelectedPageChanged(int old_selected, int new_selected) {
     GetButtonByIndex(buttons_, static_cast<size_t>(new_selected))
         ->SetSelected(true);
 }
+
+BEGIN_METADATA(PageSwitcher)
+END_METADATA
 
 }  // namespace ash

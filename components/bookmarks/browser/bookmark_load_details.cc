@@ -4,8 +4,9 @@
 
 #include "components/bookmarks/browser/bookmark_load_details.h"
 
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "components/bookmarks/browser/bookmark_client.h"
+#include "components/bookmarks/browser/bookmark_uuids.h"
 #include "components/bookmarks/browser/titled_url_index.h"
 #include "components/bookmarks/browser/url_index.h"
 
@@ -13,14 +14,13 @@ namespace bookmarks {
 
 BookmarkLoadDetails::BookmarkLoadDetails(BookmarkClient* client)
     : load_managed_node_callback_(client->GetLoadManagedNodeCallback()),
-      index_(std::make_unique<TitledUrlIndex>()),
+      titled_url_index_(std::make_unique<TitledUrlIndex>()),
       load_start_(base::TimeTicks::Now()) {
   // WARNING: do NOT add |client| as a member. Much of this code runs on another
   // thread, and |client_| is not thread safe, and/or may be destroyed before
   // this.
   root_node_ = std::make_unique<BookmarkNode>(
-      /*id=*/0, base::GUID::ParseLowercase(BookmarkNode::kRootNodeGuid),
-      GURL());
+      /*id=*/0, base::Uuid::ParseLowercase(kRootNodeUuid), GURL());
   root_node_ptr_ = root_node_.get();
   // WARNING: order is important here, various places assume the order is
   // constant (but can vary between embedders with the initial visibility
@@ -41,21 +41,36 @@ BookmarkLoadDetails::BookmarkLoadDetails(BookmarkClient* client)
 
 BookmarkLoadDetails::~BookmarkLoadDetails() = default;
 
-bool BookmarkLoadDetails::LoadManagedNode() {
-  if (!load_managed_node_callback_)
-    return false;
+void BookmarkLoadDetails::LoadManagedNode() {
+  if (!load_managed_node_callback_) {
+    return;
+  }
 
   std::unique_ptr<BookmarkPermanentNode> managed_node =
       std::move(load_managed_node_callback_).Run(&max_id_);
-  if (!managed_node)
-    return false;
-  bool has_children = !managed_node->children().empty();
+  if (!managed_node) {
+    return;
+  }
   root_node_->Add(std::move(managed_node));
-  return has_children;
 }
 
-void BookmarkLoadDetails::CreateUrlIndex() {
+void BookmarkLoadDetails::CreateIndices() {
+  AddNodeToIndexRecursive(root_node_.get());
   url_index_ = base::MakeRefCounted<UrlIndex>(std::move(root_node_));
+}
+
+void BookmarkLoadDetails::AddNodeToIndexRecursive(BookmarkNode* node) {
+  uuid_index_.insert(node);
+  if (node->is_url()) {
+    if (node->url().is_valid()) {
+      titled_url_index_->Add(node);
+    }
+  } else {
+    titled_url_index_->AddPath(node);
+    for (const auto& child : node->children()) {
+      AddNodeToIndexRecursive(child.get());
+    }
+  }
 }
 
 }  // namespace bookmarks

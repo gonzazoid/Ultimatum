@@ -10,13 +10,14 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "components/metrics/demographics/user_demographics.h"
 #include "components/metrics/metrics_log_uploader.h"
-#include "components/sync/base/sync_prefs.h"
+#include "components/sync/base/features.h"
+#include "components/sync/service/sync_prefs.h"
 #include "components/sync/test/test_sync_service.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
-#include "google_apis/gaia/google_service_auth_error.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
@@ -34,7 +35,13 @@ enum TestSyncServiceState {
   SYNC_FEATURE_NOT_ENABLED,
   SYNC_FEATURE_ENABLED,
   SYNC_FEATURE_ENABLED_BUT_PAUSED,
-  SYNC_FEATURE_TEMPORARILY_DISABLED,
+  SYNC_FEATURE_DISABLED_BUT_PREFERENCES_ENABLED,
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Represents the user clearing sync data via dashboard. On all platforms
+  // except ChromeOS (Ash), this clears the primary account (which is basically
+  // SYNC_FEATURE_NOT_ENABLED). On ChromeOS Ash, Sync enters a special state.
+  SYNC_FEATURE_DISABLED_ON_CHROMEOS_ASH_VIA_DASHBOARD,
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 };
 
 // Profile client for testing that gets fake Profile information and services.
@@ -48,6 +55,7 @@ class TestProfileClient : public DemographicMetricsProvider::ProfileClient {
   TestProfileClient(int number_of_profiles,
                     TestSyncServiceState sync_service_state)
       : number_of_profiles_(number_of_profiles) {
+    RegisterDemographicsLocalStatePrefs(pref_service_.registry());
     RegisterDemographicsProfilePrefs(pref_service_.registry());
 
     switch (sync_service_state) {
@@ -59,14 +67,13 @@ class TestProfileClient : public DemographicMetricsProvider::ProfileClient {
         // Set an arbitrary disable reason to mimic sync feature being unable to
         // start.
         sync_service_->SetDisableReasons(
-            syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR);
+            {syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR});
         break;
 
       case SYNC_FEATURE_ENABLED:
         // TestSyncService by default behaves as everything enabled/active.
         sync_service_ = std::make_unique<syncer::TestSyncService>();
 
-        CHECK(sync_service_->GetUserSettings()->IsSyncRequested());
         CHECK(sync_service_->GetDisableReasons().Empty());
         CHECK_EQ(syncer::SyncService::TransportState::ACTIVE,
                  sync_service_->GetTransportState());
@@ -75,24 +82,38 @@ class TestProfileClient : public DemographicMetricsProvider::ProfileClient {
       case SYNC_FEATURE_ENABLED_BUT_PAUSED:
         sync_service_ = std::make_unique<syncer::TestSyncService>();
         // Mimic the user signing out from content are (sync paused).
-        sync_service_->SetPersistentAuthErrorWithWebSignout();
+        sync_service_->SetPersistentAuthError();
 
-        CHECK(sync_service_->GetUserSettings()->IsSyncRequested());
         CHECK(sync_service_->GetDisableReasons().Empty());
         CHECK_EQ(syncer::SyncService::TransportState::PAUSED,
                  sync_service_->GetTransportState());
         break;
 
-      case SYNC_FEATURE_TEMPORARILY_DISABLED:
+      case SYNC_FEATURE_DISABLED_BUT_PREFERENCES_ENABLED:
         sync_service_ = std::make_unique<syncer::TestSyncService>();
-        // Temporarily disable sync without turning it off.
-        sync_service_->GetUserSettings()->SetSyncRequested(false);
-
-        CHECK(!sync_service_->GetUserSettings()->IsSyncRequested());
-        CHECK(syncer::SyncService::DisableReasonSet(
-                  syncer::SyncService::DISABLE_REASON_USER_CHOICE) ==
-              sync_service_->GetDisableReasons());
+        sync_service_->SetHasSyncConsent(false);
+        CHECK(sync_service_->GetUserSettings()->GetSelectedTypes().Has(
+            syncer::UserSelectableType::kPreferences));
+        CHECK(!sync_service_->IsSyncFeatureEnabled());
+        CHECK(sync_service_->GetDisableReasons().Empty());
+        CHECK_EQ(syncer::SyncService::TransportState::ACTIVE,
+                 sync_service_->GetTransportState());
         break;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      case SYNC_FEATURE_DISABLED_ON_CHROMEOS_ASH_VIA_DASHBOARD:
+        sync_service_ = std::make_unique<syncer::TestSyncService>();
+        sync_service_->GetUserSettings()->SetSyncFeatureDisabledViaDashboard(
+            true);
+
+        // On ChromeOS Ash, IsInitialSyncFeatureSetupComplete always returns
+        // true but IsSyncFeatureEnabled() stays false because the user needs to
+        // manually resume sync the feature.
+        CHECK(sync_service_->GetUserSettings()
+                  ->IsInitialSyncFeatureSetupComplete());
+        CHECK(!sync_service_->IsSyncFeatureEnabled());
+        break;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     }
   }
 
@@ -100,7 +121,9 @@ class TestProfileClient : public DemographicMetricsProvider::ProfileClient {
 
   syncer::SyncService* GetSyncService() override { return sync_service_.get(); }
 
-  PrefService* GetPrefService() override { return &pref_service_; }
+  PrefService* GetLocalState() override { return &pref_service_; }
+
+  PrefService* GetProfilePrefs() override { return &pref_service_; }
 
   base::Time GetNetworkTime() const override {
     base::Time time;
@@ -111,10 +134,10 @@ class TestProfileClient : public DemographicMetricsProvider::ProfileClient {
 
   void SetDemographicsInPrefs(int birth_year,
                               metrics::UserDemographicsProto_Gender gender) {
-    base::DictionaryValue dict;
-    dict.SetIntPath(kSyncDemographicsBirthYearPath, birth_year);
-    dict.SetIntPath(kSyncDemographicsGenderPath, static_cast<int>(gender));
-    pref_service_.Set(kSyncDemographicsPrefName, dict);
+    base::Value::Dict dict;
+    dict.Set(kSyncDemographicsBirthYearPath, birth_year);
+    dict.Set(kSyncDemographicsGenderPath, static_cast<int>(gender));
+    pref_service_.SetDict(kSyncDemographicsPrefName, std::move(dict));
   }
 
  private:
@@ -134,8 +157,8 @@ TEST(DemographicMetricsProviderTest,
 
   // Set birth year noise offset to not have it randomized.
   const int kBirthYearOffset = 3;
-  client->GetPrefService()->SetInteger(kSyncDemographicsBirthYearOffsetPrefName,
-                                       kBirthYearOffset);
+  client->GetLocalState()->SetInteger(kUserDemographicsBirthYearOffsetPrefName,
+                                      kBirthYearOffset);
 
   // Run demographics provider.
   DemographicMetricsProvider provider(
@@ -197,12 +220,82 @@ TEST(DemographicMetricsProviderTest,
                                UserDemographicsStatus::kSyncNotEnabled, 1);
 }
 
-TEST(DemographicMetricsProviderTest,
-     ProvideSyncedUserNoisedBirthYearAndGender_SyncTemporarilyDisabled) {
+TEST(
+    DemographicMetricsProviderTest,
+    ProvideSyncedUserNoisedBirthYearAndGender_SyncFeatureDisabledButPreferencesEnabled_WithSyncToSignin) {
+  base::test::ScopedFeatureList sync_to_signin_enabled;
+  sync_to_signin_enabled.InitAndEnableFeature(
+      syncer::kReplaceSyncPromosWithSignInPromos);
+
   base::HistogramTester histogram;
 
   auto client = std::make_unique<TestProfileClient>(
-      /*number_of_profiles=*/1, SYNC_FEATURE_TEMPORARILY_DISABLED);
+      /*number_of_profiles=*/1, SYNC_FEATURE_DISABLED_BUT_PREFERENCES_ENABLED);
+  client->SetDemographicsInPrefs(kTestBirthYear, kTestGender);
+
+  // Set birth year noise offset to not have it randomized.
+  const int kBirthYearOffset = 3;
+  client->GetLocalState()->SetInteger(kUserDemographicsBirthYearOffsetPrefName,
+                                      kBirthYearOffset);
+
+  // Run demographics provider.
+  DemographicMetricsProvider provider(
+      std::move(client), MetricsLogUploader::MetricServiceType::UMA);
+  ChromeUserMetricsExtension uma_proto;
+  provider.ProvideSyncedUserNoisedBirthYearAndGender(&uma_proto);
+
+  // Verify provided demographics.
+  EXPECT_EQ(kTestBirthYear + kBirthYearOffset,
+            uma_proto.user_demographics().birth_year());
+  EXPECT_EQ(kTestGender, uma_proto.user_demographics().gender());
+
+  // Verify histograms: Demographics should be provided.
+  histogram.ExpectUniqueSample("UMA.UserDemographics.Status",
+                               UserDemographicsStatus::kSuccess, 1);
+}
+
+TEST(
+    DemographicMetricsProviderTest,
+    ProvideSyncedUserNoisedBirthYearAndGender_SyncFeatureDisabledButPreferencesEnabled_WithoutSyncToSignin) {
+  base::test::ScopedFeatureList sync_to_signin_disabled;
+  sync_to_signin_disabled.InitAndDisableFeature(
+      syncer::kReplaceSyncPromosWithSignInPromos);
+
+  base::HistogramTester histogram;
+
+  auto client = std::make_unique<TestProfileClient>(
+      /*number_of_profiles=*/1, SYNC_FEATURE_DISABLED_BUT_PREFERENCES_ENABLED);
+  client->SetDemographicsInPrefs(kTestBirthYear, kTestGender);
+
+  // Set birth year noise offset to not have it randomized.
+  const int kBirthYearOffset = 3;
+  client->GetLocalState()->SetInteger(kUserDemographicsBirthYearOffsetPrefName,
+                                      kBirthYearOffset);
+
+  // Run demographics provider.
+  DemographicMetricsProvider provider(
+      std::move(client), MetricsLogUploader::MetricServiceType::UMA);
+  ChromeUserMetricsExtension uma_proto;
+  provider.ProvideSyncedUserNoisedBirthYearAndGender(&uma_proto);
+
+  // Expect the proto fields to be not set and left to default.
+  EXPECT_FALSE(uma_proto.user_demographics().has_birth_year());
+  EXPECT_FALSE(uma_proto.user_demographics().has_gender());
+
+  // Verify histograms: Demographics should NOT be provided.
+  histogram.ExpectUniqueSample("UMA.UserDemographics.Status",
+                               UserDemographicsStatus::kSyncNotEnabled, 1);
+}
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+TEST(
+    DemographicMetricsProviderTest,
+    ProvideSyncedUserNoisedBirthYearAndGender_SyncFeatureDisabledOnChromeOsAshViaSyncDashboard) {
+  base::HistogramTester histogram;
+
+  auto client = std::make_unique<TestProfileClient>(
+      /*number_of_profiles=*/1,
+      SYNC_FEATURE_DISABLED_ON_CHROMEOS_ASH_VIA_DASHBOARD);
 
   // Run demographics provider.
   DemographicMetricsProvider provider(
@@ -218,6 +311,7 @@ TEST(DemographicMetricsProviderTest,
   histogram.ExpectUniqueSample("UMA.UserDemographics.Status",
                                UserDemographicsStatus::kSyncNotEnabled, 1);
 }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 TEST(DemographicMetricsProviderTest,
      ProvideSyncedUserNoisedBirthYearAndGender_SyncNotEnabled) {
@@ -338,8 +432,8 @@ TEST(DemographicMetricsProviderTest,
 
   // Set birth year noise offset to not have it randomized.
   const int kBirthYearOffset = 3;
-  client->GetPrefService()->SetInteger(kSyncDemographicsBirthYearOffsetPrefName,
-                                       kBirthYearOffset);
+  client->GetLocalState()->SetInteger(kUserDemographicsBirthYearOffsetPrefName,
+                                      kBirthYearOffset);
 
   // Run demographics provider.
   DemographicMetricsProvider provider(
@@ -351,10 +445,6 @@ TEST(DemographicMetricsProviderTest,
   EXPECT_EQ(kTestBirthYear + kBirthYearOffset,
             report.user_demographics().birth_year());
   EXPECT_EQ(kTestGender, report.user_demographics().gender());
-
-  // Verify histograms.
-  histogram.ExpectUniqueSample("UKM.UserDemographics.Status",
-                               UserDemographicsStatus::kSuccess, 1);
 }
 
 }  // namespace

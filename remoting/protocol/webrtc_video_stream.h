@@ -14,6 +14,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
+#include "remoting/base/constants.h"
 #include "remoting/base/session_options.h"
 #include "remoting/protocol/desktop_capturer.h"
 #include "remoting/protocol/video_channel_state_observer.h"
@@ -61,21 +62,17 @@ class WebrtcVideoStream : public VideoStream, public VideoChannelStateObserver {
   void SetEventTimestampsSource(scoped_refptr<InputEventTimestampsSource>
                                     event_timestamps_source) override;
   void Pause(bool pause) override;
-  void SetLosslessEncode(bool want_lossless) override;
-  void SetLosslessColor(bool want_lossless) override;
   void SetObserver(Observer* observer) override;
   void SelectSource(webrtc::ScreenId id) override;
   void SetComposeEnabled(bool enabled) override;
   void SetMouseCursor(
       std::unique_ptr<webrtc::MouseCursor> mouse_cursor) override;
   void SetMouseCursorPosition(const webrtc::DesktopVector& position) override;
+  void SetTargetFramerate(int framerate) override;
+  void BoostFramerate(base::TimeDelta capture_interval,
+                      base::TimeDelta boost_duration) override;
 
   // VideoChannelStateObserver interface.
-  void OnKeyFrameRequested() override;
-  void OnTargetBitrateChanged(int bitrate_kbps) override;
-  void OnTargetFramerateChanged(int framerate) override;
-  void OnFrameEncoded(WebrtcVideoEncoder::EncodeResult encode_result,
-                      const WebrtcVideoEncoder::EncodedFrame* frame) override;
   void OnEncodedFrameSent(
       webrtc::EncodedImageCallback::Result result,
       const WebrtcVideoEncoder::EncodedFrame& frame) override;
@@ -96,6 +93,10 @@ class WebrtcVideoStream : public VideoStream, public VideoChannelStateObserver {
 
   // Label of the associated WebRTC video-stream.
   std::string stream_name_;
+
+  // Store the target framerate so we can set it on the RTP Sender when the SDP
+  // is renegotiated (such as when the codec or codec profile is changed).
+  int target_framerate_ = kTargetFrameRate;
 
   // Used to send captured frames to the encoder.
   rtc::scoped_refptr<WebrtcVideoTrackSource> video_track_source_;

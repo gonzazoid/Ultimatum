@@ -55,7 +55,7 @@ TEST_F(FirstLetterPseudoElementTest, EmptySpanOnly) {
   SetBodyContent("<div><p id=sample><b></b></p>abc</div>");
   Element& sample = *GetElementById("sample");
   // Call Element::RebuildFirstLetterLayoutTree()
-  sample.setAttribute(html_names::kContenteditableAttr, "true");
+  sample.setAttribute(html_names::kContenteditableAttr, keywords::kTrue);
   const PseudoElement* const first_letter =
       sample.GetPseudoElement(kPseudoIdFirstLetter);
   // We should not have ::first-letter pseudo element because <p> has no text.
@@ -65,9 +65,6 @@ TEST_F(FirstLetterPseudoElementTest, EmptySpanOnly) {
 }
 
 TEST_F(FirstLetterPseudoElementTest, InitialLetter) {
-  if (!RuntimeEnabledFeatures::LayoutNGEnabled())
-    return;
-  ScopedCSSInitialLetterForTest enable_initial_letter_scope(true);
   LoadAhem();
   InsertStyleElement(
       "p { font: 20px/24px Ahem; }"

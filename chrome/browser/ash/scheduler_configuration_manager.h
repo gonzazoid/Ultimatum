@@ -7,8 +7,9 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/system/scheduler_configuration_manager_base.h"
+#include "chromeos/ash/components/system/scheduler_configuration_manager_base.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -28,8 +29,7 @@ class DebugDaemonClient;
 // For more information on why H/T is configurable, see
 // https://www.chromium.org/chromium-os/mds-on-chromeos
 //
-class SchedulerConfigurationManager
-    : public chromeos::SchedulerConfigurationManagerBase {
+class SchedulerConfigurationManager : public SchedulerConfigurationManagerBase {
  public:
   SchedulerConfigurationManager(DebugDaemonClient* debug_daemon_client,
                                 PrefService* local_state);
@@ -42,7 +42,7 @@ class SchedulerConfigurationManager
 
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
-  // chromeos::SchedulerConfigurationManagerBase overrides:
+  // SchedulerConfigurationManagerBase overrides:
   absl::optional<std::pair<bool, size_t>> GetLastReply() const override;
 
  private:
@@ -50,7 +50,7 @@ class SchedulerConfigurationManager
   void OnPrefChange();
   void OnConfigurationSet(bool result, size_t num_cores_disabled);
 
-  DebugDaemonClient* debug_daemon_client_ = nullptr;
+  raw_ptr<DebugDaemonClient> debug_daemon_client_ = nullptr;
   PrefChangeRegistrar observer_;
   bool debug_daemon_ready_ = false;
   absl::optional<std::pair<bool, size_t>> last_reply_;

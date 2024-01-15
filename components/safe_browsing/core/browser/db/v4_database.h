@@ -10,13 +10,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #include "components/safe_browsing/core/browser/db/v4_store.h"
 #include "components/safe_browsing/core/common/proto/webui.pb.h"
@@ -47,7 +48,7 @@ using DatabaseUpdatedCallback = base::RepeatingClosure;
 // Maps the ListIdentifiers to their corresponding in-memory stores, which
 // contain the hash prefixes for that ListIdentifier as well as manage their
 // storage on disk.
-using StoreMap = std::unordered_map<ListIdentifier, std::unique_ptr<V4Store>>;
+using StoreMap = std::unordered_map<ListIdentifier, V4StorePtr>;
 
 // Associates metadata for a list with its ListIdentifier.
 class ListInfo {
@@ -115,11 +116,13 @@ class V4Database {
       const ListInfos& list_infos,
       NewDatabaseReadyCallback new_db_callback);
 
-  // Initialize state that lives on the IO thread.
-  void InitializeOnIOSequence();
+  // Initialize state that lives on the IO thread or UI thread if
+  // kSafeBrowsingOnUIThread is enabled.
+  void InitializeOnSBThread();
 
-  // Destroy state that lives on the IO thread.
-  void StopOnIO();
+  // Destroy state that lives on the IO thread or UI thread if
+  // kSafeBrowsingOnUIThread is enabled.
+  void StopOnSBThread();
 
   V4Database(const V4Database&) = delete;
   V4Database& operator=(const V4Database&) = delete;
@@ -147,13 +150,14 @@ class V4Database {
   virtual bool AreAnyStoresAvailable(
       const StoresToCheck& stores_to_check) const;
 
-  // Searches for a hash prefix matching the |full_hash| in stores in the
-  // database, filtered by |stores_to_check|, and returns the identifier of the
-  // store along with the matching hash prefix in |matched_hash_prefix_map|.
+  // Searches for hash prefixes matching the |full_hashes| in stores in the
+  // database, filtered by |stores_to_check|. The callback is run synchronously,
+  // or asynchronously if MmapSafeBrowsingDatabaseAsync is enabled, with the
+  // identifier of the stores along with the matching hash prefixes.
   virtual void GetStoresMatchingFullHash(
-      const FullHash& full_hash,
+      const std::vector<FullHashStr>& full_hashes,
       const StoresToCheck& stores_to_check,
-      StoreAndHashPrefixes* matched_store_and_full_hashes);
+      base::OnceCallback<void(FullHashToStoreAndHashPrefixesMap)> callback);
 
   // Returns the file size of the store in bytes. Returns 0 if the store is not
   // found.
@@ -174,6 +178,10 @@ class V4Database {
   // Records the size of each of the stores managed by this database, along
   // with the combined size of all the stores.
   void RecordFileSizeHistograms();
+
+  // Returns the migration result of the stores in this database. If the
+  // migration results for all stores do not match, returns kUnknown.
+  HashPrefixMap::MigrateResult GetMigrateResult();
 
   // Populates the DatabaseInfo message of the safe_browsing_page proto.
   void CollectDatabaseInfo(DatabaseManagerInfo::DatabaseInfo* database_info);
@@ -227,8 +235,7 @@ class V4Database {
   // Callback called when a new store has been created and is ready to be used.
   // This method updates the store_map_ to point to the new store, which causes
   // the old store to get deleted.
-  void UpdatedStoreReady(ListIdentifier identifier,
-                         std::unique_ptr<V4Store> store);
+  void UpdatedStoreReady(ListIdentifier identifier, V4StorePtr store);
 
   // See |VerifyChecksum|.
   void OnChecksumVerified(
@@ -237,9 +244,12 @@ class V4Database {
 
   bool IsStoreAvailable(const ListIdentifier& identifier) const;
 
-  // Used to verify that certain methods are called on the client-designated IO
-  // sequence (see InitializeOnIOSequence()).
-  SEQUENCE_CHECKER(io_sequence_checker_);
+  // Log the difference in time between database updates in a UMA histogram.
+  void RecordDatabaseUpdateLatency();
+
+  // Used to verify that certain methods are called on the client-designated SB
+  // sequence (see InitializeOnSBThread()).
+  SEQUENCE_CHECKER(sb_sequence_checker_);
 
   const scoped_refptr<base::SequencedTaskRunner> db_task_runner_;
 
@@ -250,6 +260,9 @@ class V4Database {
   // that needed updating and is ready for the next update. It should only be
   // accessed on the IO thread.
   int pending_store_updates_;
+
+  // Variable used to keep track of latency of database updates.
+  base::Time last_update_;
 
   // Only meant to be dereferenced and invalidated on the IO thread and hence
   // named. For details, see the comment at the top of weak_ptr.h

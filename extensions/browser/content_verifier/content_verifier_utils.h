@@ -8,8 +8,7 @@
 #include "base/types/strong_alias.h"
 #include "build/build_config.h"
 
-namespace extensions {
-namespace content_verifier_utils {
+namespace extensions::content_verifier_utils {
 
 // Extension relative FilePath's canonical version for content verification
 // system. Canonicalization consists of:
@@ -22,11 +21,6 @@ namespace content_verifier_utils {
 using CanonicalRelativePath =
     ::base::StrongAlias<class CanonicalRelativePathTag,
                         base::FilePath::StringType>;
-
-// Returns true if |path| ends with (.| )+.
-// |out_path| will contain "." and/or " " suffix removed from |path|.
-bool TrimDotSpaceSuffix(const base::FilePath::StringType& path,
-                        base::FilePath::StringType* out_path);
 
 // Returns true if this system/OS's file access is case sensitive.
 constexpr bool IsFileAccessCaseSensitive() {
@@ -55,7 +49,6 @@ constexpr bool IsDotSpaceFilenameSuffixIgnored() {
 CanonicalRelativePath CanonicalizeRelativePath(
     const base::FilePath& relative_path);
 
-}  // namespace content_verifier_utils
-}  // namespace extensions
+}  // namespace extensions::content_verifier_utils
 
 #endif  // EXTENSIONS_BROWSER_CONTENT_VERIFIER_CONTENT_VERIFIER_UTILS_H_

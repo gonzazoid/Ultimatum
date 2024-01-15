@@ -5,11 +5,11 @@
 #include <stdint.h>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -46,6 +46,11 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/mojom/frame/find_in_page.mojom.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "base/functional/callback_helpers.h"
+#include "base/test/bind.h"
+#endif  // BUILDFLAG(IS_WIN)
 
 using testing::ContainsRegex;
 using testing::HasSubstr;
@@ -127,9 +132,7 @@ class MockWriterBase : public mojom::MhtmlFileWriter {
  protected:
   void SendResponse(SerializeAsMHTMLCallback callback) {
     std::vector<std::string> dummy_digests;
-    base::TimeDelta dummy_time_delta = base::Milliseconds(100);
-    std::move(callback).Run(mojom::MhtmlSaveStatus::kSuccess, dummy_digests,
-                            dummy_time_delta);
+    std::move(callback).Run(mojom::MhtmlSaveStatus::kSuccess, dummy_digests);
   }
 
   void WriteDataToDestinationFile(base::File& destination_file) {
@@ -284,7 +287,7 @@ class MHTMLGenerationTest : public ContentBrowserTest,
   MHTMLGenerationTest()
       : has_mhtml_callback_run_(false),
         file_size_(0),
-        file_digest_(absl::nullopt),
+        file_digest_(std::nullopt),
         well_formedness_check_(true) {}
 
   enum TaskOrder { WriteThenRespond, RespondThenWrite };
@@ -344,8 +347,8 @@ class MHTMLGenerationTest : public ContentBrowserTest,
 
     // TODO(crbug.com/997408): Add tests which will let MHTMLGeneration manager
     // fail during file write operation. This will allow us to actually test if
-    // we receive a bogus hash instead of a absl::nullopt.
-    EXPECT_EQ(absl::nullopt, file_digest());
+    // we receive a bogus hash instead of a std::nullopt.
+    EXPECT_EQ(std::nullopt, file_digest());
 
     // Skip well formedness check if explicitly disabled or there was a
     // generation error.
@@ -471,7 +474,7 @@ class MHTMLGenerationTest : public ContentBrowserTest,
 
   bool has_mhtml_callback_run() const { return has_mhtml_callback_run_; }
   int64_t file_size() const { return file_size_; }
-  absl::optional<std::string> file_digest() const { return file_digest_; }
+  std::optional<std::string> file_digest() const { return file_digest_; }
   base::HistogramTester* histogram_tester() { return histogram_tester_.get(); }
 
   base::ScopedTempDir temp_dir_;
@@ -492,7 +495,7 @@ class MHTMLGenerationTest : public ContentBrowserTest,
 
   bool has_mhtml_callback_run_;
   int64_t file_size_;
-  absl::optional<std::string> file_digest_;
+  std::optional<std::string> file_digest_;
   bool well_formedness_check_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
 };
@@ -518,12 +521,47 @@ IN_PROC_BROWSER_TEST_P(MHTMLGenerationTest, GenerateMHTML) {
     EXPECT_THAT(mhtml,
                 HasSubstr("Content-Transfer-Encoding: quoted-printable"));
   }
-
-  // Checks that the final status reported to UMA is correct.
-  histogram_tester()->ExpectUniqueSample(
-      "PageSerialization.MhtmlGeneration.FinalSaveStatus",
-      static_cast<int>(mojom::MhtmlSaveStatus::kSuccess), 1);
 }
+
+#if BUILDFLAG(IS_WIN)
+// This Windows only test generates an MHTML file in a path that is explicitly
+// not in the temp directory and not in the user data dir. This is to test that
+// the mojo security constraints correctly allow this writeable handle to a
+// renderer process. See `mojo/core/platform_handle_security_util_win.cc`.
+IN_PROC_BROWSER_TEST_P(MHTMLGenerationTest, GenerateMHTMLInNonTempDir) {
+  base::FilePath local_app_data;
+  // This test creates a temporary directory in %LocalAppData% then deletes it
+  // afterwards.
+  EXPECT_TRUE(
+      base::PathService::Get(base::DIR_LOCAL_APP_DATA, &local_app_data));
+  base::FilePath new_dir;
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    EXPECT_TRUE(base::CreateTemporaryDirInDir(
+        local_app_data, FILE_PATH_LITERAL("MHTMLGenerationTest"), &new_dir));
+  }
+  base::ScopedClosureRunner delete_dir(base::BindLambdaForTesting([new_dir]() {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    base::DeletePathRecursively(new_dir);
+  }));
+
+  base::FilePath path = new_dir.Append(FILE_PATH_LITERAL("test.mht"));
+
+  GenerateMHTML(path, embedded_test_server()->GetURL("/simple_page.html"));
+
+  // Make sure the actual generated file has some contents.
+  EXPECT_GT(file_size(), 0);  // Verify the size reported by the callback.
+  EXPECT_GT(ReadFileSizeFromDisk(path), 100);  // Verify the actual file size.
+
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    std::string mhtml;
+    ASSERT_TRUE(base::ReadFileToString(path, &mhtml));
+    EXPECT_THAT(mhtml,
+                HasSubstr("Content-Transfer-Encoding: quoted-printable"));
+  }
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 // Regression test for the crash/race from https://crbug.com/612098.
 //
@@ -568,11 +606,6 @@ IN_PROC_BROWSER_TEST_P(MHTMLGenerationTest, MAYBE_InvalidPath) {
   GenerateMHTML(path, embedded_test_server()->GetURL("/page_with_image.html"));
 
   EXPECT_EQ(file_size(), -1);  // Expecting that the callback reported failure.
-
-  // Checks that the final status reported to UMA is correct.
-  histogram_tester()->ExpectUniqueSample(
-      "PageSerialization.MhtmlGeneration.FinalSaveStatus",
-      static_cast<int>(mojom::MhtmlSaveStatus::kFileCreationError), 1);
 }
 
 // Tests that MHTML generated using the default 'quoted-printable' encoding does

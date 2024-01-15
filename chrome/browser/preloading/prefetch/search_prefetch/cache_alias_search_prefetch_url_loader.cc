@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -16,6 +16,7 @@
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
@@ -36,12 +37,17 @@ CacheAliasSearchPrefetchURLLoader::CacheAliasSearchPrefetchURLLoader(
 CacheAliasSearchPrefetchURLLoader::~CacheAliasSearchPrefetchURLLoader() =
     default;
 
+// static
 SearchPrefetchURLLoader::RequestHandler
-CacheAliasSearchPrefetchURLLoader::ServingResponseHandlerImpl(
-    std::unique_ptr<SearchPrefetchURLLoader> loader) {
+CacheAliasSearchPrefetchURLLoader::GetServingResponseHandlerFromLoader(
+    std::unique_ptr<CacheAliasSearchPrefetchURLLoader> loader) {
+  DCHECK(loader);
+  loader->RecordInterceptionTime();
+  base::WeakPtr<CacheAliasSearchPrefetchURLLoader> weak_ptr_loader =
+      loader->weak_factory_.GetWeakPtr();
   return base::BindOnce(
       &CacheAliasSearchPrefetchURLLoader::SetUpForwardingClient,
-      weak_factory_.GetWeakPtr(), std::move(loader));
+      std::move(weak_ptr_loader), std::move(loader));
 }
 
 void CacheAliasSearchPrefetchURLLoader::SetUpForwardingClient(
@@ -78,7 +84,7 @@ void CacheAliasSearchPrefetchURLLoader::StartPrefetchRequest() {
       network_url_loader_.BindNewPipeAndPassReceiver(), 0,
       network::mojom::kURLLoadOptionNone, prefetch_request,
       url_loader_receiver_.BindNewPipeAndPassRemote(
-          base::ThreadTaskRunnerHandle::Get()),
+          base::SingleThreadTaskRunner::GetCurrentDefault()),
       net::MutableNetworkTrafficAnnotationTag(network_traffic_annotation_));
   url_loader_receiver_.set_disconnect_handler(base::BindOnce(
       &CacheAliasSearchPrefetchURLLoader::MojoDisconnectForPrefetch,
@@ -101,7 +107,7 @@ void CacheAliasSearchPrefetchURLLoader::RestartDirect() {
           network::mojom::kURLLoadOptionSendSSLInfoForCertificateError,
       *resource_request_,
       url_loader_receiver_.BindNewPipeAndPassRemote(
-          base::ThreadTaskRunnerHandle::Get()),
+          base::SingleThreadTaskRunner::GetCurrentDefault()),
       net::MutableNetworkTrafficAnnotationTag(network_traffic_annotation_));
   url_loader_receiver_.set_disconnect_handler(base::BindOnce(
       &CacheAliasSearchPrefetchURLLoader::MojoDisconnectWithNoFallback,
@@ -173,6 +179,8 @@ void CacheAliasSearchPrefetchURLLoader::OnUploadProgress(
 void CacheAliasSearchPrefetchURLLoader::OnTransferSizeUpdated(
     int32_t transfer_size_diff) {
   DCHECK(forwarding_client_);
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kCacheAliasSearchPrefetchURLLoader);
   forwarding_client_->OnTransferSizeUpdated(transfer_size_diff);
 }
 

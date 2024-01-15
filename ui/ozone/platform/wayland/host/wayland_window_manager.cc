@@ -5,9 +5,11 @@
 #include "ui/ozone/platform/wayland/host/wayland_window_manager.h"
 
 #include "base/observer_list.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/host/wayland_window_drag_controller.h"
+#include "ui/ozone/platform/wayland/host/wayland_window_observer.h"
 
 namespace ui {
 
@@ -95,15 +97,19 @@ WaylandWindow* WaylandWindowManager::GetCurrentFocusedWindow() const {
 
 WaylandWindow* WaylandWindowManager::GetCurrentPointerOrTouchFocusedWindow()
     const {
-  // In case there is an ongoing window dragging session, favor the window
-  // according to the active drag source.
-  //
-  // TODO(https://crbug.com/1317063): Apply the same logic to data drag sessions
-  // too?
-  if (auto drag_source = connection_->window_drag_controller()->drag_source()) {
-    return *drag_source == WaylandWindowDragController::DragSource::kMouse
-               ? GetCurrentPointerFocusedWindow()
-               : GetCurrentTouchFocusedWindow();
+  // Might be nullptr if no input devices are available.
+  if (connection_->window_drag_controller()) {
+    // In case there is an ongoing window dragging session, favor the window
+    // according to the active drag source.
+    //
+    // TODO(https://crbug.com/1317063): Apply the same logic to data drag
+    // sessions too?
+    if (auto drag_source =
+            connection_->window_drag_controller()->drag_source()) {
+      return *drag_source == mojom::DragEventSource::kMouse
+                 ? GetCurrentPointerFocusedWindow()
+                 : GetCurrentTouchFocusedWindow();
+    }
   }
 
   for (const auto& entry : window_map_) {
@@ -197,16 +203,26 @@ void WaylandWindowManager::RemoveWindow(gfx::AcceleratedWidget widget) {
 
   window_map_.erase(widget);
 
-  for (WaylandWindowObserver& observer : observers_)
-    observer.OnWindowRemoved(window);
-
+  // Reset `pointer_focused_window_` and `keyboard_focused_window_` before
+  // notifying any observers to make sure GetCurrentPointerFocusedWindow() and
+  // GetCurrentKeyboardFocusedWindow() behave correctly. Especially the former
+  // can be problematic if notifying WaylandWindowDragController that a window
+  // has been removed before resetting `pointer_focused_window_`, because that
+  // leads to WaylandEventSource::OnPointerButtonEvent() being called, which
+  // then calls GetCurrentPointerFocusedWindow().
+  if (window == pointer_focused_window_) {
+    pointer_focused_window_ = nullptr;
+  }
   if (window == keyboard_focused_window_) {
     keyboard_focused_window_ = nullptr;
-    for (auto& observer : observers_)
+    for (auto& observer : observers_) {
       observer.OnKeyboardFocusedWindowChanged();
+    }
   }
-  if (window == pointer_focused_window_)
-    pointer_focused_window_ = nullptr;
+
+  for (WaylandWindowObserver& observer : observers_) {
+    observer.OnWindowRemoved(window);
+  }
 }
 
 void WaylandWindowManager::AddSubsurface(gfx::AcceleratedWidget widget,
@@ -227,19 +243,38 @@ void WaylandWindowManager::RemoveSubsurface(gfx::AcceleratedWidget widget,
     observer.OnSubsurfaceRemoved(window, subsurface);
 }
 
+void WaylandWindowManager::RecycleSubsurface(
+    std::unique_ptr<WaylandSubsurface> subsurface) {
+  // Reset the root window when the corresponding subsurface is invalid,
+  // preventing it from receiving events.
+  subsurface->wayland_surface()->UnsetRootWindow();
+  subsurface_recycle_cache_ = std::move(subsurface);
+}
+
 gfx::AcceleratedWidget WaylandWindowManager::AllocateAcceleratedWidget() {
   return ++last_accelerated_widget_;
 }
 
+void WaylandWindowManager::DumpState(std::ostream& out) const {
+  int i = 0;
+  out << "WaylandWindowManager:" << std::endl;
+  for (const auto& window : window_map_) {
+    out << "  wayland_window[" << i++ << "]:";
+    window.second->DumpState(out);
+    out << std::endl;
+  }
+}
+
 std::vector<WaylandWindow*> WaylandWindowManager::GetAllWindows() const {
   std::vector<WaylandWindow*> result;
-  for (auto entry : window_map_)
+  for (auto& entry : window_map_) {
     result.push_back(entry.second);
+  }
   return result;
 }
 
 bool WaylandWindowManager::IsWindowValid(const WaylandWindow* window) const {
-  for (auto pair : window_map_) {
+  for (auto& pair : window_map_) {
     if (pair.second == window)
       return true;
   }

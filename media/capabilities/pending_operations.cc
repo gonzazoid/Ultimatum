@@ -6,10 +6,10 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace media {
 namespace {
@@ -48,7 +48,7 @@ PendingOperations::PendingOperation::~PendingOperation() {
 void PendingOperations::PendingOperation::UmaHistogramOpTime(
     const std::string& op_name,
     base::TimeDelta duration) {
-  base::UmaHistogramCustomMicrosecondsTimes(uma_prefix_ + op_name, duration,
+  base::UmaHistogramCustomMicrosecondsTimes(*uma_prefix_ + op_name, duration,
                                             base::Milliseconds(1),
                                             kPendingOpTimeout, 50);
 }
@@ -78,7 +78,7 @@ PendingOperations::Id PendingOperations::Start(std::string uma_str) {
       base::BindOnce(&PendingOperations::OnTimeout,
                      weak_ptr_factory_.GetWeakPtr(), op_id));
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, timeout_closure->callback(), kPendingOpTimeout);
 
   pending_ops_.emplace(

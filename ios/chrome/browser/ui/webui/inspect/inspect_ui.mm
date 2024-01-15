@@ -4,36 +4,31 @@
 
 #import "ios/chrome/browser/ui/webui/inspect/inspect_ui.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/main/browser_list.h"
-#import "ios/chrome/browser/main/browser_list_factory.h"
-#import "ios/chrome/browser/main/browser_list_observer.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
-#import "ios/chrome/browser/web/java_script_console/java_script_console_feature.h"
-#import "ios/chrome/browser/web/java_script_console/java_script_console_feature_delegate.h"
-#import "ios/chrome/browser/web/java_script_console/java_script_console_feature_factory.h"
-#import "ios/chrome/browser/web/java_script_console/java_script_console_message.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list_observer.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer.h"
+#import "ios/chrome/browser/web/model/java_script_console/java_script_console_feature.h"
+#import "ios/chrome/browser/web/model/java_script_console/java_script_console_feature_delegate.h"
+#import "ios/chrome/browser/web/model/java_script_console/java_script_console_feature_factory.h"
+#import "ios/chrome/browser/web/model/java_script_console/java_script_console_message.h"
 #import "ios/chrome/grit/ios_resources.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/webui/web_ui_ios.h"
 #import "ios/web/public/webui/web_ui_ios_data_source.h"
 #import "ios/web/public/webui/web_ui_ios_message_handler.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -137,8 +132,10 @@ void InspectDOMHandler::DidReceiveConsoleMessage(
     web::WebState* web_state,
     web::WebFrame* sender_frame,
     const JavaScriptConsoleMessage& message) {
-  web::WebFrame* inspect_ui_main_frame =
-      web_ui()->GetWebState()->GetWebFramesManager()->GetMainWebFrame();
+  web::WebFrame* inspect_ui_main_frame = web_ui()
+                                             ->GetWebState()
+                                             ->GetPageWorldWebFramesManager()
+                                             ->GetMainWebFrame();
   if (!inspect_ui_main_frame) {
     // Disable logging and drop this message because the inspect page no longer
     // exists.
@@ -146,15 +143,18 @@ void InspectDOMHandler::DidReceiveConsoleMessage(
     return;
   }
 
-  std::vector<base::Value> params;
+  std::string sender_frame_id = sender_frame->GetFrameId();
   web::WebFrame* main_web_frame =
-      web_state->GetWebFramesManager()->GetMainWebFrame();
-  params.push_back(base::Value(main_web_frame->GetFrameId()));
-  params.push_back(base::Value(sender_frame->GetFrameId()));
-  params.push_back(base::Value(message.url.spec()));
-  params.push_back(base::Value(base::SysNSStringToUTF8(message.level)));
-  params.push_back(base::Value(base::SysNSStringToUTF8(message.message)));
+      web_state->GetPageWorldWebFramesManager()->GetMainWebFrame();
+  std::string main_web_frame_id =
+      main_web_frame ? main_web_frame->GetFrameId() : sender_frame_id;
 
+  auto params = base::Value::List()
+                    .Append(main_web_frame_id)
+                    .Append(sender_frame_id)
+                    .Append(message.url.spec())
+                    .Append(base::SysNSStringToUTF8(message.level))
+                    .Append(base::SysNSStringToUTF8(message.message));
   inspect_ui_main_frame->CallJavaScriptFunction(
       "inspectWebUI.logMessageReceived", params);
 }

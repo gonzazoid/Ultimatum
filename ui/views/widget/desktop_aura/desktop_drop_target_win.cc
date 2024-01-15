@@ -99,7 +99,8 @@ DWORD DesktopDropTargetWin::OnDrop(IDataObject* data_object,
   if (delegate) {
     auto drop_cb = delegate->GetDropCallback(*event);
     if (drop_cb)
-      std::move(drop_cb).Run(std::move(data), drag_operation);
+      std::move(drop_cb).Run(std::move(data), drag_operation,
+                             /*drag_image_layer_owner=*/nullptr);
   }
   if (target_window_) {
     target_window_->RemoveObserver(this);
@@ -150,7 +151,7 @@ void DesktopDropTargetWin::Translate(
   *event = std::make_unique<ui::DropTargetEvent>(
       *(data->get()), gfx::PointF(location), gfx::PointF(root_location),
       ui::DragDropTypes::DropEffectToDragOperation(effect));
-  (*event)->set_flags(ConvertKeyStateToAuraEventFlags(key_state));
+  (*event)->SetFlags(ConvertKeyStateToAuraEventFlags(key_state));
   if (target_window_changed)
     (*delegate)->OnDragEntered(*event->get());
 }

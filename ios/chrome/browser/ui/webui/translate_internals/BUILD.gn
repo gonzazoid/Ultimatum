@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("translate_internals") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "ios_translate_internals_handler.h",
     "ios_translate_internals_handler.mm",
@@ -15,12 +14,12 @@ source_set("translate_internals") {
     "//components/translate/core/common",
     "//components/translate/translate_internals",
     "//ios/chrome/app/resources:ios_resources",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/translate",
-    "//ios/chrome/browser/url:constants",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/translate/model",
     "//ios/web/public/webui",
   ]
 }

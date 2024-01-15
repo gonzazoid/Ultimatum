@@ -12,6 +12,7 @@
 #include "chrome/browser/ui/cocoa/screentime/history_deleter.h"
 #include "components/history/core/browser/history_database_params.h"
 #include "components/history/core/browser/history_service.h"
+#include "components/version_info/channel.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -24,7 +25,7 @@ class TestHistoryDeleter : public HistoryDeleter {
   ~TestHistoryDeleter() override {}
 
   bool deleted_all() const { return deleted_all_; }
-  absl::optional<TimeInterval> deleted_interval() const {
+  std::optional<TimeInterval> deleted_interval() const {
     return deleted_interval_;
   }
   const std::set<GURL>& deleted_urls() const { return deleted_urls_; }
@@ -47,7 +48,7 @@ class TestHistoryDeleter : public HistoryDeleter {
 
  private:
   bool deleted_all_ = false;
-  absl::optional<TimeInterval> deleted_interval_ = absl::nullopt;
+  std::optional<TimeInterval> deleted_interval_ = std::nullopt;
   std::set<GURL> deleted_urls_;
   base::RunLoop wait_loop_;
 };
@@ -64,8 +65,8 @@ class HistoryBridgeTest : public ::testing::Test {
         std::make_unique<HistoryBridge>(service_.get(), std::move(deleter));
 
     CHECK(history_dir_.CreateUniqueTempDir());
-    service_->Init(
-        history::HistoryDatabaseParams(history_dir_.GetPath(), 0, 0));
+    service_->Init(history::HistoryDatabaseParams(
+        history_dir_.GetPath(), 0, 0, version_info::Channel::UNKNOWN));
     service_->SetOnBackendDestroyTask(history_teardown_loop_.QuitClosure());
   }
 
@@ -97,7 +98,7 @@ class HistoryBridgeTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   base::ScopedTempDir history_dir_;
   std::unique_ptr<history::HistoryService> service_;
-  raw_ptr<TestHistoryDeleter> deleter_;
+  raw_ptr<TestHistoryDeleter, DanglingUntriaged> deleter_;
   std::unique_ptr<HistoryBridge> bridge_;
   base::RunLoop history_teardown_loop_;
 };

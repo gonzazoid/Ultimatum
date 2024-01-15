@@ -14,6 +14,11 @@ const char kAccountsPrefAllowNewUser[] = "cros.accounts.allowGuest";
 const char kAccountsPrefShowUserNamesOnSignIn[] =
     "cros.accounts.showUserNamesOnSignIn";
 const char kAccountsPrefUsers[] = "cros.accounts.users";
+// Only `ChromeUserManagerImpl` is allowed to directly use this setting. All
+// other clients have to use `UserManager::IsEphemeralAccountId()` function to
+// get ephemeral mode for account ID. Such rule is needed because there are
+// new policies(e.g.kiosk ephemeral mode) that overrides behaviour of
+// the current setting for some accounts.
 const char kAccountsPrefEphemeralUsersEnabled[] =
     "cros.accounts.ephemeralUsersEnabled";
 const char kAccountsPrefDeviceLocalAccounts[] =
@@ -36,6 +41,8 @@ const char kAccountsPrefDeviceLocalAccountsKeyWebKioskTitle[] =
     "web_kiosk_title";
 const char kAccountsPrefDeviceLocalAccountsKeyWebKioskIconUrl[] =
     "web_kiosk_icon_url";
+const char kAccountsPrefDeviceLocalAccountsKeyEphemeralMode[] =
+    "ephemeral_mode";
 const char kAccountsPrefDeviceLocalAccountAutoLoginId[] =
     "cros.accounts.deviceLocalAccountAutoLoginId";
 const char kAccountsPrefDeviceLocalAccountAutoLoginDelay[] =
@@ -91,6 +98,9 @@ const char kReleaseChannelDelegated[] = "cros.system.releaseChannelDelegated";
 const char kReleaseLtsTag[] = "cros.system.releaseLtsTag";
 const char kDeviceChannelDowngradeBehavior[] =
     "cros.system.channelDowngradeBehavior";
+
+// This setting is used to enforce usage of system audio echo cancellation.
+const char kDeviceSystemAecEnabled[] = "cros.audio.device_system_aec_enabled";
 
 // A boolean pref that indicates whether OS & firmware version info should be
 // reported along with device policy requests.
@@ -235,6 +245,19 @@ const char kReportDeviceLoginLogout[] = "cros.reporting.report_login_logout";
 // Determines whether CRD session events are reported.
 const char kReportCRDSessions[] = "cros.reporting.report_crd_sessions";
 
+// A boolean pref that determines whether the device runtime counters should be
+// reported.
+const char kDeviceReportRuntimeCounters[] =
+    "cros.reporting.report_runtime_counters";
+
+// Determines the device activity heartbeat collection rate (in milliseconds).
+const char kDeviceActivityHeartbeatCollectionRateMs[] =
+    "cros.reporting.device_activity_heartbeat_collection_rate_ms";
+
+// Determines whether device activity state heartbeat should be reported.
+const char kDeviceActivityHeartbeatEnabled[] =
+    "cros.reporting.device_activity_heartbeat_enabled";
+
 // Determines whether heartbeats should be sent to the policy service via
 // the GCM channel.
 const char kHeartbeatEnabled[] = "cros.device_status.heartbeat_enabled";
@@ -246,7 +269,7 @@ const char kHeartbeatFrequency[] = "cros.device_status.heartbeat_frequency";
 const char kSystemLogUploadEnabled[] =
     "cros.device_status.system_log_upload_enabled";
 
-// How frequently the networks health telemetry are collected.
+// How frequently the networks health telemetry is collected.
 const char kReportDeviceNetworkTelemetryCollectionRateMs[] =
     "cros.telemetry_reporting.report_network_telemetry_collection_rate_ms";
 
@@ -258,9 +281,17 @@ const char kReportDeviceNetworkTelemetryEventCheckingRateMs[] =
 const char kReportDeviceAudioStatusCheckingRateMs[] =
     "cros.telemetry_reporting.report_device_audio_status_checking_rate_ms";
 
+// How frequently the runtime counters telemetry is collected.
+const char kDeviceReportRuntimeCountersCheckingRateMs[] =
+    "cros.telemetry_reporting.device_report_runtime_counters_checking_rate_ms";
+
 // How frequently the audio data are checked for events.
 const char kReportDeviceSignalStrengthEventDrivenTelemetry[] =
     "cros.telemetry_reporting.report_signal_strength_event_driven_telemetry";
+
+// Determines whether the network events are reported.
+const char kDeviceReportNetworkEvents[] =
+    "cros.reporting.report_network_events";
 
 // This policy should not appear in the protobuf ever but is used internally to
 // signal that we are running in a "safe-mode" for policy recovery.
@@ -280,10 +311,6 @@ const char kFeatureFlags[] = "cros.feature_flags";
 // when pinging the Variations server.
 const char kVariationsRestrictParameter[] =
     "cros.variations_restrict_parameter";
-
-// A boolean pref that indicates whether enterprise attestation is enabled for
-// the device.
-const char kDeviceAttestationEnabled[] = "cros.device.attestation_enabled";
 
 // A boolean pref that indicates whether attestation for content protection is
 // enabled for the device.
@@ -483,10 +510,6 @@ const char kDeviceUnaffiliatedCrostiniAllowed[] =
 // device.
 const char kPluginVmAllowed[] = "cros.device.plugin_vm_allowed";
 
-// A boolean pref that indicates whether Borealis is allowed to run on this
-// device.
-const char kBorealisAllowedForDevice[] = "cros.device.borealis_allowed";
-
 // An enum pref specifying the case when device needs to reboot on user sign
 // out.
 const char kDeviceRebootOnUserSignout[] = "cros.device.reboot_on_user_signout";
@@ -575,5 +598,21 @@ const char kDeviceEncryptedReportingPipelineEnabled[] =
 
 // A boolean pref that indicates whether reporting XDR events is enabled or not.
 const char kDeviceReportXDREvents[] = "cros.device.device_report_xdr_events";
+
+// String representing a template for the 'client-name' member of the
+// 'client-info' IPP attribute that will be sent to IPP printers in case they
+// support it. Maps to the `DevicePrintingClientNameTemplate` policy.
+const char kDevicePrintingClientNameTemplate[] =
+    "cros.device.printing.client_name_template";
+
+// A boolean pref that indicates whether Hindi Inscript keyboard layout
+// is available.
+const char kDeviceHindiInscriptLayoutEnabled[] =
+    "cros.device.hindi_inscript_layout_enabled";
+
+// A list of strings representing DLC identifiers to be pre downloaded on the
+// device.
+const char kDeviceDlcPredownloadList[] =
+    "cros.device.device_dlc_predownload_list";
 
 }  // namespace ash

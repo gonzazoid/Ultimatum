@@ -10,16 +10,17 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "remoting/base/logging.h"
 #include "remoting/base/oauth_token_getter_impl.h"
@@ -107,7 +108,7 @@ void FtlSignalingPlayground::StartLoop() {
 
   auto url_request_context_getter =
       base::MakeRefCounted<URLRequestContextGetter>(
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   url_loader_factory_owner_ =
       std::make_unique<network::TransitionalURLLoaderFactoryOwner>(
           url_request_context_getter);
@@ -137,7 +138,7 @@ void FtlSignalingPlayground::AcceptIncoming(base::OnceClosure on_done) {
   if (cmd->HasSwitch(kSwitchNameHostId)) {
     host_id = cmd->GetSwitchValueASCII(kSwitchNameHostId);
   } else {
-    host_id = base::GenerateGUID();
+    host_id = base::Uuid::GenerateRandomV4().AsLowercaseString();
   }
   HOST_LOG << "Using host ID: " << host_id;
 

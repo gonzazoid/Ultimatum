@@ -31,11 +31,16 @@ class MODULES_EXPORT BlinkAXTreeSource
     : public GarbageCollected<BlinkAXTreeSource>,
       public ui::AXTreeSource<AXObject*> {
  public:
-  explicit BlinkAXTreeSource(AXObjectCacheImpl& ax_object_cache);
+  // Pass truncate_inline_textboxes_ if inline textboxes should be removed
+  // from the serialized tree, even if they are already available in the cache.
+  explicit BlinkAXTreeSource(AXObjectCacheImpl& ax_object_cache,
+                             bool truncate_inline_textboxes);
   ~BlinkAXTreeSource() override;
 
-  static BlinkAXTreeSource* Create(AXObjectCacheImpl& ax_object_cache) {
-    return MakeGarbageCollected<BlinkAXTreeSource>(ax_object_cache);
+  static BlinkAXTreeSource* Create(AXObjectCacheImpl& ax_object_cache,
+                                   bool truncate_inline_textboxes = false) {
+    return MakeGarbageCollected<BlinkAXTreeSource>(ax_object_cache,
+                                                   truncate_inline_textboxes);
   }
 
   // AXTreeSource implementation.
@@ -43,16 +48,16 @@ class MODULES_EXPORT BlinkAXTreeSource
   AXObject* GetRoot() const override;
   AXObject* GetFromId(int32_t id) const override;
   int32_t GetId(AXObject* node) const override;
-  void GetChildren(AXObject* node,
-                   std::vector<AXObject*>* out_children) const override;
+  void CacheChildrenIfNeeded(AXObject*) override {}
+  size_t GetChildCount(AXObject* node) const override;
+  AXObject* ChildAt(AXObject* node, size_t) const override;
+  void ClearChildCache(AXObject*) override {}
   AXObject* GetParent(AXObject* node) const override;
   void SerializeNode(AXObject* node, ui::AXNodeData* out_data) const override;
   bool IsIgnored(AXObject* node) const override;
-  bool IsValid(AXObject* node) const override;
   bool IsEqual(AXObject* node1, AXObject* node2) const override;
   AXObject* GetNull() const override;
   std::string GetDebugString(AXObject* node) const override;
-  void SerializerClearedNode(int32_t node_id) override;
 
   // Set the id of the node to fetch image data for. Normally the content
   // of images is not part of the accessibility tree, but one node at a
@@ -65,17 +70,11 @@ class MODULES_EXPORT BlinkAXTreeSource
     max_image_data_size_ = max_size;
   }
 
-  void set_exclude_offscreen(bool exclude) { exclude_offscreen_ = exclude; }
-
   // Ignore code that limits based on the protocol (like https, file, etc.)
   // to enable tests to run.
   static void IgnoreProtocolChecksForTesting();
 
   void Trace(Visitor*) const;
-
-  void OnLoadInlineTextBoxes(AXObject& obj);
-  // Query or update a set of IDs for which we should load inline text boxes.
-  bool ShouldLoadInlineTextBoxes(const AXObject* obj) const;
 
   AXObject* GetPluginRoot();
 
@@ -84,8 +83,6 @@ class MODULES_EXPORT BlinkAXTreeSource
   void Thaw();
 
  private:
-  void SetLoadInlineTextBoxesForId(int32_t id);
-
   void Selection(const AXObject* obj,
                  bool& is_selection_backward,
                  AXObject** anchor_object,
@@ -97,9 +94,6 @@ class MODULES_EXPORT BlinkAXTreeSource
 
   AXObject* GetFocusedObject() const;
 
-  // A set of IDs for which we should always load inline text boxes.
-  WTF::HashSet<int32_t> load_inline_text_boxes_ids_;
-
   // The ID of the object to fetch image data for.
   int image_data_node_id_ = -1;
 
@@ -109,15 +103,10 @@ class MODULES_EXPORT BlinkAXTreeSource
   // for debugging.
   bool image_annotation_debugging_ = false;
 
-  // If true, excludes nodes and their entire subtrees if they're entirely
-  // offscreen. This is only meant to be used when snapshotting the
-  // accessibility tree.
-  bool exclude_offscreen_ = false;
-
   Member<AXObjectCacheImpl> ax_object_cache_;
 
-  // These are updated when calling |Freeze|.
   bool frozen_ = false;
+  // TODO(accessibility) If caching these does not improv perf, remove these.
   Member<AXObject> root_ = nullptr;
   Member<AXObject> focus_ = nullptr;
 
@@ -126,6 +115,8 @@ class MODULES_EXPORT BlinkAXTreeSource
   // Used to ensure that the tutor message that explains to screen reader users
   // how to turn on automatic image labels is provided only once.
   mutable absl::optional<int32_t> first_unlabeled_image_id_ = absl::nullopt;
+
+  const bool truncate_inline_textboxes_;
 };
 
 }  // namespace blink

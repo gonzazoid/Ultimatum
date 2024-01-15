@@ -57,6 +57,7 @@ EventConverterEvdevImpl::EventConverterEvdevImpl(
       has_touchpad_(devinfo.HasTouchpad()),
       has_numberpad_(devinfo.HasNumberpad()),
       has_stylus_switch_(devinfo.HasStylusSwitch()),
+      has_assistant_key_(devinfo.HasKeyEvent(KEY_ASSISTANT)),
       has_caps_lock_led_(devinfo.HasLedEvent(LED_CAPSL)),
       controller_(FROM_HERE),
       cursor_(cursor),
@@ -122,6 +123,10 @@ bool EventConverterEvdevImpl::HasCapsLockLed() const {
 
 bool EventConverterEvdevImpl::HasStylusSwitch() const {
   return has_stylus_switch_;
+}
+
+bool EventConverterEvdevImpl::HasAssistantKey() const {
+  return has_assistant_key_;
 }
 
 void EventConverterEvdevImpl::SetKeyFilter(bool enable_filter,
@@ -253,12 +258,9 @@ void EventConverterEvdevImpl::OnKeyChange(unsigned int key,
   // Checks for a key press that could only have occurred from a non-imposter
   // keyboard. Disables Imposter flag and triggers a callback which will update
   // the dispatched list of keyboards with this new information.
-  if (key_state_.count() == 1 && ((key >= KEY_1 && key <= KEY_EQUAL) ||
-                                  (key >= KEY_Q && key <= KEY_RIGHTBRACE) ||
-                                  (key >= KEY_A && key <= KEY_APOSTROPHE) ||
-                                  (key >= KEY_BACKSLASH && key <= KEY_SLASH))) {
-    bool was_suspected = IsSuspectedImposter();
-    SetSuspectedImposter(false);
+  if (key_state_.count() == 1 && IsValidKeyboardKeyPress(key)) {
+    bool was_suspected = IsSuspectedKeyboardImposter();
+    SetSuspectedKeyboardImposter(false);
     if (was_suspected && received_valid_input_callback_) {
       received_valid_input_callback_.Run(this);
     }
@@ -308,11 +310,6 @@ void EventConverterEvdevImpl::DispatchMouseButton(const input_event& input) {
 void EventConverterEvdevImpl::OnButtonChange(int code,
                                              bool down,
                                              base::TimeTicks timestamp) {
-  if (code == BTN_SIDE)
-    code = BTN_BACK;
-  else if (code == BTN_EXTRA)
-    code = BTN_FORWARD;
-
   int button_offset = code - BTN_MOUSE;
   if (mouse_button_state_.test(button_offset) == down)
     return;
@@ -343,6 +340,17 @@ void EventConverterEvdevImpl::FlushEvents(const input_event& input) {
 
   x_offset_ = 0;
   y_offset_ = 0;
+}
+
+std::ostream& EventConverterEvdevImpl::DescribeForLog(std::ostream& os) const {
+  os << "class=ui::EventConverterEvdevImpl id=" << input_device_.id << std::endl
+     << " keyboard_type=" << keyboard_type_ << std::endl
+     << " has_keyboard=" << HasKeyboard() << std::endl
+     << " has_touchpad=" << has_touchpad_ << std::endl
+     << " has_caps_lock_led=" << has_caps_lock_led_ << std::endl
+     << " has_stylus_switch=" << has_stylus_switch_ << std::endl
+     << "base ";
+  return EventConverterEvdev::DescribeForLog(os);
 }
 
 }  // namespace ui

@@ -8,8 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/authenticator.h"
 
@@ -26,7 +25,8 @@ class ValidatingAuthenticator : public Authenticator {
     ERROR_INVALID_CREDENTIALS,
     ERROR_INVALID_ACCOUNT,
     ERROR_REJECTED_BY_USER,
-    ERROR_TOO_MANY_CONNECTIONS
+    ERROR_TOO_MANY_CONNECTIONS,
+    ERROR_UNAUTHORIZED_ACCOUNT
   };
 
   typedef base::OnceCallback<void(Result validation_result)> ResultCallback;

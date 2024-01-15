@@ -6,12 +6,14 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_BREAKOUT_BOX_MEDIA_STREAM_AUDIO_TRACK_UNDERLYING_SOURCE_H_
 
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/audio_parameters.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
 #include "third_party/blink/renderer/modules/breakout_box/frame_queue_underlying_source.h"
 #include "third_party/blink/renderer/modules/breakout_box/transferred_frame_queue_underlying_source.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
+#include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
 
 namespace blink {
 
@@ -25,6 +27,20 @@ class MODULES_EXPORT MediaStreamAudioTrackUnderlyingSource
                       DisconnectFromTrack);
 
  public:
+  // Public interface for unit testing purposes.
+  class AudioBufferPool {
+   public:
+    AudioBufferPool() = default;
+    virtual ~AudioBufferPool() = default;
+
+    virtual void SetFormat(const media::AudioParameters params) = 0;
+    virtual scoped_refptr<media::AudioBuffer> CopyIntoAudioBuffer(
+        const media::AudioBus& audio_bus,
+        base::TimeTicks capture_time) = 0;
+
+    virtual int GetSizeForTesting() = 0;
+  };
+
   explicit MediaStreamAudioTrackUnderlyingSource(
       ScriptState*,
       MediaStreamComponent*,
@@ -48,6 +64,8 @@ class MODULES_EXPORT MediaStreamAudioTrackUnderlyingSource
   void ContextDestroyed() override;
   void Trace(Visitor*) const override;
 
+  AudioBufferPool* GetAudioBufferPoolForTesting();
+
  private:
   // FrameQueueUnderlyingSource implementation.
   bool StartFrameDelivery() override;
@@ -63,10 +81,12 @@ class MODULES_EXPORT MediaStreamAudioTrackUnderlyingSource
   const Member<ScriptWrappable> media_stream_track_processor_;
 
   Member<MediaStreamComponent> track_;
-  bool added_to_track_ = false;
 
-  media::AudioParameters audio_parameters_;
-  scoped_refptr<media::AudioBufferMemoryPool> buffer_pool_;
+  std::unique_ptr<AudioBufferPool> buffer_pool_;
+
+  // This prevents collection of this object while it is still connected to a
+  // platform MediaStreamTrack.
+  SelfKeepAlive<MediaStreamAudioTrackUnderlyingSource> is_connected_to_track_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

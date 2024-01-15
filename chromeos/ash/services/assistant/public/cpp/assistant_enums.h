@@ -35,8 +35,10 @@ enum AssistantAllowedState {
   DISALLOWED_BY_ACCOUNT_TYPE = 8,
   // Disallowed because the device is in Kiosk mode.
   DISALLOWED_BY_KIOSK_MODE = 9,
+  // Disallowed because no libassistant binary available.
+  DISALLOWED_BY_NO_BINARY = 10,
 
-  MAX_VALUE = DISALLOWED_BY_KIOSK_MODE,
+  MAX_VALUE = DISALLOWED_BY_NO_BINARY,
 };
 
 // Enumeration of possible completions for an Assistant interaction.
@@ -77,7 +79,8 @@ enum class AssistantEntryPoint {
   // kLauncherChip = 11,
   // Deprecated, please do not reuse
   // kBloom = 12,
-  kMaxValue = kLauncherSearchBoxIcon,
+  kLauncherSearchIphChip = 13,
+  kMaxValue = kLauncherSearchIphChip
 };
 
 // Enumeration of Assistant exit points. These values are persisted to logs.
@@ -100,7 +103,8 @@ enum class AssistantExitPoint {
   kLauncherOpen = 10,
   kScreenshot = 11,
   kOverviewMode = 12,
-  kMaxValue = kOverviewMode,
+  kLauncherSearchIphChip = 13,
+  kMaxValue = kLauncherSearchIphChip,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -132,9 +136,26 @@ enum class LibassistantDlcLoadStatus {
   kMaxValue = kLoaded,
 };
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// If any value is added, please update enums.xml
+// Assistant.LauncherSearchIphQueryType.{SearchBox, AssistantPage}
+// Enumeration of the query types of the chip inside LauncherSearchIph.
+enum class LauncherSearchIphQueryType {
+  kWeather = 0,
+  kUnitConversion1 = 1,
+  kUnitConversion2 = 2,
+  kTranslation = 3,
+  kDefinition = 4,
+  kCalculation = 5,
+
+  kMaxValue = kCalculation,
+};
+
 }  // namespace ash::assistant
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
 namespace chromeos::assistant {
 using ::ash::assistant::AssistantAllowedState;
 using ::ash::assistant::AssistantInteractionResolution;

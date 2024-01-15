@@ -13,7 +13,7 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "crypto/sha2.h"
 #include "third_party/re2/src/re2/re2.h"
 
@@ -53,10 +53,10 @@ std::string GetBoardName() {
 // Returns the model name of this device (either from its CustomizationId or by
 // parsing its hardware class). Returns "" if it fails.
 std::string GetModelName() {
-  std::string ret;
-  if (chromeos::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
-          chromeos::system::kCustomizationIdKey, &ret)) {
-    return ret;
+  if (const std::optional<base::StringPiece> ret =
+          ash::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
+              ash::system::kCustomizationIdKey)) {
+    return std::string(ret.value());
   }
   LOG(WARNING)
       << "CustomizationId unavailable, attempting to parse hardware class";
@@ -64,9 +64,10 @@ std::string GetModelName() {
   // As a fallback when the CustomizationId is not available, we try to parse it
   // out of the hardware class. If The hardware class is unavailable, all bets
   // are off.
-  std::string hardware_class;
-  if (!chromeos::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
-          chromeos::system::kHardwareClassKey, &hardware_class)) {
+  const std::optional<base::StringPiece> hardware_class_statistic =
+      ash::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
+          ash::system::kHardwareClassKey);
+  if (!hardware_class_statistic) {
     return "";
   }
 
@@ -79,10 +80,22 @@ std::string GetModelName() {
   //
   // Naively searching for the first hyphen is fine until we start caring about
   // models with hyphens in the name.
+  base::StringPiece hardware_class = hardware_class_statistic.value();
   size_t hyphen_pos = hardware_class.find('-');
   if (hyphen_pos != std::string::npos)
     hardware_class = hardware_class.substr(0, hyphen_pos);
   return base::ToLowerASCII(hardware_class);
+}
+
+std::string RemoveNonBorealisSuffix(const std::string& board) {
+  if (board.ends_with("-borealis")) {
+    return board;
+  }
+  size_t last_hyphen_pos = board.rfind('-');
+  if (last_hyphen_pos == std::string::npos) {
+    return board;
+  }
+  return board.substr(0, last_hyphen_pos);
 }
 
 }  // namespace
@@ -122,14 +135,14 @@ std::string TokenHardwareChecker::H(std::string input,
   std::string ret = std::move(input);
   for (unsigned i = 0; i < kHashIterations; ++i) {
     std::string raw_sha = crypto::SHA256HashString(ret + salt);
-    base::Base64Encode(raw_sha, &ret);
+    ret = base::Base64Encode(raw_sha);
   }
   return ret;
 }
 
 void TokenHardwareChecker::GetData(std::string token_hash,
                                    base::OnceCallback<void(Data)> callback) {
-  chromeos::system::StatisticsProvider::GetInstance()
+  ash::system::StatisticsProvider::GetInstance()
       ->ScheduleOnMachineStatisticsLoaded(base::BindOnce(
           [](base::OnceCallback<void(Data)> callback, std::string token_hash) {
             base::ThreadPool::PostTaskAndReplyWithResult(
@@ -157,11 +170,11 @@ bool TokenHardwareChecker::TokenHashMatches(const std::string& salt,
 }
 
 bool TokenHardwareChecker::IsBoard(const std::string& board) const {
-  return token_hardware_.board == board;
+  return RemoveNonBorealisSuffix(token_hardware_.board) == board;
 }
 
 bool TokenHardwareChecker::BoardIn(base::flat_set<std::string> boards) const {
-  return boards.contains(token_hardware_.board);
+  return boards.contains(RemoveNonBorealisSuffix(token_hardware_.board));
 }
 
 bool TokenHardwareChecker::IsModel(const std::string& model) const {

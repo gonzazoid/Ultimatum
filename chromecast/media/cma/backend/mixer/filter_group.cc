@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -26,22 +25,19 @@ namespace media {
 
 namespace {
 
-bool ParseVolumeLimit(const base::Value* dict, float* min, float* max) {
-  if (!dict->is_dict()) {
-    return false;
-  }
-  auto min_value = dict->FindDoubleKey("min");
-  auto max_value = dict->FindDoubleKey("max");
+bool ParseVolumeLimit(const base::Value::Dict* dict, float* min, float* max) {
+  auto min_value = dict->FindDouble("min");
+  auto max_value = dict->FindDouble("max");
   if (!min_value && !max_value) {
     return false;
   }
   *min = 0.0f;
   *max = 1.0f;
   if (min_value) {
-    *min = base::clamp(static_cast<float>(min_value.value()), 0.0f, 1.0f);
+    *min = std::clamp(static_cast<float>(min_value.value()), 0.0f, 1.0f);
   }
   if (max_value) {
-    *max = base::clamp(static_cast<float>(max_value.value()), *min, 1.0f);
+    *max = std::clamp(static_cast<float>(max_value.value()), *min, 1.0f);
   }
   return true;
 }
@@ -79,11 +75,16 @@ std::unique_ptr<PostProcessingPipeline> FilterGroup::CreatePrerenderPipeline(
     int num_channels) {
   ++prerender_creation_count_;
   LOG(INFO) << "Creating prerender pipeline for " << name_;
-  auto result = ppp_factory_->CreatePipeline(
+  auto pipeline = ppp_factory_->CreatePipeline(
       "prerender_" + name_ + base::NumberToString(prerender_creation_count_),
       &prerender_filter_list_, num_channels);
+  for (const auto& config : post_processing_configs_) {
+    LOG(INFO) << "Setting prerender post processing config for " << config.first
+              << " to " << config.second;
+    pipeline->SetPostProcessorConfig(config.first, config.second);
+  }
   LOG(INFO) << "Done creating prerender pipeline for " << name_;
-  return result;
+  return pipeline;
 }
 
 void FilterGroup::AddMixedInput(FilterGroup* input) {
@@ -141,7 +142,7 @@ void FilterGroup::ParseVolumeLimits(const base::Value* volume_limits) {
 
   DCHECK(volume_limits->is_dict());
   // Get default limits.
-  if (ParseVolumeLimit(volume_limits, &default_volume_min_,
+  if (ParseVolumeLimit(&volume_limits->GetDict(), &default_volume_min_,
                        &default_volume_max_)) {
     AUDIO_LOG(INFO) << "Default volume limits for '" << name_ << "' group: ["
                     << default_volume_min_ << ", " << default_volume_max_
@@ -149,8 +150,9 @@ void FilterGroup::ParseVolumeLimits(const base::Value* volume_limits) {
   }
 
   float min, max;
-  for (const auto item : volume_limits->DictItems()) {
-    if (ParseVolumeLimit(&item.second, &min, &max)) {
+  for (const auto item : volume_limits->GetDict()) {
+    if (item.second.is_dict() &&
+        ParseVolumeLimit(&item.second.GetDict(), &min, &max)) {
       AUDIO_LOG(INFO) << "Volume limits for device ID '" << item.first
                       << "' = [" << min << ", " << max << "]";
       volume_limits_.insert({item.first, {min, max}});
@@ -308,6 +310,7 @@ void FilterGroup::ResizeBuffers() {
 void FilterGroup::SetPostProcessorConfig(const std::string& name,
                                          const std::string& config) {
   post_processing_pipeline_->SetPostProcessorConfig(name, config);
+  post_processing_configs_.insert_or_assign(name, config);
   for (MixerInput* input : active_inputs_) {
     input->SetPostProcessorConfig(name, config);
   }

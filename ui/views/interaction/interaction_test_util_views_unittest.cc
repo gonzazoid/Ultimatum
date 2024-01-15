@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "base/test/bind.h"
 #include "build/build_config.h"
@@ -14,16 +15,27 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom-shared.h"
+#include "ui/base/accelerators/accelerator.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/base/interaction/expect_call_in_scope.h"
 #include "ui/base/interaction/interaction_test_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/combobox_model.h"
+#include "ui/base/models/simple_combobox_model.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "ui/base/ui_base_types.h"
+#include "ui/gfx/range/range.h"
+#include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/button/label_button.h"
+#include "ui/views/controls/combobox/combobox.h"
+#include "ui/views/controls/editable_combobox/editable_combobox.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/controls/tabbed_pane/tabbed_pane.h"
+#include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/interaction/element_tracker_views.h"
 #include "ui/views/layout/flex_layout.h"
 #include "ui/views/layout/flex_layout_types.h"
@@ -47,10 +59,15 @@ const char16_t kMenuItem2[] = u"Menu item 2";
 const char16_t kTab1Title[] = u"Tab1";
 const char16_t kTab2Title[] = u"Tab2";
 const char16_t kTab3Title[] = u"Tab3";
+const char16_t kComboBoxItem1[] = u"Item1";
+const char16_t kComboBoxItem2[] = u"Item2";
+const char16_t kComboBoxItem3[] = u"Item3";
 constexpr int kMenuID1 = 1;
 constexpr int kMenuID2 = 2;
 
 class DefaultActionTestView : public View {
+  METADATA_HEADER(DefaultActionTestView, View)
+
  public:
   DefaultActionTestView() = default;
   ~DefaultActionTestView() override = default;
@@ -68,6 +85,37 @@ class DefaultActionTestView : public View {
   bool activated_ = false;
 };
 
+BEGIN_METADATA(DefaultActionTestView)
+END_METADATA
+
+class AcceleratorView : public View {
+  METADATA_HEADER(AcceleratorView, View)
+
+ public:
+  explicit AcceleratorView(ui::Accelerator accelerator)
+      : accelerator_(accelerator) {
+    AddAccelerator(accelerator);
+  }
+
+  bool AcceleratorPressed(const ui::Accelerator& accelerator) override {
+    EXPECT_EQ(accelerator_, accelerator);
+    EXPECT_FALSE(pressed_);
+    pressed_ = true;
+    return true;
+  }
+
+  bool CanHandleAccelerators() const override { return true; }
+
+  bool pressed() const { return pressed_; }
+
+ private:
+  const ui::Accelerator accelerator_;
+  bool pressed_ = false;
+};
+
+BEGIN_METADATA(AcceleratorView)
+END_METADATA
+
 }  // namespace
 
 class InteractionTestUtilViewsTest
@@ -83,7 +131,7 @@ class InteractionTestUtilViewsTest
     Widget::InitParams params =
         CreateParams(Widget::InitParams::TYPE_WINDOW_FRAMELESS);
     params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
-    params.bounds = gfx::Rect(0, 0, 650, 650);
+    params.bounds = gfx::Rect(0, 0, 300, 300);
     widget->Init(std::move(params));
     auto* contents = widget->SetContentsView(std::make_unique<View>());
     auto* layout = contents->SetLayoutManager(std::make_unique<FlexLayout>());
@@ -156,13 +204,21 @@ class InteractionTestUtilViewsTest
     ViewsTestBase::TearDown();
   }
 
+  std::unique_ptr<ui::ComboboxModel> CreateComboboxModel() {
+    return std::make_unique<ui::SimpleComboboxModel>(
+        std::vector<ui::SimpleComboboxModel::Item>{
+            ui::SimpleComboboxModel::Item(kComboBoxItem1),
+            ui::SimpleComboboxModel::Item(kComboBoxItem2),
+            ui::SimpleComboboxModel::Item(kComboBoxItem3)});
+  }
+
  protected:
   std::unique_ptr<ui::test::InteractionTestUtil> test_util_;
   std::unique_ptr<Widget> widget_;
-  raw_ptr<View> contents_ = nullptr;
+  raw_ptr<View, DanglingUntriaged> contents_ = nullptr;
   std::unique_ptr<ui::SimpleMenuModel> menu_model_;
   std::unique_ptr<MenuRunner> menu_runner_;
-  raw_ptr<MenuItemView> menu_item_ = nullptr;
+  raw_ptr<MenuItemView, DanglingUntriaged> menu_item_ = nullptr;
 };
 
 TEST_P(InteractionTestUtilViewsTest, PressButton) {
@@ -174,12 +230,12 @@ TEST_P(InteractionTestUtilViewsTest, PressButton) {
   auto* const button = contents_->AddChildView(std::make_unique<LabelButton>(
       Button::PressedCallback(pressed.Get()), u"Button"));
   widget_->LayoutRootViewIfNecessary();
-  EXPECT_CALL_IN_SCOPE(
-      pressed, Run,
-      test_util_->PressButton(
-          views::ElementTrackerViews::GetInstance()->GetElementForView(button,
-                                                                       true),
-          GetParam()));
+  EXPECT_CALL_IN_SCOPE(pressed, Run,
+                       EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+                                 test_util_->PressButton(
+                                     views::ElementTrackerViews::GetInstance()
+                                         ->GetElementForView(button, true),
+                                     GetParam())));
 }
 
 TEST_P(InteractionTestUtilViewsTest, SelectMenuItem) {
@@ -190,12 +246,12 @@ TEST_P(InteractionTestUtilViewsTest, SelectMenuItem) {
           kMenuItemIdentifier,
           ElementTrackerViews::GetContextForWidget(widget_.get()),
           pressed.Get());
-  EXPECT_CALL_IN_SCOPE(
-      pressed, Run,
-      test_util_->SelectMenuItem(
-          views::ElementTrackerViews::GetInstance()->GetElementForView(
-              menu_item_),
-          GetParam()));
+  EXPECT_CALL_IN_SCOPE(pressed, Run,
+                       EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+                                 test_util_->SelectMenuItem(
+                                     views::ElementTrackerViews::GetInstance()
+                                         ->GetElementForView(menu_item_),
+                                     GetParam())));
 }
 
 TEST_P(InteractionTestUtilViewsTest, DoDefault) {
@@ -205,9 +261,10 @@ TEST_P(InteractionTestUtilViewsTest, DoDefault) {
     auto* const view =
         contents_->AddChildView(std::make_unique<DefaultActionTestView>());
     widget_->LayoutRootViewIfNecessary();
-    test_util_->DoDefaultAction(
-        views::ElementTrackerViews::GetInstance()->GetElementForView(view,
-                                                                     true));
+    EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+              test_util_->DoDefaultAction(
+                  views::ElementTrackerViews::GetInstance()->GetElementForView(
+                      view, true)));
     EXPECT_TRUE(view->activated());
 
   } else {
@@ -221,12 +278,12 @@ TEST_P(InteractionTestUtilViewsTest, DoDefault) {
     auto* const button = contents_->AddChildView(std::make_unique<LabelButton>(
         Button::PressedCallback(pressed.Get()), u"Button"));
     widget_->LayoutRootViewIfNecessary();
-    EXPECT_CALL_IN_SCOPE(
-        pressed, Run,
-        test_util_->DoDefaultAction(
-            views::ElementTrackerViews::GetInstance()->GetElementForView(button,
-                                                                         true),
-            GetParam()));
+    EXPECT_CALL_IN_SCOPE(pressed, Run,
+                         EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+                                   test_util_->DoDefaultAction(
+                                       views::ElementTrackerViews::GetInstance()
+                                           ->GetElementForView(button, true),
+                                       GetParam())));
   }
 }
 
@@ -240,12 +297,239 @@ TEST_P(InteractionTestUtilViewsTest, SelectTab) {
                                Button::PressedCallback(), u"Button"));
   auto* const pane_el =
       views::ElementTrackerViews::GetInstance()->GetElementForView(pane, true);
-  test_util_->SelectTab(pane_el, 2, GetParam());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectTab(pane_el, 2, GetParam()));
   EXPECT_EQ(2U, pane->GetSelectedTabIndex());
-  test_util_->SelectTab(pane_el, 0, GetParam());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectTab(pane_el, 0, GetParam()));
   EXPECT_EQ(0U, pane->GetSelectedTabIndex());
-  test_util_->SelectTab(pane_el, 1, GetParam());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectTab(pane_el, 1, GetParam()));
   EXPECT_EQ(1U, pane->GetSelectedTabIndex());
+}
+
+TEST_P(InteractionTestUtilViewsTest, SelectDropdownItem_Combobox) {
+#if BUILDFLAG(IS_MAC)
+  // Only kDontCare is supported on Mac.
+  if (GetParam() != ui::test::InteractionTestUtil::InputType::kDontCare)
+    GTEST_SKIP();
+#endif
+
+  auto* const box = contents_->AddChildView(
+      std::make_unique<Combobox>(CreateComboboxModel()));
+  box->SetAccessibleName(u"Combobox");
+  widget_->LayoutRootViewIfNecessary();
+  auto* const box_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(box, true);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 2, GetParam()));
+  EXPECT_EQ(2U, box->GetSelectedIndex());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 0, GetParam()));
+  EXPECT_EQ(0U, box->GetSelectedIndex());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 1, GetParam()));
+  EXPECT_EQ(1U, box->GetSelectedIndex());
+}
+
+TEST_P(InteractionTestUtilViewsTest, SelectDropdownItem_EditableCombobox) {
+#if BUILDFLAG(IS_MAC)
+  // Only kDontCare is supported on Mac.
+  if (GetParam() != ui::test::InteractionTestUtil::InputType::kDontCare)
+    GTEST_SKIP();
+#endif
+
+  auto* const box = contents_->AddChildView(
+      std::make_unique<EditableCombobox>(CreateComboboxModel()));
+  box->SetAccessibleName(u"Editable Combobox");
+  widget_->LayoutRootViewIfNecessary();
+  auto* const box_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(box, true);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 2, GetParam()));
+  EXPECT_EQ(kComboBoxItem3, box->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 0, GetParam()));
+  EXPECT_EQ(kComboBoxItem1, box->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 1, GetParam()));
+  EXPECT_EQ(kComboBoxItem2, box->GetText());
+}
+
+TEST_P(InteractionTestUtilViewsTest, SelectDropdownItem_Combobox_NoArrow) {
+#if BUILDFLAG(IS_MAC)
+  // Only kDontCare is supported on Mac.
+  if (GetParam() != ui::test::InteractionTestUtil::InputType::kDontCare)
+    GTEST_SKIP();
+#endif
+
+  auto* const box = contents_->AddChildView(
+      std::make_unique<Combobox>(CreateComboboxModel()));
+  box->SetShouldShowArrow(false);
+  box->SetAccessibleName(u"Combobox");
+  widget_->LayoutRootViewIfNecessary();
+  auto* const box_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(box, true);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 2, GetParam()));
+  EXPECT_EQ(2U, box->GetSelectedIndex());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 0, GetParam()));
+  EXPECT_EQ(0U, box->GetSelectedIndex());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 1, GetParam()));
+  EXPECT_EQ(1U, box->GetSelectedIndex());
+}
+
+TEST_P(InteractionTestUtilViewsTest,
+       SelectDropdownItem_EditableCombobox_NoArrow) {
+#if BUILDFLAG(IS_MAC)
+  // Only kDontCare is supported on Mac.
+  if (GetParam() != ui::test::InteractionTestUtil::InputType::kDontCare)
+    GTEST_SKIP();
+#endif
+
+  // These cases are not supported for editable combobox without an arrow
+  // button; editable comboboxes without arrows trigger on specific text input.
+  if (GetParam() == ui::test::InteractionTestUtil::InputType::kMouse ||
+      GetParam() == ui::test::InteractionTestUtil::InputType::kTouch) {
+    GTEST_SKIP();
+  }
+  // Pass the default values for every parameter except for `display_arrow`.
+  auto* const box = contents_->AddChildView(std::make_unique<EditableCombobox>(
+      CreateComboboxModel(), false, true, EditableCombobox::kDefaultTextContext,
+      EditableCombobox::kDefaultTextStyle, /* display_arrow =*/false));
+  box->SetAccessibleName(u"Editable Combobox");
+  auto* const box_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(box, true);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 2, GetParam()));
+  EXPECT_EQ(kComboBoxItem3, box->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 0, GetParam()));
+  EXPECT_EQ(kComboBoxItem1, box->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SelectDropdownItem(box_el, 1, GetParam()));
+  EXPECT_EQ(kComboBoxItem2, box->GetText());
+}
+
+TEST_F(InteractionTestUtilViewsTest, EnterText_Textfield) {
+  auto* const edit = contents_->AddChildView(std::make_unique<Textfield>());
+  edit->SetDefaultWidthInChars(20);
+  widget_->LayoutRootViewIfNecessary();
+
+  auto* const edit_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(edit, true);
+
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->EnterText(edit_el, u"abcd"));
+  EXPECT_EQ(u"abcd", edit->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->EnterText(
+                edit_el, u"efgh",
+                ui::test::InteractionTestUtil::TextEntryMode::kReplaceAll));
+  EXPECT_EQ(u"efgh", edit->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->EnterText(
+                edit_el, u"abcd",
+                ui::test::InteractionTestUtil::TextEntryMode::kAppend));
+  EXPECT_EQ(u"efghabcd", edit->GetText());
+  edit->SetSelectedRange(gfx::Range(2, 6));
+  EXPECT_EQ(
+      ui::test::ActionResult::kSucceeded,
+      test_util_->EnterText(
+          edit_el, u"1234",
+          ui::test::InteractionTestUtil::TextEntryMode::kInsertOrReplace));
+  EXPECT_EQ(u"ef1234cd", edit->GetText());
+}
+
+TEST_F(InteractionTestUtilViewsTest, EnterText_EditableCombobox) {
+  auto* const box = contents_->AddChildView(
+      std::make_unique<EditableCombobox>(CreateComboboxModel()));
+  box->SetAccessibleName(u"Editable Combobox");
+  widget_->LayoutRootViewIfNecessary();
+
+  auto* const box_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(box, true);
+
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->EnterText(box_el, u"abcd"));
+  EXPECT_EQ(u"abcd", box->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->EnterText(
+                box_el, u"efgh",
+                ui::test::InteractionTestUtil::TextEntryMode::kReplaceAll));
+  EXPECT_EQ(u"efgh", box->GetText());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->EnterText(
+                box_el, u"abcd",
+                ui::test::InteractionTestUtil::TextEntryMode::kAppend));
+  EXPECT_EQ(u"efghabcd", box->GetText());
+  box->SelectRange(gfx::Range(2, 6));
+  EXPECT_EQ(
+      ui::test::ActionResult::kSucceeded,
+      test_util_->EnterText(
+          box_el, u"1234",
+          ui::test::InteractionTestUtil::TextEntryMode::kInsertOrReplace));
+  EXPECT_EQ(u"ef1234cd", box->GetText());
+}
+
+TEST_F(InteractionTestUtilViewsTest, ActivateSurface) {
+  // Create a bubble that will close on deactivation.
+  auto dialog_ptr = std::make_unique<BubbleDialogDelegateView>(
+      contents_, BubbleBorder::Arrow::TOP_LEFT);
+  dialog_ptr->set_close_on_deactivate(true);
+  auto* widget = BubbleDialogDelegateView::CreateBubble(std::move(dialog_ptr));
+  WidgetVisibleWaiter shown_waiter(widget);
+  widget->Show();
+  shown_waiter.Wait();
+
+  // Activating the primary widget should close the bubble again.
+  WidgetDestroyedWaiter closed_waiter(widget);
+  auto* const view_el =
+      ElementTrackerViews::GetInstance()->GetElementForView(contents_, true);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->ActivateSurface(view_el));
+  closed_waiter.Wait();
+}
+
+TEST_F(InteractionTestUtilViewsTest, SendAccelerator) {
+  ui::Accelerator accel(ui::VKEY_F5, ui::EF_SHIFT_DOWN);
+  ui::Accelerator accel2(ui::VKEY_F6, ui::EF_NONE);
+  auto* const view =
+      contents_->AddChildView(std::make_unique<AcceleratorView>(accel));
+  auto* const view_el =
+      ElementTrackerViews::GetInstance()->GetElementForView(view, true);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SendAccelerator(view_el, accel2));
+  EXPECT_FALSE(view->pressed());
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_->SendAccelerator(view_el, accel));
+  EXPECT_TRUE(view->pressed());
+}
+
+TEST_F(InteractionTestUtilViewsTest, Confirm) {
+  UNCALLED_MOCK_CALLBACK(base::OnceClosure, accept);
+
+  auto dialog_ptr = std::make_unique<BubbleDialogDelegateView>(
+      contents_, BubbleBorder::Arrow::TOP_LEFT);
+  auto* dialog = dialog_ptr.get();
+  dialog->SetAcceptCallback(accept.Get());
+  auto* widget = BubbleDialogDelegateView::CreateBubble(std::move(dialog_ptr));
+  WidgetVisibleWaiter shown_waiter(widget);
+  widget->Show();
+  shown_waiter.Wait();
+
+  auto* const dialog_el =
+      views::ElementTrackerViews::GetInstance()->GetElementForView(dialog,
+                                                                   true);
+
+  EXPECT_CALL_IN_SCOPE(accept, Run, {
+    EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+              test_util_->Confirm(dialog_el));
+    WidgetDestroyedWaiter closed_waiter(widget);
+    closed_waiter.Wait();
+  });
 }
 
 INSTANTIATE_TEST_SUITE_P(

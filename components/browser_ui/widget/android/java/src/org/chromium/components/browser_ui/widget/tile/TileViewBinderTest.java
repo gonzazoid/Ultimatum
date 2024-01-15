@@ -26,13 +26,12 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.components.browser_ui.test.BrowserUiDummyFragmentActivity;
 import org.chromium.components.browser_ui.widget.R;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * Tests for {@link TileViewBinder}.
- */
+/** Tests for {@link TileViewBinder}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @Batch(Batch.PER_CLASS)
@@ -52,7 +51,7 @@ public class TileViewBinderTest {
 
     @Before
     public void setUp() {
-        mActivity = Robolectric.buildActivity(Activity.class).setup().get();
+        mActivity = Robolectric.buildActivity(BrowserUiDummyFragmentActivity.class).setup().get();
 
         mTileView = new TileView(mActivity, null);
         LayoutInflater.from(mActivity).inflate(R.layout.tile_view_modern, mTileView, true);
@@ -68,8 +67,9 @@ public class TileViewBinderTest {
 
         mLargeIconEdgeSize = mResources.getDimensionPixelSize(R.dimen.tile_view_icon_size);
         mSmallIconEdgeSize = mResources.getDimensionPixelSize(R.dimen.tile_view_icon_size_modern);
-        mLargeIconTopMarginSize = mResources.getDimensionPixelSize(
-                R.dimen.tile_view_icon_background_margin_top_modern);
+        mLargeIconTopMarginSize =
+                mResources.getDimensionPixelSize(
+                        R.dimen.tile_view_icon_background_margin_top_modern);
         mSmallIconTopMarginSize =
                 mResources.getDimensionPixelSize(R.dimen.tile_view_icon_margin_top_modern);
 

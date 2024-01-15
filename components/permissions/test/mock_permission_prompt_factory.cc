@@ -4,9 +4,9 @@
 
 #include "components/permissions/test/mock_permission_prompt_factory.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
@@ -30,8 +30,9 @@ MockPermissionPromptFactory::MockPermissionPromptFactory(
 MockPermissionPromptFactory::~MockPermissionPromptFactory() {
   manager_->set_view_factory_for_testing(
       base::BindRepeating(&MockPermissionPromptFactory::DoNotCreate));
-  for (auto* prompt : prompts_)
+  for (permissions::MockPermissionPrompt* prompt : prompts_) {
     prompt->factory_ = nullptr;
+  }
   prompts_.clear();
 }
 

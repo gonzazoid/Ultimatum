@@ -16,9 +16,9 @@
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
 #include "base/strings/string_piece.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_location.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
@@ -45,9 +45,7 @@ the following command:
 
 base::Value WebAppToPlatformAgnosticDebugValue(
     std::unique_ptr<WebApp> web_app) {
-  // Force this to be nullopt to avoid platform specific differences.
-  web_app->SetWebAppChromeOsData(absl::nullopt);
-  return web_app->AsDebugValue();
+  return web_app->AsDebugValueWithOnlyPlatformAgnosticFields();
 }
 
 base::FilePath GetTestDataDir() {
@@ -117,32 +115,27 @@ void SaveExpectationsContentsOrDie(const base::FilePath path,
 }  // namespace
 
 TEST(WebAppTest, HasAnySources) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
 
   EXPECT_FALSE(app.HasAnySources());
-  for (int i = WebAppManagement::kMinValue; i <= WebAppManagement::kMaxValue;
-       ++i) {
-    app.AddSource(static_cast<WebAppManagement::Type>(i));
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
+    app.AddSource(source);
     EXPECT_TRUE(app.HasAnySources());
   }
 
-  for (int i = WebAppManagement::kMinValue; i <= WebAppManagement::kMaxValue;
-       ++i) {
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
     EXPECT_TRUE(app.HasAnySources());
-    app.RemoveSource(static_cast<WebAppManagement::Type>(i));
+    app.RemoveSource(source);
   }
   EXPECT_FALSE(app.HasAnySources());
 }
 
 TEST(WebAppTest, HasOnlySource) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
 
-  for (int i = WebAppManagement::kMinValue; i <= WebAppManagement::kMaxValue;
-       ++i) {
-    auto source = static_cast<WebAppManagement::Type>(i);
-
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
     app.AddSource(source);
     EXPECT_TRUE(app.HasOnlySource(source));
 
@@ -153,17 +146,19 @@ TEST(WebAppTest, HasOnlySource) {
   app.AddSource(WebAppManagement::kMinValue);
   EXPECT_TRUE(app.HasOnlySource(WebAppManagement::kMinValue));
 
-  for (int i = WebAppManagement::kMinValue + 1;
-       i <= WebAppManagement::kMaxValue; ++i) {
-    auto source = static_cast<WebAppManagement::Type>(i);
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
+    if (source == WebAppManagement::kMinValue) {
+      continue;
+    }
     app.AddSource(source);
     EXPECT_FALSE(app.HasOnlySource(source));
     EXPECT_FALSE(app.HasOnlySource(WebAppManagement::kMinValue));
   }
 
-  for (int i = WebAppManagement::kMinValue + 1;
-       i <= WebAppManagement::kMaxValue; ++i) {
-    auto source = static_cast<WebAppManagement::Type>(i);
+  for (WebAppManagement::Type source : WebAppManagementTypes::All()) {
+    if (source == WebAppManagement::kMinValue) {
+      continue;
+    }
     EXPECT_FALSE(app.HasOnlySource(WebAppManagement::kMinValue));
     app.RemoveSource(source);
     EXPECT_FALSE(app.HasOnlySource(source));
@@ -176,7 +171,7 @@ TEST(WebAppTest, HasOnlySource) {
 }
 
 TEST(WebAppTest, WasInstalledByUser) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
 
   app.AddSource(WebAppManagement::kSync);
@@ -189,6 +184,12 @@ TEST(WebAppTest, WasInstalledByUser) {
   EXPECT_TRUE(app.WasInstalledByUser());
 
   app.RemoveSource(WebAppManagement::kWebAppStore);
+  EXPECT_FALSE(app.WasInstalledByUser());
+
+  app.AddSource(WebAppManagement::kOneDriveIntegration);
+  EXPECT_TRUE(app.WasInstalledByUser());
+
+  app.RemoveSource(WebAppManagement::kOneDriveIntegration);
   EXPECT_FALSE(app.WasInstalledByUser());
 
   app.AddSource(WebAppManagement::kDefault);
@@ -223,7 +224,7 @@ TEST(WebAppTest, WasInstalledByUser) {
 }
 
 TEST(WebAppTest, CanUserUninstallWebApp) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
 
   app.AddSource(WebAppManagement::kDefault);
@@ -235,6 +236,8 @@ TEST(WebAppTest, CanUserUninstallWebApp) {
   app.AddSource(WebAppManagement::kWebAppStore);
   EXPECT_TRUE(app.CanUserUninstallWebApp());
   app.AddSource(WebAppManagement::kSubApp);
+  EXPECT_TRUE(app.CanUserUninstallWebApp());
+  app.AddSource(WebAppManagement::kOneDriveIntegration);
   EXPECT_TRUE(app.CanUserUninstallWebApp());
 
   app.AddSource(WebAppManagement::kPolicy);
@@ -258,6 +261,9 @@ TEST(WebAppTest, CanUserUninstallWebApp) {
   EXPECT_FALSE(app.CanUserUninstallWebApp());
 
   app.RemoveSource(WebAppManagement::kPolicy);
+  EXPECT_TRUE(app.CanUserUninstallWebApp());
+
+  app.RemoveSource(WebAppManagement::kOneDriveIntegration);
   EXPECT_TRUE(app.CanUserUninstallWebApp());
 
   EXPECT_TRUE(app.IsPreinstalledApp());
@@ -285,12 +291,17 @@ TEST(WebAppTest, EmptyAppAsDebugValue) {
       << kGenerateExpectationsMessage;
 }
 
+// The values of the SampleApp are randomly generated. This test is mainly
+// checking that the output is formatted well and doesn't crash. Exact field
+// values are unimportant.
+//
+// If you have made changes and this test is failing, run the test with
+// `--rebaseline-web-app-expectations` to generate a new `sample_web_app.json`.
 TEST(WebAppTest, SampleAppAsDebugValue) {
   const base::FilePath path_to_test_file =
       GetPathToTestFile("sample_web_app.json");
   const base::Value web_app_debug_value = WebAppToPlatformAgnosticDebugValue(
-      test::CreateRandomWebApp(GURL("https://example.com/"),
-                               /*seed=*/1234));
+      test::CreateRandomWebApp({.seed = 1234, .non_zero = true}));
 
   if (IsRebaseline()) {
     LOG(INFO) << "Generating expectations sample web app unit test in "
@@ -306,28 +317,81 @@ TEST(WebAppTest, SampleAppAsDebugValue) {
       << kGenerateExpectationsMessage;
 }
 
+TEST(WebAppTest, RandomAppAsDebugValue_NoCrash) {
+  for (uint32_t seed = 0; seed < 1000; ++seed) {
+    const base::Value web_app_debug_value =
+        test::CreateRandomWebApp({.seed = seed})->AsDebugValue();
+
+    EXPECT_TRUE(web_app_debug_value.is_dict());
+    EXPECT_TRUE(base::ToString(web_app_debug_value).length() > 10);
+  }
+}
+
 TEST(WebAppTest, IsolationDataStartsEmpty) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
 
   EXPECT_FALSE(app.isolation_data().has_value());
 }
 
 TEST(WebAppTest, IsolationDataDebugValue) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
-  app.SetIsolationData(IsolationData(IsolationData::InstalledBundle{
-      .path = base::FilePath(FILE_PATH_LITERAL("random_path"))}));
+  app.SetIsolationData(WebApp::IsolationData(
+      InstalledBundle{.path = base::FilePath(FILE_PATH_LITERAL("random_path"))},
+      base::Version("1.0.0")));
 
   EXPECT_TRUE(app.isolation_data().has_value());
 
-  base::Value expected_isolation_data = base::JSONReader::Read(R"({
-        "content": {
+  base::Value expected_isolation_data = base::JSONReader::Read(R"|({
+        "isolated_web_app_location": {
           "installed_bundle": {
             "path": "random_path"
           }
+        },
+        "version": "1.0.0",
+        "controlled_frame_partitions (on-disk)": [],
+        "pending_update_info": null
+      })|")
+                                            .value();
+
+  base::Value::Dict debug_app = app.AsDebugValue().GetDict().Clone();
+  base::Value::Dict* debug_isolation_data =
+      debug_app.FindDict("isolation_data");
+  EXPECT_TRUE(debug_isolation_data != nullptr);
+  EXPECT_EQ(*debug_isolation_data, expected_isolation_data);
+}
+
+TEST(WebAppTest, IsolationDataPendingUpdateInfoDebugValue) {
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
+                           GURL("https://example.com"))};
+  app.SetIsolationData(WebApp::IsolationData(
+      InstalledBundle{.path = base::FilePath(FILE_PATH_LITERAL("random_path"))},
+      base::Version("1.0.0"), {},
+      WebApp::IsolationData::PendingUpdateInfo(
+          InstalledBundle{
+              .path = base::FilePath(FILE_PATH_LITERAL("another_path"))},
+          base::Version("2.0.0"))));
+
+  EXPECT_TRUE(app.isolation_data().has_value());
+
+  base::Value expected_isolation_data = base::JSONReader::Read(R"|({
+        "isolated_web_app_location": {
+          "installed_bundle": {
+            "path": "random_path"
+          }
+        },
+        "version": "1.0.0",
+        "controlled_frame_partitions (on-disk)": [],
+        "pending_update_info": {
+          "isolated_web_app_location": {
+            "installed_bundle": {
+              "path": "another_path"
+            }
+          },
+          "version": "2.0.0"
         }
-      })")
+      })|")
                                             .value();
 
   base::Value::Dict debug_app = app.AsDebugValue().GetDict().Clone();
@@ -338,24 +402,27 @@ TEST(WebAppTest, IsolationDataDebugValue) {
 }
 
 TEST(WebAppTest, PermissionsPolicyDebugValue) {
-  WebApp app{GenerateAppId(/*manifest_id=*/absl::nullopt,
+  WebApp app{GenerateAppId(/*manifest_id_path=*/absl::nullopt,
                            GURL("https://example.com"))};
   app.SetPermissionsPolicy({
       {blink::mojom::PermissionsPolicyFeature::kGyroscope,
-       {},
+       /*allowed_origins=*/{},
+       /*self_if_matches=*/absl::nullopt,
        /*matches_all_origins=*/false,
        /*matches_opaque_src=*/true},
       {blink::mojom::PermissionsPolicyFeature::kGeolocation,
-       {},
+       /*allowed_origins=*/{},
+       /*self_if_matches=*/absl::nullopt,
        /*matches_all_origins=*/true,
        /*matches_opaque_src=*/false},
       {blink::mojom::PermissionsPolicyFeature::kGamepad,
-       {{url::Origin::Create(GURL("https://example.com")),
-         /*has_subdomain_wildcard=*/false},
-        {url::Origin::Create(GURL("https://example.net")),
-         /*has_subdomain_wildcard=*/true},
-        {url::Origin::Create(GURL("https://*.example.net")),
-         /*has_subdomain_wildcard=*/false}},
+       {*blink::OriginWithPossibleWildcards::FromOriginAndWildcardsForTest(
+            url::Origin::Create(GURL("https://example.com")),
+            /*has_subdomain_wildcard=*/false),
+        *blink::OriginWithPossibleWildcards::FromOriginAndWildcardsForTest(
+            url::Origin::Create(GURL("https://example.net")),
+            /*has_subdomain_wildcard=*/true)},
+       /*self_if_matches=*/absl::nullopt,
        /*matches_all_origins=*/false,
        /*matches_opaque_src=*/false},
   });
@@ -376,7 +443,7 @@ TEST(WebAppTest, PermissionsPolicyDebugValue) {
           "matches_opaque_src": false
         }
         , {
-          "allowed_origins": [ "https://example.com", "https://*.example.net", "https://%2A.example.net" ],
+          "allowed_origins": [ "https://example.com", "https://*.example.net" ],
           "feature": "gamepad",
           "matches_all_origins": false,
           "matches_opaque_src": false

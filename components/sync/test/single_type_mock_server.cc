@@ -16,7 +16,7 @@ namespace syncer {
 
 SingleTypeMockServer::SingleTypeMockServer(ModelType type)
     : type_(type),
-      type_root_id_(ModelTypeToRootTag(type)),
+      type_root_id_(ModelTypeToProtocolRootTag(type)),
       progress_marker_token_("non_null_progress_token") {}
 
 SingleTypeMockServer::~SingleTypeMockServer() = default;
@@ -29,7 +29,7 @@ sync_pb::SyncEntity SingleTypeMockServer::TypeRootUpdate() {
   entity.set_version(1000);
   entity.set_ctime(TimeToProtoTime(base::Time::UnixEpoch()));
   entity.set_mtime(TimeToProtoTime(base::Time::UnixEpoch()));
-  entity.set_server_defined_unique_tag(ModelTypeToRootTag(type_));
+  entity.set_server_defined_unique_tag(ModelTypeToProtocolRootTag(type_));
   entity.set_deleted(false);
   AddDefaultFieldValue(type_, entity.mutable_specifics());
 
@@ -51,7 +51,7 @@ sync_pb::SyncEntity SingleTypeMockServer::UpdateFromServer(
   entity.set_id_string(GenerateId(tag_hash));
   entity.set_parent_id_string(type_root_id_);
   entity.set_version(version);
-  entity.set_client_defined_unique_tag(tag_hash.value());
+  entity.set_client_tag_hash(tag_hash.value());
   entity.set_deleted(false);
   entity.mutable_specifics()->CopyFrom(specifics);
 
@@ -79,7 +79,7 @@ sync_pb::SyncEntity SingleTypeMockServer::TombstoneFromServer(
   entity.set_id_string(GenerateId(tag_hash));
   entity.set_parent_id_string(type_root_id_);
   entity.set_version(version);
-  entity.set_client_defined_unique_tag(tag_hash.value());
+  entity.set_client_tag_hash(tag_hash.value());
   entity.set_deleted(true);
   AddDefaultFieldValue(type_, entity.mutable_specifics());
 
@@ -104,7 +104,7 @@ sync_pb::ClientToServerResponse SingleTypeMockServer::DoSuccessfulCommit(
       message.commit().entries();
   for (const sync_pb::SyncEntity& entry : entries) {
     const ClientTagHash tag_hash =
-        ClientTagHash::FromHashed(entry.client_defined_unique_tag());
+        ClientTagHash::FromHashed(entry.client_tag_hash());
 
     committed_items_[tag_hash] = entry;
 
@@ -128,7 +128,7 @@ size_t SingleTypeMockServer::GetNumCommitMessages() const {
   return commit_messages_.size();
 }
 
-sync_pb::ClientToServerMessage SingleTypeMockServer::GetNthCommitMessage(
+const sync_pb::ClientToServerMessage& SingleTypeMockServer::GetNthCommitMessage(
     size_t n) const {
   DCHECK_LT(n, GetNumCommitMessages());
   return commit_messages_[n];

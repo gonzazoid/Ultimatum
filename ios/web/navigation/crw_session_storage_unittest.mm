@@ -4,17 +4,22 @@
 
 #import "ios/web/public/session/crw_session_storage.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/ios/ios_util.h"
-#import "base/mac/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/scoped_feature_list.h"
 #import "ios/web/common/features.h"
 #import "ios/web/navigation/navigation_item_impl.h"
-#import "ios/web/navigation/navigation_item_storage_test_util.h"
 #import "ios/web/navigation/serializable_user_data_manager_impl.h"
 #import "ios/web/public/navigation/referrer.h"
 #import "ios/web/public/session/crw_navigation_item_storage.h"
-#import "ios/web/session/crw_session_user_data.h"
+#import "ios/web/public/session/crw_session_certificate_policy_cache_storage.h"
+#import "ios/web/public/session/crw_session_user_data.h"
+#import "ios/web/public/session/proto/metadata.pb.h"
+#import "ios/web/public/session/proto/proto_util.h"
+#import "ios/web/public/session/proto/storage.pb.h"
+#import "ios/web/public/web_state_id.h"
 #import "net/base/mac/url_conversions.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
@@ -22,37 +27,7 @@
 #import "third_party/ocmock/gtest_support.h"
 #import "ui/base/page_transition_types.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-
-// Checks for equality between the item storages in `items1` and `items2`.
-BOOL ItemStorageListsAreEqual(NSArray* items1, NSArray* items2) {
-  __block BOOL items_are_equal = items1.count == items2.count;
-  if (!items_are_equal)
-    return NO;
-  [items1 enumerateObjectsUsingBlock:^(CRWNavigationItemStorage* item,
-                                       NSUInteger idx, BOOL* stop) {
-    items_are_equal &= web::ItemStoragesAreEqual(item, items2[idx]);
-    *stop = !items_are_equal;
-  }];
-  return items_are_equal;
-}
-
-// Checks for equality between `session1` and `session2`.
-BOOL SessionStoragesAreEqual(CRWSessionStorage* session1,
-                             CRWSessionStorage* session2) {
-  // Check the rest of the properties.
-  NSArray<CRWNavigationItemStorage*>* items1 = session1.itemStorages;
-  NSArray<CRWNavigationItemStorage*>* items2 = session2.itemStorages;
-  return ItemStorageListsAreEqual(items1, items2) &&
-         session1.hasOpener == session2.hasOpener &&
-         session1.lastCommittedItemIndex == session2.lastCommittedItemIndex &&
-         session1.userAgentType == session2.userAgentType &&
-         [session1.userData isEqual:session2.userData];
-}
 
 // Creates a CRWSessionUserData from an NSDictionary.
 CRWSessionUserData* SessionUserDataFromDictionary(
@@ -68,12 +43,19 @@ CRWSessionUserData* SessionUserDataFromDictionary(
 
 class CRWSessionStorageTest : public PlatformTest {
  protected:
-  CRWSessionStorageTest() : session_storage_([[CRWSessionStorage alloc] init]) {
+  CRWSessionStorageTest() {
     // Set up `session_storage_`.
+    const base::Time now = base::Time::Now();
+    session_storage_ = [[CRWSessionStorage alloc] init];
     session_storage_.hasOpener = YES;
-    session_storage_.lastCommittedItemIndex = 4;
+    session_storage_.creationTime = now - base::Minutes(15);
+    session_storage_.lastActiveTime = now;
+    session_storage_.lastCommittedItemIndex = 0;
     session_storage_.userAgentType = web::UserAgentType::DESKTOP;
     session_storage_.stableIdentifier = [[NSUUID UUID] UUIDString];
+    session_storage_.uniqueIdentifier = web::WebStateID::NewUnique();
+    session_storage_.certPolicyCacheStorage =
+        [[CRWSessionCertificatePolicyCacheStorage alloc] init];
     session_storage_.userData =
         SessionUserDataFromDictionary(@{@"key" : @"value"});
 
@@ -85,8 +67,6 @@ class CRWSessionStorageTest : public PlatformTest {
         web::Referrer(GURL("http://referrer.url"), web::ReferrerPolicyDefault);
     item_storage.timestamp = base::Time::Now();
     item_storage.title = base::SysNSStringToUTF16(@"Title");
-    item_storage.displayState =
-        web::PageDisplayState(CGPointZero, UIEdgeInsetsZero, 0.0, 0.0, 0.0);
     item_storage.HTTPRequestHeaders = @{@"HeaderKey" : @"HeaderValue"};
     session_storage_.itemStorages = @[ item_storage ];
   }
@@ -111,7 +91,7 @@ CRWSessionStorage* DecodeSessionStorage(NSData* data) {
   NSKeyedUnarchiver* unarchiver =
       [[NSKeyedUnarchiver alloc] initForReadingFromData:data error:nil];
   unarchiver.requiresSecureCoding = NO;
-  return base::mac::ObjCCast<CRWSessionStorage>(
+  return base::apple::ObjCCast<CRWSessionStorage>(
       [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey]);
 }
 
@@ -123,7 +103,96 @@ TEST_F(CRWSessionStorageTest, EncodeDecode) {
   CRWSessionStorage* decoded =
       DecodeSessionStorage(EncodeSessionStorage(session_storage_));
 
-  EXPECT_TRUE(SessionStoragesAreEqual(session_storage_, decoded));
+  EXPECT_NSEQ(session_storage_, decoded);
+}
+
+// Tests that unarchiving CRWSessionStorage data set lastActiveTime to
+// creationTime if the value is unset.
+TEST_F(CRWSessionStorageTest, EncodeDecode_LastActiveTimeUnset) {
+  CRWSessionStorage* decoded =
+      DecodeSessionStorage(EncodeSessionStorage(session_storage_));
+
+  EXPECT_NSEQ(session_storage_, decoded);
+
+  // Reset the lastActiveTime to simulate having it incorrectly initialized
+  // in WebStateImpl constructor.
+  decoded.lastActiveTime = base::Time();
+  ASSERT_NSNE(session_storage_, decoded);
+
+  // Check that encoding and then decoding the value with an unitialized
+  // last active time correctly restore the property (to creation time).
+  decoded = DecodeSessionStorage(EncodeSessionStorage(decoded));
+  EXPECT_EQ(decoded.lastActiveTime, decoded.creationTime);
+}
+
+// Tests that conversion to/from proto results in an equivalent storage.
+TEST_F(CRWSessionStorageTest, EncodeDecodeToProto) {
+  web::proto::WebStateStorage storage;
+  [session_storage_ serializeToProto:storage];
+
+  CRWSessionStorage* decoded =
+      [[CRWSessionStorage alloc] initWithProto:storage
+                              uniqueIdentifier:web::WebStateID::NewUnique()
+                              stableIdentifier:[[NSUUID UUID] UUIDString]];
+
+  // The serialization to proto does not maintain the following properties
+  // - stableIdentifier
+  // - uniqueIdentifier
+  // - userData
+  //
+  // For stableIdentifier and uniqueIdentifier, the decoding generates new
+  // random values (since they are not present in the protobuf message but
+  // CRWSessionStorage getter assert that the values are set). Expect them
+  // to be different from the original values.
+  EXPECT_NE(decoded.uniqueIdentifier, session_storage_.uniqueIdentifier);
+  EXPECT_NSNE(decoded.stableIdentifier, session_storage_.stableIdentifier);
+
+  // For userData, the decoded object should have the property set to nil.
+  EXPECT_FALSE(decoded.userData);
+
+  // Copy the properties that are not serialized by the protobuf message
+  // format from the original object to the decoded value, then compare
+  // the object to ensure the object is correctly deserialized.
+  ASSERT_NSNE(session_storage_, decoded);
+
+  decoded.uniqueIdentifier = session_storage_.uniqueIdentifier;
+  decoded.stableIdentifier = session_storage_.stableIdentifier;
+  decoded.userData = session_storage_.userData;
+
+  EXPECT_NSEQ(session_storage_, decoded);
+}
+
+// Tests that when converting to proto, the metadata information are correct.
+TEST_F(CRWSessionStorageTest, MetadataWhenEncodingToProto) {
+  web::proto::WebStateStorage storage;
+  [session_storage_ serializeToProto:storage];
+
+  // Check that the protobuf message has the expected fields.
+  EXPECT_TRUE(storage.has_metadata());
+  const web::proto::WebStateMetadataStorage& metadata = storage.metadata();
+
+  EXPECT_EQ(web::TimeFromProto(metadata.creation_time()),
+            session_storage_.creationTime);
+  EXPECT_EQ(web::TimeFromProto(metadata.last_active_time()),
+            session_storage_.lastActiveTime);
+  EXPECT_GT(metadata.navigation_item_count(), 0);
+  EXPECT_EQ(static_cast<NSUInteger>(metadata.navigation_item_count()),
+            session_storage_.itemStorages.count);
+
+  // Fetch the last committed item and check the value in the last active page
+  // are initialized from this item.
+  ASSERT_GE(session_storage_.lastCommittedItemIndex, 0);
+  ASSERT_LT(static_cast<NSUInteger>(session_storage_.lastCommittedItemIndex),
+            session_storage_.itemStorages.count);
+
+  CRWNavigationItemStorage* item =
+      session_storage_.itemStorages[session_storage_.lastCommittedItemIndex];
+
+  EXPECT_TRUE(metadata.has_active_page());
+  const web::proto::PageMetadataStorage& active_page = metadata.active_page();
+
+  EXPECT_EQ(item.title, base::UTF8ToUTF16(active_page.page_title()));
+  EXPECT_EQ(item.virtualURL, GURL(active_page.page_url()));
 }
 
 // Tests that unarchiving CRWSessionStorage data results in an equivalent
@@ -133,7 +202,7 @@ TEST_F(CRWSessionStorageTest, EncodeDecodeAutomatic) {
   CRWSessionStorage* decoded =
       DecodeSessionStorage(EncodeSessionStorage(session_storage_));
 
-  EXPECT_TRUE(SessionStoragesAreEqual(session_storage_, decoded));
+  EXPECT_NSEQ(session_storage_, decoded);
 }
 
 // Tests that unarchiving CRWSessionStorage correctly creates a fresh

@@ -5,12 +5,11 @@
 #ifndef UI_WEBUI_EXAMPLES_BROWSER_UI_AURA_CONTENT_WINDOW_H_
 #define UI_WEBUI_EXAMPLES_BROWSER_UI_AURA_CONTENT_WINDOW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/webui/examples/browser/ui/aura/aura_context.h"
 #include "url/gurl.h"
 
 namespace content {
-class BrowserContext;
 class WebContents;
 }  // namespace content
 
@@ -25,7 +24,7 @@ namespace webui_examples {
 class ContentWindow {
  public:
   ContentWindow(AuraContext* aura_context,
-                content::BrowserContext* browser_context);
+                std::unique_ptr<content::WebContents> web_contents);
   ContentWindow(const ContentWindow&) = delete;
   ContentWindow& operator=(const ContentWindow&) = delete;
   ~ContentWindow();
@@ -33,7 +32,6 @@ class ContentWindow {
   void SetTitle(const std::u16string& title);
 
   void Show();
-  void NavigateToURL(GURL url);
   void SetCloseCallback(base::OnceClosure on_close);
 
   content::WebContents* web_contents() { return web_contents_.get(); }

@@ -17,7 +17,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.BlockJUnit4ClassRunner;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnit;
@@ -25,6 +24,8 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
 import org.chromium.base.FeatureList;
+import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.chrome.browser.feed.componentinterfaces.SurfaceCoordinator.StreamTabId;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.Pref;
@@ -32,17 +33,12 @@ import org.chromium.components.prefs.PrefService;
 
 import java.time.Duration;
 
-/**
- * Unit tests for {@link FeedFeatures}.
- */
-// @RunWith(BaseRobolectricTestRunner.class)
-@RunWith(BlockJUnit4ClassRunner.class)
+/** Unit tests for {@link FeedFeatures}. */
+@RunWith(BaseRobolectricTestRunner.class)
 public class FeedFeaturesTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.WARN);
+    @Rule public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.WARN);
 
-    @Mock
-    private PrefService mPrefService;
+    @Mock private PrefService mPrefService;
 
     private FeatureList.TestValues mParamsTestValues;
     private @StreamTabId int mPrefStoredTab;
@@ -55,11 +51,12 @@ public class FeedFeaturesTest {
         FeedFeatures.setFakePrefsForTest(mPrefService);
         when(mPrefService.getInteger(Pref.LAST_SEEN_FEED_TYPE))
                 .thenAnswer((InvocationOnMock i) -> mPrefStoredTab);
-        doAnswer((InvocationOnMock invocation) -> {
-            Object[] args = invocation.getArguments();
-            mPrefStoredTab = (Integer) args[1];
-            return null;
-        })
+        doAnswer(
+                        (InvocationOnMock invocation) -> {
+                            Object[] args = invocation.getArguments();
+                            mPrefStoredTab = (Integer) args[1];
+                            return null;
+                        })
                 .when(mPrefService)
                 .setInteger(eq(Pref.LAST_SEEN_FEED_TYPE), anyInt());
 
@@ -71,7 +68,6 @@ public class FeedFeaturesTest {
     @After
     public void tearDown() {
         FeatureList.setTestValues(null);
-        FeedFeatures.setFakePrefsForTest(null);
     }
 
     @Test
@@ -86,8 +82,10 @@ public class FeedFeaturesTest {
 
     @Test
     public void testResetUponRestartFromFinchParam() {
-        mParamsTestValues.addFieldTrialParamOverride(ChromeFeatureList.WEB_FEED,
-                "feed_tab_stickiness_logic", "reset_upon_chrome_restart");
+        mParamsTestValues.addFieldTrialParamOverride(
+                ChromeFeatureList.WEB_FEED,
+                "feed_tab_stickiness_logic",
+                "reset_upon_chrome_restart");
         FeatureList.setTestValues(mParamsTestValues);
 
         assertEquals(StreamTabId.FOR_YOU, FeedFeatures.getFeedTabIdToRestore());
@@ -151,6 +149,7 @@ public class FeedFeaturesTest {
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1445267")
     public void testShouldUseNewIndicator_notSeenFeedAndAnimation() {
         mParamsTestValues.addFieldTrialParamOverride(
                 ChromeFeatureList.WEB_FEED_AWARENESS, "awareness_style", "new_animation");

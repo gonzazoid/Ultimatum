@@ -17,6 +17,7 @@
 #include "content/public/renderer/render_thread.h"
 #include "content/renderer/render_thread_impl.h"
 #include "sandbox/policy/switches.h"
+#include "sandbox/policy/win/sandbox_warmup.h"
 #include "sandbox/win/src/sandbox.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "third_party/blink/public/web/win/web_font_rendering.h"
@@ -35,7 +36,7 @@ RendererMainPlatformDelegate::~RendererMainPlatformDelegate() {
 }
 
 void RendererMainPlatformDelegate::PlatformInitialize() {
-  const base::CommandLine& command_line = *parameters_.command_line;
+  const base::CommandLine& command_line = *parameters_->command_line;
 
   // Be mindful of what resources you acquire here. They can be used by
   // malicious code if the renderer gets compromised.
@@ -61,12 +62,10 @@ void RendererMainPlatformDelegate::PlatformUninitialize() {
 
 bool RendererMainPlatformDelegate::EnableSandbox() {
   sandbox::TargetServices* target_services =
-      parameters_.sandbox_info->target_services;
+      parameters_->sandbox_info->target_services;
 
   if (target_services) {
-    // Cause advapi32 to load before the sandbox is turned on.
-    unsigned int dummy_rand;
-    rand_s(&dummy_rand);
+    sandbox::policy::WarmupRandomnessInfrastructure();
 
     target_services->LowerToken();
     return true;

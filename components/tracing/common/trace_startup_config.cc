@@ -92,10 +92,6 @@ TraceStartupConfig::TraceStartupConfig() {
     DCHECK(!IsTracingStartupForDuration());
     DCHECK_EQ(SessionOwner::kBackgroundTracing, session_owner_);
     CHECK(GetResultFile().empty());
-  } else if (EnableFromATrace()) {
-    DCHECK(IsEnabled());
-    DCHECK_EQ(SessionOwner::kSystemTracing, session_owner_);
-    CHECK(GetResultFile().empty());
   }
 }
 
@@ -210,8 +206,10 @@ bool TraceStartupConfig::EnableFromCommandLine() {
           base::trace_event::MemoryDumpManager::kTraceCategory)) {
     base::trace_event::TraceConfig::MemoryDumpConfig memory_config;
     memory_config.triggers.push_back(
-        {10000, base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
-         base::trace_event::MemoryDumpType::PERIODIC_INTERVAL});
+        {10000, base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
+         base::trace_event::MemoryDumpType::kPeriodicInterval});
+    memory_config.allowed_dump_modes.insert(
+        base::trace_event::MemoryDumpLevelOfDetail::kDetailed);
     trace_config_.ResetMemoryDumpConfig(memory_config);
   }
 
@@ -219,24 +217,6 @@ bool TraceStartupConfig::EnableFromCommandLine() {
 
   is_enabled_ = true;
   return true;
-}
-
-bool TraceStartupConfig::EnableFromATrace() {
-#if BUILDFLAG(IS_ANDROID)
-  auto atrace_config =
-      base::trace_event::TraceLog::GetInstance()->TakeATraceStartupConfig();
-  if (!atrace_config)
-    return false;
-  trace_config_ = *atrace_config;
-  is_enabled_ = true;
-  // We only support ATrace-initiated startup tracing together with the system
-  // service, because DevTools and background tracing generally use Chrome
-  // command line flags to control startup tracing instead of ATrace.
-  session_owner_ = SessionOwner::kSystemTracing;
-  return true;
-#else   // BUILDFLAG(IS_ANDROID)
-  return false;
-#endif  // !BUILDFLAG(IS_ANDROID)
 }
 
 bool TraceStartupConfig::EnableFromConfigFile() {
@@ -310,8 +290,7 @@ bool TraceStartupConfig::ParseTraceConfigFileContent(
   if (!trace_config_dict)
     return false;
 
-  trace_config_ = base::trace_event::TraceConfig(
-      base::Value(std::move(*trace_config_dict)));
+  trace_config_ = base::trace_event::TraceConfig(std::move(*trace_config_dict));
 
   startup_duration_in_seconds_ =
       dict.FindInt(kStartupDurationParam).value_or(0);
@@ -325,7 +304,7 @@ bool TraceStartupConfig::ParseTraceConfigFileContent(
     result_file_ = base::FilePath::FromUTF8Unsafe(*result_dir);
     // Java time to get an int instead of a double.
     result_file_ = result_file_.AppendASCII(
-        base::NumberToString(base::Time::Now().ToJavaTime()) +
+        base::NumberToString(base::Time::Now().InMillisecondsSinceUnixEpoch()) +
         "_chrometrace.log");
   }
 

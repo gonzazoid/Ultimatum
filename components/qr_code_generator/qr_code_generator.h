@@ -15,6 +15,8 @@
 #include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+namespace qr_code_generator {
+
 struct QRVersionInfo;
 
 // QRCodeGenerator generates class M QR codes of various versions.
@@ -28,19 +30,28 @@ class QRCodeGenerator {
    public:
     GeneratedCode();
     GeneratedCode(GeneratedCode&&);
+    GeneratedCode& operator=(GeneratedCode&&);
 
     GeneratedCode(const GeneratedCode&) = delete;
     GeneratedCode& operator=(const GeneratedCode&) = delete;
 
     ~GeneratedCode();
 
-    // Pixel data; pointer to an array of bytes, where the least-significant
-    // bit of each byte is set if that tile should be "black".
-    // Clients should ensure four modules of padding when rendering the code.
-    // On error, will not be populated, and will evaluate to false.
-    base::span<uint8_t> data;
+    // Pixel data.  The least-significant bit of each byte is set if that
+    // tile/module should be "black".
+    //
+    // Clients should ensure four tiles/modules of padding when rendering the
+    // code.
+    //
+    // On error, will not be populated, and will contain an empty vector.
+    std::vector<uint8_t> data;
 
-    // Width and height (which are equal) of the generated data, in tiles.
+    // Width and height (which are equal) of the generated data, in
+    // tiles/modules.
+    //
+    // The following invariant holds: `qr_size * qr_size == data.size()`.
+    //
+    // On error, will not be populated, and will contain 0.
     int qr_size = 0;
   };
 
@@ -85,13 +96,21 @@ class QRCodeGenerator {
   // Generates a QR code containing the given data.
   // The generator will attempt to choose a version that fits the data and which
   // is >= |min_version|, if given. The returned span's length is
-  // input-dependent and not known at compile-time. The optional |mask| argument
-  // specifies the QR mask value to use (from 0 to 7). If not specified, the
-  // optimal mask is calculated per the algorithm specified in the QR standard.
+  // input-dependent and not known at compile-time.
   absl::optional<GeneratedCode> Generate(
       base::span<const uint8_t> in,
-      absl::optional<int> min_version = absl::nullopt,
-      absl::optional<uint8_t> mask = absl::nullopt);
+      absl::optional<int> min_version = absl::nullopt);
+
+  // kMaxInputSize is the maximum number of bytes that `Generate` will try to
+  // process. Inputs larger than this will certainly fail, but could otherwise
+  // take a long time to do so as the code tries to calculate an optimum
+  // segmentation before it realises that it's hopeless.
+  //
+  // To calculate this value, consider the table at
+  // https://www.qrcode.com/en/about/version.html. Take the largest capacity QR
+  // format supported by the code, find the value for "numeric" encoding, and
+  // round up a little.
+  static constexpr size_t kMaxInputSize = 700;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(QRCodeGenerator, Segmentation);
@@ -218,5 +237,7 @@ class QRCodeGenerator {
   // QR code.
   uint8_t clip_dump_;
 };
+
+}  // namespace qr_code_generator
 
 #endif  // COMPONENTS_QR_CODE_GENERATOR_QR_CODE_GENERATOR_H_

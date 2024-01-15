@@ -7,7 +7,6 @@
 # This script can be run manually (as root), but is also run as part
 # install-build-deps.sh.
 
-from __future__ import print_function
 
 import os
 import shutil
@@ -104,7 +103,12 @@ creating or editing a ~/.fonts.conf file:
     <edit name="autohint" mode="assign"><bool>true</bool></edit>
     <edit name="hinting" mode="assign"><bool>true</bool></edit>
     <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
-    <edit name="rgba" mode="assign"><const>rgb</const></edit>
+    <!--
+      Disable sub-pixel anti-aliasing to work around font corruption issues
+      in the emulator. This disables it for your entire system. See
+      http://crbug.com/1442627
+    -->
+    <edit name="rgba" mode="assign"><const>none</const></edit>
   </match>
 </fontconfig>
 

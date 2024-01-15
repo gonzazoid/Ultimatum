@@ -27,6 +27,7 @@ TEST(HttpUtilTest, IsSafeHeader) {
       "accept-encoding",
       "access-control-request-headers",
       "access-control-request-method",
+      "access-control-request-private-network",
       "connection",
       "content-length",
       "cookie",
@@ -1182,6 +1183,19 @@ TEST(HttpUtilTest, ParseRetryAfterHeader) {
           << retry_after.InSeconds() << "s.";
     }
   }
+}
+
+TEST(HttpUtilTest, TimeFormatHTTP) {
+  constexpr base::Time::Exploded kTime = {.year = 2011,
+                                          .month = 4,
+                                          .day_of_week = 6,
+                                          .day_of_month = 30,
+                                          .hour = 22,
+                                          .minute = 42,
+                                          .second = 7};
+  base::Time time;
+  EXPECT_TRUE(base::Time::FromUTCExploded(kTime, &time));
+  EXPECT_EQ("Sat, 30 Apr 2011 22:42:07 GMT", HttpUtil::TimeFormatHTTP(time));
 }
 
 namespace {

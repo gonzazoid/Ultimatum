@@ -40,6 +40,31 @@ ASH_PUBLIC_EXPORT extern const char
 ASH_PUBLIC_EXPORT extern const char
     kAppListSortDiscoveryDurationAfterActivation[];
 
+// The different ways the app list can be shown. These values are written to
+// logs.  New enum values can be added, but existing enums must never be
+// renumbered or deleted and reused.
+enum class AppListShowSource {
+  kSearchKey = 0,
+  kShelfButton = 1,
+  kSwipeFromShelf = 2,
+  kTabletMode = 3,
+  kSearchKeyFullscreen_DEPRECATED = 4,    // Migrated to kSearchKey.
+  kShelfButtonFullscreen_DEPRECATED = 5,  // Obsolete on bubble launcher.
+  kAssistantEntryPoint = 6,
+  kScrollFromShelf = 7,
+  kBrowser = 8,
+  kWelcomeTour = 9,
+  kMaxValue = kWelcomeTour,
+};
+
+// Tracks the conclusion of each search session starting from the search box.
+enum class SearchSessionConclusion {
+  kQuit = 0,
+  kLaunch = 1,
+  kAnswerCardSeen = 2,
+  kMaxValue = kAnswerCardSeen,
+};
+
 // The type of the ChromeSearchResult. This is used for logging so do not
 // change the order of this enum. If you add to this enum update
 // AppListSearchResult in enums.xml.
@@ -152,9 +177,23 @@ enum SearchResultType {
   GAME_SEARCH,
   // A search result for OS personalization options.
   PERSONALIZATION,
+  // A Bruschetta App Result.
+  BRUSCHETTA_APP,
+  // A System Info Answer Card Result.
+  SYSTEM_INFO,
+  // A local image search result.
+  IMAGE_SEARCH,
+  // A zero-state result representing a admin template.
+  DESKS_ADMIN_TEMPLATE,
+  // New app shortcuts.
+  APP_SHORTCUTS_V2,
   // Boundary is always last.
   SEARCH_RESULT_TYPE_BOUNDARY
 };
+
+// Returns true if the `show_source` is one that a user directly triggers.
+ASH_PUBLIC_EXPORT bool IsAppListShowSourceUserTriggered(
+    AppListShowSource show_source);
 
 ASH_PUBLIC_EXPORT void RecordSearchResultOpenTypeHistogram(
     AppListLaunchedFrom launch_location,

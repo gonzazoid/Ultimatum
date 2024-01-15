@@ -4,16 +4,15 @@
 
 package org.chromium.chrome.browser.metrics;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.eq;
 
 import android.Manifest;
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
 
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -24,7 +23,7 @@ import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.MetricsUtils.HistogramDelta;
+import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
@@ -33,9 +32,7 @@ import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.permissions.AndroidPermissionDelegate;
 
-/**
- * Tests for startup timing histograms.
- */
+/** Tests for startup timing histograms. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add(ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE)
 @Batch(Batch.PER_CLASS)
@@ -48,8 +45,7 @@ public class StartupPermissionsMetricsTest {
     public BlankCTATabInitialStateRule mInitialStateRule =
             new BlankCTATabInitialStateRule(sActivityTestRule, false);
 
-    @Mock
-    private AndroidPermissionDelegate mPermissionDelegate;
+    @Mock private AndroidPermissionDelegate mPermissionDelegate;
 
     private UmaSessionStats mUmaSessionStats;
 
@@ -57,12 +53,15 @@ public class StartupPermissionsMetricsTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        Context appContext = InstrumentationRegistry.getInstrumentation()
-                                     .getTargetContext()
-                                     .getApplicationContext();
+        Context appContext =
+                InstrumentationRegistry.getInstrumentation()
+                        .getTargetContext()
+                        .getApplicationContext();
 
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { mUmaSessionStats = new UmaSessionStats(appContext); });
+                () -> {
+                    mUmaSessionStats = new UmaSessionStats(appContext);
+                });
     }
 
     @Test
@@ -75,12 +74,13 @@ public class StartupPermissionsMetricsTest {
                 .when(mPermissionDelegate)
                 .canRequestPermission(eq(Manifest.permission.RECORD_AUDIO));
 
-        HistogramDelta grantedDelta =
-                new HistogramDelta("VoiceInteraction.AudioPermissionEvent.SessionStart",
+        var histogramWatcher =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "VoiceInteraction.AudioPermissionEvent.SessionStart",
                         VoiceRecognitionHandler.AudioPermissionState.GRANTED);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> mUmaSessionStats.startNewSession(null, mPermissionDelegate));
-        Assert.assertEquals(1, grantedDelta.getDelta());
+        histogramWatcher.assertExpected();
     }
 
     @Test
@@ -93,12 +93,13 @@ public class StartupPermissionsMetricsTest {
                 .when(mPermissionDelegate)
                 .canRequestPermission(eq(Manifest.permission.RECORD_AUDIO));
 
-        HistogramDelta deniedCanAskDelta =
-                new HistogramDelta("VoiceInteraction.AudioPermissionEvent.SessionStart",
+        var histogramWatcher =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "VoiceInteraction.AudioPermissionEvent.SessionStart",
                         VoiceRecognitionHandler.AudioPermissionState.DENIED_CAN_ASK_AGAIN);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> mUmaSessionStats.startNewSession(null, mPermissionDelegate));
-        Assert.assertEquals(1, deniedCanAskDelta.getDelta());
+        histogramWatcher.assertExpected();
     }
 
     @Test
@@ -111,11 +112,12 @@ public class StartupPermissionsMetricsTest {
                 .when(mPermissionDelegate)
                 .canRequestPermission(eq(Manifest.permission.RECORD_AUDIO));
 
-        HistogramDelta deniedCannotAskDelta =
-                new HistogramDelta("VoiceInteraction.AudioPermissionEvent.SessionStart",
+        var histogramWatcher =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "VoiceInteraction.AudioPermissionEvent.SessionStart",
                         VoiceRecognitionHandler.AudioPermissionState.DENIED_CANNOT_ASK_AGAIN);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> mUmaSessionStats.startNewSession(null, mPermissionDelegate));
-        Assert.assertEquals(1, deniedCannotAskDelta.getDelta());
+        histogramWatcher.assertExpected();
     }
 }

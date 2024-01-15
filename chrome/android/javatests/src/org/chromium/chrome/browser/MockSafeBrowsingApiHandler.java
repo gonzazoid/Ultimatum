@@ -1,82 +1,72 @@
-// Copyright 2018 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.components.safe_browsing.SafeBrowsingApiHandler;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * SafeBrowsingApiHandler that vends fake responses.
- */
+/** SafeBrowsingApiHandler that sends fake responses. */
 public class MockSafeBrowsingApiHandler implements SafeBrowsingApiHandler {
     private Observer mObserver;
     // Mock time it takes for a lookup request to complete.
-    private static final long DEFAULT_CHECK_DELTA_US = 10;
-    private static final String SAFE_METADATA = "{}";
+    private static final long DEFAULT_CHECK_DELTA_US = 15;
 
-    // Global url -> metadataResponse map. In practice there is only one SafeBrowsingApiHandler, but
+    // These codes are defined in safe_browsing_api_handler_util.h
+    public static final int SOCIAL_ENGINEERING_CODE = 2;
+    public static final int ABUSIVE_EXPERIENCE_VIOLATION_CODE = 20;
+    public static final int BETTER_ADS_VIOLATION_CODE = 21;
+    public static final int THREAT_ATTRIBUTE_CANARY_CODE = 1;
+    private static final int NO_THREAT_CODE = 0;
+    private static final int SUCCESS_RESPONSE_STATUS_CODE = 0;
+
+    // Global url -> threatType map. In practice there is only one SafeBrowsingApiHandler, but
     // it is cumbersome for tests to reach into the singleton instance directly. So just make this
     // static and modifiable from java tests using a static method.
-    private static final Map<String, String> sResponseMap = new HashMap<>();
+    private static final Map<String, Integer> sResponseThreatTypeMap = new HashMap<>();
+    // Global url -> threatAttributes map.
+    private static final Map<String, int[]> sResponseThreatAttributesMap = new HashMap<>();
 
     @Override
-    public boolean init(Observer observer) {
+    public void startUriLookup(long callbackId, String uri, int[] threatTypes, int protocol) {
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () ->
+                        mObserver.onUrlCheckDone(
+                                callbackId,
+                                LookupResult.SUCCESS,
+                                getReturnedThreatType(uri, threatTypes),
+                                getReturnedThreatAttributes(uri),
+                                SUCCESS_RESPONSE_STATUS_CODE,
+                                DEFAULT_CHECK_DELTA_US));
+    }
+
+    @Override
+    public void setObserver(Observer observer) {
         mObserver = observer;
-        return true;
-    }
-
-    @Override
-    public void startUriLookup(final long callbackId, String uri, int[] threatsOfInterest) {
-        final String metadata = getMetadata(uri, threatsOfInterest);
-        // clang-format off
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT,
-                (Runnable) () -> mObserver.onUrlCheckDone(
-                        callbackId, SafeBrowsingResult.SUCCESS, metadata, DEFAULT_CHECK_DELTA_US));
-        // clang-format on
-    }
-
-    @Override
-    public boolean startAllowlistLookup(final String uri, int threatType) {
-        return false;
-    }
-
-    private String getMetadata(String uri, int[] threatsOfInterest) {
-        if (sResponseMap.containsKey(uri)) {
-            try {
-                // Make sure this is a threat of interest.
-                String metaCandidate = sResponseMap.get(uri);
-                JSONObject json = new JSONObject(metaCandidate);
-                JSONArray matches = json.getJSONArray("matches");
-                for (int i = 0; i < matches.length(); i++) {
-                    JSONObject match = matches.getJSONObject(i);
-                    int threatType = Integer.parseInt(match.getString("threat_type"));
-                    for (int threatOfInterest : threatsOfInterest) {
-                        if (threatType == threatOfInterest) return metaCandidate;
-                    }
-                }
-            } catch (JSONException e) {
-                // Just return SAFE_METADATA if we were passed invalid JSON.
-            }
-        }
-        return SAFE_METADATA;
     }
 
     /*
      * Adds a mock response to the static map.
      * Should be called before the main activity starts up, to avoid thread-unsafe behavior.
      */
-    public static void addMockResponse(String uri, String metadata) {
-        sResponseMap.put(uri, metadata);
+    public static void addMockResponse(String uri, int returnedThreatType) {
+        sResponseThreatTypeMap.put(uri, returnedThreatType);
+    }
+
+    /*
+     * Adds a mock response with threat attributes to the static map.
+     * Should be called before the main activity starts up, to avoid thread-unsafe behavior.
+     */
+    public static void addMockResponse(
+            String uri, int returnedThreatType, int[] returnedThreatAttributes) {
+        sResponseThreatTypeMap.put(uri, returnedThreatType);
+        sResponseThreatAttributesMap.put(uri, returnedThreatAttributes);
     }
 
     /*
@@ -84,6 +74,24 @@ public class MockSafeBrowsingApiHandler implements SafeBrowsingApiHandler {
      * Should be called in the test tearDown method.
      */
     public static void clearMockResponses() {
-        sResponseMap.clear();
+        sResponseThreatTypeMap.clear();
+        sResponseThreatAttributesMap.clear();
+    }
+
+    private int getReturnedThreatType(String uri, int[] threatTypes) {
+        if (!sResponseThreatTypeMap.containsKey(uri)) {
+            return NO_THREAT_CODE;
+        }
+        int returnedThreatType = sResponseThreatTypeMap.get(uri);
+        for (int threatType : threatTypes) {
+            if (returnedThreatType == threatType) {
+                return returnedThreatType;
+            }
+        }
+        return NO_THREAT_CODE;
+    }
+
+    private int[] getReturnedThreatAttributes(String uri) {
+        return sResponseThreatAttributesMap.getOrDefault(uri, new int[0]);
     }
 }

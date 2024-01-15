@@ -6,10 +6,11 @@
 
 #include <array>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/segmentation_platform/internal/metadata/metadata_writer.h"
 #include "components/segmentation_platform/public/config.h"
 #include "components/segmentation_platform/public/constants.h"
+#include "components/segmentation_platform/public/features.h"
 #include "components/segmentation_platform/public/model_provider.h"
 #include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 
@@ -23,11 +24,15 @@ constexpr SegmentId kIntentionalUserSegmentId =
     SegmentId::INTENTIONAL_USER_SEGMENT;
 // Store 28 buckets of input data (28 days).
 constexpr int64_t kIntentionalUserSignalStorageLength = 28;
-// Wait until we have 28 buckets of input data to run the model (28 days).
-constexpr int64_t kIntentionalUserMinSignalCollectionLength = 28;
+// Wait until we have 7 days of data.
+constexpr int64_t kIntentionalUserMinSignalCollectionLength = 7;
+// Refresh result every 7 days.
+constexpr int64_t kIntentionalUserResultTTLDays = 7;
 // Threshold for our heuristic, if the user launched Chrome directly at least 2
 // times in the last 28 days then we consider them an intentional user.
 constexpr int64_t kIntentionalLaunchThreshold = 2;
+
+constexpr int64_t kIntentionalUserModelVersion = 2;
 
 // InputFeatures.
 
@@ -55,48 +60,57 @@ constexpr std::array<MetadataWriter::UMAFeature, 1>
 
 // static
 std::unique_ptr<Config> IntentionalUserModel::GetConfig() {
+  if (!base::FeatureList::IsEnabled(
+          features::kSegmentationPlatformIntentionalUser)) {
+    return nullptr;
+  }
   auto config = std::make_unique<Config>();
   config->segmentation_key = kIntentionalUserKey;
   config->segmentation_uma_name = kIntentionalUserUmaName;
   config->AddSegmentId(SegmentId::INTENTIONAL_USER_SEGMENT,
                        std::make_unique<IntentionalUserModel>());
-  config->segment_selection_ttl = base::Days(7);
-  config->unknown_selection_ttl = base::Days(7);
+  config->auto_execute_and_cache = true;
+  config->is_boolean_segment = true;
 
   return config;
 }
 
 IntentionalUserModel::IntentionalUserModel()
-    : ModelProvider(kIntentionalUserSegmentId) {}
+    : DefaultModelProvider(kIntentionalUserSegmentId) {}
 
-void IntentionalUserModel::InitAndFetchModel(
-    const ModelUpdatedCallback& model_updated_callback) {
+std::unique_ptr<DefaultModelProvider::ModelConfig>
+IntentionalUserModel::GetModelConfig() {
   proto::SegmentationModelMetadata intentional_user_metadata;
   MetadataWriter writer(&intentional_user_metadata);
   writer.SetDefaultSegmentationMetadataConfig(
       kIntentionalUserMinSignalCollectionLength,
       kIntentionalUserSignalStorageLength);
 
-  // Set discrete mapping.
-  writer.AddBooleanSegmentDiscreteMapping(kIntentionalUserKey);
+  // If the result from ExecuteModelWithInput is greater than 0.5 then return
+  // the intentional user label, otherwise return the non-intentional label.
+  writer.AddOutputConfigForBinaryClassifier(
+      /*threshold=*/0.5f, /*positive_label=*/
+      SegmentIdToHistogramVariant(SegmentId::INTENTIONAL_USER_SEGMENT),
+      /*negative_label=*/kLegacyNegativeLabel);
+  writer.AddPredictedResultTTLInOutputConfig(
+      /*top_label_to_ttl_list=*/{},
+      /*default_ttl=*/kIntentionalUserResultTTLDays,
+      /*time_unit=*/proto::TimeUnit::DAY);
 
   // Set features.
   writer.AddUmaFeatures(kIntentionalUserUMAFeatures.data(),
                         kIntentionalUserUMAFeatures.size());
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindRepeating(model_updated_callback, kIntentionalUserSegmentId,
-                          std::move(intentional_user_metadata),
-                          /* Model version number. */ 1));
+  return std::make_unique<ModelConfig>(std::move(intentional_user_metadata),
+                                       kIntentionalUserModelVersion);
 }
 
 void IntentionalUserModel::ExecuteModelWithInput(
-    const std::vector<float>& inputs,
+    const ModelProvider::Request& inputs,
     ExecutionCallback callback) {
   // Invalid inputs.
   if (inputs.size() != kIntentionalUserUMAFeatures.size()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
@@ -108,12 +122,9 @@ void IntentionalUserModel::ExecuteModelWithInput(
     result = 1;  // User is intentionally using Chrome.
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), result));
-}
-
-bool IntentionalUserModel::ModelAvailable() {
-  return true;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), ModelProvider::Response(1, result)));
 }
 
 }  // namespace segmentation_platform

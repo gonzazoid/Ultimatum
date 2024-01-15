@@ -10,16 +10,16 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/base/task_runner_impl.h"
 #include "chromecast/media/cma/base/decoder_buffer_adapter.h"
@@ -169,6 +169,7 @@ class MultizoneBackendTest : public testing::TestWithParam<TestParams> {
   base::test::TaskEnvironment task_environment_;
   std::vector<std::unique_ptr<BufferFeeder>> effects_feeders_;
   std::unique_ptr<BufferFeeder> audio_feeder_;
+  base::RunLoop loop_;
 };
 
 namespace {
@@ -226,7 +227,7 @@ void BufferFeeder::Start() {
   ASSERT_LE(playback_rate_, 2.0f);
   ASSERT_TRUE(backend_->Start(kStartPts));
   ASSERT_TRUE(backend_->SetPlaybackRate(playback_rate_));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BufferFeeder::FeedBuffer, base::Unretained(this)));
 }
@@ -319,7 +320,7 @@ void BufferFeeder::OnPushBufferComplete(BufferStatus status) {
   if (feeding_completed_)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BufferFeeder::FeedBuffer, base::Unretained(this)));
 }
@@ -373,7 +374,7 @@ void MultizoneBackendTest::Start() {
     feeder->Start();
   CHECK(audio_feeder_);
   audio_feeder_->Start();
-  base::RunLoop().Run();
+  loop_.Run();
 }
 
 void MultizoneBackendTest::OnEndOfStream() {
@@ -381,7 +382,7 @@ void MultizoneBackendTest::OnEndOfStream() {
   for (auto& feeder : effects_feeders_)
     feeder->Stop();
 
-  base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  loop_.QuitWhenIdle();
 
   EXPECT_LT(audio_feeder_->GetMaxRenderingDelayErrorUs(),
             kMaxRenderingDelayErrorUs);

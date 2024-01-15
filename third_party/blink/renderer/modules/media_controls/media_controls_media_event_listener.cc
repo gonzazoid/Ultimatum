@@ -60,17 +60,22 @@ void MediaControlsMediaEventListener::Attach() {
                                      /*use_capture=*/false);
   GetMediaElement().addEventListener(event_type_names::kLoadeddata, this,
                                      /*use_capture=*/false);
+  GetMediaElement().addEventListener(event_type_names::kPointermove, this,
+                                     /*use_capture=*/false);
+  GetMediaElement().addEventListener(event_type_names::kPointerout, this,
+                                     /*use_capture=*/false);
+  GetMediaElement().addEventListener(event_type_names::kPointerenter, this,
+                                     /*use_capture=*/false);
 
   // Listen to two different fullscreen events in order to make sure the new and
   // old APIs are handled.
   GetMediaElement().addEventListener(event_type_names::kWebkitfullscreenchange,
                                      this, /*use_capture=*/false);
-  media_controls_->GetDocument().addEventListener(
-      event_type_names::kFullscreenchange, this, false);
+  GetMediaElement().addEventListener(event_type_names::kFullscreenchange, this,
+                                     /*use_capture=*/false);
 
   // Picture-in-Picture events.
-  if (RuntimeEnabledFeatures::PictureInPictureEnabled() &&
-      media_controls_->GetDocument().GetSettings() &&
+  if (media_controls_->GetDocument().GetSettings() &&
       media_controls_->GetDocument()
           .GetSettings()
           ->GetPictureInPictureEnabled() &&
@@ -266,6 +271,13 @@ void MediaControlsMediaEventListener::Invoke(
       event->type() == event_type_names::kConnecting ||
       event->type() == event_type_names::kDisconnect) {
     media_controls_->RemotePlaybackStateChanged();
+    return;
+  }
+
+  if (event->type() == event_type_names::kPointermove ||
+      event->type() == event_type_names::kPointerout ||
+      event->type() == event_type_names::kPointerenter) {
+    media_controls_->DefaultEventHandler(*event);
     return;
   }
 

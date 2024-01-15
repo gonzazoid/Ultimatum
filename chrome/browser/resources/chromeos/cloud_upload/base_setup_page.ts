@@ -9,8 +9,6 @@
  * to switch pages or exit.
  */
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-
 import {getTemplate} from './base_setup_page.html.js';
 
 /**
@@ -35,34 +33,37 @@ declare global {
  * layout via a common shadow DOM.
  */
 export class BaseSetupPageElement extends HTMLElement {
-  static get observedAttributes() {
-    return ['page-number', 'total-pages'];
-  }
-
   constructor() {
     super();
 
     const template = document.createElement('template');
-    template.innerHTML = getTemplate() as string;
+    template.innerHTML = getTemplate();
     this.attachShadow({mode: 'open'})
         .appendChild(template.content.cloneNode(true));
   }
 
-  attributeChangedCallback(name: string, _oldValue: string, _newValue: string) {
-    assert(name === 'page-number' || name === 'total-pages');
+  /**
+   * Initialises the page specific content inside the page.
+   */
+  connectedCallback(): void {
+    const contentElement =
+        this.shadowRoot!.querySelector<HTMLElement>('#content')!;
+    this.updateContentFade(contentElement);
+    contentElement.addEventListener(
+        'scroll', this.updateContentFade.bind(undefined, contentElement),
+        {passive: true});
+    // Focus the dialog so that the screen reader reads the title.
+    this.shadowRoot!.querySelector<HTMLElement>('#dialog')!.focus();
+  }
 
-    const dotsElement =
-        this.shadowRoot?.querySelector('#dots') as HTMLDivElement;
-    dotsElement.innerHTML = '';
-    const pages = parseInt(this.getAttribute('total-pages')!) || 0;
-    const curPage = parseInt(this.getAttribute('page-number')!) || 0;
-
-    for (let i = 0; i < pages; i++) {
-      const dot = document.createElement('div');
-      if (i === curPage) {
-        dot.classList.add('active');
-      }
-      dotsElement.appendChild(dot);
-    }
+  updateContentFade(contentElement: HTMLElement) {
+    window.requestAnimationFrame(() => {
+      const atTop = contentElement.scrollTop === 0;
+      const atBottom =
+          contentElement.scrollHeight - contentElement.scrollTop ===
+          contentElement.clientHeight;
+      contentElement.classList.toggle('fade-top', !atTop);
+      contentElement.classList.toggle('fade-bottom', !atBottom);
+    });
   }
 }

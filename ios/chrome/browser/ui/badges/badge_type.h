@@ -27,12 +27,12 @@ typedef NS_ENUM(NSUInteger, BadgeType) {
   kBadgeTypeTranslate = 6,
   // Badge type for the Save Address Profile Infobar.
   kBadgeTypeSaveAddressProfile = 7,
-  // Badge type for the Add to Reading List Infobar.
-  kBadgeTypeAddToReadingList = 8,
   // Badge type for the Permissions Infobar with camera icon.
   kBadgeTypePermissionsCamera = 9,
   // Badge type for the Permissions Infobar with microphone icon.
   kBadgeTypePermissionsMicrophone = 10,
+  // Badge type for the Parcel Tracking Infobar.
+  kBadgeTypeParcelTracking = 11,
 };
 
 #endif  // IOS_CHROME_BROWSER_UI_BADGES_BADGE_TYPE_H_

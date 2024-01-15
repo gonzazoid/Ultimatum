@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/device/geolocation/wifi_data.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -59,9 +60,9 @@ void PublicIpAddressLocationNotifier::QueryNextPosition(
     return;
   }
 
-  if (latest_geoposition_.has_value() &&
-      latest_geoposition_->timestamp > time_of_prev_position) {
-    std::move(callback).Run(*latest_geoposition_);
+  if (latest_result_ && latest_result_->is_position() &&
+      latest_result_->get_position()->timestamp > time_of_prev_position) {
+    std::move(callback).Run(latest_result_.Clone());
     return;
   }
 
@@ -81,7 +82,7 @@ void PublicIpAddressLocationNotifier::OnConnectionChanged(
   react_to_network_change_closure_.Reset(
       base::BindOnce(&PublicIpAddressLocationNotifier::ReactToNetworkChange,
                      base::Unretained(this)));
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, react_to_network_change_closure_.callback(),
       kNetworkChangeReactionDelay);
 }
@@ -91,7 +92,7 @@ void PublicIpAddressLocationNotifier::ReactToNetworkChange() {
   network_changed_since_last_request_ = true;
 
   // Invalidate the cached recent position.
-  latest_geoposition_.reset();
+  latest_result_.reset();
 
   // If any clients are waiting, start a request.
   // (This will cancel any previous request, which is OK.)
@@ -117,19 +118,20 @@ void PublicIpAddressLocationNotifier::MakeNetworkLocationRequest() {
 }
 
 void PublicIpAddressLocationNotifier::OnNetworkLocationResponse(
-    const mojom::Geoposition& position,
+    mojom::GeopositionResultPtr result,
     const bool server_error,
-    const WifiData& /* wifi_data */) {
+    const WifiData& /* wifi_data */,
+    mojom::NetworkLocationResponsePtr /* response data */) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (server_error) {
     network_changed_since_last_request_ = true;
-    DCHECK(!latest_geoposition_.has_value());
+    DCHECK(!latest_result_);
   } else {
-    latest_geoposition_ = absl::make_optional(position);
+    latest_result_ = result.Clone();
   }
   // Notify all clients.
   for (QueryNextPositionCallback& callback : callbacks_)
-    std::move(callback).Run(position);
+    std::move(callback).Run(result.Clone());
   callbacks_.clear();
   network_location_request_.reset();
 }

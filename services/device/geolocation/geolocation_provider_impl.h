@@ -9,15 +9,19 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_forward.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
+#include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/device/geolocation/geolocation_provider.h"
 #include "services/device/public/cpp/geolocation/location_provider.h"
 #include "services/device/public/mojom/geolocation_control.mojom.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 #include "services/device/public/mojom/geoposition.mojom.h"
 
 namespace base {
@@ -39,8 +43,27 @@ class GeolocationManager;
 using CustomLocationProviderCallback =
     base::RepeatingCallback<std::unique_ptr<LocationProvider>()>;
 
+// This class implements the GeolocationProvider interface, which is the main
+// API of the geolocation subsystem. Clients subscribe for location updates
+// with AddLocationUpdateCallback and cancel their subscription by destroying
+// the returned subscription object.
+//
+// THREADING
+//
+// GeolocationProviderImpl is constructed on the main thread and its public
+// methods (except OnLocationUpdate) must also be called on the main thread.
+//
+// GeolocationProviderImpl extends base::Thread. This thread, called the
+// "geolocation thread", runs background tasks when acquiring new position
+// estimates.
+//
+// GeolocationProviderImpl owns one or more LocationProvider implementations
+// which generate new position estimates. LocationProviders must only run on
+// the geolocation thread. Providers report new position estimates by calling
+// OnLocationUpdate on the geolocation thread.
 class GeolocationProviderImpl : public GeolocationProvider,
                                 public mojom::GeolocationControl,
+                                public mojom::GeolocationInternals,
                                 public base::Thread {
  public:
   // GeolocationProvider implementation:
@@ -48,11 +71,11 @@ class GeolocationProviderImpl : public GeolocationProvider,
       const LocationUpdateCallback& callback,
       bool enable_high_accuracy) override;
   bool HighAccuracyLocationInUse() override;
-  void OverrideLocationForTesting(const mojom::Geoposition& position) override;
+  void OverrideLocationForTesting(mojom::GeopositionResultPtr result) override;
 
   // Callback from the LocationArbitrator. Public for testing.
   void OnLocationUpdate(const LocationProvider* provider,
-                        const mojom::Geoposition& position);
+                        mojom::GeopositionResultPtr result);
 
   // Gets a pointer to the singleton instance of the location relayer, which
   // is in turn bound to the browser's global context objects. This must only be
@@ -84,6 +107,9 @@ class GeolocationProviderImpl : public GeolocationProvider,
   void BindGeolocationControlReceiver(
       mojo::PendingReceiver<mojom::GeolocationControl> receiver);
 
+  void BindGeolocationInternalsReceiver(
+      mojo::PendingReceiver<mojom::GeolocationInternals> receiver);
+
   // mojom::GeolocationControl implementation:
   void UserDidOptIntoLocationServices() override;
 
@@ -98,6 +124,15 @@ class GeolocationProviderImpl : public GeolocationProvider,
   // Safe to call while there are no GeolocationProviderImpl clients
   // registered.
   void SetArbitratorForTesting(std::unique_ptr<LocationProvider> arbitrator);
+
+  // mojom::GeolocationInternals implementation:
+  void AddInternalsObserver(
+      mojo::PendingRemote<mojom::GeolocationInternalsObserver> observer,
+      AddInternalsObserverCallback callback) override;
+
+  // Calls OnInternalsUpdated on the geolocation thread to simulate updated
+  // diagnostics in tests.
+  void SimulateInternalsUpdatedForTesting();
 
  private:
   friend struct base::DefaultSingletonTraits<GeolocationProviderImpl>;
@@ -115,29 +150,68 @@ class GeolocationProviderImpl : public GeolocationProvider,
   void StopProviders();
 
   // Starts the geolocation providers or updates their options (delegates to
-  // arbitrator).
-  void StartProviders(bool enable_high_accuracy);
+  // arbitrator). If `enable_diagnostics` is true, also enables geolocation
+  // diagnostics.
+  void StartProviders(bool enable_high_accuracy, bool enable_diagnostics);
 
   // Updates the providers on the geolocation thread, which must be running.
   void InformProvidersPermissionGranted();
 
   // Notifies all registered clients that a position update is available.
-  void NotifyClients(const mojom::Geoposition& position);
+  void NotifyClients(mojom::GeopositionResultPtr result);
 
   // Thread
   void Init() override;
   void CleanUp() override;
 
-  base::RepeatingCallbackList<void(const mojom::Geoposition&)>
+  // Notifies internals observers that new diagnostic data is available. Must be
+  // called on the main thread.
+  void NotifyInternalsUpdated(mojom::GeolocationDiagnosticsPtr diagnostics);
+
+  // Notifies internals observers that a request was sent to the location
+  // service.
+  void NotifyNetworkLocationRequested(
+      std::vector<mojom::AccessPointDataPtr> request);
+
+  // Notifies internals observers that a response was received from the location
+  // service.
+  void NotifyNetworkLocationReceived(
+      mojom::NetworkLocationResponsePtr response);
+
+  // Called on the main thread when an internals observer disconnects.
+  void OnInternalsObserverDisconnected(mojo::RemoteSetElementId element_id);
+
+  // Called on the geolocation thread when new diagnostic data is available.
+  void OnInternalsUpdated();
+
+  // Called on the geolocation thread when a request is sent to the location
+  // service. `request` contains the information about nearby access points
+  // sent to the service.
+  void OnNetworkLocationRequested(
+      std::vector<mojom::AccessPointDataPtr> request);
+
+  // Called on the geolocation thread when a response is received from the
+  // location service. `response` is the received location estimate, or nullptr
+  // if no location estimate was received.
+  void OnNetworkLocationReceived(mojom::NetworkLocationResponsePtr response);
+
+  // Enables geolocation diagnostics and returns the most recent diagnostic
+  // data. Must be called on the geolocation thread.
+  mojom::GeolocationDiagnosticsPtr EnableAndGetDiagnosticsOnGeolocationThread();
+
+  // Disables geolocation diagnostics. Must be called on the geolocation thread.
+  void DisableDiagnosticsOnGeolocationThread();
+
+  base::RepeatingCallbackList<void(const mojom::GeopositionResult&)>
       high_accuracy_callbacks_;
-  base::RepeatingCallbackList<void(const mojom::Geoposition&)>
+  base::RepeatingCallbackList<void(const mojom::GeopositionResult&)>
       low_accuracy_callbacks_;
 
-  bool user_did_opt_into_location_services_;
-  mojom::Geoposition position_;
+  bool user_did_opt_into_location_services_ = false;
+  mojom::GeopositionResultPtr result_;
 
   // True only in testing, where we want to use a custom position.
-  bool ignore_location_updates_;
+  bool ignore_location_updates_ = false;
 
   // Used to PostTask()s from the geolocation thread to caller thread.
   const scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
@@ -145,7 +219,14 @@ class GeolocationProviderImpl : public GeolocationProvider,
   // Only to be used on the geolocation thread.
   std::unique_ptr<LocationProvider> arbitrator_;
 
-  mojo::Receiver<mojom::GeolocationControl> receiver_{this};
+  mojo::Receiver<mojom::GeolocationControl> control_receiver_{this};
+
+  mojo::ReceiverSet<mojom::GeolocationInternals> internals_receivers_;
+  mojo::RemoteSet<mojom::GeolocationInternalsObserver> internals_observers_;
+
+  // If enabled, calling OnInternalsUpdated collects diagnostic information and
+  // sends it to `internals_observers_`.
+  bool diagnostics_enabled_ = false;
 };
 
 }  // namespace device

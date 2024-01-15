@@ -19,6 +19,9 @@
     "dependencies": ["permission:enterprise.remoteApps"],
     "contexts": ["blessed_extension"]
   },
+  "enterprise.remoteApps.setPinnedApps": {
+    "dependencies": ["permission:enterprise.remoteApps", "behavior:imprivata_extension"]
+  },
   "firstRunPrivate": {
     "dependencies": ["permission:firstRunPrivate"],
     "contexts": ["blessed_extension"]
@@ -29,10 +32,6 @@
   },
   "syncFileSystem": {
     "dependencies": ["permission:syncFileSystem"],
-    "contexts": ["blessed_extension"]
-  },
-  "webstoreWidgetPrivate": {
-    "dependencies": ["permission:webstoreWidgetPrivate"],
     "contexts": ["blessed_extension"]
   }
 }

@@ -13,8 +13,26 @@ namespace enterprise_connectors {
 
 // Process exit codes of the chrome management service executable.
 enum Status {
+  // When the management-service successfully performed a key rotation.
   kSuccess = 0,
-  kFailure = 1,
+
+  // When the process does not return correctly. This is 1
+  // because the WaitForExitWithTimeout method returns
+  // false when the process does not correctly exit (e.g. crash).
+  kUnknownFailure = 1,
+
+  // When the management-service key rotation fails. This
+  // differs from the kUnknownFailure because the process
+  // correctly exited and returned a failure code.
+  kFailure = 2,
+
+  // Special error code returned when the browser is missing required
+  // permissions.
+  kFailedInsufficientPermissions = 3,
+
+  // Special error code returned when a key upload resulted in a conflicting
+  // HTTP response (409).
+  kFailedKeyConflict = 4,
 };
 
 namespace constants {

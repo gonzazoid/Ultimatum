@@ -10,7 +10,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "gpu/command_buffer/client/gpu_control.h"
 #include "gpu/command_buffer/common/command_buffer.h"
 #include "gpu/command_buffer/common/command_buffer_id.h"
@@ -35,6 +35,7 @@ class PPAPI_PROXY_EXPORT PpapiCommandBufferProxy : public gpu::CommandBuffer,
                           InstanceData::FlushInfo* flush_info,
                           LockedSender* sender,
                           const gpu::Capabilities& capabilities,
+                          const gpu::GLCapabilities& gl_capabilities,
                           SerializedHandle shared_state,
                           gpu::CommandBufferId command_buffer_id);
 
@@ -55,6 +56,7 @@ class PPAPI_PROXY_EXPORT PpapiCommandBufferProxy : public gpu::CommandBuffer,
   scoped_refptr<gpu::Buffer> CreateTransferBuffer(
       uint32_t size,
       int32_t* id,
+      uint32_t alignment = 0,
       gpu::TransferBufferAllocationOption option =
           gpu::TransferBufferAllocationOption::kLoseContextOnOOM) override;
   void DestroyTransferBuffer(int32_t id) override;
@@ -63,7 +65,9 @@ class PPAPI_PROXY_EXPORT PpapiCommandBufferProxy : public gpu::CommandBuffer,
   // gpu::GpuControl implementation:
   void SetGpuControlClient(gpu::GpuControlClient*) override;
   const gpu::Capabilities& GetCapabilities() const override;
+  const gpu::GLCapabilities& GetGLCapabilities() const override;
   void SignalQuery(uint32_t query, base::OnceClosure callback) override;
+  void CancelAllQueries() override;
   void CreateGpuFence(uint32_t gpu_fence_id, ClientGpuFence source) override;
   void GetGpuFence(uint32_t gpu_fence_id,
                    base::OnceCallback<void(std::unique_ptr<gfx::GpuFence>)>
@@ -95,6 +99,7 @@ class PPAPI_PROXY_EXPORT PpapiCommandBufferProxy : public gpu::CommandBuffer,
   const gpu::CommandBufferId command_buffer_id_;
 
   gpu::Capabilities capabilities_;
+  gpu::GLCapabilities gl_capabilities_;
   State last_state_;
   base::WritableSharedMemoryMapping shared_state_mapping_;
 

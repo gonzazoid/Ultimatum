@@ -16,19 +16,14 @@ namespace {
 // in other locations in the code base (e.g. content_features.h), and must be
 // replicated in the same order in PhotoPickerFeatures.java.
 const base::Feature* kFeaturesExposedToJava[] = {
-    &kAndroidMediaPickerSupport,
-    &kPhotoPickerVideoSupport,
+    &kAndroidMediaPickerAdoption,
 };
 
 }  // namespace
 
-BASE_FEATURE(kAndroidMediaPickerSupport,
-             "AndroidMediaPickerSupport",
+BASE_FEATURE(kAndroidMediaPickerAdoption,
+             "MediaPickerAdoption",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kPhotoPickerVideoSupport,
-             "PhotoPickerVideoSupport",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 static jlong JNI_PhotoPickerFeatures_GetFeature(JNIEnv* env, jint ordinal) {
   return reinterpret_cast<jlong>(kFeaturesExposedToJava[ordinal]);

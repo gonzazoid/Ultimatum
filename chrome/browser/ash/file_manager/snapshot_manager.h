@@ -7,7 +7,8 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 
@@ -39,15 +40,9 @@ class SnapshotManager {
 
   ~SnapshotManager();
 
-  // Creates a snapshot file copy of a file system file |absolute_file_path|,
-  // and returns its path to |callback|. Returns an empty path on failure.
+  // Creates a snapshot file copy of a file system file |absolute_file_path| and
+  // returns back to |callback|. Returns empty path for failure.
   void CreateManagedSnapshot(const base::FilePath& absolute_file_path,
-                             LocalPathCallback callback);
-
-  // Creates a snapshot file copy of an external backend file system file at
-  // |file_system_url|, and returns its path to |callback|. Returns an empty
-  // path on failure.
-  void CreateManagedSnapshot(const storage::FileSystemURL& file_system_url,
                              LocalPathCallback callback);
 
  private:
@@ -59,7 +54,7 @@ class SnapshotManager {
       LocalPathCallback callback,
       int64_t needed_space);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   scoped_refptr<FileRefsHolder> holder_;
 
   // Note: This should remain the last member so it'll be destroyed and

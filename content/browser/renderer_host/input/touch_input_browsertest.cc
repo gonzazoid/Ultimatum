@@ -7,14 +7,12 @@
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/gpu/compositor_util.h"
 #include "content/browser/renderer_host/render_widget_host_delegate.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/web_contents/web_contents_impl.h"
-#include "content/public/browser/browser_message_filter.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/common/content_switches.h"
@@ -24,6 +22,7 @@
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/hit_test_region_observer.h"
 #include "content/shell/browser/shell.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/synthetic_web_input_event_builders.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "ui/latency/latency_info.h"
@@ -34,50 +33,50 @@ namespace {
 
 const char kTouchEventDataURL[] =
     "data:text/html;charset=utf-8,"
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
     "<head>"
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
     "</head>"
 #endif
     "<body onload='setup();'>"
-    "<div id='first'></div><div id='second'></div><div id='third'></div>"
+    "  <div id='first'></div><div id='second'></div><div id='third'></div>"
+    "</body>"
     "<style>"
-    "  %23first {"
+    " div {"
     "    position: absolute;"
     "    width: 100px;"
     "    height: 100px;"
+    "    -webkit-transform: translate3d(0, 0, 0);"
+    " }"
+    "  %23first {"
     "    top: 0px;"
     "    left: 0px;"
     "    background-color: green;"
-    "    -webkit-transform: translate3d(0, 0, 0);"
     "  }"
     "  %23second {"
-    "    position: absolute;"
-    "    width: 100px;"
-    "    height: 100px;"
     "    top: 0px;"
     "    left: 110px;"
     "    background-color: blue;"
-    "    -webkit-transform: translate3d(0, 0, 0);"
     "  }"
     "  %23third {"
-    "    position: absolute;"
-    "    width: 100px;"
-    "    height: 100px;"
     "    top: 110px;"
     "    left: 0px;"
     "    background-color: yellow;"
-    "    -webkit-transform: translate3d(0, 0, 0);"
     "  }"
     "</style>"
     "<script>"
     "  function setup() {"
-    "    second.ontouchstart = function() {};"
-    "    third.ontouchstart = function(e) {"
-    "      e.preventDefault();"
-    "    };"
+    "    second.ontouchstart = () => {};"
+    "    third.ontouchstart = e => e.preventDefault();"
     "  }"
     "</script>";
+
+blink::mojom::InputEventResultState ExpectedNotConsumedOrNotConsumedBlocking() {
+  return base::FeatureList::IsEnabled(
+             blink::features::kFixGestureScrollQueuingBug)
+             ? blink::mojom::InputEventResultState::kNotConsumedBlocking
+             : blink::mojom::InputEventResultState::kNotConsumed;
+}
 
 }  // namespace
 
@@ -119,9 +118,9 @@ class TouchInputBrowserTest : public ContentBrowserTest {
         host->render_frame_metadata_provider());
     frame_observer.WaitForMetadataChange();
 
-#if !BUILDFLAG(IS_ANDROID)
-    // On non-Android, set a size for the view, and wait for a new frame to be
-    // generated at that size. On Android the size is specified in
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+    // On non mobile profiles, set a size for the view, and wait for a new frame
+    // to be generated at that size. On Android and iOS the size is specified in
     // kTouchEventDataURL.
     host->GetView()->SetSize(gfx::Size(400, 400));
     frame_observer.WaitForAnyFrameSubmission();
@@ -142,7 +141,7 @@ IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, TouchNoHandler) {
   blink::SyntheticWebTouchEvent touch;
 
   // A press on |first| should be acked with NO_CONSUMER_EXISTS since there is
-  // no touch-handler on it.
+  // no touch-start handler on it.
   touch.PressPoint(25, 25);
   auto filter = AddFilter(WebInputEvent::Type::kTouchStart);
   SendTouchEvent(&touch);
@@ -150,46 +149,61 @@ IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, TouchNoHandler) {
   EXPECT_EQ(blink::mojom::InputEventResultState::kNoConsumerExists,
             filter->WaitForAck());
 
-  // If a touch-press is acked with NO_CONSUMER_EXISTS, then subsequent
-  // touch-points don't need to be dispatched until the touch point is released.
+  // The same is true for release because there is no touch-end handler.
+  //
+  // TODO(https://crbug.com/1417126): a suspicious flake in AR/XR tests forced
+  // us to disable `kDroppedTouchSequenceIncludesTouchEnd` then override the
+  // expectation here!
+  filter = AddFilter(WebInputEvent::Type::kTouchEnd);
   touch.ReleasePoint(0);
   SendTouchEvent(&touch);
+  blink::mojom::InputEventResultState expected_touchend_result =
+      base::FeatureList::IsEnabled(
+          blink::features::kDroppedTouchSequenceIncludesTouchEnd)
+          ? blink::mojom::InputEventResultState::kNoConsumerExists
+          : ExpectedNotConsumedOrNotConsumedBlocking();
+  EXPECT_EQ(expected_touchend_result, filter->WaitForAck());
 }
 
-IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, TouchHandlerNoConsume) {
+IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, TouchStartNoConsume) {
   LoadURL();
   blink::SyntheticWebTouchEvent touch;
 
   // Press on |second| should be acked with NOT_CONSUMED since there is a
-  // touch-handler on |second|, but it doesn't consume the event.
+  // touch-start handler on |second|, but it doesn't consume the event.
   touch.PressPoint(125, 25);
   auto filter = AddFilter(WebInputEvent::Type::kTouchStart);
   SendTouchEvent(&touch);
-  EXPECT_EQ(blink::mojom::InputEventResultState::kNotConsumed,
-            filter->WaitForAck());
+  EXPECT_EQ(ExpectedNotConsumedOrNotConsumedBlocking(), filter->WaitForAck());
 
+  // Even though there is no touch-end handler there, the touch-end is still
+  // dispatched for state consistency in downstream event-path.  That event
+  // should be acked with NOT_CONSUMED.
   filter = AddFilter(WebInputEvent::Type::kTouchEnd);
   touch.ReleasePoint(0);
   SendTouchEvent(&touch);
-  filter->WaitForAck();
+  EXPECT_EQ(ExpectedNotConsumedOrNotConsumedBlocking(), filter->WaitForAck());
 }
 
-IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, TouchHandlerConsume) {
+IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, TouchStartConsume) {
   LoadURL();
   blink::SyntheticWebTouchEvent touch;
 
-  // Press on |third| should be acked with CONSUMED since the touch-handler on
-  // |third| consimes the event.
+  // Press on |third| should be acked with CONSUMED since the touch-start
+  // handler there consumes the event.
   touch.PressPoint(25, 125);
   auto filter = AddFilter(WebInputEvent::Type::kTouchStart);
   SendTouchEvent(&touch);
   EXPECT_EQ(blink::mojom::InputEventResultState::kConsumed,
             filter->WaitForAck());
 
+  // Even though there is no touch-end handler there, the touch-end is still
+  // dispatched for state consistency in downstream event-path.  That event
+  // should be acked with NOT_CONSUMED.
   touch.ReleasePoint(0);
   filter = AddFilter(WebInputEvent::Type::kTouchEnd);
   SendTouchEvent(&touch);
-  filter->WaitForAck();
+  EXPECT_EQ(ExpectedNotConsumedOrNotConsumedBlocking(), filter->WaitForAck());
 }
 
 IN_PROC_BROWSER_TEST_F(TouchInputBrowserTest, MultiPointTouchPress) {

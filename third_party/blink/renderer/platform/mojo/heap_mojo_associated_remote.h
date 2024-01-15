@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "third_party/blink/renderer/platform/context_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -42,6 +43,7 @@ class HeapMojoAssociatedRemote {
   Proxy* operator->() const { return get(); }
   Proxy* get() const { return wrapper_->associated_remote().get(); }
   bool is_bound() const { return wrapper_->associated_remote().is_bound(); }
+  explicit operator bool() const { return is_bound(); }
   bool is_connected() const {
     return wrapper_->associated_remote().is_connected();
   }

@@ -4,25 +4,25 @@
 
 #include "chromeos/ash/components/drivefs/drivefs_host.h"
 
-#include <map>
-#include <set>
+#include <memory>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/check.h"
+#include "base/check_op.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
-#include "base/unguessable_token.h"
+#include "base/timer/timer.h"
 #include "chromeos/ash/components/drivefs/drivefs_bootstrap.h"
-#include "chromeos/ash/components/drivefs/drivefs_host_observer.h"
+#include "chromeos/ash/components/drivefs/drivefs_host.h"
 #include "chromeos/ash/components/drivefs/drivefs_http_client.h"
 #include "chromeos/ash/components/drivefs/drivefs_search.h"
-#include "components/drive/drive_notification_manager.h"
-#include "components/drive/drive_notification_observer.h"
+#include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
+#include "chromeos/components/drivefs/mojom/drivefs_native_messaging.mojom.h"
+#include "components/account_id/account_id.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
-#include "mojo/public/cpp/platform/platform_channel_endpoint.h"
-#include "mojo/public/cpp/system/invitation.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace drivefs {
 
@@ -32,6 +32,23 @@ constexpr char kDataPath[] = "GCache/v2";
 
 }  // namespace
 
+std::ostream& operator<<(std::ostream& os, const drivefs::SyncStatus& status) {
+  switch (status) {
+    case SyncStatus::kNotFound:
+      return os << "not_found";
+    case SyncStatus::kCompleted:
+      return os << "completed";
+    case SyncStatus::kQueued:
+      return os << "queued";
+    case SyncStatus::kInProgress:
+      return os << "in_progress";
+    case SyncStatus::kError:
+      return os << "error";
+    default:
+      return os << "unknown";
+  }
+}
+
 std::unique_ptr<DriveFsBootstrapListener>
 DriveFsHost::Delegate::CreateMojoListener() {
   return std::make_unique<DriveFsBootstrapListener>();
@@ -39,8 +56,7 @@ DriveFsHost::Delegate::CreateMojoListener() {
 
 // A container of state tied to a particular mounting of DriveFS. None of this
 // should be shared between mounts.
-class DriveFsHost::MountState : public DriveFsSession,
-                                public drive::DriveNotificationObserver {
+class DriveFsHost::MountState : public DriveFsSession {
  public:
   explicit MountState(DriveFsHost* host)
       : DriveFsSession(host->timer_.get(),
@@ -51,8 +67,7 @@ class DriveFsHost::MountState : public DriveFsSession,
                        host->delegate_->GetMyFilesPath(),
                        host->GetDefaultMountDirName(),
                        host->mount_observer_),
-        host_(host),
-        sync_status_tracker_(std::make_unique<SyncStatusTracker>()) {
+        host_(host) {
     token_fetch_attempted_ =
         bool{host->account_token_delegate_->GetCachedAccessToken()};
     search_ = std::make_unique<DriveFsSearch>(
@@ -68,12 +83,9 @@ class DriveFsHost::MountState : public DriveFsSession,
 
   ~MountState() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(host_->sequence_checker_);
-    if (team_drives_fetched_) {
-      host_->delegate_->GetDriveNotificationManager().ClearTeamDriveIds();
-      host_->delegate_->GetDriveNotificationManager().RemoveObserver(this);
-    }
     if (is_mounted()) {
-      for (auto& observer : host_->observers_) {
+      for (Observer& observer : host_->observers_) {
+        DCHECK_EQ(observer.GetHost(), host_);
         observer.OnUnmounted();
       }
     }
@@ -84,7 +96,7 @@ class DriveFsHost::MountState : public DriveFsSession,
       DriveFsHost::Delegate* delegate) {
     auto access_token = auth_delegate->GetCachedAccessToken();
     mojom::DriveFsConfigurationPtr config = {
-        absl::in_place,
+        std::in_place,
         auth_delegate->GetAccountId().GetUserEmail(),
         std::move(access_token),
         auth_delegate->IsMetricsCollectionEnabled(),
@@ -92,6 +104,9 @@ class DriveFsHost::MountState : public DriveFsSession,
         base::FeatureList::IsEnabled(ash::features::kDriveFsMirroring),
         delegate->IsVerboseLoggingEnabled(),
         base::FeatureList::IsEnabled(ash::features::kDriveFsChromeNetworking),
+        base::FeatureList::IsEnabled(ash::features::kDriveFsShowCSEFiles)
+            ? mojom::CSESupport::kListing
+            : mojom::CSESupport::kNone,
     };
     return DriveFsConnection::Create(delegate->CreateMojoListener(),
                                      std::move(config));
@@ -103,10 +118,6 @@ class DriveFsHost::MountState : public DriveFsSession,
     return search_->PerformSearch(std::move(query), std::move(callback));
   }
 
-  SyncStatus GetSyncStatusForPath(const base::FilePath& drive_path) {
-    return sync_status_tracker_->GetSyncStatusForPath(drive_path);
-  }
-
  private:
   // mojom::DriveFsDelegate:
   void GetAccessToken(const std::string& client_id,
@@ -114,40 +125,41 @@ class DriveFsHost::MountState : public DriveFsSession,
                       const std::vector<std::string>& scopes,
                       GetAccessTokenCallback callback) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(host_->sequence_checker_);
+    host_->account_token_delegate_->GetAccessToken(
+        !token_fetch_attempted_,
+        base::BindOnce(
+            [](GetAccessTokenCallback callback, mojom::AccessTokenStatus status,
+               mojom::AccessTokenPtr access_token) {
+              if (status != mojom::AccessTokenStatus::kSuccess) {
+                std::move(callback).Run(status, "");
+                return;
+              }
+              std::move(callback).Run(status, access_token->token);
+            },
+            std::move(callback)));
+    token_fetch_attempted_ = true;
+  }
+
+  void GetAccessTokenWithExpiry(
+      const std::string& client_id,
+      const std::string& app_id,
+      const std::vector<std::string>& scopes,
+      GetAccessTokenWithExpiryCallback callback) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(host_->sequence_checker_);
     host_->account_token_delegate_->GetAccessToken(!token_fetch_attempted_,
                                                    std::move(callback));
     token_fetch_attempted_ = true;
   }
 
-  void OnSyncingStatusUpdate(mojom::SyncingStatusPtr status) override {
-    if (base::FeatureList::IsEnabled(ash::features::kFilesInlineSyncStatus)) {
-      // Keep track of the syncing paths.
-      for (const mojom::ItemEventPtr& event : status->item_events) {
-        base::FilePath path = host_->GetMountPath();
-        if (!base::FilePath("/").AppendRelativePath(base::FilePath(event->path),
-                                                    &path)) {
-          LOG(ERROR) << "Failed to make path relative to drive root";
-          continue;
-        }
-        switch (event->state) {
-          case mojom::ItemEvent::State::kQueued:
-          case mojom::ItemEvent::State::kInProgress:
-            sync_status_tracker_->AddSyncStatusForPath(path,
-                                                       SyncStatus::kInProgress);
-            break;
-          case mojom::ItemEvent::State::kFailed:
-            // TODO(msalomao): Post a delayed task to remove the path.
-            sync_status_tracker_->AddSyncStatusForPath(path,
-                                                       SyncStatus::kError);
-            break;
-          case mojom::ItemEvent::State::kCompleted:
-            sync_status_tracker_->RemovePath(path);
-            break;
-          default:
-            break;
-        }
-      }
+  void OnItemProgress(const mojom::ProgressEventPtr progress_event) override {
+    for (Observer& observer : host_->observers_) {
+      DCHECK_EQ(observer.GetHost(), host_);
+      observer.OnItemProgress(*progress_event);
     }
+  }
+
+  void OnSyncingStatusUpdate(mojom::SyncingStatusPtr status) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(host_->sequence_checker_);
 
     for (auto& observer : host_->observers_) {
       observer.OnSyncingStatusUpdate(*status);
@@ -155,7 +167,8 @@ class DriveFsHost::MountState : public DriveFsSession,
   }
 
   void OnMirrorSyncingStatusUpdate(mojom::SyncingStatusPtr status) override {
-    for (auto& observer : host_->observers_) {
+    for (Observer& observer : host_->observers_) {
+      DCHECK_EQ(observer.GetHost(), host_);
       observer.OnMirrorSyncingStatusUpdate(*status);
     }
   }
@@ -163,10 +176,11 @@ class DriveFsHost::MountState : public DriveFsSession,
   void OnFilesChanged(std::vector<mojom::FileChangePtr> changes) override {
     std::vector<mojom::FileChange> changes_values;
     changes_values.reserve(changes.size());
-    for (auto& change : changes) {
+    for (mojom::FileChangePtr& change : changes) {
       changes_values.emplace_back(std::move(*change));
     }
-    for (auto& observer : host_->observers_) {
+    for (Observer& observer : host_->observers_) {
+      DCHECK_EQ(observer.GetHost(), host_);
       observer.OnFilesChanged(changes_values);
     }
   }
@@ -175,43 +189,25 @@ class DriveFsHost::MountState : public DriveFsSession,
     if (!IsKnownEnumValue(error->type)) {
       return;
     }
-    for (auto& observer : host_->observers_) {
+    for (Observer& observer : host_->observers_) {
+      DCHECK_EQ(observer.GetHost(), host_);
       observer.OnError(*error);
     }
   }
 
   void OnTeamDrivesListReady(
-      const std::vector<std::string>& team_drive_ids) override {
-    host_->delegate_->GetDriveNotificationManager().AddObserver(this);
-    host_->delegate_->GetDriveNotificationManager().UpdateTeamDriveIds(
-        std::set<std::string>(team_drive_ids.begin(), team_drive_ids.end()),
-        {});
-    team_drives_fetched_ = true;
-  }
+      const std::vector<std::string>& team_drive_ids) override {}
 
   void OnTeamDriveChanged(const std::string& team_drive_id,
-                          CreateOrDelete change_type) override {
-    if (!team_drives_fetched_) {
-      return;
-    }
-    std::set<std::string> additions;
-    std::set<std::string> removals;
-    if (change_type == mojom::DriveFsDelegate::CreateOrDelete::kCreated) {
-      additions.insert(team_drive_id);
-    } else {
-      removals.insert(team_drive_id);
-    }
-    host_->delegate_->GetDriveNotificationManager().UpdateTeamDriveIds(
-        additions, removals);
-  }
+                          CreateOrDelete change_type) override {}
 
   void ConnectToExtension(
       mojom::ExtensionConnectionParamsPtr params,
       mojo::PendingReceiver<mojom::NativeMessagingPort> port,
       mojo::PendingRemote<mojom::NativeMessagingHost> host,
       ConnectToExtensionCallback callback) override {
-    std::move(callback).Run(host_->delegate_->ConnectToExtension(
-        std::move(params), std::move(port), std::move(host)));
+    host_->delegate_->ConnectToExtension(std::move(params), std::move(port),
+                                         std::move(host), std::move(callback));
   }
 
   void DisplayConfirmDialog(mojom::DialogReasonPtr error,
@@ -252,31 +248,17 @@ class DriveFsHost::MountState : public DriveFsSession,
     host_->delegate_->PersistMachineRootID(std::move(id));
   }
 
-  // DriveNotificationObserver overrides:
-  void OnNotificationReceived(
-      const std::map<std::string, int64_t>& invalidations) override {
-    std::vector<mojom::FetchChangeLogOptionsPtr> options;
-    options.reserve(invalidations.size());
-    for (const auto& invalidation : invalidations) {
-      options.emplace_back(absl::in_place, invalidation.second,
-                           invalidation.first);
-    }
-    drivefs_interface()->FetchChangeLog(std::move(options));
-  }
-
-  void OnNotificationTimerFired() override {
-    drivefs_interface()->FetchAllChangeLogs();
-  }
-
   // Owns |this|.
-  DriveFsHost* const host_;
+  const raw_ptr<DriveFsHost> host_;
 
   std::unique_ptr<DriveFsSearch> search_;
   std::unique_ptr<DriveFsHttpClient> http_client_;
-  std::unique_ptr<SyncStatusTracker> sync_status_tracker_ = nullptr;
 
   bool token_fetch_attempted_ = false;
-  bool team_drives_fetched_ = false;
+
+  // Used to dispatch individual sync status updates in a debounced manner, only
+  // sending the sync states that have changed since the last dispatched event.
+  std::unique_ptr<base::RetainingOneShotTimer> sync_throttle_timer_;
 };
 
 DriveFsHost::DriveFsHost(
@@ -307,14 +289,12 @@ DriveFsHost::DriveFsHost(
 
 DriveFsHost::~DriveFsHost() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-}
 
-void DriveFsHost::AddObserver(DriveFsHostObserver* observer) {
-  observers_.AddObserver(observer);
-}
-
-void DriveFsHost::RemoveObserver(DriveFsHostObserver* observer) {
-  observers_.RemoveObserver(observer);
+  for (Observer& observer : observers_) {
+    DCHECK_EQ(observer.GetHost(), this);
+    observer.OnHostDestroyed();
+    observer.Reset();
+  }
 }
 
 bool DriveFsHost::Mount() {
@@ -355,14 +335,6 @@ mojom::DriveFs* DriveFsHost::GetDriveFsInterface() const {
   return mount_state_->drivefs_interface();
 }
 
-SyncStatus DriveFsHost::GetSyncStatusForPath(
-    const base::FilePath& drive_path) const {
-  if (!mount_state_) {
-    return SyncStatus::kNotFound;
-  }
-  return mount_state_->GetSyncStatusForPath(drive_path);
-}
-
 mojom::QueryParameters::QuerySource DriveFsHost::PerformSearch(
     mojom::QueryParametersPtr query,
     mojom::SearchQuery::GetNextPageCallback callback) {
@@ -376,6 +348,30 @@ mojom::QueryParameters::QuerySource DriveFsHost::PerformSearch(
 
 std::string DriveFsHost::GetDefaultMountDirName() const {
   return base::StrCat({"drivefs-", delegate_->GetObfuscatedAccountId()});
+}
+
+DriveFsHost::Observer::~Observer() {
+  Reset();
+}
+
+void DriveFsHost::Observer::Observe(DriveFsHost* const host) {
+  if (host != host_) {
+    Reset();
+
+    if (host) {
+      host->observers_.AddObserver(this);
+      host_ = host;
+    }
+  }
+}
+
+void DriveFsHost::Observer::Reset() {
+  if (host_) {
+    host_->observers_.RemoveObserver(this);
+    host_ = nullptr;
+  }
+
+  DCHECK(!IsInObserverList());
 }
 
 }  // namespace drivefs

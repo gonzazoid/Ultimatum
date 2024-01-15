@@ -6,10 +6,11 @@
 #define CONTENT_BROWSER_RENDERER_HOST_POLICY_CONTAINER_HOST_H_
 
 #include <iosfwd>
+#include <memory>
+#include <vector>
 
-#include "content/common/child_process_host_impl.h"
+#include "content/browser/child_process_host_impl.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/content_browser_client.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
@@ -26,6 +27,8 @@
 
 namespace content {
 
+class ContentBrowserClient;
+
 // The contents of a PolicyContainerHost.
 struct CONTENT_EXPORT PolicyContainerPolicies {
   PolicyContainerPolicies();
@@ -39,8 +42,9 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
       const network::CrossOriginOpenerPolicy& cross_origin_opener_policy,
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       network::mojom::WebSandboxFlags sandbox_flags,
-      bool is_anonymous,
-      bool can_navigate_top_without_user_gesture);
+      bool is_credentialless,
+      bool can_navigate_top_without_user_gesture,
+      bool allow_cross_origin_isolation);
 
   explicit PolicyContainerPolicies(
       const blink::mojom::PolicyContainerPolicies& policies);
@@ -115,9 +119,9 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
       network::mojom::WebSandboxFlags::kNone;
 
   // https://wicg.github.io/anonymous-iframe/#spec-window-attribute
-  // True for window framed inside an anonymous iframe, directly or indirectly
+  // True for window framed inside credentialless iframe, directly or indirectly
   // by one of its ancestors
-  bool is_anonymous = false;
+  bool is_credentialless = false;
 
   // Tracks if a document is allowed to navigate the top-level frame without
   // sticky user activation. A document loses this ability when it is
@@ -126,6 +130,14 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
   // using sandboxing. A document that is same-origin to the top-level frame
   // will always have this value set to true.
   bool can_navigate_top_without_user_gesture = true;
+
+  // The top-level initial empty document opened as a popup by a cross-origin
+  // iframe might inherit the COOP policies of the top-level document but it
+  // shouldn't have crossOriginIsolated capabilities if COOP was initially set
+  // by another origin. Hence, we pass down this boolean to tell the renderer to
+  // restrict those capabilities. For more detail, see
+  // https://github.com/hemeryar/coi-with-popups/blob/main/docs/cross_origin_iframe_popup.MD
+  bool allow_cross_origin_isolation = false;
 };
 
 // PolicyContainerPolicies structs are comparable for equality.
@@ -199,7 +211,7 @@ class CONTENT_EXPORT PolicyContainerHost
     return policies_.ip_address_space;
   }
 
-  network::CrossOriginOpenerPolicy cross_origin_opener_policy() const {
+  network::CrossOriginOpenerPolicy& cross_origin_opener_policy() {
     return policies_.cross_origin_opener_policy;
   }
 
@@ -231,10 +243,14 @@ class CONTENT_EXPORT PolicyContainerHost
     policies_.sandbox_flags = sandbox_flags;
   }
 
-  void SetIsAnonymous() { policies_.is_anonymous = true; }
+  void SetIsCredentialless() { policies_.is_credentialless = true; }
 
   void SetCanNavigateTopWithoutUserGesture(bool value) {
     policies_.can_navigate_top_without_user_gesture = value;
+  }
+
+  void SetAllowCrossOriginIsolation(bool value) {
+    policies_.allow_cross_origin_isolation = value;
   }
 
   // Return a PolicyContainer containing copies of the policies and a pending
@@ -277,7 +293,7 @@ class CONTENT_EXPORT PolicyContainerHost
   mojo::UniqueReceiverSet<blink::mojom::PolicyContainerHostKeepAliveHandle>
       keep_alive_handles_receiver_set_;
 
-  absl::optional<blink::LocalFrameToken> frame_token_ = absl::nullopt;
+  std::optional<blink::LocalFrameToken> frame_token_ = std::nullopt;
   int process_id_ = ChildProcessHost::kInvalidUniqueID;
 };
 

@@ -7,12 +7,15 @@
 #include <utility>
 
 #include "chrome/browser/command_updater.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/omnibox/omnibox_theme.h"
+#include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
+#include "chrome/browser/ui/views/location_bar/location_bar_util.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_loading_indicator_view.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view_observer.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
@@ -23,8 +26,9 @@
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_highlight.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_impl.h"
-#include "ui/views/animation/ink_drop_mask.h"
+#include "ui/views/animation/ink_drop_ripple.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/cascading_property.h"
@@ -37,12 +41,14 @@ float PageActionIconView::Delegate::GetPageActionInkDropVisibleOpacity() const {
 }
 
 int PageActionIconView::Delegate::GetPageActionIconSize() const {
-  return GetLayoutConstant(LOCATION_BAR_ICON_SIZE);
+  return GetLayoutConstant(LOCATION_BAR_TRAILING_ICON_SIZE);
 }
 
 gfx::Insets PageActionIconView::Delegate::GetPageActionIconInsets(
     const PageActionIconView* icon_view) const {
-  return GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING);
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? GetLayoutInsets(LOCATION_BAR_PAGE_ACTION_ICON_PADDING)
+             : GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING);
 }
 
 bool PageActionIconView::Delegate::ShouldHidePageActionIcons() const {
@@ -51,8 +57,7 @@ bool PageActionIconView::Delegate::ShouldHidePageActionIcons() const {
 
 const OmniboxView* PageActionIconView::Delegate::GetOmniboxView() const {
   // Should not reach here: should call subclass's implementation.
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 PageActionIconView::PageActionIconView(
@@ -73,6 +78,7 @@ PageActionIconView::PageActionIconView(
 
   image()->SetFlipCanvasOnPaintForRTLUI(true);
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
+
   SetFocusBehavior(views::PlatformStyle::kDefaultFocusBehavior);
   // Only shows bubble after mouse is released.
   button_controller()->set_notify_action(
@@ -117,10 +123,8 @@ void PageActionIconView::InstallLoadingIndicatorForTesting() {
   InstallLoadingIndicator();
 }
 
-void PageActionIconView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kButton;
-  const std::u16string name_text = GetTextForTooltipAndAccessibleName();
-  node_data->SetName(name_text);
+std::u16string PageActionIconView::GetTextForTooltipAndAccessibleName() const {
+  return GetAccessibleName();
 }
 
 std::u16string PageActionIconView::GetTooltipText(const gfx::Point& p) const {
@@ -159,11 +163,9 @@ void PageActionIconView::NotifyClick(const ui::Event& event) {
     source = EXECUTE_SOURCE_MOUSE;
   } else if (event.IsKeyEvent()) {
     source = EXECUTE_SOURCE_KEYBOARD;
-  } else if (event.IsGestureEvent()) {
-    source = EXECUTE_SOURCE_GESTURE;
   } else {
-    NOTREACHED();
-    return;
+    CHECK(event.IsGestureEvent());
+    source = EXECUTE_SOURCE_GESTURE;
   }
 
   // Set ink drop state to ACTIVATED.
@@ -195,8 +197,10 @@ bool PageActionIconView::ShouldUpdateInkDropOnClickCanceled() const {
 
 void PageActionIconView::ExecuteCommand(ExecuteSource source) {
   OnExecuting(source);
-  if (command_updater_)
+  if (command_updater_) {
     command_updater_->ExecuteCommand(command_id_);
+  }
+  DidExecute(source);
 }
 
 const gfx::VectorIcon& PageActionIconView::GetVectorIconBadge() const {
@@ -213,8 +217,9 @@ void PageActionIconView::OnTouchUiChanged() {
 }
 
 void PageActionIconView::SetIconColor(SkColor icon_color) {
-  if (icon_color_ == icon_color)
+  if (icon_color_ == icon_color) {
     return;
+  }
   icon_color_ = icon_color;
   UpdateIconImage();
   OnPropertyChanged(&icon_color_, views::kPropertyEffectsNone);
@@ -225,8 +230,9 @@ SkColor PageActionIconView::GetIconColor() const {
 }
 
 void PageActionIconView::SetActive(bool active) {
-  if (active_ == active)
+  if (active_ == active) {
     return;
+  }
   active_ = active;
   UpdateIconImage();
   OnPropertyChanged(&active_, views::kPropertyEffectsNone);
@@ -245,6 +251,7 @@ void PageActionIconView::Update() {
   } else {
     UpdateImpl();
   }
+  UpdateBorder();
 }
 
 void PageActionIconView::UpdateIconImage() {
@@ -253,8 +260,9 @@ void PageActionIconView::UpdateIconImage() {
   // needed when added to a Widget and on theme changes. Returning early avoids
   // a call to GetNativeTheme() when no hosting Widget is present which falls
   // through to the deprecated global NativeTheme accessor.
-  if (!GetWidget())
+  if (!GetWidget()) {
     return;
+  }
 
   // Use the provided icon image if available.
   const int icon_size = delegate_->GetPageActionIconSize();
@@ -266,17 +274,23 @@ void PageActionIconView::UpdateIconImage() {
   }
 
   // Fall back to the vector icon if no icon image was provided.
-  const SkColor icon_color =
+  SkColor icon_color =
       active_ ? views::GetCascadingAccentColor(this) : icon_color_;
+  if (GetCustomForegroundColorId().has_value()) {
+    icon_color =
+        GetColorProvider()->GetColor(GetCustomForegroundColorId().value());
+  }
   const gfx::ImageSkia image = gfx::CreateVectorIconWithBadge(
       GetVectorIcon(), icon_size, icon_color, GetVectorIconBadge());
-  if (!image.isNull())
+  if (!image.isNull()) {
     SetImageModel(ui::ImageModel::FromImageSkia(image));
+  }
 }
 
 void PageActionIconView::SetIsLoading(bool is_loading) {
-  if (loading_indicator_)
+  if (loading_indicator_) {
     loading_indicator_->SetAnimating(is_loading);
+  }
 }
 
 content::WebContents* PageActionIconView::GetWebContents() const {
@@ -284,14 +298,22 @@ content::WebContents* PageActionIconView::GetWebContents() const {
 }
 
 void PageActionIconView::UpdateBorder() {
-  const gfx::Insets new_insets = delegate_->GetPageActionIconInsets(this);
-  if (new_insets != GetInsets())
+  gfx::Insets new_insets = delegate_->GetPageActionIconInsets(this);
+  if (ShouldShowLabel() && OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+    // TODO(crbug.com/1447066): Figure out what these values should be. For
+    // bonus point also try to move parts of this into the parent class. This is
+    // too bespoke.
+    new_insets += gfx::Insets::TLBR(0, 4, 0, 8);
+  }
+  if (new_insets != GetInsets()) {
     SetBorder(views::CreateEmptyBorder(new_insets));
+  }
 }
 
 void PageActionIconView::InstallLoadingIndicator() {
-  if (loading_indicator_)
+  if (loading_indicator_) {
     return;
+  }
 
   loading_indicator_ =
       AddChildView(std::make_unique<PageActionIconLoadingIndicatorView>(this));
@@ -308,7 +330,7 @@ void PageActionIconView::SetVisible(bool visible) {
   }
 }
 
-BEGIN_METADATA(PageActionIconView, IconLabelBubbleView)
+BEGIN_METADATA(PageActionIconView)
 ADD_PROPERTY_METADATA(SkColor, IconColor, ui::metadata::SkColorConverter)
 ADD_PROPERTY_METADATA(bool, Active)
 END_METADATA

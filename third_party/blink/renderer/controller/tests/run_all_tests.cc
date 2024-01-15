@@ -28,16 +28,35 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/run_loop.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_suite.h"
-#include "third_party/blink/renderer/controller/tests/blink_test_suite.h"
+#include "content/public/test/blink_test_environment.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
+#include "third_party/blink/renderer/controller/tests/thread_state_test_environment.h"
+
+class FlushQueueEnvironment : public ::testing::Environment {
+ public:
+  FlushQueueEnvironment() = default;
+
+  void TearDown() override {
+    // Tickle EndOfTaskRunner which among other things will flush the queue
+    // of error messages via V8Initializer::reportRejectedPromisesOnMainThread.
+    blink::scheduler::GetSingleThreadTaskRunnerForTesting()->PostTask(
+        FROM_HERE, base::DoNothing());
+    base::RunLoop().RunUntilIdle();
+  }
+};
 
 int main(int argc, char** argv) {
-  BlinkUnitTestSuite<base::TestSuite> test_suite(argc, argv);
+  ::testing::AddGlobalTestEnvironment(
+      new content::BlinkTestEnvironmentWithIsolate);
+  ::testing::AddGlobalTestEnvironment(new ThreadStateTestEnvironment);
+  ::testing::AddGlobalTestEnvironment(new FlushQueueEnvironment);
+
+  base::TestSuite test_suite(argc, argv);
   return base::LaunchUnitTests(
       argc, argv,
-      base::BindOnce(&BlinkUnitTestSuite<base::TestSuite>::Run,
-                     base::Unretained(&test_suite)));
+      base::BindOnce(&base::TestSuite::Run, base::Unretained(&test_suite)));
 }

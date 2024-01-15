@@ -7,13 +7,24 @@
  * auditory cues.
  */
 
-import {AbstractEarcons, Earcon} from '../common/abstract_earcons.js';
+import {EarconId} from '../common/earcon_id.js';
 import {LogType} from '../common/log_types.js';
+import {Msgs} from '../common/msgs.js';
+import {SettingsManager} from '../common/settings_manager.js';
+import {Personality, QueueMode} from '../common/tts_types.js';
 
-import {ChromeVoxState} from './chromevox_state.js';
+import {AbstractEarcons} from './abstract_earcons.js';
+import {ChromeVox} from './chromevox.js';
+import {ChromeVoxRange} from './chromevox_range.js';
 import {EarconEngine} from './earcon_engine.js';
 import {LogStore} from './logging/log_store.js';
 
+const DeviceType = chrome.audio.DeviceType;
+
+/**
+ * High-level class that manages when each earcon should start (and when
+ * relevant, stop) playing.
+ */
 export class Earcons extends AbstractEarcons {
   constructor() {
     super();
@@ -30,9 +41,9 @@ export class Earcons extends AbstractEarcons {
     if (chrome.audio) {
       chrome.audio.getDevices(
           {isActive: true, streamTypes: [chrome.audio.StreamType.OUTPUT]},
-          this.updateShouldPanForDevices_.bind(this));
+          devices => this.updateShouldPanForDevices_(devices));
       chrome.audio.onDeviceListChanged.addListener(
-          this.updateShouldPanForDevices_.bind(this));
+          devices => this.updateShouldPanForDevices_(devices));
     } else {
       this.shouldPan_ = false;
     }
@@ -47,7 +58,7 @@ export class Earcons extends AbstractEarcons {
 
   /**
    * Plays the specified earcon sound.
-   * @param {Earcon} earcon An earcon identifier.
+   * @param {EarconId} earcon An earcon identifier.
    * @param {chrome.automation.Rect=} opt_location A location associated with
    *     the earcon such as a control's bounding rectangle.
    * @override
@@ -56,14 +67,13 @@ export class Earcons extends AbstractEarcons {
     if (!this.enabled) {
       return;
     }
-    if (localStorage['enableEarconLogging'] === 'true') {
-      LogStore.getInstance().writeTextLog(earcon, LogType.EARCON);
+    if (SettingsManager.getBoolean('enableEarconLogging')) {
+      LogStore.instance.writeTextLog(earcon, LogType.EARCON);
       console.log('Earcon ' + earcon);
     }
-    if (ChromeVoxState.instance.currentRange &&
-        ChromeVoxState.instance.currentRange.isValid()) {
-      const node = ChromeVoxState.instance.currentRange.start.node;
-      const rect = opt_location || node.location;
+    if (ChromeVoxRange.current?.isValid()) {
+      const node = ChromeVoxRange.current.start.node;
+      const rect = opt_location ?? node.location;
       const container = node.root.location;
       if (this.shouldPan_) {
         this.engine_.setPositionForRect(rect, container);
@@ -75,15 +85,21 @@ export class Earcons extends AbstractEarcons {
     this.engine_.playEarcon(earcon);
   }
 
-  /**
-   * @override
-   */
+  /** @override */
   cancelEarcon(earcon) {
     switch (earcon) {
-      case Earcon.PAGE_START_LOADING:
+      case EarconId.PAGE_START_LOADING:
         this.engine_.cancelProgress();
         break;
     }
+  }
+
+  /** @override */
+  toggle() {
+    this.enabled = !this.enabled;
+    const announce =
+        this.enabled ? Msgs.getMsg('earcons_on') : Msgs.getMsg('earcons_off');
+    ChromeVox.tts.speak(announce, QueueMode.FLUSH, Personality.ANNOTATION);
   }
 
   /**
@@ -93,9 +109,8 @@ export class Earcons extends AbstractEarcons {
    * @private
    */
   updateShouldPanForDevices_(devices) {
-    this.shouldPan_ = !devices.some(device => {
-      return device.isActive &&
-          device.deviceType === chrome.audio.DeviceType.INTERNAL_SPEAKER;
-    });
+    this.shouldPan_ = !devices.some(
+        device => device.isActive &&
+            device.deviceType === DeviceType.INTERNAL_SPEAKER);
   }
 }

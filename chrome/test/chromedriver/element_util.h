@@ -19,9 +19,7 @@ std::string GetElementKey();
 
 base::Value CreateElement(const std::string& element_id);
 
-std::unique_ptr<base::DictionaryValue> CreateValueFrom(const WebPoint& point);
-
-Status CheckElement(const std::string& element_id);
+base::Value::Dict CreateValueFrom(const WebPoint& point);
 
 // |root_element_id| could be null when no root element is given.
 Status FindElement(int interval_ms,

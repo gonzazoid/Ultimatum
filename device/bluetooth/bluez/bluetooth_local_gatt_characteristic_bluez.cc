@@ -14,27 +14,21 @@
 #include "device/bluetooth/bluez/bluetooth_gatt_service_bluez.h"
 #include "device/bluetooth/bluez/bluetooth_local_gatt_service_bluez.h"
 
-namespace device {
+namespace bluez {
 
 // static
-base::WeakPtr<device::BluetoothLocalGattCharacteristic>
-BluetoothLocalGattCharacteristic::Create(
+base::WeakPtr<BluetoothLocalGattCharacteristicBlueZ>
+BluetoothLocalGattCharacteristicBlueZ::Create(
     const device::BluetoothUUID& uuid,
-    device::BluetoothGattCharacteristic::Properties properties,
-    device::BluetoothGattCharacteristic::Permissions permissions,
-    device::BluetoothLocalGattService* service) {
-  DCHECK(service);
-  bluez::BluetoothLocalGattServiceBlueZ* service_bluez =
-      static_cast<bluez::BluetoothLocalGattServiceBlueZ*>(service);
-  bluez::BluetoothLocalGattCharacteristicBlueZ* characteristic =
-      new bluez::BluetoothLocalGattCharacteristicBlueZ(
-          uuid, properties, permissions, service_bluez);
-  return characteristic->weak_ptr_factory_.GetWeakPtr();
+    Properties properties,
+    Permissions permissions,
+    BluetoothLocalGattServiceBlueZ* service) {
+  auto* characteristic = new BluetoothLocalGattCharacteristicBlueZ(
+      uuid, properties, permissions, service);
+  auto weak_ptr = characteristic->weak_ptr_factory_.GetWeakPtr();
+  service->AddCharacteristic(base::WrapUnique(characteristic));
+  return weak_ptr;
 }
-
-}  // namespace device
-
-namespace bluez {
 
 BluetoothLocalGattCharacteristicBlueZ::BluetoothLocalGattCharacteristicBlueZ(
     const device::BluetoothUUID& uuid,
@@ -50,7 +44,6 @@ BluetoothLocalGattCharacteristicBlueZ::BluetoothLocalGattCharacteristicBlueZ(
       service_(service) {
   DVLOG(1) << "Creating local GATT characteristic with identifier: "
            << GetIdentifier();
-  service->AddCharacteristic(base::WrapUnique(this));
 }
 
 BluetoothLocalGattCharacteristicBlueZ::
@@ -75,10 +68,12 @@ BluetoothLocalGattCharacteristicBlueZ::NotifyValueChanged(
     const device::BluetoothDevice* device,
     const std::vector<uint8_t>& new_value,
     bool indicate) {
-  if (indicate && !(properties_ & PROPERTY_INDICATE))
+  if (indicate && !(properties_ & PROPERTY_INDICATE)) {
     return INDICATE_PROPERTY_NOT_SET;
-  if (!indicate && !(properties_ & PROPERTY_NOTIFY))
+  }
+  if (!indicate && !(properties_ & PROPERTY_NOTIFY)) {
     return NOTIFY_PROPERTY_NOT_SET;
+  }
   DCHECK(service_);
   return service_->GetAdapter()->SendValueChanged(this, new_value)
              ? NOTIFICATION_SUCCESS

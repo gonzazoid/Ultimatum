@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIACAPTUREFROMELEMENT_HTML_VIDEO_ELEMENT_CAPTURER_SOURCE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIACAPTUREFROMELEMENT_HTML_VIDEO_ELEMENT_CAPTURER_SOURCE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -47,10 +47,13 @@ class MODULES_EXPORT HtmlVideoElementCapturerSource final
 
   // VideoCapturerSource Implementation.
   media::VideoCaptureFormats GetPreferredFormats() override;
-  void StartCapture(const media::VideoCaptureParams& params,
-                    const VideoCaptureDeliverFrameCB& new_frame_callback,
-                    const VideoCaptureCropVersionCB& crop_version_callback,
-                    const RunningCallback& running_callback) override;
+  void StartCapture(
+      const media::VideoCaptureParams& params,
+      const VideoCaptureDeliverFrameCB& new_frame_callback,
+      const VideoCaptureSubCaptureTargetVersionCB&
+          sub_capture_target_version_callback,
+      const VideoCaptureNotifyFrameDroppedCB& frame_dropped_callback,
+      const RunningCallback& running_callback) override;
   void StopCapture() override;
 
  private:

@@ -4,9 +4,9 @@
 
 import 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 interface ModuleData {
   code_id: string;
@@ -68,8 +68,8 @@ function returnModuleList(moduleListData: ModuleListData) {
   if (window.location.hash.length > 1) {
     filterModuleListData();
   }
-  $('loading-message').style.visibility = 'hidden';
-  $('body-container').style.visibility = 'visible';
+  getRequiredElement('loading-message').style.visibility = 'hidden';
+  getRequiredElement('body-container').style.visibility = 'visible';
 }
 
 // Get data and have it displayed upon loading.

@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "ash/public/cpp/session/session_observer.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 TestSessionController::TestSessionController() = default;
 TestSessionController::~TestSessionController() = default;
@@ -96,4 +96,12 @@ void TestSessionController::RemoveObserver(ash::SessionObserver* observer) {
 
 bool TestSessionController::IsScreenLocked() const {
   return is_screen_locked_;
+}
+
+bool TestSessionController::IsEnterpriseManaged() const {
+  return is_enterprise_managed_;
+}
+
+std::optional<int> TestSessionController::GetExistingUsersCount() const {
+  return existing_users_count_;
 }

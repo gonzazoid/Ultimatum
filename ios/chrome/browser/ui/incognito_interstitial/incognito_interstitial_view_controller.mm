@@ -3,24 +3,26 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/incognito_interstitial/incognito_interstitial_view_controller.h"
+
+#import <algorithm>
+
+#import "base/apple/foundation_util.h"
 #import "base/check.h"
-#import "base/cxx17_backports.h"
-#import "base/mac/foundation_util.h"
-#import "ios/chrome/browser/ui/elements/extended_touch_target_button.h"
+#import "base/ios/ios_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/elements/extended_touch_target_button.h"
+#import "ios/chrome/browser/shared/ui/util/attributed_string_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/incognito_interstitial/incognito_interstitial_constants.h"
-#import "ios/chrome/browser/ui/ntp/incognito_view.h"
-#import "ios/chrome/browser/ui/ntp/revamped_incognito_view.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/ntp/incognito/incognito_view.h"
+#import "ios/chrome/browser/ui/ntp/incognito/revamped_incognito_view.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -37,6 +39,9 @@ NSString* const kIncognitoInterstitialBannerName =
 
 // Maximum number of lines for the URL label, before the user unfolds it.
 const int kURLLabelDefaultNumberOfLines = 3;
+
+// Line height multiple for the title label.
+const CGFloat kTitleLabelLineHeightMultiple = 1.3;
 
 }  // namespace
 
@@ -72,7 +77,7 @@ const int kURLLabelDefaultNumberOfLines = 3;
       kIncognitoInterstitialAccessibilityIdentifier;
 
   self.bannerName = kIncognitoInterstitialBannerName;
-  self.isTallBanner = NO;
+  self.bannerSize = BannerImageSizeType::kStandard;
   self.shouldBannerFillTopSpace = YES;
   self.shouldHideBanner = IsCompactHeight(self.traitCollection);
 
@@ -91,6 +96,9 @@ const int kURLLabelDefaultNumberOfLines = 3;
   // constraints can only be activated once the complete view hierarchy has been
   // constructed and relevant views belong to the same hierarchy.
   [super viewDidLoad];
+
+  // Fix the line height multiple of `self.titleLabel`.
+  [self fixTitleLabelLineHeightMultiple];
 
   self.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
   self.modalInPresentation = YES;
@@ -210,9 +218,9 @@ const int kURLLabelDefaultNumberOfLines = 3;
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
   self.shouldHideBanner = IsCompactHeight(self.traitCollection);
   [self updateNavigationBarAppearance];
-  [super traitCollectionDidChange:previousTraitCollection];
 }
 
 - (void)viewDidLayoutSubviews {
@@ -274,12 +282,13 @@ const int kURLLabelDefaultNumberOfLines = 3;
     _expandURLButton =
         [[ExtendedTouchTargetButton alloc] initWithFrame:CGRectZero
                                            primaryAction:readMoreAction];
-    [_expandURLButton setAttributedTitle:readMoreString
-                                forState:UIControlStateNormal];
-    _expandURLButton.titleEdgeInsets = UIEdgeInsetsMake(
-        CGFLOAT_EPSILON, CGFLOAT_EPSILON, CGFLOAT_EPSILON, CGFLOAT_EPSILON);
-    _expandURLButton.contentEdgeInsets = UIEdgeInsetsMake(
-        CGFLOAT_EPSILON, CGFLOAT_EPSILON, CGFLOAT_EPSILON, CGFLOAT_EPSILON);
+
+    UIButtonConfiguration* buttonConfiguration =
+        [UIButtonConfiguration plainButtonConfiguration];
+    buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(0, 0, 0, 0);
+    buttonConfiguration.attributedTitle = readMoreString;
+    _expandURLButton.configuration = buttonConfiguration;
+
     _expandURLButton.backgroundColor = self.view.backgroundColor;
     _expandURLButton.translatesAutoresizingMaskIntoConstraints = NO;
     // On voice over, the full info is on the URL field and this button isn't
@@ -316,7 +325,7 @@ const int kURLLabelDefaultNumberOfLines = 3;
                           : kNavigationBarFadeInKeyFrame1;
   CGFloat opacity =
       (self.scrollViewContentOffsetY - keyFrame0) / (keyFrame1 - keyFrame0);
-  opacity = base::clamp(opacity, 0.0, 1.0, std::less_equal<>());
+  opacity = std::clamp(opacity, 0.0, 1.0, std::less_equal<>());
 
   UIColor* backgroundColor =
       [UIColor colorNamed:kGroupedPrimaryBackgroundColor];
@@ -357,6 +366,25 @@ const int kURLLabelDefaultNumberOfLines = 3;
 - (void)expandURLButtonWasTapped {
   self.URLIsExpanded = YES;
   [self.view setNeedsLayout];
+}
+
+// Set the `attributedText` attribute of `self.titleLabel` to customize the line
+// height multiple.
+- (void)fixTitleLabelLineHeightMultiple {
+  NSMutableAttributedString* titleAttributedText =
+      [NSAttributedStringFromUILabel(self.titleLabel) mutableCopy];
+  NSMutableDictionary* attributes = [NSMutableDictionary
+      dictionaryWithDictionary:[titleAttributedText attributesAtIndex:0
+                                                       effectiveRange:nil]];
+  NSMutableParagraphStyle* paragraphStyle =
+      [[NSMutableParagraphStyle alloc] init];
+  [paragraphStyle setParagraphStyle:attributes[NSParagraphStyleAttributeName]];
+  paragraphStyle.lineHeightMultiple = kTitleLabelLineHeightMultiple;
+  attributes[NSParagraphStyleAttributeName] = paragraphStyle;
+  [titleAttributedText
+      setAttributes:attributes
+              range:NSMakeRange(0, titleAttributedText.length)];
+  self.titleLabel.attributedText = titleAttributedText;
 }
 
 @end

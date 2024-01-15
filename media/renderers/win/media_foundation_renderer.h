@@ -10,7 +10,9 @@
 #include <mfmediaengine.h>
 #include <wrl.h>
 
-#include "base/callback.h"
+#include <memory>
+
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -44,6 +46,8 @@ class MEDIA_EXPORT MediaFoundationRenderer
  public:
   // An enum for recording MediaFoundationRenderer playback error reason.
   // Reported to UMA. Do not change existing values.
+  // Updates to ErrorReason also requires the changes updated to
+  // tools/metrics/histograms/metadata/media/enums.xml.
   enum class ErrorReason {
     kUnknown = 0,
     kCdmProxyReceivedInInvalidState = 1,
@@ -60,15 +64,14 @@ class MEDIA_EXPORT MediaFoundationRenderer
     kFailedToCreateMediaEngine = 12,
     kFailedToCreateDCompTextureWrapper = 13,
     kFailedToInitDCompTextureWrapper = 14,
+    kFailedToSetPlaybackRate = 15,
+    kFailedToGetMediaEngineEx = 16,
     // Add new values here and update `kMaxValue`. Never reuse existing values.
-    kMaxValue = kFailedToInitDCompTextureWrapper,
+    kMaxValue = kFailedToGetMediaEngineEx,
   };
 
   // Report `reason` to UMA.
   static void ReportErrorReason(ErrorReason reason);
-
-  // Whether MediaFoundationRenderer() is supported on the current device.
-  static bool IsSupported();
 
   MediaFoundationRenderer(scoped_refptr<base::SequencedTaskRunner> task_runner,
                           std::unique_ptr<MediaLog> media_log,
@@ -89,6 +92,7 @@ class MEDIA_EXPORT MediaFoundationRenderer
   void SetPlaybackRate(double playback_rate) override;
   void SetVolume(float volume) override;
   base::TimeDelta GetMediaTime() override;
+  RendererType GetRendererType() override;
 
   // MediaFoundationRendererExtension implementation.
   void GetDCompSurface(GetDCompSurfaceCB callback) override;
@@ -126,8 +130,10 @@ class MEDIA_EXPORT MediaFoundationRenderer
   void OnPlaybackEnded();
   void OnFormatChange();
   void OnLoadedData();
+  void OnCanPlayThrough();
   void OnPlaying();
   void OnWaiting();
+  void OnFrameStepCompleted();
   void OnTimeUpdate();
 
   // Callback for `content_protection_manager_`.
@@ -140,7 +146,7 @@ class MEDIA_EXPORT MediaFoundationRenderer
   HRESULT SetDCompModeInternal();
   HRESULT GetDCompSurfaceInternal(HANDLE* surface_handle);
   HRESULT SetSourceOnMediaEngine();
-  HRESULT UpdateVideoStream(const gfx::Rect& rect);
+  HRESULT UpdateVideoStream(const gfx::Size rect_size);
   HRESULT PauseInternal();
   HRESULT InitializeTexturePool(const gfx::Size& size);
   void OnVideoNaturalSizeChange();
@@ -185,6 +191,9 @@ class MEDIA_EXPORT MediaFoundationRenderer
   // and video processing.
   Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> dxgi_device_manager_;
 
+  // Current cached rectangle size of video to be rendered.
+  gfx::Size current_video_rect_size_;
+
   // Current duration of the media.
   base::TimeDelta duration_;
 
@@ -193,6 +202,9 @@ class MEDIA_EXPORT MediaFoundationRenderer
 
   // Keep the last volume value being set.
   float volume_ = 1.0;
+
+  // Current playback rate.
+  double playback_rate_ = 0.0;
 
   // Used for RendererClient::OnBufferingStateChange().
   BufferingState max_buffering_state_ = BufferingState::BUFFERING_HAVE_NOTHING;

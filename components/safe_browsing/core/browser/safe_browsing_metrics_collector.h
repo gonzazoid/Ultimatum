@@ -29,10 +29,7 @@ class SafeBrowsingMetricsCollector : public KeyedService {
   // for measuring user friction, or security sensitive actions. They are used
   // as keys of the SafeBrowsingEventTimestamps pref. They are used for logging
   // histograms, entries must not be removed or reordered. Please update the
-  // enums.xml file if new values are added. They are also used to construct
-  // suffixes of histograms. Please update the MetricsCollectorBypassEventType
-  // or MetricsCollectorSecuritySensitiveEventType
-  // variants in the histograms.xml file if new event values are added.
+  // enums.xml file if new values are added.
   enum EventType {
     // The user state is disabled.
     USER_STATE_DISABLED = 0,
@@ -46,7 +43,7 @@ class SafeBrowsingMetricsCollector : public KeyedService {
     CSD_INTERSTITIAL_BYPASS = 3,
     // The user bypasses the interstitial that is triggered by real time URL
     // check.
-    REAL_TIME_INTERSTITIAL_BYPASS = 4,
+    URL_REAL_TIME_INTERSTITIAL_BYPASS = 4,
     // The user bypasses the dangerous download warning based on server
     // verdicts.
     DANGEROUS_DOWNLOAD_BYPASS = 5,
@@ -72,8 +69,17 @@ class SafeBrowsingMetricsCollector : public KeyedService {
     // User committed a security sensitive action related to downloads, as
     // checked by Safe Browsing.
     SECURITY_SENSITIVE_DOWNLOAD = 12,
+    // The user bypasses an interstitial that is triggered by the hash-prefix
+    // real-time lookup.
+    HASH_PREFIX_REAL_TIME_INTERSTITIAL_BYPASS = 13,
+    // The user bypasses an interstitial that is triggered by the hash-prefix
+    // real-time lookup through Android Safe Browsing API.
+    ANDROID_SAFEBROWSING_REAL_TIME_INTERSTITIAL_BYPASS = 14,
+    // The user bypasses an interstitial that is triggered by the local Safe
+    // Browsing database through Android Safe Browsing API.
+    ANDROID_SAFEBROWSING_INTERSTITIAL_BYPASS = 15,
 
-    kMaxValue = SECURITY_SENSITIVE_DOWNLOAD
+    kMaxValue = ANDROID_SAFEBROWSING_INTERSTITIAL_BYPASS
   };
 
   using EventTypeFilter = base::RepeatingCallback<bool(const EventType&)>;
@@ -131,14 +137,63 @@ class SafeBrowsingMetricsCollector : public KeyedService {
 
  private:
   FRIEND_TEST_ALL_PREFIXES(SafeBrowsingMetricsCollectorTest, GetUserState);
+  FRIEND_TEST_ALL_PREFIXES(SafeBrowsingMetricsCollectorTest,
+                           ProtegoRequestIsNotLoggedWhenEsbIsNotEnabled);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsNoneIfNotRecordedBeforeFirstRunOfCollector);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsWithTokenWhenPingSincePreviousLogTime);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsWithoutTokenWhenPingSincePreviousLogTime);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsWithTokenWhenPingMoreRecentThanWithoutToken);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsWithoutTokenWhenPingMoreRecentThanWithToken);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsNoneWhenNoPingWithTokenSincePreviousLogTime);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsNoneWhenNoPingWithoutTokenSincePreviousLogTime);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsWithTokenWhenPingBeforeCollectorHasEverRun);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      ProtegoRequestLogsWithoutTokenWhenPingBeforeCollectorHasEverRun);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      NewProtegoRequestLogsWithTokenWhenWithTokenWasSendWithinLast24HRS);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      NewProtegoRequestLogsWithoutTokenWhenWithoutTokenWasSendWithinLast24HRS);
+  FRIEND_TEST_ALL_PREFIXES(
+      SafeBrowsingMetricsCollectorTest,
+      NewProtegoRequestLogsWithTokenWhenNoPingWasSendWithinLast24HRS);
+
+  // The type of Protego ping that was sent by an enhanced protection
+  // user. These values are persisted to logs. Entries should not be renumbered
+  // and numeric values should never be reused.
+  enum class ProtegoPingType {
+    kUnknownType = 0,
+    kNone = 1,
+    kWithToken = 2,
+    kWithoutToken = 3,
+    kMaxValue = kWithoutToken,
+  };
 
   static bool IsBypassEventType(const EventType& type);
   static bool IsSecuritySensitiveEventType(const EventType& type);
   static std::string GetUserStateMetricSuffix(const UserState& user_state);
-  static std::string GetEventTypeMetricSuffix(const EventType& event_type);
 
   // For daily metrics.
   void LogMetricsAndScheduleNextLogging();
+  void MaybeLogDailyEsbProtegoPingSentLast24Hours();
   void ScheduleNextLoggingAfterInterval(base::TimeDelta interval);
   void LogDailyOptInMetrics();
   void LogDailyEventMetrics();

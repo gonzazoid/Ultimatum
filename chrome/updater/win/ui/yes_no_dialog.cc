@@ -4,23 +4,24 @@
 
 #include "chrome/updater/win/ui/yes_no_dialog.h"
 
+#include "base/check.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "chrome/updater/win/ui/l10n_util.h"
 #include "chrome/updater/win/ui/resources/updater_installer_strings.h"
 #include "chrome/updater/win/ui/ui.h"
 #include "chrome/updater/win/ui/ui_constants.h"
 #include "chrome/updater/win/ui/ui_util.h"
 
-namespace updater {
-namespace ui {
+namespace updater::ui {
 
 YesNoDialog::YesNoDialog(WTL::CMessageLoop* message_loop, HWND parent)
     : message_loop_(message_loop), parent_(parent), yes_clicked_(false) {
-  DCHECK(message_loop);
+  CHECK(message_loop);
 }
 
 YesNoDialog::~YesNoDialog() {
-  DCHECK(!IsWindow());
+  CHECK(!IsWindow());
 }
 
 BOOL YesNoDialog::PreTranslateMessage(MSG* msg) {
@@ -29,10 +30,11 @@ BOOL YesNoDialog::PreTranslateMessage(MSG* msg) {
 
 HRESULT YesNoDialog::Initialize(const std::wstring& yes_no_title,
                                 const std::wstring& yes_no_text) {
-  DCHECK(!IsWindow());
+  CHECK(!IsWindow());
 
-  if (!Create(parent_))
+  if (!Create(parent_)) {
     return E_FAIL;
+  }
 
   message_loop_->AddMessageFilter(this);
 
@@ -47,8 +49,9 @@ HRESULT YesNoDialog::Initialize(const std::wstring& yes_no_title,
   HRESULT hr =
       SetWindowIcon(m_hWnd, IDI_APP,
                     base::win::ScopedGDIObject<HICON>::Receiver(hicon_).get());
-  if (FAILED(hr))
+  if (FAILED(hr)) {
     VLOG(1) << "Failed to SetWindowIcon" << hr;
+  }
 
   default_font_.CreatePointFont(90, kDialogFont);
   SendMessageToDescendants(
@@ -64,8 +67,8 @@ HRESULT YesNoDialog::Initialize(const std::wstring& yes_no_title,
 }
 
 HRESULT YesNoDialog::Show() {
-  DCHECK(IsWindow());
-  DCHECK(!IsWindowVisible());
+  CHECK(IsWindow());
+  CHECK(!IsWindowVisible());
 
   CenterWindow(nullptr);
   ShowWindow(SW_SHOWNORMAL);
@@ -77,7 +80,7 @@ LRESULT YesNoDialog::OnClickedButton(WORD notify_code,
                                      WORD id,
                                      HWND wnd_ctl,
                                      BOOL& handled) {
-  DCHECK(id == IDOK || id == IDCANCEL);
+  CHECK(id == IDOK || id == IDCANCEL);
 
   switch (id) {
     case IDOK:
@@ -89,9 +92,7 @@ LRESULT YesNoDialog::OnClickedButton(WORD notify_code,
       break;
 
     default:
-      DCHECK(false);
-      yes_clicked_ = false;
-      break;
+      NOTREACHED();
   }
 
   handled = true;
@@ -122,5 +123,4 @@ LRESULT YesNoDialog::OnNCDestroy(UINT message,
   return 0;
 }
 
-}  // namespace ui
-}  // namespace updater
+}  // namespace updater::ui

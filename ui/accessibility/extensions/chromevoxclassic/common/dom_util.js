@@ -470,7 +470,8 @@ cvox.DomUtil.getBaseLabel_ = function(node, recursive, includeControls) {
   if (node.hasAttribute) {
     if (node.hasAttribute('aria-labelledby')) {
       var labelNodeIds = node.getAttribute('aria-labelledby').split(' ');
-      for (var labelNodeId, i = 0; labelNodeId = labelNodeIds[i]; i++) {
+      for (var i = 0; i < labelNodeIds.length; i++) {
+        var labelNodeId = labelNodeIds[i];
         var labelNode = document.getElementById(labelNodeId);
         if (labelNode) {
           label += ' ' + cvox.DomUtil.getName(
@@ -1608,13 +1609,13 @@ cvox.DomUtil.syncInternalLink = function(node) {
     }
   }
   if (targetNode) {
-    // Insert a dummy node to adjust next Tab focus location.
+    // Insert a test node to adjust next Tab focus location.
     var parent = targetNode.parentNode;
-    var dummyNode = document.createElement('div');
-    dummyNode.setAttribute('tabindex', '-1');
-    parent.insertBefore(dummyNode, targetNode);
-    dummyNode.setAttribute('chromevoxignoreariahidden', 1);
-    dummyNode.focus();
+    var testNode = document.createElement('div');
+    testNode.setAttribute('tabindex', '-1');
+    parent.insertBefore(testNode, targetNode);
+    testNode.setAttribute('chromevoxignoreariahidden', 1);
+    testNode.focus();
     cvox.ChromeVox.syncToNode(targetNode, false);
   }
 };

@@ -8,12 +8,18 @@
 #include <ostream>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/types/expected.h"
 
 class Profile;
 
 namespace borealis {
+
+// Borealis hashes tokens it gets from insert_coin using this salt before
+// storing it in prefs.
+extern const char kSaltForPrefStorage[];
 
 class AsyncAllowChecker;
 
@@ -29,11 +35,8 @@ class BorealisFeatures {
     kBlockedOnChildAccount,
     kVmPolicyBlocked,
     kUserPrefBlocked,
-    kBlockedOnStable,
     kBlockedByFlag,
-    kUnsupportedModel,
-    kHardwareChecksFailed,
-    kIncorrectToken,
+    kInsufficientHardware,
   };
 
   // Creates a per-profile instance of the feature-checker for borealis.
@@ -45,14 +48,6 @@ class BorealisFeatures {
   // borealis can run, other statuses imply an error.
   void IsAllowed(base::OnceCallback<void(AllowStatus)> callback);
 
-  // Returns the partial AllowStatus which only performs synchronous checks.
-  // Borealis must first pass this check and then the async ones to be truly
-  // allowed.
-  //
-  // This method is useful for systems that need to initialize borealis
-  // components before the async checks returns.
-  AllowStatus MightBeAllowed();
-
   // Returns true if borealis has been installed and can be run in the profile.
   bool IsEnabled();
 
@@ -63,10 +58,19 @@ class BorealisFeatures {
                   base::OnceCallback<void(AllowStatus)> callback);
 
  private:
+  // Allowedness failures should be from most-unable-to-fix to most fixable.
+  // Hence we divide the synchronous checks into pre- and post- hardware.
+  AllowStatus PreTokenHardwareChecks();
+  AllowStatus PostTokenHardwareChecks();
+
+  void OnTokenHardwareChecked(
+      base::OnceCallback<void(AllowStatus)> callback,
+      base::expected<AllowStatus*, bool> token_hardware_status);
+
   void OnVmTokenDetermined(base::OnceCallback<void(AllowStatus)> callback,
                            std::string hashed_token);
 
-  Profile* const profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<AsyncAllowChecker> async_checker_;
   // TODO(b/218403711): remove this.
   base::WeakPtrFactory<BorealisFeatures> weak_factory_{this};

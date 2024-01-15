@@ -10,14 +10,16 @@
 #include <memory>
 #include <utility>
 
+#include <optional>
 #include "android_webview/common/aw_paths.h"
 #include "android_webview/nonembedded/component_updater/aw_component_updater_configurator.h"
 #include "base/android/path_utils.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/android/url_utils.h"
@@ -31,7 +33,6 @@
 #include "components/update_client/network.h"
 #include "components/update_client/update_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace android_webview {
@@ -67,13 +68,13 @@ void CreateTestFiles(const base::FilePath& install_dir) {
 void AssertOnDemandRequest(bool on_demand, std::string post_data) {
   const auto root = base::JSONReader::Read(post_data);
   ASSERT_TRUE(root);
-  const auto* request = root->FindKey("request");
+  const auto* request = root->GetDict().FindDict("request");
   ASSERT_TRUE(request);
-  const auto& app = request->FindKey("app")->GetListDeprecated()[0];
+  const auto& app = (*request->FindList("app"))[0].GetDict();
   if (on_demand) {
-    EXPECT_EQ("ondemand", app.FindKey("installsource")->GetString());
+    EXPECT_EQ("ondemand", *app.FindString("installsource"));
   } else {
-    EXPECT_EQ(nullptr, app.FindKey("installsource"));
+    EXPECT_EQ(nullptr, app.FindString("installsource"));
   }
 }
 
@@ -102,16 +103,18 @@ class FailingNetworkFetcher : public update_client::NetworkFetcher {
              /* x_header_retry_after_sec= */ 0ll);
   }
 
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      ResponseStartedCallback response_started_callback,
-                      ProgressCallback progress_callback,
-                      DownloadToFileCompleteCallback
-                          download_to_file_complete_callback) override {
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      ResponseStartedCallback response_started_callback,
+      ProgressCallback progress_callback,
+      DownloadToFileCompleteCallback download_to_file_complete_callback)
+      override {
     std::move(download_to_file_complete_callback)
         .Run(
             /* network_error= */ -2,
             /* content_size= */ 0);
+    return base::DoNothing();
   }
 };
 
@@ -141,16 +144,18 @@ class OnDemandNetworkFetcher : public update_client::NetworkFetcher {
              /* x_header_retry_after_sec= */ 0ll);
   }
 
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      ResponseStartedCallback response_started_callback,
-                      ProgressCallback progress_callback,
-                      DownloadToFileCompleteCallback
-                          download_to_file_complete_callback) override {
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      ResponseStartedCallback response_started_callback,
+      ProgressCallback progress_callback,
+      DownloadToFileCompleteCallback download_to_file_complete_callback)
+      override {
     std::move(download_to_file_complete_callback)
         .Run(
             /* network_error= */ -2,
             /* content_size= */ 0);
+    return base::DoNothing();
   }
 };
 
@@ -178,10 +183,10 @@ class FakeCrxNetworkFetcher : public update_client::NetworkFetcher {
         .Run(/* responseCode= */ 200, /* content_size= */ 0);
     std::string response_body;
     int network_error = 0;
-    if (post_data.find("updatecheck") != std::string::npos) {
+    if (base::Contains(post_data, "updatecheck")) {
       ASSERT_TRUE(base::ReadFileToString(
           GetTestFile("fake_component_update_response.json"), &response_body));
-    } else if (post_data.find("eventtype") != std::string::npos) {
+    } else if (base::Contains(post_data, "eventtype")) {
       ASSERT_TRUE(base::ReadFileToString(
           GetTestFile("fake_component_ping_response.json"), &response_body));
     } else {  // error post request not a ping nor update.
@@ -195,19 +200,21 @@ class FakeCrxNetworkFetcher : public update_client::NetworkFetcher {
              /* x_header_retry_after_sec= */ 0ll);
   }
 
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      ResponseStartedCallback response_started_callback,
-                      ProgressCallback progress_callback,
-                      DownloadToFileCompleteCallback
-                          download_to_file_complete_callback) override {
-    ASSERT_TRUE(base::CopyFile(GetTestFile("fake_component.crx"), file_path));
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      ResponseStartedCallback response_started_callback,
+      ProgressCallback progress_callback,
+      DownloadToFileCompleteCallback download_to_file_complete_callback)
+      override {
+    EXPECT_TRUE(base::CopyFile(GetTestFile("fake_component.crx"), file_path));
     std::move(response_started_callback)
         .Run(/* responseCode= */ 200, /* content_size= */ kCrxContentLength);
     std::move(download_to_file_complete_callback)
         .Run(
             /* network_error= */ 0,
             /* content_size= */ kCrxContentLength);
+    return base::DoNothing();
   }
 };
 
@@ -266,7 +273,7 @@ class MockInstallerPolicy : public component_updater::ComponentInstallerPolicy {
   bool RequiresNetworkEncryption() const override { return false; }
 
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override {
     return update_client::CrxInstaller::Result(0);
   }
@@ -275,13 +282,13 @@ class MockInstallerPolicy : public component_updater::ComponentInstallerPolicy {
 
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override {
+                      base::Value::Dict manifest) override {
     version_ = version;
     install_dir_ = install_dir;
     manifest_ = std::move(manifest);
   }
 
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override {
     return true;
   }
@@ -301,12 +308,12 @@ class MockInstallerPolicy : public component_updater::ComponentInstallerPolicy {
   }
 
   bool IsComponentReadyInvoked() { return !!manifest_; }
-  base::Value& GetManifest() { return *manifest_; }
+  base::Value::Dict& GetManifest() { return *manifest_; }
   base::FilePath GetInstallDir() const { return install_dir_; }
   base::Version GetVersion() const { return version_; }
 
  private:
-  absl::optional<base::Value> manifest_;
+  std::optional<base::Value::Dict> manifest_;
   base::FilePath install_dir_;
   base::Version version_;
 };
@@ -425,7 +432,7 @@ TEST_F(AwComponentUpdateServiceTest, TestFreshDownloadingFakeApk) {
   // Assert that the manifest is valid by asserting a field in it other than
   // version.
   std::string* minimum_chrome_version =
-      service.GetMockPolicy()->GetManifest().FindStringKey(
+      service.GetMockPolicy()->GetManifest().FindString(
           "minimum_chrome_version");
   ASSERT_TRUE(minimum_chrome_version);
   EXPECT_EQ(*minimum_chrome_version, "50");

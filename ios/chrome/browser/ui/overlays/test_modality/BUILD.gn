@@ -13,12 +13,10 @@ source_set("test_modality") {
     "test_resizing_presented_overlay_coordinator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/test_modality",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/test_modality",
     "//ios/chrome/browser/ui/overlays:coordinators",
     "//ios/chrome/browser/ui/overlays:presentation_controller",
     "//ios/chrome/common/ui/util",
@@ -33,15 +31,13 @@ source_set("unit_tests") {
     "test_resizing_presented_overlay_coordinator_unittest.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":test_modality",
     "//base/test:test_support",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/main:test_support",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/test_modality",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/test_modality",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
     "//ios/chrome/browser/ui/overlays/test",
     "//ios/chrome/test:test_support",
     "//ios/web/public/test",

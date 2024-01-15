@@ -40,7 +40,7 @@ class MediaRemotingDialogCoordinatorViews
   bool IsShowing() const override;
 
  private:
-  content::WebContents* const web_contents_;
+  const raw_ptr<content::WebContents> web_contents_;
   views::ViewTracker tracker_;
 };
 
@@ -49,9 +49,9 @@ class MediaRemotingDialogCoordinatorViews
 // media stream directly to the remote device instead of playing it locally and
 // then mirroring it remotely.
 class MediaRemotingDialogView : public views::BubbleDialogDelegateView {
- public:
-  METADATA_HEADER(MediaRemotingDialogView);
+  METADATA_HEADER(MediaRemotingDialogView, views::BubbleDialogDelegateView)
 
+ public:
   MediaRemotingDialogView(
       views::View* anchor_view,
       PrefService* pref_service,

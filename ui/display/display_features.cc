@@ -33,6 +33,11 @@ BASE_FEATURE(kUseHDRTransferFunction,
 #endif
 );
 
+// Enables using HDR10(PQ) mode if the monitor says it supports it.
+BASE_FEATURE(kEnableExternalDisplayHDR10Mode,
+             "EnableExternalDisplayHDR10Mode",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 #endif
 
 // This features allows listing all display modes of external displays in the
@@ -44,6 +49,17 @@ BASE_FEATURE(kListAllDisplayModes,
 
 bool IsListAllDisplayModesEnabled() {
   return base::FeatureList::IsEnabled(kListAllDisplayModes);
+}
+
+// TODO(gildekel): A temporary flag to control whether EDID-based (vs.
+// port-based) display IDs are generated per display. Remove once the migration
+// process it complete (b/193019614).
+BASE_FEATURE(kEnableEdidBasedDisplayIds,
+             "EnableEdidBasedDisplayIds",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsEdidBasedDisplayIdsEnabled() {
+  return base::FeatureList::IsEnabled(kEnableEdidBasedDisplayIds);
 }
 
 // A temporary flag to control hardware mirroring until it is decided whether to
@@ -64,6 +80,22 @@ BASE_FEATURE(kRequireHdcpKeyProvisioning,
              base::FEATURE_DISABLED_BY_DEFAULT);
 bool IsHdcpKeyProvisioningRequired() {
   return base::FeatureList::IsEnabled(kRequireHdcpKeyProvisioning);
+}
+
+BASE_FEATURE(kPanelSelfRefresh2,
+             "PanelSelfRefresh2",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsPanelSelfRefresh2Enabled() {
+  return base::FeatureList::IsEnabled(kPanelSelfRefresh2);
+}
+
+BASE_FEATURE(kTiledDisplaySupport,
+             "TiledDisplaySupport",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsTiledDisplaySupportEnabled() {
+  return base::FeatureList::IsEnabled(kTiledDisplaySupport);
 }
 
 }  // namespace features

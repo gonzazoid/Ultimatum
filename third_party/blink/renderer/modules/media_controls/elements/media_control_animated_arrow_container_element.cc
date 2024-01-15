@@ -17,7 +17,7 @@ MediaControlAnimatedArrowContainerElement::AnimatedArrow::AnimatedArrow(
     const AtomicString& id,
     Document& document)
     : HTMLDivElement(document) {
-  setAttribute("id", id);
+  SetIdAttribute(id);
 }
 
 void MediaControlAnimatedArrowContainerElement::AnimatedArrow::HideInternal() {
@@ -38,8 +38,8 @@ void MediaControlAnimatedArrowContainerElement::AnimatedArrow::ShowInternal() {
 
   setInnerHTML(MediaControlsResourceLoader::GetJumpSVGImage());
 
-  last_arrow_ = getElementById("arrow-3");
-  svg_container_ = getElementById("jump");
+  last_arrow_ = getElementById(AtomicString("arrow-3"));
+  svg_container_ = getElementById(AtomicString("jump"));
 
   event_listener_ =
       MakeGarbageCollected<MediaControlAnimationEventListener>(this);
@@ -94,20 +94,19 @@ void MediaControlAnimatedArrowContainerElement::ShowArrowAnimation(
     // This stylesheet element and will contain rules that are specific to the
     // jump arrows. The shadow DOM protects these rules from the parent DOM
     // from bleeding across the shadow DOM boundary.
-    auto* style = MakeGarbageCollected<HTMLStyleElement>(GetDocument(),
-                                                         CreateElementFlags());
+    auto* style = MakeGarbageCollected<HTMLStyleElement>(GetDocument());
     style->setTextContent(
         MediaControlsResourceLoader::GetAnimatedArrowStyleSheet());
     shadow_root->ParserAppendChild(style);
 
     left_jump_arrow_ = MakeGarbageCollected<
         MediaControlAnimatedArrowContainerElement::AnimatedArrow>(
-        "left-arrow", GetDocument());
+        AtomicString("left-arrow"), GetDocument());
     shadow_root->ParserAppendChild(left_jump_arrow_);
 
     right_jump_arrow_ = MakeGarbageCollected<
         MediaControlAnimatedArrowContainerElement::AnimatedArrow>(
-        "right-arrow", GetDocument());
+        AtomicString("right-arrow"), GetDocument());
     shadow_root->ParserAppendChild(right_jump_arrow_);
   }
 

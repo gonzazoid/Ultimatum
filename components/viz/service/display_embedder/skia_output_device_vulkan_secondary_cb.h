@@ -24,15 +24,14 @@ class SkiaOutputDeviceVulkanSecondaryCB final : public SkiaOutputDevice {
 
   std::unique_ptr<SkiaOutputDevice::ScopedPaint> BeginScopedPaint() override;
   void Submit(bool sync_cpu, base::OnceClosure callback) override;
-  bool Reshape(const SkSurfaceCharacterization& characterization,
+  bool Reshape(const SkImageInfo& image_info,
                const gfx::ColorSpace& color_space,
+               int sample_count,
                float device_scale_factor,
                gfx::OverlayTransform transform) override;
-  void SwapBuffers(BufferPresentedCallback feedback,
-                   OutputSurfaceFrame frame) override;
-  void PostSubBuffer(const gfx::Rect& rect,
-                     BufferPresentedCallback feedback,
-                     OutputSurfaceFrame frame) override;
+  void Present(const absl::optional<gfx::Rect>& update_rect,
+               BufferPresentedCallback feedback,
+               OutputSurfaceFrame frame) override;
   SkSurface* BeginPaint(
       std::vector<GrBackendSemaphore>* end_semaphores) override;
   void EndPaint() override;
@@ -47,7 +46,7 @@ class SkiaOutputDeviceVulkanSecondaryCB final : public SkiaOutputDevice {
             const GrBackendSemaphore wait_semaphores[],
             bool delete_semaphores_after_wait) override;
   bool Draw(SkSurface* sk_surface,
-            sk_sp<const SkDeferredDisplayList> ddl) override;
+            sk_sp<const GrDeferredDisplayList> ddl) override;
 
  private:
   const raw_ptr<VulkanContextProvider> context_provider_;

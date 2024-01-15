@@ -103,9 +103,10 @@ class IdentifiabilityStudyHelper final {
   // UpdateBuilder() should be called iff ShouldUpdateBuilder() is true, to
   // avoid unnecessary copies of parameters and hashing when GetToken() won't be
   // called.
-  bool ShouldUpdateBuilder() {
-    if (!is_canvas_type_allowed_)
+  ALWAYS_INLINE bool ShouldUpdateBuilder() {
+    if (LIKELY(!is_canvas_type_allowed_)) {
       return false;
+    }
     if (!execution_context_ ||
         execution_context_->IsInRequestAnimationFrame() ||
         operation_count_ >= max_operations_) {
@@ -150,7 +151,9 @@ class IdentifiabilityStudyHelper final {
     execution_context_ = context;
   }
 
-  ExecutionContext* execution_context() const { return execution_context_; }
+  ExecutionContext* execution_context() const {
+    return execution_context_.Get();
+  }
 
   // For testing, allows scoped changing the max number of operations for all
   // IdentifiabilityStudyHelper instances.

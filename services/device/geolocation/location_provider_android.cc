@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/device/geolocation/location_api_adapter_android.h"
 
 namespace device {
@@ -21,11 +22,16 @@ LocationProviderAndroid::~LocationProviderAndroid() {
 }
 
 void LocationProviderAndroid::NotifyNewGeoposition(
-    const mojom::Geoposition& position) {
+    mojom::GeopositionResultPtr result) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  last_position_ = position;
+  last_result_ = std::move(result);
   if (!callback_.is_null())
-    callback_.Run(this, position);
+    callback_.Run(this, last_result_.Clone());
+}
+
+void LocationProviderAndroid::FillDiagnostics(
+    mojom::GeolocationDiagnostics& diagnostics) {
+  diagnostics.provider_state = state_;
 }
 
 void LocationProviderAndroid::SetUpdateCallback(
@@ -36,6 +42,9 @@ void LocationProviderAndroid::SetUpdateCallback(
 
 void LocationProviderAndroid::StartProvider(bool high_accuracy) {
   DCHECK(thread_checker_.CalledOnValidThread());
+  state_ = high_accuracy
+               ? mojom::GeolocationDiagnostics::ProviderState::kHighAccuracy
+               : mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy;
   LocationApiAdapterAndroid::GetInstance()->Start(
       base::BindRepeating(&LocationProviderAndroid::NotifyNewGeoposition,
                           weak_ptr_factory_.GetWeakPtr()),
@@ -44,12 +53,13 @@ void LocationProviderAndroid::StartProvider(bool high_accuracy) {
 
 void LocationProviderAndroid::StopProvider() {
   DCHECK(thread_checker_.CalledOnValidThread());
+  state_ = mojom::GeolocationDiagnostics::ProviderState::kStopped;
   LocationApiAdapterAndroid::GetInstance()->Stop();
 }
 
-const mojom::Geoposition& LocationProviderAndroid::GetPosition() {
+const mojom::GeopositionResult* LocationProviderAndroid::GetPosition() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  return last_position_;
+  return last_result_.get();
 }
 
 void LocationProviderAndroid::OnPermissionGranted() {

@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ui/quick_answers/ui/user_consent_view.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/quick_answers/quick_answers_ui_controller.h"
 #include "chromeos/components/quick_answers/public/cpp/quick_answers_state.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
@@ -13,6 +13,7 @@
 #include "content/public/common/content_switches.h"
 #include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/display/screen.h"
@@ -87,6 +88,8 @@ std::unique_ptr<views::Label> CreateLabel(const std::u16string& text,
 // views::LabelButton with custom line-height, color and font-list for the
 // underlying label.
 class CustomizedLabelButton : public views::MdTextButton {
+  METADATA_HEADER(CustomizedLabelButton, views::MdTextButton)
+
  public:
   CustomizedLabelButton(PressedCallback callback,
                         const std::u16string& text,
@@ -111,6 +114,9 @@ class CustomizedLabelButton : public views::MdTextButton {
   const char* GetClassName() const override { return "CustomizedLabelButton"; }
 };
 
+BEGIN_METADATA(CustomizedLabelButton)
+END_METADATA
+
 }  // namespace
 
 // UserConsentView
@@ -129,35 +135,62 @@ UserConsentView::UserConsentView(
                                         base::Unretained(this))) {
   if (intent_type.empty() || intent_text.empty()) {
     title_text_ = l10n_util::GetStringUTF16(
-        IDS_ASH_QUICK_ANSWERS_USER_NOTICE_VIEW_TITLE_TEXT);
+        IDS_QUICK_ANSWERS_USER_NOTICE_VIEW_TITLE_TEXT);
   } else {
     title_text_ = l10n_util::GetStringFUTF16(
-        IDS_ASH_QUICK_ANSWERS_USER_CONSENT_VIEW_TITLE_TEXT_WITH_INTENT,
-        intent_type, intent_text);
+        IDS_QUICK_ANSWERS_USER_CONSENT_VIEW_TITLE_TEXT_WITH_INTENT, intent_type,
+        intent_text);
   }
 
   InitLayout();
-  InitWidget();
 
   // Focus should cycle to each of the buttons the view contains and back to it.
   SetFocusBehavior(FocusBehavior::ALWAYS);
   set_suppress_default_focus_handling();
   views::FocusRing::Install(this);
 
-  // Allow tooltips to be shown despite menu-controller owning capture.
-  GetWidget()->SetNativeWindowProperty(
-      views::TooltipManager::kGroupingPropertyKey,
-      reinterpret_cast<void*>(views::MenuConfig::kMenuControllerGroupingId));
-
   // Read out user-consent text if screen-reader is active.
   GetViewAccessibility().AnnounceText(l10n_util::GetStringUTF16(
-      IDS_ASH_QUICK_ANSWERS_USER_NOTICE_VIEW_A11Y_INFO_ALERT_TEXT));
+      IDS_QUICK_ANSWERS_USER_NOTICE_VIEW_A11Y_INFO_ALERT_TEXT));
 }
 
 UserConsentView::~UserConsentView() = default;
 
-const char* UserConsentView::GetClassName() const {
-  return "UserConsentView";
+views::UniqueWidgetPtr UserConsentView::CreateWidget(
+    const gfx::Rect& anchor_view_bounds,
+    const std::u16string& intent_type,
+    const std::u16string& intent_text,
+    base::WeakPtr<QuickAnswersUiController> controller) {
+  views::Widget::InitParams params;
+  params.activatable = views::Widget::InitParams::Activatable::kNo;
+  params.shadow_elevation = 2;
+  params.shadow_type = views::Widget::InitParams::ShadowType::kDrop;
+  params.type = views::Widget::InitParams::TYPE_POPUP;
+  params.z_order = ui::ZOrderLevel::kFloatingUIElement;
+
+  // Parent the widget to the owner of the menu.
+  auto* active_menu_controller = views::MenuController::GetActiveInstance();
+  DCHECK(active_menu_controller && active_menu_controller->owner());
+
+  // This widget has to be a child of menu owner's widget to make keyboard focus
+  // work.
+  params.parent = active_menu_controller->owner()->GetNativeView();
+  params.child = true;
+  params.name = kWidgetName;
+
+  views::UniqueWidgetPtr widget =
+      std::make_unique<views::Widget>(std::move(params));
+  UserConsentView* user_consent_view =
+      widget->SetContentsView(std::make_unique<UserConsentView>(
+          anchor_view_bounds, intent_type, intent_text, controller));
+  user_consent_view->UpdateWidgetBounds();
+
+  // Allow tooltips to be shown despite menu-controller owning capture.
+  widget->SetNativeWindowProperty(
+      views::TooltipManager::kGroupingPropertyKey,
+      reinterpret_cast<void*>(views::MenuConfig::kMenuControllerGroupingId));
+
+  return widget;
 }
 
 gfx::Size UserConsentView::CalculatePreferredSize() const {
@@ -193,9 +226,8 @@ void UserConsentView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->role = ax::mojom::Role::kDialog;
   node_data->SetName(title_text_);
   auto desc_text = l10n_util::GetStringFUTF8(
-      IDS_ASH_QUICK_ANSWERS_USER_NOTICE_VIEW_A11Y_INFO_DESC_TEMPLATE,
-      l10n_util::GetStringUTF16(
-          IDS_ASH_QUICK_ANSWERS_USER_CONSENT_VIEW_DESC_TEXT));
+      IDS_QUICK_ANSWERS_USER_NOTICE_VIEW_A11Y_INFO_DESC_TEMPLATE,
+      l10n_util::GetStringUTF16(IDS_QUICK_ANSWERS_USER_CONSENT_VIEW_DESC_TEXT));
   node_data->SetDescription(desc_text);
 }
 
@@ -263,10 +295,9 @@ void UserConsentView::InitContent() {
   title_->SetMaximumWidthSingleLine(maximum_width);
 
   // Description.
-  desc_ = content_->AddChildView(
-      CreateLabel(l10n_util::GetStringUTF16(
-                      IDS_ASH_QUICK_ANSWERS_USER_CONSENT_VIEW_DESC_TEXT),
-                  kDescFontSizeDelta));
+  desc_ = content_->AddChildView(CreateLabel(
+      l10n_util::GetStringUTF16(IDS_QUICK_ANSWERS_USER_CONSENT_VIEW_DESC_TEXT),
+      kDescFontSizeDelta));
   desc_->SetMultiLine(true);
 
   desc_->SetMaximumWidth(maximum_width);
@@ -293,52 +324,28 @@ void UserConsentView::InitButtonBar() {
       base::BindRepeating(&QuickAnswersUiController::OnUserConsentResult,
                           controller_, false),
       l10n_util::GetStringUTF16(
-          IDS_ASH_QUICK_ANSWERS_USER_CONSENT_VIEW_NO_THANKS_BUTTON),
+          IDS_QUICK_ANSWERS_USER_CONSENT_VIEW_NO_THANKS_BUTTON),
       ShouldUseCompactButtonLayout(anchor_view_bounds_.width()));
   no_thanks_button_ = button_bar->AddChildView(std::move(no_thanks_button));
 
   // Allow button
   auto allow_button = std::make_unique<CustomizedLabelButton>(
       base::BindRepeating(
-          [](QuickAnswersPreTargetHandler* handler,
+          [](chromeos::editor_menu::PreTargetHandler* handler,
              base::WeakPtr<QuickAnswersUiController> controller) {
             // When user consent is accepted, QuickAnswersView will be
             // displayed instead of dismissing the menu.
             handler->set_dismiss_anchor_menu_on_view_closed(false);
-            if (controller)
+            if (controller) {
               controller->OnUserConsentResult(true);
+            }
           },
           &event_handler_, controller_),
       l10n_util::GetStringUTF16(
-          IDS_ASH_QUICK_ANSWERS_USER_CONSENT_VIEW_ALLOW_BUTTON),
+          IDS_QUICK_ANSWERS_USER_CONSENT_VIEW_ALLOW_BUTTON),
       ShouldUseCompactButtonLayout(anchor_view_bounds_.width()));
-  allow_button->SetProminent(true);
+  allow_button->SetStyle(ui::ButtonStyle::kProminent);
   allow_button_ = button_bar->AddChildView(std::move(allow_button));
-}
-
-void UserConsentView::InitWidget() {
-  views::Widget::InitParams params;
-  params.activatable = views::Widget::InitParams::Activatable::kNo;
-  params.shadow_elevation = 2;
-  params.shadow_type = views::Widget::InitParams::ShadowType::kDrop;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
-  params.z_order = ui::ZOrderLevel::kFloatingUIElement;
-
-  // Parent the widget to the owner of the menu.
-  // Skip the logic for browser tests since the menu controller is not
-  // available.
-  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kBrowserTest)) {
-    auto* active_menu_controller = views::MenuController::GetActiveInstance();
-    DCHECK(active_menu_controller && active_menu_controller->owner());
-    params.parent = active_menu_controller->owner()->GetNativeView();
-    params.child = true;
-  }
-
-  views::Widget* widget = new views::Widget();
-  widget->Init(std::move(params));
-  widget->SetContentsView(this);
-  UpdateWidgetBounds();
 }
 
 void UserConsentView::UpdateWidgetBounds() {
@@ -347,13 +354,23 @@ void UserConsentView::UpdateWidgetBounds() {
   int y = anchor_view_bounds_.y() - size.height() - kMarginDip;
   if (y < display::Screen::GetScreen()
               ->GetDisplayMatching(anchor_view_bounds_)
-              .bounds()
+              .work_area()
               .y()) {
     y = anchor_view_bounds_.bottom() + kMarginDip;
   }
   gfx::Rect bounds({x, y}, size);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // For Ash, convert the position relative to the screen.
+  // For Lacros, `bounds` is already relative to the toplevel window and the
+  // position will be calculated on server side.
   wm::ConvertRectFromScreen(GetWidget()->GetNativeWindow()->parent(), &bounds);
+#endif
+
   GetWidget()->SetBounds(bounds);
 }
+
+BEGIN_METADATA(UserConsentView, views::View)
+END_METADATA
 
 }  // namespace quick_answers

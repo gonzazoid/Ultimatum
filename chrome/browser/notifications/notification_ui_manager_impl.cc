@@ -26,6 +26,7 @@
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
+#include "url/origin.h"
 
 using message_center::MessageCenter;
 using message_center::NotifierId;
@@ -46,10 +47,14 @@ NotificationUIManagerImpl::NotificationUIManagerImpl()
   auto* message_center = MessageCenter::Get();
   message_center->AddObserver(this);
 
-  blockers_.push_back(
-      std::make_unique<ScreenLockNotificationBlocker>(message_center));
-  blockers_.push_back(
-      std::make_unique<FullscreenNotificationBlocker>(message_center));
+  auto screen_lock_notification_blocker =
+      std::make_unique<ScreenLockNotificationBlocker>(message_center);
+  screen_lock_notification_blocker->Init();
+  blockers_.push_back(std::move(screen_lock_notification_blocker));
+  auto fullscreen_notification_blocker =
+      std::make_unique<FullscreenNotificationBlocker>(message_center);
+  fullscreen_notification_blocker->Init();
+  blockers_.push_back(std::move(fullscreen_notification_blocker));
 }
 
 NotificationUIManagerImpl::~NotificationUIManagerImpl() {
@@ -87,8 +92,10 @@ void NotificationUIManagerImpl::Add(
       std::make_unique<message_center::Notification>(
           profile_notification->notification()));
 
-  if (profile && profile->IsOffTheRecord())
+  if (profile && profile->IsOffTheRecord() &&
+      !observed_otr_profiles_.IsObservingSource(profile)) {
     observed_otr_profiles_.AddObservation(profile);
+  }
 }
 
 bool NotificationUIManagerImpl::Update(
@@ -172,8 +179,24 @@ std::set<std::string> NotificationUIManagerImpl::GetAllIdsByProfile(
     ProfileNotification::ProfileID profile_id) {
   std::set<std::string> original_ids;
   for (const auto& pair : profile_notifications_) {
-    if (pair.second->profile_id() == profile_id)
+    if (pair.second->profile_id() == profile_id) {
       original_ids.insert(pair.second->original_id());
+    }
+  }
+
+  return original_ids;
+}
+
+std::set<std::string> NotificationUIManagerImpl::GetAllIdsByProfileAndOrigin(
+    ProfileNotification::ProfileID profile_id,
+    const GURL& origin) {
+  std::set<std::string> original_ids;
+  for (const auto& pair : profile_notifications_) {
+    if (pair.second->profile_id() == profile_id &&
+        url::IsSameOriginWith(pair.second->notification().origin_url(),
+                              origin)) {
+      original_ids.insert(pair.second->original_id());
+    }
   }
 
   return original_ids;

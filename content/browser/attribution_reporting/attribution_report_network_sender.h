@@ -7,19 +7,17 @@
 
 #include <list>
 #include <memory>
+#include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "content/browser/attribution_reporting/attribution_report_sender.h"
 #include "content/common/content_export.h"
 
 class GURL;
 
-namespace base {
-class ValueView;
-}  // namespace base
-
 namespace net {
+class HttpRequestHeaders;
 class HttpResponseHeaders;
 }  // namespace net
 
@@ -27,6 +25,10 @@ namespace network {
 class SharedURLLoaderFactory;
 class SimpleURLLoader;
 }  // namespace network
+
+namespace url {
+class Origin;
+}  // namespace url
 
 namespace content {
 
@@ -53,7 +55,8 @@ class CONTENT_EXPORT AttributionReportNetworkSender
   void SendReport(AttributionReport report,
                   bool is_debug_report,
                   ReportSentCallback sent_callback) override;
-  void SendReport(AttributionDebugReport report) override;
+  void SendReport(AttributionDebugReport report,
+                  DebugReportSentCallback) override;
 
  private:
   // This is a std::list so that iterators remain valid during modifications.
@@ -64,19 +67,23 @@ class CONTENT_EXPORT AttributionReportNetworkSender
                               scoped_refptr<net::HttpResponseHeaders>)>;
 
   void SendReport(GURL url,
-                  base::ValueView report_body,
+                  url::Origin origin,
+                  const std::string& body,
+                  net::HttpRequestHeaders headers,
                   UrlLoaderCallback callback);
 
   // Called when headers are available for a sent report.
-  void OnReportSent(AttributionReport report,
+  void OnReportSent(const AttributionReport&,
                     bool is_debug_report,
                     ReportSentCallback sent_callback,
                     UrlLoaderList::iterator it,
                     scoped_refptr<net::HttpResponseHeaders> headers);
 
-  // Called when headers are available for a sent debug report.
-  void OnDebugReportSent(UrlLoaderList::iterator it,
-                         scoped_refptr<net::HttpResponseHeaders> headers);
+  // Called when headers are available for a sent verbose debug report.
+  void OnVerboseDebugReportSent(
+      base::OnceCallback<void(int status)> callback,
+      UrlLoaderList::iterator it,
+      scoped_refptr<net::HttpResponseHeaders> headers);
 
   // Reports that are actively being sent.
   UrlLoaderList loaders_in_progress_;

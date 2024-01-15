@@ -31,7 +31,7 @@
 <translation id="2125211348069077981"><ph name="ALT" /> <ph name="SEPARATOR" /> <ph name="E" /> o <ph name="F" /></translation>
 <translation id="2145908266289632567">Modifica del testo</translation>
 <translation id="215292019801409139">Da <ph name="SEARCH" /><ph name="SEPARATOR" /> 1 a =</translation>
-<translation id="2181097965834437145">Mostra o nasconde la barra dei Preferiti</translation>
+<translation id="2181097965834437145">Mostra o nasconde la barra dei preferiti</translation>
 <translation id="2185166372312820725">Passa alla scheda precedente</translation>
 <translation id="2194790690264064655">Premi <ph name="CTRL" /> e fai clic su un link</translation>
 <translation id="2246352309084894470">Apri/chiudi Avvio app a schermo intero</translation>
@@ -77,7 +77,7 @@
 <translation id="3649256019230929621">Riduce la finestra</translation>
 <translation id="3655154169297074232">Schede e finestre</translation>
 <translation id="3668361878347172356">Ripete l'ultima azione</translation>
-<translation id="3710784500737332588">Consente di aprire il Centro assistenza</translation>
+<translation id="3710784500737332588">Apri il Centro assistenza</translation>
 <translation id="3720939646656082033">Apre il link in una nuova scheda e passa alla nuova scheda</translation>
 <translation id="3725795051337497754">Chiude la scheda corrente</translation>
 <translation id="3751033133896282964">Annulla l'ultima azione</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Mette in evidenza la riga con la barra degli indirizzi</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> o <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Modalità panoramica</translation>
+<translation id="4275283744500212192">Apri le opzioni di layout delle finestre</translation>
 <translation id="4382340674111381977">Torna alla pagina precedente</translation>
 <translation id="4458670250301149821">Sposta un'icona dell'app all'interno/all'esterno di una cartella sulla griglia delle app</translation>
 <translation id="4472417192667361414">Impostazioni di sistema e di visualizzazione</translation>
@@ -109,7 +110,7 @@
 <translation id="4801989101741319327">Passa alla fine della parola successiva</translation>
 <translation id="4866066940972151697">Attiva la scrivania a destra</translation>
 <translation id="4916163929714267752">Apre il link in una nuova finestra</translation>
-<translation id="5030659775136592441">Consente di mostrare Gestione Preferiti</translation>
+<translation id="5030659775136592441">Consente di mostrare Gestione preferiti</translation>
 <translation id="5034421018520995080">Passa alla parte superiore della pagina</translation>
 <translation id="5104462712192763270">Salva la pagina corrente</translation>
 <translation id="5121628974188116412">Passa alla parte inferiore della pagina</translation>
@@ -167,7 +168,7 @@
 <translation id="7020813747703216897">Nessun risultato corrispondente trovato</translation>
 <translation id="7025325401470358758">Riquadro successivo</translation>
 <translation id="7076878155205969899">Disattiva audio</translation>
-<translation id="7077383985738259936">Consente di mettere in evidenza o impostare lo stato attivo nella barra dei Preferiti (se visibile)</translation>
+<translation id="7077383985738259936">Consente di mettere in evidenza o impostare lo stato attivo nella barra dei preferiti (se visibile)</translation>
 <translation id="7237562915163138771">Digita un indirizzo web nella barra degli indirizzi, quindi premi <ph name="ALT" /><ph name="SEPARATOR" /><ph name="ENTER" /></translation>
 <translation id="7254764037241667478">Consente di attivare la modalità di sospensione del dispositivo</translation>
 <translation id="7422707470576323858">Passa al successivo metodo di immissione disponibile</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">Trascina il link in un'area vuota della tabstrip</translation>
 <translation id="8389638407792712197">Apre una nuova finestra</translation>
 <translation id="8429696719963529183">Utilizza i tasti F (da F1 a F12)</translation>
+<translation id="8539396513118402548">Elenco scorciatoie</translation>
 <translation id="85690795166292698">Apre il link in una nuova scheda</translation>
 <translation id="8609384513243082612">Apre una nuova scheda</translation>
 <translation id="8644639153978066712">Visualizza i file nascosti nell'app File</translation>
@@ -216,7 +218,7 @@
 <translation id="9162942292291287644">Nessun risultato di ricerca relativo a <ph name="QUERY" /></translation>
 <translation id="9179672198516322668">Scorciatoie comuni</translation>
 <translation id="93603345341560814">Premi <ph name="SHIFT" /> e fai clic su un link</translation>
-<translation id="945383118875625837">Trascina il link nella barra dei Preferiti</translation>
+<translation id="945383118875625837">Trascina il link nella barra dei preferiti</translation>
 <translation id="969054500339500113">Consente di impostare lo stato attivo nella barra dei menu</translation>
 <translation id="98120814841227350">Passa alla fine del documento</translation>
 </translationbundle>

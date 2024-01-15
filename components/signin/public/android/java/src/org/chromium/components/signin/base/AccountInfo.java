@@ -10,7 +10,10 @@ import android.text.TextUtils;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
+import org.chromium.components.signin.AccountEmailDomainDisplayability;
+import org.chromium.components.signin.Tribool;
 
 /**
  * Stores all the information known about an account.
@@ -25,8 +28,13 @@ public class AccountInfo extends CoreAccountInfo {
 
     @VisibleForTesting
     @CalledByNative
-    public AccountInfo(CoreAccountId id, String email, String gaiaId, String fullName,
-            String givenName, @Nullable Bitmap accountImage,
+    public AccountInfo(
+            CoreAccountId id,
+            String email,
+            String gaiaId,
+            String fullName,
+            String givenName,
+            @Nullable Bitmap accountImage,
             AccountCapabilities accountCapabilities) {
         super(id, email, gaiaId);
         mFullName = fullName;
@@ -36,15 +44,30 @@ public class AccountInfo extends CoreAccountInfo {
     }
 
     /**
-     * @return Full name of the account.
+     * @return Whether the account email can be used in display fields.
+     * If `AccountCapabilities.canHaveEmailAddressDisplayed()` is not available
+     * (Tribool.UNKNOWN), uses fallback.
      */
+    public boolean canHaveEmailAddressDisplayed() {
+        switch (mAccountCapabilities.canHaveEmailAddressDisplayed()) {
+            case Tribool.FALSE:
+                {
+                    return false;
+                }
+            case Tribool.TRUE:
+                {
+                    return true;
+                }
+        }
+        return AccountEmailDomainDisplayability.checkIfDisplayableEmailAddress(getEmail());
+    }
+
+    /** @return Full name of the account. */
     public String getFullName() {
         return mFullName;
     }
 
-    /**
-     * @return Given name of the account.
-     */
+    /** @return Given name of the account. */
     public String getGivenName() {
         return mGivenName;
     }
@@ -57,9 +80,7 @@ public class AccountInfo extends CoreAccountInfo {
         return mAccountImage;
     }
 
-    /**
-     * @return the capability values associated with the account.
-     */
+    /** @return the capability values associated with the account. */
     public AccountCapabilities getAccountCapabilities() {
         return mAccountCapabilities;
     }
@@ -69,7 +90,8 @@ public class AccountInfo extends CoreAccountInfo {
      * The displayable information are full name, given name and avatar.
      */
     public boolean hasDisplayableInfo() {
-        return !TextUtils.isEmpty(mFullName) || !TextUtils.isEmpty(mGivenName)
+        return !TextUtils.isEmpty(mFullName)
+                || !TextUtils.isEmpty(mGivenName)
                 || mAccountImage != null;
     }
 }

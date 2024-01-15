@@ -12,7 +12,7 @@ import "url/mojom/url.mojom";
 
 // This structure holds basic information about a printer.
 // It corresponds to the LocalDestinationInfo object in
-// chrome/browser/resources/print_preview/data/local_parsers.js.
+// chrome/browser/resources/print_preview/data/local_parsers.ts.
 [Stable]
 struct LocalDestinationInfo {
   // Printer id.
@@ -27,12 +27,14 @@ struct LocalDestinationInfo {
   bool configured_via_policy@3;
   // The GURL class cannot be used as it does not support the ipp/ipps scheme.
   [MinVersion=3] string? uri@4;
+  // The current printer status if any exists for the associated printer.
+  [MinVersion=4] PrinterStatus? printer_status@5;
 };
 
 // A container for the results of a printer status query. A printer status
 // query can return multiple errors so PrinterStatus contains multiple
 // StatusReasons. This struct corresponds to the PrinterStatus object in
-// chrome/browser/resources/print_preview/data/printer_status_cros.js.
+// chrome/browser/resources/print_preview/data/printer_status_cros.ts.
 [Stable]
 struct PrinterStatus {
   // Printer id.
@@ -81,6 +83,7 @@ struct StatusReason {
     kPrinterUnreachable,
     kStopped,
     kTrayMissing,
+    [MinVersion=1] kExpiredCertificate,
   };
   [Stable, Extensible]
   enum Severity {
@@ -105,7 +108,7 @@ struct PrintJob {
   uint32 page_count@3;
   // Source showing which component initiated the print job.
   Source source@4;
-  // ID of source. Should be empty if source is PRINT_PREVIEW or ARC.
+  // ID of source. Should be empty if source is kPrintPreview or kArc.
   string source_id@5;
   // Converted to a print_job_info.proto ColorMode enum via
   // printing::IsColorModelSelected().
@@ -130,14 +133,14 @@ struct PrintJob {
     kShortEdge,
   };
   // Used in chrome/browser/printing/print_job.h.
-  // TODO(b/184986771): Rename to kUnknown, kPrintPreview, etc.
   [Stable, Extensible]
   enum Source {
-    [Default] UNKNOWN = -1,
-    PRINT_PREVIEW,
-    ARC,
-    EXTENSION,
-    PRINT_PREVIEW_INCOGNITO,
+    [Default] kUnknown = -1,
+    kPrintPreview,
+    kArc,
+    kExtension,
+    kPrintPreviewIncognito,
+    [MinVersion=1] kIsolatedWebApp,
   };
 };
 
@@ -268,8 +271,31 @@ interface PrintJobObserver {
 // Used to specify which source(s) to observe print jobs from.
 [Stable, Extensible]
 enum PrintJobSource {
- [Default] kAny, // reserved
- kExtension,
+  [Default] kAny, // reserved
+  kExtension,
+  [MinVersion=1] kIsolatedWebApp,
+};
+
+// This interface is used to notify Lacros about local printer events.
+[Stable]
+interface LocalPrintersObserver {
+  // Fires for any update to a local printer and sends the full set of connected
+  // local printers.
+  OnLocalPrintersUpdated@0(array<LocalDestinationInfo> printers);
+};
+
+// This union of structs represents the OAuth-related status of a printer.
+[Stable]
+struct OAuthNotNeeded {};
+[Stable]
+struct OAuthError {};
+[Stable]
+struct OAuthAccessToken { string token; };
+[Stable]
+union GetOAuthAccessTokenResult {
+  OAuthNotNeeded  none;
+  OAuthError error;
+  OAuthAccessToken token;
 };
 
 // This interface is used to query information about local printers
@@ -281,7 +307,7 @@ interface LocalPrinter {
   GetPrinters@0() => (array<LocalDestinationInfo> printers);
 
   // Gets capabilities for a printer as a CapabilitiesResponse object.
-  // See chrome/browser/resources/print_preview/native_layer.js for a
+  // See chrome/browser/resources/print_preview/native_layer.ts for a
   // detailed description of the CapabilitiesResponse object as well as
   // chrome/browser/resources/print_preview/data/ for descriptions of
   // the various sub-objects (such as the Cloud Device Description object).
@@ -305,7 +331,7 @@ interface LocalPrinter {
   CreatePrintJob@5(PrintJob job) => ();
 
   // Cancels a print job. Forwards to CancelPrintJob() in
-  // ash/webui/print_management/mojom/printing_manager.mojom.
+  // chromeos/components/print_management/mojom/printing_manager.mojom.
   [MinVersion=3]
   CancelPrintJob@12(string printer_id, uint32 job_id) => (bool attempted);
 
@@ -339,4 +365,20 @@ interface LocalPrinter {
   AddPrintJobObserver@13(
     pending_remote<PrintJobObserver> observer,
     PrintJobSource source) => ();
+
+  // Checks if the printer requires an OAuth. If yes, returns the access token.
+  [MinVersion=4]
+  GetOAuthAccessToken@14(string printer_id)
+    => (GetOAuthAccessTokenResult oauth_result);
+
+  // Returns an array of IPP 'client-info' values to be sent to the print
+  // destination.
+  [MinVersion=5]
+  GetIppClientInfo@15(string printer_id)
+    => (array<printing.mojom.IppClientInfo> settings);
+
+  // Adds a local printers observer.
+  [MinVersion=7]
+  AddLocalPrintersObserver@16(pending_remote<LocalPrintersObserver> observer)
+      => (array<LocalDestinationInfo> printers);
 };

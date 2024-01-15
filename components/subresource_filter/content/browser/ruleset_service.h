@@ -34,10 +34,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -47,8 +47,6 @@
 #include "components/subresource_filter/content/browser/ruleset_publisher.h"
 #include "components/subresource_filter/content/browser/ruleset_version.h"
 #include "components/subresource_filter/content/browser/verified_ruleset_dealer.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -120,7 +118,7 @@ class IndexedRulesetLocator {
 //
 // Obsolete files deletion and rulesets indexing are posted to
 // |background_task_runner|.
-class RulesetService : public base::SupportsWeakPtr<RulesetService> {
+class RulesetService {
  public:
   // Enumerates the possible outcomes of indexing a ruleset and writing it to
   // disk. Used in UMA histograms, so the order of enumerators should not be
@@ -273,6 +271,8 @@ class RulesetService : public base::SupportsWeakPtr<RulesetService> {
   bool is_initialized_;
 
   const base::FilePath indexed_ruleset_base_dir_;
+
+  base::WeakPtrFactory<RulesetService> weak_ptr_factory_{this};
 };
 
 }  // namespace subresource_filter

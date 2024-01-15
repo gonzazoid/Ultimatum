@@ -4,68 +4,98 @@
 
 #include "components/web_package/signed_web_bundles/signed_web_bundle_signature_stack_entry.h"
 
-#include <utility>
+#include <array>
 
-#include "components/web_package/mojom/web_bundle_parser.mojom.h"
+#include "base/containers/span.h"
+#include "components/web_package/signed_web_bundles/ed25519_public_key.h"
+#include "components/web_package/signed_web_bundles/ed25519_signature.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace web_package {
 
 namespace {
 
-constexpr uint8_t kEd25519PublicKey[32] = {0, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 8, 0, 8, 0, 0, 0, 0, 0, 0, 0,
-                                           0, 8, 8, 8, 0, 0, 0, 0, 0, 0};
+using testing::ElementsAre;
+using testing::Eq;
 
-constexpr uint8_t kEd25519Signature[64] = {
+constexpr std::array<uint8_t, 32> kEd25519PublicKey = {
+    0, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 8, 0,
+    0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 0, 0, 0, 0, 0, 0};
+
+constexpr std::array<uint8_t, 32> kEd25519PublicKey2 = {
+    2, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 8, 0,
+    0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 0, 0, 0, 0, 0, 0};
+
+constexpr std::array<uint8_t, 64> kEd25519Signature = {
     0, 0, 0, 0, 0, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 4, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-mojom::BundleIntegrityBlockSignatureStackEntryPtr MakeSignatureStackEntry(
-    base::span<const uint8_t> public_key,
-    base::span<const uint8_t> signature) {
-  auto raw_signature_stack_entry =
-      mojom::BundleIntegrityBlockSignatureStackEntry::New();
-  raw_signature_stack_entry->public_key =
-      std::vector(std::begin(public_key), std::end(public_key));
-  raw_signature_stack_entry->signature =
-      std::vector(std::begin(signature), std::end(signature));
-  return raw_signature_stack_entry;
+constexpr std::array<uint8_t, 64> kEd25519Signature2 = {
+    2, 0, 0, 0, 0, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 4, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+TEST(SignedWebBundleSignatureStackEntryTest, Getters) {
+  SignedWebBundleSignatureStackEntry signature_stack_entry(
+      /*complete_entry_cbor=*/{1, 2}, /*attributes_cbor=*/{3, 4, 5},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature)));
+
+  EXPECT_THAT(signature_stack_entry.complete_entry_cbor(), ElementsAre(1, 2));
+  EXPECT_THAT(signature_stack_entry.attributes_cbor(), ElementsAre(3, 4, 5));
+  EXPECT_THAT(signature_stack_entry.public_key().bytes(),
+              Eq(kEd25519PublicKey));
+  EXPECT_THAT(signature_stack_entry.signature().bytes(), Eq(kEd25519Signature));
+}
+
+TEST(SignedWebBundleSignatureStackEntryTest, Equality) {
+  SignedWebBundleSignatureStackEntry signature_stack_entry1a(
+      /*complete_entry_cbor=*/{1, 2}, /*attributes_cbor=*/{3, 4, 5},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature)));
+
+  SignedWebBundleSignatureStackEntry signature_stack_entry1b(
+      /*complete_entry_cbor=*/{1, 2}, /*attributes_cbor=*/{3, 4, 5},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature)));
+
+  SignedWebBundleSignatureStackEntry signature_stack_entry2(
+      /*complete_entry_cbor=*/{1}, /*attributes_cbor=*/{3, 4, 5},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature)));
+
+  SignedWebBundleSignatureStackEntry signature_stack_entry3(
+      /*complete_entry_cbor=*/{1, 2}, /*attributes_cbor=*/{3},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature)));
+
+  SignedWebBundleSignatureStackEntry signature_stack_entry4(
+      /*complete_entry_cbor=*/{1, 2}, /*attributes_cbor=*/{3, 4, 5},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey2)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature)));
+
+  SignedWebBundleSignatureStackEntry signature_stack_entry5(
+      /*complete_entry_cbor=*/{1, 2}, /*attributes_cbor=*/{3, 4, 5},
+      Ed25519PublicKey::Create(base::make_span(kEd25519PublicKey)),
+      Ed25519Signature::Create(base::make_span(kEd25519Signature2)));
+
+  EXPECT_TRUE(signature_stack_entry1a == signature_stack_entry1a);
+  EXPECT_TRUE(signature_stack_entry1a == signature_stack_entry1b);
+  EXPECT_FALSE(signature_stack_entry1a != signature_stack_entry1a);
+  EXPECT_FALSE(signature_stack_entry1a != signature_stack_entry1b);
+
+  EXPECT_TRUE(signature_stack_entry1a != signature_stack_entry2);
+  EXPECT_TRUE(signature_stack_entry1a != signature_stack_entry3);
+  EXPECT_TRUE(signature_stack_entry1a != signature_stack_entry4);
+  EXPECT_TRUE(signature_stack_entry1a != signature_stack_entry5);
+  EXPECT_FALSE(signature_stack_entry1a == signature_stack_entry2);
+  EXPECT_FALSE(signature_stack_entry1a == signature_stack_entry3);
+  EXPECT_FALSE(signature_stack_entry1a == signature_stack_entry4);
+  EXPECT_FALSE(signature_stack_entry1a == signature_stack_entry5);
 }
 
 }  // namespace
-
-TEST(SignedWebBundleSignatureStackEntryTest, TestValidSignatureStackEntry) {
-  auto signature_stack_entry = SignedWebBundleSignatureStackEntry::Create(
-      MakeSignatureStackEntry(kEd25519PublicKey, kEd25519Signature));
-
-  ASSERT_TRUE(signature_stack_entry.has_value())
-      << signature_stack_entry.error();
-  EXPECT_TRUE(base::ranges::equal(signature_stack_entry->public_key().bytes(),
-                                  kEd25519PublicKey));
-  EXPECT_TRUE(base::ranges::equal(signature_stack_entry->signature().bytes(),
-                                  kEd25519Signature));
-}
-
-TEST(SignedWebBundleSignatureStackEntryTest, TestInvalidPublicKey) {
-  auto signature_stack_entry = SignedWebBundleSignatureStackEntry::Create(
-      MakeSignatureStackEntry({}, kEd25519Signature));
-
-  ASSERT_FALSE(signature_stack_entry.has_value());
-  EXPECT_EQ(signature_stack_entry.error(),
-            "Invalid public key: The Ed25519 public key does not have the "
-            "correct length. Expected 32 bytes, but received 0 bytes.");
-}
-
-TEST(SignedWebBundleSignatureStackEntryTest, TestInvalidSignature) {
-  auto signature_stack_entry = SignedWebBundleSignatureStackEntry::Create(
-      MakeSignatureStackEntry(kEd25519PublicKey, {}));
-
-  ASSERT_FALSE(signature_stack_entry.has_value());
-  EXPECT_EQ(signature_stack_entry.error(),
-            "Invalid signature: The signature has the wrong length. Expected "
-            "64, but got 0 bytes.");
-}
 
 }  // namespace web_package

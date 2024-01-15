@@ -6,11 +6,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/threading/thread_restrictions.h"
 #include "components/subresource_filter/core/common/indexed_ruleset.h"
 #include "components/subresource_filter/core/common/test_ruleset_utils.h"
@@ -31,11 +31,7 @@ static_assert(CHAR_BIT == 8, "Assumed char was 8 bits.");
 void WriteRulesetContents(const std::vector<uint8_t>& contents,
                           base::FilePath path) {
   base::ScopedAllowBlockingForTesting allow_blocking;
-  int ruleset_size_as_int = base::checked_cast<int>(contents.size());
-  int num_bytes_written =
-      base::WriteFile(path, reinterpret_cast<const char*>(contents.data()),
-                      ruleset_size_as_int);
-  ASSERT_EQ(ruleset_size_as_int, num_bytes_written);
+  ASSERT_TRUE(base::WriteFile(path, contents));
 }
 
 std::vector<uint8_t> SerializeUnindexedRulesetWithMultipleRules(
@@ -121,7 +117,7 @@ TestRulesetCreator::~TestRulesetCreator() {
 }
 
 void TestRulesetCreator::CreateRulesetToDisallowURLsWithPathSuffix(
-    base::StringPiece suffix,
+    std::string_view suffix,
     TestRulesetPair* test_ruleset_pair) {
   DCHECK(test_ruleset_pair);
   proto::UrlRule suffix_rule = CreateSuffixRule(suffix);
@@ -129,7 +125,7 @@ void TestRulesetCreator::CreateRulesetToDisallowURLsWithPathSuffix(
 }
 
 void TestRulesetCreator::CreateUnindexedRulesetToDisallowURLsWithPathSuffix(
-    base::StringPiece suffix,
+    std::string_view suffix,
     TestRuleset* test_unindexed_ruleset) {
   DCHECK(test_unindexed_ruleset);
   proto::UrlRule suffix_rule = CreateSuffixRule(suffix);
@@ -138,7 +134,7 @@ void TestRulesetCreator::CreateUnindexedRulesetToDisallowURLsWithPathSuffix(
 }
 
 void TestRulesetCreator::CreateRulesetToDisallowURLWithSubstrings(
-    std::vector<base::StringPiece> substrings,
+    std::vector<std::string_view> substrings,
     TestRulesetPair* test_ruleset_pair) {
   DCHECK(test_ruleset_pair);
   std::vector<proto::UrlRule> url_rules;
@@ -148,7 +144,7 @@ void TestRulesetCreator::CreateRulesetToDisallowURLWithSubstrings(
 }
 
 void TestRulesetCreator::CreateRulesetToDisallowURLsWithManySuffixes(
-    base::StringPiece suffix,
+    std::string_view suffix,
     int num_of_suffixes,
     TestRulesetPair* test_ruleset_pair) {
   DCHECK(test_ruleset_pair);

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
@@ -112,7 +112,18 @@ class DomainReliabilityUploaderImpl : public DomainReliabilityUploader,
               "to Google' in Chromium's settings under Privacy. On ChromeOS, "
               "the setting is named 'Automatically send diagnostic and usage "
               "data to Google'."
-            policy_exception_justification: "Not implemented."
+            chrome_policy {
+              DomainReliabilityAllowed {
+                policy_options {mode: MANDATORY}
+                DomainReliabilityAllowed: false
+              }
+            }
+            chrome_policy {
+              MetricsReportingEnabled {
+                policy_options {mode: MANDATORY}
+                MetricsReportingEnabled: false
+              }
+            }
           })");
     std::unique_ptr<net::URLRequest> request =
         url_request_context_->CreateRequest(
@@ -122,6 +133,11 @@ class DomainReliabilityUploaderImpl : public DomainReliabilityUploader,
     request->set_allow_credentials(false);
     request->SetExtraRequestHeaderByName(net::HttpRequestHeaders::kContentType,
                                          kJsonMimeType, true /* overwrite */);
+    // Since this is a POST with an upload body and no identifier, these
+    // requests automatically bypass the cache, but for consistency set the
+    // IsolationInfo and load flags such that caching is explicitly disabled.
+    // This does mean we also disable the cache if we're redirected and the
+    // request becomes a GET, but these shouldn't be redirected.
     request->set_isolation_info_from_network_anonymization_key(
         network_anonymization_key);
     request->SetLoadFlags(request->load_flags() | net::LOAD_DISABLE_CACHE);

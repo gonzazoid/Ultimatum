@@ -66,7 +66,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/synchronization/waitable_event.h"
@@ -129,6 +129,8 @@ class MEDIA_EXPORT AudioOutputDevice : public AudioRendererSink,
                        bool play_automatically) override;
   void OnIPCClosed() override;
 
+  AudioOutputIPC* GetIpcForTesting() { return ipc_.get(); }
+
  protected:
   // Magic required by ref_counted.h to avoid any code deleting the object
   // accidentally while there are references to it.
@@ -160,7 +162,7 @@ class MEDIA_EXPORT AudioOutputDevice : public AudioRendererSink,
   // upon state changes.
   void RequestDeviceAuthorizationOnIOThread();
   void InitializeOnIOThread(const AudioParameters& params,
-                            RenderCallback* callback);
+                            MayBeDangling<RenderCallback> callback);
   void CreateStreamOnIOThread();
   void PlayOnIOThread();
   void PauseOnIOThread();

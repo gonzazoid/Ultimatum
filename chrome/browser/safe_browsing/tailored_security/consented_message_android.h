@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "components/messages/android/message_enums.h"
 #include "components/messages/android/message_wrapper.h"
+#include "ui/android/window_android.h"
 
 namespace content {
 class WebContents;
@@ -27,13 +28,14 @@ class TailoredSecurityConsentedModalAndroid {
   ~TailoredSecurityConsentedModalAndroid();
 
  private:
+  friend class TailoredSecurityConsentedModalAndroidTest;
   void DismissMessageInternal(messages::DismissReason dismiss_reason);
   void HandleSettingsClicked();
   void HandleMessageAccepted();
   void HandleMessageDismissed(messages::DismissReason dismiss_reason);
 
   std::unique_ptr<messages::MessageWrapper> message_;
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<ui::WindowAndroid> window_android_ = nullptr;
   base::OnceClosure dismiss_callback_;
 
   // Whether the message is shown for Tailored Security being enabled or

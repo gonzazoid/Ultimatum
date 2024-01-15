@@ -5,15 +5,22 @@
 #ifndef ASH_CAPTURE_MODE_CAPTURE_MODE_FEATURE_POD_CONTROLLER_H_
 #define ASH_CAPTURE_MODE_CAPTURE_MODE_FEATURE_POD_CONTROLLER_H_
 
+#include <memory>
+
+#include "ash/ash_export.h"
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 
 namespace ash {
 
+class FeatureTile;
 class UnifiedSystemTrayController;
 
-// Controller of a feature pod button that toggles night light mode.
-class CaptureModeFeaturePodController : public FeaturePodControllerBase {
+// Controller of a feature tile that launches screen capture.
+class ASH_EXPORT CaptureModeFeaturePodController
+    : public FeaturePodControllerBase {
  public:
   explicit CaptureModeFeaturePodController(
       UnifiedSystemTrayController* controller);
@@ -23,15 +30,20 @@ class CaptureModeFeaturePodController : public FeaturePodControllerBase {
       const CaptureModeFeaturePodController&) = delete;
   ~CaptureModeFeaturePodController() override;
 
+  // Referenced by `UnifiedSystemTrayController` to know whether to construct a
+  // Primary or Compact tile.
+  static bool CalculateButtonVisibility();
+
   // FeaturePodControllerBase:
-  FeaturePodButton* CreateButton() override;
+  std::unique_ptr<FeatureTile> CreateTile(bool compact = false) override;
   QsFeatureCatalogName GetCatalogName() override;
   void OnIconPressed() override;
 
  private:
-  UnifiedSystemTrayController* const tray_controller_;
+  const raw_ptr<UnifiedSystemTrayController, DanglingUntriaged>
+      tray_controller_;
 
-  FeaturePodButton* button_ = nullptr;
+  base::WeakPtrFactory<CaptureModeFeaturePodController> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

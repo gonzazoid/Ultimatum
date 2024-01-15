@@ -5,44 +5,9 @@
 #include "chrome/browser/ui/views/side_panel/side_panel_entry.h"
 
 #include "base/observer_list.h"
+#include "base/time/time.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_entry_observer.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_util.h"
-
-SidePanelEntry::Key::Key(SidePanelEntry::Id id) : id_(id) {
-  DCHECK(id_ != SidePanelEntry::Id::kExtension);
-}
-
-SidePanelEntry::Key::Key(SidePanelEntry::Id id,
-                         extensions::ExtensionId extension_id)
-    : id_(id), extension_id_(extension_id) {
-  DCHECK(id_ == SidePanelEntry::Id::kExtension);
-}
-
-SidePanelEntry::Key::Key(const Key& other) = default;
-
-SidePanelEntry::Key::~Key() = default;
-
-SidePanelEntry::Key& SidePanelEntry::Key::operator=(const Key& other) = default;
-
-bool SidePanelEntry::Key::operator==(const Key& other) const {
-  if (id_ == other.id_) {
-    if (id_ == SidePanelEntry::Id::kExtension) {
-      DCHECK(extension_id_.has_value() && other.extension_id_.has_value());
-      return extension_id_.value() == other.extension_id_.value();
-    }
-    return true;
-  }
-  return false;
-}
-
-bool SidePanelEntry::Key::operator<(const Key& other) const {
-  if (id_ == other.id_ && id_ == SidePanelEntry::Id::kExtension) {
-    DCHECK(extension_id_.has_value() && other.extension_id_.has_value());
-    // TODO(corising): Updating extension sorting
-    return extension_id_.value() < other.extension_id_.value();
-  }
-  return id_ < other.id_;
-}
 
 SidePanelEntry::SidePanelEntry(
     Id id,
@@ -75,6 +40,7 @@ SidePanelEntry::~SidePanelEntry() = default;
 std::unique_ptr<views::View> SidePanelEntry::GetContent() {
   if (content_view_)
     return std::move(content_view_);
+  entry_show_triggered_timestamp_ = base::TimeTicks::Now();
   return create_content_callback_.Run();
 }
 
@@ -94,7 +60,12 @@ void SidePanelEntry::ResetIcon(ui::ImageModel icon) {
 
 void SidePanelEntry::OnEntryShown() {
   entry_shown_timestamp_ = base::TimeTicks::Now();
-  SidePanelUtil::RecordEntryShownMetrics(key_.id());
+  SidePanelUtil::RecordEntryShownMetrics(key_.id(),
+                                         entry_show_triggered_timestamp_);
+  // After the initial load time is recorded, we need to reset the triggered
+  // timestamp so we don't keep recording this entry after its selected from the
+  // combobox.
+  ResetLoadTimestamp();
   for (SidePanelEntryObserver& observer : observers_)
     observer.OnEntryShown(this);
 }
@@ -122,4 +93,8 @@ GURL SidePanelEntry::GetOpenInNewTabURL() const {
 
 bool SidePanelEntry::SupportsNewTabButton() {
   return !open_in_new_tab_url_callback_.is_null();
+}
+
+void SidePanelEntry::ResetLoadTimestamp() {
+  entry_show_triggered_timestamp_ = base::TimeTicks();
 }

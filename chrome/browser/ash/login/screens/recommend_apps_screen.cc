@@ -5,19 +5,17 @@
 #include "chrome/browser/ash/login/screens/recommend_apps_screen.h"
 
 #include "ash/components/arc/arc_prefs.h"
-#include "ash/constants/ash_features.h"
 #include "base/check_op.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/apps/app_discovery_service/app_discovery_service_factory.h"
 #include "chrome/browser/apps/app_discovery_service/play_extras.h"
+#include "chrome/browser/ash/app_list/arc/arc_fast_app_reinstall_starter.h"
+#include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
-#include "chrome/browser/ash/login/screens/recommend_apps/recommend_apps_fetcher.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/arc/arc_fast_app_reinstall_starter.h"
-#include "chrome/browser/ui/webui/chromeos/login/recommend_apps_screen_handler.h"
-#include "chrome/common/chrome_features.h"
+#include "chrome/browser/ui/webui/ash/login/recommend_apps_screen_handler.h"
 #include "components/user_manager/user_manager.h"
 
 namespace ash {
@@ -33,12 +31,12 @@ enum class RecommendAppsScreenAction {
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused. This should be kept in sync with
   // RecommendAppsScreenAction in enums.xml.
-  SKIPPED = 0,
-  RETRIED = 1,
-  SELECTED_NONE = 2,
-  APP_SELECTED = 3,
+  kSkipped = 0,
+  kRetried = 1,
+  kSelectedNone = 2,
+  kAppSelected = 3,
 
-  kMaxValue = APP_SELECTED
+  kMaxValue = kAppSelected
 };
 
 void RecordUmaSelectedRecommendedPercentage(
@@ -62,13 +60,13 @@ void RecordUmaScreenAction(RecommendAppsScreenAction action) {
 // static
 std::string RecommendAppsScreen::GetResultString(Result result) {
   switch (result) {
-    case Result::SELECTED:
+    case Result::kSelected:
       return "Selected";
-    case Result::SKIPPED:
+    case Result::kSkipped:
       return "Skipped";
-    case Result::LOAD_ERROR:
+    case Result::kLoadError:
       return "LoadError";
-    case Result::NOT_APPLICABLE:
+    case Result::kNotApplicable:
       return BaseScreen::kNotApplicable;
   }
 }
@@ -84,8 +82,8 @@ RecommendAppsScreen::RecommendAppsScreen(
 RecommendAppsScreen::~RecommendAppsScreen() = default;
 
 void RecommendAppsScreen::OnSkip() {
-  RecordUmaScreenAction(RecommendAppsScreenAction::SKIPPED);
-  exit_callback_.Run(Result::SKIPPED);
+  RecordUmaScreenAction(RecommendAppsScreenAction::kSkipped);
+  exit_callback_.Run(Result::kSkipped);
 }
 
 void RecommendAppsScreen::OnInstall(base::Value::List apps) {
@@ -97,7 +95,7 @@ void RecommendAppsScreen::OnInstall(base::Value::List apps) {
   RecordUmaUserSelectionAppCount(selected_app_count);
   RecordUmaSelectedRecommendedPercentage(selected_recommended_percentage);
 
-  RecordUmaScreenAction(RecommendAppsScreenAction::APP_SELECTED);
+  RecordUmaScreenAction(RecommendAppsScreenAction::kAppSelected);
   pref_service_->SetList(arc::prefs::kArcFastAppReinstallPackages,
                          std::move(apps));
 
@@ -109,19 +107,24 @@ void RecommendAppsScreen::OnInstall(base::Value::List apps) {
     LOG(ERROR)
         << "Cannot complete Fast App Reinstall flow. Starter is not available.";
   }
-  exit_callback_.Run(Result::SELECTED);
+  exit_callback_.Run(Result::kSelected);
 }
 
 bool RecommendAppsScreen::MaybeSkip(WizardContext& context) {
   const user_manager::UserManager* user_manager =
       user_manager::UserManager::Get();
   DCHECK(user_manager->IsUserLoggedIn());
-  bool is_managed_account = ProfileManager::GetActiveUserProfile()
-                                ->GetProfilePolicyConnector()
-                                ->IsManaged();
+
+  Profile* profile = ProfileManager::GetActiveUserProfile();
+  if (!arc::IsArcPlayStoreEnabledForProfile(profile)) {
+    exit_callback_.Run(Result::kNotApplicable);
+    return true;
+  }
+
+  bool is_managed_account = profile->GetProfilePolicyConnector()->IsManaged();
   bool is_child_account = user_manager->IsLoggedInAsChildUser();
   if (is_managed_account || is_child_account || skip_for_testing_) {
-    exit_callback_.Run(Result::NOT_APPLICABLE);
+    exit_callback_.Run(Result::kNotApplicable);
     return true;
   }
   return false;
@@ -134,27 +137,15 @@ void RecommendAppsScreen::ShowImpl() {
   Profile* profile = ProfileManager::GetActiveUserProfile();
   pref_service_ = profile->GetPrefs();
 
-  if (features::IsOobeNewRecommendAppsEnabled() &&
-      base::FeatureList::IsEnabled(::features::kAppDiscoveryForOobe)) {
-    app_discovery_service_ =
-        apps::AppDiscoveryServiceFactory::GetForProfile(profile);
-    app_discovery_service_->GetApps(
-        apps::ResultType::kRecommendedArcApps,
-        base::BindOnce(&RecommendAppsScreen::OnRecommendationsDownloaded,
-                       weak_factory_.GetWeakPtr()));
-  } else {
-    recommend_apps_fetcher_ = RecommendAppsFetcher::Create(this);
-    recommend_apps_fetcher_->Start();
-  }
+  app_discovery_service_ =
+      apps::AppDiscoveryServiceFactory::GetForProfile(profile);
+  app_discovery_service_->GetApps(
+      apps::ResultType::kRecommendedArcApps,
+      base::BindOnce(&RecommendAppsScreen::OnRecommendationsDownloaded,
+                     weak_factory_.GetWeakPtr()));
 }
 
 void RecommendAppsScreen::HideImpl() {}
-
-void RecommendAppsScreen::OnLoadSuccess(base::Value app_list) {
-  recommended_app_count_ = app_list.is_list() ? app_list.GetList().size() : 0;
-  if (view_)
-    view_->OnLoadSuccess(std::move(app_list));
-}
 
 void RecommendAppsScreen::OnRecommendationsDownloaded(
     const std::vector<apps::Result>& results,
@@ -207,13 +198,13 @@ void RecommendAppsScreen::UnpackResultAndShow(
 void RecommendAppsScreen::OnLoadError() {
   if (is_hidden())
     return;
-  exit_callback_.Run(Result::LOAD_ERROR);
+  exit_callback_.Run(Result::kLoadError);
 }
 
 void RecommendAppsScreen::OnParseResponseError() {
   if (view_)
     view_->OnParseResponseError();
-  exit_callback_.Run(Result::SKIPPED);
+  exit_callback_.Run(Result::kSkipped);
 }
 
 void RecommendAppsScreen::OnUserAction(const base::Value::List& args) {

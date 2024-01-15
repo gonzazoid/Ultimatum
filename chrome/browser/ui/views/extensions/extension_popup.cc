@@ -4,12 +4,13 @@
 
 #include "chrome/browser/ui/views/extensions/extension_popup.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/extensions/extension_view_host.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -29,6 +30,14 @@
 #include "ui/aura/window.h"
 #include "ui/wm/core/window_animations.h"
 #include "ui/wm/public/activation_client.h"
+#endif
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/ozone/public/ozone_platform.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
+#include "base/message_loop/message_pump_apple.h"
 #endif
 
 constexpr gfx::Size ExtensionPopup::kMinSize;
@@ -62,6 +71,32 @@ class ExtensionPopup::ScopedDevToolsAgentHostObservation {
  private:
   raw_ptr<content::DevToolsAgentHostObserver> observer_;
 };
+
+#if BUILDFLAG(IS_MAC)
+// Observes the browser window and forwards OnWidgetActivationChanged()
+// to ExtensionPopup.
+class ExtensionPopup::ScopedBrowserActivationObservation
+    : public views::WidgetObserver {
+ public:
+  explicit ScopedBrowserActivationObservation(ExtensionPopup* owner)
+      : owner_(owner) {
+    BrowserView* browser_view =
+        BrowserView::GetBrowserViewForBrowser(owner->host()->GetBrowser());
+    observation_.Observe(browser_view->GetWidget());
+  }
+  ~ScopedBrowserActivationObservation() override = default;
+
+  // views::WidgetObserer:
+  void OnWidgetActivationChanged(views::Widget* widget, bool active) override {
+    owner_->OnWidgetActivationChanged(widget, active);
+  }
+
+ private:
+  raw_ptr<ExtensionPopup> owner_;
+  base::ScopedObservation<views::Widget, views::WidgetObserver> observation_{
+      this};
+};
+#endif
 
 // static
 ExtensionPopup* ExtensionPopup::last_popup_for_testing() {
@@ -140,6 +175,16 @@ void ExtensionPopup::OnWidgetActivationChanged(views::Widget* widget,
     // https://crbug.com/941994 for more discussion.
     if (widget == anchor_widget() && active)
       CloseUnlessUnderInspection();
+#if BUILDFLAG(IS_MAC)
+    // In macOS fullscreen, the extension popup is anchored to the overlay
+    // widget that never gets activated, therefore we observe the activation of
+    // the browser window.
+    BrowserView* browser_view =
+        BrowserView::GetBrowserViewForBrowser(host_->GetBrowser());
+    if (browser_view->IsImmersiveModeEnabled() && browser_view->IsActive()) {
+      CloseUnlessUnderInspection();
+    }
+#endif
   }
 }
 
@@ -181,6 +226,18 @@ gfx::Size ExtensionPopup::GetMinBounds() {
 }
 
 gfx::Size ExtensionPopup::GetMaxBounds() {
+#if BUILDFLAG(IS_OZONE)
+  // Some platforms like wayland don't allow clients to know the global
+  // coordinates of the window. This means in those platforms we have no way to
+  // calculate exact space available based on the position of the parent window.
+  // So simply fall back on default max.
+  if (!ui::OzonePlatform::GetInstance()
+           ->GetPlatformProperties()
+           .supports_global_screen_coordinates) {
+    return kMaxSize;
+  }
+#endif
+
   gfx::Size max_size = kMaxSize;
   max_size.SetToMin(
       BubbleDialogDelegate::GetMaxAvailableScreenSpaceToPlaceBubble(
@@ -213,7 +270,7 @@ void ExtensionPopup::OnExtensionUnloaded(
     DCHECK(extension_registry_observation_.IsObserving());
     extension_registry_observation_.Reset();
 
-    GetWidget()->Close();
+    CloseDeferredIfNecessary();
   }
 }
 
@@ -228,7 +285,7 @@ void ExtensionPopup::OnTabStripModelChanged(
     const TabStripModelChange& change,
     const TabStripSelectionChange& selection) {
   if (!tab_strip_model->empty() && selection.active_tab_changed())
-    GetWidget()->Close();
+    CloseDeferredIfNecessary();
 }
 
 void ExtensionPopup::DevToolsAgentHostAttached(
@@ -256,7 +313,8 @@ ExtensionPopup::ExtensionPopup(
                                views::BubbleBorder::STANDARD_SHADOW),
       host_(std::move(host)),
       show_action_(show_action),
-      shown_callback_(std::move(callback)) {
+      shown_callback_(std::move(callback)),
+      deferred_close_weak_ptr_factory_(this) {
   g_last_popup_for_testing = this;
   SetButtons(ui::DIALOG_BUTTON_NONE);
   set_use_round_corners(false);
@@ -278,7 +336,12 @@ ExtensionPopup::ExtensionPopup(
 
   scoped_devtools_observation_ =
       std::make_unique<ScopedDevToolsAgentHostObservation>(this);
-  host_->browser()->tab_strip_model()->AddObserver(this);
+  host_->GetBrowser()->tab_strip_model()->AddObserver(this);
+
+#if BUILDFLAG(IS_MAC)
+  scoped_browser_activation_obvervation_ =
+      std::make_unique<ScopedBrowserActivationObservation>(this);
+#endif
 
   // Handle the containing view calling window.close();
   // The base::Unretained() below is safe because this object owns `host_`, so
@@ -312,7 +375,8 @@ void ExtensionPopup::ShowBubble() {
 
   if (show_action_ == PopupShowAction::kShowAndInspect) {
     DevToolsWindow::OpenDevToolsWindow(
-        host_->host_contents(), DevToolsToggleAction::ShowConsolePanel());
+        host_->host_contents(), DevToolsToggleAction::ShowConsolePanel(),
+        DevToolsOpenedByAction::kContextMenuInspect);
   }
 
   if (shown_callback_)
@@ -321,13 +385,33 @@ void ExtensionPopup::ShowBubble() {
 
 void ExtensionPopup::CloseUnlessUnderInspection() {
   if (show_action_ != PopupShowAction::kShowAndInspect)
-    GetWidget()->CloseWithReason(views::Widget::ClosedReason::kLostFocus);
+    CloseDeferredIfNecessary(views::Widget::ClosedReason::kLostFocus);
+}
+
+void ExtensionPopup::CloseDeferredIfNecessary(
+    views::Widget::ClosedReason reason) {
+#if BUILDFLAG(IS_MAC)
+  // On Mac, defer close if we're in a nested run loop (for example, showing a
+  // context menu) to avoid messaging deallocated objects.
+  if (base::message_pump_apple::IsHandlingSendEvent()) {
+    deferred_close_weak_ptr_factory_.InvalidateWeakPtrs();
+    auto weak_ptr = deferred_close_weak_ptr_factory_.GetWeakPtr();
+    CFRunLoopPerformBlock(CFRunLoopGetCurrent(), kCFRunLoopDefaultMode, ^{
+      if (weak_ptr) {
+        weak_ptr->GetWidget()->CloseWithReason(reason);
+      }
+    });
+    return;
+  }
+#endif  // BUILDFLAG(IS_MAC)
+
+  GetWidget()->CloseWithReason(reason);
 }
 
 void ExtensionPopup::HandleCloseExtensionHost(extensions::ExtensionHost* host) {
   DCHECK_EQ(host, host_.get());
-  GetWidget()->Close();
+  CloseDeferredIfNecessary();
 }
 
-BEGIN_METADATA(ExtensionPopup, views::BubbleDialogDelegateView)
+BEGIN_METADATA(ExtensionPopup)
 END_METADATA

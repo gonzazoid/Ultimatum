@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -32,7 +33,7 @@ class ScrollOffsetAnimations;
 class ScrollOffsetAnimationsImpl;
 class WorkletAnimation;
 
-enum class ThreadInstance { MAIN, IMPL };
+enum class ThreadInstance { kMain, kImpl };
 
 // An AnimationHost contains all the state required to play animations.
 // Specifically, it owns all the AnimationTimelines objects.
@@ -168,10 +169,11 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
       const gfx::PointF& current_offset,
       base::TimeDelta delayed_by,
       base::TimeDelta animation_start_offset) override;
-  bool ImplOnlyScrollAnimationUpdateTarget(const gfx::Vector2dF& scroll_delta,
-                                           const gfx::PointF& max_scroll_offset,
-                                           base::TimeTicks frame_monotonic_time,
-                                           base::TimeDelta delayed_by) override;
+  std::optional<gfx::PointF> ImplOnlyScrollAnimationUpdateTarget(
+      const gfx::Vector2dF& scroll_delta,
+      const gfx::PointF& max_scroll_offset,
+      base::TimeTicks frame_monotonic_time,
+      base::TimeDelta delayed_by) override;
 
   void ScrollAnimationAbort() override;
 
@@ -209,7 +211,9 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
   bool HasCanvasInvalidation() const override;
   bool HasJSAnimation() const override;
   bool HasSmilAnimation() const override;
-  bool HasSharedElementTransition() const override;
+  bool HasViewTransition() const override;
+  bool HasScrollLinkedAnimation(ElementId for_scroller) const override;
+  bool IsAutoScrolling() const override;
 
   // Starts/stops throughput tracking represented by |sequence_id|.
   void StartThroughputTracking(TrackedAnimationSequenceId sequence_id);
@@ -219,7 +223,7 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
   void SetHasCanvasInvalidation(bool has_canvas_invalidation);
   void SetHasInlineStyleMutation(bool has_inline_style_mutation);
   void SetHasSmilAnimation(bool has_svg_smil_animation);
-  void SetHasSharedElementTransition(bool hash_shared_element_transition);
+  void SetHasViewTransition(bool has_view_transition);
   void SetCurrentFrameHadRaf(bool current_frame_had_raf);
   void SetNextFrameHasPendingRaf(bool next_frame_has_pending_raf);
 
@@ -266,7 +270,9 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
   raw_ptr<MutatorHostClient> mutator_host_client_ = nullptr;
 
   // This is only non-null within the call scope of PushPropertiesTo().
-  const PropertyTrees* property_trees_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const PropertyTrees* property_trees_ = nullptr;
 
   // Exactly one of scroll_offset_animations_ and scroll_offset_animations_impl_
   // will be non-null for a given AnimationHost instance (the former if
@@ -289,7 +295,7 @@ class CC_ANIMATION_EXPORT AnimationHost : public MutatorHost,
   ProtectedSequenceReadable<bool> has_canvas_invalidation_{false};
   ProtectedSequenceReadable<bool> has_inline_style_mutation_{false};
   ProtectedSequenceReadable<bool> has_smil_animation_{false};
-  ProtectedSequenceReadable<bool> has_shared_element_transition_{false};
+  ProtectedSequenceReadable<bool> has_view_transition_{false};
 
   ProtectedSequenceWritable<PendingThroughputTrackerInfos>
       pending_throughput_tracker_infos_;

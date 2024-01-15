@@ -21,6 +21,7 @@
 #include <iterator>
 #include <string>
 
+#include "base/check_op.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "util/file/file_io.h"
@@ -329,6 +330,11 @@ ssize_t PtraceClient::ReadUpTo(VMAddress address, size_t size, void* buffer) {
 
     if (bytes_read == 0) {
       return total_read;
+    }
+
+    if (static_cast<size_t>(bytes_read) > size) {
+      LOG(ERROR) << "invalid size " << bytes_read;
+      return -1;
     }
 
     if (!LoggingReadFileExactly(sock_, buffer_c, bytes_read)) {

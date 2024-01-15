@@ -4,9 +4,9 @@
 
 #include "remoting/ios/audio/audio_playback_sink_ios.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "remoting/client/audio/async_audio_data_supplier.h"
 #include "remoting/client/audio/audio_stream_format.h"
@@ -146,7 +146,7 @@ void AudioPlaybackSinkIos::StartPlayback() {
     // StartPlayback() may be called from inside GetDataRequest::OnDataFilled().
     // In this case ResetOutputQueue() must be called in a separate task because
     // it alters the pending requests in |supplier_|.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&AudioPlaybackSinkIos::ResetOutputQueue,
                                   weak_factory_.GetWeakPtr()));
     state_ = State::SCHEDULED_TO_RESET;

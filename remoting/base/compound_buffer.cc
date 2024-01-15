@@ -21,10 +21,7 @@ CompoundBuffer::DataChunk::DataChunk(const DataChunk& other) = default;
 
 CompoundBuffer::DataChunk::~DataChunk() = default;
 
-CompoundBuffer::CompoundBuffer()
-    : total_bytes_(0),
-      locked_(false) {
-}
+CompoundBuffer::CompoundBuffer() : total_bytes_(0), locked_(false) {}
 
 CompoundBuffer::~CompoundBuffer() = default;
 
@@ -84,15 +81,13 @@ void CompoundBuffer::Prepend(const CompoundBuffer& buffer) {
   }
 }
 void CompoundBuffer::AppendCopyOf(const char* data, int size) {
-  scoped_refptr<net::IOBuffer> buffer =
-      base::MakeRefCounted<net::IOBuffer>(size);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(size);
   memcpy(buffer->data(), data, size);
   Append(std::move(buffer), size);
 }
 
 void CompoundBuffer::PrependCopyOf(const char* data, int size) {
-  scoped_refptr<net::IOBuffer> buffer =
-      base::MakeRefCounted<net::IOBuffer>(size);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(size);
   memcpy(buffer->data(), data, size);
   Prepend(std::move(buffer), size);
 }
@@ -163,7 +158,8 @@ void CompoundBuffer::CopyTo(char* data, int size) const {
 }
 
 void CompoundBuffer::CopyFrom(const CompoundBuffer& source,
-                              int start, int end) {
+                              int start,
+                              int end) {
   // Check that 0 <= |start| <= |end| <= |total_bytes_|.
   DCHECK_LE(0, start);
   DCHECK_LE(start, end);
@@ -179,7 +175,6 @@ void CompoundBuffer::CopyFrom(const CompoundBuffer& source,
   int pos = 0;
   for (DataChunkList::const_iterator it = source.chunks_.begin();
        it != source.chunks_.end(); ++it) {
-
     // Add data from the current chunk only if it is in the specified interval.
     if (pos + it->size > start && pos < end) {
       int relative_start = std::max(0, start - pos);

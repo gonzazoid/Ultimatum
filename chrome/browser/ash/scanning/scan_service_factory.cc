@@ -4,10 +4,9 @@
 
 #include "chrome/browser/ash/scanning/scan_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/scanning/lorgnette_scanner_manager_factory.h"
 #include "chrome/browser/ash/scanning/scan_service.h"
 #include "chrome/browser/profiles/profile.h"
@@ -26,18 +25,14 @@ ScanService* ScanServiceFactory::GetForBrowserContext(
 
 // static
 ScanServiceFactory* ScanServiceFactory::GetInstance() {
-  return base::Singleton<ScanServiceFactory>::get();
+  static base::NoDestructor<ScanServiceFactory> instance;
+  return instance.get();
 }
 
 // static
 KeyedService* ScanServiceFactory::BuildInstanceFor(
     content::BrowserContext* context) {
-  // Prevent an instance of ScanService from being created on the lock screen.
   Profile* profile = Profile::FromBrowserContext(context);
-  if (!ProfileHelper::IsUserProfile(profile)) {
-    return nullptr;
-  }
-
   auto* integration_service =
       drive::DriveIntegrationServiceFactory::FindForProfile(profile);
   bool drive_available = integration_service &&
@@ -54,7 +49,14 @@ KeyedService* ScanServiceFactory::BuildInstanceFor(
 ScanServiceFactory::ScanServiceFactory()
     : ProfileKeyedServiceFactory(
           "ScanService",
-          ProfileSelections::BuildRedirectedInIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // Guest Profile follows Regular Profile selection mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // Prevent an instance of ScanService from being created on the
+              // lock screen.
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(LorgnetteScannerManagerFactory::GetInstance());
   DependsOn(HoldingSpaceKeyedServiceFactory::GetInstance());
 }
@@ -64,10 +66,6 @@ ScanServiceFactory::~ScanServiceFactory() = default;
 KeyedService* ScanServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   return BuildInstanceFor(context);
-}
-
-bool ScanServiceFactory::ServiceIsCreatedWithBrowserContext() const {
-  return true;
 }
 
 bool ScanServiceFactory::ServiceIsNULLWhileTesting() const {

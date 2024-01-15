@@ -4,15 +4,14 @@
 
 #include "components/optimization_guide/content/browser/page_content_annotations_validator.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/rand_util.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_tick_clock.h"
 #include "components/optimization_guide/content/browser/page_content_annotator.h"
@@ -68,9 +67,9 @@ PageContentAnnotationsValidator::PageContentAnnotationsValidator(
     : annotator_(annotator) {
   DCHECK(annotator);
   for (AnnotationType type : {
-           AnnotationType::kPageTopics,
            AnnotationType::kPageEntities,
            AnnotationType::kContentVisibility,
+           AnnotationType::kTextEmbedding,
        }) {
     if (features::PageContentAnnotationValidationEnabledForType(type)) {
       enabled_annotation_types_.push_back(type);
@@ -95,9 +94,9 @@ PageContentAnnotationsValidator::MaybeCreateAndStartTimer(
 
   bool enabled_for_any_type = false;
   for (AnnotationType type : {
-           AnnotationType::kPageTopics,
            AnnotationType::kPageEntities,
            AnnotationType::kContentVisibility,
+           AnnotationType::kTextEmbedding,
        }) {
     enabled_for_any_type |=
         features::PageContentAnnotationValidationEnabledForType(type);

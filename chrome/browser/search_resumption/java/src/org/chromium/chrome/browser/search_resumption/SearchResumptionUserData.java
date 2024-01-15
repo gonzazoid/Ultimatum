@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.search_resumption;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.UserData;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tab.Tab;
@@ -14,9 +15,7 @@ import org.chromium.url.GURL;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Helper class for the search suggestion module which shows search suggestions on NTP.
- */
+/** Helper class for the search suggestion module which shows search suggestions on NTP. */
 public class SearchResumptionUserData implements UserData {
     // The cached search suggestion results.
     static class SuggestionResult {
@@ -42,12 +41,15 @@ public class SearchResumptionUserData implements UserData {
         GURL getLastUrlToTrack() {
             return mLastUrlToTrack;
         }
+
         String[] getSuggestionTexts() {
             return mSuggestionTexts;
         }
+
         GURL[] getSuggestionUrls() {
             return mSuggestionUrls;
         }
+
         List<AutocompleteMatch> getSuggestions() {
             return mSuggestions;
         }
@@ -58,18 +60,17 @@ public class SearchResumptionUserData implements UserData {
     private long mTimeStampMs = -1;
     private SuggestionResult mCachedSuggestions;
 
-    /**
-     * Static class that implements the initialization-on-demand holder idiom.
-     */
-    private static class LazyHolder {
-        static final SearchResumptionUserData INSTANCE = new SearchResumptionUserData();
+    private static SearchResumptionUserData sInstance = new SearchResumptionUserData();
+
+    /** Gets the singleton instance for the SearchResumptionUserData. */
+    public static SearchResumptionUserData getInstance() {
+        return sInstance;
     }
 
-    /**
-     * Gets the singleton instance for the SearchResumptionUserData.
-     */
-    public static SearchResumptionUserData getInstance() {
-        return SearchResumptionUserData.LazyHolder.INSTANCE;
+    public static void setInstanceForTesting(SearchResumptionUserData value) {
+        var prevValue = sInstance;
+        sInstance = value;
+        ResettersForTesting.register(() -> sInstance = prevValue);
     }
 
     /**
@@ -81,7 +82,7 @@ public class SearchResumptionUserData implements UserData {
      */
     public void cacheSuggestions(
             Tab tab, GURL urlToTrack, String[] suggestionTexts, GURL[] suggestionUrls) {
-        if (tab == null || !UrlUtilities.isNTPUrl(tab.getUrl())) return;
+        if (tab == null || !UrlUtilities.isNtpUrl(tab.getUrl())) return;
 
         SearchResumptionUserData searchResumptionUserData = get(tab);
         if (searchResumptionUserData == null) {
@@ -100,7 +101,7 @@ public class SearchResumptionUserData implements UserData {
      * @param suggestions: The suggestions fetched using Autocompelete API.
      */
     public void cacheSuggestions(Tab tab, GURL urlToTrack, List<AutocompleteMatch> suggestions) {
-        if (tab == null || !UrlUtilities.isNTPUrl(tab.getUrl())) return;
+        if (tab == null || !UrlUtilities.isNtpUrl(tab.getUrl())) return;
 
         SearchResumptionUserData searchResumptionUserData = get(tab);
         if (searchResumptionUserData == null) {
@@ -111,13 +112,12 @@ public class SearchResumptionUserData implements UserData {
         tab.getUserDataHost().setUserData(USER_DATA_KEY, searchResumptionUserData);
     }
 
-    /**
-     * Returns the last cached search suggestions, null if the UserData isn't set or expired.
-     */
+    /** Returns the last cached search suggestions, null if the UserData isn't set or expired. */
     public SuggestionResult getCachedSuggestions(Tab tab) {
         SearchResumptionUserData searchResumptionUserData = get(tab);
-        return searchResumptionUserData == null ? null
-                                                : searchResumptionUserData.mCachedSuggestions;
+        return searchResumptionUserData == null
+                ? null
+                : searchResumptionUserData.mCachedSuggestions;
     }
 
     /**

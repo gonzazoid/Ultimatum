@@ -8,21 +8,29 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner.h"
+#include "chrome/browser/media/cast_mirroring_service_host.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/media/router/providers/cast/cast_activity_manager.h"
 #include "chrome/browser/media/router/providers/cast/cast_internal_message_util.h"
+#include "chrome/browser/media/router/providers/cast/cast_media_route_provider_metrics.h"
 #include "chrome/browser/media/router/providers/cast/cast_session_tracker.h"
+#include "chrome/browser/media/router/providers/cast/mirroring_activity.h"
 #include "components/media_router/browser/logger_impl.h"
 #include "components/media_router/common/media_source.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
 #include "components/media_router/common/providers/cast/cast_media_source.h"
 #include "components/media_router/common/providers/cast/channel/cast_message_handler.h"
 #include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "media/base/audio_codecs.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_codecs.h"
 #include "media/remoting/device_capability_checker.h"
 #include "net/base/url_util.h"
@@ -59,39 +67,24 @@ std::vector<url::Origin> GetOrigins(const MediaSource::Id& source_id) {
   return allowed_origins;
 }
 
-media::VideoCodec ParseVideoCodec(const MediaSource& media_source) {
+absl::optional<media::VideoCodec> ParseVideoCodec(
+    const MediaSource& media_source) {
   std::string video_codec;
   if (!net::GetValueForKeyInQuery(media_source.url(), "video_codec",
                                   &video_codec)) {
-    return media::VideoCodec::kUnknown;
+    return absl::nullopt;
   }
-#if BUILDFLAG(USE_PROPRIETARY_CODECS)
-  // `StringToVideoCodec()` does not parse custom strings like "hevc" and
-  // "h264".
-  if (video_codec == "hevc") {
-    return media::VideoCodec::kHEVC;
-  }
-  if (video_codec == "h264") {
-    return media::VideoCodec::kH264;
-  }
-#endif
-  return media::StringToVideoCodec(video_codec);
+  return media::remoting::ParseVideoCodec(video_codec);
 }
 
-media::AudioCodec ParseAudioCodec(const MediaSource& media_source) {
+absl::optional<media::AudioCodec> ParseAudioCodec(
+    const MediaSource& media_source) {
   std::string audio_codec;
   if (!net::GetValueForKeyInQuery(media_source.url(), "audio_codec",
                                   &audio_codec)) {
-    return media::AudioCodec::kUnknown;
+    return absl::nullopt;
   }
-  if (audio_codec == "aac") {
-#if BUILDFLAG(USE_PROPRIETARY_CODECS)
-    return media::AudioCodec::kAAC;
-#else
-    return media::AudioCodec::kUnknown;
-#endif
-  }
-  return media::StringToAudioCodec(audio_codec);
+  return media::remoting::ParseAudioCodec(audio_codec);
 }
 
 std::vector<MediaSinkInternal> GetRemotePlaybackMediaSourceCompatibleSinks(
@@ -99,17 +92,36 @@ std::vector<MediaSinkInternal> GetRemotePlaybackMediaSourceCompatibleSinks(
     const std::vector<MediaSinkInternal>& sinks) {
   DCHECK(media_source.IsRemotePlaybackSource());
   std::vector<MediaSinkInternal> compatible_sinks;
+
+  // Return an empty list if the source URL contains invalid codecs. It's
+  // possible that the source URL doesn't include an audio codec, which means
+  // the media content doesn't have an audio track. However, there must exist a
+  // valid video codec.
   auto video_codec = ParseVideoCodec(media_source);
+  if (!video_codec.has_value() ||
+      video_codec.value() == media::VideoCodec::kUnknown) {
+    return compatible_sinks;
+  }
   auto audio_codec = ParseAudioCodec(media_source);
-  if (video_codec == media::VideoCodec::kUnknown ||
-      audio_codec == media::AudioCodec::kUnknown) {
+  if (audio_codec.has_value() &&
+      audio_codec.value() == media::AudioCodec::kUnknown) {
     return compatible_sinks;
   }
 
   for (const auto& sink : sinks) {
     const std::string& model_name = sink.cast_data().model_name;
-    if (media::remoting::IsVideoCodecCompatible(model_name, video_codec) &&
-        media::remoting::IsAudioCodecCompatible(model_name, audio_codec)) {
+    const bool is_supported_model =
+        media::remoting::IsKnownToSupportRemoting(model_name);
+    const bool is_supported_video_codec =
+        media::remoting::IsVideoCodecCompatible(model_name,
+                                                video_codec.value());
+    const bool is_supported_audio_codec =
+        audio_codec.has_value() ? media::remoting::IsAudioCodecCompatible(
+                                      model_name, audio_codec.value())
+                                : true;
+
+    if (is_supported_model && is_supported_video_codec &&
+        is_supported_audio_codec) {
       compatible_sinks.push_back(sink);
     }
   }
@@ -128,13 +140,14 @@ CastMediaRouteProvider::CastMediaRouteProvider(
     const scoped_refptr<base::SequencedTaskRunner>& task_runner)
     : media_sink_service_(media_sink_service),
       app_discovery_service_(app_discovery_service),
-      message_handler_(message_handler) {
+      message_handler_(message_handler),
+      task_runner_(task_runner) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   DCHECK(media_sink_service_);
   DCHECK(app_discovery_service_);
   DCHECK(message_handler_);
 
-  task_runner->PostTask(
+  task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&CastMediaRouteProvider::Init, base::Unretained(this),
                      std::move(receiver), std::move(media_router),
@@ -171,7 +184,6 @@ void CastMediaRouteProvider::CreateRoute(const std::string& source_id,
                                          const url::Origin& origin,
                                          int32_t frame_tree_node_id,
                                          base::TimeDelta timeout,
-                                         bool incognito,
                                          CreateRouteCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -200,8 +212,7 @@ void CastMediaRouteProvider::CreateRoute(const std::string& source_id,
     return;
   }
   activity_manager_->LaunchSession(*cast_source, *sink, presentation_id, origin,
-                                   frame_tree_node_id, incognito,
-                                   std::move(callback));
+                                   frame_tree_node_id, std::move(callback));
 }
 
 void CastMediaRouteProvider::JoinRoute(const std::string& media_source,
@@ -209,7 +220,6 @@ void CastMediaRouteProvider::JoinRoute(const std::string& media_source,
                                        const url::Origin& origin,
                                        int32_t frame_tree_node_id,
                                        base::TimeDelta timeout,
-                                       bool incognito,
                                        JoinRouteCallback callback) {
   std::unique_ptr<CastMediaSource> cast_source =
       CastMediaSource::FromMediaSourceId(media_source);
@@ -239,8 +249,7 @@ void CastMediaRouteProvider::JoinRoute(const std::string& media_source,
     return;
   }
   activity_manager_->JoinSession(*cast_source, presentation_id, origin,
-                                 frame_tree_node_id, incognito,
-                                 std::move(callback));
+                                 frame_tree_node_id, std::move(callback));
 }
 
 void CastMediaRouteProvider::TerminateRoute(const std::string& route_id,
@@ -271,15 +280,6 @@ void CastMediaRouteProvider::StartObservingMediaSinks(
   if (!cast_source)
     return;
 
-  // A broadcast request is not an actual sink query; it is used to send a
-  // app precache message to receivers.
-  if (cast_source->broadcast_request()) {
-    // TODO(imcheng): Add metric to record broadcast usage.
-    BroadcastMessageToSinks(cast_source->GetAppIds(),
-                            *cast_source->broadcast_request());
-    return;
-  }
-
   sink_queries_[media_source] =
       app_discovery_service_->StartObservingMediaSinks(
           *cast_source,
@@ -298,16 +298,6 @@ void CastMediaRouteProvider::StartObservingMediaRoutes() {
   activity_manager_->NotifyAllOnRoutesUpdated();
 }
 
-void CastMediaRouteProvider::StartListeningForRouteMessages(
-    const std::string& route_id) {
-  NOTIMPLEMENTED();
-}
-
-void CastMediaRouteProvider::StopListeningForRouteMessages(
-    const std::string& route_id) {
-  NOTIMPLEMENTED();
-}
-
 void CastMediaRouteProvider::DetachRoute(const std::string& route_id) {
   // DetachRoute() isn't implemented. Instead, a presentation connection
   // associated with the route will call DidClose(). See CastSessionClientImpl.
@@ -318,16 +308,16 @@ void CastMediaRouteProvider::EnableMdnsDiscovery() {
   NOTIMPLEMENTED();
 }
 
-void CastMediaRouteProvider::UpdateMediaSinks(const std::string& media_source) {
+void CastMediaRouteProvider::DiscoverSinksNow() {
   app_discovery_service_->Refresh();
 }
 
-void CastMediaRouteProvider::CreateMediaRouteController(
+void CastMediaRouteProvider::BindMediaController(
     const std::string& route_id,
     mojo::PendingReceiver<mojom::MediaController> media_controller,
     mojo::PendingRemote<mojom::MediaStatusObserver> observer,
-    CreateMediaRouteControllerCallback callback) {
-  std::move(callback).Run(activity_manager_->CreateMediaController(
+    BindMediaControllerCallback callback) {
+  std::move(callback).Run(activity_manager_->BindMediaController(
       route_id, std::move(media_controller), std::move(observer)));
 }
 
@@ -363,7 +353,7 @@ void CastMediaRouteProvider::OnSinkQueryUpdated(
                                    sinks, GetOrigins(source_id));
     return;
   }
-  if (!base::FeatureList::IsEnabled(kMediaRemotingWithoutFullscreen)) {
+  if (!base::FeatureList::IsEnabled(media::kMediaRemotingWithoutFullscreen)) {
     return;
   }
 
@@ -372,16 +362,7 @@ void CastMediaRouteProvider::OnSinkQueryUpdated(
       mojom::MediaRouteProviderId::CAST, source_id,
       GetRemotePlaybackMediaSourceCompatibleSinks(media_source, sinks),
       GetOrigins(source_id));
-}
-
-void CastMediaRouteProvider::BroadcastMessageToSinks(
-    const std::vector<std::string>& app_ids,
-    const cast_channel::BroadcastRequest& request) {
-  for (const auto& id_and_sink : media_sink_service_->GetSinks()) {
-    const MediaSinkInternal& sink = id_and_sink.second;
-    message_handler_->SendBroadcastMessage(sink.cast_data().cast_channel_id,
-                                           app_ids, request);
-  }
+  LOG(ERROR) << "sent sink updates";
 }
 
 }  // namespace media_router

@@ -26,7 +26,6 @@ export interface SyncTrustedVaultKeys {
 }
 
 export interface AuthCompletedCredentials {
-  chooseWhatToSync: boolean;
   email: string;
   gaiaId: string;
   passwordAttributes: PasswordAttributes;
@@ -52,6 +51,7 @@ export interface AuthParams {
   enterpriseEnrollmentDomain: string;
   extractSamlPasswordAttributes: boolean;
   flow: string;
+  forceDarkMode: boolean;
   gaiaPath: string;
   gaiaUrl: string;
   hl: string;
@@ -66,6 +66,7 @@ export interface AuthParams {
   showTos: string;
   ssoProfile: string;
   urlParameterToAutofillSAMLUsername: string;
+  frameUrl: URL;
 }
 
 export enum AuthMode {
@@ -82,5 +83,6 @@ export enum AuthFlow {
 export class Authenticator extends EventTarget {
   constructor(webview: HTMLElement|string);
   getAccountsResponse(accounts: string[]): void;
+  getDeviceIdResponse(deviceId: string): void;
   load(authMode: AuthMode, data: AuthParams): void;
 }

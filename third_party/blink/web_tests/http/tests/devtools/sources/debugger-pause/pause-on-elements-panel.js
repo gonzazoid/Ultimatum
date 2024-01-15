@@ -2,11 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Sources from 'devtools/panels/sources/sources.js';
+
 (async function() {
   TestRunner.addResult(
       `Tests that debugger pause button works on Elements panel after a DOM node highlighting. Chromium bug 433366\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.loadHTML(`
       <div id="test"></div>
@@ -21,7 +25,7 @@
   SourcesTestRunner.startDebuggerTest(step1, true);
 
   function step1() {
-    UI.inspectorView.showPanel('sources').then(step2);
+    UI.InspectorView.InspectorView.instance().showPanel('sources').then(step2);
   }
 
   function step2() {
@@ -35,7 +39,7 @@
   }
 
   function step4(node) {
-    TestRunner.assertTrue(!UI.panels.sources.paused());
+    TestRunner.assertTrue(!Sources.SourcesPanel.SourcesPanel.instance().paused());
     SourcesTestRunner.togglePause();
 
     // This used to skip the pause request (the test used to timeout).

@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/net/dns_probe_runner.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
@@ -60,9 +60,6 @@ class SecureDnsHandler : public SettingsPageUIHandler {
 
   // Returns whether or not a test query succeeds with the provided config.
   void HandleProbeConfig(const base::Value::List& args);
-
-  // Records metrics on the user-initiated dropdown selection event.
-  void HandleRecordUserDropdownInteraction(const base::Value::List& args);
 
   // Retrieves the current host resolver configuration, computes the
   // corresponding UI representation, and sends it to javascript.

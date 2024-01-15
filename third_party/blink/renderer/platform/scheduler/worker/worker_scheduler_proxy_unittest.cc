@@ -4,7 +4,8 @@
 
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
@@ -12,6 +13,7 @@
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.h"
@@ -42,7 +44,7 @@ class WorkerThreadSchedulerForTest : public WorkerThreadScheduler {
   using WorkerThreadScheduler::lifecycle_state;
 
  private:
-  base::WaitableEvent* throtting_state_changed_;
+  raw_ptr<base::WaitableEvent, ExperimentalRenderer> throtting_state_changed_;
 };
 
 class WorkerThreadForTest : public NonMainThreadImpl {
@@ -90,8 +92,10 @@ class WorkerThreadForTest : public NonMainThreadImpl {
   WorkerThreadSchedulerForTest* GetWorkerScheduler() { return scheduler_; }
 
  private:
-  base::WaitableEvent* throtting_state_changed_;       // NOT OWNED
-  WorkerThreadSchedulerForTest* scheduler_ = nullptr;  // NOT OWNED
+  raw_ptr<base::WaitableEvent, ExperimentalRenderer>
+      throtting_state_changed_;  // NOT OWNED
+  raw_ptr<WorkerThreadSchedulerForTest, ExperimentalRenderer> scheduler_ =
+      nullptr;  // NOT OWNED
   std::unique_ptr<WorkerSchedulerImpl> worker_scheduler_;
 };
 
@@ -127,7 +131,10 @@ class WorkerSchedulerProxyTest : public testing::Test {
             base::sequence_manager::SequenceManagerForTest::Create(
                 nullptr,
                 task_environment_.GetMainThreadTaskRunner(),
-                task_environment_.GetMockTickClock()))),
+                task_environment_.GetMockTickClock(),
+                base::sequence_manager::SequenceManager::Settings::Builder()
+                    .SetPrioritySettings(CreatePrioritySettings())
+                    .Build()))),
         agent_group_scheduler_(
             main_thread_scheduler_->CreateAgentGroupScheduler()),
         page_scheduler_(agent_group_scheduler_->CreatePageScheduler(nullptr)),

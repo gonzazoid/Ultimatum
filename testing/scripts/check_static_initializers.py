@@ -5,6 +5,7 @@
 
 from __future__ import print_function
 
+import copy
 import json
 import os
 import re
@@ -16,43 +17,34 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from scripts import common
 
-# A list of files that are allowed to have static initializers.
+# A list of filename regexes that are allowed to have static initializers.
 # If something adds a static initializer, revert it. We don't accept regressions
 # in static initializers.
-_LINUX_SI_FILE_ALLOWLIST = {
+_LINUX_SI_ALLOWLIST = {
     'chrome': [
-        'InstrProfilingRuntime.cpp',  # Only in coverage builds, not production.
-        'atomicops_internals_x86.cc',  # TODO(crbug.com/973551): Remove.
-        'crtstuff.c',  # Added by libgcc due to USE_EH_FRAME_REGISTRY.
-        'iostream.cpp',  # TODO(crbug.com/973554): Remove.
-        'spinlock.cc',  # TODO(crbug.com/973556): Remove.
-    ],
-    'nacl_helper_bootstrap': [],
-}
-_LINUX_SI_FILE_ALLOWLIST['nacl_helper'] = _LINUX_SI_FILE_ALLOWLIST['chrome']
+        # Only in coverage builds, not production.
+        'InstrProfilingRuntime\\.cpp : ' +
+        '_GLOBAL__sub_I_InstrProfilingRuntime\\.cpp',
 
-# The lists for Chrome OS are conceptually the same as the Linux ones above.
-# If something adds a static initializer, revert it. We don't accept regressions
-# in static initializers.
-_CROS_SI_FILE_ALLOWLIST = {
-    'chrome': [
-        'InstrProfilingRuntime.cpp',  # Only in coverage builds, not production.
-        'atomicops_internals_x86.cc',  # TODO(crbug.com/973551): Remove.
-        'iostream.cpp:',  # TODO(crbug.com/973554): Remove.
-        '000100',   # libc++ uses init_priority 100 for iostreams.
-        'spinlock.cc',  # TODO(crbug.com/973556): Remove.
-        'rpc.pb.cc',  # TODO(crbug.com/537099): Remove.
+        # TODO(crbug.com/973554): Remove.
+        'iostream\\.cpp : _GLOBAL__I_000100',
+
+        # TODO(crbug.com/1445935): Rust stdlib argv handling.
+        # https://github.com/rust-lang/rust/blob/b08148f6a76010ea3d4e91d61245aa7aac59e4b4/library/std/src/sys/unix/args.rs#L107-L127
+        # https://github.com/rust-lang/rust/issues/111921
+        '.* : std::sys::unix::args::imp::ARGV_INIT_ARRAY::init_wrapper',
+
+        # Added by libgcc due to USE_EH_FRAME_REGISTRY.
+        'crtstuff\\.c : frame_dummy',
     ],
-    'nacl_helper_bootstrap': [],
 }
-_CROS_SI_FILE_ALLOWLIST['nacl_helper'] = _LINUX_SI_FILE_ALLOWLIST['chrome']
 
 # Mac can use this list when a dsym is available, otherwise it will fall back
 # to checking the count.
 _MAC_SI_FILE_ALLOWLIST = [
-    'InstrProfilingRuntime.cpp', # Only in coverage builds, not in production.
-    'sysinfo.cc', # Only in coverage builds, not in production.
-    'iostream.cpp', # Used to setup std::cin/cout/cerr.
+    'InstrProfilingRuntime\\.cpp', # Only in coverage builds, not in production.
+    'sysinfo\\.cc', # Only in coverage builds, not in production.
+    'iostream\\.cpp', # Used to setup std::cin/cout/cerr.
     '000100', # Used to setup std::cin/cout/cerr
 ]
 
@@ -62,9 +54,39 @@ _MAC_SI_FILE_ALLOWLIST = [
 # (InitializeDefaultMallocZoneWithPartitionAlloc) to install a malloc zone.
 FALLBACK_EXPECTED_MAC_SI_COUNT = 3
 
+# Similar to mac, iOS needs the iosstream and PartitionAlloc-Everywhere static
+# initializer (InitializeDefaultMallocZoneWithPartitionAlloc) to install a
+# malloc zone.
+FALLBACK_EXPECTED_IOS_SI_COUNT = 2
+
 # For coverage builds, also allow 'IntrProfilingRuntime.cpp'
 COVERAGE_BUILD_FALLBACK_EXPECTED_MAC_SI_COUNT = 4
 
+
+# Returns true if args contains properties which look like a chromeos-esque
+# builder.
+def check_if_chromeos(args):
+  return 'buildername' in args.properties and \
+      'chromeos' in args.properties['buildername']
+
+def get_mod_init_count(executable, hermetic_xcode_path):
+  # Find the __DATA,__mod_init_func section.
+  if os.path.exists(hermetic_xcode_path):
+    otool_path = os.path.join(hermetic_xcode_path, 'Contents', 'Developer',
+        'Toolchains', 'XcodeDefault.xctoolchain', 'usr', 'bin', 'otool')
+  else:
+    otool_path = 'otool'
+
+  stdout = run_process([otool_path, '-l', executable])
+  section_index = stdout.find('sectname __mod_init_func')
+  if section_index == -1:
+    return 0
+
+  # If the section exists, the "size" line must follow it.
+  initializers_s = re.search('size 0x([0-9a-f]+)',
+                             stdout[section_index:]).group(1)
+  word_size = 8  # Assume 64 bit
+  return int(initializers_s, 16) / word_size
 
 def run_process(command):
   p = subprocess.Popen(command, stdout=subprocess.PIPE, universal_newlines=True)
@@ -74,8 +96,35 @@ def run_process(command):
         'ERROR from command "%s": %d' % (' '.join(command), p.returncode))
   return stdout
 
+def main_ios(src_dir, hermetic_xcode_path):
+  base_names = ('Chromium', 'Chrome')
+  ret = 0
+  for base_name in base_names:
+    app_bundle = base_name + '.app'
+    chromium_executable = os.path.join(app_bundle, base_name)
+    if os.path.exists(chromium_executable):
+      si_count = get_mod_init_count(chromium_executable,
+                                    hermetic_xcode_path)
+      if si_count > 0:
+        allowed_si_count = FALLBACK_EXPECTED_IOS_SI_COUNT
+        if si_count > allowed_si_count:
+          print('Expected <= %d static initializers in %s, but found %d' %
+              (allowed_si_count, chromium_executable,
+              si_count))
+          ret = 1
+          show_mod_init_func = os.path.join(src_dir, 'tools', 'mac',
+                                            'show_mod_init_func.py')
+          args = [show_mod_init_func]
+          args.append(chromium_executable)
 
-def main_mac(src_dir, allow_coverage_initializer = False):
+          if os.path.exists(hermetic_xcode_path):
+            args.extend(['--xcode-path', hermetic_xcode_path])
+          stdout = run_process(args)
+          print(stdout)
+  return ret
+
+
+def main_mac(src_dir, hermetic_xcode_path, allow_coverage_initializer = False):
   base_names = ('Chromium', 'Google Chrome')
   ret = 0
   for base_name in base_names:
@@ -92,28 +141,8 @@ def main_mac(src_dir, allow_coverage_initializer = False):
                                            'Resources', 'DWARF', framework_name)
     if os.path.exists(chromium_executable):
       # Count the number of files with at least one static initializer.
-      si_count = 0
-      # Find the __DATA,__mod_init_func section.
-
-      # If the checkout uses the hermetic xcode binaries, then otool must be
-      # directly invoked. The indirection via /usr/bin/otool won't work unless
-      # there's an actual system install of Xcode.
-      hermetic_xcode_path = os.path.join(src_dir, 'build', 'mac_files',
-          'xcode_binaries')
-      if os.path.exists(hermetic_xcode_path):
-        otool_path = os.path.join(hermetic_xcode_path, 'Contents', 'Developer',
-            'Toolchains', 'XcodeDefault.xctoolchain', 'usr', 'bin', 'otool')
-      else:
-        otool_path = 'otool'
-
-      stdout = run_process([otool_path, '-l', chromium_framework_executable])
-      section_index = stdout.find('sectname __mod_init_func')
-      if section_index != -1:
-        # If the section exists, the "size" line must follow it.
-        initializers_s = re.search('size 0x([0-9a-f]+)',
-                                   stdout[section_index:]).group(1)
-        word_size = 8  # Assume 64 bit
-        si_count = int(initializers_s, 16) / word_size
+      si_count = get_mod_init_count(chromium_framework_executable,
+                                    hermetic_xcode_path)
 
       # Print the list of static initializers.
       if si_count > 0:
@@ -128,7 +157,7 @@ def main_mac(src_dir, allow_coverage_initializer = False):
               [dump_static_initializers, chromium_framework_dsym])
           for line in stdout:
             if re.match('0x[0-9a-f]+', line) and not any(
-                f in line for f in _MAC_SI_FILE_ALLOWLIST):
+                re.match(f, line) for f in _MAC_SI_FILE_ALLOWLIST):
               ret = 1
               print('Found invalid static initializer: {}'.format(line))
           print(stdout)
@@ -158,10 +187,9 @@ def main_mac(src_dir, allow_coverage_initializer = False):
   return ret
 
 
-def main_linux(src_dir, is_chromeos):
+def main_linux(src_dir):
   ret = 0
-  allowlist = _CROS_SI_FILE_ALLOWLIST if is_chromeos else \
-      _LINUX_SI_FILE_ALLOWLIST
+  allowlist = _LINUX_SI_ALLOWLIST
   for binary_name in allowlist:
     if not os.path.exists(binary_name):
       continue
@@ -172,9 +200,11 @@ def main_linux(src_dir, is_chromeos):
     entries = json.loads(stdout)['entries']
 
     for e in entries:
-      # Also remove line number suffix.
+      # Get the basename and remove line number suffix.
       basename = os.path.basename(e['filename']).split(':')[0]
-      if basename not in allowlist[binary_name]:
+      symbol = e['symbol_name']
+      descriptor = f"{basename} : {symbol}"
+      if not any(re.match(p, descriptor) for p in allowlist[binary_name]):
         ret = 1
         print(('Error: file "%s" is not expected to have static initializers in'
                ' binary "%s", but found "%s"') % (e['filename'], binary_name,
@@ -198,12 +228,26 @@ def main_run(args):
   os.chdir(build_dir)
 
   if sys.platform.startswith('darwin'):
-    rc = main_mac(src_dir,
-      allow_coverage_initializer = '--allow-coverage-initializer' in args.args)
+    # If the checkout uses the hermetic xcode binaries, then otool must be
+    # directly invoked. The indirection via /usr/bin/otool won't work unless
+    # there's an actual system install of Xcode.
+    hermetic_xcode_path = os.path.join(src_dir, 'build', 'mac_files',
+        'xcode_binaries')
+
+    is_ios = 'target_platform' in args.properties and \
+      'ios' in args.properties['target_platform']
+    if is_ios:
+      rc = main_ios(src_dir, hermetic_xcode_path)
+    else:
+      rc = main_mac(src_dir, hermetic_xcode_path,
+        allow_coverage_initializer = '--allow-coverage-initializer' in \
+          args.args)
   elif sys.platform.startswith('linux'):
-    is_chromeos = 'buildername' in args.properties and \
-        'chromeos' in args.properties['buildername']
-    rc = main_linux(src_dir, is_chromeos)
+    # TODO(crbug.com/1492865): Delete this assert if it's not seen to fail
+    # anywhere.
+    assert not check_if_chromeos(args), (
+        "This script is no longer supported for CrOS")
+    rc = main_linux(src_dir)
   else:
     sys.stderr.write('Unsupported platform %s.\n' % repr(sys.platform))
     return 2
@@ -218,7 +262,7 @@ def main_compile_targets(args):
   if sys.platform.startswith('darwin'):
     compile_targets = ['chrome']
   elif sys.platform.startswith('linux'):
-    compile_targets = ['chrome', 'nacl_helper', 'nacl_helper_bootstrap']
+    compile_targets = ['chrome']
   else:
     compile_targets = []
 

@@ -5,13 +5,14 @@
 #ifndef ASH_COMPONENTS_ARC_SESSION_ARC_VM_CLIENT_ADAPTER_H_
 #define ASH_COMPONENTS_ARC_SESSION_ARC_VM_CLIENT_ADAPTER_H_
 
+#include <array>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "ash/components/arc/session/arc_client_adapter.h"
 #include "ash/components/arc/session/file_system_status.h"
-#include "base/callback.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
 
 namespace base {
 struct SystemMemoryInfoKB;
@@ -46,11 +47,6 @@ enum class ArcBinaryTranslationType {
 // 3328 is chosen because it's a rounded number (i.e. 3328 % 256 == 0).
 constexpr size_t k32bitVmRamMaxMib = 3328;
 
-// Name of upstart job to start ARCVM services for sharing media directories
-// like MyFiles.
-constexpr char kArcVmMediaSharingServicesJobName[] =
-    "arcvm_2dmedia_2dsharing_2dservices";
-
 // For better unit-testing.
 class ArcVmClientAdapterDelegate {
  public:
@@ -80,7 +76,7 @@ void SetArcVmBootNotificationServerAddressForTesting(
     base::TimeDelta connect_sleep_duration_initial);
 
 // Sets the an FD ConnectToArcVmBootNotificationServer() returns for testing.
-void SetArcVmBootNotificationServerFdForTesting(absl::optional<int> fd);
+void SetArcVmBootNotificationServerFdForTesting(std::optional<int> fd);
 
 // Generates a list of props from |upgrade_params|, each of which takes the form
 // "prefix.prop_name=value"

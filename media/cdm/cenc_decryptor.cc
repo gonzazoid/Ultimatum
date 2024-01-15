@@ -54,7 +54,7 @@ void CopyExtraSettings(const DecoderBuffer& input, DecoderBuffer* output) {
   output->set_timestamp(input.timestamp());
   output->set_duration(input.duration());
   output->set_is_key_frame(input.is_key_frame());
-  output->CopySideDataFrom(input.side_data(), input.side_data_size());
+  output->set_side_data(input.side_data());
 }
 
 }  // namespace
@@ -125,7 +125,7 @@ scoped_refptr<DecoderBuffer> DecryptCencBuffer(
   // copy all encrypted subsamples to a contiguous buffer, decrypt them, then
   // copy the decrypted bytes over the encrypted bytes in the output.
   // TODO(strobe): attempt to reduce number of memory copies
-  std::unique_ptr<uint8_t[]> encrypted_bytes(new uint8_t[total_encrypted_size]);
+  auto encrypted_bytes = std::make_unique<uint8_t[]>(total_encrypted_size);
   CopySubsamples(subsamples, kSrcContainsClearBytes,
                  reinterpret_cast<const uint8_t*>(sample),
                  encrypted_bytes.get());

@@ -8,9 +8,17 @@
 #include <string>
 
 #include "chrome/browser/ui/webui/ash/system_web_dialog_delegate.h"
-#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"  // nogncheck
+#include "chrome/common/webui_url_constants.h"
+#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/web_dialogs/web_dialog_ui.h"
+#include "ui/webui/resources/cr_components/color_change_listener/color_change_listener.mojom.h"
+
+namespace ui {
+class ColorChangeHandler;
+}  //  namespace ui
 
 namespace ash {
 
@@ -21,11 +29,13 @@ class InternetConfigDialog : public SystemWebDialogDelegate {
 
   // Shows a network configuration dialog for |network_id|. Does nothing if
   // there is no NetworkState matching |network_id|.
-  static void ShowDialogForNetworkId(const std::string& network_id,
-                                     gfx::NativeWindow parent = nullptr);
+  static void ShowDialogForNetworkId(
+      const std::string& network_id,
+      gfx::NativeWindow parent = gfx::NativeWindow());
   // Shows a network configuration dialog for a new network of |network_type|.
-  static void ShowDialogForNetworkType(const std::string& network_type,
-                                       gfx::NativeWindow parent = nullptr);
+  static void ShowDialogForNetworkType(
+      const std::string& network_type,
+      gfx::NativeWindow parent = gfx::NativeWindow());
 
   // SystemWebDialogDelegate
   void AdjustWidgetInitParams(views::Widget::InitParams* params) override;
@@ -39,7 +49,7 @@ class InternetConfigDialog : public SystemWebDialogDelegate {
   ~InternetConfigDialog() override;
 
   // SystemWebDialogDelegate
-  const std::string& Id() override;
+  std::string Id() override;
 
   // ui::WebDialogDelegate
   void GetDialogSize(gfx::Size* size) const override;
@@ -49,6 +59,17 @@ class InternetConfigDialog : public SystemWebDialogDelegate {
   std::string dialog_id_;
   std::string network_type_;
   std::string network_id_;
+};
+
+class InternetConfigDialogUI;
+
+// WebUIConfig for chrome://internet-config-dialog
+class InternetConfigDialogUIConfig
+    : public content::DefaultWebUIConfig<InternetConfigDialogUI> {
+ public:
+  InternetConfigDialogUIConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUIInternetConfigDialogHost) {}
 };
 
 // A WebUI to host the network configuration UI in a dialog, used in the
@@ -61,21 +82,25 @@ class InternetConfigDialogUI : public ui::MojoWebDialogUI {
   InternetConfigDialogUI& operator=(const InternetConfigDialogUI&) = delete;
 
   ~InternetConfigDialogUI() override;
+
   // Instantiates implementor of the mojom::CrosNetworkConfig mojo interface
   // passing the pending receiver that will be internally bound.
   void BindInterface(
       mojo::PendingReceiver<chromeos::network_config::mojom::CrosNetworkConfig>
           receiver);
 
+  // Instantiates the implementor of the mojom::PageHandler mojo interface
+  // passing the pending receiver that will be internally bound.
+  void BindInterface(
+      mojo::PendingReceiver<color_change_listener::mojom::PageHandler>
+          receiver);
+
  private:
+  std::unique_ptr<ui::ColorChangeHandler> color_change_handler_;
+
   WEB_UI_CONTROLLER_TYPE_DECL();
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::InternetConfigDialog;
-}
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_INTERNET_CONFIG_DIALOG_H_

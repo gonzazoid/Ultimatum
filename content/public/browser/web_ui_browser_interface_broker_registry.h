@@ -57,6 +57,41 @@ class InterfaceRegistrationHelper {
 // registry.ForWebUI<ControllerType>
 //    .Add<Interface1>()
 //    .Add<Interface2>();
+//
+// Background:
+//
+// Renderer exposed Mojo interfaces in general use a mojo::BinderMap where
+// *all* interface binders are registered. When the renderer requests an
+// interface, we look for the interface binder in that map and run it.
+//
+// At a high level, WebUI interfaces work slightly different. Rather than
+// using the general mojo::BinderMap that has all renderer-exposed
+// interfaces, each WebUI has its own mojo::BinderMap that contains only the
+// interfaces exposed to the WebUI. When a WebUI's JS requests an interface,
+// it uses that mojo::BinderMap and not the general one.
+//
+// The implementation of this is done through
+// WebUIBrowserInterfaceBrokerRegistry which works as follows:
+//
+//   1. When we register interfaces for a WebUI, we create a
+//      a vector of "binder initializers" and add it to a map i.e.
+//      (WebUI type -> vector<BinderInitializer>). These binder initializers
+//      are repeating callbacks that wrap a call to BinderMap::Add() with an
+//      interface binder. Interface binders themselves are repeating callbacks
+//      that bind Mojo interfaces. Ideally, we would store the binders directly
+//      and pass them to the BinderMap in step 2., but BinderMap::Add() requires
+//      a template argument, so we need the binder initializer wrapper.
+//   2. When a WebUI starts loading, we check the binder initialializers map to
+//      see if the WebUI is in the map, and if it is, we create a
+//      PerWebUIBrowserInterfaceBroker, which subclasses BrowserInterfaceBroker.
+//      PerWebUIBrowserInterfaceBroker owns a mojo::BinderMap and runs the
+//      binder initializers for the WebUI, registering all the interface binders
+//      for the WebUI in the mojo::BinderMap.
+//   3. The PerWebUIBrowserInterfaceBroker is then stored in the
+//      WebUIController and a `BrowserInterfaceBroker` remote endpoint is sent
+//      to the renderer.
+//   4. Through `BrowserInterfaceBroker::GetInterface()` the JS can request
+//      other remote endpoints.
 class CONTENT_EXPORT WebUIBrowserInterfaceBrokerRegistry {
  public:
   WebUIBrowserInterfaceBrokerRegistry();

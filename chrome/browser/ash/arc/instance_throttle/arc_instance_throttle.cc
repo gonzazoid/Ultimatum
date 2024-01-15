@@ -61,8 +61,8 @@ void RecordCpuRestrictionVMResult(CpuRestrictionVmResult result) {
 // instance is being unthrottled.
 // This function can only be called when the instance is being unthrottled.
 UnthrottlingReason GetUnthrottlingReason(
-    const std::vector<std::unique_ptr<chromeos::ThrottleObserver>>& observers) {
-  std::vector<chromeos::ThrottleObserver*> active_observers;
+    const std::vector<std::unique_ptr<ash::ThrottleObserver>>& observers) {
+  std::vector<ash::ThrottleObserver*> active_observers;
 
   // Check which observer(s) are active.
   for (const auto& observer : observers) {
@@ -90,7 +90,7 @@ UnthrottlingReason GetUnthrottlingReason(
 }
 
 void OnSetArcVmCpuRestriction(
-    absl::optional<vm_tools::concierge::SetVmCpuRestrictionResponse> response) {
+    std::optional<vm_tools::concierge::SetVmCpuRestrictionResponse> response) {
   if (!response) {
     LOG(ERROR) << "Failed to call SetVmCpuRestriction";
     RecordCpuRestrictionVMResult(
@@ -247,6 +247,7 @@ class ArcInstanceThrottleFactory
   ArcInstanceThrottleFactory() {
     DependsOn(ArcBootPhaseMonitorBridgeFactory::GetInstance());
     DependsOn(ArcMetricsServiceFactory::GetInstance());
+    DependsOn(ArcAppLaunchNotifierFactory::GetInstance());
   }
   ~ArcInstanceThrottleFactory() override = default;
 };
@@ -386,14 +387,14 @@ void ArcInstanceThrottle::ThrottleInstance(bool should_throttle) {
     //   happen.
   }
 
-  const absl::optional<bool>& arc_is_booting =
+  const std::optional<bool>& arc_is_booting =
       GetBootObserver()->arc_is_booting();
   const bool arc_has_booted = (arc_is_booting && !*arc_is_booting);
   const bool is_throttling = (cpu_restriction_state ==
                               CpuRestrictionState::CPU_RESTRICTION_BACKGROUND);
 
   if (arc_has_booted && !never_enforce_quota_ && is_throttling) {
-    // TODO(yusukes): Do not use quota when Android VPN is in use.
+    // TODO(khmel): Do not use quota when Android VPN is in use.
     use_quota = true;
     DVLOG(2) << "Enforcing cfs_quota";
   }
@@ -417,9 +418,14 @@ void ArcInstanceThrottle::NotifyCpuRestriction(
 }
 
 ArcBootPhaseThrottleObserver* ArcInstanceThrottle::GetBootObserver() {
-  chromeos::ThrottleObserver* observer =
+  ash::ThrottleObserver* observer =
       GetObserverByName(kArcBootPhaseThrottleObserverName);
   return static_cast<ArcBootPhaseThrottleObserver*>(observer);
+}
+
+// static
+void ArcInstanceThrottle::EnsureFactoryBuilt() {
+  ArcInstanceThrottleFactory::GetInstance();
 }
 
 }  // namespace arc

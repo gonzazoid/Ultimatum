@@ -10,8 +10,8 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
@@ -42,11 +42,6 @@ class LongScreenshotsTabService
 
   // Define a list of statuses to describe the calling of paint preview and
   // generation of the bitmap.
-  //
-  // When updating this, also update LongScreenshotsMetrics in
-  // /chrome/browser/share/android/java/src/org/chromium/chrome/browser/share/long_screenshots/LongScreenshotsMetrics.java
-  // and SharingLongScreenshotsEvent in enums.xml
-  // and logCaptureResultStatus() in ./bitmap_generation/BitmapGenerator.java
   //
   // A Java counterpart will be generated for this enum.
   // GENERATED_JAVA_ENUM_PACKAGE: (

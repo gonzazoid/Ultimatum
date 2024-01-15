@@ -6,6 +6,7 @@
 
 #include "base/logging.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/reporting/user_event_reporter_helper.h"
@@ -21,6 +22,7 @@
 
 namespace ash {
 namespace reporting {
+
 namespace {
 
 constexpr char kLoginLogoutReporterDictionary[] =
@@ -92,17 +94,20 @@ LoginFailureReason GetLoginFailureReasonForReport(
     case AuthFailure::NETWORK_AUTH_FAILED:
     case AuthFailure::ALLOWLIST_CHECK_FAILED:
     case AuthFailure::AUTH_DISABLED:
+    case AuthFailure::CRYPTOHOME_RECOVERY_SERVICE_ERROR:
+    case AuthFailure::CRYPTOHOME_RECOVERY_OAUTH_TOKEN_ERROR:
     case AuthFailure::NUM_FAILURE_REASONS:
       return LoginFailureReason::UNKNOWN_LOGIN_FAILURE_REASON;
   }
 }
+
 }  // namespace
 
 AccountId LoginLogoutReporter::Delegate::GetLastLoginAttemptAccountId() const {
-  if (!ash::ExistingUserController::current_controller()) {
+  if (!ExistingUserController::current_controller()) {
     return EmptyAccountId();
   }
-  return ash::ExistingUserController::current_controller()
+  return ExistingUserController::current_controller()
       ->GetLastLoginAttemptAccountId();
 }
 
@@ -226,7 +231,7 @@ void LoginLogoutReporter::MaybeReportKioskLoginFailure() {
     return;
   }
 
-  absl::optional<int> last_kiosk_login_failure_timestamp =
+  std::optional<int> last_kiosk_login_failure_timestamp =
       pref->GetValue()->GetDict().FindInt(kKioskLoginFailureTimestamp);
   if (!last_kiosk_login_failure_timestamp.has_value()) {
     // No kiosk login failure to report.
@@ -257,7 +262,7 @@ void LoginLogoutReporter::MaybeReportKioskLoginFailure() {
   // pref service.
   reporter_helper_->ReportEvent(
       std::move(record), ::reporting::Priority::SECURITY,
-      base::BindPostTask(base::ThreadTaskRunnerHandle::Get(),
+      base::BindPostTask(base::SingleThreadTaskRunner::GetCurrentDefault(),
                          std::move(enqueue_cb)));
 }
 

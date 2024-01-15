@@ -4,7 +4,6 @@
 
 #include "chrome/browser/ash/multidevice_setup/auth_token_validator_factory.h"
 
-#include "chrome/browser/ash/login/quick_unlock/quick_unlock_factory.h"
 #include "chrome/browser/ash/multidevice_setup/auth_token_validator_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -21,19 +20,26 @@ AuthTokenValidator* AuthTokenValidatorFactory::GetForProfile(Profile* profile) {
 
 // static
 AuthTokenValidatorFactory* AuthTokenValidatorFactory::GetInstance() {
-  return base::Singleton<AuthTokenValidatorFactory>::get();
+  static base::NoDestructor<AuthTokenValidatorFactory> instance;
+  return instance.get();
 }
 
 AuthTokenValidatorFactory::AuthTokenValidatorFactory()
-    : ProfileKeyedServiceFactory("AuthTokenValidatorFactory") {}
+    : ProfileKeyedServiceFactory(
+          "AuthTokenValidatorFactory",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-AuthTokenValidatorFactory::~AuthTokenValidatorFactory() {}
+AuthTokenValidatorFactory::~AuthTokenValidatorFactory() = default;
 
-KeyedService* AuthTokenValidatorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AuthTokenValidatorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new AuthTokenValidatorImpl(
-      quick_unlock::QuickUnlockFactory::GetForProfile(
-          Profile::FromBrowserContext(context)));
+  return std::make_unique<AuthTokenValidatorImpl>();
 }
 
 }  // namespace multidevice_setup

@@ -4,21 +4,23 @@
 
 #import "ios/web/public/test/web_state_test_util.h"
 
+#import "base/check.h"
+#import "base/functional/callback_helpers.h"
 #import "base/logging.h"
 #import "base/run_loop.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/web/navigation/crw_wk_navigation_states.h"
 #import "ios/web/public/navigation/navigation_manager.h"
+#import "ios/web/public/session/proto/metadata.pb.h"
+#import "ios/web/public/session/proto/navigation.pb.h"
+#import "ios/web/public/session/proto/proto_util.h"
+#import "ios/web/public/session/proto/storage.pb.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/web_state/ui/crw_web_controller.h"
 #import "ios/web/web_state/ui/wk_web_view_configuration_provider.h"
 #import "ios/web/web_state/web_state_impl.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
@@ -47,16 +49,15 @@ id ExecuteJavaScript(NSString* script, web::WebState* web_state) {
   if (!WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
         return execution_completed;
       })) {
-    LOG(ERROR) << "Timed out trying to execute: " << script;
+    LOG(ERROR) << "Timed out trying to execute: "
+               << base::SysNSStringToUTF8(script);
   }
 
   return execution_result;
 }
 
 CRWWebController* GetWebController(web::WebState* web_state) {
-  web::WebStateImpl* web_state_impl =
-      static_cast<web::WebStateImpl*>(web_state);
-  return web_state_impl->GetWebController();
+  return web::WebStateImpl::FromWebState(web_state)->GetWebController();
 }
 
 void LoadHtml(NSString* html, const GURL& url, web::WebState* web_state) {
@@ -146,6 +147,58 @@ bool LoadHtmlWithoutSubresources(NSString* html, web::WebState* web_state) {
   web::test::LoadHtml(html, web_state);
   [configuration.userContentController removeContentRuleList:content_rule_list];
   return true;
+}
+
+std::unique_ptr<WebState> CreateUnrealizedWebStateWithItems(
+    BrowserState* browser_state,
+    size_t last_committed_item_index,
+    const std::vector<PageInfo>& items) {
+  DCHECK_LT(last_committed_item_index, items.size());
+  DCHECK_LT(last_committed_item_index, static_cast<size_t>(INT_MAX));
+
+  // Create the protobuf storage representing a session with a single
+  // navigation. This takes care of creating data and metadata as the
+  // optimised session serialization format needs both to be in sync.
+  proto::WebStateStorage storage;
+
+  // Use a block to limit the scope of the objects used to create the
+  // protobuf message representation.
+  {
+    storage.set_user_agent(UserAgentTypeToProto(UserAgentType::MOBILE));
+
+    proto::NavigationStorage* navigation_storage = storage.mutable_navigation();
+    for (const PageInfo& info : items) {
+      proto::NavigationItemStorage* item_storage =
+          navigation_storage->add_items();
+      item_storage->set_virtual_url(info.url.spec());
+      item_storage->set_user_agent(storage.user_agent());
+      item_storage->set_title(info.title);
+    }
+    navigation_storage->set_last_committed_item_index(
+        static_cast<int>(last_committed_item_index));
+
+    proto::WebStateMetadataStorage* metadata_storage =
+        storage.mutable_metadata();
+    metadata_storage->set_navigation_item_count(
+        navigation_storage->items_size());
+
+    const PageInfo& active_info = items[last_committed_item_index];
+    proto::PageMetadataStorage* page_storage =
+        metadata_storage->mutable_active_page();
+    page_storage->set_page_url(active_info.url.spec());
+    page_storage->set_page_title(active_info.title);
+  }
+
+  proto::WebStateMetadataStorage metadata;
+  metadata.Swap(storage.mutable_metadata());
+
+  std::unique_ptr<WebState> web_state = WebState::CreateWithStorage(
+      browser_state, WebStateID::NewUnique(), std::move(metadata),
+      base::ReturnValueOnce(std::move(storage)),
+      base::ReturnValueOnce<NSData*>(nil));
+
+  DCHECK(!web_state->IsRealized());
+  return web_state;
 }
 
 }  // namespace test

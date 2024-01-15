@@ -5,6 +5,7 @@
 #include "components/exo/wayland/clients/test/client_version_test.h"
 
 #include <alpha-compositing-unstable-v1-client-protocol.h>
+#include <aura-shell-server-protocol.h>
 #include <chrome-color-management-server-protocol.h>
 #include <content-type-v1-server-protocol.h>
 #include <cursor-shapes-unstable-v1-server-protocol.h>
@@ -28,13 +29,12 @@
 #include <text-input-extension-unstable-v1-server-protocol.h>
 #include <text-input-unstable-v1-server-protocol.h>
 #include <touchpad-haptics-unstable-v1-server-protocol.h>
+#include <ui-controls-unstable-v1-server-protocol.h>
 #include <viewporter-client-protocol.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
-#include <weston-test-server-protocol.h>
 #include <xdg-decoration-unstable-v1-server-protocol.h>
 #include <xdg-shell-server-protocol.h>
-#include <xdg-shell-unstable-v6-server-protocol.h>
 
 #include <memory>
 #include <string>
@@ -46,9 +46,7 @@
 
 #include "components/exo/wayland/clients/client_helper.h"
 
-namespace exo {
-namespace wayland {
-namespace clients {
+namespace exo::wayland::clients {
 namespace {
 
 struct Globals {
@@ -66,6 +64,7 @@ struct Globals {
   std::unique_ptr<wl_shell> wl_shell;
   std::unique_ptr<wl_seat> wl_seat;
   std::unique_ptr<wp_presentation> wp_presentation;
+  std::unique_ptr<zaura_output_manager> zaura_output_manager;
   std::unique_ptr<zaura_shell> zaura_shell;
   std::unique_ptr<zwp_linux_dmabuf_v1> zwp_linux_dmabuf_v1;
   std::unique_ptr<wl_subcompositor> wl_subcompositor;
@@ -78,8 +77,9 @@ struct Globals {
   std::unique_ptr<zcr_vsync_feedback_v1> zcr_vsync_feedback_v1;
   std::unique_ptr<wl_data_device_manager> wl_data_device_manager;
   std::unique_ptr<wp_content_type_manager_v1> wp_content_type_manager_v1;
+  std::unique_ptr<wp_fractional_scale_manager_v1>
+      wp_fractional_scale_manager_v1;
   std::unique_ptr<wp_viewporter> wp_viewporter;
-  std::unique_ptr<zxdg_shell_v6> zxdg_shell_v6;
   std::unique_ptr<xdg_wm_base> xdg_wm_base;
   std::unique_ptr<zwp_text_input_manager_v1> zwp_text_input_manager_v1;
   std::unique_ptr<zcr_secure_output_v1> zcr_secure_output_v1;
@@ -98,6 +98,7 @@ struct Globals {
   std::unique_ptr<zcr_remote_shell_v2> zcr_remote_shell_v2;
   std::unique_ptr<zcr_stylus_tools_v1> zcr_stylus_tools_v1;
   std::unique_ptr<zcr_touchpad_haptics_v1> zcr_touchpad_haptics_v1;
+  std::unique_ptr<zcr_ui_controls_v1> zcr_ui_controls_v1;
   std::unique_ptr<zwp_pointer_gestures_v1> zwp_pointer_gestures_v1;
   std::unique_ptr<zwp_pointer_constraints_v1> zwp_pointer_constraints_v1;
   std::unique_ptr<zwp_relative_pointer_manager_v1>
@@ -105,8 +106,9 @@ struct Globals {
   std::unique_ptr<zxdg_decoration_manager_v1> zxdg_decoration_manager_v1;
   std::unique_ptr<zcr_extended_drag_v1> zcr_extended_drag_v1;
   std::unique_ptr<zxdg_output_manager_v1> zxdg_output_manager_v1;
-  std::unique_ptr<weston_test> weston_test;
   std::unique_ptr<zwp_idle_inhibit_manager_v1> zwp_idle_inhibit_manager_v1;
+  std::unique_ptr<wp_single_pixel_buffer_manager_v1>
+      wp_single_pixel_buffer_manager_v1;
 };
 
 typedef void (*InterfaceRegistryCallback)(Globals*,
@@ -159,6 +161,7 @@ void RegistryHandler(void* data,
           REGISTRY_CALLBACK(wl_shell, wl_shell),
           REGISTRY_CALLBACK(wl_seat, wl_seat),
           REGISTRY_CALLBACK(wp_presentation, wp_presentation),
+          REGISTRY_CALLBACK(zaura_output_manager, zaura_output_manager),
           REGISTRY_CALLBACK(zaura_shell, zaura_shell),
           REGISTRY_CALLBACK(zwp_linux_dmabuf_v1, zwp_linux_dmabuf_v1),
           REGISTRY_CALLBACK(wl_subcompositor, wl_subcompositor),
@@ -172,8 +175,11 @@ void RegistryHandler(void* data,
           REGISTRY_CALLBACK(wl_data_device_manager, wl_data_device_manager),
           REGISTRY_CALLBACK(wp_content_type_manager_v1,
                             wp_content_type_manager_v1),
+          REGISTRY_CALLBACK(wp_fractional_scale_manager_v1,
+                            wp_fractional_scale_manager_v1),
+          REGISTRY_CALLBACK(wp_single_pixel_buffer_manager_v1,
+                            wp_single_pixel_buffer_manager_v1),
           REGISTRY_CALLBACK(wp_viewporter, wp_viewporter),
-          REGISTRY_CALLBACK(zxdg_shell_v6, zxdg_shell_v6),
           REGISTRY_CALLBACK(xdg_wm_base, xdg_wm_base),
           REGISTRY_CALLBACK(zwp_text_input_manager_v1,
                             zwp_text_input_manager_v1),
@@ -197,6 +203,7 @@ void RegistryHandler(void* data,
           REGISTRY_CALLBACK(zcr_text_input_extension_v1,
                             zcr_text_input_extension_v1),
           REGISTRY_CALLBACK(zcr_touchpad_haptics_v1, zcr_touchpad_haptics_v1),
+          REGISTRY_CALLBACK(zcr_ui_controls_v1, zcr_ui_controls_v1),
           REGISTRY_CALLBACK(zwp_pointer_gestures_v1, zwp_pointer_gestures_v1),
           REGISTRY_CALLBACK(zwp_pointer_constraints_v1,
                             zwp_pointer_constraints_v1),
@@ -208,7 +215,6 @@ void RegistryHandler(void* data,
           REGISTRY_CALLBACK(zxdg_output_manager_v1, zxdg_output_manager_v1),
           REGISTRY_CALLBACK(surface_augmenter, surface_augmenter),
           REGISTRY_CALLBACK(overlay_prioritizer, overlay_prioritizer),
-          REGISTRY_CALLBACK(weston_test, weston_test),
           REGISTRY_CALLBACK(zwp_idle_inhibit_manager_v1,
                             zwp_idle_inhibit_manager_v1),
       };
@@ -274,6 +280,4 @@ const std::vector<std::string> ClientVersionTest::Protocols() {
   wl_display_roundtrip(display.get());
   return std::move(globals.protocols);
 }
-}  // namespace clients
-}  // namespace wayland
-}  // namespace exo
+}  // namespace exo::wayland::clients

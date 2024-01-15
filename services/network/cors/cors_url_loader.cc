@@ -7,30 +7,44 @@
 #include <sstream>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
-#include "base/feature_list.h"
+#include "base/dcheck_is_on.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
 #include "net/base/load_flags.h"
+#include "net/cookies/cookie_partition_key.h"
 #include "net/http/http_status_code.h"
+#include "net/log/net_log_values.h"
 #include "services/network/cors/cors_url_loader_factory.h"
 #include "services/network/cors/cors_util.h"
+#include "services/network/masked_domain_list/network_service_resource_block_list.h"
 #include "services/network/network_context.h"
 #include "services/network/network_service_memory_cache.h"
+#include "services/network/private_network_access_checker.h"
 #include "services/network/public/cpp/cors/cors.h"
 #include "services/network/public/cpp/cors/origin_access_list.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/header_util.h"
+#include "services/network/public/cpp/is_potentially_trustworthy.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/request_mode.h"
-#include "services/network/public/cpp/resolve_host_client_base.h"
 #include "services/network/public/cpp/timing_allow_origin_parser.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/ip_address_space.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "services/network/shared_dictionary/shared_dictionary.h"
+#include "services/network/shared_dictionary/shared_dictionary_access_checker.h"
+#include "services/network/shared_dictionary/shared_dictionary_data_pipe_writer.h"
+#include "services/network/shared_dictionary/shared_dictionary_manager.h"
+#include "services/network/shared_dictionary/shared_dictionary_storage.h"
+#include "services/network/shared_dictionary/shared_dictionary_writer.h"
+#include "services/network/shared_storage/shared_storage_header_utils.h"
 #include "services/network/trust_tokens/trust_token_operation_metrics_recorder.h"
 #include "services/network/url_loader.h"
 #include "services/network/url_loader_factory.h"
@@ -83,12 +97,8 @@ absl::optional<PreflightRequiredReason> NeedsPreflight(
   return absl::nullopt;
 }
 
-base::Value NetLogCorsURLLoaderStartParams(const ResourceRequest& request) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", request.url.possibly_invalid_spec());
-  dict.SetStringKey("method", request.method);
-  dict.SetStringKey("headers", request.headers.ToString());
-  dict.SetBoolKey("is_revalidating", request.is_revalidating);
+base::Value::Dict NetLogCorsURLLoaderStartParams(
+    const ResourceRequest& request) {
   std::string cors_preflight_policy;
   switch (request.cors_preflight_policy) {
     case mojom::CorsPreflightPolicy::kConsiderPreflight:
@@ -98,14 +108,19 @@ base::Value NetLogCorsURLLoaderStartParams(const ResourceRequest& request) {
       cors_preflight_policy = "prevent_preflight";
       break;
   }
-  dict.SetStringKey("cors_preflight_policy", cors_preflight_policy);
-  return dict;
+
+  return base::Value::Dict()
+      .Set("url", request.url.possibly_invalid_spec())
+      .Set("method", request.method)
+      .Set("headers", net::NetLogStringValue(request.headers.ToString()))
+      .Set("is_revalidating", request.is_revalidating)
+      .Set("cors_preflight_policy", cors_preflight_policy);
 }
 
-base::Value NetLogPreflightRequiredParams(
+base::Value::Dict NetLogPreflightRequiredParams(
     absl::optional<PreflightRequiredReason> preflight_required_reason) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetBoolKey("preflight_required", preflight_required_reason.has_value());
+  auto dict = base::Value::Dict().Set("preflight_required",
+                                      preflight_required_reason.has_value());
   if (preflight_required_reason) {
     std::string preflight_required_reason_param;
     switch (preflight_required_reason.value()) {
@@ -122,8 +137,7 @@ base::Value NetLogPreflightRequiredParams(
         preflight_required_reason_param = "disallowed_header";
         break;
     }
-    dict.SetStringKey("preflight_required_reason",
-                      preflight_required_reason_param);
+    dict.Set("preflight_required_reason", preflight_required_reason_param);
   }
   return dict;
 }
@@ -132,9 +146,8 @@ base::Value NetLogPreflightRequiredParams(
 base::Value::Dict NetLogPreflightErrorParams(
     int net_error,
     const absl::optional<CorsErrorStatus>& status) {
-  base::Value::Dict dict;
-
-  dict.Set("error", net::ErrorToShortString(net_error));
+  auto dict =
+      base::Value::Dict().Set("error", net::ErrorToShortString(net_error));
   if (status) {
     dict.Set("cors-error", static_cast<int>(status->cors_error));
     if (!status->failed_parameter.empty()) {
@@ -242,36 +255,29 @@ void RecordNetworkLoaderCompletionTime(const char* suffix,
       elapsed);
 }
 
+// The compressed dictionary transport feature supports storing dictionaries
+// if the request was fetched by cors enabled mode request or same-origin mode
+// request or no-cors mode same origin request.
+bool IsSharedDictionaryWriteAllowed(
+    mojom::RequestMode mode,
+    mojom::FetchResponseType response_tainting) {
+  switch (mode) {
+    case mojom::RequestMode::kSameOrigin:
+      return true;
+    case mojom::RequestMode::kNoCors:
+      // Basic `response_tainting` for no-cors request means that the response
+      // is from same origin without any cross origin redirect.
+      return response_tainting == mojom::FetchResponseType::kBasic;
+    case mojom::RequestMode::kCors:
+      return true;
+    case mojom::RequestMode::kCorsWithForcedPreflight:
+      return true;
+    case mojom::RequestMode::kNavigate:
+      return false;
+  }
+}
+
 constexpr const char kTimingAllowOrigin[] = "Timing-Allow-Origin";
-
-class EmptyResolveHostClient : ResolveHostClientBase {
- public:
-  EmptyResolveHostClient(const GURL& url,
-                         const net::NetworkAnonymizationKey& key,
-                         raw_ptr<NetworkContext> context) {
-    mojom::ResolveHostParametersPtr params =
-        mojom::ResolveHostParameters::New();
-    params->initial_priority = net::RequestPriority::IDLE;
-    params->is_speculative = true;
-    params->purpose = mojom::ResolveHostParameters::Purpose::kPreconnect;
-    context->ResolveHost(
-        mojom::HostResolverHost::NewSchemeHostPort(url::SchemeHostPort(url)),
-        key, std::move(params), receiver_.BindNewPipeAndPassRemote());
-  }
-  ~EmptyResolveHostClient() override = default;
-
- private:
-  // mojom::ResolveHostClient:
-  void OnComplete(int result,
-                  const net::ResolveErrorInfo& resolve_error_info,
-                  const absl::optional<net::AddressList>& resolved_addresses,
-                  const absl::optional<net::HostResolverEndpointResults>&
-                      endpoint_results_with_metadata) override {
-    delete this;
-  }
-
-  mojo::Receiver<mojom::ResolveHostClient> receiver_{this};
-};
 
 }  // namespace
 
@@ -294,7 +300,11 @@ CorsURLLoader::CorsURLLoader(
     const net::IsolationInfo& isolation_info,
     mojo::PendingRemote<mojom::DevToolsObserver> devtools_observer,
     const mojom::ClientSecurityState* factory_client_security_state,
+    mojo::Remote<mojom::URLLoaderNetworkServiceObserver>*
+        url_loader_network_service_observer,
     const CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
+    scoped_refptr<SharedDictionaryStorage> shared_dictionary_storage,
+    raw_ptr<mojom::SharedDictionaryAccessObserver> shared_dictionary_observer,
     NetworkContext* context)
     : receiver_(this, std::move(loader_receiver)),
       process_id_(process_id),
@@ -312,17 +322,20 @@ CorsURLLoader::CorsURLLoader(
       has_factory_override_(has_factory_override),
       isolation_info_(isolation_info),
       factory_client_security_state_(factory_client_security_state),
+      url_loader_network_service_observer_(url_loader_network_service_observer),
       cross_origin_embedder_policy_(cross_origin_embedder_policy),
       devtools_observer_(std::move(devtools_observer)),
+      weak_devtools_observer_factory_(&devtools_observer_),
       // CORS preflight related events are logged in a series of URL_REQUEST
       // logs.
       net_log_(net::NetLogWithSource::Make(net::NetLog::Get(),
                                            net::NetLogSourceType::URL_REQUEST)),
-      context_(context) {
-
+      context_(context),
+      shared_dictionary_storage_(std::move(shared_dictionary_storage)),
+      shared_dictionary_observer_(shared_dictionary_observer) {
+  CHECK(url_loader_network_service_observer_ != nullptr);
   if (request_.url.SchemeIsHash() || request_.url.SchemeIsSigned() || request_.url.SchemeIsRelated())
     is_hash_net_request_ = true;
-
   if (ignore_isolated_world_origin)
     request_.isolated_world_origin = absl::nullopt;
 
@@ -332,6 +345,35 @@ CorsURLLoader::CorsURLLoader(
   DCHECK(network_loader_factory_);
   DCHECK(origin_access_list_);
   SetCorsFlagIfNeeded();
+
+  if (shared_dictionary_storage_) {
+    if (request_.mode != mojom::RequestMode::kNoCors) {
+      request_.load_flags |= net::LOAD_CAN_USE_SHARED_DICTIONARY;
+    } else if (request_.request_initiator &&
+               request_.request_initiator->IsSameOriginWith(request_.url)) {
+      // For no-cors mode requests, we can use shared dictionaries only for same
+      // origin requests. When redirected to another origin,
+      // net::URLRequest::Redirect() disables the LOAD_CAN_USE_SHARED_DICTIONARY
+      // flag.
+      request_.load_flags |= net::LOAD_CAN_USE_SHARED_DICTIONARY;
+      request_.load_flags |=
+          net::LOAD_DISABLE_SHARED_DICTIONARY_AFTER_CROSS_ORIGIN_REDIRECT;
+    }
+    // This is intended to load the dictionary as soon as possible. Without
+    // this, the dictionary will be loaded from the disk when
+    // `HttpNetworkTransaction` builds the request header just before sending it
+    // to the server.
+    shared_dictionary_storage_->GetDictionary(
+        request_.url,
+        base::BindOnce(
+            [](base::WeakPtr<CorsURLLoader> loader,
+               std::unique_ptr<SharedDictionary> shared_dictionary) {
+              if (loader) {
+                loader->shared_dictionary_ = std::move(shared_dictionary);
+              }
+            },
+            weak_factory_.GetWeakPtr()));
+  }
 }
 
 CorsURLLoader::~CorsURLLoader() {
@@ -356,6 +398,17 @@ void CorsURLLoader::Start() {
   net_log_.BeginEvent(net::NetLogEventType::CORS_REQUEST,
                       [&] { return NetLogCorsURLLoaderStartParams(request_); });
   StartRequest();
+}
+
+bool CorsURLLoader::ShouldBlockRequestForAfpExperiment(GURL request_url) {
+  if (context_ && context_->AfpBlockListExperimentEnabled() &&
+      context_->network_service() &&
+      context_->network_service()->network_service_resource_block_list()) {
+    return context_->network_service()
+        ->network_service_resource_block_list()
+        ->Matches(request_url, isolation_info_);
+  }
+  return false;
 }
 
 void CorsURLLoader::FollowRedirect(
@@ -406,16 +459,17 @@ void CorsURLLoader::FollowRedirect(
     }
   }
 
-  network::URLLoader::LogConcerningRequestHeaders(
-      modified_headers, /*added_during_redirect=*/true);
-  network::URLLoader::LogConcerningRequestHeaders(
-      modified_cors_exempt_headers, /*added_during_redirect=*/true);
-
   for (const auto& name : removed_headers) {
     request_.headers.RemoveHeader(name);
     request_.cors_exempt_headers.RemoveHeader(name);
   }
   request_.headers.MergeFrom(modified_headers);
+
+  if (GetSecSharedStorageWritableHeader(modified_headers)) {
+    request_.shared_storage_writable_eligible = true;
+  } else if (base::Contains(removed_headers, kSecSharedStorageWritableHeader)) {
+    request_.shared_storage_writable_eligible = false;
+  }
 
   if (!allow_any_cors_exempt_header_ &&
       !CorsURLLoaderFactory::IsValidCorsExemptHeaders(
@@ -427,6 +481,11 @@ void CorsURLLoader::FollowRedirect(
 
   if (!AreRequestHeadersSafe(request_.headers)) {
     HandleComplete(URLLoaderCompletionStatus(net::ERR_INVALID_ARGUMENT));
+    return;
+  }
+
+  if (ShouldBlockRequestForAfpExperiment(redirect_info_.new_url)) {
+    HandleComplete(URLLoaderCompletionStatus(net::ERR_BLOCKED_BY_CLIENT));
     return;
   }
 
@@ -447,6 +506,23 @@ void CorsURLLoader::FollowRedirect(
   // reset the request body manually.
   if (request_.method == net::HttpRequestHeaders::kGetMethod)
     request_.request_body = nullptr;
+
+  // When we follow a redirect, we should not expect the IP address space of
+  // the target server to stay the same. The new target server's IP address
+  // space will be recomputed and Private Network Access checks will apply anew.
+  //
+  // This only affects redirects where a new request is initiated at this layer
+  // instead of being handled in `network::URLLoader`.
+  //
+  // See also: https://crbug.com/1293891
+  request_.target_ip_address_space = mojom::IPAddressSpace::kUnknown;
+
+  // Similarly, when we follow a redirect, we may make a different decision as
+  // to whether and why we should send a preflight request. Maybe the request
+  // is now same-origin when it was cross-origin, or vice-versa. Maybe the
+  // request now does not target the private network. In any case, we will set
+  // this bit back to true if we need to.
+  sending_pna_only_warning_preflight_ = false;
 
   const bool original_fetch_cors_flag = fetch_cors_flag_;
   SetCorsFlagIfNeeded();
@@ -537,21 +613,36 @@ void CorsURLLoader::OnReceiveResponse(
     }
   }
 
-  if (base::FeatureList::IsEnabled(features::kPreconnectInNetworkService) &&
-      context_->enable_preconnect() && response_head->parsed_headers) {
-    auto key = isolation_info_.network_anonymization_key();
-    for (auto& header : response_head->parsed_headers->link_headers) {
-      if (header->rel == mojom::LinkRelAttribute::kDnsPrefetch) {
-        // Deletes itself.
-        new EmptyResolveHostClient(header->href, key, context_);
-      } else if (header->rel == mojom::LinkRelAttribute::kPreconnect) {
-        context_->PreconnectSockets(
-            1, header->href,
-            header->cross_origin != mojom::CrossOriginAttribute::kAnonymous,
-            key);
+  if (request_.shared_dictionary_writer_enabled && shared_dictionary_storage_ &&
+      IsSharedDictionaryWriteAllowed(request_.mode, response_tainting_)) {
+    // Opaque response tainting requests should not trigger dictionary
+    // registration.
+    CHECK_NE(mojom::FetchResponseType::kOpaque, response_tainting_);
+    auto writer = shared_dictionary_storage_->MaybeCreateWriter(
+        request_.url, response_head->response_time, *response_head->headers,
+        response_head->was_fetched_via_cache,
+        base::BindOnce(
+            &SharedDictionaryAccessChecker::CheckAllowedToWriteAndReport,
+            std::make_unique<SharedDictionaryAccessChecker>(
+                *context_, shared_dictionary_observer_),
+            request_.url, request_.site_for_cookies, isolation_info_));
+    if (writer) {
+      shared_dictionary_data_pipe_writer_ =
+          SharedDictionaryDataPipeWriter::Create(
+              body, std::move(writer),
+              base::BindOnce(&CorsURLLoader::OnSharedDictionaryWritten,
+                             base::Unretained(this)));
+      if (!shared_dictionary_data_pipe_writer_) {
+        HandleComplete(
+            URLLoaderCompletionStatus(net::ERR_INSUFFICIENT_RESOURCES));
+        return;
       }
     }
   }
+
+  // Opaque response tainting requests must not use shared dictionary.
+  CHECK(!(response_head->did_use_shared_dictionary &&
+          (response_tainting_ == mojom::FetchResponseType::kOpaque)));
 
   has_forwarded_response_ = true;
   timing_allow_failed_flag_ = !PassesTimingAllowOriginCheck(*response_head);
@@ -560,6 +651,10 @@ void CorsURLLoader::OnReceiveResponse(
   response_head->timing_allow_passed = !timing_allow_failed_flag_;
   response_head->has_authorization_covered_by_wildcard_on_preflight =
       has_authorization_covered_by_wildcard_;
+
+  response_head->private_network_access_preflight_result =
+      TakePrivateNetworkAccessPreflightResult();
+
   forwarding_client_->OnReceiveResponse(
       std::move(response_head), std::move(body), std::move(cached_metadata));
 }
@@ -583,15 +678,8 @@ void CorsURLLoader::OnReceiveRedirect(const net::RedirectInfo& redirect_info,
   DCHECK(forwarding_client_);
   DCHECK(!deferred_redirect_url_);
 
-  // When a redirect is received, we should not expect the IP address space of
-  // the target server to stay the same. The new target server's IP address
-  // space will be recomputed and Private Network Access checks will apply anew.
-  //
-  // This only affects redirects where a new request is initiated at this layer
-  // instead of being handled in `network::URLLoader`.
-  //
-  // See also: https://crbug.com/1293891
-  request_.target_ip_address_space = mojom::IPAddressSpace::kUnknown;
+  response_head->private_network_access_preflight_result =
+      TakePrivateNetworkAccessPreflightResult();
 
   // If `CORS flag` is set and a CORS check for `request` and `response` returns
   // failure, then return a network error.
@@ -612,15 +700,6 @@ void CorsURLLoader::OnReceiveRedirect(const net::RedirectInfo& redirect_info,
 
   timing_allow_failed_flag_ = !PassesTimingAllowOriginCheck(*response_head);
   last_response_url_ = redirect_info.new_url;
-
-  if (base::FeatureList::IsEnabled(features::kPreconnectOnRedirect) &&
-      context_->enable_preconnect() &&
-      redirect_info.new_url.SchemeIs(request_.url.scheme()) &&
-      !url::Origin::Create(redirect_info.new_url)
-           .IsSameOriginWith(url::Origin::Create(request_.url))) {
-    context_->PreconnectSockets(1, redirect_info.new_url, true,
-                                isolation_info_.network_anonymization_key());
-  }
 
   if (request_.redirect_mode == mojom::RedirectMode::kManual) {
     CheckTainted(redirect_info);
@@ -702,6 +781,8 @@ void CorsURLLoader::OnTransferSizeUpdated(int32_t transfer_size_diff) {
   DCHECK(network_loader_);
   DCHECK(forwarding_client_);
   DCHECK(!deferred_redirect_url_);
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kCorsURLLoader);
   forwarding_client_->OnTransferSizeUpdated(transfer_size_diff);
 }
 
@@ -714,10 +795,21 @@ void CorsURLLoader::OnComplete(const URLLoaderCompletionStatus& status) {
   // to expect it also happens even during redirect handling.
   DCHECK(!deferred_redirect_url_ || status.error_code != net::OK);
 
-  HandleComplete(status);
+  if (shared_dictionary_data_pipe_writer_) {
+    deferred_completion_status_ = status;
+    shared_dictionary_data_pipe_writer_->OnComplete(status.error_code ==
+                                                    net::OK);
+  } else {
+    HandleComplete(status);
+  }
 }
 
 void CorsURLLoader::StartRequest() {
+  // All results should be reported to `forwarding_client_` as part of a
+  // `URLResponseHead`, then `pna_preflight_result_` reset to `kNone`.
+  CHECK_EQ(pna_preflight_result_,
+           mojom::PrivateNetworkAccessPreflightResult::kNone);
+
   if (fetch_cors_flag_ && !skip_cors_enabled_scheme_check_ &&
       !base::Contains(url::GetCorsEnabledSchemes(), request_.url.scheme())) {
     HandleComplete(URLLoaderCompletionStatus(
@@ -783,18 +875,32 @@ void CorsURLLoader::StartRequest() {
     return;
   }
 
-  // Clone the devtools observer only if the original request has a
-  // |devtools_request_id|.
-  mojo::PendingRemote<mojom::DevToolsObserver> devtools_observer;
-  if (devtools_observer_ && request_.devtools_request_id) {
-    devtools_observer_->Clone(
-        devtools_observer.InitWithNewPipeAndPassReceiver());
-  }
-
   // Since we're doing a preflight, we won't reuse the original request. Cancel
   // it now to free up the socket.
   network_loader_.reset();
 
+  mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver> remote_observer;
+  // TODO(https://crbug.com/1338439): Create a base function and clean up all
+  // need_pna_permission check in the code base.
+  const mojom::ClientSecurityState* state = GetClientSecurityState();
+  const bool needs_pna_permission =
+      state && PrivateNetworkAccessChecker::NeedPermission(
+                   request_.url, state->is_web_secure_context,
+                   request_.required_ip_address_space);
+  if (needs_pna_permission &&
+      url_loader_network_service_observer_->is_bound()) {
+    // Fail the request if `targetAddressSpace` on fetch option is not the same
+    // as the real target address space.
+    if (request_.required_ip_address_space != mojom::IPAddressSpace::kUnknown &&
+        request_.required_ip_address_space !=
+            request_.target_ip_address_space) {
+      HandleComplete(URLLoaderCompletionStatus(
+          CorsErrorStatus(mojom::CorsError::kInvalidPrivateNetworkAccess)));
+      return;
+    }
+    (*url_loader_network_service_observer_)
+        ->Clone(remote_observer.InitWithNewPipeAndPassReceiver());
+  }
   context_->cors_preflight_controller()->PerformPreflightCheck(
       base::BindOnce(&CorsURLLoader::OnPreflightRequestComplete,
                      weak_factory_.GetWeakPtr()),
@@ -802,11 +908,12 @@ void CorsURLLoader::StartRequest() {
       PreflightController::WithTrustedHeaderClient(
           options_ & mojom::kURLLoadOptionUseHeaderClient),
       context_->cors_non_wildcard_request_headers_support(),
-      GetPrivateNetworkAccessPreflightBehavior(), tainted_,
-      net::NetworkTrafficAnnotationTag(traffic_annotation_),
+      GetPrivateNetworkAccessPreflightBehavior(
+          request_.required_ip_address_space),
+      tainted_, net::NetworkTrafficAnnotationTag(traffic_annotation_),
       network_loader_factory_, isolation_info_, CloneClientSecurityState(),
-      std::move(devtools_observer), net_log_,
-      context_->acam_preflight_spec_conformant());
+      weak_devtools_observer_factory_.GetWeakPtr(), net_log_,
+      context_->acam_preflight_spec_conformant(), std::move(remote_observer));
 }
 
 void CorsURLLoader::ReportCorsErrorToDevTools(const CorsErrorStatus& status,
@@ -818,17 +925,33 @@ void CorsURLLoader::ReportCorsErrorToDevTools(const CorsErrorStatus& status,
       CloneClientSecurityState(), request_.url, status, is_warning);
 }
 
+void CorsURLLoader::ReportCorbErrorToDevTools() {
+  devtools_observer_->OnCorbError(request_.devtools_request_id, request_.url);
+}
+
 absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
     int net_error,
     absl::optional<CorsErrorStatus> status) {
-  if (net_error == net::OK) {
-    DCHECK(!status) << *status;
+  absl::optional<PreflightRequiredReason> reason = NeedsPreflight(request_);
+  CHECK(reason.has_value());  // Otherwise we should not have sent a preflight.
+
+  // Unmitigated success: no error and no warning.
+  if (net_error == net::OK && !status.has_value()) {
+    // If the preflight was sent for PNA, record the success so we can report it
+    // to `forwarding_client_`.
+    if (*reason == PreflightRequiredReason::kPrivateNetworkAccess) {
+      pna_preflight_result_ =
+          mojom::PrivateNetworkAccessPreflightResult::kSuccess;
+    }
+
     return absl::nullopt;
   }
 
-  net_log_.AddEvent(net::NetLogEventType::CORS_PREFLIGHT_ERROR, [&] {
-    return base::Value(NetLogPreflightErrorParams(net_error, status));
-  });
+  if (net_error != net::OK) {
+    net_log_.AddEvent(net::NetLogEventType::CORS_PREFLIGHT_ERROR, [&] {
+      return NetLogPreflightErrorParams(net_error, status);
+    });
+  }
 
   // `kInvalidResponse` is never returned by the preflight controller, so we use
   // it to record the case where there was a net error and no CORS error.
@@ -843,10 +966,21 @@ absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
     status->target_address_space = request_.target_ip_address_space;
   }
 
-  if (sending_pna_only_warning_preflight_) {
+  // Private Network Access warning: ignore net and CORS errors.
+  if (net_error == net::OK || sending_pna_only_warning_preflight_) {
+    CHECK(ShouldIgnorePrivateNetworkAccessErrors(
+        request_.required_ip_address_space));
+    CHECK_EQ(*reason, PreflightRequiredReason::kPrivateNetworkAccess);
+
+    // Record the existence of the warning so that we can report it to
+    // `forwarding_client_` in the next `URLResponseHead` we construct.
+    pna_preflight_result_ =
+        mojom::PrivateNetworkAccessPreflightResult::kWarning;
+
     // Even if we ignore the error, record the warning in metrics and DevTools.
     base::UmaHistogramEnumeration(kPreflightWarningHistogramName,
                                   histogram_error);
+
     if (devtools_observer_) {
       if (!status) {
         // Set the resource IP address space to the target IP address space for
@@ -868,12 +1002,19 @@ absl::optional<URLLoaderCompletionStatus> CorsURLLoader::ConvertPreflightResult(
     return absl::nullopt;
   }
 
+  // Failure.
+  CHECK(net_error != net::OK);
+
   base::UmaHistogramEnumeration(kPreflightErrorHistogramName, histogram_error);
-  if (status) {
-    return URLLoaderCompletionStatus(*std::move(status));
+  auto result = status ? URLLoaderCompletionStatus(*std::move(status))
+                       : URLLoaderCompletionStatus(net_error);
+
+  if (*reason == PreflightRequiredReason::kPrivateNetworkAccess) {
+    pna_preflight_result_ = mojom::PrivateNetworkAccessPreflightResult::kError;
+    result.error_code = net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS;
   }
 
-  return URLLoaderCompletionStatus(net_error);
+  return result;
 }
 
 void CorsURLLoader::OnPreflightRequestComplete(
@@ -914,19 +1055,24 @@ void CorsURLLoader::StartNetworkRequest() {
   // Check whether a fresh entry exists in the in-memory cache.
   absl::optional<std::string> cache_key;
   if (context_->GetMemoryCache() && !has_factory_override_) {
+    // Pass `factory_client_security_state_` directly instead of using
+    // GetClientSecurityState() so that private network access checks in
+    // the memory cache don't think that both factory and request supply
+    // client security states.
     cache_key = context_->GetMemoryCache()->CanServe(
         options_, request_, isolation_info_.network_isolation_key(),
-        cross_origin_embedder_policy_, GetClientSecurityState());
+        cross_origin_embedder_policy_, factory_client_security_state_);
   }
 
   if (cache_key.has_value()) {
     context_->GetMemoryCache()->CreateLoaderAndStart(
         network_loader_.BindNewPipeAndPassReceiver(), request_id_, options_,
         *cache_key, request_, net_log_,
+        net::CookiePartitionKey::FromNetworkIsolationKey(
+            isolation_info_.network_isolation_key()),
         network_client_receiver_.BindNewPipeAndPassRemote());
     memory_cache_was_used_ = true;
-  } else if (sync_network_loader_factory_ &&
-             base::FeatureList::IsEnabled(features::kURLLoaderSyncClient)) {
+  } else if (sync_network_loader_factory_) {
     sync_network_loader_factory_->CreateLoaderAndStartWithSyncClient(
         network_loader_.BindNewPipeAndPassReceiver(), request_id_, options_,
         request_, network_client_receiver_.BindNewPipeAndPassRemote(),
@@ -937,15 +1083,15 @@ void CorsURLLoader::StartNetworkRequest() {
         request_, network_client_receiver_.BindNewPipeAndPassRemote(),
         traffic_annotation_);
   }
-  network_client_receiver_.set_disconnect_handler(
-      base::BindOnce(&CorsURLLoader::OnMojoDisconnect, base::Unretained(this)));
+  network_client_receiver_.set_disconnect_handler(base::BindOnce(
+      &CorsURLLoader::OnNetworkClientMojoDisconnect, base::Unretained(this)));
 
   request_.credentials_mode = original_credentials_mode;
 }
 
-void CorsURLLoader::HandleComplete(const URLLoaderCompletionStatus& status) {
+void CorsURLLoader::HandleComplete(URLLoaderCompletionStatus status) {
   if (request_.trust_token_params) {
-    HistogramTrustTokenOperationNetError(request_.trust_token_params->type,
+    HistogramTrustTokenOperationNetError(request_.trust_token_params->operation,
                                          status.trust_token_operation_status,
                                          status.error_code);
   }
@@ -966,6 +1112,14 @@ void CorsURLLoader::HandleComplete(const URLLoaderCompletionStatus& status) {
   if (devtools_observer_ && status.cors_error_status) {
     ReportCorsErrorToDevTools(*status.cors_error_status);
   }
+  // ORB "v0.1" (and earlier) signal CORB/ORB-related errors with a flag.
+  // ORB "v0.2" (and later) use a network error code. We should always report
+  // the error-code style error to DevTools, since it has a less spammy
+  // way of displaying them compared to just dumping them on the console.
+  if (devtools_observer_ && (status.should_report_corb_blocking ||
+                             status.error_code == net::ERR_BLOCKED_BY_ORB)) {
+    ReportCorbErrorToDevTools();
+  }
 
   // If we detect a private network access when we were not expecting one, we
   // restart the request and force a preflight request. This preflight and the
@@ -978,6 +1132,10 @@ void CorsURLLoader::HandleComplete(const URLLoaderCompletionStatus& status) {
     DCHECK(status.cors_error_status->resource_address_space !=
            mojom::IPAddressSpace::kUnknown);
 
+    // We should sent at most one PNA preflight per request (and per redirect).
+    CHECK_EQ(pna_preflight_result_,
+             mojom::PrivateNetworkAccessPreflightResult::kNone);
+
     // We should never send a preflight request for PNA after having already
     // forwarded response headers to our client. See https://crbug.com/1279376.
     if (!has_forwarded_response_) {
@@ -988,7 +1146,8 @@ void CorsURLLoader::HandleComplete(const URLLoaderCompletionStatus& status) {
       // private network access, then we rely on `PreflightController` to ignore
       // PNA-specific preflight errors during this second preflight request.
       sending_pna_only_warning_preflight_ =
-          ShouldIgnorePrivateNetworkAccessErrors() &&
+          ShouldIgnorePrivateNetworkAccessErrors(
+              request_.required_ip_address_space) &&
           !(NeedsPreflight(request_).has_value() && fetch_cors_flag_);
 
       network_client_receiver_.reset();
@@ -1003,14 +1162,30 @@ void CorsURLLoader::HandleComplete(const URLLoaderCompletionStatus& status) {
     NOTREACHED();
   }
 
+  status.private_network_access_preflight_result =
+      TakePrivateNetworkAccessPreflightResult();
+
   net_log_.EndEvent(net::NetLogEventType::CORS_REQUEST);
-  forwarding_client_->OnComplete(status);
+  forwarding_client_->OnComplete(std::move(status));
   std::move(delete_callback_).Run(this);
   // |this| is deleted here.
 }
 
 void CorsURLLoader::OnMojoDisconnect() {
   HandleComplete(URLLoaderCompletionStatus(net::ERR_ABORTED));
+}
+
+void CorsURLLoader::OnNetworkClientMojoDisconnect() {
+  if (shared_dictionary_data_pipe_writer_) {
+    // If we already received URLLoaderCompletionStatus, ignores this disconnect
+    // error.
+    if (!deferred_completion_status_) {
+      deferred_completion_status_ = URLLoaderCompletionStatus(net::ERR_ABORTED);
+      shared_dictionary_data_pipe_writer_->OnComplete(/*success=*/false);
+    }
+  } else {
+    HandleComplete(URLLoaderCompletionStatus(net::ERR_ABORTED));
+  }
 }
 
 // This should be identical to CalculateCorsFlag defined in
@@ -1134,21 +1309,47 @@ mojom::ClientSecurityStatePtr CorsURLLoader::CloneClientSecurityState() const {
   return state->Clone();
 }
 
-bool CorsURLLoader::ShouldIgnorePrivateNetworkAccessErrors() const {
+bool CorsURLLoader::ShouldIgnorePrivateNetworkAccessErrors(
+    mojom::IPAddressSpace target_address_space) const {
   const mojom::ClientSecurityState* state = GetClientSecurityState();
-  return state && state->private_network_request_policy ==
-                      mojom::PrivateNetworkRequestPolicy::kPreflightWarn;
+  if (!state) {
+    return false;
+  }
+  // When the PNA permission prompt shown, we should always respect the
+  // preflight results, otherwise it would be a bypass of mixed content checker.
+  if (PrivateNetworkAccessChecker::NeedPermission(
+          request_.url, state->is_web_secure_context, target_address_space)) {
+    return false;
+  }
+  return state->private_network_request_policy ==
+         mojom::PrivateNetworkRequestPolicy::kPreflightWarn;
 }
 
 PrivateNetworkAccessPreflightBehavior
-CorsURLLoader::GetPrivateNetworkAccessPreflightBehavior() const {
-  if (!ShouldIgnorePrivateNetworkAccessErrors()) {
+CorsURLLoader::GetPrivateNetworkAccessPreflightBehavior(
+    mojom::IPAddressSpace target_address_space) const {
+  if (!ShouldIgnorePrivateNetworkAccessErrors(target_address_space)) {
     return PrivateNetworkAccessPreflightBehavior::kEnforce;
   }
   if (sending_pna_only_warning_preflight_) {
     return PrivateNetworkAccessPreflightBehavior::kWarnWithTimeout;
   }
   return PrivateNetworkAccessPreflightBehavior::kWarn;
+}
+
+void CorsURLLoader::OnSharedDictionaryWritten(bool success) {
+  shared_dictionary_data_pipe_writer_.reset();
+  if (deferred_completion_status_) {
+    HandleComplete(*deferred_completion_status_);
+    return;
+  }
+}
+
+mojom::PrivateNetworkAccessPreflightResult
+CorsURLLoader::TakePrivateNetworkAccessPreflightResult() {
+  mojom::PrivateNetworkAccessPreflightResult result = pna_preflight_result_;
+  pna_preflight_result_ = mojom::PrivateNetworkAccessPreflightResult::kNone;
+  return result;
 }
 
 // static

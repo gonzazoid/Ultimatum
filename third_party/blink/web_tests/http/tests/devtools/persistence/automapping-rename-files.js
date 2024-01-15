@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Verify that automapping is sane.\n`);
-  await TestRunner.loadTestModule('bindings_test_runner');
 
   // Disable default-running automapping so that it doesn't conflict
   // with AutomappingTest.
@@ -12,7 +16,7 @@
 
   var foo_js = {content: 'console.log(\'foo.js!\');', time: null};
 
-  var automappingTest = new BindingsTestRunner.AutomappingTest(Workspace.workspace);
+  var automappingTest = new BindingsTestRunner.AutomappingTest(Workspace.Workspace.WorkspaceImpl.instance());
   automappingTest.addNetworkResources({
     'http://example.com/path/foo.js': foo_js,
   });
@@ -26,7 +30,7 @@
   await automappingTest.waitUntilMappingIsStabilized();
 
   TestRunner.markStep('Rename foo.js => bar.js');
-  var fileUISourceCode = await TestRunner.waitForUISourceCode('foo.js', Workspace.projectTypes.FileSystem);
+  var fileUISourceCode = await TestRunner.waitForUISourceCode('foo.js', Workspace.Workspace.projectTypes.FileSystem);
   await fileUISourceCode.rename('bar.js');
   await automappingTest.waitUntilMappingIsStabilized();
 

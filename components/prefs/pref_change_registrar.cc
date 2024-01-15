@@ -4,8 +4,10 @@
 
 #include "components/prefs/pref_change_registrar.h"
 
-#include "base/bind.h"
+#include <ostream>
+
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "components/prefs/pref_service.h"
 

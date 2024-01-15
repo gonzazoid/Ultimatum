@@ -8,14 +8,14 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "chrome/browser/k_anonymity_service/k_anonymity_service_storage.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "google_apis/gaia/google_service_auth_error.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/isolation_info.h"
 #include "net/http/http_response_headers.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
@@ -43,13 +43,6 @@ class SimpleURLLoader;
 // expires.
 class KAnonymityTrustTokenGetter {
  public:
-  struct KeyAndNonUniqueUserId {
-    std::string key_commitment;  // trust token key commitment (specific to
-                                 // `non_unique_user_id`)
-    int non_unique_user_id;  // Non-unique ID assigned to this user for k-anon
-                             // reporting
-  };
-
   // Callback where argument tells if the client has the trust token or not.
   using TryGetTrustTokenAndKeyCallback =
       base::OnceCallback<void(absl::optional<KeyAndNonUniqueUserId>)>;
@@ -58,7 +51,8 @@ class KAnonymityTrustTokenGetter {
   KAnonymityTrustTokenGetter(
       signin::IdentityManager* identity_manager,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      network::mojom::TrustTokenQueryAnswerer* answerer);
+      network::mojom::TrustTokenQueryAnswerer* answerer,
+      KAnonymityServiceStorage* storage);
 
   ~KAnonymityTrustTokenGetter();
 
@@ -76,11 +70,6 @@ class KAnonymityTrustTokenGetter {
   void TryGetTrustTokenAndKey(TryGetTrustTokenAndKeyCallback callback);
 
  private:
-  struct KeyAndNonUniqueUserIdWithExpiration {
-    KeyAndNonUniqueUserId key_and_id;
-    base::Time expiration;
-  };
-
   struct PendingRequest {
     explicit PendingRequest(TryGetTrustTokenAndKeyCallback callback);
     ~PendingRequest();
@@ -89,29 +78,6 @@ class KAnonymityTrustTokenGetter {
     base::TimeTicks request_start;
     TryGetTrustTokenAndKeyCallback callback;
   };
-
-  // A helper class to ensure that internal callbacks are only called in the
-  // expected order, and only called once.
-  class CallbackNonce {
-   public:
-    CallbackNonce() = default;
-
-    // Delete copy to prevent errors.
-    CallbackNonce(const CallbackNonce&) = delete;
-    CallbackNonce& operator=(const CallbackNonce&) = delete;
-
-    // Movable
-    CallbackNonce(CallbackNonce&&) = default;
-    CallbackNonce& operator=(CallbackNonce&&) = default;
-
-    CallbackNonce Pass();
-    void Check(const CallbackNonce& other);
-
-   private:
-    explicit CallbackNonce(int value) : value_(value) {}
-    int value_ = 0;
-  };
-
   // Entry point for processing the request on the front of the queue.
   void TryGetTrustTokenAndKeyInternal();
 
@@ -121,8 +87,7 @@ class KAnonymityTrustTokenGetter {
   // Calls the IdentityManager asynchronously to request the access token.
   void RequestAccessToken();
   // Gets the access token and caches the result.
-  void OnAccessTokenRequestCompleted(CallbackNonce call_id,
-                                     GoogleServiceAuthError error,
+  void OnAccessTokenRequestCompleted(GoogleServiceAuthError error,
                                      signin::AccessTokenInfo access_token_info);
 
   // Checks if `this` already has a cached non-expired key commitment, if not
@@ -131,23 +96,19 @@ class KAnonymityTrustTokenGetter {
   // Starts the HTTP request for the non-unique user ID.
   void FetchNonUniqueUserId();
   // Passes the non-unique user ID response body to the JSON parser.
-  void OnFetchedNonUniqueUserId(CallbackNonce call_id,
-                                std::unique_ptr<std::string> response);
+  void OnFetchedNonUniqueUserId(std::unique_ptr<std::string> response);
   // Extracts the non-unique user ID from the decoded JSON and triggers fetching
   // the key commitment.
-  void OnParsedNonUniqueUserId(CallbackNonce call_id,
-                               data_decoder::DataDecoder::ValueOrError result);
+  void OnParsedNonUniqueUserId(data_decoder::DataDecoder::ValueOrError result);
   // Starts the HTTP request for the trust token key commitment.
   void FetchTrustTokenKeyCommitment(int non_unique_user_id);
   // Passes the trust token key commitment response body to the JSON parser.
-  void OnFetchedTrustTokenKeyCommitment(CallbackNonce call_id,
-                                        int non_unique_user_id,
+  void OnFetchedTrustTokenKeyCommitment(int non_unique_user_id,
                                         std::unique_ptr<std::string> response);
   // Extracts the trust token key commitment from the custom response structure
   // provided by the Google k-anonymity server and reformats it into the V3
   // trust token key commitment format expected by the network service.
   void OnParsedTrustTokenKeyCommitment(
-      CallbackNonce call_id,
       int non_unique_user_id,
       data_decoder::DataDecoder::ValueOrError result);
 
@@ -155,13 +116,11 @@ class KAnonymityTrustTokenGetter {
   // trust token.
   void CheckTrustTokens();
   // Triggers fetching a trust token if we don't have one.
-  void OnHasTrustTokensComplete(CallbackNonce call_id,
-                                network::mojom::HasTrustTokensResultPtr result);
+  void OnHasTrustTokensComplete(network::mojom::HasTrustTokensResultPtr result);
   // Starts the HTTP request to fetch the trust token.
   void FetchTrustToken();
   // Completes the request if the trust token was fetched successfully.
-  void OnFetchedTrustToken(CallbackNonce call_id,
-                           scoped_refptr<net::HttpResponseHeaders> headers);
+  void OnFetchedTrustToken(scoped_refptr<net::HttpResponseHeaders> headers);
 
   // Calls the callbacks for all queued requests indicating failure.
   void FailAllCallbacks();
@@ -171,25 +130,18 @@ class KAnonymityTrustTokenGetter {
   void DoCallback(bool status);
 
   signin::AccessTokenInfo access_token_;
-  KeyAndNonUniqueUserIdWithExpiration
-      key_and_non_unique_user_id_with_expiration_;
-  base::circular_deque<PendingRequest> pending_callbacks_
-      GUARDED_BY_CONTEXT(sequence_checker_);
+  base::circular_deque<PendingRequest> pending_callbacks_;
 
   raw_ptr<signin::IdentityManager> identity_manager_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   std::unique_ptr<network::SimpleURLLoader> url_loader_;
   raw_ptr<network::mojom::TrustTokenQueryAnswerer> trust_token_query_answerer_;
+  raw_ptr<KAnonymityServiceStorage> storage_;
   net::IsolationInfo isolation_info_;
   std::unique_ptr<signin::PrimaryAccountAccessTokenFetcher>
       access_token_fetcher_;
   url::Origin auth_origin_;
 
-  // This is a unique token we are going to pass across callbacks to detect when
-  // one of our callbacks is called multiple times.
-  CallbackNonce callback_nonce_ GUARDED_BY_CONTEXT(sequence_checker_);
-
-  SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<KAnonymityTrustTokenGetter> weak_ptr_factory_{this};
 };
 

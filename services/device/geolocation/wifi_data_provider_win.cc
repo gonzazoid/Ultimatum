@@ -9,14 +9,10 @@
 #include <wlanapi.h>
 
 #include "base/logging.h"
-#include "base/memory/free_deleter.h"
-#include "base/memory/ptr_util.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/win/windows_version.h"
 #include "services/device/geolocation/wifi_data_provider_common.h"
 #include "services/device/geolocation/wifi_data_provider_common_win.h"
 #include "services/device/geolocation/wifi_data_provider_handle.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 
 namespace device {
 
@@ -57,15 +53,11 @@ typedef DWORD(WINAPI* WlanCloseHandleFunction)(HANDLE hClientHandle,
                                                PVOID pReserved);
 
 // Extracts data for an access point and converts to AccessPointData.
-AccessPointData GetNetworkData(const WLAN_BSS_ENTRY& bss_entry) {
-  AccessPointData access_point_data;
-  // Currently we get only MAC address, signal strength and SSID.
-  access_point_data.mac_address = MacAddressAsString16(bss_entry.dot11Bssid);
+mojom::AccessPointData GetNetworkData(const WLAN_BSS_ENTRY& bss_entry) {
+  mojom::AccessPointData access_point_data;
+  // Currently we get only MAC address and signal strength.
+  access_point_data.mac_address = MacAddressAsString(bss_entry.dot11Bssid);
   access_point_data.radio_signal_strength = bss_entry.lRssi;
-  // bss_entry.dot11Ssid.ucSSID is not null-terminated.
-  base::UTF8ToUTF16(reinterpret_cast<const char*>(bss_entry.dot11Ssid.ucSSID),
-                    static_cast<ULONG>(bss_entry.dot11Ssid.uSSIDLength),
-                    &access_point_data.ssid);
 
   // TODO(steveblock): Is it possible to get the following?
   // access_point_data.signal_to_noise

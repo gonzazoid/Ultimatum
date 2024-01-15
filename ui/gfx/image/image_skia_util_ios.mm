@@ -6,9 +6,10 @@
 
 #import <UIKit/UIKit.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "skia/ext/skia_utils_ios.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 
@@ -16,7 +17,7 @@ namespace gfx {
 
 gfx::ImageSkia ImageSkiaFromUIImage(UIImage* image) {
   gfx::ImageSkia image_skia;
-  float max_scale = ImageSkia::GetSupportedScales().back();
+  const float max_scale = ui::GetScaleForMaxSupportedResourceScaleFactor();
   gfx::ImageSkiaRep image_skia_rep = ImageSkiaRepOfScaleFromUIImage(
       image, max_scale);
   if (!image_skia_rep.is_null())
@@ -38,8 +39,8 @@ gfx::ImageSkiaRep ImageSkiaRepOfScaleFromUIImage(UIImage* image, float scale) {
 }
 
 UIImage* UIImageFromImageSkia(const gfx::ImageSkia& image_skia) {
-  return UIImageFromImageSkiaRep(
-      image_skia.GetRepresentation(ImageSkia::GetSupportedScales().back()));
+  const float max_scale = ui::GetScaleForMaxSupportedResourceScaleFactor();
+  return UIImageFromImageSkiaRep(image_skia.GetRepresentation(max_scale));
 }
 
 UIImage* UIImageFromImageSkiaRep(const gfx::ImageSkiaRep& image_skia_rep) {
@@ -47,10 +48,10 @@ UIImage* UIImageFromImageSkiaRep(const gfx::ImageSkiaRep& image_skia_rep) {
     return nil;
 
   float scale = image_skia_rep.scale();
-  base::ScopedCFTypeRef<CGColorSpaceRef> color_space(
+  base::apple::ScopedCFTypeRef<CGColorSpaceRef> color_space(
       CGColorSpaceCreateDeviceRGB());
   return skia::SkBitmapToUIImageWithColorSpace(image_skia_rep.GetBitmap(),
-                                               scale, color_space);
+                                               scale, color_space.get());
 }
 
 }  // namespace gfx

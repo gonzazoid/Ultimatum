@@ -6,7 +6,7 @@
 #define SERVICES_AUDIO_OUTPUT_GLITCH_COUNTER_H_
 
 #include <vector>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "media/base/audio_latency.h"
 
 namespace audio {
@@ -15,7 +15,7 @@ namespace audio {
 // SyncReader.
 class OutputGlitchCounter {
  public:
-  explicit OutputGlitchCounter(media::AudioLatency::LatencyType latency_tag);
+  explicit OutputGlitchCounter(media::AudioLatency::Type latency_tag);
   virtual ~OutputGlitchCounter();
 
   OutputGlitchCounter(const OutputGlitchCounter&) = delete;
@@ -38,7 +38,7 @@ class OutputGlitchCounter {
   // callbacks and one for only the mixing callbacks.
   class Counter final {
    public:
-    Counter(media::AudioLatency::LatencyType latency_tag, bool mixing);
+    Counter(media::AudioLatency::Type latency_tag, bool mixing);
     ~Counter();
 
     Counter(const Counter&) = delete;
@@ -79,7 +79,7 @@ class OutputGlitchCounter {
     std::vector<size_t> complete_samples_;
   };
 
-  media::AudioLatency::LatencyType latency_tag_;
+  media::AudioLatency::Type latency_tag_;
 
   Counter overall_counter_;
   Counter mixing_counter_;

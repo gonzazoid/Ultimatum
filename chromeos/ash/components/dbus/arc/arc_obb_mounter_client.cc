@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_obb_mounter_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -73,7 +74,7 @@ class ArcObbMounterClientImpl : public ArcObbMounterClient {
     std::move(callback).Run(response != nullptr);
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<ArcObbMounterClientImpl> weak_ptr_factory_{this};
 };

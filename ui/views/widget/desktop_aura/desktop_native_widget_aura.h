@@ -88,9 +88,16 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   wm::CompoundEventFilter* root_window_event_filter() {
     return root_window_event_filter_.get();
   }
+
   aura::WindowTreeHost* host() { return host_.get(); }
 
+  DesktopWindowTreeHost* desktop_window_tree_host_for_testing() {
+    return desktop_window_tree_host_.get();
+  }
+
   aura::Window* content_window() { return content_window_; }
+
+  views::corewm::TooltipController* tooltip_controller();
 
   Widget::InitParams::Type widget_type() const { return widget_type_; }
 
@@ -108,14 +115,13 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   // DesktopWindowTreeHost's transparency.
   void UpdateWindowTransparency();
 
-  void set_delegate_for_testing(internal::NativeWidgetDelegate* delegate) {
-    native_widget_delegate_ = delegate;
-  }
+  base::WeakPtr<internal::NativeWidgetPrivate> GetWeakPtr() override;
 
  protected:
   // internal::NativeWidgetPrivate:
   void InitNativeWidget(Widget::InitParams params) override;
   void OnWidgetInitDone() override;
+  void ReparentNativeViewImpl(gfx::NativeView new_parent) override;
   std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
@@ -164,6 +170,7 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   void Activate() override;
   void Deactivate() override;
   bool IsActive() const override;
+  void PaintAsActiveChanged() override;
   void SetZOrderLevel(ui::ZOrderLevel order) override;
   ui::ZOrderLevel GetZOrderLevel() const override;
   void SetVisibleOnAllWorkspaces(bool always_visible) override;
@@ -178,7 +185,9 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   void SetCanAppearInExistingFullscreenSpaces(
       bool can_appear_in_existing_fullscreen_spaces) override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  // See NativeWidgetPrivate::SetAspectRatio for more information.
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void FlashFrame(bool flash_frame) override;
   void RunShellDrag(View* view,
                     std::unique_ptr<ui::OSExchangeData> data,
@@ -202,7 +211,6 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   void SetVisibilityAnimationDuration(const base::TimeDelta& duration) override;
   void SetVisibilityAnimationTransition(
       Widget::VisibilityTransition transition) override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   ui::GestureRecognizer* GetGestureRecognizer() override;
   ui::GestureConsumer* GetGestureConsumer() override;
   void OnSizeConstraintsChanged() override;
@@ -275,13 +283,16 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
 
   void PerformDrop(views::DropHelper::DropCallback drop_cb,
                    std::unique_ptr<ui::OSExchangeData> data,
-                   ui::mojom::DragOperation& output_drag_op);
+                   ui::mojom::DragOperation& output_drag_op,
+                   std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner);
 
   std::unique_ptr<aura::WindowTreeHost> host_;
-  raw_ptr<DesktopWindowTreeHost> desktop_window_tree_host_;
+  // DanglingUntriaged because it is assigned a DanglingUntriaged pointer.
+  raw_ptr<DesktopWindowTreeHost, DanglingUntriaged> desktop_window_tree_host_;
 
   // See class documentation for Widget in widget.h for a note about ownership.
-  Widget::InitParams::Ownership ownership_;
+  Widget::InitParams::Ownership ownership_ =
+      Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET;
 
   // Internal name.
   std::string name_;
@@ -290,11 +301,14 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
 
   // This is the return value from GetNativeView().
   // WARNING: this may be NULL, in particular during shutdown it becomes NULL.
-  raw_ptr<aura::Window, DanglingUntriaged> content_window_;
+  raw_ptr<aura::Window, AcrossTasksDanglingUntriaged> content_window_;
 
-  // TODO(crbug.com/1346381) Change delegate to a WeakPtr after
-  // removing ownership model.
-  raw_ptr<internal::NativeWidgetDelegate> native_widget_delegate_;
+  base::WeakPtr<internal::NativeWidgetDelegate> native_widget_delegate_;
+
+  // This is a unique ptr to enforce scenarios where NativeWidget
+  // will own the NativeWidgetDelegate.
+  // Used for ownership model: NativeWidgetOwnsWidget.
+  std::unique_ptr<internal::NativeWidgetDelegate> owned_native_widget_delegate;
 
   std::unique_ptr<wm::FocusController> focus_client_;
   std::unique_ptr<aura::client::ScreenPositionClient> position_client_;
@@ -307,7 +321,7 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   std::unique_ptr<wm::CompoundEventFilter> root_window_event_filter_;
 
   std::unique_ptr<DropHelper> drop_helper_;
-  int last_drop_operation_;
+  int last_drop_operation_ = ui::DragDropTypes::DRAG_NONE;
 
   std::unique_ptr<corewm::TooltipController> tooltip_controller_;
   std::unique_ptr<TooltipManagerAura> tooltip_manager_;
@@ -316,7 +330,7 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
 
   std::unique_ptr<wm::WindowModalityController> window_modality_controller_;
 
-  bool restore_focus_on_activate_;
+  bool restore_focus_on_activate_ = false;
 
   // This flag is used to ensure that the activation client correctly sees
   // whether this widget should receive activation when handling an activation
@@ -343,12 +357,20 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   std::unique_ptr<WindowReorderer> window_reorderer_;
 
   // See class documentation for Widget in widget.h for a note about type.
-  Widget::InitParams::Type widget_type_;
+  Widget::InitParams::Type widget_type_ = Widget::InitParams::TYPE_WINDOW;
 
   // See DesktopWindowTreeHost::ShouldUseDesktopNativeCursorManager().
   bool use_desktop_native_cursor_manager_ = false;
 
-  // The following factory is used for calls to close to run drop callback.
+#if BUILDFLAG(IS_WIN)
+  // Used to track and discard duplicate events; Windows appears to
+  // generate them in some circumstances after a key press.
+  gfx::Point last_mouse_loc_;
+#endif
+
+  // The following factory is used to provide references to the
+  // DesktopNativeWidgetAura instance and used for calls to close to run drop
+  // callback.
   base::WeakPtrFactory<DesktopNativeWidgetAura> weak_ptr_factory_{this};
 };
 

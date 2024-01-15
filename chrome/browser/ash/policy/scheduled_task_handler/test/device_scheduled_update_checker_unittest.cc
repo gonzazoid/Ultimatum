@@ -10,10 +10,11 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -207,11 +208,11 @@ class DeviceScheduledUpdateCheckerTest : public testing::Test {
 
   // Sets a daily update check policy and returns true iff it's scheduled
   // correctly. |hours_from_now| must be > 0.
-  bool CheckDailyUpdateCheck(int hours_fom_now) {
-    DCHECK_GT(hours_fom_now, 0);
-    // Calculate time from one hour from now and set the update check policy to
+  bool CheckDailyUpdateCheck(int hours_from_now) {
+    DCHECK_GT(hours_from_now, 0);
+    // Calculate delay using |hours_from_now| and set the update check policy to
     // happen daily at that time.
-    base::TimeDelta delay_from_now = base::Hours(hours_fom_now);
+    base::TimeDelta delay_from_now = base::Hours(hours_from_now);
     auto policy_and_next_update_check_time =
         scheduled_task_test_util::CreatePolicy(
             scheduled_task_executor_->GetTimeZone(),
@@ -287,7 +288,7 @@ class DeviceScheduledUpdateCheckerTest : public testing::Test {
     // means that the new timer would expire at 5PM in |new_tz| as well. This
     // delay is the delay between the new time zone's timer expiration time and
     // |cur_time|.
-    absl::optional<base::TimeDelta> new_tz_timer_expiration_delay =
+    std::optional<base::TimeDelta> new_tz_timer_expiration_delay =
         scheduled_task_test_util::
             CalculateTimerExpirationDelayInDailyPolicyForTimeZone(
                 cur_time, delay_from_now, cur_tz, *new_tz);
@@ -349,11 +350,13 @@ class DeviceScheduledUpdateCheckerTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_;
   // Owned by |device_scheduled_update_checker_|
-  FakeScheduledTaskExecutor* scheduled_task_executor_;
+  raw_ptr<FakeScheduledTaskExecutor, DanglingUntriaged>
+      scheduled_task_executor_;
   std::unique_ptr<DeviceScheduledUpdateCheckerForTest>
       device_scheduled_update_checker_;
   ash::ScopedTestingCrosSettings cros_settings_;
-  ash::FakeUpdateEngineClient* fake_update_engine_client_;
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_;
   std::unique_ptr<ash::NetworkStateTestHelper> network_state_test_helper_;
   device::TestWakeLockProvider wake_lock_provider_;
 
@@ -462,7 +465,7 @@ TEST_F(DeviceScheduledUpdateCheckerTest, CheckIfMonthlyUpdateCheckIsScheduled) {
       first_update_check_icu_time.get()));
   base::Time second_update_check_time =
       scheduled_task_test_util::IcuToBaseTime(*first_update_check_icu_time);
-  absl::optional<base::TimeDelta> second_update_check_delay =
+  std::optional<base::TimeDelta> second_update_check_delay =
       second_update_check_time - scheduled_task_executor_->GetCurrentTime();
   ASSERT_TRUE(second_update_check_delay.has_value());
   task_environment_.FastForwardBy(second_update_check_delay.value());
@@ -515,7 +518,7 @@ TEST_F(DeviceScheduledUpdateCheckerTest, CheckMonthlyRolloverLogic) {
         update_check_icu_time.get()));
     base::Time expected_next_update_check_time =
         scheduled_task_test_util::IcuToBaseTime(*update_check_icu_time);
-    absl::optional<base::TimeDelta> expected_next_update_check_delay =
+    std::optional<base::TimeDelta> expected_next_update_check_delay =
         expected_next_update_check_time -
         scheduled_task_executor_->GetCurrentTime();
     // This should be always set in a virtual time environment.
@@ -927,10 +930,10 @@ TEST_F(DeviceScheduledUpdateCheckerTest, CheckWakeLockAcquireAndRelease) {
       std::move(policy_and_next_update_check_time.first));
   task_environment_.FastForwardBy(delay_from_now);
 
-  absl::optional<int> active_wake_locks_before_update_check;
+  std::optional<int> active_wake_locks_before_update_check;
   wake_lock_provider_.GetActiveWakeLocksForTests(
       device::mojom::WakeLockType::kPreventAppSuspension,
-      base::BindOnce([](absl::optional<int>* result,
+      base::BindOnce([](std::optional<int>* result,
                         int32_t wake_lock_count) { *result = wake_lock_count; },
                      &active_wake_locks_before_update_check));
   EXPECT_TRUE(active_wake_locks_before_update_check);
@@ -941,10 +944,10 @@ TEST_F(DeviceScheduledUpdateCheckerTest, CheckWakeLockAcquireAndRelease) {
   // Simulate update check succeeding.
   NotifyUpdateCheckStatus(update_engine::Operation::UPDATED_NEED_REBOOT);
 
-  absl::optional<int> active_wake_locks_after_update_check;
+  std::optional<int> active_wake_locks_after_update_check;
   wake_lock_provider_.GetActiveWakeLocksForTests(
       device::mojom::WakeLockType::kPreventAppSuspension,
-      base::BindOnce([](absl::optional<int>* result,
+      base::BindOnce([](std::optional<int>* result,
                         int32_t wake_lock_count) { *result = wake_lock_count; },
                      &active_wake_locks_after_update_check));
   // After all steps are completed the wake lock should be released.

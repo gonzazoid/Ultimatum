@@ -9,6 +9,7 @@
 #include "base/files/file_path.h"
 #include "base/i18n/rtl.h"
 #include "base/path_service.h"
+#include "base/process/current_process.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_executor.h"
@@ -74,9 +75,11 @@ int PpapiPluginMain(MainFunctionParams parameters) {
   const base::CommandLine& command_line = *parameters.command_line;
 
 #if BUILDFLAG(IS_MAC)
-  // Specified when launching the process in
-  // PpapiPluginSandboxedProcessLauncherDelegate::EnableCpuSecurityMitigations.
-  base::SysInfo::SetIsCpuSecurityMitigationsEnabled(true);
+  // Declare that this process has CPU security mitigations enabled (see
+  // PpapiPluginSandboxedProcessLauncherDelegate::EnableCpuSecurityMitigations).
+  // This must be done before the first call to
+  // base::SysInfo::NumberOfProcessors().
+  base::SysInfo::SetCpuSecurityMitigationsEnabled();
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -138,7 +141,8 @@ int PpapiPluginMain(MainFunctionParams parameters) {
 
   base::SingleThreadTaskExecutor main_thread_task_executor;
   base::PlatformThread::SetName("CrPPAPIMain");
-  base::trace_event::TraceLog::GetInstance()->set_process_name("PPAPI Process");
+  base::CurrentProcess::GetInstance().SetProcessType(
+      base::CurrentProcessType::PROCESS_PPAPI_PLUGIN);
   base::trace_event::TraceLog::GetInstance()->SetProcessSortIndex(
       kTraceEventPpapiProcessSortIndex);
 
@@ -158,14 +162,12 @@ int PpapiPluginMain(MainFunctionParams parameters) {
   ppapi_process.set_main_thread(
       new PpapiThread(run_loop.QuitClosure(), command_line));
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
-  // Startup tracing is usually enabled earlier, but if we forked from a zygote,
-  // we can only enable it after mojo IPC support is brought up by PpapiThread,
-  // because the mojo broker has to create the tracing SMB on our behalf due to
-  // the zygote sandbox.
-  if (parameters.zygote_child)
+  // Mojo IPC support is brought up by PpapiThread, so startup tracing is
+  // enabled here if it needs to start after mojo init (normally so the mojo
+  // broker can bypass the sandbox to allocate startup tracing's SMB).
+  if (parameters.needs_startup_tracing_after_mojo_init) {
     tracing::EnableStartupTracingIfNeeded();
-#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+  }
 
 #if BUILDFLAG(IS_WIN)
   if (!base::win::IsUser32AndGdi32Available())

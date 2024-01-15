@@ -6,15 +6,18 @@
 #define ASH_SYSTEM_CHANNEL_INDICATOR_CHANNEL_INDICATOR_QUICK_SETTINGS_VIEW_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "components/version_info/channel.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
 
 // ChannelIndicatorQuickSettingsView contains all of the views included in the
-// channel indicator UI that resides in UnifiedSystemInfoView.
+// channel indicator UI that resides in `QuickSettingsHeader`.
 class ASH_EXPORT ChannelIndicatorQuickSettingsView : public views::View {
  public:
+  METADATA_HEADER(ChannelIndicatorQuickSettingsView);
   ChannelIndicatorQuickSettingsView(version_info::Channel channel,
                                     bool allow_user_feedback);
   ChannelIndicatorQuickSettingsView(const ChannelIndicatorQuickSettingsView&) =
@@ -34,8 +37,8 @@ class ASH_EXPORT ChannelIndicatorQuickSettingsView : public views::View {
 
  private:
   // Refs maintained for unit test introspection methods.
-  views::View* version_button_ = nullptr;
-  views::View* feedback_button_ = nullptr;
+  raw_ptr<views::View> version_button_ = nullptr;
+  raw_ptr<views::View> feedback_button_ = nullptr;
 };
 
 }  // namespace ash

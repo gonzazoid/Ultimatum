@@ -22,11 +22,10 @@ run with --no-sandbox, but there's an extra Linux bot that enables the sandbox
 (but disables LeakSanitizer).
 
 The trybots running Chromium tests on Linux and macOS are:
-- linux\_asan (everything except browser\_tests and content\_browsertests)
-- linux\_browser\_asan (browser\_tests and content\_browsertests),
-- mac\_asan (many tests including browser\_tests and content\_browsertests)
-- linux\_chromeos\_asan (the chromeos=1 build running on a Linux machine, many
-tests including browser\_tests and content\_browsertests).
+- linux\_chromium\_asan\_rel\_ng
+- mac\_chromium\_asan\_rel\_ng
+- linux\_chromium\_chromeos\_asan\_rel\_ng (the chromeos=1 build running on a
+Linux machine)
 
 ## Pre-built Chrome binaries
 
@@ -132,8 +131,9 @@ although it shouldn't be necessary on Linux and Windows, where Chrome uses the
 llvm-symbolizer in its source tree by default.
 
 ASan should perfectly work with Chrome's sandbox. You should only need to run
-with `--no-sandbox` on Linux if you're debugging ASan.
-Note: you have to disable the sandbox on Windows until it is supported.
+with `--no-sandbox` on Linux if you're debugging ASan. To get reports on Windows
+from sandboxed processes you will have to run with both `--enable-logging` and
+`--log-file=d:\valid\path.log` then inspect the logfile.
 
 You may need to run with `--disable-gpu` on Linux with NVIDIA driver older than
 295.20.
@@ -212,7 +212,7 @@ If the above step fails or to run stuff without Chromium testing script (ex.
 ContentShell.apk, or any third party apk or binary), device setup is needed:
 ```shell
 tools/android/asan/third_party/asan_device_setup.sh \
-    --lib third_party/android_ndk/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/*/lib/linux
+    --lib third_party/android_toolchain/ndk/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/*/lib/linux
 # wait a few seconds for the device to reload
 ```
 It only needs to be run once per device. It is safe to run it multiple times.

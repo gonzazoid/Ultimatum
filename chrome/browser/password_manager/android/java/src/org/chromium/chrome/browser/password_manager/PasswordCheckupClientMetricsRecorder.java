@@ -6,11 +6,11 @@ package org.chromium.chrome.browser.password_manager;
 
 import android.os.SystemClock;
 
-import com.google.common.base.Optional;
-
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerError;
 import org.chromium.chrome.browser.password_manager.PasswordManagerHelper.PasswordCheckOperation;
+
+import java.util.Optional;
 
 /**
  * Records metrics for an asynchronous job or a series of jobs. The job is expected to have started
@@ -64,7 +64,10 @@ class PasswordCheckupClientMetricsRecorder {
     }
 
     private String getHistogramName(String metric) {
-        return PASSWORD_CHECKUP_HISTOGRAM_BASE + "." + getSuffixForOperation(mOperation) + "."
+        return PASSWORD_CHECKUP_HISTOGRAM_BASE
+                + "."
+                + getSuffixForOperation(mOperation)
+                + "."
                 + metric;
     }
 

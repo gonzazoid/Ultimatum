@@ -4,28 +4,35 @@
 
 #include "ash/capture_mode/capture_mode_util.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/capture_mode/capture_mode_camera_controller.h"
 #include "ash/capture_mode/capture_mode_constants.h"
 #include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/capture_mode/capture_mode_session.h"
+#include "ash/capture_mode/capture_mode_types.h"
 #include "ash/capture_mode/stop_recording_button_tray.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/clipboard_history_controller.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/public/cpp/window_finder.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_id.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/style/typography.h"
+#include "ash/system/privacy/privacy_indicators_controller.h"
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "chromeos/ui/frame/frame_header.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
-#include "ui/chromeos/events/keyboard_layout_util.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/compositor/layer.h"
+#include "ui/display/screen.h"
+#include "ui/events/ash/keyboard_capability.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/transform_util.h"
@@ -43,6 +50,9 @@ namespace {
 constexpr int kBannerViewTopRadius = 0;
 constexpr int kBannerViewBottomRadius = 8;
 constexpr float kScaleUpFactor = 0.8f;
+
+// The app ID used for the capture mode privacy indicators.
+constexpr char kCaptureModePrivacyIndicatorsId[] = "system-capture-mode";
 
 // Returns the target visibility of the camera preview, given the
 // `confine_bounds_short_side_length`. The out parameter
@@ -69,11 +79,6 @@ bool CalculateCameraPreviewTargetVisibility(
   return !controller->IsActive() ||
          controller->capture_mode_session()
              ->CalculateCameraPreviewTargetVisibility();
-}
-
-// Returns the local center point of the given `layer`.
-gfx::Point GetLocalCenterPoint(ui::Layer* layer) {
-  return gfx::Rect(layer->GetTargetBounds().size()).CenterPoint();
 }
 
 void FadeInWidget(views::Widget* widget,
@@ -150,24 +155,28 @@ bool IsCaptureModeActive() {
   return CaptureModeController::Get()->IsActive();
 }
 
+gfx::PointF GetEventScreenLocation(const ui::LocatedEvent& event) {
+  return event.target()->GetScreenLocationF(event);
+}
+
 gfx::Point GetLocationForFineTunePosition(const gfx::Rect& rect,
                                           FineTunePosition position) {
   switch (position) {
-    case FineTunePosition::kTopLeft:
+    case FineTunePosition::kTopLeftVertex:
       return rect.origin();
-    case FineTunePosition::kTopCenter:
+    case FineTunePosition::kTopEdge:
       return rect.top_center();
-    case FineTunePosition::kTopRight:
+    case FineTunePosition::kTopRightVertex:
       return rect.top_right();
-    case FineTunePosition::kRightCenter:
+    case FineTunePosition::kRightEdge:
       return rect.right_center();
-    case FineTunePosition::kBottomRight:
+    case FineTunePosition::kBottomRightVertex:
       return rect.bottom_right();
-    case FineTunePosition::kBottomCenter:
+    case FineTunePosition::kBottomEdge:
       return rect.bottom_center();
-    case FineTunePosition::kBottomLeft:
+    case FineTunePosition::kBottomLeftVertex:
       return rect.bottom_left();
-    case FineTunePosition::kLeftCenter:
+    case FineTunePosition::kLeftEdge:
       return rect.left_center();
     default:
       break;
@@ -179,10 +188,10 @@ gfx::Point GetLocationForFineTunePosition(const gfx::Rect& rect,
 
 bool IsCornerFineTunePosition(FineTunePosition position) {
   switch (position) {
-    case FineTunePosition::kTopLeft:
-    case FineTunePosition::kTopRight:
-    case FineTunePosition::kBottomRight:
-    case FineTunePosition::kBottomLeft:
+    case FineTunePosition::kTopLeftVertex:
+    case FineTunePosition::kTopRightVertex:
+    case FineTunePosition::kBottomRightVertex:
+    case FineTunePosition::kBottomLeftVertex:
       return true;
     default:
       break;
@@ -226,15 +235,32 @@ void TriggerAccessibilityAlert(int message_id) {
 }
 
 void TriggerAccessibilityAlertSoon(const std::string& message) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
-          &AccessibilityControllerImpl::TriggerAccessibilityAlertWithMessage,
+          &AccessibilityController::TriggerAccessibilityAlertWithMessage,
           Shell::Get()->accessibility_controller()->GetWeakPtr(), message));
 }
 
 void TriggerAccessibilityAlertSoon(int message_id) {
   TriggerAccessibilityAlertSoon(l10n_util::GetStringUTF8(message_id));
+}
+
+void AdjustBoundsWithinConfinedBounds(const gfx::Rect& confined_bounds,
+                                      gfx::Rect& out_bounds) {
+  if (int confined_x = confined_bounds.x(); confined_x > out_bounds.x()) {
+    out_bounds.set_x(confined_x);
+  } else if (int confined_right = confined_bounds.right();
+             confined_right < out_bounds.right()) {
+    out_bounds.set_x(confined_right - out_bounds.width());
+  }
+
+  if (int confined_y = confined_bounds.y(); confined_y > out_bounds.y()) {
+    out_bounds.set_y(confined_y);
+  } else if (int confined_bottom = confined_bounds.bottom();
+             confined_bottom < out_bounds.bottom()) {
+    out_bounds.set_y(confined_bottom - out_bounds.height());
+  }
 }
 
 CameraPreviewSnapPosition GetCameraNextHorizontalSnapPosition(
@@ -275,8 +301,9 @@ std::unique_ptr<views::View> CreateClipboardShortcutView() {
       views::BoxLayout::Orientation::kHorizontal));
 
   const std::u16string shortcut_key = l10n_util::GetStringUTF16(
-      ui::DeviceUsesKeyboardLayout2() ? IDS_ASH_SHORTCUT_MODIFIER_LAUNCHER
-                                      : IDS_ASH_SHORTCUT_MODIFIER_SEARCH);
+      Shell::Get()->keyboard_capability()->HasLauncherButtonOnAnyKeyboard()
+          ? IDS_ASH_SHORTCUT_MODIFIER_LAUNCHER
+          : IDS_ASH_SHORTCUT_MODIFIER_SEARCH);
 
   const std::u16string label_text = l10n_util::GetStringFUTF16(
       IDS_ASH_MULTIPASTE_SCREENSHOT_NOTIFICATION_NUDGE, shortcut_key);
@@ -284,18 +311,24 @@ std::unique_ptr<views::View> CreateClipboardShortcutView() {
   views::Label* shortcut_label =
       clipboard_shortcut_view->AddChildView(std::make_unique<views::Label>());
   shortcut_label->SetText(label_text);
-  shortcut_label->SetBackgroundColorId(kColorAshControlBackgroundColorActive);
-  shortcut_label->SetEnabledColorId(kColorAshTextOnBackgroundColor);
-
+  shortcut_label->SetBackgroundColorId(
+      chromeos::features::IsJellyEnabled()
+          ? cros_tokens::kCrosSysPrimary
+          : static_cast<ui::ColorId>(kColorAshControlBackgroundColorActive));
+  shortcut_label->SetEnabledColorId(
+      chromeos::features::IsJellyEnabled()
+          ? cros_tokens::kCrosSysOnPrimary
+          : static_cast<ui::ColorId>(kColorAshTextOnBackgroundColor));
+  if (chromeos::features::IsJellyEnabled()) {
+    ash::TypographyProvider::Get()->StyleLabel(ash::TypographyToken::kCrosBody2,
+                                               *shortcut_label);
+  }
   return clipboard_shortcut_view;
 }
 
 // Creates the banner view that will show on top of the notification image.
 std::unique_ptr<views::View> CreateBannerView() {
   std::unique_ptr<views::View> banner_view = std::make_unique<views::View>();
-  // Use the light mode as default as notification is still using light
-  // theme as the default theme.
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
 
   auto* layout =
       banner_view->SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -303,19 +336,21 @@ std::unique_ptr<views::View> CreateBannerView() {
           gfx::Insets::VH(kBannerVerticalInsetDip, kBannerHorizontalInsetDip),
           kBannerIconTextSpacingDip));
 
-  if (features::IsNotificationsRefreshEnabled()) {
-    banner_view->SetBackground(views::CreateThemedRoundedRectBackground(
-        kColorAshControlBackgroundColorActive, kBannerViewTopRadius,
-        kBannerViewBottomRadius, /*for_border_thickness=*/0));
-  } else {
-    banner_view->SetBackground(views::CreateThemedSolidBackground(
-        kColorAshControlBackgroundColorActive));
-  }
+  const ui::ColorId background_color_id =
+      chromeos::features::IsJellyEnabled()
+          ? cros_tokens::kCrosSysPrimary
+          : static_cast<ui::ColorId>(kColorAshControlBackgroundColorActive);
+  banner_view->SetBackground(views::CreateThemedRoundedRectBackground(
+      background_color_id, kBannerViewTopRadius, kBannerViewBottomRadius,
+      /*for_border_thickness=*/0));
 
   views::ImageView* icon =
       banner_view->AddChildView(std::make_unique<views::ImageView>());
   icon->SetImage(ui::ImageModel::FromVectorIcon(
-      kCaptureModeCopiedToClipboardIcon, kColorAshIconOnBackgroundColor,
+      kCaptureModeCopiedToClipboardIcon,
+      chromeos::features::IsJellyEnabled()
+          ? cros_tokens::kCrosSysOnPrimary
+          : static_cast<ui::ColorId>(kColorAshIconOnBackgroundColor),
       kBannerIconSizeDip));
 
   views::Label* label = banner_view->AddChildView(
@@ -323,9 +358,16 @@ std::unique_ptr<views::View> CreateBannerView() {
           IDS_ASH_SCREEN_CAPTURE_SCREENSHOT_COPIED_TO_CLIPBOARD)));
   label->SetBackgroundColorId(kColorAshControlBackgroundColorActive);
   label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  label->SetEnabledColorId(kColorAshTextOnBackgroundColor);
+  label->SetEnabledColorId(
+      chromeos::features::IsJellyEnabled()
+          ? cros_tokens::kCrosSysOnPrimary
+          : static_cast<ui::ColorId>(kColorAshTextOnBackgroundColor));
+  if (chromeos::features::IsJellyEnabled()) {
+    ash::TypographyProvider::Get()->StyleLabel(ash::TypographyToken::kCrosBody2,
+                                               *label);
+  }
 
-  if (!Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     banner_view->AddChildView(CreateClipboardShortcutView());
     layout->SetFlexForView(label, 1);
 
@@ -346,6 +388,10 @@ std::unique_ptr<views::View> CreatePlayIconView() {
   play_view->SetBackground(views::CreateThemedRoundedRectBackground(
       kColorAshShieldAndBase80, kPlayIconBackgroundCornerRadiusDip));
   return play_view;
+}
+
+gfx::Point GetLocalCenterPoint(ui::Layer* layer) {
+  return gfx::Rect(layer->GetTargetBounds().size()).CenterPoint();
 }
 
 gfx::Transform GetScaleTransformAboutCenter(ui::Layer* layer, float scale) {
@@ -399,23 +445,9 @@ aura::Window* GetTopMostCapturableWindowAtPoint(
     ignore_windows.insert(camera_preview_widget->GetNativeWindow());
 
   if (controller->IsActive()) {
-    auto* capture_session = controller->capture_mode_session();
-    DCHECK(capture_session->capture_mode_bar_widget());
-    ignore_windows.insert(
-        capture_session->capture_mode_bar_widget()->GetNativeWindow());
-
-    if (auto* capture_settings_widget =
-            capture_session->capture_mode_settings_widget()) {
-      ignore_windows.insert(capture_settings_widget->GetNativeWindow());
-    }
-
-    if (auto* capture_label_widget = capture_session->capture_label_widget())
-      ignore_windows.insert(capture_label_widget->GetNativeWindow());
-
-    if (auto* capture_toast_widget = capture_session->capture_toast_controller()
-                                         ->capture_toast_widget()) {
-      ignore_windows.insert(capture_toast_widget->GetNativeWindow());
-    }
+    std::set<aura::Window*> session_windows =
+        controller->capture_mode_session()->GetWindowsToIgnoreFromWidgets();
+    ignore_windows.insert(session_windows.begin(), session_windows.end());
   }
 
   return GetTopmostWindowAtPoint(screen_point, ignore_windows);
@@ -436,7 +468,7 @@ bool GetWidgetCurrentVisibility(views::Widget* widget) {
 
 bool SetWidgetVisibility(views::Widget* widget,
                          bool target_visibility,
-                         absl::optional<AnimationParams> animation_params) {
+                         std::optional<AnimationParams> animation_params) {
   DCHECK(widget);
   if (target_visibility == GetWidgetCurrentVisibility(widget))
     return false;
@@ -456,8 +488,8 @@ bool SetWidgetVisibility(views::Widget* widget,
 }
 
 aura::Window* GetPreferredRootWindow(
-    absl::optional<gfx::Point> location_in_screen) {
-  int64_t display_id =
+    std::optional<gfx::Point> location_in_screen) {
+  const int64_t display_id =
       (location_in_screen
            ? display::Screen::GetScreen()->GetDisplayNearestPoint(
                  *location_in_screen)
@@ -467,7 +499,8 @@ aura::Window* GetPreferredRootWindow(
   // The Display object returned by `CursorManager::GetDisplay()` may be stale,
   // but will have the correct id.
   DCHECK_NE(display::kInvalidDisplayId, display_id);
-  return Shell::GetRootWindowForDisplayId(display_id);
+  auto* root = Shell::GetRootWindowForDisplayId(display_id);
+  return root ? root : Shell::GetPrimaryRootWindow();
 }
 
 void ConfigLabelView(views::Label* label_view) {
@@ -486,10 +519,82 @@ views::BoxLayout* CreateAndInitBoxLayoutForView(views::View* view) {
   return box_layout;
 }
 
-std::string GetScreenCaptureNotificationIdForPath(const base::FilePath& path) {
-  DCHECK(!path.empty());
-  return base::StringPrintf("%s-%s", kScreenCaptureNotificationId,
-                            path.BaseName().value().c_str());
+void MaybeUpdateCaptureModePrivacyIndicators() {
+  // Privacy indicator is only enabled when Video Conference is disabled.
+  if (features::IsVideoConferenceEnabled()) {
+    return;
+  }
+
+  auto* controller = CaptureModeController::Get();
+  const bool is_camera_used =
+      !!controller->camera_controller()->camera_preview_widget();
+  const bool is_microphone_used = controller->IsAudioRecordingInProgress();
+
+  PrivacyIndicatorsController::Get()->UpdatePrivacyIndicators(
+      /*app_id=*/kCaptureModePrivacyIndicatorsId,
+      /*app_name=*/
+      l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAPTURE_MODE_BUTTON_LABEL),
+      is_camera_used, is_microphone_used, /*delegate=*/
+      base::MakeRefCounted<PrivacyIndicatorsNotificationDelegate>(),
+      PrivacyIndicatorsSource::kScreenCapture);
+}
+
+ui::ColorProvider* GetColorProviderForNativeTheme() {
+  auto* native_theme = ui::NativeTheme::GetInstanceForNativeUi();
+  return ui::ColorProviderManager::Get().GetColorProviderFor(
+      native_theme->GetColorProviderKey(nullptr));
+}
+
+bool IsEventTargetedOnWidget(const ui::LocatedEvent& event,
+                             views::Widget* widget) {
+  auto* target = static_cast<aura::Window*>(event.target());
+  return widget && widget->GetNativeWindow()->Contains(target);
+}
+
+gfx::Rect CalculateHighlightLayerBounds(const gfx::PointF& center_point,
+                                        int highlight_layer_radius) {
+  return gfx::Rect(center_point.x() - highlight_layer_radius,
+                   center_point.y() - highlight_layer_radius,
+                   highlight_layer_radius * 2, highlight_layer_radius * 2);
+}
+
+void SetHighlightBorder(views::View* view,
+                        int corner_radius,
+                        views::HighlightBorder::Type type) {
+  view->SetBorder(
+      std::make_unique<views::HighlightBorder>(corner_radius, type));
+}
+
+chromeos::FrameHeader* GetWindowFrameHeader(aura::Window* window) {
+  CHECK(window);
+
+  if (auto* widget = views::Widget::GetWidgetForNativeWindow(window)) {
+    return chromeos::FrameHeader::Get(widget);
+  }
+
+  return nullptr;
+}
+
+gfx::Rect GetCaptureWindowConfineBounds(aura::Window* window) {
+  CHECK(window);
+  CHECK(!window->IsRootWindow());
+
+  // When the surface being captured is a window, on-capture-surface UI
+  // elements, such as the selfie camera or the demo tools key combo widget,
+  // need to be confined within the *local* bounds of this window, since
+  // they are added as direct children of the window so that they can get
+  // captured.
+  gfx::Rect result(window->bounds().size());
+
+  // Inset from the top by the height of the frame header, in order to avoid for
+  // example having the selfie camera intersecting with the caption buttons.
+  // TODO(afakhry): This will not work for lacros. Fix this if it becomes a
+  // priority.
+  if (auto* frame_header = GetWindowFrameHeader(window)) {
+    result.Inset(gfx::Insets::TLBR(frame_header->GetHeaderHeight(), 0, 0, 0));
+  }
+
+  return result;
 }
 
 }  // namespace ash::capture_mode_util

@@ -4,9 +4,10 @@
 
 package org.chromium.chrome.browser.translate;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.LocaleUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.browser.language.settings.LanguageItem;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.content_public.browser.WebContents;
@@ -15,25 +16,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Bridge class that lets Android code access native code to execute translate on a tab.
- */
+/** Bridge class that lets Android code access native code to execute translate on a tab. */
+// TODO(crbug.com/1410601): Pass in the profile and remove GetActiveUserProfile in C++.
 public class TranslateBridge {
     /**
      * Translates the given tab when the necessary state has been computed (e.g. source language).
      */
     public static void translateTabWhenReady(Tab tab) {
         TranslateBridgeJni.get().manualTranslateWhenReady(tab.getWebContents());
-    }
-
-    /**
-     * Initates a translation on the given tab to the given target language. All metrics reported
-     * for this translation assume that this translation was initiated from the Translate UI. If the
-     * translation from the Context Menu or by some other means, then an extra signal needs to be
-     * passed through.
-     */
-    public static void translateTabToLanguage(Tab tab, String targetLanguageCode) {
-        TranslateBridgeJni.get().translateToLanguage(tab.getWebContents(), targetLanguageCode);
     }
 
     /**
@@ -52,9 +42,7 @@ public class TranslateBridge {
         return TranslateBridgeJni.get().canManuallyTranslate(webContents, menuLogging);
     }
 
-    /**
-     * Returns true iff we're in a state where the manual translate IPH could be shown.
-     */
+    /** Returns true iff we're in a state where the manual translate IPH could be shown. */
     public static boolean shouldShowManualTranslateIPH(Tab tab) {
         return TranslateBridgeJni.get().shouldShowManualTranslateIPH(tab.getWebContents());
     }
@@ -63,45 +51,14 @@ public class TranslateBridge {
      * Sets the language that the contents of the tab needs to be translated to.
      * No-op in case target language is invalid or not supported.
      * @param targetLanguage language code in ISO 639 format.
+     * @param shouldAutoTranslate If true, the page should be automatically translated immediately
+     *                            to targetLanguage.
      */
-    public static void setPredefinedTargetLanguage(Tab tab, String targetLanguage) {
-        TranslateBridgeJni.get().setPredefinedTargetLanguage(tab.getWebContents(), targetLanguage);
-    }
-
-    /**
-     * Get the page source language of the given Tab.
-     * @param tab The tab to get source language code for.
-     * @return String The source language code. Empty string if no language has been detected.
-     */
-    public static String getSourceLanguage(Tab tab) {
-        return getSourceLanguage(tab.getWebContents());
-    }
-
-    /**
-     * Get the page source language of the given contents.
-     * @param webContents The web contents to get source language code for.
-     * @return String The source language code. Empty string if no language has been detected.
-     */
-    public static String getSourceLanguage(WebContents webContents) {
-        return TranslateBridgeJni.get().getSourceLanguage(webContents);
-    }
-
-    /**
-     * Get the current page language of the given Tab.
-     * @param tab The tab to get current language code for.
-     * @return String The current language code. Empty string if no language has been detected.
-     */
-    public static String getCurrentLanguage(Tab tab) {
-        return getCurrentLanguage(tab.getWebContents());
-    }
-
-    /**
-     * Get the current page language of the given contents.
-     * @param webContents The web contents to get current language code for.
-     * @return String The current language code. Empty string if no language has been detected.
-     */
-    public static String getCurrentLanguage(WebContents webContents) {
-        return TranslateBridgeJni.get().getCurrentLanguage(webContents);
+    public static void setPredefinedTargetLanguage(
+            Tab tab, String targetLanguage, boolean shouldAutoTranslate) {
+        TranslateBridgeJni.get()
+                .setPredefinedTargetLanguage(
+                        tab.getWebContents(), targetLanguage, shouldAutoTranslate);
     }
 
     /**
@@ -130,8 +87,12 @@ public class TranslateBridge {
     }
 
     @CalledByNative
-    private static void addNewLanguageItemToList(List<LanguageItem> list, String code,
-            String displayName, String nativeDisplayName, boolean supportTranslate) {
+    private static void addNewLanguageItemToList(
+            List<LanguageItem> list,
+            String code,
+            String displayName,
+            String nativeDisplayName,
+            boolean supportTranslate) {
         list.add(new LanguageItem(code, displayName, nativeDisplayName, supportTranslate));
     }
 
@@ -223,30 +184,13 @@ public class TranslateBridge {
     }
 
     /**
-     * @return Whether the explicit language prompt was shown at least once.
-     */
-    public static boolean getExplicitLanguageAskPromptShown() {
-        return TranslateBridgeJni.get().getExplicitLanguageAskPromptShown();
-    }
-
-    /**
-     * @param shown The value to set the underlying pref to: whether the prompt
-     * was shown to the user at least once.
-     */
-    public static void setExplicitLanguageAskPromptShown(boolean shown) {
-        TranslateBridgeJni.get().setExplicitLanguageAskPromptShown(shown);
-    }
-
-    /**
      * @return Whether the app language prompt has been shown or not.
      */
     public static boolean getAppLanguagePromptShown() {
         return TranslateBridgeJni.get().getAppLanguagePromptShown();
     }
 
-    /**
-     * Set the pref indicating the app language prompt has been shown to the user.
-     */
+    /** Set the pref indicating the app language prompt has been shown to the user. */
     public static void setAppLanguagePromptShown() {
         TranslateBridgeJni.get().setAppLanguagePromptShown();
     }
@@ -255,32 +199,102 @@ public class TranslateBridge {
         TranslateBridgeJni.get().setIgnoreMissingKeyForTesting(ignore); // IN-TEST
     }
 
+    /**
+     * Get current page language.
+     *
+     * @param tab Tab to get the current language for
+     * @return The current language code or empty string if no language detected.
+     */
+    public static String getCurrentLanguage(Tab tab) {
+        return getCurrentLanguage(tab.getWebContents());
+    }
+
+    /**
+     * Get the current page language.
+     *
+     * @param webContents Web contents to get the current language for
+     * @return The current language code or empty string if no language detected.
+     */
+    public static String getCurrentLanguage(WebContents webContents) {
+        return TranslateBridgeJni.get().getCurrentLanguage(webContents);
+    }
+
+    /**
+     * Add an observer for translation events.
+     *
+     * @param webContents WebContents to observe.
+     * @param observer Observer.
+     * @return Native observer pointer, needed for removeTranslationObserver().
+     */
+    public static long addTranslationObserver(
+            WebContents webContents, TranslationObserver observer) {
+        return TranslateBridgeJni.get().addTranslationObserver(webContents, observer);
+    }
+
+    /**
+     * Remove a previously added TranslationObserver, destroying the native observer.
+     *
+     * @param webContents WebContents the observer was registered on.
+     * @param observerNativePtr Pointer to the native observer object.
+     */
+    public static void removeTranslationObserver(WebContents webContents, long observerNativePtr) {
+        TranslateBridgeJni.get().removeTranslationObserver(webContents, observerNativePtr);
+    }
+
+    /** Whether or not the WebContents have been translated. */
+    public static boolean isPageTranslated(WebContents webContents) {
+        return TranslateBridgeJni.get().isPageTranslated(webContents);
+    }
+
     @NativeMethods
     public interface Natives {
+        long addTranslationObserver(WebContents webContents, TranslationObserver observer);
+
+        void removeTranslationObserver(WebContents webContents, long observerNativePtr);
+
         void manualTranslateWhenReady(WebContents webContents);
-        void translateToLanguage(WebContents webContents, String targetLanguageCode);
+
         boolean canManuallyTranslate(WebContents webContents, boolean menuLogging);
+
         boolean shouldShowManualTranslateIPH(WebContents webContents);
-        void setPredefinedTargetLanguage(WebContents webContents, String targetLanguage);
-        String getSourceLanguage(WebContents webContents);
-        String getCurrentLanguage(WebContents webContents);
+
+        boolean isPageTranslated(WebContents webContents);
+
+        void setPredefinedTargetLanguage(
+                WebContents webContents, String targetLanguage, boolean shouldAutoTranslate);
+
         String getTargetLanguage();
+
         void setDefaultTargetLanguage(String targetLanguage);
+
         void resetAcceptLanguages(String defaultLocale);
+
         void getChromeAcceptLanguages(List<LanguageItem> list);
+
         String[] getUserAcceptLanguages();
+
         String[] getAlwaysTranslateLanguages();
+
         String[] getNeverTranslateLanguages();
+
         void setLanguageAlwaysTranslateState(String language, boolean alwaysTranslate);
+
         void updateUserAcceptLanguages(String language, boolean add);
+
         void moveAcceptLanguage(String language, int offset);
+
         void setLanguageOrder(String[] codes);
+
         boolean isBlockedLanguage(String language);
+
         void setLanguageBlockedState(String language, boolean blocked);
-        boolean getExplicitLanguageAskPromptShown();
-        void setExplicitLanguageAskPromptShown(boolean shown);
+
         boolean getAppLanguagePromptShown();
+
         void setAppLanguagePromptShown();
+
         void setIgnoreMissingKeyForTesting(boolean ignore);
+
+        String getCurrentLanguage(WebContents webContents);
     }
 }

@@ -9,13 +9,7 @@
 #include "base/no_destructor.h"
 #include "base/task/current_thread.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "chromeos/components/sensors/buildflags.h"
-#if BUILDFLAG(USE_IIOSERVICE)
 #include "ash/accelerometer/accelerometer_provider_mojo.h"
-#else  // !BUILDFLAG(USE_IIOSERVICE)
-#include "ash/accelerometer/accelerometer_file_reader.h"
-#endif  // BUILDFLAG(USE_IIOSERVICE)
 
 namespace ash {
 
@@ -56,11 +50,7 @@ void AccelerometerReader::SetECLidAngleDriverStatusForTesting(
 }
 
 AccelerometerReader::AccelerometerReader() {
-#if BUILDFLAG(USE_IIOSERVICE)
   accelerometer_provider_ = new AccelerometerProviderMojo();
-#else   // !BUILDFLAG(USE_IIOSERVICE)
-  accelerometer_provider_ = new AccelerometerFileReader();
-#endif  // BUILDFLAG(USE_IIOSERVICE)
 }
 
 AccelerometerReader::~AccelerometerReader() = default;
@@ -126,7 +116,7 @@ void AccelerometerProviderInterface::SetECLidAngleDriverStatusForTesting(
 }
 
 AccelerometerProviderInterface::AccelerometerProviderInterface()
-    : ui_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+    : ui_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DCHECK(base::CurrentUIThread::IsSet());
 }
 

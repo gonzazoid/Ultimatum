@@ -7,6 +7,7 @@
 
 #include <wayland-client.h>
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "remoting/host/linux/wayland_keyboard.h"
@@ -15,6 +16,8 @@ namespace remoting {
 
 class WaylandSeat {
  public:
+  using OnSeatPresentCallback = base::OnceCallback<void()>;
+
   WaylandSeat();
   ~WaylandSeat();
 
@@ -25,6 +28,13 @@ class WaylandSeat {
                              uint32_t name,
                              const char* interface,
                              uint32_t version);
+
+  void HandleGlobalRemoveSeatEvent(uint32_t name);
+
+  // Calling this when a seat is not available is an error.
+  uint32_t GetSeatId() const;
+
+  void SetSeatPresentCallback(OnSeatPresentCallback callback);
 
  private:
   static void OnSeatCapabilitiesEvent(void* data,
@@ -40,8 +50,10 @@ class WaylandSeat {
   const struct wl_seat_listener wl_seat_listener_ {
     .capabilities = OnSeatCapabilitiesEvent, .name = OnSeatNameEvent
   };
-  base::raw_ptr<struct wl_seat> wl_seat_ = nullptr;
+  raw_ptr<struct wl_seat> wl_seat_ = nullptr;
+  uint32_t seat_id_ = 0;
   std::unique_ptr<WaylandKeyboard> wayland_keyboard_;
+  OnSeatPresentCallback seat_present_callback_;
 };
 
 }  // namespace remoting

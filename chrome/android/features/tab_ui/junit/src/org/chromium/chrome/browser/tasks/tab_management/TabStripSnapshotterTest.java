@@ -28,13 +28,13 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.ResourceTabFavicon;
 import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.StaticTabFaviconType;
 import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.TabFavicon;
+import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.TabFaviconFetcher;
 import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.UrlTabFavicon;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
-import org.chromium.url.JUnitTestGURLs;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,13 +44,19 @@ import java.util.List;
 @Config(manifest = Config.NONE)
 public class TabStripSnapshotterTest {
     private static final PropertyKey[] PROPERTY_KEYS =
-            new PropertyKey[] {TabProperties.FAVICON, TabProperties.IS_SELECTED};
+            new PropertyKey[] {
+                TabProperties.FAVICON_FETCHER,
+                TabProperties.FAVICON_FETCHED,
+                TabProperties.IS_SELECTED
+            };
 
-    @Captor
-    private ArgumentCaptor<OnScrollListener> mOnScrollListenerCaptor;
+    @Captor private ArgumentCaptor<OnScrollListener> mOnScrollListenerCaptor;
 
-    @Mock
-    private RecyclerView mRecyclerView;
+    @Mock private RecyclerView mRecyclerView;
+
+    @Mock private TabFaviconFetcher mTabFaviconFetcherA;
+    @Mock private TabFaviconFetcher mTabFaviconFetcherB;
+    @Mock private TabFaviconFetcher mTabFaviconFetcherC;
 
     private final List<Object> mTokenList = new ArrayList<>();
 
@@ -71,7 +77,15 @@ public class TabStripSnapshotterTest {
 
     private static PropertyModel makePropertyModel(TabFavicon tabFavicon, boolean isSelected) {
         return new PropertyModel.Builder(PROPERTY_KEYS)
-                .with(TabProperties.FAVICON, tabFavicon)
+                .with(TabProperties.IS_SELECTED, isSelected)
+                .build();
+    }
+
+    private static PropertyModel makePropertyModel(
+            TabFaviconFetcher fetcher, boolean isSelected, boolean isFetched) {
+        return new PropertyModel.Builder(PROPERTY_KEYS)
+                .with(TabProperties.FAVICON_FETCHER, fetcher)
+                .with(TabProperties.FAVICON_FETCHED, isFetched)
                 .with(TabProperties.IS_SELECTED, isSelected)
                 .build();
     }
@@ -81,7 +95,7 @@ public class TabStripSnapshotterTest {
     }
 
     private static TabFavicon makeTabFavicon(String url) {
-        GURL gurl = JUnitTestGURLs.getGURL(url);
+        GURL gurl = new GURL(url);
         return new UrlTabFavicon(newDrawable(), gurl);
     }
 
@@ -92,11 +106,11 @@ public class TabStripSnapshotterTest {
     }
 
     @Test
-    public void testSnapshotter() {
+    public void testSnapshotterFetcher() {
         Mockito.when(mRecyclerView.computeHorizontalScrollOffset()).thenReturn(0);
         ModelList modelList = new ModelList();
-        PropertyModel propertyModel1 = makePropertyModel(JUnitTestGURLs.URL_1, true);
-        modelList.add(new ListItem(/*type*/ 0, propertyModel1));
+        PropertyModel propertyModel1 = makePropertyModel(mTabFaviconFetcherA, false, false);
+        modelList.add(new ListItem(/* type= */ 0, propertyModel1));
         TabStripSnapshotter tabStripSnapshotter =
                 new TabStripSnapshotter(this::onModelTokenChange, modelList, mRecyclerView);
 
@@ -105,36 +119,45 @@ public class TabStripSnapshotterTest {
         OnScrollListener onScrollListener = mOnScrollListenerCaptor.getValue();
         Assert.assertEquals(1, mTokenList.size());
 
-        PropertyModel propertyModel2 = makePropertyModel(StaticTabFaviconType.ROUNDED_GLOBE, false);
-        modelList.add(new ListItem(/*type*/ 0, propertyModel2));
+        PropertyModel propertyModel2 = makePropertyModel(mTabFaviconFetcherA, true, true);
+        modelList.add(new ListItem(/* type= */ 0, propertyModel2));
         Assert.assertEquals(2, mTokenList.size());
         Assert.assertNotEquals(mTokenList.get(0), mTokenList.get(1));
 
-        propertyModel1.set(TabProperties.FAVICON, makeTabFavicon(JUnitTestGURLs.URL_2));
+        propertyModel1.set(TabProperties.FAVICON_FETCHER, mTabFaviconFetcherC);
         Assert.assertEquals(3, mTokenList.size());
         Assert.assertNotEquals(mTokenList.get(1), mTokenList.get(2));
 
-        propertyModel1.set(TabProperties.FAVICON, makeTabFavicon(JUnitTestGURLs.URL_1));
+        propertyModel1.set(TabProperties.FAVICON_FETCHER, mTabFaviconFetcherA);
         Assert.assertEquals(4, mTokenList.size());
-        Assert.assertEquals(mTokenList.get(1), mTokenList.get(3));
+        Assert.assertNotEquals(mTokenList.get(2), mTokenList.get(3));
+
+        propertyModel1.set(TabProperties.IS_SELECTED, true);
+        Assert.assertEquals(5, mTokenList.size());
+        Assert.assertNotEquals(mTokenList.get(3), mTokenList.get(4));
+
+        propertyModel1.set(TabProperties.FAVICON_FETCHED, true);
+        Assert.assertEquals(6, mTokenList.size());
+        Assert.assertNotEquals(mTokenList.get(1), mTokenList.get(5));
+        Assert.assertNotEquals(mTokenList.get(4), mTokenList.get(5));
 
         Mockito.when(mRecyclerView.computeHorizontalScrollOffset()).thenReturn(100);
         onScrollListener.onScrollStateChanged(mRecyclerView, RecyclerView.SCROLL_STATE_DRAGGING);
         onScrollListener.onScrollStateChanged(mRecyclerView, RecyclerView.SCROLL_STATE_SETTLING);
-        Assert.assertEquals(4, mTokenList.size());
+        Assert.assertEquals(6, mTokenList.size());
 
         onScrollListener.onScrollStateChanged(mRecyclerView, RecyclerView.SCROLL_STATE_IDLE);
-        Assert.assertEquals(5, mTokenList.size());
-        Assert.assertNotEquals(mTokenList.get(3), mTokenList.get(4));
+        Assert.assertEquals(7, mTokenList.size());
+        Assert.assertNotEquals(mTokenList.get(5), mTokenList.get(6));
 
         Mockito.when(mRecyclerView.computeHorizontalScrollOffset()).thenReturn(0);
         onScrollListener.onScrollStateChanged(mRecyclerView, RecyclerView.SCROLL_STATE_IDLE);
-        Assert.assertEquals(6, mTokenList.size());
-        Assert.assertEquals(mTokenList.get(3), mTokenList.get(5));
+        Assert.assertEquals(8, mTokenList.size());
+        Assert.assertEquals(mTokenList.get(5), mTokenList.get(7));
 
         tabStripSnapshotter.destroy();
         Mockito.verify(mRecyclerView, Mockito.times(1)).removeOnScrollListener(onScrollListener);
-        propertyModel1.set(TabProperties.FAVICON, makeTabFavicon(JUnitTestGURLs.URL_2));
-        Assert.assertEquals(6, mTokenList.size());
+        propertyModel1.set(TabProperties.FAVICON_FETCHER, mTabFaviconFetcherB);
+        Assert.assertEquals(8, mTokenList.size());
     }
 }

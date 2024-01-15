@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "content/renderer/pepper/host_globals.h"
 #include "content/renderer/pepper/message_channel.h"
 #include "content/renderer/pepper/pepper_plugin_instance_impl.h"
@@ -72,8 +73,8 @@ class ObjectAccessor {
   V8VarConverter* converter() { return converter_.get(); }
 
  private:
-  V8ObjectVar* object_var_;
-  PepperPluginInstanceImpl* instance_;
+  raw_ptr<V8ObjectVar, ExperimentalRenderer> object_var_;
+  raw_ptr<PepperPluginInstanceImpl, ExperimentalRenderer> instance_;
   std::unique_ptr<V8VarConverter> converter_;
 };
 
@@ -96,8 +97,7 @@ bool HasPropertyDeprecated(PP_Var var, PP_Var name, PP_Var* exception) {
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> v8_name = try_catch.ToV8(name);
   if (try_catch.HasException())
     return false;
@@ -120,8 +120,7 @@ bool HasMethodDeprecated(PP_Var var, PP_Var name, PP_Var* exception) {
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> v8_name = try_catch.ToV8(name);
   if (try_catch.HasException())
     return false;
@@ -149,13 +148,11 @@ PP_Var GetProperty(PP_Var var, PP_Var name, PP_Var* exception) {
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> v8_name = try_catch.ToV8(name);
   if (try_catch.HasException())
     return PP_MakeUndefined();
 
-  v8::Local<v8::Value> result;
   ScopedPPVar result_var =
       try_catch.FromV8Maybe(accessor.GetObject()->Get(context, v8_name));
   if (try_catch.HasException())
@@ -176,8 +173,7 @@ void EnumerateProperties(PP_Var var,
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   *properties = nullptr;
   *property_count = 0;
@@ -212,8 +208,7 @@ void SetPropertyDeprecated(PP_Var var,
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> v8_name = try_catch.ToV8(name);
   v8::Local<v8::Value> v8_value = try_catch.ToV8(value);
 
@@ -236,8 +231,7 @@ void DeletePropertyDeprecated(PP_Var var, PP_Var name, PP_Var* exception) {
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> v8_name = try_catch.ToV8(name);
 
   if (try_catch.HasException())
@@ -272,8 +266,7 @@ PP_Var CallDeprecatedInternal(PP_Var var,
                               exception);
   v8::Local<v8::Context> context = try_catch.GetContext();
   v8::MicrotasksScope microtasks_scope(
-      accessor.GetObject()->GetIsolate(), context->GetMicrotaskQueue(),
-      v8::MicrotasksScope::kDoNotRunMicrotasks);
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Local<v8::Value> v8_method_name = try_catch.ToV8(scoped_name.get());
   if (try_catch.HasException())
     return PP_MakeUndefined();

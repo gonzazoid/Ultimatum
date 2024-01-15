@@ -9,7 +9,8 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -21,7 +22,6 @@
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/user_manager/user_manager.h"
@@ -64,31 +64,27 @@ void ShowLowDiskSpaceErrorNotification(content::BrowserContext* context) {
   notifier_id.profile_id = account_id.GetUserEmail();
 
   Profile* profile = Profile::FromBrowserContext(context);
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, kLowDiskSpaceId,
-          l10n_util::GetStringUTF16(
-              IDS_ARC_CRITICALLY_LOW_DISK_NOTIFICATION_TITLE),
-          l10n_util::GetStringUTF16(
-              IDS_ARC_CRITICALLY_LOW_DISK_NOTIFICATION_MESSAGE),
-          l10n_util::GetStringUTF16(IDS_ARC_NOTIFICATION_DISPLAY_SOURCE),
-          GURL(), notifier_id, optional_fields,
-          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-              base::BindRepeating(
-                  [](Profile* profile, absl::optional<int> button_index) {
-                    if (button_index) {
-                      DCHECK_EQ(0, *button_index);
-                      chrome::SettingsWindowManager::GetInstance()
-                          ->ShowOSSettings(
-                              profile,
-                              chromeos::settings::mojom::kStorageSubpagePath);
-                    }
-                  },
-                  profile)),
-          kNotificationStorageFullIcon,
-          message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, kLowDiskSpaceId,
+      l10n_util::GetStringUTF16(IDS_ARC_CRITICALLY_LOW_DISK_NOTIFICATION_TITLE),
+      l10n_util::GetStringUTF16(
+          IDS_ARC_CRITICALLY_LOW_DISK_NOTIFICATION_MESSAGE),
+      l10n_util::GetStringUTF16(IDS_ARC_NOTIFICATION_DISPLAY_SOURCE), GURL(),
+      notifier_id, optional_fields,
+      base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+          base::BindRepeating(
+              [](Profile* profile, std::optional<int> button_index) {
+                if (button_index) {
+                  DCHECK_EQ(0, *button_index);
+                  chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
+                      profile, chromeos::settings::mojom::kStorageSubpagePath);
+                }
+              },
+              profile)),
+      kNotificationStorageFullIcon,
+      message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
   NotificationDisplayService::GetForProfile(profile)->Display(
-      NotificationHandler::Type::TRANSIENT, *notification,
+      NotificationHandler::Type::TRANSIENT, notification,
       /*metadata=*/nullptr);
 }
 
@@ -135,6 +131,11 @@ ArcBootErrorNotification::~ArcBootErrorNotification() {
 void ArcBootErrorNotification::OnArcSessionStopped(ArcStopReason reason) {
   if (reason == ArcStopReason::LOW_DISK_SPACE)
     ShowLowDiskSpaceErrorNotification(context_);
+}
+
+// static
+void ArcBootErrorNotification::EnsureFactoryBuilt() {
+  ArcBootErrorNotificationFactory::GetInstance();
 }
 
 }  // namespace arc

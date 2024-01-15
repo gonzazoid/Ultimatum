@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/chromeos_buildflags.h"
 #include "components/prefs/pref_registry_simple.h"
 
@@ -37,6 +37,11 @@ class PrefRegistrySyncable : public PrefRegistrySimple {
   // should ever be specified.
   //
   // Note: These must NOT overlap with PrefRegistry::PrefRegistrationFlags.
+  //
+  // Note: If adding a new pref with these flags, add the same to the syncable
+  // prefs database as well. Refer to components/sync_preferences/README.md for
+  // more details about syncable prefs, and chrome/browser/prefs/README.md for
+  // details about prefs in general.
   enum PrefRegistrationFlags : uint32_t {
     // The pref will be synced.
     SYNCABLE_PREF = 1 << 0,

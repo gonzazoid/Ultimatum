@@ -5,48 +5,65 @@
 package org.chromium.chrome.browser.feed;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import android.content.Context;
+import android.content.Intent;
 
 import com.google.common.collect.ImmutableMap;
 
+import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import org.chromium.base.ContextUtils;
 import org.chromium.base.FeatureList;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.app.feed.FeedActionDelegateImpl;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel;
+import org.chromium.chrome.browser.feed.webfeed.WebFeedBridge;
+import org.chromium.chrome.browser.feed.webfeed.WebFeedBridgeJni;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.native_page.NativePageNavigationDelegate;
-import org.chromium.chrome.browser.share.crow.CrowButtonDelegate;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.ui.signin.SyncConsentActivityLauncher;
+import org.chromium.chrome.browser.util.BrowserUiUtils;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
 
 /** Tests for FeedActionDelegateImpl. */
 @RunWith(BaseRobolectricTestRunner.class)
 public final class FeedActionDelegateImplTest {
-    @Mock
-    private SyncConsentActivityLauncher mMockSyncConsentActivityLauncher;
+    @Rule public JniMocker jniMocker = new JniMocker();
 
-    @Mock
-    private SnackbarManager mMockSnackbarManager;
+    @Mock private WebFeedBridge.Natives mWebFeedBridgeJniMock;
 
-    @Mock
-    private NativePageNavigationDelegate mMockNavigationDelegate;
+    @Mock private SyncConsentActivityLauncher mMockSyncConsentActivityLauncher;
 
-    @Mock
-    private BookmarkModel mMockBookmarkModel;
+    @Mock private SnackbarManager mMockSnackbarManager;
 
-    @Mock
-    private CrowButtonDelegate mMockCrowButtonDelegate;
+    @Mock private NativePageNavigationDelegate mMockNavigationDelegate;
+
+    @Mock private BookmarkModel mMockBookmarkModel;
+
+    @Mock private Context mActivityContext;
+
+    @Mock private TabModelSelector mTabModelSelector;
+
+    @Mock private Profile mProfile;
+
+    @Captor ArgumentCaptor<Intent> mIntentCaptor;
 
     private FeedActionDelegateImpl mFeedActionDelegateImpl;
 
@@ -55,26 +72,57 @@ public final class FeedActionDelegateImplTest {
         MockitoAnnotations.initMocks(this);
 
         SyncConsentActivityLauncherImpl.setLauncherForTest(mMockSyncConsentActivityLauncher);
-        mFeedActionDelegateImpl = new FeedActionDelegateImpl(ContextUtils.getApplicationContext(),
-                mMockSnackbarManager, mMockNavigationDelegate, mMockBookmarkModel,
-                mMockCrowButtonDelegate);
+        mFeedActionDelegateImpl =
+                new FeedActionDelegateImpl(
+                        mActivityContext,
+                        mMockSnackbarManager,
+                        mMockNavigationDelegate,
+                        mMockBookmarkModel,
+                        BrowserUiUtils.HostSurface.NOT_SET,
+                        mTabModelSelector,
+                        mProfile);
+        jniMocker.mock(WebFeedBridgeJni.TEST_HOOKS, mWebFeedBridgeJniMock);
+
+        when(mWebFeedBridgeJniMock.isCormorantEnabledForLocale()).thenReturn(true);
     }
 
     @Test
-    public void testShowSignInActivity_shownWhenFlagEnabled() {
+    public void testShowSyncConsentActivity_shownWhenFlagEnabled() {
         FeatureList.setTestFeatures(
                 ImmutableMap.of(ChromeFeatureList.FEED_SHOW_SIGN_IN_COMMAND, true));
-        mFeedActionDelegateImpl.showSignInActivity();
+        mFeedActionDelegateImpl.showSyncConsentActivity(SigninAccessPoint.NTP_CONTENT_SUGGESTIONS);
         verify(mMockSyncConsentActivityLauncher)
                 .launchActivityIfAllowed(any(), eq(SigninAccessPoint.NTP_CONTENT_SUGGESTIONS));
     }
 
     @Test
-    public void testShowSignInActivity_dontShowWhenFlagDisabled() {
+    public void testShowSyncConsentActivity_dontShowWhenFlagDisabled() {
         FeatureList.setTestFeatures(
                 ImmutableMap.of(ChromeFeatureList.FEED_SHOW_SIGN_IN_COMMAND, false));
-        mFeedActionDelegateImpl.showSignInActivity();
+        mFeedActionDelegateImpl.showSyncConsentActivity(SigninAccessPoint.NTP_CONTENT_SUGGESTIONS);
         verify(mMockSyncConsentActivityLauncher, never())
                 .launchActivityIfAllowed(any(), eq(SigninAccessPoint.NTP_CONTENT_SUGGESTIONS));
+    }
+
+    @Test
+    public void testOpenWebFeed_enabledWhenCormorantFlagEnabled() {
+        FeatureList.setTestFeatures(ImmutableMap.of(ChromeFeatureList.CORMORANT, true));
+        String webFeedName = "SomeFeedName";
+
+        mFeedActionDelegateImpl.openWebFeed(webFeedName, SingleWebFeedEntryPoint.OTHER);
+
+        verify(mActivityContext).startActivity(mIntentCaptor.capture());
+        Assert.assertArrayEquals(
+                "Feed ID not passed correctly.",
+                webFeedName.getBytes(),
+                mIntentCaptor.getValue().getByteArrayExtra("CREATOR_WEB_FEED_ID"));
+    }
+
+    @Test
+    public void testOpenWebFeed_disabledWhenCormorantFlagDisabled() {
+        when(mWebFeedBridgeJniMock.isCormorantEnabledForLocale()).thenReturn(false);
+        FeatureList.setTestFeatures(ImmutableMap.of(ChromeFeatureList.CORMORANT, false));
+        mFeedActionDelegateImpl.openWebFeed("SomeFeedName", SingleWebFeedEntryPoint.OTHER);
+        verify(mActivityContext, never()).startActivity(any());
     }
 }

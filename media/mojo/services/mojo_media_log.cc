@@ -4,9 +4,9 @@
 
 #include "media/mojo/services/mojo_media_log.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace media {
 

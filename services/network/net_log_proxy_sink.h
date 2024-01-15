@@ -10,7 +10,7 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "net/log/net_log.h"
-#include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/net_log.mojom.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -43,12 +43,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetLogProxySink
 
   // mojom::NetLogProxySink:
   void AddEntry(uint32_t type,
-                uint32_t source_type,
-                uint32_t source_id,
-                base::TimeTicks source_start_time,
+                const net::NetLogSource& net_log_source,
                 net::NetLogEventPhase phase,
                 base::TimeTicks time,
-                base::Value params) override;
+                base::Value::Dict params) override;
 
  private:
   mojo::RemoteSet<network::mojom::NetLogProxySource> proxy_source_remotes_;

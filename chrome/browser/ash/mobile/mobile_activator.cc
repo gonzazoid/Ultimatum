@@ -8,9 +8,9 @@
 #include <map>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -29,6 +29,8 @@
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -169,18 +171,17 @@ void MobileActivator::InitiateActivation(const std::string& service_path) {
               ActivationError::kNone);
 
   // We want shill to connect us after activations, so enable autoconnect.
-  base::DictionaryValue auto_connect_property;
-  auto_connect_property.SetBoolKey(shill::kAutoConnectProperty, true);
+  base::Value::Dict auto_connect_property;
+  auto_connect_property.Set(shill::kAutoConnectProperty, true);
   NetworkHandler::Get()->network_configuration_handler()->SetShillProperties(
-      service_path_, auto_connect_property, base::DoNothing(),
+      service_path_, std::move(auto_connect_property), base::DoNothing(),
       network_handler::ErrorCallback());
 
   StartActivation();
 }
 
-void MobileActivator::GetPropertiesFailure(
-    const std::string& error_name,
-    std::unique_ptr<base::DictionaryValue> error_data) {
+void MobileActivator::GetPropertiesFailure(const std::string& error_name,
+                                           base::Value error_data) {
   NET_LOG(ERROR) << "MobileActivator GetProperties failed for "
                  << NetworkPathId(service_path_) << " Error: " << error_name;
 }
@@ -547,51 +548,10 @@ void MobileActivator::EvaluateCellularNetwork(const NetworkState* network) {
 
 MobileActivator::PlanActivationState MobileActivator::PickNextState(
     const NetworkState* network) const {
-  PlanActivationState new_state = state_;
   if (!network->IsConnectedState())
-    new_state = PickNextOfflineState(network);
+    return PickNextOfflineState(network);
   else
-    new_state = PickNextOnlineState(network);
-
-  if (new_state != PlanActivationState::kError &&
-      network->connection_state() == shill::kStateActivationFailure) {
-    // Check for this special case when we try to do activate partially
-    // activated device. If that attempt failed, try to disconnect to clear the
-    // state and reconnect again.
-    const std::string& activation = network->activation_state();
-    if ((activation == shill::kActivationStatePartiallyActivated ||
-         activation == shill::kActivationStateActivating) &&
-        (network->GetError().empty() ||
-         network->GetError() == shill::kErrorOtaspFailed)) {
-      NET_LOG(EVENT) << "Activation failure detected for "
-                     << NetworkId(network);
-      switch (state_) {
-        case PlanActivationState::kOTASP:
-          new_state = PlanActivationState::kDelayOTASP;
-          break;
-        case PlanActivationState::kInitiatingActivation:
-        case PlanActivationState::kTryingOTASP:
-          new_state = PlanActivationState::kStart;
-          break;
-        case PlanActivationState::kStart:
-          // We are just starting, so this must be previous activation attempt
-          // failure.
-          new_state = PlanActivationState::kTryingOTASP;
-          break;
-        case PlanActivationState::kDelayOTASP:
-          new_state = state_;
-          break;
-        default:
-          new_state = PlanActivationState::kError;
-          break;
-      }
-    } else {
-      LOG(WARNING) << "Unexpected activation failure for " << network->path();
-      new_state = PlanActivationState::kError;
-    }
-  }
-
-  return new_state;
+    return PickNextOnlineState(network);
 }
 
 MobileActivator::PlanActivationState MobileActivator::PickNextOfflineState(

@@ -6,7 +6,14 @@ import {addEntries, RootPath, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
 import {openAndWaitForClosingDialog, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET} from './test_data.js';
+
+/** The id attribute of the dismiss button in the educational banner. */
+async function getDismissButtonId(appId) {
+  return await remoteCall.isCrosComponents(appId) ? 'dismiss-button' :
+                                                    'dismiss-button-old';
+}
 
 /**
  * Tests the focus behavior of the search box.
@@ -18,9 +25,16 @@ testcase.tabindexSearchBoxFocus = async () => {
   // Check that the file list has the focus on launch.
   await remoteCall.waitForElement(appId, ['#file-list:focus']);
 
+  // Check that the search UI is in the collapsed state (hidden from the user).
+  await remoteCall.waitForElement(appId, '#search-wrapper[collapsed]');
+
   // Press the Ctrl-F key.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
       'fakeKeyDown', appId, ['body', 'f', true, false, false]));
+
+  // Wait for the search box to fully open. Only once the search wrapper
+  // is fully expanded the collapsed attribute is removed.
+  await remoteCall.waitForElementLost(appId, '#search-wrapper[collapsed]');
 
   // Check that the search box has the focus.
   await remoteCall.waitForElement(appId, ['#search-box cr-input:focus-within']);
@@ -54,9 +68,10 @@ testcase.tabindexFocus = async () => {
       await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
   chrome.test.assertEq('list', element.attributes['class']);
 
-  // Send Tab key events to cycle through the tabable elements.
+  // Send Tab key events to cycle through the tabbable elements.
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'directory-tree'));
+      // format: directory-tree#<tree item label>
+      await remoteCall.checkNextTabFocus(appId, 'directory-tree#My Drive'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'search-button'));
   chrome.test.assertTrue(
@@ -67,8 +82,10 @@ testcase.tabindexFocus = async () => {
       await remoteCall.checkNextTabFocus(appId, 'gear-button'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'drive-learn-more-button'));
+  chrome.test.assertTrue(await remoteCall.checkNextTabFocus(
+      appId, await getDismissButtonId(appId)));
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'dismiss-button'));
+      await remoteCall.checkNextTabFocus(appId, 'sort-direction-button'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'file-list'));
 };
@@ -90,9 +107,10 @@ testcase.tabindexFocusDownloads = async () => {
       await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
   chrome.test.assertEq('list', element.attributes['class']);
 
-  // Send Tab key events to cycle through the tabable elements.
+  // Send Tab key events to cycle through the tabbable elements.
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'directory-tree'));
+      // format: directory-tree#<tree item label>
+      await remoteCall.checkNextTabFocus(appId, 'directory-tree#Downloads'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'breadcrumbs'));
   chrome.test.assertTrue(
@@ -103,8 +121,10 @@ testcase.tabindexFocusDownloads = async () => {
       await remoteCall.checkNextTabFocus(appId, 'sort-button'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'gear-button'));
+  chrome.test.assertTrue(await remoteCall.checkNextTabFocus(
+      appId, await getDismissButtonId(appId)));
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'dismiss-button'));
+      await remoteCall.checkNextTabFocus(appId, 'sort-direction-button'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'file-list'));
 };
@@ -148,11 +168,16 @@ testcase.tabindexFocusDirectorySelected = async () => {
         appId, ['#delete-button:not([hidden]):not([disabled])']),
   ]);
 
+  const pinnedToggleId = await remoteCall.isCrosComponents(appId) ?
+      'pinned-toggle-jelly' :
+      'pinned-toggle';
+
   // Send Tab key events to cycle through the tabable elements.
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'directory-tree'));
+      // format: directory-tree#<tree item label>
+      await remoteCall.checkNextTabFocus(appId, 'directory-tree#My Drive'));
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'pinned-toggle'));
+      await remoteCall.checkNextTabFocus(appId, pinnedToggleId));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'sharesheet-button'));
   chrome.test.assertTrue(
@@ -167,8 +192,10 @@ testcase.tabindexFocusDirectorySelected = async () => {
       await remoteCall.checkNextTabFocus(appId, 'gear-button'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'drive-learn-more-button'));
+  chrome.test.assertTrue(await remoteCall.checkNextTabFocus(
+      appId, await getDismissButtonId(appId)));
   chrome.test.assertTrue(
-      await remoteCall.checkNextTabFocus(appId, 'dismiss-button'));
+      await remoteCall.checkNextTabFocus(appId, 'sort-direction-button'));
   chrome.test.assertTrue(
       await remoteCall.checkNextTabFocus(appId, 'file-list'));
 
@@ -183,8 +210,8 @@ testcase.tabindexFocusDirectorySelected = async () => {
  *
  * @param {!Object} dialogParams Dialog parameters to be passed to
  *     chrome.fileSystem.chooseEntry.
- * @param {string} volumeName Volume name passed to the selectVolume remote
- *     function.
+ * @param {string} volumeType Volume icon type passed to the
+ *     openAndWaitForClosingDialog function.
  * @param {!Array<TestEntryInfo>} expectedSet Expected set of the entries.
  * @param {?function(string):(!Promise|Object)} initialize Initialization before
  *     test runs. The window ID is passed as an argument. If null, do nothing as
@@ -192,22 +219,34 @@ testcase.tabindexFocusDirectorySelected = async () => {
  * @param {!Array<string>} initialElements Selectors of the elements which
  *     shows the Files app is ready. After all the elements show up, the
  *     tabfocus tests starts.
- * @param {!Array<string>} expectedTabOrder Array with the IDs of the element
- *     with the corresponding order of expected tab-indexes.
+ * @param {function(string):(!Promise<!Array<string>>)} getExpectedTabOrder
+ *     Array with the IDs of the element with the corresponding order of
+ *     expected tab-indexes.
  */
 async function tabindexFocus(
-    dialogParams, volumeName, expectedSet, initialize, initialElements,
-    expectedTabOrder) {
+    dialogParams, volumeType, expectedSet, initialize, initialElements,
+    getExpectedTabOrder) {
   await Promise.all([
     addEntries(['local'], BASIC_LOCAL_ENTRY_SET),
     addEntries(['drive'], BASIC_DRIVE_ENTRY_SET),
   ]);
 
   const selectAndCheckAndClose = async (appId) => {
+    const directoryTree =
+        await DirectoryTreePageObject.create(appId, remoteCall);
+
     if (dialogParams.type === 'saveFile') {
       await remoteCall.waitForElement(
           appId, ['#filename-input-textbox:focus-within']);
+    } else if (directoryTree.isNewTree) {
+      await directoryTree.waitForFocusedItemByType(volumeType);
     } else {
+      // The openAndWaitForClosingDialog() below will select the tree item with
+      // the corresponding `volumeType` by fake mouse click, for new tree it
+      // will focus the tree item we do that programmatically, but for the old
+      // tree it won't focus the tree because it rely on "tabindex=0" on the
+      // <tree> element to focus which only works with physical mouse/touch,
+      // hence the checking of "file-list:focus" below.
       await remoteCall.waitForElement(appId, ['#file-list:focus']);
     }
 
@@ -224,7 +263,7 @@ async function tabindexFocus(
     }));
 
     // Checks tabfocus.
-    for (const className of expectedTabOrder) {
+    for (const className of await getExpectedTabOrder(appId)) {
       chrome.test.assertTrue(
           await remoteCall.checkNextTabFocus(appId, className), className);
     }
@@ -234,31 +273,35 @@ async function tabindexFocus(
   };
 
   await openAndWaitForClosingDialog(
-      dialogParams, volumeName, expectedSet, selectAndCheckAndClose);
+      dialogParams, volumeType, expectedSet, selectAndCheckAndClose);
 }
 
 /**
  * Tests the tab focus behavior of Open Dialog (Downloads).
  */
 testcase.tabindexOpenDialogDownloads = async () => {
-  const tabindexIds = [
-    'cancel-button',
-    'ok-button',
-    'directory-tree',
-    /* first breadcrumb */ 'first',
-    'search-button',
-    'view-button',
-    'sort-button',
-    'gear-button',
-    'dismiss-button',
-    'file-list',
-  ];
   return tabindexFocus(
-      {type: 'openFile'}, 'downloads', BASIC_LOCAL_ENTRY_SET, async (appId) => {
+      {type: 'openFile'}, 'downloads', BASIC_LOCAL_ENTRY_SET,
+      async (appId) => {
         await remoteCall.waitUntilSelected(appId, 'hello.txt');
         await remoteCall.isolateBannerForTesting(
             appId, 'holding-space-welcome-banner');
-      }, ['#ok-button:not([disabled])'], tabindexIds);
+      },
+      ['#ok-button:not([disabled])'],
+      async (appId) =>
+          ['cancel-button',
+           'ok-button',
+           // format: directory-tree#<tree item label>
+           'directory-tree#Downloads',
+           /* first breadcrumb */ 'first',
+           'search-button',
+           'view-button',
+           'sort-button',
+           'gear-button',
+           await getDismissButtonId(appId),
+           'sort-direction-button',
+           'file-list',
+  ]);
 };
 
 
@@ -266,23 +309,26 @@ testcase.tabindexOpenDialogDownloads = async () => {
  * Tests the tab focus behavior of Open Dialog (Drive).
  */
 testcase.tabindexOpenDialogDrive = async () => {
-  const tabindexIds = [
-    'cancel-button',
-    'ok-button',
-    'search-button',
-    'view-button',
-    'sort-button',
-    'gear-button',
-    'drive-learn-more-button',
-    'dismiss-button',
-    'directory-tree',
-    'file-list',
-  ];
   return tabindexFocus(
-      {type: 'openFile'}, 'drive', BASIC_DRIVE_ENTRY_SET, async (appId) => {
+      {type: 'openFile'}, 'drive', BASIC_DRIVE_ENTRY_SET,
+      async (appId) => {
         await remoteCall.waitUntilSelected(appId, 'hello.txt');
         await remoteCall.isolateBannerForTesting(appId, 'drive-welcome-banner');
-      }, ['#ok-button:not([disabled])'], tabindexIds);
+      },
+      ['#ok-button:not([disabled])'],
+      async (appId) =>
+          ['cancel-button',
+           'ok-button',
+           'search-button',
+           'view-button',
+           'sort-button',
+           'gear-button',
+           'drive-learn-more-button',
+           await getDismissButtonId(appId),
+           // format: directory-tree#<tree item label>
+           'directory-tree#My Drive',
+           'file-list',
+  ]);
 };
 
 /**
@@ -295,19 +341,20 @@ testcase.tabindexSaveFileDialogDownloads = async () => {
         suggestedName: 'hoge.txt',  // Prevent showing a override prompt
       },
       'downloads', BASIC_LOCAL_ENTRY_SET, null, ['#ok-button:not([disabled])'],
-      [
-        'cancel-button',
-        'ok-button',
-        'directory-tree',
-        /* first breadcrumb */ 'first',
-        'search-button',
-        'view-button',
-        'sort-button',
-        'gear-button',
-        'file-list',
-        'new-folder-button',
-        'filename-input-textbox',
-      ]);
+      async () =>
+          ['cancel-button',
+           'ok-button',
+           // format: directory-tree#<tree item label>
+           'directory-tree#Downloads',
+           /* first breadcrumb */ 'first',
+           'search-button',
+           'view-button',
+           'sort-button',
+           'gear-button',
+           'file-list',
+           'new-folder-button',
+           'filename-input-textbox',
+  ]);
 };
 
 
@@ -320,16 +367,18 @@ testcase.tabindexSaveFileDialogDrive = async () => {
         type: 'saveFile',
         suggestedName: 'hoge.txt',  // Prevent showing a override prompt
       },
-      'drive', BASIC_DRIVE_ENTRY_SET, null, ['#ok-button:not([disabled])'], [
-        'cancel-button',
-        'ok-button',
-        'directory-tree',
-        'search-button',
-        'view-button',
-        'sort-button',
-        'gear-button',
-        'file-list',
-        'new-folder-button',
-        'filename-input-textbox',
-      ]);
+      'drive', BASIC_DRIVE_ENTRY_SET, null, ['#ok-button:not([disabled])'],
+      async () =>
+          ['cancel-button',
+           'ok-button',
+           // format: directory-tree#<tree item label>
+           'directory-tree#My Drive',
+           'search-button',
+           'view-button',
+           'sort-button',
+           'gear-button',
+           'file-list',
+           'new-folder-button',
+           'filename-input-textbox',
+  ]);
 };

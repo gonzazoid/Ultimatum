@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "gpu/command_buffer/common/mailbox_holder.h"
 #include "media/base/media_export.h"
@@ -128,6 +128,13 @@ class MEDIA_EXPORT Picture {
 
   // Returns the color space of the picture.
   const gfx::ColorSpace& color_space() const { return color_space_; }
+  const absl::optional<gfx::HDRMetadata>& hdr_metadata() const {
+    return hdr_metadata_;
+  }
+
+  void set_hdr_metadata(const absl::optional<gfx::HDRMetadata>& hdr_metadata) {
+    hdr_metadata_ = hdr_metadata;
+  }
 
   // Returns the visible rectangle of the picture. Its size may be smaller
   // than the size of the PictureBuffer, as it is the only visible part of the
@@ -179,17 +186,28 @@ class MEDIA_EXPORT Picture {
 
   bool is_webgpu_compatible() { return is_webgpu_compatible_; }
 
+  SharedImageFormatType shared_image_format_type() const {
+    return shared_image_format_type_;
+  }
+
+  void set_shared_image_format_type(SharedImageFormatType type) {
+    shared_image_format_type_ = type;
+  }
+
  private:
   int32_t picture_buffer_id_;
   int32_t bitstream_buffer_id_;
   gfx::Rect visible_rect_;
   gfx::ColorSpace color_space_;
+  absl::optional<gfx::HDRMetadata> hdr_metadata_;
   bool allow_overlay_;
   bool read_lock_fences_enabled_;
   bool size_changed_;
   bool texture_owner_;
   bool wants_promotion_hint_;
   bool is_webgpu_compatible_;
+  SharedImageFormatType shared_image_format_type_ =
+      SharedImageFormatType::kLegacy;
   std::array<scoped_refptr<ScopedSharedImage>, VideoFrame::kMaxPlanes>
       scoped_shared_images_;
 };

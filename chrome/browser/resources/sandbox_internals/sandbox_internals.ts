@@ -5,10 +5,10 @@
 // <if expr="is_linux or is_chromeos">
 import './strings.m.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 // </if>
 
-import {$} from 'chrome://resources/js/util.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 /**
  * CSS classes for different statuses.
@@ -42,7 +42,7 @@ function addStatusRow(
     valueCol.classList.add(cssClass);
   }
 
-  $('sandbox-status').appendChild(row);
+  getRequiredElement('sandbox-status').appendChild(row);
   return row;
 }
 
@@ -52,7 +52,7 @@ function addStatusRow(
 function setEvaluation(result: boolean) {
   const message = result ? 'You are adequately sandboxed.' :
                            'You are NOT adequately sandboxed.';
-  $('evaluation').innerText = message;
+  getRequiredElement('evaluation').innerText = message;
 }
 
 // <if expr="is_android">

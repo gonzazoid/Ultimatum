@@ -4,10 +4,10 @@
 
 package org.chromium.chrome.browser.ui;
 
-import android.support.test.InstrumentationRegistry;
 import android.view.View;
 
 import androidx.test.filters.SmallTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -20,13 +20,13 @@ import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Restriction;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.chrome.test.util.ChromeTabUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
@@ -34,9 +34,7 @@ import org.chromium.ui.test.util.UiRestriction;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Tests for MediaCaptureOverlayController.
- */
+/** Tests for MediaCaptureOverlayController. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Batch(Batch.PER_CLASS)
@@ -44,9 +42,11 @@ public class MediaCaptureOverlayControllerTest {
     @ClassRule
     public static final ChromeTabbedActivityTestRule sActivityTestRule =
             new ChromeTabbedActivityTestRule();
+
     @Rule
     public final BlankCTATabInitialStateRule mInitialStateRule =
             new BlankCTATabInitialStateRule(sActivityTestRule, false);
+
     private ChromeTabbedActivity mActivity;
 
     private MediaCaptureOverlayController mController;
@@ -55,9 +55,10 @@ public class MediaCaptureOverlayControllerTest {
     @Before
     public void setUp() throws Exception {
         mActivity = sActivityTestRule.getActivity();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mController = MediaCaptureOverlayController.from(mActivity.getWindowAndroid());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mController = MediaCaptureOverlayController.from(mActivity.getWindowAndroid());
+                });
         Assert.assertNotNull(mController);
         mOverlayView = mActivity.findViewById(R.id.capture_overlay);
     }
@@ -69,10 +70,13 @@ public class MediaCaptureOverlayControllerTest {
     }
 
     public void waitForOverlayVisibility(boolean visible) {
-        CriteriaHelper.pollUiThread(() -> {
-            return visible ? (mOverlayView.getVisibility() == View.VISIBLE)
-                           : (mOverlayView.getVisibility() != View.VISIBLE);
-        }, "Overlay did not reach desired visibility in the alloted time.");
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    return visible
+                            ? (mOverlayView.getVisibility() == View.VISIBLE)
+                            : (mOverlayView.getVisibility() != View.VISIBLE);
+                },
+                "Overlay did not reach desired visibility in the alloted time.");
     }
 
     @Test

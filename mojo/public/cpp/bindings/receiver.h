@@ -6,11 +6,12 @@
 #define MOJO_PUBLIC_CPP_BINDINGS_RECEIVER_H_
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "base/check.h"
+#include "base/compiler_specific.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/async_flusher.h"
 #include "mojo/public/cpp/bindings/connection_error_callback.h"
@@ -19,6 +20,7 @@
 #include "mojo/public/cpp/bindings/pending_flush.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/raw_ptr_impl_ref_traits.h"
+#include "mojo/public/cpp/bindings/runtime_features.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 
 namespace mojo {
@@ -58,7 +60,7 @@ class Receiver {
   // Constructs a bound Receiver by consuming |pending_receiver|. The Receiver
   // is permanently linked to |impl| and will schedule incoming |impl| method
   // and disconnection notifications on the default SequencedTaskRunner (i.e.
-  // base::SequencedTaskRunnerHandle::Get() at construction time).
+  // base::SequencedTaskRunner::GetCurrentDefault() at construction time).
   Receiver(ImplPointerType impl, PendingReceiver<Interface> pending_receiver)
       : Receiver(std::move(impl), std::move(pending_receiver), nullptr) {}
 
@@ -112,7 +114,7 @@ class Receiver {
 
   // Similar to the method above, but also specifies a disconnect reason.
   void ResetWithReason(uint32_t custom_reason_code,
-                       base::StringPiece description) {
+                       std::string_view description) {
     internal_state_.CloseWithReason(custom_reason_code, description);
   }
 
@@ -122,8 +124,8 @@ class Receiver {
   //
   // The Receiver will schedule incoming |impl| method calls and disconnection
   // notifications on the default SequencedTaskRunner (i.e.
-  // base::SequencedTaskRunnerHandle::Get() at the time of this call). Must only
-  // be called on an unbound Receiver.
+  // base::SequencedTaskRunner::GetCurrentDefault() at the time of this call).
+  // Must only be called on an unbound Receiver.
   [[nodiscard]] PendingRemote<Interface> BindNewPipeAndPassRemote() {
     return BindNewPipeAndPassRemote(nullptr);
   }
@@ -137,6 +139,10 @@ class Receiver {
     DCHECK(!is_bound()) << "Receiver for " << Interface::Name_
                         << " is already bound";
     PendingRemote<Interface> remote;
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      reset();
+      return remote;
+    }
     Bind(remote.InitWithNewPipeAndPassReceiver(), std::move(task_runner));
     return remote;
   }
@@ -154,7 +160,7 @@ class Receiver {
   //
   // The newly bound Receiver will schedule incoming |impl| method calls and
   // disconnection notifications on the default SequencedTaskRunner (i.e.
-  // base::SequencedTaskRunnerHandle::Get() at the time of this call).
+  // base::SequencedTaskRunner::GetCurrentDefault() at the time of this call).
   void Bind(PendingReceiver<Interface> pending_receiver) {
     DCHECK(!is_bound()) << "Receiver for " << Interface::Name_
                         << " is already bound";
@@ -170,12 +176,16 @@ class Receiver {
             scoped_refptr<base::SequencedTaskRunner> task_runner) {
     DCHECK(!is_bound()) << "Receiver for " << Interface::Name_
                         << " is already bound";
-    if (pending_receiver) {
-      internal_state_.Bind(pending_receiver.internal_state(),
-                           std::move(task_runner));
-    } else {
+    if (!pending_receiver) {
       reset();
+      return;
     }
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      reset();
+      return;
+    }
+    internal_state_.Bind(pending_receiver.internal_state(),
+                         std::move(task_runner));
   }
 
   // Unbinds this Receiver, preventing any further |impl| method calls or
@@ -289,7 +299,7 @@ class Receiver {
   // message dispatch. If you need to do asynchronous work before determining
   // the legitimacy of a message, use GetBadMessageCallback() and retain its
   // result until ready to invoke or discard it.
-  void ReportBadMessage(base::StringPiece error) {
+  NOT_TAIL_CALLED void ReportBadMessage(std::string_view error) {
     GetBadMessageCallback().Run(error);
   }
 

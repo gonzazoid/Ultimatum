@@ -9,11 +9,13 @@
 #include <vector>
 
 #include "android_webview/browser/gfx/scoped_app_gl_state_restore.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gl/gl_bindings.h"
 
 namespace android_webview {
 namespace internal {
 
+// Lifetime: Temporary
 class ScopedAppGLStateRestoreImpl : public ScopedAppGLStateRestore::Impl {
  public:
   ScopedAppGLStateRestoreImpl(ScopedAppGLStateRestore::CallMode mode,
@@ -25,7 +27,7 @@ class ScopedAppGLStateRestoreImpl : public ScopedAppGLStateRestore::Impl {
 
   ~ScopedAppGLStateRestoreImpl() override;
 
- protected:
+ private:
   void SaveHWUIState(bool save_restore);
   void RestoreHWUIState(bool save_restore);
 
@@ -41,7 +43,7 @@ class ScopedAppGLStateRestoreImpl : public ScopedAppGLStateRestore::Impl {
     GLint type;
     GLint normalized;
     GLint stride;
-    GLvoid* pointer;
+    raw_ptr<GLvoid> pointer;
     GLint vertex_attrib_array_buffer_binding;
     GLfloat current_vertex_attrib[4];
   };

@@ -5,24 +5,27 @@
 #ifndef IOS_CHROME_BROWSER_PROMOS_MANAGER_CONSTANTS_H_
 #define IOS_CHROME_BROWSER_PROMOS_MANAGER_CONSTANTS_H_
 
-#include <string>
+#include <optional>
 
-#import "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/strings/string_piece.h"
+#import "base/values.h"
 
 namespace promos_manager {
 
 // Dictionary key for `promo` identifier in stored impression (base::Value).
-extern const std::string kImpressionPromoKey;
+extern const char kImpressionPromoKey[];
 
 // Dictionary key for `day` in stored impression (base::Value).
-extern const std::string kImpressionDayKey;
+extern const char kImpressionDayKey[];
 
-// Prefix used when stringifying promos.
-extern const std::string kPromoStringifyPrefix;
+// Dictionary key for `feature_engagement_migration_completed` stored impression
+// (base::Value).
+extern const char kImpressionFeatureEngagementMigrationCompletedKey[];
 
 // The max number of days for impression history to be stored & maintained.
 extern const int kNumDaysImpressionHistoryStored;
 
+// LINT.IfChange
 enum class Promo {
   Test = 0,            // Test promo used for testing purposes (e.g. unit tests)
   DefaultBrowser = 1,  // Fullscreen Default Browser Promo
@@ -32,8 +35,17 @@ enum class Promo {
       4,  // Post Restore Sign-In (fullscreen, FRE-like promo)
   PostRestoreSignInAlert = 5,  // Post Restore Sign-In (native iOS alert)
   WhatsNew = 6,                // What's New Promo
-  kMaxValue = WhatsNew,
+  PostRestoreDefaultBrowserAlert =
+      8,  // Post Restore Default Browser (native iOS alert)
+  DefaultBrowserRemindMeLater = 9,  // Remind me later for default browser.
+  OmniboxPosition = 10,             // Choose between top and bottom omnibox.
+  DockingPromo = 11,                // Docking Promo.
+  DockingPromoRemindMeLater = 12,   // Docking Promo (Remind Me Later version).
+  kMaxValue = DockingPromoRemindMeLater,
 };
+// LINT.ThenChange(/ios/chrome/browser/promos_manager/constants.cc)
+// Also update IOSPromosManagerPromo in
+// (/tools/metrics/histograms/metadata/ios/enums.xml).
 
 // Enum for IOS.PromosManager.Promo.ImpressionLimitEvaluation histogram.
 // Entries should not be renumbered and numeric values should never be reused.
@@ -55,20 +67,30 @@ enum class IOSPromosManagerPromoType {
   kMaxValue = kStandardPromoDisplayHandler,
 };
 
-typedef struct Impression {
+struct Impression {
   Promo promo;
   // A day (int) is represented as the number of days since the Unix epoch
   // (running from UTC midnight to UTC midnight).
   int day;
+  bool feature_engagement_migration_completed;
 
-  Impression(Promo promo, int day) : promo(promo), day(day) {}
-} Impression;
+  Impression(Promo promo, int day, bool feature_engagement_migration_completed)
+      : promo(promo),
+        day(day),
+        feature_engagement_migration_completed(
+            feature_engagement_migration_completed) {}
+};
 
 // Returns string representation of promos_manager::Promo `promo`.
 std::string NameForPromo(Promo promo);
 
+// Returns a string representation of the short name for the provided `promo`.
+base::StringPiece ShortNameForPromo(Promo promo);
+
 // Returns promos_manager::Promo for string `promo`.
-absl::optional<Promo> PromoForName(std::string promo);
+std::optional<Promo> PromoForName(base::StringPiece promo);
+
+std::optional<Impression> ImpressionFromDict(const base::Value::Dict& dict);
 
 }  // namespace promos_manager
 

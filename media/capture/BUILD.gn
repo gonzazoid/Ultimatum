@@ -55,8 +55,8 @@ component("capture_base") {
 source_set("capture_device_specific") {
   visibility = [
     ":capture_lib",
-    "//media/capture/content/android",
     "//media/capture/video/android",
+    "//media/capture/video/win",
   ]
   defines = [ "CAPTURE_IMPLEMENTATION" ]
   sources = [
@@ -83,10 +83,14 @@ source_set("capture_device_specific") {
     "video/gpu_memory_buffer_utils.h",
     "video/video_capture_buffer_handle.cc",
     "video/video_capture_buffer_handle.h",
+    "video/video_capture_buffer_tracker.cc",
+    "video/video_capture_buffer_tracker.h",
     "video/video_capture_device.cc",
     "video/video_capture_device.h",
     "video/video_capture_device_factory.cc",
     "video/video_capture_device_factory.h",
+    "video/video_capture_metrics.cc",
+    "video/video_capture_metrics.h",
   ]
 
   public_deps = [ ":capture_base" ]
@@ -97,6 +101,7 @@ source_set("capture_device_specific") {
     "//gpu/command_buffer/client",
     "//gpu/ipc/common:common",
     "//media",
+    "//media/capture:capture_switches",
     "//media/capture/mojom:image_capture",
     "//media/capture/mojom:image_capture_types",
     "//media/capture/mojom:video_capture",
@@ -106,9 +111,6 @@ source_set("capture_device_specific") {
     "//third_party/libyuv",
     "//ui/gfx",
   ]
-  if (is_win) {
-    deps += [ "//media/base/win:media_foundation_util" ]
-  }
 }
 
 component("capture_lib") {
@@ -124,15 +126,11 @@ component("capture_lib") {
     "video/video_capture_buffer_pool_impl.h",
     "video/video_capture_buffer_pool_util.cc",
     "video/video_capture_buffer_pool_util.h",
-    "video/video_capture_buffer_tracker.cc",
-    "video/video_capture_buffer_tracker.h",
     "video/video_capture_buffer_tracker_factory.h",
     "video/video_capture_buffer_tracker_factory_impl.cc",
     "video/video_capture_buffer_tracker_factory_impl.h",
     "video/video_capture_device_client.cc",
     "video/video_capture_device_client.h",
-    "video/video_capture_metrics.cc",
-    "video/video_capture_metrics.h",
     "video/video_capture_system.h",
     "video/video_capture_system_impl.cc",
     "video/video_capture_system_impl.h",
@@ -158,50 +156,38 @@ component("capture_lib") {
     "//media/capture/mojom:video_capture",
     "//media/mojo/mojom",
     "//services/service_manager/public/cpp",
+    "//services/video_capture/public/mojom",
     "//third_party/libyuv",
     "//ui/display",
     "//ui/gfx",
   ]
 
   if (is_android) {
-    public_deps += [
-      "content/android",
-      "video/android",
-    ]
-    deps += [
-      "content/android:screen_capture_jni_headers",
-      "video/android:capture_jni_headers",
-    ]
+    public_deps += [ "video/android" ]
+    deps += [ "video/android:capture_jni_headers" ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
-      "video/mac/gpu_memory_buffer_tracker_mac.cc",
-      "video/mac/gpu_memory_buffer_tracker_mac.h",
-      "video/mac/pixel_buffer_pool_mac.cc",
-      "video/mac/pixel_buffer_pool_mac.h",
-      "video/mac/pixel_buffer_transferer_mac.cc",
-      "video/mac/pixel_buffer_transferer_mac.h",
-      "video/mac/sample_buffer_transformer_mac.cc",
-      "video/mac/sample_buffer_transformer_mac.h",
-      "video/mac/video_capture_device_avfoundation_mac.h",
-      "video/mac/video_capture_device_avfoundation_mac.mm",
-      "video/mac/video_capture_device_avfoundation_utils_mac.h",
-      "video/mac/video_capture_device_avfoundation_utils_mac.mm",
-      "video/mac/video_capture_device_decklink_mac.h",
-      "video/mac/video_capture_device_decklink_mac.mm",
-      "video/mac/video_capture_device_factory_mac.h",
-      "video/mac/video_capture_device_factory_mac.mm",
-      "video/mac/video_capture_device_mac.h",
-      "video/mac/video_capture_device_mac.mm",
-      "video/mac/video_capture_metrics_mac.h",
-      "video/mac/video_capture_metrics_mac.mm",
+      "video/apple/gpu_memory_buffer_tracker_apple.cc",
+      "video/apple/gpu_memory_buffer_tracker_apple.h",
+      "video/apple/pixel_buffer_pool.cc",
+      "video/apple/pixel_buffer_pool.h",
+      "video/apple/pixel_buffer_transferer.cc",
+      "video/apple/pixel_buffer_transferer.h",
+      "video/apple/sample_buffer_transformer.cc",
+      "video/apple/sample_buffer_transformer.h",
+      "video/apple/video_capture_device_apple.h",
+      "video/apple/video_capture_device_apple.mm",
+      "video/apple/video_capture_device_avfoundation.h",
+      "video/apple/video_capture_device_avfoundation.mm",
+      "video/apple/video_capture_device_avfoundation_utils.h",
+      "video/apple/video_capture_device_avfoundation_utils.mm",
+      "video/apple/video_capture_device_factory_apple.h",
+      "video/apple/video_capture_device_factory_apple.mm",
+      "video/apple/video_capture_device_frame_receiver.h",
     ]
-    deps += [
-      "//components/crash/core/common:crash_key",
-      "//services/video_capture/public/uma",
-      "//third_party/decklink",
-    ]
+    deps += [ "//components/crash/core/common:crash_key" ]
     frameworks = [
       "AVFoundation.framework",
       "CoreFoundation.framework",
@@ -214,46 +200,27 @@ component("capture_lib") {
     ]
   }
 
-  if (is_win) {
+  if (is_mac) {
     sources += [
-      "video/win/capability_list_win.cc",
-      "video/win/capability_list_win.h",
-      "video/win/filter_base_win.cc",
-      "video/win/filter_base_win.h",
-      "video/win/gpu_memory_buffer_tracker.cc",
-      "video/win/gpu_memory_buffer_tracker.h",
-      "video/win/metrics.cc",
-      "video/win/metrics.h",
-      "video/win/pin_base_win.cc",
-      "video/win/pin_base_win.h",
-      "video/win/sink_filter_observer_win.h",
-      "video/win/sink_filter_win.cc",
-      "video/win/sink_filter_win.h",
-      "video/win/sink_input_pin_win.cc",
-      "video/win/sink_input_pin_win.h",
-      "video/win/video_capture_buffer_tracker_factory_win.cc",
-      "video/win/video_capture_buffer_tracker_factory_win.h",
-      "video/win/video_capture_device_factory_win.cc",
-      "video/win/video_capture_device_factory_win.h",
-      "video/win/video_capture_device_mf_win.cc",
-      "video/win/video_capture_device_mf_win.h",
-      "video/win/video_capture_device_utils_win.cc",
-      "video/win/video_capture_device_utils_win.h",
-      "video/win/video_capture_device_win.cc",
-      "video/win/video_capture_device_win.h",
+      "video/mac/uvc_control_mac.h",
+      "video/mac/uvc_control_mac.mm",
+      "video/mac/video_capture_device_decklink_mac.h",
+      "video/mac/video_capture_device_decklink_mac.mm",
+      "video/mac/video_capture_metrics_mac.h",
+      "video/mac/video_capture_metrics_mac.mm",
     ]
-    deps += [ "//media/base/win:media_foundation_util" ]
-    libs = [
-      "mf.lib",
-      "mfplat.lib",
-      "mfreadwrite.lib",
-      "mfuuid.lib",
+    deps += [ "//third_party/decklink" ]
+  }
+
+  if (is_ios) {
+    sources += [
+      "video/ios/pixel_buffer_rotator.cc",
+      "video/ios/pixel_buffer_rotator.h",
     ]
-    ldflags = [
-      "/DELAYLOAD:mf.dll",
-      "/DELAYLOAD:mfplat.dll",
-      "/DELAYLOAD:mfreadwrite.dll",
-    ]
+  }
+
+  if (is_win) {
+    public_deps += [ "video/win" ]
   }
 
   if (is_linux || is_chromeos) {
@@ -267,8 +234,32 @@ component("capture_lib") {
       "video/linux/v4l2_capture_device_impl.h",
       "video/linux/video_capture_device_factory_linux.cc",
       "video/linux/video_capture_device_factory_linux.h",
+      "video/linux/video_capture_device_factory_v4l2.cc",
+      "video/linux/video_capture_device_factory_v4l2.h",
       "video/linux/video_capture_device_linux.cc",
       "video/linux/video_capture_device_linux.h",
+    ]
+    deps += [ "//gpu/command_buffer/client" ]
+  }
+
+  if (is_linux) {
+    sources += [
+      "video/linux/v4l2_capture_delegate_gpu_helper.cc",
+      "video/linux/v4l2_capture_delegate_gpu_helper.h",
+      "video/linux/v4l2_gpu_memory_buffer_tracker.cc",
+      "video/linux/v4l2_gpu_memory_buffer_tracker.h",
+    ]
+  }
+
+  # Establish GPU Channel
+  if (is_linux || is_win || is_chromeos_ash) {
+    sources += [
+      "video/video_capture_gpu_channel_host.cc",
+      "video/video_capture_gpu_channel_host.h",
+    ]
+    deps += [
+      "//gpu/command_buffer/client",
+      "//gpu/ipc/client",
     ]
   }
 
@@ -299,8 +290,12 @@ component("capture_lib") {
       "video/chromeos/capture_metadata_dispatcher.h",
       "video/chromeos/display_rotation_observer.cc",
       "video/chromeos/display_rotation_observer.h",
-      "video/chromeos/gpu_memory_buffer_tracker.cc",
-      "video/chromeos/gpu_memory_buffer_tracker.h",
+      "video/chromeos/gpu_memory_buffer_tracker_cros.cc",
+      "video/chromeos/gpu_memory_buffer_tracker_cros.h",
+      "video/chromeos/jpeg_accelerator_provider.cc",
+      "video/chromeos/jpeg_accelerator_provider.h",
+      "video/chromeos/mojo_service_manager_observer.cc",
+      "video/chromeos/mojo_service_manager_observer.h",
       "video/chromeos/pixel_format_utils.cc",
       "video/chromeos/pixel_format_utils.h",
       "video/chromeos/request_builder.cc",
@@ -334,14 +329,19 @@ component("capture_lib") {
     deps += [
       "//ash/constants",
       "//build/config/linux/libdrm",
-      "//chromeos/components/sensors:sensors",
+      "//chromeos/ash/components/mojo_service_manager",
       "//chromeos/dbus/power",
       "//components/chromeos_camera:mojo_mjpeg_decode_accelerator",
       "//components/chromeos_camera/common",
       "//components/device_event_log",
       "//gpu/ipc/common:common",
       "//media/capture/video/chromeos/mojom:cros_camera",
+      "//media/capture/video/chromeos/mojom:jpeg_accelerator",
       "//third_party/libsync",
+    ]
+    data_deps = [
+      ":camera_hal_dispatcher_mojo_policy",
+      ":jpeg_accelerator_mojo_policy",
     ]
   }
 
@@ -354,7 +354,7 @@ component("capture_lib") {
     ]
     deps += [
       "//media/fuchsia/common",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3:fuchsia.camera3_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
       "//third_party/libyuv",
     ]
@@ -446,6 +446,7 @@ test("capture_unittests") {
     "//media/capture/mojom:image_capture",
     "//media/capture/mojom:image_capture_types",
     "//mojo/core/embedder",
+    "//services/video_capture/public/mojom",
     "//testing/gmock",
     "//testing/gtest",
     "//third_party/libyuv:libyuv",
@@ -455,8 +456,16 @@ test("capture_unittests") {
   if (is_linux || is_chromeos_lacros) {
     sources += [
       "video/linux/v4l2_capture_delegate_unittest.cc",
-      "video/linux/video_capture_device_factory_linux_unittest.cc",
+      "video/linux/video_capture_device_factory_v4l2_unittest.cc",
     ]
+  }
+
+  if (is_linux) {
+    sources += [
+      "video/linux/v4l2_capture_delegate_gpu_helper_unittest.cc",
+      "video/linux/v4l2_gpu_memory_buffer_tracker_unittest.cc",
+    ]
+    data += [ "//media/test/data/one_frame_1280x720.mjpeg" ]
   }
 
   if (is_android) {
@@ -469,8 +478,8 @@ test("capture_unittests") {
   if (is_fuchsia) {
     deps += [
       "//media/fuchsia/camera:test_support",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3:fuchsia.camera3_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
     ]
     sources += [
@@ -478,58 +487,45 @@ test("capture_unittests") {
       "video/fuchsia/video_capture_device_fuchsia_test.cc",
     ]
     additional_manifest_fragments =
-        [ "//media/fuchsia/test_support.shard.test-cml" ]
+        [ "//build/config/fuchsia/test/sysmem.shard.test-cml" ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
-      "video/mac/pixel_buffer_pool_mac_unittest.mm",
-      "video/mac/pixel_buffer_transferer_mac_unittest.mm",
-      "video/mac/sample_buffer_transformer_mac_unittest.mm",
-      "video/mac/test/fake_av_capture_device_format.h",
-      "video/mac/test/fake_av_capture_device_format.mm",
-      "video/mac/test/mock_video_capture_device_avfoundation_frame_receiver_mac.h",
-      "video/mac/test/mock_video_capture_device_avfoundation_frame_receiver_mac.mm",
-      "video/mac/test/pixel_buffer_test_utils_mac.cc",
-      "video/mac/test/pixel_buffer_test_utils_mac.h",
-      "video/mac/test/video_capture_test_utils_mac.h",
-      "video/mac/test/video_capture_test_utils_mac.mm",
-      "video/mac/video_capture_device_avfoundation_mac_unittest.mm",
-      "video/mac/video_capture_device_factory_mac_unittest.mm",
-      "video/mac/video_capture_device_mac_unittest.mm",
-      "video/mac/video_capture_metrics_mac_unittest.mm",
+      "video/apple/pixel_buffer_pool_unittest.mm",
+      "video/apple/pixel_buffer_transferer_unittest.mm",
+      "video/apple/sample_buffer_transformer_unittest.mm",
+      "video/apple/test/fake_av_capture_device_format.h",
+      "video/apple/test/fake_av_capture_device_format.mm",
+      "video/apple/test/mock_video_capture_device_avfoundation_frame_receiver.h",
+      "video/apple/test/mock_video_capture_device_avfoundation_frame_receiver.mm",
+      "video/apple/test/pixel_buffer_test_utils.cc",
+      "video/apple/test/pixel_buffer_test_utils.h",
+      "video/apple/test/video_capture_test_utils.h",
+      "video/apple/test/video_capture_test_utils.mm",
+      "video/apple/video_capture_device_apple_unittest.mm",
+      "video/apple/video_capture_device_avfoundation_unittest.mm",
+      "video/apple/video_capture_device_factory_unittest.mm",
     ]
     frameworks = [
+      "IOSurface.framework",
       "AVFoundation.framework",
       "CoreMedia.framework",
       "CoreVideo.framework",
-      "IOSurface.framework",
     ]
+  }
+
+  if (is_mac) {
+    sources += [ "video/mac/video_capture_metrics_mac_unittest.mm" ]
     deps += [ "//third_party/ocmock" ]
   }
 
-  if (is_win) {
-    sources += [
-      "video/win/d3d_capture_test_utils.cc",
-      "video/win/d3d_capture_test_utils.h",
-      "video/win/gpu_memory_buffer_tracker_unittest.cc",
-      "video/win/video_capture_device_factory_win_unittest.cc",
-      "video/win/video_capture_device_mf_win_unittest.cc",
-    ]
-    libs = [
-      "mf.lib",
-      "mfplat.lib",
-      "mfreadwrite.lib",
-      "mfuuid.lib",
-      "dxguid.lib",
-    ]
-    ldflags = [
-      "/DELAYLOAD:mf.dll",
-      "/DELAYLOAD:mfplat.dll",
-      "/DELAYLOAD:mfreadwrite.dll",
-    ]
+  if (is_ios) {
+    deps += [ "//media:unit_tests_bundle_data" ]
+  }
 
-    deps += [ "//media/base/win:media_foundation_util" ]
+  if (is_win) {
+    deps += [ "video/win:win_unittests" ]
   }
 
   if (is_chromeos) {
@@ -552,6 +548,7 @@ test("capture_unittests") {
     ]
     deps += [
       "//build/config/linux/libdrm",
+      "//chromeos/ash/components/mojo_service_manager",
       "//media/capture/video/chromeos/mojom:cros_camera",
       "//media/capture/video/chromeos/public",
       "//mojo/core/embedder",
@@ -559,4 +556,15 @@ test("capture_unittests") {
       "//third_party/minigbm",
     ]
   }
+}
+
+# TODO(crbug.com/1484229): Move platform-specific files/targets into subdirectories.
+copy("camera_hal_dispatcher_mojo_policy") {
+  sources = [ "video/chromeos/camera_hal_dispatcher_mojo_policy.jsonc" ]
+  outputs = [ "$root_out_dir/mojo_service_manager/{{source_file_part}}" ]
+}
+
+copy("jpeg_accelerator_mojo_policy") {
+  sources = [ "video/chromeos/jpeg_accelerator_mojo_policy.jsonc" ]
+  outputs = [ "$root_out_dir/mojo_service_manager/{{source_file_part}}" ]
 }

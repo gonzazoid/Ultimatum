@@ -6,8 +6,9 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/system/platform_handle.h"
@@ -100,8 +101,8 @@ void MojoMjpegDecodeAccelerator::OnDecodeAck(
   // Only NotifyError once.
   // Client::NotifyError() may trigger deletion of |this|, so calling it needs
   // to be the last thing done on this stack!
-  MjpegDecodeAccelerator::Client* client = nullptr;
-  std::swap(client, client_);
+  MjpegDecodeAccelerator::Client* client = client_;
+  client_ = nullptr;
   client->NotifyError(bitstream_buffer_id, error);
 }
 

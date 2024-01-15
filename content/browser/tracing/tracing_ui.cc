@@ -7,16 +7,17 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ref_counted_memory.h"
@@ -40,7 +41,6 @@
 #include "content/public/common/url_constants.h"
 #include "services/tracing/public/cpp/perfetto/perfetto_config.h"
 #include "services/tracing/public/cpp/perfetto/perfetto_session.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/perfetto/include/perfetto/tracing/tracing.h"
 #include "third_party/perfetto/protos/perfetto/common/trace_stats.gen.h"
 
@@ -52,13 +52,13 @@ constexpr char kStreamFormatJSON[] = "json";
 perfetto::TracingSession* g_tracing_session = nullptr;
 
 void OnGotCategories(WebUIDataSource::GotDataCallback callback,
-                     const std::set<std::string>& categorySet) {
-  base::ListValue category_list;
-  for (auto it = categorySet.begin(); it != categorySet.end(); it++) {
-    category_list.Append(*it);
+                     const std::set<std::string>& category_set) {
+  base::Value::List category_list;
+  for (const std::string& category : category_set) {
+    category_list.Append(category);
   }
 
-  scoped_refptr<base::RefCountedString> res(new base::RefCountedString());
+  auto res = base::MakeRefCounted<base::RefCountedString>();
   base::JSONWriter::Write(category_list, &res->data());
   std::move(callback).Run(res);
 }
@@ -74,8 +74,7 @@ bool BeginRecording(const std::string& data64,
 
   // TODO(skyostil): Migrate all use cases from TracingController to Perfetto.
   if (stream_format == kStreamFormatProtobuf) {
-    if (g_tracing_session)
-      delete g_tracing_session;
+    delete g_tracing_session;
     g_tracing_session =
         perfetto::Tracing::NewTrace(perfetto::BackendType::kCustomBackend)
             .release();
@@ -261,25 +260,26 @@ bool TracingUI::GetTracingOptions(const std::string& data64,
     return false;
   }
 
-  absl::optional<base::Value> options = base::JSONReader::Read(data);
+  std::optional<base::Value> options = base::JSONReader::Read(data);
   if (!options) {
     LOG(ERROR) << "Options were not valid JSON";
     return false;
   }
-  if (!options->is_dict()) {
+  base::Value::Dict* options_dict = options->GetIfDict();
+  if (!options_dict) {
     LOG(ERROR) << "Options must be dict";
     return false;
   }
 
   if (const std::string* stream_format =
-          options->FindStringKey(kStreamFormat)) {
+          options_dict->FindString(kStreamFormat)) {
     out_stream_format = *stream_format;
   } else {
     out_stream_format = kStreamFormatJSON;
   }
 
-  // New style options dictionary.
-  trace_config = base::trace_event::TraceConfig(*options);
+  // New-style options dictionary.
+  trace_config = base::trace_event::TraceConfig(*options_dict);
   return true;
 }
 

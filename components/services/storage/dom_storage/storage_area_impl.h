@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
@@ -321,7 +321,7 @@ class StorageAreaImpl : public blink::mojom::StorageArea {
   std::vector<uint8_t> prefix_;
   mojo::ReceiverSet<blink::mojom::StorageArea> receivers_;
   mojo::RemoteSet<blink::mojom::StorageAreaObserver> observers_;
-  raw_ptr<Delegate> delegate_;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;
   raw_ptr<AsyncDomStorageDatabase> database_;
 
   // For commits to work correctly the map loaded state (keys vs keys & values)

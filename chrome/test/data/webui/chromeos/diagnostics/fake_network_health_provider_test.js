@@ -2,14 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
+
 import {fakeCellularNetwork, fakeEthernetNetwork, fakeNetworkGuidInfoList, fakeWifiNetwork} from 'chrome://diagnostics/fake_data.js';
 import {FakeNetworkHealthProvider} from 'chrome://diagnostics/fake_network_health_provider.js';
 import {NetworkListObserverRemote, NetworkStateObserverRemote} from 'chrome://diagnostics/network_health_provider.mojom-webui.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import {assertDeepEquals, assertEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-import {assertDeepEquals, assertEquals, assertTrue} from '../../chai_assert.js';
-
-export function fakeNetworkHealthProviderTestSuite() {
+suite('fakeNetworkHealthProviderTestSuite', function() {
   /** @type {?FakeNetworkHealthProvider} */
   let provider = null;
 
@@ -112,4 +113,4 @@ export function fakeNetworkHealthProviderTestSuite() {
                 ethernetNetworkStateObserverRemote, 'ethernetGuid'))
         .then(() => ethernetResolver.promise);
   });
-}
+});

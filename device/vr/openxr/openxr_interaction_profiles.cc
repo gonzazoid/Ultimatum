@@ -5,8 +5,13 @@
 #include "device/vr/openxr/openxr_interaction_profiles.h"
 
 #include "base/no_destructor.h"
+#include "device/vr/openxr/openxr_interaction_profile_paths.h"
+#include "device/vr/public/mojom/openxr_interaction_profile_type.mojom.h"
 
 namespace device {
+
+using device::mojom::OpenXrInteractionProfileType;
+
 OpenXrSystemInputProfiles::OpenXrSystemInputProfiles(
     std::string system_name,
     std::vector<std::string> input_profiles)
@@ -62,7 +67,7 @@ GetOpenXrInputProfilesMap() {
           // Microsoft Motion Controller
           {OpenXrInteractionProfileType::kMicrosoftMotion,
            {{"",
-             {"windows-mixed-reality",
+             {"microsoft-mixed-reality", "windows-mixed-reality",
               "generic-trigger-squeeze-touchpad-thumbstick"}}}},
 
           // Khronos Simple Controller
@@ -95,7 +100,8 @@ GetOpenXrInputProfilesMap() {
           // Samsung Odyssey
           {OpenXrInteractionProfileType::kSamsungOdyssey,
            {{"",
-             {"samsung-odyssey", "windows-mixed-reality",
+             {"samsung-odyssey", "microsoft-mixed-reality",
+              "windows-mixed-reality",
               "generic-trigger-squeeze-touchpad-thumbstick"}}}},
 
           // HP Reverb G2
@@ -110,6 +116,18 @@ GetOpenXrInputProfilesMap() {
           // Vive Cosmos
           {OpenXrInteractionProfileType::kViveCosmos,
            {{"", {"htc-vive-cosmos", "generic-trigger-squeeze-thumbstick"}}}},
+
+          // EXT Hand Interaction
+          {OpenXrInteractionProfileType::kExtHand,
+           {{"", {"generic-hand-select-grasp", "generic-hand-select"}}}},
+
+          // XR_ANDROID_hand_gestures
+          {OpenXrInteractionProfileType::kAndroidHandGestures,
+           {{"", {"generic-hand-select", "generic-button"}}}},
+
+          // XR_FB_hand_tracking_aim
+          {OpenXrInteractionProfileType::kMetaHandAim,
+           {{"", {"generic-hand-select", "generic-button"}}}},
       });
   return *kInputProfilesMap;
 }
@@ -153,7 +171,8 @@ GetOpenXrControllerInteractionProfiles() {
           // Samsung Odyssey
           {OpenXrInteractionProfileType::kSamsungOdyssey,
            kSamsungOdysseyInteractionProfilePath,
-           /*required_extension=*/kExtSamsungOdysseyControllerExtensionName,
+           /*required_extension=*/
+           XR_EXT_SAMSUNG_ODYSSEY_CONTROLLER_EXTENSION_NAME,
            GamepadMapping::kXrStandard,
            /*common_button_maps=*/
            {
@@ -234,6 +253,8 @@ GetOpenXrControllerInteractionProfiles() {
                     {OpenXrButtonActionType::kPress, "/input/y/click"},
                     {OpenXrButtonActionType::kTouch, "/input/y/touch"},
                 }},
+               {OpenXrButtonType::kMenu,
+                {{OpenXrButtonActionType::kPress, "/input/menu/click"}}},
            },
            /*right_button_maps=*/
            {
@@ -330,7 +351,8 @@ GetOpenXrControllerInteractionProfiles() {
           // HP Reverb G2
           {OpenXrInteractionProfileType::kHPReverbG2,
            kHPReverbG2InteractionProfilePath,
-           /*required_extension=*/kExtHPMixedRealityControllerExtensionName,
+           /*required_extension=*/
+           XR_EXT_HP_MIXED_REALITY_CONTROLLER_EXTENSION_NAME,
            GamepadMapping::kXrStandard,
            /*common_button_maps=*/
            {
@@ -380,7 +402,7 @@ GetOpenXrControllerInteractionProfiles() {
           // Microsoft Hands Profile
           {OpenXrInteractionProfileType::kHandSelectGrasp,
            kHandSelectGraspInteractionProfilePath,
-           /*required_extension=*/kMSFTHandInteractionExtensionName,
+           /*required_extension=*/XR_MSFT_HAND_INTERACTION_EXTENSION_NAME,
            GamepadMapping::kXrStandard,
            /*common_button_maps=*/
            {
@@ -403,7 +425,8 @@ GetOpenXrControllerInteractionProfiles() {
           // Vive Cosmos
           {OpenXrInteractionProfileType::kViveCosmos,
            kHTCViveCosmosInteractionProfilePath,
-           /*required_extension=*/XR_HTC_VIVE_COSMOS_CONTROLLER_INTERACTION_EXTENSION_NAME,
+           /*required_extension=*/
+           XR_HTC_VIVE_COSMOS_CONTROLLER_INTERACTION_EXTENSION_NAME,
            GamepadMapping::kXrStandard,
            /*common_button_maps=*/
            {
@@ -453,6 +476,29 @@ GetOpenXrControllerInteractionProfiles() {
                {OpenXrAxisType::kThumbstick, "/input/thumbstick"},
            }},
           // Vive Cosmos
+
+          // EXT Hands Profile
+          {OpenXrInteractionProfileType::kExtHand,
+           kExtHandInteractionProfilePath,
+           /*required_extension=*/XR_EXT_HAND_INTERACTION_EXTENSION_NAME,
+           GamepadMapping::kXrStandard,
+           /*common_button_maps=*/
+           {
+               {OpenXrButtonType::kTrigger,
+                {
+                    {OpenXrButtonActionType::kPress, "/input/pinch_ext/value"},
+                    {OpenXrButtonActionType::kValue, "/input/pinch_ext/value"},
+                }},
+               {OpenXrButtonType::kGrasp,
+                {
+                    {OpenXrButtonActionType::kPress, "/input/grasp_ext/value"},
+                    {OpenXrButtonActionType::kValue, "/input/grasp_ext/value"},
+                }},
+           },
+           /*left_button_maps=*/{},
+           /*right_button_maps=*/{},
+           /*axis_maps=*/{}},
+          // EXT Hands Profile
       });
   return *kOpenXrControllerInteractionProfiles;
 }

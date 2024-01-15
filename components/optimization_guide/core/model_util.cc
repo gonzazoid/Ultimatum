@@ -7,12 +7,16 @@
 #include "base/base64.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
+#include "base/hash/legacy_hash.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/optimization_guide/core/optimization_guide_switches.h"
+#include "components/optimization_guide/proto/models.pb.h"
 #include "net/base/url_util.h"
 #include "url/url_canon.h"
 
@@ -62,8 +66,6 @@ std::string GetStringNameForOptimizationTarget(
       return "SegmentationQueryTiles";
     case proto::OPTIMIZATION_TARGET_PAGE_VISIBILITY:
       return "PageVisibility";
-    case proto::OPTIMIZATION_TARGET_AUTOFILL_ASSISTANT:
-      return "AutofillAssistant";
     case proto::OPTIMIZATION_TARGET_PAGE_TOPICS_V2:
       return "PageTopicsV2";
     case proto::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT:
@@ -86,6 +88,39 @@ std::string GetStringNameForOptimizationTarget(
       return "OmniboxOnDeviceTailSuggest";
     case proto::OPTIMIZATION_TARGET_CLIENT_SIDE_PHISHING:
       return "ClientSidePhishing";
+    case proto::OPTIMIZATION_TARGET_OMNIBOX_URL_SCORING:
+      return "OmniboxUrlScoring";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_DEVICE_SWITCHER:
+      return "SegmentationDeviceSwitcher";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_ADAPTIVE_TOOLBAR:
+      return "SegmentationAdaptiveToolbar";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_TABLET_PRODUCTIVITY_USER:
+      return "SegmentationTabletProductivityUser";
+    case proto::OPTIMIZATION_TARGET_CLIENT_SIDE_PHISHING_IMAGE_EMBEDDER:
+      return "ClientSidePhishingImageEmbedder";
+    case proto::
+        OPTIMIZATION_TARGET_NEW_TAB_PAGE_HISTORY_CLUSTERS_MODULE_RANKING:
+      return "NewTabPageHistoryClustersModuleRanking";
+    case proto::OPTIMIZATION_TARGET_WEB_APP_INSTALLATION_PROMO:
+      return "WebAppInstallationPromo";
+    case proto::OPTIMIZATION_TARGET_TEXT_EMBEDDER:
+      return "TextEmbedder";
+    case proto::OPTIMIZATION_TARGET_VISUAL_SEARCH_CLASSIFICATION:
+      return "VisualSearchClassification";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_BOTTOM_TOOLBAR:
+      return "SegmentationBottomToolbar";
+    case proto::OPTIMIZATION_TARGET_AUTOFILL_FIELD_CLASSIFICATION:
+      return "AutofillFieldTypeClassification";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_IOS_MODULE_RANKER:
+      return "SegmentationIosModuleRanker";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_DESKTOP_NTP_MODULE:
+      return "SegmentationDesktopNtpModule";
+    case proto::OPTIMIZATION_TARGET_PRELOADING_HEURISTICS:
+      return "PreloadingHeuristics";
+    case proto::OPTIMIZATION_TARGET_TEXT_SAFETY:
+      return "TextSafety";
+    case proto::OPTIMIZATION_TARGET_SEGMENTATION_ANDROID_HOME_MODULE_RANKER:
+      return "SegmentationAndroidHomeModuleRanker";
       // Whenever a new value is added, make sure to add it to the OptTarget
       // variant list in
       // //tools/metrics/histograms/metadata/optimization/histograms.xml.
@@ -195,6 +230,56 @@ bool CheckAllPathsExist(
     }
   }
   return true;
+}
+
+base::FilePath ConvertToRelativePath(const base::FilePath& parent,
+                                     const base::FilePath& child) {
+  DCHECK(parent.IsAbsolute());
+  DCHECK(child.IsAbsolute());
+  DCHECK(parent.IsParent(child));
+  const auto parent_components = parent.GetComponents();
+  const auto child_components = child.GetComponents();
+  base::FilePath relative_path;
+  for (size_t i = parent_components.size(); i < child_components.size(); i++) {
+    relative_path = relative_path.Append(child_components[i]);
+  }
+  return relative_path;
+}
+
+std::string GetModelCacheKeyHash(proto::ModelCacheKey model_cache_key) {
+  std::string bytes;
+  model_cache_key.SerializeToString(&bytes);
+  uint64_t hash =
+      base::legacy::CityHash64(base::as_bytes(base::make_span(bytes)));
+  // Convert the hash to hex encoding and not as base64 and other encodings,
+  // since it will be used as filepath names.
+  return base::HexEncode(base::as_bytes(base::make_span(&hash, 1u)));
+}
+
+void RecordPredictionModelStoreModelRemovalVersionHistogram(
+    proto::OptimizationTarget optimization_target,
+    PredictionModelStoreModelRemovalReason model_removal_reason) {
+  base::UmaHistogramEnumeration(
+      "OptimizationGuide.PredictionModelStore.ModelRemovalReason",
+      model_removal_reason);
+  base::UmaHistogramEnumeration(
+      "OptimizationGuide.PredictionModelStore.ModelRemovalReason." +
+          GetStringNameForOptimizationTarget(optimization_target),
+      model_removal_reason);
+}
+
+bool IsPredictionModelVersionInKillSwitch(
+    const std::map<proto::OptimizationTarget, std::set<int64_t>>&
+        killswitch_model_versions,
+    proto::OptimizationTarget opt_target,
+    int64_t model_version) {
+  auto killswitch_model_versions_it =
+      killswitch_model_versions.find(opt_target);
+  if (killswitch_model_versions_it == killswitch_model_versions.end()) {
+    return false;
+  }
+  return killswitch_model_versions_it->second.find(model_version) !=
+         killswitch_model_versions_it->second.end();
 }
 
 }  // namespace optimization_guide

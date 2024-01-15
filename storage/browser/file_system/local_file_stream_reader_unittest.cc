@@ -9,20 +9,25 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_callback_support.h"
+#include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/file_access/scoped_file_access.h"
 #include "components/file_access/scoped_file_access_delegate.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -41,20 +46,6 @@ namespace storage {
 namespace {
 
 using ::testing::_;
-
-class MockScopedFileAccessDelegate
-    : public file_access::ScopedFileAccessDelegate {
- public:
-  MOCK_METHOD3(
-      RequestFilesAccess,
-      void(const std::vector<base::FilePath>& files,
-           const GURL& destination_url,
-           base::OnceCallback<void(file_access::ScopedFileAccess)> callback));
-  MOCK_METHOD2(
-      RequestFilesAccessForSystem,
-      void(const std::vector<base::FilePath>& files,
-           base::OnceCallback<void(file_access::ScopedFileAccess)> callback));
-};
 
 file_access::ScopedFileAccess CreateScopedFileAccess(bool allowed) {
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
@@ -81,22 +72,30 @@ class LocalFileStreamReaderTest : public FileStreamReaderTest {
     file_thread_.Stop();
     base::RunLoop().RunUntilIdle();
   }
-
   std::unique_ptr<FileStreamReader> CreateFileReader(
       const std::string& file_name,
       int64_t initial_offset,
       const base::Time& expected_modification_time) override {
+    return CreateFileReader(file_name, initial_offset,
+                            expected_modification_time, base::NullCallback());
+  }
+
+  std::unique_ptr<FileStreamReader> CreateFileReader(
+      const std::string& file_name,
+      int64_t initial_offset,
+      const base::Time& expected_modification_time,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access) {
     return FileStreamReader::CreateForLocalFile(
         file_task_runner(), test_dir().AppendASCII(file_name), initial_offset,
-        expected_modification_time);
+        expected_modification_time, std::move(file_access));
   }
 
   void WriteFile(const std::string& file_name,
-                 const char* buf,
-                 size_t buf_size,
+                 std::string_view data,
                  base::Time* modification_time) override {
     base::FilePath path = test_dir().AppendASCII(file_name);
-    base::WriteFile(path, buf, buf_size);
+    base::WriteFile(path, data);
 
     base::File::Info file_info;
     ASSERT_TRUE(base::GetFileInfo(path, &file_info));
@@ -135,52 +134,100 @@ INSTANTIATE_TYPED_TEST_SUITE_P(Local,
                                FileStreamReaderTypedTest,
                                LocalFileStreamReaderTest);
 
-// TODO(crbug.com/1354502): Use RequestFileAccess() instead of
-// RequestFileAccessForSystem() when destionion URLs can be obtained in
-// //storage/.
+// TODO(b/265908846): Replace direct call to
+// file_access::ScopedFileAccessDelegate with getting access through a callback.
 TEST_F(LocalFileStreamReaderTest, ReadAllowedByDataLeakPrevention) {
   this->WriteTestFile();
   std::unique_ptr<FileStreamReader> reader(
       this->CreateFileReader(std::string(this->kTestFileName), 0,
                              this->test_file_modification_time()));
 
-  MockScopedFileAccessDelegate scoped_file_access_delegate;
-  EXPECT_CALL(scoped_file_access_delegate, RequestFilesAccessForSystem(_, _))
-      .WillOnce([&](const std::vector<base::FilePath>& files,
-                    base::OnceCallback<void(file_access::ScopedFileAccess)>
-                        callback) {
-        std::move(callback).Run(CreateScopedFileAccess(true));
-      });
+  base::MockRepeatingCallback<void(
+      const std::vector<base::FilePath>&,
+      base::OnceCallback<void(file_access::ScopedFileAccess)>)>
+      callback;
+  file_access::ScopedFileAccessDelegate::
+      ScopedRequestFilesAccessCallbackForTesting file_access_callback(
+          callback.Get());
+  EXPECT_CALL(
+      callback,
+      Run(testing::ElementsAre(test_dir().AppendASCII(kTestFileName)), _))
+      .WillOnce(base::test::RunOnceCallback<1>(CreateScopedFileAccess(true)));
 
-  int result = 0;
-  std::string data;
-  ReadFromReader(reader.get(), &data, this->kTestData.size(), &result);
-  ASSERT_EQ(net::OK, result);
-  ASSERT_EQ(this->kTestData, data);
+  auto data_or_error =
+      ReadFromReader(*reader, /*bytes_to_read=*/this->kTestData.size());
+  ASSERT_TRUE(data_or_error.has_value());
+  EXPECT_EQ(data_or_error.value(), this->kTestData);
 }
 
-// TODO(crbug.com/1354502): Use RequestFileAccess() instead of
-// RequestFileAccessForSystem() when destionion URLs can be obtained in
-// //storage/.
+// TODO(b/265908846): Replace direct call to
+// file_access::ScopedFileAccessDelegate with getting access through a callback.
 TEST_F(LocalFileStreamReaderTest, ReadBlockedByDataLeakPrevention) {
   this->WriteTestFile();
   std::unique_ptr<FileStreamReader> reader(
       this->CreateFileReader(std::string(this->kTestFileName), 0,
                              this->test_file_modification_time()));
 
-  MockScopedFileAccessDelegate scoped_file_access_delegate;
-  EXPECT_CALL(scoped_file_access_delegate, RequestFilesAccessForSystem(_, _))
-      .WillOnce([&](const std::vector<base::FilePath>& files,
-                    base::OnceCallback<void(file_access::ScopedFileAccess)>
-                        callback) {
-        std::move(callback).Run(CreateScopedFileAccess(false));
-      });
+  base::MockRepeatingCallback<void(
+      const std::vector<base::FilePath>&,
+      base::OnceCallback<void(file_access::ScopedFileAccess)>)>
+      callback;
+  file_access::ScopedFileAccessDelegate::
+      ScopedRequestFilesAccessCallbackForTesting file_access_callback(
+          callback.Get());
+  EXPECT_CALL(
+      callback,
+      Run(testing::ElementsAre(test_dir().AppendASCII(kTestFileName)), _))
+      .WillOnce(base::test::RunOnceCallback<1>(CreateScopedFileAccess(false)));
 
-  int result = 0;
-  std::string data;
-  ReadFromReader(reader.get(), &data, this->kTestData.size(), &result);
-  ASSERT_EQ(net::ERR_ACCESS_DENIED, result);
-  ASSERT_EQ("", data);
+  auto data_or_error =
+      ReadFromReader(*reader, /*bytes_to_read=*/this->kTestData.size());
+  ASSERT_FALSE(data_or_error.has_value());
+  EXPECT_EQ(data_or_error.error(), net::ERR_ACCESS_DENIED);
+}
+
+TEST_F(LocalFileStreamReaderTest, ReadAllowedByDataLeakPreventionCallback) {
+  this->WriteTestFile();
+  base::MockRepeatingCallback<void(
+      const std::vector<base::FilePath>&,
+      base::OnceCallback<void(file_access::ScopedFileAccess)>)>
+      callback;
+  EXPECT_CALL(
+      callback,
+      Run(testing::ElementsAre(test_dir().AppendASCII(kTestFileName)), _))
+      .WillOnce(base::test::RunOnceCallback<1>(CreateScopedFileAccess(true)));
+
+  std::unique_ptr<FileStreamReader> reader(this->CreateFileReader(
+      std::string(this->kTestFileName), 0, this->test_file_modification_time(),
+      callback.Get()));
+
+  auto data_or_error =
+      ReadFromReader(*reader, /*bytes_to_read=*/this->kTestData.size());
+  ASSERT_TRUE(data_or_error.has_value());
+  EXPECT_EQ(data_or_error.value(), this->kTestData);
+}
+
+TEST_F(LocalFileStreamReaderTest, ReadBlockedByDataLeakPreventionCallback) {
+  this->WriteTestFile();
+  base::MockRepeatingCallback<void(
+      const std::vector<base::FilePath>&,
+      base::OnceCallback<void(file_access::ScopedFileAccess)>)>
+      callback;
+  file_access::ScopedFileAccessDelegate::
+      ScopedRequestFilesAccessCallbackForTesting file_access_callback(
+          callback.Get());
+  EXPECT_CALL(
+      callback,
+      Run(testing::ElementsAre(test_dir().AppendASCII(kTestFileName)), _))
+      .WillOnce(base::test::RunOnceCallback<1>(CreateScopedFileAccess(false)));
+  std::unique_ptr<FileStreamReader> reader(this->CreateFileReader(
+      std::string(this->kTestFileName), 0, this->test_file_modification_time(),
+      callback.Get()));
+
+  auto data_or_error =
+      ReadFromReader(*reader, /*bytes_to_read=*/this->kTestData.size());
+  ASSERT_FALSE(data_or_error.has_value());
+  EXPECT_EQ(data_or_error.error(), net::ERR_ACCESS_DENIED);
 }
 
 }  // namespace storage

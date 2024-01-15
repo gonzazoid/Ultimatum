@@ -8,7 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/weak_ptr.h"
+#include "chromeos/components/quick_answers/quick_answers_model.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
 namespace base {
@@ -17,15 +19,13 @@ class Value;
 
 namespace quick_answers {
 
-struct QuickAnswer;
-
 // Parser for extracting quick answer result out of the search response.
 class SearchResponseParser {
  public:
-  // Callback used when parsing of |quick_answer| is complete. Note that
-  // |quick_answer| may be |nullptr|.
-  using SearchResponseParserCallback =
-      base::OnceCallback<void(std::unique_ptr<QuickAnswer> quick_answer)>;
+  // Callback used when parsing of `quick_answers_session` is complete. Note
+  // that `quick_answers_session` may be `nullptr`.
+  using SearchResponseParserCallback = base::OnceCallback<void(
+      std::unique_ptr<QuickAnswersSession> quick_answers_session)>;
 
   explicit SearchResponseParser(SearchResponseParserCallback complete_callback);
   ~SearchResponseParser();
@@ -40,9 +40,11 @@ class SearchResponseParser {
   void OnJsonParsed(data_decoder::DataDecoder::ValueOrError result);
   //  void OnJSONParseFailed(const std::string& error_message);
 
-  bool ProcessResult(const base::Value* result, QuickAnswer* quick_answer);
+  std::unique_ptr<QuickAnswersSession> ProcessResult(const base::Value* result);
 
   SearchResponseParserCallback complete_callback_;
+
+  base::WeakPtrFactory<SearchResponseParser> weak_factory_{this};
 };
 
 }  // namespace quick_answers

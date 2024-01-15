@@ -6,10 +6,10 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -166,7 +166,8 @@ void ChromeSpeechRecognitionManagerDelegate::CheckRenderFrameType(
       view_type == extensions::mojom::ViewType::kAppWindow ||
       view_type == extensions::mojom::ViewType::kComponent ||
       view_type == extensions::mojom::ViewType::kExtensionPopup ||
-      view_type == extensions::mojom::ViewType::kExtensionBackgroundPage) {
+      view_type == extensions::mojom::ViewType::kExtensionBackgroundPage ||
+      view_type == extensions::mojom::ViewType::kExtensionSidePanel) {
     // If it is a tab, we can check for permission. For apps, this means
     // manifest would be checked for permission.
     allowed = true;

@@ -5,6 +5,7 @@
 #ifndef UI_ACCESSIBILITY_AX_TREE_OBSERVER_H_
 #define UI_ACCESSIBILITY_AX_TREE_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_export.h"
@@ -33,9 +34,11 @@ class AX_EXPORT AXTreeObserver : public base::CheckedObserver {
   // callstack. Do not hold a reference to the node or any relative nodes such
   // as ancestors or descendants described by the node or its node data outside
   // of these events.
-  virtual void OnIgnoredWillChange(AXTree* tree,
-                                   AXNode* node,
-                                   bool is_ignored_new_value) {}
+  virtual void OnIgnoredWillChange(
+      AXTree* tree,
+      AXNode* node,
+      bool is_ignored_new_value,
+      bool is_changing_unignored_parents_children) {}
   virtual void OnNodeDataWillChange(AXTree* tree,
                                     const AXNodeData& old_node_data,
                                     const AXNodeData& new_node_data) {}
@@ -134,6 +137,10 @@ class AX_EXPORT AXTreeObserver : public base::CheckedObserver {
   // updating.
   virtual void OnNodeChanged(AXTree* tree, AXNode* node) {}
 
+  // Called when a child tree hosted by `host_node` is connected or
+  // disconnected.
+  virtual void OnChildTreeConnectionChanged(AXNode* host_node) {}
+
   // Called just before a tree manager is removed from the AXTreeManagerMap.
   //
   // Why is this needed?
@@ -142,6 +149,9 @@ class AX_EXPORT AXTreeObserver : public base::CheckedObserver {
   // observers list of that AXTree might need to be notified of that change to
   // remove themselves from the list, if needed.
   virtual void OnTreeManagerWillBeRemoved(AXTreeID previous_tree_id) {}
+
+  virtual void OnTextDeletionOrInsertion(const AXNode& node,
+                                         const AXNodeData& new_data) {}
 
   enum ChangeType {
     NODE_CREATED,
@@ -156,7 +166,7 @@ class AX_EXPORT AXTreeObserver : public base::CheckedObserver {
       this->node = node;
       this->type = type;
     }
-    AXNode* node;
+    raw_ptr<AXNode> node;
     ChangeType type;
   };
 

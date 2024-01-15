@@ -16,7 +16,7 @@
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/stl_util.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chrome/browser/privacy_budget/representative_surface_set.h"
 #include "chrome/browser/privacy_budget/surface_set_equivalence.h"
 #include "chrome/common/privacy_budget/field_trial_param_conversions.h"
@@ -50,7 +50,7 @@ SurfaceSetValuation::~SurfaceSetValuation() = default;
 const double SurfaceSetValuation::kDefaultCost;
 
 double SurfaceSetValuation::Cost(const IdentifiableSurfaceSet& set) const {
-  return Cost(equivalence_sets_.GetRepresentatives(set));
+  return Cost(equivalence_sets_->GetRepresentatives(set));
 }
 
 double SurfaceSetValuation::Cost(const RepresentativeSurfaceSet& set) const {
@@ -66,7 +66,7 @@ double SurfaceSetValuation::Cost(const RepresentativeSurfaceSet& set) const {
 }
 
 double SurfaceSetValuation::Cost(blink::IdentifiableSurface surface) const {
-  return Cost(equivalence_sets_.GetRepresentative(surface));
+  return Cost(equivalence_sets_->GetRepresentative(surface));
 }
 
 double SurfaceSetValuation::Cost(RepresentativeSurface surface) const {

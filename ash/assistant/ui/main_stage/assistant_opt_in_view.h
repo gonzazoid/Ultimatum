@@ -7,6 +7,7 @@
 
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
@@ -44,11 +45,11 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantOptInView
 
   void OnButtonPressed();
 
-  views::StyledLabel* label_;  // Owned by view hierarchy.
+  raw_ptr<views::StyledLabel> label_;  // Owned by view hierarchy.
 
-  views::Button* container_;
+  raw_ptr<views::Button> container_;
 
-  AssistantViewDelegate* delegate_;
+  raw_ptr<AssistantViewDelegate> delegate_;
 };
 
 }  // namespace ash

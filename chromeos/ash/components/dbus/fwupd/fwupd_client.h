@@ -14,6 +14,7 @@
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_device.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_properties.h"
+#include "chromeos/ash/components/dbus/fwupd/fwupd_request.h"
 #include "chromeos/ash/components/dbus/fwupd/fwupd_update.h"
 #include "chromeos/dbus/common/dbus_client.h"
 
@@ -32,6 +33,7 @@ class COMPONENT_EXPORT(ASH_DBUS_FWUPD) FwupdClient
                                       FwupdUpdateList* updates) = 0;
     virtual void OnInstallResponse(bool success) = 0;
     virtual void OnPropertiesChangedResponse(FwupdProperties* properties) = 0;
+    virtual void OnDeviceRequestResponse(FwupdRequest request) = 0;
   };
 
   void AddObserver(Observer* observer);
@@ -73,6 +75,11 @@ class COMPONENT_EXPORT(ASH_DBUS_FWUPD) FwupdClient
   // Initialize() should be used instead.
   FwupdClient();
   ~FwupdClient() override;
+
+  // Set fwupd client-capability feature flags.
+  // See https://github.com/fwupd/fwupd/blob/main/libfwupd/fwupd-enums.h for the
+  // full list of FwupdFeatureFlags.
+  virtual void SetFwupdFeatureFlags() = 0;
 
   // Auxiliary variables for testing.
   // TODO(swifton): Replace this with an observer.

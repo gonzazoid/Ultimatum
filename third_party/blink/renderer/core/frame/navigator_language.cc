@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/frame/navigator_language.h"
 
 #include "services/network/public/cpp/features.h"
+#include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/platform/language.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -66,9 +67,11 @@ void NavigatorLanguage::EnsureUpdatedLanguage() {
       languages_ = ParseAndSanitize(accept_languages_override);
     } else {
       languages_ = ParseAndSanitize(GetAcceptLanguages());
-      if (base::FeatureList::IsEnabled(
-              network::features::kReduceAcceptLanguage)) {
+      if (RuntimeEnabledFeatures::ReduceAcceptLanguageEnabled(
+              execution_context_)) {
         languages_ = Vector<String>({languages_.front()});
+        UseCounter::Count(execution_context_,
+                          WebFeature::kReduceAcceptLanguage);
       }
     }
 

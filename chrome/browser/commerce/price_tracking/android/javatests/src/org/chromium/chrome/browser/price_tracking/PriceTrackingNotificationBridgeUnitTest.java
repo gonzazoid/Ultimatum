@@ -37,9 +37,7 @@ import org.chromium.components.optimization_guide.proto.CommonTypesProto.Any;
 import org.chromium.components.payments.CurrencyFormatter;
 import org.chromium.components.payments.CurrencyFormatterJni;
 
-/**
- * Unit test for {@link PriceDropNotifier}.
- */
+/** Unit test for {@link PriceDropNotifier}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PriceTrackingNotificationBridgeUnitTest {
@@ -55,22 +53,17 @@ public class PriceTrackingNotificationBridgeUnitTest {
     private static final String ACTION_ID_0 = "visit_site";
     private static final String ACTION_ID_1 = "turn_off_alert";
     private static final String ACTION_TEXT_0 = "Visit site";
-    private static final String ACTION_TEXT_1 = "Stop tracking product";
+    private static final String ACTION_TEXT_1 = "Untrack price";
 
     private PriceTrackingNotificationBridge mPriceTrackingNotificationBridge;
 
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
-    @Mock
-    PriceDropNotifier mNotifier;
-    @Mock
-    PriceDropNotificationManager mPriceDropNotificationManager;
+    @Mock PriceDropNotifier mNotifier;
+    @Mock PriceDropNotificationManager mPriceDropNotificationManager;
 
-    @Captor
-    ArgumentCaptor<PriceDropNotifier.NotificationData> mNotificationDataCaptor;
+    @Captor ArgumentCaptor<PriceDropNotifier.NotificationData> mNotificationDataCaptor;
 
     @Before
     public void setUp() {
@@ -80,7 +73,9 @@ public class PriceTrackingNotificationBridgeUnitTest {
         mJniMocker.mock(CurrencyFormatterJni.TEST_HOOKS, currencyFormatterJniMock);
         Mockito.doReturn("$1.00")
                 .when(currencyFormatterJniMock)
-                .format(Mockito.anyLong(), Mockito.any(CurrencyFormatter.class),
+                .format(
+                        Mockito.anyLong(),
+                        Mockito.any(CurrencyFormatter.class),
                         Mockito.anyString());
         mPriceTrackingNotificationBridge =
                 new PriceTrackingNotificationBridge(0, mNotifier, mPriceDropNotificationManager);
@@ -94,7 +89,8 @@ public class PriceTrackingNotificationBridgeUnitTest {
     }
 
     // Create a ChromeNotification.Builder with specific ChromeMessage.
-    private ChromeNotification.Builder createChromeNotification(ChromeMessage.Builder chromeMessage,
+    private ChromeNotification.Builder createChromeNotification(
+            ChromeMessage.Builder chromeMessage,
             PriceDropNotificationPayload.Builder priceDropNotificationPayload) {
         ChromeNotification.Builder builder = ChromeNotification.newBuilder();
         builder.setNotificationDataType(NotificationDataType.PRICE_DROP_NOTIFICATION);

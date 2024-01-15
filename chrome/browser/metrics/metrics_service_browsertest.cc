@@ -33,9 +33,11 @@
 #include "components/metrics/enabled_state_provider.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_reporting_default_state.h"
+#include "components/metrics/metrics_service.h"
 #include "components/metrics/metrics_switches.h"
 #include "components/metrics/persistent_histograms.h"
 #include "components/metrics/stability_metrics_helper.h"
+#include "components/metrics_services_manager/metrics_services_manager.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/common/content_switches.h"
@@ -56,8 +58,22 @@
 #include "sandbox/win/src/sandbox_types.h"
 #endif
 
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/startup/browser_params_proxy.h"
+#endif
+
 namespace {
+
+#if BUILDFLAG(IS_WIN)
+
+void VerifyRendererExitCodeIsSignal(
+    const base::HistogramTester& histogram_tester,
+    int signal) {
+  histogram_tester.ExpectUniqueSample(
+      "CrashExitCodes.Renderer", std::abs(static_cast<int32_t>(signal)), 1);
+}
+
+#elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 // Check CrashExitCodes.Renderer histogram for a single bucket entry and then
 // verify that the bucket entry contains a signal and the signal is |signal|.
@@ -73,8 +89,9 @@ void VerifyRendererExitCodeIsSignal(
   EXPECT_EQ(signal, WTERMSIG(exit_code));
 }
 
-}  // namespace
 #endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+
+}  // namespace
 
 // This test class verifies that metrics reporting works correctly for various
 // renderer behaviors such as page loads, recording crashed tabs, and browser
@@ -164,10 +181,13 @@ IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest, CloseRenderersNormally) {
       "Stability.Counts2", metrics::StabilityEventType::kRendererCrash, 0);
 }
 
-// Flaky on Linux. See http://crbug.com/131094
 // Child crashes fail the process on ASan (see crbug.com/411251,
 // crbug.com/368525).
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || defined(ADDRESS_SANITIZER)
+// Note to sheriffs: Do not disable these tests if they starts to flake. If
+// either of these tests start to fail then changes likely need to be made
+// elsewhere in crash processing, metrics analysis, and dashboards. Please
+// consult Stability Team before disabling.
+#if defined(ADDRESS_SANITIZER)
 #define MAYBE_CrashRenderers DISABLED_CrashRenderers
 #define MAYBE_CheckCrashRenderers DISABLED_CheckCrashRenderers
 #else
@@ -190,9 +210,7 @@ IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest, MAYBE_CrashRenderers) {
 #if BUILDFLAG(IS_WIN)
   // Consult Stability Team before changing this test as it's recorded to
   // histograms and used for stability measurement.
-  histogram_tester.ExpectUniqueSample(
-      "CrashExitCodes.Renderer",
-      std::abs(static_cast<int32_t>(STATUS_ACCESS_VIOLATION)), 1);
+  VerifyRendererExitCodeIsSignal(histogram_tester, STATUS_ACCESS_VIOLATION);
 #elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   VerifyRendererExitCodeIsSignal(histogram_tester, SIGSEGV);
 #endif
@@ -201,12 +219,14 @@ IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest, MAYBE_CrashRenderers) {
 // Test is disabled on Windows AMR64 because
 // TerminateWithHeapCorruption() isn't expected to work there.
 // See: https://crbug.com/1054423
-//
-// This test is disabled on Windows because it flakes.
-// See: https://crbug.com/1277825
 #if BUILDFLAG(IS_WIN)
+#if defined(ARCH_CPU_ARM64)
+#define MAYBE_HeapCorruptionInRenderer DISABLED_HeapCorruptionInRenderer
+#else
+#define MAYBE_HeapCorruptionInRenderer HeapCorruptionInRenderer
+#endif
 IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest,
-                       DISABLED_HeapCorruptionInRenderer) {
+                       MAYBE_HeapCorruptionInRenderer) {
   base::HistogramTester histogram_tester;
 
   OpenTabsAndNavigateToCrashyUrl(blink::kChromeUIHeapCorruptionCrashURL);
@@ -241,13 +261,33 @@ IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest, MAYBE_CheckCrashRenderers) {
 #if BUILDFLAG(IS_WIN)
   // Consult Stability Team before changing this test as it's recorded to
   // histograms and used for stability measurement.
-  histogram_tester.ExpectUniqueSample(
-      "CrashExitCodes.Renderer",
-      std::abs(static_cast<int32_t>(STATUS_BREAKPOINT)), 1);
-#elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  VerifyRendererExitCodeIsSignal(histogram_tester, STATUS_BREAKPOINT);
+#elif BUILDFLAG(IS_MAC)
   VerifyRendererExitCodeIsSignal(histogram_tester, SIGTRAP);
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if defined(OFFICIAL_BUILD)
+  VerifyRendererExitCodeIsSignal(histogram_tester, SIGILL);
+#else
+  VerifyRendererExitCodeIsSignal(histogram_tester, SIGSEGV);
+#endif  // defined(OFFICIAL_BUILD)
 #endif
 }
+
+#if BUILDFLAG(ENABLE_RUST_CRASH)
+IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest, CrashRenderersInRust) {
+  base::HistogramTester histogram_tester;
+
+  OpenTabsAndNavigateToCrashyUrl(blink::kChromeUICrashRustURL);
+
+  // Verify that the expected stability metrics were recorded.
+  // The three tabs from OpenTabs() and the one tab to open
+  // chrome://crash/rust/.
+  histogram_tester.ExpectBucketCount("Stability.Counts2",
+                                     metrics::StabilityEventType::kPageLoad, 3);
+  histogram_tester.ExpectBucketCount(
+      "Stability.Counts2", metrics::StabilityEventType::kRendererCrash, 1);
+}
+#endif  // BUILDFLAG(ENABLE_RUST_CRASH)
 
 // OOM code only works on Windows.
 #if BUILDFLAG(IS_WIN) && !defined(ADDRESS_SANITIZER)
@@ -455,7 +495,39 @@ class MetricsServiceBrowserSampledOutTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserSampledOutTest, FilesRemoved) {
+// TODO(crbug.com/1380375): Flaky on Mac and ChromeOS, fix flakiness and
+// re-enable the test.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_FilesRemoved DISABLED_FilesRemoved
+#else
+#define MAYBE_FilesRemoved FilesRemoved
+#endif
+IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserSampledOutTest,
+                       MAYBE_FilesRemoved) {
   // SetUp() has provided consent and made metrics "sampled-out" (disabled).
   EXPECT_FALSE(HasNonPMAFiles());
 }
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+IN_PROC_BROWSER_TEST_F(MetricsServiceBrowserTest, EntropyTransfer) {
+  // While creating, the EntropyState should have been transferred from the
+  // Ash init params to the Entropy values.
+  auto* init_params = chromeos::BrowserParamsProxy::Get();
+  metrics::MetricsService* metrics_service =
+      g_browser_process->GetMetricsServicesManager()->GetMetricsService();
+  // Due to version skew it could be that the used version of Ash does not
+  // support this yet.
+  if (init_params->EntropySource()) {
+    EXPECT_EQ(metrics_service->GetLowEntropySource(),
+              init_params->EntropySource()->low_entropy);
+    EXPECT_NE(init_params->EntropySource()->low_entropy, -1);
+    EXPECT_EQ(metrics_service->GetOldLowEntropySource(),
+              init_params->EntropySource()->old_low_entropy);
+    EXPECT_EQ(metrics_service->GetPseudoLowEntropySource(),
+              init_params->EntropySource()->pseudo_low_entropy);
+  } else {
+    LOG(WARNING) << "MetricsReportingLacrosBrowserTest.EntropyTransfer "
+                 << "- Ash version does not support entropy transfer yet";
+  }
+}
+#endif

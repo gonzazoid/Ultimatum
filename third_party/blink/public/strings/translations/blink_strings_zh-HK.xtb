@@ -8,7 +8,7 @@
 <translation id="1306460908038601864">關閉</translation>
 <translation id="1311894908970423688">數值必須為 <ph name="VALUE_DATE_OR_TIME" />。</translation>
 <translation id="1480676835519562650">可以揀幾個項目，揀咗 <ph name="SELECTED" /> 個，總共有 <ph name="COUNT" /> 個。</translation>
-<translation id="1588438908519853928">一般</translation>
+<translation id="1588438908519853928">正常</translation>
 <translation id="1591562245178063882">本月</translation>
 <translation id="1637811476055996098">選擇檔案</translation>
 <translation id="1681022320378710418">目前嘅時間</translation>
@@ -16,6 +16,7 @@
 <translation id="1729654308190250600">請輸入一個非空的電郵地址。</translation>
 <translation id="1758486001363313524">其他日期…</translation>
 <translation id="1787192514241997742">總時間：<ph name="REMAINING_TIME" /></translation>
+<translation id="1800494066469288780">授予相機權限</translation>
 <translation id="1822429046913737220">上午/下午</translation>
 <translation id="1832974991323546415">在遠端裝置上播放</translation>
 <translation id="1921819250265091946">日</translation>
@@ -24,11 +25,12 @@
 <translation id="1993104285338243655">已切換至鏡像模式</translation>
 <translation id="2031987842108996681">紅色色頻</translation>
 <translation id="2060505056492490888">「<ph name="DOT" />」未放在「<ph name="INVALIDDOMAIN" />」的正確位置。</translation>
+<translation id="2068711044993563745">最小值 (<ph name="MINIMUM" />) 必須小於最大值 (<ph name="MAXIMUM" />)。</translation>
 <translation id="2148716181193084225">今天</translation>
 <translation id="2226276347425096477">請將這段文字刪減至 <ph name="MAX_CHARACTERS" /> 個字元以下 (目前的字數為 <ph name="CURRENT_LENGTH" /> 個)。</translation>
-<translation id="2246498165605549352">本機檔案</translation>
 <translation id="2247351761944213033"><ph name="YEAR" /> 年，第 <ph name="WEEKNUMBER" /> 週</translation>
 <translation id="2277199496770840904">曲目 <ph name="NUMBER" /></translation>
+<translation id="2353297238722298836">已允許使用相機和麥克風</translation>
 <translation id="2393030564806080191">十六進制顏色值</translation>
 <translation id="2398813069815436052">開咗對話框。</translation>
 <translation id="245932805758469625">影片淨番嘅秒數</translation>
@@ -45,11 +47,13 @@
 <translation id="2761667185364618470">如果您要繼續執行，請勾選這個選框。</translation>
 <translation id="2908441821576996758">請輸入以逗號分隔的電郵地址清單。</translation>
 <translation id="3049748772180311791"><ph name="QUANTITY" /> MB</translation>
+<translation id="3053226512517284904">顯示語音描述選單</translation>
 <translation id="3075154866155599887">請輸入有效的值。欄位內容不完整或是日期無效。</translation>
 <translation id="310520048233152454">請輸入網址。</translation>
 <translation id="3220661731597678625">目前嘅步驟</translation>
 <translation id="3321030238473337787">播放速度</translation>
 <translation id="3329013043687509092">飽和度</translation>
+<translation id="3377518164566272702">授予麥克風和攝影機權限</translation>
 <translation id="3450233048674729344">數值必須小於或等於 <ph name="MAXIMUM" />。</translation>
 <translation id="3732799496749320381">月</translation>
 <translation id="3754210790023674521">退出畫中畫</translation>
@@ -57,14 +61,17 @@
 <translation id="3822383571486410024">請將這段文字加長至 <ph name="MIN_CHARACTERS" /> 個字元或以上 (目前的字數為 <ph name="CURRENT_LENGTH" /> 個)。</translation>
 <translation id="383465348367842624">「<ph name="ATSIGN" />」後面的部分不應包含「<ph name="INVALIDCHARACTER" />」符號。</translation>
 <translation id="3846214748874656680">關閉全屏幕模式</translation>
+<translation id="4031179711345676612">已允許使用麥克風</translation>
 <translation id="4103419683916926126">毫秒</translation>
 <translation id="4201051445878709314">顯示上個月</translation>
 <translation id="4360991593054037559">請輸入有效值。最接近的兩個有效值分別是 <ph name="VALID_VALUE_LOW" /> 和 <ph name="VALID_VALUE_HIGHER" />。</translation>
 <translation id="4522570452068850558">詳情</translation>
+<translation id="4663373278480897665">已允許使用相機</translation>
 <translation id="4664250907885839816">「<ph name="ATSIGN" />」後面的部分不應包含「<ph name="INVALIDCHARACTER" />」符號。</translation>
 <translation id="4718048029184481307">正在畫中畫播放</translation>
 <translation id="4748357248530471599">切換顯示屏凹口全螢幕</translation>
 <translation id="4763480195061959176">影片</translation>
+<translation id="4792862212177489858">分享位置</translation>
 <translation id="4812940957355064477">請輸入一個數字。</translation>
 <translation id="4912200001568447310">目前嘅項目</translation>
 <translation id="4915360478455618802">顯示時間點選器</translation>
@@ -74,12 +81,13 @@
 <translation id="4975562563186953947">已選取 <ph name="SELECTED_COUNT" /> 個項目</translation>
 <translation id="4992066212339426712">取消靜音</translation>
 <translation id="49969490063480558">請輸入「<ph name="ATSIGN" />」後面的部分。「<ph name="INVALIDADDRESS" />」並不完整。</translation>
+<translation id="5037575921016181960">安全度高的密碼</translation>
 <translation id="5090250355906949916">影片時間拖動欄</translation>
 <translation id="509897012892853729">藍色色頻</translation>
 <translation id="5117590920725113268">顯示下個月</translation>
 <translation id="5164977714490026579">數值必須大於或等於 <ph name="MINIMUM" />。</translation>
 <translation id="5196716972587102051">2</translation>
-<translation id="5199514351668672591">回到選項</translation>
+<translation id="5199514351668672591">返回選項</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> PB</translation>
 <translation id="5272594226096532950">未勾選。喺群組入面嘅選項 <ph name="INDEX" />，總共有 <ph name="COUNT" /> 個</translation>
 <translation id="5307600278924710095">請輸入「<ph name="ATSIGN" />」後面的部分。「<ph name="INVALIDADDRESS" />」並不完整。</translation>
@@ -89,6 +97,7 @@
 <translation id="5425179576310518467">目前嘅日期</translation>
 <translation id="5466621249238537318">請選取一個或多個檔案。</translation>
 <translation id="5468998798572797635">結束全螢幕</translation>
+<translation id="5514612371225420585">裝置上的檔案</translation>
 <translation id="5516235301412634559">0.75</translation>
 <translation id="5537725057119320332">投放</translation>
 <translation id="5546461542133609677">取消靜音</translation>
@@ -113,6 +122,7 @@
 <translation id="6398862346408813489">顯示月份選取面板</translation>
 <translation id="6404546809543547843">音效時間拖動欄</translation>
 <translation id="6443871981718447451">顯示隱藏式字幕選單</translation>
+<translation id="6484738902856791350">美化</translation>
 <translation id="6550675742724504774">選項</translation>
 <translation id="6572309429103589720">文法無效</translation>
 <translation id="658823671542763450">進入全螢幕</translation>
@@ -130,6 +140,7 @@
 <translation id="6941933287844615239">下載媒體</translation>
 <translation id="698788488269350478">展開咗。</translation>
 <translation id="6989848892321993519">請將這段文字加長至 <ph name="MIN_CHARACTERS" /> 個字元以上 (目前已有 1 個字元)。</translation>
+<translation id="7080893216867146095">已允許分享位置</translation>
 <translation id="709897737746224366">請配對要求的格式。</translation>
 <translation id="7102274145889307184">目前位置</translation>
 <translation id="7263440858009898357">請選取一個清單中的項目。</translation>
@@ -176,6 +187,7 @@
 <translation id="9132465097189459683">其他日期…</translation>
 <translation id="9155987714137265666"><ph name="WEEK" /> (該週的第一天為 <ph name="WEEK_START_DATE" />)</translation>
 <translation id="916607977885256133">畫中畫</translation>
+<translation id="918430632320614861">授予麥克風權限</translation>
 <translation id="945780513535800434">有部分勾選咗</translation>
 <translation id="954003015749068518">進入畫中畫</translation>
 </translationbundle>

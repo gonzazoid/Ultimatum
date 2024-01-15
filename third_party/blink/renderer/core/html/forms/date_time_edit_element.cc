@@ -28,6 +28,7 @@
 #include "base/ranges/algorithm.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/focus_params.h"
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/events/mouse_event.h"
 #include "third_party/blink/renderer/core/frame/use_counter_impl.h"
@@ -35,6 +36,7 @@
 #include "third_party/blink/renderer/core/html/forms/date_time_fields_state.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html_names.h"
+#include "third_party/blink/renderer/core/layout/text_utils.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
@@ -578,11 +580,11 @@ void DateTimeEditElement::BlurByOwner() {
     field->blur();
 }
 
-scoped_refptr<ComputedStyle> DateTimeEditElement::CustomStyleForLayoutObject(
+const ComputedStyle* DateTimeEditElement::CustomStyleForLayoutObject(
     const StyleRecalcContext& style_recalc_context) {
   // TODO(crbug.com/1181868): This is a kind of layout. We might want to
   // introduce new LayoutObject.
-  scoped_refptr<ComputedStyle> style =
+  const ComputedStyle* original_style =
       OriginalStyleForLayoutObject(style_recalc_context);
   float width = 0;
   for (Node* child = FieldsWrapperElement()->firstChild(); child;
@@ -594,17 +596,21 @@ scoped_refptr<ComputedStyle> DateTimeEditElement::CustomStyleForLayoutObject(
       // We need to pass the ComputedStyle of this element because child
       // elements can't resolve inherited style at this timing.
       width += static_cast<DateTimeFieldElement*>(child_element)
-                   ->MaximumWidth(*style);
+                   ->MaximumWidth(*original_style);
     } else {
       // ::-webkit-datetime-edit-text case. It has no
       // border/padding/margin in html.css.
-      width += DateTimeFieldElement::ComputeTextWidth(
-          *style, child_element->textContent());
+      width += ComputeTextWidth(child_element->textContent(), *original_style);
     }
   }
-  style->SetWidth(Length::Fixed(ceilf(width)));
-  style->SetCustomStyleCallbackDependsOnFont();
-  return style;
+  ComputedStyleBuilder builder(*original_style);
+  if (original_style->IsHorizontalWritingMode()) {
+    builder.SetWidth(Length::Fixed(ceilf(width)));
+  } else {
+    builder.SetHeight(Length::Fixed(ceilf(width)));
+  }
+  builder.SetCustomStyleCallbackDependsOnFont();
+  return builder.TakeStyle();
 }
 
 void DateTimeEditElement::DidBlurFromField(mojom::blink::FocusType focus_type) {
@@ -647,9 +653,10 @@ void DateTimeEditElement::FocusByOwner(Element* old_focused_element) {
     DateTimeFieldElement* old_focused_field =
         static_cast<DateTimeFieldElement*>(old_focused_element);
     wtf_size_t index = FieldIndexOf(*old_focused_field);
-    GetDocument().UpdateStyleAndLayoutTreeForNode(old_focused_field);
+    GetDocument().UpdateStyleAndLayoutTreeForElement(
+        old_focused_field, DocumentUpdateReason::kFocus);
     if (index != kInvalidFieldIndex && old_focused_field->IsFocusable()) {
-      old_focused_field->Focus();
+      old_focused_field->Focus(FocusParams(FocusTrigger::kUserGesture));
       return;
     }
   }
@@ -680,7 +687,7 @@ bool DateTimeEditElement::FocusOnNextFocusableField(wtf_size_t start_index) {
   for (wtf_size_t field_index = start_index; field_index < fields_.size();
        ++field_index) {
     if (fields_[field_index]->IsFocusable()) {
-      fields_[field_index]->Focus();
+      fields_[field_index]->Focus(FocusParams(FocusTrigger::kUserGesture));
       return true;
     }
   }
@@ -704,7 +711,7 @@ bool DateTimeEditElement::FocusOnPreviousField(
   while (field_index > 0) {
     --field_index;
     if (fields_[field_index]->IsFocusable()) {
-      fields_[field_index]->Focus();
+      fields_[field_index]->Focus(FocusParams(FocusTrigger::kUserGesture));
       return true;
     }
   }
@@ -787,7 +794,7 @@ void DateTimeEditElement::GetLayout(const LayoutParameters& layout_parameters,
     }
     if (DateTimeFieldElement* field =
             FieldAt(std::min(focused_field_index, fields_.size() - 1)))
-      field->Focus();
+      field->Focus(FocusParams(FocusTrigger::kUserGesture));
   }
 
   if (last_child_to_be_removed) {
@@ -861,7 +868,7 @@ DateTimeFieldElement* DateTimeEditElement::GetField(DateTimeField type) const {
   auto* it = base::ranges::find(fields_, type, &DateTimeFieldElement::Type);
   if (it == fields_.end())
     return nullptr;
-  return *it;
+  return it->Get();
 }
 
 bool DateTimeEditElement::HasField(DateTimeField type) const {

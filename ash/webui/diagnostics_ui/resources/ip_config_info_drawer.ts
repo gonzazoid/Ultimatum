@@ -6,8 +6,9 @@ import './data_point.js';
 import './diagnostics_shared.css.js';
 import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
 
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {DiagnosticsBrowserProxyImpl} from './diagnostics_browser_proxy.js';
@@ -24,41 +25,42 @@ import {Network} from './network_health_provider.mojom-webui.js';
 const IpConfigInfoDrawerElementBase = I18nMixin(PolymerElement);
 
 export class IpConfigInfoDrawerElement extends IpConfigInfoDrawerElementBase {
-  static get is() {
+  static get is(): string {
     return 'ip-config-info-drawer';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
-      expanded_: {
+      expanded: {
         type: Boolean,
         value: false,
+        reflectToAttribute: true,
       },
 
-      gateway_: {
+      gateway: {
         type: String,
-        computed: 'computeGateway_(network.ipConfig.gateway)',
+        computed: 'computeGateway(network.ipConfig.gateway)',
       },
 
-      nameServers_: {
+      nameServers: {
         type: String,
-        computed: 'computeNameServers_(network.ipConfig.nameServers)',
+        computed: 'computeNameServers(network.ipConfig.nameServers)',
       },
 
       network: {
         type: Object,
       },
 
-      subnetMask_: {
+      subnetMask: {
         type: String,
-        computed: 'computeSubnetMask_(network.ipConfig.routingPrefix)',
+        computed: 'computeSubnetMask(network.ipConfig.routingPrefix)',
       },
 
-      nameServersHeader_: {
+      nameServersHeader: {
         type: String,
         value: '',
       },
@@ -66,23 +68,23 @@ export class IpConfigInfoDrawerElement extends IpConfigInfoDrawerElementBase {
   }
 
   network: Network;
-  protected expanded_: boolean;
-  protected gateway_: string;
-  protected nameServers_: string;
-  protected subnetMask_: string;
-  protected nameServersHeader_: string;
-  private browserProxy_: DiagnosticsBrowserProxyImpl =
+  protected expanded: boolean;
+  protected gateway: string;
+  protected nameServers: string;
+  protected subnetMask: string;
+  protected nameServersHeader: string;
+  private browserProxy: DiagnosticsBrowserProxyImpl =
       DiagnosticsBrowserProxyImpl.getInstance();
 
-  static get observers() {
-    return ['getNameServersHeader_(network.ipConfig.nameServers)'];
+  static get observers(): string[] {
+    return ['getNameServersHeader(network.ipConfig.nameServers)'];
   }
 
-  protected computeGateway_(): string {
+  protected computeGateway(): string {
     return this.network?.ipConfig?.gateway || '';
   }
 
-  protected computeNameServers_(): string {
+  protected computeNameServers(): string {
     if (!this.network?.ipConfig) {
       return '';
     }
@@ -96,7 +98,7 @@ export class IpConfigInfoDrawerElement extends IpConfigInfoDrawerElementBase {
     return this.network.ipConfig.nameServers.join(', ');
   }
 
-  protected computeSubnetMask_(): string {
+  protected computeSubnetMask(): string {
     // Routing prefix should be [1,32] when set. 0 indicates an unset value.
     if (this.network?.ipConfig && this.network?.ipConfig?.routingPrefix &&
         this.network?.ipConfig?.routingPrefix >= 0 &&
@@ -107,11 +109,11 @@ export class IpConfigInfoDrawerElement extends IpConfigInfoDrawerElementBase {
     return '';
   }
 
-  protected getNameServersHeader_(nameServers?: string[]): void {
+  protected getNameServersHeader(nameServers?: string[]): void {
     const count = nameServers ? nameServers.length : 0;
-    this.browserProxy_.getPluralString('nameServersText', count)
+    this.browserProxy.getPluralString('nameServersText', count)
         .then((localizedString: string) => {
-          this.nameServersHeader_ = localizedString;
+          this.nameServersHeader = localizedString;
         });
   }
 }

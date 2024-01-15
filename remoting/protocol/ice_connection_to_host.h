@@ -9,9 +9,9 @@
 #include <set>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/proto/internal.pb.h"
@@ -68,7 +68,7 @@ class IceConnectionToHost : public ConnectionToHost,
 
   // IceTransport::EventHandler interface.
   void OnIceTransportRouteChange(const std::string& channel_name,
-                              const TransportRoute& route) override;
+                                 const TransportRoute& route) override;
   void OnIceTransportError(ErrorCode error) override;
 
   // ChannelDispatcherBase::EventHandler interface.

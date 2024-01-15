@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/editing/markers/sorted_document_marker_list_editor.h"
 
+#include <algorithm>
+
 #include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/core/editing/markers/spell_check_marker_list_impl.h"
 
@@ -146,9 +148,9 @@ bool SortedDocumentMarkerListEditor::ShiftMarkersContentIndependent(
   bool did_shift_marker = false;
   for (MarkerList::iterator it = shift_range_begin; it != list->end(); ++it) {
     DocumentMarker& marker = **it;
-    absl::optional<DocumentMarker::MarkerOffsets> result =
+    std::optional<DocumentMarker::MarkerOffsets> result =
         marker.ComputeOffsetsAfterShift(offset, old_length, new_length);
-    if (result == absl::nullopt) {
+    if (result == std::nullopt) {
       if (erase_range_begin == list->end())
         erase_range_begin = it;
       erase_range_end = std::next(it);

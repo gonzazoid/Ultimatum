@@ -8,9 +8,11 @@
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/shell.h"
 #include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/overview/overview_focus_cycler.h"
 #include "ash/wm/overview/overview_grid.h"
-#include "ash/wm/overview/overview_highlight_controller.h"
 #include "ash/wm/overview/overview_item.h"
+#include "ash/wm/overview/overview_item_base.h"
+#include "ash/wm/overview/overview_utils.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -41,32 +43,30 @@ void SendKey(ui::KeyboardCode key, int flags) {
   generator.ReleaseKey(key, flags);
 }
 
-bool HighlightOverviewWindow(const aura::Window* window) {
-  if (GetOverviewHighlightedWindow() == nullptr) {
+bool FocusOverviewWindow(const aura::Window* window) {
+  if (GetOverviewFocusedWindow() == nullptr) {
     SendKey(ui::VKEY_TAB);
     SendKey(ui::VKEY_TAB);
   }
-  const aura::Window* start_window = GetOverviewHighlightedWindow();
+  const aura::Window* start_window = GetOverviewFocusedWindow();
   if (start_window == window)
     return true;
   aura::Window* window_it = nullptr;
   do {
     SendKey(ui::VKEY_TAB);
-    window_it = const_cast<aura::Window*>(GetOverviewHighlightedWindow());
+    window_it = const_cast<aura::Window*>(GetOverviewFocusedWindow());
   } while (window_it != window && window_it != start_window);
   return window_it == window;
 }
 
-const aura::Window* GetOverviewHighlightedWindow() {
-  OverviewItem* item =
-      GetOverviewSession()->highlight_controller()->GetHighlightedItem();
-  if (!item)
-    return nullptr;
-  return item->GetWindow();
+const aura::Window* GetOverviewFocusedWindow() {
+  OverviewItemBase* item =
+      GetOverviewSession()->focus_cycler()->GetFocusedItem();
+  return item ? item->GetWindow() : nullptr;
 }
 
 void ToggleOverview(OverviewEnterExitType type) {
-  auto* overview_controller = Shell::Get()->overview_controller();
+  auto* overview_controller = OverviewController::Get();
   if (overview_controller->InOverviewSession())
     overview_controller->EndOverview(OverviewEndAction::kTests, type);
   else
@@ -82,18 +82,37 @@ void WaitForOverviewExitAnimation() {
   WaitForOverviewAnimationState(OverviewAnimationState::kExitAnimationComplete);
 }
 
-OverviewSession* GetOverviewSession() {
-  auto* session = Shell::Get()->overview_controller()->overview_session();
-  DCHECK(session);
-  return session;
+OverviewGrid* GetOverviewGridForRoot(aura::Window* root) {
+  DCHECK(root->IsRootWindow());
+
+  auto* overview_controller = OverviewController::Get();
+  CHECK(overview_controller->InOverviewSession());
+  return overview_controller->overview_session()->GetGridWithRootWindow(root);
 }
 
-const std::vector<std::unique_ptr<OverviewItem>>& GetOverviewItemsForRoot(
+const std::vector<std::unique_ptr<OverviewItemBase>>& GetOverviewItemsForRoot(
     int index) {
   return GetOverviewSession()->grid_list()[index]->window_list();
 }
 
-OverviewItem* GetOverviewItemForWindow(aura::Window* window) {
+std::vector<aura::Window*> GetWindowsListInOverviewGrids() {
+  auto* overview_controller = OverviewController::Get();
+  CHECK(overview_controller->InOverviewSession());
+
+  std::vector<aura::Window*> windows;
+  for (const std::unique_ptr<OverviewGrid>& grid :
+       overview_controller->overview_session()->grid_list()) {
+    for (const std::unique_ptr<OverviewItemBase>& item : grid->window_list()) {
+      for (aura::Window* window : item->GetWindows()) {
+        CHECK(window);
+        windows.push_back(window);
+      }
+    }
+  }
+  return windows;
+}
+
+OverviewItemBase* GetOverviewItemForWindow(aura::Window* window) {
   return GetOverviewSession()->GetOverviewItemForWindow(window);
 }
 
@@ -106,7 +125,7 @@ gfx::Rect ShrinkBoundsByHotseatInset(const gfx::Rect& rect) {
   return new_rect;
 }
 
-void DragItemToPoint(OverviewItem* item,
+void DragItemToPoint(OverviewItemBase* item,
                      const gfx::Point& screen_location,
                      ui::test::EventGenerator* event_generator,
                      bool by_touch_gestures,
@@ -132,6 +151,12 @@ void DragItemToPoint(OverviewItem* item,
     if (drop)
       event_generator->ReleaseLeftButton();
   }
+}
+
+void SendKeyUntilOverviewItemIsFocused(ui::KeyboardCode key) {
+  do {
+    SendKey(key);
+  } while (!GetOverviewFocusedWindow());
 }
 
 }  // namespace ash

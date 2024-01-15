@@ -11,10 +11,6 @@
 #import "testing/platform_test.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using WebClientTest = PlatformTest;
 
 // Tests WebClient::PrepareErrorPage method.
@@ -27,7 +23,7 @@ TEST_F(WebClientTest, PrepareErrorPage) {
                           code:NSURLErrorNotConnectedToInternet
                       userInfo:@{NSLocalizedDescriptionKey : description}];
 
-  absl::optional<net::SSLInfo> info = absl::nullopt;
+  std::optional<net::SSLInfo> info = std::nullopt;
   __block bool callback_called = false;
   __block NSString* html = nil;
   web_client.PrepareErrorPage(/*web_state*/ nullptr, GURL::EmptyGURL(), error,

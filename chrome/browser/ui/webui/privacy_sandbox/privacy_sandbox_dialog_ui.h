@@ -10,6 +10,10 @@
 
 class Profile;
 
+namespace content {
+class WebUIDataSource;
+}
+
 // WebUI which is shown to the user as part of the PrivacySandboxDialog.
 class PrivacySandboxDialogUI : public content::WebUIController {
  public:
@@ -21,10 +25,13 @@ class PrivacySandboxDialogUI : public content::WebUIController {
                   base::OnceCallback<void(int)> resize_callback,
                   base::OnceClosure show_dialog_callback,
                   base::OnceClosure open_settings_callback,
+                  base::OnceClosure open_measurement_settings_callback,
                   PrivacySandboxService::PromptType prompt_type);
 
  private:
   WEB_UI_CONTROLLER_TYPE_DECL();
+
+  void InitializeForDebug(content::WebUIDataSource* source);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_PRIVACY_SANDBOX_PRIVACY_SANDBOX_DIALOG_UI_H_

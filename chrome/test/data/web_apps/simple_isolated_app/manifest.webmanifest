@@ -1,15 +1,23 @@
 {
-  "name": "Isolated App w/o service worker",
+  "name": "Simple Isolated App",
+  "version": "1.0.0",
+  "id": "/",
+  "scope": "/",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "permissions_policy": {
+    "clipboard-read": [ "*" ],
+    "clipboard-write": [ "*" ],
+    "cross-origin-isolated": [ "*" ],
+    "direct-sockets": [ "*" ],
+    "usb": [ "*" ],
+    "web-printing": [ "*" ]
+  },
   "icons": [
     {
       "src": "256x256-green.png",
       "sizes": "256x256",
       "type": "image/png"
     }
-  ],
-  "start_url": "/basic.html",
-  "scope": "/",
-  "display": "standalone",
-  "isolated_storage": true,
-  "id": "/"
+  ]
 }

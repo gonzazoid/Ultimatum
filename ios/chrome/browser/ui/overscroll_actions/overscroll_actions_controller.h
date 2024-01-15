@@ -21,13 +21,6 @@ enum class OverscrollState {
   ACTION_READY      // Ready to take action on pull end.
 };
 
-// Notification sent when the overscroll actions controller will start
-// displaying the UI.
-extern NSString* const kOverscrollActionsWillStart;
-// Notification sent when the overscroll actions controller did stop displaying
-// the UI.
-extern NSString* const kOverscrollActionsDidEnd;
-
 // The delegate of the OverscrollActionsController, it provides the headerView
 // on which the OverscrollActionsView will be added.
 // The scrollView is used to control the state of the
@@ -37,13 +30,12 @@ extern NSString* const kOverscrollActionsDidEnd;
 // Finally the overscrollActionsController:didTriggerActionAtIndex: method is
 // called when an action has been triggered.
 @protocol OverscrollActionsControllerDelegate<NSObject>
-// Called when an action has been triggered.
-// The action index holds the current triggered action which are numbered left
-// to right.
-// TODO(crbug.com/1272486) : Separate action handling for overscroll from UI
-// management.
-- (void)overscrollActionsController:(OverscrollActionsController*)controller
-                   didTriggerAction:(OverscrollAction)action;
+// Called when a New Tab action has been triggered.
+- (void)overscrollActionNewTab:(OverscrollActionsController*)controller;
+// Called when a Close Tab action has been triggered.
+- (void)overscrollActionCloseTab:(OverscrollActionsController*)controller;
+// Called when a Refresh action has been triggered.
+- (void)overscrollActionRefresh:(OverscrollActionsController*)controller;
 // Should return true when the delegate wants to enable the overscroll actions.
 - (BOOL)shouldAllowOverscrollActionsForOverscrollActionsController:
     (OverscrollActionsController*)controller;

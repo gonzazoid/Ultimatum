@@ -7,7 +7,14 @@
 
 #include <stdint.h>
 
+#include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gl/gl_bindings.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "third_party/skia/include/core/SkBitmap.h"
+#include "third_party/skia/include/core/SkColor.h"
+#endif
 
 namespace gl {
 
@@ -36,6 +43,20 @@ class GLTestHelper {
                                    GLsizei height,
                                    int error,
                                    const uint8_t expected_color[4]);
+
+#if BUILDFLAG(IS_WIN)
+  // Check that |location| is inside the bounds of |bitmap| and return the color
+  // at that pixel.
+  static SkColor GetColorAtPoint(const SkBitmap& bitmap,
+                                 const gfx::Point& location);
+
+  // Read back the content of |window| inside a rectangle at the origin with
+  // size |size|.
+  static SkBitmap ReadBackWindow(HWND window, const gfx::Size& size);
+
+  // Read back the content of |window| of the pixel at point |point|.
+  static SkColor ReadBackWindowPixel(HWND window, const gfx::Point& point);
+#endif
 };
 
 }  // namespace gl

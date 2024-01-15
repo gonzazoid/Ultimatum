@@ -6,7 +6,6 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/invalidation/profile_invalidation_provider_factory.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 
@@ -44,7 +43,11 @@ CertProvisioningSchedulerUserServiceFactory::GetInstance() {
 
 CertProvisioningSchedulerUserServiceFactory::
     CertProvisioningSchedulerUserServiceFactory()
-    : ProfileKeyedServiceFactory("CertProvisioningSchedulerUserService") {
+    : ProfileKeyedServiceFactory("CertProvisioningSchedulerUserService",
+                                 ProfileSelections::Builder()
+                                     .WithGuest(ProfileSelection::kOriginalOnly)
+                                     .WithAshInternals(ProfileSelection::kNone)
+                                     .Build()) {
   DependsOn(platform_keys::PlatformKeysServiceFactory::GetInstance());
   DependsOn(invalidation::ProfileInvalidationProviderFactory::GetInstance());
 }
@@ -54,16 +57,15 @@ bool CertProvisioningSchedulerUserServiceFactory::
   return true;
 }
 
-KeyedService*
-CertProvisioningSchedulerUserServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
+std::unique_ptr<KeyedService> CertProvisioningSchedulerUserServiceFactory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  if (!profile || !ProfileHelper::IsUserProfile(profile) ||
-      !profile->GetProfilePolicyConnector()->IsManaged()) {
+  if (!profile || !profile->GetProfilePolicyConnector()->IsManaged()) {
     return nullptr;
   }
 
-  return new CertProvisioningSchedulerUserService(profile);
+  return std::make_unique<CertProvisioningSchedulerUserService>(profile);
 }
 
 }  // namespace cert_provisioning

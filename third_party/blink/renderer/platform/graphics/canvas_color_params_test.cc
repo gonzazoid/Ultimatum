@@ -7,8 +7,8 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/graphics/color_correction_test_utils.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "ui/gfx/color_space.h"
-#include "ui/gl/buffer_format_utils.h"
 
 namespace blink {
 
@@ -18,6 +18,7 @@ namespace blink {
 // GetStorageGfxColorSpace(). This test verifies that the two different color
 // spaces are approximately the same for different CanvasColorParam objects.
 TEST(CanvasColorParamsTest, MatchSkColorSpaceWithGfxColorSpace) {
+  test::TaskEnvironment task_environment;
   PredefinedColorSpace canvas_color_spaces[] = {
       PredefinedColorSpace::kSRGB,
       PredefinedColorSpace::kRec2020,

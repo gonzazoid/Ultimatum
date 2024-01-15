@@ -11,7 +11,9 @@ namespace safe_browsing {
 
 // Signal types.
 // These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
+// numeric values should never be reused. They should be kept in sync with
+// SBExtensionTelemetrySignalsSignalType enum definition in
+// /tools/metrics/histograms/enums.xml
 enum class ExtensionSignalType {
   kTabsExecuteScript = 0,
   kRemoteHostContacted = 1,
@@ -19,7 +21,9 @@ enum class ExtensionSignalType {
   kPasswordReuse = 3,
   kPotentialPasswordTheft = 4,
   kCookiesGet = 5,
-  kMaxValue = kCookiesGet,
+  kDeclarativeNetRequest = 6,
+  kTabsApi = 7,
+  kMaxValue = kTabsApi,
 };
 
 // An abstract signal. Subclasses provide type-specific functionality to

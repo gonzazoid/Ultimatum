@@ -6,20 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/containers/contains.h"
-#include "base/logging.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
-#include "chrome/browser/ash/crosapi/crosapi_ash.h"
-#include "chrome/browser/ash/crosapi/crosapi_manager.h"
-#include "chrome/browser/ash/crosapi/extension_info_private_ash.h"
 #include "chromeos/crosapi/mojom/networking_private.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/common/api/networking_private.h"
-#include "extensions/common/extension.h"
 
 using extensions::NetworkingPrivateDelegate;
 
@@ -150,48 +143,27 @@ ListValueSuccessOrFailureCallback ListValueAdapterCallback(
         if (result->is_error()) {
           std::move(failure).Run(result->get_error());
         } else {
-          std::move(success).Run(
-              base::ListValue::From(std::make_unique<base::Value>(
-                  std::move(result->get_success_result()))));
+          std::move(success).Run(std::move(result->get_success_result()));
         }
       },
       std::move(success), std::move(failure));
 }
 
 // This adapter will handle the call back from ash which passes back a
-// base::Value object.
-using ValueMojoCallback =
-    base::OnceCallback<void(absl::optional<base::Value> result)>;
-using ValueDelegateCallback =
-    base::OnceCallback<void(std::unique_ptr<base::Value> result)>;
-
-ValueMojoCallback ValueAdapterCallback(ValueDelegateCallback result_callback) {
-  return base::BindOnce(
-      [](ValueDelegateCallback callback, absl::optional<base::Value> result) {
-        if (!result) {
-          std::move(callback).Run(std::make_unique<base::Value>());
-        } else {
-          std::move(callback).Run(
-              std::make_unique<base::Value>(std::move(*result)));
-        }
-      },
-      std::move(result_callback));
-}
-
-// This adapter will handle the call back from ash which passes back a
 // base::Value::List object.
 using ValueListMojoCallback =
-    base::OnceCallback<void(absl::optional<base::Value::List>)>;
+    base::OnceCallback<void(std::optional<base::Value::List>)>;
+using ValueListDelegateCallback =
+    base::OnceCallback<void(base::Value::List result)>;
 ValueListMojoCallback ValueListAdapterCallback(
-    ValueDelegateCallback result_callback) {
+    ValueListDelegateCallback result_callback) {
   return base::BindOnce(
-      [](ValueDelegateCallback callback,
-         absl::optional<base::Value::List> result) {
+      [](ValueListDelegateCallback callback,
+         std::optional<base::Value::List> result) {
         if (!result) {
-          std::move(callback).Run(std::make_unique<base::Value>());
+          std::move(callback).Run(base::Value::List());
         } else {
-          std::move(callback).Run(
-              std::make_unique<base::Value>(std::move(*result)));
+          std::move(callback).Run(std::move(*result));
         }
       },
       std::move(result_callback));
@@ -203,8 +175,8 @@ ValueListMojoCallback ValueListAdapterCallback(
 using PropertiesMojoCallback = base::OnceCallback<void(
     crosapi::mojom::PropertiesSuccessOrErrorReturnPtr result)>;
 using PropertiesDelegateCallback =
-    base::OnceCallback<void(absl::optional<::base::Value> result,
-                            const absl::optional<std::string>& error)>;
+    base::OnceCallback<void(std::optional<::base::Value::Dict> result,
+                            const std::optional<std::string>& error)>;
 
 PropertiesMojoCallback PropertiesAdapterCallback(
     PropertiesDelegateCallback result_callback) {
@@ -212,43 +184,39 @@ PropertiesMojoCallback PropertiesAdapterCallback(
       [](PropertiesDelegateCallback callback,
          crosapi::mojom::PropertiesSuccessOrErrorReturnPtr result) {
         if (result->is_error()) {
-          std::move(callback).Run(absl::nullopt,
-                                  std::move(result->get_error()));
+          std::move(callback).Run(std::nullopt, std::move(result->get_error()));
         } else {
-          std::move(callback).Run(absl::optional<::base::Value>(
-                                      std::move(result->get_success_result())),
-                                  absl::nullopt);
+          std::move(callback).Run(std::optional<::base::Value::Dict>(std::move(
+                                      result->get_success_result().GetDict())),
+                                  std::nullopt);
         }
       },
       std::move(result_callback));
 }
 
 // Converting the crosapi::mojom::GetDeviceStateList returned value into the
-// intenrally used datastructure DeviceStateList and forward it to the callback
+// internally used datastructure DeviceStateList and forward it to the callback
 // handler from the caller.
 using DeviceStateListPtr =
-    absl::optional<std::vector<absl::optional<::base::Value>>>;
+    std::optional<std::vector<std::optional<::base::Value::Dict>>>;
 
 void DeviceStateListCallbackAdapter(
     extensions::NetworkingPrivateDelegate::DeviceStateListCallback callback,
     DeviceStateListPtr result) {
   if (!result) {
-    std::move(callback).Run(
-        std::make_unique<
-            extensions::NetworkingPrivateDelegate::DeviceStateList>());
+    std::move(callback).Run(std::nullopt);
     return;
   }
-  auto list = std::make_unique<
-      extensions::NetworkingPrivateDelegate::DeviceStateList>();
-  for (size_t i = 0; i < result->size(); ++i) {
-    if (result->at(i)) {
-      list->push_back(
+  auto list =
+      std::optional<extensions::NetworkingPrivateDelegate::DeviceStateList>();
+  for (auto& item : *result) {
+    if (item) {
+      list->emplace_back(
           extensions::api::networking_private::DeviceStateProperties::FromValue(
-              *result->at(i)));
+              base::Value(std::move(*item)))
+              .value());
     } else {
-      list->push_back(
-          std::make_unique<
-              extensions::api::networking_private::DeviceStateProperties>());
+      list->emplace_back();
     }
   }
   std::move(callback).Run(std::move(list));
@@ -262,17 +230,17 @@ NetworkingPrivateLacros::NetworkingPrivateLacros(
     content::BrowserContext* browser_context)
     : is_primary_user_(IsPrimaryUser(browser_context)) {}
 
-NetworkingPrivateLacros::~NetworkingPrivateLacros() {}
+NetworkingPrivateLacros::~NetworkingPrivateLacros() = default;
 
 void NetworkingPrivateLacros::GetProperties(const std::string& guid,
                                             PropertiesCallback callback) {
   if (!is_primary_user_) {
-    std::move(callback).Run(absl::nullopt, kErrorNotPrimaryUser);
+    std::move(callback).Run(std::nullopt, kErrorNotPrimaryUser);
     return;
   }
   auto* networking_private = GetNetworkingPrivateRemote();
   if (!networking_private) {
-    std::move(callback).Run(absl::nullopt, kErrorApiNotFound);
+    std::move(callback).Run(std::nullopt, kErrorApiNotFound);
     return;
   }
   (*networking_private)
@@ -284,12 +252,12 @@ void NetworkingPrivateLacros::GetManagedProperties(
     const std::string& guid,
     PropertiesCallback callback) {
   if (!is_primary_user_) {
-    std::move(callback).Run(absl::nullopt, kErrorNotPrimaryUser);
+    std::move(callback).Run(std::nullopt, kErrorNotPrimaryUser);
     return;
   }
   auto* networking_private = GetNetworkingPrivateRemote();
   if (!networking_private) {
-    std::move(callback).Run(absl::nullopt, kErrorApiNotFound);
+    std::move(callback).Run(std::nullopt, kErrorApiNotFound);
     return;
   }
   (*networking_private)
@@ -302,8 +270,9 @@ void NetworkingPrivateLacros::GetState(const std::string& guid,
                                        FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->GetState(std::move(guid),
@@ -312,14 +281,15 @@ void NetworkingPrivateLacros::GetState(const std::string& guid,
 }
 
 void NetworkingPrivateLacros::SetProperties(const std::string& guid,
-                                            base::Value properties,
+                                            base::Value::Dict properties,
                                             bool allow_set_shared_config,
                                             VoidCallback success_callback,
                                             FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->SetProperties(std::move(guid), std::move(properties),
@@ -329,16 +299,17 @@ void NetworkingPrivateLacros::SetProperties(const std::string& guid,
 }
 
 void NetworkingPrivateLacros::CreateNetwork(bool shared,
-                                            base::Value properties,
+                                            base::Value::Dict properties,
                                             StringCallback success_callback,
                                             FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
-      ->CreateNetwork(shared, std::move(properties),
+      ->CreateNetwork(shared, base::Value(std::move(properties)),
                       StringAdapterCallback(std::move(success_callback),
                                             std::move(failure_callback)));
 }
@@ -349,8 +320,9 @@ void NetworkingPrivateLacros::ForgetNetwork(const std::string& guid,
                                             FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->ForgetNetwork(std::move(guid), allow_forget_shared_config,
@@ -366,8 +338,9 @@ void NetworkingPrivateLacros::GetNetworks(const std::string& network_type,
                                           FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->GetNetworks(std::move(network_type), configured_only, visible_only,
@@ -381,8 +354,9 @@ void NetworkingPrivateLacros::StartConnect(const std::string& guid,
                                            FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->StartConnect(std::move(guid),
@@ -396,8 +370,9 @@ void NetworkingPrivateLacros::StartDisconnect(
     FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->StartDisconnect(std::move(guid),
@@ -412,8 +387,9 @@ void NetworkingPrivateLacros::StartActivate(
     FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->StartActivate(std::move(guid), std::move(specified_carrier),
@@ -427,8 +403,9 @@ void NetworkingPrivateLacros::GetCaptivePortalStatus(
     FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->GetCaptivePortalStatus(
@@ -444,8 +421,9 @@ void NetworkingPrivateLacros::UnlockCellularSim(
     FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->UnlockCellularSim(std::move(guid), std::move(pin), std::move(puk),
@@ -462,8 +440,9 @@ void NetworkingPrivateLacros::SetCellularSimState(
     FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->SetCellularSimState(std::move(guid), require_pin,
@@ -479,8 +458,9 @@ void NetworkingPrivateLacros::SelectCellularMobileNetwork(
     FailureCallback failure_callback) {
   auto* networking_private =
       GetNetworkingPrivateRemoteAndCheck(is_primary_user_, failure_callback);
-  if (!networking_private)
+  if (!networking_private) {
     return;
+  }
 
   (*networking_private)
       ->SelectCellularMobileNetwork(
@@ -493,7 +473,7 @@ void NetworkingPrivateLacros::GetEnabledNetworkTypes(
     EnabledNetworkTypesCallback callback) {
   auto* networking_private = GetNetworkingPrivateRemote();
   if (!networking_private) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(base::Value::List());
     return;
   }
   (*networking_private)
@@ -504,7 +484,7 @@ void NetworkingPrivateLacros::GetDeviceStateList(
     DeviceStateListCallback callback) {
   auto* networking_private = GetNetworkingPrivateRemote();
   if (!networking_private || !is_primary_user_) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::nullopt);
     return;
   }
   (*networking_private)
@@ -516,24 +496,20 @@ void NetworkingPrivateLacros::GetGlobalPolicy(
     GetGlobalPolicyCallback callback) {
   auto* networking_private = GetNetworkingPrivateRemote();
   if (!networking_private || !is_primary_user_) {
-    std::move(callback).Run(base::Value::ToUniquePtrValue(
-        base::Value(base::Value::Type::DICTIONARY)));
+    std::move(callback).Run(base::Value::Dict());
     return;
   }
-  (*networking_private)
-      ->GetGlobalPolicy(ValueAdapterCallback(std::move(callback)));
+  (*networking_private)->GetGlobalPolicy(std::move(callback));
 }
 
 void NetworkingPrivateLacros::GetCertificateLists(
     GetCertificateListsCallback callback) {
   auto* networking_private = GetNetworkingPrivateRemote();
   if (!networking_private || !is_primary_user_) {
-    std::move(callback).Run(base::Value::ToUniquePtrValue(
-        base::Value(base::Value::Type::DICTIONARY)));
+    std::move(callback).Run(base::Value::Dict());
     return;
   }
-  (*networking_private)
-      ->GetCertificateLists(ValueAdapterCallback(std::move(callback)));
+  (*networking_private)->GetCertificateLists(std::move(callback));
 }
 
 void NetworkingPrivateLacros::EnableNetworkType(const std::string& type,

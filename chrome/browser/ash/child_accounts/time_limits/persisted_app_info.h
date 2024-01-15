@@ -5,25 +5,26 @@
 #ifndef CHROME_BROWSER_ASH_CHILD_ACCOUNTS_TIME_LIMITS_PERSISTED_APP_INFO_H_
 #define CHROME_BROWSER_ASH_CHILD_ACCOUNTS_TIME_LIMITS_PERSISTED_APP_INFO_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace app_time {
 
 class PersistedAppInfo {
  public:
-  static absl::optional<PersistedAppInfo> PersistedAppInfoFromDict(
-      const base::Value* value,
+  static std::optional<PersistedAppInfo> PersistedAppInfoFromDict(
+      const base::Value::Dict* value,
       bool include_app_activity_array);
   static std::vector<PersistedAppInfo> PersistedAppInfosFromList(
       const base::Value::List& list,
       bool include_app_activity_array);
-  static absl::optional<AppState> GetAppStateFromDict(const base::Value* value);
+  static std::optional<AppState> GetAppStateFromDict(
+      const base::Value::Dict* value);
 
   PersistedAppInfo(const AppId& app_id,
                    AppState state,
@@ -40,7 +41,7 @@ class PersistedAppInfo {
   // If |replace_activity| is true, then completely replaces the list keyed by
   // |kActiveTimesKey| in the dicationary. Otherwise, appends the values in
   // |active_running_time_|.
-  void UpdateAppActivityPreference(base::Value* dict,
+  void UpdateAppActivityPreference(base::Value::Dict& dict,
                                    bool replace_activity) const;
 
   void RemoveActiveTimeEarlierThan(base::Time timestamp);

@@ -6,7 +6,6 @@ import 'chrome://new-tab-page/strings.m.js';
 
 import {getDeepActiveElement} from 'chrome://resources/js/util.js';
 import {keyDownOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
-
 import {assertEquals, assertNotEquals} from 'chrome://webui-test/chai_assert.js';
 
 export function $$<E extends Element = Element>(

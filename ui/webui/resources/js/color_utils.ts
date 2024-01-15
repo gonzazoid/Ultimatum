@@ -6,7 +6,7 @@
  * @fileoverview Helper functions for color manipulations.
  */
 
-import {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
+import {SkColor} from '//resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
 
 /**
  * Converts an SkColor object to a string in the form
@@ -23,6 +23,21 @@ export function skColorToRgba(skColor: SkColor): string {
 }
 
 /**
+ * Converts an SkColor object to a string in the the form "#rrggbb".
+ * @param skColor The input color.
+ * @return The hex color string,
+ */
+export function skColorToHexColor(skColor: SkColor): string {
+  const r = (skColor.value >> 16) & 0xff;
+  const g = (skColor.value >> 8) & 0xff;
+  const b = skColor.value & 0xff;
+  const rHex = r.toString(16).padStart(2, '0');
+  const gHex = g.toString(16).padStart(2, '0');
+  const bHex = b.toString(16).padStart(2, '0');
+  return `#${rHex}${gHex}${bHex}`;
+}
+
+/**
  * Converts a string of the form "#rrggbb" to an SkColor object.
  * @param hexColor The color string.
  * @return The SkColor object,
@@ -35,4 +50,19 @@ export function hexColorToSkColor(hexColor: string): SkColor {
   const g = parseInt(hexColor.substring(3, 5), 16);
   const b = parseInt(hexColor.substring(5, 7), 16);
   return {value: 0xff000000 + (r << 16) + (g << 8) + b};
+}
+
+/**
+ * Converts a string of the form "<red>, <green>, <blue>" to an SkColor
+ * object.
+ * @param rgb The rgb color string.
+ * @return The SkColor object,
+ */
+export function rgbToSkColor(rgb: string): SkColor {
+  const rgbValues = rgb.split(',');
+  const hex = rgbValues.map((bit) => {
+    bit = parseInt(bit).toString(16);
+    return (bit.length === 1) ? '0' + bit : bit;
+  });
+  return hexColorToSkColor('#' + hex.join(''));
 }

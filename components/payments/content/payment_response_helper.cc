@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/address_normalizer.h"
@@ -26,14 +26,14 @@
 namespace payments {
 
 PaymentResponseHelper::PaymentResponseHelper(
-    const std::string& app_locale,
+    std::string app_locale,
     base::WeakPtr<PaymentRequestSpec> spec,
     base::WeakPtr<PaymentApp> selected_app,
     base::WeakPtr<PaymentRequestDelegate> payment_request_delegate,
     autofill::AutofillProfile* selected_shipping_profile,
     autofill::AutofillProfile* selected_contact_profile,
     base::WeakPtr<Delegate> delegate)
-    : app_locale_(app_locale),
+    : app_locale_(std::move(app_locale)),
       is_waiting_for_shipping_address_normalization_(false),
       is_waiting_for_instrument_details_(false),
       spec_(spec),

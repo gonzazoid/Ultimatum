@@ -8,8 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
@@ -60,8 +61,7 @@ CreateInvalidationServiceForSenderId(const std::string& fcm_sender_id) {
 std::unique_ptr<KeyedService> BuildProfileInvalidationProvider(
     content::BrowserContext* context) {
   return std::make_unique<invalidation::ProfileInvalidationProvider>(
-      nullptr, nullptr,
-      base::BindRepeating(&CreateInvalidationServiceForSenderId));
+      nullptr, base::BindRepeating(&CreateInvalidationServiceForSenderId));
 }
 
 void SendInvalidatorStateChangeNotification(
@@ -94,11 +94,12 @@ class FakeConsumer : public AffiliatedInvalidationServiceProvider::Consumer {
   const invalidation::InvalidationService* GetInvalidationService() const;
 
  private:
-  AffiliatedInvalidationServiceProviderImpl* provider_;
+  raw_ptr<AffiliatedInvalidationServiceProviderImpl> provider_;
   invalidation::FakeInvalidationHandler invalidation_handler_;
 
   int invalidation_service_set_count_ = 0;
-  invalidation::InvalidationService* invalidation_service_ = nullptr;
+  raw_ptr<invalidation::InvalidationService, DanglingUntriaged>
+      invalidation_service_ = nullptr;
 };
 
 class AffiliatedInvalidationServiceProviderImplTest : public testing::Test {
@@ -144,13 +145,15 @@ class AffiliatedInvalidationServiceProviderImplTest : public testing::Test {
                                  bool is_affiliated);
   std::unique_ptr<AffiliatedInvalidationServiceProviderImpl> provider_;
   std::unique_ptr<FakeConsumer> consumer_;
-  invalidation::InvalidationService* device_invalidation_service_;
-  invalidation::FakeInvalidationService* profile_invalidation_service_;
+  raw_ptr<invalidation::InvalidationService, DanglingUntriaged>
+      device_invalidation_service_;
+  raw_ptr<invalidation::FakeInvalidationService, DanglingUntriaged>
+      profile_invalidation_service_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
-  ash::FakeChromeUserManager* fake_user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> fake_user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
   network::TestURLLoaderFactory test_url_loader_factory_;
@@ -166,8 +169,7 @@ FakeConsumer::FakeConsumer(AffiliatedInvalidationServiceProviderImpl* provider,
 
 FakeConsumer::~FakeConsumer() {
   if (invalidation_service_) {
-    invalidation_service_->UnregisterInvalidationHandler(
-        &invalidation_handler_);
+    invalidation_service_->RemoveObserver(&invalidation_handler_);
   }
   provider_->UnregisterConsumer(this);
 
@@ -179,8 +181,7 @@ void FakeConsumer::OnInvalidationServiceSet(
   ++invalidation_service_set_count_;
 
   if (invalidation_service_) {
-    invalidation_service_->UnregisterInvalidationHandler(
-        &invalidation_handler_);
+    invalidation_service_->RemoveObserver(&invalidation_handler_);
   }
 
   invalidation_service_ = invalidation_service;
@@ -191,7 +192,7 @@ void FakeConsumer::OnInvalidationServiceSet(
     // chance to unregister their invalidation handlers. Register an
     // invalidation handler so that |invalidation_service| CHECK()s in its
     // destructor if this regresses.
-    invalidation_service_->RegisterInvalidationHandler(&invalidation_handler_);
+    invalidation_service_->AddObserver(&invalidation_handler_);
   }
 }
 
@@ -211,7 +212,7 @@ AffiliatedInvalidationServiceProviderImplTest::
     : device_invalidation_service_(nullptr),
       profile_invalidation_service_(nullptr),
       fake_user_manager_(new ash::FakeChromeUserManager),
-      user_manager_enabler_(base::WrapUnique(fake_user_manager_)),
+      user_manager_enabler_(base::WrapUnique(fake_user_manager_.get())),
       profile_manager_(TestingBrowserProcess::GetGlobal()) {
   cros_settings_test_helper_.InstallAttributes()->SetCloudManaged("example.com",
                                                                   "device_id");
@@ -219,7 +220,7 @@ AffiliatedInvalidationServiceProviderImplTest::
 
 void AffiliatedInvalidationServiceProviderImplTest::SetUp() {
   ash::CryptohomeMiscClient::InitializeFake();
-  chromeos::SystemSaltGetter::Initialize();
+  ash::SystemSaltGetter::Initialize();
   ASSERT_TRUE(profile_manager_.SetUp());
 
   DeviceOAuth2TokenServiceFactory::Initialize(
@@ -242,7 +243,7 @@ void AffiliatedInvalidationServiceProviderImplTest::TearDown() {
       ->RegisterTestingFactory(
           BrowserContextKeyedServiceFactory::TestingFactory());
   DeviceOAuth2TokenServiceFactory::Shutdown();
-  chromeos::SystemSaltGetter::Shutdown();
+  ash::SystemSaltGetter::Shutdown();
   ash::CryptohomeMiscClient::Shutdown();
 }
 

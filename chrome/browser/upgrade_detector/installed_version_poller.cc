@@ -9,14 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/upgrade_detector/build_state.h"
 #include "chrome/browser/upgrade_detector/get_installed_version.h"
 #include "chrome/browser/upgrade_detector/installed_version_monitor.h"
@@ -206,6 +206,11 @@ void InstalledVersionPoller::OnInstalledVersion(
     build_state_->SetUpdate(update_type, versions.installed_version,
                             versions.critical_version);
   }
+
+  // Gather statistics on population that could update but hasn't.
+  UMA_HISTOGRAM_ENUMERATION("Chrome.BuildState.BuildStateUpdateType",
+                            update_type);
+
   // Poll again after the polling interval passes.
   timer_.Start(FROM_HERE, GetPollingInterval(),
                base::BindOnce(&InstalledVersionPoller::Poll,

@@ -4,6 +4,9 @@
 
 #include "third_party/blink/renderer/modules/font_access/font_metadata.h"
 
+#include <memory>
+#include <utility>
+
 #include "base/big_endian.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
@@ -31,9 +34,7 @@ void SetUpFontUniqueLookupIfNecessary() {
   if (!unique_name_lookup)
     return;
   // Contrary to what the method name might imply, this is not an idempotent
-  // method. It also initializes the state in the FontUniqueNameLookup object
-  // to either retrieve from tables on Windows 7, or direct lookups on
-  // Windows 10.
+  // method. It also initializes state in the FontUniqueNameLookup object.
   unique_name_lookup->IsFontUniqueNameLookupReadyForSyncLookup();
 }
 
@@ -100,9 +101,6 @@ void FontMetadata::BlobImpl(ScriptPromiseResolver* resolver,
     // TODO(https://crbug.com/1086840): openStream rarely fails, but it happens
     // sometimes. A potential remediation is to synthesize a font from tables
     // at the cost of memory and throughput.
-    // For reference, the UMA metric "Blink.Fonts.HarfBuzzFaceZeroCopyAccess"
-    // indicates that the success rate is close to 100% on all platforms where
-    // it applies, but failures do happen.
     auto message = String::Format("Font data for %s could not be accessed.",
                                   postscriptName.Latin1().c_str());
     ScriptState::Scope scope(resolver->GetScriptState());

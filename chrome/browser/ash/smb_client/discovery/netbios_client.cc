@@ -4,14 +4,13 @@
 
 #include "chrome/browser/ash/smb_client/discovery/netbios_client.h"
 
-#include "base/bind.h"
-#include "chromeos/ash/components/network/firewall_hole.h"
+#include "base/functional/bind.h"
+#include "chromeos/components/firewall_hole/firewall_hole.h"
 #include "net/base/ip_endpoint.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 namespace {
 
@@ -73,28 +72,31 @@ void NetBiosClient::ExecuteNameRequest(const net::IPAddress& broadcast_address,
 }
 
 void NetBiosClient::BindSocket() {
-  server_socket_->Bind(
-      bind_address_, nullptr /* socket_options */,
-      base::BindOnce(&NetBiosClient::OnBindComplete, AsWeakPtr()));
+  server_socket_->Bind(bind_address_, nullptr /* socket_options */,
+                       base::BindOnce(&NetBiosClient::OnBindComplete,
+                                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 void NetBiosClient::OpenPort(uint16_t port) {
-  FirewallHole::Open(
-      FirewallHole::PortType::UDP, port, "" /* all interfaces */,
-      base::BindOnce(&NetBiosClient::OnOpenPortComplete, AsWeakPtr()));
+  chromeos::FirewallHole::Open(
+      chromeos::FirewallHole::PortType::kUdp, port, "" /* all interfaces */,
+      base::BindOnce(&NetBiosClient::OnOpenPortComplete,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void NetBiosClient::SetBroadcast() {
   server_socket_->SetBroadcast(
       true /* broadcast */,
-      base::BindOnce(&NetBiosClient::OnSetBroadcastCompleted, AsWeakPtr()));
+      base::BindOnce(&NetBiosClient::OnSetBroadcastCompleted,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void NetBiosClient::SendPacket() {
   server_socket_->SendTo(
       broadcast_address_, GenerateBroadcastPacket(),
       net::MutableNetworkTrafficAnnotationTag(GetNetworkTrafficAnnotationTag()),
-      base::BindOnce(&NetBiosClient::OnSendCompleted, AsWeakPtr()));
+      base::BindOnce(&NetBiosClient::OnSendCompleted,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void NetBiosClient::OnBindComplete(
@@ -109,7 +111,7 @@ void NetBiosClient::OnBindComplete(
 }
 
 void NetBiosClient::OnOpenPortComplete(
-    std::unique_ptr<FirewallHole> firewall_hole) {
+    std::unique_ptr<chromeos::FirewallHole> firewall_hole) {
   if (!firewall_hole) {
     LOG(ERROR) << "NetBiosClient: Opening port failed.";
     return;
@@ -183,5 +185,4 @@ std::vector<uint8_t> NetBiosClient::GenerateBroadcastPacket() {
   return packet;
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

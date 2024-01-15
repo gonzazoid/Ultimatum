@@ -9,15 +9,11 @@
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 namespace consent_auditor {
 class ConsentAuditor;
-}
-
-namespace user_prefs {
-class PrefRegistrySyncable;
 }
 
 class Profile;
@@ -34,16 +30,14 @@ class ConsentAuditorFactory : public ProfileKeyedServiceFactory {
   ConsentAuditorFactory& operator=(const ConsentAuditorFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<ConsentAuditorFactory>;
+  friend base::NoDestructor<ConsentAuditorFactory>;
 
   ConsentAuditorFactory();
   ~ConsentAuditorFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
-  void RegisterProfilePrefs(
-      user_prefs::PrefRegistrySyncable* registry) override;
 };
 
 #endif  // CHROME_BROWSER_CONSENT_AUDITOR_CONSENT_AUDITOR_FACTORY_H_

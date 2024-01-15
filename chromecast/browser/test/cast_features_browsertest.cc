@@ -119,9 +119,9 @@ class CastFeaturesBrowserTest : public CastBrowserTest {
   virtual void SetFeatures(const base::Value::Dict& dcs_features) {
     base::Value::Dict pref_features =
         GetOverriddenFeaturesForStorage(dcs_features);
-    DictionaryPrefUpdate dict(pref_service(), prefs::kLatestDCSFeatures);
+    ScopedDictPrefUpdate dict(pref_service(), prefs::kLatestDCSFeatures);
     for (auto [pref_name, pref_value] : pref_features) {
-      dict->SetStringKey(pref_name, pref_value.GetString());
+      dict->Set(pref_name, pref_value.GetString());
     }
     pref_service()->CommitPendingWrite();
   }
@@ -129,9 +129,9 @@ class CastFeaturesBrowserTest : public CastBrowserTest {
   // Clears |features| from the PrefStore. Should be called in a PRE_PRE_*
   // method for any tested feature in a test to ensure consistent state.
   void ClearFeaturesFromPrefs(std::vector<base::test::FeatureRef> features) {
-    DictionaryPrefUpdate dict(pref_service(), prefs::kLatestDCSFeatures);
+    ScopedDictPrefUpdate dict(pref_service(), prefs::kLatestDCSFeatures);
     for (const auto& f : features)
-      dict->RemoveKey(f->name);
+      dict->Remove(f->name);
     pref_service()->CommitPendingWrite();
   }
 
@@ -140,16 +140,16 @@ class CastFeaturesBrowserTest : public CastBrowserTest {
   // setting features from the server.
   virtual void SetExperimentIds(
       const std::unordered_set<int32_t>& experiment_ids) {
-    base::ListValue list;
+    base::Value::List list;
     for (auto id : experiment_ids)
       list.Append(id);
-    pref_service()->Set(prefs::kActiveDCSExperiments, list);
+    pref_service()->SetList(prefs::kActiveDCSExperiments, std::move(list));
     pref_service()->CommitPendingWrite();
   }
 
   // Clear the set experiment id's.
   void ClearExperimentIds() {
-    pref_service()->Set(prefs::kActiveDCSExperiments, base::ListValue());
+    pref_service()->SetList(prefs::kActiveDCSExperiments, base::Value::List());
     pref_service()->CommitPendingWrite();
   }
 };

@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "remoting/base/auto_thread.h"
 #include "remoting/base/auto_thread_task_runner.h"
 #include "remoting/host/setup/daemon_controller.h"
@@ -30,7 +30,7 @@ class DaemonControllerDelegateMac : public DaemonController::Delegate {
 
   // DaemonController::Delegate interface.
   DaemonController::State GetState() override;
-  absl::optional<base::Value::Dict> GetConfig() override;
+  std::optional<base::Value::Dict> GetConfig() override;
   void CheckPermission(bool it2me, DaemonController::BoolCallback) override;
   void SetConfigAndStart(base::Value::Dict config,
                          bool consent,

@@ -9,6 +9,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/cart/cart_discount_fetcher.h"
 #include "chrome/browser/cart/cart_service.h"
 #include "chrome/browser/commerce/coupons/coupon_service.h"
@@ -27,12 +28,12 @@ namespace Variations {
 class VariationsClient;
 }  // namespace Variations
 
-// Delegate class that enables FetchDiscountWorker to use relevant
+// Delegate class that enables FetchDiscountWorker to use discount-related
 // functionalities from CartService.
-class CartServiceDelegate {
+class CartDiscountServiceDelegate {
  public:
-  explicit CartServiceDelegate(CartService* cart_service);
-  virtual ~CartServiceDelegate();
+  explicit CartDiscountServiceDelegate(CartService* cart_service);
+  virtual ~CartDiscountServiceDelegate();
   virtual void LoadAllCarts(CartDB::LoadCallback callback);
   virtual void UpdateCart(const std::string& cart_url,
                           const cart_db::ChromeCartContentProto new_proto,
@@ -41,7 +42,7 @@ class CartServiceDelegate {
   virtual void UpdateFreeListingCoupons(const CouponService::CouponsMap& map);
 
  private:
-  raw_ptr<CartService> cart_service_;
+  raw_ptr<CartService, DanglingUntriaged> cart_service_;
 };
 
 // This is used to fetch discounts for active Carts in cart_db. It starts
@@ -67,7 +68,8 @@ class FetchDiscountWorker {
       scoped_refptr<network::SharedURLLoaderFactory>
           browserProcessURLLoaderFactory,
       std::unique_ptr<CartDiscountFetcherFactory> fetcher_factory,
-      std::unique_ptr<CartServiceDelegate> cart_service_delegate,
+      std::unique_ptr<CartDiscountServiceDelegate>
+          cart_discount_service_delegate,
       signin::IdentityManager* const identity_manager,
       variations::VariationsClient* const chrome_variations_client);
   virtual ~FetchDiscountWorker();
@@ -86,15 +88,16 @@ class FetchDiscountWorker {
   scoped_refptr<base::SequencedTaskRunner> backend_task_runner_;
   // This is used to create a CartDiscountFetcher to fetch discounts.
   std::unique_ptr<CartDiscountFetcherFactory> fetcher_factory_;
-  // This is used to access CartService functionalities such as loading all
-  // active carts, updating given cart discount, etc.
-  std::unique_ptr<CartServiceDelegate> cart_service_delegate_;
+  // This is used to access CartService discount-related functionalities such as
+  // loading all active carts, updating given cart discount, etc.
+  std::unique_ptr<CartDiscountServiceDelegate> cart_discount_service_delegate_;
   // This is used to identify whether user is a sync user.
-  const raw_ptr<signin::IdentityManager> identity_manager_;
+  const raw_ptr<signin::IdentityManager, DanglingUntriaged> identity_manager_;
   // This is used to fetch the oauth token.
   std::unique_ptr<const signin::PrimaryAccountAccessTokenFetcher>
       access_token_fetcher_;
-  const raw_ptr<variations::VariationsClient> chrome_variations_client_;
+  const raw_ptr<variations::VariationsClient, DanglingUntriaged>
+      chrome_variations_client_;
 
   // This is run in the UI thread, it loads all active carts.
   void PrepareToFetch();

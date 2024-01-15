@@ -4,7 +4,7 @@
 
 #include "chromeos/ash/services/bluetooth_config/adapter_state_controller_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/bluetooth/chromeos/bluetooth_utils.h"
 
@@ -61,6 +61,30 @@ void AdapterStateControllerImpl::AdapterPoweredChanged(
     device::BluetoothAdapter* adapter,
     bool powered) {
   NotifyAdapterStateChanged();
+
+  // No action is required if the adapter state changed without
+  // AdapterStateController interaction.
+  if (in_progress_state_change_ == PowerStateChange::kNoChange) {
+    return;
+  }
+
+  // No action is required if the state change is unrelated to the in-progress
+  // state change request.
+  if (powered != (in_progress_state_change_ == PowerStateChange::kEnable)) {
+    return;
+  }
+
+  // The adapter state changed to that requested by the in-progress state
+  // change. Handle the change here rather than the SetPowered() success
+  // callback to avoid timing issues (b/270447662).
+  BLUETOOTH_LOG(EVENT) << "Bluetooth " << (powered ? "enabled" : "disabled")
+                       << " successfully";
+  in_progress_state_change_ = PowerStateChange::kNoChange;
+  device::PoweredStateOperation power_operation =
+      powered ? device::PoweredStateOperation::kEnable
+              : device::PoweredStateOperation::kDisable;
+  device::RecordPoweredStateOperationResult(power_operation, /*success=*/true);
+
   AttemptQueuedStateChange();
 }
 
@@ -119,29 +143,14 @@ void AdapterStateControllerImpl::AttemptSetEnabled(bool enabled) {
                        << " Bluetooth";
   bluetooth_adapter_->SetPowered(
       enabled,
-      base::BindOnce(&AdapterStateControllerImpl::OnSetPoweredSuccess,
-                     weak_ptr_factory_.GetWeakPtr(), enabled),
+      // Power state successfully updating is handled in AdapterPoweredChanged()
+      // (see b/274973520).
+      base::DoNothing(),
       base::BindOnce(&AdapterStateControllerImpl::OnSetPoweredError,
                      weak_ptr_factory_.GetWeakPtr(), enabled));
   device::RecordPoweredState(enabled);
   // State has changed to kEnabling or kDisabling; notify observers.
   NotifyAdapterStateChanged();
-}
-
-void AdapterStateControllerImpl::OnSetPoweredSuccess(bool enabled) {
-  BLUETOOTH_LOG(EVENT) << "Bluetooth " << (enabled ? "enabled" : "disabled")
-                       << " successfully";
-  in_progress_state_change_ = PowerStateChange::kNoChange;
-  device::PoweredStateOperation power_operation =
-      enabled ? device::PoweredStateOperation::kEnable
-              : device::PoweredStateOperation::kDisable;
-  device::RecordPoweredStateOperationResult(power_operation, /*success=*/true);
-
-  // Adapter->IsPowered() won't immediately be updated to the new value when
-  // SetPowered() finishes and this method is called. Don't call
-  // AttemptQueuedStateChange() now because the adapter isn't in the correct
-  // state yet. Wait until AdapterPoweredChanged() is invoked and call
-  // AttemptQueuedStateChange() there.
 }
 
 void AdapterStateControllerImpl::OnSetPoweredError(bool enabled) {

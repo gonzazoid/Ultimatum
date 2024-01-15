@@ -6,24 +6,31 @@ standalone repository for PartitionAlloc is hosted
 
 ## GN Args
 
-External clients mainly need to set these six GN args:
-
-``` none
-# These are blocked on PA-E and `raw_ptr.h` and can never be true until
-# we make them part of the standalone PA distribution.
-use_partition_alloc_as_malloc_default = false
-enable_mte_checked_ptr_support_default = false
-enable_backup_ref_ptr_support_default = false
-put_ref_count_in_previous_slot_default = false
-enable_backup_ref_ptr_slow_checks_default = false
-enable_dangling_raw_ptr_checks_default = false
-```
-
-PartitionAlloc's build will expect them at
+External clients should examine the args described in
+`build_overrides/partition_alloc.gni` and add them in their own source
+tree. PartitionAlloc's build will expect them at
 `//build_overrides/partition_alloc.gni`.
 
 In addition, something must provide `build_with_chromium = false` to
 the PA build system.
+
+## `use_partition_alloc`
+
+The `use_partition_alloc` GN arg, described in
+[`build_config.md`](./build_config.md), provides a GN-level seam that
+embedders
+
+1.  can set in their GN args and
+2.  should  observe in their GN recipes to conditionally pull in
+    PartitionAlloc.
+
+I.E. if you have any reason to disable PartitionAlloc, you should do so
+with this GN arg. Avoid pulling in PartitionAlloc headers when the
+corresponding buildflag is false.
+
+Setting `use_partition_alloc` false will also implicitly disable other
+features, e.g. nixing the compilation of BackupRefPtr as the
+implementation of `raw_ptr<T>`.
 
 ## Periodic Memory Reduction Routines
 

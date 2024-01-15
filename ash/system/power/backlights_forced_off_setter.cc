@@ -8,9 +8,9 @@
 #include "ash/shell.h"
 #include "ash/system/power/scoped_backlights_forced_off.h"
 #include "ash/touch/touch_devices_controller.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "ui/display/manager/touch_device_manager.h"
 
@@ -118,7 +118,7 @@ void BacklightsForcedOffSetter::GetInitialBacklightsForcedOff() {
 }
 
 void BacklightsForcedOffSetter::OnGotInitialBacklightsForcedOff(
-    absl::optional<bool> is_forced_off) {
+    std::optional<bool> is_forced_off) {
   if (backlights_forced_off_.has_value() || !is_forced_off.has_value())
     return;
 

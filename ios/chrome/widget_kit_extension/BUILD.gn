@@ -2,41 +2,42 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/apple/compile_entitlements.gni")
-import("//build/apple/tweak_info_plist.gni")
-import("//build/config/ios/rules.gni")
+import("//build/config/ios/ios_sdk.gni")
 import("//build/config/ios/swift_source_set.gni")
 import("//build/config/locales.gni")
 import("//ios/build/chrome_build.gni")
-import("//ios/build/config.gni")
 import("//ios/chrome/extension_repack.gni")
 import("//ios/chrome/tools/strings/generate_localizable_strings.gni")
-import("//ios/public/provider/chrome/browser/build_config.gni")
 
-config("ios_available_lockscreen_extension") {
-  swiftflags = [ "-DIOS_AVAILABLE_LOCKSCREEN_EXTENSION" ]
+config("ios_available_lockscreen_widget") {
+  swiftflags = [ "-DIOS_AVAILABLE_LOCKSCREEN_WIDGET" ]
 }
 
-config("ios_enable_lockscreen_extension") {
-  swiftflags = [ "-DIOS_ENABLE_LOCKSCREEN_EXTENSION" ]
+config("ios_enable_lockscreen_widget") {
+  swiftflags = [ "-DIOS_ENABLE_LOCKSCREEN_WIDGET" ]
 }
 
-tweak_info_plist("tweak_info_plist") {
-  info_plist = "Info.plist"
+config("ios_enable_shortcuts_widget") {
+  swiftflags = [ "-DIOS_ENABLE_SHORTCUTS_WIDGET" ]
 }
 
-compile_entitlements("entitlements") {
-  substitutions = [
-    "IOS_BUNDLE_ID_PREFIX=$ios_app_bundle_id_prefix",
-    "CHROMIUM_BUNDLE_ID=$chromium_bundle_id",
+config("ios_enable_search_passwords_widget") {
+  swiftflags = [ "-DIOS_ENABLE_SEARCH_PASSWORDS_WIDGET" ]
+}
+
+source_set("crash_helper") {
+  sources = [
+    "crash_helper.h",
+    "crash_helper.mm",
   ]
-  output_name = "$target_gen_dir/widget_kit_extension.appex.entitlements"
-  entitlements_templates =
-      [ "entitlements/external/widget_kit_extension.appex.entitlements" ]
+
+  deps = [ "//ios/chrome/common/crash_report" ]
+  frameworks = [ "Foundation.framework" ]
 }
 
 swift_source_set("widget_kit_extension_swift") {
   sources = [
+    "compat_util.swift",
     "dino_game_widget.swift",
     "lockscreen_launcher_widget.swift",
     "main.swift",
@@ -47,11 +48,13 @@ swift_source_set("widget_kit_extension_swift") {
   bridge_header = "widget_kit_swift_bridge.h"
 
   deps = [
+    ":crash_helper",
     ":system_strings",
     "resources:lockscreen_chrome_logo",
     "resources:lockscreen_game_logo",
     "resources:lockscreen_incognito_logo",
     "resources:lockscreen_voicesearch_logo",
+    "resources:widget_actions_icon_color",
     "resources:widget_actions_row_background_color",
     "resources:widget_background_color",
     "resources:widget_chrome_logo",
@@ -59,24 +62,33 @@ swift_source_set("widget_kit_extension_swift") {
     "resources:widget_dino_background_placeholder",
     "resources:widget_incognito_icon",
     "resources:widget_lens_icon",
-    "resources:widget_qr_icon",
+    "resources:widget_password_manager_logo",
     "resources:widget_search_bar_color",
     "resources:widget_separator_color",
     "resources:widget_text_color",
-    "resources:widget_voice_search_icon",
     "//ios/chrome/common/app_group:helper",
+    "//ios/chrome/common/ntp_tile",
+    "//ui/base:base",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 
   # Swift does not have the equivalent of __IPHONE_16_0, so use a
   # custom define instead.
   if (xcode_version_int >= 1400) {
-    configs += [ ":ios_available_lockscreen_extension" ]
+    configs += [ ":ios_available_lockscreen_widget" ]
   }
 
-  if (ios_enable_lockscreen_extension) {
-    configs += [ ":ios_enable_lockscreen_extension" ]
+  if (ios_enable_lockscreen_widget) {
+    configs += [ ":ios_enable_lockscreen_widget" ]
+  }
+
+  if (ios_enable_shortcuts_widget) {
+    configs += [ ":ios_enable_shortcuts_widget" ]
+    sources += [ "shortcuts_widget.swift" ]
+  }
+
+  if (ios_enable_search_passwords_widget) {
+    configs += [ ":ios_enable_search_passwords_widget" ]
+    sources += [ "search_passwords_widget.swift" ]
   }
 
   frameworks = [
@@ -84,13 +96,6 @@ swift_source_set("widget_kit_extension_swift") {
     "Foundation.framework",
     "SwiftUI.framework",
   ]
-}
-
-ios_appex_bundle("widget_kit_extension") {
-  entitlements_target = ":entitlements"
-  info_plist_target = ":tweak_info_plist"
-  bundle_identifier = "$chromium_bundle_id.WidgetKitExtension"
-  deps = [ ":widget_kit_extension_swift" ]
 }
 
 extension_repack_all_locales("packed_resources") {

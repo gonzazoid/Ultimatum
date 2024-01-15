@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 
@@ -48,7 +48,7 @@ BleSynchronizer::BleSynchronizer(
     : bluetooth_adapter_(bluetooth_adapter),
       timer_(std::make_unique<base::OneShotTimer>()),
       clock_(base::DefaultClock::GetInstance()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 BleSynchronizer::~BleSynchronizer() = default;
 
@@ -156,8 +156,6 @@ void BleSynchronizer::SetTestDoubles(
 
 void BleSynchronizer::OnAdvertisementRegistered(
     scoped_refptr<device::BluetoothAdvertisement> advertisement) {
-  RecordBluetoothAdvertisementRegistrationResult(
-      BluetoothAdvertisementResult::SUCCESS);
   ScheduleCommandCompletion();
   RegisterArgs* register_args = current_command_->register_args.get();
   DCHECK(register_args);
@@ -166,8 +164,6 @@ void BleSynchronizer::OnAdvertisementRegistered(
 
 void BleSynchronizer::OnErrorRegisteringAdvertisement(
     device::BluetoothAdvertisement::ErrorCode error_code) {
-  RecordBluetoothAdvertisementRegistrationResult(
-      BluetoothAdvertisementErrorCodeToResult(error_code));
   ScheduleCommandCompletion();
   RegisterArgs* register_args = current_command_->register_args.get();
   DCHECK(register_args);
@@ -175,8 +171,6 @@ void BleSynchronizer::OnErrorRegisteringAdvertisement(
 }
 
 void BleSynchronizer::OnAdvertisementUnregistered() {
-  RecordBluetoothAdvertisementUnregistrationResult(
-      BluetoothAdvertisementResult::SUCCESS);
   ScheduleCommandCompletion();
   UnregisterArgs* unregister_args = current_command_->unregister_args.get();
   DCHECK(unregister_args);
@@ -185,8 +179,6 @@ void BleSynchronizer::OnAdvertisementUnregistered() {
 
 void BleSynchronizer::OnErrorUnregisteringAdvertisement(
     device::BluetoothAdvertisement::ErrorCode error_code) {
-  RecordBluetoothAdvertisementUnregistrationResult(
-      BluetoothAdvertisementErrorCodeToResult(error_code));
   ScheduleCommandCompletion();
   UnregisterArgs* unregister_args = current_command_->unregister_args.get();
   DCHECK(unregister_args);
@@ -255,20 +247,6 @@ void BleSynchronizer::CompleteCurrentCommand() {
   current_command_.reset();
   last_command_end_timestamp_ = clock_->Now();
   ProcessQueue();
-}
-
-void BleSynchronizer::RecordBluetoothAdvertisementRegistrationResult(
-    BluetoothAdvertisementResult result) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "InstantTethering.BluetoothAdvertisementRegistrationResult", result,
-      BluetoothAdvertisementResult::BLUETOOTH_ADVERTISEMENT_RESULT_MAX);
-}
-
-void BleSynchronizer::RecordBluetoothAdvertisementUnregistrationResult(
-    BluetoothAdvertisementResult result) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "InstantTethering.BluetoothAdvertisementUnregistrationResult", result,
-      BluetoothAdvertisementResult::BLUETOOTH_ADVERTISEMENT_RESULT_MAX);
 }
 
 BleSynchronizer::BluetoothAdvertisementResult

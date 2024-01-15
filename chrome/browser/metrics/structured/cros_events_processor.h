@@ -10,18 +10,29 @@
 
 namespace metrics::structured::cros_event {
 
+extern const char* kResetCounterPath;
+
+// Post-processor that will process only sequenceable events and attach metadata
+// to the events.
 class CrOSEventsProcessor : public EventsProcessorInterface {
  public:
+  explicit CrOSEventsProcessor(const char* reset_counter_path);
   ~CrOSEventsProcessor() override;
 
   // Registers device-level prefs.
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
-  // Registers user-level prefs.
-  static void RegisterUserProfilePrefs(PrefRegistrySimple* registry);
-
+  // EventsProcessorInterface:
   bool ShouldProcessOnEventRecord(const Event& event) override;
   void OnEventsRecord(Event* event) override;
+  void OnEventRecorded(StructuredEventProto* event) override;
+
+  void OnProvideIndependentMetrics(
+      ChromeUserMetricsExtension* uma_proto) override;
+
+ private:
+  // The current reset counter as determined by platform2.
+  int64_t current_reset_counter_ = 0;
 };
 
 }  // namespace metrics::structured::cros_event

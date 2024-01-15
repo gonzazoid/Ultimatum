@@ -4,19 +4,24 @@
 
 #include "chrome/browser/ui/android/autofill/autofill_keyboard_accessory_view.h"
 
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
-
-#include "chrome/android/features/keyboard_accessory/jni_headers/AutofillKeyboardAccessoryViewBridge_jni.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "chrome/android/features/keyboard_accessory/internal/jni/AutofillKeyboardAccessoryViewBridge_jni.h"
 #include "chrome/browser/android/resource_mapper.h"
+#include "chrome/browser/ui/android/autofill/autofill_accessibility_utils.h"
 #include "chrome/browser/ui/autofill/autofill_popup_controller.h"
-#include "chrome/browser/ui/autofill/autofill_popup_controller_utils.h"
+#include "components/autofill/core/browser/ui/autofill_resource_utils.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
@@ -73,44 +78,52 @@ void AutofillKeyboardAccessoryView::Show() {
   for (int i = 0; i < controller_->GetLineCount(); ++i) {
     const Suggestion& suggestion = controller_->GetSuggestionAt(i);
     int android_icon_id = 0;
-    if (!suggestion.icon.empty()) {
+    if (suggestion.icon != Suggestion::Icon::kNoIcon) {
       android_icon_id = ResourceMapper::MapToJavaDrawableId(
           GetIconResourceID(suggestion.icon));
     }
 
-    std::u16string value;
-    std::u16string label;
-    if (controller_->GetSuggestionMinorTextAt(i).empty()) {
-      value = controller_->GetSuggestionMainTextAt(i);
-      std::vector<std::vector<autofill::Suggestion::Text>> suggestion_labels =
-          controller_->GetSuggestionLabelsAt(i);
-      if (!suggestion_labels.empty()) {
-        DCHECK_EQ(suggestion_labels[0].size(), 1U);
-        label = std::move(suggestion_labels[0][0].value);
+    std::u16string label = controller_->GetSuggestionMainTextAt(i);
+    std::u16string sublabel = controller_->GetSuggestionMinorTextAt(i);
+    if (std::vector<std::vector<autofill::Suggestion::Text>> suggestion_labels =
+            controller_->GetSuggestionLabelsAt(i);
+        !suggestion_labels.empty()) {
+      // Verify that there is a single line of label, and it contains a single
+      // item.
+      DCHECK_EQ(suggestion_labels.size(), 1U);
+      DCHECK_EQ(suggestion_labels[0].size(), 1U);
+
+      // Since the keyboard accessory chips support showing only 2 strings, the
+      // minor_text and the suggestion_labels are concatenated.
+      if (sublabel.empty()) {
+        sublabel = std::move(suggestion_labels[0][0].value);
+      } else {
+        sublabel = base::StrCat(
+            {sublabel, u"  ", std::move(suggestion_labels[0][0].value)});
       }
-    } else {
-      value = controller_->GetSuggestionMainTextAt(i);
-      label = controller_->GetSuggestionMinorTextAt(i);
     }
 
     Java_AutofillKeyboardAccessoryViewBridge_addToAutofillSuggestionArray(
-        env, data_array, position++, ConvertUTF16ToJavaString(env, value),
-        ConvertUTF16ToJavaString(env, label), android_icon_id,
-        suggestion.frontend_id,
+        env, data_array, position++, ConvertUTF16ToJavaString(env, label),
+        ConvertUTF16ToJavaString(env, sublabel), android_icon_id,
+        base::to_underlying(suggestion.popup_item_id),
         controller_->GetRemovalConfirmationText(i, nullptr, nullptr),
         ConvertUTF8ToJavaString(env, suggestion.feature_for_iph),
         url::GURLAndroid::FromNativeGURL(env, suggestion.custom_icon_url));
   }
-  Java_AutofillKeyboardAccessoryViewBridge_show(env, java_object_, data_array,
-                                                controller_->IsRTL());
+  Java_AutofillKeyboardAccessoryViewBridge_show(env, java_object_, data_array);
+}
+
+void AutofillKeyboardAccessoryView::AxAnnounce(const std::u16string& text) {
+  AnnounceTextForA11y(text);
 }
 
 void AutofillKeyboardAccessoryView::ConfirmDeletion(
     const std::u16string& confirmation_title,
     const std::u16string& confirmation_body,
-    base::OnceClosure confirm_deletion) {
+    base::OnceCallback<void(bool)> deletion_callback) {
   JNIEnv* env = base::android::AttachCurrentThread();
-  confirm_deletion_ = std::move(confirm_deletion);
+  deletion_callback_ = std::move(deletion_callback);
   Java_AutofillKeyboardAccessoryViewBridge_confirmDeletion(
       env, java_object_, ConvertUTF16ToJavaString(env, confirmation_title),
       ConvertUTF16ToJavaString(env, confirmation_body));
@@ -120,30 +133,47 @@ void AutofillKeyboardAccessoryView::SuggestionSelected(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj,
     jint list_index) {
-  controller_->AcceptSuggestion(list_index);
-}
+    controller_->AcceptSuggestion(list_index, base::TimeTicks::Now());
+  }
 
 void AutofillKeyboardAccessoryView::DeletionRequested(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj,
     jint list_index) {
-  controller_->RemoveSuggestion(list_index);
+  controller_->RemoveSuggestion(
+      list_index,
+      AutofillMetrics::SingleEntryRemovalMethod::kKeyboardAccessory);
 }
 
-void AutofillKeyboardAccessoryView::DeletionConfirmed(
+void AutofillKeyboardAccessoryView::OnDeletionDialogClosed(
     JNIEnv* env,
-    const JavaParamRef<jobject>& obj) {
-  if (confirm_deletion_.is_null()) {
-    LOG(DFATAL) << "DeletionConfirmed called but no deletion is pending!";
+    const JavaParamRef<jobject>& obj,
+    jboolean confirmed) {
+  if (deletion_callback_.is_null()) {
+    LOG(DFATAL) << "OnDeletionDialogClosed called but no deletion is pending!";
     return;
   }
-  std::move(confirm_deletion_).Run();
+  std::move(deletion_callback_).Run(confirmed);
 }
 
 void AutofillKeyboardAccessoryView::ViewDismissed(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj) {
   controller_->ViewDestroyed();
+}
+
+// static
+base::WeakPtr<AutofillPopupView> AutofillPopupView::Create(
+    base::WeakPtr<AutofillPopupController> controller) {
+  auto adapter = std::make_unique<AutofillKeyboardAccessoryAdapter>(controller);
+  auto accessory_view = std::make_unique<AutofillKeyboardAccessoryView>(
+      adapter->GetWeakPtrToAdapter());
+  if (!accessory_view->Initialize()) {
+    return nullptr;  // Don't create an adapter without initialized view.
+  }
+
+  adapter->SetAccessoryView(std::move(accessory_view));
+  return adapter.release()->GetWeakPtr();
 }
 
 }  // namespace autofill

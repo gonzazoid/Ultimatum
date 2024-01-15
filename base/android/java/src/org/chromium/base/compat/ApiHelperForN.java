@@ -5,13 +5,9 @@
 package org.chromium.base.compat;
 
 import android.app.Activity;
-import android.app.Notification;
-import android.app.job.JobInfo;
-import android.app.job.JobScheduler;
 import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.media.MediaCodec.CryptoInfo;
 import android.net.ConnectivityManager;
 import android.os.Build;
@@ -21,10 +17,6 @@ import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.View;
 import android.view.View.DragShadowBuilder;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.RemoteViews;
 
 import androidx.annotation.RequiresApi;
 
@@ -37,34 +29,14 @@ import androidx.annotation.RequiresApi;
 public final class ApiHelperForN {
     private ApiHelperForN() {}
 
-    /**
-     * See {@link WebViewClient#shouldOverrideUrlLoading(WebView, WebResourceRequest)}, which was
-     * added in N.
-     */
-    public static boolean shouldOverrideUrlLoading(
-            WebViewClient webViewClient, WebView webView, WebResourceRequest request) {
-        return webViewClient.shouldOverrideUrlLoading(webView, request);
-    }
-
-    /** See {@link JobScheduler#getPendingJob(int)}. */
-    public static JobInfo getPendingJob(JobScheduler scheduler, int jobId) {
-        return scheduler.getPendingJob(jobId);
-    }
-
     /** See {@link View#startDragAndDrop(ClipData, DragShadowBuilder, Object, int)}. */
-    public static boolean startDragAndDrop(View view, ClipData data,
-            DragShadowBuilder shadowBuilder, Object myLocalState, int flags) {
+    public static boolean startDragAndDrop(
+            View view,
+            ClipData data,
+            DragShadowBuilder shadowBuilder,
+            Object myLocalState,
+            int flags) {
         return view.startDragAndDrop(data, shadowBuilder, myLocalState, flags);
-    }
-
-    /** See {@link View#setPointerIcon(PointerIcon)}. */
-    public static void setPointerIcon(View view, PointerIcon icon) {
-        view.setPointerIcon(icon);
-    }
-
-    /** See {@link PointerIcon#create(Bitmap, float, float)}. */
-    public static PointerIcon createPointerIcon(Bitmap bitmap, float width, float height) {
-        return PointerIcon.create(bitmap, width, height);
     }
 
     /** See {@link CryptoInfo#setPattern(Pattern)}. */
@@ -73,8 +45,9 @@ public final class ApiHelperForN {
     }
 
     /** See {@link Activity#setVrModeEnabled(boolean, ComponentName)}. */
-    public static void setVrModeEnabled(Activity activity, boolean enabled,
-            ComponentName requestedComponent) throws PackageManager.NameNotFoundException {
+    public static void setVrModeEnabled(
+            Activity activity, boolean enabled, ComponentName requestedComponent)
+            throws PackageManager.NameNotFoundException {
         activity.setVrModeEnabled(enabled, requestedComponent);
     }
 
@@ -91,18 +64,6 @@ public final class ApiHelperForN {
     /** See {@link Process#getStartUptimeMillis()}. */
     public static long getStartUptimeMillis() {
         return Process.getStartUptimeMillis();
-    }
-
-    /** See {@link Notification.Builder#setCustomContentView(RemoteViews)}. */
-    public static Notification.Builder setCustomContentView(
-            Notification.Builder builder, RemoteViews views) {
-        return builder.setCustomContentView(views);
-    }
-
-    /** See {@link Notification.Builder#setCustomBigContentView(RemoteViews)}. */
-    public static Notification.Builder setCustomBigContentView(
-            Notification.Builder builder, RemoteViews view) {
-        return builder.setCustomBigContentView(view);
     }
 
     /** See {@link ConnectivityManager#getRestrictBackgroundStatus(ConnectivityManager)}. */

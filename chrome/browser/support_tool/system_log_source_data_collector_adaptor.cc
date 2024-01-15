@@ -10,19 +10,21 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/strings/strcat.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #include "components/feedback/feedback_common.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "components/feedback/system_logs/system_logs_source.h"
+#include "data_collector_utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
@@ -33,18 +35,15 @@ namespace {
 // returned pair.
 std::pair<std::unique_ptr<system_logs::SystemLogsResponse>, PIIMap> DetectPII(
     std::unique_ptr<system_logs::SystemLogsResponse> system_logs_response,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
   DCHECK(system_logs_response);
-  feedback::RedactionTool* redaction_tool = redaction_tool_container->Get();
+  redaction::RedactionTool* redaction_tool = redaction_tool_container->Get();
   PIIMap detected_pii;
   // Detect PII in all entries in `system_logs_response` and add the detected
   // PII to `detected_pii`.
   for (const auto& entry : *system_logs_response) {
     PIIMap pii_in_logs = redaction_tool->Detect(entry.second);
-    for (auto& pii_data : pii_in_logs) {
-      detected_pii[pii_data.first].insert(pii_data.second.begin(),
-                                          pii_data.second.end());
-    }
+    MergePIIMaps(detected_pii, pii_in_logs);
   }
   return std::make_pair(std::move(system_logs_response),
                         std::move(detected_pii));
@@ -55,11 +54,11 @@ std::pair<std::unique_ptr<system_logs::SystemLogsResponse>, PIIMap> DetectPII(
 // redacted versions. Takes the ownership of `system_logs_response` and returns
 // it back.
 std::unique_ptr<system_logs::SystemLogsResponse> RedactAndKeepSelectedPII(
-    const std::set<feedback::PIIType>& pii_types_to_keep,
+    const std::set<redaction::PIIType>& pii_types_to_keep,
     std::unique_ptr<system_logs::SystemLogsResponse> system_logs_response,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
   DCHECK(system_logs_response);
-  feedback::RedactionTool* redaction_tool = redaction_tool_container->Get();
+  redaction::RedactionTool* redaction_tool = redaction_tool_container->Get();
   for (auto& entry : *system_logs_response) {
     (*system_logs_response)[entry.first] =
         redaction_tool->RedactAndKeepSelected(entry.second, pii_types_to_keep);
@@ -110,7 +109,7 @@ const PIIMap& SystemLogSourceDataCollectorAdaptor::GetDetectedPII() {
 void SystemLogSourceDataCollectorAdaptor::CollectDataAndDetectPII(
     DataCollectorDoneCallback on_data_collected_callback,
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   log_source_->Fetch(base::BindOnce(
       &SystemLogSourceDataCollectorAdaptor::OnDataFetched,
@@ -121,7 +120,7 @@ void SystemLogSourceDataCollectorAdaptor::CollectDataAndDetectPII(
 void SystemLogSourceDataCollectorAdaptor::OnDataFetched(
     DataCollectorDoneCallback on_data_collected_callback,
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container,
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container,
     std::unique_ptr<system_logs::SystemLogsResponse> system_logs_response) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   system_logs_response_ = std::move(system_logs_response);
@@ -145,10 +144,10 @@ void SystemLogSourceDataCollectorAdaptor::OnPIIDetected(
 }
 
 void SystemLogSourceDataCollectorAdaptor::ExportCollectedDataWithPII(
-    std::set<feedback::PIIType> pii_types_to_keep,
+    std::set<redaction::PIIType> pii_types_to_keep,
     base::FilePath target_directory,
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container,
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container,
     DataCollectorDoneCallback on_exported_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   task_runner_for_redaction_tool->PostTaskAndReplyWithResult(
@@ -183,10 +182,16 @@ void SystemLogSourceDataCollectorAdaptor::OnFilesWritten(
     DataCollectorDoneCallback on_exported_callback,
     bool success) {
   if (!success) {
-    SupportToolError error = {SupportToolErrorCode::kDataCollectorError,
-                              "Failed on data export."};
+    SupportToolError error = {
+        SupportToolErrorCode::kDataCollectorError,
+        base::StrCat({GetName(), "failed on data export."})};
     std::move(on_exported_callback).Run(error);
     return;
   }
   std::move(on_exported_callback).Run(/*error=*/absl::nullopt);
+}
+
+void SystemLogSourceDataCollectorAdaptor::SetLogSourceForTesting(
+    std::unique_ptr<system_logs::SystemLogsSource> log_source) {
+  log_source_ = std::move(log_source);
 }

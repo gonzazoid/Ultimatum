@@ -7,9 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/containers/stack.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/login/auth/public/auth_callbacks.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 
@@ -20,7 +20,7 @@ void OnOperation(base::stack<AuthOperation> operations,
                  AuthSuccessCallback success_handler,
                  AuthErrorCallback error_handler,
                  std::unique_ptr<UserContext> context,
-                 absl::optional<AuthenticationError> error) {
+                 std::optional<AuthenticationError> error) {
   if (error) {
     std::move(error_handler).Run(std::move(context), error.value());
     return;

@@ -9,12 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/offline_pages/offline_page_mhtml_archiver.h"
 #include "chrome/browser/offline_pages/offliner_helper.h"
@@ -42,24 +42,6 @@
 namespace offline_pages {
 
 namespace {
-
-std::string AddHistogramSuffix(const ClientId& client_id,
-                               const char* histogram_name) {
-  if (client_id.name_space.empty()) {
-    NOTREACHED();
-    return histogram_name;
-  }
-  std::string adjusted_histogram_name(histogram_name);
-  adjusted_histogram_name += "." + client_id.name_space;
-  return adjusted_histogram_name;
-}
-
-void RecordErrorCauseUMA(const ClientId& client_id, int error_code) {
-  base::UmaHistogramSparse(
-      AddHistogramSuffix(client_id,
-                         "OfflinePages.Background.LoadingErrorStatusCode"),
-      error_code);
-}
 
 void HandleLoadTerminationCancel(
     Offliner::CompletionCallback completion_callback,
@@ -152,7 +134,7 @@ bool BackgroundLoaderOffliner::LoadAndSave(
   loader_.get()->LoadPage(request.url());
 
   snapshot_controller_ = std::make_unique<BackgroundSnapshotController>(
-      base::ThreadTaskRunnerHandle::Get(), this, false);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), this, false);
 
   return true;
 }
@@ -174,7 +156,7 @@ bool BackgroundLoaderOffliner::Cancel(CancelCallback callback) {
   }
 
   // Post the cancel callback right after this call concludes.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), *pending_request_.get()));
   ResetState();
   return true;
@@ -230,7 +212,7 @@ void BackgroundLoaderOffliner::CanDownload(
   std::move(callback).Run(should_allow_downloads);
   SavePageRequest request(*pending_request_.get());
   std::move(completion_callback_).Run(request, final_status);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BackgroundLoaderOffliner::ResetState,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -294,8 +276,6 @@ void BackgroundLoaderOffliner::DidFinishNavigation(
   // If there was an error of any kind (certificate, client, DNS, etc),
   // Mark as error page. Resetting here causes RecordNavigationMetrics to crash.
   if (navigation_handle->IsErrorPage()) {
-    RecordErrorCauseUMA(pending_request_->client_id(),
-                        static_cast<int>(navigation_handle->GetNetErrorCode()));
     page_load_state_ = RETRIABLE_NET_ERROR;
   } else {
     int status_code = 200;  // Default to OK.
@@ -308,7 +288,6 @@ void BackgroundLoaderOffliner::DidFinishNavigation(
     // 400+ codes are client and server errors.
     // We skip 418 because it's a teapot.
     if (status_code == 301 || (status_code >= 400 && status_code != 418)) {
-      RecordErrorCauseUMA(pending_request_->client_id(), status_code);
       page_load_state_ = RETRIABLE_HTTP_ERROR;
     }
   }
@@ -394,7 +373,6 @@ void BackgroundLoaderOffliner::StartSnapshot() {
   params.client_id = request.client_id();
   params.proposed_offline_id = request.request_id();
   params.is_background = true;
-  params.use_page_problem_detectors = true;
   params.request_origin = request.request_origin();
 
   // Pass in the original URL if it's different from last committed
@@ -462,7 +440,7 @@ void BackgroundLoaderOffliner::ResetState() {
   // corrupt stack in some edge cases. Deleting it soon should be safe because
   // we check against pending_request_ with every action, and snapshot
   // controller is configured to only call StartSnapshot once for BGL.
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
       FROM_HERE, snapshot_controller_.release());
   page_load_state_ = SUCCESS;
   network_bytes_ = 0LL;
@@ -496,7 +474,7 @@ void BackgroundLoaderOffliner::AddLoadingSignal(const char* signal_name) {
   // Given the choice between int and double, we choose to implicitly convert to
   // a double since it maintains more precision (we can get a longer time in
   // milliseconds than we can with a 2 bit int, 53 bits vs 32).
-  signal_data_.SetDoubleKey(signal_name, delay_so_far.InMillisecondsF());
+  signal_data_.Set(signal_name, delay_so_far.InMillisecondsF());
 }
 
 void BackgroundLoaderOffliner::RenovationsCompleted() {

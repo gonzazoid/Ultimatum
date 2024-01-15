@@ -7,6 +7,8 @@
 #include "base/containers/contains.h"
 #include "base/json/values_util.h"
 #include "base/time/clock.h"
+#include "base/values.h"
+#include "components/content_settings/core/browser/content_settings_pref_provider.h"
 
 namespace {
 
@@ -50,12 +52,23 @@ void HttpsOnlyModeAllowlist::AllowHttpForHost(const std::string& host,
   // directly storing a string value.
   GURL url = GetSecureGURLForHost(host);
   base::Time expiration_time = clock_->Now() + expiration_timeout_;
-  auto dict = std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
-  dict->SetKey(kHTTPAllowlistExpirationTimeKey,
-               base::TimeToValue(expiration_time));
+  base::Value::Dict dict;
+  dict.Set(kHTTPAllowlistExpirationTimeKey, base::TimeToValue(expiration_time));
   host_content_settings_map_->SetWebsiteSettingDefaultScope(
       url, GURL(), ContentSettingsType::HTTP_ALLOWED,
-      base::Value::FromUniquePtrValue(std::move(dict)));
+      base::Value(std::move(dict)));
+}
+
+bool HttpsOnlyModeAllowlist::IsHttpAllowedForAnyHost(
+    bool is_nondefault_storage) const {
+  if (is_nondefault_storage) {
+    return !allowed_http_hosts_for_non_default_storage_partitions_.empty();
+  }
+
+  ContentSettingsForOneType content_settings_list =
+      host_content_settings_map_->GetSettingsForOneType(
+          ContentSettingsType::HTTP_ALLOWED);
+  return !content_settings_list.empty();
 }
 
 bool HttpsOnlyModeAllowlist::IsHttpAllowedForHost(
@@ -76,8 +89,8 @@ bool HttpsOnlyModeAllowlist::IsHttpAllowedForHost(
     return false;
   }
 
-  auto* decision_expiration_value =
-      value.FindKey(kHTTPAllowlistExpirationTimeKey);
+  const base::Value* decision_expiration_value =
+      value.GetDict().Find(kHTTPAllowlistExpirationTimeKey);
   auto decision_expiration = base::ValueToTime(decision_expiration_value);
   if (decision_expiration <= clock_->Now()) {
     // Allowlist entry has expired.

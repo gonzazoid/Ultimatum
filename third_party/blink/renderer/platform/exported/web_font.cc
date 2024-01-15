@@ -4,15 +4,13 @@
 
 #include "third_party/blink/public/platform/web_font.h"
 
+#include "cc/paint/paint_flags.h"
 #include "third_party/blink/public/platform/web_font_description.h"
 #include "third_party/blink/public/platform/web_text_run.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
 #include "third_party/blink/renderer/platform/fonts/text_run_paint_info.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
-#include "third_party/blink/renderer/platform/graphics/paint/paint_record_builder.h"
 #include "third_party/blink/renderer/platform/text/text_run.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
@@ -22,12 +20,11 @@ WebFont* WebFont::Create(const WebFontDescription& description) {
   return new WebFont(description);
 }
 
-class WebFont::Impl final {
-  USING_FAST_MALLOC(WebFont::Impl);
-
+class WebFont::Impl final : public GarbageCollected<WebFont::Impl> {
  public:
-  explicit Impl(const WebFontDescription& description) : font_(description) {
-  }
+  explicit Impl(const WebFontDescription& description) : font_(description) {}
+
+  void Trace(Visitor* visitor) const { visitor->Trace(font_); }
 
   const Font& GetFont() const { return font_; }
 
@@ -36,7 +33,7 @@ class WebFont::Impl final {
 };
 
 WebFont::WebFont(const WebFontDescription& description)
-    : private_(std::make_unique<Impl>(description)) {}
+    : private_(MakeGarbageCollected<Impl>(description)) {}
 
 WebFont::~WebFont() = default;
 
@@ -84,19 +81,10 @@ void WebFont::DrawText(cc::PaintCanvas* canvas,
   TextRun text_run(run);
   TextRunPaintInfo run_info(text_run);
 
-  auto* builder = MakeGarbageCollected<PaintRecordBuilder>();
-  GraphicsContext& context = builder->Context();
-
-  {
-    DrawingRecorder recorder(context, *builder, DisplayItem::kWebFont);
-    context.Save();
-    context.SetFillColor(Color::FromSkColor(color));
-    context.DrawText(private_->GetFont(), run_info, left_baseline,
-                     kInvalidDOMNodeId, AutoDarkMode::Disabled());
-    context.Restore();
-  }
-
-  builder->EndRecording(*canvas);
+  cc::PaintFlags flags;
+  flags.setColor(color);
+  flags.setAntiAlias(true);
+  private_->GetFont().DrawText(canvas, run_info, left_baseline, flags);
 }
 
 int WebFont::CalculateWidth(const WebTextRun& run) const {

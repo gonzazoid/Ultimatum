@@ -7,8 +7,9 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -131,8 +132,9 @@ class NearbyShareSettings : public nearby_share::mojom::NearbyShareSettings,
   mojo::RemoteSet<nearby_share::mojom::NearbyShareSettingsObserver>
       observers_set_;
   mojo::ReceiverSet<nearby_share::mojom::NearbyShareSettings> receiver_set_;
-  PrefService* pref_service_ = nullptr;
-  NearbyShareLocalDeviceDataManager* local_device_data_manager_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<NearbyShareLocalDeviceDataManager> local_device_data_manager_ =
+      nullptr;
   PrefChangeRegistrar pref_change_registrar_;
 };
 

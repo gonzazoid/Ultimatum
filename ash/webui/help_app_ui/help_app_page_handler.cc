@@ -10,6 +10,7 @@
 #include "ash/webui/help_app_ui/help_app_ui.h"
 #include "ash/webui/help_app_ui/help_app_ui_delegate.h"
 #include "base/feature_list.h"
+#include "url/gurl.h"
 
 namespace ash {
 
@@ -36,6 +37,11 @@ void HelpAppPageHandler::ShowParentalControls() {
   help_app_ui_->delegate()->ShowParentalControls();
 }
 
+void HelpAppPageHandler::TriggerWelcomeTipCallToAction(
+    help_app::mojom::ActionTypeId action_type_id) {
+  help_app_ui_->delegate()->TriggerWelcomeTipCallToAction(action_type_id);
+}
+
 void HelpAppPageHandler::IsLssEnabled(IsLssEnabledCallback callback) {
   std::move(callback).Run(is_lss_enabled_);
 }
@@ -45,12 +51,29 @@ void HelpAppPageHandler::IsLauncherSearchEnabled(
   std::move(callback).Run(is_launcher_search_enabled_);
 }
 
+void HelpAppPageHandler::LaunchMicrosoft365Setup() {
+  help_app_ui_->delegate()->LaunchMicrosoft365Setup();
+}
+
 void HelpAppPageHandler::MaybeShowDiscoverNotification() {
   help_app_ui_->delegate()->MaybeShowDiscoverNotification();
 }
 
 void HelpAppPageHandler::MaybeShowReleaseNotesNotification() {
   help_app_ui_->delegate()->MaybeShowReleaseNotesNotification();
+}
+
+void HelpAppPageHandler::GetDeviceInfo(GetDeviceInfoCallback callback) {
+  help_app_ui_->delegate()->GetDeviceInfo(std::move(callback));
+}
+
+void HelpAppPageHandler::OpenUrlInBrowserAndTriggerInstallDialog(
+    const GURL& url) {
+  auto error_message =
+      help_app_ui_->delegate()->OpenUrlInBrowserAndTriggerInstallDialog(url);
+  if (error_message.has_value()) {
+    receiver_.ReportBadMessage(error_message.value());
+  }
 }
 
 }  // namespace ash

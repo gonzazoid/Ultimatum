@@ -21,6 +21,8 @@ enum ChromeInsetsMetric {
   INSETS_OMNIBOX_PILL_BUTTON,
   // Padding used in an page info hover button.
   INSETS_PAGE_INFO_HOVER_BUTTON,
+  // Padding used in Infobar view.
+  INSETS_INFOBAR_VIEW,
 };
 
 enum ChromeDistanceMetric {
@@ -39,8 +41,12 @@ enum ChromeDistanceMetric {
   // Width of the horizontal padding in a dropdown button between the down arrow
   // and the button's border.
   DISTANCE_DROPDOWN_BUTTON_RIGHT_MARGIN,
+  // Width of the extensions menu.
+  DISTANCE_EXTENSIONS_MENU_WIDTH,
   // Width and height of a button's icon in the extensions menu.
   DISTANCE_EXTENSIONS_MENU_BUTTON_ICON_SIZE,
+  // Width and height of a small button's icon in the extensions menu.
+  DISTANCE_EXTENSIONS_MENU_BUTTON_ICON_SMALL_SIZE,
   // Width and height of an extension's icon in the extensions menu. This are
   // larger than menu button's icons because it contains internal padding to
   // provide space for badging.
@@ -83,6 +89,9 @@ enum ChromeDistanceMetric {
   DISTANCE_BETWEEN_PRIMARY_AND_SECONDARY_LABELS_HORIZONTAL,
   // Vertical padding at the top and bottom of the an omnibox match row.
   DISTANCE_OMNIBOX_CELL_VERTICAL_PADDING,
+  // Horizontal overlap between an activity indicator chip and a permission
+  // request chip.
+  DISTANCE_OMNIBOX_CHIPS_OVERLAP,
   // Vertical padding at the top and bottom of the an omnibox match row for two
   // line layout.
   DISTANCE_OMNIBOX_TWO_LINE_CELL_VERTICAL_PADDING,
@@ -92,6 +101,15 @@ enum ChromeDistanceMetric {
   DISTANCE_SIDE_PANEL_HEADER_BUTTON_MINIMUM_SIZE,
   // Horizontal spacing for separating side panel header border from controls.
   DISTANCE_SIDE_PANEL_HEADER_INTERIOR_MARGIN_HORIZONTAL,
+  // Horizontal padding between separator in the page info view.
+  DISTANCE_HORIZONTAL_SEPARATOR_PADDING_PAGE_INFO_VIEW,
+  // Horizontal padding applied between the icon and label in the infobar.
+  DISTANCE_INFOBAR_HORIZONTAL_ICON_LABEL_PADDING,
+  // Horizontal padding applied between the icon and label in the permission
+  // prompt.
+  DISTANCE_PERMISSION_PROMPT_HORIZONTAL_ICON_LABEL_PADDING,
+  // Horizontal spacing between icon and label in the rich hover button.
+  DISTANCE_RICH_HOVER_BUTTON_ICON_HORIZONTAL,
 };
 
 class ChromeLayoutProvider : public views::LayoutProvider {

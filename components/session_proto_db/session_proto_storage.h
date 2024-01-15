@@ -19,7 +19,11 @@ class SessionProtoStorage {
  public:
   using KeyAndValue = std::pair<std::string, T>;
 
-  // Callback which is used when content is acquired.
+  // Callback which is used when content is acquired. Users are recommended to
+  // check the bool value which indicates whether the operation has succeeded,
+  // because when the operation fails, the callback could be posted to the
+  // thread pool to execute instead of the original thread, which might lead to
+  // use-after-free.
   using LoadCallback = base::OnceCallback<void(bool, std::vector<KeyAndValue>)>;
 
   // Used for confirming an operation was completed successfully (e.g.
@@ -63,6 +67,12 @@ class SessionProtoStorage {
   // Deletes the entry with certain key in the database.
   virtual void DeleteOneEntry(const std::string& key,
                               OperationCallback callback) = 0;
+
+  // Updates the value of multiple entries in the database.
+  virtual void UpdateEntries(
+      std::unique_ptr<std::vector<KeyAndValue>> entries_to_update,
+      std::unique_ptr<std::vector<std::string>> keys_to_remove,
+      OperationCallback callback) = 0;
 
   // Deletes content in the database, matching all keys which have a prefix
   // that matches the key.

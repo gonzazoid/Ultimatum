@@ -7,13 +7,16 @@
 #include <string.h>
 
 #include <algorithm>
+#include <string>
+#include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/expected_macros.h"
 #include "base/values.h"
 #include "components/search_engines/search_terms_data.h"
 #include "components/search_engines/template_url.h"
@@ -167,62 +170,66 @@ class SafeTemplateURLParser {
 
 void SafeTemplateURLParser::OnXmlParseComplete(
     data_decoder::DataDecoder::ValueOrError value_or_error) {
-  if (!value_or_error.has_value()) {
-    DLOG(ERROR) << "Failed to parse XML: " << value_or_error.error();
-    std::move(callback_).Run(nullptr);
-    return;
-  }
+  std::move(callback_).Run([&]() -> std::unique_ptr<TemplateURL> {
+    ASSIGN_OR_RETURN(const base::Value root, std::move(value_or_error),
+                     [](std::string error) -> std::unique_ptr<TemplateURL> {
+                       DLOG(ERROR)
+                           << "Failed to parse XML: " << std::move(error);
+                       return nullptr;
+                     });
 
-  const base::Value& root = *value_or_error;
-
-  // Get the namespaces used in the XML document, which will be used
-  // to access nodes by tag name in GetChildElementsByTag().
-  if (const base::Value* namespaces =
-          root.FindDictKey(data_decoder::mojom::XmlParser::kNamespacesKey)) {
-    for (auto item : namespaces->DictItems()) {
-      namespaces_.push_back(item.first);
+    // Get the namespaces used in the XML document, which will be used
+    // to access nodes by tag name in GetChildElementsByTag().
+    if (const base::Value::Dict* namespaces = root.GetDict().FindDict(
+            data_decoder::mojom::XmlParser::kNamespacesKey)) {
+      for (auto item : *namespaces) {
+        namespaces_.push_back(item.first);
+      }
     }
-  }
-  if (namespaces_.empty())
-    namespaces_.push_back(std::string());
+    if (namespaces_.empty()) {
+      namespaces_.emplace_back();
+    }
 
-  std::string root_tag;
-  if (!data_decoder::GetXmlElementTagName(root, &root_tag) ||
-      (root_tag != kOpenSearchDescriptionElement &&
-       root_tag != kFirefoxSearchDescriptionElement)) {
-    DLOG(ERROR) << "Unexpected root tag: " << root_tag;
-    std::move(callback_).Run(nullptr);
-    return;
-  }
+    std::string root_tag;
+    if (!data_decoder::GetXmlElementTagName(root, &root_tag) ||
+        (root_tag != kOpenSearchDescriptionElement &&
+         root_tag != kFirefoxSearchDescriptionElement)) {
+      DLOG(ERROR) << "Unexpected root tag: " << root_tag;
+      return nullptr;
+    }
 
-  // The only required element is the URL.
-  std::vector<const base::Value*> urls;
-  if (!GetChildElementsByTag(root, kURLElement, &urls)) {
-    std::move(callback_).Run(nullptr);
-    return;
-  }
-  ParseURLs(urls);
+    // The only required element is the URL.
+    std::vector<const base::Value*> urls;
+    if (!GetChildElementsByTag(root, kURLElement, &urls)) {
+      return nullptr;
+    }
+    ParseURLs(urls);
 
-  std::vector<const base::Value*> images;
-  if (GetChildElementsByTag(root, kImageElement, &images))
-    ParseImages(images);
+    std::vector<const base::Value*> images;
+    if (GetChildElementsByTag(root, kImageElement, &images)) {
+      ParseImages(images);
+    }
 
-  std::vector<const base::Value*> encodings;
-  if (GetChildElementsByTag(root, kInputEncodingElement, &encodings))
-    ParseEncodings(encodings);
+    std::vector<const base::Value*> encodings;
+    if (GetChildElementsByTag(root, kInputEncodingElement, &encodings)) {
+      ParseEncodings(encodings);
+    }
 
-  std::vector<const base::Value*> aliases;
-  if (GetChildElementsByTag(root, kAliasElement, &aliases))
-    ParseAliases(aliases);
+    std::vector<const base::Value*> aliases;
+    if (GetChildElementsByTag(root, kAliasElement, &aliases)) {
+      ParseAliases(aliases);
+    }
 
-  std::vector<const base::Value*> short_names;
-  if (GetChildElementsByTag(root, kShortNameElement, &short_names)) {
-    std::string name;
-    if (data_decoder::GetXmlElementText(*short_names.back(), &name))
-      data_.SetShortName(base::UTF8ToUTF16(name));
-  }
+    std::vector<const base::Value*> short_names;
+    if (GetChildElementsByTag(root, kShortNameElement, &short_names)) {
+      std::string name;
+      if (data_decoder::GetXmlElementText(*short_names.back(), &name)) {
+        data_.SetShortName(base::UTF8ToUTF16(name));
+      }
+    }
 
-  std::move(callback_).Run(FinalizeTemplateURL());
+    return FinalizeTemplateURL();
+  }());
 }
 
 void SafeTemplateURLParser::ParseURLs(

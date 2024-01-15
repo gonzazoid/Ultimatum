@@ -14,39 +14,42 @@
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "components/custom_handlers/pref_names.h"
 #include "components/custom_handlers/protocol_handler.h"
-#include "components/custom_handlers/protocol_handler_registry.h"
 #include "components/custom_handlers/test_protocol_handler_registry_delegate.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_prefs/user_prefs.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_renderer_host.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/security/protocol_handler_security_level.h"
 
 using content::BrowserThread;
 
 namespace custom_handlers {
 
-base::Value GetProtocolHandlerValue(const std::string& protocol,
-                                    const std::string& url) {
+base::Value::Dict GetProtocolHandlerValue(const std::string& protocol,
+                                          const std::string& url) {
   base::Value::Dict value;
   value.Set("protocol", protocol);
   value.Set("url", url);
-  return base::Value(std::move(value));
+  return value;
 }
 
-base::Value GetProtocolHandlerValueWithDefault(const std::string& protocol,
-                                               const std::string& url,
-                                               bool is_default) {
-  base::Value value = GetProtocolHandlerValue(protocol, url);
-  value.GetDict().Set("default", is_default);
+base::Value::Dict GetProtocolHandlerValueWithDefault(
+    const std::string& protocol,
+    const std::string& url,
+    bool is_default) {
+  base::Value::Dict value = GetProtocolHandlerValue(protocol, url);
+  value.Set("default", is_default);
   return value;
 }
 
@@ -197,6 +200,7 @@ class ProtocolHandlerRegistryTest : public testing::Test {
   }
 
   void TeadDownRegistry() {
+    delegate_ = nullptr;
     registry_->Shutdown();
     registry_.reset();
   }
@@ -804,8 +808,8 @@ TEST_F(ProtocolHandlerRegistryTest, TestInstallDefaultHandler) {
 #define URL_p3u1 "https://p3u1.com/%s"
 
 TEST_F(ProtocolHandlerRegistryTest, TestPrefPolicyOverlapRegister) {
-  base::ListValue handlers_registered_by_pref;
-  base::ListValue handlers_registered_by_policy;
+  base::Value::List handlers_registered_by_pref;
+  base::Value::List handlers_registered_by_policy;
 
   handlers_registered_by_pref.Append(
       GetProtocolHandlerValueWithDefault("news", URL_p1u2, true));
@@ -819,10 +823,10 @@ TEST_F(ProtocolHandlerRegistryTest, TestPrefPolicyOverlapRegister) {
   handlers_registered_by_policy.Append(
       GetProtocolHandlerValueWithDefault("mailto", URL_p3u1, true));
 
-  GetPrefs()->Set(custom_handlers::prefs::kRegisteredProtocolHandlers,
-                  handlers_registered_by_pref);
-  GetPrefs()->Set(custom_handlers::prefs::kPolicyRegisteredProtocolHandlers,
-                  handlers_registered_by_policy);
+  GetPrefs()->SetList(custom_handlers::prefs::kRegisteredProtocolHandlers,
+                      std::move(handlers_registered_by_pref));
+  GetPrefs()->SetList(custom_handlers::prefs::kPolicyRegisteredProtocolHandlers,
+                      std::move(handlers_registered_by_policy));
   registry()->InitProtocolSettings();
 
   // Duplicate p1u2 eliminated in memory but not yet saved in pref
@@ -884,8 +888,8 @@ TEST_F(ProtocolHandlerRegistryTest, TestPrefPolicyOverlapRegister) {
 }
 
 TEST_F(ProtocolHandlerRegistryTest, TestPrefPolicyOverlapIgnore) {
-  base::ListValue handlers_ignored_by_pref;
-  base::ListValue handlers_ignored_by_policy;
+  base::Value::List handlers_ignored_by_pref;
+  base::Value::List handlers_ignored_by_policy;
 
   handlers_ignored_by_pref.Append(GetProtocolHandlerValue("news", URL_p1u1));
   handlers_ignored_by_pref.Append(GetProtocolHandlerValue("news", URL_p1u2));
@@ -896,10 +900,10 @@ TEST_F(ProtocolHandlerRegistryTest, TestPrefPolicyOverlapIgnore) {
   handlers_ignored_by_policy.Append(GetProtocolHandlerValue("news", URL_p1u3));
   handlers_ignored_by_policy.Append(GetProtocolHandlerValue("im", URL_p2u1));
 
-  GetPrefs()->Set(custom_handlers::prefs::kIgnoredProtocolHandlers,
-                  handlers_ignored_by_pref);
-  GetPrefs()->Set(custom_handlers::prefs::kPolicyIgnoredProtocolHandlers,
-                  handlers_ignored_by_policy);
+  GetPrefs()->SetList(custom_handlers::prefs::kIgnoredProtocolHandlers,
+                      std::move(handlers_ignored_by_pref));
+  GetPrefs()->SetList(custom_handlers::prefs::kPolicyIgnoredProtocolHandlers,
+                      std::move(handlers_ignored_by_policy));
   registry()->InitProtocolSettings();
 
   // Duplicate p1u2 eliminated in memory but not yet saved in pref
@@ -1106,22 +1110,6 @@ TEST_F(ProtocolHandlerRegistryTest, WebPlusPrefix) {
   ASSERT_TRUE(registry()->IsHandledProtocol("web+zyxwvutsrqponmlkjihgfedcba"));
 }
 
-// See
-// https://html.spec.whatwg.org/multipage/system-state.html#safelisted-scheme
-TEST_F(ProtocolHandlerRegistryTest, SafelistedSchemes) {
-  std::string schemes[] = {
-      "bitcoin",  "cabal",       "dat",    "did",    "doi",   "dweb",
-      "ethereum", "geo",         "hyper",  "im",     "ipfs",  "ipns",
-      "irc",      "ircs",        "magnet", "mailto", "mms",   "news",
-      "nntp",     "openpgp4fpr", "sip",    "sms",    "smsto", "ssb",
-      "ssh",      "tel",         "urn",    "webcal", "wtai",  "xmpp"};
-  for (auto& scheme : schemes) {
-    registry()->OnAcceptRegisterProtocolHandler(
-        CreateProtocolHandler(scheme, GURL("https://example.com/url=%s")));
-    ASSERT_TRUE(registry()->IsHandledProtocol(scheme));
-  }
-}
-
 TEST_F(ProtocolHandlerRegistryTest, ProtocolHandlerSecurityLevels) {
   GURL https_handler_url("https://www.google.com/handler%s");
 
@@ -1177,6 +1165,174 @@ TEST_F(ProtocolHandlerRegistryTest, ProtocolHandlerSecurityLevels) {
   EXPECT_TRUE(ProtocolHandlerCanRegisterProtocol(
       "ext+foo", https_handler_url,
       blink::ProtocolHandlerSecurityLevel::kExtensionFeatures));
+}
+
+namespace {
+
+enum class ProtocolTestMode {
+  kFtpOffPaytoOn,
+  kFtpOnPaytoOff,
+  kFtpOnPaytoOn,
+  kFtpOffPaytoOff,
+};
+
+}  // namespace
+
+class ProtocolHandlerRegistrySchemeTest
+    : public ProtocolHandlerRegistryTest,
+      public ::testing::WithParamInterface<ProtocolTestMode> {
+ public:
+  ~ProtocolHandlerRegistrySchemeTest() override = default;
+
+ private:
+  void SetUp() override {
+    ProtocolHandlerRegistryTest::SetUp();
+    switch (GetParam()) {
+    case ProtocolTestMode::kFtpOffPaytoOn:
+      scoped_feature_list_.InitWithFeatures(
+          {blink::features::kSafelistPaytoToRegisterProtocolHandler},
+          {blink::features::kSafelistFTPToRegisterProtocolHandler});
+      break;
+    case ProtocolTestMode::kFtpOnPaytoOff:
+      scoped_feature_list_.InitWithFeatures(
+          {blink::features::kSafelistFTPToRegisterProtocolHandler},
+          {blink::features::kSafelistPaytoToRegisterProtocolHandler});
+      break;
+    case ProtocolTestMode::kFtpOnPaytoOn:
+      scoped_feature_list_.InitWithFeatures(
+          {blink::features::kSafelistFTPToRegisterProtocolHandler,
+          blink::features::kSafelistPaytoToRegisterProtocolHandler}, {});
+      break;
+    case ProtocolTestMode::kFtpOffPaytoOff:
+    default:
+      scoped_feature_list_.InitWithFeatures({},
+          {blink::features::kSafelistFTPToRegisterProtocolHandler,
+          blink::features::kSafelistPaytoToRegisterProtocolHandler});
+      break;
+    }
+  }
+
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+INSTANTIATE_TEST_SUITE_P(All,
+                         ProtocolHandlerRegistrySchemeTest,
+                         testing::Values(ProtocolTestMode::kFtpOffPaytoOn,
+                                         ProtocolTestMode::kFtpOnPaytoOff,
+                                         ProtocolTestMode::kFtpOnPaytoOn,
+                                         ProtocolTestMode::kFtpOffPaytoOff));
+// See
+// https://html.spec.whatwg.org/multipage/system-state.html#safelisted-scheme
+TEST_P(ProtocolHandlerRegistrySchemeTest, SafelistedSchemes) {
+  const std::string kSchemes[] = {
+      "bitcoin",  "cabal",       "dat",    "did",    "doi",   "dweb",
+      "ethereum", "geo",         "hyper",  "im",     "ipfs",  "ipns",
+      "irc",      "ircs",        "magnet", "mailto", "mms",   "news",
+      "nntp",     "openpgp4fpr", "sip",    "sms",    "smsto", "ssb",
+      "ssh",      "tel",         "urn",    "webcal", "wtai",  "xmpp"};
+  const std::string kFtpSchemes[] = {"ftp", "ftps", "sftp"};
+  const std::string kPaytoScheme = "payto";
+  for (auto& scheme : kSchemes) {
+    registry()->OnAcceptRegisterProtocolHandler(
+        CreateProtocolHandler(scheme, GURL("https://example.com/url=%s")));
+    ASSERT_TRUE(registry()->IsHandledProtocol(scheme));
+  }
+  for (auto& scheme : kFtpSchemes) {
+    registry()->OnAcceptRegisterProtocolHandler(
+        CreateProtocolHandler(scheme, GURL("https://example.com/url=%s")));
+    if (GetParam() == ProtocolTestMode::kFtpOnPaytoOff ||
+        GetParam() == ProtocolTestMode::kFtpOnPaytoOn) {
+      ASSERT_TRUE(registry()->IsHandledProtocol(scheme));
+    } else {
+      ASSERT_FALSE(registry()->IsHandledProtocol(scheme));
+    }
+  }
+  registry()->OnAcceptRegisterProtocolHandler(
+    CreateProtocolHandler(kPaytoScheme, GURL("https://example.com/url=%s")));
+  if (GetParam() == ProtocolTestMode::kFtpOffPaytoOn ||
+      GetParam() == ProtocolTestMode::kFtpOnPaytoOn) {
+     ASSERT_TRUE(registry()->IsHandledProtocol(kPaytoScheme));
+  } else {
+     ASSERT_FALSE(registry()->IsHandledProtocol(kPaytoScheme));
+  }
+}
+
+namespace {
+
+enum class CredentialsTestMode {
+  kStripCredentials,
+  kKeepCredentials,
+};
+
+}  // namespace
+
+class ProtocolHandlerRegistryCredentialsTest
+    : public ProtocolHandlerRegistryTest,
+      public ::testing::WithParamInterface<CredentialsTestMode> {
+ public:
+  ~ProtocolHandlerRegistryCredentialsTest() override = default;
+
+ private:
+  void SetUp() override {
+    ProtocolHandlerRegistryTest::SetUp();
+    if (GetParam() == CredentialsTestMode::kStripCredentials) {
+      scoped_feature_list_.InitAndEnableFeature(
+          features::kStripCredentialsForExternalProtocolHandler);
+    } else {
+      scoped_feature_list_.InitAndDisableFeature(
+          features::kStripCredentialsForExternalProtocolHandler);
+    }
+  }
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    ProtocolHandlerRegistryCredentialsTest,
+    testing::Values(CredentialsTestMode::kStripCredentials,
+                    CredentialsTestMode::kKeepCredentials));
+
+// See
+// https://html.spec.whatwg.org/multipage/system-state.html#security-and-privacy
+// guidance on mitigating credential leaks.
+TEST_P(ProtocolHandlerRegistryCredentialsTest,
+       NoCredentialsForStandardSchemes) {
+  ProtocolHandler ph =
+      CreateProtocolHandler("ftp", GURL("https://example.com/url=%s"));
+  registry()->OnAcceptRegisterProtocolHandler(ph);
+
+  EXPECT_EQ(ph.TranslateUrl(GURL("ftp://example/y")),
+            GURL("https://example.com/url=ftp%3A%2F%2Fexample%2Fy"));
+  if (GetParam() == CredentialsTestMode::kStripCredentials) {
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://user@example/y")),
+              GURL("https://example.com/url=ftp%3A%2F%2Fexample%2Fy"));
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://:password@example/y")),
+              GURL("https://example.com/url=ftp%3A%2F%2Fexample%2Fy"));
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://user:password@example/y")),
+              GURL("https://example.com/url=ftp%3A%2F%2Fexample%2Fy"));
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://user:password@example/y#ref")),
+              GURL("https://example.com/url=ftp%3A%2F%2Fexample%2Fy%23ref"));
+  } else {
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://user@example/y")),
+              GURL("https://example.com/url=ftp%3A%2F%2Fuser%40example%2Fy"));
+    EXPECT_EQ(
+        ph.TranslateUrl(GURL("ftp://:password@example/y")),
+        GURL("https://example.com/url=ftp%3A%2F%2F%3Apassword%40example%2Fy"));
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://user:password@example/y")),
+              GURL("https://example.com/"
+                   "url=ftp%3A%2F%2Fuser%3Apassword%40example%2Fy"));
+    EXPECT_EQ(ph.TranslateUrl(GURL("ftp://user:password@example/y#ref")),
+              GURL("https://example.com/"
+                   "url=ftp%3A%2F%2Fuser%3Apassword%40example%2Fy%23ref"));
+  }
+}
+
+TEST_F(ProtocolHandlerRegistryTest, CredentialsForNonStandardSchemes) {
+  ProtocolHandler ph =
+      CreateProtocolHandler("web+bool", GURL("https://example.com/url=%s"));
+  registry()->OnAcceptRegisterProtocolHandler(ph);
+
+  EXPECT_EQ(ph.TranslateUrl(GURL("web+bool://user:password@example/y")),
+            GURL("https://example.com/"
+                 "url=web%2Bbool%3A%2F%2Fuser%3Apassword%40example%2Fy"));
 }
 
 }  // namespace custom_handlers

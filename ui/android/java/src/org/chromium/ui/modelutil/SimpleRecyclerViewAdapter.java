@@ -60,7 +60,7 @@ public class SimpleRecyclerViewAdapter
     }
 
     /** The data that is shown in the list. */
-    private final ModelList mListData;
+    protected final ModelList mListData;
 
     /** The observer that watches the data for changes. */
     private final ListObserver<Void> mListObserver;
@@ -70,28 +70,32 @@ public class SimpleRecyclerViewAdapter
 
     public SimpleRecyclerViewAdapter(ModelList data) {
         mListData = data;
-        mListObserver = new ListObserver<Void>() {
-            @Override
-            public void onItemRangeInserted(ListObservable source, int index, int count) {
-                notifyItemRangeInserted(index, count);
-            }
+        mListObserver =
+                new ListObserver<Void>() {
+                    @Override
+                    public void onItemRangeInserted(ListObservable source, int index, int count) {
+                        notifyItemRangeInserted(index, count);
+                    }
 
-            @Override
-            public void onItemRangeRemoved(ListObservable source, int index, int count) {
-                notifyItemRangeRemoved(index, count);
-            }
+                    @Override
+                    public void onItemRangeRemoved(ListObservable source, int index, int count) {
+                        notifyItemRangeRemoved(index, count);
+                    }
 
-            @Override
-            public void onItemRangeChanged(
-                    ListObservable<Void> source, int index, int count, @Nullable Void payload) {
-                notifyItemRangeChanged(index, count);
-            }
+                    @Override
+                    public void onItemRangeChanged(
+                            ListObservable<Void> source,
+                            int index,
+                            int count,
+                            @Nullable Void payload) {
+                        notifyItemRangeChanged(index, count);
+                    }
 
-            @Override
-            public void onItemMoved(ListObservable source, int curIndex, int newIndex) {
-                notifyItemMoved(curIndex, newIndex);
-            }
-        };
+                    @Override
+                    public void onItemMoved(ListObservable source, int curIndex, int newIndex) {
+                        notifyItemMoved(curIndex, newIndex);
+                    }
+                };
         mListData.addObserver(mListObserver);
     }
 

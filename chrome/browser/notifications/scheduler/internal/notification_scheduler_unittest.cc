@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
@@ -145,13 +145,16 @@ class NotificationSchedulerTest : public testing::Test {
 
  private:
   base::test::TaskEnvironment task_environment_;
-  raw_ptr<NotificationSchedulerClientRegistrar> registrar_;
-  raw_ptr<test::MockImpressionHistoryTracker> impression_tracker_;
-  raw_ptr<test::MockScheduledNotificationManager> notification_manager_;
-  raw_ptr<test::MockNotificationSchedulerClient> client_;
-  raw_ptr<test::MockBackgroundTaskCoordinator> task_coordinator_;
-  raw_ptr<test::MockDisplayAgent> display_agent_;
-  raw_ptr<test::MockDisplayDecider> display_decider_;
+  raw_ptr<NotificationSchedulerClientRegistrar, DanglingUntriaged> registrar_;
+  raw_ptr<test::MockImpressionHistoryTracker, DanglingUntriaged>
+      impression_tracker_;
+  raw_ptr<test::MockScheduledNotificationManager, DanglingUntriaged>
+      notification_manager_;
+  raw_ptr<test::MockNotificationSchedulerClient, DanglingUntriaged> client_;
+  raw_ptr<test::MockBackgroundTaskCoordinator, DanglingUntriaged>
+      task_coordinator_;
+  raw_ptr<test::MockDisplayAgent, DanglingUntriaged> display_agent_;
+  raw_ptr<test::MockDisplayDecider, DanglingUntriaged> display_decider_;
 
   std::unique_ptr<NotificationScheduler> notification_scheduler_;
 };

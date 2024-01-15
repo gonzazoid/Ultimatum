@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_NAVIGATION_BODY_LOADER_H_
 
 #include "base/containers/span.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "services/network/public/mojom/url_loader.mojom-forward.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
@@ -53,7 +54,6 @@ class BLINK_EXPORT WebNavigationBodyLoader {
         int64_t total_encoded_data_length,
         int64_t total_encoded_body_length,
         int64_t total_decoded_body_length,
-        bool should_report_corb_blocking,
         const absl::optional<WebURLError>& error) = 0;
 
     // The client can return a ProcessBackgroundDataCallback which will be
@@ -80,7 +80,8 @@ class BLINK_EXPORT WebNavigationBodyLoader {
       std::unique_ptr<ResourceLoadInfoNotifierWrapper>
           resource_load_info_notifier_wrapper,
       bool is_main_frame,
-      WebNavigationParams* navigation_params);
+      WebNavigationParams* navigation_params,
+      bool is_ad_frame);
 
   // It should be safe to destroy WebNavigationBodyLoader at any moment,
   // including from inside any client notification.

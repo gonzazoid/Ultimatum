@@ -3,24 +3,24 @@
 // found in the LICENSE file.
 
 #include "chrome/test/base/ui_test_utils.h"
-#include "base/memory/raw_ptr.h"
-#include "base/scoped_observation.h"
 
 #include <stddef.h>
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/test_timeouts.h"
@@ -28,7 +28,6 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -50,7 +49,8 @@
 #include "components/javascript_dialogs/app_modal_dialog_controller.h"
 #include "components/javascript_dialogs/app_modal_dialog_queue.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
-#include "components/omnibox/browser/omnibox_controller_emitter.h"
+#include "components/omnibox/browser/autocomplete_controller_emitter.h"
+#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "components/prefs/pref_service.h"
@@ -58,6 +58,7 @@
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/notification_service.h"
+#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/storage_partition.h"
@@ -78,6 +79,7 @@
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "third_party/blink/public/common/chrome_debug_urls.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/views/widget/widget_interactive_uitest_utils.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
@@ -174,7 +176,7 @@ class AutocompleteChangeObserver : public AutocompleteController::Observer {
  public:
   explicit AutocompleteChangeObserver(Profile* profile) {
     scoped_observation_.Observe(
-        OmniboxControllerEmitter::GetForBrowserContext(profile));
+        AutocompleteControllerEmitter::GetForBrowserContext(profile));
   }
 
   AutocompleteChangeObserver(const AutocompleteChangeObserver&) = delete;
@@ -193,9 +195,25 @@ class AutocompleteChangeObserver : public AutocompleteController::Observer {
 
  private:
   base::RunLoop run_loop_;
-  base::ScopedObservation<OmniboxControllerEmitter,
+  base::ScopedObservation<AutocompleteControllerEmitter,
                           AutocompleteController::Observer>
       scoped_observation_{this};
+};
+
+// Helper class to notify AllTabsObserver that a WebContents has been destroyed.
+class WebContentsDestructionObserver : public content::WebContentsObserver {
+ public:
+  WebContentsDestructionObserver(base::OnceClosure destruction_cb,
+                                 content::WebContents* web_contents)
+      : WebContentsObserver(web_contents),
+        destruction_cb_(std::move(destruction_cb)) {}
+  ~WebContentsDestructionObserver() override = default;
+
+  // WebContentsObserver
+  void WebContentsDestroyed() override { std::move(destruction_cb_).Run(); }
+
+ private:
+  base::OnceClosure destruction_cb_;
 };
 
 }  // namespace
@@ -264,8 +282,9 @@ NavigateToURLWithDispositionBlockUntilNavigationsComplete(
     same_tab_observer.set_expected_initial_url(url);
 
   std::set<Browser*> initial_browsers;
-  for (auto* initial_browser : *BrowserList::GetInstance())
+  for (Browser* initial_browser : *BrowserList::GetInstance()) {
     initial_browsers.insert(initial_browser);
+  }
 
   AllBrowserTabAddedWaiter tab_added_waiter;
 
@@ -348,8 +367,9 @@ bool GetRelativeBuildDirectory(base::FilePath* build_dir) {
   base::FilePath exe_dir =
       base::CommandLine::ForCurrentProcess()->GetProgram().DirName();
   base::FilePath src_dir;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir))
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir)) {
     return false;
+  }
 
   // We must first generate absolute paths to SRC and EXE and from there
   // generate a relative path.
@@ -447,26 +467,33 @@ void WaitForAutocompleteDone(Browser* browser) {
   auto* controller = browser->window()
                          ->GetLocationBar()
                          ->GetOmniboxView()
-                         ->model()
+                         ->controller()
                          ->autocomplete_controller();
   while (!controller->done())
     AutocompleteChangeObserver(browser->profile()).Wait();
 }
 
+bool WaitForMinimized(Browser* browser) {
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&BrowserWindow::IsMinimized,
+                          base::Unretained(browser->window())),
+      true);
+  return minimize_waiter.Wait();
+}
+
 void SendToOmniboxAndSubmit(Browser* browser,
                             const std::string& input,
                             base::TimeTicks match_selection_timestamp) {
-  LocationBar* location_bar = browser->window()->GetLocationBar();
-  OmniboxView* omnibox = location_bar->GetOmniboxView();
+  OmniboxView* omnibox = browser->window()->GetLocationBar()->GetOmniboxView();
   omnibox->model()->OnSetFocus(/*control_down=*/false);
   omnibox->SetUserText(base::ASCIIToUTF16(input));
-  location_bar->AcceptInput(match_selection_timestamp);
+  omnibox->model()->OpenSelection(match_selection_timestamp);
 
   WaitForAutocompleteDone(browser);
 }
 
 Browser* GetBrowserNotInSet(const std::set<Browser*>& excluded_browsers) {
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     if (excluded_browsers.find(browser) == excluded_browsers.end())
       return browser;
   }
@@ -506,25 +533,151 @@ void GetCookies(const GURL& url,
   }
 }
 
-UrlLoadObserver::UrlLoadObserver(const GURL& url,
-                                 const content::NotificationSource& source)
-    : WindowedNotificationObserver(content::NOTIFICATION_LOAD_STOP, source),
-      url_(url) {
+// It would be nice to `AddAllBrowsers()` here, but we have to wait until our
+// subclass is constructed to `ProcessOneBrowser()`.  We can't put it off
+// until `Wait()` since we need to watch for anything that happens between now
+// and then.
+AllTabsObserver::AllTabsObserver() = default;
+
+AllTabsObserver::~AllTabsObserver() {
+  BrowserList::RemoveObserver(this);
+  // We're tracking all browsers, so remove us from all of all of them.
+  for (Browser* browser : *BrowserList::GetInstance()) {
+    browser->tab_strip_model()->RemoveObserver(this);
+  }
 }
 
-UrlLoadObserver::~UrlLoadObserver() {}
+void AllTabsObserver::AddAllBrowsers() {
+  added_all_browsers_ = true;
+  BrowserList::AddObserver(this);
+  for (Browser* browser : *BrowserList::GetInstance()) {
+    AddBrowser(browser);
+  }
+}
 
-void UrlLoadObserver::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  NavigationController* controller =
-      content::Source<NavigationController>(source).ptr();
-  NavigationEntry* entry = controller->GetVisibleEntry();
-  if (!entry || entry->GetVirtualURL() != url_)
+void AllTabsObserver::Wait() {
+  // For subclasses that can detect if their condition is met without
+  // necessarily needing to watch for transitions, we could wait until now to
+  // call `AddAllBrowsers()` if it hasn't happened yet.
+  CHECK(added_all_browsers_)
+      << "Subclasses must call `AddAllBrowsers()` during construction";
+
+  if (!condition_met_) {
+    run_loop_ = std::make_unique<base::RunLoop>();
+    run_loop_->Run();
+    run_loop_.reset();
+  }
+  EXPECT_TRUE(condition_met_);
+}
+
+// impls should call this to tell us to stop waiting.
+void AllTabsObserver::ConditionMet() {
+  condition_met_ = true;
+  if (run_loop_) {
+    run_loop_->Quit();
+  }
+}
+
+void AllTabsObserver::OnTabStripModelChanged(
+    TabStripModel* tab_strip_model,
+    const TabStripModelChange& change,
+    const TabStripSelectionChange& selection) {
+  if (change.type() != TabStripModelChange::kInserted) {
     return;
+  }
 
-  WindowedNotificationObserver::Observe(type, source, details);
+  AddWebContents(change.GetInsert()->contents[0].contents.get());
+}
+
+void AllTabsObserver::OnBrowserAdded(Browser* browser) {
+  AddBrowser(browser);
+}
+
+void AllTabsObserver::AddBrowser(const Browser* browser) {
+  browser->tab_strip_model()->AddObserver(this);
+  // Enumerate all WebContents in this browser, and add a WebContentsObserver
+  // for it.
+  for (int index = 0; index < browser->tab_strip_model()->count(); index++) {
+    auto* web_contents = browser->tab_strip_model()->GetWebContentsAt(index);
+    AddWebContents(web_contents);
+  }
+}
+
+void AllTabsObserver::AddWebContents(content::WebContents* web_contents) {
+  // If the condition is already met, then don't bother.
+  if (condition_met_) {
+    return;
+  }
+
+  auto observer = ProcessOneContents(web_contents);
+  if (observer) {
+    // Store both the subclass's observer and our own with this WebContents.
+    // We'll handle cleaning them both up on destruction.  It's okay if our
+    // subclass does not create an observer, but does notify us to stop waiting
+    // before returning.
+    tab_navigation_map_[web_contents].subclass_observer = std::move(observer);
+    tab_navigation_map_[web_contents].destruction_observer =
+        std::make_unique<WebContentsDestructionObserver>(
+            base::BindOnce(&AllTabsObserver::OnWebContentsDestroyed,
+                           base::Unretained(this),
+                           base::Unretained(web_contents)),
+            web_contents);
+  }
+}
+
+// called by our destruction observers
+void AllTabsObserver::OnWebContentsDestroyed(WebContents* web_contents) {
+  auto iter = tab_navigation_map_.find(web_contents);
+  CHECK(iter != tab_navigation_map_.end());
+  // This clears both our observer and the one created by our subclass.
+  tab_navigation_map_.erase(iter);
+}
+
+AllTabsObserver::TabNavigationMapEntry::TabNavigationMapEntry() = default;
+AllTabsObserver::TabNavigationMapEntry::~TabNavigationMapEntry() = default;
+
+UrlLoadObserver::UrlLoadObserver(const GURL& url) : url_(url) {
+  AddAllBrowsers();
+}
+
+UrlLoadObserver::UrlLoadObserver(
+    const GURL& url,
+    const content::NotificationSource& unused_source)
+    : UrlLoadObserver(url) {
+  // For whatever reason, CHECK_EQ doesn't pick up the overloaded == .
+  CHECK(unused_source == content::NotificationService::AllSources())
+      << "does not support filtering by source";
+}
+
+UrlLoadObserver::~UrlLoadObserver() = default;
+
+std::unique_ptr<base::CheckedObserver> UrlLoadObserver::ProcessOneContents(
+    WebContents* web_contents) {
+  return std::make_unique<LoadStopObserver>(this, web_contents);
+}
+
+void UrlLoadObserver::OnDidStopLoading(WebContents* web_contents) {
+  NavigationController& controller = web_contents->GetController();
+  NavigationEntry* entry = controller.GetVisibleEntry();
+  if (!entry || entry->GetVirtualURL() != url_) {
+    return;
+  }
+
+  // Record the first match.
+  if (!web_contents_) {
+    web_contents_ = web_contents;
+  }
+  ConditionMet();
+}
+
+UrlLoadObserver::LoadStopObserver::LoadStopObserver(UrlLoadObserver* owner,
+                                                    WebContents* web_contents)
+    : WebContentsObserver(web_contents), owner_(owner) {}
+
+UrlLoadObserver::LoadStopObserver::~LoadStopObserver() = default;
+
+void UrlLoadObserver::LoadStopObserver::DidStopLoading() {
+  owner_->OnDidStopLoading(web_contents());
 }
 
 HistoryEnumerator::HistoryEnumerator(Profile* profile) {
@@ -601,17 +754,23 @@ TabAddedWaiter::TabAddedWaiter(Browser* browser) {
   browser->tab_strip_model()->AddObserver(this);
 }
 
-void TabAddedWaiter::Wait() {
+content::WebContents* TabAddedWaiter::Wait() {
   TRACE_EVENT0("test", "TabAddedWaiter::Wait");
   run_loop_.Run();
+  return web_contents_;
 }
 
 void TabAddedWaiter::OnTabStripModelChanged(
     TabStripModel* tab_strip_model,
     const TabStripModelChange& change,
     const TabStripSelectionChange& selection) {
-  if (change.type() == TabStripModelChange::kInserted)
+  if (web_contents_) {
+    return;
+  }
+  if (change.type() == TabStripModelChange::kInserted) {
+    web_contents_ = change.GetInsert()->contents[0].contents;
     run_loop_.Quit();
+  }
 }
 
 AllBrowserTabAddedWaiter::AllBrowserTabAddedWaiter() {
@@ -676,6 +835,49 @@ void BrowserChangeObserver::OnBrowserRemoved(Browser* browser) {
     browser_ = browser;
     run_loop_.Quit();
   }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CheckWaiter:
+
+CheckWaiter::CheckWaiter(base::RepeatingCallback<bool()> callback,
+                         bool expected,
+                         const base::TimeDelta& timeout)
+    : callback_(callback),
+      expected_(expected),
+      timeout_(base::TimeTicks::Now() + timeout) {}
+
+CheckWaiter::~CheckWaiter() = default;
+
+void CheckWaiter::Wait() {
+  if (Check()) {
+    return;
+  }
+
+  base::RunLoop run_loop;
+  quit_ = run_loop.QuitClosure();
+  run_loop.Run();
+}
+
+bool CheckWaiter::Check() {
+  if (callback_.Run() != expected_ && base::TimeTicks::Now() < timeout_) {
+    // Check again after a short timeout. Important: Don't use an immediate
+    // task to check again, because the pump would be allowed to run it
+    // immediately without processing system events (system events are
+    // required for the state to change).
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(base::IgnoreResult(&CheckWaiter::Check),
+                       base::Unretained(this)),
+        TestTimeouts::tiny_timeout());
+    return false;
+  }
+
+  // Quit the run_loop to end the wait.
+  if (!quit_.is_null()) {
+    std::move(quit_).Run();
+  }
+  return true;
 }
 
 }  // namespace ui_test_utils

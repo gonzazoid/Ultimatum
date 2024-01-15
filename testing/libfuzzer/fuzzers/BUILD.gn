@@ -7,6 +7,7 @@
 import("//build/config/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//third_party/protobuf/proto_library.gni")
+import("//ui/gl/features.gni")
 import("//v8/gni/v8.gni")
 
 # root BUILD depends on this target. Needed for package discovery
@@ -79,7 +80,7 @@ fuzzer_test("libsrtp_fuzzer") {
 }
 
 libpng_seed_corpuses = [
-  "//components/viz/test/data",
+  "//components/test/data/viz",
   "//third_party/blink/web_tests/images/png-suite/samples",
   "//third_party/blink/web_tests/images/resources/pngfuzz",
 ]
@@ -88,6 +89,7 @@ fuzzer_test("gfx_png_image_fuzzer") {
   sources = [ "gfx_png_image_fuzzer.cc" ]
   deps = [
     "//base",
+    "//ui/base",
     "//ui/gfx",
   ]
   dict = "dicts/png.dict"
@@ -194,21 +196,6 @@ fuzzer_test("v8_regexp_parser_fuzzer") {
   dict = "dicts/regexp.dict"
   seed_corpus = "//v8/test/fuzzer/regexp/"
   libfuzzer_options = [ "max_len=64" ]
-  environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
-}
-
-fuzzer_test("v8_regexp_builtins_fuzzer") {
-  sources = []
-  deps = [ "//v8:regexp_builtins_fuzzer" ]
-  asan_options = [
-    "allow_user_segv_handler=1",
-    "handle_sigtrap=1",
-  ]
-  msan_options = [ "handle_sigtrap=1" ]
-  ubsan_options = [
-    "handle_sigtrap=1",
-    "handle_segv=1",
-  ]
   environment_variables = [ "AFL_DRIVER_DONT_DEFER=1" ]
 }
 
@@ -336,7 +323,10 @@ fuzzer_test("skia_path_fuzzer") {
     "skia_path_common.h",
     "skia_path_fuzzer.cc",
   ]
-  deps = [ "//skia" ]
+  deps = [
+    "//base",
+    "//skia",
+  ]
   libfuzzer_options = [ "max_len=256" ]
   if (is_debug) {
     # Disabled due to crashing on SkASSERT (crbug.com/642750, crbug.com/643275).
@@ -388,10 +378,7 @@ fuzzer_test("hash_fuzzer") {
 action("gen_javascript_parser_proto") {
   # Only targets in this file and the top-level visibility target can
   # depend on this.
-  visibility = [
-    ":*",
-    "//:gn_visibility",
-  ]
+  visibility = [ ":*" ]
 
   script = "generate_javascript_parser_proto.py"
 
@@ -460,8 +447,134 @@ fuzzer_test("skia_image_filter_proto_fuzzer") {
   ]
 }
 
-fuzzer_test("libyuv_scale_fuzzer") {
-  sources = [ "libyuv_scale_fuzzer.cc" ]
+# We build the libyuv_scale_fuzzer both for fuzztest
+# and libfuzzer, for education/comparison purposes.
+# Abstract the common parts:
+source_set("libyuv_scale_fuzzer_common") {
+  testonly = true
+  sources = [
+    "libyuv_scale_fuzzer.cc",
+    "libyuv_scale_fuzzer.h",
+  ]
 
-  deps = [ "//third_party/libyuv" ]
+  public_deps = [ "//third_party/libyuv" ]
+}
+
+# The libfuzzer version (which also works with other compatible
+# frameworks, e.g. centipede)
+fuzzer_test("libyuv_scale_fuzzer") {
+  sources = [ "libyuv_scale_fuzzer_libfuzzer.cc" ]
+  deps = [ ":libyuv_scale_fuzzer_common" ]
+}
+
+# This is a fuzztest fuzzer, which (for now) means we build this as
+# a unit test rather than using a fuzzing gn template such as
+# fuzzer_test.
+# This executable can be run in four modes:
+# modes:
+# ./libyuv_scale_fuzzer - runs a small amount of fuzzing as if
+#    to fit in with a unit test framework, just to look for
+#    egregious bugs
+# With the enable_fuzztest_fuzz gn arg:
+#   ./libyuv_scale_fuzzer -fuzz=    - fuzzes properly.
+# With the use_centipede gn arg:
+#   centipede --binary=libyuv_scale_fuzzer - fuzzes using centipede
+# With the use_libfuzzer gn arg:
+#   ./libyuv_scale_fuzzer - runs in a libfuzzer-compatible way
+# Note that right now this is using the plain 'test' template.
+# In time, we may choose a different option here.
+test("libyuv_scale_fuzztest") {
+  sources = [ "libyuv_scale_fuzztest.cc" ]
+  enable_fuzztest = true
+
+  deps = [
+    ":libyuv_scale_fuzzer_common",
+    "//third_party/fuzztest:fuzztest_gtest_main",
+  ]
+}
+
+proto_library("command_buffer_lpm_fuzzer_proto") {
+  sources = [ "command_buffer_lpm_fuzzer/cmd_buf_lpm_fuzz.proto" ]
+
+  use_protobuf_full = true
+  deps = [ "//third_party/protobuf:protobuf_full" ]
+}
+
+fuzzer_test("command_buffer_lpm_fuzzer") {
+  sources = [
+    "command_buffer_lpm_fuzzer/cmd_buf_lpm_fuzz.cc",
+    "command_buffer_lpm_fuzzer/cmd_buf_lpm_fuzz.h",
+    "command_buffer_lpm_fuzzer/webgpu_support.cc",
+    "command_buffer_lpm_fuzzer/webgpu_support.h",
+  ]
+
+  # This is a hack. These files should be pulled in as a result of the
+  # dependency on //gpu:webgpu which has a public dependency on
+  # //gpu/command_buffer/client:webgpu_sources, but for some reason these files
+  # get dropped in component builds, so manually add them to the sources here.
+  if (is_component_build) {
+    sources += [
+      "//gpu/command_buffer/client/webgpu_implementation.cc",
+      "//gpu/command_buffer/client/webgpu_implementation.h",
+    ]
+
+    if (use_dawn) {
+      sources += [
+        "//gpu/command_buffer/client/dawn_client_memory_transfer_service.cc",
+        "//gpu/command_buffer/client/dawn_client_memory_transfer_service.h",
+        "//gpu/command_buffer/client/dawn_client_serializer.cc",
+        "//gpu/command_buffer/client/dawn_client_serializer.h",
+      ]
+    }
+  }
+
+  deps = [
+    ":command_buffer_lpm_fuzzer_proto",
+    "//base",
+    "//base/test:test_support",
+    "//base/third_party/dynamic_annotations",
+    "//build:chromeos_buildflags",
+    "//components/viz/common:shared_image_format",
+    "//components/viz/test:test_support",  # TODO: huge; is there something more
+                                           # targeted?
+    "//content/public/common:static_switches",
+    "//gpu:gles2",
+    "//gpu:gpu",
+    "//gpu:test_support",
+    "//gpu:webgpu",
+    "//gpu/command_buffer/client",
+    "//gpu/command_buffer/client:gles2_c_lib",
+    "//gpu/command_buffer/client:gles2_implementation",
+    "//gpu/command_buffer/common",
+    "//gpu/command_buffer/common:gles2_utils",
+    "//gpu/command_buffer/service",
+    "//gpu/config",
+    "//gpu/ipc:gl_in_process_context",
+    "//gpu/ipc/client",
+    "//gpu/ipc/common",
+    "//gpu/ipc/host",
+    "//gpu/ipc/service:service",
+    "//gpu/webgpu:common",
+    "//mojo/core/embedder",
+    "//mojo/core/embedder",
+    "//mojo/public/cpp/bindings",
+    "//testing/gmock",
+    "//testing/gtest:gtest",
+    "//third_party/libprotobuf-mutator",
+    "//ui/gfx:gfx",
+    "//ui/gl:gl",
+    "//ui/gl:test_support",
+    "//ui/gl/init:init",
+    "//url",
+  ]
+
+  if (use_dawn) {
+    deps += [
+      "//third_party/dawn/src/dawn:cpp",
+      "//third_party/dawn/src/dawn:proc",
+      "//third_party/dawn/src/dawn/native",
+    ]
+  }
+
+  libfuzzer_options = [ "max_len=16384" ]
 }

@@ -30,7 +30,7 @@ class AutomationManagerLacros
                                    const gfx::Point& mouse_location,
                                    std::vector<ui::AXEvent> events) override;
   void DispatchAccessibilityLocationChange(
-      const ExtensionMsg_AccessibilityLocationChangeParams& params) override;
+      const content::AXLocationChangeNotificationDetails& details) override;
   void DispatchTreeDestroyedEvent(ui::AXTreeID tree_id) override;
   void DispatchActionResult(const ui::AXActionData& data,
                             bool result,
@@ -47,7 +47,7 @@ class AutomationManagerLacros
                                int32_t automation_node_id,
                                const std::string& action_type,
                                int32_t request_id,
-                               base::Value optional_args) override;
+                               base::Value::Dict optional_args) override;
   void PerformAction(const ui::AXActionData& action_data) override;
   void NotifyAllAutomationExtensionsGone() override;
   void NotifyExtensionListenerAdded() override;

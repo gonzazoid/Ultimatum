@@ -5,16 +5,11 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_PAGE_CONTENT_TO_VISIBLE_TIME_REPORTER_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_PAGE_CONTENT_TO_VISIBLE_TIME_REPORTER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom.h"
-
-namespace gfx {
-struct PresentationFeedback;
-}
 
 namespace blink {
 
@@ -23,21 +18,16 @@ namespace blink {
 // separated into two whether the tab switch has saved frames or not.
 class BLINK_COMMON_EXPORT ContentToVisibleTimeReporter {
  public:
-  // Matches the TabSwitchResult enum in enums.xml.
+  // Matches the TabSwitchResult2 enum in enums.xml.
   enum class TabSwitchResult {
     // A frame was successfully presented after a tab switch.
     kSuccess = 0,
     // Tab was hidden before a frame was presented after a tab switch.
     kIncomplete = 1,
-    // Compositor reported a failure after a tab switch.
-    kPresentationFailure = 2,
     // TabWasShown called twice for a frame without TabWasHidden between. Treat
     // the first TabWasShown as an incomplete tab switch.
-    kMissedTabHide = 3,
-    // DEPRECATED: The tab switch couldn't be measured because of an unhandled
-    // path in the compositor.
-    DEPRECATED_kUnhandled = 4,
-    kMaxValue = DEPRECATED_kUnhandled,
+    kMissedTabHide = 2,
+    kMaxValue = kMissedTabHide,
   };
 
   ContentToVisibleTimeReporter();
@@ -46,34 +36,37 @@ class BLINK_COMMON_EXPORT ContentToVisibleTimeReporter {
       delete;
   ~ContentToVisibleTimeReporter();
 
+  using SuccessfulPresentationTimeCallback =
+      base::OnceCallback<void(base::TimeTicks presentation_timestamp)>;
+
   // Invoked when the tab associated with this recorder is shown. Returns a
   // callback to invoke the next time a frame is presented for this tab.
-  base::OnceCallback<void(const gfx::PresentationFeedback&)> TabWasShown(
+  SuccessfulPresentationTimeCallback TabWasShown(
       bool has_saved_frames,
       mojom::RecordContentToVisibleTimeRequestPtr start_state);
 
-  base::OnceCallback<void(const gfx::PresentationFeedback&)> TabWasShown(
+  SuccessfulPresentationTimeCallback TabWasShown(
       bool has_saved_frames,
       base::TimeTicks event_start_time,
       bool destination_is_loaded,
       bool show_reason_tab_switching,
       bool show_reason_bfcache_restore);
 
+  // Called when the device is unfolded and the activity is recreated. Returns
+  // a callback to invoke the next time a frame is presented.
+  SuccessfulPresentationTimeCallback GetCallbackForNextFrameAfterUnfold(
+      base::TimeTicks begin_timestamp);
+
   // Indicates that the tab associated with this recorder was hidden. If no
   // frame was presented since the last tab switch, failure is reported to UMA.
   void TabWasHidden();
 
  private:
-  bool IsTabSwitchMetric2FeatureEnabled();
-
-  // Records histograms and trace events for the current tab switch. If
-  // `tab_switch_result` is kSuccess but `feedback` contains a failure flag, the
-  // result will be overridden with kPresentationFailure.
-  void RecordHistogramsAndTraceEvents(
-      TabSwitchResult tab_switch_result,
-      bool show_reason_tab_switching,
-      bool show_reason_bfcache_restore,
-      const gfx::PresentationFeedback& feedback);
+  // Records histograms and trace events for the current tab switch.
+  void RecordHistogramsAndTraceEvents(TabSwitchResult tab_switch_result,
+                                      bool show_reason_tab_switching,
+                                      bool show_reason_bfcache_restore,
+                                      base::TimeTicks presentation_timestamp);
 
   // Saves the given `state` and `has_saved_frames`, and invalidates all
   // existing callbacks that might reference the old state.
@@ -93,9 +86,6 @@ class BLINK_COMMON_EXPORT ContentToVisibleTimeReporter {
   // The information about the last tab switch request, or nullptr if there is
   // no incomplete tab switch.
   mojom::RecordContentToVisibleTimeRequestPtr tab_switch_start_state_;
-
-  // Cache the feature value for faster lookups.
-  absl::optional<bool> is_tab_switch_metric2_feature_enabled_;
 
   base::WeakPtrFactory<ContentToVisibleTimeReporter> weak_ptr_factory_{this};
 };

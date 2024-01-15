@@ -12,21 +12,13 @@
 #import "base/strings/utf_string_conversions.h"
 #import "base/values.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/webui/web_ui_ios_controller.h"
 #import "ios/web/public/webui/web_ui_ios_controller_factory.h"
 #import "ios/web/public/webui/web_ui_ios_message_handler.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using web::WebUIIOSController;
-
-namespace {
-const char kCommandPrefix[] = "webui";
-}
 
 namespace web {
 
@@ -46,12 +38,7 @@ std::u16string WebUIIOS::GetJavascriptCall(
   return base::ASCIIToUTF16(function_name) + u'(' + parameters + u");";
 }
 
-WebUIIOSImpl::WebUIIOSImpl(WebState* web_state) : web_state_(web_state) {
-  DCHECK(web_state);
-  subscription_ = web_state->AddScriptCommandCallback(
-      base::BindRepeating(&WebUIIOSImpl::OnJsMessage, base::Unretained(this)),
-      kCommandPrefix);
-}
+WebUIIOSImpl::WebUIIOSImpl(WebState* web_state) : web_state_(web_state) {}
 
 WebUIIOSImpl::~WebUIIOSImpl() {
   controller_.reset();
@@ -106,35 +93,6 @@ void WebUIIOSImpl::RegisterMessageCallback(base::StringPiece message,
   message_callbacks_.emplace(message, std::move(callback));
 }
 
-void WebUIIOSImpl::OnJsMessage(const base::Value& message,
-                               const GURL& page_url,
-                               bool user_is_interacting,
-                               web::WebFrame* sender_frame) {
-  // Chrome message are only handled if sent from the main frame.
-  if (!sender_frame->IsMainFrame())
-    return;
-
-  DCHECK(message.is_dict());
-  const auto& dict = message.GetDict();
-
-  web::URLVerificationTrustLevel trust_level =
-      web::URLVerificationTrustLevel::kNone;
-  const GURL current_url = web_state_->GetCurrentURL(&trust_level);
-  if (web::GetWebClient()->IsAppSpecificURL(current_url)) {
-    const std::string* message_content = dict.FindString("message");
-    if (!message_content) {
-      DLOG(WARNING) << "JS message parameter not found: message";
-      return;
-    }
-    const base::Value::List* arguments = dict.FindList("arguments");
-    if (!arguments) {
-      DLOG(WARNING) << "JS message parameter not found: arguments";
-      return;
-    }
-    ProcessWebUIIOSMessage(current_url, *message_content, *arguments);
-  }
-}
-
 void WebUIIOSImpl::ProcessWebUIIOSMessage(const GURL& source_url,
                                           base::StringPiece message,
                                           const base::Value::List& args) {
@@ -162,7 +120,8 @@ void WebUIIOSImpl::AddMessageHandler(
 }
 
 void WebUIIOSImpl::ExecuteJavascript(const std::u16string& javascript) {
-  web::WebFrame* main_frame = web::GetMainFrame(web_state_);
+  web::WebFrame* main_frame =
+      web_state_->GetPageWorldWebFramesManager()->GetMainWebFrame();
   if (!main_frame) {
     return;
   }

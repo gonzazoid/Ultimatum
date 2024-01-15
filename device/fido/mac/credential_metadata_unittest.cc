@@ -9,9 +9,7 @@
 #include "device/fido/public_key_credential_user_entity.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 namespace {
 
 bool MetadataEq(const CredentialMetadata& lhs, const CredentialMetadata& rhs) {
@@ -24,9 +22,10 @@ bool MetadataEq(const CredentialMetadata& lhs, const CredentialMetadata& rhs) {
 class CredentialMetadataTest : public ::testing::Test {
  protected:
   CredentialMetadata DefaultUser() {
-    return CredentialMetadata(
-        CredentialMetadata::Version::kV3, default_id_, "user", "user@acme.com",
-        /*is_resident=*/false, CredentialMetadata::SignCounter::kZero);
+    return CredentialMetadata(CredentialMetadata::CurrentVersion(), default_id_,
+                              "user", "user@acme.com",
+                              /*is_resident=*/false,
+                              CredentialMetadata::SignCounter::kZero);
   }
 
   std::vector<uint8_t> SealCredentialMetadata(CredentialMetadata user) {
@@ -60,9 +59,14 @@ class CredentialMetadataTest : public ::testing::Test {
 };
 
 TEST_F(CredentialMetadataTest, CredentialMetadata) {
-  std::vector<uint8_t> sealed = SealCredentialMetadata(DefaultUser());
-  EXPECT_EQ(sealed.size(), 55u);
-  EXPECT_TRUE(MetadataEq(UnsealCredentialMetadata(sealed), DefaultUser()));
+  for (auto version :
+       {CredentialMetadata::Version::kV3, CredentialMetadata::Version::kV4}) {
+    auto metadata = DefaultUser();
+    metadata.version = version;
+    std::vector<uint8_t> sealed = SealCredentialMetadata(metadata);
+    EXPECT_EQ(sealed.size(), 55u);
+    EXPECT_TRUE(MetadataEq(UnsealCredentialMetadata(sealed), metadata));
+  }
 }
 
 TEST_F(CredentialMetadataTest, LegacyCredentialIds) {
@@ -144,14 +148,14 @@ TEST_F(CredentialMetadataTest, Truncation) {
   constexpr char truncated[] =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef012…";
   auto credential_id = SealCredentialMetadata(CredentialMetadata(
-      CredentialMetadata::Version::kCurrent, {1}, len71, len71,
+      CredentialMetadata::CurrentVersion(), {1}, len71, len71,
       /*is_resident=*/false, CredentialMetadata::SignCounter::kZero));
   CredentialMetadata metadata = UnsealCredentialMetadata(credential_id);
   EXPECT_EQ(metadata.user_name, truncated);
   EXPECT_EQ(metadata.user_display_name, truncated);
 
   credential_id = SealCredentialMetadata(CredentialMetadata(
-      CredentialMetadata::Version::kCurrent, {1}, len70, len70,
+      CredentialMetadata::CurrentVersion(), {1}, len70, len70,
       /*is_resident=*/false, CredentialMetadata::SignCounter::kZero));
   metadata = UnsealCredentialMetadata(credential_id);
   EXPECT_EQ(metadata.user_name, len70);
@@ -183,10 +187,9 @@ TEST(CredentialMetadata, FromPublicKeyCredentialUserEntity) {
 
 TEST(CredentialMetadata, ToPublicKeyCredentialUserEntity) {
   std::vector<uint8_t> user_id = {{1, 2, 3}};
-  CredentialMetadata in(CredentialMetadata::Version::kCurrent, user_id,
-                        "username", "display name",
-                        /*is_resident=*/false,
-                        CredentialMetadata::SignCounter::kZero);
+  CredentialMetadata in(
+      CredentialMetadata::CurrentVersion(), user_id, "username", "display name",
+      /*is_resident=*/false, CredentialMetadata::SignCounter::kZero);
   PublicKeyCredentialUserEntity out = in.ToPublicKeyCredentialUserEntity();
   EXPECT_EQ(user_id, out.id);
   EXPECT_EQ("username", out.name.value());
@@ -194,6 +197,4 @@ TEST(CredentialMetadata, ToPublicKeyCredentialUserEntity) {
 }
 
 }  // namespace
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac

@@ -5,7 +5,7 @@
 import 'chrome://resources/js/action_link.js';
 import 'chrome://resources/cr_elements/action_link.css.js';
 
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
 import {TimeDelta} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -71,7 +71,6 @@ export function compareTabDiscardsInfos(
         'loadingState',
         'discardCount',
         'utilityRank',
-        'reactivationScore',
         'lastActiveSeconds',
         'siteEngagementScore',
       ].includes(sortKey)) {
@@ -151,7 +150,6 @@ class DiscardsTabElement extends DiscardsTabElementBase {
       case LifecycleUnitVisibility.VISIBLE:
         return 'visible';
     }
-    assertNotReached('Unknown visibility: ' + visibility);
   }
 
   /**
@@ -170,7 +168,6 @@ class DiscardsTabElement extends DiscardsTabElementBase {
       case LifecycleUnitLoadingState.LOADED:
         return 'loaded';
     }
-    assertNotReached('Unknown loadingState: ' + loadingState);
   }
 
   /**
@@ -184,8 +181,9 @@ class DiscardsTabElement extends DiscardsTabElementBase {
         return 'external';
       case LifecycleUnitDiscardReason.URGENT:
         return 'urgent';
+      case LifecycleUnitDiscardReason.PROACTIVE:
+        return 'proactive';
     }
-    assertNotReached('Unknown discard reason: ' + reason);
   }
 
   /**
@@ -213,7 +211,6 @@ class DiscardsTabElement extends DiscardsTabElementBase {
         case LifecycleUnitVisibility.VISIBLE:
           return hasFocus ? 'active' : 'passive';
       }
-      assertNotReached('Unknown visibility: ' + visibility);
     }
 
     switch (state) {
@@ -232,7 +229,6 @@ class DiscardsTabElement extends DiscardsTabElementBase {
                           .toLocaleString()) :
                                                               '');
     }
-    assertNotReached('Unknown lifecycle state: ' + state);
   }
 
   /** Dispatches a request to update tabInfos_. */
@@ -253,16 +249,6 @@ class DiscardsTabElement extends DiscardsTabElementBase {
     }
     this.updateTableImpl_();
     this.updateTimer_ = setInterval(this.updateTableImpl_.bind(this), 1000);
-  }
-
-  /**
-   * Formats an items reactivation for display.
-   * @param item The item in question.
-   * @return The formatted reactivation score.
-   */
-  private getReactivationScore_(item: TabDiscardsInfo): string {
-    return item.hasReactivationScore ? item.reactivationScore.toFixed(4) :
-                                       'N/A';
   }
 
   /**
@@ -372,7 +358,15 @@ class DiscardsTabElement extends DiscardsTabElementBase {
 
   /** Event handler that discards a given tab urgently. */
   private urgentDiscardTab_(e: DomRepeatEvent<TabDiscardsInfo>) {
-    this.discardsDetailsProvider_!.discardById(e.model.item.id)
+    this.discardsDetailsProvider_!
+        .discardById(e.model.item.id, LifecycleUnitDiscardReason.URGENT)
+        .then(this.updateTable_.bind(this));
+  }
+
+  /** Event handler that discards a given tab proactively. */
+  private proactiveDiscardTab_(e: DomRepeatEvent<TabDiscardsInfo>) {
+    this.discardsDetailsProvider_!
+        .discardById(e.model.item.id, LifecycleUnitDiscardReason.PROACTIVE)
         .then(this.updateTable_.bind(this));
   }
 
@@ -386,10 +380,6 @@ class DiscardsTabElement extends DiscardsTabElementBase {
   /** Event handler that discards the next discardable tab urgently. */
   private discardUrgentNow_(_e: Event) {
     this.discardImpl_();
-  }
-
-  private toggleHighEfficiencyMode_(_e: Event) {
-    this.discardsDetailsProvider_!.toggleHighEfficiencyMode();
   }
 
   private toggleBatterySaverMode_(_e: Event) {

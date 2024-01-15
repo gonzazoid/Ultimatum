@@ -4,11 +4,12 @@
 
 package org.chromium.chrome.browser.omaha;
 
-import android.content.Context;
-
 /** Mocks out the RequestGenerator for tests. */
 public class MockRequestGenerator extends RequestGenerator {
-    public enum DeviceType { HANDSET, TABLET }
+    public enum DeviceType {
+        HANDSET,
+        TABLET
+    }
 
     public static final String UUID_PHONE = "uuid_phone";
     public static final String UUID_TABLET = "uuid_tablet";
@@ -22,8 +23,7 @@ public class MockRequestGenerator extends RequestGenerator {
 
     private final boolean mIsOnTablet;
 
-    public MockRequestGenerator(Context context, DeviceType deviceType) {
-        super(context);
+    public MockRequestGenerator(DeviceType deviceType) {
         mIsOnTablet = deviceType == DeviceType.TABLET;
     }
 

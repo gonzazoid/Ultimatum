@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// Next MinVersion: 56
+// Next MinVersion: 64
 
 module arc.mojom;
 
@@ -16,6 +16,8 @@ import "ui/accessibility/mojom/ax_assistant_structure.mojom";
 struct InstallationResult {
   string package_name;
   bool success;  // true if app was installed successfully.
+  [MinVersion=62] bool is_launchable_app; // true if the package installed
+                                          // successfully and is launchable.
 };
 
 // Describes application storage.
@@ -48,6 +50,10 @@ struct AppInfo {
   // Option, only for ARC upgrade. True if the app is fixing up.
   // During fixup, it cannot be launched.
   [MinVersion=54] bool need_fixup;
+
+  // App category corresponding to the
+  // android.content.pm.ApplicationInfo#category field.
+  [MinVersion=57] AppCategory app_category;
 };
 
 // Describes the data required to install a web app.
@@ -87,6 +93,32 @@ struct WindowLayout {
   Rect? bounds;  // Window bounds value.
 };
 
+// ARC package install priority.
+[Extensible]
+enum InstallPriority {
+  [Default] kUndefined = 0,
+  kMedium = 1,
+  kLow = 2,
+};
+
+// ARC package locale-related info.
+// NOTE: All locales here are sent as is, and not guaranteed to have correspondent ICU display name
+// translation. Displaying this to user will require special handling.
+struct PackageLocaleInfo {
+  // These are the locales explicitly mentioned by the app to be supported.
+  // Should not be empty.
+  // Please see comment on `selected_locale` on possible differences between
+  // `supported_locales` and `selected_locale`.
+  array<string> supported_locales;
+
+  // Empty string denotes no language has been selected and will default to
+  // System Language. Due to Android-side implementation, this also doesn't
+  // necessarily comply with locales in `supported_locales`.
+  // For example, supported_locales = ["en-US", "ja"], selected_locale can be
+  // "en-SG" or even "fr".
+  string selected_locale;
+};
+
 // Describes ARC package.
 // The list of ArcPackageInfo sent by AppInstance contains all the installed
 // Android packages including ones other than launchable apps (e.g. Google Play
@@ -99,7 +131,7 @@ struct ArcPackageInfo {
   bool sync;  // true if package installation should be synced
   // true if package is signed with the system certificate.
   // TODO(b/255671011): This is unused. Remove this.
-  [MinVersion=11] bool system;
+  [MinVersion=11] bool deprecated_system;
   // true if package registers VPNService intent.
   [MinVersion=25] bool vpn_provider;
 
@@ -117,8 +149,17 @@ struct ArcPackageInfo {
   // see https://developer.android.com/studio/publish/versioning.
   [MinVersion=51] string? version_name;
 
-  // If the package is pre-installed in the system image.
+  // If the package is pre-installed in the system image. This is true even
+  // after the package is updated.
   [MinVersion=55] bool preinstalled;
+
+  [MinVersion=56] InstallPriority priority;
+
+  // If sent from ARC, null denotes that per-app language is not supported.
+  [MinVersion=60] PackageLocaleInfo? locale_info;
+
+  // True if the package has the Game Controls Opt Out metadata set to true.
+  [MinVersion=61] bool game_controls_opt_out;
 };
 
 // Describes ARC app shortcut.
@@ -137,6 +178,9 @@ enum ShowPackageInfoPage {
 
   // Page for managing links assigned to the app.
   MANAGE_LINKS = 1,
+
+  // Page for managing permissions assigned to the app.
+  [MinVersion=59] MANAGE_PERMISSIONS = 2,
 };
 
 // Describes the raw icon png data published by an Android application.
@@ -232,42 +276,6 @@ enum AppShortcutItemType {
   kDynamic = 1,
 };
 
-[Extensible]
-enum AppReinstallState {
-    // Request and response successful.
-    REQUEST_SUCCESS = 0,
-    // Request Timeout
-    REQUEST_TIMEOUT = 1,
-    // No Account.
-    REQUEST_NO_ACCOUNT = 2,
-    // Null data from aidl.
-    REQUEST_NULL_DATA = 3,
-    // Data that can't be converted from aidl bundle to mojom struct.
-    REQUEST_BUNDLE_ERROR = 4,
-    // Request failure other reason.
-    REQUEST_UNKNOWN_FAILURE = 5,
-};
-
-// Describes app reinstall candidates that are shown to users as suggestions.
-struct AppReinstallCandidate {
-  // The package name of this in the Play Store.
-  string package_name;
-
-  // The title of this package in the Play Store.
-  string title;
-
-  // The url of an icon for this package. Optional, a default icon is used if
-  // unset.
-  string? icon_url;
-
-  // Ratings Count from Play Store for this package. e.g. "17103" .
-  // Default of 0 if not set.
-  int64 rating_count;
-
-  // Mean star rating for this package, [1, 5]. 0 indicates missing.
-  float star_rating;
-};
-
 // Describes app shortcut that is published by Android's ShortcutManager.
 struct AppShortcutItem {
   // The ID of this shortcut. Unique within each publisher app and stable across
@@ -334,7 +342,7 @@ enum AppCategory {
   kAccessibility = 8,
 };
 
-// Next method ID: 19
+// Next method ID: 21
 // Deprecated method IDs: 1
 interface AppHost {
   // Sends newly added ARC app to Chrome. This message is sent when ARC receives
@@ -417,25 +425,27 @@ interface AppHost {
   // defined by its |intent_uri| and |package_name|.
   [MinVersion=18] OnUninstallShortcut@16(string package_name,
                                          string intent_uri);
+
+  // Notifies that a package installation has a new progress value.
+  [MinVersion=58] OnInstallationProgressChanged@19(string package_name,
+                                                   float progress);
+
+  // Notifies that a package installation session has either become active
+  // (currently downloading or installing) or inactive (installation is
+  // pending or paused).
+  [MinVersion=58] OnInstallationActiveChanged@20(string package_name,
+                                                 bool active);
 };
 
 // TODO(lhchavez): Migrate all request/response messages to Mojo.
-// Next method ID: 42
-// Deprecated method IDs: 0, 1, 2, 3, 4, 9, 12, 13, 15, 17, 18, 19, 22
+// Next method ID: 44
+// Deprecated method IDs: 0, 1, 2, 3, 4, 6, 9, 12, 13, 15, 17, 18, 19, 22, 31
 interface AppInstance {
   // Establishes full-duplex communication with the host.
   [MinVersion=26] Init@21(pending_remote<AppHost> host_remote) => ();
 
-  [MinVersion=1] CanHandleResolutionDeprecated@4(
-      string package_name, string activity, Rect dimension) =>
-          (bool can_handle);
-
   // Closes the the given task.
   [MinVersion=4] CloseTask@8(int32 task_id);
-
-  // Requests information about task.
-  [MinVersion=3] GetTaskInfo@6(int32 task_id) => (string package_name,
-                                                  string activity);
 
   // Sends a request to ARC to install package.
   [MinVersion=8] InstallPackage@11(ArcPackageInfo arcPackageInfo);
@@ -532,15 +542,13 @@ interface AppInstance {
   // Sends a request to ARC to start FastAppReinstall flow.
   [MinVersion=33] StartFastAppReinstallFlow@25(array<string> arc_package_names);
 
-  // Sends a request to ARC to retrieve an array of app reinstall
-  // candidates for this user on this device. Order of results is in an
-  // unspecified order of relevance from Play Store.
-  [MinVersion=39] GetAppReinstallCandidates@31() =>
-      (AppReinstallState state, array<AppReinstallCandidate> candidates);
-
   // Sends a request to ARC to uninstall the given package.  Error (if ever
   // happens) is ignored, and uninstall option should appear in the UI.
   [MinVersion=2] UninstallPackage@5(string package_name);
+
+  // Sends a request to ARC to call AppHost::OnPackageAppListRefreshed and
+  // receive the latest data of a specified app.
+  [MinVersion=60] UpdateAppDetails@42(string package_name);
 
   // Returns Android instance id as it is registered on Google servers. 0 is
   // reserved for the case when Android instance id could not be determined,
@@ -582,4 +590,13 @@ interface AppInstance {
   // declare an app category.
   [MinVersion=53] GetAppCategory@41(string package_name) =>
       (AppCategory category);
+
+  // Sets app locale for |package_name|. Empty |locale_tag| indicates system
+  // language being chosen.
+  // The |locale_tag| is using string as there's no direct representation for
+  // locale (which is based on IETF BCP 47). As for the content of the string,
+  // it's defined by app, so we shouldn't trust the content of this string.
+  // As for the implementation / use case, this will only be passed to Android,
+  // which is then sent back to the app as is.
+  [MinVersion=63] SetAppLocale@43(string package_name, string locale_tag);
 };

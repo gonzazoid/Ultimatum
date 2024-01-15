@@ -8,8 +8,8 @@
 #include <cmath>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
@@ -29,9 +29,7 @@ DelayBasedTimeSource::DelayBasedTimeSource(
       last_tick_time_(base::TimeTicks() - interval_),
       task_runner_(task_runner),
       tick_closure_(base::BindRepeating(&DelayBasedTimeSource::OnTimerTick,
-                                        base::Unretained(this))) {
-  timer_.SetTaskRunner(task_runner_.get());
-}
+                                        base::Unretained(this))) {}
 
 DelayBasedTimeSource::~DelayBasedTimeSource() = default;
 
@@ -44,6 +42,7 @@ void DelayBasedTimeSource::SetActive(bool active) {
   active_ = active;
 
   if (active_) {
+    timer_.SetTaskRunner(task_runner_.get());
     PostNextTickTask(Now());
   } else {
     timer_.Stop();
@@ -151,14 +150,16 @@ base::TimeTicks DelayBasedTimeSource::Now() const {
 void DelayBasedTimeSource::PostNextTickTask(base::TimeTicks now) {
   if (interval_.is_zero()) {
     next_tick_time_ = now;
+    timer_.Start(FROM_HERE, base::TimeTicks(), tick_closure_,
+                 base::subtle::DelayPolicy::kPrecise);
   } else {
     next_tick_time_ = now.SnappedToNextTick(timebase_, interval_);
     if (next_tick_time_ == now)
       next_tick_time_ += interval_;
     DCHECK_GT(next_tick_time_, now);
+    timer_.Start(FROM_HERE, next_tick_time_, tick_closure_,
+                 base::subtle::DelayPolicy::kPrecise);
   }
-  timer_.Start(FROM_HERE, next_tick_time_, tick_closure_,
-               base::ExactDeadline(true));
 }
 
 std::string DelayBasedTimeSource::TypeString() const {

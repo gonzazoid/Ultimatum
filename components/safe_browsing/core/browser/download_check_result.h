@@ -9,6 +9,9 @@ namespace safe_browsing {
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
+//
+// See SBClientDownloadCheckResult in
+// //tools/metrics/histograms/metadata/sb_client/enums.xml
 enum class DownloadCheckResult {
   UNKNOWN = 0,
   SAFE = 1,
@@ -26,7 +29,10 @@ enum class DownloadCheckResult {
   PROMPT_FOR_SCANNING = 13,
   BLOCKED_UNSUPPORTED_FILE_TYPE = 14,
   DANGEROUS_ACCOUNT_COMPROMISE = 15,
-  kMaxValue = DANGEROUS_ACCOUNT_COMPROMISE,
+  DEEP_SCANNED_FAILED = 16,
+  PROMPT_FOR_LOCAL_PASSWORD_SCANNING = 17,
+  ASYNC_LOCAL_PASSWORD_SCANNING = 18,
+  kMaxValue = ASYNC_LOCAL_PASSWORD_SCANNING,
 };
 
 }  // namespace safe_browsing

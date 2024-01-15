@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -100,7 +100,7 @@ void AccessibilityLabelsMenuObserver::ExecuteCommand(int command_id) {
       ShowConfirmBubble(profile, false /* enable once only */);
     } else {
       AccessibilityLabelsServiceFactory::GetForProfile(profile)
-          ->EnableLabelsServiceOnce();
+          ->EnableLabelsServiceOnce(proxy_->GetWebContents());
     }
   }
 }

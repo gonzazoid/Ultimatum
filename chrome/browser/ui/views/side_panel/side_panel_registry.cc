@@ -8,6 +8,7 @@
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_entry.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_registry_observer.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/common/extension_id.h"
@@ -16,7 +17,11 @@ const char kSidePanelRegistryKey[] = "side_panel_registry_key";
 
 SidePanelRegistry::SidePanelRegistry() = default;
 
-SidePanelRegistry::~SidePanelRegistry() = default;
+SidePanelRegistry::~SidePanelRegistry() {
+  for (SidePanelRegistryObserver& observer : observers_) {
+    observer.OnRegistryDestroying(this);
+  }
+}
 
 // static
 SidePanelRegistry* SidePanelRegistry::Get(content::WebContents* web_contents) {
@@ -39,7 +44,14 @@ SidePanelEntry* SidePanelRegistry::GetEntryForKey(
 }
 
 void SidePanelRegistry::ResetActiveEntry() {
-  active_entry_.reset();
+  if (active_entry_.has_value()) {
+    last_active_entry_ = active_entry_;
+    active_entry_.reset();
+  }
+}
+
+void SidePanelRegistry::ResetLastActiveEntry() {
+  last_active_entry_.reset();
 }
 
 void SidePanelRegistry::ClearCachedEntryViews() {
@@ -60,28 +72,57 @@ void SidePanelRegistry::RemoveObserver(SidePanelRegistryObserver* observer) {
 bool SidePanelRegistry::Register(std::unique_ptr<SidePanelEntry> entry) {
   if (GetEntryForKey(entry->key()))
     return false;
-  for (SidePanelRegistryObserver& observer : observers_)
-    observer.OnEntryRegistered(entry.get());
+  // It's important to add `this` as an observer to `entry` before notifying
+  // SidePanelRegistryObservers of the entry's registration because some
+  // registry observers can call SidePanelEntryObserver methods for `entry`.
   entry->AddObserver(this);
+  for (SidePanelRegistryObserver& observer : observers_)
+    observer.OnEntryRegistered(this, entry.get());
   entries_.push_back(std::move(entry));
   return true;
 }
 
 bool SidePanelRegistry::Deregister(const SidePanelEntry::Key& key) {
-  auto* entry = GetEntryForKey(key);
-  if (!entry)
+  // An observer can trigger this to be called while a deregister for the key
+  // is ongoing. An example is an observer listening to `OnSidePanelDidClose()`
+  // since a sidepanel can be closed during the deregistering process.
+  if (!GetEntryForKey(key) || (deregistering_entry_key_.has_value() &&
+                               deregistering_entry_key_.value() == key)) {
     return false;
+  }
+
+  base::AutoReset<std::optional<SidePanelEntryKey>> deregistering_entry_key(
+      &deregistering_entry_key_, key);
+  DeregisterAndReturnEntry(key);
+  return true;
+}
+
+std::unique_ptr<SidePanelEntry> SidePanelRegistry::DeregisterAndReturnEntry(
+    const SidePanelEntry::Key& key) {
+  auto* entry = GetEntryForKey(key);
+  if (!entry) {
+    return nullptr;
+  }
 
   entry->RemoveObserver(this);
   if (active_entry_.has_value() &&
-      entry->key().id() == active_entry_.value()->key().id()) {
+      entry->key() == active_entry_.value()->key()) {
     active_entry_.reset();
   }
-  for (SidePanelRegistryObserver& observer : observers_) {
-    observer.OnEntryWillDeregister(entry);
+  if (last_active_entry_.has_value() &&
+      entry->key() == last_active_entry_.value()->key()) {
+    last_active_entry_.reset();
   }
-  RemoveEntry(entry);
-  return true;
+
+  // If `entry` is currently shown, then its view is owned by the browser's side
+  // panel view instead of being cached.
+  // SidePanelCoordinator::OnEntryWillDeregister will retrieve the view from the
+  // side panel and cache it into `entry`.
+  for (SidePanelRegistryObserver& observer : observers_) {
+    observer.OnEntryWillDeregister(this, entry);
+  }
+
+  return RemoveEntry(entry);
 }
 
 void SidePanelRegistry::SetActiveEntry(SidePanelEntry* entry) {
@@ -97,6 +138,14 @@ void SidePanelRegistry::OnEntryIconUpdated(SidePanelEntry* entry) {
     observer.OnEntryIconUpdated(entry);
 }
 
-void SidePanelRegistry::RemoveEntry(SidePanelEntry* entry) {
-  base::EraseIf(entries_, base::MatchesUniquePtr(entry));
+std::unique_ptr<SidePanelEntry> SidePanelRegistry::RemoveEntry(
+    SidePanelEntry* entry) {
+  auto it = std::find_if(entries_.begin(), entries_.end(),
+                         base::MatchesUniquePtr(entry));
+  if (it == entries_.end()) {
+    return nullptr;
+  }
+  std::unique_ptr<SidePanelEntry> return_entry = std::move(*it);
+  entries_.erase(it);
+  return return_entry;
 }

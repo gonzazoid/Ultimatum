@@ -7,137 +7,49 @@
 #import "base/feature_list.h"
 #import "base/files/file_path.h"
 #import "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #import "base/strings/sys_string_conversions.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/crash_report/crash_report_helper.h"
-#import "ios/chrome/browser/device_sharing/device_sharing_browser_agent.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/main/browser_list.h"
-#import "ios/chrome/browser/main/browser_list_factory.h"
-#import "ios/chrome/browser/sessions/scene_util.h"
-#import "ios/chrome/browser/sessions/session_restoration_browser_agent.h"
-#import "ios/chrome/browser/snapshots/snapshot_browser_agent.h"
+#import "ios/chrome/browser/crash_report/model/crash_report_helper.h"
+#import "ios/chrome/browser/device_sharing/model/device_sharing_browser_agent.h"
+#import "ios/chrome/browser/sessions/ios_chrome_tab_restore_service_factory.h"
+#import "ios/chrome/browser/sessions/session_restoration_service.h"
+#import "ios/chrome/browser/sessions/session_restoration_service_factory.h"
+#import "ios/chrome/browser/sessions/session_util.h"
+#import "ios/chrome/browser/settings/model/sync/utils/sync_presenter.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_browser_agent.h"
+#import "ios/chrome/browser/tabs/model/inactive_tabs/features.h"
+#import "ios/chrome/browser/tabs/model/inactive_tabs/utils.h"
 #import "ios/chrome/browser/ui/browser_view/browser_coordinator.h"
 #import "ios/chrome/browser/ui/browser_view/browser_view_controller.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browsing_data_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_scene_agent.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#import "ios/chrome/browser/ui/settings/sync/utils/sync_presenter.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/main/wrangled_browser.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+@implementation BrowserViewWrangler {
+  raw_ptr<ChromeBrowserState> _browserState;
 
-// Internal implementation of BrowserInterface -- for the most part a wrapper
-// around BrowserCoordinator.
-@interface WrangledBrowser : NSObject <BrowserInterface>
-
-@property(nonatomic, weak, readonly) BrowserCoordinator* coordinator;
-
-- (instancetype)initWithCoordinator:(BrowserCoordinator*)coordinator;
-
-@end
-
-@implementation WrangledBrowser
-
-- (instancetype)initWithCoordinator:(BrowserCoordinator*)coordinator {
-  if (self = [super init]) {
-    DCHECK(coordinator.browser);
-    _coordinator = coordinator;
-  }
-  return self;
-}
-
-- (UIViewController*)viewController {
-  return self.coordinator.viewController;
-}
-
-- (BrowserViewController*)bvc {
-  return self.coordinator.viewController;
-}
-
-- (id<SyncPresenter>)syncPresenter {
-  return self.coordinator;
-}
-
-- (Browser*)browser {
-  return self.coordinator.browser;
-}
-
-- (ChromeBrowserState*)browserState {
-  return self.browser->GetBrowserState();
-}
-
-- (BOOL)userInteractionEnabled {
-  return self.coordinator.active;
-}
-
-- (void)setUserInteractionEnabled:(BOOL)userInteractionEnabled {
-  self.coordinator.active = userInteractionEnabled;
-}
-
-- (BOOL)incognito {
-  return self.browserState->IsOffTheRecord();
-}
-
-- (void)setPrimary:(BOOL)primary {
-  [self.coordinator.viewController setPrimary:primary];
-}
-
-- (void)clearPresentedStateWithCompletion:(ProceduralBlock)completion
-                           dismissOmnibox:(BOOL)dismissOmnibox {
-  [self.coordinator clearPresentedStateWithCompletion:completion
-                                       dismissOmnibox:dismissOmnibox];
-}
-
-@end
-
-@interface BrowserViewWrangler () {
-  ChromeBrowserState* _browserState;
   __weak SceneState* _sceneState;
   __weak id<ApplicationCommands> _applicationCommandEndpoint;
   __weak id<BrowsingDataCommands> _browsingDataCommandEndpoint;
-  BOOL _isShutdown;
 
   std::unique_ptr<Browser> _mainBrowser;
   std::unique_ptr<Browser> _otrBrowser;
+
+  BrowserCoordinator* _mainBrowserCoordinator;
+  BrowserCoordinator* _incognitoBrowserCoordinator;
+
+  BOOL _isShutdown;
 }
-
-@property(nonatomic, strong, readwrite) WrangledBrowser* mainInterface;
-@property(nonatomic, strong, readwrite) WrangledBrowser* incognitoInterface;
-
-// Backing objects.
-@property(nonatomic) BrowserCoordinator* mainBrowserCoordinator;
-@property(nonatomic) BrowserCoordinator* incognitoBrowserCoordinator;
-@property(nonatomic, readonly) Browser* mainBrowser;
-@property(nonatomic, readonly) Browser* otrBrowser;
-
-// The main browser can't be set after creation, but they can be
-// cleared (setting them to nullptr).
-- (void)clearMainBrowser;
-// The OTR browser can be reset after creation.
-- (void)setOtrBrowser:(std::unique_ptr<Browser>)browser;
-
-// Creates and sets up a new Browser for the given BrowserState, optionally
-// loading the session from disk.
-- (std::unique_ptr<Browser>)buildBrowserForBrowserState:
-                                (ChromeBrowserState*)browserState
-                                         restoreSession:(BOOL)restoreSession;
-
-// Creates the correct BrowserCoordinator for the corresponding browser state
-// and Browser.
-- (BrowserCoordinator*)coordinatorForBrowser:(Browser*)browser;
-@end
-
-@implementation BrowserViewWrangler
-
-@synthesize currentInterface = _currentInterface;
 
 - (instancetype)initWithBrowserState:(ChromeBrowserState*)browserState
                           sceneState:(SceneState*)sceneState
@@ -150,6 +62,16 @@
     _sceneState = sceneState;
     _applicationCommandEndpoint = applicationCommandEndpoint;
     _browsingDataCommandEndpoint = browsingDataCommandEndpoint;
+
+    // Create all browsers.
+    _mainBrowser = Browser::Create(_browserState, _sceneState);
+    [self setupBrowser:_mainBrowser.get()];
+    [self setupBrowser:_mainBrowser->CreateInactiveBrowser()];
+
+    ChromeBrowserState* otrBrowserState =
+        _browserState->GetOffTheRecordChromeBrowserState();
+    _otrBrowser = Browser::Create(otrBrowserState, _sceneState);
+    [self setupBrowser:_otrBrowser.get()];
   }
   return self;
 }
@@ -158,21 +80,78 @@
   DCHECK(_isShutdown) << "-shutdown must be called before -dealloc";
 }
 
-- (Browser*)createMainBrowser {
-  _mainBrowser = [self buildBrowserForBrowserState:_browserState
-                                    restoreSession:YES];
-  return _mainBrowser.get();
-}
-
 - (void)createMainCoordinatorAndInterface {
-  DCHECK(_mainBrowser);
+  DCHECK(!_mainInterface)
+      << "-createMainCoordinatorAndInterface must not be called once";
 
   // Create the main coordinator, and thus the main interface.
-  _mainBrowserCoordinator = [self coordinatorForBrowser:self.mainBrowser];
+  _mainBrowserCoordinator = [[BrowserCoordinator alloc]
+      initWithBaseViewController:nil
+                         browser:_mainBrowser.get()];
   [_mainBrowserCoordinator start];
+
   DCHECK(_mainBrowserCoordinator.viewController);
   _mainInterface =
       [[WrangledBrowser alloc] initWithCoordinator:_mainBrowserCoordinator];
+  _mainInterface.inactiveBrowser = _mainBrowser->GetInactiveBrowser();
+
+  _incognitoInterface = [self createOTRInterface];
+}
+
+- (void)loadSession {
+  DCHECK(_mainBrowser);
+  DCHECK(_mainInterface)
+      << "-loadSession must be called after -createMainCoordinatorAndInterface";
+
+  Browser* inactiveBrowser = _mainBrowser->GetInactiveBrowser();
+
+  // Restore the session after creating the coordinator.
+  [self loadSessionForBrowser:_mainBrowser.get()];
+  [self loadSessionForBrowser:inactiveBrowser];
+  [self loadSessionForBrowser:_otrBrowser.get()];
+
+  if (IsInactiveTabsEnabled()) {
+    // Ensure there is no active element in the restored inactive browser. It
+    // can be caused by a flag change, for example.
+    // TODO(crbug.com/1412108): Remove the following line as soon as inactive
+    // tabs is fully launched. After fully launched the only place where tabs
+    // can move from inactive to active is after a settings change, this line
+    // will be called at this specific moment.
+    MoveTabsFromInactiveToActive(inactiveBrowser, _mainBrowser.get());
+
+    // Moves all tabs that might have become inactive since the last launch.
+    MoveTabsFromActiveToInactive(_mainBrowser.get(), inactiveBrowser);
+  } else {
+    RestoreAllInactiveTabs(inactiveBrowser, _mainBrowser.get());
+  }
+}
+
+#pragma mark - BrowserProviderInterface
+
+- (id<BrowserProvider>)mainBrowserProvider {
+  return _mainInterface;
+}
+
+- (id<BrowserProvider>)incognitoBrowserProvider {
+  if (!self.hasIncognitoBrowserProvider) {
+    // Ensure that the method return nil if self.hasIncognitoBrowserProvider
+    // returns NO.
+    return nil;
+  }
+
+  return _incognitoInterface;
+}
+
+- (id<BrowserProvider>)currentBrowserProvider {
+  return _currentInterface;
+}
+
+// This method should almost never return NO since the incognitoInterface
+// is not lazily created, but it is possible for it to return YES after
+// -shutdown or as a transient state while the OTR ChromeBrowserState is
+// being detroyed and recreated (see SceneController).
+- (BOOL)hasIncognitoBrowserProvider {
+  return _mainInterface && _incognitoInterface;
 }
 
 #pragma mark - BrowserViewInformation property implementations
@@ -180,15 +159,14 @@
 - (void)setCurrentInterface:(WrangledBrowser*)interface {
   DCHECK(interface);
   // `interface` must be one of the interfaces this class already owns.
-  DCHECK(self.mainInterface == interface ||
-         self.incognitoInterface == interface);
-  if (self.currentInterface == interface) {
+  DCHECK(_mainInterface == interface || _incognitoInterface == interface);
+  if (_currentInterface == interface) {
     return;
   }
 
-  if (self.currentInterface) {
+  if (_currentInterface) {
     // Tell the current BVC it moved to the background.
-    [self.currentInterface setPrimary:NO];
+    [_currentInterface setPrimary:NO];
   }
 
   _currentInterface = interface;
@@ -198,104 +176,18 @@
       ->UpdateForActiveBrowser();
 }
 
-- (id<BrowserInterface>)incognitoInterface {
-  if (!_mainInterface)
-    return nil;
-  if (!_incognitoInterface) {
-    // The backing coordinator should not have been created yet.
-    DCHECK(!_incognitoBrowserCoordinator);
-    ChromeBrowserState* otrBrowserState =
-        _browserState->GetOffTheRecordChromeBrowserState();
-    DCHECK(otrBrowserState);
-    _incognitoBrowserCoordinator = [self coordinatorForBrowser:self.otrBrowser];
-    [_incognitoBrowserCoordinator start];
-    DCHECK(_incognitoBrowserCoordinator.viewController);
-    _incognitoInterface = [[WrangledBrowser alloc]
-        initWithCoordinator:_incognitoBrowserCoordinator];
-  }
-  return _incognitoInterface;
-}
-
-- (BOOL)hasIncognitoInterface {
-  return _incognitoInterface;
-}
-
-- (Browser*)mainBrowser {
-  DCHECK(_mainBrowser.get())
-      << "-createMainBrowser must be called before -mainBrowser is accessed.";
-  return _mainBrowser.get();
-}
-
-- (Browser*)otrBrowser {
-  if (!_otrBrowser) {
-    // Ensure the incognito BrowserState is created.
-    DCHECK(_browserState);
-    ChromeBrowserState* incognitoBrowserState =
-        _browserState->GetOffTheRecordChromeBrowserState();
-    _otrBrowser = [self buildBrowserForBrowserState:incognitoBrowserState
-                                     restoreSession:YES];
-  }
-  return _otrBrowser.get();
-}
-
-- (void)clearMainBrowser {
-  if (_mainBrowser.get()) {
-    WebStateList* webStateList = self.mainBrowser->GetWebStateList();
-    breakpad::StopMonitoringTabStateForWebStateList(webStateList);
-    breakpad::StopMonitoringURLsForWebStateList(webStateList);
-    // Close all webstates in `webStateList`. Do this in an @autoreleasepool as
-    // WebStateList observers will be notified (they are unregistered later). As
-    // some of them may be implemented in Objective-C and unregister themselves
-    // in their -dealloc method, ensure they -autorelease introduced by ARC are
-    // processed before the WebStateList destructor is called.
-    @autoreleasepool {
-      webStateList->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
-    }
-  }
-
-  _mainBrowser = nullptr;
-}
-
-- (void)setOtrBrowser:(std::unique_ptr<Browser>)otrBrowser {
-  if (_otrBrowser.get()) {
-    WebStateList* webStateList = self.otrBrowser->GetWebStateList();
-    breakpad::StopMonitoringTabStateForWebStateList(webStateList);
-    // Close all webstates in `webStateList`. Do this in an @autoreleasepool as
-    // WebStateList observers will be notified (they are unregistered later). As
-    // some of them may be implemented in Objective-C and unregister themselves
-    // in their -dealloc method, ensure they -autorelease introduced by ARC are
-    // processed before the WebStateList destructor is called.
-    @autoreleasepool {
-      webStateList->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
-    }
-  }
-
-  _otrBrowser = std::move(otrBrowser);
-}
-
 #pragma mark - Other public methods
 
 - (void)willDestroyIncognitoBrowserState {
   // It is theoretically possible that a Tab has been added to the webStateList
   // since the deletion has been scheduled. It is unlikely to happen for real
   // because it would require superhuman speed.
-  DCHECK(self.hasIncognitoInterface);
-  DCHECK(self.otrBrowser->GetWebStateList()->empty());
-  DCHECK(_browserState);
-
-  // Remove the OTR browser from the browser list. The browser itself is
-  // still alive during this call, so any observers can act on it.
-  BrowserList* browserList = BrowserListFactory::GetForBrowserState(
-      self.otrBrowser->GetBrowserState());
-  browserList->RemoveIncognitoBrowser(self.otrBrowser);
-
-  // Stop watching the OTR webStateList's state for crashes.
-  breakpad::StopMonitoringTabStateForWebStateList(
-      self.otrBrowser->GetWebStateList());
+  DCHECK(_incognitoInterface);
+  DCHECK(_otrBrowser->GetWebStateList()->empty());
 
   // At this stage, a new incognitoBrowserCoordinator shouldn't be lazily
   // constructed by calling the property getter.
-  BOOL otrBVCIsCurrent = self.currentInterface == self.incognitoInterface;
+  BOOL otrBVCIsCurrent = self.currentInterface == _incognitoInterface;
   @autoreleasepool {
     // At this stage, a new incognitoBrowserCoordinator shouldn't be lazily
     // constructed by calling the property getter.
@@ -303,9 +195,13 @@
     _incognitoBrowserCoordinator = nil;
     _incognitoInterface = nil;
 
+    // Cleanup and destroy the OTR browser. It will be recreated with the
+    // off-the-record ChromeBrowserState.
+    [self cleanupBrowser:_otrBrowser.get()];
+    _otrBrowser.reset();
+
     // There's no guarantee the tab model was ever added to the BVC (or even
     // that the BVC was created), so ensure the tab model gets notified.
-    [self setOtrBrowser:nullptr];
     if (otrBVCIsCurrent) {
       _currentInterface = nil;
     }
@@ -315,6 +211,7 @@
 - (void)incognitoBrowserStateCreated {
   DCHECK(_browserState);
   DCHECK(_browserState->HasOffTheRecordChromeBrowserState());
+  DCHECK(!_otrBrowser);
 
   // An empty _otrBrowser must be created at this point, because it is then
   // possible to prevent the tabChanged notification being sent. Otherwise,
@@ -323,12 +220,15 @@
   ChromeBrowserState* incognitoBrowserState =
       _browserState->GetOffTheRecordChromeBrowserState();
 
-  [self setOtrBrowser:[self buildBrowserForBrowserState:incognitoBrowserState
-                                         restoreSession:NO]];
-  DCHECK(self.otrBrowser->GetWebStateList()->empty());
+  _otrBrowser = Browser::Create(incognitoBrowserState, _sceneState);
+  [self setupBrowser:_otrBrowser.get()];
+
+  // Recreate the off-the-record interface, but do not load the session as
+  // we had just closed all the tabs.
+  _incognitoInterface = [self createOTRInterface];
 
   if (_currentInterface == nil) {
-    self.currentInterface = self.incognitoInterface;
+    self.currentInterface = _incognitoInterface;
   }
 }
 
@@ -336,10 +236,12 @@
   DCHECK(!_isShutdown);
   _isShutdown = YES;
 
-  [self.mainBrowser->GetCommandDispatcher() prepareForShutdown];
-  if ([self hasIncognitoInterface]) {
-    [self.otrBrowser->GetCommandDispatcher() prepareForShutdown];
-  }
+  // Inform the command dispatchers of the shutdown. Should be in reverse
+  // order of -init.
+  Browser* inactiveBrowser = _mainBrowser->GetInactiveBrowser();
+  [_otrBrowser->GetCommandDispatcher() prepareForShutdown];
+  [inactiveBrowser->GetCommandDispatcher() prepareForShutdown];
+  [_mainBrowser->GetCommandDispatcher() prepareForShutdown];
 
   // At this stage, new BrowserCoordinators shouldn't be lazily constructed by
   // calling their property getters.
@@ -348,29 +250,20 @@
   [_incognitoBrowserCoordinator stop];
   _incognitoBrowserCoordinator = nil;
 
-  BrowserList* browserList = BrowserListFactory::GetForBrowserState(
-      self.mainBrowser->GetBrowserState());
-  browserList->RemoveBrowser(self.mainBrowser);
-  BrowserList* otrBrowserList = BrowserListFactory::GetForBrowserState(
-      self.otrBrowser->GetBrowserState());
-  otrBrowserList->RemoveIncognitoBrowser(self.otrBrowser);
+  // Destroy all Browsers. This handles removing observers, stopping crash key
+  // monitoring, closing all tabs, ... Should be in reverse order of -init.
+  [self cleanupBrowser:_otrBrowser.get()];
+  _otrBrowser.reset();
 
-  // Handles removing observers, stopping breakpad monitoring, and closing all
-  // tabs.
-  [self clearMainBrowser];
-  [self setOtrBrowser:nullptr];
+  [self cleanupBrowser:inactiveBrowser];
+  [self cleanupBrowser:_mainBrowser.get()];
+  _mainBrowser->DestroyInactiveBrowser();
+  _mainBrowser.reset();
 
   _browserState = nullptr;
 }
 
 #pragma mark - Internal methods
-
-- (BrowserCoordinator*)coordinatorForBrowser:(Browser*)browser {
-  BrowserCoordinator* coordinator =
-      [[BrowserCoordinator alloc] initWithBaseViewController:nil
-                                                     browser:browser];
-  return coordinator;
-}
 
 - (void)dispatchToEndpointsForBrowser:(Browser*)browser {
   IncognitoReauthSceneAgent* reauthAgent =
@@ -396,68 +289,98 @@
                            forProtocol:@protocol(BrowsingDataCommands)];
 }
 
-- (std::unique_ptr<Browser>)buildBrowserForBrowserState:
-                                (ChromeBrowserState*)browserState
-                                         restoreSession:(BOOL)restoreSession {
-  DCHECK(browserState);
-  auto browser = Browser::Create(browserState);
-  DCHECK_EQ(browser->GetBrowserState(), browserState);
-
+// Sets up an existing browser.
+- (void)setupBrowser:(Browser*)browser {
+  ChromeBrowserState* browserState = browser->GetBrowserState();
   BrowserList* browserList =
       BrowserListFactory::GetForBrowserState(browserState);
   if (browserState->IsOffTheRecord()) {
-    browserList->AddIncognitoBrowser(browser.get());
+    browserList->AddIncognitoBrowser(browser);
   } else {
-    browserList->AddBrowser(browser.get());
+    browserList->AddBrowser(browser);
   }
 
-  // Associate the current SceneState with the new browser.
-  SceneStateBrowserAgent::CreateForBrowser(browser.get(), _sceneState);
+  [self dispatchToEndpointsForBrowser:browser];
 
-  [self dispatchToEndpointsForBrowser:browser.get()];
+  [self setSessionIDForBrowser:browser];
 
-  [self setSessionIDForBrowser:browser.get() restoreSession:restoreSession];
-
-  breakpad::MonitorTabStateForWebStateList(browser->GetWebStateList());
+  crash_report_helper::MonitorTabStateForWebStateList(
+      browser->GetWebStateList());
 
   // Follow loaded URLs in the non-incognito browser to send those in case of
   // crashes.
   if (!browserState->IsOffTheRecord()) {
-    breakpad::MonitorURLsForWebStateList(browser->GetWebStateList());
+    crash_report_helper::MonitorURLsForWebStateList(browser->GetWebStateList());
   }
-
-  return browser;
 }
 
-- (void)setSessionIDForBrowser:(Browser*)browser
-                restoreSession:(BOOL)restoreSession {
-  // The location were the session and snapshots are stored can change due to
-  // multiple factors, such as upgrading Chrome or iOS from a version that did
-  // not support multiple windows to one that does (e.g. Chrome M86 or earlier
-  // to M87, iOS 12.x to iOS 13.0+), or upgrading Chrome from M87-M89 to M90+,
-  // or restoring an iPhone backup to an iPad.
-  //
-  // As the migration code is relatively quick when there is nothing to do, it
-  // is always attempted (will result in one directory lookup). Trying to check
-  // if the migration has to be done can be quite tricky, as both permanent and
-  // off-the-record BrowserState need to be independently migrated, migration
-  // also needs to happen on device that do support multiple scenes, ...
-  //
-  // Once the migration has been performed, the function will be a no-op, so it
-  // is safe to call it multiple time for the same BrowserState.
-  MigrateSessionStorageForDirectory(
-      browser->GetBrowserState()->GetStatePath(), _sceneState.sceneSessionID,
-      _sceneState.appState.previousSingleWindowSessionID);
+// Create the OTR interface object.
+- (WrangledBrowser*)createOTRInterface {
+  DCHECK(!_incognitoInterface);
 
-  SnapshotBrowserAgent::FromBrowser(browser)->SetSessionID(
-      _sceneState.sceneSessionID);
+  // The backing coordinator should not have been created yet.
+  DCHECK(!_incognitoBrowserCoordinator);
+  _incognitoBrowserCoordinator =
+      [[BrowserCoordinator alloc] initWithBaseViewController:nil
+                                                     browser:_otrBrowser.get()];
+  [_incognitoBrowserCoordinator start];
 
-  SessionRestorationBrowserAgent* restorationAgent =
-      SessionRestorationBrowserAgent::FromBrowser(browser);
+  DCHECK(_incognitoBrowserCoordinator.viewController);
+  return [[WrangledBrowser alloc]
+      initWithCoordinator:_incognitoBrowserCoordinator];
+}
 
-  restorationAgent->SetSessionID(_sceneState.sceneSessionID);
-  if (restoreSession)
-    restorationAgent->RestoreSession();
+// Cleanup `browser` and associated state before destroying it.
+- (void)cleanupBrowser:(Browser*)browser {
+  DCHECK(browser);
+
+  // Remove the Browser from the browser list. The browser itself is still
+  // alive during this call, so any observer can act on it.
+  ChromeBrowserState* browserState = browser->GetBrowserState();
+  BrowserList* browserList =
+      BrowserListFactory::GetForBrowserState(browserState);
+  if (browserState->IsOffTheRecord()) {
+    browserList->RemoveIncognitoBrowser(browser);
+  } else {
+    browserList->RemoveBrowser(browser);
+  }
+
+  // Stop serializing the state of `browser`.
+  SessionRestorationServiceFactory::GetForBrowserState(browserState)
+      ->Disconnect(browser);
+
+  WebStateList* webStateList = browser->GetWebStateList();
+  crash_report_helper::StopMonitoringTabStateForWebStateList(webStateList);
+  if (!browser->GetBrowserState()->IsOffTheRecord()) {
+    crash_report_helper::StopMonitoringURLsForWebStateList(webStateList);
+  }
+
+  // Close all webstates in `webStateList`. Do this in an @autoreleasepool as
+  // WebStateList observers will be notified (they are unregistered later). As
+  // some of them may be implemented in Objective-C and unregister themselves
+  // in their -dealloc method, ensure the -autorelease introduced by ARC are
+  // processed before the WebStateList destructor is called.
+  @autoreleasepool {
+    webStateList->CloseAllWebStates(WebStateList::CLOSE_NO_FLAGS);
+  }
+}
+
+// Configures the BrowserAgent with the session identifier for `browser`.
+- (void)setSessionIDForBrowser:(Browser*)browser {
+  const std::string identifier = session_util::GetSessionIdentifier(browser);
+
+  SnapshotBrowserAgent::FromBrowser(browser)->SetSessionID(identifier);
+
+  ChromeBrowserState* browserState = browser->GetBrowserState();
+  SessionRestorationServiceFactory::GetForBrowserState(browserState)
+      ->SetSessionID(browser, identifier);
+}
+
+// Load session for `browser`.
+- (void)loadSessionForBrowser:(Browser*)browser {
+  ChromeBrowserState* browserState = browser->GetBrowserState();
+  SessionRestorationServiceFactory::GetForBrowserState(browserState)
+      ->LoadSession(browser);
 }
 
 @end

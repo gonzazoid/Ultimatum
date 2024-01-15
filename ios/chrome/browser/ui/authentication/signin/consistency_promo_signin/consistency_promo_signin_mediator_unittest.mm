@@ -8,66 +8,52 @@
 
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/metrics/histogram_tester.h"
+#import "components/signin/public/base/signin_metrics.h"
 #import "components/signin/public/identity_manager/accounts_in_cookie_jar_info.h"
 #import "components/signin/public/identity_manager/objc/identity_manager_observer_bridge.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/authentication_service_fake.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#import "ios/chrome/browser/signin/fake_system_identity.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_completion_info.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+namespace {
 
-// Subclass of ConsistencyPromoSigninMediator to override
-// `signinTimeoutDurationSeconds` property.
-@interface TestConsistencyPromoSigninMediator : ConsistencyPromoSigninMediator
-
-@property(nonatomic, assign) NSInteger signinTimeoutDurationSeconds;
-
-@end
-
-@implementation TestConsistencyPromoSigninMediator
-@end
+const FakeSystemIdentity* kDefaultIdentity = [FakeSystemIdentity fakeIdentity1];
+const FakeSystemIdentity* kNonDefaultIdentity =
+    [FakeSystemIdentity fakeIdentity2];
 
 class ConsistencyPromoSigninMediatorTest : public PlatformTest {
  public:
   void SetUp() override {
     PlatformTest::SetUp();
-    authentication_flow_ = OCMStrictClassMock([AuthenticationFlow class]);
-    identity1_ = [FakeSystemIdentity identityWithEmail:@"foo1@gmail.com"
-                                                gaiaID:@"foo1ID1"
-                                                  name:@"Fake Foo 1"];
-    identity2_ = [FakeSystemIdentity identityWithEmail:@"foo2@gmail.com"
-                                                gaiaID:@"foo1ID2"
-                                                  name:@"Fake Foo 2"];
-    GetIdentityService()->AddIdentity(identity1_);
-    GetIdentityService()->AddIdentity(identity2_);
-
+    GetSystemIdentityManager()->AddIdentity(kDefaultIdentity);
+    GetSystemIdentityManager()->AddIdentity(kNonDefaultIdentity);
     TestChromeBrowserState::Builder builder;
     builder.AddTestingFactory(
         AuthenticationServiceFactory::GetInstance(),
-        base::BindRepeating(
-            &AuthenticationServiceFake::CreateAuthenticationService));
+        AuthenticationServiceFactory::GetDefaultFactory());
     browser_state_ = builder.Build();
-
-    PrefRegistrySimple* registry = pref_service_.registry();
-    registry->RegisterIntegerPref(prefs::kSigninWebSignDismissalCount, 0);
-
-    mediator_delegate_mock_ = OCMStrictProtocolMock(
-        @protocol(ConsistencyPromoSigninMediatorDelegate));
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        browser_state_.get(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
+    ASSERT_EQ(ChromeAccountManagerServiceFactory::GetForBrowserState(
+                  browser_state_.get())
+                  ->GetDefaultIdentity(),
+              kDefaultIdentity);
   }
 
   void TearDown() override {
@@ -76,310 +62,432 @@ class ConsistencyPromoSigninMediatorTest : public PlatformTest {
     PlatformTest::TearDown();
   }
 
-  signin::IdentityManager* GetIdentityManager() {
-    return IdentityManagerFactory::GetForBrowserState(browser_state_.get());
+  sync_preferences::TestingPrefServiceSyncable* GetPrefService() {
+    return browser_state_->GetTestingPrefService();
   }
 
-  ios::FakeChromeIdentityService* GetIdentityService() {
-    return ios::FakeChromeIdentityService::GetInstanceFromChromeProvider();
+  FakeSystemIdentityManager* GetSystemIdentityManager() {
+    return FakeSystemIdentityManager::FromSystemIdentityManager(
+        GetApplicationContext()->GetSystemIdentityManager());
   }
 
-  AuthenticationService* GetAuthenticationService() {
-    return AuthenticationServiceFactory::GetForBrowserState(
-        browser_state_.get());
-  }
-
-  TestConsistencyPromoSigninMediator* GetConsistencyPromoSigninMediator() {
-    ChromeAccountManagerService* chromeAccountManagerService =
+  ConsistencyPromoSigninMediator* BuildConsistencyPromoSigninMediator(
+      signin_metrics::AccessPoint access_point) {
+    ChromeAccountManagerService* chrome_account_manager_service =
         ChromeAccountManagerServiceFactory::GetForBrowserState(
             browser_state_.get());
-    TestConsistencyPromoSigninMediator* mediator =
-        [[TestConsistencyPromoSigninMediator alloc]
-            initWithAccountManagerService:chromeAccountManagerService
-                    authenticationService:GetAuthenticationService()
-                          identityManager:GetIdentityManager()
-                          userPrefService:&pref_service_
-                              accessPoint:signin_metrics::AccessPoint::
-                                              ACCESS_POINT_WEB_SIGNIN];
+    AuthenticationService* auth_service =
+        AuthenticationServiceFactory::GetForBrowserState(browser_state_.get());
+    signin::IdentityManager* identity_manager =
+        IdentityManagerFactory::GetForBrowserState(browser_state_.get());
+    ConsistencyPromoSigninMediator* mediator =
+        [[ConsistencyPromoSigninMediator alloc]
+            initWithAccountManagerService:chrome_account_manager_service
+                    authenticationService:auth_service
+                          identityManager:identity_manager
+                          userPrefService:GetPrefService()
+                              accessPoint:access_point];
     mediator.delegate = mediator_delegate_mock_;
     return mediator;
   }
 
-  // Signs in and simulates cookies being added on the web.
-  void SigninAndSimulateCookies(ConsistencyPromoSigninMediator* mediator,
-                                id<SystemIdentity> identity) {
-    GetAuthenticationService()->SignIn(identity);
-    OCMExpect([mediator_delegate_mock_
-        consistencyPromoSigninMediatorSignInDone:mediator
-                                    withIdentity:identity]);
-    id<IdentityManagerObserverBridgeDelegate>
-        identityManagerObserverBridgeDelegate =
-            (id<IdentityManagerObserverBridgeDelegate>)mediator;
-    struct signin::AccountsInCookieJarInfo cookieJarInfo;
+  void SimulateCookieFetchSuccess(ConsistencyPromoSigninMediator* mediator,
+                                  id<SystemIdentity> identity) {
     gaia::ListedAccount account;
-    account.id = CoreAccountId(base::SysNSStringToUTF8(identity.gaiaID));
-    cookieJarInfo.signed_in_accounts.push_back(account);
-    const GoogleServiceAuthError error(GoogleServiceAuthError::State::NONE);
-    [identityManagerObserverBridgeDelegate
-        onAccountsInCookieUpdated:cookieJarInfo
-                            error:error];
+    account.id =
+        CoreAccountId::FromGaiaId(base::SysNSStringToUTF8(identity.gaiaID));
+    signin::AccountsInCookieJarInfo cookie_jar_info(
+        /*accounts_are_fresh_param=*/true,
+        /*signed_in_accounts_param=*/{account},
+        /*signed_out_accounts_param=*/{});
+    [(id<IdentityManagerObserverBridgeDelegate>)mediator
+        onAccountsInCookieUpdated:cookie_jar_info
+                            error:GoogleServiceAuthError(
+                                      GoogleServiceAuthError::State::NONE)];
   }
 
-  // Signs in and simulates a cookie error.
-  void SigninAndSimulateError(ConsistencyPromoSigninMediator* mediator,
-                              id<SystemIdentity> identity) {
-    GetAuthenticationService()->SignIn(identity);
-    OCMExpect([mediator_delegate_mock_
-        consistencyPromoSigninMediator:mediator
-                        errorDidHappen:
-                            ConsistencyPromoSigninMediatorErrorGeneric]);
-    id<IdentityManagerObserverBridgeDelegate>
-        identityManagerObserverBridgeDelegate =
-            (id<IdentityManagerObserverBridgeDelegate>)mediator;
-    struct signin::AccountsInCookieJarInfo cookieJarInfo;
-    gaia::ListedAccount account;
-    account.id = CoreAccountId(base::SysNSStringToUTF8(identity.gaiaID));
-    cookieJarInfo.signed_in_accounts.push_back(account);
-    const GoogleServiceAuthError error(
-        GoogleServiceAuthError::State::INVALID_GAIA_CREDENTIALS);
-    [identityManagerObserverBridgeDelegate
-        onAccountsInCookieUpdated:cookieJarInfo
-                            error:error];
+  void SimulateCookieFetchError(ConsistencyPromoSigninMediator* mediator) {
+    signin::AccountsInCookieJarInfo cookie_jar_info(
+        /*accounts_are_fresh_param=*/false,
+        /*signed_in_accounts_param=*/{},
+        /*signed_out_accounts_param=*/{});
+    [(id<IdentityManagerObserverBridgeDelegate>)mediator
+        onAccountsInCookieUpdated:cookie_jar_info
+                            error:GoogleServiceAuthError(
+                                      GoogleServiceAuthError::State::
+                                          INVALID_GAIA_CREDENTIALS)];
   }
 
-  void SigninWithMediator(ConsistencyPromoSigninMediator* mediator,
-                          id<SystemIdentity> identity,
-                          BOOL signin_success) {
-    OCMStub([authentication_flow_ identity]).andReturn(identity);
-    __block signin_ui::CompletionCallback completion_block = nil;
+  void SimulateCookieFetchTimeout() {
+    task_environment_.AdvanceClock(base::Seconds(30));
+  }
+
+  void ExpectAuthFlowStartAndSetSuccess(
+      id<SystemIdentity> identity,
+      signin_metrics::AccessPoint access_point,
+      bool success) {
+    OCMExpect([mediator_delegate_mock_
+        consistencyPromoSigninMediatorSigninStarted:[OCMArg any]]);
+    OCMExpect([authentication_flow_ identity]).andReturn(identity);
+    AuthenticationService* auth_service =
+        AuthenticationServiceFactory::GetForBrowserState(browser_state_.get());
     OCMExpect([authentication_flow_
         startSignInWithCompletion:[OCMArg checkWithBlock:^BOOL(
                                               signin_ui::CompletionCallback
                                                   callback) {
-          completion_block = callback;
+          if (success) {
+            auth_service->SignIn(identity, access_point);
+          }
+          callback(success);
           return YES;
         }]]);
-    [mediator signinWithAuthenticationFlow:authentication_flow_];
-    if (!signin_success) {
-      OCMExpect([mediator_delegate_mock_
-          consistencyPromoSigninMediator:mediator
-                          errorDidHappen:
-                              ConsistencyPromoSigninMediatorErrorFailedToSignin]);
-    }
-    completion_block(signin_success);
   }
 
  protected:
-  // Needed for test browser state created by TestChromeBrowserState().
-  web::WebTaskEnvironment task_environment_;
+  AuthenticationFlow* authentication_flow_ =
+      OCMStrictClassMock([AuthenticationFlow class]);
+  id<ConsistencyPromoSigninMediatorDelegate> mediator_delegate_mock_ =
+      OCMStrictProtocolMock(@protocol(ConsistencyPromoSigninMediatorDelegate));
+
+ private:
+  // Needed for test browser state.
+  web::WebTaskEnvironment task_environment_{
+      web::WebTaskEnvironment::Options::DEFAULT,
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
-  sync_preferences::TestingPrefServiceSyncable pref_service_;
-
-  AuthenticationFlow* authentication_flow_ = nil;
-  FakeSystemIdentity* identity1_ = nil;
-  FakeSystemIdentity* identity2_ = nil;
-
-  id<ConsistencyPromoSigninMediatorDelegate> mediator_delegate_mock_ = nil;
 };
 
 // Tests start and cancel by user.
 TEST_F(ConsistencyPromoSigninMediatorTest, StartAndStopForCancel) {
   base::HistogramTester histogram_tester;
+
   ConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
   [mediator disconnectWithResult:SigninCoordinatorResultCanceledByUser];
 
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.DismissedButton", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::DISMISSED_BUTTON, 1);
+      "Signin.AccountConsistencyPromoAction.DismissedButton",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
 // Tests start and interrupt.
 TEST_F(ConsistencyPromoSigninMediatorTest, StartAndStopForInterrupt) {
   base::HistogramTester histogram_tester;
+
   ConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
   [mediator disconnectWithResult:SigninCoordinatorResultInterrupted];
 
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.DismissedOther", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::DISMISSED_OTHER, 1);
+      "Signin.AccountConsistencyPromoAction.DismissedOther",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
 // Tests start and sign-in with default identity.
 TEST_F(ConsistencyPromoSigninMediatorTest,
        SigninCoordinatorResultSuccessWithDefaultIdentity) {
   base::HistogramTester histogram_tester;
-  pref_service_.SetInteger(prefs::kSigninWebSignDismissalCount, 1);
+  GetPrefService()->SetInteger(prefs::kSigninWebSignDismissalCount, 1);
+
+  ExpectAuthFlowStartAndSetSuccess(
+      kDefaultIdentity, signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN,
+      true);
+
   ConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+
   OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediatorSigninStarted:mediator]);
-  SigninWithMediator(mediator, identity1_, /*signin_success=*/YES);
-  SigninAndSimulateCookies(mediator, identity1_);
-  EXPECT_EQ(0, pref_service_.GetInteger(prefs::kSigninWebSignDismissalCount));
+      consistencyPromoSigninMediatorSignInDone:mediator
+                                  withIdentity:kDefaultIdentity]);
+
+  SimulateCookieFetchSuccess(mediator, kDefaultIdentity);
+
   [mediator disconnectWithResult:SigninCoordinatorResultSuccess];
 
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
+  EXPECT_EQ(0,
+            GetPrefService()->GetInteger(prefs::kSigninWebSignDismissalCount));
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.SignedInWithDefaultAccount", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::
-          SIGNED_IN_WITH_DEFAULT_ACCOUNT,
-      1);
+      "Signin.AccountConsistencyPromoAction.SignedInWithDefaultAccount",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
 // Tests start and sign-in with secondary identity.
 TEST_F(ConsistencyPromoSigninMediatorTest,
        SigninCoordinatorResultSuccessWithSecondaryIdentity) {
   base::HistogramTester histogram_tester;
+  GetPrefService()->SetInteger(prefs::kSigninWebSignDismissalCount, 1);
+
+  ExpectAuthFlowStartAndSetSuccess(
+      kNonDefaultIdentity, signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN,
+      true);
+
   ConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+
   OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediatorSigninStarted:mediator]);
-  SigninWithMediator(mediator, identity2_, /*signin_success=*/YES);
-  SigninAndSimulateCookies(mediator, identity2_);
+      consistencyPromoSigninMediatorSignInDone:mediator
+                                  withIdentity:kNonDefaultIdentity]);
+
+  SimulateCookieFetchSuccess(mediator, kNonDefaultIdentity);
+
   [mediator disconnectWithResult:SigninCoordinatorResultSuccess];
 
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.SignedInWithNonDefaultAccount", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::
-          SIGNED_IN_WITH_NON_DEFAULT_ACCOUNT,
-      1);
+      "Signin.AccountConsistencyPromoAction.SignedInWithNonDefaultAccount",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
 // Tests start and sign-in with an added identity.
 TEST_F(ConsistencyPromoSigninMediatorTest,
        SigninCoordinatorResultSuccessWithAddedIdentity) {
   base::HistogramTester histogram_tester;
-  FakeSystemIdentity* identity3 =
+
+  ConsistencyPromoSigninMediator* mediator =
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+  FakeSystemIdentity* new_identity =
       [FakeSystemIdentity identityWithEmail:@"foo3@gmail.com"
                                      gaiaID:@"foo1ID3"
                                        name:@"Fake Foo 3"];
-  GetIdentityService()->AddIdentity(identity3);
-  ConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
+  GetSystemIdentityManager()->AddIdentity(new_identity);
+  [mediator systemIdentityAdded:new_identity];
+
+  ExpectAuthFlowStartAndSetSuccess(
+      new_identity, signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, true);
+
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+
   OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediatorSigninStarted:mediator]);
-  SigninWithMediator(mediator, identity3, /*signin_success=*/YES);
-  [mediator systemIdentityAdded:identity3];
-  SigninAndSimulateCookies(mediator, identity3);
+      consistencyPromoSigninMediatorSignInDone:mediator
+                                  withIdentity:new_identity]);
+
+  SimulateCookieFetchSuccess(mediator, new_identity);
+
   [mediator disconnectWithResult:SigninCoordinatorResultSuccess];
 
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.SignedInWithAddedAccount", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::
-          SIGNED_IN_WITH_ADDED_ACCOUNT,
-      1);
+      "Signin.AccountConsistencyPromoAction.SignedInWithAddedAccount",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
-// Tests start and sign-in with an error.
-TEST_F(ConsistencyPromoSigninMediatorTest, SigninCoordinatorWithError) {
+// Tests the case where browser sign-in succeeds but the request to fetch
+// cookies comes back with an error, causing the user to be signed out from the
+// browser too.
+TEST_F(ConsistencyPromoSigninMediatorTest, CookiesError) {
   base::HistogramTester histogram_tester;
+
   ConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+
+  ExpectAuthFlowStartAndSetSuccess(
+      kDefaultIdentity, signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN,
+      true);
+
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+
+  // The error is only signaled after AuthenticationService::Signout() and
+  // that's async.
+  __block auto error_wait_loop = std::make_unique<base::RunLoop>();
   OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediatorSigninStarted:mediator]);
-  SigninWithMediator(mediator, identity1_, /*signin_success=*/YES);
-  SigninAndSimulateError(mediator, identity1_);
+                consistencyPromoSigninMediator:mediator
+                                errorDidHappen:
+                                    ConsistencyPromoSigninMediatorErrorGeneric])
+      .andDo(^(NSInvocation*) {
+        error_wait_loop->Quit();
+      });
+
+  SimulateCookieFetchError(mediator);
+
+  error_wait_loop->Run();
+
   [mediator disconnectWithResult:SigninCoordinatorResultCanceledByUser];
 
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 3);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.DismissedButton", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::DISMISSED_BUTTON, 1);
+      "Signin.AccountConsistencyPromoAction.DismissedButton",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.GenericErrorShown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::GENERIC_ERROR_SHOWN, 1);
+      "Signin.AccountConsistencyPromoAction.GenericErrorShown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
-// Tests timeout error.
-TEST_F(ConsistencyPromoSigninMediatorTest, SigninCoordinatorWithTimeoutError) {
+// Tests the case where browser sign-in succeeds but cookies never arrive on
+// time, causing the user to be signed out from the browser too.
+TEST_F(ConsistencyPromoSigninMediatorTest, CookiesTimeout) {
   base::HistogramTester histogram_tester;
-  TestConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
-  // Sets the timeout duration to 0, to trigger the timeout error without
-  // waiting.
-  mediator.signinTimeoutDurationSeconds = 0;
-  // Starts sign-in for the mediator.
+
+  ConsistencyPromoSigninMediator* mediator =
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+
+  ExpectAuthFlowStartAndSetSuccess(
+      kDefaultIdentity, signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN,
+      true);
+
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+
+  // The error is only signaled after AuthenticationService::Signout() and
+  // that's async.
+  __block auto error_wait_loop = std::make_unique<base::RunLoop>();
   OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediatorSigninStarted:mediator]);
-  SigninWithMediator(mediator, identity1_, /*signin_success=*/YES);
-  // Expects timeout.
-  OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediator:mediator
-                      errorDidHappen:
-                          ConsistencyPromoSigninMediatorErrorTimeout]);
-  // Wait for the time trigger.
-  base::RunLoop().RunUntilIdle();
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
-  // Expects show metric.
-  histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
-  // Expects timeout metric.
-  histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::TIMEOUT_ERROR_SHOWN, 1);
-  // Closes the sign-in dialog.
+                consistencyPromoSigninMediator:mediator
+                                errorDidHappen:
+                                    ConsistencyPromoSigninMediatorErrorTimeout])
+      .andDo(^(NSInvocation*) {
+        error_wait_loop->Quit();
+      });
+
+  SimulateCookieFetchTimeout();
+
+  error_wait_loop->Run();
+
   [mediator disconnectWithResult:SigninCoordinatorResultCanceledByUser];
-  // Expects dismiss metric.
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 3);
+
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::DISMISSED_BUTTON, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.TimeoutErrorShown", 1);
+  histogram_tester.ExpectBucketCount(
+      "Signin.AccountConsistencyPromoAction.TimeoutErrorShown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.DismissedButton", 1);
+  histogram_tester.ExpectBucketCount(
+      "Signin.AccountConsistencyPromoAction.DismissedButton",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
 
-// Tests sign-in failed.
-TEST_F(ConsistencyPromoSigninMediatorTest, SigninFailed) {
+// Tests the case where browser sign-in fails.
+TEST_F(ConsistencyPromoSigninMediatorTest, AuthFlowError) {
   base::HistogramTester histogram_tester;
-  TestConsistencyPromoSigninMediator* mediator =
-      GetConsistencyPromoSigninMediator();
-  // Sets the timeout duration to 0, to trigger the timeout error without
-  // waiting.
-  mediator.signinTimeoutDurationSeconds = 0;
-  // Starts sign-in for the mediator.
+
+  ConsistencyPromoSigninMediator* mediator =
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+
+  ExpectAuthFlowStartAndSetSuccess(
+      kDefaultIdentity, signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN,
+      false);
+
+  // The error is only signaled after AuthenticationService::Signout() and
+  // that's async (note: the user never really signed-in in this case, but the
+  // call is made nonetheless).
+  __block auto error_wait_loop = std::make_unique<base::RunLoop>();
   OCMExpect([mediator_delegate_mock_
-      consistencyPromoSigninMediatorSigninStarted:mediator]);
-  SigninWithMediator(mediator, identity1_, /*signin_success=*/NO);
-  // Wait for the time trigger.
-  base::RunLoop().RunUntilIdle();
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 2);
-  // Expects show metric.
-  histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SHOWN, 1);
-  // Expects timeout metric.
-  histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::SIGN_IN_FAILED, 1);
-  // Closes the sign-in dialog.
+                consistencyPromoSigninMediatorSignInCancelled:mediator])
+      .andDo(^(NSInvocation*) {
+        error_wait_loop->Quit();
+      });
+
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+
+  error_wait_loop->Run();
+
   [mediator disconnectWithResult:SigninCoordinatorResultCanceledByUser];
-  // Expects dismiss metric.
-  histogram_tester.ExpectTotalCount("Signin.AccountConsistencyPromoAction", 3);
+
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
   histogram_tester.ExpectBucketCount(
-      "Signin.AccountConsistencyPromoAction",
-      signin_metrics::AccountConsistencyPromoAction::DISMISSED_BUTTON, 1);
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.SignInFailed", 1);
+  histogram_tester.ExpectBucketCount(
+      "Signin.AccountConsistencyPromoAction.SignInFailed",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.DismissedButton", 1);
+  histogram_tester.ExpectBucketCount(
+      "Signin.AccountConsistencyPromoAction.DismissedButton",
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN, 1);
 }
+
+// Tests start and sign-in with default identity from Settings access point, and
+// then update the cookies. Related to crrev.com/1471140.
+TEST_F(ConsistencyPromoSigninMediatorTest, SigninWithoutCookies) {
+  base::HistogramTester histogram_tester;
+  GetPrefService()->SetInteger(prefs::kSigninWebSignDismissalCount, 1);
+
+  ConsistencyPromoSigninMediator* mediator =
+      BuildConsistencyPromoSigninMediator(
+          signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS);
+
+  ExpectAuthFlowStartAndSetSuccess(
+      kDefaultIdentity, signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS,
+      true);
+  OCMExpect([mediator_delegate_mock_
+      consistencyPromoSigninMediatorSignInDone:mediator
+                                  withIdentity:kDefaultIdentity]);
+
+  [mediator signinWithAuthenticationFlow:authentication_flow_];
+  [mediator disconnectWithResult:SigninCoordinatorResultSuccess];
+
+  EXPECT_EQ(1,
+            GetPrefService()->GetInteger(prefs::kSigninWebSignDismissalCount));
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.Shown", 1);
+  histogram_tester.ExpectBucketCount(
+      "Signin.AccountConsistencyPromoAction.Shown",
+      signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS, 1);
+  histogram_tester.ExpectTotalCount(
+      "Signin.AccountConsistencyPromoAction.SignedInWithDefaultAccount", 1);
+  histogram_tester.ExpectBucketCount(
+      "Signin.AccountConsistencyPromoAction.SignedInWithDefaultAccount",
+      signin_metrics::AccessPoint::ACCESS_POINT_SETTINGS, 1);
+}
+
+}  // namespace

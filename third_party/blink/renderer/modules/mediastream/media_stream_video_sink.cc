@@ -12,7 +12,7 @@ namespace blink {
 namespace {
 
 // Calls to these methods must be done on the main render thread.
-// Note that |callback| for frame delivery happens on the IO thread.
+// Note that |callback| for frame delivery happens on the video task runner.
 // Warning: Calling RemoveSinkFromMediaStreamTrack does not immediately stop
 // frame delivery through the |callback|, since frames are being delivered on
 // a different thread.
@@ -81,8 +81,12 @@ void MediaStreamVideoSink::OnFrameDropped(
   if (connected_track_.IsNull())
     return;
 
-  if (auto* const video_track = MediaStreamVideoTrack::From(connected_track_))
-    video_track->OnFrameDropped(reason);
+  // For UMA reasons we want to log this frame as dropped, even though it was
+  // delivered to the sink before being dropped. This is not considered a frame
+  // drop by the MediaStreamTrack Statistics API.
+  if (auto* const video_track = MediaStreamVideoTrack::From(connected_track_)) {
+    video_track->OnSinkDroppedFrame(reason);
+  }
 }
 
 double MediaStreamVideoSink::GetRequiredMinFramesPerSec() const {

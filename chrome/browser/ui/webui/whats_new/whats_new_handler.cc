@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/webui/whats_new/whats_new_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
@@ -35,15 +35,25 @@ void WhatsNewHandler::RegisterMessages() {
 }
 
 void WhatsNewHandler::HandleInitialize(const base::Value::List& args) {
-  CHECK_EQ(1U, args.size());
+  CHECK_EQ(2U, args.size());
   const std::string& callback_id = args[0].GetString();
+  const bool is_refresh = args[1].GetBool();
 
   AllowJavascript();
-  ResolveJavascriptCallback(
-      base::Value(callback_id),
-      whats_new::IsRemoteContentDisabled()
-          ? base::Value()
-          : base::Value(whats_new::GetServerURL(true).spec()));
+
+  auto response = base::Value();
+  if (!whats_new::IsRemoteContentDisabled()) {
+    if (is_refresh) {
+      // Show the refresh WNP. This logic essentially does a client-side
+      // redirect when WN is auto-opened and the refresh page has not
+      // been seen yet.
+      response = base::Value(whats_new::GetServerURLForRefresh().spec());
+    } else {
+      response = base::Value(whats_new::GetServerURL(true).spec());
+    }
+  }
+
+  ResolveJavascriptCallback(base::Value(callback_id), response);
   TryShowHatsSurveyWithTimeout();
 }
 
@@ -60,5 +70,5 @@ void WhatsNewHandler::TryShowHatsSurveyWithTimeout() {
           .InMilliseconds(),
       /*product_specific_bits_data=*/{},
       /*product_specific_string_data=*/{},
-      /*require_same_origin=*/true);
+      /*navigation_behaviour=*/HatsService::REQUIRE_SAME_ORIGIN);
 }

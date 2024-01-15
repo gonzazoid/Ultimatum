@@ -4,13 +4,11 @@
 
 #include "components/messages/android/messages_feature.h"
 
-#include "base/android/jni_string.h"
+#include "base/android/feature_map.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
-#include "components/messages/android/jni_headers/MessageFeatureList_jni.h"
-
-using base::android::ConvertJavaStringToUTF8;
-using base::android::JavaParamRef;
+#include "base/no_destructor.h"
+#include "components/messages/android/jni_headers/MessageFeatureMap_jni.h"
 
 namespace messages {
 
@@ -18,16 +16,15 @@ namespace {
 
 const base::Feature* kFeaturesExposedToJava[] = {
     &kMessagesForAndroidStackingAnimation,
+    &kMessagesForAndroidFullyVisibleCallback,
+    &kMessagesAndroidExtraHistograms,
 };
 
-const base::Feature* FindFeatureExposedToJava(const std::string& feature_name) {
-  for (const base::Feature* feature : kFeaturesExposedToJava) {
-    if (feature->name == feature_name)
-      return feature;
-  }
-  NOTREACHED() << "Queried feature not found in MessageFeatureList: "
-               << feature_name;
-  return nullptr;
+// static
+base::android::FeatureMap* GetFeatureMap() {
+  static base::NoDestructor<base::android::FeatureMap> kFeatureMap(std::vector(
+      std::begin(kFeaturesExposedToJava), std::end(kFeaturesExposedToJava)));
+  return kFeatureMap.get();
 }
 
 }  // namespace
@@ -36,34 +33,9 @@ BASE_FEATURE(kMessagesForAndroidAdsBlocked,
              "MessagesForAndroidAdsBlocked",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kMessagesForAndroidChromeSurvey,
-             "MessagesForAndroidChromeSurvey",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kMessagesForAndroidInfrastructure,
-             "MessagesForAndroidInfrastructure",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kMessagesForAndroidNearOomReduction,
-             "MessagesForAndroidNearOomReduction",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kMessagesForAndroidNotificationBlocked,
-             "MessagesForAndroidNotificationBlocked",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 BASE_FEATURE(kMessagesForAndroidOfferNotification,
              "MessagesForAndroidOfferNotification",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kMessagesForAndroidPasswords,
-             "MessagesForAndroidPasswords",
              base::FEATURE_ENABLED_BY_DEFAULT);
-
-constexpr base::FeatureParam<int>
-    kMessagesForAndroidPasswords_MessageDismissDurationMs{
-        &kMessagesForAndroidPasswords,
-        "save_password_message_dismiss_duration_ms", 20000};
 
 BASE_FEATURE(kMessagesForAndroidPermissionUpdate,
              "MessagesForAndroidPermissionUpdate",
@@ -73,121 +45,53 @@ BASE_FEATURE(kMessagesForAndroidPopupBlocked,
              "MessagesForAndroidPopupBlocked",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kMessagesForAndroidReaderMode,
-             "MessagesForAndroidReaderMode",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kMessagesForAndroidSafetyTip,
-             "MessagesForAndroidSafetyTip",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 BASE_FEATURE(kMessagesForAndroidSaveCard,
              "MessagesForAndroidSaveCard",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-constexpr base::FeatureParam<bool>
-    kMessagesForAndroidSaveCard_UseFollowupButtonText{
-        &kMessagesForAndroidSaveCard,
-        "save_card_message_use_followup_button_text", false};
-
-constexpr base::FeatureParam<bool> kMessagesForAndroidSaveCard_UseGPayIcon{
-    &kMessagesForAndroidSaveCard, "save_card_message_use_gpay_icon", true};
-
-constexpr base::FeatureParam<bool> kMessagesForAndroidSaveCard_UseDialogV2{
-    &kMessagesForAndroidSaveCard, "save_card_dialog_v2_enabled", false};
-
 BASE_FEATURE(kMessagesForAndroidStackingAnimation,
              "MessagesForAndroidStackingAnimation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kMessagesForAndroidUpdatePassword,
-             "MessagesForAndroidUpdatePassword",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-constexpr base::FeatureParam<bool>
-    kMessagesForAndroidUpdatePassword_UseFollowupButtonText{
-        &kMessagesForAndroidUpdatePassword, "use_followup_button_text", false};
+BASE_FEATURE(kMessagesForAndroidFullyVisibleCallback,
+             "MessagesForAndroidFullyVisibleCallback",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kMessagesForAndroidReduceLayoutChanges,
-             "MessagesForAndroidReduceLayoutChanges",
+// Feature that enables extra histogram recordings.
+BASE_FEATURE(kMessagesAndroidExtraHistograms,
+             "MessagesAndroidExtraHistograms",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool IsAdsBlockedMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidAdsBlocked);
-}
-
-bool IsNearOomReductionMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidNearOomReduction);
+  return base::FeatureList::IsEnabled(kMessagesForAndroidAdsBlocked);
 }
 
 bool IsOfferNotificationMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidOfferNotification);
-}
-
-bool IsPasswordMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidPasswords);
+  return base::FeatureList::IsEnabled(kMessagesForAndroidOfferNotification);
 }
 
 bool IsPopupBlockedMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidPopupBlocked);
-}
-
-bool IsSafetyTipMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidSafetyTip);
+  return base::FeatureList::IsEnabled(kMessagesForAndroidPopupBlocked);
 }
 
 bool IsSaveCardMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidSaveCard);
-}
-
-bool IsUpdatePasswordMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidUpdatePassword);
-}
-
-bool UseFollowupButtonTextForUpdatePasswordButton() {
-  return kMessagesForAndroidUpdatePassword_UseFollowupButtonText.Get();
-}
-
-bool IsNotificationBlockedMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidNotificationBlocked);
+  return base::FeatureList::IsEnabled(kMessagesForAndroidSaveCard);
 }
 
 bool IsPermissionUpdateMessagesUiEnabled() {
-  return base::FeatureList::IsEnabled(kMessagesForAndroidInfrastructure) &&
-         base::FeatureList::IsEnabled(kMessagesForAndroidPermissionUpdate);
+  return base::FeatureList::IsEnabled(kMessagesForAndroidPermissionUpdate);
 }
 
-int GetSavePasswordMessageDismissDurationMs() {
-  return kMessagesForAndroidPasswords_MessageDismissDurationMs.Get();
+bool IsStackingAnimationEnabled() {
+  return base::FeatureList::IsEnabled(kMessagesForAndroidStackingAnimation);
 }
 
-bool UseFollowupButtonTextForSaveCardMessage() {
-  return kMessagesForAndroidSaveCard_UseFollowupButtonText.Get();
+bool ISdFullyVisibleCallbackEnabled() {
+  return base::FeatureList::IsEnabled(kMessagesForAndroidFullyVisibleCallback);
 }
 
-bool UseGPayIconForSaveCardMessage() {
-  return kMessagesForAndroidSaveCard_UseGPayIcon.Get();
-}
-
-bool UseDialogV2ForSaveCardMessage() {
-  return kMessagesForAndroidSaveCard_UseDialogV2.Get();
-}
-
-static jboolean JNI_MessageFeatureList_IsEnabled(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& jfeature_name) {
-  const base::Feature* feature =
-      FindFeatureExposedToJava(ConvertJavaStringToUTF8(env, jfeature_name));
-  return base::FeatureList::IsEnabled(*feature);
+static jlong JNI_MessageFeatureMap_GetNativeMap(JNIEnv* env) {
+  return reinterpret_cast<jlong>(GetFeatureMap());
 }
 
 }  // namespace messages

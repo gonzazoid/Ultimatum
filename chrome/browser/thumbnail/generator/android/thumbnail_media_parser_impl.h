@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -111,9 +111,10 @@ class ThumbnailMediaParserImpl : public ThumbnailMediaParser,
   // Objects used to decode the video into media::VideoFrame with
   // MojoVideoDecoder.
   media::VideoDecoderConfig config_;
+  // `gpu_factories_` must outlive `decoder_`.
+  std::unique_ptr<media::GpuVideoAcceleratorFactories> gpu_factories_;
   std::unique_ptr<media::VideoThumbnailDecoder> decoder_;
   mojo::Remote<media::mojom::InterfaceFactory> media_interface_factory_;
-  std::unique_ptr<media::GpuVideoAcceleratorFactories> gpu_factories_;
   bool decode_done_;
 
   base::WeakPtrFactory<ThumbnailMediaParserImpl> weak_factory_{this};

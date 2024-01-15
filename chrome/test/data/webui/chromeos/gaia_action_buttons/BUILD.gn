@@ -10,9 +10,9 @@ js_type_check("closure_compile") {
                     "browser_resolver_prefix_replacements=\"chrome://chrome-signin/gaia_action_buttons/=" + rebase_path(
                             "//chrome/browser/resources/chromeos/gaia_action_buttons/",
                             root_build_dir) + "\"",
-                    "browser_resolver_prefix_replacements=\"chrome://test/=" +
-                        rebase_path("//chrome/test/data/webui/",
-                                    root_build_dir) + "\"",
+                    "browser_resolver_prefix_replacements=\"chrome://webui-test/=" + rebase_path(
+                            "//chrome/test/data/webui/",
+                            root_build_dir) + "\"",
                     "js_module_root=" + rebase_path("//chrome/test/data/webui/",
                                                     root_build_dir),
                     "js_module_root=./gen/chrome/test/data/webui/",
@@ -30,10 +30,10 @@ js_type_check("closure_compile") {
 
 js_library("gaia_action_buttons_test") {
   deps = [
-    "../..:chai_assert",
+    "..:chai_assert",
+    "//ash/webui/common/resources:assert",
+    "//ash/webui/common/resources:event_target",
     "//chrome/browser/resources/chromeos/gaia_action_buttons:gaia_action_buttons",
-    "//ui/webui/resources/js:assert",
-    "//ui/webui/resources/js/cr:event_target",
   ]
   externs_list = [ "$externs_path/mocha-2.5.js" ]
 }

@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "media/base/video_frame.h"
 #include "media/cast/cast_callbacks.h"
@@ -17,6 +17,9 @@
 #include "media/cast/common/video_frame_factory.h"
 
 namespace media {
+
+class VideoEncoderMetricsProvider;
+
 namespace cast {
 
 struct SenderEncodedFrame;
@@ -38,6 +41,7 @@ class VideoEncoder {
   static std::unique_ptr<VideoEncoder> Create(
       const scoped_refptr<CastEnvironment>& cast_environment,
       const FrameSenderConfig& video_config,
+      std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
       StatusChangeCallback status_change_cb,
       const CreateVideoEncodeAcceleratorCallback& create_vea_cb);
 

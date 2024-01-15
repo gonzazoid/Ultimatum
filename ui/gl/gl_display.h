@@ -18,9 +18,11 @@
 #include "ui/gl/gpu_switching_manager.h"
 #endif  // defined(USE_EGL)
 
-namespace base {
-class CommandLine;
-}  // namespace base
+#if BUILDFLAG(IS_APPLE)
+#if __OBJC__
+@protocol MTLSharedEvent;
+#endif  // __OBJC__
+#endif
 
 namespace gl {
 struct DisplayExtensionsEGL;
@@ -74,19 +76,7 @@ enum DisplayType {
 enum DisplayPlatform {
   NONE = 0,
   EGL = 1,
-  X11 = 2,
 };
-
-GL_EXPORT void GetEGLInitDisplaysForTesting(
-    bool supports_angle_d3d,
-    bool supports_angle_opengl,
-    bool supports_angle_null,
-    bool supports_angle_vulkan,
-    bool supports_angle_swiftshader,
-    bool supports_angle_egl,
-    bool supports_angle_metal,
-    const base::CommandLine* command_line,
-    std::vector<DisplayType>* init_displays);
 
 class GL_EXPORT GLDisplay {
  public:
@@ -94,20 +84,26 @@ class GL_EXPORT GLDisplay {
   GLDisplay& operator=(const GLDisplay&) = delete;
 
   uint64_t system_device_id() const { return system_device_id_; }
+  DisplayKey display_key() const { return display_key_; }
+  DisplayPlatform type() const { return type_; }
 
   virtual ~GLDisplay();
 
   virtual void* GetDisplay() const = 0;
   virtual void Shutdown() = 0;
   virtual bool IsInitialized() const = 0;
+  virtual bool Initialize(GLDisplay* display) = 0;
 
   template <typename GLDisplayPlatform>
   GLDisplayPlatform* GetAs();
 
  protected:
-  GLDisplay(uint64_t system_device_id, DisplayPlatform type);
+  GLDisplay(uint64_t system_device_id,
+            DisplayKey display_key,
+            DisplayPlatform type);
 
   uint64_t system_device_id_ = 0;
+  DisplayKey display_key_ = DisplayKey::kDefault;
   DisplayPlatform type_ = NONE;
 };
 
@@ -134,11 +130,30 @@ class GL_EXPORT GLDisplayEGL : public GLDisplay {
   bool IsAndroidNativeFenceSyncSupported();
   bool IsANGLEExternalContextAndSurfaceSupported();
 
-  bool Initialize(EGLDisplayPlatform native_display);
+  bool Initialize(bool supports_angle,
+                  std::vector<DisplayType> init_displays,
+                  EGLDisplayPlatform native_display);
+  bool Initialize(GLDisplay* other_display) override;
   void InitializeForTesting();
   bool InitializeExtensionSettings();
 
   std::unique_ptr<DisplayExtensionsEGL> ext;
+
+#if BUILDFLAG(IS_APPLE)
+  bool IsANGLEMetalSharedEventSyncSupported();
+#if __OBJC__
+  bool CreateMetalSharedEvent(id<MTLSharedEvent>* shared_event_out,
+                              uint64_t* signal_value_out);
+  void WaitForMetalSharedEvent(id<MTLSharedEvent> shared_event,
+                               uint64_t signal_value);
+#endif  // __OBJC__
+
+  // Call periodically to clean up resources.
+  void CleanupTempEGLSyncObjects();
+
+  // Call once upon shutdown of the display.
+  void CleanupMetalSharedEvent();
+#endif
 
  private:
   friend class GLDisplayManager<GLDisplayEGL>;
@@ -154,10 +169,13 @@ class GL_EXPORT GLDisplayEGL : public GLDisplay {
     EGLDisplay display_ = EGL_NO_DISPLAY;
   };
 
-  explicit GLDisplayEGL(uint64_t system_device_id);
+  GLDisplayEGL(uint64_t system_device_id, DisplayKey display_key);
 
-  bool InitializeDisplay(EGLDisplayPlatform native_display);
-  void InitializeCommon();
+  bool InitializeDisplay(bool supports_angle,
+                         std::vector<DisplayType> init_displays,
+                         EGLDisplayPlatform native_display,
+                         gl::GLDisplayEGL* existing_display);
+  void InitializeCommon(bool for_testing);
 
   EGLDisplay display_ = EGL_NO_DISPLAY;
   EGLDisplayPlatform native_display_ = EGLDisplayPlatform(EGL_DEFAULT_DISPLAY);
@@ -168,27 +186,13 @@ class GL_EXPORT GLDisplayEGL : public GLDisplay {
   bool egl_android_native_fence_sync_supported_ = false;
 
   std::unique_ptr<EGLGpuSwitchingObserver> gpu_switching_observer_;
+
+#if BUILDFLAG(IS_APPLE)
+  struct ObjCStorage;
+  std::unique_ptr<ObjCStorage> objc_storage_;
+#endif
 };
 #endif  // defined(USE_EGL)
-
-#if defined(USE_GLX)
-class GL_EXPORT GLDisplayX11 : public GLDisplay {
- public:
-  GLDisplayX11(const GLDisplayX11&) = delete;
-  GLDisplayX11& operator=(const GLDisplayX11&) = delete;
-
-  ~GLDisplayX11() override;
-
-  void* GetDisplay() const override;
-  void Shutdown() override;
-  bool IsInitialized() const override;
-
- private:
-  friend class GLDisplayManager<GLDisplayX11>;
-
-  explicit GLDisplayX11(uint64_t system_device_id);
-};
-#endif  // defined(USE_GLX)
 
 }  // namespace gl
 

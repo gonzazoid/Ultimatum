@@ -8,6 +8,7 @@
 
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
@@ -45,8 +46,6 @@ void SchedulerHelper::AttachToCurrentThread() {
   CheckOnValidThread();
   DCHECK(default_task_runner_)
       << "Must be invoked after InitDefaultTaskRunner().";
-  DCHECK(!simple_task_executor_.has_value());
-  simple_task_executor_.emplace(default_task_runner_);
 }
 
 SchedulerHelper::~SchedulerHelper() {
@@ -55,8 +54,6 @@ SchedulerHelper::~SchedulerHelper() {
 
 void SchedulerHelper::Shutdown() {
   CheckOnValidThread();
-  DCHECK(simple_task_executor_.has_value())
-      << "AttachToCurrentThread() was not invoked.";
   if (!sequence_manager_)
     return;
   ShutdownAllQueues();
@@ -163,14 +160,6 @@ base::TimeTicks SchedulerHelper::NowTicks() const {
     return sequence_manager_->NowTicks();
   // We may need current time for tracing when shutting down worker thread.
   return base::TimeTicks::Now();
-}
-
-void SchedulerHelper::SetTimerSlack(base::TimerSlack timer_slack) {
-  if (sequence_manager_) {
-    static_cast<base::sequence_manager::internal::SequenceManagerImpl*>(
-        sequence_manager_)
-        ->SetTimerSlack(timer_slack);
-  }
 }
 
 bool SchedulerHelper::HasCPUTimingForEachTask() const {

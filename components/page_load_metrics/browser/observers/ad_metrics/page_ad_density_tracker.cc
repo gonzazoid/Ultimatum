@@ -14,6 +14,8 @@ namespace page_load_metrics {
 
 namespace {
 
+using RectId = PageAdDensityTracker::RectId;
+
 int CalculateIntersectedLength(int start1, int end1, int start2, int end2) {
   DCHECK_LE(start1, end1);
   DCHECK_LE(start2, end2);
@@ -34,26 +36,25 @@ class BoundedSegmentLength {
   // An event to process corresponding to the left or right point of each
   // line segment.
   struct SegmentEvent {
-    SegmentEvent(int segment_id, int pos, bool is_segment_start)
+    SegmentEvent(RectId segment_id, int pos, bool is_segment_start)
         : segment_id(segment_id),
           pos(pos),
           is_segment_start(is_segment_start) {}
     SegmentEvent(const SegmentEvent& other) = default;
 
-    // Tiebreak with position with |is_segment_start| and |segment_id|.
+    // Tiebreak with position with |segment_id|.
     bool operator<(const SegmentEvent& rhs) const {
       if (pos == rhs.pos) {
-        if (segment_id == rhs.segment_id) {
-          return is_segment_start != rhs.is_segment_start;
-        } else {
-          return segment_id < rhs.segment_id;
-        }
+        // We do not have 0-length segment.
+        DCHECK(segment_id != rhs.segment_id);
+
+        return segment_id < rhs.segment_id;
       } else {
         return pos < rhs.pos;
       }
     }
 
-    int segment_id;
+    RectId segment_id;
     int pos;
     bool is_segment_start;
   };
@@ -83,7 +84,7 @@ class BoundedSegmentLength {
 
   // Add a line segment to the set of active line segments, the segment
   // corresponds to the bottom or top of a rect.
-  void AddSegment(int segment_id, int start, int end) {
+  void AddSegment(RectId segment_id, int start, int end) {
     DCHECK_LE(start, end);
 
     int clipped_start = std::max(bound_start_, start);
@@ -107,7 +108,7 @@ class BoundedSegmentLength {
   }
 
   // Remove a segment from the set of active line segmnets.
-  void RemoveSegment(int segment_id) {
+  void RemoveSegment(RectId segment_id) {
     auto it = segment_event_iterators_.find(segment_id);
     if (it == segment_event_iterators_.end())
       return;
@@ -155,12 +156,17 @@ class BoundedSegmentLength {
   std::set<SegmentEvent> active_segments_;
 
   // Map from the segment_id passed by user to the Segment struct.
-  std::unordered_map<int, SegmentEventSetIterators> segment_event_iterators_;
+  std::map<RectId, SegmentEventSetIterators> segment_event_iterators_;
 };
 
 }  // namespace
 
-PageAdDensityTracker::RectEvent::RectEvent(int id,
+PageAdDensityTracker::RectId::RectId(RectType rect_type, int id)
+    : rect_type(rect_type), id(id) {}
+
+PageAdDensityTracker::RectId::RectId(const RectId& other) = default;
+
+PageAdDensityTracker::RectEvent::RectEvent(RectId id,
                                            bool is_bottom,
                                            const gfx::Rect& rect)
     : rect_id(id), is_bottom(is_bottom), rect(rect) {}
@@ -200,7 +206,9 @@ int PageAdDensityTracker::ViewportAdDensityByArea() const {
   return last_viewport_ad_density_by_area_;
 }
 
-void PageAdDensityTracker::AddRect(int rect_id, const gfx::Rect& rect) {
+void PageAdDensityTracker::AddRect(RectId rect_id,
+                                   const gfx::Rect& rect,
+                                   bool recalculate_density) {
   // Check that we do not already have rect events for the rect.
   DCHECK(rect_events_iterators_.find(rect_id) == rect_events_iterators_.end());
 
@@ -215,21 +223,24 @@ void PageAdDensityTracker::AddRect(int rect_id, const gfx::Rect& rect) {
     return;
 
   auto top_it =
-      rect_events_.insert(RectEvent(rect_id, true /*is_bottom*/, rect)).first;
-  auto bottom_it =
       rect_events_.insert(RectEvent(rect_id, false /*is_bottom*/, rect)).first;
+  auto bottom_it =
+      rect_events_.insert(RectEvent(rect_id, true /*is_bottom*/, rect)).first;
   rect_events_iterators_.emplace(rect_id,
                                  RectEventSetIterators(top_it, bottom_it));
 
-  // TODO(https://crbug.com/1068586): Improve performance by adding additional
-  // throttling to only calculate when max density can decrease (frame deleted
-  // or moved).
-  CalculatePageAdDensity();
+  if (recalculate_density) {
+    // TODO(https://crbug.com/1068586): Improve performance by adding additional
+    // throttling to only calculate when max density can decrease (frame deleted
+    // or moved).
+    CalculatePageAdDensity();
 
-  CalculateViewportAdDensity();
+    CalculateViewportAdDensity();
+  }
 }
 
-void PageAdDensityTracker::RemoveRect(int rect_id) {
+void PageAdDensityTracker::RemoveRect(RectId rect_id,
+                                      bool recalculate_viewport_density) {
   auto it = rect_events_iterators_.find(rect_id);
 
   if (it == rect_events_iterators_.end())
@@ -239,6 +250,10 @@ void PageAdDensityTracker::RemoveRect(int rect_id) {
   rect_events_.erase(set_its.top_it);
   rect_events_.erase(set_its.bottom_it);
   rect_events_iterators_.erase(it);
+
+  if (recalculate_viewport_density) {
+    CalculateViewportAdDensity();
+  }
 }
 
 void PageAdDensityTracker::UpdateMainFrameRect(const gfx::Rect& rect) {
@@ -254,6 +269,22 @@ void PageAdDensityTracker::UpdateMainFrameViewportRect(const gfx::Rect& rect) {
     return;
 
   last_main_frame_viewport_rect_ = rect;
+  CalculateViewportAdDensity();
+}
+
+void PageAdDensityTracker::UpdateMainFrameImageAdRects(
+    const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) {
+  for (auto const& [element_id, rect] : main_frame_image_ad_rects) {
+    RectId rect_id = RectId(RectType::kElement, element_id);
+
+    RemoveRect(rect_id, /*recalculate_viewport_density=*/false);
+
+    if (!rect.IsEmpty()) {
+      AddRect(rect_id, rect, /*recalculate_density=*/false);
+    }
+  }
+
+  CalculatePageAdDensity();
   CalculateViewportAdDensity();
 }
 
@@ -342,6 +373,8 @@ PageAdDensityTracker::CalculateDensityWithin(const gfx::Rect& bounding_rect) {
           rect_event.rect_id, rect_event.rect.x(),
           rect_event.rect.x() + rect_event.rect.width());
       last_y = rect_event.rect.bottom();
+      // For first iteration, the current_area is 0 so we skip this iteration.
+      continue;
     }
 
     int current_y =
@@ -409,17 +442,31 @@ PageAdDensityTracker::CalculateDensityWithin(const gfx::Rect& bounding_rect) {
   return result;
 }
 
+bool PageAdDensityTracker::RectId::operator<(const RectId& rhs) const {
+  if (rect_type == rhs.rect_type) {
+    return id < rhs.id;
+  }
+
+  return rect_type < rhs.rect_type;
+}
+
+bool PageAdDensityTracker::RectId::operator==(const RectId& rhs) const {
+  return rect_type == rhs.rect_type && id == rhs.id;
+}
+
+bool PageAdDensityTracker::RectId::operator!=(const RectId& rhs) const {
+  return !(*this == rhs);
+}
+
 bool PageAdDensityTracker::RectEvent::operator<(const RectEvent& rhs) const {
   int lhs_y = is_bottom ? rect.bottom() : rect.y();
   int rhs_y = rhs.is_bottom ? rhs.rect.bottom() : rhs.rect.y();
 
-  // Tiebreak with |rect_id| and |is_bottom|.
+  // Tiebreak with |rect_id|.
   if (lhs_y == rhs_y) {
-    if (rect_id == rhs.rect_id) {
-      return is_bottom == rhs.is_bottom;
-    } else {
-      return rect_id < rhs.rect_id;
-    }
+    // We do not have 0-length Rect.
+    DCHECK(rect_id != rhs.rect_id);
+    return rect_id < rhs.rect_id;
   } else {
     return lhs_y > rhs_y;
   }

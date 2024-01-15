@@ -10,12 +10,14 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "components/password_manager/core/browser/form_fetcher.h"
 #include "components/password_manager/core/browser/http_password_store_migrator.h"
-#include "components/password_manager/core/browser/password_store_consumer.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_backend_error.h"
+#include "components/password_manager/core/browser/password_store/password_store_consumer.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 
 namespace password_manager {
 
@@ -46,19 +48,25 @@ class FormFetcherImpl : public FormFetcher,
   void Fetch() override;
   State GetState() const override;
   const std::vector<InteractionsStats>& GetInteractionsStats() const override;
-  std::vector<const PasswordForm*> GetInsecureCredentials() const override;
-  std::vector<const PasswordForm*> GetNonFederatedMatches() const override;
-  std::vector<const PasswordForm*> GetFederatedMatches() const override;
+  std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+  GetInsecureCredentials() const override;
+  std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+  GetNonFederatedMatches() const override;
+  std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+  GetFederatedMatches() const override;
   bool IsBlocklisted() const override;
-  bool IsMovingBlocked(const autofill::GaiaIdHash& destination,
+  bool IsMovingBlocked(const signin::GaiaIdHash& destination,
                        const std::u16string& username) const override;
 
-  const std::vector<const PasswordForm*>& GetAllRelevantMatches()
-      const override;
-  const std::vector<const PasswordForm*>& GetBestMatches() const override;
+  const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+  GetAllRelevantMatches() const override;
+  const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+  GetBestMatches() const override;
   const PasswordForm* GetPreferredMatch() const override;
   std::unique_ptr<FormFetcher> Clone() override;
-  absl::optional<PasswordStoreBackendError> GetProfileStoreBackendError()
+  std::optional<PasswordStoreBackendError> GetProfileStoreBackendError()
+      const override;
+  std::optional<PasswordStoreBackendError> GetAccountStoreBackendError()
       const override;
 
  protected:
@@ -74,7 +82,7 @@ class FormFetcherImpl : public FormFetcher,
   const PasswordFormDigest form_digest_;
 
   // Client used to obtain a CredentialFilter.
-  const raw_ptr<PasswordManagerClient, DanglingUntriaged> client_;
+  const raw_ptr<PasswordManagerClient> client_;
 
   // State of the fetcher.
   State state_ = State::NOT_WAITING;
@@ -108,7 +116,7 @@ class FormFetcherImpl : public FormFetcher,
   void OnGetSiteStatistics(std::vector<InteractionsStats> stats) override;
   void OnGetPasswordStoreResultsOrErrorFrom(
       PasswordStoreInterface* store,
-      FormsOrError results_or_error) override;
+      LoginsResultOrError results_or_error) override;
 
   // HttpPasswordStoreMigrator::Consumer:
   void ProcessMigratedForms(
@@ -123,17 +131,12 @@ class FormFetcherImpl : public FormFetcher,
       http_migrators_;
 
   // Non-federated credentials of the same scheme as the observed form.
-  std::vector<const PasswordForm*> non_federated_same_scheme_;
+  std::vector<raw_ptr<const PasswordForm, VectorExperimental>>
+      non_federated_same_scheme_;
 
   // Set of nonblocklisted PasswordForms from the password store that best match
   // the form being managed by |this|.
-  std::vector<const PasswordForm*> best_matches_;
-
-  // Convenience pointer to entry in |best_matches_| that is marked as
-  // preferred. This is only allowed to be null if there are no best matches at
-  // all, since there will always be one preferred login when there are multiple
-  // matches (when first saved, a login is marked preferred).
-  const PasswordForm* preferred_match_ = nullptr;
+  std::vector<raw_ptr<const PasswordForm, VectorExperimental>> best_matches_;
 
   // Whether there were any blocklisted credentials obtained from the profile
   // and account password stores respectively.
@@ -152,7 +155,8 @@ class FormFetcherImpl : public FormFetcher,
 
   // Holds an error if it occurred during login retrieval from the
   // PasswordStore.
-  absl::optional<PasswordStoreBackendError> profile_store_backend_error_;
+  std::optional<PasswordStoreBackendError> profile_store_backend_error_;
+  std::optional<PasswordStoreBackendError> account_store_backend_error_;
 
   base::WeakPtrFactory<FormFetcherImpl> weak_ptr_factory_{this};
 };

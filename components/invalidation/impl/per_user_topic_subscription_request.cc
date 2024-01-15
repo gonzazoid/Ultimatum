@@ -6,13 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
-#include "components/sync/base/model_type.h"
 #include "net/http/http_status_code.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
@@ -30,9 +29,11 @@ const char kPrivateTopicNameKey[] = "privateTopicName";
 const std::string* GetTopicName(const base::Value& value) {
   if (!value.is_dict())
     return nullptr;
-  if (value.FindBoolKey("isPublic").value_or(false))
-    return value.FindStringKey(kPublicTopicNameKey);
-  return value.FindStringKey(kPrivateTopicNameKey);
+  const base::Value::Dict& dict = value.GetDict();
+  if (dict.FindBool("isPublic").value_or(false)) {
+    return dict.FindString(kPublicTopicNameKey);
+  }
+  return dict.FindString(kPrivateTopicNameKey);
 }
 
 bool IsNetworkError(int net_error) {
@@ -87,17 +88,6 @@ void RecordRequestStatus(SubscriptionStatus status,
     // Log a histogram to track response success vs. failure rates.
     base::UmaHistogramSparse("FCMInvalidations.SubscriptionResponseCode",
                              response_code);
-    // If the topic corresponds to a Sync ModelType, use that as the histogram
-    // suffix. Otherwise (e.g. Drive or Policy), just use "OTHER" for now.
-    // TODO(crbug.com/1029698): Depending on sync is a layering violation.
-    // Eventually the "whitelisted for metrics" bit should be part of a Topic.
-    syncer::ModelType model_type;  // Unused.
-    std::string suffix =
-        syncer::NotificationTypeToRealModelType(topic, &model_type) ? topic
-                                                                    : "OTHER";
-    base::UmaHistogramSparse(
-        "FCMInvalidations.SubscriptionResponseCodeForTopic." + suffix,
-        response_code);
   }
 }
 
@@ -138,9 +128,8 @@ void PerUserTopicSubscriptionRequest::OnURLFetchCompleteInternal(
   if (IsNetworkError(net_error)) {
     RecordRequestStatus(SubscriptionStatus::kNetworkFailure, type_, topic_,
                         net_error, response_code);
-    RunCompletedCallbackAndMaybeDie(
-        Status(StatusCode::FAILED, base::StringPrintf("Network Error")),
-        std::string());
+    RunCompletedCallbackAndMaybeDie(Status(StatusCode::FAILED, "Network Error"),
+                                    std::string());
     // Potentially dead after the above invocation; nothing to do except return.
     return;
   }
@@ -174,9 +163,8 @@ void PerUserTopicSubscriptionRequest::OnURLFetchCompleteInternal(
   if (!response_body || response_body->empty()) {
     RecordRequestStatus(SubscriptionStatus::kParsingFailure, type_, topic_,
                         net_error, response_code);
-    RunCompletedCallbackAndMaybeDie(
-        Status(StatusCode::FAILED, base::StringPrintf("Body missing")),
-        std::string());
+    RunCompletedCallbackAndMaybeDie(Status(StatusCode::FAILED, "Body missing"),
+                                    std::string());
     // Potentially dead after the above invocation; nothing to do except return.
     return;
   }
@@ -189,28 +177,20 @@ void PerUserTopicSubscriptionRequest::OnURLFetchCompleteInternal(
 
 void PerUserTopicSubscriptionRequest::OnJsonParse(
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.has_value()) {
-    RecordRequestStatus(SubscriptionStatus::kParsingFailure, type_, topic_);
-    RunCompletedCallbackAndMaybeDie(
-        Status(StatusCode::FAILED, base::StringPrintf("Body parse error")),
-        std::string());
+  if (const auto topic_name = result.transform(GetTopicName);
+      topic_name.has_value() && *topic_name) {
+    RecordRequestStatus(SubscriptionStatus::kSuccess, type_, topic_);
+    RunCompletedCallbackAndMaybeDie(Status(StatusCode::SUCCESS, std::string()),
+                                    **topic_name);
     // Potentially dead after the above invocation; nothing to do except return.
     return;
   }
-
-  const std::string* topic_name = GetTopicName(*result);
-  if (topic_name) {
-    RecordRequestStatus(SubscriptionStatus::kSuccess, type_, topic_);
-    RunCompletedCallbackAndMaybeDie(Status(StatusCode::SUCCESS, std::string()),
-                                    *topic_name);
-    // Potentially dead after the above invocation; nothing to do except return.
-  } else {
-    RecordRequestStatus(SubscriptionStatus::kParsingFailure, type_, topic_);
-    RunCompletedCallbackAndMaybeDie(
-        Status(StatusCode::FAILED, base::StringPrintf("Missing topic name")),
-        std::string());
-    // Potentially dead after the above invocation; nothing to do except return.
-  }
+  RecordRequestStatus(SubscriptionStatus::kParsingFailure, type_, topic_);
+  RunCompletedCallbackAndMaybeDie(
+      Status(StatusCode::FAILED,
+             result.has_value() ? "Missing topic name" : "Body parse error"),
+      std::string());
+  // Potentially dead after the above invocation; nothing to do except return.
 }
 
 void PerUserTopicSubscriptionRequest::RunCompletedCallbackAndMaybeDie(
@@ -324,11 +304,11 @@ HttpRequestHeaders PerUserTopicSubscriptionRequest::Builder::BuildHeaders()
 }
 
 std::string PerUserTopicSubscriptionRequest::Builder::BuildBody() const {
-  base::Value request(base::Value::Type::DICTIONARY);
+  base::Value::Dict request;
 
-  request.SetStringKey("public_topic_name", topic_);
+  request.Set("public_topic_name", topic_);
   if (topic_is_public_)
-    request.SetBoolKey("is_public", true);
+    request.Set("is_public", true);
 
   std::string request_json;
   bool success = base::JSONWriter::Write(request, &request_json);
@@ -341,6 +321,8 @@ PerUserTopicSubscriptionRequest::Builder::BuildURLFetcher(
     const HttpRequestHeaders& headers,
     const std::string& body,
     const GURL& url) const {
+  // TODO(crbug.com/1404927): Chrome Sync does not use topics anymore, update
+  // the description.
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("per_user_topic_registration_request",
                                           R"(

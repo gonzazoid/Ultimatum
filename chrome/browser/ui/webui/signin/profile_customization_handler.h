@@ -7,8 +7,8 @@
 
 #include "content/public/browser/web_ui_message_handler.h"
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
@@ -52,7 +52,7 @@ class ProfileCustomizationHandler : public content::WebUIMessageHandler,
                             const std::u16string& old_profile_name) override;
 
  private:
-  friend class ProfilePickerLocalProfileCreationDialogBrowserTest;
+  friend class ProfilePickerCreationFlowBrowserTest;
 
   // Handlers for messages from javascript.
   void HandleInitialized(const base::Value::List& args);

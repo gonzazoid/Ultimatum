@@ -8,8 +8,10 @@
 #include <string>
 
 #include "ash/constants/ash_pref_names.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/edu_coexistence_tos_store_utils.h"
 #include "chrome/browser/profiles/profile.h"
@@ -100,8 +102,9 @@ class AccountManagerEducoexistenceControllerTest : public testing::Test {
  private:
   // To support context of browser threads.
   content::BrowserTaskEnvironment task_environment_;
-  account_manager::AccountManager* account_manager_ = nullptr;
-  account_manager::AccountManagerFacade* account_manager_facade_ = nullptr;
+  raw_ptr<account_manager::AccountManager> account_manager_ = nullptr;
+  raw_ptr<account_manager::AccountManagerFacade> account_manager_facade_ =
+      nullptr;
   network::TestURLLoaderFactory test_url_loader_factory_;
   TestingProfile testing_profile_;
 };
@@ -126,25 +129,15 @@ void AccountManagerEducoexistenceControllerTest::
 
 void AccountManagerEducoexistenceControllerTest::UpdateEduCoexistenceToSVersion(
     const std::string& new_version) {
-  profile()->GetPrefs()->SetString(chromeos::prefs::kEduCoexistenceToSVersion,
+  profile()->GetPrefs()->SetString(prefs::kEduCoexistenceToSVersion,
                                    new_version);
 }
 
 bool AccountManagerEducoexistenceControllerTest::HasInvalidGaiaToken(
     const ::account_manager::Account& account) {
-  base::RunLoop run_loop;
-  bool is_dummy_return = false;
-  account_manager()->HasDummyGaiaToken(
-      account.key, base::BindOnce(
-                       [](const base::RepeatingClosure& run_loop_callback,
-                          bool* out, bool is_invalid) {
-                         *out = is_invalid;
-                         run_loop_callback.Run();
-                       },
-                       run_loop.QuitClosure(), &is_dummy_return));
-  run_loop.Run();
-
-  return is_dummy_return;
+  base::test::TestFuture<bool> future;
+  account_manager()->HasDummyGaiaToken(account.key, future.GetCallback());
+  return future.Get();
 }
 
 TEST_F(AccountManagerEducoexistenceControllerTest,

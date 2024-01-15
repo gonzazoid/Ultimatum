@@ -5,12 +5,12 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC_SESSION_AUTH_FACTORS_H_
 #define CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC_SESSION_AUTH_FACTORS_H_
 
+#include <optional>
 #include <string>
 
 #include "chromeos/ash/components/cryptohome/auth_factor.h"
 #include "chromeos/ash/components/cryptohome/common_types.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -48,6 +48,8 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
   // Checks if password key with given label exists.
   bool HasPasswordKey(const std::string& label) const;
 
+  bool HasSinglePasswordFactor() const;
+
   // Returns metadata for the PIN key, so that it can be identified for
   // further operations.
   const cryptohome::KeyDefinition* FindPinKey() const;
@@ -55,14 +57,17 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_PUBLIC)
   const cryptohome::AuthFactor* FindPasswordFactor(
       const cryptohome::KeyLabel& label) const;
   const cryptohome::AuthFactor* FindOnlinePasswordFactor() const;
+  const cryptohome::AuthFactor* FindLocalPasswordFactor() const;
+  const cryptohome::AuthFactor* FindAnyPasswordFactor() const;
   const cryptohome::AuthFactor* FindKioskFactor() const;
   const cryptohome::AuthFactor* FindPinFactor() const;
   const cryptohome::AuthFactor* FindRecoveryFactor() const;
+  const std::vector<cryptohome::AuthFactorType> GetSessionFactors() const;
 
- private:
   const cryptohome::AuthFactor* FindFactorByType(
       cryptohome::AuthFactorType type) const;
 
+ private:
   // Depending on the state of eatures::IsUseAuthFactorsEnabled() only
   // one of these two vectors would be filled.
   std::vector<cryptohome::KeyDefinition> keys_;

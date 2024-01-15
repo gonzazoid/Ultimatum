@@ -10,18 +10,18 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/subresource_filter/content/browser/ruleset_service.h"
 #include "components/subresource_filter/core/common/test_ruleset_creator.h"
@@ -127,8 +127,8 @@ class MockRulesetPublisherImpl : public RulesetPublisherImpl {
 
 TEST_F(SubresourceFilterRulesetPublisherImplTest, NoRuleset_NoIPCMessages) {
   NotifyingMockRenderProcessHost existing_renderer(browser_context(), nullptr);
-  MockRulesetPublisherImpl service(nullptr,
-                                   base::ThreadTaskRunnerHandle::Get());
+  MockRulesetPublisherImpl service(
+      nullptr, base::SingleThreadTaskRunner::GetCurrentDefault());
   NotifyingMockRenderProcessHost new_renderer(browser_context(), &service);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(0u, service.RulesetSent());
@@ -137,18 +137,18 @@ TEST_F(SubresourceFilterRulesetPublisherImplTest, NoRuleset_NoIPCMessages) {
 TEST_F(SubresourceFilterRulesetPublisherImplTest,
        PublishedRuleset_IsDistributedToExistingAndNewRenderers) {
   const char kTestFileContents[] = "foobar";
-  base::WriteFile(scoped_temp_file(), kTestFileContents,
-                  strlen(kTestFileContents));
+  base::WriteFile(scoped_temp_file(), kTestFileContents);
 
   RulesetFilePtr file(
       new base::File(scoped_temp_file(),
                      base::File::FLAG_OPEN | base::File::FLAG_READ),
-      base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+      base::OnTaskRunnerDeleter(
+          base::SequencedTaskRunner::GetCurrentDefault()));
 
   NotifyingMockRenderProcessHost existing_renderer(browser_context(), nullptr);
   MockClosureTarget publish_callback_target;
-  MockRulesetPublisherImpl service(nullptr,
-                                   base::ThreadTaskRunnerHandle::Get());
+  MockRulesetPublisherImpl service(
+      nullptr, base::SingleThreadTaskRunner::GetCurrentDefault());
   service.SetRulesetPublishedCallbackForTesting(base::BindOnce(
       &MockClosureTarget::Call, base::Unretained(&publish_callback_target)));
 

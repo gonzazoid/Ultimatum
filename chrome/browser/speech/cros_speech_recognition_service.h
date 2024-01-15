@@ -5,8 +5,12 @@
 #ifndef CHROME_BROWSER_SPEECH_CROS_SPEECH_RECOGNITION_SERVICE_H_
 #define CHROME_BROWSER_SPEECH_CROS_SPEECH_RECOGNITION_SERVICE_H_
 
-#include "base/bind.h"
+#include <memory>
+#include <string>
+
+#include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/speech/chrome_speech_recognition_service.h"
 #include "media/mojo/mojom/speech_recognition.mojom.h"
 #include "media/mojo/mojom/speech_recognition_service.mojom.h"
@@ -16,6 +20,10 @@
 namespace content {
 class BrowserContext;
 }  // namespace content
+
+namespace network {
+class PendingSharedURLLoaderFactory;
+}  // namespace network
 
 namespace speech {
 
@@ -58,13 +66,23 @@ class CrosSpeechRecognitionService
       BindRecognizerCallback callback) override;
 
  private:
-  void CreateAudioSourceFetcherOnIOThread(
+  void CreateAudioSourceFetcherForOnDeviceRecognitionOnIOThread(
       mojo::PendingReceiver<media::mojom::AudioSourceFetcher> fetcher_receiver,
       mojo::PendingRemote<media::mojom::SpeechRecognitionRecognizerClient>
           client,
       media::mojom::SpeechRecognitionOptionsPtr options,
       const base::FilePath& binary_path,
-      const base::FilePath& languagepack_path);
+      const base::flat_map<std::string, base::FilePath>& config_paths,
+      const std::string& primary_language_name,
+      const bool mask_offensive_words);
+
+  void CreateAudioSourceFetcherForServerBasedRecognitionOnIOThread(
+      mojo::PendingReceiver<media::mojom::AudioSourceFetcher> fetcher_receiver,
+      mojo::PendingRemote<media::mojom::SpeechRecognitionRecognizerClient>
+          client,
+      media::mojom::SpeechRecognitionOptionsPtr options,
+      std::unique_ptr<network::PendingSharedURLLoaderFactory>
+          pending_loader_factory);
 
   mojo::ReceiverSet<media::mojom::AudioSourceSpeechRecognitionContext>
       audio_source_speech_recognition_contexts_;

@@ -10,7 +10,6 @@ and inlines the specified file, producing one HTML file with no external
 dependencies. It recursively inlines the included files.
 """
 
-from __future__ import print_function
 
 import os
 import re
@@ -398,6 +397,13 @@ def DoInline(
       return None
 
     filename = filename.replace('%DISTRIBUTION%', distribution)
+
+    if filename.startswith("%ROOT_GEN_DIR%"):
+      # Expand %ROOT_GEN_DIR%  placeholder to allow inlining generated files.
+      filename = filename.replace(
+          '%ROOT_GEN_DIR%', os.path.relpath(os.environ['root_gen_dir'],
+                                            base_path))
+
     if filename_expansion_function:
       filename = filename_expansion_function(filename)
     return os.path.normpath(os.path.join(base_path, filename))
@@ -517,6 +523,15 @@ def DoInline(
                   lambda m: InlineCSSFile(m, '%s', filepath),
                   text)
 
+  if names_only:
+    relpath = os.path.relpath(input_filename, os.getcwd())
+    if relpath.startswith(os.path.join(os.environ['root_gen_dir'], '')):
+      # Don't attempt to read the file when `names_only` is true and the current
+      # file is a generated file, since the file is not guaranteed to exist yet,
+      # for example when invoked from grit_info.py. Inlined generated files are
+      # not supposed to rely on Grit's flattenhtml attribute anyway, therefore
+      # no more dependencies would be discovered anyway, so just return early.
+      return InlinedData(None, inlined_files)
 
   flat_text = util.ReadFile(input_filename, 'utf-8')
 
@@ -587,7 +602,7 @@ def InlineToString(input_filename, grd_node, preprocess_only = False,
         strip_whitespace=strip_whitespace,
         rewrite_function=rewrite_function,
         filename_expansion_function=filename_expansion_function).inlined_data
-  except IOError as e:
+  except OSError as e:
     raise Exception("Failed to open %s while trying to flatten %s. (%s)" %
                     (e.filename, input_filename, e.strerror))
 
@@ -627,7 +642,7 @@ def GetResourceFilenames(filename,
         strip_whitespace=False,
         rewrite_function=rewrite_function,
         filename_expansion_function=filename_expansion_function).inlined_files
-  except IOError as e:
+  except OSError as e:
     raise Exception("Failed to open %s while trying to flatten %s. (%s)" %
                     (e.filename, filename, e.strerror))
 

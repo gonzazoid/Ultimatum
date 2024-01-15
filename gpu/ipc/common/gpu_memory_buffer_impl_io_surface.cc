@@ -4,9 +4,9 @@
 
 #include "gpu/ipc/common/gpu_memory_buffer_impl_io_surface.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
@@ -23,18 +23,14 @@ const int kMaxCrashDumps = 10;
 
 uint32_t LockFlags(gfx::BufferUsage usage) {
   switch (usage) {
-    case gfx::BufferUsage::GPU_READ_CPU_READ_WRITE:
-    case gfx::BufferUsage::VEA_READ_CAMERA_AND_CPU_READ_WRITE:
-      // The AvoidSync call has the property that it will not preserve the
-      // previous contents of the buffer if those contents were written by a
-      // GPU.
-      return kIOSurfaceLockAvoidSync;
     case gfx::BufferUsage::SCANOUT_VEA_CPU_READ:
       // This constant is used for buffers used by video capture. On macOS,
       // these buffers are only ever written to in the capture process,
       // directly as IOSurfaces.
       // Once they are sent to other processes, no CPU writes are performed.
       return kIOSurfaceLockReadOnly;
+    case gfx::BufferUsage::GPU_READ_CPU_READ_WRITE:
+    case gfx::BufferUsage::VEA_READ_CAMERA_AND_CPU_READ_WRITE:
     case gfx::BufferUsage::GPU_READ:
     case gfx::BufferUsage::SCANOUT:
     case gfx::BufferUsage::SCANOUT_CAMERA_READ_WRITE:
@@ -87,8 +83,8 @@ GpuMemoryBufferImplIOSurface::CreateFromHandle(
     }
     return nullptr;
   }
-  int64_t io_surface_width = IOSurfaceGetWidth(io_surface);
-  int64_t io_surface_height = IOSurfaceGetHeight(io_surface);
+  int64_t io_surface_width = IOSurfaceGetWidth(io_surface.get());
+  int64_t io_surface_height = IOSurfaceGetHeight(io_surface.get());
   if (io_surface_width < size.width() || io_surface_height < size.height()) {
     DLOG(ERROR) << "IOSurface size does not match handle.";
     return nullptr;
@@ -108,7 +104,7 @@ base::OnceClosure GpuMemoryBufferImplIOSurface::AllocateForTesting(
   gfx::GpuMemoryBufferId kBufferId(1);
   handle->type = gfx::IO_SURFACE_BUFFER;
   handle->id = kBufferId;
-  handle->io_surface.reset(gfx::CreateIOSurface(size, format));
+  handle->io_surface = gfx::CreateIOSurface(size, format);
   DCHECK(handle->io_surface);
   return base::DoNothing();
 }
@@ -118,15 +114,15 @@ bool GpuMemoryBufferImplIOSurface::Map() {
   if (map_count_++)
     return true;
 
-  IOReturn status = IOSurfaceLock(io_surface_, lock_flags_, nullptr);
-  DCHECK_NE(status, kIOReturnCannotLock);
+  IOReturn status = IOSurfaceLock(io_surface_.get(), lock_flags_, nullptr);
+  DCHECK_NE(status, kIOReturnCannotLock) << " lock_flags_: " << lock_flags_;
   return true;
 }
 
 void* GpuMemoryBufferImplIOSurface::memory(size_t plane) {
   AssertMapped();
   DCHECK_LT(plane, gfx::NumberOfPlanesForLinearBufferFormat(format_));
-  return IOSurfaceGetBaseAddressOfPlane(io_surface_, plane);
+  return IOSurfaceGetBaseAddressOfPlane(io_surface_.get(), plane);
 }
 
 void GpuMemoryBufferImplIOSurface::Unmap() {
@@ -134,12 +130,12 @@ void GpuMemoryBufferImplIOSurface::Unmap() {
   DCHECK_GT(map_count_, 0u);
   if (--map_count_)
     return;
-  IOSurfaceUnlock(io_surface_, lock_flags_, nullptr);
+  IOSurfaceUnlock(io_surface_.get(), lock_flags_, nullptr);
 }
 
 int GpuMemoryBufferImplIOSurface::stride(size_t plane) const {
   DCHECK_LT(plane, gfx::NumberOfPlanesForLinearBufferFormat(format_));
-  return IOSurfaceGetBytesPerRowOfPlane(io_surface_, plane);
+  return IOSurfaceGetBytesPerRowOfPlane(io_surface_.get(), plane);
 }
 
 void GpuMemoryBufferImplIOSurface::SetColorSpace(
@@ -147,7 +143,7 @@ void GpuMemoryBufferImplIOSurface::SetColorSpace(
   if (color_space == color_space_)
     return;
   color_space_ = color_space;
-  IOSurfaceSetColorSpace(io_surface_, color_space);
+  IOSurfaceSetColorSpace(io_surface_.get(), color_space);
 }
 
 gfx::GpuMemoryBufferType GpuMemoryBufferImplIOSurface::GetType() const {

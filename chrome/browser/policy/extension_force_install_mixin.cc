@@ -11,13 +11,13 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
@@ -31,6 +31,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "components/crx_file/crx_verifier.h"
 #include "components/crx_file/id_util.h"
+#include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
@@ -51,6 +52,7 @@
 #include "extensions/common/file_util.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/mojom/view_type.mojom.h"
+#include "extensions/test/extension_test_message_listener.h"
 #include "net/http/http_status_code.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -62,8 +64,8 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #endif
 
@@ -72,6 +74,9 @@ namespace {
 // Name of the directory whose contents are served by the embedded test
 // server.
 constexpr char kServedDirName[] = "served";
+// Hardcoded string value expected from the extension after extension is
+// installed and it started executing.
+constexpr char kReadyMessage[] = "ready";
 // Template for the file name of a served CRX file.
 constexpr char kCrxFileNameTemplate[] = "%s-%s.crx";
 // Template for the file name of a served update manifest file.
@@ -137,8 +142,8 @@ bool ForceInstallPrefObserver::IsForceInstallPrefSet() const {
     // protects against, and there might be tests that simulate this scenario.
     return false;
   }
-  DCHECK_EQ(pref->GetType(), base::Value::Type::DICTIONARY);
-  return pref->GetValue()->FindKey(extension_id_) != nullptr;
+  DCHECK_EQ(pref->GetType(), base::Value::Type::DICT);
+  return pref->GetValue()->GetDict().contains(extension_id_);
 }
 
 // Implements waiting for the mixin's specified event.
@@ -167,6 +172,7 @@ class ForceInstallWaiter final {
   std::unique_ptr<extensions::TestExtensionRegistryObserver> registry_observer_;
   std::unique_ptr<extensions::ExtensionHostTestHelper>
       background_page_first_load_observer_;
+  std::unique_ptr<ExtensionTestMessageListener> extension_message_listener_;
 };
 
 ForceInstallWaiter::ForceInstallWaiter(
@@ -197,6 +203,11 @@ ForceInstallWaiter::ForceInstallWaiter(
                                                                 extension_id_);
       background_page_first_load_observer_->RestrictToType(
           extensions::mojom::ViewType::kExtensionBackgroundPage);
+      break;
+    case ExtensionForceInstallMixin::WaitMode::kReadyMessageReceived:
+      extension_message_listener_ =
+          std::make_unique<ExtensionTestMessageListener>(kReadyMessage);
+      extension_message_listener_->set_extension_id(extension_id_);
       break;
   }
 }
@@ -229,6 +240,10 @@ void ForceInstallWaiter::WaitImpl(bool* success) {
                                   ->WaitForHostCompletedFirstLoad());
       *success = true;
       break;
+    case ExtensionForceInstallMixin::WaitMode::kReadyMessageReceived:
+      ASSERT_NO_FATAL_FAILURE(*success = extension_message_listener_
+                                             ->WaitUntilSatisfied());
+      break;
   }
 }
 
@@ -256,7 +271,7 @@ std::string GenerateUpdateManifest(const extensions::ExtensionId& extension_id,
 bool ParseExtensionManifestData(const base::FilePath& extension_dir_path,
                                 base::Version* extension_version) {
   std::string error_message;
-  std::unique_ptr<base::DictionaryValue> extension_manifest;
+  absl::optional<base::Value::Dict> extension_manifest;
   {
     base::ScopedAllowBlockingForTesting scoped_allow_blocking;
     extension_manifest =
@@ -267,8 +282,8 @@ bool ParseExtensionManifestData(const base::FilePath& extension_dir_path,
                   << extension_dir_path.value() << ": " << error_message;
     return false;
   }
-  const std::string* version_string = extension_manifest->GetDict().FindString(
-      extensions::manifest_keys::kVersion);
+  const std::string* version_string =
+      extension_manifest->FindString(extensions::manifest_keys::kVersion);
   if (!version_string) {
     ADD_FAILURE() << "Failed to load extension version from "
                   << extension_dir_path.value()
@@ -340,14 +355,17 @@ void UpdatePolicyViaMockPolicyProvider(
       policy_map.GetMutable(policy::key::kExtensionInstallForcelist);
   if (existing_entry && existing_entry->value(base::Value::Type::LIST)) {
     // Append to the existing policy.
-    existing_entry->value(base::Value::Type::LIST)->Append(policy_item_value);
+    existing_entry->value(base::Value::Type::LIST)
+        ->GetList()
+        .Append(policy_item_value);
   } else {
     // Set the new policy value.
-    base::Value policy_value(base::Value::Type::LIST);
+    base::Value::List policy_value;
     policy_value.Append(policy_item_value);
     policy_map.Set(policy::key::kExtensionInstallForcelist,
                    policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                   policy::POLICY_SOURCE_CLOUD, std::move(policy_value),
+                   policy::POLICY_SOURCE_CLOUD,
+                   base::Value(std::move(policy_value)),
                    /*external_data_fetcher=*/nullptr);
   }
   mock_policy_provider->UpdateChromePolicy(policy_map);
@@ -398,7 +416,8 @@ void UpdatePolicyViaEmbeddedPolicyMixin(
       user_policy_builder->payload().SerializeAsString());
 
   base::RunLoop run_loop;
-  g_browser_process->policy_service()->RefreshPolicies(run_loop.QuitClosure());
+  g_browser_process->policy_service()->RefreshPolicies(
+      run_loop.QuitClosure(), policy::PolicyFetchReason::kTest);
   ASSERT_NO_FATAL_FAILURE(run_loop.Run());
 
   // Report the outcome via an output argument instead of the return value,

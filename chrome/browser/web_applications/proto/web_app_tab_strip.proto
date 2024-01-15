@@ -4,9 +4,17 @@
 
 syntax = "proto2";
 
+import "content/browser/background_fetch/background_fetch.proto";
+import "chrome/browser/web_applications/proto/web_app_url_pattern.proto";
+
 option optimize_for = LITE_RUNTIME;
 
 package web_app.proto;
+
+message HomeTabParams {
+  repeated content.proto.ImageResource icons = 1;
+  repeated UrlPattern scope_patterns = 2;
+}
 
 message NewTabButtonParams {
   optional string url = 1;
@@ -21,13 +29,12 @@ message TabStrip {
     ABSENT = 1;
   }
 
-  oneof new_tab_button {
-    Visibility new_tab_button_visibility = 1;
-    NewTabButtonParams new_tab_button_params = 2;
-  }
+  reserved 1;
+  reserved "new_tab_button_visibility";
+  optional NewTabButtonParams new_tab_button_params = 2;
 
   oneof home_tab {
     Visibility home_tab_visibility = 3;
-    // TODO(crbug.com/897314): Add HomeTabParams containing icons.
+    HomeTabParams home_tab_params = 4;
   }
 }

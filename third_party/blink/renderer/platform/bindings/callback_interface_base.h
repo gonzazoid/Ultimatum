@@ -62,7 +62,7 @@ class PLATFORM_EXPORT CallbackInterfaceBase
   // |CallbackRelevantScriptStateOrThrowException| must be used instead.
   ScriptState* CallbackRelevantScriptState() {
     DCHECK(callback_relevant_script_state_);
-    return callback_relevant_script_state_;
+    return callback_relevant_script_state_.Get();
   }
 
   // Returns the ScriptState of the relevant realm of the callback object iff
@@ -79,13 +79,9 @@ class PLATFORM_EXPORT CallbackInterfaceBase
       const char* interface_name,
       const char* operation_name);
 
-  ScriptState* IncumbentScriptState() { return incumbent_script_state_; }
+  ScriptState* IncumbentScriptState() { return incumbent_script_state_.Get(); }
 
   DOMWrapperWorld& GetWorld() const { return incumbent_script_state_->World(); }
-
-  absl::optional<scheduler::TaskAttributionId> GetParentTaskId() const {
-    return absl::nullopt;
-  }
 
  protected:
   explicit CallbackInterfaceBase(v8::Local<v8::Object> callback_object,

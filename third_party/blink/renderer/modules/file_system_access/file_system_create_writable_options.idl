@@ -2,8 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// https://wicg.github.io/file-system-access/#dictdef-filesystemcreatewritableoptions
+// https://fs.spec.whatwg.org/#dictdef-filesystemcreatewritableoptions
+enum FileSystemWritableFileStreamMode {
+  "exclusive",
+  "siloed",
+};
+
 dictionary FileSystemCreateWritableOptions {
   boolean keepExistingData = false;
   [RuntimeEnabled=FileSystemAccessAPIExperimental] boolean autoClose = false;
+  [
+    RuntimeEnabled=FileSystemAccessLockingScheme
+  ] FileSystemWritableFileStreamMode mode = "siloed";
 };

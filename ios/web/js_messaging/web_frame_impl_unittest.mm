@@ -6,7 +6,7 @@
 
 #import <WebKit/WebKit.h>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/ios/ios_util.h"
 #import "base/json/json_reader.h"
 #import "base/run_loop.h"
@@ -20,10 +20,6 @@
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -76,7 +72,6 @@ TEST_F(WebFrameImplTest, CreateWebFrameForMainFrame) {
 
   EXPECT_EQ(&fake_web_state_, web_frame.GetWebState());
   EXPECT_TRUE(web_frame.IsMainFrame());
-  EXPECT_TRUE(web_frame.CanCallJavaScriptFunction());
   EXPECT_EQ(security_origin_, web_frame.GetSecurityOrigin());
   EXPECT_EQ(kFrameId, web_frame.GetFrameId());
 }
@@ -87,20 +82,19 @@ TEST_F(WebFrameImplTest, CallJavaScriptFunctionMainFrame) {
                          /*is_main_frame=*/true, security_origin_,
                          &fake_web_state_);
 
-  std::vector<base::Value> function_params;
-
+  base::Value::List function_params;
   EXPECT_TRUE(
       web_frame.CallJavaScriptFunction("functionName", function_params));
   EXPECT_NSEQ(@"__gCrWeb.functionName()", last_received_script_);
 
-  function_params.push_back(base::Value("param1"));
+  function_params.Append("param1");
   EXPECT_TRUE(
       web_frame.CallJavaScriptFunction("functionName", function_params));
   EXPECT_NSEQ(@"__gCrWeb.functionName(\"param1\")", last_received_script_);
 
-  function_params.push_back(base::Value(true));
-  function_params.push_back(base::Value(27));
-  function_params.push_back(base::Value(3.14));
+  function_params.Append(true);
+  function_params.Append(27);
+  function_params.Append(3.14);
   EXPECT_TRUE(
       web_frame.CallJavaScriptFunction("functionName", function_params));
   EXPECT_NSEQ(@"__gCrWeb.functionName(\"param1\",true,27,3.14)",
@@ -113,20 +107,20 @@ TEST_F(WebFrameImplTest, CallJavaScriptFunctionIFrame) {
                          /*is_main_frame=*/false, security_origin_,
                          &fake_web_state_);
 
-  std::vector<base::Value> function_params;
+  base::Value::List function_params;
 
   EXPECT_TRUE(
       web_frame.CallJavaScriptFunction("functionName", function_params));
   EXPECT_NSEQ(@"__gCrWeb.functionName()", last_received_script_);
 
-  function_params.push_back(base::Value("param1"));
+  function_params.Append("param1");
   EXPECT_TRUE(
       web_frame.CallJavaScriptFunction("functionName", function_params));
   EXPECT_NSEQ(@"__gCrWeb.functionName(\"param1\")", last_received_script_);
 
-  function_params.push_back(base::Value(true));
-  function_params.push_back(base::Value(27));
-  function_params.push_back(base::Value(3.14));
+  function_params.Append(true);
+  function_params.Append(27);
+  function_params.Append(3.14);
   EXPECT_TRUE(
       web_frame.CallJavaScriptFunction("functionName", function_params));
   EXPECT_NSEQ(@"__gCrWeb.functionName(\"param1\",true,27,3.14)",

@@ -4,11 +4,12 @@
 
 #include "chrome/browser/ui/views/side_search/unified_side_search_controller.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/side_search/side_search_utils.h"
@@ -26,13 +27,21 @@
 #include "content/public/browser/navigation_handle.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/views/controls/webview/webview.h"
+#include "ui/views/interaction/element_tracker_views.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/layout/flex_layout_view.h"
+#include "ui/views/view_class_properties.h"
 
 namespace {
 class SideSearchWebView : public views::WebView {
  public:
   using WebView::WebView;
+
+  void DidStartNavigation(
+      content::NavigationHandle* navigation_handle) override {
+    views::ElementTrackerViews::GetInstance()->NotifyCustomEvent(
+        kSideSearchResultsClickedCustomEventId, this);
+  }
 
   ~SideSearchWebView() override {
     if (!web_contents())
@@ -95,15 +104,13 @@ void UnifiedSideSearchController::SidePanelAvailabilityChanged(
     bool should_close) {
   if (should_close) {
     auto* registry = SidePanelRegistry::Get(web_contents());
-    if (registry && registry->active_entry().has_value() &&
-        registry->active_entry().value()->key().id() ==
-            SidePanelEntry::Id::kSideSearch) {
-      registry->ResetActiveEntry();
+    if (registry && registry->GetEntryForKey(
+                        SidePanelEntry::Key(SidePanelEntry::Id::kSideSearch))) {
+      registry->Deregister(
+          SidePanelEntry::Key(SidePanelEntry::Id::kSideSearch));
     }
-    CloseSidePanel();
-  } else {
-    UpdateSidePanel();
   }
+  UpdateSidePanel();
 }
 
 void UnifiedSideSearchController::DidFinishNavigation(
@@ -119,17 +126,17 @@ void UnifiedSideSearchController::DidFinishNavigation(
   if (ShouldAutomaticallyTriggerAfterNavigation(navigation_handle)) {
     auto* tracker =
         feature_engagement::TrackerFactory::GetForBrowserContext(GetProfile());
-    auto* browser_view = GetBrowserView();
+    auto* side_panel_ui = GetSidePanelUI();
     auto* tab_contents_helper =
         SideSearchTabContentsHelper::FromWebContents(web_contents());
 
-    if (!browser_view || !tracker || !tab_contents_helper ||
+    if (!side_panel_ui || !tracker || !tab_contents_helper ||
         !tracker->ShouldTriggerHelpUI(
             feature_engagement::kIPHSideSearchAutoTriggeringFeature)) {
       return;
     }
 
-    browser_view->side_panel_coordinator()->Show(
+    side_panel_ui->Show(
         SidePanelEntry::Id::kSideSearch,
         SidePanelUtil::SidePanelOpenTrigger::kIPHSideSearchAutoTrigger);
     tab_contents_helper->SetAutoTriggered(true);
@@ -167,6 +174,8 @@ std::unique_ptr<views::View> UnifiedSideSearchController::GetSideSearchView() {
   DCHECK(browser_view);
   auto side_search_view =
       std::make_unique<SideSearchWebView>(browser_view->GetProfile());
+  side_search_view->SetProperty(views::kElementIdentifierKey,
+                                kSideSearchWebViewElementId);
   side_search_view->SetProperty(
       views::kFlexBehaviorKey,
       views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
@@ -183,7 +192,7 @@ std::unique_ptr<views::View> UnifiedSideSearchController::GetSideSearchView() {
 ui::ImageModel UnifiedSideSearchController::GetSideSearchIcon() {
   const int icon_size = ChromeLayoutProvider::Get()->GetDistanceMetric(
       ChromeDistanceMetric::DISTANCE_SIDE_PANEL_HEADER_VECTOR_ICON_SIZE);
-  auto* browser = chrome::FindBrowserWithWebContents(web_contents());
+  auto* browser = chrome::FindBrowserWithTab(web_contents());
   auto icon_image =
       browser ? DefaultSearchIconSource::GetOrCreateForBrowser(browser)
                     ->GetSizedIconImage(icon_size)
@@ -212,29 +221,33 @@ std::u16string UnifiedSideSearchController::GetSideSearchName() const {
 // this function can only be called via tapping on menu search option.
 void UnifiedSideSearchController::OpenSidePanel() {
   UpdateSidePanel();
-  auto* browser_view = GetBrowserView();
-  if (browser_view) {
-    browser_view->side_panel_coordinator()->Show(
+  auto* side_panel_ui = GetSidePanelUI();
+  if (side_panel_ui) {
+    side_panel_ui->Show(
         SidePanelEntry::Id::kSideSearch,
         SidePanelUtil::SidePanelOpenTrigger::kContextMenuSearchOption);
   }
 }
 
-void UnifiedSideSearchController::CloseSidePanel(
-    absl::optional<SideSearchCloseActionType> action) {
-  auto* browser_view = GetBrowserView();
-  if (browser_view) {
-    browser_view->side_panel_coordinator()->Close();
+void UnifiedSideSearchController::CloseSidePanel() {
+  auto* side_panel_ui = GetSidePanelUI();
+  if (side_panel_ui) {
+    side_panel_ui->Close();
   }
 }
 
 BrowserView* UnifiedSideSearchController::GetBrowserView() const {
-  auto* browser = chrome::FindBrowserWithWebContents(web_contents());
+  auto* browser = chrome::FindBrowserWithTab(web_contents());
   return browser ? BrowserView::GetBrowserViewForBrowser(browser) : nullptr;
 }
 
 Profile* UnifiedSideSearchController::GetProfile() const {
   return Profile::FromBrowserContext(web_contents()->GetBrowserContext());
+}
+
+SidePanelUI* UnifiedSideSearchController::GetSidePanelUI() {
+  auto* browser = chrome::FindBrowserWithTab(web_contents());
+  return browser ? SidePanelUI::GetSidePanelUIForBrowser(browser) : nullptr;
 }
 
 void UnifiedSideSearchController::UpdateSidePanel() {
@@ -297,8 +310,11 @@ bool UnifiedSideSearchController::ShouldAutomaticallyTriggerAfterNavigation(
 
   // If the side search side panel is already open we do not need to
   // automatically retrigger the panel.
-  if (side_search::IsSideSearchToggleOpen(browser_view))
+
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
+  if (side_search::IsSideSearchToggleOpen(browser)) {
     return false;
+  }
 
   auto* tab_contents_helper =
       SideSearchTabContentsHelper::FromWebContents(web_contents());

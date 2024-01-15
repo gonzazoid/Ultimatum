@@ -4,19 +4,26 @@
 
 #include "device/bluetooth/bluetooth_gatt_notify_session.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
 
 namespace device {
+
+// static
+BluetoothGattNotifySession::Id BluetoothGattNotifySession::GetNextId() {
+  static Id::Generator generator;
+  return generator.GenerateNextId();
+}
 
 BluetoothGattNotifySession::BluetoothGattNotifySession(
     base::WeakPtr<BluetoothRemoteGattCharacteristic> characteristic)
     : characteristic_(characteristic),
       characteristic_id_(characteristic.get() ? characteristic->GetIdentifier()
                                               : std::string()),
-      active_(true) {}
+      active_(true),
+      unique_id_(GetNextId()) {}
 
 BluetoothGattNotifySession::~BluetoothGattNotifySession() {
   if (active_) {
@@ -41,10 +48,10 @@ bool BluetoothGattNotifySession::IsActive() {
 void BluetoothGattNotifySession::Stop(base::OnceClosure callback) {
   active_ = false;
   if (characteristic_ != nullptr) {
-    characteristic_->StopNotifySession(this, std::move(callback));
+    characteristic_->StopNotifySession(unique_id(), std::move(callback));
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
   }
 }
 

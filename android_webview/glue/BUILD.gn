@@ -8,27 +8,27 @@ import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
 
 android_library("glue_java") {
+  resources_package = "org.chromium.android_webview"
   deps = [
     "//android_webview:android_webview_product_config_java",
     "//android_webview:browser_java",
     "//android_webview:common_java",
-    "//android_webview/nonembedded:system_webview_manifest",
+    "//android_webview:resources",
     "//android_webview/support_library/boundary_interfaces:boundary_interface_java",
     "//android_webview/support_library/callback:callback_java",
     "//base:base_java",
-    "//base:jni_java",
+    "//base/version_info/android:version_constants_java",
     "//build/android:build_java",
     "//components/content_capture/android:java",
     "//components/embedder_support/android:application_java",
     "//components/embedder_support/android:util_java",
-    "//components/version_info/android:version_constants_java",
     "//content/public/android:content_java",
     "//net/android:net_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_no_recycler_view_java",
     "//url:gurl_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 
   alternative_android_sdk_dep =
       "//third_party/android_sdk:public_framework_system_java"
@@ -41,14 +41,14 @@ android_library("glue_java") {
     "java/src/com/android/webview/chromium/DrawFunctor.java",
     "java/src/com/android/webview/chromium/DrawGLFunctor.java",
     "java/src/com/android/webview/chromium/GeolocationPermissionsAdapter.java",
-    "java/src/com/android/webview/chromium/GlueApiHelperForN.java",
-    "java/src/com/android/webview/chromium/GlueApiHelperForO.java",
     "java/src/com/android/webview/chromium/GlueApiHelperForOMR1.java",
     "java/src/com/android/webview/chromium/GlueApiHelperForP.java",
     "java/src/com/android/webview/chromium/GlueApiHelperForQ.java",
     "java/src/com/android/webview/chromium/GlueApiHelperForR.java",
     "java/src/com/android/webview/chromium/GraphicsUtils.java",
     "java/src/com/android/webview/chromium/PacProcessorImpl.java",
+    "java/src/com/android/webview/chromium/Profile.java",
+    "java/src/com/android/webview/chromium/ProfileStore.java",
     "java/src/com/android/webview/chromium/SafeBrowsingResponseAdapter.java",
     "java/src/com/android/webview/chromium/ServiceWorkerClientAdapter.java",
     "java/src/com/android/webview/chromium/ServiceWorkerControllerAdapter.java",

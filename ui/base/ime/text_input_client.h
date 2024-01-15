@@ -112,6 +112,13 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient
   // even if the current text input type is TEXT_INPUT_TYPE_NONE.
   virtual void InsertChar(const ui::KeyEvent& event) = 0;
 
+  // Returns whether the current insertion point supports images.
+  virtual bool CanInsertImage();
+
+  // Inserts a given image at the insertion point. It should be only called when
+  // CanInsertImage returns true.
+  virtual void InsertImage(const GURL& src) {}
+
   // Input context information -------------------------------------------------
 
   // Returns current text input type. It could be changed and even becomes
@@ -218,6 +225,22 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient
   // of IPC between browser and renderer.
   virtual void ExtendSelectionAndDelete(size_t before, size_t after) = 0;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // Deletes any active composition, and the current selection plus the
+  // specified number of char16 values before and after the selection, and
+  // replaces it with |replacement_string|.
+  // Places the cursor at the end of |replacement_string|.
+  //
+  // Clients should try to implement this with an atomic operation to ensure
+  // that input method features like autocorrection works well. However, it's
+  // also okay for clients to fall back to ExtendSelectionAndDelete followed by
+  // InsertText for a degraded experience.
+  virtual void ExtendSelectionAndReplace(
+      size_t length_before_selection,
+      size_t length_after_selection,
+      base::StringPiece16 replacement_string);
+#endif
+
   // Ensure the caret is not in |rect|.  |rect| is in screen coordinates in
   // DIP (Density Independent Pixel) and may extend beyond the bounds of this
   // TextInputClient.
@@ -283,6 +306,13 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient
   // is successful.
   virtual bool AddGrammarFragments(
       const std::vector<GrammarFragment>& fragments);
+
+  // Does the current text client support always confirming a composition, even
+  // if there isn't a composition currently set?
+  // TODO(b/265853952): This is required to resolve an incompatibility between
+  //   Crostini and Lacros text clients. Remove this method and its use once
+  //   both clients support the required behavior.
+  virtual bool SupportsAlwaysConfirmComposition();
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
@@ -308,13 +338,18 @@ class COMPONENT_EXPORT(UI_BASE_IME) TextInputClient
       const gfx::Range& range,
       const std::u16string& active_composition_text,
       bool is_composition_committed) = 0;
+#endif
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
   struct EditingContext {
     // Contains the active web content's URL.
     GURL page_url;
   };
 
   virtual ui::TextInputClient::EditingContext GetTextEditingContext();
+
+  // Notifies TSF when a frame with a committed Url receives focus.
+  virtual void NotifyOnFrameFocusChanged() {}
 #endif
 
   // Called before ui::InputMethod dispatches a not-consumed event to PostIME

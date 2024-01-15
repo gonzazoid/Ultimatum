@@ -98,9 +98,7 @@ message SyncEnums {
     // DEPRECATED_AUTH_EXPIRED = 4;
     // DEPRECATED_USER_NOT_ACTIVATED = 5;
     // DEPRECATED_AUTH_INVALID = 6;
-    // A clear of the user data is pending (e.g. initiated by privacy request).
-    // The client should come back later.
-    CLEAR_PENDING = 7;
+    // DEPRECATED_CLEAR_PENDING = 7;
     // A transient error occurred (e.g. a backend timeout). The client should
     // try again later.
     TRANSIENT_ERROR = 8;
@@ -138,16 +136,39 @@ message SyncEnums {
     UNKNOWN_ACTION = 5;  // This is the default.
   }
 
-  // Please keep in sync with chrome/android/java/.../ForeignSessionHelper.java
+  // New enums to describe the device type were introduced; OsType and
+  // FormFactor. Deprecated 12/2022.
+  // TODO(1395353): Remove deprecated values from DeviceType enum.
   enum DeviceType {
-    TYPE_UNSET = 0;
-    TYPE_WIN = 1;
-    TYPE_MAC = 2;
-    TYPE_LINUX = 3;
-    TYPE_CROS = 4;
-    TYPE_OTHER = 5;
-    TYPE_PHONE = 6;
-    TYPE_TABLET = 7;
+    TYPE_UNSET = 0 [deprecated = true];
+    TYPE_WIN = 1 [deprecated = true];
+    TYPE_MAC = 2 [deprecated = true];
+    TYPE_LINUX = 3 [deprecated = true];
+    TYPE_CROS = 4 [deprecated = true];
+    TYPE_OTHER = 5 [deprecated = true];
+    TYPE_PHONE = 6 [deprecated = true];
+    TYPE_TABLET = 7 [deprecated = true];
+  }
+
+  // Types of device OS.
+  enum OsType {
+    OS_TYPE_UNSPECIFIED = 0;
+    OS_TYPE_WINDOWS = 1;
+    OS_TYPE_MAC = 2;
+    OS_TYPE_LINUX = 3;
+    OS_TYPE_CHROME_OS_ASH = 4;
+    OS_TYPE_ANDROID = 5;
+    OS_TYPE_IOS = 6;
+    OS_TYPE_CHROME_OS_LACROS = 7;
+    OS_TYPE_FUCHSIA = 8;
+  }
+
+  // Types of device form factors.
+  enum DeviceFormFactor {
+    DEVICE_FORM_FACTOR_UNSPECIFIED = 0;
+    DEVICE_FORM_FACTOR_DESKTOP = 1;
+    DEVICE_FORM_FACTOR_PHONE = 2;
+    DEVICE_FORM_FACTOR_TABLET = 3;
   }
 
   // Types of browsers; used for history-related data types.

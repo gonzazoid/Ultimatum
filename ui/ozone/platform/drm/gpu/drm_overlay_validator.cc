@@ -8,14 +8,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/files/platform_file.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/timer/elapsed_timer.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
-#include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/linux/drm_util_linux.h"
 #include "ui/gfx/linux/gbm_buffer.h"
+#include "ui/gfx/linux/gbm_device.h"
 #include "ui/ozone/platform/drm/common/drm_util.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_framebuffer.h"
@@ -85,7 +85,7 @@ scoped_refptr<DrmFramebuffer> GetBufferForPageFlipTest(
 
 DrmOverlayValidator::DrmOverlayValidator(DrmWindow* window) : window_(window) {}
 
-DrmOverlayValidator::~DrmOverlayValidator() {}
+DrmOverlayValidator::~DrmOverlayValidator() = default;
 
 DrmOverlayPlane DrmOverlayValidator::MakeOverlayPlane(
     const OverlaySurfaceCandidate& param,
@@ -93,7 +93,9 @@ DrmOverlayPlane DrmOverlayValidator::MakeOverlayPlane(
   scoped_refptr<DrmFramebuffer> buffer =
       GetBufferForPageFlipTest(window_, param, &reusable_buffers);
 
-  return DrmOverlayPlane(buffer, param.plane_z_order, param.transform,
+  return DrmOverlayPlane(buffer, param.color_space, param.plane_z_order,
+                         absl::get<gfx::OverlayTransform>(param.transform),
+                         gfx::ToNearestRect(param.display_rect),
                          gfx::ToNearestRect(param.display_rect),
                          param.crop_rect, !param.is_opaque,
                          /*gpu_fence=*/nullptr);

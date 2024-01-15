@@ -4,15 +4,15 @@
 
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_impl.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/ios/ios_util.h"
 #import "base/test/ios/wait_util.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/overlays/public/overlay_presentation_context_observer.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_contained_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_presented_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_presentation_context_observer.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_contained_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_presented_overlay_request_config.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_impl_delegate.h"
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_util.h"
 #import "ios/chrome/browser/ui/overlays/test/test_overlay_presentation_context.h"
@@ -20,10 +20,6 @@
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForUIElementTimeout;

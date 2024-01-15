@@ -5,13 +5,19 @@
 #ifndef ASH_SYSTEM_TIME_TIME_OF_DAY_H_
 #define ASH_SYSTEM_TIME_TIME_OF_DAY_H_
 
+#include <optional>
+#include <ostream>
 #include <string>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 
 namespace ash {
+
+class LocalTimeConverter;
 
 // Represents the time of the day as a simple number of minutes since 00:00
 // regardless of the date or the timezone. This makes it simple to persist this
@@ -39,13 +45,21 @@ class ASH_EXPORT TimeOfDay {
 
   // Sets `clock_` with a given `clock`, but this class does not own it.
   // The clock is used to determine current time in `GetNow()`.
-  TimeOfDay& SetClock(base::Clock* clock);
+  TimeOfDay& SetClock(const base::Clock* clock);
 
-  // Converts to an actual point in time today. If this fail for some reason,
-  // base::Time() will be returned.
-  base::Time ToTimeToday() const;
+  // Sets a custom `LocalTimeConverter` for tests to simulate failed local time
+  // operations (i.e. `ToTimeToday()` returns a null `base::Time`). May be
+  // called multiple times, or set to `nullptr` for the default local time
+  // implementations to be used.
+  TimeOfDay& SetLocalTimeConverter(
+      const LocalTimeConverter* local_time_converter);
 
-  // Converts to a string in the format "3:07 PM".
+  // Converts to an actual point in time today. If this fails for some reason,
+  // `std::nullopt` will be returned. Otherwise, always returns a valid
+  // non-null timestamp.
+  std::optional<base::Time> ToTimeToday() const;
+
+  // Converts to a string in the format "3:07 PM". Only for debugging use.
   std::string ToString() const;
 
  private:
@@ -53,11 +67,22 @@ class ASH_EXPORT TimeOfDay {
   // if `clock_` does not exist.
   base::Time GetNow() const;
 
+  const LocalTimeConverter& GetLocalTimeConverter() const;
+
   int offset_minutes_from_zero_hour_;
 
   // Optional Used in tests to override the time of "Now".
-  base::Clock* clock_ = nullptr;  // Not owned.
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const base::Clock* clock_ = nullptr;  // Not owned.
+
+  // May be null, in which case `GetLocalTimeConverter()` returns the default
+  // implementation.
+  raw_ptr<const LocalTimeConverter> local_time_converter_ = nullptr;
 };
+
+ASH_EXPORT std::ostream& operator<<(std::ostream& os,
+                                    const TimeOfDay& time_of_day);
 
 }  // namespace ash
 

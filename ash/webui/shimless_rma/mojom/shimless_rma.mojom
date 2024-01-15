@@ -185,6 +185,12 @@ enum RmadErrorCode {
 
   // Failed to save logs.
   kCannotSaveLog = 43,
+
+  // Failed to record browser actions.
+  kCannotRecordBrowserAction = 44,
+
+  // No USB found when performing a task that requires a USB.
+  kUsbNotFound = 45,
 };
 
 // Return type from state progression methods.
@@ -414,6 +420,32 @@ enum ShutdownMethod {
   kBatteryCutoff = 3,
 };
 
+// This must remain in sync with UpdateDeviceInfoState::FeatureLevel in
+// //third_party/cros_system_api/dbus/rmad/rmad.proto.
+// See shimless_rma_mojom_traits.cc\h.
+enum FeatureLevel {
+  kRmadFeatureLevelUnsupported = 0,
+  kRmadFeatureLevelUnknown = 1,
+  kRmadFeatureLevel0 = 2,
+  kRmadFeatureLevel1 = 3,
+};
+
+// Information of a 3p diagnostics app.
+struct Shimless3pDiagnosticsAppInfo {
+  // Name of the app.
+  string name;
+  // Permission message to show. This is a multi-line string. Is omitted if no
+  // permission is required.
+  string? permission_message;
+};
+
+// Results of showing 3p diagnostics app.
+enum Show3pDiagnosticsAppResult {
+  kOk = 0,
+  kAppNotInstalled = 1,
+  kFailedToLoad = 2,
+};
+
 // Implemented by clients to receive errors from the rmad service.
 // rmad runs a lot of asynchronous processing and errors can occur at any time.
 interface ErrorObserver {
@@ -592,9 +624,9 @@ interface ShimlessRmaService {
   // Get the device hardware ID (HWID) to display during RSU.
   // Returns the HWID as a string.
   GetRsuDisableWriteProtectHwid() => (string hwid);
-  // Returns a QR Code image representing the URL to generate the RSU unlock
-  // code. A null value is returned if the QR Code could not be generated.
-  GetRsuDisableWriteProtectChallengeQrCode() => (QrCode? qr_code);
+  // Returns a QR Code image data encoded as a PNG representing the URL to
+  // generate the RSU unlock code.
+  GetRsuDisableWriteProtectChallengeQrCode() => (array<uint8> qr_code_data);
   // Attempt to disable HWWP using a RSU code.
   // Returns the next state to display and an error code.
   SetRsuDisableWriteProtectCode(string code)
@@ -607,11 +639,6 @@ interface ShimlessRmaService {
   // been received.
   WriteProtectManuallyDisabled()
       => (StateResult state_result);
-  // Returns a display string and QR Code image representing the URL that takes
-  // users to the manufacturer specific instructions page for manually disabling
-  // write protect.
-  GetWriteProtectManuallyDisabledInstructions()
-      => (string display_url, QrCode? qr_code);
 
   ///////////////////////////////////////
   // Methods for kWPDisableComplete state.
@@ -669,23 +696,28 @@ interface ShimlessRmaService {
   GetRegionList() => (array<string> regions);
   // Get the list of OEM SKUs for this device.
   GetSkuList() => (array<uint64> skus);
-  // Get the list of valid white-labels for this device.
-  GetWhiteLabelList() => (array<string> whiteLabels);
+  // Get the list of valid custom-labels for this device.
+  GetCustomLabelList() => (array<string> custom_labels);
+  // Get the list of OEM SKU descriptions for this device.
+  GetSkuDescriptionList() => (array<string> sku_descriptions);
   // Get the device serial number at RMA start.
   GetOriginalSerialNumber() => (string serial_number);
   // Get the device region index at RMA start.
   GetOriginalRegion() => (int32 region_index);
   // Get the device SKU index at RMA start.
   GetOriginalSku() => (int32 sku_index);
-  // Get the device white-label index at RMA start.
-  GetOriginalWhiteLabel() => (int32 white_label_index);
+  // Get the device custom-label index at RMA start.
+  GetOriginalCustomLabel() => (int32 custom_label_index);
   // Get the device dram part number at RMA start.
   GetOriginalDramPartNumber() => (string dram_part_number);
+  // Get the device feature level at RMA start.
+  GetOriginalFeatureLevel() => (FeatureLevel original_feature_level);
   // Attempt to set device info and transition to the next state.
   // Returns the next state to display and an error code.
   SetDeviceInformation(
       string serial_number, int32 region_index, int32 sku_index,
-      int32 white_label_index, string dram_part_number)
+      int32 custom_label_index, string dram_part_number,
+      bool is_chassis_branded, int32 hw_compliance_version)
           => (StateResult state_result);
 
   ///////////////////////////////////////
@@ -783,6 +815,33 @@ interface ShimlessRmaService {
   CriticalErrorExitToLogin() => (RmadErrorCode error);
   // Attempt to exit RMA and reboot the device.
   CriticalErrorReboot() => (RmadErrorCode error);
+
+  ///////////////////////////////////////
+  // Methods for 3p diagnostics
+  //
+  // Third-party (3p) diagnostics is diagnostics features provided by device
+  // manufacturer. These methods are related to loading and showing the
+  // 3p diagnostics to users.
+  //
+  // Get the 3p diagnostics provider name. It is the manufacturer of this device
+  // if the manufacturer provides any 3p diagnostics app.
+  Get3pDiagnosticsProvider() => (string? provider);
+  // Get the installable 3p diagnostics app path. Returns null if there is no
+  // installable app. Otherwise, returns its path.
+  GetInstallable3pDiagnosticsAppPath() => (mojo_base.mojom.FilePath? app_path);
+  // Install the diagnostics app found by the last call to
+  // `GetInstallable3pDiagnosticsAppPath`. Returns null if fail to install.
+  // Otherwise, returns the information of the app. Note that the installation
+  // is not yet finished. We will need users to review the app's permissions.
+  InstallLastFound3pDiagnosticsApp()
+      => (Shimless3pDiagnosticsAppInfo? app_info);
+  // Completes the last installation triggered by
+  // `InstallLastFound3pDiagnosticsApp`. If users approve the installation,
+  // this will move the app files from a temporary place to a place that will be
+  // kept through the whole RMA process.
+  CompleteLast3pDiagnosticsInstallation(bool is_approved) => ();
+  // Show the installed 3p diagnostics app.
+  Show3pDiagnosticsApp() => (Show3pDiagnosticsAppResult result);
 
   ///////////////////////////////////////
   // Observers

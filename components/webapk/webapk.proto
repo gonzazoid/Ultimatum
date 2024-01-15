@@ -8,6 +8,9 @@ option optimize_for = LITE_RUNTIME;
 
 package webapk;
 
+option java_package = "org.chromium.components.webapk.proto";
+option java_outer_classname = "WebApkProto";
+
 // Response after creating or updating a WebAPK.
 message WebApkResponse {
   // Package name to install WebAPK at.
@@ -49,6 +52,10 @@ message WebApk {
     PRIMARY_ICON_MASKABLE_DIFFERS = 15;
     SHORTCUTS_DIFFER = 16;
     SPLASH_ICON_HASH_DIFFERS = 17;
+    DARK_BACKGROUND_COLOR_DIFFERS = 18;
+    DARK_THEME_COLOR_DIFFERS = 19;
+    PRIMARY_ICON_CHANGE_BELOW_THRESHOLD = 20;
+    PRIMARY_ICON_CHANGE_SHELL_UPDATE = 21;
 
     reserved 4;
   }
@@ -107,6 +114,8 @@ message WebAppManifest {
   repeated ShareTarget share_targets = 17;
   repeated ShortcutItem shortcuts = 18;
   optional string id = 19;
+  optional string dark_theme_color = 20;
+  optional string dark_background_color = 21;
 
   reserved 3, 7, 8, 13 to 16;
 }
@@ -114,8 +123,10 @@ message WebAppManifest {
 message Image {
   enum Usage {
     PRIMARY_ICON = 1;
-    BADGE_ICON = 2;
     SPLASH_ICON = 3;
+    SHORTCUT_ICON = 4;
+
+    reserved 2;
   }
 
   // Image's URL.

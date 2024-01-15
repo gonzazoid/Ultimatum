@@ -19,12 +19,13 @@
 #include "ash/keyboard/ui/shaped_window_targeter.h"
 #include "ash/public/cpp/keyboard/keyboard_controller_observer.h"
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/aura/client/aura_constants.h"
@@ -70,20 +71,6 @@ constexpr base::TimeDelta kReportLingeringStateDelay = base::Milliseconds(5000);
 // after the user enters their username.
 constexpr base::TimeDelta kTransientBlurThreshold = base::Milliseconds(3500);
 
-// An enumeration of different keyboard control events that should be logged.
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class KeyboardControlEvent {
-  kShow = 0,
-  kHideAuto = 1,
-  kHideUser = 2,
-  kMaxValue = kHideUser
-};
-
-void LogKeyboardControlEvent(KeyboardControlEvent event) {
-  UMA_HISTOGRAM_ENUMERATION("VirtualKeyboard.KeyboardControlEvent", event);
-}
-
 class VirtualKeyboardController : public ui::VirtualKeyboardController {
  public:
   explicit VirtualKeyboardController(
@@ -127,7 +114,7 @@ class VirtualKeyboardController : public ui::VirtualKeyboardController {
   }
 
  private:
-  KeyboardUIController* keyboard_ui_controller_;
+  raw_ptr<KeyboardUIController> keyboard_ui_controller_;
   base::ObserverList<ui::VirtualKeyboardControllerObserver>::Unchecked
       observer_list_;
 };
@@ -493,6 +480,7 @@ bool KeyboardUIController::IsKeyboardEnableRequested() const {
 
 void KeyboardUIController::UpdateKeyboardAsRequestedBy(
     KeyboardEnableFlag flag) {
+  this->NotifyKeyboardConfigChanged();
   if (IsKeyboardEnableRequested()) {
     // Note that there are two versions of the on-screen keyboard. A full layout
     // is provided for accessibility, which includes sticky modifier keys to
@@ -560,19 +548,6 @@ void KeyboardUIController::HideKeyboard(HideReason reason) {
 
     case KeyboardUIState::kWillHide:
     case KeyboardUIState::kShown: {
-      // Log whether this was a user or system (automatic) action.
-      switch (reason) {
-        case HIDE_REASON_SYSTEM_EXPLICIT:
-        case HIDE_REASON_SYSTEM_IMPLICIT:
-        case HIDE_REASON_SYSTEM_TEMPORARY:
-          LogKeyboardControlEvent(KeyboardControlEvent::kHideAuto);
-          break;
-        case HIDE_REASON_USER_EXPLICIT:
-        case HIDE_REASON_USER_IMPLICIT:
-          LogKeyboardControlEvent(KeyboardControlEvent::kHideUser);
-          break;
-      }
-
       NotifyKeyboardBoundsChanging(gfx::Rect());
 
       set_keyboard_locked(false);
@@ -627,7 +602,7 @@ void KeyboardUIController::HideKeyboardImplicitlyBySystem() {
 
   ChangeState(KeyboardUIState::kWillHide);
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&KeyboardUIController::HideKeyboard,
                      weak_factory_will_hide_.GetWeakPtr(),
@@ -657,8 +632,6 @@ void KeyboardUIController::HideAnimationFinished() {
 
 // private
 void KeyboardUIController::ShowAnimationFinished() {
-  MarkKeyboardLoadFinished();
-
   // Notify observers after animation finished to prevent reveal desktop
   // background during animation.
   // If the current state is not SHOWN, it means the state was changed after the
@@ -859,7 +832,6 @@ void KeyboardUIController::OnVirtualKeyboardVisibilityChangedIfEnabled(
 
 void KeyboardUIController::ShowKeyboardInternal(
     aura::Window* target_container) {
-  MarkKeyboardLoadStarted();
   PopulateKeyboardContent(target_container);
   UpdateInputMethodObserver();
 }
@@ -903,7 +875,6 @@ void KeyboardUIController::PopulateKeyboardContent(
   // are at begin states for animation.
   container_behavior_->InitializeShowAnimationStartingState(keyboard_window);
 
-  LogKeyboardControlEvent(KeyboardControlEvent::kShow);
   RecordUkmKeyboardShown();
 
   ui::LayerAnimator* container_animator =
@@ -954,7 +925,7 @@ void KeyboardUIController::ChangeState(KeyboardUIState state) {
   switch (model_.state()) {
     case KeyboardUIState::kLoading:
     case KeyboardUIState::kWillHide:
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&KeyboardUIController::ReportLingeringState,
                          weak_factory_report_lingering_state_.GetWeakPtr()),
@@ -969,8 +940,6 @@ void KeyboardUIController::ChangeState(KeyboardUIState state) {
 void KeyboardUIController::ReportLingeringState() {
   LOG(ERROR) << "KeyboardUIController lingering in "
              << StateToStr(model_.state());
-  UMA_HISTOGRAM_ENUMERATION("VirtualKeyboard.LingeringIntermediateState",
-                            model_.state());
 }
 
 gfx::Rect KeyboardUIController::GetWorkspaceOccludedBoundsInScreen() const {
@@ -1160,26 +1129,6 @@ void KeyboardUIController::EnsureCaretInWorkArea(
   } else if (ime->GetTextInputClient()) {
     ime->GetTextInputClient()->EnsureCaretNotInRect(occluded_bounds_in_screen);
   }
-}
-
-void KeyboardUIController::MarkKeyboardLoadStarted() {
-  if (!keyboard_load_time_logged_)
-    keyboard_load_time_start_ = base::Time::Now();
-}
-
-void KeyboardUIController::MarkKeyboardLoadFinished() {
-  // Possible to get a load finished without a start if navigating directly to
-  // chrome://keyboard.
-  if (keyboard_load_time_start_.is_null())
-    return;
-
-  if (keyboard_load_time_logged_)
-    return;
-
-  // Log the delta only once.
-  UMA_HISTOGRAM_TIMES("VirtualKeyboard.InitLatency.FirstLoad",
-                      base::Time::Now() - keyboard_load_time_start_);
-  keyboard_load_time_logged_ = true;
 }
 
 void KeyboardUIController::EnableFlagsChanged() {

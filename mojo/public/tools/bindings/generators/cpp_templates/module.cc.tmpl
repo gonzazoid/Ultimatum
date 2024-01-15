@@ -2,22 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-{%- if variant -%}
-{%-   set variant_path = "%s-%s"|format(module.path, variant) -%}
-{%- else -%}
-{%-   set variant_path = module.path -%}
-{%- endif %}
-
-{%- set header_guard_for_jumbo = "%s_JUMBO_H_"|format(
-        variant_path|upper|replace("/","_")|replace(".","_")|
-            replace("-", "_")) %}
+{%- from 'cpp_macros.tmpl' import
+    namespace_begin, namespace_end, variant_path %}
 
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-private-field"
 #endif
 
-#include "{{variant_path}}.h"
+#include "{{variant_path(module.path, variant)}}.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -27,9 +20,10 @@
 #include "base/hash/md5_constexpr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/typed_macros.h"
-#include "mojo/public/cpp/bindings/default_construct_traits.h"
+#include "mojo/public/cpp/bindings/lib/default_construct_tag_internal.h"
 #include "mojo/public/cpp/bindings/lib/generated_code_util.h"
 #include "mojo/public/cpp/bindings/lib/message_internal.h"
 #include "mojo/public/cpp/bindings/lib/send_message_helper.h"
@@ -39,48 +33,25 @@
 #include "mojo/public/cpp/bindings/lib/validate_params.h"
 #include "mojo/public/cpp/bindings/lib/validation_errors.h"
 #include "mojo/public/cpp/bindings/mojo_buildflags.h"
+#include "mojo/public/cpp/bindings/urgent_message_scope.h"
 #include "mojo/public/interfaces/bindings/interface_control_messages.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
 #include "{{module.path}}-params-data.h"
 #include "{{module.path}}-shared-message-ids.h"
 
-#include "{{variant_path}}-import-headers.h"
-#include "{{variant_path}}-test-utils.h"
+#include "{{variant_path(module.path, variant)}}-import-headers.h"
+#include "{{variant_path(module.path, variant)}}-test-utils.h"
 
 {%- if for_blink %}
 #include "mojo/public/cpp/bindings/lib/wtf_serialization.h"
 {%- endif %}
 
-{# This is include guard for jumbo build. #}
-#ifndef {{header_guard_for_jumbo}}
-#define {{header_guard_for_jumbo}}
 {%- for header in extra_traits_headers %}
 #include "{{header}}"
 {%- endfor %}
-#endif
 
-
-{%- macro namespace_begin() %}
-{%-   for namespace in namespaces_as_array %}
-namespace {{namespace}} {
-{%-   endfor %}
-{%-   if variant %}
-namespace {{variant}} {
-{%-   endif %}
-{%- endmacro %}
-
-{%- macro namespace_end() %}
-{%-   if variant %}
-}  // namespace {{variant}}
-{%-   endif %}
-{%-   for namespace in namespaces_as_array|reverse %}
-}  // namespace {{namespace}}
-{%-   endfor %}
-{%- endmacro %}
-
-
-{{namespace_begin()}}
+{{namespace_begin(namespaces_as_array, variant)}}
 
 {#--- Constants #}
 {%- for constant in module.constants %}
@@ -117,7 +88,7 @@ constexpr {{constant.kind|cpp_pod_type}} {{struct.name}}::{{constant.name}};
 {%-   include "interface_definition.tmpl" %}
 {%- endfor %}
 
-{{namespace_end()}}
+{{namespace_end(namespaces_as_array, variant)}}
 
 
 namespace mojo {
@@ -140,7 +111,7 @@ namespace mojo {
 // Symbols declared in the -test-utils.h header are defined here instead of a
 // separate .cc file to save compile time.
 
-{{namespace_begin()}}
+{{namespace_begin(namespaces_as_array, variant)}}
 
 {%- import "interface_macros.tmpl" as interface_macros %}
 
@@ -196,10 +167,11 @@ void {{interface.name}}AsyncWaiter::{{method.name}}(
 }
 
 {%   if method.response_parameters|length == 1 -%}
-{%-     set response_type = method.response_parameters[0].kind|cpp_wrapper_call_type -%}
+{%-     set response_kind = method.response_parameters[0].kind -%}
+{%-     set response_type = response_kind|cpp_wrapper_call_type -%}
 {{response_type}} {{interface.name}}AsyncWaiter::{{method.name}}(
     {{interface_macros.declare_params("", method.parameters)}}) {
-  {{response_type}} async_wait_result = mojo::DefaultConstructTraits::CreateInstance<{{response_type}}>();
+  {{response_type}} async_wait_result{{ '' if response_kind|is_default_constructible else '{mojo::internal::DefaultConstructTag()}' }};
   {{method.name}}(
 {%-   for param in method.parameters -%}
         std::move({{param.name}}),
@@ -213,7 +185,7 @@ void {{interface.name}}AsyncWaiter::{{method.name}}(
 
 {% endfor %}
 
-{{namespace_end()}}
+{{namespace_end(namespaces_as_array, variant)}}
 
 
 #if defined(__clang__)

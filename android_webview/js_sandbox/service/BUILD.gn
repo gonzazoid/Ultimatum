@@ -4,8 +4,12 @@
 
 source_set("js_sandbox") {
   sources = [
+    "js_sandbox_array_buffer_allocator.cc",
+    "js_sandbox_array_buffer_allocator.h",
     "js_sandbox_isolate.cc",
     "js_sandbox_isolate.h",
+    "js_sandbox_isolate_callback.cc",
+    "js_sandbox_isolate_callback.h",
   ]
 
   deps = [
@@ -15,8 +19,5 @@ source_set("js_sandbox") {
     "//gin",
   ]
 
-  configs += [
-    "//tools/v8_context_snapshot:use_v8_context_snapshot",
-    "//v8:external_startup_data",
-  ]
+  configs += [ "//v8:external_startup_data" ]
 }

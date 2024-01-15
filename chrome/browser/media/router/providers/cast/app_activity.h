@@ -42,7 +42,7 @@ class AppActivity : public CastActivity {
                                 absl::optional<int> request_id) override;
   void OnAppMessage(const cast::channel::CastMessage& message) override;
   void OnInternalMessage(const cast_channel::InternalMessage& message) override;
-  void CreateMediaController(
+  void BindMediaController(
       mojo::PendingReceiver<mojom::MediaController> media_controller,
       mojo::PendingRemote<mojom::MediaStatusObserver> observer) override;
   absl::optional<int> SendMediaRequestToReceiver(
@@ -53,8 +53,7 @@ class AppActivity : public CastActivity {
       const CastInternalMessage& cast_message,
       cast_channel::ResultCallback callback) override;
 
-  bool CanJoinSession(const CastMediaSource& cast_source,
-                      bool off_the_record) const;
+  bool CanJoinSession(const CastMediaSource& cast_source) const;
   bool HasJoinableClient(AutoJoinPolicy policy,
                          const url::Origin& origin,
                          int tab_id) const;

@@ -7,20 +7,15 @@
 
 #import <UIKit/UIKit.h>
 
-
 #import "ios/chrome/app/application_delegate/app_state_agent.h"
 #import "ios/chrome/app/application_delegate/app_state_observer.h"
-#import "ios/chrome/browser/ui/main/scene_state_observer.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state_observer.h"
 #import "ios/chrome/browser/ui/scoped_ui_blocker/ui_blocker_manager.h"
 
 @class AppState;
-@protocol BrowserLauncher;
 class ChromeBrowserState;
 @class CommandDispatcher;
-@protocol ConnectionInformation;
-typedef NS_ENUM(NSUInteger, DefaultPromoType);
 @class SceneState;
-@class MainApplicationDelegate;
 @class MemoryWarningHelper;
 @class MetricsMediator;
 @protocol StartupInformation;
@@ -29,17 +24,30 @@ namespace base {
 class TimeTicks;
 }
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class PostCrashAction {
+  // Restore tabs normally after a clean shutdown.
+  kRestoreTabsCleanShutdown = 0,
+  // Restore tabs normally after an unclean shutdown.
+  kRestoreTabsUncleanShutdown = 1,
+  // kStashTabsAndShowNTP is no longer used, but the value 2 cannot be reused
+  // as it would break histograms.
+  // Restore tabs with `return to previous tab` NTP.
+  kShowNTPWithReturnToTab = 3,
+  // Show safe mode.
+  kShowSafeMode = 4,
+  kMaxValue = kShowSafeMode,
+};
+
 // Represents the application state and responds to application state changes
 // and system events.
 @interface AppState : NSObject <UIBlockerManager, SceneStateObserver>
 
 - (instancetype)init NS_UNAVAILABLE;
 
-- (instancetype)
-initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
-     startupInformation:(id<StartupInformation>)startupInformation
-    applicationDelegate:(MainApplicationDelegate*)applicationDelegate
-    NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithStartupInformation:
+    (id<StartupInformation>)startupInformation NS_DESIGNATED_INITIALIZER;
 
 // Dispatcher for app-level commands for multiwindow use cases.
 // Most features should use the browser-level dispatcher instead.
@@ -58,32 +66,18 @@ initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
 // YES if the sign-in upgrade promo has been presented to the user, once.
 @property(nonatomic) BOOL signinUpgradePromoPresentedOnce;
 
-// YES if the default browser fullscreen promo has met the qualifications to be
-// shown after the last cold start.
-@property(nonatomic) BOOL shouldShowDefaultBrowserPromo;
-
-// The type of default browser fullscreen promo that should be shown to the
-// user.
-@property(nonatomic) DefaultPromoType defaultBrowserPromoTypeToShow;
-
 // YES if the sign-out prompt should be shown to the user when the scene becomes
 // active and enters the foreground. This can happen if the policies have
 // changed since the last cold start, meaning the user was signed out during
 // startup.
 @property(nonatomic) BOOL shouldShowForceSignOutPrompt;
 
-// Indicates that this app launch is one after a crash.
-@property(nonatomic, assign) BOOL postCrashLaunch;
+// Indicates what action, if any, is taken after a crash (stash tabs, show NTP,
+// show safe mode).
+@property(nonatomic, assign) PostCrashAction postCrashAction;
 
-// Indicates that session restoration might be required for connecting scenes.
-@property(nonatomic, assign) BOOL sessionRestorationRequired;
-
-// The last window which received a tap.
-@property(nonatomic, weak) UIWindow* lastTappedWindow;
-
-// The SceneSession ID for the last session, where the Device doesn't support
-// multiple windows.
-@property(nonatomic, strong) NSString* previousSingleWindowSessionID;
+// YES if the app is resuming from safe mode.
+@property(nonatomic) BOOL resumingFromSafeMode;
 
 // Timestamp of when a scene was last becoming active. Can be null.
 @property(nonatomic, assign) base::TimeTicks lastTimeInForeground;
@@ -101,14 +95,6 @@ initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
 
 // YES if the application is getting terminated.
 @property(nonatomic, readonly) BOOL appIsTerminating;
-
-// Saves the launchOptions to be used from -newTabFromLaunchOptions. If the
-// application is in background, initialize the browser to basic. If not, launch
-// the browser.
-// Returns whether additional delegate handling should be performed (call to
-// -performActionForShortcutItem or -openURL by the system for example)
-- (BOOL)requiresHandlingAfterLaunchWithOptions:(NSDictionary*)launchOptions
-                               stateBackground:(BOOL)stateBackground;
 
 // Logs duration of the session and records that chrome is no longer in cold
 // start.
@@ -170,6 +156,10 @@ initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
 // finally return to the runloop. It is an error to queue more than one
 // transition at once.
 - (void)queueTransitionToNextInitStage;
+
+// Queue the transition (as defined above) to the very first initialization
+// stage.
+- (void)startInitialization;
 
 @end
 

@@ -13,6 +13,10 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/x/connection.h"
 
+#if BUILDFLAG(IS_LINUX)
+#include "ui/linux/linux_ui.h"
+#endif
+
 namespace ui {
 
 namespace {
@@ -26,19 +30,27 @@ scoped_refptr<X11Cursor> CreateInvisibleCursor(XCursorLoader* cursor_loader) {
 }  // namespace
 
 X11CursorFactory::X11CursorFactory()
-    : cursor_loader_(std::make_unique<XCursorLoader>(x11::Connection::Get())) {}
+    : cursor_loader_(std::make_unique<XCursorLoader>(
+          x11::Connection::Get(),
+          base::BindRepeating(
+              &X11CursorFactory::ClearThemeCursors,
+              // Unretained is safe here since `cursor_loader_`'s lifetime is
+              // contained in `this`'s lifetime.
+              base::Unretained(this)))) {}
 
 X11CursorFactory::~X11CursorFactory() = default;
 
 scoped_refptr<PlatformCursor> X11CursorFactory::CreateImageCursor(
     mojom::CursorType type,
     const SkBitmap& bitmap,
-    const gfx::Point& hotspot) {
+    const gfx::Point& hotspot,
+    float scale) {
   // There is a problem with custom cursors that have no custom data. The
   // resulting SkBitmap is empty and X crashes when creating a zero size cursor
   // image. Return invisible cursor here instead.
-  if (bitmap.drawsNothing())
+  if (bitmap.drawsNothing()) {
     return GetDefaultCursor(mojom::CursorType::kNone);
+  }
 
   return cursor_loader_->CreateCursor(bitmap, hotspot);
 }
@@ -47,11 +59,13 @@ scoped_refptr<PlatformCursor> X11CursorFactory::CreateAnimatedCursor(
     mojom::CursorType type,
     const std::vector<SkBitmap>& bitmaps,
     const gfx::Point& hotspot,
+    float scale,
     base::TimeDelta frame_delay) {
   std::vector<XCursorLoader::Image> images;
   images.reserve(bitmaps.size());
-  for (const auto& bitmap : bitmaps)
+  for (const auto& bitmap : bitmaps) {
     images.push_back(XCursorLoader::Image{bitmap, hotspot, frame_delay});
+  }
   return cursor_loader_->CreateCursor(images);
 }
 

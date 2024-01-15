@@ -7,8 +7,9 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
+#include "components/metrics/metrics_log.h"
 
 namespace metrics {
 
@@ -18,30 +19,42 @@ class ReportingInfo;
 // of MetricsService.
 class MetricsLogUploader {
  public:
-  // Type for OnUploadComplete callbacks.  These callbacks will receive three
-  // parameters: A response code, a net error code, and a boolean specifying
-  // if the connection was secure (over HTTPS).
-  using UploadCallback = base::RepeatingCallback<void(int, int, bool)>;
+  // Type for OnUploadComplete callbacks. These callbacks receive five
+  // parameters:
+  //   - a response code,
+  //   - a net error code,
+  //   - a boolean specifying if the connection was secure (over HTTPS),
+  //   - a boolean specifying if the log should be discarded regardless of
+  //     response/error code,
+  //   - a string specifying the reason why the log was forcibly discarded (or
+  //     empty string if not).
+  using UploadCallback =
+      base::RepeatingCallback<void(int, int, bool, bool, base::StringPiece)>;
 
   // Possible service types. This should correspond to a type from
   // DataUseUserData.
+  // TODO(crbug.com/1445151) Investigate cleaning up this enum if it isn't
+  // needed anymore.
   enum MetricServiceType {
     UMA,
     UKM,
+    STRUCTURED_METRICS,
   };
 
-  virtual ~MetricsLogUploader() {}
+  virtual ~MetricsLogUploader() = default;
 
   // Uploads a log with the specified |compressed_log_data|, a |log_hash| and
   // |log_signature| for data validation, and |reporting_info|. |log_hash| is
-  // expected to be the hex-encoded SHA1 hash of the log data before compression
-  // and |log_signature| is expected to be a base64-encoded HMAC-SHA256
-  // signature of the log data before compression. When the server receives an
-  // upload it recomputes the hash and signature of the upload and compares it
-  // to the ones inlcuded in the upload. If there is a missmatched, the upload
-  // is flagged. If an Uploader implementation uploads to a server that doesn't
-  // do this validation then |log_hash| and |log_signature| can be ignored.
+  // expected to be the hex-encoded SHA1 hash of the log data before
+  // compression, and |log_signature| is expected to be a base64-encoded
+  // HMAC-SHA256 signature of the log data before compression. When the server
+  // receives an upload, it recomputes the hash and signature of the upload and
+  // compares it to the ones included in the upload. If there is a mismatch, the
+  // upload is flagged. If an Uploader implementation uploads to a server that
+  // doesn't do this validation, then |log_hash| and |log_signature| can be
+  // ignored.
   virtual void UploadLog(const std::string& compressed_log_data,
+                         const LogMetadata& log_metadata,
                          const std::string& log_hash,
                          const std::string& log_signature,
                          const ReportingInfo& reporting_info) = 0;

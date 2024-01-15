@@ -6,18 +6,20 @@
 #define ASH_APP_LIST_APP_LIST_CONTROLLER_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "ash/app_list/app_list_color_provider_impl.h"
 #include "ash/app_list/app_list_metrics.h"
 #include "ash/app_list/app_list_view_delegate.h"
 #include "ash/app_list/home_launcher_animation_info.h"
 #include "ash/app_list/model/search/search_model.h"
+#include "ash/app_list/quick_app_access_model.h"
 #include "ash/ash_export.h"
 #include "ash/assistant/model/assistant_ui_model_observer.h"
 #include "ash/display/window_tree_host_manager.h"
+#include "ash/public/cpp/app_list/app_list_client.h"
 #include "ash/public/cpp/app_list/app_list_controller.h"
 #include "ash/public/cpp/app_list/app_list_model_delegate.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
@@ -25,24 +27,28 @@
 #include "ash/public/cpp/keyboard/keyboard_controller_observer.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/shelf_types.h"
-#include "ash/public/cpp/tablet_mode_observer.h"
 #include "ash/public/cpp/wallpaper/wallpaper_controller_observer.h"
 #include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shell_observer.h"
 #include "ash/wm/overview/overview_observer.h"
 #include "ash/wm/overview/overview_types.h"
 #include "ash/wm/splitview/split_view_observer.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "components/sync/model/string_ordinal.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "ui/aura/window_observer.h"
+#include "ui/display/display_observer.h"
 #include "ui/display/types/display_constants.h"
 
 class PrefRegistrySimple;
+
+namespace display {
+enum class TabletState;
+}  // namespace display
 
 namespace ash {
 
@@ -66,7 +72,7 @@ class ASH_EXPORT AppListControllerImpl
       public ShellObserver,
       public OverviewObserver,
       public SplitViewObserver,
-      public TabletModeObserver,
+      public display::DisplayObserver,
       public KeyboardControllerObserver,
       public WallpaperControllerObserver,
       public AssistantStateObserver,
@@ -100,14 +106,14 @@ class ASH_EXPORT AppListControllerImpl
   void RemoveObserver(AppListControllerObserver* obsever) override;
   void SetActiveModel(int profile_id,
                       AppListModel* model,
-                      SearchModel* search_model) override;
+                      SearchModel* search_model,
+                      QuickAppAccessModel* quick_app_access_model) override;
   void ClearActiveModel() override;
-  void NotifyProcessSyncChangesFinished() override;
   void DismissAppList() override;
-  void GetAppInfoDialogBounds(GetAppInfoDialogBoundsCallback callback) override;
-  void ShowAppList() override;
+  void ShowAppList(AppListShowSource source) override;
+  AppListShowSource LastAppListShowSource() override;
   aura::Window* GetWindow() override;
-  bool IsVisible(const absl::optional<int64_t>& display_id) override;
+  bool IsVisible(const std::optional<int64_t>& display_id) override;
   bool IsVisible() override;
 
   // SessionObserver:
@@ -116,12 +122,15 @@ class ASH_EXPORT AppListControllerImpl
   void OnUserSessionAdded(const AccountId& account_id) override;
 
   // Methods used in ash:
-  bool GetTargetVisibility(const absl::optional<int64_t>& display_id) const;
+  bool GetTargetVisibility(const std::optional<int64_t>& display_id) const;
+  // 'should_record_metrics' is false when transitioning to tablet mode with a
+  // visible window which is shown over, and thus hides, the app list.
   void Show(int64_t display_id,
-            absl::optional<AppListShowSource> show_source,
-            base::TimeTicks event_time_stamp);
+            AppListShowSource show_source,
+            base::TimeTicks event_time_stamp,
+            bool should_record_metrics);
   void UpdateAppListWithNewTemporarySortOrder(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool animate,
       base::OnceClosure update_position_closure) override;
 
@@ -145,7 +154,12 @@ class ASH_EXPORT AppListControllerImpl
 
   // AppListViewDelegate:
   AppListNotifier* GetNotifier() override;
-  void StartAssistant() override;
+  std::unique_ptr<ash::ScopedIphSession> CreateLauncherSearchIphSession()
+      override;
+  void StartAssistant(assistant::AssistantEntryPoint entry_point) override;
+  void EndAssistant(assistant::AssistantExitPoint exit_point) override;
+  std::vector<AppListSearchControlCategory> GetToggleableCategories()
+      const override;
   void StartSearch(const std::u16string& raw_query) override;
   void StartZeroStateSearch(base::OnceClosure callback,
                             base::TimeDelta timeout) override;
@@ -159,9 +173,6 @@ class ASH_EXPORT AppListControllerImpl
                                 SearchResultActionType action) override;
   using GetContextMenuModelCallback =
       AppListViewDelegate::GetContextMenuModelCallback;
-  void GetSearchResultContextMenuModel(
-      const std::string& result_id,
-      GetContextMenuModelCallback callback) override;
   void ViewShown(int64_t display_id) override;
   bool AppListTargetVisibility() const override;
   void ViewClosing() override;
@@ -171,21 +182,15 @@ class ASH_EXPORT AppListControllerImpl
   void GetContextMenuModel(const std::string& id,
                            AppListItemContext item_context,
                            GetContextMenuModelCallback callback) override;
-  ui::ImplicitAnimationObserver* GetAnimationObserver(
-      AppListViewState target_state) override;
   void ShowWallpaperContextMenu(const gfx::Point& onscreen_location,
                                 ui::MenuSourceType source_type) override;
   bool KeyboardTraversalEngaged() override;
   bool CanProcessEventsOnApplistViews() override;
   bool ShouldDismissImmediately() override;
-  int GetTargetYForAppListHide(aura::Window* root_window) override;
   AssistantViewDelegate* GetAssistantViewDelegate() override;
   void OnSearchResultVisibilityChanged(const std::string& id,
                                        bool visibility) override;
-  void MaybeIncreaseSuggestedContentInfoShownCount() override;
   bool IsAssistantAllowedAndEnabled() const override;
-  bool ShouldShowSuggestedContentInfo() const override;
-  void MarkSuggestedContentInfoDismissed() override;
   void OnStateTransitionAnimationCompleted(
       AppListViewState state,
       bool was_animation_interrupted) override;
@@ -193,7 +198,9 @@ class ASH_EXPORT AppListControllerImpl
   bool HasValidProfile() const override;
   bool ShouldHideContinueSection() const override;
   void SetHideContinueSection(bool hide) override;
-  void CommitTemporarySortOrder() override;
+  bool IsCategoryEnabled(AppListSearchControlCategory category) override;
+  void SetCategoryEnabled(AppListSearchControlCategory category,
+                          bool enabled) override;
 
   void GetAppLaunchedMetricParams(
       AppLaunchedMetricParams* metric_params) override;
@@ -203,8 +210,8 @@ class ASH_EXPORT AppListControllerImpl
   AppListViewState GetAppListViewState() const override;
   void OnViewStateChanged(AppListViewState state) override;
   int GetShelfSize() override;
-  bool IsInTabletMode() override;
-  AppListColorProviderImpl* GetColorProvider();
+  int GetSystemShelfInsetsInTabletMode() override;
+  bool IsInTabletMode() const override;
 
   // Notifies observers of AppList visibility changes.
   void OnVisibilityChanged(bool visible, int64_t display_id);
@@ -226,15 +233,13 @@ class ASH_EXPORT AppListControllerImpl
   void OnSplitViewStateChanged(SplitViewController::State previous_state,
                                SplitViewController::State state) override;
 
-  // TabletModeObserver:
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
+  // display::DisplayObserver:
+  void OnDisplayTabletStateChanged(display::TabletState state) override;
 
   // KeyboardControllerObserver:
   void OnKeyboardVisibilityChanged(bool is_visible) override;
 
   // WallpaperControllerObserver:
-  void OnWallpaperColorsChanged() override;
   void OnWallpaperPreviewStarted() override;
   void OnWallpaperPreviewEnded() override;
 
@@ -258,8 +263,8 @@ class ASH_EXPORT AppListControllerImpl
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
 
   // Gets the home screen window, if available, or null if the home screen
   // window is being hidden for effects (e.g. when dragging windows or
@@ -277,7 +282,7 @@ class ASH_EXPORT AppListControllerImpl
   void UpdateScaleAndOpacityForHomeLauncher(
       float scale,
       float opacity,
-      absl::optional<HomeLauncherAnimationInfo> animation_info,
+      std::optional<HomeLauncherAnimationInfo> animation_info,
       UpdateAnimationSettingsCallback callback);
 
   // Called when the HomeLauncher positional animation has completed.
@@ -334,11 +339,11 @@ class ASH_EXPORT AppListControllerImpl
 
   // Updates which container the fullscreen launcher window should be in.
   void UpdateFullscreenLauncherContainer(
-      absl::optional<int64_t> display_id = absl::nullopt);
+      std::optional<int64_t> display_id = std::nullopt);
 
   // Returns the parent window of the `AppListView` for a |display_id|.
   aura::Window* GetFullscreenLauncherContainerForDisplayId(
-      absl::optional<int64_t> display_id = absl::nullopt);
+      std::optional<int64_t> display_id = std::nullopt);
 
   // Methods for recording the state of the app list before it changes in order
   // to record metrics.
@@ -348,6 +353,16 @@ class ASH_EXPORT AppListControllerImpl
     return badge_controller_.get();
   }
 
+  // Returns the preferred width for the bubble launcher for the |root_window|.
+  int GetPreferredBubbleWidth(aura::Window* root_window) const;
+
+  // Set the launchable quick app button shown next to the home button. This app
+  // icon is shown next to the home button until the app is launched or the
+  // launcher is opened.
+  // Returns true when the quick app was changed to a valid `app_id` or reset
+  // using an empty `app_id`.
+  bool SetHomeButtonQuickApp(const std::string& app_id);
+
  private:
   // Convenience methods for getting models from `model_provider_`.
   AppListModel* GetModel();
@@ -355,14 +370,15 @@ class ASH_EXPORT AppListControllerImpl
 
   std::unique_ptr<AppListItem> CreateAppListItem(
       std::unique_ptr<AppListItemMetadata> metadata);
-  // Update the visibility of Assistant functionality.
-  void UpdateAssistantVisibility();
+
+  // Update the visibility of UIs controlled by `SearchBoxModel`.
+  void UpdateSearchBoxUiVisibilities();
 
   int64_t GetDisplayIdToShowAppListOn();
 
   void ResetHomeLauncherIfShown();
 
-  void ShowHomeScreen();
+  void ShowHomeScreen(AppListShowSource show_source);
 
   // Updates the visibility of the home screen based on e.g. if the device is
   // in overview mode.
@@ -397,6 +413,11 @@ class ASH_EXPORT AppListControllerImpl
   // FeatureDiscoveryDurationReporter::ReporterObserver:
   void OnReporterActivated() override;
 
+  // Called when display tablet state is changed to kInTabletMode or
+  // kInClamshellMode.
+  void OnChangedToInTabletMode();
+  void OnChangedToInClamshellMode();
+
   // Gets the container which should contain the fullscreen launcher.
   int GetFullscreenLauncherContainerId() const;
 
@@ -411,16 +432,15 @@ class ASH_EXPORT AppListControllerImpl
   // gesture is reversed).
   HomeLauncherTransitionState home_launcher_transition_state_ = kFinished;
 
-  AppListClient* client_ = nullptr;
+  raw_ptr<AppListClient> client_ = nullptr;
+
+  // Tracks the most recent show source for the app list.
+  std::optional<AppListShowSource> last_open_source_;
 
   // Tracks active app list and search models to app list UI stack. It can be
   // accessed outside AppListModelControllerImpl using
   // `AppListModelController::Get()`.
   std::unique_ptr<AppListModelProvider> model_provider_;
-
-  // Used to fetch colors from AshColorProvider. Should be destructed after
-  // |presenter_| and UI.
-  AppListColorProviderImpl color_provider_;
 
   // Manages the tablet mode home launcher.
   // |fullscreen_presenter_| should be put below |client_| and |model_| to
@@ -468,7 +488,7 @@ class ASH_EXPORT AppListControllerImpl
   // last calculated.
   // This window changing it's visibility to false is used as a signal that the
   // home launcher visibility should be recalculated.
-  aura::Window* tracked_app_window_ = nullptr;
+  raw_ptr<aura::Window> tracked_app_window_ = nullptr;
 
   // A callback that can be registered by a test to wait for the app list state
   // transition animation to finish.
@@ -481,15 +501,15 @@ class ASH_EXPORT AppListControllerImpl
   // The AppListViewState at the moment it was recorded, used to record app
   // launching metrics. This allows an accurate AppListViewState to be recorded
   // before AppListViewState changes.
-  absl::optional<AppListViewState> recorded_app_list_view_state_;
+  std::optional<AppListViewState> recorded_app_list_view_state_;
 
   // Whether the applist was shown at the moment it was recorded, used to record
   // app launching metrics. This is recorded because AppList visibility can
   // change before the metric is recorded.
-  absl::optional<bool> recorded_app_list_visibility_;
+  std::optional<bool> recorded_app_list_visibility_;
 
   // The last time the app list was shown.
-  absl::optional<base::TimeTicks> last_show_timestamp_;
+  std::optional<base::TimeTicks> last_show_timestamp_;
 
   base::ObserverList<AppListControllerObserver> observers_;
 
@@ -511,11 +531,11 @@ class ASH_EXPORT AppListControllerImpl
   // it can be used to decide how to update home screen when overview mode exit
   // animations are finished (at which point this information will not be
   // available).
-  absl::optional<OverviewEnterExitType> overview_exit_type_;
+  std::optional<OverviewEnterExitType> overview_exit_type_;
 
   // Responsible for recording smoothness related UMA stats for home screen
   // animations.
-  absl::optional<ui::ThroughputTracker> smoothness_tracker_;
+  std::optional<ui::ThroughputTracker> smoothness_tracker_;
 
   // Used for closing the Assistant ui in the asynchronous way.
   base::ScopedClosureRunner close_assistant_ui_runner_;

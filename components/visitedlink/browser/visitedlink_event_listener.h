@@ -10,11 +10,12 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
+#include "base/scoped_multi_source_observation.h"
 #include "base/timer/timer.h"
 #include "components/visitedlink/browser/visitedlink_writer.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/render_process_host_creation_observer.h"
+#include "content/public/browser/render_process_host_observer.h"
+#include "content/public/browser/render_widget_host_observer.h"
 
 namespace content {
 class BrowserContext;
@@ -29,8 +30,9 @@ class VisitedLinkUpdater;
 // messages to the renderers.
 class VisitedLinkEventListener
     : public VisitedLinkWriter::Listener,
-      public content::NotificationObserver,
-      public content::RenderProcessHostCreationObserver {
+      public content::RenderProcessHostCreationObserver,
+      public content::RenderProcessHostObserver,
+      public content::RenderWidgetHostObserver {
  public:
   explicit VisitedLinkEventListener(content::BrowserContext* browser_context);
 
@@ -50,13 +52,16 @@ class VisitedLinkEventListener
   // content::RenderProcessHostCreationObserver:
   void OnRenderProcessHostCreated(content::RenderProcessHost* rph) override;
 
+  // content::RenderProcessHostObserver:
+  void RenderProcessHostDestroyed(content::RenderProcessHost* host) override;
+
+  // content::RenderWidgetHostObserver:
+  void RenderWidgetHostVisibilityChanged(content::RenderWidgetHost* rwh,
+                                         bool became_visible) override;
+  void RenderWidgetHostDestroyed(content::RenderWidgetHost* rwh) override;
+
  private:
   void CommitVisitedLinks();
-
-  // content::NotificationObserver implementation.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
 
   // The default Timer to use for coalescing events. This should not be used
   // directly to allow overriding it in tests. Instead, |coalesce_timer_|
@@ -67,11 +72,16 @@ class VisitedLinkEventListener
   raw_ptr<base::OneShotTimer> coalesce_timer_;
   VisitedLinkCommon::Fingerprints pending_visited_links_;
 
-  content::NotificationRegistrar registrar_;
+  base::ScopedMultiSourceObservation<content::RenderProcessHost,
+                                     content::RenderProcessHostObserver>
+      host_observation_{this};
+
+  base::ScopedMultiSourceObservation<content::RenderWidgetHost,
+                                     content::RenderWidgetHostObserver>
+      widget_observation_{this};
 
   // Map between renderer child ids and their VisitedLinkUpdater.
-  typedef std::map<int, std::unique_ptr<VisitedLinkUpdater>> Updaters;
-  Updaters updaters_;
+  std::map<int, std::unique_ptr<VisitedLinkUpdater>> updaters_;
 
   base::ReadOnlySharedMemoryRegion table_region_;
 

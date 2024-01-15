@@ -8,7 +8,7 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "media/audio/audio_io.h"
@@ -40,7 +40,7 @@ class CastAudioMixer : public ::media::AudioOutputStream::AudioSourceCallback {
   // ::media::AudioOutputStream::AudioSourceCallback implementation
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks delay_timestamp,
-                 int prior_frames_skipped,
+                 const ::media::AudioGlitchInfo& glitch_info,
                  ::media::AudioBus* dest) override;
   void OnError(ErrorType type) override;
 

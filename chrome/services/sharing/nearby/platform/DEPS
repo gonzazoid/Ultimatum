@@ -4,22 +4,30 @@
 
 include_rules = [
   '+ash/constants/ash_features.h',
-  '+chromeos/services/network_config',
-  '+device/bluetooth/public',
+  '+device/bluetooth',
   '+services/network/public',
   '+third_party/abseil-cpp/absl/strings/string_view.h',
   '+third_party/abseil-cpp/absl/time/time.h',
+  '+third_party/nearby',
   '+unicode/locid.h',
+  '+chromeos/ash/components/login/login_state/login_state.h',
   '+chromeos/ash/components/network/proxy/ui_proxy_config_service.h',
   '+chromeos/ash/components/network/managed_network_configuration_handler.h',
   '+chromeos/ash/components/network/network_configuration_handler.h',
   '+chromeos/ash/components/network/network_profile_handler.h',
-  '+chromeos/login/login_state/login_state.h',
+  '+chromeos/ash/components/nearby/presence/conversions/proto_conversions.h',
   '+components/onc/onc_constants.h',
   '+components/onc/onc_pref_names.h',
   '+components/prefs/testing_pref_service.h',
   '+components/proxy_config/pref_proxy_config_tracker_impl.h',
   '+components/proxy_config/proxy_config_pref_names.h',
   '+components/sync_preferences/testing_pref_service_syncable.h',
+  '+components/user_manager',
   '+third_party/cros_system_api/dbus/shill/dbus-constants.h',
 ]
+
+specific_include_rules = {
+  "wifi_lan_medium_unittest\.cc": [
+    "+chromeos/ash/services/network_config/in_process_instance.h",
+  ],
+}

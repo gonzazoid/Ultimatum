@@ -5,24 +5,27 @@
 #ifndef IOS_WEB_PUBLIC_WEB_STATE_H_
 #define IOS_WEB_PUBLIC_WEB_STATE_H_
 
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 #include <stdint.h>
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/supports_user_data.h"
 #include "base/time/time.h"
-#include "ios/web/public/deprecated/url_verification_constants.h"
+#include "build/blink_buildflags.h"
+#include "components/sessions/core/session_id.h"
+#include "ios/web/public/js_messaging/content_world.h"
 #include "ios/web/public/navigation/referrer.h"
+#include "ios/web/public/web_state_id.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "ui/base/page_transition_types.h"
@@ -31,26 +34,21 @@
 
 class GURL;
 
-@class CRWJSInjectionReceiver;
 @class CRWSessionStorage;
 @protocol CRWScrollableContent;
 @protocol CRWWebViewDownload;
+@protocol CRWFindInteraction;
 @protocol CRWWebViewDownloadDelegate;
 @protocol CRWWebViewProxy;
 typedef id<CRWWebViewProxy> CRWWebViewProxyType;
 @class UIView;
 typedef UIView<CRWScrollableContent> CRWContentView;
 
-namespace base {
-class Value;
-}
-
-namespace gfx {
-class Image;
-class RectF;
-}
-
 namespace web {
+namespace proto {
+class WebStateStorage;
+class WebStateMetadataStorage;
+}  // namespace proto
 
 class BrowserState;
 struct FaviconStatus;
@@ -58,7 +56,6 @@ class NavigationManager;
 enum Permission : NSUInteger;
 enum PermissionState : NSUInteger;
 class SessionCertificatePolicyCache;
-class WebFrame;
 class WebFramesManager;
 class WebStateDelegate;
 class WebStateObserver;
@@ -73,6 +70,13 @@ void IgnoreOverRealizationCheck();
 // Core interface for interaction with the web.
 class WebState : public base::SupportsUserData {
  public:
+  // Callback used to load the full information for the WebState when
+  // it will become realized.
+  using WebStateStorageLoader = base::OnceCallback<proto::WebStateStorage()>;
+
+  // Callback used to fetch the native session for the WebState.
+  using NativeSessionFetcher = base::OnceCallback<NSData*()>;
+
   // Parameters for the Create() method.
   struct CreateParams {
     explicit CreateParams(web::BrowserState* browser_state);
@@ -86,12 +90,17 @@ class WebState : public base::SupportsUserData {
     // WebState is allowed to be closed via window.close().
     bool created_with_opener;
 
+#if BUILDFLAG(USE_BLINK)
+    // If `created_with_opener`, a pointer to the opener WebState.
+    WebState* opener_web_state;
+#endif
+
     // Value used to set the last time the WebState was made active; this
     // is the value that will be returned by GetLastActiveTime(). If this
     // is left default initialized, then the value will not be passed on
     // to the WebState and GetLastActiveTime() will return the WebState's
     // creation time.
-    base::Time last_active_time;
+    std::optional<base::Time> last_active_time;
   };
 
   // Parameters for the OpenURL() method.
@@ -180,26 +189,48 @@ class WebState : public base::SupportsUserData {
 
   // Creates a new WebState from a serialized representation of the session.
   // `session_storage` must not be nil.
+  // TODO(crbug.com/1383087): remove when the optimised serialisation feature
+  // has been fully launched.
   static std::unique_ptr<WebState> CreateWithStorageSession(
       const CreateParams& params,
       CRWSessionStorage* session_storage);
+
+  // Creates a new WebState from a serialized representation of the session.
+  // The callbacks are used to load the complete serialized data from disk
+  // when the WebState transition to the realized state.
+  static std::unique_ptr<WebState> CreateWithStorage(
+      BrowserState* browser_state,
+      WebStateID unique_identifier,
+      proto::WebStateMetadataStorage metadata,
+      WebStateStorageLoader storage_loader,
+      NativeSessionFetcher session_fetcher);
 
   WebState(const WebState&) = delete;
   WebState& operator=(const WebState&) = delete;
 
   ~WebState() override {}
 
+  // Serializes the object to `storage`. It is an error to call this method
+  // on a WebState that is not realized.
+  virtual void SerializeToProto(proto::WebStateStorage& storage) const = 0;
+
   // Gets/Sets the delegate.
   virtual WebStateDelegate* GetDelegate() = 0;
   virtual void SetDelegate(WebStateDelegate* delegate) = 0;
 
+  // Clones the current WebState. The newly returned WebState is realized and
+  // is a copy to the current instance but will have distinct identifiers. It
+  // is used to implement prerendering or preview as this allow to have a new
+  // WebState that shares the same navigation history.
+  virtual std::unique_ptr<WebState> Clone() const = 0;
+
   // Returns whether the WebState is realized.
   //
   // What does "realized" mean? When creating a WebState from session storage
-  // with `CreateWithStorageSession()`, it may not yet have been fully created.
-  // Instead, it has all information to fully instantiate it and its history
-  // available, but the underlying objects (WKWebView, NavigationManager, ...)
-  // have not been created.
+  // with `CreateWithStorageSession()` or `CreateWithStorage()`, it may not
+  // yet have been fully created. Instead, it has all information to fully
+  // instantiate it and its history available, but the underlying objects
+  // (WKWebView, NavigationManager, ...) have not been created.
   //
   // This is an optimisation to reduce the amount of memory consumed by tabs
   // that have been restored after the browser has been shutdown. If the user
@@ -272,15 +303,13 @@ class WebState : public base::SupportsUserData {
   // Loads the web content from the HTML you provide as if the HTML were the
   // response to the request.
   virtual void LoadSimulatedRequest(const GURL& url,
-                                    NSString* response_html_string)
-      API_AVAILABLE(ios(15.0)) = 0;
+                                    NSString* response_html_string) = 0;
 
   // Loads the web content from the data you provide as if the data were the
   // response to the request.
   virtual void LoadSimulatedRequest(const GURL& url,
                                     NSData* response_data,
-                                    NSString* mime_type)
-      API_AVAILABLE(ios(15.0)) = 0;
+                                    NSString* mime_type) = 0;
 
   // Stops any pending navigation.
   virtual void Stop() = 0;
@@ -292,8 +321,11 @@ class WebState : public base::SupportsUserData {
 
   // Gets the WebFramesManager associated with this WebState. Can never return
   // null.
-  virtual const WebFramesManager* GetWebFramesManager() const = 0;
-  virtual WebFramesManager* GetWebFramesManager() = 0;
+  virtual WebFramesManager* GetPageWorldWebFramesManager() = 0;
+
+  // Returns the WebFrameManagerImpl associated with this WebState for the given
+  // `world`.
+  virtual WebFramesManager* GetWebFramesManager(ContentWorld world) = 0;
 
   // Gets the SessionCertificatePolicyCache for this WebState.  Can never return
   // null.
@@ -303,10 +335,7 @@ class WebState : public base::SupportsUserData {
 
   // Creates a serializable representation of the session. The returned value
   // is autoreleased.
-  virtual CRWSessionStorage* BuildSessionStorage() = 0;
-
-  // Gets the CRWJSInjectionReceiver associated with this WebState.
-  virtual CRWJSInjectionReceiver* GetJSInjectionReceiver() const = 0;
+  virtual CRWSessionStorage* BuildSessionStorage() const = 0;
 
   // Loads `data` of type `mime_type` and replaces last committed URL with the
   // given `url`.
@@ -322,7 +351,16 @@ class WebState : public base::SupportsUserData {
   // to identify locally this WebState (e.g. can be used as part of the name
   // of the file that is used to store a snapshot of the WebState, or it can
   // be used as a key in an NSDictionary).
+  //
+  // DEPRECATED: use GetUniqueIdentifier() instead.
   virtual NSString* GetStableIdentifier() const = 0;
+
+  // Returns a unique identifier for this WebState that is stable across
+  // restart of the application (and across "undo" after a tab is closed).
+  // It is local to the device and not synchronized (but may be used by
+  // the sync code to uniquely identify a session on the current device).
+  // It can be used as a key to identify this WebState.
+  virtual WebStateID GetUniqueIdentifier() const = 0;
 
   // Gets the contents MIME type.
   virtual const std::string& GetContentsMimeType() const = 0;
@@ -359,6 +397,9 @@ class WebState : public base::SupportsUserData {
   // Whether this instance is in the process of being destroyed.
   virtual bool IsBeingDestroyed() const = 0;
 
+  // Whether this instance's web page is in fullscreen mode.
+  virtual bool IsWebPageInFullscreenMode() const = 0;
+
   // Gets/Sets the favicon for the current page displayed by this WebState.
   virtual const FaviconStatus& GetFaviconStatus() const = 0;
   virtual void SetFaviconStatus(const FaviconStatus& favicon_status) = 0;
@@ -379,33 +420,9 @@ class WebState : public base::SupportsUserData {
   // displayed in this WebState. It represents the current security context.
   virtual const GURL& GetLastCommittedURL() const = 0;
 
-  // Returns the WebState view of the current URL. Moreover, this method
-  // will set the trustLevel enum to the appropriate level from a security point
-  // of view. The caller has to handle the case where `trust_level` is not
-  // appropriate.  Passing `null` will skip the trust check.
-  // TODO(crbug.com/457679): Figure out a clean API for this.
-  virtual GURL GetCurrentURL(URLVerificationTrustLevel* trust_level) const = 0;
-
-  // Callback used to handle script commands. `message` is the JS message sent
-  // from the `sender_frame` in the page, `page_url` is the URL of page's main
-  // frame, `user_is_interacting` indicates if the user is interacting with the
-  // page.
-  // TODO(crbug.com/881813): remove `page_url`.
-  using ScriptCommandCallbackSignature = void(const base::Value& message,
-                                              const GURL& page_url,
-                                              bool user_is_interacting,
-                                              web::WebFrame* sender_frame);
-  using ScriptCommandCallback =
-      base::RepeatingCallback<ScriptCommandCallbackSignature>;
-  // Registers `callback` for JS message whose 'command' matches
-  // `command_prefix`. The returned subscription should be stored by the caller.
-  // When the description object is destroyed, it will unregister `callback` if
-  // this WebState is still alive, and do nothing if this WebState is already
-  // destroyed. Therefore if the caller want to stop receiving JS messages it
-  // can just destroy the subscription.
-  [[nodiscard]] virtual base::CallbackListSubscription AddScriptCommandCallback(
-      const ScriptCommandCallback& callback,
-      const std::string& command_prefix) = 0;
+  // Returns the last committed URL if the correctness of this URL's origin is
+  // trusted, and std::nullopt otherwise.
+  virtual std::optional<GURL> GetLastCommittedURLIfTrusted() const = 0;
 
   // Returns the current CRWWebViewProxy object.
   virtual CRWWebViewProxyType GetWebViewProxy() const = 0;
@@ -427,7 +444,7 @@ class WebState : public base::SupportsUserData {
   virtual void SetHasOpener(bool has_opener) = 0;
 
   // Callback used to handle snapshots. The parameter is the snapshot image.
-  typedef base::RepeatingCallback<void(const gfx::Image&)> SnapshotCallback;
+  typedef base::RepeatingCallback<void(UIImage*)> SnapshotCallback;
 
   // Returns whether TakeSnapshot() can be executed.  The API may be disabled if
   // the WKWebView IPC mechanism is blocked due to an outstanding JavaScript
@@ -438,8 +455,7 @@ class WebState : public base::SupportsUserData {
   // in the coordinate system of the view returned by GetView(). `callback` is
   // asynchronously invoked after performing the snapshot. Prior to iOS 11, the
   // callback is invoked with a nil snapshot.
-  virtual void TakeSnapshot(const gfx::RectF& rect,
-                            SnapshotCallback callback) = 0;
+  virtual void TakeSnapshot(const CGRect rect, SnapshotCallback callback) = 0;
 
   // Creates PDF representation of the web page and invokes the `callback` with
   // the NSData of the PDF or nil if a PDF couldn't be generated.
@@ -467,26 +483,50 @@ class WebState : public base::SupportsUserData {
 
   // Gets or sets the web state's permission for a specific type, for example
   // camera or microphone, on the device.
-  virtual PermissionState GetStateForPermission(Permission permission) const
-      API_AVAILABLE(ios(15.0)) = 0;
+  virtual PermissionState GetStateForPermission(
+      Permission permission) const = 0;
   virtual void SetStateForPermission(PermissionState state,
-                                     Permission permission)
-      API_AVAILABLE(ios(15.0)) = 0;
+                                     Permission permission) = 0;
 
   // Gets a mapping of all available permissions and their states.
   // Note that both key and value are in NSNumber format, and should be
   // translated to NSUInteger and casted to web::Permission or
   // web::PermissionState before use.
-  virtual NSDictionary<NSNumber*, NSNumber*>* GetStatesForAllPermissions() const
-      API_AVAILABLE(ios(15.0)) = 0;
+  virtual NSDictionary<NSNumber*, NSNumber*>* GetStatesForAllPermissions()
+      const = 0;
 
   // Downloads the displayed webview at `destination_file`. `handler`
   // is used to retrieve the CRWWebViewDownload, so the caller can manage the
   // launched download.
   virtual void DownloadCurrentPage(NSString* destination_file,
                                    id<CRWWebViewDownloadDelegate> delegate,
-                                   void (^handler)(id<CRWWebViewDownload>))
-      API_AVAILABLE(ios(14.5)) = 0;
+                                   void (^handler)(id<CRWWebViewDownload>)) = 0;
+
+  // Whether the Find interaction is supported and can be enabled.
+  virtual bool IsFindInteractionSupported() = 0;
+
+  // Whether the Find interaction in the contained web view is enabled. Should
+  // only be called if `IsFindInteractionSupported()` returns `true`.
+  virtual bool IsFindInteractionEnabled() = 0;
+
+  // Enable or disable the Find interaction for the contained web view. Should
+  // only be called if `IsFindInteractionSupported()` returns `true`.
+  virtual void SetFindInteractionEnabled(bool enabled) = 0;
+
+  // Get the Find interaction object associated with the contained web view.
+  // Returns `nil` if the Find interaction is currently disabled. Should only be
+  // called if `IsFindInteractionSupported()` returns `true`.
+  virtual id<CRWFindInteraction> GetFindInteraction() = 0;
+
+  // Get an opaque activity item that can be passed to a
+  // UIActivityViewController to share the current URL.
+  virtual id GetActivityItem() API_AVAILABLE(ios(16.4)) = 0;
+
+  // Returns the page theme color.
+  virtual UIColor* GetThemeColor() = 0;
+
+  // Returns the under page background color.
+  virtual UIColor* GetUnderPageBackgroundColor() = 0;
 
  protected:
   friend class WebStatePolicyDecider;

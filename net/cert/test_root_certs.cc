@@ -7,10 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "net/cert/pki/cert_errors.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
 #include "third_party/boringssl/src/include/openssl/pool.h"
+#include "third_party/boringssl/src/pki/cert_errors.h"
+#include "third_party/boringssl/src/pki/trust_store.h"
 
 namespace net {
 
@@ -32,26 +33,47 @@ bool TestRootCerts::HasInstance() {
   return g_has_instance;
 }
 
-bool TestRootCerts::Add(X509Certificate* certificate) {
-  CertErrors errors;
-  scoped_refptr<ParsedCertificate> parsed = ParsedCertificate::Create(
-      bssl::UpRef(certificate->cert_buffer()),
-      x509_util::DefaultParseCertificateOptions(), &errors);
+bool TestRootCerts::Add(X509Certificate* certificate,
+                        bssl::CertificateTrust trust) {
+  bssl::CertErrors errors;
+  std::shared_ptr<const bssl::ParsedCertificate> parsed =
+      bssl::ParsedCertificate::Create(
+          bssl::UpRef(certificate->cert_buffer()),
+          x509_util::DefaultParseCertificateOptions(), &errors);
   if (!parsed) {
     return false;
   }
 
-  test_trust_store_.AddTrustAnchor(std::move(parsed));
+  test_trust_store_.AddCertificate(std::move(parsed), trust);
+  if (trust.HasUnspecifiedTrust() || trust.IsDistrusted()) {
+    // TestRootCerts doesn't support passing the specific trust settings into
+    // the OS implementations in any case, but in the case of unspecified trust
+    // or explicit distrust, simply not passing the certs to the OS
+    // implementation is better than nothing.
+    return true;
+  }
   return AddImpl(certificate);
+}
+
+void TestRootCerts::AddKnownRoot(base::span<const uint8_t> der_cert) {
+  test_known_roots_.insert(std::string(
+      reinterpret_cast<const char*>(der_cert.data()), der_cert.size()));
 }
 
 void TestRootCerts::Clear() {
   ClearImpl();
   test_trust_store_.Clear();
+  test_known_roots_.clear();
 }
 
 bool TestRootCerts::IsEmpty() const {
   return test_trust_store_.IsEmpty();
+}
+
+bool TestRootCerts::IsKnownRoot(base::span<const uint8_t> der_cert) const {
+  return test_known_roots_.find(
+             base::StringPiece(reinterpret_cast<const char*>(der_cert.data()),
+                               der_cert.size())) != test_known_roots_.end();
 }
 
 TestRootCerts::TestRootCerts() {
@@ -61,12 +83,14 @@ TestRootCerts::TestRootCerts() {
 
 ScopedTestRoot::ScopedTestRoot() = default;
 
-ScopedTestRoot::ScopedTestRoot(X509Certificate* cert) {
-  Reset({cert});
+ScopedTestRoot::ScopedTestRoot(scoped_refptr<X509Certificate> cert,
+                               bssl::CertificateTrust trust) {
+  Reset({std::move(cert)}, trust);
 }
 
-ScopedTestRoot::ScopedTestRoot(CertificateList certs) {
-  Reset(std::move(certs));
+ScopedTestRoot::ScopedTestRoot(CertificateList certs,
+                               bssl::CertificateTrust trust) {
+  Reset(std::move(certs), trust);
 }
 
 ScopedTestRoot::ScopedTestRoot(ScopedTestRoot&& other) {
@@ -84,12 +108,24 @@ ScopedTestRoot::~ScopedTestRoot() {
   Reset({});
 }
 
-void ScopedTestRoot::Reset(CertificateList certs) {
+void ScopedTestRoot::Reset(CertificateList certs,
+                           bssl::CertificateTrust trust) {
   if (!certs_.empty())
     TestRootCerts::GetInstance()->Clear();
   for (const auto& cert : certs)
-    TestRootCerts::GetInstance()->Add(cert.get());
-  certs_ = certs;
+    TestRootCerts::GetInstance()->Add(cert.get(), trust);
+  certs_ = std::move(certs);
+}
+
+ScopedTestKnownRoot::ScopedTestKnownRoot() = default;
+
+ScopedTestKnownRoot::ScopedTestKnownRoot(X509Certificate* cert) {
+  TestRootCerts::GetInstance()->AddKnownRoot(
+      x509_util::CryptoBufferAsSpan(cert->cert_buffer()));
+}
+
+ScopedTestKnownRoot::~ScopedTestKnownRoot() {
+  TestRootCerts::GetInstance()->Clear();
 }
 
 }  // namespace net

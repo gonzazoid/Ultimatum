@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ui/cocoa/apps/quit_with_apps_controller_mac.h"
 
+#import "base/apple/foundation_util.h"
 #include "base/command_line.h"
-#import "base/mac/foundation_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #import "chrome/browser/app_controller_mac.h"
@@ -89,8 +89,8 @@ IN_PROC_BROWSER_TEST_F(QuitWithAppsControllerInteractiveTest, QuitBehavior) {
   // If notification was dismissed by click, show again on next quit.
   display_service.SimulateClick(
       NotificationHandler::Type::TRANSIENT,
-      QuitWithAppsController::kQuitWithAppsNotificationID, absl::nullopt,
-      absl::nullopt);
+      QuitWithAppsController::kQuitWithAppsNotificationID, std::nullopt,
+      std::nullopt);
   EXPECT_FALSE(display_service.GetNotification(
       QuitWithAppsController::kQuitWithAppsNotificationID));
   EXPECT_FALSE(controller->ShouldQuit());
@@ -140,7 +140,7 @@ IN_PROC_BROWSER_TEST_F(QuitWithAppsControllerInteractiveTest, QuitBehavior) {
   display_service.SimulateClick(
       NotificationHandler::Type::TRANSIENT,
       QuitWithAppsController::kQuitWithAppsNotificationID,
-      0 /* kQuitAllAppsButtonIndex */, absl::nullopt);
+      0 /* kQuitAllAppsButtonIndex */, std::nullopt);
   destroyed_watcher.Wait();
   EXPECT_FALSE(AppWindowRegistryUtil::IsAppWindowVisibleInAnyProfile(0));
   quit_observer.Run();
@@ -159,12 +159,10 @@ IN_PROC_BROWSER_TEST_F(QuitWithAppsControllerInteractiveTest, QuitOnPowerOff) {
   // Simulate a terminate triggered by a power off or log out.
   // Cocoa will send an NSWorkspaceWillPowerOffNotification followed by
   // -[NSApplication terminate:].
-  AppController* app_controller =
-      base::mac::ObjCCast<AppController>([NSApp delegate]);
   NSNotification* notification =
       [NSNotification notificationWithName:NSWorkspaceWillPowerOffNotification
                                     object:nil];
-  [app_controller willPowerOff:notification];
+  [AppController.sharedController willPowerOff:notification];
   [NSApp terminate:nil];
   EXPECT_TRUE(browser_shutdown::IsTryingToQuit());
 }

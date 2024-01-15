@@ -11,17 +11,17 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/win/default_apps_util.h"
 #include "base/win/scoped_co_mem.h"
@@ -106,7 +106,7 @@ bool ShowSetUpUrlForwarderDialog() {
   }
   task_dialog.set_default_button(IDOK);
 
-  absl::optional<int> button_result = task_dialog.Show();
+  std::optional<int> button_result = task_dialog.Show();
   if (!button_result.has_value()) {
     LOG(ERROR) << "Failed to show the setup dialog.";
     return false;
@@ -205,7 +205,7 @@ void SetUpProcess::PollUrlForwarderSetupState() {
     return;
   }
   total_poll_time_ += kPollingInterval;
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&SetUpProcess::PollUrlForwarderSetupState,
                      base::Unretained(this)),

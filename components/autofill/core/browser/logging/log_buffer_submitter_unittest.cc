@@ -6,8 +6,8 @@
 
 #include <tuple>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/values.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/browser/logging/log_receiver.h"
@@ -26,7 +26,7 @@ class MockLogReceiver : public LogReceiver {
 TEST(LogBufferSubmitter, VerifySubmissionOnDestruction) {
   LogBuffer buffer;
   buffer << 42;
-  absl::optional<base::Value::Dict> expected = buffer.RetrieveResult();
+  std::optional<base::Value::Dict> expected = buffer.RetrieveResult();
 
   MockLogReceiver receiver;
   LogRouter router;

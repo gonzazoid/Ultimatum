@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_SYNC_SYNC_USER_SETTINGS_CLIENT_ASH_H_
 
 #include "chromeos/crosapi/mojom/sync.mojom.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
@@ -43,7 +43,7 @@ class SyncUserSettingsClientAsh : public crosapi::mojom::SyncUserSettingsClient,
   void FlushMojoForTesting();
 
  private:
-  const base::raw_ptr<syncer::SyncService> sync_service_;
+  const raw_ptr<syncer::SyncService> sync_service_;
 
   bool is_apps_sync_enabled_;
 

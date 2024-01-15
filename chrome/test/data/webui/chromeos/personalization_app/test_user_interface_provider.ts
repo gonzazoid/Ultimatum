@@ -7,9 +7,9 @@ import {BigBuffer} from 'chrome://resources/mojo/mojo/public/mojom/base/big_buff
 import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
-export class TestUserProvider extends
-    TestBrowserProxy<UserProviderInterface> implements UserProviderInterface {
-  public defaultUserImages: DefaultUserImage[] = [
+export class TestUserProvider extends TestBrowserProxy implements
+    UserProviderInterface {
+  defaultUserImages: DefaultUserImage[] = [
     {
       index: 8,
       title: {data: 'Test title'.split('').map(ch => ch.charCodeAt(0))},
@@ -18,14 +18,14 @@ export class TestUserProvider extends
     },
   ];
 
-  public image: UserImage = {defaultImage: this.defaultUserImages[0]} as any;
+  image: UserImage = {defaultImage: this.defaultUserImages[0]} as any;
 
-  public info: UserInfo = {
+  info: UserInfo = {
     name: 'test name',
     email: 'test@email',
   };
 
-  public profileImage: Url = {
+  profileImage: Url = {
     url: 'data://test_profile_url',
   };
 

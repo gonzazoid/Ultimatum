@@ -4,7 +4,7 @@
 
 #include "ash/system/accessibility/select_to_speak/select_to_speak_menu_bubble_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/test_accessibility_controller_client.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
 #include "ash/shell.h"
@@ -38,7 +38,7 @@ class SelectToSpeakMenuBubbleControllerTest : public AshTestBase {
 
   void TearDown() override { AshTestBase::TearDown(); }
 
-  AccessibilityControllerImpl* GetAccessibilitController() {
+  AccessibilityController* GetAccessibilitController() {
     return Shell::Get()->accessibility_controller();
   }
 
@@ -85,6 +85,8 @@ TEST_F(SelectToSpeakMenuBubbleControllerTest, ShowSelectToSpeakPanel_paused) {
       GetMenuButton(SelectToSpeakMenuView::ButtonId::kPause);
   EXPECT_EQ(pause_button->GetTooltipText(),
             l10n_util::GetStringUTF16(IDS_ASH_SELECT_TO_SPEAK_RESUME));
+  EXPECT_EQ(pause_button->GetAccessibleName(),
+            l10n_util::GetStringUTF16(IDS_ASH_SELECT_TO_SPEAK_TOGGLE_PLAYBACK));
   EXPECT_TRUE(GetBubbleWidget()->IsVisible());
 }
 
@@ -97,6 +99,8 @@ TEST_F(SelectToSpeakMenuBubbleControllerTest,
       GetMenuButton(SelectToSpeakMenuView::ButtonId::kPause);
   EXPECT_EQ(pause_button->GetTooltipText(),
             l10n_util::GetStringUTF16(IDS_ASH_SELECT_TO_SPEAK_PAUSE));
+  EXPECT_EQ(pause_button->GetAccessibleName(),
+            l10n_util::GetStringUTF16(IDS_ASH_SELECT_TO_SPEAK_TOGGLE_PLAYBACK));
   EXPECT_TRUE(GetBubbleWidget()->IsVisible());
 }
 

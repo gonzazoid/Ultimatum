@@ -19,7 +19,7 @@
 #include "chrome/common/extensions/manifest_handlers/theme_handler.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/constants.h"
@@ -185,12 +185,11 @@ std::set<base::FilePath> ChromeExtensionsClient::GetBrowserImagePaths(
       ExtensionsClient::GetBrowserImagePaths(extension);
 
   // Theme images
-  const base::DictionaryValue* theme_images = ThemeInfo::GetImages(extension);
+  const base::Value::Dict* theme_images = ThemeInfo::GetImages(extension);
   if (theme_images) {
-    for (const auto item : theme_images->GetDict()) {
-      if (item.second.is_string())
-        image_paths.insert(
-            base::FilePath::FromUTF8Unsafe(item.second.GetString()));
+    for (const auto [key, value] : *theme_images) {
+      if (value.is_string())
+        image_paths.insert(base::FilePath::FromUTF8Unsafe(value.GetString()));
     }
   }
 

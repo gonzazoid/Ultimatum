@@ -7,11 +7,14 @@
 
 #include <stdint.h>
 
+#include <optional>
+#include <set>
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ref.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "content/browser/aggregation_service/aggregation_service.h"
@@ -20,7 +23,6 @@
 #include "content/public/browser/storage_partition.h"
 #include "sql/database.h"
 #include "sql/meta_table.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -31,6 +33,10 @@ class Clock;
 namespace sql {
 class Statement;
 }  // namespace sql
+
+namespace url {
+class Origin;
+}  // namespace url
 
 namespace content {
 
@@ -74,15 +80,15 @@ class CONTENT_EXPORT AggregationServiceStorageSql
   void UpdateReportForSendFailure(
       AggregationServiceStorage::RequestId request_id,
       base::Time new_report_time) override;
-  absl::optional<base::Time> NextReportTimeAfter(
+  std::optional<base::Time> NextReportTimeAfter(
       base::Time strictly_after_time) override;
   std::vector<AggregationServiceStorage::RequestAndId>
   GetRequestsReportingOnOrBefore(
       base::Time not_after_time,
-      absl::optional<int> limit = absl::nullopt) override;
+      std::optional<int> limit = std::nullopt) override;
   std::vector<AggregationServiceStorage::RequestAndId> GetRequests(
       const std::vector<AggregationServiceStorage::RequestId>& ids) override;
-  absl::optional<base::Time> AdjustOfflineReportTimes(
+  std::optional<base::Time> AdjustOfflineReportTimes(
       base::Time now,
       base::TimeDelta min_delay,
       base::TimeDelta max_delay) override;
@@ -90,6 +96,7 @@ class CONTENT_EXPORT AggregationServiceStorageSql
       base::Time delete_begin,
       base::Time delete_end,
       StoragePartition::StorageKeyMatcherFunction filter) override;
+  std::set<url::Origin> GetReportRequestReportingOrigins() override;
 
   void set_ignore_errors_for_testing(bool ignore_for_testing)
       VALID_CONTEXT_REQUIRED(sequence_checker_) {
@@ -153,7 +160,7 @@ class CONTENT_EXPORT AggregationServiceStorageSql
   bool DeleteRequestImpl(RequestId request_id)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<base::Time> NextReportTimeAfterImpl(
+  std::optional<base::Time> NextReportTimeAfterImpl(
       base::Time strictly_after_time) VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   // Clears the report requests that were stored between `delete_begin` and
@@ -198,7 +205,7 @@ class CONTENT_EXPORT AggregationServiceStorageSql
   // This is an empty FilePath if the database is being stored in-memory.
   const base::FilePath path_to_database_;
 
-  const base::Clock& clock_;
+  const raw_ref<const base::Clock> clock_;
 
   // No more report requests with the same reporting origin can be stored in the
   // database than this. Any additional requests attempted to be stored will
@@ -209,8 +216,7 @@ class CONTENT_EXPORT AggregationServiceStorageSql
   // at for lazy initialization, and used as a signal for if the database is
   // closed. This is initialized in the first call to EnsureDatabaseOpen() to
   // avoid doing additional work in the constructor.
-  absl::optional<DbStatus> db_init_status_
-      GUARDED_BY_CONTEXT(sequence_checker_);
+  std::optional<DbStatus> db_init_status_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   sql::Database db_ GUARDED_BY_CONTEXT(sequence_checker_);
 

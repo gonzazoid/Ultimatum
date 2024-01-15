@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_OUTPUT_DELEGATE_IMPL_H_
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_OUTPUT_DELEGATE_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/libassistant/public/mojom/audio_output_delegate.mojom.h"
 
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -23,6 +24,7 @@ class AudioOutputDelegateImpl
   ~AudioOutputDelegateImpl() override;
 
   void Bind(mojo::PendingReceiver<AudioOutputDelegate> pending_receiver);
+  void Stop();
 
   // libassistant::mojom::AudioOutputDelegate implementation:
   void RequestAudioFocus(
@@ -34,7 +36,7 @@ class AudioOutputDelegateImpl
 
  private:
   mojo::Receiver<AudioOutputDelegate> receiver_{this};
-  AssistantMediaSession* const media_session_;
+  const raw_ptr<AssistantMediaSession> media_session_;
 };
 
 }  // namespace ash::assistant

@@ -4,9 +4,9 @@
 
 #include "components/security_interstitials/content/ssl_error_navigation_throttle.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/security_interstitials/content/security_interstitial_controller_client.h"
 #include "components/security_interstitials/content/security_interstitial_page.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
@@ -29,16 +29,6 @@ CreateMetricsHelperForTest(const GURL& request_url) {
   return std::make_unique<security_interstitials::MetricsHelper>(
       request_url, report_details, /*history_service=*/nullptr);
 }
-
-// A minimal SSLCertReporter implementation.
-class FakeSSLCertReporter : public SSLCertReporter {
- public:
-  void ReportInvalidCertificateChain(
-      const std::string& serialized_report) override {
-    // Reports are not expected to be sent in this context.
-    NOTREACHED();
-  }
-};
 
 // A SecurityInterstitialPage implementation that does the minimum necessary
 // to satisfy SSLErrorNavigationThrottle's expectations of the instance passed
@@ -91,14 +81,13 @@ void MockHandleSSLError(
     int cert_error,
     const net::SSLInfo& ssl_info,
     const GURL& request_url,
-    std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
     base::OnceCallback<
         void(std::unique_ptr<security_interstitials::SecurityInterstitialPage>)>
         blocking_page_ready_callback) {
   auto blocking_page = std::make_unique<FakeSSLBlockingPage>(
       web_contents, cert_error, ssl_info, request_url);
   if (async) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(blocking_page_ready_callback),
                                   std::move(blocking_page)));
   } else {
@@ -124,7 +113,6 @@ class TestSSLErrorNavigationThrottle : public SSLErrorNavigationThrottle {
           on_cancel_deferred_navigation)
       : SSLErrorNavigationThrottle(
             handle,
-            std::make_unique<FakeSSLCertReporter>(),
             base::BindOnce(&MockHandleSSLError, async_handle_ssl_error),
             base::BindOnce(&IsInHostedApp),
             base::BindOnce(

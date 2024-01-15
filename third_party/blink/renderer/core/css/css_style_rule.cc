@@ -21,6 +21,7 @@
 
 #include "third_party/blink/renderer/core/css/css_style_rule.h"
 
+#include "third_party/blink/renderer/core/css/css_grouping_rule.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css/css_rule_list.h"
 #include "third_party/blink/renderer/core/css/css_selector.h"
@@ -87,12 +88,17 @@ void CSSStyleRule::setSelectorText(const ExecutionContext* execution_context,
   StyleSheetContents* parent_contents =
       parentStyleSheet() ? parentStyleSheet()->Contents() : nullptr;
   HeapVector<CSSSelector> arena;
-  base::span<CSSSelector> selector_vector =
-      CSSParser::ParseSelector(context,
-                               /*parent_rule_for_nesting=*/nullptr,
-                               parent_contents, selector_text, arena);
-  if (selector_vector.empty())
+  StyleRule* parent_rule_for_nesting =
+      FindClosestParentStyleRuleOrNull(parentRule());
+  CSSNestingType nesting_type = parent_rule_for_nesting
+                                    ? CSSNestingType::kNesting
+                                    : CSSNestingType::kNone;
+  base::span<CSSSelector> selector_vector = CSSParser::ParseSelector(
+      context, nesting_type, parent_rule_for_nesting, /*is_within_scope=*/false,
+      parent_contents, selector_text, arena);
+  if (selector_vector.empty()) {
     return;
+  }
 
   StyleRule* new_style_rule =
       StyleRule::Create(selector_vector, std::move(*style_rule_));
@@ -168,8 +174,9 @@ String CSSStyleRule::cssText() const {
 void CSSStyleRule::Reattach(StyleRuleBase* rule) {
   DCHECK(rule);
   style_rule_ = To<StyleRule>(rule);
-  if (properties_cssom_wrapper_)
+  if (properties_cssom_wrapper_) {
     properties_cssom_wrapper_->Reattach(style_rule_->MutableProperties());
+  }
   for (unsigned i = 0; i < child_rule_cssom_wrappers_.size(); ++i) {
     if (child_rule_cssom_wrappers_[i]) {
       child_rule_cssom_wrappers_[i]->Reattach(
@@ -196,8 +203,9 @@ unsigned CSSStyleRule::length() const {
 }
 
 CSSRule* CSSStyleRule::Item(unsigned index) const {
-  if (index >= length())
+  if (index >= length()) {
     return nullptr;
+  }
   DCHECK_EQ(child_rule_cssom_wrappers_.size(),
             style_rule_->ChildRules()->size());
   Member<CSSRule>& rule = child_rule_cssom_wrappers_[index];
@@ -268,8 +276,9 @@ void CSSStyleRule::deleteRule(unsigned index, ExceptionState& exception_state) {
 
   style_rule_->WrapperRemoveRule(index);
 
-  if (child_rule_cssom_wrappers_[index])
+  if (child_rule_cssom_wrappers_[index]) {
     child_rule_cssom_wrappers_[index]->SetParentRule(nullptr);
+  }
   child_rule_cssom_wrappers_.EraseAt(index);
 }
 

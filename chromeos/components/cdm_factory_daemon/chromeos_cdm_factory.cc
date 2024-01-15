@@ -7,12 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/unguessable_token.h"
 #include "chromeos/components/cdm_factory_daemon/cdm_storage_adapter.h"
 #include "chromeos/components/cdm_factory_daemon/content_decryption_module_adapter.h"
@@ -75,14 +77,6 @@ void CreateFactoryOnTaskRunner(
   GetBrowserCdmFactoryRemote()->CreateFactory(key_system, std::move(callback));
 }
 
-void CreateFactoryCallback(
-    scoped_refptr<base::SingleThreadTaskRunner> runner,
-    cdm::mojom::BrowserCdmFactory::CreateFactoryCallback callback,
-    mojo::PendingRemote<cdm::mojom::CdmFactory> remote_factory) {
-  runner->PostTask(FROM_HERE, base::BindOnce(std::move(callback),
-                                             std::move(remote_factory)));
-}
-
 void GetOutputProtectionOnTaskRunner(
     mojo::PendingReceiver<cdm::mojom::OutputProtection> output_protection) {
   GetBrowserCdmFactoryRemote()->GetOutputProtection(
@@ -103,7 +97,7 @@ class SingletonCdmContextRef : public media::CdmContextRef {
   }
 
  private:
-  media::CdmContext* cdm_context_;
+  raw_ptr<media::CdmContext> cdm_context_;
 };
 
 void GetHwKeyDataProxy(const std::string& key_id,
@@ -147,6 +141,18 @@ class ArcCdmContext : public ChromeOsCdmContext, public media::CdmContext {
   }
   bool UsingArcCdm() const override { return true; }
   bool IsRemoteCdm() const override { return true; }
+  void AllocateSecureBuffer(uint32_t size,
+                            AllocateSecureBufferCB callback) override {
+    ChromeOsCdmFactory::AllocateSecureBuffer(size, std::move(callback));
+  }
+  void ParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ParseEncryptedSliceHeaderCB callback) override {
+    ChromeOsCdmFactory::ParseEncryptedSliceHeader(
+        secure_handle, offset, stream_data, std::move(callback));
+  }
 
   // media::CdmContext implementation.
   ChromeOsCdmContext* GetChromeOsCdmContext() override { return this; }
@@ -171,7 +177,7 @@ ChromeOsCdmFactory::GetBrowserCdmFactoryReceiver() {
   auto receiver = browser_proxy.InitWithNewPipeAndPassReceiver();
   GetBrowserCdmFactoryRemote().Bind(std::move(browser_proxy));
 
-  GetFactoryTaskRunner() = base::SequencedTaskRunnerHandle::Get();
+  GetFactoryTaskRunner() = base::SequencedTaskRunner::GetCurrentDefault();
   return receiver;
 }
 
@@ -223,13 +229,44 @@ void ChromeOsCdmFactory::GetScreenResolutions(
   GetBrowserCdmFactoryRemote()->GetScreenResolutions(std::move(callback));
 }
 
+// static
+void ChromeOsCdmFactory::AllocateSecureBuffer(
+    uint32_t size,
+    ChromeOsCdmContext::AllocateSecureBufferCB callback) {
+  if (!GetFactoryTaskRunner()->RunsTasksInCurrentSequence()) {
+    GetFactoryTaskRunner()->PostTask(
+        FROM_HERE, base::BindOnce(&ChromeOsCdmFactory::AllocateSecureBuffer,
+                                  size, std::move(callback)));
+    return;
+  }
+  GetBrowserCdmFactoryRemote()->AllocateSecureBuffer(size, std::move(callback));
+}
+
+// static
+void ChromeOsCdmFactory::ParseEncryptedSliceHeader(
+    uint64_t secure_handle,
+    uint32_t offset,
+    const std::vector<uint8_t>& stream_data,
+    ChromeOsCdmContext::ParseEncryptedSliceHeaderCB callback) {
+  if (!GetFactoryTaskRunner()->RunsTasksInCurrentSequence()) {
+    GetFactoryTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&ChromeOsCdmFactory::ParseEncryptedSliceHeader,
+                       secure_handle, offset, stream_data,
+                       std::move(callback)));
+    return;
+  }
+  GetBrowserCdmFactoryRemote()->ParseEncryptedSliceHeader(
+      secure_handle, offset, stream_data, std::move(callback));
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // static
 void ChromeOsCdmFactory::SetBrowserCdmFactoryRemote(
     mojo::Remote<cdm::mojom::BrowserCdmFactory> remote) {
   GetBrowserCdmFactoryRemoteHolder().ReplaceBrowserCdmFactoryRemote(
       std::move(remote));
-  GetFactoryTaskRunner() = base::SequencedTaskRunnerHandle::Get();
+  GetFactoryTaskRunner() = base::SequencedTaskRunner::GetCurrentDefault();
 }
 
 // static
@@ -250,7 +287,7 @@ void ChromeOsCdmFactory::OnVerifiedAccessEnabled(
   if (!enabled) {
     DVLOG(1)
         << "Not using Chrome OS CDM factory due to Verified Access disabled";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cdm_created_cb), nullptr,
                                   "Verified Access is disabled."));
     return;
@@ -265,13 +302,11 @@ void ChromeOsCdmFactory::OnVerifiedAccessEnabled(
         FROM_HERE,
         base::BindOnce(
             &CreateFactoryOnTaskRunner, cdm_config.key_system,
-            base::BindOnce(
-                &CreateFactoryCallback, base::ThreadTaskRunnerHandle::Get(),
-                base::BindOnce(
-                    &ChromeOsCdmFactory::OnCreateFactory,
-                    weak_factory_.GetWeakPtr(), cdm_config, session_message_cb,
-                    session_closed_cb, session_keys_change_cb,
-                    session_expiration_update_cb, std::move(cdm_created_cb)))));
+            base::BindPostTaskToCurrentDefault(base::BindOnce(
+                &ChromeOsCdmFactory::OnCreateFactory,
+                weak_factory_.GetWeakPtr(), cdm_config, session_message_cb,
+                session_closed_cb, session_keys_change_cb,
+                session_expiration_update_cb, std::move(cdm_created_cb)))));
     return;
   }
 
@@ -294,7 +329,7 @@ void ChromeOsCdmFactory::OnCreateFactory(
   DVLOG(1) << __func__;
   if (!remote_factory) {
     LOG(ERROR) << "Failed creating the remote CDM factory";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cdm_created_cb), nullptr,
                                   "Remote factory creation failed."));
     return;
@@ -359,7 +394,7 @@ void ChromeOsCdmFactory::CreateCdm(
                              base::UnguessableToken::Create().ToString(),
                              std::move(cros_cdm_pending_receiver));
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(cdm_created_cb), std::move(cdm), ""));
 }
 

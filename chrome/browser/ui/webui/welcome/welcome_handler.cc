@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/webui/welcome/welcome_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "chrome/browser/profiles/profile.h"
@@ -12,7 +12,6 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
-#include "chrome/browser/ui/profile_chooser_constants.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
 #include "chrome/common/url_constants.h"
 #include "components/signin/public/base/signin_metrics.h"
@@ -41,8 +40,6 @@ WelcomeHandler::~WelcomeHandler() {
   signin_metrics::RecordSigninImpressionUserActionForAccessPoint(
       signin_metrics::AccessPoint::ACCESS_POINT_START_PAGE);
 
-  UMA_HISTOGRAM_ENUMERATION("Welcome.SignInPromptResult", result_,
-                            WelcomeResult::WELCOME_RESULT_MAX);
 }
 
 bool WelcomeHandler::isValidRedirectUrl() {
@@ -64,7 +61,7 @@ void WelcomeHandler::HandleActivateSignIn(const base::Value::List& args) {
     // them away to the NTP instead.
     GoToNewTabPage();
   } else {
-    GURL redirect_url = GURL::EmptyGURL();
+    GURL redirect_url(chrome::kChromeUINewTabURL);
     if (args.size() == 1U) {
       const std::string& url_string = args[0].GetString();
       redirect_url = GURL(url_string);
@@ -73,7 +70,6 @@ void WelcomeHandler::HandleActivateSignIn(const base::Value::List& args) {
 
     Browser* browser = GetBrowser();
     browser->signin_view_controller()->ShowSignin(
-        profiles::BubbleViewMode::BUBBLE_VIEW_MODE_GAIA_SIGNIN,
         signin_metrics::AccessPoint::ACCESS_POINT_START_PAGE, redirect_url);
   }
 }
@@ -116,7 +112,7 @@ Browser* WelcomeHandler::GetBrowser() {
   DCHECK(web_ui());
   content::WebContents* contents = web_ui()->GetWebContents();
   DCHECK(contents);
-  Browser* browser = chrome::FindBrowserWithWebContents(contents);
+  Browser* browser = chrome::FindBrowserWithTab(contents);
   DCHECK(browser);
   return browser;
 }

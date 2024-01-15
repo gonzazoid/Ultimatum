@@ -10,9 +10,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
@@ -199,7 +200,7 @@ class ImpressionHistoryTrackerImpl : public ImpressionHistoryTracker {
   std::unique_ptr<CollectionStore<ClientState>> store_;
 
   // System configuration.
-  const SchedulerConfig& config_;
+  const raw_ref<const SchedulerConfig, DanglingUntriaged> config_;
 
   const std::vector<SchedulerClientType> registered_clients_;
 
@@ -213,7 +214,7 @@ class ImpressionHistoryTrackerImpl : public ImpressionHistoryTracker {
   raw_ptr<base::Clock> clock_;
 
   // Delegate object.
-  raw_ptr<Delegate> delegate_;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;
 
   base::WeakPtrFactory<ImpressionHistoryTrackerImpl> weak_ptr_factory_{this};
 };

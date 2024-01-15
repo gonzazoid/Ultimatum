@@ -19,6 +19,19 @@
 
 namespace blink {
 
+// Note: these must match the values in renderer_preferences.mojom.
+constexpr uint32_t kDefaultActiveSelectionBgColor = 0xFF1967D2;
+#if BUILDFLAG(IS_ANDROID)
+// See crbug.com/1445053, but on Android, the selection background color is
+// not used, and a much lighter shade of blue is used instead. Therefore, the
+// foreground color needs to be dark/black to ensure contrast.
+constexpr uint32_t kDefaultActiveSelectionFgColor = 0xFF000000;
+#else
+constexpr uint32_t kDefaultActiveSelectionFgColor = 0xFFFFFFFF;
+#endif
+constexpr uint32_t kDefaultInactiveSelectionBgColor = 0xFFC8C8C8;
+constexpr uint32_t kDefaultInactiveSelectionFgColor = 0xFF323232;
+
 // User preferences passed between the browser and renderer processes.
 // See //third_party/blink/public/mojom/renderer_preferences.mojom for a
 // description of what each field is about.
@@ -32,10 +45,10 @@ struct BLINK_COMMON_EXPORT RendererPreferences {
       gfx::FontRenderParams::SUBPIXEL_RENDERING_NONE};
   bool use_subpixel_positioning{false};
   uint32_t focus_ring_color{0xFFE59700};
-  uint32_t active_selection_bg_color{0xFF1E90FF};
-  uint32_t active_selection_fg_color{0xFFFFFFFF};
-  uint32_t inactive_selection_bg_color{0xFFC8C8C8};
-  uint32_t inactive_selection_fg_color{0xFF323232};
+  uint32_t active_selection_bg_color{kDefaultActiveSelectionBgColor};
+  uint32_t active_selection_fg_color{kDefaultActiveSelectionFgColor};
+  uint32_t inactive_selection_bg_color{kDefaultInactiveSelectionBgColor};
+  uint32_t inactive_selection_fg_color{kDefaultInactiveSelectionFgColor};
   bool browser_handles_all_top_level_requests{false};
   absl::optional<base::TimeDelta> caret_blink_interval;
   bool use_custom_colors{true};
@@ -47,9 +60,9 @@ struct BLINK_COMMON_EXPORT RendererPreferences {
   uint16_t webrtc_udp_min_port{0};
   uint16_t webrtc_udp_max_port{0};
   std::vector<std::string> webrtc_local_ips_allowed_urls;
-  bool webrtc_allow_legacy_tls_protocols{false};
   UserAgentOverride user_agent_override;
   std::string accept_languages;
+  bool send_subresource_notification{false};
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   std::string system_font_family_name;
 #endif
@@ -69,7 +82,7 @@ struct BLINK_COMMON_EXPORT RendererPreferences {
   int32_t arrow_bitmap_height_vertical_scroll_bar_in_dips{0};
   int32_t arrow_bitmap_width_horizontal_scroll_bar_in_dips{0};
 #endif
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   bool selection_clipboard_buffer_available{false};
 #endif
   bool plugin_fullscreen_allowed{true};

@@ -21,6 +21,13 @@
 - (void)showControlButtons;
 - (void)hideControlButtons;
 
+// Changes related to the location bar height matching the fakebox height.
+- (void)setLocationBarHeightToMatchFakeOmnibox;
+- (void)setLocationBarHeightExpanded;
+
+// Changes related to the toolbar itself.
+- (void)setToolbarFaded:(BOOL)faded;
+
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_ORCHESTRATOR_TOOLBAR_ANIMATEE_H_

@@ -4,16 +4,15 @@
 
 #include "chrome/browser/chromeos/extensions/vpn_provider/vpn_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/chromeos/extensions/vpn_provider/vpn_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/event_router_factory.h"
 #include "extensions/browser/extensions_browser_client.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #endif
 
 namespace {
@@ -30,8 +29,8 @@ bool IsContextForMainProfile(content::BrowserContext* context) {
   std::string user_hash =
       extensions::ExtensionsBrowserClient::Get()->GetUserIdHashFromContext(
           context);
-  if (!chromeos::LoginState::IsInitialized() ||
-      user_hash != chromeos::LoginState::Get()->primary_user_hash()) {
+  if (!ash::LoginState::IsInitialized() ||
+      user_hash != ash::LoginState::Get()->primary_user_hash()) {
     return false;
   }
 #endif
@@ -52,13 +51,19 @@ VpnServiceInterface* VpnServiceFactory::GetForBrowserContext(
 
 // static
 VpnServiceFactory* VpnServiceFactory::GetInstance() {
-  return base::Singleton<VpnServiceFactory>::get();
+  static base::NoDestructor<VpnServiceFactory> instance;
+  return instance.get();
 }
 
 VpnServiceFactory::VpnServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "VpnService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(extensions::EventRouterFactory::GetInstance());
 }
 

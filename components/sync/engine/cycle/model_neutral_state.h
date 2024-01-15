@@ -6,7 +6,7 @@
 #define COMPONENTS_SYNC_ENGINE_CYCLE_MODEL_NEUTRAL_STATE_H_
 
 #include "components/sync/base/model_type.h"
-#include "components/sync/base/syncer_error.h"
+#include "components/sync/engine/syncer_error.h"
 
 namespace syncer {
 
@@ -23,26 +23,26 @@ struct ModelNeutralState {
   // server.
   ModelTypeSet updated_types;
 
-  int num_successful_commits;
+  int num_successful_commits = 0;
 
   // This is needed for monitoring extensions activity.
-  int num_successful_bookmark_commits;
+  int num_successful_bookmark_commits = 0;
 
   // Download event counters.
-  int num_updates_downloaded_total;
-  int num_tombstone_updates_downloaded_total;
+  int num_updates_downloaded_total = 0;
+  int num_tombstone_updates_downloaded_total = 0;
 
   // Update application and conflicts.
-  int num_server_conflicts;
+  int num_server_conflicts = 0;
 
   // Records the most recent results of GetKey, PostCommit and GetUpdates
   // commands.
-  SyncerError last_get_key_result;
-  SyncerError last_download_updates_result;
-  SyncerError commit_result;
+  bool last_get_key_failed = false;
+  SyncerError last_download_updates_result = SyncerError::Success();
+  SyncerError commit_result = SyncerError::Success();
 
   // Set to true by PostCommitMessageCommand if any commits were successful.
-  bool items_committed;
+  bool items_committed = false;
 };
 
 bool HasSyncerError(const ModelNeutralState& state);

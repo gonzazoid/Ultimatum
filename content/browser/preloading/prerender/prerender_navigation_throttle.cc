@@ -5,6 +5,9 @@
 #include "content/browser/preloading/prerender/prerender_navigation_throttle.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/no_destructor.h"
+#include "base/strings/string_split.h"
+#include "content/browser/preloading/prerender/prerender_features.h"
 #include "content/browser/preloading/prerender/prerender_final_status.h"
 #include "content/browser/preloading/prerender/prerender_host.h"
 #include "content/browser/preloading/prerender/prerender_host_registry.h"
@@ -14,7 +17,8 @@
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/render_frame_host_delegate.h"
-#include "content/public/browser/prerender_trigger_type.h"
+#include "content/public/browser/preloading_trigger_type.h"
+#include "content/public/common/content_features.h"
 #include "services/network/public/mojom/parsed_headers.mojom.h"
 #include "third_party/blink/public/common/features.h"
 #include "url/origin.h"
@@ -28,18 +32,18 @@ namespace {
 void AnalyzeCrossOriginRedirection(
     const url::Origin& current_origin,
     const url::Origin& initial_origin,
-    PrerenderTriggerType trigger_type,
+    PreloadingTriggerType trigger_type,
     const std::string& embedder_histogram_suffix) {
-  DCHECK_NE(initial_origin, current_origin);
-  DCHECK_EQ(trigger_type, PrerenderTriggerType::kEmbedder);
-  DCHECK(current_origin.GetURL().SchemeIsHTTPOrHTTPS());
-  DCHECK(initial_origin.GetURL().SchemeIsHTTPOrHTTPS());
+  CHECK_NE(initial_origin, current_origin);
+  CHECK_EQ(trigger_type, PreloadingTriggerType::kEmbedder);
+  CHECK(current_origin.GetURL().SchemeIsHTTPOrHTTPS());
+  CHECK(initial_origin.GetURL().SchemeIsHTTPOrHTTPS());
 
   std::bitset<3> bits;
   bits[2] = current_origin.scheme() != initial_origin.scheme();
   bits[1] = current_origin.host() != initial_origin.host();
   bits[0] = current_origin.port() != initial_origin.port();
-  DCHECK(bits.any());
+  CHECK(bits.any());
   auto mismatch_type =
       static_cast<PrerenderCrossOriginRedirectionMismatch>(bits.to_ulong());
 
@@ -57,19 +61,32 @@ void AnalyzeCrossOriginRedirection(
         trigger_type, embedder_histogram_suffix);
     return;
   }
-  if (mismatch_type == PrerenderCrossOriginRedirectionMismatch::kHostMismatch) {
-    if (current_origin.DomainIs(initial_origin.host())) {
-      RecordPrerenderRedirectionDomain(
-          PrerenderCrossOriginRedirectionDomain::kRedirectToSubDomain,
-          trigger_type, embedder_histogram_suffix);
-      return;
-    }
-    RecordPrerenderRedirectionDomain(
-        initial_origin.DomainIs(current_origin.host())
-            ? PrerenderCrossOriginRedirectionDomain::kRedirectFromSubDomain
-            : PrerenderCrossOriginRedirectionDomain::kCrossDomain,
-        trigger_type, embedder_histogram_suffix);
-  }
+}
+
+// This is deprecated in favor of kPrerender2EmbedderBlockedHosts. See
+// https://crbug.com/1509271.
+//
+// Prerender2 Embedders trigger based on rules decided by the browser. Prevent
+// the browser from triggering on the hosts listed.
+// Blocked hosts are expected to be passed as a comma separated string.
+// e.g. example1.test,example2.test
+const base::FeatureParam<std::string> kPrerender2EmbedderBlockedHostsDeprecated{
+    &blink::features::kPrerender2, "embedder_blocked_hosts", ""};
+
+bool ShouldSkipHostInBlockList(const GURL& url) {
+  // Keep this as static because the blocked origins are served via feature
+  // parameters and are never changed until browser restart.
+  const static base::NoDestructor<std::vector<std::string>>
+      embedder_blocked_hosts(base::SplitString(
+          features::kPrerender2EmbedderBlockedHostsParam.Get(), ",",
+          base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY));
+  const static base::NoDestructor<std::vector<std::string>>
+      embedder_blocked_hosts_deprecated(base::SplitString(
+          kPrerender2EmbedderBlockedHostsDeprecated.Get(), ",",
+          base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY));
+
+  return base::Contains(*embedder_blocked_hosts, url.host()) ||
+         base::Contains(*embedder_blocked_hosts_deprecated, url.host());
 }
 
 }  // namespace
@@ -82,15 +99,9 @@ PrerenderNavigationThrottle::MaybeCreateThrottleFor(
     NavigationHandle* navigation_handle) {
   auto* navigation_request = NavigationRequest::From(navigation_handle);
   FrameTreeNode* frame_tree_node = navigation_request->frame_tree_node();
-  if (frame_tree_node->IsMainFrame() &&
-      frame_tree_node->frame_tree()->is_prerendering()) {
-    DCHECK(blink::features::IsPrerender2Enabled());
-
-    PrerenderHost* prerender_host =
-        static_cast<PrerenderHost*>(frame_tree_node->frame_tree()->delegate());
-    DCHECK(prerender_host);
-
-    return base::WrapUnique(new PrerenderNavigationThrottle(navigation_handle));
+  if (frame_tree_node->GetFrameType() == FrameType::kPrerenderMainFrame) {
+    return base::WrapUnique(
+        new PrerenderNavigationThrottle(navigation_request));
   }
   return nullptr;
 }
@@ -110,120 +121,167 @@ PrerenderNavigationThrottle::WillRedirectRequest() {
 }
 
 PrerenderNavigationThrottle::PrerenderNavigationThrottle(
-    NavigationHandle* navigation_handle)
-    : NavigationThrottle(navigation_handle) {
-  auto* navigation_request = NavigationRequest::From(navigation_handle);
-  PrerenderHost* prerender_host = static_cast<PrerenderHost*>(
-      navigation_request->frame_tree_node()->frame_tree()->delegate());
-  DCHECK(prerender_host);
+    NavigationRequest* navigation_request)
+    : NavigationThrottle(navigation_request),
+      prerender_host_(static_cast<PrerenderHost*>(
+          navigation_request->frame_tree_node()->frame_tree().delegate())) {
+  CHECK(prerender_host_);
 
   // This throttle is responsible for setting the initial navigation id on the
   // PrerenderHost, since the PrerenderHost obtains the NavigationRequest,
   // which has the ID, only after the navigation throttles run.
-  if (prerender_host->GetInitialNavigationId().has_value()) {
+  if (prerender_host_->GetInitialNavigationId().has_value()) {
     // If the host already has an initial navigation id, this throttle
     // will later cancel the navigation in Will*Request(). Just do nothing
     // until then.
   } else {
-    prerender_host->SetInitialNavigation(
-        static_cast<NavigationRequest*>(navigation_handle));
+    prerender_host_->SetInitialNavigation(navigation_request);
   }
 }
 
 NavigationThrottle::ThrottleCheckResult
 PrerenderNavigationThrottle::WillStartOrRedirectRequest(bool is_redirection) {
-  DCHECK(blink::features::IsPrerender2Enabled());
+  GURL navigation_url = navigation_handle()->GetURL();
+  url::Origin navigation_origin = url::Origin::Create(navigation_url);
+  url::Origin initial_prerendering_origin =
+      url::Origin::Create(prerender_host_->GetInitialUrl());
 
-  // Take the root frame tree node of the prerendering page.
-  auto* navigation_request = NavigationRequest::From(navigation_handle());
-  FrameTreeNode* frame_tree_node = navigation_request->frame_tree_node();
-  DCHECK(frame_tree_node->IsMainFrame());
-  DCHECK(frame_tree_node->frame_tree()->is_prerendering());
+  // Reset the flags that should be calculated every time redirction happens.
+  is_same_site_cross_origin_prerender_ = false;
+  same_site_cross_origin_prerender_did_redirect_ = false;
 
-  PrerenderHostRegistry* prerender_host_registry =
-      frame_tree_node->current_frame_host()
-          ->delegate()
-          ->GetPrerenderHostRegistry();
-
-  // Get the prerender host of the prerendering page.
-  PrerenderHost* prerender_host =
-      static_cast<PrerenderHost*>(frame_tree_node->frame_tree()->delegate());
-  DCHECK(prerender_host);
-
-  // Navigations after the initial prerendering navigation are disallowed.
-  if (*prerender_host->GetInitialNavigationId() !=
-      navigation_request->GetNavigationId()) {
-    prerender_host_registry->CancelHost(
-        frame_tree_node->frame_tree_node_id(),
-        PrerenderFinalStatus::kMainFrameNavigation);
+  if (prerender_host_->IsBrowserInitiated() &&
+      ShouldSkipHostInBlockList(navigation_url)) {
+    CancelPrerendering(PrerenderFinalStatus::kEmbedderHostDisallowed);
     return CANCEL;
   }
 
   // Allow only HTTP(S) schemes.
   // https://wicg.github.io/nav-speculation/prerendering.html#no-bad-navs
-  GURL prerendering_url = navigation_handle()->GetURL();
-  if (!prerendering_url.SchemeIsHTTPOrHTTPS()) {
-    prerender_host_registry->CancelHost(
-        frame_tree_node->frame_tree_node_id(),
-        is_redirection ? PrerenderFinalStatus::kInvalidSchemeRedirect
-                       : PrerenderFinalStatus::kInvalidSchemeNavigation);
+  if (!navigation_url.SchemeIsHTTPOrHTTPS()) {
+    if (is_redirection) {
+      CancelPrerendering(PrerenderFinalStatus::kInvalidSchemeRedirect);
+    } else {
+      // For non-redirected initial navigation, this should be checked in
+      // PrerenderHostRegistry::CreateAndStartHost().
+      CHECK(!IsInitialNavigation());
+      CancelPrerendering(PrerenderFinalStatus::kInvalidSchemeNavigation);
+    }
     return CANCEL;
   }
 
-  url::Origin prerendering_origin = url::Origin::Create(prerendering_url);
-  if (!prerender_host->IsBrowserInitiated() &&
-      prerendering_origin == prerender_host->initiator_origin()) {
-    is_same_site_cross_origin_prerender_ =
-        same_site_cross_origin_prerender_did_redirect_ = false;
+  // Disallow all pages that have an effective URL like hosted apps and NTP.
+  auto* browser_context =
+      navigation_handle()->GetStartingSiteInstance()->GetBrowserContext();
+  if (SiteInstanceImpl::HasEffectiveURL(browser_context, navigation_url)) {
+    CancelPrerendering(
+        is_redirection
+            ? PrerenderFinalStatus::kRedirectedPrerenderingUrlHasEffectiveUrl
+            : PrerenderFinalStatus::kPrerenderingUrlHasEffectiveUrl);
+    return CANCEL;
   }
 
-  if (prerender_host->IsBrowserInitiated()) {
-    // Cancel an embedder triggered prerendering if it is redirected to a URL
-    // cross-origin to the initial prerendering URL.
-    if (is_redirection) {
-      url::Origin initial_origin =
-          url::Origin::Create(prerender_host->GetInitialUrl());
-      if (initial_origin != prerendering_origin) {
+  // Origin checks for the navigation (redirection), which varies depending on
+  // whether the navigation is initial one or not.
+  if (IsInitialNavigation()) {
+    // Origin checks for initial prerendering navigation (redirection).
+    //
+    // For non-embedder triggered prerendering, compare the origin of the
+    // initiator URL to the origin of navigation (redirection) URL.
+    //
+    // For embedder triggered prerendering, there is no initiator page, so
+    // initial prerendering navigation doesn't check origins and instead initial
+    // prerendering redirection compare the origin of initial prerendering URL
+    // to the origin of redirection URL.
+
+    if (prerender_host_->IsBrowserInitiated()) {
+      // Cancel an embedder triggered prerendering if it is redirected to a URL
+      // cross-site to the initial prerendering URL.
+      if (prerender_navigation_utils::IsCrossSite(
+              navigation_url, initial_prerendering_origin)) {
+        // TODO(crbug.com/1456866): Remove this crash key when investigation is
+        // completed.
+        if (!is_redirection) {
+          SCOPED_CRASH_KEY_BOOL("Bug1456866", "scheme",
+                                navigation_origin.scheme() !=
+                                    initial_prerendering_origin.scheme());
+          SCOPED_CRASH_KEY_BOOL(
+              "Bug1456866", "host",
+              navigation_origin.host() != initial_prerendering_origin.host());
+          SCOPED_CRASH_KEY_BOOL(
+              "Bug1456866", "port",
+              navigation_origin.port() != initial_prerendering_origin.port());
+          NOTREACHED_NORETURN();
+        }
         AnalyzeCrossOriginRedirection(
-            prerendering_origin, initial_origin, prerender_host->trigger_type(),
-            prerender_host->embedder_histogram_suffix());
-        prerender_host_registry->CancelHost(
-            frame_tree_node->frame_tree_node_id(),
-            PrerenderFinalStatus::kEmbedderTriggeredAndCrossOriginRedirected);
+            navigation_origin, initial_prerendering_origin,
+            prerender_host_->trigger_type(),
+            prerender_host_->embedder_histogram_suffix());
+        CancelPrerendering(
+            PrerenderFinalStatus::kCrossSiteRedirectInInitialNavigation);
         return CANCEL;
       }
-    }
 
-    // Skip the same-origin check for non-redirected cases as the initiator
-    // origin is nullopt for browser-initiated prerendering.
-    DCHECK(!prerender_host->initiator_origin().has_value());
-  } else if (!prerender_navigation_utils::IsSameSite(
-                 prerendering_url,
-                 prerender_host->initiator_origin().value())) {
-    // TODO(crbug.com/1176054): Once cross-site prerendering is implemented,
-    // we'll need to enforce strict referrer policies
-    // (https://wicg.github.io/nav-speculation/prefetch.html#list-of-sufficiently-strict-speculative-navigation-referrer-policies).
-    //
-    // Cancel prerendering if this is cross-site prerendering, cross-site
-    // redirection during prerendering, or cross-site navigation from a
-    // prerendered page.
-    prerender_host_registry->CancelHost(
-        frame_tree_node->frame_tree_node_id(),
-        is_redirection ? PrerenderFinalStatus::kCrossSiteRedirect
-                       : PrerenderFinalStatus::kCrossSiteNavigation);
-    return CANCEL;
-  } else if (prerendering_origin != prerender_host->initiator_origin()) {
-    if (blink::features::
-            IsSameSiteCrossOriginForSpeculationRulesPrerender2Enabled()) {
+      // Skip the same-site check for non-redirected cases as the initiator
+      // origin is nullopt for browser-initiated prerendering.
+      CHECK(!prerender_host_->initiator_origin().has_value());
+    } else if (prerender_navigation_utils::IsCrossSite(
+                   navigation_url,
+                   prerender_host_->initiator_origin().value())) {
+      // TODO(crbug.com/1176054): Once cross-site prerendering is implemented,
+      // we'll need to enforce strict referrer policies
+      // (https://wicg.github.io/nav-speculation/prefetch.html#list-of-sufficiently-strict-speculative-navigation-referrer-policies).
+      //
+      // Cancel prerendering if this is cross-site prerendering, cross-site
+      // redirection during prerendering, or cross-site navigation from a
+      // prerendered page.
+      CancelPrerendering(
+          is_redirection
+              ? PrerenderFinalStatus::kCrossSiteRedirectInInitialNavigation
+              : PrerenderFinalStatus::kCrossSiteNavigationInInitialNavigation);
+      return CANCEL;
+    } else if (prerender_navigation_utils::IsSameSiteCrossOrigin(
+                   navigation_url,
+                   prerender_host_->initiator_origin().value())) {
+      // Same-site cross-origin prerendering is allowed only when the opt-in
+      // header is specified on response. This will be checked on
+      // WillProcessResponse().
       is_same_site_cross_origin_prerender_ = true;
       same_site_cross_origin_prerender_did_redirect_ = is_redirection;
-    } else {
-      prerender_host_registry->CancelHost(
-          frame_tree_node->frame_tree_node_id(),
-          is_redirection
-              ? PrerenderFinalStatus::kSameSiteCrossOriginRedirect
-              : PrerenderFinalStatus::kSameSiteCrossOriginNavigation);
+    }
+  } else {
+    // Origin checks for the main frame navigation (redirection) happens after
+    // the initial prerendering navigation in a prerendered page. Compare the
+    // origin of the initial prerendering URL to the origin of navigation
+    // (redirection) URL.
+
+    if (!base::FeatureList::IsEnabled(
+            blink::features::kPrerender2MainFrameNavigation)) {
+      // Navigations after the initial prerendering navigation are disallowed
+      // when the kPrerender2MainFrameNavigation feature is disabled.
+      CancelPrerendering(PrerenderFinalStatus::kMainFrameNavigation);
       return CANCEL;
+    }
+
+    // Cross-site navigations after the initial prerendering navigation are
+    // disallowed.
+    if (prerender_navigation_utils::IsCrossSite(navigation_url,
+                                                initial_prerendering_origin)) {
+      CancelPrerendering(
+          is_redirection
+              ? PrerenderFinalStatus::kCrossSiteRedirectInMainFrameNavigation
+              : PrerenderFinalStatus::
+                    kCrossSiteNavigationInMainFrameNavigation);
+      return CANCEL;
+    }
+
+    // Same-site cross-origin prerendering is allowed only when the opt-in
+    // header is specified on response. This will be checked on
+    // WillProcessResponse().
+    if (prerender_navigation_utils::IsSameSiteCrossOrigin(
+            navigation_url, initial_prerendering_origin)) {
+      is_same_site_cross_origin_prerender_ = true;
+      same_site_cross_origin_prerender_did_redirect_ = is_redirection;
     }
   }
 
@@ -233,15 +291,6 @@ PrerenderNavigationThrottle::WillStartOrRedirectRequest(bool is_redirection) {
 NavigationThrottle::ThrottleCheckResult
 PrerenderNavigationThrottle::WillProcessResponse() {
   auto* navigation_request = NavigationRequest::From(navigation_handle());
-
-  FrameTreeNode* frame_tree_node = navigation_request->frame_tree_node();
-  DCHECK(frame_tree_node->IsMainFrame());
-  DCHECK(frame_tree_node->frame_tree()->is_prerendering());
-
-  PrerenderHostRegistry* prerender_host_registry =
-      frame_tree_node->current_frame_host()
-          ->delegate()
-          ->GetPrerenderHostRegistry();
 
   // https://wicg.github.io/nav-speculation/prerendering.html#navigate-fetch-patch
   // "1. If browsingContext is a prerendering browsing context and
@@ -256,16 +305,31 @@ PrerenderNavigationThrottle::WillProcessResponse() {
       base::Contains(
           navigation_request->response()->parsed_headers->supports_loading_mode,
           network::mojom::LoadingMode::kCredentialedPrerender);
-  if (!is_credentialed_prerender && is_same_site_cross_origin_prerender_) {
-    prerender_host_registry->CancelHost(
-        frame_tree_node->frame_tree_node_id(),
-        same_site_cross_origin_prerender_did_redirect_
-            ? PrerenderFinalStatus::kSameSiteCrossOriginRedirectNotOptIn
-            : PrerenderFinalStatus::kSameSiteCrossOriginNavigationNotOptIn);
+  // Cancel prerendering when this is same-site cross-origin navigation but the
+  // opt-in header is not specified.
+  if (is_same_site_cross_origin_prerender_ && !is_credentialed_prerender) {
+    // Calculate the final status for cancellation.
+    PrerenderFinalStatus final_status = PrerenderFinalStatus::kDestroyed;
+    if (IsInitialNavigation()) {
+      final_status =
+          same_site_cross_origin_prerender_did_redirect_
+              ? PrerenderFinalStatus::
+                    kSameSiteCrossOriginRedirectNotOptInInInitialNavigation
+              : PrerenderFinalStatus::
+                    kSameSiteCrossOriginNavigationNotOptInInInitialNavigation;
+    } else {
+      final_status =
+          same_site_cross_origin_prerender_did_redirect_
+              ? PrerenderFinalStatus::
+                    kSameSiteCrossOriginRedirectNotOptInInMainFrameNavigation
+              : PrerenderFinalStatus::
+                    kSameSiteCrossOriginNavigationNotOptInInMainFrameNavigation;
+    }
+    CancelPrerendering(final_status);
     return CANCEL;
   }
 
-  absl::optional<PrerenderFinalStatus> cancel_reason;
+  std::optional<PrerenderFinalStatus> cancel_reason;
 
   // TODO(crbug.com/1318739): Delay until activation instead of cancellation.
   if (navigation_handle()->IsDownload()) {
@@ -278,11 +342,28 @@ PrerenderNavigationThrottle::WillProcessResponse() {
   }
 
   if (cancel_reason.has_value()) {
-    prerender_host_registry->CancelHost(frame_tree_node->frame_tree_node_id(),
-                                        cancel_reason.value());
+    CancelPrerendering(cancel_reason.value());
     return CANCEL;
   }
   return PROCEED;
+}
+
+bool PrerenderNavigationThrottle::IsInitialNavigation() const {
+  return prerender_host_->GetInitialNavigationId() ==
+         navigation_handle()->GetNavigationId();
+}
+
+void PrerenderNavigationThrottle::CancelPrerendering(
+    PrerenderFinalStatus final_status) {
+  auto* navigation_request = NavigationRequest::From(navigation_handle());
+  FrameTreeNode* frame_tree_node = navigation_request->frame_tree_node();
+  CHECK_EQ(frame_tree_node->GetFrameType(), FrameType::kPrerenderMainFrame);
+  PrerenderHostRegistry* prerender_host_registry =
+      frame_tree_node->current_frame_host()
+          ->delegate()
+          ->GetPrerenderHostRegistry();
+  prerender_host_registry->CancelHost(prerender_host_->frame_tree_node_id(),
+                                      final_status);
 }
 
 }  // namespace content

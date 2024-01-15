@@ -3,10 +3,10 @@
 // found in the LICENSE file.
 
 import 'chrome://personalization/strings.m.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
 
 import {AmbientActionName, AmbientModeAlbum, AmbientObserver, emptyState, SetAlbumsAction, TopicSource} from 'chrome://personalization/js/personalization_app.js';
-import {assertDeepEquals, assertEquals} from 'chrome://webui-test/chai_assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 import {baseSetup} from './personalization_app_test_utils.js';
 import {TestAmbientProvider} from './test_ambient_interface_provider.js';
@@ -17,6 +17,7 @@ suite('AmbientObserverTest', function() {
   let personalizationStore: TestPersonalizationStore;
 
   setup(() => {
+    loadTimeData.overrideValues({isAmbientModeAllowed: true});
     const mocks = baseSetup();
     ambientProvider = mocks.ambientProvider;
     personalizationStore = mocks.personalizationStore;
@@ -96,5 +97,60 @@ suite('AmbientObserverTest', function() {
     assertEquals(
         'new-regular-album-url', albums[1]!.url.url,
         'used updated regular album url');
+  });
+});
+
+suite('GooglePhotosPreviewLoadPerformance', () => {
+  let ambientProvider: TestAmbientProvider;
+  let personalizationStore: TestPersonalizationStore;
+
+  setup(() => {
+    const mocks = baseSetup();
+    ambientProvider = mocks.ambientProvider;
+    personalizationStore = mocks.personalizationStore;
+    // Reset the value to always start true in test.
+    AmbientObserver.shouldLogPreviewsLoadPerformance = true;
+    AmbientObserver.initAmbientObserverIfNeeded();
+  });
+
+  teardown(() => {
+    AmbientObserver.shutdown();
+  });
+
+  test('sets to false if ambient mode disabled', async () => {
+    ambientProvider.ambientObserverRemote!.onAmbientModeEnabledChanged(false);
+    personalizationStore.expectAction(
+        AmbientActionName.SET_AMBIENT_MODE_ENABLED);
+    await personalizationStore.waitForAction(
+        AmbientActionName.SET_AMBIENT_MODE_ENABLED);
+    assertFalse(AmbientObserver.shouldLogPreviewsLoadPerformance);
+  });
+
+  test('sets to false if already received preview images', async () => {
+    personalizationStore.data.ambient.previews = [];
+    ambientProvider.ambientObserverRemote!.onPreviewsFetched([]);
+    personalizationStore.expectAction(AmbientActionName.SET_PREVIEWS);
+    await personalizationStore.waitForAction(AmbientActionName.SET_PREVIEWS);
+    assertTrue(
+        AmbientObserver.shouldLogPreviewsLoadPerformance,
+        'still true because no previews stored yet');
+
+    personalizationStore.data.ambient.previews = [
+      {url: 'asdf'},
+    ];
+    ambientProvider.ambientObserverRemote!.onPreviewsFetched([]);
+    personalizationStore.expectAction(AmbientActionName.SET_PREVIEWS);
+    await personalizationStore.waitForAction(AmbientActionName.SET_PREVIEWS);
+    assertFalse(AmbientObserver.shouldLogPreviewsLoadPerformance);
+  });
+
+  test('sets to false after receiving preview images', async () => {
+    personalizationStore.data.ambient.previews = [];
+    ambientProvider.ambientObserverRemote!.onPreviewsFetched([
+      {url: 'asdf'},
+    ]);
+    personalizationStore.expectAction(AmbientActionName.SET_PREVIEWS);
+    await personalizationStore.waitForAction(AmbientActionName.SET_PREVIEWS);
+    assertFalse(AmbientObserver.shouldLogPreviewsLoadPerformance);
   });
 });

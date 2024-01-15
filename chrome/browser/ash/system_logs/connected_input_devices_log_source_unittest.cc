@@ -10,7 +10,7 @@
 
 #include "chrome/browser/ash/system_logs/connected_input_devices_log_source.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "content/public/test/browser_task_environment.h"
@@ -18,6 +18,7 @@
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/devices/device_data_manager_test_api.h"
 #include "ui/events/devices/input_device.h"
+#include "ui/events/devices/touchpad_device.h"
 
 namespace system_logs {
 
@@ -71,7 +72,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single) {
   const uint16_t vid = 0x06cb;
   const uint16_t pid = 0x685f;
 
-  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::InputDevice(
+  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_INTERNAL, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), vid, pid, /*version=*/0)});
 
@@ -89,7 +90,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single) {
   EXPECT_EQ(vendor_name, it->second);
   it = response().find("TOUCHPAD_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -101,10 +102,10 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_other_ext) {
   const uint16_t t1_pid = 0x3b1d;
   const uint16_t t2_vid = 0x0457;
   const uint16_t t2_pid = 0x3462;
-  const ui::InputDevice tp1 = ui::InputDevice(
+  const ui::TouchpadDevice tp1 = ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_INTERNAL, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), t1_vid, t1_pid, /*version=*/0);
-  const ui::InputDevice tp2 = ui::InputDevice(
+  const ui::TouchpadDevice tp2 = ui::TouchpadDevice(
       /*id=*/2, ui::INPUT_DEVICE_USB, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), t2_vid, t2_pid, /*version=*/0);
 
@@ -124,7 +125,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_other_ext) {
   EXPECT_EQ(t1_vendor_name, it->second);
   it = response().find("TOUCHPAD_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", t1_pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", t1_pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -136,7 +137,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_ts_ext) {
   const uint16_t tp_pid = 0x323b;
   const uint16_t ts_vid = 0x056a;
   const uint16_t ts_pid = 0xd4f4;
-  const ui::InputDevice tp = ui::InputDevice(
+  const ui::TouchpadDevice tp = ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_INTERNAL, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), tp_vid, tp_pid, /*version=*/0);
   const ui::InputDevice ts = ui::InputDevice(
@@ -161,7 +162,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_ts_ext) {
   EXPECT_EQ(tp_vendor_name, it->second);
   it = response().find("TOUCHPAD_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", tp_pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", tp_pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -192,7 +193,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchscreen_single) {
   EXPECT_EQ(vendor_name, it->second);
   it = response().find("TOUCHSCREEN_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -232,7 +233,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchscreen_single_other_ext) {
   EXPECT_EQ(t1_vendor_name, it->second);
   it = response().find("TOUCHSCREEN_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", t1_pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", t1_pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -244,7 +245,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchscreen_single_tp_ext) {
   const std::string ts_vendor_name = "Wacom";
   const uint16_t ts_vid = 0x056a;
   const uint16_t ts_pid = 0xd4f4;
-  const ui::InputDevice tp = ui::InputDevice(
+  const ui::TouchpadDevice tp = ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_USB, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), tp_vid, tp_pid, /*version=*/0);
   const ui::InputDevice ts = ui::InputDevice(
@@ -269,7 +270,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchscreen_single_tp_ext) {
   EXPECT_EQ(ts_vendor_name, it->second);
   it = response().find("TOUCHSCREEN_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", ts_pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", ts_pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -283,7 +284,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_touchscreen_single) {
   const uint16_t ts_vid = 0x18d1;
   const uint16_t ts_pid = 0x5400;
 
-  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::InputDevice(
+  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_INTERNAL, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), tp_vid, tp_pid, /*version=*/0)});
 
@@ -307,13 +308,13 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_touchscreen_single) {
   EXPECT_EQ(tp_vendor_name, it->second);
   it = response().find("TOUCHPAD_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", tp_pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", tp_pid), it->second);
   it = response().find("TOUCHSCREEN_VENDOR");
   ASSERT_NE(it, response().end());
   EXPECT_EQ(ts_vendor_name, it->second);
   it = response().find("TOUCHSCREEN_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", ts_pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", ts_pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -322,7 +323,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_single_touchscreen_single) {
 TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_unknown_vendor_single) {
   const uint16_t pid = 0x0002;
 
-  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::InputDevice(
+  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_INTERNAL, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), unknown_vid, pid, /*version=*/0)});
 
@@ -340,7 +341,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchpad_unknown_vendor_single) {
   EXPECT_EQ(unknown_vendor_name, it->second);
   it = response().find("TOUCHPAD_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -369,7 +370,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, Touchscreen_unknown_vendor_single) {
   EXPECT_EQ(unknown_vendor_name, it->second);
   it = response().find("TOUCHSCREEN_PID");
   ASSERT_NE(it, response().end());
-  EXPECT_EQ(base::StringPrintf("%#06x", pid), it->second);
+  EXPECT_EQ(base::StringPrintf("0x%04x", pid), it->second);
 
   /* Verify fetch_callback() has not been called again. */
   EXPECT_EQ(1U, num_callback_calls());
@@ -381,7 +382,7 @@ TEST_F(ConnectedInputDevicesLogSourceTest, No_internal_touch_input) {
   const uint16_t ts_vid = 0x04b4;
   const uint16_t ts_pid = 0x0763;
 
-  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::InputDevice(
+  ui::DeviceDataManagerTestApi().SetTouchpadDevices({ui::TouchpadDevice(
       /*id=*/1, ui::INPUT_DEVICE_USB, /*name=*/"", /*phys=*/"",
       /*sys_path=*/base::FilePath(), tp_vid, tp_pid, /*version=*/0)});
 

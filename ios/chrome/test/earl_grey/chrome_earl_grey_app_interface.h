@@ -8,14 +8,14 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-#include "base/time/time.h"
+#import "base/ios/block_types.h"
+#import "base/time/time.h"
 #import "components/content_settings/core/common/content_settings.h"
 #import "components/sync/base/model_type.h"
-#include "third_party/metrics_proto/user_demographics.pb.h"
+#import "third_party/metrics_proto/user_demographics.pb.h"
 
 @class ElementSelector;
 @class FakeSystemIdentity;
-@class NamedGuide;
 
 @interface JavaScriptExecutionResult : NSObject
 @property(readonly, nonatomic) BOOL success;
@@ -41,6 +41,12 @@
 // operation failed.
 + (NSError*)clearBrowsingHistory;
 
+// Shuts down the network process in order to
+// avoid tests from hanging when clearing browser history. Uses a private WebKit
+// API and should be refactored or removed in the event that there's a different
+// way to address hanging.
++ (void)killWebKitNetworkProcess;
+
 // Clears all web state browsing data and waits to finish clearing before
 // returning. Returns nil on success, otherwise an NSError indicating why
 // the operation failed.
@@ -58,6 +64,9 @@
 // the operation failed.
 + (NSError*)removeBrowsingCache;
 
+// Persists the current list of tabs to disk immediately.
++ (void)saveSessionImmediately;
+
 // Opens `URL` using some connected scene.
 + (void)sceneOpenURL:(NSString*)spec;
 
@@ -65,26 +74,25 @@
 // ui::PAGE_TRANSITION_TYPED and returns without waiting for the page to load.
 + (void)startLoadingURL:(NSString*)spec;
 
-// If the current WebState is HTML content, will wait until the window ID is
-// injected. Returns YES if the injection is successful or if the WebState is
-// not HTML content.
-+ (BOOL)waitForWindowIDInjectionIfNeeded;
-
 // Returns YES if the current WebState is loading.
 + (BOOL)isLoading;
 
 // Reloads the page without waiting for the page to load.
 + (void)startReloading;
 
-// Returns the NamedGuide with the given `name`, if one is attached to `view`
-// or one of `view`'s ancestors.  If no guide is found, returns nil.
-+ (NamedGuide*)guideWithName:(NSString*)name view:(UIView*)view;
-
 // Loads `URL` as if it was opened from an external application.
 + (void)openURLFromExternalApp:(NSString*)URL;
 
 // Programmatically dismisses settings screen.
 + (void)dismissSettings;
+
+// Stops primes performance metrics logging by calling into the
+// internal framework (should only be used by performance tests)
++ (void)primesStopLogging;
+
+// Takes a snapshot of memory usage by calling into the internal
+// framework (should only be used by performance tests)
++ (void)primesTakeMemorySnapshot:(NSString*)eventName;
 
 #pragma mark - Tab Utilities (EG2)
 
@@ -102,19 +110,22 @@
 // Returns the number of open non-incognito tabs.
 + (NSUInteger)mainTabCount [[nodiscard]];
 
+// Returns the number of open inactive tabs.
++ (NSUInteger)inactiveTabCount [[nodiscard]];
+
 // Returns the number of open incognito tabs.
 + (NSUInteger)incognitoTabCount [[nodiscard]];
 
 // Returns the number of open browsers.
 + (NSUInteger)browserCount [[nodiscard]];
 
+// Returns the number of the realized web states from the existing web states.
++ (NSInteger)realizedWebStatesCount [[nodiscard]];
+
 // Simulates a backgrounding.
 // If not succeed returns an NSError indicating  why the
 // operation failed, otherwise nil.
 + (NSError*)simulateTabsBackgrounding;
-
-// Persists the current list of tabs to disk immediately.
-+ (void)saveSessionImmediately;
 
 // Returns the number of main (non-incognito) tabs currently evicted.
 + (NSUInteger)evictedMainTabCount [[nodiscard]];
@@ -143,6 +154,9 @@
 
 // Closes current tab.
 + (void)closeCurrentTab;
+
+// Pins current tab.
++ (void)pinCurrentTab;
 
 // Opens a new incognito tab, and does not wait for animations to complete.
 + (void)openNewIncognitoTab;
@@ -223,11 +237,6 @@
 // Returns YES if the current WebState in window with given number is loading.
 + (BOOL)isLoadingInWindowWithNumber:(int)windowNumber [[nodiscard]];
 
-// If the current WebState in window with given number is HTML content, will
-// wait until the window ID is injected. Returns YES if the injection is
-// successful or if the WebState is not HTML content.
-+ (BOOL)waitForWindowIDInjectionIfNeededInWindowWithNumber:(int)windowNumber;
-
 // Returns YES if the current WebState in window with given number contains
 // `text`.
 + (BOOL)webStateContainsText:(NSString*)text
@@ -238,6 +247,9 @@
 
 // Returns the number of open incognito tabs, in window with given number.
 + (NSUInteger)incognitoTabCountInWindowWithNumber:(int)windowNumber;
+
+// Returns a key window from the connected scenes.
++ (UIWindow*)keyWindow;
 
 #pragma mark - WebState Utilities (EG2)
 
@@ -296,10 +308,10 @@
 
 // Signs the user out from Chrome and then starts clearing the identities.
 //
-// Note: This method does not wait for identities to be cleared from the
-// keychain. To wait for this operation to finish, please use an GREYCondition
-// and wait for +hasIdentities to return NO.
-+ (void)signOutAndClearIdentities;
+// Note: The idendities & browsing data cleanings are executed asynchronously.
+// The completion block should be used if there's a need to wait the end of
+// those operations.
++ (void)signOutAndClearIdentitiesWithCompletion:(ProceduralBlock)completion;
 
 // Returns YES if there is at at least identity in the ChromeIdentityService.
 + (BOOL)hasIdentities;
@@ -330,17 +342,6 @@
 // Stops any pending navigations in all WebStates which are loading.
 + (void)stopAllWebStatesLoading;
 
-#pragma mark - Bookmarks Utilities (EG2)
-
-// Waits for the bookmark internal state to be done loading.
-// If not succeed returns an NSError indicating  why the operation failed,
-// otherwise nil.
-+ (NSError*)waitForBookmarksToFinishinLoading;
-
-// Clears bookmarks. If not succeed returns an NSError indicating  why the
-// operation failed, otherwise nil.
-+ (NSError*)clearBookmarks;
-
 #pragma mark - URL Utilities (EG2)
 
 // Returns the title string to be used for a page with `URL` if that page
@@ -349,23 +350,25 @@
 
 #pragma mark - Sync Utilities (EG2)
 
-// Clears fake sync server data if the server is running.
-+ (void)clearSyncServerData;
-
 // Signs in with `identity` without sync consent.
 + (void)signInWithoutSyncWithIdentity:(FakeSystemIdentity*)identity;
 
-// Starts the sync server. The server should not be running when calling this.
-+ (void)startSync;
+// Waits for sync engine to be initialized or not. It doesn't necessarily mean
+// that data types are configured and ready to use. See
+// SyncService::IsEngineInitialized() for details. If not succeeded a GREYAssert
+// is induced.
++ (NSError*)waitForSyncEngineInitialized:(BOOL)isInitialized
+                             syncTimeout:(base::TimeDelta)timeout;
 
-// Stops the sync server. The server should be running when calling this.
-+ (void)stopSync;
+// Waits for the sync feature to be enabled/disabled. See SyncService::
+// IsSyncFeatureEnabled() for details. If not succeeded a GREYAssert is induced.
++ (NSError*)waitForSyncFeatureEnabled:(BOOL)isEnabled
+                          syncTimeout:(base::TimeDelta)timeout;
 
-// Waits for sync to be initialized or not.
-// Returns nil on success, or else an NSError indicating why the
-// operation failed.
-+ (NSError*)waitForSyncInitialized:(BOOL)isInitialized
-                       syncTimeout:(base::TimeDelta)timeout;
+// Waits for sync to become fully active; see
+// SyncService::TransportState::ACTIVE for details. If not succeeded a
+// GREYAssert is induced.
++ (NSError*)waitForSyncTransportStateActiveWithTimeout:(base::TimeDelta)timeout;
 
 // Returns the current sync cache GUID. The sync server must be running when
 // calling this.
@@ -385,8 +388,22 @@
 // real one.
 + (void)tearDownFakeSyncServer;
 
+// Clears fake sync server data if the server is running.
++ (void)clearFakeSyncServerData;
+
+// Ensures that all of the FakeServer's data is persisted to disk. This is
+// useful before app restarts, where otherwise the FakeServer may not get to do
+// its usual on-destruction flush.
++ (void)flushFakeSyncServerToDisk;
+
 // Gets the number of entities of the given `type`.
 + (int)numberOfSyncEntitiesWithType:(syncer::ModelType)type;
+
+// Forces every request to fail in a way that simulates a network failure.
++ (void)disconnectFakeSyncServerNetwork;
+
+// Undoes the effects of disconnectFakeSyncServerNetwork.
++ (void)connectFakeSyncServerNetwork;
 
 // Injects a bookmark into the fake sync server with `URL` and `title`.
 + (void)addFakeSyncServerBookmarkWithURL:(NSString*)URL title:(NSString*)title;
@@ -399,8 +416,8 @@
                      originator_client_item_id:
                          (NSString*)originator_client_item_id;
 
-// Injects typed URL to sync FakeServer.
-+ (void)addFakeSyncServerTypedURL:(NSString*)URL;
+// Injects a HISTORY visit to the sync FakeServer.
++ (void)addFakeSyncServerHistoryVisit:(NSURL*)URL;
 
 // Injects device info to sync FakeServer.
 + (void)addFakeSyncServerDeviceInfo:(NSString*)deviceName
@@ -415,7 +432,7 @@
 // If the provided URL `spec` is either present or not present in HistoryService
 // (depending on `expectPresent`), return YES. If the present status of `spec`
 // is not what is expected, or there is an error, return NO.
-+ (BOOL)isTypedURL:(NSString*)spec presentOnClient:(BOOL)expectPresent;
++ (BOOL)isURL:(NSString*)spec presentOnClient:(BOOL)expectPresent;
 
 // Triggers a sync cycle for a `type`.
 + (void)triggerSyncCycleForType:(syncer::ModelType)type;
@@ -452,6 +469,11 @@
 // SessionsHierarchy class for documentation regarding the verification.
 + (NSError*)verifySessionsOnSyncServerWithSpecs:(NSArray<NSString*>*)specs;
 
+// Verifies the URLs (in the HISTORY data type) on the Sync FakeServer.
+// `specs` is the collection of expected URLs. On failure, returns a NSError
+// describing the failure.
++ (NSError*)verifyHistoryOnSyncServerWithURLs:(NSArray<NSURL*>*)URLs;
+
 // Verifies that `count` entities of the given `type` and `name` exist on the
 // sync FakeServer. Folders are not included in this count. Returns NSError
 // if there is a failure or if the count does not match.
@@ -462,6 +484,9 @@
 // Adds a bookmark with a sync passphrase. The sync server will need the sync
 // passphrase to start.
 + (void)addBookmarkWithSyncPassphrase:(NSString*)syncPassphrase;
+
+// Returns whether UserSelectableType::kHistory is among the selected types.
++ (BOOL)isSyncHistoryDataTypeSelected;
 
 #pragma mark - JavaScript Utilities (EG2)
 
@@ -495,14 +520,14 @@
 // Returns YES if UKM feature is enabled.
 + (BOOL)isUKMEnabled [[nodiscard]];
 
-// Returns YES if kSynthesizedRestoreSessionEnabled feature is enabled.
-+ (BOOL)isSynthesizedRestoreSessionEnabled [[nodiscard]];
-
 // Returns YES if kTestFeature is enabled.
 + (BOOL)isTestFeatureEnabled;
 
 // Returns YES if DemographicMetricsReporting feature is enabled.
 + (BOOL)isDemographicMetricsReportingEnabled [[nodiscard]];
+
+// Returns YES if the ReplaceSyncPromosWithSignInPromos feature is enabled.
++ (BOOL)isReplaceSyncWithSigninEnabled [[nodiscard]];
 
 // Returns YES if the `launchSwitch` is found in host app launch switches.
 + (BOOL)appHasLaunchSwitch:(NSString*)launchSwitch;
@@ -525,21 +550,14 @@
 // Returns whether the NewOverflowMenu feature is enabled.
 + (BOOL)isNewOverflowMenuEnabled;
 
-// Returns whether the OmniboxPopupUpdatedUI feature is enabled.
-+ (BOOL)isNewOmniboxPopupEnabled;
-
-// Returns whether the kIOSNewOmniboxImplementation feature is enabled.
-+ (BOOL)isExperimentalOmniboxEnabled;
-
 // Returns whether the UseLensToSearchForImage feature is enabled.
 + (BOOL)isUseLensToSearchForImageEnabled;
 
-// Returns whether the Thumbstrip feature is enabled for window with given
-// number.
-+ (BOOL)isThumbstripEnabledForWindowWithNumber:(int)windowNumber;
-
 // Returns whether the Web Channels feature is enabled.
 + (BOOL)isWebChannelsEnabled;
+
+// Returns whether the bottom omnibox steady state feature is enabled.
++ (BOOL)isBottomOmniboxSteadyStateEnabled;
 
 #pragma mark - ContentSettings
 
@@ -554,6 +572,22 @@
 // Resets the desktop content setting to its default value.
 + (void)resetDesktopContentSetting;
 
+// Sets the preference value of a content settings type for the original browser
+// state.
++ (void)setContentSetting:(ContentSetting)setting
+    forContentSettingsType:(ContentSettingsType)type;
+
+#pragma mark - Default Utilities (EG2)
+
+// Stores a value for the provided key in NSUserDefaults.
++ (void)setUserDefaultsObject:(id)value forKey:(NSString*)defaultName;
+
+// Removes the object for the provided `key` in NSUserDefaults.
++ (void)removeUserDefaultsObjectForKey:(NSString*)key;
+
+// Returns the value for provided key from NSUserDefaults.
++ (id)userDefaultsObjectForKey:(NSString*)key;
+
 #pragma mark - Pref Utilities (EG2)
 
 // Gets the value of a local state pref. Returns a
@@ -561,10 +595,25 @@
 // returns a Value of type NONE.
 + (NSString*)localStatePrefValue:(NSString*)prefName;
 
-// Sets the integer values for the local state pref with `prefName`. `value`
+// Sets the integer value for the local state pref with `prefName`. `value`
 // can be either a casted enum or any other numerical value. Local State
 // contains the preferences that are shared between all browser states.
 + (void)setIntegerValue:(int)value forLocalStatePref:(NSString*)prefName;
+
+// Sets the time value for the local state pref with `prefName`. Local State
+// contains the preferences that are shared between all browser states.
++ (void)setTimeValue:(base::Time)value forLocalStatePref:(NSString*)prefName;
+
+// Sets the string value for the local state pref with `prefName`. Local State
+// contains the preferences that are shared between all browser states.
++ (void)setStringValue:(NSString*)value forLocalStatePref:(NSString*)prefName;
+
+// Sets the value of a string user pref in the original browser state.
++ (void)setStringValue:(NSString*)value forUserPref:(NSString*)prefName;
+
+// Sets the bool value for the local state pref with `prefName`. Local State
+// contains the preferences that are shared between all browser states.
++ (void)setBoolValue:(BOOL)value forLocalStatePref:(NSString*)prefName;
 
 // Gets the value of a user pref in the original browser state. Returns a
 // base::Value encoded as a JSON string. If the pref was not registered,
@@ -576,6 +625,11 @@
 
 // Sets the value of a integer user pref in the original browser state.
 + (void)setIntegerValue:(int)value forUserPref:(NSString*)prefName;
+
+// Returns true if the Preference is currently using its default value,
+// and has not been set by any higher-priority source (even with the same
+// value).
++ (BOOL)prefWithNameIsDefaultValue:(NSString*)prefName;
 
 // Clears the user pref of |prefName|.
 + (void)clearUserPrefWithName:(NSString*)prefName;
@@ -605,7 +659,9 @@
 // The input is similar to UIKeyCommand parameters, and is designed for testing
 // keyboard shortcuts.
 // Accepts any strings and also UIKeyInput{Up|Down|Left|Right}Arrow and
-// UIKeyInputEscape constants as `input`.
+// UIKeyInputEscape constants as `input`. `flags` must be set to
+// UIKeyModifierShift for things like capital letters or characters like !@#$%
+// etc.
 + (void)simulatePhysicalKeyboardEvent:(NSString*)input
                                 flags:(UIKeyModifierFlags)flags;
 
@@ -656,18 +712,20 @@
 // Copies a chrome:// URL that doesn't require internet connection.
 + (void)copyURLToPasteBoard;
 
-// Disables default browser promo. If a test needs to check a message drop down
-// in a second window, this needs to be disabled or the popup will kill the
-// message.
-+ (void)disableDefaultBrowserPromo;
+#pragma mark - Default Search Engine Choice Screen Utilities
 
-#pragma mark - Url Param Classification utilities
-// Sets `contents` to be used by the url_param_filter::ClassificationsLoader.
-+ (void)setUrlParamClassifications:(NSString*)contents;
+// Returns YES if the search engine choice screen will be shown.
++ (BOOL)IsSearchEngineChoiceScreenEnabledFre;
 
-// Resets the stored classifications on the
-// url_param_filter::ClassificationsLoader.
-+ (void)resetUrlParamClassifications;
+#pragma mark - First Run Utilities
+
+// Writes the First Run Sentinel file, used to record that First Run has
+// completed.
++ (void)writeFirstRunSentinel;
+
+// Remove the FirstRun sentinel file.
++ (void)removeFirstRunSentinel;
+
 @end
 
 #endif  // IOS_CHROME_TEST_EARL_GREY_CHROME_EARL_GREY_APP_INTERFACE_H_

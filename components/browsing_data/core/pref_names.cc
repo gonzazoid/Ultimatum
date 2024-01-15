@@ -8,9 +8,7 @@
 #include "build/build_config.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 
-namespace browsing_data {
-
-namespace prefs {
+namespace browsing_data::prefs {
 
 // JSON config to periodically delete some browsing data as specified by
 // the BrowsingDataLifetime policy.
@@ -31,6 +29,15 @@ const char kClearBrowsingDataOnExitList[] = "browser.clear_data.clear_on_exit";
 // Clear browsing data deletion time period.
 const char kDeleteTimePeriod[] = "browser.clear_data.time_period";
 const char kDeleteTimePeriodBasic[] = "browser.clear_data.time_period_basic";
+
+// Clear browsing data deletion time period experiment. This experiment requires
+// users to interact with timeframe drop down menu in the clear browsing data
+// dialog. It also adds a new 'Last 15 minutes' value to the list. Until the
+// user has made their 1st time period selection, the UI shows 'Select a time
+// range'.
+const char kDeleteTimePeriodV2[] = "browser.clear_data.time_period_v2";
+const char kDeleteTimePeriodV2Basic[] =
+    "browser.clear_data.time_period_v2_basic";
 
 // Clear Browsing Data dialog datatype preferences.
 const char kDeleteBrowsingHistory[] = "browser.clear_data.browsing_history";
@@ -56,16 +63,19 @@ const char kPreferencesMigratedToBasic[] =
     "browser.clear_data.preferences_migrated_to_basic";
 
 void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterListPref(kBrowsingDataLifetime,
-                             base::Value(base::Value::Type::LIST));
+  registry->RegisterListPref(kBrowsingDataLifetime);
   registry->RegisterBooleanPref(kClearBrowsingDataOnExitDeletionPending, false);
-  registry->RegisterListPref(kClearBrowsingDataOnExitList,
-                             base::Value(base::Value::Type::LIST));
+  registry->RegisterListPref(kClearBrowsingDataOnExitList);
   registry->RegisterIntegerPref(
       kDeleteTimePeriod, 0,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(
       kDeleteTimePeriodBasic, 0,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterIntegerPref(
+      kDeleteTimePeriodV2, -1, user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterIntegerPref(
+      kDeleteTimePeriodV2Basic, -1,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterBooleanPref(
       kDeleteBrowsingHistory, true,
@@ -109,6 +119,4 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 }
 
-}  // namespace prefs
-
-}  // namespace browsing_data
+}  // namespace browsing_data::prefs

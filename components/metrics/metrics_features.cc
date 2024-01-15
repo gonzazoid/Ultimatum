@@ -5,7 +5,25 @@
 #include "components/metrics/metrics_features.h"
 
 namespace metrics::features {
-BASE_FEATURE(kConsolidateMetricsServiceInitialLogLogic,
-             "ConsolidateMetricsServiceInitialLogLogic",
+
+BASE_FEATURE(kMetricsServiceAllowEarlyLogClose,
+             "MetricsServiceAllowEarlyLogClose",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kStructuredMetrics,
+             "EnableStructuredMetrics",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kFlushPersistentSystemProfileOnWrite,
+             "FlushPersistentSystemProfileOnWrite",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kMetricsServiceDeltaSnapshotInBg,
+             "MetricsServiceDeltaSnapshotInBg",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kReportingServiceAlwaysFlush,
+             "ReportingServiceAlwaysFlush",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 }  // namespace metrics::features

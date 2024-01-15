@@ -16,7 +16,6 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.vr.VrModuleProvider;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
@@ -24,9 +23,7 @@ import org.chromium.components.page_info.ConnectionInfoView;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
-/**
- * Tests for ConnectionInfoView.
- */
+/** Tests for ConnectionInfoView. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Batch(ConnectionInfoViewTest.PAGE_INFO_BATCH_NAME)
@@ -41,18 +38,16 @@ public class ConnectionInfoViewTest {
     public final BlankCTATabInitialStateRule mInitialStateRule =
             new BlankCTATabInitialStateRule(sActivityTestRule, false);
 
-    /**
-     * Tests that ConnectionInfoView can be instantiated and shown.
-     */
+    /** Tests that ConnectionInfoView can be instantiated and shown. */
     @Test
     @MediumTest
     @Feature({"ConnectionInfoView"})
     public void testShow() throws InterruptedException {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ChromeActivity context = sActivityTestRule.getActivity();
-            WebContents webContents = context.getActivityTab().getWebContents();
-            ConnectionInfoView.show(context, webContents, context.getModalDialogManager(),
-                    VrModuleProvider.getDelegate());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeActivity context = sActivityTestRule.getActivity();
+                    WebContents webContents = context.getActivityTab().getWebContents();
+                    ConnectionInfoView.show(context, webContents, context.getModalDialogManager());
+                });
     }
 }

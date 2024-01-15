@@ -4,11 +4,7 @@
 
 #import "ios/chrome/browser/ui/autofill/cells/autofill_edit_item.h"
 
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/public/features/features.h"
 
 @implementation AutofillEditItem
 

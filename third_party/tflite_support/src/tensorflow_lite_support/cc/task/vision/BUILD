@@ -10,7 +10,7 @@ package(
 # IMPORTANT: in order to use hardware acceleration delegates, configurable through the
 # `compute_settings` field of the ObjectDetectorOptions, you must additionally link to
 # the appropriate delegate plugin target (e.g. `gpu_plugin` for GPU) from:
-# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/experimental/acceleration/configuration/BUILD
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/acceleration/configuration/BUILD
 # To use EDGETPU_CORAL, link to `edgetpu_coral_plugin` from:
 # https://github.com/tensorflow/tflite-support/blob/a58a4f9225c411fa9ba29f821523e6e283988d23/tensorflow_lite_support/acceleration/configuration/BUILD#L11
 cc_library_with_tflite(
@@ -18,7 +18,7 @@ cc_library_with_tflite(
     srcs = ["object_detector.cc"],
     hdrs = ["object_detector.h"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
         "//tensorflow_lite_support/cc/task/core:task_api_factory",
         "//tensorflow_lite_support/cc/task/core:tflite_engine",
         "//tensorflow_lite_support/cc/task/vision/core:base_vision_task_api",
@@ -53,7 +53,7 @@ cc_library_with_tflite(
 # IMPORTANT: in order to use hardware acceleration delegates, configurable through the
 # `compute_settings` field of the ImageClassifierOptions, you must additionally link to
 # the appropriate delegate plugin target (e.g. `gpu_plugin` for GPU) from:
-# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/experimental/acceleration/configuration/BUILD
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/acceleration/configuration/BUILD
 # To use EDGETPU_CORAL, link to `edgetpu_coral_plugin` from:
 # https://github.com/tensorflow/tflite-support/blob/a58a4f9225c411fa9ba29f821523e6e283988d23/tensorflow_lite_support/acceleration/configuration/BUILD#L11
 cc_library_with_tflite(
@@ -61,7 +61,7 @@ cc_library_with_tflite(
     srcs = ["image_classifier.cc"],
     hdrs = ["image_classifier.h"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
         "//tensorflow_lite_support/cc/task/core:task_api_factory",
         "//tensorflow_lite_support/cc/task/core:tflite_engine",
         "//tensorflow_lite_support/cc/task/vision/core:base_vision_task_api",
@@ -98,7 +98,7 @@ cc_library_with_tflite(
 # IMPORTANT: in order to use hardware acceleration delegates, configurable through the
 # `compute_settings` field of the ImageSegmenterOptions, you must additionally link to
 # the appropriate delegate plugin target (e.g. `gpu_plugin` for GPU) from:
-# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/experimental/acceleration/configuration/BUILD
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/acceleration/configuration/BUILD
 # To use EDGETPU_CORAL, link to `edgetpu_coral_plugin` from:
 # https://github.com/tensorflow/tflite-support/blob/a58a4f9225c411fa9ba29f821523e6e283988d23/tensorflow_lite_support/acceleration/configuration/BUILD#L11
 cc_library_with_tflite(
@@ -106,7 +106,7 @@ cc_library_with_tflite(
     srcs = ["image_segmenter.cc"],
     hdrs = ["image_segmenter.h"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
         "//tensorflow_lite_support/cc/task/core:tflite_engine",
         "//tensorflow_lite_support/cc/task/core:task_api_factory",
         "//tensorflow_lite_support/cc/task/vision/core:base_vision_task_api",
@@ -139,7 +139,7 @@ cc_library_with_tflite(
 # IMPORTANT: in order to use hardware acceleration delegates, configurable through the
 # `compute_settings` field of the ImageEmbedderOptions, you must additionally link to
 # the appropriate delegate plugin target (e.g. `gpu_plugin` for GPU) from:
-# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/experimental/acceleration/configuration/BUILD
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/acceleration/configuration/BUILD
 # To use EDGETPU_CORAL, link to `edgetpu_coral_plugin` from:
 # https://github.com/tensorflow/tflite-support/blob/a58a4f9225c411fa9ba29f821523e6e283988d23/tensorflow_lite_support/acceleration/configuration/BUILD#L11
 cc_library_with_tflite(
@@ -147,7 +147,7 @@ cc_library_with_tflite(
     srcs = ["image_embedder.cc"],
     hdrs = ["image_embedder.h"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
         "//tensorflow_lite_support/cc/task/core:task_api_factory",
         "//tensorflow_lite_support/cc/task/core:tflite_engine",
         "//tensorflow_lite_support/cc/task/vision/core:base_vision_task_api",
@@ -177,7 +177,7 @@ cc_library_with_tflite(
 # IMPORTANT: in order to use hardware acceleration delegates, configurable through the
 # `compute_settings` field of the ImageSearcherOptions, you must additionally link to
 # the appropriate delegate plugin target (e.g. `gpu_plugin` for GPU) from:
-# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/experimental/acceleration/configuration/BUILD
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/acceleration/configuration/BUILD
 # To use EDGETPU_CORAL, link to `edgetpu_coral_plugin` from:
 # https://github.com/tensorflow/tflite-support/blob/a58a4f9225c411fa9ba29f821523e6e283988d23/tensorflow_lite_support/acceleration/configuration/BUILD#L11
 cc_library_with_tflite(
@@ -185,7 +185,7 @@ cc_library_with_tflite(
     srcs = ["image_searcher.cc"],
     hdrs = ["image_searcher.h"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
         "//tensorflow_lite_support/cc/task/core:task_api_factory",
         "//tensorflow_lite_support/cc/task/core:tflite_engine",
         "//tensorflow_lite_support/cc/task/processor:search_postprocessor",

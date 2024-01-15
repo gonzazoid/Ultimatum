@@ -160,7 +160,7 @@ We have an emacs module,
 which adds c-mode formatting. Then add to your .emacs:
 
 ```el
-(load "/<path/to/chromium>/src/buildtools/clang_format/script/clang-format.el")
+(load "/<path/to/chromium>/src/third_party/clang-format/script/clang-format.el")
 (add-hook 'c-mode-common-hook
     (function (lambda () (local-set-key (kbd "TAB") 'clang-format-region))))
 ```
@@ -177,6 +177,24 @@ BUILD.gn and gni files are supported by the official gn-mode which can
 be enabled with:
 
     (load-file "src/tools/emacs/gn.el")
+
+## Mojom IDL (.mojom files)
+
+[Mojom](/mojo/public/tools/bindings/README.md)
+files are supported by mojom-mode, which can be enabled with:
+
+```el
+(load-file "/<path/to/chromium>/src/tools/emacs/mojom-mode.el")
+```
+
+Alternatively, you can `require` the feature.
+(See emacs documentation on
+[Named Features](https://www.gnu.org/software/emacs/manual/html_node/elisp/Named-Features.html).)
+
+```el
+(add-to-list 'load-path "/<path/to/chromium>/src/tools/emacs/")
+(require 'mojom-mode)
+```
 
 ## Highlight long lines
 

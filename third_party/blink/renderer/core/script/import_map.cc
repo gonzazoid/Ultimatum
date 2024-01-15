@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <utility>
+#include "base/metrics/histogram_macros.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/script/import_map_error.h"

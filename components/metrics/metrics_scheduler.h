@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_METRICS_METRICS_SCHEDULER_H_
 #define COMPONENTS_METRICS_METRICS_SCHEDULER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 
@@ -30,6 +30,9 @@ class MetricsScheduler {
 
   // Stops scheduling uploads.
   void Stop();
+
+  // Returns the initial delay before the task is run for the first time.
+  static int GetInitialIntervalSeconds();
 
  protected:
   // Subclasses should provide task_callback with a wrapper to call this with.

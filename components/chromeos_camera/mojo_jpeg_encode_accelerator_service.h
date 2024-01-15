@@ -9,7 +9,6 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "components/chromeos_camera/common/jpeg_encode_accelerator.mojom.h"
 #include "components/chromeos_camera/gpu_jpeg_encode_accelerator_factory.h"
@@ -86,6 +85,8 @@ class MojoJpegEncodeAcceleratorService
       int32_t coded_size_width,
       int32_t coded_size_height,
       int32_t quality,
+      bool has_input_modifier,
+      uint64_t input_modifier,
       EncodeWithDmaBufCallback callback) override;
 
   void NotifyEncodeStatus(

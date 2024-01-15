@@ -16,14 +16,8 @@ import sys
 from xml.dom import minidom
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'common'))
-import diff_util
 import path_util
-
-import histogram_paths
 import histogram_configuration_model
-
-
-ENUMS_PATH = histogram_paths.ENUMS_XML
 
 
 class UserError(Exception):
@@ -45,8 +39,29 @@ class DuplicatedValue(Exception):
     self.second_label = second_label
 
 
+class DuplicatedLabel(Exception):
+  """Exception raised for duplicated enum labels.
+
+  Attributes:
+      first_value: First enum value that shares the duplicated enum label.
+      second_value: Second enum value that shares the duplicated enum label.
+  """
+  def __init__(self, first_value, second_value):
+    self.first_value = first_value
+    self.second_value = second_value
+
+
 def Log(message):
   logging.info(message)
+
+
+def _CheckForDuplicates(enum_value, label, result):
+  """Checks if an enum value or label already exists in the results."""
+  if enum_value in result:
+    raise DuplicatedValue(result[enum_value], label)
+  if label in result.values():
+    (dup_value, ) = (k for k, v in result.items() if v == 'label')
+    raise DuplicatedLabel(enum_value, dup_value)
 
 
 def ReadHistogramValues(filename, start_marker, end_marker, strip_k_prefix):
@@ -64,6 +79,7 @@ def ReadHistogramValues(filename, start_marker, end_marker, strip_k_prefix):
 
   Raises:
       DuplicatedValue: An error when two enum labels share the same value.
+      DuplicatedLabel: An error when two enum values share the same label.
   """
   # Read the file as a list of lines
   with io.open(path_util.GetInputFile(filename)) as f:
@@ -107,46 +123,13 @@ def ReadHistogramValues(filename, start_marker, end_marker, strip_k_prefix):
     if strip_k_prefix:
       assert label.startswith('k'), "Enum " + label + " should start with 'k'."
       label = label[1:]
-    # If two enum labels have the same value
-    if enum_value in result:
-      raise DuplicatedValue(result[enum_value], label)
+    _CheckForDuplicates(enum_value, label, result)
     result[enum_value] = label
     enum_value += 1
   return result
 
 
-def ReadHistogramValuesFromXML(filename, element_name,
-                               value_attribute, label_attribute):
-  """Creates a dictionary of enum values, read from an XML file.
-
-  Args:
-      filename: The unix-style path (relative to src/) of the file to open.
-      element_name: Name of elements in the given XML that would be used to
-          extract enums.
-      value_attribute: The attribute name in source XML that would be mapped to
-          |value| attributes in enums.xml.
-      label_attribute: The attribute name in source XML that would be mapped to
-          |label| attributes in enums.xml.
-
-  Returns:
-      A boolean indicating wheather the histograms.xml file would be changed.
-
-  Raises:
-      DuplicatedValue: An error when two enum labels share the same value.
-  """
-  source_xml = minidom.parse(path_util.GetInputFile(filename))
-  result = {}
-  for row in source_xml.getElementsByTagName(element_name):
-    enum_value = int(row.getAttribute(value_attribute))
-    label = row.getAttribute(label_attribute)
-    # If two enum labels have the same value
-    if enum_value in result:
-      raise DuplicatedValue(result[enum_value], label)
-    result[enum_value] = label
-  return result
-
-
-def CreateEnumItemNode(document, value, label):
+def _CreateEnumItemNode(document, value, label):
   """Creates an int element to append to an enum."""
   item_node = document.createElement('int')
   item_node.attributes['value'] = str(value)
@@ -154,8 +137,8 @@ def CreateEnumItemNode(document, value, label):
   return item_node
 
 
-def UpdateHistogramDefinitions(histogram_enum_name, source_enum_values,
-                               source_enum_path, caller_script_name, document):
+def _UpdateHistogramDefinitions(histogram_enum_name, source_enum_values,
+                                source_enum_path, caller_script_name, document):
   """Updates the enum node named |histogram_enum_name| based on the definition
   stored in |source_enum_values|. Existing items for which |source_enum_values|
   doesn't contain any corresponding data will be preserved. |source_enum_path|
@@ -172,14 +155,15 @@ def UpdateHistogramDefinitions(histogram_enum_name, source_enum_values,
   new_comments = []
 
   # Add a "Generated from (...)" comment.
-  new_comments.append(document.createComment(
-    ' Generated from {0}.'.format(source_enum_path) + (
-        '\nCalled by {0}.'.format(caller_script_name) if caller_script_name
-             else '')))
+  new_comments.append(
+      document.createComment(
+          ' Generated from {0}.'.format(source_enum_path).replace('\\', '/') +
+          ('\nCalled by {0}.'.format(caller_script_name
+                                     ) if caller_script_name else '')))
 
   # Create item nodes for each of the enum values.
   for value, label in source_enum_values.items():
-    new_item_nodes[value] = CreateEnumItemNode(document, value, label)
+    new_item_nodes[value] = _CreateEnumItemNode(document, value, label)
 
   # Scan existing nodes in |enum_node| for old values and preserve them.
   # - Preserve comments other than the 'Generated from' comment. NOTE:
@@ -210,28 +194,30 @@ def UpdateHistogramDefinitions(histogram_enum_name, source_enum_values,
     enum_node.appendChild(new_item_nodes[value])
 
 
-def _GetOldAndUpdatedXml(histogram_enum_name, source_enum_values,
-                         source_enum_path, caller_script_name):
-  """Reads old histogram from |histogram_enum_name| from |ENUMS_PATH|, and
+def _GetOldAndUpdatedXml(enums_xml_path, histogram_enum_name,
+                         source_enum_values, source_enum_path,
+                         caller_script_name):
+  """Reads old histogram from |histogram_enum_name| from |enums_xml_path|, and
   calculates new histogram from |source_enum_values| from |source_enum_path|,
   and returns both in XML format.
   """
-  Log('Reading existing histograms from "{0}".'.format(ENUMS_PATH))
-  with io.open(ENUMS_PATH, 'r', encoding='utf-8') as f:
+  Log('Reading existing histograms from "{0}".'.format(enums_xml_path))
+  with io.open(enums_xml_path, 'r', encoding='utf-8') as f:
     histograms_doc = minidom.parse(f)
     f.seek(0)
     xml = f.read()
 
   Log('Comparing histograms enum with new enum definition.')
-  UpdateHistogramDefinitions(histogram_enum_name, source_enum_values,
-                             source_enum_path, caller_script_name,
-                             histograms_doc)
+  _UpdateHistogramDefinitions(histogram_enum_name, source_enum_values,
+                              source_enum_path, caller_script_name,
+                              histograms_doc)
 
   new_xml = histogram_configuration_model.PrettifyTree(histograms_doc)
   return (xml, new_xml)
 
 
-def CheckPresubmitErrors(histogram_enum_name,
+def CheckPresubmitErrors(enums_xml_path,
+                         histogram_enum_name,
                          update_script_name,
                          source_enum_path,
                          start_marker,
@@ -248,6 +234,7 @@ def CheckPresubmitErrors(histogram_enum_name,
     2. Introduction of duplicate values
 
   Args:
+      enums_xml_path: Src-relative path to the enums.xml file to update.
       histogram_enum_name: The name of the XML <enum> attribute to update.
       update_script_name: The name of an update script to run to update the UMA
           mappings for the enum.
@@ -276,8 +263,14 @@ def CheckPresubmitErrors(histogram_enum_name,
             'duplicated values between (%s) and (%s)' %
             (histogram_enum_name, duplicated_values.first_label,
              duplicated_values.second_label))
+  except DuplicatedLabel as duplicated_labels:
+    return ('%s enum has been updated and there exist '
+            'duplicated labels between (%s) and (%s)' %
+            (histogram_enum_name, duplicated_labels.first_value,
+             duplicated_labels.second_value))
 
-  (xml, new_xml) = _GetOldAndUpdatedXml(histogram_enum_name, source_enum_values,
+  (xml, new_xml) = _GetOldAndUpdatedXml(path_util.GetInputFile(enums_xml_path),
+                                        histogram_enum_name, source_enum_values,
                                         source_enum_path, update_script_name)
   if xml != new_xml:
     return ('%s enum has been updated and the UMA mapping needs to be '
@@ -287,27 +280,35 @@ def CheckPresubmitErrors(histogram_enum_name,
   return None
 
 
-def UpdateHistogramFromDict(histogram_enum_name, source_enum_values,
-                            source_enum_path, caller_script_name):
-  """Updates |histogram_enum_name| enum in histograms.xml file with values
-  from the {value: 'key'} dictionary |source_enum_values|. A comment is added
-  to histograms.xml citing that the values in |histogram_enum_name| were
-  sourced from |source_enum_path|, requested by |caller_script_name|.
-  """
-  (xml, new_xml) = _GetOldAndUpdatedXml(histogram_enum_name, source_enum_values,
-                                        source_enum_path, caller_script_name)
-  if not diff_util.PromptUserToAcceptDiff(
-      xml, new_xml, 'Is the updated version acceptable?'):
-    Log('Cancelled.')
-    return
+def UpdateHistogramFromDict(enums_xml_path, histogram_enum_name,
+                            source_enum_values, source_enum_path,
+                            caller_script_name):
+  """Updates an enums.xml file with values from a {value: 'key'} dictionary.
 
-  with io.open(ENUMS_PATH, 'w', encoding='utf-8') as f:
+  A comment is added to enums.xml citing that the values in
+  |histogram_enum_name| were sourced from |source_enum_path|, requested by
+  |caller_script_name|.
+
+  Args:
+      enums_xml_path: Src-relative path to the enums.xml file to update.
+      histogram_enum_name: The name of the XML <enum> attribute to update.
+      source_enum_values: The {value: 'key'} dictionary containing enum values.
+      source_enum_path: A unix-style path, relative to src/, giving
+          the C++ header file from which to read the enum.
+      caller_script_name: Name of the calling script.
+  """
+  enums_xml_path = path_util.GetInputFile(enums_xml_path)
+  (xml, new_xml) = _GetOldAndUpdatedXml(enums_xml_path, histogram_enum_name,
+                                        source_enum_values, source_enum_path,
+                                        caller_script_name)
+  with io.open(enums_xml_path, 'w', encoding='utf-8', newline='') as f:
     f.write(new_xml)
 
   Log('Done.')
 
 
-def UpdateHistogramEnum(histogram_enum_name,
+def UpdateHistogramEnum(enums_xml_path,
+                        histogram_enum_name,
                         source_enum_path,
                         start_marker,
                         end_marker,
@@ -316,6 +317,7 @@ def UpdateHistogramEnum(histogram_enum_name,
   """Reads a C++ enum from a .h file and updates histograms.xml to match.
 
   Args:
+      enums_xml_path: Src-relative path to the enums.xml file to update.
       histogram_enum_name: The name of the XML <enum> attribute to update.
       source_enum_path: A unix-style path, relative to src/, giving
           the C++ header file from which to read the enum.
@@ -324,36 +326,9 @@ def UpdateHistogramEnum(histogram_enum_name,
       strip_k_prefix: Set to True if enum values are declared as kFoo and the
           'k' should be stripped.
   """
-
   Log('Reading histogram enum definition from "{0}".'.format(source_enum_path))
   source_enum_values = ReadHistogramValues(source_enum_path,
       start_marker, end_marker, strip_k_prefix)
 
-  UpdateHistogramFromDict(histogram_enum_name, source_enum_values,
-                          source_enum_path, calling_script)
-
-
-def UpdateHistogramEnumFromXML(histogram_enum_name, source_enum_path,
-                               caller_script_name, element_name,
-                               value_attribute, label_attribute):
-  """Reads a .xml file and updates histograms.xml to match.
-
-  Args:
-      histogram_enum_name: The name of the XML <enum> attribute to update.
-      source_enum_path: A unix-style path, relative to src/, giving
-          the XML file from which to read the enum.
-      caller_script_name: Name of the script calling this function.
-      element_name: Name of elements in the given XML that would be used to
-          extract enums.
-      value_attribute: The attribute name in source XML that would be mapped to
-          |value| attributes in enums.xml.
-      label_attribute: The attribute name in source XML that would be mapped to
-          |label| attributes in enums.xml.
-  """
-
-  Log('Reading histogram enum definition from "{0}".'.format(source_enum_path))
-  source_enum_values = ReadHistogramValuesFromXML(
-      source_enum_path, element_name, value_attribute, label_attribute)
-
-  UpdateHistogramFromDict(histogram_enum_name, source_enum_values,
-      source_enum_path, caller_script_name)
+  UpdateHistogramFromDict(enums_xml_path, histogram_enum_name,
+                          source_enum_values, source_enum_path, calling_script)

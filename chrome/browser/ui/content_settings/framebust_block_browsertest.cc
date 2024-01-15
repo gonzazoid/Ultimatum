@@ -3,10 +3,11 @@
 // found in the LICENSE file.
 
 #include <cstddef>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -39,7 +40,6 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
 #include "url/gurl.h"
@@ -105,9 +105,10 @@ class FramebustBlockBrowserTest
         iframe.src='%s'
     )";
     content::TestNavigationObserver load_observer(contents);
-    bool result = content::ExecuteScriptWithoutUserGesture(
+    bool result = content::ExecJs(
         contents,
-        base::StringPrintf(kScript, iframe_id.c_str(), url.spec().c_str()));
+        base::StringPrintf(kScript, iframe_id.c_str(), url.spec().c_str()),
+        content::EXECUTE_SCRIPT_NO_USER_GESTURE);
     load_observer.Wait();
     return result;
   }
@@ -140,11 +141,11 @@ class FramebustBlockBrowserTest
   }
 
  protected:
-  absl::optional<GURL> clicked_url_;
-  absl::optional<size_t> clicked_index_;
+  std::optional<GURL> clicked_url_;
+  std::optional<size_t> clicked_index_;
 
   base::OnceClosure blocked_url_added_closure_;
-  raw_ptr<Browser, DanglingUntriaged> current_browser_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> current_browser_;
 };
 
 // Tests that clicking an item in the list of blocked URLs trigger a navigation
@@ -373,7 +374,7 @@ class FramebustBlockPrerenderTest : public FramebustBlockBrowserTest {
   ~FramebustBlockPrerenderTest() override = default;
 
   void SetUpOnMainThread() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     FramebustBlockBrowserTest::SetUpOnMainThread();
   }
 

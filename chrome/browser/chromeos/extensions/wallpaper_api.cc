@@ -9,16 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include "ash/public/cpp/wallpaper/wallpaper_types.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
-#include "chrome/browser/ash/file_manager/fileapi_util.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
@@ -60,11 +57,11 @@ namespace {
 crosapi::mojom::WallpaperLayout GetMojoLayoutEnum(
     extensions::api::wallpaper::WallpaperLayout layout) {
   switch (layout) {
-    case extensions::api::wallpaper::WALLPAPER_LAYOUT_STRETCH:
+    case extensions::api::wallpaper::WallpaperLayout::kStretch:
       return crosapi::mojom::WallpaperLayout::kStretch;
-    case extensions::api::wallpaper::WALLPAPER_LAYOUT_CENTER:
+    case extensions::api::wallpaper::WallpaperLayout::kCenter:
       return crosapi::mojom::WallpaperLayout::kCenter;
-    case extensions::api::wallpaper::WALLPAPER_LAYOUT_CENTER_CROPPED:
+    case extensions::api::wallpaper::WallpaperLayout::kCenterCropped:
       return crosapi::mojom::WallpaperLayout::kCenterCropped;
     default:
       return crosapi::mojom::WallpaperLayout::kCenter;
@@ -211,10 +208,14 @@ void WallpaperSetWallpaperFunction::OnWallpaperFetched(
 }
 
 void WallpaperSetWallpaperFunction::OnWallpaperSetOnAsh(
-    const std::vector<uint8_t>& thumbnail_data) {
-  Respond(params_->details.thumbnail
-              ? WithArguments(Value(std::move(thumbnail_data)))
-              : NoArguments());
+    const crosapi::mojom::SetWallpaperResultPtr result) {
+  if (result->is_thumbnail_data()) {
+    Respond(params_->details.thumbnail
+                ? WithArguments(Value(std::move(result->get_thumbnail_data())))
+                : NoArguments());
+  } else {
+    Respond(Error(result->get_error_message()));
+  }
 }
 
 void WallpaperSetWallpaperFunction::SetWallpaperOnAsh() {
@@ -238,8 +239,24 @@ void WallpaperSetWallpaperFunction::SetWallpaperOnAsh() {
     return;
   }
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  auto ash_version = chromeos::LacrosService::Get()
+                         ->GetInterfaceVersion<crosapi::mojom::Wallpaper>();
+  if (ash_version <
+      static_cast<int>(crosapi::mojom::Wallpaper::kSetWallpaperMinVersion)) {
+    Respond(Error("Unsupported ChromeOS version."));
+    return;
+  }
   wallpaper_api->SetWallpaper(
       std::move(settings), extension_id, extension_name,
       base::BindOnce(&WallpaperSetWallpaperFunction::OnWallpaperSetOnAsh,
                      this));
+#else
+  // Without lacros, there is never a version mismatch between this file and
+  // wallpaper_ash.
+  wallpaper_api->SetWallpaper(
+      std::move(settings), extension_id, extension_name,
+      base::BindOnce(&WallpaperSetWallpaperFunction::OnWallpaperSetOnAsh,
+                     this));
+#endif
 }

@@ -6,13 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace offline_pages {
 
@@ -30,7 +29,8 @@ struct TaskQueue::Entry {
 };
 
 TaskQueue::TaskQueue(Delegate* delegate)
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()), delegate_(delegate) {
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
+      delegate_(delegate) {
   DCHECK(delegate_);
 }
 

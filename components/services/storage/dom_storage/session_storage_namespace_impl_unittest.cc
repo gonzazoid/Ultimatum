@@ -5,16 +5,16 @@
 #include "components/services/storage/dom_storage/session_storage_namespace_impl.h"
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
+#include "base/uuid.h"
 #include "components/services/storage/dom_storage/async_dom_storage_database.h"
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "components/services/storage/dom_storage/session_storage_data_map.h"
@@ -56,8 +56,9 @@ class SessionStorageNamespaceImplTest
       public SessionStorageNamespaceImpl::Delegate {
  public:
   SessionStorageNamespaceImplTest()
-      : test_namespace_id1_(base::GenerateGUID()),
-        test_namespace_id2_(base::GenerateGUID()) {}
+      : test_namespace_id1_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
+        test_namespace_id2_(
+            base::Uuid::GenerateRandomV4().AsLowercaseString()) {}
   ~SessionStorageNamespaceImplTest() override = default;
 
   void RunBatch(std::vector<AsyncDomStorageDatabase::BatchDatabaseTask> tasks) {

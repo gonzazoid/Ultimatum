@@ -16,22 +16,17 @@
 #include "extensions/browser/extension_event_histogram_value.h"
 #include "storage/browser/file_system/async_file_util.h"
 
-namespace extensions {
-struct Event;
-class EventRouter;
-}  // namespace extensions
+namespace ash::file_system_provider {
 
-namespace ash {
-namespace file_system_provider {
+class ProvidedFileSystemInfo;
+class RequestDispatcher;
+
 namespace operations {
 
 // Base class for operation bridges between fileapi and providing extensions.
 class Operation : public RequestManager::HandlerInterface {
  public:
-  using DispatchEventImplCallback =
-      base::RepeatingCallback<bool(std::unique_ptr<extensions::Event> event)>;
-
-  Operation(extensions::EventRouter* event_router,
+  Operation(RequestDispatcher* dispatcher,
             const ProvidedFileSystemInfo& file_system_info);
 
   Operation(const Operation&) = delete;
@@ -42,15 +37,12 @@ class Operation : public RequestManager::HandlerInterface {
   // RequestManager::HandlerInterface overrides.
   bool Execute(int request_id) override = 0;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override = 0;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override = 0;
-
-  // Sets custom dispatchign event implementation for tests.
-  void SetDispatchEventImplForTesting(
-      const DispatchEventImplCallback& callback);
+  void OnAbort(int request_id) override;
 
  protected:
   // Sends an event to the providing extension. Returns false, if the providing
@@ -63,18 +55,10 @@ class Operation : public RequestManager::HandlerInterface {
   ProvidedFileSystemInfo file_system_info_;
 
  private:
-  using DispatchEventInternalCallback =
-      base::RepeatingCallback<bool(ProviderId provider_id,
-                                   const std::string& file_system_id,
-                                   int request_id,
-                                   extensions::events::HistogramValue,
-                                   const std::string&,
-                                   base::Value::List)>;
-  DispatchEventInternalCallback dispatch_event_impl_;
+  raw_ptr<RequestDispatcher, DanglingUntriaged> request_dispatcher_;
 };
 
 }  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_OPERATION_H_

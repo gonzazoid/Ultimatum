@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -18,6 +19,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/webrtc/rtc_base/async_packet_socket.h"
+#include "third_party/webrtc/rtc_base/network/received_packet.h"
 #include "third_party/webrtc/rtc_base/socket_address.h"
 #include "third_party/webrtc/rtc_base/time_utils.h"
 
@@ -48,19 +50,19 @@ class ChromiumSocketFactoryTest : public testing::Test,
         rtc::SocketAddress("127.0.0.1", 0), 0, 0));
     ASSERT_TRUE(socket_.get() != nullptr);
     EXPECT_EQ(socket_->GetState(), rtc::AsyncPacketSocket::STATE_BOUND);
-    socket_->SignalReadPacket.connect(
-        this, &ChromiumSocketFactoryTest::OnPacket);
+    socket_->RegisterReceivedPacketCallback(
+        [&](rtc::AsyncPacketSocket* socket, const rtc::ReceivedPacket& packet) {
+          OnPacket(socket, packet);
+        });
   }
 
   void OnPacket(rtc::AsyncPacketSocket* socket,
-                const char* data,
-                size_t size,
-                const rtc::SocketAddress& address,
-                const int64_t& packet_time) {
+                const rtc::ReceivedPacket& packet) {
     EXPECT_EQ(socket, socket_.get());
-    last_packet_.assign(data, data + size);
-    last_address_ = address;
-    last_packet_time_ = packet_time;
+    last_packet_.assign(packet.payload().data(),
+                        packet.payload().data() + packet.payload().size());
+    last_address_ = packet.source_address();
+    last_packet_time_ = packet.arrival_time()->us();
     run_loop_.Quit();
   }
 
@@ -110,8 +112,7 @@ TEST_F(ChromiumSocketFactoryTest, SendAndReceive) {
       socket_factory_->CreateUdpSocket(rtc::SocketAddress("127.0.0.1", 0), 0,
                                        0));
   ASSERT_TRUE(sending_socket.get() != nullptr);
-  EXPECT_EQ(sending_socket->GetState(),
-            rtc::AsyncPacketSocket::STATE_BOUND);
+  EXPECT_EQ(sending_socket->GetState(), rtc::AsyncPacketSocket::STATE_BOUND);
 
   VerifyCanSendAndReceive(sending_socket.get());
 }
@@ -149,7 +150,7 @@ TEST_F(ChromiumSocketFactoryTest, CreateMultiplePortsFromPortRange) {
     uint16_t port = socket->GetLocalAddress().port();
     EXPECT_GE(port, kMinPort);
     EXPECT_LE(port, kMaxPort);
-    ASSERT_EQ(assigned_ports.end(), assigned_ports.find(port));
+    ASSERT_FALSE(base::Contains(assigned_ports, port));
     assigned_ports.insert(port);
   }
 
@@ -170,8 +171,7 @@ TEST_F(ChromiumSocketFactoryTest, TransientError) {
   // IPv4 address. This send is expected to fail, but the socket should still be
   // functional.
   sending_socket->SendTo(test_packet.data(), test_packet.size(),
-                         rtc::SocketAddress("::1", 0),
-                         rtc::PacketOptions());
+                         rtc::SocketAddress("::1", 0), rtc::PacketOptions());
 
   // Verify that socket is still usable.
   VerifyCanSendAndReceive(sending_socket.get());

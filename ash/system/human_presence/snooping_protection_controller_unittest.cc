@@ -14,6 +14,7 @@
 #include "ash/shell.h"
 #include "ash/system/human_presence/human_presence_metrics.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
@@ -96,8 +97,10 @@ class SnoopingProtectionControllerTestBase : public NoSessionAshTestBase {
   const bool service_state_;
   const std::map<std::string, std::string> params_;
 
-  FakeHumanPresenceDBusClient* dbus_client_ = nullptr;
-  SnoopingProtectionController* controller_ = nullptr;
+  raw_ptr<FakeHumanPresenceDBusClient, DanglingUntriaged> dbus_client_ =
+      nullptr;
+  raw_ptr<SnoopingProtectionController, DanglingUntriaged> controller_ =
+      nullptr;
 
   // Simulates a login. This will trigger a DBus call if and only if logging in
   // was the final precondition required for the feature. Hence we wait for any
@@ -166,7 +169,9 @@ TEST_F(SnoopingProtectionControllerTestAbsent, PresenceChange) {
 
 // Test that daemon signals are only enabled when session and pref state means
 // they will be used.
-TEST_F(SnoopingProtectionControllerTestAbsent, ReconfigureOnPrefs) {
+//
+// TODO(https://crbug.com/1410425): Flaky test.
+TEST_F(SnoopingProtectionControllerTestAbsent, DISABLED_ReconfigureOnPrefs) {
   // When the service becomes available for the first time, one disable is
   // performed in case the last session ended in a crash without de-configuring
   // the daemon.
@@ -201,7 +206,9 @@ TEST_F(SnoopingProtectionControllerTestAbsent, ReconfigureOnPrefs) {
 
 // Test that daemon signals are correctly enabled/disabled when the daemon
 // starts and stops.
-TEST_F(SnoopingProtectionControllerTestAbsent, ReconfigureOnRestarts) {
+//
+// TODO(https://crbug.com/1410425): Flaky test.
+TEST_F(SnoopingProtectionControllerTestAbsent, DISABLED_ReconfigureOnRestarts) {
   SimulateLogin();
   SetEnabledPref(true);
 

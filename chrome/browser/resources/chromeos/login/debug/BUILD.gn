@@ -3,29 +3,27 @@
 # found in the LICENSE file.
 
 import("//third_party/closure_compiler/compile_js.gni")
-import("//ui/webui/resources/tools/js_modulizer.gni")
+import("//tools/polymer/html_to_js.gni")
 
 # TODO(crbug.com/1229130)
 # Uncomment once most screens are migrated.
-#js_type_check("closure_compile") {
-#  is_polymer3 = true
-#  deps = [
-#    ":debug.m",
-#  ]
-#}
+# js_type_check("closure_compile") {
+#   is_polymer3 = true
+#   deps = [ ":debug" ]
+# }
 
-js_library("debug.m") {
+# js_library("debug") {
+# }
+
+# Copy existing files to output directory.
+copy("copy_js") {
   sources = [
-    "$root_gen_dir/chrome/browser/resources/chromeos/login/debug/debug.m.js",
+    "debug.js",
+    "no_debug.js",
   ]
-  deps = []
-  extra_deps = [ ":modulize" ]
+  outputs = [ "$target_gen_dir/{{source_file_part}}" ]
 }
 
-js_modulizer("modulize") {
-  input_files = [ "debug.js" ]
-  namespace_rewrites = [
-    "cr.ui.Oobe|Oobe",
-    "cr.ui.login.debug.DebuggerUI|DebuggerUI",
-  ]
+html_to_js("web_components") {
+  js_files = [ "quick_start_debugger.js" ]
 }

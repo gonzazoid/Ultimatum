@@ -7,12 +7,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/tether/asynchronous_shutdown_object_container.h"
 #include "chromeos/ash/components/tether/disconnect_tethering_request_sender.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
 
 class PrefService;
 
@@ -20,6 +18,10 @@ namespace ash {
 
 namespace device_sync {
 class DeviceSyncClient;
+}
+
+namespace secure_channel {
+class SecureChannelClient;
 }
 
 class ManagedNetworkConfigurationHandler;
@@ -103,7 +105,7 @@ class AsynchronousShutdownObjectContainerImpl
   void SetTestDoubles(std::unique_ptr<DisconnectTetheringRequestSender>
                           disconnect_tethering_request_sender);
 
-  TetherHostFetcher* tether_host_fetcher_;
+  raw_ptr<TetherHostFetcher> tether_host_fetcher_;
   std::unique_ptr<DisconnectTetheringRequestSender>
       disconnect_tethering_request_sender_;
   std::unique_ptr<NetworkConfigurationRemover> network_configuration_remover_;

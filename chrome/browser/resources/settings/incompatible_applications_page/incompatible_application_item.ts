@@ -36,8 +36,8 @@
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import '../settings_shared.css.js';
 
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './incompatible_application_item.html.js';
@@ -89,13 +89,13 @@ export class IncompatibleApplicationItemElement extends
    * Executes the action for this incompatible application, depending on
    * actionType.
    */
-  private onActionTap_() {
+  private onActionClick_() {
     if (this.actionType === ActionTypes.UNINSTALL) {
       this.browserProxy_.startApplicationUninstallation(this.applicationName);
     } else if (
         this.actionType === ActionTypes.MORE_INFO ||
         this.actionType === ActionTypes.UPGRADE) {
-      this.browserProxy_.openURL(this.actionUrl);
+      this.browserProxy_.openUrl(this.actionUrl);
     } else {
       assertNotReached();
     }

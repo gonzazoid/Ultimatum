@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 
 #include "base/test/bind.h"
 #include "chrome/browser/favicon/favicon_utils.h"
@@ -32,19 +33,19 @@ IN_PROC_BROWSER_TEST_F(SavedTabGroupBarBrowserTest,
       SavedTabGroupServiceFactory::GetForProfile(browser()->profile());
   SavedTabGroupModel* stg_model = saved_tab_group_service->model();
   TabStripModel* model = browser()->tab_strip_model();
-  base::GUID guid = base::GUID::GenerateRandomV4();
+  base::Uuid guid = base::Uuid::GenerateRandomV4();
 
   {  // Add the STG to the model and then open it from the current browser.
     const int original_model_count = model->GetTabCount();
 
     stg_model->Add(SavedTabGroup(
         std::u16string(u"test_title_1"), tab_groups::TabGroupColorId::kGrey,
-        {SavedTabGroupTab(GURL("chrome://newtab"), guid)
+        {SavedTabGroupTab(GURL("chrome://newtab"), u"New Tab Title", guid,
+                          /*position=*/0)
              .SetTitle(u"Title")
              .SetFavicon(favicon::GetDefaultFavicon())},
-        guid));
-    chrome::OpenSavedTabGroup(browser(), guid, 1);
-
+        /*position=*/std::nullopt, guid));
+    saved_tab_group_service->OpenSavedTabGroupInBrowser(browser(), guid);
     const SavedTabGroup* saved_tab_group = stg_model->Get(guid);
     EXPECT_NE(saved_tab_group, nullptr);
     EXPECT_TRUE(saved_tab_group->local_group_id().has_value());
@@ -56,7 +57,7 @@ IN_PROC_BROWSER_TEST_F(SavedTabGroupBarBrowserTest,
   {  // The STG is already opened in the saved tab group
     const int original_model_count = model->GetTabCount();
 
-    chrome::OpenSavedTabGroup(browser(), guid, 1);
+    saved_tab_group_service->OpenSavedTabGroupInBrowser(browser(), guid);
     const SavedTabGroup* saved_tab_group = stg_model->Get(guid);
     EXPECT_NE(saved_tab_group, nullptr);
     EXPECT_TRUE(saved_tab_group->local_group_id().has_value());
@@ -73,16 +74,17 @@ IN_PROC_BROWSER_TEST_F(SavedTabGroupBarBrowserTest,
   SavedTabGroupModel* stg_model = saved_tab_group_service->model();
   TabStripModel* model = browser()->tab_strip_model();
 
-  base::GUID guid = base::GUID::GenerateRandomV4();
+  base::Uuid guid = base::Uuid::GenerateRandomV4();
 
   {  // Add an STG, open a group for it in the tabstrip, and delete the STG.
     stg_model->Add(SavedTabGroup(
         std::u16string(u"test_title_1"), tab_groups::TabGroupColorId::kGrey,
-        {SavedTabGroupTab(GURL("chrome://newtab"), guid)
+        {SavedTabGroupTab(GURL("chrome://newtab"), u"New Tab Title", guid,
+                          /*position=*/0)
              .SetTitle(u"Title")
              .SetFavicon(favicon::GetDefaultFavicon())},
-        guid));
-    chrome::OpenSavedTabGroup(browser(), guid, 1);
+        /*position=*/std::nullopt, guid));
+    saved_tab_group_service->OpenSavedTabGroupInBrowser(browser(), guid);
 
     const SavedTabGroup* saved_tab_group = stg_model->Get(guid);
 
@@ -90,12 +92,13 @@ IN_PROC_BROWSER_TEST_F(SavedTabGroupBarBrowserTest,
     EXPECT_TRUE(saved_tab_group->local_group_id().has_value());
     EXPECT_TRUE(model->group_model()->ContainsTabGroup(
         saved_tab_group->local_group_id().value()));
-    stg_model->Remove(saved_tab_group->saved_guid());
+    saved_tab_group_service->UnsaveGroup(
+        saved_tab_group->local_group_id().value());
   }
 
   {  // Attempt to reopen the STG, it should not open.
     const int original_tab_count = model->count();
-    chrome::OpenSavedTabGroup(browser(), guid, 1);
+    saved_tab_group_service->OpenSavedTabGroupInBrowser(browser(), guid);
 
     const SavedTabGroup* saved_tab_group = stg_model->Get(guid);
     EXPECT_EQ(saved_tab_group, nullptr);
@@ -111,24 +114,24 @@ IN_PROC_BROWSER_TEST_F(SavedTabGroupBarBrowserTest,
       SavedTabGroupServiceFactory::GetForProfile(browser()->profile());
   SavedTabGroupModel* stg_model = saved_tab_group_service->model();
   TabStripModel* model = browser()->tab_strip_model();
-  base::GUID guid = base::GUID::GenerateRandomV4();
+  base::Uuid guid = base::Uuid::GenerateRandomV4();
 
   // Add a tab to a new group and expect the new group is not saved.
   chrome::AddTabAt(browser(), GURL("chrome://newtab"), -1, true);
   tab_groups::TabGroupId group_id = model->AddToNewGroup({1});
-  EXPECT_FALSE(model->group_model()->GetTabGroup(group_id)->IsSaved());
+  EXPECT_FALSE(saved_tab_group_service->model()->Contains(group_id));
 
   // Add the group to the SavedTabGroupModel and expect it is saved.
-  stg_model->Add(SavedTabGroup(std::u16string(u"test_title_1"),
-                               tab_groups::TabGroupColorId::kGrey,
-                               {SavedTabGroupTab(GURL("chrome://newtab"), guid)
-                                    .SetTitle(u"Title")
-                                    .SetFavicon(favicon::GetDefaultFavicon())},
-                               guid, group_id));
-  EXPECT_TRUE(model->group_model()->GetTabGroup(group_id)->IsSaved());
+  stg_model->Add(SavedTabGroup(
+      std::u16string(u"test_title_1"), tab_groups::TabGroupColorId::kGrey,
+      {SavedTabGroupTab(GURL("chrome://newtab"), u"New Tab Title", guid,
+                        /*position=*/0)
+           .SetFavicon(favicon::GetDefaultFavicon())},
+      /*position=*/std::nullopt, guid, group_id));
+  EXPECT_TRUE(saved_tab_group_service->model()->Contains(group_id));
 
   // Remove the group from the SavedTabGroupModel and expect it is no longer
   // saved.
   stg_model->Remove(group_id);
-  EXPECT_FALSE(model->group_model()->GetTabGroup(group_id)->IsSaved());
+  EXPECT_FALSE(saved_tab_group_service->model()->Contains(group_id));
 }

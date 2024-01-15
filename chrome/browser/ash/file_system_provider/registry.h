@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/file_system_provider/registry_interface.h"
 #include "chrome/browser/ash/file_system_provider/watcher.h"
 
@@ -17,8 +18,7 @@ namespace user_prefs {
 class PrefRegistrySyncable;
 }  // namespace user_prefs
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Key names for preferences.
 extern const char kPrefKeyFileSystemId[];
@@ -58,10 +58,9 @@ class Registry : public RegistryInterface {
                         const Watcher& watcher) override;
 
  private:
-  Profile* profile_;  // Not owned.
+  raw_ptr<Profile> profile_;  // Not owned.
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_REGISTRY_H_

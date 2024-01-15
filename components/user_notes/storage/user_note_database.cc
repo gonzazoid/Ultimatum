@@ -25,9 +25,7 @@ const int kCompatibleVersionNumber = 1;
 }  // namespace
 
 UserNoteDatabase::UserNoteDatabase(const base::FilePath& path_to_database_dir)
-    : db_(sql::DatabaseOptions{.exclusive_locking = true,
-                               .page_size = 4096,
-                               .cache_size = 128}),
+    : db_(sql::DatabaseOptions{.page_size = 4096, .cache_size = 128}),
       db_file_path_(path_to_database_dir.Append(kDatabaseName)) {}
 
 UserNoteDatabase::~UserNoteDatabase() {
@@ -104,15 +102,18 @@ UserNoteMetadataSnapshot UserNoteDatabase::GetNoteMetadataForUrls(
           !base::HexStringToUInt64(string_piece.substr(16, 16), &low)) {
         continue;
       }
-      base::UnguessableToken token =
+      absl::optional<base::UnguessableToken> token =
           base::UnguessableToken::Deserialize(high, low);
+      if (!token.has_value()) {
+        continue;
+      }
 
       base::Time creation_date = statement.ColumnTime(1);
       base::Time modification_date = statement.ColumnTime(2);
 
       auto metadata = std::make_unique<UserNoteMetadata>(
           creation_date, modification_date, /*min_note_version=*/1);
-      metadata_snapshot.AddEntry(url, token, std::move(metadata));
+      metadata_snapshot.AddEntry(url, token.value(), std::move(metadata));
     }
   }
 
@@ -491,7 +492,7 @@ void UserNoteDatabase::DatabaseErrorCallback(int error, sql::Statement* stmt) {
 
   // After this call, the `db_` handle is poisoned so that future calls will
   // return errors until the handle is re-opened.
-  db_.RazeAndClose();
+  db_.RazeAndPoison();
 }
 
 bool UserNoteDatabase::InitSchema() {
@@ -520,9 +521,8 @@ bool UserNoteDatabase::InitSchema() {
     return CreateSchema();
   }
 
-  meta_table.SetVersionNumber(kCurrentVersionNumber);
-  meta_table.SetCompatibleVersionNumber(kCompatibleVersionNumber);
-  return true;
+  return meta_table.SetVersionNumber(kCurrentVersionNumber) &&
+         meta_table.SetCompatibleVersionNumber(kCompatibleVersionNumber);
 }
 
 bool UserNoteDatabase::CreateSchema() {

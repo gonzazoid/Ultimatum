@@ -29,7 +29,7 @@ MockDownloadManager::CreateDownloadItemAdapter::CreateDownloadItemAdapter(
     const std::string& serialized_embedder_download_data,
     const GURL& tab_url,
     const GURL& tab_referrer_url,
-    const absl::optional<url::Origin>& request_initiator,
+    const std::optional<url::Origin>& request_initiator,
     const std::string& mime_type,
     const std::string& original_mime_type,
     base::Time start_time,
@@ -45,8 +45,7 @@ MockDownloadManager::CreateDownloadItemAdapter::CreateDownloadItemAdapter(
     bool opened,
     base::Time last_access_time,
     bool transient,
-    const std::vector<download::DownloadItem::ReceivedSlice>& received_slices,
-    const download::DownloadItemRerouteInfo& reroute_info)
+    const std::vector<download::DownloadItem::ReceivedSlice>& received_slices)
     : guid(guid),
       id(id),
       current_path(current_path),
@@ -70,8 +69,7 @@ MockDownloadManager::CreateDownloadItemAdapter::CreateDownloadItemAdapter(
       opened(opened),
       last_access_time(last_access_time),
       transient(transient),
-      received_slices(received_slices),
-      reroute_info(reroute_info) {}
+      received_slices(received_slices) {}
 
 MockDownloadManager::CreateDownloadItemAdapter::CreateDownloadItemAdapter(
     const CreateDownloadItemAdapter& rhs)
@@ -136,7 +134,7 @@ download::DownloadItem* MockDownloadManager::CreateDownloadItem(
     const StoragePartitionConfig& storage_partition_config,
     const GURL& tab_url,
     const GURL& tab_referrer_url,
-    const absl::optional<url::Origin>& request_initiator,
+    const std::optional<url::Origin>& request_initiator,
     const std::string& mime_type,
     const std::string& original_mime_type,
     base::Time start_time,
@@ -152,8 +150,7 @@ download::DownloadItem* MockDownloadManager::CreateDownloadItem(
     bool opened,
     base::Time last_access_time,
     bool transient,
-    const std::vector<download::DownloadItem::ReceivedSlice>& received_slices,
-    const download::DownloadItemRerouteInfo& reroute_info) {
+    const std::vector<download::DownloadItem::ReceivedSlice>& received_slices) {
   CreateDownloadItemAdapter adapter(
       guid, id, current_path, target_path, url_chain, referrer_url,
       StoragePartitionConfigToSerializedEmbedderDownloadData(
@@ -161,7 +158,7 @@ download::DownloadItem* MockDownloadManager::CreateDownloadItem(
       tab_url, tab_referrer_url, request_initiator, mime_type,
       original_mime_type, start_time, end_time, etag, last_modified,
       received_bytes, total_bytes, hash, state, danger_type, interrupt_reason,
-      opened, last_access_time, transient, received_slices, reroute_info);
+      opened, last_access_time, transient, received_slices);
   return MockCreateDownloadItem(adapter);
 }
 

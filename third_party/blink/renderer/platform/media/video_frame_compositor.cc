@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -331,9 +332,6 @@ VideoFrameCompositor::GetLastPresentedFrameMetadata() {
     frame_metadata->presented_frames = presentation_counter_;
   }
 
-  if (base::FeatureList::IsEnabled(media::kKeepRvfcFrameAlive))
-    frame_metadata->frame = last_frame;
-
   frame_metadata->width = last_frame->visible_rect().width();
   frame_metadata->height = last_frame->visible_rect().height();
 
@@ -368,6 +366,9 @@ bool VideoFrameCompositor::ProcessNewFrame(
   // subsequent PutCurrentFrame() call it will mark it as rendered.
   rendered_last_frame_ = false;
 
+  // TODO(crbug.com/1447318): Add other cases where the frame is not readable.
+  bool is_frame_readable = !frame->metadata().dcomp_surface;
+
   // Copy to a local variable to avoid potential deadlock when executing the
   // callback.
   OnNewFramePresentedCB frame_presented_cb;
@@ -377,8 +378,10 @@ bool VideoFrameCompositor::ProcessNewFrame(
     frame_presented_cb = std::move(new_presented_frame_cb_);
   }
 
-  if (new_processed_frame_cb_)
-    std::move(new_processed_frame_cb_).Run(tick_clock_->NowTicks());
+  if (new_processed_frame_cb_) {
+    std::move(new_processed_frame_cb_)
+        .Run(tick_clock_->NowTicks(), is_frame_readable);
+  }
 
   if (frame_presented_cb) {
     std::move(frame_presented_cb).Run();
@@ -395,7 +398,9 @@ void VideoFrameCompositor::SetIsPageVisible(bool is_visible) {
 
 void VideoFrameCompositor::SetForceSubmit(bool force_submit) {
   DCHECK(task_runner_->BelongsToCurrentThread());
-  submitter_->SetForceSubmit(force_submit);
+  // The `submitter_` can be null in tests.
+  if (submitter_)
+    submitter_->SetForceSubmit(force_submit);
 }
 
 base::TimeDelta VideoFrameCompositor::GetLastIntervalWithoutLock()

@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "net/base/features.h"
@@ -625,11 +625,11 @@ TEST_F(ReportingUploaderTest, DontCacheResponse) {
 // with a different one, and make sure only the requests with the same
 // NetworkAnonymizationKey share a socket.
 TEST_F(ReportingUploaderTest, RespectsNetworkAnonymizationKey) {
-  // While features::kPartitionConnectionsByNetworkIsolationKey is not needed
-  // for reporting code to respect NetworkAnonymizationKey, this test works by
-  // ensuring that Reporting's NetworkAnonymizationKey makes it to the socket
-  // pool layer and is respected there, so this test needs to enable
-  // kPartitionConnectionsByNetworkIsolationKey.
+  // While network state partitioning is not needed for reporting code to
+  // respect NetworkAnonymizationKey, this test works by ensuring that
+  // Reporting's NetworkAnonymizationKey makes it to the socket pool layer and
+  // is respected there, so this test needs to enable
+  // network state partitioning.
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeature(
       features::kPartitionConnectionsByNetworkIsolationKey);
@@ -637,12 +637,14 @@ TEST_F(ReportingUploaderTest, RespectsNetworkAnonymizationKey) {
   const SchemefulSite kSite1 = SchemefulSite(kOrigin);
   const SchemefulSite kSite2(GURL("https://origin2/"));
   ASSERT_NE(kSite1, kSite2);
-  const NetworkIsolationKey kNetworkIsolationKey1(kSite1, kSite1);
-  const NetworkIsolationKey kNetworkIsolationKey2(kSite2, kSite2);
-  const IsolationInfo kIsolationInfo1 = IsolationInfo::CreatePartial(
-      IsolationInfo::RequestType::kOther, kNetworkIsolationKey1);
-  const IsolationInfo kIsolationInfo2 = IsolationInfo::CreatePartial(
-      IsolationInfo::RequestType::kOther, kNetworkIsolationKey2);
+  const url::Origin kSiteOrigin1 = url::Origin::Create(kSite1.GetURL());
+  const url::Origin kSiteOrigin2 = url::Origin::Create(kSite2.GetURL());
+  const IsolationInfo kIsolationInfo1 =
+      IsolationInfo::Create(net::IsolationInfo::RequestType::kOther,
+                            kSiteOrigin1, kSiteOrigin1, net::SiteForCookies());
+  const IsolationInfo kIsolationInfo2 =
+      IsolationInfo::Create(net::IsolationInfo::RequestType::kOther,
+                            kSiteOrigin2, kSiteOrigin2, net::SiteForCookies());
 
   MockClientSocketFactory socket_factory;
   auto context_builder = CreateTestURLRequestContextBuilder();

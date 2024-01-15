@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_SYNC_MODEL_PROXY_MODEL_TYPE_CONTROLLER_DELEGATE_H_
 #define COMPONENTS_SYNC_MODEL_PROXY_MODEL_TYPE_CONTROLLER_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -42,6 +42,8 @@ class ProxyModelTypeControllerDelegate : public ModelTypeControllerDelegate {
       base::OnceCallback<void(const TypeEntitiesCount&)> callback)
       const override;
   void RecordMemoryUsageAndCountsHistograms() override;
+  void ClearMetadataIfStopped() override;
+  void ReportBridgeErrorForTest() override;
 
  private:
   // Post the given task (that requires the destination delegate to run) to

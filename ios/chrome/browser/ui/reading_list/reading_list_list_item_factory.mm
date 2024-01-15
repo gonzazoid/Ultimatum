@@ -4,7 +4,7 @@
 
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item_factory.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/reading_list/core/reading_list_entry.h"
 #import "components/url_formatter/url_formatter.h"
@@ -15,10 +15,6 @@
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 #import "ui/base/l10n/time_format.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface ReadingListListItemFactory ()
 
@@ -60,8 +56,9 @@
 
 #pragma mark Public
 
-- (ListItem<ReadingListListItem>*)cellItemForReadingListEntry:
-    (const ReadingListEntry*)entry {
+- (ListItem<ReadingListListItem>*)
+    cellItemForReadingListEntry:(const ReadingListEntry*)entry
+            needsExplicitUpload:(BOOL)needsExplicitUpload {
   ListItem<ReadingListListItem>* item =
       [[ReadingListTableViewItem alloc] initWithType:0];
   item.title = base::SysUTF8ToNSString(entry->Title());
@@ -73,15 +70,12 @@
       reading_list::UIStatusFromModelStatus(entry->DistilledState());
   BOOL hasDistillationDetails =
       entry->DistilledState() == ReadingListEntry::PROCESSED &&
-      entry->DistillationSize() != 0 && entry->DistillationTime() != 0;
+      entry->DistillationTime() != 0;
   int64_t distillationDate =
       hasDistillationDetails ? entry->DistillationTime() : 0;
   item.distillationDateText =
       GetReadingListCellDistillationDateText(distillationDate);
-  int64_t distillationSize =
-      hasDistillationDetails ? entry->DistillationSize() : 0;
-  item.distillationSizeText =
-      GetReadingListCellDistillationSizeText(distillationSize);
+  item.showCloudSlashIcon = needsExplicitUpload;
   item.customActionFactory = self.customActionFactory;
   return item;
 }

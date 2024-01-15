@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+
+/** @type {?BrowserBridge} */
+let instance = null;
 
 /**
  * This class provides a "bridge" for communicating between the javascript and
@@ -42,18 +45,6 @@ export class BrowserBridge {
     chrome.send('domainSecurityPolicyDelete', [domain]);
   }
 
-  sendExpectCTQuery(domain) {
-    return sendWithPromise('expectCTQuery', domain);
-  }
-
-  sendExpectCTAdd(domain, report_uri, enforce) {
-    chrome.send('expectCTAdd', [domain, report_uri, enforce]);
-  }
-
-  sendExpectCTTestReport(report_uri) {
-    return sendWithPromise('expectCTTestReport', report_uri);
-  }
-
   sendCloseIdleSockets() {
     chrome.send('closeIdleSockets');
   }
@@ -65,6 +56,27 @@ export class BrowserBridge {
   setNetworkDebugMode(subsystem) {
     chrome.send('setNetworkDebugMode', [subsystem]);
   }
-}
 
-addSingletonGetter(BrowserBridge);
+  sendClearSharedDictionary() {
+    return sendWithPromise('clearSharedDictionary');
+  }
+
+  sendClearSharedDictionaryCacheForIsolationKey(frame_origin, top_frame_site) {
+    return sendWithPromise(
+        'clearSharedDictionaryCacheForIsolationKey', frame_origin,
+        top_frame_site);
+  }
+
+  getSharedDictionaryUsageInfo() {
+    return sendWithPromise('getSharedDictionaryUsageInfo');
+  }
+
+  getSharedDictionaryInfo(frame_origin, top_frame_site) {
+    return sendWithPromise(
+        'getSharedDictionaryInfo', frame_origin, top_frame_site);
+  }
+
+  static getInstance() {
+    return instance || (instance = new BrowserBridge());
+  }
+}

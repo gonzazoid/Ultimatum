@@ -18,6 +18,16 @@ extern const struct wp_presentation_interface kMockWpPresentationImpl;
 
 class MockWpPresentation : public GlobalObject {
  public:
+  struct PresentationFeedbackParams {
+    uint32_t tv_sec_hi;
+    uint32_t tv_sec_lo;
+    uint32_t tv_nsec;
+    uint32_t refresh;
+    uint32_t seq_hi;
+    uint32_t seq_lo;
+    uint32_t flags;
+  };
+
   MockWpPresentation();
 
   MockWpPresentation(const MockWpPresentation&) = delete;
@@ -33,18 +43,42 @@ class MockWpPresentation : public GlobalObject {
                     struct wl_resource* surface,
                     uint32_t callback));
 
-  void set_presentation_callback(wl_resource* callback_resource) {
-    DCHECK(!presentation_callback_ || callback_resource == nullptr);
-    presentation_callback_ = callback_resource;
+  size_t num_of_presentation_callbacks() const {
+    return presentation_callbacks_.size();
   }
 
-  wl_resource* ReleasePresentationCallback();
+  void OnFeedback(wl_resource* callback_resource);
 
+  // Drops first presentation callback from |presentation_callbacks|. If |last|
+  // is true, the last item is dropped instead.
+  void DropPresentationCallback(bool last = false);
+
+  // Sends successful presentation callback for the first callback item in
+  // |presentation_callbacks| and deletes that.
   void SendPresentationCallback();
-  void SendPresentationCallbackDiscarded();
+
+  // Sends discarded presentation callback for the first callback item (if
+  // |last| is true, then the very recent one) in |presentation_callbacks| and
+  // deletes that.
+  void SendPresentationCallbackDiscarded(bool last = false);
+
+  // Sends either discarded or feedback with `params` to client and deletes
+  // the feedback resource. If `params` is null, then send discarded feedback.
+  // Which feedback is sent (the oldest or the most recent) is based on |last|
+  // value.
+  void SendPresentationFeedbackToClient(
+      bool last,
+      absl::optional<PresentationFeedbackParams> params);
 
  private:
-  raw_ptr<wl_resource> presentation_callback_ = nullptr;
+  // Sends either discarded or succeeded, which is based on |discarded|,
+  // feedback to client and deletes the feedback resource. Which feedback is
+  // sent (the oldest or the most recent) is based on |last| value.
+  void SendPresentationFeedbackToClient(bool last, bool discarded);
+
+  wl_resource* GetPresentationCallbackResource(bool last);
+
+  std::vector<raw_ptr<wl_resource>> presentation_callbacks_;
 };
 
 }  // namespace wl

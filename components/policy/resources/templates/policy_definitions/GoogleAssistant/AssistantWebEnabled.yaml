@@ -24,14 +24,14 @@ items:
 - caption: Allow the user to decide
   value: null
 owners:
-- file://components/autofill_assistant/OWNERS
 - brunobraga@google.com
 - jkeitel@google.com
 schema:
   type: boolean
 supported_on:
-- android:109-
-- chrome.*:107-
-- chrome_os:107-
+- android:109-109
+- chrome.*:107-109
+- chrome_os:107-109
 tags: []
 type: main
+deprecated: true

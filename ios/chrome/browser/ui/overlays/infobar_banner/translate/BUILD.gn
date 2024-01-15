@@ -8,11 +8,9 @@ source_set("coordinators") {
     "translate_infobar_placeholder_overlay_coordinator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
-    "//ios/chrome/browser/overlays/public/common/infobars",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model/public/common/infobars",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
     "//ios/chrome/browser/ui/overlays:coordinators",
     "//ios/chrome/browser/ui/overlays/infobar_banner:coordinators",
   ]
@@ -24,15 +22,16 @@ source_set("mediators") {
     "translate_infobar_banner_overlay_mediator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
+    "//components/translate/core/browser",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/browser/infobars/model/overlays:util",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/ui/infobars/banners",
     "//ios/chrome/browser/ui/overlays:coordinators",
     "//ios/chrome/browser/ui/overlays/infobar_banner:mediators",
@@ -44,8 +43,6 @@ source_set("unit_tests") {
   testonly = true
   sources = [ "translate_infobar_banner_overlay_mediator_unittest.mm" ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":mediators",
     "//base/test:test_support",
@@ -53,12 +50,15 @@ source_set("unit_tests") {
     "//components/strings",
     "//components/translate/core/browser:test_support",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/infobars",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/common/infobars",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/overlays/test",
-    "//ios/chrome/browser/translate:test_support",
+    "//ios/chrome/browser/infobars/model",
+    "//ios/chrome/browser/infobars/model:public",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/common/infobars",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model/test",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/translate/model:test_support",
     "//ios/chrome/browser/ui/infobars/banners/test",
     "//ios/chrome/browser/ui/infobars/test",
     "//ios/chrome/browser/ui/overlays:coordinators",

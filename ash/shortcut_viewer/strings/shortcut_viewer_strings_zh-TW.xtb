@@ -59,7 +59,7 @@
 <translation id="2872353916818027657">切換主要顯示器</translation>
 <translation id="2914313326123580426">顯示或隱藏開發人員工具面板</translation>
 <translation id="292495055542441795">切換全螢幕</translation>
-<translation id="3020183492814296499">快速鍵</translation>
+<translation id="3020183492814296499">捷徑</translation>
 <translation id="3084301071537457911">醒目顯示檔案櫃中的下一個項目</translation>
 <translation id="309173601632226815">醒目顯示檔案櫃中的啟動器按鈕</translation>
 <translation id="3140353188828248647">將焦點移至網址列</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">醒目顯示網址列所在的行</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> 鍵或 <ph name="ENTER" /> 鍵</translation>
 <translation id="4240486403425279990">總覽模式</translation>
+<translation id="4275283744500212192">開啟視窗版面配置選項</translation>
 <translation id="4276530550848325494"><ph name="KEY" /></translation>
 <translation id="4382340674111381977">返回上一頁</translation>
 <translation id="4458670250301149821">將應用程式圖示移入或移出應用程式格線中的資料夾</translation>
@@ -194,6 +195,7 @@
 <translation id="8388247778047144397">將連結拖曳至分頁列中的空白區域</translation>
 <translation id="8389638407792712197">開啟新視窗</translation>
 <translation id="8429696719963529183">使用 F 鍵 (F1 到 F12)</translation>
+<translation id="8539396513118402548">快速鍵清單</translation>
 <translation id="85690795166292698">在新分頁中開啟連結</translation>
 <translation id="8609384513243082612">開啟新分頁</translation>
 <translation id="8644639153978066712">顯示「檔案」應用程式中隱藏的檔案</translation>

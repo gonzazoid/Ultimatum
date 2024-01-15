@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/android/scoped_surface_request_manager.h"
 #include "content/browser/media/android/media_player_renderer_web_contents_observer.h"
 #include "content/browser/media/android/media_resource_getter_impl.h"
@@ -76,7 +76,7 @@ void MediaPlayerRenderer::Initialize(media::MediaResource* media_resource,
 
   renderer_client_ = client;
 
-  if (media_resource->GetType() != media::MediaResource::Type::URL) {
+  if (media_resource->GetType() != media::MediaResource::Type::KUrl) {
     DLOG(ERROR) << "MediaResource is not of Type URL";
     std::move(init_cb).Run(media::PIPELINE_ERROR_INITIALIZATION_FAILED);
     return;
@@ -115,10 +115,10 @@ void MediaPlayerRenderer::CreateMediaPlayer(
 
   media_player_ = std::make_unique<media::MediaPlayerBridge>(
       url_params.media_url, url_params.site_for_cookies,
-      url_params.top_frame_origin, user_agent,
+      url_params.top_frame_origin, url_params.has_storage_access, user_agent,
       false,  // hide_url_log
       this,   // MediaPlayerBridge::Client
-      url_params.allow_credentials, url_params.is_hls);
+      url_params.allow_credentials, url_params.is_hls, url_params.headers);
 
   media_player_->Initialize();
   UpdateVolume();
@@ -127,7 +127,7 @@ void MediaPlayerRenderer::CreateMediaPlayer(
 }
 
 void MediaPlayerRenderer::SetLatencyHint(
-    absl::optional<base::TimeDelta> latency_hint) {}
+    std::optional<base::TimeDelta> latency_hint) {}
 
 void MediaPlayerRenderer::Flush(base::OnceClosure flush_cb) {
   DVLOG(3) << __func__;
@@ -204,6 +204,10 @@ void MediaPlayerRenderer::UpdateVolume() {
 
 base::TimeDelta MediaPlayerRenderer::GetMediaTime() {
   return media_player_->GetCurrentTime();
+}
+
+media::RendererType MediaPlayerRenderer::GetRendererType() {
+  return media::RendererType::kMediaPlayer;
 }
 
 media::MediaResourceGetter* MediaPlayerRenderer::GetMediaResourceGetter() {

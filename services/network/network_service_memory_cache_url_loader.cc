@@ -4,7 +4,7 @@
 
 #include "services/network/network_service_memory_cache_url_loader.h"
 
-#include "base/bit_cast.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_event.h"
 #include "net/http/http_log_util.h"
@@ -23,7 +23,8 @@ NetworkServiceMemoryCacheURLLoader::NetworkServiceMemoryCacheURLLoader(
     mojo::PendingReceiver<mojom::URLLoader> receiver,
     mojo::PendingRemote<mojom::URLLoaderClient> client,
     scoped_refptr<base::RefCountedBytes> content,
-    int64_t encoded_body_length)
+    int64_t encoded_body_length,
+    const absl::optional<net::CookiePartitionKey> cookie_partition_key)
     : memory_cache_(memory_cache),
       trace_id_(trace_id),
       net_log_(net_log),
@@ -31,7 +32,8 @@ NetworkServiceMemoryCacheURLLoader::NetworkServiceMemoryCacheURLLoader(
       client_(std::move(client)),
       devtools_request_id_(resource_request.devtools_request_id),
       content_(std::move(content)),
-      encoded_body_length_(encoded_body_length) {
+      encoded_body_length_(encoded_body_length),
+      cookie_partition_key_(std::move(cookie_partition_key)) {
   DCHECK(memory_cache_);
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       "loading", "NetworkServiceMemoryCacheURLLoader",
@@ -91,7 +93,7 @@ void NetworkServiceMemoryCacheURLLoader::Start(
   // Set up data pipe producer.
   producer_handle_watcher_ = std::make_unique<mojo::SimpleWatcher>(
       FROM_HERE, mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
   producer_handle_watcher_->Watch(
       producer_handle_.get(), MOJO_HANDLE_SIGNAL_WRITABLE,
       MOJO_WATCH_CONDITION_SATISFIED,
@@ -147,7 +149,8 @@ void NetworkServiceMemoryCacheURLLoader::MaybeNotifyRawResponse(
   devtools_observer_->OnRawResponse(
       *devtools_request_id_, /*cookies_with_access_result=*/{},
       std::move(header_array), /*raw_response_headers=*/absl::nullopt,
-      mojom::IPAddressSpace::kUnknown, response_head.headers->response_code());
+      mojom::IPAddressSpace::kUnknown, response_head.headers->response_code(),
+      cookie_partition_key_);
 }
 
 void NetworkServiceMemoryCacheURLLoader::WriteMore() {
@@ -190,8 +193,8 @@ void NetworkServiceMemoryCacheURLLoader::WriteMore() {
   if (net_log_.IsCapturing()) {
     net_log_.AddByteTransferEvent(
         net::NetLogEventType::IN_MEMORY_CACHE_BYTES_READ, total_write_size,
-        base::bit_cast<const char*>(content_->data().data() +
-                                    original_write_position));
+        reinterpret_cast<const char*>(content_->data().data() +
+                                      original_write_position));
   }
 
   if (write_completed) {

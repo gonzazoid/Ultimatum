@@ -21,9 +21,7 @@ public class FrozenNativePage implements NativePage {
     private final String mTitle;
     private final int mBackgroundColor;
 
-    /**
-     * Creates a FrozenNativePage to replace the given NativePage and destroys the NativePage.
-     */
+    /** Creates a FrozenNativePage to replace the given NativePage and destroys the NativePage. */
     public static FrozenNativePage freeze(NativePage nativePage) {
         FrozenNativePage fnp = new FrozenNativePage(nativePage);
         nativePage.destroy();
@@ -64,18 +62,8 @@ public class FrozenNativePage implements NativePage {
     }
 
     @Override
-    public @ColorInt int getToolbarTextBoxBackgroundColor(@ColorInt int defaultColor) {
-        return defaultColor;
-    }
-
-    @Override
     public @ColorInt int getToolbarSceneLayerBackground(@ColorInt int defaultColor) {
         return defaultColor;
-    }
-
-    @Override
-    public float getToolbarTextBoxAlpha(float defaultAlpha) {
-        return 1.f;
     }
 
     @Override

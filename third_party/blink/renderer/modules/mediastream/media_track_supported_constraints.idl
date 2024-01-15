@@ -19,6 +19,7 @@ dictionary MediaTrackSupportedConstraints {
     boolean echoCancellation = true;
     boolean autoGainControl = true;
     boolean noiseSuppression = true;
+    [RuntimeEnabled=MediaCaptureVoiceIsolation] boolean voiceIsolation = true;
     boolean latency = true;
     boolean channelCount = true;
     boolean deviceId = true;
@@ -48,7 +49,11 @@ dictionary MediaTrackSupportedConstraints {
 
     // W3C Media Capture Extensions
     [RuntimeEnabled=MediaCaptureBackgroundBlur] boolean backgroundBlur = true;
+    [RuntimeEnabled=MediaCaptureCameraControls] boolean eyeGazeCorrection = true;
+    [RuntimeEnabled=MediaCaptureCameraControls] boolean faceFraming = true;
 
-    // https://github.com/w3c/mediacapture-screen-share/pull/186/files
-    [RuntimeEnabled=DisplaySurfaceConstraint] boolean displaySurface = true;
+    // Screen Capture API
+    // https://w3c.github.io/mediacapture-screen-share/#extensions-to-mediatracksupportedconstraints
+    boolean displaySurface = true;
+    boolean suppressLocalAudioPlayback = true;
 };

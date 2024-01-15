@@ -18,7 +18,6 @@
 #define MEDIA_AUDIO_MAC_AUDIO_AUHAL_MAC_H_
 
 #include <AudioUnit/AudioUnit.h>
-#include <CoreAudio/CoreAudio.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -31,18 +30,24 @@
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
+#include "media/audio/apple/audio_io_stream_client.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
 #include "media/audio/mac/scoped_audio_unit.h"
 #include "media/audio/system_glitch_reporter.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_parameters.h"
+
+#if BUILDFLAG(IS_MAC)
+#include <CoreAudio/CoreAudio.h>
+#endif
 
 namespace media {
 
-class AudioManagerMac;
 class AudioPullFifo;
 
-// Implementation of AudioOuputStream for Mac OS X using the
+// Implementation of AudioOutputStream for Apple using the
 // AUHAL Audio Unit present in OS 10.4 and later.
 // It is useful for low-latency output.
 //
@@ -73,10 +78,10 @@ class AudioPullFifo;
 
 class AUHALStream : public AudioOutputStream {
  public:
-  // |manager| creates this object.
+  // |client| creates this object.
   // |device| is the CoreAudio device to use for the stream.
   // It will often be the default output device.
-  AUHALStream(AudioManagerMac* manager,
+  AUHALStream(AudioIOStreamClient* client,
               const AudioParameters& params,
               AudioDeviceID device,
               const AudioManager::LogCallback& log_callback);
@@ -135,7 +140,7 @@ class AUHALStream : public AudioOutputStream {
   void UpdatePlayoutTimestamp(const AudioTimeStamp* timestamp);
 
   // Our creator, the audio manager needs to be notified when we close.
-  const raw_ptr<AudioManagerMac> manager_;
+  const raw_ptr<AudioIOStreamClient> client_;
 
   const AudioParameters params_;
 
@@ -174,11 +179,6 @@ class AUHALStream : public AudioOutputStream {
   // Current playout time.  Set by Render().
   base::TimeTicks current_playout_time_;
 
-  // Lost frames not yet reported to the provider. Increased in
-  // UpdatePlayoutTimestamp() if any lost frame since last time. Forwarded to
-  // the provider and reset in ProvideInput().
-  uint32_t current_lost_frames_;
-
   // Stores the timestamp of the previous audio buffer requested by the OS.
   // We use this in combination with |last_number_of_frames_| to detect when
   // the OS has decided to skip rendering frames (i.e. a glitch).
@@ -199,6 +199,11 @@ class AUHALStream : public AudioOutputStream {
 
   // Callback to send statistics info.
   AudioManager::LogCallback log_callback_;
+
+  [[maybe_unused]] std::unique_ptr<AmplitudePeakDetector> peak_detector_
+      GUARDED_BY(lock_);
+
+  AudioGlitchInfo::Accumulator glitch_info_accumulator_;
 
   // Used to make sure control functions (Start(), Stop() etc) are called on the
   // right thread.

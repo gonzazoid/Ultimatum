@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/test/test_future.h"
 #include "chrome/browser/lacros/browser_test_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -19,8 +20,8 @@ namespace {
 // If ash does not contain the relevant test controller functionality, then
 // there's nothing to do for this test.
 bool IsServiceAvailable() {
-  if (chromeos::LacrosService::Get()->GetInterfaceVersion(
-          crosapi::mojom::TestController::Uuid_) <
+  if (chromeos::LacrosService::Get()
+          ->GetInterfaceVersion<crosapi::mojom::TestController>() <
       static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
                            kEnterOverviewModeMinVersion)) {
     LOG(WARNING) << "Unsupported ash version.";
@@ -41,22 +42,19 @@ IN_PROC_BROWSER_TEST_F(OverviewBrowserTest, NoCrashWithSingleWindow) {
   if (!IsServiceAvailable())
     return;
 
-  // Wait for the window to be visible.
-  aura::Window* window = browser()->window()->GetNativeWindow();
-  std::string id =
-      lacros_window_utility::GetRootWindowUniqueId(window->GetRootWindow());
-  browser_test_util::WaitForWindowCreation(id);
-
   // Enter overview mode.
-  auto* lacros_service = chromeos::LacrosService::Get();
-  crosapi::mojom::TestControllerAsyncWaiter waiter(
-      lacros_service->GetRemote<crosapi::mojom::TestController>().get());
-  waiter.EnterOverviewMode();
+  auto& test_controller = chromeos::LacrosService::Get()
+                              ->GetRemote<crosapi::mojom::TestController>();
+  base::RunLoop run_loop;
+  test_controller->EnterOverviewMode(run_loop.QuitClosure());
+  run_loop.Run();
 
   // Close the window by closing all tabs and wait for it to stop existing in
   // ash.
+  std::string id = lacros_window_utility::GetRootWindowUniqueId(
+      browser()->window()->GetNativeWindow()->GetRootWindow());
   browser()->tab_strip_model()->CloseAllTabs();
-  browser_test_util::WaitForWindowDestruction(id);
+  ASSERT_TRUE(browser_test_util::WaitForWindowDestruction(id));
 }
 
 // We enter overview mode with 2 windows. We delete 1 window during overview
@@ -67,34 +65,28 @@ IN_PROC_BROWSER_TEST_F(OverviewBrowserTest, NoCrashTwoWindows) {
   if (!IsServiceAvailable())
     return;
 
-  // Wait for the window to be visible.
-  aura::Window* main_window = browser()->window()->GetNativeWindow();
-  std::string main_id = lacros_window_utility::GetRootWindowUniqueId(
-      main_window->GetRootWindow());
-  browser_test_util::WaitForWindowCreation(main_id);
-
   // Create an incognito window and make it visible.
   Browser* incognito_browser = Browser::Create(Browser::CreateParams(
       browser()->profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true),
       true));
   AddBlankTabAndShow(incognito_browser);
-  aura::Window* incognito_window =
-      incognito_browser->window()->GetNativeWindow();
-  std::string incognito_id = lacros_window_utility::GetRootWindowUniqueId(
-      incognito_window->GetRootWindow());
-  browser_test_util::WaitForWindowCreation(incognito_id);
 
   // Enter overview mode.
-  auto* lacros_service = chromeos::LacrosService::Get();
-  crosapi::mojom::TestControllerAsyncWaiter waiter(
-      lacros_service->GetRemote<crosapi::mojom::TestController>().get());
-  waiter.EnterOverviewMode();
+  auto& test_controller = chromeos::LacrosService::Get()
+                              ->GetRemote<crosapi::mojom::TestController>();
+  base::test::TestFuture<void> future;
+  test_controller->EnterOverviewMode(future.GetCallback());
+  EXPECT_TRUE(future.Wait());
+  future.Clear();
 
   // Close the incognito window by closing all tabs and wait for it to stop
   // existing in ash.
+  std::string incognito_id = lacros_window_utility::GetRootWindowUniqueId(
+      incognito_browser->window()->GetNativeWindow()->GetRootWindow());
   incognito_browser->tab_strip_model()->CloseAllTabs();
-  browser_test_util::WaitForWindowDestruction(incognito_id);
+  ASSERT_TRUE(browser_test_util::WaitForWindowDestruction(incognito_id));
 
   // Exit overview mode.
-  waiter.ExitOverviewMode();
+  test_controller->ExitOverviewMode(future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 }

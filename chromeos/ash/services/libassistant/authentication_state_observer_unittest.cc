@@ -8,7 +8,6 @@
 #include "chromeos/ash/services/libassistant/test_support/libassistant_service_tester.h"
 #include "chromeos/assistant/internal/internal_util.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -26,8 +25,9 @@ std::vector<int> GetAuthenticationErrorCodes() {
 
   std::vector<int> result;
   for (int code = kMinErrorCode; code <= kMaxErrorCode; ++code) {
-    if (chromeos::assistant::IsAuthError(code))
+    if (chromeos::assistant::IsAuthError(code)) {
       result.push_back(code);
+    }
   }
 
   return result;
@@ -88,12 +88,23 @@ class AuthenticationStateObserverTest : public ::testing::Test {
 
   AuthenticationStateObserverMock& observer_mock() { return observer_mock_; }
 
-  assistant_client::AssistantManagerDelegate& assistant_manager_delegate() {
-    return *service_tester_.assistant_manager_internal()
-                .assistant_manager_delegate();
-  }
-
   void FlushMojomPipes() { service_tester_.FlushForTesting(); }
+
+  void OnCommunicationError(int error_code) {
+    if (!chromeos::assistant::IsAuthError(error_code)) {
+      return;
+    }
+
+    ::assistant::api::OnDeviceStateEventRequest request;
+    auto* communication_error =
+        request.mutable_event()->mutable_on_communication_error();
+    communication_error->set_error_code(
+        ::assistant::api::events::DeviceStateEvent::OnCommunicationError::
+            AUTH_TOKEN_FAIL);
+
+    service_tester_.service().conversation_controller().OnGrpcMessageForTesting(
+        request);
+  }
 
  private:
   base::test::SingleThreadTaskEnvironment environment_;
@@ -104,7 +115,7 @@ class AuthenticationStateObserverTest : public ::testing::Test {
 TEST_F(AuthenticationStateObserverTest, ShouldReportAuthenticationErrors) {
   for (int code : GetAuthenticationErrorCodes()) {
     EXPECT_CALL(observer_mock(), OnAuthenticationError());
-    assistant_manager_delegate().OnCommunicationError(code);
+    OnCommunicationError(code);
 
     FlushMojomPipes();
     ASSERT_TRUE(testing::Mock::VerifyAndClearExpectations(&observer_mock()))
@@ -115,14 +126,11 @@ TEST_F(AuthenticationStateObserverTest, ShouldReportAuthenticationErrors) {
 TEST_F(AuthenticationStateObserverTest, ShouldIgnoreNonAuthenticationErrors) {
   std::vector<int> non_authentication_errors = GetNonAuthenticationErrorCodes();
 
-  // check to ensure these are not authentication errors.
-  for (int code : non_authentication_errors)
+  for (int code : non_authentication_errors) {
+    // check to ensure these are not authentication errors.
     ASSERT_FALSE(chromeos::assistant::IsAuthError(code));
-
-  // Run the actual unittest
-  for (int code : GetAuthenticationErrorCodes()) {
-    EXPECT_CALL(observer_mock(), OnAuthenticationError());
-    assistant_manager_delegate().OnCommunicationError(code);
+    EXPECT_CALL(observer_mock(), OnAuthenticationError()).Times(0);
+    OnCommunicationError(code);
 
     FlushMojomPipes();
     ASSERT_TRUE(testing::Mock::VerifyAndClearExpectations(&observer_mock()))

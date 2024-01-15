@@ -8,18 +8,19 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.ApplicationStatus;
+import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Matchers;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
@@ -27,13 +28,13 @@ import org.chromium.components.webapk.lib.client.WebApkValidator;
 import org.chromium.webapk.lib.common.WebApkConstants;
 
 /**
- * Instrumentation tests for launching site settings for WebApks.
- * Site settings are added as a dynamic android shortcut.
- * The shortcut launches a {@link ManageTrustedWebActivityDataActivity}
+ * Instrumentation tests for launching site settings for WebApks. Site settings are added as a
+ * dynamic android shortcut. The shortcut launches a {@link ManageTrustedWebActivityDataActivity}
  * intent that validates the WebApk and launches the chromium SettingsActivity.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
+@Batch(Batch.PER_CLASS)
 public class ManageTrustedWebActivityDataActivityTest {
     private static final String SETTINGS_ACTIVITY_NAME =
             "org.chromium.chrome.browser.settings.SettingsActivity";
@@ -42,7 +43,6 @@ public class ManageTrustedWebActivityDataActivityTest {
 
     @Test
     @MediumTest
-    @DisabledTest(message = "http://crbug.com/1283285")
     public void launchesWebApkSiteSettings() throws Exception {
         WebApkValidator.setDisableValidationForTesting(true);
         ManageTrustedWebActivityDataActivity.setCallingPackageForTesting(TEST_PACKAGE_NAME);
@@ -50,14 +50,17 @@ public class ManageTrustedWebActivityDataActivityTest {
         launchSettings(TEST_PACKAGE_NAME, Uri.parse(WEBAPK_TEST_URL));
 
         // Check settings activity is running.
-        CriteriaHelper.pollUiThread(() -> {
-            try {
-                Criteria.checkThat("Site settings activity was not launched",
-                        siteSettingsActivityRunning(), Matchers.is(true));
-            } catch (PackageManager.NameNotFoundException e) {
-                e.printStackTrace();
-            }
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    try {
+                        Criteria.checkThat(
+                                "Site settings activity was not launched",
+                                siteSettingsActivityRunning(),
+                                Matchers.is(true));
+                    } catch (PackageManager.NameNotFoundException e) {
+                        e.printStackTrace();
+                    }
+                });
     }
 
     private boolean siteSettingsActivityRunning() throws PackageManager.NameNotFoundException {
@@ -75,7 +78,7 @@ public class ManageTrustedWebActivityDataActivityTest {
         Intent intent = new Intent();
         intent.setAction(
                 "android.support.customtabs.action.ACTION_MANAGE_TRUSTED_WEB_ACTIVITY_DATA");
-        intent.setPackage(InstrumentationRegistry.getTargetContext().getPackageName());
+        intent.setPackage(ApplicationProvider.getApplicationContext().getPackageName());
         intent.setData(uri);
         intent.putExtra(WebApkConstants.EXTRA_IS_WEBAPK, true);
         // The following flag is required because the test starts the intent outside of an activity.

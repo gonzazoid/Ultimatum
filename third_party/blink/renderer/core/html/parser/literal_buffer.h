@@ -6,10 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_PARSER_LITERAL_BUFFER_H_
 
 #include <algorithm>
+#include <bit>
 #include <memory>
 #include <type_traits>
 
-#include "base/bits.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
@@ -26,12 +26,6 @@
 #else
 #define BUFFER_INLINE_CAPACITY kInlineSize
 #endif
-
-// Controls whether strings created by LiteralBuffer have an encoding specified.
-// Specifying the encoding may avoid unnecessary allocations and checks to
-// determine encoding, and allows for a fast path when copying UChars to
-// LChars.
-CORE_EXPORT extern bool g_literal_buffer_create_string_with_encoding;
 
 // LiteralBufferBase is an optimized version of Vector for LChar and UChar
 // characters. In particular `AddChar` is faster than `push_back`, since
@@ -71,18 +65,6 @@ class LiteralBufferBase {
     if (UNLIKELY(end_ == end_of_storage_))
       end_ = Grow();
     *end_++ = val;
-  }
-
-  template <typename OtherT>
-  void AppendSpan(const base::span<OtherT>& val) {
-    static_assert(sizeof(T) >= sizeof(OtherT),
-                  "T is not big enough to contain OtherT");
-    size_t count = val.size();
-    size_t new_size = size() + count;
-    if (capacity() < new_size)
-      Grow(new_size);
-    std::copy_n(val.data(), count, end_);
-    end_ += count;
   }
 
   template <typename OtherT, wtf_size_t kOtherSize>
@@ -149,7 +131,7 @@ class LiteralBufferBase {
     DCHECK_LE(value, size_t{1} << (digits - 1));
     if (value)
       --value;
-    return size_t{1} << (digits - base::bits::CountLeadingZeroBits(value));
+    return size_t{1} << (digits - std::countl_zero(value));
   }
 
   // Grows the backing store by a factor of two. Returns the new end of the used
@@ -211,8 +193,6 @@ class LCharLiteralBuffer : public LiteralBufferBase<LChar, kInlineSize> {
 
   ALWAYS_INLINE void AddChar(LChar val) { this->AddCharImpl(val); }
 
-  void Append(const base::span<const LChar>& span) { this->AppendSpan(span); }
-
   String AsString() const { return String(this->data(), this->size()); }
 };
 
@@ -229,6 +209,14 @@ class UCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
   UCharLiteralBuffer& operator=(
       const UCharLiteralBuffer<kOtherInlineSize>& other) {
     if (this->data() == other.data())
+      return *this;
+    this->Copy(other);
+    is_8bit_ = other.is_8bit_;
+    return *this;
+  }
+
+  UCharLiteralBuffer& operator=(const UCharLiteralBuffer& other) {
+    if (this == &other)
       return *this;
     this->Copy(other);
     is_8bit_ = other.is_8bit_;
@@ -260,18 +248,10 @@ class UCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
     this->AppendLiteralImpl(val);
   }
 
-  void Append(const String& string) {
-    if (string.empty())
-      return;
-    if (string.Is8Bit())
-      this->AppendSpan(string.Span8());
-    else
-      this->AppendSpan(string.Span16());
-  }
-
   String AsString() const {
-    if (g_literal_buffer_create_string_with_encoding && Is8Bit())
+    if (Is8Bit()) {
       return String::Make8BitFrom16BitSource(this->data(), this->size());
+    }
     return String(this->data(), this->size());
   }
 
@@ -280,8 +260,6 @@ class UCharLiteralBuffer : public LiteralBufferBase<UChar, kInlineSize> {
   }
 
   AtomicString AsAtomicString() const {
-    if (!g_literal_buffer_create_string_with_encoding)
-      return AtomicString(this->data(), this->size());
     return AtomicString(this->data(), this->size(),
                         Is8Bit() ? WTF::AtomicStringUCharEncoding::kIs8Bit
                                  : WTF::AtomicStringUCharEncoding::kIs16Bit);

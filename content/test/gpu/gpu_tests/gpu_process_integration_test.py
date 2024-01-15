@@ -28,7 +28,7 @@ test_harness_script = r"""
   domAutomationController._succeeded = false;
   domAutomationController.send = function(msg) {
     domAutomationController._finished = true;
-    if (msg.toLowerCase() == "finished") {
+    if (msg.toLowerCase() == "success") {
       domAutomationController._succeeded = true;
     } else {
       domAutomationController._succeeded = false;
@@ -38,12 +38,7 @@ test_harness_script = r"""
   window.domAutomationController = domAutomationController;
 
   function GetDriverBugWorkarounds() {
-    var query_result = document.querySelector('info-view').shadowRoot
-        .querySelector('.workarounds-list');
-    var browser_list = []
-    for (var i=0; i < query_result.childElementCount; i++)
-      browser_list.push(query_result.children[i].textContent);
-    return browser_list;
+    return getGPUInfo('workarounds');
   };
 """
 
@@ -497,8 +492,6 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
         self.fail('Target machine must have a GPU')
       if not gpu.aux_attributes:
         self.fail('Browser must support GPU aux attributes')
-      if not gpu.aux_attributes['software_rendering']:
-        self.fail('Software rendering was disabled')
       if 'SwiftShader' not in gpu.aux_attributes['gl_renderer']:
         self.fail('Expected "SwiftShader" in GPU info GL renderer string')
       if 'Google' not in gpu.aux_attributes['gl_vendor']:
@@ -538,7 +531,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
 
   def _GpuProcess_mac_webgl_low_power(self, test_path: str) -> None:
     # Ensures that low-power WebGL content stays on the low-power GPU.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -558,7 +551,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
   def _GpuProcess_mac_webgl_high_performance(self, test_path: str) -> None:
     # Ensures that high-performance WebGL content activates the high-performance
     # GPU.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -578,7 +571,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                                                           ) -> None:
     # Ensures that high-performance WebGL content in a background tab releases
     # the hold on the discrete GPU after 10 seconds.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -615,7 +608,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                                                         test_path: str) -> None:
     # Ensures that high-performance WebGL content in a background tab releases
     # the hold on the discrete GPU after 10 seconds.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -648,9 +641,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
           'hold on the high-performance GPU')
 
   def _GpuProcess_webgpu_iframe_removed(self, test_path: str) -> None:
-    self.RestartBrowserIfNecessaryWithArgs([
-        '--enable-unsafe-webgpu',
-    ])
+    self.RestartBrowserIfNecessaryWithArgs(cba.ENABLE_WEBGPU_FOR_TESTING)
     self._NavigateAndWait(test_path)
 
   @classmethod

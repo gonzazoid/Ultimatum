@@ -3,17 +3,17 @@
 // found in the LICENSE file.
 
 import {AuthCompletedCredentials} from 'chrome://chrome-signin/gaia_auth_host/authenticator.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 export interface InlineLoginBrowserProxy {
   /** Send 'initialize' message to prepare for starting auth. */
   initialize(): void;
 
   /**
-   * Send 'authExtensionReady' message to handle tasks after auth extension
+   * Send 'authenticatorReady' message to handle tasks after authenticator
    * loads.
    */
-  authExtensionReady(): void;
+  authenticatorReady(): void;
 
   /**
    * Send 'switchToFullTab' message to switch the UI from a constrained dialog
@@ -48,24 +48,14 @@ export interface InlineLoginBrowserProxy {
    */
   getAccounts(): Promise<string[]>;
 
+  /**
+   * Sends 'getDeviceId' message to the handler. The promise will be resolved
+   * with the device identifier for this user.
+   */
+  getDeviceId(): Promise<string>;
+
   /** Send 'dialogClose' message to close the login dialog. */
   dialogClose(): void;
-
-  // <if expr="chromeos_ash">
-  /**
-   * Send 'skipWelcomePage' message to the handler.
-   * @param skip Whether the welcome page should be skipped.
-   */
-  skipWelcomePage(skip: boolean): void;
-
-  /** Send 'openGuestWindow' message to the handler */
-  openGuestWindow(): void;
-
-  /**
-   * @return JSON-encoded dialog arguments.
-   */
-  getDialogArguments(): string|null;
-  // </if>
 }
 
 export class InlineLoginBrowserProxyImpl implements InlineLoginBrowserProxy {
@@ -73,8 +63,8 @@ export class InlineLoginBrowserProxyImpl implements InlineLoginBrowserProxy {
     chrome.send('initialize');
   }
 
-  authExtensionReady() {
-    chrome.send('authExtensionReady');
+  authenticatorReady() {
+    chrome.send('authenticatorReady');
   }
 
   switchToFullTab(url: string) {
@@ -101,23 +91,13 @@ export class InlineLoginBrowserProxyImpl implements InlineLoginBrowserProxy {
     return sendWithPromise('getAccounts');
   }
 
+  getDeviceId() {
+    return sendWithPromise('getDeviceId');
+  }
+
   dialogClose() {
     chrome.send('dialogClose');
   }
-
-  // <if expr="chromeos_ash">
-  skipWelcomePage(skip: boolean) {
-    chrome.send('skipWelcomePage', [skip]);
-  }
-
-  openGuestWindow() {
-    chrome.send('openGuestWindow');
-  }
-
-  getDialogArguments() {
-    return chrome.getVariableValue('dialogArguments');
-  }
-  // </if>
 
   static getInstance(): InlineLoginBrowserProxy {
     return instance || (instance = new InlineLoginBrowserProxyImpl());

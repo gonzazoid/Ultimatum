@@ -27,7 +27,6 @@
 #include <utility>
 
 #include "base/check.h"
-#include "base/functional/identity.h"
 
 namespace base {
 namespace trace_event::internal {
@@ -77,8 +76,12 @@ class LRUCacheBase {
   // can pass NO_AUTO_EVICT to not restrict the cache size.
   explicit LRUCacheBase(size_type max_size) : max_size_(max_size) {}
 
-  LRUCacheBase(const LRUCacheBase&) = delete;
-  LRUCacheBase& operator=(const LRUCacheBase&) = delete;
+  // In theory, LRUCacheBase could be copyable, but since copying `ValueList`
+  // might be costly, it's currently move-only to ensure users don't
+  // accidentally incur performance penalties. If you need this to become
+  // copyable, talk to base/ OWNERS.
+  LRUCacheBase(LRUCacheBase&&) noexcept = default;
+  LRUCacheBase& operator=(LRUCacheBase&&) noexcept = default;
 
   ~LRUCacheBase() = default;
 
@@ -218,7 +221,8 @@ class LRUCacheBase {
       const LruCacheType&);
 
   ValueList ordering_;
-  KeyIndex index_;
+  // TODO(crbug.com/1472363): Remove annotation once crbug.com/1472363 is fixed.
+  __attribute__((annotate("blink_gc_plugin_ignore"))) KeyIndex index_;
 
   size_type max_size_;
 };
@@ -268,7 +272,7 @@ using HashingLRUCache = internal::LRUCacheBase<
 template <class ValueType, class Compare = std::less<ValueType>>
 using LRUCacheSet =
     internal::LRUCacheBase<ValueType,
-                           identity,
+                           std::identity,
                            internal::LRUCacheKeyIndex<ValueType, Compare>>;
 
 // Implements an LRU cache of `ValueType`, where is value is unique, and may be
@@ -281,7 +285,7 @@ template <class ValueType,
           class Equal = std::equal_to<ValueType>>
 using HashingLRUCacheSet = internal::LRUCacheBase<
     ValueType,
-    identity,
+    std::identity,
     internal::HashingLRUCacheKeyIndex<ValueType, Hash, Equal>>;
 
 }  // namespace base

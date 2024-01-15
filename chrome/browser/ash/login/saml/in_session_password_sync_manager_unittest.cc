@@ -5,19 +5,18 @@
 #include "chrome/browser/ash/login/saml/in_session_password_sync_manager.h"
 #include <memory>
 
-#include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/saml/mock_lock_handler.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/scoped_user_manager.h"
@@ -65,12 +64,12 @@ class InSessionPasswordSyncManagerTest : public testing::Test {
   content::BrowserTaskEnvironment test_environment_{
       base::test::TaskEnvironment::MainThreadType::UI,
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_{std::make_unique<ash::FakeChromeUserManager>()};
   TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
-  TestingProfile* primary_profile_ = nullptr;
-  TestingProfile* secondary_profile_ = nullptr;
+  raw_ptr<TestingProfile> primary_profile_ = nullptr;
+  raw_ptr<TestingProfile> secondary_profile_ = nullptr;
 
-  FakeChromeUserManager* user_manager_ = nullptr;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<MockLockHandler> lock_handler_;
   std::unique_ptr<InSessionPasswordSyncManager> manager_;
   base::test::ScopedFeatureList feature_list_;
@@ -79,19 +78,15 @@ class InSessionPasswordSyncManagerTest : public testing::Test {
 
 InSessionPasswordSyncManagerTest::InSessionPasswordSyncManagerTest()
     : manager_(nullptr) {
-  std::unique_ptr<FakeChromeUserManager> fake_user_manager =
-      std::make_unique<FakeChromeUserManager>();
-  scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-      std::move(fake_user_manager));
+  UserDataAuthClient::InitializeFake();
 
-  user_manager_ =
-      static_cast<FakeChromeUserManager*>(user_manager::UserManager::Get());
   known_user_ = std::make_unique<user_manager::KnownUser>(
       g_browser_process->local_state());
 }
 
 InSessionPasswordSyncManagerTest::~InSessionPasswordSyncManagerTest() {
   DestroyInSessionSyncManager();
+  UserDataAuthClient::Shutdown();
 }
 
 void InSessionPasswordSyncManagerTest::SetUp() {
@@ -99,17 +94,17 @@ void InSessionPasswordSyncManagerTest::SetUp() {
   primary_profile_ = profile_manager_.CreateTestingProfile("test1");
   secondary_profile_ = profile_manager_.CreateTestingProfile("test2");
 
-  user_manager_->AddUserWithAffiliationAndTypeAndProfile(
+  fake_user_manager_->AddUserWithAffiliationAndTypeAndProfile(
       saml_login_account_id1_, /* is_affiliated = */ false,
       user_manager::UserType::USER_TYPE_REGULAR, primary_profile_);
-  user_manager_->AddUserWithAffiliationAndTypeAndProfile(
+  fake_user_manager_->AddUserWithAffiliationAndTypeAndProfile(
       saml_login_account_id2_, /* is_affiliated = */ false,
       user_manager::UserType::USER_TYPE_REGULAR, secondary_profile_);
-  user_manager_->AddUser(saml_login_account_id2_);
-  user_manager_->LoginUser(saml_login_account_id1_);
+  fake_user_manager_->AddUser(saml_login_account_id2_);
+  fake_user_manager_->LoginUser(saml_login_account_id1_);
   // ActiveUser in FakeChromeUserManager needs to be set explicitly.
-  user_manager_->SwitchActiveUser(saml_login_account_id1_);
-  ASSERT_TRUE(user_manager_->GetActiveUser());
+  fake_user_manager_->SwitchActiveUser(saml_login_account_id1_);
+  ASSERT_TRUE(fake_user_manager_->GetActiveUser());
 }
 
 void InSessionPasswordSyncManagerTest::TearDown() {
@@ -152,7 +147,7 @@ TEST_F(InSessionPasswordSyncManagerTest, ReauthenticateSetInSession) {
       prefs::kLockScreenReauthenticationEnabled, true);
   CreateInSessionSyncManager();
   UnlockScreen();
-  user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
+  fake_user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
   manager_->MaybeForceReauthOnLockScreen(
       InSessionPasswordSyncManager::ReauthenticationReason::kPolicy);
   EXPECT_EQ(InSessionReauthReason(),
@@ -164,7 +159,7 @@ TEST_F(InSessionPasswordSyncManagerTest, ReauthenticateResetByToken) {
       prefs::kLockScreenReauthenticationEnabled, true);
   CreateInSessionSyncManager();
   UnlockScreen();
-  user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
+  fake_user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
   manager_->MaybeForceReauthOnLockScreen(
       InSessionPasswordSyncManager::ReauthenticationReason::kPolicy);
   manager_->MaybeForceReauthOnLockScreen(
@@ -184,7 +179,7 @@ TEST_F(InSessionPasswordSyncManagerTest, ReauthenticateSetOnLock) {
                           proximity_auth::mojom::AuthType::ONLINE_SIGN_IN,
                           std::u16string()))
       .Times(1);
-  user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
+  fake_user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
   manager_->MaybeForceReauthOnLockScreen(
       InSessionPasswordSyncManager::ReauthenticationReason::kPolicy);
   EXPECT_EQ(InSessionReauthReason(),
@@ -205,7 +200,7 @@ TEST_F(InSessionPasswordSyncManagerTest, AuthenticateWithIncorrectUser) {
                           std::u16string()))
       .Times(1);
   EXPECT_CALL(*lock_handler_, Unlock(saml_login_account_id1_)).Times(0);
-  user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
+  fake_user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
   manager_->MaybeForceReauthOnLockScreen(
       InSessionPasswordSyncManager::ReauthenticationReason::kPolicy);
   EXPECT_EQ(InSessionReauthReason(),
@@ -235,7 +230,7 @@ TEST_F(InSessionPasswordSyncManagerTest, AuthenticateWithCorrectUser) {
                           std::u16string()))
       .Times(1);
   EXPECT_CALL(*lock_handler_, Unlock(saml_login_account_id1_)).Times(1);
-  user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
+  fake_user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
   test_environment_.FastForwardBy(kSamlOnlineShortDelay);
   manager_->MaybeForceReauthOnLockScreen(
       InSessionPasswordSyncManager::ReauthenticationReason::kPolicy);
@@ -261,7 +256,7 @@ TEST_F(InSessionPasswordSyncManagerTest, AuthenticateTokenNotInitialized) {
                           std::u16string()))
       .Times(1);
   EXPECT_CALL(*lock_handler_, Unlock(saml_login_account_id1_)).Times(1);
-  user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
+  fake_user_manager_->SaveForceOnlineSignin(saml_login_account_id1_, true);
   manager_->MaybeForceReauthOnLockScreen(
       InSessionPasswordSyncManager::ReauthenticationReason::kInvalidToken);
   EXPECT_EQ(

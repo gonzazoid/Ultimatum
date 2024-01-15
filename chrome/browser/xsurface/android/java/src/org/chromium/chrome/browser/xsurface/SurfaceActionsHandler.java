@@ -12,15 +12,25 @@ import androidx.annotation.Nullable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.List;
+
 /**
+ * Implemented in Chromium.
+ *
  * Interface to provide chromium calling points for an external surface.
  */
 public interface SurfaceActionsHandler {
     String KEY = "GeneralActions";
 
-    @IntDef({OpenMode.UNKNOWN, OpenMode.SAME_TAB, OpenMode.NEW_TAB, OpenMode.INCOGNITO_TAB,
-            OpenMode.DOWNLOAD_LINK, OpenMode.READ_LATER, OpenMode.THANK_CREATOR,
-            OpenMode.NEW_TAB_IN_GROUP})
+    @IntDef({
+        OpenMode.UNKNOWN,
+        OpenMode.SAME_TAB,
+        OpenMode.NEW_TAB,
+        OpenMode.INCOGNITO_TAB,
+        OpenMode.DOWNLOAD_LINK,
+        OpenMode.READ_LATER,
+        OpenMode.THANK_CREATOR,
+        OpenMode.NEW_TAB_IN_GROUP
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface OpenMode {
         int UNKNOWN = 0;
@@ -34,16 +44,38 @@ public interface SurfaceActionsHandler {
         int DOWNLOAD_LINK = 4;
         // The URL is added for later reading.
         int READ_LATER = 5;
-        // The URL to thank the current creator is opened in a Chrome Custom Tab
-        // (CCT).
+        // Deprecated. The URL to thank the current creator is opened in a Chrome Custom Tab (CCT).
         int THANK_CREATOR = 6;
         // The URL is opened in a new tab that is organized as group.
         int NEW_TAB_IN_GROUP = 7;
     }
 
-    /**
-     * Options when opening URLs with openUrl().
-     */
+    /** Options for entry points to the single web feed. */
+    @IntDef({
+        OpenWebFeedEntryPoint.OTHER,
+        OpenWebFeedEntryPoint.ATTRIBUTION,
+        OpenWebFeedEntryPoint.RECOMMENDATION,
+        OpenWebFeedEntryPoint.GROUP_HEADER,
+        OpenWebFeedEntryPoint.MAX_VALUE
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface OpenWebFeedEntryPoint {
+        /** Other */
+        int OTHER = 0;
+
+        /** Feed Attribution */
+        int ATTRIBUTION = 1;
+
+        /** Feed Recommendation */
+        int RECOMMENDATION = 2;
+
+        /** Group Header */
+        int GROUP_HEADER = 3;
+
+        int MAX_VALUE = GROUP_HEADER;
+    }
+
+    /** Options when opening URLs with openUrl(). */
     interface OpenUrlOptions {
         /**
          * The WebFeed associated with this navigation, for use with shouldShowWebFeedAccelerator(),
@@ -52,17 +84,19 @@ public interface SurfaceActionsHandler {
         default String webFeedName() {
             return "";
         }
+
         /** Whether to show the Web Feed accelerator on the page after navigation. */
         default boolean shouldShowWebFeedAccelerator() {
             return false;
         }
+
         /** Returns the title. Currently used only for READ_LATER. */
         default String getTitle() {
             return "";
         }
+
         /** The View from which the user tap originated. May be null.*/
-        @Nullable
-        default View actionSourceView() {
+        default @Nullable View actionSourceView() {
             return null;
         }
     }
@@ -82,34 +116,6 @@ public interface SurfaceActionsHandler {
      */
     @Deprecated
     default void navigateTab(String url, View actionSourceView) {}
-
-    /**
-     * Navigates a new tab to a particular URL.
-     * @param url The url for which to navigate.
-     * @param actionSourceView The View from which the user tap originated. May be null.
-     */
-    @Deprecated
-    default void navigateNewTab(String url, View actionSourceView) {}
-
-    /**
-     * Navigate a new incognito tab to a URL.
-     */
-    @Deprecated
-    default void navigateIncognitoTab(String url) {}
-
-    /**
-     * Get an offline page for a URL.
-     */
-    @Deprecated
-    default void downloadLink(String url) {}
-
-    /** Add the url to the reading list and make it available offline. */
-    @Deprecated
-    default void addToReadingList(String title, String url) {}
-
-    /** Opens Crow CCT for the URL. */
-    @Deprecated
-    default void navigateCrow(String url) {}
 
     /**
      * Open a bottom sheet with the view as contents.
@@ -134,6 +140,7 @@ public interface SurfaceActionsHandler {
      * TODO(tbansal): Remove the first method once the callers have been updated.
      */
     default void updateUserProfileOnLinkClick(String url, List<Long> entityMids) {}
+
     default void updateUserProfileOnLinkClick(
             String url, List<Long> entityMids, long contentCategoryMediaType, long cardCategory) {}
 
@@ -176,21 +183,28 @@ public interface SurfaceActionsHandler {
         }
     }
 
-    /**
-     * Attempts to follow or unfollow a WebFeed.
-     */
+    /** Attempts to follow or unfollow a WebFeed. */
     default void updateWebFeedFollowState(WebFeedFollowUpdate update) {}
 
     /**
-     * Navigates a new tab in group to a particular URL.
-     * @param url The url for which to navigate.
-     * @param actionSourceView The View from which the user tap originated. May be null.
+     * Opens a specific WebFeed by name.
+     * @param webFeedName the relevant web feed name.
      */
     @Deprecated
-    default void navigateNewTabInGroup(String url, View actionSourceView) {}
+    default void openWebFeed(String webFeedName) {
+        openWebFeed(webFeedName, OpenWebFeedEntryPoint.OTHER);
+    }
 
     /**
-     * Requests that a sign-in prompt be shown.
+     * Opens a specific WebFeed by name with a specific entrypoint.
+     * @param webFeedName the relevant web feed name.
+     * @param entryPoint the entry point used to launch the feed.
      */
-    default void showSignInPrompt() {}
+    default void openWebFeed(String webFeedName, @OpenWebFeedEntryPoint int entryPoint) {}
+
+    /** Requests that a sync consent prompt be shown. */
+    default void showSyncConsentPrompt() {}
+
+    /** Requests that a sign-in interstitial bottom sheet be shown. */
+    default void showSignInInterstitial() {}
 }

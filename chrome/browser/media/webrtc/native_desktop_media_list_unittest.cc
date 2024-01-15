@@ -22,7 +22,6 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "chrome/test/views/chrome_views_test_base.h"
@@ -131,7 +130,7 @@ class MockObserver : public DesktopMediaListObserver {
   MOCK_METHOD0(OnDelegatedSourceListDismissed, void());
 };
 
-class FakeScreenCapturer : public webrtc::DesktopCapturer {
+class FakeScreenCapturer : public ThumbnailCapturer {
  public:
   FakeScreenCapturer() {}
 
@@ -140,14 +139,18 @@ class FakeScreenCapturer : public webrtc::DesktopCapturer {
 
   ~FakeScreenCapturer() override {}
 
-  // webrtc::ScreenCapturer implementation.
-  void Start(Callback* callback) override { callback_ = callback; }
+  // ThumbnailCapturer implementation.
+  void Start(Consumer* consumer) override { consumer_ = consumer; }
+
+  FrameDeliveryMethod GetFrameDeliveryMethod() const override {
+    return FrameDeliveryMethod::kOnRequest;
+  }
 
   void CaptureFrame() override {
-    DCHECK(callback_);
+    DCHECK(consumer_);
     std::unique_ptr<webrtc::DesktopFrame> frame(
         new webrtc::BasicDesktopFrame(webrtc::DesktopSize(10, 10)));
-    callback_->OnCaptureResult(webrtc::DesktopCapturer::Result::SUCCESS,
+    consumer_->OnCaptureResult(webrtc::DesktopCapturer::Result::SUCCESS,
                                std::move(frame));
   }
 
@@ -162,10 +165,10 @@ class FakeScreenCapturer : public webrtc::DesktopCapturer {
   }
 
  protected:
-  raw_ptr<Callback> callback_;
+  raw_ptr<Consumer> consumer_;
 };
 
-class FakeWindowCapturer : public webrtc::DesktopCapturer {
+class FakeWindowCapturer : public ThumbnailCapturer {
  public:
   FakeWindowCapturer() = default;
   explicit FakeWindowCapturer(const webrtc::DesktopCaptureOptions& options)
@@ -188,11 +191,15 @@ class FakeWindowCapturer : public webrtc::DesktopCapturer {
     frame_values_[window_id] = value;
   }
 
-  // webrtc::WindowCapturer implementation.
-  void Start(Callback* callback) override { callback_ = callback; }
+  // ThumbnailCapturer implementation.
+  void Start(Consumer* consumer) override { consumer_ = consumer; }
+
+  FrameDeliveryMethod GetFrameDeliveryMethod() const override {
+    return FrameDeliveryMethod::kOnRequest;
+  }
 
   void CaptureFrame() override {
-    DCHECK(callback_);
+    DCHECK(consumer_);
 
     base::AutoLock lock(frame_values_lock_);
 
@@ -201,7 +208,7 @@ class FakeWindowCapturer : public webrtc::DesktopCapturer {
     std::unique_ptr<webrtc::DesktopFrame> frame(
         new webrtc::BasicDesktopFrame(webrtc::DesktopSize(10, 10)));
     memset(frame->data(), value, frame->stride() * frame->size().height());
-    callback_->OnCaptureResult(webrtc::DesktopCapturer::Result::SUCCESS,
+    consumer_->OnCaptureResult(webrtc::DesktopCapturer::Result::SUCCESS,
                                std::move(frame));
   }
 
@@ -232,10 +239,8 @@ class FakeWindowCapturer : public webrtc::DesktopCapturer {
     return true;
   }
 
-  bool FocusOnSelectedSource() override { return true; }
-
  private:
-  raw_ptr<Callback> callback_;
+  raw_ptr<Consumer> consumer_;
   webrtc::DesktopCaptureOptions options_ =
       webrtc::DesktopCaptureOptions::CreateDefault();
   SourceList window_list_;
@@ -376,9 +381,9 @@ class NativeDesktopMediaListTest : public ChromeViewsTestBase {
 
   void UpdateModel() {
     base::RunLoop run_loop;
-    base::OnceClosure update_callback =
+    base::OnceClosure update_consumer =
         base::BindLambdaForTesting([&]() { run_loop.Quit(); });
-    model_->Update(std::move(update_callback));
+    model_->Update(std::move(update_consumer));
     run_loop.Run();
   }
 
@@ -439,8 +444,8 @@ class NativeDesktopMediaListTest : public ChromeViewsTestBase {
         EXPECT_CALL(observer_, OnSourceThumbnailChanged(i));
       }
       EXPECT_CALL(observer_, OnSourceThumbnailChanged(window_count - 1))
-          .WillOnce(
-              QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+          .WillOnce(QuitRunLoop(
+              base::SingleThreadTaskRunner::GetCurrentDefault(), &run_loop));
     }
     model_->StartUpdating(&observer_);
     run_loop.Run();
@@ -472,7 +477,7 @@ class NativeDesktopMediaListTest : public ChromeViewsTestBase {
   MockObserver observer_;
 
   // Owned by |model_|;
-  raw_ptr<FakeWindowCapturer> window_capturer_;
+  raw_ptr<FakeWindowCapturer, DanglingUntriaged> window_capturer_;
 
   webrtc::DesktopCapturer::SourceList window_list_;
   std::vector<views::UniqueWidgetPtr> desktop_widgets_;
@@ -503,7 +508,8 @@ TEST_F(NativeDesktopMediaListTest, ScreenOnly) {
     EXPECT_CALL(observer_, OnSourceAdded(0))
         .WillOnce(CheckListSize(model_.get(), 1));
     EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
-        .WillOnce(QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+        .WillOnce(QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                              &run_loop));
   }
   model_->StartUpdating(&observer_);
   run_loop.Run();
@@ -527,7 +533,8 @@ TEST_F(NativeDesktopMediaListTest, AddNativeWindow) {
   EXPECT_CALL(observer_, OnSourceAdded(index))
       .WillOnce(
           DoAll(CheckListSize(model_.get(), kDefaultWindowCount + 1),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
 
   AddNativeWindow(WindowIndex(index));
   window_capturer_->SetWindowList(window_list_);
@@ -548,7 +555,8 @@ TEST_F(NativeDesktopMediaListTest, AddAuraWindow) {
   EXPECT_CALL(observer_, OnSourceAdded(index))
       .WillOnce(
           DoAll(CheckListSize(kDefaultWindowCount + 1),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
 
   AddAuraWindow();
   window_capturer_->SetWindowList(window_list_);
@@ -571,7 +579,8 @@ TEST_F(NativeDesktopMediaListTest, RemoveNativeWindow) {
   EXPECT_CALL(observer_, OnSourceRemoved(0))
       .WillOnce(
           DoAll(CheckListSize(model_.get(), kDefaultWindowCount - 1),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
 
   window_list_.erase(window_list_.begin());
   window_capturer_->SetWindowList(window_list_);
@@ -589,7 +598,8 @@ TEST_F(NativeDesktopMediaListTest, RemoveAuraWindow) {
   EXPECT_CALL(observer_, OnSourceRemoved(aura_window_start_index))
       .WillOnce(
           DoAll(CheckListSize(model_.get(), kDefaultWindowCount - 1),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
 
   RemoveAuraWindow(0);
   window_capturer_->SetWindowList(window_list_);
@@ -611,7 +621,8 @@ TEST_F(NativeDesktopMediaListTest, RemoveAllWindows) {
   EXPECT_CALL(observer_, OnSourceRemoved(0))
       .WillOnce(
           DoAll(CheckListSize(model_.get(), 0),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
 
   window_list_.clear();
   window_capturer_->SetWindowList(window_list_);
@@ -625,7 +636,8 @@ TEST_F(NativeDesktopMediaListTest, UpdateTitle) {
   base::RunLoop run_loop;
 
   EXPECT_CALL(observer_, OnSourceNameChanged(0))
-      .WillOnce(QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+      .WillOnce(QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop));
 
   const std::string kTestTitle = "New Title";
   window_list_[0].title = kTestTitle;
@@ -649,7 +661,8 @@ TEST_F(NativeDesktopMediaListTest, UpdateThumbnail) {
   base::RunLoop run_loop;
 
   EXPECT_CALL(observer_, OnSourceThumbnailChanged(0))
-      .WillOnce(QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+      .WillOnce(QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop));
 
   // Update frame for the window and verify that we get notification about it.
   window_capturer_->SetNextFrameValue(WindowIndex(0), 10);
@@ -665,7 +678,8 @@ TEST_F(NativeDesktopMediaListTest, MoveWindow) {
   EXPECT_CALL(observer_, OnSourceMoved(1, 0))
       .WillOnce(
           DoAll(CheckListSize(model_.get(), kDefaultWindowCount),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
 
   std::swap(window_list_[0], window_list_[1]);
   window_capturer_->SetWindowList(window_list_);
@@ -687,7 +701,8 @@ TEST_F(NativeDesktopMediaListTest, EmptyThumbnail) {
   EXPECT_CALL(observer_, OnSourceAdded(0))
       .WillOnce(
           DoAll(CheckListSize(model_.get(), 1),
-                QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop)));
+                QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                            &run_loop)));
   // Called upon webrtc::DesktopCapturer::CaptureFrame() call.
   ON_CALL(observer_, OnSourceThumbnailChanged(_))
       .WillByDefault(testing::InvokeWithoutArgs([]() { NOTREACHED(); }));
@@ -825,7 +840,7 @@ class DelegatedFakeScreenCapturer
   int ensure_hidden_call_count() const { return ensure_hidden_call_count_; }
 
  private:
-  webrtc::DelegatedSourceListController::Observer* observer_ = nullptr;
+  raw_ptr<webrtc::DelegatedSourceListController::Observer> observer_ = nullptr;
   int ensure_visible_call_count_ = 0;
   int ensure_hidden_call_count_ = 0;
 };
@@ -867,7 +882,8 @@ class NativeDesktopMediaListDelegatedTest : public ChromeViewsTestBase {
   void TriggerAndWaitForSelection() {
     base::RunLoop run_loop;
     EXPECT_CALL(observer_, OnDelegatedSourceListSelection())
-        .WillOnce(QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+        .WillOnce(QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                              &run_loop));
     capturer_->SimulateSourceListSelection();
     run_loop.Run();
   }
@@ -877,7 +893,8 @@ class NativeDesktopMediaListDelegatedTest : public ChromeViewsTestBase {
     // We don't differentiate to the observer *why* the list is dismissed, just
     // that it was.
     EXPECT_CALL(observer_, OnDelegatedSourceListDismissed())
-        .WillOnce(QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+        .WillOnce(QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                              &run_loop));
     capturer_->SimulateSourceListError();
     run_loop.Run();
   }
@@ -887,7 +904,8 @@ class NativeDesktopMediaListDelegatedTest : public ChromeViewsTestBase {
     // We don't differentiate to the observer *why* the list is dismissed, just
     // that it was.
     EXPECT_CALL(observer_, OnDelegatedSourceListDismissed())
-        .WillOnce(QuitRunLoop(base::ThreadTaskRunnerHandle::Get(), &run_loop));
+        .WillOnce(QuitRunLoop(base::SingleThreadTaskRunner::GetCurrentDefault(),
+                              &run_loop));
     capturer_->SimulateSourceListCancelled();
     run_loop.Run();
   }

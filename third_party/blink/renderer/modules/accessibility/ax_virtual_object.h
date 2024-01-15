@@ -23,7 +23,6 @@ class MODULES_EXPORT AXVirtualObject : public AXObject {
   void Detach() override;
   bool IsVirtualObject() const override { return true; }
   void AddChildren() override;
-  void ChildrenChangedWithCleanLayout() override;
   const AtomicString& GetAOMPropertyOrARIAAttribute(
       AOMStringProperty) const override;
   bool HasAOMPropertyOrARIAAttribute(AOMBooleanProperty,
@@ -41,8 +40,6 @@ class MODULES_EXPORT AXVirtualObject : public AXObject {
   ax::mojom::blink::Role AriaRoleAttribute() const override;
 
  private:
-  bool ComputeAccessibilityIsIgnored(IgnoredReasons* = nullptr) const override;
-
   Member<AccessibleNode> accessible_node_;
 
   ax::mojom::blink::Role aria_role_;

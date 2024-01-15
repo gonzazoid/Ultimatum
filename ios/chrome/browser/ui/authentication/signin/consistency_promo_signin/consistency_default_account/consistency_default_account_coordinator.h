@@ -5,7 +5,7 @@
 #ifndef IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_CONSISTENCY_PROMO_SIGNIN_CONSISTENCY_DEFAULT_ACCOUNT_CONSISTENCY_DEFAULT_ACCOUNT_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_CONSISTENCY_PROMO_SIGNIN_CONSISTENCY_DEFAULT_ACCOUNT_CONSISTENCY_DEFAULT_ACCOUNT_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 @class ConsistencyDefaultAccountCoordinator;
 @protocol ConsistencyLayoutDelegate;
@@ -31,6 +31,10 @@ enum class AccessPoint : int;
 
 // Called when the user wants to sign-in with the default identity.
 - (void)consistencyDefaultAccountCoordinatorSignin:
+    (ConsistencyDefaultAccountCoordinator*)coordinator;
+
+// Called when the user wants to sign in without an existing account.
+- (void)consistencyDefaultAccountCoordinatorOpenAddAccount:
     (ConsistencyDefaultAccountCoordinator*)coordinator;
 
 @end

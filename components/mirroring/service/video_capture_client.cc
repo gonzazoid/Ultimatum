@@ -4,10 +4,10 @@
 
 #include "components/mirroring/service/video_capture_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/bind_post_task.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_frame_pool.h"
 #include "media/base/video_util.h"
@@ -20,15 +20,19 @@ namespace {
 
 // Required by mojom::VideoCaptureHost interface. Can be any nonzero value.
 const base::UnguessableToken& DeviceId() {
+  // TODO(https://crbug.com/1406986): Investigate whether there's a better way
+  // to accomplish this (without using UnguessableToken::Deserialize).
   static const base::UnguessableToken device_id(
-      base::UnguessableToken::Deserialize(1, 1));
+      base::UnguessableToken::Deserialize(1, 1).value());
   return device_id;
 }
 
 // Required by mojom::VideoCaptureHost interface. Can be any nonzero value.
 const base::UnguessableToken& SessionId() {
+  // TODO(https://crbug.com/1406986): Investigate whether there's a better way
+  // to accomplish this (without using UnguessableToken::Deserialize).
   static const base::UnguessableToken session_id(
-      base::UnguessableToken::Deserialize(1, 1));
+      base::UnguessableToken::Deserialize(1, 1).value());
   return session_id;
 }
 
@@ -91,6 +95,16 @@ void VideoCaptureClient::RequestRefreshFrame() {
   video_capture_host_->RequestRefreshFrame(DeviceId());
 }
 
+void VideoCaptureClient::SwitchVideoCaptureHost(
+    mojo::PendingRemote<media::mojom::VideoCaptureHost> host) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DVLOG(2) << __func__;
+  switching_video_capture_host_ = true;
+  video_capture_host_.reset();
+  video_capture_host_.Bind(std::move(host));
+  DCHECK(video_capture_host_);
+}
+
 void VideoCaptureClient::OnStateChanged(
     media::mojom::VideoCaptureResultPtr result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -108,9 +122,16 @@ void VideoCaptureClient::OnStateChanged(
       case media::mojom::VideoCaptureState::ENDED:
         client_buffers_.clear();
         weak_factory_.InvalidateWeakPtrs();
-        error_callback_.Reset();
-        frame_deliver_callback_.Reset();
         receiver_.reset();
+        if (switching_video_capture_host_) {
+          switching_video_capture_host_ = false;
+          first_frame_ref_time_ = base::TimeTicks();
+          accumulated_time_ = last_timestamp_;
+          Start(std::move(frame_deliver_callback_), std::move(error_callback_));
+        } else {
+          error_callback_.Reset();
+          frame_deliver_callback_.Reset();
+        }
         break;
     }
   } else {
@@ -143,18 +164,9 @@ void VideoCaptureClient::OnNewBuffer(
   DCHECK(insert_result.second);
 }
 
-void VideoCaptureClient::OnBufferReady(
-    media::mojom::ReadyBufferPtr buffer,
-    std::vector<media::mojom::ReadyBufferPtr> scaled_buffers) {
+void VideoCaptureClient::OnBufferReady(media::mojom::ReadyBufferPtr buffer) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DVLOG(3) << __func__ << ": buffer_id=" << buffer->buffer_id;
-
-  // Scaled buffers are currently ignored by VideoCaptureClient.
-  for (media::mojom::ReadyBufferPtr& scaled_buffer : scaled_buffers) {
-    video_capture_host_->ReleaseBuffer(DeviceId(), scaled_buffer->buffer_id,
-                                       media::VideoCaptureFeedback());
-  }
-  scaled_buffers.clear();
 
   bool consume_buffer = !frame_deliver_callback_.is_null();
   if (buffer->info->pixel_format != media::PIXEL_FORMAT_NV12 &&
@@ -200,9 +212,10 @@ void VideoCaptureClient::OnBufferReady(
     frame = media::VideoFrame::WrapUnacceleratedIOSurface(
         buffer_iter->second->get_gpu_memory_buffer_handle().Clone(),
         buffer->info->visible_rect, buffer->info->timestamp);
-    buffer_finished_callback = media::BindToCurrentLoop(base::BindOnce(
-        &VideoCaptureClient::OnClientBufferFinished, weak_factory_.GetWeakPtr(),
-        buffer->buffer_id, MappingKeepAlive()));
+    buffer_finished_callback =
+        base::BindPostTaskToCurrentDefault(base::BindOnce(
+            &VideoCaptureClient::OnClientBufferFinished,
+            weak_factory_.GetWeakPtr(), buffer->buffer_id, MappingKeepAlive()));
 #else
     NOTREACHED();
 #endif
@@ -218,26 +231,26 @@ void VideoCaptureClient::OnBufferReady(
           mapping.GetMemoryAs<uint8_t>(), frame_allocation_size,
           buffer->info->timestamp);
     }
-    buffer_finished_callback = media::BindToCurrentLoop(base::BindOnce(
-        &VideoCaptureClient::OnClientBufferFinished, weak_factory_.GetWeakPtr(),
-        buffer->buffer_id, std::move(mapping)));
+    buffer_finished_callback =
+        base::BindPostTaskToCurrentDefault(base::BindOnce(
+            &VideoCaptureClient::OnClientBufferFinished,
+            weak_factory_.GetWeakPtr(), buffer->buffer_id, std::move(mapping)));
   } else {
     base::ReadOnlySharedMemoryMapping mapping =
         buffer_iter->second->get_read_only_shmem_region().Map();
     const size_t frame_allocation_size = media::VideoFrame::AllocationSize(
         buffer->info->pixel_format, buffer->info->coded_size);
     if (mapping.IsValid() && mapping.size() >= frame_allocation_size) {
-      // TODO(https://crbug.com/1316810): This code should not be casting
-      // const-ness away from ReadOnlySharedMemoryRegion...
       frame = media::VideoFrame::WrapExternalData(
           buffer->info->pixel_format, buffer->info->coded_size,
           buffer->info->visible_rect, buffer->info->visible_rect.size(),
-          const_cast<uint8_t*>(mapping.GetMemoryAs<uint8_t>()),
-          frame_allocation_size, buffer->info->timestamp);
+          mapping.GetMemoryAs<uint8_t>(), frame_allocation_size,
+          buffer->info->timestamp);
     }
-    buffer_finished_callback = media::BindToCurrentLoop(base::BindOnce(
-        &VideoCaptureClient::OnClientBufferFinished, weak_factory_.GetWeakPtr(),
-        buffer->buffer_id, std::move(mapping)));
+    buffer_finished_callback =
+        base::BindPostTaskToCurrentDefault(base::BindOnce(
+            &VideoCaptureClient::OnClientBufferFinished,
+            weak_factory_.GetWeakPtr(), buffer->buffer_id, std::move(mapping)));
   }
 
   if (!frame) {
@@ -275,8 +288,10 @@ void VideoCaptureClient::OnBufferReady(
   }
 
   frame->set_metadata(buffer->info->metadata);
-  if (buffer->info->color_space)
-    frame->set_color_space(*buffer->info->color_space);
+  frame->set_color_space(buffer->info->color_space);
+
+  frame->set_timestamp(frame->timestamp() + accumulated_time_);
+  last_timestamp_ = frame->timestamp();
 
   frame_deliver_callback_.Run(frame);
 }
@@ -290,7 +305,11 @@ void VideoCaptureClient::OnBufferDestroyed(int32_t buffer_id) {
     client_buffers_.erase(buffer_iter);
 }
 
-void VideoCaptureClient::OnNewCropVersion(uint32_t crop_version) {}
+void VideoCaptureClient::OnFrameDropped(
+    media::VideoCaptureFrameDropReason reason) {}
+
+void VideoCaptureClient::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {}
 
 void VideoCaptureClient::OnClientBufferFinished(int buffer_id,
                                                 MappingKeepAlive mapping) {

@@ -26,45 +26,26 @@ class ServeRepoTest(unittest.TestCase):
                                              target_id=_TARGET)
 
     @mock.patch('serve_repo.run_ffx_command')
-    @mock.patch('serve_repo.get_config')
-    def test_ffx_config(self, mock_get_config, mock_ffx) -> None:
-        """Test |_ensure_ffx_config| returns True if config is changed,
-        False otherwise."""
-
-        mock_get_config.side_effect = ['true', '\"ffx\"']
-
-        serve_repo.run_serve_cmd('start', self._namespace)
-        self.assertEqual(mock_ffx.call_count, 3)
-
-        mock_ffx.reset_mock()
-        mock_get_config.reset_mock()
-        mock_get_config.side_effect = ['false', '\"not_ffx\"']
-
-        serve_repo.run_serve_cmd('start', self._namespace)
-        self.assertEqual(mock_ffx.call_count, 6)
-
-    @mock.patch('serve_repo.run_ffx_command')
-    @mock.patch('serve_repo._ensure_ffx_config', return_value=True)
-    def test_run_serve_cmd_start(self, mock_config, mock_ffx) -> None:
+    def test_run_serve_cmd_start(self, mock_ffx) -> None:
         """Test |run_serve_cmd| function for start."""
 
         serve_repo.run_serve_cmd('start', self._namespace)
-        self.assertEqual(mock_config.call_count, 2)
         self.assertEqual(mock_ffx.call_count, 4)
-        first_call = mock_ffx.call_args_list[0]
-        self.assertEqual(['doctor', '--restart-daemon'], first_call[0][0])
         second_call = mock_ffx.call_args_list[1]
-        self.assertEqual(['repository', 'server', 'start'], second_call[0][0])
+        self.assertEqual(mock.call(cmd=['repository', 'server', 'start']),
+                         second_call)
         third_call = mock_ffx.call_args_list[2]
         self.assertEqual(
-            ['repository', 'add-from-pm', _REPO_DIR, '-r', _REPO_NAME],
-            third_call[0][0])
+            mock.call(
+                cmd=['repository', 'add-from-pm', _REPO_DIR, '-r', _REPO_NAME
+                     ]), third_call)
         fourth_call = mock_ffx.call_args_list[3]
-        self.assertEqual([
-            'target', 'repository', 'register', '-r', _REPO_NAME, '--alias',
-            REPO_ALIAS
-        ], fourth_call[0][0])
-        self.assertEqual(_TARGET, fourth_call[0][1])
+        self.assertEqual(
+            mock.call(cmd=[
+                'target', 'repository', 'register', '-r', _REPO_NAME,
+                '--alias', REPO_ALIAS
+            ],
+                      target_id=_TARGET), fourth_call)
 
     @mock.patch('serve_repo.run_ffx_command')
     def test_run_serve_cmd_stop(self, mock_ffx) -> None:
@@ -74,14 +55,26 @@ class ServeRepoTest(unittest.TestCase):
         self.assertEqual(mock_ffx.call_count, 3)
         first_call = mock_ffx.call_args_list[0]
         self.assertEqual(
-            ['target', 'repository', 'deregister', '-r', _REPO_NAME],
-            first_call[0][0])
-        self.assertEqual(_TARGET, first_call[0][1])
+            mock.call(
+                cmd=['target', 'repository', 'deregister', '-r', _REPO_NAME],
+                target_id=_TARGET,
+                check=False), first_call)
         second_call = mock_ffx.call_args_list[1]
-        self.assertEqual(['repository', 'remove', _REPO_NAME],
-                         second_call[0][0])
+        self.assertEqual(
+            mock.call(cmd=['repository', 'remove', _REPO_NAME], check=False),
+            second_call)
         third_call = mock_ffx.call_args_list[2]
-        self.assertEqual(['repository', 'server', 'stop'], third_call[0][0])
+        self.assertEqual(
+            mock.call(cmd=['repository', 'server', 'stop'], check=False),
+            third_call)
+
+    @mock.patch('serve_repo.serve_repository')
+    def test_run_serve_cmd_run(self, mock_serve) -> None:
+        """Test |run_serve_cmd| function for run."""
+
+        with mock.patch('common.time.sleep', side_effect=KeyboardInterrupt):
+            serve_repo.run_serve_cmd('run', self._namespace)
+        self.assertEqual(mock_serve.call_count, 1)
 
     @mock.patch('serve_repo.run_serve_cmd')
     def test_serve_repository(self, mock_serve) -> None:
@@ -103,6 +96,17 @@ class ServeRepoTest(unittest.TestCase):
         """Tests |main| function."""
 
         with mock.patch('sys.argv', ['serve_repo.py', 'stop']):
+            serve_repo.main()
+            self.assertEqual(mock_serve.call_count, 1)
+
+    @mock.patch('serve_repo.run_serve_cmd')
+    def test_main_run(self, mock_serve) -> None:
+        """Tests |main| function."""
+
+        with mock.patch('sys.argv', [
+                'serve_repo.py', 'run', '--serve-repo', _REPO_NAME
+              ]), \
+             mock.patch('common.time.sleep', side_effect=KeyboardInterrupt):
             serve_repo.main()
             self.assertEqual(mock_serve.call_count, 1)
 

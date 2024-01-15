@@ -11,14 +11,17 @@
 #include <unordered_map>
 #include <utility>
 
+#include "base/auto_reset.h"
 #include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/debug/stack_trace.h"
+#include "base/memory/raw_ref.h"
 #include "base/synchronization/lock_impl.h"
 #include "base/trace_event/base_tracing.h"
 #include "base/win/base_win_buildflags.h"
 #include "base/win/current_module.h"
 #include "base/win/scoped_handle.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 extern "C" {
 __declspec(dllexport) void* GetHandleVerifier();
@@ -35,30 +38,31 @@ namespace internal {
 namespace {
 
 ScopedHandleVerifier* g_active_verifier = nullptr;
+ABSL_CONST_INIT thread_local bool closing = false;
 using GetHandleVerifierFn = void* (*)();
 using HandleMap =
     std::unordered_map<HANDLE, ScopedHandleVerifierInfo, HandleHash>;
 using NativeLock = base::internal::LockImpl;
 
 NOINLINE void ReportErrorOnScopedHandleOperation(
-    const base::debug::StackTrace& creation_stack,
+    const debug::StackTrace& creation_stack,
     HandleOperation operation) {
   auto creation_stack_copy = creation_stack;
-  base::debug::Alias(&creation_stack_copy);
-  base::debug::Alias(&operation);
+  debug::Alias(&creation_stack_copy);
+  debug::Alias(&operation);
   CHECK(false) << operation;
   __builtin_unreachable();
 }
 
 NOINLINE void ReportErrorOnScopedHandleOperation(
-    const base::debug::StackTrace& creation_stack,
+    const debug::StackTrace& creation_stack,
     const ScopedHandleVerifierInfo& other,
     HandleOperation operation) {
   auto other_stack_copy = *other.stack;
-  base::debug::Alias(&other_stack_copy);
+  debug::Alias(&other_stack_copy);
   auto creation_stack_copy = creation_stack;
-  base::debug::Alias(&creation_stack_copy);
-  base::debug::Alias(&operation);
+  debug::Alias(&creation_stack_copy);
+  debug::Alias(&operation);
   CHECK(false) << operation;
   __builtin_unreachable();
 }
@@ -69,15 +73,15 @@ NOINLINE void ReportErrorOnScopedHandleOperation(
 // recursive locking.
 class AutoNativeLock {
  public:
-  explicit AutoNativeLock(NativeLock& lock) : lock_(lock) { lock_.Lock(); }
+  explicit AutoNativeLock(NativeLock& lock) : lock_(lock) { lock_->Lock(); }
 
   AutoNativeLock(const AutoNativeLock&) = delete;
   AutoNativeLock& operator=(const AutoNativeLock&) = delete;
 
-  ~AutoNativeLock() { lock_.Unlock(); }
+  ~AutoNativeLock() { lock_->Unlock(); }
 
  private:
-  NativeLock& lock_;
+  const raw_ref<NativeLock> lock_;
 };
 
 ScopedHandleVerifierInfo::ScopedHandleVerifierInfo(
@@ -174,9 +178,8 @@ bool ScopedHandleVerifier::CloseHandle(HANDLE handle) {
   if (!enabled_)
     return CloseHandleWrapper(handle);
 
-  closing_.Set(true);
+  const AutoReset<bool> resetter(&closing, true);
   CloseHandleWrapper(handle);
-  closing_.Set(false);
 
   return true;
 }
@@ -262,8 +265,9 @@ NOINLINE void ScopedHandleVerifier::StopTrackingImpl(HANDLE handle,
 NOINLINE void ScopedHandleVerifier::OnHandleBeingClosedImpl(
     HANDLE handle,
     HandleOperation operation) {
-  if (closing_.Get())
+  if (closing) {
     return;
+  }
 
   AutoNativeLock lock(*lock_);
   HandleMap::iterator i = map_.find(handle);

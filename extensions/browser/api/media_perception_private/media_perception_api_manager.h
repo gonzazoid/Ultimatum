@@ -5,8 +5,9 @@
 #ifndef EXTENSIONS_BROWSER_API_MEDIA_PERCEPTION_PRIVATE_MEDIA_PERCEPTION_API_MANAGER_H_
 #define EXTENSIONS_BROWSER_API_MEDIA_PERCEPTION_PRIVATE_MEDIA_PERCEPTION_API_MANAGER_H_
 
+#include <optional>
 #include <string>
-
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/components/dbus/media_analytics/media_analytics_client.h"
@@ -16,7 +17,6 @@
 #include "extensions/common/api/media_perception_private.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -82,6 +82,8 @@ class MediaPerceptionAPIManager : public BrowserContextKeyedAPI,
   // BrowserContextKeyedAPI:
   static const char* service_name() { return "MediaPerceptionAPIManager"; }
 
+  static const bool kServiceIsNULLWhileTesting = true;
+
   enum class AnalyticsProcessState {
     // The process is not running.
     IDLE,
@@ -102,12 +104,12 @@ class MediaPerceptionAPIManager : public BrowserContextKeyedAPI,
 
   // Callback for State D-Bus method calls to the media analytics process.
   void StateCallback(APIStateCallback callback,
-                     absl::optional<mri::State> state);
+                     std::optional<mri::State> state);
 
   // Callback for GetDiagnostics D-Bus method calls to the media analytics
   // process.
   void GetDiagnosticsCallback(APIGetDiagnosticsCallback callback,
-                              absl::optional<mri::Diagnostics> diagnostics);
+                              std::optional<mri::Diagnostics> diagnostics);
 
   // Callbacks for Upstart command to start media analytics process.
   void UpstartStartProcessCallback(APIComponentProcessStateCallback callback,
@@ -144,7 +146,7 @@ class MediaPerceptionAPIManager : public BrowserContextKeyedAPI,
 
   bool ComponentIsLoaded();
 
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext> browser_context_;
 
   // Keeps track of whether the analytics process is running so that it can be
   // started with an Upstart D-Bus method call if necessary.

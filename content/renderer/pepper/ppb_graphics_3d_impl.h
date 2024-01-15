@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "base/containers/flat_map.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
 #include "gpu/command_buffer/client/gpu_control_client.h"
@@ -20,8 +21,9 @@
 
 namespace gpu {
 struct Capabilities;
+struct GLCapabilities;
 class CommandBufferProxyImpl;
-struct ContextCreationAttribs;
+class ClientSharedImageInterface;
 }
 
 namespace content {
@@ -32,8 +34,9 @@ class PPB_Graphics3D_Impl : public ppapi::PPB_Graphics3D_Shared,
   static PP_Resource CreateRaw(
       PP_Instance instance,
       PP_Resource share_context,
-      const gpu::ContextCreationAttribs& attrib_helper,
+      const ppapi::Graphics3DContextAttribs& context_attribs,
       gpu::Capabilities* capabilities,
+      gpu::GLCapabilities* gl_capabilities,
       const base::UnsafeSharedMemoryRegion** shared_state_region,
       gpu::CommandBufferId* command_buffer_id);
 
@@ -53,10 +56,11 @@ class PPB_Graphics3D_Impl : public ppapi::PPB_Graphics3D_Shared,
       int32_t start,
       int32_t end) override;
   void EnsureWorkVisible() override;
-  void TakeFrontBuffer() override;
   void ReturnFrontBuffer(const gpu::Mailbox& mailbox,
                          const gpu::SyncToken& sync_token,
                          bool is_lost);
+  void ResolveAndDetachFramebuffer() override;
+  void DoResize(gfx::Size size) override;
 
   // Binds/unbinds the graphics of this context with the associated instance.
   // Returns true if binding/unbinding is successful.
@@ -80,11 +84,14 @@ class PPB_Graphics3D_Impl : public ppapi::PPB_Graphics3D_Shared,
                         const gfx::Size& size) override;
 
  private:
+  class ColorBuffer;
+
   explicit PPB_Graphics3D_Impl(PP_Instance instance);
 
   bool InitRaw(PPB_Graphics3D_API* share_context,
-               const gpu::ContextCreationAttribs& requested_attribs,
+               const ppapi::Graphics3DContextAttribs& requested_attribs,
                gpu::Capabilities* capabilities,
+               gpu::GLCapabilities* gl_capabilities,
                const base::UnsafeSharedMemoryRegion** shared_state_region,
                gpu::CommandBufferId* command_buffer_id);
 
@@ -99,15 +106,28 @@ class PPB_Graphics3D_Impl : public ppapi::PPB_Graphics3D_Shared,
   // Notifications sent to plugin.
   void SendContextLost();
 
-  // Reuses a mailbox if one is available, otherwise makes a new one.
-  gpu::Mailbox GenerateMailbox();
+  // This is called by NaCL process when it wants to present next frame
+  // (SwapBuffers call from the plugin). Note that
+  // `ResolveAndDetachFramebuffer()` must be called before and `sync_token` must
+  // be submitted after that call.
+  int32_t DoPresent(const gpu::SyncToken& sync_token, const gfx::Size& size);
 
-  // A front buffer that was recently taken from the command buffer. This should
-  // be immediately consumed by DoSwapBuffers().
-  gpu::Mailbox taken_front_buffer_;
+  // Returns ColorBuffer for the next frame. It will try to re-use one of
+  // `available_color_buffers_` first and create new one if there is none.
+  std::unique_ptr<ColorBuffer> GetOrCreateColorBuffer();
 
-  // Mailboxes that are no longer in use.
-  std::vector<gpu::Mailbox> mailboxes_to_reuse_;
+  // This returns ColorBuffer from the display compositor. If it's not lost and
+  // have the same size, it will be put in `available_color_buffers_` or
+  // Destroyed otherwise.
+  void RecycleColorBuffer(std::unique_ptr<ColorBuffer> buffer,
+                          const gpu::SyncToken& sync_token,
+                          bool is_lost);
+
+  gfx::Size swapchain_size_;
+  std::vector<std::unique_ptr<ColorBuffer>> available_color_buffers_;
+  std::unique_ptr<ColorBuffer> current_color_buffer_;
+  base::flat_map<gpu::Mailbox, std::unique_ptr<ColorBuffer>>
+      inflight_color_buffers_;
 
   // True if context is bound to instance.
   bool bound_to_instance_;
@@ -118,9 +138,15 @@ class PPB_Graphics3D_Impl : public ppapi::PPB_Graphics3D_Shared,
   bool lost_context_ = false;
 #endif
 
-  bool has_alpha_;
-  const bool use_image_chromium_;
+  bool has_alpha_ = false;
+  bool is_single_buffered_ = false;
+  int samples_count_ = 0;
+  bool preserve_ = false;
+  bool needs_depth_ = false;
+  bool needs_stencil_ = false;
+
   std::unique_ptr<gpu::CommandBufferProxyImpl> command_buffer_;
+  std::unique_ptr<gpu::ClientSharedImageInterface> shared_image_interface_;
 
   base::WeakPtrFactory<PPB_Graphics3D_Impl> weak_ptr_factory_{this};
 };

@@ -10,50 +10,25 @@
 #include <memory>
 
 #include "base/containers/contains.h"
-#include "base/file_version_info.h"
 #include "base/files/file.h"
-#include "base/files/scoped_temp_dir.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/synchronization/waitable_event.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "base/win/windows_version.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/service_manager/public/cpp/bind_source_info.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/common/dwrite_rasterizer_support/dwrite_rasterizer_support.h"
 #include "third_party/blink/public/common/font_unique_name_lookup/font_table_matcher.h"
 #include "third_party/icu/source/common/unicode/umachine.h"
-#include "ui/gfx/test/font_fallback_test_data.h"
 
 namespace content {
 
 namespace {
-
-struct FontExpectation {
-  const char* font_name;
-  uint16_t ttc_index;
-};
-
-constexpr FontExpectation kExpectedTestFonts[] = {{"CambriaMath", 1},
-                                                  {"Ming-Lt-HKSCS-ExtB", 2},
-                                                  {"NSimSun", 1},
-                                                  {"calibri-bolditalic", 0}};
-
-// DirectWrite on Windows supports IDWriteFontSet API which allows for querying
-// by PostScript name and full font name directly. In the implementation of
-// DWriteFontProxy we check whether this API is available by checking for
-// whether IDWriteFactory3 is available. In order to validate in a unit test
-// whether this check works, compare it against the dwrite.dll major version -
-// versions starting from 10 have the required functionality.
-constexpr int kDWriteMajorVersionSupportingSingleLookups = 10;
 
 // Base test class that sets up the Mojo connection to DWriteFontProxy so that
 // tests can call its Mojo methods.
@@ -66,58 +41,10 @@ class DWriteFontProxyImplUnitTest : public testing::Test {
     return *dwrite_font_proxy_;
   }
 
-  bool SupportsSingleLookups() {
-    blink::mojom::UniqueFontLookupMode lookup_mode;
-    dwrite_font_proxy().GetUniqueFontLookupMode(&lookup_mode);
-    return lookup_mode == blink::mojom::UniqueFontLookupMode::kSingleLookups;
-  }
-
   base::test::TaskEnvironment task_environment_;
   mojo::Remote<blink::mojom::DWriteFontProxy> dwrite_font_proxy_;
   DWriteFontProxyImpl impl_;
   mojo::Receiver<blink::mojom::DWriteFontProxy> receiver_;
-};
-
-// Derived class for tests that exercise font unique local matching mojo methods
-// of DWriteFontProxy. Needs a ScopedFeatureList to activate the feature as it
-// is currently behind a flag.
-class DWriteFontProxyLocalMatchingTest : public DWriteFontProxyImplUnitTest {
- public:
-  DWriteFontProxyLocalMatchingTest() {
-    feature_list_.InitAndEnableFeature(features::kFontSrcLocalMatching);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Derived class for tests that exercise the parts of the DWriteFontProxy Mojo
-// interface that deal with accessing the font lookup table created by
-// DWriteFontLookupTableBuilder. Initializes the DWriteFontLookupTableBuilder
-// and has a ScopedTempDir for testing persisting the lookup table to disk.
-class DWriteFontProxyTableMatchingTest
-    : public DWriteFontProxyLocalMatchingTest {
- public:
-  void SetUp() override {
-    DWriteFontLookupTableBuilder* table_builder_instance =
-        DWriteFontLookupTableBuilder::GetInstance();
-    bool temp_dir_success = scoped_temp_dir_.CreateUniqueTempDir();
-    ASSERT_TRUE(temp_dir_success);
-    table_builder_instance->OverrideDWriteVersionChecksForTesting();
-    table_builder_instance->SetCacheDirectoryForTesting(
-        scoped_temp_dir_.GetPath());
-    table_builder_instance->ResetLookupTableForTesting();
-    table_builder_instance->SchedulePrepareFontUniqueNameTableIfNeeded();
-  }
-
-  void TearDown() override {
-    DWriteFontLookupTableBuilder* table_builder_instance =
-        DWriteFontLookupTableBuilder::GetInstance();
-    table_builder_instance->ResetStateForTesting();
-  }
-
- private:
-  base::ScopedTempDir scoped_temp_dir_;
 };
 
 TEST_F(DWriteFontProxyImplUnitTest, GetFamilyCount) {
@@ -163,33 +90,29 @@ TEST_F(DWriteFontProxyImplUnitTest, GetFamilyNamesIndexOutOfBounds) {
   EXPECT_TRUE(names.empty());
 }
 
-TEST_F(DWriteFontProxyImplUnitTest, GetFontFiles) {
+TEST_F(DWriteFontProxyImplUnitTest, GetFontFileHandles) {
   UINT32 arial_index = 0;
   dwrite_font_proxy().FindFamily(u"Arial", &arial_index);
 
-  std::vector<base::FilePath> files;
   std::vector<base::File> handles;
-  dwrite_font_proxy().GetFontFiles(arial_index, &files, &handles);
+  dwrite_font_proxy().GetFontFileHandles(arial_index, &handles);
 
-  EXPECT_LT(0u, files.size());
-  for (const auto& file : files) {
-    EXPECT_FALSE(file.value().empty());
+  EXPECT_LT(0u, handles.size());
+  for (auto& file : handles) {
+    EXPECT_TRUE(file.IsValid());
+    EXPECT_LT(0, file.GetLength());  // Check the file exists
   }
 }
 
-TEST_F(DWriteFontProxyImplUnitTest, GetFontFilesIndexOutOfBounds) {
-  std::vector<base::FilePath> files;
+TEST_F(DWriteFontProxyImplUnitTest, GetFontFileHandlesIndexOutOfBounds) {
   std::vector<base::File> handles;
   UINT32 invalid_index = 1000000;
-  dwrite_font_proxy().GetFontFiles(invalid_index, &files, &handles);
+  dwrite_font_proxy().GetFontFileHandles(invalid_index, &handles);
 
-  EXPECT_EQ(0u, files.size());
+  EXPECT_EQ(0u, handles.size());
 }
 
 TEST_F(DWriteFontProxyImplUnitTest, MapCharacter) {
-  if (!blink::DWriteRasterizerSupport::IsDWriteFactory2Available())
-    return;
-
   blink::mojom::MapCharactersResultPtr result;
   dwrite_font_proxy().MapCharacters(
       u"abc",
@@ -209,9 +132,6 @@ TEST_F(DWriteFontProxyImplUnitTest, MapCharacter) {
 }
 
 TEST_F(DWriteFontProxyImplUnitTest, MapCharacterInvalidCharacter) {
-  if (!blink::DWriteRasterizerSupport::IsDWriteFactory2Available())
-    return;
-
   blink::mojom::MapCharactersResultPtr result;
   dwrite_font_proxy().MapCharacters(
       u"\ufffe\uffffabc",
@@ -227,9 +147,6 @@ TEST_F(DWriteFontProxyImplUnitTest, MapCharacterInvalidCharacter) {
 }
 
 TEST_F(DWriteFontProxyImplUnitTest, MapCharacterInvalidAfterValid) {
-  if (!blink::DWriteRasterizerSupport::IsDWriteFactory2Available())
-    return;
-
   blink::mojom::MapCharactersResultPtr result;
   dwrite_font_proxy().MapCharacters(
       u"abc\ufffe\uffff",
@@ -255,132 +172,14 @@ TEST_F(DWriteFontProxyImplUnitTest, TestCustomFontFiles) {
   UINT32 arial_index = 0;
   dwrite_font_proxy().FindFamily(u"Arial", &arial_index);
 
-  std::vector<base::FilePath> files;
   std::vector<base::File> handles;
-  dwrite_font_proxy().GetFontFiles(arial_index, &files, &handles);
+  dwrite_font_proxy().GetFontFileHandles(arial_index, &handles);
 
-  EXPECT_TRUE(files.empty());
   EXPECT_FALSE(handles.empty());
   for (auto& file : handles) {
     EXPECT_TRUE(file.IsValid());
     EXPECT_LT(0, file.GetLength());  // Check the file exists
   }
-}
-
-TEST_F(DWriteFontProxyImplUnitTest, FallbackFamily) {
-  const bool on_win10 = base::win::GetVersion() >= base::win::Version::WIN10;
-
-  for (auto& fallback_request : gfx::kGetFontFallbackTests) {
-    if (fallback_request.is_win10 && !on_win10)
-      continue;
-
-    blink::mojom::FallbackFamilyAndStylePtr fallback_family_and_style;
-    UChar32 codepoint;
-    U16_GET(fallback_request.text.c_str(), 0, 0, fallback_request.text.size(),
-            codepoint);
-    dwrite_font_proxy().FallbackFamilyAndStyleForCodepoint(
-        "Times New Roman", fallback_request.language_tag, codepoint,
-        &fallback_family_and_style);
-
-    EXPECT_TRUE(base::Contains(fallback_request.fallback_fonts,
-                               fallback_family_and_style->fallback_family_name))
-        << "Did not find expected fallback font for language: "
-        << fallback_request.language_tag << ", codepoint U+" << std::hex
-        << codepoint << " DWrite returned font name: \""
-        << fallback_family_and_style->fallback_family_name << "\""
-        << ", expected: "
-        << base::JoinString(fallback_request.fallback_fonts, ", ");
-    EXPECT_EQ(fallback_family_and_style->weight, 400u);
-    EXPECT_EQ(fallback_family_and_style->width,
-              5u);  // SkFontStyle::Width::kNormal_Width
-    EXPECT_EQ(fallback_family_and_style->slant,
-              0u);  // SkFontStyle::Slant::kUpright_Slant
-  }
-}
-
-namespace {
-void TestWhenLookupTableReady(
-    bool* did_test_fonts,
-    base::ReadOnlySharedMemoryRegion font_table_memory) {
-  blink::FontTableMatcher font_table_matcher(font_table_memory.Map());
-  for (auto& test_font_name_index : kExpectedTestFonts) {
-    absl::optional<blink::FontTableMatcher::MatchResult> match_result =
-        font_table_matcher.MatchName(test_font_name_index.font_name);
-    ASSERT_TRUE(match_result)
-        << "No font matched for font name: " << test_font_name_index.font_name;
-    base::File unique_font_file(
-        base::FilePath::FromUTF8Unsafe(match_result->font_path),
-        base::File::FLAG_OPEN | base::File::FLAG_READ);
-    ASSERT_TRUE(unique_font_file.IsValid());
-    ASSERT_GT(unique_font_file.GetLength(), 0);
-    ASSERT_EQ(test_font_name_index.ttc_index, match_result->ttc_index);
-    *did_test_fonts = true;
-  }
-}
-}  // namespace
-
-TEST_F(DWriteFontProxyTableMatchingTest, TestFindUniqueFont) {
-  bool lookup_table_results_were_tested = false;
-  dwrite_font_proxy().GetUniqueNameLookupTable(base::BindOnce(
-      &TestWhenLookupTableReady, &lookup_table_results_were_tested));
-  task_environment_.RunUntilIdle();
-  ASSERT_TRUE(lookup_table_results_were_tested);
-}
-
-TEST_F(DWriteFontProxyLocalMatchingTest, TestSingleLookup) {
-  // Do not run this test on unsupported Windows versions.
-  if (!SupportsSingleLookups())
-    return;
-  for (auto& test_font_name_index : kExpectedTestFonts) {
-    base::File result_handle;
-    uint32_t ttc_index;
-    dwrite_font_proxy().MatchUniqueFont(
-        base::UTF8ToUTF16(test_font_name_index.font_name), &result_handle,
-        &ttc_index);
-    ASSERT_TRUE(result_handle.IsValid());
-    ASSERT_GT(result_handle.GetLength(), 0);
-    ASSERT_EQ(test_font_name_index.ttc_index, ttc_index);
-  }
-}
-
-TEST_F(DWriteFontProxyLocalMatchingTest, TestSingleLookupUnavailable) {
-  // Do not run this test on unsupported Windows versions.
-  if (!SupportsSingleLookups())
-    return;
-  base::File result_handle;
-  uint32_t ttc_index;
-  std::u16string unavailable_font_name =
-      u"Unavailable_Font_Name_56E7EA7E-2C69-4E23-99DC-750BC19B250E";
-  dwrite_font_proxy().MatchUniqueFont(unavailable_font_name, &result_handle,
-                                      &ttc_index);
-  ASSERT_FALSE(result_handle.IsValid());
-  ASSERT_EQ(ttc_index, 0u);
-}
-
-TEST_F(DWriteFontProxyLocalMatchingTest, TestLookupMode) {
-  std::unique_ptr<FileVersionInfo> dwrite_version_info =
-      FileVersionInfo::CreateFileVersionInfo(
-          base::FilePath(FILE_PATH_LITERAL("DWrite.dll")));
-
-  std::string dwrite_version =
-      base::UTF16ToUTF8(dwrite_version_info->product_version());
-
-  int dwrite_major_version_number = 0;
-  ASSERT_TRUE(
-      base::StringToInt(dwrite_version.substr(0, dwrite_version.find(".")),
-                        &dwrite_major_version_number));
-
-  blink::mojom::UniqueFontLookupMode expected_lookup_mode;
-  if (dwrite_major_version_number >=
-      kDWriteMajorVersionSupportingSingleLookups) {
-    expected_lookup_mode = blink::mojom::UniqueFontLookupMode::kSingleLookups;
-  } else {
-    expected_lookup_mode = blink::mojom::UniqueFontLookupMode::kRetrieveTable;
-  }
-
-  blink::mojom::UniqueFontLookupMode lookup_mode;
-  dwrite_font_proxy().GetUniqueFontLookupMode(&lookup_mode);
-  ASSERT_EQ(lookup_mode, expected_lookup_mode);
 }
 
 }  // namespace

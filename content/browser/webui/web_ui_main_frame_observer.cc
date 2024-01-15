@@ -14,8 +14,8 @@
 #include "content/public/browser/web_ui_controller.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
@@ -62,7 +62,7 @@ void WebUIMainFrameObserver::OnDidAddMessageToConsole(
     const std::u16string& message,
     int32_t line_no,
     const std::u16string& source_id,
-    const absl::optional<std::u16string>& untrusted_stack_trace) {
+    const std::optional<std::u16string>& untrusted_stack_trace) {
   DVLOG(3) << "OnDidAddMessageToConsole called for " << message;
   if (untrusted_stack_trace) {
     DVLOG(3) << "stack is " << *untrusted_stack_trace;
@@ -82,7 +82,7 @@ void WebUIMainFrameObserver::OnDidAddMessageToConsole(
   // Some WebUI pages have another WebUI page in an <iframe>. Both
   // WebUIMainFrameObservers will get a callback when either page gets an error.
   // To avoid duplicates, only report on errors from this page's frame.
-  if (source_frame != web_ui_->frame_host()) {
+  if (source_frame != web_ui_->GetRenderFrameHost()) {
     DVLOG(3) << "Message not reported, different frame";
     return;
   }
@@ -145,7 +145,8 @@ void WebUIMainFrameObserver::MaybeEnableWebUIJavaScriptErrorReporting(
   // https://crbug.com/1154866).
   if (error_reporting_enabled_) {
     DVLOG(3) << "Enabled";
-    web_ui_->frame_host()->SetWantErrorMessageStackTrace();
+    static_cast<content::RenderFrameHostImpl*>(web_ui_->GetRenderFrameHost())
+        ->SetWantErrorMessageStackTrace();
   } else {
     DVLOG(3) << "Error reporting disabled for this page";
   }
@@ -156,10 +157,13 @@ void WebUIMainFrameObserver::MaybeEnableWebUIJavaScriptErrorReporting(
 void WebUIMainFrameObserver::ReadyToCommitNavigation(
     NavigationHandle* navigation_handle) {
   // Navigation didn't occur in the frame associated with this WebUI.
-  if (navigation_handle->GetRenderFrameHost() != web_ui_->frame_host())
+  if (navigation_handle->GetRenderFrameHost() !=
+      web_ui_->GetRenderFrameHost()) {
     return;
+  }
 
-  web_ui_->GetController()->WebUIReadyToCommitNavigation(web_ui_->frame_host());
+  web_ui_->GetController()->WebUIReadyToCommitNavigation(
+      web_ui_->GetRenderFrameHost());
 
 // TODO(crbug.com/1129544) This is currently disabled due to Windows DLL
 // thunking issues. Fix & re-enable.

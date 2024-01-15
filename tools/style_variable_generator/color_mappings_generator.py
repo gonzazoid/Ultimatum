@@ -6,7 +6,7 @@ import collections
 import math
 import os
 import re
-from style_variable_generator.color import Color
+from style_variable_generator.color import Color, ColorBlend, ColorVar, ColorRGBVar
 from style_variable_generator.css_generator import CSSStyleGenerator
 from style_variable_generator.model import Modes, VariableType
 
@@ -17,10 +17,6 @@ class ColorMappingsStyleGenerator(CSSStyleGenerator):
     @staticmethod
     def GetName():
         return 'ColorMappings'
-
-    def __init__(self):
-        super().__init__()
-        self.resolve_blended_colors = False
 
     def GetParameters(self):
         return {
@@ -55,6 +51,9 @@ class ColorMappingsStyleGenerator(CSSStyleGenerator):
 
         return globals
 
+    def ShouldResolveBlendedColors(self):
+        return False
+
     def _CreateMappings(self):
         mappings = collections.defaultdict(list)
         for name, mode_values in self.model.colors.items():
@@ -78,17 +77,22 @@ class ColorMappingsStyleGenerator(CSSStyleGenerator):
         '''Returns the C++ ColorMappings representation of |c|'''
         assert (isinstance(c, Color))
 
-        if c.blended_colors:
+        if isinstance(c, ColorBlend) and c.blendPercentage:
+            return 'ui::GetResultingPaintColor(ui::SetAlpha(%s, 0x%X), %s)' % (
+                self._ColorMixerColor(c.blended_colors[0], mode),
+                math.floor(255 * (float(c.blendPercentage) / 100)),
+                self._ColorMixerColor(c.blended_colors[1], mode))
+        elif isinstance(c, ColorBlend):
             return 'ui::GetResultingPaintColor(%s, %s)' % (
                 self._ColorMixerColor(c.blended_colors[0], mode),
                 self._ColorMixerColor(c.blended_colors[1], mode))
 
-        if c.var:
+        if isinstance(c, ColorVar):
             return '{%s}' % self._ToColorIdName(c.var)
 
-        if c.rgb_var:
+        if isinstance(c, ColorRGBVar):
             return ('ui::SetAlpha({%s}, 0x%X)' % (self._ToColorIdName(
-                c.RGBVarToVar()), self._CppOpacity(c.opacity, mode)))
+                c.ToVar()), self._CppOpacity(c.opacity, mode)))
 
         if c.opacity.a != 1:
             return '{SkColorSetARGB(0x%X, 0x%X, 0x%X, 0x%X)}' % (

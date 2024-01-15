@@ -12,6 +12,8 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
 #include "media/audio/audio_sink_parameters.h"
@@ -20,7 +22,6 @@
 #include "media/base/audio_latency.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/audio_timestamp_helper.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/channel_layout.h"
 #include "media/base/sample_rates.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
@@ -186,11 +187,6 @@ class SharedAudioRenderer : public WebMediaStreamAudioRenderer {
     return delegate_->GetCurrentRenderTime();
   }
 
-  bool IsLocalRenderer() override {
-    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    return delegate_->IsLocalRenderer();
-  }
-
  private:
   THREAD_CHECKER(thread_checker_);
   const scoped_refptr<WebMediaStreamAudioRenderer> delegate_;
@@ -306,11 +302,7 @@ WebRtcAudioRenderer::WebRtcAudioRenderer(
       on_render_error_callback_(std::move(on_render_error_callback)) {
   if (web_frame.Client()) {
     speech_recognition_client_ =
-        web_frame.Client()->CreateSpeechRecognitionClient(
-            media::BindToCurrentLoop(
-                ConvertToBaseOnceCallback(CrossThreadBindOnce(
-                    &WebRtcAudioRenderer::EnableSpeechRecognition,
-                    weak_factory_.GetWeakPtr()))));
+        web_frame.Client()->CreateSpeechRecognitionClient();
   }
 
   SendLogMessage(
@@ -525,10 +517,6 @@ base::TimeDelta WebRtcAudioRenderer::GetCurrentRenderTime() {
   return current_time_;
 }
 
-bool WebRtcAudioRenderer::IsLocalRenderer() {
-  return false;
-}
-
 void WebRtcAudioRenderer::SwitchOutputDevice(
     const std::string& device_id,
     media::OutputDeviceStatusCB callback) {
@@ -552,6 +540,11 @@ void WebRtcAudioRenderer::SwitchOutputDevice(
   if (!web_frame) {
     SendLogMessage(String::Format("%s => (ERROR: No Frame)", __func__));
     std::move(callback).Run(media::OUTPUT_DEVICE_STATUS_ERROR_INTERNAL);
+    return;
+  }
+
+  if (sink_ && output_device_id_ == String::FromUTF8(device_id)) {
+    std::move(callback).Run(media::OUTPUT_DEVICE_STATUS_OK);
     return;
   }
 
@@ -593,17 +586,9 @@ void WebRtcAudioRenderer::SwitchOutputDevice(
   std::move(callback).Run(media::OUTPUT_DEVICE_STATUS_OK);
 }
 
-void WebRtcAudioRenderer::TranscribeAudio(
-    std::unique_ptr<media::AudioBus> audio_bus,
-    int sample_rate,
-    media::ChannelLayout channel_layout) {
-  speech_recognition_client_->AddAudio(std::move(audio_bus), sample_rate,
-                                       channel_layout);
-}
-
 int WebRtcAudioRenderer::Render(base::TimeDelta delay,
                                 base::TimeTicks delay_timestamp,
-                                int prior_frames_skipped,
+                                const media::AudioGlitchInfo& glitch_info,
                                 media::AudioBus* audio_bus) {
   DCHECK(sink_->CurrentThreadIsRenderingThread());
   DCHECK_LE(sink_params_.channels(), 8);
@@ -612,27 +597,7 @@ int WebRtcAudioRenderer::Render(base::TimeDelta delay,
     return 0;
 
   audio_delay_ = delay;
-
-  // If there are skipped frames, pull and throw away the same amount. We always
-  // pull 10 ms of data from the source (see PrepareSink()), so the fifo is only
-  // required if the number of frames to drop doesn't correspond to 10 ms.
-  if (prior_frames_skipped > 0) {
-    const int source_frames_per_buffer = sink_params_.sample_rate() / 100;
-    if (!audio_fifo_ && prior_frames_skipped != source_frames_per_buffer) {
-      audio_fifo_ = std::make_unique<media::AudioPullFifo>(
-          sink_params_.channels(), source_frames_per_buffer,
-          ConvertToBaseRepeatingCallback(
-              CrossThreadBindRepeating(&WebRtcAudioRenderer::SourceCallback,
-                                       CrossThreadUnretained(this))));
-    }
-
-    std::unique_ptr<media::AudioBus> drop_bus =
-        media::AudioBus::Create(audio_bus->channels(), prior_frames_skipped);
-    if (audio_fifo_)
-      audio_fifo_->Consume(drop_bus.get(), drop_bus->frames());
-    else
-      SourceCallback(0, drop_bus.get());
-  }
+  glitch_info_accumulator_.Add(glitch_info);
 
   // Pull the data we will deliver.
   if (audio_fifo_)
@@ -646,13 +611,8 @@ int WebRtcAudioRenderer::Render(base::TimeDelta delay,
     audio_stream_tracker_->MeasurePower(*audio_bus, audio_bus->frames());
   }
 
-  if (transcribe_audio_callback_) {
-    auto audio_bus_copy =
-        media::AudioBus::Create(audio_bus->channels(), audio_bus->frames());
-    audio_bus->CopyTo(audio_bus_copy.get());
-    transcribe_audio_callback_.Run(std::move(audio_bus_copy),
-                                   sink_params_.sample_rate(),
-                                   sink_params_.channel_layout());
+  if (speech_recognition_client_) {
+    speech_recognition_client_->AddAudio(*audio_bus);
   }
 
   return (state_ == kPlaying) ? audio_bus->frames() : 0;
@@ -688,7 +648,7 @@ void WebRtcAudioRenderer::SourceCallback(int fifo_frame_delay,
   // We need to keep render data for the |source_| regardless of |state_|,
   // otherwise the data will be buffered up inside |source_|.
   source_->RenderData(audio_bus, sink_params_.sample_rate(), output_delay,
-                      &current_time_);
+                      &current_time_, glitch_info_accumulator_.GetAndReset());
 
   // Avoid filling up the audio bus if we are not playing; instead
   // return here and ensure that the returned value in Render() is 0.
@@ -865,6 +825,8 @@ void WebRtcAudioRenderer::PrepareSink() {
                        __func__, sample_rate));
     sample_rate = 48000;
   }
+  DVLOG(1) << "WebRtcAudioRenderer::PrepareSink sample_rate " << sample_rate;
+
   media::AudioSampleRate asr;
   if (media::ToAudioSampleRate(sample_rate, &asr)) {
     UMA_HISTOGRAM_ENUMERATION("WebRTC.AudioOutputSampleRate", asr,
@@ -936,6 +898,13 @@ void WebRtcAudioRenderer::PrepareSink() {
   new_sink_params.set_latency_tag(
       Platform::Current()->GetAudioSourceLatencyType(
           WebAudioDeviceSourceType::kWebRtc));
+
+  // Reconfigure() is safe to call, since |sink_| has not started yet, so there
+  // are no AddAudio() calls coming from the rendering thread.
+  if (speech_recognition_client_) {
+    speech_recognition_client_->Reconfigure(new_sink_params);
+  }
+
   sink_->Initialize(new_sink_params, this);
 }
 
@@ -943,16 +912,6 @@ void WebRtcAudioRenderer::SendLogMessage(const WTF::String& message) {
   WebRtcLogMessage(String::Format("WRAR::%s [label=%s]", message.Utf8().c_str(),
                                   media_stream_descriptor_id_.Utf8().c_str())
                        .Utf8());
-}
-
-void WebRtcAudioRenderer::EnableSpeechRecognition() {
-  if (speech_recognition_client_ &&
-      speech_recognition_client_->IsSpeechRecognitionAvailable()) {
-    transcribe_audio_callback_ =
-        media::BindToCurrentLoop(ConvertToBaseRepeatingCallback(
-            CrossThreadBindRepeating(&WebRtcAudioRenderer::TranscribeAudio,
-                                     weak_factory_.GetWeakPtr())));
-  }
 }
 
 }  // namespace blink

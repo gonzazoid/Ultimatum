@@ -4,18 +4,16 @@
 
 #include "ash/wm/desks/desks_controller.h"
 
-#include <memory>
+#include <algorithm>
 #include <utility>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
-#include "ash/public/cpp/desk_template.h"
-#include "ash/public/cpp/desks_templates_delegate.h"
 #include "ash/public/cpp/shelf_model.h"
+#include "ash/public/cpp/shelf_prefs.h"
 #include "ash/public/cpp/shelf_types.h"
-#include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/system/toast_data.h"
 #include "ash/public/cpp/system/toast_manager.h"
 #include "ash/public/cpp/window_properties.h"
@@ -23,10 +21,10 @@
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/utility/haptics_util.h"
 #include "ash/wm/desks/desk.h"
 #include "ash/wm/desks/desk_animation_base.h"
 #include "ash/wm/desks/desk_animation_impl.h"
+#include "ash/wm/desks/desk_bar_controller.h"
 #include "ash/wm/desks/desks_animations.h"
 #include "ash/wm/desks/desks_histogram_enums.h"
 #include "ash/wm/desks/desks_restore_util.h"
@@ -41,8 +39,8 @@
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_utils.h"
 #include "ash/wm/switchable_windows.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_cycle/window_cycle_controller.h"
+#include "ash/wm/window_properties.h"
 #include "ash/wm/window_restore/window_restore_controller.h"
 #include "ash/wm/window_restore/window_restore_util.h"
 #include "ash/wm/window_state.h"
@@ -50,31 +48,31 @@
 #include "ash/wm/workspace/workspace_layout_manager.h"
 #include "ash/wm/workspace_controller.h"
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
-#include "base/containers/unique_ptr_adapters.h"
-#include "base/cxx17_backports.h"
-#include "base/guid.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/time/time.h"
-#include "base/timer/timer.h"
-#include "chromeos/ui/wm/features.h"
-#include "components/app_restore/app_launch_info.h"
+#include "base/task/single_thread_task_runner.h"
+#include "chromeos/utils/haptics_util.h"
 #include "components/app_restore/full_restore_utils.h"
-#include "components/app_restore/restore_data.h"
-#include "components/app_restore/window_info.h"
 #include "components/app_restore/window_properties.h"
 #include "components/user_manager/user_manager.h"
 #include "ui/aura/client/aura_constants.h"
+#include "ui/aura/window_tracker.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/display/screen.h"
 #include "ui/events/devices/haptic_touchpad_effects.h"
+#include "ui/views/widget/native_widget_private.h"
 #include "ui/wm/core/window_animations.h"
 #include "ui/wm/core/window_util.h"
 #include "ui/wm/public/activation_client.h"
@@ -89,21 +87,21 @@ unsigned int g_close_desk_toast_counter = 0;
 constexpr char kDesksCountHistogramName[] = "Ash.Desks.DesksCount3";
 constexpr char kWeeklyActiveDesksHistogramName[] =
     "Ash.Desks.WeeklyActiveDesks";
-constexpr char kRemoveDeskHistogramName[] = "Ash.Desks.RemoveDesk";
 constexpr char kMoveWindowFromActiveDeskHistogramName[] =
     "Ash.Desks.MoveWindowFromActiveDesk";
 constexpr char kCloseAllUndoHistogramName[] = "Ash.Desks.CloseAllUndo";
 constexpr char kCloseAllTotalHistogramName[] = "Ash.Desks.CloseAllTotal";
 constexpr char kRemoveDeskTypeHistogramName[] = "Ash.Desks.RemoveDeskType";
-constexpr char kNumberOfWindowsClosed[] = "Ash.Desks.NumberOfWindowsClosed";
+constexpr char kDeskApiRemoveDeskTypeHistogramName[] =
+    "Ash.DeskApi.RemoveDeskType";
+constexpr char kDeskApiCloseAllUndoHistogramName[] = "Ash.DeskApi.CloseAllUndo";
+constexpr char kNumberOfWindowsClosed[] = "Ash.Desks.NumberOfWindowsClosed2";
 constexpr char kNumberOfWindowsClosedByButton[] =
-    "Ash.Desks.NumberOfWindowsClosed.Button";
+    "Ash.Desks.NumberOfWindowsClosed2.Button";
 constexpr char kNumberOfWindowsClosedByKeyboard[] =
-    "Ash.Desks.NumberOfWindowsClosed.Keyboard";
-constexpr char kNumberOfWindowsClosedBySaveAndRecall[] =
-    "Ash.Desks.NumberOfWindowsClosed.SaveRecall";
+    "Ash.Desks.NumberOfWindowsClosed2.Keyboard";
 constexpr char kNumberOfWindowsClosedByApi[] =
-    "Ash.Desks.NumberOfWindowsClosed.Api";
+    "Ash.Desks.NumberOfWindowsClosed2.Api";
 // Used for histograms from "Ash.Desks.NumberOfWindowsOnDesk_1" up to 16.
 constexpr char kNumberOfWindowsOnDeskHistogramPrefix[] =
     "Ash.Desks.NumberOfWindowsOnDesk_";
@@ -116,6 +114,13 @@ constexpr int kDeskTraversalsMaxValue = 20;
 // |kNumberOfDeskTraversalsHistogramName| will be recorded after this time
 // interval.
 constexpr base::TimeDelta kDeskTraversalsTimeout = base::Seconds(5);
+
+constexpr char kCloseAllZombieWindowsFoundHistogramName[] =
+    "Ash.Desks.CloseAllZombieWindowsFound";
+
+// The amount of time we wait after `CleanUpClosedAppWindowsTask` runs before
+// we check how many of those windows are still in memory.
+constexpr base::TimeDelta kCloseAllWindowsZombieCheckTimeout = base::Minutes(1);
 
 constexpr int kDeskDefaultNameIds[] = {
     IDS_ASH_DESKS_DESK_1_MINI_VIEW_TITLE,
@@ -139,7 +144,8 @@ constexpr int kDeskDefaultNameIds[] = {
 // Appends the given |windows| to the end of the currently active overview mode
 // session such that the most-recently used window is added first. If
 // The windows will animate to their positions in the overview grid.
-void AppendWindowsToOverview(const std::vector<aura::Window*>& windows) {
+void AppendWindowsToOverview(
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows) {
   DCHECK(Shell::Get()->overview_controller()->InOverviewSession());
 
   // TODO(dandersson): See if we can remove this code and just let
@@ -147,7 +153,7 @@ void AppendWindowsToOverview(const std::vector<aura::Window*>& windows) {
   auto* overview_session =
       Shell::Get()->overview_controller()->overview_session();
   overview_session->set_auto_add_windows_enabled(false);
-  for (auto* window :
+  for (aura::Window* window :
        Shell::Get()->mru_window_tracker()->BuildMruWindowList(kActiveDesk)) {
     if (!base::Contains(windows, window) ||
         window_util::ShouldExcludeForOverview(window)) {
@@ -167,7 +173,7 @@ void RemoveAllWindowsFromOverview() {
       Shell::Get()->overview_controller()->overview_session();
   for (const auto& grid : overview_session->grid_list()) {
     while (!grid->empty()) {
-      OverviewItem* overview_item = grid->window_list()[0].get();
+      OverviewItemBase* overview_item = grid->window_list()[0].get();
 
       // We want to restore the window here primarily because when we are
       // undoing the removal of an active desk outside of overview, we do not
@@ -178,7 +184,7 @@ void RemoveAllWindowsFromOverview() {
       // overview transformation to the windows again when appending those
       // windows back to the overview grid regardless of whether those windows
       // were already in that transformation.
-      overview_item->RestoreWindow(/*reset_transform=*/true);
+      overview_item->RestoreWindow(/*reset_transform=*/true, /*animate=*/false);
       overview_session->RemoveItem(overview_item);
     }
   }
@@ -196,8 +202,10 @@ void RemoveAllWindowsFromOverview() {
 // given windows will be updated, while the rest will remain unchanged. Either
 // or both window lists can be empty.
 void MaybeUpdateShelfItems(
-    const std::vector<aura::Window*>& windows_on_inactive_desk,
-    const std::vector<aura::Window*>& windows_on_active_desk) {
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+        windows_on_inactive_desk,
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+        windows_on_active_desk) {
   if (!features::IsPerDeskShelfEnabled())
     return;
 
@@ -217,10 +225,12 @@ void MaybeUpdateShelfItems(
     shelf_items_updates.push_back({index, is_on_active_desk});
   };
 
-  for (auto* window : windows_on_inactive_desk)
+  for (aura::Window* window : windows_on_inactive_desk) {
     add_shelf_item_update(window, /*is_on_active_desk=*/false);
-  for (auto* window : windows_on_active_desk)
+  }
+  for (aura::Window* window : windows_on_active_desk) {
     add_shelf_item_update(window, /*is_on_active_desk=*/true);
+  }
 
   shelf_model->UpdateItemsForDeskChange(shelf_items_updates);
 }
@@ -232,17 +242,17 @@ bool IsParentSwitchableContainer(const aura::Window* window) {
 
 bool IsApplistActiveInTabletMode(const aura::Window* active_window) {
   DCHECK(active_window);
-  Shell* shell = Shell::Get();
-  if (!shell->tablet_mode_controller()->InTabletMode())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
-  auto* app_list_controller = shell->app_list_controller();
+  auto* app_list_controller = Shell::Get()->app_list_controller();
   return active_window == app_list_controller->GetWindow();
 }
 
 void ShowDeskRemovalUndoToast(const std::string& toast_id,
                               base::RepeatingClosure dismiss_callback,
-                              base::RepeatingClosure expired_callback,
+                              base::OnceClosure expired_callback,
                               bool use_persistent_toast) {
   // If ChromeVox is enabled, then we want the toast to be infinite duration.
   ToastData undo_toast_data(
@@ -257,7 +267,21 @@ void ShowDeskRemovalUndoToast(const std::string& toast_id,
   undo_toast_data.show_on_all_root_windows = true;
   undo_toast_data.dismiss_callback = std::move(dismiss_callback);
   undo_toast_data.expired_callback = std::move(expired_callback);
-  ToastManager::Get()->Show(undo_toast_data);
+  ToastManager::Get()->Show(std::move(undo_toast_data));
+}
+
+// Reports the number of windows that still exist in `window_tracker`.
+void ReportNumberOfZombieWindows(
+    std::unique_ptr<aura::WindowTracker> window_tracker) {
+  base::UmaHistogramCounts100(kCloseAllZombieWindowsFoundHistogramName,
+                              window_tracker->windows().size());
+}
+
+AccountId GetPrimaryUserAccountId() {
+  return Shell::Get()
+      ->session_controller()
+      ->GetPrimaryUserSession()
+      ->user_info.account_id;
 }
 
 }  // namespace
@@ -267,18 +291,22 @@ void ShowDeskRemovalUndoToast(const std::string& toast_id,
 class DesksController::RemovedDeskData {
  public:
   RemovedDeskData(std::unique_ptr<Desk> desk,
+                  bool was_active,
                   int index,
-                  DesksCreationRemovalSource source)
+                  DesksCreationRemovalSource source,
+                  DeskCloseType type)
       : toast_id_(base::StringPrintf("UndoCloseAllToast_%d",
                                      ++g_close_desk_toast_counter)),
-        was_active_(desk->is_active()),
+        was_active_(was_active),
         desk_(std::move(desk)),
         index_(index),
         is_toast_persistent_(Shell::Get()
                                  ->accessibility_controller()
                                  ->spoken_feedback()
                                  .enabled()),
-        source_(source) {
+        source_(source),
+        desk_close_type_(type) {
+    full_restore::SaveRemovingDeskGuid(desk_->uuid());
     desk_->set_is_desk_being_removed(true);
   }
 
@@ -286,10 +314,14 @@ class DesksController::RemovedDeskData {
   RemovedDeskData& operator=(const RemovedDeskData&) = delete;
 
   ~RemovedDeskData() {
-    if (desk_) {
-      ToastManager::Get()->Cancel(toast_id_);
+    // `toast_manager` gets destroyed before `DesksController` so we want to
+    // make sure it still exists before we try to call `Cancel` on it.
+    auto* toast_manager = ToastManager::Get();
+    if (toast_manager && desk_) {
+      toast_manager->Cancel(toast_id_);
       DesksController::Get()->FinalizeDeskRemoval(this);
     }
+    full_restore::ResetRemovingDeskGuid();
   }
 
   const std::string& toast_id() const { return toast_id_; }
@@ -298,6 +330,7 @@ class DesksController::RemovedDeskData {
   int index() const { return index_; }
   bool is_toast_persistent() const { return is_toast_persistent_; }
   DesksCreationRemovalSource desk_removal_source() const { return source_; }
+  DeskCloseType desk_close_type() const { return desk_close_type_; }
 
   std::unique_ptr<Desk> AcquireDesk() { return std::move(desk_); }
 
@@ -313,6 +346,8 @@ class DesksController::RemovedDeskData {
   const bool is_toast_persistent_;
 
   const DesksCreationRemovalSource source_;
+
+  const DeskCloseType desk_close_type_;
 };
 
 // Helper class which wraps around a OneShotTimer and used for recording how
@@ -372,7 +407,7 @@ class DesksController::DeskTraversalsMetricsHelper {
 
   // Pointer to the DesksController that owns this. Guaranteed to be not
   // nullptr for the lifetime of |this|.
-  DesksController* const controller_;
+  const raw_ptr<DesksController> controller_;
 
   base::OneShotTimer timer_;
 
@@ -399,6 +434,10 @@ DesksController::DesksController()
   weekly_active_desks_scheduler_.Start(
       FROM_HERE, base::Days(7), this,
       &DesksController::RecordAndResetNumberOfWeeklyActiveDesks);
+
+  if (ash::features::IsDeskButtonEnabled()) {
+    desk_bar_controller_ = std::make_unique<DeskBarController>();
+  }
 }
 
 DesksController::~DesksController() {
@@ -438,9 +477,21 @@ const std::u16string& DesksController::GetCombineDesksTargetName(
 }
 
 const Desk* DesksController::GetTargetActiveDesk() const {
-  if (animation_)
-    return desks_[animation_->ending_desk_index()].get();
-  return active_desk();
+  const Desk* target_desk = nullptr;
+  if (animation_) {
+    // If there is ongoing animation, return the target of the animation.
+    target_desk = desks_[animation_->ending_desk_index()].get();
+  } else if (desk_to_activate_) {
+    // Even if there is no ongoing animation, it's still possible to be in the
+    // middle of a desk switch.
+    // Please refer to b/266147233.
+    target_desk = desk_to_activate_;
+  } else {
+    target_desk = active_desk();
+  }
+
+  DCHECK(HasDesk(target_desk));
+  return target_desk;
 }
 
 base::flat_set<aura::Window*>
@@ -458,10 +509,7 @@ DesksController::GetVisibleOnAllDesksWindowsOnRoot(
 void DesksController::RestorePrimaryUserActiveDeskIndex(int active_desk_index) {
   DCHECK_GE(active_desk_index, 0);
   DCHECK_LT(active_desk_index, static_cast<int>(desks_.size()));
-  user_to_active_desk_index_[Shell::Get()
-                                 ->session_controller()
-                                 ->GetPrimaryUserSession()
-                                 ->user_info.account_id] = active_desk_index;
+  user_to_active_desk_index_[GetPrimaryUserAccountId()] = active_desk_index;
   // Following |OnActiveUserSessionChanged| approach, restoring uses
   // DesksSwitchSource::kUserSwitch as a desk switch source.
   // TODO(crbug.com/1145404): consider adding an UMA metric for desks
@@ -475,6 +523,7 @@ void DesksController::OnNewUserShown() {
 }
 
 void DesksController::Shutdown() {
+  desk_bar_controller_.reset();
   animation_.reset();
   desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 }
@@ -512,9 +561,18 @@ Desk* DesksController::GetPreviousDesk(bool use_target_active_desk) const {
   return desks_[previous_index].get();
 }
 
-Desk* DesksController::GetDeskByUuid(const base::GUID& desk_uuid) const {
+Desk* DesksController::GetDeskByUuid(const base::Uuid& desk_uuid) const {
   auto it = base::ranges::find(desks_, desk_uuid, &Desk::uuid);
   return it != desks_.end() ? it->get() : nullptr;
+}
+
+int DesksController::GetDeskIndexByUuid(const base::Uuid& desk_uuid) const {
+  for (size_t i = 0; i < desks_.size(); ++i) {
+    if (desk_uuid == desks_[i]->uuid()) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 bool DesksController::CanRemoveDesks() const {
@@ -522,13 +580,10 @@ bool DesksController::CanRemoveDesks() const {
 }
 
 void DesksController::NewDesk(DesksCreationRemovalSource source) {
-  // We do not want this function to run here when there is no
-  // `temporary_removed_desk_` because that will incorrectly record metrics.
-  // We also want to destroy the `temporary_removed_desk_` first in this
+  // We want to destroy the `temporary_removed_desk_` first in this
   // function because we want to ensure that the removing desk's container is
   // available for use if we need it for the new desk.
-  if (temporary_removed_desk_)
-    MaybeCommitPendingDeskRemoval();
+  MaybeCommitPendingDeskRemoval();
 
   DCHECK(CanCreateDesks());
   DCHECK(!available_container_ids_.empty());
@@ -545,37 +600,62 @@ void DesksController::NewDesk(DesksCreationRemovalSource source) {
   available_container_ids_.pop();
   Desk* new_desk = desks_.back().get();
 
+  // We should notify observers that the desk is added before possibly
+  // notifying observers that the name is set.
+  for (auto& observer : observers_) {
+    observer.OnDeskAdded(new_desk, /*from_undo=*/false);
+  }
+
   // The new desk should have an empty name when the user creates a desk with
-  // the button. This is done to encourage them to rename their desks.
+  // a button. This is done to encourage them to rename their desks.
   const bool empty_name =
-      source == DesksCreationRemovalSource::kButton && desks_.size() > 1;
+      (source == DesksCreationRemovalSource::kButton ||
+       source == DesksCreationRemovalSource::kDeskButtonDeskBarButton) &&
+      desks_.size() > 1;
   if (!empty_name) {
     new_desk->SetName(GetDeskDefaultName(desks_.size() - 1),
                       /*set_by_user=*/false);
   }
 
-  // Don't trigger an a11y alert when the source is kLaunchTemplate because
-  // CreateNewDeskForTemplate will trigger an alert instead.
-  // Dont trigger when the source is kSaveAndRecall because the
-  // DESK_TEMPLATES_MODE_ENTERED alert triggered in
-  // OverviewSession::ShowDesksTemplatesGrids should be shown instead.
+  // Don't trigger an a11y alert when the source is `kLaunchTemplate` because
+  // `CreateNewDeskForSavedDesk` will trigger an alert instead.
+  // Dont trigger when the source is `kSaveAndRecall` because the
+  // `DESK_TEMPLATES_MODE_ENTERED` alert triggered in
+  // `OverviewSession::ShowSavedDeskLibrary` should be shown instead.
   if (source != DesksCreationRemovalSource::kLaunchTemplate &&
-      source != DesksCreationRemovalSource::kSaveAndRecall) {
+      source != DesksCreationRemovalSource::kSaveAndRecall &&
+      source != DesksCreationRemovalSource::kFloatingWorkspace) {
     auto* shell = Shell::Get();
     shell->accessibility_controller()->TriggerAccessibilityAlertWithMessage(
         l10n_util::GetStringFUTF8(IDS_ASH_VIRTUAL_DESKS_ALERT_NEW_DESK_CREATED,
                                   base::NumberToString16(desks_.size())));
   }
 
-  for (auto& observer : observers_)
-    observer.OnDeskAdded(new_desk);
-
   if (!is_first_ever_desk) {
+    if (features::IsDeskButtonEnabled()) {
+      PrefService* prefs =
+          Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+      // Record that virtual desks have been used on this device so we can show
+      // the desk button from now on, if the user doesn't and hasn't elected to
+      // hide it from the shelf context menu.
+      SetDeviceUsesDesksPref(prefs, true);
+    }
+    desks_restore_util::UpdatePrimaryUserDeskGuidsPrefs();
     desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
+    desks_restore_util::UpdatePrimaryUserDeskLacrosProfileIdPrefs();
     desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
     UMA_HISTOGRAM_ENUMERATION(kNewDeskHistogramName, source);
     ReportDesksCountHistogram();
   }
+}
+
+bool DesksController::HasDesk(const Desk* desk) const {
+  return base::Contains(desks_, desk, &std::unique_ptr<Desk>::get);
+}
+
+Desk* DesksController::GetDeskAtIndex(size_t index) const {
+  CHECK_LT(index, desks_.size());
+  return desks_[index].get();
 }
 
 void DesksController::RemoveDesk(const Desk* desk,
@@ -598,13 +678,22 @@ void DesksController::RemoveDesk(const Desk* desk,
         current_desk_index + ((current_desk_index > 0) ? -1 : 1);
     DCHECK_GE(target_desk_index, 0);
     DCHECK_LT(target_desk_index, static_cast<int>(desks_.size()));
+
+    // Collect metrics now because the `DeskRemovalAnimation` will skip the
+    // logging in `ActivateDesk` and go straight to `ActivateDeskInternal`.
+    base::UmaHistogramEnumeration(
+        kDeskSwitchHistogramName,
+        source == DesksCreationRemovalSource::kDeskButtonDeskBarButton
+            ? DesksSwitchSource::kDeskButtonDeskRemoved
+            : DesksSwitchSource::kDeskRemoved);
+
     animation_ = std::make_unique<DeskRemovalAnimation>(
         this, current_desk_index, target_desk_index, source, close_type);
     animation_->Launch();
     return;
   }
 
-  RemoveDeskInternal(desk, source, close_type);
+  RemoveDeskInternal(desk, source, close_type, /*desk_switched=*/false);
 }
 
 void DesksController::ReorderDesk(int old_index, int new_index) {
@@ -627,6 +716,8 @@ void DesksController::ReorderDesk(int old_index, int new_index) {
   // 1. Update desk name and metrics lists in the user prefs to maintain the
   // right order.
   desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskGuidsPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskLacrosProfileIdPrefs();
   desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 
   // 2. For multi-profile switching, update all affected active desk index in
@@ -637,8 +728,8 @@ void DesksController::ReorderDesk(int old_index, int new_index) {
   // two positions shift left (-1), otherwiser shift right (+1).
   const int offset = new_index > old_index ? -1 : 1;
 
-  for (auto& iter : user_to_active_desk_index_) {
-    const int old_active_index = iter.second;
+  for (auto& [account_id, desk_index] : user_to_active_desk_index_) {
+    const int old_active_index = desk_index;
     if (old_active_index < starting_affected_index ||
         old_active_index > ending_affected_index) {
       // Skip unaffected desk index.
@@ -646,21 +737,18 @@ void DesksController::ReorderDesk(int old_index, int new_index) {
     }
     // The moving desk changes from old_index to new_index, while other desks
     // between the two positions shift by one position.
-    iter.second =
+    desk_index =
         old_active_index == old_index ? new_index : old_active_index + offset;
   }
 
   // 3. For primary user's active desks restore, update the active desk index.
   desks_restore_util::UpdatePrimaryUserActiveDeskPrefs(
-      user_to_active_desk_index_[Shell::Get()
-                                     ->session_controller()
-                                     ->GetPrimaryUserSession()
-                                     ->user_info.account_id]);
+      user_to_active_desk_index_[GetPrimaryUserAccountId()]);
 
   // 4. For restoring windows to the right desks, update workspaces of all
   // windows in the affected desks for all simultaneously logged-in users.
   for (int i = starting_affected_index; i <= ending_affected_index; i++) {
-    for (auto* window : desks_[i]->windows()) {
+    for (aura::Window* window : desks_[i]->windows()) {
       if (desks_util::IsWindowVisibleOnAllWorkspaces(window))
         continue;
       window->SetProperty(aura::client::kWindowWorkspaceKey, i);
@@ -675,12 +763,11 @@ void DesksController::ActivateDesk(const Desk* desk, DesksSwitchSource source) {
   // If we are switching users, we don't want to notify desks of content changes
   // until the user switch animation has shown the new user's windows.
   const bool is_user_switch = source == DesksSwitchSource::kUserSwitch;
-  std::vector<base::AutoReset<bool>> desks_scoped_notify_disablers;
+  std::optional<Desk::ScopedContentUpdateNotificationDisabler>
+      desks_scoped_notify_disabler;
   if (is_user_switch) {
-    for (const auto& desk_to_notify : desks_) {
-      desks_scoped_notify_disablers.push_back(
-          desk_to_notify->GetScopedNotifyContentChangedDisabler());
-    }
+    desks_scoped_notify_disabler.emplace(/*desks=*/desks_,
+                                         /*notify_when_destroyed=*/false);
   }
 
   OverviewController* overview_controller = Shell::Get()->overview_controller();
@@ -692,11 +779,15 @@ void DesksController::ActivateDesk(const Desk* desk, DesksSwitchSource source) {
       // switching to a new user, otherwise the multi user switch animation will
       // animate the same windows that overview watches to determine if the
       // overview shutdown animation is complete. See https://crbug.com/1001586.
-      const bool immediate_exit = source == DesksSwitchSource::kUserSwitch;
       overview_controller->EndOverview(
           OverviewEndAction::kDeskActivation,
-          immediate_exit ? OverviewEnterExitType::kImmediateExit
+          is_user_switch ? OverviewEnterExitType::kImmediateExit
                          : OverviewEnterExitType::kNormal);
+    }
+    // Selecting the active desk in desk button desk bar is allowed, and
+    // should just close all desk bars.
+    if (desk_bar_controller_) {
+      desk_bar_controller_->CloseAllDeskBars();
     }
     return;
   }
@@ -704,7 +795,8 @@ void DesksController::ActivateDesk(const Desk* desk, DesksSwitchSource source) {
   UMA_HISTOGRAM_ENUMERATION(kDeskSwitchHistogramName, source);
 
   const int target_desk_index = GetDeskIndex(desk);
-  if (source != DesksSwitchSource::kDeskRemoved) {
+  if (source != DesksSwitchSource::kDeskRemoved &&
+      source != DesksSwitchSource::kDeskButtonDeskRemoved) {
     // Desk removal has its own a11y alert.
     Shell::Get()
         ->accessibility_controller()
@@ -713,6 +805,7 @@ void DesksController::ActivateDesk(const Desk* desk, DesksSwitchSource source) {
   }
 
   if (source == DesksSwitchSource::kDeskRemoved ||
+      source == DesksSwitchSource::kDeskButtonDeskRemoved ||
       (source == DesksSwitchSource::kRemovalUndone && in_overview) ||
       is_user_switch) {
     // Desk switches due to desks removal, undoing the removal of an active desk
@@ -778,12 +871,13 @@ bool DesksController::ActivateAdjacentDesk(bool going_left,
   } else {
     // Fire a haptic event if necessary.
     if (source == DesksSwitchSource::kDeskSwitchTouchpad) {
-      haptics_util::PlayHapticTouchpadEffect(
+      chromeos::haptics_util::PlayHapticTouchpadEffect(
           ui::HapticTouchpadEffect::kKnock,
           ui::HapticTouchpadEffectStrength::kMedium);
     }
-    for (auto* root : Shell::GetAllRootWindows())
+    for (aura::Window* root : Shell::GetAllRootWindows()) {
       desks_animations::PerformHitTheWallAnimation(root, going_left);
+    }
   }
 
   return true;
@@ -847,16 +941,15 @@ bool DesksController::MoveWindowFromActiveDeskTo(
   // handles minimized windows differently.
   if (in_overview) {
     auto* overview_session = overview_controller->overview_session();
-    auto* item = overview_session->GetOverviewItemForWindow(window);
     // `item` can be null when we are switching users.
-    if (item) {
-      item->OnMovingWindowToAnotherDesk();
+    if (auto* item = overview_session->GetOverviewItemForWindow(window)) {
+      item->OnMovingItemToAnotherDesk();
       // The item no longer needs to be in the overview grid.
       overview_session->RemoveItem(item);
     } else if (visible_on_all_desks) {
       // Create an item for a visible on all desks window if it doesn't have one
       // already. This can happen when launching a template. When we are in the
-      // templates grid, there are no items.
+      // saved desk grid, there are no items.
       overview_session->AppendItem(window,
                                    /*reposition=*/true, /*animate=*/true);
     }
@@ -866,14 +959,19 @@ bool DesksController::MoveWindowFromActiveDeskTo(
   // handles its desk-window relationship.
   if (is_floated) {
     Shell::Get()->float_controller()->OnMovingFloatedWindowToDesk(
-        window, target_desk, target_root);
+        window, active_desk_, target_desk, target_root);
   } else {
     active_desk_->MoveWindowToDesk(window, target_desk, target_root,
                                    /*unminimize=*/true);
   }
 
-  MaybeUpdateShelfItems(/*windows_on_inactive_desk=*/{window},
-                        /*windows_on_active_desk=*/{});
+  // We don't update shelf items if we're moving an all-desk window, since we
+  // are in that case about to switch to `target_desk` and the app will be on
+  // that desk as well.
+  if (source != DesksMoveWindowFromActiveDeskSource::kVisibleOnAllDesks) {
+    MaybeUpdateShelfItems(/*windows_on_inactive_desk=*/{window},
+                          /*windows_on_active_desk=*/{});
+  }
 
   Shell::Get()
       ->accessibility_controller()
@@ -905,7 +1003,33 @@ void DesksController::AddVisibleOnAllDesksWindow(aura::Window* window) {
   // added.
   if (!visible_on_all_desks_windows_.emplace(window).second)
     return;
-  wm::AnimateWindow(window, wm::WINDOW_ANIMATION_TYPE_BOUNCE);
+
+  // A window is made visible on all desks by always keeping it on the active
+  // desk. If `window` isn't already on the active desk, then we need to move it
+  // there. We will also skip the bounce animation.
+  bool do_window_bound_animation = true;
+  if (const Desk* window_desk = desks_util::GetDeskForContext(window);
+      window_desk != active_desk_) {
+    do_window_bound_animation = false;
+
+    // TODO(b/295371112): It is unexpected that we get here. Dump a call stack
+    // to help figure out why it happens.
+    base::debug::DumpWithoutCrashing();
+
+    CHECK(window_desk);
+    const_cast<Desk*>(window_desk)
+        ->MoveWindowToDesk(window, active_desk_, window->GetRootWindow(),
+                           /*unminimize=*/false);
+  }
+
+  if (features::IsPerDeskZOrderEnabled()) {
+    TrackWindowOnAllDesks(window);
+  }
+
+  if (do_window_bound_animation) {
+    wm::AnimateWindow(window, wm::WINDOW_ANIMATION_TYPE_BOUNCE);
+  }
+
   NotifyAllDesksForContentChanged();
   Shell::Get()
       ->accessibility_controller()
@@ -915,6 +1039,10 @@ void DesksController::AddVisibleOnAllDesksWindow(aura::Window* window) {
 
 void DesksController::MaybeRemoveVisibleOnAllDesksWindow(aura::Window* window) {
   if (visible_on_all_desks_windows_.erase(window)) {
+    if (features::IsPerDeskZOrderEnabled()) {
+      UntrackWindowFromAllDesks(window);
+    }
+
     wm::AnimateWindow(window, wm::WINDOW_ANIMATION_TYPE_BOUNCE);
     NotifyAllDesksForContentChanged();
     Shell::Get()
@@ -925,6 +1053,13 @@ void DesksController::MaybeRemoveVisibleOnAllDesksWindow(aura::Window* window) {
   }
 }
 
+void DesksController::NotifyAllDeskWindowMovedToNewRoot(aura::Window* window) {
+  CHECK(features::IsPerDeskZOrderEnabled());
+  for (auto& desk : desks_) {
+    desk->AllDeskWindowMovedToNewRoot(window);
+  }
+}
+
 void DesksController::NotifyAllDesksForContentChanged() {
   for (const auto& desk : desks_)
     desk->NotifyContentChanged();
@@ -932,6 +1067,13 @@ void DesksController::NotifyAllDesksForContentChanged() {
 
 void DesksController::NotifyDeskNameChanged(const Desk* desk,
                                             const std::u16string& new_name) {
+  // We only want metrics for users with two or more desks.
+  if (desks_.size() > 1) {
+    ReportCustomDeskNames();
+    base::UmaHistogramBoolean(kCustomNameCreatedHistogramName,
+                              desk->is_name_set_by_user());
+  }
+
   for (auto& observer : observers_)
     observer.OnDeskNameChanged(desk, new_name);
 }
@@ -947,6 +1089,12 @@ void DesksController::RestoreNameOfDeskAtIndex(std::u16string name,
   DCHECK_LT(index, desks_.size());
 
   desks_[index]->SetName(std::move(name), /*set_by_user=*/true);
+}
+
+void DesksController::RestoreGuidOfDeskAtIndex(base::Uuid guid, size_t index) {
+  DCHECK(guid.is_valid());
+  DCHECK_LT(index, desks_.size());
+  desks_[index]->SetGuid(std::move(guid));
 }
 
 void DesksController::RestoreCreationTimeOfDeskAtIndex(base::Time creation_time,
@@ -1075,18 +1223,19 @@ void DesksController::SendToDeskAtIndex(aura::Window* window, int desk_index) {
                              DesksMoveWindowFromActiveDeskSource::kSendToDesk);
 }
 
-void DesksController::CaptureActiveDeskAsTemplate(
+void DesksController::CaptureActiveDeskAsSavedDesk(
     GetDeskTemplateCallback callback,
     DeskTemplateType template_type,
     aura::Window* root_window_to_show) const {
   DCHECK(current_account_id_.is_valid());
 
-  restore_data_collector_.CaptureActiveDeskAsTemplate(
+  restore_data_collector_.CaptureActiveDeskAsSavedDesk(
       std::move(callback), template_type,
-      base::UTF16ToUTF8(active_desk_->name()), root_window_to_show);
+      base::UTF16ToUTF8(active_desk_->name()), root_window_to_show,
+      current_account_id_);
 }
 
-const Desk* DesksController::CreateNewDeskForTemplate(
+Desk* DesksController::CreateNewDeskForSavedDesk(
     DeskTemplateType template_type,
     const std::u16string& customized_desk_name) {
   DCHECK(CanCreateDesks());
@@ -1096,11 +1245,19 @@ const Desk* DesksController::CreateNewDeskForTemplate(
   if (animation_)
     animation_.reset();
 
-  // Desk name was set to a default name upon creation. If
-  // `customized_desk_name` is not empty, override desk name to be
-  // `customized_desk_name` or `customized_desk_name ({counter})` to resolve
-  // naming conflicts.
-  std::u16string desk_name = CreateUniqueDeskName(customized_desk_name);
+  // Call `HideSavedDeskLibrary` before the new desk is created to update the
+  // state of the library button, otherwise the library button will be laid out
+  // with the wrong state when the new desk is created.
+  if (template_type == DeskTemplateType::kTemplate ||
+      template_type == DeskTemplateType::kFloatingWorkspace) {
+    if (auto* session =
+            Shell::Get()->overview_controller()->overview_session()) {
+      session->HideSavedDeskLibrary();
+      for (auto& grid : session->grid_list()) {
+        grid->RemoveAllItemsForSavedDeskLaunch();
+      }
+    }
+  }
 
   switch (template_type) {
     case DeskTemplateType::kTemplate:
@@ -1109,11 +1266,20 @@ const Desk* DesksController::CreateNewDeskForTemplate(
     case DeskTemplateType::kSaveAndRecall:
       NewDesk(DesksCreationRemovalSource::kSaveAndRecall);
       break;
+    case DeskTemplateType::kFloatingWorkspace:
+      NewDesk(DesksCreationRemovalSource::kFloatingWorkspace);
+      break;
     case DeskTemplateType::kUnknown:
       return nullptr;
   }
 
   Desk* desk = desks().back().get();
+
+  // Desk name was set to a default name upon creation. If
+  // `customized_desk_name` is not empty, override desk name to be
+  // `customized_desk_name` or `customized_desk_name ({counter})` to resolve
+  // naming conflicts.
+  std::u16string desk_name = CreateUniqueDeskName(customized_desk_name);
 
   if (!desk_name.empty()) {
     desk->SetName(desk_name, /*set_by_user=*/true);
@@ -1125,10 +1291,11 @@ const Desk* DesksController::CreateNewDeskForTemplate(
   // Force update user prefs because `SetName()` does not trigger it.
   desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
 
-  if (template_type == DeskTemplateType::kTemplate) {
-    // We're staying in overview mode, so move desks bar window and the save
-    // template button to the new desk. They would otherwise disappear when the
-    // new desk is activated.
+  if (template_type == DeskTemplateType::kTemplate ||
+      template_type == DeskTemplateType::kFloatingWorkspace) {
+    // We're staying in overview mode, so move desks bar window and the
+    // save desk buttons to the new desk. They would otherwise disappear
+    // when the new desk is activated.
     DCHECK(active_desk_);
 
     // Since we're going to move certain windows from the currently active desk,
@@ -1137,20 +1304,11 @@ const Desk* DesksController::CreateNewDeskForTemplate(
     // list.
     auto active_desk_windows = active_desk_->windows();
     for (aura::Window* window : active_desk_windows) {
-      if (window->GetId() == kShellWindowId_DesksBarWindow ||
-          window->GetId() == kShellWindowId_SaveDeskButtonContainer ||
-          window->GetId() == kShellWindowId_SavedDeskLibraryWindow) {
+      if (window->GetProperty(kOverviewUiKey)) {
         aura::Window* destination_container =
             desk->GetDeskContainerForRoot(window->GetRootWindow());
         destination_container->AddChild(window);
       }
-    }
-
-    if (auto* session =
-            Shell::Get()->overview_controller()->overview_session()) {
-      session->HideDesksTemplatesGrids();
-      for (auto& grid : session->grid_list())
-        grid->RemoveAllItemsForDesksTemplatesLaunch();
     }
 
     ActivateDesk(desk, DesksSwitchSource::kLaunchTemplate);
@@ -1160,7 +1318,7 @@ const Desk* DesksController::CreateNewDeskForTemplate(
   return desk;
 }
 
-bool DesksController::OnSingleInstanceAppLaunchingFromTemplate(
+bool DesksController::OnSingleInstanceAppLaunchingFromSavedDesk(
     const std::string& app_id,
     const app_restore::RestoreData::LaunchList& launch_list) {
   // Iterate through the windows on each desk to see if there is an existing app
@@ -1168,7 +1326,7 @@ bool DesksController::OnSingleInstanceAppLaunchingFromTemplate(
   aura::Window* existing_app_instance_window = nullptr;
   Desk* src_desk = nullptr;
   for (auto& desk : desks()) {
-    for (aura::Window* window : desk->windows()) {
+    for (aura::Window* window : desk->GetAllAssociatedWindows()) {
       const std::string* const app_id_ptr = window->GetProperty(kAppIDKey);
       if (app_id_ptr && *app_id_ptr == app_id) {
         existing_app_instance_window = window;
@@ -1201,13 +1359,11 @@ bool DesksController::OnSingleInstanceAppLaunchingFromTemplate(
   // not be visible on all desks.
   if (!desks_util::IsWindowVisibleOnAllWorkspaces(
           existing_app_instance_window)) {
-    // The index of the target desk is found in `app_restore_data`. If it isn't
-    // set, or out of bounds, then we default to the rightmost desk.
-    const int rightmost_desk_index = desks_.size() - 1;
-    const int target_desk_index =
-        std::min(app_restore_data.desk_id.value_or(rightmost_desk_index),
-                 rightmost_desk_index);
-    Desk* target_desk = desks_[target_desk_index].get();
+    // The uuid of the target desk is found in `app_restore_data`. If it isn't
+    // set, or is invalid, then we default to the rightmost desk.
+    Desk* target_desk = app_restore_data.desk_guid.is_valid()
+                            ? GetDeskByUuid(app_restore_data.desk_guid)
+                            : desks_.back().get();
 
     DCHECK(src_desk);
     if (src_desk != target_desk) {
@@ -1215,6 +1371,15 @@ bool DesksController::OnSingleInstanceAppLaunchingFromTemplate(
       src_desk->MoveWindowToDesk(existing_app_instance_window, target_desk,
                                  existing_app_instance_window->GetRootWindow(),
                                  /*unminimize=*/false);
+      // If the floated window is the single instance window, we need to let
+      // float controller handle move window to desk, as floated window
+      // doesn't belong to desk container.
+      if (WindowState::Get(existing_app_instance_window)->IsFloated()) {
+        Shell::Get()->float_controller()->OnMovingFloatedWindowToDesk(
+            existing_app_instance_window, src_desk, target_desk,
+            existing_app_instance_window->GetRootWindow());
+      }
+
       MaybeUpdateShelfItems(
           /*windows_on_inactive_desk=*/{},
           /*windows_on_active_desk=*/{existing_app_instance_window});
@@ -1235,10 +1400,9 @@ bool DesksController::OnSingleInstanceAppLaunchingFromTemplate(
     // Not all window states are supported.
     const bool restoreable_state =
         chromeos::IsNormalWindowStateType(target_state) ||
+        chromeos::IsSnappedWindowStateType(target_state) ||
         target_state == chromeos::WindowStateType::kMinimized ||
-        target_state == chromeos::WindowStateType::kMaximized ||
-        target_state == chromeos::WindowStateType::kPrimarySnapped ||
-        target_state == chromeos::WindowStateType::kSecondarySnapped;
+        target_state == chromeos::WindowStateType::kMaximized;
 
     if (restoreable_state) {
       WindowState* window_state =
@@ -1266,23 +1430,26 @@ bool DesksController::OnSingleInstanceAppLaunchingFromTemplate(
           case chromeos::WindowStateType::kPrimarySnapped:
           case chromeos::WindowStateType::kSecondarySnapped:
             if (window_state->CanSnap()) {
-              window_state->set_snap_action_source(
-                  WindowSnapActionSource::kOthers);
-
-              const WMEvent event(
+              const WindowSnapWMEvent event(
                   target_state == chromeos::WindowStateType::kPrimarySnapped
                       ? WM_EVENT_SNAP_PRIMARY
-                      : WM_EVENT_SNAP_SECONDARY);
+                      : WM_EVENT_SNAP_SECONDARY,
+                  WindowSnapActionSource::
+                      kSnapByFullRestoreOrDeskTemplateOrSavedDesk);
               window_state->OnWMEvent(&event);
             }
             break;
+          case chromeos::WindowStateType::kFloated: {
+            const WindowFloatWMEvent event(
+                chromeos::FloatStartLocation::kBottomRight);
+            window_state->OnWMEvent(&event);
+            break;
+          }
           case chromeos::WindowStateType::kInactive:
           case chromeos::WindowStateType::kFullscreen:
           case chromeos::WindowStateType::kPinned:
           case chromeos::WindowStateType::kTrustedPinned:
           case chromeos::WindowStateType::kPip:
-            // TODO(crbug.com/1331825): Float state support for desk template.
-          case chromeos::WindowStateType::kFloated:
             NOTREACHED();
             break;
         }
@@ -1342,7 +1509,7 @@ void DesksController::MaybeDismissPersistentDeskRemovalToast() {
 
 bool DesksController::MaybeToggleA11yHighlightOnUndoDeskRemovalToast() {
   if (!temporary_removed_desk_ ||
-      !ToastManager::Get()->IsRunning(temporary_removed_desk_->toast_id())) {
+      !ToastManager::Get()->IsToastShown(temporary_removed_desk_->toast_id())) {
     return false;
   }
 
@@ -1353,7 +1520,7 @@ bool DesksController::MaybeToggleA11yHighlightOnUndoDeskRemovalToast() {
 
 bool DesksController::MaybeActivateDeskRemovalUndoButtonOnHighlightedToast() {
   if (!temporary_removed_desk_ ||
-      !ToastManager::Get()->IsRunning(temporary_removed_desk_->toast_id())) {
+      !ToastManager::Get()->IsToastShown(temporary_removed_desk_->toast_id())) {
     return false;
   }
 
@@ -1362,11 +1529,56 @@ bool DesksController::MaybeActivateDeskRemovalUndoButtonOnHighlightedToast() {
           temporary_removed_desk_->toast_id());
 }
 
+bool DesksController::CanEnterOverview() const {
+  // Prevent entering overview if a desk animation is underway and we didn't
+  // start the animation in overview. The overview animation would be completely
+  // covered anyway, and doing so could put us in a strange state (unless we are
+  // doing an immediate enter).
+  if (animation_ && !animation_->CanEnterOverview()) {
+    // The one exception to this rule is in tablet mode, having a window snapped
+    // to one side. Moving to this desk, we will want to open overview on the
+    // other side. For clamshell we don't need to enter overview as having a
+    // window snapped to one side and showing the wallpaper on the other is
+    // fine.
+    auto* split_view_controller =
+        SplitViewController::Get(Shell::GetPrimaryRootWindow());
+    if (!split_view_controller->InTabletSplitViewMode() ||
+        split_view_controller->state() ==
+            SplitViewController::State::kBothSnapped) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DesksController::CanEndOverview() const {
+  // During an ongoing desk animation, we take screenshots of the starting
+  // active desk and the new active desk and animate between them. If overview
+  // desk navigation is enabled, we keep the user in overview for both the
+  // original and new active desks so it appears as if the user never left
+  // overview, and this is reflected in the screenshots displayed. If an
+  // overview exit is attempted during this ongoing animation (i.e. a user
+  // presses the overview button), we want to ensure that the displayed
+  // screenshot is still reflective of the user's actual ending state (which can
+  // be jarring if the screenshot is different from the appearance of the new
+  // desk), so we don't want to allow overview to be exited before the animation
+  // ends.
+  return !features::IsOverviewDeskNavigationEnabled() || !animation_ ||
+         animation_->CanEndOverview();
+}
+
 void DesksController::OnWindowActivating(ActivationReason reason,
                                          aura::Window* gaining_active,
                                          aura::Window* losing_active) {
   if (AreDesksBeingModified())
     return;
+
+  // When there is no `current_account_id_`, it means no user has finished sign
+  // in (either no user, or a user is signing in). Do not change desks in this
+  // case.
+  if (!current_account_id_.is_valid()) {
+    return;
+  }
 
   // Browser session restore opens all restored windows, so it activates
   // every single window and activates the parent desk. Therefore, this check
@@ -1391,7 +1603,7 @@ void DesksController::OnWindowActivated(ActivationReason reason,
                                         aura::Window* lost_active) {}
 
 void DesksController::OnActiveUserSessionChanged(const AccountId& account_id) {
-  // TODO(afakhry): Remove this when multi-profile support goes away.
+  // TODO(b/284482035): Remove this when multi-profile support goes away.
   DCHECK(current_account_id_.is_valid());
   if (current_account_id_ == account_id) {
     return;
@@ -1415,8 +1627,8 @@ void DesksController::OnActiveUserSessionChanged(const AccountId& account_id) {
   int new_user_active_desk_index =
       /* This is a default initialized index to 0 if the id doesn't exist. */
       user_to_active_desk_index_[current_account_id_];
-  new_user_active_desk_index = base::clamp(new_user_active_desk_index, 0,
-                                           static_cast<int>(desks_.size()) - 1);
+  new_user_active_desk_index = std::clamp(new_user_active_desk_index, 0,
+                                          static_cast<int>(desks_.size()) - 1);
 
   ActivateDesk(desks_[new_user_active_desk_index].get(),
                DesksSwitchSource::kUserSwitch);
@@ -1455,10 +1667,12 @@ void DesksController::OnAnimationFinished(DeskAnimationBase* animation) {
   DCHECK_EQ(animation_.get(), animation);
   metrics_helper_->OnAnimationFinished(animation->visible_desk_changes());
   animation_.reset();
-}
 
-bool DesksController::HasDesk(const Desk* desk) const {
-  return base::Contains(desks_, desk, &std::unique_ptr<Desk>::get);
+  // If we just switched desks due to removing the active desk, we immediately
+  // highlight the undo button.
+  if (Shell::Get()->accessibility_controller()->spoken_feedback().enabled()) {
+    MaybeToggleA11yHighlightOnUndoDeskRemovalToast();
+  }
 }
 
 bool DesksController::HasDeskWithName(const std::u16string& desk_name) const {
@@ -1473,11 +1687,42 @@ void DesksController::ActivateDeskInternal(const Desk* desk,
     return;
 
   base::AutoReset<bool> in_progress(&are_desks_being_modified_, true);
+  base::AutoReset<raw_ptr<Desk>> activate_desk(&desk_to_activate_,
+                                               const_cast<Desk*>(desk));
 
   // Mark the new desk as active first, so that deactivating windows on the
   // `old_active` desk do not activate other windows on the same desk. See
   // `ash::AshFocusRules::GetNextActivatableWindow()`.
   Desk* old_active = active_desk_;
+
+  if (features::IsPerDeskZOrderEnabled())
+    old_active->BuildAllDeskStackingData();
+
+  auto* shell = Shell::Get();
+  auto* overview_controller = shell->overview_controller();
+  const bool was_in_overview = overview_controller->InOverviewSession();
+  if (animation_) {
+    // The order here matters. Overview must end before ending tablet split view
+    // before switching desks. (If clamshell split view is active on one or more
+    // displays, then it simply will end when we end overview.) That's because
+    // we don't want `TabletModeWindowManager` maximizing all windows because we
+    // cleared the snapped ones in `SplitViewController` first. See
+    // `TabletModeWindowManager::OnOverviewModeEndingAnimationComplete`.
+    // See also test coverage for this case in
+    // `TabletModeDesksTest.SnappedStateRetainedOnSwitchingDesksFromOverview`.
+    if (was_in_overview) {
+      // Exit overview mode immediately without any animations before taking the
+      // ending desk screenshot. This makes sure that the ending desk screenshot
+      // will only show the windows in that desk, not overview stuff.
+      overview_controller->EndOverview(OverviewEndAction::kDeskActivation,
+                                       OverviewEnterExitType::kImmediateExit);
+    }
+    SplitViewController* split_view_controller =
+        SplitViewController::Get(Shell::GetPrimaryRootWindow());
+    split_view_controller->EndSplitView(
+        SplitViewController::EndReason::kDesksChange);
+  }
+
   MoveVisibleOnAllDesksWindowsFromActiveDeskTo(const_cast<Desk*>(desk));
   active_desk_ = const_cast<Desk*>(desk);
   RestackVisibleOnAllDesksWindowsOnActiveDesk();
@@ -1486,6 +1731,11 @@ void DesksController::ActivateDeskInternal(const Desk* desk,
   DCHECK(old_active);
   old_active->Deactivate(update_window_activation);
   active_desk_->Activate(update_window_activation);
+  if (features::IsOverviewDeskNavigationEnabled() && animation_ &&
+      was_in_overview) {
+    overview_controller->StartOverview(OverviewStartAction::kOverviewDeskSwitch,
+                                       OverviewEnterExitType::kImmediateEnter);
+  }
 
   // Content is normally updated in
   // `MoveVisibleOnAllDesksWindowsFromActiveDeskTo`. However, the layers for a
@@ -1500,30 +1750,35 @@ void DesksController::ActivateDeskInternal(const Desk* desk,
 
   // If in the middle of a window cycle gesture, reset the window cycle list
   // contents so it contains the new active desk's windows.
-  auto* shell = Shell::Get();
-  auto* window_cycle_controller = shell->window_cycle_controller();
-  if (window_cycle_controller->IsAltTabPerActiveDesk())
+  if (auto* window_cycle_controller = shell->window_cycle_controller();
+      window_cycle_controller->IsAltTabPerActiveDesk()) {
     window_cycle_controller->MaybeResetCycleList();
+  }
 
   for (auto& observer : observers_)
     observer.OnDeskActivationChanged(active_desk_, old_active);
 
   NotifyFullScreenStateChangedAcrossDesksIfNeeded(old_active);
 
+  const int active_desk_index = GetActiveDeskIndex();
+  user_to_active_desk_index_[current_account_id_] = active_desk_index;
+
   // Only update active desk prefs when a primary user switches a desk.
   if (shell->session_controller()->IsUserPrimary()) {
-    desks_restore_util::UpdatePrimaryUserActiveDeskPrefs(
-        GetDeskIndex(active_desk_));
+    desks_restore_util::UpdatePrimaryUserActiveDeskPrefs(active_desk_index);
   }
 }
 
 void DesksController::RemoveDeskInternal(const Desk* desk,
                                          DesksCreationRemovalSource source,
-                                         DeskCloseType close_type) {
-  // We do not want this function to run here when there is no
-  // `temporary_removed_desk_` because that will incorrectly record metrics.
-  if (temporary_removed_desk_)
-    MaybeCommitPendingDeskRemoval();
+                                         DeskCloseType close_type,
+                                         bool desk_switched) {
+  // Removing a desk can cause transient raster scale updates during overview
+  // mode, if desks are combined. Pause raster scale updates until windows are
+  // in their final state.
+  ScopedPauseRasterScaleUpdates scoped_pause;
+
+  MaybeCommitPendingDeskRemoval();
 
   DCHECK(CanRemoveDesks());
 
@@ -1538,16 +1793,34 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
   // removed desk since indices of those desks shift by one.
   for (int i = removed_desk_index + 1; i < static_cast<int>(desks_.size());
        i++) {
-    for (auto* window : desks_[i]->windows()) {
+    for (aura::Window* window : desks_[i]->windows()) {
       if (desks_util::IsWindowVisibleOnAllWorkspaces(window))
         continue;
       window->SetProperty(aura::client::kWindowWorkspaceKey, i - 1);
     }
   }
 
+  // If the removed desk is before the active desk (or the active desk) of any
+  // logged in user, it needs to be adjusted.
+  for (auto& [account_id, desk_index] : user_to_active_desk_index_) {
+    if (removed_desk_index <= desk_index && desk_index > 0) {
+      --desk_index;
+    }
+  }
+  // Update the prefs for the primary user, since it may have been affected by
+  // the desk removal.
+  desks_restore_util::UpdatePrimaryUserActiveDeskPrefs(
+      user_to_active_desk_index_[GetPrimaryUserAccountId()]);
+
   // Keep the removed desk's data alive until at least the end of this function.
-  auto temporary_removed_desk = std::make_unique<RemovedDeskData>(
-      std::move(*iter), removed_desk_index, source);
+  // `MaybeCommitPendingDeskRemoval` at this point should have cleared
+  // `temporary_removed_desk_`. Otherwise, we may be resetting the wrong
+  // removing desk GUID in restore data.
+  CHECK(!temporary_removed_desk_);
+  const bool desk_was_active = (*iter)->is_active() || desk_switched;
+  auto temporary_removed_desk =
+      std::make_unique<RemovedDeskData>(std::move(*iter), desk_was_active,
+                                        removed_desk_index, source, close_type);
   auto* temporary_removed_desk_ptr = temporary_removed_desk.get();
   Desk* removed_desk = temporary_removed_desk_ptr->desk();
 
@@ -1564,12 +1837,23 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
   auto* shell = Shell::Get();
   auto* overview_controller = shell->overview_controller();
   const bool in_overview = overview_controller->InOverviewSession();
-  const std::vector<aura::Window*> removed_desk_windows =
-      removed_desk->windows();
+
+  // Windows that are associated with the desk that is being removed. If we are
+  // combining desks, then they are going to be moved into the active desk.
+  // They are placed in a window tracker, in case an operation below closes any
+  // of them.
+  aura::WindowTracker windows_from_combined_desk;
+  if (close_type == DeskCloseType::kCombineDesks) {
+    for (aura::Window* window : removed_desk->GetAllAssociatedWindows()) {
+      windows_from_combined_desk.Add(window);
+    }
+  }
 
   // No need to spend time refreshing the mini_views of the removed desk.
   auto removed_desk_mini_views_pauser =
-      removed_desk->GetScopedNotifyContentChangedDisabler();
+      Desk::ScopedContentUpdateNotificationDisabler(
+          /*desks=*/{removed_desk},
+          /*notify_when_destroyed=*/false);
 
   // - If the active desk is the one being removed, activate the desk to its
   //   left, if no desk to the left, activate one on the right.
@@ -1594,7 +1878,9 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
     // The target desk, which is about to become active, will have its
     // mini_views refreshed at the end.
     auto target_desk_mini_view_pauser =
-        target_desk->GetScopedNotifyContentChangedDisabler();
+        Desk::ScopedContentUpdateNotificationDisabler(
+            /*desks=*/{target_desk},
+            /*notify_when_destroyed=*/false);
 
     // Exit split view if active, before activating the new desk. We will
     // restore the split view state of the newly activated desk at the end.
@@ -1626,7 +1912,15 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
       removed_desk->MoveNonAppOverviewWindowsToDesk(target_desk);
     }
 
-    ActivateDesk(target_desk, DesksSwitchSource::kDeskRemoved);
+    // If the desk has already switched due to the `DeskRemovalAnimation` being
+    // run in `RemoveDesk`, we should not try to activate the desk again.
+    if (!desk_switched) {
+      ActivateDesk(
+          target_desk,
+          source == DesksCreationRemovalSource::kDeskButtonDeskBarButton
+              ? DesksSwitchSource::kDeskButtonDeskRemoved
+              : DesksSwitchSource::kDeskRemoved);
+    }
 
     // Desk activation should not change overview mode state.
     DCHECK_EQ(in_overview, overview_controller->InOverviewSession());
@@ -1638,15 +1932,16 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
     // Now that the windows from the removed and target desks merged, add them
     // all to the grid in the order of the new MRU.
     if (in_overview)
-      AppendWindowsToOverview(target_desk->windows());
+      AppendWindowsToOverview(target_desk->GetAllAssociatedWindows());
+
   } else if (close_type == DeskCloseType::kCombineDesks) {
     // We will refresh the mini_views of the active desk only once at the end.
     auto active_desk_mini_view_pauser =
-        active_desk_->GetScopedNotifyContentChangedDisabler();
+        Desk::ScopedContentUpdateNotificationDisabler(
+            /*desks=*/{active_desk_},
+            /*notify_when_destroyed=*/false);
 
     removed_desk->MoveWindowsToDesk(active_desk_);
-
-    MaybeUpdateShelfItems({}, removed_desk_windows);
 
     // If overview mode is active, we add the windows of the removed desk to the
     // overview grid in the order of the new MRU (which changes after removing a
@@ -1654,15 +1949,17 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
     // across all desks). Note that this can only be done after the windows have
     // moved to the active desk in `MoveWindowsToDesk()` above, so that building
     // the window MRU list should contain those windows.
-    if (in_overview)
-      AppendWindowsToOverview(removed_desk_windows);
+    if (in_overview) {
+      AppendWindowsToOverview(windows_from_combined_desk.windows());
+    }
   }
 
   // It's OK now to refresh the mini_views of *only* the active desk, and only
   // if windows from the removed desk moved to it.
-  DCHECK(active_desk_->should_notify_content_changed());
-  if (!removed_desk_windows.empty())
+  DCHECK(!active_desk_->ContentUpdateNotificationSuspended());
+  if (!windows_from_combined_desk.windows().empty()) {
     active_desk_->NotifyContentChanged();
+  }
 
   UpdateDesksDefaultNames();
 
@@ -1681,19 +1978,33 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
   if (will_switch_desks)
     MaybeRestoreSplitView(/*refresh_snapped_windows=*/true);
 
+  // The current active desk may have gained some windows.
+  MaybeUpdateShelfItems({}, windows_from_combined_desk.windows());
+
   UMA_HISTOGRAM_ENUMERATION(kRemoveDeskHistogramName, source);
   UMA_HISTOGRAM_ENUMERATION(kRemoveDeskTypeHistogramName, close_type);
+  if (source == DesksCreationRemovalSource::kApi) {
+    base::UmaHistogramEnumeration(kDeskApiRemoveDeskTypeHistogramName,
+                                  close_type);
+  }
 
   // We should only announce desks are being merged if we are combining desks.
+  // Otherwise, we tell the user that the desk has closed with its windows.
+  AccessibilityController* accessibility_controller =
+      shell->accessibility_controller();
   if (close_type == DeskCloseType::kCombineDesks) {
-    Shell::Get()
-        ->accessibility_controller()
-        ->TriggerAccessibilityAlertWithMessage(l10n_util::GetStringFUTF8(
-            IDS_ASH_VIRTUAL_DESKS_ALERT_DESK_REMOVED, removed_desk->name(),
-            active_desk_->name()));
+    accessibility_controller->TriggerAccessibilityAlertWithMessage(
+        l10n_util::GetStringFUTF8(IDS_ASH_VIRTUAL_DESKS_ALERT_DESK_REMOVED,
+                                  removed_desk->name(), active_desk_->name()));
+  } else if (close_type == DeskCloseType::kCloseAllWindowsAndWait) {
+    accessibility_controller->TriggerAccessibilityAlertWithMessage(
+        l10n_util::GetStringUTF8(
+            IDS_ASH_VIRTUAL_DESKS_ALERT_DESK_CLOSED_WITH_WINDOWS));
   }
 
   desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskGuidsPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskLacrosProfileIdPrefs();
   desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 
   DCHECK_LE(available_container_ids_.size(), desks_util::GetMaxNumberOfDesks());
@@ -1705,24 +2016,43 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
         base::BindRepeating(&DesksController::UndoDeskRemoval,
                             base::Unretained(this)),
         /*expired_callback=*/
-        base::BindRepeating(&DesksController::MaybeCommitPendingDeskRemoval,
-                            base::Unretained(this),
-                            temporary_removed_desk_->toast_id()),
+        base::BindOnce(&DesksController::MaybeCommitPendingDeskRemoval,
+                       base::Unretained(this),
+                       temporary_removed_desk_->toast_id()),
         temporary_removed_desk_->is_toast_persistent());
+
+    // This method will be invoked on both undo and expired toast.
+    base::UmaHistogramBoolean(kCloseAllTotalHistogramName, true);
   }
 }
 
 void DesksController::UndoDeskRemoval() {
   DCHECK(temporary_removed_desk_);
   base::UmaHistogramBoolean(kCloseAllUndoHistogramName, true);
+  if (temporary_removed_desk_->desk_removal_source() ==
+      DesksCreationRemovalSource::kApi) {
+    base::UmaHistogramBoolean(kDeskApiCloseAllUndoHistogramName, true);
+  }
   Desk* readded_desk_ptr = temporary_removed_desk_->desk();
   auto readded_desk_data = std::move(temporary_removed_desk_);
-  desks_.insert(desks_.begin() + readded_desk_data->index(),
+  const int readded_desk_index = readded_desk_data->index();
+  desks_.insert(desks_.begin() + readded_desk_index,
                 readded_desk_data->AcquireDesk());
   readded_desk_ptr->set_is_desk_being_removed(false);
 
-  for (auto& observer : observers_)
-    observer.OnDeskAdded(readded_desk_ptr);
+  // If the re-added desk is before the active desk of any logged in user, it
+  // needs to be adjusted.
+  for (auto& [account_id, desk_index] : user_to_active_desk_index_) {
+    if (readded_desk_index <= desk_index) {
+      ++desk_index;
+    }
+  }
+  desks_restore_util::UpdatePrimaryUserActiveDeskPrefs(
+      user_to_active_desk_index_[GetPrimaryUserAccountId()]);
+
+  for (auto& observer : observers_) {
+    observer.OnDeskAdded(readded_desk_ptr, /*from_undo=*/true);
+  }
 
   // If the desk was active, we reactivate it.
   if (readded_desk_data->was_active()) {
@@ -1738,7 +2068,7 @@ void DesksController::UndoDeskRemoval() {
     RestackVisibleOnAllDesksWindowsOnActiveDesk();
 
     if (in_overview)
-      AppendWindowsToOverview(readded_desk_ptr->windows());
+      AppendWindowsToOverview(readded_desk_ptr->GetAllAssociatedWindows());
   }
 
   Shell::Get()
@@ -1759,13 +2089,27 @@ void DesksController::FinalizeDeskRemoval(RemovedDeskData* removed_desk_data) {
   non_const_desk->RecordAndResetConsecutiveDailyVisits(
       /*being_removed=*/true);
 
-  // Record number of windows being closed by desk removal.
-  UMA_HISTOGRAM_COUNTS_100(kNumberOfWindowsClosed,
-                           removed_desk->windows().size());
-  ReportClosedWindowsCountPerSourceHistogram(
-      removed_desk_data->desk_removal_source(), removed_desk->windows().size());
+  // Record number of windows being closed by close-all desk removal.
+  // Only record metric for close-all, not for combine desk action.
+  if (removed_desk_data->desk_close_type() == DeskCloseType::kCloseAllWindows ||
+      removed_desk_data->desk_close_type() ==
+          DeskCloseType::kCloseAllWindowsAndWait) {
+    base::UmaHistogramCounts100(kNumberOfWindowsClosed,
+                                removed_desk->windows().size());
+    ReportClosedWindowsCountPerSourceHistogram(
+        removed_desk_data->desk_removal_source(),
+        removed_desk->windows().size());
+  }
+
+  for (auto& observer : observers_) {
+    observer.OnDeskRemovalFinalized(removed_desk->uuid());
+  }
+
   ReportDesksCountHistogram();
   ReportNumberOfWindowsPerDeskHistogram();
+
+  // Record the number and percentage of desks with custom names.
+  ReportCustomDeskNames();
 
   // We need to ensure there are no app windows in the desk before destruction.
   // During a combine desks operation, the windows would have already been
@@ -1774,19 +2118,11 @@ void DesksController::FinalizeDeskRemoval(RemovedDeskData* removed_desk_data) {
   // Content changed notifications for this desk should be disabled when
   // we are destroying the windows.
   auto throttle_desk_notifications =
-      removed_desk->GetScopedNotifyContentChangedDisabler();
+      Desk::ScopedContentUpdateNotificationDisabler(
+          /*desks=*/{removed_desk}, /*notify_when_destroyed=*/false);
 
-  std::vector<aura::Window*> app_windows = removed_desk->GetAllAppWindows();
-
-  // Add the floated window that belongs to the removed desk (if any) to the
-  // list of windows that will be closed.
-  aura::Window* floated_window = nullptr;
-  if (chromeos::wm::features::IsFloatWindowEnabled() &&
-      (floated_window =
-           Shell::Get()->float_controller()->FindFloatedWindowOfDesk(
-               removed_desk))) {
-    app_windows.push_back(floated_window);
-  }
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> app_windows =
+      removed_desk->GetAllAppWindows();
 
   // We use `closing_window_tracker` to track all app windows that should be
   // closed from the removed desk, `WindowTracker` will handle windows that may
@@ -1795,11 +2131,17 @@ void DesksController::FinalizeDeskRemoval(RemovedDeskData* removed_desk_data) {
   std::unique_ptr<aura::WindowTracker> closing_window_tracker =
       std::make_unique<aura::WindowTracker>(app_windows);
 
-  for (aura::Window* window : app_windows) {
+  // We create a new tracker other than `closing_window_tracker`, since we want
+  // to leave it unaffected as we will pass it later to a delayed callback to
+  // force close the windows that haven't been closed yet. The new tracker
+  // `unclosed_windows_tracker` will be empty by the end of the below
+  // while-loop.
+  aura::WindowTracker unclosed_windows_tracker(app_windows);
+
+  while (!unclosed_windows_tracker.windows().empty()) {
+    aura::Window* window = unclosed_windows_tracker.Pop();
     views::Widget* widget = views::Widget::GetWidgetForNativeView(window);
     DCHECK(widget);
-
-    widget->Close();
 
     // `widget->Close();` calls the underlying `native_widget_->Close()` which
     // will schedule `native_widget_->CloseNow()` as an async task. Only
@@ -1810,16 +2152,27 @@ void DesksController::FinalizeDeskRemoval(RemovedDeskData* removed_desk_data) {
     // container are removed from the container in case we want to immediately
     // reuse that container. Since floated window doesn't belong to desk
     // container, handle it separately.
+    aura::Window* floated_window =
+        Shell::Get()->float_controller()->FindFloatedWindowOfDesk(removed_desk);
+
+    // When windows are being closed, they do so asynchronously. So, to free up
+    // the desk container while the windows are being closed, we want to move
+    // those windows to the container `kShellWindowId_UnparentedContainer`.
     if (window != floated_window) {
-      aura::Window* removed_desk_container =
-          removed_desk->GetDeskContainerForRoot(window->GetRootWindow());
-      removed_desk_container->RemoveChild(window);
+      window->GetRootWindow()
+          ->GetChildById(kShellWindowId_UnparentedContainer)
+          ->AddChild(window);
     }
+
+    // We need to ensure that `widget->Close()` is called after we move the
+    // windows to the unparented container because some windows lose access to
+    // their root window immediately when their widget starts closing.
+    widget->Close();
   }
 
   // Schedules a delayed task to forcefully close all windows that have not
   // finish closing.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&DesksController::CleanUpClosedAppWindowsTask,
                      weak_ptr_factory_.GetWeakPtr(),
@@ -1832,24 +2185,48 @@ void DesksController::FinalizeDeskRemoval(RemovedDeskData* removed_desk_data) {
 
 void DesksController::MaybeCommitPendingDeskRemoval(
     const std::string& toast_id) {
-  // This method will be invoked on both undo and expired toast.
-  base::UmaHistogramBoolean(kCloseAllTotalHistogramName, true);
-
-  if (toast_id.empty() || (temporary_removed_desk_ &&
-                           temporary_removed_desk_->toast_id() == toast_id)) {
-    DCHECK(temporary_removed_desk_ && temporary_removed_desk_->desk());
+  if (temporary_removed_desk_ && temporary_removed_desk_->desk()) {
     // We need to tell any browser windows that are still in
     // `temporary_removed_desk_->desk()` to suppress warning the user before
     // closing.
     Shell::Get()->shell_delegate()->ForceSkipWarningUserOnClose(
         temporary_removed_desk_->desk()->GetAllAppWindows());
+  }
 
+  if (toast_id.empty() || (temporary_removed_desk_ &&
+                           temporary_removed_desk_->toast_id() == toast_id)) {
     temporary_removed_desk_.reset();
+  }
+}
+
+bool DesksController::IsUndoToastShown() const {
+  return temporary_removed_desk_ &&
+         ToastManager::Get()->IsToastShown(temporary_removed_desk_->toast_id());
+}
+
+bool DesksController::IsUndoToastHighlighted() const {
+  return temporary_removed_desk_ &&
+         ToastManager::Get()->IsToastDismissButtonHighlighted(
+             temporary_removed_desk_->toast_id());
+}
+
+void DesksController::TrackWindowOnAllDesks(aura::Window* window) {
+  for (auto& desk : desks_) {
+    desk->TrackAllDeskWindow(window);
+  }
+}
+
+void DesksController::UntrackWindowFromAllDesks(aura::Window* window) {
+  for (auto& desk : desks_) {
+    desk->UntrackAllDeskWindow(window,
+                               /*recent_root=*/window->GetRootWindow());
   }
 }
 
 void DesksController::CleanUpClosedAppWindowsTask(
     std::unique_ptr<aura::WindowTracker> closing_window_tracker) {
+  auto widgetless_windows = std::make_unique<aura::WindowTracker>();
+
   // We have waited long enough for these app windows to close cleanly.
   // If there is any app windows still around, we will close them forcefully.
   // These window's desk has already been removed. We should not let these
@@ -1857,14 +2234,27 @@ void DesksController::CleanUpClosedAppWindowsTask(
   while (!closing_window_tracker->windows().empty()) {
     aura::Window* window = closing_window_tracker->Pop();
     views::Widget* widget = views::Widget::GetWidgetForNativeView(window);
-    DCHECK(widget);
 
     // Forcefully close this app window. `CloseNow` which directly deleted the
     // associated native widget. This will skip many Window shutdown hook
     // logic. However, the desk controller has waited for the app window to
     // close cleanly before this.
-    widget->CloseNow();
+    if (widget) {
+      widget->CloseNow();
+    } else {
+      // If the window does not have a widget, we add it to the
+      // `widgetless_windows` tracker to check back on later.
+      widgetless_windows->Add(window);
+    }
   }
+
+  // We post a delayed task to check that all of the windows in
+  // `widgetless_windows eventually end up closing.
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&ReportNumberOfZombieWindows,
+                     std::move(widgetless_windows)),
+      kCloseAllWindowsZombieCheckTimeout);
 }
 
 void DesksController::MoveVisibleOnAllDesksWindowsFromActiveDeskTo(
@@ -1906,9 +2296,20 @@ void DesksController::NotifyFullScreenStateChangedAcrossDesksIfNeeded(
 }
 
 void DesksController::RestackVisibleOnAllDesksWindowsOnActiveDesk() {
+  if (features::IsPerDeskZOrderEnabled()) {
+    active_desk_->RestackAllDeskWindows();
+    return;
+  }
+
   auto mru_windows =
       Shell::Get()->mru_window_tracker()->BuildMruWindowList(kActiveDesk);
   for (auto* visible_on_all_desks_window : visible_on_all_desks_windows_) {
+    // If the window is floated, it will always be on top, so there is no need
+    // to restack it.
+    if (WindowState::Get(visible_on_all_desks_window)->IsFloated()) {
+      continue;
+    }
+
     auto visible_on_all_desks_window_iter =
         base::ranges::find(mru_windows, visible_on_all_desks_window);
     if (visible_on_all_desks_window_iter == mru_windows.end())
@@ -1917,7 +2318,20 @@ void DesksController::RestackVisibleOnAllDesksWindowsOnActiveDesk() {
     auto* desk_container =
         visible_on_all_desks_window->GetRootWindow()->GetChildById(
             active_desk_->container_id());
-    DCHECK_EQ(desk_container, visible_on_all_desks_window->parent());
+    if (desk_container != visible_on_all_desks_window->parent()) {
+      // TODO(b/295371112): Clean this up when the root cause has been resolved.
+      // This can sometimes happen and we're still trying to nail down the root
+      // cause. Rather than proceeding to stack the window (which will crash),
+      // we'll log some info and skip the window.
+      SCOPED_CRASH_KEY_NUMBER(
+          "Restack", "adw_app_type",
+          visible_on_all_desks_window->GetProperty(aura::client::kAppType));
+      SCOPED_CRASH_KEY_STRING32(
+          "Restack", "adw_app_id",
+          full_restore::GetAppId(visible_on_all_desks_window));
+      base::debug::DumpWithoutCrashing();
+      continue;
+    }
 
     // Search through the MRU list for the next element that shares the same
     // parent. This will be used to stack |visible_on_all_desks_window| in
@@ -1945,9 +2359,8 @@ const Desk* DesksController::FindDeskOfWindow(aura::Window* window) const {
   DCHECK(window);
 
   // Floating windows are stored in float container, their relationship with
-  // desks can be found in `FloatedWindowInfo`.
-  if (chromeos::wm::features::IsFloatWindowEnabled() &&
-      WindowState::Get(window)->IsFloated()) {
+  // desks can be found in `FloatController::FloatedWindowInfo`.
+  if (WindowState::Get(window)->IsFloated()) {
     return Shell::Get()->float_controller()->FindDeskOfFloatedWindow(window);
   }
 
@@ -1992,28 +2405,43 @@ void DesksController::ReportClosedWindowsCountPerSourceHistogram(
     DesksCreationRemovalSource source,
     int windows_closed) const {
   const char* desk_removal_source_histogram = nullptr;
+
+  // TODO(b/285029311): We may want to create a new histogram for
+  // NumberOfWindowsClosed with `kDeskButtonDeskBarButton` separated out.
   switch (source) {
     case DesksCreationRemovalSource::kButton:
+    case DesksCreationRemovalSource::kDeskButtonDeskBarButton:
       desk_removal_source_histogram = kNumberOfWindowsClosedByButton;
       break;
     case DesksCreationRemovalSource::kKeyboard:
       desk_removal_source_histogram = kNumberOfWindowsClosedByKeyboard;
       break;
-    case DesksCreationRemovalSource::kSaveAndRecall:
-      desk_removal_source_histogram = kNumberOfWindowsClosedBySaveAndRecall;
-      break;
     case DesksCreationRemovalSource::kApi:
       desk_removal_source_histogram = kNumberOfWindowsClosedByApi;
       break;
+    // Skip recording for save&recall as windows are already closed before
+    // reaching here.
+    case DesksCreationRemovalSource::kSaveAndRecall:
     // Skip recording for source that can't close a desk.
     case DesksCreationRemovalSource::kDragToNewDeskButton:
     case DesksCreationRemovalSource::kLaunchTemplate:
     case DesksCreationRemovalSource::kDesksRestore:
+    case DesksCreationRemovalSource::kFloatingWorkspace:
     case DesksCreationRemovalSource::kEnsureDefaultDesk:
       break;
   }
   if (desk_removal_source_histogram)
     base::UmaHistogramCounts100(desk_removal_source_histogram, windows_closed);
+}
+
+void DesksController::ReportCustomDeskNames() const {
+  int custom_names_count =
+      base::ranges::count(desks_, true, &Desk::is_name_set_by_user);
+
+  base::UmaHistogramCounts100(kNumberOfCustomNamesHistogramName,
+                              custom_names_count);
+  base::UmaHistogramPercentage(kPercentageOfCustomNamesHistogramName,
+                               custom_names_count * 100 / desks_.size());
 }
 
 }  // namespace ash

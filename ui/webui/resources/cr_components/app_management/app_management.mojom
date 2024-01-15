@@ -14,7 +14,6 @@ enum AppType {
   kCrostini,              // Linux (via Crostini) app.
   kChromeApp,             // Chrome app.
   kWeb,                   // Web app.
-  kMacOs,                 // Mac OS app.
   kPluginVm,              // Plugin VM app, see go/pluginvm.
   kStandaloneBrowser,     // Lacros browser app, see //docs/lacros.md.
   kRemote,                // Remote app.
@@ -23,13 +22,7 @@ enum AppType {
   kStandaloneBrowserChromeApp,  // Chrome app hosted in Lacros.
   kExtension,             // Browser extension.
   kStandaloneBrowserExtension,  // Extension hosted in Lacros.
-};
-
-// Augments a bool to include an 'unknown' value.
-enum OptionalBool {
-  kUnknown = 0,
-  kFalse,
-  kTrue,
+  kBruschetta,            // Bruschetta app, see go/bruschetta.
 };
 
 // The types of permissions in App Service.
@@ -61,6 +54,7 @@ struct Permission {
   PermissionValue value;
   // If the permission is managed by an enterprise policy.
   bool is_managed;
+  string? details;
 };
 
 // How the app was installed.
@@ -125,6 +119,19 @@ struct RunOnOsLogin {
   bool is_managed;
 };
 
+// Locale info including tag and readable name translated based on ICU-20273.
+struct Locale {
+  // In general, this should be IETF BCP 47 tag, unless apps decide to specify
+  // their own tag.
+  string locale_tag;
+  // Readable name of the locale, translated based on the system language.
+  // Empty if `locale_tag` cannot be translated.
+  string display_name;
+  // Readable name of the locale, translated based on the `locale_tag`.
+  // Empty if `locale_tag` cannot be translated.
+  string native_display_name;
+};
+
 struct App {
   string id;
 
@@ -135,8 +142,8 @@ struct App {
   string? title;
 
   string? description;
-  OptionalBool is_pinned;
-  OptionalBool is_policy_pinned;
+  bool? is_pinned;
+  bool? is_policy_pinned;
   string? version;
   string? size;
   map<PermissionType, Permission> permissions;
@@ -155,6 +162,15 @@ struct App {
   string? app_size;
   string? data_size;
   string publisher_id;
+  // A string of the formatted origin URL where it is no longer a valid URL,
+  // such as "foo.com".
+  string? formatted_origin;
+  // A list of formatted origins from the "scope_extensions" field in web app
+  // manifest that are no longer valid URLs, such as "foo.com", "app.foo.com",
+  // "*.foo2.com".
+  array<string> scope_extensions;
+  array<Locale> supported_locales;
+  Locale? selected_locale;
 };
 
 // Extension-based apps primarily use install-time permissions that cannot be
@@ -175,10 +191,13 @@ interface PageHandler {
   GetApps() => (array<App> apps);
   // Returns null if the app is not found.
   GetApp(string app_id) => (App? app);
+  // Maps app IDs to their parent apps' app ID. The return value omits apps
+  // that do not have a parent.
+  GetSubAppToParentMap() => (map<string, string> sub_app_to_parent_map);
   GetExtensionAppPermissionMessages(string app_id) =>
       (array<ExtensionAppPermissionMessage> messages);
   // Pins or unpins for an app identified with `app_id`.
-  SetPinned(string app_id, OptionalBool pinned);
+  SetPinned(string app_id, bool pinned);
   // Sets `permission` for an app identified with `app_id`.
   SetPermission(string app_id,
                 Permission permission);
@@ -186,10 +205,26 @@ interface PageHandler {
   SetResizeLocked(string app_id, bool locked);
   Uninstall(string app_id);
   OpenNativeSettings(string app_id);
+  // On ChromeOS, this updates the preferred apps list for `app_id`.
+  // On Windows, Mac and Linux, this is used to update the
+  // user_link_capturing_preference_ flag on the web_app DB
+  // for the `app_id`. If the app_id is set as a preferred app,
+  // then it resets user_link_capturing_preference_
+  // for all other apps if that is set.
   SetPreferredApp(string app_id, bool is_preferred_app);
-  // Returns a list of |app_ids| that are currently set as preferred apps
-  // and have overlapping intent filters with |app_id|.
+  // On ChromeOS: Returns a list of |app_ids| that are currently set
+  // as preferred apps and have overlapping intent filters with |app_id|.
+  // On Windows, Mac and Linux, this returns a list of |app_ids| that
+  // are currently set as preferred apps and satisfy the following
+  // conditions:
+  // 1. Scope of each app_id in the array matches the scope of
+  // the input app_id and has an http or https scheme.
+  // 2. The app opens in a separate window.
+  // 3. The app is not a shortcut app.
   GetOverlappingPreferredApps(string app_id) => (array<string> app_ids);
+  // Called when an app's settings is viewed, to start the calculation of
+  // the app's size to be displayed.
+  UpdateAppSize(string app_id);
   // Used to set the Window Mode from the frontend inside
   // app_management_page_handler.
   SetWindowMode(string app_id, WindowMode window_mode);
@@ -205,6 +240,9 @@ interface PageHandler {
   ShowDefaultAppAssociationsUi();
   // Opens the store page for an app with the given |app_id|.
   OpenStorePage(string app_id);
+  // Sets app locale for an app with the given |app_id|. Empty |locale_tag|
+  // indicates system language being chosen.
+  SetAppLocale(string app_id, string locale_tag);
 };
 
 // Frontend interface.

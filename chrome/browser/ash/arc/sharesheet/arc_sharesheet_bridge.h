@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ARC_SHARESHEET_ARC_SHARESHEET_BRIDGE_H_
 
 #include "ash/components/arc/mojom/sharesheet.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -40,10 +41,13 @@ class ArcSharesheetBridge : public KeyedService, public mojom::SharesheetHost {
   // mojom::SharesheetHost overrides:
   // TODO(phshah): Add overrides.
 
- private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  static void EnsureFactoryBuilt();
 
-  Profile* const profile_;
+ private:
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
+
+  const raw_ptr<Profile> profile_;
 
   base::WeakPtrFactory<ArcSharesheetBridge> weak_ptr_factory_{this};
 };

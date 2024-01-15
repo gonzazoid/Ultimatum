@@ -31,19 +31,6 @@ chromium-metrics-reviews@google.com.
 </variants>
 
 <histogram
-    name="BackgroundFetch.EventDispatchFailure.Dispatch{BackgroundFetchEvents}"
-    enum="ServiceWorkerStatusCode" expires_after="2022-06-30">
-  <owner>peter@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <summary>
-    Records the Service Worker status code that caused a Background Fetch API
-    event to fail dispatching whilst trying to dispatch an event on the active
-    Service Worker. {BackgroundFetchEvents}
-  </summary>
-  <token key="BackgroundFetchEvents" variants="BackgroundFetchEvents"/>
-</histogram>
-
-<histogram
     name="BackgroundFetch.EventDispatchFailure.FindWorker{BackgroundFetchEvents}"
     enum="ServiceWorkerStatusCode" expires_after="2022-06-30">
   <owner>peter@chromium.org</owner>
@@ -69,173 +56,6 @@ chromium-metrics-reviews@google.com.
   <token key="BackgroundFetchEvents" variants="BackgroundFetchEvents"/>
 </histogram>
 
-<histogram name="BackgroundFetch.EventDispatchResult{BackgroundFetchEvents}"
-    enum="BackgroundFetchEventDispatchResult" expires_after="2022-06-30">
-  <owner>peter@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <summary>
-    Records the result of dispatching one of the Background Fetch API events to
-    the Service Worker associated with the event. {BackgroundFetchEvents}
-  </summary>
-  <token key="BackgroundFetchEvents" variants="BackgroundFetchEvents"/>
-</histogram>
-
-<histogram name="BackgroundFetch.HasDuplicateRequests" enum="Boolean"
-    expires_after="2022-06-30">
-  <owner>peter@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <summary>
-    Records whether the fetch requests contains any duplicate URLs. This is
-    called after the provided requests are verified, but before the fetch is
-    started.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundFetch.HasRequestsWithBody" enum="Boolean"
-    expires_after="2021-12-26">
-  <owner>nator@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records whether the background fetch contains any requests with a body.
-    Called before the fetch is started.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundFetch.IncompleteFetchesOnStartup" units="units"
-    expires_after="M99">
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records the number of Background Fetch registrations found on browser
-    start-up. This is called after the initialization database task runs
-    successfully.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundFetch.Manager{BackgroundFetchManagerAPIsDuration}"
-    units="ms" expires_after="M99">
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records the duration of the mojo call for the exposed BackgroundFetchManager
-    APIs. {BackgroundFetchManagerAPIsDuration}
-  </summary>
-  <token key="BackgroundFetchManagerAPIsDuration">
-    <variant name=".FetchDuration" summary="Duration of fetch"/>
-    <variant name=".GetDuration" summary="Duration of get"/>
-    <variant name=".GetIdsDuration" summary="Duration of getIds"/>
-  </token>
-</histogram>
-
-<histogram name="BackgroundFetch.MatchCalledFromDocumentScope"
-    enum="ScopeMatchCalledFrom" expires_after="2021-11-30">
-  <owner>nator@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records whether match() or matchAll() was called from Document Scope. Called
-    when match() or matchAll() is invoked in the renderer process.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundFetch.MatchCalledWhenFetchIsIncomplete"
-    enum="FetchStatusWhenMatchCalled" expires_after="2021-11-30">
-  <owner>nator@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records whether match() or matchAll() was called when the background fetch
-    was incomplete. Called when match() or matchAll() is invoked in the renderer
-    process.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundFetch.PercentOfRequestsForWhichUpdatesAreSent"
-    units="%" expires_after="2021-11-30">
-  <owner>nator@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records the percent of requests for which updates are received in the
-    renderer process from the browser process. Called when the completion event
-    for a background fetch has finished processing.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundFetch.Storage{BackgroundFetchDatabaseStorageErrors}"
-    enum="BackgroundFetchStorageError" expires_after="M99">
-  <owner>rayankans@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Records the storage error when running a database task.
-    {BackgroundFetchDatabaseStorageErrors}
-  </summary>
-  <token key="BackgroundFetchDatabaseStorageErrors">
-    <variant name=".CleanupTask" summary="CleanupTask"/>
-    <variant name=".CreateMetadataTask" summary="CreateMetadata DatabaseTask"/>
-    <variant name=".DeleteRegistrationTask"
-        summary="DeleteRegistration DatabaseTask"/>
-    <variant name=".GetDeveloperIdsTask"
-        summary="GetDeveloperIds DatabaseTask"/>
-    <variant name=".GetInitializationDataTask"
-        summary="GetInitializationData DatabaseTask"/>
-    <variant name=".GetRegistrationTask"
-        summary="GetRegistration DatabaseTask"/>
-    <variant name=".GetRequestBlobTask" summary="GetRequestBlob DatabaseTask"/>
-    <variant name=".GetSettledFetchesTask"
-        summary="GetSettledFetches DatabaseTask"/>
-    <variant name=".MarkRegistrationForDeletionTask"
-        summary="MarkRegistrationForDeletion DatabaseTask"/>
-    <variant name=".MarkRequestCompleteTask"
-        summary="MarkRequestComplete DatabaseTask"/>
-    <variant name=".MatchRequestsTask" summary="MatchRequests DatabaseTask"/>
-    <variant name=".StartNextPendingRequestTask"
-        summary="StartNextPendingRequest DatabaseTask"/>
-    <variant name=".UpdateRegistrationUITask"
-        summary="UpdateRegistrationUI DatabaseTask"/>
-  </token>
-</histogram>
-
-<histogram name="BackgroundMode.BackgroundApplicationsCount" units="units"
-    expires_after="2021-09-12">
-  <owner>atwilson@chromium.org</owner>
-  <owner>mvanouwerkerk@chromium.org</owner>
-  <summary>
-    The number of background applications (extensions) for a profile that were
-    loaded after the profile was registered with the BackgroundModeManager.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundMode.BackgroundModeEnabledPrefChanged"
-    enum="BooleanEnabled" expires_after="2020-09-01">
-  <owner>mvanouwerkerk@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Logged if BackgroundModeManager is running and listening for pref changes,
-    and the pref does indeed change. The new value is logged.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundMode.MenuItemClick" enum="BackgroundModeMenuItem"
-    expires_after="2020-09-01">
-  <owner>mvanouwerkerk@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Logged when an item in the system tray icon menu is clicked.
-  </summary>
-</histogram>
-
-<histogram name="BackgroundMode.OnStartup.AutoLaunchState"
-    enum="AutoLaunchState" expires_after="2021-10-04">
-  <owner>mvanouwerkerk@chromium.org</owner>
-  <owner>rdevlin.cronin@chromium.org</owner>
-  <summary>
-    Logged during BackgroundModeManager's initialization. Indicates the
-    AutoLaunchState the current browser process was launched in.
-  </summary>
-</histogram>
-
 <histogram name="BackgroundMode.OnStartup.IsBackgroundModePrefEnabled"
     enum="BooleanEnabled" expires_after="2022-04-17">
   <owner>mvanouwerkerk@chromium.org</owner>
@@ -246,18 +66,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="BackgroundMode.TimeBeforeOptimizedRestart" units="ms"
-    expires_after="2020-09-01">
-  <owner>peter@chromium.org</owner>
-  <owner>mvanouwerkerk@chromium.org</owner>
-  <summary>
-    The duration of a session before the browser got restarted in the background
-    by the BackgroundOptimizer to purge the memory.
-  </summary>
-</histogram>
-
 <histogram name="BackgroundSync.Event.BatchSize" units="units"
-    expires_after="2021-10-31">
+    expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -270,7 +80,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Event.FromWakeupTask"
-    enum="BackgroundSyncWakeupTask" expires_after="2023-02-26">
+    enum="BackgroundSyncWakeupTask" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -280,7 +90,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Event.OneShotResultPattern"
-    enum="BackgroundSyncResultPattern" expires_after="2023-03-19">
+    enum="BackgroundSyncResultPattern" expires_after="2024-06-30">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -293,7 +103,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Event.OneShotStartedInForeground"
-    enum="BooleanInForeground" expires_after="2022-01-02">
+    enum="BooleanInForeground" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -303,7 +113,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Event.PeriodicResultPattern"
-    enum="BackgroundSyncResultPattern" expires_after="2022-07-31">
+    enum="BackgroundSyncResultPattern" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <owner>peter@chromium.org</owner>
@@ -317,7 +127,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Event.PeriodicStartedInForeground"
-    enum="BooleanInForeground" expires_after="2022-07-31">
+    enum="BooleanInForeground" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <owner>peter@chromium.org</owner>
@@ -328,7 +138,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Event.Time" units="ms"
-    expires_after="2021-10-31">
+    expires_after="2024-04-28">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -341,7 +151,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.LaunchTask.PlayServicesAvailable"
-    enum="Boolean" expires_after="2022-08-19">
+    enum="Boolean" expires_after="2024-04-28">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -352,7 +162,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.NetworkObserver.HasPermission" enum="Boolean"
-    expires_after="2022-06-30">
+    expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -364,7 +174,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Periodic.Wakeup.DelayTime" units="ms"
-    expires_after="2022-07-31">
+    expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
@@ -376,7 +186,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Registration.OneShot"
-    enum="BackgroundSyncStatus" expires_after="2022-02-20">
+    enum="BackgroundSyncStatus" expires_after="2024-06-30">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -385,7 +195,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Registration.OneShot.CouldFire"
-    enum="BooleanCouldFireImmediately" expires_after="2022-08-09">
+    enum="BooleanCouldFireImmediately" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -396,7 +206,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="BackgroundSync.Registration.OneShot.EventSucceededAtCompletion"
-    enum="BooleanSuccess" expires_after="2021-11-14">
+    enum="BooleanSuccess" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <owner>peter@chromium.org</owner>
@@ -407,7 +217,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Registration.OneShot.IsDuplicate"
-    enum="BooleanRegistrationIsDuplicate" expires_after="2022-06-30">
+    enum="BooleanRegistrationIsDuplicate" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -418,7 +228,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="BackgroundSync.Registration.OneShot.NumAttemptsForSuccessfulEvent"
-    units="attempts" expires_after="2022-01-16">
+    units="attempts" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -428,7 +238,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Registration.Periodic"
-    enum="BackgroundSyncStatus" expires_after="2021-12-12">
+    enum="BackgroundSyncStatus" expires_after="2024-06-30">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -438,7 +248,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Registration.Periodic.IsDuplicate"
-    enum="BooleanRegistrationIsDuplicate" expires_after="2022-07-31">
+    enum="BooleanRegistrationIsDuplicate" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -449,7 +259,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Registration.Periodic.MinInterval"
-    units="seconds" expires_after="2022-07-31">
+    units="seconds" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
   <summary>
@@ -459,7 +269,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Unregistration.Periodic"
-    enum="BackgroundSyncStatus" expires_after="2022-07-31">
+    enum="BackgroundSyncStatus" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>platform-capabilities@chromium.org</owner>
   <summary>
@@ -468,7 +278,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.Wakeup.DelayTime" units="ms"
-    expires_after="2022-07-31">
+    expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
@@ -481,7 +291,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.WakeupTaskFiredEvents.OneShot"
-    enum="BackgroundSyncFiredEvents" expires_after="2022-07-31">
+    enum="BackgroundSyncFiredEvents" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>
@@ -494,7 +304,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackgroundSync.WakeupTaskFiredEvents.Periodic"
-    enum="BackgroundSyncFiredEvents" expires_after="2022-07-31">
+    enum="BackgroundSyncFiredEvents" expires_after="2024-02-06">
   <owner>nator@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <owner>rayankans@chromium.org</owner>

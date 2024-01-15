@@ -19,11 +19,9 @@ Tab* FakeTabSlotController::tab_at(int index) const {
   return tab_container_->GetTabAtModelIndex(index);
 }
 
-bool FakeTabSlotController::ToggleTabGroupCollapsedState(
+void FakeTabSlotController::ToggleTabGroupCollapsedState(
     const tab_groups::TabGroupId group,
-    ToggleTabGroupCollapsedStateOrigin origin) {
-  return false;
-}
+    ToggleTabGroupCollapsedStateOrigin origin) {}
 
 bool FakeTabSlotController::IsActiveTab(const Tab* tab) const {
   return active_tab_ == tab;
@@ -43,6 +41,12 @@ bool FakeTabSlotController::IsTabFirst(const Tab* tab) const {
 
 bool FakeTabSlotController::IsFocusInTabs() const {
   return false;
+}
+
+TabSlotController::Liveness FakeTabSlotController::ContinueDrag(
+    views::View* view,
+    const ui::LocatedEvent& event) {
+  return Liveness::kAlive;
 }
 
 bool FakeTabSlotController::EndDrag(EndDragReason reason) {
@@ -69,10 +73,6 @@ int FakeTabSlotController::GetBackgroundOffset() const {
   return 0;
 }
 
-bool FakeTabSlotController::ShouldPaintAsActiveFrame() const {
-  return true;
-}
-
 int FakeTabSlotController::GetStrokeThickness() const {
   return 0;
 }
@@ -89,21 +89,14 @@ SkColor FakeTabSlotController::GetTabSeparatorColor() const {
   return SK_ColorBLACK;
 }
 
-SkColor FakeTabSlotController::GetTabBackgroundColor(
-    TabActive active,
-    BrowserFrameActiveState active_state) const {
-  return active == TabActive::kActive ? tab_bg_color_active_
-                                      : tab_bg_color_inactive_;
-}
-
 SkColor FakeTabSlotController::GetTabForegroundColor(TabActive active) const {
   return active == TabActive::kActive ? tab_fg_color_active_
                                       : tab_fg_color_inactive_;
 }
 
-absl::optional<int> FakeTabSlotController::GetCustomBackgroundId(
+std::optional<int> FakeTabSlotController::GetCustomBackgroundId(
     BrowserFrameActiveState active_state) const {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::u16string FakeTabSlotController::GetAccessibleTabName(

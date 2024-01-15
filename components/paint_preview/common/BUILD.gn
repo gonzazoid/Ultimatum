@@ -2,9 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/features.gni")
 import("//testing/test.gni")
 
-assert(!is_ios, "Paint Previews are not supported on iOS.")
+assert(use_blink, "Paint Previews are not supported without blink.")
 
 source_set("common") {
   sources = [
@@ -34,7 +35,7 @@ source_set("common") {
 
   deps = [
     "//base",
-    "//components/crash/core/common:crash_key_lib",
+    "//components/crash/core/common:crash_key",
     "//skia",
     "//third_party:freetype_harfbuzz",
     "//ui/gfx/geometry",
@@ -80,13 +81,16 @@ source_set("unit_tests") {
     ":test_utils",
     "//base",
     "//base/test:test_support",
-    "//components/crash/core/common:crash_key_lib",
+    "//components/crash/core/common:crash_key",
     "//skia",
     "//testing/gmock",
     "//testing/gtest",
     "//third_party:freetype_harfbuzz",
     "//ui/gfx/geometry",
   ]
+  if (is_ios) {
+    deps += [ "//components/test:paint_preview_test_bundle_data" ]
+  }
 }
 
 test("paint_preview_common_unit_tests") {

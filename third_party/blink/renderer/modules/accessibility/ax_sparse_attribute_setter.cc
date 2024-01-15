@@ -4,11 +4,9 @@
 
 #include "third_party/blink/renderer/modules/accessibility/ax_sparse_attribute_setter.h"
 
-#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object_cache_impl.h"
-#include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
@@ -25,18 +23,6 @@ void SetBoolAttribute(ax::mojom::blink::BoolAttribute attribute,
                       AXObject* object,
                       ui::AXNodeData* node_data,
                       const AtomicString& value) {
-  // Don't set kTouchPassthrough unless the feature is enabled in this
-  // context.
-  if (attribute == ax::mojom::blink::BoolAttribute::kTouchPassthrough) {
-    auto* context = object->AXObjectCache().GetDocument().GetExecutionContext();
-    if (RuntimeEnabledFeatures::AccessibilityAriaTouchPassthroughEnabled(
-            context)) {
-      UseCounter::Count(context, WebFeature::kAccessibilityTouchPassthroughSet);
-    } else {
-      return;
-    }
-  }
-
   // ARIA booleans are true if not "false" and not specifically undefined.
   bool is_true = !AccessibleNode::IsUndefinedAttrValue(value) &&
                  !EqualIgnoringASCIICase(value, "false");
@@ -66,9 +52,6 @@ void SetObjectAttribute(ax::mojom::blink::IntAttribute attribute,
                         AXObject* object,
                         ui::AXNodeData* node_data,
                         const AtomicString& value) {
-  if (object->IsProhibited(attribute))
-    return;
-
   Element* element = object->GetElement();
   if (!element)
     return;
@@ -78,7 +61,7 @@ void SetObjectAttribute(ax::mojom::blink::IntAttribute attribute,
   if (!target)
     return;
 
-  AXObject* ax_target = object->AXObjectCache().GetOrCreate(target);
+  AXObject* ax_target = object->AXObjectCache().Get(target);
   if (!ax_target)
     return;
   if (attribute == ax::mojom::blink::IntAttribute::kActivedescendantId &&
@@ -94,18 +77,21 @@ void SetIntListAttribute(ax::mojom::blink::IntListAttribute attribute,
                          AXObject* object,
                          ui::AXNodeData* node_data,
                          const AtomicString& value) {
+  if (object->IsProhibited(attribute)) {
+    return;
+  }
   Element* element = object->GetElement();
   if (!element)
     return;
   HeapVector<Member<Element>>* attr_associated_elements =
       element->GetElementArrayAttribute(qualified_name);
-  if (!attr_associated_elements || attr_associated_elements->empty())
+  if (!attr_associated_elements || attr_associated_elements->empty()) {
     return;
+  }
   std::vector<int32_t> ax_ids;
 
   for (const auto& associated_element : *attr_associated_elements) {
-    AXObject* ax_element =
-        object->AXObjectCache().GetOrCreate(associated_element);
+    AXObject* ax_element = object->AXObjectCache().Get(associated_element);
     if (!ax_element)
       continue;
     if (!ax_element->AccessibilityIsIgnored())
@@ -157,8 +143,8 @@ AXSparseAttributeSetterMap& GetAXSparseAttributeSetterMap() {
                            html_names::kAriaControlsAttr));
     ax_sparse_setter_map.Set(
         html_names::kAriaErrormessageAttr,
-        WTF::BindRepeating(&SetObjectAttribute,
-                           ax::mojom::blink::IntAttribute::kErrormessageId,
+        WTF::BindRepeating(&SetIntListAttribute,
+                           ax::mojom::blink::IntListAttribute::kErrormessageIds,
                            html_names::kAriaErrormessageAttr));
     ax_sparse_setter_map.Set(
         html_names::kAriaDetailsAttr,
@@ -187,10 +173,6 @@ AXSparseAttributeSetterMap& GetAXSparseAttributeSetterMap() {
         WTF::BindRepeating(
             &SetStringAttribute,
             ax::mojom::blink::StringAttribute::kRoleDescription));
-    ax_sparse_setter_map.Set(
-        html_names::kAriaTouchpassthroughAttr,
-        WTF::BindRepeating(&SetBoolAttribute,
-                           ax::mojom::blink::BoolAttribute::kTouchPassthrough));
     if (RuntimeEnabledFeatures::AccessibilityAriaVirtualContentEnabled()) {
       ax_sparse_setter_map.Set(
           html_names::kAriaVirtualcontentAttr,
@@ -232,7 +214,7 @@ void AXNodeDataAOMPropertyClient::AddStringProperty(AOMStringProperty property,
     default:
       return;
   }
-  node_data_.AddStringAttribute(attribute, value.Utf8());
+  node_data_->AddStringAttribute(attribute, value.Utf8());
 }
 
 void AXNodeDataAOMPropertyClient::AddBooleanProperty(
@@ -246,7 +228,7 @@ void AXNodeDataAOMPropertyClient::AddBooleanProperty(
     default:
       return;
   }
-  node_data_.AddBoolAttribute(attribute, value);
+  node_data_->AddBoolAttribute(attribute, value);
 }
 
 void AXNodeDataAOMPropertyClient::AddFloatProperty(AOMFloatProperty property,
@@ -260,19 +242,16 @@ void AXNodeDataAOMPropertyClient::AddRelationProperty(
     case AOMRelationProperty::kActiveDescendant:
       attribute = ax::mojom::blink::IntAttribute::kActivedescendantId;
       break;
-    case AOMRelationProperty::kErrorMessage:
-      attribute = ax::mojom::blink::IntAttribute::kErrormessageId;
-      break;
     default:
       return;
   }
 
   Element* target = value.element();
-  AXObject* ax_target = ax_object_cache_->GetOrCreate(target);
+  AXObject* ax_target = ax_object_cache_->Get(target);
   if (!ax_target)
     return;
 
-  node_data_.AddIntAttribute(attribute, ax_target->AXObjectID());
+  node_data_->AddIntAttribute(attribute, ax_target->AXObjectID());
 }
 
 void AXNodeDataAOMPropertyClient::AddRelationListProperty(
@@ -286,6 +265,9 @@ void AXNodeDataAOMPropertyClient::AddRelationListProperty(
     case AOMRelationListProperty::kDetails:
       attribute = ax::mojom::blink::IntListAttribute::kDetailsIds;
       break;
+    case AOMRelationListProperty::kErrorMessage:
+      attribute = ax::mojom::blink::IntListAttribute::kErrormessageIds;
+      break;
     case AOMRelationListProperty::kFlowTo:
       attribute = ax::mojom::blink::IntListAttribute::kFlowtoIds;
       break;
@@ -298,13 +280,13 @@ void AXNodeDataAOMPropertyClient::AddRelationListProperty(
     AccessibleNode* accessible_node = relations.item(i);
     if (accessible_node) {
       Element* element = accessible_node->element();
-      AXObject* ax_element = ax_object_cache_->GetOrCreate(element);
+      AXObject* ax_element = ax_object_cache_->Get(element);
       if (ax_element && !ax_element->AccessibilityIsIgnored())
         ax_ids.push_back(ax_element->AXObjectID());
     }
   }
 
-  node_data_.AddIntListAttribute(attribute, ax_ids);
+  node_data_->AddIntListAttribute(attribute, ax_ids);
 }
 
 }  // namespace blink

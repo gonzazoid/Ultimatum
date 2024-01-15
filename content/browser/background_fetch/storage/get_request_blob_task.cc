@@ -4,7 +4,7 @@
 
 #include "content/browser/background_fetch/storage/get_request_blob_task.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/background_fetch/background_fetch_request_match_params.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
@@ -79,14 +79,8 @@ void GetRequestBlobTask::DidMatchRequest(
 
 void GetRequestBlobTask::FinishWithError(
     blink::mojom::BackgroundFetchError error) {
-  ReportStorageError();
-
   std::move(callback_).Run(error, std::move(blob_));
   Finished();
-}
-
-std::string GetRequestBlobTask::HistogramName() const {
-  return "GetRequestBlobTask";
 }
 
 }  // namespace background_fetch

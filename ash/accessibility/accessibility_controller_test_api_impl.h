@@ -6,6 +6,7 @@
 #define ASH_ACCESSIBILITY_ACCESSIBILITY_CONTROLLER_TEST_API_IMPL_H_
 
 #include "ash/public/cpp/test/accessibility_controller_test_api.h"
+#include "base/functional/callback_forward.h"
 
 namespace ash {
 
@@ -14,18 +15,22 @@ class AccessibilityControllerTestApiImpl
     : public AccessibilityControllerTestApi {
  public:
   AccessibilityControllerTestApiImpl();
-
   AccessibilityControllerTestApiImpl(
       const AccessibilityControllerTestApiImpl&) = delete;
   AccessibilityControllerTestApiImpl& operator=(
       const AccessibilityControllerTestApiImpl&) = delete;
-
   ~AccessibilityControllerTestApiImpl() override;
 
   // AccessibilityControllerTestApi:
   void SetLargeCursorEnabled(bool enabled) override;
   bool IsLargeCursorEnabled() const override;
   int GetDictationSodaDownloadProgress() const override;
+  bool IsDictationKeboardDialogShowing() const override;
+  void AcceptDictationKeyboardDialog() override;
+  void DismissDictationKeyboardDialog() override;
+  void AddShowToastCallbackForTesting(
+      base::RepeatingCallback<void(AccessibilityToastType)> callback)
+      const override;
 };
 
 }  // namespace ash

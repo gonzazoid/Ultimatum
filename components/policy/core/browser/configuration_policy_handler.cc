@@ -10,18 +10,16 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/containers/adapters.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
@@ -120,30 +118,33 @@ ListPolicyHandler::~ListPolicyHandler() {}
 
 bool ListPolicyHandler::CheckPolicySettings(const policy::PolicyMap& policies,
                                             policy::PolicyErrorMap* errors) {
-  return CheckAndGetList(policies, errors, nullptr);
+  absl::optional<base::Value::List> empty = absl::nullopt;
+  return CheckAndGetList(policies, errors, empty);
 }
 
 void ListPolicyHandler::ApplyPolicySettings(const policy::PolicyMap& policies,
                                             PrefValueMap* prefs) {
-  base::Value list(base::Value::Type::NONE);
-  if (CheckAndGetList(policies, nullptr, &list) && list.is_list())
-    ApplyList(std::move(list), prefs);
+  auto list = absl::make_optional<base::Value::List>();
+  if (CheckAndGetList(policies, nullptr, list) && list) {
+    ApplyList(*std::move(list), prefs);
+  }
 }
 
-bool ListPolicyHandler::CheckAndGetList(const policy::PolicyMap& policies,
-                                        policy::PolicyErrorMap* errors,
-                                        base::Value* filtered_list) {
+bool ListPolicyHandler::CheckAndGetList(
+    const policy::PolicyMap& policies,
+    policy::PolicyErrorMap* errors,
+    absl::optional<base::Value::List>& filtered_list) {
   const base::Value* value = nullptr;
   if (!CheckAndGetValue(policies, errors, &value))
     return false;
 
-  if (!value)
+  if (!value) {
+    filtered_list = absl::nullopt;  // nothing to apply
     return true;
+  }
 
   // Filter the list, rejecting any invalid strings.
   const base::Value::List& list = value->GetList();
-  if (filtered_list)
-    *filtered_list = base::Value(base::Value::Type::LIST);
   for (size_t list_index = 0; list_index < list.size(); ++list_index) {
     const base::Value& entry = list[list_index];
     if (entry.type() != list_entry_type_) {
@@ -164,7 +165,7 @@ bool ListPolicyHandler::CheckAndGetList(const policy::PolicyMap& policies,
     }
 
     if (filtered_list)
-      filtered_list->GetList().Append(entry.Clone());
+      filtered_list->Append(entry.Clone());
   }
 
   return true;
@@ -212,7 +213,7 @@ bool IntRangePolicyHandlerBase::EnsureInRange(const base::Value* input,
     if (!clamp_)
       return false;
 
-    value = base::clamp(value, min_, max_);
+    value = std::clamp(value, min_, max_);
   }
 
   if (output)
@@ -254,13 +255,13 @@ void StringMappingListPolicyHandler::ApplyPolicySettings(
     return;
   const base::Value* value =
       policies.GetValue(policy_name(), base::Value::Type::LIST);
-  base::ListValue list;
+  base::Value::List list;
   if (value && Convert(value, &list, nullptr))
-    prefs->SetValue(pref_path_, std::move(list));
+    prefs->SetValue(pref_path_, base::Value(std::move(list)));
 }
 
 bool StringMappingListPolicyHandler::Convert(const base::Value* input,
-                                             base::ListValue* output,
+                                             base::Value::List* output,
                                              PolicyErrorMap* errors) {
   if (!input)
     return true;
@@ -281,12 +282,12 @@ bool StringMappingListPolicyHandler::Convert(const base::Value* input,
     std::unique_ptr<base::Value> mapped_value = Map(entry.GetString());
     if (mapped_value) {
       if (output) {
-        output->GetList().Append(
+        output->Append(
             base::Value::FromUniquePtrValue(std::move(mapped_value)));
       }
     } else if (errors) {
       errors->AddError(policy_name(), IDS_POLICY_OUT_OF_RANGE_ERROR,
-                       PolicyErrorPath{index});
+                       entry.GetString(), PolicyErrorPath{index});
     }
   }
 
@@ -376,6 +377,42 @@ void SimplePolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
     prefs->SetValue(pref_path_, value->Clone());
 }
 
+// PolicyWithDependencyHandler implementation ------------------------------------------
+
+PolicyWithDependencyHandler::PolicyWithDependencyHandler(
+    const char* required_policy_name,
+    std::unique_ptr<NamedPolicyHandler> handler)
+    : NamedPolicyHandler(handler->policy_name()),
+      required_policy_name_(required_policy_name),
+      handler_(std::move(handler)) {}
+
+PolicyWithDependencyHandler::~PolicyWithDependencyHandler() = default;
+
+bool PolicyWithDependencyHandler::CheckPolicySettings(const PolicyMap& policies,
+                                                      PolicyErrorMap* errors) {
+  // It is safe to use `GetValueUnsafe()` as multiple policy types are handled.
+  const base::Value* required_value =
+      policies.GetValueUnsafe(required_policy_name_);
+  if (!required_value) {
+    errors->AddError(policy_name(), IDS_POLICY_DEPENDENCY_ERROR_ANY_VALUE,
+                     required_policy_name_);
+    return false;
+  }
+  return handler_->CheckPolicySettings(policies, errors);
+}
+
+void PolicyWithDependencyHandler::ApplyPolicySettingsWithParameters(
+    const policy::PolicyMap& policies,
+    const policy::PolicyHandlerParameters& parameters,
+    PrefValueMap* prefs) {
+  handler_->ApplyPolicySettingsWithParameters(policies, parameters, prefs);
+}
+
+void PolicyWithDependencyHandler::ApplyPolicySettings(
+    const policy::PolicyMap& /* policies */,
+    PrefValueMap* /* prefs */) {
+  NOTREACHED();
+}
 // SchemaValidatingPolicyHandler implementation --------------------------------
 
 SchemaValidatingPolicyHandler::SchemaValidatingPolicyHandler(
@@ -750,6 +787,59 @@ void SimpleDeprecatingPolicyHandler::ApplyPolicySettings(
     const policy::PolicyMap& /* policies */,
     PrefValueMap* /* prefs */) {
   NOTREACHED();
+}
+
+// CloudOnlyPolicyHandler implementation ---------------------------------------
+
+namespace {
+
+bool IsCloudOnlyPolicy(const policy::PolicyMap::Entry& policy) {
+  return policy.source == policy::POLICY_SOURCE_CLOUD ||
+         policy.source == policy::POLICY_SOURCE_CLOUD_FROM_ASH;
+}
+
+}  // namespace
+
+CloudOnlyPolicyHandler::CloudOnlyPolicyHandler(const char* policy_name,
+                                               Schema schema,
+                                               SchemaOnErrorStrategy strategy)
+    : SchemaValidatingPolicyHandler(policy_name, schema, strategy) {}
+
+CloudOnlyPolicyHandler::~CloudOnlyPolicyHandler() = default;
+
+// static
+bool CloudOnlyPolicyHandler::CheckCloudOnlyPolicySettings(
+    const char* policy_name,
+    const PolicyMap& policies,
+    PolicyErrorMap* errors) {
+  const PolicyMap::Entry* policy = policies.Get(policy_name);
+  if (!policy) {
+    return true;
+  }
+
+  // If the policy source is POLICY_SOURCE_MERGED, it is still cloud-only if all
+  // policy values merged into it are cloud-only.
+  if (policy->source == policy::POLICY_SOURCE_MERGED) {
+    for (const auto& conflict : policy->conflicts) {
+      if (!IsCloudOnlyPolicy(conflict.entry())) {
+        errors->AddError(policy_name, IDS_POLICY_CLOUD_SOURCE_ONLY_ERROR);
+        return false;
+      }
+    }
+  } else if (!IsCloudOnlyPolicy(*policy)) {
+    errors->AddError(policy_name, IDS_POLICY_CLOUD_SOURCE_ONLY_ERROR);
+    return false;
+  }
+
+  return true;
+}
+
+bool CloudOnlyPolicyHandler::CheckPolicySettings(const PolicyMap& policies,
+                                                 PolicyErrorMap* errors) {
+  return CheckCloudOnlyPolicySettings(policy_name(), policies, errors)
+             ? SchemaValidatingPolicyHandler::CheckPolicySettings(policies,
+                                                                  errors)
+             : false;
 }
 
 }  // namespace policy

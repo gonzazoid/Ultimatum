@@ -6,11 +6,11 @@
 #define SERVICES_NETWORK_TRUST_TOKENS_TRUST_TOKEN_KEY_COMMITMENT_CONTROLLER_H_
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/trust_tokens.mojom-forward.h"
 #include "url/gurl.h"
@@ -72,7 +72,7 @@ class TrustTokenKeyCommitmentController final {
    public:
     virtual ~Parser() = default;
     virtual mojom::TrustTokenKeyCommitmentResultPtr Parse(
-        base::StringPiece response_body) = 0;
+        std::string_view response_body) = 0;
   };
 
   // Constructor. Immediately starts a request:
@@ -125,7 +125,8 @@ class TrustTokenKeyCommitmentController final {
 
   // On redirect, fails (key commitment endpoints must not redirect
   // their clients).
-  void HandleRedirect(const net::RedirectInfo& redirect_info,
+  void HandleRedirect(const GURL& url_before_redirect,
+                      const net::RedirectInfo& redirect_info,
                       const mojom::URLResponseHead& response_head,
                       std::vector<std::string>* to_be_removed_headers);
 

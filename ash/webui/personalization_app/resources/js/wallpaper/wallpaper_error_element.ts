@@ -9,6 +9,8 @@
  * that may have multiple sizes, not large rectangular svgs.
  */
 
+import 'chrome://resources/ash/common/personalization/personalization_shared_icons.html.js';
+
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -16,7 +18,7 @@ import {getTemplate} from './wallpaper_error_element.html.js';
 
 const WallpaperErrorBase = I18nMixin(PolymerElement);
 
-export class WallpaperError extends WallpaperErrorBase {
+export class WallpaperErrorElement extends WallpaperErrorBase {
   static get is() {
     return 'wallpaper-error';
   }
@@ -26,4 +28,4 @@ export class WallpaperError extends WallpaperErrorBase {
   }
 }
 
-customElements.define(WallpaperError.is, WallpaperError);
+customElements.define(WallpaperErrorElement.is, WallpaperErrorElement);

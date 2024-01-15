@@ -4,6 +4,7 @@
 
 #include "chromeos/ash/components/string_matching/fuzzy_tokenized_string_match.h"
 
+#include "base/containers/adapters.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -25,6 +26,7 @@ constexpr double kCompleteMismatchScore = 0.0;
 
 // Default parameters.
 constexpr bool kUseWeightedRatio = false;
+constexpr bool kStripDiacritics = false;
 
 void ExpectAllNearlyEqualTo(const std::vector<double>& scores,
                             double target_score,
@@ -101,6 +103,23 @@ std::string FormatRelevanceResult(const std::u16string& query,
                               base::UTF16ToUTF8(text).data(),
                               base::UTF16ToUTF8(query).data(), relevance);
   }
+}
+
+// Returns a string of |text| marked with the hits using block
+// bracket. e.g. text= "Text", hits = [{0,1}], returns "[T]ext".
+//
+// TODO(crbug.com/1336160): Consider defining it as a |test_util| function as it
+// has been used for several unit tests.
+std::u16string MatchHit(const std::u16string& text,
+                        const FuzzyTokenizedStringMatch::Hits& hits) {
+  std::u16string marked = text;
+
+  for (const gfx::Range& hit : base::Reversed(hits)) {
+    marked.insert(hit.end(), 1, u']');
+    marked.insert(hit.start(), 1, u'[');
+  }
+
+  return marked;
 }
 
 }  // namespace
@@ -187,13 +206,14 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkCamelCase) {
   std::u16string text = u"AbcdeFghIj";
   std::vector<std::u16string> queries = {u"AbcdeFghIj", u"abcde fgh ij",
                                          u"abcdefghij", u"abcde fghij"};
+  std::vector<double> scores;
   for (const auto& query : queries) {
     const double relevance = CalculateRelevance(query, text);
+    scores.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                      /*query_first*/ false);
   }
-  // TODO(crbug.com/1336160): Enforce/check that scores are close, after this
-  // behavior is implemented.
+  ExpectAllNearlyEqual(scores, /*abs_error*/ 0.05);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkCompleteMatchSingleToken) {
@@ -254,16 +274,14 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkCompleteNonMatchMultiToken) {
     const double relevance = CalculateRelevance(query, text);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                      /*query_first*/ false);
-    // TODO(crbug.com/1336160): Expect score is zero. Currently, the
-    // presence of whitespace in both text and query causes
-    // inappropriately high relevance scoring.
+    EXPECT_NEAR(relevance, kCompleteMismatchScore, kEps);
   }
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest,
        BenchmarkVariedLengthUnmatchedTextSingleToken) {
   std::u16string full_text = u"abcdefghijklmnop";
-  const size_t shortest_text_length = 6;
+  const size_t shortest_text_length = 9;
   const size_t longest_text_length = full_text.size();
 
   std::vector<std::u16string> queries = {u"abc", u"bcd", u"cde", u"def"};
@@ -273,13 +291,15 @@ TEST_F(FuzzyTokenizedStringMatchTest,
     // text, the relevance score should not be influenced by the
     // amounts of any remaining unmatched portions of text ("text-length
     // agnosticism").
+    std::vector<double> scores;
     for (size_t i = shortest_text_length; i < longest_text_length; ++i) {
       std::u16string text = full_text.substr(0, i);
       const double relevance = CalculateRelevance(query, text);
+      scores.push_back(relevance);
       VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                        /*query_first*/ true);
     }
-    // TODO(crbug.com/1336160): Enforce/check text-length agnosticism.
+    ExpectAllNearlyEqual(scores);
   }
 }
 
@@ -301,12 +321,14 @@ TEST_F(FuzzyTokenizedStringMatchTest,
     // text, the relevance score should not be influenced by the
     // amounts of any remaining unmatched portions of text ("text-length
     // agnosticism").
+    std::vector<double> scores;
     for (const auto& text : texts) {
       const double relevance = CalculateRelevance(query, text);
       VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                        /*query_first*/ true);
+      scores.push_back(relevance);
     }
-    // TODO(crbug.com/1336160): Enforce/check text-length agnosticism.
+    ExpectAllNearlyEqual(scores);
   }
 }
 
@@ -370,35 +392,28 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkTokenOrderVariation) {
   // Case: Two words.
   std::u16string text_two_words = u"abc def";
   std::vector<std::u16string> queries_two_words = {u"abc def", u"def abc"};
+  std::vector<double> scores_query_two_words;
   for (const auto& query : queries_two_words) {
     const double relevance = CalculateRelevance(query, text_two_words);
+    scores_query_two_words.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text_two_words, relevance,
                                      /*query_first*/ false);
   }
-  // Currently, query "abc def" yields a high score, whereas the inverted query
-  // "def abc" yields a low score.
-  //
-  // TODO(crbug.com/1336160): Support word order flexibility, such that the
-  // resulting relevance scores here are high and nearly equal.
+  ExpectAllNearlyEqual(scores_query_two_words, /*abs_error*/ 0.1);
 
   // Case: Three words.
   std::u16string text_three_words = u"abc def ghi";
   std::vector<std::u16string> queries_three_words = {
       u"abc def ghi", u"abc ghi def", u"def abc ghi",
       u"def ghi abc", u"ghi abc def", u"ghi def abc"};
+  std::vector<double> scores_query_three_words;
   for (const auto& query : queries_three_words) {
     const double relevance = CalculateRelevance(query, text_three_words);
+    scores_query_three_words.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text_three_words, relevance,
                                      /*query_first*/ false);
   }
-  // Currently, query "abc def ghi" yields a high score, whereas all other
-  // queries yield low scores.
-  //
-  // TODO(crbug.com/1336160): Support word order flexibility, such that the
-  // resulting relevance scores here are high and nearly equal.
-
-  // TODO(crbug.com/1336160): [Later] Consider a score boost for when a matched
-  // token is the first token of both text and query.
+  ExpectAllNearlyEqual(scores_query_three_words, /*abs_error*/ 0.05);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkTokensPresentInTextButNotQuery) {
@@ -413,9 +428,10 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkTokensPresentInTextButNotQuery) {
                                      /*query_first*/ false);
     scores_query_single_token.push_back(relevance);
   }
-  // TODO(crbug.com/1336160): Consider a score boost for when a matched token is
-  // the first token of both text and query.
-  ExpectAllNearlyEqual(scores_query_single_token, /*abs_error*/ 0.1);
+  // There is a score boost in prefix matcher when a matched token is the first
+  // token of both text and query.
+  scores_query_single_token[0] -= 0.125;
+  ExpectAllNearlyEqual(scores_query_single_token, /*abs_error*/ 0.01);
 
   // Case: multi-token text, two-token query.
   std::vector<std::u16string> queries_two_tokens = {u"abc def", u"abc ghi",
@@ -428,11 +444,6 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkTokensPresentInTextButNotQuery) {
     scores_query_two_tokens.push_back(relevance);
   }
   ExpectAllNearlyEqual(scores_query_two_tokens, /*abs_error*/ 0.1);
-
-  // TODO(crbug.com/1336160): Support text-length agnosticism, whereby
-  // non-matched text tokens have no (or less of) an adverse effect on scoring.
-  // Maybe add some score comparisons between `scores_query_single_token` and
-  // `scores_query_two_tokens`.
 
   // TODO(crbug.com/1336160): [Later] Consider a score boost for when a matched
   // token is the first token of both text and query.
@@ -517,7 +528,7 @@ TEST_F(FuzzyTokenizedStringMatchTest,
                                      /*query_first*/ false);
     scores1_shuffled.push_back(relevance);
   }
-  ExpectAllNearlyEqualTo(scores1_shuffled, 0.4, /*abs_error*/ 0.2);
+  ExpectAllNearlyEqualTo(scores1_shuffled, 0.54, /*abs_error*/ 0.1);
 
   // Case 2: multi-token text.
   std::u16string text2 = u"abcdef ghi";
@@ -547,8 +558,7 @@ TEST_F(FuzzyTokenizedStringMatchTest,
                                      /*query_first*/ false);
     scores2_shuffled.push_back(relevance);
   }
-  // TODO(crbug.com/1336160): Perhaps these scores should be higher.
-  ExpectAllNearlyEqualTo(scores2_shuffled, 0.4, /*abs_error*/ 0.25);
+  ExpectAllNearlyEqualTo(scores2_shuffled, 0.6, /*abs_error*/ 0.25);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest,
@@ -590,7 +600,7 @@ TEST_F(FuzzyTokenizedStringMatchTest,
                                      /*query_first*/ true);
     scores1_shuffled.push_back(relevance);
   }
-  ExpectAllNearlyEqualTo(scores1_shuffled, 0.4, /*abs_error*/ 0.2);
+  ExpectAllNearlyEqualTo(scores1_shuffled, 0.6, /*abs_error*/ 0.2);
 
   // Case 2: multi-token query.
   std::u16string query2 = u"abcdef ghi";
@@ -620,8 +630,7 @@ TEST_F(FuzzyTokenizedStringMatchTest,
                                      /*query_first*/ true);
     scores2_shuffled.push_back(relevance);
   }
-  // TODO(crbug.com/1336160): Perhaps these scores should be higher.
-  ExpectAllNearlyEqualTo(scores2_shuffled, 0.4, /*abs_error*/ 0.25);
+  ExpectAllNearlyEqualTo(scores2_shuffled, 0.6, /*abs_error*/ 0.25);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkPartialMatchPartialMismatch) {
@@ -677,9 +686,9 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkPartialMatchPartialMismatch) {
 
   // TODO(crbug.com/1336160): Consider the following if/when supported:
   //
+  // CHECK_GT(relevance_query_suffix_mismatch, relevance_query_prefix_mismatch);
   // CHECK_GT(relevance_query_suffix_mismatch,
-  // relevance_query_prefix_mismatch);
-  // CHECK_GT(relevance_query_suffix_mismatch, query_suffix_is_text_prefix);
+  // relevance_query_suffix_is_text_prefix);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest,
@@ -787,7 +796,7 @@ TEST_F(FuzzyTokenizedStringMatchTest,
 
   // Only case 0 should benefit from a prefix-related scoring boost, and
   // the boost should be fairly high.
-  const double prefix_score_boost = 0.3;
+  const double prefix_score_boost = 0.25;
 
   EXPECT_GT(relevance0, relevance1 + prefix_score_boost);
   EXPECT_GT(relevance0, relevance2 + prefix_score_boost);
@@ -841,24 +850,49 @@ TEST_F(FuzzyTokenizedStringMatchTest,
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest,
-       BenchmarkPrefixVsSameLengthNonPrefixMultiToken) {
+       BenchmarkHitsMatchHighestMatchingAlgorithm) {
   FuzzyTokenizedStringMatch match;
-  std::u16string text = u"xyzabc abcdef";
-  std::u16string query = u"abc";
-  const double relevance = match.Relevance(
-      TokenizedString(query), TokenizedString(text), kUseWeightedRatio);
 
-  VLOG(1) << FormatRelevanceResult(query, text, relevance,
-                                   /*query_first*/ false);
+  struct {
+    const std::u16string text;
+    const std::u16string query;
+    const std::u16string expect;
+    const bool use_acronym_matcher;
+  } kTestCases[] = {
+      // Prefix Matcher is favored over Sequence Matcher.
+      {u"xyzabc abcdef", u"abc", u"xyzabc [abc]def",
+       /*use_acronym_matcher=*/true},
+      {u"xyzabc abcdef", u"abc", u"xyzabc [abc]def",
+       /*use_acronym_matcher=*/false},
+      // Acronym Matcher is favored over Sequence Matcher.
+      {u"dabc axyz bxyz cxzy", u"abc", u"dabc [a]xyz [b]xyz [c]xzy",
+       /*use_acronym_matcher=*/true},
+      {u"dabc axyz bxyz cxzy", u"abc", u"d[abc] axyz bxyz cxzy",
+       /*use_acronym_matcher=*/false},
+      // Prefix Matcher at first token is favored over Acronym Matcher.
+      {u"abcxyz bxyz cxzy", u"abc", u"[abc]xyz bxyz cxzy",
+       /*use_acronym_matcher=*/true},
+      {u"abcxyz bxyz cxzy", u"abc", u"[abc]xyz bxyz cxzy",
+       /*use_acronym_matcher=*/false},
+      // Acronym Matcher is favored over Prefix Matcher at non-first token.
+      {u"def abcxyz bxyz cxzy", u"abc", u"def [a]bcxyz [b]xyz [c]xzy",
+       /*use_acronym_matcher=*/true},
+      {u"def abcxyz bxyz cxzy", u"abc", u"def [abc]xyz bxyz cxzy",
+       /*use_acronym_matcher=*/false},
+  };
 
-  EXPECT_EQ(match.hits().size(), 1u);
+  for (auto& test_case : kTestCases) {
+    const TokenizedString query(test_case.query);
+    const TokenizedString text(test_case.text);
 
-  // TODO(crbug.com/1336160): Currently the "abc" of "xyzabc" is matched.
-  // Consider an implementation which instead matches to the "abc" of "abcdef",
-  // i.e.:
-  //
-  //   EXPECT_EQ(match.hits()[0].start(), 7u);
-  //   EXPECT_EQ(match.hits()[0].end(), 10u);
+    double relevance =
+        match.Relevance(query, text, kUseWeightedRatio, kStripDiacritics,
+                        /*use_acronym_matcher=*/test_case.use_acronym_matcher);
+
+    VLOG(1) << FormatRelevanceResult(test_case.query, test_case.text, relevance,
+                                     /*query_first*/ false);
+    EXPECT_EQ(test_case.expect, MatchHit(test_case.text, match.hits()));
+  }
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest,
@@ -873,10 +907,11 @@ TEST_F(FuzzyTokenizedStringMatchTest,
                                      /*query_first*/ false);
     scores.push_back(relevance);
   }
-  ExpectAllNearlyEqual(scores, /*abs_error*/ 0.2);
-
-  // TODO(crbug.com/1336160): Consider a score boost for when a matched token is
-  // the first token of both text and query.
+  // There is a score boost in prefix matcher when a matched token is the first
+  // token of both text and query.
+  scores[0] -= 0.04;
+  scores[1] -= 0.04;
+  ExpectAllNearlyEqual(scores, /*abs_error*/ 0.01);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest,
@@ -1067,7 +1102,7 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkChromePrefix) {
       VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                        /*query_first*/ false);
     }
-    ExpectStrictlyIncreasing(scores);
+    ExpectMostlyIncreasing(scores, /*epsilon=*/0.001);
   }
 }
 
@@ -1089,15 +1124,16 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkGamesArk) {
   // - Favor full token matches over partial token matches.
   // - Favor prefix matches over non-prefix matches.
   // - Do not penalize for unmatched lengths of text.
-  std::vector<std::u16string> texts = {u"PixARK", u"LOST ARK",
+  std::vector<std::u16string> texts = {u"Pixark", u"LOST ARK",
                                        u"ARK: Survival Evolved"};
+  std::vector<double> scores;
   for (const auto& text : texts) {
     const double relevance = CalculateRelevance(query, text);
+    scores.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                      /*query_first*/ true);
   }
-  // TODO(crbug.com/1342440): Add expectation that scores are strictly
-  // increasing, once the implementation achieves this.
+  ExpectStrictlyIncreasing(scores);
 }
 
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkGamesAssassinsCreed) {
@@ -1125,7 +1161,6 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkKeyboardShortcutsScreenshot) {
   }
 }
 
-// TODO(crbug.com/1323910): Improve word order flexibility.
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkKeyboardShortcutsDesk) {
   std::u16string text = u"Create a new desk";
   std::u16string text_lower = u"create a new desk";
@@ -1144,12 +1179,18 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkKeyboardShortcutsDesk) {
                                                        u"create a new des",
                                                        u"create a new desk"};
   std::vector<std::u16string> queries_missing_words = {
-      u"create a d",   u"create a de",   u"create a des",   u"create a desk",
-      u"create d",     u"create de",     u"create des",     u"create desk",
-      u"create n",     u"create ne",     u"create new",     u"create new ",
-      u"create new d", u"create new de", u"create new des", u"create new desk",
-      u"new ",         u"new d",         u"new de",         u"new des",
-      u"new desk",     u"desk"};
+      u"new ",           u"desk",
+      u"new d",          u"new de",
+      u"new des",        u"new desk",
+      u"create d",       u"create n",
+      u"create de",      u"create ne",
+      u"create a d",     u"create a de",
+      u"create new",     u"create des",
+      u"create new ",    u"create desk",
+      u"create a des",   u"create new d",
+      u"create a desk",  u"create new de",
+      u"create new des", u"create new desk",
+  };
 
   std::vector<double> scores;
   for (const auto& query : queries_strict_prefix) {
@@ -1161,49 +1202,64 @@ TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkKeyboardShortcutsDesk) {
   // Allow a flexible (rather than strict) increase in scores.
   ExpectMostlyIncreasing(scores, /*epsilon*/ 0.005);
 
+  scores.clear();
   for (const auto& query : queries_missing_words) {
     const double relevance = CalculateRelevance(query, text);
+    scores.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                      /*query_first*/ false);
   }
+
+  // With word order flexibility, the scores are expected to increase as the
+  // query length increases.
+  //
+  // Allow a flexible (rather than strict) increase in scores.
+  ExpectMostlyIncreasing(scores, /*epsilon*/ 0.005);
 }
 
-// TODO(crbug.com/1327090): Reduce/remove penalties for unmatched text.
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkKeyboardShortcutsEmojiPicker) {
   std::u16string text = u"Open Emoji picker";
   std::vector<std::u16string> queries = {u"emoj", u"emoji", u"emoji ",
                                          u"emoji p", u"emoji pi"};
+  std::vector<double> scores;
   for (const auto& query : queries) {
     const double relevance = CalculateRelevance(query, text);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                      /*query_first*/ false);
+    scores.push_back(relevance);
   }
+  ExpectMostlyIncreasing(scores, /*epsilon=*/0.001);
+  ExpectAllNearlyEqualTo(scores, 0.9, /*abs_error=*/0.1);
 }
 
-// TODO(crbug.com/1325088): Improve word order flexibility.
 TEST_F(FuzzyTokenizedStringMatchTest,
        BenchmarkKeyboardShortcutsIncognitoWindow) {
-  std::u16string query = u"Open a new window in incognito mode";
-  std::vector<std::u16string> texts = {u"new window incognito",
-                                       u"new incognito window"};
-  for (const auto& text : texts) {
+  std::u16string text = u"Open a new window in incognito mode";
+  std::vector<std::u16string> queries = {u"new window incognito",
+                                         u"new incognito window"};
+  std::vector<double> scores;
+  for (const auto& query : queries) {
     const double relevance = CalculateRelevance(query, text);
+    scores.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
-                                     /*query_first*/ true);
+                                     /*query_first*/ false);
   }
+  ExpectAllNearlyEqual(scores);
 }
 
-// TODO(crbug.com/1336160): Introduce some kind of agnosticism to text length.
 TEST_F(FuzzyTokenizedStringMatchTest, BenchmarkSettingsPreferences) {
   std::u16string query = u"preferences";
   std::vector<std::u16string> texts = {
       u"Android preferences", u"Caption preferences", u"System preferences",
       u"External storage preferences"};
+  std::vector<double> scores;
   for (const auto& text : texts) {
     const double relevance = CalculateRelevance(query, text);
+    scores.push_back(relevance);
     VLOG(1) << FormatRelevanceResult(query, text, relevance,
                                      /*query_first*/ true);
   }
+  ExpectAllNearlyEqual(scores);
 }
 
 /**********************************************************************
@@ -1329,7 +1385,7 @@ TEST_F(FuzzyTokenizedStringMatchTest, WeightedRatio) {
         u"this sentence is much much much much much longer "
         u"than the text before");
     EXPECT_NEAR(
-        match.WeightedRatio(TokenizedString(query), TokenizedString(text)), 0.5,
+        match.WeightedRatio(TokenizedString(query), TokenizedString(text)), 0.6,
         0.1);
   }
 }
@@ -1362,27 +1418,6 @@ TEST_F(FuzzyTokenizedStringMatchTest, PrefixMatcherTest) {
     EXPECT_NEAR(FuzzyTokenizedStringMatch::PrefixMatcher(TokenizedString(query),
                                                          TokenizedString(text)),
                 1.0, 0.01);
-  }
-  {
-    std::u16string query(u"coc");
-    std::u16string text(u"Clash of Clan");
-    EXPECT_NEAR(FuzzyTokenizedStringMatch::PrefixMatcher(
-                    TokenizedString(query), TokenizedString(text),
-                    /* use_acronym_matcher = */ true),
-                0.84, 0.01);
-  }
-  // TODO(crbug.com/1336160): Consider allowing acronym matching for query with
-  // space in between.
-  // E.g., query: "c o c" and text: "Clash of Clan".
-  // But we may also want to exclude some cases.
-  // E.g., query: "c oc" and text: "Clash of Clan".
-  {
-    std::u16string query(u"c o c");
-    std::u16string text(u"Clash of Clan");
-    EXPECT_EQ(FuzzyTokenizedStringMatch::PrefixMatcher(
-                  TokenizedString(query), TokenizedString(text),
-                  /* use_acronym_matcher = */ true),
-              0.0);
   }
   {
     std::u16string query(u"coc");
@@ -1435,53 +1470,57 @@ TEST_F(FuzzyTokenizedStringMatchTest, PrefixMatcherTest) {
   }
 }
 
-TEST_F(FuzzyTokenizedStringMatchTest, ParamThresholdTest1) {
-  FuzzyTokenizedStringMatch match;
+TEST_F(FuzzyTokenizedStringMatchTest, AcronymMatchTest) {
   {
-    std::u16string query(u"anonymous");
-    std::u16string text(u"famous");
-    EXPECT_LT(
-        match.Relevance(TokenizedString(query), TokenizedString(text), true),
-        0.4);
+    std::u16string query(u"coc");
+    std::u16string text(u"Clash of Clan");
+    EXPECT_NEAR(FuzzyTokenizedStringMatch::AcronymMatcher(
+                    TokenizedString(query), TokenizedString(text)),
+                0.84, 0.01);
+  }
+  // TODO(crbug.com/1336160): Consider allowing acronym matching for query with
+  // space in between.
+  // E.g., query: "c o c" and text: "Clash of Clan".
+  // But we may also want to exclude some cases.
+  // E.g., query: "c oc" and text: "Clash of Clan".
+  {
+    std::u16string query(u"c o c");
+    std::u16string text(u"Clash of Clan");
+    EXPECT_EQ(FuzzyTokenizedStringMatch::AcronymMatcher(TokenizedString(query),
+                                                        TokenizedString(text)),
+              0.0);
   }
   {
-    std::u16string query(u"CC");
-    std::u16string text(u"Clash Of Clan");
-    EXPECT_LT(
-        match.Relevance(TokenizedString(query), TokenizedString(text), true),
-        0.25);
-  }
-  {
-    std::u16string query(u"Clash.of.clan");
-    std::u16string text(u"ClashOfTitan");
-    EXPECT_GT(
-        match.Relevance(TokenizedString(query), TokenizedString(text), true),
-        0.3);
+    std::u16string query(u"cloc");
+    std::u16string text(u"Clash of Clan");
+    EXPECT_EQ(FuzzyTokenizedStringMatch::AcronymMatcher(TokenizedString(query),
+                                                        TokenizedString(text)),
+              0.0);
   }
 }
 
-TEST_F(FuzzyTokenizedStringMatchTest, ParamThresholdTest2) {
+TEST_F(FuzzyTokenizedStringMatchTest, ParamThresholdTest) {
   FuzzyTokenizedStringMatch match;
   {
     std::u16string query(u"anonymous");
     std::u16string text(u"famous");
     EXPECT_LT(
         match.Relevance(TokenizedString(query), TokenizedString(text), true),
-        0.5);
+        0.64);
   }
   {
     std::u16string query(u"CC");
     std::u16string text(u"Clash Of Clan");
     EXPECT_LT(
         match.Relevance(TokenizedString(query), TokenizedString(text), true),
-        0.25);
+        0.5);
   }
   {
     std::u16string query(u"Clash.of.clan");
     std::u16string text(u"ClashOfTitan");
     EXPECT_LT(
         match.Relevance(TokenizedString(query), TokenizedString(text), true),
-        0.5);
+        0.77);
   }
 }
 

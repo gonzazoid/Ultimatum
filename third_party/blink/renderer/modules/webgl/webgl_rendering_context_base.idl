@@ -464,9 +464,9 @@ interface mixin WebGLRenderingContextBase {
 
     readonly attribute GLsizei drawingBufferWidth;
     readonly attribute GLsizei drawingBufferHeight;
-    [RuntimeEnabled=CanvasColorManagementV2] readonly attribute GLenum drawingBufferFormat;
-    [RaisesException=Setter, RuntimeEnabled=WebGLColorManagement] attribute PredefinedColorSpace drawingBufferColorSpace;
-    [RaisesException=Setter, RuntimeEnabled=WebGLColorManagement] attribute PredefinedColorSpace unpackColorSpace;
+    [RuntimeEnabled=WebGLDrawingBufferStorage] readonly attribute GLenum drawingBufferFormat;
+    [RaisesException=Setter] attribute PredefinedColorSpace drawingBufferColorSpace;
+    [RaisesException=Setter] attribute PredefinedColorSpace unpackColorSpace;
 
     void activeTexture(GLenum texture);
     void attachShader(WebGLProgram program, WebGLShader shader);
@@ -498,9 +498,11 @@ interface mixin WebGLRenderingContextBase {
     void compileShader(WebGLShader shader);
 
     void compressedTexImage2D(GLenum target, GLint level, GLenum internalformat,
-                              GLsizei width, GLsizei height, GLint border, [AllowShared] ArrayBufferView data);
+                              GLsizei width, GLsizei height, GLint border,
+                              [AllowShared, BufferSourceTypeNoSizeLimit] ArrayBufferView data);
     void compressedTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset,
-                                 GLsizei width, GLsizei height, GLenum format, [AllowShared] ArrayBufferView data);
+                                 GLsizei width, GLsizei height, GLenum format,
+                                 [AllowShared, BufferSourceTypeNoSizeLimit] ArrayBufferView data);
 
     void copyTexImage2D(GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border);
     void copyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height);
@@ -616,85 +618,97 @@ interface mixin WebGLRenderingContextBase {
     void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLsizei width, GLsizei height, GLint border,
-        GLenum format, GLenum type, [AllowShared] ArrayBufferView? pixels);
+        GLenum format, GLenum type,
+        [AllowShared, BufferSourceTypeNoSizeLimit] ArrayBufferView? pixels);
     void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, ImageData pixels);
-    [CallWith=ExecutionContext, RaisesException] void texImage2D(
+    [CallWith=ScriptState, RaisesException] void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, HTMLImageElement image);
-    [CallWith=ExecutionContext, RaisesException] void texImage2D(
+    [CallWith=ScriptState, RaisesException] void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, HTMLCanvasElement canvas);
-    [CallWith=ExecutionContext, RaisesException] void texImage2D(
+    [CallWith=ScriptState, RaisesException] void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, OffscreenCanvas offscreenCanvas);
-    [CallWith=ExecutionContext, RaisesException] void texImage2D(
+    [CallWith=ScriptState, RaisesException] void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, HTMLVideoElement video);
     [RaisesException] void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, ImageBitmap bitmap);
-    [CallWith=ExecutionContext, RaisesException, RuntimeEnabled=WebCodecs] void texImage2D(
+    [CallWith=ScriptState, RaisesException] void texImage2D(
         GLenum target, GLint level, GLint internalformat,
         GLenum format, GLenum type, VideoFrame frame);
 
     void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
-        GLsizei width, GLsizei height,
-        GLenum format, GLenum type, [AllowShared] ArrayBufferView? pixels);
+        GLsizei width, GLsizei height, GLenum format, GLenum type,
+        [AllowShared, BufferSourceTypeNoSizeLimit] ArrayBufferView? pixels);
     void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, ImageData pixels);
-    [CallWith=ExecutionContext, RaisesException] void texSubImage2D(
+    [CallWith=ScriptState, RaisesException] void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, HTMLImageElement image);
-    [CallWith=ExecutionContext, RaisesException] void texSubImage2D(
+    [CallWith=ScriptState, RaisesException] void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, HTMLCanvasElement canvas);
-    [CallWith=ExecutionContext, RaisesException] void texSubImage2D(
+    [CallWith=ScriptState, RaisesException] void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, OffscreenCanvas offscreenCanvas);
-    [CallWith=ExecutionContext, RaisesException] void texSubImage2D(
+    [CallWith=ScriptState, RaisesException] void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, HTMLVideoElement video);
     [RaisesException] void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, ImageBitmap bitmap);
-    [CallWith=ExecutionContext, RaisesException, RuntimeEnabled=WebCodecs] void texSubImage2D(
+    [CallWith=ScriptState, RaisesException] void texSubImage2D(
         GLenum target, GLint level, GLint xoffset, GLint yoffset,
         GLenum format, GLenum type, VideoFrame frame);
 
     [NoAllocDirectCall] void uniform1f(WebGLUniformLocation? location, GLfloat x);
-    [NoAllocDirectCall] void uniform1fv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Float32Array v);
+    [NoAllocDirectCall] void uniform1fv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Float32Array v);
     [NoAllocDirectCall] void uniform1fv(WebGLUniformLocation? location, sequence<GLfloat> v);
     [NoAllocDirectCall] void uniform1i(WebGLUniformLocation? location, GLint x);
-    [NoAllocDirectCall] void uniform1iv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Int32Array v);
+    [NoAllocDirectCall] void uniform1iv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Int32Array v);
     [NoAllocDirectCall] void uniform1iv(WebGLUniformLocation? location, sequence<GLint> v);
     [NoAllocDirectCall] void uniform2f(WebGLUniformLocation? location, GLfloat x, GLfloat y);
-    [NoAllocDirectCall] void uniform2fv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Float32Array v);
+    [NoAllocDirectCall] void uniform2fv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Float32Array v);
     [NoAllocDirectCall] void uniform2fv(WebGLUniformLocation? location, sequence<GLfloat> v);
     [NoAllocDirectCall] void uniform2i(WebGLUniformLocation? location, GLint x, GLint y);
-    [NoAllocDirectCall] void uniform2iv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Int32Array v);
+    [NoAllocDirectCall] void uniform2iv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Int32Array v);
     [NoAllocDirectCall] void uniform2iv(WebGLUniformLocation? location, sequence<GLint> v);
     [NoAllocDirectCall] void uniform3f(WebGLUniformLocation? location, GLfloat x, GLfloat y, GLfloat z);
-    [NoAllocDirectCall] void uniform3fv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Float32Array v);
+    [NoAllocDirectCall] void uniform3fv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Float32Array v);
     [NoAllocDirectCall] void uniform3fv(WebGLUniformLocation? location, sequence<GLfloat> v);
     [NoAllocDirectCall] void uniform3i(WebGLUniformLocation? location, GLint x, GLint y, GLint z);
-    [NoAllocDirectCall] void uniform3iv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Int32Array v);
+    [NoAllocDirectCall] void uniform3iv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Int32Array v);
     [NoAllocDirectCall] void uniform3iv(WebGLUniformLocation? location, sequence<GLint> v);
     [NoAllocDirectCall] void uniform4f(WebGLUniformLocation? location, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-    [NoAllocDirectCall] void uniform4fv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Float32Array v);
+    [NoAllocDirectCall] void uniform4fv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Float32Array v);
     [NoAllocDirectCall] void uniform4fv(WebGLUniformLocation? location, sequence<GLfloat> v);
     [NoAllocDirectCall] void uniform4i(WebGLUniformLocation? location, GLint x, GLint y, GLint z, GLint w);
-    [NoAllocDirectCall] void uniform4iv(WebGLUniformLocation? location, [AllowShared, FlexibleArrayBufferView] Int32Array v);
+    [NoAllocDirectCall] void uniform4iv(WebGLUniformLocation? location,
+                       [AllowShared, FlexibleArrayBufferView, BufferSourceTypeNoSizeLimit] Int32Array v);
     [NoAllocDirectCall] void uniform4iv(WebGLUniformLocation? location, sequence<GLint> v);
 
-    [NoAllocDirectCall] void uniformMatrix2fv(WebGLUniformLocation? location, GLboolean transpose, [AllowShared] Float32Array array);
+    [NoAllocDirectCall] void uniformMatrix2fv(WebGLUniformLocation? location, GLboolean transpose,
+                       [AllowShared, BufferSourceTypeNoSizeLimit] Float32Array array);
     [NoAllocDirectCall] void uniformMatrix2fv(WebGLUniformLocation? location, GLboolean transpose, sequence<GLfloat> array);
-    [NoAllocDirectCall] void uniformMatrix3fv(WebGLUniformLocation? location, GLboolean transpose, [AllowShared] Float32Array array);
+    [NoAllocDirectCall] void uniformMatrix3fv(WebGLUniformLocation? location, GLboolean transpose,
+                       [AllowShared, BufferSourceTypeNoSizeLimit] Float32Array array);
     [NoAllocDirectCall] void uniformMatrix3fv(WebGLUniformLocation? location, GLboolean transpose, sequence<GLfloat> array);
-    [NoAllocDirectCall] void uniformMatrix4fv(WebGLUniformLocation? location, GLboolean transpose, [AllowShared] Float32Array array);
+    [NoAllocDirectCall] void uniformMatrix4fv(WebGLUniformLocation? location, GLboolean transpose,
+                       [AllowShared, BufferSourceTypeNoSizeLimit] Float32Array array);
     [NoAllocDirectCall] void uniformMatrix4fv(WebGLUniformLocation? location, GLboolean transpose, sequence<GLfloat> array);
 
     void useProgram(WebGLProgram? program);
@@ -717,7 +731,7 @@ interface mixin WebGLRenderingContextBase {
 
     [NoAllocDirectCall] void viewport(GLint x, GLint y, GLsizei width, GLsizei height);
 
-    [RuntimeEnabled=CanvasColorManagementV2] void drawingBufferStorage(GLenum sizedformat, GLsizei width, GLsizei height);
+    [RuntimeEnabled=WebGLDrawingBufferStorage] void drawingBufferStorage(GLenum sizedformat, GLsizei width, GLsizei height);
 
     [RuntimeEnabled=OffscreenCanvasCommit] void commit();
 

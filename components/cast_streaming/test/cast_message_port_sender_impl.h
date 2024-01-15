@@ -5,8 +5,11 @@
 #ifndef COMPONENTS_CAST_STREAMING_TEST_CAST_MESSAGE_PORT_SENDER_IMPL_H_
 #define COMPONENTS_CAST_STREAMING_TEST_CAST_MESSAGE_PORT_SENDER_IMPL_H_
 
-#include "base/callback.h"
+#include <string_view>
+
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/threading/thread_checker.h"
 #include "components/cast/message_port/message_port.h"
 #include "third_party/openscreen/src/cast/common/public/message_port.h"
 
@@ -41,7 +44,7 @@ class CastMessagePortSenderImpl final
   void MaybeClose();
 
   // cast_api_bindings::MessagePort::Receiver implementation.
-  bool OnMessage(base::StringPiece message,
+  bool OnMessage(std::string_view message,
                  std::vector<std::unique_ptr<cast_api_bindings::MessagePort>>
                      ports) override;
   void OnPipeError() override;
@@ -50,6 +53,8 @@ class CastMessagePortSenderImpl final
   std::unique_ptr<cast_api_bindings::MessagePort> message_port_;
   base::OnceClosure on_close_;
   base::OnceClosure on_system_sender_message_received_;
+  bool is_closed_ = false;
+  THREAD_CHECKER(thread_checker_);
 };
 
 }  // namespace cast_streaming

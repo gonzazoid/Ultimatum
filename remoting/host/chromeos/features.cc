@@ -10,13 +10,14 @@ namespace remoting::features {
 
 BASE_FEATURE(kEnableCrdAdminRemoteAccess,
              "EnableCrdAdminRemoteAccess",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kForceCrdAdminRemoteAccess,
-             "ForceCrdAdminRemoteAccess",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableFrameSinkDesktopCapturerInCrd,
-             "EnableFrameSinkDesktopCapturerInCrd",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableCrdAdminRemoteAccessV2,
+             "EnableCrdAdminRemoteAccessV2",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableCrdFileTransferForKiosk,
+             "EnableCrdFileTransferForKiosk",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace remoting::features

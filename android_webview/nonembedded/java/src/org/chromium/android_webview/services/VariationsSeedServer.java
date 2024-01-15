@@ -15,7 +15,6 @@ import android.os.RemoteException;
 import org.chromium.android_webview.common.services.IVariationsSeedServer;
 import org.chromium.android_webview.common.services.IVariationsSeedServerCallback;
 import org.chromium.android_webview.common.variations.VariationsServiceMetricsHelper;
-import org.chromium.android_webview.services.ServicesStatsHelper.NonembeddedService;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 
@@ -27,19 +26,17 @@ import org.chromium.base.Log;
 public class VariationsSeedServer extends Service {
     private static final String TAG = "VariationsSeedServer";
 
-    private final IVariationsSeedServer.Stub mBinder = new IVariationsSeedServer.Stub() {
-        @Override
-        public void getSeed(ParcelFileDescriptor newSeedFile, long oldSeedDate,
-                IVariationsSeedServerCallback callback) {
-            maybeReportMetrics(callback);
-            VariationsSeedHolder.getInstance().writeSeedIfNewer(newSeedFile, oldSeedDate);
-        }
-    };
-
-    @Override
-    public void onCreate() {
-        ServicesStatsHelper.recordServiceLaunch(NonembeddedService.VARIATIONS_SEED_SERVER);
-    }
+    private final IVariationsSeedServer.Stub mBinder =
+            new IVariationsSeedServer.Stub() {
+                @Override
+                public void getSeed(
+                        ParcelFileDescriptor newSeedFile,
+                        long oldSeedDate,
+                        IVariationsSeedServerCallback callback) {
+                    maybeReportMetrics(callback);
+                    VariationsSeedHolder.getInstance().writeSeedIfNewer(newSeedFile, oldSeedDate);
+                }
+            };
 
     @Override
     public IBinder onBind(Intent intent) {

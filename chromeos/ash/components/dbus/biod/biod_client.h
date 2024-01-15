@@ -9,8 +9,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/biod/constants.pb.h"
 #include "chromeos/ash/components/dbus/biod/messages.pb.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
@@ -38,6 +39,10 @@ class COMPONENT_EXPORT(BIOD_CLIENT) BiodClient {
    public:
     // Called when biometrics manager powers up or is restarted.
     virtual void BiodServiceRestarted() {}
+
+    // Called when biometrics manager status changed: e.g initialized.
+    virtual void BiodServiceStatusChanged(
+        biod::BiometricsManagerStatus status) {}
 
     // Called whenever a user attempts a scan during enrollment. |scan_result|
     // tells whether the scan was succesful. |enroll_session_complete| tells
@@ -89,7 +94,7 @@ class COMPONENT_EXPORT(BIOD_CLIENT) BiodClient {
   // one argument which contains a list of the stored records' object paths for
   // a given user.
   using UserRecordsCallback =
-      base::OnceCallback<void(const std::vector<dbus::ObjectPath>&)>;
+      base::OnceCallback<void(const std::vector<dbus::ObjectPath>&, bool)>;
 
   // BiometricTypeCallback is used for the GetType method. It receives
   // one argument which states the type of biometric.

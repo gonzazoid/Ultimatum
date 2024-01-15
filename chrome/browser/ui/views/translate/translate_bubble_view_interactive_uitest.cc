@@ -2,22 +2,23 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <string>
-#include "base/strings/string_piece_forward.h"
 #include "chrome/browser/ui/views/translate/translate_bubble_view.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <string>
+
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/base_i18n_switches.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "chrome/browser/translate/translate_test_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
-#include "chrome/browser/ui/translate/translate_bubble_ui_action_logger.h"
 #include "chrome/browser/ui/views/translate/translate_bubble_controller.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/grit/generated_resources.h"
@@ -86,8 +87,6 @@ class TranslateBubbleViewUITest
  public:
   TranslateBubbleViewUITest() = default;
   ~TranslateBubbleViewUITest() override = default;
-  explicit TranslateBubbleViewUITest(const TranslateBubbleUiEvent&) = delete;
-  TranslateBubbleUiEvent& operator=(const TranslateBubbleUiEvent&) = delete;
 
   void SetUp() override {
     set_open_about_blank_on_browser_launch(true);
@@ -142,16 +141,6 @@ class TranslateBubbleViewUITest
         CheckViewProperty(TranslateBubbleView::kTargetLanguageTab,
                           &views::TabbedPaneTab::selected, translated));
     return steps;
-  }
-
-  // Callback that selects a specific row in a combobox.
-  static auto SelectComboboxRow(int row) {
-    return base::BindOnce(
-        [](int row, ui::TrackedElement* element) {
-          auto* const combobox = AsView<views::Combobox>(element);
-          combobox->SetSelectedRow(row);
-        },
-        row);
   }
 
   std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
@@ -260,8 +249,7 @@ IN_PROC_BROWSER_TEST_P(TranslateBubbleViewUITest, ChooseAnotherLanguage) {
       // languages.
       AfterHide(TranslateBubbleView::kChangeTargetLanguage, base::DoNothing()),
       // P4. Select a language from the list and select translate.
-      AfterShow(TranslateBubbleView::kTargetLanguageCombobox,
-                SelectComboboxRow(0)),
+      SelectDropdownItem(TranslateBubbleView::kTargetLanguageCombobox, 0),
       PressButton(TranslateBubbleView::kTargetLanguageDoneButton),
       // V2. Verify that the language list will be dismissed, the target
       // language tab shows updated target language. Source language tab is
@@ -300,8 +288,8 @@ IN_PROC_BROWSER_TEST_P(TranslateBubbleViewUITest,
       // languages.
       AfterHide(TranslateBubbleView::kChangeSourceLanguage, base::DoNothing()),
       // P4. Select a language from the list and select translate.
-      AfterShow(TranslateBubbleView::kSourceLanguageCombobox,
-                SelectComboboxRow(1)),  // 0 = Detected Language
+      // Item 0 is the detected language.
+      SelectDropdownItem(TranslateBubbleView::kSourceLanguageCombobox, 1),
       PressButton(TranslateBubbleView::kSourceLanguageDoneButton),
       // V2. The language list will be dismissed, the source language tab
       // shows updated source language. Source language tab is no longer

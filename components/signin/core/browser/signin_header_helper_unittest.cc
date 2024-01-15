@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
@@ -15,6 +16,7 @@
 #include "build/chromeos_buildflags.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/prefs/pref_member.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/signin/core/browser/chrome_connected_header_helper.h"
 #include "components/signin/public/base/account_consistency_method.h"
 #include "components/signin/public/base/signin_buildflags.h"
@@ -52,7 +54,7 @@ class RequestAdapterWrapper {
   RequestAdapter* adapter() { return &adapter_; }
 
   net::HttpRequestHeaders GetFinalHeaders() {
-    net::HttpRequestHeaders final_headers(original_headers_);
+    net::HttpRequestHeaders final_headers(*original_headers_);
     final_headers.MergeFrom(modified_request_headers_);
     for (const std::string& name : to_be_removed_request_headers_)
       final_headers.RemoveHeader(name);
@@ -61,7 +63,7 @@ class RequestAdapterWrapper {
 
  private:
   RequestAdapter adapter_;
-  const net::HttpRequestHeaders& original_headers_;
+  const raw_ref<const net::HttpRequestHeaders> original_headers_;
   net::HttpRequestHeaders modified_request_headers_;
   std::vector<std::string> to_be_removed_request_headers_;
 };
@@ -72,6 +74,7 @@ class SigninHeaderHelperTest : public testing::Test {
   void SetUp() override {
     content_settings::CookieSettings::RegisterProfilePrefs(prefs_.registry());
     HostContentSettingsMap::RegisterProfilePrefs(prefs_.registry());
+    privacy_sandbox::RegisterProfilePrefs(prefs_.registry());
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
     // TODO(crbug.com/1198528): remove this after the rollout.
@@ -84,8 +87,9 @@ class SigninHeaderHelperTest : public testing::Test {
     settings_map_ = new HostContentSettingsMap(
         &prefs_, false /* is_off_the_record */, false /* store_last_modified */,
         false /* restore_session */, false /* should_record_metrics */);
-    cookie_settings_ = new content_settings::CookieSettings(settings_map_.get(),
-                                                            &prefs_, false, "");
+    cookie_settings_ = new content_settings::CookieSettings(
+        settings_map_.get(), &prefs_, /*tracking_protection_settings_=*/nullptr,
+        false, "");
   }
 
   void TearDown() override { settings_map_->ShutdownOnUIThread(); }

@@ -4,8 +4,8 @@
 
 #include "chrome/browser/lacros/device_oauth2_token_service_lacros.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chromeos/crosapi/mojom/account_manager.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "components/account_manager_core/account_manager_util.h"
@@ -20,8 +20,8 @@ chromeos::LacrosService* GetLacrosService(int min_version,
   chromeos::LacrosService* service = chromeos::LacrosService::Get();
   if (!service)
     return nullptr;
-  int interface_version = service->GetInterfaceVersion(
-      crosapi::mojom::DeviceOAuth2TokenService::Uuid_);
+  int interface_version =
+      service->GetInterfaceVersion<crosapi::mojom::DeviceOAuth2TokenService>();
   if (interface_version < min_version) {
     DLOG(ERROR) << "Unsupported ash version for " << function_name;
     return nullptr;

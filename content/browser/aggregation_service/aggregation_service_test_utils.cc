@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
 #include <ostream>
 #include <string>
 #include <tuple>
@@ -18,21 +19,22 @@
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
 #include "base/json/json_reader.h"
 #include "base/strings/strcat.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/sequence_bound.h"
+#include "base/time/clock.h"
 #include "base/time/time.h"
+#include "base/types/expected_macros.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "content/browser/aggregation_service/aggregatable_report.h"
 #include "content/browser/aggregation_service/aggregation_service_storage.h"
 #include "content/browser/aggregation_service/aggregation_service_storage_sql.h"
 #include "content/browser/aggregation_service/public_key.h"
 #include "content/browser/aggregation_service/public_key_parsing_utils.h"
-#include "content/common/aggregatable_report.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/private_aggregation/aggregatable_report.mojom.h"
 #include "third_party/boringssl/src/include/openssl/hpke.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -97,6 +99,10 @@ testing::AssertionResult AggregatableReportsEqual(
            << ", actual: " << actual.shared_info();
   }
 
+  if (expected.additional_fields() != actual.additional_fields()) {
+    return testing::AssertionFailure() << "Expected additional fields to match";
+  }
+
   return testing::AssertionSuccess();
 }
 
@@ -127,6 +133,10 @@ testing::AssertionResult ReportRequestsEqual(
     return testing::AssertionFailure()
            << "Expected reporting_path " << expected.reporting_path()
            << ", actual: " << actual.reporting_path();
+  }
+
+  if (expected.additional_fields() != actual.additional_fields()) {
+    return testing::AssertionFailure() << "Expected additional fields to match";
   }
 
   return SharedInfoEqual(expected.shared_info(), actual.shared_info());
@@ -163,6 +173,19 @@ testing::AssertionResult PayloadContentsEqual(
     return testing::AssertionFailure()
            << "Expected aggregation_mode " << expected.aggregation_mode
            << ", actual: " << actual.aggregation_mode;
+  }
+
+  if (expected.aggregation_coordinator_origin !=
+      actual.aggregation_coordinator_origin) {
+    return testing::AssertionFailure()
+           << "Expected aggregation_coordinator_origin "
+           << (expected.aggregation_coordinator_origin
+                   ? expected.aggregation_coordinator_origin->Serialize()
+                   : "null")
+           << ", actual: "
+           << (actual.aggregation_coordinator_origin
+                   ? actual.aggregation_coordinator_origin->Serialize()
+                   : "null");
   }
 
   return testing::AssertionSuccess();
@@ -212,35 +235,39 @@ testing::AssertionResult SharedInfoEqual(
 }
 
 AggregatableReportRequest CreateExampleRequest(
-    mojom::AggregationServiceMode aggregation_mode,
-    int failed_send_attempts) {
+    blink::mojom::AggregationServiceMode aggregation_mode,
+    int failed_send_attempts,
+    std::optional<url::Origin> aggregation_coordinator_origin) {
   return CreateExampleRequestWithReportTime(
-      /*report_time=*/base::Time::Now(), aggregation_mode,
-      failed_send_attempts);
+      /*report_time=*/base::Time::Now(), aggregation_mode, failed_send_attempts,
+      std::move(aggregation_coordinator_origin));
 }
 
 AggregatableReportRequest CreateExampleRequestWithReportTime(
     base::Time report_time,
-    mojom::AggregationServiceMode aggregation_mode,
-    int failed_send_attempts) {
+    blink::mojom::AggregationServiceMode aggregation_mode,
+    int failed_send_attempts,
+    std::optional<url::Origin> aggregation_coordinator_origin) {
   return AggregatableReportRequest::Create(
              AggregationServicePayloadContents(
                  AggregationServicePayloadContents::Operation::kHistogram,
-                 {mojom::AggregatableReportHistogramContribution(
+                 {blink::mojom::AggregatableReportHistogramContribution(
                      /*bucket=*/123,
                      /*value=*/456)},
-                 aggregation_mode),
+                 aggregation_mode, std::move(aggregation_coordinator_origin),
+                 /*max_contributions_allowed=*/20),
              AggregatableReportSharedInfo(
                  /*scheduled_report_time=*/report_time,
                  /*report_id=*/
-                 base::GUID::GenerateRandomV4(),
+                 base::Uuid::GenerateRandomV4(),
                  url::Origin::Create(GURL("https://reporting.example")),
                  AggregatableReportSharedInfo::DebugMode::kDisabled,
                  /*additional_fields=*/base::Value::Dict(),
                  /*api_version=*/"",
                  /*api_identifier=*/"example-api"),
              /*reporting_path=*/"example-path",
-             /*debug_key=*/absl::nullopt, failed_send_attempts)
+             /*debug_key=*/std::nullopt, /*additional_fields=*/{},
+             failed_send_attempts)
       .value();
 }
 
@@ -248,7 +275,9 @@ AggregatableReportRequest CloneReportRequest(
     const AggregatableReportRequest& request) {
   return AggregatableReportRequest::CreateForTesting(
              request.processing_urls(), request.payload_contents(),
-             request.shared_info().Clone(), request.reporting_path())
+             request.shared_info().Clone(), request.reporting_path(),
+             request.debug_key(), request.additional_fields(),
+             request.failed_send_attempts())
       .value();
 }
 
@@ -260,64 +289,57 @@ AggregatableReport CloneAggregatableReport(const AggregatableReport& report) {
   }
 
   return AggregatableReport(std::move(payloads), report.shared_info(),
-                            report.debug_key());
+                            report.debug_key(), report.additional_fields(),
+                            report.aggregation_coordinator_origin());
 }
 
-TestHpkeKey GenerateKey(std::string key_id) {
-  bssl::ScopedEVP_HPKE_KEY key;
-  EXPECT_TRUE(EVP_HPKE_KEY_generate(key.get(), EVP_hpke_x25519_hkdf_sha256()));
+TestHpkeKey::TestHpkeKey(std::string key_id) : key_id_(std::move(key_id)) {
+  EXPECT_TRUE(EVP_HPKE_KEY_generate(full_hpke_key_.get(),
+                                    EVP_hpke_x25519_hkdf_sha256()));
+}
 
+TestHpkeKey::TestHpkeKey(TestHpkeKey&&) = default;
+TestHpkeKey& TestHpkeKey::operator=(TestHpkeKey&&) = default;
+TestHpkeKey::~TestHpkeKey() = default;
+
+PublicKey TestHpkeKey::GetPublicKey() const {
   std::vector<uint8_t> public_key(X25519_PUBLIC_VALUE_LEN);
   size_t public_key_len;
   EXPECT_TRUE(EVP_HPKE_KEY_public_key(
-      /*key=*/key.get(), /*out=*/public_key.data(),
+      /*key=*/full_hpke_key_.get(), /*out=*/public_key.data(),
       /*out_len=*/&public_key_len, /*max_out=*/public_key.size()));
   EXPECT_EQ(public_key.size(), public_key_len);
-
-  TestHpkeKey hpke_key{
-      {}, PublicKey(key_id, public_key), base::Base64Encode(public_key)};
-  EVP_HPKE_KEY_copy(&hpke_key.full_hpke_key, key.get());
-
-  return hpke_key;
+  return PublicKey(key_id_, std::move(public_key));
 }
 
-absl::optional<PublicKeyset> ReadAndParsePublicKeys(const base::FilePath& file,
-                                                    base::Time now,
-                                                    std::string* error_msg) {
-  if (!base::PathExists(file)) {
-    if (error_msg)
-      *error_msg = base::StrCat({"Failed to open file: ", file.MaybeAsASCII()});
+std::string TestHpkeKey::GetPublicKeyBase64() const {
+  return base::Base64Encode(GetPublicKey().key);
+}
 
-    return absl::nullopt;
+base::expected<PublicKeyset, std::string> ReadAndParsePublicKeys(
+    const base::FilePath& file,
+    base::Time now) {
+  if (!base::PathExists(file)) {
+    return base::unexpected("Failed to open file: " + file.MaybeAsASCII());
   }
 
   std::string contents;
   if (!base::ReadFileToString(file, &contents)) {
-    if (error_msg)
-      *error_msg = base::StrCat({"Failed to read file: ", file.MaybeAsASCII()});
-
-    return absl::nullopt;
+    return base::unexpected("Failed to read file: " + file.MaybeAsASCII());
   }
 
-  auto value_with_error =
-      base::JSONReader::ReadAndReturnValueWithError(contents);
-  if (!value_with_error.has_value()) {
-    if (error_msg) {
-      *error_msg =
-          base::StrCat({"Failed to parse \"", contents,
-                        "\" as JSON: ", value_with_error.error().message});
-    }
-    return absl::nullopt;
-  }
+  ASSIGN_OR_RETURN(
+      base::Value value,
+      base::JSONReader::ReadAndReturnValueWithError(contents),
+      [&](base::JSONReader::Error error) {
+        return base::StrCat({"Failed to parse \"", contents,
+                             "\" as JSON: ", std::move(error).message});
+      });
 
-  std::vector<PublicKey> keys = GetPublicKeys(*value_with_error);
+  std::vector<PublicKey> keys = GetPublicKeys(value);
   if (keys.empty()) {
-    if (error_msg) {
-      *error_msg =
-          base::StrCat({"Failed to parse public keys from \"", contents, "\""});
-    }
-
-    return absl::nullopt;
+    return base::unexpected(
+        base::StrCat({"Failed to parse public keys from \"", contents, "\""}));
   }
 
   return PublicKeyset(std::move(keys), /*fetch_time=*/now,
@@ -407,8 +429,8 @@ void MockAggregationService::NotifyRequestStorageModified() {
 
 void MockAggregationService::NotifyReportHandled(
     const AggregatableReportRequest& request,
-    absl::optional<AggregationServiceStorage::RequestId> id,
-    absl::optional<AggregatableReport> report,
+    std::optional<AggregationServiceStorage::RequestId> id,
+    std::optional<AggregatableReport> report,
     base::Time report_handled_time,
     AggregationServiceObserver::ReportStatus status) {
   for (auto& observer : observers_)
@@ -446,12 +468,13 @@ std::ostream& operator<<(
   }
 }
 
-std::ostream& operator<<(std::ostream& out,
-                         mojom::AggregationServiceMode aggregation_mode) {
+std::ostream& operator<<(
+    std::ostream& out,
+    blink::mojom::AggregationServiceMode aggregation_mode) {
   switch (aggregation_mode) {
-    case mojom::AggregationServiceMode::kTeeBased:
+    case blink::mojom::AggregationServiceMode::kTeeBased:
       return out << "kTeeBased";
-    case mojom::AggregationServiceMode::kExperimentalPoplar:
+    case blink::mojom::AggregationServiceMode::kExperimentalPoplar:
       return out << "kExperimentalPoplar";
   }
 }

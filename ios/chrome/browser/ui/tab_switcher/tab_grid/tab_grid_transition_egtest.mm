@@ -5,8 +5,11 @@
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_constants.h"
+#import "ios/chrome/browser/ui/tab_switcher/test/query_title_server_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
@@ -18,15 +21,13 @@
 #import "net/test/embedded_test_server/request_handler_util.h"
 #import "ui/base/device_form_factor.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
+using chrome_test_util::CloseTabMenuButton;
 using chrome_test_util::TabGridDoneButton;
 using chrome_test_util::TabGridIncognitoTabsPanelButton;
 using chrome_test_util::TabGridNewIncognitoTabButton;
 using chrome_test_util::TabGridNewTabButton;
 using chrome_test_util::TabGridOpenTabsPanelButton;
+using chrome_test_util::TabGridOtherDevicesPanelButton;
 
 namespace {
 
@@ -45,20 +46,27 @@ void SelectTab(NSString* title) {
                                               @"GridCell")),
                                           grey_accessibilityTrait(
                                               UIAccessibilityTraitStaticText),
-                                          nil)] performAction:grey_tap()];
+                                          grey_hidden(NO), nil)]
+      performAction:grey_tap()];
 }
 
-// net::EmbeddedTestServer handler that responds with the request's query as the
-// title and body.
-std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
-    const net::test_server::HttpRequest& request) {
-  std::unique_ptr<net::test_server::BasicHttpResponse> http_response(
-      new net::test_server::BasicHttpResponse);
-  http_response->set_content_type("text/html");
-  http_response->set_content("<html><head><title>" + request.GetURL().query() +
-                             "</title></head><body>" +
-                             request.GetURL().query() + "</body></html>");
-  return std::move(http_response);
+// Expects that the total number of samples in histogram `histogram` grew by
+// `expected_count` since the HistogramTester was created.
+void ExpectIdleHistogramCount(const char* histogram, int expected_count) {
+  NSError* error = [MetricsAppInterface expectTotalCount:expected_count
+                                            forHistogram:@(histogram)];
+  GREYAssertNil(error, error.description);
+}
+
+// Expects that the total number of samples in histogram `histogram` for bucket
+// `bucket` grew by `expected_count` since the HistogramTester was created.
+void ExpectIdleHistogramBucketCount(const char* histogram,
+                                    int expected_count,
+                                    BOOL bucket) {
+  NSError* error = [MetricsAppInterface expectCount:expected_count
+                                          forBucket:static_cast<int>(bucket)
+                                       forHistogram:@(histogram)];
+  GREYAssertNil(error, error.description);
 }
 
 }  // namespace
@@ -73,25 +81,34 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
 // to fail.
 @implementation TabSwitcherTransitionTestCase
 
+- (void)setUp {
+  [super setUp];
+
+  // Observe histograms in tests.
+  GREYAssertNil([MetricsAppInterface setupHistogramTester],
+                @"Cannot setup histogram tester.");
+}
+
 // Rotate the device back to portrait if needed, since some tests attempt to run
 // in landscape.
 - (void)tearDown {
   [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationPortrait error:nil];
+
+  // Release the histogram tester.
+  GREYAssertNil([MetricsAppInterface releaseHistogramTester],
+                @"Cannot reset histogram tester.");
   [super tearDown];
 }
 
 // Sets up the EmbeddedTestServer as needed for tests.
 - (void)setUpTestServer {
-  self.testServer->RegisterDefaultHandler(base::BindRepeating(
-      net::test_server::HandlePrefixedRequest, "/querytitle",
-      base::BindRepeating(&HandleQueryTitle)));
+  RegisterQueryTitleHandler(self.testServer);
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start");
 }
 
 // Returns the URL for a test page with the given `title`.
 - (GURL)makeURLForTitle:(NSString*)title {
-  return self.testServer->GetURL("/querytitle?" +
-                                 base::SysNSStringToUTF8(title));
+  return GetQueryTitleURL(self.testServer, title);
 }
 
 // Tests entering the tab switcher when one normal tab is open.
@@ -150,9 +167,17 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   // Load a test URL in the current tab.
   [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+
   // Enter and leave the switcher.
   [ChromeEarlGrey showTabSwitcher];
   ShowTabViewController();
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, YES);
 
   // Verify that the original tab is visible again.
   [ChromeEarlGrey
@@ -165,10 +190,18 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   NSString* tab1_title = @"NormalTab1";
   [self setUpTestServer];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+
   // Enter the switcher and open a new tab using the new tab button.
   [ChromeEarlGrey showTabSwitcher];
   id<GREYMatcher> matcher = TabGridNewTabButton();
   [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
 
   // Load a URL in this newly-created tab and verify that the tab is visible.
   [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
@@ -186,10 +219,18 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   [ChromeEarlGreyUI openNewIncognitoTab];
   [ChromeEarlGrey closeAllNormalTabs];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
   // Enter the switcher and open a new incognito tab using the new tab button.
   [ChromeEarlGrey showTabSwitcher];
   id<GREYMatcher> matcher = TabGridNewIncognitoTabButton();
   [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1, NO);
 
   // Load a URL in this newly-created tab and verify that the tab is visible.
   [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
@@ -203,12 +244,20 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   NSString* incognito_title = @"IncognitoTab";
   [self setUpTestServer];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
   // Go from normal mode to incognito mode.
   [ChromeEarlGrey showTabSwitcher];
   [[EarlGrey selectElementWithMatcher:TabGridIncognitoTabsPanelButton()]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:TabGridNewIncognitoTabButton()]
       performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1, NO);
 
   // Load a URL in this newly-created tab and verify that the tab is visible.
   [ChromeEarlGrey loadURL:[self makeURLForTitle:incognito_title]];
@@ -221,6 +270,14 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:TabGridNewTabButton()]
       performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1, NO);
 
   // Load a URL in this newly-created tab and verify that the tab is visible.
   [ChromeEarlGrey loadURL:[self makeURLForTitle:normal_title]];
@@ -242,15 +299,38 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   [ChromeEarlGreyUI openNewTab];
   [ChromeEarlGrey loadURL:[self makeURLForTitle:tab3_title]];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+
   [ChromeEarlGrey showTabSwitcher];
   SelectTab(tab1_title);
   [ChromeEarlGrey
       waitForWebStateContainingText:base::SysNSStringToUTF8(tab1_title)];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
+
   [ChromeEarlGrey showTabSwitcher];
   SelectTab(tab3_title);
   [ChromeEarlGrey
       waitForWebStateContainingText:base::SysNSStringToUTF8(tab3_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 2);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 2, NO);
+
+  [ChromeEarlGrey showTabSwitcher];
+  SelectTab(tab3_title);
+  [ChromeEarlGrey
+      waitForWebStateContainingText:base::SysNSStringToUTF8(tab3_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 3);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, YES);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 2, NO);
 }
 
 // Tests exiting the tab switcher by selecting an incognito tab.
@@ -269,15 +349,38 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   [ChromeEarlGrey loadURL:[self makeURLForTitle:tab3_title]];
   [ChromeEarlGrey closeAllNormalTabs];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
   [ChromeEarlGrey showTabSwitcher];
   SelectTab(tab1_title);
   [ChromeEarlGrey
       waitForWebStateContainingText:base::SysNSStringToUTF8(tab1_title)];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1, NO);
+
   [ChromeEarlGrey showTabSwitcher];
   SelectTab(tab3_title);
   [ChromeEarlGrey
       waitForWebStateContainingText:base::SysNSStringToUTF8(tab3_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 2);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 2, NO);
+
+  [ChromeEarlGrey showTabSwitcher];
+  SelectTab(tab3_title);
+  [ChromeEarlGrey
+      waitForWebStateContainingText:base::SysNSStringToUTF8(tab3_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1, YES);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 2, NO);
 }
 
 // Tests exiting the tab switcher by selecting a tab in the other tab model.
@@ -291,6 +394,9 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   [ChromeEarlGreyUI openNewIncognitoTab];
   [ChromeEarlGrey loadURL:[self makeURLForTitle:incognito_title]];
 
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
   [ChromeEarlGrey showTabSwitcher];
   // Switch to the normal panel and select the one tab that is there.
   [[EarlGrey selectElementWithMatcher:TabGridOpenTabsPanelButton()]
@@ -298,6 +404,11 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   SelectTab(normal_title);
   [ChromeEarlGrey
       waitForWebStateContainingText:base::SysNSStringToUTF8(normal_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
 
   [ChromeEarlGrey showTabSwitcher];
   // Switch to the incognito panel and select the one tab that is there.
@@ -307,6 +418,175 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
   SelectTab(incognito_title);
   [ChromeEarlGrey
       waitForWebStateContainingText:base::SysNSStringToUTF8(incognito_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
+}
+
+// Tests exiting the tab switcher after switch back and forth between the normal
+// page and the recent tabs page.
+- (void)testLeaveSwitcherAfterVisitingRecentTabs {
+  [self setUpTestServer];
+
+  NSString* tab1_title = @"NormalTab1";
+
+  // Load a test URL in the current tab.
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+
+  [ChromeEarlGrey showTabSwitcher];
+
+  // Switch to the recent tabs panel.
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+
+  // Switch back to the regular tabs panel and open the selected tab.
+  [[EarlGrey selectElementWithMatcher:TabGridOpenTabsPanelButton()]
+      performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRecentTabsHistogram, 1,
+                                 YES);
+
+  SelectTab(tab1_title);
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, YES);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRecentTabsHistogram, 1,
+                                 YES);
+}
+
+// Tests deleting a tab and exiting the tab switcher after switch back and forth
+// between the normal page and the incognito page.
+- (void)testDeleteAndLeaveSwitcherAfterVisitingIncognitoPage {
+  NSString* tab1_title = @"NormalTabLongerStringForTest1";
+  NSString* tab2_title = @"NormalTabLongerStringForTest2";
+  [self setUpTestServer];
+
+  // Create a few tabs and give them all unique titles.
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
+  [ChromeEarlGreyUI openNewTab];
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab2_title]];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
+  [ChromeEarlGrey showTabSwitcher];
+
+  // Close a tab and switch to the incognito page.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(0)]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:TabGridIncognitoTabsPanelButton()]
+      performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
+  // Switch back to the regular page and open the selected tab.
+  [[EarlGrey selectElementWithMatcher:TabGridOpenTabsPanelButton()]
+      performAction:grey_tap()];
+  SelectTab(tab2_title);
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
+}
+
+// Tests exiting the tab switcher after closing a normal tab.
+- (void)testLeaveSwitcherAfterClosingNormalTab {
+  NSString* tab1_title = @"NormalTabLongerStringForTest1";
+  NSString* tab2_title = @"NormalTabLongerStringForTest2";
+  NSString* tab3_title = @"NormalTabLongerStringForTest3";
+  [self setUpTestServer];
+
+  // Create a few tabs and give them all unique titles.
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
+  [ChromeEarlGreyUI openNewTab];
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab2_title]];
+  [ChromeEarlGreyUI openNewTab];
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab3_title]];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+
+  [ChromeEarlGrey showTabSwitcher];
+
+  // Close a tab an open a non-selected tab.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(1)]
+      performAction:grey_tap()];
+  SelectTab(tab1_title);
+  [ChromeEarlGrey
+      waitForWebStateContainingText:base::SysNSStringToUTF8(tab1_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 1, NO);
+
+  [ChromeEarlGrey showTabSwitcher];
+
+  // Close tab #3 and open the current selected tab.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(1)]
+      performAction:grey_tap()];
+  SelectTab(tab1_title);
+  [ChromeEarlGrey
+      waitForWebStateContainingText:base::SysNSStringToUTF8(tab1_title)];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 2);
+  ExpectIdleHistogramBucketCount(kUMATabSwitcherIdleRegularTabGridPageHistogram,
+                                 2, NO);
+}
+
+// Tests exiting the tab switcher by opening an incognito tab after closing a
+// normal tab.
+- (void)testLeaveSwitcherFromIncognitoTabAfterClosingNormalTab {
+  NSString* tab1_title = @"NormalTabLongerStringForTest1";
+  NSString* tab2_title = @"NormalTabLongerStringForTest2";
+  [self setUpTestServer];
+
+  // Create a few tabs and give them all unique titles.
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab1_title]];
+  [ChromeEarlGreyUI openNewTab];
+  [ChromeEarlGrey loadURL:[self makeURLForTitle:tab2_title]];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 0);
+
+  [ChromeEarlGrey showTabSwitcher];
+
+  // Close a regular tab and open an incognito page.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(1)]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:TabGridIncognitoTabsPanelButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:TabGridNewIncognitoTabButton()]
+      performAction:grey_tap()];
+
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRecentTabsHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleRegularTabGridPageHistogram, 0);
+  ExpectIdleHistogramCount(kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1);
+  ExpectIdleHistogramBucketCount(
+      kUMATabSwitcherIdleIncognitoTabGridPageHistogram, 1, NO);
 }
 
 // Tests switching back and forth between the normal and incognito BVCs.

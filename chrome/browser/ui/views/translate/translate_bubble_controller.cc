@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
@@ -14,10 +14,13 @@
 #include "chrome/browser/ui/translate/partial_translate_bubble_model_impl.h"
 #include "chrome/browser/ui/translate/partial_translate_bubble_ui_action_logger.h"
 #include "chrome/browser/ui/translate/translate_bubble_model_impl.h"
-#include "chrome/browser/ui/translate/translate_bubble_ui_action_logger.h"
 #include "chrome/browser/ui/views/translate/partial_translate_bubble_view.h"
 #include "components/contextual_search/core/browser/contextual_search_delegate_impl.h"
+#include "components/translate/content/browser/partial_translate_manager.h"
+#include "components/translate/core/browser/translate_language_list.h"
 #include "components/translate/core/browser/translate_manager.h"
+#include "components/translate/core/browser/translate_ui_delegate.h"
+#include "components/translate/core/browser/translate_ui_languages_manager.h"
 #include "components/translate/core/common/translate_constants.h"
 #include "components/translate/core/common/translate_errors.h"
 #include "components/translate/core/common/translate_util.h"
@@ -103,8 +106,6 @@ views::Widget* TranslateBubbleController::ShowTranslateBubble(
   translate_bubble_view_->SetViewState(step, error_type);
 
   translate_bubble_view_->ShowForReason(reason);
-  translate::ReportTranslateBubbleUiAction(
-      translate::TranslateBubbleUiEvent::BUBBLE_SHOWN);
 
   translate_bubble_view_->model()->ReportUIChange(true);
 
@@ -127,8 +128,7 @@ void TranslateBubbleController::StartPartialTranslate(
   // the bubble will be shown in a loading state until the translation is ready.
   partial_translate_timer_.Start(
       FROM_HERE,
-      base::Milliseconds(
-          translate::kDesktopPartialTranslateBubbleShowDelayMs.Get()),
+      base::Milliseconds(translate::kDesktopPartialTranslateBubbleShowDelayMs),
       base::BindOnce(&TranslateBubbleController::OnPartialTranslateWaitExpired,
                      weak_ptr_factory_.GetWeakPtr()));
 
@@ -168,6 +168,7 @@ void TranslateBubbleController::OnPartialTranslateComplete() {
         translate::TranslateErrors::NONE);
   }
 
+  partial_translate_bubble_view_->MaybeUpdateSourceLanguageCombobox();
   partial_translate_bubble_view_->ShowForReason(
       LocationBarBubbleDelegateView::USER_GESTURE);
   translate::ReportPartialTranslateBubbleUiAction(
@@ -195,7 +196,7 @@ void TranslateBubbleController::CreatePartialTranslateBubble(
       source_text.length());
   std::u16string truncated_source_text = gfx::TruncateString(
       source_text,
-      translate::kDesktopPartialTranslateTextSelectionMaxCharacters.Get(),
+      translate::kDesktopPartialTranslateTextSelectionMaxCharacters,
       gfx::WORD_BREAK);
   bool is_truncated = (source_text.compare(truncated_source_text) != 0);
 
@@ -224,12 +225,14 @@ void TranslateBubbleController::CreatePartialTranslateBubble(
   if (partial_model_factory_callback_) {
     model = partial_model_factory_callback_.Run();
   } else {
-    // Start with kUnknownLanguageCode to make the server run language
-    // detection.
-    auto ui_delegate = std::make_unique<translate::TranslateUIDelegate>(
-        ChromeTranslateClient::GetManagerFromWebContents(web_contents)
-            ->GetWeakPtr(),
-        translate::kUnknownLanguageCode, target_language);
+    std::vector<std::string> language_codes;
+    translate::TranslateLanguageList::GetSupportedPartialTranslateLanguages(
+        &language_codes);
+    auto translate_ui_languages_manager =
+        std::make_unique<translate::TranslateUILanguagesManager>(
+            ChromeTranslateClient::GetManagerFromWebContents(web_contents)
+                ->GetWeakPtr(),
+            language_codes, source_language, target_language);
 
     Profile* profile =
         Profile::FromBrowserContext(web_contents->GetBrowserContext());
@@ -240,7 +243,8 @@ void TranslateBubbleController::CreatePartialTranslateBubble(
 
     model = std::make_unique<PartialTranslateBubbleModelImpl>(
         view_state, error_type, truncated_source_text, target_text,
-        std::move(partial_translate_manager), std::move(ui_delegate));
+        std::move(partial_translate_manager),
+        std::move(translate_ui_languages_manager));
   }
   model->SetSourceTextTruncated(is_truncated);
 

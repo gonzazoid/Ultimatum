@@ -76,6 +76,8 @@ class WebTestRunner(object):
         self._shards_to_redo = []
 
         self._current_run_results = None
+        self._exit_after_n_failures = 0
+        self._exit_after_n_crashes_or_timeouts = 0
 
     def run_tests(self, expectations, test_inputs, tests_to_skip, num_workers,
                   retry_attempt):
@@ -90,6 +92,12 @@ class WebTestRunner(object):
             batch_size = 1
         self._expectations = expectations
         self._test_inputs = test_inputs
+
+        # dynamically set exit_after_n_failures and exit_after_n_crashes_or_timeouts
+        self._exit_after_n_failures = self._port.max_allowed_failures(
+            len(test_inputs))
+        self._exit_after_n_crashes_or_timeouts = self._port.max_allowed_crash_or_timeouts(
+            len(test_inputs))
 
         test_run_results = TestRunResults(
             self._expectations,
@@ -208,12 +216,11 @@ class WebTestRunner(object):
                     message, InterruptReason.TOO_MANY_FAILURES)
 
         interrupt_if_at_failure_limit(
-            self._options.exit_after_n_failures,
-            test_run_results.unexpected_failures, test_run_results,
-            'Exiting early after %d failures.' %
+            self._exit_after_n_failures, test_run_results.unexpected_failures,
+            test_run_results, 'Exiting early after %d failures.' %
             test_run_results.unexpected_failures)
         interrupt_if_at_failure_limit(
-            self._options.exit_after_n_crashes_or_timeouts,
+            self._exit_after_n_crashes_or_timeouts,
             test_run_results.unexpected_crashes +
             test_run_results.unexpected_timeouts, test_run_results,
             'Exiting early after %d crashes and %d timeouts.' %

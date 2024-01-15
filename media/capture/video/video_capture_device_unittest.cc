@@ -10,21 +10,20 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_frame.h"
 #include "media/capture/video/create_video_capture_device_factory.h"
 #include "media/capture/video/mock_video_capture_device_client.h"
@@ -35,13 +34,12 @@
 #if BUILDFLAG(IS_WIN)
 #include <mfcaptureengine.h>
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/windows_version.h"  // For fine-grained suppression.
 #include "media/capture/video/win/video_capture_device_factory_win.h"
 #include "media/capture/video/win/video_capture_device_mf_win.h"
 #endif
 
-#if BUILDFLAG(IS_MAC)
-#include "media/capture/video/mac/video_capture_device_factory_mac.h"
+#if BUILDFLAG(IS_APPLE)
+#include "media/capture/video/apple/video_capture_device_factory_apple.h"
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
@@ -52,6 +50,7 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/mojo_service_manager/connection.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "media/capture/video/chromeos/camera_buffer_factory.h"
 #include "media/capture/video/chromeos/camera_hal_dispatcher_impl.h"
@@ -62,7 +61,7 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #endif
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 // Mac will always give you the size you ask for and this case will fail.
 #define MAYBE_UsingRealWebcam_AllocateBadSize \
   DISABLED_UsingRealWebcam_AllocateBadSize
@@ -110,12 +109,9 @@
 #define MAYBE_UsingRealWebcam_AllocateBadSize \
   DISABLED_UsingRealWebcam_AllocateBadSize
 #define MAYBE_UsingRealWebcam_CaptureMjpeg UsingRealWebcam_CaptureMjpeg
-// TODO(b/228238413): Fix and reenable.
-#define MAYBE_UsingRealWebcam_TakePhoto DISABLED_UsingRealWebcam_TakePhoto
-#define MAYBE_UsingRealWebcam_GetPhotoState \
-  DISABLED_UsingRealWebcam_GetPhotoState
-#define MAYBE_UsingRealWebcam_CaptureWithSize \
-  DISABLED_UsingRealWebcam_CaptureWithSize
+#define MAYBE_UsingRealWebcam_TakePhoto UsingRealWebcam_TakePhoto
+#define MAYBE_UsingRealWebcam_GetPhotoState UsingRealWebcam_GetPhotoState
+#define MAYBE_UsingRealWebcam_CaptureWithSize UsingRealWebcam_CaptureWithSize
 #define MAYBE_UsingRealWebcam_CheckPhotoCallbackRelease \
   UsingRealWebcam_CheckPhotoCallbackRelease
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -278,31 +274,27 @@ class VideoCaptureDeviceTest
 
   VideoCaptureDeviceTest()
       : task_environment_(kMainThreadType),
-        main_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+        main_thread_task_runner_(
+            base::SingleThreadTaskRunner::GetCurrentDefault()),
         video_capture_client_(CreateDeviceClient()),
         image_capture_client_(new MockImageCaptureClient()) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+    CHECK(test_thread_.Start()) << "Cannot start the test thread";
     local_gpu_memory_buffer_manager_ =
         std::make_unique<LocalGpuMemoryBufferManager>();
     VideoCaptureDeviceFactoryChromeOS::SetGpuBufferManager(
         local_gpu_memory_buffer_manager_.get());
     if (media::ShouldUseCrosCameraService() &&
         !CameraHalDispatcherImpl::GetInstance()->IsStarted()) {
-      CameraHalDispatcherImpl::GetInstance()->Start(base::DoNothing(),
-                                                    base::DoNothing());
-      // Since the callback is posted to the main task, it might introduce
-      // issues when destroying the main task runner while the callback hasn't
-      // been triggered. Since we don't do sensor related check in video capture
-      // tests, it should be okay to simply disable sensor code path for
-      // testing.
-      // If the sensor initialization becomes a part of the camera
-      // initialization in the future, we should include the check for sensors
-      // in the test codes instead of simply disabling it.
-      CameraHalDispatcherImpl::GetInstance()->DisableSensorForTesting();
+      if (!ash::mojo_service_manager::IsServiceManagerBound()) {
+        CHECK(ash::mojo_service_manager::BootstrapServiceManagerConnection())
+            << "Cannot bootstrap service manager connection.";
+      }
+      CameraHalDispatcherImpl::GetInstance()->Start();
     }
 #endif
-    video_capture_device_factory_ =
-        CreateVideoCaptureDeviceFactory(base::ThreadTaskRunnerHandle::Get());
+    video_capture_device_factory_ = CreateVideoCaptureDeviceFactory(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void SetUp() override {
@@ -331,6 +323,14 @@ class VideoCaptureDeviceTest
   bool UseWinMediaFoundation() {
     return std::get<1>(GetParam()) == WIN_MEDIA_FOUNDATION &&
            VideoCaptureDeviceFactoryWin::PlatformSupportsMediaFoundation();
+  }
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+  void WaitForCameraServiceReady() {
+    if (media::ShouldUseCrosCameraService()) {
+      ASSERT_TRUE(CameraHalDispatcherImpl::GetInstance()->IsStarted());
+      ASSERT_TRUE(CameraHalDispatcherImpl::GetInstance()
+                      ->WaitForServiceReadyForTesting());
+    }
   }
 #endif
 
@@ -461,6 +461,17 @@ class VideoCaptureDeviceTest
             },
             &run_loop, &test_case));
     run_loop.Run();
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+    base::RunLoop run_loop;
+    test_thread_.task_runner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            [](base::RunLoop* run_loop, base::OnceClosure* test_case) {
+              std::move(*test_case).Run();
+              run_loop->Quit();
+            },
+            &run_loop, &test_case));
+    run_loop.Run();
 #else
     std::move(test_case).Run();
 #endif
@@ -477,6 +488,7 @@ class VideoCaptureDeviceTest
   const scoped_refptr<MockImageCaptureClient> image_capture_client_;
   VideoCaptureFormat last_format_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+  base::Thread test_thread_{"VCD test thread"};
   std::unique_ptr<LocalGpuMemoryBufferManager> local_gpu_memory_buffer_manager_;
 #endif
   std::unique_ptr<VideoCaptureDeviceFactory> video_capture_device_factory_;
@@ -506,13 +518,13 @@ void VideoCaptureDeviceTest::RunOpenInvalidDeviceTestCase() {
       VideoCaptureDeviceFactoryWin::PlatformSupportsMediaFoundation()
           ? VideoCaptureApi::WIN_MEDIA_FOUNDATION
           : VideoCaptureApi::WIN_DIRECT_SHOW;
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   invalid_descriptor.capture_api = VideoCaptureApi::MACOSX_AVFOUNDATION;
 #endif
   VideoCaptureErrorOrDevice device_status =
       video_capture_device_factory_->CreateDevice(invalid_descriptor);
 
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_APPLE)
   EXPECT_FALSE(device_status.ok());
 #else
   ASSERT_TRUE(device_status.ok());
@@ -544,6 +556,9 @@ WRAPPED_TEST_P(VideoCaptureDeviceTest, MAYBE_UsingRealWebcam_CaptureWithSize) {
                      base::Unretained(this)));
 }
 void VideoCaptureDeviceTest::RunCaptureWithSizeTestCase() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  WaitForCameraServiceReady();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   const auto device_info = FindUsableDevice();
   ASSERT_TRUE(device_info);
 
@@ -687,18 +702,13 @@ void VideoCaptureDeviceTest::RunCaptureMjpegTestCase() {
         << "Skipped on Chrome OS device where HAL v3 camera service is used";
     return;
   }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   auto device_info = GetFirstDeviceSupportingPixelFormat(PIXEL_FORMAT_MJPEG);
   ASSERT_TRUE(device_info);
 
 #if BUILDFLAG(IS_WIN)
-  base::win::Version version = base::win::GetVersion();
-  if (version >= base::win::Version::WIN10) {
-    VLOG(1) << "Skipped on Win10: http://crbug.com/570604, current: "
-            << static_cast<int>(version);
-    return;
-  }
-#endif
+  GTEST_SKIP() << "Skipped on Windows:  https://crbug.com/570604";
+#else
   VideoCaptureErrorOrDevice device_status =
       video_capture_device_factory_->CreateDevice(device_info->descriptor);
   ASSERT_TRUE(device_status.ok());
@@ -721,6 +731,7 @@ void VideoCaptureDeviceTest::RunCaptureMjpegTestCase() {
             media::VideoFrame::AllocationSize(last_format().pixel_format,
                                               last_format().frame_size));
   device->StopAndDeAllocate();
+#endif  // BUILDFLAG(IS_WIN)
 }
 
 #define MAYBE_UsingRealWebcam_NoCameraSupportsPixelFormatMax \
@@ -748,6 +759,9 @@ WRAPPED_TEST_P(VideoCaptureDeviceTest, MAYBE_UsingRealWebcam_TakePhoto) {
                              base::Unretained(this)));
 }
 void VideoCaptureDeviceTest::RunTakePhotoTestCase() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  WaitForCameraServiceReady();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   const auto device_info = FindUsableDevice();
   ASSERT_TRUE(device_info);
 
@@ -775,7 +789,7 @@ void VideoCaptureDeviceTest::RunTakePhotoTestCase() {
 
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   base::RepeatingClosure quit_closure =
-      BindToCurrentLoop(run_loop.QuitClosure());
+      base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
   EXPECT_CALL(*image_capture_client_.get(), OnCorrectPhotoTaken())
       .Times(1)
       .WillOnce(RunClosure(quit_closure));
@@ -792,6 +806,9 @@ WRAPPED_TEST_P(VideoCaptureDeviceTest, MAYBE_UsingRealWebcam_GetPhotoState) {
                              base::Unretained(this)));
 }
 void VideoCaptureDeviceTest::RunGetPhotoStateTestCase() {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  WaitForCameraServiceReady();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   const auto device_info = FindUsableDevice();
   ASSERT_TRUE(device_info);
 
@@ -823,7 +840,7 @@ void VideoCaptureDeviceTest::RunGetPhotoStateTestCase() {
   WaitForCapturedFrame();
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   base::RepeatingClosure quit_closure =
-      BindToCurrentLoop(run_loop.QuitClosure());
+      base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
   EXPECT_CALL(*image_capture_client_.get(), OnCorrectGetPhotoState())
       .Times(1)
       .WillOnce(RunClosure(quit_closure));
@@ -883,7 +900,7 @@ WRAPPED_TEST_P(VideoCaptureDeviceTest,
 
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   base::RepeatingClosure quit_closure =
-      BindToCurrentLoop(run_loop.QuitClosure());
+      base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
   EXPECT_CALL(*image_capture_client_.get(), OnCorrectPhotoTaken())
       .WillOnce(RunClosure(quit_closure));
 

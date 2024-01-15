@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 
 namespace arc {
 
@@ -26,8 +26,12 @@ void FakePowerInstance::Init(mojo::PendingRemote<mojom::PowerHost> host_remote,
   std::move(callback).Run();
 }
 
-void FakePowerInstance::SetInteractive(bool enabled) {
-  interactive_ = enabled;
+void FakePowerInstance::SetInteractiveDeprecated(bool enabled) {
+  idle_state_ = enabled ? mojom::IdleState::ACTIVE : mojom::IdleState::INACTIVE;
+}
+
+void FakePowerInstance::SetIdleState(mojom::IdleState state) {
+  idle_state_ = state;
 }
 
 void FakePowerInstance::Suspend(SuspendCallback callback) {
@@ -56,6 +60,11 @@ void FakePowerInstance::OnCpuRestrictionChanged(
     mojom::CpuRestrictionState cpu_restriction_state) {
   last_cpu_restriction_state_ = cpu_restriction_state;
   ++cpu_restriction_state_count_;
+}
+
+void FakePowerInstance::OnBatterySaverModeStateChanged(
+    mojom::BatterySaverModeStatePtr state) {
+  ++battery_saver_mode_state_count_;
 }
 
 }  // namespace arc

@@ -4,15 +4,13 @@
 
 #include "net/nqe/socket_watcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "net/base/address_list.h"
 #include "net/base/ip_address.h"
-#include "net/socket/socket_performance_watcher.h"
 #include "net/socket/socket_performance_watcher_factory.h"
 #include "net/test/test_with_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -105,17 +103,13 @@ TEST_F(NetworkQualitySocketWatcherTest, NotificationsThrottled) {
   tick_clock.SetNowTicks(base::TimeTicks::Now());
 
   // Use a public IP address so that the socket watcher runs the RTT callback.
-  IPAddressList ip_list;
   IPAddress ip_address;
   ASSERT_TRUE(ip_address.AssignFromIPLiteral("157.0.0.1"));
-  ip_list.push_back(ip_address);
-  std::vector<std::string> aliases({"canonical.example.com"});
-  AddressList address_list =
-      AddressList::CreateFromIPAddressList(ip_list, std::move(aliases));
 
   SocketWatcher socket_watcher(
-      SocketPerformanceWatcherFactory::PROTOCOL_TCP, address_list,
-      base::Milliseconds(2000), false, base::ThreadTaskRunnerHandle::Get(),
+      SocketPerformanceWatcherFactory::PROTOCOL_TCP, ip_address,
+      base::Milliseconds(2000), false,
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
       base::BindRepeating(OnUpdatedRTTAvailable),
       base::BindRepeating(ShouldNotifyRTTCallback), &tick_clock);
 
@@ -149,17 +143,13 @@ TEST_F(NetworkQualitySocketWatcherTest, QuicFirstNotificationDropped) {
   tick_clock.SetNowTicks(base::TimeTicks::Now());
 
   // Use a public IP address so that the socket watcher runs the RTT callback.
-  IPAddressList ip_list;
   IPAddress ip_address;
   ASSERT_TRUE(ip_address.AssignFromIPLiteral("157.0.0.1"));
-  ip_list.push_back(ip_address);
-  std::vector<std::string> aliases({"canonical.example.com"});
-  AddressList address_list =
-      AddressList::CreateFromIPAddressList(ip_list, std::move(aliases));
 
   SocketWatcher socket_watcher(
-      SocketPerformanceWatcherFactory::PROTOCOL_QUIC, address_list,
-      base::Milliseconds(2000), false, base::ThreadTaskRunnerHandle::Get(),
+      SocketPerformanceWatcherFactory::PROTOCOL_QUIC, ip_address,
+      base::Milliseconds(2000), false,
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
       base::BindRepeating(OnUpdatedRTTAvailableStoreParams),
       base::BindRepeating(ShouldNotifyRTTCallback), &tick_clock);
 
@@ -209,17 +199,13 @@ TEST_F(NetworkQualitySocketWatcherTest, MAYBE_PrivateAddressRTTNotNotified) {
   };
 
   for (const auto& test : tests) {
-    IPAddressList ip_list;
     IPAddress ip_address;
     ASSERT_TRUE(ip_address.AssignFromIPLiteral(test.ip_address));
-    ip_list.push_back(ip_address);
-    std::vector<std::string> aliases({"canonical.example.com"});
-    AddressList address_list =
-        AddressList::CreateFromIPAddressList(ip_list, std::move(aliases));
 
     SocketWatcher socket_watcher(
-        SocketPerformanceWatcherFactory::PROTOCOL_TCP, address_list,
-        base::Milliseconds(2000), false, base::ThreadTaskRunnerHandle::Get(),
+        SocketPerformanceWatcherFactory::PROTOCOL_TCP, ip_address,
+        base::Milliseconds(2000), false,
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
         base::BindRepeating(OnUpdatedRTTAvailable),
         base::BindRepeating(ShouldNotifyRTTCallback), &tick_clock);
 
@@ -248,17 +234,13 @@ TEST_F(NetworkQualitySocketWatcherTest, RemoteHostIPHashComputedCorrectly) {
   };
 
   for (const auto& test : tests) {
-    IPAddressList ip_list;
     IPAddress ip_address;
     ASSERT_TRUE(ip_address.AssignFromIPLiteral(test.ip_address));
-    ip_list.push_back(ip_address);
-    std::vector<std::string> aliases({"canonical.example.com"});
-    AddressList address_list =
-        AddressList::CreateFromIPAddressList(ip_list, std::move(aliases));
 
     SocketWatcher socket_watcher(
-        SocketPerformanceWatcherFactory::PROTOCOL_TCP, address_list,
-        base::Milliseconds(2000), false, base::ThreadTaskRunnerHandle::Get(),
+        SocketPerformanceWatcherFactory::PROTOCOL_TCP, ip_address,
+        base::Milliseconds(2000), false,
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
         base::BindRepeating(OnUpdatedRTTAvailableStoreParams),
         base::BindRepeating(ShouldNotifyRTTCallback), &tick_clock);
     EXPECT_TRUE(socket_watcher.ShouldNotifyUpdatedRTT());

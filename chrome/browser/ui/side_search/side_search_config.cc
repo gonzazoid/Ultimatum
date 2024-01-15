@@ -105,13 +105,6 @@ void ApplyGoogleSearchConfiguration(SideSearchConfig& config) {
 }  // namespace
 
 SideSearchConfig::SideSearchConfig(Profile* profile) : profile_(profile) {
-  // Only allow ChromeOS to toggle between DSE and non-DSE configurations.
-#if BUILDFLAG(IS_CHROMEOS)
-  if (!side_search::IsDSESupportEnabled(profile_)) {
-    ApplyGoogleSearchConfiguration(*this);
-    return;
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS)
   // `template_url_service` may be null in tests.
   if (auto* template_url_service =
           TemplateURLServiceFactory::GetForProfile(profile_)) {
@@ -178,8 +171,7 @@ void SideSearchConfig::SetShouldNavigateInSidePanelCallback(
 }
 
 bool SideSearchConfig::CanShowSidePanelForURL(const GURL& url) {
-  return is_side_panel_srp_available_ &&
-         can_show_side_panel_for_url_callback_.Run(url);
+  return can_show_side_panel_for_url_callback_.Run(url);
 }
 
 void SideSearchConfig::SetCanShowSidePanelForURLCallback(
@@ -205,9 +197,6 @@ void SideSearchConfig::RemoveObserver(Observer* observer) {
 }
 
 void SideSearchConfig::ResetStateAndNotifyConfigChanged() {
-  // Reset the availabiliy bit before propagating notifications.
-  is_side_panel_srp_available_ = false;
-
   for (auto& observer : observers_)
     observer.OnSideSearchConfigChanged();
 }

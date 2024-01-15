@@ -9,11 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage_impl.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
 #include "components/leveldb_proto/public/proto_database.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 class PrefService;
 
@@ -31,7 +32,8 @@ class FakeNearbyShareCertificateStorage : public NearbyShareCertificateStorage {
 
     // Returns all FakeNearbyShareCertificateStorage instances created by
     // CreateInstance().
-    std::vector<FakeNearbyShareCertificateStorage*>& instances() {
+    std::vector<raw_ptr<FakeNearbyShareCertificateStorage, VectorExperimental>>&
+    instances() {
       return instances_;
     }
 
@@ -50,34 +52,35 @@ class FakeNearbyShareCertificateStorage : public NearbyShareCertificateStorage {
         leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
         const base::FilePath& profile_path) override;
 
-    std::vector<FakeNearbyShareCertificateStorage*> instances_;
-    PrefService* latest_pref_service_ = nullptr;
-    leveldb_proto::ProtoDatabaseProvider* latest_proto_database_provider_ =
-        nullptr;
+    std::vector<raw_ptr<FakeNearbyShareCertificateStorage, VectorExperimental>>
+        instances_;
+    raw_ptr<PrefService, DanglingUntriaged> latest_pref_service_ = nullptr;
+    raw_ptr<leveldb_proto::ProtoDatabaseProvider>
+        latest_proto_database_provider_ = nullptr;
     base::FilePath latest_profile_path_;
   };
 
   struct ReplacePublicCertificatesCall {
     ReplacePublicCertificatesCall(
-        const std::vector<nearbyshare::proto::PublicCertificate>&
+        const std::vector<nearby::sharing::proto::PublicCertificate>&
             public_certificates,
         ResultCallback callback);
     ReplacePublicCertificatesCall(ReplacePublicCertificatesCall&& other);
     ~ReplacePublicCertificatesCall();
 
-    std::vector<nearbyshare::proto::PublicCertificate> public_certificates;
+    std::vector<nearby::sharing::proto::PublicCertificate> public_certificates;
     ResultCallback callback;
   };
 
   struct AddPublicCertificatesCall {
     AddPublicCertificatesCall(
-        const std::vector<nearbyshare::proto::PublicCertificate>&
+        const std::vector<nearby::sharing::proto::PublicCertificate>&
             public_certificates,
         ResultCallback callback);
     AddPublicCertificatesCall(AddPublicCertificatesCall&& other);
     ~AddPublicCertificatesCall();
 
-    std::vector<nearbyshare::proto::PublicCertificate> public_certificates;
+    std::vector<nearby::sharing::proto::PublicCertificate> public_certificates;
     ResultCallback callback;
   };
 
@@ -105,7 +108,7 @@ class FakeNearbyShareCertificateStorage : public NearbyShareCertificateStorage {
       const std::vector<NearbySharePrivateCertificate>& private_certificates)
       override;
   void AddPublicCertificates(
-      const std::vector<nearbyshare::proto::PublicCertificate>&
+      const std::vector<nearby::sharing::proto::PublicCertificate>&
           public_certificates,
       ResultCallback callback) override;
   void RemoveExpiredPublicCertificates(base::Time now,

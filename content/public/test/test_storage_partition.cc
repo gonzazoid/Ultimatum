@@ -15,12 +15,24 @@ namespace content {
 TestStoragePartition::TestStoragePartition() {}
 TestStoragePartition::~TestStoragePartition() {}
 
-base::FilePath TestStoragePartition::GetPath() {
+const StoragePartitionConfig& TestStoragePartition::GetConfig() const {
+  return config_;
+}
+
+const base::FilePath& TestStoragePartition::GetPath() const {
   return file_path_;
 }
 
 network::mojom::NetworkContext* TestStoragePartition::GetNetworkContext() {
   return network_context_;
+}
+cert_verifier::mojom::CertVerifierServiceUpdater*
+TestStoragePartition::GetCertVerifierServiceUpdater() {
+  return nullptr;
+}
+
+storage::SharedStorageManager* TestStoragePartition::GetSharedStorageManager() {
+  return nullptr;
 }
 
 scoped_refptr<network::SharedURLLoaderFactory>
@@ -133,6 +145,20 @@ InterestGroupManager* TestStoragePartition::GetInterestGroupManager() {
   return nullptr;
 }
 
+AttributionDataModel* TestStoragePartition::GetAttributionDataModel() {
+  return nullptr;
+}
+
+PrivateAggregationDataModel*
+TestStoragePartition::GetPrivateAggregationDataModel() {
+  return nullptr;
+}
+
+CookieDeprecationLabelManager*
+TestStoragePartition::GetCookieDeprecationLabelManager() {
+  return nullptr;
+}
+
 BrowsingTopicsSiteDataManager*
 TestStoragePartition::GetBrowsingTopicsSiteDataManager() {
   return browsing_topics_site_data_manager_;
@@ -145,10 +171,6 @@ TestStoragePartition::GetDevToolsBackgroundServicesContext() {
 
 ContentIndexContext* TestStoragePartition::GetContentIndexContext() {
   return content_index_context_;
-}
-
-NativeIOContext* TestStoragePartition::GetNativeIOContext() {
-  return native_io_context_;
 }
 
 leveldb_proto::ProtoDatabaseProvider*
@@ -180,6 +202,11 @@ void TestStoragePartition::ClearDataForOrigin(
     uint32_t remove_mask,
     uint32_t quota_storage_remove_mask,
     const GURL& storage_origin,
+    base::OnceClosure callback) {}
+
+void TestStoragePartition::ClearDataForBuckets(
+    const blink::StorageKey& storage_key,
+    const std::set<std::string>& buckets,
     base::OnceClosure callback) {}
 
 void TestStoragePartition::ClearData(uint32_t remove_mask,
@@ -224,12 +251,9 @@ int TestStoragePartition::GetDataRemovalObserverCount() {
 
 void TestStoragePartition::ClearBluetoothAllowedDevicesMapForTesting() {}
 
-void TestStoragePartition::ResetAttributionManagerForTesting(
-    base::OnceCallback<void(bool)> callback) {
-  std::move(callback).Run(/*success=*/true);
-}
-
 void TestStoragePartition::FlushNetworkInterfaceForTesting() {}
+
+void TestStoragePartition::FlushCertVerifierInterfaceForTesting() {}
 
 void TestStoragePartition::WaitForDeletionTasksForTesting() {}
 

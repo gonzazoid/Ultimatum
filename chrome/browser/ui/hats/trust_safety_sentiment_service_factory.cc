@@ -10,14 +10,22 @@
 #include "content/public/browser/browser_context.h"
 
 TrustSafetySentimentServiceFactory::TrustSafetySentimentServiceFactory()
-    : ProfileKeyedServiceFactory("TrustSafetySentimentService") {
+    : ProfileKeyedServiceFactory(
+          "TrustSafetySentimentService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HatsServiceFactory::GetInstance());
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
 TrustSafetySentimentServiceFactory*
 TrustSafetySentimentServiceFactory::GetInstance() {
-  return base::Singleton<TrustSafetySentimentServiceFactory>::get();
+  static base::NoDestructor<TrustSafetySentimentServiceFactory> instance;
+  return instance.get();
 }
 
 TrustSafetySentimentService* TrustSafetySentimentServiceFactory::GetForProfile(
@@ -29,7 +37,9 @@ TrustSafetySentimentService* TrustSafetySentimentServiceFactory::GetForProfile(
 KeyedService* TrustSafetySentimentServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   if (context->IsOffTheRecord() ||
-      !base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurvey)) {
+      (!base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurvey) &&
+       !base::FeatureList::IsEnabled(
+           features::kTrustSafetySentimentSurveyV2))) {
     return nullptr;
   }
   Profile* profile = Profile::FromBrowserContext(context);

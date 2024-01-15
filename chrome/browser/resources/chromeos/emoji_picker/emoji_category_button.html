@@ -4,8 +4,13 @@
     width: var(--emoji-size);
   }
 
+  :host([gif-support]) {
+    height: var(--emoji-category-size);
+    width: var(--emoji-category-size);
+  }
+
   #category-button {
-    --cr-icon-button-fill-color: var(--cros-icon-color-secondary);
+    --cr-icon-button-fill-color: var(--emoji-picker-icon-toggle-unselected-color);
     border-radius: 50%;
     display: block;
     height: 100%;
@@ -14,22 +19,27 @@
     width: 100%;
   }
 
-  #category-button.category-button-active {
-    --cr-icon-button-fill-color: var(--cros-icon-color-prominent);
-    background-color: var(--cros-highlight-color);
+  :host([gif-support]) #category-button {
+    --cr-icon-button-icon-size: 24px;
   }
 
-  #category-button.category-button-primary {
-    --cr-icon-button-fill-color: var(--cros-icon-color-primary);
+  #category-button.category-button-active {
+    --cr-icon-button-fill-color: var(--emoji-picker-icon-toggle-selected-color);
+    background-color: var(--emoji-picker-icon-toggle-selected-container-color);
+  }
+
+  cr-icon-button {
+    --cr-icon-button-focus-outline-color: var(--emoji-picker-focus-ring-color);
   }
 </style>
 
 
 <cr-icon-button
   id="category-button"
-  class$="[[_className(active, searchActive)]]"
+  class$="[[calculateClassName(active, searchActive)]]"
   iron-icon="[[icon]]"
   on-click="handleClick"
-  aria-label="[[name]]"
+  aria-label$="[[getAriaLabel(name, gifSupport)]]"
+  aria-pressed$="[[getAriaPressedState(active)]]"
 >
 </cr-icon-button>

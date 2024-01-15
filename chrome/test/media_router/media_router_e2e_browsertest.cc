@@ -7,9 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -31,7 +31,6 @@ const char kCastAppPresentationUrl[] =
     "cast:BE6E4473?clientId=143692175507258981";
 const char kVideo[] = "video";
 const char kBearVP9Video[] = "bear-vp9.webm";
-const char kPlayer[] = "player.html";
 const char kOrigin[] = "http://origin/";
 }  // namespace
 
@@ -54,6 +53,10 @@ void MediaRouterE2EBrowserTest::TearDownOnMainThread() {
   route_id_.clear();
   media_router_ = nullptr;
   MediaRouterIntegrationBrowserTest::TearDownOnMainThread();
+}
+
+bool MediaRouterE2EBrowserTest::RequiresMediaRouteProviders() const {
+  return true;
 }
 
 void MediaRouterE2EBrowserTest::OnRouteResponseReceived(
@@ -91,7 +94,7 @@ void MediaRouterE2EBrowserTest::CreateMediaRoute(
       source.id(), sink.id(), origin, web_contents,
       base::BindOnce(&MediaRouterE2EBrowserTest::OnRouteResponseReceived,
                      base::Unretained(this)),
-      base::TimeDelta(), is_incognito());
+      base::TimeDelta());
 
   // Wait for the route request to be fulfilled (and route to be started).
   ASSERT_TRUE(ConditionalWait(
@@ -117,8 +120,8 @@ void MediaRouterE2EBrowserTest::OpenMediaPage() {
   base::StringPairs query_params;
   query_params.push_back(std::make_pair(kVideo, kBearVP9Video));
   std::string query = media::GetURLQueryString(query_params);
-  GURL gurl =
-      content::GetFileUrlWithQuery(media::GetTestDataFilePath(kPlayer), query);
+  GURL gurl = content::GetFileUrlWithQuery(
+      GetResourceFile(FILE_PATH_LITERAL("player.html")), query);
   ui_test_utils::NavigateToURLBlockUntilNavigationsComplete(browser(), gurl, 1);
 }
 

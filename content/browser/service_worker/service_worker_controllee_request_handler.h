@@ -15,11 +15,12 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
 #include "content/browser/service_worker/service_worker_accessed_callback.h"
 #include "content/browser/service_worker/service_worker_main_resource_loader.h"
+#include "content/browser/service_worker/service_worker_metrics.h"
 #include "content/common/content_export.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom.h"
@@ -45,12 +46,31 @@ class CONTENT_EXPORT ServiceWorkerControlleeRequestHandler final {
  public:
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
+  //
+  // These have to be consistent with ServiceWorkerFetchHandlerSkipReason in
+  // tools/metrics/histograms/enums.xml
+  //
+  // Only one reason is recorded even if multiple reasons are matched.
+  // The order is following:
+  // 1. kSkippedForEmptyFetchHandler
+  // 2. kMainResourceSkippedDueToOriginTrial
+  // 3. kMainResourceSkippedDueToFeatureFlag
+  // 4. kMainResourceSkippedBecauseMatchedWithAllowedScriptList
+  // 5.
+  // kBypassFetchHandlerForAllOnlyIfServiceWorkerNotStarted_Status_[Stop|Starting]
   enum class FetchHandlerSkipReason {
     kNoFetchHandler = 0,
     kNotSkipped = 1,
     kSkippedForEmptyFetchHandler = 2,
+    kMainResourceSkippedDueToOriginTrial = 3,
+    kMainResourceSkippedDueToFeatureFlag = 4,
+    // kMainResourceSkippedBecauseMatchedWithAllowedOriginList = 5,
+    kMainResourceSkippedBecauseMatchedWithAllowedScriptList = 6,
+    kBypassFetchHandlerForAllOnlyIfServiceWorkerNotStarted_Status_Stop = 7,
+    kBypassFetchHandlerForAllOnlyIfServiceWorkerNotStarted_Status_Starting = 8,
 
-    kMaxValue = kSkippedForEmptyFetchHandler,
+    kMaxValue =
+        kBypassFetchHandlerForAllOnlyIfServiceWorkerNotStarted_Status_Starting,
   };
 
   // If |skip_service_worker| is true, service workers are bypassed for
@@ -94,12 +114,15 @@ class CONTENT_EXPORT ServiceWorkerControlleeRequestHandler final {
       const blink::StorageKey& storage_key);
 
   void ContinueWithRegistration(
-      base::TimeTicks start_time,
+      // True when FindRegistrationForClientUrl() is called for navigation.
+      bool is_for_navigation,
+      base::TimeTicks find_registration_start_time,
       blink::ServiceWorkerStatusCode status,
       scoped_refptr<ServiceWorkerRegistration> registration);
   void ContinueWithActivatedVersion(
       scoped_refptr<ServiceWorkerRegistration> registration,
-      scoped_refptr<ServiceWorkerVersion> version);
+      scoped_refptr<ServiceWorkerVersion> version,
+      base::TimeTicks find_registration_start_time);
 
   // For forced update.
   void DidUpdateRegistration(
@@ -117,6 +140,20 @@ class CONTENT_EXPORT ServiceWorkerControlleeRequestHandler final {
   // initial subresources load, if this handler was for a navigation.
   void MaybeScheduleUpdate();
 
+  // Runs service worker if not running.
+  void MaybeStartServiceWorker(
+      scoped_refptr<ServiceWorkerVersion> active_version,
+      ServiceWorkerMetrics::EventType event_type);
+
+  // Runs after ServiceWorker has started.
+  // Normally ServiceWorker starts before dispatching the main resource request,
+  // but if the ServiceWorkerBypassFetchHandler feature is enabled, we bypass
+  // the main resource request and then start ServiceWorker for subresources.
+  // Also, if we decided to start the service worker for
+  // the ServiceWorkerSkipEmptyFetchHandler feature and the browser handles
+  // an empty fetch handler, this runs after the service worker starts.
+  void DidStartWorker(blink::ServiceWorkerStatusCode status);
+
   const base::WeakPtr<ServiceWorkerContextCore> context_;
   const base::WeakPtr<ServiceWorkerContainerHost> container_host_;
   const network::mojom::RequestDestination destination_;
@@ -125,7 +162,6 @@ class CONTENT_EXPORT ServiceWorkerControlleeRequestHandler final {
   const bool skip_service_worker_;
 
   std::unique_ptr<ServiceWorkerMainResourceLoaderWrapper> loader_wrapper_;
-  raw_ptr<BrowserContext> browser_context_;
   GURL stripped_url_;
   blink::StorageKey storage_key_;
   bool force_update_started_;

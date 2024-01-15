@@ -13,6 +13,7 @@
 
 #include "base/i18n/rtl.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -43,7 +44,8 @@
 #include "extensions/browser/extension_function_registry.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/error_utils.h"
-#include "ui/base/layout.h"
+#include "extensions/common/mojom/context_type.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -68,7 +70,7 @@ const char kRestoreInIncognitoError[] =
 // descending modified_time (i.e., most recent first).
 bool SortSessionsByRecency(const sync_sessions::SyncedSession* s1,
                            const sync_sessions::SyncedSession* s2) {
-  return s1->modified_time > s2->modified_time;
+  return s1->GetModifiedTime() > s2->GetModifiedTime();
 }
 
 // Comparator function for use with std::sort that will sort tabs in a window
@@ -85,7 +87,7 @@ api::tabs::Tab CreateTabModelHelper(
     bool pinned,
     bool active,
     const Extension* extension,
-    Feature::Context context) {
+    mojom::ContextType context) {
   api::tabs::Tab tab_struct;
 
   const GURL& url = current_navigation.virtual_url();
@@ -172,7 +174,7 @@ api::windows::Window SessionsGetRecentlyClosedFunction::CreateWindowModel(
 
   return CreateWindowModelHelper(
       std::move(tabs), base::NumberToString(window.id.id()),
-      api::windows::WINDOW_TYPE_NORMAL, api::windows::WINDOW_STATE_NORMAL);
+      api::windows::WindowType::kNormal, api::windows::WindowState::kNormal);
 }
 
 api::tab_groups::TabGroup SessionsGetRecentlyClosedFunction::CreateGroupModel(
@@ -206,8 +208,8 @@ api::sessions::Session SessionsGetRecentlyClosedFunction::CreateSessionModel(
 }
 
 ExtensionFunction::ResponseAction SessionsGetRecentlyClosedFunction::Run() {
-  std::unique_ptr<GetRecentlyClosed::Params> params(
-      GetRecentlyClosed::Params::Create(args()));
+  absl::optional<GetRecentlyClosed::Params> params =
+      GetRecentlyClosed::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   int max_results = api::sessions::MAX_SESSION_RESULTS;
   if (params->filter && params->filter->max_results)
@@ -304,19 +306,19 @@ SessionsGetDevicesFunction::CreateWindowModel(
   std::string session_id =
       SessionId(session_tag, window.window_id.id()).ToString();
 
-  api::windows::WindowType type = api::windows::WINDOW_TYPE_NONE;
+  api::windows::WindowType type = api::windows::WindowType::kNone;
   switch (window.type) {
     case sessions::SessionWindow::TYPE_NORMAL:
-      type = api::windows::WINDOW_TYPE_NORMAL;
+      type = api::windows::WindowType::kNormal;
       break;
     case sessions::SessionWindow::TYPE_POPUP:
-      type = api::windows::WINDOW_TYPE_POPUP;
+      type = api::windows::WindowType::kPopup;
       break;
     case sessions::SessionWindow::TYPE_APP:
-      type = api::windows::WINDOW_TYPE_APP;
+      type = api::windows::WindowType::kApp;
       break;
     case sessions::SessionWindow::TYPE_DEVTOOLS:
-      type = api::windows::WINDOW_TYPE_DEVTOOLS;
+      type = api::windows::WindowType::kDevtools;
       break;
     case sessions::SessionWindow::TYPE_APP_POPUP:
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -325,19 +327,19 @@ SessionsGetDevicesFunction::CreateWindowModel(
       NOTREACHED();
   }
 
-  api::windows::WindowState state = api::windows::WINDOW_STATE_NONE;
+  api::windows::WindowState state = api::windows::WindowState::kNone;
   switch (window.show_state) {
     case ui::SHOW_STATE_NORMAL:
-      state = api::windows::WINDOW_STATE_NORMAL;
+      state = api::windows::WindowState::kNormal;
       break;
     case ui::SHOW_STATE_MINIMIZED:
-      state = api::windows::WINDOW_STATE_MINIMIZED;
+      state = api::windows::WindowState::kMinimized;
       break;
     case ui::SHOW_STATE_MAXIMIZED:
-      state = api::windows::WINDOW_STATE_MAXIMIZED;
+      state = api::windows::WindowState::kMaximized;
       break;
     case ui::SHOW_STATE_FULLSCREEN:
-      state = api::windows::WINDOW_STATE_FULLSCREEN;
+      state = api::windows::WindowState::kFullscreen;
       break;
     case ui::SHOW_STATE_DEFAULT:
     case ui::SHOW_STATE_INACTIVE:
@@ -376,21 +378,21 @@ api::sessions::Device SessionsGetDevicesFunction::CreateDeviceModel(
     const sync_sessions::SyncedSession* session) {
   int max_results = api::sessions::MAX_SESSION_RESULTS;
   // Already validated in RunAsync().
-  std::unique_ptr<GetDevices::Params> params(
-      GetDevices::Params::Create(args()));
+  absl::optional<GetDevices::Params> params =
+      GetDevices::Params::Create(args());
   if (params->filter && params->filter->max_results)
     max_results = *params->filter->max_results;
 
   api::sessions::Device device_struct;
-  device_struct.info = session->session_name;
-  device_struct.device_name = session->session_name;
+  device_struct.info = session->GetSessionName();
+  device_struct.device_name = session->GetSessionName();
 
   for (auto it = session->windows.begin();
        it != session->windows.end() &&
        static_cast<int>(device_struct.sessions.size()) < max_results;
        ++it) {
-    absl::optional<api::sessions::Session> session_model =
-        CreateSessionModel(it->second->wrapped_window, session->session_tag);
+    absl::optional<api::sessions::Session> session_model = CreateSessionModel(
+        it->second->wrapped_window, session->GetSessionTag());
     if (session_model)
       device_struct.sessions.push_back(std::move(*session_model));
   }
@@ -405,15 +407,16 @@ ExtensionFunction::ResponseAction SessionsGetDevicesFunction::Run() {
 
   sync_sessions::OpenTabsUIDelegate* open_tabs =
       service->GetOpenTabsUIDelegate();
-  std::vector<const sync_sessions::SyncedSession*> sessions;
+  std::vector<raw_ptr<const sync_sessions::SyncedSession, VectorExperimental>>
+      sessions;
   // If the user has disabled tab sync, GetOpenTabsUIDelegate() returns null.
   if (!(open_tabs && open_tabs->GetAllForeignSessions(&sessions))) {
     return RespondNow(ArgumentList(
         GetDevices::Results::Create(std::vector<api::sessions::Device>())));
   }
 
-  std::unique_ptr<GetDevices::Params> params(
-      GetDevices::Params::Create(args()));
+  absl::optional<GetDevices::Params> params =
+      GetDevices::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   if (params->filter && params->filter->max_results) {
     EXTENSION_FUNCTION_VALIDATE(*params->filter->max_results >= 0 &&
@@ -423,8 +426,9 @@ ExtensionFunction::ResponseAction SessionsGetDevicesFunction::Run() {
   std::vector<api::sessions::Device> result;
   // Sort sessions from most recent to least recent.
   std::sort(sessions.begin(), sessions.end(), SortSessionsByRecency);
-  for (const auto* session : sessions)
+  for (const sync_sessions::SyncedSession* session : sessions) {
     result.push_back(CreateDeviceModel(session));
+  }
 
   return RespondNow(ArgumentList(GetDevices::Results::Create(result)));
 }
@@ -454,8 +458,8 @@ SessionsRestoreFunction::GetRestoredWindowResult(int window_id) {
       ExtensionTabUtil::CreateWindowValueForExtension(
           *browser, extension(), ExtensionTabUtil::kPopulateTabs,
           source_context_type());
-  std::unique_ptr<api::windows::Window> window =
-      api::windows::Window::FromValue(base::Value(std::move(window_value)));
+  absl::optional<api::windows::Window> window =
+      api::windows::Window::FromValue(window_value);
   DCHECK(window);
   return ArgumentList(Restore::Results::Create(
       CreateSessionModelHelper(base::Time::Now().ToTimeT(), absl::nullopt,
@@ -566,9 +570,11 @@ ExtensionFunction::ResponseValue SessionsRestoreFunction::RestoreForeignSession(
   }
 
   // Restoring a full window.
-  std::vector<const sessions::SessionWindow*> windows;
-  if (!open_tabs->GetForeignSession(session_id.session_tag(), &windows))
+  std::vector<const sessions::SessionWindow*> windows =
+      open_tabs->GetForeignSession(session_id.session_tag());
+  if (windows.empty()) {
     return Error(kInvalidSessionIdError, session_id.ToString());
+  }
 
   std::vector<const sessions::SessionWindow*>::const_iterator window =
       windows.begin();
@@ -588,7 +594,7 @@ ExtensionFunction::ResponseValue SessionsRestoreFunction::RestoreForeignSession(
 }
 
 ExtensionFunction::ResponseAction SessionsRestoreFunction::Run() {
-  std::unique_ptr<Restore::Params> params(Restore::Params::Create(args()));
+  absl::optional<Restore::Params> params = Restore::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   Profile* profile = Profile::FromBrowserContext(browser_context());

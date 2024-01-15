@@ -8,14 +8,28 @@
 #include <memory>
 
 #include "base/no_destructor.h"
+#include "base/strings/stringprintf.h"
+#include "chrome/browser/extensions/extension_tab_util.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/common/extensions/api/side_panel.h"
 #include "chrome/common/extensions/api/side_panel/side_panel_info.h"
 #include "components/sessions/core/session_id.h"
+#include "extensions/browser/extension_prefs.h"
+#include "extensions/browser/pref_types.h"
+#include "extensions/common/extension_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
 namespace {
+
+// Key corresponding to whether the extension's side panel entry (if one exists)
+// should be opened when its icon is clicked in the toolbar.
+constexpr PrefMap kOpenSidePanelOnIconClickPref = {
+    "open_side_panel_on_icon_click", PrefType::kBool,
+    PrefScope::kExtensionSpecific};
 
 api::side_panel::PanelOptions GetPanelOptionsFromManifest(
     const Extension& extension) {
@@ -28,14 +42,6 @@ api::side_panel::PanelOptions GetPanelOptionsFromManifest(
   return options;
 }
 
-// TODO(crbug.com/1332599): Add a Clone() method for generated types.
-api::side_panel::PanelOptions CloneOptions(
-    const api::side_panel::PanelOptions& options) {
-  auto clone =
-      api::side_panel::PanelOptions::FromValue(base::Value(options.ToValue()));
-  return clone ? std::move(*clone) : api::side_panel::PanelOptions();
-}
-
 }  // namespace
 
 SidePanelService::~SidePanelService() = default;
@@ -45,6 +51,36 @@ SidePanelService::SidePanelService(content::BrowserContext* context)
   extensions::ExtensionRegistry* extension_registry =
       extensions::ExtensionRegistry::Get(context);
   extension_registry_observation_.Observe(extension_registry);
+}
+
+bool SidePanelService::HasSidePanelActionForTab(const Extension& extension,
+                                                TabId tab_id) {
+  if (!OpenSidePanelOnIconClick(extension.id()) ||
+      !base::FeatureList::IsEnabled(
+          extensions_features::kExtensionSidePanelIntegration)) {
+    return false;
+  }
+
+  return HasSidePanelAvailableForTab(extension, tab_id);
+}
+
+bool SidePanelService::HasSidePanelContextMenuActionForTab(
+    const Extension& extension,
+    TabId tab_id) {
+  if (!features::IsSidePanelPinningEnabled() ||
+      !base::FeatureList::IsEnabled(
+          extensions_features::kExtensionSidePanelIntegration)) {
+    return false;
+  }
+
+  return HasSidePanelAvailableForTab(extension, tab_id);
+}
+
+bool SidePanelService::HasSidePanelAvailableForTab(const Extension& extension,
+                                                   TabId tab_id) {
+  api::side_panel::PanelOptions options = GetOptions(extension, tab_id);
+  return options.enabled.has_value() && *options.enabled &&
+         options.path.has_value();
 }
 
 api::side_panel::PanelOptions SidePanelService::GetOptions(
@@ -66,37 +102,78 @@ api::side_panel::PanelOptions SidePanelService::GetOptions(
   if (tab_id != default_tab_id) {
     auto specific_tab_options = tab_panel_options.find(tab_id);
     if (specific_tab_options != tab_panel_options.end())
-      return CloneOptions(specific_tab_options->second);
+      return specific_tab_options->second.Clone();
   }
 
   // Fall back to the default tab if no tab ID was specified or entries for the
   // specific tab weren't found.
   auto default_options = tab_panel_options.find(default_tab_id);
   if (default_options != tab_panel_options.end()) {
-    auto options = CloneOptions(default_options->second);
-    return options;
+    return default_options->second.Clone();
   }
 
   // Fall back to the manifest-specified options as a last resort.
   return GetPanelOptionsFromManifest(extension);
 }
 
+api::side_panel::PanelOptions SidePanelService::GetSpecificOptionsForTab(
+    const Extension& extension,
+    TabId tab_id) {
+  auto extension_panel_options = panels_.find(extension.id());
+  if (extension_panel_options == panels_.end()) {
+    return api::side_panel::PanelOptions();
+  }
+
+  TabPanelOptions& tab_panel_options = extension_panel_options->second;
+  auto specific_tab_options = tab_panel_options.find(tab_id);
+  return specific_tab_options == tab_panel_options.end()
+             ? api::side_panel::PanelOptions()
+             : specific_tab_options->second.Clone();
+}
+
 // Upsert to merge `panels_[extension_id][tab_id]` with `set_options`.
 void SidePanelService::SetOptions(const Extension& extension,
                                   api::side_panel::PanelOptions options) {
+  auto update_existing_options =
+      [&options](api::side_panel::PanelOptions& existing_options) {
+        if (options.path) {
+          existing_options.path = std::move(options.path);
+        }
+        if (options.enabled) {
+          existing_options.enabled = std::move(options.enabled);
+        }
+      };
+
   TabId tab_id = SessionID::InvalidValue().id();
   if (options.tab_id)
     tab_id = *options.tab_id;
   TabPanelOptions& extension_panel_options = panels_[extension.id()];
   auto it = extension_panel_options.find(tab_id);
-  if (it == extension_panel_options.end()) {
-    extension_panel_options[tab_id] = std::move(options);
+
+  // Create the options if they don't exist, otherwise update them.
+  if (it != extension_panel_options.end()) {
+    update_existing_options(it->second);
   } else {
-    auto& existing_options = it->second;
-    if (options.path)
-      existing_options.path = std::move(options.path);
-    if (options.enabled)
-      existing_options.enabled = std::move(options.enabled);
+    // The default value for the optional enabled option is true. This default
+    // is applied when the supplied option is being inserted for the first time.
+    if (!options.enabled.has_value()) {
+      options.enabled = true;
+    }
+
+    // If there is no entry for the default tab, merge `options` into the
+    // manifest-specified options.
+    if (tab_id == SessionID::InvalidValue().id()) {
+      extension_panel_options[tab_id] = GetPanelOptionsFromManifest(extension);
+      update_existing_options(extension_panel_options[tab_id]);
+    } else {
+      // Update an existing option.
+      extension_panel_options[tab_id] = std::move(options);
+    }
+  }
+
+  for (auto& observer : observers_) {
+    observer.OnPanelOptionsChanged(extension.id(),
+                                   extension_panel_options[tab_id]);
   }
 }
 
@@ -121,6 +198,114 @@ void SidePanelService::RemoveExtensionOptions(const ExtensionId& id) {
   panels_.erase(id);
 }
 
+bool SidePanelService::OpenSidePanelOnIconClick(
+    const ExtensionId& extension_id) {
+  bool open_side_panel_on_icon_click = false;
+  ExtensionPrefs::Get(browser_context_)
+      ->ReadPrefAsBoolean(extension_id, kOpenSidePanelOnIconClickPref,
+                          &open_side_panel_on_icon_click);
+  return open_side_panel_on_icon_click;
+}
+
+void SidePanelService::SetOpenSidePanelOnIconClick(
+    const ExtensionId& extension_id,
+    bool open_side_panel_on_icon_click) {
+  ExtensionPrefs::Get(browser_context_)
+      ->SetBooleanPref(extension_id, kOpenSidePanelOnIconClickPref,
+                       open_side_panel_on_icon_click);
+}
+
+base::expected<bool, std::string> SidePanelService::OpenSidePanelForWindow(
+    const Extension& extension,
+    int window_id,
+    bool include_incognito_information) {
+  std::string error;
+  Browser* browser = ExtensionTabUtil::GetBrowserInProfileWithId(
+      Profile::FromBrowserContext(browser_context_), window_id,
+      include_incognito_information, &error);
+  if (!browser) {
+    return base::unexpected(error);
+  }
+
+  auto global_options = GetOptions(extension, absl::nullopt);
+  if (!global_options.path || !global_options.enabled.has_value() ||
+      !(*global_options.enabled)) {
+    return base::unexpected(
+        base::StringPrintf("No active side panel for windowId: %d", window_id));
+  }
+
+  side_panel_util::OpenGlobalExtensionSidePanel(
+      *browser, /*web_contents=*/nullptr, extension.id());
+  return true;
+}
+
+base::expected<bool, std::string> SidePanelService::OpenSidePanelForTab(
+    const Extension& extension,
+    int tab_id,
+    absl::optional<int> window_id,
+    bool include_incognito_information) {
+  // First, find the corresponding tab.
+  Browser* browser = nullptr;
+  content::WebContents* web_contents = nullptr;
+  if (!ExtensionTabUtil::GetTabById(tab_id, browser_context_,
+                                    include_incognito_information, &browser,
+                                    nullptr, &web_contents, nullptr)) {
+    return base::unexpected(
+        base::StringPrintf("No tab with tabId: %d", tab_id));
+  }
+
+  CHECK(browser);
+
+  // If both `tab_id` and `window_id` were provided, ensure the tab is in
+  // the specified window.
+  if (window_id && window_id != ExtensionTabUtil::GetWindowId(browser)) {
+    return base::unexpected(
+        "The specified tab does not belong to the specified window.");
+  }
+
+  // Next, determine if we an active side panel (contextual or global) for that
+  // tab.
+  api::side_panel::PanelOptions panel_options = GetOptions(extension, tab_id);
+  if (!panel_options.path || !panel_options.enabled.has_value() ||
+      !(*panel_options.enabled)) {
+    return base::unexpected(
+        base::StringPrintf("No active side panel for tabId: %d", tab_id));
+  }
+
+  // If we do have an active panel, check if it's a contextual panel.
+  bool has_contextual_panel = false;
+  auto panels_iter = panels_.find(extension.id());
+  if (panels_iter != panels_.end()) {
+    auto tab_panels_iter = panels_iter->second.find(tab_id);
+    if (tab_panels_iter != panels_iter->second.end()) {
+      auto& options = tab_panels_iter->second;
+      CHECK(options.path);
+      CHECK(options.enabled.has_value());
+      CHECK(options.enabled.value());
+      has_contextual_panel = true;
+    }
+  }
+
+  // Open the appropriate panel.
+  if (has_contextual_panel) {
+    side_panel_util::OpenContextualExtensionSidePanel(*browser, *web_contents,
+                                                      extension.id());
+  } else {
+    side_panel_util::OpenGlobalExtensionSidePanel(*browser, web_contents,
+                                                  extension.id());
+  }
+
+  return true;
+}
+
+void SidePanelService::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void SidePanelService::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
 void SidePanelService::OnExtensionUnloaded(
     content::BrowserContext* browser_context,
     const Extension* extension,
@@ -133,6 +318,12 @@ void SidePanelService::OnExtensionUninstalled(
     const Extension* extension,
     UninstallReason reason) {
   RemoveExtensionOptions(extension->id());
+}
+
+void SidePanelService::Shutdown() {
+  for (auto& observer : observers_) {
+    observer.OnSidePanelServiceShutdown();
+  }
 }
 
 }  // namespace extensions

@@ -7,10 +7,10 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/uuid.h"
 #include "components/download/internal/background_service/entry.h"
 #include "components/download/internal/background_service/stats.h"
 #include "components/download/internal/background_service/test/entry_utils.h"
@@ -42,6 +42,7 @@ class DownloadServiceModelImplTest : public testing::Test {
     store_ = store.get();
     model_ = std::make_unique<ModelImpl>(std::move(store));
   }
+  void TearDown() override { store_ = nullptr; }
 
  protected:
   test::MockModelClient client_;
@@ -268,7 +269,8 @@ TEST_F(DownloadServiceModelImplTest, Get) {
   store_->TriggerInit(true, std::make_unique<std::vector<Entry>>(entries));
 
   EXPECT_TRUE(test::CompareEntry(&entry, model_->Get(entry.guid)));
-  EXPECT_EQ(nullptr, model_->Get(base::GenerateGUID()));
+  EXPECT_EQ(nullptr,
+            model_->Get(base::Uuid::GenerateRandomV4().AsLowercaseString()));
 }
 
 TEST_F(DownloadServiceModelImplTest, PeekEntries) {

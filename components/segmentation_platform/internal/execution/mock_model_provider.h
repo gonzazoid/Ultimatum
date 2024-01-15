@@ -28,11 +28,13 @@ class MockModelProvider : public ModelProvider {
           get_client_callback);
   ~MockModelProvider() override;
 
-  MOCK_METHOD(void,
-              ExecuteModelWithInput,
-              (const std::vector<float>& input,
-               base::OnceCallback<void(const absl::optional<float>&)> callback),
-              (override));
+  MOCK_METHOD(
+      void,
+      ExecuteModelWithInput,
+      (const ModelProvider::Request& input,
+       base::OnceCallback<void(const absl::optional<ModelProvider::Response>&)>
+           callback),
+      (override));
 
   MOCK_METHOD(void,
               InitAndFetchModel,
@@ -44,6 +46,29 @@ class MockModelProvider : public ModelProvider {
  private:
   base::RepeatingCallback<void(const ModelProvider::ModelUpdatedCallback&)>
       get_client_callback_;
+};
+
+class MockDefaultModelProvider : public DefaultModelProvider {
+ public:
+  MockDefaultModelProvider(proto::SegmentId segment_id,
+                           const proto::SegmentationModelMetadata& metadata);
+  ~MockDefaultModelProvider() override;
+
+  MOCK_METHOD(
+      void,
+      ExecuteModelWithInput,
+      (const ModelProvider::Request& input,
+       base::OnceCallback<void(const absl::optional<ModelProvider::Response>&)>
+           callback),
+      (override));
+
+  MOCK_METHOD(std::unique_ptr<DefaultModelProvider::ModelConfig>,
+              GetModelConfig,
+              (),
+              (override));
+
+ private:
+  proto::SegmentationModelMetadata metadata_;
 };
 
 // Test factory for providers, keeps track of model requests, but does not run
@@ -61,7 +86,13 @@ class TestModelProviderFactory : public ModelProviderFactory {
 
     // Map of targets to default model providers, added when provider is
     // created. The list is not cleared when providers are destroyed.
-    std::map<proto::SegmentId, MockModelProvider*> default_model_providers;
+    std::map<proto::SegmentId, MockDefaultModelProvider*>
+        default_model_providers;
+
+    // Map of targets to the metadata that the default model should return when
+    // the platform requests for the data.
+    std::map<proto::SegmentId, proto::SegmentationModelMetadata>
+        default_provider_metadata;
 
     // Map from target to updated callback, recorded when InitAndFetchModel()
     // was called on any provider.
@@ -81,7 +112,7 @@ class TestModelProviderFactory : public ModelProviderFactory {
   std::unique_ptr<ModelProvider> CreateProvider(
       proto::SegmentId segment_id) override;
 
-  std::unique_ptr<ModelProvider> CreateDefaultProvider(
+  std::unique_ptr<DefaultModelProvider> CreateDefaultProvider(
       proto::SegmentId) override;
 
  private:

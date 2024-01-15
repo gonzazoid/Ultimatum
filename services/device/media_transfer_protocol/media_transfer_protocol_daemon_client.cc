@@ -6,7 +6,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -503,7 +504,7 @@ class MediaTransferProtocolDaemonClientImpl
         << "Connect to " << interface << " " << signal << " failed.";
   }
 
-  dbus::ObjectProxy* const proxy_;
+  const raw_ptr<dbus::ObjectProxy> proxy_;
 
   bool listen_for_changes_called_;
 

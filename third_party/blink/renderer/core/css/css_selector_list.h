@@ -57,9 +57,9 @@ namespace blink {
 //   index = IndexOfNextSelectorAfter(index);
 // } while (index != kNotFound);
 //
-// Use CSSSelector::TagHistory() and CSSSelector::IsLastInTagHistory()
-// to traverse through each sequence of simple selectors,
-// from .c3 to #ident; from span to .c2; from div to .c1
+// Use CSSSelector::NextSimpleSelector() and
+// CSSSelector::IsLastInComplexSelector() to traverse through each sequence of
+// simple selectors, from .c3 to #ident; from span to .c2; from div to .c1
 //
 // StyleRule stores its selectors in an identical memory layout,
 // but not as part of a CSSSelectorList (see its class comments).
@@ -110,8 +110,9 @@ class CORE_EXPORT CSSSelectorList : public GarbageCollected<CSSSelectorList> {
   wtf_size_t IndexOfNextSelectorAfter(wtf_size_t index) const {
     const CSSSelector& current = SelectorAt(index);
     const CSSSelector* next = Next(current);
-    if (!next)
+    if (!next) {
       return kNotFound;
+    }
     return SelectorIndex(*next);
   }
 
@@ -125,6 +126,15 @@ class CORE_EXPORT CSSSelectorList : public GarbageCollected<CSSSelectorList> {
   // Return the specificity of the selector with the highest specificity.
   unsigned MaximumSpecificity() const;
 
+  // See CSSSelector::Reparent.
+  static void Reparent(CSSSelector* selector_list,
+                       StyleRule* old_parent,
+                       StyleRule* new_parent);
+
+  void Reparent(StyleRule* old_parent, StyleRule* new_parent) {
+    CSSSelectorList::Reparent(first_selector_, old_parent, new_parent);
+  }
+
   CSSSelectorList(const CSSSelectorList&) = delete;
   CSSSelectorList& operator=(const CSSSelectorList&) = delete;
 
@@ -134,7 +144,7 @@ class CORE_EXPORT CSSSelectorList : public GarbageCollected<CSSSelectorList> {
   // All of the remaining CSSSelector objects are allocated on
   // AdditionalBytes, and thus live immediately after this object. The length
   // is not stored explicitly anywhere: End of a multipart selector is
-  // indicated by is_last_in_tag_history_ bit in the last item. End of the
+  // indicated by is_last_in_complexlector_ bit in the last item. End of the
   // array is indicated by is_last_in_selector_list_ bit in the last item.
   CSSSelector first_selector_[1];
 };
@@ -146,8 +156,9 @@ inline const CSSSelector* CSSSelectorList::Next(const CSSSelector& current) {
 inline CSSSelector* CSSSelectorList::Next(CSSSelector& current) {
   // Skip subparts of compound selectors.
   CSSSelector* last = &current;
-  while (!last->IsLastInTagHistory())
+  while (!last->IsLastInComplexSelector()) {
     last++;
+  }
   return last->IsLastInSelectorList() ? nullptr : last + 1;
 }
 

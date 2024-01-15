@@ -8,10 +8,10 @@
 #include <set>
 
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "cc/input/browser_controls_state.h"
 #include "chrome/android/chrome_jni_headers/OverlayPanelContent_jni.h"
@@ -75,7 +75,8 @@ void OverlayPanelContent::RemoveLastHistoryEntry(
     jlong search_start_time_ms) {
   // The deletion window is from the time a search URL was put in history, up
   // to a short amount of time later.
-  base::Time begin_time = base::Time::FromJsTime(search_start_time_ms);
+  base::Time begin_time =
+      base::Time::FromMillisecondsSinceUnixEpoch(search_start_time_ms);
   base::Time end_time =
       begin_time + base::Seconds(kHistoryDeletionWindowSeconds);
 
@@ -111,6 +112,7 @@ void OverlayPanelContent::SetWebContents(
   // TODO(pedrosimonetti): Confirm with dtrainor@ if the comment above
   // is accurate.
   web_contents_.reset(web_contents);
+  web_contents_->SetOwnerLocationForDebug(FROM_HERE);
 
   web_contents_->SetIsOverlayContent(true);
   // TODO(pedrosimonetti): confirm if we need this after promoting it
@@ -130,8 +132,8 @@ void OverlayPanelContent::DestroyWebContents(
   // WebContents. WebContents does not support being deleted from a callback
   // (crashes). To avoid this problem DeleteSoon() is used. See
   // https://crbug.com/1262098.
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                  web_contents_.release());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
+      FROM_HERE, web_contents_.release());
   // |web_contents_delegate_| may already be NULL at this point.
   web_contents_delegate_.reset();
 }

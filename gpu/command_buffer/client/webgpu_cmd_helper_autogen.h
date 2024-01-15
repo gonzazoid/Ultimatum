@@ -11,12 +11,15 @@
 #ifndef GPU_COMMAND_BUFFER_CLIENT_WEBGPU_CMD_HELPER_AUTOGEN_H_
 #define GPU_COMMAND_BUFFER_CLIENT_WEBGPU_CMD_HELPER_AUTOGEN_H_
 
-void DawnCommands(uint32_t commands_shm_id,
+void DawnCommands(uint32_t trace_id_high,
+                  uint32_t trace_id_low,
+                  uint32_t commands_shm_id,
                   uint32_t commands_shm_offset,
                   uint32_t size) {
   webgpu::cmds::DawnCommands* c = GetCmdSpace<webgpu::cmds::DawnCommands>();
   if (c) {
-    c->Init(commands_shm_id, commands_shm_offset, size);
+    c->Init(trace_id_high, trace_id_low, commands_shm_id, commands_shm_offset,
+            size);
   }
 }
 
@@ -26,14 +29,17 @@ void AssociateMailboxImmediate(GLuint device_id,
                                GLuint generation,
                                GLuint usage,
                                MailboxFlags flags,
-                               const GLbyte* mailbox) {
-  const uint32_t size = webgpu::cmds::AssociateMailboxImmediate::ComputeSize();
+                               GLuint view_format_count,
+                               GLuint count,
+                               const GLuint* mailbox_and_view_formats) {
+  const uint32_t size =
+      webgpu::cmds::AssociateMailboxImmediate::ComputeSize(count);
   webgpu::cmds::AssociateMailboxImmediate* c =
       GetImmediateCmdSpaceTotalSize<webgpu::cmds::AssociateMailboxImmediate>(
           size);
   if (c) {
     c->Init(device_id, device_generation, id, generation, usage, flags,
-            mailbox);
+            view_format_count, count, mailbox_and_view_formats);
   }
 }
 

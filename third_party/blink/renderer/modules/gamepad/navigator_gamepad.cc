@@ -236,6 +236,31 @@ GamepadHapticActuator* NavigatorGamepad::GetVibrationActuatorForGamepad(
   return vibration_actuators_[pad_index].Get();
 }
 
+void NavigatorGamepad::SetTouchEvents(const Gamepad& gamepad,
+                                      GamepadTouchVector& touch_events,
+                                      unsigned count,
+                                      const device::GamepadTouch* data) {
+  int pad_index = gamepad.index();
+  DCHECK_GE(pad_index, 0);
+
+  auto& id = next_touch_id_[pad_index];
+  auto& id_map = touch_id_map_[pad_index];
+
+  uint32_t the_id = 0u;
+  TouchIdMap the_id_map{};
+  for (unsigned i = 0u; i < count; ++i) {
+    if (auto search = id_map.find(data[i].touch_id); search != id_map.end()) {
+      the_id = search->value;
+    } else {
+      the_id = id++;
+    }
+    the_id_map.Set(data[i].touch_id, the_id);
+    touch_events[i]->UpdateValuesFrom(data[i], the_id);
+  }
+
+  id_map = std::move(the_id_map);
+}
+
 void NavigatorGamepad::Trace(Visitor* visitor) const {
   visitor->Trace(gamepads_);
   visitor->Trace(gamepads_back_);
@@ -249,18 +274,11 @@ void NavigatorGamepad::Trace(Visitor* visitor) const {
 
 bool NavigatorGamepad::StartUpdatingIfAttached() {
   // The frame must be attached to start updating.
-  if (!DomWindow()) {
-    return false;
+  if (DomWindow()) {
+    StartUpdating();
+    return true;
   }
-
-  // TODO(https://crbug.com/1011006): Remove fenced frame specific code when
-  // permission policy implements the Gamepad API support.
-  if (DomWindow()->GetFrame()->IsInFencedFrameTree()) {
-    return false;
-  }
-
-  StartUpdating();
-  return true;
+  return false;
 }
 
 void NavigatorGamepad::DidUpdateData() {
@@ -282,12 +300,17 @@ NavigatorGamepad::NavigatorGamepad(Navigator& navigator)
       PlatformEventController(*navigator.DomWindow()),
       gamepad_dispatcher_(
           MakeGarbageCollected<GamepadDispatcher>(*navigator.DomWindow())) {
-  navigator.DomWindow()->RegisterEventListenerObserver(this);
+  LocalDOMWindow* window = navigator.DomWindow();
+  window->RegisterEventListenerObserver(this);
 
   // Fetch |window.performance.timing.navigationStart|. Gamepad timestamps are
   // reported relative to this value.
-  auto& timing = DomWindow()->document()->Loader()->GetTiming();
-  navigation_start_ = timing.NavigationStart();
+  DocumentLoader* loader = window->document()->Loader();
+  if (loader) {
+    navigation_start_ = loader->GetTiming().NavigationStart();
+  } else {
+    navigation_start_ = base::TimeTicks::Now();
+  }
 
   vibration_actuators_.resize(device::Gamepads::kItemsLengthCap);
 }

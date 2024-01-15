@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/profiler/profile_builder.h"
 #include "base/profiler/sampling_profiler_thread_token.h"
 #include "base/synchronization/waitable_event.h"
@@ -109,13 +109,6 @@ class BASE_EXPORT StackSamplingProfiler {
       RepeatingClosure record_sample_callback = RepeatingClosure(),
       StackSamplerTestDelegate* test_delegate = nullptr);
 
-  // Same as above function, with custom |sampler| implementation. The sampler
-  // on Android is not implemented in base.
-  StackSamplingProfiler(SamplingProfilerThreadToken thread_token,
-                        const SamplingParams& params,
-                        std::unique_ptr<ProfileBuilder> profile_builder,
-                        std::unique_ptr<StackSampler> sampler);
-
   StackSamplingProfiler(const StackSamplingProfiler&) = delete;
   StackSamplingProfiler& operator=(const StackSamplingProfiler&) = delete;
 
@@ -181,13 +174,18 @@ class BASE_EXPORT StackSamplingProfiler {
   // the target thread.
   class SamplingThread;
 
-  // Friend the global function from sample_metadata.cc so that it can call into
-  // the function below.
+  // Friend the global functions from sample_metadata.cc so that it can call
+  // into the function below.
   friend void ApplyMetadataToPastSamplesImpl(
       TimeTicks period_start,
       TimeTicks period_end,
       uint64_t name_hash,
       absl::optional<int64_t> key,
+      int64_t value,
+      absl::optional<PlatformThreadId> thread_id);
+  friend void AddProfileMetadataImpl(
+      uint64_t name_hash,
+      int64_t key,
       int64_t value,
       absl::optional<PlatformThreadId> thread_id);
 
@@ -200,6 +198,12 @@ class BASE_EXPORT StackSamplingProfiler {
       absl::optional<int64_t> key,
       int64_t value,
       absl::optional<PlatformThreadId> thread_id);
+
+  // Adds metadata as metadata global to the sampling profile.
+  static void AddProfileMetadata(uint64_t name_hash,
+                                 int64_t key,
+                                 int64_t value,
+                                 absl::optional<PlatformThreadId> thread_id);
 
   // The thread whose stack will be sampled.
   SamplingProfilerThreadToken thread_token_;

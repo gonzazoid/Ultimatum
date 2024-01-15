@@ -4,8 +4,8 @@
 
 #include "chrome/browser/performance_manager/decorators/helpers/page_live_state_decorator_helper.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
@@ -342,6 +342,26 @@ TEST_F(PageLiveStateDecoratorHelperTabsTest, IsActiveTab) {
   testing::TestPageNodePropertyOnPMSequence(
       other_contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
       &PageLiveStateDecorator::Data::IsActiveTab, true);
+}
+
+TEST_F(PageLiveStateDecoratorHelperTabsTest, IsPinnedTab) {
+  // Create a tab, it's associated PageNode should be the active one.
+  AddTab(browser(), GURL("http://foo/1"));
+  content::WebContents* contents =
+      browser()->tab_strip_model()->GetWebContentsAt(0);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab, false);
+
+  browser()->tab_strip_model()->SetTabPinned(0, true);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab, true);
+
+  browser()->tab_strip_model()->SetTabPinned(0, false);
+  testing::TestPageNodePropertyOnPMSequence(
+      contents, &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab, false);
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 

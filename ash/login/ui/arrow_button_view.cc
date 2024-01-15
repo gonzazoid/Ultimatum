@@ -7,11 +7,13 @@
 #include <utility>
 
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/color_util.h"
 #include "base/time/time.h"
 #include "cc/paint/paint_flags.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/layer_animator.h"
@@ -20,7 +22,7 @@
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/skia_conversions.h"
-#include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
@@ -28,8 +30,6 @@
 namespace ash {
 namespace {
 
-// Arrow icon size.
-constexpr int kArrowIconSizeDp = 20;
 constexpr int kArrowIconBackroundRadius = 25;
 
 constexpr const int kBorderForFocusRingDp = 3;
@@ -79,7 +79,7 @@ ArrowButtonView::ArrowButtonView(PressedCallback callback, int size)
   SetPreferredSize(gfx::Size(size + 2 * kBorderForFocusRingDp,
                              size + 2 * kBorderForFocusRingDp));
   SetFocusBehavior(FocusBehavior::ALWAYS);
-
+  SetBackgroundColorId(kColorAshControlBackgroundColorInactive);
   // Layer rendering is needed for animation.
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
@@ -89,49 +89,30 @@ ArrowButtonView::ArrowButtonView(PressedCallback callback, int size)
   views::FocusRing::Get(this)->SetPathGenerator(
       std::make_unique<views::FixedSizeCircleHighlightPathGenerator>(
           kArrowIconBackroundRadius));
+  SetImageModel(views::Button::STATE_NORMAL,
+                ui::ImageModel::FromVectorIcon(kLockScreenArrowIcon,
+                                               kColorAshButtonIconColor));
+  SetImageModel(views::Button::STATE_DISABLED,
+                ui::ImageModel::FromVectorIcon(
+                    kLockScreenArrowIcon, kColorAshButtonIconDisabledColor));
 }
 
 ArrowButtonView::~ArrowButtonView() = default;
 
 void ArrowButtonView::PaintButtonContents(gfx::Canvas* canvas) {
-  const gfx::Rect rect(GetContentsBounds());
-
-  // Draw background.
-  cc::PaintFlags flags;
-  flags.setAntiAlias(true);
-  if (background_color_) {
-    flags.setColor(*background_color_);
-  } else {
-    flags.setColor(AshColorProvider::Get()->GetControlsLayerColor(
-        AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive));
-  }
-  flags.setStyle(cc::PaintFlags::kFill_Style);
-  canvas->DrawCircle(gfx::PointF(rect.CenterPoint()), rect.width() / 2, flags);
-
   // Draw arrow icon.
   views::ImageButton::PaintButtonContents(canvas);
 
   // Draw the arc of the loading animation.
-  if (loading_animation_)
+  if (loading_animation_) {
+    const gfx::Rect rect(GetContentsBounds());
     PaintLoadingArc(canvas, rect, loading_animation_->GetCurrentValue());
+  }
 }
 
 void ArrowButtonView::OnThemeChanged() {
   LoginButton::OnThemeChanged();
-  auto* color_provider = AshColorProvider::Get();
-  SkColor icon_color;
-  if (icon_color_) {
-    icon_color = *icon_color_;
-  } else {
-    icon_color = color_provider->GetContentLayerColor(
-        AshColorProvider::ContentLayerType::kButtonIconColor);
-  }
-  SetImage(views::Button::STATE_NORMAL,
-           gfx::CreateVectorIcon(kLockScreenArrowIcon, kArrowIconSizeDp,
-                                 icon_color));
-  SetImage(views::Button::STATE_DISABLED,
-           gfx::CreateVectorIcon(kLockScreenArrowIcon, kArrowIconSizeDp,
-                                 ColorUtil::GetDisabledColor(icon_color)));
+  SchedulePaint();
 }
 
 void ArrowButtonView::RunTransformAnimation() {
@@ -179,15 +160,17 @@ void ArrowButtonView::StopAnimating() {
 
 void ArrowButtonView::EnableLoadingAnimation(bool enabled) {
   if (!enabled) {
-    if (!loading_animation_)
+    if (!loading_animation_) {
       return;
+    }
     loading_animation_.reset();
     SchedulePaint();
     return;
   }
 
-  if (loading_animation_)
+  if (loading_animation_) {
     return;
+  }
 
   // Use MultiAnimation in order to have a continuously running analog of
   // LinearAnimation.
@@ -210,6 +193,11 @@ ArrowButtonView::LoadingAnimationDelegate::~LoadingAnimationDelegate() =
 void ArrowButtonView::LoadingAnimationDelegate::AnimationProgressed(
     const gfx::Animation* /*animation*/) {
   owner_->SchedulePaint();
+}
+
+void ArrowButtonView::SetBackgroundColorId(ui::ColorId color_id) {
+  SetBackground(views::CreateThemedRoundedRectBackground(
+      color_id, GetPreferredSize().width() / 2, 2 * kBorderForFocusRingDp));
 }
 
 BEGIN_METADATA(ArrowButtonView, LoginButton)

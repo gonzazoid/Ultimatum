@@ -8,7 +8,6 @@
 #include "base/task/thread_pool.h"
 #include "chrome/services/sharing/nearby/platform/bidirectional_stream.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -62,7 +61,7 @@ Exception BluetoothSocket::Close() {
 }
 
 api::BluetoothDevice* BluetoothSocket::GetRemoteDevice() {
-  return &remote_device_ref_;
+  return &*remote_device_ref_;
 }
 
 void BluetoothSocket::CloseMojoSocketIfNecessary() {
@@ -83,4 +82,3 @@ void BluetoothSocket::CloseMojoSocketIfNecessary() {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

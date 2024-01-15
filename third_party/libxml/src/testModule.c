@@ -6,12 +6,12 @@
  * joelwreed@comcast.net
  */
 
-#include "libxml.h"
-#ifdef LIBXML_MODULES_ENABLED
+#include <stdio.h>
 #include <libxml/xmlversion.h>
 
+#ifdef LIBXML_MODULES_ENABLED
+
 #include <limits.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -49,32 +49,31 @@ int main(int argc ATTRIBUTE_UNUSED, char **argv ATTRIBUTE_UNUSED) {
     xmlStrPrintf(filename, sizeof(filename),
                  "%s/testdso%s",
                  (const xmlChar*)MODULE_PATH,
-		 (const xmlChar*)LIBXML_MODULE_EXTENSION);
+                 (const xmlChar*)LIBXML_MODULE_EXTENSION);
 
     module = xmlModuleOpen((const char*)filename, 0);
-    if (module)
-      {
-        if (xmlModuleSymbol(module, "hello_world", (void **) &hello_world)) {
-	    fprintf(stderr, "Failure to lookup\n");
-	    return(1);
-	}
-	if (hello_world == NULL) {
-	    fprintf(stderr, "Lookup returned NULL\n");
-	    return(1);
-	}
+    if (module == NULL) {
+      fprintf(stderr, "Failed to open module\n");
+      return(1);
+    }
 
-        (*hello_world)();
+    if (xmlModuleSymbol(module, "hello_world", (void **) &hello_world)) {
+      fprintf(stderr, "Failure to lookup\n");
+      return(1);
+    }
+    if (hello_world == NULL) {
+      fprintf(stderr, "Lookup returned NULL\n");
+      return(1);
+    }
 
-        xmlModuleClose(module);
-      }
+    (*hello_world)();
 
-    xmlMemoryDump();
+    xmlModuleClose(module);
 
     return(0);
 }
 
 #else
-#include <stdio.h>
 int main(int argc ATTRIBUTE_UNUSED, char **argv ATTRIBUTE_UNUSED) {
     printf("%s : Module support not compiled in\n", argv[0]);
     return(0);

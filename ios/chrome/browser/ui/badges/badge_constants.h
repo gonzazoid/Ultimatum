@@ -15,8 +15,6 @@ extern NSString* const
     kBadgeButtonUpdatePasswordAccpetedAccessibilityIdentifier;
 extern NSString* const kBadgeButtonIncognitoAccessibilityIdentifier;
 extern NSString* const kBadgeButtonOverflowAccessibilityIdentifier;
-extern NSString* const kBadgeButtonReadingListAccessibilityIdentifier;
-extern NSString* const kBadgeButtonReadingListAcceptedAccessibilityIdentifier;
 extern NSString* const kBadgeButtonSaveAddressProfileAccessibilityIdentifier;
 extern NSString* const
     kBadgeButtonSaveAddressProfileAcceptedAccessibilityIdentifier;
@@ -30,9 +28,9 @@ extern NSString* const
 extern NSString* const kBadgeButtonPermissionsMicrophoneAccessibilityIdentifier;
 extern NSString* const
     kBadgeButtonPermissionsMicrophoneAcceptedAccessibilityIdentifier;
-
-// A11y identifier for the Badge Popup Menu Table View.
-extern NSString* const kBadgePopupMenuTableViewAccessibilityIdentifier;
+extern NSString* const kBadgeButtonParcelTrackingAccessibilityIdentifier;
+extern NSString* const
+    kBadgeButtonParcelTrackingAcceptedAccessibilityIdentifier;
 
 // A11y identifier for the unread indicator above the displayed badge.
 extern NSString* const kBadgeUnreadIndicatorAccessibilityIdentifier;
@@ -40,10 +38,10 @@ extern NSString* const kBadgeUnreadIndicatorAccessibilityIdentifier;
 // Action identifiers for the new overflow menu.
 extern NSString* const kBadgeButtonSavePasswordActionIdentifier;
 extern NSString* const kBadgeButtonUpdatePasswordActionIdentifier;
-extern NSString* const kBadgeButtonReadingListActionIdentifier;
 extern NSString* const kBadgeButtonSaveAddressProfileActionIdentifier;
 extern NSString* const kBadgeButtonSaveCardActionIdentifier;
 extern NSString* const kBadgeButtonTranslateActionIdentifier;
 extern NSString* const kBadgeButtonPermissionsActionIdentifier;
+extern NSString* const kBadgeButtonParcelTrackingActionIdentifier;
 
 #endif  // IOS_CHROME_BROWSER_UI_BADGES_BADGE_CONSTANTS_H_

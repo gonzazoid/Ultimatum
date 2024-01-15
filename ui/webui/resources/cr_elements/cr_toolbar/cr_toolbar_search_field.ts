@@ -18,12 +18,12 @@ import {getTemplate} from './cr_toolbar_search_field.html.js';
 export interface CrToolbarSearchFieldElement {
   $: {
     searchInput: HTMLInputElement,
+    searchTerm: HTMLElement,
     spinnerTemplate: DomIf,
   };
 }
 
 const CrToolbarSearchFieldElementBase = CrSearchFieldMixin(PolymerElement);
-
 
 export class CrToolbarSearchFieldElement extends
     CrToolbarSearchFieldElementBase {
@@ -50,6 +50,12 @@ export class CrToolbarSearchFieldElement extends
         reflectToAttribute: true,
       },
 
+      disabled: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
       autofocus: {
         type: Boolean,
         value: false,
@@ -65,12 +71,13 @@ export class CrToolbarSearchFieldElement extends
         computed: 'computeIsSpinnerShown_(spinnerActive, showingSearch)',
       },
 
-      searchFocused_: {type: Boolean, value: false},
+      searchFocused_: {reflectToAttribute: true, type: Boolean, value: false},
     };
   }
 
   narrow: boolean;
   showingSearch: boolean;
+  disabled: boolean;
   override autofocus: boolean;
   spinnerActive: boolean;
   private isSpinnerShown_: boolean;
@@ -78,7 +85,6 @@ export class CrToolbarSearchFieldElement extends
 
   override ready() {
     super.ready();
-
     this.addEventListener('click', e => this.showSearch_(e));
   }
 

@@ -3,23 +3,24 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/network_info.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {fakeCellularNetwork, fakeEthernetNetwork, fakeWifiNetwork} from 'chrome://diagnostics/fake_data.js';
 import {Network} from 'chrome://diagnostics/network_health_provider.mojom-webui.js';
 import {NetworkInfoElement} from 'chrome://diagnostics/network_info.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertFalse, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function networkInfoTestSuite() {
+suite('networkInfoTestSuite', function() {
   /** @type {?NetworkInfoElement} */
   let networkInfoElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -86,4 +87,4 @@ export function networkInfoTestSuite() {
               isVisible(dx_utils.getCellularInfoElement(networkInfoElement)));
         });
   });
-}
+});

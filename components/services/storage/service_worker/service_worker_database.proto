@@ -22,7 +22,7 @@ message ServiceWorkerNavigationPreloadState {
   optional string header = 2;
 }
 
-// NEXT ID TO USE: 24
+// NEXT ID TO USE: 27
 message ServiceWorkerRegistrationData {
   enum ServiceWorkerScriptType {
     CLASSIC = 0;
@@ -72,6 +72,151 @@ message ServiceWorkerRegistrationData {
     optional int32 sandbox_flags = 2 [default = 0];
     optional IPAddressSpace ip_address_space = 3 [default = UNKNOWN];
     // TODO(https://crbug.com/1177199): add content security policies
+  }
+
+  message RouterRules {
+    message RuleV1 {
+      message Condition {
+        // Structure representing a URLPattern as described in:
+        // https://wicg.github.io/urlpattern/.
+        message URLPattern {
+          message Part {
+            enum Modifier {
+              kNone = 0;
+              kOptional = 1;
+              kZeroOrMore = 2;
+              kOneOrMore = 3;
+            }
+            // Represents a fixed string part of a URLPattern as described in:
+            // https://wicg.github.io/urlpattern/#part-type-fixed-text
+            message FixedPattern {
+              optional string value = 1;
+            }
+            // Represents either a segment wildcard part or a full wildcard
+            // part of a URLPattern as described in:
+            // https://wicg.github.io/urlpattern/#parts
+            message WildcardPattern {
+              optional string name = 1;
+              optional string prefix = 2;
+              optional string value = 3;
+              optional string suffix = 4;
+            }
+            optional Modifier modifier = 1;
+            oneof pattern {
+              FixedPattern fixed = 2;
+              // Note that kRegex PartType is not implemented because we do not
+              // execute regexp in the browser process for security concerns.
+              // (but reserve 3 for regexp just in case).
+              WildcardPattern segment_wildcard = 4;
+              WildcardPattern full_wildcard = 5;
+            }
+          }
+          message Options {
+            optional bool ignore_case = 1 [default = false];
+          }
+
+          repeated Part legacy_pathname = 1;
+
+          repeated Part protocol = 3;
+          repeated Part username = 4;
+          repeated Part password = 5;
+          repeated Part hostname = 2;
+          repeated Part port = 6;
+          repeated Part pathname = 7;
+          repeated Part search = 8;
+          repeated Part hash = 9;
+
+          optional Options options = 10;
+        }
+        message Request {
+          optional string method = 1;
+          // RequestMode in services/network/public/mojom/fetch_api.mojom
+          enum Mode {
+            kSameOriginMode = 0;
+            kNoCorsMode = 1;
+            kCorsMode = 2;
+            kCorsWithForcedPreflightMode = 3;
+            kNavigateMode = 4;
+          }
+          optional Mode mode = 2;
+          // RequestDestination in services/network/public/mojom/fetch_api.mojom
+          enum Destination {
+            kEmptyDestination = 0;
+            kAudioDestination = 1;
+            kAudioWorkletDestination = 2;
+            kDocumentDestination = 3;
+            kEmbedDestination = 4;
+            kFontDestination = 5;
+            kFrameDestination = 6;
+            kIframeDestination = 7;
+            kImageDestination = 8;
+            kManifestDestination = 9;
+            kObjectDestination = 10;
+            kPaintWorkletDestination = 11;
+            kReportDestination = 12;
+            kScriptDestination = 13;
+            kServiceWorkerDestination = 14;
+            kSharedWorkerDestination = 15;
+            kStyleDestination = 16;
+            kTrackDestination = 17;
+            kVideoDestination = 18;
+            kWebBundleDestination = 19;
+            kWorkerDestination = 20;
+            kXsltDestination = 21;
+            kFencedframeDestination = 22;
+            kWebIdentityDestination = 23;
+            kDictionaryDestination = 24;
+            kSpeculationRulesDestination = 25;
+          }
+          optional Destination destination = 3;
+        }
+        message RunningStatus {
+          enum Status {
+            kRunning = 0;
+            kNotRunning = 1;
+          }
+          optional Status status = 1;
+        }
+        // TODO(crbug.com/1492871): Remove and replace this to `condition`
+        message ConditionObject {
+          repeated Condition conditions = 1;
+        }
+        message OrCondition {
+          repeated ConditionObject objects = 1;
+        }
+        // TODO(crbug.com/1492871): Make this a `message` to fit WebIDL
+        oneof condition {
+          // Used for representing URLPattern.
+          URLPattern url_pattern = 1;
+          // Used for representing Request.
+          Request request = 2;
+          // Used for representing running status.
+          RunningStatus running_status = 3;
+          // Used for representing 'or' condition.
+          // The `_condition` suffix is to avoid conflicts with keywords in C++
+          OrCondition or_condition = 4;
+        }
+      }
+      message Source {
+        message NetworkSource {}
+        message RaceSource {}
+        message FetchEventSource {}
+        message CacheSource {
+          optional string cache_name = 1;
+        }
+        oneof source {
+          NetworkSource network_source = 1;
+          RaceSource race_source = 2;
+          FetchEventSource fetch_event_source = 3;
+          CacheSource cache_source = 4;
+        }
+      }
+      repeated Condition condition = 1;
+      repeated Source source = 2;
+    }
+
+    required int32 version = 1;
+    repeated RuleV1 v1 = 2;
   }
 
   required int64 registration_id = 1;
@@ -126,10 +271,17 @@ message ServiceWorkerRegistrationData {
   optional AncestorFrameType ancestor_frame_type = 21 [default = NORMAL_FRAME];
 
   optional PolicyContainerPolicies policy_container_policies = 23;
+
+  optional RouterRules router_rules = 24;
+
+  optional bool has_hid_event_handlers = 25;
+
+  optional bool has_usb_event_handlers = 26;
 }
 
 message ServiceWorkerResourceRecord {
   required int64 resource_id = 1;
   required string url = 2;
   optional uint64 size_bytes = 3;
+  optional string sha256_checksum = 4;
 }

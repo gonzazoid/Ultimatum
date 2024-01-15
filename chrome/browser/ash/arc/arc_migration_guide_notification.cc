@@ -5,10 +5,11 @@
 #include "chrome/browser/ash/arc/arc_migration_guide_notification.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/arc_migration_constants.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -20,7 +21,6 @@
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
 #include "components/vector_icons/vector_icons.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
 #include "ui/gfx/color_palette.h"
@@ -44,7 +44,7 @@ void ShowArcMigrationGuideNotification(Profile* profile) {
   notifier_id.profile_id =
       multi_user_util::GetAccountIdFromProfile(profile).GetUserEmail();
 
-  absl::optional<power_manager::PowerSupplyProperties> power =
+  std::optional<power_manager::PowerSupplyProperties> power =
       chromeos::PowerManagerClient::Get()->GetLastStatus();
   const bool is_low_battery =
       power &&
@@ -61,19 +61,17 @@ void ShowArcMigrationGuideNotification(Profile* profile) {
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
           base::BindRepeating(&chrome::AttemptUserExit));
 
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, kSuggestNotificationId,
-          l10n_util::GetStringUTF16(
-              IDS_ARC_MIGRATE_ENCRYPTION_NOTIFICATION_TITLE),
-          message, std::u16string(), GURL(), notifier_id,
-          message_center::RichNotificationData(), std::move(delegate),
-          vector_icons::kSettingsIcon,
-          message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
-  notification->set_renotify(true);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, kSuggestNotificationId,
+      l10n_util::GetStringUTF16(IDS_ARC_MIGRATE_ENCRYPTION_NOTIFICATION_TITLE),
+      message, std::u16string(), GURL(), notifier_id,
+      message_center::RichNotificationData(), std::move(delegate),
+      vector_icons::kSettingsIcon,
+      message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
+  notification.set_renotify(true);
 
   NotificationDisplayService::GetForProfile(profile)->Display(
-      NotificationHandler::Type::TRANSIENT, *notification,
+      NotificationHandler::Type::TRANSIENT, notification,
       /*metadata=*/nullptr);
 }
 

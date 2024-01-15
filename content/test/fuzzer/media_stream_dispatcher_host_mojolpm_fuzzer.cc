@@ -3,19 +3,27 @@
 // found in the LICENSE file.
 
 #include <stdint.h>
+
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
+#include "content/browser/media/media_internals.h"
+#include "content/browser/renderer_host/media/media_stream_dispatcher_host.h"
+#include "content/browser/renderer_host/media/media_stream_manager.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/mock_navigation_handle.h"
 #include "content/public/test/test_browser_context.h"
+#include "content/test/fuzzer/media_stream_dispatcher_host_mojolpm_fuzzer.pb.h"
 #include "content/test/fuzzer/mojolpm_fuzzer_support.h"
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_web_contents.h"
@@ -26,17 +34,8 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#include "content/browser/media/media_internals.h"
-#include "content/browser/renderer_host/media/media_stream_dispatcher_host.h"
-#include "content/browser/renderer_host/media/media_stream_manager.h"
-
-#include "content/test/fuzzer/media_stream_dispatcher_host_mojolpm_fuzzer.pb.h"
-
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-mojolpm.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
-
 #include "third_party/libprotobuf-mutator/src/src/libfuzzer/libfuzzer_macro.h"
 
 const char* kCmdline[] = {
@@ -91,7 +90,7 @@ class MediaStreamDispatcherHostTestcase
   std::unique_ptr<media::AudioManager> audio_manager_ = nullptr;
   std::unique_ptr<media::AudioSystem> audio_system_ = nullptr;
   std::unique_ptr<content::MediaStreamManager> media_stream_manager_ = nullptr;
-  content::TestRenderFrameHost* render_frame_host_ = nullptr;
+  raw_ptr<content::TestRenderFrameHost> render_frame_host_ = nullptr;
 };
 
 MediaStreamDispatcherHostTestcase::MediaStreamDispatcherHostTestcase(
@@ -212,10 +211,9 @@ void MediaStreamDispatcherHostTestcase::AddMediaStreamDispatcherHostImpl(
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
 
   // MediaStreamDispatcherHost is a self-owned receiver.
-  content::MediaStreamDispatcherHost::Create(
-      render_frame_host_->GetProcess()->GetID(),
-      render_frame_host_->GetRoutingID(), media_stream_manager_.get(),
-      std::move(receiver));
+  content::MediaStreamDispatcherHost::Create(render_frame_host_->GetGlobalId(),
+                                             media_stream_manager_.get(),
+                                             std::move(receiver));
 }
 
 // Component(s) which we fuzz

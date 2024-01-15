@@ -17,10 +17,8 @@
 #include <memory>
 #include <tuple>
 
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/partition_alloc_buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/compiler_specific.h"
-#include "base/debug/activity_tracker.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -45,9 +43,9 @@
 #include <sys/resource.h>
 #endif
 
-#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && BUILDFLAG(STARSCAN)
-#include "base/allocator/partition_allocator/starscan/pcscan.h"
-#include "base/allocator/partition_allocator/starscan/stack/stack.h"
+#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && BUILDFLAG(USE_STARSCAN)
+#include "base/allocator/partition_allocator/src/partition_alloc/starscan/pcscan.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/starscan/stack/stack.h"
 #endif
 
 namespace base {
@@ -78,12 +76,12 @@ void* ThreadFunc(void* params) {
     if (!thread_params->joinable)
       base::DisallowSingleton();
 
-#if !BUILDFLAG(IS_NACL)
-#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && BUILDFLAG(STARSCAN)
+#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && BUILDFLAG(USE_STARSCAN)
     partition_alloc::internal::PCScan::NotifyThreadCreated(
         partition_alloc::internal::GetStackPointer());
 #endif
 
+#if !BUILDFLAG(IS_NACL)
 #if BUILDFLAG(IS_APPLE)
     PlatformThread::SetCurrentThreadRealtimePeriodValue(
         delegate->GetRealtimePeriod());
@@ -93,7 +91,7 @@ void* ThreadFunc(void* params) {
     // where they were created. This explicitly sets the priority of all new
     // threads.
     PlatformThread::SetCurrentThreadType(thread_params->thread_type);
-#endif
+#endif  //  !BUILDFLAG(IS_NACL)
   }
 
   ThreadIdNameManager::GetInstance()->RegisterThread(
@@ -106,8 +104,7 @@ void* ThreadFunc(void* params) {
       PlatformThread::CurrentHandle().platform_handle(),
       PlatformThread::CurrentId());
 
-#if !BUILDFLAG(IS_NACL) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && \
-    BUILDFLAG(STARSCAN)
+#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && BUILDFLAG(USE_STARSCAN)
   partition_alloc::internal::PCScan::NotifyThreadDestroyed();
 #endif
 
@@ -212,7 +209,7 @@ void InvalidateTidCache() {
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 // static
-PlatformThreadId PlatformThread::CurrentId() {
+PlatformThreadId PlatformThreadBase::CurrentId() {
   // Pthreads doesn't have the concept of a thread ID, so we have to reach down
   // into the kernel.
 #if BUILDFLAG(IS_APPLE)
@@ -272,24 +269,24 @@ PlatformThreadId PlatformThread::CurrentId() {
 }
 
 // static
-PlatformThreadRef PlatformThread::CurrentRef() {
+PlatformThreadRef PlatformThreadBase::CurrentRef() {
   return PlatformThreadRef(pthread_self());
 }
 
 // static
-PlatformThreadHandle PlatformThread::CurrentHandle() {
+PlatformThreadHandle PlatformThreadBase::CurrentHandle() {
   return PlatformThreadHandle(pthread_self());
 }
 
 #if !BUILDFLAG(IS_APPLE)
 // static
-void PlatformThread::YieldCurrentThread() {
+void PlatformThreadBase::YieldCurrentThread() {
   sched_yield();
 }
 #endif  // !BUILDFLAG(IS_APPLE)
 
 // static
-void PlatformThread::Sleep(TimeDelta duration) {
+void PlatformThreadBase::Sleep(TimeDelta duration) {
   struct timespec sleep_time, remaining;
 
   // Break the duration into seconds and nanoseconds.
@@ -304,12 +301,12 @@ void PlatformThread::Sleep(TimeDelta duration) {
 }
 
 // static
-const char* PlatformThread::GetName() {
+const char* PlatformThreadBase::GetName() {
   return ThreadIdNameManager::GetInstance()->GetName(CurrentId());
 }
 
 // static
-bool PlatformThread::CreateWithType(size_t stack_size,
+bool PlatformThreadBase::CreateWithType(size_t stack_size,
                                     Delegate* delegate,
                                     PlatformThreadHandle* thread_handle,
                                     ThreadType thread_type,
@@ -319,12 +316,12 @@ bool PlatformThread::CreateWithType(size_t stack_size,
 }
 
 // static
-bool PlatformThread::CreateNonJoinable(size_t stack_size, Delegate* delegate) {
+bool PlatformThreadBase::CreateNonJoinable(size_t stack_size, Delegate* delegate) {
   return CreateNonJoinableWithType(stack_size, delegate, ThreadType::kDefault);
 }
 
 // static
-bool PlatformThread::CreateNonJoinableWithType(size_t stack_size,
+bool PlatformThreadBase::CreateNonJoinableWithType(size_t stack_size,
                                                Delegate* delegate,
                                                ThreadType thread_type,
                                                MessagePumpType pump_type_hint) {
@@ -336,10 +333,7 @@ bool PlatformThread::CreateNonJoinableWithType(size_t stack_size,
 }
 
 // static
-void PlatformThread::Join(PlatformThreadHandle thread_handle) {
-  // Record the event that this thread is blocking upon (for hang diagnosis).
-  base::debug::ScopedThreadJoinActivity thread_activity(&thread_handle);
-
+void PlatformThreadBase::Join(PlatformThreadHandle thread_handle) {
   // Joining another thread may block the current thread for a long time, since
   // the thread referred to by |thread_handle| may still be running long-lived /
   // blocking tasks.
@@ -349,7 +343,7 @@ void PlatformThread::Join(PlatformThreadHandle thread_handle) {
 }
 
 // static
-void PlatformThread::Detach(PlatformThreadHandle thread_handle) {
+void PlatformThreadBase::Detach(PlatformThreadHandle thread_handle) {
   CHECK_EQ(0, pthread_detach(thread_handle.platform_handle()));
 }
 
@@ -358,7 +352,7 @@ void PlatformThread::Detach(PlatformThreadHandle thread_handle) {
 #if !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_FUCHSIA)
 
 // static
-bool PlatformThread::CanChangeThreadType(ThreadType from, ThreadType to) {
+bool PlatformThreadBase::CanChangeThreadType(ThreadType from, ThreadType to) {
 #if BUILDFLAG(IS_NACL)
   return false;
 #else
@@ -401,7 +395,7 @@ void SetCurrentThreadTypeImpl(ThreadType thread_type,
 }  // namespace internal
 
 // static
-ThreadPriorityForTest PlatformThread::GetCurrentThreadPriorityForTest() {
+ThreadPriorityForTest PlatformThreadBase::GetCurrentThreadPriorityForTest() {
 #if BUILDFLAG(IS_NACL)
   NOTIMPLEMENTED();
   return ThreadPriorityForTest::kNormal;
@@ -421,7 +415,7 @@ ThreadPriorityForTest PlatformThread::GetCurrentThreadPriorityForTest() {
 #endif  // !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_FUCHSIA)
 
 // static
-size_t PlatformThread::GetDefaultThreadStackSize() {
+size_t PlatformThreadBase::GetDefaultThreadStackSize() {
   pthread_attr_t attributes;
   pthread_attr_init(&attributes);
   return base::GetDefaultThreadStackSize(attributes);

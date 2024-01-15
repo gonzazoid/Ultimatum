@@ -6,17 +6,22 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/safe_browsing/archive_analyzer_results.h"
+#include "chrome/services/file_util/fake_file_util_service.h"
 #include "chrome/services/file_util/file_util_service.h"
+#include "chrome/services/file_util/public/mojom/safe_archive_analyzer.mojom.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "crypto/sha2.h"
@@ -24,19 +29,22 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(IS_MAC)
 namespace {
 
+#if BUILDFLAG(IS_MAC)
 const char kAppInZipHistogramName[] =
     "SBClientDownload.ZipFileContainsAppDirectory";
-}
 #endif  // BUILDFLAG(IS_MAC)
+
+using testing::_;
+
+}  // namespace
 
 class SandboxedZipAnalyzerTest : public ::testing::Test {
  protected:
   // Constants for validating the data reported by the analyzer.
   struct BinaryData {
-    const char* file_basename;
+    const char* file_path;
     safe_browsing::ClientDownloadRequest_DownloadType download_type;
     const uint8_t* sha256_digest;
     int64_t length;
@@ -85,13 +93,27 @@ class SandboxedZipAnalyzerTest : public ::testing::Test {
   // |results|.
   void RunAnalyzer(const base::FilePath& file_path,
                    safe_browsing::ArchiveAnalyzerResults* results) {
+    RunAnalyzer(file_path, /*password=*/absl::nullopt, results);
+  }
+
+  void RunAnalyzer(const base::FilePath& file_path,
+                   const std::string& password,
+                   safe_browsing::ArchiveAnalyzerResults* results) {
+    RunAnalyzer(file_path, base::optional_ref(password), results);
+  }
+
+  void RunAnalyzer(const base::FilePath& file_path,
+                   base::optional_ref<const std::string> password,
+                   safe_browsing::ArchiveAnalyzerResults* results) {
     DCHECK(results);
     mojo::PendingRemote<chrome::mojom::FileUtilService> remote;
     FileUtilService service(remote.InitWithNewPipeAndPassReceiver());
     base::RunLoop run_loop;
     ResultsGetter results_getter(run_loop.QuitClosure(), results);
-    scoped_refptr<SandboxedZipAnalyzer> analyzer(new SandboxedZipAnalyzer(
-        file_path, results_getter.GetCallback(), std::move(remote)));
+    std::unique_ptr<SandboxedZipAnalyzer, base::OnTaskRunnerDeleter> analyzer =
+        SandboxedZipAnalyzer::CreateAnalyzer(
+            file_path, password.CopyAsOptional(), results_getter.GetCallback(),
+            std::move(remote));
     analyzer->Start();
     run_loop.Run();
   }
@@ -133,8 +155,8 @@ class SandboxedZipAnalyzerTest : public ::testing::Test {
   void ExpectBinary(
       const BinaryData& data,
       const safe_browsing::ClientDownloadRequest_ArchivedBinary& binary) {
-    ASSERT_TRUE(binary.has_file_basename());
-    EXPECT_EQ(data.file_basename, binary.file_basename());
+    ASSERT_TRUE(binary.has_file_path());
+    EXPECT_EQ(data.file_path, binary.file_path());
     ASSERT_TRUE(binary.has_download_type());
     EXPECT_EQ(data.download_type, binary.download_type());
     ASSERT_TRUE(binary.has_digests());
@@ -149,7 +171,7 @@ class SandboxedZipAnalyzerTest : public ::testing::Test {
 #if BUILDFLAG(IS_WIN)
     // ExtractImageFeatures for Windows, which only works on PE
     // files.
-    if (binary.file_basename().find(".exe") != std::string::npos) {
+    if (binary.file_path().find(".exe") != std::string::npos) {
       ExpectPEHeaders(data, binary);
       return;
     }
@@ -157,7 +179,7 @@ class SandboxedZipAnalyzerTest : public ::testing::Test {
 #if BUILDFLAG(IS_MAC)
     // ExtractImageFeatures for Mac, which only works on MachO
     // files.
-    if (binary.file_basename().find("executablefat") != std::string::npos) {
+    if (binary.file_path().find("executablefat") != std::string::npos) {
       ExpectMachOHeaders(data, binary);
       return;
     }
@@ -183,6 +205,7 @@ class SandboxedZipAnalyzerTest : public ::testing::Test {
 #endif  // BUILDFLAG(IS_MAC)
 
   base::FilePath dir_test_data_;
+  base::test::ScopedFeatureList scoped_feature_list;
   content::BrowserTaskEnvironment task_environment_;
 };
 
@@ -231,7 +254,7 @@ const uint8_t SandboxedZipAnalyzerTest::kUnsignedMachODigest[] = {
     0x47, 0x3f, 0xb7, 0x94, 0xb2, 0x86, 0xa3, 0x89, 0xb9, 0x45};
 const SandboxedZipAnalyzerTest::BinaryData
     SandboxedZipAnalyzerTest::kUnsignedMachO = {
-        "executablefat",
+        "app-with-executables.app/Contents/MacOS/executablefat",
         safe_browsing::ClientDownloadRequest_DownloadType_WIN_EXECUTABLE,
         &kUnsignedMachODigest[0],
         16640,
@@ -243,7 +266,7 @@ const uint8_t SandboxedZipAnalyzerTest::kSignedMachODigest[] = {
     0x2c, 0x27, 0x48, 0xad, 0x04, 0x0c, 0x2a, 0x1e, 0xf8, 0x29};
 const SandboxedZipAnalyzerTest::BinaryData
     SandboxedZipAnalyzerTest::kSignedMachO = {
-        "signedexecutablefat",
+        "app-with-executables.app/Contents/MacOS/signedexecutablefat",
         safe_browsing::ClientDownloadRequest_DownloadType_WIN_EXECUTABLE,
         &kSignedMachODigest[0],
         34176,
@@ -260,7 +283,7 @@ TEST_F(SandboxedZipAnalyzerTest, NoBinaries) {
   EXPECT_FALSE(results.has_executable);
   EXPECT_FALSE(results.has_archive);
   ASSERT_EQ(1, results.archived_binary.size());
-  EXPECT_EQ(results.archived_binary[0].file_basename(), "simple_exe.txt");
+  EXPECT_EQ(results.archived_binary[0].file_path(), "simple_exe.txt");
   EXPECT_FALSE(results.archived_binary[0].is_executable());
   EXPECT_FALSE(results.archived_binary[0].is_archive());
 }
@@ -292,17 +315,44 @@ TEST_F(SandboxedZipAnalyzerTest, TwoBinariesOneSigned) {
 
 TEST_F(SandboxedZipAnalyzerTest, ZippedArchiveNoBinaries) {
   safe_browsing::ArchiveAnalyzerResults results;
+  scoped_feature_list.InitAndEnableFeature(safe_browsing::kNestedArchives);
   RunAnalyzer(dir_test_data_.AppendASCII(
                   "download_protection/zipfile_archive_no_binaries.zip"),
               &results);
   ASSERT_TRUE(results.success);
+  EXPECT_TRUE(results.has_executable);
+  EXPECT_FALSE(results.has_archive);
+  EXPECT_EQ(1, results.archived_binary.size());
+  ASSERT_EQ(0u, results.archived_archive_filenames.size());
+  EXPECT_GT(results.archived_binary[0].length(), 0);
+  EXPECT_FALSE(results.archived_binary[0].digests().sha256().empty());
+}
+
+TEST_F(SandboxedZipAnalyzerTest, ZippedNestedArchive) {
+  scoped_feature_list.InitAndEnableFeature(safe_browsing::kNestedArchives);
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(dir_test_data_.AppendASCII(
+                  "download_protection/zipfile_nested_archives.zip"),
+              &results);
+  ASSERT_TRUE(results.success);
+  EXPECT_TRUE(results.has_executable);
+  EXPECT_FALSE(results.has_archive);
+  EXPECT_EQ(6, results.archived_binary.size());
+  ASSERT_EQ(0u, results.archived_archive_filenames.size());
+  EXPECT_FALSE(results.archived_binary[0].digests().sha256().empty());
+}
+
+TEST_F(SandboxedZipAnalyzerTest, ZippedTooManyNestedArchive) {
+  scoped_feature_list.InitAndEnableFeature(safe_browsing::kNestedArchives);
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(dir_test_data_.AppendASCII(
+                  "download_protection/zipfile_too_many_nested_archives.zip"),
+              &results);
+  ASSERT_TRUE(results.success);
   EXPECT_FALSE(results.has_executable);
   EXPECT_TRUE(results.has_archive);
-  EXPECT_EQ(1, results.archived_binary.size());
-  ASSERT_EQ(1u, results.archived_archive_filenames.size());
-  EXPECT_EQ(FILE_PATH_LITERAL("hello.zip"),
-            results.archived_archive_filenames[0].value());
-  EXPECT_GT(results.archived_binary[0].length(), 0);
+  EXPECT_EQ(14, results.archived_binary.size());
+  ASSERT_EQ(3u, results.archived_archive_filenames.size());
   EXPECT_FALSE(results.archived_binary[0].digests().sha256().empty());
 }
 
@@ -344,18 +394,16 @@ TEST_F(SandboxedZipAnalyzerTest,
               &results);
   ASSERT_TRUE(results.success);
   EXPECT_TRUE(results.has_executable);
-  EXPECT_TRUE(results.has_archive);
+  EXPECT_FALSE(results.has_archive);
   ASSERT_EQ(3, results.archived_binary.size());
 
   BinaryData SignedExe = kSignedExe;
-  SignedExe.file_basename = "signed.exe ";
+  SignedExe.file_path = "signed.exe ";
   BinaryData UnsignedExe = kUnsignedExe;
-  UnsignedExe.file_basename = "unsigned.exe.";
+  UnsignedExe.file_path = "unsigned.exe.";
   ExpectBinary(SignedExe, results.archived_binary.Get(0));
   ExpectBinary(UnsignedExe, results.archived_binary.Get(1));
-  ASSERT_EQ(1u, results.archived_archive_filenames.size());
-  EXPECT_EQ(FILE_PATH_LITERAL("zipfile_no_binaries.zip  .  . "),
-            results.archived_archive_filenames[0].value());
+  ASSERT_EQ(0u, results.archived_archive_filenames.size());
 }
 
 TEST_F(SandboxedZipAnalyzerTest, ZippedJSEFile) {
@@ -369,6 +417,89 @@ TEST_F(SandboxedZipAnalyzerTest, ZippedJSEFile) {
   ASSERT_EQ(1, results.archived_binary.size());
   ExpectBinary(kJSEFile, results.archived_binary.Get(0));
   EXPECT_TRUE(results.archived_archive_filenames.empty());
+}
+
+TEST_F(SandboxedZipAnalyzerTest, EncryptedZip) {
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(dir_test_data_.AppendASCII("download_protection/encrypted.zip"),
+              /*password=*/"12345", &results);
+  ASSERT_TRUE(results.success);
+  EXPECT_TRUE(results.has_executable);
+  EXPECT_FALSE(results.has_archive);
+  ASSERT_EQ(1, results.archived_binary.size());
+  ExpectBinary(kSignedExe, results.archived_binary.Get(0));
+
+  EXPECT_TRUE(results.encryption_info.is_encrypted);
+  EXPECT_EQ(results.encryption_info.password_status,
+            safe_browsing::EncryptionInfo::kKnownCorrect);
+}
+
+TEST_F(SandboxedZipAnalyzerTest, EncryptedZipWrongPassword) {
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(dir_test_data_.AppendASCII("download_protection/encrypted.zip"),
+              /*password=*/"67890", &results);
+  ASSERT_TRUE(results.success);
+  EXPECT_TRUE(results.has_executable);
+  EXPECT_FALSE(results.has_archive);
+  ASSERT_EQ(1, results.archived_binary.size());
+
+  const safe_browsing::ClientDownloadRequest_ArchivedBinary& binary =
+      results.archived_binary.Get(0);
+  EXPECT_EQ("signed.exe", binary.file_path());
+  EXPECT_EQ(safe_browsing::ClientDownloadRequest_DownloadType_WIN_EXECUTABLE,
+            binary.download_type());
+  EXPECT_FALSE(binary.has_digests());
+  EXPECT_FALSE(binary.has_length());
+
+  EXPECT_TRUE(results.encryption_info.is_encrypted);
+  EXPECT_EQ(results.encryption_info.password_status,
+            safe_browsing::EncryptionInfo::kKnownIncorrect);
+}
+
+TEST_F(SandboxedZipAnalyzerTest, EncryptedZipAes) {
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(
+      dir_test_data_.AppendASCII("download_protection/encrypted_aes.zip"),
+      /*password=*/"67890", &results);
+  ASSERT_TRUE(results.success);
+  EXPECT_TRUE(results.has_executable);
+  EXPECT_FALSE(results.has_archive);
+  ASSERT_EQ(1, results.archived_binary.size());
+
+  const safe_browsing::ClientDownloadRequest_ArchivedBinary& binary =
+      results.archived_binary.Get(0);
+  EXPECT_EQ("signed.exe", binary.file_path());
+  EXPECT_EQ(safe_browsing::ClientDownloadRequest_DownloadType_WIN_EXECUTABLE,
+            binary.download_type());
+  EXPECT_FALSE(binary.has_digests());
+  EXPECT_FALSE(binary.has_length());
+
+  EXPECT_TRUE(results.encryption_info.is_encrypted);
+  EXPECT_EQ(results.encryption_info.password_status,
+            safe_browsing::EncryptionInfo::kUnknown);
+}
+
+TEST_F(SandboxedZipAnalyzerTest, EncryptedZipAesNoPassword) {
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(
+      dir_test_data_.AppendASCII("download_protection/encrypted_aes.zip"),
+      &results);
+  ASSERT_TRUE(results.success);
+  EXPECT_TRUE(results.has_executable);
+  EXPECT_FALSE(results.has_archive);
+  ASSERT_EQ(1, results.archived_binary.size());
+
+  const safe_browsing::ClientDownloadRequest_ArchivedBinary& binary =
+      results.archived_binary.Get(0);
+  EXPECT_EQ("signed.exe", binary.file_path());
+  EXPECT_EQ(safe_browsing::ClientDownloadRequest_DownloadType_WIN_EXECUTABLE,
+            binary.download_type());
+  EXPECT_FALSE(binary.has_digests());
+  EXPECT_FALSE(binary.has_length());
+
+  EXPECT_TRUE(results.encryption_info.is_encrypted);
+  EXPECT_EQ(results.encryption_info.password_status,
+            safe_browsing::EncryptionInfo::kKnownIncorrect);
 }
 
 #if BUILDFLAG(IS_MAC)
@@ -390,18 +521,64 @@ TEST_F(SandboxedZipAnalyzerTest, ZippedAppWithUnsignedAndSignedExecutable) {
   bool found_unsigned = false;
   bool found_signed = false;
   for (const auto& binary : results.archived_binary) {
-    if (kSignedMachO.file_basename == binary.file_basename()) {
+    if (kSignedMachO.file_path == binary.file_path()) {
       found_signed = true;
       ExpectBinary(kSignedMachO, binary);
     }
 
-    if (kUnsignedMachO.file_basename == binary.file_basename()) {
+    if (kUnsignedMachO.file_path == binary.file_path()) {
       found_unsigned = true;
       ExpectBinary(kUnsignedMachO, binary);
     }
   }
 
+  if (!found_unsigned || !found_signed) {
+    LOG(ERROR) << "Expected to find: " << kSignedMachO.file_path << " and "
+               << kUnsignedMachO.file_path;
+    for (const auto& binary : results.archived_binary) {
+      LOG(ERROR) << "Found " << binary.file_path();
+    }
+  }
   EXPECT_TRUE(found_unsigned);
   EXPECT_TRUE(found_signed);
 }
 #endif  // BUILDFLAG(IS_MAC)
+
+TEST_F(SandboxedZipAnalyzerTest, CanDeleteDuringExecution) {
+  base::FilePath file_path =
+      dir_test_data_.AppendASCII("download_protection/zipfile_no_binaries.zip");
+  base::FilePath temp_path;
+  ASSERT_TRUE(base::CreateTemporaryFile(&temp_path));
+  ASSERT_TRUE(base::CopyFile(file_path, temp_path));
+
+  mojo::PendingRemote<chrome::mojom::FileUtilService> remote;
+  base::RunLoop run_loop;
+
+  FakeFileUtilService service(remote.InitWithNewPipeAndPassReceiver());
+  EXPECT_CALL(service.GetSafeArchiveAnalyzer(), AnalyzeZipFile(_, _, _, _))
+      .WillOnce([&](base::File zip_file,
+                    const absl::optional<std::string>& password,
+                    mojo::PendingRemote<chrome::mojom::TemporaryFileGetter>
+                        temp_file_getter,
+                    chrome::mojom::SafeArchiveAnalyzer::AnalyzeZipFileCallback
+                        callback) {
+        EXPECT_TRUE(base::DeleteFile(temp_path));
+        std::move(callback).Run(safe_browsing::ArchiveAnalyzerResults());
+        run_loop.Quit();
+      });
+  std::unique_ptr<SandboxedZipAnalyzer, base::OnTaskRunnerDeleter> analyzer =
+      SandboxedZipAnalyzer::CreateAnalyzer(
+          temp_path, /*password=*/absl::nullopt, base::DoNothing(),
+          std::move(remote));
+  analyzer->Start();
+  run_loop.Run();
+}
+
+TEST_F(SandboxedZipAnalyzerTest, InvalidPath) {
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(dir_test_data_.AppendASCII("download_protection/does_not_exist"),
+              &results);
+  EXPECT_FALSE(results.success);
+  EXPECT_EQ(results.analysis_result,
+            safe_browsing::ArchiveAnalysisResult::kFailedToOpen);
+}

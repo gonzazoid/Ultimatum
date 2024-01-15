@@ -6,15 +6,16 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "content/browser/webauth/authenticator_environment_impl.h"
-#include "device/fido/features.h"
+#include "content/browser/webauth/authenticator_environment.h"
 #include "device/fido/fido_discovery_factory.h"
+#include "device/fido/public_key_credential_descriptor.h"
 #include "device/fido/public_key_credential_user_entity.h"
+#include "url/origin.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "device/fido/win/webauthn_api.h"
@@ -41,12 +42,11 @@ bool WebAuthenticationDelegate::OriginMayUseRemoteDesktopClientOverride(
   return false;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
-absl::optional<std::string>
+std::optional<std::string>
 WebAuthenticationDelegate::MaybeGetRelyingPartyIdOverride(
     const std::string& claimed_relying_party_id,
     const url::Origin& caller_origin) {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool WebAuthenticationDelegate::ShouldPermitIndividualAttestation(
@@ -62,10 +62,14 @@ bool WebAuthenticationDelegate::SupportsResidentKeys(
   // doesn't by default.
   FrameTreeNode* frame_tree_node =
       static_cast<RenderFrameHostImpl*>(render_frame_host)->frame_tree_node();
-  if (AuthenticatorEnvironmentImpl::GetInstance()
-          ->IsVirtualAuthenticatorEnabledFor(frame_tree_node)) {
+  if (AuthenticatorEnvironment::GetInstance()->IsVirtualAuthenticatorEnabledFor(
+          frame_tree_node)) {
     return true;
   }
+  return false;
+}
+
+bool WebAuthenticationDelegate::SupportsPasskeyMetadataSyncing() {
   return false;
 }
 
@@ -73,36 +77,35 @@ bool WebAuthenticationDelegate::IsFocused(WebContents* web_contents) {
   return true;
 }
 
-absl::optional<bool> WebAuthenticationDelegate::
+std::optional<bool> WebAuthenticationDelegate::
     IsUserVerifyingPlatformAuthenticatorAvailableOverride(
         RenderFrameHost* render_frame_host) {
   FrameTreeNode* frame_tree_node =
       static_cast<RenderFrameHostImpl*>(render_frame_host)->frame_tree_node();
-  if (AuthenticatorEnvironmentImpl::GetInstance()
-          ->IsVirtualAuthenticatorEnabledFor(frame_tree_node)) {
-    return AuthenticatorEnvironmentImpl::GetInstance()
+  if (AuthenticatorEnvironment::GetInstance()->IsVirtualAuthenticatorEnabledFor(
+          frame_tree_node)) {
+    return AuthenticatorEnvironment::GetInstance()
         ->HasVirtualUserVerifyingPlatformAuthenticator(frame_tree_node);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 WebAuthenticationRequestProxy* WebAuthenticationDelegate::MaybeGetRequestProxy(
-    BrowserContext* browser_context) {
+    BrowserContext* browser_context,
+    const url::Origin& caller_origin) {
   return nullptr;
 }
-#endif  // !IS_ANDROID
 
-#if BUILDFLAG(IS_WIN)
-void WebAuthenticationDelegate::OperationSucceeded(
-    BrowserContext* browser_context,
-    bool used_win_api) {}
-#endif
+bool WebAuthenticationDelegate::IsEnclaveAuthenticatorAvailable(
+    BrowserContext* browser_context) {
+  return false;
+}
 
 #if BUILDFLAG(IS_MAC)
-absl::optional<WebAuthenticationDelegate::TouchIdAuthenticatorConfig>
+std::optional<WebAuthenticationDelegate::TouchIdAuthenticatorConfig>
 WebAuthenticationDelegate::GetTouchIdAuthenticatorConfig(
     BrowserContext* browser_context) {
-  return absl::nullopt;
+  return std::nullopt;
 }
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -113,19 +116,6 @@ WebAuthenticationDelegate::GetGenerateRequestIdCallback(
   return base::NullCallback();
 }
 #endif
-
-#if BUILDFLAG(IS_ANDROID)
-base::android::ScopedJavaLocalRef<jobject>
-WebAuthenticationDelegate::GetIntentSender(WebContents* web_contents) {
-  return nullptr;
-}
-
-int WebAuthenticationDelegate::GetSupportLevel(WebContents* web_contents) {
-  return 2 /* browser-like support */;
-}
-#endif
-
-#if !BUILDFLAG(IS_ANDROID)
 
 AuthenticatorRequestClientDelegate::AuthenticatorRequestClientDelegate() =
     default;
@@ -140,6 +130,11 @@ bool AuthenticatorRequestClientDelegate::DoesBlockRequestOnFailure(
     InterestingFailureReason reason) {
   return false;
 }
+
+void AuthenticatorRequestClientDelegate::OnTransactionSuccessful(
+    RequestSource request_source,
+    device::FidoRequestType request_type,
+    device::AuthenticatorType authenticator_type) {}
 
 void AuthenticatorRequestClientDelegate::RegisterActionCallbacks(
     base::OnceClosure cancel_callback,
@@ -156,11 +151,17 @@ void AuthenticatorRequestClientDelegate::ShouldReturnAttestation(
   std::move(callback).Run(!is_enterprise_attestation);
 }
 
-void AuthenticatorRequestClientDelegate::ConfigureCable(
+void AuthenticatorRequestClientDelegate::ConfigureDiscoveries(
     const url::Origin& origin,
-    device::CableRequestType request_type,
+    const std::string& rp_id,
+    RequestSource request_source,
+    device::FidoRequestType request_type,
+    std::optional<device::ResidentKeyRequirement> resident_key_requirement,
     base::span<const device::CableDiscoveryData> pairings_from_extension,
+    bool is_enclave_authenticator_available,
     device::FidoDiscoveryFactory* fido_discovery_factory) {}
+
+void AuthenticatorRequestClientDelegate::SetHints(const Hints& hints) {}
 
 void AuthenticatorRequestClientDelegate::SelectAccount(
     std::vector<device::AuthenticatorGetAssertionResponse> responses,
@@ -191,6 +192,9 @@ bool AuthenticatorRequestClientDelegate::IsVirtualEnvironmentEnabled() {
 
 void AuthenticatorRequestClientDelegate::SetConditionalRequest(
     bool is_conditional) {}
+
+void AuthenticatorRequestClientDelegate::SetCredentialIdFilter(
+    std::vector<device::PublicKeyCredentialDescriptor>) {}
 
 void AuthenticatorRequestClientDelegate::SetUserEntityForMakeCredentialRequest(
     const device::PublicKeyCredentialUserEntity&) {}
@@ -232,7 +236,5 @@ void AuthenticatorRequestClientDelegate::FinishCollectToken() {}
 
 void AuthenticatorRequestClientDelegate::OnRetryUserVerification(int attempts) {
 }
-
-#endif  // !IS_ANDROID
 
 }  // namespace content

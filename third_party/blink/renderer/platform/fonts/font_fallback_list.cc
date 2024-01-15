@@ -49,10 +49,15 @@ FontFallbackList::FontFallbackList(FontFallbackMap& font_fallback_map)
       has_custom_font_(false),
       can_shape_word_by_word_(false),
       can_shape_word_by_word_computed_(false),
-      is_invalid_(false) {}
+      is_invalid_(false),
+      nullify_primary_font_data_for_test_(false) {}
 
 FontFallbackList::~FontFallbackList() {
   ReleaseFontData();
+}
+
+void FontFallbackList::Trace(Visitor* visitor) const {
+  visitor->Trace(font_fallback_map_);
 }
 
 FontSelector* FontFallbackList::GetFontSelector() const {
@@ -72,6 +77,7 @@ void FontFallbackList::ReleaseFontData() {
       FontCache::Get().ReleaseFontData(To<SimpleFontData>(font_list_[i].get()));
     }
   }
+  ng_shape_cache_.reset();  // Clear the weak pointer to the cache instance.
   shape_cache_.reset();  // Clear the weak pointer to the cache instance.
 }
 
@@ -160,31 +166,34 @@ scoped_refptr<FontData> FontFallbackList::GetFontData(
 
   for (; curr_family; curr_family = curr_family->Next()) {
     family_index_++;
-    if (!curr_family->FamilyName().empty()) {
-      if (!GetFontSelector()) {
+    if (!GetFontSelector()) {
+      // Don't query system fonts for empty font family name.
+      if (!curr_family->FamilyName().empty()) {
         if (auto result = FontCache::Get().GetFontData(
-                font_description, curr_family->FamilyName()))
+                font_description, curr_family->FamilyName())) {
           return result;
-        continue;
+        }
       }
-
-      scoped_refptr<FontData> result =
-          GetFontSelector()->GetFontData(font_description, *curr_family);
-      if (!result) {
-        result = FontCache::Get().GetFontData(font_description,
-                                              curr_family->FamilyName());
-        GetFontSelector()->ReportFontLookupByUniqueOrFamilyName(
-            curr_family->FamilyName(), font_description,
-            DynamicTo<SimpleFontData>(result.get()));
-      }
-      if (result) {
-        GetFontSelector()->ReportSuccessfulFontFamilyMatch(
-            curr_family->FamilyName());
-        return result;
-      }
-
-      GetFontSelector()->ReportFailedFontFamilyMatch(curr_family->FamilyName());
+      continue;
     }
+
+    scoped_refptr<FontData> result =
+        GetFontSelector()->GetFontData(font_description, *curr_family);
+    // Don't query system fonts for empty font family name.
+    if (!result && !curr_family->FamilyName().empty()) {
+      result = FontCache::Get().GetFontData(font_description,
+                                            curr_family->FamilyName());
+      GetFontSelector()->ReportFontLookupByUniqueOrFamilyName(
+          curr_family->FamilyName(), font_description,
+          DynamicTo<SimpleFontData>(result.get()));
+    }
+    if (result) {
+      GetFontSelector()->ReportSuccessfulFontFamilyMatch(
+          curr_family->FamilyName());
+      return result;
+    }
+
+    GetFontSelector()->ReportFailedFontFamilyMatch(curr_family->FamilyName());
   }
   family_index_ = kCAllFamiliesScanned;
 
@@ -206,38 +215,6 @@ scoped_refptr<FontData> FontFallbackList::GetFontData(
                                                           last_resort.get());
   }
   return last_resort;
-}
-
-FallbackListCompositeKey FontFallbackList::CompositeKey(
-    const FontDescription& font_description) const {
-  FallbackListCompositeKey key(font_description);
-  const FontFamily* current_family = &font_description.Family();
-  while (current_family) {
-    if (!current_family->FamilyName().empty()) {
-      FontFaceCreationParams params(AdjustFamilyNameToAvoidUnsupportedFonts(
-          current_family->FamilyName()));
-      scoped_refptr<FontData> result;
-      if (GetFontSelector()) {
-        result =
-            GetFontSelector()->GetFontData(font_description, *current_family);
-      }
-      if (!result) {
-        if (FontPlatformData* platform_data =
-                FontCache::Get().GetFontPlatformData(font_description, params))
-          result = FontCache::Get().FontDataFromFontPlatformData(platform_data);
-      }
-      if (result) {
-        bool is_unique_match = false;
-        key.Add(font_description.CacheKey(params, is_unique_match));
-        auto* font_data = DynamicTo<SimpleFontData>(result.get());
-        if (!font_data && !result->IsCustomFont())
-          FontCache::Get().ReleaseFontData(font_data);
-      }
-    }
-    current_family = current_family->Next();
-  }
-
-  return key;
 }
 
 const FontData* FontFallbackList::FontDataAt(

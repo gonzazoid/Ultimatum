@@ -152,7 +152,7 @@ class CORE_EXPORT ListedElement : public GarbageCollectedMixin {
   // This should be called in Node::DidMoveToDocument().
   void DidMoveToNewDocument(Document& old_document);
   // This is for HTMLFieldSetElement class.
-  void AncestorDisabledStateWasChanged();
+  virtual void AncestorDisabledStateWasChanged();
 
   // https://html.spec.whatwg.org/C/#concept-element-disabled
   bool IsActuallyDisabled() const;
@@ -198,9 +198,13 @@ class CORE_EXPORT ListedElement : public GarbageCollectedMixin {
   void SetCustomValidationMessage(const String& message);
 
   // False; There are no FIELDSET ancestors.
-  // True; There might be a FIELDSET ancestor, and thre might be no
+  // True; There might be a FIELDSET ancestor, and there might be no
   //       FIELDSET ancestors.
-  mutable bool may_have_field_set_ancestor_ = true;
+  mutable bool may_have_fieldset_ancestor_ = true;
+
+  enum class AncestorDisabledState { kUnknown, kEnabled, kDisabled };
+  mutable AncestorDisabledState ancestor_disabled_state_ =
+      AncestorDisabledState::kUnknown;
 
  private:
   void UpdateAncestorDisabledState() const;
@@ -230,10 +234,8 @@ class CORE_EXPORT ListedElement : public GarbageCollectedMixin {
   // Cache of IsValidElement().
   bool is_valid_ : 1;
   bool validity_is_dirty_ : 1;
-
-  enum class AncestorDisabledState { kUnknown, kEnabled, kDisabled };
-  mutable AncestorDisabledState ancestor_disabled_state_ =
-      AncestorDisabledState::kUnknown;
+  bool is_element_disabled_ : 1;
+  bool is_readonly_ : 1;
 
   enum class DataListAncestorState {
     kUnknown,

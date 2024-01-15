@@ -8,7 +8,7 @@ import("//media/gpu/args.gni")
 import("//media/media_options.gni")
 import("//ui/gl/features.gni")
 
-assert(is_mac)
+assert(is_apple)
 
 import("//build/config/mac/mac_sdk.gni")
 
@@ -17,6 +17,24 @@ source_set("mac") {
   visibility = [ "//media/gpu" ]
 
   sources = [
+    "video_toolbox_av1_accelerator.cc",
+    "video_toolbox_av1_accelerator.h",
+    "video_toolbox_decompression_metadata.cc",
+    "video_toolbox_decompression_metadata.h",
+    "video_toolbox_decompression_session.cc",
+    "video_toolbox_decompression_session.h",
+    "video_toolbox_decompression_session_manager.cc",
+    "video_toolbox_decompression_session_manager.h",
+    "video_toolbox_frame_converter.cc",
+    "video_toolbox_frame_converter.h",
+    "video_toolbox_h264_accelerator.cc",
+    "video_toolbox_h264_accelerator.h",
+    "video_toolbox_output_queue.cc",
+    "video_toolbox_output_queue.h",
+    "video_toolbox_video_decoder.cc",
+    "video_toolbox_video_decoder.h",
+    "video_toolbox_vp9_accelerator.cc",
+    "video_toolbox_vp9_accelerator.h",
     "vp9_super_frame_bitstream_filter.cc",
     "vp9_super_frame_bitstream_filter.h",
     "vt_config_util.h",
@@ -26,6 +44,12 @@ source_set("mac") {
     "vt_video_encode_accelerator_mac.cc",
     "vt_video_encode_accelerator_mac.h",
   ]
+  if (enable_hevc_parser_and_hw_decoder) {
+    sources += [
+      "video_toolbox_h265_accelerator.cc",
+      "video_toolbox_h265_accelerator.h",
+    ]
+  }
   public_deps = [ "//third_party/webrtc_overrides:webrtc_component" ]
   frameworks = [
     "CoreFoundation.framework",
@@ -38,6 +62,8 @@ source_set("mac") {
   deps = [
     "//base",
     "//components/crash/core/common:crash_key",
+    "//components/viz/common:shared_image_format",
+    "//gpu/command_buffer/service",
     "//gpu/command_buffer/service:gles2",
     "//gpu/ipc/service",
     "//media",
@@ -54,8 +80,10 @@ source_set("unit_tests") {
     "CoreMedia.framework",
   ]
   deps = [
+    "//base/test:test_support",
     "//media:test_support",
     "//media/gpu:test_support",
+    "//testing/gmock",
     "//testing/gtest",
   ]
 
@@ -64,7 +92,15 @@ source_set("unit_tests") {
   }
 
   sources = [
+    "video_toolbox_av1_accelerator_unittest.cc",
+    "video_toolbox_decompression_session_manager_unittest.cc",
+    "video_toolbox_h264_accelerator_unittest.cc",
+    "video_toolbox_output_queue_unittest.cc",
+    "video_toolbox_vp9_accelerator_unittest.cc",
     "vp9_super_frame_bitstream_filter_unittest.cc",
     "vt_config_util_unittest.cc",
   ]
+  if (enable_hevc_parser_and_hw_decoder) {
+    sources += [ "video_toolbox_h265_accelerator_unittest.cc" ]
+  }
 }

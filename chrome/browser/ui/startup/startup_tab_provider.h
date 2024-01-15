@@ -11,8 +11,12 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/startup/startup_tab.h"
-#include "chrome/browser/ui/startup/startup_types.h"
+#include "components/signin/public/base/signin_buildflags.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "chrome/browser/ui/startup/startup_types.h"
+#endif
 
 class Profile;
 class StartupBrowserCreator;
@@ -42,15 +46,6 @@ class StartupTabProvider {
   // BrowserCreator.
   virtual StartupTabs GetDistributionFirstRunTabs(
       StartupBrowserCreator* browser_creator) const = 0;
-
-#if BUILDFLAG(IS_WIN)
-  // Returns a "welcome back" tab to be shown if requested for a specific
-  // launch.
-  virtual StartupTabs GetWelcomeBackTabs(
-      Profile* profile,
-      StartupBrowserCreator* browser_creator,
-      chrome::startup::IsProcessStartup process_startup) const = 0;
-#endif  // BUILDFLAG(IS_WIN)
 
   // Checks for the presence of a trigger indicating the need to offer a Profile
   // Reset on this profile. Returns any tabs which should be shown accordingly.
@@ -91,12 +86,6 @@ class StartupTabProvider {
       const base::CommandLine& command_line,
       const base::FilePath& cur_dir) const = 0;
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Returns the URLs given via the crosapi BrowserInitParams with
-  // kOpenWindowWithUrls action.
-  virtual StartupTabs GetCrosapiTabs() const = 0;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
 #if !BUILDFLAG(IS_ANDROID)
   // Returns tabs related to the What's New UI (if applicable).
   virtual StartupTabs GetNewFeaturesTabs(bool whats_new_enabled) const = 0;
@@ -130,6 +119,7 @@ class StartupTabProviderImpl : public StartupTabProvider {
   // system state relating to making those policy decisions. Exposed for
   // testing.
 
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
   // Returns true if showing the standard welcome page is permissible.
   static bool CanShowWelcome(bool is_signin_allowed,
                              bool is_supervised_user,
@@ -139,6 +129,7 @@ class StartupTabProviderImpl : public StartupTabProvider {
   // should only be used following a positive result from CanShowWelcome.
   static bool ShouldShowWelcomeForOnboarding(bool has_seen_welcome_page,
                                              bool is_signed_in);
+#endif
 
   // Determines which tabs should be shown according to onboarding/first
   // run policy.
@@ -192,12 +183,14 @@ class StartupTabProviderImpl : public StartupTabProvider {
       const StartupTabs& other_startup_tabs);
 #endif
 
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
   // Gets the URL for the Welcome page. If |use_later_run_variant| is true, a
   // URL parameter will be appended so as to access the variant page used when
   // onboarding occurs after the first Chrome execution (e.g., when creating an
   // additional profile).
   // TODO(hcarmona): it might be possible to deprecate use_later_run_variant.
   static GURL GetWelcomePageUrl(bool use_later_run_variant);
+#endif
 
   // In branded Windows builds, adds the URL for the Incompatible Applications
   // subpage of the Chrome settings.
@@ -209,14 +202,6 @@ class StartupTabProviderImpl : public StartupTabProvider {
 
   // StartupTabProvider:
   StartupTabs GetOnboardingTabs(Profile* profile) const override;
-
-#if BUILDFLAG(IS_WIN)
-  StartupTabs GetWelcomeBackTabs(
-      Profile* profile,
-      StartupBrowserCreator* browser_creator,
-      chrome::startup::IsProcessStartup process_startup) const override;
-#endif  // BUILDFLAG(IS_WIN)
-
   StartupTabs GetDistributionFirstRunTabs(
       StartupBrowserCreator* browser_creator) const override;
   StartupTabs GetResetTriggerTabs(Profile* profile) const override;
@@ -234,10 +219,6 @@ class StartupTabProviderImpl : public StartupTabProvider {
   CommandLineTabsPresent HasCommandLineTabs(
       const base::CommandLine& command_line,
       const base::FilePath& cur_dir) const override;
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  StartupTabs GetCrosapiTabs() const override;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if !BUILDFLAG(IS_ANDROID)
   StartupTabs GetNewFeaturesTabs(bool whats_new_enabled) const override;

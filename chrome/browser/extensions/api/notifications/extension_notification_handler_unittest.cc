@@ -4,8 +4,8 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/extensions/api/notifications/extension_notification_handler.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -41,14 +41,14 @@ class TestExtensionNotificationHandler : public ExtensionNotificationHandler {
                  events::HistogramValue histogram_value,
                  const std::string& event_name,
                  EventRouter::UserGestureState user_gesture,
-                 std::unique_ptr<base::ListValue> args) final {
+                 base::Value::List args) final {
     EXPECT_EQ(event_name_, event_name);
     EXPECT_EQ(extension_id_, extension_id);
-    EXPECT_EQ(param_count_, args->GetList().size());
+    EXPECT_EQ(param_count_, args.size());
   }
 
  private:
-  std::string extension_id_;
+  ExtensionId extension_id_;
   std::string event_name_;
   size_t param_count_;
 };

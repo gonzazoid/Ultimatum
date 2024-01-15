@@ -10,8 +10,8 @@
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/shell.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/singleton.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
@@ -89,12 +89,14 @@ void ArcScreenCaptureBridge::RequestPermission(
     const std::string& package_name,
     RequestPermissionCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  std::unique_ptr<DesktopMediaPicker> picker = DesktopMediaPicker::Create();
+  std::unique_ptr<DesktopMediaPicker> picker =
+      DesktopMediaPicker::Create(nullptr);
   std::vector<std::unique_ptr<DesktopMediaList>> source_lists;
   source_lists.emplace_back(
       std::make_unique<DesktopMediaListAsh>(DesktopMediaList::Type::kScreen));
   const std::u16string display_name16 = base::UTF8ToUTF16(display_name);
-  DesktopMediaPicker::Params picker_params;
+  DesktopMediaPicker::Params picker_params{
+      DesktopMediaPicker::Params::RequestSource::kArcScreenCapture};
   picker_params.context = ash::Shell::GetRootWindowForDisplayId(
       display::Screen::GetScreen()->GetPrimaryDisplay().id());
   picker_params.modality = ui::ModalType::MODAL_TYPE_SYSTEM;
@@ -203,6 +205,11 @@ void ArcScreenCaptureBridge::OpenSession(
           std::move(notifier), found->second.display_name,
           found->second.desktop_id, size, found->second.enable_notification));
   std::move(callback).Run(std::move(screen_capture_session_remote));
+}
+
+// static
+void ArcScreenCaptureBridge::EnsureFactoryBuilt() {
+  ArcScreenCaptureBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

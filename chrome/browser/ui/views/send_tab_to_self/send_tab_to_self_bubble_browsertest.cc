@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/send_tab_to_self_sync_service_factory.h"
@@ -74,17 +74,22 @@ class SendTabToSelfBubbleTest : public DialogBrowserTest {
       BrowserView::GetBrowserViewForBrowser(browser())
           ->ShowSendTabToSelfPromoBubble(web_contents,
                                          /*show_signin_button=*/true);
-    } else if (name == "ShowNoTargetDevicePromo") {
+    } else {
+      DCHECK_EQ(name, "ShowNoTargetDevicePromo");
       BrowserView::GetBrowserViewForBrowser(browser())
           ->ShowSendTabToSelfPromoBubble(web_contents,
                                          /*show_signin_button=*/false);
-    } else {
-      NOTREACHED();
     }
   }
 };
 
-IN_PROC_BROWSER_TEST_F(SendTabToSelfBubbleTest, InvokeUi_ShowDeviceList) {
+// TODO(crbug.com/1473988): Flakily fails on some Windows builders.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_InvokeUi_ShowDeviceList DISABLED_InvokeUi_ShowDeviceList
+#else
+#define MAYBE_InvokeUi_ShowDeviceList InvokeUi_ShowDeviceList
+#endif
+IN_PROC_BROWSER_TEST_F(SendTabToSelfBubbleTest, MAYBE_InvokeUi_ShowDeviceList) {
   ShowAndVerifyUi();
 }
 

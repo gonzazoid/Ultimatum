@@ -5,13 +5,13 @@
 #include "services/network/cors/preflight_result.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/time/default_tick_clock.h"
@@ -91,7 +91,7 @@ bool ParseAccessControlAllowList(const absl::optional<std::string>& string,
 
   net::HttpUtil::ValuesIterator it(string->begin(), string->end(), ',', true);
   while (it.GetNext()) {
-    base::StringPiece value = it.value_piece();
+    std::string_view value = it.value_piece();
     if (!net::HttpUtil::IsToken(value)) {
       set->clear();
       return false;
@@ -104,7 +104,7 @@ bool ParseAccessControlAllowList(const absl::optional<std::string>& string,
 
 // Joins the strings in the given `set ` with commas.
 std::string JoinSet(const base::flat_set<std::string>& set) {
-  std::vector<base::StringPiece> values(set.begin(), set.end());
+  std::vector<std::string_view> values(set.begin(), set.end());
   return base::JoinString(values, ",");
 }
 
@@ -287,11 +287,10 @@ bool PreflightResult::HasAuthorizationCoveredByWildcard(
          !headers_.contains(kAuthorization);
 }
 
-base::Value PreflightResult::NetLogParams() const {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("access-control-allow-methods", JoinSet(methods_));
-  dict.SetStringKey("access-control-allow-headers", JoinSet(headers_));
-  return dict;
+base::Value::Dict PreflightResult::NetLogParams() const {
+  return base::Value::Dict()
+      .Set("access-control-allow-methods", JoinSet(methods_))
+      .Set("access-control-allow-headers", JoinSet(headers_));
 }
 
 }  // namespace network::cors

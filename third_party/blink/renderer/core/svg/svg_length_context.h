@@ -22,23 +22,17 @@
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
-#include "third_party/blink/renderer/core/svg/svg_unit_types.h"
-#include "third_party/blink/renderer/platform/geometry/length.h"
-#include "ui/gfx/geometry/rect_f.h"
-
-namespace gfx {
-class SizeF;
-class Vector2dF;
-}
+#include "third_party/blink/renderer/core/css/css_to_length_conversion_data.h"
 
 namespace blink {
 
+class CSSMathFunctionValue;
 class ComputedStyle;
+class Element;
+class LayoutObject;
 class SVGElement;
-class SVGLength;
-class UnzoomedLength;
 
-enum class SVGLengthMode { kWidth, kHeight, kOther };
+enum class SVGLengthMode;
 
 class CORE_EXPORT SVGLengthContext {
   STACK_ALLOCATED();
@@ -46,70 +40,35 @@ class CORE_EXPORT SVGLengthContext {
  public:
   explicit SVGLengthContext(const SVGElement*);
 
-  template <typename T>
-  static gfx::RectF ResolveRectangle(const T* context,
-                                     SVGUnitTypes::SVGUnitType type,
-                                     const gfx::RectF& viewport) {
-    return ResolveRectangle(
-        context, type, viewport, *context->x()->CurrentValue(),
-        *context->y()->CurrentValue(), *context->width()->CurrentValue(),
-        *context->height()->CurrentValue());
-  }
-
-  static gfx::RectF ResolveRectangle(const SVGElement*,
-                                     SVGUnitTypes::SVGUnitType,
-                                     const gfx::RectF& viewport,
-                                     const SVGLength& x,
-                                     const SVGLength& y,
-                                     const SVGLength& width,
-                                     const SVGLength& height);
-  static gfx::PointF ResolvePoint(const SVGElement*,
-                                  SVGUnitTypes::SVGUnitType,
-                                  const SVGLength& x,
-                                  const SVGLength& y);
-  static float ResolveLength(const SVGElement*,
-                             SVGUnitTypes::SVGUnitType,
-                             const SVGLength&);
-  gfx::Vector2dF ResolveLengthPair(const Length& x_length,
-                                   const Length& y_length,
-                                   const ComputedStyle&) const;
-
   float ConvertValueToUserUnits(float,
                                 SVGLengthMode,
                                 CSSPrimitiveValue::UnitType from_unit) const;
   float ConvertValueFromUserUnits(float,
                                   SVGLengthMode,
                                   CSSPrimitiveValue::UnitType to_unit) const;
+  float ResolveValue(const CSSMathFunctionValue&, SVGLengthMode) const;
 
-  float ValueForLength(const UnzoomedLength&,
-                       SVGLengthMode = SVGLengthMode::kOther) const;
-  float ValueForLength(const Length&,
-                       const ComputedStyle&,
-                       SVGLengthMode = SVGLengthMode::kOther) const;
-  static float ValueForLength(const Length&,
-                              const ComputedStyle&,
-                              float dimension);
-
-  bool DetermineViewport(gfx::SizeF&) const;
-  float ResolveValue(const CSSPrimitiveValue&, SVGLengthMode) const;
+  static const ComputedStyle* ComputedStyleForLengthResolving(
+      const SVGElement&);
 
  private:
-  float ValueForLength(const Length&, float zoom, SVGLengthMode) const;
-  static float ValueForLength(const Length&, float zoom, float dimension);
-
-  float ConvertValueFromUserUnitsToEXS(float value) const;
-  float ConvertValueFromEXSToUserUnits(float value) const;
-
-  float ConvertValueFromUserUnitsToCHS(float value) const;
-  float ConvertValueFromCHSToUserUnits(float value) const;
-
-  float ConvertValueFromUserUnitsToICS(float value) const;
-  float ConvertValueFromICSToUserUnits(float value) const;
-
-  float ConvertValueFromUserUnitsToLHS(float value) const;
-  float ConvertValueFromLHSToUserUnits(float value) const;
+  double ConvertValueToUserUnitsUnclamped(
+      float value,
+      SVGLengthMode mode,
+      CSSPrimitiveValue::UnitType from_unit) const;
 
   const SVGElement* context_;
+};
+
+class SVGLengthConversionData : public CSSToLengthConversionData {
+  STACK_ALLOCATED();
+
+ public:
+  SVGLengthConversionData(const Element& context, const ComputedStyle& style);
+  explicit SVGLengthConversionData(const LayoutObject& object);
+
+ private:
+  CSSToLengthConversionData::Flags ignored_flags_ = 0;
 };
 
 }  // namespace blink

@@ -13,7 +13,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "storage/browser/file_system/copy_or_move_file_validator.h"
 #include "storage/browser/file_system/file_observers.h"
 #include "storage/browser/file_system/file_system_operation.h"
@@ -68,15 +68,6 @@ class TestFileSystemBackend::QuotaUtil : public FileSystemQuotaUtil,
   ~QuotaUtil() override = default;
 
   // FileSystemQuotaUtil overrides.
-  base::File::Error DeleteStorageKeyDataOnFileTaskRunner(
-      FileSystemContext* context,
-      QuotaManagerProxy* proxy,
-      const blink::StorageKey& storage_key,
-      FileSystemType type) override {
-    NOTREACHED();
-    return base::File::FILE_OK;
-  }
-
   void DeleteCachedDefaultBucket(
       const blink::StorageKey& storage_key) override {
     NOTREACHED();
@@ -192,6 +183,7 @@ void TestFileSystemBackend::InitializeCopyOrMoveFileValidatorFactory(
 
 std::unique_ptr<FileSystemOperation>
 TestFileSystemBackend::CreateFileSystemOperation(
+    OperationType type,
     const FileSystemURL& url,
     FileSystemContext* context,
     base::File::Error* error_code) const {
@@ -199,7 +191,7 @@ TestFileSystemBackend::CreateFileSystemOperation(
       std::make_unique<FileSystemOperationContext>(context));
   operation_context->set_update_observers(*GetUpdateObservers(url.type()));
   operation_context->set_change_observers(*GetChangeObservers(url.type()));
-  return FileSystemOperation::Create(url, context,
+  return FileSystemOperation::Create(type, url, context,
                                      std::move(operation_context));
 }
 
@@ -217,7 +209,9 @@ std::unique_ptr<FileStreamReader> TestFileSystemBackend::CreateFileStreamReader(
     int64_t offset,
     int64_t max_bytes_to_read,
     const base::Time& expected_modification_time,
-    FileSystemContext* context) const {
+    FileSystemContext* context,
+    file_access::ScopedFileAccessDelegate::
+        RequestFilesAccessIOCallback /*file_access*/) const {
   return std::make_unique<SandboxFileStreamReader>(context, url, offset,
                                                    expected_modification_time);
 }

@@ -15,188 +15,9 @@ namespace floss {
 
 // All Floss D-Bus methods return immediately, so the timeout can be very short.
 int kDBusTimeoutMs = 2000;
-
-// TODO(b/189499077) - Expose via floss package
-const char kAdapterService[] = "org.chromium.bluetooth";
-const char kManagerService[] = "org.chromium.bluetooth.Manager";
-const char kAdapterInterface[] = "org.chromium.bluetooth.Bluetooth";
-const char kGattInterface[] = "org.chromium.bluetooth.BluetoothGatt";
-const char kManagerInterface[] = "org.chromium.bluetooth.Manager";
-const char kExperimentalInterface[] = "org.chromium.bluetooth.Experimental";
-const char kManagerObject[] = "/org/chromium/bluetooth/Manager";
-const char kAdapterObjectFormat[] = "/org/chromium/bluetooth/hci%d/adapter";
-const char kGattObjectFormat[] = "/org/chromium/bluetooth/hci%d/gatt";
-const char kMediaObjectFormat[] = "/org/chromium/bluetooth/hci%d/media";
-
-const char kSocketManagerInterface[] = "org.chromium.bluetooth.SocketManager";
-
-namespace adapter {
-const char kGetAddress[] = "GetAddress";
-const char kGetName[] = "GetName";
-const char kSetName[] = "SetName";
-const char kGetDiscoverable[] = "GetDiscoverable";
-const char kSetDiscoverable[] = "SetDiscoverable";
-const char kStartDiscovery[] = "StartDiscovery";
-const char kCancelDiscovery[] = "CancelDiscovery";
-const char kCreateBond[] = "CreateBond";
-const char kCancelBondProcess[] = "CancelBondProcess";
-const char kRemoveBond[] = "RemoveBond";
-const char kGetRemoteType[] = "GetRemoteType";
-const char kGetRemoteClass[] = "GetRemoteClass";
-const char kGetRemoteAppearance[] = "GetRemoteAppearance";
-const char kGetConnectionState[] = "GetConnectionState";
-const char kGetRemoteUuids[] = "GetRemoteUuids";
-const char kGetBondState[] = "GetBondState";
-const char kConnectAllEnabledProfiles[] = "ConnectAllEnabledProfiles";
-const char kDisconnectAllEnabledProfiles[] = "DisconnectAllEnabledProfiles";
-const char kRegisterCallback[] = "RegisterCallback";
-const char kRegisterConnectionCallback[] = "RegisterConnectionCallback";
-const char kRegisterScanner[] = "RegisterScanner";
-const char kUnregisterScanner[] = "UnregisterScanner";
-const char kRegisterScannerCallback[] = "RegisterScannerCallback";
-const char kUnregisterScannerCallback[] = "UnregisterScannerCallback";
-const char kStartScan[] = "StartScan";
-const char kStopScan[] = "StopScan";
-const char kSetPairingConfirmation[] = "SetPairingConfirmation";
-const char kSetPin[] = "SetPin";
-const char kSetPasskey[] = "SetPasskey";
-const char kGetBondedDevices[] = "GetBondedDevices";
-const char kGetConnectedDevices[] = "GetConnectedDevices";
-
-// TODO(abps) - Rename this to AdapterCallback in platform and here
-const char kCallbackInterface[] = "org.chromium.bluetooth.BluetoothCallback";
-const char kConnectionCallbackInterface[] =
-    "org.chromium.bluetooth.BluetoothConnectionCallback";
-
-const char kOnAdapterPropertyChanged[] = "OnAdapterPropertyChanged";
-const char kOnAddressChanged[] = "OnAddressChanged";
-const char kOnNameChanged[] = "OnNameChanged";
-const char kOnDiscoverableChanged[] = "OnDiscoverableChanged";
-const char kOnDeviceFound[] = "OnDeviceFound";
-const char kOnDeviceCleared[] = "OnDeviceCleared";
-const char kOnDiscoveringChanged[] = "OnDiscoveringChanged";
-const char kOnSspRequest[] = "OnSspRequest";
-
-const char kOnBondStateChanged[] = "OnBondStateChanged";
-const char kOnDeviceConnected[] = "OnDeviceConnected";
-const char kOnDeviceDisconnected[] = "OnDeviceDisconnected";
-
-const char kOnScannerRegistered[] = "OnScannerRegistered";
-const char kOnScanResult[] = "OnScanResult";
-}  // namespace adapter
-
-namespace manager {
-const char kStart[] = "Start";
-const char kStop[] = "Stop";
-const char kGetFlossEnabled[] = "GetFlossEnabled";
-const char kSetFlossEnabled[] = "SetFlossEnabled";
-const char kGetState[] = "GetState";
-const char kGetAvailableAdapters[] = "GetAvailableAdapters";
-const char kGetDefaultAdapter[] = "GetDefaultAdapter";
-const char kSetDesiredDefaultAdapter[] = "SetDesiredDefaultAdapter";
-const char kRegisterCallback[] = "RegisterCallback";
-const char kCallbackInterface[] = "org.chromium.bluetooth.ManagerCallback";
-const char kOnHciDeviceChanged[] = "OnHciDeviceChanged";
-const char kOnHciEnabledChanged[] = "OnHciEnabledChanged";
-const char kOnDefaultAdapterChanged[] = "OnDefaultAdapterChanged";
-}  // namespace manager
-
-namespace socket_manager {
-const char kRegisterCallback[] = "RegisterCallback";
-const char kListenUsingInsecureL2capChannel[] =
-    "ListenUsingInsecureL2capChannel";
-const char kListenUsingInsecureRfcommWithServiceRecord[] =
-    "ListenUsingInsecureRfcommWithServiceRecord";
-const char kListenUsingL2capChannel[] = "ListenUsingL2capChannel";
-const char kListenUsingRfcommWithServiceRecord[] =
-    "ListenUsingRfcommWithServiceRecord";
-const char kCreateInsecureL2capChannel[] = "CreateInsecureL2capChannel";
-const char kCreateInsecureRfcommSocketToServiceRecord[] =
-    "CreateInsecureRfcommSocketToServiceRecord";
-const char kCreateL2capChannel[] = "CreateL2capChannel";
-const char kCreateRfcommSocketToServiceRecord[] =
-    "CreateRfcommSocketToServiceRecord";
-const char kAccept[] = "Accept";
-const char kClose[] = "Close";
-const char kCallbackInterface[] =
-    "org.chromium.bluetooth.SocketManagerCallback";
-
-const char kOnIncomingSocketReady[] = "OnIncomingSocketReady";
-const char kOnIncomingSocketClosed[] = "OnIncomingSocketClosed";
-const char kOnHandleIncomingConnection[] = "OnHandleIncomingConnection";
-const char kOnOutgoingConnectionResult[] = "OnOutgoingConnectionResult";
-}  // namespace socket_manager
-
-namespace gatt {
-const char kRegisterClient[] = "RegisterClient";
-const char kUnregisterClient[] = "UnregisterClient";
-const char kClientConnect[] = "ClientConnect";
-const char kClientDisconnect[] = "ClientDisconnect";
-const char kRefreshDevice[] = "RefreshDevice";
-const char kDiscoverServices[] = "DiscoverServices";
-const char kDiscoverServiceByUuid[] = "DiscoverServiceByUuid";
-const char kReadCharacteristic[] = "ReadCharacteristic";
-const char kReadUsingCharacteristicUuid[] = "ReadUsingCharacteristicUuid";
-const char kWriteCharacteristic[] = "WriteCharacteristic";
-const char kReadDescriptor[] = "ReadDescriptor";
-const char kWriteDescriptor[] = "WriteDescriptor";
-const char kRegisterForNotification[] = "RegisterForNotification";
-const char kBeginReliableWrite[] = "BeginReliableWrite";
-const char kEndReliableWrite[] = "EndReliableWrite";
-const char kReadRemoteRssi[] = "ReadRemoteRssi";
-const char kConfigureMtu[] = "ConfigureMtu";
-const char kConnectionParameterUpdate[] = "ConnectionParameterUpdate";
-const char kCallbackInterface[] =
-    "org.chromium.bluetooth.BluetoothGattCallback";
-
-const char kOnClientRegistered[] = "OnClientRegistered";
-const char kOnClientConnectionState[] = "OnClientConnectionState";
-const char kOnPhyUpdate[] = "OnPhyUpdate";
-const char kOnPhyRead[] = "OnPhyRead";
-const char kOnSearchComplete[] = "OnSearchComplete";
-const char kOnCharacteristicRead[] = "OnCharacteristicRead";
-const char kOnCharacteristicWrite[] = "OnCharacteristicWrite";
-const char kOnExecuteWrite[] = "OnExecuteWrite";
-const char kOnDescriptorRead[] = "OnDescriptorRead";
-const char kOnNotify[] = "OnNotify";
-const char kOnReadRemoteRssi[] = "OnReadRemoteRssi";
-const char kOnConfigureMtu[] = "OnConfigureMtu";
-const char kOnConnectionUpdated[] = "OnConnectionUpdated";
-const char kOnServiceChanged[] = "OnServiceChanged";
-}  // namespace gatt
-
-namespace advertiser {
-const char kRegisterCallback[] = "RegisterAdvertiserCallback";
-const char kStartAdvertisingSet[] = "StartAdvertisingSet";
-const char kStopAdvertisingSet[] = "StopAdvertisingSet";
-const char kGetOwnAddress[] = "GetOwnAddress";
-const char kEnableAdvertisingSet[] = "EnableAdvertisingSet";
-const char kSetAdvertisingData[] = "SetAdvertisingData";
-const char kSetScanResponseData[] = "SetScanResponseData";
-const char kSetAdvertisingParameters[] = "SetAdvertisingParameters";
-const char kSetPeriodicAdvertisingParameters[] =
-    "SetPeriodicAdvertisingParameters";
-const char kSetPeriodicAdvertisingData[] = "SetPeriodicAdvertisingData";
-const char kSetPeriodicAdvertisingEnable[] = "SetPeriodicAdvertisingEnable";
-
-const char kCallbackInterface[] =
-    "org.chromium.bluetooth.AdvertisingSetCallback";
-const char kOnAdvertisingSetStarted[] = "OnAdvertisingSetStarted";
-const char kOnOwnAddressRead[] = "OnOwnAddressRead";
-const char kOnAdvertisingSetStopped[] = "OnAdvertisingSetStopped";
-const char kOnAdvertisingEnabled[] = "OnAdvertisingEnabled";
-const char kOnAdvertisingDataSet[] = "OnAdvertisingDataSet";
-const char kOnScanResponseDataSet[] = "OnScanResponseDataSet";
-const char kOnAdvertisingParametersUpdated[] = "OnAdvertisingParametersUpdated";
-const char kOnPeriodicAdvertisingParametersUpdated[] =
-    "OnPeriodicAdvertisingParametersUpdated";
-const char kOnPeriodicAdvertisingDataSet[] = "OnPeriodicAdvertisingDataSet";
-const char kOnPeriodicAdvertisingEnabled[] = "OnPeriodicAdvertisingEnabled";
-}  // namespace advertiser
-
-namespace experimental {
-const char kSetLLPrivacy[] = "SetLLPrivacy";
-}  // namespace experimental
+// Timeout for waiting HCI enabled changed. Make it longer since it takes longer
+// when there is a connected device.
+int kAdapterEnabledTimeoutMs = 5000;
 
 namespace {
 constexpr char kDeviceIdNameKey[] = "name";
@@ -311,6 +132,13 @@ const DBusTypeInfo& GetDBusTypeInfo(const FlossDeviceId*) {
 }
 
 template <>
+const DBusTypeInfo& GetDBusTypeInfo(
+    const FlossAdapterClient::VendorProductInfo*) {
+  static DBusTypeInfo info{"a{sv}", "VendorProductInfo"};
+  return info;
+}
+
+template <>
 DEVICE_BLUETOOTH_EXPORT const DBusTypeInfo& GetDBusTypeInfo(
     const device::BluetoothUUID*) {
   static DBusTypeInfo info{"ay", "BluetoothUUID"};
@@ -340,6 +168,30 @@ dbus::ObjectPath FlossDBusClient::GenerateAdapterPath(int adapter_index) {
 // static
 dbus::ObjectPath FlossDBusClient::GenerateGattPath(int adapter_index) {
   return dbus::ObjectPath(base::StringPrintf(kGattObjectFormat, adapter_index));
+}
+
+// static
+dbus::ObjectPath FlossDBusClient::GenerateBatteryManagerPath(
+    int adapter_index) {
+  return dbus::ObjectPath(
+      base::StringPrintf(kBatteryManagerObjectFormat, adapter_index));
+}
+
+// static
+dbus::ObjectPath FlossDBusClient::GenerateBluetoothTelephonyPath(
+    int adapter_index) {
+  return dbus::ObjectPath(
+      base::StringPrintf(kBluetoothTelephonyObjectFormat, adapter_index));
+}
+
+dbus::ObjectPath FlossDBusClient::GenerateAdminPath(int adapter_index) {
+  return dbus::ObjectPath(
+      base::StringPrintf(kAdminObjectFormat, adapter_index));
+}
+
+dbus::ObjectPath FlossDBusClient::GenerateLoggingPath(int adapter_index) {
+  return dbus::ObjectPath(
+      base::StringPrintf(kAdapterLoggingObjectFormat, adapter_index));
 }
 
 // Default error handler for dbus clients is to just print the error right now.
@@ -533,6 +385,25 @@ bool FlossDBusClient::ReadDBusParam(dbus::MessageReader* reader,
   return struct_reader.ReadDBusParam(reader, device);
 }
 
+// static
+template <>
+bool FlossDBusClient::ReadDBusParam(
+    dbus::MessageReader* reader,
+    FlossAdapterClient::VendorProductInfo* vpi) {
+  static StructReader<FlossAdapterClient::VendorProductInfo> struct_reader({
+      {"vendor_id_src",
+       CreateFieldReader(&FlossAdapterClient::VendorProductInfo::vendorIdSrc)},
+      {"vendor_id",
+       CreateFieldReader(&FlossAdapterClient::VendorProductInfo::vendorId)},
+      {"product_id",
+       CreateFieldReader(&FlossAdapterClient::VendorProductInfo::productId)},
+      {"version",
+       CreateFieldReader(&FlossAdapterClient::VendorProductInfo::version)},
+  });
+
+  return struct_reader.ReadDBusParam(reader, vpi);
+}
+
 template <>
 void FlossDBusClient::WriteDBusParam(dbus::MessageWriter* writer,
                                      const FlossDeviceId& device) {
@@ -608,7 +479,7 @@ void FlossDBusClient::WriteDBusParam(dbus::MessageWriter* writer,
 template <>
 void FlossDBusClient::WriteDBusParam(dbus::MessageWriter* writer,
                                      const std::vector<uint8_t>& data) {
-  writer->AppendArrayOfBytes(data.data(), data.size());
+  writer->AppendArrayOfBytes(data);
 }
 
 template <>
@@ -670,6 +541,11 @@ template void FlossDBusClient::DefaultResponseWithCallback(
 
 template void FlossDBusClient::DefaultResponseWithCallback(
     ResponseCallback<device::BluetoothDevice::UUIDList> callback,
+    dbus::Response* response,
+    dbus::ErrorResponse* error_response);
+
+template void FlossDBusClient::DefaultResponseWithCallback(
+    ResponseCallback<FlossAdapterClient::VendorProductInfo> callback,
     dbus::Response* response,
     dbus::ErrorResponse* error_response);
 

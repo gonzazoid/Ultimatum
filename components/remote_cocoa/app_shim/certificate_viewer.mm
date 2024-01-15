@@ -4,12 +4,13 @@
 
 #import "components/remote_cocoa/app_shim/certificate_viewer.h"
 
-#include <CoreFoundation/CFArray.h>
+#include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
-#import <SecurityInterface/SFCertificatePanel.h>
+#import <SecurityInterface/SecurityInterface.h>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/notreached.h"
 #include "net/cert/x509_util_apple.h"
 
@@ -17,8 +18,9 @@ namespace remote_cocoa {
 
 void ShowCertificateViewerForWindow(NSWindow* owning_window,
                                     net::X509Certificate* certificate) {
-  base::ScopedCFTypeRef<CFArrayRef> cert_chain(
-      net::x509_util::CreateSecCertificateArrayForX509Certificate(certificate));
+  NSArray* cert_chain = base::apple::CFToNSOwnershipCast(
+      net::x509_util::CreateSecCertificateArrayForX509Certificate(certificate)
+          .release());
   if (!cert_chain)
     return;
 
@@ -36,7 +38,7 @@ void ShowCertificateViewerForWindow(NSWindow* owning_window,
   // the certificate viewer UI from displaying which certificate is revoked.
   // This is acceptable, as certificate revocation will still be shown in
   // the page info bubble if a certificate in the chain is actually revoked.
-  base::ScopedCFTypeRef<CFMutableArrayRef> policies(
+  base::apple::ScopedCFTypeRef<CFMutableArrayRef> policies(
       CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks));
   if (!policies.get()) {
     NOTREACHED();
@@ -44,25 +46,22 @@ void ShowCertificateViewerForWindow(NSWindow* owning_window,
   }
   // Add a basic X.509 policy, in order to match the behaviour of
   // SFCertificatePanel when no policies are specified.
-  base::ScopedCFTypeRef<SecPolicyRef> basic_policy(SecPolicyCreateBasicX509());
+  base::apple::ScopedCFTypeRef<SecPolicyRef> basic_policy(
+      SecPolicyCreateBasicX509());
   if (!basic_policy) {
     NOTREACHED();
     return;
   }
-  CFArrayAppendValue(policies, basic_policy.get());
+  CFArrayAppendValue(policies.get(), basic_policy.get());
 
   SFCertificatePanel* panel = [[SFCertificatePanel alloc] init];
-  [panel setPolicies:base::mac::CFToNSCast(policies.get())];
+  [panel setPolicies:base::apple::CFToNSPtrCast(policies.get())];
   [panel beginSheetForWindow:owning_window
                modalDelegate:nil
               didEndSelector:nil
                  contextInfo:nil
-                certificates:base::mac::CFToNSCast(cert_chain.get())
+                certificates:cert_chain
                    showGroup:YES];
-  // beginSheetForWindow: internally retains an extra reference to |panel| and
-  // releases it when the sheet closes. Release the original reference so the
-  // sheet is destroyed.
-  [panel autorelease];
 }
 
 }  // namespace remote_cocoa

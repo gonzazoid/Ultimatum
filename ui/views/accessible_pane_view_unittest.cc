@@ -4,12 +4,15 @@
 
 #include "ui/views/accessible_pane_view.h"
 
+#include <memory>
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/base/accelerators/accelerator.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/test/views_test_base.h"
@@ -23,6 +26,8 @@ namespace views {
 using AccessiblePaneViewTest = ViewsTestBase;
 
 class TestBarView : public AccessiblePaneView {
+  METADATA_HEADER(TestBarView, AccessiblePaneView)
+
  public:
   TestBarView();
 
@@ -42,8 +47,7 @@ class TestBarView : public AccessiblePaneView {
   void Init();
 
   raw_ptr<LabelButton> child_button_;
-  // TODO(crbug.com/1298696): Breaks views_unittests.
-  raw_ptr<LabelButton, DegradeToNoOpWhenMTE> second_child_button_;
+  raw_ptr<LabelButton> second_child_button_;
   raw_ptr<LabelButton> third_child_button_;
   std::unique_ptr<LabelButton> not_child_button_;
 };
@@ -67,6 +71,9 @@ void TestBarView::Init() {
 View* TestBarView::GetDefaultFocusableChild() {
   return child_button_;
 }
+
+BEGIN_METADATA(TestBarView)
+END_METADATA
 
 TEST_F(AccessiblePaneViewTest, SimpleSetPaneFocus) {
   TestBarView* test_view = new TestBarView();
@@ -268,6 +275,32 @@ TEST_F(AccessiblePaneViewTest, MAYBE_DoesntCrashOnEscapeWithRemovedView) {
   v1->parent()->RemoveChildView(v1);
   // This shouldn't hit a CHECK in the FocusManager.
   EXPECT_TRUE(test_view2->AcceleratorPressed(test_view2->escape_key()));
+}
+
+TEST_F(AccessiblePaneViewTest, AccessibleProperties) {
+  std::unique_ptr<TestBarView> test_view = std::make_unique<TestBarView>();
+  test_view->SetAccessibleName(u"Name");
+  test_view->SetAccessibleDescription(u"Description");
+  EXPECT_EQ(test_view->GetAccessibleName(), u"Name");
+  EXPECT_EQ(test_view->GetAccessibleDescription(), u"Description");
+  EXPECT_EQ(test_view->GetAccessibleRole(), ax::mojom::Role::kPane);
+
+  ui::AXNodeData data;
+  test_view->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Name");
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kDescription),
+            u"Description");
+  EXPECT_EQ(data.role, ax::mojom::Role::kPane);
+
+  data = ui::AXNodeData();
+  test_view->SetAccessibleRole(ax::mojom::Role::kToolbar);
+  test_view->GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Name");
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kDescription),
+            u"Description");
+  EXPECT_EQ(data.role, ax::mojom::Role::kToolbar);
 }
 
 }  // namespace views

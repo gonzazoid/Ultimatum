@@ -9,14 +9,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "components/download/internal/background_service/client_set.h"
 #include "components/download/internal/background_service/config.h"
 #include "components/download/internal/background_service/entry.h"
@@ -70,8 +70,6 @@ DriverEntry BuildDriverEntry(const Entry& entry, DriverEntry::State state) {
   return dentry;
 }
 
-void NotifyTaskFinished(bool success) {}
-
 class UploadClient : public test::MockClient {
  public:
   UploadClient() = default;
@@ -95,7 +93,7 @@ void UploadClient::GetUploadData(const std::string& guid,
   scoped_refptr<network::ResourceRequestBody> post_body =
       new network::ResourceRequestBody();
   unsigned int delay = upload_response_delay_[guid];
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, base::BindOnce(std::move(callback), post_body),
       base::Seconds(delay));
 }
@@ -129,7 +127,7 @@ class DownloadServiceControllerImplTest : public testing::Test {
  public:
   DownloadServiceControllerImplTest()
       : task_runner_(new base::TestMockTimeTaskRunner),
-        handle_(task_runner_),
+        current_default_handle_(task_runner_),
         controller_(nullptr),
         client_(nullptr),
         driver_(nullptr),
@@ -199,7 +197,10 @@ class DownloadServiceControllerImplTest : public testing::Test {
         std::move(device_status_listener), &navigation_monitor,
         std::move(scheduler), std::move(task_scheduler),
         std::move(file_monitor), download_file_dir);
+    task_finished_successfully_ = false;
   }
+
+  void NotifyTaskFinished(bool success) { task_finished_successfully_ = true; }
 
  protected:
   void OnInitCompleted() {
@@ -217,7 +218,7 @@ class DownloadServiceControllerImplTest : public testing::Test {
   DownloadParams MakeDownloadParams() {
     DownloadParams params;
     params.client = DownloadClient::TEST;
-    params.guid = base::GenerateGUID();
+    params.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
     params.callback = start_callback_;
     return params;
   }
@@ -226,7 +227,7 @@ class DownloadServiceControllerImplTest : public testing::Test {
                void(const std::string&, DownloadParams::StartResult));
 
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle current_default_handle_;
 
   std::unique_ptr<ControllerImpl> controller_;
   raw_ptr<Configuration> config_;
@@ -246,6 +247,7 @@ class DownloadServiceControllerImplTest : public testing::Test {
   base::RepeatingCallback<void(const std::string&, DownloadParams::StartResult)>
       start_callback_;
   bool init_callback_called_;
+  bool task_finished_successfully_;
 };
 
 }  // namespace
@@ -409,7 +411,8 @@ TEST_F(DownloadServiceControllerImplTest, SuccessfulInitWithExistingDownload) {
   Entry entry1 = test::BuildBasicEntry();
   Entry entry2 = test::BuildBasicEntry();
   Entry entry3 =
-      test::BuildEntry(DownloadClient::INVALID, base::GenerateGUID());
+      test::BuildEntry(DownloadClient::INVALID,
+                       base::Uuid::GenerateRandomV4().AsLowercaseString());
 
   std::vector<Entry> entries = {entry1, entry2, entry3};
   std::vector<DownloadMetaData> expected_downloads = {
@@ -471,10 +474,37 @@ TEST_F(DownloadServiceControllerImplTest,
   driver_->MakeReady();
   store_->TriggerInit(true, std::make_unique<std::vector<Entry>>(entries));
   file_monitor_->TriggerInit(true);
-  controller_->OnStartScheduledTask(DownloadTaskType::CLEANUP_TASK,
-                                    base::BindOnce(&NotifyTaskFinished));
+  controller_->OnStartScheduledTask(
+      DownloadTaskType::CLEANUP_TASK,
+      base::BindOnce(&DownloadServiceControllerImplTest::NotifyTaskFinished,
+                     base::Unretained(this)));
 
   task_runner_->RunUntilIdle();
+  EXPECT_FALSE(task_finished_successfully_);
+  controller_->OnStopScheduledTask(DownloadTaskType::CLEANUP_TASK);
+}
+
+TEST_F(DownloadServiceControllerImplTest,
+       OnStartScheduledTaskCallbackInvokedIfControllerNotReady) {
+  Entry entry1 = test::BuildBasicEntry();
+  Entry entry2 = test::BuildBasicEntry();
+  Entry entry3 = test::BuildBasicEntry(Entry::State::COMPLETE);
+  entry3.completion_time = base::Time::Now();
+
+  std::vector<Entry> entries = {entry1, entry2, entry3};
+
+  EXPECT_CALL(*task_scheduler_,
+              ScheduleTask(DownloadTaskType::CLEANUP_TASK, _, _, _, _, _))
+      .Times(0);
+
+  InitializeController();
+  controller_->OnStartScheduledTask(
+      DownloadTaskType::CLEANUP_TASK,
+      base::BindOnce(&DownloadServiceControllerImplTest::NotifyTaskFinished,
+                     base::Unretained(this)));
+
+  task_runner_->RunUntilIdle();
+  EXPECT_TRUE(task_finished_successfully_);
   controller_->OnStopScheduledTask(DownloadTaskType::CLEANUP_TASK);
 }
 
@@ -493,7 +523,8 @@ TEST_F(DownloadServiceControllerImplTest, GetOwnerOfDownload) {
 
   EXPECT_EQ(DownloadClient::TEST, controller_->GetOwnerOfDownload(entry.guid));
   EXPECT_EQ(DownloadClient::INVALID,
-            controller_->GetOwnerOfDownload(base::GenerateGUID()));
+            controller_->GetOwnerOfDownload(
+                base::Uuid::GenerateRandomV4().AsLowercaseString()));
 }
 
 TEST_F(DownloadServiceControllerImplTest, AddDownloadAccepted) {
@@ -1672,7 +1703,7 @@ TEST_F(DownloadServiceControllerImplTest, ExistingExternalDownload) {
   DriverEntry dentry1 =
       BuildDriverEntry(entry2, DriverEntry::State::IN_PROGRESS);
   DriverEntry dentry2;
-  dentry2.guid = base::GenerateGUID();
+  dentry2.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   dentry2.state = DriverEntry::State::IN_PROGRESS;
 
   std::vector<Entry> entries = {entry1, entry2, entry3};
@@ -1746,7 +1777,7 @@ TEST_F(DownloadServiceControllerImplTest, NewExternalDownload) {
   EXPECT_FALSE(driver_->Find(entry2.guid).value().paused);
 
   DriverEntry dentry2;
-  dentry2.guid = base::GenerateGUID();
+  dentry2.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   dentry2.state = DriverEntry::State::IN_PROGRESS;
 
   // Simulate a newly created external download.
@@ -1987,8 +2018,10 @@ TEST_F(DownloadServiceControllerImplTest, DownloadTaskQueuesAfterFinish) {
 
   // Simulate a task start, which should limit our calls to Reschedule() because
   // we are in a task.
-  controller_->OnStartScheduledTask(DownloadTaskType::DOWNLOAD_TASK,
-                                    base::BindOnce(&NotifyTaskFinished));
+  controller_->OnStartScheduledTask(
+      DownloadTaskType::DOWNLOAD_TASK,
+      base::BindOnce(&DownloadServiceControllerImplTest::NotifyTaskFinished,
+                     base::Unretained(this)));
 
   // Set up new expectations to start a new download.
   ON_CALL(*scheduler_, Next(_, _))
@@ -2052,8 +2085,10 @@ TEST_F(DownloadServiceControllerImplTest, CleanupTaskQueuesAfterFinish) {
   EXPECT_CALL(*task_scheduler_,
               ScheduleTask(DownloadTaskType::CLEANUP_TASK, _, _, _, _, _))
       .Times(0);
-  controller_->OnStartScheduledTask(DownloadTaskType::CLEANUP_TASK,
-                                    base::BindOnce(&NotifyTaskFinished));
+  controller_->OnStartScheduledTask(
+      DownloadTaskType::CLEANUP_TASK,
+      base::BindOnce(&DownloadServiceControllerImplTest::NotifyTaskFinished,
+                     base::Unretained(this)));
 
   // Trigger download succeed events, which should not schedule a cleanup until
   // the existing cleanup has finished.

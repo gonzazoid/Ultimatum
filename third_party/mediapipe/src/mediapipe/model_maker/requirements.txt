@@ -1,0 +1,10 @@
+absl-py
+mediapipe>=0.10.0
+numpy
+opencv-python
+tensorflow>=2.10
+tensorflow-addons
+tensorflow-datasets
+tensorflow-hub
+tensorflow-text
+tf-models-official>=2.13.2

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,38 +6,46 @@ import './icons.html.js';
 import './mojo_api.js';
 import './multidevice_setup_shared.css.js';
 import './ui_page.js';
-import '//resources/js/cr.m.js';
-import '//resources/cr_elements/cr_lottie/cr_lottie.js';
+import '//resources/ash/common/cr.m.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '//resources/polymer/v3_0/iron-media-query/iron-media-query.js';
+import 'chrome://resources/cros_components/lottie_renderer/lottie-renderer.js';
 
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
 import {WebUIListenerBehavior} from '//resources/ash/common/web_ui_listener_behavior.js';
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
 import {Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ConnectivityStatus} from 'chrome://resources/mojo/ash/services/device_sync/public/mojom/device_sync.mojom-webui.js';
+import {LottieRenderer} from 'chrome://resources/cros_components/lottie_renderer/lottie-renderer.js';
+import {ConnectivityStatus} from 'chrome://resources/mojo/chromeos/ash/services/device_sync/public/mojom/device_sync.mojom-webui.js';
 import {HostDevice} from 'chrome://resources/mojo/chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-webui.js';
 
+import {MojoInterfaceProvider, MojoInterfaceProviderImpl} from './mojo_api.js';
 import {MultiDeviceSetupDelegate} from './multidevice_setup_delegate.js';
 import {getTemplate} from './start_setup_page.html.js';
 import {UiPageContainerBehavior} from './ui_page_container_behavior.js';
 
 /**
- * The multidevice setup animation for light mode.
+ * The multidevice setup animation for dynamic colors.
  * @type {string}
  */
-const MULTIDEVICE_ANIMATION_DARK_URL = 'multidevice_setup_dark.json';
-
-/**
- * The multidevice setup animation for dark mode.
- * @type {string}
- */
-const MULTIDEVICE_ANIMATION_LIGHT_URL = 'multidevice_setup_light.json';
+const MULTIDEVICE_ANIMATION_JELLY_URL =
+    'chrome://resources/ash/common/multidevice_setup/multidevice_setup_animation.json';
 
 Polymer({
   _template: getTemplate(),
   is: 'start-setup-page',
 
   properties: {
+    /* The localized loadTimeData string for the
+     * StartSetupPage header text, dependent on whether
+     * a user is on OOBE and previously connected their phone during Quick
+     * Start.
+     * */
+    headerTextId: {
+      type: String,
+      value: 'startSetupPageHeader',
+      notify: true,
+    },
+
     /** Overridden from UiPageContainerBehavior. */
     forwardButtonTextId: {
       type: String,
@@ -94,28 +102,36 @@ Polymer({
     },
 
     /** @private */
-    phoneHubCameraRollEnabled_: {
+    phoneHubEnabled_: {
       type: Boolean,
       value() {
-        return loadTimeData.valueExists('phoneHubCameraRollEnabled') &&
-            loadTimeData.getBoolean('phoneHubCameraRollEnabled');
+        return loadTimeData.valueExists('phoneHubEnabled') &&
+            loadTimeData.getBoolean('phoneHubEnabled');
       },
     },
 
     /**
-     * Whether the multidevice setup page is being rendered in dark mode.
-     * @private {boolean}
+     * ID of phone a user used to complete Quick Start earlier in OOBE flow.
+     * @private {string|undefined}
      */
-    isDarkModeActive_: {
-      type: Boolean,
-      value: false,
-    },
+    quickStartPhoneInstanceId_: String,
+
+    /**
+     * Provider of an interface to the MultiDeviceSetup Mojo service.
+     * @private {!MojoInterfaceProvider}
+     */
+    mojoInterfaceProvider_: Object,
   },
 
   behaviors: [
     UiPageContainerBehavior,
     WebUIListenerBehavior,
   ],
+
+  /** @override */
+  created() {
+    this.mojoInterfaceProvider_ = MojoInterfaceProviderImpl.getInstance();
+  },
 
   /** @override */
   attached() {
@@ -129,22 +145,31 @@ Polymer({
    * @param {boolean} enabled Whether the animation should play or not.
    */
   setPlayAnimation(enabled) {
-    /** @type {!CrLottieElement} */ (this.$.multideviceSetupAnimation)
-        .setPlay(enabled);
+    if (enabled) {
+      this.$.multideviceSetupAnimation.play();
+    } else {
+      this.$.multideviceSetupAnimation.pause();
+    }
   },
 
-  /** @private */
+  /**
+   * If the user used Quick Start, this method retrieves and sets the ID of the
+   * phone a user used to complete the flow earlier in OOBE.
+   * @private
+   */
   initializeSetupFlow_() {
-    // The "Learn More" links are inside a grdp string, so we cannot actually
-    // add an onclick handler directly to the html. Instead, grab the two and
-    // manaully add onclick handlers.
-    const helpArticleLinks = [
-      this.$$('#multidevice-summary-message a'),
-    ];
-    for (let i = 0; i < helpArticleLinks.length; i++) {
-      helpArticleLinks[i].onclick = this.fire.bind(
-          this, 'open-learn-more-webview-requested', helpArticleLinks[i].href);
-    }
+    this.mojoInterfaceProvider_.getMojoServiceRemote()
+        .getQuickStartPhoneInstanceID()
+        .then(({qsPhoneInstanceId}) => {
+          if (!qsPhoneInstanceId) {
+            return;
+          }
+
+          this.quickStartPhoneInstanceId_ = qsPhoneInstanceId;
+        })
+        .catch((error) => {
+          console.warn('Mojo service failure: ' + error);
+        });
   },
 
   /**
@@ -244,9 +269,40 @@ Polymer({
   /** @private */
   devicesChanged_() {
     if (this.devices.length > 0) {
+      if (this.quickStartPhoneInstanceId_ &&
+          this.moveDeviceToFront_(this.quickStartPhoneInstanceId_)) {
+        // Adjust the title to reflect that the Quick Start phone was moved to
+        // top of list.
+        this.headerTextId = 'startSetupPageAfterQuickStartHeader';
+      }
+
       this.selectedInstanceIdOrLegacyDeviceId =
           this.getInstanceIdOrLegacyDeviceId_(this.devices[0]);
     }
+  },
+
+  /**
+   * Checks if the devices list contains a phone matching the provided
+   * device_id. If so, that phone is moved to the front of the devices list.
+   * @param {string} device_id
+   * @return {boolean} Whether the device matching the provided ID is moved to
+   *     the front of the devices list. Returns false if no matching device is
+   *     found. Returns true and moves the matching device to index 0 if a
+   *     matching device is found.
+   * @private
+   */
+  moveDeviceToFront_(device_id) {
+    const matchingDeviceIdx = this.devices.findIndex(
+        device => this.getInstanceIdOrLegacyDeviceId_(device) === device_id);
+
+    if (matchingDeviceIdx === -1) {
+      return false;
+    }
+
+    // Move device located at the matchingDeviceIdx to the front of the
+    // devices list.
+    this.devices.unshift(this.devices.splice(matchingDeviceIdx, 1)[0]);
+    return true;
   },
 
   /** @private */
@@ -274,7 +330,6 @@ Polymer({
    * @private
    */
   getAnimationUrl_() {
-    return this.isDarkModeActive_ ? MULTIDEVICE_ANIMATION_DARK_URL :
-                                    MULTIDEVICE_ANIMATION_LIGHT_URL;
+    return MULTIDEVICE_ANIMATION_JELLY_URL;
   },
 });

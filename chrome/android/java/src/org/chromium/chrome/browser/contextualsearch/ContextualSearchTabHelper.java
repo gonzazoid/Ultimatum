@@ -9,10 +9,11 @@ import android.content.Context;
 
 import androidx.annotation.Nullable;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Callback;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel.StateChangeReason;
@@ -23,6 +24,7 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.components.search_engines.TemplateUrlService.TemplateUrlServiceObserver;
 import org.chromium.content_public.browser.GestureListenerManager;
 import org.chromium.content_public.browser.GestureStateListener;
@@ -33,8 +35,8 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
 
 /** Manages the enabling and disabling and gesture listeners for ContextualSearch on a given Tab. */
-public class ContextualSearchTabHelper
-        extends EmptyTabObserver implements NetworkChangeNotifier.ConnectionTypeObserver {
+public class ContextualSearchTabHelper extends EmptyTabObserver
+        implements NetworkChangeNotifier.ConnectionTypeObserver, TemplateUrlServiceObserver {
     private static final String TAG = "ContextualSearch";
 
     /** The Tab that this helper tracks. */
@@ -43,12 +45,9 @@ public class ContextualSearchTabHelper
     // Device scale factor.
     private final float mPxToDp;
 
-    /** Notification handler for Contextual Search events. */
-    private TemplateUrlServiceObserver mTemplateUrlObserver;
+    private TemplateUrlService mTemplateUrlService;
 
-    /**
-     * The WebContents associated with the Tab which this helper is monitoring, unless detached.
-     */
+    /** The WebContents associated with the Tab which this helper is monitoring, unless detached. */
     private WebContents mWebContents;
 
     /**
@@ -60,9 +59,7 @@ public class ContextualSearchTabHelper
     /** The GestureListener used for handling events from the current WebContents. */
     private GestureStateListener mGestureStateListener;
 
-    /**
-     * Manages incoming calls to Smart Select when available, for the current base WebContents.
-     */
+    /** Manages incoming calls to Smart Select when available, for the current base WebContents. */
     private SelectionClientManager mSelectionClientManager;
 
     /** The pointer to our native C++ implementation. */
@@ -114,24 +111,16 @@ public class ContextualSearchTabHelper
     public void onContentChanged(Tab tab) {
         // Native initialization happens after a page loads or content is changed to ensure profile
         // is initialized.
+        Profile profile = tab.getProfile();
         if (mNativeHelper == 0 && tab.getWebContents() != null) {
-            mNativeHelper = ContextualSearchTabHelperJni.get().init(
-                    ContextualSearchTabHelper.this, Profile.fromWebContents(tab.getWebContents()));
+            mNativeHelper =
+                    ContextualSearchTabHelperJni.get()
+                            .init(ContextualSearchTabHelper.this, profile);
         }
-        if (mTemplateUrlObserver == null) {
-            mTemplateUrlObserver = new TemplateUrlServiceObserver() {
-                @Override
-                public void onTemplateURLServiceChanged() {
-                    boolean isDefaultSearchEngineGoogle =
-                            TemplateUrlServiceFactory.get().isDefaultSearchEngineGoogle();
-                    if (mIsDefaultSearchEngineGoogle == null
-                            || isDefaultSearchEngineGoogle != mIsDefaultSearchEngineGoogle) {
-                        mIsDefaultSearchEngineGoogle = isDefaultSearchEngineGoogle;
-                        updateContextualSearchHooks(mWebContents);
-                    }
-                }
-            };
-            TemplateUrlServiceFactory.get().addObserver(mTemplateUrlObserver);
+        if (profile != null && mTemplateUrlService == null) {
+            mTemplateUrlService = TemplateUrlServiceFactory.getForProfile(profile);
+            mTemplateUrlService.addObserver(this);
+            if (mTemplateUrlService.isLoaded()) onTemplateURLServiceChanged();
         }
         updateHooksForTab(tab);
     }
@@ -144,12 +133,12 @@ public class ContextualSearchTabHelper
     @Override
     public void onDestroyed(Tab tab) {
         if (mNativeHelper != 0) {
-            ContextualSearchTabHelperJni.get().destroy(
-                    mNativeHelper, ContextualSearchTabHelper.this);
+            ContextualSearchTabHelperJni.get()
+                    .destroy(mNativeHelper, ContextualSearchTabHelper.this);
             mNativeHelper = 0;
         }
-        if (mTemplateUrlObserver != null) {
-            TemplateUrlServiceFactory.get().removeObserver(mTemplateUrlObserver);
+        if (mTemplateUrlService != null) {
+            mTemplateUrlService.removeObserver(this);
         }
         if (NetworkChangeNotifier.isInitialized()) {
             NetworkChangeNotifier.removeConnectionTypeObserver(this);
@@ -185,6 +174,21 @@ public class ContextualSearchTabHelper
     }
 
     // ============================================================================================
+    // TemplateUrlServiceObserver overrides.
+    // ============================================================================================
+
+    @Override
+    public void onTemplateURLServiceChanged() {
+        assert mTemplateUrlService != null;
+        boolean isDefaultSearchEngineGoogle = mTemplateUrlService.isDefaultSearchEngineGoogle();
+        if (mIsDefaultSearchEngineGoogle == null
+                || isDefaultSearchEngineGoogle != mIsDefaultSearchEngineGoogle) {
+            mIsDefaultSearchEngineGoogle = isDefaultSearchEngineGoogle;
+            updateContextualSearchHooks(mWebContents);
+        }
+    }
+
+    // ============================================================================================
     // NetworkChangeNotifier.ConnectionTypeObserver overrides.
     // ============================================================================================
 
@@ -212,9 +216,10 @@ public class ContextualSearchTabHelper
                 // the objects associated with the web content need to be recreated in order for
                 // selection to continue working. See https://crbug.com/1076326 for more details.
                 removeContextualSearchHooks(mWebContents);
-                mSelectionClientManager = currentWebContents != null
-                        ? new SelectionClientManager(currentWebContents)
-                        : null;
+                mSelectionClientManager =
+                        currentWebContents != null
+                                ? new SelectionClientManager(currentWebContents)
+                                : null;
             }
             mWebContents = currentWebContents;
             updateContextualSearchHooks(mWebContents);
@@ -252,8 +257,9 @@ public class ContextualSearchTabHelper
             controller.setSelectionClient(
                     mSelectionClientManager.addContextualSearchSelectionClient(
                             contextualSearchManager.getContextualSearchSelectionClient()));
-            ContextualSearchTabHelperJni.get().installUnhandledTapNotifierIfNeeded(
-                    mNativeHelper, ContextualSearchTabHelper.this, webContents, mPxToDp);
+            ContextualSearchTabHelperJni.get()
+                    .installUnhandledTapNotifierIfNeeded(
+                            mNativeHelper, ContextualSearchTabHelper.this, webContents, mPxToDp);
         }
     }
 
@@ -299,31 +305,42 @@ public class ContextualSearchTabHelper
             return false;
         }
 
-        boolean isActive = !webContents.isIncognito() && FirstRunStatus.getFirstRunFlowComplete()
-                && !ContextualSearchPolicy.isContextualSearchDisabled()
-                && TemplateUrlServiceFactory.get().isDefaultSearchEngineGoogle()
-                && !LocaleManager.getInstance().needToCheckForSearchEnginePromo()
-                // Svelte and Accessibility devices are incompatible with the first-run flow and
-                // Talkback has poor interaction with Contextual Search (see http://crbug.com/399708
-                // and http://crbug.com/396934).
-                && !manager.isRunningInCompatibilityMode() && !(mTab.isShowingErrorPage())
-                && isDeviceOnline(manager);
+        boolean isDseGoogle =
+                TemplateUrlServiceFactory.getForProfile(Profile.fromWebContents(webContents))
+                        .isDefaultSearchEngineGoogle();
+        boolean isActive =
+                !webContents.isIncognito()
+                        && FirstRunStatus.getFirstRunFlowComplete()
+                        && !ContextualSearchPolicy.isContextualSearchDisabled()
+                        && isDseGoogle
+                        && !LocaleManager.getInstance().needToCheckForSearchEnginePromo()
+                        // Svelte and Accessibility devices are incompatible with the first-run flow
+                        // and Talkback has poor interaction with Contextual Search (see
+                        // http://crbug.com/399708 and http://crbug.com/396934).
+                        && !manager.isRunningInCompatibilityMode()
+                        && !(mTab.isShowingErrorPage())
+                        && isDeviceOnline(manager);
         if (isCct && !isActive) {
             // TODO(donnd): remove after https://crbug.com/1192143 is resolved.
             Log.w(TAG, "Not allowed to be active! Checking reasons:");
-            Log.w(TAG,
-                    "!isIncognito: " + !webContents.isIncognito() + " getFirstRunFlowComplete: "
+            Log.w(
+                    TAG,
+                    "!isIncognito: "
+                            + !webContents.isIncognito()
+                            + " getFirstRunFlowComplete: "
                             + FirstRunStatus.getFirstRunFlowComplete()
                             + " !isContextualSearchDisabled: "
                             + !ContextualSearchManager.isContextualSearchDisabled()
                             + " isDefaultSearchEngineGoogle: "
-                            + TemplateUrlServiceFactory.get().isDefaultSearchEngineGoogle()
+                            + isDseGoogle
                             + " !needToCheckForSearchEnginePromo: "
                             + !LocaleManager.getInstance().needToCheckForSearchEnginePromo()
                             + " !isRunningInCompatibilityMode: "
                             + !manager.isRunningInCompatibilityMode()
-                            + " !isShowingErrorPage: " + !mTab.isShowingErrorPage()
-                            + " isDeviceOnline: " + isDeviceOnline(manager));
+                            + " !isShowingErrorPage: "
+                            + !mTab.isShowingErrorPage()
+                            + " isDeviceOnline: "
+                            + isDeviceOnline(manager));
         }
         return isActive;
     }
@@ -331,7 +348,7 @@ public class ContextualSearchTabHelper
     /** @return Whether the device is online, or we have disabled online-detection. */
     private boolean isDeviceOnline(ContextualSearchManager manager) {
         return ChromeFeatureList.isEnabled(
-                       ChromeFeatureList.CONTEXTUAL_SEARCH_DISABLE_ONLINE_DETECTION)
+                        ChromeFeatureList.CONTEXTUAL_SEARCH_DISABLE_ONLINE_DETECTION)
                 ? true
                 : manager.isDeviceOnline();
     }
@@ -390,8 +407,13 @@ public class ContextualSearchTabHelper
     @NativeMethods
     interface Natives {
         long init(ContextualSearchTabHelper caller, Profile profile);
-        void installUnhandledTapNotifierIfNeeded(long nativeContextualSearchTabHelper,
-                ContextualSearchTabHelper caller, WebContents webContents, float pxToDpScaleFactor);
+
+        void installUnhandledTapNotifierIfNeeded(
+                long nativeContextualSearchTabHelper,
+                ContextualSearchTabHelper caller,
+                WebContents webContents,
+                float pxToDpScaleFactor);
+
         void destroy(long nativeContextualSearchTabHelper, ContextualSearchTabHelper caller);
     }
 }

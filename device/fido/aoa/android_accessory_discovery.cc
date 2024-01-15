@@ -10,7 +10,6 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/aoa/android_accessory_device.h"
@@ -19,7 +18,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 // See https://source.android.com/devices/accessories/aoa for details on the
 // protocol used to talk to apps on the phone here.
@@ -204,15 +203,16 @@ void AndroidAccessoryDiscovery::OnOpenAccessory(
     mojo::Remote<device::mojom::UsbDevice> device,
     device::mojom::UsbDeviceInfoPtr device_info,
     InterfaceInfo interface_info,
-    device::mojom::UsbOpenDeviceError error) {
-  switch (error) {
-    case mojom::UsbOpenDeviceError::OK:
-    case mojom::UsbOpenDeviceError::ALREADY_OPEN:
-      break;
-    default:
-      FIDO_LOG(DEBUG) << "Failed to open accessory device. Ignoring.";
-      RecordEvent(AOADiscoveryEvent::kAOAOpenFailed);
-      return;
+    device::mojom::UsbOpenDeviceResultPtr result) {
+  if (result->is_error()) {
+    switch (result->get_error()) {
+      case mojom::UsbOpenDeviceError::ALREADY_OPEN:
+        break;
+      default:
+        FIDO_LOG(DEBUG) << "Failed to open accessory device. Ignoring.";
+        RecordEvent(AOADiscoveryEvent::kAOAOpenFailed);
+        return;
+    }
   }
 
   FIDO_LOG(DEBUG) << "Accessory USB device opened";
@@ -340,15 +340,16 @@ void AndroidAccessoryDiscovery::OnReadComplete(
 
 void AndroidAccessoryDiscovery::OnOpen(
     mojo::Remote<device::mojom::UsbDevice> device,
-    device::mojom::UsbOpenDeviceError error) {
-  switch (error) {
-    case mojom::UsbOpenDeviceError::OK:
-    case mojom::UsbOpenDeviceError::ALREADY_OPEN:
-      break;
-    default:
-      FIDO_LOG(DEBUG) << "Failed to open USB device. Ignoring.";
-      RecordEvent(AOADiscoveryEvent::kOpenFailed);
-      return;
+    device::mojom::UsbOpenDeviceResultPtr result) {
+  if (result->is_error()) {
+    switch (result->get_error()) {
+      case mojom::UsbOpenDeviceError::ALREADY_OPEN:
+        break;
+      default:
+        FIDO_LOG(DEBUG) << "Failed to open USB device. Ignoring.";
+        RecordEvent(AOADiscoveryEvent::kOpenFailed);
+        return;
+    }
   }
 
   auto* device_ptr = device.get();

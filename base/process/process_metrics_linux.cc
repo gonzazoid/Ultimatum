@@ -34,18 +34,14 @@
 #include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
-namespace {
+class ScopedAllowBlockingForProcessMetrics : public ScopedAllowBlocking {};
 
-void TrimKeyValuePairs(StringPairs* pairs) {
-  for (auto& pair : *pairs) {
-    TrimWhitespaceASCII(pair.first, TRIM_ALL, &pair.first);
-    TrimWhitespaceASCII(pair.second, TRIM_ALL, &pair.second);
-  }
-}
+namespace {
 
 #if BUILDFLAG(IS_CHROMEOS)
 // Read a file with a single number string and return the number as a uint64_t.
@@ -60,79 +56,6 @@ uint64_t ReadFileToUint64(const FilePath& file) {
   return file_contents_uint64;
 }
 #endif
-
-// Read |filename| in /proc/<pid>/, split the entries into key/value pairs, and
-// trim the key and value. On success, return true and write the trimmed
-// key/value pairs into |key_value_pairs|.
-bool ReadProcFileToTrimmedStringPairs(pid_t pid,
-                                      StringPiece filename,
-                                      StringPairs* key_value_pairs) {
-  std::string status_data;
-  FilePath status_file = internal::GetProcPidDir(pid).Append(filename);
-  if (!internal::ReadProcFile(status_file, &status_data))
-    return false;
-  SplitStringIntoKeyValuePairs(status_data, ':', '\n', key_value_pairs);
-  TrimKeyValuePairs(key_value_pairs);
-  return true;
-}
-
-// Read /proc/<pid>/status and return the value for |field|, or 0 on failure.
-// Only works for fields in the form of "Field: value kB".
-size_t ReadProcStatusAndGetFieldAsSizeT(pid_t pid, StringPiece field) {
-  StringPairs pairs;
-  if (!ReadProcFileToTrimmedStringPairs(pid, "status", &pairs))
-    return 0;
-
-  for (const auto& pair : pairs) {
-    const std::string& key = pair.first;
-    const std::string& value_str = pair.second;
-    if (key != field)
-      continue;
-
-    std::vector<StringPiece> split_value_str =
-        SplitStringPiece(value_str, " ", TRIM_WHITESPACE, SPLIT_WANT_ALL);
-    if (split_value_str.size() != 2 || split_value_str[1] != "kB") {
-      NOTREACHED();
-      return 0;
-    }
-    size_t value;
-    if (!StringToSizeT(split_value_str[0], &value)) {
-      NOTREACHED();
-      return 0;
-    }
-    return value;
-  }
-  // This can be reached if the process dies when proc is read -- in that case,
-  // the kernel can return missing fields.
-  return 0;
-}
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_AIX)
-// Read /proc/<pid>/status and look for |field|. On success, return true and
-// write the value for |field| into |result|.
-// Only works for fields in the form of "field    :     uint_value"
-bool ReadProcStatusAndGetFieldAsUint64(pid_t pid,
-                                       StringPiece field,
-                                       uint64_t* result) {
-  StringPairs pairs;
-  if (!ReadProcFileToTrimmedStringPairs(pid, "status", &pairs))
-    return false;
-
-  for (const auto& pair : pairs) {
-    const std::string& key = pair.first;
-    const std::string& value_str = pair.second;
-    if (key != field)
-      continue;
-
-    uint64_t value;
-    if (!StringToUint64(value_str, &value))
-      return false;
-    *result = value;
-    return true;
-  }
-  return false;
-}
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_AIX)
 
 // Get the total CPU from a proc stat buffer.  Return value is number of jiffies
 // on success or 0 if parsing failed.
@@ -152,16 +75,6 @@ int64_t GetProcessCPU(pid_t pid) {
   }
 
   return ParseTotalCPUTimeFromStats(proc_stats);
-}
-
-bool SupportsPerTaskTimeInState() {
-  FilePath time_in_state_path = internal::GetProcPidDir(GetCurrentProcId())
-                                    .Append("task")
-                                    .Append(NumberToString(GetCurrentProcId()))
-                                    .Append("time_in_state");
-  std::string contents;
-  return internal::ReadProcFile(time_in_state_path, &contents) &&
-         StartsWith(contents, "cpu");
 }
 
 }  // namespace
@@ -205,40 +118,13 @@ bool ProcessMetrics::GetCumulativeCPUUsagePerThread(
   return !cpu_per_thread.empty();
 }
 
-bool ProcessMetrics::GetPerThreadCumulativeCPUTimeInState(
-    TimeInStatePerThread& time_in_state_per_thread) {
-  time_in_state_per_thread.clear();
-
-  // Check for per-pid/tid time_in_state support. If the current process's
-  // time_in_state file doesn't exist or conform to the expected format, there's
-  // no need to iterate the threads. This shouldn't change over the lifetime of
-  // the current process, so we cache it into a static constant.
-  static const bool kSupportsPerPidTimeInState = SupportsPerTaskTimeInState();
-  if (!kSupportsPerPidTimeInState)
-    return false;
-
-  bool success = false;
-  internal::ForEachProcessTask(
-      process_, [&time_in_state_per_thread, &success, this](
-                    PlatformThreadId tid, const FilePath& task_path) {
-        FilePath time_in_state_path = task_path.Append("time_in_state");
-
-        std::string buffer;
-        if (!internal::ReadProcFile(time_in_state_path, &buffer))
-          return;
-
-        success |= ParseProcTimeInState(buffer, tid, time_in_state_per_thread);
-      });
-
-  return success;
-}
-
 // For the /proc/self/io file to exist, the Linux kernel must have
 // CONFIG_TASK_IO_ACCOUNTING enabled.
 bool ProcessMetrics::GetIOCounters(IoCounters* io_counters) const {
   StringPairs pairs;
-  if (!ReadProcFileToTrimmedStringPairs(process_, "io", &pairs))
+  if (!internal::ReadProcFileToTrimmedStringPairs(process_, "io", &pairs)) {
     return false;
+  }
 
   io_counters->OtherOperationCount = 0;
   io_counters->OtherTransferCount = 0;
@@ -265,7 +151,8 @@ bool ProcessMetrics::GetIOCounters(IoCounters* io_counters) const {
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
 uint64_t ProcessMetrics::GetVmSwapBytes() const {
-  return ReadProcStatusAndGetFieldAsSizeT(process_, "VmSwap") * 1024;
+  return internal::ReadProcStatusAndGetKbFieldAsSizeT(process_, "VmSwap") *
+         1024;
 }
 
 bool ProcessMetrics::GetPageFaultCounts(PageFaultCounts* counts) const {
@@ -382,79 +269,6 @@ int64_t GetNumberOfThreads(ProcessHandle process) {
                                                    internal::VM_NUMTHREADS);
 }
 
-bool ProcessMetrics::ParseProcTimeInState(
-    const std::string& content,
-    PlatformThreadId tid,
-    TimeInStatePerThread& time_in_state_per_thread) {
-  uint32_t current_core_index = 0;
-  CPU::CoreType current_core_type = CPU::CoreType::kOther;
-  bool header_seen = false;
-
-  const char* begin = content.data();
-  size_t max_pos = content.size() - 1;
-
-  // Example time_in_state content:
-  // ---
-  // cpu0
-  // 300000 1
-  // 403200 0
-  // 499200 15
-  // cpu4
-  // 710400 13
-  // 825600 5
-  // 940800 550
-  // ---
-
-  // Iterate over the individual lines.
-  for (size_t pos = 0; pos <= max_pos;) {
-    const char next_char = content[pos];
-    int num_chars = 0;
-    if (!isdigit(next_char)) {
-      // Header line, which we expect to contain "cpu" followed by the number
-      // of the CPU, e.g. "cpu0" or "cpu24".
-      int matches = sscanf(begin + pos, "cpu%" PRIu32 "\n%n",
-                           &current_core_index, &num_chars);
-      if (matches != 1)
-        return false;
-      current_core_type = GetCoreType(current_core_index);
-      header_seen = true;
-    } else if (header_seen) {
-      // Data line with two integer fields, frequency (kHz) and time (in
-      // jiffies), separated by a space, e.g. "2419200 132".
-      uint64_t frequency;
-      uint64_t time;
-      int matches = sscanf(begin + pos, "%" PRIu64 " %" PRIu64 "\n%n",
-                           &frequency, &time, &num_chars);
-      if (matches != 2)
-        return false;
-
-      // Skip zero-valued entries in the output list (no time spent at this
-      // frequency).
-      if (time > 0) {
-        time_in_state_per_thread.push_back(
-            {tid, current_core_type, current_core_index, frequency,
-             internal::ClockTicksToTimeDelta(checked_cast<int64_t>(time))});
-      }
-    } else {
-      // Data without a header is not supported.
-      return false;
-    }
-
-    // Advance line.
-    DCHECK_GT(num_chars, 0);
-    pos += static_cast<size_t>(num_chars);
-  }
-
-  return true;
-}
-
-CPU::CoreType ProcessMetrics::GetCoreType(uint32_t core_index) {
-  const std::vector<CPU::CoreType>& core_types = CPU::GetGuessedCoreTypes();
-  if (core_index >= core_types.size())
-    return CPU::CoreType::kUnknown;
-  return core_types[core_index];
-}
-
 const char kProcSelfExe[] = "/proc/self/exe";
 
 namespace {
@@ -512,25 +326,25 @@ const size_t kDiskWeightedIOTime = 13;
 
 }  // namespace
 
-Value SystemMemoryInfoKB::ToValue() const {
-  Value res(Value::Type::DICTIONARY);
-  res.SetIntKey("total", total);
-  res.SetIntKey("free", free);
-  res.SetIntKey("available", available);
-  res.SetIntKey("buffers", buffers);
-  res.SetIntKey("cached", cached);
-  res.SetIntKey("active_anon", active_anon);
-  res.SetIntKey("inactive_anon", inactive_anon);
-  res.SetIntKey("active_file", active_file);
-  res.SetIntKey("inactive_file", inactive_file);
-  res.SetIntKey("swap_total", swap_total);
-  res.SetIntKey("swap_free", swap_free);
-  res.SetIntKey("swap_used", swap_total - swap_free);
-  res.SetIntKey("dirty", dirty);
-  res.SetIntKey("reclaimable", reclaimable);
+Value::Dict SystemMemoryInfoKB::ToDict() const {
+  Value::Dict res;
+  res.Set("total", total);
+  res.Set("free", free);
+  res.Set("available", available);
+  res.Set("buffers", buffers);
+  res.Set("cached", cached);
+  res.Set("active_anon", active_anon);
+  res.Set("inactive_anon", inactive_anon);
+  res.Set("active_file", active_file);
+  res.Set("inactive_file", inactive_file);
+  res.Set("swap_total", swap_total);
+  res.Set("swap_free", swap_free);
+  res.Set("swap_used", swap_total - swap_free);
+  res.Set("dirty", dirty);
+  res.Set("reclaimable", reclaimable);
 #if BUILDFLAG(IS_CHROMEOS)
-  res.SetIntKey("shmem", shmem);
-  res.SetIntKey("slab", slab);
+  res.Set("shmem", shmem);
+  res.Set("slab", slab);
 #endif
 
   return res;
@@ -680,19 +494,19 @@ bool GetSystemMemoryInfo(SystemMemoryInfoKB* meminfo) {
   return true;
 }
 
-Value VmStatInfo::ToValue() const {
-  Value res(Value::Type::DICTIONARY);
+Value::Dict VmStatInfo::ToDict() const {
+  Value::Dict res;
   // TODO(crbug.com/1334256): Make base::Value able to hold uint64_t and remove
   // casts below.
-  res.SetIntKey("pswpin", static_cast<int>(pswpin));
-  res.SetIntKey("pswpout", static_cast<int>(pswpout));
-  res.SetIntKey("pgmajfault", static_cast<int>(pgmajfault));
+  res.Set("pswpin", static_cast<int>(pswpin));
+  res.Set("pswpout", static_cast<int>(pswpout));
+  res.Set("pgmajfault", static_cast<int>(pgmajfault));
   return res;
 }
 
 bool GetVmStatInfo(VmStatInfo* vmstat) {
   // Synchronously reading files in /proc is safe.
-  ThreadRestrictions::ScopedAllowIO allow_io;
+  ScopedAllowBlockingForProcessMetrics allow_blocking;
 
   FilePath vmstat_file("/proc/vmstat");
   std::string vmstat_data;
@@ -725,22 +539,22 @@ SystemDiskInfo::SystemDiskInfo(const SystemDiskInfo&) = default;
 
 SystemDiskInfo& SystemDiskInfo::operator=(const SystemDiskInfo&) = default;
 
-Value SystemDiskInfo::ToValue() const {
-  Value res(Value::Type::DICTIONARY);
+Value::Dict SystemDiskInfo::ToDict() const {
+  Value::Dict res;
 
   // Write out uint64_t variables as doubles.
   // Note: this may discard some precision, but for JS there's no other option.
-  res.SetDoubleKey("reads", static_cast<double>(reads));
-  res.SetDoubleKey("reads_merged", static_cast<double>(reads_merged));
-  res.SetDoubleKey("sectors_read", static_cast<double>(sectors_read));
-  res.SetDoubleKey("read_time", static_cast<double>(read_time));
-  res.SetDoubleKey("writes", static_cast<double>(writes));
-  res.SetDoubleKey("writes_merged", static_cast<double>(writes_merged));
-  res.SetDoubleKey("sectors_written", static_cast<double>(sectors_written));
-  res.SetDoubleKey("write_time", static_cast<double>(write_time));
-  res.SetDoubleKey("io", static_cast<double>(io));
-  res.SetDoubleKey("io_time", static_cast<double>(io_time));
-  res.SetDoubleKey("weighted_io_time", static_cast<double>(weighted_io_time));
+  res.Set("reads", static_cast<double>(reads));
+  res.Set("reads_merged", static_cast<double>(reads_merged));
+  res.Set("sectors_read", static_cast<double>(sectors_read));
+  res.Set("read_time", static_cast<double>(read_time));
+  res.Set("writes", static_cast<double>(writes));
+  res.Set("writes_merged", static_cast<double>(writes_merged));
+  res.Set("sectors_written", static_cast<double>(sectors_written));
+  res.Set("write_time", static_cast<double>(write_time));
+  res.Set("io", static_cast<double>(io));
+  res.Set("io_time", static_cast<double>(io_time));
+  res.Set("weighted_io_time", static_cast<double>(weighted_io_time));
 
   return res;
 }
@@ -753,8 +567,9 @@ bool IsValidDiskName(StringPiece candidate) {
       (candidate[0] == 'h' || candidate[0] == 's' || candidate[0] == 'v')) {
     // [hsv]d[a-z]+ case
     for (size_t i = 2; i < candidate.length(); ++i) {
-      if (!islower(candidate[i]))
+      if (!absl::ascii_islower(static_cast<unsigned char>(candidate[i]))) {
         return false;
+      }
     }
     return true;
   }
@@ -765,15 +580,16 @@ bool IsValidDiskName(StringPiece candidate) {
 
   // mmcblk[0-9]+ case
   for (size_t i = strlen(kMMCName); i < candidate.length(); ++i) {
-    if (!isdigit(candidate[i]))
+    if (!absl::ascii_isdigit(static_cast<unsigned char>(candidate[i]))) {
       return false;
+    }
   }
   return true;
 }
 
 bool GetSystemDiskInfo(SystemDiskInfo* diskinfo) {
   // Synchronously reading files in /proc does not hit the disk.
-  ThreadRestrictions::ScopedAllowIO allow_io;
+  ScopedAllowBlockingForProcessMetrics allow_blocking;
 
   FilePath diskinfo_file("/proc/diskstats");
   std::string diskinfo_data;
@@ -854,29 +670,29 @@ TimeDelta GetUserCpuTimeSinceBoot() {
 }
 
 #if BUILDFLAG(IS_CHROMEOS)
-Value SwapInfo::ToValue() const {
-  Value res(Value::Type::DICTIONARY);
+Value::Dict SwapInfo::ToDict() const {
+  Value::Dict res;
 
   // Write out uint64_t variables as doubles.
   // Note: this may discard some precision, but for JS there's no other option.
-  res.SetDoubleKey("num_reads", static_cast<double>(num_reads));
-  res.SetDoubleKey("num_writes", static_cast<double>(num_writes));
-  res.SetDoubleKey("orig_data_size", static_cast<double>(orig_data_size));
-  res.SetDoubleKey("compr_data_size", static_cast<double>(compr_data_size));
-  res.SetDoubleKey("mem_used_total", static_cast<double>(mem_used_total));
+  res.Set("num_reads", static_cast<double>(num_reads));
+  res.Set("num_writes", static_cast<double>(num_writes));
+  res.Set("orig_data_size", static_cast<double>(orig_data_size));
+  res.Set("compr_data_size", static_cast<double>(compr_data_size));
+  res.Set("mem_used_total", static_cast<double>(mem_used_total));
   double ratio = compr_data_size ? static_cast<double>(orig_data_size) /
                                        static_cast<double>(compr_data_size)
                                  : 0;
-  res.SetDoubleKey("compression_ratio", ratio);
+  res.Set("compression_ratio", ratio);
 
   return res;
 }
 
-Value GraphicsMemoryInfoKB::ToValue() const {
-  Value res(Value::Type::DICTIONARY);
+Value::Dict GraphicsMemoryInfoKB::ToDict() const {
+  Value::Dict res;
 
-  res.SetIntKey("gpu_objects", gpu_objects);
-  res.SetDoubleKey("gpu_memory_size", static_cast<double>(gpu_memory_size));
+  res.Set("gpu_objects", gpu_objects);
+  res.Set("gpu_memory_size", static_cast<double>(gpu_memory_size));
 
   return res;
 }
@@ -969,7 +785,7 @@ void ParseZramPath(SwapInfo* swap_info) {
 
 bool GetSwapInfoImpl(SwapInfo* swap_info) {
   // Synchronously reading files in /sys/block/zram0 does not hit the disk.
-  ThreadRestrictions::ScopedAllowIO allow_io;
+  ScopedAllowBlockingForProcessMetrics allow_blocking;
 
   // Since ZRAM update, it shows the usage data in different places.
   // If file "/sys/block/zram0/mm_stat" exists, use the new way, otherwise,
@@ -1074,7 +890,8 @@ bool GetGraphicsMemoryInfo(GraphicsMemoryInfoKB* gpu_meminfo) {
 int ProcessMetrics::GetIdleWakeupsPerSecond() {
   uint64_t num_switches;
   static const char kSwitchStat[] = "voluntary_ctxt_switches";
-  return ReadProcStatusAndGetFieldAsUint64(process_, kSwitchStat, &num_switches)
+  return internal::ReadProcStatusAndGetFieldAsUint64(process_, kSwitchStat,
+                                                     &num_switches)
              ? CalculateIdleWakeupsPerSecond(num_switches)
              : 0;
 }

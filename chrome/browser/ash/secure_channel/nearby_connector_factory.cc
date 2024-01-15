@@ -8,6 +8,7 @@
 #include "chrome/browser/ash/secure_channel/nearby_connector_impl.h"
 #include "chrome/browser/ash/secure_channel/secure_channel_client_provider.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/services/secure_channel/public/cpp/client/nearby_connector.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
 
 namespace ash {
@@ -22,17 +23,26 @@ NearbyConnector* NearbyConnectorFactory::GetForProfile(Profile* profile) {
 
 // static
 NearbyConnectorFactory* NearbyConnectorFactory::GetInstance() {
-  return base::Singleton<NearbyConnectorFactory>::get();
+  static base::NoDestructor<NearbyConnectorFactory> instance;
+  return instance.get();
 }
 
 NearbyConnectorFactory::NearbyConnectorFactory()
-    : ProfileKeyedServiceFactory("NearbyConnector") {
+    : ProfileKeyedServiceFactory(
+          "NearbyConnector",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(nearby::NearbyProcessManagerFactory::GetInstance());
 }
 
 NearbyConnectorFactory::~NearbyConnectorFactory() = default;
 
-KeyedService* NearbyConnectorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NearbyConnectorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   nearby::NearbyProcessManager* nearby_process_manager =
       nearby::NearbyProcessManagerFactory::GetForProfile(
@@ -47,7 +57,7 @@ KeyedService* NearbyConnectorFactory::BuildServiceInstanceFor(
       std::make_unique<NearbyConnectorImpl>(nearby_process_manager);
   SecureChannelClientProvider::GetInstance()->GetClient()->SetNearbyConnector(
       nearby_connector.get());
-  return nearby_connector.release();
+  return nearby_connector;
 }
 
 bool NearbyConnectorFactory::ServiceIsCreatedWithBrowserContext() const {

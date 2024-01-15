@@ -10,11 +10,10 @@ import static org.junit.Assert.assertNotEquals;
 
 import android.graphics.Bitmap;
 import android.os.Handler;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -39,9 +38,7 @@ import org.chromium.components.favicon.LargeIconBridge;
 import org.chromium.net.test.EmbeddedTestServer;
 import org.chromium.url.GURL;
 
-/**
- * Tests for events around the loading of a New Tab Page.
- */
+/** Tests for events around the loading of a New Tab Page. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
@@ -54,8 +51,7 @@ public class NewTabPageLoadTest {
     public BlankCTATabInitialStateRule mBlankCTATabInitialStateRule =
             new BlankCTATabInitialStateRule(sActivityTestRule, false);
 
-    @Rule
-    public SuggestionsDependenciesRule mSuggestionDeps = new SuggestionsDependenciesRule();
+    @Rule public SuggestionsDependenciesRule mSuggestionDeps = new SuggestionsDependenciesRule();
 
     private Tab mTab;
     private EmbeddedTestServer mTestServer;
@@ -63,7 +59,9 @@ public class NewTabPageLoadTest {
 
     @Before
     public void setUp() throws Exception {
-        mTestServer = EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+        mTestServer =
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
 
         mMostVisitedSites = new AutoVerifyingMostVisitedSites();
         mMostVisitedSites.setTileSuggestions(mTestServer.getURLs("/site1", "/site2"));
@@ -72,11 +70,6 @@ public class NewTabPageLoadTest {
         mSuggestionDeps.getFactory().largeIconBridge = new AsyncMockLargeIconBridge();
 
         mTab = sActivityTestRule.getActivity().getActivityTab();
-    }
-
-    @After
-    public void tearDown() {
-        mTestServer.stopAndDestroyServer();
     }
 
     @Test
@@ -105,14 +98,19 @@ public class NewTabPageLoadTest {
         @Override
         public boolean getLargeIconForUrl(
                 GURL pageUrl, int desiredSizePx, final LargeIconBridge.LargeIconCallback callback) {
-            new Handler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    callback.onLargeIconAvailable(
-                            Bitmap.createBitmap(148, 148, Bitmap.Config.ALPHA_8), 0, false,
-                            IconType.INVALID);
-                }
-            }, 0);
+            new Handler()
+                    .postDelayed(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    callback.onLargeIconAvailable(
+                                            Bitmap.createBitmap(148, 148, Bitmap.Config.ALPHA_8),
+                                            0,
+                                            false,
+                                            IconType.INVALID);
+                                }
+                            },
+                            0);
 
             return true;
         }

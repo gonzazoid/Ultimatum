@@ -4,18 +4,21 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor_factory.h"
 #include "chrome/browser/preloading/chrome_preloading.h"
+#include "chrome/browser/preloading/prefetch/search_prefetch/field_trial_settings.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service_factory.h"
 #include "chrome/browser/preloading/prerender/prerender_manager.h"
@@ -28,7 +31,6 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/omnibox/omnibox_tab_helper.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/chrome_test_utils.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -36,6 +38,7 @@
 #include "chrome/test/base/search_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/omnibox/browser/base_search_provider.h"
+#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/search_engines/template_url_data.h"
@@ -62,6 +65,8 @@ namespace {
 using UkmEntry = ukm::TestUkmRecorder::HumanReadableUkmEntry;
 using ukm::builders::Preloading_Attempt;
 using ukm::builders::Preloading_Prediction;
+static const auto kMockElapsedTime =
+    base::ScopedMockElapsedTimersForTest::kMockElapsedTime;
 
 content::PreloadingFailureReason ToPreloadingFailureReason(
     PrerenderPredictionStatus status) {
@@ -86,7 +91,7 @@ class AutocompleteActionPredictorObserverImpl
   }
 
   void OnInitialized() override {
-    DCHECK(waiting_);
+    CHECK(waiting_);
     std::move(waiting_).Run();
   }
 
@@ -107,12 +112,12 @@ class PrerenderOmniboxUIBrowserTest : public InProcessBrowserTest,
       : prerender_helper_(base::BindRepeating(
             &PrerenderOmniboxUIBrowserTest::GetActiveWebContents,
             base::Unretained(this))) {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kOmniboxTriggerForPrerender2);
+    scoped_feature_list_.InitWithFeatures(
+        {}, {kSearchPrefetchOnlyAllowDefaultMatchPreloading});
   }
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
@@ -123,10 +128,11 @@ class PrerenderOmniboxUIBrowserTest : public InProcessBrowserTest,
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     ukm_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kOmniboxDirectURLInput));
+            chrome_preloading_predictor::kOmniboxDirectURLInput);
 
     ASSERT_TRUE(embedded_test_server()->Start());
+    scoped_test_timer_ =
+        std::make_unique<base::ScopedMockElapsedTimersForTest>();
   }
 
   void TearDownOnMainThread() override {
@@ -168,13 +174,11 @@ class PrerenderOmniboxUIBrowserTest : public InProcessBrowserTest,
   }
 
   void SelectAutocompleteMatchAndWaitForActivation(
-      const AutocompleteMatch& match,
+      OmniboxPopupSelection selection,
       int host_id) {
-    GURL url = match.destination_url;
     content::test::PrerenderHostObserver prerender_observer(
         *GetActiveWebContents(), host_id);
-    omnibox()->model()->OpenMatch(match, WindowOpenDisposition::CURRENT_TAB,
-                                  url, std::u16string(), 0);
+    omnibox()->model()->OpenSelection(selection);
     prerender_observer.WaitForActivation();
   }
 
@@ -219,7 +223,7 @@ class PrerenderOmniboxUIBrowserTest : public InProcessBrowserTest,
   }
 
   void PressEnter() {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             [](const Browser* browser, bool ctrl_key) {
@@ -252,6 +256,9 @@ class PrerenderOmniboxUIBrowserTest : public InProcessBrowserTest,
   std::unique_ptr<content::test::PreloadingAttemptUkmEntryBuilder>
       ukm_entry_builder_;
   bool is_prerendering_page_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> scoped_test_timer_;
+  // Disable sampling of UKM preloading logs.
+  content::test::PreloadingConfigOverride preloading_config_override_;
 };
 
 // This test covers the path from starting a omnibox triggered prerendering
@@ -324,35 +331,27 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxUIBrowserTest,
   EXPECT_TRUE(IsPrerenderingNavigation());
   EXPECT_EQ(GetActiveWebContents()->GetLastCommittedURL(), kNewUrl);
 
-  {
-    // Check that we store two entries for both new and old entry.
-    ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    EXPECT_EQ(ukm_entries.size(), 2u);
-
-    std::vector<UkmEntry> expected_entries = {
-        ukm_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kFailure,
-            ToPreloadingFailureReason(PrerenderPredictionStatus::kCancelled),
-            /*accurate=*/false),
-        ukm_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kSuccess,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
+  // Check that we store two entries for both new and old entry.
+  ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          ukm_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kFailure,
+              ToPreloadingFailureReason(PrerenderPredictionStatus::kCancelled),
+              /*accurate=*/false),
+          ukm_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kSuccess,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+      });
 
   // Prerender was attempted twice and the first one was cancelled.
   histogram_tester.ExpectBucketCount(
@@ -396,28 +395,20 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxUIBrowserTest,
   EXPECT_FALSE(IsPrerenderingNavigation());
   EXPECT_EQ(GetActiveWebContents()->GetLastCommittedURL(), kNewUrl);
 
-  {
-    ukm::SourceId ukm_source_id =
-        GetActiveWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    EXPECT_EQ(ukm_entries.size(), 1u);
-
-    std::vector<UkmEntry> expected_entries = {
-        ukm_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kReady,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/false),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
+  ukm::SourceId ukm_source_id =
+      GetActiveWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          ukm_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/false,
+              /*ready_time=*/kMockElapsedTime),
+      });
 
   // Prerender was attempted once and was cancelled.
   histogram_tester.ExpectBucketCount(
@@ -457,34 +448,26 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxUIBrowserTest,
   EXPECT_TRUE(IsPrerenderingNavigation());
   EXPECT_EQ(GetActiveWebContents()->GetLastCommittedURL(), kPrerenderingUrl);
 
-  {
-    ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    EXPECT_EQ(ukm_entries.size(), 2u);
-
-    std::vector<UkmEntry> expected_entries = {
-        ukm_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kSuccess,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-        ukm_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kDuplicate,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
+  ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          ukm_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kSuccess,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+          ukm_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kDuplicate,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true),
+      });
 
   histogram_tester.ExpectUniqueSample(
       internal::kHistogramPrerenderPredictionStatusDirectUrlInput,
@@ -499,16 +482,14 @@ class PrerenderPreloaderHoldbackBrowserTest
     : public PrerenderOmniboxUIBrowserTest {
  public:
   PrerenderPreloaderHoldbackBrowserTest() {
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{blink::features::kPrerender2,
-                              features::kOmniboxTriggerForPrerender2,
-                              features::kPrerender2Holdback},
-        /* disabled_features=*/{});
+    preloading_config_override_.SetHoldback(
+        content::PreloadingType::kPrerender,
+        chrome_preloading_predictor::kOmniboxDirectURLInput, true);
   }
   ~PrerenderPreloaderHoldbackBrowserTest() override = default;
 
  private:
-  base::test::ScopedFeatureList feature_list_;
+  content::test::PreloadingConfigOverride preloading_config_override_;
 };
 
 IN_PROC_BROWSER_TEST_F(PrerenderPreloaderHoldbackBrowserTest,
@@ -527,28 +508,20 @@ IN_PROC_BROWSER_TEST_F(PrerenderPreloaderHoldbackBrowserTest,
       kPrerenderingUrl, *GetActiveWebContents(), gfx::Size(50, 50));
   ASSERT_TRUE(content::NavigateToURL(GetActiveWebContents(), kPrerenderingUrl));
 
-  {
-    ukm::SourceId ukm_source_id =
-        GetActiveWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-
-    // PreloadingHoldbackStatus should be set to kHoldback.
-    std::vector<UkmEntry> expected_entries = {
-        ukm_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kHoldback,
-            content::PreloadingTriggeringOutcome::kUnspecified,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
+  // PreloadingHoldbackStatus should be set to kHoldback.
+  ukm::SourceId ukm_source_id =
+      GetActiveWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          ukm_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kHoldback,
+              content::PreloadingTriggeringOutcome::kUnspecified,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true),
+      });
 }
 
 // Tests that NavigationHandle::IsRendererInitiated() returns RendererInitiated
@@ -638,9 +611,13 @@ class PrerenderOmniboxSearchSuggestionUIBrowserTest
       : prerender_helper_(base::BindRepeating(
             &PrerenderOmniboxUIBrowserTest::GetActiveWebContents,
             base::Unretained(this))) {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kSupportSearchSuggestionForPrerender2},
-        {prerender_utils::kHidePrefetchParameter});
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {{features::kSupportSearchSuggestionForPrerender2,
+          {
+              {"implementation_type", "use_prefetch"},
+          }}},
+        {prerender_utils::kHidePrefetchParameter,
+         kSearchPrefetchOnlyAllowDefaultMatchPreloading});
   }
 
   void SetUpOnMainThread() override {
@@ -693,16 +670,16 @@ class PrerenderOmniboxSearchSuggestionUIBrowserTest
     // This test suite only tests for Default Search Engine prerendering.
     attempt_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kDefaultSearchEngine));
+            chrome_preloading_predictor::kDefaultSearchEngine);
     prediction_entry_builder_ =
         std::make_unique<content::test::PreloadingPredictionUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kDefaultSearchEngine));
+            chrome_preloading_predictor::kDefaultSearchEngine);
+    scoped_test_timer_ =
+        std::make_unique<base::ScopedMockElapsedTimersForTest>();
   }
 
   void SetUp() override {
-    prerender_helper().SetUp(&search_engine_server_);
+    prerender_helper().RegisterServerRequestMonitor(&search_engine_server_);
     InProcessBrowserTest::SetUp();
   }
 
@@ -766,65 +743,27 @@ class PrerenderOmniboxSearchSuggestionUIBrowserTest
     resp->set_code(net::HTTP_OK);
     resp->set_content_type("text/html");
     std::string content = R"(
-      <html><body> HI PRERENDER!
-      <script>
-        let resolveFunc;
-        const historyUpdated = new Promise((resolve, reject) => {
-            resolveFunc = resolve;
-        });
-        function removeParam() {
-          const url = new URL(document.URL);
-          // Search parameters will contain pf=cs if the document is
-          // activated from a prerendered document.
-          if (url.searchParams.get('pf') === 'cs') {
-            url.searchParams.delete('pf');
-            // After being activated, the page is no longer a prerendering
-            // page. If it defines any parameters for identifying the
-            // page type, it is also responsible for updating its history
-            // state by removing the parameters.
-            history.replaceState(null, "", url.toString());
-            resolveFunc(true);
-          } else {
-            resolveFunc(false);
-          }
-        }
-        if (document.prerendering) {
-          document.addEventListener("prerenderingchange", () => {
-              removeParam();
-          });
-        } else {
-          // If this script is executed after the page was activated.
-          removeParam();
-        }
-      </script>
-      </body></html>
+      <html><body> HI PRERENDER! </body></html>
     )";
     resp->set_content(content);
     return resp;
   }
 
-  GURL GetSearchUrl(const std::string& query,
-                    std::string search_terms,
-                    bool is_prerender) {
+  GURL GetSearchUrl(const std::string& query, std::string search_terms) {
     // $1: the search terms that will be retrieved.
-    // $2: flag for prefetch/prerender request. Should be &pf=cs if the url is
-    // expected to be used for a prerendering navigation. Otherwise it should be
-    // an empty string.
-    // $3: origin query. This might differ than search terms. For example, an
+    // $2: origin query. This might differ than search terms. For example, an
     //     origin query of "prerend" can have the search term of "prerender",
     //     since the suggestion service suggests to retrieve the term.
-    std::string url_template = "/search_page.html?q=$1$2&oq=$3&";
+    std::string url_template = "/search_page.html?q=$1&oq=$2&";
     return search_engine_server_.GetURL(
-        kSearchDomain,
-        base::ReplaceStringPlaceholders(
-            url_template, {search_terms, is_prerender ? "&pf=cs" : "", query},
-            nullptr));
+        kSearchDomain, base::ReplaceStringPlaceholders(
+                           url_template, {search_terms, query}, nullptr));
   }
 
   AutocompleteController* GetAutocompleteController() {
     OmniboxView* omnibox =
         browser()->window()->GetLocationBar()->GetOmniboxView();
-    return omnibox->model()->autocomplete_controller();
+    return omnibox->controller()->autocomplete_controller();
   }
 
  protected:
@@ -909,12 +848,25 @@ class PrerenderOmniboxSearchSuggestionUIBrowserTest
       attempt_entry_builder_;
   std::unique_ptr<content::test::PreloadingPredictionUkmEntryBuilder>
       prediction_entry_builder_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> scoped_test_timer_;
+};
+
+// TODO(crbug.com/1491942): This fails with the field trial testing config.
+class PrerenderOmniboxSearchSuggestionUIBrowserTestNoTestingConfig
+    : public PrerenderOmniboxSearchSuggestionUIBrowserTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    PrerenderOmniboxSearchSuggestionUIBrowserTest::SetUpCommandLine(
+        command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
 };
 
 // Tests the basic functionality of prerendering a search suggestion with search
 // suggestion hints.
-IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
-                       SearchPrerenderSuggestion) {
+IN_PROC_BROWSER_TEST_F(
+    PrerenderOmniboxSearchSuggestionUIBrowserTestNoTestingConfig,
+    SearchPrerenderSuggestion) {
   base::HistogramTester histogram_tester;
   const GURL kInitialUrl = embedded_test_server()->GetURL("/empty.html");
   ASSERT_TRUE(GetActiveWebContents());
@@ -922,8 +874,12 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
   Observe(GetActiveWebContents());
   std::string search_query = "prerender2";
-  GURL expected_prerender_url =
-      GetSearchUrl(search_query, "prerender222", /*is_prerender=*/true);
+  GURL expected_prerender_url = GetSearchUrl(search_query, "prerender222");
+
+  GURL canonical_search_url;
+  HasCanoncialPreloadingOmniboxSearchURL(
+      expected_prerender_url, GetActiveWebContents()->GetBrowserContext(),
+      &canonical_search_url);
   int host_id =
       InputSearchQueryAndWaitForTrigger(search_query, expected_prerender_url);
   ASSERT_NE(host_id, content::RenderFrameHost::kNoFrameTreeNodeId);
@@ -938,21 +894,18 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
   ASSERT_NE(search_prefetch_service, nullptr);
   absl::optional<SearchPrefetchStatus> prefetch_status =
       search_prefetch_service->GetSearchPrefetchStatusForTesting(
-          u"prerender222");
-  EXPECT_FALSE(prefetch_status.has_value());
-  histogram_tester.ExpectTotalCount(
+          canonical_search_url);
+  ASSERT_TRUE(prefetch_status.has_value());
+  EXPECT_EQ(prefetch_status.value(), SearchPrefetchStatus::kComplete);
+  histogram_tester.ExpectUniqueSample(
       "Omnibox.SearchPrefetch.PrefetchEligibilityReason2.SuggestionPrefetch",
-      0);
+      SearchPrefetchEligibilityReason::kPrefetchStarted, 1);
 
+  // The prerendering url shouldn't contain the parameter of pf=cs.
   content::RenderFrameHost* prerender_rfh =
       prerender_helper().GetPrerenderedMainFrameHost(host_id);
-  EXPECT_TRUE(
+  EXPECT_FALSE(
       base::Contains(prerender_rfh->GetLastCommittedURL().spec(), "pf=cs"));
-
-  histogram_tester.ExpectUniqueSample(
-      "Prerender.Experimental.DefaultSearchEngine."
-      "SearchTermExtractorCorrectness",
-      true, 1);
 
   // Ensure there is a search hint.
   AutocompleteController* autocomplete_controller = GetAutocompleteController();
@@ -962,58 +915,49 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
   content::NavigationHandleObserver activation_observer(
       GetActiveWebContents(), prerender_match->destination_url);
-  SelectAutocompleteMatchAndWaitForActivation(*prerender_match, host_id);
+  SelectAutocompleteMatchAndWaitForActivation(
+      OmniboxPopupSelection(std::distance(
+          autocomplete_controller->result().begin(), prerender_match)),
+      host_id);
   EXPECT_TRUE(IsPrerenderingNavigation());
 
-  // Wait until the history is updated.
-  ASSERT_EQ(true, content::EvalJs(GetActiveWebContents()->GetPrimaryMainFrame(),
-                                  "historyUpdated;"));
-
-  EXPECT_EQ(1, prerender_helper().GetRequestCount(expected_prerender_url));
+  // Prerendering shouldn't send a request as it reuses the prefetched response.
+  EXPECT_EQ(0, prerender_helper().GetRequestCount(expected_prerender_url));
+  EXPECT_EQ(expected_prerender_url,
+            GetActiveWebContents()->GetLastCommittedURL());
   // The displayed url shouldn't contain the parameter of pf=cs.
   EXPECT_FALSE(base::Contains(
       GetActiveWebContents()->GetLastCommittedURL().spec(), "pf=cs"));
-  EXPECT_EQ(0, prerender_helper().GetRequestCount(
-                   GetActiveWebContents()->GetLastCommittedURL()));
 
-  {
-    // Check that we store one entry corresponding to the prerender prediction
-    // and attempt.
-    ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
-    auto attempt_ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    auto prediction_ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Prediction::kEntryName,
-        content::test::kPreloadingPredictionUkmMetrics);
-    EXPECT_EQ(prediction_ukm_entries.size(), 1u);
-    EXPECT_EQ(attempt_ukm_entries.size(), 1u);
-
-    // Check that we log the correct metrics for successful prerender
-    // activation.
-    std::vector<UkmEntry> expected_prediction_entries = {
-        prediction_entry_builder().BuildEntry(ukm_source_id,
-                                              /*confidence=*/80,
-                                              /*accurate_prediction=*/true),
-    };
-    std::vector<UkmEntry> expected_attempt_entries = {
-        attempt_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kSuccess,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-    };
-    EXPECT_THAT(attempt_ukm_entries,
-                testing::UnorderedElementsAreArray(expected_attempt_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(
-               attempt_ukm_entries, expected_attempt_entries);
-    EXPECT_THAT(prediction_ukm_entries,
-                testing::UnorderedElementsAreArray(expected_prediction_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(
-               prediction_ukm_entries, expected_prediction_entries);
-  }
+  // Check that we log the correct metrics for successful prerender activation.
+  ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
+  content::test::ExpectPreloadingPredictionUkm(
+      *test_ukm_recorder(),
+      {
+          prediction_entry_builder().BuildEntry(ukm_source_id,
+                                                /*confidence=*/80,
+                                                /*accurate_prediction=*/true),
+      });
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrefetch,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kSuccess,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+      });
 
   histogram_tester.ExpectUniqueSample(
       internal::kHistogramPrerenderPredictionStatusDefaultSearchEngine,
@@ -1028,8 +972,9 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 }
 
 // Tests that prerendering the wrong URL doesn't lead to activation.
-IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
-                       WrongPrediction) {
+IN_PROC_BROWSER_TEST_F(
+    PrerenderOmniboxSearchSuggestionUIBrowserTestNoTestingConfig,
+    WrongPrediction) {
   base::HistogramTester histogram_tester;
   AddNewSuggestionRule("prerender22", {"prerender222", "prerender223"});
   const GURL kInitialUrl = embedded_test_server()->GetURL("/empty.html");
@@ -1038,8 +983,7 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
   Observe(GetActiveWebContents());
   std::string search_query_1 = "prerender2";
-  GURL expected_prerender_url =
-      GetSearchUrl(search_query_1, "prerender222", /*is_prerender=*/true);
+  GURL expected_prerender_url = GetSearchUrl(search_query_1, "prerender222");
 
   // Trigger an omnibox suggest that has a prerender hint.
   int host_id =
@@ -1053,28 +997,28 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
   EXPECT_FALSE(IsPrerenderingNavigation());
   base::RunLoop().RunUntilIdle();
 
-  {
-    ukm::SourceId ukm_source_id =
-        GetActiveWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    EXPECT_EQ(ukm_entries.size(), 1u);
-
-    std::vector<UkmEntry> expected_entries = {
-        attempt_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kReady,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/false),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
+  ukm::SourceId ukm_source_id =
+      GetActiveWebContents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrefetch,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/false,
+              /*ready_time=*/kMockElapsedTime),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/false,
+              /*ready_time=*/kMockElapsedTime),
+      });
 
   histogram_tester.ExpectUniqueSample(
       internal::kHistogramPrerenderPredictionStatusDefaultSearchEngine,
@@ -1083,8 +1027,9 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
 // Tests that prerender maintain the previous prerendered page if the new
 // prerendering aims to load a same url to the prerendered page.
-IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
-                       SameSuggestion) {
+IN_PROC_BROWSER_TEST_F(
+    PrerenderOmniboxSearchSuggestionUIBrowserTestNoTestingConfig,
+    SameSuggestion) {
   base::HistogramTester histogram_tester;
   AddNewSuggestionRule("prerender22", {"prerender222", "prerender223"});
   const GURL kInitialUrl = embedded_test_server()->GetURL("/empty.html");
@@ -1093,8 +1038,7 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
   Observe(GetActiveWebContents());
   std::string search_query_1 = "prerender2";
-  GURL expected_prerender_url =
-      GetSearchUrl(search_query_1, "prerender222", /*is_prerender=*/true);
+  GURL expected_prerender_url = GetSearchUrl(search_query_1, "prerender222");
 
   // Trigger an omnibox suggest that has a prerender hint.
   int host_id =
@@ -1114,46 +1058,50 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
   ASSERT_NE(prerender_match, std::end(autocomplete_controller->result()));
   content::NavigationHandleObserver activation_observer(
       GetActiveWebContents(), prerender_match->destination_url);
-  SelectAutocompleteMatchAndWaitForActivation(*prerender_match, host_id);
+  SelectAutocompleteMatchAndWaitForActivation(
+      OmniboxPopupSelection(std::distance(
+          autocomplete_controller->result().begin(), prerender_match)),
+      host_id);
   EXPECT_TRUE(IsPrerenderingNavigation());
   base::RunLoop().RunUntilIdle();
 
-  {
-    // Check that we store two entries corresponding to both the prererendering
-    // attempts.
-    ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    EXPECT_EQ(ukm_entries.size(), 2u);
-
-    // Check that we log the correct metrics for successful prerender
-    // activation and for duplicate attempt to the same prerender URL.
-    std::vector<UkmEntry> expected_entries = {
-        attempt_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kSuccess,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-        attempt_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kDuplicate,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
-
-  // Wait until the history is updated.
-  EXPECT_EQ(true, content::EvalJs(GetActiveWebContents()->GetPrimaryMainFrame(),
-                                  "historyUpdated;"));
+  // Check that we log the correct metrics for successful prerender activation
+  // and for duplicate attempt to the same prerender URL.
+  ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrefetch,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kSuccess,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrefetch,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kDuplicate,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kDuplicate,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true),
+      });
 
   // The displayed url shouldn't contain the parameter of pf=cs.
   EXPECT_FALSE(base::Contains(
@@ -1178,8 +1126,7 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
   AddNewSuggestionRule("prerender22", {"prerender222", "prerender223"});
   std::string search_query_1 = "prerender22";
-  GURL prerender_url =
-      GetSearchUrl(search_query_1, "prerender222", /*is_prerender=*/true);
+  GURL prerender_url = GetSearchUrl(search_query_1, "prerender222");
   int host_id =
       InputSearchQueryAndWaitForTrigger(search_query_1, prerender_url);
   ASSERT_NE(host_id, content::RenderFrameHost::kNoFrameTreeNodeId);
@@ -1187,8 +1134,7 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
   // Start the second prerendering with the different suggestion.
   AddNewSuggestionRule("prerender33", {"prerender333", "prerender334"});
   std::string search_query_2 = "prerender33";
-  GURL prerender_url2 =
-      GetSearchUrl(search_query_2, "prerender333", /*is_prerender=*/true);
+  GURL prerender_url2 = GetSearchUrl(search_query_2, "prerender333");
   int host_id2 =
       InputSearchQueryAndWaitForTrigger(search_query_2, prerender_url2);
   ASSERT_NE(host_id, host_id2);
@@ -1203,45 +1149,50 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
 
   content::NavigationHandleObserver activation_observer(
       GetActiveWebContents(), prerender_match->destination_url);
-  SelectAutocompleteMatchAndWaitForActivation(*prerender_match, host_id2);
+  SelectAutocompleteMatchAndWaitForActivation(
+      OmniboxPopupSelection(std::distance(
+          autocomplete_controller->result().begin(), prerender_match)),
+      host_id2);
   EXPECT_TRUE(IsPrerenderingNavigation());
 
-  {
-    // Check that we store two entries corresponding to both the prererendering
-    // attempts.
-    ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
-    auto ukm_entries = test_ukm_recorder()->GetEntries(
-        Preloading_Attempt::kEntryName,
-        content::test::kPreloadingAttemptUkmMetrics);
-    EXPECT_EQ(ukm_entries.size(), 2u);
-
-    // Check that we log the correct metrics for successful prerender
-    // activation with suggestions to the different prerender URLs.
-    std::vector<UkmEntry> expected_entries = {
-        attempt_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kFailure,
-            ToPreloadingFailureReason(PrerenderPredictionStatus::kCancelled),
-            /*accurate=*/false),
-        attempt_entry_builder().BuildEntry(
-            ukm_source_id, content::PreloadingType::kPrerender,
-            content::PreloadingEligibility::kEligible,
-            content::PreloadingHoldbackStatus::kAllowed,
-            content::PreloadingTriggeringOutcome::kSuccess,
-            content::PreloadingFailureReason::kUnspecified,
-            /*accurate=*/true),
-    };
-    EXPECT_THAT(ukm_entries,
-                testing::UnorderedElementsAreArray(expected_entries))
-        << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
-                                                             expected_entries);
-  }
-
-  // Wait until the history is updated.
-  EXPECT_EQ(true, content::EvalJs(GetActiveWebContents()->GetPrimaryMainFrame(),
-                                  "historyUpdated;"));
+  // Check that we log the correct metrics for successful prerender activation
+  // with suggestions to the different prerender URLs.
+  ukm::SourceId ukm_source_id = activation_observer.next_page_ukm_source_id();
+  content::test::ExpectPreloadingAttemptUkm(
+      *test_ukm_recorder(),
+      {
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrefetch,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/false,
+              /*ready_time=*/kMockElapsedTime),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kFailure,
+              ToPreloadingFailureReason(PrerenderPredictionStatus::kCancelled),
+              /*accurate=*/false),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrefetch,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kReady,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+          attempt_entry_builder().BuildEntry(
+              ukm_source_id, content::PreloadingType::kPrerender,
+              content::PreloadingEligibility::kEligible,
+              content::PreloadingHoldbackStatus::kAllowed,
+              content::PreloadingTriggeringOutcome::kSuccess,
+              content::PreloadingFailureReason::kUnspecified,
+              /*accurate=*/true,
+              /*ready_time=*/kMockElapsedTime),
+      });
 
   // The displayed url shouldn't contain the parameter of pf=cs.
   EXPECT_FALSE(base::Contains(
@@ -1253,24 +1204,6 @@ IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
   histogram_tester.ExpectBucketCount(
       internal::kHistogramPrerenderPredictionStatusDefaultSearchEngine,
       PrerenderPredictionStatus::kHitFinished, 1);
-}
-
-// Tests whether prerendering a search suggestion will have pf=cs parameter
-// attached correctly.
-IN_PROC_BROWSER_TEST_F(PrerenderOmniboxSearchSuggestionUIBrowserTest,
-                       SearchPrerenderParameterVerification) {
-  const GURL kInitialUrl = embedded_test_server()->GetURL("/empty.html");
-  ASSERT_TRUE(GetActiveWebContents());
-  ASSERT_TRUE(content::NavigateToURL(GetActiveWebContents(), kInitialUrl));
-  Observe(GetActiveWebContents());
-  std::string search_query = "prerender2";
-
-  GURL expected_prerender_url =
-      GetSearchUrl(search_query, "prerender222", /*is_prerender=*/true);
-  ASSERT_TRUE(base::Contains(expected_prerender_url.spec(), "pf=cs"));
-  int host_id =
-      InputSearchQueryAndWaitForTrigger(search_query, expected_prerender_url);
-  EXPECT_NE(host_id, content::RenderFrameHost::kNoFrameTreeNodeId);
 }
 
 class PrerenderOmniboxReferrerChainUIBrowserTest

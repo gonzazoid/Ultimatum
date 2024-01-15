@@ -5,10 +5,27 @@
 #ifndef CHROME_BROWSER_EXTENSIONS_API_AUTOFILL_PRIVATE_AUTOFILL_PRIVATE_API_H_
 #define CHROME_BROWSER_EXTENSIONS_API_AUTOFILL_PRIVATE_AUTOFILL_PRIVATE_API_H_
 
+#include "components/prefs/pref_service.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/extension_function_histogram_value.h"
 
 namespace extensions {
+class AutofillPrivateGetAccountInfoFunction : public ExtensionFunction {
+ public:
+  AutofillPrivateGetAccountInfoFunction() = default;
+  AutofillPrivateGetAccountInfoFunction(
+      const AutofillPrivateGetAccountInfoFunction&) = delete;
+  AutofillPrivateGetAccountInfoFunction& operator=(
+      const AutofillPrivateGetAccountInfoFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.getAccountInfo",
+                             AUTOFILLPRIVATE_GETACCOUNTINFO)
+
+ protected:
+  ~AutofillPrivateGetAccountInfoFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+};
 
 class AutofillPrivateSaveAddressFunction : public ExtensionFunction {
  public:
@@ -112,23 +129,6 @@ class AutofillPrivateRemoveEntryFunction : public ExtensionFunction {
   ResponseAction Run() override;
 };
 
-class AutofillPrivateValidatePhoneNumbersFunction : public ExtensionFunction {
- public:
-  AutofillPrivateValidatePhoneNumbersFunction() = default;
-  AutofillPrivateValidatePhoneNumbersFunction(
-      const AutofillPrivateValidatePhoneNumbersFunction&) = delete;
-  AutofillPrivateValidatePhoneNumbersFunction& operator=(
-      const AutofillPrivateValidatePhoneNumbersFunction&) = delete;
-  DECLARE_EXTENSION_FUNCTION("autofillPrivate.validatePhoneNumbers",
-                             AUTOFILLPRIVATE_VALIDATEPHONENUMBERS)
-
- protected:
-  ~AutofillPrivateValidatePhoneNumbersFunction() override = default;
-
-  // ExtensionFunction overrides.
-  ResponseAction Run() override;
-};
-
 class AutofillPrivateMaskCreditCardFunction : public ExtensionFunction {
  public:
   AutofillPrivateMaskCreditCardFunction() = default;
@@ -198,6 +198,24 @@ class AutofillPrivateLogServerCardLinkClickedFunction
   ResponseAction Run() override;
 };
 
+class AutofillPrivateLogServerIbanLinkClickedFunction
+    : public ExtensionFunction {
+ public:
+  AutofillPrivateLogServerIbanLinkClickedFunction() = default;
+  AutofillPrivateLogServerIbanLinkClickedFunction(
+      const AutofillPrivateLogServerIbanLinkClickedFunction&) = delete;
+  AutofillPrivateLogServerIbanLinkClickedFunction& operator=(
+      const AutofillPrivateLogServerIbanLinkClickedFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.logServerIbanLinkClicked",
+                             AUTOFILLPRIVATE_SERVERIBANLINKCLICKED)
+
+ protected:
+  ~AutofillPrivateLogServerIbanLinkClickedFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+};
+
 class AutofillPrivateSetCreditCardFIDOAuthEnabledStateFunction
     : public ExtensionFunction {
  public:
@@ -218,18 +236,52 @@ class AutofillPrivateSetCreditCardFIDOAuthEnabledStateFunction
   ResponseAction Run() override;
 };
 
-class AutofillPrivateGetUpiIdListFunction : public ExtensionFunction {
+class AutofillPrivateSaveIbanFunction : public ExtensionFunction {
  public:
-  AutofillPrivateGetUpiIdListFunction() = default;
-  AutofillPrivateGetUpiIdListFunction(
-      const AutofillPrivateGetUpiIdListFunction&) = delete;
-  AutofillPrivateGetUpiIdListFunction& operator=(
-      const AutofillPrivateGetUpiIdListFunction&) = delete;
-  DECLARE_EXTENSION_FUNCTION("autofillPrivate.getUpiIdList",
-                             AUTOFILLPRIVATE_GETUPIIDLIST)
+  AutofillPrivateSaveIbanFunction() = default;
+  AutofillPrivateSaveIbanFunction(const AutofillPrivateSaveIbanFunction&) =
+      delete;
+  AutofillPrivateSaveIbanFunction& operator=(
+      const AutofillPrivateSaveIbanFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.saveIban",
+                             AUTOFILLPRIVATE_SAVEIBAN)
 
  protected:
-  ~AutofillPrivateGetUpiIdListFunction() override = default;
+  ~AutofillPrivateSaveIbanFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+};
+
+class AutofillPrivateGetIbanListFunction : public ExtensionFunction {
+ public:
+  AutofillPrivateGetIbanListFunction() = default;
+  AutofillPrivateGetIbanListFunction(
+      const AutofillPrivateGetIbanListFunction&) = delete;
+  AutofillPrivateGetIbanListFunction& operator=(
+      const AutofillPrivateGetIbanListFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.getIbanList",
+                             AUTOFILLPRIVATE_GETIBANLIST)
+
+ protected:
+  ~AutofillPrivateGetIbanListFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+};
+
+class AutofillPrivateIsValidIbanFunction : public ExtensionFunction {
+ public:
+  AutofillPrivateIsValidIbanFunction() = default;
+  AutofillPrivateIsValidIbanFunction(
+      const AutofillPrivateIsValidIbanFunction&) = delete;
+  AutofillPrivateIsValidIbanFunction& operator=(
+      const AutofillPrivateIsValidIbanFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.isValidIban",
+                             AUTOFILLPRIVATE_ISVALIDIBAN)
+
+ protected:
+  ~AutofillPrivateIsValidIbanFunction() override = default;
 
   // ExtensionFunction overrides.
   ResponseAction Run() override;
@@ -264,6 +316,88 @@ class AutofillPrivateRemoveVirtualCardFunction : public ExtensionFunction {
 
  protected:
   ~AutofillPrivateRemoveVirtualCardFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+};
+
+class AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction
+    : public ExtensionFunction {
+ public:
+  AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction() = default;
+  AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction(
+      const AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction&) =
+      delete;
+  AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction& operator=(
+      const AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction&) =
+      delete;
+  DECLARE_EXTENSION_FUNCTION(
+      "autofillPrivate.authenticateUserAndFlipMandatoryAuthToggle",
+      AUTOFILLPRIVATE_AUTHENTICATEUSERANDFLIPMANDATORYAUTHTOGGLE)
+
+ protected:
+  ~AutofillPrivateAuthenticateUserAndFlipMandatoryAuthToggleFunction()
+      override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+
+ private:
+  void UpdateMandatoryAuthTogglePref(bool reauth_succeeded);
+};
+
+// Performs a local reauth before releasing data if reauth is enabled.
+class AutofillPrivateGetLocalCardFunction : public ExtensionFunction {
+ public:
+  AutofillPrivateGetLocalCardFunction() = default;
+  AutofillPrivateGetLocalCardFunction(
+      const AutofillPrivateGetLocalCardFunction&) = delete;
+  AutofillPrivateGetLocalCardFunction& operator=(
+      const AutofillPrivateGetLocalCardFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.getLocalCard",
+                             AUTOFILLPRIVATE_GETLOCALCARD)
+
+ protected:
+  ~AutofillPrivateGetLocalCardFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+
+ private:
+  void OnReauthFinished(bool can_retrieve);
+  void ReturnCreditCard();
+};
+
+class AutofillPrivateCheckIfDeviceAuthAvailableFunction
+    : public ExtensionFunction {
+ public:
+  AutofillPrivateCheckIfDeviceAuthAvailableFunction() = default;
+  AutofillPrivateCheckIfDeviceAuthAvailableFunction(
+      const AutofillPrivateCheckIfDeviceAuthAvailableFunction&) = delete;
+  AutofillPrivateCheckIfDeviceAuthAvailableFunction& operator=(
+      const AutofillPrivateCheckIfDeviceAuthAvailableFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.checkIfDeviceAuthAvailable",
+                             AUTOFILLPRIVATE_CHECKIFDEVICEAUTHAVAILABLE)
+
+ protected:
+  ~AutofillPrivateCheckIfDeviceAuthAvailableFunction() override = default;
+
+  // ExtensionFunction overrides.
+  ResponseAction Run() override;
+};
+
+class AutofillPrivateBulkDeleteAllCvcsFunction : public ExtensionFunction {
+ public:
+  AutofillPrivateBulkDeleteAllCvcsFunction() = default;
+  AutofillPrivateBulkDeleteAllCvcsFunction(
+      const AutofillPrivateBulkDeleteAllCvcsFunction&) = delete;
+  AutofillPrivateBulkDeleteAllCvcsFunction& operator=(
+      const AutofillPrivateBulkDeleteAllCvcsFunction&) = delete;
+  DECLARE_EXTENSION_FUNCTION("autofillPrivate.bulkDeleteAllCvcs",
+                             AUTOFILLPRIVATE_BULKDELETEALLCVCS)
+
+ protected:
+  ~AutofillPrivateBulkDeleteAllCvcsFunction() override = default;
 
   // ExtensionFunction overrides.
   ResponseAction Run() override;

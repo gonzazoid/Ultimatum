@@ -1,0 +1,100 @@
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Updates to this file must be backwards-compatible, as it is used outside of
+// the Chromium repo. This file should be updated first, before syncing in the
+// other repos.
+
+// Next MinVersion: 3
+
+module ash.ime.mojom;
+
+// The following enums refer to the config options used for the
+// Japanese decoder Mozc.
+// More information about this interface is documented publicly at
+// https://github.com/google/mozc/blob/master/src/protocol/config.proto
+
+[Stable, Extensible]
+enum InputMode {
+    [Default] kRomaji = 0,
+    kKana = 1
+};
+
+[Stable, Extensible]
+enum PunctuationStyle {
+    [Default] kKutenTouten = 0,
+    kCommaPeriod = 1,
+    kKutenPeriod = 2,
+    kCommaTouten = 3
+};
+
+[Stable, Extensible]
+enum SymbolStyle {
+    [Default] kCornerBracketMiddleDot = 0,
+    kSquareBracketSlash = 1,
+    kCornerBracketSlash = 2,
+    kSquareBracketMiddleDot = 3
+};
+
+[Stable, Extensible]
+enum SpaceInputStyle {
+    [Default] kInputMode = 0,
+    kFullwidth = 1,
+    kHalfwidth = 2
+};
+
+[Stable, Extensible]
+enum SelectionShortcut {
+    kNoShortcut = 0,
+    [Default] kDigits123456789 = 1,
+    kAsdfghjkl = 2
+};
+
+[Stable, Extensible]
+enum KeymapStyle {
+    [Default] kCustom = 0,
+    kAtok = 1,
+    kMsIme = 2,
+    kKotoeri = 3,
+    kMobile = 4,
+    kChromeOs = 5,
+    [MinVersion=2] kNone = 6
+};
+
+[Stable, Extensible]
+enum ShiftKeyModeSwitch {
+    kOff = 0,
+    [Default] kAlphanumeric = 1,
+    kKatakana = 2,
+};
+
+[Stable, RenamedFrom="ash.ime.mojom.MozcConfig"]
+struct JapaneseConfig {
+    InputMode input_mode@0;
+    PunctuationStyle punctuation_style@1;
+    SymbolStyle symbol_style@2;
+    SpaceInputStyle space_input_style@3;
+    SelectionShortcut selection_shortcut@4;
+    KeymapStyle keymap_style@5;
+    bool automatically_switch_to_halfwidth@6;
+    ShiftKeyModeSwitch shift_key_mode_switch@7;
+    bool use_input_history@8;
+    bool use_system_dictionary@9;
+    int64 number_of_suggestions@10;
+    bool disable_personalized_suggestions@11;
+    bool send_statistics_to_google@12;
+};
+
+// JapaneseDecoder is the interface used for communicating with the Mozc
+// decoder for Japanese input, which is hosted inside of ImeService.  It is
+// just going to allow access to the user's settings and user dictionary for
+// migrating the code to settings.  Once the settings migration is done, this
+// interface can be deleted.
+[Stable, RenamedFrom="ash.ime.mojom.Mozc"]
+interface JapaneseDecoder {
+    // Retrieve the config used for Mozc which is stored as a file internally.
+    // If this file does not exist, this should just return the default config.
+    FetchJapaneseConfig@0() => (JapaneseConfig config);
+};
+

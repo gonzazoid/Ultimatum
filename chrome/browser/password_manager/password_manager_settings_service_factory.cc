@@ -26,7 +26,8 @@ PasswordManagerSettingsServiceFactory::GetForProfile(Profile* profile) {
 // static
 PasswordManagerSettingsServiceFactory*
 PasswordManagerSettingsServiceFactory::GetInstance() {
-  return base::Singleton<PasswordManagerSettingsServiceFactory>::get();
+  static base::NoDestructor<PasswordManagerSettingsServiceFactory> instance;
+  return instance.get();
 }
 
 PasswordManagerSettingsServiceFactory::PasswordManagerSettingsServiceFactory()
@@ -39,7 +40,12 @@ PasswordManagerSettingsServiceFactory::PasswordManagerSettingsServiceFactory()
           // used, but since this service is used to access settings which are
           // not specific to incognito the service can still be used as for the
           // regular profile.
-          ProfileSelections::BuildRedirectedInIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
 #if BUILDFLAG(IS_ANDROID)
   // The sync status is necessary on Android to decide which prefs to check.
   DependsOn(SyncServiceFactory::GetInstance());
@@ -49,21 +55,15 @@ PasswordManagerSettingsServiceFactory::PasswordManagerSettingsServiceFactory()
 PasswordManagerSettingsServiceFactory::
     ~PasswordManagerSettingsServiceFactory() = default;
 
-KeyedService* PasswordManagerSettingsServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PasswordManagerSettingsServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   TRACE_EVENT0("passwords", "PasswordManagerSettingsServiceCreation");
   Profile* profile = Profile::FromBrowserContext(context);
 #if BUILDFLAG(IS_ANDROID)
-  if (password_manager::features::UsesUnifiedPasswordManagerUi()) {
-    return new PasswordManagerSettingsServiceAndroidImpl(
+    return std::make_unique<PasswordManagerSettingsServiceAndroidImpl>(
         profile->GetPrefs(), SyncServiceFactory::GetForProfile(profile));
-  }
-  // Reset the migration pref in case the client is no longer in the enabled
-  // group.
-  profile->GetPrefs()->SetBoolean(
-      password_manager::prefs::kSettingsMigratedToUPM, false);
-  return new PasswordManagerSettingsServiceImpl(profile->GetPrefs());
 #else
-  return new PasswordManagerSettingsServiceImpl(profile->GetPrefs());
+  return std::make_unique<PasswordManagerSettingsServiceImpl>(profile->GetPrefs());
 #endif
 }

@@ -8,8 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/process/process_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -18,7 +18,7 @@
 #include "content/browser/gpu/gpu_process_host.h"
 #include "content/public/browser/browser_child_process_host.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_data.h"
 #include "content/public/browser/render_process_host.h"
 #include "gpu/config/gpu_feature_type.h"
@@ -50,7 +50,7 @@ std::unique_ptr<SystemInfo::Size> GfxSizeToSystemInfoSize(
 // Windows builds need more time -- see Issue 873112 and 1004472.
 // Mac builds need more time - see Issue angleproject:6182.
 #if ((BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && !defined(NDEBUG)) || \
-    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || defined(USE_OZONE)
+    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_OZONE)
 static constexpr int kGPUInfoWatchdogTimeoutMultiplierOS = 3;
 #else
 static constexpr int kGPUInfoWatchdogTimeoutMultiplierOS = 1;
@@ -335,9 +335,9 @@ class SystemInfoHandlerGpuObserver : public content::GpuDataManagerObserver {
   base::WeakPtrFactory<SystemInfoHandlerGpuObserver> weak_factory_{this};
 };
 
-SystemInfoHandler::SystemInfoHandler()
-    : DevToolsDomainHandler(SystemInfo::Metainfo::domainName) {
-}
+SystemInfoHandler::SystemInfoHandler(bool is_browser_session)
+    : DevToolsDomainHandler(SystemInfo::Metainfo::domainName),
+      is_browser_session_(is_browser_session) {}
 
 SystemInfoHandler::~SystemInfoHandler() = default;
 
@@ -346,6 +346,12 @@ void SystemInfoHandler::Wire(UberDispatcher* dispatcher) {
 }
 
 void SystemInfoHandler::GetInfo(std::unique_ptr<GetInfoCallback> callback) {
+  if (!is_browser_session_) {
+    callback->sendFailure(Response::ServerError(
+        "SystemInfo.getInfo is only supported on the browser target"));
+    return;
+  }
+
   // We will be able to get more information from the GpuDataManager.
   // Register a transient observer with it to call us back when the
   // information is available.
@@ -418,6 +424,12 @@ void AddChildProcessInfo(
 
 void SystemInfoHandler::GetProcessInfo(
     std::unique_ptr<GetProcessInfoCallback> callback) {
+  if (!is_browser_session_) {
+    callback->sendFailure(Response::ServerError(
+        "SystemInfo.getProcessInfo is only supported on the browser target"));
+    return;
+  }
+
   auto process_info =
       std::make_unique<protocol::Array<SystemInfo::ProcessInfo>>();
 
@@ -425,6 +437,11 @@ void SystemInfoHandler::GetProcessInfo(
   AddRendererProcessInfo(process_info.get());
   AddChildProcessInfo(process_info.get());
   callback->sendSuccess(std::move(process_info));
+}
+
+Response SystemInfoHandler::GetFeatureState(const String& in_featureState,
+                                            bool* featureEnabled) {
+  return Response::InvalidParams("Unknown feature");
 }
 
 }  // namespace protocol

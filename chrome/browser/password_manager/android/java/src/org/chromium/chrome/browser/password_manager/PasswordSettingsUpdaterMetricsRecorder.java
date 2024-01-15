@@ -10,6 +10,7 @@ import static org.chromium.chrome.browser.password_manager.PasswordManagerSettin
 import android.os.SystemClock;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.metrics.RecordHistogram;
 
@@ -67,8 +68,13 @@ class PasswordSettingsUpdaterMetricsRecorder {
     }
 
     private String getHistogramName(String metric) {
-        return PASSWORD_SETTINGS_HISTOGRAM_BASE + "." + mFunctionSuffix + "."
-                + getSuffixForSetting(mSetting) + "." + metric;
+        return PASSWORD_SETTINGS_HISTOGRAM_BASE
+                + "."
+                + mFunctionSuffix
+                + "."
+                + getSuffixForSetting(mSetting)
+                + "."
+                + metric;
     }
 
     private void reportErrorMetrics(Exception exception) {
@@ -80,5 +86,15 @@ class PasswordSettingsUpdaterMetricsRecorder {
             int apiErrorCode = PasswordManagerAndroidBackendUtil.getApiErrorCode(exception);
             RecordHistogram.recordSparseHistogram(getHistogramName("APIError1"), apiErrorCode);
         }
+    }
+
+    String getFunctionSuffixForTesting() {
+        return mFunctionSuffix;
+    }
+
+    @VisibleForTesting
+    @PasswordManagerSetting
+    int getSettingForTesting() {
+        return mSetting;
     }
 }

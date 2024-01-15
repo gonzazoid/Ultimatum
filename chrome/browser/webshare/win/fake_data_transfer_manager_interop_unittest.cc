@@ -8,8 +8,8 @@
 #include <wrl/event.h>
 #include <wrl/implements.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/win/core_winrt_util.h"
 #include "content/public/test/browser_task_environment.h"
@@ -55,8 +55,6 @@ class DataRequestedTestCallback {
 class FakeDataTransferManagerInteropTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    if (!FakeDataTransferManagerInterop::IsSupportedEnvironment())
-      GTEST_SKIP();
     fake_data_transfer_manager_interop_ =
         Microsoft::WRL::Make<FakeDataTransferManagerInterop>();
   }

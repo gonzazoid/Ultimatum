@@ -12,6 +12,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.UserDataHost;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
 import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -29,6 +30,7 @@ import java.lang.annotation.RetentionPolicy;
  */
 public interface Tab extends TabLifecycle {
     public static final int INVALID_TAB_ID = -1;
+    public static final long INVALID_TIMESTAMP = -1;
 
     @IntDef({TabLoadStatus.PAGE_LOAD_FAILED, TabLoadStatus.DEFAULT_PAGE_LOAD})
     @Retention(RetentionPolicy.SOURCE)
@@ -58,6 +60,10 @@ public interface Tab extends TabLifecycle {
      *         object having to know about them directly.
      */
     UserDataHost getUserDataHost();
+
+    /** Returns the Profile this tab is associated with. */
+    @NonNull
+    Profile getProfile();
 
     /**
      * @return The web contents associated with this tab.
@@ -113,7 +119,7 @@ public interface Tab extends TabLifecycle {
     int getId();
 
     /**
-     * @return Parameters that should be used for a lazily loaded Tab.  May be null.
+     * @return Parameters that should be used for a lazily loaded Tab. May be null.
      */
     LoadUrlParams getPendingLoadParams();
 
@@ -199,6 +205,12 @@ public interface Tab extends TabLifecycle {
      */
     boolean isUserInteractable();
 
+    /** Returns whether the tab is detached for reparenting. */
+    boolean isDetached();
+
+    /** Sets Parent for the current Tab and other tab related parent properties. */
+    void reparentTab(Tab parent);
+
     /**
      * Causes this tab to navigate to the specified URL.
      * @param params parameters describing the url load. Note that it is important to set correct
@@ -217,9 +229,7 @@ public interface Tab extends TabLifecycle {
      */
     boolean loadIfNeeded(int caller);
 
-    /**
-     * Reloads the current page content.
-     */
+    /** Reloads the current page content. */
     void reload();
 
     /**
@@ -228,9 +238,7 @@ public interface Tab extends TabLifecycle {
      */
     void reloadIgnoringCache();
 
-    /**
-     * Stop the current navigation.
-     */
+    /** Stop the current navigation. */
     void stopLoading();
 
     /**
@@ -263,25 +271,62 @@ public interface Tab extends TabLifecycle {
      */
     boolean canGoForward();
 
-    /**
-     * Goes to the navigation entry before the current one.
-     */
+    /** Goes to the navigation entry before the current one. */
     void goBack();
 
-    /**
-     * Goes to the navigation entry after the current one.
-     */
+    /** Goes to the navigation entry after the current one. */
     void goForward();
-
-    /**
-     * Set whether {@link Tab} metadata (specifically all {@link PersistedTabData})
-     * will be saved. Not all Tabs need to be persisted across restarts.
-     * The default value when a Tab is initialized is false.
-     */
-    void setIsTabSaveEnabled(boolean isSaveEnabled);
 
     /**
      * @return true if the {@link Tab} is a custom tab.
      */
     boolean isCustomTab();
+
+    /**
+     * @return the last time this tab was shown or the time of its initialization if it wasn't yet
+     *         shown.
+     */
+    long getTimestampMillis();
+
+    /**
+     * @return parent identifier for the {@link Tab}
+     */
+    int getParentId();
+
+    /**
+     * @return root identifier for the {@link Tab}
+     */
+    int getRootId();
+
+    /** Set the root identifier for the {@link Tab} */
+    void setRootId(int rootId);
+
+    /**
+     * @return user agent type for the {@link Tab}
+     */
+    @TabUserAgent
+    int getUserAgent();
+
+    /** Set user agent type for the {@link Tab} */
+    void setUserAgent(@TabUserAgent int userAgent);
+
+    /**
+     * @return content state bytes for the {@link Tab}
+     */
+    WebContentsState getWebContentsState();
+
+    /**
+     * @return timestamp in milliseconds when the tab was last interacted.
+     */
+    long getLastNavigationCommittedTimestampMillis();
+
+    /**
+     * @return launch type at creation
+     */
+    @Nullable
+    @TabLaunchType
+    Integer getTabLaunchTypeAtCreation();
+
+    /** Sets the TabLaunchType for tabs launched with an unset launch type. */
+    void setTabLaunchType(@TabLaunchType int launchType);
 }

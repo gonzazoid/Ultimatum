@@ -162,7 +162,11 @@ class CONTENT_EXPORT SiteInstance : public base::RefCounted<SiteInstance> {
   virtual bool IsRelatedSiteInstance(const SiteInstance* instance) = 0;
 
   // Returns the total active WebContents count for this SiteInstance and all
-  // related SiteInstances in the same BrowsingInstance.
+  // related SiteInstances that have a form of communication with each other.
+  // This include all the WebContents for documents in the same BrowsingInstance
+  // as well as all the BrowsingInstances in the same CoopRelatedGroup. The
+  // latter is useful to include because some interactions (e.g., messaging) are
+  // allowed across such BrowsingInstances.
   virtual size_t GetRelatedActiveContentsCount() = 0;
 
   // Returns true if this SiteInstance is for a site that requires a dedicated
@@ -232,8 +236,21 @@ class CONTENT_EXPORT SiteInstance : public base::RefCounted<SiteInstance> {
       BrowserContext* browser_context,
       const StoragePartitionConfig& partition_config);
 
+  // Factory method to create a SiteInstance in a new BrowsingInstance with a
+  // custom StoragePartition that is preserved across navigations.
+  // `partition_config` needs to be for a non-default StoragePartition.
+  static scoped_refptr<SiteInstance> CreateForFixedStoragePartition(
+      BrowserContext* browser_context,
+      const GURL& url,
+      const StoragePartitionConfig& partition_config);
+
   // Determine if a URL should "use up" a site.  URLs such as about:blank or
   // chrome-native:// leave the site unassigned.
+  //
+  // Note that this API shouldn't be used for cases where about:blank has an
+  // inherited origin, because that origin may influence the outcome of this
+  // call.  See the content-internal ShouldAssignSiteForUrlInfo() for more
+  // information.
   static bool ShouldAssignSiteForURL(const GURL& url);
 
   // Starts requiring a dedicated process for |url|'s site.  On platforms where

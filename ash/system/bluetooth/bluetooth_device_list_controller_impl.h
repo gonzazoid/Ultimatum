@@ -11,18 +11,18 @@
 #include "ash/ash_export.h"
 #include "ash/system/bluetooth/bluetooth_device_list_controller.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 
 namespace views {
-class Separator;
+class View;
 }  // namespace views
 
 namespace ash {
 
 class BluetoothDetailedView;
-
 class BluetoothDeviceListItemView;
-class TriView;
 
 // BluetoothDeviceListController implementation.
 class ASH_EXPORT BluetoothDeviceListControllerImpl
@@ -49,9 +49,9 @@ class ASH_EXPORT BluetoothDeviceListControllerImpl
   // |sub_header| is |nullptr|, otherwise uses the provided |sub_header|. The
   // used sub-header is then moved to index |index| within the device list and
   // returned.
-  TriView* CreateSubHeaderIfMissingAndReorder(TriView* sub_header,
-                                              int text_id,
-                                              size_t index);
+  views::View* CreateSubHeaderIfMissingAndReorder(views::View* sub_header,
+                                                  int text_id,
+                                                  size_t index);
 
   // Creates and initializes a view for each of the device properties within
   // |device_property_list| if a view does not already exist, otherwise re-using
@@ -63,15 +63,21 @@ class ASH_EXPORT BluetoothDeviceListControllerImpl
       base::flat_map<std::string, BluetoothDeviceListItemView*>* previous_views,
       size_t index);
 
-  BluetoothDetailedView* const bluetooth_detailed_view_;
+  const raw_ptr<BluetoothDetailedView, DanglingUntriaged>
+      bluetooth_detailed_view_;
 
   bool is_bluetooth_enabled_ = false;
   base::flat_map<std::string, BluetoothDeviceListItemView*>
       device_id_to_view_map_;
-  views::Separator* device_list_separator_ = nullptr;
-  TriView* connected_sub_header_ = nullptr;
-  TriView* no_device_connected_sub_header_ = nullptr;
-  TriView* previously_connected_sub_header_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #addr-of
+  RAW_PTR_EXCLUSION views::View* connected_sub_header_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #addr-of
+  RAW_PTR_EXCLUSION views::View* no_device_connected_sub_header_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #addr-of
+  RAW_PTR_EXCLUSION views::View* previously_connected_sub_header_ = nullptr;
 };
 
 }  // namespace ash

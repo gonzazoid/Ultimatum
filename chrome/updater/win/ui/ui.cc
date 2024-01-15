@@ -5,16 +5,16 @@
 #include "chrome/updater/win/ui/ui.h"
 
 #include <stdint.h>
-#include <functional>
 
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/logging.h"
 #include "chrome/updater/updater_scope.h"
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/ui/ui_constants.h"
 #include "chrome/updater/win/ui/ui_util.h"
-#include "chrome/updater/win/win_util.h"
 
-namespace updater {
-namespace ui {
+namespace updater::ui {
 
 const OmahaWnd::ControlAttributes OmahaWnd::kVisibleTextAttributes = {
     false, true, true, false, false};
@@ -32,11 +32,12 @@ const OmahaWnd::ControlAttributes OmahaWnd::kDisabledNonButtonAttributes = {
 void EnableFlatButtons(HWND hwnd_parent) {
   struct Local {
     static BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
-      DCHECK(hwnd);
+      CHECK(hwnd);
       CWindow wnd(hwnd);
       const DWORD style = wnd.GetStyle();
-      if (style & BS_FLAT)
+      if (style & BS_FLAT) {
         ::SetWindowTheme(wnd, _T(""), _T(""));
+      }
       return true;
     }
   };
@@ -47,7 +48,7 @@ void EnableFlatButtons(HWND hwnd_parent) {
 void HideWindowChildren(HWND hwnd_parent) {
   struct Local {
     static BOOL CALLBACK EnumProc(HWND hwnd, LPARAM) {
-      DCHECK(hwnd);
+      CHECK(hwnd);
       ShowWindow(hwnd, SW_HIDE);
       return true;
     }
@@ -63,16 +64,16 @@ OmahaWnd::OmahaWnd(int dialog_id, WTL::CMessageLoop* message_loop, HWND parent)
       is_close_enabled_(true),
       events_sink_(nullptr),
       scope_(UpdaterScope::kUser) {
-  DCHECK(message_loop);
+  CHECK(message_loop);
 }
 
 OmahaWnd::~OmahaWnd() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(!IsWindow());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!IsWindow());
 }
 
 HRESULT OmahaWnd::Initialize() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!Create(parent_)) {
     VLOG(1) << "Failed to create the window";
@@ -96,7 +97,7 @@ void OmahaWnd::InitializeDialog() {
 
   // Disable the Maximize System Menu item.
   HMENU menu = ::GetSystemMenu(*this, false);
-  DCHECK(menu);
+  CHECK(menu);
   ::EnableMenuItem(menu, SC_MAXIMIZE, MF_BYCOMMAND | MF_GRAYED);
 
   progress_bar_.SubclassWindow(GetDlgItem(IDC_PROGRESS));
@@ -128,21 +129,24 @@ LRESULT OmahaWnd::OnClose(UINT, WPARAM, LPARAM, BOOL& handled) {
 
 HRESULT OmahaWnd::CloseWindow() {
   HRESULT hr = DestroyWindow() ? S_OK : HRESULTFromLastError();
-  if (events_sink_)
+  if (events_sink_) {
     events_sink_->DoClose();
+  }
   return hr;
 }
 
 void OmahaWnd::MaybeRequestExitProcess() {
-  if (!is_complete_)
+  if (!is_complete_) {
     return;
+  }
 
   RequestExitProcess();
 }
 
 void OmahaWnd::RequestExitProcess() {
-  if (events_sink_)
+  if (events_sink_) {
     events_sink_->DoExit();
+  }
 }
 
 LRESULT OmahaWnd::OnNCDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
@@ -154,10 +158,11 @@ LRESULT OmahaWnd::OnNCDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
 
 // Called when ESC key is pressed.
 LRESULT OmahaWnd::OnCancel(WORD, WORD id, HWND, BOOL& handled) {
-  DCHECK_EQ(id, IDCANCEL);
+  CHECK_EQ(id, IDCANCEL);
 
-  if (!is_close_enabled_)
+  if (!is_close_enabled_) {
     return 0;
+  }
 
   MaybeCloseWindow();
   handled = true;
@@ -165,9 +170,10 @@ LRESULT OmahaWnd::OnCancel(WORD, WORD id, HWND, BOOL& handled) {
 }
 
 void OmahaWnd::Show() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow() || IsWindowVisible())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow() || IsWindowVisible()) {
     return;
+  }
 
   CenterWindow(nullptr);
   SetVisible(true);
@@ -199,11 +205,12 @@ bool OmahaWnd::OnComplete() {
 
 void OmahaWnd::SetControlAttributes(int control_id,
                                     const ControlAttributes& attributes) {
-  if (attributes.is_ignore_entry)
+  if (attributes.is_ignore_entry) {
     return;
+  }
 
   HWND hwnd = GetDlgItem(control_id);
-  DCHECK(hwnd);
+  CHECK(hwnd);
   ::ShowWindow(hwnd, attributes.is_visible ? SW_SHOW : SW_HIDE);
   ::EnableWindow(hwnd, attributes.is_enabled ? true : false);
   if (attributes.is_button && attributes.is_default) {
@@ -225,7 +232,7 @@ HRESULT OmahaWnd::EnableClose(bool enable) {
 
 HRESULT OmahaWnd::EnableSystemCloseButton(bool enable) {
   HMENU menu = ::GetSystemMenu(*this, false);
-  DCHECK(menu);
+  CHECK(menu);
   uint32_t flags = MF_BYCOMMAND;
   flags |= enable ? MF_ENABLED : MF_GRAYED;
   ::EnableMenuItem(menu, SC_CLOSE, flags);
@@ -235,16 +242,16 @@ HRESULT OmahaWnd::EnableSystemCloseButton(bool enable) {
 
 HRESULT InitializeCommonControls(DWORD control_classes) {
   INITCOMMONCONTROLSEX init_ctrls = {sizeof(INITCOMMONCONTROLSEX), 0};
-  DCHECK_EQ(init_ctrls.dwSize, sizeof(init_ctrls));
+  CHECK_EQ(init_ctrls.dwSize, sizeof(init_ctrls));
   init_ctrls.dwICC = control_classes;
   if (!::InitCommonControlsEx(&init_ctrls)) {
     const DWORD error = ::GetLastError();
-    if (error != ERROR_CLASS_ALREADY_EXISTS)
+    if (error != ERROR_CLASS_ALREADY_EXISTS) {
       return HRESULT_FROM_WIN32(error);
+    }
   }
 
   return S_OK;
 }
 
-}  // namespace ui
-}  // namespace updater
+}  // namespace updater::ui

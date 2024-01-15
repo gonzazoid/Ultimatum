@@ -7,9 +7,9 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/hash/sha1.h"
+#include "base/uuid.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/engine/commit_queue.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
@@ -88,9 +88,10 @@ void MockModelTypeProcessor::RunQueuedTasks() {
 std::unique_ptr<CommitRequestData> MockModelTypeProcessor::CommitRequest(
     const ClientTagHash& tag_hash,
     const sync_pb::EntitySpecifics& specifics) {
-  const std::string server_id = HasServerAssignedId(tag_hash)
-                                    ? GetServerAssignedId(tag_hash)
-                                    : base::GenerateGUID();
+  const std::string server_id =
+      HasServerAssignedId(tag_hash)
+          ? GetServerAssignedId(tag_hash)
+          : base::Uuid::GenerateRandomV4().AsLowercaseString();
   return CommitRequest(tag_hash, specifics, server_id);
 }
 
@@ -119,6 +120,12 @@ std::unique_ptr<CommitRequestData> MockModelTypeProcessor::CommitRequest(
   request_data->base_version = base_version;
   base::Base64Encode(base::SHA1HashString(specifics.SerializeAsString()),
                      &request_data->specifics_hash);
+  if (specifics.has_bookmark()) {
+    request_data->deprecated_bookmark_folder =
+        (specifics.bookmark().type() == sync_pb::BookmarkSpecifics::FOLDER);
+    request_data->deprecated_bookmark_unique_position =
+        UniquePosition::FromProto(specifics.bookmark().unique_position());
+  }
 
   return request_data;
 }
@@ -237,9 +244,10 @@ void MockModelTypeProcessor::SetCommitRequest(
 void MockModelTypeProcessor::AppendCommitRequest(
     const ClientTagHash& tag_hash,
     const sync_pb::EntitySpecifics& specifics) {
-  const std::string server_id = HasServerAssignedId(tag_hash)
-                                    ? GetServerAssignedId(tag_hash)
-                                    : base::GenerateGUID();
+  const std::string server_id =
+      HasServerAssignedId(tag_hash)
+          ? GetServerAssignedId(tag_hash)
+          : base::Uuid::GenerateRandomV4().AsLowercaseString();
   AppendCommitRequest(tag_hash, specifics, server_id);
 }
 
@@ -252,6 +260,10 @@ void MockModelTypeProcessor::AppendCommitRequest(
 
 int MockModelTypeProcessor::GetLocalChangesCallCount() const {
   return get_local_changes_call_count_;
+}
+
+int MockModelTypeProcessor::GetStoreInvalidationsCallCount() const {
+  return store_invalidations_call_count_;
 }
 
 void MockModelTypeProcessor::OnCommitCompletedImpl(
@@ -296,6 +308,11 @@ void MockModelTypeProcessor::OnUpdateReceivedImpl(
   received_update_responses_.push_back(std::move(response_list));
   received_gc_directives_.push_back(
       gc_directive.value_or(sync_pb::GarbageCollectionDirective()));
+}
+
+void MockModelTypeProcessor::StorePendingInvalidations(
+    std::vector<sync_pb::ModelTypeState::Invalidation> invalidations_to_store) {
+  store_invalidations_call_count_++;
 }
 
 // Fetches the sequence number as of the most recent update request.

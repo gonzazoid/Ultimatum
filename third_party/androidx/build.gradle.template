@@ -12,14 +12,26 @@ repositories {
     mavenCentral()
 }
 
+dependencies.constraints {
+    // This exists to resolve an ambiguous dependency onto 2 versions of this library. "androidJvm"
+    // seemed like the more correct one to use. See crbug.com/1511597.
+    compile("androidx.sqlite:sqlite") {
+        attributes {
+            attribute(Attribute.of("org.jetbrains.kotlin.platform.type", String), "androidJvm")
+        }
+    }
+}
+
 dependencies {
     // Note about the configuration names: they are defined in buildSrc/ChromiumPlugin
 
     compile 'androidx.lifecycle:lifecycle-runtime:{{androidx_dependency_version}}'
+    compile 'androidx.lifecycle:lifecycle-runtime-ktx:{{androidx_dependency_version}}'
     compile 'androidx.lifecycle:lifecycle-common:{{androidx_dependency_version}}'
     compile 'androidx.lifecycle:lifecycle-common-java8:{{androidx_dependency_version}}'
     compile 'androidx.lifecycle:lifecycle-livedata:{{androidx_dependency_version}}'
     compile 'androidx.lifecycle:lifecycle-livedata-core:{{androidx_dependency_version}}'
+    compile 'androidx.lifecycle:lifecycle-service:{{androidx_dependency_version}}'
     compile 'androidx.lifecycle:lifecycle-viewmodel:{{androidx_dependency_version}}'
     compile 'androidx.lifecycle:lifecycle-viewmodel-savedstate:{{androidx_dependency_version}}'
 
@@ -28,11 +40,15 @@ dependencies {
     compile 'androidx.annotation:annotation-jvm:{{androidx_dependency_version}}'
     compile 'androidx.appcompat:appcompat:{{androidx_dependency_version}}'
     compile 'androidx.appcompat:appcompat-resources:{{androidx_dependency_version}}'
+    compile 'androidx.appsearch:appsearch:{{androidx_dependency_version}}'
+    compile 'androidx.appsearch:appsearch-platform-storage:{{androidx_dependency_version}}'
     compile 'androidx.asynclayoutinflater:asynclayoutinflater:{{androidx_dependency_version}}'
+    compile 'androidx.asynclayoutinflater:asynclayoutinflater-appcompat:{{androidx_dependency_version}}'
     compile 'androidx.biometric:biometric:{{androidx_dependency_version}}'
     compile 'androidx.browser:browser:{{androidx_dependency_version}}'
     compile 'androidx.cardview:cardview:{{androidx_dependency_version}}'
     compile 'androidx.collection:collection:{{androidx_dependency_version}}'
+    compile 'androidx.collection:collection-ktx:{{androidx_dependency_version}}'
     compile 'androidx.concurrent:concurrent-futures:{{androidx_dependency_version}}'
     compile 'androidx.coordinatorlayout:coordinatorlayout:{{androidx_dependency_version}}'
     compile 'androidx.core:core:{{androidx_dependency_version}}'
@@ -50,6 +66,10 @@ dependencies {
     compile 'androidx.media:media:{{androidx_dependency_version}}'
     compile 'androidx.mediarouter:mediarouter:{{androidx_dependency_version}}'
     compile 'androidx.preference:preference:{{androidx_dependency_version}}'
+    // This library version is hard-coded as it does not match the
+    // version of the filepath in the snapshot.
+    compile 'androidx.privacysandbox.ads:ads-adservices:1.0.0-alpha01'
+    compile 'androidx.privacysandbox.ads:ads-adservices-java:1.0.0-alpha01'
     compile 'androidx.recyclerview:recyclerview:{{androidx_dependency_version}}'
     compile 'androidx.savedstate:savedstate:{{androidx_dependency_version}}'
     compile 'androidx.slice:slice-builders:{{androidx_dependency_version}}'
@@ -78,6 +98,16 @@ dependencies {
     compile 'androidx.documentfile:documentfile:{{androidx_dependency_version}}'
     compile 'androidx.print:print:{{androidx_dependency_version}}'
 
+    String media3Version = '1.2.0'
+    compile "androidx.media3:media3-common:${media3Version}"
+    compile "androidx.media3:media3-database:${media3Version}"
+    compile "androidx.media3:media3-datasource:${media3Version}"
+    compile "androidx.media3:media3-decoder:${media3Version}"
+    compile "androidx.media3:media3-exoplayer:${media3Version}"
+    compile "androidx.media3:media3-extractor:${media3Version}"
+    compile "androidx.media3:media3-session:${media3Version}"
+    compile "androidx.media3:media3-ui:${media3Version}"
+
     compile 'androidx.multidex:multidex:2.0.0'
     compile 'androidx.webkit:webkit:{{androidx_dependency_version}}'
 
@@ -90,10 +120,13 @@ dependencies {
 
     // testCompile targets have test_only = true.
     androidTestCompile 'androidx.fragment:fragment-testing:{{androidx_dependency_version}}'
+    androidTestCompile 'androidx.benchmark:benchmark-macro:{{androidx_dependency_version}}'
+    androidTestCompile 'androidx.benchmark:benchmark-macro-junit4:{{androidx_dependency_version}}'
+    androidTestCompile 'androidx.benchmark:benchmark-junit4:{{androidx_dependency_version}}'
     androidTestCompile 'androidx.test:core:1.4.0-rc01'
     androidTestCompile 'androidx.test:monitor:1.4.0-rc01'
     androidTestCompile 'androidx.test:rules:1.2.0'
-    androidTestCompile 'androidx.test:runner:1.2.0'
+    androidTestCompile 'androidx.test:runner:1.5.2'
     androidTestCompile 'androidx.test.espresso:espresso-contrib:3.2.0'
     androidTestCompile 'androidx.test.espresso:espresso-core:3.2.0'
     androidTestCompile 'androidx.test.espresso:espresso-intents:3.2.0'

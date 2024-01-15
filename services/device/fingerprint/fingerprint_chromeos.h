@@ -68,6 +68,7 @@ class SERVICES_DEVICE_FINGERPRINT_EXPORT FingerprintChromeOS
 
   // ash::BiodClient::Observer:
   void BiodServiceRestarted() override;
+  void BiodServiceStatusChanged(biod::BiometricsManagerStatus status) override;
   void BiodEnrollScanDoneReceived(biod::ScanResult scan_result,
                                   bool enroll_session_complete,
                                   int percent_complete) override;
@@ -79,7 +80,8 @@ class SERVICES_DEVICE_FINGERPRINT_EXPORT FingerprintChromeOS
   void OnStartEnrollSession(const dbus::ObjectPath& enroll_path);
   void OnStartAuthSession(const dbus::ObjectPath& auth_path);
   void OnGetRecordsForUser(GetRecordsForUserCallback callback,
-                           const std::vector<dbus::ObjectPath>& record_paths);
+                           const std::vector<dbus::ObjectPath>& record_paths,
+                           bool success);
   void OnGetLabelFromRecordPath(size_t num_records,
                                 const dbus::ObjectPath& record_path,
                                 const std::string& label);

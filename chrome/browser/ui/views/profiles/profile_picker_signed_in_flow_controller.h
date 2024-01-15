@@ -5,15 +5,19 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_SIGNED_IN_FLOW_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_SIGNED_IN_FLOW_CONTROLLER_H_
 
+#include <optional>
+
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
-#include "chrome/browser/ui/views/profiles/profile_management_utils.h"
+#include "chrome/browser/ui/views/profiles/profile_management_types.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
-#include "chrome/browser/ui/webui/signin/enterprise_profile_welcome_ui.h"
+#include "chrome/browser/ui/webui/signin/managed_user_profile_notice_ui.h"
+#include "chrome/browser/ui/webui/signin/signin_utils.h"
+#include "components/signin/public/base/signin_metrics.h"
+#include "components/signin/public/identity_manager/account_info.h"
 #include "content/public/browser/web_contents_delegate.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 
 class Profile;
@@ -39,8 +43,10 @@ class ProfilePickerSignedInFlowController
   ProfilePickerSignedInFlowController(
       ProfilePickerWebContentsHost* host,
       Profile* profile,
+      const CoreAccountInfo& account_info,
       std::unique_ptr<content::WebContents> contents,
-      absl::optional<SkColor> profile_color);
+      signin_metrics::AccessPoint signin_access_point,
+      std::optional<SkColor> profile_color);
   ~ProfilePickerSignedInFlowController() override;
   ProfilePickerSignedInFlowController(
       const ProfilePickerSignedInFlowController&) = delete;
@@ -65,11 +71,17 @@ class ProfilePickerSignedInFlowController
   // Finishes the sign-in process by moving to the sync confirmation screen.
   virtual void SwitchToSyncConfirmation();
 
-  // Finishes the sign-in process by moving to the enterprise profile welcome
+  // Finishes the sign-in process by moving to the managed user profile notice
   // screen.
-  void SwitchToEnterpriseProfileWelcome(
-      EnterpriseProfileWelcomeUI::ScreenType type,
+  virtual void SwitchToManagedUserProfileNotice(
+      ManagedUserProfileNoticeUI::ScreenType type,
       signin::SigninChoiceCallback proceed_callback);
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // The default implementation is NOTREACHED
+  virtual void SwitchToLacrosIntro(
+      signin::SigninChoiceCallback proceed_callback);
+#endif
 
   // When the sign-in flow cannot be completed because another profile at
   // `profile_path` is already syncing with a chosen account, shows the profile
@@ -84,34 +96,33 @@ class ProfilePickerSignedInFlowController
   // screen. Returns an empty path if no such screen has been displayed.
   base::FilePath switch_profile_path() const { return switch_profile_path_; }
 
+  content::WebContents* contents() const { return contents_.get(); }
+
  protected:
   // Returns the profile color, taking into account current policies.
-  absl::optional<SkColor> GetProfileColor() const;
+  std::optional<SkColor> GetProfileColor() const;
 
   // Returns the URL for sync confirmation screen (or for the "is-loading"
   // version of it, if `loading` is true).
   GURL GetSyncConfirmationURL(bool loading);
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Added for bug investigation purposes.
-  // TODO(crbug.com/1340791): Remove this once the source of the bug is found.
-  virtual void PreShowScreenForDebug() {}
-#endif
-
   ProfilePickerWebContentsHost* host() const { return host_; }
   Profile* profile() const { return profile_; }
-  content::WebContents* contents() const { return contents_.get(); }
   std::unique_ptr<content::WebContents> ReleaseContents();
+  const CoreAccountInfo& account_info() const { return account_info_; }
 
  private:
   // content::WebContentsDelegate:
   bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) override;
+  bool HandleKeyboardEvent(
+      content::WebContents* source,
+      const content::NativeWebKeyboardEvent& event) override;
 
   // Callbacks that finalize initialization of WebUI pages.
   void SwitchToSyncConfirmationFinished();
-  void SwitchToEnterpriseProfileWelcomeFinished(
-      EnterpriseProfileWelcomeUI::ScreenType type,
+  void SwitchToManagedUserProfileNoticeFinished(
+      ManagedUserProfileNoticeUI::ScreenType type,
       signin::SigninChoiceCallback proceed_callback);
 
   // Returns whether the flow is initialized (i.e. whether `Init()` has been
@@ -123,6 +134,10 @@ class ProfilePickerSignedInFlowController
 
   raw_ptr<Profile> profile_ = nullptr;
 
+  // Account ID for the profile. Note that it may not be set as primary account
+  // yet.
+  const CoreAccountInfo account_info_;
+
   // Prevent |profile_| from being destroyed first.
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
 
@@ -130,10 +145,12 @@ class ProfilePickerSignedInFlowController
   // sign-in flow.
   std::unique_ptr<content::WebContents> contents_;
 
+  const signin_metrics::AccessPoint signin_access_point_;
+
   // Set for the profile at the very end to avoid coloring the simple toolbar
   // for GAIA sign-in (that uses the ThemeProvider of the current profile).
-  // absl::nullopt if the profile should use the default theme.
-  absl::optional<SkColor> profile_color_;
+  // std::nullopt if the profile should use the default theme.
+  std::optional<SkColor> profile_color_;
 
   // Email of the signed-in account. It is set after the user finishes the
   // sign-in flow on GAIA and Chrome receives the account info.

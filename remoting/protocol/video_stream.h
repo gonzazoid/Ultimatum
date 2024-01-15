@@ -38,11 +38,6 @@ class VideoStream {
   // only affects capture scheduling and does not stop/start the capturer.
   virtual void Pause(bool pause) = 0;
 
-  // Sets whether the video encoder should be requested to encode losslessly,
-  // or to use a lossless color space (typically requiring higher bandwidth).
-  virtual void SetLosslessEncode(bool want_lossless) = 0;
-  virtual void SetLosslessColor(bool want_lossless) = 0;
-
   // Control mouse cursor compositing in the video stream.
   virtual void SetComposeEnabled(bool enabled) = 0;
   virtual void SetMouseCursor(
@@ -55,6 +50,18 @@ class VideoStream {
 
   // Selects the current desktop display (if multiple displays).
   virtual void SelectSource(webrtc::ScreenId id) = 0;
+
+  // Sets the target/max video framerate for the host. The actual framerate is
+  // variable and determined by the number of changes on the screen and the rate
+  // at which the host is able to generate frames. Also WebRTC will adjust this
+  // value based on network conditions.
+  virtual void SetTargetFramerate(int framerate) = 0;
+
+  // Allows the owner of the stream to request a different |capture_interval|
+  // (usually a higher frequency) for the specified |boost_duration|. After
+  // |boost_duration| has elapsed, the capture rate will return to normal.
+  virtual void BoostFramerate(base::TimeDelta capture_interval,
+                              base::TimeDelta boost_duration) {}
 };
 
 }  // namespace remoting::protocol

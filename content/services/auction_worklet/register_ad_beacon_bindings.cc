@@ -7,20 +7,22 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_util.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
-#include "gin/converter.h"
+#include "content/services/auction_worklet/webidl_compat.h"
+#include "third_party/blink/public/common/fenced_frame/fenced_frame_utils.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
-#include "v8-context.h"
-#include "v8-object.h"
+#include "v8/include/v8-context.h"
 #include "v8/include/v8-exception.h"
 #include "v8/include/v8-external.h"
 #include "v8/include/v8-function-callback.h"
-#include "v8/include/v8-template.h"
+#include "v8/include/v8-function.h"
 
 namespace auction_worklet {
 
@@ -29,16 +31,17 @@ RegisterAdBeaconBindings::RegisterAdBeaconBindings(AuctionV8Helper* v8_helper)
 
 RegisterAdBeaconBindings::~RegisterAdBeaconBindings() = default;
 
-void RegisterAdBeaconBindings::FillInGlobalTemplate(
-    v8::Local<v8::ObjectTemplate> global_template) {
+void RegisterAdBeaconBindings::AttachToContext(v8::Local<v8::Context> context) {
   v8::Local<v8::External> v8_this =
       v8::External::New(v8_helper_->isolate(), this);
-  v8::Local<v8::FunctionTemplate> v8_template = v8::FunctionTemplate::New(
-      v8_helper_->isolate(), &RegisterAdBeaconBindings::RegisterAdBeacon,
-      v8_this);
-  v8_template->RemovePrototype();
-  global_template->Set(v8_helper_->CreateStringFromLiteral("registerAdBeacon"),
-                       v8_template);
+  v8::Local<v8::Function> v8_function =
+      v8::Function::New(context, &RegisterAdBeaconBindings::RegisterAdBeacon,
+                        v8_this)
+          .ToLocalChecked();
+  context->Global()
+      ->Set(context, v8_helper_->CreateStringFromLiteral("registerAdBeacon"),
+            v8_function)
+      .Check();
 }
 
 void RegisterAdBeaconBindings::Reset() {
@@ -51,7 +54,6 @@ void RegisterAdBeaconBindings::RegisterAdBeacon(
   RegisterAdBeaconBindings* bindings = static_cast<RegisterAdBeaconBindings*>(
       v8::External::Cast(*args.Data())->Value());
   v8::Isolate* isolate = args.GetIsolate();
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
   AuctionV8Helper* v8_helper = bindings->v8_helper_;
 
   if (!bindings->first_call_) {
@@ -62,49 +64,53 @@ void RegisterAdBeaconBindings::RegisterAdBeacon(
   }
   bindings->ad_beacon_map_.clear();
 
-  if (args.Length() != 1 || args[0].IsEmpty() || !args[0]->IsObject()) {
-    isolate->ThrowException(
-        v8::Exception::TypeError(v8_helper->CreateStringFromLiteral(
-            "registerAdBeacon requires 1 object parameter")));
+  AuctionV8Helper::TimeLimitScope time_limit_scope(v8_helper->GetTimeLimit());
+  ArgsConverter args_converter(v8_helper, time_limit_scope,
+                               "registerAdBeacon(): ", &args,
+                               /*min_required_args=*/1);
+  std::vector<std::pair<std::string, std::string>> idl_map;
+  if (args_converter.is_success()) {
+    args_converter.SetStatus(ConvertRecord(
+        v8_helper, time_limit_scope, "registerAdBeacon(): ", {"argument 'map'"},
+        args[0], idl_map));
+  }
+
+  if (args_converter.is_failed()) {
+    args_converter.TakeStatus().PropagateErrorsToV8(v8_helper);
     return;
   }
 
-  v8::Local<v8::Object> obj = args[0].As<v8::Object>();
-
-  v8::MaybeLocal<v8::Array> maybe_fields = obj->GetOwnPropertyNames(context);
-  v8::Local<v8::Array> fields;
-  if (!maybe_fields.ToLocal(&fields)) {
-    // TODO: This might not be able to happen.
-    isolate->ThrowException(
-        v8::Exception::TypeError(v8_helper->CreateStringFromLiteral(
-            "registerAdBeacon could not get object attributes")));
-    return;
-  }
   std::vector<std::pair<std::string, GURL>> ad_beacon_list;
-  for (size_t idx = 0; idx < fields->Length(); idx++) {
-    v8::Local<v8::Value> key = fields->Get(context, idx).ToLocalChecked();
-    if (!key->IsString()) {
-      isolate->ThrowException(
-          v8::Exception::TypeError(v8_helper->CreateStringFromLiteral(
-              "registerAdBeacon object attributes must be strings")));
+  for (const auto& [key_string, url_string] : idl_map) {
+    if (key_string.starts_with(blink::kFencedFrameReservedPAEventPrefix) &&
+        std::find(std::begin(blink::kFencedFrameAutomaticBeaconTypes),
+                  std::end(blink::kFencedFrameAutomaticBeaconTypes),
+                  key_string) ==
+            std::end(blink::kFencedFrameAutomaticBeaconTypes)) {
+      std::string error_msg =
+          base::StrCat({"registerAdBeacon(): Invalid reserved type '",
+                        key_string, "' cannot be used"});
+      isolate->ThrowException(v8::Exception::TypeError(
+          v8_helper->CreateUtf8String(error_msg).ToLocalChecked()));
       return;
     }
-    std::string key_string = gin::V8ToString(isolate, key);
-    std::string url_string =
-        gin::V8ToString(isolate, obj->Get(context, key).ToLocalChecked());
     GURL url(url_string);
     if (!url.is_valid() || !url.SchemeIs(url::kHttpsScheme)) {
-      isolate->ThrowException(
-          v8::Exception::TypeError(v8_helper->CreateStringFromLiteral(
-              base::StrCat({"registerAdBeacon invalid reporting url for key '",
-                            key_string, "': '", url_string, "'"})
-                  .c_str())));
+      std::string error_msg =
+          base::StrCat({"registerAdBeacon(): invalid reporting url for key '",
+                        key_string, "': '", url_string, "'"});
+      // Since the map key is a DOMString and not USVString, the above may
+      // not be valid UTF8, so we may need to simplify the error message.
+      if (!base::IsStringUTF8(error_msg)) {
+        error_msg = "registerAdBeacon(): invalid reporting url";
+      }
+      isolate->ThrowException(v8::Exception::TypeError(
+          v8_helper->CreateUtf8String(error_msg).ToLocalChecked()));
       return;
     }
-    ad_beacon_list.emplace_back(key_string, url);
+    ad_beacon_list.emplace_back(std::move(key_string), std::move(url));
   }
   base::flat_map<std::string, GURL> ad_beacon_map(std::move(ad_beacon_list));
-  DCHECK_EQ(fields->Length(), ad_beacon_map.size());
 
   bindings->first_call_ = false;
   bindings->ad_beacon_map_ = std::move(ad_beacon_map);

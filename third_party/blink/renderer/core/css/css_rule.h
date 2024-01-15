@@ -62,6 +62,7 @@ class CORE_EXPORT CSSRule : public ScriptWrappable {
     kNamespaceRule = 10,
     kCounterStyleRule = 11,
     kSupportsRule = 12,
+    kFontFeatureValuesRule = 14,
     kViewportRule = 15,
     // CSSOM constants are deprecated [1], and there will be no new
     // web-exposed values.
@@ -77,6 +78,9 @@ class CORE_EXPORT CSSRule : public ScriptWrappable {
     kScopeRule = 21,
     kPositionFallbackRule = 22,
     kTryRule = 23,
+    kFontFeatureRule = 24,
+    kStartingStyleRule = 25,
+    kViewTransitionRule = 26,
   };
 
   virtual Type GetType() const = 0;
@@ -100,8 +104,9 @@ class CORE_EXPORT CSSRule : public ScriptWrappable {
   void Trace(Visitor*) const override;
 
   CSSStyleSheet* parentStyleSheet() const {
-    if (parent_is_rule_)
+    if (parent_is_rule_) {
       return parent_ ? ParentAsCSSRule()->parentStyleSheet() : nullptr;
+    }
     return ParentAsCSSStyleSheet();
   }
 
@@ -152,7 +157,7 @@ class CORE_EXPORT CSSRule : public ScriptWrappable {
       const String& rule_string,
       unsigned index,
       size_t num_child_rules,
-      const CSSRule& parent_rule,
+      CSSRule& parent_rule,
       ExceptionState& exception_state);
 };
 

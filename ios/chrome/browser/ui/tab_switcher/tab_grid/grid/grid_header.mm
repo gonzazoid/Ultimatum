@@ -4,17 +4,14 @@
 
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_header.h"
 
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/gfx/ios/uikit_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface GridHeader ()
 // Visual components of the view.
@@ -53,7 +50,6 @@
     UIStackView* containerView = [[UIStackView alloc]
         initWithArrangedSubviews:@[ _titleLabel, _valueLabel ]];
     containerView.axis = UILayoutConstraintAxisHorizontal;
-    containerView.alignment = UIStackViewAlignmentCenter;
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     containerView.spacing = kGridHeaderContentSpacing;
     containerView.layoutMarginsRelativeArrangement = YES;
@@ -68,6 +64,10 @@
       [containerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [containerView.trailingAnchor
           constraintEqualToAnchor:self.trailingAnchor],
+      [valueLabel.heightAnchor
+          constraintEqualToAnchor:containerView.heightAnchor],
+      [titleLabel.heightAnchor
+          constraintEqualToAnchor:containerView.heightAnchor],
     ]];
     [NSLayoutConstraint activateConstraints:constraints];
   }
@@ -77,6 +77,7 @@
 #pragma mark - UIView
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
   [self updateContentInsets];
 }
 
@@ -110,9 +111,15 @@
 #pragma mark - Private
 
 // The collection view header always stretch across the whole collection view
-// width. to work around that, this method adds a padding to the container view
+// width. To work around that, this method adds a padding to the container view
 // based on the current layout and the size classes.
+// TODO(crbug.com/1504112): Remove this method when the compositional layout is
+// fully landed.
 - (void)updateContentInsets {
+  if (IsTabGridCompositionalLayoutEnabled()) {
+    return;
+  }
+
   UIEdgeInsets contentInsets;
   CGFloat width = CGRectGetWidth(self.bounds);
   UIUserInterfaceSizeClass horizontalSizeClass =
@@ -142,7 +149,8 @@
   } else {
     contentInsets = kGridLayoutInsetsRegularRegular;
   }
-  self.containerView.layoutMargins = contentInsets;
+  self.containerView.layoutMargins =
+      UIEdgeInsetsMake(0, contentInsets.left, 0, contentInsets.right);
   [self layoutIfNeeded];
 }
 

@@ -20,8 +20,7 @@
 #include "ui/views/animation/test/square_ink_drop_ripple_test_api.h"
 #include "ui/views/animation/test/test_ink_drop_ripple_observer.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 const float kVisibleOpacity = 0.175f;
 
@@ -57,8 +56,7 @@ class InkDropRippleTest
 
   std::unique_ptr<InkDropRippleTestApi> test_api_;
 
-  std::unique_ptr<base::AutoReset<gfx::Animation::RichAnimationRenderMode>>
-      animation_mode_reset_;
+  gfx::AnimationTestApi::RenderModeResetter animation_mode_reset_;
 };
 
 InkDropRippleTest::InkDropRippleTest()
@@ -66,9 +64,9 @@ InkDropRippleTest::InkDropRippleTest()
           gfx::Animation::RichAnimationRenderMode::FORCE_DISABLED)) {
   switch (GetParam()) {
     case SQUARE_INK_DROP_RIPPLE: {
-      SquareInkDropRipple* square_ink_drop_ripple =
-          new SquareInkDropRipple(gfx::Size(10, 10), 2, gfx::Size(8, 8), 1,
-                                  gfx::Point(), SK_ColorBLACK, kVisibleOpacity);
+      SquareInkDropRipple* square_ink_drop_ripple = new SquareInkDropRipple(
+          nullptr, gfx::Size(10, 10), 2, gfx::Size(8, 8), 1, gfx::Point(),
+          SK_ColorBLACK, kVisibleOpacity);
       ink_drop_ripple_.reset(square_ink_drop_ripple);
       test_api_ =
           std::make_unique<SquareInkDropRippleTestApi>(square_ink_drop_ripple);
@@ -76,7 +74,7 @@ InkDropRippleTest::InkDropRippleTest()
     }
     case FLOOD_FILL_INK_DROP_RIPPLE: {
       FloodFillInkDropRipple* flood_fill_ink_drop_ripple =
-          new FloodFillInkDropRipple(gfx::Size(10, 10), gfx::Point(),
+          new FloodFillInkDropRipple(nullptr, gfx::Size(10, 10), gfx::Point(),
                                      SK_ColorBLACK, kVisibleOpacity);
       ink_drop_ripple_.reset(flood_fill_ink_drop_ripple);
       test_api_ = std::make_unique<FloodFillInkDropRippleTestApi>(
@@ -408,5 +406,4 @@ TEST_P(InkDropRippleTest, RipplePendingToActivatedObserverOrder) {
       {InkDropState::ACTION_PENDING, InkDropState::ACTIVATED}));
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

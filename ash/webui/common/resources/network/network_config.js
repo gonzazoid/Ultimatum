@@ -22,11 +22,11 @@ import './network_config_toggle.js';
 import './network_password_input.js';
 import './network_shared.css.js';
 
+import {assert, assertNotReached} from '//resources/ash/common/assert.js';
 import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
-import {assert, assertNotReached} from '//resources/js/assert.js';
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
 import {flush, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {CertificateType, ConfigProperties, CrosNetworkConfigRemote, EAPConfigProperties, GlobalPolicy, HiddenSsidMode, IPSecConfigProperties, L2TPConfigProperties, ManagedBoolean, ManagedEAPProperties, ManagedInt32, ManagedIPSecProperties, ManagedL2TPProperties, ManagedOpenVPNProperties, ManagedProperties, ManagedString, ManagedStringList, ManagedWireGuardProperties, NetworkCertificate, OpenVPNConfigProperties, SecurityType, StartConnectResult, SubjectAltName, VpnType, WireGuardConfigProperties} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
+import {CertificateType, ConfigProperties, CrosNetworkConfigInterface, EAPConfigProperties, GlobalPolicy, HiddenSsidMode, IPSecConfigProperties, L2TPConfigProperties, ManagedBoolean, ManagedEAPProperties, ManagedInt32, ManagedIPSecProperties, ManagedL2TPProperties, ManagedOpenVPNProperties, ManagedProperties, ManagedString, ManagedStringList, ManagedWireGuardProperties, NetworkCertificate, OpenVPNConfigProperties, SecurityType, StartConnectResult, SubjectAltName, VpnType, WireGuardConfigProperties} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 import {ConnectionStateType, IPConfigType, NetworkType, OncSource, PolicySource} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 
 import {MojoInterfaceProvider, MojoInterfaceProviderImpl} from './mojo_interface_provider.js';
@@ -70,7 +70,36 @@ const WireGuardKeyConfigType = {
 /** @type {string}  */ const NO_CERTS_HASH = 'no-certs';
 /** @type {string}  */ const NO_USER_CERT_HASH = 'no-user-cert';
 
+/** @type {string}  */ const DEFAULT_EAP_OUTER_PROTOCOL = 'PEAP';
+
 /** @type {string}  */ const PLACEHOLDER_CREDENTIAL = '(credential)';
+
+/**
+ * A light-weight regular expression for testing an IPv4 address string. Note
+ * that this is not a complete check and thus some invalid input can also be
+ * accepted.
+ * @type {RegExp}
+ * @private
+ */
+const IPV4_ADDR_REGEX = /^([0-9]+\.){3}[0-9]+$/i;
+
+/**
+ * A light-weight regular expression for testing an IPv6 address string. Note
+ * that this is not a complete check and thus some invalid input can also be
+ * accepted.
+ * @type {RegExp}
+ * @private
+ */
+const IPV6_ADDR_REGEX = /^(\:?[0-9a-f]{0,4}){2,8}$/i;
+
+/**
+ * A light-weight regular expression for testing an IP CIDR string (e.g.,
+ * 192.168.1.0/24). Both IPv4 and IPv6 are accepted. Note that this is not a
+ * complete check and thus some invalid input can also be accepted.
+ * @type {RegExp}
+ * @private
+ */
+const IP_CIDR_REGEX = /^[0-9a-f\.\:]+\/[0-9]+?$/i;
 
 Polymer({
   _template: getTemplate(),
@@ -235,6 +264,21 @@ Polymer({
     },
 
     /**
+     * This is a ManagedBoolean that represents a device-policy-enforced false
+     * value. It is used to present a policy-disabled toggle for "Share network"
+     * when user-created networks are ephemeral. It is never mutated.
+     * @private {!ManagedBoolean}
+     */
+    shareNetworkEphemeralDisabled_: {
+      type: Object,
+      value: {
+        activeValue: false,
+        policySource: PolicySource.kDevicePolicyEnforced,
+        policyValue: false,
+      },
+    },
+
+    /**
      * Whether the device should automatically connect to the network.
      * @private
      */
@@ -345,12 +389,13 @@ Polymer({
 
     /**
      * Array of values for the EAP Method (Outer) dropdown.
+     * They will be presented in a dropdown in this order.
      * @private {!Array<string>}
      */
     eapOuterItems_: {
       type: Array,
       readOnly: true,
-      value: ['LEAP', 'PEAP', 'EAP-TLS', 'EAP-TTLS'],
+      value: ['PEAP', 'EAP-TLS', 'EAP-TTLS', 'LEAP'],
     },
 
     /**
@@ -477,17 +522,8 @@ Polymer({
   /** @const */
   MIN_PASSPHRASE_LENGTH: 5,
 
-  /** @private {?CrosNetworkConfigRemote} */
+  /** @private {?CrosNetworkConfigInterface} */
   networkConfig_: null,
-
-  /*
-   * This value is used to avoid an edge case when configuring a network. We
-   * default to |true| since this is the more privacy-preserving option. This
-   * value is overridden with dialog arguments in specific situations where it
-   * ought be |false|. For more information see b/253247084.
-   * @private {boolean}
-   */
-  isLoggedIn_: true,
 
   /** @override */
   created() {
@@ -512,16 +548,6 @@ Polymer({
     this.cachedUserCerts_ = undefined;
     this.selectedServerCaHash_ = undefined;
     this.selectedUserCertHash_ = undefined;
-
-    if (this.getHiddenNetworkMigrationEnabled()) {
-      const dialogArgs = chrome.getVariableValue('dialogArguments');
-      if (dialogArgs) {
-        const args = JSON.parse(dialogArgs);
-        if ('loggedIn' in args) {
-          this.isLoggedIn_ = args.loggedIn;
-        }
-      }
-    }
 
     this.networkConfig_.getSupportedVpnTypes().then(response => {
       this.updateVpnTypeItems_(response.vpnTypes);
@@ -577,11 +603,6 @@ Polymer({
     }
   },
 
-  /** @private */
-  getHiddenNetworkMigrationEnabled() {
-    return loadTimeData.getBoolean('enableHiddenNetworkMigration');
-  },
-
   /**
    * @param {boolean} connect If true, connect after save.
    * @private
@@ -610,16 +631,20 @@ Polymer({
         return;
       }
       this.eapProperties_.subjectAltNameMatch = sanm;
+      if (!this.eapConfigServerCaCertAllowed_()) {
+        this.setError_('missingEapDefaultServerCaSubjectVerification');
+        this.propertiesSent_ = false;
+        return;
+      }
     }
     const propertiesToSet = this.getPropertiesToSet_();
     if (this.managedProperties_.source === OncSource.kNone) {
-      if (this.getHiddenNetworkMigrationEnabled() && this.isLoggedIn_) {
-        // Note: Set hidden SSID mode of new WiFi networks to disabled to avoid
-        // unintentionally marking networks as hidden if not in range or
-        // misspelled, etc.
-        if (this.mojoType_ === NetworkType.kWiFi) {
-          propertiesToSet.typeConfig.wifi.hiddenSsid = HiddenSsidMode.kDisabled;
-        }
+      // Explicitly set the hidden SSID mode of new WiFi networks disabled to
+      // avoid networks being unintentionally marked as hidden in some
+      // situations, e.g., when the network SSID is misspelled or the network is
+      // not within range.
+      if (this.mojoType_ === NetworkType.kWiFi) {
+        propertiesToSet.typeConfig.wifi.hiddenSsid = HiddenSsidMode.kDisabled;
       }
       if (!this.autoConnect_) {
         // Note: Do not set autoConnect to true, the connection manager will do
@@ -878,7 +903,7 @@ Polymer({
       return;
     }
     if (!this.shareIsVisible_()) {
-      this.shareNetwork_ = false;
+      this.shareNetwork_ = this.shareDefault;
       return;
     }
     if (this.shareAllowEnable) {
@@ -913,7 +938,7 @@ Polymer({
       domainSuffixMatch: this.getActiveStringList_(eap.domainSuffixMatch) || [],
       identity: OncMojo.getActiveString(eap.identity),
       inner: OncMojo.getActiveString(eap.inner),
-      outer: OncMojo.getActiveString(eap.outer) || 'LEAP',
+      outer: OncMojo.getActiveString(eap.outer) || DEFAULT_EAP_OUTER_PROTOCOL,
       password: OncMojo.getActiveString(eap.password),
       saveCredentials: this.getActiveBoolean_(eap.saveCredentials),
       serverCaPems: this.getActiveStringList_(eap.serverCaPems),
@@ -990,6 +1015,7 @@ Polymer({
    */
   getWireGuardConfigProperties_(wireguard) {
     const config = {
+      ipAddresses: this.getActiveStringList_(wireguard.ipAddresses) ?? [],
       privateKey: OncMojo.getActiveString(wireguard.privateKey),
       peers: [],
     };
@@ -997,7 +1023,7 @@ Polymer({
       for (const peer of wireguard.peers.activeValue) {
         const peerCopied = Object.assign({}, peer);
         if (this.hasGuid_()) {
-          // Shill does not return exact value for crendential fields, showing
+          // Shill does not return exact value for credential fields, showing
           // a placeholder here.
           peerCopied.presharedKey = PLACEHOLDER_CREDENTIAL;
         }
@@ -1077,12 +1103,11 @@ Polymer({
             break;
           }
           assert(vpn.wireguard);
-          assert(managedProperties.staticIpConfig);
           configVpn.wireguard =
               this.getWireGuardConfigProperties_(vpn.wireguard);
+          this.ipAddressInput_ = configVpn.wireguard.ipAddresses.join(',');
           const staticIpConfig = managedProperties.staticIpConfig;
-          this.ipAddressInput_ = staticIpConfig.ipAddress.activeValue;
-          if (staticIpConfig.nameServers) {
+          if (staticIpConfig && staticIpConfig.nameServers) {
             this.nameServersInput_ =
                 staticIpConfig.nameServers.activeValue.join(',');
           }
@@ -1146,7 +1171,7 @@ Polymer({
     let eap;
     if (security === SecurityType.kWpaEap) {
       eap = this.getEap_(this.configProperties_, true);
-      eap.outer = eap.outer || 'LEAP';
+      eap.outer = eap.outer || DEFAULT_EAP_OUTER_PROTOCOL;
     }
     this.setEap_(eap);
   },
@@ -1794,13 +1819,28 @@ Polymer({
         this.managedProperties_.source !== OncSource.kNone) {
       return false;
     }
+    return true;
+  },
 
-    // Insecure WiFi networks are always shared.
-    if (this.mojoType_ === NetworkType.kWiFi &&
-        this.securityType_ === SecurityType.kNone) {
+  /**
+   * Returns true if the network configured by this UI element is ephemeral
+   * according to enterprise policy.
+   * @return {boolean}
+   * @private
+   */
+  networkIsEphemeral_() {
+    if (!loadTimeData.getBoolean('ephemeralNetworkPoliciesEnabled')) {
       return false;
     }
-    return true;
+    if (!this.globalPolicy_ ||
+        !this.globalPolicy_.userCreatedNetworkConfigurationsAreEphemeral) {
+      return false;
+    }
+    if (!this.managedProperties_) {
+      return false;
+    }
+    // Only user-created networks are ephemeral with this policy.
+    return this.managedProperties_.source === OncSource.kNone;
   },
 
   /**
@@ -1949,17 +1989,45 @@ Polymer({
   },
 
   /**
-   * @param {WireGuardConfigProperties|null|undefined} wireguard
-   * @param {string|undefined} ipAddress
+   * Checks if the input ipAddresses is a comma-delimited string which contains
+   * IP addresses (v4, v6, or both).
+   * @param {string|undefined} ipAddresses
    * @return {boolean}
    * @private
    */
-  isWireGuardConfigurationValid_(wireguard, ipAddress) {
+  isValidWireGuardIpAddresses_(ipAddresses) {
+    if (!ipAddresses) {
+      return false;
+    }
+    // Currently shill only supports at most 1 IPv4 + 1 IPv6 address.
+    let v4Count = 0;
+    let v6Count = 0;
+    for (const ipAddress of ipAddresses.split(',')) {
+      if (ipAddress.match(IPV4_ADDR_REGEX)) {
+        v4Count++;
+      } else if (ipAddress.match(IPV6_ADDR_REGEX)) {
+        v6Count++;
+      } else {
+        return false;
+      }
+    }
+    if (v4Count > 1 || v6Count > 1) {
+      return false;
+    }
+    return v4Count + v6Count > 0;
+  },
+
+  /**
+   * @param {WireGuardConfigProperties|null|undefined} wireguard
+   * @param {string|undefined} ipAddresses
+   * @return {boolean}
+   * @private
+   */
+  isWireGuardConfigurationValid_(wireguard, ipAddresses) {
     if (!wireguard) {
       return false;
     }
-    // ipAddress should be a valid IPv4 address
-    if (!ipAddress || !ipAddress.match(/^([0-9]+\.){3}[0-9]+$/i)) {
+    if (!this.isValidWireGuardIpAddresses_(ipAddresses)) {
       return false;
     }
     if (this.isWireGuardUserPrivateKeyInputActive_ &&
@@ -1976,13 +2044,13 @@ Polymer({
       return false;
     }
     // endpoint should be the form of IP:port or hostname:port
-    if (!peer.endpoint || !peer.endpoint.match(/^[a-zA-Z0-9\-\.]+:[0-9]+$/i)) {
+    if (!peer.endpoint ||
+        !peer.endpoint.match(/^\[?[a-zA-Z0-9\-\.:]+\]?:[0-9]+$/i)) {
       return false;
     }
-    // allowedIps should be comma-seperated list of IP/cidr
+    // allowedIps should be comma-separated list of IP/cidr.
     if (!peer.allowedIps ||
-        !peer.allowedIps.match(
-            /^([0-9\.]+(\/[0-9]+)?,)*[0-9\.]+(\/[0-9]+)?$/i)) {
+        !peer.allowedIps.split(',').every(s => s.match(IP_CIDR_REGEX))) {
       return false;
     }
     return true;
@@ -2182,9 +2250,9 @@ Polymer({
     assert(!!wireguard);
     propertiesToSet.typeConfig.vpn.host = 'wireguard';
     propertiesToSet.ipAddressConfigType = 'Static';
+    wireguard.ipAddresses = this.ipAddressInput_.split(',');
     propertiesToSet.staticIpConfig = {
       gateway: this.ipAddressInput_,
-      ipAddress: this.ipAddressInput_,
       routingPrefix: 32,
       type: IPConfigType.kIPv4,
     };
@@ -2439,5 +2507,49 @@ Polymer({
       // Reset error if user starts typing new password.
       this.setError_('');
     }
+  },
+
+  /**
+   * Verifies if the selected server CA certificate can be used for the selected
+   * EAP method. This method returns false is the selected EAP method requires a
+   * server CA certificate and the user selected the default certificate without
+   * configuring the domain suffix match or subject alternative match and
+   * without explicitly allowing insecure connections via Chrome flags.
+   * Otherwise returns true.
+   * @return {boolean}
+   * @private
+   */
+  eapConfigServerCaCertAllowed_() {
+    if (loadTimeData.getBoolean(
+            'eapDefaultCasWithoutSubjectVerificationAllowed')) {
+      return true;
+    }
+
+    const outer = this.eapProperties_.outer;
+    if (!(outer === 'EAP-TLS' || outer === 'EAP-TTLS' || outer === 'PEAP')) {
+      return true;
+    }
+
+    if (this.selectedServerCaHash_ !== DEFAULT_HASH) {
+      // Does not use default CA server certs.
+      return true;
+    }
+
+    const isPropertyManaged = !!this.managedEapProperties_ &&
+        !!this.managedEapProperties_.useSystemCas &&
+        (this.managedEapProperties_.useSystemCas.policySource !==
+         PolicySource.kNone);
+    // Bypass `domainSuffixMatch` and `subjectAltNameMatch` checks for managed
+    // networks if the user doesn't control the CA setting.
+    if (isPropertyManaged) {
+      return true;
+    }
+
+    if (this.eapProperties_.domainSuffixMatch.length != 0 ||
+        this.eapProperties_.subjectAltNameMatch.length != 0) {
+      return true;
+    }
+
+    return false;
   },
 });

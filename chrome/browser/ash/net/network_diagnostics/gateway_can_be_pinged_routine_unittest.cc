@@ -15,7 +15,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 // Fake ICMP output. For more details, see:
@@ -78,7 +77,7 @@ class FakeDebugDaemonClient : public ash::FakeDebugDaemonClient {
   void TestICMP(const std::string& ip_address,
                 TestICMPCallback callback) override {
     // Invoke the test callback with fake output.
-    std::move(callback).Run(absl::optional<std::string>{icmp_output_});
+    std::move(callback).Run(std::optional<std::string>{icmp_output_});
   }
 
  private:
@@ -141,7 +140,7 @@ TEST_F(GatewayCanBePingedRoutineTest, TestSingleActiveNetwork) {
 
 TEST_F(GatewayCanBePingedRoutineTest, TestNoActiveNetworks) {
   SetUpRoutine(kFakeValidICMPOutput);
-  SetUpWiFi(shill::kStateOffline);
+  SetUpWiFi(shill::kStateIdle);
   std::vector<mojom::GatewayCanBePingedProblem> expected_problems = {
       mojom::GatewayCanBePingedProblem::kUnreachableGateway};
   base::RunLoop run_loop;

@@ -8,8 +8,10 @@
 #include "ash/app_list/model/search/search_model.h"
 #include "ash/app_list/views/search_box_view_delegate.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -26,6 +28,8 @@ class SearchBoxViewBase;
 // when the user is signed in.
 class ASH_EXPORT AppListMainView : public views::View,
                                    public SearchBoxViewDelegate {
+  METADATA_HEADER(AppListMainView, views::View)
+
  public:
   AppListMainView(AppListViewDelegate* delegate, AppListView* app_list_view);
 
@@ -48,11 +52,7 @@ class ASH_EXPORT AppListMainView : public views::View,
   ContentsView* contents_view() const { return contents_view_; }
   AppListViewDelegate* view_delegate() { return delegate_; }
 
-  // Called when the search box's visibility is changed.
-  void NotifySearchBoxVisibilityChanged();
-
   // Overridden from views::View:
-  const char* GetClassName() const override;
   void Layout() override;
 
  private:
@@ -70,14 +70,16 @@ class ASH_EXPORT AppListMainView : public views::View,
   void ActiveChanged(SearchBoxViewBase* sender) override;
   void OnSearchBoxKeyEvent(ui::KeyEvent* event) override;
   bool CanSelectSearchResults() override;
-
-  AppListViewDelegate* delegate_;  // Owned by parent view (AppListView).
+  bool HandleFocusMoveAboveSearchResults(
+      const ui::KeyEvent& key_event) override;
+  raw_ptr<AppListViewDelegate>
+      delegate_;  // Owned by parent view (AppListView).
 
   // Created by AppListView. Owned by views hierarchy.
-  SearchBoxView* search_box_view_ = nullptr;
+  raw_ptr<SearchBoxView> search_box_view_ = nullptr;
 
-  ContentsView* contents_view_ = nullptr;  // Owned by views hierarchy.
-  AppListView* const app_list_view_;       // Owned by views hierarchy.
+  raw_ptr<ContentsView> contents_view_ = nullptr;  // Owned by views hierarchy.
+  const raw_ptr<AppListView> app_list_view_;       // Owned by views hierarchy.
 };
 
 }  // namespace ash

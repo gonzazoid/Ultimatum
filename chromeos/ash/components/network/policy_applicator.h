@@ -9,9 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
@@ -33,21 +34,26 @@ class PolicyApplicator {
    public:
     ConfigurationHandler& operator=(const ConfigurationHandler&) = delete;
 
-    virtual ~ConfigurationHandler() {}
-    // Write the new configuration with the properties |shill_properties| to
+    virtual ~ConfigurationHandler() = default;
+    // Write the new configuration with the properties `shill_properties` to
     // Shill. This configuration comes from a policy. Any conflicting or
     // existing configuration for the same network will have been removed
-    // before. |callback| will be called after the configuration update has been
-    // reflected in NetworkStateHandler, or on error.
+    // before.
+    // `callback` does not necessarily signal success and is only used for
+    // completion - it will be called after the configuration update has been
+    // reflected in NetworkStateHandler or when an error has occurred.
     virtual void CreateConfigurationFromPolicy(
-        const base::Value& shill_properties,
+        const base::Value::Dict& shill_properties,
         base::OnceClosure callback) = 0;
 
-    // before. |callback| will be called after the configuration update has been
-    // reflected in NetworkStateHandler, or on error.
+    // Modifies the properties of an already-configured network.
+    // `existing_properties` is used to find the network.
+    // `callback` does not necessarily signal success and is only used for
+    // completion - it will be called after the configuration update has been
+    // reflected in NetworkStateHandler or when an error has occurred.
     virtual void UpdateExistingConfigurationWithPropertiesFromPolicy(
-        const base::Value& existing_properties,
-        const base::Value& new_properties,
+        const base::Value::Dict& existing_properties,
+        const base::Value::Dict& new_properties,
         base::OnceClosure callback) = 0;
 
     // Called after all policies for |profile| were applied except for new
@@ -60,14 +66,34 @@ class PolicyApplicator {
         const base::flat_set<std::string>& new_cellular_policy_guids) = 0;
   };
 
-  // |handler| must outlive this object.
-  // |modified_policy_guids| must not be nullptr and will be empty afterwards.
+  struct Options {
+    Options();
+    Options(Options&& other);
+    Options& operator=(Options&& other);
+    Options(const Options&) = delete;
+    Options& operator=(const Options&) = delete;
+    ~Options();
+
+    // Merges this `Options` instance with `other`, ORing the requested
+    // operation flags.
+    void Merge(const Options& other);
+
+    // When this is set to true, all managed configurations with at least one
+    // "Recommended" field will be reset to only contain the managed settings.
+    bool reset_recommended_managed_configs = false;
+
+    // When this is set to true, all unmanaged configurations will be removed.
+    bool remove_unmanaged_configs = false;
+  };
+
+  // `handler` and `managed_cellular_pref_handler` must outlive this object.
   PolicyApplicator(const NetworkProfile& profile,
-                   base::flat_map<std::string, base::Value> all_policies,
-                   base::Value global_network_config,
+                   base::flat_map<std::string, base::Value::Dict> all_policies,
+                   base::Value::Dict global_network_config,
                    ConfigurationHandler* handler,
                    ManagedCellularPrefHandler* managed_cellular_pref_handler,
-                   base::flat_set<std::string> modified_policy_guids);
+                   base::flat_set<std::string> modified_policy_guids,
+                   Options options);
 
   PolicyApplicator(const PolicyApplicator&) = delete;
   PolicyApplicator& operator=(const PolicyApplicator&) = delete;
@@ -79,7 +105,7 @@ class PolicyApplicator {
  private:
   // Called with the properties of the profile |profile_|. Requests the
   // properties of each entry, which are processed by GetEntryCallback.
-  void GetProfilePropertiesCallback(base::Value profile_properties);
+  void GetProfilePropertiesCallback(base::Value::Dict profile_properties);
   void GetProfilePropertiesError(const std::string& error_name,
                                  const std::string& error_message);
 
@@ -87,7 +113,7 @@ class PolicyApplicator {
   // whether the entry was previously managed, whether a current policy applies
   // and then either updates, deletes or not touches the entry.
   void GetEntryCallback(const std::string& entry_identifier,
-                        base::Value entry_properties);
+                        base::Value::Dict entry_properties);
   void GetEntryError(const std::string& entry_identifier,
                      const std::string& error_name,
                      const std::string& error_message);
@@ -99,21 +125,22 @@ class PolicyApplicator {
   // entry and may be empty.
   // |callback| will be called when policy application for |entry_identifier|
   // has finished.
-  void ApplyNewPolicy(const std::string& entry_identifier,
-                      const base::Value& entry_properties,
+  void ApplyOncPolicy(const std::string& entry_identifier,
+                      const base::Value::Dict& entry_properties,
                       std::unique_ptr<NetworkUIData> ui_data,
                       const std::string& old_guid,
                       const std::string& new_guid,
-                      const base::Value& new_policy,
+                      const base::Value::Dict& new_policy,
                       base::OnceClosure callback);
 
   // Applies the global network policy (if any) on |entry_identifier|,
   // |entry_properties|}  are the current properties for the entry.
   // |callback| will be called when policy application for |entry_identifier|
   // has finished or immediately if no global network policy is present.
-  void ApplyGlobalPolicyOnUnmanagedEntry(const std::string& entry_identifier,
-                                         const base::Value& entry_properties,
-                                         base::OnceClosure callback);
+  void ApplyGlobalPolicyOnUnmanagedEntry(
+      const std::string& entry_identifier,
+      const base::Value::Dict& entry_properties,
+      base::OnceClosure callback);
 
   // Sends Shill the command to delete profile entry |entry_identifier| from
   // |profile_|. |callback| will be called when the profile entry has been
@@ -125,8 +152,8 @@ class PolicyApplicator {
   // lead to the policy application. |callback| will be called when policy
   // application has finished, i.e. when the policy has been applied in shill
   // NetworkStateHandler in chrome has reflected the changes.
-  void WriteNewShillConfiguration(base::Value shill_dictionary,
-                                  base::Value policy,
+  void WriteNewShillConfiguration(base::Value::Dict shill_dictionary,
+                                  base::Value::Dict policy,
                                   base::OnceClosure callback);
 
   // Removes |entry_identifier| from the list of pending profile entries.
@@ -147,11 +174,12 @@ class PolicyApplicator {
   // |handler_|.
   void NotifyConfigurationHandlerAndFinish();
 
-  ConfigurationHandler* const handler_;
-  ManagedCellularPrefHandler* managed_cellular_pref_handler_ = nullptr;
+  const raw_ptr<ConfigurationHandler> handler_;
+  raw_ptr<ManagedCellularPrefHandler> managed_cellular_pref_handler_ = nullptr;
   NetworkProfile profile_;
-  base::flat_map<std::string, base::Value> all_policies_;
-  base::Value global_network_config_;
+  base::flat_map<std::string, base::Value::Dict> all_policies_;
+  base::Value::Dict global_network_config_;
+  const Options options_;
 
   base::flat_set<std::string> remaining_policy_guids_;
   base::flat_set<std::string> pending_get_entry_calls_;

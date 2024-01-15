@@ -6,10 +6,8 @@
 
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/feed/core/v2/test/callback_receiver.h"
 #include "components/feed/mojom/rss_link_reader.mojom.h"
-#include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -67,7 +65,6 @@ class StubRssLinkReader : public mojom::RssLinkReader {
 class RssLinksFetcherUnitTest : public ::testing::Test {
  public:
   RssLinksFetcherUnitTest() = default;
-  void SetUp() override { mojo::core::Init(); }
 
  protected:
   base::test::TaskEnvironment task_env_;

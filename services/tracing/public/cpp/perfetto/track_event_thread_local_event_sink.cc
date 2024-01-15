@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <atomic>
+#include <string_view>
 
+#include "base/auto_reset.h"
 #include "base/containers/contains.h"
 #include "base/hash/hash.h"
 #include "base/memory/raw_ptr_exclusion.h"
@@ -213,9 +215,9 @@ void TrackEventThreadLocalEventSink::AddLegacyTraceEvent(
 base::trace_event::TrackEventHandle
 TrackEventThreadLocalEventSink::AddTypedTraceEvent(
     base::trace_event::TraceEvent* trace_event) {
-  DCHECK(!base::tracing::GetThreadIsInTraceEventTLS()->Get());
+  DCHECK(!*base::tracing::GetThreadIsInTraceEvent());
   // Cleared in OnTrackEventCompleted().
-  base::tracing::GetThreadIsInTraceEventTLS()->Set(true);
+  *base::tracing::GetThreadIsInTraceEvent() = true;
 
   DCHECK(!pending_trace_packet_);
   UpdateIncrementalStateIfNeeded(trace_event);
@@ -262,15 +264,15 @@ void TrackEventThreadLocalEventSink::OnTrackEventCompleted() {
   WriteInternedDataIntoTracePacket(pending_trace_packet_.get());
   pending_trace_packet_ = perfetto::TraceWriter::TracePacketHandle();
 
-  DCHECK(base::tracing::GetThreadIsInTraceEventTLS()->Get());
-  base::tracing::GetThreadIsInTraceEventTLS()->Set(false);
+  DCHECK(*base::tracing::GetThreadIsInTraceEvent());
+  *base::tracing::GetThreadIsInTraceEvent() = false;
 }
 
 base::trace_event::TracePacketHandle
 TrackEventThreadLocalEventSink::AddTracePacket() {
-  DCHECK(!base::tracing::GetThreadIsInTraceEventTLS()->Get());
+  DCHECK(!*base::tracing::GetThreadIsInTraceEvent());
   // Cleared in OnTracePacketCompleted().
-  base::tracing::GetThreadIsInTraceEventTLS()->Set(true);
+  *base::tracing::GetThreadIsInTraceEvent() = true;
 
   DCHECK(!pending_trace_packet_);
 
@@ -289,18 +291,15 @@ void TrackEventThreadLocalEventSink::AddEmptyPacket() {
   if (last_packet_was_empty_)
     return;
 
-  DCHECK(!base::tracing::GetThreadIsInTraceEventTLS()->Get());
-  base::tracing::GetThreadIsInTraceEventTLS()->Set(true);
-
+  const base::AutoReset<bool> resetter(base::tracing::GetThreadIsInTraceEvent(),
+                                       true, false);
   DCHECK(!pending_trace_packet_);
   NewTracePacket(PacketType::kEmpty);
-
-  base::tracing::GetThreadIsInTraceEventTLS()->Set(false);
 }
 
 void TrackEventThreadLocalEventSink::OnTracePacketCompleted() {
-  DCHECK(base::tracing::GetThreadIsInTraceEventTLS()->Get());
-  base::tracing::GetThreadIsInTraceEventTLS()->Set(false);
+  DCHECK(*base::tracing::GetThreadIsInTraceEvent());
+  *base::tracing::GetThreadIsInTraceEvent() = false;
 }
 
 void TrackEventThreadLocalEventSink::UpdateIncrementalStateIfNeeded(
@@ -348,6 +347,11 @@ void TrackEventThreadLocalEventSink::UpdateIncrementalStateIfNeeded(
       track_descriptor->set_uuid(thread_track.uuid);
       DCHECK(thread_track.parent_uuid);
       track_descriptor->set_parent_uuid(thread_track.parent_uuid);
+      // Instructs Trace Processor not to merge track events and system events
+      // track for this thread.
+      // TODO(kraskevich): Figure out how to do this for the Perfetto SDK
+      // version.
+      track_descriptor->set_disallow_merging_with_system_tracks(true);
       ThreadDescriptor* thread = track_descriptor->set_thread();
       thread->set_pid(process_id_);
       thread->set_tid(trace_event->thread_id());
@@ -490,11 +494,9 @@ TrackEvent* TrackEventThreadLocalEventSink::PrepareTrackEvent(
               .InMicroseconds());
       track_event->add_extra_counter_track_uuids(track_uuid);
     } else {
-      // Thread timestamps for the current thread are never user-provided, and
-      // since we split COMPLETE events into BEGIN+END event pairs, they should
-      // not appear out of order.
-      DCHECK(trace_event->thread_timestamp() >= last_thread_time_);
-
+      // Thread timestamps for the current thread are never user-provided.
+      // While OSes don't guarantee they are monotonic, the discrepancies are
+      // usually quite rare and quite small.
       track_event->add_extra_counter_values(
           (trace_event->thread_timestamp() - last_thread_time_)
               .InMicroseconds());
@@ -704,6 +706,10 @@ void TrackEventThreadLocalEventSink::EmitThreadTrackDescriptor(
   track_descriptor->set_uuid(thread_track.uuid);
   DCHECK(thread_track.parent_uuid);
   track_descriptor->set_parent_uuid(thread_track.parent_uuid);
+  // Instructs Trace Processor not to merge track events and system events
+  // track for this thread.
+  // TODO(kraskevich): Figure out how to do this for the Perfetto SDK version.
+  track_descriptor->set_disallow_merging_with_system_tracks(true);
 
   ThreadDescriptor* thread = track_descriptor->set_thread();
   thread->set_pid(process_id_);
@@ -714,7 +720,7 @@ void TrackEventThreadLocalEventSink::EmitThreadTrackDescriptor(
         base::ThreadIdNameManager::GetInstance()->GetNameForCurrentThread();
   }
   if (maybe_new_name && *maybe_new_name &&
-      base::StringPiece(thread_name_) != maybe_new_name) {
+      std::string_view(thread_name_) != maybe_new_name) {
     thread_name_ = maybe_new_name;
     thread_type_ = GetThreadType(maybe_new_name);
   }

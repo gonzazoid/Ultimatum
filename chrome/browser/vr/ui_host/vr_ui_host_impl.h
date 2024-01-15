@@ -5,8 +5,8 @@
 #ifndef CHROME_BROWSER_VR_UI_HOST_VR_UI_HOST_IMPL_H_
 #define CHROME_BROWSER_VR_UI_HOST_VR_UI_HOST_IMPL_H_
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -93,14 +93,17 @@ class VRUiHostImpl : public content::VrUiHost,
 
   void ShowExternalNotificationPrompt();
   void RemoveHeadsetNotificationPrompt();
-  void SetLocationInfoOnUi();
 
   void InitCapturingStates();
   void PollCapturingState();
 
   mojo::Remote<device::mojom::XRCompositorHost> compositor_;
   std::unique_ptr<VRBrowserRendererThreadWin> ui_rendering_thread_;
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  base::WeakPtr<content::WebContents> web_contents_ = nullptr;
+  // Because the WebContents is a WeakPtr it could be nulled out when the
+  // WebContents is destroyed; but there may be other state that we need to
+  // cleanup, even if it is now-null.
+  bool have_webxr_web_contents_ = false;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
 
   base::CancelableOnceClosure external_prompt_timeout_task_;

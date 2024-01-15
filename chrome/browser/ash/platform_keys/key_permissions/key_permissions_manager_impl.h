@@ -11,15 +11,16 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/platform_keys/key_permissions/arc_key_permissions_manager_delegate.h"
 #include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_manager.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
@@ -69,10 +70,9 @@ class KeyPermissionsManagerImpl : public KeyPermissionsManager,
 
    private:
     void UpdateWithAllKeys(
-        std::vector<std::string> public_key_spki_der_list,
+        std::vector<std::vector<uint8_t>> public_key_spki_der_list,
         chromeos::platform_keys::Status keys_retrieval_status);
     void UpdateNextKey();
-    void OnUpdateFinished();
     void UpdatePermissionsForKey(std::vector<uint8_t> public_key_spki_der);
     void UpdatePermissionsForKeyWithCorporateFlag(
         std::vector<uint8_t> public_key_spki_der,
@@ -82,12 +82,10 @@ class KeyPermissionsManagerImpl : public KeyPermissionsManager,
         chromeos::platform_keys::Status permissions_update_status);
 
     const Mode mode_;
-    KeyPermissionsManagerImpl* const key_permissions_manager_;
+    const raw_ptr<KeyPermissionsManagerImpl> key_permissions_manager_;
     base::queue<std::vector<uint8_t>> public_key_spki_der_queue_;
     bool update_started_ = false;
     UpdateCallback callback_;
-    // The time when the Update() method was called.
-    base::TimeTicks update_start_time_;
 
     base::WeakPtrFactory<KeyPermissionsInChapsUpdater> weak_ptr_factory_{this};
   };
@@ -153,28 +151,17 @@ class KeyPermissionsManagerImpl : public KeyPermissionsManager,
   void OnArcUsageAllowanceForCorporateKeysChanged(bool allowed) override;
 
   void OnGotTokens(
-      std::unique_ptr<std::vector<chromeos::platform_keys::TokenId>> token_ids,
+      const std::vector<chromeos::platform_keys::TokenId> token_ids,
       chromeos::platform_keys::Status status);
 
   // Updates the permissions of the keys residing on |token_id| in chaps. If
   // this method is called while an update is already running, it will cancel
   // the running update and start a new one.
   void UpdateKeyPermissionsInChaps();
-  void OnKeyPermissionsInChapsUpdated(
-      chromeos::platform_keys::Status update_status);
 
   void StartOneTimeMigration();
   void OnOneTimeMigrationDone(chromeos::platform_keys::Status migration_status);
-
   bool IsOneTimeMigrationDone() const;
-
-  void MigrateFlagsWithAllKeys(
-      std::vector<std::string> public_key_spki_der_list,
-      chromeos::platform_keys::Status all_keys_retrieval_status);
-  void MigrateFlagsWithQueueOfKeys(base::queue<std::string> queue);
-  void OnFlagsMigratedForKey(
-      base::queue<std::string> queue,
-      chromeos::platform_keys::Status last_key_flags_migration_status);
 
   void AllowKeyForCorporateUsage(AllowKeyForUsageCallback callback,
                                  std::vector<uint8_t> public_key_spki_der);
@@ -187,7 +174,7 @@ class KeyPermissionsManagerImpl : public KeyPermissionsManager,
   void IsKeyAllowedForUsageWithPermissions(
       IsKeyAllowedForUsageCallback callback,
       KeyUsage usage,
-      const absl::optional<std::string>& serialized_key_permissions,
+      absl::optional<std::vector<uint8_t>> serialized_key_permissions,
       chromeos::platform_keys::Status key_attribute_retrieval_status);
 
   // Called when the token is ready and the one-time migration is done.
@@ -210,8 +197,8 @@ class KeyPermissionsManagerImpl : public KeyPermissionsManager,
       key_permissions_in_chaps_updater_;
   // The ARC usage manager delegate for |token_id_|.
   std::unique_ptr<ArcKpmDelegate> arc_usage_manager_delegate_;
-  PlatformKeysService* platform_keys_service_ = nullptr;
-  PrefService* pref_service_ = nullptr;
+  raw_ptr<PlatformKeysService> platform_keys_service_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_ = nullptr;
   base::ScopedObservation<ArcKpmDelegate, ArcKpmDelegate::Observer>
       arc_usage_manager_delegate_observation_{this};
   base::WeakPtrFactory<KeyPermissionsManagerImpl> weak_ptr_factory_{this};

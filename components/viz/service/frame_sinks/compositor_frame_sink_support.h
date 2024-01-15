@@ -9,13 +9,13 @@
 #include <set>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/containers/circular_deque.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "components/power_scheduler/power_mode_voter.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/frame_timing_details_map.h"
 #include "components/viz/common/quads/compositor_frame.h"
@@ -29,11 +29,13 @@
 #include "components/viz/service/frame_sinks/surface_resource_holder_client.h"
 #include "components/viz/service/frame_sinks/video_capture/capturable_frame_sink.h"
 #include "components/viz/service/hit_test/hit_test_aggregator.h"
+#include "components/viz/service/layers/layer_context_impl.h"
 #include "components/viz/service/surfaces/frame_index_constants.h"
 #include "components/viz/service/surfaces/surface_client.h"
 #include "components/viz/service/transitions/surface_animation_manager.h"
 #include "components/viz/service/viz_service_export.h"
 #include "services/viz/public/mojom/compositing/compositor_frame_sink.mojom.h"
+#include "services/viz/public/mojom/compositing/layer_context.mojom.h"
 #include "services/viz/public/mojom/hit_test/hit_test_region_list.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -41,6 +43,7 @@ namespace viz {
 
 class FrameSinkManagerImpl;
 class LatestLocalSurfaceIdLookupDelegate;
+class LayerContextImpl;
 class Surface;
 class SurfaceManager;
 
@@ -132,12 +135,20 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   base::TimeDelta GetPreferredFrameInterval(
       mojom::CompositorFrameSinkType* type) const;
   void InitializeCompositorFrameSinkType(mojom::CompositorFrameSinkType type);
+  void BindLayerContext(mojom::PendingLayerContext& context);
   void SetThreadIds(
       bool from_untrusted_client,
       base::flat_set<base::PlatformThreadId> unverified_thread_ids);
+
   // Throttles the BeginFrames to send at |interval| if |interval| is greater
   // than zero, or clears previously set throttle if zero.
-  void ThrottleBeginFrame(base::TimeDelta interval);
+  // If |simple_cadence_only| is true, then it will further check if the
+  // |interval| is a simple cadence and apply only if that is true. Returns true
+  // if we should throttle, otherwise false.
+  bool ThrottleBeginFrame(base::TimeDelta interval,
+                          bool simple_cadence_only = false);
+
+  void SetLastKnownVsync(base::TimeDelta vsync_interval);
 
   // SurfaceClient implementation.
   void OnSurfaceCommitted(Surface* surface) override;
@@ -172,6 +183,8 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // mojom::CompositorFrameSink helpers.
   void SetNeedsBeginFrame(bool needs_begin_frame);
   void SetWantsAnimateOnlyBeginFrames();
+  void SetWantsBeginFrameAcks();
+  void SetAutoNeedsBeginFrame();
   void DidNotProduceFrame(const BeginFrameAck& ack);
   void SubmitCompositorFrame(
       const LocalSurfaceId& local_surface_id,
@@ -186,6 +199,15 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // Mark |id| and all surfaces with smaller ids for destruction. Note that |id|
   // doesn't have to exist at the time of calling.
   void EvictSurface(const LocalSurfaceId& id);
+
+  void GarbageCollectSurfaces() { surface_manager_->GarbageCollectSurfaces(); }
+
+  // Submits a compositor frame not from the client but from viz itself. For
+  // example, this is used to submit empty compositor frames to unref
+  // resources on root surface eviction.
+  void SubmitCompositorFrameLocally(const SurfaceId& surface_id,
+                                    CompositorFrame frame,
+                                    const RendererSettings& settings);
 
   // Attempts to submit a new CompositorFrame to |local_surface_id| and returns
   // whether the frame was accepted or the reason why it was rejected. If
@@ -206,7 +228,8 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   const FrameSinkId& GetFrameSinkId() const override;
   void AttachCaptureClient(CapturableFrameSink::Client* client) override;
   void DetachCaptureClient(CapturableFrameSink::Client* client) override;
-  gfx::Rect GetCopyOutputRequestRegion(
+  absl::optional<CapturableFrameSink::RegionProperties>
+  GetRequestRegionProperties(
       const VideoCaptureSubTarget& sub_target) const override;
   void OnClientCaptureStarted() override;
   void OnClientCaptureStopped() override;
@@ -235,16 +258,26 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
 
   bool IsEvicted(const LocalSurfaceId& local_surface_id) const;
 
+  // Clears `copy_output_requests_`. Should be called when the client or service
+  // is shutting down. The requests demanding an exact `LocalSurfaceid` match
+  // will be transferred to the corresponding `Surface`s
+  void ClearAllPendingCopyOutputRequests();
+
   SurfaceAnimationManager* GetSurfaceAnimationManagerForTesting();
 
   const RegionCaptureBounds& current_capture_bounds() const {
     return current_capture_bounds_;
   }
 
+  mojom::CompositorFrameSinkType frame_sink_type() const {
+    return frame_sink_type_;
+  }
+
  private:
   friend class CompositorFrameSinkSupportTest;
   friend class DisplayTest;
   friend class FrameSinkManagerTest;
+  friend class OnBeginFrameAcksCompositorFrameSinkSupportTest;
   friend class SurfaceAggregatorWithResourcesTest;
 
   // Creates a surface reference from the top-level root to |surface_id|.
@@ -288,17 +321,29 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
 
   void MaybeEvictSurfaces();
   void EvictLastActiveSurface();
-  bool ShouldSendBeginFrame(base::TimeTicks timestamp);
+  bool ShouldSendBeginFrame(base::TimeTicks timestamp,
+                            base::TimeDelta vsync_interval);
 
   // Checks if any of the pending surfaces should activate now because their
   // deadline has passed. This is called every BeginFrame.
   void CheckPendingSurfaces();
 
+  // When features::kOnBeginFrameAcks is enabled and `wants_begin_frame_acks_`
+  // was requested by a client, we want to throttle sending
+  // DidReceiveCompositorFrameAck and ReclaimResources. Instead merging them
+  // into OnBeginFrame.
+  bool ShouldMergeBeginFrameWithAcks() const;
+
+  // Returns true if the begin frame arguments should be adjusted with
+  // any existing throttling.
+  bool ShouldAdjustBeginFrameArgs() const;
+
   // When throttling is requested by a client, a BeginFrame will not be sent
   // until the time elapsed has passed the requested throttle interval since the
   // last sent BeginFrame. This function returns true if such interval has
   // passed and a BeginFrame should be sent.
-  bool ShouldThrottleBeginFrameAsRequested(base::TimeTicks frame_time);
+  bool ShouldThrottleBeginFrameAsRequested(base::TimeTicks frame_time,
+                                           base::TimeDelta vsync_interval);
 
   // Instructs the FrameSinkManager to destroy our CompositorFrameSinkImpl.
   // To avoid reentrancy issues, this should be called from its own task.
@@ -306,6 +351,10 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
 
   // Posts a task to invoke DestroySelf() ASAP.
   void ScheduleSelfDestruction();
+
+  void UpdateThreadIdsPostVerification(
+      base::flat_set<base::PlatformThreadId> thread_ids,
+      bool passed_verification);
 
   const raw_ptr<mojom::CompositorFrameSinkClient> client_;
 
@@ -326,9 +375,32 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // This has a HitTestAggregator if and only if |is_root_| is true.
   std::unique_ptr<HitTestAggregator> hit_test_aggregator_;
 
-  // Counts the number of CompositorFrames that have been submitted and have not
-  // yet received an ACK.
-  int ack_pending_count_ = 0;
+  struct FrameData {
+    // True if this frame was submitted from viz itself. This happens during
+    // root surface eviction when an empty compositor frame is submitted to
+    // deref existing resources.
+    bool local_frame;
+  };
+
+  // Keeps track of CompositorFrames that have been submitted and have not
+  // yet received an ACK from their Surface.
+  base::circular_deque<FrameData> pending_frames_;
+
+  // Counts the number of ACKs that have been received from a Surface and have
+  // not yet been sent to the CompositorFrameSinkClient.
+  int ack_queued_for_client_count_ = 0;
+  bool ack_pending_during_on_begin_frame_ = false;
+
+  // When `true` we have received frames from a client using its own
+  // BeginFrameSource. While dealing with frames from multiple sources we cannot
+  // rely on checking the number of pending frames in `pending_frames_` to
+  // throttle frame production.
+  //
+  // TODO(crbug.com/1396081): Track acks, presentation feedback, and resources
+  // being returned, on a per BeginFrameSource basis. For
+  // BeginFrameArgs::kManualSourceId the feedback and resources should not be
+  // tied to the current `begin_frame_source_`;
+  bool pending_manual_begin_frame_source_ = false;
   std::vector<ReturnedResource> surface_returned_resources_;
 
   // The begin frame source being observered. Null if none.
@@ -340,6 +412,8 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // Whether a request for begin frames has been issued.
   bool client_needs_begin_frame_ = false;
 
+  bool handling_auto_needs_begin_frame_ = false;
+
   // Whether the sink currently needs begin frames for any reason.
   bool needs_begin_frame_ = false;
 
@@ -347,6 +421,8 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   bool added_frame_observer_ = false;
 
   bool wants_animate_only_begin_frames_ = false;
+  bool wants_begin_frame_acks_ = false;
+  bool auto_needs_begin_frame_ = false;
 
   // Indicates the FrameSinkBundle to which this sink belongs, if any.
   absl::optional<FrameSinkBundleId> bundle_id_;
@@ -367,7 +443,8 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // The video capture clients hooking into this instance to observe frame
   // begins and damage, and then make CopyOutputRequests on the appropriate
   // frames.
-  std::vector<CapturableFrameSink::Client*> capture_clients_;
+  std::vector<raw_ptr<CapturableFrameSink::Client, VectorExperimental>>
+      capture_clients_;
 
   // The set of SharedBitmapIds that have been reported as allocated to this
   // interface. On closing this interface, the display compositor should drop
@@ -413,10 +490,17 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   // If zero, no throttling would be applied.
   base::TimeDelta begin_frame_interval_;
 
+  base::TimeDelta last_known_vsync_interval_;
+
   // The set of surfaces owned by this frame sink that have pending frame.
   base::flat_set<Surface*> pending_surfaces_;
 
   base::TimeDelta preferred_frame_interval_ = BeginFrameArgs::MinInterval();
+
+  // This is the last known frame interval for this sink used to decide
+  // when to throttle begin frames.
+  base::TimeDelta last_known_frame_interval_ = BeginFrameArgs::MinInterval();
+
   mojom::CompositorFrameSinkType frame_sink_type_ =
       mojom::CompositorFrameSinkType::kUnspecified;
 
@@ -426,8 +510,6 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
   std::unique_ptr<SurfaceAnimationManager> surface_animation_manager_;
   // The sequence ID for the save directive pending copy.
   uint32_t in_flight_save_sequence_id_ = 0;
-
-  std::unique_ptr<power_scheduler::PowerModeVoter> power_mode_voter_;
 
   base::flat_set<base::PlatformThreadId> thread_ids_;
 
@@ -439,6 +521,10 @@ class VIZ_SERVICE_EXPORT CompositorFrameSinkSupport
 
   // Region capture bounds associated with the last surface that was aggregated.
   RegionCaptureBounds current_capture_bounds_;
+
+  // In LayerContext mode only, this is the Viz LayerContext implementation
+  // which owns the backend layer tree for this frame sink.
+  std::unique_ptr<LayerContextImpl> layer_context_impl_;
 
   base::WeakPtrFactory<CompositorFrameSinkSupport> weak_factory_{this};
 };

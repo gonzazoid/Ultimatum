@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 /**
  * Specifies page visibility based on incognito status and Chrome OS guest mode.
@@ -10,12 +10,14 @@ import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 export interface PageVisibility {
   a11y?: boolean;
   advancedSettings?: boolean;
+  ai?: boolean;
   appearance?: boolean|AppearancePageVisibility;
   autofill?: boolean;
   defaultBrowser?: boolean;
   downloads?: boolean;
   extensions?: boolean;
   hashnet?: boolean;
+  getMostChrome?: boolean;
   languages?: boolean;
   onStartup?: boolean;
   people?: boolean;
@@ -23,12 +25,14 @@ export interface PageVisibility {
   privacy?: boolean|PrivacyPageVisibility;
   reset?: boolean;
   safetyCheck?: boolean;
+  safetyHub?: boolean;
   system?: boolean;
 }
 
 export interface AppearancePageVisibility {
   bookmarksBar: boolean;
   homeButton: boolean;
+  hoverCardImages: boolean;
   pageZoom: boolean;
   setTheme: boolean;
   sidePanel: boolean;
@@ -51,11 +55,13 @@ if (loadTimeData.getBoolean('isGuest')) {
   pageVisibility = {
     a11y: false,
     advancedSettings: false,
+    ai: false,
     appearance: false,
     autofill: false,
     defaultBrowser: false,
     downloads: false,
     extensions: false,
+    getMostChrome: false,
     languages: false,
     onStartup: false,
     people: false,
@@ -63,19 +69,23 @@ if (loadTimeData.getBoolean('isGuest')) {
     privacy: false,
     reset: false,
     safetyCheck: false,
+    safetyHub: false,
     system: false,
   };
   // </if>
   // <if expr="is_chromeos">
   pageVisibility = {
+    ai: false,
     autofill: false,
     people: false,
     onStartup: false,
     reset: false,
     safetyCheck: false,
+    safetyHub: false,
     appearance: {
       setTheme: false,
       homeButton: false,
+      hoverCardImages: false,
       bookmarksBar: false,
       pageZoom: false,
       sidePanel: false,
@@ -88,6 +98,7 @@ if (loadTimeData.getBoolean('isGuest')) {
     downloads: true,
     a11y: true,
     extensions: false,
+    getMostChrome: false,
     languages: true,
     performance: false,
   };

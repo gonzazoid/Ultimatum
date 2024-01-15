@@ -1,50 +1,69 @@
     <style include="cr-shared-style md-select">
-      cr-dialog::part(wrapper) {
-        /* Subtract the internal padding in <cr-dialog>. */
-        padding: calc(24px - 20px);
+      cr-dialog::part(dialog) {
+        background-color: var(--cros-sys-dialog_container);
       }
 
-      [slot='button-container']  {
-        padding-bottom: 20px;
-        padding-top: 32px;
+      [slot=title] {
+        --cr-dialog-title-slot-padding-bottom: 32px;
+        --cr-dialog-title-slot-padding-end: 32px;
+        --cr-dialog-title-slot-padding-start: 32px;
+        --cr-dialog-title-slot-padding-top: 32px;
+        --cr-primary-text-color: var(--cros-sys-on_surface);
+        font: var(--cros-display-7-font);
+      }
+
+      [slot='button-container'] {
+        --cr-dialog-button-container-padding-bottom: 28px;
+        --cr-dialog-button-container-padding-horizontal: 32px;
+        padding-top: 0;
       }
 
       #dialog [slot=body] {
-        height: 390px;
+        --cr-dialog-body-padding-horizontal: 32px;
+        --cr-form-field-bottom-spacing: 8px;
       }
 
       .md-select {
-        --md-select-bg-color: var(--cros-textfield-background-color);
-        --md-select-focus-shadow-color: var(--cros-focus-ring-color);
-        --md-select-text-color: var(--cros-text-color-primary);
+        --md-select-bg-color: var(--cros-sys-input_field_on_base);
+        --md-select-focus-shadow-color: var(--cros-sys-focus_ring);
+        --md-select-text-color: var(--cros-sys-on_surface);
+        --md-select-side-padding: 16px;
+        border-radius: 8px;
+        height: 36px;
         width: 100%;
       }
 
       cr-searchable-drop-down {
-        --cr-searchable-drop-down-bg-color: var(--cros-bg-color-elevation-2);
+        --cr-searchable-drop-down-bg-color: var(--cros-sys-base_elevated);
         --cr-searchable-drop-down-icon-color-focus:
-          var(--cros-textfield-label-color);
-        --cr-searchable-drop-down-list-item-color: var(--cros-text-color-primary);
+            var(--cros-sys-on_surface);
+        --cr-searchable-drop-down-list-item-color: var(--cros-sys-on_surface);
         --cr-searchable-drop-down-list-bg-color-selected:
-          var(--cros-ripple-color);
+            var(--cros-sys-hover_on_subtle);
         --cr-searchable-drop-down-list-bg-color-active:
-          var(--cros-ripple-color);
+            var(--cros-sys-hover_on_subtle);
         --cr-searchable-drop-down-shadow: var(--cros-elevation-2-shadow);
-        --cr-searchable-drop-down-spinner-color: var(--cros-icon-color-prominent);
-        /* cr_searchable_drop_down will hard code its width without this variable */
-        --cr-searchable-drop-down-width: auto;
-        --cr-secondary-text-color: var(--cros-text-color-secondary);
-        --iron-icon-fill-color: var(--cros-textfield-label-color);
+        --cr-searchable-drop-down-spinner-color: var(--cros-sys-primary);
+        /* dialog width (512px) - padding left (32px) - padding right (32px) */
+        --cr-searchable-drop-down-width: calc(512px - 2 * 32px);
+        --cr-secondary-text-color: var(--cros-sys-on_surface);
+        --iron-icon-fill-color: var(--cros-sys-secondary);
         display: block;
       }
 
       cr-input,
       cr-searchable-drop-down::part(input) {
-        --cr-form-field-label-color: var(--cros-textfield-label-color);
-        --cr-input-background-color: var(--cros-textfield-background-color);
-        --cr-input-color: var(--cros-textfield-input-color);
-        --cr-input-error-color: var(--cros-textfield-label-color-error);
-        --cr-input-focus-color: var(--cros-textfield-label-color-focus);
+        --cr-form-field-label-color: var(--cros-sys-on_surface);
+        --cr-input-background-color: var(--cros-sys-input_field_on_base);
+        --cr-input-border-radius: 8px;
+        --cr-input-color: var(--cros-sys-on_surface);
+        --cr-input-error-color: var(--cros-sys-error);
+        --cr-input-focus-color: var(--cros-sys-primary);
+        --cr-input-min-height: 36px;
+        --cr-input-padding-end: 16px;
+        --cr-input-padding-start: 16px;
+        --cr-input-placeholder-color: var(--cros-sys-secondary);
+        font: var(--cros-body-2-font);
       }
 
       .md-select,
@@ -54,54 +73,67 @@
       }
 
       #saveCredentialsCheckbox {
-        --cr-checkbox-checked-box-color: var(--cros-icon-color-prominent);
-        --cr-checkbox-label-color: var(--cros-textfield-label-color);
-        --cr-checkbox-mark-color: var(--cros-bg-color);
-        --cr-checkbox-ripple-checked-color: var(--cros-focus-aura-color);
+        --cr-checkbox-checked-box-color: var(--cros-sys-primary);
+        --cr-checkbox-label-color: var(--cros-sys-on_surface);
+        --cr-checkbox-mark-color: var(--cros-sys-on_primary);
+        --cr-checkbox-ripple-checked-color: var(--cros-sys-ripple_primary);
         --cr-checkbox-ripple-opacity: 1;
-        --cr-checkbox-ripple-unchecked-color: var(--cros-ripple-color);
-        --cr-checkbox-unchecked-box-color: var(--cros-icon-color-primary);
+        --cr-checkbox-ripple-unchecked-color: var(--cros-sys-ripple_primary);
+        --cr-checkbox-unchecked-box-color: var(--cros-sys-on_surface);
       }
 
-      :host-context(.focus-outline-visible) #saveCredentialsCheckbox:focus-within {
-        --cr-checkbox-ripple-ring: 2px solid var(--cros-focus-ring-color);
+      :host-context(.focus-outline-visible)
+          #saveCredentialsCheckbox:focus-within {
+        --cr-checkbox-ripple-ring: 2px solid var(--cros-sys-focus_ring);
+      }
+
+      #saveCredentialsCheckboxJelly {
+        --cros-checkbox-reserve-inline-start: 0px;
       }
 
       cr-button {
         --active-bg: transparent;
-        --active-shadow:
-          0 1px 2px var(--cros-button-active-shadow-color-key-secondary),
-          0 1px 3px var(--cros-button-active-shadow-color-ambient-secondary);
-        --active-shadow-action:
-          0 1px 2px var(--cros-button-active-shadow-color-key-primary),
-          0 1px 3px var(--cros-button-active-shadow-color-ambient-primary);
-        --bg-action: var(--cros-button-background-color-primary);
-        --border-color: var(--cros-button-stroke-color-secondary);
+        --active-shadow: none;
+        --active-shadow-action: none;
+        --bg-action: var(--cros-sys-primary);
+        --cr-button-height: 36px;
         --disabled-bg-action:
-          var(--cros-button-background-color-primary-disabled);
-        --disabled-bg: var(--cros-button-background-color-primary-disabled);
-        --disabled-border-color:
-          var(--cros-button-stroke-color-secondary-disabled);
-        --disabled-text-color: var(--cros-button-label-color-secondary-disabled);
-        --hover-bg-action: var(--cros-button-background-color-primary-hover-preblended);
-        --hover-bg-color: var(--cros-button-background-color-secondary-hover);
-        --hover-border-color: var(--cros-button-stroke-color-secondary-hover);
-        --ink-color: var(--cros-button-ripple-color-secondary);
-        --ripple-opacity-action: var(--cros-button-primary-ripple-opacity);
-        --ripple-opacity: var(--cros-button-secondary-ripple-opacity);
-        --text-color-action: var(--cros-button-label-color-primary);
-        --text-color: var(--cros-button-label-color-secondary);
+            var(--cros-sys-disabled_container);
+        --disabled-bg: var(--cros-sys-disabled_container);;
+        --disabled-text-color: var(--cros-sys-disabled);
+        /* Use the default bg color as hover color because we
+           rely on hoverBackground layer below.  */
+        --hover-bg-action: var(--cros-sys-primary);
+        --hover-bg-color: var(--cros-sys-primary_container);
+        --ink-color: var(--cros-sys-ripple_primary);
+        --ripple-opacity-action: 1;
+        --ripple-opacity: 1;
+        --text-color-action: var(--cros-sys-on_primary);
+        --text-color: var(--cros-sys-on_primary_container);
+        border: none;
+        border-radius: 18px;
+        font: var(--cros-button-2-font);
         position: relative;
       }
 
-      cr-button.action-button {
-        --ink-color: var(--cros-button-ripple-color-primary);
+      cr-button.cancel-button {
+        background-color: var(--cros-sys-primary_container);
+      }
+
+      cr-button.cancel-button:hover::part(hoverBackground) {
+        background-color: var(--cros-sys-hover_on_subtle);
+        display: block;
+      }
+
+      cr-button.action-button:hover::part(hoverBackground) {
+        background-color: var(--cros-sys-hover_on_prominent);
+        display: block;
       }
 
       :host-context(.focus-outline-visible) cr-button:focus {
         /* disable the focus shadow because we use outline below */
         box-shadow: none;
-        outline: 2px solid var(--cros-focus-ring-color);
+        outline: 2px solid var(--cros-sys-focus_ring);
         outline-offset: 2px;
       }
 
@@ -119,11 +151,11 @@
       }
 
       #general-error-icon {
-       --iron-icon-fill-color: var(--cros-icon-color-alert);
+        --iron-icon-fill-color: var(--cros-sys-error);
       }
 
       #general-error-message {
-        color: var(--cros-text-color-alert);
+        color: var(--cros-sys-error);
         display: inline-block;
         font-size: 10px;
       }
@@ -131,7 +163,7 @@
 
     <cr-dialog id="dialog" exportparts="dialog">
       <div slot="title" part="title">[[i18n('addSmbShare')]]</div>
-      <div slot="body" spellcheck="false">
+      <div slot="body" part="body" spellcheck="false">
         <div id="general-error-container">
           <div hidden="[[!shouldShowGeneralError_(currentMountError_)]]">
             <iron-icon id="general-error-icon" icon="cr:warning"></iron-icon>
@@ -175,9 +207,18 @@
               label="[[i18n('smbSharePassword')]]" value="{{password_}}"
               invalid="[[shouldShowCredentialError_(currentMountError_)]]">
           </cr-input>
-          <cr-checkbox id="saveCredentialsCheckbox" checked>
-            [[i18n('smbShareSaveCredentials')]]
-          </cr-checkbox>
+          <template is="dom-if" if="[[isCrosComponentsEnabled_()]]">
+            <label>
+              <cros-checkbox id="saveCredentialsCheckboxJelly" checked>
+              </cros-checkbox>
+              [[i18n('smbShareSaveCredentials')]]
+            </label>
+          </template>
+          <template is="dom-if" if="[[!isCrosComponentsEnabled_()]]">
+            <cr-checkbox id="saveCredentialsCheckbox" checked>
+              [[i18n('smbShareSaveCredentials')]]
+            </cr-checkbox>
+          </template>
         </div>
       </div>
       <div slot="button-container">

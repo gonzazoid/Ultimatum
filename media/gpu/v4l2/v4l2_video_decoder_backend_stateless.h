@@ -8,10 +8,13 @@
 #include "base/containers/lru_cache.h"
 #include "base/containers/queue.h"
 #include "base/containers/small_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
+#include "base/types/id_type.h"
+#include "media/base/cdm_context.h"
 #include "media/base/decoder_status.h"
 #include "media/base/video_decoder.h"
 #include "media/gpu/chromeos/dmabuf_video_frame_pool.h"
@@ -36,7 +39,8 @@ class V4L2StatelessVideoDecoderBackend : public V4L2VideoDecoderBackend,
       scoped_refptr<V4L2Device> device,
       VideoCodecProfile profile,
       const VideoColorSpace& color_space,
-      scoped_refptr<base::SequencedTaskRunner> task_runner);
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
+      CdmContext* cdm_context);
 
   V4L2StatelessVideoDecoderBackend(const V4L2StatelessVideoDecoderBackend&) =
       delete;
@@ -48,20 +52,20 @@ class V4L2StatelessVideoDecoderBackend : public V4L2VideoDecoderBackend,
   // V4L2VideoDecoderBackend implementation
   bool Initialize() override;
   void EnqueueDecodeTask(scoped_refptr<DecoderBuffer> buffer,
-                         VideoDecoder::DecodeCB decode_cb,
-                         int32_t bitstream_id) override;
+                         VideoDecoder::DecodeCB decode_cb) override;
   void OnOutputBufferDequeued(V4L2ReadableBufferRef buffer) override;
   void OnStreamStopped(bool stop_input_queue) override;
   bool ApplyResolution(const gfx::Size& pic_size,
-                       const gfx::Rect& visible_rect,
-                       const size_t num_output_frames) override;
+                       const gfx::Rect& visible_rect) override;
   void OnChangeResolutionDone(CroStatus status) override;
   void ClearPendingRequests(DecoderStatus status) override;
   bool StopInputQueueOnResChange() const override;
-  size_t GetNumOUTPUTQueueBuffers() const override;
+  size_t GetNumOUTPUTQueueBuffers(bool secure_mode) const override;
 
   // V4L2DecodeSurfaceHandler implementation.
   scoped_refptr<V4L2DecodeSurface> CreateSurface() override;
+  scoped_refptr<V4L2DecodeSurface> CreateSecureSurface(
+      uint64_t secure_handle) override;
   bool SubmitSlice(V4L2DecodeSurface* dec_surface,
                    const uint8_t* data,
                    size_t size) override;
@@ -70,6 +74,7 @@ class V4L2StatelessVideoDecoderBackend : public V4L2VideoDecoderBackend,
                     int32_t bitstream_id,
                     const gfx::Rect& visible_rect,
                     const VideoColorSpace& color_space) override;
+  void ResumeDecoding() override;
 
  private:
   // Request for displaying the surface or calling the decode callback.
@@ -105,10 +110,6 @@ class V4L2StatelessVideoDecoderBackend : public V4L2VideoDecoderBackend,
     kNone,
     // Cannot create a new V4L2 surface. Waiting for surfaces to be released.
     kRanOutOfSurfaces,
-    // A VP9 superframe contains multiple subframes. Before decoding the next
-    // subframe, we need to wait for previous subframes decoded and update the
-    // context.
-    kWaitSubFrameDecoded,
   };
 
   // Callback which is called when the output buffer is not used anymore.
@@ -183,13 +184,22 @@ class V4L2StatelessVideoDecoderBackend : public V4L2VideoDecoderBackend,
   std::vector<VideoCodecProfile> supported_profiles_;
 
   // Reference to request queue to get free requests.
-  V4L2RequestsQueue* requests_queue_;
+  raw_ptr<V4L2RequestsQueue> requests_queue_;
 
   // Map of enqueuing timestamps to wall clock, for histogramming purposes.
   base::small_map<std::map<int64_t, base::TimeTicks>> enqueuing_timestamps_;
   // Same but with ScopedDecodeTrace for chrome:tracing purposes.
   base::small_map<std::map<base::TimeDelta, std::unique_ptr<ScopedDecodeTrace>>>
       buffer_tracers_ GUARDED_BY_CONTEXT(sequence_checker_);
+
+  // Int32 safe ID generator, starting at 0. Generated IDs are used to uniquely
+  // identify a Decode() request for stateless backends. BitstreamID is just
+  // a "phantom type" (see StrongAlias), essentially just a name.
+  struct BitstreamID {};
+  base::IdType32<BitstreamID>::Generator bitstream_id_generator_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+
+  raw_ptr<CdmContext> cdm_context_;
 
   base::WeakPtr<V4L2StatelessVideoDecoderBackend> weak_this_;
   base::WeakPtrFactory<V4L2StatelessVideoDecoderBackend> weak_this_factory_{

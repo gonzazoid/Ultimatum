@@ -14,16 +14,153 @@ var ADDRESS_LEVEL2 = 'Address level 2';
 var ADDRESS_LEVEL3 = 'Address level 3';
 var POSTAL_CODE = 'Postal code';
 var SORTING_CODE = 'Sorting code';
-var COUNTRY_CODE = 'US';
+var COUNTRY_CODE = 'DE';
 var PHONE = '1 123-123-1234';
 var EMAIL = 'johndoe@gmail.com';
 var CARD_NAME = 'CardName';
+var GUID = '1234-5678-90'
+var MASKED_NUMBER = '1111';
 var NUMBER = '4111 1111 1111 1111';
 var EXP_MONTH = '02';
 var EXP_YEAR = '2999';
+var CVC = '987';
+var MASKED_CVC = '•••';
+var NICKNAME = 'nickname';
+var IBAN_VALUE = 'AD1400080001001234567890';
+var INVALID_IBAN_VALUE = 'AD14000800010012345678900';
 
 var failOnceCalled = function() {
   chrome.test.fail();
+};
+
+function addNewIban(nickname) {
+  function filterIbanProperties(ibans) {
+    return ibans.map(iban => {
+      var filteredIban = {};
+      ['value', 'nickname'].forEach(property => {
+        filteredIban[property] = iban[property];
+      });
+      return filteredIban;
+    });
+  }
+
+  chrome.autofillPrivate.getIbanList(chrome.test.callbackPass(function(
+      ibanList) {
+    chrome.test.assertEq([], ibanList);
+
+    // Set up the callback that verifies that the IBAN was correctly added.
+    chrome.test.listenOnce(
+        chrome.autofillPrivate.onPersonalDataChanged,
+        chrome.test.callbackPass(function(addressList, cardList, ibanList) {
+          chrome.test.assertEq(
+              [{value: IBAN_VALUE, nickname: nickname}],
+              filterIbanProperties(ibanList));
+        }));
+
+    chrome.autofillPrivate.saveIban({
+      value: IBAN_VALUE,
+      nickname: nickname
+    });
+  }));
+};
+
+function updateExistingIban(updatedNickname) {
+  var UPDATED_IBAN_VALUE = 'AL35202111090000000001234567';
+
+  function filterIbanProperties(ibans) {
+    return ibans.map(iban => {
+      var filteredIban = {};
+      ['guid', 'value', 'nickname'].forEach(property => {
+        filteredIban[property] = iban[property];
+      });
+      return filteredIban;
+    });
+  }
+
+  chrome.autofillPrivate.getIbanList(chrome.test.callbackPass(function(
+      ibanList) {
+    // The IBAN from the addNewIban function should still be there.
+    chrome.test.assertEq(1, ibanList.length);
+    var ibanGuid = ibanList[0].guid;
+
+    // Set up the callback that verifies that the IBAN was correctly
+    // updated.
+    chrome.test.listenOnce(
+        chrome.autofillPrivate.onPersonalDataChanged,
+        chrome.test.callbackPass(function(addressList, cardList, ibanList) {
+          chrome.test.assertEq(
+              [{
+                guid: ibanGuid,
+                value: UPDATED_IBAN_VALUE,
+                nickname: updatedNickname
+              }],
+              filterIbanProperties(ibanList));
+        }));
+
+    // Update the IBAN by saving an IBAN with the same guid and using some
+    // different information.
+    chrome.autofillPrivate.saveIban({
+      guid: ibanGuid,
+      value: UPDATED_IBAN_VALUE,
+      nickname: updatedNickname
+    });
+  }));
+};
+
+function updateCreditCardForCvc(updatedCvcValue) {
+  // Reset onPersonalDataChanged.
+  chrome.autofillPrivate.onPersonalDataChanged.removeListener(failOnceCalled);
+
+  var UPDATED_CARD_NAME = 'UpdatedCardName';
+  var UPDATED_EXP_YEAR = '2888';
+  var UPDATED_NICKNAME = 'New nickname';
+
+  function filterCardProperties(cards) {
+    return cards.map(cards => {
+      var filteredCards = {};
+      ['guid', 'name', 'cardNumber', 'expirationMonth', 'expirationYear',
+       'nickname', 'cvc']
+          .forEach(property => {
+            filteredCards[property] = cards[property];
+          });
+      return filteredCards;
+    });
+  }
+
+  chrome.autofillPrivate.getCreditCardList(
+      chrome.test.callbackPass(function(cardList) {
+        // The card from the addNewCreditCard function should still be there.
+        chrome.test.assertEq(1, cardList.length);
+        var cardGuid = cardList[0].guid;
+
+        // Set up the callback that verifies that the card was correctly
+        // updated.
+        chrome.test.listenOnce(
+            chrome.autofillPrivate.onPersonalDataChanged,
+            chrome.test.callbackPass(function(addressList, cardList) {
+              chrome.test.assertEq(
+                  [{
+                    guid: cardGuid,
+                    name: UPDATED_CARD_NAME,
+                    cardNumber: MASKED_NUMBER,
+                    expirationMonth: EXP_MONTH,
+                    expirationYear: UPDATED_EXP_YEAR,
+                    nickname: UPDATED_NICKNAME,
+                    cvc: updatedCvcValue ? MASKED_CVC : undefined,
+                  }],
+                  filterCardProperties(cardList));
+            }));
+
+        // Update the card by saving a card with the same guid and using some
+        // different information.
+        chrome.autofillPrivate.saveCreditCard({
+          guid: cardGuid,
+          name: UPDATED_CARD_NAME,
+          expirationYear: UPDATED_EXP_YEAR,
+          nickname: UPDATED_NICKNAME,
+          cvc: updatedCvcValue
+        });
+      }));
 };
 
 var availableTests = [
@@ -65,7 +202,7 @@ var availableTests = [
   },
 
   function getAddressComponents() {
-    var COUNTRY_CODE = 'US';
+    var COUNTRY_CODE = 'DE';
 
     var handler = function(components) {
       chrome.test.assertTrue(!!components.components);
@@ -82,16 +219,14 @@ var availableTests = [
   },
 
   function addNewAddress() {
-    function filterAddressProperties(addresses) {
-      return addresses.map(address => {
-        var filteredAddress = {};
-        ['fullNames', 'addressLevel1', 'addressLevel2', 'addressLevel3',
-         'postalCode', 'sortingCode', 'phoneNumbers', 'emailAddresses']
-            .forEach(property => {
-              filteredAddress[property] = address[property];
-            });
-        return filteredAddress;
+    function filterAddressProperties(address) {
+      const fieldMap = {};
+      address.fields.forEach(entry => {
+        if (!!entry.value) {
+          fieldMap[entry.type] = entry.value;
+        }
       });
+      return fieldMap;
     }
 
     chrome.autofillPrivate.getAddressList(
@@ -103,30 +238,68 @@ var availableTests = [
           chrome.test.listenOnce(
               chrome.autofillPrivate.onPersonalDataChanged,
               chrome.test.callbackPass(function(addressList, cardList) {
-                chrome.test.assertEq(
-                    [{
-                      fullNames: [NAME],
-                      addressLevel1: ADDRESS_LEVEL1,
-                      addressLevel2: ADDRESS_LEVEL2,
-                      addressLevel3: ADDRESS_LEVEL3,
-                      postalCode: POSTAL_CODE,
-                      sortingCode: SORTING_CODE,
-                      phoneNumbers: [PHONE],
-                      emailAddresses: [EMAIL]
-                    }],
-                    filterAddressProperties(addressList));
+                chrome.test.assertEq(1, addressList.length);
+                const expectedAddress = {
+                  NAME_FULL: NAME,
+                  ADDRESS_HOME_STATE: ADDRESS_LEVEL1,
+                  ADDRESS_HOME_CITY: ADDRESS_LEVEL2,
+                  ADDRESS_HOME_DEPENDENT_LOCALITY: ADDRESS_LEVEL3,
+                  ADDRESS_HOME_ZIP: POSTAL_CODE,
+                  ADDRESS_HOME_SORTING_CODE: SORTING_CODE,
+                  ADDRESS_HOME_COUNTRY: COUNTRY_CODE,
+                  PHONE_HOME_WHOLE_NUMBER: PHONE,
+                  EMAIL_ADDRESS: EMAIL,
+                };
+                const actualAddress = filterAddressProperties(addressList[0]);
+                Object.keys(expectedAddress).forEach(key => {
+                  chrome.test.assertEq(
+                      expectedAddress[key], actualAddress[key]);
+                })
               }));
 
           chrome.autofillPrivate.saveAddress({
-            fullNames: [NAME],
-            addressLevel1: ADDRESS_LEVEL1,
-            addressLevel2: ADDRESS_LEVEL2,
-            addressLevel3: ADDRESS_LEVEL3,
-            postalCode: POSTAL_CODE,
-            sortingCode: SORTING_CODE,
-            countryCode: COUNTRY_CODE,
-            phoneNumbers: [PHONE],
-            emailAddresses: [EMAIL]
+            fields: [
+              {
+                type: chrome.autofillPrivate.FieldType.NAME_FULL,
+                value: NAME
+              },
+              {
+                type: chrome.autofillPrivate.FieldType.ADDRESS_HOME_STATE,
+                value: ADDRESS_LEVEL1
+              },
+              {
+                type: chrome.autofillPrivate.FieldType.ADDRESS_HOME_CITY,
+                value: ADDRESS_LEVEL2
+              },
+              {
+                type: chrome.autofillPrivate.FieldType
+                          .ADDRESS_HOME_DEPENDENT_LOCALITY,
+                value: ADDRESS_LEVEL3
+              },
+              {
+                type: chrome.autofillPrivate.FieldType.ADDRESS_HOME_ZIP,
+                value: POSTAL_CODE
+              },
+              {
+                type: chrome.autofillPrivate.FieldType
+                          .ADDRESS_HOME_SORTING_CODE,
+                value: SORTING_CODE
+              },
+              {
+                type:
+                    chrome.autofillPrivate.FieldType.ADDRESS_HOME_COUNTRY,
+                value: COUNTRY_CODE
+              },
+              {
+                type: chrome.autofillPrivate.FieldType
+                          .PHONE_HOME_WHOLE_NUMBER,
+                value: PHONE
+              },
+              {
+                type: chrome.autofillPrivate.FieldType.EMAIL_ADDRESS,
+                value: EMAIL
+              },
+            ],
           });
         }));
   },
@@ -137,16 +310,14 @@ var availableTests = [
     var UPDATED_NAME = 'UpdatedName';
     var UPDATED_PHONE = '1 987-987-9876'
 
-    function filterAddressProperties(addresses) {
-      return addresses.map(address => {
-        var filteredAddress = {};
-        ['guid', 'fullNames', 'addressLevel1', 'addressLevel2', 'addressLevel3',
-         'postalCode', 'sortingCode', 'phoneNumbers', 'emailAddresses']
-            .forEach(property => {
-              filteredAddress[property] = address[property];
-            });
-        return filteredAddress;
+    function filterAddressProperties(address) {
+      const filteredAddress = {guid: address.guid};
+      address.fields.map(entry => {
+        if (!!entry.value) {
+          filteredAddress[entry.type] = entry.value
+        }
       });
+      return filteredAddress;
     }
 
     chrome.autofillPrivate.getAddressList(
@@ -160,27 +331,41 @@ var availableTests = [
           chrome.test.listenOnce(
               chrome.autofillPrivate.onPersonalDataChanged,
               chrome.test.callbackPass(function(addressList, cardList) {
-                chrome.test.assertEq(
-                    [{
-                      guid: addressGuid,
-                      fullNames: [UPDATED_NAME],
-                      addressLevel1: ADDRESS_LEVEL1,
-                      addressLevel2: ADDRESS_LEVEL2,
-                      addressLevel3: ADDRESS_LEVEL3,
-                      postalCode: POSTAL_CODE,
-                      sortingCode: SORTING_CODE,
-                      phoneNumbers: [UPDATED_PHONE],
-                      emailAddresses: [EMAIL]
-                    }],
-                    filterAddressProperties(addressList));
+                chrome.test.assertEq(1, addressList.length);
+                const expectedAddress = {
+                  guid: addressGuid,
+                  NAME_FULL: UPDATED_NAME,
+                  ADDRESS_HOME_STATE: ADDRESS_LEVEL1,
+                  ADDRESS_HOME_CITY: ADDRESS_LEVEL2,
+                  ADDRESS_HOME_DEPENDENT_LOCALITY: ADDRESS_LEVEL3,
+                  ADDRESS_HOME_ZIP: POSTAL_CODE,
+                  ADDRESS_HOME_SORTING_CODE: SORTING_CODE,
+                  ADDRESS_HOME_COUNTRY: COUNTRY_CODE,
+                  PHONE_HOME_WHOLE_NUMBER: UPDATED_PHONE,
+                  EMAIL_ADDRESS: EMAIL,
+                };
+                const actualAddress = filterAddressProperties(addressList[0]);
+                Object.keys(expectedAddress).forEach(prop => {
+                  chrome.test.assertEq(
+                      expectedAddress[prop], actualAddress[prop]);
+                })
               }));
 
           // Update the address by saving an address with the same guid and
           // using some different information.
           chrome.autofillPrivate.saveAddress({
             guid: addressGuid,
-            fullNames: [UPDATED_NAME],
-            phoneNumbers: [UPDATED_PHONE]
+            fields: [
+              {
+                type: chrome.autofillPrivate.FieldType.NAME_FULL,
+                value: UPDATED_NAME
+              },
+              {
+                type: chrome.autofillPrivate.FieldType
+                          .PHONE_HOME_WHOLE_NUMBER,
+                value: UPDATED_PHONE
+              },
+            ],
           });
         }));
   },
@@ -189,7 +374,8 @@ var availableTests = [
     function filterCardProperties(cards) {
       return cards.map(cards => {
         var filteredCards = {};
-        ['name', 'cardNumber', 'expirationMonth', 'expirationYear', 'nickname']
+        ['name', 'cardNumber', 'expirationMonth', 'expirationYear', 'nickname',
+         'cvc']
             .forEach(property => {
               filteredCards[property] = cards[property];
             });
@@ -201,17 +387,64 @@ var availableTests = [
         chrome.test.callbackPass(function(cardList) {
           chrome.test.assertEq([], cardList);
 
-          // Setup the callback that verifies that the card was correctly added.
+          // Set up the callback that verifies that the card was correctly
+          // added.
           chrome.test.listenOnce(
               chrome.autofillPrivate.onPersonalDataChanged,
               chrome.test.callbackPass(function(addressList, cardList) {
                 chrome.test.assertEq(
                     [{
                       name: CARD_NAME,
-                      cardNumber: NUMBER,
+                      cardNumber: MASKED_NUMBER,
                       expirationMonth: EXP_MONTH,
                       expirationYear: EXP_YEAR,
-                      nickname: undefined
+                      nickname: NICKNAME,
+                      cvc: MASKED_CVC
+                    }],
+                    filterCardProperties(cardList));
+              }));
+
+          chrome.autofillPrivate.saveCreditCard({
+            name: CARD_NAME,
+            cardNumber: NUMBER,
+            expirationMonth: EXP_MONTH,
+            expirationYear: EXP_YEAR,
+            nickname: NICKNAME,
+            cvc: CVC
+          });
+        }));
+  },
+
+  function addNewCreditCardWithoutCvc() {
+    function filterCardProperties(cards) {
+      return cards.map(cards => {
+        var filteredCards = {};
+        ['name', 'cardNumber', 'expirationMonth', 'expirationYear', 'nickname',
+         'cvc']
+            .forEach(property => {
+              filteredCards[property] = cards[property];
+            });
+        return filteredCards;
+      });
+    }
+
+    chrome.autofillPrivate.getCreditCardList(
+        chrome.test.callbackPass(function(cardList) {
+          chrome.test.assertEq([], cardList);
+
+          // Set up the callback that verifies that the card was correctly
+          // added.
+          chrome.test.listenOnce(
+              chrome.autofillPrivate.onPersonalDataChanged,
+              chrome.test.callbackPass(function(addressList, cardList) {
+                chrome.test.assertEq(
+                    [{
+                      name: CARD_NAME,
+                      cardNumber: MASKED_NUMBER,
+                      expirationMonth: EXP_MONTH,
+                      expirationYear: EXP_YEAR,
+                      nickname: undefined,
+                      cvc: undefined
                     }],
                     filterCardProperties(cardList));
               }));
@@ -243,7 +476,8 @@ var availableTests = [
         name: CARD_NAME,
         cardNumber: NUMBER,
         expirationMonth: EXP_MONTH,
-        expirationYear: EXP_YEAR
+        expirationYear: EXP_YEAR,
+        cvc: undefined
       });
     }));
   },
@@ -260,7 +494,7 @@ var availableTests = [
       return cards.map(cards => {
         var filteredCards = {};
         ['guid', 'name', 'cardNumber', 'expirationMonth', 'expirationYear',
-         'nickname']
+         'nickname', 'cvc']
             .forEach(property => {
               filteredCards[property] = cards[property];
             });
@@ -283,10 +517,11 @@ var availableTests = [
                     [{
                       guid: cardGuid,
                       name: UPDATED_CARD_NAME,
-                      cardNumber: NUMBER,
+                      cardNumber: MASKED_NUMBER,
                       expirationMonth: EXP_MONTH,
                       expirationYear: UPDATED_EXP_YEAR,
-                      nickname: UPDATED_NICKNAME
+                      nickname: UPDATED_NICKNAME,
+                      cvc: undefined
                     }],
                     filterCardProperties(cardList));
               }));
@@ -300,6 +535,98 @@ var availableTests = [
             nickname: UPDATED_NICKNAME
           });
         }));
+  },
+
+  function updateExistingCreditCard_CvcRemoved() {
+    updateCreditCardForCvc(/*updatedCvcValue=*/ '');
+  },
+
+  function updateExistingCreditCard_CvcUpdated() {
+    updateCreditCardForCvc(/*updatedCvcValue=*/ '123');
+  },
+
+  function updateExistingCreditCard_UnchangedCvc() {
+    updateCreditCardForCvc(/*updatedCvcValue=*/ CVC);
+  },
+
+  function addNewIbanNoNickname() {
+    addNewIban(/*nickname=*/undefined);
+  },
+
+  function addNewIbanWithNickname() {
+    addNewIban(/*nickname=*/'nickname');
+  },
+
+  function noChangesToExistingIban() {
+    chrome.autofillPrivate.getIbanList(chrome.test.callbackPass(function(
+        ibanList) {
+      // The IBAN from the addNewIban function should still be there.
+      chrome.test.assertEq(1, ibanList.length);
+      var ibanGuid = ibanList[0].guid;
+
+      // Set up the listener that verifies that onPersonalDataChanged shouldn't
+      // be called.
+      chrome.autofillPrivate.onPersonalDataChanged.addListener(failOnceCalled);
+
+      // Save the IBAN with the same info, shouldn't invoke
+      // onPersonalDataChanged.
+      chrome.autofillPrivate.saveIban({
+        guid: ibanGuid,
+        value: IBAN_VALUE,
+      });
+
+      // Reset onPersonalDataChanged.
+      chrome.autofillPrivate.onPersonalDataChanged.removeListener(
+          failOnceCalled);
+    }));
+  },
+
+  function updateExistingIban_NoNickname() {
+    updateExistingIban(/*updatedNickname=*/undefined);
+  },
+
+  function updateExistingIban_WithNickname() {
+    updateExistingIban(/*updatedNickname=*/'New nickname');
+  },
+
+  function removeExistingIban() {
+    chrome.autofillPrivate.getIbanList(chrome.test.callbackPass(function(
+        ibanList) {
+      // The IBAN from the addNewIban function should still be there.
+      chrome.test.assertEq(1, ibanList.length);
+      var ibanGuid = ibanList[0].guid;
+
+      // Set up the callback that verifies that the IBAN was correctly
+      // updated.
+      chrome.test.listenOnce(
+          chrome.autofillPrivate.onPersonalDataChanged,
+          chrome.test.callbackPass(function(addressList, cardList, ibanList) {
+            chrome.test.assertEq(0, ibanList.length);
+          }));
+
+      // Remove the IBAN with the given guid.
+      chrome.autofillPrivate.removeEntry(ibanGuid);
+    }));
+  },
+
+  function removeExistingCard() {
+    chrome.autofillPrivate.getCreditCardList(chrome.test.callbackPass(function(
+        cardList) {
+      // The card from the addNewCreditCard function should still be there.
+      chrome.test.assertEq(1, cardList.length);
+      var cardGuid = cardList[0].guid;
+
+      // Set up the callback that verifies that the card was correctly
+      // deleted.
+      chrome.test.listenOnce(
+          chrome.autofillPrivate.onPersonalDataChanged,
+          chrome.test.callbackPass(function(addressList, cardList, ibanList) {
+            chrome.test.assertEq(0, cardList.length);
+          }));
+
+      // Remove the card with the given guid.
+      chrome.autofillPrivate.removeEntry(cardGuid);
+    }));
   },
 
   function removeEntry() {
@@ -336,58 +663,61 @@ var availableTests = [
     chrome.autofillPrivate.saveCreditCard({name: NAME});
   },
 
-  function validatePhoneNumbers() {
-    var COUNTRY_CODE = 'US';
-    var FAKE_NUMBER = '1-800-123-4567';
-    var ORIGINAL_NUMBERS = [FAKE_NUMBER];
-    var FIRST_NUMBER_TO_ADD = '1-800-234-5768';
-    // Same as original number, but without formatting.
-    var SECOND_NUMBER_TO_ADD = '18001234567';
-
-    var handler1 =
-        function(validateNumbers) {
-      chrome.test.assertEq(validateNumbers.length, 1);
-      chrome.test.assertEq(FAKE_NUMBER, validateNumbers[0]);
-
-      chrome.autofillPrivate.validatePhoneNumbers(
-          {
-            phoneNumbers: validateNumbers.concat(FIRST_NUMBER_TO_ADD),
-            indexOfNewNumber: 1,  // A new number (FIRST_NUMBER_TO_ADD) is added
-                                  // at the end of the list.
-            countryCode: COUNTRY_CODE
-          },
-          handler2);
+  function isValidIban() {
+    var handler1 = function(isValidIban) {
+      // IBAN_VALUE should be valid, then follow up with invalid value.
+      chrome.test.assertTrue(isValidIban);
+      chrome.autofillPrivate.isValidIban(INVALID_IBAN_VALUE, handler2);
     }
 
-    var handler2 = function(validateNumbers) {
-      chrome.test.assertEq(validateNumbers.length, 2);
-      chrome.test.assertEq(FAKE_NUMBER, validateNumbers[0]);
-      chrome.test.assertEq(FIRST_NUMBER_TO_ADD, validateNumbers[1]);
-
-      chrome.autofillPrivate.validatePhoneNumbers(
-          {
-            phoneNumbers: validateNumbers.concat(SECOND_NUMBER_TO_ADD),
-            indexOfNewNumber: 2,  // A new number (SECOND_NUMBER_TO_ADD) is
-                                  // added at the end of the list.
-            countryCode: COUNTRY_CODE
-          },
-          handler3);
-    };
-
-    var handler3 = function(validateNumbers) {
-      // Newly-added number should not appear since it was the same as an
-      // existing number.
-      chrome.test.assertEq(validateNumbers.length, 2);
-      chrome.test.assertEq(FAKE_NUMBER, validateNumbers[0]);
-      chrome.test.assertEq(FIRST_NUMBER_TO_ADD, validateNumbers[1]);
+    var handler2 = function(isValidIban) {
+      // INVALID_IBAN_VALUE is not valid.
+      chrome.test.assertFalse(isValidIban);
       chrome.test.succeed();
     }
 
-    chrome.autofillPrivate.validatePhoneNumbers({
-      phoneNumbers: ORIGINAL_NUMBERS,
-      indexOfNewNumber: 0,
-      countryCode: COUNTRY_CODE
-    }, handler1);
+    chrome.autofillPrivate.isValidIban(IBAN_VALUE, handler1);
+  },
+
+  function authenticateUserAndFlipMandatoryAuthToggle() {
+    chrome.autofillPrivate.authenticateUserAndFlipMandatoryAuthToggle();
+    chrome.test.assertNoLastError();
+    chrome.test.succeed();
+  },
+
+  function getLocalCard() {
+    chrome.autofillPrivate.getCreditCardList(
+        chrome.test.callbackPass(function(cardList) {
+          // The card from the addNewCreditCard function should still be there.
+          chrome.test.assertEq(1, cardList.length);
+          var cardGuid = cardList[0].guid;
+
+          // Get the card based on the `cardGuid` with unmasked card number.
+          chrome.autofillPrivate.getLocalCard(
+              cardGuid, chrome.test.callbackPass(function(card) {
+                chrome.test.assertTrue(!!card);
+                chrome.test.assertEq(
+                    [{
+                      guid: cardGuid,
+                      cardNumber: NUMBER,
+                      expirationMonth: EXP_MONTH,
+                      expirationYear: EXP_YEAR,
+                    }],
+                    [{
+                      guid: card.guid,
+                      cardNumber: card.cardNumber,
+                      expirationMonth: card.expirationMonth,
+                      expirationYear: card.expirationYear,
+                    }]);
+                chrome.test.assertNoLastError();
+              }));
+        }));
+  },
+
+  function bulkDeleteAllCvcs() {
+    chrome.autofillPrivate.bulkDeleteAllCvcs();
+    chrome.test.assertNoLastError();
+    chrome.test.succeed();
   },
 ];
 
@@ -395,15 +725,38 @@ var availableTests = [
 var TESTS_FOR_CONFIG = {
   'addAndUpdateAddress': ['addNewAddress', 'updateExistingAddress'],
   'addAndUpdateCreditCard': [
-    'addNewCreditCard', 'noChangesToExistingCreditCard',
+    'addNewCreditCardWithoutCvc', 'noChangesToExistingCreditCard',
     'updateExistingCreditCard'
-  ]
+  ],
+  'addAndUpdateCreditCard_AddCvc':
+      ['addNewCreditCardWithoutCvc', 'updateExistingCreditCard_CvcUpdated'],
+  'addAndUpdateCreditCard_RemoveCvc':
+      ['addNewCreditCard', 'updateExistingCreditCard_CvcRemoved'],
+  'addAndUpdateCreditCard_UpdateCvc':
+      ['addNewCreditCard', 'updateExistingCreditCard_CvcUpdated'],
+  'addAndUpdateCreditCard_UnchangedCvc':
+      ['addNewCreditCard', 'updateExistingCreditCard_UnchangedCvc'],
+  'addNewIbanNoNickname': ['addNewIbanNoNickname'],
+  'addNewIbanWithNickname': ['addNewIbanWithNickname'],
+  'noChangesToExistingIban':
+      ['addNewIbanNoNickname', 'noChangesToExistingIban'],
+  'updateExistingIbanNoNickname':
+      ['addNewIbanNoNickname', 'updateExistingIban_NoNickname'],
+  'updateExistingIbanWithNickname':
+      ['addNewIbanNoNickname', 'updateExistingIban_WithNickname'],
+  'removeExistingIban': ['addNewIbanNoNickname', 'removeExistingIban'],
+  'removeExistingCard': ['addNewCreditCardWithoutCvc', 'removeExistingCard'],
+  'removeExistingCard_WithCvcAndNickname':
+      ['addNewCreditCard', 'removeExistingCard'],
+  'isValidIban': ['isValidIban'],
+  'authenticateUserAndFlipMandatoryAuthToggle':
+      ['authenticateUserAndFlipMandatoryAuthToggle'],
+  'getLocalCard': ['addNewCreditCard', 'getLocalCard'],
+  'bulkDeleteAllCvcs': ['bulkDeleteAllCvcs'],
 };
 
-chrome.test.getConfig(function(config) {
-  var testConfig = config.customArg;
-  var testsToRun = TESTS_FOR_CONFIG[testConfig] || [testConfig];
-  chrome.test.runTests(availableTests.filter(function(op) {
-    return testsToRun.includes(op.name);
-  }));
-});
+var testConfig = window.location.search.substring(1);
+var testsToRun = TESTS_FOR_CONFIG[testConfig] || [testConfig];
+chrome.test.runTests(availableTests.filter(function(op) {
+  return testsToRun.includes(op.name);
+}));

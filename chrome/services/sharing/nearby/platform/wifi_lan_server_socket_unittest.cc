@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
@@ -23,7 +24,6 @@
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -111,7 +111,8 @@ class WifiLanServerSocketTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   size_t num_running_accept_calls_ = 0;
   base::OnceClosure on_accept_calls_finished_;
-  ash::nearby::FakeTcpServerSocket* fake_tcp_server_socket_;
+  raw_ptr<ash::nearby::FakeTcpServerSocket, DanglingUntriaged>
+      fake_tcp_server_socket_;
   mojo::SelfOwnedReceiverRef<network::mojom::TCPServerSocket>
       tcp_server_socket_self_owned_receiver_ref_;
   mojo::SelfOwnedReceiverRef<sharing::mojom::FirewallHole>
@@ -279,4 +280,3 @@ TEST_F(WifiLanServerSocketTest, Disconnect_WhileWaitingForAccept_FirewallHole) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

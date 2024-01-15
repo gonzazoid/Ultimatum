@@ -6,6 +6,7 @@ import("//chrome/browser/buildflags.gni")
 if (is_android) {
   import("//build/config/android/config.gni")
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 source_set("share") {
@@ -19,6 +20,8 @@ source_set("share") {
     "share_ranking.cc",
     "share_ranking.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//base",
@@ -38,7 +41,6 @@ source_set("share") {
   if (is_android) {
     sources += [
       "bitmap_download_request.cc",
-      "crow_bridge.cc",
       "default_ranking_android.cc",
       "editor_screenshot_task.cc",
       "link_to_text_bridge.cc",
@@ -47,34 +49,29 @@ source_set("share") {
     ]
     deps += [
       ":jni_headers",
-      "//chrome/browser/share/android:jni_headers",
-      "//chrome/browser/share/core/crow:crow_configuration",
-      "//chrome/browser/share/proto:crow_proto",
+      "//chrome/android:chrome_jni_headers",
       "//components/history/core/browser:browser",
       "//components/ukm/content:content",
       "//ui/android",
-      "//url:gurl_android",
+      "//url",
     ]
   }
 }
 
 if (is_android) {
   android_library("java") {
+    srcjar_deps = [ ":jni_headers" ]
     sources = [
       "android/java/src/org/chromium/chrome/browser/share/ChromeShareExtras.java",
       "android/java/src/org/chromium/chrome/browser/share/ShareDelegate.java",
       "android/java/src/org/chromium/chrome/browser/share/ShareHistoryBridge.java",
       "android/java/src/org/chromium/chrome/browser/share/ShareRankingBridge.java",
-      "android/java/src/org/chromium/chrome/browser/share/crow/CrowButtonDelegate.java",
       "android/java/src/org/chromium/chrome/browser/share/share_sheet/ChromeOptionShareCallback.java",
     ]
-
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 
     deps = [
       ":jni_headers",
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//chrome/browser/preferences:java",
       "//chrome/browser/profiles/android:java",
@@ -82,6 +79,7 @@ if (is_android) {
       "//components/browser_ui/share/android:java",
       "//content/public/android:content_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
       "//url:gurl_java",
     ]
   }

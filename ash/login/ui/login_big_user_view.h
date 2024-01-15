@@ -13,6 +13,8 @@
 #include "ash/public/cpp/session/user_info.h"
 #include "ash/public/cpp/wallpaper/wallpaper_controller.h"
 #include "ash/public/cpp/wallpaper/wallpaper_controller_observer.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ash {
 
@@ -22,6 +24,8 @@ namespace ash {
 //  - LoginPublicAccountUserView: for public account user.
 class ASH_EXPORT LoginBigUserView : public NonAccessibleView,
                                     public WallpaperControllerObserver {
+  METADATA_HEADER(LoginBigUserView, NonAccessibleView)
+
  public:
   // TestApi is used for tests to get internal implementation details.
   class ASH_EXPORT TestApi {
@@ -32,7 +36,7 @@ class ASH_EXPORT LoginBigUserView : public NonAccessibleView,
     void Remove();
 
    private:
-    LoginBigUserView* const view_;
+    const raw_ptr<LoginBigUserView, DanglingUntriaged> view_;
   };
 
   LoginBigUserView(
@@ -44,9 +48,6 @@ class ASH_EXPORT LoginBigUserView : public NonAccessibleView,
   LoginBigUserView& operator=(const LoginBigUserView&) = delete;
 
   ~LoginBigUserView() override;
-
-  // NonAccessibleView:
-  void OnThemeChanged() override;
 
   // Base on the user type, call CreateAuthUser or CreatePublicAccount.
   void CreateChildView(const LoginUserInfo& user);
@@ -83,8 +84,9 @@ class ASH_EXPORT LoginBigUserView : public NonAccessibleView,
   void CreatePublicAccount(const LoginUserInfo& user);
 
   // Either |auth_user_| or |public_account_| must be null.
-  LoginPublicAccountUserView* public_account_ = nullptr;
-  LoginAuthUserView* auth_user_ = nullptr;
+  raw_ptr<LoginPublicAccountUserView, DanglingUntriaged> public_account_ =
+      nullptr;
+  raw_ptr<LoginAuthUserView, DanglingUntriaged> auth_user_ = nullptr;
 
   LoginAuthUserView::Callbacks auth_user_callbacks_;
   LoginPublicAccountUserView::Callbacks public_account_callbacks_;

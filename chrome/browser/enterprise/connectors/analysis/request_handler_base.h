@@ -9,6 +9,9 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
+#include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/binary_upload_service.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_utils.h"
@@ -36,8 +39,10 @@ class RequestHandlerBase {
       const std::string& source,
       const std::string& destination,
       const std::string& user_action_id,
+      const std::string& tab_title,
       uint64_t user_action_requests_count,
-      safe_browsing::DeepScanAccessPoint access_point);
+      safe_browsing::DeepScanAccessPoint access_point,
+      ContentAnalysisRequest::Reason reason);
 
   virtual ~RequestHandlerBase();
 
@@ -80,15 +85,18 @@ class RequestHandlerBase {
   // Returns the BinaryUploadService used to upload content for deep scanning.
   safe_browsing::BinaryUploadService* GetBinaryUploadService();
 
-  base::raw_ptr<safe_browsing::BinaryUploadService> upload_service_ = nullptr;
-  base::raw_ptr<Profile> profile_ = nullptr;
-  const enterprise_connectors::AnalysisSettings& analysis_settings_;
+  base::WeakPtr<safe_browsing::BinaryUploadService> upload_service_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
+  const raw_ref<const enterprise_connectors::AnalysisSettings>
+      analysis_settings_;
   GURL url_;
   std::string source_;
   std::string destination_;
   std::string user_action_id_;
+  std::string tab_title_;
   uint64_t user_action_requests_count_;
   safe_browsing::DeepScanAccessPoint access_point_;
+  ContentAnalysisRequest::Reason reason_;
 
   // A mapping of request tokens (corresponding to one user action) to their Ack
   // final action.

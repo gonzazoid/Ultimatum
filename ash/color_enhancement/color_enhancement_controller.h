@@ -7,12 +7,24 @@
 
 #include "ash/ash_export.h"
 #include "ash/shell_observer.h"
+#include "cc/paint/filter_operation.h"
 
 namespace aura {
 class Window;
 }
 
 namespace ash {
+
+// The types of color filters available in color correction settings.
+// Do not change these values, they are persisted to logs in
+// ColorCorrectionFilterTypes enum and mapped in os settings.
+enum ColorVisionCorrectionType {
+  kProtanomaly = 0,
+  kDeuteranomaly = 1,
+  kTritanomaly = 2,
+  kGrayscale = 3,
+  kMaxValue = kGrayscale,
+};
 
 // Controls the color enhancement options on all displays. These options
 // are applied globally.
@@ -26,22 +38,21 @@ class ASH_EXPORT ColorEnhancementController : public ShellObserver {
 
   ~ColorEnhancementController() override;
 
-  // Sets high contrast mode and updates all available displays.
+  // Sets high contrast mode (which inverts colors) and updates all available
+  // displays.
   void SetHighContrastEnabled(bool enabled);
 
-  // Sets greyscale amount and updates all available displays.
+  // Sets whether color filtering options are enabled and updates all available
+  // displays.
+  void SetColorCorrectionEnabledAndUpdateDisplays(bool enabled);
+
+  // Sets greyscale amount.
   void SetGreyscaleAmount(float amount);
 
-  // Sets saturation amount and updates all available displays.
-  void SetSaturationAmount(float amount);
-
-  // Sets sepia amount and updates all available displays.
-  void SetSepiaAmount(float amount);
-
-  // Sets hue rotation amount and updates all available displays.
-  void SetHueRotationAmount(int amount);
-
-  bool ShouldEnableCursorCompositingForSepia() const;
+  // Sets the color vision correction filter type and severity.
+  // `severity` should be between 0 and 1.0, inclusive.
+  void SetColorVisionCorrectionFilter(ColorVisionCorrectionType type,
+                                      float severity);
 
   // ShellObserver:
   void OnRootWindowAdded(aura::Window* root_window) override;
@@ -57,18 +68,14 @@ class ASH_EXPORT ColorEnhancementController : public ShellObserver {
   // Indicates if the high contrast mode is enabled or disabled.
   bool high_contrast_enabled_ = false;
 
-  // Amount of hue rotation, on the scale of 0 to 359.
-  int hue_rotation_amount_ = 0;
+  // Indicates if the color filtering options are enabled or disabled.
+  bool color_filtering_enabled_ = false;
 
   // Amount of greyscale, on the scale of 0 to 1.
   float greyscale_amount_ = 0;
 
-  // Amount of sepia, on the scale of 0 to 1.
-  float sepia_amount_ = 0;
-
-  // Amount of saturation where 1 is normal. Values may range from
-  // 0 to max float.
-  float saturation_amount_ = 1;
+  // Color correction matrix.
+  std::unique_ptr<cc::FilterOperation::Matrix> cvd_correction_matrix_;
 };
 
 }  // namespace ash

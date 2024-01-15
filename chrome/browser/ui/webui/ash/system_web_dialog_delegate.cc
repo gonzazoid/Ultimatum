@@ -8,11 +8,11 @@
 
 #include "ash/public/cpp/shell_window_ids.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/no_destructor.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/views/chrome_web_dialog_view.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/host_zoom_map.h"
@@ -39,24 +39,45 @@ std::list<SystemWebDialogDelegate*>* GetInstances() {
   return instances.get();
 }
 
-// Creates default initial parameters. The system web dialog has 12 dip corner
-// radius by default. If the the dialog uses a non client type frame, we should
-// build a drop shadow. If use a dialog type frame, we don't have to set a
-// shadow since the dialog frame's border has its own shadow.
+// Creates default initial parameters. If dialog has a non-client frame, corner
+// radius matches the top-level window radii of Chromeos otherwise it is
+// defaulted to 12 dips. If the the dialog uses a non client type frame, we
+// should build a drop shadow. If use a dialog type frame, we don't have to set
+// a shadow since the dialog frame's border has its own shadow.
 views::Widget::InitParams CreateWidgetParams(
     SystemWebDialogDelegate::FrameKind frame_kind) {
   views::Widget::InitParams params;
-  params.corner_radius = kSystemDialogCornerRadiusDp;
   // Set shadow type according to the frame kind.
   switch (frame_kind) {
     case SystemWebDialogDelegate::FrameKind::kNonClient:
+      params.corner_radius = chromeos::features::IsRoundedWindowsEnabled()
+                                 ? chromeos::features::RoundedWindowsRadius()
+                                 : kSystemDialogCornerRadiusDp;
       params.shadow_type = views::Widget::InitParams::ShadowType::kDrop;
       break;
     case SystemWebDialogDelegate::FrameKind::kDialog:
       params.shadow_type = views::Widget::InitParams::ShadowType::kNone;
+      params.corner_radius = kSystemDialogCornerRadiusDp;
       break;
   }
   return params;
+}
+
+ui::ModalType ModalTypeForSessionState(session_manager::SessionState state) {
+  switch (state) {
+    // Normally system dialogs are not modal.
+    case session_manager::SessionState::UNKNOWN:
+    case session_manager::SessionState::LOGGED_IN_NOT_ACTIVE:
+    case session_manager::SessionState::ACTIVE:
+      return ui::MODAL_TYPE_NONE;
+    // These states use an overlay so dialogs must be modal.
+    case session_manager::SessionState::OOBE:
+    case session_manager::SessionState::LOGIN_PRIMARY:
+    case session_manager::SessionState::LOCKED:
+    case session_manager::SessionState::LOGIN_SECONDARY:
+    case session_manager::SessionState::RMA:
+      return ui::MODAL_TYPE_SYSTEM;
+  }
 }
 
 }  // namespace
@@ -74,7 +95,10 @@ SystemWebDialogDelegate* SystemWebDialogDelegate::FindInstance(
 
 // static
 bool SystemWebDialogDelegate::HasInstance(const GURL& url) {
-  return base::Contains(*GetInstances(), url, &SystemWebDialogDelegate::gurl_);
+  return base::Contains(*GetInstances(), url,
+                        [](const SystemWebDialogDelegate* instance) {
+                          return instance->GetDialogContentURL();
+                        });
 }
 
 // static
@@ -121,35 +145,28 @@ gfx::Size SystemWebDialogDelegate::ComputeDialogSizeForInternalScreen(
                    std::min({preferred_size.height(), max_work_area_height}));
 }
 
-SystemWebDialogDelegate::SystemWebDialogDelegate(const GURL& gurl,
-                                                 const std::u16string& title)
-    : gurl_(gurl), title_(title), modal_type_(ui::MODAL_TYPE_NONE) {
+SystemWebDialogDelegate::SystemWebDialogDelegate(const GURL& url,
+                                                 const std::u16string& title) {
+  set_can_close(true);
   set_can_resize(false);
-  switch (session_manager::SessionManager::Get()->session_state()) {
-    // Normally system dialogs are not modal.
-    case session_manager::SessionState::UNKNOWN:
-    case session_manager::SessionState::LOGGED_IN_NOT_ACTIVE:
-    case session_manager::SessionState::ACTIVE:
-      break;
-    // These states use an overlay so dialogs must be modal.
-    case session_manager::SessionState::OOBE:
-    case session_manager::SessionState::LOGIN_PRIMARY:
-    case session_manager::SessionState::LOCKED:
-    case session_manager::SessionState::LOGIN_SECONDARY:
-    case session_manager::SessionState::RMA:
-      set_modal_type(ui::MODAL_TYPE_SYSTEM);
-      break;
-  }
+  set_delete_on_close(true);
+  set_dialog_content_url(url);
+  set_dialog_frame_kind(FrameKind::kDialog);
+  set_dialog_modal_type(ModalTypeForSessionState(
+      session_manager::SessionManager::Get()->session_state()));
+  set_dialog_size(gfx::Size(kDialogWidth, kDialogHeight));
+  set_dialog_title(title);
+  set_show_dialog_title(!title.empty());
   GetInstances()->push_back(this);
 }
 
 SystemWebDialogDelegate::~SystemWebDialogDelegate() {
-  base::EraseIf(*GetInstances(),
+  std::erase_if(*GetInstances(),
                 [this](SystemWebDialogDelegate* i) { return i == this; });
 }
 
-const std::string& SystemWebDialogDelegate::Id() {
-  return gurl_.spec();
+std::string SystemWebDialogDelegate::Id() {
+  return GetDialogContentURL().spec();
 }
 
 void SystemWebDialogDelegate::Focus() {
@@ -157,41 +174,14 @@ void SystemWebDialogDelegate::Focus() {
   // enable interaction. It does however remove focus from the current dialog,
   // preventing interaction with any dialog. TODO(stevenjb): Investigate and
   // fix, https://crbug.com/914133.
-  if (modal_type_ == ui::MODAL_TYPE_NONE)
+  if (GetDialogModalType() == ui::MODAL_TYPE_NONE) {
     dialog_window()->Focus();
+  }
 }
 
 void SystemWebDialogDelegate::Close() {
   DCHECK(dialog_window());
   views::Widget::GetWidgetForNativeWindow(dialog_window())->Close();
-}
-
-ui::ModalType SystemWebDialogDelegate::GetDialogModalType() const {
-  return modal_type_;
-}
-
-std::u16string SystemWebDialogDelegate::GetDialogTitle() const {
-  return title_;
-}
-
-GURL SystemWebDialogDelegate::GetDialogContentURL() const {
-  return gurl_;
-}
-
-void SystemWebDialogDelegate::GetWebUIMessageHandlers(
-    std::vector<content::WebUIMessageHandler*>* handlers) const {}
-
-void SystemWebDialogDelegate::GetDialogSize(gfx::Size* size) const {
-  size->SetSize(kDialogWidth, kDialogHeight);
-}
-
-SystemWebDialogDelegate::FrameKind
-SystemWebDialogDelegate::GetWebDialogFrameKind() const {
-  return FrameKind::kDialog;
-}
-
-std::string SystemWebDialogDelegate::GetDialogArgs() const {
-  return std::string();
 }
 
 void SystemWebDialogDelegate::OnDialogShown(content::WebUI* webui) {
@@ -200,25 +190,14 @@ void SystemWebDialogDelegate::OnDialogShown(content::WebUI* webui) {
   // System dialogs don't use the browser's default page zoom. Their contents
   // stay at 100% to match the size of app list, shelf, status area, etc.
   auto* web_contents = webui_->GetWebContents();
-  auto* rvh = web_contents->GetRenderViewHost();
+  // This is safe, because OnDialogShown() is called from
+  // WebUIRenderFrameCreated(), and by then `webui` is already associated with a
+  // RenderFrameHost.
+  auto* rfh = webui->GetRenderFrameHost();
   auto* zoom_map = content::HostZoomMap::GetForWebContents(web_contents);
   // Temporary means the lifetime of the WebContents.
-  zoom_map->SetTemporaryZoomLevel(rvh->GetProcess()->GetID(),
-                                  rvh->GetRoutingID(),
+  zoom_map->SetTemporaryZoomLevel(rfh->GetGlobalId(),
                                   blink::PageZoomFactorToZoomLevel(1.0));
-}
-
-void SystemWebDialogDelegate::OnDialogClosed(const std::string& json_retval) {
-  delete this;
-}
-
-void SystemWebDialogDelegate::OnCloseContents(content::WebContents* source,
-                                              bool* out_close_dialog) {
-  *out_close_dialog = true;
-}
-
-bool SystemWebDialogDelegate::ShouldShowDialogTitle() const {
-  return !title_.empty();
 }
 
 void SystemWebDialogDelegate::ShowSystemDialogForBrowserContext(
@@ -233,7 +212,7 @@ void SystemWebDialogDelegate::ShowSystemDialogForBrowserContext(
   AdjustWidgetInitParams(&extra_params);
   dialog_window_ = chrome::ShowWebDialogWithParams(
       parent, browser_context, this,
-      absl::make_optional<views::Widget::InitParams>(std::move(extra_params)));
+      std::make_optional<views::Widget::InitParams>(std::move(extra_params)));
 }
 
 void SystemWebDialogDelegate::ShowSystemDialog(gfx::NativeWindow parent) {

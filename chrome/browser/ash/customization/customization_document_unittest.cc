@@ -6,23 +6,23 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ash/net/network_portal_detector_test_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/browser/extensions/external_provider_impl.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/sync_preferences/pref_service_mock_factory.h"
@@ -120,7 +120,7 @@ using ::testing::SetArgPointee;
 using ::testing::_;
 
 TEST(StartupCustomizationDocumentTest, Basic) {
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider;
+  system::ScopedFakeStatisticsProvider fake_statistics_provider;
 
   // hardware_class selects the appropriate entry in hwid_map in the manifest.
   fake_statistics_provider.SetMachineStatistic("hardware_class", "Mario 12345");
@@ -139,7 +139,7 @@ TEST(StartupCustomizationDocumentTest, Basic) {
 }
 
 TEST(StartupCustomizationDocumentTest, VPD) {
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider;
+  system::ScopedFakeStatisticsProvider fake_statistics_provider;
 
   // hardware_class selects the appropriate entry in hwid_map in the manifest.
   fake_statistics_provider.SetMachineStatistic("hardware_class", "Mario 12345");
@@ -156,7 +156,7 @@ TEST(StartupCustomizationDocumentTest, VPD) {
 }
 
 TEST(StartupCustomizationDocumentTest, BadManifest) {
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider;
+  system::ScopedFakeStatisticsProvider fake_statistics_provider;
   StartupCustomizationDocument customization(&fake_statistics_provider,
                                              kBadManifest);
   EXPECT_FALSE(customization.IsReady());
@@ -236,8 +236,8 @@ class ServicesCustomizationDocumentTest : public testing::Test {
   }
 
   void AddCustomizationIdToVp(const std::string& id) {
-    fake_statistics_provider_.SetMachineStatistic(
-        chromeos::system::kCustomizationIdKey, id);
+    fake_statistics_provider_.SetMachineStatistic(system::kCustomizationIdKey,
+                                                  id);
   }
 
   void AddExpectedManifest(const std::string& id,
@@ -284,7 +284,7 @@ class ServicesCustomizationDocumentTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
   NetworkHandlerTestHelper network_handler_test_helper_;
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  system::ScopedFakeStatisticsProvider fake_statistics_provider_;
   ScopedCrosSettingsTestHelper scoped_cros_settings_test_helper_;
   TestingPrefServiceSimple local_state_;
   network::TestURLLoaderFactory loader_factory_;

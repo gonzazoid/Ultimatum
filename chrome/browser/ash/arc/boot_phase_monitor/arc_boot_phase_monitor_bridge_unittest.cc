@@ -10,8 +10,9 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/fake_arc_session.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/arc_util.h"
@@ -27,13 +28,12 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace arc {
-
 namespace {
 
 class ArcBootPhaseMonitorBridgeTest : public testing::Test {
  public:
   ArcBootPhaseMonitorBridgeTest()
-      : scoped_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {
+      : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
     ash::SessionManagerClient::InitializeFakeInMemory();
 
@@ -48,14 +48,8 @@ class ArcBootPhaseMonitorBridgeTest : public testing::Test {
 
     const AccountId account_id(AccountId::FromUserEmailGaiaId(
         testing_profile_->GetProfileUserName(), "1234567890"));
-    GetFakeUserManager()->AddUser(account_id);
-    GetFakeUserManager()->LoginUser(account_id);
-
-    boot_phase_monitor_bridge_ =
-        ArcBootPhaseMonitorBridge::GetForBrowserContextForTesting(
-            testing_profile_.get());
-    boot_phase_monitor_bridge_->SetDelegateForTesting(
-        std::make_unique<TestDelegateImpl>(this));
+    fake_user_manager_->AddUser(account_id);
+    fake_user_manager_->LoginUser(account_id);
   }
 
   ArcBootPhaseMonitorBridgeTest(const ArcBootPhaseMonitorBridgeTest&) = delete;
@@ -63,12 +57,30 @@ class ArcBootPhaseMonitorBridgeTest : public testing::Test {
       const ArcBootPhaseMonitorBridgeTest&) = delete;
 
   ~ArcBootPhaseMonitorBridgeTest() override {
-    boot_phase_monitor_bridge_->Shutdown();
     testing_profile_.reset();
     arc_session_manager_.reset();
     arc_service_manager_.reset();
     ash::SessionManagerClient::Shutdown();
     ash::ConciergeClient::Shutdown();
+  }
+
+  void SetUp() override {
+    boot_phase_monitor_bridge_ = std::make_unique<ArcBootPhaseMonitorBridge>(
+        testing_profile_.get(), arc_service_manager_->arc_bridge_service(),
+        std::make_unique<TestDelegateImpl>(this));
+  }
+
+  void TearDown() override {
+    boot_phase_monitor_bridge_->Shutdown();
+    boot_phase_monitor_bridge_.reset();
+  }
+
+  void RecreateBootPhaseMonitorBridge() {
+    boot_phase_monitor_bridge_->Shutdown();
+    boot_phase_monitor_bridge_.reset();
+    boot_phase_monitor_bridge_ = std::make_unique<ArcBootPhaseMonitorBridge>(
+        testing_profile_.get(), arc_service_manager_->arc_bridge_service(),
+        std::make_unique<TestDelegateImpl>(this));
   }
 
  protected:
@@ -83,17 +95,20 @@ class ArcBootPhaseMonitorBridgeTest : public testing::Test {
     void OnBootCompleted() override { ++(test_->on_boot_completed_counter_); }
 
    private:
-    ArcBootPhaseMonitorBridgeTest* const test_;
+    const raw_ptr<ArcBootPhaseMonitorBridgeTest> test_;
   };
 
   ArcSessionManager* arc_session_manager() const {
     return arc_session_manager_.get();
   }
   ArcBootPhaseMonitorBridge* boot_phase_monitor_bridge() const {
-    return boot_phase_monitor_bridge_;
+    return boot_phase_monitor_bridge_.get();
   }
   size_t record_uma_counter() const { return record_uma_counter_; }
   base::TimeDelta last_time_delta() const { return last_time_delta_; }
+  const std::vector<int>& app_requested_in_session_records() const {
+    return app_requested_in_session_records_;
+  }
   size_t on_boot_completed_counter() const {
     return on_boot_completed_counter_;
   }
@@ -116,24 +131,25 @@ class ArcBootPhaseMonitorBridgeTest : public testing::Test {
       ++(test_->record_uma_counter_);
     }
 
+    void RecordAppRequestedInSessionUMA(int num_requested) override {
+      test_->app_requested_in_session_records_.push_back(num_requested);
+    }
+
    private:
-    ArcBootPhaseMonitorBridgeTest* const test_;
+    const raw_ptr<ArcBootPhaseMonitorBridgeTest> test_;
   };
 
-  ash::FakeChromeUserManager* GetFakeUserManager() const {
-    return static_cast<ash::FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
-  }
-
   content::BrowserTaskEnvironment task_environment_;
-  user_manager::ScopedUserManager scoped_user_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
   std::unique_ptr<TestingProfile> testing_profile_;
-  ArcBootPhaseMonitorBridge* boot_phase_monitor_bridge_;
+  std::unique_ptr<ArcBootPhaseMonitorBridge> boot_phase_monitor_bridge_;
 
   size_t record_uma_counter_ = 0;
   base::TimeDelta last_time_delta_;
+  std::vector<int> app_requested_in_session_records_;
   size_t on_boot_completed_counter_ = 0;
 };
 
@@ -228,6 +244,39 @@ TEST_F(ArcBootPhaseMonitorBridgeTest, TestRecordUMA_AppLaunchesAfterBoot) {
   boot_phase_monitor_bridge()->RecordFirstAppLaunchDelayUMAForTesting();
   EXPECT_EQ(1U, record_uma_counter());
 }
-}  // namespace
 
+TEST_F(ArcBootPhaseMonitorBridgeTest, TestRecordUMA_AppRequested) {
+  // Make sure there's no UMA reported for the first time.
+  EXPECT_EQ(0U, app_requested_in_session_records().size());
+
+  // Emulate user's triggering ARC app launching.
+  boot_phase_monitor_bridge()->RecordFirstAppLaunchDelayUMAForTesting();
+  // but still there's no UMA, *yet*.
+  EXPECT_EQ(0U, app_requested_in_session_records().size());
+
+  // Emulate the restarting session by just recreating
+  // ArcBootPhaseMonitorBridge on the same Profile.
+  RecreateBootPhaseMonitorBridge();
+
+  // Now, we have UMA.
+  EXPECT_EQ(1U, app_requested_in_session_records().size());
+  EXPECT_EQ(1, app_requested_in_session_records().back());
+
+  boot_phase_monitor_bridge()->RecordFirstAppLaunchDelayUMAForTesting();
+  boot_phase_monitor_bridge()->RecordFirstAppLaunchDelayUMAForTesting();
+  boot_phase_monitor_bridge()->RecordFirstAppLaunchDelayUMAForTesting();
+
+  RecreateBootPhaseMonitorBridge();
+
+  EXPECT_EQ(2U, app_requested_in_session_records().size());
+  EXPECT_EQ(3, app_requested_in_session_records().back());
+
+  // Reboot without any requests.
+  RecreateBootPhaseMonitorBridge();
+
+  EXPECT_EQ(3U, app_requested_in_session_records().size());
+  EXPECT_EQ(0, app_requested_in_session_records().back());
+}
+
+}  // namespace
 }  // namespace arc

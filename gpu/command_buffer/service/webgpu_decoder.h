@@ -5,11 +5,12 @@
 #ifndef GPU_COMMAND_BUFFER_SERVICE_WEBGPU_DECODER_H_
 #define GPU_COMMAND_BUFFER_SERVICE_WEBGPU_DECODER_H_
 
+#include <optional>
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/service/common_decoder.h"
 #include "gpu/command_buffer/service/decoder_context.h"
 #include "gpu/gpu_gles2_export.h"
 #include "gpu/ipc/common/gpu_disk_cache_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace gpu {
 
@@ -31,8 +32,8 @@ class DawnCachingInterfaceFactory;
 
 // Options specifically passed for Dawn caching;
 struct DawnCacheOptions {
-  DawnCachingInterfaceFactory* caching_interface_factory = nullptr;
-  absl::optional<GpuDiskCacheHandle> handle = {};
+  raw_ptr<DawnCachingInterfaceFactory> caching_interface_factory = nullptr;
+  std::optional<GpuDiskCacheHandle> handle = {};
 };
 
 class GPU_GLES2_EXPORT WebGPUDecoder : public DecoderContext,

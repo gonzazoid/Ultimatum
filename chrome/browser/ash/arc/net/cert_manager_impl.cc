@@ -7,10 +7,12 @@
 #include <pk11priv.h>
 #include <pk11pub.h>
 
+#include <optional>
 #include <utility>
 
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/net/nss_service.h"
 #include "chrome/browser/net/nss_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -19,10 +21,9 @@
 #include "content/public/browser/browser_thread.h"
 #include "crypto/nss_key_util.h"
 #include "net/cert/nss_cert_database.h"
-#include "net/cert/pem.h"
 #include "net/cert/scoped_nss_types.h"
 #include "net/cert/x509_util_nss.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/boringssl/src/pki/pem.h"
 
 namespace {
 
@@ -42,7 +43,7 @@ void GetCertDBOnIOThread(
 }
 
 net::ScopedCERTCertificate TranslatePEMToCert(const std::string& cert_pem) {
-  net::PEMTokenizer tokenizer(cert_pem, {arc::kCertificatePEMHeader});
+  bssl::PEMTokenizer tokenizer(cert_pem, {arc::kCertificatePEMHeader});
   if (!tokenizer.GetNext()) {
     NET_LOG(ERROR) << "Failed to get certificate data";
     return nullptr;
@@ -50,8 +51,7 @@ net::ScopedCERTCertificate TranslatePEMToCert(const std::string& cert_pem) {
 
   std::vector<uint8_t> cert_der(tokenizer.data().begin(),
                                 tokenizer.data().end());
-  return net::x509_util::CreateCERTCertificateFromBytes(cert_der.data(),
-                                                        cert_der.size());
+  return net::x509_util::CreateCERTCertificateFromBytes(cert_der);
 }
 
 }  // namespace
@@ -69,7 +69,7 @@ std::string CertManagerImpl::ImportPrivateKey(const std::string& key_pem,
     return std::string();
   }
 
-  net::PEMTokenizer tokenizer(key_pem, {kPrivateKeyPEMHeader});
+  bssl::PEMTokenizer tokenizer(key_pem, {kPrivateKeyPEMHeader});
   if (!tokenizer.GetNext()) {
     NET_LOG(ERROR) << "Failed to get private key data";
     return std::string();
@@ -176,8 +176,8 @@ void CertManagerImpl::ImportPrivateKeyAndCertWithDB(
   std::string key_id = ImportPrivateKey(key_pem, database);
   if (key_id.empty()) {
     NET_LOG(ERROR) << "Failed to import private key";
-    std::move(callback).Run(/*cert_id=*/absl::nullopt,
-                            /*slot_id=*/absl::nullopt);
+    std::move(callback).Run(/*cert_id=*/std::nullopt,
+                            /*slot_id=*/std::nullopt);
     return;
   }
   // Both DeleteCertAndKey parse the passed certificate into a CERTCertificate.
@@ -186,8 +186,8 @@ void CertManagerImpl::ImportPrivateKeyAndCertWithDB(
   std::string cert_id = ImportUserCert(cert_pem, database);
   if (cert_id.empty()) {
     NET_LOG(ERROR) << "Failed to import client certificate";
-    std::move(callback).Run(/*cert_id=*/absl::nullopt,
-                            /*slot_id=*/absl::nullopt);
+    std::move(callback).Run(/*cert_id=*/std::nullopt,
+                            /*slot_id=*/std::nullopt);
     return;
   }
   int slot_id = GetSlotID(database);
@@ -204,15 +204,13 @@ void CertManagerImpl::ImportPrivateKeyAndCert(
     ImportPrivateKeyAndCertCallback callback) {
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
-      base::BindOnce(
-          &GetCertDBOnIOThread,
-          NssServiceFactory::GetForContext(profile_)
-              ->CreateNSSCertDatabaseGetterForIOThread(),
-          base::BindPostTask(
-              base::SequencedTaskRunnerHandle::Get(),
-              base::BindOnce(&CertManagerImpl::ImportPrivateKeyAndCertWithDB,
-                             weak_factory_.GetWeakPtr(), key_pem, cert_pem,
-                             std::move(callback)))));
+      base::BindOnce(&GetCertDBOnIOThread,
+                     NssServiceFactory::GetForContext(profile_)
+                         ->CreateNSSCertDatabaseGetterForIOThread(),
+                     base::BindPostTaskToCurrentDefault(base::BindOnce(
+                         &CertManagerImpl::ImportPrivateKeyAndCertWithDB,
+                         weak_factory_.GetWeakPtr(), key_pem, cert_pem,
+                         std::move(callback)))));
 }
 
 }  // namespace arc

@@ -8,7 +8,7 @@
 #include <memory>
 #include <set>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "remoting/protocol/port_allocator_factory.h"
 #include "third_party/abseil-cpp/absl/strings/string_view.h"
 #include "third_party/webrtc/p2p/client/basic_port_allocator.h"
@@ -53,7 +53,7 @@ class FakePortAllocatorFactory : public protocol::PortAllocatorFactory {
 
   FakePacketSocketFactory* socket_factory() { return socket_factory_.get(); }
 
-   // PortAllocatorFactory interface.
+  // PortAllocatorFactory interface.
   std::unique_ptr<cricket::PortAllocator> CreatePortAllocator(
       scoped_refptr<protocol::TransportContext> transport_context,
       base::WeakPtr<protocol::SessionOptionsProvider> session_options_provider)

@@ -5,7 +5,7 @@
 #ifndef SERVICES_DEVICE_PUBLIC_CPP_TEST_SCOPED_GEOLOCATION_OVERRIDER_H_
 #define SERVICES_DEVICE_PUBLIC_CPP_TEST_SCOPED_GEOLOCATION_OVERRIDER_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "services/device/public/mojom/geoposition.mojom.h"
 
 namespace device {
@@ -21,11 +21,11 @@ namespace device {
 // same process that runs the Device Service implementation.
 class ScopedGeolocationOverrider {
  public:
-  explicit ScopedGeolocationOverrider(mojom::GeopositionPtr position);
+  explicit ScopedGeolocationOverrider(mojom::GeopositionResultPtr result);
   ScopedGeolocationOverrider(double latitude, double longitude);
   ~ScopedGeolocationOverrider();
-  void OverrideGeolocation(mojom::GeopositionPtr position);
-  void UpdateLocation(mojom::GeopositionPtr position);
+  void OverrideGeolocation(mojom::GeopositionResultPtr result);
+  void UpdateLocation(mojom::GeopositionResultPtr result);
   void UpdateLocation(double latitude, double longitude);
 
   // Pause resolving Geolocation queries to keep request inflight.

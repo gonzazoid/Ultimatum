@@ -15,9 +15,7 @@ namespace ash {
 namespace attestation {
 namespace {
 std::string Base64EncodeStr(const std::string& str) {
-  std::string result;
-  base::Base64Encode(str, &result);
-  return result;
+  return base::Base64Encode(str);
 }
 }  // namespace
 
@@ -71,6 +69,8 @@ const char TpmChallengeKeyResult::kUploadCertificateFailedErrorMsg[] =
 const char TpmChallengeKeyResult::kDeviceTrustURLConflictError[] =
     "Both policies DeviceContextAwareAccessSignalsAllowlist and "
     "DeviceWebBasedAttestationAllowedUrls are enabled for this URL.";
+const char TpmChallengeKeyResult::kVerifiedAccessFlowUnsupportedErrorMsg[] =
+    "Verified Access flow type is not supported on ChromeOS.";
 
 // static
 TpmChallengeKeyResult TpmChallengeKeyResult::MakeChallengeResponse(
@@ -153,6 +153,8 @@ const char* TpmChallengeKeyResult::GetErrorMessage() const {
       return kUploadCertificateFailedErrorMsg;
     case TpmChallengeKeyResultCode::kDeviceTrustURLConflictError:
       return kDeviceTrustURLConflictError;
+    case TpmChallengeKeyResultCode::kVerifiedAccessFlowUnsupportedError:
+      return kVerifiedAccessFlowUnsupportedErrorMsg;
     case TpmChallengeKeyResultCode::kSuccess:
       // Not an error message.
       NOTREACHED();
@@ -179,15 +181,14 @@ bool TpmChallengeKeyResult::operator!=(
 
 std::ostream& operator<<(std::ostream& os,
                          const TpmChallengeKeyResult& result) {
-  base::Value value(base::Value::Type::DICTIONARY);
+  base::Value::Dict value;
 
-  value.SetIntKey("result_code", static_cast<int>(result.result_code));
+  value.Set("result_code", static_cast<int>(result.result_code));
   if (!result.IsSuccess()) {
-    value.SetStringKey("error_message", result.GetErrorMessage());
+    value.Set("error_message", result.GetErrorMessage());
   }
-  value.SetStringKey("public_key", Base64EncodeStr(result.public_key));
-  value.SetStringKey("challenge_response",
-                     Base64EncodeStr(result.challenge_response));
+  value.Set("public_key", Base64EncodeStr(result.public_key));
+  value.Set("challenge_response", Base64EncodeStr(result.challenge_response));
 
   os << value;
   return os;

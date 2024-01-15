@@ -30,6 +30,7 @@
 
 #include "base/check_op.h"
 #include "base/containers/lru_cache.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/numerics/checked_math.h"
 #include "base/task/single_thread_task_runner.h"
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
@@ -116,9 +117,7 @@ class WebGLShaderPrecisionFormat;
 class WebGLVertexArrayObjectBase;
 class XRSystem;
 
-using GLenumHashSet = HashSet<GLenum,
-                              WTF::AlreadyHashed,
-                              WTF::UnsignedWithZeroKeyHashTraits<GLenum>>;
+using GLenumHashSet = HashSet<GLenum, AlreadyHashedWithZeroKeyTraits>;
 
 // This class uses the color mask to prevent drawing to the alpha channel, if
 // the DrawingBuffer requires RGB emulation.
@@ -395,7 +394,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                   GLenum format,
                   GLenum type,
                   ImageData*);
-  void texImage2D(ExecutionContext*,
+  void texImage2D(ScriptState*,
                   GLenum target,
                   GLint level,
                   GLint internalformat,
@@ -403,7 +402,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                   GLenum type,
                   HTMLImageElement*,
                   ExceptionState&);
-  void texImage2D(ExecutionContext*,
+  void texImage2D(ScriptState*,
                   GLenum target,
                   GLint level,
                   GLint internalformat,
@@ -411,7 +410,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                   GLenum type,
                   CanvasRenderingContextHost*,
                   ExceptionState&);
-  void texImage2D(ExecutionContext*,
+  void texImage2D(ScriptState*,
                   GLenum target,
                   GLint level,
                   GLint internalformat,
@@ -419,7 +418,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                   GLenum type,
                   HTMLVideoElement*,
                   ExceptionState&);
-  void texImage2D(ExecutionContext*,
+  void texImage2D(ScriptState*,
                   GLenum target,
                   GLint level,
                   GLint internalformat,
@@ -454,7 +453,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                      GLenum format,
                      GLenum type,
                      ImageData*);
-  void texSubImage2D(ExecutionContext*,
+  void texSubImage2D(ScriptState*,
                      GLenum target,
                      GLint level,
                      GLint xoffset,
@@ -463,7 +462,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                      GLenum type,
                      HTMLImageElement*,
                      ExceptionState&);
-  void texSubImage2D(ExecutionContext*,
+  void texSubImage2D(ScriptState*,
                      GLenum target,
                      GLint level,
                      GLint xoffset,
@@ -472,7 +471,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                      GLenum type,
                      CanvasRenderingContextHost*,
                      ExceptionState&);
-  void texSubImage2D(ExecutionContext*,
+  void texSubImage2D(ScriptState*,
                      GLenum target,
                      GLint level,
                      GLint xoffset,
@@ -481,7 +480,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                      GLenum type,
                      HTMLVideoElement*,
                      ExceptionState&);
-  void texSubImage2D(ExecutionContext*,
+  void texSubImage2D(ScriptState*,
                      GLenum target,
                      GLint level,
                      GLint xoffset,
@@ -608,6 +607,14 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
       return nullptr;
     return d->ContextGL();
   }
+  const gpu::Capabilities& ContextGLCapabilities() const {
+    // This should only be called in contexts where ContextGL() is guaranteed
+    // to exist.
+    CHECK(ContextGL());
+    // Note: DrawingBuffer::ContextGL() comes from
+    // DrawingBuffer::ContextProvider::ContextGL().
+    return GetDrawingBuffer()->ContextProvider()->GetCapabilities();
+  }
   gpu::SharedImageInterface* SharedImageInterface() const {
     DrawingBuffer* d = GetDrawingBuffer();
     if (!d)
@@ -654,7 +661,8 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   // TODO(https://crbug.com/1208480): This function applies only to 2D rendering
   // contexts, and should be removed.
   SkColorInfo CanvasRenderingContextSkColorInfo() const override;
-  scoped_refptr<StaticBitmapImage> GetImage() override;
+  scoped_refptr<StaticBitmapImage> GetImage(FlushReason) override;
+  void SetHdrMetadata(const gfx::HDRMetadata& hdr_metadata) override;
   void SetFilterQuality(cc::PaintFlags::FilterQuality) override;
 
   V8UnionHTMLCanvasElementOrOffscreenCanvas* getHTMLOrOffscreenCanvas() const;
@@ -691,6 +699,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   friend class WebGLVertexArrayObjectBase;
 
   // Implementation helpers.
+  friend class ScopedPixelLocalStorageInterrupt;
   friend class ScopedDrawingBufferBinder;
   friend class ScopedFramebufferRestorer;
   friend class ScopedTexture2DRestorer;
@@ -721,7 +730,8 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   friend class WebGLMultiDraw;
   friend class WebGLMultiDrawCommon;
   friend class WebGLMultiDrawInstancedBaseVertexBaseInstance;
-  friend class WebGLVideoTexture;
+  friend class WebGLPolygonMode;
+  friend class WebGLShaderPixelLocalStorage;
 
   WebGLRenderingContextBase(CanvasRenderingContextHost*,
                             std::unique_ptr<WebGraphicsContext3DProvider>,
@@ -735,11 +745,9 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
 
   // CanvasRenderingContext implementation.
   bool IsComposited() const override { return true; }
-  bool IsAccelerated() const override { return true; }
   bool UsingSwapChain() const override;
   bool IsOriginTopLeft() const override;
-  void SetIsInHiddenPage(bool) override;
-  void SetIsBeingDisplayed(bool) override {}
+  void PageVisibilityChanged() override;
   bool PaintRenderingResultsToCanvas(SourceDrawingBuffer) override;
   bool CopyRenderingResultsFromDrawingBuffer(CanvasResourceProvider*,
                                              SourceDrawingBuffer) override;
@@ -751,11 +759,13 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
 
   cc::Layer* CcLayer() const override;
   void Stop() override;
-  void FinalizeFrame(bool printing) override;
+  void FinalizeFrame(FlushReason) override;
   bool PushFrame() override;
 
   // DrawingBuffer::Client implementation.
   bool DrawingBufferClientIsBoundForDraw() override;
+  void DrawingBufferClientInterruptPixelLocalStorage() override;
+  void DrawingBufferClientRestorePixelLocalStorage() override;
   void DrawingBufferClientRestoreScissorTest() override;
   void DrawingBufferClientRestoreMaskAndClearValues() override;
   void DrawingBufferClientRestorePixelPackParameters() override;
@@ -766,7 +776,8 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   void DrawingBufferClientRestorePixelUnpackBufferBinding() override;
   void DrawingBufferClientRestorePixelPackBufferBinding() override;
   bool DrawingBufferClientUserAllocatedMultisampledRenderbuffers() override;
-  void DrawingBufferClientForceLostContextWithAutoRecovery() override;
+  void DrawingBufferClientForceLostContextWithAutoRecovery(
+      const char* reason) override;
 
   // All draw calls should go through this wrapper so that various
   // bookkeeping related to compositing and preserveDrawingBuffer
@@ -785,7 +796,14 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                                                      drawing_buffer_.get());
     OnBeforeDrawCall(draw_type);
     draw_func();
-    RecordUKMCanvasDrawnToAtFirstDrawCall();
+    if (!has_been_drawn_to_) {
+      // At first draw call, record
+      // Canvas/OffscreenCanvas.RenderingContextDrawnTo and what the ANGLE
+      // implementation is.
+      has_been_drawn_to_ = true;
+      RecordUKMCanvasDrawnToRenderingAPI();
+      RecordANGLEImplementation();
+    }
   }
 
   virtual void DestroyContext();
@@ -845,7 +863,6 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
 
   bool is_origin_top_left_ = false;
 
-  bool is_hidden_ = false;
   LostContextMode context_lost_mode_ = kNotLostContext;
   AutoRecoveryMethod auto_recovery_method_ = kManual;
   // Dispatches a context lost event once it is determined that one is needed.
@@ -962,6 +979,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   GLboolean color_mask_[4];
   GLboolean depth_mask_;
 
+  bool depth_enabled_;
   bool stencil_enabled_;
   GLuint stencil_mask_, stencil_mask_back_;
   GLint stencil_func_ref_,
@@ -1033,7 +1051,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
         extension_field_ = extension_;
       }
 
-      return extension_;
+      return extension_.Get();
     }
 
     bool Supported(WebGLRenderingContextBase* context) const override {
@@ -1051,7 +1069,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
     }
 
     WebGLExtension* GetExtensionObjectIfAlreadyEnabled() override {
-      return extension_;
+      return extension_.Get();
     }
 
     void Trace(Visitor* visitor) const override {
@@ -1060,7 +1078,10 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
     }
 
    private:
-    Member<T>& extension_field_;
+    // `extension_field_` is not a `raw_ref` because `Member<T>` denotes
+    // a type managed by Oilpan, i.e. memory that is not managed by
+    // PartitionAlloc.
+    RAW_PTR_EXCLUSION Member<T>& extension_field_;
     // ExtensionTracker holds it's own reference to the extension to ensure
     // that it is not deleted before this object's destructor is called
     Member<T> extension_;
@@ -1091,6 +1112,10 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   // DrawingBuffer. In this situation, we need to blit to a single sampled
   // buffer for reading, during which the bindings could be changed and need to
   // be recovered.
+  //
+  // It is possible for the binding operation to fail, in which case
+  // the context will have been lost. Users must check the Succeeded()
+  // status before proceeding.
   class ScopedDrawingBufferBinder {
     STACK_ALLOCATED();
 
@@ -1098,21 +1123,27 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
     ScopedDrawingBufferBinder(DrawingBuffer* drawing_buffer,
                               WebGLFramebuffer* framebuffer_binding)
         : drawing_buffer_(drawing_buffer),
-          read_framebuffer_binding_(framebuffer_binding) {
+          read_framebuffer_binding_(framebuffer_binding),
+          succeeded_(true) {
       // Commit DrawingBuffer if needed (e.g., for multisampling)
       if (!read_framebuffer_binding_ && drawing_buffer_)
-        drawing_buffer_->ResolveAndBindForReadAndDraw();
+        succeeded_ = drawing_buffer_->ResolveAndBindForReadAndDraw();
     }
+
+    // Users must check this before proceeding with their logic.
+    [[nodiscard]] bool Succeeded() { return succeeded_; }
 
     ~ScopedDrawingBufferBinder() {
       // Restore DrawingBuffer if needed
-      if (!read_framebuffer_binding_ && drawing_buffer_)
+      if (!read_framebuffer_binding_ && drawing_buffer_ && succeeded_) {
         drawing_buffer_->RestoreFramebufferBindings();
+      }
     }
 
    private:
     DrawingBuffer* drawing_buffer_;
     WebGLFramebuffer* read_framebuffer_binding_;
+    bool succeeded_;
   };
 
   // Errors raised by synthesizeGLError() while the context is lost.
@@ -1824,9 +1855,10 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
 
   String EnsureNotNull(const String&) const;
 
-  // Enable or disable stencil test based on user setting and
-  // whether the current FBO has a stencil buffer.
-  void ApplyStencilTest();
+  // Enable or disable the depth and stencil test based on the user's
+  // setting and whether the current FBO has a depth and stencil
+  // buffer.
+  void ApplyDepthAndStencilTest();
 
   // Helper for enabling or disabling a capability.
   void EnableOrDisable(GLenum capability, bool enable);
@@ -1920,9 +1952,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                         DOMArrayBufferView* pixels,
                         int64_t offset);
 
-  // Record Canvas/OffscreenCanvas.RenderingContextDrawnTo at the first draw
-  // call.
-  void RecordUKMCanvasDrawnToAtFirstDrawCall();
+  void RecordANGLEImplementation();
 
  private:
   WebGLRenderingContextBase(CanvasRenderingContextHost*,
@@ -1931,7 +1961,6 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                             const Platform::GraphicsInfo& graphics_info,
                             const CanvasContextCreationAttributesCore&,
                             Platform::ContextType);
-  static bool SupportOwnOffscreenSurface(ExecutionContext*);
   static std::unique_ptr<WebGraphicsContext3DProvider>
   CreateContextProviderInternal(CanvasRenderingContextHost*,
                                 const CanvasContextCreationAttributesCore&,
@@ -1991,13 +2020,14 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
 
   bool has_been_drawn_to_ = false;
 
+  // Tracks if the context has ever called glBeginPixelLocalStorageANGLE. If it
+  // has, we need to start using the pixel local storage interrupt mechanism
+  // when we take over the client's context.
+  bool has_activated_pixel_local_storage_ = false;
+
   PredefinedColorSpace drawing_buffer_color_space_ =
       PredefinedColorSpace::kSRGB;
   PredefinedColorSpace unpack_color_space_ = PredefinedColorSpace::kSRGB;
-
-  // The pixel format of the WebGL canvas. This is based on a deprecated
-  // specification that is being replaced by drawingBufferStorage.
-  CanvasPixelFormat pixel_format_deprecated_ = CanvasPixelFormat::kUint8;
 };
 
 template <>

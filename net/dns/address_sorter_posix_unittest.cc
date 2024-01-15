@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
@@ -68,6 +68,7 @@ class TestUDPClientSocket : public DatagramClientSocket {
   int SetReceiveBufferSize(int32_t) override { return OK; }
   int SetSendBufferSize(int32_t) override { return OK; }
   int SetDoNotFragment() override { return OK; }
+  int SetRecvEcn() override { return OK; }
 
   void Close() override {}
   int GetPeerAddress(IPEndPoint* address) const override {
@@ -105,7 +106,7 @@ class TestUDPClientSocket : public DatagramClientSocket {
         base::BindOnce(&TestUDPClientSocket::RunConnectCallback,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback), rv);
     if (connect_mode_ == ConnectMode::kAsynchronous) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, std::move(finish_connect_callback_));
       return ERR_IO_PENDING;
     } else if (connect_mode_ == ConnectMode::kAsynchronousManual) {

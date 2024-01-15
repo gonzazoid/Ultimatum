@@ -16,11 +16,15 @@
     accessKeyChanged,
     activeDescendantChanged,
     alert,
-    ariaAttributeChanged,
+    // TODO(crbug.com/1464633) Fully remove ariaAttributeChangedDeprecated
+    // starting in 122, because although it was removed in 118, it is still
+    // present in earlier versions of LaCros.
+    ariaAttributeChangedDeprecated,
     ariaCurrentChanged,
     atomicChanged,
     autoCompleteChanged,
     autocorrectionOccured,
+    autofillAvailabilityChanged,
     blur,
     busyChanged,
     caretBoundsChanged,
@@ -62,7 +66,7 @@
     labeledByChanged,
     languageChanged,
     layoutComplete,
-    layoutInvalidated,   // fired when aria-busy goes false
+    layoutInvalidated,  // fired when aria-busy goes false
     liveRegionChanged,
     liveRegionCreated,
     liveRegionNodeChanged,  // fired on a node within a live region.
@@ -88,6 +92,7 @@
     multiselectableStateChanged,
     nameChanged,
     objectAttributeChanged,
+    orientationChanged,
     otherAttributeChanged,
     parentChanged,
     placeholderChanged,
@@ -172,6 +177,7 @@
     dialog,
     directory,
     disclosureTriangle,
+    disclosureTriangleGrouped,
     // --------------------------------------------------------------
     // DPub Roles:
     // https://www.w3.org/TR/dpub-aam-1.0/#mapping_role_table
@@ -305,7 +311,7 @@
     pluginObject,
     popUpButton,
     portal,
-    pre,
+    preDeprecated,
     progressIndicator,
     radioButton,
     radioGroup,
@@ -408,6 +414,7 @@
     scrollUp,
     scrollToMakeVisible,
     scrollToPoint,
+    scrollToPositionAtRowColumn,
     setAccessibilityFocus,
     setScrollOffset,
     setSelection,
@@ -416,6 +423,7 @@
     showContextMenu,
     signalEndOfTest,
     showTooltip,
+    stitchChildTree,
     startDuckingMedia,
     stopDuckingMedia,
     suspendMedia
@@ -468,6 +476,7 @@
     caption,
     contents,
     placeholder,
+    popoverAttribute,
     relatedElement,
     title,
     value
@@ -477,7 +486,7 @@
     ariaDescription,
     attributeExplicitlyEmpty,
     buttonLabel,
-    popupElement,
+    popoverAttribute,
     relatedElement,
     rubyAnnotation,
     summary,
@@ -646,6 +655,13 @@ enum SortDirectionType {
   other
 };
 
+// A type of AutomationPosition.
+enum PositionType {
+  null,
+  text,
+  tree
+};
+
   dictionary Rect {
     long left;
     long top;
@@ -694,9 +710,6 @@ enum SortDirectionType {
     // The offset within the focus node where the selection ends.
     long focusOffset;
   };
-
-  // Called when the result for a <code>query</code> is available.
-  callback QueryCallback = void(AutomationNode node);
 
   [nocompile, noinline_doc] dictionary AutomationIntent {
     // A command associated with this AutomationIntent.
@@ -764,22 +777,6 @@ enum SortDirectionType {
       [nocompile, noinline_doc] dictionary CustomAction {
     long id;
     DOMString description;
-  };
-
-  // The string which the indices are relative to is not included in this
-  // structure. See documentation on $(ref:languageAnnotationForStringAttribute)
-  // for details on how to associate this object with a string.
-  // Also, the start and end indices always point to the first code unit of a
-  // valid code-point.
-    [nocompile, noinline_doc] dictionary LanguageSpan {
-    // Inclusive start index of substring that contains language.
-    long startIndex;
-    // Exclusive end index of substring that contains language.
-    long endIndex;
-    // Detected language for substring.
-    DOMString language;
-    // Probability that language is correct.
-    double probability;
   };
 
     // A marker associated with an AutomationNode.
@@ -1017,8 +1014,8 @@ enum SortDirectionType {
     // A node that provides more details about the current node.
     AutomationNode[]? details;
 
-    // A node that provides an error message for a current node.
-    AutomationNode? errorMessage;
+    // The nodes, if any, that provide an error message for the current node.
+    AutomationNode[]? errorMessages;
 
     // Reverse relationship for details.
     AutomationNode[]? detailsFor;
@@ -1261,6 +1258,9 @@ enum SortDirectionType {
     // Whether or not this node is an image.
     boolean isImage;
 
+    // Whether the node contains hidden nodes.
+    boolean hasHiddenOffscreenNodes;
+
     // Aria auto complete.
     DOMString? autoComplete;
 
@@ -1376,6 +1376,8 @@ enum SortDirectionType {
     AutomationNode? nextOnLine;
     AutomationNode? previousFocus;
     AutomationNode? nextFocus;
+    AutomationNode? previousWindowFocus;
+    AutomationNode? nextWindowFocus;
 
     // The index of this node in its parent node's list of children. If this is
     // the root node, this will be undefined.
@@ -1464,6 +1466,9 @@ enum SortDirectionType {
     // Suspend any media playing within this tree.
     static void suspendMedia();
 
+    // Simulates long click on node.
+    static void longClick();
+
     // Scrolls this scrollable container backward.
     static void scrollBackward(optional PerformActionCallback callback);
 
@@ -1496,22 +1501,6 @@ enum SortDirectionType {
     static void removeEventListener(
         EventType eventType, AutomationListener listener, boolean capture);
 
-    // Gets the first node in this node's subtree which matches the given CSS
-    // selector and is within the same DOM context.
-    //
-    // If this node doesn't correspond directly with an HTML node in the DOM,
-    // querySelector will be run on this node's nearest HTML node ancestor. Note
-    // that this may result in the query returning a node which is not a
-    // descendant of this node.
-    //
-    // If the selector matches a node which doesn't directly correspond to an
-    // automation node (for example an element within an ARIA widget, where the
-    // ARIA widget forms one node of the automation tree, or an element which
-    // is hidden from accessibility via hiding it using CSS or using
-    // aria-hidden), this will return the nearest ancestor which does correspond
-    // to an automation node.
-    static void domQuerySelector(DOMString selector, QueryCallback callback);
-
     // Finds the first AutomationNode in this node's subtree which matches the
     // given search parameters.
     static AutomationNode find(FindParams params);
@@ -1526,19 +1515,8 @@ enum SortDirectionType {
     static AutomationNode getNextTextMatch(
         DOMString searchStr, boolean backward);
 
-    // Returns the detected languages for the provided string attribute as an
-    // array of LanguageSpan objects. There are several guarantees about the
-    // format of the LanguageSpan array:
-    // 1. Is either empty or contains LanguageSpans that cover all indices in
-    // the associated string attribute value.
-    // 2. Is sorted by increasing startIndex (those with smaller startIndex
-    // appear first).
-    // 3. LanguageSpans are non-overlapping and contain exactly one language.
-    static LanguageSpan[] languageAnnotationForStringAttribute(
-        DOMString attribute);
-
     // Creates a position object backed by Chrome's accessibility position support.
-    static AutomationPosition createPosition(long offset, optional boolean isUpstream);
+    static AutomationPosition createPosition(PositionType type, long offset, optional boolean isUpstream);
   };
 
   // Called when the <code>AutomationNode</code> for the page is available.
@@ -1552,14 +1530,6 @@ enum SortDirectionType {
   callback AccessibilityFocusCallback = void(AutomationNode focusedNode);
 
   interface Functions {
-    // Get the automation tree for the tab with the given tabId, or the current
-    // tab if no tabID is given, enabling automation if necessary. Returns a
-    // tree with a placeholder root node; listen for the "loadComplete" event to
-    // get a notification that the tree has fully loaded (the previous root node
-    // reference will stop working at or before this point).
-    [nocompile] static void getTree(optional long tabId,
-                                    optional RootCallback callback);
-
     // Get the automation tree for the whole desktop which consists of all on
     // screen views. Note this API is currently only supported on Chrome OS.
     [nocompile] static void getDesktop(RootCallback callback);
@@ -1578,11 +1548,13 @@ enum SortDirectionType {
     // listen to changes across all trees. Pass a filter to determine what
     // specific tree changes to listen to, and note that listnening to all
     // tree changes can be expensive.
-    [nocompile] static void addTreeChangeObserver(
+    [nocompile, doesNotSupportPromises="Event callback"]
+    static void addTreeChangeObserver(
         TreeChangeObserverFilter filter, TreeChangeObserver observer);
 
     // Remove a tree change observer.
-    [nocompile] static void removeTreeChangeObserver(
+    [nocompile, doesNotSupportPromises="Event callback"]
+    static void removeTreeChangeObserver(
         TreeChangeObserver observer);
 
     // Sets the selection in a tree. This creates a selection in a single

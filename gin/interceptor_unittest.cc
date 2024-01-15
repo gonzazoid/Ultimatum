@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "gin/arguments.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
@@ -33,6 +33,11 @@ class MyInterceptor : public Wrappable<MyInterceptor>,
 
   static gin::Handle<MyInterceptor> Create(v8::Isolate* isolate) {
     return CreateHandle(isolate, new MyInterceptor(isolate));
+  }
+
+  void Clear() {
+    NamedPropertyInterceptor::ClearForTesting();
+    IndexedPropertyInterceptor::ClearForTesting();
   }
 
   int value() const { return value_; }
@@ -166,6 +171,7 @@ class InterceptorTest : public V8Test {
     EXPECT_EQ("", try_catch.GetStackTrace());
 
     EXPECT_EQ(191, obj->value());
+    obj->Clear();
   }
 };
 

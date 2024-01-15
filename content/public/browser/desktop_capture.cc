@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "content/common/features.h"
 #include "content/public/common/content_features.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -15,6 +16,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "content/browser/media/capture/aura_window_to_mojo_device_adapter.h"
+#include "content/browser/media/capture/desktop_capturer_ash.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #endif
 
@@ -23,6 +25,27 @@
 #include "base/nix/xdg_util.h"
 #endif
 
+#if BUILDFLAG(IS_WIN)
+#include "base/win/windows_version.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/mac_util.h"
+
+BASE_FEATURE(kUseCGDisplayStreamCreateSonoma,
+             "UseCGDisplayStreamCreateSonoma",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// CGDisplayStreamCreate() is marked as deprecated from macOS 14 (Sonoma), so
+// don't use unless the feature flag is set.
+bool CGDisplayStreamCreateIsAvailable() {
+  if (base::mac::MacOSMajorVersion() >= 14) {
+    return base::FeatureList::IsEnabled(kUseCGDisplayStreamCreateSonoma);
+  }
+  return true;
+}
+#endif  // BUILDFLAG(IS_MAC)
+
 namespace content::desktop_capture {
 
 webrtc::DesktopCaptureOptions CreateDesktopCaptureOptions() {
@@ -30,19 +53,23 @@ webrtc::DesktopCaptureOptions CreateDesktopCaptureOptions() {
   // Leave desktop effects enabled during WebRTC captures.
   options.set_disable_effects(false);
 #if BUILDFLAG(IS_WIN)
+  // TODO(crbug.com/webrtc/15045): Possibly remove this flag. Keeping for now
+  // to force fallback to GDI.
   static BASE_FEATURE(kDirectXCapturer, "DirectXCapturer",
                       base::FEATURE_ENABLED_BY_DEFAULT);
   if (base::FeatureList::IsEnabled(kDirectXCapturer)) {
+    // Results in DirectX as main capture API and GDI as fallback solution.
     options.set_allow_directx_capturer(true);
-    options.set_allow_use_magnification_api(false);
-  } else {
-    options.set_allow_use_magnification_api(true);
   }
   options.set_enumerate_current_process_windows(
       ShouldEnumerateCurrentProcessWindows());
 
 #elif BUILDFLAG(IS_MAC)
-  if (base::FeatureList::IsEnabled(features::kIOSurfaceCapturer)) {
+  // Enabling IO surface capturer means that we will be using the
+  // CGDisplayStreamCreate() API. This is marked as deprecated from macOS 14
+  // (Sonoma), only use it if it's available.
+  if (base::FeatureList::IsEnabled(features::kIOSurfaceCapturer) &&
+      CGDisplayStreamCreateIsAvailable()) {
     options.set_allow_iosurface(true);
   }
 #endif
@@ -54,14 +81,22 @@ webrtc::DesktopCaptureOptions CreateDesktopCaptureOptions() {
   return options;
 }
 
-std::unique_ptr<webrtc::DesktopCapturer> CreateScreenCapturer() {
+std::unique_ptr<webrtc::DesktopCapturer> CreateScreenCapturer(
+    bool allow_wgc_screen_capturer) {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   return std::make_unique<DesktopCapturerLacros>(
       DesktopCapturerLacros::CaptureType::kScreen,
       webrtc::DesktopCaptureOptions());
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+  return std::make_unique<DesktopCapturerAsh>();
 #else
-  return webrtc::DesktopCapturer::CreateScreenCapturer(
-      CreateDesktopCaptureOptions());
+  auto options = desktop_capture::CreateDesktopCaptureOptions();
+#if defined(RTC_ENABLE_WIN_WGC)
+  if (allow_wgc_screen_capturer) {
+    options.set_allow_wgc_screen_capturer(true);
+  }
+#endif  // defined(RTC_ENABLE_WIN_WGC)
+  return webrtc::DesktopCapturer::CreateScreenCapturer(options);
 #endif
 }
 

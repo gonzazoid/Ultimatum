@@ -4,6 +4,7 @@
 
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 assert(is_android, "This component can only be depended on for android builds")
 
@@ -14,6 +15,8 @@ static_library("metrics") {
     "android_metrics_log_uploader.h",
     "android_metrics_service_client.cc",
     "android_metrics_service_client.h",
+    "features.cc",
+    "features.h",
     "memory_metrics_logger.cc",
     "memory_metrics_logger.h",
   ]
@@ -42,19 +45,30 @@ java_cpp_enum("java_enum_srcjar") {
   sources = [ "android_metrics_service_client.h" ]
 }
 
+java_cpp_features("java_features_srcjar") {
+  # External code should depend on ":java" instead.
+  visibility = [ ":*" ]
+  sources = [ "features.cc" ]
+  template = "java_templates/AndroidMetricsFeatures.java.tmpl"
+}
+
 android_library("java") {
   sources = [
+    "java/src/org/chromium/components/metrics/AndroidMetricsLogConsumer.java",
     "java/src/org/chromium/components/metrics/AndroidMetricsLogUploader.java",
     "java/src/org/chromium/components/metrics/AndroidMetricsServiceClient.java",
   ]
 
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
-  srcjar_deps = [ ":java_enum_srcjar" ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+  srcjar_deps = [
+    ":java_enum_srcjar",
+    ":java_features_srcjar",
+    ":jni",
+  ]
 }
 
 generate_jni("jni") {
@@ -71,6 +85,7 @@ source_set("unit_tests") {
     ":metrics",
     "//base/test:test_support",
     "//components/metrics",
+    "//components/metrics:content",
     "//components/prefs:test_support",
     "//content/test:test_support",
     "//testing/gtest",
@@ -84,6 +99,6 @@ java_group("test_support_java") {
   testonly = true
   deps = [
     ":java",
-    "//components/version_info/android:version_constants_java",
+    "//base/version_info/android:version_constants_java",
   ]
 }

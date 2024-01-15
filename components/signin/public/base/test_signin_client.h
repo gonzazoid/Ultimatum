@@ -10,12 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/chromeos_buildflags.h"
 #include "components/signin/public/base/signin_client.h"
+#include "components/signin/public/base/wait_for_network_callback_helper.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
@@ -27,6 +28,26 @@
 #endif
 
 class PrefService;
+
+namespace version_info {
+enum class Channel;
+}
+
+class TestWaitForNetworkCallbackHelper : public WaitForNetworkCallbackHelper {
+ public:
+  TestWaitForNetworkCallbackHelper();
+  ~TestWaitForNetworkCallbackHelper() override;
+
+  // WaitForNetworkCallbackHelper:
+  bool AreNetworkCallsDelayed() override;
+  void DelayNetworkCall(base::OnceClosure callback) override;
+
+  void SetNetworkCallsDelayed(bool delayed);
+
+ private:
+  bool network_calls_delayed_ = false;
+  std::vector<base::OnceClosure> delayed_network_calls_;
+};
 
 // An implementation of SigninClient for use in unittests. Instantiates test
 // versions of the various objects that SigninClient is required to provide as
@@ -51,12 +72,6 @@ class TestSigninClient : public SigninClient {
   // once there is a unit test that requires it.
   PrefService* GetPrefs() override;
 
-  // Allow or disallow continuation of sign-out depending on value of
-  // |is_clear_primary_account_allowed_|;
-  void PreSignOut(
-      base::OnceCallback<void(SignoutDecision)> on_signout_decision_reached,
-      signin_metrics::ProfileSignout signout_source_metric) override;
-
   // Wraps the test_url_loader_factory().
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
 
@@ -77,10 +92,6 @@ class TestSigninClient : public SigninClient {
     are_signin_cookies_allowed_ = value;
   }
 
-  void set_is_clear_primary_account_allowed(SignoutDecision value) {
-    is_clear_primary_account_allowed_ = value;
-  }
-
   // When |value| is true, network calls posted through DelayNetworkCall() are
   // delayed indefinitely.
   // When |value| is false, all pending calls are unblocked, and new calls are
@@ -94,10 +105,16 @@ class TestSigninClient : public SigninClient {
       content_settings::Observer* observer) override;
   void RemoveContentSettingsObserver(
       content_settings::Observer* observer) override;
+  bool AreNetworkCallsDelayed() override;
   void DelayNetworkCall(base::OnceClosure callback) override;
   std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcher(
       GaiaAuthConsumer* consumer,
       gaia::GaiaSource source) override;
+  version_info::Channel GetClientChannel() override;
+  void OnPrimaryAccountChangedWithEventSource(
+      signin::PrimaryAccountChangeEvent event_details,
+      absl::variant<signin_metrics::AccessPoint, signin_metrics::ProfileSignout>
+          event_source) override;
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   absl::optional<account_manager::Account> GetInitialPrimaryAccount() override;
@@ -111,6 +128,8 @@ class TestSigninClient : public SigninClient {
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
  private:
+  std::unique_ptr<TestWaitForNetworkCallbackHelper>
+      test_wait_for_network_callback_helper_;
   std::unique_ptr<network::TestURLLoaderFactory>
       default_test_url_loader_factory_;
   raw_ptr<network::TestURLLoaderFactory> test_url_loader_factory_;
@@ -118,10 +137,6 @@ class TestSigninClient : public SigninClient {
   raw_ptr<PrefService> pref_service_;
   std::unique_ptr<network::mojom::CookieManager> cookie_manager_;
   bool are_signin_cookies_allowed_;
-  bool network_calls_delayed_;
-  SignoutDecision is_clear_primary_account_allowed_ = SignoutDecision::ALLOW;
-
-  std::vector<base::OnceClosure> delayed_network_calls_;
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   absl::optional<account_manager::Account> initial_primary_account_;

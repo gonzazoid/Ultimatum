@@ -6,12 +6,14 @@
 #define CHROME_BROWSER_UI_VIEWS_SELECT_FILE_DIALOG_EXTENSION_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/policy/dlp/dlp_files_controller.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_file_destination.h"
 #include "ui/color/color_provider_source_observer.h"
 #include "ui/gfx/native_widget_types.h"  // gfx::NativeWindow
 #include "ui/shell_dialogs/select_file_dialog.h"
@@ -91,19 +93,18 @@ class SelectFileDialogExtension : public ui::SelectFileDialog {
     Owner& operator=(Owner&&);
 
     // The native window that opened the dialog.
-    aura::Window* window = nullptr;
+    raw_ptr<aura::Window, LeakedDanglingUntriaged> window = nullptr;
     // Android task ID if the owner window is an Android app.
-    absl::optional<int> android_task_id;
+    std::optional<int> android_task_id;
     // Lacros window ID if the owner window is a Lacros browser. This field
     // can be nullopt even when is_lacros is true, for dialogs that are not
     // owned by a particular window, aka "modeless" dialog.
-    absl::optional<std::string> lacros_window_id;
+    std::optional<std::string> lacros_window_id;
     // Set to true only if SelectFileAsh opened the dialog.
     bool is_lacros = false;
     // The URL or Component type of the caller that opened the dialog (Save
     // As/File Picker).
-    absl::optional<policy::DlpFilesController::DlpFileDestination>
-        dialog_caller;
+    std::optional<policy::DlpFileDestination> dialog_caller;
   };
   void SelectFileWithFileManagerParams(Type type,
                                        const std::u16string& title,
@@ -152,8 +153,12 @@ class SelectFileDialogExtension : public ui::SelectFileDialog {
       std::unique_ptr<ui::SelectFilePolicy> policy);
   ~SelectFileDialogExtension() override;
 
+  // Applies DLP policies if there's any, then notifies listeners accordingly.
+  void ApplyPolicyAndNotifyListener(
+      std::optional<policy::DlpFileDestination> dialog_caller);
+
   // Invokes the appropriate file selection callback on our listener.
-  void NotifyListener();
+  void NotifyListener(std::vector<ui::SelectedFileInfo> selection_files);
 
   // Adds this to the list of pending dialogs, used for testing.
   void AddPending(RoutingID routing_id);
@@ -170,16 +175,20 @@ class SelectFileDialogExtension : public ui::SelectFileDialog {
   // If System Files App is enabled it stores the web contents associated with
   // System File App dialog. Not owned by this class. Set only while System
   // Files App dialog is opened.
-  content::WebContents* system_files_app_web_contents_;
+  raw_ptr<content::WebContents, LeakedDanglingUntriaged>
+      system_files_app_web_contents_;
 
   // ID of the tab that spawned this dialog, used to route callbacks.
   RoutingID routing_id_;
 
   // Pointer to the profile the dialog is running in.
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile, LeakedDanglingUntriaged> profile_ = nullptr;
 
   // Information about the dialog's owner, such as the window or app type.
   Owner owner_;
+
+  // Dialog type.
+  Type type_;
 
   // We defer the callback into SelectFileDialog::Listener until the window
   // closes, to match the semantics of file selection on Windows and Mac.
@@ -193,7 +202,7 @@ class SelectFileDialogExtension : public ui::SelectFileDialog {
   std::vector<ui::SelectedFileInfo> selection_files_;
   int selection_index_ = 0;
   bool can_resize_ = true;
-  void* params_ = nullptr;
+  raw_ptr<void, LeakedDanglingUntriaged> params_ = nullptr;
   base::WeakPtrFactory<SelectFileDialogExtension> weak_factory_{this};
 };
 

@@ -6,6 +6,7 @@
 
 #include <fcntl.h>
 
+#include <ostream>
 #include <string>
 
 #include "base/logging.h"
@@ -85,8 +86,9 @@ libinput_event_type LibInputEventConverter::LibInputEvent::Type() const {
 }
 
 LibInputEventConverter::LibInputDevice::LibInputDevice(
+    int id,
     libinput_device* const device)
-    : device_(device) {
+    : device_id_(id), device_(device) {
   DCHECK(device);
 
   // |libinput_path_add_device| returns a device pointer that is is
@@ -99,7 +101,7 @@ LibInputEventConverter::LibInputDevice::LibInputDevice(
 }
 
 LibInputEventConverter::LibInputDevice::LibInputDevice(LibInputDevice&& other)
-    : device_(other.device_) {
+    : device_id_(other.device_id_), device_(other.device_) {
   other.device_ = nullptr;
 }
 
@@ -111,9 +113,10 @@ LibInputEventConverter::LibInputDevice::~LibInputDevice() {
 
 void LibInputEventConverter::LibInputDevice::ApplySettings(
     const InputDeviceSettingsEvdev& settings) const {
-  SetNaturalScrollEnabled(settings.natural_scroll_enabled);
-  SetSensitivity(settings.touchpad_sensitivity);
-  SetTapToClickEnabled(settings.tap_to_click_enabled);
+  const auto& touchpad_settings = settings.GetTouchpadSettings(device_id_);
+  SetNaturalScrollEnabled(touchpad_settings.natural_scroll_enabled);
+  SetSensitivity(touchpad_settings.sensitivity);
+  SetTapToClickEnabled(touchpad_settings.tap_to_click_enabled);
 }
 
 // Get a comma-separated string of the device's capabilities
@@ -195,6 +198,7 @@ LibInputEventConverter::LibInputContext::Create() {
 
 absl::optional<LibInputEventConverter::LibInputDevice>
 LibInputEventConverter::LibInputContext::AddDevice(
+    int id,
     const base::FilePath& path) const {
   auto* const dev = libinput_path_add_device(li_, path.value().c_str());
   if (!dev) {
@@ -202,7 +206,7 @@ LibInputEventConverter::LibInputContext::AddDevice(
     return absl::nullopt;
   }
 
-  return absl::make_optional(LibInputDevice(dev));
+  return absl::make_optional(LibInputDevice(id, dev));
 }
 
 bool LibInputEventConverter::LibInputContext::Dispatch() const {
@@ -302,7 +306,7 @@ LibInputEventConverter::LibInputEventConverter(
       has_touchpad_(devinfo.HasTouchpad()),
       has_touchscreen_(devinfo.HasTouchscreen()),
       context_(std::move(ctx)),
-      device_(context_.AddDevice(path)) {}
+      device_(context_.AddDevice(id, path)) {}
 
 LibInputEventConverter::~LibInputEventConverter() {}
 
@@ -442,6 +446,16 @@ base::TimeTicks LibInputEventConverter::Timestamp(const LibInputEvent& evt) {
   libinput_event_pointer* event = evt.PointerEvent();
   uint64_t time_usec = libinput_event_pointer_get_time_usec(event);
   return base::TimeTicks() + base::Microseconds(time_usec);
+}
+
+std::ostream& LibInputEventConverter::DescribeForLog(std::ostream& os) const {
+  os << "class=ui::LibInputEventConverter id=" << input_device_.id << std::endl
+     << " has_keyboard=" << has_keyboard_ << std::endl
+     << " has_mouse=" << has_mouse_ << std::endl
+     << " has_touchpad=" << has_touchpad_ << std::endl
+     << " has_touchscreen=" << has_touchscreen_ << std::endl
+     << "base ";
+  return EventConverterEvdev::DescribeForLog(os);
 }
 
 }  // namespace ui

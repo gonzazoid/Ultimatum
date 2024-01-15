@@ -9,12 +9,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/debug/crash_logging.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
@@ -54,50 +55,6 @@ bool IsLastResortFontName(const std::u16string& font_name) {
       return true;
   }
   return false;
-}
-
-// This enum is used to define the buckets for an enumerated UMA histogram.
-// Hence,
-//   (a) existing enumerated constants should never be deleted or reordered, and
-//   (b) new constants should only be appended at the end of the enumeration.
-enum DirectWriteLoadFamilyResult {
-  LOAD_FAMILY_SUCCESS_SINGLE_FAMILY = 0,
-  LOAD_FAMILY_SUCCESS_MATCHED_FAMILY = 1,
-  LOAD_FAMILY_ERROR_MULTIPLE_FAMILIES = 2,
-  LOAD_FAMILY_ERROR_NO_FAMILIES = 3,
-  LOAD_FAMILY_ERROR_NO_COLLECTION = 4,
-
-  LOAD_FAMILY_MAX_VALUE
-};
-
-// This enum is used to define the buckets for an enumerated UMA histogram.
-// Hence,
-//   (a) existing enumerated constants should never be deleted or reordered, and
-//   (b) new constants should only be appended at the end of the enumeration.
-enum FontProxyError {
-  FIND_FAMILY_SEND_FAILED = 0,
-  GET_FAMILY_COUNT_SEND_FAILED = 1,
-  COLLECTION_KEY_INVALID = 2,
-  FAMILY_INDEX_OUT_OF_RANGE = 3,
-  GET_FONT_FILES_SEND_FAILED = 4,
-  MAPPED_FILE_FAILED = 5,
-  DUPLICATE_HANDLE_FAILED = 6,
-
-  FONT_PROXY_ERROR_MAX_VALUE
-};
-
-void LogLoadFamilyResult(DirectWriteLoadFamilyResult result) {
-  UMA_HISTOGRAM_ENUMERATION("DirectWrite.Fonts.Proxy.LoadFamilyResult", result,
-                            LOAD_FAMILY_MAX_VALUE);
-}
-
-void LogFamilyCount(uint32_t count) {
-  UMA_HISTOGRAM_COUNTS_1000("DirectWrite.Fonts.Proxy.FamilyCount", count);
-}
-
-void LogFontProxyError(FontProxyError error) {
-  UMA_HISTOGRAM_ENUMERATION("DirectWrite.Fonts.Proxy.FontProxyError", error,
-                            FONT_PROXY_ERROR_MAX_VALUE);
 }
 
 // Binds a DWriteFontProxy pending receiver. Must be invoked from the main
@@ -197,7 +154,7 @@ HRESULT DWriteFontCollectionProxy::FindFamilyName(
   TRACE_EVENT0("dwrite,fonts", "FontProxy::FindFamilyName");
 
   HRESULT hr = S_OK;
-  if (absl::optional<UINT32> family_index = FindFamilyIndex(family_name, &hr)) {
+  if (std::optional<UINT32> family_index = FindFamilyIndex(family_name, &hr)) {
     DCHECK_EQ(hr, S_OK);
     DCHECK(IsValidFamilyIndex(*family_index));
     *index = *family_index;
@@ -210,7 +167,7 @@ HRESULT DWriteFontCollectionProxy::FindFamilyName(
   return hr;
 }
 
-absl::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
+std::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
     const std::u16string& family_name,
     HRESULT* hresult_out) {
   DCHECK(!hresult_out || *hresult_out == S_OK);
@@ -220,13 +177,13 @@ absl::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
     if (iter != family_names_.end()) {
       if (iter->second != kFamilyNotFound)
         return iter->second;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     if (base::FeatureList::IsEnabled(kLimitFontFamilyNamesPerRenderer) &&
         family_names_.size() > kFamilyNamesLimit &&
         !IsLastResortFontName(family_name)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
@@ -235,10 +192,9 @@ absl::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
   // the lock protects the main thread in such case. crbug.com/1289576
   uint32_t family_index = 0;
   if (!GetFontProxy().FindFamily(family_name, &family_index)) {
-    LogFontProxyError(FIND_FAMILY_SEND_FAILED);
     if (hresult_out)
       *hresult_out = E_FAIL;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   {
@@ -247,7 +203,7 @@ absl::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
            family_names_[family_name] == family_index);
     family_names_[family_name] = family_index;
     if (UNLIKELY(family_index == kFamilyNotFound))
-      return absl::nullopt;
+      return std::nullopt;
     DCHECK(IsValidFamilyIndex(family_index));
 
     if (DWriteFontFamilyProxy* family =
@@ -258,14 +214,13 @@ absl::optional<UINT32> DWriteFontCollectionProxy::FindFamilyIndex(
 
     if (hresult_out)
       *hresult_out = E_FAIL;
-    return absl::nullopt;
+    return std::nullopt;
   }
 }
 
 DWriteFontFamilyProxy* DWriteFontCollectionProxy::FindFamily(
     const std::u16string& family_name) {
-  if (const absl::optional<UINT32> family_index =
-          FindFamilyIndex(family_name)) {
+  if (const std::optional<UINT32> family_index = FindFamilyIndex(family_name)) {
     if (DWriteFontFamilyProxy* family = GetFamily(*family_index))
       return family;
   }
@@ -333,11 +288,9 @@ UINT32 DWriteFontCollectionProxy::GetFontFamilyCountLockRequired() {
 
   uint32_t family_count = 0;
   if (!GetFontProxy().GetFamilyCount(&family_count)) {
-    LogFontProxyError(GET_FAMILY_COUNT_SEND_FAILED);
     return 0;
   }
 
-  LogFamilyCount(family_count);
   family_count_ = family_count;
   return family_count;
 }
@@ -372,7 +325,6 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
     UINT32 collection_key_size,
     IDWriteFontFileEnumerator** font_file_enumerator) {
   if (!collection_key || collection_key_size != sizeof(uint32_t)) {
-    LogFontProxyError(COLLECTION_KEY_INVALID);
     return E_INVALIDARG;
   }
 
@@ -381,7 +333,6 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
   const uint32_t* family_index =
       reinterpret_cast<const uint32_t*>(collection_key);
 
-  std::vector<base::FilePath> file_names;
   std::vector<base::File> file_handles;
   {
     // The Mojo call cannot be asynchronous because CreateEnumeratorFromKey is
@@ -390,30 +341,21 @@ HRESULT DWriteFontCollectionProxy::CreateEnumeratorFromKey(
     // (CreateEnumeratorFromKey can be invoked from the main thread or the
     // ThreadPool).
     base::ScopedAllowBaseSyncPrimitives allow_sync;
-    if (!GetFontProxy().GetFontFiles(*family_index, &file_names,
-                                     &file_handles)) {
-      LogFontProxyError(GET_FONT_FILES_SEND_FAILED);
+    if (!GetFontProxy().GetFontFileHandles(*family_index, &file_handles)) {
       return E_FAIL;
     }
   }
 
   std::vector<HANDLE> handles;
-  handles.reserve(file_names.size() + file_handles.size());
-  for (const base::FilePath& file_name : file_names) {
-    // This leaks the handles, since they are used as the reference key to
-    // CreateStreamFromKey, and DirectWrite requires the reference keys to
-    // remain valid for the lifetime of the loader. The loader is the font
-    // collection proxy, which remains alive for the lifetime of the renderer.
-    HANDLE handle =
-        CreateFile(file_name.value().c_str(), GENERIC_READ, FILE_SHARE_READ,
-                   NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (handle != INVALID_HANDLE_VALUE)
-      handles.push_back(handle);
-  }
+  handles.reserve(file_handles.size());
   for (auto& file_handle : file_handles) {
     handles.push_back(file_handle.TakePlatformFile());
   }
 
+  // This leaks the handles, since they are used as the reference key to
+  // CreateStreamFromKey, and DirectWrite requires the reference keys to
+  // remain valid for the lifetime of the loader. The loader is the font
+  // collection proxy, which remains alive for the lifetime of the renderer.
   HRESULT hr = mswr::MakeAndInitialize<FontFileEnumerator>(
       font_file_enumerator, factory, this, &handles);
 
@@ -461,7 +403,7 @@ HRESULT DWriteFontCollectionProxy::RuntimeClassInitialize(
   factory_ = factory;
   if (proxy)
     font_proxy_.GetOrCreateValue().Bind(std::move(proxy));
-  main_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   // |prewarm_task_runner_| needs to be initialized later because ThreadPool is
   // not setup yet when |this| is instantiated. See |InitializePrewarmer|.
 
@@ -718,9 +660,6 @@ const std::u16string& DWriteFontFamilyProxy::GetName() {
 }
 
 IDWriteFontFamily* DWriteFontFamilyProxy::LoadFamily() {
-  // The time needed to lock should be included in the reports. They metrics may
-  // include entries of almost zero time when |this| is already loaded though.
-  SCOPED_UMA_HISTOGRAM_TIMER("DirectWrite.Fonts.Proxy.LoadFamilyTime");
   TRACE_EVENT0("dwrite,fonts", "DWriteFontFamilyProxy::LoadFamily");
 
   base::AutoLock family_lock(family_lock_);
@@ -749,7 +688,6 @@ IDWriteFontFamily* DWriteFontFamilyProxy::LoadFamilyCoreLockRequired() {
 
   mswr::ComPtr<IDWriteFontCollection> collection;
   if (!proxy_collection_->LoadFamily(family_index_, &collection)) {
-    LogLoadFamilyResult(LOAD_FAMILY_ERROR_NO_COLLECTION);
     return nullptr;
   }
 
@@ -768,7 +706,6 @@ IDWriteFontFamily* DWriteFontFamilyProxy::LoadFamilyCoreLockRequired() {
         &found);
     if (SUCCEEDED(hr) && found) {
       hr = collection->GetFontFamily(family_index, &family_);
-      LogLoadFamilyResult(LOAD_FAMILY_SUCCESS_MATCHED_FAMILY);
       return SUCCEEDED(hr) ? family_.Get() : nullptr;
     }
   }
@@ -777,12 +714,8 @@ IDWriteFontFamily* DWriteFontFamilyProxy::LoadFamilyCoreLockRequired() {
 
   if (family_count == 0) {
     // This is really strange, we successfully loaded no fonts?!
-    LogLoadFamilyResult(LOAD_FAMILY_ERROR_NO_FAMILIES);
     return nullptr;
   }
-
-  LogLoadFamilyResult(family_count == 1 ? LOAD_FAMILY_SUCCESS_SINGLE_FAMILY
-                                        : LOAD_FAMILY_ERROR_MULTIPLE_FAMILIES);
 
   hr = collection->GetFontFamily(0, &family_);
   return SUCCEEDED(hr) ? family_.Get() : nullptr;
@@ -870,12 +803,10 @@ HRESULT FontFileStream::RuntimeClassInitialize(HANDLE handle) {
   if (!DuplicateHandle(GetCurrentProcess(), handle, GetCurrentProcess(),
                        &duplicate_handle, 0 /* dwDesiredAccess */,
                        false /* bInheritHandle */, DUPLICATE_SAME_ACCESS)) {
-    LogFontProxyError(DUPLICATE_HANDLE_FAILED);
     return E_FAIL;
   }
 
   if (!data_.Initialize(base::File(duplicate_handle))) {
-    LogFontProxyError(MAPPED_FILE_FAILED);
     return E_FAIL;
   }
   return S_OK;

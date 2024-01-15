@@ -6,7 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "ash/components/arc/arc_features.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -42,7 +44,10 @@ constexpr char kErrorDescription[] = "error_description";
 constexpr char kDeviceId[] = "device_id";
 constexpr char kDeviceType[] = "device_type";
 constexpr char kDeviceTypeArc[] = "arc_plus_plus";
-constexpr char kLoginScopedToken[] = "login_scoped_token";
+constexpr char kClientId[] = "client_id";
+constexpr char kClientIdArc[] =
+    "1070009224336-sdh77n7uot3oc99ais00jmuft6sk2fg9.apps.googleusercontent.com";
+constexpr char kRefreshToken[] = "refresh_token";
 constexpr char kGetAuthCodeKey[] = "Content-Type";
 constexpr char kGetAuthCodeValue[] = "application/json; charset=utf-8";
 constexpr char kContentTypeJSON[] = "application/json";
@@ -57,8 +62,8 @@ signin::ScopeSet GetAccessTokenScopes() {
 
 }  // namespace
 
-const char kAuthTokenExchangeEndPoint[] =
-    "https://www.googleapis.com/oauth2/v4/ExchangeToken";
+const char kTokenBootstrapEndPoint[] =
+    "https://oauthtokenbootstrap.googleapis.com/v1/tokenbootstrap";
 
 ArcBackgroundAuthCodeFetcher::ArcBackgroundAuthCodeFetcher(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -124,10 +129,11 @@ void ArcBackgroundAuthCodeFetcher::OnAccessTokenFetchComplete(
       multi_user_util::GetAccountIdFromProfile(profile_));
   DCHECK(!device_id.empty());
 
-  base::DictionaryValue request_data;
-  request_data.SetStringKey(kLoginScopedToken, token_info.token);
-  request_data.SetStringKey(kDeviceType, kDeviceTypeArc);
-  request_data.SetStringKey(kDeviceId, device_id);
+  base::Value::Dict request_data;
+  request_data.Set(kRefreshToken, token_info.token);
+  request_data.Set(kClientId, kClientIdArc);
+  request_data.Set(kDeviceType, kDeviceTypeArc);
+  request_data.Set(kDeviceId, device_id);
   std::string request_string;
   base::JSONWriter::Write(request_data, &request_string);
   const net::NetworkTrafficAnnotationTag traffic_annotation =
@@ -142,9 +148,18 @@ void ArcBackgroundAuthCodeFetcher::OnAccessTokenFetchComplete(
           "account setup. This is also triggered when the Google Play Store "
           "detects that current credentials are revoked or invalid and "
           "requests extra authorization code for the account re-sign in."
-        data: "Device id and access token."
+        data: "Device id, access token, and hardcoded client id."
         destination: GOOGLE_OWNED_SERVICE
+        internal {
+          contacts {
+            email: "arc-core@google.com"
+          }
         }
+        user_data {
+          type: ACCESS_TOKEN
+        }
+        last_reviewed: "2023-01-24"
+      }
       policy {
         cookies_allowed: NO
         setting:
@@ -154,7 +169,7 @@ void ArcBackgroundAuthCodeFetcher::OnAccessTokenFetchComplete(
         policy_exception_justification: "Not implemented."
   })");
   auto resource_request = std::make_unique<network::ResourceRequest>();
-  resource_request->url = GURL(kAuthTokenExchangeEndPoint);
+  resource_request->url = GURL(kTokenBootstrapEndPoint);
   resource_request->load_flags = net::LOAD_DISABLE_CACHE |
                                  net::LOAD_BYPASS_CACHE |
                                  (bypass_proxy_ ? net::LOAD_BYPASS_PROXY : 0);
@@ -188,8 +203,8 @@ void ArcBackgroundAuthCodeFetcher::OnSimpleLoaderComplete(
     response_code =
         simple_url_loader_->ResponseInfo()->headers->response_code();
   }
-
-  bool mandatory_proxy_failed = simple_url_loader_->NetError() ==
+  int net_error = simple_url_loader_->NetError();
+  bool mandatory_proxy_failed = net_error ==
                                 net::ERR_MANDATORY_PROXY_CONFIGURATION_FAILED;
 
   // If the network request has failed because of an unreachable PAC script,
@@ -214,15 +229,16 @@ void ArcBackgroundAuthCodeFetcher::OnSimpleLoaderComplete(
       deserializer.Deserialize(nullptr, &error_msg);
 
   if (!response_body || (response_code != net::HTTP_OK)) {
-    const auto* error_value =
+    const std::string* error =
         json_value && json_value->is_dict()
-            ? json_value->FindKeyOfType(kErrorDescription,
-                                        base::Value::Type::STRING)
+            ? json_value->GetDict().FindString(kErrorDescription)
             : nullptr;
 
-    LOG(WARNING) << "Server returned wrong response code: " << response_code
-                 << ": " << (error_value ? error_value->GetString() : "Unknown")
-                 << ".";
+    LOG(WARNING) << "Server request failed."
+                 << " Net error: " << net_error
+                 << ": " << net::ErrorToString(net_error)
+                 << ", response code: " << response_code
+                 << ": " << (error ? *error : "Unknown") << ".";
 
     OptInSilentAuthCode uma_status;
     if (response_code >= 400 && response_code < 500) {
@@ -255,18 +271,14 @@ void ArcBackgroundAuthCodeFetcher::OnSimpleLoaderComplete(
     return;
   }
 
-  const auto* auth_code_value =
-      json_value->FindKeyOfType(kToken, base::Value::Type::STRING);
-  std::string auth_code =
-      auth_code_value ? auth_code_value->GetString() : std::string();
-  if (auth_code.empty()) {
+  const std::string* auth_code = json_value->GetDict().FindString(kToken);
+  if (!auth_code || auth_code->empty()) {
     LOG(WARNING) << "Response does not contain auth code.";
     ReportResult(std::string(), OptInSilentAuthCode::NO_AUTH_CODE_IN_RESPONSE);
     return;
   }
 
-  UpdateAuthCodeFetcherProxyBypassUMA(bypass_proxy_, profile_);
-  ReportResult(auth_code, OptInSilentAuthCode::SUCCESS);
+  ReportResult(*auth_code, OptInSilentAuthCode::SUCCESS);
 }
 
 void ArcBackgroundAuthCodeFetcher::ReportResult(

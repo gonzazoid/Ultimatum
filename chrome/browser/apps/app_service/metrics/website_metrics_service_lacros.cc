@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_service/metrics/website_metrics_service_lacros.h"
 
+#include "base/check.h"
 #include "base/time/time.h"
 #include "chromeos/crosapi/mojom/device_attributes.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
@@ -23,14 +24,29 @@ constexpr base::TimeDelta kFiveMinutes = base::Minutes(5);
 }  // namespace
 
 WebsiteMetricsServiceLacros::WebsiteMetricsServiceLacros(Profile* profile)
-    : profile_(profile) {
+    : profile_(profile) {}
+
+WebsiteMetricsServiceLacros::~WebsiteMetricsServiceLacros() {
+  // Notify observers.
+  for (auto& observer : observers_) {
+    observer.OnWebsiteMetricsServiceLacrosWillBeDestroyed();
+  }
+}
+
+// static
+void WebsiteMetricsServiceLacros::RegisterProfilePrefs(
+    PrefRegistrySimple* registry) {
+  registry->RegisterDictionaryPref(kWebsiteUsageTime);
+}
+
+void WebsiteMetricsServiceLacros::InitDeviceTypeAndStart() {
   auto* service = chromeos::LacrosService::Get();
   if (!service || !service->IsAvailable<crosapi::mojom::DeviceAttributes>()) {
     return;
   }
 
   int mojo_version =
-      service->GetInterfaceVersion(crosapi::mojom::DeviceAttributes::Uuid_);
+      service->GetInterfaceVersion<crosapi::mojom::DeviceAttributes>();
   if (mojo_version < int{crosapi::mojom::DeviceAttributes::MethodMinVersions::
                              kGetDeviceTypeForMetricsMinVersion}) {
     return;
@@ -43,15 +59,8 @@ WebsiteMetricsServiceLacros::WebsiteMetricsServiceLacros(Profile* profile)
           weak_ptr_factory_.GetWeakPtr()));
 }
 
-WebsiteMetricsServiceLacros::~WebsiteMetricsServiceLacros() = default;
-
-// static
-void WebsiteMetricsServiceLacros::RegisterProfilePrefs(
-    PrefRegistrySimple* registry) {
-  registry->RegisterDictionaryPref(kWebsiteUsageTime);
-}
-
 void WebsiteMetricsServiceLacros::Start() {
+  CHECK(website_metrics_);
   // Check every `kFiveMinutes` to record websites usage time.
   five_minutes_timer_.Start(FROM_HERE, kFiveMinutes, this,
                             &WebsiteMetricsServiceLacros::CheckForFiveMinutes);
@@ -60,6 +69,21 @@ void WebsiteMetricsServiceLacros::Start() {
   noisy_appkm_reporting_interval_timer_.Start(
       FROM_HERE, kNoisyAppKMReportInterval, this,
       &WebsiteMetricsServiceLacros::CheckForNoisyAppKMReportingInterval);
+
+  // Also notify observers.
+  for (auto& observer : observers_) {
+    observer.OnWebsiteMetricsInit(website_metrics_.get());
+  }
+}
+
+void WebsiteMetricsServiceLacros::AddObserver(
+    WebsiteMetricsServiceLacros::Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void WebsiteMetricsServiceLacros::RemoveObserver(
+    WebsiteMetricsServiceLacros::Observer* observer) {
+  observers_.RemoveObserver(observer);
 }
 
 void WebsiteMetricsServiceLacros::SetWebsiteMetricsForTesting(
@@ -83,6 +107,7 @@ void WebsiteMetricsServiceLacros::OnGetDeviceTypeForMetrics(
     int user_type_by_device_type) {
   website_metrics_ = std::make_unique<apps::WebsiteMetrics>(
       profile_, user_type_by_device_type);
+  Start();
 }
 
 }  // namespace apps

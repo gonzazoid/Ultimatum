@@ -39,6 +39,7 @@
 #include "third_party/blink/public/common/input/web_menu_source_type.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom-shared.h"
+#include "third_party/blink/public/mojom/forms/form_control_type.mojom-shared.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
@@ -63,24 +64,32 @@ struct ContextMenuData {
   // Whether the image in context is a null.
   bool has_image_contents;
 
+  // This is true if the context menu was invoked on an image, media or plugin
+  // document. In these cases the resource for the hit-tested element might be
+  // the main resource, not a subresource.
+  bool is_image_media_plugin_document = false;
+
   // The encoding for the frame in context.
   std::string frame_encoding;
 
   enum MediaFlags {
-    kMediaNone = 0x0,
-    kMediaInError = 0x1,
-    kMediaPaused = 0x2,
-    kMediaMuted = 0x4,
-    kMediaLoop = 0x8,
-    kMediaCanSave = 0x10,
-    kMediaHasAudio = 0x20,
-    kMediaCanToggleControls = 0x40,
-    kMediaControls = 0x80,
-    kMediaCanPrint = 0x100,
-    kMediaCanRotate = 0x200,
-    kMediaCanPictureInPicture = 0x400,
-    kMediaPictureInPicture = 0x800,
-    kMediaCanLoop = 0x1000,
+    kMediaNone = 0,
+    kMediaInError = 1,
+    kMediaPaused = 1 << 1,
+    kMediaMuted = 1 << 2,
+    kMediaLoop = 1 << 3,
+    kMediaCanSave = 1 << 4,
+    kMediaHasAudio = 1 << 5,
+    kMediaCanToggleControls = 1 << 6,
+    kMediaControls = 1 << 7,
+    kMediaCanPrint = 1 << 8,
+    kMediaCanRotate = 1 << 9,
+    kMediaCanPictureInPicture = 1 << 10,
+    kMediaPictureInPicture = 1 << 11,
+    kMediaCanLoop = 1 << 12,
+    kMediaHasVideo = 1 << 13,
+    kMediaHasReadableVideoFrame = 1 << 14,
+    kMediaEncrypted = 1 << 15,
   };
 
   // Extra attributes describing media elements.
@@ -116,9 +125,6 @@ struct ContextMenuData {
 
   // Whether context is editable.
   bool is_editable;
-
-  // If this node is an input field, the type of that field.
-  blink::mojom::ContextMenuDataInputFieldType input_field_type;
 
   enum CheckableMenuItemFlags {
     kCheckableMenuItemDisabled = 0x0,
@@ -158,12 +164,32 @@ struct ContextMenuData {
   // TextFragmentAnchor.
   bool opened_from_highlight = false;
 
-  // The form's renderer id if the context menu is triggered on the form.
-  absl::optional<uint64_t> form_renderer_id;
+  // The type of the form control element on which the context menu is invoked,
+  // if any.
+  std::optional<mojom::FormControlType> form_control_type;
 
-  // The field's renderer id if the context menu is triggered on an input
-  // field or a textarea field.
-  absl::optional<uint64_t> field_renderer_id;
+  // Indicates whether the context menu is invoked on a non-form,
+  // non-form-control element that is contenteditable. Thus, it is mutually
+  // exclusive with `form_control_type`.
+  // TODO(crbug.com/1427131): Only true if AutofillUseDomNodeIdForRendererId
+  // is enabled.
+  bool is_content_editable_for_autofill = false;
+
+  // Identifies the element the context menu was invoked on if either
+  // `form_control_type` is engaged or `is_content_editable_for_autofill` is
+  // true.
+  // See `autofill::FieldRendererId` for the semantics of renderer IDs.
+  uint64_t field_renderer_id = 0;
+
+  // Identifies form to which the field identified by `field_renderer_id` is
+  // associated.
+  // See `autofill::FormRendererId` for the semantics of renderer IDs.
+  uint64_t form_renderer_id = 0;
+
+  // True iff a field's type is plain text but heuristics (e.g. the name
+  // attribute contains 'password' as a substring) recognize it as a password
+  // field.
+  bool is_password_type_by_heuristics = false;
 
   ContextMenuData()
       : media_type(blink::mojom::ContextMenuDataMediaType::kNone),

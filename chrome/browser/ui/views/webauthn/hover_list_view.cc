@@ -16,6 +16,7 @@
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_palette.h"
@@ -36,20 +37,19 @@ std::unique_ptr<WebAuthnHoverButton> CreateHoverButtonForListItem(
     const ui::ImageModel& icon,
     std::u16string item_title,
     std::u16string item_description,
-    views::Button::PressedCallback callback,
-    bool is_two_line_item) {
+    views::Button::PressedCallback callback) {
   constexpr int kChevronSize = 8;
   auto secondary_view =
       std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
           vector_icons::kSubmenuArrowIcon, ui::kColorIcon, kChevronSize));
 
-  constexpr int kIconSize = 20;
+  const int kIconSize = features::IsChromeRefresh2023() ? 24 : 20;
   auto item_image = std::make_unique<views::ImageView>(icon);
   item_image->SetImageSize(gfx::Size(kIconSize, kIconSize));
 
   return std::make_unique<WebAuthnHoverButton>(
       std::move(callback), std::move(item_image), item_title, item_description,
-      std::move(secondary_view), is_two_line_item);
+      std::move(secondary_view), false /*XXX*/);
 }
 
 }  // namespace
@@ -57,7 +57,7 @@ std::unique_ptr<WebAuthnHoverButton> CreateHoverButtonForListItem(
 // HoverListView ---------------------------------------------------------
 
 HoverListView::HoverListView(std::unique_ptr<HoverListModel> model)
-    : model_(std::move(model)), is_two_line_list_(model_->StyleForTwoLines()) {
+    : model_(std::move(model)) {
   DCHECK(model_);
   SetLayoutManager(std::make_unique<views::FillLayout>());
 
@@ -91,8 +91,7 @@ void HoverListView::AppendListItemView(const ui::ImageModel& icon,
   auto hover_button = CreateHoverButtonForListItem(
       icon, item_text, description_text,
       base::BindRepeating(&HoverListModel::OnListItemSelected,
-                          base::Unretained(model_.get()), item_tag),
-      is_two_line_list_);
+                          base::Unretained(model_.get()), item_tag));
 
   auto* list_item_view_ptr = hover_button.release();
   item_container_->AddChildView(list_item_view_ptr);
@@ -108,8 +107,9 @@ views::Button& HoverListView::GetTopListItemView() const {
 }
 
 void HoverListView::RequestFocus() {
-  if (tags_to_list_item_views_.empty())
+  if (tags_to_list_item_views_.empty()) {
     return;
+  }
 
   GetTopListItemView().RequestFocus();
 }
@@ -130,7 +130,7 @@ int HoverListView::GetPreferredViewHeight() const {
   if (reserved_items > 0) {
     auto dummy_hover_button = CreateHoverButtonForListItem(
         ui::ImageModel(), std::u16string(), std::u16string(),
-        views::Button::PressedCallback(), is_two_line_list_);
+        views::Button::PressedCallback());
     const auto list_item_height =
         separator_height + dummy_hover_button->GetPreferredSize().height();
     size += list_item_height * reserved_items;
@@ -138,6 +138,6 @@ int HoverListView::GetPreferredViewHeight() const {
   return std::min(kMaxViewHeight, size);
 }
 
-BEGIN_METADATA(HoverListView, views::View)
+BEGIN_METADATA(HoverListView)
 ADD_READONLY_PROPERTY_METADATA(int, PreferredViewHeight)
 END_METADATA

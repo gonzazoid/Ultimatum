@@ -21,13 +21,12 @@ export class TestPrivacyPageBrowserProxy extends TestBrowserProxy implements
     super([
       'getMetricsReporting',
       'setMetricsReportingEnabled',
-      'showManageSSLCertificates',
+      'showManageSslCertificates',
       'setBlockAutoplayEnabled',
       'getSecureDnsResolverList',
       'getSecureDnsSetting',
       'isValidConfig',
       'probeConfig',
-      'recordUserDropdownInteraction',
     ]);
 
     this.metricsReporting = {
@@ -39,6 +38,10 @@ export class TestPrivacyPageBrowserProxy extends TestBrowserProxy implements
       mode: SecureDnsMode.AUTOMATIC,
       config: '',
       managementMode: SecureDnsUiManagementMode.NO_OVERRIDE,
+      // <if expr="chromeos_ash">
+      dohWithIdentifiersActive: false,
+      configForDisplay: '',
+      // </if>
     };
 
     this.resolverList_ = [{name: 'Custom', value: 'custom', policy: ''}];
@@ -53,8 +56,8 @@ export class TestPrivacyPageBrowserProxy extends TestBrowserProxy implements
     this.methodCalled('setMetricsReportingEnabled', enabled);
   }
 
-  showManageSSLCertificates() {
-    this.methodCalled('showManageSSLCertificates');
+  showManageSslCertificates() {
+    this.methodCalled('showManageSslCertificates');
   }
 
   setBlockAutoplayEnabled(enabled: boolean) {
@@ -107,10 +110,5 @@ export class TestPrivacyPageBrowserProxy extends TestBrowserProxy implements
     const result = this.probeConfigResults_[entry];
     assertFalse(result === undefined);
     return Promise.resolve(result || false);
-  }
-
-  recordUserDropdownInteraction(oldSelection: string, newSelection: string) {
-    this.methodCalled(
-        'recordUserDropdownInteraction', [oldSelection, newSelection]);
   }
 }

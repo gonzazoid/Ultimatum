@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/test_message_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "media/audio/audio_device_info_accessor_for_tests.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
@@ -92,7 +91,14 @@ TEST_F(AUHALStreamTest, CreateOpenClose) {
   stream->Close();
 }
 
-TEST_F(AUHALStreamTest, CreateOpenStartStopClose) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1489278): audio output unit startup fails with partition
+// alloc.
+#define MAYBE_CreateOpenStartStopClose DISABLED_CreateOpenStartStopClose
+#else
+#define MAYBE_CreateOpenStartStopClose CreateOpenStartStopClose
+#endif
+TEST_F(AUHALStreamTest, MAYBE_CreateOpenStartStopClose) {
   ABORT_AUDIO_TEST_IF_NOT(OutputDevicesAvailable());
 
   AudioOutputStream* stream = Create();

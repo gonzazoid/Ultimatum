@@ -70,11 +70,24 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // vertical and regular horizontal size class.
 - (BOOL)isRegularXRegularSizeClass;
 
+// Stops primes performance metrics logging by calling into the
+// internal framework (should only be used by performance tests)
+- (void)primesStopLogging;
+
+// Takes a snapshot of memory usage by calling into the internal
+// framework (should only be used by performance tests)
+- (void)primesTakeMemorySnapshot:(NSString*)eventName;
+
 #pragma mark - History Utilities (EG2)
 
 // Clears browsing history. Raises an EarlGrey exception if history is not
 // cleared within a timeout.
 - (void)clearBrowsingHistory;
+
+// Shuts down the network process. Uses a
+// private WebKit API and should be refactored or removed in the event that
+// there's a different way to address hanging.
+- (void)killWebKitNetworkProcess;
 
 // Gets the number of entries in the browsing history database. GREYAssert is
 // induced on error.
@@ -86,6 +99,9 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Clears browsing cache. Raises an EarlGrey exception if history is not
 // cleared within a timeout.
 - (void)removeBrowsingCache;
+
+// Persists the current list of tabs to disk immediately.
+- (void)saveSessionImmediately;
 
 #pragma mark - Navigation Utilities (EG2)
 
@@ -133,13 +149,27 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Waits for the matcher to return an element that is sufficiently visible.
 - (void)waitForSufficientlyVisibleElementWithMatcher:(id<GREYMatcher>)matcher;
 
+// Waits for the matcher to return an element that is not sufficiently visible
+// (or nil).
+- (void)waitForNotSufficientlyVisibleElementWithMatcher:
+    (id<GREYMatcher>)matcher;
+
 // Waits for the matcher to return an element.
 - (void)waitForUIElementToAppearWithMatcher:(id<GREYMatcher>)matcher;
+
+// Waits for the matcher to return an element. Returns whether the element did
+// appear in the delay.
+- (BOOL)testUIElementAppearanceWithMatcher:(id<GREYMatcher>)matcher;
 
 // Waits for the matcher to return an element. If the condition is not met
 // within the given `timeout` a GREYAssert is induced.
 - (void)waitForUIElementToAppearWithMatcher:(id<GREYMatcher>)matcher
                                     timeout:(base::TimeDelta)timeout;
+
+// Waits for the matcher to return an element. Returns wheher the condition is
+// met within the given `timeout`.
+- (BOOL)testUIElementAppearanceWithMatcher:(id<GREYMatcher>)matcher
+                                   timeout:(base::TimeDelta)timeout;
 
 // Waits for the matcher to not return any elements.
 - (void)waitForUIElementToDisappearWithMatcher:(id<GREYMatcher>)matcher;
@@ -149,9 +179,13 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 - (void)waitForUIElementToDisappearWithMatcher:(id<GREYMatcher>)matcher
                                        timeout:(base::TimeDelta)timeout;
 
-// Waits for there to be `count` number of non-incognito tabs within a timeout,
-// or a GREYAssert is induced.
+// Waits for there to be `count` number of non-incognito, active, tabs within a
+// timeout, or a GREYAssert is induced.
 - (void)waitForMainTabCount:(NSUInteger)count;
+
+// Waits for there to be `count` number of inactive tabs within a timeout, or a
+// GREYAssert is induced.
+- (void)waitForInactiveTabCount:(NSUInteger)count;
 
 // Waits for there to be `count` number of incognito tabs within a timeout, or a
 // GREYAssert is induced.
@@ -165,17 +199,8 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 
 #pragma mark - Sync Utilities (EG2)
 
-// Clears fake sync server data if the server is running.
-- (void)clearSyncServerData;
-
 // Signs in with `identity` without sync consent.
 - (void)signInWithoutSyncWithIdentity:(FakeSystemIdentity*)identity;
-
-// Starts the sync server. The server should not be running when calling this.
-- (void)startSync;
-
-// Stops the sync server. The server should be running when calling this.
-- (void)stopSync;
 
 // Injects user demographics into the fake sync server. `rawBirthYear` is the
 // true birth year, pre-noise, and the gender corresponds to the proto enum
@@ -207,6 +232,14 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // real one.
 - (void)tearDownFakeSyncServer;
 
+// Clears fake sync server data if the server is running.
+- (void)clearFakeSyncServerData;
+
+// Ensures that all of the FakeServer's data is persisted to disk. This is
+// useful before app restarts, where otherwise the FakeServer may not get to do
+// its usual on-destruction flush.
+- (void)flushFakeSyncServerToDisk;
+
 // Gets the number of entities of the given `type`.
 - (int)numberOfSyncEntitiesWithType:(syncer::ModelType)type [[nodiscard]];
 
@@ -228,8 +261,8 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
                      originator_client_item_id:
                          (const std::string&)originator_client_item_id;
 
-// Injects typed URL to sync FakeServer.
-- (void)addFakeSyncServerTypedURL:(const GURL&)URL;
+// Injects a HISTORY visit to the sync FakeServer.
+- (void)addFakeSyncServerHistoryVisit:(const GURL&)URL;
 
 // Injects device info to sync FakeServer.
 - (void)addFakeSyncServerDeviceInfo:(NSString*)deviceName
@@ -247,7 +280,7 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // the collection of URLs that are to be expected for a single window. A
 // GREYAssert is induced on failure. See the SessionsHierarchy class for
 // documentation regarding the verification.
-- (void)verifySyncServerURLs:(NSArray<NSString*>*)URLs;
+- (void)verifySyncServerSessionURLs:(NSArray<NSString*>*)URLs;
 
 // Waits until sync server contains `count` entities of the given `type` and
 // `name`. Folders are not included in this count.
@@ -257,15 +290,21 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
                                     count:(size_t)count
                                   timeout:(base::TimeDelta)timeout;
 
-// Induces a GREYAssert if `expected_present` is YES and the provided `url` is
-// not present, or vice versa.
-- (void)waitForTypedURL:(const GURL&)URL
-          expectPresent:(BOOL)expectPresent
-                timeout:(base::TimeDelta)timeout;
+- (void)waitForSyncServerHistoryURLs:(NSArray<NSURL*>*)URLs
+                             timeout:(base::TimeDelta)timeout;
+
+// Induces a GREYAssert if `expectPresent` is YES and the provided `URL` is
+// not present in the history DB, or vice versa.
+- (void)waitForHistoryURL:(const GURL&)URL
+            expectPresent:(BOOL)expectPresent
+                  timeout:(base::TimeDelta)timeout;
 
 // Waits for sync invalidation field presence in the DeviceInfo data type on the
 // server.
 - (void)waitForSyncInvalidationFields;
+
+// Returns whether UserSelectableType::kHistory is among the selected types.
+- (BOOL)isSyncHistoryDataTypeSelected;
 
 #pragma mark - Tab Utilities (EG2)
 
@@ -281,6 +320,9 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 
 // Closes the current tab and waits for the UI to complete.
 - (void)closeCurrentTab;
+
+// Pins the current tab and waits for the UI to complete.
+- (void)pinCurrentTab;
 
 // Opens a new incognito tab and waits for the new tab animation to complete.
 - (void)openNewIncognitoTab;
@@ -317,11 +359,17 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Returns the number of main (non-incognito) tabs.
 - (NSUInteger)mainTabCount [[nodiscard]];
 
+// Returns the number of inactive tabs.
+- (NSUInteger)inactiveTabCount [[nodiscard]];
+
 // Returns the number of incognito tabs.
 - (NSUInteger)incognitoTabCount [[nodiscard]];
 
 // Returns the number of browsers.
 - (NSUInteger)browserCount [[nodiscard]];
+
+// Returns the number of the realized web states from the existing web states.
+- (NSInteger)realizedWebStatesCount [[nodiscard]];
 
 // Returns the index of active tab in normal (non-incognito) mode.
 - (NSUInteger)indexOfActiveNormalTab;
@@ -329,9 +377,6 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Simulates a backgrounding and raises an EarlGrey exception if simulation not
 // succeeded.
 - (void)simulateTabsBackgrounding;
-
-// Persists the current list of tabs to disk immediately.
-- (void)saveSessionImmediately;
 
 // Returns the number of main (non-incognito) tabs currently evicted.
 - (NSUInteger)evictedMainTabCount [[nodiscard]];
@@ -358,6 +403,11 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 
 // Returns a unique identifier for the next Tab.
 - (NSString*)nextTabID;
+
+// Perform a tap with a timeout, or a GREYAssert is induced. Occasionally EG
+// doesn't sync up properly to the animations of tab switcher, so it is
+// necessary to poll.
+- (void)waitForAndTapButton:(id<GREYMatcher>)button;
 
 // Shows the tab switcher by tapping the switcher button.  Works on both phone
 // and tablet.
@@ -461,9 +511,24 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 
 #pragma mark - SignIn Utilities (EG2)
 
+// Signs the user out, clears the known accounts & browsing data, and wait for
+// the completion of those steps. Induces a GREYAssert if the operation fails or
+// timeouts.
+// TODO(crbug.com/1451733): When the browser data cleaning will always have an
+// acceptable delay, this method should be merged with
+// `signOutAndClearIdentities` and the whole sign-out operation completion
+// should always be ensured before executing next steps.
+- (void)signOutAndClearIdentitiesAndWaitForCompletion;
+
 // Signs the user out, clears the known accounts entirely and checks whether the
 // accounts were correctly removed from the keychain. Induces a GREYAssert if
-// the operation fails.
+// the operation fails. This will block the UI with a spinner until all
+// identities are cleared. In order to interact with the UI again call
+// `WaitForActivityOverlayToDisappear()`.
+// TODO(crbug.com/1451733): When the browser data cleaning will always have an
+// acceptable delay, this method should be merged with
+// `signOutAndClearIdentitiesAndWaitForCompletion` and the whole sign-out
+// operation completion should always be ensured before executing next steps.
 - (void)signOutAndClearIdentities;
 
 #pragma mark - Sync Utilities (EG2)
@@ -472,8 +537,18 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // that data types are configured and ready to use. See
 // SyncService::IsEngineInitialized() for details. If not succeeded a GREYAssert
 // is induced.
-- (void)waitForSyncInitialized:(BOOL)isInitialized
-                   syncTimeout:(base::TimeDelta)timeout;
+- (void)waitForSyncEngineInitialized:(BOOL)isInitialized
+                         syncTimeout:(base::TimeDelta)timeout;
+
+// Waits for the sync feature to be enabled/disabled. See SyncService::
+// IsSyncFeatureEnabled() for details. If not succeeded a GREYAssert is induced.
+- (void)waitForSyncFeatureEnabled:(BOOL)isEnabled
+                      syncTimeout:(base::TimeDelta)timeout;
+
+// Waits for sync to become fully active; see
+// SyncService::TransportState::ACTIVE for details. If not succeeded a
+// GREYAssert is induced.
+- (void)waitForSyncTransportStateActiveWithTimeout:(base::TimeDelta)timeout;
 
 // Returns the current sync cache GUID. The sync server must be running when
 // calling this.
@@ -521,13 +596,6 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 - (void)waitForWebStateContainingText:(const std::string&)UTF8Text
                               timeout:(base::TimeDelta)timeout;
 
-// Alias for -waitForWebStateContainingText:timeout: to allow changing the
-// type of `timeout` parameter from `NSTimeInterval` to `base::TimeDelta`
-// without breaking the internal repository as Objective-C does not support
-// overloads (this method will be removed in a followup CL).
-- (void)waitForWebStateContainingText:(const std::string&)UTF8Text
-                     timeoutInSeconds:(NSTimeInterval)timeout;
-
 // Waits for there to be no web state containing `UTF8Text`.
 // If the condition is not met within a timeout a GREYAssert is induced.
 - (void)waitForWebStateNotContainingText:(const std::string&)UTF8Text;
@@ -561,10 +629,6 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Cache-Control response header says otherwise.
 - (void)purgeCachedWebViewPages;
 
-// Simulators background, killing, and restoring the app within the limitations
-// of EG1, by simply doing a tab grid close all / undo / done.
-- (void)triggerRestoreViaTabGridRemoveAllUndo;
-
 // Returns YES if the current WebState's web view uses the content inset to
 // correctly align the top of the content with the bottom of the top bar.
 - (BOOL)webStateWebViewUsesContentInset;
@@ -580,16 +644,6 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // NOTE: The passed in `config` will be modified to set `relaunch_policy` to
 // `ForceRelaunchByKilling.
 - (void)clearAllWebStateBrowsingData:(AppLaunchConfiguration)config;
-
-#pragma mark - Bookmarks Utilities (EG2)
-
-// Waits for the bookmark internal state to be done loading.
-// If the condition is not met within a timeout a GREYAssert is induced.
-- (void)waitForBookmarksToFinishLoading;
-
-// Clears bookmarks if any bookmark still presents. A GREYAssert is induced if
-// bookmarks can not be cleared.
-- (void)clearBookmarks;
 
 #pragma mark - URL Utilities (EG2)
 
@@ -617,7 +671,7 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 
 // Returns cookies as key value pairs, where key is a cookie name and value is a
 // cookie value.
-// A GREYAssert is induced if cookies can not be returned.
+// If cookies can not be returned, returns nil and induces a GREYAssert.
 - (NSDictionary*)cookies;
 
 #pragma mark - Accessibility Utilities (EG2)
@@ -638,14 +692,14 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Returns YES if UKM feature is enabled.
 - (BOOL)isUKMEnabled [[nodiscard]];
 
-// Returns YES if kSynthesizedRestoreSessionEnabled feature is enabled.
-- (BOOL)isSynthesizedRestoreSessionEnabled [[nodiscard]];
-
 // Returns YES if kTestFeature is enabled.
 - (BOOL)isTestFeatureEnabled;
 
 // Returns YES if DemographicMetricsReporting feature is enabled.
 - (BOOL)isDemographicMetricsReportingEnabled [[nodiscard]];
+
+// Returns YES if the ReplaceSyncPromosWithSignInPromos feature is enabled.
+- (BOOL)isReplaceSyncWithSigninEnabled [[nodiscard]];
 
 // Returns YES if the `launchSwitch` is found in host app launch switches.
 - (BOOL)appHasLaunchSwitch:(const std::string&)launchSwitch;
@@ -668,21 +722,17 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Returns whether the NewOverflowMenu feature is enabled.
 - (BOOL)isNewOverflowMenuEnabled;
 
-// Returns whether the OmniboxUpdatedPopupUI feature is enabled.
-- (BOOL)isNewOmniboxPopupEnabled;
-
-// Returns whether the kIOSNewOmniboxImplementation feature is enabled.
-- (BOOL)isExperimentalOmniboxEnabled;
-
 // Returns whether the UseLensToSearchForImage feature is enabled;
 - (BOOL)isUseLensToSearchForImageEnabled;
 
-// Returns whether the Thumbstrip feature is enabled for window with given
-// number.
-- (BOOL)isThumbstripEnabledForWindowWithNumber:(int)windowNumber;
-
 // Returns whether the Web Channels feature is enabled.
 - (BOOL)isWebChannelsEnabled;
+
+// Returns whether the bottom omnibox steady state feature is enabled.
+- (BOOL)isBottomOmniboxSteadyStateEnabled;
+
+// Returns whether the unfocused omnibox is at the bottom.
+- (BOOL)isUnfocusedOmniboxAtBottom;
 
 #pragma mark - ContentSettings
 
@@ -710,6 +760,17 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 - (void)simulatePhysicalKeyboardEvent:(NSString*)input
                                 flags:(UIKeyModifierFlags)flags;
 
+#pragma mark - Default Utilities (EG2)
+
+// Stores a value for the provided key in NSUserDefaults.
+- (void)setUserDefaultsObject:(id)value forKey:(NSString*)defaultName;
+
+// Removes the object for `key` in NSUserDefault.
+- (void)removeUserDefaultsObjectForKey:(NSString*)key;
+
+// Returns the object for `key` in NSUserDefault.
+- (id)userDefaultsObjectForKey:(NSString*)key;
+
 #pragma mark - Pref Utilities (EG2)
 
 // Gets the value of a local state pref.
@@ -717,11 +778,25 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 - (int)localStateIntegerPref:(const std::string&)prefName;
 - (std::string)localStateStringPref:(const std::string&)prefName;
 
-// Sets the integer values for the local state pref with `prefName`. `value`
+// Sets the integer value for the local state pref with `prefName`. `value`
 // can be either a casted enum or any other numerical value. Local State
 // contains the preferences that are shared between all browser states.
 - (void)setIntegerValue:(int)value
       forLocalStatePref:(const std::string&)prefName;
+
+// Sets the time value for the local state pref with `prefName`. `value` Local
+// State contains the preferences that are shared between all browser states.
+- (void)setTimeValue:(base::Time)value
+    forLocalStatePref:(const std::string&)prefName;
+
+// Sets the string value for the local state pref with `prefName`. `value` Local
+// State contains the preferences that are shared between all browser states.
+- (void)setStringValue:(const std::string&)value
+     forLocalStatePref:(const std::string&)prefName;
+
+// Sets the bool value for the local state pref with `prefName`. Local
+// State contains the preferences that are shared between all browser states.
+- (void)setBoolValue:(BOOL)value forLocalStatePref:(const std::string&)prefName;
 
 // Gets the value of a user pref in the original browser state.
 - (bool)userBooleanPref:(const std::string&)prefName;
@@ -731,6 +806,14 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Sets the value of a user pref in the original browser state.
 - (void)setBoolValue:(BOOL)value forUserPref:(const std::string&)UTF8PrefName;
 - (void)setIntegerValue:(int)value forUserPref:(const std::string&)UTF8PrefName;
+
+// Returns true if the Preference is currently using its default value,
+// and has not been set by any higher-priority source (even with the same
+// value).
+- (bool)prefWithNameIsDefaultValue:(const std::string&)prefName;
+
+// Clears the user pref of `prefName` in the original browser state.
+- (void)clearUserPrefWithName:(const std::string&)prefName;
 
 // Resets the BrowsingDataPrefs, which defines if its selected or not when
 // clearing Browsing data.
@@ -803,21 +886,28 @@ id<GREYAction> grey_longPressWithDuration(base::TimeDelta duration);
 // Clear the watcher list, stopping monitoring.
 - (void)stopWatcher;
 
-#pragma mark - Url Param Classification utilities
-// Sets the `raw_classifications` on the
-// url_param_filter::ClassificationsLoader.
-- (void)setUrlParamClassifications:(const std::string&)raw_classifications;
+#pragma mark - ActivitySheet utilities
 
-// Resets the stored classifications on the
-// url_param_filter::ClassificationsLoader.
-- (void)resetUrlParamClassifications;
-@end
+// Induces a GREYAssert if the activity sheet is not visible.
+- (void)verifyActivitySheetVisible;
 
-// Helpers that only compile under EarlGrey 1 are included in this "EG1"
-// category.
-// TODO(crbug.com/922813): Update these helpers to compile under EG2 and move
-// them into the main class declaration as they are converted.
-@interface ChromeEarlGreyImpl (EG1)
+// Induces a GREYAssert if the activity sheet is visible.
+- (void)verifyActivitySheetNotVisible;
+
+// Induces a GREYAssert if `text` is visible the activity sheet.
+- (void)verifyTextNotVisibleInActivitySheetWithID:(NSString*)text;
+
+// Induces a GREYAssert if `text` is not visible the activity sheet.
+- (void)verifyTextVisibleInActivitySheetWithID:(NSString*)text;
+
+// Closes the activity sheet. Induces a GREYAssert if the activity sheet cannot
+// be closed, either if the 'Close' button is not visible on a phone, or if the
+// share button cannot be tapped on a tablet.
+- (void)closeActivitySheet;
+
+// Taps the element with `buttonText` within the activity sheet. A GREYAssert
+// is induced on failure.
+- (void)tapButtonInActivitySheetWithID:(NSString*)buttonText;
 
 @end
 

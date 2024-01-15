@@ -20,9 +20,6 @@
 namespace power_sampler {
 
 SamplingController::SamplingController() = default;
-SamplingController::SamplingController(int sample_every)
-    : sample_every_nth_(sample_every) {}
-
 SamplingController::~SamplingController() {
   // Stop the session before destruction for best results.
   DCHECK(!started_);
@@ -63,12 +60,12 @@ void SamplingController::StartSession() {
   started_ = true;
 }
 
+bool SamplingController::HasSamplers() {
+  return !samplers_.empty();
+}
+
 bool SamplingController::OnSamplingEvent() {
   DCHECK(started_);
-
-  ++sampling_event_count_;
-  if (sampling_event_count_ % sample_every_nth_ != 0)
-    return false;
 
   DataRow data_row;
   const base::TimeTicks sample_time = base::TimeTicks::Now();

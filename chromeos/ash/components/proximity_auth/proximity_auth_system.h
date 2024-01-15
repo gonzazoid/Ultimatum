@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/components/proximity_auth/screenlock_bridge.h"
 #include "components/account_id/account_id.h"
@@ -31,10 +32,7 @@ class UnlockManager;
 // registered user is focused.
 class ProximityAuthSystem : public ScreenlockBridge::Observer {
  public:
-  enum ScreenlockType { SESSION_LOCK, SIGN_IN };
-
   ProximityAuthSystem(
-      ScreenlockType screenlock_type,
       ProximityAuthClient* proximity_auth_client,
       ash::secure_channel::SecureChannelClient* secure_channel_client);
 
@@ -44,28 +42,27 @@ class ProximityAuthSystem : public ScreenlockBridge::Observer {
   ~ProximityAuthSystem() override;
 
   // Starts the system to connect and authenticate when a registered user is
-  // focused on the lock/sign-in screen.
+  // focused on the lock screen.
   void Start();
 
   // Stops the system.
   void Stop();
 
   // Registers a list of |remote_devices| for |account_id| that can be used for
-  // sign-in/unlock. |local_device| represents this device (i.e. this Chrome OS
+  // unlock. |local_device| represents this device (i.e. this Chrome OS
   // device) for this particular user profile context. If devices were
   // previously registered for the user, then they will be replaced.
   void SetRemoteDevicesForUser(
       const AccountId& account_id,
       const ash::multidevice::RemoteDeviceRefList& remote_devices,
-      absl::optional<ash::multidevice::RemoteDeviceRef> local_device);
+      std::optional<ash::multidevice::RemoteDeviceRef> local_device);
 
   // Returns the RemoteDevices registered for |account_id|. Returns an empty
-  // list
-  // if no devices are registered for |account_id|.
+  // list if no devices are registered for |account_id|.
   ash::multidevice::RemoteDeviceRefList GetRemoteDevicesForUser(
       const AccountId& account_id) const;
 
-  // Called when the user clicks the user pod and attempts to unlock/sign-in.
+  // Called when the user clicks the user pod and attempts to unlock.
   void OnAuthAttempted();
 
   // Called when the system suspends.
@@ -73,12 +70,6 @@ class ProximityAuthSystem : public ScreenlockBridge::Observer {
 
   // Called when the system wakes up from a suspended state.
   void OnSuspendDone();
-
-  // Called when the screen turns off.
-  void OnScreenOff();
-
-  // Called when the system resumes after the screen turns back on.
-  void OnScreenOffDone();
 
   // Called in order to disable attempts to get RemoteStatus from host devices.
   void CancelConnectionAttempt();
@@ -103,19 +94,14 @@ class ProximityAuthSystem : public ScreenlockBridge::Observer {
   // Exposed for testing.
   virtual std::unique_ptr<RemoteDeviceLifeCycle> CreateRemoteDeviceLifeCycle(
       ash::multidevice::RemoteDeviceRef remote_device,
-      absl::optional<ash::multidevice::RemoteDeviceRef> local_device);
+      std::optional<ash::multidevice::RemoteDeviceRef> local_device);
 
   // ScreenlockBridge::Observer:
-  void OnScreenDidLock(
-      ScreenlockBridge::LockHandler::ScreenType screen_type) override;
-  void OnScreenDidUnlock(
-      ScreenlockBridge::LockHandler::ScreenType screen_type) override;
+  void OnScreenDidLock() override;
+  void OnScreenDidUnlock() override;
   void OnFocusedUserChanged(const AccountId& account_id) override;
 
  private:
-  // Called when there is a change in |suspended_| or |screen_off_|.
-  void OnSuspendOrScreenOffChange();
-
   // Lists of remote devices, keyed by user account id.
   std::map<AccountId, ash::multidevice::RemoteDeviceRefList>
       remote_devices_map_;
@@ -126,7 +112,7 @@ class ProximityAuthSystem : public ScreenlockBridge::Observer {
   std::map<AccountId, ash::multidevice::RemoteDeviceRef> local_device_map_;
 
   // Entry point to the SecureChannel API.
-  ash::secure_channel::SecureChannelClient* secure_channel_client_;
+  raw_ptr<ash::secure_channel::SecureChannelClient> secure_channel_client_;
 
   // Responsible for the life cycle of connecting and authenticating to
   // the RemoteDevice of the currently focused user.
@@ -137,9 +123,6 @@ class ProximityAuthSystem : public ScreenlockBridge::Observer {
 
   // True if the system is suspended.
   bool suspended_ = false;
-
-  // True if the screen is off.
-  bool screen_off_ = false;
 
   // True if the system is started_.
   bool started_ = false;

@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/timer/timer.h"
@@ -118,9 +119,9 @@ class TabMemoryMetricsReporterTest : public testing::Test {
   std::unique_ptr<content::TestWebContentsFactory> test_web_contents_factory_;
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile testing_profile_;
-  raw_ptr<content::WebContents> contents1_;
-  raw_ptr<content::WebContents> contents2_;
-  raw_ptr<content::WebContents> contents3_;
+  raw_ptr<content::WebContents, DanglingUntriaged> contents1_;
+  raw_ptr<content::WebContents, DanglingUntriaged> contents2_;
+  raw_ptr<content::WebContents, DanglingUntriaged> contents3_;
 };
 
 TEST_F(TabMemoryMetricsReporterTest, StartTrackingWithUnloaded) {

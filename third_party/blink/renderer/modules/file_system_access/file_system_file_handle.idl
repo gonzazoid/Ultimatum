@@ -2,37 +2,58 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// https://wicg.github.io/file-system-access/#filesystemfilehandle
+// https://fs.spec.whatwg.org/#filesystemfilehandle
 [
     Exposed=(Window,Worker),
     SecureContext,
     Serializable,
     RuntimeEnabled=FileSystemAccess
 ] interface FileSystemFileHandle : FileSystemHandle {
-    [CallWith=ScriptState, RaisesException]
-    Promise<FileSystemWritableFileStream> createWritable(optional FileSystemCreateWritableOptions options = {});
-
-    [CallWith=ScriptState, RaisesException] Promise<File> getFile();
+    [
+        CallWith=ScriptState,
+        RaisesException,
+        Measure
+    ] Promise<FileSystemWritableFileStream> createWritable(
+        optional FileSystemCreateWritableOptions options = {});
 
     [
         CallWith=ScriptState,
         RaisesException,
-        Exposed=DedicatedWorker,
-        RuntimeEnabled=FileSystemAccessAccessHandle,
         Measure
+    ] Promise<File> getFile();
+
+    // TODO(crbug/1382215): Combine createSyncAccessHandle overloads into one
+    // with options as an optional param that defaults to {}.
+    [
+        CallWith=ScriptState,
+        RaisesException,
+        Measure,
+        Exposed=DedicatedWorker
     ] Promise<FileSystemSyncAccessHandle> createSyncAccessHandle();
 
     [
         CallWith=ScriptState,
-        RuntimeEnabled=FileSystemAccessAccessHandle
+        RaisesException,
+        Measure,
+        Exposed=DedicatedWorker,
+        RuntimeEnabled=FileSystemAccessLockingScheme
+    ] Promise<FileSystemSyncAccessHandle> createSyncAccessHandle(
+      FileSystemCreateSyncAccessHandleOptions options);
+
+    [
+        CallWith=ScriptState,
+        RaisesException,
+        MeasureAs=FileSystemAccessMoveRename
     ]  Promise<void> move(USVString new_entry_name);
     [
         CallWith=ScriptState,
-        RuntimeEnabled=FileSystemAccessAccessHandle
+        RaisesException,
+        MeasureAs=FileSystemAccessMoveReparent
     ]  Promise<void> move(FileSystemDirectoryHandle destination_directory);
     [
         CallWith=ScriptState,
-        RuntimeEnabled=FileSystemAccessAccessHandle
+        RaisesException,
+        MeasureAs=FileSystemAccessMoveReparentAndRename
     ]  Promise<void> move(FileSystemDirectoryHandle destination_directory,
                           USVString new_entry_name);
 };

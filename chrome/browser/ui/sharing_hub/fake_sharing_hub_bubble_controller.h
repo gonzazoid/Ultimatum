@@ -7,10 +7,11 @@
 
 #include "chrome/browser/ui/sharing_hub/sharing_hub_bubble_controller.h"
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sharing_hub {
 
@@ -20,9 +21,12 @@ namespace sharing_hub {
 // interface have been invoked or not for tests to query.
 class FakeSharingHubBubbleController : public SharingHubBubbleController {
  public:
-  FakeSharingHubBubbleController(std::vector<SharingHubAction> first_party,
-                                 std::vector<SharingHubAction> third_party);
+  explicit FakeSharingHubBubbleController(
+      std::vector<SharingHubAction> first_party);
   ~FakeSharingHubBubbleController();
+
+  // Test API:
+  void SetFirstPartyActions(std::vector<SharingHubAction> actions);
 
   // SharingHubBubbleController:
   void HideBubble() override {}
@@ -30,23 +34,14 @@ class FakeSharingHubBubbleController : public SharingHubBubbleController {
   SharingHubBubbleView* sharing_hub_bubble_view() const override;
   bool ShouldOfferOmniboxIcon() override;
   std::vector<SharingHubAction> GetFirstPartyActions() override;
-  std::vector<SharingHubAction> GetThirdPartyActions() override;
-  bool ShouldUsePreview() override;
-  base::CallbackListSubscription RegisterPreviewImageChangedCallback(
-      PreviewImageChangedCallback callback) override;
   base::WeakPtr<SharingHubBubbleController> GetWeakPtr() override;
 
-  MOCK_METHOD3(OnActionSelected,
-               void(int command_id,
-                    bool is_first_party,
-                    std::string feature_name_for_metrics));
-  MOCK_METHOD0(OnBubbleClosed, void());
+  MOCK_METHOD(void, OnActionSelected, (const SharingHubAction&));
+  MOCK_METHOD(void, OnBubbleClosed, ());
 
  private:
   std::vector<SharingHubAction> first_party_actions_;
-  std::vector<SharingHubAction> third_party_actions_;
 
-  base::RepeatingCallbackList<void(ui::ImageModel)> preview_changed_callbacks_;
   base::WeakPtrFactory<SharingHubBubbleController> weak_factory_{this};
 };
 

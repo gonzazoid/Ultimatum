@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "chrome/browser/cart/cart_service.h"
@@ -34,7 +35,7 @@ cart_db::ChromeCartContentProto BuildProto(const char* domain,
   cart_db::ChromeCartContentProto proto;
   proto.set_key(domain);
   proto.set_merchant_cart_url(merchant_url);
-  proto.set_timestamp(base::Time::Now().ToDoubleT());
+  proto.set_timestamp(base::Time::Now().InSecondsFSinceUnixEpoch());
   return proto;
 }
 
@@ -175,14 +176,7 @@ IN_PROC_BROWSER_TEST_F(CartServiceBrowserTest, TestNotShowSkippedMerchants) {
   run_loop[5].Run();
 }
 
-// TODO(crbug.com/1246293): Flaky on Linux, ChromeOS, and Mac.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
-#define MAYBE_TestNavigationUKMCollection DISABLED_TestNavigationUKMCollection
-#else
-#define MAYBE_TestNavigationUKMCollection TestNavigationUKMCollection
-#endif
-IN_PROC_BROWSER_TEST_F(CartServiceBrowserTest,
-                       MAYBE_TestNavigationUKMCollection) {
+IN_PROC_BROWSER_TEST_F(CartServiceBrowserTest, TestNavigationUKMCollection) {
   ukm::TestAutoSetUkmRecorder ukm_recorder;
   GURL foo_url(kFakeMerchantURLA);
   GURL bar_url(kFakeMerchantURLB);
@@ -245,11 +239,11 @@ class FakeCartDiscountLinkFetcher : public CartDiscountLinkFetcher {
       std::unique_ptr<network::PendingSharedURLLoaderFactory> pending_factory,
       cart_db::ChromeCartContentProto cart_content_proto,
       CartDiscountLinkFetcherCallback callback) override {
-    std::move(callback).Run(discount_url_);
+    std::move(callback).Run(*discount_url_);
   }
 
  private:
-  const GURL& discount_url_;
+  const raw_ref<const GURL> discount_url_;
 };
 
 class CartServiceBrowserDiscountTest : public CartServiceBrowserTest {
@@ -290,7 +284,7 @@ IN_PROC_BROWSER_TEST_F(CartServiceBrowserDiscountTest,
   added_discount->set_rule_id("fake_id");
   added_discount->set_percent_off(5);
   added_discount->set_raw_merchant_offer_id("fake_offer_id");
-  service_->AddCart(kFakeMerchantA, absl::nullopt, merchant_proto);
+  service_->AddCart(GURL(kFakeMerchantURLA), absl::nullopt, merchant_proto);
 
   GURL foo_url("https://www.foo.com/cart.html");
   GURL bar_url("https://www.bar.com/cart.html");

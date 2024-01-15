@@ -7,9 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -179,7 +179,7 @@ TEST_F(MediaParserAndroidTest, VideoFrameExtractionVp8WithAlphaPlane) {
 // Test to verify frame extraction will fail on invalid video file.
 TEST_F(MediaParserAndroidTest, VideoFrameExtractionInvalidFile) {
   base::FilePath dummy_file = temp_dir().AppendASCII("test.txt");
-  EXPECT_GT(base::WriteFile(dummy_file, "123", sizeof("123")), 0);
+  EXPECT_TRUE(base::WriteFile(dummy_file, "123"));
 
   EXPECT_FALSE(ExtractFrame(dummy_file, "video/webm"));
 }

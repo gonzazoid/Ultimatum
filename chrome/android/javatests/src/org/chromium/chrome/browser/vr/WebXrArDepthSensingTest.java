@@ -6,8 +6,6 @@ package org.chromium.chrome.browser.vr;
 
 import static org.chromium.chrome.browser.vr.WebXrArTestFramework.PAGE_LOAD_TIMEOUT_S;
 
-import android.os.Build;
-
 import androidx.test.filters.MediumTest;
 
 import org.junit.Before;
@@ -21,7 +19,6 @@ import org.chromium.base.test.params.ParameterAnnotations.UseRunnerDelegate;
 import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.vr.rules.ArPlaybackFile;
 import org.chromium.chrome.browser.vr.rules.XrActivityRestriction;
@@ -32,20 +29,19 @@ import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-/**
- * End-to-end tests for testing WebXR for AR's depth sensing behavior.
- */
+/** End-to-end tests for testing WebXR for AR's depth sensing behavior. */
 @RunWith(ParameterizedRunner.class)
 @UseRunnerDelegate(ChromeJUnit4RunnerDelegate.class)
-@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
-        "enable-features=WebXR,WebXRARModule,WebXRIncubations,LogJsConsoleMessages"})
-@MinAndroidSdkLevel(Build.VERSION_CODES.N) // WebXR for AR is only supported on N+
+@CommandLineFlags.Add({
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    "enable-features=WebXR,WebXRARModule,WebXRIncubations,LogJsConsoleMessages"
+})
 public class WebXrArDepthSensingTest {
     @ClassParameter
     private static List<ParameterSet> sClassParams =
             ArTestRuleUtils.generateDefaultTestRuleParameters();
-    @Rule
-    public RuleChain mRuleChain;
+
+    @Rule public RuleChain mRuleChain;
 
     private ChromeActivityTestRule mTestRule;
     private WebXrArTestFramework mWebXrArTestFramework;
@@ -60,9 +56,7 @@ public class WebXrArDepthSensingTest {
         mWebXrArTestFramework = new WebXrArTestFramework(mTestRule);
     }
 
-    /**
-     * Tests that depth sensing API returns results that can be queried for depth.
-     */
+    /** Tests that depth sensing API returns results that can be queried for depth. */
     @Test
     @MediumTest
     @XrActivityRestriction({XrActivityRestriction.SupportedActivity.ALL})

@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {NetworkTestRunner} from 'network_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Test user agent setting\n`);
-  await TestRunner.loadTestModule('network_test_runner');
 
   var cases = [
     'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36',
@@ -14,12 +18,12 @@
   ];
 
   for (var i = 0; i < cases.length; i++) {
-    var result = SDK.MultitargetNetworkManager.patchUserAgentWithChromeVersion(cases[i]);
+    var result = SDK.NetworkManager.MultitargetNetworkManager.patchUserAgentWithChromeVersion(cases[i]);
     TestRunner.addResult(result);
   }
 
   TestRunner.addResult('\nManually setting custom user agent');
-  SDK.multitargetNetworkManager.setCustomUserAgentOverride('foobar with %s inside');
+  SDK.NetworkManager.MultitargetNetworkManager.instance().setCustomUserAgentOverride('foobar with %s inside');
 
   TestRunner.evaluateInPage('navigator.userAgent', step2);
 

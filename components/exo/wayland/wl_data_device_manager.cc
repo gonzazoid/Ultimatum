@@ -4,13 +4,12 @@
 
 #include "components/exo/wayland/wl_data_device_manager.h"
 
-#include <wayland-server-protocol-core.h>
-
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/data_device.h"
 #include "components/exo/data_device_delegate.h"
 #include "components/exo/data_offer.h"
@@ -22,8 +21,7 @@
 #include "components/exo/wayland/server_util.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 
-namespace exo {
-namespace wayland {
+namespace exo::wayland {
 namespace {
 
 uint32_t WaylandDataDeviceManagerDndAction(DndAction action) {
@@ -133,8 +131,8 @@ class WaylandDataSourceDelegate : public DataSourceDelegate {
   }
 
  private:
-  wl_client* const client_;
-  wl_resource* const data_source_resource_;
+  const raw_ptr<wl_client> client_;
+  const raw_ptr<wl_resource> data_source_resource_;
 };
 
 void data_source_offer(wl_client* client,
@@ -194,7 +192,7 @@ class WaylandDataOfferDelegate : public DataOfferDelegate {
   }
 
  private:
-  wl_resource* const data_offer_resource_;
+  const raw_ptr<wl_resource> data_offer_resource_;
 };
 
 void data_offer_accept(wl_client* client,
@@ -296,6 +294,7 @@ class WaylandDataDeviceDelegate : public DataDeviceDelegate {
   }
   void OnDrop() override {
     wl_data_device_send_drop(data_device_resource_);
+    wl_data_device_send_leave(data_device_resource_);
     wl_client_flush(client_);
   }
   void OnSelection(const DataOffer& data_offer) override {
@@ -313,22 +312,43 @@ class WaylandDataDeviceDelegate : public DataDeviceDelegate {
         serial_tracker_->GetEventType(serial);
     if (event_type == absl::nullopt) {
       LOG(ERROR) << "The serial passed to StartDrag does not exist.";
+      source->Cancelled();
       return;
     }
-    if (event_type == wayland::SerialTracker::EventType::POINTER_BUTTON_DOWN &&
-        serial_tracker_->GetPointerDownSerial() == serial) {
+    if (event_type == wayland::SerialTracker::EventType::POINTER_BUTTON_DOWN) {
+      if (serial_tracker_->GetPointerDownSerial() != serial) {
+        LOG(ERROR)
+            << "The serial passed to StartDrag for pointer does not match its "
+               "expected types. tracker_id="
+            << serial << ", " << serial_tracker_->ToString();
+        source->Cancelled();
+        return;
+      }
       DCHECK(data_device);
       data_device->StartDrag(source, origin, icon,
                              ui::mojom::DragEventSource::kMouse);
-    } else if (event_type == wayland::SerialTracker::EventType::TOUCH_DOWN &&
-               serial_tracker_->GetTouchDownSerial() == serial) {
+    } else if (event_type == wayland::SerialTracker::EventType::TOUCH_DOWN) {
+      if (serial_tracker_->GetTouchDownSerial() != serial) {
+        LOG(ERROR)
+            << "The serial passed to StartDrag for touch does not match its "
+               "expected types. tracker_id="
+            << serial << ", " << serial_tracker_->ToString();
+        source->Cancelled();
+        return;
+      }
       DCHECK(data_device);
       data_device->StartDrag(source, origin, icon,
                              ui::mojom::DragEventSource::kTouch);
     } else {
-      LOG(ERROR) << "The serial passed to StartDrag does not match its "
-                    "expected types.";
+      LOG(ERROR) << "Invalid event type for StartDrag:" << (int)*event_type
+                 << ", tracker_id=" << serial << ", "
+                 << serial_tracker_->ToString();
+      source->Cancelled();
+      return;
     }
+    // TODO(crbug/1371493): Remove this when bug is fixed.
+    LOG(ERROR) << "DataDrag Started=" << serial
+               << ", event_type=" << SerialTracker::ToString(*event_type);
   }
 
   void SetSelection(DataDevice* data_device,
@@ -345,11 +365,11 @@ class WaylandDataDeviceDelegate : public DataDeviceDelegate {
   }
 
  private:
-  wl_client* const client_;
-  wl_resource* const data_device_resource_;
+  const raw_ptr<wl_client> client_;
+  const raw_ptr<wl_resource> data_device_resource_;
 
   // Owned by Server, which always outlives this delegate.
-  SerialTracker* const serial_tracker_;
+  const raw_ptr<SerialTracker> serial_tracker_;
 };
 
 void data_device_start_drag(wl_client* client,
@@ -433,5 +453,4 @@ void bind_data_device_manager(wl_client* client,
                                  data, nullptr);
 }
 
-}  // namespace wayland
-}  // namespace exo
+}  // namespace exo::wayland

@@ -17,50 +17,15 @@ found in the LICENSE file.
     <style name="ThemeOverlay.BrowserUI.Fullscreen"
         parent="Base.ThemeOverlay.BrowserUI.Fullscreen" />
 
-    <!-- Color overlays -->
-
-    <!-- Indirection to allow downstream to add attributes. -->
-    <style name="ColorOverlay" parent="Base.ColorOverlay"/>
-    <!-- TODO(https://crbug.com/1216642): Inconsistent naming style. Remove
-         after downstream stops using. -->
-    <style name="Base.ColorOverlay" parent="ColorOverlay.BrowserUi"/>
-    <style name="ColorOverlay.BrowserUi" parent="ColorOverlay.BrowserUi.DayNight">
-        <item name="android:colorBackground">@color/baseline_neutral_0</item>
-        <item name="colorError">@color/baseline_error_600</item>
-        <item name="colorOnBackground">@color/baseline_neutral_900</item>
-        <item name="colorOnPrimary">@color/baseline_primary_0</item>
-        <item name="colorOnSurface">@color/baseline_neutral_900</item>
-        <item name="colorOnSurfaceInverse">@color/baseline_neutral_50</item>
-        <item name="colorOnSurfaceVariant">@color/baseline_neutral_variant_700</item>
-        <item name="colorOutline">@color/baseline_neutral_variant_500</item>
-        <item name="colorPrimary">@color/baseline_primary_600</item>
-        <item name="colorSurface">@color/baseline_neutral_0</item>
-        <item name="colorSurfaceVariant">@color/baseline_neutral_variant_100</item>
-
-        <item name="elevationOverlayAccentColor">?attr/colorPrimary</item>
-        <item name="elevationOverlayColor">@color/baseline_neutral_600</item>
-        <item name="elevationOverlayEnabled">true</item>
-    </style>
-    <style name="ColorOverlay.BrowserUi.DayNight" parent="ColorOverlay.Ui">
-        <item name="android:textColorPrimary">@color/default_text_color_list</item>
-        <item name="android:textColorSecondary">@color/default_text_color_secondary_list</item>
-        <item name="colorOnPrimaryContainer">@color/baseline_primary_900</item>
-        <item name="colorPrimaryContainer">@color/baseline_primary_100</item>
-    </style>
-
     <!-- Applied to the SettingsActivity's AppBarLayout to disable the
          liftOnScroll color-fill effect. -->
     <style name="ThemeOverlay.Settings.DisableElevationOverlay" parent="">
         <item name="elevationOverlayEnabled">false</item>
     </style>
+
     <style name="ThemeOverlay.BrowserUI.DynamicColors" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
         <item name="elevationOverlayColor">?attr/colorPrimary</item>
         <item name="elevationOverlayAccentColor">@android:color/transparent</item>
-    </style>
-    <!-- TODO(skym): Move this into ThemeOverlay.BrowserUI.DynamicColors instead. -->
-    <!-- Applied after the dynamic colors to override the undesired overrides done by the dynamic
-         color overlay, e.g. android:textColorHighlight. -->
-    <style name="ThemeOverlay.DynamicColorOverrides" parent="">
         <!-- android:textColorHighlight applied by Material3 is too dark, so we override it with our
              own color state list to specify a lower alpha. -->
         <item name="android:textColorHighlight">@color/text_highlight_color</item>
@@ -68,12 +33,39 @@ found in the LICENSE file.
              color state list. -->
         <item name="android:textColorHint">@color/default_text_color_hint_list</item>
     </style>
-    <style name="ThemeOverlay.DynamicButtons" parent="">
-        <item name="globalFilledButtonBgColor">@color/filled_button_bg_dynamic_list</item>
-        <item name="globalFilledButtonTextColor">@color/default_text_color_on_accent1_list</item>
-        <item name="globalTextButtonTextColor">@color/default_text_color_accent1_tint_list</item>
-        <item name="globalOutlinedButtonBorderColor">@macro/divider_line_bg_color</item>
-        <item name="globalLinkTextColor">?attr/colorPrimary</item>
-        <item name="globalClickableSpanColor">?attr/colorPrimary</item>
+
+    <!-- Add a persistent back button toolbar to automotive -->
+    <style name="ThemeOverlay.BrowserUI.Automotive.PersistentBackButtonToolbar" parent="">
+        <item name="windowActionBar">true</item>
+        <item name="windowNoTitle">false</item>
+        <item name="actionBarStyle">@style/ActionBarWithBackButton</item>
+        <item name="actionBarTheme">@style/DarkModeActionBarTheme</item>
+    </style>
+
+    <!-- Black action bar with back button -->
+    <style name="ActionBarWithBackButton">
+        <item name="displayOptions">homeAsUp</item>
+        <item name="homeAsUpIndicator">@drawable/ic_arrow_back_24dp</item>
+    </style>
+
+    <style name="DarkModeActionBarTheme">
+        <item name="background">@android:color/black</item>
+        <item name="colorControlNormal">@android:color/white</item>
+        <!-- Click event uses dark mode colors -->
+        <item name="colorControlHighlight">@color/ripple_material_dark</item>
+    </style>
+    <!-- Incognito switch theme overlay -->
+    <!-- TODO(sinansahin): See if we can pass the baseline dark theme to the incognito NTP instead.
+         -->
+    <style name="ThemeOverlay.BrowserUI.Switch.Incognito" parent="">
+        <item name="colorSurface">@color/baseline_neutral_10</item>
+        <item name="colorOnSurface">@color/baseline_neutral_90</item>
+        <item name="colorOnSurfaceVariant">@color/baseline_neutral_variant_80</item>
+        <item name="colorSurfaceVariant">@color/baseline_neutral_variant_30</item>
+        <item name="colorPrimary">@color/baseline_primary_80</item>
+        <item name="colorOnPrimary">@color/baseline_primary_20</item>
+        <item name="colorPrimaryContainer">@color/baseline_primary_30</item>
+        <item name="colorOutline">@color/baseline_neutral_variant_60</item>
+        <item name="colorSurfaceContainerHighest">@color/default_bg_color_dark_elev_5_baseline</item>
     </style>
 </resources>

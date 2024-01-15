@@ -5,11 +5,14 @@
 import 'chrome://os-settings/strings.m.js';
 import 'chrome://resources/ash/common/cellular_setup/activation_code_page.js';
 
+import {MojoInterfaceProviderImpl} from 'chrome://resources/ash/common/network/mojo_interface_provider.js';
+import {DeviceStateType, NetworkType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {FakeNetworkConfig} from 'chrome://webui-test/chromeos/fake_network_config_mojom.js';
 import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-import {assertTrue} from '../../../chai_assert.js';
+import {assertTrue} from '../../../chromeos/chai_assert.js';
 
 import {FakeBarcodeDetector, FakeImageCapture} from './fake_barcode_detector.js';
 import {FakeMediaDevices} from './fake_media_devices.js';
@@ -28,6 +31,8 @@ suite('CrComponentsActivationCodePageTest', function() {
 
   /** @type {function(Function, number)} */
   let intervalFunction = null;
+
+  let networkConfigRemote;
 
   function flushAsync() {
     flush();
@@ -49,6 +54,16 @@ suite('CrComponentsActivationCodePageTest', function() {
   function stopStreamFunction(stream) {}
 
   setup(async function() {
+    networkConfigRemote = new FakeNetworkConfig();
+    MojoInterfaceProviderImpl.getInstance().remote_ = networkConfigRemote;
+    loadTimeData.overrideValues({'isCellularCarrierLockEnabled': true});
+    networkConfigRemote.setDeviceStateForTest({
+      type: NetworkType.kCellular,
+      deviceState: DeviceStateType.kEnabled,
+      isCarrierLocked: true,
+    });
+    await flushAsync();
+
     activationCodePage = document.createElement('activation-code-page');
     await activationCodePage.setFakesForTesting(
         FakeBarcodeDetector, FakeImageCapture, setIntervalFunction,
@@ -86,21 +101,52 @@ suite('CrComponentsActivationCodePageTest', function() {
     await enumerateDeviceResolvedPromise;
   }
 
+  test('Page description', async function() {
+    const description =
+        activationCodePage.shadowRoot.querySelector('#description');
+    assertTrue(!!description);
+
+    // Mock camera on
+    activationCodePage.showNoProfilesFound = true;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('scanQRCodeNoProfilesFound'));
+    activationCodePage.showNoProfilesFound = false;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('scanQRCode'));
+
+    // Clearing devices to test without camera
+    mediaDevices.removeDevice();
+      await resolveEnumeratedDevicesPromise();
+    activationCodePage.showNoProfilesFound = true;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('enterActivationCodeNoProfilesFound'));
+    activationCodePage.showNoProfilesFound = false;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('enterActivationCode'));
+  });
+
   test('UI states', async function() {
-    let qrCodeDetectorContainer = activationCodePage.$$('#esimQrCodeDetection');
+    let qrCodeDetectorContainer =
+        activationCodePage.shadowRoot.querySelector('#esimQrCodeDetection');
     const activationCodeContainer =
-        activationCodePage.$$('#activationCodeContainer');
-    const video = activationCodePage.$$('#video');
+        activationCodePage.shadowRoot.querySelector('#activationCodeContainer');
+    const video = activationCodePage.shadowRoot.querySelector('#video');
     const startScanningContainer =
-        activationCodePage.$$('#startScanningContainer');
-    const startScanningButton = activationCodePage.$$('#startScanningButton');
-    const scanFinishContainer = activationCodePage.$$('#scanFinishContainer');
-    const switchCameraButton = activationCodePage.$$('#switchCameraButton');
+        activationCodePage.shadowRoot.querySelector('#startScanningContainer');
+    const startScanningButton =
+        activationCodePage.shadowRoot.querySelector('#startScanningButton');
+    const scanFinishContainer =
+        activationCodePage.shadowRoot.querySelector('#scanFinishContainer');
+    const switchCameraButton =
+        activationCodePage.shadowRoot.querySelector('#switchCameraButton');
     const getUseCameraAgainButton = () => {
-      return activationCodePage.$$('#useCameraAgainButton');
+      return activationCodePage.shadowRoot.querySelector(
+          '#useCameraAgainButton');
     };
-    const scanSuccessContainer = activationCodePage.$$('#scanSuccessContainer');
-    const scanFailureContainer = activationCodePage.$$('#scanFailureContainer');
+    const scanSuccessContainer =
+        activationCodePage.shadowRoot.querySelector('#scanSuccessContainer');
+    const scanFailureContainer =
+        activationCodePage.shadowRoot.querySelector('#scanFailureContainer');
 
     assertTrue(!!qrCodeDetectorContainer);
     assertTrue(!!activationCodeContainer);
@@ -112,7 +158,8 @@ suite('CrComponentsActivationCodePageTest', function() {
     assertFalse(!!getUseCameraAgainButton());
     assertTrue(!!scanSuccessContainer);
     assertTrue(!!scanFailureContainer);
-    assertFalse(!!activationCodePage.$$('paper-spinner-lite'));
+    assertFalse(
+        !!activationCodePage.shadowRoot.querySelector('paper-spinner-lite'));
 
     // Initial state should only be showing the start scanning UI.
     assertFalse(startScanningContainer.hidden);
@@ -120,7 +167,8 @@ suite('CrComponentsActivationCodePageTest', function() {
     assertTrue(video.hidden);
     assertTrue(scanFinishContainer.hidden);
     assertTrue(switchCameraButton.hidden);
-    assertFalse(!!activationCodePage.$$('paper-spinner-lite'));
+    assertFalse(
+        !!activationCodePage.shadowRoot.querySelector('paper-spinner-lite'));
 
     // Click the start scanning button.
     startScanningButton.click();
@@ -153,7 +201,7 @@ suite('CrComponentsActivationCodePageTest', function() {
     assertFalse(activationCodePage.showError);
 
     // Simulate typing in the input.
-    activationCodePage.$$('#activationCode')
+    activationCodePage.shadowRoot.querySelector('#activationCode')
         .dispatchEvent(new KeyboardEvent('keydown', {key: 'A'}));
     await flushAsync();
 
@@ -163,11 +211,13 @@ suite('CrComponentsActivationCodePageTest', function() {
     assertTrue(video.hidden);
     assertTrue(scanFinishContainer.hidden);
     assertTrue(switchCameraButton.hidden);
-    assertFalse(!!activationCodePage.$$('paper-spinner-lite'));
+    assertFalse(
+        !!activationCodePage.shadowRoot.querySelector('paper-spinner-lite'));
 
     activationCodePage.showBusy = true;
     await flushAsync();
-    assertTrue(!!activationCodePage.$$('paper-spinner-lite'));
+    assertTrue(
+        !!activationCodePage.shadowRoot.querySelector('paper-spinner-lite'));
 
     // Mock, no media devices present
     mediaDevices.removeDevice();
@@ -175,15 +225,18 @@ suite('CrComponentsActivationCodePageTest', function() {
 
     // When no camera device is present qrCodeDetector container should
     // not be shown
-    qrCodeDetectorContainer = activationCodePage.$$('#esimQrCodeDetection');
+    qrCodeDetectorContainer =
+        activationCodePage.shadowRoot.querySelector('#esimQrCodeDetection');
 
     assertFalse(!!qrCodeDetectorContainer);
   });
 
   test('Switch camera button states', async function() {
-    const video = activationCodePage.$$('#video');
-    const startScanningButton = activationCodePage.$$('#startScanningButton');
-    const switchCameraButton = activationCodePage.$$('#switchCameraButton');
+    const video = activationCodePage.shadowRoot.querySelector('#video');
+    const startScanningButton =
+        activationCodePage.shadowRoot.querySelector('#startScanningButton');
+    const switchCameraButton =
+        activationCodePage.shadowRoot.querySelector('#switchCameraButton');
 
     assertTrue(!!video);
     assertTrue(!!startScanningButton);
@@ -252,10 +305,14 @@ suite('CrComponentsActivationCodePageTest', function() {
   });
 
   test('UI is disabled when showBusy property is set', async function() {
-    const startScanningButton = activationCodePage.$$('#startScanningButton');
-    const switchCameraButton = activationCodePage.$$('#switchCameraButton');
-    const tryAgainButton = activationCodePage.$$('#tryAgainButton');
-    const input = activationCodePage.$$('#activationCode');
+    const startScanningButton =
+        activationCodePage.shadowRoot.querySelector('#startScanningButton');
+    const switchCameraButton =
+        activationCodePage.shadowRoot.querySelector('#switchCameraButton');
+    const tryAgainButton =
+        activationCodePage.shadowRoot.querySelector('#tryAgainButton');
+    const input =
+        activationCodePage.shadowRoot.querySelector('#activationCode');
 
     assertTrue(!!startScanningButton);
     assertTrue(!!switchCameraButton);
@@ -279,11 +336,12 @@ suite('CrComponentsActivationCodePageTest', function() {
       'Do not show qrContainer when BarcodeDetector is not ready',
       async function() {
         let qrCodeDetectorContainer =
-            activationCodePage.$$('#esimQrCodeDetection');
+            activationCodePage.shadowRoot.querySelector('#esimQrCodeDetection');
 
         assertTrue(!!qrCodeDetectorContainer);
         // Activation code input should be at the bottom of the page.
-        assertTrue(activationCodePage.$$('#activationCodeContainer')
+        assertTrue(activationCodePage.shadowRoot
+                       .querySelector('#activationCodeContainer')
                        .classList.contains('relative'));
 
         FakeBarcodeDetector.setShouldFail(true);
@@ -291,11 +349,13 @@ suite('CrComponentsActivationCodePageTest', function() {
             FakeBarcodeDetector, FakeImageCapture, setIntervalFunction,
             playVideoFunction, stopStreamFunction);
 
-        qrCodeDetectorContainer = activationCodePage.$$('#esimQrCodeDetection');
+        qrCodeDetectorContainer =
+            activationCodePage.shadowRoot.querySelector('#esimQrCodeDetection');
 
         assertFalse(!!qrCodeDetectorContainer);
         // Activation code input should now be in the center of the page.
-        assertTrue(activationCodePage.$$('#activationCodeContainer')
+        assertTrue(activationCodePage.shadowRoot
+                       .querySelector('#activationCodeContainer')
                        .classList.contains('center'));
       });
 
@@ -304,7 +364,8 @@ suite('CrComponentsActivationCodePageTest', function() {
     activationCodePage.addEventListener('forward-navigation-requested', () => {
       eventFired = true;
     });
-    const input = activationCodePage.$$('#activationCode');
+    const input =
+        activationCodePage.shadowRoot.querySelector('#activationCode');
     input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));
 
     await flushAsync();
@@ -314,11 +375,13 @@ suite('CrComponentsActivationCodePageTest', function() {
   test(
       'Install error after manual entry should show error on input',
       async function() {
-        const input = activationCodePage.$$('#activationCode');
+        const input =
+            activationCodePage.shadowRoot.querySelector('#activationCode');
         const startScanningContainer =
-            activationCodePage.$$('#startScanningContainer');
+            activationCodePage.shadowRoot.querySelector(
+                '#startScanningContainer');
         const scanFinishContainer =
-            activationCodePage.$$('#scanFinishContainer');
+            activationCodePage.shadowRoot.querySelector('#scanFinishContainer');
         assertTrue(!!input);
         assertTrue(!!startScanningContainer);
         assertTrue(!!scanFinishContainer);
@@ -336,18 +399,23 @@ suite('CrComponentsActivationCodePageTest', function() {
   test(
       'Install error after scanning should show error on camera',
       async function() {
-        const input = activationCodePage.$$('#activationCode');
+        const input =
+            activationCodePage.shadowRoot.querySelector('#activationCode');
         const startScanningContainer =
-            activationCodePage.$$('#startScanningContainer');
+            activationCodePage.shadowRoot.querySelector(
+                '#startScanningContainer');
         const startScanningButton =
-            activationCodePage.$$('#startScanningButton');
+            activationCodePage.shadowRoot.querySelector('#startScanningButton');
         const scanFinishContainer =
-            activationCodePage.$$('#scanFinishContainer');
+            activationCodePage.shadowRoot.querySelector('#scanFinishContainer');
         const scanInstallFailureHeader =
-            activationCodePage.$$('#scanInstallFailureHeader');
-        const scanSucessHeader = activationCodePage.$$('#scanSucessHeader');
+            activationCodePage.shadowRoot.querySelector(
+                '#scanInstallFailureHeader');
+        const scanSucessHeader =
+            activationCodePage.shadowRoot.querySelector('#scanSucessHeader');
         const getUseCameraAgainButton = () => {
-          return activationCodePage.$$('#useCameraAgainButton');
+          return activationCodePage.shadowRoot.querySelector(
+              '#useCameraAgainButton');
         };
         assertTrue(!!input);
         assertTrue(!!startScanningContainer);
@@ -390,9 +458,12 @@ suite('CrComponentsActivationCodePageTest', function() {
       });
 
   test('Tabbing does not close video stream', async function() {
-    const startScanningButton = activationCodePage.$$('#startScanningButton');
-    const getVideo = () => activationCodePage.$$('#video');
-    const input = activationCodePage.$$('#activationCode');
+    const startScanningButton =
+        activationCodePage.shadowRoot.querySelector('#startScanningButton');
+    const getVideo = () =>
+        activationCodePage.shadowRoot.querySelector('#video');
+    const input =
+        activationCodePage.shadowRoot.querySelector('#activationCode');
 
     assertTrue(!!startScanningButton);
     assertTrue(!!getVideo());
@@ -422,8 +493,9 @@ suite('CrComponentsActivationCodePageTest', function() {
   test(
       'Clear qr code detection timeout when video is hidden', async function() {
         const startScanningButton =
-            activationCodePage.$$('#startScanningButton');
-        const getVideo = () => activationCodePage.$$('#video');
+            activationCodePage.shadowRoot.querySelector('#startScanningButton');
+        const getVideo = () =>
+            activationCodePage.shadowRoot.querySelector('#video');
 
         assertTrue(!!startScanningButton);
         assertTrue(!!getVideo());
@@ -445,7 +517,8 @@ suite('CrComponentsActivationCodePageTest', function() {
       });
 
   test('Input entered manually is validated', async function() {
-    const input = activationCodePage.$$('#activationCode');
+    const input =
+        activationCodePage.shadowRoot.querySelector('#activationCode');
     assertTrue(!!input);
     assertFalse(input.invalid);
 
@@ -499,16 +572,22 @@ suite('CrComponentsActivationCodePageTest', function() {
   });
 
   test('Scanned code is validated', async function() {
-    const input = activationCodePage.$$('#activationCode');
+    const input =
+        activationCodePage.shadowRoot.querySelector('#activationCode');
     const startScanningContainer =
-        activationCodePage.$$('#startScanningContainer');
-    const startScanningButton = activationCodePage.$$('#startScanningButton');
-    const scanFinishContainer = activationCodePage.$$('#scanFinishContainer');
+        activationCodePage.shadowRoot.querySelector('#startScanningContainer');
+    const startScanningButton =
+        activationCodePage.shadowRoot.querySelector('#startScanningButton');
+    const scanFinishContainer =
+        activationCodePage.shadowRoot.querySelector('#scanFinishContainer');
     const scanInstallFailureHeader =
-        activationCodePage.$$('#scanInstallFailureHeader');
-    const scanSucessHeader = activationCodePage.$$('#scanSucessHeader');
+        activationCodePage.shadowRoot.querySelector(
+            '#scanInstallFailureHeader');
+    const scanSucessHeader =
+        activationCodePage.shadowRoot.querySelector('#scanSucessHeader');
     const getUseCameraAgainButton = () => {
-      return activationCodePage.$$('#useCameraAgainButton');
+      return activationCodePage.shadowRoot.querySelector(
+          '#useCameraAgainButton');
     };
     assertTrue(!!input);
     assertTrue(!!startScanningContainer);
@@ -588,4 +667,38 @@ suite('CrComponentsActivationCodePageTest', function() {
         activationCodeUpdatedEvent.detail.activationCode,
         ACTIVATION_CODE_VALID);
   });
+
+  test('check carrier lock warning', async function() {
+    assertTrue(!!activationCodePage.shadowRoot.querySelector(
+        '#carrierLockWarningContainer'));
+  });
+
+  test(
+      'check carrier lock warning not displayed for consumer devices',
+      async function() {
+        networkConfigRemote.setDeviceStateForTest({
+          type: NetworkType.kCellular,
+          deviceState: DeviceStateType.kEnabled,
+          isCarrierLocked: false,
+        });
+        await flushAsync();
+        const page = document.createElement('activation-code-page');
+        assertFalse(
+            !!page.shadowRoot?.querySelector('#carrierLockWarningContainer'));
+      });
+
+  test(
+      'check carrier lock warning not displayed with feature flag disabled',
+      async function() {
+        loadTimeData.overrideValues({'isCellularCarrierLockEnabled': false});
+        networkConfigRemote.setDeviceStateForTest({
+          type: NetworkType.kCellular,
+          deviceState: DeviceStateType.kEnabled,
+          isCarrierLocked: true,
+        });
+        await flushAsync();
+        const page = document.createElement('activation-code-page');
+        assertFalse(
+            !!page.shadowRoot?.querySelector('#carrierLockWarningContainer'));
+      });
 });

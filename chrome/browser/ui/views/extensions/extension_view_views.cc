@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_view_host.h"
 #include "chrome/browser/profiles/profile.h"
@@ -23,15 +24,24 @@
 #include "ui/views/widget/widget.h"
 
 ExtensionViewViews::ExtensionViewViews(extensions::ExtensionViewHost* host)
-    : views::WebView(host->browser() ? host->browser()->profile() : nullptr),
+    : views::WebView(host->GetBrowser() ? host->GetBrowser()->profile()
+                                        : nullptr),
       host_(host) {
+  web_contents_attached_subscription_ =
+      AddWebContentsAttachedCallback(base::BindRepeating(
+          &ExtensionViewViews::OnWebContentsAttached, base::Unretained(this)));
   host_->set_view(this);
   SetWebContents(host_->web_contents());
 }
 
 ExtensionViewViews::~ExtensionViewViews() {
-  if (parent())
+  if (parent()) {
     parent()->RemoveChildView(this);
+  }
+
+  for (auto& observer : observers_) {
+    observer.OnViewDestroying();
+  }
 }
 
 void ExtensionViewViews::Init() {
@@ -89,6 +99,14 @@ ExtensionViewViews::Container* ExtensionViewViews::GetContainer() const {
   return container_;
 }
 
+void ExtensionViewViews::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void ExtensionViewViews::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
 gfx::NativeView ExtensionViewViews::GetNativeView() {
   return holder()->native_view();
 }
@@ -140,12 +158,12 @@ void ExtensionViewViews::PreferredSizeChanged() {
     container_->OnExtensionSizeChanged(this);
 }
 
-void ExtensionViewViews::OnWebContentsAttached() {
+void ExtensionViewViews::OnWebContentsAttached(views::WebView*) {
   host_->CreateRendererSoon();
   SetVisible(false);
 }
 
-BEGIN_METADATA(ExtensionViewViews, views::WebView)
+BEGIN_METADATA(ExtensionViewViews)
 ADD_PROPERTY_METADATA(gfx::Size, MinimumSize)
 ADD_PROPERTY_METADATA(ExtensionViewViews::Container*, Container)
 END_METADATA

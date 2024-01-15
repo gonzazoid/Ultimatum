@@ -11,10 +11,10 @@
 #include "components/grit/dev_ui_components_resources.h"
 #include "components/signin/public/identity_manager/accounts_in_cookie_jar_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/signin/about_signin_internals_factory.h"
-#include "ios/chrome/browser/signin/identity_manager_factory.h"
-#include "ios/chrome/browser/url/chrome_url_constants.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#include "ios/chrome/browser/signin/model/about_signin_internals_factory.h"
+#include "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #include "ios/web/public/webui/web_ui_ios.h"
 #include "ios/web/public/webui/web_ui_ios_data_source.h"
 
@@ -52,10 +52,6 @@ SignInInternalsHandlerIOS::~SignInInternalsHandlerIOS() {
   ChromeBrowserState* browser_state =
       ChromeBrowserState::FromWebUIIOS(web_ui());
   DCHECK(browser_state);
-  AboutSigninInternals* about_signin_internals =
-      ios::AboutSigninInternalsFactory::GetForBrowserState(browser_state);
-  if (about_signin_internals)
-    about_signin_internals->RemoveSigninObserver(this);
 }
 
 void SignInInternalsHandlerIOS::RegisterMessages() {
@@ -89,7 +85,7 @@ void SignInInternalsHandlerIOS::HandleGetSignInInfo(
   // reasonable defaults, so the about:signin-internals page doesn't look
   // empty in incognito mode. Alternatively, we could force about:signin to
   // open in non-incognito mode always (like about:settings for ex.).
-  about_signin_internals->AddSigninObserver(this);
+  about_signin_internals_observeration_.Observe(about_signin_internals);
   const base::Value::Dict status = about_signin_internals->GetSigninStatus();
   base::ValueView return_args[] = {callback, success, status};
   web_ui()->CallJavascriptFunction("cr.webUIResponse", return_args);

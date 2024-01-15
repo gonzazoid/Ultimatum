@@ -11,10 +11,9 @@
 #include "ash/public/cpp/in_session_auth_token_provider.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
-#include "base/unguessable_token.h"
 #include "chromeos/ash/components/cryptohome/common_types.h"
 #include "chromeos/ash/components/login/auth/auth_performer.h"
 #include "chromeos/ash/components/login/auth/public/auth_session_intent.h"
@@ -135,7 +134,7 @@ void AuthenticationDialog::Init() {
 }
 
 void AuthenticationDialog::NotifyResult(bool success,
-                                        const base::UnguessableToken& token,
+                                        const AuthProofToken& token,
                                         base::TimeDelta timeout) {
   if (on_auth_complete_) {
     std::move(on_auth_complete_).Run(success, token, timeout);
@@ -162,17 +161,15 @@ void AuthenticationDialog::ValidateAuthFactor() {
 
   SetUIDisabled(true);
 
-  cryptohome::KeyLabel key_label;
-
-  if (features::IsUseAuthFactorsEnabled()) {
-    key_label = user_context_->GetAuthFactorsData()
-                    .FindOnlinePasswordFactor()
-                    ->ref()
-                    .label();
-  } else {
-    key_label =
-        user_context_->GetAuthFactorsData().FindOnlinePasswordKey()->label;
+  const auto* password_factor =
+      user_context_->GetAuthFactorsData().FindAnyPasswordFactor();
+  if (!password_factor) {
+    LOG(ERROR) << "Could not find password key";
+    ShowAuthError();
+    return;
   }
+
+  cryptohome::KeyLabel key_label = password_factor->ref().label();
 
   // Create a copy of `user_context_` so that we don't lose it to std::move
   // for future auth attempts
@@ -185,7 +182,7 @@ void AuthenticationDialog::ValidateAuthFactor() {
 
 void AuthenticationDialog::OnAuthFactorValidityChecked(
     std::unique_ptr<UserContext> user_context,
-    absl::optional<AuthenticationError> authentication_error) {
+    std::optional<AuthenticationError> authentication_error) {
   if (authentication_error.has_value()) {
     if (authentication_error.value().get_cryptohome_code() ==
         user_data_auth::CRYPTOHOME_INVALID_AUTH_SESSION_TOKEN) {
@@ -203,11 +200,7 @@ void AuthenticationDialog::OnAuthFactorValidityChecked(
     LOG(ERROR) << "An error happened during the attempt to validate"
                   "the password: "
                << authentication_error.value().get_cryptohome_code();
-    password_field_->SetInvalid(true);
-    password_field_->SelectAll(false);
-    invalid_password_label_->SetText(
-        l10n_util::GetStringUTF16(IDS_ASH_LOGIN_ERROR_AUTHENTICATING));
-    SetUIDisabled(false);
+    ShowAuthError();
     return;
   }
 
@@ -221,6 +214,14 @@ void AuthenticationDialog::OnAuthFactorValidityChecked(
   SetUIDisabled(false);
   CancelDialog();
   return;
+}
+
+void AuthenticationDialog::ShowAuthError() {
+  password_field_->SetInvalid(true);
+  password_field_->SelectAll(false);
+  invalid_password_label_->SetText(
+      l10n_util::GetStringUTF16(IDS_ASH_LOGIN_ERROR_AUTHENTICATING));
+  SetUIDisabled(false);
 }
 
 void AuthenticationDialog::CancelAuthAttempt() {
@@ -240,7 +241,7 @@ void AuthenticationDialog::ConfigureChildViews() {
 void AuthenticationDialog::OnAuthSessionInvalid(
     bool user_exists,
     std::unique_ptr<UserContext> user_context,
-    absl::optional<AuthenticationError> authentication_error) {
+    std::optional<AuthenticationError> authentication_error) {
   OnAuthSessionStarted(user_exists, std::move(user_context),
                        authentication_error);
   ValidateAuthFactor();
@@ -249,7 +250,7 @@ void AuthenticationDialog::OnAuthSessionInvalid(
 void AuthenticationDialog::OnAuthSessionStarted(
     bool user_exists,
     std::unique_ptr<UserContext> user_context,
-    absl::optional<AuthenticationError> authentication_error) {
+    std::optional<AuthenticationError> authentication_error) {
   if (authentication_error.has_value()) {
     LOG(ERROR) << "Error starting authsession for in session authentication: "
                << authentication_error.value().get_cryptohome_code();

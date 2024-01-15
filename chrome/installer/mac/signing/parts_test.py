@@ -5,7 +5,7 @@
 import unittest
 from unittest import mock
 
-from . import model, parts, signing, test_config
+from signing import model, parts, signing, test_config
 
 
 def _get_identity_hash(i):
@@ -173,10 +173,11 @@ class TestSignChrome(unittest.TestCase):
             set([p.path for p in parts.get_parts(config).values()]),
             set(signed_paths))
 
-        # Make sure that the framework and the app are the last two parts that
-        # are signed.
-        self.assertEqual(signed_paths[-2:], [
+        # Make sure that the framework, helper, and the app are the last three
+        # parts that are signed.
+        self.assertEqual(signed_paths[-3:], [
             'App Product.app/Contents/Frameworks/Product Framework.framework',
+            'App Product.app/Contents/Library/LaunchServices/test.signing.bundle_id.UpdaterPrivilegedHelper',
             'App Product.app'
         ])
 
@@ -250,7 +251,10 @@ class TestSignChrome(unittest.TestCase):
         signed_paths = [
             call[1][2].path for call in kwargs['sign_part'].mock_calls
         ]
-        self.assertEqual(signed_paths, ['App Product.app'])
+        self.assertEqual(signed_paths, [
+            'App Product.app/Contents/Library/LaunchServices/test.signing.bundle_id.UpdaterPrivilegedHelper',
+            'App Product.app'
+        ])
 
         self.assertEqual(kwargs['run_command'].mock_calls, [
             mock.call.run_command([
@@ -260,6 +264,40 @@ class TestSignChrome(unittest.TestCase):
             mock.call.run_command(
                 ['spctl', '--assess', '-vv', '/$W/App Product.app']),
         ])
+
+    @mock.patch('signing.parts._sanity_check_version_keys')
+    def test_sign_chrome_updater(self, *args, **kwargs):
+
+        class Config(test_config.TestConfig):
+
+            @property
+            def enable_updater(self):
+                return True
+
+        config = model.Distribution().to_config(Config())
+        parts.sign_chrome(self.paths, config, sign_framework=True)
+        # Ensure that the privileged helper is signed.
+        self.assertIn(
+            'App Product.app/Contents/Library/LaunchServices' +
+            '/test.signing.bundle_id.UpdaterPrivilegedHelper',
+            [call[1][2].path for call in kwargs['sign_part'].mock_calls])
+
+    @mock.patch('signing.parts._sanity_check_version_keys')
+    def test_sign_chrome_no_updater(self, *args, **kwargs):
+
+        class Config(test_config.TestConfig):
+
+            @property
+            def enable_updater(self):
+                return False
+
+        config = model.Distribution().to_config(Config())
+        parts.sign_chrome(self.paths, config, sign_framework=True)
+        # Ensure that the privileged helper not is signed.
+        self.assertNotIn(
+            'App Product.app/Contents/Library/LaunchServices' +
+            '/test.signing.bundle_id.UpdaterPrivilegedHelper',
+            [call[1][2].path for call in kwargs['sign_part'].mock_calls])
 
     @mock.patch(
         'signing.commands.read_plist',

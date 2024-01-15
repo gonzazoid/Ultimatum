@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.ui.signin;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.action.ViewActions.pressBack;
+import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
@@ -21,6 +22,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.app.Activity;
 import android.os.IBinder;
 import android.view.WindowManager;
 
@@ -43,7 +45,6 @@ import org.mockito.quality.Strictness;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
@@ -55,9 +56,9 @@ import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogType;
 import org.chromium.ui.test.util.BlankUiTestActivity;
 
-/**
- * Instrumentation tests for {@link ConfirmImportSyncDataDialogCoordinator}.
- */
+import java.util.function.Predicate;
+
+/** Instrumentation tests for {@link ConfirmImportSyncDataDialogCoordinator}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Batch(Batch.PER_CLASS)
@@ -91,11 +92,9 @@ public class ConfirmImportSyncDataDialogTest {
     public static final BaseActivityTestRule<BlankUiTestActivity> sActivityTestRule =
             new BaseActivityTestRule<>(BlankUiTestActivity.class);
 
-    @Mock
-    private ConfirmImportSyncDataDialogCoordinator.Listener mListenerMock;
+    @Mock private ConfirmImportSyncDataDialogCoordinator.Listener mListenerMock;
 
-    @Mock
-    private SigninManager mSigninManagerMock;
+    @Mock private SigninManager mSigninManagerMock;
 
     private ModalDialogManager mDialogManager;
     private ConfirmImportSyncDataDialogCoordinator mDialogCoordinator;
@@ -107,14 +106,18 @@ public class ConfirmImportSyncDataDialogTest {
 
     @Before
     public void setUp() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            IdentityServicesProvider.setInstanceForTests(mock(IdentityServicesProvider.class));
-            Profile.setLastUsedProfileForTesting(mock(Profile.class));
-            when(IdentityServicesProvider.get().getSigninManager(any()))
-                    .thenReturn(mSigninManagerMock);
-            mDialogManager = new ModalDialogManager(
-                    new AppModalPresenter(sActivityTestRule.getActivity()), ModalDialogType.APP);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    IdentityServicesProvider.setInstanceForTests(
+                            mock(IdentityServicesProvider.class));
+                    Profile.setLastUsedProfileForTesting(mock(Profile.class));
+                    when(IdentityServicesProvider.get().getSigninManager(any()))
+                            .thenReturn(mSigninManagerMock);
+                    mDialogManager =
+                            new ModalDialogManager(
+                                    new AppModalPresenter(sActivityTestRule.getActivity()),
+                                    ModalDialogType.APP);
+                });
     }
 
     @Test
@@ -173,11 +176,48 @@ public class ConfirmImportSyncDataDialogTest {
                 .check(matches(isDisplayed()));
     }
 
+    @Test
+    @MediumTest
+    public void testForNonDisplayableAccountEmail() {
+        showConfirmImportSyncDataDialog(
+                (String email) -> {
+                    return false;
+                });
+        final Activity activity = sActivityTestRule.getActivity();
+        final String defaultAccountName =
+                activity.getString(R.string.default_google_account_username);
+        final String expectedString =
+                activity.getString(R.string.sync_import_data_prompt, defaultAccountName);
+        final String unexpectedString =
+                activity.getString(R.string.sync_import_data_prompt, "old.testaccount@gmail.com");
+        onView(withText(expectedString)).check(matches(isDisplayed()));
+        onView(withText(unexpectedString)).check(doesNotExist());
+    }
+
     private void showConfirmImportSyncDataDialog() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mDialogCoordinator = new ConfirmImportSyncDataDialogCoordinator(
-                    sActivityTestRule.getActivity(), mDialogManager, mListenerMock,
-                    "old.testaccount@gmail.com", "new.testaccount@gmail.com");
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mDialogCoordinator =
+                            new ConfirmImportSyncDataDialogCoordinator(
+                                    sActivityTestRule.getActivity(),
+                                    mDialogManager,
+                                    mListenerMock,
+                                    "old.testaccount@gmail.com",
+                                    "new.testaccount@gmail.com");
+                });
+    }
+
+    private void showConfirmImportSyncDataDialog(Predicate<String> checkIfDisplayableEmailAddress) {
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mDialogCoordinator =
+                            new ConfirmImportSyncDataDialogCoordinator(
+                                    sActivityTestRule.getActivity(),
+                                    mDialogManager,
+                                    mListenerMock,
+                                    "old.testaccount@gmail.com",
+                                    "new.testaccount@gmail.com",
+                                    checkIfDisplayableEmailAddress);
+                });
     }
 }

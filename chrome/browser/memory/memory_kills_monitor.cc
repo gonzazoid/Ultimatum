@@ -35,7 +35,7 @@ void MemoryKillsMonitor::Initialize() {
 
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  auto* login_state = chromeos::LoginState::Get();
+  auto* login_state = ash::LoginState::Get();
   if (login_state)
     login_state->AddObserver(g_memory_kills_monitor_instance.Pointer());
   else
@@ -53,7 +53,7 @@ void MemoryKillsMonitor::LogLowMemoryKill(const std::string& type,
 
 void MemoryKillsMonitor::LoggedInStateChanged() {
   VLOG(2) << "LoggedInStateChanged";
-  auto* login_state = chromeos::LoginState::Get();
+  auto* login_state = ash::LoginState::Get();
   if (login_state) {
     // Note: LoginState never fires a notification when logged out.
     if (login_state->IsUserLoggedIn()) {
@@ -99,14 +99,6 @@ void MemoryKillsMonitor::LogLowMemoryKillImpl(const std::string& type,
   }
 
   VLOG(1) << "LOW_MEMORY_KILL_" << type;
-
-  base::Time now = base::Time::Now();
-  const base::TimeDelta time_delta = last_low_memory_kill_time_.is_null()
-                                         ? kMaxMemoryKillTimeDelta
-                                         : (now - last_low_memory_kill_time_);
-  UMA_HISTOGRAM_MEMORY_KILL_TIME_INTERVAL("Memory.LowMemoryKiller.TimeDelta",
-                                          time_delta);
-  last_low_memory_kill_time_ = now;
 
   ++low_memory_kills_count_;
   base::UmaHistogramCustomCounts("Memory.LowMemoryKiller.Count",

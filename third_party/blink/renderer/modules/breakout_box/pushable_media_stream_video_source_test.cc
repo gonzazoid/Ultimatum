@@ -4,9 +4,10 @@
 
 #include "third_party/blink/renderer/modules/breakout_box/pushable_media_stream_video_source.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/bind_post_task.h"
 #include "base/time/time.h"
-#include "media/base/bind_to_current_loop.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-blink.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
@@ -17,6 +18,7 @@
 #include "third_party/blink/renderer/modules/mediastream/video_track_adapter_settings.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -47,7 +49,6 @@ class FakeMediaStreamVideoSink : public MediaStreamVideoSink {
   void DisconnectFromTrack() { MediaStreamVideoSink::DisconnectFromTrack(); }
 
   void OnVideoFrame(scoped_refptr<media::VideoFrame> frame,
-                    std::vector<scoped_refptr<media::VideoFrame>> scaled_frames,
                     base::TimeTicks capture_time) {
     *capture_time_ = capture_time;
     *metadata_ = frame->metadata();
@@ -56,9 +57,9 @@ class FakeMediaStreamVideoSink : public MediaStreamVideoSink {
   }
 
  private:
-  base::TimeTicks* const capture_time_;
-  media::VideoFrameMetadata* const metadata_;
-  gfx::Size* const natural_size_;
+  const raw_ptr<base::TimeTicks, ExperimentalRenderer> capture_time_;
+  const raw_ptr<media::VideoFrameMetadata, ExperimentalRenderer> metadata_;
+  const raw_ptr<gfx::Size, ExperimentalRenderer> natural_size_;
   base::OnceClosure got_frame_cb_;
 };
 
@@ -100,10 +101,12 @@ class PushableMediaStreamVideoSourceTest : public testing::Test {
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   ScopedTestingPlatformSupport<IOTaskRunnerTestingPlatformSupport> platform_;
 
   Persistent<MediaStreamSource> stream_source_;
-  PushableMediaStreamVideoSource* pushable_video_source_;
+  raw_ptr<PushableMediaStreamVideoSource, DanglingUntriaged>
+      pushable_video_source_;
 };
 
 TEST_F(PushableMediaStreamVideoSourceTest, StartAndStop) {
@@ -132,7 +135,7 @@ TEST_F(PushableMediaStreamVideoSourceTest, FramesPropagateToSink) {
   gfx::Size natural_size;
   FakeMediaStreamVideoSink fake_sink(
       &capture_time, &metadata, &natural_size,
-      media::BindToCurrentLoop(run_loop.QuitClosure()));
+      base::BindPostTaskToCurrentDefault(run_loop.QuitClosure()));
   fake_sink.ConnectToTrack(track);
   const scoped_refptr<media::VideoFrame> frame =
       media::VideoFrame::CreateBlackFrame(gfx::Size(100, 50));

@@ -19,6 +19,10 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/search/ntp_features.h"
+#include "components/segmentation_platform/public/constants.h"
+#include "components/segmentation_platform/public/prediction_options.h"
+#include "components/segmentation_platform/public/result.h"
+#include "components/segmentation_platform/public/segmentation_platform_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
@@ -28,13 +32,13 @@
 #include "services/network/public/cpp/resource_request.h"
 
 namespace {
-#if OS_LINUX
+#if BUILDFLAG(IS_LINUX)
 constexpr char kPlatform[] = "LINUX";
-#elif OS_WIN
+#elif BUILDFLAG(IS_WIN)
 constexpr char kPlatform[] = "WINDOWS";
-#elif OS_MAC
+#elif BUILDFLAG(IS_MAC)
 constexpr char kPlatform[] = "MAC_OS";
-#elif OS_CHROMEOS
+#elif BUILDFLAG(IS_CHROMEOS)
 constexpr char kPlatform[] = "CHROME_OS";
 #else
 constexpr char kPlatform[] = "UNSPECIFIED_PLATFORM";
@@ -50,7 +54,7 @@ constexpr char kRequestBody[] = R"({
       "name": "%s"
     }
   },
-  "max_suggestions": 3,
+  "max_suggestions": %d,
   "type_detail_fields": "drive_item.title,drive_item.mimeType"
 })";
 // Maximum accepted size of an ItemSuggest response. 1MB.
@@ -93,44 +97,132 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
           }
         }
       })");
-constexpr char kFakeData[] = R"({
+constexpr char kFakeDataWithThreeFiles[] = R"({
   "item": [
     {
       "itemId": "foo",
       "url": "https://docs.google.com",
       "driveItem": {
-        "title": "foo doc",
+        "title": "Drive Module Design Doc",
         "mimeType": "application/vnd.google-apps.document"
       },
       "justification": {
-        "displayText": { "textSegment": [{"text": "You opened yesterday"}]}
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened yesterday"}]
+        }
       }
     },
     {
       "itemId": "bar",
       "url": "https://sheets.google.com",
       "driveItem": {
-        "title": "bar sheet",
+        "title": "Monthly Presentation Schedule",
         "mimeType": "application/vnd.google-apps.spreadsheet"
       },
       "justification": {
-        "displayText": { "textSegment": [{"text": "You opened today"}]}
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened today"}]
+        }
       }
     },
     {
       "itemId": "baz",
       "url": "https://slides.google.com",
       "driveItem": {
-        "title": "baz slides",
+        "title": "File With A Really Really Really Really Really Long Name",
         "mimeType": "application/vnd.google-apps.presentation"
       },
       "justification": {
-        "displayText": { "textSegment": [{"text": "You opened on Monday"}]}
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened on Monday"}]
+        }
       }
     }
   ]
 }
 )";
+constexpr char kFakeDataWithSixFiles[] = R"({
+  "item": [
+    {
+      "itemId": "foo",
+      "url": "https://docs.google.com",
+      "driveItem": {
+        "title": "Drive Module Design Doc",
+        "mimeType": "application/vnd.google-apps.document"
+      },
+      "justification": {
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened yesterday"}]
+        }
+      }
+    },
+    {
+      "itemId": "bar",
+      "url": "https://sheets.google.com",
+      "driveItem": {
+        "title": "Monthly Presentation Schedule",
+        "mimeType": "application/vnd.google-apps.spreadsheet"
+      },
+      "justification": {
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened today"}]
+        }
+      }
+    },
+    {
+      "itemId": "baz",
+      "url": "https://slides.google.com",
+      "driveItem": {
+        "title": "File With A Really Really Really Really Really Long Name",
+        "mimeType": "application/vnd.google-apps.presentation"
+      },
+      "justification": {
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened on Monday"}]
+        }
+      }
+    },
+    {
+      "itemId": "qux",
+      "url": "https://slides.google.com",
+      "driveItem": {
+        "title": "Cutest Kittens on the Web",
+        "mimeType": "application/vnd.google-apps.presentation"
+      },
+      "justification": {
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened on Monday"}]
+        }
+      }
+    },
+    {
+      "itemId": "foobar",
+      "url": "https://docs.google.com",
+      "driveItem": {
+        "title": "Budgeting Notes",
+        "mimeType": "application/vnd.google-apps.document"
+      },
+      "justification": {
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened yesterday"}]
+        }
+      }
+    },
+    {
+      "itemId": "bazqux",
+      "url": "https://sheets.google.com",
+      "driveItem": {
+        "title": "1",
+        "mimeType": "application/vnd.google-apps.spreadsheet"
+      },
+      "justification": {
+        "unstructuredJustificationDescription": {
+          "textSegment": [{"text": "You opened today"}]
+        }
+      }
+    }
+  ]
+})";
 }  // namespace
 
 // static
@@ -145,10 +237,13 @@ DriveService::~DriveService() = default;
 DriveService::DriveService(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     signin::IdentityManager* identity_manager,
+    segmentation_platform::SegmentationPlatformService*
+        segmentation_platform_service,
     const std::string& application_locale,
     PrefService* pref_service)
     : url_loader_factory_(std::move(url_loader_factory)),
       identity_manager_(identity_manager),
+      segmentation_platform_service_(segmentation_platform_service),
       application_locale_(application_locale),
       pref_service_(pref_service) {}
 
@@ -164,9 +259,27 @@ void DriveService::GetDriveFiles(GetFilesCallback get_files_callback) {
     return;
   }
 
+  if (base::FeatureList::IsEnabled(ntp_features::kNtpDriveModuleSegmentation)) {
+    GetDriveModuleSegmentationData();
+  } else {
+    GetDriveFilesInternal();
+  }
+}
+
+bool DriveService::GetDriveModuleSegmentationData() {
+  segmentation_platform::PredictionOptions options;
+  options.on_demand_execution = true;
+  segmentation_platform_service_->GetClassificationResult(
+      segmentation_platform::kDesktopNtpModuleKey, options, nullptr,
+      base::IgnoreArgs<const segmentation_platform::ClassificationResult&>(
+          base::BindOnce(&DriveService::GetDriveFilesInternal,
+                         base::Unretained(this))));
+  return true;
+}
+
+void DriveService::GetDriveFilesInternal() {
   // Bail if module is still dismissed.
-  if (!base::FeatureList::IsEnabled(ntp_features::kNtpModulesRedesigned) &&
-      !pref_service_->GetTime(kLastDismissedTimePrefName).is_null() &&
+  if (!pref_service_->GetTime(kLastDismissedTimePrefName).is_null() &&
       base::Time::Now() - pref_service_->GetTime(kLastDismissedTimePrefName) <
           kDismissDuration) {
     for (auto& callback : callbacks_) {
@@ -180,9 +293,14 @@ void DriveService::GetDriveFiles(GetFilesCallback get_files_callback) {
   if (base::GetFieldTrialParamValueByFeature(
           ntp_features::kNtpDriveModule,
           ntp_features::kNtpDriveModuleDataParam) == "fake") {
-    data_decoder::DataDecoder::ParseJsonIsolated(
-        kFakeData, base::BindOnce(&DriveService::OnJsonParsed,
-                                  weak_factory_.GetWeakPtr()));
+    base::FeatureList::IsEnabled(ntp_features::kNtpDriveModuleShowSixFiles)
+        ? data_decoder::DataDecoder::ParseJsonIsolated(
+              kFakeDataWithSixFiles, base::BindOnce(&DriveService::OnJsonParsed,
+                                                    weak_factory_.GetWeakPtr()))
+        : data_decoder::DataDecoder::ParseJsonIsolated(
+              kFakeDataWithThreeFiles,
+              base::BindOnce(&DriveService::OnJsonParsed,
+                             weak_factory_.GetWeakPtr()));
     return;
   }
 
@@ -250,12 +368,17 @@ void DriveService::OnTokenReceived(GoogleServiceAuthError error,
   url_loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
                                                  kTrafficAnnotation);
   url_loader_->SetRetryOptions(0, network::SimpleURLLoader::RETRY_NEVER);
+  const int kNumFilesRequested =
+      base::FeatureList::IsEnabled(ntp_features::kNtpDriveModuleShowSixFiles)
+          ? 6
+          : 3;
   url_loader_->AttachStringForUpload(
       base::StringPrintf(kRequestBody, kPlatform, application_locale_.c_str(),
                          base::GetFieldTrialParamValueByFeature(
                              ntp_features::kNtpDriveModule,
                              ntp_features::kNtpDriveModuleExperimentGroupParam)
-                             .c_str()),
+                             .c_str(),
+                         kNumFilesRequested),
       "application/json");
   url_loader_->DownloadToString(
       url_loader_factory_.get(),
@@ -274,6 +397,8 @@ void DriveService::OnJsonReceived(const std::string& token,
   url_loader_.reset();
 
   if (net_error != net::OK || !response_body) {
+    base::UmaHistogramEnumeration("NewTabPage.Drive.ItemSuggestRequestResult",
+                                  ItemSuggestRequestResult::kNetworkError);
     for (auto& callback : callbacks_) {
       std::move(callback).Run(std::vector<drive::mojom::FilePtr>());
     }
@@ -291,43 +416,51 @@ void DriveService::OnJsonReceived(const std::string& token,
 void DriveService::OnJsonParsed(
     data_decoder::DataDecoder::ValueOrError result) {
   if (!result.has_value()) {
+    base::UmaHistogramEnumeration("NewTabPage.Drive.ItemSuggestRequestResult",
+                                  ItemSuggestRequestResult::kJsonParseError);
     for (auto& callback : callbacks_) {
       std::move(callback).Run(std::vector<drive::mojom::FilePtr>());
     }
     callbacks_.clear();
     return;
   }
-  auto* items = result->FindListPath("item");
+  auto* items = result->GetDict().FindList("item");
   if (!items) {
+    base::UmaHistogramEnumeration("NewTabPage.Drive.ItemSuggestRequestResult",
+                                  ItemSuggestRequestResult::kContentError);
     for (auto& callback : callbacks_) {
       std::move(callback).Run(std::vector<drive::mojom::FilePtr>());
     }
     callbacks_.clear();
     return;
   }
+  ItemSuggestRequestResult request_result = ItemSuggestRequestResult::kSuccess;
   std::vector<drive::mojom::FilePtr> document_list;
-  for (const auto& item : items->GetListDeprecated()) {
-    auto* title = item.FindStringPath("driveItem.title");
-    auto* mime_type = item.FindStringPath("driveItem.mimeType");
-    auto* justification_text_segments =
-        item.FindListPath("justification.displayText.textSegment");
+  for (const auto& item : *items) {
+    const auto& item_dict = item.GetDict();
+    auto* title = item_dict.FindStringByDottedPath("driveItem.title");
+    auto* mime_type = item_dict.FindStringByDottedPath("driveItem.mimeType");
+    auto* justification_text_segments = item_dict.FindListByDottedPath(
+        "justification.unstructuredJustificationDescription.textSegment");
     if (!justification_text_segments ||
-        justification_text_segments->GetListDeprecated().size() == 0) {
+        justification_text_segments->size() == 0) {
+      request_result = ItemSuggestRequestResult::kContentError;
       continue;
     }
     std::string justification_text;
-    for (auto& text_segment :
-         justification_text_segments->GetListDeprecated()) {
-      auto* justification_text_path = text_segment.FindStringPath("text");
+    for (auto& text_segment : *justification_text_segments) {
+      auto* justification_text_path = text_segment.GetDict().FindString("text");
       if (!justification_text_path) {
+        request_result = ItemSuggestRequestResult::kContentError;
         continue;
       }
       justification_text += *justification_text_path;
     }
-    auto* id = item.FindStringKey("itemId");
-    auto* item_url = item.FindStringKey("url");
+    auto* id = item_dict.FindString("itemId");
+    auto* item_url = item_dict.FindString("url");
     if (!title || !mime_type || justification_text.empty() || !id ||
         !item_url || !GURL(*item_url).is_valid()) {
+      request_result = ItemSuggestRequestResult::kContentError;
       continue;
     }
     auto mojo_drive_doc = drive::mojom::File::New();
@@ -338,6 +471,10 @@ void DriveService::OnJsonParsed(
     mojo_drive_doc->item_url = GURL(*item_url);
     document_list.push_back(std::move(mojo_drive_doc));
   }
+  base::UmaHistogramEnumeration("NewTabPage.Drive.ItemSuggestRequestResult",
+                                request_result);
+  base::UmaHistogramCounts100("NewTabPage.Drive.FileCount",
+                              document_list.size());
   for (auto& callback : callbacks_) {
     std::move(callback).Run(mojo::Clone(document_list));
   }

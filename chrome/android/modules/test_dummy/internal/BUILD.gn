@@ -4,6 +4,7 @@
 
 import("//build/config/android/rules.gni")
 import("//chrome/android/modules/buildflags.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
   sources = [ "java/src/org/chromium/chrome/modules/test_dummy/TestDummyProviderImpl.java" ]
@@ -22,23 +23,20 @@ group("native") {
   deps = [ ":test_dummy" ]
 }
 
-component("test_dummy") {
+component_with_jni("test_dummy") {
+  java_targets = [ ":java" ]
   sources = [ "entrypoints.cc" ]
   deps = [
-    ":jni_registration",
     "//base",
     "//chrome/browser/test_dummy/internal:native",
+    "//third_party/jni_zero",
   ]
 
   # Test dummy native entrypoints belong in the partition.
   if (use_native_partitions) {
     cflags = [ "-fsymbol-partition=test_dummy_partition" ]
   }
-}
-
-generate_jni_registration("jni_registration") {
-  no_transitive_deps = true
-  targets = [ "//chrome/browser/test_dummy/internal:java" ]
-  header_output = "$target_gen_dir/jni_registration.h"
+  manual_jni_registration = true
   namespace = "test_dummy"
+  module_name = "test_dummy"
 }

@@ -15,6 +15,7 @@
 #include "ash/wm/gestures/back_gesture/back_gesture_event_handler.h"
 #include "ash/wm/gestures/back_gesture/test_back_gesture_contextual_nudge_delegate.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "build/build_config.h"
@@ -97,7 +98,7 @@ class BackGestureContextualNudgeControllerTest : public NoSessionAshTestBase {
   void WaitNudgeAnimationDone() {
     while (nudge()) {
       base::RunLoop run_loop;
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(100));
       run_loop.Run();
     }
@@ -381,14 +382,7 @@ TEST_F(BackGestureContextualNudgeControllerTest, GesturePerformedMetricTest) {
   GenerateBackSequence();
 }
 
-// crbug.com/1239200: flaky on linux.
-#if BUILDFLAG(IS_LINUX)
-#define MAYBE_TimeoutMetricsTest DISABLED_TimeoutMetricsTest
-#else
-#define MAYBE_TimeoutMetricsTest TimeoutMetricsTest
-#endif
-TEST_P(BackGestureContextualNudgeControllerTestA11yPrefs,
-       MAYBE_TimeoutMetricsTest) {
+TEST_P(BackGestureContextualNudgeControllerTestA11yPrefs, TimeoutMetricsTest) {
   ui::ScopedAnimationDurationScaleMode non_zero(
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
   std::unique_ptr<aura::Window> window = CreateTestWindow();

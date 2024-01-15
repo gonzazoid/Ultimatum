@@ -7,10 +7,10 @@
 
 #import <UIKit/UIKit.h>
 
-#include "components/ntp_snippets/callbacks.h"
 #include "url/gurl.h"
 
 @protocol GREYMatcher;
+@class SetUpListItemView;
 
 namespace ntp_home {
 // Returns the primary collection view of the new tab page. Returns nil if it is
@@ -28,23 +28,16 @@ UIView* FakeOmnibox();
 // Returns the label corresponding to the Discover header label. Returns nil if
 // it is not in the view hierarchy.
 UILabel* DiscoverHeaderLabel();
+
+// Returns the SetUpListItemView with the given `accessibility_id`.
+SetUpListItemView* SetUpListItemViewWithAccessibilityId(
+    NSString* accessibility_id);
+
+// Returns the SetUpListItemView in a Magic Stack module with the given
+// `accessibility_id`.
+SetUpListItemView* SetUpListItemViewInMagicStackWithAccessibilityId(
+    NSString* accessibility_id);
+
 }  // namespace ntp_home
-
-namespace ntp_snippets {
-
-// Helper to return additional suggestions with a defined url when the "fetch
-// more" action is done.
-class AdditionalSuggestionsHelper {
- public:
-  AdditionalSuggestionsHelper(const GURL& suggestions_url);
-
-  // Calls the `callback` with 10 suggestions, with their url set to `url_`.
-  void SendAdditionalSuggestions(FetchDoneCallback* callback);
-
- private:
-  GURL url_;
-};
-
-}  // namespace ntp_snippets
 
 #endif  // IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_NTP_HOME_TEST_UTILS_H_

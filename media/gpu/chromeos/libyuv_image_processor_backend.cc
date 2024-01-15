@@ -10,6 +10,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/checked_math.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "media/gpu/chromeos/fourcc.h"
 #include "media/gpu/macros.h"
@@ -18,74 +20,11 @@
 #include "third_party/libyuv/include/libyuv/convert.h"
 #include "third_party/libyuv/include/libyuv/convert_from.h"
 #include "third_party/libyuv/include/libyuv/convert_from_argb.h"
-#include "third_party/libyuv/include/libyuv/rotate.h"
 #include "third_party/libyuv/include/libyuv/scale.h"
 
 namespace media {
 
 namespace {
-
-// TODO(https://bugs.chromium.org/p/libyuv/issues/detail?id=840): Remove
-// this once libyuv implements NV12Rotate() and use the libyuv::NV12Rotate().
-int NV12Rotate(uint8_t* tmp_buffer,
-               const uint8_t* src_y,
-               int src_stride_y,
-               const uint8_t* src_uv,
-               int src_stride_uv,
-               uint8_t* dst_y,
-               int dst_stride_y,
-               uint8_t* dst_uv,
-               int dst_stride_uv,
-               int width,
-               int height,
-               VideoRotation relative_rotation) {
-  libyuv::RotationModeEnum rotation = libyuv::kRotate0;
-  int tmp_width = width;
-  int tmp_height = height;
-  switch (relative_rotation) {
-    case VIDEO_ROTATION_0:
-      NOTREACHED() << "Unexpected rotation: " << rotation;
-      return -1;
-    case VIDEO_ROTATION_90:
-      rotation = libyuv::kRotate90;
-      tmp_width = height;
-      tmp_height = width;
-      break;
-    case VIDEO_ROTATION_180:
-      rotation = libyuv::kRotate180;
-      tmp_width = width;
-      tmp_height = height;
-      break;
-    case VIDEO_ROTATION_270:
-      rotation = libyuv::kRotate270;
-      tmp_width = height;
-      tmp_height = width;
-      break;
-  }
-
-  // Rotating.
-  int tmp_uv_width = 0;
-  int tmp_uv_height = 0;
-  if (!(base::CheckAdd<int>(tmp_width, 1) / 2).AssignIfValid(&tmp_uv_width) ||
-      !(base::CheckAdd<int>(tmp_height, 1) / 2).AssignIfValid(&tmp_uv_height)) {
-    VLOGF(1) << "Overflow occurred for " << tmp_width << "x" << tmp_height;
-    return -1;
-  }
-  uint8_t* const tmp_u = tmp_buffer;
-  uint8_t* const tmp_v = tmp_u + tmp_uv_width * tmp_uv_height;
-
-  // Rotate the NV12 planes to I420.
-  int ret = libyuv::NV12ToI420Rotate(
-      src_y, src_stride_y, src_uv, src_stride_uv, dst_y, dst_stride_y, tmp_u,
-      tmp_uv_width, tmp_v, tmp_uv_width, width, height, rotation);
-  if (ret != 0)
-    return ret;
-
-  // Merge the UV planes into the destination.
-  libyuv::MergeUVPlane(tmp_u, tmp_uv_width, tmp_v, tmp_uv_width, dst_uv,
-                       dst_stride_uv, tmp_uv_width, tmp_uv_height);
-  return 0;
-}
 
 enum class SupportResult {
   Supported,
@@ -97,7 +36,6 @@ enum class SupportResult {
 enum class Transform {
   kConversion,
   kScaling,
-  kRotation,
 };
 
 static constexpr struct {
@@ -109,6 +47,9 @@ static constexpr struct {
 #define CONV(in, out, trans, result) \
   {Fourcc::in, Fourcc::out, Transform::trans, SupportResult::result}
     // Conversion.
+#if BUILDFLAG(IS_LINUX)
+    CONV(NV12, AR24, kConversion, Supported),
+#endif
     CONV(NV12, NV12, kConversion, Supported),
     CONV(YM16, NV12, kConversion, Supported),
     CONV(YM16, YU12, kConversion, Supported),
@@ -118,6 +59,7 @@ static constexpr struct {
     CONV(YUYV, YU12, kConversion, Supported),
     CONV(YV12, NV12, kConversion, Supported),
     CONV(MM21, NV12, kConversion, Supported),
+    CONV(MT2T, P010, kConversion, Supported),
     // Scaling.
     CONV(NV12, NV12, kScaling, Supported),
     CONV(YM16, NV12, kScaling, SupportedWithNV12Pivot),
@@ -125,8 +67,6 @@ static constexpr struct {
     CONV(YU12, YU12, kScaling, Supported),
     CONV(YUYV, NV12, kScaling, SupportedWithNV12Pivot),
     CONV(YUYV, YU12, kScaling, SupportedWithI420Pivot),
-    // Rotating.
-    CONV(NV12, NV12, kRotation, SupportedWithI420Pivot),
 #undef CONV
 };
 
@@ -167,12 +107,33 @@ std::unique_ptr<ImageProcessorBackend> LibYUVImageProcessorBackend::Create(
     const PortConfig& input_config,
     const PortConfig& output_config,
     OutputMode output_mode,
-    VideoRotation relative_rotation,
+    ErrorCB error_cb) {
+  return CreateWithTaskRunner(input_config, output_config, output_mode,
+                              error_cb,
+                              base::ThreadPool::CreateSequencedTaskRunner(
+                                  {base::TaskPriority::USER_VISIBLE}));
+}
+
+// static
+std::unique_ptr<ImageProcessorBackend>
+LibYUVImageProcessorBackend::CreateWithTaskRunner(
+    const PortConfig& input_config,
+    const PortConfig& output_config,
+    OutputMode output_mode,
     ErrorCB error_cb,
     scoped_refptr<base::SequencedTaskRunner> backend_task_runner) {
   VLOGF(2);
   DCHECK_EQ(output_mode, OutputMode::IMPORT)
       << "Only OutputMode::IMPORT supported";
+
+  if (!gfx::Rect(input_config.size).Contains(input_config.visible_rect)) {
+    VLOGF(1) << "Input size should contain input visible rect.";
+    return nullptr;
+  }
+  if (!gfx::Rect(output_config.size).Contains(output_config.visible_rect)) {
+    VLOGF(1) << "Output size should contain output visible rect.";
+    return nullptr;
+  }
 
   std::unique_ptr<VideoFrameMapper> input_frame_mapper;
   // LibYUVImageProcessorBackend supports only memory-based video frame for
@@ -181,8 +142,13 @@ std::unique_ptr<ImageProcessorBackend> LibYUVImageProcessorBackend::Create(
   for (auto input_type : input_config.preferred_storage_types) {
     if (input_type == VideoFrame::STORAGE_DMABUFS ||
         input_type == VideoFrame::STORAGE_GPU_MEMORY_BUFFER) {
+      // The LibYUVImageProcessorBackend is not currently used to read from
+      // Intel media compressed buffers, so we don't need the VideoFrameMapper
+      // to support those.
       input_frame_mapper = VideoFrameMapperFactory::CreateMapper(
-          input_config.fourcc.ToVideoPixelFormat(), input_type, true);
+          input_config.fourcc.ToVideoPixelFormat(), input_type,
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
       if (input_frame_mapper) {
         input_storage_type = input_type;
         break;
@@ -204,8 +170,13 @@ std::unique_ptr<ImageProcessorBackend> LibYUVImageProcessorBackend::Create(
   for (auto output_type : output_config.preferred_storage_types) {
     if (output_type == VideoFrame::STORAGE_DMABUFS ||
         output_type == VideoFrame::STORAGE_GPU_MEMORY_BUFFER) {
+      // The LibYUVImageProcessorBackend is not currently used to write onto
+      // Intel media compressed buffers, so we don't need the VideoFrameMapper
+      // to support those.
       output_frame_mapper = VideoFrameMapperFactory::CreateMapper(
-          output_config.fourcc.ToVideoPixelFormat(), output_type, true);
+          output_config.fourcc.ToVideoPixelFormat(), output_type,
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
       if (output_frame_mapper) {
         output_storage_type = output_type;
         break;
@@ -225,44 +196,18 @@ std::unique_ptr<ImageProcessorBackend> LibYUVImageProcessorBackend::Create(
   const gfx::Size& input_size = input_config.visible_rect.size();
   const gfx::Size& output_size = output_config.visible_rect.size();
   Transform transform = Transform::kConversion;
-  if (relative_rotation != VIDEO_ROTATION_0) {
-    transform = Transform::kRotation;
-    bool size_mismatch = false;
-    if (relative_rotation == VIDEO_ROTATION_180) {
-      size_mismatch = input_size.width() != output_size.width() ||
-                      input_size.height() != output_size.height();
-    } else {  // For VIDEO_ROTATION_90 and 270.
-      size_mismatch = input_size.width() != output_size.height() ||
-                      input_size.height() != output_size.width();
-    }
-    if (size_mismatch) {
-      VLOGF(1) << "input and output resolution mismatch: "
-               << "input=" << input_size.ToString()
-               << ", output=" << output_size.ToString();
-      return nullptr;
-    }
-  } else if (input_size.width() != output_size.width() ||
-             input_size.height() != output_size.height()) {
+  if (input_size != output_size) {
     transform = Transform::kScaling;
   }
+
   SupportResult res = IsConversionSupported(input_config.fourcc,
                                             output_config.fourcc, transform);
   if (res == SupportResult::Unsupported) {
     VLOGF(2) << "Conversion from " << input_size.ToString() << "/"
              << input_config.fourcc.ToString() << " to "
              << output_size.ToString() << "/" << output_config.fourcc.ToString()
-             << " with rotation " << relative_rotation << " is not supported";
+             << " is not supported";
     return nullptr;
-  }
-
-  if (input_config.fourcc.ToVideoPixelFormat() ==
-      output_config.fourcc.ToVideoPixelFormat()) {
-    if (output_config.visible_rect.origin() != gfx::Point(0, 0)) {
-      VLOGF(2) << "Output visible rectangle is not (0, 0), "
-               << "output_config.visible_rect="
-               << output_config.visible_rect.ToString();
-      return nullptr;
-    }
   }
 
   scoped_refptr<VideoFrame> intermediate_frame;
@@ -280,17 +225,40 @@ std::unique_ptr<ImageProcessorBackend> LibYUVImageProcessorBackend::Create(
     }
   }
 
+  // This intermediate frame is only needed in the event of a crop operation
+  // that does not start with the upper left corner at (0,0). Tiled formats such
+  // as MM21 can not easily be converted starting at arbitrary origins. With
+  // this intermediate buffer the tiled format can be converted to a linear
+  // format that can be easily cropped.
+  scoped_refptr<VideoFrame> crop_intermediate_frame;
+  if (input_config.visible_rect.origin() != gfx::Point(0, 0) &&
+      input_config.fourcc == Fourcc(Fourcc::MM21)) {
+    if (transform != Transform::kScaling) {
+      crop_intermediate_frame = VideoFrame::CreateFrame(
+          output_config.fourcc.ToVideoPixelFormat(), input_config.size,
+          input_config.visible_rect, input_config.size, base::TimeDelta());
+      if (!crop_intermediate_frame) {
+        VLOGF(1) << "Failed to create cropping intermediate frame";
+        return nullptr;
+      }
+    } else {
+      VLOGF(1)
+          << "Scaling and cropping simultaneously are not supported for MM21.";
+      return nullptr;
+    }
+  }
+
   auto processor =
       base::WrapUnique<ImageProcessorBackend>(new LibYUVImageProcessorBackend(
           std::move(input_frame_mapper), std::move(output_frame_mapper),
-          std::move(intermediate_frame),
+          std::move(intermediate_frame), std::move(crop_intermediate_frame),
           PortConfig(input_config.fourcc, input_config.size,
                      input_config.planes, input_config.visible_rect,
                      {input_storage_type}),
           PortConfig(output_config.fourcc, output_config.size,
                      output_config.planes, output_config.visible_rect,
                      {output_storage_type}),
-          OutputMode::IMPORT, relative_rotation, std::move(error_cb),
+          OutputMode::IMPORT, std::move(error_cb),
           std::move(backend_task_runner)));
   VLOGF(2) << "LibYUVImageProcessorBackend created for converting from "
            << input_config.ToString() << " to " << output_config.ToString();
@@ -301,24 +269,28 @@ LibYUVImageProcessorBackend::LibYUVImageProcessorBackend(
     std::unique_ptr<VideoFrameMapper> input_frame_mapper,
     std::unique_ptr<VideoFrameMapper> output_frame_mapper,
     scoped_refptr<VideoFrame> intermediate_frame,
+    scoped_refptr<VideoFrame> crop_intermediate_frame,
     const PortConfig& input_config,
     const PortConfig& output_config,
     OutputMode output_mode,
-    VideoRotation relative_rotation,
     ErrorCB error_cb,
     scoped_refptr<base::SequencedTaskRunner> backend_task_runner)
     : ImageProcessorBackend(input_config,
                             output_config,
                             output_mode,
-                            relative_rotation,
                             std::move(error_cb),
                             std::move(backend_task_runner)),
       input_frame_mapper_(std::move(input_frame_mapper)),
       output_frame_mapper_(std::move(output_frame_mapper)),
-      intermediate_frame_(std::move(intermediate_frame)) {}
+      intermediate_frame_(std::move(intermediate_frame)),
+      crop_intermediate_frame_(std::move(crop_intermediate_frame)) {}
 
 LibYUVImageProcessorBackend::~LibYUVImageProcessorBackend() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(backend_sequence_checker_);
+}
+
+std::string LibYUVImageProcessorBackend::type() const {
+  return "LibYUVImageProcessor";
 }
 
 void LibYUVImageProcessorBackend::Process(
@@ -359,9 +331,42 @@ void LibYUVImageProcessorBackend::Process(
 
   int res;
   {
-    TRACE_EVENT0("media", "LibYUVImageProcessorBackend::Process");
+    TRACE_EVENT2("media", "LibYUVImageProcessorBackend::Process", "input_frame",
+                 input_frame->AsHumanReadableString(), "output_frame",
+                 mapped_frame->AsHumanReadableString());
     SCOPED_UMA_HISTOGRAM_TIMER("LibYUVImageProcessorBackend::Process");
-    res = DoConversion(input_frame.get(), mapped_frame.get());
+    if (input_config_.visible_rect.origin() == gfx::Point(0, 0) ||
+        input_config_.fourcc != Fourcc(Fourcc::MM21)) {
+      res = DoConversion(input_frame.get(), mapped_frame.get());
+    } else {
+      res = DoConversion(input_frame.get(), crop_intermediate_frame_.get());
+
+      // This is cropping routine that should be able to support any (known)
+      // pixel format).
+      if (!res) {
+        for (size_t plane = 0;
+             plane < VideoFrame::NumPlanes(crop_intermediate_frame_->format());
+             plane++) {
+          const uint8_t* src_row_ptr =
+              crop_intermediate_frame_->visible_data(plane);
+          uint8_t* dst_row_ptr = mapped_frame->GetWritableVisibleData(plane);
+          for (size_t row = 0;
+               row < VideoFrame::Rows(
+                         plane, crop_intermediate_frame_->format(),
+                         crop_intermediate_frame_->visible_rect().height());
+               row++) {
+            memcpy(dst_row_ptr, src_row_ptr,
+                   VideoFrame::Columns(
+                       plane, crop_intermediate_frame_->format(),
+                       crop_intermediate_frame_->visible_rect().width()) *
+                       VideoFrame::BytesPerElement(
+                           crop_intermediate_frame_->format(), plane));
+            src_row_ptr += crop_intermediate_frame_->row_bytes(plane);
+            dst_row_ptr += mapped_frame->row_bytes(plane);
+          }
+        }
+      }
+    }
   }
 
   if (res != 0) {
@@ -410,6 +415,27 @@ int LibYUVImageProcessorBackend::DoConversion(const VideoFrame* const input,
 #define YUY2_DATA(fr) \
   fr->visible_data(VideoFrame::kYPlane), fr->stride(VideoFrame::kYPlane)
 
+#define Y_UV_DATA_10BIT(fr)                                                 \
+  reinterpret_cast<const uint16_t*>(fr->visible_data(VideoFrame::kYPlane)), \
+      fr->stride(VideoFrame::kYPlane),                                      \
+      reinterpret_cast<const uint16_t*>(                                    \
+          fr->visible_data(VideoFrame::kUVPlane)),                          \
+      fr->stride(VideoFrame::kUVPlane)
+
+#define Y_UV_DATA_W_10BIT(fr)                                \
+  reinterpret_cast<uint16_t*>(                               \
+      fr->GetWritableVisibleData(VideoFrame::kYPlane)),      \
+      fr->stride(VideoFrame::kYPlane),                       \
+      reinterpret_cast<uint16_t*>(                           \
+          fr->GetWritableVisibleData(VideoFrame::kUVPlane)), \
+      fr->stride(VideoFrame::kUVPlane)
+
+#if BUILDFLAG(IS_LINUX)
+#define ARGB_DATA(fr)                                 \
+  fr->GetWritableVisibleData(VideoFrame::kARGBPlane), \
+      fr->stride(VideoFrame::kARGBPlane)
+#endif
+
 #define LIBYUV_FUNC(func, i, o)                      \
   libyuv::func(i, o, output->visible_rect().width(), \
                output->visible_rect().height())
@@ -424,33 +450,20 @@ int LibYUVImageProcessorBackend::DoConversion(const VideoFrame* const input,
       case PIXEL_FORMAT_NV12:
         // MM21 mode.
         if (input_config_.fourcc == Fourcc(Fourcc::MM21)) {
-          // The X and Y of the input rectangle seem to have a more complicated
-          // relationship with the channel offsets. This is what we have managed
-          // to figure out. (b/248991039)
-          const int luma_offset =
-              input->visible_rect().x() * (input->visible_rect().y() - 1);
-          const int chroma_offset = luma_offset / 2 - input->visible_rect().y();
-          return libyuv::MM21ToNV12(
-              input->visible_data(VideoFrame::kYPlane) + luma_offset,
-              input->stride(VideoFrame::kYPlane),
-              input->visible_data(VideoFrame::kUVPlane) + chroma_offset,
-              input->stride(VideoFrame::kUVPlane), Y_UV_DATA_W(output),
-              output->visible_rect().width(), output->visible_rect().height());
+          return libyuv::MM21ToNV12(input->data(VideoFrame::kYPlane),
+                                    input->stride(VideoFrame::kYPlane),
+                                    input->data(VideoFrame::kUVPlane),
+                                    input->stride(VideoFrame::kUVPlane),
+                                    output->writable_data(VideoFrame::kYPlane),
+                                    output->stride(VideoFrame::kYPlane),
+                                    output->writable_data(VideoFrame::kUVPlane),
+                                    output->stride(VideoFrame::kUVPlane),
+                                    std::min(output->coded_size().width(),
+                                             input->coded_size().width()),
+                                    std::min(output->coded_size().height(),
+                                             input->coded_size().height()));
         }
 
-        // Rotation mode.
-        if (relative_rotation_ != VIDEO_ROTATION_0) {
-          // The size of |tmp_buffer| of NV12Rotate() should be
-          // 2 * ceil(|output_visible_rect_.width()| / 2) *
-          // ceil(|output_visible_rect_.height()| / 2), which used to store
-          // temporary U and V planes for I420 data. Although
-          // |intermediate_frame_->data(0)| is much larger than the required
-          // size, we use the frame to simplify the code.
-          return NV12Rotate(intermediate_frame_->writable_data(0),
-                            Y_UV_DATA(input), Y_UV_DATA_W(output),
-                            input->visible_rect().width(),
-                            input->visible_rect().height(), relative_rotation_);
-        }
         // Scaling mode.
         return libyuv::NV12Scale(
             Y_UV_DATA(input), input->visible_rect().width(),
@@ -552,6 +565,22 @@ int LibYUVImageProcessorBackend::DoConversion(const VideoFrame* const input,
         return -1;
     }
   }
+
+  if (output->format() == PIXEL_FORMAT_P016LE) {
+    if (input_config_.fourcc == Fourcc(Fourcc::MT2T)) {
+      return LIBYUV_FUNC(MT2TToP010, Y_UV_DATA(input),
+                         Y_UV_DATA_W_10BIT(output));
+    }
+  }
+
+#if BUILDFLAG(IS_LINUX)
+  if (output->format() == PIXEL_FORMAT_ARGB) {
+    if (input_config_.fourcc == Fourcc(Fourcc::NV12)) {
+      return LIBYUV_FUNC(NV12ToARGB, Y_UV_DATA(input),
+                         ARGB_DATA(output));
+    }
+  }
+#endif
 
 #undef Y_U_V_DATA
 #undef Y_V_U_DATA

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 import {AudioBroker} from './audio_broker.js';
 import {Page, PageNavigator} from './page.js';
@@ -51,7 +51,8 @@ export class InputPage extends Page {
   updateActiveInputDevice() {
     const handler = AudioBroker.getInstance().handler;
     handler.getActiveInputDeviceName().then(({deviceName}) => {
-      $('active-input').innerHTML = deviceName ?? 'No active input device';
+      getRequiredElement('active-input').innerHTML =
+          deviceName ?? 'No active input device';
     });
   }
 
@@ -62,11 +63,11 @@ export class InputPage extends Page {
     }> =
         [
           {
-            canvas: $('channel-l') as HTMLCanvasElement,
+            canvas: getRequiredElement<HTMLCanvasElement>('channel-l'),
             analyser: this.analyserLeft,
           },
           {
-            canvas: $('channel-r') as HTMLCanvasElement,
+            canvas: getRequiredElement<HTMLCanvasElement>('channel-r'),
             analyser: this.analyserRight,
           },
         ];
@@ -98,14 +99,14 @@ export class InputPage extends Page {
 
           canvasContext.beginPath();
 
-          var dx = width * 1.0 / bufferSize;
-          var x = 0;
+          const dx = width * 1.0 / bufferSize;
+          let x = 0;
 
-          for (var i = 0; i < bufferSize; i++) {
+          for (let i = 0; i < bufferSize; i++) {
             const data = buffer[i];
             if (data) {
-              var v = data / 128.0;
-              var y = v * height / 2;
+              const v = data / 128.0;
+              const y = v * height / 2;
               if (i === 0) {
                 canvasContext.moveTo(x, y);
               } else {
@@ -152,8 +153,8 @@ export class InputPage extends Page {
 
   record(source: MediaStream) {
     let chunks: Blob[] = [];
-    const recordButton = $('record-btn');
-    const clipSection = $('audio-file');
+    const recordButton = getRequiredElement('record-btn');
+    const clipSection = getRequiredElement('audio-file');
     this.mediaRecorder = new MediaRecorder(source);
 
     recordButton.onclick = () => {
@@ -188,8 +189,8 @@ export class InputPage extends Page {
 
   startRecord() {
     if (this.mediaRecorder) {
-      const recordButton = $('record-btn');
-      const clipSection = $('audio-file');
+      const recordButton = getRequiredElement('record-btn');
+      const clipSection = getRequiredElement('audio-file');
       this.recordClicked = true;
       this.mediaRecorder.start();
       this.startTimer();
@@ -203,21 +204,21 @@ export class InputPage extends Page {
 
   stopRecord() {
     if (this.mediaRecorder) {
-      const recordButton = $('record-btn');
+      const recordButton = getRequiredElement('record-btn');
       this.recordClicked = false;
       this.mediaRecorder.stop();
       this.stopTimer();
       recordButton.className = 'on-record';
       recordButton.textContent = 'Record';
-      $('input-qs').hidden = false;
+      getRequiredElement('input-qs').hidden = false;
     }
   }
 
   startTimer() {
-    var startTime = Date.now();
+    const startTime = Date.now();
     this.intervalId = window.setInterval(() => {
-      var delta = Date.now() - startTime;
-      $('counter').innerHTML =
+      const delta = Date.now() - startTime;
+      getRequiredElement('counter').innerHTML =
           String(Math.floor(delta / 1000)) + ':' + String(delta % 1000);
     }, 200);
   }
@@ -225,16 +226,16 @@ export class InputPage extends Page {
   stopTimer() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
-      $('counter').innerHTML = '';
+      getRequiredElement('counter').innerHTML = '';
     }
   }
 
   setUpButtons() {
-    $('input-yes').addEventListener('click', () => {
+    getRequiredElement('input-yes').addEventListener('click', () => {
       this.testInputFeedback.set('Can Hear Clearly', 'true');
       PageNavigator.getInstance().showPage('feedback');
     });
-    $('input-no').addEventListener('click', () => {
+    getRequiredElement('input-no').addEventListener('click', () => {
       this.testInputFeedback.set('Can Hear Clearly', 'false');
       PageNavigator.getInstance().showPage('feedback');
     });

@@ -6,15 +6,61 @@ import("//build/toolchain/win/midl.gni")
 import("//chrome/updater/branding.gni")
 import("//chrome/version.gni")
 
+# Processes IDL template files into a new IDL template with distinct user and
+# system identities for interfaces that are decorated with `BEGIN_INTERFACE` and
+# `END_INTERFACE`.
+template("generate_user_system_idl") {
+  action(target_name + "_generate_user_system_idl") {
+    script = "generate_user_system_idl.py"
+    inputs = [
+      script,
+      invoker.idl_template_filename,
+    ]
+    output_file = "$target_gen_dir/" + invoker.idl_template_filename
+    args = [
+      "--idl_template_file",
+      rebase_path(invoker.idl_template_filename, root_build_dir),
+      "--idl_output_file",
+      rebase_path(output_file, root_build_dir),
+    ]
+    outputs = [ output_file ]
+  }
+}
+
 # These GUIDs must depend on branding only.
 branding_only_placeholder_guids = [
   "PLACEHOLDER-GUID-69464FF0-D9EC-4037-A35F-8AE4358106CC",  # UpdaterLib
+
   "PLACEHOLDER-GUID-158428a4-6014-4978-83ba-9fad0dabe791",  # UpdaterUserClass
   "PLACEHOLDER-GUID-415FD747-D79E-42D7-93AC-1BA6E5FD4E93",  # UpdaterSystemClass
+
   "PLACEHOLDER-GUID-63B8FFB1-5314-48C9-9C57-93EC8BC6184B",  # IUpdater
+  "PLACEHOLDER-GUID-02AFCB67-0899-4676-91A9-67D92B3B7918",  # IUpdaterUser
+  "PLACEHOLDER-GUID-FCE335F3-A55C-496E-814F-85971C9FA6F1",  # IUpdaterSystem
+
   "PLACEHOLDER-GUID-46ACF70B-AC13-406D-B53B-B2C4BF091FF6",  # IUpdateState
+  "PLACEHOLDER-GUID-C3485D9F-C684-4C43-B85B-E339EA395C29",  # IUpdateStateUser
+  "PLACEHOLDER-GUID-EA6FDC05-CDC5-4EA4-AB41-CCBD1040A2B5",  # IUpdateStateSystem
+
   "PLACEHOLDER-GUID-2FCD14AF-B645-4351-8359-E80A0E202A0B",  # ICompleteStatus
+  "PLACEHOLDER-GUID-9AD1A645-5A4B-4D36-BC21-F0059482E6EA",  # ICompleteStatusUser
+  "PLACEHOLDER-GUID-E2BD9A6B-0A19-4C89-AE8B-B7E9E51D9A07",  # ICompleteStatusSystem
+
   "PLACEHOLDER-GUID-7B416CFD-4216-4FD6-BD83-7C586054676E",  # IUpdaterObserver
+  "PLACEHOLDER-GUID-B54493A0-65B7-408C-B650-06265D2182AC",  # IUpdaterObserverUser
+  "PLACEHOLDER-GUID-057B500A-4BA2-496A-B1CD-C5DED3CCC61B",  # IUpdaterObserverSystem
+
+  "PLACEHOLDER-GUID-8BAB6F84-AD67-4819-B846-CC890880FD3B",  # IUpdaterCallback
+  "PLACEHOLDER-GUID-34ADC89D-552B-4102-8AE5-D613A691335B",  # IUpdaterCallbackUser
+  "PLACEHOLDER-GUID-F0D6763A-0182-4136-B1FA-508E334CFFC1",  # IUpdaterCallbackSystem
+
+  "PLACEHOLDER-GUID-A22AFC54-2DEF-4578-9187-DB3B24381090",  # IUpdaterAppState
+  "PLACEHOLDER-GUID-028FEB84-44BC-4A73-A0CD-603678155CC3",  # IUpdaterAppStateUser
+  "PLACEHOLDER-GUID-92631531-8044-46F4-B645-CDFBCCC7FA3B",  # IUpdaterAppStateSystem
+
+  "PLACEHOLDER-GUID-EFE903C0-E820-4136-9FAE-FDCD7F256302",  # IUpdaterAppStatesCallback
+  "PLACEHOLDER-GUID-BCFCF95C-DE48-4F42-B0E9-D50DB407DB53",  # IUpdaterAppStatesCallbackUser
+  "PLACEHOLDER-GUID-2CB8867E-495E-459F-B1B6-2DD7FFDBD462",  # IUpdaterAppStatesCallbackSystem
 ]
 
 uuid5_guids = []
@@ -23,12 +69,18 @@ foreach(guid, branding_only_placeholder_guids) {
 }
 uuid5_guids = string_join(",", uuid5_guids)
 
+generate_user_system_idl("updater_idl") {
+  idl_template_filename = "updater_idl.template"
+}
+
 midl("updater_idl_idl") {
   dynamic_guids = "ignore_proxy_stub," + uuid5_guids
 
-  sources = [ "updater_idl.template" ]
+  sources = [ "$target_gen_dir/updater_idl.template" ]
 
   writes_tlb = true
+
+  deps = [ ":updater_idl_generate_user_system_idl" ]
 }
 
 # These GUIDs must depend on branding and version.
@@ -37,7 +89,11 @@ branding_version_placeholder_guids = [
   "PLACEHOLDER-GUID-1F87FE2F-D6A9-4711-9D11-8187705F8457",  # UpdaterInternalUserClass
   "PLACEHOLDER-GUID-4556BA55-517E-4F03-8016-331A43C269C9",  # UpdaterInternalSystemClass
   "PLACEHOLDER-GUID-526DA036-9BD3-4697-865A-DA12D37DFFCA",  # IUpdaterInternal
+  "PLACEHOLDER-GUID-C82AFDA3-CA76-46EE-96E9-474717BFA7BA",  # IUpdaterInternalUser
+  "PLACEHOLDER-GUID-E690EB97-6E46-4361-AF8F-90A4F5496475",  # IUpdaterInternalSystem
   "PLACEHOLDER-GUID-D272C794-2ACE-4584-B993-3B90C622BE65",  # IUpdaterInternalCallback
+  "PLACEHOLDER-GUID-618D9B82-9F51-4490-AF24-BB80489E1537",  # IUpdaterInternalCallbackUser
+  "PLACEHOLDER-GUID-7E806C73-B2A4-4BC5-BDAD-2249D87F67FC",  # IUpdaterInternalCallbackSystem
 ]
 
 uuid5_guids = []
@@ -47,81 +103,87 @@ foreach(guid, branding_version_placeholder_guids) {
 }
 uuid5_guids = string_join(",", uuid5_guids)
 
+generate_user_system_idl("updater_internal_idl") {
+  idl_template_filename = "updater_internal_idl.template"
+}
+
 midl("updater_internal_idl_idl") {
   dynamic_guids = "ignore_proxy_stub," + uuid5_guids
 
-  sources = [ "updater_internal_idl.template" ]
+  sources = [ "$target_gen_dir/updater_internal_idl.template" ]
 
   writes_tlb = true
+
+  deps = [ ":updater_internal_idl_generate_user_system_idl" ]
 }
 
-if (is_chrome_branded) {
-  idl_suffix = "chrome_branded"
-} else {
-  idl_suffix = "open_source"
-}
+updater_legacy_idl_guids = [
+  "PLACEHOLDER-GUID-7A1FDE1F-AAA9-441B-B9AA-95B31D78592B=$UpdaterLegacyLibGUID",
+  "PLACEHOLDER-GUID-A0FEB7CB-E0D8-4035-A4C9-5620A8C725AD=$GoogleUpdate3WebUserClassGUID",
+  "PLACEHOLDER-GUID-FAC5C548-84EC-474C-A4B3-CD414E09B14C=$GoogleUpdate3WebSystemClassGUID",
+  "PLACEHOLDER-GUID-687DCE9A-57BE-4026-BEC4-C0A9ACBBCAF2=$GoogleUpdate3WebServiceClassGUID",
+  "PLACEHOLDER-GUID-E432DCFE-6A32-4C07-B038-9D74AC80D6AB=$PolicyStatusUserClassGUID",
+  "PLACEHOLDER-GUID-F675D224-BD54-40E9-AECB-AA3B64EB9863=$PolicyStatusSystemClassGUID",
+  "PLACEHOLDER-GUID-CEC2877D-4856-460E-BE73-11DD7CC7C821=$ProcessLauncherClassGUID",
 
-# For cross compilation reasons, the IDL files are generated with different
-# names for chrome-branded and open source. The common template
-# `updater_legacy_idl.template` is copied to the appropriately  suffixed
-# template under the gen dir, and that copied template is used to then generate
-# the MIDL output with substitutible `defines` such as `UPDATER_LEGACY_LIB_UUID`
-# in the `midl("updater_legacy_idl_idl")` action.
-copy("copy_updater_legacy_idl_idl") {
-  sources = [ "updater_legacy_idl.template" ]
-  outputs =
-      [ "$root_gen_dir/chrome/updater/updater_legacy_idl_$idl_suffix.template" ]
+  "PLACEHOLDER-GUID-AA10D17D-7A09-48AC-B1E4-F124937E3D26=$IAppVersionWebGUID",
+  "PLACEHOLDER-GUID-AC817E10-993C-470F-8DCA-25F53D70EA8D=$IAppVersionWebUserGUID",
+  "PLACEHOLDER-GUID-9367601E-C100-4702-8755-808D6BB385D8=$IAppVersionWebSystemGUID",
+
+  "PLACEHOLDER-GUID-A643508B-B1E3-4457-9769-32C953BD1D57=$ICurrentStateGUID",
+  "PLACEHOLDER-GUID-31479718-D170-467B-9274-27FC3E88CB76=$ICurrentStateUserGUID",
+  "PLACEHOLDER-GUID-71CBC6BB-CA4B-4B5A-83C0-FC95F9CA6A30=$ICurrentStateSystemGUID",
+
+  "PLACEHOLDER-GUID-A35E1C5E-0A18-4FF1-8C4D-DD8ED07B0BD0=$IGoogleUpdate3WebGUID",
+  "PLACEHOLDER-GUID-EE8EE731-C592-4A4F-9774-BB04337B8F46=$IGoogleUpdate3WebUserGUID",
+  "PLACEHOLDER-GUID-AE5F8C9D-B94D-4367-A422-D1DC4E913A52=$IGoogleUpdate3WebSystemGUID",
+
+  "PLACEHOLDER-GUID-0569DBB9-BAA0-48D5-8543-0F3BE30A1648=$IAppBundleWebGUID",
+  "PLACEHOLDER-GUID-CE7A37FD-A255-460C-BAF1-708765EB76EC=$IAppBundleWebUserGUID",
+  "PLACEHOLDER-GUID-BFFD766D-A2DD-436E-89FA-BF05BC5B5958=$IAppBundleWebSystemGUID",
+
+  "PLACEHOLDER-GUID-63D941DE-F67B-4E15-8A90-27881DA9EF4A=$IAppWebGUID",
+  "PLACEHOLDER-GUID-47B9D508-CB72-4F8B-AF00-7D0143603B25=$IAppWebUserGUID",
+  "PLACEHOLDER-GUID-540B227A-F442-45D5-BA52-298A05BAF1A8=$IAppWebSystemGUID",
+
+  "PLACEHOLDER-GUID-10A2D03F-8BC7-49DB-A21E-A7D4429D2759=$IAppCommandWebGUID",
+  "PLACEHOLDER-GUID-5515E66F-FA6F-4D74-B5EA-4FCFDA16FE12=$IAppCommandWebUserGUID",
+  "PLACEHOLDER-GUID-C6E2C5D5-86FA-4A64-9D08-8C9B644F0E49=$IAppCommandWebSystemGUID",
+
+  "PLACEHOLDER-GUID-6A54FE75-EDC8-404E-A41B-4278C0557151=$IPolicyStatusGUID",
+  "PLACEHOLDER-GUID-EF739C0C-40B0-478D-B76B-3659B8F2B0EB=$IPolicyStatusUserGUID",
+  "PLACEHOLDER-GUID-F3964464-A939-44D3-9244-36BD2E3630B8=$IPolicyStatusSystemGUID",
+
+  "PLACEHOLDER-GUID-06A6AA1E-2680-4076-A7CD-6053722CF454=$IPolicyStatus2GUID",
+  "PLACEHOLDER-GUID-AD91C851-86AC-499F-9BA9-9A561744AA4D=$IPolicyStatus2UserGUID",
+  "PLACEHOLDER-GUID-F4A0362A-3702-48B8-9896-7D8013D03AB2=$IPolicyStatus2SystemGUID",
+
+  "PLACEHOLDER-GUID-029BD175-5035-4E2A-8724-C9D47F4FAEA3=$IPolicyStatus3GUID",
+  "PLACEHOLDER-GUID-BC39E1E1-E8FA-4E72-903F-3BF346E7E165=$IPolicyStatus3UserGUID",
+  "PLACEHOLDER-GUID-7B26CC23-B2B8-441B-AA9C-8B551ABB611B=$IPolicyStatus3SystemGUID",
+
+  "PLACEHOLDER-GUID-2A7D2AE7-8EEE-45B4-B17F-31DAAC82CCBB=$IPolicyStatusValueGUID",
+  "PLACEHOLDER-GUID-7E0A6B39-7CEB-4944-ABFA-F419D201D6A0=$IPolicyStatusValueUserGUID",
+  "PLACEHOLDER-GUID-CC2CCD05-119C-44E1-852D-6DCC2DFB72EC=$IPolicyStatusValueSystemGUID",
+
+  "PLACEHOLDER-GUID-4779D540-F6A3-455F-A929-7ADFE85B6F09=$IProcessLauncherGUID",
+
+  "PLACEHOLDER-GUID-74F243B8-75D1-4E2D-BC89-5689798EEF3E=$IProcessLauncher2GUID",
+]
+updater_legacy_idl_guids = string_join(",", updater_legacy_idl_guids)
+
+generate_user_system_idl("updater_legacy_idl") {
+  idl_template_filename = "updater_legacy_idl.template"
 }
 
 midl("updater_legacy_idl_idl") {
-  sources =
-      [ "$root_gen_dir/chrome/updater/updater_legacy_idl_$idl_suffix.template" ]
+  dynamic_guids = "ignore_proxy_stub," + updater_legacy_idl_guids
+
+  sources = [ "$target_gen_dir/updater_legacy_idl.template" ]
+
   writes_tlb = true
 
-  if (is_chrome_branded) {
-    # Google-specific Legacy GUIDs that Omaha 4 supports.
-    defines = [
-      "UPDATER_LEGACY_LIB_UUID=69464FF0-D9EC-4037-A35F-8AE4358106CC",
-      "GOOGLEUPDATE3WEBUSERCLASS_CLSID=22181302-A8A6-4F84-A541-E5CBFC70CC43",
-      "GOOGLEUPDATE3WEBSYSTEMCLASS_CLSID=8A1D4361-2C08-4700-A351-3EAA9CBFF5E4",
-      "POLICYSTATUSUSERCLASS_CLSID=6DDCE70D-A4AE-4E97-908C-BE7B2DB750AD",
-      "POLICYSTATUSSYSTEMCLASS_CLSID=521FDB42-7130-4806-822A-FC5163FAD983",
-      "PROCESSLAUNCHERCLASS_CLSID=ABC01078-F197-4B0B-ADBC-CFE684B39C82",
-      "ICURRENTSTATE_IID=247954F9-9EDC-4E68-8CC3-150C2B89EADF",
-      "IGOOGLEUPDATE3WEB_IID=494B20CF-282E-4BDD-9F5D-B70CB09D351E",
-      "IAPPBUNDLEWEB_IID=DD42475D-6D46-496A-924E-BD5630B4CBBA",
-      "IAPPWEB_IID=18D0F672-18B4-48E6-AD36-6E6BF01DBBC4",
-      "IAPPCOMMANDWEB_IID=8476CE12-AE1F-4198-805C-BA0F9B783F57",
-      "IPOLICYSTATUS_IID=F63F6F8B-ACD5-413C-A44B-0409136D26CB",
-      "IPOLICYSTATUS2_IID=34527502-D3DB-4205-A69B-789B27EE0414",
-      "IPOLICYSTATUS3_IID=05A30352-EB25-45B6-8449-BCA7B0542CE5",
-      "IPOLICYSTATUSVALUE_IID=27634814-8E41-4C35-8577-980134A96544",
-      "IPROCESSLAUNCHER_IID=128C2DA6-2BC0-44C0-B3F6-4EC22E647964",
-      "IPROCESSLAUNCHER2_IID=D106AB5F-A70E-400E-A21B-96208C1D8DBB",
-    ]
-  } else {
-    defines = [
-      "UPDATER_LEGACY_LIB_UUID=4C61BB05-94D1-4BAB-B69C-C34195AF92CA",
-      "GOOGLEUPDATE3WEBUSERCLASS_CLSID=75828ED1-7BE8-45D0-8950-AA85CBF74510",
-      "GOOGLEUPDATE3WEBSYSTEMCLASS_CLSID=283209B7-C761-41CA-BE8D-B5321CD78FD6",
-      "POLICYSTATUSUSERCLASS_CLSID=4DAC24AB-B340-4B7E-AD01-1504A7F59EEA",
-      "POLICYSTATUSSYSTEMCLASS_CLSID=83FE19AC-72A6-4A72-B136-724444121586",
-      "PROCESSLAUNCHERCLASS_CLSID=811A664F-703E-407C-A323-E6E31D1EFFA0",
-      "ICURRENTSTATE_IID=BE5D3E90-A66C-4A0A-9B7B-1A6B9BF3971E",
-      "IGOOGLEUPDATE3WEB_IID=027234BD-61BB-4F5C-9386-7FE804171C8C",
-      "IAPPBUNDLEWEB_IID=D734C877-21F4-496E-B857-3E5B2E72E4CC",
-      "IAPPWEB_IID=2C6218B9-088D-4D25-A4F8-570558124142",
-      "IAPPCOMMANDWEB_IID=87DBF75E-F590-4802-93FD-F8D07800E2E9",
-      "IPOLICYSTATUS_IID=7D908375-C9D0-44C5-BB98-206F3C24A74C",
-      "IPOLICYSTATUS2_IID=9D31EA63-2E06-4D41-98C7-CB1F307DB597",
-      "IPOLICYSTATUS3_IID=5C674FC1-80E3-48D2-987B-79D9D286065B",
-      "IPOLICYSTATUSVALUE_IID=47C8886A-A4B5-4F6C-865A-41A207074DFA",
-      "IPROCESSLAUNCHER_IID=EED70106-3604-4385-866E-6D540E99CA1A",
-      "IPROCESSLAUNCHER2_IID=BAEE6326-C925-4FA4-AFE9-5FA69902B021",
-    ]
-  }
-
-  deps = [ ":copy_updater_legacy_idl_idl" ]
+  deps = [ ":updater_legacy_idl_generate_user_system_idl" ]
 }
 
 # The COM server needs to work with Windows 7, so explicitly setting the defines

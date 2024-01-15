@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "mojo/public/cpp/bindings/optional_as_pointer.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -54,6 +54,7 @@ EnumTraits<viz::mojom::CopyOutputResultFormat, viz::CopyOutputResult::Format>::
       return viz::mojom::CopyOutputResultFormat::RGBA;
     case viz::CopyOutputResult::Format::I420_PLANES:
     case viz::CopyOutputResult::Format::NV12_PLANES:
+    case viz::CopyOutputResult::Format::NV12_MULTIPLANE:
       break;  // Not intended for transport across service boundaries.
   }
   NOTREACHED();
@@ -157,8 +158,8 @@ StructTraits<viz::mojom::CopyOutputResultDataView,
   // Only RGBA can travel across process boundaries, in which case there will be
   // only one plane that is relevant in the |result|:
   DCHECK_EQ(result->format(), viz::CopyOutputResult::Format::RGBA);
-  return mojo::MakeOptionalAsPointer(
-      &result->GetTextureResult()->planes[0].mailbox);
+  return mojo::OptionalAsPointer(
+      &result->GetTextureResult()->mailbox_holders[0].mailbox);
 }
 
 // static
@@ -175,8 +176,8 @@ StructTraits<viz::mojom::CopyOutputResultDataView,
   // Only RGBA can travel across process boundaries, in which case there will be
   // only one plane that is relevant in the |result|:
   DCHECK_EQ(result->format(), viz::CopyOutputResult::Format::RGBA);
-  return mojo::MakeOptionalAsPointer(
-      &result->GetTextureResult()->planes[0].sync_token);
+  return mojo::OptionalAsPointer(
+      &result->GetTextureResult()->mailbox_holders[0].sync_token);
 }
 
 // static
@@ -189,7 +190,7 @@ StructTraits<viz::mojom::CopyOutputResultDataView,
       result->IsEmpty()) {
     return nullptr;
   }
-  return mojo::MakeOptionalAsPointer(&result->GetTextureResult()->color_space);
+  return mojo::OptionalAsPointer(&result->GetTextureResult()->color_space);
 }
 
 // static
@@ -307,6 +308,7 @@ bool StructTraits<viz::mojom::CopyOutputResultDataView,
 
     case viz::CopyOutputResult::Format::I420_PLANES:
     case viz::CopyOutputResult::Format::NV12_PLANES:
+    case viz::CopyOutputResult::Format::NV12_MULTIPLANE:
       break;  // Not intended for transport across service boundaries.
   }
 

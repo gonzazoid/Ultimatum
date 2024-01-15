@@ -16,36 +16,32 @@
 #include "ash/test/ash_test_base.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/scroll_view.h"
 
 namespace ash {
 
-class AppListFolderViewProductivityLauncherTest : public AshTestBase {
+class AppListFolderViewTest : public AshTestBase,
+                              public testing::WithParamInterface<bool> {
  public:
-  AppListFolderViewProductivityLauncherTest() = default;
-  ~AppListFolderViewProductivityLauncherTest() override = default;
+  AppListFolderViewTest() = default;
+  ~AppListFolderViewTest() override = default;
 
-  // testing::Test:
+  // testing::test:
   void SetUp() override {
+    scoped_feature_list_.InitWithFeatureStates(
+        {{chromeos::features::kCrosWebAppShortcutUiUpdate, true},
+         {features::kSeparateWebAppShortcutBadgeIcon, true}});
     AshTestBase::SetUp();
-
-    app_list_test_model_ = std::make_unique<test::AppListTestModel>();
-    search_model_ = std::make_unique<SearchModel>();
-    Shell::Get()->app_list_controller()->SetActiveModel(
-        /*profile_id=*/1, app_list_test_model_.get(), search_model_.get());
   }
-
-  base::test::ScopedFeatureList feature_list_{features::kProductivityLauncher};
-  std::unique_ptr<test::AppListTestModel> app_list_test_model_;
-  std::unique_ptr<SearchModel> search_model_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-TEST_F(AppListFolderViewProductivityLauncherTest,
-       ScrollViewSizeIsCappedForLargeFolders) {
+TEST_F(AppListFolderViewTest, ScrollViewSizeIsCappedForLargeFolders) {
   // Create a large number of apps, more than a 4 rows.
-  app_list_test_model_->CreateAndPopulateFolderWithApps(30);
+  GetAppListTestHelper()->model()->CreateAndPopulateFolderWithApps(30);
 
   // Open the app list and open the folder.
   auto* helper = GetAppListTestHelper();
@@ -65,10 +61,9 @@ TEST_F(AppListFolderViewProductivityLauncherTest,
   EXPECT_LT(scroll_view->height(), tile_height * 5);
 }
 
-TEST_F(AppListFolderViewProductivityLauncherTest,
-       CloseFolderMakesA11yAnnouncement) {
+TEST_F(AppListFolderViewTest, CloseFolderMakesA11yAnnouncement) {
   // Create a folder with a couple items.
-  app_list_test_model_->CreateAndPopulateFolderWithApps(2);
+  GetAppListTestHelper()->model()->CreateAndPopulateFolderWithApps(2);
 
   // Open the app list and open the folder.
   auto* helper = GetAppListTestHelper();
@@ -103,6 +98,30 @@ TEST_F(AppListFolderViewProductivityLauncherTest,
   announcement_view->GetViewAccessibility().GetAccessibleNodeData(&node_data);
   EXPECT_EQ(node_data.GetStringAttribute(ax::mojom::StringAttribute::kName),
             "Close folder");
+}
+
+TEST_F(AppListFolderViewTest,
+       ShortcutIconEffectsReflectsOnShorcutItemWithHostBadge) {
+  GetAppListTestHelper()->model()->CreateSingleWebAppShortcutItemFolder(
+      "folder_id", "shortcut_id");
+
+  // Open the app list and open the folder.
+  auto* helper = GetAppListTestHelper();
+  helper->ShowAppList();
+  auto* apps_grid_view = helper->GetScrollableAppsGridView();
+  AppListItemView* folder_item_view = apps_grid_view->GetItemViewAt(0);
+  LeftClickOn(folder_item_view);
+  ASSERT_TRUE(helper->IsInFolderView());
+
+  auto* folder_view = helper->GetBubbleFolderView();
+  AppListItemView* item_view = folder_view->items_grid_view()->GetItemViewAt(0);
+
+  views::ImageView* badge_icon_view = item_view->GetHostBadgeIconViewForTest();
+  AppListItem* item = GetAppListTestHelper()->model()->FindItem("shortcut_id");
+
+  ASSERT_TRUE(helper->IsInFolderView());
+  EXPECT_FALSE(item->GetHostBadgeIcon().isNull());
+  EXPECT_TRUE(badge_icon_view);
 }
 
 }  // namespace ash

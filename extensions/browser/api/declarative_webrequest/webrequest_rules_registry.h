@@ -14,7 +14,6 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/url_matcher/url_matcher.h"
 #include "extensions/browser/api/declarative/declarative_rule.h"
@@ -173,8 +172,6 @@ class WebRequestRulesRegistry : public RulesRegistry {
   std::map<ExtensionId, RulesMap> webrequest_rules_;
 
   url_matcher::URLMatcher url_matcher_;
-
-  raw_ptr<content::BrowserContext> browser_context_;
 };
 
 }  // namespace extensions

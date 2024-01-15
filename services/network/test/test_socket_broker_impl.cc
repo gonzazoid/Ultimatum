@@ -60,7 +60,7 @@ TestSocketBrokerImpl::~TestSocketBrokerImpl() = default;
 
 void TestSocketBrokerImpl::CreateTcpSocket(net::AddressFamily address_family,
                                            CreateTcpSocketCallback callback) {
-  if (is_mock_socket_test_) {
+  if (connection_failure_) {
     std::move(callback).Run(network::TransferableSocket(),
                             net::ERR_CONNECTION_FAILED);
     return;
@@ -69,6 +69,33 @@ void TestSocketBrokerImpl::CreateTcpSocket(net::AddressFamily address_family,
   ScopedSocketDescriptor socket(net::CreatePlatformSocket(
       net::ConvertAddressFamily(address_family), SOCK_STREAM,
       address_family == AF_UNIX ? 0 : IPPROTO_TCP));
+  int rv = net::OK;
+  if (!socket.is_valid()) {
+    rv = GetSystemError();
+  } else if (!base::SetNonBlocking(socket.get())) {
+    rv = GetSystemError();
+    socket.reset();
+  }
+#if BUILDFLAG(IS_WIN)
+  std::move(callback).Run(
+      network::TransferableSocket(socket.release(), base::Process::Current()),
+      rv);
+#else
+  std::move(callback).Run(network::TransferableSocket(socket.release()), rv);
+#endif
+}
+
+void TestSocketBrokerImpl::CreateUdpSocket(net::AddressFamily address_family,
+                                           CreateUdpSocketCallback callback) {
+  if (connection_failure_) {
+    std::move(callback).Run(network::TransferableSocket(),
+                            net::ERR_CONNECTION_FAILED);
+    return;
+  }
+
+  ScopedSocketDescriptor socket(net::CreatePlatformSocket(
+      net::ConvertAddressFamily(address_family), SOCK_DGRAM,
+      address_family == AF_UNIX ? 0 : IPPROTO_UDP));
   int rv = net::OK;
   if (!socket.is_valid()) {
     rv = GetSystemError();

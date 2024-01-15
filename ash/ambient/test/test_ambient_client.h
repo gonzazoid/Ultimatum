@@ -7,7 +7,8 @@
 
 #include "ash/public/cpp/ambient/ambient_client.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "services/device/public/cpp/test/test_wake_lock_provider.h"
 
 namespace network {
@@ -33,6 +34,9 @@ class ASH_PUBLIC_EXPORT TestAmbientClient : public AmbientClient {
   void DownloadImage(const std::string& url,
                      ash::ImageDownloader::DownloadCallback callback) override;
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
+  scoped_refptr<network::SharedURLLoaderFactory> GetSigninURLLoaderFactory()
+      override;
+
   void RequestWakeLockProvider(
       mojo::PendingReceiver<device::mojom::WakeLockProvider> receiver) override;
   bool ShouldUseProdServer() override;
@@ -53,7 +57,7 @@ class ASH_PUBLIC_EXPORT TestAmbientClient : public AmbientClient {
   bool is_automatic_ = false;
   GetAccessTokenCallback pending_callback_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  device::TestWakeLockProvider* const wake_lock_provider_;
+  const raw_ptr<device::TestWakeLockProvider> wake_lock_provider_;
 };
 
 }  // namespace ash

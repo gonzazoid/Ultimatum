@@ -12,10 +12,10 @@
 
 #include "base/at_exit.h"
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -29,6 +29,7 @@
 #include "base/time/default_tick_clock.h"
 #include "base/values.h"
 #include "media/base/media.h"
+#include "media/base/mock_filters.h"
 #include "media/base/video_frame.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/cast_environment.h"
@@ -294,6 +295,7 @@ int main(int argc, char** argv) {
       base::BindOnce(&media::cast::CastSender::InitializeVideo,
                      base::Unretained(cast_sender.get()),
                      fake_media_source->get_video_config(),
+                     std::make_unique<media::MockVideoEncoderMetricsProvider>(),
                      base::BindRepeating(&QuitLoopOnInitializationResult),
                      base::DoNothing()));
   base::RunLoop().Run();  // Wait for video initialization.

@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "media/base/video_encoder_metrics_provider.h"
 #include "media/base/video_frame.h"
 #include "media/cast/common/video_frame_factory.h"
 
@@ -108,7 +109,7 @@ void CastSenderImpl::InitializeAudio(
     const FrameSenderConfig& audio_config,
     StatusChangeOnceCallback status_change_cb) {
   DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
-  CHECK(audio_config.use_external_encoder ||
+  CHECK(audio_config.use_hardware_encoder ||
         cast_environment_->HasAudioThread());
 
   VLOG(1) << "CastSenderImpl@" << this << "::InitializeAudio()";
@@ -126,6 +127,7 @@ void CastSenderImpl::InitializeAudio(
 
 void CastSenderImpl::InitializeVideo(
     const FrameSenderConfig& video_config,
+    std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
     const StatusChangeCallback& status_change_cb,
     const CreateVideoEncodeAcceleratorCallback& create_vea_cb) {
   DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
@@ -137,7 +139,7 @@ void CastSenderImpl::InitializeVideo(
       cast_environment_, video_config,
       base::BindRepeating(&CastSenderImpl::OnVideoStatusChange,
                           weak_factory_.GetWeakPtr(), status_change_cb),
-      create_vea_cb, transport_sender_,
+      create_vea_cb, transport_sender_, std::move(metrics_provider),
       base::BindRepeating(&CastSenderImpl::SetTargetPlayoutDelay,
                           weak_factory_.GetWeakPtr()),
       media::VideoCaptureFeedbackCB());

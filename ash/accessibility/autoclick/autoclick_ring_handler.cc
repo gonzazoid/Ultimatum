@@ -4,6 +4,7 @@
 
 #include "ash/accessibility/autoclick/autoclick_ring_handler.h"
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkRect.h"
@@ -129,7 +130,7 @@ class AutoclickRingHandler::AutoclickRingView : public views::View {
     canvas->Restore();
   }
 
-  views::Widget* widget_;
+  raw_ptr<views::Widget> widget_;
   int radius_;
   int current_angle_ = kAutoclickRingAngleStartValue;
 };
@@ -150,7 +151,7 @@ void AutoclickRingHandler::StartGesture(
   StopAutoclickRing();
   tap_down_location_ = center_point_in_screen;
   ring_widget_ = widget;
-  current_animation_type_ = AnimationType::GROW_ANIMATION;
+  current_animation_type_ = AnimationType::kGrowAnimation;
   animation_duration_ = duration;
   StartAnimation(animation_duration_);
 }
@@ -176,7 +177,7 @@ void AutoclickRingHandler::SetSize(int radius) {
 // AutoclickRingHandler, private
 void AutoclickRingHandler::StartAnimation(base::TimeDelta delay) {
   switch (current_animation_type_) {
-    case AnimationType::GROW_ANIMATION: {
+    case AnimationType::kGrowAnimation: {
       DCHECK(!view_);
       view_ =
           AutoclickRingView::Create(tap_down_location_, ring_widget_, radius_);
@@ -184,7 +185,7 @@ void AutoclickRingHandler::StartAnimation(base::TimeDelta delay) {
       Start();
       break;
     }
-    case AnimationType::NONE:
+    case AnimationType::kNone:
       NOTREACHED();
       break;
   }
@@ -194,10 +195,10 @@ void AutoclickRingHandler::StopAutoclickRing() {
   // Since, Animation::Stop() calls AnimationStopped(), we need to reset the
   // |current_animation_type_| before Stop(), otherwise AnimationStopped() may
   // start the timer again.
-  current_animation_type_ = AnimationType::NONE;
+  current_animation_type_ = AnimationType::kNone;
   Stop();
   if (view_) {
-    ring_widget_->GetRootView()->RemoveChildViewT(view_);
+    ring_widget_->GetRootView()->RemoveChildViewT(view_.get());
     view_ = nullptr;
   }
 }
@@ -205,11 +206,11 @@ void AutoclickRingHandler::StopAutoclickRing() {
 void AutoclickRingHandler::AnimateToState(double state) {
   DCHECK(view_);
   switch (current_animation_type_) {
-    case AnimationType::GROW_ANIMATION:
+    case AnimationType::kGrowAnimation:
       view_->SetLocation(tap_down_location_);
       view_->UpdateWithGrowAnimation(this);
       break;
-    case AnimationType::NONE:
+    case AnimationType::kNone:
       NOTREACHED();
       break;
   }
@@ -217,13 +218,13 @@ void AutoclickRingHandler::AnimateToState(double state) {
 
 void AutoclickRingHandler::AnimationStopped() {
   switch (current_animation_type_) {
-    case AnimationType::GROW_ANIMATION:
-      current_animation_type_ = AnimationType::NONE;
+    case AnimationType::kGrowAnimation:
+      current_animation_type_ = AnimationType::kNone;
       break;
-    case AnimationType::NONE:
+    case AnimationType::kNone:
       // Fall through to reset the view.
       if (view_) {
-        ring_widget_->GetRootView()->RemoveChildViewT(view_);
+        ring_widget_->GetRootView()->RemoveChildViewT(view_.get());
         view_ = nullptr;
       }
       break;

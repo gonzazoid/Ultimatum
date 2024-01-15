@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/test/task_environment.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
@@ -115,7 +115,8 @@ class ServiceWorkerCacheWriterTest : public ::testing::Test {
         auto copy_reader = CreateReader();
         cache_writer_ = ServiceWorkerCacheWriter::CreateForComparison(
             std::move(compare_reader), std::move(copy_reader), CreateWriter(),
-            /*writer_resource_id=*/0, pause_when_not_identical);
+            /*writer_resource_id=*/0, pause_when_not_identical,
+            ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch);
         break;
     };
   }
@@ -234,6 +235,10 @@ TEST_F(ServiceWorkerCacheWriterTest, PassthroughDataAsync) {
   EXPECT_EQ(net::ERR_IO_PENDING, error);
   writer->CompletePendingWrite();
   EXPECT_TRUE(write_complete_);
+  // SHA256 hash for "abcdefghijklmno"
+  EXPECT_EQ("41C7760C50EFDE99BF574ED8FFFC7A6DD3405D546D3DA929B214C8945ACF8A97",
+            cache_writer_->GetSha256Checksum());
+
   EXPECT_EQ(net::OK, last_error_);
   EXPECT_TRUE(writer->AllExpectedWritesDone());
 }
@@ -1008,6 +1013,142 @@ TEST_F(ServiceWorkerCacheWriterTest, ObserverAsyncFail) {
   cache_writer_->set_write_observer(nullptr);
 }
 
+class ServiceWorkerCacheWriterSha256ChecksumTest
+    : public ServiceWorkerCacheWriterTest,
+      public testing::WithParamInterface<
+          ServiceWorkerCacheWriter::ChecksumUpdateTiming> {
+ public:
+  void Initialize() {
+    auto compare_reader = CreateReader();
+    auto copy_reader = CreateReader();
+    cache_writer_ = ServiceWorkerCacheWriter::CreateForComparison(
+        std::move(compare_reader), std::move(copy_reader), CreateWriter(),
+        /*writer_resource_id=*/0, /*pause_when_not_identical=*/false,
+        GetChecksumUpdateTiming());
+  }
+
+ protected:
+  ServiceWorkerCacheWriter::ChecksumUpdateTiming GetChecksumUpdateTiming() {
+    return GetParam();
+  }
+};
+
+TEST_P(ServiceWorkerCacheWriterSha256ChecksumTest, CompareDataOk) {
+  const std::string data = "abcdef";
+  size_t response_size = data.size();
+
+  MockServiceWorkerResourceReader* reader = ExpectReader();
+
+  // Create a copy reader and writer as they're needed to create cache writer
+  // for comparison though not used in this test.
+  ExpectReader();
+  ExpectWriter();
+
+  reader->ExpectReadResponseHeadOk(response_size);
+  reader->ExpectReadDataOk(data);
+  Initialize();
+
+  net::Error error = WriteHeaders(response_size);
+  EXPECT_EQ(net::ERR_IO_PENDING, error);
+  reader->CompletePendingRead();
+
+  error = WriteData(data);
+  EXPECT_EQ(net::ERR_IO_PENDING, error);
+  reader->CompletePendingRead();
+
+  EXPECT_TRUE(reader->AllExpectedReadsDone());
+
+  std::string expected_checksum;
+  switch (GetChecksumUpdateTiming()) {
+    case ServiceWorkerCacheWriter::ChecksumUpdateTiming::kAlways:
+      // Expected value is calculated from SHA256("abcdef")
+      expected_checksum =
+          "BEF57EC7F53A6D40BEB640A780A639C83BC29AC8A9816F1FC6C5C6DCD93C4721";
+      break;
+    case ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch:
+      // Expected value is calculated from SHA256("")
+      expected_checksum =
+          "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855";
+      break;
+  }
+  EXPECT_EQ(expected_checksum, cache_writer_->GetSha256Checksum());
+}
+
+TEST_P(ServiceWorkerCacheWriterSha256ChecksumTest, CompareFailed) {
+  std::string data1 = "abcdef";
+  std::string cache_data2 = "mnop";
+  std::string net_data2 = "mnopqr";
+  std::string data3 = "stuvwxyz";
+  size_t cache_response_size = data1.size() + cache_data2.size() + data3.size();
+  size_t net_response_size = data1.size() + net_data2.size() + data3.size();
+
+  MockServiceWorkerResourceWriter* writer = ExpectWriter();
+  MockServiceWorkerResourceReader* compare_reader = ExpectReader();
+  MockServiceWorkerResourceReader* copy_reader = ExpectReader();
+
+  compare_reader->ExpectReadResponseHeadOk(cache_response_size);
+  compare_reader->ExpectReadDataOk(data1);
+  compare_reader->ExpectReadDataOk(cache_data2);
+  compare_reader->ExpectReadDataOk("");  // EOF read
+
+  copy_reader->ExpectReadResponseHeadOk(cache_response_size);
+  copy_reader->ExpectReadDataOk(data1);
+
+  writer->ExpectWriteResponseHeadOk(net_response_size);
+  writer->ExpectWriteDataOk(data1.size());
+  writer->ExpectWriteDataOk(net_data2.size());
+  writer->ExpectWriteDataOk(data3.size());
+
+  Initialize();
+
+  net::Error error = WriteHeaders(net_response_size);
+  EXPECT_EQ(net::ERR_IO_PENDING, error);
+  // Read the header from |compare_reader|.
+  compare_reader->CompletePendingRead();
+  EXPECT_EQ(net::OK, last_error_);
+
+  error = WriteData(data1);
+  EXPECT_EQ(net::ERR_IO_PENDING, error);
+  // Read |data1| from |compare_reader| for the comparison.
+  compare_reader->CompletePendingRead();
+  EXPECT_EQ(net::OK, last_error_);
+
+  error = WriteData(net_data2);
+  EXPECT_EQ(net::ERR_IO_PENDING, error);
+  // Read |cache_data2| and |data3| from |compare_reader|.
+  compare_reader->CompletePendingRead();
+  compare_reader->CompletePendingRead();
+  // After that, the cache writer uses |copy_reader| to read the header and
+  // |data1|.
+  copy_reader->CompletePendingRead();
+  writer->CompletePendingWrite();
+  copy_reader->CompletePendingRead();
+  writer->CompletePendingWrite();
+  EXPECT_EQ(net::OK, last_error_);
+
+  // |net_data2| is written to the |writer|.
+  writer->CompletePendingWrite();
+  // |data3| is directly written to the disk.
+  error = WriteData(data3);
+  EXPECT_EQ(net::ERR_IO_PENDING, error);
+  writer->CompletePendingWrite();
+
+  EXPECT_TRUE(writer->AllExpectedWritesDone());
+  EXPECT_TRUE(compare_reader->AllExpectedReadsDone());
+  EXPECT_TRUE(copy_reader->AllExpectedReadsDone());
+
+  // Expected value is calculated from SHA256("abcdefmnopqrstuvwxyz")
+  EXPECT_EQ("50DCEABE70B3474ACF0E608D9E77B1ED2700FB74431FA8D8E0ED62ECDA7DCFEB",
+            cache_writer_->GetSha256Checksum());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    ServiceWorkerCacheWriterSha256ChecksumTest,
+    testing::Values(
+        ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch,
+        ServiceWorkerCacheWriter::ChecksumUpdateTiming::kAlways));
+
 class ServiceWorkerCacheWriterDisconnectionTest
     : public ServiceWorkerCacheWriterTest {
  public:
@@ -1059,7 +1200,8 @@ class ServiceWorkerCacheWriterDisconnectionTest
     cache_writer_ = ServiceWorkerCacheWriter::CreateForComparison(
         std::move(remote_compare_reader), std::move(remote_copy_reader),
         std::move(remote_writer),
-        /*writer_resource_id=*/0, pause_when_not_identical);
+        /*writer_resource_id=*/0, pause_when_not_identical,
+        ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch);
   }
 
   void SimulateDisconnection() {

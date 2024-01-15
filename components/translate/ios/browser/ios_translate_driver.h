@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "components/language/ios/browser/ios_language_detection_tab_helper.h"
@@ -57,6 +58,8 @@ class IOSTranslateDriver
   void OnLanguageModelFileAvailabilityChanged(bool available);
 
   // web::WebStateObserver methods.
+  void DidStartNavigation(web::WebState* web_state,
+                          web::NavigationContext* navigation_context) override;
   void DidFinishNavigation(web::WebState* web_state,
                            web::NavigationContext* navigation_context) override;
   void WebStateDestroyed(web::WebState* web_state) override;
@@ -79,12 +82,12 @@ class IOSTranslateDriver
                      const std::string& source_lang,
                      const std::string& target_lang) override;
   void RevertTranslation(int page_seq_no) override;
-  bool IsIncognito() override;
+  bool IsIncognito() const override;
   const std::string& GetContentsMimeType() override;
-  const GURL& GetLastCommittedURL() override;
+  const GURL& GetLastCommittedURL() const override;
   const GURL& GetVisibleURL() override;
   ukm::SourceId GetUkmSourceId() override;
-  bool HasCurrentPage() override;
+  bool HasCurrentPage() const override;
   void OpenUrlInNewTab(const GURL& url) override;
 
  private:

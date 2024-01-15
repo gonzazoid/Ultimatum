@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/escape.h"
 #include "base/test/bind.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
@@ -91,8 +92,9 @@ class PluginVmAppsTest : public testing::Test {
 
   storage::FileSystemURL GetMyFilesFileSystemURL(const std::string& path) {
     return mount_points_->CreateExternalFileSystemURL(
-        blink::StorageKey(file_manager::util::GetFilesAppOrigin()), mount_name_,
-        base::FilePath(path));
+        blink::StorageKey::CreateFirstParty(
+            file_manager::util::GetFilesAppOrigin()),
+        mount_name_, base::FilePath(path));
   }
 
   // Set up the test PluginVm app for our desired mime types.
@@ -139,13 +141,13 @@ class PluginVmAppsTest : public testing::Test {
     }
   } dbus_clients_;
 
-  AppServiceProxy* app_service_proxy_ = nullptr;
+  raw_ptr<AppServiceProxy, DanglingUntriaged> app_service_proxy_ = nullptr;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<plugin_vm::PluginVmTestHelper> test_helper_;
-  storage::ExternalMountPoints* mount_points_;
+  raw_ptr<storage::ExternalMountPoints> mount_points_;
   std::string mount_name_;
-  MockPluginVmManager* plugin_vm_manager_;
+  raw_ptr<MockPluginVmManager, DanglingUntriaged> plugin_vm_manager_;
 };
 
 TEST_F(PluginVmAppsTest, AppServiceHasPluginVmIntentFilters) {
@@ -223,7 +225,7 @@ TEST_F(PluginVmAppsTest, LaunchAppWithIntent_FailedDirectoryNotShared) {
       GetMyFilesFileSystemURL("Downloads/file").ToGURL()));
   intent->files = {std::move(files)};
 
-  absl::optional<State> result_state;
+  std::optional<State> result_state;
   app_service_proxy()->LaunchAppWithIntent(
       app_id, /*event_flags=*/0, std::move(intent), LaunchSource::kUnknown,
       std::unique_ptr<WindowInfo>(),

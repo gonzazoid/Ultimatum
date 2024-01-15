@@ -5,10 +5,14 @@
 module blink.mojom;
 
 import "services/network/public/mojom/url_loader.mojom";
+import "services/network/public/mojom/url_loader_factory.mojom";
 import "third_party/blink/public/mojom/blob/blob.mojom";
 import "third_party/blink/public/mojom/fetch/fetch_api_request.mojom";
 
 // Parameters used for dispatching a FetchEvent.
+// This struct is used by ServiceWorker main resource or subreosurce loader,
+// those are located in both browser and renderer processes. This is used to
+// pass parameters to ServiceWorker global scope.
 struct DispatchFetchEventParams {
   // FetchEvent#request.
   FetchAPIRequest request;
@@ -22,4 +26,10 @@ struct DispatchFetchEventParams {
   // Whether this is a "fake" fetch event used to detect the offline capability
   // of the service worker. See more details at https://crbug.com/965802.
   bool is_offline_capability_check = false;
+
+  // Used for BestEffortServiceWorker(crbug.com/1420517). Specifies the cusotm
+  // URLLoaderFactory if the RaceNetworkRequest is triggered. This value is
+  // referred by the fetch process in blink, in order to detect and dedupe
+  // the corresponding fetch event in ServiceWorker.
+  pending_remote<network.mojom.URLLoaderFactory>? race_network_request_loader_factory;
 };

@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/debug/leak_annotations.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/model/blocking_model_type_store_impl.h"
 #include "components/sync/model/model_type_store_backend.h"
@@ -61,25 +61,28 @@ class ForwardingModelTypeStore : public ModelTypeStore {
   }
 
  private:
-  raw_ptr<ModelTypeStore> other_;
+  const raw_ptr<ModelTypeStore, DanglingUntriaged> other_;
 };
 
 }  // namespace
 
 // static
 std::unique_ptr<ModelTypeStore>
-ModelTypeStoreTestUtil::CreateInMemoryStoreForTest(ModelType type) {
+ModelTypeStoreTestUtil::CreateInMemoryStoreForTest(ModelType type,
+                                                   StorageType storage_type) {
   std::unique_ptr<BlockingModelTypeStoreImpl, base::OnTaskRunnerDeleter>
-      blocking_store(
-          new BlockingModelTypeStoreImpl(
-              type, ModelTypeStoreBackend::CreateInMemoryForTest()),
-          base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+      blocking_store(new BlockingModelTypeStoreImpl(
+                         type, storage_type,
+                         ModelTypeStoreBackend::CreateInMemoryForTest()),
+                     base::OnTaskRunnerDeleter(
+                         base::SequencedTaskRunner::GetCurrentDefault()));
   // Not all tests issue a RunUntilIdle() at the very end, to guarantee that
   // the backend is properly destroyed. They also don't need to verify that, so
   // let keep memory sanitizers happy.
   ANNOTATE_LEAKING_OBJECT_PTR(blocking_store.get());
   return std::make_unique<ModelTypeStoreImpl>(
-      type, std::move(blocking_store), base::SequencedTaskRunnerHandle::Get());
+      type, storage_type, std::move(blocking_store),
+      base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 // static

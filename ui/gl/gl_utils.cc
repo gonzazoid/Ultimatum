@@ -21,18 +21,21 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/posix/eintr_wrapper.h"
-#include "third_party/libsync/src/include/sync/sync.h"
+#include "third_party/libsync/src/include/sync/sync.h"  // nogncheck
 #endif
 
 #if BUILDFLAG(IS_WIN)
 #include <d3d11_1.h>
 #include "base/strings/stringprintf.h"
-#include "media/base/win/mf_helpers.h"
+#include "ui/gl/debug_utils.h"
 #include "ui/gl/direct_composition_support.h"
 #endif
 
 namespace gl {
 namespace {
+
+// The global set of workarounds.
+GlWorkarounds g_workarounds;
 
 int GetIntegerv(unsigned int name) {
   int value = 0;
@@ -89,6 +92,13 @@ bool UsePassthroughCommandDecoder(const base::CommandLine* command_line) {
     switch_value = command_line->GetSwitchValueASCII(switches::kUseCmdDecoder);
   }
 
+#if !BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER)
+  if (switch_value == kCmdDecoderValidatingName) {
+    LOG(WARNING) << "Ignoring request for the validating command decoder. It "
+                    "is not supported on this platform.";
+  }
+  return true;
+#else
   if (switch_value == kCmdDecoderPassthroughName) {
     return true;
   } else if (switch_value == kCmdDecoderValidatingName) {
@@ -97,6 +107,7 @@ bool UsePassthroughCommandDecoder(const base::CommandLine* command_line) {
     // Unrecognized or missing switch, use the default.
     return features::UsePassthroughCommandDecoder();
   }
+#endif  // !BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER)
 }
 
 bool PassthroughCommandDecoderSupported() {
@@ -113,6 +124,14 @@ bool PassthroughCommandDecoderSupported() {
   // The passthrough command buffer is only supported on top of ANGLE/EGL
   return false;
 #endif  // defined(USE_EGL)
+}
+
+const GlWorkarounds& GetGlWorkarounds() {
+  return g_workarounds;
+}
+
+void SetGlWorkarounds(const GlWorkarounds& workarounds) {
+  g_workarounds = workarounds;
 }
 
 #if BUILDFLAG(IS_WIN)
@@ -150,7 +169,7 @@ void LabelSwapChainBuffers(IDXGISwapChain* swap_chain,
     }
     const std::string buffer_name =
         base::StringPrintf("%s_Buffer_%d", name_prefix, i);
-    hr = media::SetDebugName(swap_chain_buffer.Get(), buffer_name.c_str());
+    hr = SetDebugName(swap_chain_buffer.Get(), buffer_name.c_str());
     if (FAILED(hr)) {
       DLOG(ERROR) << "Failed to label swap chain buffer " << i << ": "
                   << logging::SystemErrorCodeToString(hr);
@@ -162,19 +181,26 @@ void LabelSwapChainBuffers(IDXGISwapChain* swap_chain,
 // operations
 void LabelSwapChainAndBuffers(IDXGISwapChain* swap_chain,
                               const char* name_prefix) {
-  media::SetDebugName(swap_chain, name_prefix);
+  SetDebugName(swap_chain, name_prefix);
   LabelSwapChainBuffers(swap_chain, name_prefix);
 }
 #endif  // BUILDFLAG(IS_WIN)
 
 GLDisplay* GetDisplay(GpuPreference gpu_preference) {
+  return GetDisplay(gpu_preference, gl::DisplayKey::kDefault);
+}
+
+GL_EXPORT GLDisplay* GetDisplay(GpuPreference gpu_preference,
+                                gl::DisplayKey display_key) {
 #if defined(USE_GLX)
   if (!GLDisplayManagerX11::GetInstance()->IsEmpty()) {
-    return GLDisplayManagerX11::GetInstance()->GetDisplay(gpu_preference);
+    return GLDisplayManagerX11::GetInstance()->GetDisplay(gpu_preference,
+                                                          display_key);
   }
 #endif
 #if defined(USE_EGL)
-  return GLDisplayManagerEGL::GetInstance()->GetDisplay(gpu_preference);
+  return GLDisplayManagerEGL::GetInstance()->GetDisplay(gpu_preference,
+                                                        display_key);
 #endif
   NOTREACHED();
   return nullptr;
@@ -190,21 +216,19 @@ void SetGpuPreferenceEGL(GpuPreference preference, uint64_t system_device_id) {
                                                        system_device_id);
 }
 
+void RemoveGpuPreferenceEGL(GpuPreference preference) {
+  GLDisplayManagerEGL::GetInstance()->RemoveGpuPreference(preference);
+}
+
 GLDisplayEGL* GetDefaultDisplayEGL() {
   return GLDisplayManagerEGL::GetInstance()->GetDisplay(
       GpuPreference::kDefault);
 }
 
-GLDisplayEGL* GetDisplayEGL(uint64_t system_device_id) {
-  return GLDisplayManagerEGL::GetInstance()->GetDisplay(system_device_id);
+GLDisplayEGL* GetDisplayEGL(GpuPreference gpu_preference) {
+  return GLDisplayManagerEGL::GetInstance()->GetDisplay(gpu_preference);
 }
 #endif  // USE_EGL
-
-#if defined(USE_GLX)
-GLDisplayX11* GetDisplayX11(uint64_t system_device_id) {
-  return GLDisplayManagerX11::GetInstance()->GetDisplay(system_device_id);
-}
-#endif  // USE_GLX
 
 #if BUILDFLAG(IS_MAC)
 

@@ -32,6 +32,7 @@ UserSeenOffer& UserSeenOffer::operator=(const UserSeenOffer&) = default;
 UserSeenOffer::~UserSeenOffer() = default;
 
 const int64_t kUnknownSubscriptionTimestamp = 0;
+const uint64_t kInvalidSubscriptionId = 0;
 
 CommerceSubscription::CommerceSubscription(
     SubscriptionType type,
@@ -100,6 +101,13 @@ ManagementType StringToSubscriptionManagementType(const std::string& s) {
     return ManagementType::kUserManaged;
   else
     return ManagementType::kTypeUnspecified;
+}
+
+std::string GetStorageKeyForSubscription(
+    const CommerceSubscription& subscription) {
+  return SubscriptionTypeToString(subscription.type) + "_" +
+         SubscriptionIdTypeToString(subscription.id_type) + "_" +
+         subscription.id;
 }
 
 }  // namespace commerce

@@ -11,10 +11,10 @@
 #import "base/memory/ref_counted_memory.h"
 #import "base/time/time.h"
 #import "components/grit/dev_ui_components_resources.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/ui/webui/interstitials/interstitial_ui_constants.h"
 #import "ios/chrome/browser/ui/webui/interstitials/interstitial_ui_util.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/components/security_interstitials/ios_security_interstitial_page.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/webui/url_data_source_ios.h"
@@ -22,10 +22,6 @@
 #import "ios/web/public/webui/web_ui_ios_data_source.h"
 #import "net/base/url_util.h"
 #import "ui/base/resource/resource_bundle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -102,7 +98,8 @@ void InterstitialHTMLSource::StartDataRequest(
         IDR_SECURITY_INTERSTITIAL_UI_HTML);
   }
 
-  std::move(callback).Run(base::RefCountedString::TakeString(&html));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(html)));
 }
 
 #pragma mark - InterstitialUI

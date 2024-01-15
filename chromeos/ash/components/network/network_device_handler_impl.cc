@@ -12,14 +12,14 @@
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/shill_device_client.h"
@@ -58,10 +58,10 @@ std::string GetErrorNameForShillError(const std::string& shill_error_name) {
 
 void GetPropertiesCallback(const std::string& device_path,
                            network_handler::ResultCallback callback,
-                           absl::optional<base::Value> result) {
+                           std::optional<base::Value::Dict> result) {
   if (!result) {
     NET_LOG(ERROR) << "GetProperties failed: " << NetworkPathId(device_path);
-    std::move(callback).Run(device_path, absl::nullopt);
+    std::move(callback).Run(device_path, std::nullopt);
     return;
   }
   std::move(callback).Run(device_path, std::move(result));
@@ -311,6 +311,7 @@ void NetworkDeviceHandlerImpl::DeviceListChanged() {
   ApplyUsbEthernetMacAddressSourceToShill();
   ApplyUseAttachApnToShill();
   ApplyWakeOnWifiAllowedToShill();
+  ApplyPasspointInterworkingSelectEnabledToShill();
 }
 
 void NetworkDeviceHandlerImpl::DevicePropertiesUpdated(
@@ -322,7 +323,7 @@ void NetworkDeviceHandlerImpl::Init(
     NetworkStateHandler* network_state_handler) {
   DCHECK(network_state_handler);
   network_state_handler_ = network_state_handler;
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 }
 
 void NetworkDeviceHandlerImpl::ApplyCellularAllowRoamingToShill() {
@@ -378,12 +379,12 @@ void NetworkDeviceHandlerImpl::HandleWifiFeatureSupportedProperty(
     std::string support_property_name,
     WifiFeatureSupport* feature_support_to_set,
     const std::string& device_path,
-    absl::optional<base::Value> properties) {
+    std::optional<base::Value::Dict> properties) {
   if (!properties) {
     return;
   }
-  absl::optional<bool> supported_val =
-      properties->FindBoolKey(support_property_name);
+  std::optional<bool> supported_val =
+      properties->FindBool(support_property_name);
   if (!supported_val.has_value()) {
     if (base::SysInfo::IsRunningOnChromeOS()) {
       NET_LOG(ERROR) << "Failed to get support property "
@@ -418,6 +419,18 @@ void NetworkDeviceHandlerImpl::ApplyWakeOnWifiAllowedToShill() {
   ApplyWifiFeatureToShillIfSupported(
       shill::kWakeOnWiFiAllowedProperty, wake_on_wifi_allowed_,
       shill::kWakeOnWiFiSupportedProperty, &wake_on_wifi_supported_);
+}
+
+void NetworkDeviceHandlerImpl::
+    ApplyPasspointInterworkingSelectEnabledToShill() {
+  // Get the setting from feature flags.
+  passpoint_allowed_ =
+      base::FeatureList::IsEnabled(features::kPasspointARCSupport);
+  // Passpoint is supported on all WiFi devices.
+  passpoint_supported_ = WifiFeatureSupport::SUPPORTED;
+  ApplyWifiFeatureToShillIfSupported(
+      shill::kPasspointInterworkingSelectEnabledProperty, passpoint_allowed_,
+      /*support_property_name=*/"", &passpoint_supported_);
 }
 
 void NetworkDeviceHandlerImpl::ApplyUsbEthernetMacAddressSourceToShill() {
@@ -494,8 +507,8 @@ bool NetworkDeviceHandlerImpl::IsUsbEnabledDevice(
   return device_state && device_state->link_up() &&
          device_state->Matches(NetworkTypePattern::Ethernet()) &&
          device_state->device_bus_type() == shill::kDeviceBusTypeUsb &&
-         mac_address_change_not_supported_.find(device_state->mac_address()) ==
-             mac_address_change_not_supported_.end();
+         !base::Contains(mac_address_change_not_supported_,
+                         device_state->mac_address());
 }
 
 void NetworkDeviceHandlerImpl::UpdatePrimaryEnabledUsbEthernetDevice() {

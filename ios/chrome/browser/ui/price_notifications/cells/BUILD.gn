@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("cells") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "price_notifications_image_container_view.h",
     "price_notifications_image_container_view.mm",
@@ -11,24 +10,42 @@ source_set("cells") {
     "price_notifications_menu_button.mm",
     "price_notifications_price_chip_view.h",
     "price_notifications_price_chip_view.mm",
+    "price_notifications_table_view_cell_delegate.h",
     "price_notifications_table_view_item.h",
     "price_notifications_table_view_item.mm",
     "price_notifications_track_button.h",
     "price_notifications_track_button.mm",
+    "price_notifications_track_button_util.h",
+    "price_notifications_track_button_util.mm",
   ]
 
   deps = [
+    "//components/url_formatter",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/shared/ui/table_view/cells",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/price_notifications:constants",
-    "//ios/chrome/browser/ui/table_view:styler",
-    "//ios/chrome/browser/ui/table_view/cells",
-    "//ios/chrome/browser/ui/util",
+    "//ios/chrome/common:button_config",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/table_view:cells_constants",
     "//ios/chrome/common/ui/util",
     "//ui/base",
+    "//url",
   ]
 
   frameworks = [ "UIKit.framework" ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [ "price_notifications_table_view_item_unittest.mm" ]
+  deps = [
+    ":cells",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/common/ui/colors",
+    "//testing/gtest",
+    "//url",
+  ]
 }

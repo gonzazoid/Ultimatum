@@ -11,6 +11,7 @@
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/fenced_frame/fenced_frame_utils.h"
 #include "third_party/blink/public/platform/web_blob_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialization_tag.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/trailer_reader.h"
@@ -26,6 +27,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_dom_quad.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_dom_rect.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_dom_rect_read_only.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_fenced_frame_config.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_file.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_file_list.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_bitmap.h"
@@ -50,6 +52,7 @@
 #include "third_party/blink/renderer/core/geometry/dom_rect.h"
 #include "third_party/blink/renderer/core/geometry/dom_rect_read_only.h"
 #include "third_party/blink/renderer/core/html/canvas/image_data.h"
+#include "third_party/blink/renderer/core/html/fenced_frame/fenced_frame_config.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap.h"
 #include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
 #include "third_party/blink/renderer/core/messaging/message_port.h"
@@ -265,7 +268,12 @@ bool V8ScriptValueDeserializer::ReadUnguessableToken(
   uint64_t low;
   if (!ReadUint64(&high) || !ReadUint64(&low))
     return false;
-  *token_out = base::UnguessableToken::Deserialize(high, low);
+  absl::optional<base::UnguessableToken> token =
+      base::UnguessableToken::Deserialize(high, low);
+  if (!token.has_value()) {
+    return false;
+  }
+  *token_out = token.value();
   return true;
 }
 
@@ -609,8 +617,8 @@ ScriptWrappable* V8ScriptValueDeserializer::ReadDOMObject(
           !ReadUint32(&canvas_id) || !ReadUint32(&client_id) ||
           !ReadUint32(&sink_id) || !ReadUint32(&filter_quality))
         return nullptr;
-      OffscreenCanvas* canvas = OffscreenCanvas::Create(
-          ExecutionContext::From(GetScriptState()), width, height);
+      OffscreenCanvas* canvas =
+          OffscreenCanvas::Create(GetScriptState(), width, height);
       canvas->SetPlaceholderCanvasId(canvas_id);
       canvas->SetFrameSinkId(client_id, sink_id);
       if (filter_quality == 0)
@@ -686,6 +694,73 @@ ScriptWrappable* V8ScriptValueDeserializer::ReadDOMObject(
       // DOMException::Create takes its arguments in the opposite order.
       return DOMException::Create(message, name);
     }
+    case kFencedFrameConfigTag: {
+      String url_string, shared_storage_context, urn_uuid_string;
+      uint32_t width, height, has_shared_storage_context, has_container_size,
+          container_width, container_height, has_content_size, content_width,
+          content_height, freeze_initial_size;
+      KURL url;
+      absl::optional<KURL> urn_uuid;
+      FencedFrameConfig::AttributeVisibility url_visibility, size_visibility;
+      absl::optional<gfx::Size> container_size, content_size;
+
+      if (!ReadUTF8String(&url_string) || !ReadUint32(&width) ||
+          !ReadUint32(&height) ||
+          !ReadUint32Enum<FencedFrameConfig::AttributeVisibility>(
+              &url_visibility) ||
+          !ReadUint32Enum<FencedFrameConfig::AttributeVisibility>(
+              &size_visibility) ||
+          !ReadUint32(&freeze_initial_size) ||
+          !ReadUTF8String(&urn_uuid_string)) {
+        return nullptr;
+      }
+
+      // `ReadUTF8String` does not distinguish between null and empty strings.
+      // Adding the `has_shared_storage_context` bit allows us to get this
+      // functionality back, which is needed for Shared Storage.
+      if (!ReadUint32(&has_shared_storage_context)) {
+        return nullptr;
+      }
+      if (has_shared_storage_context &&
+          !ReadUTF8String(&shared_storage_context)) {
+        return nullptr;
+      }
+
+      if (!ReadUint32(&has_container_size)) {
+        return nullptr;
+      }
+      if (has_container_size) {
+        if (!ReadUint32(&container_width) || !ReadUint32(&container_height)) {
+          return nullptr;
+        }
+        container_size = gfx::Size(container_width, container_height);
+      }
+
+      if (!ReadUint32(&has_content_size)) {
+        return nullptr;
+      }
+      if (has_content_size) {
+        if (!ReadUint32(&content_width) || !ReadUint32(&content_height)) {
+          return nullptr;
+        }
+        content_size = gfx::Size(content_width, content_height);
+      }
+
+      // Validate the URL and URN values.
+      url = KURL(url_string);
+      if (!url.IsEmpty() && !url.IsValid()) {
+        return nullptr;
+      }
+      if (blink::IsValidUrnUuidURL(GURL(urn_uuid_string.Utf8()))) {
+        urn_uuid = KURL(urn_uuid_string);
+      } else if (!urn_uuid_string.empty()) {
+        return nullptr;
+      }
+
+      return FencedFrameConfig::Create(
+          url, width, height, shared_storage_context, urn_uuid, container_size,
+          content_size, url_visibility, size_visibility, freeze_initial_size);
+    }
     default:
       break;
   }
@@ -720,8 +795,10 @@ File* V8ScriptValueDeserializer::ReadFile() {
   if (!blob_handle)
     return nullptr;
   absl::optional<base::Time> last_modified;
-  if (has_snapshot && std::isfinite(last_modified_ms))
-    last_modified = base::Time::FromJsTime(last_modified_ms);
+  if (has_snapshot && std::isfinite(last_modified_ms)) {
+    last_modified =
+        base::Time::FromMillisecondsSinceUnixEpoch(last_modified_ms);
+  }
   return File::CreateFromSerialization(path, name, relative_path,
                                        user_visibility, has_snapshot, size,
                                        last_modified, std::move(blob_handle));
@@ -784,7 +861,7 @@ V8ScriptValueDeserializer::GetOrCreateBlobDataHandle(const String& uuid,
 v8::MaybeLocal<v8::Object> V8ScriptValueDeserializer::ReadHostObject(
     v8::Isolate* isolate) {
   DCHECK_EQ(isolate, script_state_->GetIsolate());
-  ExceptionState exception_state(isolate, ExceptionState::kUnknownContext,
+  ExceptionState exception_state(isolate, ExceptionContextType::kUnknown,
                                  nullptr, nullptr);
   ScriptWrappable* wrappable = nullptr;
   SerializationTag tag = kVersionTag;
@@ -832,7 +909,7 @@ V8ScriptValueDeserializer::GetSharedArrayBufferFromId(v8::Isolate* isolate,
     DCHECK(wrapper->IsSharedArrayBuffer());
     return v8::Local<v8::SharedArrayBuffer>::Cast(wrapper);
   }
-  ExceptionState exception_state(isolate, ExceptionState::kUnknownContext,
+  ExceptionState exception_state(isolate, ExceptionContextType::kUnknown,
                                  nullptr, nullptr);
   exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
                                     "Unable to deserialize SharedArrayBuffer.");
@@ -849,7 +926,7 @@ V8ScriptValueDeserializer::GetSharedValueConveyor(v8::Isolate* isolate) {
           serialized_script_value_->MaybeGetSharedValueConveyor()) {
     return conveyor;
   }
-  ExceptionState exception_state(isolate, ExceptionState::kUnknownContext,
+  ExceptionState exception_state(isolate, ExceptionContextType::kUnknown,
                                  nullptr, nullptr);
   exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
                                     "Unable to deserialize shared JS value.");
@@ -930,6 +1007,8 @@ bool V8ScriptValueDeserializer::ExecutionContextExposesInterface(
     }
     case kDOMExceptionTag:
       return V8DOMException::IsExposed(execution_context);
+    case kFencedFrameConfigTag:
+      return V8FencedFrameConfig::IsExposed(execution_context);
     default:
       return false;
   }

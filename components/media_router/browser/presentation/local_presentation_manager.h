@@ -55,7 +55,7 @@ namespace media_router {
 //
 //   manager->RegisterLocalPresentationController(
 //       presentation_info,
-//       std::move(controller_connection_remote,
+//       std::move(controller_connection_remote),
 //       std::move(receiver_connection_receiver));
 //
 // Invoked on receiver's PresentationServiceImpl when controller connection is
@@ -110,6 +110,9 @@ namespace media_router {
 // thread.
 class LocalPresentationManager : public KeyedService {
  public:
+  // Used by
+  // LocalPresentationManagerFactory::BuildServiceInstanceForBrowserContext.
+  LocalPresentationManager();
   LocalPresentationManager(const LocalPresentationManager&) = delete;
   LocalPresentationManager& operator=(const LocalPresentationManager&) = delete;
 
@@ -216,7 +219,8 @@ class LocalPresentationManager : public KeyedService {
 
     const blink::mojom::PresentationInfo presentation_info_;
     absl::optional<MediaRoute> route_;
-    raw_ptr<content::WebContents> receiver_web_contents_ = nullptr;
+    raw_ptr<content::WebContents, DanglingUntriaged> receiver_web_contents_ =
+        nullptr;
 
     // Callback to invoke whenever a receiver connection is available.
     content::ReceiverConnectionAvailableCallback receiver_callback_;
@@ -250,14 +254,10 @@ class LocalPresentationManager : public KeyedService {
   };
 
  private:
-  friend class LocalPresentationManagerFactory;
   friend class LocalPresentationManagerTest;
   friend class MockLocalPresentationManager;
   FRIEND_TEST_ALL_PREFIXES(PresentationServiceDelegateImplTest,
                            ConnectToLocalPresentation);
-
-  // Used by LocalPresentationManagerFactory::GetOrCreateForBrowserContext.
-  LocalPresentationManager();
 
   using LocalPresentationMap =
       std::map<std::string, std::unique_ptr<LocalPresentation>>;

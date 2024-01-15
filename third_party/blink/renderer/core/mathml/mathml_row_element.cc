@@ -5,7 +5,8 @@
 #include "third_party/blink/renderer/core/mathml/mathml_row_element.h"
 
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
-#include "third_party/blink/renderer/core/layout/ng/mathml/layout_ng_mathml_block.h"
+#include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/core/layout/mathml/layout_mathml_block.h"
 #include "third_party/blink/renderer/core/mathml/mathml_operator_element.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
@@ -13,14 +14,17 @@ namespace blink {
 
 MathMLRowElement::MathMLRowElement(const QualifiedName& tagName,
                                    Document& document)
-    : MathMLElement(tagName, document) {}
+    : MathMLElement(tagName, document) {
+  if (HasTagName(mathml_names::kMathTag)) {
+    UseCounter::Count(document, WebFeature::kMathMLMathElement);
+  }
+}
 
-LayoutObject* MathMLRowElement::CreateLayoutObject(const ComputedStyle& style,
-                                                   LegacyLayout legacy) {
-  if (!RuntimeEnabledFeatures::MathMLCoreEnabled() ||
-      !style.IsDisplayMathType() || legacy == LegacyLayout::kForce)
-    return MathMLElement::CreateLayoutObject(style, legacy);
-  return MakeGarbageCollected<LayoutNGMathMLBlock>(this);
+LayoutObject* MathMLRowElement::CreateLayoutObject(const ComputedStyle& style) {
+  if (!style.IsDisplayMathType()) {
+    return MathMLElement::CreateLayoutObject(style);
+  }
+  return MakeGarbageCollected<LayoutMathMLBlock>(this);
 }
 
 void MathMLRowElement::ChildrenChanged(const ChildrenChange& change) {
@@ -32,6 +36,14 @@ void MathMLRowElement::ChildrenChanged(const ChildrenChange& change) {
   }
 
   MathMLElement::ChildrenChanged(change);
+}
+
+Node::InsertionNotificationRequest MathMLRowElement::InsertedInto(
+    ContainerNode& root_parent) {
+  if (HasTagName(mathml_names::kMathTag) && root_parent.isConnected()) {
+    UseCounter::Count(GetDocument(), WebFeature::kMathMLMathElementInDocument);
+  }
+  return MathMLElement::InsertedInto(root_parent);
 }
 
 }  // namespace blink

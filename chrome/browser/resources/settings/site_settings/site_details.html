@@ -31,6 +31,7 @@
         padding: 8px;
       }
     </style>
+
     <!-- Confirm reset settings dialog. -->
     <cr-dialog id="confirmResetSettings" close-text="$i18n{close}"
         on-close="onResetSettingsDialogClosed_">
@@ -52,20 +53,25 @@
         on-close="onClearStorageDialogClosed_">
       <style include="clear-storage-dialog-shared"></style>
       <div slot="title">
-        $i18n{siteSettingsSiteClearStorageDialogTitle}
+        $i18n{siteSettingsSiteDeleteStorageDialogTitle}
       </div>
       <div slot="body">
         [[i18n('siteSettingsSiteClearStorageConfirmationNew', pageTitle)]]
         <div class="detail-list">
           <div class="detail">
             <iron-icon icon="all-sites:logout" aria-hidden="true"
-              role="presentation"></iron-icon>
+                role="presentation"></iron-icon>
             $i18n{siteSettingsSiteClearStorageSignOut}
           </div>
           <div class="detail">
             <iron-icon icon="all-sites:offline" aria-hidden="true"
-              role="presentation"></iron-icon>
-            $i18n{siteSettingsSiteClearStorageOfflineData}
+                role="presentation"></iron-icon>
+            $i18n{siteSettingsSiteDeleteStorageOfflineData}
+          </div>
+          <div class="detail" id="adPersonalization">
+            <iron-icon icon="all-sites:tag" aria-hidden="true"
+                role="presentation"></iron-icon>
+            $i18n{siteSettingsRemoveSiteAdPersonalization}
           </div>
         </div>
       </div>
@@ -112,9 +118,9 @@
             <template is="dom-if" if="[[fpsEnterprisePref_]]">
               <div id="fpsPolicyContainer">
                 <cr-policy-pref-indicator
-                  id="fpsPolicy" pref="[[fpsEnterprisePref_]]"
-                  icon-aria-label="[[label]]" focus-row-control
-                  focus-type="policy">
+                    id="fpsPolicy" pref="[[fpsEnterprisePref_]]"
+                    icon-aria-label="[[label]]" focus-row-control
+                    focus-type="policy">
                 </cr-policy-pref-indicator>
               </div>
             </template>
@@ -136,6 +142,7 @@
         $i18n{siteSettingsReset}
       </cr-button>
     </div>
+
     <div class="list-frame">
       <site-details-permission category="[[contentSettingsTypesEnum_.GEOLOCATION]]"
           icon="settings:location-on" label="$i18n{siteSettingsLocation}">
@@ -177,19 +184,35 @@
           category="[[contentSettingsTypesEnum_.AUTOMATIC_DOWNLOADS]]"
           icon="cr:file-download" label="$i18n{siteSettingsAutomaticDownloads}">
       </site-details-permission>
-      <site-details-permission category="[[contentSettingsTypesEnum_.MIDI_DEVICES]]"
+      <template is="dom-if" if="[[!blockMidiByDefault_]]">
+        <site-details-permission
+            category="[[contentSettingsTypesEnum_.MIDI_DEVICES]]"
+            icon="settings:midi" label="$i18n{siteSettingsMidiDevices}">
+        </site-details-permission>
+      </template>
+      <template is="dom-if" if="[[blockMidiByDefault_]]">
+        <site-details-permission category="[[contentSettingsTypesEnum_.MIDI]]"
           icon="settings:midi" label="$i18n{siteSettingsMidiDevices}">
-      </site-details-permission>
+        </site-details-permission>
+      </template>
       <site-details-permission category="[[contentSettingsTypesEnum_.USB_DEVICES]]"
-          icon="settings:usb" label="$i18n{siteSettingsUsbDevices}">
+          icon="settings:usb" label="$i18n{siteSettingsUsbDevices}"
+          chooser-type="[[chooserTypeEnum_.USB_DEVICES]]">
       </site-details-permission>
       <site-details-permission category="[[contentSettingsTypesEnum_.SERIAL_PORTS]]"
-          icon="settings:serial-port" label="$i18n{siteSettingsSerialPorts}">
+          icon="settings:serial-port" label="$i18n{siteSettingsSerialPorts}"
+          chooser-type="[[chooserTypeEnum_.SERIAL_PORTS]]">
+      </site-details-permission>
+      <site-details-permission
+          category="[[contentSettingsTypesEnum_.WEB_PRINTING]]"
+          icon="settings:printer"
+          label="$i18n{siteSettingsWebPrinting}">
       </site-details-permission>
       <template is="dom-if" if="[[enableWebBluetoothNewPermissionsBackend_]]">
         <site-details-permission
             category="[[contentSettingsTypesEnum_.BLUETOOTH_DEVICES]]"
             icon="settings:bluetooth"
+            chooser-type="[[chooserTypeEnum_.BLUETOOTH_DEVICES]]"
             label="$i18n{siteSettingsBluetoothDevices}">
         </site-details-permission>
       </template>
@@ -199,6 +222,7 @@
           label="$i18n{siteSettingsFileSystemWrite}">
       </site-details-permission>
       <site-details-permission category="[[contentSettingsTypesEnum_.HID_DEVICES]]"
+          chooser-type="[[chooserTypeEnum_.HID_DEVICES]]"
           icon="settings:hid-device" label="$i18n{siteSettingsHidDevices}">
       </site-details-permission>
 <if expr="is_chromeos or is_win">
@@ -253,4 +277,11 @@
           category="[[contentSettingsTypesEnum_.LOCAL_FONTS]]"
           icon="settings:local-fonts" label="$i18n{fonts}">
       </site-details-permission>
+      <template is="dom-if" if="[[autoPictureInPictureEnabled_]]">
+        <site-details-permission
+            category="[[contentSettingsTypesEnum_.AUTO_PICTURE_IN_PICTURE]]"
+            icon="settings:picture-in-picture"
+            label="$i18n{siteSettingsAutoPictureInPicture}">
+        </site-details-permission>
+      </template>
     </div>

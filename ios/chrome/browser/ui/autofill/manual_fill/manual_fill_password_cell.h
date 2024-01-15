@@ -7,7 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
 
 @class FaviconAttributes;
 @class FaviconView;
@@ -17,7 +17,7 @@ class GURL;
 
 extern NSString* const kMaskedPasswordTitle;
 
-// Wrapper to show password cells in a ChromeTableViewController.
+// Wrapper to show password cells in a LegacyChromeTableViewController.
 @interface ManualFillCredentialItem : TableViewItem
 
 // URL to fetch the favicon.

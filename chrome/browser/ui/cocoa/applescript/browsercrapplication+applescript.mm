@@ -4,8 +4,11 @@
 
 #import "chrome/browser/ui/cocoa/applescript/browsercrapplication+applescript.h"
 
-#import "base/mac/foundation_util.h"
-#import "base/mac/scoped_nsobject.h"
+#include <Foundation/Foundation.h>
+
+#include <map>
+
+#import "base/apple/foundation_util.h"
 #include "base/notreached.h"
 #import "chrome/browser/app_controller_mac.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
@@ -13,6 +16,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_window.h"
 #import "chrome/browser/ui/cocoa/applescript/bookmark_folder_applescript.h"
 #import "chrome/browser/ui/cocoa/applescript/constants_applescript.h"
 #import "chrome/browser/ui/cocoa/applescript/error_applescript.h"
@@ -24,46 +28,50 @@ using bookmarks::BookmarkModel;
 @implementation BrowserCrApplication (AppleScriptAdditions)
 
 - (NSArray*)appleScriptWindows {
-  NSMutableArray* appleScriptWindows = [NSMutableArray
-      arrayWithCapacity:chrome::GetTotalBrowserCount()];
-  // Iterate through all browsers and check if it closing,
-  // if not add it to list.
-  for (auto* browser : *BrowserList::GetInstance()) {
-    if (browser->IsAttemptingToCloseBrowser())
+  std::map<NSWindow*, Browser*> browsers;
+  for (Browser* browser : *BrowserList::GetInstance()) {
+    if (browser->IsAttemptingToCloseBrowser()) {
       continue;
+    }
 
-    base::scoped_nsobject<WindowAppleScript> window(
-        [[WindowAppleScript alloc] initWithBrowser:browser]);
-    [window setContainer:NSApp
-                property:AppleScript::kWindowsProperty];
-    [appleScriptWindows addObject:window];
+    browsers.emplace(browser->window()->GetNativeWindow().GetNativeNSWindow(),
+                     browser);
   }
-  // Windows sorted by their index value, which is obtained by calling
-  // orderedIndex: on each window.
-  [appleScriptWindows sortUsingSelector:@selector(windowComparator:)];
-  return appleScriptWindows;
+
+  NSMutableArray* result = [NSMutableArray array];
+  for (NSWindow* window in NSApp.orderedWindows) {
+    const auto& browser_it = browsers.find(window);
+    if (browser_it == browsers.end()) {
+      continue;
+    }
+
+    WindowAppleScript* aWindow =
+        [[WindowAppleScript alloc] initWithBrowser:browser_it->second];
+    [aWindow setContainer:self property:AppleScript::kWindowsProperty];
+    [result addObject:aWindow];
+  }
+
+  return result;
 }
 
 - (void)insertInAppleScriptWindows:(WindowAppleScript*)aWindow {
   // This method gets called when a new window is created so
   // the container and property are set here.
-  [aWindow setContainer:self
-               property:AppleScript::kWindowsProperty];
+  [aWindow setContainer:self property:AppleScript::kWindowsProperty];
 }
 
 - (void)insertInAppleScriptWindows:(WindowAppleScript*)aWindow
                            atIndex:(int)index {
   // This method gets called when a new window is created so
   // the container and property are set here.
-  [aWindow setContainer:self
-               property:AppleScript::kWindowsProperty];
+  [aWindow setContainer:self property:AppleScript::kWindowsProperty];
   // Note: AppleScript is 1-based.
   index--;
-  [aWindow setOrderedIndex:@(index)];
+  aWindow.orderedIndex = @(index);
 }
 
 - (void)removeFromAppleScriptWindowsAtIndex:(int)index {
-  [[self appleScriptWindows][index] handlesCloseScriptCommand:nil];
+  [self.appleScriptWindows[index] handlesCloseScriptCommand:nil];
 }
 
 - (NSScriptObjectSpecifier*)objectSpecifier {
@@ -71,67 +79,57 @@ using bookmarks::BookmarkModel;
 }
 
 - (BookmarkFolderAppleScript*)otherBookmarks {
-  AppController* appDelegate =
-      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
-
-  Profile* lastProfile = [appDelegate lastProfile];
+  Profile* lastProfile = AppController.sharedController.lastProfile;
   if (!lastProfile) {
-    AppleScript::SetError(AppleScript::errGetProfile);
+    AppleScript::SetError(AppleScript::Error::kGetProfile);
     return nil;
   }
 
   BookmarkModel* model =
       BookmarkModelFactory::GetForBrowserContext(lastProfile);
   if (!model->loaded()) {
-    AppleScript::SetError(AppleScript::errBookmarkModelLoad);
+    AppleScript::SetError(AppleScript::Error::kBookmarkModelLoad);
     return nil;
   }
 
-  BookmarkFolderAppleScript* otherBookmarks =
-      [[[BookmarkFolderAppleScript alloc]
-          initWithBookmarkNode:model->other_node()] autorelease];
+  BookmarkFolderAppleScript* otherBookmarks = [[BookmarkFolderAppleScript alloc]
+      initWithBookmarkNode:model->other_node()];
   [otherBookmarks setContainer:self
                       property:AppleScript::kBookmarkFoldersProperty];
   return otherBookmarks;
 }
 
 - (BookmarkFolderAppleScript*)bookmarksBar {
-  AppController* appDelegate =
-      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
-
-  Profile* lastProfile = [appDelegate lastProfile];
+  Profile* lastProfile = AppController.sharedController.lastProfile;
   if (!lastProfile) {
-    AppleScript::SetError(AppleScript::errGetProfile);
+    AppleScript::SetError(AppleScript::Error::kGetProfile);
     return nil;
   }
 
   BookmarkModel* model =
       BookmarkModelFactory::GetForBrowserContext(lastProfile);
   if (!model->loaded()) {
-    AppleScript::SetError(AppleScript::errBookmarkModelLoad);
-    return NULL;
+    AppleScript::SetError(AppleScript::Error::kBookmarkModelLoad);
+    return nullptr;
   }
 
-  BookmarkFolderAppleScript* bookmarksBar =
-      [[[BookmarkFolderAppleScript alloc]
-          initWithBookmarkNode:model->bookmark_bar_node()] autorelease];
+  BookmarkFolderAppleScript* bookmarksBar = [[BookmarkFolderAppleScript alloc]
+      initWithBookmarkNode:model->bookmark_bar_node()];
   [bookmarksBar setContainer:self
                     property:AppleScript::kBookmarkFoldersProperty];
   return bookmarksBar;
 }
 
-- (NSArray*)bookmarkFolders {
-  BookmarkFolderAppleScript* otherBookmarks = [self otherBookmarks];
-  BookmarkFolderAppleScript* bookmarksBar = [self bookmarksBar];
-  NSArray* folderArray = @[ otherBookmarks, bookmarksBar ];
-  return folderArray;
+- (NSArray<BookmarkFolderAppleScript*>*)bookmarkFolders {
+  return @[ self.otherBookmarks, self.bookmarksBar ];
 }
 
-- (void)insertInBookmarksFolders:(id)aBookmarkFolder {
+- (void)insertInBookmarksFolders:(BookmarkFolderAppleScript*)aBookmarkFolder {
   NOTIMPLEMENTED();
 }
 
-- (void)insertInBookmarksFolders:(id)aBookmarkFolder atIndex:(int)index {
+- (void)insertInBookmarksFolders:(BookmarkFolderAppleScript*)aBookmarkFolder
+                         atIndex:(int)index {
   NOTIMPLEMENTED();
 }
 

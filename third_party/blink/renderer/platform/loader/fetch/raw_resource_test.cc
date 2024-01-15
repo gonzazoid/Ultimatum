@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
-#include "third_party/blink/renderer/platform/loader/fetch/resource_timing_info.h"
 #include "third_party/blink/renderer/platform/loader/fetch/response_body_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/response_body_loader_client.h"
 #include "third_party/blink/renderer/platform/loader/testing/replaying_bytes_consumer.h"
@@ -69,7 +68,7 @@ class RawResourceTest : public testing::Test {
     void DidReceiveData(base::span<const char>) override {}
     void DidReceiveDecodedData(
         const String& data,
-        std::unique_ptr<Resource::DecodedDataInfo> info) override {}
+        std::unique_ptr<ParkableStringImpl::SecureDigest> digest) override {}
     void DidFinishLoadingBody() override {}
     void DidFailLoadingBody() override {}
     void DidCancelLoadingBody() override {}

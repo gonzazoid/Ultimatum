@@ -57,22 +57,18 @@ class NodeTest : public testing::Test {
     auto node_link = NodeLink::CreateInactive(
         node, LinkSide::kB, name, broker_name, Node::Type::kBroker, 0,
         transports.second, NodeLinkMemory::Create(node, buffer.memory.Map()));
-    node->SetAssignedName(name);
     broker_->AddConnection(name, {.link = broker_link});
     node->AddConnection(broker_name, {.link = node_link, .broker = node_link});
     broker_link->Activate();
     node_link->Activate();
   }
 
-  const Ref<Node> broker_{MakeRefCounted<Node>(Node::Type::kBroker,
-                                               kTestDriver,
-                                               IPCZ_INVALID_DRIVER_HANDLE)};
-  const Ref<Node> node_a_{MakeRefCounted<Node>(Node::Type::kNormal,
-                                               kTestDriver,
-                                               IPCZ_INVALID_DRIVER_HANDLE)};
-  const Ref<Node> node_b_{MakeRefCounted<Node>(Node::Type::kNormal,
-                                               kTestDriver,
-                                               IPCZ_INVALID_DRIVER_HANDLE)};
+  const Ref<Node> broker_{
+      MakeRefCounted<Node>(Node::Type::kBroker, kTestDriver)};
+  const Ref<Node> node_a_{
+      MakeRefCounted<Node>(Node::Type::kNormal, kTestDriver)};
+  const Ref<Node> node_b_{
+      MakeRefCounted<Node>(Node::Type::kNormal, kTestDriver)};
 };
 
 TEST_F(NodeTest, EstablishExistingLinks) {
@@ -180,8 +176,8 @@ TEST_F(NodeTest, EstablishLinkFailureFromBroker) {
 TEST_F(NodeTest, EstablishLinkFailureWithoutBrokerLink) {
   // A node with no broker link can't be introduced to anyone.
   bool failed = false;
-  const Ref<Node> node_c = MakeRefCounted<Node>(
-      Node::Type::kNormal, kTestDriver, IPCZ_INVALID_DRIVER_HANDLE);
+  const Ref<Node> node_c =
+      MakeRefCounted<Node>(Node::Type::kNormal, kTestDriver);
   EXPECT_TRUE(broker().GetLink(kNodeAName));
   node_c->EstablishLink(kNodeAName, [&](NodeLink* link) {
     EXPECT_FALSE(link);

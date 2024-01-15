@@ -4,15 +4,11 @@
 
 #include "ui/gl/init/gl_initializer.h"
 
-#include <OpenGL/CGLRenderers.h>
-
-#include <vector>
-
+#include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
 #include "base/base_paths.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/mac/bundle_locations.h"
-#include "base/mac/foundation_util.h"
 #include "base/native_library.h"
 #include "base/path_service.h"
 #include "base/threading/thread_restrictions.h"
@@ -24,6 +20,7 @@
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_utils.h"
 #include "ui/gl/gpu_switching_manager.h"
+#include "ui/gl/init/gl_display_initializer.h"
 
 #if defined(USE_EGL)
 #include "ui/gl/gl_egl_api_implementation.h"
@@ -33,57 +30,6 @@ namespace gl {
 namespace init {
 
 namespace {
-
-const char kOpenGLFrameworkPath[] =
-    "/System/Library/Frameworks/OpenGL.framework/Versions/Current/OpenGL";
-
-bool InitializeOneOffForSandbox() {
-  static bool initialized = false;
-  if (initialized)
-    return true;
-
-  // This is called from the sandbox warmup code on Mac OS X.
-  // GPU-related stuff is very slow without this, probably because
-  // the sandbox prevents loading graphics drivers or some such.
-  std::vector<CGLPixelFormatAttribute> attribs;
-  if (GLContext::SwitchableGPUsSupported()) {
-    // Avoid switching to the discrete GPU just for this pixel
-    // format selection.
-    attribs.push_back(kCGLPFAAllowOfflineRenderers);
-  }
-  attribs.push_back(static_cast<CGLPixelFormatAttribute>(0));
-
-  CGLPixelFormatObj format;
-  GLint num_pixel_formats;
-  if (CGLChoosePixelFormat(&attribs.front(), &format, &num_pixel_formats) !=
-      kCGLNoError) {
-    LOG(ERROR) << "Error choosing pixel format.";
-    return false;
-  }
-  if (!format) {
-    LOG(ERROR) << "format == 0.";
-    return false;
-  }
-  CGLReleasePixelFormat(format);
-  DCHECK_NE(num_pixel_formats, 0);
-  initialized = true;
-  return true;
-}
-
-bool InitializeStaticCGLInternal(GLImplementation implementation) {
-  base::NativeLibrary library =
-      base::LoadNativeLibrary(base::FilePath(kOpenGLFrameworkPath), nullptr);
-  if (!library) {
-    LOG(ERROR) << "OpenGL framework not found";
-    return false;
-  }
-
-  AddGLNativeLibrary(library);
-  SetGLImplementation(implementation);
-
-  InitializeStaticGLBindingsGL();
-  return true;
-}
 
 #if defined(USE_EGL)
 const char kGLESv2ANGLELibraryName[] = "libGLESv2.dylib";
@@ -97,8 +43,8 @@ bool InitializeStaticEGLInternalFromLibrary(GLImplementation implementation) {
   // Some unit test targets depend on Angle/SwiftShader but aren't built
   // as app bundles. In that case, the .dylib is next to the executable.
   base::FilePath base_dir;
-  if (base::mac::AmIBundled()) {
-    base_dir = base::mac::FrameworkBundlePath().Append("Libraries");
+  if (base::apple::AmIBundled()) {
+    base_dir = base::apple::FrameworkBundlePath().Append("Libraries");
   } else {
     if (!base::PathService::Get(base::FILE_EXE, &base_dir)) {
       LOG(ERROR) << "PathService::Get failed.";
@@ -165,19 +111,13 @@ bool InitializeStaticEGLInternal(GLImplementationParts implementation) {
 
 }  // namespace
 
-GLDisplay* InitializeGLOneOffPlatform(uint64_t system_device_id) {
-  GLDisplayEGL* display = GetDisplayEGL(system_device_id);
+GLDisplay* InitializeGLOneOffPlatform(gl::GpuPreference gpu_preference) {
+  GLDisplayEGL* display = GetDisplayEGL(gpu_preference);
   switch (GetGLImplementation()) {
-    case kGLImplementationDesktopGL:
-    case kGLImplementationDesktopGLCoreProfile:
-      if (!InitializeOneOffForSandbox()) {
-        LOG(ERROR) << "GLSurfaceCGL::InitializeOneOff failed.";
-      }
-      break;
 #if defined(USE_EGL)
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:
-      if (!display->Initialize(EGLDisplayPlatform(0))) {
+      if (!InitializeDisplay(display, EGLDisplayPlatform(0))) {
         LOG(ERROR) << "GLDisplayEGL::Initialize failed.";
         return nullptr;
       }
@@ -199,12 +139,9 @@ bool InitializeStaticGLBindings(GLImplementationParts implementation) {
   // after instituting restrictions on I/O. Going forward they will
   // likely be used in the browser process on most platforms. The
   // one-time initialization cost is small, between 2 and 5 ms.
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking allow_blocking;
 
   switch (implementation.gl) {
-    case kGLImplementationDesktopGL:
-    case kGLImplementationDesktopGLCoreProfile:
-      return InitializeStaticCGLInternal(implementation.gl);
 #if defined(USE_EGL)
     case kGLImplementationEGLGLES2:
     case kGLImplementationEGLANGLE:

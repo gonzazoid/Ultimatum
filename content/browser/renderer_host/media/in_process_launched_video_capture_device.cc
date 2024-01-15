@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/token.h"
 #include "build/build_config.h"
 #include "content/common/buildflags.h"
@@ -27,7 +28,6 @@ namespace {
 
 void StopAndReleaseDeviceOnDeviceThread(media::VideoCaptureDevice* device,
                                         base::OnceClosure done_cb) {
-  SCOPED_UMA_HISTOGRAM_TIMER("Media.VideoCaptureManager.StopDeviceTime");
   device->StopAndDeAllocate();
   DVLOG(3) << "StopAndReleaseDeviceOnDeviceThread";
   delete device;
@@ -115,21 +115,24 @@ void InProcessLaunchedVideoCaptureDevice::ResumeDevice() {
                                 base::Unretained(device_.get())));
 }
 
-void InProcessLaunchedVideoCaptureDevice::Crop(
-    const base::Token& crop_id,
-    uint32_t crop_version,
-    base::OnceCallback<void(media::mojom::CropRequestResult)> callback) {
+void InProcessLaunchedVideoCaptureDevice::ApplySubCaptureTarget(
+    media::mojom::SubCaptureTargetType type,
+    const base::Token& target,
+    uint32_t sub_capture_target_version,
+    base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+        callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   // Unretained() is safe to use here because |device| would be null if it
   // was scheduled for shutdown and destruction, and because this task is
   // guaranteed to run before the task that destroys the |device|.
   //
   // Explicitly bind the callback to the I/O thread since the VideoCaptureDevice
-  // Crop method runs the callback on an unspecified thread.
+  // ApplySubCaptureTarget method runs the callback on an unspecified thread.
   device_task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&media::VideoCaptureDevice::Crop,
-                     base::Unretained(device_.get()), crop_id, crop_version,
+      base::BindOnce(&media::VideoCaptureDevice::ApplySubCaptureTarget,
+                     base::Unretained(device_.get()), type, target,
+                     sub_capture_target_version,
                      base::BindPostTask(content::GetIOThreadTaskRunner({}),
                                         std::move(callback))));
 }

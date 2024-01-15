@@ -3,10 +3,9 @@
 # found in the LICENSE file.
 
 source_set("cells") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "language_item.h",
     "language_item.mm",
   ]
-  deps = [ "//ios/chrome/browser/ui/table_view/cells" ]
+  deps = [ "//ios/chrome/browser/shared/ui/table_view/cells" ]
 }

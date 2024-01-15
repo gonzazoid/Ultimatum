@@ -8,8 +8,10 @@
 
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/media_router/media_router_internals_webui_message_handler.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/browser_resources.h"
+#include "chrome/grit/media_router_internals_resources.h"
+#include "chrome/grit/media_router_internals_resources_map.h"
 #include "components/media_router/browser/media_router.h"
 #include "components/media_router/browser/media_router_factory.h"
 #include "content/public/browser/web_contents.h"
@@ -22,24 +24,23 @@ MediaRouterInternalsUI::MediaRouterInternalsUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
   // Create a WebUIDataSource containing the chrome://media-router-internals
   // page's content.
-  std::unique_ptr<content::WebUIDataSource> html_source(
-      content::WebUIDataSource::Create(
-          chrome::kChromeUIMediaRouterInternalsHost));
-  html_source->AddResourcePath("media_router_internals.js",
-                               IDR_MEDIA_ROUTER_INTERNALS_JS);
-  html_source->AddResourcePath("media_router_internals.css",
-                               IDR_MEDIA_ROUTER_INTERNALS_CSS);
-  html_source->SetDefaultResource(IDR_MEDIA_ROUTER_INTERNALS_HTML);
-  // Ownership of |html_source| is transferred to the BrowserContext.
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui),
-                                html_source.release());
+  content::WebUIDataSource* html_source =
+      content::WebUIDataSource::CreateAndAdd(
+          Profile::FromWebUI(web_ui),
+          chrome::kChromeUIMediaRouterInternalsHost);
+
+  webui::SetupWebUIDataSource(
+      html_source,
+      base::make_span(kMediaRouterInternalsResources,
+                      kMediaRouterInternalsResourcesSize),
+      IDR_MEDIA_ROUTER_INTERNALS_MEDIA_ROUTER_INTERNALS_HTML);
 
   content::WebContents* wc = web_ui->GetWebContents();
   DCHECK(wc);
   content::BrowserContext* context = wc->GetBrowserContext();
   MediaRouter* router = MediaRouterFactory::GetApiForBrowserContext(context);
-  auto handler =
-      std::make_unique<MediaRouterInternalsWebUIMessageHandler>(router);
+  auto handler = std::make_unique<MediaRouterInternalsWebUIMessageHandler>(
+      router, router->GetDebugger());
   web_ui->AddMessageHandler(std::move(handler));
 }
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 export interface DataCollectorItem {
   name: string;
@@ -30,9 +30,10 @@ export interface StartDataCollectionResult {
   errorMessage: string;
 }
 
-export interface UrlGenerationResult {
+export interface SupportTokenGenerationResult {
   success: boolean;
-  url: string;
+  // It will be filled only if `success` is true.
+  token: string;
   errorMessage: string;
 }
 
@@ -47,8 +48,10 @@ export interface BrowserProxy {
   getAllDataCollectors(): Promise<DataCollectorItem[]>;
 
   startDataCollection(
-      issueDetails: IssueDetails, selectedDataCollectors: DataCollectorItem[]):
-      Promise<StartDataCollectionResult>;
+      issueDetails: IssueDetails, selectedDataCollectors: DataCollectorItem[],
+      screenshotBase64: string): Promise<StartDataCollectionResult>;
+
+  takeScreenshot(): void;
 
   cancelDataCollection(): void;
 
@@ -56,8 +59,11 @@ export interface BrowserProxy {
 
   showExportedDataInFolder(): void;
 
-  generateCustomizedURL(caseId: string, dataCollectors: DataCollectorItem[]):
-      Promise<UrlGenerationResult>;
+  generateCustomizedUrl(caseId: string, dataCollectors: DataCollectorItem[]):
+      Promise<SupportTokenGenerationResult>;
+
+  generateSupportToken(dataCollectors: DataCollectorItem[]):
+      Promise<SupportTokenGenerationResult>;
 }
 
 export class BrowserProxyImpl implements BrowserProxy {
@@ -73,9 +79,15 @@ export class BrowserProxyImpl implements BrowserProxy {
     return sendWithPromise('getAllDataCollectors');
   }
 
+  takeScreenshot() {
+    chrome.send('takeScreenshot');
+  }
+
   startDataCollection(
-      issueDetails: IssueDetails, dataCollectors: DataCollectorItem[]) {
-    return sendWithPromise('startDataCollection', issueDetails, dataCollectors);
+      issueDetails: IssueDetails, dataCollectors: DataCollectorItem[],
+      screenshotBase64: string) {
+    return sendWithPromise(
+        'startDataCollection', issueDetails, dataCollectors, screenshotBase64);
   }
 
   cancelDataCollection() {
@@ -90,8 +102,12 @@ export class BrowserProxyImpl implements BrowserProxy {
     chrome.send('showExportedDataInFolder');
   }
 
-  generateCustomizedURL(caseId: string, dataCollectors: DataCollectorItem[]) {
-    return sendWithPromise('generateCustomizedURL', caseId, dataCollectors);
+  generateCustomizedUrl(caseId: string, dataCollectors: DataCollectorItem[]) {
+    return sendWithPromise('generateCustomizedUrl', caseId, dataCollectors);
+  }
+
+  generateSupportToken(dataCollectors: DataCollectorItem[]) {
+    return sendWithPromise('generateSupportToken', dataCollectors);
   }
 
   static getInstance(): BrowserProxy {

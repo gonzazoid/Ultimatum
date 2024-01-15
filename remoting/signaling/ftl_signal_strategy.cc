@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
@@ -14,7 +14,7 @@
 #include "base/rand_util.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "remoting/base/logging.h"
 #include "remoting/base/oauth_token_getter.h"
 #include "remoting/base/protobuf_http_status.h"
@@ -130,8 +130,9 @@ void FtlSignalStrategy::Core::Connect() {
       messaging_client_->RegisterMessageCallback(base::BindRepeating(
           &Core::OnMessageReceived, weak_factory_.GetWeakPtr()));
 
-  for (auto& observer : listeners_)
+  for (auto& observer : listeners_) {
     observer.OnSignalStrategyStateChange(CONNECTING);
+  }
 
   StartReceivingMessages();
 }
@@ -148,8 +149,9 @@ void FtlSignalStrategy::Core::Disconnect() {
     receive_message_subscription_ = {};
     messaging_client_->StopReceivingMessages();
 
-    for (auto& observer : listeners_)
+    for (auto& observer : listeners_) {
       observer.OnSignalStrategyStateChange(DISCONNECTED);
+    }
   }
 }
 
@@ -304,8 +306,9 @@ void FtlSignalStrategy::Core::OnReceiveMessagesStreamStarted() {
   local_address_ = SignalingAddress::CreateFtlSignalingAddress(
       user_email_, registration_manager_->GetRegistrationId());
 
-  for (auto& observer : listeners_)
+  for (auto& observer : listeners_) {
     observer.OnSignalStrategyStateChange(CONNECTED);
+  }
 }
 
 void FtlSignalStrategy::Core::OnReceiveMessagesStreamClosed(
@@ -461,8 +464,9 @@ void FtlSignalStrategy::Core::OnStanza(
            << "\n=========================================================";
 
   for (auto& listener : listeners_) {
-    if (listener.OnSignalStrategyIncomingStanza(stanza.get()))
+    if (listener.OnSignalStrategyIncomingStanza(stanza.get())) {
       return;
+    }
   }
 }
 
@@ -494,8 +498,8 @@ FtlSignalStrategy::FtlSignalStrategy(
 FtlSignalStrategy::~FtlSignalStrategy() {
   // All listeners should be removed at this point, so it's safe to detach
   // |core_|.
-  base::SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                     core_.release());
+  base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                             core_.release());
 }
 
 void FtlSignalStrategy::Connect() {

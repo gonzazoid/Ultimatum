@@ -19,6 +19,10 @@ class PeriodicBackgroundSyncServiceImplTest
     BackgroundSyncServiceImplTestHarness::SetUp();
     CreatePeriodicBackgroundSyncServiceImpl();
   }
+  void TearDown() override {
+    periodic_sync_service_impl_ = nullptr;
+    BackgroundSyncServiceImplTestHarness::TearDown();
+  }
 
  protected:
   void CreatePeriodicBackgroundSyncServiceImpl() {

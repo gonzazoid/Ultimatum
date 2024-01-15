@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "ash/components/arc/app/arc_playstore_search_request_state.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -190,7 +190,7 @@ arc::mojom::RawIconPngDataPtr FakeAppInstance::GenerateIconResponse(
     }
     case IconResponseType::ICON_RESPONSE_SEND_GOOD: {
       base::FilePath base_path;
-      CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &base_path));
+      CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &base_path));
       base::FilePath icon_file_path =
           base_path.AppendASCII("ash")
               .AppendASCII("components")
@@ -252,7 +252,7 @@ arc::mojom::RawIconPngDataPtr FakeAppInstance::GetFakeIcon(
 
   base::FilePath base_path;
   std::string png_data_as_string;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &base_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &base_path));
   base::FilePath icon_file_path = base_path.AppendASCII("ash")
                                       .AppendASCII("components")
                                       .AppendASCII("arc")
@@ -266,12 +266,6 @@ arc::mojom::RawIconPngDataPtr FakeAppInstance::GetFakeIcon(
   arc::mojom::RawIconPngDataPtr icon = arc::mojom::RawIconPngData::New();
   FillRawIconPngData(png_data_as_string, icon.get());
   return icon;
-}
-
-void FakeAppInstance::SetTaskInfo(int32_t task_id,
-                                  const std::string& package_name,
-                                  const std::string& activity) {
-  task_id_to_info_[task_id] = std::make_unique<Request>(package_name, activity);
 }
 
 void FakeAppInstance::SendRefreshPackageList(
@@ -296,35 +290,21 @@ void FakeAppInstance::SendInstallationStarted(const std::string& package_name) {
 }
 
 void FakeAppInstance::SendInstallationFinished(const std::string& package_name,
-                                               bool success) {
+                                               bool success,
+                                               bool is_launchable_app) {
   mojom::InstallationResult result;
   result.package_name = package_name;
   result.success = success;
+  result.is_launchable_app = is_launchable_app;
   app_host_->OnInstallationFinished(
       mojom::InstallationResultPtr(result.Clone()));
-}
-
-void FakeAppInstance::CanHandleResolutionDeprecated(
-    const std::string& package_name,
-    const std::string& activity,
-    const gfx::Rect& dimension,
-    CanHandleResolutionDeprecatedCallback callback) {
-  std::move(callback).Run(true);
 }
 
 void FakeAppInstance::UninstallPackage(const std::string& package_name) {
   app_host_->OnPackageRemoved(package_name);
 }
 
-void FakeAppInstance::GetTaskInfo(int32_t task_id,
-                                  GetTaskInfoCallback callback) {
-  TaskIdToInfo::const_iterator it = task_id_to_info_.find(task_id);
-  if (it == task_id_to_info_.end()) {
-    std::move(callback).Run(std::string(), std::string());
-    return;
-  }
-  std::move(callback).Run(it->second->package_name(), it->second->activity());
-}
+void FakeAppInstance::UpdateAppDetails(const std::string& package_name) {}
 
 void FakeAppInstance::SetTaskActive(int32_t task_id) {}
 
@@ -479,17 +459,6 @@ void FakeAppInstance::StartPaiFlow(StartPaiFlowCallback callback) {
   std::move(callback).Run(pai_state_response_);
 }
 
-void FakeAppInstance::GetAppReinstallCandidates(
-    GetAppReinstallCandidatesCallback callback) {
-  ++get_app_reinstall_callback_count_;
-  std::vector<arc::mojom::AppReinstallCandidatePtr> candidates;
-  for (const auto& candidate : app_reinstall_candidates_)
-    candidates.emplace_back(candidate.Clone());
-
-  std::move(callback).Run(arc::mojom::AppReinstallState::REQUEST_SUCCESS,
-                          std::move(candidates));
-}
-
 void FakeAppInstance::StartFastAppReinstallFlow(
     const std::vector<std::string>& package_names) {
   ++start_fast_app_reinstall_request_count_;
@@ -512,6 +481,11 @@ void FakeAppInstance::GetAppCategory(const std::string& package_name,
 
   if (itr != pkg_name_to_app_category_.end()) category = itr->second;
   std::move(callback).Run(category);
+}
+
+void FakeAppInstance::SetAppLocale(const std::string& package_name,
+                                   const std::string& locale_tag) {
+  selected_locales_[package_name] = locale_tag;
 }
 
 void FakeAppInstance::LaunchIntentWithWindowInfo(
@@ -556,11 +530,16 @@ void FakeAppInstance::GetPackageIcon(const std::string& package_name,
 
 void FakeAppInstance::RemoveCachedIcon(const std::string& icon_resource_id) {}
 
-void FakeAppInstance::SetAppReinstallCandidates(
-    const std::vector<arc::mojom::AppReinstallCandidatePtr>& candidates) {
-  app_reinstall_candidates_.clear();
-  for (const auto& candidate : candidates)
-    app_reinstall_candidates_.emplace_back(candidate.Clone());
+void FakeAppInstance::SendInstallationProgressChanged(
+    const std::string& package_name,
+    float progress) {
+  app_host_->OnInstallationProgressChanged(package_name, progress);
+}
+
+void FakeAppInstance::SendInstallationActiveChanged(
+    const std::string& package_name,
+    bool active) {
+  app_host_->OnInstallationActiveChanged(package_name, active);
 }
 
 }  // namespace arc

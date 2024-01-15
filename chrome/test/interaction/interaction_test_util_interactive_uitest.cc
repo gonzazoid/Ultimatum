@@ -4,7 +4,8 @@
 
 #include "ui/base/interaction/interaction_test_util.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/tabs/tab_menu_model.h"
@@ -81,7 +82,7 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilInteractiveUitest,
         // Have to defer opening because this call is blocking on Mac;
         // subsequent steps will be called from within the run loop of the
         // context menu.
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, std::move(open_context_menu));
 #else
         // Conversely, on other platforms, this is already an async call and
@@ -91,8 +92,11 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilInteractiveUitest,
 #endif
       });
 
-  auto click_menu_item = base::BindLambdaForTesting(
-      [&](ui::TrackedElement* element) { test_util_.SelectMenuItem(element); });
+  auto click_menu_item =
+      base::BindLambdaForTesting([&](ui::TrackedElement* element) {
+        ASSERT_EQ(ui::test::ActionResult::kSucceeded,
+                  test_util_.SelectMenuItem(element));
+      });
 
   auto sequence =
       ui::InteractionSequence::Builder()

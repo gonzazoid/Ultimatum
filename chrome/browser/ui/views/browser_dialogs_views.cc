@@ -10,7 +10,6 @@
 #include "chrome/browser/extensions/api/chrome_device_permissions_prompt.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/login/login_handler.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_editor_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/task_manager_view.h"
@@ -22,15 +21,6 @@
 
 // This file provides definitions of desktop browser dialog-creation methods for
 // all toolkit-views platforms.
-
-// static
-std::unique_ptr<LoginHandler> LoginHandler::Create(
-    const net::AuthChallengeInfo& auth_info,
-    content::WebContents* web_contents,
-    LoginAuthRequiredCallback auth_required_callback) {
-  return chrome::CreateLoginHandlerViews(auth_info, web_contents,
-                                         std::move(auth_required_callback));
-}
 
 // static
 void BookmarkEditor::Show(gfx::NativeWindow parent_window,
@@ -61,10 +51,10 @@ void HideTaskManager() {
 }
 #endif
 
-void ShowBrowserModal(Browser* browser,
-                      std::unique_ptr<ui::DialogModel> dialog_model) {
-  constrained_window::ShowBrowserModal(std::move(dialog_model),
-                                       browser->window()->GetNativeWindow());
+views::Widget* ShowBrowserModal(Browser* browser,
+                                std::unique_ptr<ui::DialogModel> dialog_model) {
+  return constrained_window::ShowBrowserModal(
+      std::move(dialog_model), browser->window()->GetNativeWindow());
 }
 
 // TODO(pbos): Move bubble showing out of this file (like ShowBrowserModal) so

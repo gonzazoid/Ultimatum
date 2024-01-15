@@ -19,7 +19,7 @@
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_aura.h"
 #include "content/public/common/content_switches.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 #include "ui/accessibility/platform/ax_system_caret_win.h"
 #include "ui/aura/window.h"
@@ -39,7 +39,9 @@ namespace content {
 const int kIdScreenReaderHoneyPot = 1;
 
 // static
-LegacyRenderWidgetHostHWND* LegacyRenderWidgetHostHWND::Create(HWND parent) {
+LegacyRenderWidgetHostHWND* LegacyRenderWidgetHostHWND::Create(
+    HWND parent,
+    RenderWidgetHostViewAura* host) {
   // content_unittests passes in the desktop window as the parent. We allow
   // the LegacyRenderWidgetHostHWND instance to be created in this case for
   // these tests to pass.
@@ -49,7 +51,7 @@ LegacyRenderWidgetHostHWND* LegacyRenderWidgetHostHWND::Create(HWND parent) {
     return nullptr;
 
   LegacyRenderWidgetHostHWND* legacy_window_instance =
-      new LegacyRenderWidgetHostHWND();
+      new LegacyRenderWidgetHostHWND(host);
   if (!legacy_window_instance->InitOrDeleteSelf(parent))
     return nullptr;
 
@@ -58,19 +60,14 @@ LegacyRenderWidgetHostHWND* LegacyRenderWidgetHostHWND::Create(HWND parent) {
 
 void LegacyRenderWidgetHostHWND::Destroy() {
   // Delete DirectManipulationHelper before the window is destroyed.
-  if (direct_manipulation_helper_)
-    direct_manipulation_helper_.reset();
+  direct_manipulation_helper_.reset();
+  window_tree_host_prop_.reset();
   host_ = nullptr;
   if (::IsWindow(hwnd()))
     ::DestroyWindow(hwnd());
 }
 
-void LegacyRenderWidgetHostHWND::UpdateParent(HWND parent) {
-  if (GetWindowEventTarget(GetParent()))
-    GetWindowEventTarget(GetParent())->HandleParentChanged();
-
-  ::SetParent(hwnd(), parent);
-
+void LegacyRenderWidgetHostHWND::CreateDirectManipulationHelper() {
   // Direct Manipulation is enabled on Windows 10+. The CreateInstance function
   // returns NULL if Direct Manipulation is not available. Recreate
   // |direct_manipulation_helper_| when parent changed (compositor and window
@@ -78,10 +75,38 @@ void LegacyRenderWidgetHostHWND::UpdateParent(HWND parent) {
   direct_manipulation_helper_ = DirectManipulationHelper::CreateInstance(
       hwnd(), host_->GetNativeView()->GetHost()->compositor(),
       GetWindowEventTarget(GetParent()));
+}
 
-  // Reset tooltips when parent changed; otherwise tooltips could stay open as
-  // the former parent wouldn't be forwarded any mouse leave messages.
-  host_->UpdateTooltip(std::u16string());
+void LegacyRenderWidgetHostHWND::UpdateParent(HWND new_parent) {
+  // Performance profiles for resizing show that roughly 1/3 of the
+  // browser main thread CPU samples are inside of the ::SetParent call, even
+  // though the parent is never changed during this operation. The CPU samples
+  // disappear if we ask the OS for the current parent and avoid the SetParent
+  // call altogether.
+  const HWND current_parent = GetParent();
+  if (current_parent != new_parent) {
+    if (GetWindowEventTarget(GetParent())) {
+      GetWindowEventTarget(GetParent())->HandleParentChanged();
+    }
+
+    ::SetParent(hwnd(), new_parent);
+
+    CreateDirectManipulationHelper();
+
+    // Reset tooltips when parent changed; otherwise tooltips could stay open as
+    // the former parent wouldn't be forwarded any mouse leave messages.
+    host_->UpdateTooltip(std::u16string());
+  } else {
+    // The first call to UpdateParent may have the parent correctly set on
+    // account of InitOrDeleteSelf having just created the correctly parented
+    // Window. We will need to create the DirectManipulationHelper in this case
+    // if we haven't already done so. After initial creation, the
+    // DirectManipulationHelper only needs to be re-created if the parent
+    // subsequently changes.
+    if (!direct_manipulation_helper_) {
+      CreateDirectManipulationHelper();
+    }
+  }
 }
 
 HWND LegacyRenderWidgetHostHWND::GetParent() {
@@ -114,30 +139,33 @@ void LegacyRenderWidgetHostHWND::OnFinalMessage(HWND hwnd) {
 
   // Re-enable flicks for just a moment
   base::win::EnableFlicks(hwnd);
-
   delete this;
 }
 
-LegacyRenderWidgetHostHWND::LegacyRenderWidgetHostHWND()
-    : mouse_tracking_enabled_(false),
-      host_(nullptr),
-      did_return_uia_object_(false) {}
+LegacyRenderWidgetHostHWND::LegacyRenderWidgetHostHWND(
+    RenderWidgetHostViewAura* host)
+    : host_(host) {}
 
 LegacyRenderWidgetHostHWND::~LegacyRenderWidgetHostHWND() {
-  DCHECK(!::IsWindow(hwnd()));
+  // WindowImpl will clean up the hwnd value on WM_NCDESTROY.
+  DCHECK(!hwnd());
 }
 
 bool LegacyRenderWidgetHostHWND::InitOrDeleteSelf(HWND parent) {
   // Need to use weak_ptr to guard against `this` from being deleted by
-  // Base::Create(), which used to be called in the constructor and caused
+  // Create(), which used to be called in the constructor and caused
   // heap-use-after-free crash (https://crbug.com/1194694).
   auto weak_ptr = weak_factory_.GetWeakPtr();
-  RECT rect = {0};
-  Base::Create(parent, rect, L"Chrome Legacy Window",
-               WS_CHILDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-               WS_EX_TRANSPARENT);
+
+  set_window_style(WS_CHILDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+  set_window_ex_style(WS_EX_TRANSPARENT);
+  set_window_class_name(ui::kLegacyRenderWidgetHostHwnd);
+  set_window_name(L"Chrome Legacy Window");
+  gfx::Rect rect(0, 0);
+  Init(parent, rect);
+
   if (!weak_ptr) {
-    // Base::Create() runs nested windows message loops that could end up
+    // Create() runs nested windows message loops that could end up
     // deleting `this`. Therefore, upon returning false here, `this` is already
     // deleted.
     return false;
@@ -164,7 +192,7 @@ bool LegacyRenderWidgetHostHWND::InitOrDeleteSelf(HWND parent) {
   ::CreateStdAccessibleObject(hwnd(), OBJID_WINDOW,
                               IID_PPV_ARGS(&window_accessible_));
 
-  if (::switches::IsExperimentalAccessibilityPlatformUIAEnabled()) {
+  if (::features::IsUiaProviderEnabled()) {
     // The usual way for UI Automation to obtain a fragment root is through
     // WM_GETOBJECT. However, if there's a relation such as "Controller For"
     // between element A in one window and element B in another window, UIA
@@ -175,9 +203,11 @@ bool LegacyRenderWidgetHostHWND::InitOrDeleteSelf(HWND parent) {
     ax_fragment_root_ = std::make_unique<ui::AXFragmentRootWin>(hwnd(), this);
   }
 
+  // Continue to send honey pot events until we have kWebContents to
+  // ensure screen readers have the opportunity to enable.
   ui::AXMode mode =
       BrowserAccessibilityStateImpl::GetInstance()->GetAccessibilityMode();
-  if (!mode.has_mode(ui::AXMode::kNativeAPIs)) {
+  if (!mode.has_mode(ui::AXMode::kWebContents)) {
     // Attempt to detect screen readers or other clients who want full
     // accessibility support, by seeing if they respond to this event.
     NotifyWinEvent(EVENT_SYSTEM_ALERT, hwnd(), kIdScreenReaderHoneyPot,
@@ -186,6 +216,13 @@ bool LegacyRenderWidgetHostHWND::InitOrDeleteSelf(HWND parent) {
 
   // Disable pen flicks (http://crbug.com/506977)
   base::win::DisableFlicks(hwnd());
+
+  host_->UpdateTooltip(std::u16string());
+
+  // Instruct aura::WindowTreeHost to use the HWND's parent for lookup.
+  window_tree_host_prop_ = std::make_unique<ui::ViewProp>(
+      hwnd(), aura::WindowTreeHost::kWindowTreeHostUsesParent,
+      reinterpret_cast<HANDLE>(true));
 
   return true;
 }
@@ -227,8 +264,7 @@ LRESULT LegacyRenderWidgetHostHWND::OnGetObject(UINT message,
   bool is_uia_request = static_cast<DWORD>(UiaRootObjectId) == obj_id;
   bool is_msaa_request = static_cast<DWORD>(OBJID_CLIENT) == obj_id;
 
-  if ((is_uia_request &&
-       ::switches::IsExperimentalAccessibilityPlatformUIAEnabled()) ||
+  if ((is_uia_request && ::features::IsUiaProviderEnabled()) ||
       is_msaa_request) {
     gfx::NativeViewAccessible root =
         GetOrCreateWindowRootAccessible(is_uia_request);
@@ -272,22 +308,20 @@ LRESULT LegacyRenderWidgetHostHWND::OnGetObject(UINT message,
 // with capture changes.
 LRESULT LegacyRenderWidgetHostHWND::OnKeyboardRange(UINT message,
                                                     WPARAM w_param,
-                                                    LPARAM l_param,
-                                                    BOOL& handled) {
+                                                    LPARAM l_param) {
   LRESULT ret = 0;
   if (GetWindowEventTarget(GetParent())) {
     bool msg_handled = false;
     ret = GetWindowEventTarget(GetParent())->HandleKeyboardMessage(
         message, w_param, l_param, &msg_handled);
-    handled = msg_handled;
+    msg_handled_ = msg_handled;
   }
   return ret;
 }
 
 LRESULT LegacyRenderWidgetHostHWND::OnMouseRange(UINT message,
                                                  WPARAM w_param,
-                                                 LPARAM l_param,
-                                                 BOOL& handled) {
+                                                 LPARAM l_param) {
   if (message == WM_MOUSEMOVE) {
     if (!mouse_tracking_enabled_) {
       mouse_tracking_enabled_ = true;
@@ -317,15 +351,16 @@ LRESULT LegacyRenderWidgetHostHWND::OnMouseRange(UINT message,
     bool msg_handled = false;
     ret = GetWindowEventTarget(GetParent())->HandleMouseMessage(
         message, w_param, l_param, &msg_handled);
-    handled = msg_handled;
+
+    msg_handled_ = msg_handled;
     // If the parent did not handle non client mouse messages, we call
     // DefWindowProc on the message with the parent window handle. This
     // ensures that WM_SYSCOMMAND is generated for the parent and we are
     // out of the picture.
-    if (!handled &&
-         (message >= WM_NCMOUSEMOVE && message <= WM_NCXBUTTONDBLCLK)) {
+    if (!msg_handled_ &&
+        (message >= WM_NCMOUSEMOVE && message <= WM_NCXBUTTONDBLCLK)) {
       ret = ::DefWindowProc(GetParent(), message, w_param, l_param);
-      handled = TRUE;
+      msg_handled_ = TRUE;
     }
   }
   return ret;
@@ -543,7 +578,7 @@ gfx::NativeViewAccessible
 LegacyRenderWidgetHostHWND::GetOrCreateWindowRootAccessible(
     bool is_uia_request) {
   if (is_uia_request) {
-    DCHECK(::switches::IsExperimentalAccessibilityPlatformUIAEnabled());
+    DCHECK(::features::IsUiaProviderEnabled());
     return ax_fragment_root_->GetNativeViewAccessible();
   }
   return GetOrCreateBrowserAccessibilityRoot();

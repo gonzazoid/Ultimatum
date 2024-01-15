@@ -25,46 +25,22 @@ CertVerifyResult::CertVerifyResult(const CertVerifyResult& other) {
 
 CertVerifyResult::~CertVerifyResult() = default;
 
-CertVerifyResult& CertVerifyResult::operator=(const CertVerifyResult& other) {
-  verified_cert = other.verified_cert;
-  cert_status = other.cert_status;
-  has_sha1 = other.has_sha1;
-  has_sha1_leaf = other.has_sha1_leaf;
-  is_issued_by_known_root = other.is_issued_by_known_root;
-  is_issued_by_additional_trust_anchor =
-      other.is_issued_by_additional_trust_anchor;
-
-  public_key_hashes = other.public_key_hashes;
-  ocsp_result = other.ocsp_result;
-
-  scts = other.scts;
-  policy_compliance = other.policy_compliance;
-
-  ClearAllUserData();
-  CloneDataFrom(other);
-
-  return *this;
-}
-
 void CertVerifyResult::Reset() {
   verified_cert = nullptr;
   cert_status = 0;
   has_sha1 = false;
-  has_sha1_leaf = false;
   is_issued_by_known_root = false;
   is_issued_by_additional_trust_anchor = false;
 
   public_key_hashes.clear();
-  ocsp_result = OCSPVerifyResult();
+  ocsp_result = bssl::OCSPVerifyResult();
 
   scts.clear();
   policy_compliance =
       ct::CTPolicyCompliance::CT_POLICY_COMPLIANCE_DETAILS_NOT_AVAILABLE;
-
-  ClearAllUserData();
 }
 
-base::Value CertVerifyResult::NetLogParams(int net_error) const {
+base::Value::Dict CertVerifyResult::NetLogParams(int net_error) const {
   base::Value::Dict dict;
   DCHECK_NE(ERR_IO_PENDING, net_error);
   if (net_error < 0)
@@ -87,8 +63,10 @@ base::Value CertVerifyResult::NetLogParams(int net_error) const {
   dict.Set("public_key_hashes", std::move(hashes));
 
   dict.Set("scts", net::NetLogSignedCertificateTimestampParams(&scts));
+  dict.Set("ct_compliance_status",
+           CTPolicyComplianceToString(policy_compliance));
 
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace net

@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "extensions/renderer/native_handler.h"
 #include "v8/include/v8-forward.h"
 #include "v8/include/v8-persistent-handle.h"
@@ -123,13 +124,15 @@ class ObjectBackedNativeHandler : public NativeHandler {
   // A scenario when v8 will outlive us is if a frame holds onto the
   // contentWindow of an iframe after it's removed.
   //
-  // So, we use v8::Objects here to hold that data, effectively refcounting
-  // the data. When |this| is destroyed we remove the base::Bound function from
-  // the object to indicate that it shouldn't be called.
+  // So, we use v8::Objects here to hold that data as a weak reference. The
+  // strong reference is stored in `handler_functions_`.
   using RouterData = std::vector<v8::Global<v8::Object>>;
   RouterData router_data_;
 
-  ScriptContext* context_;
+  // Owned list of HandlerFunctions.
+  std::vector<std::unique_ptr<HandlerFunction>> handler_functions_;
+
+  raw_ptr<ScriptContext, DanglingUntriaged> context_;
 
   v8::Global<v8::ObjectTemplate> object_template_;
 };

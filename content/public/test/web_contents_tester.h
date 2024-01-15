@@ -169,12 +169,6 @@ class WebContentsTester {
   virtual void TestIncrementBluetoothConnectedDeviceCount() = 0;
   virtual void TestDecrementBluetoothConnectedDeviceCount() = 0;
 
-  // Used to create portals and retrieve their WebContents.
-  virtual const blink::PortalToken& CreatePortal(
-      std::unique_ptr<WebContents> portal_web_contents) = 0;
-  virtual WebContents* GetPortalContents(
-      const blink::PortalToken& portal_token) = 0;
-
   // Indicates if this WebContents has been frozen via a call to
   // SetPageFrozen().
   virtual bool IsPageFrozen() = 0;
@@ -197,6 +191,12 @@ class WebContentsTester {
   // Returns the time that was set with SetTabSwitchStartTime, or a null
   // TimeTicks if it was never called.
   virtual base::TimeTicks GetTabSwitchStartTime() = 0;
+
+  // Sets the return value for GetPictureInPictureOptions().
+  virtual void SetPictureInPictureOptions(
+      std::optional<blink::mojom::PictureInPictureWindowOptions> options) = 0;
+
+  virtual bool GetOverscrollNavigationEnabled() = 0;
 };
 
 }  // namespace content

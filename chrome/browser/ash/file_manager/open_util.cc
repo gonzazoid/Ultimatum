@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
@@ -46,8 +46,9 @@ void IgnoreFileTaskExecuteResult(
 void ExecuteFileTaskForUrl(Profile* profile,
                            const file_tasks::TaskDescriptor& task,
                            const GURL& url) {
-  if (!shell_operations_allowed)
+  if (!shell_operations_allowed) {
     return;
+  }
   storage::FileSystemContext* file_system_context =
       GetFileManagerFileSystemContext(profile);
 
@@ -68,8 +69,9 @@ void OpenFileManagerWithInternalActionId(Profile* profile,
                                          const GURL& url,
                                          const std::string& action_id) {
   DCHECK(action_id == "open" || action_id == "select");
-  if (!shell_operations_allowed)
+  if (!shell_operations_allowed) {
     return;
+  }
   base::RecordAction(base::UserMetricsAction("ShowFileBrowserFullTab"));
 
   file_tasks::TaskDescriptor task(
@@ -91,14 +93,16 @@ void OpenFileMimeTypeAfterTasksListed(
         chosen_task = &task;
         break;
       }
-      if (!chosen_task)
+      if (!chosen_task) {
         chosen_task = &task;
+      }
     }
   }
 
   if (chosen_task != nullptr) {
-    if (shell_operations_allowed)
+    if (shell_operations_allowed) {
       ExecuteFileTaskForUrl(profile, chosen_task->task_descriptor, url);
+    }
     std::move(callback).Run(platform_util::OPEN_SUCCEEDED);
   } else {
     std::move(callback).Run(
@@ -119,7 +123,7 @@ void OpenFileWithMimeType(Profile* profile,
   file_urls.push_back(url);
 
   file_tasks::FindAllTypesOfTasks(
-      profile, entries, file_urls,
+      profile, entries, file_urls, {""},
       base::BindOnce(&OpenFileMimeTypeAfterTasksListed, profile, url,
                      std::move(callback)));
 }
@@ -204,7 +208,7 @@ void OpenItem(Profile* profile,
 
   GetMetadataForPath(
       GetFileManagerFileSystemContext(profile), file_path,
-      storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+      {storage::FileSystemOperation::GetMetadataField::kIsDirectory},
       base::BindOnce(&OpenItemWithMetadata, profile, file_path, url,
                      expected_type, std::move(callback)));
 }
@@ -223,7 +227,7 @@ void ShowItemInFolder(Profile* profile,
 
   GetMetadataForPath(
       GetFileManagerFileSystemContext(profile), file_path,
-      storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+      {storage::FileSystemOperation::GetMetadataField::kIsDirectory},
       base::BindOnce(&ShowItemInFolderWithMetadata, profile, file_path, url,
                      std::move(callback)));
 }

@@ -4,8 +4,8 @@
 
 #include "chromeos/ash/services/libassistant/media_controller.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/ash/services/libassistant/grpc/external_services/grpc_services_observer.h"
 #include "chromeos/ash/services/libassistant/grpc/utils/media_status_utils.h"
@@ -56,7 +56,7 @@ std::string GetAndroidIntentUrlFromMediaArgs(
   return std::string();
 }
 
-absl::optional<AndroidAppInfo> GetAppInfoFromMediaArgs(
+std::optional<AndroidAppInfo> GetAppInfoFromMediaArgs(
     const std::string& play_media_args_proto) {
   PlayMediaArgs play_media_args;
   if (play_media_args.ParseFromString(play_media_args_proto)) {
@@ -73,7 +73,7 @@ absl::optional<AndroidAppInfo> GetAppInfoFromMediaArgs(
       }
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string GetWebUrlFromMediaArgs(const std::string& play_media_args_proto) {
@@ -142,7 +142,7 @@ class MediaController::GrpcEventsObserver
   }
 
   void OnPlayMedia(const std::string& play_media_args_proto) {
-    absl::optional<AndroidAppInfo> app_info =
+    std::optional<AndroidAppInfo> app_info =
         GetAppInfoFromMediaArgs(play_media_args_proto);
     if (app_info) {
       OnOpenMediaAndroidIntent(play_media_args_proto,
@@ -209,7 +209,7 @@ class MediaController::GrpcEventsObserver
 
   mojom::MediaDelegate& delegate() { return *parent_->delegate_; }
 
-  MediaController* const parent_;
+  const raw_ptr<MediaController> parent_;
 };
 
 MediaController::MediaController()
@@ -252,6 +252,16 @@ void MediaController::OnAssistantClientRunning(
   // `events_observer_` outlives `assistant_client_`.
   assistant_client->AddDeviceStateEventObserver(events_observer_.get());
   assistant_client->AddMediaActionFallbackEventObserver(events_observer_.get());
+}
+
+void MediaController::SendGrpcMessageForTesting(
+    const ::assistant::api::OnDeviceStateEventRequest& request) {
+  events_observer_->OnGrpcMessage(request);
+}
+
+void MediaController::SendGrpcMessageForTesting(
+    const ::assistant::api::OnMediaActionFallbackEventRequest& request) {
+  events_observer_->OnGrpcMessage(request);
 }
 
 }  // namespace ash::libassistant

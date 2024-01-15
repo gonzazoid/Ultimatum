@@ -20,8 +20,8 @@
 #include "ash/quick_pair/repository/fast_pair/pairing_metadata.h"
 #include "ash/quick_pair/scanning/fast_pair/fake_fast_pair_scanner.h"
 #include "ash/quick_pair/scanning/fast_pair/fast_pair_not_discoverable_scanner.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -545,15 +545,15 @@ TEST_F(FastPairNotDiscoverableScannerImplTest, SetBatteryInfo) {
   scanner_->NotifyDeviceFound(device);
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_EQ(absl::nullopt, device->GetBatteryInfo(
-                               device::BluetoothDevice::BatteryType::kDefault));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_EQ(std::nullopt, device->GetBatteryInfo(
+                              device::BluetoothDevice::BatteryType::kDefault));
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kLeftBudTrueWireless));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kRightBudTrueWireless));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kCaseTrueWireless));
 }
@@ -584,15 +584,15 @@ TEST_F(FastPairNotDiscoverableScannerImplTest, SetUnknownBatteryInfo) {
   scanner_->NotifyDeviceFound(device);
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_EQ(absl::nullopt, device->GetBatteryInfo(
-                               device::BluetoothDevice::BatteryType::kDefault));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_EQ(std::nullopt, device->GetBatteryInfo(
+                              device::BluetoothDevice::BatteryType::kDefault));
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kLeftBudTrueWireless));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kRightBudTrueWireless));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kCaseTrueWireless));
 }
@@ -623,15 +623,15 @@ TEST_F(FastPairNotDiscoverableScannerImplTest, SetInvalidPercentBatteryInfo) {
   scanner_->NotifyDeviceFound(device);
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_EQ(absl::nullopt, device->GetBatteryInfo(
-                               device::BluetoothDevice::BatteryType::kDefault));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_EQ(std::nullopt, device->GetBatteryInfo(
+                              device::BluetoothDevice::BatteryType::kDefault));
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kLeftBudTrueWireless));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kRightBudTrueWireless));
-  EXPECT_NE(absl::nullopt,
+  EXPECT_NE(std::nullopt,
             device->GetBatteryInfo(
                 device::BluetoothDevice::BatteryType::kCaseTrueWireless));
 }

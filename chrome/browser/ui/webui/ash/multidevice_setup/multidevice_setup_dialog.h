@@ -8,11 +8,19 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/webui/ash/system_web_dialog_delegate.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-forward.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/web_dialogs/web_dialog_ui.h"
+#include "ui/webui/resources/cr_components/color_change_listener/color_change_listener.mojom.h"
+
+namespace ui {
+class ColorChangeHandler;
+}
 
 namespace ash::multidevice_setup {
 
@@ -57,6 +65,17 @@ class MultiDeviceSetupDialog : public SystemWebDialogDelegate {
   std::vector<base::OnceClosure> on_close_callbacks_;
 };
 
+class MultiDeviceSetupDialogUI;
+
+// WebUIConfig for chrome://multidevice-setup
+class MultiDeviceSetupDialogUIConfig
+    : public content::DefaultWebUIConfig<MultiDeviceSetupDialogUI> {
+ public:
+  MultiDeviceSetupDialogUIConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUIMultiDeviceSetupHost) {}
+};
+
 class MultiDeviceSetupDialogUI : public ui::MojoWebDialogUI {
  public:
   explicit MultiDeviceSetupDialogUI(content::WebUI* web_ui);
@@ -70,7 +89,15 @@ class MultiDeviceSetupDialogUI : public ui::MojoWebDialogUI {
   // passing the pending receiver that will be internally bound.
   void BindInterface(mojo::PendingReceiver<mojom::MultiDeviceSetup> receiver);
 
+  // Instantiates the implementor of the mojom::PageHandler mojo interface
+  // passing the pending receiver that will be internally bound.
+  void BindInterface(
+      mojo::PendingReceiver<color_change_listener::mojom::PageHandler>
+          receiver);
+
  private:
+  std::unique_ptr<ui::ColorChangeHandler> color_provider_handler_;
+
   WEB_UI_CONTROLLER_TYPE_DECL();
 };
 

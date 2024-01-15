@@ -4,8 +4,9 @@
 
 #include "services/network/public/cpp/source_stream_to_data_pipe.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/checked_math.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/filter/source_stream.h"
 
 namespace network {
@@ -17,7 +18,7 @@ SourceStreamToDataPipe::SourceStreamToDataPipe(
       dest_(std::move(dest)),
       writable_handle_watcher_(FROM_HERE,
                                mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                               base::SequencedTaskRunnerHandle::Get()) {
+                               base::SequencedTaskRunner::GetCurrentDefault()) {
   writable_handle_watcher_.Watch(
       dest_.get(), MOJO_HANDLE_SIGNAL_WRITABLE,
       base::BindRepeating(&SourceStreamToDataPipe::OnDataPipeWritable,
@@ -34,29 +35,29 @@ void SourceStreamToDataPipe::Start(
 
 void SourceStreamToDataPipe::ReadMore() {
   DCHECK(!pending_write_.get());
-
-  uint32_t num_bytes;
-  MojoResult mojo_result = network::NetToMojoPendingBuffer::BeginWrite(
-      &dest_, &pending_write_, &num_bytes);
-  if (mojo_result == MOJO_RESULT_SHOULD_WAIT) {
-    // The pipe is full.  We need to wait for it to have more space.
-    writable_handle_watcher_.ArmOrNotify();
-    return;
-  } else if (mojo_result == MOJO_RESULT_FAILED_PRECONDITION) {
-    // The data pipe consumer handle has been closed.
-    OnComplete(net::ERR_ABORTED);
-    return;
-  } else if (mojo_result != MOJO_RESULT_OK) {
-    // The body stream is in a bad state. Bail out.
-    OnComplete(net::ERR_UNEXPECTED);
-    return;
+  MojoResult mojo_result =
+      network::NetToMojoPendingBuffer::BeginWrite(&dest_, &pending_write_);
+  switch (mojo_result) {
+    case MOJO_RESULT_OK:
+      break;
+    case MOJO_RESULT_SHOULD_WAIT:
+      // The pipe is full.  We need to wait for it to have more space.
+      writable_handle_watcher_.ArmOrNotify();
+      return;
+    case MOJO_RESULT_FAILED_PRECONDITION:
+      // The data pipe consumer handle has been closed.
+      OnComplete(net::ERR_ABORTED);
+      return;
+    default:
+      // The body stream is in a bad state. Bail out.
+      OnComplete(net::ERR_UNEXPECTED);
+      return;
   }
-
-  scoped_refptr<net::IOBuffer> buffer(
-      new network::NetToMojoIOBuffer(pending_write_.get()));
-  int result = source_->Read(
-      buffer.get(), base::checked_cast<int>(num_bytes),
-      base::BindOnce(&SourceStreamToDataPipe::DidRead, base::Unretained(this)));
+  int num_bytes = base::checked_cast<int>(pending_write_->size());
+  auto buffer = base::MakeRefCounted<NetToMojoIOBuffer>(pending_write_);
+  int result = source_->Read(buffer.get(), num_bytes,
+                             base::BindOnce(&SourceStreamToDataPipe::DidRead,
+                                            weak_factory_.GetWeakPtr()));
 
   if (result != net::ERR_IO_PENDING)
     DidRead(result);
@@ -82,7 +83,7 @@ void SourceStreamToDataPipe::DidRead(int result) {
 
   pending_write_ = nullptr;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SourceStreamToDataPipe::ReadMore,
                                 weak_factory_.GetWeakPtr()));
 }

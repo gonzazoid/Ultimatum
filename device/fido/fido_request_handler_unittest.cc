@@ -4,10 +4,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -30,6 +31,7 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "device/fido/win/fake_webauthn_api.h"
+#include "device/fido/win/webauthn_api.h"
 #endif  // BUILDFLAG(IS_WIN)
 
 using ::testing::_;
@@ -88,8 +90,7 @@ class TestObserver : public FidoRequestHandlerBase::Observer {
   void WaitForAndExpectAvailableTransportsAre(
       base::flat_set<FidoTransportProtocol> expected_transports,
       FidoRequestHandlerBase::RecognizedCredential
-          has_platform_authenticator_credential =
-              FidoRequestHandlerBase::RecognizedCredential::kUnknown) {
+          has_platform_authenticator_credential) {
     auto result = WaitForTransportAvailabilityInfo();
     EXPECT_THAT(result.available_transports,
                 ::testing::UnorderedElementsAreArray(expected_transports));
@@ -112,7 +113,7 @@ class TestObserver : public FidoRequestHandlerBase::Observer {
   void BluetoothAdapterPowerChanged(bool is_powered_on) override {}
   void FidoAuthenticatorAdded(const FidoAuthenticator& authenticator) override {
   }
-  void FidoAuthenticatorRemoved(base::StringPiece device_id) override {}
+  void FidoAuthenticatorRemoved(std::string_view device_id) override {}
 
   bool SupportsPIN() const override { return false; }
 
@@ -226,15 +227,11 @@ class FakeFidoRequestHandler : public FidoRequestHandlerBase {
                        weak_factory_.GetWeakPtr(), authenticator)));
   }
 
-  void AuthenticatorAdded(FidoDiscoveryBase* discovery,
-                          FidoAuthenticator* authenticator) override {
-    if (authenticator->AuthenticatorTransport() ==
-        FidoTransportProtocol::kInternal) {
-      transport_availability_info().has_platform_authenticator_credential =
-          has_platform_credential_;
-    }
-
-    FidoRequestHandlerBase::AuthenticatorAdded(discovery, authenticator);
+  void GetPlatformCredentialStatus(
+      FidoAuthenticator* platform_authenticator) override {
+    OnHavePlatformCredentialStatus(AuthenticatorType::kOther,
+                                   /*user_entities=*/{},
+                                   has_platform_credential_);
   }
 
   void HandleResponse(FidoAuthenticator* authenticator,
@@ -320,7 +317,7 @@ class FidoRequestHandlerTest : public ::testing::Test {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   test::FakeFidoDiscoveryFactory fake_discovery_factory_;
   scoped_refptr<::testing::NiceMock<MockBluetoothAdapter>> mock_adapter_;
-  raw_ptr<test::FakeFidoDiscovery> discovery_;
+  raw_ptr<test::FakeFidoDiscovery, DanglingUntriaged> discovery_;
   FakeHandlerCallbackReceiver cb_;
 };
 
@@ -607,7 +604,9 @@ TEST_F(FidoRequestHandlerTest, InternalTransportDisallowedIfMarkedUnavailable) {
       callback().callback());
   request_handler->set_observer(&observer);
 
-  observer.WaitForAndExpectAvailableTransportsAre({});
+  observer.WaitForAndExpectAvailableTransportsAre(
+      {},
+      FidoRequestHandlerBase::RecognizedCredential::kNoRecognizedCredential);
 }
 
 TEST_F(FidoRequestHandlerTest,
@@ -619,19 +618,76 @@ TEST_F(FidoRequestHandlerTest,
 
   request_handler->set_observer(&observer);
   observer.WaitForAndExpectAvailableTransportsAre(
-      {FidoTransportProtocol::kUsbHumanInterfaceDevice});
+      {FidoTransportProtocol::kUsbHumanInterfaceDevice},
+      FidoRequestHandlerBase::RecognizedCredential::kNoRecognizedCredential);
+}
+
+// This tests sets up a scenario where there are two platform authenticators
+// and the first one returns a failure for discovery, to verify that the
+// second is still used.
+TEST_F(FidoRequestHandlerTest, TestWithMultiplePlatformAuthenticators) {
+  auto device = MockFidoDevice::MakeCtap();
+  EXPECT_CALL(*device, GetId()).WillRepeatedly(testing::Return("device2"));
+  device->ExpectCtap2CommandAndRespondWith(
+      CtapRequestCommand::kAuthenticatorGetInfo,
+      test_data::kTestGetInfoResponsePlatformDevice);
+  device->ExpectRequestAndRespondWith(std::vector<uint8_t>(),
+                                      CreateFakeSuccessDeviceResponse());
+  device->SetDeviceTransport(FidoTransportProtocol::kInternal);
+
+  auto* fake_discovery_fails =
+      fake_discovery_factory_.ForgeNextPlatformDiscovery(
+          test::FakeFidoDiscovery::StartMode::kManual);
+  auto* fake_discovery_succeeds =
+      fake_discovery_factory_.ForgeNextPlatformDiscovery(
+          test::FakeFidoDiscovery::StartMode::kManual);
+
+  TestObserver observer;
+  auto request_handler = std::make_unique<FakeFidoRequestHandler>(
+      &fake_discovery_factory_,
+      base::flat_set<FidoTransportProtocol>({FidoTransportProtocol::kInternal}),
+      callback().callback());
+  request_handler->set_has_platform_credential(
+      FidoRequestHandlerBase::RecognizedCredential::kHasRecognizedCredential);
+  request_handler->set_observer(&observer);
+  fake_discovery_succeeds->AddDevice(std::move(device));
+  fake_discovery_fails->SimulateStarted(false);
+  fake_discovery_succeeds->SimulateStarted(true);
+
+  observer.WaitForAndExpectAvailableTransportsAre(
+      {FidoTransportProtocol::kInternal},
+      FidoRequestHandlerBase::RecognizedCredential::kHasRecognizedCredential);
+
+  callback().WaitForCallback();
+  EXPECT_TRUE(callback().status());
 }
 
 #if BUILDFLAG(IS_WIN)
+
 TEST_F(FidoRequestHandlerTest, TransportAvailabilityOfWindowsAuthenticator) {
+  static const struct {
+    bool api_available = false;
+    bool is_uvpaa = false;
+  } kTestCases[] = {
+      /* clang-format off */
+      /* api_available is_uvpaa */
+      {true,           true},
+      {true,           false},
+      {false,          false},
+      /* clang-format on */
+  };
   FakeWinWebAuthnApi api;
-  fake_discovery_factory_.set_win_webauthn_api(&api);
-  for (const bool api_available : {false, true}) {
-    SCOPED_TRACE(::testing::Message() << "api_available=" << api_available);
-    api.set_available(api_available);
+  device::WinWebAuthnApi::ScopedOverride win_webauthn_api_override(&api);
+  for (const auto& test_case : kTestCases) {
+    SCOPED_TRACE(::testing::Message()
+                 << "api_available=" << test_case.api_available);
+    SCOPED_TRACE(::testing::Message() << "is_uvpaa=" << test_case.is_uvpaa);
+    api.set_available(test_case.api_available);
+    api.set_is_uvpaa(test_case.is_uvpaa);
 
     TestObserver observer;
     ForgeNextHidDiscovery();
+    fake_discovery_factory_.set_discover_win_webauthn_api_authenticator(true);
     EmptyRequestHandler request_handler(
         {FidoTransportProtocol::kUsbHumanInterfaceDevice},
         &fake_discovery_factory_);
@@ -639,19 +695,17 @@ TEST_F(FidoRequestHandlerTest, TransportAvailabilityOfWindowsAuthenticator) {
 
     // If the windows API is not enabled, the request is dispatched to the USB
     // discovery. Simulate a success to fill the transport availability info.
-    if (!api_available)
+    if (!test_case.api_available) {
       discovery()->WaitForCallToStartAndSimulateSuccess();
-
-    task_environment_.FastForwardUntilNoTasksRemain();
+    }
 
     auto transport_availability_info =
         observer.WaitForTransportAvailabilityInfo();
     EXPECT_EQ(transport_availability_info.available_transports.empty(),
-              api_available);
+              test_case.api_available);
     EXPECT_EQ(transport_availability_info.has_win_native_api_authenticator,
-              api_available);
-    EXPECT_EQ(transport_availability_info.win_native_api_authenticator_id,
-              api_available ? "WinWebAuthnApiAuthenticator" : "");
+              test_case.api_available);
+    EXPECT_EQ(transport_availability_info.win_is_uvpaa, test_case.is_uvpaa);
   }
 }
 #endif  // BUILDFLAG(IS_WIN)

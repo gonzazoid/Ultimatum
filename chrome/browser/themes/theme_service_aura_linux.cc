@@ -4,7 +4,7 @@
 
 #include "chrome/browser/themes/theme_service_aura_linux.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
@@ -141,7 +141,7 @@ bool ThemeServiceAuraLinux::IsSystemThemeDistinctFromDefaultTheme() const {
 bool ThemeServiceAuraLinux::UsingSystemTheme() const {
   return GetThemeSupplier() &&
          GetThemeSupplier()->get_theme_type() ==
-             ui::ColorProviderManager::ThemeInitializerSupplier::ThemeType::
+             ui::ColorProviderKey::ThemeInitializerSupplier::ThemeType::
                  kNativeX11;
 }
 

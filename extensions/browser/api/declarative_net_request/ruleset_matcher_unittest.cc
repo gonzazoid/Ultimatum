@@ -5,6 +5,7 @@
 #include "extensions/browser/api/declarative_net_request/ruleset_matcher.h"
 
 #include <limits>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -13,6 +14,7 @@
 #include "base/format_macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/url_pattern_index/flat/url_pattern_index_generated.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -30,19 +32,27 @@
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/api/declarative_net_request/constants.h"
 #include "extensions/common/api/declarative_net_request/test_utils.h"
+#include "extensions/common/extension_features.h"
 #include "net/http/http_request_headers.h"
+#include "net/http/http_response_headers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 namespace {
 
 namespace dnr_api = api::declarative_net_request;
 
 using RulesetMatcherTest = ExtensionsTest;
+
+RequestParams CreateRequestWithResponseHeaders(
+    const GURL& url,
+    const net::HttpResponseHeaders* headers) {
+  return RequestParams(url, url::Origin(), dnr_api::ResourceType::kSubFrame,
+                       dnr_api::RequestMethod::kGet, -1, headers);
+}
 
 // Tests a simple blocking rule.
 TEST_F(RulesetMatcherTest, BlockingRule) {
@@ -58,14 +68,14 @@ TEST_F(RulesetMatcherTest, BlockingRule) {
   };
 
   GURL google_url("http://google.com");
+  GURL yahoo_url("http://yahoo.com");
+
   RequestParams params;
   params.url = &google_url;
   params.element_type = url_pattern_index::flat::ElementType_SUBDOCUMENT;
   params.is_third_party = true;
-
   EXPECT_TRUE(should_block_request(params));
 
-  GURL yahoo_url("http://yahoo.com");
   params.url = &yahoo_url;
   EXPECT_FALSE(should_block_request(params));
 }
@@ -90,7 +100,7 @@ TEST_F(RulesetMatcherTest, RedirectRule) {
   params.element_type = url_pattern_index::flat::ElementType_SUBDOCUMENT;
   params.is_third_party = true;
 
-  absl::optional<RequestAction> redirect_action =
+  std::optional<RequestAction> redirect_action =
       matcher->GetBeforeRequestAction(params);
   ASSERT_TRUE(redirect_action);
   ASSERT_EQ(redirect_action->type, RequestAction::Type::REDIRECT);
@@ -164,8 +174,7 @@ TEST_F(RulesetMatcherTest, FailedVerification) {
   // Persist invalid data to the ruleset file and ensure that a version mismatch
   // occurs.
   std::string data = "invalid data";
-  ASSERT_EQ(static_cast<int>(data.size()),
-            base::WriteFile(source.indexed_path(), data.c_str(), data.size()));
+  ASSERT_TRUE(base::WriteFile(source.indexed_path(), data));
   EXPECT_EQ(LoadRulesetResult::kErrorVersionMismatch,
             source.CreateVerifiedMatcher(expected_checksum, &matcher));
 
@@ -173,8 +182,7 @@ TEST_F(RulesetMatcherTest, FailedVerification) {
   // correct version header. Ensure that it fails verification due to checksum
   // mismatch.
   data = GetVersionHeaderForTesting() + "invalid data";
-  ASSERT_EQ(static_cast<int>(data.size()),
-            base::WriteFile(source.indexed_path(), data.c_str(), data.size()));
+  ASSERT_TRUE(base::WriteFile(source.indexed_path(), data));
   EXPECT_EQ(LoadRulesetResult::kErrorChecksumMismatch,
             source.CreateVerifiedMatcher(expected_checksum, &matcher));
 }
@@ -200,7 +208,7 @@ TEST_F(RulesetMatcherTest, ModifyHeaders) {
   rule_1.condition->url_filter = std::string("example.com");
   rule_1.action->type = std::string("modifyHeaders");
   rule_1.action->request_headers = std::vector<TestHeaderInfo>(
-      {TestHeaderInfo("header1", "remove", absl::nullopt)});
+      {TestHeaderInfo("header1", "remove", std::nullopt)});
 
   TestRule rule_2 = CreateGenericRule();
   rule_2.id = kMinValidID + 1;
@@ -209,7 +217,7 @@ TEST_F(RulesetMatcherTest, ModifyHeaders) {
   rule_2.action->type = std::string("modifyHeaders");
   rule_2.action->request_headers = std::vector<TestHeaderInfo>(
       {TestHeaderInfo("header1", "set", "value1"),
-       TestHeaderInfo("header2", "remove", absl::nullopt)});
+       TestHeaderInfo("header2", "remove", std::nullopt)});
 
   std::unique_ptr<RulesetMatcher> matcher;
   ASSERT_TRUE(CreateVerifiedMatcher({rule_1, rule_2}, CreateTemporarySource(),
@@ -228,15 +236,15 @@ TEST_F(RulesetMatcherTest, ModifyHeaders) {
   RequestAction expected_rule_1_action = CreateRequestActionForTesting(
       RequestAction::Type::MODIFY_HEADERS, *rule_1.id, *rule_1.priority);
   expected_rule_1_action.request_headers_to_modify = {RequestAction::HeaderInfo(
-      "header1", dnr_api::HEADER_OPERATION_REMOVE, absl::nullopt)};
+      "header1", dnr_api::HeaderOperation::kRemove, std::nullopt)};
 
   RequestAction expected_rule_2_action = CreateRequestActionForTesting(
       RequestAction::Type::MODIFY_HEADERS, *rule_2.id, *rule_2.priority);
   expected_rule_2_action.request_headers_to_modify = {
-      RequestAction::HeaderInfo("header1", dnr_api::HEADER_OPERATION_SET,
+      RequestAction::HeaderInfo("header1", dnr_api::HeaderOperation::kSet,
                                 "value1"),
-      RequestAction::HeaderInfo("header2", dnr_api::HEADER_OPERATION_REMOVE,
-                                absl::nullopt)};
+      RequestAction::HeaderInfo("header2", dnr_api::HeaderOperation::kRemove,
+                                std::nullopt)};
 
   EXPECT_THAT(modify_header_actions,
               testing::UnorderedElementsAre(
@@ -263,7 +271,7 @@ TEST_F(RulesetMatcherTest, RedirectToExtensionPath) {
   RequestParams params;
   params.url = &example_url;
 
-  absl::optional<RequestAction> redirect_action =
+  std::optional<RequestAction> redirect_action =
       matcher->GetBeforeRequestAction(params);
 
   RequestAction expected_action = CreateRequestActionForTesting(
@@ -290,7 +298,7 @@ TEST_F(RulesetMatcherTest, RedirectToStaticUrl) {
   RequestParams params;
   params.url = &example_url;
 
-  absl::optional<RequestAction> redirect_action =
+  std::optional<RequestAction> redirect_action =
       matcher->GetBeforeRequestAction(params);
 
   ASSERT_TRUE(redirect_action.has_value());
@@ -304,7 +312,7 @@ TEST_F(RulesetMatcherTest, UrlTransform) {
   struct TestCase {
     std::string url;
     // Valid if a redirect is expected.
-    absl::optional<std::string> expected_redirect_url;
+    std::optional<std::string> expected_redirect_url;
   };
 
   std::vector<TestCase> cases;
@@ -373,8 +381,7 @@ TEST_F(RulesetMatcherTest, UrlTransform) {
       {"http://user@7.com/xyz", "http://new_user:new_pass@7.com/xyz"});
 
   auto make_query = [](const std::string& key, const std::string& value,
-                       const absl::optional<bool>& replace_only =
-                           absl::nullopt) {
+                       const std::optional<bool>& replace_only = std::nullopt) {
     TestRuleQueryKeyValue query;
     query.key = key;
     query.value = value;
@@ -405,7 +412,7 @@ TEST_F(RulesetMatcherTest, UrlTransform) {
       std::vector<std::string>({"r1", "r2"});
   rules.push_back(rule);
   // No redirect is performed since the url won't change.
-  cases.push_back({"http://9.com/path?query#fragment", absl::nullopt});
+  cases.push_back({"http://9.com/path?query#fragment", std::nullopt});
 
   rule = create_transform_rule(10, "||10.com");
   rule.action->redirect->transform->query_transform.emplace();
@@ -447,7 +454,7 @@ TEST_F(RulesetMatcherTest, UrlTransform) {
     RequestParams params;
     params.url = &url;
 
-    absl::optional<RequestAction> redirect_action =
+    std::optional<RequestAction> redirect_action =
         matcher->GetBeforeRequestAction(params);
 
     if (!test_case.expected_redirect_url) {
@@ -515,8 +522,8 @@ TEST_F(RulesetMatcherTest, RegexRules) {
 
   struct TestCase {
     const char* url = nullptr;
-    absl::optional<RequestAction> expected_action;
-    absl::optional<RequestAction> expected_modify_header_action;
+    std::optional<RequestAction> expected_action;
+    std::optional<RequestAction> expected_modify_header_action;
   };
 
   std::vector<TestCase> test_cases;
@@ -530,7 +537,9 @@ TEST_F(RulesetMatcherTest, RegexRules) {
 
   {
     TestCase test_case = {"http://www.collapse.com/PATH"};
-    // Filters are case sensitive by default, hence the request doesn't match.
+    // Filters are case insensitive by default, hence the request will match.
+    test_case.expected_action = CreateRequestActionForTesting(
+        RequestAction::Type::BLOCK, *block_rule.id);
     test_cases.push_back(std::move(test_case));
   }
 
@@ -574,7 +583,7 @@ TEST_F(RulesetMatcherTest, RegexRules) {
     test_case.expected_modify_header_action = CreateRequestActionForTesting(
         RequestAction::Type::MODIFY_HEADERS, *modify_headers_rule.id);
     test_case.expected_modify_header_action->request_headers_to_modify = {
-        RequestAction::HeaderInfo("header1", dnr_api::HEADER_OPERATION_SET,
+        RequestAction::HeaderInfo("header1", dnr_api::HeaderOperation::kSet,
                                   "value1")};
     test_cases.push_back(std::move(test_case));
   }
@@ -623,11 +632,11 @@ TEST_F(RulesetMatcherTest, RegexRules_Metadata) {
 
   // Add a case sensitive rule.
   TestRule path_rule = create_regex_rule(1, "/PATH");
+  path_rule.condition->is_url_filter_case_sensitive = true;
   rules.push_back(path_rule);
 
   // Add a case insensitive rule.
   TestRule xyz_rule = create_regex_rule(2, "/XYZ");
-  xyz_rule.condition->is_url_filter_case_sensitive = false;
   rules.push_back(xyz_rule);
 
   // Test `domains`, `excludedDomains`.
@@ -653,13 +662,13 @@ TEST_F(RulesetMatcherTest, RegexRules_Metadata) {
       std::vector<std::string>({"b.example.com"});
   rules.push_back(request_domains_rule);
 
-  // Test |resourceTypes|.
+  // Test `resourceTypes`.
   TestRule sub_frame_rule = create_regex_rule(6, R"((abc|def)\.com)");
   sub_frame_rule.condition->resource_types =
       std::vector<std::string>({"sub_frame"});
   rules.push_back(sub_frame_rule);
 
-  // Test |domainType|.
+  // Test `domainType`.
   TestRule third_party_rule = create_regex_rule(7, R"(http://(\d+)\.com)");
   third_party_rule.condition->domain_type = "thirdParty";
   rules.push_back(third_party_rule);
@@ -673,7 +682,7 @@ TEST_F(RulesetMatcherTest, RegexRules_Metadata) {
     url_pattern_index::flat::ElementType element_type =
         url_pattern_index::flat::ElementType_OTHER;
     bool is_third_party = false;
-    absl::optional<RequestAction> expected_action;
+    std::optional<RequestAction> expected_action;
   };
   std::vector<TestCase> test_cases;
 
@@ -819,14 +828,14 @@ TEST_F(RulesetMatcherTest, RegexAndFilterListRules_RedirectPriority) {
     const char* action_type;
     const char* filter;
     bool is_regex_rule;
-    absl::optional<std::string> redirect_url;
+    std::optional<std::string> redirect_url;
   } rule_info[] = {
       {1, 1, "redirect", "filter.com", false, "http://redirect_filter.com"},
-      {2, 1, "upgradeScheme", "regex\\.com", true, absl::nullopt},
+      {2, 1, "upgradeScheme", "regex\\.com", true, std::nullopt},
       {3, 9, "redirect", "common1.com", false, "http://common1_filter.com"},
       {4, 10, "redirect", "common1\\.com", true, "http://common1_regex.com"},
-      {5, 10, "upgradeScheme", "common2.com", false, absl::nullopt},
-      {6, 9, "upgradeScheme", "common2\\.com", true, absl::nullopt},
+      {5, 10, "upgradeScheme", "common2.com", false, std::nullopt},
+      {6, 9, "upgradeScheme", "common2\\.com", true, std::nullopt},
       {7, 10, "redirect", "abc\\.com", true, "http://example1.com"},
       {8, 9, "redirect", "abc", true, "http://example2.com"},
   };
@@ -857,7 +866,7 @@ TEST_F(RulesetMatcherTest, RegexAndFilterListRules_RedirectPriority) {
 
   struct TestCase {
     const char* url = nullptr;
-    absl::optional<RequestAction> expected_action;
+    std::optional<RequestAction> expected_action;
   };
   std::vector<TestCase> test_cases;
 
@@ -942,17 +951,17 @@ TEST_F(RulesetMatcherTest, RegexAndFilterListRules_ModifyHeaders) {
   rule.action->type = "modifyHeaders";
   rule.condition->url_filter = "abc";
   rule.action->request_headers = std::vector<TestHeaderInfo>(
-      {TestHeaderInfo("header1", "remove", absl::nullopt),
-       TestHeaderInfo("header2", "remove", absl::nullopt)});
+      {TestHeaderInfo("header1", "remove", std::nullopt),
+       TestHeaderInfo("header2", "remove", std::nullopt)});
   rules.push_back(rule);
 
   RequestAction action_1 = CreateRequestActionForTesting(
       RequestAction::Type::MODIFY_HEADERS, 1, *rule.priority);
   action_1.request_headers_to_modify = {
-      RequestAction::HeaderInfo("header1", dnr_api::HEADER_OPERATION_REMOVE,
-                                absl::nullopt),
-      RequestAction::HeaderInfo("header2", dnr_api::HEADER_OPERATION_REMOVE,
-                                absl::nullopt)};
+      RequestAction::HeaderInfo("header1", dnr_api::HeaderOperation::kRemove,
+                                std::nullopt),
+      RequestAction::HeaderInfo("header2", dnr_api::HeaderOperation::kRemove,
+                                std::nullopt)};
 
   rule = CreateGenericRule();
   rule.id = 2;
@@ -961,17 +970,17 @@ TEST_F(RulesetMatcherTest, RegexAndFilterListRules_ModifyHeaders) {
   rule.condition->regex_filter = "example";
   rule.action->type = "modifyHeaders";
   rule.action->request_headers = std::vector<TestHeaderInfo>(
-      {TestHeaderInfo("header1", "remove", absl::nullopt),
-       TestHeaderInfo("header3", "remove", absl::nullopt)});
+      {TestHeaderInfo("header1", "remove", std::nullopt),
+       TestHeaderInfo("header3", "remove", std::nullopt)});
   rules.push_back(rule);
 
   RequestAction action_2 = CreateRequestActionForTesting(
       RequestAction::Type::MODIFY_HEADERS, 2, *rule.priority);
   action_2.request_headers_to_modify = {
-      RequestAction::HeaderInfo("header1", dnr_api::HEADER_OPERATION_REMOVE,
-                                absl::nullopt),
-      RequestAction::HeaderInfo("header3", dnr_api::HEADER_OPERATION_REMOVE,
-                                absl::nullopt)};
+      RequestAction::HeaderInfo("header1", dnr_api::HeaderOperation::kRemove,
+                                std::nullopt),
+      RequestAction::HeaderInfo("header3", dnr_api::HeaderOperation::kRemove,
+                                std::nullopt)};
 
   std::unique_ptr<RulesetMatcher> matcher;
   ASSERT_TRUE(CreateVerifiedMatcher(rules, CreateTemporarySource(), &matcher));
@@ -1075,7 +1084,7 @@ TEST_F(RulesetMatcherTest, RegexSubstitution) {
 
   struct {
     std::string url;
-    absl::optional<RequestAction> expected_action;
+    std::optional<RequestAction> expected_action;
   } test_cases[] = {
       {"http://google.com/path?query",
        create_redirect_action(
@@ -1085,14 +1094,14 @@ TEST_F(RulesetMatcherTest, RegexSubstitution) {
       {"http://example.com/path?q1=1&redirect=facebook.com&q2=2",
        create_redirect_action(3, "http://facebook.com")},
       // The redirect url here would have been "http://" which is invalid.
-      {"http://example.com/path?q1=1&redirect=&q2=2", absl::nullopt},
+      {"http://example.com/path?q1=1&redirect=&q2=2", std::nullopt},
       {"https://reddit.com", create_redirect_action(4, "https://abc.com")},
       {"http://www.rst.xyz.com/path",
        create_redirect_action(5, "https://rst.xyz.com/path")},
       {"http://yahoo.in/path",
        create_redirect_action(6, "http://yahoo.co.in/path")},
       // No match.
-      {"http://example.com", absl::nullopt}};
+      {"http://example.com", std::nullopt}};
 
   for (const auto& test_case : test_cases) {
     SCOPED_TRACE(test_case.url);
@@ -1110,12 +1119,23 @@ TEST_F(RulesetMatcherTest, RegexSubstitution) {
 TEST_F(RulesetMatcherTest, RulesCount) {
   size_t kNumNonRegexRules = 20;
   size_t kNumRegexRules = 10;
+
+  // Rules that are not block or allow rules are considered unsafe for dynamic
+  // rulesets. Make some of the rules these types as well.
+  size_t kNumUnsafeNonRegexRules = 5;
+  size_t kNumUnsafeRegexRules = 3;
+
   std::vector<TestRule> rules;
   int id = kMinValidID;
   for (size_t i = 0; i < kNumNonRegexRules; ++i, ++id) {
     TestRule rule = CreateGenericRule();
     rule.id = id;
     rule.condition->url_filter = std::to_string(id);
+    if (i < kNumUnsafeNonRegexRules) {
+      rule.action->type = "redirect";
+      rule.action->redirect.emplace();
+      rule.action->redirect->url = "http://google.com";
+    }
     rules.push_back(rule);
   }
 
@@ -1124,6 +1144,11 @@ TEST_F(RulesetMatcherTest, RulesCount) {
     rule.id = id;
     rule.condition->url_filter.reset();
     rule.condition->regex_filter = std::to_string(id);
+    if (i < kNumUnsafeRegexRules) {
+      rule.action->type = std::string("modifyHeaders");
+      rule.action->response_headers = std::vector<TestHeaderInfo>(
+          {TestHeaderInfo("HEADER3", "append", "VALUE3")});
+    }
     rules.push_back(rule);
   }
 
@@ -1131,6 +1156,18 @@ TEST_F(RulesetMatcherTest, RulesCount) {
   ASSERT_TRUE(CreateVerifiedMatcher(rules, CreateTemporarySource(), &matcher));
   ASSERT_TRUE(matcher);
   EXPECT_EQ(kNumRegexRules + kNumNonRegexRules, matcher->GetRulesCount());
+  // For static rulesets, no rules are considered unsafe.
+  EXPECT_EQ(std::nullopt, matcher->GetUnsafeRulesCount());
+  EXPECT_EQ(kNumRegexRules, matcher->GetRegexRulesCount());
+
+  // Recreate `matcher` for a dynamic ruleset to test that unsafe rule count is
+  // calculated correctly.
+  ASSERT_TRUE(CreateVerifiedMatcher(
+      rules, CreateTemporarySource(kDynamicRulesetID), &matcher));
+  ASSERT_TRUE(matcher);
+  EXPECT_EQ(kNumRegexRules + kNumNonRegexRules, matcher->GetRulesCount());
+  EXPECT_EQ(kNumUnsafeNonRegexRules + kNumUnsafeRegexRules,
+            matcher->GetUnsafeRulesCount());
   EXPECT_EQ(kNumRegexRules, matcher->GetRegexRulesCount());
 
   // Also verify the rules count for an empty matcher.
@@ -1138,6 +1175,7 @@ TEST_F(RulesetMatcherTest, RulesCount) {
       CreateVerifiedMatcher({} /* rules */, CreateTemporarySource(), &matcher));
   ASSERT_TRUE(matcher);
   EXPECT_EQ(0u, matcher->GetRulesCount());
+  EXPECT_EQ(std::nullopt, matcher->GetUnsafeRulesCount());
   EXPECT_EQ(0u, matcher->GetRegexRulesCount());
 }
 
@@ -1265,7 +1303,7 @@ TEST_F(AllowAllRequestsTest, AllowlistedFrameTracking) {
 
   GURL example_url("http://example.com");
   simulate_navigation(web_contents->GetPrimaryMainFrame(), example_url);
-  absl::optional<RequestAction> action =
+  std::optional<RequestAction> action =
       matcher->GetAllowlistedFrameActionForTesting(
           web_contents->GetPrimaryMainFrame());
   EXPECT_FALSE(action);
@@ -1279,9 +1317,10 @@ TEST_F(AllowAllRequestsTest, AllowlistedFrameTracking) {
                                     *google_rule_2.id, *google_rule_2.priority);
   EXPECT_EQ(google_rule_2_action, action);
 
-  auto* rfh_tester =
+  auto* render_frame_host_tester =
       content::RenderFrameHostTester::For(web_contents->GetPrimaryMainFrame());
-  content::RenderFrameHost* child = rfh_tester->AppendChild("sub_frame");
+  content::RenderFrameHost* child =
+      render_frame_host_tester->AppendChild("sub_frame");
   ASSERT_TRUE(child);
 
   child = simulate_navigation(child, example_url);
@@ -1391,6 +1430,239 @@ TEST_F(AllowAllRequestsTest, GetBeforeRequestAction) {
   }
 }
 
+// Tests disable rules with simple blocking rules.
+TEST_F(RulesetMatcherTest, SetDisabledRuleIds) {
+  TestRule rule_1 = CreateGenericRule(kMinValidID);
+  rule_1.condition->url_filter = std::string("google.com");
+  GURL google_url("http://google.com");
+
+  TestRule rule_2 = CreateGenericRule(kMinValidID + 1);
+  rule_2.condition->url_filter = std::string("yahoo.com");
+  GURL yahoo_url("http://yahoo.com");
+
+  GURL example_url("http://example.com");
+
+  auto should_block_request = [](const RulesetMatcher& matcher,
+                                 const RequestParams& params) {
+    auto action = matcher.GetBeforeRequestAction(params);
+    return action.has_value() && action->IsBlockOrCollapse();
+  };
+
+  RequestParams params;
+  params.element_type = url_pattern_index::flat::ElementType_SUBDOCUMENT;
+  params.is_third_party = true;
+
+  std::unique_ptr<RulesetMatcher> matcher;
+  ASSERT_TRUE(CreateVerifiedMatcher({rule_1, rule_2}, CreateTemporarySource(),
+                                    &matcher));
+  ASSERT_TRUE(matcher);
+
+  params.url = &google_url;
+  EXPECT_TRUE(should_block_request(*matcher, params));
+
+  params.url = &yahoo_url;
+  EXPECT_TRUE(should_block_request(*matcher, params));
+
+  params.url = &example_url;
+  EXPECT_FALSE(should_block_request(*matcher, params));
+
+  EXPECT_THAT(matcher->GetDisabledRuleIdsForTesting(), testing::IsEmpty());
+
+  matcher->SetDisabledRuleIds({*rule_1.id});
+
+  EXPECT_THAT(matcher->GetDisabledRuleIdsForTesting(),
+              testing::ElementsAreArray({*rule_1.id}));
+
+  params.url = &google_url;
+  EXPECT_FALSE(should_block_request(*matcher, params));
+
+  params.url = &yahoo_url;
+  EXPECT_TRUE(should_block_request(*matcher, params));
+
+  params.url = &example_url;
+  EXPECT_FALSE(should_block_request(*matcher, params));
+}
+
+class RulesetMatcherResponseHeadersTest : public RulesetMatcherTest {
+ public:
+  RulesetMatcherResponseHeadersTest() {
+    scoped_feature_list_.InitAndEnableFeature(
+        extensions_features::kDeclarativeNetRequestResponseHeaderMatching);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Test that GetOnHeadersReceivedAction only matches rules with response header
+// conditions.
+TEST_F(RulesetMatcherResponseHeadersTest, OnHeadersReceivedAction) {
+  // Create 2 rules: a block rule that is matched in onBeforeRequest and a
+  // redirect rule that is matched in onHeadersReceived.
+  TestRule before_request_rule = CreateGenericRule(kMinValidID);
+  before_request_rule.condition->url_filter = std::string("google.com");
+
+  std::vector<TestHeaderCondition> header_condition(
+      {TestHeaderCondition("key1", {"value1"}, {})});
+  TestRule response_headers_rule = CreateGenericRule(kMinValidID + 1);
+  response_headers_rule.condition->url_filter = std::string("google.com");
+  response_headers_rule.condition->response_headers =
+      std::move(header_condition);
+  response_headers_rule.action->type = std::string("redirect");
+  response_headers_rule.action->redirect.emplace();
+  response_headers_rule.action->redirect->url = std::string("http://yahoo.com");
+
+  char base_headers_string[] =
+      "HTTP/1.0 200 OK\r\n"
+      "Key1: Value1\r\n";
+  auto base_headers = base::MakeRefCounted<net::HttpResponseHeaders>(
+      net::HttpUtil::AssembleRawHeaders(base_headers_string));
+
+  GURL google_url("http://google.com");
+  RequestParams params =
+      CreateRequestWithResponseHeaders(google_url, base_headers.get());
+
+  std::unique_ptr<RulesetMatcher> matcher;
+  ASSERT_TRUE(
+      CreateVerifiedMatcher({before_request_rule, response_headers_rule},
+                            CreateTemporarySource(), &matcher));
+  ASSERT_TRUE(matcher);
+
+  // The request should be blocked if matched with `before_request_rule`.
+  RequestAction expected_before_request_action =
+      CreateRequestActionForTesting(RequestAction::Type::COLLAPSE, kMinValidID);
+  EXPECT_EQ(expected_before_request_action,
+            matcher->GetBeforeRequestAction(params));
+
+  // The request should be redirected if matched with `response_headers_rule`.
+  RequestAction expected_headers_received_action =
+      CreateRequestActionForTesting(RequestAction::Type::REDIRECT,
+                                    kMinValidID + 1);
+  expected_headers_received_action.redirect_url.emplace("http://yahoo.com");
+  EXPECT_EQ(expected_headers_received_action,
+            matcher->GetOnHeadersReceivedAction(params));
+
+  // Sanity check that disabling rules works for response header rules as well.
+  EXPECT_THAT(matcher->GetDisabledRuleIdsForTesting(), testing::IsEmpty());
+  matcher->SetDisabledRuleIds({*response_headers_rule.id});
+  EXPECT_THAT(matcher->GetDisabledRuleIdsForTesting(),
+              testing::ElementsAreArray({*response_headers_rule.id}));
+
+  EXPECT_EQ(std::nullopt, matcher->GetOnHeadersReceivedAction(params));
+}
+
+// Test matching rules based on response header conditions.
+TEST_F(RulesetMatcherResponseHeadersTest, MatchOnResponseHeaders) {
+  std::vector<TestHeaderCondition> header_condition(
+      {TestHeaderCondition("key1", {}, {}),
+       TestHeaderCondition("key2", {"value1", "value2"}, {"excludedValue"})});
+
+  // `rule_1` will fail to match if:
+  //   - the excludedKey header is present, or:
+  //   - the key2 header has excludedValue
+  // if neither of the above causes a match failure, the rule will match if:
+  //   - the key1 header is present, or:
+  //   - the key2 header is present and has either value1 or value2
+  TestRule rule_1 = CreateGenericRule(kMinValidID);
+  rule_1.action->type = std::string("block");
+  rule_1.condition->url_filter = std::string("google.com");
+  rule_1.condition->response_headers = std::move(header_condition);
+  rule_1.condition->excluded_response_headers =
+      std::vector<std::string>({"excludedKey"});
+
+  // `rule_2` and `rule_3` aim to create a condition where requests from
+  // example.com which do not contain the "key3: value3" header-value pair are
+  // collapsed.
+  TestRule rule_2 = CreateGenericRule(kMinValidID + 1);
+  rule_2.action->type = std::string("block");
+  rule_2.condition->url_filter = std::string("example.com");
+  rule_2.condition->response_headers = std::vector<TestHeaderCondition>(
+      {TestHeaderCondition("key3", {}, {"value3"})});
+
+  TestRule rule_3 = CreateGenericRule(kMinValidID + 2);
+  rule_3.action->type = std::string("block");
+  rule_3.condition->url_filter = std::string("example.com");
+  rule_3.condition->excluded_response_headers =
+      std::vector<std::string>({"key3"});
+
+  std::unique_ptr<RulesetMatcher> matcher;
+  ASSERT_TRUE(CreateVerifiedMatcher({rule_1, rule_2, rule_3},
+                                    CreateTemporarySource(), &matcher));
+  ASSERT_TRUE(matcher);
+
+  struct {
+    std::string url;
+    std::string response_headers;
+    std::optional<RequestAction> expected_action;
+  } cases[] = {
+      // No match for a non-matching URL.
+      {"http://nomatch.com", "HTTP/1.0 200 OK\r\nKey1: Value1\r\n",
+       std::nullopt},
+
+      // No match if no header conditions match.
+      {"http://google.com", "HTTP/1.0 200 OK\r\nNonmatching: Value\r\n",
+       std::nullopt},
+
+      // Test matching the key1 header by name only.
+      {"http://google.com", "HTTP/1.0 200 OK\r\nkey1: any\r\n",
+       CreateRequestActionForTesting(RequestAction::Type::COLLAPSE,
+                                     kMinValidID)},
+
+      // Test matching the key2 header by its value.
+      {"http://google.com", "HTTP/1.0 200 OK\r\nkey2: value1\r\n",
+       CreateRequestActionForTesting(RequestAction::Type::COLLAPSE,
+                                     kMinValidID)},
+
+      // No match since key2's value does not match what's specified in
+      // `rule_1`.
+      {"http://google.com", "HTTP/1.0 200 OK\r\nkey2: wrongvalue\r\n",
+       std::nullopt},
+
+      // No match since key2's value is excluded by `rule_1`. Note that the
+      // excluded value takes precedence over the included `value1`.
+      {"http://google.com",
+       "HTTP/1.0 200 OK\r\nkey2: value1\r\nkey2: excludedValue\r\n",
+       std::nullopt},
+
+      // Test that only one included header condition needs to match (key1) for
+      // the rule to match, even though another header condition does not match
+      // (key2).
+      {"http://google.com",
+       "HTTP/1.0 200 OK\r\nkey1: any\r\nkey2: excludedValue\r\n",
+       CreateRequestActionForTesting(RequestAction::Type::COLLAPSE,
+                                     kMinValidID)},
+
+      // No match since a header that is excluded by `rule_1` exists.
+      {"http://google.com",
+       "HTTP/1.0 200 OK\r\nkey1: any\r\nexcludedKey: value\r\n", std::nullopt},
+
+      // For the next 3 test cases, the request matches if it does NOT contain
+      // a "key3: value3" header-value pair.
+      {"http://example.com", "HTTP/1.0 200 OK\r\nkey3: othervalue\r\n",
+       CreateRequestActionForTesting(RequestAction::Type::COLLAPSE,
+                                     kMinValidID + 1)},
+
+      {"http://example.com", "HTTP/1.0 200 OK\r\nkey3: value3\r\n",
+       std::nullopt},
+
+      {"http://example.com", "HTTP/1.0 200 OK\r\nkey4: key3doesntexist\r\n",
+       CreateRequestActionForTesting(RequestAction::Type::COLLAPSE,
+                                     kMinValidID + 2)},
+  };
+
+  for (size_t i = 0; i < std::size(cases); ++i) {
+    SCOPED_TRACE(base::StringPrintf("Testing case[%" PRIuS "]", i));
+    GURL url(cases[i].url);
+    ASSERT_TRUE(url.is_valid());
+
+    auto base_headers = base::MakeRefCounted<net::HttpResponseHeaders>(
+        net::HttpUtil::AssembleRawHeaders(cases[i].response_headers.c_str()));
+    RequestParams params =
+        CreateRequestWithResponseHeaders(url, base_headers.get());
+    EXPECT_EQ(cases[i].expected_action,
+              matcher->GetOnHeadersReceivedAction(params));
+  }
+}
+
 }  // namespace
-}  // namespace declarative_net_request
-}  // namespace extensions
+}  // namespace extensions::declarative_net_request

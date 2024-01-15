@@ -9,20 +9,20 @@
 #include "chrome/browser/profiles/profile.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/app_update.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 
 ShelfAppServiceAppUpdater::ShelfAppServiceAppUpdater(
     Delegate* delegate,
     content::BrowserContext* browser_context)
     : ShelfAppUpdater(delegate, browser_context) {
-  apps::AppServiceProxy* proxy = apps::AppServiceProxyFactory::GetForProfile(
-      Profile::FromBrowserContext(browser_context));
+  auto* cache = &apps::AppServiceProxyFactory::GetForProfile(
+                     Profile::FromBrowserContext(browser_context))
+                     ->AppRegistryCache();
 
-  proxy->AppRegistryCache().ForEachApp([this](const apps::AppUpdate& update) {
+  cache->ForEachApp([this](const apps::AppUpdate& update) {
     if (update.Readiness() == apps::Readiness::kReady)
       this->installed_apps_.insert(update.AppId());
   });
-  Observe(&proxy->AppRegistryCache());
+  app_registry_cache_observer_.Observe(cache);
 }
 
 ShelfAppServiceAppUpdater::~ShelfAppServiceAppUpdater() = default;
@@ -45,11 +45,11 @@ void ShelfAppServiceAppUpdater::OnAppUpdate(const apps::AppUpdate& update) {
         delegate()->OnAppInstalled(browser_context(), app_id);
         return;
       case apps::Readiness::kUninstalledByUser:
-      case apps::Readiness::kUninstalledByMigration:
+      case apps::Readiness::kUninstalledByNonUser:
         if (it != installed_apps_.end()) {
           installed_apps_.erase(it);
           const bool by_migration =
-              update.Readiness() == apps::Readiness::kUninstalledByMigration;
+              update.Readiness() == apps::Readiness::kUninstalledByNonUser;
           delegate()->OnAppUninstalledPrepared(browser_context(), app_id,
                                                by_migration);
           delegate()->OnAppUninstalled(browser_context(), app_id);
@@ -95,7 +95,7 @@ void ShelfAppServiceAppUpdater::OnAppUpdate(const apps::AppUpdate& update) {
 
 void ShelfAppServiceAppUpdater::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void ShelfAppServiceAppUpdater::OnShowInShelfChangedForAppDisabledByPolicy(

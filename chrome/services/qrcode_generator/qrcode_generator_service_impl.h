@@ -29,6 +29,9 @@ class QRCodeGeneratorServiceImpl : public mojom::QRCodeGeneratorService {
   ~QRCodeGeneratorServiceImpl() override;
 
  private:
+  friend class QRImageGenerator;
+  QRCodeGeneratorServiceImpl();
+
   // chrome::mojom::QRCodeGeneratorService override.
   void GenerateQRCode(mojom::GenerateQRCodeRequestPtr request,
                       GenerateQRCodeCallback callback) override;
@@ -66,19 +69,15 @@ class QRCodeGeneratorServiceImpl : public mojom::QRCodeGeneratorService {
                         const SkBitmap& image);
 
   // Renders the QR code with pixel information in |data| and render parameters
-  // in |request|. Result is stored into |response|.
+  // in |request|.
   // |data| is input data, one element per module, row-major.
   // |data_size| is the dimensions of |data|, in modules. Currently expected to
   //     be square, but function should cope with other shapes.
   // |request| is the mojo service request object to Generate().
   //     It includes rendering style preferences expressed by the client.
-  // |response| is the mojo service request object to Generate().
-  //     The bitmap will be populated as a response field if requested by the
-  //     client.
-  void RenderBitmap(const uint8_t* data,
-                    const gfx::Size data_size,
-                    const mojom::GenerateQRCodeRequestPtr& request,
-                    mojom::GenerateQRCodeResponsePtr* response);
+  SkBitmap RenderBitmap(base::span<const uint8_t> data,
+                        const gfx::Size data_size,
+                        const mojom::GenerateQRCodeRequest& request);
 
   mojo::Receiver<mojom::QRCodeGeneratorService> receiver_;
 

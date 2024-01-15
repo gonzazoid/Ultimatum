@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chrome/browser/ash/base/locale_util.h"
 #include "ui/base/ime/ash/input_method_manager.h"
 
-namespace chromeos {
+namespace ash {
 
 typedef base::OnceCallback<void(
     base::Value::List /* new_language_list */,
@@ -91,16 +91,6 @@ void GetKeyboardLayoutsForLocale(
     const std::string& locale,
     input_method::InputMethodManager* input_method_manager);
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when ch/br/ui/webui/chromeos is moved
-// to ash.
-namespace ash {
-using ::chromeos::FindMostRelevantLocale;
-using ::chromeos::GetKeyboardLayoutsForLocale;
-using ::chromeos::GetUILanguageList;
-using ::chromeos::kMostRelevantLanguagesDivider;
-using ::chromeos::ResolveUILanguageList;
 }  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_L10N_UTIL_H_

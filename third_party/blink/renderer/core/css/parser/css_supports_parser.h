@@ -77,7 +77,8 @@ class CORE_EXPORT CSSSupportsParser {
   // <supports-decl> = ( <declaration> )
   Result ConsumeSupportsDecl(const CSSParserToken&, CSSParserTokenStream&);
 
-  // <general-enclosed>
+  // <general-enclosed> = [ <function-token> <any-value>? ) ]
+  //                  | ( <any-value>? )
   Result ConsumeGeneralEnclosed(const CSSParserToken&, CSSParserTokenStream&);
 
   // Parsing helpers.
@@ -97,30 +98,36 @@ class CORE_EXPORT CSSSupportsParser {
 
 inline CSSSupportsParser::Result operator!(CSSSupportsParser::Result result) {
   using Result = CSSSupportsParser::Result;
-  if (result == Result::kUnsupported)
+  if (result == Result::kUnsupported) {
     return Result::kSupported;
-  if (result == Result::kSupported)
+  }
+  if (result == Result::kSupported) {
     return Result::kUnsupported;
+  }
   return result;
 }
 
 inline CSSSupportsParser::Result operator&(CSSSupportsParser::Result a,
                                            CSSSupportsParser::Result b) {
   using Result = CSSSupportsParser::Result;
-  if (a == Result::kParseFailure || b == Result::kParseFailure)
+  if (a == Result::kParseFailure || b == Result::kParseFailure) {
     return Result::kParseFailure;
-  if (a != Result::kSupported || b != Result::kSupported)
+  }
+  if (a != Result::kSupported || b != Result::kSupported) {
     return Result::kUnsupported;
+  }
   return Result::kSupported;
 }
 
 inline CSSSupportsParser::Result operator|(CSSSupportsParser::Result a,
                                            CSSSupportsParser::Result b) {
   using Result = CSSSupportsParser::Result;
-  if (a == Result::kParseFailure || b == Result::kParseFailure)
+  if (a == Result::kParseFailure || b == Result::kParseFailure) {
     return Result::kParseFailure;
-  if (a == Result::kSupported || b == Result::kSupported)
+  }
+  if (a == Result::kSupported || b == Result::kSupported) {
     return Result::kSupported;
+  }
   return Result::kUnsupported;
 }
 

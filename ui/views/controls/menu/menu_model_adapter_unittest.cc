@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -36,8 +37,6 @@ class MenuModelBase : public ui::MenuModel {
 
   // ui::MenuModel implementation:
 
-  bool HasIcons() const override { return false; }
-
   size_t GetItemCount() const override { return items_.size(); }
 
   ItemType GetTypeAt(size_t index) const override { return items_[index].type; }
@@ -55,10 +54,6 @@ class MenuModelBase : public ui::MenuModel {
   }
 
   bool IsItemDynamicAt(size_t index) const override { return false; }
-
-  const gfx::FontList* GetLabelFontListAt(size_t index) const override {
-    return nullptr;
-  }
 
   bool GetAcceleratorAt(size_t index,
                         ui::Accelerator* accelerator) const override {
@@ -114,9 +109,7 @@ class MenuModelBase : public ui::MenuModel {
          ui::MenuModel* item_submenu)
         : type(item_type),
           label(base::ASCIIToUTF16(item_label)),
-          submenu(item_submenu),
-          enabled(true),
-          visible(true) {}
+          submenu(item_submenu) {}
 
     Item(ItemType item_type,
          const std::string& item_label,
@@ -132,8 +125,8 @@ class MenuModelBase : public ui::MenuModel {
     ItemType type;
     std::u16string label;
     raw_ptr<ui::MenuModel> submenu;
-    bool enabled;
-    bool visible;
+    bool enabled = true;
+    bool visible = true;
     bool alerted = false;
     bool new_feature = false;
   };
@@ -200,7 +193,10 @@ class RootModel : public MenuModelBase {
   RootModel(const RootModel&) = delete;
   RootModel& operator=(const RootModel&) = delete;
 
-  ~RootModel() override = default;
+  ~RootModel() override {
+    // Avoid that the pointer to `submenu_model_` becomes dangling.
+    items_.clear();
+  }
 
  private:
   std::unique_ptr<MenuModel> submenu_model_;
@@ -292,9 +288,9 @@ TEST_F(MenuModelAdapterTest, BasicTest) {
   views::MenuModelAdapter delegate(&model);
 
   // Create menu.  Build menu twice to check that rebuilding works properly.
-  MenuItemView* menu = new views::MenuItemView(&delegate);
-  // MenuRunner takes ownership of menu.
-  std::unique_ptr<MenuRunner> menu_runner(new MenuRunner(menu, 0));
+  auto menu_owning = std::make_unique<MenuItemView>(&delegate);
+  MenuItemView* menu = menu_owning.get();
+  MenuRunner menu_runner(std::move(menu_owning), 0);
   delegate.BuildMenu(menu);
   delegate.BuildMenu(menu);
   EXPECT_TRUE(menu->HasSubmenu());

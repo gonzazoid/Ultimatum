@@ -5,11 +5,11 @@
 
 #include "base/feature_list.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "chrome/browser/lens/metrics/lens_metrics.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
 #include "components/lens/lens_features.h"
+#include "components/lens/lens_metrics.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_unittest_util.h"
@@ -20,14 +20,22 @@ class LensRegionSearchControllerTest : public TestWithBrowserView {
  public:
   void SetUp() override {
     base::test::ScopedFeatureList features;
-    features.InitWithFeatures({features::kLensStandalone},
-                              {::features::kUnifiedSidePanel});
+    features.InitWithFeatures({features::kLensStandalone}, {});
     TestWithBrowserView::SetUp();
 
     // Create an active web contents.
     AddTab(browser_view()->browser(), GURL("about:blank"));
-    controller_ = std::make_unique<LensRegionSearchController>(
-        browser_view()->GetActiveWebContents(), browser_view()->browser());
+    controller_ = std::make_unique<LensRegionSearchController>();
+    controller_->SetWebContentsForTesting(
+        browser_view()->GetActiveWebContents());
+    controller_->SetEntryPointForTesting(
+        lens::AmbientSearchEntryPoint::
+            CONTEXT_MENU_SEARCH_REGION_WITH_GOOGLE_LENS);
+  }
+
+  void TearDown() override {
+    controller_.reset();
+    TestWithBrowserView::TearDown();
   }
 
  protected:

@@ -4,7 +4,7 @@
 
 #include "chrome/browser/sync_file_system/drive_backend/remote_change_processor_wrapper.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync_file_system/remote_change_processor.h"
 
@@ -14,6 +14,8 @@ namespace drive_backend {
 RemoteChangeProcessorWrapper::RemoteChangeProcessorWrapper(
     RemoteChangeProcessor* remote_change_processor)
     : remote_change_processor_(remote_change_processor) {}
+
+RemoteChangeProcessorWrapper::~RemoteChangeProcessorWrapper() = default;
 
 void RemoteChangeProcessorWrapper::PrepareForProcessRemoteChange(
     const storage::FileSystemURL& url,

@@ -5,11 +5,10 @@
 #ifndef COMPONENTS_UPDATE_CLIENT_PATCHER_H_
 #define COMPONENTS_UPDATE_CLIENT_PATCHER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 
 namespace base {
-class FilePath;
 class File;
 }  // namespace base
 
@@ -21,16 +20,6 @@ class Patcher : public base::RefCountedThreadSafe<Patcher> {
 
   Patcher(const Patcher&) = delete;
   Patcher& operator=(const Patcher&) = delete;
-
-  virtual void PatchBsdiff(const base::FilePath& input_file,
-                           const base::FilePath& patch_file,
-                           const base::FilePath& destination,
-                           PatchCompleteCallback callback) const = 0;
-
-  virtual void PatchCourgette(const base::FilePath& input_file,
-                              const base::FilePath& patch_file,
-                              const base::FilePath& destination,
-                              PatchCompleteCallback callback) const = 0;
 
   virtual void PatchPuffPatch(base::File input_file_path,
                               base::File patch_file_path,

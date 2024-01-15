@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include "base/time/time.h"
+#include "cc/base/features.h"
 #include "cc/cc_export.h"
 #include "cc/debug/layer_tree_debug_state.h"
 #include "cc/scheduler/scheduler_settings.h"
@@ -15,8 +16,6 @@
 #include "cc/tiles/tile_manager_settings.h"
 #include "cc/trees/managed_memory_policy.h"
 #include "components/viz/common/display/renderer_settings.h"
-#include "components/viz/common/resources/resource_format.h"
-#include "components/viz/common/resources/resource_settings.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -31,7 +30,6 @@ class CC_EXPORT LayerTreeSettings {
   SchedulerSettings ToSchedulerSettings() const;
   TileManagerSettings ToTileManagerSettings() const;
 
-  viz::ResourceSettings resource_settings;
   bool single_thread_proxy_scheduler = true;
   bool main_frame_before_activation_enabled = false;
   bool using_synchronous_renderer_compositor = false;
@@ -45,6 +43,7 @@ class CC_EXPORT LayerTreeSettings {
   float gpu_rasterization_skewport_target_time_in_seconds = 0.2f;
   bool create_low_res_tiling = false;
   bool use_stream_video_draw_quad = false;
+  bool use_gpu_memory_buffer_resources = false;
 
   enum ScrollbarAnimator {
     NO_ANIMATOR,
@@ -55,10 +54,9 @@ class CC_EXPORT LayerTreeSettings {
   base::TimeDelta scrollbar_fade_delay;
   base::TimeDelta scrollbar_fade_duration;
   base::TimeDelta scrollbar_thinning_duration;
+  float idle_thickness_scale = 0.4f;
   bool scrollbar_flash_after_any_scroll_update = false;
-  SkColor4f solid_color_scrollbar_color = SkColors::kWhite;
   base::TimeDelta scroll_animation_duration_for_testing;
-  bool timeout_and_draw_when_animation_checkerboards = true;
   bool layers_always_allowed_lcd_text = false;
   float low_res_contents_scale_factor = 0.25f;
   float top_controls_show_threshold = 0.5f;
@@ -73,13 +71,20 @@ class CC_EXPORT LayerTreeSettings {
   // sane minimum for now, but we might want to tune this for low-end.
   int min_height_for_gpu_raster_tile = 256;
   gfx::Size minimum_occlusion_tracking_size;
-  // 3000 pixels should give sufficient area for prepainting.
   // Note this value is specified with an ideal contents scale in mind. That
   // is, the ideal tiling would use this value as the padding.
   // TODO(vmpstr): Figure out a better number that doesn't depend on scale.
-  int tiling_interest_area_padding = 3000;
+  constexpr static int kDefaultSkewportExtrapolationLimitInScrenPixels = 2000;
+  int tiling_interest_area_padding = features::kDefaultInterestAreaSizeInPixels;
+  // Note: only used for software raster, otherwise
+  // |gpu_rasterization_skewport_target_time_in_seconds| is used.
   float skewport_target_time_in_seconds = 1.0f;
-  int skewport_extrapolation_limit_in_screen_pixels = 2000;
+  int skewport_extrapolation_limit_in_screen_pixels =
+      kDefaultSkewportExtrapolationLimitInScrenPixels;
+  static_assert(kDefaultSkewportExtrapolationLimitInScrenPixels <=
+                    features::kDefaultInterestAreaSizeInPixels,
+                "Skewport size must be smaller than the interest area to "
+                "prevent prepainted tiles from being discarded.");
   size_t max_memory_for_prepaint_percentage = 100;
   bool use_zero_copy = false;
   bool use_partial_raster = false;
@@ -134,10 +139,6 @@ class CC_EXPORT LayerTreeSettings {
   // deadlines.
   bool wait_for_all_pipeline_stages_before_draw = false;
 
-  // Determines whether mouse interactions on composited scrollbars are handled
-  // on the compositor thread.
-  bool compositor_threaded_scrollbar_scrolling = true;
-
   // If enabled, the scroll deltas will be a percentage of the target scroller.
   bool percent_based_scrolling = false;
 
@@ -177,13 +178,6 @@ class CC_EXPORT LayerTreeSettings {
   // https://crbug.com/414283.
   bool commit_fractional_scroll_deltas = false;
 
-  // When false, we do not check for occlusion and all quads are drawn.
-  // Defaults to true.
-  bool enable_occlusion = true;
-
-  // Whether experimental de-jelly effect is allowed.
-  bool allow_de_jelly_effect = false;
-
   // Whether the compositor should attempt to sync with the scroll handlers
   // before submitting a frame.
   bool enable_synchronized_scrolling = true;
@@ -215,17 +209,26 @@ class CC_EXPORT LayerTreeSettings {
   // Whether Fluent scrollbar is enabled. Please check https://crbug.com/1292117
   // to find the link to the Fluent Scrollbar spec and related CLs.
   bool enable_fluent_scrollbar = false;
-
-  // This corresponds to the ScrollUpdateOptimizations feature.
-  bool enable_scroll_update_optimizations = false;
+  // This feature overrides enable_fluent_scrollbar by enabling them in overlay
+  // mode. Overlay Fluent scrollbars have disappearance animation transitions
+  // and are rendered over page's content.
+  // For more information please check https://crbug.com/1479146
+  bool enable_fluent_overlay_scrollbar = false;
 
   // Whether to disable the frame rate limit in the scheduler.
   bool disable_frame_rate_limit = false;
 
-  // When enabled commits are aborted if scroll and viewport state from CC could
-  // not be synchronized at the beginning of the frame because main frames were
-  // being deferred.
-  bool skip_commits_if_not_synchronizing_compositor_state = true;
+  // Enables shared image cache for gpu.
+  // TODO(crbug.com/1378251): not ready to be used by renderer cc instance yet.
+  bool enable_shared_image_cache_for_gpu = false;
+
+  // Maximum size for buffers allocated for rendering when GPU compositing is
+  // disabled. This size is equivalent to the max texture size in GPU mode.
+  // This is an arbitrary limit here similar to what hardware might have.
+  int max_render_buffer_bounds_for_sw = 16 * 1024;
+
+  // Whether to use variable refresh rates when generating begin frames.
+  bool enable_variable_refresh_rate = false;
 };
 
 class CC_EXPORT LayerListSettings : public LayerTreeSettings {

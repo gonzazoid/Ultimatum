@@ -7,9 +7,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
@@ -35,17 +37,18 @@ std::unique_ptr<base::Value> PopStringToStringDictionary(
   dbus::MessageReader array_reader(nullptr);
   if (!reader->PopArray(&array_reader))
     return nullptr;
-  auto result = std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
+  base::Value::Dict result;
   while (array_reader.HasMoreData()) {
     dbus::MessageReader entry_reader(nullptr);
     std::string key;
     std::string value;
     if (!array_reader.PopDictEntry(&entry_reader) ||
-        !entry_reader.PopString(&key) || !entry_reader.PopString(&value))
+        !entry_reader.PopString(&key) || !entry_reader.PopString(&value)) {
       return nullptr;
-    result->SetKey(key, base::Value(value));
+    }
+    result.Set(key, value);
   }
-  return result;
+  return std::make_unique<base::Value>(std::move(result));
 }
 
 }  // namespace
@@ -130,11 +133,9 @@ void ShillClientUnittestBase::SetUp() {
       .WillRepeatedly(
           Invoke(this, &ShillClientUnittestBase::OnConnectToPacketReceived));
 
-  // Set an expectation so mock_bus's GetObjectProxy() for the given
-  // service name and the object path will return mock_proxy_.
   EXPECT_CALL(*mock_bus_.get(),
               GetObjectProxy(shill::kFlimflamServiceName, object_path_))
-      .WillOnce(Return(mock_proxy_.get()));
+      .WillRepeatedly(Return(mock_proxy_.get()));
 
   // Set an expectation so mock_bus's GetDBusTaskRunner will return the current
   // task runner.
@@ -164,7 +165,7 @@ void ShillClientUnittestBase::SendPlatformMessageSignal(dbus::Signal* signal) {
   platform_message_handler_.Run(signal);
 }
 
-void ShillClientUnittestBase::SendPacketReceievedSignal(dbus::Signal* signal) {
+void ShillClientUnittestBase::SendPacketReceivedSignal(dbus::Signal* signal) {
   ASSERT_FALSE(packet_receieved__handler_.is_null());
   packet_receieved__handler_.Run(signal);
 }
@@ -258,10 +259,9 @@ void ShillClientUnittestBase::ExpectStringAndValueArguments(
 
 // static
 void ShillClientUnittestBase::ExpectValueDictionaryArgument(
-    const base::Value* expected_dictionary,
+    const base::Value::Dict* expected_dictionary,
     bool string_valued,
     dbus::MessageReader* reader) {
-  ASSERT_TRUE(expected_dictionary->is_dict());
   dbus::MessageReader array_reader(nullptr);
   ASSERT_TRUE(reader->PopArray(&array_reader));
   while (array_reader.HasMoreData()) {
@@ -272,8 +272,7 @@ void ShillClientUnittestBase::ExpectValueDictionaryArgument(
     if (string_valued) {
       std::string value;
       ASSERT_TRUE(entry_reader.PopString(&value));
-      const std::string* expected_value =
-          expected_dictionary->FindStringKey(key);
+      const std::string* expected_value = expected_dictionary->FindString(key);
       ASSERT_TRUE(expected_value);
       EXPECT_EQ(*expected_value, value);
       continue;
@@ -282,7 +281,7 @@ void ShillClientUnittestBase::ExpectValueDictionaryArgument(
     ASSERT_TRUE(entry_reader.PopVariant(&variant_reader));
     std::unique_ptr<base::Value> value;
     // Variants in the dictionary can be basic types or string-to-string
-    // dictinoary.
+    // dictionary.
     switch (variant_reader.GetDataType()) {
       case dbus::Message::ARRAY:
         value = PopStringToStringDictionary(&variant_reader);
@@ -298,71 +297,25 @@ void ShillClientUnittestBase::ExpectValueDictionaryArgument(
         NOTREACHED();
     }
     ASSERT_TRUE(value.get());
-    const base::Value* expected_value = expected_dictionary->FindKey(key);
+    const base::Value* expected_value = expected_dictionary->Find(key);
     ASSERT_TRUE(expected_value);
     EXPECT_EQ(*value, *expected_value);
   }
 }
 
 // static
-base::Value ShillClientUnittestBase::CreateExampleServiceProperties() {
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kGuidProperty,
-                    base::Value("00000000-0000-0000-0000-000000000000"));
-  properties.SetKey(shill::kModeProperty, base::Value(shill::kModeManaged));
-  properties.SetKey(shill::kTypeProperty, base::Value(shill::kTypeWifi));
+base::Value::Dict ShillClientUnittestBase::CreateExampleServiceProperties() {
+  base::Value::Dict properties;
+  properties.Set(shill::kGuidProperty,
+                 base::Value("00000000-0000-0000-0000-000000000000"));
+  properties.Set(shill::kModeProperty, base::Value(shill::kModeManaged));
+  properties.Set(shill::kTypeProperty, base::Value(shill::kTypeWifi));
   const std::string ssid = "testssid";
-  properties.SetKey(shill::kWifiHexSsid,
-                    base::Value(base::HexEncode(ssid.c_str(), ssid.size())));
-  properties.SetKey(shill::kSecurityClassProperty,
-                    base::Value(shill::kSecurityClassPsk));
+  properties.Set(shill::kWifiHexSsid,
+                 base::Value(base::HexEncode(ssid.c_str(), ssid.size())));
+  properties.Set(shill::kSecurityClassProperty,
+                 base::Value(shill::kSecurityClassPsk));
   return properties;
-}
-
-// static
-void ShillClientUnittestBase::ExpectNoResultValue(bool result) {
-  EXPECT_TRUE(result);
-}
-
-// static
-void ShillClientUnittestBase::ExpectObjectPathResultWithoutStatus(
-    const dbus::ObjectPath& expected_result,
-    const dbus::ObjectPath& result) {
-  EXPECT_EQ(expected_result, result);
-}
-
-// static
-void ShillClientUnittestBase::ExpectBoolResultWithoutStatus(
-    bool expected_result,
-    bool result) {
-  EXPECT_EQ(expected_result, result);
-}
-
-// static
-void ShillClientUnittestBase::ExpectStringResultWithoutStatus(
-    const std::string& expected_result,
-    const std::string& result) {
-  EXPECT_EQ(expected_result, result);
-}
-
-// static
-void ShillClientUnittestBase::ExpectValueResultWithoutStatus(
-    const base::Value* expected_result,
-    base::Value result) {
-  std::string expected_result_string;
-  base::JSONWriter::Write(*expected_result, &expected_result_string);
-  std::string result_string;
-  base::JSONWriter::Write(result, &result_string);
-  EXPECT_EQ(expected_result_string, result_string);
-}
-
-// static
-void ShillClientUnittestBase::ExpectValueResult(
-    const base::Value* expected_result,
-    absl::optional<base::Value> result) {
-  EXPECT_TRUE(result);
-  ExpectValueResultWithoutStatus(expected_result,
-                                 std::move(result).value_or(base::Value()));
 }
 
 void ShillClientUnittestBase::OnConnectToPlatformMessage(

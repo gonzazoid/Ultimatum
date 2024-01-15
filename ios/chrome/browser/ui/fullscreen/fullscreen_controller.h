@@ -12,7 +12,6 @@
 class Browser;
 @class ChromeBroadcaster;
 class FullscreenControllerObserver;
-class WebStateList;
 
 // An object that observes scrolling events in the main content area and
 // calculates how much of the toolbar should be visible as a result.  When the
@@ -32,12 +31,6 @@ class FullscreenController : public base::SupportsUserData::Data {
   // remove this ad-hoc broadcaster and drive the animations via the Browser's
   // ChromeBroadcaster.
   virtual ChromeBroadcaster* broadcaster() = 0;
-
-  // The WebStateList for the Browser whose fullscreen state is managed by this
-  // controller.
-  virtual void SetWebStateList(WebStateList* web_state_list) = 0;
-  virtual const WebStateList* GetWebStateList() const = 0;
-  virtual WebStateList* GetWebStateList() = 0;
 
   // Adds and removes FullscreenControllerObservers.
   virtual void AddObserver(FullscreenControllerObserver* observer) = 0;
@@ -86,7 +79,17 @@ class FullscreenController : public base::SupportsUserData::Data {
   // 1.0.
   virtual void ExitFullscreen() = 0;
 
-  virtual void FreezeToolbarHeight(bool freeze_toolbar_height) = 0;
+  // Exits fullscreen without animation, resetting the progress to 1.0.
+  virtual void ExitFullscreenWithoutAnimation() = 0;
+
+  // Force fullscreen mode is used when the bottom omnibox is collapsed above
+  // the keyboard. When the mode is active:
+  // - Fullscreen progress is forced to 0 and should stay at 0.
+  // - Updating browser insets through fullscreen are disabled. (crbug/1490601)
+  // When exiting the mode, fullscreen is reset.
+  virtual bool IsForceFullscreenMode() const = 0;
+  virtual void EnterForceFullscreenMode() = 0;
+  virtual void ExitForceFullscreenMode() = 0;
 
   // Force horizontal content resize, when content isn't tracking resize by
   // itself.

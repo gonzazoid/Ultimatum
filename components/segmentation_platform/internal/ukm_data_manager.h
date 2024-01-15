@@ -30,12 +30,14 @@ class UkmDataManager {
   UkmDataManager() = default;
   virtual ~UkmDataManager() = default;
 
-  UkmDataManager(UkmDataManager&) = delete;
-  UkmDataManager& operator=(UkmDataManager&) = delete;
+  UkmDataManager(const UkmDataManager&) = delete;
+  UkmDataManager& operator=(const UkmDataManager&) = delete;
 
   // Initializes UKM database and the observer of all UKM events.
   virtual void Initialize(const base::FilePath& database_path,
-                          UkmObserver* ukm_observer) = 0;
+                          bool in_memory) = 0;
+
+  virtual void StartObservation(UkmObserver* ukm_observer) = 0;
 
   // Returns true when UKM engine is usable. If false, then UKM based engine is
   // disabled and this class is a no-op. UkmObserver, UrlSignalHandler and
@@ -58,6 +60,10 @@ class UkmDataManager {
   // Get UKM database. The database is safe to use as long as data manager is
   // alive, so until after all profiles are destroyed.
   virtual UkmDatabase* GetUkmDatabase() = 0;
+
+  // Called to check if Ukm database exist. Ukm database might be null if
+  // initialized within tests.
+  virtual bool HasUkmDatabase() = 0;
 
   // Called when a new UKM entry is added.
   virtual void OnEntryAdded(ukm::mojom::UkmEntryPtr entry) = 0;

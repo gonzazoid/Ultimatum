@@ -7,8 +7,11 @@
 
 #include <string>
 
+#include "base/functional/callback_forward.h"
 #include "base/types/expected.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_location.h"
+#include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
+#include "components/webapps/common/web_app_id.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -16,10 +19,6 @@ namespace content {
 class BrowserContext;
 class StoragePartitionConfig;
 }  // namespace content
-
-namespace web_package {
-class SignedWebBundleId;
-}
 
 namespace web_app {
 
@@ -31,38 +30,58 @@ class IsolatedWebAppUrlInfo {
   // message if the URL isn't valid.
   //
   // Note that this only performs basic URL validation; a non-error value does
-  // not guarantee the URL contains a valid key in its hostname, or that it
-  // corresponds to an existing or installed app.
+  // not guarantee that it corresponds to an existing or installed app.
   static base::expected<IsolatedWebAppUrlInfo, std::string> Create(
       const GURL& url);
 
-  // Wraps Create() but accepts a SignedWebBundleId object.
-  static base::expected<IsolatedWebAppUrlInfo, std::string>
-  CreateFromSignedWebBundleId(
+  // Creates an IsolatedWebAppUrlInfo instance from a SignedWebBundleId object.
+  static IsolatedWebAppUrlInfo CreateFromSignedWebBundleId(
       const web_package::SignedWebBundleId& web_bundle_id);
+
+  // Creates an IsolatedWebAppUrlInfo instance corresponding to the IWA
+  // located at |location|.
+  //
+  // For proxy-based dev mode IWAs a random hostname will be generated, and
+  // for signed bundles the hostname will be extracted from the bundle's
+  // integrity block.
+  static void CreateFromIsolatedWebAppLocation(
+      const IsolatedWebAppLocation& location,
+      base::OnceCallback<
+          void(base::expected<IsolatedWebAppUrlInfo, std::string>)> callback);
 
   // Returns the origin of the IWA that this URL refers to.
   const url::Origin& origin() const;
 
-  // Returns the AppId that should be used when installing the app hosted at
-  // this URL.
-  const AppId& app_id() const;
+  // Returns the webapps::AppId that should be used when installing the app
+  // hosted at this URL.
+  const webapps::AppId& app_id() const;
+
+  // Returns the Web Bundle ID of the IWA that this URL refers to.
+  const web_package::SignedWebBundleId& web_bundle_id() const;
 
   // Returns the StoragePartitionConfig that should be used by the resource
   // hosted at this URL.
   content::StoragePartitionConfig storage_partition_config(
       content::BrowserContext* browser_context) const;
 
-  // Parses a `SignedWebBundleId` from the URL, verifying that it is a valid
-  // isolated-app:// URL. Returns an error message on failure.
-  base::expected<web_package::SignedWebBundleId, std::string>
-  ParseSignedWebBundleId() const;
+  // Returns the StoragePartitionConfig that should be used by a controlled
+  // frame within the IWA represented by this object.
+  content::StoragePartitionConfig GetStoragePartitionConfigForControlledFrame(
+      content::BrowserContext* browser_context,
+      const std::string& partition_name,
+      bool in_memory) const;
+
+  bool operator==(const IsolatedWebAppUrlInfo& other) const;
 
  private:
-  explicit IsolatedWebAppUrlInfo(const url::Origin& url);
+  explicit IsolatedWebAppUrlInfo(
+      const web_package::SignedWebBundleId& web_bundle_id);
+
+  std::string partition_domain() const;
 
   url::Origin origin_;
-  AppId app_id_;
+  webapps::AppId app_id_;
+  web_package::SignedWebBundleId web_bundle_id_;
 };
 
 }  // namespace web_app

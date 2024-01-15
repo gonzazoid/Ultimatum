@@ -10,8 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "content/public/browser/session_storage_namespace.h"
@@ -25,11 +26,13 @@
 class GURL;
 
 namespace content {
+class FileSelectListener;
 class BrowserContext;
 class JavaScriptDialogManager;
 class ShellDevToolsFrontend;
 class SiteInstance;
 class WebContents;
+class RenderFrameHost;
 
 // This represents one window of the Content Shell, i.e. all the UI including
 // buttons and url bar, as well as the web content area.
@@ -147,7 +150,6 @@ class Shell : public WebContentsDelegate, public WebContentsObserver {
   JavaScriptDialogManager* GetJavaScriptDialogManager(
       WebContents* source) override;
 #if BUILDFLAG(IS_MAC)
-  void DidNavigatePrimaryMainFramePostCommit(WebContents* contents) override;
   bool HandleKeyboardEvent(WebContents* source,
                            const NativeWebKeyboardEvent& event) override;
 #endif
@@ -156,27 +158,37 @@ class Shell : public WebContentsDelegate, public WebContentsObserver {
                               const std::u16string& message,
                               int32_t line_no,
                               const std::u16string& source_id) override;
-  void PortalWebContentsCreated(WebContents* portal_web_contents) override;
   void RendererUnresponsive(
       WebContents* source,
       RenderWidgetHost* render_widget_host,
       base::RepeatingClosure hang_monitor_restarter) override;
   void ActivateContents(WebContents* contents) override;
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE)
+  std::unique_ptr<ColorChooser> OpenColorChooser(
+      WebContents* web_contents,
+      SkColor color,
+      const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions)
+      override;
+#endif
+  void RunFileChooser(RenderFrameHost* render_frame_host,
+                      scoped_refptr<FileSelectListener> listener,
+                      const blink::mojom::FileChooserParams& params) override;
+  void EnumerateDirectory(WebContents* web_contents,
+                          scoped_refptr<FileSelectListener> listener,
+                          const base::FilePath& path) override;
   bool IsBackForwardCacheSupported() override;
-  bool IsPrerender2Supported(WebContents& web_contents) override;
-  std::unique_ptr<content::WebContents> ActivatePortalWebContents(
-      content::WebContents* predecessor_contents,
-      std::unique_ptr<content::WebContents> portal_contents) override;
+  PreloadingEligibility IsPrerender2Supported(
+      WebContents& web_contents) override;
   void UpdateInspectedWebContentsIfNecessary(
-      content::WebContents* old_contents,
-      content::WebContents* new_contents,
+      WebContents* old_contents,
+      WebContents* new_contents,
       base::OnceCallback<void()> callback) override;
-  bool ShouldAllowRunningInsecureContent(content::WebContents* web_contents,
+  bool ShouldAllowRunningInsecureContent(WebContents* web_contents,
                                          bool allowed_per_prefs,
                                          const url::Origin& origin,
                                          const GURL& resource_url) override;
   PictureInPictureResult EnterPictureInPicture(
-      content::WebContents* web_contents) override;
+      WebContents* web_contents) override;
   bool ShouldResumeRequestsForCreatedWindow() override;
   void SetContentsBounds(WebContents* source, const gfx::Rect& bounds) override;
 
@@ -185,6 +197,11 @@ class Shell : public WebContentsDelegate, public WebContentsObserver {
   void set_delay_popup_contents_delegate_for_testing(bool delay) {
     delay_popup_contents_delegate_for_testing_ = delay;
   }
+
+  void set_hold_file_chooser() { hold_file_chooser_ = true; }
+
+  // Counts both RunFileChooser and EnumerateDirectory.
+  size_t run_file_chooser_count() const { return run_file_chooser_count_; }
 
  private:
   class DevToolsWebContentsObserver;
@@ -216,6 +233,9 @@ class Shell : public WebContentsDelegate, public WebContentsObserver {
 #endif
   void TitleWasSet(NavigationEntry* entry) override;
   void RenderFrameCreated(RenderFrameHost* frame_host) override;
+#if BUILDFLAG(IS_MAC)
+  void PrimaryPageChanged(Page& page) override;
+#endif
 
   std::unique_ptr<JavaScriptDialogManager> dialog_manager_;
 
@@ -228,6 +248,10 @@ class Shell : public WebContentsDelegate, public WebContentsObserver {
   gfx::Size content_size_;
 
   bool delay_popup_contents_delegate_for_testing_ = false;
+
+  bool hold_file_chooser_ = false;
+  scoped_refptr<FileSelectListener> held_file_chooser_listener_;
+  size_t run_file_chooser_count_ = 0u;
 
   // A container of all the open windows. We use a vector so we can keep track
   // of ordering.

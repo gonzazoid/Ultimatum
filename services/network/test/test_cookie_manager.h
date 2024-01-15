@@ -8,7 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_types.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 
@@ -54,20 +56,17 @@ class TestCookieManager : public network::mojom::CookieManager {
       bool allow,
       AllowFileSchemeCookiesCallback callback) override {}
   void SetContentSettings(
-      const std::vector<::ContentSettingPatternSource>& settings) override {}
+      ContentSettingsType type,
+      const std::vector<::ContentSettingPatternSource>& settings,
+      SetContentSettingsCallback callback) override {}
   void SetForceKeepSessionState() override {}
   void BlockThirdPartyCookies(bool block) override {}
-  void SetContentSettingsForLegacyCookieAccess(
-      const std::vector<::ContentSettingPatternSource>& settings) override {}
-  void SetStorageAccessGrantSettings(
-      const std::vector<::ContentSettingPatternSource>& settings,
-      SetStorageAccessGrantSettingsCallback callback) override {}
+  void BlockTruncatedCookies(bool block) override {}
+  void SetMitigationsEnabledFor3pcd(bool enable) override {}
+  void SetTrackingProtectionEnabledFor3pcd(bool enable) override {}
+  void SetPreCommitCallbackDelayForTesting(base::TimeDelta delay) override {}
 
-  void DispatchCookieChange(const net::CookieChangeInfo& change);
-
-  // TODO(crbug.com/1296161): Delete this when the partitioned cookies origin
-  // trial is over.
-  void ConvertPartitionedCookiesToUnpartitioned(const GURL& url) override {}
+  virtual void DispatchCookieChange(const net::CookieChangeInfo& change);
 
  private:
   // List of observers receiving cookie change notifications.

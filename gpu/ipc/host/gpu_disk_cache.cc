@@ -4,8 +4,8 @@
 
 #include "gpu/ipc/host/gpu_disk_cache.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
@@ -41,9 +41,13 @@ class GpuDiskCacheEntry {
     OPEN_ENTRY,
     WRITE_DATA,
     CREATE_ENTRY,
+    REOPEN_ENTRY,
   };
 
+  int OpenEntry();
+
   int OpenCallback(int rv);
+  int ReopenCallback(int rv);
   int WriteCallback(int rv);
   int IOComplete(int rv);
 
@@ -53,7 +57,7 @@ class GpuDiskCacheEntry {
   OpType op_type_ = OPEN_ENTRY;
   std::string key_;
   std::string blob_;
-  raw_ptr<disk_cache::Entry, DanglingUntriaged> entry_;
+  raw_ptr<disk_cache::Entry, AcrossTasksDanglingUntriaged> entry_;
   base::WeakPtr<GpuDiskCacheEntry> weak_ptr_;
   base::WeakPtrFactory<GpuDiskCacheEntry> weak_ptr_factory_{this};
 };
@@ -96,7 +100,7 @@ class GpuDiskCacheReadHelper {
   OpType op_type_ = OPEN_NEXT;
   std::unique_ptr<disk_cache::Backend::Iterator> iter_;
   scoped_refptr<net::IOBufferWithSize> buf_;
-  raw_ptr<disk_cache::Entry, DanglingUntriaged> entry_;
+  raw_ptr<disk_cache::Entry, AcrossTasksDanglingUntriaged> entry_;
   base::WeakPtrFactory<GpuDiskCacheReadHelper> weak_ptr_factory_{this};
 };
 
@@ -147,7 +151,7 @@ GpuDiskCacheEntry::~GpuDiskCacheEntry() {
     entry_->Close();
 }
 
-void GpuDiskCacheEntry::Cache() {
+int GpuDiskCacheEntry::OpenEntry() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   auto callback = base::BindOnce(&GpuDiskCacheEntry::OnEntryOpenComplete,
@@ -155,8 +159,15 @@ void GpuDiskCacheEntry::Cache() {
 
   disk_cache::EntryResult result =
       cache_->backend()->OpenEntry(key_, net::HIGHEST, std::move(callback));
-  if (result.net_error() != net::ERR_IO_PENDING)
+  int rv = result.net_error();
+  if (rv != net::ERR_IO_PENDING) {
     OnEntryOpenComplete(std::move(result));
+  }
+  return rv;
+}
+
+void GpuDiskCacheEntry::Cache() {
+  OpenEntry();
 }
 
 void GpuDiskCacheEntry::OnOpComplete(int rv) {
@@ -175,6 +186,9 @@ void GpuDiskCacheEntry::OnOpComplete(int rv) {
         break;
       case WRITE_DATA:
         rv = IOComplete(rv);
+        break;
+      case REOPEN_ENTRY:
+        rv = ReopenCallback(rv);
         break;
     }
   } while (rv != net::ERR_IO_PENDING && weak_ptr);
@@ -210,12 +224,30 @@ int GpuDiskCacheEntry::OpenCallback(int rv) {
   return rv;
 }
 
+int GpuDiskCacheEntry::ReopenCallback(int rv) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (rv == net::OK) {
+    cache_->backend()->OnExternalCacheHit(key_);
+  } else {
+    LOG(ERROR) << "Failed retry to open blob cache entry: " << rv;
+  }
+  cache_->EntryComplete(this);
+  return rv;
+}
+
 int GpuDiskCacheEntry::WriteCallback(int rv) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (rv != net::OK) {
-    LOG(ERROR) << "Failed to create blob cache entry: " << rv;
-    cache_->EntryComplete(this);
-    return rv;
+    // We might have failed to create the entry because another create on the
+    // same key happened before. To verify, try re-opening the entry.
+    if (rv == net::ERR_FAILED) {
+      op_type_ = REOPEN_ENTRY;
+      return OpenEntry();
+    } else {
+      LOG(ERROR) << "Failed to create blob cache entry: " << rv;
+      cache_->EntryComplete(this);
+      return rv;
+    }
   }
 
   op_type_ = WRITE_DATA;
@@ -564,12 +596,15 @@ void GpuDiskCacheFactory::ClearByPath(const base::FilePath& path,
     return;
   }
 
-  // We may end up creating the cache if the path that is specified isn't
-  // already an opened path. In this case, we don't need to set a blob loaded
-  // callback since the cache is being cleared anyways, hence the DoNothing
-  // callback.
-  ClearByCache(GetOrCreateByPath(path), delete_begin, delete_end,
-               std::move(callback));
+  // Don't need to do anything if there is no cache in the path. This happens
+  // when clearing an in-memory storage partition.
+  auto iter = gpu_cache_map_.find(path);
+  if (iter == gpu_cache_map_.end()) {
+    std::move(callback).Run();
+    return;
+  }
+
+  ClearByCache(iter->second, delete_begin, delete_end, std::move(callback));
 }
 
 void GpuDiskCacheFactory::CacheCleared(GpuDiskCache* cache) {
@@ -638,8 +673,8 @@ void GpuDiskCache::Cache(const std::string& key, const std::string& blob) {
 
   auto shim = std::make_unique<GpuDiskCacheEntry>(this, key, blob);
   shim->Cache();
-  auto* raw_ptr = shim.get();
-  entries_.insert(std::make_pair(raw_ptr, std::move(shim)));
+  auto* ptr = shim.get();
+  entries_.insert(std::make_pair(ptr, std::move(shim)));
 }
 
 int GpuDiskCache::Clear(base::Time begin_time,

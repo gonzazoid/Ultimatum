@@ -12,8 +12,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace base {
-namespace trace_event {
+namespace base::trace_event {
 
 namespace {
 
@@ -296,7 +295,7 @@ TEST(TraceConfigTest, ConstructDefaultTraceConfig) {
                tc_empty_category_filter.ToString().c_str());
   CheckDefaultTraceConfigBehavior(tc_empty_category_filter);
 
-  // Constructor from JSON formated config string.
+  // Constructor from JSON formatted config string.
   TraceConfig tc_empty_json_string("");
   EXPECT_STREQ("", tc_empty_json_string.ToCategoryFilterString().c_str());
   EXPECT_STREQ(kDefaultTraceConfigString,
@@ -304,8 +303,7 @@ TEST(TraceConfigTest, ConstructDefaultTraceConfig) {
   CheckDefaultTraceConfigBehavior(tc_empty_json_string);
 
   // Constructor from dictionary value.
-  Value dict(Value::Type::DICTIONARY);
-  TraceConfig tc_dict(dict);
+  TraceConfig tc_dict(Value::Dict{});
   EXPECT_STREQ("", tc_dict.ToCategoryFilterString().c_str());
   EXPECT_STREQ(kDefaultTraceConfigString, tc_dict.ToString().c_str());
   CheckDefaultTraceConfigBehavior(tc_dict);
@@ -353,8 +351,7 @@ TEST(TraceConfigTest, DisabledByDefaultCategoryFilterString) {
 
 TEST(TraceConfigTest, TraceConfigFromDict) {
   // Passing in empty dictionary will result in default trace config.
-  Value dict(Value::Type::DICTIONARY);
-  TraceConfig tc(dict);
+  TraceConfig tc(Value::Dict{});
   EXPECT_STREQ(kDefaultTraceConfigString, tc.ToString().c_str());
   EXPECT_EQ(RECORD_UNTIL_FULL, tc.GetTraceRecordMode());
   EXPECT_FALSE(tc.IsSystraceEnabled());
@@ -366,7 +363,7 @@ TEST(TraceConfigTest, TraceConfigFromDict) {
       JSONReader::Read(kDefaultTraceConfigString);
   ASSERT_TRUE(default_value);
   ASSERT_TRUE(default_value->is_dict());
-  TraceConfig default_tc(*default_value);
+  TraceConfig default_tc(default_value->GetDict());
   EXPECT_STREQ(kDefaultTraceConfigString, default_tc.ToString().c_str());
   EXPECT_EQ(RECORD_UNTIL_FULL, default_tc.GetTraceRecordMode());
   EXPECT_FALSE(default_tc.IsSystraceEnabled());
@@ -378,7 +375,7 @@ TEST(TraceConfigTest, TraceConfigFromDict) {
       JSONReader::Read(kCustomTraceConfigString);
   ASSERT_TRUE(custom_value);
   ASSERT_TRUE(custom_value->is_dict());
-  TraceConfig custom_tc(*custom_value);
+  TraceConfig custom_tc(custom_value->GetDict());
   std::string custom_tc_str = custom_tc.ToString();
   EXPECT_TRUE(custom_tc_str == kCustomTraceConfigString ||
               custom_tc_str ==
@@ -460,7 +457,7 @@ TEST(TraceConfigTest, TraceConfigFromValidString) {
   EXPECT_EQ(1u, event_filter.category_filter().excluded_categories().size());
   EXPECT_STREQ("unfiltered_cat",
                event_filter.category_filter().excluded_categories()[0].c_str());
-  EXPECT_FALSE(event_filter.filter_args().is_none());
+  EXPECT_FALSE(event_filter.filter_args().empty());
 
   std::string json_out;
   base::JSONWriter::Write(event_filter.filter_args(), &json_out);
@@ -668,12 +665,12 @@ TEST(TraceConfigTest, TraceConfigFromMemoryConfigString) {
 
   EXPECT_EQ(200u,
             tc1.memory_dump_config().triggers[0].min_time_between_dumps_ms);
-  EXPECT_EQ(MemoryDumpLevelOfDetail::LIGHT,
+  EXPECT_EQ(MemoryDumpLevelOfDetail::kLight,
             tc1.memory_dump_config().triggers[0].level_of_detail);
 
   EXPECT_EQ(2000u,
             tc1.memory_dump_config().triggers[1].min_time_between_dumps_ms);
-  EXPECT_EQ(MemoryDumpLevelOfDetail::DETAILED,
+  EXPECT_EQ(MemoryDumpLevelOfDetail::kDetailed,
             tc1.memory_dump_config().triggers[1].level_of_detail);
   EXPECT_EQ(
       2048u,
@@ -687,7 +684,7 @@ TEST(TraceConfigTest, TraceConfigFromMemoryConfigString) {
   EXPECT_TRUE(tc3.IsCategoryGroupEnabled(MemoryDumpManager::kTraceCategory));
   ASSERT_EQ(1u, tc3.memory_dump_config().triggers.size());
   EXPECT_EQ(1u, tc3.memory_dump_config().triggers[0].min_time_between_dumps_ms);
-  EXPECT_EQ(MemoryDumpLevelOfDetail::BACKGROUND,
+  EXPECT_EQ(MemoryDumpLevelOfDetail::kBackground,
             tc3.memory_dump_config().triggers[0].level_of_detail);
 }
 
@@ -734,5 +731,29 @@ TEST(TraceConfigTest, SystraceEventsSerialization) {
   EXPECT_TRUE(tc2.systrace_events().count("timer:tick_stop"));
 }
 
-}  // namespace trace_event
-}  // namespace base
+TEST(TraceConfigTest, IsConfigEquivalent) {
+  TraceConfig tc1("foo,bar", "");
+  TraceConfig tc2("bar,foo", "");
+  EXPECT_TRUE(tc1.IsEquivalentTo(tc2));
+
+  tc1.EnableHistogram("Foo.Bar1");
+  tc1.EnableHistogram("Foo.Bar2");
+  tc2.EnableHistogram("Foo.Bar2");
+  tc2.EnableHistogram("Foo.Bar1");
+  EXPECT_TRUE(tc1.IsEquivalentTo(tc2));
+
+  tc1.SetEventPackageNameFilterEnabled(true);
+  EXPECT_FALSE(tc1.IsEquivalentTo(tc2));
+
+  // This is an example of a config that comes from Perfetto UI. Check that
+  // it is still equivalent after converting to a string and back (this is
+  // important for startup session adoption).
+  TraceConfig tc3(
+      "{\"record_mode\":\"record-until-full\","
+      "\"included_categories\":[\"foo,bar\"],"
+      "\"excluded_categories\":[\"*\"],\"memory_dump_config\":{}}");
+  TraceConfig tc4(tc3.ToString());
+  EXPECT_TRUE(tc3.IsEquivalentTo(tc4));
+}
+
+}  // namespace base::trace_event

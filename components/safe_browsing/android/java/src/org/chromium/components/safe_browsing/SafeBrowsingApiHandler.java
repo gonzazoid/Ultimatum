@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,51 +14,62 @@ import java.lang.annotation.RetentionPolicy;
  * {@code SafeBrowsingApiBridge}.
  */
 public interface SafeBrowsingApiHandler {
-    /**
-     * Observer to be notified when the SafeBrowsingApiHandler determines the verdict for a url.
-     */
+    /** Observer to be notified when the SafeBrowsingApiHandler determines the verdict for a url. */
     interface Observer {
-        // Note: |checkDelta| is the time the remote call took in microseconds.
-        void onUrlCheckDone(long callbackId, @SafeBrowsingResult int resultStatus, String metadata,
-                long checkDelta);
+        /**
+         * Called when the SafeBrowsingApiHandler gets a response from the SafeBrowsing API.
+         * @param callbackId The same ID provided when {@link #startUriLookup(long, String, int[],
+         *         int)} is called.
+         * @param lookupResult The result of the API call. Self-defined.
+         * @param threatType The threatType that is returned from the API.
+         * @param threatAttributes The threatAttributes that is returned from the API.
+         * @param responseStatus The responseStatus that is returned from the API.
+         * @param checkDeltaMs The time the remote call took in microseconds.
+         */
+        void onUrlCheckDone(
+                long callbackId,
+                @LookupResult int lookupResult,
+                int threatType,
+                int[] threatAttributes,
+                int responseStatus,
+                long checkDeltaMs);
     }
 
-    // Possible values for resultStatus. Native side has the same definitions.
-    @IntDef({SafeBrowsingResult.INTERNAL_ERROR, SafeBrowsingResult.SUCCESS,
-            SafeBrowsingResult.TIMEOUT})
+    // Possible values for lookupResult. Native side has the same definitions. See the native side
+    // definition for detailed descriptions.
+    @IntDef({
+        LookupResult.SUCCESS,
+        LookupResult.FAILURE,
+        LookupResult.FAILURE_API_CALL_TIMEOUT,
+        LookupResult.FAILURE_API_UNSUPPORTED,
+        LookupResult.FAILURE_API_NOT_AVAILABLE,
+        LookupResult.FAILURE_HANDLER_NULL
+    })
     @Retention(RetentionPolicy.SOURCE)
-    @interface SafeBrowsingResult {
-        int INTERNAL_ERROR = -1;
+    @interface LookupResult {
         int SUCCESS = 0;
-        int TIMEOUT = 1;
+        int FAILURE = 1;
+        int FAILURE_API_CALL_TIMEOUT = 2;
+        int FAILURE_API_UNSUPPORTED = 3;
+        int FAILURE_API_NOT_AVAILABLE = 4;
+        int FAILURE_HANDLER_NULL = 5;
     }
 
     /**
-     * Verifies that SafeBrowsingApiHandler can operate and initializes if feasible.
-     * Should be called on the same sequence as |startUriLookup|.
-     *
-     * @param result The object on which to call the callback functions when URL checking
-     * is complete.
-     *
-     * @return whether Safe Browsing is supported for this installation.
+     * Start a URI-lookup to determine if the URI matches one of the threat types.
+     * @param callbackId The identifier used to map the callback on the native side when the verdict
+     *         is returned.
+     * @param uri The URL being checked. It can be a top-level URL or a subresource URL.
+     * @param threatTypes The type of threats that are checked.
+     * @param protocol The protocol used to perform the check.
      */
-    boolean init(Observer result);
+    void startUriLookup(long callbackId, String uri, int[] threatTypes, int protocol);
 
     /**
-     * Start a URI-lookup to determine if it matches one of the specified threats.
-     * This is called on every URL resource Chrome loads, on the same sequence as |init|.
+     * Set the observer used to return the verdict. Must be called before {@link
+     * #startUriLookup(long, String, int[], int)} is called.
+     * @param observer The object on which to call the callback functions when the URI lookup is
+     *         complete.
      */
-    void startUriLookup(long callbackId, String uri, int[] threatsOfInterest);
-
-    /**
-     * Start a check to determine if a uri is in an allowlist. If true, password protection
-     * service will consider the uri to be safe.
-     *
-     * @param uri The uri from a password protection event(user focuses on password form
-     *      * or user reuses their password)
-     * @param threatType determines the type of the allowlist that the uri will be matched to.
-     *
-     * @return true if the uri is found in the corresponding allowlist. Otherwise, false.
-     */
-    boolean startAllowlistLookup(String uri, int threatType);
+    void setObserver(Observer observer);
 }

@@ -9,22 +9,31 @@
 #include <utility>
 #include <vector>
 
+#include "base/time/time.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/client/drag_drop_client.h"
 #include "ui/aura/client/screen_position_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
+#include "ui/compositor/layer.h"
+#include "ui/compositor/layer_type.h"
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
+#include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/ozone/public/ozone_platform.h"
 #include "ui/views/corewm/tooltip_state_manager.h"
 #include "ui/views/widget/tooltip_manager.h"
 #include "ui/wm/public/activation_client.h"
+#include "ui/wm/public/tooltip_observer.h"
 
 namespace views::corewm {
 namespace {
 
-constexpr auto kDefaultHideTooltipTimeoutInMs = base::Seconds(10);
+constexpr auto kDefaultShowTooltipDelay = base::Milliseconds(500);
+constexpr auto kDefaultHideTooltipDelay = base::Seconds(10);
 
 // Returns true if |target| is a valid window to get the tooltip from.
 // |event_target| is the original target from the event and |target| the window
@@ -33,12 +42,29 @@ bool IsValidTarget(aura::Window* event_target, aura::Window* target) {
   if (!target || (event_target == target))
     return true;
 
+  // If `target` is contained in `event_target`, it's valid.
+  // This case may happen on exo surfaces.
+  if (event_target->Contains(target) &&
+      event_target->GetBoundsInScreen().Contains(target->GetBoundsInScreen())) {
+    return true;
+  }
+
   void* event_target_grouping_id = event_target->GetNativeWindowProperty(
       TooltipManager::kGroupingPropertyKey);
-  void* target_grouping_id =
-      target->GetNativeWindowProperty(TooltipManager::kGroupingPropertyKey);
+
+  auto* toplevel_of_target = target->GetToplevelWindow();
+
+  // Return true if grouping id is same for `target` and `event_target`.
+  // Also, check grouping id of target's toplevel window to allow the child
+  // window under `target`, because the menu window may have a child window.
   return event_target_grouping_id &&
-         event_target_grouping_id == target_grouping_id;
+         (event_target_grouping_id ==
+              target->GetNativeWindowProperty(
+                  TooltipManager::kGroupingPropertyKey) ||
+          (toplevel_of_target &&
+           event_target_grouping_id ==
+               toplevel_of_target->GetNativeWindowProperty(
+                   TooltipManager::kGroupingPropertyKey)));
 }
 
 // Returns the target (the Window tooltip text comes from) based on the event.
@@ -98,10 +124,8 @@ aura::Window* GetTooltipTarget(const ui::MouseEvent& event,
       return screen_target;
     }
     default:
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
   }
-  return nullptr;
 }
 
 }  // namespace
@@ -125,6 +149,14 @@ TooltipController::~TooltipController() {
     activation_client_->RemoveObserver(this);
 }
 
+void TooltipController::AddObserver(wm::TooltipObserver* observer) {
+  state_manager_->AddObserver(observer);
+}
+
+void TooltipController::RemoveObserver(wm::TooltipObserver* observer) {
+  state_manager_->RemoveObserver(observer);
+}
+
 int TooltipController::GetMaxWidth(const gfx::Point& location) const {
   return state_manager_->GetMaxWidth(location);
 }
@@ -133,17 +165,10 @@ void TooltipController::UpdateTooltip(aura::Window* target) {
   // The |tooltip_parent_window_| is only set when the tooltip is visible or
   // its |will_show_tooltip_timer_| is running.
   if (target && observed_window_ == target) {
-    // This is either an update on an already (or about to be) visible tooltip
-    // or a call to UpdateIfRequired that will potentially trigger a tooltip
-    // caused by a tooltip text update.
-    //
-    // If there's no active tooltip, it's appropriate to assume that the trigger
-    // is kCursor because a tooltip text update triggered from the keyboard
-    // would always happen in UpdateTooltipFromKeyboard, not from here.
-    if (state_manager_->tooltip_parent_window())
-      UpdateIfRequired(state_manager_->tooltip_trigger());
-    else if (IsTooltipTextUpdateNeeded())
+    if (state_manager_->tooltip_parent_window() ||
+        IsTooltipTextUpdateNeeded()) {
       UpdateIfRequired(TooltipTrigger::kCursor);
+    }
   }
 
   ResetWindowAtMousePressedIfNeeded(target, /* force_reset */ false);
@@ -151,17 +176,22 @@ void TooltipController::UpdateTooltip(aura::Window* target) {
 
 void TooltipController::UpdateTooltipFromKeyboard(const gfx::Rect& bounds,
                                                   aura::Window* target) {
-  anchor_point_ = bounds.bottom_center();
+  UpdateTooltipFromKeyboardWithAnchorPoint(bounds.bottom_center(), target);
+}
+
+void TooltipController::UpdateTooltipFromKeyboardWithAnchorPoint(
+    const gfx::Point& anchor_point,
+    aura::Window* target) {
+  last_focus_loc_ = anchor_point;
   SetObservedWindow(target);
 
   // Update the position of the active but not yet visible keyboard triggered
   // tooltip, if any.
   if (state_manager_->tooltip_parent_window()) {
-    state_manager_->UpdatePositionIfNeeded(anchor_point_,
+    state_manager_->UpdatePositionIfNeeded(last_focus_loc_,
                                            TooltipTrigger::kKeyboard);
   }
 
-  // This function is always only called for keyboard-triggered tooltips.
   UpdateIfRequired(TooltipTrigger::kKeyboard);
 
   ResetWindowAtMousePressedIfNeeded(target, /* force_reset */ true);
@@ -194,6 +224,9 @@ void TooltipController::OnKeyEvent(ui::KeyEvent* event) {
   HideAndReset();
 }
 
+// TODO(crbug.com/1492222): Figure out why we have code both here and
+// in DesktopNativeWidgetAura to handle mouse (and key?) events. Seems like we
+// should only need one set of them.
 void TooltipController::OnMouseEvent(ui::MouseEvent* event) {
   // Ignore mouse events that coincide with the last touch event.
   if (event->location() == last_touch_loc_) {
@@ -224,6 +257,17 @@ void TooltipController::OnMouseEvent(ui::MouseEvent* event) {
       // https://crbug.com/1146981.
       if (event->IsSynthesized())
         break;
+
+#if BUILDFLAG(IS_WIN)
+      // Showing a tooltip causes Windows to generate a MOUSE_MOVED
+      // event to the same location it was already at; when that happens,
+      // we need to throw the event away rather than acting as if someone
+      // moved the mouse and showing a new tooltip.
+      if (event->location() == last_mouse_loc_) {
+        break;
+      }
+#endif
+
       last_mouse_loc_ = event->location();
       aura::Window* target = nullptr;
       // Avoid a call to display::Screen::GetWindowAtScreenPoint() since it can
@@ -238,6 +282,9 @@ void TooltipController::OnMouseEvent(ui::MouseEvent* event) {
                                              TooltipTrigger::kCursor);
       SetObservedWindow(target);
 
+      is_duplicate_pen_hover_event_ =
+          IsDuplicatePenHoverEvent(event->pointer_details().pointer_type);
+
       if (state_manager_->IsVisible() ||
           (observed_window_ && IsTooltipTextUpdateNeeded())) {
         UpdateIfRequired(TooltipTrigger::kCursor);
@@ -248,9 +295,11 @@ void TooltipController::OnMouseEvent(ui::MouseEvent* event) {
       if ((event->flags() & ui::EF_IS_NON_CLIENT) == 0) {
         aura::Window* target = static_cast<aura::Window*>(event->target());
         // We don't get a release for non-client areas.
-        tooltip_window_at_mouse_press_ = target;
-        if (target)
+        tooltip_window_at_mouse_press_tracker_.RemoveAll();
+        if (target) {
+          tooltip_window_at_mouse_press_tracker_.Add(target);
           tooltip_text_at_mouse_press_ = wm::GetTooltipText(target);
+        }
       }
       state_manager_->HideAndReset();
       break;
@@ -294,18 +343,25 @@ void TooltipController::OnCursorVisibilityChanged(bool is_visible) {
 
 void TooltipController::OnWindowVisibilityChanged(aura::Window* window,
                                                   bool visible) {
-  if (!visible)
+  // If window is not drawn, skip modifying tooltip.
+  if (!visible && window->layer()->type() != ui::LAYER_NOT_DRAWN)
     HideAndReset();
+}
+
+void TooltipController::OnWindowDestroying(aura::Window* window) {
+  // Reset tooltip before `observed_window_` is destructed since Tooltip::Hide
+  // which is called by HideAndReset() may try to access to the raw_ptr of the
+  // window.
+  if (state_manager_->tooltip_parent_window() == window) {
+    HideAndReset();
+  }
 }
 
 void TooltipController::OnWindowDestroyed(aura::Window* window) {
   if (observed_window_ == window) {
-    RemoveHideTooltipTimeoutFromMap(observed_window_);
+    RemoveTooltipDelayFromMap(observed_window_);
     observed_window_ = nullptr;
   }
-
-  if (state_manager_->tooltip_parent_window() == window)
-    HideAndReset();
 }
 
 void TooltipController::OnWindowPropertyChanged(aura::Window* window,
@@ -325,6 +381,23 @@ void TooltipController::OnWindowActivated(ActivationReason reason,
   if (lost_active)
     HideAndReset();
 }
+
+void TooltipController::SetShowTooltipDelay(aura::Window* target,
+                                            base::TimeDelta delay) {
+  show_tooltip_delay_map_[target] = delay;
+}
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+void TooltipController::OnTooltipShownOnServer(aura::Window* window,
+                                               const std::u16string& text,
+                                               const gfx::Rect& bounds) {
+  state_manager_->OnTooltipShownOnServer(window, text, bounds);
+}
+
+void TooltipController::OnTooltipHiddenOnServer() {
+  state_manager_->OnTooltipHiddenOnServer();
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 ////////////////////////////////////////////////////////////////////////////////
 // TooltipController private:
@@ -349,17 +422,24 @@ void TooltipController::UpdateIfRequired(TooltipTrigger trigger) {
     state_manager_->HideAndReset();
     return;
   }
-  tooltip_window_at_mouse_press_ = nullptr;
+  tooltip_window_at_mouse_press_tracker_.RemoveAll();
 
-  if (trigger == TooltipTrigger::kCursor)
-    anchor_point_ = last_mouse_loc_;
+  // If this is a duplicate event generated by a hovering stylus or pen, the
+  // tooltip has already been updated and its timer should not be restarted.
+  if (is_duplicate_pen_hover_event_) {
+    return;
+  }
 
   // If the uniqueness indicator is different from the previously encountered
   // one, we should force tooltip update
   if (!state_manager_->IsVisible() || IsTooltipTextUpdateNeeded() ||
       IsTooltipIdUpdateNeeded()) {
+    gfx::Point tooltip_point =
+        ((trigger == TooltipTrigger::kCursor) ? last_mouse_loc_
+                                              : last_focus_loc_);
     state_manager_->Show(observed_window_, wm::GetTooltipText(observed_window_),
-                         anchor_point_, trigger, GetHideTooltipTimeout());
+                         tooltip_point, trigger, GetShowTooltipDelay(),
+                         GetHideTooltipDelay());
   }
 }
 
@@ -383,11 +463,21 @@ bool TooltipController::IsCursorVisible() const {
   return !cursor_client || cursor_client->IsCursorVisible();
 }
 
-base::TimeDelta TooltipController::GetHideTooltipTimeout() {
+base::TimeDelta TooltipController::GetShowTooltipDelay() {
+  std::map<aura::Window*, base::TimeDelta>::const_iterator it =
+      show_tooltip_delay_map_.find(observed_window_);
+  if (it == show_tooltip_delay_map_.end()) {
+    return skip_show_delay_for_testing_ ? base::TimeDelta()
+                                        : kDefaultShowTooltipDelay;
+  }
+  return it->second;
+}
+
+base::TimeDelta TooltipController::GetHideTooltipDelay() {
   std::map<aura::Window*, base::TimeDelta>::const_iterator it =
       hide_tooltip_timeout_map_.find(observed_window_);
   if (it == hide_tooltip_timeout_map_.end())
-    return kDefaultHideTooltipTimeoutInMs;
+    return kDefaultHideTooltipDelay;
   return it->second;
 }
 
@@ -421,21 +511,22 @@ bool TooltipController::IsTooltipTextUpdateNeeded() const {
   return state_manager_->tooltip_text() != wm::GetTooltipText(observed_window_);
 }
 
-void TooltipController::RemoveHideTooltipTimeoutFromMap(aura::Window* window) {
+void TooltipController::RemoveTooltipDelayFromMap(aura::Window* window) {
+  show_tooltip_delay_map_.erase(window);
   hide_tooltip_timeout_map_.erase(window);
 }
 
 void TooltipController::ResetWindowAtMousePressedIfNeeded(aura::Window* target,
                                                           bool force_reset) {
-  // Reset |tooltip_window_at_mouse_press_| if the cursor moved within the same
+  // Reset tooltip_window_at_mouse_press() if the cursor moved within the same
   // window but over a region that has different tooltip text. This handles the
   // case of clicking on a view, moving within the same window but over a
   // different view, then back to the original view.
   if (force_reset ||
-      (tooltip_window_at_mouse_press_ &&
-       target == tooltip_window_at_mouse_press_ &&
+      (tooltip_window_at_mouse_press() &&
+       target == tooltip_window_at_mouse_press() &&
        wm::GetTooltipText(target) != tooltip_text_at_mouse_press_)) {
-    tooltip_window_at_mouse_press_ = nullptr;
+    tooltip_window_at_mouse_press_tracker_.RemoveAll();
   }
 }
 
@@ -447,9 +538,31 @@ void TooltipController::ResetWindowAtMousePressedIfNeeded(aura::Window* target,
 // identifier of the renderer side element that triggered the tooltip. Could we
 // pass a renderer element unique id alongside the tooltip text?
 bool TooltipController::ShouldHideBecauseMouseWasOncePressed() {
-  return tooltip_window_at_mouse_press_ &&
-         observed_window_ == tooltip_window_at_mouse_press_ &&
+  // Skip hiding when tooltip text is empty as no need to hide again.
+  // This is required since client-side tooltip appears as empty text on server
+  // side so that the tooltip is overridden by empty text regardless of the
+  // actual text to show.
+  // TODO(crbug.com/1383844): Remove or update this special path when tooltip
+  // identifier is implemented.
+  if (wm::GetTooltipText(observed_window_).empty())
+    return false;
+
+  return tooltip_window_at_mouse_press() &&
+         observed_window_ == tooltip_window_at_mouse_press() &&
          wm::GetTooltipText(observed_window_) == tooltip_text_at_mouse_press_;
+}
+
+bool TooltipController::IsDuplicatePenHoverEvent(
+    ui::EventPointerType pointer_type) {
+  if (pointer_type != ui::EventPointerType::kPen || !observed_window_) {
+    return false;
+  }
+  const auto tooltip_text = wm::GetTooltipText(observed_window_);
+  if (!tooltip_text.empty() && tooltip_text == last_pen_tooltip_text_) {
+    return true;
+  }
+  last_pen_tooltip_text_ = tooltip_text;
+  return false;
 }
 
 }  // namespace views::corewm

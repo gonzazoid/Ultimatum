@@ -23,6 +23,34 @@ class ShortcutsProviderTest;
 class ShortcutsProvider : public AutocompleteProvider,
                           public ShortcutsBackend::ShortcutsBackendObserver {
  public:
+  // ShortcutMatch holds sufficient information about a single match from the
+  // shortcut database to allow for destination deduping and relevance sorting.
+  // After those stages the top matches are converted to the more heavyweight
+  // AutocompleteMatch struct.  Avoiding constructing the larger struct for
+  // every such match can save significant time when there are many shortcut
+  // matches to process.
+  struct ShortcutMatch {
+    ShortcutMatch(int relevance,
+                  int aggregate_number_of_hits,
+                  base::Time most_recent_access_time,
+                  size_t shortest_text_length,
+                  const GURL& stripped_destination_url,
+                  const ShortcutsDatabase::Shortcut* shortcut);
+
+    ShortcutMatch(const ShortcutMatch& other);
+    ShortcutMatch& operator=(const ShortcutMatch& other);
+
+    int relevance;
+    // The sum of `number_of_hits` of all deduped shortcuts.
+    int aggregate_number_of_hits;
+    base::Time most_recent_access_time;
+    size_t shortest_text_length;
+    GURL stripped_destination_url;
+    raw_ptr<const ShortcutsDatabase::Shortcut> shortcut;
+    std::u16string contents;
+    AutocompleteMatch::Type type;
+  };
+
   explicit ShortcutsProvider(AutocompleteProviderClient* client);
 
   // Performs the autocompletion synchronously. Since no asynch completion is
@@ -41,20 +69,37 @@ class ShortcutsProvider : public AutocompleteProvider,
   // ShortcutsBackendObserver:
   void OnShortcutsLoaded() override;
 
-  // Performs the autocomplete matching and scoring.
-  void GetMatches(const AutocompleteInput& input);
+  // Performs the autocomplete matching and scoring. Populates matches results
+  // with scoring signals for ML models if enabled. Only populates signals for
+  // ULR matches for now.
+  void DoAutocomplete(const AutocompleteInput& input,
+                      bool populate_scoring_signals);
 
-  // Returns an AutocompleteMatch corresponding to |shortcut|. Assigns it
-  // |relevance| score in the process, and highlights the description and
-  // contents against |input|, which should be the lower-cased version of
-  // the user's input. |input| and |fixed_up_input_text| are used to decide
-  // what can be inlined.
+  // Creates a shortcut match by aggregating the scoring factors from a vector
+  // of `shortcuts`. Specifically:
+  // - Considers the shortest shortcut when computing fraction typed.
+  // - Considers the most recent shortcut when considering last visit.
+  // - Considers the sum of `number_of_hits`.
+  // - Considers the shortest contents when picking a shortcut.
+  // Returns the shortcut match with the aggregated score.
+  ShortcutMatch CreateScoredShortcutMatch(
+      size_t input_length,
+      const GURL& stripped_destination_url,
+      const std::vector<const ShortcutsDatabase::Shortcut*>& shortcuts,
+      int max_relevance);
+
+  // Returns an AutocompleteMatch corresponding to `shortcut`. Assigns it
+  // `stripped_destination_url` and `relevance` in the process, and highlights
+  // the description and contents against `input`, which should be the
+  // normalized version of the user's input. `input` and `fixed_up_input_text`
+  // are used to decide what can be inlined.
   AutocompleteMatch ShortcutToACMatch(
       const ShortcutsDatabase::Shortcut& shortcut,
+      const GURL& stripped_destination_url,
       int relevance,
       const AutocompleteInput& input,
       const std::u16string& fixed_up_input_text,
-      const std::u16string term_string);
+      const std::u16string lower_input);
 
   // Returns iterator to first item in |shortcuts_map_| matching |keyword|.
   // Returns shortcuts_map_.end() if there are no matches.
@@ -62,21 +107,12 @@ class ShortcutsProvider : public AutocompleteProvider,
       const std::u16string& keyword,
       ShortcutsBackend* backend);
 
-  // Aggregates the scoring factors from a vector of `shortcuts`. Specifically:
-  // - Considers the shortest shortcut when computing fraction typed.
-  // - Considers the most recent shortcut when considering last visit.
-  // - Considers the sum of `number_of_hits`.
-  // Returns the relevance score and summed `number_of_hits`.
-  std::pair<int, int> CalculateAggregateScore(
-      const std::u16string& terms,
-      const std::vector<const ShortcutsDatabase::Shortcut*>& shortcuts,
-      int max_relevance);
-
   // The default max relevance unless overridden by a field trial.
   static const int kShortcutsProviderDefaultMaxRelevance;
 
-  raw_ptr<AutocompleteProviderClient> client_;
-  bool initialized_;
+  raw_ptr<AutocompleteProviderClient> client_ = nullptr;
+  scoped_refptr<ShortcutsBackend> backend_;
+  bool initialized_{};
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_SHORTCUTS_PROVIDER_H_

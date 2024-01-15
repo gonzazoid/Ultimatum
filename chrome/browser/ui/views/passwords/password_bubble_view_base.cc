@@ -5,10 +5,10 @@
 #include "chrome/browser/ui/views/passwords/password_bubble_view_base.h"
 
 #include "base/notreached.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/passwords/passwords_model_delegate.h"
-#include "chrome/browser/ui/passwords/ui_utils.h"
 #include "chrome/browser/ui/views/accessibility/theme_tracking_non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
@@ -16,19 +16,26 @@
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/passwords/manage_passwords_icon_views.h"
+#include "chrome/browser/ui/views/passwords/manage_passwords_view.h"
 #include "chrome/browser/ui/views/passwords/move_to_account_store_bubble_view.h"
+#include "chrome/browser/ui/views/passwords/password_add_username_view.h"
 #include "chrome/browser/ui/views/passwords/password_auto_sign_in_view.h"
 #include "chrome/browser/ui/views/passwords/password_generation_confirmation_view.h"
-#include "chrome/browser/ui/views/passwords/password_items_view.h"
 #include "chrome/browser/ui/views/passwords/password_save_unsynced_credentials_locally_view.h"
 #include "chrome/browser/ui/views/passwords/password_save_update_view.h"
 #include "chrome/browser/ui/views/passwords/post_save_compromised_bubble_view.h"
+#include "chrome/browser/ui/views/passwords/shared_passwords_notification_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/autofill/core/common/autofill_payments_features.h"
+#include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/common/password_manager_features.h"
+#include "components/password_manager/core/common/password_manager_ui.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/controls/button/button.h"
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#include "chrome/browser/ui/views/passwords/password_relaunch_chrome_view.h"
+#endif
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 #include "chrome/browser/ui/views/passwords/biometric_authentication_confirmation_bubble_view.h"
@@ -42,7 +49,7 @@ PasswordBubbleViewBase* PasswordBubbleViewBase::g_manage_passwords_bubble_ =
 // static
 void PasswordBubbleViewBase::ShowBubble(content::WebContents* web_contents,
                                         DisplayReason reason) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   DCHECK(browser);
   DCHECK(browser->window());
   DCHECK(!g_manage_passwords_bubble_ ||
@@ -82,12 +89,19 @@ PasswordBubbleViewBase* PasswordBubbleViewBase::CreateBubble(
   password_manager::ui::State model_state =
       PasswordsModelDelegateFromWebContents(web_contents)->GetState();
   if (model_state == password_manager::ui::MANAGE_STATE) {
-    view = new PasswordItemsView(web_contents, anchor_view);
+    view = new ManagePasswordsView(web_contents, anchor_view);
   } else if (model_state == password_manager::ui::AUTO_SIGNIN_STATE) {
     view = new PasswordAutoSignInView(web_contents, anchor_view);
-  } else if (model_state == password_manager::ui::CONFIRMATION_STATE) {
-    view = new PasswordGenerationConfirmationView(web_contents, anchor_view,
-                                                  reason);
+  } else if (model_state == password_manager::ui::SAVE_CONFIRMATION_STATE ||
+             model_state == password_manager::ui::UPDATE_CONFIRMATION_STATE) {
+    if (base::FeatureList::IsEnabled(
+            password_manager::features::
+                kNewConfirmationBubbleForGeneratedPasswords)) {
+      view = new ManagePasswordsView(web_contents, anchor_view);
+    } else {
+      view = new PasswordGenerationConfirmationView(web_contents, anchor_view,
+                                                    reason);
+    }
   } else if (model_state ==
                  password_manager::ui::PENDING_PASSWORD_UPDATE_STATE ||
              model_state == password_manager::ui::PENDING_PASSWORD_STATE) {
@@ -103,6 +117,9 @@ PasswordBubbleViewBase* PasswordBubbleViewBase::CreateBubble(
              model_state ==
                  password_manager::ui::PASSWORD_UPDATED_MORE_TO_FIX) {
     view = new PostSaveCompromisedBubbleView(web_contents, anchor_view);
+  } else if (model_state ==
+             password_manager::ui::GENERATED_PASSWORD_CONFIRMATION_STATE) {
+    view = new PasswordAddUsernameView(web_contents, anchor_view, reason);
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
   } else if (model_state ==
              password_manager::ui::BIOMETRIC_AUTHENTICATION_FOR_FILLING_STATE) {
@@ -116,8 +133,18 @@ PasswordBubbleViewBase* PasswordBubbleViewBase::CreateBubble(
     view = new BiometricAuthenticationConfirmationBubbleView(web_contents,
                                                              anchor_view);
 #endif
+  } else if (model_state ==
+             password_manager::ui::NOTIFY_RECEIVED_SHARED_CREDENTIALS) {
+    view = new SharedPasswordsNotificationView(web_contents, anchor_view);
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  } else if (model_state == password_manager::ui::KEYCHAIN_ERROR_STATE) {
+    view = new RelaunchChromeView(
+        web_contents, anchor_view,
+        Profile::FromBrowserContext(web_contents->GetBrowserContext())
+            ->GetPrefs());
+#endif
   } else {
-    NOTREACHED();
+    NOTREACHED_NORETURN();
   }
 
   g_manage_passwords_bubble_ = view;
@@ -170,37 +197,6 @@ PasswordBubbleViewBase::~PasswordBubbleViewBase() {
     g_manage_passwords_bubble_ = nullptr;
 }
 
-// static
-std::unique_ptr<views::Label> PasswordBubbleViewBase::CreateUsernameLabel(
-    const password_manager::PasswordForm& form) {
-  auto label = std::make_unique<views::Label>(
-      GetDisplayUsername(form), views::style::CONTEXT_DIALOG_BODY_TEXT,
-      views::style::STYLE_SECONDARY);
-  label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  return label;
-}
-
-// static
-std::unique_ptr<views::Label> PasswordBubbleViewBase::CreatePasswordLabel(
-    const password_manager::PasswordForm& form) {
-  std::unique_ptr<views::Label> label;
-  if (form.federation_origin.opaque()) {
-    label = std::make_unique<views::Label>(
-        form.password_value, views::style::CONTEXT_DIALOG_BODY_TEXT,
-        STYLE_SECONDARY_MONOSPACED);
-    label->SetObscured(true);
-    label->SetElideBehavior(gfx::TRUNCATE);
-  } else {
-    label = std::make_unique<views::Label>(
-        l10n_util::GetStringFUTF16(IDS_PASSWORDS_VIA_FEDERATION,
-                                   GetDisplayFederation(form)),
-        views::style::CONTEXT_DIALOG_BODY_TEXT, views::style::STYLE_SECONDARY);
-    label->SetElideBehavior(gfx::ELIDE_HEAD);
-  }
-  label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  return label;
-}
-
 void PasswordBubbleViewBase::SetBubbleHeader(int light_image_id,
                                              int dark_image_id) {
   ui::ResourceBundle& bundle = ui::ResourceBundle::GetSharedInstance();
@@ -229,3 +225,6 @@ void PasswordBubbleViewBase::Init() {
   SetTitle(controller->GetTitle());
   SetShowTitle(!controller->GetTitle().empty());
 }
+
+BEGIN_METADATA(PasswordBubbleViewBase)
+END_METADATA

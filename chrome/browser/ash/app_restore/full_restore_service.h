@@ -6,15 +6,17 @@
 #define CHROME_BROWSER_ASH_APP_RESTORE_FULL_RESTORE_SERVICE_H_
 
 #include <memory>
+#include <optional>
 
 #include "ash/public/cpp/accelerators.h"
 #include "base/callback_list.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/sessions/exit_type_service.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 
 class Profile;
@@ -53,9 +55,9 @@ enum class RestoreAction {
 };
 
 // Returns true if FullRestoreService can be created to restore/launch Lacros
-// during the system startup phase when below conditions are matched:
+// during the system startup phase when all of the below conditions are met:
 // 1. The FullRestoreForLacros flag is enabled.
-// 2. The WebAppsCrosapi or LacrosPrimary flag is enabled.
+// 2. Lacros is enabled.
 // 3. FullRestoreService can be created for the primary profile.
 bool MaybeCreateFullRestoreServiceForLacros();
 
@@ -63,7 +65,7 @@ bool MaybeCreateFullRestoreServiceForLacros();
 // interfaces to restore the app launchings and app windows.
 class FullRestoreService : public KeyedService,
                            public message_center::NotificationObserver,
-                           public ash::AcceleratorController::Observer {
+                           public AcceleratorController::Observer {
  public:
   static FullRestoreService* GetForProfile(Profile* profile);
   static void MaybeCloseNotification(Profile* profile);
@@ -90,10 +92,10 @@ class FullRestoreService : public KeyedService,
 
   // message_center::NotificationObserver:
   void Close(bool by_user) override;
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override;
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override;
 
-  // ash::AcceleratorController::Observer:
+  // AcceleratorController::Observer:
   void OnActionPerformed(AcceleratorAction action) override;
   void OnAcceleratorControllerWillBeDestroyed(
       AcceleratorController* controller) override;
@@ -135,7 +137,7 @@ class FullRestoreService : public KeyedService,
 
   void OnAppTerminating();
 
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
   PrefChangeRegistrar pref_change_registrar_;
 
   // If the user of `profile_` is not the primary user, and hasn't been the
@@ -176,8 +178,8 @@ class FullRestoreService : public KeyedService,
   // system is restored from crash to help set the browser saving flag.
   std::unique_ptr<ExitTypeService::CrashedLock> crashed_lock_;
 
-  base::ScopedObservation<ash::AcceleratorController,
-                          ash::AcceleratorController::Observer>
+  base::ScopedObservation<AcceleratorController,
+                          AcceleratorController::Observer>
       accelerator_controller_observer_{this};
 
   base::WeakPtrFactory<FullRestoreService> weak_ptr_factory_{this};

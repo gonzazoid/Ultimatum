@@ -4,8 +4,9 @@
 
 #include "content/test/mock_ssl_host_state_delegate.h"
 
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -41,8 +42,9 @@ SSLHostStateDelegate::CertJudgment MockSSLHostStateDelegate::QueryPolicy(
     const net::X509Certificate& cert,
     int error,
     StoragePartition* storage_partition) {
-  if (exceptions_.find(host) == exceptions_.end())
+  if (!base::Contains(exceptions_, host)) {
     return SSLHostStateDelegate::DENIED;
+  }
 
   return SSLHostStateDelegate::ALLOWED;
 }
@@ -58,8 +60,7 @@ bool MockSSLHostStateDelegate::DidHostRunInsecureContent(
     const std::string& host,
     int child_id,
     InsecureContentType content_type) {
-  return hosts_ran_insecure_content_.find(host) !=
-         hosts_ran_insecure_content_.end();
+  return base::Contains(hosts_ran_insecure_content_, host);
 }
 
 void MockSSLHostStateDelegate::AllowHttpForHost(
@@ -74,15 +75,41 @@ bool MockSSLHostStateDelegate::IsHttpAllowedForHost(
   return base::Contains(allow_http_hosts_, host);
 }
 
+void MockSSLHostStateDelegate::SetHttpsEnforcementForHost(
+    const std::string& host,
+    bool enforce,
+    StoragePartition* storage_partition) {
+  if (enforce) {
+    enforce_https_hosts_.insert(host);
+  } else {
+    enforce_https_hosts_.erase(host);
+  }
+}
+
+bool MockSSLHostStateDelegate::IsHttpsEnforcedForUrl(
+    const GURL& url,
+    StoragePartition* storage_partition) {
+  // HTTPS-First Mode is never auto-enabled for URLs with non-default ports.
+  if (!url.port().empty()) {
+    return false;
+  }
+  return base::Contains(enforce_https_hosts_, url.host());
+}
+
 void MockSSLHostStateDelegate::RevokeUserAllowExceptions(
     const std::string& host) {
-  exceptions_.erase(exceptions_.find(host));
+  exceptions_.erase(host);
 }
 
 bool MockSSLHostStateDelegate::HasAllowException(
     const std::string& host,
     StoragePartition* storage_partition) {
-  return exceptions_.find(host) != exceptions_.end();
+  return base::Contains(exceptions_, host);
+}
+
+bool MockSSLHostStateDelegate::HasAllowExceptionForAnyHost(
+    StoragePartition* storage_partition) {
+  return !exceptions_.empty();
 }
 
 }  // namespace content

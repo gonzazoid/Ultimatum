@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,13 +71,6 @@ struct HashTraits<blink::CrossThreadWeakPersistent<T>>
     : BasePersistentHashTraits<T, blink::CrossThreadWeakPersistent<T>> {};
 
 template <typename T>
-struct DefaultHash<blink::CrossThreadPersistent<T>> : PersistentHashBase<T> {};
-
-template <typename T>
-struct DefaultHash<blink::CrossThreadWeakPersistent<T>>
-    : PersistentHashBase<T> {};
-
-template <typename T>
 struct CrossThreadCopier<blink::CrossThreadPersistent<T>>
     : public CrossThreadCopierPassThrough<blink::CrossThreadPersistent<T>> {
   STATIC_ONLY(CrossThreadCopier);
@@ -95,6 +88,9 @@ namespace base {
 
 template <typename T>
 struct IsWeakReceiver<blink::CrossThreadWeakPersistent<T>> : std::true_type {};
+
+template <typename>
+struct BindUnwrapTraits;
 
 template <typename T>
 struct BindUnwrapTraits<blink::CrossThreadWeakPersistent<T>> {

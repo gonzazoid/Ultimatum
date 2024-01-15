@@ -74,6 +74,7 @@ class MockRenderProcessHostFactory;
 class NavigationController;
 class RenderProcessHostFactory;
 class TestNavigationURLLoaderFactory;
+class TestPageFactory;
 class TestRenderFrameHostFactory;
 class TestRenderViewHostFactory;
 class TestRenderWidgetHostFactory;
@@ -101,7 +102,6 @@ class RenderFrameHostTester {
                                     const IPC::Message& msg);
 
   // Commit the load pending in the given |controller| if any.
-  // TODO(ahemery): This should take a WebContents directly.
   static void CommitPendingLoad(NavigationController* controller);
 
   virtual ~RenderFrameHostTester() {}
@@ -121,8 +121,9 @@ class RenderFrameHostTester {
       const std::string& frame_name,
       const blink::ParsedPermissionsPolicy& allow) = 0;
 
-  // Same as AppendChild above, but simulates a custom attributes.
-  virtual RenderFrameHost* AppendAnonymousChild(
+  // Same as AppendChild above, but simulates the `credentialless` attribute
+  // being added.
+  virtual RenderFrameHost* AppendCredentiallessChild(
       const std::string& frame_name) = 0;
 
   // Gives tests access to RenderFrameHostImpl::OnDetach. Destroys |this|.
@@ -144,6 +145,9 @@ class RenderFrameHostTester {
   // RenderFrameHost::AddMessageToConsole in this frame.
   virtual const std::vector<std::string>& GetConsoleMessages() = 0;
 
+  // Clears the console messages logged in this frame.
+  virtual void ClearConsoleMessages() = 0;
+
   // Get a count of the total number of heavy ad issues reported.
   virtual int GetHeavyAdIssueCount(HeavyAdIssueType type) = 0;
 
@@ -151,9 +155,7 @@ class RenderFrameHostTester {
   virtual void SimulateManifestURLUpdate(const GURL& manifest_url) = 0;
 
   // Creates and appends a fenced frame.
-  virtual RenderFrameHost* AppendFencedFrame(
-      blink::mojom::FencedFrameMode mode =
-          blink::mojom::FencedFrameMode::kDefault) = 0;
+  virtual RenderFrameHost* AppendFencedFrame() = 0;
 
 #if !BUILDFLAG(IS_ANDROID)
   // Creates the HidService and binds `receiver`.
@@ -228,6 +230,7 @@ class RenderViewHostTestEnabler {
   std::unique_ptr<base::test::SingleThreadTaskEnvironment> task_environment_;
   std::unique_ptr<MockRenderProcessHostFactory> rph_factory_;
   std::unique_ptr<MockAgentSchedulingGroupHostFactory> asgh_factory_;
+  std::unique_ptr<TestPageFactory> page_factory_;
   std::unique_ptr<TestRenderViewHostFactory> rvh_factory_;
   std::unique_ptr<TestRenderFrameHostFactory> rfh_factory_;
   std::unique_ptr<TestRenderWidgetHostFactory> rwhi_factory_;
@@ -253,7 +256,7 @@ class RenderViewHostTestHarness : public ::testing::Test {
   NavigationController& controller();
 
   // The contents under test.
-  WebContents* web_contents();
+  WebContents* web_contents() const;
 
   // RVH/RFH getters are shorthand for oft-used bits of web_contents().
 
@@ -292,6 +295,10 @@ class RenderViewHostTestHarness : public ::testing::Test {
   // Sets the focused frame to the main frame of the WebContents for tests that
   // rely on the focused frame not being null.
   void FocusWebContentsOnMainFrame();
+
+  // Sets the focused frame to the `rfh` for tests that rely on the focused
+  // frame not being null.
+  void FocusWebContentsOnFrame(content::RenderFrameHost* rfh);
 
  protected:
   // testing::Test

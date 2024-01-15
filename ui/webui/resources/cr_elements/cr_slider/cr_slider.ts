@@ -6,15 +6,13 @@
  * @fileoverview 'cr-slider' is a slider component used to select a number from
  * a continuous or discrete range of numbers.
  */
-import '../../js/cr.m.js';
 import '../cr_hidden_style.css.js';
 import '../cr_shared_vars.css.js';
 
+import {assert} from '//resources/js/assert.js';
+import {EventTracker} from '//resources/js/event_tracker.js';
 import {PaperRippleBehavior} from '//resources/polymer/v3_0/paper-behaviors/paper-ripple-behavior.js';
 import {Debouncer, microTask, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {assert} from '../../js/assert_ts.js';
-import {EventTracker} from '../../js/event_tracker.js';
 
 import {getTemplate} from './cr_slider.html.js';
 
@@ -96,13 +94,21 @@ export class CrSliderElement extends CrSliderElementBase {
         type: Boolean,
         value: false,
         notify: true,
-        reflectToAttribute: true,
       },
 
       updatingFromKey: {
         type: Boolean,
         value: false,
         notify: true,
+      },
+
+      /**
+       * The amount the slider value increments by when pressing any of the keys
+       * from `deltaKeyMap_`. Defaults to 1.
+       */
+      keyPressSliderIncrement: {
+        type: Number,
+        value: 1,
       },
 
       markerCount: {
@@ -183,12 +189,14 @@ export class CrSliderElement extends CrSliderElementBase {
       'onTicksChanged_(ticks.*)',
       'updateUi_(ticks.*, value, min, max)',
       'onValueMinMaxChange_(value, min, max)',
+      'buildDeltaKeyMap_(isRtl_, keyPressSliderIncrement)',
     ];
   }
 
   disabled: boolean;
   dragging: boolean;
   updatingFromKey: boolean;
+  keyPressSliderIncrement: number;
   markerCount: number;
   max: number;
   min: number;
@@ -224,14 +232,6 @@ export class CrSliderElement extends CrSliderElementBase {
   override connectedCallback() {
     super.connectedCallback();
     this.isRtl_ = window.getComputedStyle(this)['direction'] === 'rtl';
-    this.deltaKeyMap_ = new Map([
-      ['ArrowDown', -1],
-      ['ArrowUp', 1],
-      ['PageDown', -1],
-      ['PageUp', 1],
-      ['ArrowLeft', this.isRtl_ ? 1 : -1],
-      ['ArrowRight', this.isRtl_ ? -1 : 1],
-    ]);
     this.draggingEventTracker_ = new EventTracker();
   }
 
@@ -282,12 +282,22 @@ export class CrSliderElement extends CrSliderElementBase {
   }
 
   private hideRipple_() {
+    if (this.noink) {
+      return;
+    }
+
     this.getRipple().clear();
     this.showLabel_ = false;
   }
 
   private showRipple_() {
-    this.getRipple().showAndHoldDown();
+    if (this.noink) {
+      return;
+    }
+
+    if (!this.getRipple().holdDown) {
+      this.getRipple().showAndHoldDown();
+    }
     this.showLabel_ = true;
   }
 
@@ -459,6 +469,19 @@ export class CrSliderElement extends CrSliderElementBase {
     if (this.updateValue_(ratio * (this.max - this.min) + this.min)) {
       this.fire_('cr-slider-value-changed');
     }
+  }
+
+  private buildDeltaKeyMap_() {
+    const increment = this.keyPressSliderIncrement;
+    const decrement = -this.keyPressSliderIncrement;
+    this.deltaKeyMap_ = new Map([
+      ['ArrowDown', decrement],
+      ['ArrowUp', increment],
+      ['PageDown', decrement],
+      ['PageUp', increment],
+      ['ArrowLeft', this.isRtl_ ? increment : decrement],
+      ['ArrowRight', this.isRtl_ ? decrement : increment],
+    ]);
   }
 
   // Overridden from PaperRippleBehavior

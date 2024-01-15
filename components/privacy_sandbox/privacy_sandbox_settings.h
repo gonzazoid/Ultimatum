@@ -5,21 +5,17 @@
 #ifndef COMPONENTS_PRIVACY_SANDBOX_PRIVACY_SANDBOX_SETTINGS_H_
 #define COMPONENTS_PRIVACY_SANDBOX_PRIVACY_SANDBOX_SETTINGS_H_
 
-#include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
-#include "base/observer_list.h"
-#include "base/time/time.h"
+#include "components/browsing_topics/common/common_types.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/prefs/pref_change_registrar.h"
-#include "components/privacy_sandbox/canonical_topic.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/privacy_sandbox/tpcd_experiment_eligibility.h"
+#include "content/public/browser/interest_group_api_operation.h"
 
-class HostContentSettingsMap;
-class PrefService;
+#include "base/time/time.h"
+
 class GURL;
 
-namespace content_settings {
-class CookieSettings;
+namespace content {
+class RenderFrameHost;
 }
 
 namespace url {
@@ -27,6 +23,23 @@ class Origin;
 }
 
 namespace privacy_sandbox {
+
+class CanonicalTopic;
+
+// When a new enum value is added:
+// 1. Update kMaxValue to match it.
+// 2. Update `PrivacySandboxAttestationsGatedAPIProto` in
+//    `privacy_sandbox_attestations.proto`.
+// 3. Update `AllowAPI` in `privacy_sandbox_attestations_parser.cc`.
+enum class PrivacySandboxAttestationsGatedAPI {
+  kTopics,
+  kProtectedAudience,
+  kPrivateAggregation,
+  kAttributionReporting,
+  kSharedStorage,
+
+  kMaxValue = kSharedStorage,
+};
 
 // A service which acts as a intermediary between Privacy Sandbox APIs and the
 // preferences and content settings which define when they are allowed to be
@@ -41,14 +54,6 @@ class PrivacySandboxSettings : public KeyedService {
    public:
     virtual void OnTopicsDataAccessibleSinceUpdated() {}
 
-    // Fired when Trust Token blocking has changed because of a change to the
-    // Privacy Sandbox preference. Does not account for changes to third-party
-    // cookie blocking, which may result in the Privacy Sandbox being disabled.
-    // Trust tokens thus additionally independently consult Cookie settings.
-    // TODO(crbug.com/1304132): Unify this so Trust Tokens only need to consult
-    // a single source of truth.
-    virtual void OnTrustTokenBlockingChanged(bool blocked) {}
-
     // Fired when the First-Party Sets changes to being `enabled` as a result of
     // the kPrivacySandboxFirstPartySets preference changing.
     virtual void OnFirstPartySetsEnabledChanged(bool enabled) {}
@@ -58,68 +63,132 @@ class PrivacySandboxSettings : public KeyedService {
    public:
     virtual ~Delegate() = default;
 
-    // Allows the delegate to restirct access to the Privacy Sandbox. When
+    // Allows the delegate to restrict access to the Privacy Sandbox. When
     // the Privacy Sandbox is restricted, all API access is disabled. This is
     // consulted on every access check, and it is acceptable for this to change
     // return value over the life of the service.
-    virtual bool IsPrivacySandboxRestricted() = 0;
-  };
+    virtual bool IsPrivacySandboxRestricted() const = 0;
 
-  PrivacySandboxSettings(
-      std::unique_ptr<Delegate> delegate,
-      HostContentSettingsMap* host_content_settings_map,
-      scoped_refptr<content_settings::CookieSettings> cookie_settings,
-      PrefService* pref_service,
-      bool incognito_profile);
-  ~PrivacySandboxSettings() override;
+    // Allows the delegate to query in real time if Privacy Sandbox is currently
+    // unrestricted. Unlike IsPrivacySandboxRestricted, does NOT
+    // restrict/unrestrict access to the Privacy Sandbox.
+    virtual bool IsPrivacySandboxCurrentlyUnrestricted() const = 0;
+
+    // Whether the current profile is Incognito or not. For Incognito, the
+    // privacy sandbox APIs are restricted.
+    virtual bool IsIncognitoProfile() const = 0;
+
+    // Whether there is an appropriate level of consent for the Topics API.
+    // When this returns false, access control functions for Topics will
+    // return as not allowed.
+    virtual bool HasAppropriateTopicsConsent() const = 0;
+
+    // Whether the profile is subject to being given notice of restrictions to
+    // the standard set of Privacy Sandbox APIs.
+    virtual bool IsSubjectToM1NoticeRestricted() const = 0;
+
+    // Whether the profile is eligible for 3PCD experiment. The eligibility
+    // applies for both mode A and mode B experiments.
+    virtual bool IsCookieDeprecationExperimentEligible() const = 0;
+
+    // Returns the profile's computed eligibility for 3PCD experiment. The
+    // eligibility applies for both mode A and mode B experiments. Unlike
+    // `IsCookieDeprecationExperimentEligible` this method returns the real time
+    // eligibility.
+    virtual TpcdExperimentEligibility
+    GetCookieDeprecationExperimentCurrentEligibility() const = 0;
+
+    // Whether cookie deprecation label is allowed.
+    virtual bool IsCookieDeprecationLabelAllowed() const = 0;
+
+    // Whether third-party cookies are blocked due to cookie deprecation
+    // experiment. Also returns false if users explicitly block third-party
+    // cookies.
+    virtual bool AreThirdPartyCookiesBlockedByCookieDeprecationExperiment()
+        const = 0;
+  };
 
   // Returns whether the Topics API is allowed at all. If false, Topics API
   // calculations should not occur. If true, the more specific function,
   // IsTopicsApiAllowedForContext(), should be consulted for the relevant
   // context.
-  bool IsTopicsAllowed() const;
+  virtual bool IsTopicsAllowed() const = 0;
 
   // Determines whether the Topics API is allowable in a particular context.
   // |top_frame_origin| is used to check for content settings which could both
   // affect 1P and 3P contexts.
-  bool IsTopicsAllowedForContext(
+  // If provided, `console_frame` is used to log errors to the console upon
+  // attestation failure.
+  virtual bool IsTopicsAllowedForContext(
+      const url::Origin& top_frame_origin,
       const GURL& url,
-      const absl::optional<url::Origin>& top_frame_origin) const;
+      content::RenderFrameHost* console_frame = nullptr) const = 0;
 
   // Returns whether |topic| can be either considered as a top topic for the
   // current epoch, or provided to a website as a previous / current epochs
   // site assigned topic.
-  bool IsTopicAllowed(const CanonicalTopic& topic);
+  virtual bool IsTopicAllowed(const CanonicalTopic& topic) = 0;
+
+  // Returns whether |topic| is prioritized by Finch settings.
+  virtual bool IsTopicPrioritized(const CanonicalTopic& topic) = 0;
 
   // Sets |topic| to |allowed|. Whether a topic is allowed or not is made
   // available through IsTopicAllowed().
-  void SetTopicAllowed(const CanonicalTopic& topic, bool allowed);
+  virtual void SetTopicAllowed(const CanonicalTopic& topic, bool allowed) = 0;
 
   // Removes all Topic settings with creation times between |start_time|
   // and |end_time|. This allows for integration with the existing browsing data
   // remover, such as the one powering Clear Browser Data.
-  void ClearTopicSettings(base::Time start_time, base::Time end_time);
+  virtual void ClearTopicSettings(base::Time start_time,
+                                  base::Time end_time) = 0;
 
   // Returns the point in time from which history is eligible to be used when
   // calculating a user's Topics API topics. Reset when a user clears all
   // cookies, or when the browser restarts with "Clear on exit" enabled. The
   // returned time will have been fuzzed for local privacy, and so may be in the
   // future, in which case no history is eligible.
-  base::Time TopicsDataAccessibleSince() const;
+  virtual base::Time TopicsDataAccessibleSince() const = 0;
+
+  // Returns whether any Attribution Reporting operation would ever be allowed.
+  // If false, no attribution reporting operation is allowed (e.g. because the
+  // user has disabled the setting). If true, the appropriate context specific
+  // check must also be made.
+  virtual bool IsAttributionReportingEverAllowed() const = 0;
 
   // Determines whether Attribution Reporting is allowable in a particular
   // context. Should be called at both source and trigger registration. At each
   // of these points |top_frame_origin| is the same as either the source origin
   // or the destination origin respectively.
-  bool IsAttributionReportingAllowed(const url::Origin& top_frame_origin,
-                                     const url::Origin& reporting_origin) const;
+  // If provided, `console_frame` is used to log errors to the console upon
+  // attestation failure.
+  virtual bool IsAttributionReportingAllowed(
+      const url::Origin& top_frame_origin,
+      const url::Origin& reporting_origin,
+      content::RenderFrameHost* console_frame = nullptr) const = 0;
 
   // Called before sending the associated attribution report to
   // |reporting_origin|. Re-checks that |reporting_origin| is allowable as a 3P
   // on both |source_origin| and |destination_origin|.
-  bool MaySendAttributionReport(const url::Origin& source_origin,
-                                const url::Origin& destination_origin,
-                                const url::Origin& reporting_origin) const;
+  // If provided, `console_frame` is used to log errors to the console upon
+  // attestation failure.
+  virtual bool MaySendAttributionReport(
+      const url::Origin& source_origin,
+      const url::Origin& destination_origin,
+      const url::Origin& reporting_origin,
+      content::RenderFrameHost* console_frame = nullptr) const = 0;
+
+  // Determines whether Attribution Reporting API's transitional debug reporting
+  // is allowable in a particular context. Note that
+  // `IsAttributionReportingAllowed()` should be called prior to this.
+  // |can_bypass| indicates whether the result can be bypassed which is set to
+  // true when it's disallowed due to the cookie deprecation experiment.
+  //
+  // TODO(https://crbug.com/1501357): Clean up `can_bypass` after the cookie
+  // deprecation experiment.
+  virtual bool IsAttributionReportingTransitionalDebuggingAllowed(
+      const url::Origin& top_frame_origin,
+      const url::Origin& reporting_origin,
+      bool& can_bypass) const = 0;
 
   // Sets the ability for |top_frame_etld_plus1| to join the profile to interest
   // groups to |allowed|. This information is stored in preferences, and is made
@@ -127,107 +196,130 @@ class PrivacySandboxSettings : public KeyedService {
   // should in most circumstances be a valid eTLD+1, but hosts are accepted to
   // allow for shifts in private registries. Entries are converted into wildcard
   // subdomain ContentSettingsPattern before comparison.
-  void SetFledgeJoiningAllowed(const std::string& top_frame_etld_plus1,
-                               bool allowed);
+  virtual void SetFledgeJoiningAllowed(const std::string& top_frame_etld_plus1,
+                                       bool allowed) = 0;
 
   // Clears any FLEDGE joining block settings with creation times between
   // |start_time| and |end_time|.
-  void ClearFledgeJoiningAllowedSettings(base::Time start_time,
-                                         base::Time end_time);
+  virtual void ClearFledgeJoiningAllowedSettings(base::Time start_time,
+                                                 base::Time end_time) = 0;
 
-  // Determines whether the user may be joined to FLEDGE interest groups on, or
-  // by, |top_frame_origin|. This is an additional check that must be
-  // combined with the more generic IsFledgeAllowed().
-  bool IsFledgeJoiningAllowed(const url::Origin& top_frame_origin) const;
-
-  // Determine whether |auction_party| can register an interest group, or sell /
+  // Determine whether |auction_party| can register an interest group, or sell
   // buy in an auction, on |top_frame_origin|.
-  bool IsFledgeAllowed(const url::Origin& top_frame_origin,
-                       const url::Origin& auction_party);
-
-  // Filter |auction_parties| down to those that may participate as a buyer for
-  // auctions run on |top_frame_origin|. Logically equivalent to calling
-  // IsFledgeAllowed() for each element of |auction_parties|.
-  std::vector<GURL> FilterFledgeAllowedParties(
+  // If provided, `console_frame` is used to log errors to the console upon
+  // attestation failure.
+  virtual bool IsFledgeAllowed(
       const url::Origin& top_frame_origin,
-      const std::vector<GURL>& auction_parties);
+      const url::Origin& auction_party,
+      content::InterestGroupApiOperation interest_group_api_operation,
+      content::RenderFrameHost* console_frame = nullptr) const = 0;
+
+  // Determine whether |destination_origin| is allowed to receive events
+  // (reportEvent(), automatic beacons) reported by an API like Protected
+  // Audience or Shared Storage. This does not check if the API itself is
+  // allowed by the calling context, since the corresponding registerAdBeacon
+  // and selectUrl caller sites were also checked for attestation.
+  virtual bool IsEventReportingDestinationAttested(
+      const url::Origin& destination_origin,
+      privacy_sandbox::PrivacySandboxAttestationsGatedAPI invoking_api)
+      const = 0;
 
   // Determines whether Shared Storage is allowable in a particular context.
   // `top_frame_origin` can be the same as `accessing_origin` in the case of a
   // top-level document calling Shared Storage.
-  bool IsSharedStorageAllowed(const url::Origin& top_frame_origin,
-                              const url::Origin& accessing_origin) const;
+  // If provided, `console_frame` is used to log errors to the console upon
+  // attestation failure.
+  virtual bool IsSharedStorageAllowed(
+      const url::Origin& top_frame_origin,
+      const url::Origin& accessing_origin,
+      content::RenderFrameHost* console_frame = nullptr) const = 0;
+
+  // Controls whether Shared Storage SelectURL is allowable for
+  // `accessing_origin` in the context of `top_frame_origin`. Does not override
+  // a false return value from IsSharedStorageAllowed.
+  // TODO(crbug.com/1378703): This just redirects to the general
+  // IsSharedStorageAllowed(). The implementation needs to be updated to reflect
+  // the M1 preferences when release 4 is enabled.
+  virtual bool IsSharedStorageSelectURLAllowed(
+      const url::Origin& top_frame_origin,
+      const url::Origin& accessing_origin) const = 0;
 
   // Determines whether the Private Aggregation API is allowable in a particular
   // context. `top_frame_origin` is the associated top-frame origin of the
-  // calling context.
-  bool IsPrivateAggregationAllowed(const url::Origin& top_frame_origin,
-                                   const url::Origin& reporting_origin) const;
+  // calling context. Applicable to all uses of Private Aggregation.
+  virtual bool IsPrivateAggregationAllowed(
+      const url::Origin& top_frame_origin,
+      const url::Origin& reporting_origin) const = 0;
 
-  // Returns whether the profile has the Privacy Sandbox enabled. This consults
-  // the main preference, as well as the delegate to check whether the sandbox
-  // is restricted. It does not consider any cookie settings. A return value of
-  // false means that no Privacy Sandbox operations can occur. A return value of
-  // true must be followed up with the appropriate IsXAllowed() call.
-  bool IsPrivacySandboxEnabled() const;
+  // Determines whether the Private Aggregation API's debug mode is allowable in
+  // a particular context. Note that if IsPrivateAggregationAllowed() is false,
+  // this will always be false too. `top_frame_origin` is the associated
+  // top-frame origin of the calling context. Applicable to all uses of Private
+  // Aggregation.
+  virtual bool IsPrivateAggregationDebugModeAllowed(
+      const url::Origin& top_frame_origin,
+      const url::Origin& reporting_origin) const = 0;
 
-  // Disables the Privacy Sandbox completely if |enabled| is false, if |enabled|
-  // is true, more granular checks will still be performed, and the delegate
-  // consulted, to determine if specific APIs are available in specific
-  // contexts.
-  void SetPrivacySandboxEnabled(bool enabled);
+  // Returns the profile computed eligibility for 3PCD experiments.
+  // This consults the delegate for the real time eligibility of the profile.
+  // The eligibility applies for both mode A and mode B experiments.
+  virtual TpcdExperimentEligibility
+  GetCookieDeprecationExperimentCurrentEligibility() const = 0;
 
-  // Returns whether Trust Tokens are "generally" available. A return value of
-  // false is authoritative, while a value of true must be followed by the
-  // appropriate context specific check.
-  bool IsTrustTokensAllowed();
+  // Determines whether cookie deprecation label is allowable. This consults
+  // whether the profile is eligible for 3PCD experiments. If true, the more
+  // specific function, IsCookieDeprecationLabelAllowed(), should be consulted
+  // for the relevant context.
+  virtual bool IsCookieDeprecationLabelAllowed() const = 0;
+
+  // Determines whether cookie deprecation label is allowable for
+  // `context_origin` in the context of `top_frame_origin`.
+  virtual bool IsCookieDeprecationLabelAllowedForContext(
+      const url::Origin& top_frame_origin,
+      const url::Origin& context_origin) const = 0;
+
+  // Allows all Privacy Sandbox prefs for testing. This should be used if tests
+  // don't depend on specific access control and just would like to have Privacy
+  // Sandbox allowed. Doesn't affect other non-default settings which might
+  // disallow APIs e.g. site data exceptions.
+  virtual void SetAllPrivacySandboxAllowedForTesting() = 0;
+
+  // Blocks Topics pref for testing.
+  virtual void SetTopicsBlockedForTesting() = 0;
 
   // Returns whether the Privacy Sandbox is being restricted by the associated
   // delegate. Forwards directly to the corresponding delegate function.
   // Virtual to allow mocking in tests.
-  virtual bool IsPrivacySandboxRestricted();
+  virtual bool IsPrivacySandboxRestricted() const = 0;
+
+  // Returns whether the Privacy Sandbox is being unrestricted by the associated
+  // delegate. Forwards directly to the corresponding delegate function.
+  // Virtual to allow mocking in tests. Unlike IsPrivacySandboxRestricted
+  // this method always return the current restriction status.
+  virtual bool IsPrivacySandboxCurrentlyUnrestricted() const = 0;
+
+  // Returns whether the privacy sandbox restricted notice should be shown,
+  // based on account characteristics. Forwards to the delegate. Virtual for
+  // mocking in tests.
+  virtual bool IsSubjectToM1NoticeRestricted() const = 0;
+
+  // Returns whether the Privacy Sandbox is partially enabled based on
+  // restrictions.
+  virtual bool IsRestrictedNoticeEnabled() const = 0;
 
   // Called when there's a broad cookies clearing action. For example, this
   // should be called on "Clear browsing data", but shouldn't be called on the
   // Clear-Site-Data header, as it's restricted to a specific site.
-  void OnCookiesCleared();
+  virtual void OnCookiesCleared() = 0;
 
-  // Called when the main privacy sandbox preference is changed.
-  void OnPrivacySandboxPrefChanged();
-
-  // Called when the First-Party Sets enabled preference is changed.
-  void OnFirstPartySetsEnabledPrefChanged();
-
-  void AddObserver(Observer* observer);
-  void RemoveObserver(Observer* observer);
+  virtual void AddObserver(Observer* observer) = 0;
+  virtual void RemoveObserver(Observer* observer) = 0;
 
   // Overrides the internal delegate for test purposes.
-  void SetDelegateForTesting(std::unique_ptr<Delegate> delegate);
+  virtual void SetDelegateForTesting(std::unique_ptr<Delegate> delegate) = 0;
 
- protected:
-  // Protected default constructor to allow mocking in tests.
-  PrivacySandboxSettings();
-
-  // Determines based on the current features, preferences and provided
-  // |cookie_settings| whether Privacy Sandbox APIs are generally allowable for
-  // |url| on |top_frame_origin|. Individual APIs may perform additional checks
-  // for allowability (such as incognito) ontop of this. |cookie_settings| is
-  // provided as a parameter to allow callers to cache it between calls.
-  bool IsPrivacySandboxEnabledForContext(
-      const GURL& url,
-      const absl::optional<url::Origin>& top_frame_origin) const;
-
-  void SetTopicsDataAccessibleFromNow() const;
-
- private:
-  base::ObserverList<Observer>::Unchecked observers_;
-
-  std::unique_ptr<Delegate> delegate_;
-  raw_ptr<HostContentSettingsMap, DanglingUntriaged> host_content_settings_map_;
-  scoped_refptr<content_settings::CookieSettings> cookie_settings_;
-  raw_ptr<PrefService, DanglingUntriaged> pref_service_;
-  PrefChangeRegistrar pref_change_registrar_;
-  bool incognito_profile_;
+  // Source of truth for whether related websites are enabled.
+  virtual bool AreRelatedWebsiteSetsEnabled() const = 0;
 };
 
 }  // namespace privacy_sandbox

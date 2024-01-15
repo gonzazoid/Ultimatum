@@ -8,9 +8,9 @@
 #include <string>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -33,10 +33,7 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/base/resource/resource_bundle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/resource/resource_scale_factor.h"
 
 using base::test::ios::kWaitForActionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -101,24 +98,22 @@ class CWVCreditCardVerifierTest : public PlatformTest {
         ui::ResourceBundle::GetSharedInstance();
 
     // Don't load 100P resource since no @1x devices are supported.
-    if (ui::ResourceBundle::IsScaleFactorSupported(ui::k200Percent)) {
+    if (ui::IsScaleFactorSupported(ui::k200Percent)) {
       base::FilePath pak_file_200;
-      base::PathService::Get(base::DIR_MODULE, &pak_file_200);
+      base::PathService::Get(base::DIR_ASSETS, &pak_file_200);
       pak_file_200 =
           pak_file_200.Append(FILE_PATH_LITERAL("web_view_200_percent.pak"));
       resource_bundle.AddDataPackFromPath(pak_file_200, ui::k200Percent);
     }
-    if (ui::ResourceBundle::IsScaleFactorSupported(ui::k300Percent)) {
+    if (ui::IsScaleFactorSupported(ui::k300Percent)) {
       base::FilePath pak_file_300;
-      base::PathService::Get(base::DIR_MODULE, &pak_file_300);
+      base::PathService::Get(base::DIR_ASSETS, &pak_file_300);
       pak_file_300 =
           pak_file_300.Append(FILE_PATH_LITERAL("web_view_300_percent.pak"));
       resource_bundle.AddDataPackFromPath(pak_file_300, ui::k300Percent);
     }
 
     pref_service_ = std::make_unique<TestingPrefServiceSimple>();
-    pref_service_->registry()->RegisterBooleanPref(
-        autofill::prefs::kAutofillWalletImportStorageCheckboxState, false);
     autofill::CreditCard credit_card = autofill::test::GetMaskedServerCard();
     credit_card_verifier_ = [[CWVCreditCardVerifier alloc]
          initWithPrefs:pref_service_.get()

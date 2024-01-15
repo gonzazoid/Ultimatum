@@ -4,20 +4,19 @@
 
 #import "ios/web_view/public/cwv_navigation_action.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @implementation CWVNavigationAction
 @synthesize request = _request;
 @synthesize userInitiated = _userInitiated;
+@synthesize navigationType = _navigationType;
 
 - (instancetype)initWithRequest:(NSURLRequest*)request
-                  userInitiated:(BOOL)userInitiated {
+                  userInitiated:(BOOL)userInitiated
+                 navigationType:(CWVNavigationType)navigationType {
   self = [super init];
   if (self) {
     _userInitiated = userInitiated;
     _request = [request copy];
+    _navigationType = navigationType;
   }
   return self;
 }

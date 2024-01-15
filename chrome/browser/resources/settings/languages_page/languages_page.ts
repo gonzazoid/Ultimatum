@@ -22,7 +22,6 @@ import 'chrome://resources/cr_elements/action_link.css.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './add_languages_dialog.js';
-import '../controls/settings_toggle_button.js';
 import '../icons.html.js';
 import '../relaunch_confirmation_dialog.js';
 import '../settings_shared.css.js';
@@ -31,22 +30,20 @@ import '../settings_vars.css.js';
 import {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {isWindows} from 'chrome://resources/js/cr.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {isWindows} from 'chrome://resources/js/platform.js';
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 // <if expr="is_win">
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 // </if>
 
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
-import {loadTimeData} from '../i18n_setup.js';
-import {PrefsMixin, PrefsMixinInterface} from '../prefs/prefs_mixin.js';
-import {RelaunchMixin, RelaunchMixinInterface, RestartType} from '../relaunch_mixin.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+
+import {RelaunchMixin, RestartType} from '../relaunch_mixin.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface} from '../router.js';
+import {Route, RouteObserverMixin} from '../router.js';
 
 import {getTemplate} from './languages_page.html.js';
 import {LanguageSettingsActionType, LanguageSettingsMetricsProxy, LanguageSettingsMetricsProxyImpl, LanguageSettingsPageImpressionType} from './languages_settings_metrics_proxy.js';
@@ -58,18 +55,16 @@ import {LanguageHelper, LanguagesModel, LanguageState} from './languages_types.j
  * Millisecond delay that can be used when closing an action menu to keep it
  * briefly on-screen.
  */
- export const kMenuCloseDelay: number = 100;
+export const kMenuCloseDelay: number = 100;
 
- export interface SettingsLanguagesPageElement {
-   $: {
-     menu: CrLazyRenderElement<CrActionMenuElement>,
-   };
- }
+export interface SettingsLanguagesPageElement {
+  $: {
+    menu: CrLazyRenderElement<CrActionMenuElement>,
+  };
+}
 
 const SettingsLanguagesPageElementBase =
-    RouteObserverMixin(RelaunchMixin(I18nMixin(PrefsMixin(PolymerElement)))) as {
-      new (): PolymerElement & RelaunchMixinInterface & I18nMixinInterface & PrefsMixinInterface & RouteObserverMixinInterface,
-    };
+    RouteObserverMixin(RelaunchMixin(I18nMixin(PrefsMixin(PolymerElement))));
 
 export class SettingsLanguagesPageElement extends
     SettingsLanguagesPageElementBase {
@@ -114,20 +109,11 @@ export class SettingsLanguagesPageElement extends
         type: Boolean,
         value: false,
       },
-
-      enableDesktopDetailedLanguageSettings_: {
-        type: Boolean,
-        value: function() {
-          return loadTimeData.getBoolean(
-              'enableDesktopDetailedLanguageSettings');
-        },
-      },
     };
   }
 
   languages?: LanguagesModel;
   languageHelper: LanguageHelper;
-  private enableDesktopDetailedLanguageSettings_: boolean;
   private detailLanguage_?: LanguageState;
   private showAddLanguagesDialog_: boolean;
   private addLanguagesDialogLanguages_:
@@ -144,7 +130,7 @@ export class SettingsLanguagesPageElement extends
    * Stamps and opens the Add Languages dialog, registering a listener to
    * disable the dialog's dom-if again on close.
    */
-  private onAddLanguagesTap_(e: Event) {
+  private onAddLanguagesClick_(e: Event) {
     e.preventDefault();
     this.languageSettingsMetricsProxy_.recordPageImpressionMetric(
         LanguageSettingsPageImpressionType.ADD_LANGUAGE);
@@ -176,7 +162,7 @@ export class SettingsLanguagesPageElement extends
    * Formats language index (zero-indexed)
    */
   private formatIndex_(index: number): string {
-    return (index+1).toLocaleString();
+    return (index + 1).toLocaleString();
   }
 
   /**
@@ -188,15 +174,6 @@ export class SettingsLanguagesPageElement extends
     return languages === undefined || languages.supported.some(language => {
       return this.languageHelper.canEnableLanguage(language);
     });
-  }
-
-  /**
-   * Used to determine whether to show the separator between checkbox settings
-   * and move buttons in the dialog menu.
-   * @return True if there is currently more than one selected language.
-   */
-  private shouldShowDialogSeparator_(): boolean {
-    return this.languages !== undefined && this.languages.enabled.length > 1;
   }
 
   /**
@@ -251,13 +228,6 @@ export class SettingsLanguagesPageElement extends
     }
   }
 
-  private onTranslateToggleChange_(e: Event) {
-    this.languageSettingsMetricsProxy_.recordSettingsMetric(
-        (e.target as SettingsToggleButtonElement).checked ?
-            LanguageSettingsActionType.ENABLE_TRANSLATE_GLOBALLY :
-            LanguageSettingsActionType.DISABLE_TRANSLATE_GLOBALLY);
-  }
-
   // <if expr="is_win">
   /**
    * @param languageCode The language code identifying a language.
@@ -290,7 +260,7 @@ export class SettingsLanguagesPageElement extends
    * @return True if the given language cannot be set as the
    *     prospective UI language by the user.
    */
-  private disableUILanguageCheckbox_(
+  private disableUiLanguageCheckbox_(
       languageState: LanguageState, prospectiveUILanguage: string): boolean {
     if (this.detailLanguage_ === undefined) {
       return true;
@@ -320,12 +290,12 @@ export class SettingsLanguagesPageElement extends
   /**
    * Handler for changes to the UI language checkbox.
    */
-  private onUILanguageChange_(e: Event) {
+  private onUiLanguageChange_(e: Event) {
     // We don't support unchecking this checkbox. TODO(michaelpg): Ask for a
     // simpler widget.
     assert((e.target as CrCheckboxElement).checked);
     this.isChangeInProgress_ = true;
-    this.languageHelper.setProspectiveUILanguage(
+    this.languageHelper.setProspectiveUiLanguage(
         this.detailLanguage_!.language.code);
     this.languageHelper.moveLanguageToFront(
         this.detailLanguage_!.language.code);
@@ -345,7 +315,7 @@ export class SettingsLanguagesPageElement extends
    * @return True if the given language matches the prospective UI pref (which
    *     may be different from the actual UI language).
    */
-  private isProspectiveUILanguage_(
+  private isProspectiveUiLanguage_(
       languageCode: string, prospectiveUILanguage: string): boolean {
     return languageCode === prospectiveUILanguage;
   }
@@ -353,68 +323,15 @@ export class SettingsLanguagesPageElement extends
   /**
    * Handler for the restart button.
    */
-  private onRestartTap_() {
+  private onRestartClick_() {
     this.performRestart(RestartType.RESTART);
   }
   // </if>
 
   /**
-   * @param targetLanguageCode The default translate target language.
-   * @return True if the translate checkbox should be disabled.
-   */
-  private disableTranslateCheckbox_(
-      languageState: LanguageState|undefined,
-      targetLanguageCode: string): boolean {
-    if (languageState === undefined || languageState.language === undefined ||
-        !languageState.language.supportsTranslate) {
-      return true;
-    }
-
-    if (this.languageHelper.isOnlyTranslateBlockedLanguage(languageState)) {
-      return true;
-    }
-
-    return this.languageHelper.convertLanguageCodeForTranslate(
-               languageState.language.code) === targetLanguageCode;
-  }
-
-  /**
-   * Handler for changes to the translate checkbox.
-   */
-  private onTranslateCheckboxChange_(e: Event) {
-    if ((e.target as CrCheckboxElement).checked) {
-      this.languageHelper.enableTranslateLanguage(
-          this.detailLanguage_!.language.code);
-
-      this.languageSettingsMetricsProxy_.recordSettingsMetric(
-          LanguageSettingsActionType.ENABLE_TRANSLATE_FOR_SINGLE_LANGUAGE);
-
-    } else {
-      this.languageHelper.disableTranslateLanguage(
-          this.detailLanguage_!.language.code);
-
-      this.languageSettingsMetricsProxy_.recordSettingsMetric(
-          LanguageSettingsActionType.DISABLE_TRANSLATE_FOR_SINGLE_LANGUAGE);
-    }
-    this.closeMenuSoon_();
-  }
-
-  /**
-   * Returns "complex" if the menu includes checkboxes, which should change
-   * the spacing of items and show a separator in the menu.
-   */
-  private getMenuClass_(translateEnabled: boolean): string {
-    if (isWindows ||
-        (translateEnabled && !this.enableDesktopDetailedLanguageSettings_)) {
-      return 'complex';
-    }
-    return '';
-  }
-
-  /**
    * Moves the language to the top of the list.
    */
-  private onMoveToTopTap_() {
+  private onMoveToTopClick_() {
     this.$.menu.get().close();
     if (this.detailLanguage_!.isForced) {
       // If language is managed, show dialog to inform user it can't be modified
@@ -430,7 +347,7 @@ export class SettingsLanguagesPageElement extends
   /**
    * Moves the language up in the list.
    */
-  private onMoveUpTap_() {
+  private onMoveUpClick_() {
     this.$.menu.get().close();
     if (this.detailLanguage_!.isForced) {
       // If language is managed, show dialog to inform user it can't be modified
@@ -446,7 +363,7 @@ export class SettingsLanguagesPageElement extends
   /**
    * Moves the language down in the list.
    */
-  private onMoveDownTap_() {
+  private onMoveDownClick_() {
     this.$.menu.get().close();
     if (this.detailLanguage_!.isForced) {
       // If language is managed, show dialog to inform user it can't be modified
@@ -462,7 +379,7 @@ export class SettingsLanguagesPageElement extends
   /**
    * Disables the language.
    */
-  private onRemoveLanguageTap_() {
+  private onRemoveLanguageClick_() {
     this.$.menu.get().close();
     if (this.detailLanguage_!.isForced) {
       // If language is managed, show dialog to inform user it can't be modified
@@ -490,7 +407,7 @@ export class SettingsLanguagesPageElement extends
     return '';
   }
 
-  private onDotsTap_(e: DomRepeatEvent<LanguageState>) {
+  private onDotsClick_(e: DomRepeatEvent<LanguageState>) {
     // Set a copy of the LanguageState object since it is not data-bound to
     // the languages model directly.
     this.detailLanguage_ = Object.assign({}, e.model.item);

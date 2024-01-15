@@ -5,11 +5,12 @@
 #include "chrome/browser/ui/views/plugin_vm/plugin_vm_installer_view.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/window_properties.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_installer_factory.h"
@@ -23,7 +24,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -72,8 +72,7 @@ int HttpErrorFailureReasonToInt(
   using Reason = plugin_vm::PluginVmInstaller::FailureReason;
   switch (reason) {
     default:
-      NOTREACHED();
-      [[fallthrough]];
+      NOTREACHED_NORETURN();
     case Reason::DOWNLOAD_FAILED_401:
       return 401;
     case Reason::DOWNLOAD_FAILED_403:
@@ -157,7 +156,7 @@ PluginVmInstallerView::PluginVmInstallerView(Profile* profile)
       gfx::Insets::TLBR(kTitleHeight - kTitleFontSize, 0, 0, 0));
   title_label_->SetMultiLine(false);
   title_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  upper_container_view->AddChildView(title_label_);
+  upper_container_view->AddChildView(title_label_.get());
 
   views::View* message_container_view = new views::View();
   message_container_view->SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -168,19 +167,20 @@ PluginVmInstallerView::PluginVmInstallerView(Profile* profile)
   message_label_ = new views::Label(GetMessage(), {kMessageFont});
   message_label_->SetMultiLine(true);
   message_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  message_container_view->AddChildView(message_label_);
+  message_container_view->AddChildView(message_label_.get());
 
   learn_more_link_ = new views::Link(l10n_util::GetStringUTF16(IDS_LEARN_MORE));
   learn_more_link_->SetCallback(base::BindRepeating(
       &PluginVmInstallerView::OnLinkClicked, base::Unretained(this)));
   learn_more_link_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  message_container_view->AddChildView(learn_more_link_);
+  message_container_view->AddChildView(learn_more_link_.get());
 
-  progress_bar_ = new views::ProgressBar(kProgressBarHeight);
+  progress_bar_ = new views::ProgressBar();
+  progress_bar_->SetPreferredHeight(kProgressBarHeight);
   progress_bar_->SetProperty(
       views::kMarginsKey,
       gfx::Insets::TLBR(kProgressBarTopMargin - kProgressBarHeight, 0, 0, 0));
-  upper_container_view->AddChildView(progress_bar_);
+  upper_container_view->AddChildView(progress_bar_.get());
 
   download_progress_message_label_ =
       new views::Label(std::u16string(), {kDownloadProgressMessageFont});
@@ -191,10 +191,10 @@ PluginVmInstallerView::PluginVmInstallerView(Profile* profile)
           0, 0));
   download_progress_message_label_->SetMultiLine(false);
   download_progress_message_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  upper_container_view->AddChildView(download_progress_message_label_);
+  upper_container_view->AddChildView(download_progress_message_label_.get());
 
   big_image_ = new views::ImageView();
-  lower_container_view->AddChildView(big_image_);
+  lower_container_view->AddChildView(big_image_.get());
 
   // Make sure the lower_container_view is pinned to the bottom of the dialog.
   lower_container_layout_->set_main_axis_alignment(
@@ -273,8 +273,6 @@ void PluginVmInstallerView::OnDownloadProgressUpdated(uint64_t bytes_downloaded,
 
   download_progress_message_label_->SetText(
       GetDownloadProgressMessage(bytes_downloaded, content_length));
-  download_progress_message_label_->NotifyAccessibilityEvent(
-      ax::mojom::Event::kTextChanged, true);
 }
 
 void PluginVmInstallerView::OnVmExists() {
@@ -363,8 +361,7 @@ std::u16string PluginVmInstallerView::GetMessage() const {
     case State::kInstalling:
       switch (installing_state_) {
         case InstallingState::kInactive:
-          NOTREACHED();
-          [[fallthrough]];
+          NOTREACHED_NORETURN();
         case InstallingState::kCheckingLicense:
         case InstallingState::kCheckingForExistingVm:
         case InstallingState::kCheckingDiskSpace:
@@ -399,6 +396,10 @@ std::u16string PluginVmInstallerView::GetMessage() const {
               IDS_PLUGIN_VM_INSTALLER_ERROR_MESSAGE_LOGIC_ERROR, app_name_,
               base::NumberToString16(
                   static_cast<std::underlying_type_t<Reason>>(*reason_)));
+        case Reason::EXISTING_IMAGE_INVALID:
+          return l10n_util::GetStringFUTF16(
+              IDS_PLUGIN_VM_INSTALLER_ERROR_INVALID_IMAGE_MESSAGE,
+              base::UTF8ToUTF16(plugin_vm::kPluginVmName), app_name_);
         case Reason::OFFLINE:
           return l10n_util::GetStringUTF16(
               IDS_PLUGIN_VM_INSTALLER_ERROR_OFFLINE_MESSAGE);
@@ -580,24 +581,19 @@ std::u16string PluginVmInstallerView::GetDownloadProgressMessage(
         ui::FormatBytesWithUnits(content_length, ui::DATA_UNITS_GIBIBYTE,
                                  /*show_units=*/true));
   } else {
-    return l10n_util::GetStringFUTF16(
-        IDS_PLUGIN_VM_INSTALLER_DOWNLOAD_PROGRESS_WITHOUT_DOWNLOAD_SIZE_MESSAGE,
-        ui::FormatBytesWithUnits(bytes_downloaded, ui::DATA_UNITS_GIBIBYTE,
-                                 /*show_units=*/true));
+    return ui::FormatBytesWithUnits(bytes_downloaded, ui::DATA_UNITS_GIBIBYTE,
+                                    /*show_units=*/true);
   }
 }
 
 void PluginVmInstallerView::SetTitleLabel() {
   title_label_->SetText(GetTitle());
   title_label_->SetVisible(true);
-  title_label_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
 }
 
 void PluginVmInstallerView::SetMessageLabel() {
   message_label_->SetText(GetMessage());
   message_label_->SetVisible(true);
-  message_label_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged,
-                                           true);
 }
 
 void PluginVmInstallerView::SetBigImage() {
@@ -632,13 +628,13 @@ void PluginVmInstallerView::StartInstallation() {
   OnStateUpdated();
 
   plugin_vm_installer_->SetObserver(this);
-  absl::optional<plugin_vm::PluginVmInstaller::FailureReason> failure_reason =
+  std::optional<plugin_vm::PluginVmInstaller::FailureReason> failure_reason =
       plugin_vm_installer_->Start();
   if (failure_reason)
     OnError(failure_reason.value());
 }
 
-BEGIN_METADATA(PluginVmInstallerView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(PluginVmInstallerView)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, Title)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, Message)
 END_METADATA

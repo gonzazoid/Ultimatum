@@ -7,25 +7,24 @@
 #include <stdint.h>
 #include <windows.h>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include <optional>
 #include "base/compiler_specific.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/win/windows_version.h"
 #include "remoting/base/util.h"
 #include "remoting/host/clipboard.h"
 #include "remoting/host/touch_injector_win.h"
 #include "remoting/proto/event.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
 namespace remoting {
@@ -34,8 +33,8 @@ namespace {
 
 using protocol::ClipboardEvent;
 using protocol::KeyEvent;
-using protocol::TextEvent;
 using protocol::MouseEvent;
+using protocol::TextEvent;
 using protocol::TouchEvent;
 
 // Helper used to call SendInput() API.
@@ -58,12 +57,14 @@ void SendKeyboardInput(uint32_t flags,
     // usually distinguishes keys with the same meaning, e.g. left & right
     // shift.
     input.ki.wScan &= 0xFF;
-    if ((scancode & 0xFF00) != 0x0000)
+    if ((scancode & 0xFF00) != 0x0000) {
       input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    }
   }
 
-  if (SendInput(1, &input, sizeof(INPUT)) == 0)
+  if (SendInput(1, &input, sizeof(INPUT)) == 0) {
     PLOG(ERROR) << "Failed to inject a key event";
+  }
 }
 
 // Parse move related operations from the input MouseEvent, and insert the
@@ -80,8 +81,8 @@ void ParseMouseMoveEvent(const MouseEvent& event, std::vector<INPUT>* output) {
     int width = GetSystemMetrics(SM_CXVIRTUALSCREEN);
     int height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
     if (width > 1 && height > 1) {
-      int x = base::clamp(event.x(), 0, width);
-      int y = base::clamp(event.y(), 0, height);
+      int x = std::clamp(event.x(), 0, width);
+      int y = std::clamp(event.y(), 0, height);
       input.mi.dx = static_cast<int>((x * 65535) / (width - 1));
       input.mi.dy = static_cast<int>((y * 65535) / (height - 1));
       input.mi.dwFlags =
@@ -167,8 +168,8 @@ bool IsLockKey(int scancode) {
 }
 
 // Sets the keyboard lock states to those provided.
-void SetLockStates(absl::optional<bool> caps_lock,
-                   absl::optional<bool> num_lock) {
+void SetLockStates(std::optional<bool> caps_lock,
+                   std::optional<bool> num_lock) {
   if (caps_lock) {
     bool client_capslock_state = *caps_lock;
     bool host_capslock_state = (GetKeyState(VK_CAPITAL) & 1) != 0;
@@ -385,16 +386,15 @@ void InputInjectorWin::Core::HandleKey(const KeyEvent& event) {
 
   int scancode =
       ui::KeycodeConverter::UsbKeycodeToNativeKeycode(event.usb_keycode());
-  VLOG(3) << "Converting USB keycode: " << std::hex << event.usb_keycode()
-          << " to scancode: " << scancode << std::dec;
 
   // Ignore events which can't be mapped.
-  if (scancode == ui::KeycodeConverter::InvalidNativeKeycode())
+  if (scancode == ui::KeycodeConverter::InvalidNativeKeycode()) {
     return;
+  }
 
   if (event.pressed() && !IsLockKey(scancode)) {
-    absl::optional<bool> caps_lock;
-    absl::optional<bool> num_lock;
+    std::optional<bool> caps_lock;
+    std::optional<bool> num_lock;
 
     // For caps lock, check both the new caps_lock field and the old lock_states
     // field.
@@ -416,6 +416,7 @@ void InputInjectorWin::Core::HandleKey(const KeyEvent& event) {
   }
 
   uint32_t flags = KEYEVENTF_SCANCODE | (event.pressed() ? 0 : KEYEVENTF_KEYUP);
+  VLOG(3) << "Injecting key " << (event.pressed() ? "down" : "up") << " event.";
   SendKeyboardInput(flags, scancode, 0);
 }
 
@@ -448,8 +449,10 @@ void InputInjectorWin::Core::HandleMouse(const MouseEvent& event) {
   ParseMouseWheelEvent(event, &inputs);
 
   if (!inputs.empty()) {
-    if (SendInput(inputs.size(), inputs.data(), sizeof(INPUT)) != inputs.size())
+    if (SendInput(inputs.size(), inputs.data(), sizeof(INPUT)) !=
+        inputs.size()) {
       PLOG(ERROR) << "Failed to inject a mouse event";
+    }
   }
 }
 
@@ -470,7 +473,7 @@ std::unique_ptr<InputInjector> InputInjector::Create(
 
 // static
 bool InputInjector::SupportsTouchEvents() {
-  return base::win::GetVersion() >= base::win::Version::WIN8;
+  return true;
 }
 
 }  // namespace remoting

@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/dom_distiller/content/browser/android/jni_headers/DistillablePageUtils_jni.h"
 #include "components/dom_distiller/content/browser/distillable_page_utils.h"
 #include "content/public/browser/web_contents.h"
@@ -36,7 +35,7 @@ class JniDistillabilityObserverWrapper
   void OnResult(const DistillabilityResult& result) override {
     Java_DistillablePageUtils_callOnIsPageDistillableUpdate(
         base::android::AttachCurrentThread(), callback_, result.is_distillable,
-        result.is_last, result.is_mobile_friendly);
+        result.is_last, result.is_long_article, result.is_mobile_friendly);
   }
 
  private:

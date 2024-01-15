@@ -7,9 +7,9 @@
 #include <windows.h>
 #include <winhttp.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_tokenizer.h"
@@ -49,7 +49,7 @@ ProxyConfigServiceWin::~ProxyConfigServiceWin() {
   NetworkChangeNotifier::RemoveNetworkChangeObserver(this);
   // The registry functions below will end up going to disk.  TODO: Do this on
   // another thread to avoid slowing the current thread.  http://crbug.com/61453
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
   keys_to_watch_.clear();
 }
 
@@ -81,7 +81,7 @@ void ProxyConfigServiceWin::StartWatchingRegistryForChanges() {
 
   // The registry functions below will end up going to disk.  Do this on another
   // thread to avoid slowing the current thread.  http://crbug.com/61453
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
 
   // There are a number of different places where proxy settings can live
   // in the registry. In some cases it appears in a binary value, in other

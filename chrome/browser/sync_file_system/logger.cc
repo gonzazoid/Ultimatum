@@ -20,13 +20,13 @@ static base::LazyInstance<drive::EventLogger>::DestructorAtExit g_logger =
 
 const char* LogSeverityToString(logging::LogSeverity level) {
   switch (level) {
-    case logging::LOG_ERROR:
+    case logging::LOGGING_ERROR:
       return "ERROR";
-    case logging::LOG_WARNING:
+    case logging::LOGGING_WARNING:
       return "WARNING";
-    case logging::LOG_INFO:
+    case logging::LOGGING_INFO:
       return "INFO";
-    case logging::LOG_VERBOSE:
+    case logging::LOGGING_VERBOSE:
       return "VERBOSE";
   }
 
@@ -60,7 +60,7 @@ void Log(logging::LogSeverity severity,
                                                  what.c_str()));
 
   // Log to console if the severity is at or above the min level.
-  // LOG_VERBOSE logs are also output if the verbosity of this module
+  // LOGGING_VERBOSE logs are also output if the verbosity of this module
   // (sync_file_system/logger) is >= 1.
   // TODO(kinuko,calvinlo): Reconsider this logging hack, it's not recommended
   // to directly use LogMessage.

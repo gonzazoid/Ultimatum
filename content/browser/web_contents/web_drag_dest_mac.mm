@@ -4,29 +4,31 @@
 
 #import "content/browser/web_contents/web_drag_dest_mac.h"
 
+#include <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
 
-#include "base/mac/scoped_nsobject.h"
+#include <optional>
+
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/sys_string_conversions.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/browser/web_contents/web_contents_view_drag_security_info.h"
 #include "content/common/web_contents_ns_view_bridge.mojom.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "content/public/browser/web_drag_dest_delegate.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/drop_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
-#import "third_party/mozilla/NSPasteboard+Utils.h"
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/clipboard/clipboard_util_mac.h"
 #include "ui/base/clipboard/custom_data_helper.h"
-#include "ui/base/cocoa/cocoa_base_utils.h"
-#import "ui/base/dragdrop/cocoa_dnd_util.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/geometry/point.h"
 
@@ -39,12 +41,11 @@ using remote_cocoa::mojom::DraggingInfo;
 
 namespace content {
 
-DropContext::DropContext(
-    const content::DropData drop_data,
-    const gfx::PointF client_pt,
-    const gfx::PointF screen_pt,
-    int modifier_flags,
-    base::WeakPtr<content::RenderWidgetHostImpl> target_rwh)
+DropContext::DropContext(const DropData drop_data,
+                         const gfx::PointF client_pt,
+                         const gfx::PointF screen_pt,
+                         int modifier_flags,
+                         base::WeakPtr<RenderWidgetHostImpl> target_rwh)
     : drop_data(drop_data),
       client_pt(client_pt),
       screen_pt(screen_pt),
@@ -87,26 +88,45 @@ int GetModifierFlags() {
   return modifier_state;
 }
 
-content::GlobalRoutingID GetRenderViewHostID(content::RenderViewHost* rvh) {
-  return content::GlobalRoutingID(rvh->GetProcess()->GetID(),
-                                  rvh->GetRoutingID());
-}
-
 void DropCompletionCallback(WebDragDest* drag_dest,
                             const content::DropContext context,
-                            absl::optional<content::DropData> drop_data) {
+                            std::optional<content::DropData> drop_data) {
   // This is an async callback. Make sure RWH is still valid.
-  if (!context.target_rwh ||
-      ![drag_dest isValidDragTarget:context.target_rwh.get()]) {
+  if (!context.target_rwh)
     return;
-  }
 
   [drag_dest completeDropAsync:drop_data withContext:context];
 }
 
 }  // namespace
 
-@implementation WebDragDest
+@implementation WebDragDest {
+  // Our associated WebContentsImpl. Weak reference.
+  raw_ptr<content::WebContentsImpl, DanglingUntriaged> _webContents;
+
+  // Delegate; weak.
+  raw_ptr<content::WebDragDestDelegate, DanglingUntriaged> _delegate;
+
+  // Tracks the current RenderWidgetHost we're dragging over.
+  base::WeakPtr<content::RenderWidgetHostImpl> _currentRWHForDrag;
+
+  // Keep track of the render view host we're dragging over.  If it changes
+  // during a drag, we need to re-send the DragEnter message.
+  RenderViewHostIdentifier _currentRVH;
+
+  // Holds the security info for the current drag.
+  content::WebContentsViewDragSecurityInfo _dragSecurityInfo;
+
+  // The unfiltered data for the current drag, or nullptr if none is in
+  // progress.
+  std::unique_ptr<content::DropData> _dropDataUnfiltered;
+
+  // The data for the current drag, filtered by |currentRWHForDrag_|.
+  std::unique_ptr<content::DropData> _dropDataFiltered;
+
+  // True if the drag has been canceled.
+  bool _canceled;
+}
 
 // |contents| is the WebContentsImpl representing this tab, used to communicate
 // drag&drop messages to WebCore and handle navigation on a successful drop
@@ -115,9 +135,6 @@ void DropCompletionCallback(WebDragDest* drag_dest,
   if ((self = [super init])) {
     _webContents = contents;
     _canceled = false;
-    _dragStartProcessID = content::ChildProcessHost::kInvalidUniqueID;
-    _dragStartViewID = content::GlobalRoutingID(
-        content::ChildProcessHost::kInvalidUniqueID, MSG_ROUTING_NONE);
   }
   return self;
 }
@@ -132,8 +149,16 @@ void DropCompletionCallback(WebDragDest* drag_dest,
 
 // Call to set whether or not we should allow the drop. Takes effect the
 // next time |-draggingUpdated:| is called.
-- (void)setCurrentOperation:(NSDragOperation)operation {
-  _currentOperation = operation;
+- (void)setCurrentOperation:(ui::mojom::DragOperation)operation
+     documentIsHandlingDrag:(bool)documentIsHandlingDrag {
+  if (_dropDataUnfiltered) {
+    _dropDataUnfiltered->operation = operation;
+    _dropDataUnfiltered->document_is_handling_drag = documentIsHandlingDrag;
+  }
+  if (_dropDataFiltered) {
+    _dropDataFiltered->operation = operation;
+    _dropDataFiltered->document_is_handling_drag = documentIsHandlingDrag;
+  }
 }
 
 // Given a point in window coordinates and a view in that window, return a
@@ -152,10 +177,8 @@ void DropCompletionCallback(WebDragDest* drag_dest,
 - (NSPoint)flipWindowPointToScreen:(const NSPoint&)windowPoint
                               view:(NSView*)view {
   DCHECK(view);
-  NSPoint screenPoint =
-      ui::ConvertPointFromWindowToScreen([view window], windowPoint);
-  NSScreen* screen = [[view window] screen];
-  NSRect screenFrame = [screen frame];
+  NSPoint screenPoint = [view.window convertPointToScreen:windowPoint];
+  NSRect screenFrame = view.window.screen.frame;
   screenPoint.y = screenFrame.size.height - screenPoint.y;
   return screenPoint;
 }
@@ -187,8 +210,9 @@ void DropCompletionCallback(WebDragDest* drag_dest,
   content::RenderWidgetHostImpl* targetRWH =
       [self GetRenderWidgetHostAtPoint:info->location_in_view
                          transformedPt:&transformedPt];
-  if (![self isValidDragTarget:targetRWH])
+  if (!_dragSecurityInfo.IsValidDragTarget(targetRWH)) {
     return NSDragOperationNone;
+  }
 
   // Filter |dropDataUnfiltered_| by currentRWHForDrag_ to populate
   // |dropDataFiltered_|.
@@ -223,8 +247,9 @@ void DropCompletionCallback(WebDragDest* drag_dest,
 
   // We won't know the true operation (whether the drag is allowed) until we
   // hear back from the renderer. For now, be optimistic:
-  _currentOperation = NSDragOperationCopy;
-  return _currentOperation;
+  _dropDataUnfiltered->operation = ui::mojom::DragOperation::kCopy;
+  _dropDataUnfiltered->document_is_handling_drag = true;
+  return static_cast<NSDragOperation>(_dropDataUnfiltered->operation);
 }
 
 - (void)draggingExited {
@@ -270,8 +295,9 @@ void DropCompletionCallback(WebDragDest* drag_dest,
       [self GetRenderWidgetHostAtPoint:info->location_in_view
                          transformedPt:&transformedPt];
 
-  if (![self isValidDragTarget:targetRWH])
+  if (!_dragSecurityInfo.IsValidDragTarget(targetRWH)) {
     return NSDragOperationNone;
+  }
 
   // TODO(paulmeyer): The dragging delegates may now by invoked multiple times
   // per drag, even without the drag ever leaving the window.
@@ -306,7 +332,7 @@ void DropCompletionCallback(WebDragDest* drag_dest,
   if (_delegate)
     _delegate->OnDragOver();
 
-  return _currentOperation;
+  return static_cast<NSDragOperation>(_dropDataUnfiltered->operation);
 }
 
 - (BOOL)performDragOperation:(const DraggingInfo*)info
@@ -320,8 +346,9 @@ void DropCompletionCallback(WebDragDest* drag_dest,
       [self GetRenderWidgetHostAtPoint:info->location_in_view
                          transformedPt:&transformedPt];
 
-  if (![self isValidDragTarget:targetRWH])
+  if (!_dragSecurityInfo.IsValidDragTarget(targetRWH)) {
     return NO;
+  }
 
   if (targetRWH != _currentRWHForDrag.get()) {
     if (_currentRWHForDrag)
@@ -341,7 +368,7 @@ void DropCompletionCallback(WebDragDest* drag_dest,
                                  /*target_rwh=*/targetRWH->GetWeakPtr());
     // Use a separate variable since `context` is about to move.
     content::DropData drop_data = context.drop_data;
-    webContentsViewDelegate->OnPerformDrop(
+    webContentsViewDelegate->OnPerformingDrop(
         std::move(drop_data),
         base::BindOnce(&DropCompletionCallback, self, std::move(context)));
   } else {
@@ -357,7 +384,7 @@ void DropCompletionCallback(WebDragDest* drag_dest,
   return YES;
 }
 
-- (void)completeDropAsync:(absl::optional<content::DropData>)dropData
+- (void)completeDropAsync:(std::optional<content::DropData>)dropData
               withContext:(const content::DropContext)context {
   if (dropData.has_value()) {
     if (_delegate)
@@ -380,82 +407,86 @@ void DropCompletionCallback(WebDragDest* drag_dest,
       transformedPt);
 }
 
-- (void)setDragStartTrackersForProcess:(int)processID {
-  _dragStartProcessID = processID;
-  _dragStartViewID = GetRenderViewHostID(_webContents->GetRenderViewHost());
+- (void)initiateDragWithRenderWidgetHost:(content::RenderWidgetHostImpl*)rwhi
+                                dropData:(const content::DropData&)dropData {
+  _dragSecurityInfo.OnDragInitiated(rwhi, dropData);
 }
 
-- (bool)isValidDragTarget:(content::RenderWidgetHostImpl*)targetRWH {
-  return targetRWH->GetProcess()->GetID() == _dragStartProcessID ||
-         GetRenderViewHostID(_webContents->GetRenderViewHost()) !=
-             _dragStartViewID;
+- (void)endDrag {
+  _dragSecurityInfo.OnDragEnded();
+}
+
+- (content::WebContentsViewDragSecurityInfo)dragSecurityInfo {
+  return _dragSecurityInfo;
+}
+
+- (void)setDragSecurityInfo:
+    (content::WebContentsViewDragSecurityInfo)dragSecurityInfo {
+  _dragSecurityInfo = dragSecurityInfo;
 }
 
 @end
 
 namespace content {
 
-void PopulateDropDataFromPasteboard(content::DropData* data,
-                                    NSPasteboard* pboard) {
-  DCHECK(data);
+DropData PopulateDropDataFromPasteboard(NSPasteboard* pboard) {
   DCHECK(pboard);
-  // https://crbug.com/1016740#c21
-  base::scoped_nsobject<NSArray> types([[pboard types] retain]);
+  DropData drop_data;
 
-  data->did_originate_from_renderer =
-      [types containsObject:ui::kChromeDragDummyPboardType];
+  // https://crbug.com/1016740#c21
+  NSArray* types = [pboard types];
+
+  drop_data.did_originate_from_renderer =
+      [types containsObject:ui::kUTTypeChromiumRendererInitiatedDrag];
+  drop_data.is_from_privileged =
+      [types containsObject:ui::kUTTypeChromiumPrivilegedInitiatedDrag];
 
   // Get URL if possible. To avoid exposing file system paths to web content,
   // filenames in the drag are not converted to file URLs.
-  ui::PopulateURLAndTitleFromPasteboard(&data->url,
-                                        &data->url_title,
-                                        pboard,
-                                        NO);
+  NSArray<URLAndTitle*>* urls_and_titles =
+      ui::clipboard_util::URLsAndTitlesFromPasteboard(pboard,
+                                                      /*include_files=*/false);
+  if (urls_and_titles.count) {
+    drop_data.url =
+        GURL(base::SysNSStringToUTF8(urls_and_titles.firstObject.URL));
+    drop_data.url_title =
+        base::SysNSStringToUTF16(urls_and_titles.firstObject.title);
+  }
 
   // Get plain text.
-  if ([types containsObject:NSStringPboardType]) {
-    data->text =
-        base::SysNSStringToUTF16([pboard stringForType:NSStringPboardType]);
+  if ([types containsObject:NSPasteboardTypeString]) {
+    drop_data.text =
+        base::SysNSStringToUTF16([pboard stringForType:NSPasteboardTypeString]);
   }
 
   // Get HTML. If there's no HTML, try RTF.
-  if ([types containsObject:NSHTMLPboardType]) {
-    NSString* html = [pboard stringForType:NSHTMLPboardType];
-    data->html = base::SysNSStringToUTF16(html);
-  } else if ([types containsObject:ui::kChromeDragImageHTMLPboardType]) {
-    NSString* html = [pboard stringForType:ui::kChromeDragImageHTMLPboardType];
-    data->html = base::SysNSStringToUTF16(html);
-  } else if ([types containsObject:NSRTFPboardType]) {
-    NSString* html = ui::ClipboardUtil::GetHTMLFromRTFOnPasteboard(pboard);
-    data->html = base::SysNSStringToUTF16(html);
+  if ([types containsObject:NSPasteboardTypeHTML]) {
+    NSString* html = [pboard stringForType:NSPasteboardTypeHTML];
+    drop_data.html = base::SysNSStringToUTF16(html);
+  } else if ([types containsObject:ui::kUTTypeChromiumImageAndHTML]) {
+    NSString* html = [pboard stringForType:ui::kUTTypeChromiumImageAndHTML];
+    drop_data.html = base::SysNSStringToUTF16(html);
+  } else if ([types containsObject:NSPasteboardTypeRTF]) {
+    NSString* html = ui::clipboard_util::GetHTMLFromRTFOnPasteboard(pboard);
+    drop_data.html = base::SysNSStringToUTF16(html);
   }
 
   // Get files.
-  if ([types containsObject:NSFilenamesPboardType]) {
-    NSArray* files = [pboard propertyListForType:NSFilenamesPboardType];
-    if ([files isKindOfClass:[NSArray class]] && [files count]) {
-      for (NSUInteger i = 0; i < [files count]; i++) {
-        NSString* filename = [files objectAtIndex:i];
-        BOOL exists = [[NSFileManager defaultManager]
-                           fileExistsAtPath:filename];
-        if (exists) {
-          data->filenames.emplace_back(
-              base::FilePath::FromUTF8Unsafe(base::SysNSStringToUTF8(filename)),
-              base::FilePath());
-        }
-      }
+  drop_data.filenames = ui::clipboard_util::FilesFromPasteboard(pboard);
+
+  // Get custom MIME data.
+  if ([types containsObject:ui::kUTTypeChromiumWebCustomData]) {
+    NSData* customData = [pboard dataForType:ui::kUTTypeChromiumWebCustomData];
+    if (std::optional<std::unordered_map<std::u16string, std::u16string>>
+            maybe_custom_data = ui::ReadCustomDataIntoMap(
+                base::span(reinterpret_cast<const uint8_t*>([customData bytes]),
+                           [customData length]));
+        maybe_custom_data) {
+      drop_data.custom_data = std::move(*maybe_custom_data);
     }
   }
 
-  // TODO(pinkerton): Get file contents. http://crbug.com/34661
-
-  // Get custom MIME data.
-  if ([types containsObject:ui::kWebCustomDataPboardType]) {
-    NSData* customData = [pboard dataForType:ui::kWebCustomDataPboardType];
-    ui::ReadCustomDataIntoMap([customData bytes],
-                              [customData length],
-                              &data->custom_data);
-  }
+  return drop_data;
 }
 
 }  // namespace content

@@ -4,7 +4,19 @@
 
 #include "chrome/browser/webshare/win/share_operation.h"
 
-#include "base/bind.h"
+#include <shlobj.h>
+#include <windows.applicationmodel.datatransfer.h>
+#include <windows.foundation.collections.h>
+#include <windows.foundation.h>
+#include <windows.storage.h>
+#include <windows.storage.streams.h>
+#include <wininet.h>
+#include <wrl/client.h>
+#include <wrl/event.h>
+
+#include <utility>
+
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/post_async_results.h"
@@ -15,7 +27,6 @@
 #include "chrome/browser/webshare/win/show_share_ui_for_window_operation.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/net_errors.h"
 #include "storage/browser/blob/blob_data_handle.h"
@@ -23,20 +34,9 @@
 #include "storage/browser/file_system/file_stream_writer.h"
 #include "storage/browser/file_system/file_writer_delegate.h"
 #include "storage/common/file_system/file_system_mount_option.h"
-#include "ui/accessibility/platform/ax_platform_node.h"
-#include "ui/accessibility/platform/ax_platform_node_delegate.h"
+#include "ui/base/win/internal_constants.h"
 #include "ui/views/win/hwnd_util.h"
 #include "url/gurl.h"
-
-#include <shlobj.h>
-#include <windows.applicationmodel.datatransfer.h>
-#include <windows.foundation.collections.h>
-#include <windows.foundation.h>
-#include <windows.storage.h>
-#include <windows.storage.streams.h>
-#include <wininet.h>
-#include <wrl/client.h>
-#include <wrl/event.h>
 
 using ABI::Windows::ApplicationModel::DataTransfer::IDataPackage;
 using ABI::Windows::ApplicationModel::DataTransfer::IDataPackage2;
@@ -62,10 +62,7 @@ using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
 using Microsoft::WRL::Make;
 
-namespace ABI {
-namespace Windows {
-namespace Foundation {
-namespace Collections {
+namespace ABI::Windows::Foundation::Collections {
 
 // Define template specializations for the types used. These uuids were randomly
 // generated.
@@ -78,10 +75,7 @@ struct __declspec(uuid("30BE4864-5EE5-4111-916E-15126649F3C9"))
     VectorChangedEventHandler<IStorageItem*>
     : VectorChangedEventHandler_impl<IStorageItem*> {};
 
-}  // namespace Collections
-}  // namespace Foundation
-}  // namespace Windows
-}  // namespace ABI
+}  // namespace ABI::Windows::Foundation::Collections
 
 namespace webshare {
 namespace {
@@ -146,7 +140,8 @@ class DataWriterFileStreamWriter final : public storage::FileStreamWriter {
     return net::OK;
   }
 
-  int Flush(net::CompletionOnceCallback callback) final {
+  int Flush(storage::FlushMode /*flush_mode*/,
+            net::CompletionOnceCallback callback) final {
     DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
     DCHECK(flush_callback_.is_null());
     DCHECK_EQ(flush_operation_, nullptr);
@@ -375,13 +370,6 @@ void ShareOperation::Run(blink::mojom::ShareService::ShareCallback callback) {
   DCHECK(!callback_);
   callback_ = std::move(callback);
 
-  // Ensure that the required WinRT functionality is available/loaded.
-  if (!base::win::ResolveCoreWinRTDelayload() ||
-      !base::win::ScopedHString::ResolveCoreWinRTStringDelayload()) {
-    Complete(blink::mojom::ShareError::INTERNAL_ERROR);
-    return;
-  }
-
   // If the corresponding web_contents have already been cleaned up, cancel
   // the operation.
   if (!web_contents_) {
@@ -427,31 +415,28 @@ void ShareOperation::Run(blink::mojom::ShareService::ShareCallback callback) {
     }
   }
 
-  // Attempt to fetch the accessibility HWND for these WebContents. For the
-  // sake of better communication with screen readers this HWND is (virtually)
-  // scoped to just the WebContents (rather than the entire actual window), so
-  // allows the resulting Share dialog to also better position/associate itself
-  // with the WebContents.
-  HWND hwnd = nullptr;
-  content::RenderWidgetHostView* host_view =
-      web_contents_->GetTopLevelRenderWidgetHostView();
-  if (host_view) {
-    ui::AXPlatformNode* platform_node =
-        ui::AXPlatformNode::FromNativeViewAccessible(
-            host_view->GetNativeViewAccessible());
-    if (platform_node) {
-      ui::AXPlatformNodeDelegate* delegate = platform_node->GetDelegate();
-      if (delegate) {
-        hwnd = delegate->GetTargetForNativeAccessibilityEvent();
-      }
+  HWND hwnd =
+      views::HWNDForNativeWindow(web_contents_->GetTopLevelNativeWindow());
+
+  // Attempt to fetch the special HWND maintained for the primary WebContents of
+  // this window. For the sake of better communication with screen readers this
+  // HWND is (virtually) scoped to the same space as the WebContents (rather
+  // than the entire actual window), so allows the resulting Share dialog to
+  // better position/associate itself with the WebContents.
+  //
+  // Note: Though this is exposed to accessibility tools via standardized routes
+  // we could expect to leverage here, the browser may choose to not set up all
+  // these routes until an accessibility tool has been detected. Instead we look
+  // for this specific class directly so we can find it even if accessibility
+  // has not been configured yet.
+  if (hwnd) {
+    HWND accessible_hwnd =
+        ::FindWindowExW(/*hWndParent*/ hwnd, /*hWndChildAfter*/ NULL,
+                        /*lpszClass*/ ui::kLegacyRenderWidgetHostHwnd,
+                        /*lpszWindow*/ NULL);
+    if (accessible_hwnd) {
+      hwnd = accessible_hwnd;
     }
-  }
-  // If we were unable to fetch the accessibility HWND, fall-back to the
-  // top-level HWND, which will still function appropriately, it just may not
-  // position as nicely. This is unexpected in most cases, but can happen if,
-  // for example, Windows has explicitly destroyed said HWND.
-  if (!hwnd) {
-    hwnd = views::HWNDForNativeWindow(web_contents_->GetTopLevelNativeWindow());
   }
 
   show_share_ui_for_window_operation_ =

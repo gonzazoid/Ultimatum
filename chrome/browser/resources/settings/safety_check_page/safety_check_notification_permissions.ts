@@ -17,7 +17,7 @@ import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bu
 
 import {routes} from '../route.js';
 import {Router} from '../router.js';
-import {NotificationPermission, SiteSettingsPrefsBrowserProxy, SiteSettingsPrefsBrowserProxyImpl} from '../site_settings/site_settings_prefs_browser_proxy.js';
+import {NotificationPermission, SafetyHubBrowserProxy, SafetyHubBrowserProxyImpl, SafetyHubEvent} from '../safety_hub/safety_hub_browser_proxy.js';
 
 import {SafetyCheckIconStatus, SettingsSafetyCheckChildElement} from './safety_check_child.js';
 import {getTemplate} from './safety_check_notification_permissions.html.js';
@@ -50,35 +50,25 @@ export class SettingsSafetyCheckNotificationPermissionsElement extends
         },
       },
 
-      sites_: {
-        type: Array,
-        observer: 'onSitesChanged_',
-      },
-
       headerString_: String,
-
-      buttonAriaLabel_: String,
     };
   }
 
   private iconStatus_: SafetyCheckIconStatus;
   private headerString_: string;
-  private buttonAriaLabel_: string;
-  private sites_: NotificationPermission[] = [];
-  private siteSettingsBrowserProxy_: SiteSettingsPrefsBrowserProxy =
-      SiteSettingsPrefsBrowserProxyImpl.getInstance();
+  private safetyHubBrowserProxy_: SafetyHubBrowserProxy =
+      SafetyHubBrowserProxyImpl.getInstance();
 
-  override async connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
 
     // Register for review notification permission list updates.
-    this.addWebUIListener(
-        'notification-permission-review-list-maybe-changed',
-        (sites: NotificationPermission[]) =>
-            this.onReviewNotificationPermissionListChanged_(sites));
+    this.addWebUiListener(
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED,
+        (sites: NotificationPermission[]) => this.onSitesChanged_(sites));
 
-    this.sites_ =
-        await this.siteSettingsBrowserProxy_.getNotificationPermissionReview();
+    this.safetyHubBrowserProxy_.getNotificationPermissionReview().then(
+        this.onSitesChanged_.bind(this));
   }
 
   private onButtonClick_() {
@@ -87,20 +77,10 @@ export class SettingsSafetyCheckNotificationPermissionsElement extends
         /* removeSearch= */ true);
   }
 
-  private async onReviewNotificationPermissionListChanged_(
-      sites: NotificationPermission[]) {
-    this.sites_ = sites;
-  }
-
-  private async onSitesChanged_() {
+  private async onSitesChanged_(sites: NotificationPermission[]) {
     this.headerString_ =
         await PluralStringProxyImpl.getInstance().getPluralString(
-            'safetyCheckNotificationPermissionReviewHeaderLabel',
-            this.sites_.length);
-    this.buttonAriaLabel_ =
-        await PluralStringProxyImpl.getInstance().getPluralString(
-            'safetyCheckNotificationPermissionReviewPrimaryLabel',
-            this.sites_!.length);
+            'safetyCheckNotificationPermissionReviewHeaderLabel', sites.length);
   }
 }
 

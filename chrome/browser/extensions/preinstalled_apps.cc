@@ -89,7 +89,7 @@ void Provider::InitProfileState() {
       // Pre-installed apps are only installed on profile creation or a new
       // chrome download.
       bool is_new_profile = profile_->WasCreatedByVersionOrLater(
-          version_info::GetVersionNumber());
+          std::string(version_info::GetVersionNumber()));
       if (is_new_profile && preinstalled_apps_enabled_) {
         new_install_state = kAlreadyInstalledPreinstalledApps;
         perform_new_installation_ = true;
@@ -184,7 +184,7 @@ void Provider::SetPrefs(base::Value::Dict prefs) {
       if (!pref.is_dict())
         return false;  // Invalid entry; it'll be ignored later.
       const std::string* web_app_flag =
-          pref.FindStringPath(kWebAppMigrationFlag);
+          pref.GetDict().FindString(kWebAppMigrationFlag);
       if (!web_app_flag)
         return false;  // Isn't migrating.
       if (web_app::IsPreinstalledAppInstallFeatureEnabled(*web_app_flag,

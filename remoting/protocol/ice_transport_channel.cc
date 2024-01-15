@@ -8,10 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/webrtc/net_address_utils.h"
 #include "net/base/net_errors.h"
 #include "remoting/protocol/channel_socket_adapter.h"
@@ -61,11 +60,13 @@ IceTransportChannel::~IceTransportChannel() {
 
   delegate_->OnChannelDeleted(this);
 
-  auto task_runner = base::ThreadTaskRunnerHandle::Get();
-  if (channel_)
+  auto task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
+  if (channel_) {
     task_runner->DeleteSoon(FROM_HERE, channel_.release());
-  if (port_allocator_)
+  }
+  if (port_allocator_) {
     task_runner->DeleteSoon(FROM_HERE, port_allocator_.release());
+  }
 }
 
 void IceTransportChannel::Connect(const std::string& name,
@@ -90,7 +91,6 @@ void IceTransportChannel::Connect(const std::string& name,
   channel_ = std::make_unique<cricket::P2PTransportChannel>(
       std::string(), 0, port_allocator_.get());
   std::string ice_password = rtc::CreateRandomString(cricket::ICE_PWD_LENGTH);
-  channel_->SetIceProtocolType(cricket::ICEPROTO_RFC5245);
   channel_->SetIceRole((transport_context_->role() == TransportRole::CLIENT)
                            ? cricket::ICEROLE_CONTROLLING
                            : cricket::ICEROLE_CONTROLLED);
@@ -99,10 +99,10 @@ void IceTransportChannel::Connect(const std::string& name,
   channel_->SetIceCredentials(ice_username_fragment_, ice_password);
   channel_->SignalCandidateGathered.connect(
       this, &IceTransportChannel::OnCandidateGathered);
-  channel_->SignalRouteChange.connect(
-      this, &IceTransportChannel::OnRouteChange);
-  channel_->SignalWritableState.connect(
-      this, &IceTransportChannel::OnWritableState);
+  channel_->SignalRouteChange.connect(this,
+                                      &IceTransportChannel::OnRouteChange);
+  channel_->SignalWritableState.connect(this,
+                                        &IceTransportChannel::OnWritableState);
   channel_->set_incoming_only(!(transport_context_->network_settings().flags &
                                 NetworkSettings::NAT_TRAVERSAL_OUTGOING));
 
@@ -127,7 +127,7 @@ void IceTransportChannel::Connect(const std::string& name,
                          transport_context_->network_settings().ice_timeout,
                          this, &IceTransportChannel::TryReconnect);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&IceTransportChannel::NotifyConnected,
                                 weak_factory_.GetWeakPtr()));
 }
@@ -148,8 +148,9 @@ void IceTransportChannel::SetRemoteCredentials(const std::string& ufrag,
   remote_ice_username_fragment_ = ufrag;
   remote_ice_password_ = password;
 
-  if (channel_)
+  if (channel_) {
     channel_->SetRemoteIceCredentials(ufrag, password);
+  }
 }
 
 void IceTransportChannel::AddRemoteCandidate(
@@ -160,8 +161,9 @@ void IceTransportChannel::AddRemoteCandidate(
   // candidates. It's also necessary to discard remote relay candidates.
   bool relay_allowed = (transport_context_->network_settings().flags &
                         NetworkSettings::NAT_TRAVERSAL_RELAY) != 0;
-  if (!relay_allowed && candidate.type() == cricket::RELAY_PORT_TYPE)
+  if (!relay_allowed && candidate.type() == cricket::RELAY_PORT_TYPE) {
     return;
+  }
 
   if (channel_) {
     channel_->AddRemoteCandidate(candidate);
@@ -191,8 +193,9 @@ void IceTransportChannel::OnRouteChange(
     cricket::IceTransportInternal* ice_transport,
     const cricket::Candidate& candidate) {
   // Ignore notifications if the channel is not writable.
-  if (channel_->writable())
+  if (channel_->writable()) {
     NotifyRouteChanged();
+  }
 }
 
 void IceTransportChannel::OnWritableState(
@@ -232,7 +235,7 @@ void IceTransportChannel::NotifyRouteChanged() {
   // candidate is "local". In this case, we still want to report a RELAY route
   // type.
   static_assert(TransportRoute::DIRECT < TransportRoute::STUN &&
-                TransportRoute::STUN < TransportRoute::RELAY,
+                    TransportRoute::STUN < TransportRoute::RELAY,
                 "Route type enum values are ordered by 'indirectness'");
   route.type = std::max(
       CandidateTypeToTransportRouteType(connection->local_candidate().type()),

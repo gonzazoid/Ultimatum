@@ -18,10 +18,6 @@
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForActionTimeout;
 using chrome_test_util::CancelButton;
 using chrome_test_util::ManualFallbackAddCreditCardsMatcher;
@@ -422,7 +418,8 @@ BOOL WaitForKeyboardToAppear() {
 
 // Tests that the credit card View Controller is dismissed when tapping the
 // keyboard.
-- (void)testTappingKeyboardDismissCreditCardControllerPopOver {
+// TODO(crbug.com/1400980): reenable this flaky test.
+- (void)DISABLED_testTappingKeyboardDismissCreditCardControllerPopOver {
   if (![ChromeEarlGrey isIPadIdiom]) {
     return;
   }

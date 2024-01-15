@@ -7,8 +7,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/task_runner.h"
 #include "chrome/browser/web_applications/os_integration/web_app_file_handler_registration.h"
@@ -27,17 +28,17 @@ bool FileHandlingIconsSupportedByOs() {
   return false;
 }
 
-void RegisterFileHandlersWithOs(const AppId& app_id,
+void RegisterFileHandlersWithOs(const webapps::AppId& app_id,
                                 const std::string& app_name,
-                                Profile* profile,
+                                const base::FilePath& profile_path,
                                 const apps::FileHandlers& file_handlers,
                                 ResultCallback callback) {
   NOTIMPLEMENTED();
   std::move(callback).Run(Result::kError);
 }
 
-void UnregisterFileHandlersWithOs(const AppId& app_id,
-                                  Profile* profile,
+void UnregisterFileHandlersWithOs(const webapps::AppId& app_id,
+                                  const base::FilePath& profile_path,
                                   ResultCallback callback) {
   NOTIMPLEMENTED();
   std::move(callback).Run(Result::kError);
@@ -65,10 +66,13 @@ bool CreatePlatformShortcuts(const base::FilePath& web_app_path,
   return false;
 }
 
-void UpdatePlatformShortcuts(const base::FilePath& web_app_path,
-                             const std::u16string& old_app_title,
-                             const ShortcutInfo& shortcut_info) {
+Result UpdatePlatformShortcuts(
+    const base::FilePath& web_app_path,
+    const std::u16string& old_app_title,
+    absl::optional<ShortcutLocations> user_specified_locations,
+    const ShortcutInfo& shortcut_info) {
   NOTIMPLEMENTED();
+  return Result::kOk;
 }
 
 void DeletePlatformShortcuts(const base::FilePath& web_app_path,

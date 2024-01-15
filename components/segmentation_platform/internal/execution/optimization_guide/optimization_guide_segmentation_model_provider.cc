@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/optimization_guide/core/model_executor.h"
 #include "components/optimization_guide/proto/common_types.pb.h"
 #include "components/segmentation_platform/internal/execution/optimization_guide/optimization_guide_segmentation_model_handler.h"
@@ -68,10 +68,10 @@ void OptimizationGuideSegmentationModelProvider::InitAndFetchModel(
 }
 
 void OptimizationGuideSegmentationModelProvider::ExecuteModelWithInput(
-    const std::vector<float>& inputs,
+    const ModelProvider::Request& inputs,
     ExecutionCallback callback) {
   if (!model_handler_) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }

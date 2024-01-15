@@ -35,6 +35,7 @@ class ScenarioOSADriver(abc.ABC):
     self.script_process = None
     self.osa_script = None
     self.duration = duration
+    self.tag = ""
 
   def Launch(self):
     """Starts the driver script.
@@ -46,8 +47,12 @@ class ScenarioOSADriver(abc.ABC):
     # Disable aborting the sequence of movements by moving to the corner of
     # the screen. This is fine because there isn't a sequence but a single move.
     pyautogui.FAILSAFE = False
-    # Move the cursor out of the way so it's always in the same spot.
-    pyautogui.moveTo(0, 0)
+
+    # Move the cursor in the midle of the screen so it's always in the same
+    # spot. This cannot be 0,0 as this keeps the task bar visible in
+    # full-screen scenarios.
+    width, height = pyautogui.size()
+    pyautogui.moveTo(width / 2, height / 2)
 
     assert self.osa_script is not None
     logging.debug(f"Starting scenario {self.name}")
@@ -102,7 +107,7 @@ class ScenarioOSADriver(abc.ABC):
   def Summary(self):
     """Returns a dictionary describing the scenarios parameters.
     """
-    return {'name': self.name, **self._args}
+    return {'name': self.name, 'tag': self.tag, **self._args}
 
 
 class ScenarioWithBrowserOSADriver(ScenarioOSADriver):
@@ -150,28 +155,47 @@ class IdleOnSiteScenario(ScenarioWithBrowserOSADriver):
   """
 
   def __init__(self, browser_driver: browsers.BrowserDriver,
-               duration: datetime.timedelta, site_url: str, scenario_name):
+               duration: datetime.timedelta, site_url: str, scenario_name,
+               send_full_screen_key):
     super().__init__(scenario_name, browser_driver, duration)
     self._CompileTemplate(
         GetTemplateFileForBrowser(browser_driver, "idle_on_site"), {
             "idle_site": site_url,
             "delay": duration.total_seconds(),
+            "send_full_screen_key": send_full_screen_key,
         })
 
   @staticmethod
   def Wiki(browser_driver: browsers.BrowserDriver,
            duration: datetime.timedelta):
-    return IdleOnSiteScenario(browser_driver, duration,
+    return IdleOnSiteScenario(browser_driver,
+                              duration,
                               "http://www.wikipedia.com/wiki/Alessandro_Volta",
-                              "idle_on_wiki")
+                              "idle_on_wiki",
+                              send_full_screen_key=False)
 
   @staticmethod
   def Youtube(browser_driver: browsers.BrowserDriver,
               duration: datetime.timedelta):
     return IdleOnSiteScenario(
-        browser_driver, duration,
-        "https://www.youtube.com/watch?v=9EE_ICC_wFw?autoplay=1",
-        "idle_on_youtube")
+        browser_driver,
+        duration,
+        # A nature video confirmed to use AV1 and that lasts long enough.
+        # Set to always start a time 1, no matter the progress made previously.
+        "https://www.youtube.com/watch?v=rV_ERKtNyNA?t=1",
+        "idle_on_youtube",
+        send_full_screen_key=True)
+
+  @staticmethod
+  def Netflix(browser_driver: browsers.BrowserDriver,
+              duration: datetime.timedelta):
+    return IdleOnSiteScenario(
+        browser_driver,
+        duration,
+        # A movie that lasts long enough. Set to always restart at time 0.
+        "https://www.netflix.com/watch/81198930?t=0",
+        "idle_on_netflix",
+        send_full_screen_key=True)
 
 
 class ZeroWindowScenario(ScenarioWithBrowserOSADriver):
@@ -234,8 +258,8 @@ def MakeScenarioDriver(scenario_name,
 
   Args:
     scenario_name: Identifier for the scenario to create. Supported scenarios
-      are: meet, idle_on_wiki, idle_on_youtube, navigation_top_sites,
-      navigation_heavy_sites, zero_window and idle.
+      are: meet, idle_on_wiki, idle_on_youtube, idle_on_netflix,
+      navigation_top_sites,navigation_heavy_sites, zero_window and idle.
     browser_driver: Browser the scenario is created with.
     meet_meeting_id: Optional meeting id used for meet scenario.
   """
@@ -244,6 +268,9 @@ def MakeScenarioDriver(scenario_name,
     return IdleScenario(datetime.timedelta(minutes=60))
   if not browser_driver:
     return None
+  if "prep" == scenario_name:
+    return IdleOnSiteScenario.Wiki(browser_driver,
+                                   datetime.timedelta(minutes=1))
   if "meet" == scenario_name:
     return MeetScenario(browser_driver,
                         datetime.timedelta(minutes=60),
@@ -253,6 +280,9 @@ def MakeScenarioDriver(scenario_name,
                                    datetime.timedelta(minutes=60))
   if "idle_on_youtube" == scenario_name:
     return IdleOnSiteScenario.Youtube(browser_driver,
+                                      datetime.timedelta(minutes=60))
+  if "idle_on_netflix" == scenario_name:
+    return IdleOnSiteScenario.Netflix(browser_driver,
                                       datetime.timedelta(minutes=60))
 
   if scenario_name.startswith("navigation"):

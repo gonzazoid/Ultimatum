@@ -28,9 +28,9 @@ enum class CloseRequestResult;
 //  details on View hierarchy).
 class VIEWS_EXPORT NonClientFrameView : public View,
                                         public ViewTargeterDelegate {
- public:
-  METADATA_HEADER(NonClientFrameView);
+  METADATA_HEADER(NonClientFrameView, View)
 
+ public:
   enum {
     // Various edges of the frame border have a 1 px shadow along their edges;
     // in a few cases we shift elements based on this amount for visual appeal.
@@ -93,6 +93,7 @@ class VIEWS_EXPORT NonClientFrameView : public View,
   virtual void ResetWindowControls() {}
   virtual void UpdateWindowIcon() {}
   virtual void UpdateWindowTitle() {}
+  virtual void UpdateWindowRoundedCorners() {}
 
   // Whether the widget can be resized or maximized has changed.
   virtual void SizeConstraintsChanged() {}
@@ -149,9 +150,9 @@ class VIEWS_EXPORT NonClientFrameView : public View,
 //  +----------------------------------------------------+
 //
 class VIEWS_EXPORT NonClientView : public View, public ViewTargeterDelegate {
- public:
-  METADATA_HEADER(NonClientView);
+  METADATA_HEADER(NonClientView, View)
 
+ public:
   explicit NonClientView(ClientView* client_view);
   NonClientView(const NonClientView&) = delete;
   NonClientView& operator=(const NonClientView&) = delete;
@@ -234,11 +235,11 @@ class VIEWS_EXPORT NonClientView : public View, public ViewTargeterDelegate {
   // A ClientView object or subclass, responsible for sizing the contents view
   // of the window, hit testing and perhaps other tasks depending on the
   // implementation.
-  const raw_ptr<ClientView, DanglingUntriaged> client_view_;
+  const raw_ptr<ClientView> client_view_;
 
   // The overlay view, when non-NULL and visible, takes up the entire widget and
   // is placed on top of the ClientView and NonClientFrameView.
-  raw_ptr<View, DanglingUntriaged> overlay_view_ = nullptr;
+  raw_ptr<View> overlay_view_ = nullptr;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, NonClientFrameView, View)

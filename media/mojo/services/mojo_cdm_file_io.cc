@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
+#include "media/cdm/cdm_helpers.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 
 namespace media {
@@ -21,9 +22,12 @@ using ClientStatus = cdm::FileIOClient::Status;
 using FileStatus = media::mojom::CdmFile::Status;
 using StorageStatus = media::mojom::CdmStorage::Status;
 
-// File size limit is 512KB. Licenses saved by the CDM are typically several
-// hundreds of bytes. This value should match what is in CdmFileImpl.
-const int64_t kMaxFileSizeBytes = 512 * 1024;
+// Constants for UMA reporting of file size (in KB) via
+// UMA_HISTOGRAM_CUSTOM_COUNTS. Note that the histogram is log-scaled (rather
+// than linear).
+constexpr int kSizeKBMin = 1;
+const int64_t kMaxFileSizeKB = 512;
+constexpr int kSizeKBBuckets = 100;
 
 const char* ConvertStorageStatus(StorageStatus status) {
   switch (status) {
@@ -120,7 +124,7 @@ void MojoCdmFileIO::OnFileOpened(
       return;
   }
 
-  NOTREACHED();
+  NOTREACHED_NORETURN();
 }
 
 void MojoCdmFileIO::Read() {
@@ -202,6 +206,10 @@ void MojoCdmFileIO::Write(const uint8_t* data, uint32_t data_size) {
     return;
   }
 
+  UMA_HISTOGRAM_CUSTOM_COUNTS("Media.EME.CdmFileIO.WriteFile.DataSizeKB",
+                              data_size / 1024, kSizeKBMin, kMaxFileSizeKB,
+                              kSizeKBBuckets);
+
   TRACE_EVENT_ASYNC_BEGIN2("media", "MojoCdmFileIO::Write", this, "file_name",
                            file_name_, "bytes_to_write", data_size);
 
@@ -249,7 +257,7 @@ void MojoCdmFileIO::Close() {
 void MojoCdmFileIO::OnError(ErrorType error) {
   DVLOG(3) << __func__ << " file: " << file_name_ << ", error: " << (int)error;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&MojoCdmFileIO::NotifyClientOfError,
                                 weak_factory_.GetWeakPtr(), error));
 }

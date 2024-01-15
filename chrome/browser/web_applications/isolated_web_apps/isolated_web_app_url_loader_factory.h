@@ -9,10 +9,11 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
-#include "chrome/browser/web_applications/isolation_data.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_location.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/cpp/self_deleting_url_loader_factory.h"
@@ -53,14 +54,22 @@ class IsolatedWebAppURLLoaderFactory
       int frame_tree_node_id,
       content::BrowserContext* browser_context);
 
+  // The same as `Create`, but doesn't have access to the frame tree.
+  static mojo::PendingRemote<network::mojom::URLLoaderFactory>
+  CreateForServiceWorker(content::BrowserContext* browser_context);
+
   IsolatedWebAppURLLoaderFactory(const IsolatedWebAppURLLoaderFactory&) =
       delete;
   IsolatedWebAppURLLoaderFactory& operator=(
       const IsolatedWebAppURLLoaderFactory&) = delete;
 
  private:
+  static mojo::PendingRemote<network::mojom::URLLoaderFactory> CreateInternal(
+      absl::optional<int> frame_tree_node_id,
+      content::BrowserContext* browser_context);
+
   IsolatedWebAppURLLoaderFactory(
-      int frame_tree_node_id,
+      absl::optional<int> frame_tree_node_id,
       Profile* profile,
       mojo::PendingReceiver<network::mojom::URLLoaderFactory> factory_receiver);
 
@@ -73,7 +82,7 @@ class IsolatedWebAppURLLoaderFactory
 
   void HandleDevModeProxy(
       const IsolatedWebAppUrlInfo& url_info,
-      const IsolationData::DevModeProxy& dev_mode_proxy,
+      const DevModeProxy& dev_mode_proxy,
       mojo::PendingReceiver<network::mojom::URLLoader> loader_receiver,
       const network::ResourceRequest& resource_request,
       mojo::PendingRemote<network::mojom::URLLoaderClient> loader_client,
@@ -94,14 +103,24 @@ class IsolatedWebAppURLLoaderFactory
       const net::MutableNetworkTrafficAnnotationTag& traffic_annotation)
       override;
 
+  void HandleRequest(
+      const IsolatedWebAppUrlInfo& url_info,
+      const IsolatedWebAppLocation& location,
+      bool is_pending_install,
+      mojo::PendingReceiver<network::mojom::URLLoader> loader_receiver,
+      const network::ResourceRequest& resource_request,
+      mojo::PendingRemote<network::mojom::URLLoaderClient> loader_client,
+      const net::MutableNetworkTrafficAnnotationTag& traffic_annotation);
+
   // ProfileObserver:
   void OnProfileWillBeDestroyed(Profile* profile) override;
 
-  const int frame_tree_node_id_;
+  const absl::optional<int> frame_tree_node_id_;
   // It is safe to store a pointer to a `Profile` here, since `this` is freed
   // via `profile_observation_` when the `Profile` is destroyed.
   const raw_ptr<Profile> profile_;
   base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
+  base::WeakPtrFactory<IsolatedWebAppURLLoaderFactory> weak_factory_{this};
 };
 
 }  // namespace web_app

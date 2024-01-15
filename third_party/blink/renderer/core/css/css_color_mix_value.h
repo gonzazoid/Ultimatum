@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_COLOR_MIX_VALUE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_CSS_COLOR_MIX_VALUE_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
@@ -20,13 +19,12 @@ namespace cssvalue {
 // https://www.w3.org/TR/css-color-5/#color-mix
 class CORE_EXPORT CSSColorMixValue : public CSSValue {
  public:
-  CSSColorMixValue(
-      const CSSValue* color1,
-      const CSSValue* color2,
-      const CSSPrimitiveValue* p1,
-      const CSSPrimitiveValue* p2,
-      const Color::ColorInterpolationSpace color_interpolation_space,
-      const Color::HueInterpolationMethod hue_interpolation_method)
+  CSSColorMixValue(const CSSValue* color1,
+                   const CSSValue* color2,
+                   const CSSPrimitiveValue* p1,
+                   const CSSPrimitiveValue* p2,
+                   const Color::ColorSpace color_interpolation_space,
+                   const Color::HueInterpolationMethod hue_interpolation_method)
       : CSSValue(kColorMixClass),
         color1_(color1),
         color2_(color2),
@@ -43,9 +41,9 @@ class CORE_EXPORT CSSColorMixValue : public CSSValue {
 
   const CSSValue& Color1() const { return *color1_; }
   const CSSValue& Color2() const { return *color2_; }
-  const CSSPrimitiveValue* Percentage1() const { return percentage1_; }
-  const CSSPrimitiveValue* Percentage2() const { return percentage2_; }
-  Color::ColorInterpolationSpace ColorInterpolationSpace() const {
+  const CSSPrimitiveValue* Percentage1() const { return percentage1_.Get(); }
+  const CSSPrimitiveValue* Percentage2() const { return percentage2_.Get(); }
+  Color::ColorSpace ColorInterpolationSpace() const {
     return color_interpolation_space_;
   }
   Color::HueInterpolationMethod HueInterpolationMethod() const {
@@ -62,7 +60,7 @@ class CORE_EXPORT CSSColorMixValue : public CSSValue {
   Member<const CSSValue> color2_;
   Member<const CSSPrimitiveValue> percentage1_;
   Member<const CSSPrimitiveValue> percentage2_;
-  const Color::ColorInterpolationSpace color_interpolation_space_;
+  const Color::ColorSpace color_interpolation_space_;
   const Color::HueInterpolationMethod hue_interpolation_method_;
 };
 

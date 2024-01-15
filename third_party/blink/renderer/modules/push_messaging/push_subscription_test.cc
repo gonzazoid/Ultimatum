@@ -6,14 +6,15 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
-#include "third_party/blink/renderer/modules/push_messaging/push_subscription.h"
-#include "third_party/blink/renderer/platform/bindings/string_resource.h"
+#include "third_party/blink/renderer/platform/bindings/to_blink_string.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
 TEST(PushSubscriptionTest, SerializesToBase64URLWithoutPadding) {
+  test::TaskEnvironment task_environment;
   V8TestingScope v8_testing_scope;
 
   // Byte value of a p256dh public key with the following base64 encoding:
@@ -44,6 +45,7 @@ TEST(PushSubscriptionTest, SerializesToBase64URLWithoutPadding) {
   EXPECT_TRUE(json_object.IsObject());
 
   String json_string = ToBlinkString<String>(
+      v8_testing_scope.GetIsolate(),
       v8::JSON::Stringify(v8_testing_scope.GetContext(),
                           json_object.V8Value().As<v8::Object>())
           .ToLocalChecked(),

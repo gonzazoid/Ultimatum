@@ -4,6 +4,9 @@
 
 #include "chrome/updater/external_constants_default.h"
 
+#include <optional>
+#include <vector>
+
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -25,12 +28,18 @@ class DefaultExternalConstants : public ExternalConstants {
     return std::vector<GURL>{GURL(UPDATE_CHECK_URL)};
   }
 
+  GURL CrashUploadURL() const override { return GURL(CRASH_UPLOAD_URL); }
+
+  GURL DeviceManagementURL() const override {
+    return GURL(DEVICE_MANAGEMENT_SERVER_URL);
+  }
+
   bool UseCUP() const override { return true; }
 
-  double InitialDelay() const override { return kInitialDelay; }
+  base::TimeDelta InitialDelay() const override { return kInitialDelay; }
 
-  int ServerKeepAliveSeconds() const override {
-    return kServerKeepAliveSeconds;
+  base::TimeDelta ServerKeepAliveTime() const override {
+    return kServerKeepAliveTime;
   }
 
   crx_file::VerifierFormat CrxVerifierFormat() const override {
@@ -44,6 +53,12 @@ class DefaultExternalConstants : public ExternalConstants {
   base::TimeDelta OverinstallTimeout() const override {
     return base::Minutes(2);
   }
+
+  base::TimeDelta IdleCheckPeriod() const override { return base::Minutes(5); }
+
+  std::optional<bool> IsMachineManaged() const override { return std::nullopt; }
+
+  bool EnableDiffUpdates() const override { return false; }
 
  private:
   ~DefaultExternalConstants() override = default;

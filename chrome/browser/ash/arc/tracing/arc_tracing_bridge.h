@@ -12,7 +12,8 @@
 
 #include "ash/components/arc/mojom/tracing.mojom-forward.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
@@ -65,6 +66,8 @@ class ArcTracingBridge : public KeyedService,
   // Stops tracing and calls |callback| when stopped.
   void StopTracing(StopCallback callback);
 
+  static void EnsureFactoryBuilt();
+
  private:
   // TODO(crbug.com/839086): Remove once we have replaced the legacy tracing
   // service with perfetto.
@@ -81,7 +84,7 @@ class ArcTracingBridge : public KeyedService,
     // tracing::BaseAgent.
     void GetCategories(std::set<std::string>* category_set) override;
 
-    ArcTracingBridge* const bridge_;
+    const raw_ptr<ArcTracingBridge> bridge_;
   };
 
   struct Category;
@@ -92,7 +95,8 @@ class ArcTracingBridge : public KeyedService,
   void OnArcTracingStarted(StartCallback callback, bool success);
   void OnArcTracingStopped(StopCallback callback, bool success);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // List of available categories.
   base::Lock categories_lock_;

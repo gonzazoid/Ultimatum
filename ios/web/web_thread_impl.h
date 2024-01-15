@@ -5,8 +5,9 @@
 #ifndef IOS_WEB_WEB_THREAD_IMPL_H_
 #define IOS_WEB_WEB_THREAD_IMPL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "ios/web/public/thread/web_thread.h"
 
@@ -27,6 +28,16 @@ class WebSubThread;
 class WebThreadImpl : public WebThread {
  public:
   ~WebThreadImpl();
+
+  // WebThread static implementation:
+  static scoped_refptr<base::SingleThreadTaskRunner> GetUIThreadTaskRunner(
+      const WebTaskTraits& traits);
+  static scoped_refptr<base::SingleThreadTaskRunner> GetIOThreadTaskRunner(
+      const WebTaskTraits& traits);
+  static bool IsThreadInitialized(ID identifier);
+  static bool CurrentlyOn(ID identifier);
+  static std::string GetDCheckCurrentlyOnErrorMessage(ID expected);
+  static bool GetCurrentThreadIdentifier(ID* identifier);
 
   // Returns the thread name for `identifier`.
   static const char* GetThreadName(WebThread::ID identifier);

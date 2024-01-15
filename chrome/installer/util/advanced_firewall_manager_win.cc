@@ -7,10 +7,10 @@
 #include <objbase.h>
 #include <stddef.h>
 
-#include "base/guid.h"
 #include "base/logging.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/string_number_conversions_win.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "base/win/scoped_bstr.h"
 #include "base/win/scoped_variant.h"
 
@@ -103,7 +103,8 @@ void AdvancedFirewallManager::DeleteRule(
   // Rename rule to unique name and delete by unique name. We can't just delete
   // rule by name. Multiple rules with the same name and different app are
   // possible.
-  base::win::ScopedBstr unique_name(base::ASCIIToWide(base::GenerateGUID()));
+  base::win::ScopedBstr unique_name(
+      base::ASCIIToWide(base::Uuid::GenerateRandomV4().AsLowercaseString()));
   rule->put_Name(unique_name.Get());
   firewall_rules_->Remove(unique_name.Get());
 }
@@ -136,7 +137,7 @@ Microsoft::WRL::ComPtr<INetFwRule> AdvancedFirewallManager::CreateUDPRule(
   udp_rule->put_Direction(NET_FW_RULE_DIR_IN);
   udp_rule->put_Enabled(VARIANT_TRUE);
   udp_rule->put_LocalPorts(
-      base::win::ScopedBstr(base::StringPrintf(L"%u", port)).Get());
+      base::win::ScopedBstr(base::NumberToWString(port)).Get());
   udp_rule->put_Grouping(base::win::ScopedBstr(app_name_).Get());
   udp_rule->put_Profiles(NET_FW_PROFILE2_ALL);
   udp_rule->put_Action(NET_FW_ACTION_ALLOW);

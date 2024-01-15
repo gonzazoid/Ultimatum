@@ -36,7 +36,7 @@
 #include <tuple>
 #include <utility>
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc.h"
 #include "base/numerics/checked_math.h"
 #include "media/base/logging_override_if_enabled.h"
 #include "media/base/stream_parser_buffer.h"
@@ -155,8 +155,7 @@ scoped_refptr<media::StreamParserBuffer> MakeAudioStreamParserBuffer(
       kWebCodecsAudioTrackId);
 
   // Currently, we do not populate any side_data in these converters.
-  DCHECK_EQ(0U, stream_parser_buffer->side_data_size());
-  DCHECK_EQ(nullptr, stream_parser_buffer->side_data());
+  DCHECK(!stream_parser_buffer->has_side_data());
 
   stream_parser_buffer->set_timestamp(audio_chunk.buffer()->timestamp());
   // TODO(crbug.com/1144908): Get EncodedAudioChunk to have an optional duration
@@ -181,8 +180,7 @@ scoped_refptr<media::StreamParserBuffer> MakeVideoStreamParserBuffer(
       kWebCodecsVideoTrackId);
 
   // Currently, we do not populate any side_data in these converters.
-  DCHECK_EQ(0U, stream_parser_buffer->side_data_size());
-  DCHECK_EQ(nullptr, stream_parser_buffer->side_data());
+  DCHECK(!stream_parser_buffer->has_side_data());
 
   stream_parser_buffer->set_timestamp(video_chunk.buffer()->timestamp());
   // TODO(crbug.com/1144908): Get EncodedVideoChunk to have an optional decode
@@ -192,6 +190,11 @@ scoped_refptr<media::StreamParserBuffer> MakeVideoStreamParserBuffer(
   // or decode errors.
   DCHECK(video_chunk.duration().has_value());
   stream_parser_buffer->set_duration(video_chunk.buffer()->duration());
+
+  if (video_chunk.buffer()->decrypt_config()) {
+    stream_parser_buffer->set_decrypt_config(
+        video_chunk.buffer()->decrypt_config()->Clone());
+  }
   return stream_parser_buffer;
 }
 
@@ -200,7 +203,8 @@ scoped_refptr<media::StreamParserBuffer> MakeVideoStreamParserBuffer(
 SourceBuffer::SourceBuffer(std::unique_ptr<WebSourceBuffer> web_source_buffer,
                            MediaSource* source,
                            EventQueue* async_event_queue)
-    : ExecutionContextLifecycleObserver(source->GetExecutionContext()),
+    : ActiveScriptWrappable<SourceBuffer>({}),
+      ExecutionContextLifecycleObserver(source->GetExecutionContext()),
       web_source_buffer_(std::move(web_source_buffer)),
       source_(source),
       track_defaults_(MakeGarbageCollected<TrackDefaultList>()),
@@ -233,9 +237,7 @@ SourceBuffer::SourceBuffer(std::unique_ptr<WebSourceBuffer> web_source_buffer,
     video_tracks_ = attachment->CreateVideoTrackList(tracer);
     DCHECK(video_tracks_);
   } else {
-    DCHECK(RuntimeEnabledFeatures::MediaSourceInWorkersEnabled(
-               GetExecutionContext()) &&
-           GetExecutionContext()->IsDedicatedWorkerGlobalScope());
+    DCHECK(GetExecutionContext()->IsDedicatedWorkerGlobalScope());
     DCHECK(!IsMainThread());
 
     // TODO(https://crbug.com/878133): Enable construction of media tracks that
@@ -261,11 +263,11 @@ void SourceBuffer::Dispose() {
 }
 
 AtomicString SourceBuffer::SegmentsKeyword() {
-  return "segments";
+  return AtomicString("segments");
 }
 
 AtomicString SourceBuffer::SequenceKeyword() {
-  return "sequence";
+  return AtomicString("sequence");
 }
 
 void SourceBuffer::setMode(const AtomicString& new_mode,
@@ -655,8 +657,7 @@ ScriptPromise SourceBuffer::appendEncodedChunks(
     case V8EncodedChunks::ContentType::kEncodedAudioChunk:
       buffer_queue->emplace_back(
           MakeAudioStreamParserBuffer(*(chunks->GetAsEncodedAudioChunk())));
-      size += buffer_queue->back()->data_size() +
-              buffer_queue->back()->side_data_size();
+      size += buffer_queue->back()->data_size();
       break;
     case V8EncodedChunks::ContentType::kEncodedVideoChunk: {
       const auto& video_chunk = *(chunks->GetAsEncodedVideoChunk());
@@ -668,8 +669,7 @@ ScriptPromise SourceBuffer::appendEncodedChunks(
         return ScriptPromise();
       }
       buffer_queue->emplace_back(MakeVideoStreamParserBuffer(video_chunk));
-      size += buffer_queue->back()->data_size() +
-              buffer_queue->back()->side_data_size();
+      size += buffer_queue->back()->data_size();
       break;
     }
     case V8EncodedChunks::ContentType::
@@ -682,8 +682,7 @@ ScriptPromise SourceBuffer::appendEncodedChunks(
               kEncodedAudioChunk:
             buffer_queue->emplace_back(MakeAudioStreamParserBuffer(
                 *(av_chunk->GetAsEncodedAudioChunk())));
-            size += buffer_queue->back()->data_size() +
-                    buffer_queue->back()->side_data_size();
+            size += buffer_queue->back()->data_size();
             break;
           case V8UnionEncodedAudioChunkOrEncodedVideoChunk::ContentType::
               kEncodedVideoChunk: {
@@ -697,8 +696,7 @@ ScriptPromise SourceBuffer::appendEncodedChunks(
             }
             buffer_queue->emplace_back(
                 MakeVideoStreamParserBuffer(video_chunk));
-            size += buffer_queue->back()->data_size() +
-                    buffer_queue->back()->side_data_size();
+            size += buffer_queue->back()->data_size();
             break;
           }
         }
@@ -707,8 +705,8 @@ ScriptPromise SourceBuffer::appendEncodedChunks(
   }
 
   DCHECK(!append_encoded_chunks_resolver_);
-  append_encoded_chunks_resolver_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  append_encoded_chunks_resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   auto promise = append_encoded_chunks_resolver_->Promise();
 
   // Do remainder of steps of analogue of prepare append algorithm and sending
@@ -1392,7 +1390,7 @@ AtomicString SourceBuffer::DefaultTrackLabel(
   // Spec: https://w3c.github.io/media-source/#sourcebuffer-default-track-label
   const TrackDefault* track_default =
       GetTrackDefault(track_type, byte_stream_track_id);
-  return track_default ? AtomicString(track_default->label()) : "";
+  return track_default ? AtomicString(track_default->label()) : g_empty_atom;
 }
 
 AtomicString SourceBuffer::DefaultTrackLanguage(
@@ -1402,7 +1400,7 @@ AtomicString SourceBuffer::DefaultTrackLanguage(
   // https://w3c.github.io/media-source/#sourcebuffer-default-track-language
   const TrackDefault* track_default =
       GetTrackDefault(track_type, byte_stream_track_id);
-  return track_default ? AtomicString(track_default->language()) : "";
+  return track_default ? AtomicString(track_default->language()) : g_empty_atom;
 }
 
 void SourceBuffer::AddPlaceholderCrossThreadTracks(
@@ -2284,7 +2282,7 @@ void SourceBuffer::Trace(Visitor* visitor) const {
   visitor->Trace(append_encoded_chunks_resolver_);
   visitor->Trace(audio_tracks_);
   visitor->Trace(video_tracks_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 

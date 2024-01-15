@@ -8,7 +8,6 @@
 #include "base/test/task_environment.h"
 #include "chromeos/ash/services/libassistant/test_support/fake_assistant_client.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/icu/source/common/unicode/locid.h"
@@ -32,11 +31,8 @@ std::vector<mojom::AuthenticationTokenPtr> ToVector(
 class AssistantClientMock : public FakeAssistantClient {
  public:
   AssistantClientMock(std::unique_ptr<chromeos::assistant::FakeAssistantManager>
-                          assistant_manager,
-                      chromeos::assistant::FakeAssistantManagerInternal*
-                          assistant_manager_internal)
-      : FakeAssistantClient(std::move(assistant_manager),
-                            assistant_manager_internal) {}
+                          assistant_manager)
+      : FakeAssistantClient(std::move(assistant_manager)) {}
   ~AssistantClientMock() override = default;
 
   // FakeAssistantClient:
@@ -61,6 +57,9 @@ class AssistantClientMock : public FakeAssistantClient {
   MOCK_METHOD(void, SetDeviceAttributes, (bool dark_mode_enabled));
   MOCK_METHOD(void, EnableListening, (bool listening_enabled));
   MOCK_METHOD(void, SetAuthenticationInfo, (const AuthTokens& tokens));
+  MOCK_METHOD(void,
+              SendDisplayRequest,
+              (const OnDisplayRequestRequest& request));
 };
 
 }  // namespace
@@ -98,14 +97,11 @@ class AssistantSettingsControllerTest : public testing::Test {
 
   void Init() {
     assistant_client_ = nullptr;
-    assistant_manager_internal_ = nullptr;
 
     auto assistant_manager =
         std::make_unique<chromeos::assistant::FakeAssistantManager>();
-    assistant_manager_internal_ = std::make_unique<testing::StrictMock<
-        chromeos::assistant::FakeAssistantManagerInternal>>();
-    assistant_client_ = std::make_unique<AssistantClientMock>(
-        std::move(assistant_manager), assistant_manager_internal_.get());
+    assistant_client_ =
+        std::make_unique<AssistantClientMock>(std::move(assistant_manager));
   }
 
   AssistantClientMock& assistant_client_mock() { return *assistant_client_; }
@@ -114,8 +110,6 @@ class AssistantSettingsControllerTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment environment_;
 
   SettingsController controller_;
-  std::unique_ptr<chromeos::assistant::FakeAssistantManagerInternal>
-      assistant_manager_internal_;
   std::unique_ptr<AssistantClientMock> assistant_client_;
 };
 
@@ -207,7 +201,6 @@ TEST_F(AssistantSettingsControllerTest,
   IGNORE_CALLS(assistant_client_mock(), SetLocaleOverride);
   CreateLibassistant();
 
-  EXPECT_NO_CALLS(assistant_client_mock(), SetInternalOptions);
   EXPECT_NO_CALLS(assistant_client_mock(), SetDeviceAttributes);
 
   controller().SetLocale("locale");
@@ -239,20 +232,22 @@ TEST_F(AssistantSettingsControllerTest,
 }
 
 TEST_F(AssistantSettingsControllerTest,
-       ShouldSetInternalOptionsWhenDarkModeEnabledIsUpdated) {
+       ShouldSetInternalOptionsWhenDarkModeEnabledIsUpdated_V2) {
   IGNORE_CALLS(assistant_client_mock(), SetLocaleOverride);
   controller().SetLocale("locale");
   controller().SetSpokenFeedbackEnabled(true);
   CreateLibassistant();
 
-  EXPECT_CALL(assistant_client_mock(), SetInternalOptions);
-  EXPECT_CALL(assistant_client_mock(), SetDeviceAttributes);
+  EXPECT_CALL(assistant_client_mock(), SendDisplayRequest);
+  EXPECT_NO_CALLS(assistant_client_mock(), SetInternalOptions);
+  EXPECT_NO_CALLS(assistant_client_mock(), SetDeviceAttributes);
 
   controller().SetDarkModeEnabled(false);
 }
 
 TEST_F(AssistantSettingsControllerTest,
-       ShouldSetInternalOptionsAndLocaleWhenLibassistantIsStarted) {
+       ShouldSetInternalOptionsAndLocaleWhenLibassistantIsRunning_V2) {
+  CreateLibassistant();
   controller().SetLocale("locale");
   controller().SetSpokenFeedbackEnabled(true);
   controller().SetDarkModeEnabled(false);
@@ -260,7 +255,7 @@ TEST_F(AssistantSettingsControllerTest,
   EXPECT_CALL(assistant_client_mock(), SetLocaleOverride);
   EXPECT_CALL(assistant_client_mock(), SetInternalOptions);
 
-  CreateLibassistant();
+  CreateAndRunningLibassistant();
 }
 
 TEST_F(AssistantSettingsControllerTest,
@@ -359,12 +354,13 @@ TEST_F(AssistantSettingsControllerTest, ShouldSetListeningEnabled) {
 }
 
 TEST_F(AssistantSettingsControllerTest,
-       ShouldSetListeningEnabledWhenLibassistantIsStarted) {
+       ShouldSetListeningEnabledWhenLibassistantIsRunning_V2) {
+  CreateLibassistant();
   controller().SetListeningEnabled(false);
 
   EXPECT_CALL(assistant_client_mock(), EnableListening(false));
 
-  CreateLibassistant();
+  RunningLibassistant();
 }
 
 TEST_F(AssistantSettingsControllerTest,

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -22,6 +23,7 @@
 #include "components/translate/core/browser/translate_prefs.h"
 #include "components/translate/core/browser/translate_step.h"
 #include "components/translate/core/browser/translate_ui_delegate.h"
+#include "components/translate/core/browser/translate_ui_languages_manager.h"
 #include "components/translate/core/common/translate_constants.h"
 #include "components/translate/core/common/translate_errors.h"
 
@@ -36,6 +38,7 @@ BASE_DECLARE_FEATURE(kTranslateCompactUI);
 
 class TranslateDriver;
 class TranslateManager;
+class TranslateUILanguagesManager;
 
 class TranslateInfoBarDelegate : public infobars::InfoBarDelegate {
  public:
@@ -97,15 +100,19 @@ class TranslateInfoBarDelegate : public infobars::InfoBarDelegate {
   TranslateErrors error_type() const { return error_type_; }
 
   std::string source_language_code() const {
-    return ui_delegate_.GetSourceLanguageCode();
+    return ui_languages_manager_->GetSourceLanguageCode();
   }
 
   virtual std::u16string source_language_name() const;
 
+  virtual std::u16string initial_source_language_name() const;
+
+  virtual std::u16string unknown_language_name() const;
+
   virtual void UpdateSourceLanguage(const std::string& language_code);
 
   std::string target_language_code() const {
-    return ui_delegate_.GetTargetLanguageCode();
+    return ui_languages_manager_->GetTargetLanguageCode();
   }
 
   virtual std::u16string target_language_name() const;
@@ -242,6 +249,7 @@ class TranslateInfoBarDelegate : public infobars::InfoBarDelegate {
 
   TranslateUIDelegate ui_delegate_;
   base::WeakPtr<TranslateManager> translate_manager_;
+  raw_ptr<TranslateUILanguagesManager> ui_languages_manager_;
 
   // The error that occurred when trying to translate (NONE if no error).
   TranslateErrors error_type_;

@@ -31,7 +31,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_INSPECTOR_DOM_AGENT_H_
 
 #include <memory>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event_listener_map.h"
@@ -51,14 +51,12 @@
 namespace blink {
 
 class CharacterData;
-class Color;
 class DOMEditor;
 class Document;
 class DocumentLoader;
 class Element;
 class ExceptionState;
 class HTMLFrameOwnerElement;
-class HTMLPortalElement;
 class HTMLSlotElement;
 class InspectedFrames;
 class InspectorHistory;
@@ -99,7 +97,6 @@ class CORE_EXPORT InspectorDOMAgent final
   static protocol::DOM::CompatibilityMode GetDocumentCompatibilityMode(
       Document*);
   static ShadowRoot* UserAgentShadowRoot(Node*);
-  static Color ParseColor(protocol::DOM::RGBA*);
 
   InspectorDOMAgent(v8::Isolate*,
                     InspectedFrames*,
@@ -262,6 +259,8 @@ class CORE_EXPORT InspectorDOMAgent final
   protocol::Response getContainerForNode(
       int node_id,
       protocol::Maybe<String> container_name,
+      protocol::Maybe<protocol::DOM::PhysicalAxes> physical_axes,
+      protocol::Maybe<protocol::DOM::LogicalAxes> logical_axes,
       protocol::Maybe<int>* container_node_id) override;
   protocol::Response getQueryingDescendantsForContainer(
       int node_id,
@@ -298,7 +297,6 @@ class CORE_EXPORT InspectorDOMAgent final
   void TopLayerElementsChanged();
   void PseudoElementDestroyed(PseudoElement*);
   void NodeCreated(Node* node);
-  void PortalRemoteFrameCreated(HTMLPortalElement*);
 
   Node* NodeForId(int node_id) const;
   int BoundNodeId(Node*) const;

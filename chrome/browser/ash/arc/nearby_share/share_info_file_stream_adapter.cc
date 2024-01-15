@@ -7,11 +7,10 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_piece.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/arc/nearby_share/arc_nearby_share_uma.h"
@@ -115,13 +114,13 @@ void ShareInfoFileStreamAdapter::WriteToFile(int bytes_read) {
       [](int fd, scoped_refptr<net::IOBuffer> buf, int size) -> bool {
         const bool result =
             base::WriteFileDescriptor(fd, base::StringPiece(buf->data(), size));
-        PLOG_IF(ERROR, !result) << "Failed writting to fd";
+        PLOG_IF(ERROR, !result) << "Failed writing to fd.";
         return result;
       },
       dest_fd_.get(), net_iobuf_, bytes_read);
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE, std::move(write_fd_func),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, std::move(write_fd_func),
       base::BindOnce(&ShareInfoFileStreamAdapter::OnWriteFinished,
                      weak_ptr_factory_.GetWeakPtr()));
 }

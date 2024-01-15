@@ -10,9 +10,10 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -59,8 +60,8 @@ AwProxyConfigMonitor::AwProxyConfigMonitor() {
   TRACE_EVENT0("startup", "AwProxyConfigMonitor");
   proxy_config_service_android_ =
       std::make_unique<net::ProxyConfigServiceAndroid>(
-          base::ThreadTaskRunnerHandle::Get(),
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   proxy_config_service_android_->set_exclude_pac_url(true);
   proxy_config_service_android_->AddObserver(this);
 }

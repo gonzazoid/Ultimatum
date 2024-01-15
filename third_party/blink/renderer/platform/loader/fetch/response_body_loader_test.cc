@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "services/network/public/cpp/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -30,9 +31,10 @@ class TestBackForwardCacheLoaderHelper : public BackForwardCacheLoaderHelper {
   TestBackForwardCacheLoaderHelper() = default;
 
   void EvictFromBackForwardCache(
-      mojom::RendererEvictionReason reason) override {}
+      mojom::blink::RendererEvictionReason reason) override {}
 
-  void DidBufferLoadWhileInBackForwardCache(size_t num_bytes) override {}
+  void DidBufferLoadWhileInBackForwardCache(bool update_process_wide_count,
+                                            size_t num_bytes) override {}
 
   void Detach() override {}
 };
@@ -78,7 +80,7 @@ class ResponseBodyLoaderTest : public testing::Test {
     }
     void DidReceiveDecodedData(
         const String& data,
-        std::unique_ptr<Resource::DecodedDataInfo> info) override {}
+        std::unique_ptr<ParkableStringImpl::SecureDigest> digest) override {}
     void DidFinishLoadingBody() override {
       DCHECK(!finished_);
       DCHECK(!failed_);
@@ -443,8 +445,8 @@ TEST_F(ResponseBodyLoaderTest, DrainAsDataPipe) {
   ASSERT_TRUE(client);
   EXPECT_TRUE(body_loader->IsDrained());
 
-  client_for_draining->DidReceiveData(base::make_span("xyz", 3));
-  client_for_draining->DidReceiveData(base::make_span("abc", 3));
+  client_for_draining->DidReceiveData(base::make_span("xyz", 3u));
+  client_for_draining->DidReceiveData(base::make_span("abc", 3u));
 
   EXPECT_FALSE(client->LoadingIsFinished());
   EXPECT_FALSE(client->LoadingIsFailed());
@@ -716,8 +718,8 @@ TEST_F(ResponseBodyLoaderTest, DrainAsDataPipeAndReportError) {
   ASSERT_TRUE(client);
   EXPECT_TRUE(body_loader->IsDrained());
 
-  client_for_draining->DidReceiveData(base::make_span("xyz", 3));
-  client_for_draining->DidReceiveData(base::make_span("abc", 3));
+  client_for_draining->DidReceiveData(base::make_span("xyz", 3u));
+  client_for_draining->DidReceiveData(base::make_span("abc", 3u));
 
   EXPECT_FALSE(client->LoadingIsFinished());
   EXPECT_FALSE(client->LoadingIsFailed());
@@ -796,6 +798,25 @@ TEST_F(ResponseBodyLoaderTest, CancelDrainedBytesConsumer) {
   EXPECT_TRUE(client->LoadingIsCancelled());
   EXPECT_FALSE(client->LoadingIsFinished());
   EXPECT_FALSE(client->LoadingIsFailed());
+}
+
+TEST_F(ResponseBodyLoaderTest, AbortDrainAsBytesConsumerWhileLoading) {
+  auto task_runner = base::MakeRefCounted<scheduler::FakeTaskRunner>();
+  auto* original_consumer =
+      MakeGarbageCollected<ReplayingBytesConsumer>(task_runner);
+  original_consumer->Add(Command(Command::kData, "hello"));
+  original_consumer->Add(Command(Command::kDone));
+
+  auto* client = MakeGarbageCollected<TestClient>();
+  auto* body_loader =
+      MakeResponseBodyLoader(*original_consumer, *client, task_runner);
+  BytesConsumer& consumer = body_loader->DrainAsBytesConsumer();
+
+  EXPECT_EQ(PublicState::kReadableOrWaiting, consumer.GetPublicState());
+
+  body_loader->Abort();
+  EXPECT_EQ(PublicState::kErrored, consumer.GetPublicState());
+  EXPECT_EQ("Response body loading was aborted", consumer.GetError().Message());
 }
 
 TEST_F(ResponseBodyLoaderTest, DrainAsBytesConsumerWithError) {

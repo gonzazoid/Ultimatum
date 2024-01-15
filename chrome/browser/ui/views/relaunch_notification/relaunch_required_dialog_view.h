@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_REQUIRED_DIALOG_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_REQUIRED_DIALOG_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/views/relaunch_notification/relaunch_required_timer.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -18,7 +18,7 @@ class Widget;
 // A View for the relaunch required dialog. This is shown to users to inform
 // them that Chrome will be relaunched by the RelaunchNotificationController as
 // dictated by policy settings and upgrade availability.
-class RelaunchRequiredDialogView : views::DialogDelegateView {
+class RelaunchRequiredDialogView : public views::DialogDelegateView {
  public:
   // Shows the dialog in |browser| for a relaunch that will be forced at
   // |deadline|. |on_accept| is run if the user accepts the prompt to restart.
@@ -39,6 +39,9 @@ class RelaunchRequiredDialogView : views::DialogDelegateView {
   // Sets the relaunch deadline to |deadline| and refreshes the view's title
   // accordingly.
   void SetDeadline(base::Time deadline);
+
+  // Returns the deadline used to derive the time-to-relaunch shown to the user.
+  base::Time deadline() const { return relaunch_required_timer_.deadline(); }
 
   // views::DialogDelegateView:
   std::u16string GetWindowTitle() const override;

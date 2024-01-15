@@ -1,0 +1,11 @@
+include_rules = [
+  "+components/keyed_service/core",
+  "+components/os_crypt/sync",
+  "+components/signin/public",
+  "+crypto",
+  "+google_apis",
+  "+net",
+  "+services/network/public",
+  "+services/network/test",
+  "+third_party/boringssl",
+]

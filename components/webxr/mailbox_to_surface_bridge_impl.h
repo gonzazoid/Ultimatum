@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_WEBXR_MAILBOX_TO_SURFACE_BRIDGE_IMPL_H_
 #define COMPONENTS_WEBXR_MAILBOX_TO_SURFACE_BRIDGE_IMPL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -57,8 +57,6 @@ class MailboxToSurfaceBridgeImpl : public device::MailboxToSurfaceBridge {
 
   void ResizeSurface(int width, int height) override;
 
-  bool CopyMailboxToSurfaceAndSwap(const gpu::MailboxHolder& mailbox) override;
-
   bool CopyMailboxToSurfaceAndSwap(const gpu::MailboxHolder& mailbox,
                                    const gfx::Transform& uv_transform) override;
 
@@ -72,12 +70,17 @@ class MailboxToSurfaceBridgeImpl : public device::MailboxToSurfaceBridge {
                       base::OnceCallback<void(std::unique_ptr<gfx::GpuFence>)>
                           callback) override;
 
-  gpu::MailboxHolder CreateSharedImage(
-      gpu::GpuMemoryBufferImplAndroidHardwareBuffer* buffer,
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      gfx::GpuMemoryBufferHandle buffer_handle,
+      gfx::BufferFormat buffer_format,
+      const gfx::Size& size,
       const gfx::ColorSpace& color_space,
-      uint32_t usage) override;
+      uint32_t usage,
+      gpu::SyncToken& sync_token) override;
 
-  void DestroySharedImage(const gpu::MailboxHolder& mailbox_holder) override;
+  void DestroySharedImage(
+      const gpu::SyncToken& sync_token,
+      scoped_refptr<gpu::ClientSharedImage> shared_image) override;
 
  private:
   void BindContextProviderToCurrentThread();
@@ -88,7 +91,6 @@ class MailboxToSurfaceBridgeImpl : public device::MailboxToSurfaceBridge {
   void DrawQuad(unsigned int textureHandle, const gfx::Transform& uv_transform);
 
   scoped_refptr<viz::ContextProvider> context_provider_;
-  std::unique_ptr<gl::ScopedJavaSurface> surface_;
   raw_ptr<gpu::gles2::GLES2Interface> gl_ = nullptr;
   raw_ptr<gpu::ContextSupport> context_support_ = nullptr;
   int surface_handle_ = gpu::kNullSurfaceHandle;
@@ -96,6 +98,7 @@ class MailboxToSurfaceBridgeImpl : public device::MailboxToSurfaceBridge {
   // in the same class like this.
   base::OnceClosure on_context_bound_;
 
+  // Only initialized if we have Surface (i.e surface_handle_ is not null).
   int surface_width_ = 0;
   int surface_height_ = 0;
 

@@ -5,7 +5,6 @@
 '''Exception types for GRIT.
 '''
 
-from __future__ import print_function
 
 class Base(Exception):
   '''A base exception that uses the class's docstring in addition to any
@@ -17,7 +16,7 @@ class Base(Exception):
         msg = self.__doc__ + ': ' + msg
     else:
       msg = self.__doc__
-    super(Base, self).__init__(msg)
+    super().__init__(msg)
 
 
 class Parsing(Base):
@@ -116,6 +115,11 @@ sure the section ID is correct (matches the section's ID in the RC file). \
 Also note that you may need to specify the RC file's encoding (using the \
 encoding="" attribute) if it is not in the default Windows-1252 encoding. \
 '''
+  pass
+
+
+class IdRangeOverflow(Base):
+  '''ID range overflow.'''
   pass
 
 

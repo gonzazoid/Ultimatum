@@ -8,11 +8,11 @@
 #include <utility>
 
 #include "base/check_op.h"
-#include "base/guid.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/uuid.h"
 #include "content/public/browser/browser_thread.h"
 #include "sql/statement.h"
 #include "sql/transaction.h"
@@ -28,7 +28,7 @@ const size_t kMaxDataLength = 2048;
 void BindRowToStatement(
     const predictors::AutocompleteActionPredictorTable::Row& row,
     sql::Statement* statement) {
-  DCHECK(base::IsValidGUID(row.id));
+  DCHECK(base::Uuid::ParseCaseInsensitive(row.id).is_valid());
   statement->BindString(0, row.id);
   statement->BindString16(1, row.user_text.substr(0, kMaxDataLength));
   statement->BindString(2, row.url.spec().substr(0, kMaxDataLength));
@@ -243,8 +243,6 @@ void AutocompleteActionPredictorTable::LogDatabaseStats()  {
                          kAutocompletePredictorTableName).c_str()));
   if (!count_statement.is_valid() || !count_statement.Step())
     return;
-  UMA_HISTOGRAM_COUNTS_1M("AutocompleteActionPredictor.DatabaseRowCount",
-                          count_statement.ColumnInt(0));
 }
 
 }  // namespace predictors

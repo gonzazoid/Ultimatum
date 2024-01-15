@@ -7,7 +7,6 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/network/network_icon_animation_observer.h"
-#include "ash/system/network/network_info.h"
 #include "ash/system/network/network_list_item_view.h"
 #include "ash/system/tray/hover_highlight_view.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
@@ -43,6 +42,9 @@ class ASH_EXPORT NetworkListNetworkItemView
 
   // network_icon::AnimationObserver:
   void NetworkIconChanged() override;
+
+  // ash::NetworkListItemView
+  void OnThemeChanged() override;
 
   void SetupCellularSubtext();
   void SetupNetworkSubtext();

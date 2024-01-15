@@ -14,19 +14,20 @@
 #include <memory>
 #include <numeric>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/object_watcher.h"
 #include "components/device_event_log/device_event_log.h"
 #include "services/device/public/cpp/usb/usb_utils.h"
@@ -44,7 +45,7 @@ using mojom::UsbTransferStatus;
 
 namespace {
 
-const base::WStringPiece kWinUsbDriverName = L"winusb";
+const std::wstring_view kWinUsbDriverName = L"winusb";
 
 uint8_t BuildRequestFlags(UsbTransferDirection direction,
                           UsbControlTransferType request_type,
@@ -584,7 +585,7 @@ const mojom::UsbInterfaceInfo* UsbDeviceHandleWin::FindInterfaceByEndpoint(
 
 UsbDeviceHandleWin::UsbDeviceHandleWin(scoped_refptr<UsbDeviceWin> device)
     : device_(std::move(device)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       blocking_task_runner_(UsbService::CreateBlockingTaskRunner()) {
   if (const auto* config = device_->GetActiveConfiguration()) {
     for (const auto& interface : config->interfaces) {
@@ -633,7 +634,7 @@ UsbDeviceHandleWin::UsbDeviceHandleWin(
     scoped_refptr<base::SequencedTaskRunner> blocking_task_runner)
     : device_(std::move(device)),
       hub_handle_(std::move(handle)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       blocking_task_runner_(std::move(blocking_task_runner)) {}
 
 UsbDeviceHandleWin::~UsbDeviceHandleWin() = default;
@@ -1043,7 +1044,7 @@ void UsbDeviceHandleWin::GotDescriptorFromNodeConnection(
     std::pair<DWORD, DWORD> result_and_bytes_transferred) {
   if (result_and_bytes_transferred.first != ERROR_SUCCESS) {
     SetLastError(result_and_bytes_transferred.first);
-    USB_PLOG(ERROR) << "Failed to read descriptor from node connection";
+    USB_PLOG(DEBUG) << "Failed to read descriptor from node connection";
     std::move(callback).Run(UsbTransferStatus::TRANSFER_ERROR,
                             /*buffer=*/nullptr, /*length=*/0);
     return;

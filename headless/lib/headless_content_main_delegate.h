@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include <optional>
 #include "build/build_config.h"
 #include "content/public/app/content_main_delegate.h"
 #include "content/public/browser/content_browser_client.h"
@@ -15,7 +16,6 @@
 #include "headless/lib/headless_content_client.h"
 #include "headless/public/headless_browser.h"
 #include "headless/public/headless_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class CommandLine;
@@ -31,7 +31,6 @@ class HEADLESS_EXPORT HeadlessContentMainDelegate
  public:
   explicit HeadlessContentMainDelegate(
       std::unique_ptr<HeadlessBrowserImpl> browser);
-  explicit HeadlessContentMainDelegate(HeadlessBrowser::Options options);
 
   HeadlessContentMainDelegate(const HeadlessContentMainDelegate&) = delete;
   HeadlessContentMainDelegate& operator=(const HeadlessContentMainDelegate&) =
@@ -39,47 +38,51 @@ class HEADLESS_EXPORT HeadlessContentMainDelegate
 
   ~HeadlessContentMainDelegate() override;
 
+ private:
   // content::ContentMainDelegate implementation:
-  absl::optional<int> BasicStartupComplete() override;
+  std::optional<int> BasicStartupComplete() override;
   void PreSandboxStartup() override;
   absl::variant<int, content::MainFunctionParams> RunProcess(
       const std::string& process_type,
       content::MainFunctionParams main_function_params) override;
-#if BUILDFLAG(IS_MAC)
-  absl::optional<int> PreBrowserMain() override;
+  std::optional<int> PreBrowserMain() override;
+#if BUILDFLAG(IS_WIN)
+  bool ShouldHandleConsoleControlEvents() override;
 #endif
   content::ContentClient* CreateContentClient() override;
   content::ContentBrowserClient* CreateContentBrowserClient() override;
   content::ContentUtilityClient* CreateContentUtilityClient() override;
   content::ContentRendererClient* CreateContentRendererClient() override;
 
-  absl::optional<int> PostEarlyInitialization(InvokedIn invoked_in) override;
+  std::optional<int> PostEarlyInitialization(InvokedIn invoked_in) override;
+#if BUILDFLAG(IS_MAC)
+  void PlatformPreBrowserMain();
+#endif
 
+  // TODO(caseq): get rid of this method and GetInstance(), tests should get
+  // browser through other means.
+  // Note this is nullptr in processes other than the browser.
   HeadlessBrowserImpl* browser() const { return browser_.get(); }
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   void ZygoteForked() override;
 #endif
 
- private:
   friend class HeadlessBrowserTest;
-
-  void Init();
-
-  HeadlessBrowser::Options* options();
 
   static HeadlessContentMainDelegate* GetInstance();
 
   void InitLogging(const base::CommandLine& command_line);
   void InitCrashReporter(const base::CommandLine& command_line);
 
+  // Other clients may retain pointers to browser, so it should come
+  // first.
+  std::unique_ptr<HeadlessBrowserImpl> const browser_;
+
   std::unique_ptr<content::ContentRendererClient> renderer_client_;
   std::unique_ptr<content::ContentBrowserClient> browser_client_;
   std::unique_ptr<content::ContentUtilityClient> utility_client_;
   HeadlessContentClient content_client_;
-
-  std::unique_ptr<HeadlessBrowserImpl> browser_;
-  std::unique_ptr<HeadlessBrowser::Options> options_;
 };
 
 }  // namespace headless

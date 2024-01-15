@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import {PrintPreviewModelElement, PrintPreviewScalingSettingsElement, ScalingType} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.js';
 import {getDeepActiveElement} from 'chrome://resources/js/util.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
@@ -11,18 +10,7 @@ import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 import {selectOption} from './print_preview_test_utils.js';
 
-const scaling_settings_interactive_test = {
-  suiteName: 'ScalingSettingsInteractiveTest',
-  TestNames: {
-    AutoFocusInput: 'auto focus input',
-  },
-};
-
-Object.assign(
-    window,
-    {scaling_settings_interactive_test: scaling_settings_interactive_test});
-
-suite(scaling_settings_interactive_test.suiteName, function() {
+suite('ScalingSettingsInteractiveTest', function() {
   let scalingSection: PrintPreviewScalingSettingsElement;
 
   let model: PrintPreviewModelElement;
@@ -42,8 +30,7 @@ suite(scaling_settings_interactive_test.suiteName, function() {
   });
 
   test(
-      assert(scaling_settings_interactive_test.TestNames.AutoFocusInput),
-      async () => {
+      'auto focus input', async () => {
         const scalingInput =
             scalingSection.shadowRoot!
                 .querySelector('print-preview-number-settings-section')!.$

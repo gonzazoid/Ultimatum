@@ -5,16 +5,155 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_COMMON_DENSE_SET_H_
 #define COMPONENTS_AUTOFILL_CORE_COMMON_DENSE_SET_H_
 
-#include <bitset>
+#include <array>
+#include <bit>
+#include <climits>
 #include <cstddef>
 #include <iterator>
 #include <type_traits>
 
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/numerics/safe_conversions.h"
 
 namespace autofill {
+
+namespace internal {
+
+// The number of bits in `T`.
+template <typename T>
+static constexpr size_t kBitsPer = sizeof(T) * CHAR_BIT;
+
+// A bitset represented as `std::array<Word, kNumWords>.
+// There's a specialization further down for `kNumWords == 1`.
+template <typename Word, size_t kNumWords>
+class Bitset {
+ public:
+  constexpr Bitset() = default;
+
+  constexpr size_t num_set_bits() const {
+    // We count the number of bits in `words_`. DenseSet ensures that all bits
+    // beyond `kMaxBitIndex` are zero. This is necessary for size() to be
+    // correct.
+    size_t num = 0;
+    for (const auto word : words_) {
+      num += std::popcount(word);
+    }
+    return num;
+  }
+
+  constexpr bool get_bit(size_t index) const {
+    size_t word = index / kBitsPer<Word>;
+    size_t bit = index % kBitsPer<Word>;
+    return words_[word] & (static_cast<Word>(1) << bit);
+  }
+
+  constexpr void set_bit(size_t index) {
+    size_t word = index / kBitsPer<Word>;
+    size_t bit = index % kBitsPer<Word>;
+    words_[word] |= static_cast<Word>(1) << bit;
+  }
+
+  constexpr void unset_bit(size_t index) {
+    size_t word = index / kBitsPer<Word>;
+    size_t bit = index % kBitsPer<Word>;
+    words_[word] &= ~(static_cast<Word>(1) << bit);
+  }
+
+  constexpr Bitset operator|=(const Bitset& rhs) {
+    for (size_t i = 0; i < words_.size(); ++i) {
+      words_[i] |= rhs.words_[i];
+    }
+    return *this;
+  }
+
+  constexpr Bitset operator&=(const Bitset& rhs) {
+    for (size_t i = 0; i < words_.size(); ++i) {
+      words_[i] &= rhs.words_[i];
+    }
+    return *this;
+  }
+
+  friend constexpr Bitset operator&(Bitset lhs, const Bitset& rhs) {
+    return lhs &= rhs;
+  }
+
+  friend constexpr Bitset operator~(Bitset x) {
+    for (size_t i = 0; i < x.words_.size(); ++i) {
+      x.words_[i] = ~x.words_[i];
+    }
+    return x;
+  }
+
+  friend constexpr bool operator==(const Bitset& lhs,
+                                   const Bitset& rhs) = default;
+
+  constexpr base::span<const Word, kNumWords> data() const { return words_; }
+
+ private:
+  std::array<Word, kNumWords> words_{};
+};
+
+// Specialization that uses a single integer instead of an std::array.
+template <typename Word>
+class Bitset<Word, 1u> {
+ public:
+  constexpr Bitset() = default;
+
+  constexpr size_t num_set_bits() const { return std::popcount(word_); }
+
+  constexpr bool get_bit(size_t index) const {
+    return word_ & (static_cast<Word>(1) << index);
+  }
+
+  constexpr void set_bit(size_t index) {
+    word_ |= static_cast<Word>(1) << index;
+  }
+
+  constexpr void unset_bit(size_t index) {
+    word_ &= ~(static_cast<Word>(1) << index);
+  }
+
+  constexpr Bitset operator|=(const Bitset& rhs) {
+    word_ |= rhs.word_;
+    return *this;
+  }
+
+  constexpr Bitset operator&=(const Bitset& rhs) {
+    word_ &= rhs.word_;
+    return *this;
+  }
+
+  friend constexpr Bitset operator&(Bitset lhs, const Bitset& rhs) {
+    lhs.word_ &= rhs.word_;
+    return lhs;
+  }
+
+  friend constexpr Bitset operator~(Bitset x) {
+    x.word_ = ~x.word_;
+    return x;
+  }
+
+  friend constexpr bool operator==(Bitset lhs, Bitset rhs) = default;
+
+  constexpr base::span<const Word, 1> data() const {
+    return base::span<const Word, 1>(&word_, 1u);
+  }
+
+ private:
+  Word word_;
+};
+
+}  // namespace internal
+
+template <typename T>
+struct DenseSetTraits {
+  static constexpr T kMinValue = T(0);
+  static constexpr T kMaxValue = T::kMaxValue;
+  static constexpr bool kPacked = false;
+};
 
 // A set container with a std::set<T>-like interface for integral or enum types
 // T that have a dense and small representation as unsigned integers.
@@ -23,23 +162,79 @@ namespace autofill {
 // representation.
 //
 // The lower and upper bounds of elements storable in a container are
-// [T(0), kMaxValue]. By default, kMaxValue is T::kMaxValue.
+// [Traits::kMinValue, Traits::kMaxValue]. The default is [T(0), T::kMaxValue].
 //
-// Internally, the set is represented as a std::bitset.
+// The `Traits::kPacked` parameter indicates whether the memory consumption of a
+// DenseSet object should be minimized. That comes at the cost of slightly
+// larger code size.
 //
-// Time and space complexity depend on std::bitset:
-// - insert(), erase(), contains() should run in time O(1)
-// - empty(), size(), iteration should run in time O(kMaxValue)
-// - sizeof(DenseSet) should be ceil(kMaxValue / 8) bytes.
+// Time and space complexity:
+// - insert(), erase(), contains() run in time O(1)
+// - empty(), size(), iteration run in time O(Traits::kMaxValue)
+// - sizeof(DenseSet) is, for N = `Traits::kMaxValue - Traits::kMinValue + 1,
+//   - if `!Traits::kPacked`: the minimum of {1, 2, 4, 8 * ceil(N / 64)} bytes
+//     that has at least N bits;
+//   - if `Traits::kPacked`: ceil(N / 8) bytes.
 //
 // Iterators are invalidated when the owning container is destructed or moved,
 // or when the element the iterator points to is erased from the container.
-template <typename T, T kMaxValue = T::kMaxValue>
+template <typename T, typename Traits = DenseSetTraits<T>>
 class DenseSet {
  private:
-  using Index = std::make_unsigned_t<T>;
+  static_assert(std::is_integral<T>::value || std::is_enum<T>::value);
+
+  // Needed for std::conditional_t.
+  struct Wrapper {
+    using type = T;
+  };
+
+  // For arithmetic on `T`.
+  using UnderlyingType = typename std::conditional_t<std::is_enum<T>::value,
+                                                     std::underlying_type<T>,
+                                                     Wrapper>::type;
+
+  // The index of a bit in the underlying bitset. Use
+  // value_to_index() and index_to_value() for conversion.
+  using Index = std::make_unsigned_t<UnderlyingType>;
+
+  // We can't use `base::to_underlying()` because `T` may be not an enum.
+  static constexpr UnderlyingType to_underlying(T x) {
+    return static_cast<UnderlyingType>(x);
+  }
+
+  static_assert(to_underlying(Traits::kMinValue) <=
+                to_underlying(Traits::kMaxValue));
+
+  // The maximum supported bit index. Indexing starts at 0, so kMaxBitIndex ==
+  // 63 means we need 64 bits. This is a `size_t` to avoid `kMaxBitIndex + 1`
+  // from overflowing.
+  static constexpr size_t kMaxBitIndex = base::checked_cast<Index>(
+      to_underlying(Traits::kMaxValue) - to_underlying(Traits::kMinValue));
+
+  static_assert(kMaxBitIndex <
+                std::numeric_limits<decltype(kMaxBitIndex)>::max());
 
  public:
+  // The bitset is represented as array of words.
+  using Word = std::conditional_t<
+      (Traits::kPacked || kMaxBitIndex < 8),
+      uint8_t,
+      std::conditional_t<
+          (kMaxBitIndex < 16),
+          uint16_t,
+          std::conditional_t<(kMaxBitIndex < 32), uint32_t, uint64_t>>>;
+
+ private:
+  // Returns ceil(x / y).
+  static constexpr size_t ceil_div(size_t x, size_t y) {
+    return (x + y - 1) / y;
+  }
+
+ public:
+  // The number of `Word`s needed to hold `kMaxBitIndex + 1` bits.
+  static constexpr size_t kNumWords =
+      ceil_div(kMaxBitIndex + 1, internal::kBitsPer<Word>);
+
   // A bidirectional iterator for the DenseSet.
   class Iterator {
    public:
@@ -62,7 +257,7 @@ class DenseSet {
     }
 
     T operator*() const {
-      DCHECK(derefenceable());
+      DCHECK(dereferenceable());
       return index_to_value(index_);
     }
 
@@ -99,20 +294,22 @@ class DenseSet {
         : owner_(owner), index_(index) {}
 
     // Advances the index, starting from the current position, to the next
-    // non-empty one. std::bitset does not offer a find-next-set operation.
+    // non-empty one.
     void Skip(Direction direction) {
       DCHECK_LE(index_, owner_->max_size());
-      while (index_ < owner_->max_size() && !derefenceable()) {
+      while (index_ < owner_->max_size() && !dereferenceable()) {
         index_ += direction;
       }
     }
 
-    bool derefenceable() const {
+    bool dereferenceable() const {
       DCHECK_LT(index_, owner_->max_size());
-      return owner_->bitset_.test(index_);
+      return owner_->bitset_.get_bit(index_);
     }
 
-    const DenseSet* owner_ = nullptr;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer
+    RAW_PTR_EXCLUSION const DenseSet* owner_ = nullptr;
 
     // The current index is in the interval [0, owner_->max_size()].
     Index index_ = 0;
@@ -126,20 +323,9 @@ class DenseSet {
 
   constexpr DenseSet() = default;
 
-  // The `constexpr` constructor allows for compile-time initialization of
-  // DenseSets. This only works if the set fits into 64 bits. Otherwise, we
-  // fall back to a non-`constexpr` constructor.
-
-  template <size_t kMaxBit = base::checked_cast<Index>(kMaxValue),
-            std::enable_if_t<(kMaxBit < 64), bool> = true>
-  constexpr DenseSet(std::initializer_list<T> init)
-      : bitset_(initializer_list_to_bitmask(init)) {}
-
-  template <size_t kMaxBit = base::checked_cast<Index>(kMaxValue),
-            std::enable_if_t<(kMaxBit >= 64), bool> = true>
-  DenseSet(std::initializer_list<T> init) {
+  constexpr DenseSet(std::initializer_list<T> init) {
     for (const auto& x : init) {
-      insert(x);
+      bitset_.set_bit(value_to_index(x));
     }
   }
 
@@ -150,13 +336,23 @@ class DenseSet {
     }
   }
 
-  friend bool operator==(const DenseSet& a, const DenseSet& b) {
-    return a.bitset_ == b.bitset_;
+  // Returns a set containing all values from `kMinValue` to `kMaxValue`,
+  // regardless of whether the values represent an existing enum.
+  static constexpr DenseSet all() {
+    DenseSet set;
+    for (Index x = value_to_index(Traits::kMinValue);
+         x <= value_to_index(Traits::kMaxValue); ++x) {
+      set.insert(index_to_value(x));
+    }
+    return set;
   }
 
-  friend bool operator!=(const DenseSet& a, const DenseSet& b) {
-    return !(a == b);
+  // Returns a raw bitmask. Useful for serialization.
+  constexpr base::span<const Word, kNumWords> data() const {
+    return bitset_.data();
   }
+
+  friend bool operator==(const DenseSet& a, const DenseSet& b) = default;
 
   // Iterators.
 
@@ -183,43 +379,46 @@ class DenseSet {
   // Capacity.
 
   // Returns true if the set is empty, otherwise false.
-  bool empty() const { return bitset_.none(); }
+  constexpr bool empty() const { return bitset_ == Bitset{}; }
 
   // Returns the number of elements the set has.
-  size_t size() const { return bitset_.count(); }
+  constexpr size_t size() const { return bitset_.num_set_bits(); }
 
   // Returns the maximum number of elements the set can have.
-  constexpr size_t max_size() const { return bitset_.size(); }
+  constexpr size_t max_size() const { return kMaxBitIndex + 1; }
 
   // Modifiers.
 
   // Clears the contents.
-  void clear() { bitset_.reset(); }
+  constexpr void clear() { bitset_ = {}; }
 
   // Inserts value |x| if it is not present yet, and returns an iterator to the
   // inserted or existing element and a boolean that indicates whether the
   // insertion took place.
-  std::pair<iterator, bool> insert(T x) {
+  constexpr std::pair<iterator, bool> insert(T x) {
     bool contained = contains(x);
-    bitset_.set(value_to_index(x));
+    bitset_.set_bit(value_to_index(x));
     return {find(x), !contained};
   }
 
   // Inserts all values of |xs| into the present set.
-  void insert_all(const DenseSet& xs) { bitset_ |= xs.bitset_; }
+  constexpr void insert_all(const DenseSet& xs) { bitset_ |= xs.bitset_; }
+
+  // Erases all elements that are not present in both `*this` and `xs`.
+  constexpr void intersect(const DenseSet& xs) { bitset_ &= xs.bitset_; }
 
   // Erases the element whose index matches the index of |x| and returns the
   // number of erased elements (0 or 1).
   size_t erase(T x) {
     bool contained = contains(x);
-    bitset_.reset(value_to_index(x));
+    bitset_.unset_bit(value_to_index(x));
     return contained ? 1 : 0;
   }
 
   // Erases the element |*it| and returns an iterator to its successor.
   iterator erase(const_iterator it) {
-    DCHECK(it.owner_ == this && it.derefenceable());
-    bitset_.reset(it.index_);
+    DCHECK(it.owner_ == this && it.dereferenceable());
+    bitset_.unset_bit(it.index_);
     it.Skip(const_iterator::kForward);
     return it;
   }
@@ -228,7 +427,7 @@ class DenseSet {
   iterator erase(const_iterator first, const_iterator last) {
     DCHECK(first.owner_ == this && last.owner_ == this);
     while (first != last) {
-      bitset_.reset(first.index_);
+      bitset_.unset_bit(first.index_);
       ++first;
     }
     return last;
@@ -240,24 +439,26 @@ class DenseSet {
   // Lookup.
 
   // Returns 1 if |x| is an element, otherwise 0.
-  size_t count(T x) const { return contains(x) ? 1 : 0; }
+  constexpr size_t count(T x) const { return contains(x) ? 1 : 0; }
 
   // Returns an iterator to the element |x| if it exists, otherwise end().
-  const_iterator find(T x) const {
+  constexpr const_iterator find(T x) const {
     return contains(x) ? const_iterator(this, value_to_index(x)) : cend();
   }
 
   // Returns true if |x| is an element, else |false|.
-  bool contains(T x) const { return bitset_.test(value_to_index(x)); }
+  constexpr bool contains(T x) const {
+    return bitset_.get_bit(value_to_index(x));
+  }
 
   // Returns true if some element of |xs| is an element, else |false|.
   bool contains_none(const DenseSet& xs) const {
-    return (bitset_ & xs.bitset_).none();
+    return (bitset_ & xs.bitset_) == Bitset{};
   }
 
   // Returns true if some element of |xs| is an element, else |false|.
   bool contains_any(const DenseSet& xs) const {
-    return (bitset_ & xs.bitset_).any();
+    return (bitset_ & xs.bitset_) != Bitset{};
   }
 
   // Returns true if every elements of |xs| is an element, else |false|.
@@ -282,41 +483,22 @@ class DenseSet {
  private:
   friend Iterator;
 
-  struct Wrapper {
-    using type = T;
-  };
+  using Bitset = internal::Bitset<Word, kNumWords>;
 
   static constexpr Index value_to_index(T x) {
-    DCHECK(index_to_value(0) <= x && x <= kMaxValue);
-    return base::checked_cast<Index>(x);
+    DCHECK_LE(Traits::kMinValue, x);
+    DCHECK_LE(x, Traits::kMaxValue);
+    return base::checked_cast<Index>(to_underlying(x) -
+                                     to_underlying(Traits::kMinValue));
   }
 
   static constexpr T index_to_value(Index i) {
-    DCHECK_LE(i, base::checked_cast<Index>(kMaxValue));
-    using UnderlyingType =
-        typename std::conditional_t<std::is_enum<T>::value,
-                                    std::underlying_type<T>, Wrapper>::type;
-    return static_cast<T>(base::checked_cast<UnderlyingType>(i));
+    DCHECK_LE(i, kMaxBitIndex);
+    return static_cast<T>(base::checked_cast<UnderlyingType>(i) +
+                          to_underlying(Traits::kMinValue));
   }
 
-  // Helper for `constexpr DenseSet(std::initializer_list<T>)`.
-  //
-  // While std::bitset's constructor takes an `unsigned long long`, we use
-  // `uint64_t` because Chromium bans `unsigned long long`. Both are 64 bit
-  // integers, so they're interchangeable.
-  static constexpr uint64_t initializer_list_to_bitmask(
-      const std::initializer_list<T>& init) {
-    uint64_t bitmask = 0;
-    for (const auto& x : init) {
-      bitmask |= 1ULL << value_to_index(x);
-    }
-    return bitmask;
-  }
-
-  static_assert(std::is_integral<T>::value || std::is_enum<T>::value, "");
-  static_assert(0 <= base::checked_cast<Index>(kMaxValue) + 1, "");
-
-  std::bitset<base::checked_cast<Index>(kMaxValue) + 1> bitset_{};
+  Bitset bitset_{};
 };
 
 }  // namespace autofill

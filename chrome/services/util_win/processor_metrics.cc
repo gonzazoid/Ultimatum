@@ -7,9 +7,11 @@
 #include <objbase.h>
 #include <sysinfoapi.h>
 #include <wbemidl.h>
+#include <winbase.h>
 #include <wrl/client.h>
 
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/win/com_init_util.h"
@@ -107,9 +109,6 @@ void RecordCetAvailability() {
       reinterpret_cast<decltype(&IsUserCetAvailableInEnvironment)>(
           ::GetProcAddress(::GetModuleHandleW(L"kernel32.dll"),
                            "IsUserCetAvailableInEnvironment"));
-  auto get_process_mitigation_policy =
-      reinterpret_cast<decltype(&GetProcessMitigationPolicy)>(::GetProcAddress(
-          ::GetModuleHandleW(L"kernel32.dll"), "GetProcessMitigationPolicy"));
 
   if (is_user_cet_available_in_environment) {
     available = is_user_cet_available_in_environment(
@@ -117,26 +116,57 @@ void RecordCetAvailability() {
   }
   base::UmaHistogramBoolean("Windows.CetAvailable", available);
 
-  if (available && get_process_mitigation_policy) {
+  if (available) {
     PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY policy = {0};
-    if (get_process_mitigation_policy(GetCurrentProcess(),
-                                      ProcessUserShadowStackPolicy, &policy,
-                                      sizeof(policy))) {
+    if (::GetProcessMitigationPolicy(GetCurrentProcess(),
+                                     ProcessUserShadowStackPolicy, &policy,
+                                     sizeof(policy))) {
       base::UmaHistogramBoolean("Windows.CetEnabled",
                                 policy.EnableUserShadowStack);
     }
   }
 }
 
+void RecordEnclaveAvailabilityInternal(base::StringPiece type,
+                                       DWORD enclave_type) {
+  // This API does not appear to be exported from kernel32.dll on
+  // Windows 10.0.10240.
+  static auto is_enclave_type_supported_func =
+      reinterpret_cast<decltype(&IsEnclaveTypeSupported)>(::GetProcAddress(
+          ::GetModuleHandleW(L"kernel32.dll"), "IsEnclaveTypeSupported"));
+
+  bool is_supported = false;
+
+  if (is_enclave_type_supported_func) {
+    is_supported = is_enclave_type_supported_func(enclave_type);
+  }
+
+  base::UmaHistogramBoolean(
+      base::StrCat({"Windows.Enclave.", type, ".Available"}), is_supported);
+}
+
+void RecordEnclaveAvailability() {
+  RecordEnclaveAvailabilityInternal("SGX", ENCLAVE_TYPE_SGX);
+  RecordEnclaveAvailabilityInternal("SGX2", ENCLAVE_TYPE_SGX2);
+  RecordEnclaveAvailabilityInternal("VBS", ENCLAVE_TYPE_VBS);
+  RecordEnclaveAvailabilityInternal("VBSBasic", ENCLAVE_TYPE_VBS_BASIC);
+}
+
 void RecordProcessorMetrics() {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::MAY_BLOCK);
-  ComPtr<IWbemServices> wmi_services;
-  if (!base::win::CreateLocalWmiConnection(true, &wmi_services))
-    return;
-  RecordProcessorMetricsFromWMI(wmi_services);
-  RecordHypervStatusFromWMI(wmi_services);
+  // These metrics do not require a WMI connection.
   RecordCetAvailability();
+  RecordEnclaveAvailability();
+
+  {
+    base::ScopedBlockingCall scoped_blocking_call(
+        FROM_HERE, base::BlockingType::MAY_BLOCK);
+    ComPtr<IWbemServices> wmi_services;
+    if (!base::win::CreateLocalWmiConnection(true, &wmi_services)) {
+      return;
+    }
+    RecordProcessorMetricsFromWMI(wmi_services);
+    RecordHypervStatusFromWMI(wmi_services);
+  }
 }
 
 }  // namespace

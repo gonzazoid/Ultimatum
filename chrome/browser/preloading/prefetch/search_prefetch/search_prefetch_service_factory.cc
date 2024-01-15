@@ -17,18 +17,33 @@ SearchPrefetchService* SearchPrefetchServiceFactory::GetForProfile(
 }
 
 // static
+SearchPrefetchService* SearchPrefetchServiceFactory::GetForProfileIfExists(
+    Profile* profile) {
+  return static_cast<SearchPrefetchService*>(
+      GetInstance()->GetServiceForBrowserContext(profile, false));
+}
+
+// static
 SearchPrefetchServiceFactory* SearchPrefetchServiceFactory::GetInstance() {
   static base::NoDestructor<SearchPrefetchServiceFactory> factory;
   return factory.get();
 }
 
 SearchPrefetchServiceFactory::SearchPrefetchServiceFactory()
-    : ProfileKeyedServiceFactory("SearchPrefetchService") {}
+    : ProfileKeyedServiceFactory(
+          "SearchPrefetchService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 SearchPrefetchServiceFactory::~SearchPrefetchServiceFactory() = default;
 
-KeyedService* SearchPrefetchServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SearchPrefetchServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new SearchPrefetchService(profile);
+  return std::make_unique<SearchPrefetchService>(profile);
 }

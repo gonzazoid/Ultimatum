@@ -5,18 +5,15 @@
 #ifndef CHROME_BROWSER_ANDROID_COMPOSITOR_LAYER_TAB_LAYER_H_
 #define CHROME_BROWSER_ANDROID_COMPOSITOR_LAYER_TAB_LAYER_H_
 
-#include <memory>
-#include <vector>
-
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/android/compositor/layer/layer.h"
 #include "ui/android/resources/nine_patch_resource.h"
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 class NinePatchLayer;
 class SolidColorLayer;
-}
+}  // namespace cc::slim
 
 namespace gfx {
 class Size;
@@ -46,7 +43,6 @@ class TabLayer : public Layer {
   // TODO(meiliang): This method needs another parameter, a resource that can be
   // used to indicate the currently selected tab for the TabLayer.
   void SetProperties(int id,
-                     const std::vector<int>& ids,
                      bool can_use_live_layer,
                      int toolbar_resource_id,
                      int shadow_resource_id,
@@ -58,8 +54,6 @@ class TabLayer : public Layer {
                      float y,
                      float width,
                      float height,
-                     float shadow_x,
-                     float shadow_y,
                      float shadow_width,
                      float shadow_height,
                      float alpha,
@@ -69,7 +63,6 @@ class TabLayer : public Layer {
                      float shadow_alpha,
                      float border_scale,
                      float saturation,
-                     float brightness,
                      float static_to_view_blend,
                      float content_width,
                      float content_height,
@@ -80,15 +73,11 @@ class TabLayer : public Layer {
                      bool anonymize_toolbar,
                      int toolbar_textbox_resource_id,
                      int toolbar_textbox_background_color,
-                     float toolbar_alpha,
-                     float toolbar_y_offset,
-                     float content_offset,
-                     float side_border_scale,
-                     bool inset_border);
+                     float content_offset);
 
   bool is_incognito() const { return incognito_; }
 
-  scoped_refptr<cc::Layer> layer() override;
+  scoped_refptr<cc::slim::Layer> layer() override;
 
   static void ComputePaddingPositions(const gfx::Size& content_size,
                                       const gfx::Size& desired_size,
@@ -102,18 +91,6 @@ class TabLayer : public Layer {
   ~TabLayer() override;
 
  private:
-  void SetContentProperties(int id,
-                            const std::vector<int>& tab_ids,
-                            bool can_use_live_layer,
-                            float static_to_view_blend,
-                            bool should_override_content_alpha,
-                            float content_alpha_override,
-                            float saturation,
-                            bool should_clip,
-                            const gfx::Rect& clip,
-                            ui::NinePatchResource* inner_shadow_resource,
-                            float inner_shadow_alpha);
-
   const bool incognito_;
   raw_ptr<ui::ResourceManager> resource_manager_;
   raw_ptr<TabContentManager> tab_content_manager_;
@@ -124,19 +101,18 @@ class TabLayer : public Layer {
   //         +-[padding]
   //         +-[contour_shadow]
   //         +-[shadow]
-  scoped_refptr<cc::Layer> layer_;
+  scoped_refptr<cc::slim::Layer> layer_;
   scoped_refptr<ToolbarLayer> toolbar_layer_;
   scoped_refptr<ContentLayer> content_;
-  scoped_refptr<cc::SolidColorLayer> side_padding_;
-  scoped_refptr<cc::SolidColorLayer> bottom_padding_;
+  scoped_refptr<cc::slim::SolidColorLayer> side_padding_;
+  scoped_refptr<cc::slim::SolidColorLayer> bottom_padding_;
 
-  scoped_refptr<cc::NinePatchLayer> front_border_;
-  scoped_refptr<cc::NinePatchLayer> front_border_inner_shadow_;
+  scoped_refptr<cc::slim::NinePatchLayer> front_border_;
+  scoped_refptr<cc::slim::NinePatchLayer> front_border_inner_shadow_;
 
-  scoped_refptr<cc::NinePatchLayer> contour_shadow_;
+  scoped_refptr<cc::slim::NinePatchLayer> contour_shadow_;
 
-  scoped_refptr<cc::NinePatchLayer> shadow_;
-  float brightness_;
+  scoped_refptr<cc::slim::NinePatchLayer> shadow_;
 };
 
 }  //  namespace android

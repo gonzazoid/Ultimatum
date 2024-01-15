@@ -13,7 +13,6 @@
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
-#include "chrome/browser/ui/thumbnails/thumbnail_stats_tracker.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 #include "ui/gfx/geometry/skia_conversions.h"
@@ -36,17 +35,16 @@ ThumbnailImage::Delegate::~Delegate() {
     thumbnail_->delegate_ = nullptr;
 }
 
-ThumbnailImage::ThumbnailImage(Delegate* delegate) : delegate_(delegate) {
+ThumbnailImage::ThumbnailImage(Delegate* delegate, CompressedThumbnailData data)
+    : delegate_(delegate), data_(std::move(data)) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   DCHECK(delegate_);
   DCHECK(!delegate_->thumbnail_);
   delegate_->thumbnail_ = this;
-  ThumbnailStatsTracker::GetInstance().AddThumbnail(this);
 }
 
 ThumbnailImage::~ThumbnailImage() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  ThumbnailStatsTracker::GetInstance().RemoveThumbnail(this);
   if (delegate_)
     delegate_->thumbnail_ = nullptr;
 }
@@ -70,7 +68,7 @@ std::unique_ptr<ThumbnailImage::Subscription> ThumbnailImage::Subscribe() {
 }
 
 void ThumbnailImage::AssignSkBitmap(SkBitmap bitmap,
-                                    absl::optional<uint64_t> frame_id) {
+                                    std::optional<uint64_t> frame_id) {
   thumbnail_id_ = base::Token::CreateRandom();
 
   base::ThreadPool::PostTaskAndReplyWithResult(
@@ -123,7 +121,7 @@ size_t ThumbnailImage::GetCompressedDataSizeInBytes() const {
 
 void ThumbnailImage::AssignJPEGData(base::Token thumbnail_id,
                                     base::TimeTicks assign_sk_bitmap_time,
-                                    absl::optional<uint64_t> frame_id_for_trace,
+                                    std::optional<uint64_t> frame_id_for_trace,
                                     std::vector<uint8_t> data) {
   // If the image is stale (a new thumbnail was assigned or the
   // thumbnail was cleared after AssignSkBitmap), ignore it.
@@ -135,11 +133,6 @@ void ThumbnailImage::AssignJPEGData(base::Token thumbnail_id,
 
   data_ = base::MakeRefCounted<base::RefCountedData<std::vector<uint8_t>>>(
       std::move(data));
-
-  UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
-      "Tab.Preview.TimeToNotifyObserversAfterCaptureReceived",
-      base::TimeTicks::Now() - assign_sk_bitmap_time, base::Microseconds(100),
-      base::Milliseconds(100), 50);
 
   // We select a TRACE_EVENT_* macro based on |frame_id|'s presence.
   // Since these are scoped traces, the macro invocation must be in the
@@ -211,7 +204,7 @@ void ThumbnailImage::NotifyCompressedDataObservers(
 // static
 std::vector<uint8_t> ThumbnailImage::CompressBitmap(
     SkBitmap bitmap,
-    absl::optional<uint64_t> frame_id) {
+    std::optional<uint64_t> frame_id) {
   constexpr int kCompressionQuality = 97;
   std::vector<uint8_t> data;
 
@@ -239,9 +232,13 @@ std::vector<uint8_t> ThumbnailImage::CompressBitmap(
 // static
 gfx::ImageSkia ThumbnailImage::UncompressImage(
     CompressedThumbnailData compressed) {
-  gfx::ImageSkia result =
-      gfx::ImageSkia::CreateFrom1xBitmap(*gfx::JPEGCodec::Decode(
-          compressed->data.data(), compressed->data.size()));
+  gfx::ImageSkia result;
+  std::unique_ptr<SkBitmap> bitmap(
+      gfx::JPEGCodec::Decode(compressed->data.data(), compressed->data.size()));
+  if (bitmap.get()) {
+    result = gfx::ImageSkia::CreateFrom1xBitmap(*bitmap);
+  }
+
   result.MakeThreadSafe();
   return result;
 }

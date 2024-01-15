@@ -23,10 +23,10 @@
     attribute AccessibleNodeList? describedBy;
     attribute AccessibleNodeList? details;
     attribute boolean? disabled;
-    attribute AccessibleNode? errorMessage;
+    attribute AccessibleNodeList? errorMessage;
     attribute boolean? expanded;
     attribute AccessibleNodeList? flowTo;
-    attribute DOMString? hasPopUp;
+    attribute DOMString? hasPopup;
     attribute boolean? hidden;
     attribute DOMString? invalid;
     attribute DOMString? keyShortcuts;

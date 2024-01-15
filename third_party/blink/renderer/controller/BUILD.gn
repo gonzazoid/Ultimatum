@@ -9,6 +9,10 @@ import("//third_party/blink/renderer/config.gni")
 import("//third_party/blink/renderer/core/core.gni")
 import("//third_party/blink/renderer/modules/modules.gni")
 
+if (is_ios) {
+  import("//build/config/ios/bundle_data_from_filelist.gni")
+}
+
 visibility = [
   "//:gn_all",
   "//third_party/blink/*",
@@ -31,7 +35,6 @@ component("controller") {
   }
 
   configs += [
-    "//build/config/compiler:wexit_time_destructors",
     "//third_party/blink/renderer:config",
     "//third_party/blink/renderer:inside_blink",
     "//third_party/blink/renderer:non_test_config",
@@ -74,6 +77,8 @@ component("controller") {
       "memory_usage_monitor_posix.h",
       "oom_intervention_impl.cc",
       "oom_intervention_impl.h",
+      "private_memory_footprint_provider.cc",
+      "private_memory_footprint_provider.h",
     ]
     public_deps = [ "//third_party/blink/public/mojom:memory_usage_monitor_linux_mojo_bindings_blink" ]
   }
@@ -83,23 +88,24 @@ component("controller") {
       "memory_usage_monitor_win.h",
     ]
   }
-  if (is_mac) {
+  if (is_apple) {
     sources += [
       "memory_usage_monitor_mac.cc",
       "memory_usage_monitor_mac.h",
     ]
-    frameworks = [
-      "AppKit.framework",
-      "Foundation.framework",
-    ]
+    frameworks = [ "Foundation.framework" ]
   }
 
   # HighestPmfReporter depends on MemoryUsageMonitor and MemoryUsageMonitor
   # depends on platform specific code. Explicitly specify supported platforms.
-  if (is_linux || is_chromeos || is_win || is_android || is_mac) {
+  if (is_linux || is_chromeos || is_win || is_android || is_apple) {
     sources += [
       "highest_pmf_reporter.cc",
       "highest_pmf_reporter.h",
+    ]
+  }
+  if (is_android) {
+    sources += [
       "user_level_memory_pressure_signal_generator.cc",
       "user_level_memory_pressure_signal_generator.h",
     ]
@@ -133,16 +139,33 @@ group("webkit_unit_tests") {
   visibility = []  # Allow re-assignment of list.
   visibility = [ "*" ]
   testonly = true
-  deps = [ ":blink_unittests" ]
+  deps = [
+    ":blink_unittests",
+    ":blink_unittests_v2",
+  ]
 }
 
 test("blink_unittests") {
   deps = [ ":blink_unittests_sources" ]
 
-  data_deps = [
-    ":blink_unittests_data",
-    "//content/shell:pak",
-  ]
+  if (is_ios) {
+    bundle_deps = [
+      ":blink_unittests_pak_bundle_data",
+      "//components/shared_highlighting/core/common:data_driven_testing_data",
+      "//media/test:media_bundle_data",
+      "//third_party/blink/renderer/core:animation_test_bundle_data",
+      "//third_party/blink/renderer/core:core_test_bundle_data",
+      "//third_party/blink/renderer/core:paint_test_bundle_data",
+      "//third_party/blink/renderer/modules:accessibility_selection_test_bundle_data",
+      "//third_party/blink/renderer/platform:blink_platform_unittests_bundle_data",
+      "//third_party/text-fragments-polyfill:test_bundle_data",
+    ]
+  } else {
+    data_deps = [
+      ":blink_unittests_data",
+      "//content/shell:pak",
+    ]
+  }
 
   if (is_android) {
     deps += [
@@ -157,12 +180,12 @@ test("blink_unittests") {
   }
 
   if (is_fuchsia) {
-    # TODO(https://crbug.com/1185811): Investigate removing the requirement for
-    # job_policy_ambient_mark_vmo_exec for the sake of V8's allocator in tests.
-    test_runner_shard = "//build/config/fuchsia/test/elf_test_ambient_exec_runner.shard.test-cml"
     additional_manifest_fragments = [
       "//build/config/fuchsia/test/fonts.shard.test-cml",
       "//build/config/fuchsia/test/network.shard.test-cml",
+
+      # TODO(https://crbug.com/1185811): Investigate removing the requirement
+      # for VmexResource.
       "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml",
     ]
   }
@@ -177,7 +200,10 @@ source_set("blink_perf_tests_sources") {
   visibility = [ "*" ]
   testonly = true
 
-  sources = [ "tests/run_all_perftests.cc" ]
+  sources = [
+    "tests/run_all_perftests.cc",
+    "tests/thread_state_test_environment.h",
+  ]
 
   deps = [
     ":controller",
@@ -227,6 +253,7 @@ source_set("blink_unittests_sources") {
     "performance_manager/v8_detailed_memory_reporter_impl_test.cc",
     "performance_manager/v8_worker_memory_reporter_test.cc",
     "tests/run_all_tests.cc",
+    "tests/thread_state_test_environment.h",
   ]
   if (is_linux || is_chromeos) {
     sources += [ "memory_usage_monitor_posix_test.cc" ]
@@ -239,7 +266,7 @@ source_set("blink_unittests_sources") {
     ]
   }
 
-  if (is_linux || is_chromeos || is_android || is_mac || is_win) {
+  if (is_linux || is_chromeos || is_android || is_apple || is_win) {
     sources += [
       "highest_pmf_reporter_test.cc",
       "memory_usage_monitor_test.cc",
@@ -279,4 +306,92 @@ source_set("blink_unittests_sources") {
     "//third_party/blink/renderer:inside_blink",
     "//third_party/blink/renderer/core:blink_core_pch",
   ]
+}
+
+if (is_ios) {
+  bundle_data("blink_unittests_pak_bundle_data") {
+    testonly = true
+    public_deps = [ "//content/shell:pak" ]
+    sources = [ "$root_out_dir/content_shell.pak" ]
+    outputs = [ "{{bundle_resources_dir}}/content_shell.pak" ]
+  }
+}
+
+test("blink_unittests_v2") {
+  visibility = []  # Allow re-assignment of list.
+  visibility = [ "*" ]
+  testonly = true
+
+  sources = [
+    "//third_party/blink/renderer/platform/testing/main_thread_isolate_unittest.cc",
+    "//third_party/blink/renderer/platform/testing/task_environment_unittest.cc",
+    "tests/run_all_tests_v2.cc",
+    "tests/thread_state_test_environment.h",
+  ]
+
+  deps = [
+    ":blink_bindings_test_sources",
+    ":controller",
+    "//base",
+    "//base:i18n",
+    "//base/test:test_support",
+    "//components/payments/mojom:mojom_blink",
+    "//components/performance_manager/public/mojom:mojom_blink",
+    "//content/test:test_support",
+    "//gpu:test_support",
+    "//testing/gmock",
+    "//testing/gtest",
+    "//third_party/blink/renderer/core:testing",
+    "//third_party/blink/renderer/core:unit_test_support",
+    "//third_party/blink/renderer/core:unit_tests_v2",
+    "//third_party/blink/renderer/modules:modules",
+    "//third_party/blink/renderer/modules:unit_tests_v2",
+    "//third_party/blink/renderer/modules/exported:test_support",
+    "//third_party/blink/renderer/platform",
+    "//third_party/blink/renderer/platform:test_support",
+    "//third_party/blink/renderer/platform:unit_tests",
+    "//third_party/blink/renderer/platform/wtf",
+    "//third_party/libwebp",
+    "//third_party/zlib",
+    "//url",
+    "//v8",
+  ]
+
+  if (is_ios) {
+    bundle_deps = [
+      ":blink_unittests_pak_bundle_data",
+      "//components/shared_highlighting/core/common:data_driven_testing_data",
+      "//media/test:media_bundle_data",
+      "//third_party/blink/renderer/core:animation_test_bundle_data",
+      "//third_party/blink/renderer/core:core_test_bundle_data",
+      "//third_party/blink/renderer/core:paint_test_bundle_data",
+      "//third_party/blink/renderer/modules:accessibility_selection_test_bundle_data",
+      "//third_party/blink/renderer/platform:blink_platform_unittests_bundle_data",
+      "//third_party/text-fragments-polyfill:test_bundle_data",
+    ]
+  } else {
+    data_deps = [
+      ":blink_unittests_data",
+      "//content/shell:pak",
+    ]
+  }
+
+  if (is_android) {
+    deps += [
+      "//content/public/android:content_java",
+      "//content/shell/android:content_shell_assets",
+      "//net/android:net_java",
+    ]
+  }
+
+  if (is_fuchsia) {
+    additional_manifest_fragments = [
+      "//build/config/fuchsia/test/fonts.shard.test-cml",
+      "//build/config/fuchsia/test/network.shard.test-cml",
+
+      # TODO(https://crbug.com/1185811): Investigate removing the requirement
+      # for VmexResource.
+      "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml",
+    ]
+  }
 }

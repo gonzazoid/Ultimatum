@@ -6,7 +6,8 @@
 #define ASH_SYSTEM_FIRMWARE_UPDATE_FIRMWARE_UPDATE_NOTIFICATION_CONTROLLER_H_
 
 #include "ash/ash_export.h"
-#include "ash/components/fwupd/firmware_update_manager.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/fwupd/firmware_update_manager.h"
 
 namespace message_center {
 class MessageCenter;
@@ -28,10 +29,6 @@ class ASH_EXPORT FirmwareUpdateNotificationController
       const FirmwareUpdateNotificationController&) = delete;
   ~FirmwareUpdateNotificationController() override;
 
-  // Call when FirmwareUpdateManager is initialized so that this class can start
-  // observering requests for notifications.
-  void OnFirmwareUpdateManagerInitialized();
-
   // chromeos::FirmwareUpdateManager::Observer
   void OnFirmwareUpdateReceived() override;
 
@@ -39,11 +36,18 @@ class ASH_EXPORT FirmwareUpdateNotificationController
   // available.
   void NotifyFirmwareUpdateAvailable();
 
+  void set_should_show_notification_for_test(bool show_notification) {
+    should_show_notification_for_test_ = show_notification;
+  }
+
  private:
   friend class FirmwareUpdateNotificationControllerTest;
 
+  bool should_show_notification_for_test_ = false;
+
   // MessageCenter for adding notifications.
-  message_center::MessageCenter* const message_center_;
+  const raw_ptr<message_center::MessageCenter, DanglingUntriaged>
+      message_center_;
 };
 
 }  // namespace ash

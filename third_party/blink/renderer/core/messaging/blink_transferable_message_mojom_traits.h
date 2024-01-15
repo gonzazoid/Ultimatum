@@ -5,8 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_MESSAGING_BLINK_TRANSFERABLE_MESSAGE_MOJOM_TRAITS_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_MESSAGING_BLINK_TRANSFERABLE_MESSAGE_MOJOM_TRAITS_H_
 
-#include "mojo/public/cpp/bindings/array_traits_wtf_vector.h"
 #include "skia/public/mojom/bitmap_skbitmap_mojom_traits.h"
+#include "third_party/blink/public/common/messaging/accelerated_static_bitmap_image_mojom_traits.h"
 #include "third_party/blink/public/common/messaging/message_port_channel.h"
 #include "third_party/blink/public/common/messaging/message_port_descriptor.h"
 #include "third_party/blink/public/common/messaging/message_port_descriptor_mojom_traits.h"
@@ -53,8 +53,8 @@ struct CORE_EXPORT StructTraits<blink::mojom::TransferableMessageDataView,
     return input.message->GetArrayBufferContentsArray();
   }
 
-  static Vector<SkBitmap> image_bitmap_contents_array(
-      const blink::BlinkCloneableMessage& input);
+  static Vector<blink::mojom::blink::SerializedStaticBitmapImagePtr>
+  image_bitmap_contents_array(const blink::BlinkCloneableMessage& input);
 
   static const blink::mojom::blink::UserActivationSnapshotPtr& user_activation(
       const blink::BlinkTransferableMessage& input) {
@@ -90,6 +90,15 @@ class CORE_EXPORT
     return mojo_base::BigBuffer(
         base::make_span(allocation_start, array_buffer_contents.DataLength()));
   }
+  static bool is_resizable_by_user_javascript(
+      const blink::ArrayBufferContents& array_buffer_contents) {
+    return array_buffer_contents.IsResizableByUserJavaScript();
+  }
+  static size_t max_byte_length(
+      const blink::ArrayBufferContents& array_buffer_contents) {
+    return array_buffer_contents.MaxDataLength();
+  }
+
   static bool Read(blink::mojom::SerializedArrayBufferContentsDataView,
                    blink::ArrayBufferContents* out);
 };

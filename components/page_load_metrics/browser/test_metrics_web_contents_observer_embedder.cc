@@ -58,6 +58,11 @@ class TimingLoggingPageLoadMetricsObserver final
     return CONTINUE_OBSERVING;
   }
 
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override {
+    return STOP_OBSERVING;
+  }
+
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override {
@@ -215,6 +220,10 @@ bool TestMetricsWebContentsObserverEmbedder::IsExtensionUrl(const GURL& url) {
 
 bool TestMetricsWebContentsObserverEmbedder::IsSidePanel(
     content::WebContents* web_contents) {
+  return false;
+}
+
+bool TestMetricsWebContentsObserverEmbedder::IsNonTabWebUI() {
   return false;
 }
 

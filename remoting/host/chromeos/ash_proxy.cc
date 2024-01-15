@@ -4,19 +4,19 @@
 
 #include "remoting/host/chromeos/ash_proxy.h"
 
+#include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "base/feature_list.h"
 #include "base/no_destructor.h"
-#include "components/viz/common/frame_sinks/copy_output_request.h"
+#include "components/prefs/pref_service.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "remoting/base/constants.h"
 #include "remoting/host/chromeos/features.h"
 #include "ui/aura/env.h"
 #include "ui/aura/scoped_window_capture_request.h"
 #include "ui/compositor/compositor.h"
-#include "ui/compositor/layer.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/screen.h"
 #include "ui/display/types/display_constants.h"
@@ -24,15 +24,6 @@
 namespace remoting {
 
 namespace {
-
-absl::optional<SkBitmap> ToSkBitmap(
-    std::unique_ptr<viz::CopyOutputResult> result) {
-  if (result->IsEmpty())
-    return absl::nullopt;
-
-  auto scoped_bitmap = result->ScopedAccessSkBitmap();
-  return scoped_bitmap.GetOutScopedBitmap();
-}
 
 class DefaultAshProxy : public AshProxy {
  public:
@@ -43,8 +34,9 @@ class DefaultAshProxy : public AshProxy {
 
   // AshProxy implementation:
   DisplayId GetPrimaryDisplayId() const override {
-    if (!screen())
+    if (!screen()) {
       return display::kDefaultDisplayId;
+    }
 
     return screen()->GetPrimaryDisplay().id();
   }
@@ -54,27 +46,16 @@ class DefaultAshProxy : public AshProxy {
   }
 
   const display::Display* GetDisplayForId(DisplayId display_id) const override {
-    if (!display_manager().IsActiveDisplayId(display_id))
+    if (!display_manager().IsActiveDisplayId(display_id)) {
       return nullptr;
+    }
 
     return &display_manager().GetDisplayForId(display_id);
   }
 
-  void TakeScreenshotOfDisplay(DisplayId display_id,
-                               ScreenshotCallback callback) override {
-    aura::Window* root_window = GetWindowToCaptureForId(display_id);
-    if (!root_window) {
-      std::move(callback).Run(absl::nullopt);
-      return;
-    }
-
-    auto request = std::make_unique<viz::CopyOutputRequest>(
-        viz::CopyOutputRequest::ResultFormat::RGBA,
-        viz::CopyOutputRequest::ResultDestination::kSystemMemory,
-        base::BindOnce(&ToSkBitmap).Then(std::move(callback)));
-
-    request->set_area(gfx::Rect(root_window->bounds().size()));
-    root_window->layer()->RequestCopyOfOutput(std::move(request));
+  aura::Window* GetSelectFileContainer() override {
+    return shell().GetPrimaryRootWindow()->GetChildById(
+        ash::kShellWindowId_AlwaysOnTopContainer);
   }
 
   void CreateVideoCapturer(
@@ -118,6 +99,11 @@ class DefaultAshProxy : public AshProxy {
     shell().session_controller()->RequestSignOut();
   }
 
+  bool IsScreenReaderEnabled() const override {
+    return shell().session_controller()->GetActivePrefService()->GetBoolean(
+        ash::prefs::kAccessibilitySpokenFeedbackEnabled);
+  }
+
  private:
   const display::Screen* screen() const { return display::Screen::GetScreen(); }
   // We can not return a const reference, as the ash shell has no const getter
@@ -157,27 +143,24 @@ AshProxy* g_instance_for_testing_ = nullptr;
 AshProxy& AshProxy::Get() {
   static base::NoDestructor<DefaultAshProxy> instance_;
 
-  if (g_instance_for_testing_)
+  if (g_instance_for_testing_) {
     return *g_instance_for_testing_;
+  }
 
   return *instance_;
 }
 
 // static
 void AshProxy::SetInstanceForTesting(AshProxy* instance) {
-  if (instance)
+  if (instance) {
     DCHECK(!g_instance_for_testing_);
+  }
   g_instance_for_testing_ = instance;
 }
 
 // static
 int AshProxy::ScaleFactorToDpi(float scale_factor) {
   return static_cast<int>(scale_factor * kDefaultDpi);
-}
-
-// static
-int AshProxy::GetDpi(const display::Display& display) {
-  return ScaleFactorToDpi(display.device_scale_factor());
 }
 
 AshProxy::~AshProxy() = default;

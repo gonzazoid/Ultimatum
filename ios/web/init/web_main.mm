@@ -3,11 +3,8 @@
 // found in the LICENSE file.
 
 #import "ios/web/public/init/web_main.h"
-#import "ios/web/public/init/web_main_runner.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/init/web_main_runner.h"
 
 namespace web {
 

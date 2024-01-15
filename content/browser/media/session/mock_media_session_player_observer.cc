@@ -13,8 +13,8 @@ MockMediaSessionPlayerObserver::MockMediaSessionPlayerObserver(
     media::MediaContentType media_content_type)
     : render_frame_host_global_id_(
           render_frame_host
-              ? absl::make_optional(render_frame_host->GetGlobalId())
-              : absl::nullopt),
+              ? std::make_optional(render_frame_host->GetGlobalId())
+              : std::nullopt),
       media_content_type_(media_content_type) {}
 
 MockMediaSessionPlayerObserver::MockMediaSessionPlayerObserver(
@@ -80,14 +80,6 @@ void MockMediaSessionPlayerObserver::OnEnterPictureInPicture(int player_id) {
   players_[player_id].is_in_picture_in_picture_ = true;
 }
 
-void MockMediaSessionPlayerObserver::OnExitPictureInPicture(int player_id) {
-  EXPECT_GE(player_id, 0);
-  EXPECT_EQ(players_.size(), 1u);
-
-  ++received_exit_picture_in_picture_calls_;
-  players_[player_id].is_in_picture_in_picture_ = false;
-}
-
 void MockMediaSessionPlayerObserver::OnSetAudioSinkId(
     int player_id,
     const std::string& raw_device_id) {
@@ -103,7 +95,12 @@ void MockMediaSessionPlayerObserver::OnSetMute(int player_id, bool mute) {
   EXPECT_GT(players_.size(), static_cast<size_t>(player_id));
 }
 
-absl::optional<media_session::MediaPosition>
+void MockMediaSessionPlayerObserver::OnRequestMediaRemoting(int player_id) {
+  EXPECT_GE(player_id, 0);
+  EXPECT_GT(players_.size(), static_cast<size_t>(player_id));
+}
+
+std::optional<media_session::MediaPosition>
 MockMediaSessionPlayerObserver::GetPosition(int player_id) const {
   EXPECT_GE(player_id, 0);
   EXPECT_GT(players_.size(), static_cast<size_t>(player_id));

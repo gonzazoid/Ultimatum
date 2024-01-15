@@ -11,11 +11,12 @@
 #include "components/guest_view/browser/guest_view_manager.h"
 #include "components/guest_view/common/guest_view_constants.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
-#include "content/public/common/child_process_host.h"
 #include "extensions/browser/api/extensions_api_client.h"
+#include "extensions/browser/browser_frame_context_data.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_util.h"
 #include "extensions/browser/guest_view/app_view/app_view_guest.h"
@@ -31,6 +32,7 @@
 #include "extensions/common/features/feature_provider.h"
 #include "extensions/common/mojom/event_dispatcher.mojom.h"
 #include "extensions/common/mojom/view_type.mojom.h"
+#include "extensions/common/utils/extension_utils.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_object.mojom-forward.h"
 
 using guest_view::GuestViewBase;
@@ -38,10 +40,38 @@ using guest_view::GuestViewManager;
 
 namespace extensions {
 
-ExtensionsGuestViewManagerDelegate::ExtensionsGuestViewManagerDelegate(
-    content::BrowserContext* context)
-    : context_(context) {
+// static
+bool ExtensionsGuestViewManagerDelegate::IsGuestAvailableToContextWithFeature(
+    const GuestViewBase* guest,
+    const std::string& feature_name) {
+  const Feature* feature = FeatureProvider::GetAPIFeature(feature_name);
+  if (!feature) {
+    return false;
+  }
+
+  content::BrowserContext* context = guest->browser_context();
+  ProcessMap* process_map = ProcessMap::Get(context);
+  CHECK(process_map);
+
+  const Extension* owner_extension =
+      ProcessManager::Get(context)->GetExtensionForRenderFrameHost(
+          guest->owner_rfh());
+
+  const GURL& owner_site_url = guest->GetOwnerSiteURL();
+  // Ok for |owner_extension| to be nullptr, the embedder might be WebUI.
+  Feature::Availability availability = feature->IsAvailableToContext(
+      owner_extension,
+      process_map->GetMostLikelyContextType(
+          owner_extension, guest->owner_rfh()->GetProcess()->GetID(),
+          &owner_site_url),
+      owner_site_url, util::GetBrowserContextId(context),
+      BrowserFrameContextData(guest->owner_rfh()));
+
+  return availability.is_available();
 }
+
+ExtensionsGuestViewManagerDelegate::ExtensionsGuestViewManagerDelegate() =
+    default;
 
 ExtensionsGuestViewManagerDelegate::~ExtensionsGuestViewManagerDelegate() =
     default;
@@ -54,14 +84,15 @@ void ExtensionsGuestViewManagerDelegate::OnGuestAdded(
 
 void ExtensionsGuestViewManagerDelegate::DispatchEvent(
     const std::string& event_name,
-    std::unique_ptr<base::DictionaryValue> args,
+    base::Value::Dict args,
     GuestViewBase* guest,
     int instance_id) {
+  CHECK(guest);
   mojom::EventFilteringInfoPtr info = mojom::EventFilteringInfo::New();
   info->has_instance_id = true;
   info->instance_id = instance_id;
   base::Value::List event_args;
-  event_args.Append(std::move(*args));
+  event_args.Append(std::move(args));
 
   // GetEventHistogramValue maps guest view event names to their histogram
   // value. It needs to be like this because the guest view component doesn't
@@ -72,52 +103,36 @@ void ExtensionsGuestViewManagerDelegate::DispatchEvent(
   DCHECK_NE(events::UNKNOWN, histogram_value) << "Event " << event_name
                                               << " must have a histogram value";
 
-  content::WebContents* owner = guest->owner_web_contents();
-  if (!owner)
+  content::RenderFrameHost* owner = guest->owner_rfh();
+  if (!owner || !ExtensionsBrowserClient::Get()->IsValidContext(
+                    guest->browser_context())) {
     return;  // Could happen at tab shutdown.
+  }
 
-  EventRouter::DispatchEventToSender(
-      owner->GetPrimaryMainFrame()->GetProcess(), guest->browser_context(),
-      guest->owner_host(), histogram_value, event_name,
-      content::ChildProcessHost::kInvalidUniqueID, extensions::kMainThreadId,
-      blink::mojom::kInvalidServiceWorkerVersionId, std::move(event_args),
-      std::move(info));
+  EventRouter::Get(guest->browser_context())
+      ->DispatchEventToSender(owner->GetProcess(), guest->browser_context(),
+                              util::GenerateHostIdFromGuestView(*guest),
+                              histogram_value, event_name,
+                              extensions::kMainThreadId,
+                              blink::mojom::kInvalidServiceWorkerVersionId,
+                              std::move(event_args), std::move(info));
 }
 
 bool ExtensionsGuestViewManagerDelegate::IsGuestAvailableToContext(
-    GuestViewBase* guest) {
-  const Feature* feature =
-      FeatureProvider::GetAPIFeature(guest->GetAPINamespace());
-  if (!feature)
-    return false;
-
-  ProcessMap* process_map = ProcessMap::Get(context_);
-  CHECK(process_map);
-
-  const Extension* owner_extension = ProcessManager::Get(context_)->
-      GetExtensionForWebContents(guest->owner_web_contents());
-
-  // Using `GetOwnerSiteURL` in the case of MimeHandlerViewGuest is safe, since
-  // mimeHandlerViewGuestInternal allows all urls.
-  const GURL& owner_site_url = guest->GetOwnerSiteURL();
-  // Ok for |owner_extension| to be nullptr, the embedder might be WebUI.
-  Feature::Availability availability = feature->IsAvailableToContext(
-      owner_extension,
-      process_map->GetMostLikelyContextType(owner_extension,
-                                            guest->owner_web_contents()
-                                                ->GetPrimaryMainFrame()
-                                                ->GetProcess()
-                                                ->GetID(),
-                                            &owner_site_url),
-      owner_site_url, util::GetBrowserContextId(context_));
-
-  return availability.is_available();
+    const GuestViewBase* guest) const {
+  return IsGuestAvailableToContextWithFeature(guest, guest->GetAPINamespace());
 }
 
 bool ExtensionsGuestViewManagerDelegate::IsOwnedByExtension(
-    GuestViewBase* guest) {
-  return !!ProcessManager::Get(context_)->
-      GetExtensionForWebContents(guest->owner_web_contents());
+    const GuestViewBase* guest) {
+  content::BrowserContext* context = guest->browser_context();
+  return !!ProcessManager::Get(context)->GetExtensionForRenderFrameHost(
+      guest->owner_rfh());
+}
+
+bool ExtensionsGuestViewManagerDelegate::IsOwnedByControlledFrameEmbedder(
+    const GuestViewBase* guest) {
+  return false;
 }
 
 void ExtensionsGuestViewManagerDelegate::RegisterAdditionalGuestViewTypes(

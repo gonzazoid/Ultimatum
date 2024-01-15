@@ -7,15 +7,15 @@
 #include <memory>
 
 #include "ash/constants/ash_features.h"
-#include "ash/services/device_sync/proto/cryptauth_api.pb.h"
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
-#include "ash/services/device_sync/public/mojom/device_sync.mojom.h"
 #include "base/containers/flat_set.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time_override.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/multidevice/software_feature.h"
 #include "chromeos/ash/components/multidevice/software_feature_state.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_api.pb.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
+#include "chromeos/ash/services/device_sync/public/mojom/device_sync.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -51,32 +51,30 @@ class MultiDeviceSetupEligibleHostDevicesProviderImplTest
     always_use_active_eligible_devices_ = std::get<2>(GetParam());
     use_last_activity_time_to_dedup_ = std::get<3>(GetParam());
     if (use_get_devices_activity_status_) {
-      enabled_features.push_back(
-          chromeos::features::kCryptAuthV2DeviceActivityStatus);
+      enabled_features.push_back(features::kCryptAuthV2DeviceActivityStatus);
     } else {
-      disabled_features.push_back(
-          chromeos::features::kCryptAuthV2DeviceActivityStatus);
+      disabled_features.push_back(features::kCryptAuthV2DeviceActivityStatus);
     }
     if (use_connectivity_status_) {
       enabled_features.push_back(
-          chromeos::features::kCryptAuthV2DeviceActivityStatusUseConnectivity);
+          features::kCryptAuthV2DeviceActivityStatusUseConnectivity);
     } else {
       disabled_features.push_back(
-          chromeos::features::kCryptAuthV2DeviceActivityStatusUseConnectivity);
+          features::kCryptAuthV2DeviceActivityStatusUseConnectivity);
     }
     if (always_use_active_eligible_devices_) {
       enabled_features.push_back(
-          chromeos::features::kCryptAuthV2AlwaysUseActiveEligibleHosts);
+          features::kCryptAuthV2AlwaysUseActiveEligibleHosts);
     } else {
       disabled_features.push_back(
-          chromeos::features::kCryptAuthV2AlwaysUseActiveEligibleHosts);
+          features::kCryptAuthV2AlwaysUseActiveEligibleHosts);
     }
     if (use_last_activity_time_to_dedup_) {
       enabled_features.push_back(
-          chromeos::features::kCryptAuthV2DedupDeviceLastActivityTime);
+          features::kCryptAuthV2DedupDeviceLastActivityTime);
     } else {
       disabled_features.push_back(
-          chromeos::features::kCryptAuthV2DedupDeviceLastActivityTime);
+          features::kCryptAuthV2DedupDeviceLastActivityTime);
     }
     scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
 
@@ -166,6 +164,20 @@ TEST_P(MultiDeviceSetupEligibleHostDevicesProviderImplTest, NoEligibleDevices) {
   GetMutableRemoteDevice(test_devices()[1])
       ->software_features[multidevice::SoftwareFeature::kBetterTogetherHost] =
       multidevice::SoftwareFeatureState::kNotSupported;
+
+  multidevice::RemoteDeviceRefList devices{test_devices()[0],
+                                           test_devices()[1]};
+  fake_device_sync_client()->set_synced_devices(devices);
+  fake_device_sync_client()->NotifyNewDevicesSynced();
+
+  EXPECT_TRUE(provider()->GetEligibleHostDevices().empty());
+}
+
+// Regression test for b/207089877
+TEST_P(MultiDeviceSetupEligibleHostDevicesProviderImplTest,
+       NoEligibleDevices_NoDeviceId) {
+  GetMutableRemoteDevice(test_devices()[0])->instance_id = std::string();
+  GetMutableRemoteDevice(test_devices()[1])->instance_id = std::string();
 
   multidevice::RemoteDeviceRefList devices{test_devices()[0],
                                            test_devices()[1]};
@@ -430,7 +442,7 @@ TEST_P(MultiDeviceSetupEligibleHostDevicesProviderImplTest,
   fake_device_sync_client()->NotifyNewDevicesSynced();
   fake_device_sync_client()->InvokePendingGetDevicesActivityStatusCallback(
       device_sync::mojom::NetworkRequestResult::kInternalServerError,
-      absl::nullopt);
+      std::nullopt);
 
   multidevice::DeviceWithConnectivityStatusList eligible_active_devices =
       provider()->GetEligibleActiveHostDevices();

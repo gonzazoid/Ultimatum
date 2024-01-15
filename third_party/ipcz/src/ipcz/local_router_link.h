@@ -41,13 +41,11 @@ class LocalRouterLink : public RouterLink {
   void AllocateParcelData(size_t num_bytes,
                           bool allow_partial,
                           Parcel& parcel) override;
-  void AcceptParcel(const OperationContext& context, Parcel& parcel) override;
+  void AcceptParcel(const OperationContext& context,
+                    std::unique_ptr<Parcel> parcel) override;
   void AcceptRouteClosure(const OperationContext& context,
                           SequenceNumber sequence_length) override;
   void AcceptRouteDisconnected(const OperationContext& context) override;
-  AtomicQueueState* GetPeerQueueState() override;
-  AtomicQueueState* GetLocalQueueState() override;
-  void SnapshotPeerQueueState(const OperationContext& context) override;
   void MarkSideStable() override;
   bool TryLockForBypass(const NodeName& bypass_request_source) override;
   bool TryLockForClosure() override;

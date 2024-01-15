@@ -15,7 +15,7 @@
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_tree.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
-#include "ui/accessibility/platform/ax_platform_node_delegate_base.h"
+#include "ui/accessibility/platform/ax_platform_node_delegate.h"
 
 #if BUILDFLAG(IS_WIN)
 namespace gfx {
@@ -27,7 +27,7 @@ namespace ui {
 
 // For testing, a TestAXNodeWrapper wraps an AXNode, implements
 // AXPlatformNodeDelegate, and owns an AXPlatformNode.
-class TestAXNodeWrapper : public AXPlatformNodeDelegateBase {
+class TestAXNodeWrapper : public AXPlatformNodeDelegate {
  public:
   // Create TestAXNodeWrapper instances on-demand from an AXTree and AXNode.
   static TestAXNodeWrapper* GetOrCreate(AXTree* tree, AXNode* node);
@@ -83,7 +83,7 @@ class TestAXNodeWrapper : public AXPlatformNodeDelegateBase {
   gfx::NativeViewAccessible GetNativeViewAccessible() override;
   gfx::NativeViewAccessible GetParent() const override;
   size_t GetChildCount() const override;
-  gfx::NativeViewAccessible ChildAtIndex(size_t index) override;
+  gfx::NativeViewAccessible ChildAtIndex(size_t index) const override;
   gfx::Rect GetBoundsRect(const AXCoordinateSystem coordinate_system,
                           const AXClippingBehavior clipping_behavior,
                           AXOffscreenResult* offscreen_result) const override;
@@ -110,14 +110,12 @@ class TestAXNodeWrapper : public AXPlatformNodeDelegateBase {
   AXPlatformNode* GetFromNodeID(int32_t id) override;
   AXPlatformNode* GetFromTreeIDAndNodeID(const ui::AXTreeID& ax_tree_id,
                                          int32_t id) override;
-  absl::optional<size_t> GetIndexInParent() override;
-  bool IsTable() const override;
+  absl::optional<size_t> GetIndexInParent() const override;
   absl::optional<int> GetTableRowCount() const override;
   absl::optional<int> GetTableColCount() const override;
   absl::optional<int> GetTableAriaColCount() const override;
   absl::optional<int> GetTableAriaRowCount() const override;
   absl::optional<int> GetTableCellCount() const override;
-  absl::optional<bool> GetTableHasColumnOrRowHeaderNode() const override;
   std::vector<int32_t> GetColHeaderNodeIds() const override;
   std::vector<int32_t> GetColHeaderNodeIds(int col_index) const override;
   std::vector<int32_t> GetRowHeaderNodeIds() const override;
@@ -147,9 +145,9 @@ class TestAXNodeWrapper : public AXPlatformNodeDelegateBase {
   bool ShouldIgnoreHoveredStateForTesting() override;
   const ui::AXUniqueId& GetUniqueId() const override;
   bool HasVisibleCaretOrSelection() const override;
-  std::set<AXPlatformNode*> GetReverseRelations(
+  std::vector<AXPlatformNode*> GetSourceNodesForReverseRelations(
       ax::mojom::IntAttribute attr) override;
-  std::set<AXPlatformNode*> GetReverseRelations(
+  std::vector<AXPlatformNode*> GetSourceNodesForReverseRelations(
       ax::mojom::IntListAttribute attr) override;
   bool IsOrderedSetItem() const override;
   bool IsOrderedSet() const override;
@@ -198,7 +196,7 @@ class TestAXNodeWrapper : public AXPlatformNodeDelegateBase {
   AXOffscreenResult DetermineOffscreenResult(gfx::RectF bounds) const;
 
   raw_ptr<AXTree> tree_;
-  raw_ptr<AXNode> node_;
+  raw_ptr<AXNode, DanglingUntriaged> node_;
   ui::AXUniqueId unique_id_;
   raw_ptr<AXPlatformNode> platform_node_;
   gfx::AcceleratedWidget native_event_target_;

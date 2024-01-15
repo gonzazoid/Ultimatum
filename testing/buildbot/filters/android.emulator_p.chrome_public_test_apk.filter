@@ -20,17 +20,6 @@
 # crbug.com/1040088
 -org.chromium.chrome.browser.payments.PaymentRequestRetryTest.testRetryWithShippingAddressErrorsAndPayerErrors
 
-# crbug.com/1059168
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantBottomsheetTest.testNoResize
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantBottomsheetTest.testResizeLayoutViewport
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantBottomsheetTest.testResizeVisualViewport
-
-# crbug.com/1059046
--org.chromium.chrome.browser.customtabs.CustomTabFromChromeExternalNavigationTest.testIntentWithRedirectToApp
-
-# crbug.com/1060724
--org.chromium.chrome.browser.offlinepages.indicator.OfflineIndicatorControllerTest.testDoNotShowOfflineIndicatorWhenTemporarilyPaused
-
 # crbug.com/1061158
 -org.chromium.chrome.browser.TabsOpenedFromExternalAppTest.testLaunchWebLiteURLNoPreviews
 
@@ -57,7 +46,6 @@
 -org.chromium.chrome.browser.autofill.AutofillUpstreamTest.testSaveCardInfoBarContinueButton_EmptyName_launchesNameFixFlow
 -org.chromium.chrome.browser.autofill.AutofillUpstreamTest.testSaveCardInfoBarWithEmptyMonth
 -org.chromium.chrome.browser.autofill.AutofillUpstreamTest.testSaveCardInfoBarWithEmptyMonthAndYear
--org.chromium.chrome.browser.autofill.AutofillUpstreamTest.testSaveCardInfoBarWithEmptyName
 -org.chromium.chrome.browser.autofill.AutofillUpstreamTest.testSaveCardInfoBarWithEmptyYear
 
 # crbug.com/1062055
@@ -75,49 +63,14 @@
 # crbug.com/1063975
 -org.chromium.chrome.browser.feed.FeedAppLifecycleTest.testSecondWindowDoesNotTriggerForegroundOrBackground
 
-# crbug.com/1063981
--org.chromium.chrome.browser.toolbar.IdentityDiscControllerTest.testIdentityDiscWithSignInState
-
-# crbug.com/1063987
--org.chromium.chrome.browser.tasks.tab_management.TabListContainerViewBinderTest.testHidesWithAnimation
-
 # crbug.com/1067673
 -org.chromium.chrome.browser.ntp.cards.NewTabPageRecyclerViewTest.testDismissArticleWithContextMenu
-
-# crbug.com/1153888
--org.chromium.chrome.browser.autofill.AutofillUpstreamTest.testSaveCardInfoBarWithEmptyName
 
 # crbug.com/1159805
 -org.chromium.chrome.browser.customtabs.DetachedResourceRequestTest.testRepeatedIntents
 
-# crbug.com/1163913
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantTriggerScriptIntegrationTest.dontShowOnboardingIfAcceptedInDifferentTab
-
 # crbug.com/1187536
 -org.chromium.chrome.browser.customtabs.CustomTabExternalNavigationTest.testIntentPickerNotShownForNormalUrl
 
-# crbug.com/1272997
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantFormActionTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantChromeTabIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantTriggerScriptIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantBackButtonIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantCollectUserDataIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantGenericUiTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantChromeTabIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantNavigationIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantInterruptIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantPersonalDataManagerTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantInputActionIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantOverlayIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantBottomsheetTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantKeyboardIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantUpdateClientSettingsIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantTtsIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantQrCodeIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantParseSingleTagXmlIntegrationTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantAutostartTest*
--org.chromium.chrome.browser.autofill_assistant.AutofillAssistantPasswordManagerIntegrationTest*
-
-
-
-
+# crbug.com/1392774
+-org.chromium.chrome.browser.display_cutout.DisplayCutoutTest.testViewportFitCover*

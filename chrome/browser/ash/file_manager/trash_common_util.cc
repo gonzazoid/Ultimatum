@@ -44,8 +44,7 @@ bool IsTrashEnabledForProfile(Profile* profile) {
   if (!profile || !profile->GetPrefs()) {
     return false;
   }
-  return base::FeatureList::IsEnabled(chromeos::features::kFilesTrash) &&
-         profile->GetPrefs()->GetBoolean(ash::prefs::kFilesAppTrashEnabled);
+  return profile->GetPrefs()->GetBoolean(ash::prefs::kFilesAppTrashEnabled);
 }
 
 const base::FilePath GenerateTrashPath(const base::FilePath& trash_path,
@@ -78,6 +77,19 @@ TrashPathsMap GenerateEnabledTrashLocationsForProfile(
           util::GetMyFilesFolderForProfile(profile),
           /*prefix_path=*/
           util::GetDownloadsFolderForProfile(profile).BaseName()));
+
+  if (base::FeatureList::IsEnabled(ash::features::kFilesTrashDrive)) {
+    auto* integration_service =
+        drive::DriveIntegrationServiceFactory::FindForProfile(profile);
+    if (integration_service) {
+      enabled_trash_locations.try_emplace(
+          integration_service->GetMountPointPath(),
+          TrashLocation(
+              /*supplied_relative_folder_path=*/base::FilePath(".Trash-1000"),
+              /*supplied_mount_point_path=*/integration_service
+                  ->GetMountPointPath()));
+    }
+  }
 
   return enabled_trash_locations;
 }

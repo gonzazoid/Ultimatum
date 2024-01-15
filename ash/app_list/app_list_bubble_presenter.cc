@@ -4,6 +4,7 @@
 
 #include "ash/app_list/app_list_bubble_presenter.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -25,9 +26,9 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/wm/container_finder.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
@@ -74,6 +75,12 @@ gfx::Rect GetWorkAreaForBubble(aura::Window* root_window) {
   return gfx::ToRoundedRect(work_area);
 }
 
+int GetBubbleWidth(gfx::Rect work_area, aura::Window* root_window) {
+  // As of August 2021 the assistant cards require a minimum width of 640. If
+  // the cards become narrower then this could be reduced.
+  return work_area.width() < 1200 ? 544 : 640;
+}
+
 // Returns the preferred size of the bubble widget in DIPs.
 gfx::Size ComputeBubbleSize(aura::Window* root_window,
                             AppListBubbleView* bubble_view) {
@@ -82,12 +89,7 @@ gfx::Size ComputeBubbleSize(aura::Window* root_window,
   const gfx::Rect work_area = GetWorkAreaForBubble(root_window);
   int height = default_height;
 
-  // As of August 2021 the assistant cards require a minimum width of 640. If
-  // the cards become narrower then this could be reduced.
-  const int width = app_list_features::IsCompactBubbleLauncherEnabled() &&
-                            work_area.width() < 1200
-                        ? 544
-                        : 640;
+  const int width = GetBubbleWidth(work_area, root_window);
   // If the work area height is too small to fit the default size bubble, then
   // calculate a smaller height to fit in the work area. Otherwise, if the work
   // area height is tall enough to fit at least two default sized bubbles, then
@@ -104,7 +106,7 @@ gfx::Size ComputeBubbleSize(aura::Window* root_window,
     int max_height =
         (work_area.height() - shelf_size - kExtraTopOfScreenSpacing) / 2;
     DCHECK_GE(max_height, default_height);
-    height = base::clamp(height_to_fit_all_apps, default_height, max_height);
+    height = std::clamp(height_to_fit_all_apps, default_height, max_height);
   }
 
   return gfx::Size(width, height);
@@ -358,7 +360,7 @@ void AppListBubblePresenter::UpdateContinueSectionVisibility() {
 }
 
 void AppListBubblePresenter::UpdateForNewSortingOrder(
-    const absl::optional<AppListSortOrder>& new_order,
+    const std::optional<AppListSortOrder>& new_order,
     bool animate,
     base::OnceClosure update_position_closure) {
   DCHECK_EQ(animate, !update_position_closure.is_null());
@@ -406,11 +408,14 @@ void AppListBubblePresenter::OnWindowActivated(ActivationReason reason,
   if (gained_active) {
     if (auto* container = GetContainerForWindow(gained_active)) {
       const int container_id = container->GetId();
-      // If the bubble or one of its children (e.g. an uninstall dialog) gained
-      // activation, the bubble should stay open. Likewise, allow focus to move
-      // to the shelf (e.g. by pressing Alt-Shift-L).
+      // The bubble can be shown without activation if:
+      // 1. The bubble or one of its children (e.g. an uninstall dialog) gains
+      //    activation; OR
+      // 2. The shelf gains activation (e.g. by pressing Alt-Shift-L); OR
+      // 3. A help bubble container's descendant gains activation.
       if (container_id == kShellWindowId_AppListContainer ||
-          container_id == kShellWindowId_ShelfContainer) {
+          container_id == kShellWindowId_ShelfContainer ||
+          container_id == kShellWindowId_HelpBubbleContainer) {
         return;
       }
     }
@@ -483,6 +488,11 @@ void AppListBubblePresenter::OnHideAnimationEnded() {
   bubble_widget_->Hide();
 
   controller_->MaybeCloseAssistant();
+}
+
+int AppListBubblePresenter::GetPreferredBubbleWidth(
+    aura::Window* root_window) const {
+  return GetBubbleWidth(GetWorkAreaForBubble(root_window), root_window);
 }
 
 }  // namespace ash

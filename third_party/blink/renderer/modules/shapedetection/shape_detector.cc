@@ -90,8 +90,8 @@ ScriptPromise ShapeDetector::detect(ScriptState* script_state,
       canvas_image_source->ElementSize(gfx::SizeF(), kRespectImageOrientation);
 
   SourceImageStatus source_image_status = kInvalidSourceImageStatus;
-  scoped_refptr<Image> image =
-      canvas_image_source->GetSourceImageForCanvas(&source_image_status, size);
+  scoped_refptr<Image> image = canvas_image_source->GetSourceImageForCanvas(
+      FlushReason::kShapeDetector, &source_image_status, size);
   if (!image || source_image_status != kNormalSourceImageStatus) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Invalid element or state.");
@@ -105,16 +105,16 @@ ScriptPromise ShapeDetector::detect(ScriptState* script_state,
   }
 
   // GetSwSkImage() will make a raster copy of PaintImageForCurrentFrame()
-  // if needed, otherwise returning the original SkImage.
+  // if needed, otherwise returning the original SkImage. May return nullptr
+  // if resource allocation failed.
   const sk_sp<SkImage> sk_image =
       image->PaintImageForCurrentFrame().GetSwSkImage();
 
   SkBitmap sk_bitmap;
   SkBitmap n32_bitmap;
-  if (!sk_image->asLegacyBitmap(&sk_bitmap) ||
+  if (!sk_image || !sk_image->asLegacyBitmap(&sk_bitmap) ||
       !skia::SkBitmapToN32OpaqueOrPremul(sk_bitmap, &n32_bitmap)) {
-    // TODO(mcasas): retrieve the pixels from elsewhere.
-    NOTREACHED();
+    // TODO(crbug.com/1467598): retrieve the pixels from elsewhere.
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Failed to get pixels for current frame.");

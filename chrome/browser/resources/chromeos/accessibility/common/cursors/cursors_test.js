@@ -3,18 +3,12 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../testing/common_e2e_test_base.js']);
 
 /**
  * Test fixture for cursors.
  */
-AccessibilityExtensionCursorsTest = class extends ChromeVoxNextE2ETest {
-  constructor() {
-    super(true /* isCommonClass */);
-  }
-
+AccessibilityExtensionCursorsTest = class extends CommonE2ETestBase {
   /** Test Cursor. @const {string} */
   get CURSOR() {
     return 'cursor';
@@ -28,25 +22,28 @@ AccessibilityExtensionCursorsTest = class extends ChromeVoxNextE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('CursorRange', '/common/cursors/range.js');
-    await importModule(
-        ['Cursor', 'CursorMovement', 'CursorUnit', 'WrappingCursor'],
-        '/common/cursors/cursor.js');
+    await Promise.all([
+      importModule('CursorRange', '/common/cursors/range.js'),
+      importModule(
+          ['Cursor', 'CursorMovement', 'CursorUnit', 'WrappingCursor'],
+          '/common/cursors/cursor.js'),
 
-    await importModule('AutomationUtil', '/common/automation_util.js');
-    await importModule(
-        'AutomationPredicate', '/common/automation_predicate.js');
-    await importModule('constants', '/common/constants.js');
+      importModule('AutomationUtil', '/common/automation_util.js'),
+      importModule('AutomationPredicate', '/common/automation_predicate.js'),
+      importModule('constants', '/common/constants.js'),
+      importModule('createMockNode', '/common/testing/test_node_generator.js'),
+    ]);
     // Various aliases
-    window.CHARACTER = CursorUnit.CHARACTER;
-    window.WORD = CursorUnit.WORD;
-    window.LINE = CursorUnit.LINE;
-    window.NODE = CursorUnit.NODE;
-    window.BOUND = CursorMovement.BOUND;
-    window.DIRECTIONAL = CursorMovement.DIRECTIONAL;
-    window.SYNC = CursorMovement.SYNC;
-    window.BACKWARD = constants.Dir.BACKWARD;
-    window.FORWARD = constants.Dir.FORWARD;
+    globalThis.CHARACTER = CursorUnit.CHARACTER;
+    globalThis.WORD = CursorUnit.WORD;
+    globalThis.LINE = CursorUnit.LINE;
+    globalThis.NODE = CursorUnit.NODE;
+    globalThis.BOUND = CursorMovement.BOUND;
+    globalThis.DIRECTIONAL = CursorMovement.DIRECTIONAL;
+    globalThis.SYNC = CursorMovement.SYNC;
+    globalThis.BACKWARD = constants.Dir.BACKWARD;
+    globalThis.FORWARD = constants.Dir.FORWARD;
+    globalThis.RoleType = chrome.automation.RoleType;
   }
 
   /**
@@ -97,10 +94,10 @@ AccessibilityExtensionCursorsTest = class extends ChromeVoxNextE2ETest {
    * @param {Cursor} cursor
    */
   makeCursorAssertion(expected, cursor) {
-    if (goog.isDef(expected.value)) {
+    if (expected.value !== undefined) {
       assertEquals(expected.value, cursor.node.name);
     }
-    if (goog.isDef(expected.index)) {
+    if (expected.index !== undefined) {
       assertEquals(expected.index, cursor.index,
         'wrong index at ' + expected.value + ', expected: ' + expected.index + ' actual: ' + cursor.index);
     }
@@ -480,7 +477,7 @@ AX_TEST_F(
   `);
       // For some reason, Blink fails if we don't first select something
       // on the page.
-      ChromeVoxState.instance.currentRange.select();
+      CursorRange.fromNode(root).select();
       const link = root.find({role: RoleType.LINK});
       const p1 = root.find({role: RoleType.PARAGRAPH});
       const p2 = p1.nextSibling;
@@ -717,6 +714,50 @@ AX_TEST_F(
         // Reached first word of first object.
         [WORD, DIRECTIONAL, BACKWARD, {index: 0, value: 'Inline text content'}],
       ]);
+    });
+
+AX_TEST_F(
+    'AccessibilityExtensionCursorsTest', 'MovementByNodeInPdf',
+    async function() {
+      const root =
+          createMockNode({role: chrome.automation.RoleType.ROOT_WEB_AREA});
+      const pdfRoot = createMockNode(
+          {role: chrome.automation.RoleType.PDF_ROOT, parent: root, root});
+      const paragraph1 = createMockNode({
+        role: chrome.automation.RoleType.PARAGRAPH,
+        display: 'block',
+        parent: pdfRoot,
+        pdfRoot,
+      });
+      const text1 = createMockNode({
+        role: chrome.automation.RoleType.STATIC_TEXT,
+        parent: paragraph1,
+        pdfRoot,
+        name: 'First text in PDF',
+      });
+      const paragraph2 = createMockNode({
+        role: chrome.automation.RoleType.PARAGRAPH,
+        display: 'block',
+        parent: pdfRoot,
+        pdfRoot,
+      });
+      const text2 = createMockNode({
+        role: chrome.automation.RoleType.STATIC_TEXT,
+        parent: paragraph2,
+        pdfRoot,
+        name: 'Second text in PDF',
+      });
+
+      let cursor = new Cursor(root.firstChild, 0);
+      assertEquals(chrome.automation.RoleType.PDF_ROOT, cursor.node.role);
+
+      cursor = cursor.move(NODE, DIRECTIONAL, FORWARD);
+      assertEquals(chrome.automation.RoleType.STATIC_TEXT, cursor.node.role);
+      assertEquals('First text in PDF', cursor.node.name);
+
+      cursor = cursor.move(NODE, DIRECTIONAL, FORWARD);
+      assertEquals(chrome.automation.RoleType.STATIC_TEXT, cursor.node.role);
+      assertEquals('Second text in PDF', cursor.node.name);
     });
 
 TEST_F('AccessibilityExtensionCursorsTest', 'CopiedSelection', function() {

@@ -8,16 +8,16 @@
 
 namespace extensions {
 
-PortId::PortId() {}
+PortId::PortId() = default;
 PortId::PortId(const base::UnguessableToken& context_id,
                int port_number,
                bool is_opener,
-               SerializationFormat format)
+               mojom::SerializationFormat format)
     : context_id(context_id),
       port_number(port_number),
       is_opener(is_opener),
       serialization_format(format) {}
-PortId::~PortId() {}
+PortId::~PortId() = default;
 PortId::PortId(PortId&& other) = default;
 PortId::PortId(const PortId& other) = default;
 PortId& PortId::operator=(const PortId& other) = default;

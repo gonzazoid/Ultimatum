@@ -8,11 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -137,8 +137,8 @@ class HostZoomMapBrowserTest : public InProcessBrowserTest {
   }
 
   GURL ConstructTestServerURL(const char* url_template) {
-    return GURL(base::StringPrintf(
-        url_template, embedded_test_server()->port()));
+    return GURL(base::StringPrintfNonConstexpr(url_template,
+                                               embedded_test_server()->port()));
   }
 
  private:

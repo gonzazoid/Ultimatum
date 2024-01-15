@@ -7,14 +7,14 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -64,7 +64,7 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_CRYPTOHOME) SystemSaltGetter {
                                       bool service_is_available);
   void DidGetSystemSalt(
       GetSystemSaltCallback system_salt_callback,
-      absl::optional<::user_data_auth::GetSystemSaltReply> system_salt_reply);
+      std::optional<::user_data_auth::GetSystemSaltReply> system_salt_reply);
 
   RawSalt raw_salt_;
   std::string system_salt_;
@@ -76,11 +76,5 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_CRYPTOHOME) SystemSaltGetter {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source code migration is finished.
-namespace chromeos {
-using ::ash::SystemSaltGetter;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_CRYPTOHOME_SYSTEM_SALT_GETTER_H_

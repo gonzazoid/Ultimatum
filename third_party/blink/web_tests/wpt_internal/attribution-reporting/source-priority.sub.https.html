@@ -3,34 +3,39 @@
 <meta name=timeout content=long>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="resources/helpers.js"></script>
+<script src="/attribution-reporting/resources/helpers.js"></script>
 <script>
 attribution_reporting_promise_test(async t => {
-  await Promise.all([
-    registerAttributionSrc(t, {source: {
-      source_event_id: '1',
-      destination: `https://{{host}}`,
-      priority: '11',
-    }}),
-    registerAttributionSrc(t, {source: {
-      source_event_id: '2',
-      destination: `https://{{host}}`,
-      priority: '13',
-    }}),
-    registerAttributionSrc(t, {source: {
-      source_event_id: '3',
-      destination: `https://{{host}}`,
-      priority: '12',
-    }}),
-  ]);
+  const host = 'https://{{host}}';
 
-  await registerAttributionSrc(t, {trigger: {
-    event_trigger_data: [{}],
-  }});
+  registerAttributionSrcByImg(createRedirectChain([
+    {
+      source: {
+         destination: host,
+         priority: '11',
+         source_event_id: '6',
+      },
+    },
+    {
+      source: {
+         destination: host,
+         priority: '13',
+         source_event_id: '5',
+      },
+    },
+    {
+      source: {
+         destination: host,
+         priority: '12',
+         source_event_id: '4',
+      },
+    },
+    {trigger: {event_trigger_data: [{}]}},
+  ]));
 
   const payload = await pollEventLevelReports();
   assert_equals(payload.reports.length, 1);
   const report = JSON.parse(payload.reports[0].body);
-  assert_equals(report.source_event_id, '2');
+  assert_equals(report.source_event_id, '5');
 }, 'Trigger is attributed to highest priority source.');
 </script>

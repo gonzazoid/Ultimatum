@@ -44,7 +44,8 @@ found in the LICENSE file.
     on-startenrollment="onStartEnrollment_"
     on-exit="onExitMessage_"
     on-removeuserbyemail="onRemoveUserByEmailMessage_"
-    on-changesigninprovider="onSamlPageChangeAccount_">
+    on-changesigninprovider="onSamlPageChangeAccount_"
+    on-quick-start-clicked="onQuickStartButtonClicked_">
 </gaia-dialog>
 <!-- TODO(dkuzmin): This alert is added here, because ChromeVox keep
                     pronouncing it several times when role="alert" is added
@@ -63,11 +64,22 @@ found in the LICENSE file.
     id="step-loading" for-step="loading">
   <iron-icon slot="icon" icon="oobe-32:googleg"></iron-icon>
 </oobe-loading-dialog>
-<notification-card id="gaia-allowlist-error" class="fit"
-    for-step="allowlist-error"
-    on-buttonclick="onAllowlistErrorTryAgainClick_"
-    on-linkclick="onAllowlistErrorLinkClick_"
-    button-label="[[i18nDynamic(locale, 'tryAgainButton')]]"
-    link-label="[[i18nDynamic(locale, 'learnMoreButton')]]">
-  [[i18nDynamic(locale, allowlistError_)]]
-</notification-card>
+<oobe-modal-dialog id="enrollmentNudge">
+  <div slot="title">
+    [[i18nDynamic(locale, 'enrollmentNudgeTitle')]]
+  </div>
+  <div slot="content">
+    [[getEnrollmentNudgeMessage_(locale, emailDomain_)]]
+  </div>
+  <div slot="buttons">
+    <oobe-text-button id="useAnotherAccount"
+      class="focus-on-show"
+      on-click="onEnrollmentNudgeUseAnotherAccount_"
+      text-key="enrollmentNudgeUseAnotherAccountButton">
+    </oobe-text-button>
+    <oobe-text-button id="enterpriseEnrollment"
+      inverse on-click="onEnrollmentNudgeEnroll_"
+      text-key="enrollmentNudgeEnterpriseEnrollmentButton">
+    </oobe-text-button>
+  </div>
+</oobe-modal-dialog>

@@ -14,7 +14,6 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner_util.h"
-#include "mojo/public/cpp/system/handle.h"
 #include "net/base/completion_once_callback.h"
 #include "storage/browser/file_system/file_stream_writer.h"
 #include "url/gurl.h"
@@ -47,7 +46,8 @@ class ArcContentFileSystemFileStreamWriter : public storage::FileStreamWriter {
             int buffer_length,
             net::CompletionOnceCallback callback) override;
   int Cancel(net::CompletionOnceCallback callback) override;
-  int Flush(net::CompletionOnceCallback callback) override;
+  int Flush(storage::FlushMode flush_mode,
+            net::CompletionOnceCallback callback) override;
 
  private:
   using CloseStatus = file_system_operation_runner_util::CloseStatus;

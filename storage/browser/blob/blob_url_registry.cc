@@ -5,6 +5,7 @@
 #include "storage/browser/blob/blob_url_registry.h"
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "net/base/features.h"
 #include "storage/browser/blob/blob_url_store_impl.h"
@@ -57,7 +58,7 @@ bool BlobUrlRegistry::AddUrlMapping(
     const blink::StorageKey& storage_key,
     // TODO(https://crbug.com/1224926): Remove these once experiment is over.
     const base::UnguessableToken& unsafe_agent_cluster_id,
-    const absl::optional<net::SchemefulSite>& unsafe_top_level_site) {
+    const std::optional<net::SchemefulSite>& unsafe_top_level_site) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!BlobUrlUtils::UrlHasFragment(blob_url));
   if (IsUrlMapped(blob_url, storage_key)) {
@@ -95,13 +96,15 @@ bool BlobUrlRegistry::IsUrlMapped(const GURL& blob_url,
                                   const blink::StorageKey& storage_key) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (base::FeatureList::IsEnabled(net::features::kSupportPartitionedBlobUrl)) {
-    if (url_to_blob_.find(blob_url) != url_to_blob_.end() &&
+    if (base::Contains(url_to_blob_, blob_url) &&
+        base::Contains(url_to_storage_key_, blob_url) &&
         url_to_storage_key_.at(blob_url) == storage_key) {
       return true;
     }
   } else {
-    if (url_to_blob_.find(blob_url) != url_to_blob_.end())
+    if (base::Contains(url_to_blob_, blob_url)) {
       return true;
+    }
   }
   if (fallback_) {
     return fallback_->IsUrlMapped(blob_url, storage_key);
@@ -110,7 +113,7 @@ bool BlobUrlRegistry::IsUrlMapped(const GURL& blob_url,
 }
 
 // TODO(https://crbug.com/1224926): Remove this once experiment is over.
-absl::optional<base::UnguessableToken> BlobUrlRegistry::GetUnsafeAgentClusterID(
+std::optional<base::UnguessableToken> BlobUrlRegistry::GetUnsafeAgentClusterID(
     const GURL& blob_url) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto it = url_to_unsafe_agent_cluster_id_.find(blob_url);
@@ -118,10 +121,10 @@ absl::optional<base::UnguessableToken> BlobUrlRegistry::GetUnsafeAgentClusterID(
     return it->second;
   if (fallback_)
     return fallback_->GetUnsafeAgentClusterID(blob_url);
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<net::SchemefulSite> BlobUrlRegistry::GetUnsafeTopLevelSite(
+std::optional<net::SchemefulSite> BlobUrlRegistry::GetUnsafeTopLevelSite(
     const GURL& blob_url) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto it = url_to_unsafe_top_level_site_.find(blob_url);
@@ -129,7 +132,7 @@ absl::optional<net::SchemefulSite> BlobUrlRegistry::GetUnsafeTopLevelSite(
     return it->second;
   if (fallback_)
     return fallback_->GetUnsafeTopLevelSite(blob_url);
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 mojo::PendingRemote<blink::mojom::Blob> BlobUrlRegistry::GetBlobFromUrl(
@@ -150,13 +153,13 @@ void BlobUrlRegistry::AddTokenMapping(
     const GURL& url,
     mojo::PendingRemote<blink::mojom::Blob> blob) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(token_to_url_and_blob_.find(token) == token_to_url_and_blob_.end());
+  DCHECK(!base::Contains(token_to_url_and_blob_, token));
   token_to_url_and_blob_.emplace(token, std::make_pair(url, std::move(blob)));
 }
 
 void BlobUrlRegistry::RemoveTokenMapping(const base::UnguessableToken& token) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(token_to_url_and_blob_.find(token) != token_to_url_and_blob_.end());
+  DCHECK(base::Contains(token_to_url_and_blob_, token));
   token_to_url_and_blob_.erase(token);
 }
 

@@ -9,13 +9,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/pickle.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_tokenizer.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_usage_estimator.h"
@@ -202,14 +203,21 @@ void SimpleIndex::Initialize(base::Time cache_mtime) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
 #if BUILDFLAG(IS_ANDROID)
-  if (app_status_listener_) {
-    app_status_listener_->SetCallback(base::BindRepeating(
-        &SimpleIndex::OnApplicationStateChange, AsWeakPtr()));
+  if (app_status_listener_getter_) {
+    base::android::ApplicationStatusListener* listener =
+        app_status_listener_getter_.Run();
+    if (listener) {
+      listener->SetCallback(base::BindRepeating(
+          &SimpleIndex::OnApplicationStateChange, AsWeakPtr()));
+    }
+    // Not using the fallback on purpose here --- if the getter is set, we may
+    // be in a process where the base::android::ApplicationStatusListener::New
+    // impl is unavailable.
+    // (See https://crbug.com/881572)
   } else if (base::android::IsVMInitialized()) {
     owned_app_status_listener_ =
         base::android::ApplicationStatusListener::New(base::BindRepeating(
             &SimpleIndex::OnApplicationStateChange, AsWeakPtr()));
-    app_status_listener_ = owned_app_status_listener_.get();
   }
 #endif
 

@@ -11,6 +11,8 @@ import android.annotation.SuppressLint;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.chromium.android_webview.common.Lifetime;
+import org.chromium.base.TraceEvent;
 import org.chromium.content_public.browser.MessagePayload;
 import org.chromium.support_lib_boundary.WebMessageBoundaryInterface;
 import org.chromium.support_lib_boundary.WebMessagePayloadBoundaryInterface;
@@ -20,9 +22,8 @@ import org.chromium.support_lib_glue.SupportLibWebViewChromiumFactory.ApiCall;
 
 import java.lang.reflect.InvocationHandler;
 
-/**
- * Adapter between WebMessagePayloadBoundaryInterface and MessagePayload in content/.
- */
+/** Adapter between WebMessagePayloadBoundaryInterface and MessagePayload in content/. */
+@Lifetime.Temporary
 class SupportLibWebMessagePayloadAdapter implements WebMessagePayloadBoundaryInterface {
     private final MessagePayload mMessagePayload;
 
@@ -39,22 +40,32 @@ class SupportLibWebMessagePayloadAdapter implements WebMessagePayloadBoundaryInt
     @SuppressLint("WrongConstant")
     @Override
     public int getType() {
-        recordApiCall(ApiCall.WEB_MESSAGE_PAYLOAD_GET_TYPE);
-        return mMessagePayload.getType();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.AndroidX.WEB_MESSAGE_PAYLOAD_GET_TYPE")) {
+            recordApiCall(ApiCall.WEB_MESSAGE_PAYLOAD_GET_TYPE);
+            return mMessagePayload.getType();
+        }
     }
 
     @Nullable
     @Override
     public String getAsString() {
-        recordApiCall(ApiCall.WEB_MESSAGE_PAYLOAD_GET_AS_STRING);
-        return mMessagePayload.getAsString();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.AndroidX.WEB_MESSAGE_PAYLOAD_GET_AS_STRING")) {
+            recordApiCall(ApiCall.WEB_MESSAGE_PAYLOAD_GET_AS_STRING);
+            return mMessagePayload.getAsString();
+        }
     }
 
     @NonNull
     @Override
     public byte[] getAsArrayBuffer() {
-        recordApiCall(ApiCall.WEB_MESSAGE_PAYLOAD_GET_AS_ARRAY_BUFFER);
-        return mMessagePayload.getAsArrayBuffer();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.AndroidX.WEB_MESSAGE_PAYLOAD_GET_AS_ARRAY_BUFFER")) {
+            recordApiCall(ApiCall.WEB_MESSAGE_PAYLOAD_GET_AS_ARRAY_BUFFER);
+            return mMessagePayload.getAsArrayBuffer();
+        }
     }
 
     public /* MessagePayload */ InvocationHandler getInvocationHandler() {
@@ -64,8 +75,7 @@ class SupportLibWebMessagePayloadAdapter implements WebMessagePayloadBoundaryInt
     public static MessagePayload fromWebMessageBoundaryInterface(
             @NonNull WebMessageBoundaryInterface boundaryInterface) {
         if (BoundaryInterfaceReflectionUtil.containsFeature(
-                    boundaryInterface.getSupportedFeatures(),
-                    Features.WEB_MESSAGE_GET_MESSAGE_PAYLOAD)) {
+                boundaryInterface.getSupportedFeatures(), Features.WEB_MESSAGE_ARRAY_BUFFER)) {
             // MessagePayload API is supported by AndroidX.
             final MessagePayload messagePayload =
                     SupportLibWebMessagePayloadAdapter.toMessagePayload(
@@ -79,7 +89,7 @@ class SupportLibWebMessagePayloadAdapter implements WebMessagePayloadBoundaryInt
         return new MessagePayload(boundaryInterface.getData());
     }
 
-    private static MessagePayload toMessagePayload(
+    public static MessagePayload toMessagePayload(
             /* MessagePayload */ InvocationHandler invocationHandler) {
         if (invocationHandler == null) {
             return null;
@@ -87,8 +97,7 @@ class SupportLibWebMessagePayloadAdapter implements WebMessagePayloadBoundaryInt
         WebMessagePayloadBoundaryInterface webMessagePayloadBoundaryInterface =
                 BoundaryInterfaceReflectionUtil.castToSuppLibClass(
                         WebMessagePayloadBoundaryInterface.class, invocationHandler);
-        @WebMessagePayloadType
-        final int type = webMessagePayloadBoundaryInterface.getType();
+        @WebMessagePayloadType final int type = webMessagePayloadBoundaryInterface.getType();
         switch (type) {
             case WebMessagePayloadType.TYPE_STRING:
                 return new MessagePayload(webMessagePayloadBoundaryInterface.getAsString());
@@ -97,7 +106,7 @@ class SupportLibWebMessagePayloadAdapter implements WebMessagePayloadBoundaryInt
             default:
                 // String and ArrayBuffer are covered by WEB_MESSAGE_GET_MESSAGE_PAYLOAD feature.
                 // Please add new feature flags for new types.
-                throw new RuntimeException("Unsupported type: " + type);
+                throw new IllegalArgumentException("Unsupported type: " + type);
         }
     }
 }

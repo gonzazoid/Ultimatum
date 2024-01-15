@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_BROWSING_TOPICS_BROWSING_TOPICS_SERVICE_H_
 #define COMPONENTS_BROWSING_TOPICS_BROWSING_TOPICS_SERVICE_H_
 
+#include "components/browsing_topics/annotator.h"
 #include "components/browsing_topics/mojom/browsing_topics_internals.mojom-forward.h"
 #include "components/browsing_topics/mojom/browsing_topics_internals.mojom.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -35,6 +36,12 @@ class BrowsingTopicsService : public KeyedService {
       bool observe,
       std::vector<blink::mojom::EpochTopicPtr>& topics) = 0;
 
+  // Returns the number of distinct epochs versions for `main_frame_origin`.
+  // Must be called when topics are eligible (i.e. `HandleTopicsWebApi` would
+  // return true for the same main frame context).
+  virtual int NumVersionsInEpochs(
+      const url::Origin& main_frame_origin) const = 0;
+
   // Get the topics state to show in the chrome://topics-internals page. If
   // `calculate_now` is true, this will first trigger a calculation before
   // invoking `callback` with the topics state.
@@ -47,6 +54,8 @@ class BrowsingTopicsService : public KeyedService {
   // the browser. Padded top topics won't be returned.
   virtual std::vector<privacy_sandbox::CanonicalTopic> GetTopTopicsForDisplay()
       const = 0;
+
+  virtual Annotator* GetAnnotator() = 0;
 
   // Removes topic from any existing epoch.
   virtual void ClearTopic(

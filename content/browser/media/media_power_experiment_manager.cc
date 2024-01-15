@@ -7,16 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/media_switches.h"
 
 namespace content {
 
 MediaPowerExperimentManager::MediaPowerExperimentManager()
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 MediaPowerExperimentManager::~MediaPowerExperimentManager() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -50,7 +50,7 @@ void MediaPowerExperimentManager::PlayerStopped(
 void MediaPowerExperimentManager::CheckExperimentState() {
   // See if an experiment should be running.
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  absl::optional<MediaPlayerId> new_experiment_player;
+  std::optional<MediaPlayerId> new_experiment_player;
   if (players_.size() == 1)
     new_experiment_player = players_.begin()->first;
 

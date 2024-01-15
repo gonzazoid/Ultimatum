@@ -6,8 +6,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
+#include "chrome/browser/enterprise/connectors/test/deep_scanning_test_utils.h"
 #include "chrome/browser/policy/dm_token_utils.h"
-#include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_test_utils.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_utils.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
@@ -31,10 +31,7 @@ class BaseTest : public testing::Test {
     profile_ = profile_manager_.CreateTestingProfile("test-user");
   }
 
-  void EnableFeatures() {
-    scoped_feature_list_.Reset();
-    scoped_feature_list_.InitWithFeatures({kEnterpriseConnectorsEnabled}, {});
-  }
+  void EnableFeatures() { scoped_feature_list_.Reset(); }
 
   Profile* profile() { return profile_; }
 
@@ -58,11 +55,14 @@ class EnterpriseConnectorsResultShouldAllowDataUseTest
     EnableFeatures();
 
     // Settings can't be returned if no DM token exists.
-    SetDMTokenForTesting(policy::DMToken::CreateValidTokenForTesting(kDmToken));
+    SetDMTokenForTesting(policy::DMToken::CreateValidToken(kDmToken));
   }
 
   bool allowed() const { return !GetParam(); }
   const char* bool_setting() const { return GetParam() ? "true" : "false"; }
+  const char* default_action_setting() const {
+    return GetParam() ? "block" : "allow";
+  }
 
   AnalysisSettings settings() {
     absl::optional<AnalysisSettings> settings =
@@ -85,8 +85,7 @@ TEST_P(EnterpriseConnectorsResultShouldAllowDataUseTest, BlockLargeFile) {
       "block_large_files": %s
     })",
                                  bool_setting());
-  safe_browsing::SetAnalysisConnector(profile()->GetPrefs(), FILE_ATTACHED,
-                                      pref);
+  test::SetAnalysisConnector(profile()->GetPrefs(), FILE_ATTACHED, pref);
   EXPECT_EQ(allowed(),
             ResultShouldAllowDataUse(
                 settings(),
@@ -102,29 +101,27 @@ TEST_P(EnterpriseConnectorsResultShouldAllowDataUseTest,
       "block_password_protected": %s
     })",
                                  bool_setting());
-  safe_browsing::SetAnalysisConnector(profile()->GetPrefs(), FILE_ATTACHED,
-                                      pref);
+  test::SetAnalysisConnector(profile()->GetPrefs(), FILE_ATTACHED, pref);
   EXPECT_EQ(allowed(),
             ResultShouldAllowDataUse(
                 settings(),
                 safe_browsing::BinaryUploadService::Result::FILE_ENCRYPTED));
 }
 
-TEST_P(EnterpriseConnectorsResultShouldAllowDataUseTest,
-       BlockUnsupportedFileTypes) {
+TEST_P(EnterpriseConnectorsResultShouldAllowDataUseTest, BlockUploadFailure) {
   auto pref = base::StringPrintf(R"(
     {
       "service_provider": "google",
       "enable": [{"url_list": ["*"], "tags": ["dlp"]}],
-      "block_unsupported_file_types": %s
+      "default_action": "%s"
     })",
-                                 bool_setting());
-  safe_browsing::SetAnalysisConnector(profile()->GetPrefs(), FILE_ATTACHED,
-                                      pref);
+                                 default_action_setting());
+
+  test::SetAnalysisConnector(profile()->GetPrefs(), FILE_ATTACHED, pref);
   EXPECT_EQ(allowed(),
             ResultShouldAllowDataUse(
-                settings(), safe_browsing::BinaryUploadService::Result::
-                                DLP_SCAN_UNSUPPORTED_FILE_TYPE));
+                settings(),
+                safe_browsing::BinaryUploadService::Result::UPLOAD_FAILURE));
 }
 
 }  // namespace enterprise_connectors

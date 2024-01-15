@@ -22,25 +22,27 @@ import org.chromium.chrome.browser.feed.R;
 import org.chromium.chrome.browser.feed.StreamKind;
 import org.chromium.chrome.browser.feed.v2.FeedUserActionType;
 import org.chromium.chrome.browser.feed.webfeed.WebFeedSnackbarController.FeedLauncher;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.ui.modaldialog.DialogDismissalCause;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * The coordinator for the WebFeed modal dialog.
- */
+/** The coordinator for the WebFeed modal dialog. */
 class WebFeedDialogCoordinator {
     private final WebFeedDialogMediator mMediator;
 
     private Context mContext;
+
     /**
      * This enum is reported in a UMA histogram. Changes must be synchronized with
      * WebFeedPostFollowDialogPresentation in enums.xml, and values may not be re-used.
      */
-    @IntDef({WebFeedPostFollowDialogPresentation.AVAILABLE,
-            WebFeedPostFollowDialogPresentation.UNAVAILABLE,
-            WebFeedPostFollowDialogPresentation.VALUE_COUNT})
+    @IntDef({
+        WebFeedPostFollowDialogPresentation.AVAILABLE,
+        WebFeedPostFollowDialogPresentation.UNAVAILABLE,
+        WebFeedPostFollowDialogPresentation.VALUE_COUNT
+    })
     @interface WebFeedPostFollowDialogPresentation {
         int AVAILABLE = 0;
         int UNAVAILABLE = 1;
@@ -65,13 +67,20 @@ class WebFeedDialogCoordinator {
      * @param isActive Whether the followed site is active (has content available).
      */
     void initialize(Context context, FeedLauncher feedLauncher, String title, boolean isActive) {
-        Runnable positiveAction = () -> {
-            FeedServiceBridge.reportOtherUserAction(StreamKind.UNKNOWN,
-                    FeedUserActionType.TAPPED_GO_TO_FEED_POST_FOLLOW_ACTIVE_HELP);
-            feedLauncher.openFollowingFeed();
-        };
-        initializeInternal(context, positiveAction,
-                R.string.web_feed_post_follow_dialog_go_to_following, title, isActive);
+        Runnable positiveAction =
+                () -> {
+                    FeedServiceBridge.reportOtherUserAction(
+                            StreamKind.UNKNOWN,
+                            FeedUserActionType.TAPPED_GO_TO_FEED_POST_FOLLOW_ACTIVE_HELP);
+                    feedLauncher.openFollowingFeed();
+                };
+        initializeInternal(
+                context,
+                positiveAction,
+                R.string.web_feed_post_follow_dialog_go_to_following,
+                title,
+                isActive,
+                /* hasCloseAction= */ true);
     }
 
     /**
@@ -84,22 +93,35 @@ class WebFeedDialogCoordinator {
      */
     void initializeForInFollowingFollow(
             Context context, @Nullable Runnable activeAction, String title, boolean isActive) {
-        Runnable positiveAction = () -> {
-            FeedServiceBridge.reportOtherUserAction(StreamKind.UNKNOWN,
-                    FeedUserActionType.TAPPED_GOT_IT_FEED_POST_FOLLOW_ACTIVE_HELP);
-            if (activeAction != null) activeAction.run();
-        };
-        initializeInternal(context, positiveAction, R.string.web_feed_post_follow_dialog_got_it,
-                title, isActive);
+        Runnable positiveAction =
+                () -> {
+                    FeedServiceBridge.reportOtherUserAction(
+                            StreamKind.UNKNOWN,
+                            FeedUserActionType.TAPPED_GOT_IT_FEED_POST_FOLLOW_ACTIVE_HELP);
+                    if (activeAction != null) activeAction.run();
+                };
+        initializeInternal(
+                context,
+                positiveAction,
+                R.string.web_feed_post_follow_dialog_got_it,
+                title,
+                isActive,
+                /* hasCloseAction= */ false);
     }
 
-    private void initializeInternal(Context context, Runnable positiveAction,
-            int positiveActionLabelId, String title, boolean isActive) {
+    private void initializeInternal(
+            Context context,
+            Runnable positiveAction,
+            int positiveActionLabelId,
+            String title,
+            boolean isActive,
+            boolean hasCloseAction) {
         mContext = context;
         View webFeedDialogView =
                 LayoutInflater.from(context).inflate(R.layout.web_feed_dialog, null);
         WebFeedDialogContents dialogContents =
-                buildDialogContents(positiveAction, positiveActionLabelId, title, isActive);
+                buildDialogContents(
+                        positiveAction, positiveActionLabelId, title, isActive, hasCloseAction);
         PropertyModel model = buildModel(dialogContents);
         mMediator.initialize(webFeedDialogView, dialogContents);
         PropertyModelChangeProcessor.create(
@@ -111,41 +133,61 @@ class WebFeedDialogCoordinator {
     }
 
     private WebFeedDialogContents buildDialogContents(
-            Runnable positiveAction, int positiveActionLabelId, String title, boolean isActive) {
+            Runnable positiveAction,
+            int positiveActionLabelId,
+            String title,
+            boolean isActive,
+            boolean hasCloseAction) {
         RecordHistogram.recordEnumeratedHistogram(
                 "ContentSuggestions.Feed.WebFeed.PostFollowDialog.Show",
-                isActive ? WebFeedPostFollowDialogPresentation.AVAILABLE
-                         : WebFeedPostFollowDialogPresentation.UNAVAILABLE,
+                isActive
+                        ? WebFeedPostFollowDialogPresentation.AVAILABLE
+                        : WebFeedPostFollowDialogPresentation.UNAVAILABLE,
                 WebFeedPostFollowDialogPresentation.VALUE_COUNT);
 
-        String description;
+        int descriptionResId;
         String primaryButtonText;
         String secondaryButtonText;
         Callback<Integer> buttonClickCallback;
+        boolean uiUpdateEnabled =
+                ChromeFeatureList.isEnabled(ChromeFeatureList.FEED_FOLLOW_UI_UPDATE);
         if (isActive) {
-            description = mContext.getString(
-                    R.string.web_feed_post_follow_dialog_stories_ready_description, title);
+            descriptionResId =
+                    uiUpdateEnabled
+                            ? R.string
+                                    .web_feed_post_follow_dialog_stories_ready_description_with_ui_update
+                            : R.string.web_feed_post_follow_dialog_stories_ready_description;
             primaryButtonText = mContext.getString(positiveActionLabelId);
-            secondaryButtonText = mContext.getString(R.string.close);
-            buttonClickCallback = dismissalCause -> {
-                if (dismissalCause.equals(DialogDismissalCause.POSITIVE_BUTTON_CLICKED)) {
-                    positiveAction.run();
-                } else {
-                    FeedServiceBridge.reportOtherUserAction(StreamKind.UNKNOWN,
-                            FeedUserActionType.TAPPED_DISMISS_POST_FOLLOW_ACTIVE_HELP);
-                }
-            };
+            secondaryButtonText = hasCloseAction ? mContext.getString(R.string.close) : null;
+            buttonClickCallback =
+                    dismissalCause -> {
+                        if (dismissalCause.equals(DialogDismissalCause.POSITIVE_BUTTON_CLICKED)) {
+                            positiveAction.run();
+                        } else {
+                            assert hasCloseAction : "Secondary close action must be enabled";
+                            FeedServiceBridge.reportOtherUserAction(
+                                    StreamKind.UNKNOWN,
+                                    FeedUserActionType.TAPPED_DISMISS_POST_FOLLOW_ACTIVE_HELP);
+                        }
+                    };
         } else {
-            description = mContext.getString(
-                    R.string.web_feed_post_follow_dialog_stories_not_ready_description, title);
+            descriptionResId =
+                    uiUpdateEnabled
+                            ? R.string
+                                    .web_feed_post_follow_dialog_stories_not_ready_description_with_ui_update
+                            : R.string.web_feed_post_follow_dialog_stories_not_ready_description;
             primaryButtonText = mContext.getString(R.string.ok);
             secondaryButtonText = null;
             buttonClickCallback = dismissalCause -> {};
         }
+        String description = mContext.getString(descriptionResId, title);
         return new WebFeedDialogContents(
-                mContext.getString(R.string.web_feed_post_follow_dialog_title, title), description,
-                R.drawable.web_feed_post_follow_illustration, primaryButtonText,
-                secondaryButtonText, buttonClickCallback);
+                mContext.getString(R.string.web_feed_post_follow_dialog_title, title),
+                description,
+                R.drawable.web_feed_post_follow_illustration,
+                primaryButtonText,
+                secondaryButtonText,
+                buttonClickCallback);
     }
 
     private PropertyModel buildModel(WebFeedDialogContents dialogContents) {

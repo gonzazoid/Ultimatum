@@ -5,12 +5,14 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_UI_CREDENTIAL_UI_ENTRY_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_UI_CREDENTIAL_UI_ENTRY_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "components/password_manager/core/browser/import/csv_password.h"
+#include "components/password_manager/core/browser/passkey_credential.h"
 #include "components/password_manager/core/browser/password_form.h"
 
 namespace password_manager {
@@ -59,6 +61,20 @@ struct CredentialFacet {
 // correspond to multiple PasswordForms.
 // TODO(crbug.com/1374029): Use class here instead of struct.
 struct CredentialUIEntry {
+  // Structure which represents affiliated domain and can be used by the UI to
+  // display affiliated domains as links.
+  struct DomainInfo {
+    // A human readable version of the URL of the credential's origin. For
+    // android credentials this is usually the app name.
+    std::string name;
+
+    // The URL that will be linked to when an entry is clicked.
+    GURL url;
+
+    // signon_realm of a corresponding PasswordForm.
+    std::string signon_realm;
+  };
+
   struct Less {
     bool operator()(const CredentialUIEntry& lhs,
                     const CredentialUIEntry& rhs) const;
@@ -67,6 +83,7 @@ struct CredentialUIEntry {
   CredentialUIEntry();
   explicit CredentialUIEntry(const PasswordForm& form);
   explicit CredentialUIEntry(const std::vector<PasswordForm>& forms);
+  explicit CredentialUIEntry(const PasskeyCredential& passkey);
   explicit CredentialUIEntry(
       const CSVPassword& csv_password,
       PasswordForm::Store to_store = PasswordForm::Store::kProfileStore);
@@ -77,12 +94,20 @@ struct CredentialUIEntry {
   CredentialUIEntry& operator=(const CredentialUIEntry& other);
   CredentialUIEntry& operator=(CredentialUIEntry&& other);
 
+  // If this is a passkey, a non empty credential id as a byte string. Empty
+  // otherwise.
+  // https://w3c.github.io/webauthn/#credential-id
+  std::vector<uint8_t> passkey_credential_id;
+
   // List of facets represented by this entry which contains the display name,
   // url and sign-on realm of a credential.
   std::vector<CredentialFacet> facets;
 
   // The current username.
   std::u16string username;
+
+  // The user's display name, if this is a passkey. Always empty otherwise.
+  std::u16string user_display_name;
 
   // The current password.
   std::u16string password;
@@ -101,10 +126,10 @@ struct CredentialUIEntry {
   // currently supports manipulation of one note only with an empty
   // `unique_display_name`. The storage layer however supports multiple-notes
   // for forward compatibility.
-  PasswordNote note;
+  std::u16string note;
 
   // Tracks if the user opted to never remember passwords for this website.
-  bool blocked_by_user;
+  bool blocked_by_user = false;
 
   // Indicates when the credential was last used by the user to login to the
   // site. Defaults to |date_created|.
@@ -113,6 +138,9 @@ struct CredentialUIEntry {
   // Information about password insecurities.
   bool IsLeaked() const;
   bool IsPhished() const;
+  bool IsWeak() const;
+  bool IsReused() const;
+  bool IsMuted() const;
 
   const base::Time GetLastLeakedOrPhishedTime() const;
 
@@ -131,11 +159,33 @@ struct CredentialUIEntry {
   // Returns the first URL among all the URLs in the facets associated with this
   // entry.
   GURL GetURL() const;
+
+  // Returns the URL which allows to change the password of compromised
+  // credentials. Can be null for Android credentials.
+  std::optional<GURL> GetChangePasswordURL() const;
+
+  // Returns a vector of pairs, where the first element is formatted string
+  // representing website or an Android application and a second parameter is a
+  // link which should be opened when item is clicked. Can be used by the UI to
+  // display all the affiliated domains.
+  std::vector<DomainInfo> GetAffiliatedDomains() const;
 };
+
+// Creates key for sorting password or password exception entries. The key is
+// eTLD+1 followed by the reversed list of domains (e.g.
+// secure.accounts.example.com => example.com.com.example.accounts.secure) and
+// the scheme. If |form| is not blocklisted, username, password and federation
+// are appended to the key. If not, no further information is added. For Android
+// credentials the canocial spec is included.
+// TODO(vsemeniuk): find a better name for this function.
+std::string CreateSortKey(const CredentialUIEntry& credential);
 
 bool operator==(const CredentialUIEntry& lhs, const CredentialUIEntry& rhs);
 bool operator!=(const CredentialUIEntry& lhs, const CredentialUIEntry& rhs);
 bool operator<(const CredentialUIEntry& lhs, const CredentialUIEntry& rhs);
+
+// Returns true when the credential is either leaked or phished.
+bool IsCompromised(const CredentialUIEntry& credential);
 
 }  // namespace password_manager
 

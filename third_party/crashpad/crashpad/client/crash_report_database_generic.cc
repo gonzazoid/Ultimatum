@@ -22,6 +22,7 @@
 #include <tuple>
 #include <utility>
 
+#include "base/check_op.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "client/settings.h"
@@ -549,6 +550,16 @@ int CrashReportDatabaseGeneric::CleanDatabase(time_t lockfile_ttl) {
   removed += CleanReportsInState(kPending, lockfile_ttl);
   removed += CleanReportsInState(kCompleted, lockfile_ttl);
   CleanOrphanedAttachments();
+#if !CRASHPAD_FLOCK_ALWAYS_SUPPORTED
+  base::FilePath settings_path(kSettings);
+  if (Settings::IsLockExpired(settings_path, lockfile_ttl)) {
+    base::FilePath lockfile_path(settings_path.value() +
+                                 Settings::kLockfileExtension);
+    if (LoggingRemoveFile(lockfile_path)) {
+      ++removed;
+    }
+  }
+#endif  // !CRASHPAD_FLOCK_ALWAYS_SUPPORTED
   return removed;
 }
 

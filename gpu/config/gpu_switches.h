@@ -22,6 +22,8 @@ GPU_EXPORT extern const char kEnableUnsafeWebGPU[];
 GPU_EXPORT extern const char kEnableWebGPUDeveloperFeatures[];
 GPU_EXPORT extern const char kEnableDawnBackendValidation[];
 GPU_EXPORT extern const char kUseWebGPUAdapter[];
+GPU_EXPORT extern const char kUseWebGPUPowerPreference[];
+GPU_EXPORT extern const char kForceWebGPUCompat[];
 GPU_EXPORT extern const char kEnableDawnFeatures[];
 GPU_EXPORT extern const char kDisableDawnFeatures[];
 GPU_EXPORT extern const char kUseHighGPUThreadPriorityForPerfTests[];
@@ -39,6 +41,18 @@ GPU_EXPORT extern const char kVulkanHeapMemoryLimitMb[];
 GPU_EXPORT extern const char kVulkanSyncCpuMemoryLimitMb[];
 GPU_EXPORT extern const char kForceBrowserCrashOnGpuCrash[];
 GPU_EXPORT extern const char kGpuWatchdogTimeoutSeconds[];
+GPU_EXPORT extern const char kForceSeparateEGLDisplayForWebGLTesting[];
+GPU_EXPORT extern const char kSkiaGraphiteBackend[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendDawn[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendDawnD3D11[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendDawnD3D12[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendDawnMetal[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendDawnSwiftshader[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendDawnVulkan[];
+GPU_EXPORT extern const char kSkiaGraphiteBackendMetal[];
+GPU_EXPORT extern const char kShaderCachePath[];
+GPU_EXPORT extern const char kDisableSkiaGraphite[];
+GPU_EXPORT extern const char kEnableSkiaGraphite[];
 
 }  // namespace switches
 

@@ -20,6 +20,8 @@ import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
 
 import java.util.concurrent.TimeoutException;
 
@@ -32,17 +34,24 @@ public final class RecyclerViewTestUtils {
 
     public static RecyclerView.ViewHolder waitForView(
             final RecyclerView recyclerView, final int position) {
-        CriteriaHelper.pollUiThread(() -> {
-            RecyclerView.ViewHolder viewHolder =
-                    recyclerView.findViewHolderForAdapterPosition(position);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    RecyclerView.ViewHolder viewHolder =
+                            recyclerView.findViewHolderForAdapterPosition(position);
 
-            Criteria.checkThat("Cannot find view holder for position " + position + ".", viewHolder,
-                    Matchers.notNullValue());
-            Criteria.checkThat("The view is not attached for position " + position + ".",
-                    viewHolder.itemView.getParent(), Matchers.notNullValue());
-            Criteria.checkThat("The view is not visible for position " + position + ".",
-                    viewHolder.itemView.isShown(), Matchers.is(true));
-        });
+                    Criteria.checkThat(
+                            "Cannot find view holder for position " + position + ".",
+                            viewHolder,
+                            Matchers.notNullValue());
+                    Criteria.checkThat(
+                            "The view is not attached for position " + position + ".",
+                            viewHolder.itemView.getParent(),
+                            Matchers.notNullValue());
+                    Criteria.checkThat(
+                            "The view is not visible for position " + position + ".",
+                            viewHolder.itemView.isShown(),
+                            Matchers.is(true));
+                });
 
         waitForStableRecyclerView(recyclerView);
 
@@ -71,19 +80,44 @@ public final class RecyclerViewTestUtils {
         waitForStableRecyclerView(recyclerView);
     }
 
+    /**
+     * Tries to wait for changes and animations to {@link RecyclerView} to finish happening. This
+     * works especially well for animations, but not as well when just underlying model changes
+     * happen though the {@link RecyclerView.Adapter}.
+     */
     public static void waitForStableRecyclerView(final RecyclerView recyclerView) {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat("The recycler view is computing layout.",
-                    recyclerView.isComputingLayout(), Matchers.is(false));
-            Criteria.checkThat("The recycler view layout is frozen.", recyclerView.isLayoutFrozen(),
-                    Matchers.is(false));
-            Criteria.checkThat("The recycler view is animating.", recyclerView.isAnimating(),
-                    Matchers.is(false));
-            Criteria.checkThat(
-                    "The recycler view is dirty.", recyclerView.isDirty(), Matchers.is(false));
-            Criteria.checkThat("The recycler view has layout requested.",
-                    recyclerView.isLayoutRequested(), Matchers.is(false));
-        });
+        CriteriaHelper.pollUiThread(() -> checkForStableRecyclerView(recyclerView));
+    }
+
+    /**
+     * In addition to the checks in {@link #waitForStableRecyclerView(RecyclerView)}, also checks
+     * all of the PropertyModels. This will make sure all of the view binding has completed.
+     */
+    public static void waitForStableMvcRecyclerView(RecyclerView recyclerView) {
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    SimpleRecyclerViewAdapter adapter =
+                            (SimpleRecyclerViewAdapter) recyclerView.getAdapter();
+                    int viewCount = recyclerView.getChildCount();
+                    int adapterCount = adapter.getModelList().size();
+                    Criteria.checkThat(
+                            "Views can be lazily created, but shouldn't have extra.",
+                            viewCount,
+                            Matchers.lessThanOrEqualTo(adapterCount));
+                    for (int i = 0; i < viewCount; i++) {
+                        View child = recyclerView.getChildAt(i);
+                        SimpleRecyclerViewAdapter.ViewHolder viewHolder =
+                                (SimpleRecyclerViewAdapter.ViewHolder)
+                                        recyclerView.getChildViewHolder(child);
+                        PropertyModel viewModel = viewHolder.model;
+                        PropertyModel adapterModel = adapter.getModelList().get(i).model;
+                        Criteria.checkThat(
+                                "Models should be the same at index " + i,
+                                viewModel,
+                                Matchers.equalTo(adapterModel));
+                    }
+                    checkForStableRecyclerView(recyclerView);
+                });
     }
 
     /**
@@ -98,14 +132,13 @@ public final class RecyclerViewTestUtils {
         return waitForView(recyclerView, position);
     }
 
-    /**
-     * Scrolls the {@link RecyclerView} to the bottom.
-     */
+    /** Scrolls the {@link RecyclerView} to the bottom. */
     public static void scrollToBottom(RecyclerView recyclerView) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            // Scroll to bottom.
-            recyclerView.scrollToPosition(recyclerView.getAdapter().getItemCount() - 1);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    // Scroll to bottom.
+                    recyclerView.scrollToPosition(recyclerView.getAdapter().getItemCount() - 1);
+                });
 
         // Wait until we can scroll no further.
         // A positive parameter checks scrolling down, a negative one scrolling up.
@@ -168,5 +201,24 @@ public final class RecyclerViewTestUtils {
         public void describeTo(Description description) {
             description.appendText("Not the active view in RecyclerView");
         }
+    }
+
+    private static void checkForStableRecyclerView(RecyclerView recyclerView) {
+        Criteria.checkThat(
+                "The recycler view is computing layout.",
+                recyclerView.isComputingLayout(),
+                Matchers.is(false));
+        Criteria.checkThat(
+                "The recycler view layout is frozen.",
+                recyclerView.isLayoutFrozen(),
+                Matchers.is(false));
+        Criteria.checkThat(
+                "The recycler view is animating.", recyclerView.isAnimating(), Matchers.is(false));
+        Criteria.checkThat(
+                "The recycler view is dirty.", recyclerView.isDirty(), Matchers.is(false));
+        Criteria.checkThat(
+                "The recycler view has layout requested.",
+                recyclerView.isLayoutRequested(),
+                Matchers.is(false));
     }
 }

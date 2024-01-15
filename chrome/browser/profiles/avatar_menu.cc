@@ -4,22 +4,21 @@
 
 #include "chrome/browser/profiles/avatar_menu.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/case_conversion.h"
 #include "base/metrics/field_trial.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/avatar_menu_observer.h"
-#include "chrome/browser/profiles/profile_list.h"
+#include "chrome/browser/profiles/profile_list_desktop.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_switches.h"
@@ -28,14 +27,13 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
+#include "components/supervised_user/core/browser/supervised_user_service.h"
 #endif
 
 using content::BrowserThread;
@@ -60,7 +58,7 @@ bool CanOpenBrowserForProfile(const AvatarMenu::Item& profile_item) {
 AvatarMenu::AvatarMenu(ProfileAttributesStorage* profile_storage,
                        AvatarMenuObserver* observer,
                        Browser* browser)
-    : profile_list_(ProfileList::Create(profile_storage)),
+    : profile_list_(std::make_unique<ProfileListDesktop>(profile_storage)),
       profile_storage_(profile_storage->AsWeakPtr()),
       observer_(observer),
       browser_(browser) {
@@ -76,8 +74,11 @@ AvatarMenu::AvatarMenu(ProfileAttributesStorage* profile_storage,
   // Register this as an observer of the SupervisedUserService to be notified
   // of changes to the custodian info.
   if (browser_) {
-    supervised_user_observation_.Observe(
-        SupervisedUserServiceFactory::GetForProfile(browser_->profile()));
+    auto* supervised_user_service =
+        SupervisedUserServiceFactory::GetForProfile(browser_->profile());
+    if (supervised_user_service) {
+      supervised_user_observation_.Observe(supervised_user_service);
+    }
   }
 #endif
 }
@@ -149,9 +150,11 @@ const AvatarMenu::Item& AvatarMenu::GetItemAt(size_t index) const {
   return profile_list_->GetItemAt(index);
 }
 
-size_t AvatarMenu::GetIndexOfItemWithProfilePath(
+size_t AvatarMenu::GetIndexOfItemWithProfilePathForTesting(
     const base::FilePath& path) const {
-  return profile_list_->MenuIndexFromProfilePath(path);
+  absl::optional<size_t> index = profile_list_->MenuIndexFromProfilePath(path);
+  DCHECK(index.has_value());
+  return index.value();
 }
 
 absl::optional<size_t> AvatarMenu::GetActiveProfileIndex() const {
@@ -167,32 +170,13 @@ absl::optional<size_t> AvatarMenu::GetActiveProfileIndex() const {
   if (!active_profile)
     return absl::nullopt;
 
-  size_t index =
+  // The profile may be missing from the menu (e.g. omitted profile, guest).
+  absl::optional<size_t> index =
       profile_list_->MenuIndexFromProfilePath(active_profile->GetPath());
-  DCHECK_LT(index, profile_list_->GetNumberOfItems());
-  return index;
-}
 
-std::u16string AvatarMenu::GetSupervisedUserInformation() const {
-  // |browser_| can be NULL in unit_tests.
-  if (browser_ && browser_->profile()->IsChild()) {
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-    SupervisedUserService* service =
-        SupervisedUserServiceFactory::GetForProfile(browser_->profile());
-    std::u16string custodian =
-        base::UTF8ToUTF16(service->GetCustodianEmailAddress());
-    std::u16string second_custodian =
-        base::UTF8ToUTF16(service->GetSecondCustodianEmailAddress());
-    if (second_custodian.empty()) {
-      return l10n_util::GetStringFUTF16(IDS_CHILD_INFO_ONE_CUSTODIAN,
-                                        custodian);
-    } else {
-      return l10n_util::GetStringFUTF16(IDS_CHILD_INFO_TWO_CUSTODIANS,
-                                        custodian, second_custodian);
-    }
-#endif
-  }
-  return std::u16string();
+  DCHECK(!index.has_value() ||
+         index.value() < profile_list_->GetNumberOfItems());
+  return index;
 }
 
 void AvatarMenu::ActiveBrowserChanged(Browser* browser) {

@@ -7,8 +7,8 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_component_options.h"
-#import "ios/chrome/browser/ui/util/named_guide.h"
 
 @class LayoutGuideCenter;
 @class ToolbarConfiguration;
@@ -33,28 +33,23 @@
 @property(nonatomic, strong) GuideName* guideName;
 // The layout guide center for this button.
 @property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;
-// Whether this button is spotlighted, having a light gray background. This
-// state should not be used in the same time as the selected state.
-@property(nonatomic, assign) BOOL spotlighted;
+// Whether this button is highlighted for an IPH, having a blue background. This
+// color will override the spotlighted background color.
+@property(nonatomic, assign) BOOL iphHighlighted;
 // View used to display the view used for the spotlight effect.
 @property(nonatomic, strong) UIView* spotlightView;
-// Whether this button is dimmed. When the button is dimmed, its tintColor is
-// changed to have a lower alpha.
-@property(nonatomic, assign) BOOL dimmed;
 
 // Returns a ToolbarButton with a type system, using the `image` as image for
 // normal state.
-+ (instancetype)toolbarButtonWithImage:(UIImage*)image;
-
+- (instancetype)initWithImage:(UIImage*)image;
+// Returns a ToolbarButton using the `image` as image for normal state and
+// `IPHHighlightedImage` as image for IPHHighlightedImage state.
+- (instancetype)initWithImage:(UIImage*)image
+          IPHHighlightedImage:(UIImage*)IPHHighlightedImage;
 // Checks if the ToolbarButton should be visible in the current SizeClass,
 // afterwards it calls setHiddenForCurrentStateAndSizeClass if needed.
 - (void)updateHiddenInCurrentSizeClass;
 
-@end
-
-@interface ToolbarButton (Subclassing)
-// Creates the view used for the spotlight effect.
-- (void)configureSpotlightView;
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_TOOLBAR_BUTTONS_TOOLBAR_BUTTON_H_

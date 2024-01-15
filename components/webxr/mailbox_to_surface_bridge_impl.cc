@@ -8,16 +8,17 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/system/sys_info.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/gpu/context_provider.h"
 #include "content/public/browser/android/compositor.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
@@ -28,11 +29,12 @@
 #include "gpu/ipc/common/gpu_memory_buffer_impl_android_hardware_buffer.h"
 #include "gpu/ipc/common/gpu_surface_tracker.h"
 #include "services/viz/public/cpp/gpu/context_provider_command_buffer.h"
+#include "ui/gfx/buffer_types.h"
 #include "ui/gfx/color_space.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gl/android/surface_texture.h"
-
-#include <android/native_window_jni.h>
 
 #define VOID_OFFSET(x) reinterpret_cast<void*>(x)
 #define SHADER(Src) #Src
@@ -216,22 +218,17 @@ void MailboxToSurfaceBridgeImpl::BindContextProviderToCurrentThread() {
 
 void MailboxToSurfaceBridgeImpl::CreateSurface(
     gl::SurfaceTexture* surface_texture) {
-  ANativeWindow* window = surface_texture->CreateSurface();
   gpu::GpuSurfaceTracker* tracker = gpu::GpuSurfaceTracker::Get();
-  ANativeWindow_acquire(window);
-  // Skip ANativeWindow_setBuffersGeometry, the default size appears to work.
-  surface_ = std::make_unique<gl::ScopedJavaSurface>(surface_texture);
   surface_handle_ =
       tracker->AddSurfaceForNativeWidget(gpu::GpuSurfaceTracker::SurfaceRecord(
-          window, surface_->j_surface(),
+          gl::ScopedJavaSurface(surface_texture),
           false /* can_be_used_with_surface_control */));
   // Unregistering happens in the destructor.
-  ANativeWindow_release(window);
 }
 
 void MailboxToSurfaceBridgeImpl::CreateAndBindContextProvider(
     base::OnceClosure on_bound_callback) {
-  gl_thread_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  gl_thread_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   on_context_bound_ = std::move(on_bound_callback);
 
   // The callback to run in this thread. It is necessary to keep |surface| alive
@@ -245,31 +242,8 @@ void MailboxToSurfaceBridgeImpl::CreateAndBindContextProvider(
       FROM_HERE, base::BindOnce(
                      [](int surface_handle,
                         content::Compositor::ContextProviderCallback callback) {
-                       // Our attributes must be compatible with the shared
-                       // offscreen surface used by virtualized contexts,
-                       // otherwise mailbox synchronization doesn't work
-                       // properly - it assumes a shared underlying GL context.
-                       // See GetCompositorContextAttributes in
-                       // content/browser/renderer_host/compositor_impl_android.cc
-                       // and https://crbug.com/699330.
-                       gpu::ContextCreationAttribs attributes;
-                       attributes.alpha_size = -1;
-                       attributes.red_size = 8;
-                       attributes.green_size = 8;
-                       attributes.blue_size = 8;
-                       attributes.stencil_size = 0;
-                       attributes.depth_size = 0;
-                       attributes.samples = 0;
-                       attributes.sample_buffers = 0;
-                       attributes.bind_generates_resource = false;
-                       if (base::SysInfo::IsLowEndDevice()) {
-                         attributes.alpha_size = 0;
-                         attributes.red_size = 5;
-                         attributes.green_size = 6;
-                         attributes.blue_size = 5;
-                       }
                        content::Compositor::CreateContextProvider(
-                           surface_handle, attributes,
+                           surface_handle,
                            gpu::SharedMemoryLimits::ForMailboxContext(),
                            std::move(callback));
                      },
@@ -277,6 +251,9 @@ void MailboxToSurfaceBridgeImpl::CreateAndBindContextProvider(
 }
 
 void MailboxToSurfaceBridgeImpl::ResizeSurface(int width, int height) {
+  // Make sure we have the surface.
+  CHECK(surface_handle_);
+
   surface_width_ = width;
   surface_height_ = height;
 
@@ -294,17 +271,15 @@ void MailboxToSurfaceBridgeImpl::ResizeSurface(int width, int height) {
 }
 
 bool MailboxToSurfaceBridgeImpl::CopyMailboxToSurfaceAndSwap(
-    const gpu::MailboxHolder& mailbox) {
-  return CopyMailboxToSurfaceAndSwap(mailbox, gfx::Transform());
-}
-
-bool MailboxToSurfaceBridgeImpl::CopyMailboxToSurfaceAndSwap(
     const gpu::MailboxHolder& mailbox,
     const gfx::Transform& uv_transform) {
   if (!IsConnected()) {
     // We may not have a context yet, i.e. due to surface initialization
     // being incomplete. This is not an error, but we obviously can't draw
-    // yet. TODO(klausw): change the caller to defer this until we are ready.
+    // yet. This affects the non-shared-buffer path on Android N (or
+    // if UseSharedBuffer was forced to false due to GPU bug workarounds),
+    // and may result in a couple of discarded images while waiting for
+    // initialization which is generally harmless.
     return false;
   }
 
@@ -366,35 +341,41 @@ void MailboxToSurfaceBridgeImpl::CreateGpuFence(
   gl_->DestroyGpuFenceCHROMIUM(id);
 }
 
-gpu::MailboxHolder MailboxToSurfaceBridgeImpl::CreateSharedImage(
-    gpu::GpuMemoryBufferImplAndroidHardwareBuffer* buffer,
+scoped_refptr<gpu::ClientSharedImage>
+MailboxToSurfaceBridgeImpl::CreateSharedImage(
+    gfx::GpuMemoryBufferHandle buffer_handle,
+    gfx::BufferFormat buffer_format,
+    const gfx::Size& size,
     const gfx::ColorSpace& color_space,
-    uint32_t usage) {
+    uint32_t usage,
+    gpu::SyncToken& sync_token) {
   TRACE_EVENT0("gpu", __FUNCTION__);
   DCHECK(IsConnected());
 
   auto* sii = context_provider_->SharedImageInterface();
   DCHECK(sii);
 
-  gpu::MailboxHolder mailbox_holder;
-  mailbox_holder.mailbox = sii->CreateSharedImage(buffer, nullptr, color_space,
-                                                  kTopLeft_GrSurfaceOrigin,
-                                                  kPremul_SkAlphaType, usage);
-  mailbox_holder.sync_token = sii->GenVerifiedSyncToken();
-  DCHECK(!gpu::NativeBufferNeedsPlatformSpecificTextureTarget(
-      buffer->GetFormat()));
-  mailbox_holder.texture_target = GL_TEXTURE_2D;
-  return mailbox_holder;
+  CHECK_EQ(buffer_format, gfx::BufferFormat::RGBA_8888);
+  auto client_shared_image = sii->CreateSharedImage(
+      viz::SinglePlaneFormat::kRGBA_8888, size, color_space,
+      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, usage,
+      "WebXrMailboxToSurfaceBridge", std::move(buffer_handle));
+  CHECK(client_shared_image);
+  sync_token = sii->GenVerifiedSyncToken();
+  DCHECK(!gpu::NativeBufferNeedsPlatformSpecificTextureTarget(buffer_format));
+  return client_shared_image;
 }
 
 void MailboxToSurfaceBridgeImpl::DestroySharedImage(
-    const gpu::MailboxHolder& mailbox_holder) {
+    const gpu::SyncToken& sync_token,
+    scoped_refptr<gpu::ClientSharedImage> shared_image) {
   TRACE_EVENT0("gpu", __FUNCTION__);
   DCHECK(IsConnected());
+  DCHECK(shared_image);
 
   auto* sii = context_provider_->SharedImageInterface();
   DCHECK(sii);
-  sii->DestroySharedImage(mailbox_holder.sync_token, mailbox_holder.mailbox);
+  sii->DestroySharedImage(sync_token, std::move(shared_image));
 }
 
 void MailboxToSurfaceBridgeImpl::DestroyContext() {
@@ -484,10 +465,7 @@ void MailboxToSurfaceBridgeImpl::DrawQuad(unsigned int texture_handle,
 
   // We're redrawing over the entire viewport, but it's generally more
   // efficient on mobile tiling GPUs to clear anyway as a hint that
-  // we're done with the old content. TODO(klausw, https://crbug.com/700389):
-  // investigate using gl_->DiscardFramebufferEXT here since that's more
-  // efficient on desktop, but it would need a capability check since
-  // it's not supported on older devices such as Nexus 5X.
+  // we're done with the old content.
   gl_->Clear(GL_COLOR_BUFFER_BIT);
 
   float uv_transform_floats[16];

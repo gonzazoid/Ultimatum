@@ -109,11 +109,9 @@ class CORE_EXPORT TouchEventManager final
   const Member<LocalFrame> frame_;
 
   // The attributes of each active touch point indexed by the touch ID.
-  using TouchAttributeMap =
-      HeapHashMap<int,
-                  Member<TouchPointAttributes>,
-                  WTF::IntHash<int>,
-                  WTF::UnsignedWithZeroKeyHashTraits<int>>;
+  using TouchAttributeMap = HeapHashMap<int,
+                                        Member<TouchPointAttributes>,
+                                        IntWithZeroKeyHashTraits<int>>;
   TouchAttributeMap touch_attribute_map_;
 
   // If set, the document of the active touch sequence. Unset if no touch

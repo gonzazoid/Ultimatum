@@ -12,7 +12,7 @@
  * code.
  */
 
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
 
 import {parseHtmlSubset, sanitizeInnerHtml, SanitizeInnerHtmlOpts} from './parse_html_subset.js';
 
@@ -80,7 +80,7 @@ export const I18nBehavior = {
    * Polymer bindings that are inner-h-t-m-l, for example.
    * @param {string} id The ID of the string to translate.
    * @param {SanitizeInnerHtmlOpts=} opts
-   * @return {string}
+   * @return {TrustedHTML}
    */
   i18nAdvanced(id, opts) {
     opts = opts || {};

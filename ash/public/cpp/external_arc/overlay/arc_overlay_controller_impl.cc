@@ -7,6 +7,8 @@
 #include "ash/wm/window_state.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/exo/surface.h"
+#include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/window_targeter.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/widget/widget.h"
@@ -21,6 +23,12 @@ class OverlayNativeViewHost final : public views::NativeViewHost {
   OverlayNativeViewHost& operator=(const OverlayNativeViewHost&) = delete;
   ~OverlayNativeViewHost() override = default;
   METADATA_HEADER(OverlayNativeViewHost);
+
+  // views::View:
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
+    node_data->role = ax::mojom::Role::kApplication;
+    node_data->SetNameExplicitlyEmpty();
+  }
 
   // views::NativeViewHost:
   void OnFocus() override {
@@ -43,16 +51,16 @@ ArcOverlayControllerImpl::ArcOverlayControllerImpl(aura::Window* host_window)
 
   VLOG(1) << "Host is " << host_window_->GetName();
 
-  host_window_observer_.Observe(host_window_);
+  host_window_observer_.Observe(host_window_.get());
 
   overlay_container_ = new OverlayNativeViewHost();
-  overlay_container_observer_.Observe(overlay_container_);
+  overlay_container_observer_.Observe(overlay_container_.get());
 
   auto* const widget = views::Widget::GetWidgetForNativeWindow(
       host_window_->GetToplevelWindow());
   DCHECK(widget);
   DCHECK(widget->GetContentsView());
-  widget->GetContentsView()->AddChildView(overlay_container_);
+  widget->GetContentsView()->AddChildView(overlay_container_.get());
 }
 
 ArcOverlayControllerImpl::~ArcOverlayControllerImpl() {
@@ -86,6 +94,9 @@ void ArcOverlayControllerImpl::AttachOverlay(aura::Window* overlay_window) {
 
   overlay_container_->SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   overlay_container_->RequestFocus();
+
+  // Make sure that the overlay comes on top of other windows.
+  host_window_->StackChildAtTop(overlay_container_->GetNativeViewContainer());
 
   UpdateHostBounds();
 }

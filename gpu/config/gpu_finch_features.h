@@ -9,8 +9,13 @@
 #define GPU_CONFIG_GPU_FINCH_FEATURES_H_
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "build/build_config.h"
 #include "gpu/gpu_export.h"
+
+namespace base {
+class CommandLine;
+}  // namespace base
 
 namespace features {
 
@@ -22,15 +27,23 @@ GPU_EXPORT BASE_DECLARE_FEATURE(kUseGles2ForOopR);
 GPU_EXPORT BASE_DECLARE_FEATURE(kAndroidSurfaceControl);
 GPU_EXPORT BASE_DECLARE_FEATURE(kWebViewSurfaceControl);
 GPU_EXPORT BASE_DECLARE_FEATURE(kAImageReader);
-GPU_EXPORT BASE_DECLARE_FEATURE(kWebViewVulkan);
 GPU_EXPORT BASE_DECLARE_FEATURE(kLimitAImageReaderMaxSizeToOne);
 GPU_EXPORT BASE_DECLARE_FEATURE(kWebViewThreadSafeMediaDefault);
 GPU_EXPORT BASE_DECLARE_FEATURE(kIncreaseBufferCountForHighFrameRate);
 #endif  // BUILDFLAG(IS_ANDROID)
 
+GPU_EXPORT BASE_DECLARE_FEATURE(kAggressiveSkiaGpuResourcePurge);
+
 GPU_EXPORT BASE_DECLARE_FEATURE(kDefaultEnableGpuRasterization);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kCanvasOopRasterization);
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kCanvasOopWithoutGpuTileRaster);
+
+#if BUILDFLAG(IS_OZONE)
+GPU_EXPORT BASE_DECLARE_FEATURE(kEnablePerContextGLTextureCache);
+GPU_EXPORT BASE_DECLARE_FEATURE(kOzoneFrontBufferUsage);
+#endif
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kEnableMSAAOnNewIntelGPUs);
 
@@ -42,11 +55,16 @@ GPU_EXPORT BASE_DECLARE_FEATURE(kCanvasContextLostInBackground);
 GPU_EXPORT BASE_DECLARE_FEATURE(kGpuProcessHighPriorityWin);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kDisableVideoOverlayIfMoving);
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kNoUndamagedOverlayPromotion);
+
 #endif
 
-#if BUILDFLAG(IS_MAC)
-GPU_EXPORT BASE_DECLARE_FEATURE(kMetal);
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_IOS)
+GPU_EXPORT BASE_DECLARE_FEATURE(kAdjustGpuProcessPriority);
 #endif
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kGenGpuDiskCacheKeyPrefixInGpuService);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kSharedImageManager);
 
@@ -56,15 +74,22 @@ GPU_EXPORT BASE_DECLARE_FEATURE(kVaapiWebPImageDecodeAcceleration);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kVulkan);
 
-GPU_EXPORT BASE_DECLARE_FEATURE(kSkiaDawn);
+GPU_EXPORT BASE_DECLARE_FEATURE(kSkiaGraphite);
+GPU_EXPORT extern const base::FeatureParam<bool>
+    kSkiaGraphiteDawnSkipValidation;
+GPU_EXPORT extern const base::FeatureParam<bool>
+    kSkiaGraphiteDawnBackendValidation;
+GPU_EXPORT extern const base::FeatureParam<bool> kSkiaGraphiteDawnShareDevice;
+
+#if BUILDFLAG(IS_WIN)
+GPU_EXPORT BASE_DECLARE_FEATURE(kSkiaGraphiteDawnUseD3D12);
+#endif
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kEnableGrShaderCacheForVulkan);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kEnableWatchdogReportOnlyModeOnGpuInit);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kEnableVkPipelineCache);
-
-GPU_EXPORT BASE_DECLARE_FEATURE(kReduceOpsTaskSplitting);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kNoDiscardableMemoryForGpuDecodePath);
 
@@ -74,6 +99,14 @@ GPU_EXPORT BASE_DECLARE_FEATURE(kForceGpuMainThreadToNormalPriorityDrDc);
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kForceRestartGpuKillSwitch);
 
+GPU_EXPORT BASE_DECLARE_FEATURE(kPruneOldTransferCacheEntries);
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kPurgeOldCacheEntriesOnTimer);
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kUseGpuSchedulerDfs);
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kUseClientGmbInterface);
+
 #if BUILDFLAG(IS_ANDROID)
 // This flag is use additionally with kEnableDrDc to enable the feature for
 // vulkan enabled android devices.
@@ -81,8 +114,19 @@ GPU_EXPORT BASE_DECLARE_FEATURE(kEnableDrDcVulkan);
 #endif  // BUILDFLAG(IS_ANDROID)
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kWebGPUService);
+GPU_EXPORT BASE_DECLARE_FEATURE(kWebGPUBlobCache);
+GPU_EXPORT BASE_DECLARE_FEATURE(kWebGPUUseDXC);
+GPU_EXPORT BASE_DECLARE_FEATURE(kWebGPUUseTintIR);
+GPU_EXPORT extern const base::FeatureParam<std::string> kWebGPUUnsafeFeatures;
+GPU_EXPORT extern const base::FeatureParam<std::string> kWGSLUnsafeFeatures;
 
 GPU_EXPORT BASE_DECLARE_FEATURE(kIncreasedCmdBufferParseSlice);
+
+GPU_EXPORT BASE_DECLARE_FEATURE(kGpuCleanupInBackground);
+
+#if BUILDFLAG(IS_ANDROID)
+GPU_EXPORT BASE_DECLARE_FEATURE(kCmdDecoderSkipGLRedMesaWorkaroundOnAndroid);
+#endif
 
 GPU_EXPORT bool UseGles2ForOopR();
 GPU_EXPORT bool IsUsingVulkan();
@@ -90,6 +134,10 @@ GPU_EXPORT bool IsDrDcEnabled();
 GPU_EXPORT bool IsGpuMainThreadForcedToNormalPriorityDrDc();
 GPU_EXPORT bool NeedThreadSafeAndroidMedia();
 GPU_EXPORT bool IsANGLEValidationEnabled();
+GPU_EXPORT bool IsSkiaGraphiteEnabled(const base::CommandLine* command_line);
+GPU_EXPORT bool EnablePurgeGpuImageDecodeCache();
+GPU_EXPORT bool EnablePruneOldTransferCacheEntries();
+GPU_EXPORT bool IsCanvasOopRasterizationEnabled();
 
 #if BUILDFLAG(IS_ANDROID)
 GPU_EXPORT bool IsAImageReaderEnabled();

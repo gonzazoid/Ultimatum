@@ -6,15 +6,9 @@ package org.chromium.chrome.browser.autofill;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.res.Resources;
-import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.text.Editable;
 import android.text.InputFilter;
-import android.text.Spannable;
-import android.text.SpannableString;
-import android.text.TextWatcher;
-import android.text.style.ImageSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -23,16 +17,19 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.TextView.BufferType;
 
+import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.view.ViewCompat;
 
+import org.chromium.base.ResettersForTesting;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.AutofillUiUtils.ErrorType;
@@ -40,14 +37,19 @@ import org.chromium.ui.modaldialog.DialogDismissalCause;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.text.EmptyTextWatcher;
+import org.chromium.url.GURL;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.Calendar;
 
-/**
- * A prompt that bugs users to enter their CVC when unmasking a Wallet instrument (credit card).
- */
+/** A prompt that bugs users to enter their CVC when unmasking a Wallet instrument (credit card). */
 public class CardUnmaskPrompt
-        implements TextWatcher, OnClickListener, ModalDialogProperties.Controller {
+        implements EmptyTextWatcher,
+                OnClickListener,
+                ModalDialogProperties.Controller,
+                CompoundButton.OnCheckedChangeListener {
     private static CardUnmaskObserverForTest sObserverForTest;
 
     private final CardUnmaskPromptDelegate mDelegate;
@@ -56,7 +58,6 @@ public class CardUnmaskPrompt
 
     private final View mMainView;
     private final TextView mInstructions;
-    private final TextView mTitleView;
     private final TextView mNoRetryErrorMessage;
     private final EditText mCardUnmaskInput;
     private final EditText mMonthInput;
@@ -71,11 +72,10 @@ public class CardUnmaskPrompt
     private final TextView mVerificationView;
     private final long mSuccessMessageDurationMilliseconds;
     private final int mGooglePayDrawableId;
-    private final boolean mIsCardLocal;
+    private final boolean mIsVirtualCard;
 
     private int mThisYear;
     private int mThisMonth;
-    private boolean mValidationWaitsForCalendarTask;
     private ModalDialogManager mModalDialogManager;
     private Context mContext;
 
@@ -84,12 +84,29 @@ public class CardUnmaskPrompt
     private boolean mDidFocusOnCvc;
 
     /**
-     * An interface to handle the interaction with an CardUnmaskPrompt object.
+     * Used to record the CheckBox status. This definition should be in sync
+     * with the histogram enum `CheckBoxStatus`.
+     * These values are persisted to logs. Entries should not be renumbered and numeric values
+     * should never be reused.
      */
+    @IntDef({
+        CheckBoxStatus.NOT_SHOWN,
+        CheckBoxStatus.UNCHECKED,
+        CheckBoxStatus.CHECKED,
+        CheckBoxStatus.NUM_ENTRIES
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    private @interface CheckBoxStatus {
+        int NOT_SHOWN = 0;
+        int UNCHECKED = 1;
+        int CHECKED = 2;
+
+        int NUM_ENTRIES = 3;
+    }
+
+    /** An interface to handle the interaction with an CardUnmaskPrompt object. */
     public interface CardUnmaskPromptDelegate {
-        /**
-         * Called when the dialog has been dismissed.
-         */
+        /** Called when the dialog has been dismissed. */
         void dismissed();
 
         /**
@@ -100,12 +117,19 @@ public class CardUnmaskPrompt
 
         /**
          * Called when the user has entered a value and pressed "verify".
+         *
          * @param cvc The value the user entered (a CVC), or an empty string if the user canceled.
          * @param month The value the user selected for expiration month, if any.
          * @param year The value the user selected for expiration month, if any.
          * @param enableFidoAuth The value the user selected for the use lockscreen checkbox.
+         * @param wasCheckboxVisible If the FIDO auth checkbox was shown to the user.
          */
-        void onUserInput(String cvc, String month, String year, boolean enableFidoAuth);
+        void onUserInput(
+                String cvc,
+                String month,
+                String year,
+                boolean enableFidoAuth,
+                boolean wasCheckboxVisible);
 
         /**
          * Called when the "New card?" link has been clicked.
@@ -113,92 +137,109 @@ public class CardUnmaskPrompt
          */
         void onNewCardLinkClicked();
 
-        /**
-         * Returns the expected length of the CVC for the card.
-         */
+        /** Returns the expected length of the CVC for the card. */
         int getExpectedCvcLength();
     }
 
-    /**
-     * A test-only observer for the unmasking prompt.
-     */
+    /** A test-only observer for the unmasking prompt. */
     public interface CardUnmaskObserverForTest {
-        /**
-         * Called when typing the CVC input is possible.
-         */
+        /** Called when typing the CVC input is possible. */
         void onCardUnmaskPromptReadyForInput(CardUnmaskPrompt prompt);
 
-        /**
-         * Called when clicking "Verify" or "Continue" (the positive button) is possible.
-         */
+        /** Called when clicking "Verify" or "Continue" (the positive button) is possible. */
         void onCardUnmaskPromptReadyToUnmask(CardUnmaskPrompt prompt);
 
-        /**
-         * Called when the input values in the unmask prompt have been validated.
-         */
+        /** Called when the input values in the unmask prompt have been validated. */
         void onCardUnmaskPromptValidationDone(CardUnmaskPrompt prompt);
 
-        /**
-         * Called when submitting through the soft keyboard was disallowed.
-         */
+        /** Called when submitting through the soft keyboard was disallowed. */
         void onCardUnmaskPromptSubmitRejected(CardUnmaskPrompt prompt);
     }
 
-    public CardUnmaskPrompt(Context context, CardUnmaskPromptDelegate delegate, String title,
-            String instructions, String confirmButtonLabel, int cvcDrawableId,
-            int googlePayDrawableId, boolean isCardLocal, boolean shouldRequestExpirationDate,
-            boolean defaultToStoringLocally, boolean shouldOfferWebauthn,
-            boolean defaultUseScreenlockChecked, long successMessageDurationMilliseconds) {
+    public CardUnmaskPrompt(
+            Context context,
+            CardUnmaskPromptDelegate delegate,
+            String title,
+            String instructions,
+            int cardIconId,
+            String cardName,
+            String cardLastFourDigits,
+            String cardExpiration,
+            GURL cardArtUrl,
+            String confirmButtonLabel,
+            int cvcDrawableId,
+            String cvcImageAnnouncement,
+            int googlePayDrawableId,
+            boolean isVirtualCard,
+            boolean shouldRequestExpirationDate,
+            boolean shouldOfferWebauthn,
+            boolean defaultUseScreenlockChecked,
+            long successMessageDurationMilliseconds) {
         mDelegate = delegate;
         mGooglePayDrawableId = googlePayDrawableId;
-        mIsCardLocal = isCardLocal;
+        mIsVirtualCard = isVirtualCard;
 
         LayoutInflater inflater = LayoutInflater.from(context);
-        View v = inflater.inflate(R.layout.autofill_card_unmask_prompt, null);
-        mInstructions = (TextView) v.findViewById(R.id.instructions);
-        mInstructions.setText(instructions);
-        mTitleView = (TextView) v.findViewById(R.id.title);
+        mMainView = inflater.inflate(R.layout.autofill_card_unmask_prompt, null);
+        AutofillUiUtils.addCardDetails(
+                context,
+                mMainView,
+                cardName,
+                cardLastFourDigits,
+                cardExpiration,
+                cardArtUrl,
+                cardIconId,
+                AutofillUiUtils.CardIconSize.LARGE,
+                R.dimen.card_unmask_dialog_credit_card_icon_end_margin,
+                /* cardNameAndNumberTextAppearance= */ R.style.TextAppearance_TextLarge_Primary,
+                /* cardLabelTextAppearance= */ R.style.TextAppearance_TextMedium_Secondary,
+                /* showCustomIcon= */ AutofillUiUtils.shouldShowCustomIcon(
+                        cardArtUrl, /* isVirtualCard= */ isVirtualCard));
 
-        mMainView = v;
-        mNoRetryErrorMessage = (TextView) v.findViewById(R.id.no_retry_error_message);
-        mCardUnmaskInput = (EditText) v.findViewById(R.id.card_unmask_input);
-        mMonthInput = (EditText) v.findViewById(R.id.expiration_month);
-        mYearInput = (EditText) v.findViewById(R.id.expiration_year);
-        mExpirationContainer = v.findViewById(R.id.expiration_container);
-        mNewCardLink = (TextView) v.findViewById(R.id.new_card_link);
+        updateTitleForCustomView(title, context);
+        mInstructions = (TextView) mMainView.findViewById(R.id.instructions);
+        mInstructions.setText(instructions);
+        mNoRetryErrorMessage = (TextView) mMainView.findViewById(R.id.no_retry_error_message);
+        mCardUnmaskInput = (EditText) mMainView.findViewById(R.id.card_unmask_input);
+        if (isVirtualCard) {
+            mCardUnmaskInput.setHint("");
+        }
+        mMonthInput = (EditText) mMainView.findViewById(R.id.expiration_month);
+        mYearInput = (EditText) mMainView.findViewById(R.id.expiration_year);
+        mExpirationContainer = mMainView.findViewById(R.id.expiration_container);
+        mNewCardLink = (TextView) mMainView.findViewById(R.id.new_card_link);
         mNewCardLink.setOnClickListener(this);
-        mErrorMessage = (TextView) v.findViewById(R.id.error_message);
-        mUseScreenlockCheckbox = (CheckBox) v.findViewById(R.id.use_screenlock_checkbox);
+        mErrorMessage = (TextView) mMainView.findViewById(R.id.error_message);
+        mUseScreenlockCheckbox = (CheckBox) mMainView.findViewById(R.id.use_screenlock_checkbox);
         mUseScreenlockCheckbox.setChecked(defaultUseScreenlockChecked);
         if (!shouldOfferWebauthn) {
             mUseScreenlockCheckbox.setVisibility(View.GONE);
             mUseScreenlockCheckbox.setChecked(false);
         }
-        mControlsContainer = (ViewGroup) v.findViewById(R.id.controls_container);
-        mVerificationOverlay = v.findViewById(R.id.verification_overlay);
-        mVerificationProgressBar = (ProgressBar) v.findViewById(R.id.verification_progress_bar);
-        mVerificationView = (TextView) v.findViewById(R.id.verification_message);
+        logCheckBoxInitialStateStats(mUseScreenlockCheckbox.isChecked());
+        mUseScreenlockCheckbox.setOnCheckedChangeListener(this);
+        mControlsContainer = (ViewGroup) mMainView.findViewById(R.id.controls_container);
+        mVerificationOverlay = mMainView.findViewById(R.id.verification_overlay);
+        mVerificationProgressBar =
+                (ProgressBar) mMainView.findViewById(R.id.verification_progress_bar);
+        mVerificationView = (TextView) mMainView.findViewById(R.id.verification_message);
         mSuccessMessageDurationMilliseconds = successMessageDurationMilliseconds;
-        ((ImageView) v.findViewById(R.id.cvc_hint_image)).setImageResource(cvcDrawableId);
+        ImageView cvcHintImage = (ImageView) mMainView.findViewById(R.id.cvc_hint_image);
+        cvcHintImage.setImageResource(cvcDrawableId);
+        cvcHintImage.setContentDescription(cvcImageAnnouncement);
 
-        Resources resources = context.getResources();
-        String modalDialogTitle = null;
-        if (isCardLocal) {
-            mTitleView.setVisibility(View.GONE);
-            modalDialogTitle = title;
-        } else {
-            updateTitleForCustomView(title, context);
-        }
         PropertyModel.Builder dialogModelBuilder =
                 new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
                         .with(ModalDialogProperties.CONTROLLER, this)
-                        .with(ModalDialogProperties.CUSTOM_VIEW, v)
+                        .with(ModalDialogProperties.CUSTOM_VIEW, mMainView)
                         .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT, confirmButtonLabel)
-                        .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT, resources,
-                                R.string.cancel);
-        if (modalDialogTitle != null) {
-            dialogModelBuilder.with(ModalDialogProperties.TITLE, modalDialogTitle);
-        }
+                        .with(
+                                ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
+                                context.getResources(),
+                                R.string.cancel)
+                        .with(
+                                ModalDialogProperties.BUTTON_STYLES,
+                                ModalDialogProperties.ButtonStyles.PRIMARY_FILLED_NEGATIVE_OUTLINE);
         mDialogModel = dialogModelBuilder.build();
 
         mShouldRequestExpirationDate = shouldRequestExpirationDate;
@@ -213,36 +254,38 @@ public class CardUnmaskPrompt
                 new InputFilter[] {new InputFilter.LengthFilter(mDelegate.getExpectedCvcLength())});
 
         // Hitting the "submit" button on the software keyboard should submit the form if valid.
-        mCardUnmaskInput.setOnEditorActionListener((v14, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                if (!mDialogModel.get(ModalDialogProperties.POSITIVE_BUTTON_DISABLED)) {
-                    onClick(mDialogModel, ModalDialogProperties.ButtonType.POSITIVE);
-                } else if (sObserverForTest != null) {
-                    sObserverForTest.onCardUnmaskPromptSubmitRejected(this);
-                }
-                return true;
-            }
-            return false;
-        });
+        mCardUnmaskInput.setOnEditorActionListener(
+                (v14, actionId, event) -> {
+                    if (actionId == EditorInfo.IME_ACTION_DONE) {
+                        if (!mDialogModel.get(ModalDialogProperties.POSITIVE_BUTTON_DISABLED)) {
+                            onClick(mDialogModel, ModalDialogProperties.ButtonType.POSITIVE);
+                        } else if (sObserverForTest != null) {
+                            sObserverForTest.onCardUnmaskPromptSubmitRejected(this);
+                        }
+                        return true;
+                    }
+                    return false;
+                });
 
         // Create the listeners to be notified when the user focuses out the input fields.
-        mCardUnmaskInput.setOnFocusChangeListener((v13, hasFocus) -> {
-            mDidFocusOnCvc = true;
-            validate();
-        });
-        mMonthInput.setOnFocusChangeListener((v12, hasFocus) -> {
-            mDidFocusOnMonth = true;
-            validate();
-        });
-        mYearInput.setOnFocusChangeListener((v1, hasFocus) -> {
-            mDidFocusOnYear = true;
-            validate();
-        });
+        mCardUnmaskInput.setOnFocusChangeListener(
+                (v13, hasFocus) -> {
+                    mDidFocusOnCvc = true;
+                    validate();
+                });
+        mMonthInput.setOnFocusChangeListener(
+                (v12, hasFocus) -> {
+                    mDidFocusOnMonth = true;
+                    validate();
+                });
+        mYearInput.setOnFocusChangeListener(
+                (v1, hasFocus) -> {
+                    mDidFocusOnYear = true;
+                    validate();
+                });
     }
 
-    /**
-     * Avoids disk reads for timezone when getting the default instance of Calendar.
-     */
+    /** Avoids disk reads for timezone when getting the default instance of Calendar. */
     private class CalendarTask extends AsyncTask<Calendar> {
         @Override
         protected Calendar doInBackground() {
@@ -253,7 +296,6 @@ public class CardUnmaskPrompt
         protected void onPostExecute(Calendar result) {
             mThisYear = result.get(Calendar.YEAR);
             mThisMonth = result.get(Calendar.MONTH) + 1;
-            if (mValidationWaitsForCalendarTask) validate();
         }
     }
 
@@ -281,12 +323,7 @@ public class CardUnmaskPrompt
     }
 
     public void update(String title, String instructions, boolean shouldRequestExpirationDate) {
-        if (mIsCardLocal) {
-            mDialogModel.set(ModalDialogProperties.TITLE, title);
-        } else {
-            updateTitleForCustomView(title, mContext);
-            mDialogModel.set(ModalDialogProperties.CUSTOM_VIEW, mMainView);
-        }
+        updateTitleForCustomView(title, mContext);
         mInstructions.setText(instructions);
         mShouldRequestExpirationDate = shouldRequestExpirationDate;
         if (mShouldRequestExpirationDate && (mThisYear == -1 || mThisMonth == -1)) {
@@ -296,21 +333,8 @@ public class CardUnmaskPrompt
     }
 
     private void updateTitleForCustomView(String title, Context context) {
-        Drawable mInlineTitleIcon = context.getDrawable(mGooglePayDrawableId);
-        // The first character will be replaced by the logo, and the consecutive spaces after
-        // are used as padding.
-        SpannableString titleWithLogo = new SpannableString("   " + title);
-        // How much the original logo should scale up in size to match height of text.
-        float scaleFactor = mTitleView.getTextSize() / mInlineTitleIcon.getIntrinsicHeight();
-        mInlineTitleIcon.setBounds(
-                /* left */ 0, /* top */ 0,
-                /* right */ (int) (scaleFactor * mInlineTitleIcon.getIntrinsicWidth()),
-                /* bottom */ (int) (scaleFactor * mInlineTitleIcon.getIntrinsicHeight()));
-        titleWithLogo.setSpan(new ImageSpan(mInlineTitleIcon, ImageSpan.ALIGN_CENTER),
-                /* start */ 0,
-                /* end */ 1,
-                /* flags */ Spannable.SPAN_INCLUSIVE_EXCLUSIVE);
-        mTitleView.setText(titleWithLogo, BufferType.SPANNABLE);
+        TextView titleView = (TextView) mMainView.findViewById(R.id.title);
+        titleView.setText(title);
     }
 
     public void dismiss(@DialogDismissalCause int dismissalCause) {
@@ -334,7 +358,11 @@ public class CardUnmaskPrompt
                 setInputsEnabled(true);
                 setInitialFocus();
 
-                if (!mShouldRequestExpirationDate) mNewCardLink.setVisibility(View.VISIBLE);
+                if (!mShouldRequestExpirationDate && !mIsVirtualCard) {
+                    mNewCardLink.setVisibility(View.VISIBLE);
+                } else {
+                    mNewCardLink.setVisibility(View.GONE);
+                }
             } else {
                 clearInputError();
                 setNoRetryError(errorMessage);
@@ -361,7 +389,7 @@ public class CardUnmaskPrompt
     /**
      * Validates the values of the input fields to determine whether the submit button should be
      * enabled. Also displays a detailed error message and highlights the fields for which the value
-     * is wrong. Finally checks whether the focuse should move to the next field.
+     * is wrong. Finally checks whether the focus should move to the next field.
      */
     private void validate() {
         @ErrorType int errorType = getExpirationAndCvcErrorType();
@@ -380,12 +408,6 @@ public class CardUnmaskPrompt
             }
         }
     }
-
-    @Override
-    public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-    @Override
-    public void onTextChanged(CharSequence s, int start, int before, int count) {}
 
     @Override
     public void onClick(View v) {
@@ -462,13 +484,14 @@ public class CardUnmaskPrompt
      *
      * @return The ErrorType value representing the type of error found for the unmask fields.
      */
-    @ErrorType private int getExpirationAndCvcErrorType() {
-        @ErrorType
-        int errorType = ErrorType.NONE;
+    @ErrorType
+    private int getExpirationAndCvcErrorType() {
+        @ErrorType int errorType = ErrorType.NONE;
 
         if (mShouldRequestExpirationDate) {
-            errorType = AutofillUiUtils.getExpirationDateErrorType(
-                    mMonthInput, mYearInput, mDidFocusOnMonth, mDidFocusOnYear);
+            errorType =
+                    AutofillUiUtils.getExpirationDateErrorType(
+                            mMonthInput, mYearInput, mDidFocusOnMonth, mDidFocusOnYear);
         }
 
         // If the CVC is valid, return the error type determined so far.
@@ -502,7 +525,7 @@ public class CardUnmaskPrompt
 
     /**
      * Sets the enabled state of the main contents, and hides or shows the verification overlay.
-     * @param enabled True if the inputs should be useable, false if the verification overlay
+     * @param enabled True if the inputs should be usable, false if the verification overlay
      *        obscures them.
      */
     private void setInputsEnabled(boolean enabled) {
@@ -526,17 +549,18 @@ public class CardUnmaskPrompt
             mVerificationOverlay.animate().alpha(1f).setDuration(durationMs);
             mControlsContainer.animate().alpha(0f).setDuration(durationMs);
         }
-        ViewCompat.setImportantForAccessibility(mControlsContainer,
-                contentsShowing ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-                                : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        ViewCompat.setImportantForAccessibility(
+                mControlsContainer,
+                contentsShowing
+                        ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                        : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         mControlsContainer.setDescendantFocusability(
-                contentsShowing ? ViewGroup.FOCUS_BEFORE_DESCENDANTS
-                                : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+                contentsShowing
+                        ? ViewGroup.FOCUS_BEFORE_DESCENDANTS
+                        : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
     }
 
-    /**
-     * Removes the error message on the inputs.
-     */
+    /** Removes the error message on the inputs. */
     private void clearInputError() {
         AutofillUiUtils.clearInputError(mErrorMessage);
         // Remove the highlight on the input fields.
@@ -544,22 +568,36 @@ public class CardUnmaskPrompt
                 ErrorType.NONE, mContext, mMonthInput, mYearInput, mCardUnmaskInput);
     }
 
-    /**
-     * Displays an error that indicates the user can't retry.
-     */
+    /** Displays an error that indicates the user can't retry. */
     private void setNoRetryError(String message) {
         mNoRetryErrorMessage.setText(message);
         mNoRetryErrorMessage.setVisibility(View.VISIBLE);
         mNoRetryErrorMessage.announceForAccessibility(message);
     }
 
+    private void logCheckBoxInitialStateStats(boolean isChecked) {
+        if (mUseScreenlockCheckbox.getVisibility() == View.VISIBLE) {
+            RecordHistogram.recordEnumeratedHistogram(
+                    "Autofill.CardUnmask.ScreenLockCheckBox.InitialState",
+                    isChecked ? CheckBoxStatus.CHECKED : CheckBoxStatus.UNCHECKED,
+                    CheckBoxStatus.NUM_ENTRIES);
+        } else {
+            RecordHistogram.recordEnumeratedHistogram(
+                    "Autofill.CardUnmask.ScreenLockCheckBox.InitialState",
+                    CheckBoxStatus.NOT_SHOWN,
+                    CheckBoxStatus.NUM_ENTRIES);
+        }
+    }
+
     @Override
     public void onClick(PropertyModel model, int buttonType) {
         if (buttonType == ModalDialogProperties.ButtonType.POSITIVE) {
-            mDelegate.onUserInput(mCardUnmaskInput.getText().toString(),
+            mDelegate.onUserInput(
+                    mCardUnmaskInput.getText().toString(),
                     mMonthInput.getText().toString(),
                     Integer.toString(AutofillUiUtils.getFourDigitYear(mYearInput)),
-                    mUseScreenlockCheckbox.isChecked());
+                    mUseScreenlockCheckbox.isChecked(),
+                    mUseScreenlockCheckbox.getVisibility() == View.VISIBLE);
         } else if (buttonType == ModalDialogProperties.ButtonType.NEGATIVE) {
             mModalDialogManager.dismissDialog(model, DialogDismissalCause.NEGATIVE_BUTTON_CLICKED);
         }
@@ -571,12 +609,18 @@ public class CardUnmaskPrompt
         mDialogModel = null;
     }
 
-    @VisibleForTesting
-    public static void setObserverForTest(CardUnmaskObserverForTest observerForTest) {
-        sObserverForTest = observerForTest;
+    @Override
+    public void onCheckedChanged(CompoundButton button, boolean isChecked) {
+        RecordHistogram.recordBooleanHistogram(
+                "Autofill.CardUnmask.ScreenLockCheckBox.UserChecked", isChecked);
     }
 
-    @VisibleForTesting
+    public static void setObserverForTest(CardUnmaskObserverForTest observerForTest) {
+        var oldValue = sObserverForTest;
+        sObserverForTest = observerForTest;
+        ResettersForTesting.register(() -> sObserverForTest = oldValue);
+    }
+
     public PropertyModel getDialogForTest() {
         return mDialogModel;
     }

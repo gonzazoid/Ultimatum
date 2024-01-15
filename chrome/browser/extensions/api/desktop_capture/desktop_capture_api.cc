@@ -50,9 +50,9 @@ DesktopCaptureChooseDesktopMediaFunction::Run() {
 
   mutable_args().erase(args().begin());
 
-  std::unique_ptr<api::desktop_capture::ChooseDesktopMedia::Params> params =
+  absl::optional<api::desktop_capture::ChooseDesktopMedia::Params> params =
       api::desktop_capture::ChooseDesktopMedia::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   // |target_render_frame_host| is the RenderFrameHost for which the stream is
   // created, and will also be used to determine where to show the picker's UI.
@@ -105,12 +105,12 @@ DesktopCaptureChooseDesktopMediaFunction::Run() {
   const bool exclude_system_audio =
       params->options &&
       params->options->system_audio ==
-          api::desktop_capture::SYSTEM_AUDIO_PREFERENCE_ENUM_EXCLUDE;
+          api::desktop_capture::SystemAudioPreferenceEnum::kExclude;
 
   const bool exclude_self_browser_surface =
       params->options &&
       params->options->self_browser_surface ==
-          api::desktop_capture::SELF_CAPTURE_PREFERENCE_ENUM_EXCLUDE;
+          api::desktop_capture::SelfCapturePreferenceEnum::kExclude;
 
   const bool suppress_local_audio_playback_intended =
       params->options &&
@@ -120,6 +120,14 @@ DesktopCaptureChooseDesktopMediaFunction::Run() {
                  exclude_self_browser_surface,
                  suppress_local_audio_playback_intended,
                  target_render_frame_host, origin, target_name);
+}
+
+bool DesktopCaptureChooseDesktopMediaFunction::
+    ShouldKeepWorkerAliveIndefinitely() {
+  // `desktopCapture.chooseDesktopMedia()` displays a chooser dialog for the
+  // user to select the media to share with the extension; thus, we keep the
+  // worker alive for an extended period.
+  return true;
 }
 
 std::string DesktopCaptureChooseDesktopMediaFunction::GetExtensionTargetName()

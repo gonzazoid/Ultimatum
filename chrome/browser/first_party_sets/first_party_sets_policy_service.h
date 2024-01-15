@@ -22,8 +22,11 @@ class BrowserContext;
 namespace net {
 class FirstPartySetsCacheFilter;
 class FirstPartySetsContextConfig;
+class FirstPartySetEntry;
 class SchemefulSite;
 }  // namespace net
+
+class Profile;
 
 namespace first_party_sets {
 
@@ -34,6 +37,19 @@ namespace first_party_sets {
 // BrowserContext.
 class FirstPartySetsPolicyService : public KeyedService {
  public:
+  enum class ServiceState {
+    // Related Website Sets is permanently disabled for this profile.
+    kPermanentlyDisabled,
+    // Related Website Sets is disabled (for now) for this profile. This may
+    // change as preferences change.
+    kDisabled,
+    // Related Website Sets is permanently enabled for this profile.
+    kPermanentlyEnabled,
+    // Related Website Sets is enabled (for now) for this profile. This may
+    // change as preferences change.
+    kEnabled,
+  };
+
   explicit FirstPartySetsPolicyService(content::BrowserContext* context);
   FirstPartySetsPolicyService(const FirstPartySetsPolicyService&) = delete;
   FirstPartySetsPolicyService& operator=(const FirstPartySetsPolicyService&) =
@@ -47,7 +63,6 @@ class FirstPartySetsPolicyService : public KeyedService {
   void ComputeFirstPartySetMetadata(
       const net::SchemefulSite& site,
       const net::SchemefulSite* top_frame_site,
-      const std::set<net::SchemefulSite>& party_context,
       base::OnceCallback<void(net::FirstPartySetMetadata)> callback);
 
   // Stores `access_delegate` in a RemoteSet for later IPC calls on it when this
@@ -69,9 +84,8 @@ class FirstPartySetsPolicyService : public KeyedService {
   // First-Party Sets enabled pref changes.
   void OnFirstPartySetsEnabledChanged(bool enabled);
 
-  // Invoke the callback synchronously to resume navigation if the instance is
-  // ready; or stores the callback to be invoked when this service is ready to
-  // do so.
+  // Stores the callback to be invoked when this service is ready to do so. Must
+  // not be called when FPS is not enabled or the service is already ready.
   void RegisterThrottleResumeCallback(base::OnceClosure resume_callback);
 
   // KeyedService:
@@ -90,6 +104,19 @@ class FirstPartySetsPolicyService : public KeyedService {
 
   // Exposes `Init` for use in tests.
   void InitForTesting();
+
+  // Returns true iff the Related Website Sets service is enabled.
+  bool is_enabled() const {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    switch (service_state_) {
+      case ServiceState::kPermanentlyDisabled:
+      case ServiceState::kDisabled:
+        return false;
+      case ServiceState::kPermanentlyEnabled:
+      case ServiceState::kEnabled:
+        return true;
+    }
+  }
 
   // Returns true when this instance has received the config thus has been fully
   // initialized.
@@ -114,6 +141,21 @@ class FirstPartySetsPolicyService : public KeyedService {
   absl::optional<net::FirstPartySetEntry> FindEntry(
       const net::SchemefulSite& site);
 
+  // Synchronously iterate over the effective First-Party Sets entries in use by
+  // this profile (i.e. all the entries that could be returned by `FindEntry`,
+  // including the manual set, policy sets, and public sets).
+  //
+  // Returns early if any of the iterations returns false.
+  // Returns false if service is not ready, or First-Party Sets was not yet
+  // initialized, or iteration was incomplete;
+  // Returns true if all iterations returned true. No guarantees are made re:
+  // iteration order.
+  //
+  // This also logs metrics that track how often this is queried before ready.
+  bool ForEachEffectiveSetEntry(
+      base::FunctionRef<bool(const net::SchemefulSite&,
+                             const net::FirstPartySetEntry&)> f) const;
+
   // Checks if ownership of `site` is managed by an enterprise.
   //
   // Note: this doesn't consider `site` as managed if it was removed by an
@@ -123,6 +165,10 @@ class FirstPartySetsPolicyService : public KeyedService {
   content::BrowserContext* browser_context() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return browser_context_;
+  }
+
+  base::WeakPtr<first_party_sets::FirstPartySetsPolicyService> GetWeakPtr() {
+    return weak_factory_.GetWeakPtr();
   }
 
  private:
@@ -138,7 +184,7 @@ class FirstPartySetsPolicyService : public KeyedService {
   //
   // Only clears site data if First-Party Sets is enabled when this service
   // is created.
-  void OnProfileConfigReady(bool initially_enabled,
+  void OnProfileConfigReady(ServiceState initial_state,
                             net::FirstPartySetsContextConfig config);
 
   // Like ComputeFirstPartySetMetadata, but passes the result into the provided
@@ -146,14 +192,11 @@ class FirstPartySetsPolicyService : public KeyedService {
   void ComputeFirstPartySetMetadataInternal(
       const net::SchemefulSite& site,
       const absl::optional<net::SchemefulSite>& top_frame_site,
-      const std::set<net::SchemefulSite>& party_context,
       base::OnceCallback<void(net::FirstPartySetMetadata)> callback) const;
 
-  // Returns true iff the preference and feature are both enabled.
-  bool is_enabled() const {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    return feature_enabled_ && pref_enabled_;
-  }
+  // Clears the content settings associated with `profile` that were
+  // affected/mediated by First-Party Sets.
+  void ClearContentSettings(Profile* profile) const;
 
   // The remote delegates associated with the profile that created this
   // service.
@@ -165,20 +208,14 @@ class FirstPartySetsPolicyService : public KeyedService {
   raw_ptr<content::BrowserContext> browser_context_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
-  // Whether FPS is enabled globally.
-  //
-  // Initialized to true for the sake of tests, so that queries received before
-  // service initialization can be accumulated and answered after test setup,
-  // rather than answered immediately in the negative.
-  bool feature_enabled_ GUARDED_BY_CONTEXT(sequence_checker_) = true;
-
   // Whether FPS is enabled in this context. Note that this may be true even if
-  // FPS is globally disabled.
+  // FPS is globally disabled (e.g. disabled by the embedder).
   //
-  // Initialized to true for the sake of tests, so that queries received before
-  // service initialization can be accumulated and answered after test setup,
-  // rather than answered immediately in the negative.
-  bool pref_enabled_ GUARDED_BY_CONTEXT(sequence_checker_) = true;
+  // Initialized to `kEnabled` for the sake of tests, so that queries received
+  // before service initialization can be accumulated and answered after test
+  // setup, rather than answered immediately in the negative.
+  ServiceState service_state_ GUARDED_BY_CONTEXT(sequence_checker_) =
+      ServiceState::kEnabled;
 
   // The customizations to the browser's list of First-Party Sets to respect
   // the changes specified by this FirstPartySetsOverrides policy for the
@@ -204,7 +241,8 @@ class FirstPartySetsPolicyService : public KeyedService {
 
   // Tracks the number of queries to the First-Party Sets in the browser process
   // are received before the `global_sets_` are initialized.
-  int num_queries_before_sets_ready_ GUARDED_BY_CONTEXT(sequence_checker_) = 0;
+  mutable int num_queries_before_sets_ready_
+      GUARDED_BY_CONTEXT(sequence_checker_) = 0;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

@@ -16,11 +16,11 @@
 #include <vector>
 
 #include "base/big_endian.h"
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -28,11 +28,11 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/gtest_util.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -47,6 +47,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/testing_pref_store.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "components/sync_preferences/pref_service_mock_factory.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "content/public/browser/global_routing_id.h"
@@ -196,7 +197,7 @@ class NullWebRtcEventLogUploader : public WebRtcEventLogUploader {
     EXPECT_TRUE(cancellation_expected_);
     was_cancelled_ = true;
     if (callback_) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(callback_), log_file_.path, false));
     }
@@ -261,8 +262,7 @@ class WebRtcEventLogManagerTestBase : public ::testing::Test {
  public:
   WebRtcEventLogManagerTestBase()
       : test_shared_url_loader_factory_(
-            base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-                &test_url_loader_factory_)),
+            test_url_loader_factory_.GetSafeWeakWrapper()),
         run_loop_(std::make_unique<base::RunLoop>()),
         uploader_run_loop_(std::make_unique<base::RunLoop>()),
         browser_context_(nullptr),
@@ -1233,7 +1233,7 @@ class WebRtcEventLogManagerTestIncognito
         std::make_unique<MockRenderProcessHost>(incognito_profile_);
   }
 
-  raw_ptr<Profile> incognito_profile_;
+  raw_ptr<Profile, DanglingUntriaged> incognito_profile_;
   std::unique_ptr<MockRenderProcessHost> incognito_rph_;
 };
 
@@ -1354,7 +1354,7 @@ class FileListExpectingWebRtcEventLogUploader : public WebRtcEventLogUploader {
                                           bool result,
                                           UploadResultCallback callback)
       : log_file_(log_file) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), log_file_.path, result));
   }
 
@@ -1956,18 +1956,15 @@ TEST_F(WebRtcEventLogManagerTest, LocalLogFilenameMatchesExpectedFormat) {
   ON_CALL(local_observer_, OnLocalLogStarted(key, _))
       .WillByDefault(Invoke(SaveFilePathTo(&file_path)));
 
-  const base::Time::Exploded frozen_time_exploded{
-      2017,  // Four digit year "2007"
-      9,     // 1-based month (values 1 = January, etc.)
-      3,     // 0-based day of week (0 = Sunday, etc.)
-      6,     // 1-based day of month (1-31)
-      10,    // Hour within the current day (0-23)
-      43,    // Minute within the current hour (0-59)
-      29,    // Second within the current minute.
-      0      // Milliseconds within the current second (0-999)
-  };
-  ASSERT_TRUE(frozen_time_exploded.HasValidValues());
-  FreezeClockAt(frozen_time_exploded);
+  static constexpr base::Time::Exploded kFrozenTime = {.year = 2017,
+                                                       .month = 9,
+                                                       .day_of_week = 3,
+                                                       .day_of_month = 6,
+                                                       .hour = 10,
+                                                       .minute = 43,
+                                                       .second = 29};
+  ASSERT_TRUE(kFrozenTime.HasValidValues());
+  FreezeClockAt(kFrozenTime);
 
   const StringType user_defined = FILE_PATH_LITERAL("user_defined");
   const base::FilePath local_logs_base_path =
@@ -2003,18 +2000,15 @@ TEST_F(WebRtcEventLogManagerTest,
       .WillOnce(Invoke(SaveFilePathTo(&file_path_1)))
       .WillOnce(Invoke(SaveFilePathTo(&file_path_2)));
 
-  const base::Time::Exploded frozen_time_exploded{
-      2017,  // Four digit year "2007"
-      9,     // 1-based month (values 1 = January, etc.)
-      3,     // 0-based day of week (0 = Sunday, etc.)
-      6,     // 1-based day of month (1-31)
-      10,    // Hour within the current day (0-23)
-      43,    // Minute within the current hour (0-59)
-      29,    // Second within the current minute.
-      0      // Milliseconds within the current second (0-999)
-  };
-  ASSERT_TRUE(frozen_time_exploded.HasValidValues());
-  FreezeClockAt(frozen_time_exploded);
+  static constexpr base::Time::Exploded kFrozenTime = {.year = 2017,
+                                                       .month = 9,
+                                                       .day_of_week = 3,
+                                                       .day_of_month = 6,
+                                                       .hour = 10,
+                                                       .minute = 43,
+                                                       .second = 29};
+  ASSERT_TRUE(kFrozenTime.HasValidValues());
+  FreezeClockAt(kFrozenTime);
 
   const StringType user_defined_portion = FILE_PATH_LITERAL("user_defined");
   const base::FilePath local_logs_base_path =
@@ -3893,6 +3887,10 @@ TEST_F(WebRtcEventLogManagerTestCacheClearing,
   ClearCacheForBrowserContext(browser_context_.get(), base::Time::Min(),
                               base::Time::Max());
   WaitForPendingTasks(&run_loop);
+
+  // Restore factory before `run_loop` goes out of scope.
+  SetWebRtcEventLogUploaderFactoryForTesting(
+      std::make_unique<NullWebRtcEventLogUploader::Factory>(true));
 }
 
 TEST_P(WebRtcEventLogManagerTestWithRemoteLoggingDisabled,
@@ -4007,18 +4005,17 @@ std::unique_ptr<user_manager::ScopedUserManager>
 WebRtcEventLogManagerTestPolicy::GetScopedUserManager(
     user_manager::UserType user_type) {
   const AccountId kAccountId = AccountId::FromUserEmailGaiaId("name", "id");
-  auto mock_user_manager =
-      std::make_unique<testing::NiceMock<ash::FakeChromeUserManager>>();
+  auto fake_user_manager = std::make_unique<ash::FakeChromeUserManager>();
   // On Chrome OS, there are different user types, some of which can be
   // affiliated with the device if the device is enterprise-enrolled, i.e. the
   // logged in account belongs to the org that owns the device. For our
   // purposes here, affiliation does not matter for the determination of the
   // policy default, so we can set it to false here. We do not need a user
   // to profile mapping either, so profile can be a nullptr.
-  mock_user_manager->AddUserWithAffiliationAndTypeAndProfile(
+  fake_user_manager->AddUserWithAffiliationAndTypeAndProfile(
       kAccountId, /*is_affiliated*/ false, user_type, /*profile*/ nullptr);
   return std::make_unique<user_manager::ScopedUserManager>(
-      std::move(mock_user_manager));
+      std::move(fake_user_manager));
 }
 #endif
 

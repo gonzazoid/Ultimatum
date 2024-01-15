@@ -2,17 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 #include "remoting/ios/persistence/remoting_keychain.h"
 
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/base64.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/rand_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -25,10 +21,7 @@ const char kTestServicePrefix[] =
     "com.google.ChromeRemoteDesktop.RemotingKeychainTest.";
 
 std::string RandomBase64String(int byte_length) {
-  std::string random_bytes = base::RandBytesAsString(byte_length);
-  std::string random_string;
-  base::Base64Encode(random_bytes, &random_string);
-  return random_string;
+  return base::Base64Encode(base::RandBytesAsVector(byte_length));
 }
 
 NSString* KeyToService(Keychain::Key key) {
@@ -51,7 +44,7 @@ void VerifyNoKeychainForKey(Keychain::Key key) {
     (__bridge NSString*)kSecAttrService : KeyToService(key),
     (__bridge NSString*)kSecReturnData : @YES,
   };
-  base::ScopedCFTypeRef<CFTypeRef> cf_result;
+  base::apple::ScopedCFTypeRef<CFTypeRef> cf_result;
   OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)get_all_query,
                                         cf_result.InitializeInto());
   ASSERT_EQ(errSecItemNotFound, status);

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/tab_dialogs.h"
@@ -36,8 +36,9 @@ class TableModel;
 }
 
 class DeprecatedAppsDialogView : public views::DialogDelegateView {
+  METADATA_HEADER(DeprecatedAppsDialogView, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(DeprecatedAppsDialogView);
   DeprecatedAppsDialogView(const DeprecatedAppsDialogView&) = delete;
   DeprecatedAppsDialogView& operator=(const DeprecatedAppsDialogView&) = delete;
   ~DeprecatedAppsDialogView() override;
@@ -94,12 +95,12 @@ class DeprecatedAppsDialogView : public views::DialogDelegateView {
 
   raw_ptr<views::Label> info_label_;
 
-  absl::optional<std::u16string> launched_extension_name_;
+  std::optional<std::u16string> launched_extension_name_;
   std::set<extensions::ExtensionId> deprecated_app_ids_;
-  absl::optional<std::u16string> single_app_name_;
+  std::optional<std::u16string> single_app_name_;
   base::OnceClosure launch_anyways_;
 
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
 
   base::WeakPtrFactory<DeprecatedAppsDialogView> weak_ptr_factory_{this};
 };

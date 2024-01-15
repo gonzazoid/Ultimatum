@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
@@ -17,7 +18,6 @@
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -64,7 +64,7 @@ class CONTENT_EXPORT SynchronousCompositor {
     std::unique_ptr<viz::CompositorFrame> frame;
     // Invalid if |frame| is nullptr.
     viz::LocalSurfaceId local_surface_id;
-    absl::optional<viz::HitTestRegionList> hit_test_region_list;
+    std::optional<viz::HitTestRegionList> hit_test_region_list;
   };
 
   class FrameFuture : public base::RefCountedThreadSafe<FrameFuture> {
@@ -84,6 +84,9 @@ class CONTENT_EXPORT SynchronousCompositor {
 #endif
   };
 
+  virtual void OnCompositorVisible() = 0;
+  virtual void OnCompositorHidden() = 0;
+
   // "On demand" hardware draw. Parameters are used by compositor for this draw.
   // |viewport_size| is the current size to improve results during resize.
   // |viewport_rect_for_tile_priority| and |transform_for_tile_priority| are
@@ -99,7 +102,7 @@ class CONTENT_EXPORT SynchronousCompositor {
       uint32_t layer_tree_frame_sink_id,
       std::vector<viz::ReturnedResource> resources) = 0;
 
-  // Notifies the client when a directive for DocumentTransition, submitted in
+  // Notifies the client when a directive for ViewTransition, submitted in
   // a previous CompositorFrame, has finished executing.
   virtual void OnCompositorFrameTransitionDirectiveProcessed(
       uint32_t layer_tree_frame_sink_id,

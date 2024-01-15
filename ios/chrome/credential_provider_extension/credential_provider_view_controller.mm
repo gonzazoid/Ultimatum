@@ -25,12 +25,9 @@
 #import "ios/chrome/credential_provider_extension/reauthentication_handler.h"
 #import "ios/chrome/credential_provider_extension/ui/consent_coordinator.h"
 #import "ios/chrome/credential_provider_extension/ui/credential_list_coordinator.h"
+#import "ios/chrome/credential_provider_extension/ui/credential_response_handler.h"
 #import "ios/chrome/credential_provider_extension/ui/feature_flags.h"
 #import "ios/chrome/credential_provider_extension/ui/stale_credentials_view_controller.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 UIColor* BackgroundColor() {
@@ -39,7 +36,8 @@ UIColor* BackgroundColor() {
 }
 
 @interface CredentialProviderViewController () <ConfirmationAlertActionHandler,
-                                                SuccessfulReauthTimeAccessor>
+                                                SuccessfulReauthTimeAccessor,
+                                                CredentialResponseHandler>
 
 // Interface for the persistent credential store.
 @property(nonatomic, strong) id<CredentialStore> credentialStore;
@@ -78,9 +76,7 @@ UIColor* BackgroundColor() {
 
 + (void)initialize {
   if (self == [CredentialProviderViewController self]) {
-    if (crash_helper::common::CanUseCrashpad()) {
-      crash_helper::common::StartCrashpad();
-    }
+    crash_helper::common::StartCrashpad();
   }
 }
 
@@ -163,9 +159,9 @@ UIColor* BackgroundColor() {
 }
 
 - (void)prepareInterfaceForExtensionConfiguration {
-  self.consentCoordinator = [[ConsentCoordinator alloc]
-      initWithBaseViewController:self
-                         context:self.extensionContext];
+  self.consentCoordinator =
+      [[ConsentCoordinator alloc] initWithBaseViewController:self
+                                   credentialResponseHandler:self];
   [self.consentCoordinator start];
 }
 
@@ -228,18 +224,12 @@ UIColor* BackgroundColor() {
   id<Credential> credential =
       [self.credentialStore credentialWithRecordIdentifier:identifier];
   if (credential) {
-    NSString* password =
-        PasswordWithKeychainIdentifier(credential.keychainIdentifier);
-    if (password) {
-      UpdateUMACountForKey(
-          app_group::kCredentialExtensionQuickPasswordUseCount);
-      ASPasswordCredential* ASCredential =
-          [ASPasswordCredential credentialWithUser:credential.user
-                                          password:password];
-      [self.extensionContext completeRequestWithSelectedCredential:ASCredential
-                                                 completionHandler:nil];
-      return;
-    }
+    UpdateUMACountForKey(app_group::kCredentialExtensionQuickPasswordUseCount);
+    ASPasswordCredential* ASCredential =
+        [ASPasswordCredential credentialWithUser:credential.user
+                                        password:credential.password];
+    [self completeRequestWithSelectedCredential:ASCredential];
+    return;
   }
   [self exitWithErrorCode:ASExtensionErrorCodeCredentialIdentityNotFound];
 }
@@ -318,15 +308,27 @@ UIColor* BackgroundColor() {
   self.listCoordinator = [[CredentialListCoordinator alloc]
       initWithBaseViewController:self
                  credentialStore:self.credentialStore
-                         context:self.extensionContext
               serviceIdentifiers:serviceIdentifiers
-         reauthenticationHandler:self.reauthenticationHandler];
+         reauthenticationHandler:self.reauthenticationHandler
+       credentialResponseHandler:self];
   [self.listCoordinator start];
   UpdateUMACountForKey(app_group::kCredentialExtensionDisplayCount);
 }
 
+// Convenience wrapper for
+// -completeRequestWithSelectedCredential:completionHandler:.
+- (void)completeRequestWithSelectedCredential:
+    (ASPasswordCredential*)credential {
+  [self.listCoordinator stop];
+  self.listCoordinator = nil;
+  [self.extensionContext completeRequestWithSelectedCredential:credential
+                                             completionHandler:nil];
+}
+
 // Convenience wrapper for -cancelRequestWithError.
 - (void)exitWithErrorCode:(ASExtensionErrorCode)errorCode {
+  [self.listCoordinator stop];
+  self.listCoordinator = nil;
   NSError* error = [[NSError alloc] initWithDomain:ASExtensionErrorDomain
                                               code:errorCode
                                           userInfo:nil];
@@ -350,6 +352,22 @@ UIColor* BackgroundColor() {
 
 - (void)confirmationAlertPrimaryAction {
   // No-op.
+}
+
+#pragma mark - CredentialResponseHandler
+
+- (void)userSelectedCredential:(ASPasswordCredential*)credential {
+  [self completeRequestWithSelectedCredential:credential];
+}
+
+- (void)userCancelledRequestWithErrorCode:(ASExtensionErrorCode)errorCode {
+  [self exitWithErrorCode:errorCode];
+}
+
+- (void)completeExtensionConfigurationRequest {
+  [self.consentCoordinator stop];
+  self.consentCoordinator = nil;
+  [self.extensionContext completeExtensionConfigurationRequest];
 }
 
 @end

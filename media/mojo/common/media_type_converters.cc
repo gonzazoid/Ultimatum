@@ -46,6 +46,39 @@ TypeConverter<std::unique_ptr<media::DecryptConfig>,
 }
 
 // static
+media::mojom::DecoderBufferSideDataPtr
+TypeConverter<media::mojom::DecoderBufferSideDataPtr,
+              absl::optional<media::DecoderBufferSideData>>::
+    Convert(const absl::optional<media::DecoderBufferSideData>& input) {
+  if (!input.has_value()) {
+    return nullptr;
+  }
+  media::mojom::DecoderBufferSideDataPtr mojo_side_data(
+      media::mojom::DecoderBufferSideData::New());
+  mojo_side_data->alpha_data = input->alpha_data;
+  mojo_side_data->spatial_layers = input->spatial_layers;
+  mojo_side_data->secure_handle = input->secure_handle;
+
+  return mojo_side_data;
+}
+
+// static
+absl::optional<media::DecoderBufferSideData>
+TypeConverter<absl::optional<media::DecoderBufferSideData>,
+              media::mojom::DecoderBufferSideDataPtr>::
+    Convert(const media::mojom::DecoderBufferSideDataPtr& input) {
+  if (!input) {
+    return absl::nullopt;
+  }
+  auto side_data = absl::make_optional<media::DecoderBufferSideData>(
+      media::DecoderBufferSideData());
+  side_data->alpha_data = input->alpha_data;
+  side_data->spatial_layers = input->spatial_layers;
+  side_data->secure_handle = input->secure_handle;
+  return side_data;
+}
+
+// static
 media::mojom::DecoderBufferPtr
 TypeConverter<media::mojom::DecoderBufferPtr, media::DecoderBuffer>::Convert(
     const media::DecoderBuffer& input) {
@@ -64,12 +97,8 @@ TypeConverter<media::mojom::DecoderBufferPtr, media::DecoderBuffer>::Convert(
   mojo_buffer->front_discard = input.discard_padding().first;
   mojo_buffer->back_discard = input.discard_padding().second;
 
-  // Note: The side data is always small, so this copy is okay.
-  if (input.side_data()) {
-    DCHECK_GT(input.side_data_size(), 0u);
-    mojo_buffer->side_data.assign(input.side_data(),
-                                  input.side_data() + input.side_data_size());
-  }
+  mojo_buffer->side_data =
+      media::mojom::DecoderBufferSideData::From(input.side_data());
 
   if (input.decrypt_config()) {
     mojo_buffer->decrypt_config =
@@ -92,10 +121,12 @@ TypeConverter<scoped_refptr<media::DecoderBuffer>,
     return media::DecoderBuffer::CreateEOSBuffer();
 
   scoped_refptr<media::DecoderBuffer> buffer(
-      new media::DecoderBuffer(input->data_size));
+      new media::DecoderBuffer(base::strict_cast<size_t>(input->data_size)));
 
-  if (!input->side_data.empty())
-    buffer->CopySideDataFrom(input->side_data.data(), input->side_data.size());
+  if (input->side_data) {
+    buffer->set_side_data(
+        input->side_data.To<absl::optional<media::DecoderBufferSideData>>());
+  }
 
   buffer->set_timestamp(input->timestamp);
   buffer->set_duration(input->duration);
@@ -131,9 +162,15 @@ TypeConverter<media::mojom::AudioBufferPtr, media::AudioBuffer>::Convert(
   buffer->timestamp = input.timestamp();
 
   if (input.data_) {
+    // `input.data_->span()` refers to the whole memory buffer given to the
+    // `media::AudioBuffer`.
+    // `data_size()` refers to the amount of memory really used by the audio
+    // data. The rest is padding, which we don't need to copy.
     DCHECK_GT(input.data_size(), 0u);
-    buffer->data.assign(input.data_.get(),
-                        input.data_.get() + input.data_size_);
+    DCHECK_GE(input.data_size(), input.data_->span().size());
+    auto buffer_start = input.data_->span().begin();
+    auto buffer_end = buffer_start + input.data_size();
+    buffer->data.assign(buffer_start, buffer_end);
   }
 
   return buffer;

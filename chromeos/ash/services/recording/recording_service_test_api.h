@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_ASH_SERVICES_RECORDING_RECORDING_SERVICE_TEST_API_H_
 #define CHROMEOS_ASH_SERVICES_RECORDING_RECORDING_SERVICE_TEST_API_H_
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/ash/services/recording/public/mojom/recording_service.mojom.h"
 #include "chromeos/ash/services/recording/recording_service.h"
 #include "media/base/video_frame.h"
@@ -58,6 +58,13 @@ class RecordingServiceTestApi {
                               const gfx::Rect& content_rect)>;
   void RequestAndWaitForVideoFrame(
       VerifyVideoFrameCallback verify_frame_callback = base::NullCallback());
+
+  // Returns true if the recording service is currently recording audio.
+  bool IsDoingAudioRecording() const;
+
+  // Returns the number of audio capturers currently owned by the recording
+  // service.
+  int GetNumberOfAudioCapturers() const;
 
  private:
   // The actual recording service instance.

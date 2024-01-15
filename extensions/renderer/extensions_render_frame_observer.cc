@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/renderer/render_frame.h"
@@ -20,6 +20,7 @@
 #include "third_party/blink/public/common/logging/logging_utils.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_view.h"
 
 namespace extensions {
 
@@ -95,6 +96,11 @@ ExtensionsRenderFrameObserver::~ExtensionsRenderFrameObserver() {
 void ExtensionsRenderFrameObserver::BindAppWindowReceiver(
     mojo::PendingReceiver<mojom::AppWindow> receiver) {
   receivers_.Add(this, std::move(receiver));
+}
+
+void ExtensionsRenderFrameObserver::SetSupportsAppRegion(
+    bool supports_app_region) {
+  render_frame()->GetWebView()->SetSupportsAppRegion(supports_app_region);
 }
 
 void ExtensionsRenderFrameObserver::SetVisuallyDeemphasized(bool deemphasized) {

@@ -6,6 +6,7 @@
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_ENTITY_ANNOTATOR_NATIVE_LIBRARY_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/native_library.h"
@@ -17,7 +18,7 @@ namespace optimization_guide {
 // Enumerates the statuses possible when creating an entity annotator.
 //
 // Keep this in sync with
-// OptimizationGuidePageEntitiesModelExecutorCreationStatus in enums.xml.
+// OptimizationGuideEntityAnnotatorCreationStatus in enums.xml.
 enum class EntityAnnotatorCreationStatus {
   kUnknown = 0,
   // The entity annotator was created successfully.
@@ -79,12 +80,12 @@ class EntityAnnotatorNativeLibrary {
   void DeleteEntityAnnotator(void* entity_annotator);
 
   // Uses |annotator| to annotate entities present in |text|.
-  absl::optional<std::vector<ScoredEntityMetadata>> AnnotateText(
+  std::optional<std::vector<ScoredEntityMetadata>> AnnotateText(
       void* annotator,
       const std::string& text);
 
   // Returns entity metadata from |annotator| for |entity_id|.
-  absl::optional<EntityMetadata> GetEntityMetadataForEntityId(
+  std::optional<EntityMetadata> GetEntityMetadataForEntityId(
       void* annotator,
       const std::string& entity_id);
 

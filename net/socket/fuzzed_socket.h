@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "net/base/completion_once_callback.h"
@@ -81,7 +82,6 @@ class FuzzedSocket : public TransportClientSocket {
   int GetLocalAddress(IPEndPoint* address) const override;
   const NetLogWithSource& NetLog() const override;
   bool WasEverUsed() const override;
-  bool WasAlpnNegotiated() const override;
   NextProto GetNegotiatedProtocol() const override;
   bool GetSSLInfo(SSLInfo* ssl_info) override;
   int64_t GetTotalReceivedBytes() const override;
@@ -102,7 +102,7 @@ class FuzzedSocket : public TransportClientSocket {
   // See https://crbug.com/823012
   bool ForceSync() const;
 
-  FuzzedDataProvider* data_provider_;
+  raw_ptr<FuzzedDataProvider> data_provider_;
 
   // If true, the result of the Connect() call is fuzzed - it can succeed or
   // fail with a variety of connection errors, and it can complete synchronously

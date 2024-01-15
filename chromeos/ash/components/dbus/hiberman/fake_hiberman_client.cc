@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -33,25 +33,25 @@ FakeHibermanClient* FakeHibermanClient::Get() {
   return g_instance;
 }
 
-void FakeHibermanClient::ResumeFromHibernate(
-    const std::string& account_id,
-    ResumeFromHibernateCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+bool FakeHibermanClient::IsAlive() const {
+  return true;
 }
 
-void FakeHibermanClient::ResumeFromHibernateAS(
-    const std::string& auth_session_id,
-    ResumeFromHibernateCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+bool FakeHibermanClient::IsEnabled() const {
+  return true;
 }
+
+void FakeHibermanClient::ResumeFromHibernate(
+    const std::string& account_id,
+    const std::string& auth_session_id) {}
 
 void FakeHibermanClient::WaitForServiceToBeAvailable(
     chromeos::WaitForServiceToBeAvailableCallback callback) {
   // Sure, the service is available now!
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
+
+void FakeHibermanClient::AbortResumeHibernate(const std::string& reason) {}
 
 }  // namespace ash

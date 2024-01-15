@@ -56,7 +56,7 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
 
 @fragment
 fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
-  return textureSampleLevel(myTexture, mySampler, fragUV);
+  return textureSampleBaseClampToEdge(myTexture, mySampler, fragUV);
 }
 `,
   };
@@ -94,6 +94,7 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
     importExternalTextureTest: function(
       device, context, video) {
         const blitPipeline = device.createRenderPipeline({
+          layout: 'auto',
           vertex: {
             module: device.createShaderModule({
               code: wgslShaders.vertex,
@@ -143,7 +144,9 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
           colorAttachments: [
             {
               view: context.getCurrentTexture().createView(),
-              loadValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+              loadOp: 'clear',
+              clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+              storeOp: 'store',
             },
           ],
         };
@@ -154,14 +157,15 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
         passEncoder.setPipeline(blitPipeline);
         passEncoder.setBindGroup(0, bindGroup);
         passEncoder.draw(4, 1, 0, 0);
-        passEncoder.endPass();
+        passEncoder.end();
 
         device.queue.submit([commandEncoder.finish()]);
     },
 
     uploadToGPUTextureTest: function(
-      device, context, canvasImageSource, options) {
+      device, context, canvasImageSource) {
       const blitPipeline = device.createRenderPipeline({
+        layout: 'auto',
         vertex: {
           module: device.createShaderModule({
             code: wgslShaders.vertex,
@@ -192,45 +196,19 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
 
       let texture;
 
-      if (options.useImport) {
-        texture = device.experimentalImportTexture(
-          canvasImageSource,
-          GPUTextureUsage.TEXTURE_BINDING
-        );
-      } else {
-        texture = device.createTexture({
-          size: [canvasImageSource.width, canvasImageSource.height],
-          format: 'rgba8unorm',
-          usage: GPUTextureUsage.COPY_DST |
-                 GPUTextureUsage.RENDER_ATTACHMENT |
-                 GPUTextureUsage.TEXTURE_BINDING
-        });
-      }
+      texture = device.createTexture({
+        size: [canvasImageSource.width, canvasImageSource.height],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.COPY_DST |
+               GPUTextureUsage.RENDER_ATTACHMENT |
+               GPUTextureUsage.TEXTURE_BINDING
+      });
 
-      // Use copyExternalImageToTexture()
-      if (!options.useImport) {
-        let imageCopyExternalImage;
-
-        // TODO(crbug.com/1257856): This test use the temporary origin
-        // config to fix flip issue. It should be removed when we change
-        // the default behaviour.
-        if (options.isWebGLCanvas) {
-          imageCopyExternalImage = { source: canvasImageSource,
-                                     origin: {x: 0, y: 0},
-                                     temporaryOriginBottomLeftIfWebGL: false
-                                   };
-        } else {
-          imageCopyExternalImage = { source: canvasImageSource,
-                                     origin: {x: 0, y: 0}
-                                   };
-        }
-
-        device.queue.copyExternalImageToTexture(
-          imageCopyExternalImage,
-          {texture},
-          [canvasImageSource.width, canvasImageSource.height]
-        );
-      }
+      device.queue.copyExternalImageToTexture(
+        {source: canvasImageSource, origin: [0, 0]},
+        {texture},
+        [canvasImageSource.width, canvasImageSource.height]
+      );
 
       const bindGroup = device.createBindGroup({
         layout: blitPipeline.getBindGroupLayout(0),
@@ -250,7 +228,9 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
         colorAttachments: [
           {
             view: context.getCurrentTexture().createView(),
-            loadValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+            loadOp: 'clear',
+            clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+            storeOp: 'store',
           },
         ],
       };
@@ -260,13 +240,14 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
       passEncoder.setPipeline(blitPipeline);
       passEncoder.setBindGroup(0, bindGroup);
       passEncoder.draw(4, 1, 0, 0);
-      passEncoder.endPass();
+      passEncoder.end();
 
       device.queue.submit([commandEncoder.finish()]);
     },
 
     fourColorsTest: function(device, context, width, height) {
       const clearPipeline = device.createRenderPipeline({
+        layout: 'auto',
         vertex: {
           module: device.createShaderModule({
             code: wgslShaders.vertex,
@@ -302,7 +283,9 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
         colorAttachments: [
           {
             view: context.getCurrentTexture().createView(),
-            loadValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+            loadOp: 'clear',
+            clearValue: {r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+            storeOp: 'store',
           },
         ],
       };
@@ -327,7 +310,7 @@ fn main(@location(0) fragUV : vec2<f32>) -> @location(0) vec4<f32> {
       passEncoder.setScissorRect(width / 2, 0, width / 2, height / 2);
       passEncoder.draw(4, 1, 0, 0);
 
-      passEncoder.endPass();
+      passEncoder.end();
       device.queue.submit([commandEncoder.finish()]);
     },
   };

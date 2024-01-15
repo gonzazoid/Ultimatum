@@ -1,0 +1,4 @@
+This is a wdspec test.
+[FAIL] test_touch_pointer_properties_tilt_twist
+  assert 90 == 21
+Harness: the test ran to completion.

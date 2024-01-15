@@ -5,13 +5,14 @@
 #ifndef CONTENT_SERVICES_AUCTION_WORKLET_SET_PRIORITY_SIGNALS_OVERRIDE_BINDINGS_H_
 #define CONTENT_SERVICES_AUCTION_WORKLET_SET_PRIORITY_SIGNALS_OVERRIDE_BINDINGS_H_
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
 #include "content/services/auction_worklet/context_recycler.h"
 #include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "v8/include/v8-forward.h"
 
@@ -30,9 +31,8 @@ class SetPrioritySignalsOverrideBindings : public Bindings {
       delete;
   ~SetPrioritySignalsOverrideBindings() override;
 
-  // Add report method to `global_template`. `this` must outlive the template.
-  void FillInGlobalTemplate(
-      v8::Local<v8::ObjectTemplate> global_template) override;
+  // Add report method to global context. `this` must outlive the context.
+  void AttachToContext(v8::Local<v8::Context> context) override;
   void Reset() override;
 
   base::flat_map<std::string, mojom::PrioritySignalsDoublePtr>

@@ -7,9 +7,11 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/containers/span.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "components/autofill/core/browser/payments/payments_network_interface.h"
 #include "components/autofill/core/browser/payments/payments_requests/payments_request.h"
 
 namespace base {
@@ -21,8 +23,8 @@ namespace autofill::payments {
 class MigrateCardsRequest : public PaymentsRequest {
  public:
   MigrateCardsRequest(
-      const PaymentsClient::MigrationRequestDetails& request_details,
-      const std::vector<MigratableCreditCard>& migratable_credit_cards,
+      const PaymentsNetworkInterface::MigrationRequestDetails& request_details,
+      base::span<const MigratableCreditCard> migratable_credit_cards,
       const bool full_sync_enabled,
       MigrateCardsCallback callback);
   MigrateCardsRequest(const MigrateCardsRequest&) = delete;
@@ -33,7 +35,7 @@ class MigrateCardsRequest : public PaymentsRequest {
   std::string GetRequestUrlPath() override;
   std::string GetRequestContentType() override;
   std::string GetRequestContent() override;
-  void ParseResponse(const base::Value& response) override;
+  void ParseResponse(const base::Value::Dict& response) override;
   bool IsResponseComplete() override;
   void RespondToDelegate(AutofillClient::PaymentsRpcResult result) override;
 
@@ -46,8 +48,8 @@ class MigrateCardsRequest : public PaymentsRequest {
                            const std::string& app_locale,
                            const std::string& pan_field_name);
 
-  const PaymentsClient::MigrationRequestDetails request_details_;
-  const std::vector<MigratableCreditCard>& migratable_credit_cards_;
+  const PaymentsNetworkInterface::MigrationRequestDetails request_details_;
+  const std::vector<MigratableCreditCard> migratable_credit_cards_;
   const bool full_sync_enabled_;
   MigrateCardsCallback callback_;
   std::unique_ptr<std::unordered_map<std::string, std::string>> save_result_;

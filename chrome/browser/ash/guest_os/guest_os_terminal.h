@@ -8,12 +8,13 @@
 #include <vector>
 
 #include "base/containers/fixed_flat_map.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "components/services/app_service/public/cpp/intent.h"
-#include "components/services/app_service/public/mojom/app_service.mojom.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/display/types/display_constants.h"
+#include "ui/gfx/image/image_skia.h"
 
 namespace apps {
 struct MenuItems;
@@ -111,11 +112,16 @@ enum class TerminalSetting {
   kAllowImagesInline = 70,
   kTheme = 71,
   kThemeVariations = 72,
-  kMaxValue = kThemeVariations,
+  kFindResultColor = 73,
+  kFindResultSelectedColor = 74,
+  kLineHeightPaddingSize = 75,
+  kKeybindingsOsDefaults = 76,
+  kScreenPaddingSize = 77,
+  kScreenBorderSize = 78,
+  kScreenBorderColor = 79,
+  kLineHeight = 80,
+  kMaxValue = kLineHeight,
 };
-
-// Remove Terminal app id from crostini.registry.<terminal-app-id>.
-void RemoveTerminalFromRegistry(PrefService* prefs);
 
 const std::string& GetTerminalHomeUrl();
 
@@ -133,10 +139,11 @@ void LaunchTerminal(Profile* profile,
                     const std::string& cwd = "",
                     const std::vector<std::string>& terminal_args = {});
 
-void LaunchTerminalHome(Profile* profile, int64_t display_id);
+void LaunchTerminalHome(Profile* profile, int64_t display_id, int restore_id);
 
 void LaunchTerminalWithUrl(Profile* profile,
                            int64_t display_id,
+                           int restore_id,
                            const GURL& url);
 
 void LaunchTerminalWithIntent(
@@ -170,7 +177,7 @@ std::string ShortcutIdFromContainerId(Profile* profile,
 
 // Parse Intent extras from shortcut ID.
 base::flat_map<std::string, std::string> ExtrasFromShortcutId(
-    const base::Value& shortcut);
+    const base::Value::Dict& shortcut);
 
 // Returns list of SSH connections {<profile-id>, <description>}.
 std::vector<std::pair<std::string, std::string>> GetSSHConnections(

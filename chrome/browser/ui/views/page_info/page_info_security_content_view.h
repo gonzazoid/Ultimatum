@@ -7,9 +7,10 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/views/page_info/page_info_hover_button.h"
+#include "chrome/browser/ui/views/controls/rich_hover_button.h"
 #include "chrome/browser/ui/views/page_info/security_information_view.h"
 #include "components/page_info/page_info_ui.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 // The view that contains `SecurityInformationView` and a certificate button.
@@ -17,6 +18,7 @@
 // the main page if connection isn't secure.
 class PageInfoSecurityContentView : public views::View, public PageInfoUI {
  public:
+  METADATA_HEADER(PageInfoSecurityContentView);
   // `is_standalone_page` is true, when this view is used as a content view of
   // a subpage and this view becomes current UI for `PageInfo` by calling
   // `InitializeUiState()`. Otherwise, it is part of another page (part of the
@@ -37,7 +39,7 @@ class PageInfoSecurityContentView : public views::View, public PageInfoUI {
   raw_ptr<PageInfo, DanglingUntriaged> presenter_;
 
   // The button that opens the "Certificate" dialog.
-  raw_ptr<PageInfoHoverButton> certificate_button_ = nullptr;
+  raw_ptr<RichHoverButton> certificate_button_ = nullptr;
 
   // The views that shows the status of the site's identity check.
   raw_ptr<SecurityInformationView> security_view_ = nullptr;

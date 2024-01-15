@@ -11,6 +11,7 @@
 #include "base/test/task_environment.h"
 #include "net/base/features.h"
 #include "net/log/test_net_log.h"
+#include "net/net_buildflags.h"
 #include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
@@ -28,14 +29,19 @@
 namespace cert_verifier {
 namespace {
 
-mojo::PendingRemote<mojom::CertVerifierService> GetNewCertVerifierServiceRemote(
+network::mojom::CertVerifierServiceRemoteParamsPtr
+GetNewCertVerifierServiceRemoteParams(
     mojom::CertVerifierServiceFactory* cert_verifier_service_factory,
     mojom::CertVerifierCreationParamsPtr creation_params) {
   mojo::PendingRemote<mojom::CertVerifierService> cert_verifier_remote;
+  mojo::PendingReceiver<mojom::CertVerifierServiceClient> cert_verifier_client;
   cert_verifier_service_factory->GetNewCertVerifier(
       cert_verifier_remote.InitWithNewPipeAndPassReceiver(),
+      /*updater=*/mojo::NullReceiver(),
+      cert_verifier_client.InitWithNewPipeAndPassRemote(),
       std::move(creation_params));
-  return cert_verifier_remote;
+  return network::mojom::CertVerifierServiceRemoteParams::New(
+      std::move(cert_verifier_remote), std::move(cert_verifier_client));
 }
 
 }  // namespace
@@ -67,23 +73,20 @@ class NetworkContextWithRealCertVerifierTest : public testing::Test {
     if (!cert_verifier_service_factory_) {
       cert_verifier_service_factory_ =
           std::make_unique<CertVerifierServiceFactoryImpl>(
-              GetCertVerifierServiceParams(),
               cert_verifier_service_factory_remote_
                   .BindNewPipeAndPassReceiver());
+      InitializeCertVerifierServiceFactory(
+          cert_verifier_service_factory_.get());
     }
 
     // Create a cert verifier service.
-    auto cert_verifier_service_remote = GetNewCertVerifierServiceRemote(
+    return GetNewCertVerifierServiceRemoteParams(
         cert_verifier_service_factory_.get(),
         std::move(cert_verifier_creation_params));
-
-    return network::mojom::CertVerifierServiceRemoteParams::New(
-        std::move(cert_verifier_service_remote));
   }
 
-  virtual mojom::CertVerifierServiceParamsPtr GetCertVerifierServiceParams() {
-    return nullptr;
-  }
+  virtual void InitializeCertVerifierServiceFactory(
+      mojom::CertVerifierServiceFactory* factory) {}
 
   network::mojom::NetworkService* network_service() const {
     return network_service_.get();
@@ -104,7 +107,7 @@ class NetworkContextWithRealCertVerifierTest : public testing::Test {
       cert_verifier_service_factory_;
 };
 
-#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+#if BUILDFLAG(CHROME_ROOT_STORE_OPTIONAL)
 namespace {
 
 network::mojom::NetworkContextParamsPtr CreateContextParams() {
@@ -167,13 +170,12 @@ class NetworkContextChromeRootStoreFeatureFlagTest
         net::features::kChromeRootStoreUsed, feature_use_chrome_root_store());
   }
 
-  mojom::CertVerifierServiceParamsPtr GetCertVerifierServiceParams() override {
-    mojom::CertVerifierServiceParamsPtr params;
+  void InitializeCertVerifierServiceFactory(
+      mojom::CertVerifierServiceFactory* factory) override {
     if (param_use_chrome_root_store().has_value()) {
-      params = mojom::CertVerifierServiceParams::New();
-      params->use_chrome_root_store = *param_use_chrome_root_store();
+      factory->SetUseChromeRootStore(*param_use_chrome_root_store(),
+                                     base::DoNothing());
     }
-    return params;
   }
 
   bool feature_use_chrome_root_store() const { return std::get<0>(GetParam()); }
@@ -232,6 +234,6 @@ INSTANTIATE_TEST_SUITE_P(
                ? (*std::get<1>(info.param) ? "ParamTrue" : "ParamFalse")
                : "ParamNotSet"});
     });
-#endif  // BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+#endif  // BUILDFLAG(CHROME_ROOT_STORE_OPTIONAL)
 
 }  // namespace cert_verifier

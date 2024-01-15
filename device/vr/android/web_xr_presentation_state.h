@@ -9,25 +9,23 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/android/scoped_hardware_buffer_handle.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/viz/common/resources/resource_id.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/common/mailbox_holder.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/transform.h"
+#include "ui/gl/gl_bindings.h"
 #include "ui/gl/scoped_egl_image.h"
 
 namespace gl {
 class GLFence;
 }  // namespace gl
-
-namespace gpu {
-class GpuMemoryBufferImplAndroidHardwareBuffer;
-}  // namespace gpu
 
 namespace viz {
 struct BeginFrameArgs;
@@ -93,20 +91,28 @@ struct WebXrSharedBuffer {
   WebXrSharedBuffer();
   ~WebXrSharedBuffer();
 
+  gpu::MailboxHolder mailbox_holder() const {
+    return gpu::MailboxHolder(shared_image->mailbox(), sync_token,
+                              texture_target());
+  }
+
+  uint32_t texture_target() const { return GL_TEXTURE_2D; }
+
   gfx::Size size = {0, 0};
 
-  // Shared GpuMemoryBuffer
-  std::unique_ptr<gpu::GpuMemoryBufferImplAndroidHardwareBuffer> gmb;
+  // This owns a single reference to an AHardwareBuffer object.
+  base::android::ScopedHardwareBufferHandle scoped_ahb_handle;
 
   // Resources in the remote GPU process command buffer context
-  gpu::MailboxHolder mailbox_holder;
+  scoped_refptr<gpu::ClientSharedImage> shared_image;
+  gpu::SyncToken sync_token;
 
   // Resources in the local GL context
   uint32_t local_texture = 0;
   // This object keeps the image alive while processing a frame. That's
   // required because it owns underlying resources, and must still be
   // alive when the mailbox texture backed by this image is used.
-  ui::ScopedEGLImage local_eglimage;
+  gl::ScopedEGLImage local_eglimage;
 
   // The ResourceId that was used to pass this buffer to the Viz Compositor.
   // Id should be set to kInvalidResourceId when it is not in use by the viz
@@ -165,12 +171,10 @@ struct WebXrFrame {
   // Viewport bounds used for rendering, in texture coordinates with uv=(0, 1)
   // corresponding to viewport pixel (0, 0) as set by UpdateLayerBounds.
   //
-  // Currently this is only used by the ARCore handheld AR mode which is
-  // monoscopic and uses the left viewport. TODO(https://crbug.com/1134203): The
-  // GVR device currently has its own separate bounds tracking implementation.
-  // That should be updated to use this implementation, at that time a matching
-  // bounds_right would need to be added.
+  // When used by monoscoping ARCore, only the left viewport/bounds are used.
+  // Cardboard makes use of both.
   gfx::RectF bounds_left;
+  gfx::RectF bounds_right;
 };
 
 class WebXrPresentationState {
@@ -247,10 +251,6 @@ class WebXrPresentationState {
   // timeout.
   bool last_ui_allows_sending_vsync = false;
 
-  // GpuMemoryBuffer creation needs a buffer ID. We don't really care about
-  // this, but try to keep it unique to avoid confusion.
-  int next_memory_buffer_id = 0;
-
  private:
   // Checks if we're in a valid state for processing the current animating
   // frame. Invalid states include mailbox_bridge_ready_ being false, or an
@@ -268,7 +268,7 @@ class WebXrPresentationState {
   raw_ptr<WebXrFrame> animating_frame_ = nullptr;
   raw_ptr<WebXrFrame> processing_frame_ = nullptr;
   raw_ptr<WebXrFrame> rendering_frame_ = nullptr;
-  std::vector<WebXrFrame*> rendering_frames_;
+  std::vector<raw_ptr<WebXrFrame, VectorExperimental>> rendering_frames_;
   base::queue<WebXrFrame*> idle_frames_;
 
   bool mailbox_bridge_ready_ = false;

@@ -7,22 +7,21 @@
 #ifndef BASE_STRINGS_STRING_UTIL_H_
 #define BASE_STRINGS_STRING_UTIL_H_
 
-#include <ctype.h>
-#include <stdarg.h>   // va_list
+#include <stdarg.h>  // va_list
 #include <stddef.h>
 #include <stdint.h>
 
+#include <concepts>
 #include <initializer_list>
-#include <sstream>
+#include <memory>
 #include <string>
-#include <type_traits>
+#include <string_view>
 #include <vector>
 
 #include "base/base_export.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
-#include "base/cxx20_to_address.h"
 #include "base/strings/string_piece.h"  // For implicit conversions.
 #include "base/strings/string_util_internal.h"
 #include "build/build_config.h"
@@ -61,6 +60,9 @@ inline int snprintf(char* buffer, size_t size, const char* format, ...) {
 // If the return value is >= dst_size, then the output was truncated.
 // NOTE: All sizes are in number of characters, NOT in bytes.
 BASE_EXPORT size_t strlcpy(char* dst, const char* src, size_t dst_size);
+BASE_EXPORT size_t u16cstrlcpy(char16_t* dst,
+                               const char16_t* src,
+                               size_t dst_size);
 BASE_EXPORT size_t wcslcpy(wchar_t* dst, const wchar_t* src, size_t dst_size);
 
 // Scan a wprintf format string to determine whether it's portable across a
@@ -89,13 +91,14 @@ BASE_EXPORT bool IsWprintfFormatPortable(const wchar_t* format);
 // Simplified implementation of C++20's std::basic_string_view(It, End).
 // Reference: https://wg21.link/string.view.cons
 template <typename CharT, typename Iter>
-constexpr BasicStringPiece<CharT> MakeBasicStringPiece(Iter begin, Iter end) {
+constexpr std::basic_string_view<CharT> MakeBasicStringPiece(Iter begin,
+                                                             Iter end) {
   DCHECK_GE(end - begin, 0);
-  return {base::to_address(begin), static_cast<size_t>(end - begin)};
+  return {std::to_address(begin), static_cast<size_t>(end - begin)};
 }
 
 // Explicit instantiations of MakeBasicStringPiece for the BasicStringPiece
-// aliases defined in base/strings/string_piece_forward.h
+// aliases defined in base/strings/string_piece.h
 template <typename Iter>
 constexpr StringPiece MakeStringPiece(Iter begin, Iter end) {
   return MakeBasicStringPiece<char>(begin, end);
@@ -107,44 +110,41 @@ constexpr StringPiece16 MakeStringPiece16(Iter begin, Iter end) {
 }
 
 template <typename Iter>
-constexpr WStringPiece MakeWStringPiece(Iter begin, Iter end) {
+constexpr std::wstring_view MakeWStringView(Iter begin, Iter end) {
   return MakeBasicStringPiece<wchar_t>(begin, end);
-}
-
-// Convert a type with defined `operator<<` into a string.
-template <typename... Streamable>
-std::string StreamableToString(const Streamable&... values) {
-  std::ostringstream ss;
-  (ss << ... << values);
-  return ss.str();
 }
 
 // ASCII-specific tolower.  The standard library's tolower is locale sensitive,
 // so we don't want to use it here.
-template <typename CharT,
-          typename = std::enable_if_t<std::is_integral<CharT>::value>>
+template <typename CharT>
+  requires(std::integral<CharT>)
 constexpr CharT ToLowerASCII(CharT c) {
   return internal::ToLowerASCII(c);
 }
 
 // ASCII-specific toupper.  The standard library's toupper is locale sensitive,
 // so we don't want to use it here.
-template <typename CharT,
-          typename = std::enable_if_t<std::is_integral<CharT>::value>>
+template <typename CharT>
+  requires(std::integral<CharT>)
 CharT ToUpperASCII(CharT c) {
   return (c >= 'a' && c <= 'z') ? static_cast<CharT>(c + 'A' - 'a') : c;
 }
 
-// Converts the given string to it's ASCII-lowercase equivalent.
+// Converts the given string to its ASCII-lowercase equivalent. Non-ASCII
+// bytes (or UTF-16 code units in `StringPiece16`) are permitted but will be
+// unmodified.
 BASE_EXPORT std::string ToLowerASCII(StringPiece str);
 BASE_EXPORT std::u16string ToLowerASCII(StringPiece16 str);
 
-// Converts the given string to it's ASCII-uppercase equivalent.
+// Converts the given string to its ASCII-uppercase equivalent. Non-ASCII
+// bytes (or UTF-16 code units in `StringPiece16`) are permitted but will be
+// unmodified.
 BASE_EXPORT std::string ToUpperASCII(StringPiece str);
 BASE_EXPORT std::u16string ToUpperASCII(StringPiece16 str);
 
-// Functor for case-insensitive ASCII comparisons for STL algorithms like
-// std::search.
+// Functor for ASCII case-insensitive comparisons for STL algorithms like
+// std::search. Non-ASCII bytes (or UTF-16 code units in `StringPiece16`) are
+// permitted but will be compared as-is.
 //
 // Note that a full Unicode version of this functor is not possible to write
 // because case mappings might change the number of characters, depend on
@@ -158,13 +158,17 @@ template<typename Char> struct CaseInsensitiveCompareASCII {
   }
 };
 
-// Like strcasecmp for case-insensitive ASCII characters only. Returns:
+// Like strcasecmp for ASCII case-insensitive comparisons only. Returns:
 //   -1  (a < b)
 //    0  (a == b)
 //    1  (a > b)
-// (unlike strcasecmp which can return values greater or less than 1/-1). For
-// full Unicode support, use base::i18n::ToLower or base::i18n::FoldCase
-// and then just call the normal string operators on the result.
+// (unlike strcasecmp which can return values greater or less than 1/-1). To
+// compare all Unicode code points case-insensitively, use base::i18n::ToLower
+// or base::i18n::FoldCase and then just call the normal string operators on the
+// result.
+//
+// Non-ASCII bytes (or UTF-16 code units in `StringPiece16`) are permitted but
+// will be compared unmodified.
 BASE_EXPORT constexpr int CompareCaseInsensitiveASCII(StringPiece a,
                                                       StringPiece b) {
   return internal::CompareCaseInsensitiveASCIIT(a, b);
@@ -174,9 +178,11 @@ BASE_EXPORT constexpr int CompareCaseInsensitiveASCII(StringPiece16 a,
   return internal::CompareCaseInsensitiveASCIIT(a, b);
 }
 
-// Equality for ASCII case-insensitive comparisons. For full Unicode support,
-// use base::i18n::ToLower or base::i18n::FoldCase and then compare with either
-// == or !=.
+// Equality for ASCII case-insensitive comparisons. Non-ASCII bytes (or UTF-16
+// code units in `StringPiece16`) are permitted but will be compared unmodified.
+// To compare all Unicode code points case-insensitively, use
+// base::i18n::ToLower or base::i18n::FoldCase and then compare with either ==
+// or !=.
 inline bool EqualsCaseInsensitiveASCII(StringPiece a, StringPiece b) {
   return internal::EqualsCaseInsensitiveASCIIT(a, b);
 }
@@ -215,6 +221,9 @@ BASE_EXPORT extern const char16_t
     kWhitespaceNoCrLfUTF16[];  // Unicode w/o CR/LF.
 BASE_EXPORT extern const char kWhitespaceASCII[];
 BASE_EXPORT extern const char16_t kWhitespaceASCIIAs16[];  // No unicode.
+                                                           //
+// https://infra.spec.whatwg.org/#ascii-whitespace
+BASE_EXPORT extern const char kInfraAsciiWhitespace[];
 
 // Null-terminated string representing the UTF-8 byte order mark.
 BASE_EXPORT extern const char kUtf8ByteOrderMark[];
@@ -337,8 +346,8 @@ BASE_EXPORT bool IsStringUTF8AllowingNoncharacters(StringPiece str);
 BASE_EXPORT bool IsStringASCII(StringPiece str);
 BASE_EXPORT bool IsStringASCII(StringPiece16 str);
 
-#if defined(WCHAR_T_IS_UTF32)
-BASE_EXPORT bool IsStringASCII(WStringPiece str);
+#if defined(WCHAR_T_IS_32_BIT)
+BASE_EXPORT bool IsStringASCII(std::wstring_view str);
 #endif
 
 // Performs a case-sensitive string compare of the given 16-bit string against
@@ -413,6 +422,28 @@ inline bool IsAsciiPrintable(Char c) {
 }
 
 template <typename Char>
+inline bool IsAsciiControl(Char c) {
+  if constexpr (std::is_signed_v<Char>) {
+    if (c < 0) {
+      return false;
+    }
+  }
+  return c <= 0x1f || c == 0x7f;
+}
+
+template <typename Char>
+inline bool IsUnicodeControl(Char c) {
+  return IsAsciiControl(c) ||
+         // C1 control characters: http://unicode.org/charts/PDF/U0080.pdf
+         (c >= 0x80 && c <= 0x9F);
+}
+
+template <typename Char>
+inline bool IsAsciiPunctuation(Char c) {
+  return c > 0x20 && c < 0x7f && !IsAsciiAlphaNumeric(c);
+}
+
+template <typename Char>
 inline bool IsHexDigit(Char c) {
   return (c >= '0' && c <= '9') ||
          (c >= 'A' && c <= 'F') ||
@@ -435,7 +466,8 @@ inline char HexDigitToInt(char16_t c) {
 // should call IsAsciiWhitespace(), and if they are from a UTF-8 string they may
 // be individual units of a multi-unit code point.  Convert to 16- or 32-bit
 // values known to hold the full code point before calling this.
-template <typename Char, typename = std::enable_if_t<(sizeof(Char) > 1)>>
+template <typename Char>
+  requires(sizeof(Char) > 1)
 inline bool IsUnicodeWhitespace(Char c) {
   // kWhitespaceWide is a null-terminated string.
   for (const auto* cur = kWhitespaceWide; *cur; ++cur) {

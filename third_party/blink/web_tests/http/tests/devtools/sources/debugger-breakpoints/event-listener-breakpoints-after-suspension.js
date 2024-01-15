@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests event listener breakpoints.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadLegacyModule('panels/browser_debugger'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.loadHTML(`
       <input type="button" id="test">
@@ -38,13 +42,13 @@
 
   function suspendAll() {
     TestRunner.addResult('Suspend all targets');
-    SDK.targetManager.suspendAllTargets();
+    SDK.TargetManager.TargetManager.instance().suspendAllTargets();
     TestRunner.deprecatedRunAfterPendingDispatches(resumeAll);
   }
 
   function resumeAll() {
     TestRunner.addResult('Resume all targets');
-    SDK.targetManager.resumeAllTargets();
+    SDK.TargetManager.TargetManager.instance().resumeAllTargets();
     SourcesTestRunner.waitUntilPaused(finish);
     TestRunner.evaluateInPageWithTimeout('addListenerAndClick()');
   }

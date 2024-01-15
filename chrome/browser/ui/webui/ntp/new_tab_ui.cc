@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/utf_string_conversions.h"
@@ -64,9 +64,7 @@ NewTabUI::NewTabUI(content::WebUI* web_ui) : content::WebUIController(web_ui) {
   // The title should be "New Tab" for regular mode and guest mode, while it
   // should be "New Incognito Tab" for incognito mode.
   const int title_resource_id =
-      base::FeatureList::IsEnabled(
-          features::kUpdateHistoryEntryPointsInIncognito) &&
-              profile->IsOffTheRecord() && !profile->IsGuestSession()
+      profile->IsOffTheRecord() && !profile->IsGuestSession()
           ? IDS_NEW_INCOGNITO_TAB_TITLE
           : IDS_NEW_TAB_TITLE;
   web_ui->OverrideTitle(l10n_util::GetStringUTF16(title_resource_id));

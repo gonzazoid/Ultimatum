@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/win/windows_types.h"
 #include "ui/wm/core/native_cursor_manager_delegate.h"
@@ -59,8 +59,9 @@ void DesktopNativeCursorManagerWin::RegisterCursorRegkeyObserver(
 
 void DesktopNativeCursorManagerWin::InitCursorSizeObserver(
     wm::NativeCursorManagerDelegate* delegate) {
-  hkcu_cursor_regkey_.Open(HKEY_CURRENT_USER, L"Control Panel\\Cursors",
-                           KEY_READ | KEY_NOTIFY);
+  // Validity of this key is checked at time-of-use.
+  (void)hkcu_cursor_regkey_.Open(HKEY_CURRENT_USER, L"Control Panel\\Cursors",
+                                 KEY_READ | KEY_NOTIFY);
   system_cursor_size_ = gfx::Size(kDefaultCursorSize, kDefaultCursorSize);
   RegisterCursorRegkeyObserver(delegate);
   SetSystemCursorSize(delegate);

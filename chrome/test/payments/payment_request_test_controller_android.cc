@@ -4,7 +4,7 @@
 
 #include "chrome/test/payments/payment_request_test_controller.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "chrome/browser/android/background_task_scheduler/chrome_background_task_factory.h"
 #include "chrome/test/payments/android/payment_request_test_bridge.h"
@@ -41,10 +41,6 @@ bool PaymentRequestTestController::ClickOptOut() {
   return ClickSecurePaymentConfirmationOptOutForTest();
 }
 
-bool PaymentRequestTestController::IsAndroidMarshmallowOrLollipop() {
-  return IsAndroidMarshmallowOrLollipopForTest();
-}
-
 void PaymentRequestTestController::SetUpOnMainThread() {
   ChromeBackgroundTaskFactory::SetAsDefault();
 
@@ -66,6 +62,12 @@ void PaymentRequestTestController::SetUpOnMainThread() {
                           base::Unretained(this)),
       base::BindRepeating(&PaymentRequestTestController::set_app_descriptions,
                           base::Unretained(this)),
+      base::BindRepeating(
+          &PaymentRequestTestController::set_shipping_section_visible,
+          base::Unretained(this)),
+      base::BindRepeating(
+          &PaymentRequestTestController::set_contact_section_visible,
+          base::Unretained(this)),
       base::BindRepeating(&PaymentRequestTestController::OnErrorDisplayed,
                           base::Unretained(this)),
       base::BindRepeating(&PaymentRequestTestController::OnNotSupportedError,
@@ -130,56 +132,67 @@ void PaymentRequestTestController::SetTwaPaymentApp(
 }
 
 void PaymentRequestTestController::OnCanMakePaymentCalled() {
-  if (observer_)
+  if (observer_) {
     observer_->OnCanMakePaymentCalled();
+  }
 }
 
 void PaymentRequestTestController::OnCanMakePaymentReturned() {
-  if (observer_)
+  if (observer_) {
     observer_->OnCanMakePaymentReturned();
+  }
 }
 
 void PaymentRequestTestController::OnHasEnrolledInstrumentCalled() {
-  if (observer_)
+  if (observer_) {
     observer_->OnHasEnrolledInstrumentCalled();
+  }
 }
 
 void PaymentRequestTestController::OnHasEnrolledInstrumentReturned() {
-  if (observer_)
+  if (observer_) {
     observer_->OnHasEnrolledInstrumentReturned();
+  }
 }
 
 void PaymentRequestTestController::OnAppListReady() {
-  if (observer_)
+  if (observer_) {
     observer_->OnAppListReady();
+  }
 }
 void PaymentRequestTestController::OnErrorDisplayed() {
-  if (observer_)
+  if (observer_) {
     observer_->OnErrorDisplayed();
+  }
 }
 void PaymentRequestTestController::OnNotSupportedError() {
-  if (observer_)
+  if (observer_) {
     observer_->OnNotSupportedError();
+  }
 }
 
 void PaymentRequestTestController::OnConnectionTerminated() {
-  if (observer_)
+  if (observer_) {
     observer_->OnConnectionTerminated();
+  }
 }
 
 void PaymentRequestTestController::OnAbortCalled() {
-  if (observer_)
+  if (observer_) {
     observer_->OnAbortCalled();
+  }
 }
 
 void PaymentRequestTestController::OnCompleteCalled() {
-  if (observer_)
+  if (observer_) {
     observer_->OnCompleteCalled();
+  }
 }
 
 void PaymentRequestTestController::OnUIDisplayed() {
-  if (observer_)
+  if (observer_) {
     observer_->OnUIDisplayed();
+  }
 }
 
 }  // namespace payments

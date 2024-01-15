@@ -6,9 +6,9 @@
 
 #include <cmath>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_renderer_mixer.h"
 #include "media/base/audio_renderer_mixer_pool.h"
@@ -28,7 +28,7 @@ AudioRendererMixerInput::AudioRendererMixerInput(
     AudioRendererMixerPool* mixer_pool,
     const base::UnguessableToken& owner_token,
     const std::string& device_id,
-    AudioLatency::LatencyType latency)
+    AudioLatency::Type latency)
     : mixer_pool_(mixer_pool),
       owner_token_(owner_token),
       device_id_(device_id),
@@ -142,7 +142,7 @@ void AudioRendererMixerInput::GetOutputDeviceInfoAsync(
   // If we have device information for a current sink or mixer, just return it
   // immediately. Per the AudioRendererSink API contract, this must be posted.
   if (device_info_.has_value() && (sink_ || mixer_)) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(info_cb), *device_info_));
     return;
   }
@@ -218,14 +218,16 @@ void AudioRendererMixerInput::SwitchOutputDevice(
                      base::RetainedRef(this), std::move(callback), new_sink));
 }
 
-double AudioRendererMixerInput::ProvideInput(AudioBus* audio_bus,
-                                             uint32_t frames_delayed) {
+double AudioRendererMixerInput::ProvideInput(
+    AudioBus* audio_bus,
+    uint32_t frames_delayed,
+    const AudioGlitchInfo& glitch_info) {
   TRACE_EVENT0("audio", "AudioRendererMixerInput::ProvideInput");
   const base::TimeDelta delay =
       AudioTimestampHelper::FramesToTime(frames_delayed, params_.sample_rate());
 
   int frames_filled =
-      callback_->Render(delay, base::TimeTicks::Now(), 0, audio_bus);
+      callback_->Render(delay, base::TimeTicks::Now(), glitch_info, audio_bus);
 
   // AudioConverter expects unfilled frames to be zeroed.
   if (frames_filled < audio_bus->frames()) {

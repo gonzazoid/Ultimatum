@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests XHR breakpoints.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function sendRequest(url)
@@ -17,7 +21,7 @@
 
   SourcesTestRunner.runDebuggerTestSuite([
     function testXHRBreakpoint(next) {
-      SDK.domDebuggerManager.addXHRBreakpoint('foo', true);
+      SDK.DOMDebuggerModel.DOMDebuggerManager.instance().addXHRBreakpoint('foo', true);
       SourcesTestRunner.waitUntilPaused(step1);
       TestRunner.evaluateInPageWithTimeout('sendRequest(\'/foo?a=b\')');
 
@@ -31,13 +35,13 @@
       }
 
       function step3() {
-        SDK.domDebuggerManager.removeXHRBreakpoint('foo');
+        SDK.DOMDebuggerModel.DOMDebuggerManager.instance().removeXHRBreakpoint('foo');
         TestRunner.evaluateInPage('sendRequest(\'/foo?a=b\')', next);
       }
     },
 
     function testPauseOnAnyXHR(next) {
-      SDK.domDebuggerManager.addXHRBreakpoint('', true);
+      SDK.DOMDebuggerModel.DOMDebuggerManager.instance().addXHRBreakpoint('', true);
       SourcesTestRunner.waitUntilPaused(pausedFoo);
       TestRunner.evaluateInPageWithTimeout('sendRequest(\'/foo?a=b\')');
 
@@ -51,7 +55,7 @@
 
       function pausedBar(callFrames) {
         function resumed() {
-          SDK.domDebuggerManager.removeXHRBreakpoint('');
+          SDK.DOMDebuggerModel.DOMDebuggerManager.instance().removeXHRBreakpoint('');
           TestRunner.evaluateInPage('sendRequest(\'/baz?a=b\')', next);
         }
         SourcesTestRunner.resumeExecution(resumed);
@@ -59,13 +63,13 @@
     },
 
     function testDisableBreakpoint(next) {
-      SDK.domDebuggerManager.addXHRBreakpoint('', true);
+      SDK.DOMDebuggerModel.DOMDebuggerManager.instance().addXHRBreakpoint('', true);
       SourcesTestRunner.waitUntilPaused(paused);
       TestRunner.evaluateInPage('sendRequest(\'/foo\')');
 
       function paused(callFrames) {
         function resumed() {
-          SDK.domDebuggerManager.toggleXHRBreakpoint('', false);
+          SDK.DOMDebuggerModel.DOMDebuggerManager.instance().toggleXHRBreakpoint('', false);
           SourcesTestRunner.waitUntilPaused(pausedAgain);
           TestRunner.evaluateInPage('sendRequest(\'/foo\')', next);
         }

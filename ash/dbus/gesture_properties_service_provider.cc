@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "dbus/message.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -84,8 +84,7 @@ void GetPropertyCallback(dbus::MethodCall* method_call,
     case ui::ozone::mojom::GesturePropValue::Tag::kInts: {
       writer.AppendUint32(values->get_ints().size());
       writer.OpenVariant("ai", &variant_writer);
-      variant_writer.AppendArrayOfInt32s(values->get_ints().data(),
-                                         values->get_ints().size());
+      variant_writer.AppendArrayOfInt32s(values->get_ints());
       writer.CloseContainer(&variant_writer);
       break;
     }
@@ -119,8 +118,7 @@ void GetPropertyCallback(dbus::MethodCall* method_call,
     case ui::ozone::mojom::GesturePropValue::Tag::kReals: {
       writer.AppendUint32(values->get_reals().size());
       writer.OpenVariant("ad", &variant_writer);
-      variant_writer.AppendArrayOfDoubles(values->get_reals().data(),
-                                          values->get_reals().size());
+      variant_writer.AppendArrayOfDoubles(values->get_reals());
       writer.CloseContainer(&variant_writer);
       break;
     }

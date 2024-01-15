@@ -6,17 +6,17 @@
 
 #include <vector>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
+#include "base/uuid.h"
 #include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/download_params.h"
 #include "components/download/public/background_service/logger.h"
 #include "components/grit/download_internals_resources.h"
 #include "components/grit/download_internals_resources_map.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/download/background_service/background_download_service_factory.h"
-#include "ios/chrome/browser/url/chrome_url_constants.h"
+#include "ios/chrome/browser/download/model/background_service/background_download_service_factory.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #include "ios/web/public/webui/web_ui_ios.h"
 #include "ios/web/public/webui/web_ui_ios_data_source.h"
 #include "ios/web/public/webui/web_ui_ios_message_handler.h"
@@ -118,7 +118,7 @@ class DownloadInternalsUIMessageHandler : public web::WebUIIOSMessageHandler,
     }
 
     download::DownloadParams params;
-    params.guid = base::GenerateGUID();
+    params.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
     params.client = download::DownloadClient::DEBUGGING;
     params.request_params.method = "GET";
     params.request_params.url = url;
@@ -163,10 +163,8 @@ DownloadInternalsUI::DownloadInternalsUI(web::WebUIIOS* web_ui,
   web::WebUIIOSDataSource* html_source =
       web::WebUIIOSDataSource::Create(kChromeUIDownloadInternalsHost);
   html_source->UseStringsJs();
-  for (size_t i = 0; i < kDownloadInternalsResourcesSize; ++i) {
-    html_source->AddResourcePath(kDownloadInternalsResources[i].path,
-                                 kDownloadInternalsResources[i].id);
-  }
+  html_source->AddResourcePaths(base::make_span(
+      kDownloadInternalsResources, kDownloadInternalsResourcesSize));
   html_source->SetDefaultResource(
       IDR_DOWNLOAD_INTERNALS_DOWNLOAD_INTERNALS_HTML);
   web::WebUIIOSDataSource::Add(ChromeBrowserState::FromWebUIIOS(web_ui),

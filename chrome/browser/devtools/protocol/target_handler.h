@@ -7,7 +7,6 @@
 
 #include <set>
 
-#include "base/memory/weak_ptr.h"
 #include "chrome/browser/devtools/protocol/target.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list_observer.h"
@@ -38,6 +37,7 @@ class TargetHandler : public protocol::Target::Backend {
       protocol::Maybe<bool> enable_begin_frame_control,
       protocol::Maybe<bool> new_window,
       protocol::Maybe<bool> background,
+      protocol::Maybe<bool> for_tab,
       std::string* out_target_id) override;
 
  private:

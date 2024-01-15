@@ -4,8 +4,8 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -37,7 +37,6 @@
 
 using base::android::ConvertJavaStringToUTF8;
 using base::android::ConvertUTF8ToJavaString;
-using base::android::JavaByteArrayToByteVector;
 using base::android::JavaParamRef;
 using base::android::JavaRef;
 using base::android::ScopedJavaGlobalRef;
@@ -47,117 +46,6 @@ using base::android::ToJavaByteArray;
 using base::android::ToJavaIntArray;
 
 namespace {
-
-namespace protobuf {
-
-// WireType enumerates the protobuf wire types. See
-// https://developers.google.com/protocol-buffers/docs/encoding#structure
-enum class WireType {
-  kVarint = 0,
-  kLengthPrefixed = 2,
-};
-
-// EncodeTag encodes a protobuf tag and type into the identifier value used on
-// the wire. See
-// https://developers.google.com/protocol-buffers/docs/encoding#structure
-constexpr uint64_t EncodeTag(uint64_t tag_number, WireType type) {
-  return tag_number << 3 | static_cast<uint8_t>(type);
-}
-
-// Some tag numbers used in a protobuf that cannot be included here but which
-// we wish to generate messages for.
-constexpr uint64_t kTagRequestId = 1;
-constexpr uint64_t kTagEventType = 2;
-constexpr uint64_t kTagTunnelId = 11;
-constexpr uint64_t kTagChromeLog = 501;
-constexpr uint64_t kTagEvent = 1;
-constexpr uint64_t kTagResult = 2;
-
-// cbb_add_varint encodes |v| as a base128 varint as described at
-// https://developers.google.com/protocol-buffers/docs/encoding#varints.
-bool cbb_add_varint(CBB* cbb, uint64_t v) {
-  for (;;) {
-    const uint64_t next_v = v >> 7;
-    const bool is_last_byte = (next_v == 0);
-    const uint8_t b = (v & 0x7f) | (is_last_byte ? 0 : 0x80);
-
-    if (!CBB_add_u8(cbb, b)) {
-      return false;
-    }
-
-    if (is_last_byte) {
-      return true;
-    }
-    v = next_v;
-  }
-}
-
-enum class Type {
-  kEvent,
-  kResult,
-};
-
-// LogEvent logs an event on a server-linked transaction with the given
-// |tunnel_id|. The semantics of |value| are specific to the |type| of the
-// logged event.
-void LogEvent(
-    JNIEnv* env,
-    base::span<const uint8_t, device::cablev2::kTunnelIdSize> tunnel_id,
-    Type type,
-    unsigned value) {
-  uint64_t tag;
-  switch (type) {
-    case Type::kEvent:
-      tag = kTagEvent;
-      break;
-    case Type::kResult:
-      tag = kTagResult;
-      break;
-  }
-
-  // An inner protobuf is serialised first in order to get its length for the
-  // outer message.
-  bssl::ScopedCBB inner_cbb;
-  uint8_t* inner_bytes;
-  size_t inner_length;
-  if (!CBB_init(inner_cbb.get(), 16) ||
-      !cbb_add_varint(inner_cbb.get(), EncodeTag(tag, WireType::kVarint)) ||
-      !cbb_add_varint(inner_cbb.get(), value) ||
-      !CBB_finish(inner_cbb.get(), &inner_bytes, &inner_length)) {
-    return;
-  }
-  bssl::UniquePtr<uint8_t> inner_bytes_storage(inner_bytes);
-
-  bssl::ScopedCBB cbb;
-  uint8_t* bytes;
-  size_t length;
-  if (!CBB_init(cbb.get(), 32) ||
-      // Protobuf entries are (tag, value) pairs.
-      !cbb_add_varint(cbb.get(), EncodeTag(kTagRequestId, WireType::kVarint)) ||
-      !cbb_add_varint(cbb.get(), 0) ||
-
-      !cbb_add_varint(cbb.get(), EncodeTag(kTagEventType, WireType::kVarint)) ||
-      !cbb_add_varint(cbb.get(), kTagChromeLog) ||
-
-      !cbb_add_varint(cbb.get(),
-                      EncodeTag(kTagTunnelId, WireType::kLengthPrefixed)) ||
-      !cbb_add_varint(cbb.get(), tunnel_id.size()) ||
-      !CBB_add_bytes(cbb.get(), tunnel_id.data(), tunnel_id.size()) ||
-
-      !cbb_add_varint(cbb.get(),
-                      EncodeTag(kTagChromeLog, WireType::kLengthPrefixed)) ||
-      !cbb_add_varint(cbb.get(), inner_length) ||
-      !CBB_add_bytes(cbb.get(), inner_bytes, inner_length) ||
-
-      !CBB_finish(cbb.get(), &bytes, &length)) {
-    return;
-  }
-  bssl::UniquePtr<uint8_t> bytes_storage(bytes);
-
-  Java_CableAuthenticator_logEvent(env, ToJavaByteArray(env, bytes, length));
-}
-
-}  // namespace protobuf
 
 // CableV2MobileEvent enumerates several steps that occur during a caBLEv2
 // transaction. Do not change the assigned value since they are used in
@@ -214,69 +102,40 @@ enum class CableV2MobileResult {
   kMaxValue = 12,
 };
 
-// JavaByteArrayToSpan returns a span that aliases |data|. Be aware that the
-// reference for |data| must outlive the span.
-base::span<const uint8_t> JavaByteArrayToSpan(
+// JavaByteArrayToByteVector returns a copy of the contents of |data|.
+std::vector<uint8_t> JavaByteArrayToByteVector(
     JNIEnv* env,
     const JavaParamRef<jbyteArray>& data) {
   if (data.is_null()) {
-    return base::span<const uint8_t>();
+    return std::vector<uint8_t>();
   }
 
-  const size_t data_len = env->GetArrayLength(data);
-  const jbyte* data_bytes = env->GetByteArrayElements(data, /*iscopy=*/nullptr);
-  return base::as_bytes(base::make_span(data_bytes, data_len));
-}
-
-// JavaByteArrayToFixedSpan returns a span that aliases |data|, or |nullopt| if
-// the span is not of the correct length. Be aware that the reference for |data|
-// must outlive the span.
-template <size_t N>
-absl::optional<base::span<const uint8_t, N>> JavaByteArrayToFixedSpan(
-    JNIEnv* env,
-    const JavaParamRef<jbyteArray>& data) {
-  static_assert(N != 0,
-                "Zero case is different from JavaByteArrayToSpan as null "
-                "inputs will always be rejected here.");
-
-  if (data.is_null()) {
-    return absl::nullopt;
-  }
-
-  const size_t data_len = env->GetArrayLength(data);
-  if (data_len != N) {
-    return absl::nullopt;
-  }
-  const jbyte* data_bytes = env->GetByteArrayElements(data, /*iscopy=*/nullptr);
-  return base::as_bytes(base::make_span<N>(data_bytes, data_len));
+  std::vector<uint8_t> ret;
+  base::android::JavaByteArrayToByteVector(env, data, &ret);
+  return ret;
 }
 
 // GlobalData holds all the state for ongoing security key operations. Since
 // there are ultimately only one human user, concurrent requests are not
 // supported.
 struct GlobalData {
-  JNIEnv* env = nullptr;
+  raw_ptr<JNIEnv> env = nullptr;
   // instance_num is incremented for each new |Transaction| created and returned
   // to Java to serve as a "handle". This prevents commands intended for a
   // previous transaction getting applied to a replacement. The zero value is
   // reserved so that functions can still return that to indicate an error.
   jlong instance_num = 1;
 
-  // metrics_enabled records whether the user opted into metrics and crash
-  // reporting. If so then logging of events related to server-link
-  // transactions is permitted.
-  bool metrics_enabled = false;
-
   absl::optional<std::array<uint8_t, device::cablev2::kRootSecretSize>>
       root_secret;
-  network::mojom::NetworkContext* network_context = nullptr;
+  raw_ptr<network::mojom::NetworkContext> network_context = nullptr;
 
   // event_to_record_if_stopped contains an event to record with UMA if the
   // activity is stopped. This is updated as a transaction progresses.
   absl::optional<CableV2MobileEvent> event_to_record_if_stopped;
 
   // registration is a non-owning pointer to the global |Registration|.
-  device::cablev2::authenticator::Registration* registration = nullptr;
+  raw_ptr<device::cablev2::authenticator::Registration> registration = nullptr;
 
   // current_transaction holds the |Transaction| that is currently active.
   std::unique_ptr<device::cablev2::authenticator::Transaction>
@@ -293,7 +152,6 @@ struct GlobalData {
   // completed.
   absl::optional<device::cablev2::authenticator::Platform::GetAssertionCallback>
       pending_get_assertion_callback;
-  absl::optional<base::TimeTicks> get_assertion_start_time;
 
   // usb_callback holds the callback that receives data from a USB connection.
   absl::optional<
@@ -316,34 +174,19 @@ GlobalData& GetGlobalData() {
 
 void ResetGlobalData() {
   GlobalData& global_data = GetGlobalData();
-  global_data.metrics_enabled = false;
   global_data.current_transaction.reset();
   global_data.pending_make_credential_callback.reset();
   global_data.pending_get_assertion_callback.reset();
-  global_data.get_assertion_start_time.reset();
   global_data.usb_callback.reset();
-  global_data.server_link_tunnel_id.reset();
 }
 
 void RecordEvent(const GlobalData* global_data, CableV2MobileEvent event) {
   base::UmaHistogramEnumeration("WebAuthentication.CableV2.MobileEvent", event);
-
-  if (global_data && global_data->metrics_enabled &&
-      global_data->server_link_tunnel_id.has_value()) {
-    protobuf::LogEvent(global_data->env, *global_data->server_link_tunnel_id,
-                       protobuf::Type::kEvent, static_cast<unsigned>(event));
-  }
 }
 
 void RecordResult(const GlobalData* global_data, CableV2MobileResult result) {
   base::UmaHistogramEnumeration("WebAuthentication.CableV2.MobileResult",
                                 result);
-
-  if (global_data && global_data->metrics_enabled &&
-      global_data->server_link_tunnel_id.has_value()) {
-    protobuf::LogEvent(global_data->env, *global_data->server_link_tunnel_id,
-                       protobuf::Type::kResult, static_cast<unsigned>(result));
-  }
 }
 
 // AndroidBLEAdvert wraps a Java |BLEAdvert| object so that
@@ -416,7 +259,6 @@ class AndroidPlatform : public device::cablev2::authenticator::Platform {
     GlobalData& global_data = GetGlobalData();
     DCHECK(!global_data.pending_get_assertion_callback);
     global_data.pending_get_assertion_callback = std::move(callback);
-    global_data.get_assertion_start_time = base::TimeTicks::Now();
 
     std::vector<uint8_t> params_bytes =
         blink::mojom::PublicKeyCredentialRequestOptions::Serialize(&params);
@@ -621,18 +463,17 @@ class USBTransport : public device::cablev2::authenticator::Transport {
 // These functions are the entry points for CableAuthenticator.java and
 // BLEHandler.java calling into C++.
 
-static void JNI_CableAuthenticator_Setup(JNIEnv* env,
-                                         jlong registration_long,
-                                         jlong network_context_long,
-                                         const JavaParamRef<jbyteArray>& secret,
-                                         jboolean metrics_enabled) {
+static void JNI_CableAuthenticator_Setup(
+    JNIEnv* env,
+    jlong registration_long,
+    jlong network_context_long,
+    const JavaParamRef<jbyteArray>& secret) {
   GlobalData& global_data = GetGlobalData();
-  global_data.metrics_enabled = metrics_enabled;
 
   // The root_secret may not be provided when triggered for server-link. It
   // won't be used in that case either, but we need to be able to grab it if
   // setup() is called called for a different type of exchange.
-  base::span<const uint8_t> root_secret = JavaByteArrayToSpan(env, secret);
+  std::vector<uint8_t> root_secret = JavaByteArrayToByteVector(env, secret);
   if (!root_secret.empty() && !global_data.root_secret) {
     global_data.root_secret.emplace();
     CHECK_EQ(global_data.root_secret->size(), root_secret.size());
@@ -712,42 +553,37 @@ static jlong JNI_CableAuthenticator_StartQR(
 
   global_data.event_to_record_if_stopped =
       CableV2MobileEvent::kStoppedWhileAwaitingTunnelServerConnection;
-  global_data
-      .current_transaction = device::cablev2::authenticator::TransactFromQRCode(
-      // Just because the client supports storing linking information doesn't
-      // imply that it supports revision one, but we happened to introduce
-      // these features at the same time.
-      /*protocol_revision=*/decoded_qr->supports_linking.has_value() ? 1 : 0,
-      std::make_unique<AndroidPlatform>(env, cable_authenticator,
-                                        /*is_usb=*/false),
-      global_data.network_context, *global_data.root_secret,
-      ConvertJavaStringToUTF8(authenticator_name), decoded_qr->secret,
-      decoded_qr->peer_identity,
-      link ? global_data.registration->contact_id() : absl::nullopt,
-      // If the QR code knows about at least two registered tunnel server
-      // domains then we consider it recent enough to use the new Crypter mode.
-      /*use_new_crypter_construction=*/decoded_qr->num_known_domains >= 2);
+  global_data.current_transaction =
+      device::cablev2::authenticator::TransactFromQRCode(
+          std::make_unique<AndroidPlatform>(env, cable_authenticator,
+                                            /*is_usb=*/false),
+          global_data.network_context, *global_data.root_secret,
+          ConvertJavaStringToUTF8(authenticator_name), decoded_qr->secret,
+          decoded_qr->peer_identity,
+          link ? global_data.registration->contact_id() : absl::nullopt);
 
   return ++global_data.instance_num;
 }
 
-std::tuple<base::span<const uint8_t, device::kP256X962Length>,
-           base::span<const uint8_t, device::cablev2::kQRSecretSize>,
+std::tuple<std::array<uint8_t, device::kP256X962Length>,
+           std::array<uint8_t, device::cablev2::kQRSecretSize>,
            std::array<uint8_t, device::cablev2::kTunnelIdSize>>
 ParseServerLinkData(JNIEnv* env,
                     const JavaParamRef<jbyteArray>& server_link_data_java) {
-  constexpr size_t kDataSize =
-      device::kP256X962Length + device::cablev2::kQRSecretSize;
-  const absl::optional<base::span<const uint8_t, kDataSize>> server_link_data =
-      JavaByteArrayToFixedSpan<kDataSize>(env, server_link_data_java);
+  const std::vector<uint8_t> server_link_data =
+      JavaByteArrayToByteVector(env, server_link_data_java);
   // validateServerLinkData should have been called to check this already.
-  CHECK(server_link_data);
+  CHECK_EQ(server_link_data.size(),
+           device::kP256X962Length + device::cablev2::kQRSecretSize);
 
-  const base::span<const uint8_t, device::kP256X962Length> peer_identity =
-      server_link_data->subspan<0, device::kP256X962Length>();
-  const base::span<const uint8_t, device::cablev2::kQRSecretSize> qr_secret =
-      server_link_data
-          ->subspan<device::kP256X962Length, device::cablev2::kQRSecretSize>();
+  std::array<uint8_t, device::kP256X962Length> peer_identity;
+  memcpy(peer_identity.data(), server_link_data.data(),
+         device::kP256X962Length);
+
+  std::array<uint8_t, device::cablev2::kQRSecretSize> qr_secret;
+  memcpy(qr_secret.data(), server_link_data.data() + device::kP256X962Length,
+         device::cablev2::kQRSecretSize);
+
   const std::array<uint8_t, device::cablev2::kTunnelIdSize> tunnel_id =
       device::cablev2::Derive<device::cablev2::kTunnelIdSize>(
           qr_secret, base::span<uint8_t>(),
@@ -777,12 +613,10 @@ static jlong JNI_CableAuthenticator_StartServerLink(
 
   global_data.current_transaction =
       device::cablev2::authenticator::TransactFromQRCode(
-          /*protocol_revision=*/0,
           std::make_unique<AndroidPlatform>(env, cable_authenticator,
                                             /*is_usb=*/false),
           global_data.network_context, dummy_root_secret,
-          dummy_authenticator_name, qr_secret, peer_identity, absl::nullopt,
-          /*use_new_crypter_construction=*/false);
+          dummy_authenticator_name, qr_secret, peer_identity, absl::nullopt);
 
   return ++global_data.instance_num;
 }
@@ -796,7 +630,7 @@ static jlong JNI_CableAuthenticator_StartCloudMessage(
 
   auto event =
       device::cablev2::authenticator::Registration::Event::FromSerialized(
-          JavaByteArrayToSpan(env, serialized_event));
+          JavaByteArrayToByteVector(env, serialized_event));
   if (!event) {
     LOG(ERROR) << "Failed to parse event";
     return 0;
@@ -813,7 +647,6 @@ static jlong JNI_CableAuthenticator_StartCloudMessage(
       CableV2MobileEvent::kStoppedWhileAwaitingTunnelServerConnection;
   global_data.current_transaction =
       device::cablev2::authenticator::TransactFromFCM(
-          event->protocol_revision,
           std::make_unique<AndroidPlatform>(env, cable_authenticator,
                                             /*is_usb=*/false),
           global_data.network_context, *global_data.root_secret,
@@ -833,14 +666,15 @@ static void JNI_CableAuthenticator_Stop(JNIEnv* env, jlong instance_num) {
 static int JNI_CableAuthenticator_ValidateServerLinkData(
     JNIEnv* env,
     const JavaParamRef<jbyteArray>& jdata) {
-  base::span<const uint8_t> data = JavaByteArrayToSpan(env, jdata);
+  std::vector<uint8_t> data = JavaByteArrayToByteVector(env, jdata);
   if (data.size() != device::kP256X962Length + device::cablev2::kQRSecretSize) {
     RecordResult(nullptr, CableV2MobileResult::kInvalidServerLink);
     return static_cast<int>(device::cablev2::authenticator::Platform::Error::
                                 SERVER_LINK_WRONG_LENGTH);
   }
 
-  base::span<const uint8_t> x962 = data.subspan(0, device::kP256X962Length);
+  base::span<const uint8_t> x962 =
+      base::make_span(data).subspan(0, device::kP256X962Length);
   bssl::UniquePtr<EC_GROUP> p256(
       EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1));
   bssl::UniquePtr<EC_POINT> point(EC_POINT_new(p256.get()));
@@ -881,7 +715,7 @@ static void JNI_CableAuthenticator_OnAuthenticatorAttestationResponse(
     JNIEnv* env,
     jint ctap_status,
     const JavaParamRef<jbyteArray>& jattestation_object,
-    const JavaParamRef<jbyteArray>& jdevice_public_key_signature) {
+    jboolean prf_enabled) {
   GlobalData& global_data = GetGlobalData();
 
   if (!global_data.pending_make_credential_callback) {
@@ -890,15 +724,9 @@ static void JNI_CableAuthenticator_OnAuthenticatorAttestationResponse(
   auto callback = std::move(*global_data.pending_make_credential_callback);
   global_data.pending_make_credential_callback.reset();
 
-  absl::optional<base::span<const uint8_t>> device_public_key_signature;
-  if (jdevice_public_key_signature) {
-    device_public_key_signature =
-        JavaByteArrayToSpan(env, jdevice_public_key_signature);
-  }
-
   std::move(callback).Run(ctap_status,
-                          JavaByteArrayToSpan(env, jattestation_object),
-                          device_public_key_signature);
+                          JavaByteArrayToByteVector(env, jattestation_object),
+                          prf_enabled);
 }
 
 static void JNI_CableAuthenticator_OnAuthenticatorAssertionResponse(
@@ -907,20 +735,6 @@ static void JNI_CableAuthenticator_OnAuthenticatorAssertionResponse(
     const JavaParamRef<jbyteArray>& jresponse_bytes) {
   GlobalData& global_data = GetGlobalData();
   RecordEvent(&global_data, CableV2MobileEvent::kGetAssertionComplete);
-
-  // TODO: |get_assertion_start_time| should always be present in this case.
-  // But, at the time of writing, we are seeing some odd numbers in UMA metrics
-  // and aren't sure what's going on. Thus there's an if to avoid introducing
-  // a crash. If the number of records for this histogram are comparible to
-  // the number of recorded starts, then this can be removed.
-  DCHECK(global_data.get_assertion_start_time);
-  if (global_data.get_assertion_start_time) {
-    const base::TimeDelta duration =
-        base::TimeTicks::Now() - global_data.get_assertion_start_time.value();
-    base::UmaHistogramMediumTimes("WebAuthentication.CableV2.GetAssertionTime",
-                                  duration);
-    global_data.get_assertion_start_time.reset();
-  }
 
   if (!global_data.pending_get_assertion_callback) {
     RecordEvent(&global_data, CableV2MobileEvent::kStrayGetAssertionResponse);
@@ -931,8 +745,8 @@ static void JNI_CableAuthenticator_OnAuthenticatorAssertionResponse(
 
   if (ctap_status ==
       static_cast<jint>(device::CtapDeviceResponseCode::kSuccess)) {
-    base::span<const uint8_t> response_bytes =
-        JavaByteArrayToSpan(env, jresponse_bytes);
+    std::vector<uint8_t> response_bytes =
+        JavaByteArrayToByteVector(env, jresponse_bytes);
     auto response = blink::mojom::GetAssertionAuthenticatorResponse::New();
     if (blink::mojom::GetAssertionAuthenticatorResponse::Deserialize(
             response_bytes.data(), response_bytes.size(), &response)) {
@@ -947,20 +761,6 @@ static void JNI_CableAuthenticator_OnAuthenticatorAssertionResponse(
   std::move(callback).Run(ctap_status, nullptr);
 }
 
-static void JNI_CableAuthenticator_RecordEvent(
-    JNIEnv* env,
-    jint event,
-    const JavaParamRef<jbyteArray>& server_link_data_java) {
-  auto server_link_values = ParseServerLinkData(env, server_link_data_java);
-  base::UmaHistogramEnumeration("WebAuthentication.CableV2.MobileEvent",
-                                static_cast<CableV2MobileEvent>(event));
-
-  if (GetGlobalData().metrics_enabled) {
-    protobuf::LogEvent(env, /*tunnel_id=*/std::get<2>(server_link_values),
-                       protobuf::Type::kEvent, event);
-  }
-}
-
 static void JNI_USBHandler_OnUSBData(JNIEnv* env,
                                      const JavaParamRef<jbyteArray>& usb_data) {
   GlobalData& global_data = GetGlobalData();
@@ -971,6 +771,6 @@ static void JNI_USBHandler_OnUSBData(JNIEnv* env,
   if (!usb_data) {
     global_data.usb_callback->Run(absl::nullopt);
   } else {
-    global_data.usb_callback->Run(JavaByteArrayToSpan(env, usb_data));
+    global_data.usb_callback->Run(JavaByteArrayToByteVector(env, usb_data));
   }
 }

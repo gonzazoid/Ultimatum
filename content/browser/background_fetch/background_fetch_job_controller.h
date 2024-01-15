@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -83,7 +83,7 @@ class CONTENT_EXPORT BackgroundFetchJobController
       std::vector<scoped_refptr<BackgroundFetchRequestInfo>>
           active_fetch_requests,
       bool start_paused,
-      absl::optional<net::IsolationInfo> isolation_info);
+      std::optional<net::IsolationInfo> isolation_info);
 
   // Gets the number of bytes downloaded/uploaded for jobs that are currently
   // running.

@@ -4,14 +4,10 @@
 
 #import "ios/chrome/browser/ui/overlays/test_modality/test_presented_overlay_coordinator.h"
 
-#import "ios/chrome/browser/overlays/public/test_modality/test_presented_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_presented_overlay_request_config.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator+subclassing.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator_delegate.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface TestPresentedOverlayCoordinator ()
 // Redefine as readwrite.

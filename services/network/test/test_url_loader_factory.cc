@@ -7,6 +7,7 @@
 #include "base/check_op.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
+#include "base/test/test_future.h"
 #include "net/http/http_status_code.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/resource_request_body.h"
@@ -16,6 +17,38 @@
 #include "services/network/test/test_utils.h"
 
 namespace network {
+
+TestURLLoaderFactory::TestURLLoader::FollowRedirectParams::
+    FollowRedirectParams() = default;
+TestURLLoaderFactory::TestURLLoader::FollowRedirectParams::
+    ~FollowRedirectParams() = default;
+
+TestURLLoaderFactory::TestURLLoader::FollowRedirectParams::FollowRedirectParams(
+    FollowRedirectParams&& other) = default;
+
+TestURLLoaderFactory::TestURLLoader::FollowRedirectParams&
+TestURLLoaderFactory::TestURLLoader::FollowRedirectParams::operator=(
+    FollowRedirectParams&& other) = default;
+
+TestURLLoaderFactory::TestURLLoader::TestURLLoader(
+    mojo::PendingReceiver<network::mojom::URLLoader> url_loader_receiver)
+    : receiver_(this, std::move(url_loader_receiver)) {}
+
+TestURLLoaderFactory::TestURLLoader::~TestURLLoader() = default;
+
+void TestURLLoaderFactory::TestURLLoader::FollowRedirect(
+    const std::vector<std::string>& removed_headers,
+    const net::HttpRequestHeaders& modified_headers,
+    const net::HttpRequestHeaders& modified_cors_exempt_headers,
+    const absl::optional<GURL>& new_url) {
+  FollowRedirectParams params;
+  params.removed_headers = removed_headers;
+  params.modified_headers = modified_headers;
+  params.modified_cors_exempt_headers = modified_cors_exempt_headers;
+  params.new_url = new_url;
+
+  follow_redirect_params_.emplace_back(std::move(params));
+}
 
 TestURLLoaderFactory::PendingRequest::PendingRequest() = default;
 TestURLLoaderFactory::PendingRequest::~PendingRequest() = default;
@@ -31,10 +64,11 @@ TestURLLoaderFactory::Response::Response(Response&&) = default;
 TestURLLoaderFactory::Response& TestURLLoaderFactory::Response::operator=(
     Response&&) = default;
 
-TestURLLoaderFactory::TestURLLoaderFactory()
+TestURLLoaderFactory::TestURLLoaderFactory(bool observe_loader_requests)
     : weak_wrapper_(
           base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-              this)) {}
+              this)),
+      observe_loader_requests_(observe_loader_requests) {}
 
 TestURLLoaderFactory::~TestURLLoaderFactory() {
   weak_wrapper_->Detach();
@@ -132,12 +166,21 @@ void TestURLLoaderFactory::CreateLoaderAndStart(
     return;
 
   PendingRequest pending_request;
+
+  if (observe_loader_requests_) {
+    pending_request.test_url_loader =
+        std::make_unique<TestURLLoader>(std::move(receiver));
+  }
+
   pending_request.client = std::move(client_remote);
   pending_request.request_id = request_id;
   pending_request.options = options;
   pending_request.request = url_request;
   pending_request.traffic_annotation = traffic_annotation;
   pending_requests_.push_back(std::move(pending_request));
+  if (on_new_pending_request_) {
+    std::move(on_new_pending_request_).Run();
+  }
 }
 
 void TestURLLoaderFactory::Clone(
@@ -166,50 +209,74 @@ bool TestURLLoaderFactory::CreateLoaderAndStartInternal(
   return true;
 }
 
+absl::optional<network::TestURLLoaderFactory::PendingRequest>
+TestURLLoaderFactory::FindPendingRequest(const GURL& url,
+                                         ResponseMatchFlags flags) {
+  const bool url_match_prefix = flags & kUrlMatchPrefix;
+  const bool reverse = flags & kMostRecentMatch;
+  const bool wait_for_request = flags & kWaitForRequest;
+
+  // Give any cancellations a chance to happen...
+  base::RunLoop().RunUntilIdle();
+
+  network::TestURLLoaderFactory::PendingRequest request;
+  while (true) {
+    bool found_request = false;
+    for (int i = (reverse ? static_cast<int>(pending_requests_.size()) - 1 : 0);
+         reverse ? i >= 0 : i < static_cast<int>(pending_requests_.size());
+         reverse ? --i : ++i) {
+      // Skip already cancelled.
+      if (!pending_requests_[i].client.is_connected()) {
+        continue;
+      }
+
+      if (pending_requests_[i].request.url == url ||
+          (url_match_prefix &&
+           base::StartsWith(pending_requests_[i].request.url.spec(), url.spec(),
+                            base::CompareCase::INSENSITIVE_ASCII))) {
+        request = std::move(pending_requests_[i]);
+        pending_requests_.erase(pending_requests_.begin() + i);
+        found_request = true;
+        break;
+      }
+    }
+    if (found_request) {
+      return request;
+    }
+    if (wait_for_request) {
+      base::test::TestFuture<void> future;
+      on_new_pending_request_ = future.GetCallback();
+      if (!future.Wait()) {
+        // Timed out.
+        return absl::nullopt;
+      }
+    } else {
+      return absl::nullopt;
+    }
+  }
+}
+
 bool TestURLLoaderFactory::SimulateResponseForPendingRequest(
     const GURL& url,
     const network::URLLoaderCompletionStatus& completion_status,
     mojom::URLResponseHeadPtr response_head,
     const std::string& content,
     ResponseMatchFlags flags) {
-  if (pending_requests_.empty())
+  auto request = FindPendingRequest(url, flags);
+  if (!request) {
     return false;
-
-  const bool url_match_prefix = flags & kUrlMatchPrefix;
-  const bool reverse = flags & kMostRecentMatch;
-
-  // Give any cancellations a chance to happen...
-  base::RunLoop().RunUntilIdle();
-
-  bool found_request = false;
-  network::TestURLLoaderFactory::PendingRequest request;
-  for (int i = (reverse ? static_cast<int>(pending_requests_.size()) - 1 : 0);
-       reverse ? i >= 0 : i < static_cast<int>(pending_requests_.size());
-       reverse ? --i : ++i) {
-    // Skip already cancelled.
-    if (!pending_requests_[i].client.is_connected())
-      continue;
-
-    if (pending_requests_[i].request.url == url ||
-        (url_match_prefix &&
-         base::StartsWith(pending_requests_[i].request.url.spec(), url.spec(),
-                          base::CompareCase::INSENSITIVE_ASCII))) {
-      request = std::move(pending_requests_[i]);
-      pending_requests_.erase(pending_requests_.begin() + i);
-      found_request = true;
-      break;
-    }
   }
-  if (!found_request)
-    return false;
 
   // |decoded_body_length| must be set to the right size or the SimpleURLLoader
   // will fail.
   network::URLLoaderCompletionStatus status(completion_status);
   status.decoded_body_length = content.size();
 
-  SimulateResponse(request.client.get(), TestURLLoaderFactory::Redirects(),
+  SimulateResponse(request->client.get(), TestURLLoaderFactory::Redirects(),
                    std::move(response_head), content, status, kResponseDefault);
+  // Attempt to wait for the response to be handled. If any part of the handling
+  // is queued elsewhere (for example on another thread) this may return before
+  // it is finished.
   base::RunLoop().RunUntilIdle();
 
   return true;
@@ -237,6 +304,9 @@ void TestURLLoaderFactory::SimulateResponseWithoutRemovingFromPendingList(
   status.decoded_body_length = content.size();
   SimulateResponse(request->client.get(), TestURLLoaderFactory::Redirects(),
                    std::move(head), content, status, kResponseDefault);
+  // Attempt to wait for the response to be handled. If any part of the handling
+  // is queued elsewhere (for example on another thread) this may return before
+  // it is finished.
   base::RunLoop().RunUntilIdle();
 }
 

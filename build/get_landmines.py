@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -8,7 +8,6 @@ This file emits the list of reasons why a particular build needs to be clobbered
 (or a list of 'landmines').
 """
 
-from __future__ import print_function
 
 import sys
 
@@ -78,6 +77,11 @@ def print_landmines():
   print('The Great Blink mv for source files (crbug.com/768828)')
   if host_os() == 'linux':
     print('Clobber to workaround buggy .ninja_deps cycle (crbug.com/934404)')
+  print('Clobber to flush stale generated files. See crbug.com/1406628')
+  print('Clobber to flush old .ninja_log files for updating ninja. '
+        'See crbug.com/1406628#c14')
+  if host_os() == 'mac':
+    print('Clobber to clear old nocompile targets. See crbug.com/1497005.')
 
 
 def main():

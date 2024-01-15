@@ -5,7 +5,7 @@
 #include <memory>
 #include "services/device/generic_sensor/platform_sensor_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/test/task_environment.h"
@@ -15,11 +15,13 @@
 #include "services/device/generic_sensor/platform_sensor_util.h"
 #include "services/device/public/cpp/generic_sensor/platform_sensor_configuration.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::_;
 using ::testing::Invoke;
 using ::testing::NiceMock;
+using ::testing::Return;
 
 namespace device {
 
@@ -217,6 +219,65 @@ TEST_F(PlatformSensorAndProviderTest, SensorValueValidityCheckAmbientLight) {
     fake_sensor->GetLatestReading(&reading);
     EXPECT_DOUBLE_EQ(reading.als.value, test_case.expected_als_value);
   }
+}
+
+TEST_F(PlatformSensorAndProviderTest, ResetLastReadingsOnStop) {
+  scoped_refptr<FakePlatformSensor> fake_sensor =
+      CreateSensorSync(SensorType::AMBIENT_LIGHT);
+  ASSERT_EQ(fake_sensor->GetReportingMode(), mojom::ReportingMode::ON_CHANGE);
+
+  auto client = std::make_unique<MockPlatformSensorClient>(fake_sensor);
+  EXPECT_TRUE(fake_sensor->StartListening(client.get(),
+                                          PlatformSensorConfiguration(10)));
+
+  SensorReading reading;
+  reading.raw.timestamp = 1.0;
+  reading.als.value = 1.0;
+
+  AddNewReadingAndExpectReadingChangedEvent(client.get(), reading);
+
+  // We could have also called PlatformSensor::StopListening(),
+  // PlatformSensor::UpdateSensor() and PlatformSensor::StartListening(). The
+  // idea is to get the sensor to stop, regardless of whether is_active_ is
+  // true or not.
+  ON_CALL(*client, IsSuspended()).WillByDefault(Return(true));
+  fake_sensor->UpdateSensor();
+  ON_CALL(*client, IsSuspended()).WillByDefault(Return(false));
+  fake_sensor->UpdateSensor();
+
+  // Set the exact same readings. They should be stored because stopping the
+  // sensor causes the previous readings to be reset.
+  AddNewReadingAndExpectReadingChangedEvent(client.get(), reading);
+}
+
+TEST_F(PlatformSensorAndProviderTest, DoNotStoreReadingsWhenInactive) {
+  scoped_refptr<FakePlatformSensor> fake_sensor =
+      CreateSensorSync(SensorType::AMBIENT_LIGHT);
+  ASSERT_EQ(fake_sensor->GetReportingMode(), mojom::ReportingMode::ON_CHANGE);
+
+  auto client = std::make_unique<MockPlatformSensorClient>(fake_sensor);
+  EXPECT_TRUE(fake_sensor->StartListening(client.get(),
+                                          PlatformSensorConfiguration(10)));
+  EXPECT_TRUE(fake_sensor->IsActiveForTesting());
+
+  ON_CALL(*client, IsSuspended()).WillByDefault(Return(true));
+  fake_sensor->UpdateSensor();
+  EXPECT_FALSE(fake_sensor->IsActiveForTesting());
+
+  SensorReading reading;
+  reading.raw.timestamp = 1.0;
+  reading.als.value = 1.0;
+
+  AddNewReadingAndExpectNoReadingChangedEvent(client.get(), reading);
+
+  ON_CALL(*client, IsSuspended()).WillByDefault(Return(false));
+  fake_sensor->UpdateSensor();
+  EXPECT_TRUE(fake_sensor->IsActiveForTesting());
+
+  // Set the exact same readings. They should be stored because
+  // |last_raw_reading_| and |last_rounded_reading_| should not have been
+  // updated while the sensor was not active.
+  AddNewReadingAndExpectReadingChangedEvent(client.get(), reading);
 }
 
 // No rounding of values. Any change in values reported in significance test.

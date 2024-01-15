@@ -20,6 +20,12 @@ namespace unified_consent {
 // for URL-keyed data collection.
 class UrlKeyedDataCollectionConsentHelper {
  public:
+  enum class State {
+    kInitializing,
+    kDisabled,
+    kEnabled,
+  };
+
   class Observer {
    public:
     // Called when the state of the URL-keyed data collection changes.
@@ -48,6 +54,15 @@ class UrlKeyedDataCollectionConsentHelper {
   static std::unique_ptr<UrlKeyedDataCollectionConsentHelper>
   NewPersonalizedDataCollectionConsentHelper(syncer::SyncService* sync_service);
 
+  // Creates a new |UrlKeyedDataCollectionConsentHelper| instance that checks
+  // whether *bookmarks* data collection is enabled. This should be used when
+  // the client needs to check whether the user has granted consent for
+  // bookmarks data collection keyed by their Google account.
+  static std::unique_ptr<UrlKeyedDataCollectionConsentHelper>
+  NewPersonalizedBookmarksDataCollectionConsentHelper(
+      syncer::SyncService* sync_service,
+      bool require_sync_feature_enabled);
+
   UrlKeyedDataCollectionConsentHelper(
       const UrlKeyedDataCollectionConsentHelper&) = delete;
   UrlKeyedDataCollectionConsentHelper& operator=(
@@ -55,9 +70,14 @@ class UrlKeyedDataCollectionConsentHelper {
 
   virtual ~UrlKeyedDataCollectionConsentHelper();
 
+  // Returns the state of the consent helper. To throttle requests until after
+  // initialization, use the `ConsentThrottle` class.
+  virtual State GetConsentState() = 0;
+
   // Returns true if the user has consented for URL keyed anonymized data
-  // collection.
-  virtual bool IsEnabled() = 0;
+  // collection. Note, this is a simplified form of `GetConsentState()` where
+  // kInitializing and kDisabled are both considered NOT enabled.
+  bool IsEnabled();
 
   // Methods to register or remove observers.
   void AddObserver(Observer* observer);

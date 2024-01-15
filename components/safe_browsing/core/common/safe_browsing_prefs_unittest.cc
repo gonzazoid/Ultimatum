@@ -8,6 +8,7 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
@@ -33,6 +34,8 @@ class SafeBrowsingPrefsTest : public ::testing::Test {
     prefs_.registry()->RegisterBooleanPref(
         prefs::kSafeBrowsingExtendedReportingOptInAllowed, true);
     prefs_.registry()->RegisterListPref(prefs::kSafeBrowsingAllowlistDomains);
+    prefs_.registry()->RegisterBooleanPref(
+        prefs::kHashPrefixRealTimeChecksAllowedByPolicy, true);
   }
 
   void ResetPrefs(bool scout_reporting) {
@@ -54,6 +57,47 @@ class SafeBrowsingPrefsTest : public ::testing::Test {
   TestingPrefServiceSimple prefs_;
 };
 
+TEST_F(SafeBrowsingPrefsTest,
+       TailoredSecuritySyncFlowLastRunTimeIsInitialized) {
+  TestingPrefServiceSimple prefs;
+  RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(prefs.GetTime(prefs::kTailoredSecuritySyncFlowLastRunTime),
+            base::Time());
+}
+
+TEST_F(SafeBrowsingPrefsTest,
+       TailoredSecuritySyncLastUserInteractionStateIsInitialized) {
+  TestingPrefServiceSimple prefs;
+  RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(
+      prefs.GetValue(prefs::kTailoredSecuritySyncFlowLastUserInteractionState),
+      TailoredSecurityRetryState::UNSET);
+}
+
+TEST_F(SafeBrowsingPrefsTest,
+       TailoredSecurityNextSyncFlowTimestampIsInitialized) {
+  TestingPrefServiceSimple prefs;
+  RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(prefs.GetTime(prefs::kTailoredSecurityNextSyncFlowTimestamp),
+            base::Time());
+}
+
+TEST_F(SafeBrowsingPrefsTest, TailoredSecuritySyncFlowRetryStateIsInitialized) {
+  TestingPrefServiceSimple prefs;
+  RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(prefs.GetValue(prefs::kTailoredSecuritySyncFlowRetryState),
+            TailoredSecurityRetryState::UNSET);
+}
+
+TEST_F(SafeBrowsingPrefsTest,
+       TailoredSecuritySyncUserObservedOutcomeUnsetTimestampIsInitialized) {
+  TestingPrefServiceSimple prefs;
+  RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(prefs.GetTime(
+                prefs::kTailoredSecuritySyncFlowObservedOutcomeUnsetTimestamp),
+            base::Time());
+}
+
 TEST_F(SafeBrowsingPrefsTest, GetSafeBrowsingExtendedReportingLevel) {
   // By Default, extended reporting is off.
   EXPECT_EQ(SBER_LEVEL_OFF, GetExtendedReportingLevel(prefs_));
@@ -71,14 +115,14 @@ TEST_F(SafeBrowsingPrefsTest, VerifyMatchesPasswordProtectionLoginURL) {
   EXPECT_FALSE(prefs_.HasPrefPath(prefs::kPasswordProtectionLoginURLs));
   EXPECT_FALSE(MatchesPasswordProtectionLoginURL(url, prefs_));
 
-  base::ListValue login_urls;
+  base::Value::List login_urls;
   login_urls.Append("https://otherdomain.com/login.html");
-  prefs_.Set(prefs::kPasswordProtectionLoginURLs, login_urls);
+  prefs_.SetList(prefs::kPasswordProtectionLoginURLs, login_urls.Clone());
   EXPECT_TRUE(prefs_.HasPrefPath(prefs::kPasswordProtectionLoginURLs));
   EXPECT_FALSE(MatchesPasswordProtectionLoginURL(url, prefs_));
 
   login_urls.Append("https://mydomain.com/login.html");
-  prefs_.Set(prefs::kPasswordProtectionLoginURLs, login_urls);
+  prefs_.SetList(prefs::kPasswordProtectionLoginURLs, std::move(login_urls));
   EXPECT_TRUE(prefs_.HasPrefPath(prefs::kPasswordProtectionLoginURLs));
   EXPECT_TRUE(MatchesPasswordProtectionLoginURL(url, prefs_));
 }
@@ -105,19 +149,28 @@ TEST_F(SafeBrowsingPrefsTest, EnhancedProtection) {
   EXPECT_FALSE(IsEnhancedProtectionEnabled(prefs_));
 
   SetEnhancedProtectionPrefForTests(&prefs_, true);
+  EXPECT_TRUE(IsEnhancedProtectionEnabled(prefs_));
   {
-    base::test::ScopedFeatureList scoped_feature_list;
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeature(kEnhancedProtection);
-    EXPECT_TRUE(IsEnhancedProtectionEnabled(prefs_));
-  }
-  {
-    base::test::ScopedFeatureList scoped_feature_list;
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndDisableFeature(kEnhancedProtection);
     prefs_.SetBoolean(prefs::kSafeBrowsingEnabled, false);
     EXPECT_FALSE(IsEnhancedProtectionEnabled(prefs_));
   }
+}
+
+TEST_F(SafeBrowsingPrefsTest, InitializesEsbProtegoPingWithTokenLastLogTime) {
+  TestingPrefServiceSimple prefs;
+  safe_browsing::RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(
+      prefs.GetTime(prefs::kSafeBrowsingEsbProtegoPingWithTokenLastLogTime),
+      base::Time());
+}
+
+TEST_F(SafeBrowsingPrefsTest,
+       InitializesEsbProtegoPingWithoutTokenLastLogTime) {
+  TestingPrefServiceSimple prefs;
+  safe_browsing::RegisterProfilePrefs(prefs.registry());
+  EXPECT_EQ(
+      prefs.GetTime(prefs::kSafeBrowsingEsbProtegoPingWithoutTokenLastLogTime),
+      base::Time());
 }
 
 TEST_F(SafeBrowsingPrefsTest, IsExtendedReportingPolicyManaged) {
@@ -159,14 +212,21 @@ TEST_F(SafeBrowsingPrefsTest, VerifyIsURLAllowlistedByPolicy) {
   GURL target_url("https://www.foo.com");
 
   EXPECT_FALSE(prefs_.HasPrefPath(prefs::kSafeBrowsingAllowlistDomains));
-  base::ListValue allowlisted_domains;
+  base::Value::List allowlisted_domains;
   allowlisted_domains.Append("foo.com");
-  prefs_.Set(prefs::kSafeBrowsingAllowlistDomains, allowlisted_domains);
+  prefs_.SetList(prefs::kSafeBrowsingAllowlistDomains,
+                 std::move(allowlisted_domains));
   StringListPrefMember string_list_pref;
   string_list_pref.Init(prefs::kSafeBrowsingAllowlistDomains, &prefs_);
   EXPECT_TRUE(IsURLAllowlistedByPolicy(target_url, prefs_));
 
   GURL not_allowlisted_url("https://www.bar.com");
   EXPECT_FALSE(IsURLAllowlistedByPolicy(not_allowlisted_url, prefs_));
+}
+
+TEST_F(SafeBrowsingPrefsTest, VerifyHashPrefixRealTimeChecksAllowedByPolicy) {
+  EXPECT_TRUE(AreHashPrefixRealTimeLookupsAllowedByPolicy(prefs_));
+  prefs_.SetBoolean(prefs::kHashPrefixRealTimeChecksAllowedByPolicy, false);
+  EXPECT_FALSE(AreHashPrefixRealTimeLookupsAllowedByPolicy(prefs_));
 }
 }  // namespace safe_browsing

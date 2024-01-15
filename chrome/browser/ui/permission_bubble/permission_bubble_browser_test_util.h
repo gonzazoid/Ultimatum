@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "components/permissions/permission_prompt.h"
@@ -38,7 +39,9 @@ class TestPermissionBubbleViewDelegate
 
   ~TestPermissionBubbleViewDelegate() override;
 
-  const std::vector<permissions::PermissionRequest*>& Requests() override;
+  const std::vector<
+      raw_ptr<permissions::PermissionRequest, VectorExperimental>>&
+  Requests() override;
 
   GURL GetRequestingOrigin() const override;
 
@@ -49,10 +52,14 @@ class TestPermissionBubbleViewDelegate
   void Deny() override {}
   void Dismiss() override {}
   void Ignore() override {}
+  void FinalizeCurrentRequests() override {}
+  void OpenHelpCenterLink(const ui::Event& event) override {}
+  void PreIgnoreQuietPrompt() override {}
   void SetManageClicked() override {}
   void SetLearnMoreClicked() override {}
+  void SetHatsShownCallback(base::OnceCallback<void()> callback) override {}
 
-  absl::optional<permissions::PermissionUiSelector::QuietUiReason>
+  std::optional<permissions::PermissionUiSelector::QuietUiReason>
   ReasonForUsingQuietUi() const override;
   bool ShouldCurrentRequestUseQuietUI() const override;
   bool ShouldDropCurrentRequestIfCannotShowQuietly() const override;
@@ -61,15 +68,19 @@ class TestPermissionBubbleViewDelegate
   void SetPromptShown() override {}
   void SetDecisionTime() override {}
   bool RecreateView() override;
+  content::WebContents* GetAssociatedWebContents() override;
 
   base::WeakPtr<permissions::PermissionPrompt::Delegate> GetWeakPtr() override;
 
-  void set_requests(std::vector<permissions::PermissionRequest*> requests) {
+  void set_requests(
+      std::vector<raw_ptr<permissions::PermissionRequest, VectorExperimental>>
+          requests) {
     requests_ = requests;
   }
 
  private:
-  std::vector<permissions::PermissionRequest*> requests_;
+  std::vector<raw_ptr<permissions::PermissionRequest, VectorExperimental>>
+      requests_;
   base::WeakPtrFactory<TestPermissionBubbleViewDelegate> weak_factory_{this};
 };
 

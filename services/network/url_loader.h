@@ -7,14 +7,16 @@
 
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ref.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -26,8 +28,11 @@
 #include "net/base/load_states.h"
 #include "net/base/network_delegate.h"
 #include "net/base/transport_info.h"
+#include "net/base/upload_progress.h"
+#include "net/cookies/cookie_setting_override.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/url_request/url_request.h"
+#include "services/network/attribution/attribution_request_helper.h"
 #include "services/network/keepalive_statistics_recorder.h"
 #include "services/network/network_service.h"
 #include "services/network/network_service_memory_cache.h"
@@ -44,10 +49,14 @@
 #include "services/network/public/mojom/ip_address_space.mojom-forward.h"
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
 #include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/trust_token_access_observer.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
+#include "services/network/public/mojom/url_response_head.mojom-forward.h"
 #include "services/network/resource_scheduler/resource_scheduler.h"
 #include "services/network/resource_scheduler/resource_scheduler_client.h"
+#include "services/network/shared_dictionary/shared_dictionary_access_checker.h"
+#include "services/network/shared_storage/shared_storage_request_helper.h"
 #include "services/network/trust_tokens/pending_trust_token_store.h"
 #include "services/network/trust_tokens/trust_token_request_helper.h"
 #include "services/network/trust_tokens/trust_token_request_helper_factory.h"
@@ -70,24 +79,11 @@ class OriginAccessList;
 
 constexpr size_t kMaxFileUploadRequestsPerBatch = 64;
 
-class CacheTransparencySettings;
 class KeepaliveStatisticsRecorder;
 class NetToMojoPendingBuffer;
 class ScopedThrottlingToken;
+class SlopBucket;
 class URLLoaderFactory;
-
-// When a request matches a pervasive payload url and checksum a value from this
-// enum will be logged to the "Network.CacheTransparency.CacheNotUsed"
-// histogram. These values are persisted to logs. Entries should not be
-// renumbered and numeric values should never be reused. This is exposed in the
-// header file for use in tests.
-enum class CacheTransparencyCacheNotUsedReason {
-  kTryingSingleKeyedCache = 0,
-  kIncompatibleRequestType = 1,
-  kIncompatibleRequestLoadFlags = 2,
-  kIncompatibleRequestHeaders = 3,
-  kMaxValue = kIncompatibleRequestHeaders,
-};
 
 class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
     : public mojom::URLLoader,
@@ -95,25 +91,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
       public mojom::AuthChallengeResponder,
       public mojom::ClientCertificateResponder {
  public:
-  // Enumeration for UMA histograms logged by LogConcerningRequestHeaders().
-  // Entries should not be renumbered and numeric values should never be reused.
-  // Please keep in sync with "NetworkServiceConcerningRequestHeaders" in
-  // src/tools/metrics/histograms/enums.xml.
-  enum class ConcerningHeaderId {
-    kConnection = 0,
-    kCookie = 1,
-    kCookie2 = 2,
-    kContentTransferEncoding = 3,
-    kDate = 4,
-    kExpect = 5,
-    kKeepAlive = 6,
-    kReferer = 7,
-    kTe = 8,
-    kTransferEncoding = 9,
-    kVia = 10,
-    kMaxValue = kVia,
-  };
-
   using DeleteCallback = base::OnceCallback<void(URLLoader* loader)>;
 
   // Holds a sync and async implementation of URLLoaderClient. The sync
@@ -138,6 +115,24 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
    private:
     mojo::Remote<mojom::URLLoaderClient> mojo_client_;
     base::WeakPtr<mojom::URLLoaderClient> sync_client_;
+  };
+
+  // A subset of the fields in mojom::LoadInfo.
+  struct PartialLoadInfo final {
+    PartialLoadInfo() = default;
+    PartialLoadInfo(net::LoadStateWithParam load_state,
+                    net::UploadProgress upload_progress);
+
+    // Avoid accidentally copying this object as `load_state` contains a string.
+    PartialLoadInfo(const PartialLoadInfo&) = delete;
+    PartialLoadInfo& operator=(const PartialLoadInfo&) = delete;
+
+    // Moving it is good.
+    PartialLoadInfo(PartialLoadInfo&&) = default;
+    PartialLoadInfo& operator=(PartialLoadInfo&&) = default;
+
+    net::LoadStateWithParam load_state;
+    net::UploadProgress upload_progress;
   };
 
   // |delete_callback| tells the URLLoader's owner to destroy the URLLoader.
@@ -173,14 +168,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
       base::WeakPtr<KeepaliveStatisticsRecorder> keepalive_statistics_recorder,
       std::unique_ptr<TrustTokenRequestHelperFactory>
           trust_token_helper_factory,
+      std::unique_ptr<SharedDictionaryAccessChecker> shared_dictionary_checker,
       mojo::PendingRemote<mojom::CookieAccessObserver> cookie_observer,
+      mojo::PendingRemote<mojom::TrustTokenAccessObserver> trust_token_observer,
       mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver>
           url_loader_network_observer,
       mojo::PendingRemote<mojom::DevToolsObserver> devtools_observer,
       mojo::PendingRemote<mojom::AcceptCHFrameObserver>
           accept_ch_frame_observer,
-      bool third_party_cookies_enabled,
-      const CacheTransparencySettings* cache_transparency_settings);
+      net::CookieSettingOverrides cookie_setting_overrides,
+      std::unique_ptr<AttributionRequestHelper> attribution_request_helper,
+      bool shared_storage_writable_eligible);
 
   URLLoader(const URLLoader&) = delete;
   URLLoader& operator=(const URLLoader&) = delete;
@@ -278,18 +276,24 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
     return devtools_request_id_;
   }
 
+  SharedStorageRequestHelper* shared_storage_request_helper() const {
+    return shared_storage_request_helper_.get();
+  }
+
   void SetEnableReportingRawHeaders(bool enable);
 
-  mojom::LoadInfoPtr CreateLoadInfo();
+  // Returns a subset of the info in mojom::LoadInfo. This is sufficient to make
+  // a decision on whether to call CreateLoadInfo() for this loader.
+  PartialLoadInfo GetPartialLoadInfo() const;
+
+  // Returns a mojom::LoadInfo, reusing the data returned by
+  // GetPartialLoadInfo().
+  mojom::LoadInfoPtr CreateLoadInfo(const PartialLoadInfo& partial_load_info);
 
   // Gets the URLLoader associated with this request.
   static URLLoader* ForRequest(const net::URLRequest& request);
 
   static const void* const kUserDataKey;
-
-  static void LogConcerningRequestHeaders(
-      const net::HttpRequestHeaders& request_headers,
-      bool added_during_redirect);
 
   static bool HasFetchStreamingUploadBody(const ResourceRequest*);
 
@@ -335,6 +339,110 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
                    int error_code,
                    const std::vector<base::File> opened_files);
 
+  // A `ResourceRequest` where `shared_storage_writable_eligible` is true, is
+  // eligible for shared storage operations via response headers.
+  //
+  // Outbound control flow:
+  //
+  // Start in `ProcessOutboundSharedStorageInterceptor()`
+  // - Execute `SharedStorageRequestHelper::ProcessOutgoingRequest`, which will
+  // add the `kSecSharedStorageWritableHeader` request header to the
+  // `URLRequest` if `ResourceRequest::shared_storage_writable_eligible` is true
+  // and there is a `mojom::URLLoaderNetworkServiceObserver*` available to
+  // forward processed headers to.
+  // - `ScheduleStart` immediately afterwards regardless of eligibility for
+  // shared storage
+  //
+  // Outbound redirection control flow:
+  //
+  // Start in `FollowRedirect`
+  // - Execute
+  // `SharedStorageRequestHelper::UpdateSharedStorageWritableEligible`
+  // to remove or restore the `kSecSharedStorageWritableHeader` request header
+  // if eligibility has been lost or regained
+  //
+  // Inbound redirection control flow:
+  //
+  // Start in `ProcessInboundSharedStorageInterceptorOnReceivedRedirect`
+  // - Execute `SharedStorageRequestHelper::ProcessIncomingResponse`
+  // - If the request has received the `kSharedStorageWriteHeader` response
+  // header and if it is currently eligible for shared storage (i.e., in
+  // particular, the `kSecSharedStorageWritableHeader` has not been removed on a
+  // redirect), the helper will parse the header value into a vector of Shared
+  // Storage operations to call
+  // - If the request has not received the `kSharedStorageWriteHeader` response
+  // header, or if parsing fails to produce any valid operations, then
+  // immediately call `ContinueOnReceivedRedirect`
+  // - Otherwise, `ContinueOnReceivedRedirect` will be run asynchronously after
+  // forwarding the operations to `URLLoaderNetworkServiceObserver` to queue via
+  // Mojo
+  //
+  // Inbound control flow:
+  //
+  // Start in `ProcessInboundSharedStorageInterceptorOnResponseStarted`
+  // - Execute `SharedStorageRequestHelper::ProcessIncomingResponse`
+  // - If the request has received the `kSharedStorageWriteHeader` response
+  // header and if it is currently eligible for shared storage (i.e., in
+  // particular, the `kSecSharedStorageWritableHeader` has not been removed on a
+  // redirect), the helper will parse the header value into a vector of Shared
+  // Storage operations to call
+  // - If the request has not received the `kSharedStorageWriteHeader` response
+  // header, or if parsing fails to produce any valid operations, then
+  // immediately call `ContinueOnResponseStarted`
+  // - Otherwise, `ContinueOnResponseStarted` will be run asynchronously after
+  // forwarding the operations to `URLLoaderNetworkServiceObserver` to queue via
+  // Mojo
+  void ProcessOutboundSharedStorageInterceptor();
+  void ProcessInboundSharedStorageInterceptorOnReceivedRedirect(
+      const ::net::RedirectInfo& redirect_info,
+      mojom::URLResponseHeadPtr response);
+  void ProcessInboundSharedStorageInterceptorOnResponseStarted();
+
+  // A request where `attribution_request_helper_` is defined will (assuming
+  // preconditions pass and operations are successful) have one
+  // `AttributionRequestHelper::Begin` executed against the request, one
+  // `AttributionRequestHelper::OnReceiveRedirect` per redirection received and
+  // one `AttributionRequestHelper::Finalize` executed against its response.
+  //
+  // Outbound control flow:
+  //
+  // Start in `ProcessOutboundAttributionInterceptor`
+  // - If `attribution_request_helper_` is not defined, immediately
+  //   calls`ScheduleStart`.
+  // - Otherwise:
+  //   - Execute `AttributionRequestHelper::Begin`
+  //   - On Begin's callback, calls `ScheduleStart`
+  //
+  // Redirection control flow:
+  //
+  // Start in `ProcessInboundAttributionInterceptorOnReceivedRedirect`
+  //  - If `attribution_request_helper_` is not defined, immediately
+  //    calls`ProcessInboundAttributionInterceptorOnReceivedRedirect`.
+  // - Otherwise:
+  //   - Execute `AttributionRequestHelper::OnReceiveRedirect`
+  //   - On OnReceiveRedirect's callback, calls
+  //   `ProcessInboundAttributionInterceptorOnReceivedRedirect`
+  //
+  // Inbound control flow:
+  //
+  // Start in `ProcessInboundAttributionInterceptorOnResponseStarted`
+  //  - If `attribution_request_helper_` is not defined, immediately
+  //    calls`ProcessInboundSharedStorageInterceptorOnResponseStarted`.
+  // - Otherwise:
+  //   - Execute `AttributionRequestHelper::Finalize`
+  //   - On Finalize's callback, calls
+  //   `ProcessInboundSharedStorageInterceptorOnResponseStarted`
+  void ProcessOutboundAttributionInterceptor();
+  void ProcessInboundAttributionInterceptorOnReceivedRedirect(
+      const ::net::RedirectInfo& redirect_info,
+      mojom::URLResponseHeadPtr response);
+  void ProcessInboundAttributionInterceptorOnResponseStarted();
+
+  // Continuation of `OnReceivedRedirect` after possibly asynchronously
+  // concluding the request's Attribution and/or Shared Storage operations.
+  void ContinueOnReceiveRedirect(const ::net::RedirectInfo& redirect_info,
+                                 uint64_t response_index);
+
   // A request with Trust Tokens parameters will (assuming preconditions pass
   // and operations are successful) have one TrustTokenRequestHelper::Begin
   // executed against the request and one TrustTokenRequestHelper::Finalize
@@ -342,7 +450,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   //
   // Outbound control flow:
   //
-  // Start in BeginTrustTokenOperationIfNecessaryAndThenScheduleStart
+  // Start in ProcessOutboundTrustTokenInterceptor
   // - If there are no Trust Tokens parameters, immediately ScheduleStart.
   // - Otherwise:
   //   - asynchronously construct a TrustTokenRequestHelper;
@@ -359,25 +467,30 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   // ContinueOnResponseStarted.
   // - Otherwise:
   //   - execute TrustTokenRequestHelper::Finalize against the helper;
-  //   - receive the result in OnDoneFinalizingTrusttokenOperation;
-  //   - if successful, ContinueOnResponseStarted; if there was an error, fail.
-  void BeginTrustTokenOperationIfNecessaryAndThenScheduleStart(
-      const ResourceRequest& request);
+  //   - receive the result in OnDoneFinalizingTrustTokenOperation;
+  //   - if successful, ProcessInboundAttributionInterceptorOnResponseStarted;
+  //   if there was an error, fail.
+  void ProcessOutboundTrustTokenInterceptor(const ResourceRequest& request);
   void OnDoneConstructingTrustTokenHelper(
       mojom::TrustTokenOperationType type,
       TrustTokenStatusOrRequestHelper status_or_helper);
   void OnDoneBeginningTrustTokenOperation(
+      absl::optional<net::HttpRequestHeaders> headers,
       mojom::TrustTokenOperationStatus status);
   void OnDoneFinalizingTrustTokenOperation(
       mojom::TrustTokenOperationStatus status);
-  // Continuation of |OnResponseStarted| after possibly asynchronously
-  // concluding the request's Trust Tokens operation.
+
+  // Continuation of `OnResponseStarted` after possibly asynchronously
+  // concluding the request's Trust Tokens, Attribution, and/or Shared Storage
+  // operations.
   void ContinueOnResponseStarted();
   void MaybeSendTrustTokenOperationResultToDevTools();
 
   void ScheduleStart();
   void ReadMore();
-  void DidRead(int num_bytes, bool completed_synchronously);
+  void DidRead(int num_bytes,
+               bool completed_synchronously,
+               bool into_slop_bucket);
   void NotifyCompleted(int error_code);
   void OnMojoDisconnect();
   void OnResponseBodyStreamConsumerClosed(MojoResult result);
@@ -388,6 +501,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   void SetRawResponseHeaders(scoped_refptr<const net::HttpResponseHeaders>);
   void NotifyEarlyResponse(scoped_refptr<const net::HttpResponseHeaders>);
   void SetRawRequestHeadersAndNotify(net::HttpRawRequestHeaders);
+  bool IsSharedDictionaryReadAllowed();
   void DispatchOnRawRequest(
       std::vector<network::mojom::HttpRawHeaderPairPtr> headers);
   bool DispatchOnRawResponse();
@@ -430,15 +544,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   // Returns true if the request should be cancelled.
   bool MaybeBlockResponseForCorb(corb::ResponseAnalyzer::Decision);
 
-  void ReportFlaggedResponseCookies();
+  void ReportFlaggedResponseCookies(bool call_cookie_observer);
   void StartReading();
 
   // Whether `force_ignore_site_for_cookies` should be set on net::URLRequest.
   bool ShouldForceIgnoreSiteForCookies(const ResourceRequest& request);
-
-  // Whether `force_ignore_top_frame_party_for_cookies` should be set on
-  // net::URLRequest.
-  bool ShouldForceIgnoreTopFramePartyForCookies() const;
 
   // Applies Private Network Access checks to the current request.
   //
@@ -464,7 +574,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   // send or store credentials for no-cors cross-origin request.
   bool CoepAllowCredentials(const GURL& url);
 
-  bool ThirdPartyCookiesEnabled() const;
+  // Returns whether TransferSizeUpdated IPC should be sent.
+  bool ShouldSendTransferSizeUpdated() const;
 
   raw_ptr<net::URLRequestContext> url_request_context_;
 
@@ -479,7 +590,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
 
   // URLLoaderFactory is guaranteed to outlive URLLoader, so it is safe to
   // store a raw pointer to mojom::URLLoaderFactoryParams.
-  const mojom::URLLoaderFactoryParams& factory_params_;
+  const raw_ref<const mojom::URLLoaderFactoryParams> factory_params_;
   // This also belongs to URLLoaderFactory and outlives this loader.
   const raw_ptr<mojom::CrossOriginEmbedderPolicyReporter> coep_reporter_;
 
@@ -509,19 +620,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   // Stores any CORS error encountered while processing |url_request_|.
   absl::optional<CorsErrorStatus> cors_error_status_;
 
-  // True if a pervasive payload is found, for logging purposes.
-  bool pervasive_payload_requested_ = false;
-
   // Used when deferring sending the data to the client until mime sniffing is
   // finished.
   mojom::URLResponseHeadPtr response_;
   mojo::ScopedDataPipeConsumerHandle consumer_handle_;
 
   // Sniffing state and CORB state.
-  std::unique_ptr<corb::ResponseAnalyzer> corb_analyzer_;
   bool is_more_corb_sniffing_needed_ = false;
   bool is_more_mime_sniffing_needed_ = false;
-  corb::PerFactoryState& per_factory_corb_state_;
+  const raw_ref<corb::PerFactoryState> per_factory_corb_state_;
+  // `corb_analyzer_` must be destructed before `per_factory_corb_state_`.
+  std::unique_ptr<corb::ResponseAnalyzer> corb_analyzer_;
 
   std::unique_ptr<ResourceScheduler::ScheduledResourceRequest>
       resource_scheduler_request_handle_;
@@ -548,16 +657,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   bool should_pause_reading_body_ = false;
   // The response body stream is open, but transferring data is paused.
   bool paused_reading_body_ = false;
-
-  // Whether to update |body_read_before_paused_| after the pending read is
-  // completed (or when the response body stream is closed).
-  bool update_body_read_before_paused_ = false;
-  // The number of bytes obtained by the reads initiated before the last
-  // PauseReadingBodyFromNet() call. -1 means the request hasn't been paused.
-  // The body may be read from cache or network. So even if this value is not
-  // -1, we still need to check whether it is from network before reporting it
-  // as BodyReadFromNetBeforePaused.
-  int64_t body_read_before_paused_ = -1;
 
   // This is used to compute the delta since last time received
   // encoded body size was reported to the client.
@@ -616,8 +715,27 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   // specific to one direction.
   absl::optional<mojom::TrustTokenOperationStatus> trust_token_status_;
 
+  // This is used to determine whether it is allowed to use a dictionary when
+  // there is a matching shared dictionary for the request.
+  std::unique_ptr<SharedDictionaryAccessChecker> shared_dictionary_checker_;
+
+  // Request helper responsible for orchestrating Attribution operations
+  // (https://github.com/WICG/attribution-reporting-api). Only set if the
+  // request is related to attribution.
+  std::unique_ptr<AttributionRequestHelper> attribution_request_helper_;
+
+  // The `SharedStorageRequestHelper` takes a callback to trigger
+  // `ContinueOnReceiveRedirect()`. To prevent re-entrancy, however, this
+  // callback is conditionally run only if the helper successfully parses
+  // operations and sends them via mojo to observer(s). We stash here the
+  // non-copyable `mojom::URLResponseHeadPtr` to which
+  // `ContinueOnReceiveRedirect()` needs access and pass the response's index in
+  // the map as a parameter.
+  std::map<uint64_t, mojom::URLResponseHeadPtr> on_receive_redirect_responses_;
+  uint64_t next_on_receive_redirect_response_index_ = 0;
+
   // Outlives `this`.
-  const cors::OriginAccessList& origin_access_list_;
+  const raw_ref<const cors::OriginAccessList> origin_access_list_;
 
   // Observers bound to this specific URLLoader. There may be observers bound to
   // an URLLoaderFactory as well so these `mojo::Remote`s should not be used
@@ -628,6 +746,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   // URLLoaderFactory).
   const mojo::Remote<mojom::CookieAccessObserver> cookie_observer_remote_;
   const raw_ptr<mojom::CookieAccessObserver> cookie_observer_ = nullptr;
+  const mojo::Remote<mojom::TrustTokenAccessObserver>
+      trust_token_observer_remote_;
+  const raw_ptr<mojom::TrustTokenAccessObserver> trust_token_observer_ =
+      nullptr;
   const mojo::Remote<mojom::URLLoaderNetworkServiceObserver>
       url_loader_network_observer_remote_;
   const raw_ptr<mojom::URLLoaderNetworkServiceObserver>
@@ -635,7 +757,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   const mojo::Remote<mojom::DevToolsObserver> devtools_observer_remote_;
   const raw_ptr<mojom::DevToolsObserver> devtools_observer_ = nullptr;
 
-  const raw_ptr<const CacheTransparencySettings> cache_transparency_settings_;
+  // Request helper responsible for processing Shared Storage headers
+  // (https://github.com/WICG/shared-storage#from-response-headers).
+  std::unique_ptr<SharedStorageRequestHelper> shared_storage_request_helper_;
 
   // Indicates |url_request_| is fetch upload request and that has streaming
   // body.
@@ -647,8 +771,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
 
   bool emitted_devtools_raw_request_ = false;
   bool emitted_devtools_raw_response_ = false;
-
-  const bool third_party_cookies_enabled_;
 
   mojo::Remote<mojom::AcceptCHFrameObserver> accept_ch_frame_observer_;
 
@@ -662,6 +784,23 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   bool IsValidHashNetResponse() const;
   void StartSignedSplashing();
   void ReadMoreHashNetHelper();
+
+  // Stores cookies passed from the browser process to later add them to the
+  // request. This prevents the network stack from overriding them.
+  bool allow_cookies_from_browser_ = false;
+  std::string cookies_from_browser_;
+
+  std::vector<network::mojom::CookieAccessDetailsPtr> cookie_access_details_;
+
+  const bool provide_data_use_updates_;
+
+  // A SlopBucket is used as temporary storage for response body data from
+  // high-priority requests that cannot yet be written to the mojo data pipe
+  // because it is full.
+  std::unique_ptr<SlopBucket> slop_bucket_;
+
+  // Keeps the result of IsSharedDictionaryReadAllowed(). Used only for metrics.
+  bool shared_dictionary_allowed_check_passed_ = false;
 
   base::WeakPtrFactory<URLLoader> weak_ptr_factory_{this};
 };

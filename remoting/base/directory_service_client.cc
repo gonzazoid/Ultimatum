@@ -4,7 +4,7 @@
 
 #include "remoting/base/directory_service_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/base/protobuf_http_request.h"
 #include "remoting/base/protobuf_http_request_config.h"
 #include "remoting/base/service_urls.h"
@@ -119,7 +119,9 @@ void DirectoryServiceClient::RegisterHost(const std::string& host_id,
 
   auto register_host_request =
       std::make_unique<apis::v1::RegisterHostRequest>();
-  register_host_request->set_host_id(host_id);
+  if (!host_id.empty()) {
+    register_host_request->set_host_id(host_id);
+  }
   register_host_request->set_host_name(host_name);
   register_host_request->set_public_key(public_key);
   register_host_request->set_host_client_id(host_client_id);

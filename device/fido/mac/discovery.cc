@@ -4,13 +4,10 @@
 
 #include "device/fido/mac/discovery.h"
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
 #include "device/fido/mac/authenticator.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 FidoTouchIdDiscovery::FidoTouchIdDiscovery(
     AuthenticatorConfig authenticator_config)
@@ -41,6 +38,4 @@ void FidoTouchIdDiscovery::OnAuthenticatorAvailable(bool is_available) {
   observer()->DiscoveryStarted(this, /*success=*/true, {authenticator_.get()});
 }
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac

@@ -28,7 +28,10 @@
 #include <algorithm>
 #include <memory>
 
-#include "third_party/blink/public/common/indexeddb/web_idb_types.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
+#include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 
 namespace blink {
 
@@ -177,6 +180,49 @@ int IDBKey::Compare(const IDBKey* other) const {
   return 0;
 }
 
+v8::Local<v8::Value> IDBKey::ToV8(ScriptState* script_state) const {
+  v8::Local<v8::Context> context = script_state->GetContext();
+  v8::Isolate* isolate = script_state->GetIsolate();
+  switch (type_) {
+    case mojom::IDBKeyType::Invalid:
+    case mojom::IDBKeyType::Min:
+      NOTREACHED();
+      return v8::Local<v8::Value>();
+    case mojom::IDBKeyType::None:
+      return v8::Null(isolate);
+    case mojom::IDBKeyType::Number:
+      return v8::Number::New(isolate, Number());
+    case mojom::IDBKeyType::String:
+      return V8String(isolate, GetString());
+    case mojom::IDBKeyType::Binary:
+      // https://w3c.github.io/IndexedDB/#convert-a-value-to-a-key
+      return ToV8Traits<DOMArrayBuffer>::ToV8(script_state,
+                                              DOMArrayBuffer::Create(Binary()))
+          .ToLocalChecked();
+    case mojom::IDBKeyType::Date:
+      return v8::Date::New(context, Date()).ToLocalChecked();
+    case mojom::IDBKeyType::Array: {
+      v8::Local<v8::Array> array = v8::Array::New(isolate, Array().size());
+      for (wtf_size_t i = 0; i < Array().size(); ++i) {
+        v8::Local<v8::Value> value = Array()[i]->ToV8(script_state);
+        if (value.IsEmpty()) {
+          value = v8::Undefined(isolate);
+        }
+        bool created_property;
+        if (!array->CreateDataProperty(context, i, value)
+                 .To(&created_property) ||
+            !created_property) {
+          return v8::Local<v8::Value>();
+        }
+      }
+      return array;
+    }
+  }
+
+  NOTREACHED();
+  return v8::Local<v8::Value>();
+}
+
 bool IDBKey::IsLessThan(const IDBKey* other) const {
   DCHECK(other);
   return Compare(other) == -1;
@@ -201,7 +247,7 @@ Vector<std::unique_ptr<IDBKey>> IDBKey::ToMultiEntryArray(
   }
 
   // Remove duplicates using std::sort/std::unique rather than a hashtable to
-  // avoid the complexity of implementing DefaultHash<IDBKey>.
+  // avoid the complexity of implementing HashTraits<IDBKey>.
   std::sort(
       result.begin(), result.end(),
       [](const std::unique_ptr<IDBKey>& a, const std::unique_ptr<IDBKey>& b) {

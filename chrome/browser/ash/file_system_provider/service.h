@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/files/file.h"
+#include "base/functional/callback_helpers.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -42,8 +43,7 @@ namespace user_prefs {
 class PrefRegistrySyncable;
 }  // namespace user_prefs
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class ProvidedFileSystemInfo;
 class ProvidedFileSystemInterface;
@@ -106,7 +106,8 @@ class Service : public KeyedService,
   // Requests mounting a new file system by the providing extension with
   // |provider_id|. Returns false if the request could not been created, true
   // otherwise.
-  bool RequestMount(const ProviderId& provider_id);
+  bool RequestMount(const ProviderId& provider_id,
+                    RequestMountCallback callback);
 
   // Returns a list of information of all currently provided file systems. All
   // items are copied.
@@ -116,6 +117,10 @@ class Service : public KeyedService,
   // |provider_id|. All items are copied.
   std::vector<ProvidedFileSystemInfo> GetProvidedFileSystemInfoList(
       const ProviderId& provider_id);
+
+  // Returns a file system provider for the passed |provider_id|. If not found
+  // then returns nullptr.
+  ProviderInterface* GetProvider(const ProviderId& provider_id);
 
   // Returns an immutable map of all registered providers.
   const ProviderMap& GetProviders() const;
@@ -198,10 +203,6 @@ class Service : public KeyedService,
   // for automagical remount in the future.
   void UnmountFileSystems(const ProviderId& provider_id, UnmountReason reason);
 
-  // Returns a file system provider for the passed |provider_id|. If not found
-  // then returns nullptr.
-  ProviderInterface* GetProvider(const ProviderId& provider_id);
-
   raw_ptr<Profile> profile_;
   raw_ptr<extensions::ExtensionRegistry> extension_registry_;  // Not owned.
   base::ObserverList<Observer>::Unchecked observers_;
@@ -215,14 +216,6 @@ class Service : public KeyedService,
   base::WeakPtrFactory<Service> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace file_system_provider {
-using ::ash::file_system_provider::Service;
-}  // namespace file_system_provider
-}  // namespace chromeos
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_SERVICE_H_

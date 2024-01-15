@@ -65,6 +65,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocket : public mojom::P2PSocket {
       mojo::PendingRemote<mojom::P2PSocketClient> client,
       mojo::PendingReceiver<mojom::P2PSocket> socket,
       P2PSocketType type,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
       net::NetLog* net_log,
       ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory,
       P2PMessageThrottler* throttler);
@@ -139,8 +140,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocket : public mojom::P2PSocket {
 
   // Verifies that the packet |data| has a valid STUN header. In case
   // of success stores type of the message in |type|.
-  static bool GetStunPacketType(const uint8_t* data,
-                                int data_size,
+  static bool GetStunPacketType(base::span<const uint8_t> data,
                                 StunMessageType* type);
   static bool IsRequestOrResponse(StunMessageType type);
 
@@ -151,12 +151,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocket : public mojom::P2PSocket {
   // destroy the socket.
   void OnError();
 
-  // Used by subclasses to track the metrics of delayed bytes and packets.
-  void IncrementDelayedPackets();
-  void IncrementTotalSentPackets();
-  void IncrementDelayedBytes(uint32_t size);
-  void DecrementDelayedBytes(uint32_t size);
-
   raw_ptr<Delegate> delegate_;
   mojo::Remote<mojom::P2PSocketClient> client_;
   mojo::Receiver<mojom::P2PSocket> receiver_;
@@ -164,16 +158,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocket : public mojom::P2PSocket {
   ProtocolType protocol_type_;
 
  private:
-  // Track total delayed packets for calculating how many packets are
-  // delayed by system at the end of call.
-  uint32_t send_packets_delayed_total_ = 0;
-  uint32_t send_packets_total_ = 0;
-
-  // Track the maximum of consecutive delayed bytes caused by system's
-  // EWOULDBLOCK.
-  int32_t send_bytes_delayed_max_ = 0;
-  int32_t send_bytes_delayed_cur_ = 0;
-
   base::WeakPtrFactory<P2PSocket> weak_ptr_factory_{this};
 };
 

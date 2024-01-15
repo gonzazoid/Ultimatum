@@ -19,10 +19,11 @@ namespace blink {
 
 class Blob;
 class BlobData;
+enum class DOMExceptionCode;
 class ExceptionState;
 
 class MODULES_EXPORT MediaRecorder
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<MediaRecorder>,
       public ExecutionContextLifecycleObserver {
   DEFINE_WRAPPERTYPEINFO();
@@ -77,11 +78,16 @@ class MODULES_EXPORT MediaRecorder
   // ScriptWrappable
   bool HasPendingActivity() const final { return state_ != State::kInactive; }
 
-  virtual void WriteData(const char* data,
+  virtual void WriteData(const void* data,
                          size_t length,
                          bool last_in_slice,
-                         double timecode);
-  virtual void OnError(const String& message);
+                         double timecode,
+                         ErrorEvent* error_event);
+  virtual void OnError(DOMExceptionCode code, const String& message);
+
+  // This causes an invalid modification error to be sent and recording to be
+  // stopped if recording is not inactive.
+  void OnStreamChanged(const String& message);
 
   // Causes recording to be stopped, remaining data to be written, and onstop to
   // be sent, unless recording isn't active in which case nothing happens.
@@ -92,7 +98,7 @@ class MODULES_EXPORT MediaRecorder
  private:
   void CreateBlobEvent(Blob* blob, double timecode);
 
-  void StopRecording();
+  void StopRecording(ErrorEvent* error_event);
   void ScheduleDispatchEvent(Event* event);
   void DispatchScheduledEvent();
 
@@ -100,8 +106,9 @@ class MODULES_EXPORT MediaRecorder
   String mime_type_;
   uint32_t audio_bits_per_second_{0};
   uint32_t video_bits_per_second_{0};
+  absl::optional<uint32_t> overall_bits_per_second_;
 
-  State state_;
+  State state_ = State::kInactive;
   bool first_write_received_ = false;
   std::unique_ptr<BlobData> blob_data_;
   Member<MediaRecorderHandler> recorder_handler_;

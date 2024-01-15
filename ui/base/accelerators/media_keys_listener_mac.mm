@@ -4,16 +4,14 @@
 
 #include "ui/base/accelerators/media_keys_listener.h"
 
-#include <ApplicationServices/ApplicationServices.h>
 #include <Carbon/Carbon.h>
-#include "base/memory/raw_ptr.h"
-
 #import <Cocoa/Cocoa.h>
-#include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hidsystem/ev_keymap.h>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/containers/flat_set.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/accelerators/accelerator.h"
 
 namespace ui {
@@ -68,8 +66,8 @@ class MediaKeysListenerImpl : public MediaKeysListener {
   raw_ptr<MediaKeysListener::Delegate> delegate_;
   const Scope scope_;
   // Event tap for intercepting mac media keys.
-  CFMachPortRef event_tap_ = nullptr;
-  CFRunLoopSourceRef event_tap_source_ = nullptr;
+  base::apple::ScopedCFTypeRef<CFMachPortRef> event_tap_;
+  base::apple::ScopedCFTypeRef<CFRunLoopSourceRef> event_tap_source_;
   base::flat_set<KeyboardCode> key_codes_;
 };
 
@@ -102,26 +100,26 @@ void MediaKeysListenerImpl::StartEventTapIfNecessary() {
   if (event_tap_) {
     return;
   }
-  DCHECK_EQ(event_tap_, nullptr);
-  DCHECK_EQ(event_tap_source_, nullptr);
+  DCHECK(!event_tap_);
+  DCHECK(!event_tap_source_);
 
   // Add an event tap to intercept the system defined media key events.
-  event_tap_ = CGEventTapCreate(
+  event_tap_.reset(CGEventTapCreate(
       kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault,
-      CGEventMaskBit(NX_SYSDEFINED), EventTapCallback, this);
-  if (event_tap_ == nullptr) {
+      CGEventMaskBit(NX_SYSDEFINED), EventTapCallback, /*userInfo=*/this));
+  if (!event_tap_) {
     LOG(ERROR) << "Error: failed to create event tap.";
     return;
   }
 
-  event_tap_source_ =
-      CFMachPortCreateRunLoopSource(kCFAllocatorSystemDefault, event_tap_, 0);
-  if (event_tap_source_ == nullptr) {
+  event_tap_source_.reset(CFMachPortCreateRunLoopSource(
+      kCFAllocatorDefault, event_tap_.get(), /*order=*/0));
+  if (!event_tap_source_) {
     LOG(ERROR) << "Error: failed to create new run loop source.";
     return;
   }
 
-  CFRunLoopAddSource(CFRunLoopGetCurrent(), event_tap_source_,
+  CFRunLoopAddSource(CFRunLoopGetCurrent(), event_tap_source_.get(),
                      kCFRunLoopCommonModes);
 }
 
@@ -129,20 +127,18 @@ void MediaKeysListenerImpl::StopEventTapIfNecessary() {
   if (!event_tap_) {
     return;
   }
-  CFRunLoopRemoveSource(CFRunLoopGetCurrent(), event_tap_source_,
+  CFRunLoopRemoveSource(CFRunLoopGetCurrent(), event_tap_source_.get(),
                         kCFRunLoopCommonModes);
   // Ensure both event tap and source are initialized.
-  DCHECK_NE(event_tap_, nullptr);
-  DCHECK_NE(event_tap_source_, nullptr);
+  DCHECK(event_tap_);
+  DCHECK(event_tap_source_);
 
   // Invalidate the event tap.
-  CFMachPortInvalidate(event_tap_);
-  CFRelease(event_tap_);
-  event_tap_ = nullptr;
+  CFMachPortInvalidate(event_tap_.get());
+  event_tap_.reset();
 
   // Release the event tap source.
-  CFRelease(event_tap_source_);
-  event_tap_source_ = nullptr;
+  event_tap_source_.reset();
 }
 
 void MediaKeysListenerImpl::OnMediaKeyEvent(KeyboardCode key_code) {
@@ -172,7 +168,7 @@ CGEventRef MediaKeysListenerImpl::EventTapCallback(CGEventTapProxy proxy,
 
   // Handle the timeout case by re-enabling the tap.
   if (type == kCGEventTapDisabledByTimeout) {
-    CGEventTapEnable(shortcut_listener->event_tap_, true);
+    CGEventTapEnable(shortcut_listener->event_tap_.get(), true);
     return event;
   }
 

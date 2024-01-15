@@ -4,7 +4,6 @@
 
 #include "components/metrics/metrics_state_manager.h"
 
-#include <ctype.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -12,9 +11,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -31,6 +30,7 @@
 #include "components/variations/pref_names.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 namespace metrics {
 namespace {
@@ -44,7 +44,7 @@ void VerifyClientId(const std::string& client_id) {
     if (i == 8 || i == 13 || i == 18 || i == 23)
       EXPECT_EQ('-', current);
     else
-      EXPECT_TRUE(isxdigit(current));
+      EXPECT_TRUE(absl::ascii_isxdigit(static_cast<unsigned char>(current)));
   }
 }
 
@@ -81,8 +81,7 @@ class MetricsStateManagerTest : public testing::Test {
     std::unique_ptr<MetricsStateManager> state_manager =
         MetricsStateManager::Create(
             &prefs_, enabled_state_provider_.get(), std::wstring(),
-            base::FilePath(), StartupVisibility::kUnknown,
-            EntropyProviderType::kDefault,
+            base::FilePath(), StartupVisibility::kUnknown, {},
             base::BindRepeating(
                 &MetricsStateManagerTest::MockStoreClientInfoBackup,
                 base::Unretained(this)),

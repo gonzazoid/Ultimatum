@@ -10,9 +10,12 @@
 #include <string>
 #include <vector>
 
+#include "base/observer_list.h"
 #include "build/build_config.h"
 #include "components/media_router/browser/logger_impl.h"
 #include "components/media_router/browser/media_router_base.h"
+#include "components/media_router/browser/media_router_debugger.h"
+#include "components/media_router/browser/media_routes_observer.h"
 #include "components/media_router/common/media_route.h"
 #include "components/media_router/common/media_sink.h"
 #include "components/media_router/common/media_source.h"
@@ -50,38 +53,34 @@ class MockMediaRouter : public MediaRouterBase {
                    const url::Origin& origin,
                    content::WebContents* web_contents,
                    MediaRouteResponseCallback callback,
-                   base::TimeDelta timeout,
-                   bool incognito) override {
+                   base::TimeDelta timeout) override {
     CreateRouteInternal(source, sink_id, origin, web_contents, callback,
-                        timeout, incognito);
+                        timeout);
   }
-  MOCK_METHOD7(CreateRouteInternal,
+  MOCK_METHOD6(CreateRouteInternal,
                void(const MediaSource::Id& source,
                     const MediaSink::Id& sink_id,
                     const url::Origin& origin,
                     content::WebContents* web_contents,
                     MediaRouteResponseCallback& callback,
-                    base::TimeDelta timeout,
-                    bool incognito));
+                    base::TimeDelta timeout));
 
   void JoinRoute(const MediaSource::Id& source,
                  const std::string& presentation_id,
                  const url::Origin& origin,
                  content::WebContents* web_contents,
                  MediaRouteResponseCallback callback,
-                 base::TimeDelta timeout,
-                 bool incognito) override {
+                 base::TimeDelta timeout) override {
     JoinRouteInternal(source, presentation_id, origin, web_contents, callback,
-                      timeout, incognito);
+                      timeout);
   }
-  MOCK_METHOD7(JoinRouteInternal,
+  MOCK_METHOD6(JoinRouteInternal,
                void(const MediaSource::Id& source,
                     const std::string& presentation_id,
                     const url::Origin& origin,
                     content::WebContents* web_contents,
                     MediaRouteResponseCallback& callback,
-                    base::TimeDelta timeout,
-                    bool incognito));
+                    base::TimeDelta timeout));
 
   MOCK_METHOD1(DetachRoute, void(MediaRoute::Id route_id));
   MOCK_METHOD1(TerminateRoute, void(const MediaRoute::Id& route_id));
@@ -108,6 +107,8 @@ class MockMediaRouter : public MediaRouterBase {
                    const MediaRoute::Id& route_id));
 
 #if !BUILDFLAG(IS_ANDROID)
+  MOCK_METHOD1(GetMirroringMediaControllerHost,
+               MirroringMediaControllerHost*(const MediaRoute::Id& route_id));
   IssueManager* GetIssueManager() override { return &issue_manager_; }
   MOCK_METHOD3(GetMediaController,
                void(const MediaRoute::Id& route_id,
@@ -120,6 +121,7 @@ class MockMediaRouter : public MediaRouterBase {
   MOCK_CONST_METHOD0(GetLogs, base::Value());
   MOCK_CONST_METHOD0(GetState, base::Value::Dict());
   MOCK_METHOD0(GetLogger, LoggerImpl*());
+  MOCK_METHOD(MediaRouterDebugger&, GetDebugger, (), (override));
 #endif  // !BUILDFLAG(IS_ANDROID)
   MOCK_METHOD1(OnAddPresentationConnectionStateChangedCallbackInvoked,
                void(const content::PresentationConnectionStateChangedCallback&
@@ -127,15 +129,24 @@ class MockMediaRouter : public MediaRouterBase {
   MOCK_METHOD1(RegisterMediaSinksObserver, bool(MediaSinksObserver* observer));
   MOCK_METHOD1(UnregisterMediaSinksObserver,
                void(MediaSinksObserver* observer));
-  MOCK_METHOD1(RegisterMediaRoutesObserver,
-               void(MediaRoutesObserver* observer));
-  MOCK_METHOD1(UnregisterMediaRoutesObserver,
-               void(MediaRoutesObserver* observer));
-  MOCK_METHOD1(RegisterRouteMessageObserver,
-               void(RouteMessageObserver* observer));
-  MOCK_METHOD1(UnregisterRouteMessageObserver,
-               void(RouteMessageObserver* observer));
+  void RegisterMediaRoutesObserver(MediaRoutesObserver* observer) override {
+    routes_observers_.AddObserver(observer);
+  }
+  void UnregisterMediaRoutesObserver(MediaRoutesObserver* observer) override {
+    routes_observers_.RemoveObserver(observer);
+  }
+  MOCK_METHOD1(RegisterPresentationConnectionMessageObserver,
+               void(PresentationConnectionMessageObserver* observer));
+  MOCK_METHOD1(UnregisterPresentationConnectionMessageObserver,
+               void(PresentationConnectionMessageObserver* observer));
   MOCK_METHOD0(GetMediaSinkServiceStatus, std::string());
+
+  base::ObserverList<MediaRoutesObserver>& routes_observers() {
+    return routes_observers_;
+  }
+
+ protected:
+  base::ObserverList<MediaRoutesObserver> routes_observers_;
 
  private:
 #if !BUILDFLAG(IS_ANDROID)

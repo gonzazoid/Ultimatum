@@ -5,10 +5,11 @@
 #include <cmath>
 #include <tuple>
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "chromecast/media/api/audio_clock_simulator.h"
+#include "media/base/sinc_resampler.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -187,7 +188,8 @@ TEST_P(AudioClockSimulatorLongRunningTest, Run) {
   int output_frames = kRequestSize * kIterations;
 
   EXPECT_GE(input_frames, std::floor(rate * output_frames));
-  EXPECT_LE(input_frames, std::ceil(rate * output_frames) + 64);
+  EXPECT_LE(input_frames, std::ceil(rate * output_frames) +
+                              ::media::SincResampler::kSmallRequestSize);
 }
 
 INSTANTIATE_TEST_SUITE_P(Rates,

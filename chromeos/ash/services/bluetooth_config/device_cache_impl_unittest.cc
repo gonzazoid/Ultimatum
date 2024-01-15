@@ -96,7 +96,7 @@ class DeviceCacheImplTest : public testing::Test {
   void AddDevice(bool paired,
                  bool connected,
                  std::string* id_out,
-                 const absl::optional<int8_t> inquiry_rssi = absl::nullopt,
+                 const std::optional<int8_t> inquiry_rssi = std::nullopt,
                  const device::BluetoothDeviceType device_type =
                      device::BluetoothDeviceType::AUDIO,
                  DeviceImageInfo* image_info = nullptr) {
@@ -119,7 +119,7 @@ class DeviceCacheImplTest : public testing::Test {
         .WillByDefault(testing::Return(device_type));
 
     if (image_info)
-      fake_fast_pair_delegate_.SetDeviceImageInfo(*id_out, *image_info);
+      fake_fast_pair_delegate_.SetDeviceImageInfo(address, *image_info);
 
     device::BluetoothDevice* device = mock_device.get();
     mock_devices_.push_back(std::move(mock_device));
@@ -143,6 +143,7 @@ class DeviceCacheImplTest : public testing::Test {
     EXPECT_TRUE(it != mock_devices_.end());
 
     ON_CALL(**it, IsPaired()).WillByDefault(testing::Return(is_now_paired));
+    ON_CALL(**it, IsBonded()).WillByDefault(testing::Return(is_now_paired));
 
     device_cache_->DevicePairedChanged(mock_adapter_.get(), it->get(),
                                        is_now_paired);
@@ -167,7 +168,7 @@ class DeviceCacheImplTest : public testing::Test {
   }
 
   void ChangeInquiryRssi(const std::string& device_id,
-                         const absl::optional<int8_t> inquiry_rssi) {
+                         const std::optional<int8_t> inquiry_rssi) {
     std::vector<NiceMockDevice>::iterator it = FindDevice(device_id);
     EXPECT_TRUE(it != mock_devices_.end());
 
@@ -180,6 +181,10 @@ class DeviceCacheImplTest : public testing::Test {
   void SetDeviceNickname(const std::string& device_id,
                          const std::string& nickname) {
     fake_device_name_manager_.SetDeviceNickname(device_id, nickname);
+  }
+
+  std::optional<std::string> GetDeviceNickname(std::string address) {
+    return fake_fast_pair_delegate_.GetDeviceNickname(address);
   }
 
   void ForgetDevice(const std::string& device_id) {
@@ -222,8 +227,10 @@ class DeviceCacheImplTest : public testing::Test {
   }
 
  private:
-  std::vector<const device::BluetoothDevice*> GenerateDevices() {
-    std::vector<const device::BluetoothDevice*> devices;
+  std::vector<raw_ptr<const device::BluetoothDevice, VectorExperimental>>
+  GenerateDevices() {
+    std::vector<raw_ptr<const device::BluetoothDevice, VectorExperimental>>
+        devices;
     for (auto& device : mock_devices_)
       devices.push_back(device.get());
     return devices;
@@ -446,6 +453,14 @@ TEST_F(DeviceCacheImplTest, PairedDeviceNicknameChanges) {
   SetDeviceNickname(paired_device_id, kTestBluetoothNickname);
   EXPECT_EQ(2u, GetNumPairedDeviceListObserverEvents());
   list = GetPairedDevices();
+
+  // In this test file, AddDevice() uses |num_devices_created_| converted to a
+  // string  as the address for each device. Only one device is created in this
+  // test so "0" is the address of the device we want to check.
+  auto nickname = GetDeviceNickname("0");
+
+  EXPECT_TRUE(nickname.has_value());
+  EXPECT_TRUE(nickname.value() == kTestBluetoothNickname);
   EXPECT_EQ(1u, list.size());
   EXPECT_EQ(paired_device_id, list[0]->device_properties->id);
   EXPECT_EQ(kTestBluetoothNickname, list[0]->nickname);
@@ -488,13 +503,21 @@ TEST_F(DeviceCacheImplTest, PairedDeviceBluetoothClassChanges) {
   EXPECT_EQ(mojom::DeviceType::kHeadset,
             list[0]->device_properties->device_type);
 
-  // Change its device type.
-  ChangeDeviceType(paired_device_id, device::BluetoothDeviceType::PHONE);
+  // Change its device type to a different supported type.
+  ChangeDeviceType(paired_device_id, device::BluetoothDeviceType::AUDIO);
   EXPECT_EQ(2u, GetNumPairedDeviceListObserverEvents());
   list = GetPairedDevices();
   EXPECT_EQ(1u, list.size());
   EXPECT_EQ(paired_device_id, list[0]->device_properties->id);
-  EXPECT_EQ(mojom::DeviceType::kPhone, list[0]->device_properties->device_type);
+  EXPECT_EQ(mojom::DeviceType::kHeadset,
+            list[0]->device_properties->device_type);
+
+  // Change its device type to an unsupported type. Bonded devices are expected
+  // to remain in the list even if they have an unsupported type.
+  ChangeDeviceType(paired_device_id, device::BluetoothDeviceType::PHONE);
+  EXPECT_EQ(3u, GetNumPairedDeviceListObserverEvents());
+  list = GetPairedDevices();
+  EXPECT_EQ(1u, list.size());
 }
 
 TEST_F(DeviceCacheImplTest, PairedDeviceForgotten) {
@@ -744,7 +767,7 @@ TEST_F(DeviceCacheImplTest, PairedDeviceImageInfo) {
   DeviceImageInfo image_info = DeviceImageInfo(
       /*default_image=*/kTestDefaultImage, /*left_bud_image=*/"",
       /*right_bud_image=*/"", /*case_image=*/"");
-  AddDevice(/*bonded=*/true, /*connected=*/false, &paired_device_id1,
+  AddDevice(/*paired=*/true, /*connected=*/false, &paired_device_id1,
             /*inquiry_rssi=*/1,
             /*device_type=*/device::BluetoothDeviceType::AUDIO, &image_info);
   Init();
@@ -759,7 +782,7 @@ TEST_F(DeviceCacheImplTest, PairedDeviceImageInfo) {
 
   // Add a paired device without image info. This should notify observers.
   std::string paired_device_id2;
-  AddDevice(/*bonded=*/true, /*connected=*/false, &paired_device_id2,
+  AddDevice(/*paired=*/true, /*connected=*/false, &paired_device_id2,
             /*inquiry_rssi=*/1,
             /*device_type=*/device::BluetoothDeviceType::AUDIO);
   EXPECT_EQ(2u, GetNumPairedDeviceListObserverEvents());
@@ -772,7 +795,7 @@ TEST_F(DeviceCacheImplTest, PairedDeviceImageInfo) {
 
   // Add a paired device with image info. This should notify observers.
   std::string paired_device_id3;
-  AddDevice(/*bonded=*/true, /*connected=*/false, &paired_device_id3,
+  AddDevice(/*paired=*/true, /*connected=*/false, &paired_device_id3,
             /*inquiry_rssi=*/1,
             /*device_type=*/device::BluetoothDeviceType::AUDIO, &image_info);
   EXPECT_EQ(4u, GetNumPairedDeviceListObserverEvents());
@@ -788,7 +811,7 @@ TEST_F(DeviceCacheImplTest, UnpairedDeviceImageInfo) {
   DeviceImageInfo image_info = DeviceImageInfo(
       /*default_image=*/kTestDefaultImage, /*left_bud_image=*/"",
       /*right_bud_image=*/"", /*case_image=*/"");
-  AddDevice(/*bonded=*/false, /*connected=*/false, &unpaired_device_id1,
+  AddDevice(/*paired=*/false, /*connected=*/false, &unpaired_device_id1,
             /*inquiry_rssi=*/1,
             /*device_type=*/device::BluetoothDeviceType::AUDIO, &image_info);
   Init();
@@ -803,7 +826,7 @@ TEST_F(DeviceCacheImplTest, UnpairedDeviceImageInfo) {
 
   // Add an unpaired device without image info. This should notify observers.
   std::string unpaired_device_id2;
-  AddDevice(/*bonded=*/false, /*connected=*/false, &unpaired_device_id2,
+  AddDevice(/*paired=*/false, /*connected=*/false, &unpaired_device_id2,
             /*inquiry_rssi=*/1,
             /*device_type=*/device::BluetoothDeviceType::AUDIO);
   EXPECT_EQ(2u, GetNumUnpairedDeviceListObserverEvents());
@@ -816,7 +839,7 @@ TEST_F(DeviceCacheImplTest, UnpairedDeviceImageInfo) {
 
   // Add an unpaired device with image info. This should notify observers.
   std::string unpaired_device_id3;
-  AddDevice(/*bonded=*/false, /*connected=*/false, &unpaired_device_id3,
+  AddDevice(/*paired=*/false, /*connected=*/false, &unpaired_device_id3,
             /*inquiry_rssi=*/1,
             /*device_type=*/device::BluetoothDeviceType::AUDIO, &image_info);
   EXPECT_EQ(4u, GetNumUnpairedDeviceListObserverEvents());

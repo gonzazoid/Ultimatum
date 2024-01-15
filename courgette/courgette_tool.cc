@@ -101,13 +101,11 @@ class BufferedFileReader : public courgette::BasicBuffer {
 
 void WriteSinkToFile(const courgette::SinkStream* sink,
                      const base::FilePath& output_file) {
-  int count = base::WriteFile(output_file,
-                              reinterpret_cast<const char*>(sink->Buffer()),
-                              static_cast<int>(sink->Length()));
-  if (count == -1)
+  bool success = base::WriteFile(
+      output_file, base::make_span(sink->Buffer(), sink->Length()));
+  if (!success) {
     Problem("Can't write output.");
-  if (static_cast<size_t>(count) != sink->Length())
-    Problem("Incomplete write.");
+  }
 }
 
 bool Supported(const base::FilePath& input_file) {
@@ -410,7 +408,7 @@ int main(int argc, const char* argv[]) {
     settings.log_file_path = FILE_PATH_LITERAL("courgette.log");
   }
   std::ignore = logging::InitLogging(settings);
-  logging::SetMinLogLevel(logging::LOG_VERBOSE);
+  logging::SetMinLogLevel(logging::LOGGING_VERBOSE);
 
   bool cmd_sup = command_line.HasSwitch("supported");
   bool cmd_dis = command_line.HasSwitch("dis");

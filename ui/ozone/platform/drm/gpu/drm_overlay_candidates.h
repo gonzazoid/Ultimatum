@@ -7,11 +7,13 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/public/hardware_capabilities.h"
 #include "ui/ozone/public/overlay_candidates_ozone.h"
 
 namespace ui {
+
 class DrmOverlayManager;
 class OverlaySurfaceCandidate;
 
@@ -35,7 +37,7 @@ class DrmOverlayCandidates : public OverlayCandidatesOzone {
   void RegisterOverlayRequirement(bool requires_overlay) override;
 
  private:
-  DrmOverlayManager* const overlay_manager_;  // Not owned.
+  const raw_ptr<DrmOverlayManager> overlay_manager_;  // Not owned.
   const gfx::AcceleratedWidget widget_;
 };
 

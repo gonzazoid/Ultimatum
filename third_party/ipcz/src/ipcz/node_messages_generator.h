@@ -36,6 +36,9 @@ IPCZ_MSG_BEGIN(ConnectFromBrokerToNonBroker,
   // A driver memory object to serve as the new NodeLink's primary shared
   // buffer. That is, BufferId 0 within its NodeLinkMemory's BufferPool.
   IPCZ_MSG_PARAM_DRIVER_OBJECT(buffer)
+
+  // Explicit padding to preserve 8-byte size alignemnt.
+  IPCZ_MSG_PARAM(uint32_t, padding)
 IPCZ_MSG_END()
 
 // Initial greeting sent by a non-broker node when ConnectNode() is invoked with
@@ -204,6 +207,9 @@ IPCZ_MSG_BEGIN(ConnectFromBrokerToBroker, IPCZ_MSG_ID(7), IPCZ_MSG_VERSION(0))
   // determined by whichever broker's name is the lesser of the two when
   // compared numerically.
   IPCZ_MSG_PARAM_DRIVER_OBJECT(buffer)
+
+  // Explicit padding to preserve 8-byte size alignment.
+  IPCZ_MSG_PARAM(uint32_t, padding)
 IPCZ_MSG_END()
 
 // Sent to a broker to ask for an introduction to one of the non-broker nodes in
@@ -233,6 +239,9 @@ IPCZ_MSG_BEGIN(AcceptIntroduction, IPCZ_MSG_ID(11), IPCZ_MSG_VERSION(0))
 
   // Indicates the type of the remote node being introduced.
   IPCZ_MSG_PARAM(NodeType, remote_node_type)
+
+  // Explicit padding to preserve 4-byte alignment of the following field.
+  IPCZ_MSG_PARAM(uint16_t, padding)
 
   // Indicates the highest ipcz protocol version which the remote side of
   // `transport` able and willing to use according to the broker.
@@ -295,14 +304,29 @@ IPCZ_MSG_BEGIN(AcceptParcel, IPCZ_MSG_ID(20), IPCZ_MSG_VERSION(0))
   // parcel sequence (and the receiving portal's inbound parcel sequence.)
   IPCZ_MSG_PARAM(SequenceNumber, sequence_number)
 
-  // Free-form array of application-provided data bytes for this parcel. This
-  // field is only meaningful if `parcel_fragment` is null.
-  IPCZ_MSG_PARAM_ARRAY(uint8_t, parcel_data)
+  // For any given Parcel in a portal's sequence, there may be any number of
+  // additional subparcels transmitted separately and indexed sequentially
+  // starting from 1. This is the subparcel index for this transmitted Parcel.
+  // If 0, then this is the main Parcel for the given SequenceNumber.
+  IPCZ_MSG_PARAM(uint32_t, subparcel_index)
+
+  // The total number of subparcels belonging to this Parcel or its main
+  // containing Parcel. If no subparcels are associated with this Parcel, this
+  // value is 1.
+  //
+  // Note that subparcels themselves never contain other subparcels, so for
+  // subparcels this field always conveys the number of subparcels belonging to
+  // its main containing Parcel.
+  IPCZ_MSG_PARAM(uint32_t, num_subparcels)
 
   // An optional shared memory fragment containing this parcel's data. If this
   // is null, the parcel data is instead inlined via the `parcel_data` array
   // above.
   IPCZ_MSG_PARAM(FragmentDescriptor, parcel_fragment)
+
+  // Free-form array of application-provided data bytes for this parcel. This
+  // field is only meaningful if `parcel_fragment` is null.
+  IPCZ_MSG_PARAM_ARRAY(uint8_t, parcel_data)
 
   // Array of handle types, with each corresponding to a single IpczHandle
   // attached to the parcel.
@@ -312,6 +336,9 @@ IPCZ_MSG_BEGIN(AcceptParcel, IPCZ_MSG_ID(20), IPCZ_MSG_VERSION(0))
   // the details needed to construct a new Router at the parcel's destination
   // to extend the transmitted portal's route there.
   IPCZ_MSG_PARAM_ARRAY(RouterDescriptor, new_routers)
+
+  // Explicit padding to preserve 8-byte alignment.
+  IPCZ_MSG_PARAM(uint32_t, padding)
 
   // Every DriverObject boxed and attached to this parcel has an entry in this
   // array.
@@ -363,13 +390,6 @@ IPCZ_MSG_END()
 // essentially the same as route closure but without respect for complete parcel
 // sequence delivery.
 IPCZ_MSG_BEGIN(RouteDisconnected, IPCZ_MSG_ID(23), IPCZ_MSG_VERSION(0))
-  IPCZ_MSG_PARAM(SublinkId, sublink)
-IPCZ_MSG_END()
-
-// Notifies a router that it may be interested in a recent change to its outward
-// peer's visible queue state.
-IPCZ_MSG_BEGIN(SnapshotPeerQueueState, IPCZ_MSG_ID(24), IPCZ_MSG_VERSION(0))
-  // Identifies the router to receive this message.
   IPCZ_MSG_PARAM(SublinkId, sublink)
 IPCZ_MSG_END()
 
@@ -562,6 +582,7 @@ IPCZ_MSG_END()
 // providing the IPCZ_CONNECT_NODE_TO_ALLOCATION_DELEGATE flag to ConnectNode().
 IPCZ_MSG_BEGIN(RequestMemory, IPCZ_MSG_ID(64), IPCZ_MSG_VERSION(0))
   IPCZ_MSG_PARAM(uint32_t, size)
+  IPCZ_MSG_PARAM(uint32_t, padding)
 IPCZ_MSG_END()
 
 // Provides a new shared buffer to the receiver, owned exclusively by the
@@ -582,6 +603,9 @@ IPCZ_MSG_BEGIN(RelayMessage, IPCZ_MSG_ID(66), IPCZ_MSG_VERSION(0))
   // The actual serialized message to be relayed, including its own header.
   IPCZ_MSG_PARAM_ARRAY(uint8_t, data)
 
+  // Padding to preserve 8-byte alignment of the `driver_objects` field below.
+  IPCZ_MSG_PARAM(uint32_t, padding)
+
   // The set of driver objects to be relayed along with `data`.
   IPCZ_MSG_PARAM_DRIVER_OBJECT_ARRAY(driver_objects)
 IPCZ_MSG_END()
@@ -594,6 +618,9 @@ IPCZ_MSG_BEGIN(AcceptRelayedMessage, IPCZ_MSG_ID(67), IPCZ_MSG_VERSION(0))
 
   // The full serialized data of the relayed message.
   IPCZ_MSG_PARAM_ARRAY(uint8_t, data)
+
+  // Padding to preserve 8-byte alignment of the `driver_objects` field below.
+  IPCZ_MSG_PARAM(uint32_t, padding)
 
   // The set of driver objects relayed along with `data`.
   IPCZ_MSG_PARAM_DRIVER_OBJECT_ARRAY(driver_objects)

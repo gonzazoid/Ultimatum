@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "cc/base/region.h"
 #include "cc/tiles/picture_layer_tiling.h"
 #include "ui/gfx/geometry/size.h"
@@ -56,10 +57,12 @@ class CC_EXPORT PictureLayerTilingSet {
 
   const PictureLayerTilingClient* client() const { return client_; }
 
-  void CleanUpTilings(float min_acceptable_high_res_scale_key,
-                      float max_acceptable_high_res_scale_key,
-                      const std::vector<PictureLayerTiling*>& needed_tilings,
-                      PictureLayerTilingSet* twin_set);
+  void CleanUpTilings(
+      float min_acceptable_high_res_scale_key,
+      float max_acceptable_high_res_scale_key,
+      const std::vector<raw_ptr<PictureLayerTiling, VectorExperimental>>&
+          needed_tilings,
+      PictureLayerTilingSet* twin_set);
   void RemoveNonIdealTilings();
 
   // This function is called on the active tree during activation.
@@ -211,14 +214,18 @@ class CC_EXPORT PictureLayerTilingSet {
       ~AutoClear() { *state_to_clear_ = StateSinceLastTilePriorityUpdate(); }
 
      private:
-      raw_ptr<StateSinceLastTilePriorityUpdate> state_to_clear_;
+      // Not a raw_ptr<...> for performance reasons: on-stack pointer +
+      // based on analysis of sampling profiler data
+      // (cc::PictureLayerTilingSet::UpdateTilePriorities -> creates AutoClear
+      // on stack).
+      RAW_PTR_EXCLUSION StateSinceLastTilePriorityUpdate* state_to_clear_;
     };
 
-    StateSinceLastTilePriorityUpdate()
-        : invalidated(false), added_tilings(false) {}
+    StateSinceLastTilePriorityUpdate() = default;
 
-    bool invalidated;
-    bool added_tilings;
+    bool invalidated = false;
+    bool added_tilings = false;
+    bool tiling_needs_update = false;
   };
 
   explicit PictureLayerTilingSet(

@@ -5,22 +5,17 @@
 #ifndef SANDBOX_WIN_SRC_CROSSCALL_PARAMS_H_
 #define SANDBOX_WIN_SRC_CROSSCALL_PARAMS_H_
 
-#if !defined(SANDBOX_FUZZ_TARGET)
 #include <windows.h>
 
 #include <lmaccess.h>
-#else
-#include "sandbox/win/fuzzer/fuzzer_types.h"
-#endif
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "sandbox/win/src/internal_types.h"
-#if !defined(SANDBOX_FUZZ_TARGET)
-#include "sandbox/win/src/sandbox_nt_types.h"
-#endif
 #include "sandbox/win/src/ipc_tags.h"
+#include "sandbox/win/src/sandbox_nt_types.h"
 #include "sandbox/win/src/sandbox_types.h"
 
 // This header is part of CrossCall: the sandbox inter-process communication.
@@ -70,7 +65,9 @@ const size_t kExtendedReturnCount = 8;
 // in the CrossCallReturn.
 union MultiType {
   uint32_t unsigned_int;
-  void* pointer;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union
+  RAW_PTR_EXCLUSION void* pointer;
   HANDLE handle;
   ULONG_PTR ulong_ptr;
 };

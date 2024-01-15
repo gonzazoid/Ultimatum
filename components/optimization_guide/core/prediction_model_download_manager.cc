@@ -4,18 +4,18 @@
 
 #include "components/optimization_guide/core/prediction_model_download_manager.h"
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "components/crx_file/crx_verifier.h"
 #include "components/download/public/background_service/background_download_service.h"
@@ -25,6 +25,7 @@
 #include "components/optimization_guide/core/optimization_guide_switches.h"
 #include "components/optimization_guide/core/optimization_guide_util.h"
 #include "components/optimization_guide/core/prediction_model_download_observer.h"
+#include "components/optimization_guide/core/prediction_model_store.h"
 #include "components/services/unzip/public/cpp/unzip.h"
 #include "crypto/sha2.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -84,6 +85,15 @@ void RecordPredictionModelDownloadStatus(PredictionModelDownloadStatus status) {
       status);
 }
 
+// Writes the |model_info| to |file_path|.
+bool WriteModelInfoProtoToFile(const proto::ModelInfo& model_info,
+                               const base::FilePath& file_path) {
+  std::string model_info_str;
+  if (!model_info.SerializeToString(&model_info_str))
+    return false;
+  return base::WriteFile(file_path, model_info_str);
+}
+
 }  // namespace
 
 const char kPredictionModelOptimizationTargetCustomDataKey[] =
@@ -91,12 +101,13 @@ const char kPredictionModelOptimizationTargetCustomDataKey[] =
 
 PredictionModelDownloadManager::PredictionModelDownloadManager(
     download::BackgroundDownloadService* download_service,
-    const base::FilePath& models_dir_path,
+    GetBaseModelDirForDownloadCallback get_base_model_dir_for_download_callback,
     scoped_refptr<base::SequencedTaskRunner> background_task_runner)
     : download_service_(download_service),
       is_available_for_downloads_(true),
       api_key_(features::GetOptimizationGuideServiceAPIKey()),
-      models_dir_path_(models_dir_path),
+      get_base_model_dir_for_download_callback_(
+          get_base_model_dir_for_download_callback),
       background_task_runner_(background_task_runner) {}
 
 PredictionModelDownloadManager::~PredictionModelDownloadManager() = default;
@@ -107,7 +118,7 @@ void PredictionModelDownloadManager::StartDownload(
   download::DownloadParams download_params;
   download_params.client =
       download::DownloadClient::OPTIMIZATION_GUIDE_PREDICTION_MODELS;
-  download_params.guid = base::GenerateGUID();
+  download_params.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   download_params.custom_data[kPredictionModelOptimizationTargetCustomDataKey] =
       proto::OptimizationTarget_Name(optimization_target);
   download_params.callback =
@@ -208,19 +219,27 @@ void PredictionModelDownloadManager::OnDownloadStarted(
 void PredictionModelDownloadManager::OnDownloadSucceeded(
     absl::optional<proto::OptimizationTarget> optimization_target,
     const std::string& guid,
-    const base::FilePath& file_path) {
+    const base::FilePath& download_file_path) {
   pending_download_guids_.erase(guid);
 
   base::UmaHistogramBoolean(
       "OptimizationGuide.PredictionModelDownloadManager.DownloadSucceeded",
-      true);
+      optimization_target.has_value());
+  if (!optimization_target) {
+    return;
+  }
+
+  base::FilePath base_model_dir =
+      get_base_model_dir_for_download_callback_.Run(*optimization_target);
 
   background_task_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
-      base::BindOnce(&PredictionModelDownloadManager::VerifyDownload, file_path,
+      base::BindOnce(&PredictionModelDownloadManager::VerifyDownload,
+                     download_file_path, base_model_dir,
                      /*delete_file_on_error=*/true),
       base::BindOnce(&PredictionModelDownloadManager::StartUnzipping,
-                     ui_weak_ptr_factory_.GetWeakPtr(), optimization_target));
+                     ui_weak_ptr_factory_.GetWeakPtr(), *optimization_target,
+                     download_file_path, base_model_dir));
 }
 
 void PredictionModelDownloadManager::OnDownloadFailed(
@@ -237,14 +256,15 @@ void PredictionModelDownloadManager::OnDownloadFailed(
 
 // static
 // Note: This function runs on a background sequence!
-absl::optional<std::pair<base::FilePath, base::FilePath>>
-PredictionModelDownloadManager::VerifyDownload(const base::FilePath& file_path,
-                                               bool delete_file_on_error) {
+bool PredictionModelDownloadManager::VerifyDownload(
+    const base::FilePath& download_file_path,
+    const base::FilePath& base_model_dir,
+    bool delete_file_on_error) {
   if (!switches::ShouldSkipModelDownloadVerificationForTesting()) {
-    // Verify that the |file_path| contains a valid CRX file.
+    // Verify that the |download_file_path| contains a valid CRX file.
     std::string public_key;
     crx_file::VerifierResult verifier_result = crx_file::Verify(
-        file_path, crx_file::VerifierFormat::CRX3,
+        download_file_path, crx_file::VerifierFormat::CRX3,
         /*required_key_hashes=*/{},
         /*required_file_hash=*/{}, &public_key,
         /*crx_id=*/nullptr, /*compressed_verified_contents=*/nullptr);
@@ -254,9 +274,9 @@ PredictionModelDownloadManager::VerifyDownload(const base::FilePath& file_path,
       if (delete_file_on_error) {
         base::ThreadPool::PostTask(
             FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
-            base::GetDeleteFileCallback(file_path));
+            base::GetDeleteFileCallback(download_file_path));
       }
-      return absl::nullopt;
+      return false;
     }
 
     // Verify that the CRX3 file is from a publisher we trust.
@@ -273,39 +293,36 @@ PredictionModelDownloadManager::VerifyDownload(const base::FilePath& file_path,
       if (delete_file_on_error) {
         base::ThreadPool::PostTask(
             FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
-            base::GetDeleteFileCallback(file_path));
+            base::GetDeleteFileCallback(download_file_path));
       }
-      return absl::nullopt;
+      return false;
     }
   }
 
-  // Create a temp directory to unzip the model package.
-  base::FilePath temp_dir_path;
-  if (!base::CreateNewTempDirectory(base::FilePath::StringType(),
-                                    &temp_dir_path)) {
+  if (base_model_dir.empty()) {
     RecordPredictionModelDownloadStatus(
-        PredictionModelDownloadStatus::kFailedUnzipDirectoryCreation);
-    if (delete_file_on_error) {
-      base::ThreadPool::PostTask(
-          FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
-          base::GetDeleteFileCallback(file_path));
-    }
-    return absl::nullopt;
+        PredictionModelDownloadStatus::kOptGuideDirectoryDoesNotExist);
+    return false;
   }
 
-  return std::make_pair(file_path, temp_dir_path);
+  if (!base::CreateDirectory(base_model_dir)) {
+    RecordPredictionModelDownloadStatus(
+        PredictionModelDownloadStatus::kCouldNotCreateDirectory);
+    return false;
+  }
+
+  return true;
 }
 
 void PredictionModelDownloadManager::StartUnzipping(
-    absl::optional<proto::OptimizationTarget> optimization_target,
-    const absl::optional<std::pair<base::FilePath, base::FilePath>>&
-        unzip_paths) {
+    proto::OptimizationTarget optimization_target,
+    const base::FilePath& download_file_path,
+    const base::FilePath& base_model_dir,
+    bool is_verify_success) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!unzip_paths) {
-    if (optimization_target) {
-      NotifyModelDownloadFailed(*optimization_target);
-    }
+  if (!is_verify_success) {
+    NotifyModelDownloadFailed(optimization_target);
     return;
   }
 
@@ -315,16 +332,16 @@ void PredictionModelDownloadManager::StartUnzipping(
   auto unzipper = unzip::LaunchUnzipper();
 #endif
   unzip::Unzip(
-      std::move(unzipper), unzip_paths->first, unzip_paths->second,
+      std::move(unzipper), download_file_path, base_model_dir,
       base::BindOnce(&PredictionModelDownloadManager::OnDownloadUnzipped,
                      ui_weak_ptr_factory_.GetWeakPtr(), optimization_target,
-                     unzip_paths->first, unzip_paths->second));
+                     download_file_path, base_model_dir));
 }
 
 void PredictionModelDownloadManager::OnDownloadUnzipped(
-    absl::optional<proto::OptimizationTarget> optimization_target,
+    proto::OptimizationTarget optimization_target,
     const base::FilePath& original_file_path,
-    const base::FilePath& unzipped_dir_path,
+    const base::FilePath& base_model_dir,
     bool success) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -333,9 +350,7 @@ void PredictionModelDownloadManager::OnDownloadUnzipped(
       FROM_HERE, base::GetDeleteFileCallback(original_file_path));
 
   if (!success) {
-    if (optimization_target) {
-      NotifyModelDownloadFailed(*optimization_target);
-    }
+    NotifyModelDownloadFailed(optimization_target);
     RecordPredictionModelDownloadStatus(
         PredictionModelDownloadStatus::kFailedCrxUnzip);
     return;
@@ -344,23 +359,19 @@ void PredictionModelDownloadManager::OnDownloadUnzipped(
   background_task_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(&PredictionModelDownloadManager::ProcessUnzippedContents,
-                     models_dir_path_, unzipped_dir_path),
+                     base_model_dir),
       base::BindOnce(&PredictionModelDownloadManager::NotifyModelReady,
-                     ui_weak_ptr_factory_.GetWeakPtr(), optimization_target));
+                     ui_weak_ptr_factory_.GetWeakPtr(), optimization_target,
+                     base_model_dir));
 }
 
 // static
 absl::optional<proto::PredictionModel>
 PredictionModelDownloadManager::ProcessUnzippedContents(
-    const base::FilePath& model_dir_path,
-    const base::FilePath& unzipped_dir_path) {
-  // Clean up temp dir when this function finishes.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::GetDeletePathRecursivelyCallback(unzipped_dir_path));
-
+    const base::FilePath& base_model_dir) {
   // Unpack and verify model info file.
   base::FilePath model_info_path =
-      unzipped_dir_path.Append(GetBaseFileNameForModelInfo());
+      base_model_dir.Append(GetBaseFileNameForModelInfo());
   std::string binary_model_info_pb;
   if (!base::ReadFileToString(model_info_path, &binary_model_info_pb)) {
     RecordPredictionModelDownloadStatus(
@@ -379,109 +390,59 @@ PredictionModelDownloadManager::ProcessUnzippedContents(
     return absl::nullopt;
   }
 
-  if (model_dir_path.empty()) {
+  base::FilePath model_path = base_model_dir.Append(GetBaseFileNameForModels());
+  if (!base::PathExists(model_path)) {
     RecordPredictionModelDownloadStatus(
-        PredictionModelDownloadStatus::kOptGuideDirectoryDoesNotExist);
+        PredictionModelDownloadStatus::kFailedModelFileNotFound);
     return absl::nullopt;
   }
-
-  // Move each packaged file away from temp directory into a new directory.
-
-  base::FilePath store_dir = model_dir_path.AppendASCII(
-      base::GUID::GenerateRandomV4().AsLowercaseString());
-  if (!base::CreateDirectory(store_dir)) {
-    RecordPredictionModelDownloadStatus(
-        PredictionModelDownloadStatus::kCouldNotCreateDirectory);
-    return absl::nullopt;
-  }
-
-  base::FilePath temp_model_path =
-      unzipped_dir_path.Append(GetBaseFileNameForModels());
-  // Note that the base file name is used for backwards compatibility checking
-  // in |OptimizationGuideStore::OnLoadModelsToBeUpdated|.
-  base::FilePath store_model_path =
-      store_dir.Append(GetBaseFileNameForModels());
-
   proto::PredictionModel model;
   *model.mutable_model_info() = model_info;
-  model.mutable_model()->set_download_url(FilePathToString(store_model_path));
-
-  // Pairs are setup as `mv <first> <second>`.
-  std::vector<std::pair<base::FilePath, base::FilePath>> files_to_move;
-  files_to_move.emplace_back(std::make_pair(temp_model_path, store_model_path));
-
-  // Ensure that the attached additional files are actually a set. The
-  // conversion to a set also happens later during processing, but at the very
-  // end. Eliminating duplicates here helps eliminate unneeded file operations
-  // in the next step of processing.
-  base::flat_set<std::string> additional_files_set;
-  for (const proto::AdditionalModelFile& add_file :
-       model_info.additional_files()) {
-    additional_files_set.insert(add_file.file_path());
-  }
+  model.mutable_model()->set_download_url(FilePathToString(model_path));
 
   // Clear all the additional files set by the server so they they can be fully
   // replaced by absolute paths.
   model.mutable_model_info()->clear_additional_files();
 
-  for (const std::string& additional_file_path : additional_files_set) {
-    base::FilePath temp_add_file_path =
-        unzipped_dir_path.AppendASCII(additional_file_path);
+  for (const auto& additional_file : model_info.additional_files()) {
     base::FilePath store_add_file_path =
-        store_dir.AppendASCII(additional_file_path);
-
-    // Make sure the additional file gets moved.
-    files_to_move.emplace_back(
-        std::make_pair(temp_add_file_path, store_add_file_path));
-
-    // And put its new path in the proto.
+        base_model_dir.AppendASCII(additional_file.file_path());
+    if (!base::PathExists(store_add_file_path)) {
+      RecordPredictionModelDownloadStatus(
+          PredictionModelDownloadStatus::kFailedInvalidAdditionalFile);
+      return absl::nullopt;
+    }
     model.mutable_model_info()->add_additional_files()->set_file_path(
         FilePathToString(store_add_file_path));
   }
 
-  PredictionModelDownloadStatus status =
-      PredictionModelDownloadStatus::kSuccess;
-  for (const auto& move_file : files_to_move) {
-    base::File::Error file_error;
-    if (base::ReplaceFile(move_file.first, move_file.second, &file_error)) {
-      continue;
-    }
-
-    // ReplaceFile failed, log the error code and attempt to utilize base::Move
-    // instead as the file could be on a different storage partition.
-    base::UmaHistogramExactLinear(
-        "OptimizationGuide.PredictionModelDownloadManager.ReplaceFileError." +
-            GetStringNameForOptimizationTarget(
-                model_info.optimization_target()),
-        -file_error, -base::File::FILE_ERROR_MAX);
-    if (base::Move(move_file.first, move_file.second)) {
-      continue;
-    }
-
-    status = PredictionModelDownloadStatus::kFailedModelFileOtherError;
+  if (features::IsInstallWideModelStoreEnabled() &&
+      !WriteModelInfoProtoToFile(model.model_info(), model_info_path)) {
+    RecordPredictionModelDownloadStatus(
+        PredictionModelDownloadStatus::kFailedModelInfoSaving);
+    return absl::nullopt;
   }
+  RecordPredictionModelDownloadStatus(PredictionModelDownloadStatus::kSuccess);
 
-  RecordPredictionModelDownloadStatus(status);
-
-  return status == PredictionModelDownloadStatus::kSuccess
-             ? absl::make_optional(model)
-             : absl::nullopt;
+  return absl::make_optional(model);
 }
 
 void PredictionModelDownloadManager::NotifyModelReady(
-    absl::optional<proto::OptimizationTarget> optimization_target,
+    proto::OptimizationTarget optimization_target,
+    const base::FilePath& base_model_dir,
     const absl::optional<proto::PredictionModel>& model) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!model) {
-    if (optimization_target) {
-      NotifyModelDownloadFailed(*optimization_target);
-    }
+    // Clean up model dir.
+    background_task_runner_->PostTask(
+        FROM_HERE, base::GetDeletePathRecursivelyCallback(base_model_dir));
+    NotifyModelDownloadFailed(optimization_target);
     return;
   }
 
   for (PredictionModelDownloadObserver& observer : observers_)
-    observer.OnModelReady(*model);
+    observer.OnModelReady(base_model_dir, *model);
 }
 
 void PredictionModelDownloadManager::NotifyModelDownloadFailed(

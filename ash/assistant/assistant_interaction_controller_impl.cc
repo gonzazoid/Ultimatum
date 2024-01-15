@@ -4,11 +4,11 @@
 
 #include "ash/assistant/assistant_interaction_controller_impl.h"
 
+#include <optional>
 #include <utility>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/assistant/assistant_controller_impl.h"
-#include "ash/assistant/assistant_screen_context_controller_impl.h"
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
 #include "ash/assistant/model/assistant_query.h"
 #include "ash/assistant/model/assistant_response.h"
@@ -29,16 +29,18 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "net/base/url_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 
 namespace ash {
 
@@ -52,13 +54,9 @@ constexpr char kAndroidIntentPrefix[] = "#Intent";
 
 // Helpers ---------------------------------------------------------------------
 
-ash::TabletModeController* GetTabletModeController() {
-  return Shell::Get()->tablet_mode_controller();
-}
-
 // Returns true if device is in tablet mode, false otherwise.
 bool IsTabletMode() {
-  return GetTabletModeController()->InTabletMode();
+  return display::Screen::GetScreen()->InTabletMode();
 }
 
 bool launch_with_mic_open() {
@@ -89,9 +87,7 @@ AssistantInteractionControllerImpl::AssistantInteractionControllerImpl(
   model_.AddObserver(this);
 
   assistant_controller_observation_.Observe(AssistantController::Get());
-  highlighter_controller_observation_.Observe(
-      Shell::Get()->highlighter_controller());
-  tablet_mode_controller_observation_.Observe(GetTabletModeController());
+  display_observation_.Observe(display::Screen::GetScreen());
 }
 
 AssistantInteractionControllerImpl::~AssistantInteractionControllerImpl() {
@@ -108,7 +104,7 @@ void AssistantInteractionControllerImpl::RegisterProfilePrefs(
 }
 
 void AssistantInteractionControllerImpl::SetAssistant(
-    chromeos::assistant::Assistant* assistant) {
+    assistant::Assistant* assistant) {
   if (assistant_)
     assistant_->RemoveAssistantInteractionSubscriber(this);
 
@@ -163,7 +159,7 @@ void AssistantInteractionControllerImpl::OnDeepLinkReceived(
 
   if (type == DeepLinkType::kReminders) {
     using ReminderAction = assistant::util::ReminderAction;
-    const absl::optional<ReminderAction>& action =
+    const std::optional<ReminderAction>& action =
         GetDeepLinkParamAsRemindersAction(params, DeepLinkParam::kAction);
 
     // We treat reminders deeplinks without an action as web deep links.
@@ -179,7 +175,7 @@ void AssistantInteractionControllerImpl::OnDeepLinkReceived(
         break;
 
       case ReminderAction::kEdit:
-        const absl::optional<std::string>& client_id =
+        const std::optional<std::string>& client_id =
             GetDeepLinkParam(params, DeepLinkParam::kClientId);
         if (client_id && !client_id.value().empty()) {
           model_.SetPendingQuery(std::make_unique<AssistantTextQuery>(
@@ -196,7 +192,7 @@ void AssistantInteractionControllerImpl::OnDeepLinkReceived(
   if (type != DeepLinkType::kQuery)
     return;
 
-  const absl::optional<std::string>& query =
+  const std::optional<std::string>& query =
       GetDeepLinkParam(params, DeepLinkParam::kQuery);
 
   if (!query.has_value())
@@ -237,8 +233,8 @@ void AssistantInteractionControllerImpl::OnDeepLinkReceived(
 void AssistantInteractionControllerImpl::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   switch (new_visibility) {
     case AssistantVisibility::kClosed:
       // When the UI is closed we need to stop any active interaction. We also
@@ -255,23 +251,6 @@ void AssistantInteractionControllerImpl::OnUiVisibilityChanged(
   }
 }
 
-void AssistantInteractionControllerImpl::OnHighlighterSelectionRecognized(
-    const gfx::Rect& rect) {
-  DCHECK(AssistantState::Get()->IsScreenContextAllowed());
-
-  AssistantUiController::Get()->ShowUi(AssistantEntryPoint::kStylus);
-  StartScreenContextInteraction(rect, AssistantQuerySource::kStylus);
-}
-
-void AssistantInteractionControllerImpl::OnInteractionStateChanged(
-    InteractionState interaction_state) {
-  if (!HasActiveInteraction())
-    return;
-
-  // Metalayer mode should not be sticky. Disable it on interaction start.
-  Shell::Get()->highlighter_controller()->AbortSession();
-}
-
 void AssistantInteractionControllerImpl::OnInputModalityChanged(
     InputModality input_modality) {
   if (!IsVisible())
@@ -280,11 +259,6 @@ void AssistantInteractionControllerImpl::OnInputModalityChanged(
   if (input_modality == InputModality::kVoice)
     return;
 
-  // Metalayer interactions cause an input modality change that causes us to
-  // lose the pending query. We cache the source before stopping the active
-  // interaction so we can restore the pending query when using the stylus.
-  const auto source = model_.pending_query().source();
-
   // When switching to a non-voice input modality we instruct the underlying
   // service to terminate any pending query. We do not do this when switching to
   // voice input modality because initiation of a voice interaction will
@@ -292,12 +266,6 @@ void AssistantInteractionControllerImpl::OnInputModalityChanged(
   // interaction here for voice input modality would actually have the undesired
   // effect of stopping the voice interaction.
   StopActiveInteraction(false);
-
-  if (source == AssistantQuerySource::kStylus) {
-    model_.SetPendingQuery(std::make_unique<AssistantTextQuery>(
-        l10n_util::GetStringUTF8(IDS_ASH_ASSISTANT_CHIP_WHATS_ON_MY_SCREEN),
-        AssistantQuerySource::kStylus));
-  }
 }
 
 void AssistantInteractionControllerImpl::OnMicStateChanged(MicState mic_state) {
@@ -348,9 +316,6 @@ void AssistantInteractionControllerImpl::OnCommittedQueryChanged(
 void AssistantInteractionControllerImpl::OnInteractionStarted(
     const AssistantInteractionMetadata& metadata) {
   VLOG(1) << __func__;
-
-  // Abort any request in progress.
-  screen_context_request_factory_.InvalidateWeakPtrs();
 
   // Stop the interaction if the opt-in window is active.
   auto* assistant_setup = AssistantSetup::GetInstance();
@@ -524,7 +489,7 @@ void AssistantInteractionControllerImpl::OnSuggestionPressed(
     // and destroy |suggestion| in the process. Failure to post in this case
     // would cause any subsequent observers of this suggestion chip event to
     // receive a deleted pointer.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&AssistantController::OpenUrl,
                        AssistantController::Get()->GetWeakPtr(),
@@ -561,15 +526,13 @@ void AssistantInteractionControllerImpl::OnSuggestionPressed(
       query_source);
 }
 
-void AssistantInteractionControllerImpl::OnTabletModeStarted() {
-  OnTabletModeChanged();
-}
+void AssistantInteractionControllerImpl::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  // Ignore the state in the process of changing the tablet state.
+  if (display::IsTabletStateChanging(state)) {
+    return;
+  }
 
-void AssistantInteractionControllerImpl::OnTabletModeEnded() {
-  OnTabletModeChanged();
-}
-
-void AssistantInteractionControllerImpl::OnTabletModeChanged() {
   // The default input modality is different for tablet and normal mode.
   // Change input modality to the new default input modality.
   if (!HasActiveInteraction() && !IsVisible())
@@ -788,28 +751,6 @@ void AssistantInteractionControllerImpl::OnUiVisible(
   }
 }
 
-void AssistantInteractionControllerImpl::StartScreenContextInteraction(
-    const gfx::Rect& region,
-    AssistantQuerySource query_source) {
-  StopActiveInteraction(false);
-
-  model_.SetPendingQuery(std::make_unique<AssistantTextQuery>(
-      l10n_util::GetStringUTF8(IDS_ASH_ASSISTANT_CHIP_WHATS_ON_MY_SCREEN),
-      query_source));
-
-  assistant_controller_->screen_context_controller()->RequestScreenshot(
-      region,
-      base::BindOnce(
-          [](const base::WeakPtr<AssistantInteractionControllerImpl>& self,
-             const std::vector<uint8_t>& screenshot) {
-            if (!self)
-              return;
-
-            self->assistant_->StartScreenContextInteraction(screenshot);
-          },
-          screen_context_request_factory_.GetWeakPtr()));
-}
-
 void AssistantInteractionControllerImpl::StartVoiceInteraction() {
   model_.SetPendingQuery(std::make_unique<AssistantVoiceQuery>());
 
@@ -825,10 +766,10 @@ void AssistantInteractionControllerImpl::StopActiveInteraction(
   model_.SetInteractionState(InteractionState::kInactive);
   model_.ClearPendingQuery();
 
-  // Abort any request in progress.
-  screen_context_request_factory_.InvalidateWeakPtrs();
-
-  assistant_->StopActiveInteraction(cancel_conversation);
+  if (AssistantState::Get()->assistant_status() ==
+      assistant::AssistantStatus::READY) {
+    assistant_->StopActiveInteraction(cancel_conversation);
+  }
 
   // Because we are stopping an interaction in progress, we discard any pending
   // response for it that is cached to prevent it from being committed when the

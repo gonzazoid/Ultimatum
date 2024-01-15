@@ -26,7 +26,7 @@ accepts `RenderFrameHost`, `WebContents`, and other types.
 
 ```c++
   // Executes in the main frame.
-  EXPECT_EQ(true, EvalJs(shell()->GetWebContents(), "window.top == window"));
+  EXPECT_EQ(true, EvalJs(shell()->web_contents(), "window.top == window"));
 
   // Also executes in the main frame.
   EXPECT_EQ(true, EvalJs(shell(), "window.top == window"));
@@ -34,7 +34,7 @@ accepts `RenderFrameHost`, `WebContents`, and other types.
   // Executes in the first child frame of the main frame.
   EXPECT_EQ(
       false,
-      EvalJs(ChildFrameAt(shell()->GetWebContents()->GetPrimaryMainFrame(), 0),
+      EvalJs(ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0),
              "window.top == window"));
 ```
 
@@ -124,17 +124,17 @@ as if the navigation was renderer-initiated, e.g. by setting `window.location`:
 ```c++
   // Navigates the main frame.
   GURL url_1(embedded_test_server()->GetURL("a.com", "/title1.html"));
-  EXPECT_TRUE(NavigateToURLFromRenderer(shell()->GetWebContents(), url_1));
+  EXPECT_TRUE(NavigateToURLFromRenderer(shell()->web_contents(), url_1));
 
   // Navigates the main frame too.
   GURL url_2(embedded_test_server()->GetURL("b.com", "/page_with_iframe.html"));
-  EXPECT_TRUE(NavigateToURLFromRenderer(shell()->GetWebContents(), url_2));
+  EXPECT_TRUE(NavigateToURLFromRenderer(shell()->web_contents(), url_2));
 
   // Navigates the first child frame.
   GURL url_3(embedded_test_server()->GetURL("a.com", "/empty.html"));
   EXPECT_TRUE(
       NavigateToURLFromRenderer(
-          ChildFrameAt(shell()->GetWebContents()->GetPrimaryMainFrame(), 0),
+          ChildFrameAt(shell()->web_contents()->GetPrimaryMainFrame(), 0),
           url_3));
 ```
 
@@ -194,7 +194,6 @@ Override `SetUpOnMainThread()` to configure it like this:
   }
 ```
 
-
 ## Simulating a slow load
 
 Navigates to a page that takes 60 seconds to load.
@@ -206,6 +205,20 @@ Navigates to a page that takes 60 seconds to load.
 
 The embedded test server also registers [other default
 handlers][test-server-default-handlers] that may be useful.
+
+## Simulating a failed navigation
+
+Note that this is distinct from a navigation that results in an HTTP error,
+since those navigations still load arbitrary HTML from the server-supplied error
+page; a failed navigation is one that results in committing a Chrome-supplied
+error page, i.e. `RenderFrameHost::IsErrorDocument()` returns `true`.
+
+```c++
+  GURL url = embedded_test_server()->GetURL("/title1.html");
+  std::unique_ptr<URLLoaderInterceptor> url_interceptor =
+      URLLoaderInterceptor::SetupRequestFailForURL(url, net::ERR_DNS_TIMED_OUT);
+  EXPECT_FALSE(NavigateToURLFromRenderer(shell()->web_contents(), url));
+```
 
 [host-resolver-config]: README.md#Cross_origin-navigations
 [cross-site-iframe-factory]: https://source.chromium.org/chromium/chromium/src/+/main:content/test/data/cross_site_iframe_factory.html

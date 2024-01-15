@@ -17,6 +17,7 @@
 #include "services/network/public/mojom/http_raw_headers.mojom-forward.h"
 #include "services/network/public/mojom/ip_address_space.mojom-forward.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 
@@ -35,7 +36,9 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
       const net::CookieAccessResultList& cookies_with_access_result,
       std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
       const base::TimeTicks timestamp,
-      network::mojom::ClientSecurityStatePtr client_security_state) override;
+      network::mojom::ClientSecurityStatePtr client_security_state,
+      network::mojom::OtherPartitionInfoPtr site_has_cookie_in_other_partition)
+      override;
 
   void OnRawResponse(
       const std::string& devtools_request_id,
@@ -43,7 +46,9 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
       std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
       const absl::optional<std::string>& raw_response_headers,
       network::mojom::IPAddressSpace resource_address_space,
-      int32_t http_status_code) override;
+      int32_t http_status_code,
+      const absl::optional<net::CookiePartitionKey>& cookie_partition_key)
+      override;
 
   void OnPrivateNetworkRequest(
       const absl::optional<std::string>& devtools_request_id,
@@ -105,6 +110,12 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
                    const GURL& url,
                    const network::CorsErrorStatus& status,
                    bool is_warning) override;
+
+  MOCK_METHOD(void,
+              OnCorbError,
+              (const absl::optional<std::string>& devtools_request_id,
+               const GURL& url),
+              (override));
 
   void Clone(mojo::PendingReceiver<DevToolsObserver> observer) override;
 
@@ -175,12 +186,22 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
     absl::optional<::url::Origin> initiator_origin;
     mojom::ClientSecurityStatePtr client_security_state;
     GURL url;
-    network::CorsErrorStatus status;
+    absl::optional<network::CorsErrorStatus> status;
     bool is_warning = false;
   };
 
   const absl::optional<OnCorsErrorParams>& cors_error_params() const {
     return params_of_cors_error_;
+  }
+
+  const absl::optional<net::CookiePartitionKey>& response_cookie_partition_key()
+      const {
+    return response_cookie_partition_key_;
+  }
+
+  const absl::optional<network::URLLoaderCompletionStatus>& preflight_status()
+      const {
+    return preflight_status_;
   }
 
  private:
@@ -193,6 +214,7 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
   absl::optional<std::string> raw_response_headers_;
   std::vector<network::mojom::HttpRawHeaderPairPtr> response_headers_;
   int32_t raw_response_http_status_code_ = -1;
+  absl::optional<network::URLLoaderCompletionStatus> preflight_status_;
 
   bool got_raw_request_ = false;
   net::CookieAccessResultList raw_request_cookies_;
@@ -208,6 +230,8 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
   absl::optional<OnCorsErrorParams> params_of_cors_error_;
 
   mojo::ReceiverSet<mojom::DevToolsObserver> receivers_;
+
+  absl::optional<net::CookiePartitionKey> response_cookie_partition_key_;
 };
 
 }  // namespace network

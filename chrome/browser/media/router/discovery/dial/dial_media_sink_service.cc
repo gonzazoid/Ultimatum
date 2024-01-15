@@ -4,7 +4,8 @@
 
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
 #include "components/media_router/common/media_source.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -26,7 +27,7 @@ void DialMediaSinkService::Start(
 
   OnSinksDiscoveredCallback sink_discovery_cb_impl = base::BindRepeating(
       &RunSinksDiscoveredCallbackOnSequence,
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindRepeating(&DialMediaSinkService::RunSinksDiscoveredCallback,
                           weak_ptr_factory_.GetWeakPtr(), sink_discovery_cb));
 
@@ -37,12 +38,12 @@ void DialMediaSinkService::Start(
                                 base::Unretained(impl_.get())));
 }
 
-void DialMediaSinkService::OnUserGesture() {
+void DialMediaSinkService::DiscoverSinksNow() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(impl_);
 
   impl_->task_runner()->PostTask(
-      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::OnUserGesture,
+      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::DiscoverSinksNow,
                                 base::Unretained(impl_.get())));
 }
 

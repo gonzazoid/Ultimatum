@@ -2,10 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {HeapProfilerTestRunner} from 'heap_profiler_test_runner';
+
+import * as HeapSnapshotModel from 'devtools/models/heap_snapshot_model/heap_snapshot_model.js';
+import * as Profiler from 'devtools/panels/profiler/profiler.js';
+
 (async function() {
   TestRunner.addResult(
       `Test that event listeners not user reachable from the root are still present in the class list.\n`);
-  await TestRunner.loadTestModule('heap_profiler_test_runner');
   await TestRunner.showPanel('heap_profiler');
   await TestRunner.evaluateInPagePromise(`
       class EventListenerWrapperTest {
@@ -19,7 +24,7 @@
   `);
 
   var heapProfileType = Profiler.ProfileTypeRegistry.instance.heapSnapshotProfileType;
-  heapProfileType.addEventListener(Profiler.HeapSnapshotProfileType.SnapshotReceived, finishHeapSnapshot);
+  heapProfileType.addEventListener(Profiler.HeapSnapshotView.HeapSnapshotProfileType.SnapshotReceived, finishHeapSnapshot);
   TestRunner.addSniffer(heapProfileType, 'snapshotReceived', snapshotReceived);
   heapProfileType.takeHeapSnapshot();
 
@@ -33,12 +38,12 @@
       return clear('FAILED: wrong number of recorded profiles was found. profiles.length = ' + profiles.length);
 
     var profile = profiles[profiles.length - 1];
-    UI.panels.heap_profiler.showProfile(profile);
+    Profiler.HeapProfilerPanel.HeapProfilerPanel.instance().showProfile(profile);
   }
 
   async function snapshotReceived(profile) {
     var snapshotProxy = profile.snapshotProxy;
-    var classNames = await snapshotProxy.aggregatesWithFilter(new HeapSnapshotModel.NodeFilter());
+    var classNames = await snapshotProxy.aggregatesWithFilter(new HeapSnapshotModel.HeapSnapshotModel.NodeFilter());
     var found = Object.keys(classNames).includes('EventListenerWrapperTest');
     if (found)
       TestRunner.addResult('PASS: the class name is found');

@@ -25,22 +25,31 @@ ClientAppMetadataProviderServiceFactory::GetForProfile(Profile* profile) {
 // static
 ClientAppMetadataProviderServiceFactory*
 ClientAppMetadataProviderServiceFactory::GetInstance() {
-  return base::Singleton<ClientAppMetadataProviderServiceFactory>::get();
+  static base::NoDestructor<ClientAppMetadataProviderServiceFactory> instance;
+  return instance.get();
 }
 
 ClientAppMetadataProviderServiceFactory::
     ClientAppMetadataProviderServiceFactory()
-    : ProfileKeyedServiceFactory("ClientAppMetadataProviderService") {
+    : ProfileKeyedServiceFactory(
+          "ClientAppMetadataProviderService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(instance_id::InstanceIDProfileServiceFactory::GetInstance());
 }
 
 ClientAppMetadataProviderServiceFactory::
     ~ClientAppMetadataProviderServiceFactory() = default;
 
-KeyedService* ClientAppMetadataProviderServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ClientAppMetadataProviderServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   Profile* profile = Profile::FromBrowserContext(browser_context);
-  return new ClientAppMetadataProviderService(
+  return std::make_unique<ClientAppMetadataProviderService>(
       profile->GetPrefs(), NetworkHandler::Get()->network_state_handler(),
       instance_id::InstanceIDProfileServiceFactory::GetForProfile(profile));
 }

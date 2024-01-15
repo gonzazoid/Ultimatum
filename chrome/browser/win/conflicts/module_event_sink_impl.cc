@@ -9,16 +9,15 @@
 #include <psapi.h>
 
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/win/conflicts/module_database.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -44,7 +43,7 @@ bool GetModulePath(base::ProcessHandle process,
     temp_path.resize(2 * temp_path.size());
   }
 
-  *path = base::FilePath(base::WStringPiece(temp_path.data(), length));
+  *path = base::FilePath(std::wstring_view(temp_path.data(), length));
   return true;
 }
 
@@ -179,7 +178,8 @@ void ModuleEventSinkImpl::OnModuleEvents(
         {base::TaskPriority::BEST_EFFORT,
          base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN, base::MayBlock()},
         base::BindOnce(&HandleModuleEvent, process_.Duplicate(), process_type_,
-                       load_address, base::SequencedTaskRunnerHandle::Get(),
+                       load_address,
+                       base::SequencedTaskRunner::GetCurrentDefault(),
                        on_module_load_callback_));
   }
 }

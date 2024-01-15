@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 
+#include <string_view>
 #include <utility>
 
 #include "base/containers/span.h"
@@ -26,19 +27,19 @@ TEST(WebRequestUploadDataPresenterTest, ParsedData) {
   net::UploadBytesElementReader element(block, sizeof(block) - 1);
 
   // Expected output.
-  base::Value values(base::Value::Type::LIST);
+  base::Value::List values;
   values.Append("value");
-  base::Value expected_form(base::Value::Type::DICTIONARY);
-  expected_form.SetKey("key.with.dots", std::move(values));
+  base::Value::Dict expected_form;
+  expected_form.Set("key.with.dots", std::move(values));
 
   // Real output.
   std::unique_ptr<ParsedDataPresenter> parsed_data_presenter(
       ParsedDataPresenter::CreateForTests());
   ASSERT_TRUE(parsed_data_presenter.get() != nullptr);
   parsed_data_presenter->FeedBytes(
-      base::StringPiece(element.bytes(), element.length()));
+      std::string_view(element.bytes(), element.length()));
   EXPECT_TRUE(parsed_data_presenter->Succeeded());
-  absl::optional<base::Value> result = parsed_data_presenter->TakeResult();
+  std::optional<base::Value> result = parsed_data_presenter->TakeResult();
   EXPECT_EQ(result, expected_form);
 }
 
@@ -69,7 +70,7 @@ TEST(WebRequestUploadDataPresenterTest, RawData) {
   raw_presenter.FeedNextFile(kFilename);
   raw_presenter.FeedNextBytes(block2, block2_size);
   EXPECT_TRUE(raw_presenter.Succeeded());
-  absl::optional<base::Value> result = raw_presenter.TakeResult();
+  std::optional<base::Value> result = raw_presenter.TakeResult();
   EXPECT_EQ(expected_list, result);
 }
 

@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Console from 'devtools/panels/console/console.js';
+
 (async function() {
   TestRunner.addResult(`Tests that console logging dumps proper messages with broken Unicode.\n`);
 
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
 
   await TestRunner.evaluateInPagePromise(`
@@ -59,7 +63,7 @@
   function countTextNodes(textContent) {
     ConsoleTestRunner.disableConsoleViewport();
     var count = 0;
-    var viewMessages = Console.ConsoleView.instance().visibleViewMessages;
+    var viewMessages = Console.ConsoleView.ConsoleView.instance().visibleViewMessages;
 
     for (var i = 0; i < viewMessages.length; ++i) {
       var node = viewMessages[i].contentElement();

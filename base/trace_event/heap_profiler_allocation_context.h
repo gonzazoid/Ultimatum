@@ -11,6 +11,7 @@
 #include <functional>
 
 #include "base/base_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace base {
 namespace trace_event {
@@ -30,19 +31,19 @@ namespace trace_event {
 // pointer from process' address space.
 struct BASE_EXPORT StackFrame {
   enum class Type {
-    THREAD_NAME,        // const char* thread name
-    PROGRAM_COUNTER,    // as returned by stack tracing (e.g. by StackTrace)
+    kThreadName,      // const char* thread name
+    kProgramCounter,  // as returned by stack tracing (e.g. by StackTrace)
   };
 
   static StackFrame FromThreadName(const char* name) {
-    return {Type::THREAD_NAME, name};
+    return {Type::kThreadName, name};
   }
   static StackFrame FromProgramCounter(const void* pc) {
-    return {Type::PROGRAM_COUNTER, pc};
+    return {Type::kProgramCounter, pc};
   }
 
   Type type;
-  const void* value;
+  raw_ptr<const void> value;
 };
 
 bool BASE_EXPORT operator < (const StackFrame& lhs, const StackFrame& rhs);

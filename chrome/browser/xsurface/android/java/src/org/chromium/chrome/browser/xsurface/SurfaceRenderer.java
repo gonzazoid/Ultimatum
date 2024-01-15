@@ -11,6 +11,8 @@ import androidx.annotation.Nullable;
 import java.util.Map;
 
 /**
+ * Implemented internally.
+ *
  * Interface to call a rendering service to render a View sent by a server.
  */
 public interface SurfaceRenderer {
@@ -23,8 +25,7 @@ public interface SurfaceRenderer {
      * @param renderData externally-provided bytes to be rendered.
      * @param contextValues additional context to be incorporated into the view.
      */
-    @Nullable
-    default View render(byte[] renderData, Map<String, Object> contextValues) {
+    default @Nullable View render(byte[] renderData, Map<String, Object> contextValues) {
         return null;
     }
 }

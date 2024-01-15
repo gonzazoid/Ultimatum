@@ -4,11 +4,11 @@
 
 #include "content/browser/serial/serial_service.h"
 
+#include <map>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "content/browser/renderer_host/back_forward_cache_disable.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/back_forward_cache.h"
@@ -19,6 +19,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "services/device/public/mojom/serial.mojom.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom.h"
 
 namespace content {
@@ -35,6 +36,9 @@ blink::mojom::SerialPortInfoPtr ToBlinkType(
   info->has_usb_product_id = port.has_product_id;
   if (port.has_product_id)
     info->usb_product_id = port.product_id;
+  if (port.bluetooth_service_class_id) {
+    info->bluetooth_service_class_id = port.bluetooth_service_class_id;
+  }
   return info;
 }
 
@@ -96,6 +100,8 @@ void SerialService::GetPorts(GetPortsCallback callback) {
 
 void SerialService::RequestPort(
     std::vector<blink::mojom::SerialPortFilterPtr> filters,
+    const std::vector<::device::BluetoothUUID>&
+        allowed_bluetooth_service_class_ids,
     RequestPortCallback callback) {
   SerialDelegate* delegate = GetContentClient()->browser()->GetSerialDelegate();
   if (!delegate) {
@@ -110,6 +116,7 @@ void SerialService::RequestPort(
 
   chooser_ = delegate->RunChooser(
       &render_frame_host(), std::move(filters),
+      allowed_bluetooth_service_class_ids,
       base::BindOnce(&SerialService::FinishRequestPort,
                      weak_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -194,7 +201,7 @@ void SerialService::OnPermissionRevoked(const url::Origin& origin) {
 
   SerialDelegate* delegate = GetContentClient()->browser()->GetSerialDelegate();
   size_t watchers_removed =
-      base::EraseIf(watcher_ids_, [&](const auto& watcher_entry) {
+      std::erase_if(watcher_ids_, [&](const auto& watcher_entry) {
         const auto* port =
             delegate->GetPortInfo(&render_frame_host(), watcher_entry.first);
         if (port && delegate->HasPortPermission(&render_frame_host(), *port))
@@ -242,7 +249,7 @@ void SerialService::OnWatcherConnectionError() {
     DecrementActiveFrameCount();
 
   // Clean up any associated |watcher_ids_| entries.
-  base::EraseIf(watcher_ids_, [&](const auto& watcher_entry) {
+  std::erase_if(watcher_ids_, [&](const auto& watcher_entry) {
     return watcher_entry.second == watchers_.current_receiver();
   });
 }

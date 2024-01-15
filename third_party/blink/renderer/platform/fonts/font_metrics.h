@@ -20,6 +20,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_METRICS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_METRICS_H_
 
+#include "base/types/strong_alias.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/fonts/font_baseline.h"
 #include "third_party/blink/renderer/platform/fonts/font_height.h"
@@ -39,13 +40,18 @@ class FontMetrics {
   DISALLOW_NEW();
 
  public:
+  using ApplyBaselineTable =
+      base::StrongAlias<class ApplyBaselineTableTag, bool>;
+
   unsigned UnitsPerEm() const { return units_per_em_; }
   void SetUnitsPerEm(unsigned units_per_em) { units_per_em_ = units_per_em; }
 
-  float FloatAscent(FontBaseline baseline_type = kAlphabeticBaseline) const {
+  float FloatAscent(FontBaseline baseline_type = kAlphabeticBaseline,
+                    ApplyBaselineTable apply_baseline_table =
+                        ApplyBaselineTable(false)) const {
     if (baseline_type == kAlphabeticBaseline)
       return float_ascent_;
-    return FloatAscentInternal(baseline_type);
+    return FloatAscentInternal(baseline_type, apply_baseline_table);
   }
 
   void SetAscent(float ascent) {
@@ -53,10 +59,13 @@ class FontMetrics {
     int_ascent_ = static_cast<int>(lroundf(ascent));
   }
 
-  float FloatDescent(FontBaseline baseline_type = kAlphabeticBaseline) const {
+  float FloatDescent(FontBaseline baseline_type = kAlphabeticBaseline,
+                     ApplyBaselineTable apply_baseline_table =
+                         ApplyBaselineTable(false)) const {
     if (baseline_type == kAlphabeticBaseline)
       return float_descent_;
-    return FloatHeight() - FloatAscentInternal(baseline_type);
+    return FloatHeight() -
+           FloatAscentInternal(baseline_type, apply_baseline_table);
   }
 
   void SetDescent(float descent) {
@@ -69,10 +78,10 @@ class FontMetrics {
   float CapHeight() const { return cap_height_; }
   void SetCapHeight(float cap_height) { cap_height_ = cap_height; }
 
-  float FloatLineGap() const { return line_gap_; }
+  int LineGap() const { return static_cast<int>(lroundf(line_gap_)); }
   void SetLineGap(float line_gap) { line_gap_ = line_gap; }
 
-  float FloatLineSpacing() const { return line_spacing_; }
+  int LineSpacing() const { return static_cast<int>(lroundf(line_spacing_)); }
   void SetLineSpacing(float line_spacing) { line_spacing_ = line_spacing; }
 
   float XHeight() const { return x_height_; }
@@ -85,22 +94,23 @@ class FontMetrics {
   void SetHasXHeight(bool has_x_height) { has_x_height_ = has_x_height; }
 
   // Integer variants of certain metrics, used for HTML rendering.
-  int Ascent(FontBaseline baseline_type = kAlphabeticBaseline) const {
+  int Ascent(FontBaseline baseline_type = kAlphabeticBaseline,
+             ApplyBaselineTable apply_baseline_table =
+                 ApplyBaselineTable(false)) const {
     if (baseline_type == kAlphabeticBaseline)
       return int_ascent_;
-    return IntAscentInternal(baseline_type);
+    return IntAscentInternal(baseline_type, apply_baseline_table);
   }
 
-  int Descent(FontBaseline baseline_type = kAlphabeticBaseline) const {
+  int Descent(FontBaseline baseline_type = kAlphabeticBaseline,
+              ApplyBaselineTable apply_baseline_table =
+                  ApplyBaselineTable(false)) const {
     if (baseline_type == kAlphabeticBaseline)
       return int_descent_;
-    return Height() - IntAscentInternal(baseline_type);
+    return Height() - IntAscentInternal(baseline_type, apply_baseline_table);
   }
 
   int Height() const { return int_ascent_ + int_descent_; }
-
-  int LineGap() const { return static_cast<int>(lroundf(line_gap_)); }
-  int LineSpacing() const { return static_cast<int>(lroundf(line_spacing_)); }
 
   // LayoutUnit variants of certain metrics.
   // LayoutNG should use LayoutUnit for the block progression metrics.
@@ -131,11 +141,6 @@ class FontMetrics {
                       LayoutUnit(Descent(baseline_type)));
   }
 
-  bool HasIdenticalAscentDescentAndLineGap(const FontMetrics& other) const {
-    return Ascent() == other.Ascent() && Descent() == other.Descent() &&
-           LineGap() == other.LineGap();
-  }
-
   float ZeroWidth() const { return zero_width_; }
   void SetZeroWidth(float zero_width) {
     zero_width_ = zero_width;
@@ -145,16 +150,6 @@ class FontMetrics {
   bool HasZeroWidth() const { return has_zero_width_; }
   void SetHasZeroWidth(bool has_zero_width) {
     has_zero_width_ = has_zero_width;
-  }
-
-  // The approximated advance of fullwidth ideographic characters. This is
-  // currently used to support the [`ic` unit].
-  // [`ic` unit]: https://drafts.csswg.org/css-values-4/#ic
-  absl::optional<float> IdeographicFullWidth() const {
-    return ideographic_full_width_;
-  }
-  void SetIdeographicFullWidth(absl::optional<float> width) {
-    ideographic_full_width_ = width;
   }
 
   absl::optional<float> UnderlineThickness() const {
@@ -169,6 +164,30 @@ class FontMetrics {
   }
   void SetUnderlinePosition(float underline_position) {
     underline_position_ = underline_position;
+  }
+
+  void SetIdeographicBaseline(absl::optional<float> value) {
+    ideographic_baseline_position_ = value;
+  }
+
+  absl::optional<float> IdeographicBaseline() const {
+    return ideographic_baseline_position_;
+  }
+
+  void SetAlphabeticBaseline(absl::optional<float> value) {
+    alphabetic_baseline_position_ = value;
+  }
+
+  absl::optional<float> AlphabeticBaseline() const {
+    return alphabetic_baseline_position_;
+  }
+
+  void SetHangingBaseline(absl::optional<float> value) {
+    hanging_baseline_position_ = value;
+  }
+
+  absl::optional<float> HangingBaseline() const {
+    return hanging_baseline_position_;
   }
 
   // Unfortunately we still need to keep metrics adjustments for certain Mac
@@ -199,14 +218,20 @@ class FontMetrics {
     line_gap_ = 0;
     line_spacing_ = 0;
     x_height_ = 0;
-    ideographic_full_width_.reset();
     has_x_height_ = false;
     underline_thickness_.reset();
     underline_position_.reset();
+    ideographic_baseline_position_.reset();
+    alphabetic_baseline_position_.reset();
+    hanging_baseline_position_.reset();
   }
 
-  PLATFORM_EXPORT float FloatAscentInternal(FontBaseline baseline_type) const;
-  PLATFORM_EXPORT int IntAscentInternal(FontBaseline baseline_type) const;
+  PLATFORM_EXPORT float FloatAscentInternal(
+      FontBaseline baseline_type,
+      ApplyBaselineTable apply_baseline_table) const;
+  PLATFORM_EXPORT int IntAscentInternal(
+      FontBaseline baseline_type,
+      ApplyBaselineTable apply_baseline_table) const;
 
   unsigned units_per_em_ = kGDefaultUnitsPerEm;
   float cap_height_ = 0;
@@ -216,9 +241,11 @@ class FontMetrics {
   float line_spacing_ = 0;
   float x_height_ = 0;
   float zero_width_ = 0;
-  absl::optional<float> ideographic_full_width_;
   absl::optional<float> underline_thickness_;
   absl::optional<float> underline_position_;
+  absl::optional<float> ideographic_baseline_position_;
+  absl::optional<float> alphabetic_baseline_position_;
+  absl::optional<float> hanging_baseline_position_;
   int int_ascent_ = 0;
   int int_descent_ = 0;
   bool has_x_height_ = false;

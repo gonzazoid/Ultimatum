@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
@@ -36,7 +36,7 @@ MojoDataPump::MojoDataPump(mojo::ScopedDataPipeConsumerHandle receive_stream,
       base::BindRepeating(&MojoDataPump::SendMore, base::Unretained(this)));
 }
 
-MojoDataPump::~MojoDataPump() {}
+MojoDataPump::~MojoDataPump() = default;
 
 void MojoDataPump::Read(int count, ReadCallback callback) {
   DCHECK(callback);
@@ -74,8 +74,8 @@ void MojoDataPump::ReceiveMore(MojoResult result,
 
   scoped_refptr<net::IOBuffer> io_buffer;
   if (result == MOJO_RESULT_OK) {
-    io_buffer =
-        base::MakeRefCounted<net::IOBuffer>(static_cast<size_t>(num_bytes));
+    io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(
+        static_cast<size_t>(num_bytes));
     result = receive_stream_->ReadData(io_buffer->data(), &num_bytes,
                                        MOJO_READ_DATA_FLAG_NONE);
   }

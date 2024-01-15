@@ -2,23 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
 import {ModuleDescriptor, ModuleRegistry} from 'chrome://new-tab-page/lazy_load.js';
 import {NewTabPageProxy, WindowProxy} from 'chrome://new-tab-page/new_tab_page.js';
-import {PageCallbackRouter, PageHandlerRemote, PageRemote} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {ModuleIdName, PageCallbackRouter, PageHandlerRemote, PageRemote} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {assertDeepEquals, assertEquals} from 'chrome://webui-test/chai_assert.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 
-import {fakeMetricsPrivate, MetricsTracker} from '../metrics_test_support.js';
 import {createElement, initNullModule, installMock} from '../test_support.js';
 
 suite('NewTabPageModulesModuleRegistryTest', () => {
-  let windowProxy: TestBrowserProxy;
-  let handler: TestBrowserProxy;
+  let windowProxy: TestMock<WindowProxy>;
+  let handler: TestMock<PageHandlerRemote>;
   let callbackRouterRemote: PageRemote;
   let metrics: MetricsTracker;
 
@@ -34,6 +32,34 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
                                .callbackRouter.$.bindNewPipeAndPassRemote();
   });
 
+  test('multi instance', async () => {
+    const fooElements = [createElement(), createElement()];
+    const barElement = createElement();
+    const descriptors = [
+      new ModuleDescriptor('foo', () => Promise.resolve(fooElements)),
+      new ModuleDescriptor('bar', () => Promise.resolve(barElement)),
+      new ModuleDescriptor('baz', initNullModule),
+    ];
+
+    handler.setResultFor('getModulesIdNames', Promise.resolve({
+      data: descriptors.map(d => ({id: d.id, name: d.id} as ModuleIdName)),
+    }));
+    handler.setResultFor('getModulesOrder', Promise.resolve({
+      moduleIds: [],
+    }));
+
+    const moduleRegistry = new ModuleRegistry(descriptors);
+    const modulesPromise = moduleRegistry.initializeModules(0);
+    callbackRouterRemote.setDisabledModules(false, []);
+
+    const modules = await modulesPromise;
+    assertEquals(2, modules.length);
+    assertEquals('foo', modules[0]!.descriptor.id);
+    assertEquals(2, modules[0]!.elements.length);
+    assertEquals('bar', modules[1]!.descriptor.id);
+    assertEquals(1, modules[1]!.elements.length);
+  });
+
   test('instantiates non-reordered modules', async () => {
     // Arrange.
     const fooModule = createElement();
@@ -41,12 +67,15 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
     const bazModuleResolver: PromiseResolver<HTMLElement> =
         new PromiseResolver();
     const descriptors = [
-      new ModuleDescriptor('foo', 'bli', () => Promise.resolve(fooModule)),
-      new ModuleDescriptor('bar', 'blu', initNullModule),
-      new ModuleDescriptor('baz', 'bla', () => bazModuleResolver.promise),
-      new ModuleDescriptor('buz', 'blo', () => Promise.resolve(fooModule)),
+      new ModuleDescriptor('foo', () => Promise.resolve(fooModule)),
+      new ModuleDescriptor('bar', initNullModule),
+      new ModuleDescriptor('baz', () => bazModuleResolver.promise),
+      new ModuleDescriptor('buz', () => Promise.resolve(fooModule)),
     ];
     windowProxy.setResultFor('now', 5.0);
+    handler.setResultFor('getModulesIdNames', Promise.resolve({
+      data: descriptors.map(d => ({id: d.id, name: d.id} as ModuleIdName)),
+    }));
     handler.setResultFor('getModulesOrder', Promise.resolve({
       moduleIds: [],
     }));
@@ -67,9 +96,9 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
     assertEquals(1, handler.getCallCount('updateDisabledModules'));
     assertEquals(2, modules.length);
     assertEquals('foo', modules[0]!.descriptor.id);
-    assertDeepEquals(fooModule, modules[0]!.element);
+    assertDeepEquals(fooModule, modules[0]!.elements[0]);
     assertEquals('baz', modules[1]!.descriptor.id);
-    assertDeepEquals(bazModule, modules[1]!.element);
+    assertDeepEquals(bazModule, modules[1]!.elements[0]);
     assertEquals(2, metrics.count('NewTabPage.Modules.Loaded'));
     assertEquals(1, metrics.count('NewTabPage.Modules.Loaded', 5));
     assertEquals(1, metrics.count('NewTabPage.Modules.Loaded', 123));
@@ -94,13 +123,14 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
           const barModule = createElement();
           const bazModule = createElement();
           const descriptors = [
-            new ModuleDescriptor(
-                'foo', 'bli', () => Promise.resolve(fooModule)),
-            new ModuleDescriptor(
-                'bar', 'blu', () => Promise.resolve(barModule)),
-            new ModuleDescriptor(
-                'baz', 'bla', () => Promise.resolve(bazModule)),
+            new ModuleDescriptor('foo', () => Promise.resolve(fooModule)),
+            new ModuleDescriptor('bar', () => Promise.resolve(barModule)),
+            new ModuleDescriptor('baz', () => Promise.resolve(bazModule)),
           ];
+          handler.setResultFor('getModulesIdNames', Promise.resolve({
+            data:
+                descriptors.map(d => ({id: d.id, name: d.id} as ModuleIdName)),
+          }));
           handler.setResultFor('getModulesOrder', Promise.resolve({
             moduleIds: ['bar', 'baz', 'foo'],
           }));
@@ -116,11 +146,11 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
           // Assert.
           assertEquals(3, modules.length);
           assertEquals('bar', modules[0]!.descriptor.id);
-          assertDeepEquals(barModule, modules[0]!.element);
+          assertDeepEquals(barModule, modules[0]!.elements[0]);
           assertEquals('baz', modules[1]!.descriptor.id);
-          assertDeepEquals(bazModule, modules[1]!.element);
+          assertDeepEquals(bazModule, modules[1]!.elements[0]);
           assertEquals('foo', modules[2]!.descriptor.id);
-          assertDeepEquals(fooModule, modules[2]!.element);
+          assertDeepEquals(fooModule, modules[2]!.elements[0]);
         });
 
     test('instantiates reordered modules with disabled modules', async () => {
@@ -131,12 +161,15 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
       const bizModule = createElement();
       const buzModule = createElement();
       const descriptors = [
-        new ModuleDescriptor('foo', 'bli', () => Promise.resolve(fooModule)),
-        new ModuleDescriptor('bar', 'blu', () => Promise.resolve(barModule)),
-        new ModuleDescriptor('baz', 'bla', () => Promise.resolve(bazModule)),
-        new ModuleDescriptor('biz', 'blo', () => Promise.resolve(bizModule)),
-        new ModuleDescriptor('buz', 'ble', () => Promise.resolve(buzModule)),
+        new ModuleDescriptor('foo', () => Promise.resolve(fooModule)),
+        new ModuleDescriptor('bar', () => Promise.resolve(barModule)),
+        new ModuleDescriptor('baz', () => Promise.resolve(bazModule)),
+        new ModuleDescriptor('biz', () => Promise.resolve(bizModule)),
+        new ModuleDescriptor('buz', () => Promise.resolve(buzModule)),
       ];
+      handler.setResultFor('getModulesIdNames', Promise.resolve({
+        data: descriptors.map(d => ({id: d.id, name: d.id} as ModuleIdName)),
+      }));
       handler.setResultFor('getModulesOrder', Promise.resolve({
         moduleIds: ['biz', 'bar'],
       }));
@@ -152,9 +185,9 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
       // Assert.
       assertEquals(2, modules.length);
       assertEquals('biz', modules[0]!.descriptor.id);
-      assertDeepEquals(bizModule, modules[0]!.element);
+      assertDeepEquals(bizModule, modules[0]!.elements[0]);
       assertEquals('bar', modules[1]!.descriptor.id);
-      assertDeepEquals(barModule, modules[1]!.element);
+      assertDeepEquals(barModule, modules[1]!.elements[0]);
 
       // Act.
       modulesPromise = moduleRegistry.initializeModules(0);
@@ -166,15 +199,15 @@ suite('NewTabPageModulesModuleRegistryTest', () => {
       // Assert.
       assertEquals(5, modules.length);
       assertEquals('biz', modules[0]!.descriptor.id);
-      assertDeepEquals(bizModule, modules[0]!.element);
+      assertDeepEquals(bizModule, modules[0]!.elements[0]);
       assertEquals('bar', modules[1]!.descriptor.id);
-      assertDeepEquals(barModule, modules[1]!.element);
+      assertDeepEquals(barModule, modules[1]!.elements[0]);
       assertEquals('foo', modules[2]!.descriptor.id);
-      assertDeepEquals(fooModule, modules[2]!.element);
+      assertDeepEquals(fooModule, modules[2]!.elements[0]);
       assertEquals('baz', modules[3]!.descriptor.id);
-      assertDeepEquals(bazModule, modules[3]!.element);
+      assertDeepEquals(bazModule, modules[3]!.elements[0]);
       assertEquals('buz', modules[4]!.descriptor.id);
-      assertDeepEquals(buzModule, modules[4]!.element);
+      assertDeepEquals(buzModule, modules[4]!.elements[0]);
     });
   });
 });

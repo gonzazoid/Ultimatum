@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/observer_list.h"
 #include "base/time/clock.h"
@@ -24,10 +24,12 @@ RemoteCommandsQueue::RemoteCommandsQueue()
       tick_clock_(base::DefaultTickClock::GetInstance()) {}
 
 RemoteCommandsQueue::~RemoteCommandsQueue() {
-  while (!incoming_commands_.empty())
+  while (!incoming_commands_.empty()) {
     incoming_commands_.pop();
-  if (running_command_)
+  }
+  if (running_command_) {
     running_command_->Terminate();
+  }
 }
 
 void RemoteCommandsQueue::AddObserver(Observer* observer) {
@@ -41,8 +43,9 @@ void RemoteCommandsQueue::RemoveObserver(Observer* observer) {
 void RemoteCommandsQueue::AddJob(std::unique_ptr<RemoteCommandJob> job) {
   incoming_commands_.emplace(std::move(job));
 
-  if (!running_command_)
+  if (!running_command_) {
     ScheduleNextJob();
+  }
 }
 
 void RemoteCommandsQueue::SetClocksForTesting(
@@ -68,8 +71,9 @@ void RemoteCommandsQueue::CurrentJobFinished() {
 
   execution_timeout_timer_.Stop();
 
-  for (auto& observer : observer_list_)
+  for (auto& observer : observer_list_) {
     observer.OnJobFinished(running_command_.get());
+  }
   running_command_.reset();
 
   ScheduleNextJob();
@@ -77,8 +81,9 @@ void RemoteCommandsQueue::CurrentJobFinished() {
 
 void RemoteCommandsQueue::ScheduleNextJob() {
   DCHECK(!running_command_);
-  if (incoming_commands_.empty())
+  if (incoming_commands_.empty()) {
     return;
+  }
   DCHECK(!execution_timeout_timer_.IsRunning());
 
   running_command_ = std::move(incoming_commands_.front());
@@ -92,8 +97,9 @@ void RemoteCommandsQueue::ScheduleNextJob() {
           clock_->Now(), tick_clock_->NowTicks(),
           base::BindOnce(&RemoteCommandsQueue::CurrentJobFinished,
                          base::Unretained(this)))) {
-    for (auto& observer : observer_list_)
+    for (auto& observer : observer_list_) {
       observer.OnJobStarted(running_command_.get());
+    }
   } else {
     CurrentJobFinished();
   }

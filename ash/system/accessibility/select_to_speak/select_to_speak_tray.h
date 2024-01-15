@@ -10,6 +10,7 @@
 #include "ash/constants/tray_background_view_catalog.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/tray/tray_background_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
@@ -40,7 +41,11 @@ class ASH_EXPORT SelectToSpeakTray : public TrayBackgroundView,
   // The SelectToSpeakTray does not have a bubble, so these functions are
   // no-ops.
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override {}
+  void HideBubble(const TrayBubbleView* bubble_view) override {}
   void ClickedOutsideBubble() override {}
+  // No need to override since the icon and tray activation state will change
+  // and get updated simultaneously in `UpdateUXOnCurrentStatus()`.
+  void UpdateTrayItemColor(bool is_active) override {}
 
   // AccessibilityObserver:
   void OnAccessibilityStatusChanged() override;
@@ -60,7 +65,7 @@ class ASH_EXPORT SelectToSpeakTray : public TrayBackgroundView,
   void UpdateIconOnColorChanges();
 
   // Owned by TrayContainer for its lifetime.
-  views::ImageView* icon_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
 
   ScopedSessionObserver session_observer_{this};
 };

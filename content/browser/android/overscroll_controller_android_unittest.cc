@@ -5,6 +5,7 @@
 #include "content/browser/android/overscroll_controller_android.h"
 #include <memory>
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "cc/input/overscroll_behavior.h"
 #include "cc/layers/layer.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -33,8 +34,10 @@ namespace {
 
 class MockCompositor : public WindowAndroidCompositor {
  public:
-  ~MockCompositor() override {}
-  std::unique_ptr<ReadbackRef> TakeReadbackRef() override { return nullptr; }
+  ~MockCompositor() override = default;
+  std::unique_ptr<ReadbackRef> TakeReadbackRef(const viz::SurfaceId&) override {
+    return nullptr;
+  }
   void RequestCopyOfOutputOnRootLayer(
       std::unique_ptr<viz::CopyOutputRequest>) override {}
   void SetNeedsAnimate() override {}
@@ -52,8 +55,8 @@ class MockCompositor : public WindowAndroidCompositor {
     return nullptr;
   }
   void OnUpdateOverlayTransform() override {}
-  void PostRequestPresentationTimeForNextFrame(
-      PresentationTimeCallback callback) override {}
+  void PostRequestSuccessfulPresentationTimeForNextFrame(
+      SuccessfulPresentationTimeCallback callback) override {}
 };
 
 class MockGlowClient : public OverscrollGlowClient {
@@ -111,7 +114,9 @@ class OverscrollControllerAndroidUnitTest : public testing::Test {
 
  protected:
   raw_ptr<MockGlow> glow_;
-  MockRefresh* refresh_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION MockRefresh* refresh_;
   std::unique_ptr<MockCompositor> compositor_;
   std::unique_ptr<OverscrollControllerAndroid> controller_;
   float dip_scale_;

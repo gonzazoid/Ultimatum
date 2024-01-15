@@ -13,12 +13,14 @@
 #include "chrome/browser/ui/test/test_browser_ui.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/eye_dropper.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "ui/display/display_switches.h"
 
+// TODO(crbug.com/1448244): enable this test on all supported platforms.
 #if BUILDFLAG(IS_WIN)
-#include "chrome/browser/ui/views/eye_dropper/eye_dropper_view.h"
+#include "components/eye_dropper/eye_dropper_view.h"
 #endif
 
 class EyeDropperBrowserTest : public UiBrowserTest,
@@ -38,6 +40,7 @@ class EyeDropperBrowserTest : public UiBrowserTest,
                                                  ->tab_strip_model()
                                                  ->GetActiveWebContents()
                                                  ->GetPrimaryMainFrame();
+    parent_frame->GetView()->Focus();
     eye_dropper_ = ShowEyeDropper(parent_frame, /*listener=*/nullptr);
 #endif
   }
@@ -48,11 +51,13 @@ class EyeDropperBrowserTest : public UiBrowserTest,
       return false;
 
     views::Widget* widget =
-        static_cast<EyeDropperView*>(eye_dropper_.get())->GetWidget();
+        static_cast<eye_dropper::EyeDropperView*>(eye_dropper_.get())
+            ->GetWidget();
     auto* test_info = testing::UnitTest::GetInstance()->current_test_info();
     const std::string screenshot_name =
-        base::StrCat({test_info->test_case_name(), "_", test_info->name()});
-    return VerifyPixelUi(widget, "EyeDropperBrowserTest", screenshot_name);
+        base::StrCat({test_info->test_suite_name(), "_", test_info->name()});
+    return VerifyPixelUi(widget, "EyeDropperBrowserTest", screenshot_name) !=
+           ui::test::ActionResult::kFailed;
 #else
     return true;
 #endif
@@ -70,8 +75,7 @@ class EyeDropperBrowserTest : public UiBrowserTest,
 };
 
 // Invokes the eye dropper.
-// Flaky: https://crbug.com/1131319
-IN_PROC_BROWSER_TEST_P(EyeDropperBrowserTest, DISABLED_InvokeUi_default) {
+IN_PROC_BROWSER_TEST_P(EyeDropperBrowserTest, InvokeUi_default) {
   ShowAndVerifyUi();
 }
 

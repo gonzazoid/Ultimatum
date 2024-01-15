@@ -5,12 +5,9 @@
 #ifndef CONTENT_BROWSER_BLUETOOTH_BLUETOOTH_METRICS_H_
 #define CONTENT_BROWSER_BLUETOOTH_BLUETOOTH_METRICS_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/mojom/bluetooth/web_bluetooth.mojom.h"
+#include <optional>
 
-namespace base {
-class TimeDelta;
-}
+#include "third_party/blink/public/mojom/bluetooth/web_bluetooth.mojom.h"
 
 namespace device {
 class BluetoothUUID;
@@ -50,6 +47,12 @@ enum class UMAConnectGATTOutcome {
   AUTH_REJECTED = 7,
   AUTH_TIMEOUT = 8,
   UNSUPPORTED_DEVICE = 9,
+  NOT_READY = 10,
+  ALREADY_CONNECTED = 11,
+  ALREADY_EXISTS = 12,
+  NOT_CONNECTED = 13,
+  DOES_NOT_EXIST = 14,
+  INVALID_ARGS = 15,
   // Note: Add new ConnectGATT outcomes immediately above this line. Make sure
   // to update the enum list in tools/metrics/histograms/histograms.xml
   // accordingly.
@@ -65,46 +68,12 @@ void RecordConnectGATTOutcome(UMAConnectGATTOutcome outcome);
 // if QueryCacheForDevice fails.
 void RecordConnectGATTOutcome(CacheQueryOutcome outcome);
 
-// Records how long it took for the connection to succeed.
-void RecordConnectGATTTimeSuccess(const base::TimeDelta& duration);
-
-// Records how long it took for the connection to fail.
-void RecordConnectGATTTimeFailed(const base::TimeDelta& duration);
-
 // getPrimaryService() and getPrimaryServices() Metrics
-
-enum class UMAGetPrimaryServiceOutcome {
-  SUCCESS = 0,
-  NO_DEVICE = 1,
-  NOT_FOUND = 2,
-  NO_SERVICES = 3,
-  DEVICE_DISCONNECTED = 4,
-  // Note: Add new GetPrimaryService outcomes immediately above this line.
-  // Make sure to update the enum list in
-  // tools/metrics/histograms/histograms.xml accordingly.
-  COUNT
-};
-
-// There should be a call to this function whenever
-// RemoteServerGetPrimaryServicesCallback is run.
-// Pass blink::mojom::WebBluetoothGATTQueryQuantity::SINGLE for
-// getPrimaryService.
-// Pass blink::mojom::WebBluetoothGATTQueryQuantity::MULTIPLE for
-// getPrimaryServices.
-void RecordGetPrimaryServicesOutcome(
-    blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    UMAGetPrimaryServiceOutcome outcome);
-
-// Records the outcome of the cache query for getPrimaryServices. Should only be
-// called if QueryCacheForDevice fails.
-void RecordGetPrimaryServicesOutcome(
-    blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    CacheQueryOutcome outcome);
 
 // Records the UUID of the service used when calling getPrimaryService.
 void RecordGetPrimaryServicesServices(
     blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    const absl::optional<device::BluetoothUUID>& service);
+    const std::optional<device::BluetoothUUID>& service);
 
 // getCharacteristic() and getCharacteristics() Metrics
 
@@ -154,7 +123,7 @@ void RecordGetCharacteristicsOutcome(
 // Records the UUID of the characteristic used when calling getCharacteristic.
 void RecordGetCharacteristicsCharacteristic(
     blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    const absl::optional<device::BluetoothUUID>& characteristic);
+    const std::optional<device::BluetoothUUID>& characteristic);
 
 // Records the outcome of the cache query for getDescriptors. Should only be
 // called if QueryCacheForService fails.

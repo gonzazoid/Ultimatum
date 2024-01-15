@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("enterprise_prompt") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "enterprise_prompt_coordinator.h",
     "enterprise_prompt_coordinator.mm",
@@ -13,11 +12,11 @@ source_set("enterprise_prompt") {
   ]
   deps = [
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/policy/resources:enterprise_grey_icon_large",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/url:constants",
+    "//ios/chrome/browser/policy/model/resources:enterprise_grey_icon_large",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/common/ui/confirmation_alert",
     "//ui/base",
   ]

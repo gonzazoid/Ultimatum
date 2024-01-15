@@ -9,8 +9,8 @@
 #include <set>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/base/clipboard/file_info.h"
 
@@ -18,7 +18,7 @@ namespace enterprise_connectors {
 
 // Helper class to handle files going through content analysis by expanding
 // directories, aggregating verdicts, etc.
-class FilesScanData : public base::SupportsWeakPtr<FilesScanData> {
+class FilesScanData final {
  public:
   FilesScanData();
   explicit FilesScanData(std::vector<ui::FileInfo> paths);
@@ -65,6 +65,8 @@ class FilesScanData : public base::SupportsWeakPtr<FilesScanData> {
   // Called after the `ExpandPaths()` operation is done to tell callers its
   // results can be used.
   base::OnceClosure expand_paths_done_closure_;
+
+  base::WeakPtrFactory<FilesScanData> weak_ptr_factory_{this};
 };
 
 }  // namespace enterprise_connectors

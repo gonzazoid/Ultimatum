@@ -11,21 +11,25 @@ if (is_android) {
 
 source_set("embedder") {
   sources = [
-    "input_delegate/price_tracking_input_delegate.cc",
-    "input_delegate/price_tracking_input_delegate.h",
+    "input_delegate/tab_rank_dispatcher.cc",
+    "input_delegate/tab_rank_dispatcher.h",
+    "input_delegate/tab_session_source.cc",
+    "input_delegate/tab_session_source.h",
     "model_provider_factory_impl.cc",
     "model_provider_factory_impl.h",
+    "tab_fetcher.cc",
+    "tab_fetcher.h",
   ]
 
   deps = [
     "//base",
-    "//components/bookmarks/browser",
-    "//components/commerce/core:shopping_service",
     "//components/optimization_guide/core",
     "//components/optimization_guide/core:features",
     "//components/segmentation_platform/internal",
     "//components/segmentation_platform/internal/proto",
     "//components/segmentation_platform/public",
+    "//components/sessions:session_id",
+    "//components/sync_sessions:sync_sessions",
     "//url",
   ]
 
@@ -40,7 +44,8 @@ source_set("unit_tests") {
   # IMPORTANT NOTE: When adding new tests, also remember to update the list of
   # tests in //components/segmentation_platform/components_unittests.filter
   sources = [
-    "input_delegate/price_tracking_input_delegate_unittest.cc",
+    "input_delegate/tab_rank_dispatcher_unittest.cc",
+    "input_delegate/tab_session_source_unittest.cc",
     "model_provider_factory_impl_unittest.cc",
   ]
 
@@ -49,13 +54,13 @@ source_set("unit_tests") {
     "//base",
     "//base/test:test_support",
     "//components/commerce/core:feature_list",
-    "//components/commerce/core:shopping_service",
-    "//components/commerce/core:shopping_service_test_support",
     "//components/optimization_guide/core",
     "//components/optimization_guide/core:test_support",
     "//components/segmentation_platform/internal",
     "//components/segmentation_platform/internal/proto",
     "//components/segmentation_platform/public",
+    "//components/segmentation_platform/public:test_support",
+    "//components/sync_sessions:sync_sessions",
     "//services/network/public/cpp",
     "//testing/gmock",
     "//testing/gtest",

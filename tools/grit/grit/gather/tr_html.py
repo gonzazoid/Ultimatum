@@ -49,11 +49,7 @@ This implementation borrows some code, constants and ideas from
 extern.tclib.api.handlers.html.TCHTMLParser.
 '''
 
-from __future__ import print_function
-
 import re
-
-import six
 
 from grit import clique
 from grit import exception
@@ -214,7 +210,7 @@ def _DebugPrint(text):
     print(text.encode('utf-8'))
 
 
-class HtmlChunks(object):
+class HtmlChunks:
   '''A parser that knows how to break an HTML-like document into a list of
   chunks, where each chunk is either translateable or non-translateable.
   The chunks are unmodified sections of the original document, so concatenating
@@ -571,7 +567,7 @@ def HtmlToMessage(html, include_block_tags=False, description=''):
       current += m.end()
       continue
 
-    if len(parts) and isinstance(parts[-1], six.string_types):
+    if len(parts) and isinstance(parts[-1], str):
       parts[-1] += html[current]
     else:
       parts.append(html[current])
@@ -592,7 +588,7 @@ def HtmlToMessage(html, include_block_tags=False, description=''):
                       description=description)
   content = msg.GetContent()
   for ix in range(len(content)):
-    if isinstance(content[ix], six.string_types):
+    if isinstance(content[ix], str):
       content[ix] = util.UnescapeHtml(content[ix], replace_nbsp=False)
 
   return msg
@@ -603,7 +599,7 @@ class TrHtml(interface.GathererBase):
   Total Recall for HTML documents.'''
 
   def __init__(self, *args, **kwargs):
-    super(TrHtml, self).__init__(*args, **kwargs)
+    super().__init__(*args, **kwargs)
     self.have_parsed_ = False
     self.skeleton_ = []  # list of strings and MessageClique objects
     self.fold_whitespace_ = False
@@ -656,7 +652,7 @@ class TrHtml(interface.GathererBase):
 
     out = []
     for item in self.skeleton_:
-      if isinstance(item, six.string_types):
+      if isinstance(item, str):
         out.append(item)
       else:
         msg = item.MessageForLanguage(lang,
@@ -680,7 +676,7 @@ class TrHtml(interface.GathererBase):
     text = self._LoadInputFile()
 
     # Ignore the BOM character if the document starts with one.
-    if text.startswith(u'\ufeff'):
+    if text.startswith('\ufeff'):
       text = text[1:]
 
     self.text_ = text
@@ -716,8 +712,8 @@ class TrHtml(interface.GathererBase):
       if isinstance(self.skeleton_[ix], clique.MessageClique):
         msg = self.skeleton_[ix].GetMessage()
         for item in msg.GetContent():
-          if (isinstance(item, six.string_types)
-              and _NON_WHITESPACE.search(item) and item != '&nbsp;'):
+          if (isinstance(item, str) and _NON_WHITESPACE.search(item)
+              and item != '&nbsp;'):
             got_text = True
             break
         if not got_text:

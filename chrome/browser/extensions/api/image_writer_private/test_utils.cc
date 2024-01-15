@@ -7,12 +7,11 @@
 #include <string.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/api/image_writer_private/error_constants.h"
@@ -45,16 +44,16 @@ class ImageWriterFakeImageBurnerClient : public ash::FakeImageBurnerClient {
   void BurnImage(const std::string& from_path,
                  const std::string& to_path,
                  ErrorCallback error_callback) override {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(burn_progress_update_handler_, to_path, 0, 100));
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(burn_progress_update_handler_, to_path, 50, 100));
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(burn_progress_update_handler_, to_path, 100, 100));
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(burn_finished_handler_), to_path, true, ""));
   }
@@ -76,7 +75,7 @@ FakeDiskMountManager::~FakeDiskMountManager() = default;
 void FakeDiskMountManager::UnmountDeviceRecursively(
     const std::string& device_path,
     UnmountDeviceRecursivelyCallbackType callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), ash::MountError::kSuccess));
 }
@@ -303,12 +302,10 @@ bool ImageWriterTestUtils::ImageWrittenToDevice() {
 }
 
 bool ImageWriterTestUtils::FillFile(const base::FilePath& file,
-                                    const int pattern,
-                                    const int length) {
-  std::unique_ptr<char[]> buffer(new char[length]);
-  memset(buffer.get(), pattern, length);
-
-  return base::WriteFile(file, buffer.get(), length) == length;
+                                    uint8_t pattern,
+                                    size_t length) {
+  std::vector<uint8_t> buffer(length, pattern);
+  return base::WriteFile(file, buffer);
 }
 
 ImageWriterUnitTestBase::ImageWriterUnitTestBase()

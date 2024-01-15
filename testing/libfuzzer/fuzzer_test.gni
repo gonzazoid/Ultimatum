@@ -19,13 +19,19 @@ import("//testing/test.gni")
 # - dict - a dictionary file for the fuzzer.
 # - environment_variables - certain whitelisted environment variables for the
 # fuzzer (AFL_DRIVER_DONT_DEFER is the only one allowed currently).
-# - libfuzzer_options - options for the fuzzer (e.g. -close_fd_mask=N).
+# - libfuzzer_options - options for the fuzzer (e.g. close_fd_mask=N).
+#   These are mostly applied only when the fuzzer is being run using the
+#   libfuzzer fuzzing engine, but a few of these may be interpreted by
+#   other fuzzing engines too
+# - centipede_options - options for the fuzzer (e.g. shmem_size_mb=N)
+#   when running using the centipede fuzzing engine.
 # - asan_options - AddressSanitizer options (e.g. allow_user_segv_handler=1).
 # - msan_options - MemorySanitizer options.
 # - ubsan_options - UndefinedBehaviorSanitizer options.
 # - seed_corpus - a directory with seed corpus.
 # - seed_corpus_deps - dependencies for generating the seed corpus.
 # - grammar_options - defines a grammar used by a grammar based mutator.
+# - exclude_main - if you're going to provide your own 'main' function
 #
 # If use_libfuzzer gn flag is defined, then proper fuzzer would be build.
 # Without use_libfuzzer or use_afl a unit-test style binary would be built on
@@ -39,7 +45,12 @@ template("fuzzer_test") {
   if (!disable_libfuzzer && use_fuzzing_engine) {
     assert(defined(invoker.sources), "Need sources in $target_name.")
 
-    test_deps = [ "//testing/libfuzzer:libfuzzer_main" ]
+    test_deps = []
+    if (defined(invoker.exclude_main) && invoker.exclude_main) {
+      test_deps += [ "//testing/libfuzzer:fuzzing_engine_no_main" ]
+    } else {
+      test_deps += [ "//testing/libfuzzer:fuzzing_engine_main" ]
+    }
     test_data_deps = []
 
     if (defined(invoker.deps)) {
@@ -95,8 +106,8 @@ template("fuzzer_test") {
     }
 
     if (defined(invoker.dict) || defined(invoker.libfuzzer_options) ||
-        defined(invoker.asan_options) || defined(invoker.msan_options) ||
-        defined(invoker.ubsan_options) ||
+        defined(invoker.centipede_options) || defined(invoker.asan_options) ||
+        defined(invoker.msan_options) || defined(invoker.ubsan_options) ||
         defined(invoker.environment_variables) ||
         defined(invoker.grammar_options)) {
       if (defined(invoker.dict)) {
@@ -130,6 +141,11 @@ template("fuzzer_test") {
           args += invoker.libfuzzer_options
         }
 
+        if (defined(invoker.centipede_options)) {
+          args += [ "--centipede_options" ]
+          args += invoker.centipede_options
+        }
+
         if (defined(invoker.asan_options)) {
           args += [ "--asan_options" ]
           args += invoker.asan_options
@@ -157,6 +173,7 @@ template("fuzzer_test") {
 
         outputs = [ "$root_build_dir/$config_file_name" ]
       }
+      test_data_deps += [ ":" + config_file_name ]
       supporting_file_test_deps += [ ":" + config_file_name ]
     }
 
@@ -259,6 +276,7 @@ template("fuzzer_test") {
                                "check_includes",
                                "defines",
                                "include_dirs",
+                               "output_name",
                                "sources",
                                "libs",
                                "frameworks",
@@ -282,7 +300,7 @@ template("fuzzer_test") {
 
       if (is_ios) {
         info_plist =
-            "//testing/libfuzzer/fuzzer_support_ios/libfuzzer-Info.plist"
+            "//testing/libfuzzer/fuzzer_support_ios/fuzzer-engine-Info.plist"
       }
 
       if (is_mac) {

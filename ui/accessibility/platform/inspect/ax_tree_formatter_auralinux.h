@@ -8,14 +8,15 @@
 #include <atk/atk.h>
 #include <atspi/atspi.h>
 
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
 #include "ui/accessibility/platform/inspect/ax_tree_formatter_base.h"
 
 namespace ui {
 
 class AXPlatformNodeAuraLinux;
 
-class AX_EXPORT AXTreeFormatterAuraLinux : public AXTreeFormatterBase {
+class COMPONENT_EXPORT(AX_PLATFORM) AXTreeFormatterAuraLinux
+    : public AXTreeFormatterBase {
  public:
   AXTreeFormatterAuraLinux();
   ~AXTreeFormatterAuraLinux() override;
@@ -44,13 +45,19 @@ class AX_EXPORT AXTreeFormatterAuraLinux : public AXTreeFormatterBase {
                               base::Value::Dict* dict) const;
   void AddActionProperties(AtkObject* atk_object,
                            base::Value::Dict* dict) const;
+  void AddRelationProperties(AtkObject* atk_object,
+                             base::Value::Dict* dict) const;
   void AddValueProperties(AtkObject* atk_object, base::Value::Dict* dict) const;
   void AddTableProperties(AtkObject* atk_object, base::Value::Dict* dict) const;
   void AddTableCellProperties(const AXPlatformNodeAuraLinux* node,
                               AtkObject* atk_object,
                               base::Value::Dict* dict) const;
+
+  // Returns a string with the relation's name and the roles of the targets it
+  // points to.
+  static std::string ToString(AtkRelation* relation);
 };
 
 }  // namespace ui
 
-#endif  // UI_ACCESSIBILITY_PLATFORM_INSPECT__AX_TREE_FORMATTER_AURALINUX_H_
+#endif  // UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_TREE_FORMATTER_AURALINUX_H_

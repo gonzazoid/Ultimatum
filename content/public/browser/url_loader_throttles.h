@@ -7,8 +7,9 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace blink {
 class URLLoaderThrottle;
@@ -33,6 +34,18 @@ CreateContentBrowserURLLoaderThrottles(
     BrowserContext* browser_context,
     const base::RepeatingCallback<WebContents*()>& wc_getter,
     NavigationUIData* navigation_ui_data,
+    int frame_tree_node_id,
+    absl::optional<int64_t> navigation_id);
+
+// Wrapper around `ContentBrowserClient::CreateURLLoaderThrottlesForKeepAlive()`
+// which inserts additional content specific throttles for handling fetch
+// keepalive requests when their initiator is destroyed.
+CONTENT_EXPORT
+std::vector<std::unique_ptr<blink::URLLoaderThrottle>>
+CreateContentBrowserURLLoaderThrottlesForKeepAlive(
+    const network::ResourceRequest& request,
+    BrowserContext* browser_context,
+    const base::RepeatingCallback<WebContents*()>& wc_getter,
     int frame_tree_node_id);
 
 }  // namespace content

@@ -91,7 +91,7 @@ absl::optional<uint16_t> RTCIceCandidate::sdpMLineIndex() const {
 }
 
 RTCIceCandidatePlatform* RTCIceCandidate::PlatformCandidate() const {
-  return platform_candidate_;
+  return platform_candidate_.Get();
 }
 
 void RTCIceCandidate::Trace(Visitor* visitor) const {
@@ -149,6 +149,7 @@ ScriptValue RTCIceCandidate::toJSONForBinding(ScriptState* script_state) {
   result.AddString("sdpMid", platform_candidate_->SdpMid());
   if (platform_candidate_->SdpMLineIndex())
     result.AddNumber("sdpMLineIndex", *platform_candidate_->SdpMLineIndex());
+  result.AddString("usernameFragment", platform_candidate_->UsernameFragment());
   return result.GetScriptValue();
 }
 

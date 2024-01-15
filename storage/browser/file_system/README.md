@@ -38,7 +38,7 @@ The three public file system types are:
 
 External File Systems are only used by Chrome OS. A lot of the code for this
 (besides `ExternalMountPoints` itself) lives in
-[`//chrome/browser/chromeos/fileapi/`](../../../chrome/browser/chromeos/fileapi/).
+[`//chrome/browser/ash/fileapi/`](../../../chrome/browser/ash/fileapi/).
 
 TODO(mek): Document this more.
 
@@ -88,6 +88,12 @@ And further more it references:
    consists of the optional browser context specific `ExternalMountPoints`,
    a global singleton `ExternalMountPoints` and finally a global singleton
    `IsolatedContext`.
+
+## `FileSystemURL`
+
+The equivalent of a file path, but for the virtual file systems that this API
+serves. `FileSystemContext::CreateFileStreamReader` takes a `FileSystemURL`
+argument the same way that `fopen` takes a file path.
 
 ## `SandboxFileSystemBackend`
 

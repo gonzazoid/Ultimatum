@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "ash/components/arc/arc_prefs.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "chromeos/ash/components/dbus/upstart/upstart_client.h"
 
@@ -41,7 +41,7 @@ void ArcDataRemover::Run(RunCallback callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (!pref_.GetValue()) {
     VLOG(1) << "Data removal is not scheduled, skip.";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -49,7 +49,7 @@ void ArcDataRemover::Run(RunCallback callback) {
   auto* upstart_client = ash::UpstartClient::Get();
   if (!upstart_client) {
     // May be null in tests
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
   const std::string account_id =

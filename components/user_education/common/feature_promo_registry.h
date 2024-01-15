@@ -19,6 +19,8 @@ namespace user_education {
 class FeaturePromoRegistry {
  public:
   FeaturePromoRegistry();
+  FeaturePromoRegistry(FeaturePromoRegistry&& other) noexcept;
+  FeaturePromoRegistry& operator=(FeaturePromoRegistry&& other) noexcept;
   ~FeaturePromoRegistry();
 
   // Determines whether or not a particular feature is registered.
@@ -41,7 +43,7 @@ class FeaturePromoRegistry {
   void RegisterFeature(FeaturePromoSpecification spec);
 
   const std::map<const base::Feature*, FeaturePromoSpecification>&
-  GetRegisteredFeaturePromoSpecifications() {
+  GetRegisteredFeaturePromoSpecifications() const {
     return feature_promo_data_;
   }
 

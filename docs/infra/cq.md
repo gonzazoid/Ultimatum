@@ -44,6 +44,11 @@ The Chromium CQ supports a variety of options that can change what it checks.
   around any intermittent infra failures. If this footer is set, it won't try
   to retry failed shards no matter what happens.
 
+* `Ignore-Freeze: true`
+
+  Whenever there is an active prod freeze (usually around Christmas), it can be
+  bypassed by setting this footer.
+
 * `Include-Ci-Only-Tests: true`
 
   Some builder configurations may run some tests only post-submit (on CI), and
@@ -71,12 +76,6 @@ The Chromium CQ supports a variety of options that can change what it checks.
 
   This should only be used for reverts to green the tree, since it skips try
   bots and might therefore break the tree. You shouldn't use this otherwise.
-
-* `Tbr: <username>`
-
-  [See policy](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/code_reviews.md#TBR-To-Be-Reviewed)
-  of when it's acceptable to use TBR ("To be reviewed"). If a change has a TBR
-  line with a valid reviewer, the CQ will skip checks for LGTMs.
 
 ## FAQ
 

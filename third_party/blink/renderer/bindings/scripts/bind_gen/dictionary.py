@@ -88,6 +88,7 @@ class _DictionaryMember(object):
             self._default_expr = None
 
         self._exposure = dict_member.exposure
+        self._extended_attributes = dict_member.extended_attributes
 
     @property
     def identifier(self):
@@ -198,6 +199,10 @@ class _DictionaryMember(object):
     def exposure(self):
         return self._exposure
 
+    @property
+    def extended_attributes(self):
+        return self._extended_attributes
+
 
 def bind_local_vars(code_node, cg_context):
     assert isinstance(code_node, SymbolScopeNode)
@@ -214,7 +219,8 @@ def bind_local_vars(code_node, cg_context):
                               "${isolate}->GetCurrentContext();")),
         S("is_cross_origin_isolated",
           ("const bool ${is_cross_origin_isolated} = "
-           "${execution_context}->CrossOriginIsolatedCapability();")),
+           "${execution_context}"
+           "->CrossOriginIsolatedCapabilityOrDisabledWebSecurity();")),
         S("is_in_isolated_context",
           ("const bool ${is_in_isolated_context} = "
            "${execution_context}->IsIsolatedContext();")),
@@ -418,7 +424,9 @@ def make_accessor_functions(cg_context):
         func_def.set_base_template_vars(cg_context.template_bindings())
         if not member.is_always_present:
             func_def.body.append(F("DCHECK({}());", member.api_has))
-        func_def.body.append(F("return {};", member.value_var))
+        func_def.body.append(
+            F("return {};",
+              member.type_info.member_var_to_ref_expr(member.value_var)))
         return func_def, None
 
     def make_api_get_or(member):
@@ -433,7 +441,8 @@ def make_accessor_functions(cg_context):
         func_def.body.extend([
             CxxUnlikelyIfNode(cond="!{}()".format(member.api_has),
                               body=T("return fallback_value;")),
-            F("return {};", member.value_var),
+            F("return {};",
+              member.type_info.member_var_to_ref_expr(member.value_var)),
         ])
         return func_def, None
 
@@ -457,7 +466,8 @@ def make_accessor_functions(cg_context):
         copy_func_def.body.extend([
             CxxUnlikelyIfNode(cond="!{}()".format(member.api_has),
                               body=T("return fallback_value;")),
-            F("return {};", member.value_var),
+            F("return {};",
+              member.type_info.member_var_to_ref_expr(member.value_var)),
         ])
 
         move_func_decl = CxxFuncDeclNode(
@@ -475,7 +485,8 @@ def make_accessor_functions(cg_context):
         move_func_def.body.extend([
             CxxUnlikelyIfNode(cond="!{}()".format(member.api_has),
                               body=T("return std::move(fallback_value);")),
-            F("return {};", member.value_var),
+            F("return {};",
+              member.type_info.member_var_to_ref_expr(member.value_var)),
         ])
 
         decls = ListNode([copy_func_decl, move_func_decl])
@@ -496,7 +507,8 @@ def make_accessor_functions(cg_context):
         func_def.body.extend([
             CxxUnlikelyIfNode(cond="!{}()".format(member.api_has),
                               body=T("return fallback_value;")),
-            F("return {};", member.value_var),
+            F("return {};",
+              member.type_info.member_var_to_ref_expr(member.value_var)),
         ])
         return func_def, None
 
@@ -761,6 +773,23 @@ def make_blink_to_v8_function(cg_context):
         ])
 
     for index, member in enumerate(cg_context.dictionary_own_members):
+        # [DeprecateAs]
+        deprecate_as = member.extended_attributes.value_of("DeprecateAs")
+        deprecate_as_node = None
+        if deprecate_as:
+            deprecate_as_node = SequenceNode([
+                EmptyNode(),
+                T("// [DeprecateAs]"),
+                F(("Deprecation::CountDeprecation("
+                   "${execution_context}, "
+                   "WebFeature::k{deprecate_as});"),
+                  deprecate_as=deprecate_as),
+            ])
+            deprecate_as_node.accumulate(
+                CodeGenAccumulator.require_include_headers([
+                    "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
+                ]))
+
         node = CxxLikelyIfNode(
             cond="{}()".format(member.api_has),
             body=[
@@ -770,7 +799,8 @@ def make_blink_to_v8_function(cg_context):
                         "ToV8(${script_state}, {blink_value})"
                         ".ToLocal(&${v8_value})",
                         native_value_tag=native_value_tag(member.idl_type),
-                        blink_value=member.value_var),
+                        blink_value=member.type_info.member_var_to_ref_expr(
+                            member.value_var)),
                     body=T("return false;")),
                 CxxUnlikelyIfNode(  #
                     cond=_format(
@@ -780,6 +810,7 @@ def make_blink_to_v8_function(cg_context):
                         "${v8_value}).To(&${was_property_created})",
                         index=index),
                     body=T("return false;")),
+                deprecate_as_node,
             ])
 
         conditional = expr_from_exposure(member.exposure)
@@ -827,10 +858,11 @@ def make_v8_to_blink_function(cg_context):
         S("exception_context_scope",
           ("ExceptionState::ContextScope ${exception_context_scope}("
            "ExceptionContext("
-           "ExceptionContext::Context::kDictionaryMemberGet, "
+           "ExceptionContextType::kDictionaryMemberGet, "
            "${class_like_name}, \"\"), "
            "${exception_state});")),
         S("fallback_presence_var", "bool ${fallback_presence_var};"),
+        S("has_deprecated", "bool ${has_deprecated};"),
         S("is_optional", "constexpr bool ${is_optional} = false;"),
         S("is_required", "constexpr bool ${is_required} = true;"),
         S("try_block", "v8::TryCatch ${try_block}(${isolate});"),
@@ -869,6 +901,29 @@ def make_v8_to_blink_function(cg_context):
               member_name=member.identifier),
             CxxUnlikelyIfNode(cond=cond, body=T("return;")),
         ])
+
+        # [DeprecateAs]
+        deprecate_as = member.extended_attributes.value_of("DeprecateAs")
+        if deprecate_as:
+            node.extend([
+                T("// [DeprecateAs]"),
+                CxxUnlikelyIfNode(cond=_format(
+                    "!${v8_dictionary}->Has("
+                    "${current_context}, "
+                    "${v8_own_member_names}[{index}].Get(${isolate}))"
+                    ".To(&${has_deprecated})",
+                    index=index),
+                                  body=T("return;")),
+                CxxUnlikelyIfNode(cond="${has_deprecated}",
+                                  body=F(("Deprecation::CountDeprecation("
+                                          "${execution_context}, "
+                                          "WebFeature::k{deprecate_as});"),
+                                         deprecate_as=deprecate_as)),
+            ])
+            node.accumulate(
+                CodeGenAccumulator.require_include_headers([
+                    "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
+                ]))
 
         conditional = expr_from_exposure(member.exposure)
         if not conditional.is_always_true:

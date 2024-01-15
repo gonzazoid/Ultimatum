@@ -4,23 +4,26 @@
 
 #include "chrome/browser/ash/arc/input_overlay/ui/input_menu_view.h"
 
+#include <utility>
+
 #include "ash/components/arc/compat_mode/style/arc_color_provider.h"
 #include "ash/login/ui/views_utils.h"
 #include "ash/public/cpp/new_window_delegate.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/pill_button.h"
 #include "ash/style/style_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/ash/arc/input_overlay/arc_input_overlay_ukm.h"
 #include "chrome/browser/ash/arc/input_overlay/arc_input_overlay_uma.h"
 #include "chrome/browser/ash/arc/input_overlay/constants.h"
 #include "chrome/browser/ash/arc/input_overlay/display_overlay_controller.h"
-#include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/browser/ash/arc/input_overlay/util.h"
 #include "chrome/grit/generated_resources.h"
 #include "net/base/url_util.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/chromeos/styles/cros_styles.h"
@@ -41,20 +44,17 @@
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/vector_icons.h"
 
-namespace arc {
-
-namespace input_overlay {
+namespace arc::input_overlay {
 
 namespace {
-// If the parent's width smaller than |kParentWidthThreshold|, it uses smaller
+// If the parent's width smaller than `kParentWidthThreshold`, it uses smaller
 // specs.
 constexpr int kParentWidthThreshold = 376;
 // Whole Menu measurements.
 constexpr int kMenuWidth = 328;
 constexpr int kMenuWidthSmall = 280;
 constexpr int kMenuHeight = 244;
-constexpr int kMenuMarginRight = 32;
-constexpr int kMenuMarginRightSmall = 24;
+constexpr int kMenuMarginSmall = 24;
 
 // Individual entries and header.
 constexpr int kHeaderMinHeight = 64;
@@ -92,10 +92,11 @@ constexpr char kGamePackageName[] = "entry.435412983";
 constexpr char kBoardName[] = "entry.1492517074";
 constexpr char kOsVersion[] = "entry.1961594320";
 
-GURL GetAssembleUrl(DisplayOverlayController& controller) {
+// Pass `package_name` by value because the focus will be changed to the
+// browser.
+GURL GetAssembleUrl(std::string package_name) {
   GURL url(kFeedbackUrl);
-  const auto* package_name = controller.GetPackageName();
-  url = net::AppendQueryParameter(url, kGamePackageName, *package_name);
+  url = net::AppendQueryParameter(url, kGamePackageName, package_name);
   url = net::AppendQueryParameter(url, kBoardName,
                                   base::SysInfo::HardwareModelName());
   url = net::AppendQueryParameter(url, kOsVersion,
@@ -105,11 +106,6 @@ GURL GetAssembleUrl(DisplayOverlayController& controller) {
 
 int GetMenuWidth(int parent_width) {
   return parent_width < kParentWidthThreshold ? kMenuWidthSmall : kMenuWidth;
-}
-
-int GetMenuMarginRight(int parent_width) {
-  return parent_width < kParentWidthThreshold ? kMenuMarginRightSmall
-                                              : kMenuMarginRight;
 }
 
 int GetTitleFontSize(int parent_width) {
@@ -125,10 +121,12 @@ int GetAlphaLeftMargin(int parent_width) {
 }  // namespace
 
 class InputMenuView::FeedbackButton : public views::LabelButton {
+  METADATA_HEADER(FeedbackButton, views::LabelButton)
+
  public:
   explicit FeedbackButton(PressedCallback callback = PressedCallback(),
                           const std::u16string& text = std::u16string())
-      : LabelButton(callback, text) {
+      : LabelButton(std::move(callback), text) {
     SetAccessibleName(
         l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_MENU_SEND_FEEDBACK));
     SetBorder(views::CreateEmptyBorder(
@@ -139,8 +137,9 @@ class InputMenuView::FeedbackButton : public views::LabelButton {
 
     auto* color_provider = ash::AshColorProvider::Get();
     DCHECK(color_provider);
-    if (!color_provider)
+    if (!color_provider) {
       return;
+    }
 
     SetTextColor(
         views::Button::STATE_NORMAL,
@@ -161,14 +160,18 @@ class InputMenuView::FeedbackButton : public views::LabelButton {
   ~FeedbackButton() override = default;
 };
 
+BEGIN_METADATA(InputMenuView, FeedbackButton, views::LabelButton)
+END_METADATA
+
 // static
 std::unique_ptr<InputMenuView> InputMenuView::BuildMenuView(
     DisplayOverlayController* display_overlay_controller,
     views::View* entry_view,
     const gfx::Size& parent_size) {
   // Ensure there is only one menu at any time.
-  if (display_overlay_controller->HasMenuView())
+  if (display_overlay_controller->HasMenuView()) {
     display_overlay_controller->RemoveInputMenuView();
+  }
 
   auto menu_view_ptr =
       std::make_unique<InputMenuView>(display_overlay_controller, entry_view);
@@ -192,8 +195,9 @@ void InputMenuView::OnThemeChanged() {
 }
 
 void InputMenuView::CloseMenu() {
-  if (display_overlay_controller_)
-    display_overlay_controller_->SetDisplayMode(DisplayMode::kView);
+  if (display_overlay_controller_) {
+    display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kView);
+  }
 }
 
 void InputMenuView::Init(const gfx::Size& parent_size) {
@@ -226,7 +230,7 @@ void InputMenuView::Init(const gfx::Size& parent_size) {
         ash::login_views_utils::CreateThemedBubbleLabel(
             l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_RELEASE_ALPHA),
             /*view_defining_max_width=*/nullptr,
-            /*enabled_color_type=*/cros_tokens::kColorSelection,
+            /*enabled_color_type=*/cros_tokens::kCrosSysPrimary,
             gfx::FontList({ash::login_views_utils::kGoogleSansFont},
                           gfx::Font::FontStyle::NORMAL, kAlphaFontSize,
                           gfx::Font::Weight::MEDIUM)));
@@ -235,7 +239,7 @@ void InputMenuView::Init(const gfx::Size& parent_size) {
         alpha_label->GetPreferredSize().width() + 2 * kAlphaSidePadding,
         kAlphaHeight));
     alpha_label->SetBackground(views::CreateThemedRoundedRectBackground(
-        cros_tokens::kHighlightColor, kAlphaCornerRadius));
+        cros_tokens::kCrosSysHighlightShape, kAlphaCornerRadius));
 
     game_control_toggle_ =
         header_view->AddChildView(std::make_unique<views::ToggleButton>(
@@ -354,20 +358,33 @@ void InputMenuView::Init(const gfx::Size& parent_size) {
   }
 
   SetSize(gfx::Size(menu_width, kMenuHeight));
-  int x = std::max(0, parent_size.width() - width() -
-                          GetMenuMarginRight(parent_size.width()));
-  if (x < GetMenuMarginRight(parent_size.width())) {
-    // Set the menu in the middle if there is not enough margin on the left
-    // side.
-    x = std::max(0, (parent_size.width() - width()) / 2);
-  }
+  int x;
   int y = entry_view_->y();
-  if (display_overlay_controller_->touch_injector()->beta() &&
-      (y + height() > parent_size.height())) {
-    // Set the menu at the bottom if there is not enough margin on the bottom
-    // side.
-    y = parent_size.height() - height();
+
+  x = entry_view_->x();
+  // If the menu entry view is on the right side of the screen, bias toward
+  // the center.
+  if (x > parent_size.width() / 2) {
+    x -= width() - entry_view_->width();
   }
+  // Set the menu at the middle if there is not enough margin on the right
+  // or left side.
+  if (x + width() > parent_size.width() || x < 0) {
+    x = std::max(0, parent_size.width() - width() - kMenuMarginSmall);
+  }
+
+  // If the menu entry is at the bottom side of the screen, bias towards the
+  // center.
+  if (y > parent_size.height() / 2) {
+    y -= height() - entry_view_->height();
+  }
+
+  // Set the menu at the bottom if there is not enough margin on the bottom
+  // side.
+  if (y + height() > parent_size.height()) {
+    y = std::max(0, parent_size.height() - height() - kMenuMarginSmall);
+  }
+
   SetPosition(gfx::Point(x, y));
 }
 
@@ -380,11 +397,12 @@ std::unique_ptr<views::View> InputMenuView::BuildSeparator() {
 
 void InputMenuView::OnToggleGameControlPressed() {
   DCHECK(display_overlay_controller_);
-  if (!display_overlay_controller_)
+  if (!display_overlay_controller_) {
     return;
+  }
   const bool enabled = game_control_toggle_->GetIsOn();
   display_overlay_controller_->SetTouchInjectorEnable(enabled);
-  // Adjust |enabled_| and |visible_| properties to match |Game controls|.
+  // Adjust `enabled_` and `visible_` properties to match `Game controls`.
   show_mapping_toggle_->SetIsOn(enabled);
   display_overlay_controller_->SetInputMappingVisible(enabled);
   show_mapping_toggle_->SetEnabled(enabled);
@@ -399,28 +417,30 @@ void InputMenuView::OnToggleShowHintPressed() {
 
 void InputMenuView::OnEditButtonPressed() {
   DCHECK(display_overlay_controller_);
-  if (!display_overlay_controller_)
+  if (!display_overlay_controller_) {
     return;
+  }
   // Force key-binding labels ON before entering edit mode.
   if (!show_mapping_toggle_->GetIsOn()) {
     show_mapping_toggle_->SetIsOn(true);
-    display_overlay_controller_->SetInputMappingVisible(true);
+    display_overlay_controller_->SetInputMappingVisibleTemporary();
   }
   RecordInputOverlayCustomizedUsage();
   InputOverlayUkm::RecordInputOverlayCustomizedUsageUkm(
-      *(display_overlay_controller_->GetPackageName()));
+      display_overlay_controller_->GetPackageName());
   // Change display mode, load edit UI per action and overall edit buttons; make
   // sure the following line is at the bottom because edit mode will kill this
   // view.
-  display_overlay_controller_->SetDisplayMode(DisplayMode::kEdit);
+  display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kEdit);
 }
 
 void InputMenuView::OnButtonSendFeedbackPressed() {
   DCHECK(display_overlay_controller_);
-  if (!display_overlay_controller_)
+  if (!display_overlay_controller_) {
     return;
+  }
 
-  GURL url = GetAssembleUrl(*display_overlay_controller_);
+  GURL url = GetAssembleUrl(display_overlay_controller_->GetPackageName());
   ash::NewWindowDelegate::GetPrimary()->OpenUrl(
       url, ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
       ash::NewWindowDelegate::Disposition::kNewForegroundTab);
@@ -432,8 +452,9 @@ gfx::Insets InputMenuView::CalculateInsets(views::View* view,
                                            int other_spacing,
                                            int menu_width) const {
   int total_width = 0;
-  for (auto* child : view->children())
+  for (views::View* child : view->children()) {
     total_width += child->GetPreferredSize().width();
+  }
 
   int right_inset =
       std::max(0, menu_width - (total_width + left + right + other_spacing));
@@ -441,20 +462,19 @@ gfx::Insets InputMenuView::CalculateInsets(views::View* view,
 }
 
 void InputMenuView::SetCustomToggleColor(views::ToggleButton* toggle) {
-  auto* color_provider = ash::AshColorProvider::Get();
-  if (!color_provider)
-    return;
-
-  toggle->SetThumbOnColor(color_provider->GetContentLayerColor(
-      ash::AshColorProvider::ContentLayerType::kSwitchKnobColorActive));
-  toggle->SetThumbOffColor(color_provider->GetContentLayerColor(
-      ash::AshColorProvider::ContentLayerType::kSwitchKnobColorInactive));
-  toggle->SetTrackOnColor(color_provider->GetContentLayerColor(
-      ash::AshColorProvider::ContentLayerType::kSwitchTrackColorActive));
-  toggle->SetTrackOffColor(color_provider->GetContentLayerColor(
-      ash::AshColorProvider::ContentLayerType::kSwitchTrackColorInactive));
+  if (const auto* color_provider = ash::AshColorProvider::Get()) {
+    toggle->SetThumbOnColor(color_provider->GetContentLayerColor(
+        ash::AshColorProvider::ContentLayerType::kSwitchKnobColorActive));
+    toggle->SetThumbOffColor(color_provider->GetContentLayerColor(
+        ash::AshColorProvider::ContentLayerType::kSwitchKnobColorInactive));
+    toggle->SetTrackOnColor(color_provider->GetContentLayerColor(
+        ash::AshColorProvider::ContentLayerType::kSwitchTrackColorActive));
+    toggle->SetTrackOffColor(color_provider->GetContentLayerColor(
+        ash::AshColorProvider::ContentLayerType::kSwitchTrackColorInactive));
+  }
 }
 
-}  // namespace input_overlay
+BEGIN_METADATA(InputMenuView)
+END_METADATA
 
-}  // namespace arc
+}  // namespace arc::input_overlay

@@ -10,6 +10,7 @@
 #include "components/favicon/core/favicon_driver_observer.h"
 #include "components/sessions/core/session_id.h"
 #include "components/translate/core/browser/translate_driver.h"
+#include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 
@@ -54,6 +55,7 @@ class SyncSessionsRouterTabHelper
                            ui::PageTransition transition,
                            bool started_from_context_menu,
                            bool renderer_initiated) override;
+  void OnVisibilityChanged(content::Visibility visibility) override;
 
   // TranslateDriver::LanguageDetectionObserver implementation.
   void OnLanguageDetermined(
@@ -76,11 +78,13 @@ class SyncSessionsRouterTabHelper
   void NotifyRouter(bool page_load_completed = false);
 
   // |router_| is a KeyedService and is guaranteed to outlive |this|.
-  raw_ptr<SyncSessionsWebContentsRouter, DanglingUntriaged> router_;
+  const raw_ptr<SyncSessionsWebContentsRouter, DanglingUntriaged> router_;
 
-  raw_ptr<ChromeTranslateClient, DanglingUntriaged> chrome_translate_client_;
+  const raw_ptr<ChromeTranslateClient, AcrossTasksDanglingUntriaged>
+      chrome_translate_client_;
 
-  raw_ptr<favicon::FaviconDriver, DanglingUntriaged> favicon_driver_;
+  const raw_ptr<favicon::FaviconDriver, AcrossTasksDanglingUntriaged>
+      favicon_driver_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

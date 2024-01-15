@@ -116,7 +116,7 @@ class AudioConverterTest
     converter_->Convert(audio_bus_.get());
 
     // Render expected audio data.
-    expected_callback_->Render(base::TimeDelta(), base::TimeTicks::Now(), 0,
+    expected_callback_->Render(base::TimeDelta(), base::TimeTicks::Now(), {},
                                expected_audio_bus_.get());
 
     // Zero out unused channels in the expected AudioBus just as AudioConverter
@@ -222,14 +222,51 @@ TEST(AudioConverterTest, AudioDelayAndDiscreteChannelCount) {
   //
   // This magic number is the accumulated MultiChannelResampler delay after
   // |fill_count| (4) callbacks to provide input. The number of frames delayed
-  // is an implementation detail of the SincResampler chunk size (480 for the
+  // is an implementation detail of the SincResampler chunk size (448 for the
   // first two callbacks, 512 for the last two callbacks). See
   // SincResampler.ChunkSize().
-  int kExpectedDelay = 992;
+  int kExpectedDelay = 960;
   auto expected_delay =
       AudioTimestampHelper::FramesToTime(kExpectedDelay, kSampleRate);
   EXPECT_EQ(expected_delay, callback.last_delay());
   EXPECT_EQ(input_parameters.channels(), callback.last_channel_count());
+}
+
+// Ensure that glitch info is propagated to all callbacks.
+TEST(AudioConverterTest, PropagatesGlitchInfo) {
+  // Choose input and output parameters such that the transform must make
+  // multiple calls to fill the buffer.
+  AudioParameters input_parameters(AudioParameters::AUDIO_PCM_LINEAR,
+                                   ChannelLayoutConfig::Stereo(), kSampleRate,
+                                   kLowLatencyBufferSize);
+  AudioParameters output_parameters(AudioParameters::AUDIO_PCM_LINEAR,
+                                    ChannelLayoutConfig::Stereo(),
+                                    kSampleRate * 2, kHighLatencyBufferSize);
+  AudioGlitchInfo glitch_info{.duration = base::Seconds(5), .count = 123};
+
+  AudioConverter converter(input_parameters, output_parameters, false);
+  FakeAudioRenderCallback callback1(0.2, kSampleRate);
+  FakeAudioRenderCallback callback2(0.2, kSampleRate);
+  std::unique_ptr<AudioBus> audio_bus = AudioBus::Create(output_parameters);
+  converter.AddInput(&callback1);
+  converter.AddInput(&callback2);
+
+  // Send no glitches, so the cumulative glitches should remain at 0.
+  converter.ConvertWithInfo(0, {}, audio_bus.get());
+  EXPECT_EQ(callback1.cumulative_glitch_info(), AudioGlitchInfo());
+  EXPECT_EQ(callback2.cumulative_glitch_info(), AudioGlitchInfo());
+
+  // Send glitches, and expect them to be forwarded to the callbacks. The
+  // callbacks will be called several times due to their differing buffer sizes,
+  // but the glitch info should only be passed on once.
+  converter.ConvertWithInfo(0, glitch_info, audio_bus.get());
+  EXPECT_EQ(callback1.cumulative_glitch_info(), glitch_info);
+  EXPECT_EQ(callback2.cumulative_glitch_info(), glitch_info);
+
+  // Send no glitches, so the cumulative glitches should remain unchanged.
+  converter.ConvertWithInfo(0, {}, audio_bus.get());
+  EXPECT_EQ(callback1.cumulative_glitch_info(), glitch_info);
+  EXPECT_EQ(callback2.cumulative_glitch_info(), glitch_info);
 }
 
 TEST_P(AudioConverterTest, ArbitraryOutputRequestSize) {

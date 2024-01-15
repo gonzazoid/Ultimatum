@@ -10,19 +10,25 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/path_service.h"
+#include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "base/version.h"
 #include "chrome/browser/component_updater/component_updater_utils.h"
 #include "chrome/browser/extensions/updater/extension_update_client_command_line_config_policy.h"
 #include "chrome/browser/google/google_brand.h"
 #include "chrome/browser/update_client/chrome_update_query_params_delegate.h"
 #include "chrome/common/channel_info.h"
+#include "chrome/common/chrome_paths.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/patch/content/patch_service.h"
 #include "components/services/unzip/content/unzip_service.h"
@@ -31,6 +37,7 @@
 #include "components/update_client/net/network_chromium.h"
 #include "components/update_client/patch/patch_impl.h"
 #include "components/update_client/patcher.h"
+#include "components/update_client/persisted_data.h"
 #include "components/update_client/protocol_handler.h"
 #include "components/update_client/unzip/unzip_impl.h"
 #include "components/update_client/unzipper.h"
@@ -39,6 +46,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "extensions/browser/extension_prefs.h"
+#include "extensions/browser/extension_prefs_observer.h"
 
 namespace extensions {
 
@@ -53,7 +61,8 @@ static FactoryCallback& GetFactoryCallback() {
 }
 
 class ExtensionActivityDataService final
-    : public update_client::ActivityDataService {
+    : public update_client::ActivityDataService,
+      public ExtensionPrefsObserver {
  public:
   explicit ExtensionActivityDataService(ExtensionPrefs* extension_prefs);
 
@@ -73,10 +82,16 @@ class ExtensionActivityDataService final
   int GetDaysSinceLastActive(const std::string& id) const override;
   int GetDaysSinceLastRollCall(const std::string& id) const override;
 
+  // ExtensionPrefsObserver:
+  void OnExtensionPrefsWillBeDestroyed(ExtensionPrefs* prefs) override;
+
  private:
   // This member is not owned by this class, it's owned by a profile keyed
   // service.
   raw_ptr<ExtensionPrefs> extension_prefs_;
+
+  base::ScopedObservation<ExtensionPrefs, ExtensionPrefsObserver>
+      prefs_observation_{this};
 };
 
 // Calculates the value to use for the ping days parameter.
@@ -90,27 +105,38 @@ ExtensionActivityDataService::ExtensionActivityDataService(
     ExtensionPrefs* extension_prefs)
     : extension_prefs_(extension_prefs) {
   DCHECK(extension_prefs_);
+
+  prefs_observation_.Observe(extension_prefs);
 }
 
 void ExtensionActivityDataService::GetActiveBits(
     const std::vector<std::string>& ids,
     base::OnceCallback<void(const std::set<std::string>&)> callback) const {
   std::set<std::string> actives;
-  for (const auto& id : ids) {
-    if (extension_prefs_->GetActiveBit(id))
-      actives.insert(id);
+  if (extension_prefs_) {
+    for (const auto& id : ids) {
+      if (extension_prefs_->GetActiveBit(id)) {
+        actives.insert(id);
+      }
+    }
   }
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), actives));
 }
 
 int ExtensionActivityDataService::GetDaysSinceLastActive(
     const std::string& id) const {
+  if (!extension_prefs_) {
+    return update_client::kDaysUnknown;
+  }
   return CalculatePingDays(extension_prefs_->LastActivePingDay(id));
 }
 
 int ExtensionActivityDataService::GetDaysSinceLastRollCall(
     const std::string& id) const {
+  if (!extension_prefs_) {
+    return update_client::kDaysUnknown;
+  }
   return CalculatePingDays(extension_prefs_->LastPingDay(id));
 }
 
@@ -118,13 +144,23 @@ void ExtensionActivityDataService::GetAndClearActiveBits(
     const std::vector<std::string>& ids,
     base::OnceCallback<void(const std::set<std::string>&)> callback) {
   std::set<std::string> actives;
-  for (const auto& id : ids) {
-    if (extension_prefs_->GetActiveBit(id))
-      actives.insert(id);
-    extension_prefs_->SetActiveBit(id, false);
+  if (extension_prefs_) {
+    for (const auto& id : ids) {
+      if (extension_prefs_->GetActiveBit(id)) {
+        actives.insert(id);
+      }
+      extension_prefs_->SetActiveBit(id, false);
+    }
   }
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), actives));
+}
+
+void ExtensionActivityDataService::OnExtensionPrefsWillBeDestroyed(
+    ExtensionPrefs* prefs) {
+  DCHECK(prefs_observation_.IsObservingSource(prefs));
+  prefs_observation_.Reset();
+  extension_prefs_ = nullptr;
 }
 
 }  // namespace
@@ -139,39 +175,43 @@ ChromeUpdateClientConfig::ChromeUpdateClientConfig(
                 base::CommandLine::ForCurrentProcess()),
             /*require_encryption=*/true),
       pref_service_(ExtensionPrefs::Get(context)->pref_service()),
-      activity_data_service_(std::make_unique<ExtensionActivityDataService>(
-          ExtensionPrefs::Get(context))),
+      persisted_data_(update_client::CreatePersistedData(
+          pref_service_,
+          std::make_unique<ExtensionActivityDataService>(
+              ExtensionPrefs::Get(context)))),
       url_override_(url_override) {
   DCHECK(pref_service_);
 }
 
 ChromeUpdateClientConfig::~ChromeUpdateClientConfig() = default;
 
-double ChromeUpdateClientConfig::InitialDelay() const {
+base::TimeDelta ChromeUpdateClientConfig::InitialDelay() const {
   return impl_.InitialDelay();
 }
 
-int ChromeUpdateClientConfig::NextCheckDelay() const {
+base::TimeDelta ChromeUpdateClientConfig::NextCheckDelay() const {
   return impl_.NextCheckDelay();
 }
 
-int ChromeUpdateClientConfig::OnDemandDelay() const {
+base::TimeDelta ChromeUpdateClientConfig::OnDemandDelay() const {
   return impl_.OnDemandDelay();
 }
 
-int ChromeUpdateClientConfig::UpdateDelay() const {
+base::TimeDelta ChromeUpdateClientConfig::UpdateDelay() const {
   return impl_.UpdateDelay();
 }
 
 std::vector<GURL> ChromeUpdateClientConfig::UpdateUrl() const {
-  if (url_override_.has_value())
+  if (url_override_.has_value()) {
     return {*url_override_};
+  }
   return impl_.UpdateUrl();
 }
 
 std::vector<GURL> ChromeUpdateClientConfig::PingUrl() const {
-  if (url_override_.has_value())
+  if (url_override_.has_value()) {
     return {*url_override_};
+  }
   return impl_.PingUrl();
 }
 
@@ -260,8 +300,9 @@ bool ChromeUpdateClientConfig::EnabledBackgroundDownloader() const {
 }
 
 bool ChromeUpdateClientConfig::EnabledCupSigning() const {
-  if (url_override_.has_value())
+  if (url_override_.has_value()) {
     return false;
+  }
   return impl_.EnabledCupSigning();
 }
 
@@ -269,9 +310,9 @@ PrefService* ChromeUpdateClientConfig::GetPrefService() const {
   return pref_service_;
 }
 
-update_client::ActivityDataService*
-ChromeUpdateClientConfig::GetActivityDataService() const {
-  return activity_data_service_.get();
+update_client::PersistedData* ChromeUpdateClientConfig::GetPersistedData()
+    const {
+  return persisted_data_.get();
 }
 
 bool ChromeUpdateClientConfig::IsPerUserInstall() const {
@@ -308,6 +349,19 @@ void ChromeUpdateClientConfig::SetChromeUpdateClientConfigFactoryForTesting(
     FactoryCallback factory) {
   DCHECK(!factory.is_null());
   GetFactoryCallback() = factory;
+}
+
+absl::optional<base::FilePath> ChromeUpdateClientConfig::GetCrxCachePath()
+    const {
+  base::FilePath path;
+  bool result = base::PathService::Get(chrome::DIR_USER_DATA, &path);
+  return result ? absl::optional<base::FilePath>(
+                      path.AppendASCII("extensions_crx_cache"))
+                : absl::nullopt;
+}
+
+bool ChromeUpdateClientConfig::IsConnectionMetered() const {
+  return impl_.IsConnectionMetered();
 }
 
 }  // namespace extensions

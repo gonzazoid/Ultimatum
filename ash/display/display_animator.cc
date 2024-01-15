@@ -8,9 +8,11 @@
 
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
@@ -48,10 +50,11 @@ class CallbackRunningObserver {
   void OnSingleTaskCompleted() {
     completed_counter_++;
     if (completed_counter_ >= observer_list_.size()) {
-      base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+      base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                    this);
       if (!animation_aborted_)
-        base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                      std::move(callback_));
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(callback_));
     }
   }
 
@@ -87,8 +90,8 @@ class CallbackRunningObserver {
     }
 
    private:
-    ui::LayerAnimator* animator_;
-    CallbackRunningObserver* observer_;
+    raw_ptr<ui::LayerAnimator> animator_;
+    raw_ptr<CallbackRunningObserver> observer_;
   };
 
   size_t completed_counter_;
@@ -167,7 +170,7 @@ void DisplayAnimator::StartFadeInAnimation() {
   // invisible.
   for (aura::Window* root_window : Shell::Get()->GetAllRootWindows()) {
     ui::Layer* hiding_layer = nullptr;
-    if (hiding_layers_.find(root_window) == hiding_layers_.end()) {
+    if (!base::Contains(hiding_layers_, root_window)) {
       // In case of the transition from mirroring->non-mirroring, new root
       // windows appear and we do not have the black layers for them.  Thus
       // we need to create the layer and make it visible.

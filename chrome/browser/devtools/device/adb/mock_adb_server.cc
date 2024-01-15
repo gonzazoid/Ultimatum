@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
@@ -17,7 +17,6 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_test.h"
@@ -266,7 +265,7 @@ SimpleHttpServer::SimpleHttpServer(const ParserFactory& factory,
                                    net::IPEndPoint endpoint)
     : factory_(factory),
       socket_(new net::TCPServerSocket(nullptr, net::NetLogSource())) {
-  socket_->Listen(endpoint, 5);
+  socket_->Listen(endpoint, 5, /*ipv6_only=*/absl::nullopt);
   OnConnect();
 }
 
@@ -355,7 +354,7 @@ void SimpleHttpServer::Connection::OnDataRead(int count) {
     }
   } while (bytes_processed);
   // Posting to avoid deep recursion in case of synchronous IO
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&Connection::ReadData, weak_factory_.GetWeakPtr()));
 }
@@ -389,7 +388,7 @@ void SimpleHttpServer::Connection::OnDataWritten(int count) {
 
   if (bytes_to_write_ != 0)
     // Posting to avoid deep recursion in case of synchronous IO
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&Connection::WriteData, weak_factory_.GetWeakPtr()));
   else if (read_closed_)
@@ -404,7 +403,7 @@ void SimpleHttpServer::OnConnect() {
       base::BindOnce(&SimpleHttpServer::OnAccepted, base::Unretained(this)));
 
   if (accept_result != net::ERR_IO_PENDING)
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&SimpleHttpServer::OnAccepted,
                                   weak_factory_.GetWeakPtr(), accept_result));
 }
@@ -489,11 +488,10 @@ class AdbParser : public SimpleHttpServer::Parser,
         buffer = std::string();
     }
 
-    int size = response.size();
-    if (size > 0) {
-      static const char kHexChars[] = "0123456789ABCDEF";
-      for (int i = 3; i >= 0; i--)
-        buffer += kHexChars[ (size >> 4*i) & 0x0f ];
+    if (size_t size = response.size(); size > 0) {
+      CHECK_LE(size, 0xffffu);
+      base::AppendHexEncodedByte(static_cast<uint8_t>(size >> 8), buffer);
+      base::AppendHexEncodedByte(static_cast<uint8_t>(size), buffer);
       if (flush_mode_ == FlushWithSize) {
           callback_.Run(buffer);
           buffer = std::string();
@@ -567,14 +565,14 @@ void MockAndroidConnection::Receive(const std::string& data) {
   if (socket_name_ == "chrome_devtools_remote") {
     if (path == kJsonVersionPath)
       SendHTTPResponse(kSampleChromeVersion);
-    else if (path == kJsonListPath)
+    else if (base::StartsWith(path, kJsonListPath))
       SendHTTPResponse(kSampleChromePages);
     else
       NOTREACHED() << "Unknown command " << request;
   } else if (socket_name_ == "chrome_devtools_remote_1002") {
     if (path == kJsonVersionPath)
       SendHTTPResponse(kSampleChromeBetaVersion);
-    else if (path == kJsonListPath)
+    else if (base::StartsWith(path, kJsonListPath))
       SendHTTPResponse(kSampleChromeBetaPages);
     else
       NOTREACHED() << "Unknown command " << request;
@@ -582,21 +580,21 @@ void MockAndroidConnection::Receive(const std::string& data) {
                               base::CompareCase::SENSITIVE)) {
     if (path == kJsonVersionPath)
       SendHTTPResponse("{}");
-    else if (path == kJsonListPath)
+    else if (base::StartsWith(path, kJsonListPath))
       SendHTTPResponse("[]");
     else
       NOTREACHED() << "Unknown command " << request;
   } else if (socket_name_ == "webview_devtools_remote_2425") {
     if (path == kJsonVersionPath)
       SendHTTPResponse(kSampleWebViewVersion);
-    else if (path == kJsonListPath)
+    else if (base::StartsWith(path, kJsonListPath))
       SendHTTPResponse(kSampleWebViewPages);
     else
       NOTREACHED() << "Unknown command " << request;
   } else if (socket_name_ == "node_devtools_remote") {
     if (path == kJsonVersionPath)
       SendHTTPResponse(kSampleNodeVersion);
-    else if (path == kJsonListPath)
+    else if (base::StartsWith(path, kJsonListPath))
       SendHTTPResponse(kSampleNodePage);
     else
       NOTREACHED() << "Unknown command " << request;

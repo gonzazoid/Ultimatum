@@ -10,7 +10,7 @@ Most of what you'll want to know exists between
 
 * [`//base/allocator/partition_allocator/BUILD.gn`][pa-build-gn],
 * Everything else ending in `.gn` or `.gni` in
-  `//base/allocator/partition_allocator/`,
+  `//base/allocator/partition_allocator/src/partition_alloc/`,
 * [`allocator.gni`][allocator-gni],
 * [`//base/allocator/BUILD.gn`][base-allocator-build-gn], and
 * [`//base/BUILD.gn`][base-build-gn].
@@ -62,21 +62,6 @@ Does nothing special when value is `false`. Enables
   with `use_partition_alloc` (see above).
 ***
 
-## Note: Component Builds
-
-When working on PartitionAlloc, know that `is_debug` defaults to
-implying `is_component_build`, which interferes with the allocator
-shim. A typical set of GN args should include
-
-```none
-is_debug = true
-is_component_build = false
-```
-
-Conversely, build configurations that have `is_component_build = true`
-without explicitly specifying PA-specific args will not build with PA-E
-enabled.
-
 ## Notable Macros
 
 There is an ongoing effort
@@ -112,7 +97,7 @@ that influence PartitionAlloc's behavior.
 [allocator-gni]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/allocator.gni
 [base-allocator-build-gn]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/BUILD.gn
 [base-build-gn]: https://source.chromium.org/chromium/chromium/src/+/main:base/BUILD.gn
-[partition-alloc-config]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/partition_alloc_config.h
+[partition-alloc-config]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/src/partition_alloc/partition_alloc_config.h
 [pae-public-doc]: https://docs.google.com/document/d/1R1H9z5IVUAnXJgDjnts3nTJVcRbufWWT9ByXLgecSUM/preview
 [miracleptr-doc]: https://docs.google.com/document/d/1pnnOAIz_DMWDI4oIOFoMAqLnf_MZ2GsrJNb_dbQ3ZBg/preview
 [pa-ee-crbug]: https://crbug.com/1151236

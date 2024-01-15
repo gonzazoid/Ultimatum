@@ -9,6 +9,7 @@
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/extensions/api/settings_private/generated_pref.h"
 #include "chrome/browser/extensions/api/settings_private/generated_pref_test_base.h"
+#include "chrome/browser/ui/hats/hats_service.h"
 #include "chrome/browser/ui/hats/hats_service_factory.h"
 #include "chrome/browser/ui/hats/mock_hats_service.h"
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
@@ -17,11 +18,13 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/test/content_settings_mock_provider.h"
 #include "components/content_settings/core/test/content_settings_test_utils.h"
 #include "components/privacy_sandbox/privacy_sandbox_prefs.h"
+#include "components/privacy_sandbox/tracking_protection_prefs.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/unified_consent/pref_names.h"
@@ -44,6 +47,14 @@ class TrustSafetySentimentServiceTest : public testing::Test {
         .WillRepeatedly(testing::Return(true));
   }
 
+  void SetUp() override {
+    metrics::DesktopSessionDurationTracker::Initialize();
+  }
+
+  void TearDown() override {
+    metrics::DesktopSessionDurationTracker::CleanupForTesting();
+  }
+
  protected:
   struct FeatureParams {
     std::string privacy_settings_time = "20s";
@@ -54,24 +65,21 @@ class TrustSafetySentimentServiceTest : public testing::Test {
     std::string privacy_settings_probability = "0.6";
     std::string trusted_surface_probability = "0.4";
     std::string transactions_probability = "0.05";
-    std::string privacy_sandbox_3_consent_accept_probability = "0.08";
-    std::string privacy_sandbox_3_consent_decline_probability = "0.1";
-    std::string privacy_sandbox_3_notice_dismiss_probability = "0.1";
-    std::string privacy_sandbox_3_notice_ok_probability = "0.4";
-    std::string privacy_sandbox_3_notice_settings_probability = "0.7";
+    std::string privacy_sandbox_4_consent_accept_probability = "0.01";
+    std::string privacy_sandbox_4_consent_decline_probability = "0.1";
+    std::string privacy_sandbox_4_notice_ok_probability = "0.1";
+    std::string privacy_sandbox_4_notice_settings_probability = "0.1";
     std::string privacy_settings_trigger_id = "privacy-settings-test";
     std::string trusted_surface_trigger_id = "trusted-surface-test";
     std::string transactions_trigger_id = "transactions-test";
-    std::string privacy_sandbox_3_consent_accept_trigger_id =
-        "privacy-sandbox-3-consent-accept";
-    std::string privacy_sandbox_3_consent_decline_trigger_id =
-        "privacy-sandbox-3-consent-decline";
-    std::string privacy_sandbox_3_notice_dismiss_trigger_id =
-        "privacy-sandbox-3-notice-dismiss";
-    std::string privacy_sandbox_3_notice_ok_trigger_id =
-        "privacy-sandbox-3-ok-dismiss";
-    std::string privacy_sandbox_3_notice_settings_trigger_id =
-        "privacy-sandbox-3-settings-dismiss";
+    std::string privacy_sandbox_4_consent_accept_trigger_id =
+        "privacy-sandbox-4-consent-accept";
+    std::string privacy_sandbox_4_consent_decline_trigger_id =
+        "privacy-sandbox-4-consent-decline";
+    std::string privacy_sandbox_4_notice_ok_trigger_id =
+        "privacy-sandbox-4-notice-ok";
+    std::string privacy_sandbox_4_notice_settings_trigger_id =
+        "privacy-sandbox-4-notice-settings";
     std::string transactions_password_manager_time = "20s";
   };
 
@@ -88,31 +96,121 @@ class TrustSafetySentimentServiceTest : public testing::Test {
              params.privacy_settings_probability},
             {"trusted-surface-probability", params.trusted_surface_probability},
             {"transactions-probability", params.transactions_probability},
-            {"privacy-sandbox-3-consent-accept-probability",
-             params.privacy_sandbox_3_consent_accept_probability},
-            {"privacy-sandbox-3-consent-decline-probability",
-             params.privacy_sandbox_3_consent_decline_probability},
-            {"privacy-sandbox-3-notice-dismiss-probability",
-             params.privacy_sandbox_3_notice_dismiss_probability},
-            {"privacy-sandbox-3-notice-ok-probability",
-             params.privacy_sandbox_3_notice_ok_probability},
-            {"privacy-sandbox-3-notice-settings-probability",
-             params.privacy_sandbox_3_notice_settings_probability},
+            {"privacy-sandbox-4-consent-accept-probability",
+             params.privacy_sandbox_4_consent_accept_probability},
+            {"privacy-sandbox-4-consent-decline-probability",
+             params.privacy_sandbox_4_consent_decline_probability},
+            {"privacy-sandbox-4-notice-ok-probability",
+             params.privacy_sandbox_4_notice_ok_probability},
+            {"privacy-sandbox-4-notice-settings-probability",
+             params.privacy_sandbox_4_notice_settings_probability},
             {"privacy-settings-trigger-id", params.privacy_settings_trigger_id},
             {"trusted-surface-trigger-id", params.trusted_surface_trigger_id},
             {"transactions-trigger-id", params.transactions_trigger_id},
-            {"privacy-sandbox-3-consent-accept-trigger-id",
-             params.privacy_sandbox_3_consent_accept_trigger_id},
-            {"privacy-sandbox-3-consent-decline-trigger-id",
-             params.privacy_sandbox_3_consent_decline_trigger_id},
-            {"privacy-sandbox-3-notice-dismiss-trigger-id",
-             params.privacy_sandbox_3_notice_dismiss_trigger_id},
-            {"privacy-sandbox-3-notice-ok-trigger-id",
-             params.privacy_sandbox_3_notice_ok_trigger_id},
-            {"privacy-sandbox-3-notice-settings-trigger-id",
-             params.privacy_sandbox_3_notice_settings_trigger_id},
+            {"privacy-sandbox-4-consent-accept-trigger-id",
+             params.privacy_sandbox_4_consent_accept_trigger_id},
+            {"privacy-sandbox-4-consent-decline-trigger-id",
+             params.privacy_sandbox_4_consent_decline_trigger_id},
+            {"privacy-sandbox-4-notice-ok-trigger-id",
+             params.privacy_sandbox_4_notice_ok_trigger_id},
+            {"privacy-sandbox-4-notice-settings-trigger-id",
+             params.privacy_sandbox_4_notice_settings_trigger_id},
             {"transactions-password-manager-time",
              params.transactions_password_manager_time},
+        });
+  }
+
+  struct FeatureParamsV2 {
+    std::string min_time_to_prompt = "2m";
+    std::string max_time_to_prompt = "60m";
+    std::string ntp_visits_min_range = "2";
+    std::string ntp_visits_max_range = "4";
+    std::string min_session_time = "30s";
+    std::string trusted_surface_time = "5s";
+    std::string browsing_data_probability = "0.4";
+    std::string control_group_probability = "0.4";
+    std::string download_warning_ui_probability = "0.0";
+    std::string password_check_probability = "0.4";
+    std::string password_protection_ui_probability = "0.0";
+    std::string safety_check_probability = "0.4";
+    std::string trusted_surface_probability = "0.4";
+    std::string privacy_guide_probability = "0.4";
+    std::string privacy_sandbox_4_consent_accept_probability = "0.01";
+    std::string privacy_sandbox_4_consent_decline_probability = "0.1";
+    std::string privacy_sandbox_4_notice_ok_probability = "0.1";
+    std::string privacy_sandbox_4_notice_settings_probability = "0.1";
+    std::string safe_browsing_interstitial_probability = "0.4";
+    std::string browsing_data_trigger_id = "browsing-data-test";
+    std::string control_group_trigger_id = "control-group-test";
+    std::string download_warning_ui_trigger_id = "download-warning-ui-test";
+    std::string password_check_trigger_id = "password-check-test";
+    std::string password_protection_ui_trigger_id =
+        "password-protection-ui-test";
+    std::string safety_check_trigger_id = "safety-check-test";
+    std::string trusted_surface_trigger_id = "trusted-surface-test";
+    std::string privacy_guide_trigger_id = "privacy-guide-test";
+    std::string privacy_sandbox_4_consent_accept_trigger_id =
+        "privacy-sandbox-4-consent-accept";
+    std::string privacy_sandbox_4_consent_decline_trigger_id =
+        "privacy-sandbox-4-consent-decline";
+    std::string privacy_sandbox_4_notice_ok_trigger_id =
+        "privacy-sandbox-4-notice-ok";
+    std::string privacy_sandbox_4_notice_settings_trigger_id =
+        "privacy-sandbox-4-notice-settings";
+    std::string safe_browsing_interstitial_trigger_id =
+        "safe-browsing-interstitial";
+  };
+
+  void SetupFeatureParametersV2(FeatureParamsV2 params) {
+    feature_list()->InitAndEnableFeatureWithParameters(
+        features::kTrustSafetySentimentSurveyV2,
+        {
+            {"min-time-to-prompt", params.min_time_to_prompt},
+            {"max-time-to-prompt", params.max_time_to_prompt},
+            {"ntp-visits-min-range", params.ntp_visits_min_range},
+            {"ntp-visits-max-range", params.ntp_visits_max_range},
+            {"min-session-time", params.min_session_time},
+            {"trusted-surface-time", params.trusted_surface_time},
+            {"browsing-data-probability", params.browsing_data_probability},
+            {"control-group-probability", params.control_group_probability},
+            {"download-warning-ui-probability",
+             params.download_warning_ui_probability},
+            {"password-check-probability", params.password_check_probability},
+            {"password-protection-ui-probability",
+             params.password_protection_ui_probability},
+            {"safety-check-probability", params.safety_check_probability},
+            {"trusted-surface-probability", params.trusted_surface_probability},
+            {"privacy-guide-probability", params.privacy_guide_probability},
+            {"privacy-sandbox-4-consent-accept-probability",
+             params.privacy_sandbox_4_consent_accept_probability},
+            {"privacy-sandbox-4-consent-decline-probability",
+             params.privacy_sandbox_4_consent_decline_probability},
+            {"privacy-sandbox-4-notice-ok-probability",
+             params.privacy_sandbox_4_notice_ok_probability},
+            {"privacy-sandbox-4-notice-settings-probability",
+             params.privacy_sandbox_4_notice_settings_probability},
+            {"safe-browsing-interstitial-probability",
+             params.safe_browsing_interstitial_probability},
+            {"browsing-data-trigger-id", params.browsing_data_trigger_id},
+            {"control-group-trigger-id", params.control_group_trigger_id},
+            {"download-warning-ui-trigger-id",
+             params.download_warning_ui_trigger_id},
+            {"password-check-trigger-id", params.password_check_trigger_id},
+            {"password-protection-ui-trigger-id",
+             params.password_protection_ui_trigger_id},
+            {"safety-check-trigger-id", params.safety_check_trigger_id},
+            {"trusted-surface-trigger-id", params.trusted_surface_trigger_id},
+            {"privacy-guide-trigger-id", params.privacy_guide_trigger_id},
+            {"privacy-sandbox-4-consent-accept-trigger-id",
+             params.privacy_sandbox_4_consent_accept_trigger_id},
+            {"privacy-sandbox-4-consent-decline-trigger-id",
+             params.privacy_sandbox_4_consent_decline_trigger_id},
+            {"privacy-sandbox-4-notice-ok-trigger-id",
+             params.privacy_sandbox_4_notice_ok_trigger_id},
+            {"privacy-sandbox-4-notice-settings-trigger-id",
+             params.privacy_sandbox_4_notice_settings_trigger_id},
+            {"safe-browsing-interstitial-trigger-id",
+             params.safe_browsing_interstitial_trigger_id},
         });
   }
 
@@ -133,6 +231,22 @@ class TrustSafetySentimentServiceTest : public testing::Test {
         histogram_tester()->ExpectBucketCount(histogram_name, area, 1);
       }
     }
+  }
+
+  void CheckCallTriggerOccurredHistogram(
+      const std::map<TrustSafetySentimentService::FeatureArea, int>&
+          triggered_area_counts) {
+    int total_count = 0;
+    const std::string histogram_name =
+        "Feedback.TrustSafetySentiment.CallTriggerOccurred";
+    for (const auto& histogram_expected : triggered_area_counts) {
+      const auto& feature_area = histogram_expected.first;
+      int expected_count = histogram_expected.second;
+      histogram_tester()->ExpectBucketCount(histogram_name, feature_area,
+                                            expected_count);
+      total_count += expected_count;
+    }
+    histogram_tester()->ExpectTotalCount(histogram_name, total_count);
   }
 
   TrustSafetySentimentService* service() {
@@ -183,6 +297,9 @@ TEST_F(TrustSafetySentimentServiceTest, Eligibility_NtpOpens) {
   CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacySettings,
                    TrustSafetySentimentService::FeatureArea::kTrustedSurface},
                   {});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPrivacySettings, 1},
+       {TrustSafetySentimentService::FeatureArea::kTrustedSurface, 1}});
 
   // The next NTP should be eligible for a survey.
   EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _));
@@ -223,6 +340,9 @@ TEST_F(TrustSafetySentimentServiceTest, Eligibility_Time) {
   CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacySettings,
                    TrustSafetySentimentService::FeatureArea::kTrustedSurface},
                   {TrustSafetySentimentService::FeatureArea::kTrustedSurface});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPrivacySettings, 1},
+       {TrustSafetySentimentService::FeatureArea::kTrustedSurface, 1}});
 }
 
 TEST_F(TrustSafetySentimentServiceTest, TriggerProbability) {
@@ -238,6 +358,8 @@ TEST_F(TrustSafetySentimentServiceTest, TriggerProbability) {
       TrustSafetySentimentService::FeatureArea::kTrustedSurface, {});
   service()->OpenedNewTabPage();
   CheckHistograms({}, {});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kTrustedSurface, 1}});
 }
 
 TEST_F(TrustSafetySentimentServiceTest, TriggersClearOnLaunch) {
@@ -290,6 +412,10 @@ TEST_F(TrustSafetySentimentServiceTest, TriggersClearOnLaunch) {
                    TrustSafetySentimentService::FeatureArea::kTransactions},
                   {surveyed_feature_area,
                    TrustSafetySentimentService::FeatureArea::kTransactions});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPrivacySettings, 1},
+       {TrustSafetySentimentService::FeatureArea::kTrustedSurface, 1},
+       {TrustSafetySentimentService::FeatureArea::kTransactions, 1}});
 }
 
 TEST_F(TrustSafetySentimentServiceTest, SettingsWatcher_PrivacySettings) {
@@ -447,132 +573,80 @@ TEST_F(TrustSafetySentimentServiceTest, SavedCard) {
 }
 
 TEST_F(TrustSafetySentimentServiceTest,
-       InteractedWithPrivacySandbox3ConsentAccept) {
-  // Accepting Privacy Sandbox 3 consent is considered a trigger, and should
+       InteractedWithPrivacySandbox4ConsentAccept) {
+  // Accepting Privacy Sandbox 4 consent is considered a trigger, and should
   // make a user eligible to receive a survey.
   FeatureParams params;
-  params.privacy_sandbox_3_consent_accept_probability = "1.0";
+  params.privacy_sandbox_4_consent_accept_probability = "1.0";
   params.min_time_to_prompt = "0s";
   params.ntp_visits_min_range = "0";
   params.ntp_visits_max_range = "0";
   SetupFeatureParameters(params);
 
-  auto* content_settings =
-      HostContentSettingsMapFactory::GetForProfile(profile());
-  content_settings->SetDefaultContentSetting(
-      ContentSettingsType::COOKIES, ContentSetting::CONTENT_SETTING_BLOCK);
-  profile()->GetTestingPrefService()->SetUserPref(
-      prefs::kPrivacySandboxApisEnabledV2, std::make_unique<base::Value>(true));
-
-  SurveyBitsData expected_psd = {
-      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
-      {"3P cookies blocked", true},
-      {"Privacy Sandbox enabled", true}};
-
   EXPECT_CALL(
       *mock_hats_service(),
-      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3ConsentAccept, _,
-                   _, expected_psd, _));
-  service()->InteractedWithPrivacySandbox3(
-      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3ConsentAccept);
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox4ConsentAccept, _,
+                   _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4ConsentAccept);
   service()->OpenedNewTabPage();
 }
 
 TEST_F(TrustSafetySentimentServiceTest,
-       InteractedWithPrivacySandbox3ConsentDecline) {
-  // Declining Privacy Sandbox 3 consent is considered a trigger, and should
+       InteractedWithPrivacySandbox4ConsentDecline) {
+  // Declining Privacy Sandbox 4 consent is considered a trigger, and should
   // make a user eligible to receive a survey.
   FeatureParams params;
-  params.privacy_sandbox_3_consent_decline_probability = "1.0";
+  params.privacy_sandbox_4_consent_decline_probability = "1.0";
   params.min_time_to_prompt = "0s";
   params.ntp_visits_min_range = "0";
   params.ntp_visits_max_range = "0";
   SetupFeatureParameters(params);
-
-  SurveyBitsData expected_psd = {
-      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
-      {"3P cookies blocked", false},
-      {"Privacy Sandbox enabled", false}};
 
   EXPECT_CALL(
       *mock_hats_service(),
-      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3ConsentDecline,
-                   _, _, expected_psd, _));
-  service()->InteractedWithPrivacySandbox3(
-      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3ConsentDecline);
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox4ConsentDecline,
+                   _, _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4ConsentDecline);
   service()->OpenedNewTabPage();
 }
 
-TEST_F(TrustSafetySentimentServiceTest,
-       InteractedWithPrivacySandbox3NoticeDismiss) {
-  // Dismissing Privacy Sandbox 3 notice is considered a trigger, and should
-  // make a user eligible to receive a survey.
+TEST_F(TrustSafetySentimentServiceTest, InteractedWithPrivacySandbox4NoticeOk) {
+  // Acknowledging the Privacy Sandbox 4 notice is considered a trigger, and
+  // should make a user eligible to receive a survey.
   FeatureParams params;
-  params.privacy_sandbox_3_notice_dismiss_probability = "1.0";
+  params.privacy_sandbox_4_notice_ok_probability = "1.0";
   params.min_time_to_prompt = "0s";
   params.ntp_visits_min_range = "0";
   params.ntp_visits_max_range = "0";
   SetupFeatureParameters(params);
-
-  SurveyBitsData expected_psd = {
-      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
-      {"3P cookies blocked", false},
-      {"Privacy Sandbox enabled", false}};
-
-  EXPECT_CALL(
-      *mock_hats_service(),
-      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeDismiss, _,
-                   _, expected_psd, _));
-  service()->InteractedWithPrivacySandbox3(
-      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeDismiss);
-  service()->OpenedNewTabPage();
-}
-
-TEST_F(TrustSafetySentimentServiceTest, InteractedWithPrivacySandbox3NoticeOk) {
-  // Okaying the Privacy Sandbox 3 notice is considered a trigger, and should
-  // make a user eligible to receive a survey.
-  FeatureParams params;
-  params.privacy_sandbox_3_notice_ok_probability = "1.0";
-  params.min_time_to_prompt = "0s";
-  params.ntp_visits_min_range = "0";
-  params.ntp_visits_max_range = "0";
-  SetupFeatureParameters(params);
-
-  SurveyBitsData expected_psd = {
-      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
-      {"3P cookies blocked", false},
-      {"Privacy Sandbox enabled", false}};
 
   EXPECT_CALL(*mock_hats_service(),
-              LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeOk,
-                           _, _, expected_psd, _));
-  service()->InteractedWithPrivacySandbox3(
-      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeOk);
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox4NoticeOk,
+                           _, _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4NoticeOk);
   service()->OpenedNewTabPage();
 }
 
 TEST_F(TrustSafetySentimentServiceTest,
-       InteractedWithPrivacySandbox3NoticeSettings) {
-  // Going to settings from the Privacy Sandbox 3 notice is considered a
+       InteractedWithPrivacySandbox4NoticeSettings) {
+  // Going to settings from the Privacy Sandbox 4 notice is considered a
   // trigger, and should make a user eligible to receive a survey.
   FeatureParams params;
-  params.privacy_sandbox_3_notice_settings_probability = "1.0";
+  params.privacy_sandbox_4_notice_settings_probability = "1.0";
   params.min_time_to_prompt = "0s";
   params.ntp_visits_min_range = "0";
   params.ntp_visits_max_range = "0";
   SetupFeatureParameters(params);
 
-  SurveyBitsData expected_psd = {
-      {"Stable channel", chrome::GetChannel() == version_info::Channel::STABLE},
-      {"3P cookies blocked", false},
-      {"Privacy Sandbox enabled", false}};
-
   EXPECT_CALL(
       *mock_hats_service(),
-      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeSettings,
-                   _, _, expected_psd, _));
-  service()->InteractedWithPrivacySandbox3(
-      TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeSettings);
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySandbox4NoticeSettings,
+                   _, _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4NoticeSettings);
   service()->OpenedNewTabPage();
 }
 
@@ -673,7 +747,8 @@ TEST_F(TrustSafetySentimentServiceTest, PrivacySettingsProductSpecificData) {
   managed_provider->SetWebsiteSetting(
       ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
       ContentSettingsType::COOKIES,
-      base::Value(ContentSetting::CONTENT_SETTING_BLOCK));
+      base::Value(ContentSetting::CONTENT_SETTING_BLOCK), /*constraints=*/{},
+      content_settings::PartitionKey::GetDefaultForTesting());
   content_settings::TestUtils::OverrideProvider(
       content_settings, std::move(managed_provider),
       HostContentSettingsMap::POLICY_PROVIDER);
@@ -710,6 +785,9 @@ TEST_F(TrustSafetySentimentServiceTest, ActiveIncognitoPreventsSurvey) {
   CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacySettings,
                    TrustSafetySentimentService::FeatureArea::kIneligible},
                   {TrustSafetySentimentService::FeatureArea::kPrivacySettings});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kSafetyCheck, 1},
+       {TrustSafetySentimentService::FeatureArea::kPrivacySettings, 1}});
 }
 
 TEST_F(TrustSafetySentimentServiceTest, ClosingIncognitoDelaysSurvey) {
@@ -763,4 +841,637 @@ TEST_F(TrustSafetySentimentServiceTest, ClosingIncognitoDelaysSurvey) {
   CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacySettings,
                    TrustSafetySentimentService::FeatureArea::kIneligible},
                   {TrustSafetySentimentService::FeatureArea::kPrivacySettings});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kSafetyCheck, 1},
+       {TrustSafetySentimentService::FeatureArea::kPrivacySettings, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, AllFeatureAreasHaveTriggers) {
+  // Assert that for every feature area there is the correct version(s) and
+  // survey trigger id.
+  FeatureParams paramsv1;
+  SetupFeatureParameters(paramsv1);
+  for (int enum_value = 0;
+       enum_value <=
+       static_cast<int>(TrustSafetySentimentService::FeatureArea::kMaxValue);
+       ++enum_value) {
+    // Skip deprecated PrivacySandbox3 values.
+    if (enum_value >= 4 && enum_value <= 9) {
+      continue;
+    }
+    auto feature_area =
+        static_cast<TrustSafetySentimentService::FeatureArea>(enum_value);
+    if (TrustSafetySentimentService::VersionCheck(feature_area)) {
+      EXPECT_NE("", TrustSafetySentimentService::GetHatsTriggerForFeatureArea(
+                        feature_area));
+    }
+  }
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_AllFeatureAreasHaveTriggers) {
+  // Assert that for every feature area there is the correct version(s) and
+  // survey trigger id.
+  FeatureParamsV2 paramsv2;
+  SetupFeatureParametersV2(paramsv2);
+  for (int enum_value = 0;
+       enum_value <=
+       static_cast<int>(TrustSafetySentimentService::FeatureArea::kMaxValue);
+       ++enum_value) {
+    // Skip deprecated PrivacySandbox3 values.
+    if (enum_value >= 4 && enum_value <= 9) {
+      continue;
+    }
+    auto feature_area =
+        static_cast<TrustSafetySentimentService::FeatureArea>(enum_value);
+    if (TrustSafetySentimentService::VersionCheck(feature_area)) {
+      EXPECT_NE("", TrustSafetySentimentService::GetHatsTriggerForFeatureArea(
+                        feature_area));
+    }
+  }
+}
+
+TEST_F(TrustSafetySentimentServiceTest, AllFeatureAreasHaveProbabilities) {
+  // Check that for every feature with a probability of 1 and the correct
+  // version, the dice roll always succeeds.
+  FeatureParams params;
+  params.privacy_settings_probability = "1.0";
+  params.trusted_surface_probability = "1.0";
+  params.transactions_probability = "1.0";
+  params.privacy_sandbox_4_consent_accept_probability = "1.0";
+  params.privacy_sandbox_4_consent_decline_probability = "1.0";
+  params.privacy_sandbox_4_notice_ok_probability = "1.0";
+  params.privacy_sandbox_4_notice_settings_probability = "1.0";
+
+  SetupFeatureParameters(params);
+  for (int enum_value = 0;
+       enum_value <=
+       static_cast<int>(TrustSafetySentimentService::FeatureArea::kMaxValue);
+       ++enum_value) {
+    // Skip deprecated PrivacySandbox3 values.
+    if (enum_value >= 4 && enum_value <= 9) {
+      continue;
+    }
+    auto feature_area =
+        static_cast<TrustSafetySentimentService::FeatureArea>(enum_value);
+    if (TrustSafetySentimentService::VersionCheck(feature_area)) {
+      EXPECT_TRUE(TrustSafetySentimentService::ProbabilityCheck(feature_area))
+          << "Feature area: " << static_cast<int>(feature_area);
+    }
+  }
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_AllFeatureAreasHaveProbabilities) {
+  // Check that for every feature with a probability of 1 and the correct
+  // version, the dice roll always succeeds.
+  FeatureParamsV2 params;
+  params.browsing_data_probability = "1.0";
+  params.control_group_probability = "1.0";
+  params.download_warning_ui_probability = "1.0";
+  params.password_check_probability = "1.0";
+  params.password_protection_ui_probability = "1.0";
+  params.safety_check_probability = "1.0";
+  params.trusted_surface_probability = "1.0";
+  params.privacy_guide_probability = "1.0";
+  params.privacy_sandbox_4_consent_accept_probability = "1.0";
+  params.privacy_sandbox_4_consent_decline_probability = "1.0";
+  params.privacy_sandbox_4_notice_ok_probability = "1.0";
+  params.privacy_sandbox_4_notice_settings_probability = "1.0";
+  params.safe_browsing_interstitial_probability = "1.0";
+
+  SetupFeatureParametersV2(params);
+  for (int enum_value = 0;
+       enum_value <=
+       static_cast<int>(TrustSafetySentimentService::FeatureArea::kMaxValue);
+       ++enum_value) {
+    // Skip deprecated PrivacySandbox3 values.
+    if (enum_value >= 4 && enum_value <= 9) {
+      continue;
+    }
+    auto feature_area =
+        static_cast<TrustSafetySentimentService::FeatureArea>(enum_value);
+    if (TrustSafetySentimentService::VersionCheck(feature_area)) {
+      EXPECT_TRUE(TrustSafetySentimentService::ProbabilityCheck(feature_area))
+          << "Feature area: " << static_cast<int>(feature_area);
+    }
+  }
+}
+
+TEST_F(TrustSafetySentimentServiceTest, Eligibility_V1FeatureWhileV2Enabled) {
+  // A survey from V1 only is not shown because V2 is enabled.
+  FeatureParams params;
+  params.privacy_settings_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  feature_list()->InitWithFeaturesAndParameters(
+      {{features::kTrustSafetySentimentSurvey,
+        {
+            {"min-time-to-prompt", params.min_time_to_prompt},
+            {"max-time-to-prompt", params.max_time_to_prompt},
+            {"ntp-visits-min-range", params.ntp_visits_min_range},
+            {"ntp-visits-max-range", params.ntp_visits_max_range},
+            {"trusted-surface-probability", params.trusted_surface_probability},
+            {"trusted-surface-trigger-id", params.trusted_surface_trigger_id},
+        }},
+       {features::kTrustSafetySentimentSurveyV2, {}}},
+      {});
+
+  EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _)).Times(0);
+  service()->TriggerOccurred(
+      TrustSafetySentimentService::FeatureArea::kPrivacySettings, {});
+
+  service()->OpenedNewTabPage();
+
+  // Survey should not shown be shown as triggered because v2 enabled.
+  CheckHistograms({}, {});
+  testing::Mock::VerifyAndClearExpectations(mock_hats_service());
+
+  // Disable V2 and now the same trigger should work.
+  feature_list()->Reset();
+  SetupFeatureParameters(params);
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySettings, _, _, _, _));
+  service()->TriggerOccurred(
+      TrustSafetySentimentService::FeatureArea::kPrivacySettings, {});
+  service()->OpenedNewTabPage();
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacySettings},
+                  {TrustSafetySentimentService::FeatureArea::kPrivacySettings});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPrivacySettings, 2}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_TrustedSurface) {
+  // A survey from version 2 is only shown if the right conditions are met.
+  FeatureParamsV2 params;
+  params.trusted_surface_probability = "1.0";
+  params.min_time_to_prompt = "2m";
+  params.max_time_to_prompt = "4m";
+  params.ntp_visits_min_range = "2";
+  params.ntp_visits_max_range = "2";
+  SetupFeatureParametersV2(params);
+
+  EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _)).Times(0);
+  service()->TriggerOccurred(
+      TrustSafetySentimentService::FeatureArea::kTrustedSurface, {});
+
+  service()->OpenedNewTabPage();
+  service()->OpenedNewTabPage();
+
+  // Survey should not shown because although the ntp visits condition is met,
+  // the time is not.
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kTrustedSurface},
+                  {});
+  testing::Mock::VerifyAndClearExpectations(mock_hats_service());
+
+  task_environment()->AdvanceClock(base::Minutes(3));
+  // Assert the V2 survey is called and not the V1.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyTrustedSurface, _, _, _, _))
+      .Times(0);
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2TrustedSurface, _, _, _, _));
+
+  // A survey should be shown because we are now within the right time.
+  service()->OpenedNewTabPage();
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kTrustedSurface},
+                  {TrustSafetySentimentService::FeatureArea::kTrustedSurface});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kTrustedSurface, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_SafetyCheck) {
+  // Running the safety check is considered a trigger, and should make a user
+  // eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.safety_check_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // Running safety check was previously part of PrivacySettings, so assure only
+  // the correct histograms and survey are triggered for V2.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyPrivacySettings, _, _, _, _))
+      .Times(0);
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2SafetyCheck, _, _, _, _));
+  service()->RanSafetyCheck();
+  service()->OpenedNewTabPage();
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kSafetyCheck},
+                  {TrustSafetySentimentService::FeatureArea::kSafetyCheck});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kSafetyCheck, 1},
+       {TrustSafetySentimentService::FeatureArea::kPrivacySettings, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_PasswordCheck) {
+  // Running password check should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.password_check_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PasswordCheck, _, _, _, _));
+  service()->RanPasswordCheck();
+  service()->OpenedNewTabPage();
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kPasswordCheck},
+                  {TrustSafetySentimentService::FeatureArea::kPasswordCheck});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPasswordCheck, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_BrowsingData) {
+  // Clearing history through CBD should make user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.browsing_data_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  std::vector<std::pair<browsing_data::BrowsingDataType, SurveyBitsData>>
+      datatypes = {{browsing_data::BrowsingDataType::HISTORY,
+                    {{"Deleted history", true},
+                     {"Deleted downloads", false},
+                     {"Deleted autofill form data", false}}},
+                   {browsing_data::BrowsingDataType::DOWNLOADS,
+                    {{"Deleted history", false},
+                     {"Deleted downloads", true},
+                     {"Deleted autofill form data", false}}},
+                   {browsing_data::BrowsingDataType::FORM_DATA,
+                    {{"Deleted history", false},
+                     {"Deleted downloads", false},
+                     {"Deleted autofill form data", true}}}};
+
+  for (const auto& datatype : datatypes) {
+    // The correct survey should be launched.
+    EXPECT_CALL(*mock_hats_service(),
+                LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2BrowsingData, _, _,
+                             datatype.second, _));
+    service()->ClearedBrowsingData(datatype.first);
+    service()->OpenedNewTabPage();
+    testing::Mock::VerifyAndClearExpectations(mock_hats_service());
+  }
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_BrowsingData_NotInterested) {
+  // Clearing a BrowsingDataType that we are not interested in should not
+  // trigger a survey.
+  FeatureParamsV2 params;
+  params.browsing_data_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // No browsing data survey should be launched.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2BrowsingData, _, _, _, _))
+      .Times(0);
+  service()->ClearedBrowsingData(browsing_data::BrowsingDataType::COOKIES);
+  service()->OpenedNewTabPage();
+  CheckHistograms({}, {});
+  CheckCallTriggerOccurredHistogram({});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_PrivacyGuide) {
+  // Finishing the privacy guide is considered a trigger, and should make a user
+  // eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.privacy_guide_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PrivacyGuide, _, _, _, _));
+  service()->FinishedPrivacyGuide();
+  service()->OpenedNewTabPage();
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kPrivacyGuide},
+                  {TrustSafetySentimentService::FeatureArea::kPrivacyGuide});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPrivacyGuide, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_ControlGroup) {
+  // If a user is in the control group, they should be eligible to see a survey
+  // if they reached a certain threshold of session length, and only once.
+  FeatureParamsV2 params;
+  params.control_group_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  params.min_session_time = "30s";
+  SetupFeatureParametersV2(params);
+
+  // A survey should not be launched because the session threshold was not
+  // surpassed.
+  EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _)).Times(0);
+  base::TimeTicks session_start = base::TimeTicks::Now();
+  service()->OnSessionStarted(session_start);
+  task_environment()->AdvanceClock(base::Seconds(10));
+  base::TimeTicks session_end = base::TimeTicks::Now();
+  service()->OnSessionEnded(session_end - session_start, session_end);
+  service()->OpenedNewTabPage();
+  CheckHistograms({}, {});
+  testing::Mock::VerifyAndClearExpectations(mock_hats_service());
+
+  // A survey should be launched because the session threshold was surpassed.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2ControlGroup, _, _, _, _));
+  session_start = base::TimeTicks::Now();
+  service()->OnSessionStarted(session_start);
+  task_environment()->AdvanceClock(base::Seconds(40));
+  session_end = base::TimeTicks::Now();
+  service()->OnSessionEnded(session_end - session_start, session_end);
+  service()->OpenedNewTabPage();
+  CheckHistograms({TrustSafetySentimentService::FeatureArea::kControlGroup},
+                  {TrustSafetySentimentService::FeatureArea::kControlGroup});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kControlGroup, 1}});
+  testing::Mock::VerifyAndClearExpectations(mock_hats_service());
+
+  // A second valid trigger should not launch a survey because we have already
+  // performed one dice roll for this user.
+  EXPECT_CALL(*mock_hats_service(), LaunchSurvey(_, _, _, _, _)).Times(0);
+  session_start = base::TimeTicks::Now();
+  service()->OnSessionStarted(session_start);
+  task_environment()->AdvanceClock(base::Seconds(40));
+  session_end = base::TimeTicks::Now();
+  service()->OnSessionEnded(session_end - session_start, session_end);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_PrivacySandbox4ConsentAccept) {
+  // Accepting Privacy Sandbox 4 consent is considered a trigger, and should
+  // make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.privacy_sandbox_4_consent_accept_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4ConsentAccept,
+                   _, _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4ConsentAccept);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_PrivacySandbox4ConsentDecline) {
+  // Declining Privacy Sandbox 4 consent is considered a trigger, and should
+  // make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.privacy_sandbox_4_consent_decline_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4ConsentDecline,
+                   _, _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4ConsentDecline);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_PrivacySandbox4NoticeOk) {
+  // Acknowledging the Privacy Sandbox 4 notice is considered a trigger, and
+  // should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.privacy_sandbox_4_notice_ok_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4NoticeOk, _, _,
+                   _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4NoticeOk);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_PrivacySandbox4NoticeSettings) {
+  // Going to settings from the Privacy Sandbox 4 notice is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.privacy_sandbox_4_notice_settings_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4NoticeSettings,
+                   _, _, _, _));
+  service()->InteractedWithPrivacySandbox4(
+      TrustSafetySentimentService::FeatureArea::kPrivacySandbox4NoticeSettings);
+  service()->OpenedNewTabPage();
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_SafeBrowsingInterstitial) {
+  // Making a final decision on a safe browsing interstitial is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.safe_browsing_interstitial_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(
+      *mock_hats_service(),
+      LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2SafeBrowsingInterstitial, _,
+                   _, _, _));
+  service()->InteractedWithSafeBrowsingInterstitial(
+      true, safe_browsing::SB_THREAT_TYPE_URL_PHISHING);
+  service()->OpenedNewTabPage();
+  CheckHistograms(
+      {TrustSafetySentimentService::FeatureArea::kSafeBrowsingInterstitial},
+      {TrustSafetySentimentService::FeatureArea::kSafeBrowsingInterstitial});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kSafeBrowsingInterstitial,
+        1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, V2_DownloadWarningUI) {
+  // Making a final decision on a download warning is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.download_warning_ui_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2DownloadWarningUI, _,
+                           _, _, _));
+  service()->InteractedWithDownloadWarningUI(
+      DownloadItemWarningData::WarningSurface::BUBBLE_MAINPAGE,
+      DownloadItemWarningData::WarningAction::PROCEED);
+  service()->OpenedNewTabPage();
+  CheckHistograms(
+      {TrustSafetySentimentService::FeatureArea::kDownloadWarningUI},
+      {TrustSafetySentimentService::FeatureArea::kDownloadWarningUI});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kDownloadWarningUI, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest, PasswordProtectionUINonPasswordChange) {
+  // Making a final decision on a password protection UI is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.password_protection_ui_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PasswordProtectionUI,
+                           _, _, _, _));
+  service()->PhishedPasswordUpdateNotClicked(
+      PasswordProtectionUIType::PAGE_INFO,
+      PasswordProtectionUIAction::IGNORE_WARNING);
+  service()->OpenedNewTabPage();
+  CheckHistograms(
+      {TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI},
+      {TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       PasswordProtectionUIPasswordChangeClickedNotCompleted) {
+  // Making a final decision on a password protection UI is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.password_protection_ui_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PasswordProtectionUI,
+                           _, _, _, _));
+  service()->ProtectResetOrCheckPasswordClicked(
+      PasswordProtectionUIType::PAGE_INFO);
+  task_environment()->AdvanceClock(kPasswordChangeInactivity);
+  task_environment()->RunUntilIdle();
+  service()->OpenedNewTabPage();
+
+  CheckHistograms(
+      {TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI},
+      {TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       PasswordProtectionUIPasswordChangeClickedAndCompleted) {
+  // Making a final decision on a password protection UI is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.password_protection_ui_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PasswordProtectionUI,
+                           _, _, _, _));
+  service()->ProtectResetOrCheckPasswordClicked(
+      PasswordProtectionUIType::PAGE_INFO);
+  service()->PhishedPasswordUpdateFinished();
+  service()->OpenedNewTabPage();
+  CheckHistograms(
+      {TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI},
+      {TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI});
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI, 1}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       PasswordProtectionUIPasswordChangeThenNonPasswordChange) {
+  // Making a final decision on a password protection UI is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.password_protection_ui_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PasswordProtectionUI,
+                           _, _, _, _));
+  service()->ProtectResetOrCheckPasswordClicked(
+      PasswordProtectionUIType::PAGE_INFO);
+  service()->PhishedPasswordUpdateNotClicked(
+      PasswordProtectionUIType::PAGE_INFO, PasswordProtectionUIAction::CLOSE);
+  service()->PhishedPasswordUpdateFinished();
+  service()->OpenedNewTabPage();
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI, 2}});
+}
+
+TEST_F(TrustSafetySentimentServiceTest,
+       PasswordProtectionUIPasswordChangeThenNonPasswordChange2) {
+  // Making a final decision on a password protection UI is considered a
+  // trigger, and should make a user eligible to receive a survey.
+  FeatureParamsV2 params;
+  params.password_protection_ui_probability = "1.0";
+  params.min_time_to_prompt = "0s";
+  params.ntp_visits_min_range = "0";
+  params.ntp_visits_max_range = "0";
+  SetupFeatureParametersV2(params);
+
+  // The correct survey should be launched.
+  EXPECT_CALL(*mock_hats_service(),
+              LaunchSurvey(kHatsSurveyTriggerTrustSafetyV2PasswordProtectionUI,
+                           _, _, _, _));
+  service()->ProtectResetOrCheckPasswordClicked(
+      PasswordProtectionUIType::PAGE_INFO);
+  service()->PhishedPasswordUpdateNotClicked(
+      PasswordProtectionUIType::PAGE_INFO, PasswordProtectionUIAction::CLOSE);
+  service()->PhishedPasswordUpdateFinished();
+  task_environment()->AdvanceClock(kPasswordChangeInactivity);
+  service()->OpenedNewTabPage();
+  CheckCallTriggerOccurredHistogram(
+      {{TrustSafetySentimentService::FeatureArea::kPasswordProtectionUI, 2}});
 }

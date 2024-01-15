@@ -6,15 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/policy/core/common/cloud/external_policy_data_fetcher.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "crypto/sha2.h"
 #include "net/base/backoff_entry.h"
 #include "url/gurl.h"
@@ -112,8 +114,7 @@ const int kMaxLimitedRetries = 3;
 
 }  // namespace
 
-class ExternalPolicyDataUpdater::FetchJob
-    : public base::SupportsWeakPtr<FetchJob> {
+class ExternalPolicyDataUpdater::FetchJob final {
  public:
   FetchJob(ExternalPolicyDataUpdater* updater,
            const std::string& key,
@@ -134,6 +135,8 @@ class ExternalPolicyDataUpdater::FetchJob
   bool IsRescheduleWithDelayRunning() const {
     return is_reschedule_with_delay_running_;
   }
+
+  base::WeakPtr<FetchJob> AsWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
  private:
   void OnFailed(net::BackoffEntry* backoff_entry);
@@ -166,6 +169,8 @@ class ExternalPolicyDataUpdater::FetchJob
   net::BackoffEntry retry_soon_entry_{&kRetrySoonPolicy};
   net::BackoffEntry retry_later_entry_{&kRetryLaterPolicy};
   net::BackoffEntry retry_much_later_entry_{&kRetryMuchLaterPolicy};
+
+  base::WeakPtrFactory<FetchJob> weak_factory_{this};
 };
 
 ExternalPolicyDataUpdater::Request::Request() = default;
@@ -207,7 +212,8 @@ ExternalPolicyDataUpdater::FetchJob::request() const {
 
 void ExternalPolicyDataUpdater::FetchJob::Start() {
   DCHECK(!fetch_job_);
-  DVLOG(1) << "Fetching data for " << key_ << " from " << request_.url << " .";
+  DVLOG_POLICY(1, POLICY_FETCHING)
+      << "Fetching data for " << key_ << " from " << request_.url << " .";
   // Start a fetch job in the |external_policy_data_fetcher_|. This will
   // eventually call back to OnFetchFinished() with the result.
   // Passing |this| as base::Unretained() is safe here because the |FetchJob|
@@ -227,37 +233,43 @@ void ExternalPolicyDataUpdater::FetchJob::OnFetchFinished(
   switch (result) {
     case ExternalPolicyDataFetcher::CONNECTION_INTERRUPTED:
       // The connection was interrupted. Try again soon.
-      DVLOG(1) << "Failed to fetch the data due to the interrupted connection.";
+      DVLOG_POLICY(1, POLICY_FETCHING)
+          << "Failed to fetch the data due to the interrupted connection.";
       OnFailed(&retry_soon_entry_);
       return;
     case ExternalPolicyDataFetcher::NETWORK_ERROR:
       // Another network error occurred. Try again later.
-      DVLOG(1) << "Failed to fetch the data due to a network error.";
+      DVLOG_POLICY(1, POLICY_FETCHING)
+          << "Failed to fetch the data due to a network error.";
       OnFailed(&retry_later_entry_);
       return;
     case ExternalPolicyDataFetcher::SERVER_ERROR:
       // Problem at the server. Try again soon.
-      LOG(WARNING) << "Failed to fetch the data due to a server HTTP error.";
+      LOG_POLICY(WARNING, POLICY_FETCHING)
+          << "Failed to fetch the data due to a server HTTP error.";
       OnFailed(&retry_soon_entry_);
       return;
     case ExternalPolicyDataFetcher::CLIENT_ERROR:
       // Client error. This is unlikely to go away. Try again later, and give up
       // retrying after 3 attempts.
-      LOG(WARNING) << "Failed to fetch the data due to a client HTTP error.";
+      LOG_POLICY(WARNING, POLICY_FETCHING)
+          << "Failed to fetch the data due to a client HTTP error.";
       OnFailed(limited_retries_remaining_ ? &retry_later_entry_ : nullptr);
       if (limited_retries_remaining_)
         --limited_retries_remaining_;
       return;
     case ExternalPolicyDataFetcher::HTTP_ERROR:
       // Any other type of HTTP failure. Try again later.
-      LOG(WARNING) << "Failed to fetch the data due to an HTTP error.";
+      LOG_POLICY(WARNING, POLICY_FETCHING)
+          << "Failed to fetch the data due to an HTTP error.";
       OnFailed(&retry_later_entry_);
       return;
     case ExternalPolicyDataFetcher::MAX_SIZE_EXCEEDED:
       // Received |data| exceeds maximum allowed size. This may be because the
       // data being served is stale. Try again much later.
-      LOG(WARNING) << "Failed to fetch the data due to the excessive size (max "
-                   << request_.max_size << " bytes).";
+      LOG_POLICY(WARNING, POLICY_FETCHING)
+          << "Failed to fetch the data due to the excessive size (max "
+          << request_.max_size << " bytes).";
       OnFailed(&retry_much_later_entry_);
       return;
     case ExternalPolicyDataFetcher::SUCCESS:
@@ -267,7 +279,8 @@ void ExternalPolicyDataUpdater::FetchJob::OnFetchFinished(
   if (crypto::SHA256HashString(*data) != request_.hash) {
     // Received |data| does not match expected hash. This may be because the
     // data being served is stale. Try again much later.
-    LOG(ERROR) << "The fetched data doesn't match the expected hash.";
+    LOG_POLICY(ERROR, POLICY_FETCHING)
+        << "The fetched data doesn't match the expected hash.";
     OnFailed(&retry_much_later_entry_);
     return;
   }
@@ -286,14 +299,17 @@ void ExternalPolicyDataUpdater::FetchJob::OnFailed(net::BackoffEntry* entry) {
   if (entry) {
     entry->InformOfRequest(false);
     const base::TimeDelta delay = entry->GetTimeUntilRelease();
-    DVLOG(1) << "Rescheduling the fetch in " << delay << ".";
+    DVLOG_POLICY(1, POLICY_FETCHING)
+        << "Rescheduling the fetch in " << delay << ".";
 
     is_reschedule_with_delay_running_ = true;
     // This function may have been invoked because the job was obsoleted and is
     // in the process of being deleted. If this is the case, the WeakPtr will
     // become invalid and the delayed task will never run.
     updater_->task_runner_->PostDelayedTask(
-        FROM_HERE, base::BindOnce(&FetchJob::Reschedule, AsWeakPtr()), delay);
+        FROM_HERE,
+        base::BindOnce(&FetchJob::Reschedule, weak_factory_.GetWeakPtr()),
+        delay);
   }
 
   updater_->OnJobFailed(this);
@@ -343,8 +359,9 @@ void ExternalPolicyDataUpdater::FetchExternalData(
       // If the current |job| is handling the given |request| already, nothing
       // needs to be done.
       if (job->request() == request) {
-        DVLOG(2) << "Fetching job already scheduled for " << key
-                 << " with the same parameters.";
+        DVLOG_POLICY(2, POLICY_FETCHING)
+            << "Fetching job already scheduled for " << key
+            << " with the same parameters.";
         return;
       }
     }
@@ -352,7 +369,8 @@ void ExternalPolicyDataUpdater::FetchExternalData(
     // Otherwise, the current |job| is obsolete. If the |job| is on the queue,
     // its WeakPtr will be invalidated and skipped by StartNextJobs(). If |job|
     // is currently running, it will call OnJobFailed() immediately.
-    DVLOG(2) << "Removing the old job for " << key << ".";
+    DVLOG_POLICY(2, POLICY_FETCHING)
+        << "Removing the old job for " << key << ".";
     job_map_.erase(key);
   }
 
@@ -371,7 +389,7 @@ void ExternalPolicyDataUpdater::CancelExternalDataFetch(
   // currently running, it will call OnJobFailed() immediately.
   auto job = job_map_.find(key);
   if (job != job_map_.end()) {
-    DVLOG(1) << "Cancelling the job for " << key << ".";
+    DVLOG_POLICY(1, POLICY_FETCHING) << "Cancelling the job for " << key << ".";
     job_map_.erase(job);
   }
 }

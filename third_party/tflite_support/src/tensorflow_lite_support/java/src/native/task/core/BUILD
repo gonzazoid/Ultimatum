@@ -17,7 +17,7 @@ cc_library_with_tflite(
     name = "builtin_op_resolver",
     srcs = ["builtin_op_resolver.cc"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:builtin_ops",
+        "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
     ],
     deps = [
         "@org_tensorflow//tensorflow/lite:op_resolver",

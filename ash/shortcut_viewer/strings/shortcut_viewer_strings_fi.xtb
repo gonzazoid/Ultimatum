@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Korosta osoitepalkkirivi</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> tai <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Yleiskatsaustila</translation>
+<translation id="4275283744500212192">Avaa ikkunoiden asetteluasetukset</translation>
 <translation id="4382340674111381977">Palaa edelliselle sivulle</translation>
 <translation id="4458670250301149821">Siirrä sovelluskuvake kansioon tai pois siitä sovellusruudukossa</translation>
 <translation id="4472417192667361414">Järjestelmä- ja näyttöasetukset</translation>
@@ -130,7 +131,7 @@
 <translation id="5757474750054631686">Himmennä näppäimistö (jos se on taustavalaistu)</translation>
 <translation id="587531134027443617">Poista edellinen sana</translation>
 <translation id="5899919361772749550">Näytä tai piilota Kehittäjien työkalut ‑konsoli</translation>
-<translation id="5919628958418675842">Näytönsuojan ottaminen käyttöön tai poistaminen käytöstä</translation>
+<translation id="5919628958418675842">Yksityisen näkyvyyden laittaminen päälle tai pois päältä</translation>
 <translation id="5921745308587794300">Kierrä ikkunaa</translation>
 <translation id="5926306472221400972">Ota kuvakaappaus koko näytöstä</translation>
 <translation id="6022924867608035986">Tyhjennä hakukentän teksti</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">Vedä linkki välilehtirivin tyhjään kohtaan</translation>
 <translation id="8389638407792712197">Avaa uusi ikkuna</translation>
 <translation id="8429696719963529183">Käytä F-näppäimiä (F1–F12)</translation>
+<translation id="8539396513118402548">Pikanäppäinlista</translation>
 <translation id="85690795166292698">Avaa linkki uudella välilehdellä</translation>
 <translation id="8609384513243082612">Avaa uusi välilehti</translation>
 <translation id="8644639153978066712">Näytä piilotetut tiedostot Tiedostot-sovelluksessa</translation>

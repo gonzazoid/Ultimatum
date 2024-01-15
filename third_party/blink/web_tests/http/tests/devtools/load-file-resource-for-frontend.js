@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Host from 'devtools/core/host/host.js';
+
 (async function() {
   TestRunner.addResult(`Test loading file resource from front-end \n`);
 

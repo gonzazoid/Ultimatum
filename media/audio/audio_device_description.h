@@ -37,6 +37,10 @@ struct MEDIA_EXPORT AudioDeviceDescription {
   // will mute system audio during capturing.
   static const char kLoopbackWithMuteDeviceId[];
 
+  // Similar to |kLoopbackInputDeviceId|, but without audio from Chrome.
+  // Only supported on ChromeOS.
+  static const char kLoopbackWithoutChromeId[];
+
   // Returns true if |device_id| represents the default device.
   static bool IsDefaultDevice(const std::string& device_id);
 
@@ -74,21 +78,30 @@ struct MEDIA_EXPORT AudioDeviceDescription {
       const std::string& real_device_name);
 
   // This prepends localized "Default" or "Communications" strings to
-  // default and communications device names in |device_descriptions|.
+  // default and communications device names in |device_descriptions|, and
+  // sanitizes devices known to contain users' names etc.
   static void LocalizeDeviceDescriptions(
       std::vector<AudioDeviceDescription>* device_descriptions);
 
-  AudioDeviceDescription() = default;
-  AudioDeviceDescription(const AudioDeviceDescription& other) = default;
+  AudioDeviceDescription();
+  AudioDeviceDescription(const AudioDeviceDescription& other);
+  AudioDeviceDescription& operator=(const AudioDeviceDescription& other);
+  AudioDeviceDescription(AudioDeviceDescription&& other);
+  AudioDeviceDescription& operator=(AudioDeviceDescription&& other);
   AudioDeviceDescription(std::string device_name,
                          std::string unique_id,
-                         std::string group_id);
+                         std::string group_id,
+                         bool is_system_default = false);
 
-  ~AudioDeviceDescription() = default;
+  ~AudioDeviceDescription();
 
-  std::string device_name;  // Friendly name of the device.
-  std::string unique_id;    // Unique identifier for the device.
-  std::string group_id;     // Group identifier.
+  bool operator==(const AudioDeviceDescription& other) const;
+
+  std::string device_name;         // Friendly name of the device.
+  std::string unique_id;           // Unique identifier for the device.
+  std::string group_id;            // Group identifier.
+  bool is_system_default = false;  // True if the device represented by this
+                                   // description is the system default.
 };
 
 typedef std::vector<AudioDeviceDescription> AudioDeviceDescriptions;

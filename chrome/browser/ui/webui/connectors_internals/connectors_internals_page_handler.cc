@@ -8,15 +8,37 @@
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "chrome/browser/enterprise/connectors/device_trust/common/common_types.h"
+#include "chrome/browser/enterprise/connectors/device_trust/device_trust_connector_service.h"
+#include "chrome/browser/enterprise/connectors/device_trust/device_trust_connector_service_factory.h"
 #include "chrome/browser/enterprise/connectors/device_trust/device_trust_service.h"
 #include "chrome/browser/enterprise/connectors/device_trust/device_trust_service_factory.h"
+#include "chrome/browser/enterprise/signals/user_permission_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/connectors_internals/connectors_internals.mojom.h"
 #include "chrome/browser/ui/webui/connectors_internals/device_trust_utils.h"
+#include "components/device_signals/core/browser/user_permission_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/core/mac/secure_enclave_client.h"
+#endif  // BUILDFLAG(IS_MAC)
+
 namespace enterprise_connectors {
+
+namespace {
+
+std::string ConvertPolicyLevelToString(DTCPolicyLevel level) {
+  switch (level) {
+    case DTCPolicyLevel::kBrowser:
+      return "Browser";
+    case DTCPolicyLevel::kUser:
+      return "User";
+  }
+}
+
+}  // namespace
 
 ConnectorsInternalsPageHandler::ConnectorsInternalsPageHandler(
     mojo::PendingReceiver<connectors_internals::mojom::PageHandler> receiver,
@@ -36,13 +58,14 @@ void ConnectorsInternalsPageHandler::GetDeviceTrustState(
   // if the current management configuration is not supported.
   if (!device_trust_service) {
     auto state = connectors_internals::mojom::DeviceTrustState::New(
-        false,
+        false, std::vector<std::string>(),
         connectors_internals::mojom::KeyInfo::New(
             connectors_internals::mojom::KeyManagerInitializedValue::
                 UNSUPPORTED,
-            connectors_internals::mojom::KeyTrustLevel::UNSPECIFIED,
-            connectors_internals::mojom::KeyType::UNKNOWN, std::string()),
-        std::string());
+            nullptr,
+            connectors_internals::mojom::KeyManagerPermanentFailure::
+                UNSPECIFIED),
+        std::string(), nullptr);
     std::move(callback).Run(std::move(state));
     return;
   }
@@ -55,6 +78,20 @@ void ConnectorsInternalsPageHandler::GetDeviceTrustState(
                      device_trust_service->IsEnabled()));
 }
 
+void ConnectorsInternalsPageHandler::DeleteDeviceTrustKey(
+    DeleteDeviceTrustKeyCallback callback) {
+#if BUILDFLAG(IS_MAC)
+  auto client = SecureEnclaveClient::Create();
+
+  // Delete both the permanent and temporary keys.
+  client->DeleteKey(SecureEnclaveClient::KeyType::kTemporary);
+  client->DeleteKey(SecureEnclaveClient::KeyType::kPermanent);
+  std::move(callback).Run();
+#else
+  NOTIMPLEMENTED();
+#endif  // BUILDFLAG(IS_MAC)
+}
+
 void ConnectorsInternalsPageHandler::OnSignalsCollected(
     GetDeviceTrustStateCallback callback,
     bool is_device_trust_enabled,
@@ -62,8 +99,30 @@ void ConnectorsInternalsPageHandler::OnSignalsCollected(
   std::string signals_json;
   base::JSONWriter::WriteWithOptions(
       signals, base::JSONWriter::OPTIONS_PRETTY_PRINT, &signals_json);
+
+  const auto* user_permission_service =
+      enterprise_signals::UserPermissionServiceFactory::GetForProfile(profile_);
+  connectors_internals::mojom::ConsentMetadataPtr consent_metadata = nullptr;
+  if (user_permission_service) {
+    consent_metadata = connectors_internals::mojom::ConsentMetadata::New(
+        user_permission_service->CanCollectSignals() ==
+            device_signals::UserPermission::kGranted,
+        user_permission_service->HasUserConsented());
+  }
+
+  std::vector<std::string> policy_enabled_levels;
+  auto* device_trust_connector_service =
+      DeviceTrustConnectorServiceFactory::GetForProfile(profile_);
+  if (device_trust_connector_service) {
+    for (const auto& level :
+         device_trust_connector_service->GetEnabledInlinePolicyLevels()) {
+      policy_enabled_levels.push_back(ConvertPolicyLevelToString(level));
+    }
+  }
+
   auto state = connectors_internals::mojom::DeviceTrustState::New(
-      is_device_trust_enabled, utils::GetKeyInfo(), signals_json);
+      is_device_trust_enabled, policy_enabled_levels, utils::GetKeyInfo(),
+      signals_json, std::move(consent_metadata));
   std::move(callback).Run(std::move(state));
 }
 

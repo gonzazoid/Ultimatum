@@ -4,8 +4,7 @@
 
 package org.chromium.chrome.browser.tab;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -28,20 +27,19 @@ import java.io.File;
  */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class TabStateTest {
-    @Rule
-    public final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
+    @Rule public final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
 
     private TestTabModelDirectory mTestTabModelDirectory;
 
     @Before
     public void setUp() {
-        mTestTabModelDirectory = new TestTabModelDirectory(
-                InstrumentationRegistry.getTargetContext(), "TabStateTest", null);
+        mTestTabModelDirectory =
+                new TestTabModelDirectory(
+                        ApplicationProvider.getApplicationContext(), "TabStateTest", null);
     }
 
     @After
     public void tearDown() {
-        TabStateFileManager.setChannelNameOverrideForTest(null);
         mTestTabModelDirectory.tearDown();
     }
 
@@ -49,7 +47,7 @@ public class TabStateTest {
         mTestTabModelDirectory.writeTabStateFile(info);
 
         File tabStateFile = new File(mTestTabModelDirectory.getBaseDirectory(), info.filename);
-        TabState tabState = TabStateFileManager.restoreTabState(tabStateFile, false);
+        TabState tabState = TabStateFileManager.restoreTabStateInternal(tabStateFile, false);
         Assert.assertNotNull(tabState);
         Assert.assertEquals(info.url, tabState.contentsState.getVirtualUrlFromState());
         Assert.assertEquals(info.title, tabState.contentsState.getDisplayTitleFromState());
@@ -67,7 +65,6 @@ public class TabStateTest {
     @Test
     @SmallTest
     public void testLoadV1Tabs() throws Exception {
-        TabStateFileManager.setChannelNameOverrideForTest(null);
         loadAndCheckTabState(TestTabModelDirectory.M26_GOOGLE_COM);
         loadAndCheckTabState(TestTabModelDirectory.M26_GOOGLE_CA);
     }
@@ -75,8 +72,6 @@ public class TabStateTest {
     @Test
     @SmallTest
     public void testLoadV2Tabs() throws Exception {
-        TabStateFileManager.setChannelNameOverrideForTest(null);
-
         // Standard English tabs.
         loadAndCheckTabState(TestTabModelDirectory.V2_DUCK_DUCK_GO);
         loadAndCheckTabState(TestTabModelDirectory.V2_TEXTAREA);
@@ -87,5 +82,4 @@ public class TabStateTest {
         // Hebrew, RTL.
         loadAndCheckTabState(TestTabModelDirectory.V2_HAARETZ);
     }
-
 }

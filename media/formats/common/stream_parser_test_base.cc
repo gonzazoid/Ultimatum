@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "media/base/media_log.h"
 #include "media/base/media_track.h"
 #include "media/base/media_tracks.h"
@@ -43,7 +43,6 @@ StreamParserTestBase::StreamParserTestBase(
                           base::Unretained(this)),
       base::BindRepeating(&StreamParserTestBase::OnNewBuffers,
                           base::Unretained(this)),
-      true,
       base::BindRepeating(&StreamParserTestBase::OnKeyNeeded,
                           base::Unretained(this)),
       base::BindRepeating(&StreamParserTestBase::OnNewSegment,
@@ -123,16 +122,22 @@ void StreamParserTestBase::OnInitDone(
   DVLOG(1) << __func__ << "(" << params.duration.InMilliseconds() << ")";
 }
 
-bool StreamParserTestBase::OnNewConfig(
-    std::unique_ptr<MediaTracks> tracks,
-    const StreamParser::TextTrackConfigMap& text_config) {
+bool StreamParserTestBase::OnNewConfig(std::unique_ptr<MediaTracks> tracks) {
   DVLOG(1) << __func__ << ": got " << tracks->tracks().size() << " tracks";
   EXPECT_EQ(tracks->tracks().size(), 1u);
   const auto& track = tracks->tracks()[0];
-  EXPECT_EQ(track->type(), MediaTrack::Audio);
+  EXPECT_EQ(track->type(), MediaTrack::Type::kAudio);
   audio_track_id_ = track->bytestream_track_id();
   last_audio_config_ = tracks->getAudioConfig(track->bytestream_track_id());
   EXPECT_TRUE(last_audio_config_.IsValidConfig());
+  // This common test utility only ever expects a single audio track in any
+  // tested init segment.
+  const auto& audio_configs = tracks->GetAudioConfigs();
+  EXPECT_EQ(audio_configs.size(), 1u);
+  const auto& itr = audio_configs.find(track->bytestream_track_id());
+  EXPECT_NE(itr, audio_configs.end());
+  EXPECT_TRUE(last_audio_config_.Matches(itr->second));
+  EXPECT_EQ(tracks->GetVideoConfigs().size(), 0u);
   return true;
 }
 

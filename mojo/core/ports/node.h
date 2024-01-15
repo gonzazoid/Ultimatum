@@ -14,7 +14,7 @@
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "mojo/core/ports/event.h"
 #include "mojo/core/ports/name.h"
@@ -218,8 +218,8 @@ class COMPONENT_EXPORT(MOJO_CORE_PORTS) Node {
     void EnsureSafeDelegateAccess() const {}
 #endif
 
-    const raw_ptr<Node> node_;
-    const raw_ptr<NodeDelegate> delegate_;
+    const raw_ptr<Node, DanglingUntriaged> node_;
+    const raw_ptr<NodeDelegate, DanglingUntriaged> delegate_;
   };
 
   int OnUserMessage(const PortRef& port_ref,

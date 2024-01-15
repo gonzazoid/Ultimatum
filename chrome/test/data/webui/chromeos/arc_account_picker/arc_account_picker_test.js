@@ -4,10 +4,10 @@
 
 import {ArcAccountPickerAppElement} from 'chrome://chrome-signin/arc_account_picker/arc_account_picker_app.js';
 import {Account, ArcAccountPickerBrowserProxyImpl} from 'chrome://chrome-signin/arc_account_picker/arc_account_picker_browser_proxy.js';
-import {assert} from 'chrome://resources/js/assert.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
 import {getFakeAccountsNotAvailableInArcList, TestArcAccountPickerBrowserProxy} from './test_util.js';
 
@@ -34,7 +34,7 @@ suite(arc_account_picker_test.suiteName, () => {
    * @param {!Array<Account>} accountsNotAvailableInArc
    */
   function testSetup(accountsNotAvailableInArc) {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
     testBrowserProxy = new TestArcAccountPickerBrowserProxy();
     if (accountsNotAvailableInArc) {
       testBrowserProxy.setAccountsNotAvailableInArc(accountsNotAvailableInArc);

@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/ranges/algorithm.h"
@@ -34,7 +34,7 @@
 #include "chrome/browser/ui/webui/signin/signin_utils_desktop.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/test_browser_window.h"
@@ -133,16 +133,11 @@ GURL GetSigninPromoURL() {
 class FooWebUIProvider
     : public TestChromeWebUIControllerFactory::WebUIProvider {
  public:
-  MOCK_METHOD2(NewWebUI,
-               std::unique_ptr<content::WebUIController>(content::WebUI* web_ui,
-                                                         const GURL& url));
+  MOCK_METHOD(std::unique_ptr<content::WebUIController>,
+              NewWebUI,
+              (content::WebUI * web_ui, const GURL& url),
+              (override));
 };
-
-bool AddToSet(std::set<content::WebContents*>* set,
-              content::WebContents* web_contents) {
-  set->insert(web_contents);
-  return false;
-}
 
 std::unique_ptr<net::test_server::HttpResponse> EmptyHtmlResponseHandler(
     const net::test_server::HttpRequest& request) {
@@ -173,9 +168,15 @@ class MockInlineSigninHelper : public InlineSigninHelper {
   MockInlineSigninHelper(const MockInlineSigninHelper&) = delete;
   MockInlineSigninHelper& operator=(const MockInlineSigninHelper&) = delete;
 
-  MOCK_METHOD1(OnClientOAuthSuccess, void(const ClientOAuthResult& result));
-  MOCK_METHOD1(OnClientOAuthFailure, void(const GoogleServiceAuthError& error));
-  MOCK_METHOD1(CreateSyncStarter, void(const std::string&));
+  MOCK_METHOD(void,
+              OnClientOAuthSuccess,
+              (const ClientOAuthResult& result),
+              (override));
+  MOCK_METHOD(void,
+              OnClientOAuthFailure,
+              (const GoogleServiceAuthError& error),
+              (override));
+  MOCK_METHOD(void, CreateSyncStarter, (const std::string&), (override));
 
   GaiaAuthFetcher* GetGaiaAuthFetcher() { return GetGaiaAuthFetcherForTest(); }
 };
@@ -225,7 +226,7 @@ class MockSyncStarterInlineSigninHelper : public InlineSigninHelper {
   MockSyncStarterInlineSigninHelper& operator=(
       const MockSyncStarterInlineSigninHelper&) = delete;
 
-  MOCK_METHOD1(CreateSyncStarter, void(const std::string&));
+  MOCK_METHOD(void, CreateSyncStarter, (const std::string&), (override));
 };
 
 MockSyncStarterInlineSigninHelper::MockSyncStarterInlineSigninHelper(
@@ -310,7 +311,11 @@ IN_PROC_BROWSER_TEST_F(InlineLoginUIBrowserTest, MAYBE_DifferentStorageId) {
   std::set<content::WebContents*> set;
   GuestViewManager* manager =
       GuestViewManager::FromBrowserContext(info.contents->GetBrowserContext());
-  manager->ForEachGuest(info.contents, base::BindRepeating(&AddToSet, &set));
+  manager->ForEachGuest(info.contents, [&](content::WebContents* web_contents) {
+    set.insert(web_contents);
+    return false;
+  });
+
   ASSERT_EQ(1u, set.size());
   content::WebContents* webview_contents = *set.begin();
   content::RenderProcessHost* process =
@@ -481,8 +486,10 @@ class InlineLoginHelperBrowserTest : public DialogBrowserTest {
 
   void SimulateOnClientOAuthSuccess(GaiaAuthConsumer* consumer,
                                     const std::string& refresh_token) {
-    GaiaAuthConsumer::ClientOAuthResult result(refresh_token, "", 0, false,
-                                               false);
+    GaiaAuthConsumer::ClientOAuthResult result(
+        refresh_token, /*access_token=*/"", /*expires_in_secs=*/0,
+        /*is_child_account*/ false,
+        /*is_under_advanced_protection=*/false, /*is_bound_to_key=*/false);
     consumer->OnClientOAuthSuccess(result);
     base::RunLoop().RunUntilIdle();
   }
@@ -498,7 +505,7 @@ class InlineLoginHelperBrowserTest : public DialogBrowserTest {
     // possible values of access_point=, reason=.
     GURL url("chrome://chrome-signin/?access_point=0&reason=5");
     // MockSyncStarterInlineSigninHelper will delete itself when done using
-    // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+    // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
     // do need the RunUntilIdle() at the end.
     MockSyncStarterInlineSigninHelper* helper =
         new MockSyncStarterInlineSigninHelper(
@@ -524,7 +531,7 @@ class InlineLoginHelperBrowserTest : public DialogBrowserTest {
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_env_profile_adaptor_;
   base::CallbackListSubscription create_services_subscription_;
-  raw_ptr<Profile, DanglingUntriaged> profile_ = nullptr;
+  raw_ptr<Profile, AcrossTasksDanglingUntriaged> profile_ = nullptr;
   signin_util::ScopedForceSigninSetterForTesting forced_signin_setter_;
 };
 
@@ -560,7 +567,7 @@ IN_PROC_BROWSER_TEST_F(InlineLoginHelperBrowserTest,
   // possible values of access_point=, reason=.
   GURL url("chrome://chrome-signin/?access_point=0&reason=5");
   // MockSyncStarterInlineSigninHelper will delete itself when done using
-  // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+  // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
   // do need the RunUntilIdle() at the end.
   MockSyncStarterInlineSigninHelper* helper =
       new MockSyncStarterInlineSigninHelper(
@@ -598,7 +605,7 @@ IN_PROC_BROWSER_TEST_F(InlineLoginHelperBrowserTest,
   // possible values of access_point=, reason=.
   const GURL url("chrome://chrome-signin/?access_point=0&reason=5");
   // MockSyncStarterInlineSigninHelper will delete itself when done using
-  // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+  // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
   // do need the RunUntilIdle() at the end.
   MockSyncStarterInlineSigninHelper* helper =
       new MockSyncStarterInlineSigninHelper(
@@ -621,7 +628,7 @@ IN_PROC_BROWSER_TEST_F(InlineLoginHelperBrowserTest,
   // possible values of access_point=, reason=.
   GURL url("chrome://chrome-signin/?access_point=0&reason=5");
   // MockSyncStarterInlineSigninHelper will delete itself when done using
-  // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+  // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
   // do need the RunUntilIdle() at the end.
   MockSyncStarterInlineSigninHelper* helper =
       new MockSyncStarterInlineSigninHelper(
@@ -646,7 +653,7 @@ IN_PROC_BROWSER_TEST_F(InlineLoginHelperBrowserTest,
   // possible values of access_point=, reason=.
   GURL url("chrome://chrome-signin/?access_point=0&reason=5");
   // MockSyncStarterInlineSigninHelper will delete itself when done using
-  // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+  // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
   // do need the RunUntilIdle() at the end.
   MockSyncStarterInlineSigninHelper* helper =
       new MockSyncStarterInlineSigninHelper(
@@ -674,7 +681,7 @@ IN_PROC_BROWSER_TEST_F(InlineLoginHelperBrowserTest,
   // possible values of access_point=, reason=.
   const GURL url("chrome://chrome-signin/?access_point=3&reason=5");
   // MockSyncStarterInlineSigninHelper will delete itself when done using
-  // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+  // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
   // do need the RunUntilIdle() at the end.
   MockSyncStarterInlineSigninHelper* helper =
       new MockSyncStarterInlineSigninHelper(
@@ -697,7 +704,7 @@ IN_PROC_BROWSER_TEST_F(InlineLoginHelperBrowserTest,
   InlineLoginHandlerImpl handler;
   GURL url("chrome://chrome-signin/?access_point=0&reason=5");
   // MockSyncStarterInlineSigninHelper will delete itself when done using
-  // base::ThreadTaskRunnerHandle::DeleteSoon(), so need to delete here.  But
+  // base::SingleThreadTaskRunner::DeleteSoon(), so need to delete here.  But
   // do need the RunUntilIdle() at the end.
   MockSyncStarterInlineSigninHelper* helper =
       new MockSyncStarterInlineSigninHelper(

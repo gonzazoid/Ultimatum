@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -151,8 +151,8 @@ TEST_F(CredentialProviderFetcherTest, ValidFetchResult) {
 
   RunFetcher("");
   EXPECT_FALSE(fetch_result_.empty());
-  EXPECT_TRUE(test_data_storage_.EqualsSccessfulFetchResult(
-      base::Value(std::move(fetch_result_))));
+  EXPECT_TRUE(
+      test_data_storage_.EqualsSccessfulFetchResult(std::move(fetch_result_)));
 }
 
 TEST_F(CredentialProviderFetcherTest,

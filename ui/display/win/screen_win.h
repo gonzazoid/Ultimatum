@@ -158,6 +158,17 @@ class DISPLAY_EXPORT ScreenWin : public Screen,
   // Returns the device id for the given `device_name`.
   static int64_t DeviceIdFromDeviceName(const wchar_t* device_name);
 
+  // Updates the display infos to make sure they have the right scale factors.
+  // This is called before handling WM_DPICHANGED messages, to be sure that we
+  // have the right scale factors for the screens.
+  static void UpdateDisplayInfos();
+
+  // Updates the display infos if it appears that Windows state has changed
+  // in a way that requires the display infos to be updated. This currently
+  // only detects when the primary monitor changes, which it does when a monitor
+  // is added or removed.
+  static void UpdateDisplayInfosIfNeeded();
+
   // Returns the HWND associated with the NativeWindow.
   virtual HWND GetHWNDFromNativeWindow(gfx::NativeWindow view) const;
 
@@ -173,7 +184,11 @@ class DISPLAY_EXPORT ScreenWin : public Screen,
       gfx::NativeWindow window) const;
 
  protected:
-  ScreenWin(bool initialize);
+  // `initialize_from_system` is true if the ScreenWin should be initialized
+  // from the Windows desktop environment, e.g., the monitor information and
+  // configuration. It is false in unit tests, true in Chrome and browser
+  // tests.
+  ScreenWin(bool initialize_from_system);
 
   // Screen:
   gfx::Point GetCursorScreenPoint() override;
@@ -216,6 +231,7 @@ class DISPLAY_EXPORT ScreenWin : public Screen,
   void Initialize();
   void OnWndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
   void UpdateAllDisplaysAndNotify();
+  void UpdateAllDisplaysIfPrimaryMonitorChanged();
 
   // Returns the ScreenWinDisplay closest to or enclosing |hwnd|.
   ScreenWinDisplay GetScreenWinDisplayNearestHWND(HWND hwnd) const;
@@ -259,6 +275,12 @@ class DISPLAY_EXPORT ScreenWin : public Screen,
   void OnUwpTextScaleFactorChanged() override;
   void OnUwpTextScaleFactorCleanup(UwpTextScaleFactor* source) override;
 
+  // Tests don't want to use the actual DPI settings of the monitor(s) on
+  // the machine running the test.
+  // Returns false if running in unit tests, if the ScreenWin constructor was
+  // called with initialize set to false.
+  bool PerProcessDPIAwarenessDisabledForTesting() const;
+
   // Helper implementing the DisplayObserver handling.
   DisplayChangeNotifier change_notifier_;
 
@@ -283,6 +305,14 @@ class DISPLAY_EXPORT ScreenWin : public Screen,
 
   base::ScopedObservation<UwpTextScaleFactor, UwpTextScaleFactor::Observer>
       scale_factor_observation_{this};
+
+  // Used to avoid calling GetSystemMetricsForDpi in unit tests.
+  bool per_process_dpi_awareness_disabled_for_testing_ = false;
+
+  // Used to track if primary_monitor_ changes, which is used as a signal that
+  // screen_win_displays_ needs to be updated. This should be updated when
+  // screen_win_displays_ is updated.
+  HMONITOR primary_monitor_ = nullptr;
 };
 
 }  // namespace win

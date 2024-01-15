@@ -7,28 +7,30 @@
 #import "ios/chrome/browser/ui/broadcaster/chrome_broadcaster.h"
 #import "ios/chrome/browser/ui/toolbar/fullscreen/toolbar_ui.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 void StartBroadcastingToolbarUI(id<ToolbarUI> toolbar,
                                 ChromeBroadcaster* broadcaster) {
-  [broadcaster broadcastValue:@"collapsedHeight"
+  [broadcaster broadcastValue:@"collapsedTopToolbarHeight"
                      ofObject:toolbar
-                     selector:@selector(broadcastCollapsedToolbarHeight:)];
-  [broadcaster broadcastValue:@"expandedHeight"
+                     selector:@selector(broadcastCollapsedTopToolbarHeight:)];
+  [broadcaster broadcastValue:@"expandedTopToolbarHeight"
                      ofObject:toolbar
-                     selector:@selector(broadcastExpandedToolbarHeight:)];
-  [broadcaster broadcastValue:@"bottomToolbarHeight"
+                     selector:@selector(broadcastExpandedTopToolbarHeight:)];
+  [broadcaster
+      broadcastValue:@"collapsedBottomToolbarHeight"
+            ofObject:toolbar
+            selector:@selector(broadcastCollapsedBottomToolbarHeight:)];
+  [broadcaster broadcastValue:@"expandedBottomToolbarHeight"
                      ofObject:toolbar
-                     selector:@selector(broadcastBottomToolbarHeight:)];
+                     selector:@selector(broadcastExpandedBottomToolbarHeight:)];
 }
 
 void StopBroadcastingToolbarUI(ChromeBroadcaster* broadcaster) {
-  [broadcaster
-      stopBroadcastingForSelector:@selector(broadcastCollapsedToolbarHeight:)];
-  [broadcaster
-      stopBroadcastingForSelector:@selector(broadcastExpandedToolbarHeight:)];
-  [broadcaster
-      stopBroadcastingForSelector:@selector(broadcastBottomToolbarHeight:)];
+  [broadcaster stopBroadcastingForSelector:@selector
+               (broadcastCollapsedTopToolbarHeight:)];
+  [broadcaster stopBroadcastingForSelector:@selector
+               (broadcastExpandedTopToolbarHeight:)];
+  [broadcaster stopBroadcastingForSelector:@selector
+               (broadcastCollapsedBottomToolbarHeight:)];
+  [broadcaster stopBroadcastingForSelector:@selector
+               (broadcastExpandedBottomToolbarHeight:)];
 }

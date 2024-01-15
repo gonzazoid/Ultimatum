@@ -27,11 +27,24 @@
 
 #include "third_party/blink/renderer/platform/geometry/blend.h"
 #include "third_party/blink/renderer/platform/geometry/calculation_value.h"
+#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
+#include "third_party/blink/renderer/platform/wtf/static_constructors.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
+
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_auto_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_none_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_fixed_zero_length);
+
+// static
+void Length::Initialize() {
+  new (WTF::NotNullTag::kNotNull, (void*)&g_auto_length) Length(kAuto);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_none_length) Length(kNone);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_fixed_zero_length) Length(kFixed);
+}
 
 class CalculationValueHandleMap {
   USING_FAST_MALLOC(CalculationValueHandleMap);
@@ -67,14 +80,15 @@ class CalculationValueHandleMap {
 
   void DecrementRef(int index) {
     DCHECK(map_.Contains(index));
-    const CalculationValue* value = map_.at(index);
-    if (value->HasOneRef()) {
+    auto iter = map_.find(index);
+    if (iter->value->HasOneRef()) {
       // Force the CalculationValue destructor early to avoid a potential
       // recursive call inside HashMap remove().
-      map_.Set(index, nullptr);
+      iter->value = nullptr;
+      // |iter| may be invalidated during the CalculationValue destructor.
       map_.erase(index);
     } else {
-      value->Release();
+      iter->value->Release();
     }
   }
 
@@ -89,8 +103,8 @@ static CalculationValueHandleMap& CalcHandles() {
 }
 
 Length::Length(scoped_refptr<const CalculationValue> calc)
-    : quirk_(false), type_(kCalculated), is_float_(false) {
-  int_value_ = CalcHandles().insert(std::move(calc));
+    : quirk_(false), type_(kCalculated) {
+  calculation_handle_ = CalcHandles().insert(std::move(calc));
 }
 
 Length Length::BlendMixedTypes(const Length& from,
@@ -118,14 +132,15 @@ Length Length::BlendSameTypes(const Length& from,
 PixelsAndPercent Length::GetPixelsAndPercent() const {
   switch (GetType()) {
     case kFixed:
-      return PixelsAndPercent(Value(), 0);
+      return PixelsAndPercent(Value());
     case kPercent:
-      return PixelsAndPercent(0, Value());
+      return PixelsAndPercent(0.0f, Value(), /*has_explicit_pixels=*/false,
+                              /*has_explicit_percent=*/true);
     case kCalculated:
       return GetCalculationValue().GetPixelsAndPercent();
     default:
       NOTREACHED();
-      return PixelsAndPercent(0, 0);
+      return PixelsAndPercent(0.0f, 0.0f, false, false);
   }
 }
 
@@ -139,15 +154,18 @@ Length Length::SubtractFromOneHundredPercent() const {
   if (IsPercent())
     return Length::Percent(100 - Value());
   DCHECK(IsSpecified());
-  scoped_refptr<const CalculationValue> result =
-      AsCalculationValue()->SubtractFromOneHundredPercent();
-  if (result->IsExpression() ||
-      (result->Pixels() != 0 && result->Percent() != 0)) {
-    return Length(std::move(result));
+  return Length(AsCalculationValue()->SubtractFromOneHundredPercent());
+}
+
+Length Length::Add(const Length& other) const {
+  CHECK(IsSpecified());
+  if (IsFixed() && other.IsFixed()) {
+    return Length::Fixed(Pixels() + other.Pixels());
   }
-  if (result->Percent())
-    return Length::Percent(result->Percent());
-  return Length::Fixed(result->Pixels());
+  if (IsPercent() && other.IsPercent()) {
+    return Length::Percent(Percent() + other.Percent());
+  }
+  return Length(AsCalculationValue()->Add(*other.AsCalculationValue()));
 }
 
 Length Length::Zoom(double factor) const {
@@ -177,11 +195,10 @@ void Length::DecrementCalculatedRef() const {
 }
 
 float Length::NonNanCalculatedValue(
-    LayoutUnit max_value,
+    float max_value,
     const AnchorEvaluator* anchor_evaluator) const {
   DCHECK(IsCalculated());
-  float result =
-      GetCalculationValue().Evaluate(max_value.ToFloat(), anchor_evaluator);
+  float result = GetCalculationValue().Evaluate(max_value, anchor_evaluator);
   if (std::isnan(result))
     return 0;
   return result;
@@ -193,20 +210,12 @@ bool Length::IsCalculatedEqual(const Length& o) const {
           GetCalculationValue() == o.GetCalculationValue());
 }
 
-absl::optional<LayoutUnit> Length::AnchorEvaluator::EvaluateAnchor(
-    const AtomicString& anchor_name,
-    AnchorValue anchor_value) const {
-  return absl::nullopt;
-}
-
-absl::optional<LayoutUnit> Length::AnchorEvaluator::EvaluateAnchorSize(
-    const AtomicString& anchor_name,
-    AnchorSizeValue anchor_size_value) const {
-  return absl::nullopt;
-}
-
 bool Length::HasAnchorQueries() const {
   return IsCalculated() && GetCalculationValue().HasAnchorQueries();
+}
+
+bool Length::HasAutoAnchorPositioning() const {
+  return IsCalculated() && GetCalculationValue().HasAutoAnchorPositioning();
 }
 
 String Length::ToString() const {
@@ -222,10 +231,11 @@ String Length::ToString() const {
   else
     builder.Append("?");
   builder.Append(", ");
-  if (is_float_)
-    builder.AppendNumber(float_value_);
-  else
-    builder.AppendNumber(int_value_);
+  if (IsCalculated()) {
+    builder.AppendNumber(calculation_handle_);
+  } else {
+    builder.AppendNumber(value_);
+  }
   if (quirk_)
     builder.Append(", Quirk");
   builder.Append(")");

@@ -5,7 +5,6 @@
 #ifndef MEDIA_FORMATS_MP4_DOLBY_VISION_H_
 #define MEDIA_FORMATS_MP4_DOLBY_VISION_H_
 
-#include "base/memory/ref_counted.h"
 #include "media/base/media_export.h"
 #include "media/formats/mp4/box_definitions.h"
 
@@ -21,6 +20,7 @@ struct MEDIA_EXPORT DOVIDecoderConfigurationRecord {
   uint8_t rpu_present_flag = 0;
   uint8_t el_present_flag = 0;
   uint8_t bl_present_flag = 0;
+  uint8_t dv_bl_signal_compatibility_id = 0;
 
   VideoCodecProfile codec_profile = VIDEO_CODEC_PROFILE_UNKNOWN;
 

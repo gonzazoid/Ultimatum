@@ -12,6 +12,15 @@
 // Indicates whether or not "Offer to Save Passwords" is set to enabled.
 - (void)savedPasswordSwitchDidChange:(BOOL)enabled;
 
+// Indicates whether or not the account storage switch is set to enabled.
+- (void)accountStorageSwitchDidChange:(BOOL)enabled;
+
+// Indicates the new feature icon was shown for the account storage switch.
+- (void)accountStorageNewFeatureIconDidShow;
+
+// Indicates that the bulk move passwords to account button was clicked.
+- (void)bulkMovePasswordsToAccountButtonClicked;
+
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORD_SETTINGS_PASSWORD_SETTINGS_DELEGATE_H_

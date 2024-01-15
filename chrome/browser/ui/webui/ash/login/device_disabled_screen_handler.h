@@ -8,7 +8,7 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // Interface between the device disabled screen and its representation.
 class DeviceDisabledScreenView
@@ -19,9 +19,15 @@ class DeviceDisabledScreenView
 
   virtual ~DeviceDisabledScreenView() = default;
 
+  // Sets some properties of the `DeviceDisabledScreen`, then shows the screen,
+  // by calling `ShowInWebUI()`. Receives the following data, respectively:
+  // serial number of the device, domain that owns the device (can be empty),
+  // message from the admin, and a flag indicating if the device was disabled
+  // because it's in AD mode (which is no longer supported).
   virtual void Show(const std::string& serial,
                     const std::string& domain,
-                    const std::string& message) = 0;
+                    const std::string& message,
+                    bool is_disabled_ad_device) = 0;
   virtual void UpdateMessage(const std::string& message) = 0;
 };
 
@@ -42,7 +48,8 @@ class DeviceDisabledScreenHandler : public DeviceDisabledScreenView,
   // DeviceDisabledScreenView:
   void Show(const std::string& serial,
             const std::string& domain,
-            const std::string& message) override;
+            const std::string& message,
+            bool is_disabled_ad_device) override;
   void UpdateMessage(const std::string& message) override;
 
   // BaseScreenHandler:
@@ -50,12 +57,6 @@ class DeviceDisabledScreenHandler : public DeviceDisabledScreenView,
       ::login::LocalizedValuesBuilder* builder) override;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::DeviceDisabledScreenHandler;
-using ::chromeos::DeviceDisabledScreenView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_DEVICE_DISABLED_SCREEN_HANDLER_H_

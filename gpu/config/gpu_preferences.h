@@ -15,7 +15,7 @@
 #include "media/media_buildflags.h"
 #include "ui/gfx/buffer_types.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "base/message_loop/message_pump_type.h"
 #endif
 
@@ -41,16 +41,31 @@ enum class VulkanImplementationName : uint32_t {
 
 enum class WebGPUAdapterName : uint32_t {
   kDefault = 0,
-  kCompat = 1,
-  kSwiftShader = 2,
+  kD3D11 = 1,
+  kOpenGLES = 2,
+  kSwiftShader = 3,
+};
+
+// Affecting how chromium handles GPUPowerPreference in
+// GPURequestAdapterOptions.
+enum class WebGPUPowerPreference : uint32_t {
+  // No explicit power preference.
+  kNone = 0,
+  // Choose the preferred adapter when GPUPowerPreference is not given.
+  // Has no impact when GPUPowerPreference is given.
+  kDefaultLowPower = 1,
+  kDefaultHighPerformance = 2,
+  // Choose the forced adapter regardless of whether GPUPowerPreference is set
+  // or not.
+  kForceLowPower = 3,
+  kForceHighPerformance = 4,
 };
 
 enum class GrContextType : uint32_t {
-  kGL = 0,
-  kVulkan = 1,
-  kMetal = 2,
-  kDawn = 3,
-  kLast = kDawn,
+  kGL,      // Ganesh
+  kVulkan,  // Ganesh
+  kGraphiteDawn,
+  kGraphiteMetal,
 };
 
 enum class DawnBackendValidationLevel : uint32_t {
@@ -105,11 +120,6 @@ struct GPU_EXPORT GpuPreferences {
 
   // Enables support for outputting NV12 video frames. Windows only.
   bool enable_nv12_dxgi_video = false;
-
-  // Enables MediaFoundationVideoEncoderAccelerator on Windows 7. Windows 7 does
-  // not support some of the attributes which may impact the performance or the
-  // quality of output. So this flag is disabled by default. Windows only.
-  bool enable_media_foundation_vea_on_windows7 = false;
 
   // Disables the use of a 3D software rasterizer, for example, SwiftShader.
   bool disable_software_rasterizer = false;
@@ -211,7 +221,7 @@ struct GPU_EXPORT GpuPreferences {
 
   // ===================================
   // Settings from //gpu/command_buffer/service/gpu_switches.h
-  // The type of the GrContext.
+  // The type of the GrContext or Graphite Context.
   GrContextType gr_context_type = GrContextType::kGL;
 
   // Use Vulkan for rasterization and display compositing.
@@ -236,10 +246,6 @@ struct GPU_EXPORT GpuPreferences {
   // when this limit is reached.
   uint32_t vulkan_sync_cpu_memory_limit = 0u;
 
-  // Use Metal for rasterization and Skia-based display compositing. Note that
-  // this is compatible with GL-based display compositing.
-  bool enable_metal = false;
-
   // ===================================
   // Settings from //cc/base/switches.h
   // Enable the GPU benchmarking extension; used by tests only.
@@ -251,12 +257,22 @@ struct GPU_EXPORT GpuPreferences {
   // Enable usage of unsafe WebGPU features.
   bool enable_unsafe_webgpu = false;
 
+  // Enable usage of WebGPU features intended only for use during development.
+  bool enable_webgpu_developer_features = false;
+
   // Enable validation layers in Dawn backends.
   DawnBackendValidationLevel enable_dawn_backend_validation =
       DawnBackendValidationLevel::kDisabled;
 
   // The adapter to use for WebGPU content.
   WebGPUAdapterName use_webgpu_adapter = WebGPUAdapterName::kDefault;
+
+  // The adapter selecting strategy related to GPUPowerPreference.
+  WebGPUPowerPreference use_webgpu_power_preference =
+      WebGPUPowerPreference::kNone;
+
+  // Force the use of WebGPU Compatibility mode for all WebGPU content.
+  bool force_webgpu_compat = false;
 
   // The Dawn features(toggles) enabled on the creation of Dawn devices.
   std::vector<std::string> enabled_dawn_features_list;
@@ -271,7 +287,7 @@ struct GPU_EXPORT GpuPreferences {
   // only enabled on Windows platform for the info collection GPU process.
   bool enable_perf_data_collection = false;
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // Determines message pump type for the GPU thread.
   base::MessagePumpType message_pump_type = base::MessagePumpType::DEFAULT;
 #endif
@@ -292,6 +308,10 @@ struct GPU_EXPORT GpuPreferences {
 
   // Disables oppr debug crash dumps.
   bool disable_oopr_debug_crash_dump = false;
+
+  // Forces the use of a separate EGL display for WebGL contexts even when one
+  // GPU is used.
+  bool force_separate_egl_display_for_webgl_testing = false;
 
   // Please update gpu_preferences_unittest.cc when making additions or
   // changes to this struct.

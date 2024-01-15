@@ -6,17 +6,22 @@
 #define CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_FAKE_SESSION_MANAGER_CLIENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/arc/arc.pb.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 
 namespace ash {
 
@@ -92,10 +97,12 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
 
   void StartSession(
       const cryptohome::AccountIdentifier& cryptohome_id) override;
+  void StartSessionEx(const cryptohome::AccountIdentifier& cryptohome_id,
+                      bool chrome_side_key_generation) override;
   void StopSession(login_manager::SessionStopReason reason) override;
   void LoadShillProfile(
       const cryptohome::AccountIdentifier& cryptohome_id) override;
-  void StartDeviceWipe() override;
+  void StartDeviceWipe(chromeos::VoidDBusMethodCallback callback) override;
   void StartRemoteDeviceWipe(
       const enterprise_management::SignedData& signed_command) override;
   void ClearForcedReEnrollmentVpd(
@@ -185,6 +192,9 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   bool GetFlagsForUser(const cryptohome::AccountIdentifier& cryptohome_id,
                        std::vector<std::string>* out_flags_for_user) const;
 
+  // Notify observers about the session stopping.
+  void NotifySessionStopping() const;
+
   // Sets whether FakeSessionManagerClient should advertise (through
   // |SupportsBrowserRestart|) that it supports restarting Chrome. For example,
   // to apply user-session flags, or to start guest session.
@@ -198,11 +208,11 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
     restart_job_callback_ = std::move(callback);
   }
 
-  const absl::optional<std::vector<std::string>>& restart_job_argv() const {
+  const std::optional<std::vector<std::string>>& restart_job_argv() const {
     return restart_job_argv_;
   }
 
-  absl::optional<RestartJobReason> restart_job_reason() const {
+  std::optional<RestartJobReason> restart_job_reason() const {
     return restart_job_reason_;
   }
 
@@ -339,7 +349,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
 
   const std::string& login_password() const { return login_password_; }
 
-  const absl::optional<std::string>& primary_user_id() const {
+  const std::optional<std::string>& primary_user_id() const {
     return primary_user_id_;
   }
 
@@ -356,7 +366,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   }
 
   bool request_browser_data_backward_migration_called() const {
-    return request_browser_data_migration_called_;
+    return request_browser_data_backward_migration_called_;
   }
 
  private:
@@ -373,11 +383,11 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
 
   // If restart job was requested, and the client supports restart job, the
   // requested restarted arguments.
-  absl::optional<std::vector<std::string>> restart_job_argv_;
+  std::optional<std::vector<std::string>> restart_job_argv_;
 
   // If restart job was requested, and the client supports restart job, the
   // requested restart reason.
-  absl::optional<RestartJobReason> restart_job_reason_;
+  std::optional<RestartJobReason> restart_job_reason_;
 
   // Callback that will be run, if set, when StopSession() is called.
   base::OnceClosure stop_session_callback_;
@@ -445,7 +455,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   // Contains last request passed to StartArcInstance
   arc::UpgradeArcContainerRequest last_upgrade_arc_request_;
 
-  StubDelegate* delegate_ = nullptr;
+  raw_ptr<StubDelegate> delegate_ = nullptr;
 
   bool session_stopped_ = false;
 
@@ -461,28 +471,25 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   };
   std::map<cryptohome::AccountIdentifier, FlagsState> flags_for_user_;
 
-  absl::optional<std::string> primary_user_id_;
+  std::optional<std::string> primary_user_id_;
+
+  base::flat_map<std::string, std::string> login_screen_storage_;
+
+  base::flat_set<base::FilePath> files_to_clean_up_;
 
   base::WeakPtrFactory<FakeSessionManagerClient> weak_ptr_factory_{this};
 };
 
+// Helper class to create FakeSessionManagerClient. Note that the existing
+// SessionManagerClient instance will be released.
 class COMPONENT_EXPORT(SESSION_MANAGER) ScopedFakeSessionManagerClient {
  public:
   ScopedFakeSessionManagerClient();
+  explicit ScopedFakeSessionManagerClient(
+      FakeSessionManagerClient::PolicyStorageType policy_storage);
   ~ScopedFakeSessionManagerClient();
 };
 
-class COMPONENT_EXPORT(SESSION_MANAGER) ScopedFakeInMemorySessionManagerClient {
- public:
-  ScopedFakeInMemorySessionManagerClient();
-  ~ScopedFakeInMemorySessionManagerClient();
-};
-
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::FakeSessionManagerClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_FAKE_SESSION_MANAGER_CLIENT_H_

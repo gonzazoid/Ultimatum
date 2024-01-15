@@ -4,9 +4,7 @@
 
 #include "media/gpu/windows/d3d11_av1_accelerator.h"
 
-#include <windows.h>
 #include <numeric>
-#include <string>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
@@ -52,97 +50,11 @@ class D3D11AV1Picture : public AV1Picture {
   const size_t picture_index_;
 };
 
-class D3D11AV1Accelerator::ScopedDecoderBuffer {
- public:
-  ScopedDecoderBuffer(MediaLog* media_log,
-                      VideoContextWrapper* context,
-                      ID3D11VideoDecoder* decoder,
-                      D3D11_VIDEO_DECODER_BUFFER_TYPE type)
-      : media_log_(media_log),
-        context_(context),
-        decoder_(decoder),
-        type_(type) {
-    UINT size;
-    uint8_t* buffer;
-    driver_call_result_ = context_->GetDecoderBuffer(
-        decoder_, type_, &size, reinterpret_cast<void**>(&buffer));
-    if (FAILED(driver_call_result_)) {
-      MEDIA_LOG(ERROR, media_log_)
-          << "ScopedDecoderBuffer(" << type_
-          << ")=" << logging::SystemErrorCodeToString(driver_call_result_);
-      return;
-    }
-
-    buffer_ = base::span<uint8_t>(buffer, size);
-  }
-  ScopedDecoderBuffer(ScopedDecoderBuffer&& o)
-      : media_log_(o.media_log_),
-        context_(o.context_),
-        decoder_(o.decoder_),
-        type_(o.type_),
-        buffer_(std::move(o.buffer_)) {
-    DCHECK(o.buffer_.empty());
-  }
-
-  ~ScopedDecoderBuffer() { Commit(); }
-
-  ScopedDecoderBuffer(const ScopedDecoderBuffer&) = delete;
-  ScopedDecoderBuffer& operator=(const ScopedDecoderBuffer&) = delete;
-
-  void Commit() {
-    if (buffer_.empty())
-      return;
-    driver_call_result_ = context_->ReleaseDecoderBuffer(decoder_, type_);
-    if (FAILED(driver_call_result_)) {
-      MEDIA_LOG(ERROR, media_log_)
-          << "~ScopedDecoderBuffer(" << type_
-          << ")=" << logging::SystemErrorCodeToString(driver_call_result_);
-    }
-    buffer_ = base::span<uint8_t>();
-  }
-
-  bool empty() const { return buffer_.empty(); }
-  uint8_t* data() const { return buffer_.data(); }
-  size_t size() const { return buffer_.size(); }
-  HRESULT error() const { return driver_call_result_; }
-
- private:
-  const raw_ptr<MediaLog> media_log_;
-  const raw_ptr<VideoContextWrapper> context_;
-  const raw_ptr<ID3D11VideoDecoder> decoder_;
-  const D3D11_VIDEO_DECODER_BUFFER_TYPE type_;
-  base::span<uint8_t> buffer_;
-  HRESULT driver_call_result_ = S_OK;
-};
-
-D3D11AV1Accelerator::D3D11AV1Accelerator(
-    D3D11VideoDecoderClient* client,
-    MediaLog* media_log,
-    ComD3D11VideoDevice video_device,
-    std::unique_ptr<VideoContextWrapper> video_context)
-    : client_(client),
-      media_log_(media_log->Clone()),
-      video_device_(std::move(video_device)),
-      video_context_(std::move(video_context)) {
-  DCHECK(client);
-  DCHECK(media_log_);
-  client->SetDecoderCB(base::BindRepeating(
-      &D3D11AV1Accelerator::SetVideoDecoder, base::Unretained(this)));
-}
+D3D11AV1Accelerator::D3D11AV1Accelerator(D3D11VideoDecoderClient* client,
+                                         MediaLog* media_log)
+    : D3DAccelerator(client, media_log) {}
 
 D3D11AV1Accelerator::~D3D11AV1Accelerator() {}
-
-void D3D11AV1Accelerator::RecordFailure(const std::string& fail_type,
-                                        D3D11Status error) {
-  RecordFailure(fail_type, error.message(), error.code());
-}
-
-void D3D11AV1Accelerator::RecordFailure(const std::string& fail_type,
-                                        const std::string& message,
-                                        D3D11Status::Codes reason) {
-  MEDIA_LOG(ERROR, media_log_)
-      << "DX11AV1Failure(" << fail_type << ")=" << message;
-}
 
 scoped_refptr<AV1Picture> D3D11AV1Accelerator::CreateAV1Picture(
     bool apply_grain) {
@@ -152,20 +64,14 @@ scoped_refptr<AV1Picture> D3D11AV1Accelerator::CreateAV1Picture(
                         : nullptr;
 }
 
-D3D11AV1Accelerator::ScopedDecoderBuffer D3D11AV1Accelerator::GetBuffer(
-    D3D11_VIDEO_DECODER_BUFFER_TYPE type) {
-  return ScopedDecoderBuffer(media_log_.get(), video_context_.get(),
-                             video_decoder_.Get(), type);
-}
-
 bool D3D11AV1Accelerator::SubmitDecoderBuffer(
     const DXVA_PicParams_AV1& pic_params,
     const libgav1::Vector<libgav1::TileBuffer>& tile_buffers) {
   // Buffer #1 - AV1 specific picture parameters.
-  auto params_buffer = GetBuffer(D3D11_VIDEO_DECODER_BUFFER_PICTURE_PARAMETERS);
-  if (params_buffer.empty() || params_buffer.size() < sizeof(pic_params)) {
-    RecordFailure("SubmitDecoderBuffers",
-                  logging::SystemErrorCodeToString(params_buffer.error()),
+  auto params_buffer =
+      video_decoder_wrapper_->GetPictureParametersBuffer(sizeof(pic_params));
+  if (params_buffer.size() < sizeof(pic_params)) {
+    RecordFailure("Insufficient picture parameter buffer size",
                   D3D11Status::Codes::kGetPicParamBufferFailed);
     return false;
   }
@@ -174,10 +80,9 @@ bool D3D11AV1Accelerator::SubmitDecoderBuffer(
 
   // Buffer #2 - Slice control data.
   const auto tile_size = sizeof(DXVA_Tile_AV1) * tile_buffers.size();
-  auto tile_buffer = GetBuffer(D3D11_VIDEO_DECODER_BUFFER_SLICE_CONTROL);
-  if (tile_buffer.empty() || tile_buffer.size() < tile_size) {
-    RecordFailure("SubmitDecoderBuffers",
-                  logging::SystemErrorCodeToString(tile_buffer.error()),
+  auto tile_buffer = video_decoder_wrapper_->GetSliceControlBuffer(tile_size);
+  if (tile_buffer.size() < tile_size) {
+    RecordFailure("Insufficient slice control buffer size",
                   D3D11Status::Codes::kGetSliceControlBufferFailed);
     return false;
   }
@@ -188,10 +93,10 @@ bool D3D11AV1Accelerator::SubmitDecoderBuffer(
   const size_t bitstream_size = std::accumulate(
       tile_buffers.begin(), tile_buffers.end(), 0,
       [](size_t acc, const auto& buffer) { return acc + buffer.size; });
-  auto bitstream_buffer = GetBuffer(D3D11_VIDEO_DECODER_BUFFER_BITSTREAM);
-  if (bitstream_buffer.empty() || bitstream_buffer.size() < bitstream_size) {
-    RecordFailure("SubmitDecoderBuffers",
-                  logging::SystemErrorCodeToString(bitstream_buffer.error()),
+  auto& bitstream_buffer =
+      video_decoder_wrapper_->GetBitstreamBuffer(bitstream_size);
+  if (bitstream_buffer.size() < bitstream_size) {
+    RecordFailure("Insufficient bitstream buffer size",
                   D3D11Status::Codes::kGetBitstreamBufferFailed);
     return false;
   }
@@ -205,33 +110,14 @@ bool D3D11AV1Accelerator::SubmitDecoderBuffer(
     tiles[i].column = i % pic_params.tiles.cols;
     tiles[i].anchor_frame = 0xFF;
 
-    memcpy(bitstream_buffer.data() + tile_offset, tile.data, tile.size);
+    CHECK_EQ(bitstream_buffer.Write({tile.data, tile.size}), tile.size);
     tile_offset += tile.size;
   }
 
-  // Commit the buffers we prepared above.
-  params_buffer.Commit();
-  tile_buffer.Commit();
-  bitstream_buffer.Commit();
-
-  constexpr int kBuffersCount = 3;
-  VideoContextWrapper::VideoBufferWrapper buffers[kBuffersCount] = {};
-  buffers[0].BufferType = D3D11_VIDEO_DECODER_BUFFER_PICTURE_PARAMETERS;
-  buffers[0].DataSize = sizeof(pic_params);
-  buffers[1].BufferType = D3D11_VIDEO_DECODER_BUFFER_SLICE_CONTROL;
-  buffers[1].DataSize = tile_size;
-  buffers[2].BufferType = D3D11_VIDEO_DECODER_BUFFER_BITSTREAM;
-  buffers[2].DataSize = bitstream_size;
-
-  const auto hr = video_context_->SubmitDecoderBuffers(video_decoder_.Get(),
-                                                       kBuffersCount, buffers);
-  if (FAILED(hr)) {
-    RecordFailure("SubmitDecoderBuffers", logging::SystemErrorCodeToString(hr),
-                  D3D11Status::Codes::kSubmitDecoderBuffersFailed);
-    return false;
-  }
-
-  return true;
+  // Commit the buffers we prepared above. Bitstream buffer will be committed
+  // by SubmitSlice() so we don't explicitly commit here.
+  return params_buffer.Commit() && tile_buffer.Commit() &&
+         video_decoder_wrapper_->SubmitSlice();
 }
 
 DecodeStatus D3D11AV1Accelerator::SubmitDecode(
@@ -241,27 +127,9 @@ DecodeStatus D3D11AV1Accelerator::SubmitDecode(
     const libgav1::Vector<libgav1::TileBuffer>& tile_buffers,
     base::span<const uint8_t> data) {
   const D3D11AV1Picture* pic_ptr = static_cast<const D3D11AV1Picture*>(&pic);
-  do {
-    ID3D11VideoDecoderOutputView* output_view = nullptr;
-    auto result = pic_ptr->picture_buffer()->AcquireOutputView();
-    if (result.has_value()) {
-      output_view = std::move(result).value();
-    } else {
-      RecordFailure("AcquireOutputView", std::move(result).error());
-      return DecodeStatus::kFail;
-    }
-    const auto hr = video_context_->DecoderBeginFrame(video_decoder_.Get(),
-                                                      output_view, 0, nullptr);
-    if (SUCCEEDED(hr)) {
-      break;
-    } else if (hr == E_PENDING || hr == D3DERR_WASSTILLDRAWING) {
-      base::PlatformThread::YieldCurrentThread();
-    } else if (FAILED(hr)) {
-      RecordFailure("DecoderBeginFrame", logging::SystemErrorCodeToString(hr),
-                    D3D11Status::Codes::kDecoderBeginFrameFailed);
-      return DecodeStatus::kFail;
-    }
-  } while (true);
+  if (!video_decoder_wrapper_->WaitForFrameBegins(pic_ptr->picture_buffer())) {
+    return DecodeStatus::kFail;
+  }
 
   DXVA_PicParams_AV1 pic_params = {0};
   FillPicParams(pic_ptr->picture_buffer()->picture_index(),
@@ -271,23 +139,13 @@ DecodeStatus D3D11AV1Accelerator::SubmitDecode(
   if (!SubmitDecoderBuffer(pic_params, tile_buffers))
     return DecodeStatus::kFail;
 
-  const auto hr = video_context_->DecoderEndFrame(video_decoder_.Get());
-  if (FAILED(hr)) {
-    RecordFailure("DecoderEndFrame", logging::SystemErrorCodeToString(hr),
-                  D3D11Status::Codes::kDecoderEndFrameFailed);
-    return DecodeStatus::kFail;
-  }
-
-  return DecodeStatus::kOk;
+  return video_decoder_wrapper_->SubmitDecode() ? DecodeStatus::kOk
+                                                : DecodeStatus::kFail;
 }
 
 bool D3D11AV1Accelerator::OutputPicture(const AV1Picture& pic) {
   const auto* pic_ptr = static_cast<const D3D11AV1Picture*>(&pic);
   return client_->OutputResult(pic_ptr, pic_ptr->picture_buffer());
-}
-
-void D3D11AV1Accelerator::SetVideoDecoder(ComD3D11VideoDecoder video_decoder) {
-  video_decoder_ = std::move(video_decoder);
 }
 
 void D3D11AV1Accelerator::FillPicParams(

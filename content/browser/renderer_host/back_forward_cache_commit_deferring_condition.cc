@@ -49,12 +49,21 @@ BackForwardCacheCommitDeferringCondition::WillCommitNavigation(
 
   // If an entry doesn't exist (it was evicted?) there's no need to defer the
   // commit as we'll end up performing a new navigation.
-  BackForwardCacheImpl::Entry* bfcache_entry = bfcache.GetEntry(
+  auto bfcache_entry = bfcache.GetOrEvictEntry(
       NavigationRequest::From(&GetNavigationHandle())->nav_entry_id());
-  if (!bfcache_entry)
-    return Result::kProceed;
+  if (!bfcache_entry.has_value()) {
+    CHECK_EQ(bfcache_entry.error(),
+             BackForwardCacheImpl::kEntryIneligibleAndEvicted);
+    // If the BFCache entry has just been evicted, it will reset the
+    // associated `NavigationRequest` and restart a new one. The commit
+    // process should not be continued.
+    // DO NOT ADD CODE after this. The previous call to `GetOrEvictEntry()` has
+    // destroyed the NavigationRequest.
+    return Result::kCancelled;
+  }
 
-  bfcache.WillCommitNavigationToCachedEntry(*bfcache_entry, std::move(resume));
+  bfcache.WillCommitNavigationToCachedEntry(*(bfcache_entry.value()),
+                                            std::move(resume));
   return Result::kDefer;
 }
 

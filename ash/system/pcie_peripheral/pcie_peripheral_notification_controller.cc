@@ -4,6 +4,7 @@
 
 #include "ash/system/pcie_peripheral/pcie_peripheral_notification_controller.h"
 
+#include <optional>
 #include <string>
 
 #include "ash/constants/ash_pref_names.h"
@@ -16,11 +17,10 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -87,7 +87,7 @@ void RemoveNotification(const std::string& notification_id) {
                                                            /*from_user=*/true);
 }
 
-void OnPeripheralLimitedNotificationClicked(absl::optional<int> button_index) {
+void OnPeripheralLimitedNotificationClicked(std::optional<int> button_index) {
   // Clicked on body.
   if (!button_index) {
     ShowPrivacyAndSecuritySettings();
@@ -168,7 +168,7 @@ void PciePeripheralNotificationController::
 
 void PciePeripheralNotificationController::NotifyBillboardDevice() {
   std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
+      CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE,
           kPciePeripheralBillboardDeviceNotificationId,
           /*title=*/std::u16string(),
@@ -203,7 +203,7 @@ void PciePeripheralNotificationController::NotifyLimitedPerformance() {
           IDS_ASH_PCIE_PERIPHERAL_NOTIFICATION_LEARN_MORE_BUTTON_TEXT)));
 
   std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
+      CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE,
           kPciePeripheralLimitedPerformanceNotificationId,
           l10n_util::GetStringUTF16(
@@ -230,29 +230,30 @@ void PciePeripheralNotificationController::NotifyGuestModeNotification(
   if (!ShouldDisplayNotification())
     return;
 
-  std::unique_ptr<message_center::Notification> notification = CreateSystemNotification(
-      message_center::NOTIFICATION_TYPE_SIMPLE,
-      is_thunderbolt_only
-          ? kPciePeripheralGuestModeNotSupportedNotificationId
-          : kPciePeripheralLimitedPerformanceGuestModeNotificationId,
-      /*title=*/std::u16string(),
-      is_thunderbolt_only
-          ? l10n_util::GetStringUTF16(
-                IDS_ASH_PCIE_PERIPHERAL_NOTIFICATION_GUEST_MODE_NOT_SUPPORTED)
-          : l10n_util::GetStringUTF16(
-                IDS_ASH_PCIE_PERIPHERAL_NOTIFICATION_PERFORMANCE_LIMITED_GUEST_MODE),
-      /*display_source=*/std::u16string(), GURL(),
-      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
-                                 kNotifierPciePeripheral,
-                                 NotificationCatalogName::kPcieGuestMode),
-      message_center::RichNotificationData(),
-      base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-          base::BindRepeating(&OnGuestNotificationClicked,
-                              is_thunderbolt_only)),
-      kSettingsIcon,
-      is_thunderbolt_only
-          ? message_center::SystemNotificationWarningLevel::CRITICAL_WARNING
-          : message_center::SystemNotificationWarningLevel::WARNING);
+  std::unique_ptr<message_center::Notification> notification =
+      CreateSystemNotificationPtr(
+          message_center::NOTIFICATION_TYPE_SIMPLE,
+          is_thunderbolt_only
+              ? kPciePeripheralGuestModeNotSupportedNotificationId
+              : kPciePeripheralLimitedPerformanceGuestModeNotificationId,
+          /*title=*/std::u16string(),
+          is_thunderbolt_only
+              ? l10n_util::GetStringUTF16(
+                    IDS_ASH_PCIE_PERIPHERAL_NOTIFICATION_GUEST_MODE_NOT_SUPPORTED)
+              : l10n_util::GetStringUTF16(
+                    IDS_ASH_PCIE_PERIPHERAL_NOTIFICATION_PERFORMANCE_LIMITED_GUEST_MODE),
+          /*display_source=*/std::u16string(), GURL(),
+          message_center::NotifierId(
+              message_center::NotifierType::SYSTEM_COMPONENT,
+              kNotifierPciePeripheral, NotificationCatalogName::kPcieGuestMode),
+          message_center::RichNotificationData(),
+          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+              base::BindRepeating(&OnGuestNotificationClicked,
+                                  is_thunderbolt_only)),
+          kSettingsIcon,
+          is_thunderbolt_only
+              ? message_center::SystemNotificationWarningLevel::CRITICAL_WARNING
+              : message_center::SystemNotificationWarningLevel::WARNING);
 
   message_center_->AddNotification(std::move(notification));
 }
@@ -260,7 +261,7 @@ void PciePeripheralNotificationController::NotifyGuestModeNotification(
 void PciePeripheralNotificationController::
     NotifyPeripheralBlockedNotification() {
   std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
+      CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE,
           kPciePeripheralDeviceBlockedNotificationId,
           l10n_util::GetStringUTF16(

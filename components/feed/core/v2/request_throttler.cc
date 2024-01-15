@@ -34,6 +34,9 @@ int GetMaxRequestsPerDay(NetworkRequestType request_type) {
       return config.max_list_recommended_web_feeds_requests_per_day;
     case NetworkRequestType::kUnfollowWebFeed:
     case NetworkRequestType::kFollowWebFeed:
+    case NetworkRequestType::kSingleWebFeedListContents:
+    case NetworkRequestType::kQueryWebFeed:
+    case NetworkRequestType::kSupervisedFeed:
       return -1;
   }
 }

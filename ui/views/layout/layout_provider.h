@@ -40,6 +40,8 @@ enum InsetsMetric {
   INSETS_VECTOR_IMAGE_BUTTON,
   // Padding used in a label button.
   INSETS_LABEL_BUTTON,
+  // Padding used in icon buttons.
+  INSETS_ICON_BUTTON,
 
   // Embedders must start Insets enum values from this value.
   VIEWS_INSETS_END,
@@ -105,6 +107,8 @@ enum DistanceMetric {
   DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING,
   // Vertical spacing between controls that are logically unrelated.
   DISTANCE_UNRELATED_CONTROL_VERTICAL,
+  // Padding in vector icons. This is a general number for more vector icons.
+  DISTANCE_VECTOR_ICON_PADDING,
 
   // Embedders must start DistanceMetric enum values from here.
   VIEWS_DISTANCE_END,
@@ -129,6 +133,41 @@ enum class Emphasis {
   kHigh,
   // Maximum emphasis components like the omnibox or rich suggestions.
   kMaximum,
+};
+
+// ShapeContextTokens are enums specific to the context of a Views object.
+// This includes components such as Buttons, Labels, Textfields, Dropdowns, etc.
+// These context tokens are granular to the entire client and will map to
+// sys token values (see below).
+enum class ShapeContextTokens {
+  kBadgeRadius,
+  kButtonRadius,
+  kComboboxRadius,
+  kDialogRadius,
+  kFindBarViewRadius,
+  kMenuRadius,
+  kMenuAuxRadius,
+  kMenuTouchRadius,
+  kOmniboxExpandedRadius,
+  kTextfieldRadius,
+  kSidePanelContentRadius,
+  kSidePanelPageContentRadius,
+};
+
+// ShapeSysTokens are tokens that map to a fixed value that aligns with UX/UI.
+// Different from context tokens that will expand, sys tokens are more selective
+// and are not used by the client. Context tokens will be mapped to a
+// Sys token which then will fetch the corresponding fixed value.
+enum class ShapeSysTokens {
+  // Default token should never be used and signals a missing shaping token
+  // mapping.
+  kDefault,
+  kXSmall,
+  kSmall,
+  kMediumSmall,
+  kMedium,
+  kLarge,
+  kFull,
 };
 
 class VIEWS_EXPORT LayoutProvider {
@@ -159,7 +198,7 @@ class VIEWS_EXPORT LayoutProvider {
   virtual int GetDistanceMetric(int metric) const;
 
   // Returns the TypographyProvider, used to configure text properties such as
-  // font, weight, color, size, and line height. Never null.
+  // font, weight, color, size, and line height.
   virtual const TypographyProvider& GetTypographyProvider() const;
 
   // Returns the actual width to use for a dialog that requires at least
@@ -181,6 +220,12 @@ class VIEWS_EXPORT LayoutProvider {
 
   // Returns the shadow elevation metric for the given emphasis.
   virtual int GetShadowElevationMetric(Emphasis emphasis) const;
+
+  // Returns the corner radius related to a specific context token.
+  // TODO(crbug.com/1412134): Replace GetCornerRadiusMetric(Emphasis...) with
+  // context tokens.
+  int GetCornerRadiusMetric(ShapeContextTokens token,
+                            const gfx::Size& size = gfx::Size()) const;
 
  protected:
   static constexpr int kSmallDialogWidth = 320;

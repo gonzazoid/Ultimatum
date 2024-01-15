@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CLOSEWATCHER_CLOSE_WATCHER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CLOSEWATCHER_CLOSE_WATCHER_H_
 
-#include "base/time/time.h"
 #include "third_party/blink/public/mojom/close_watcher/close_listener.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -20,8 +19,7 @@ class CloseWatcherOptions;
 class LocalDOMWindow;
 class KeyboardEvent;
 
-class CloseWatcher final : public EventTargetWithInlineData,
-                           public ExecutionContextClient {
+class CloseWatcher final : public EventTarget, public ExecutionContextClient {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -29,28 +27,30 @@ class CloseWatcher final : public EventTargetWithInlineData,
                               CloseWatcherOptions*,
                               ExceptionState&);
 
-  static CloseWatcher* Create(LocalDOMWindow*);
+  static CloseWatcher* Create(LocalDOMWindow&);
 
-  explicit CloseWatcher(LocalDOMWindow*);
+  explicit CloseWatcher(LocalDOMWindow&);
+
   void Trace(Visitor*) const override;
 
   bool IsClosed() const { return state_ == State::kClosed; }
   bool IsGroupedWithPrevious() const { return grouped_with_previous_; }
 
+  void requestClose();
   void close();
   void destroy();
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(cancel, kCancel)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(close, kClose)
 
-  // EventTargetWithInlineData overrides:
+  // EventTarget overrides:
   const AtomicString& InterfaceName() const final;
   ExecutionContext* GetExecutionContext() const final {
     return ExecutionContextClient::GetExecutionContext();
   }
 
   // If multiple CloseWatchers are active in a given window, they form a
-  // stack, and a close signal will pop the top watcher. If the stack is empty,
+  // stack, and a close request will pop the top watcher. If the stack is empty,
   // the first CloseWatcher is "free", but creating a new
   // CloseWatcher when the stack is non-empty requires a user activation.
   class WatcherStack final : public GarbageCollected<WatcherStack>,
@@ -65,16 +65,6 @@ class CloseWatcher final : public EventTargetWithInlineData,
 
     void Trace(Visitor*) const;
 
-    void DidReceiveUserActivation() {
-      user_activation_time_ = base::TimeTicks::Now();
-    }
-    void ConsumeCloseWatcherCancelability() {
-      last_used_user_activation_time_ = user_activation_time_;
-    }
-    bool CanCloseWatcherFireCancel() const {
-      return last_used_user_activation_time_ != user_activation_time_;
-    }
-
     void EscapeKeyHandler(KeyboardEvent*);
 
    private:
@@ -86,18 +76,11 @@ class CloseWatcher final : public EventTargetWithInlineData,
     // Holds a pipe which the service uses to notify this object
     // when the idle state has changed.
     HeapMojoReceiver<mojom::blink::CloseListener, WatcherStack> receiver_;
-
-    // Tracks last use activation time consumed by a close watcher vs. last
-    // time user activation happened:
-    // https://wicg.github.io/close-watcher/#timestamp-of-last-activation-used-for-close-watchers
-    base::TimeTicks user_activation_time_;
-    base::TimeTicks last_used_user_activation_time_;
-
     Member<LocalDOMWindow> window_;
   };
 
  private:
-  static CloseWatcher* CreateInternal(LocalDOMWindow*,
+  static CloseWatcher* CreateInternal(LocalDOMWindow&,
                                       WatcherStack&,
                                       CloseWatcherOptions*);
 

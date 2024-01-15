@@ -6,71 +6,76 @@
  * @fileoverview Display manager for WebUI OOBE and login.
  */
 
-// #import {assert} from 'chrome://resources/js/assert.js';
-// #import {$, ensureTransitionEndEvent} from 'chrome://resources/js/util.js';
-// #import {loadTimeData} from './i18n_setup.js';
-// #import {OobeTypes} from './components/oobe_types.m.js';
+import {assert} from '//resources/ash/common/assert.js';
+import {$, ensureTransitionEndEvent} from '//resources/ash/common/util.js';
+import {afterNextRender} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
- // #import {DISPLAY_TYPE, SCREEN_DEVICE_DISABLED, OOBE_UI_STATE, SCREEN_WELCOME } from './components/display_manager_types.m.js';
-// #import {MultiTapDetector} from './multi_tap_detector.m.js';
-// #import {keyboard} from './keyboard_utils.m.js'
+import {DISPLAY_TYPE, OOBE_UI_STATE, SCREEN_DEVICE_DISABLED, SCREEN_WELCOME} from './components/display_manager_types.js';
+import {globalOobeKeyboard} from './components/keyboard_utils_oobe.js';
+import {OobeTypes} from './components/oobe_types.js';
+import {loadTimeData} from './i18n_setup.js';
+import {MultiTapDetector} from './multi_tap_detector.js';
 
-cr.define('cr.ui.login', function() {
-  /**
-   * Maximum time in milliseconds to wait for step transition to finish.
-   * The value is used as the duration for ensureTransitionEndEvent below.
-   * It needs to be inline with the step screen transition duration time
-   * defined in css file. The current value in css is 200ms. To avoid emulated
-   * transitionend fired before real one, 250ms is used.
-   * @const
-   */
-  var MAX_SCREEN_TRANSITION_DURATION = 250;
+/**
+ * Maximum time in milliseconds to wait for step transition to finish.
+ * The value is used as the duration for ensureTransitionEndEvent below.
+ * It needs to be inline with the step screen transition duration time
+ * defined in css file. The current value in css is 1,150ms. To avoid emulated
+ * transitionend fired before real one, +50ms is used.
+ */
+const MAX_SCREEN_TRANSITION_DURATION = 1200;
 
-  /**
-   * As Polymer behaviors do not provide true inheritance, when two behaviors
-   * would declare same method one of them will be hidden. Also, if element
-   * re-declares the method it needs explicitly iterate over behaviors and call
-   * method on them. This function simplifies such interaction by calling
-   * method on element and all behaviors in the same order as lifecycle
-   * callbacks are called.
-   * @param {Element} element
-   * @param {string} name function name
-   * @param {...*} args arguments for the function
-   *
-   * @suppress {missingProperties}
-   * element.behaviors
-   * TODO(crbug.com/1229130) - Remove this suppression.
-   */
-  /* #export */ function invokePolymerMethod(element, name, ...args) {
-    const method = element[name];
-    if (!method || typeof method !== 'function') {
-      return;
-    }
-    method.apply(element, args);
-    if (!element.behaviors) {
-      return;
-    }
+/**
+ * Maximum delay to call triggerDown from cpp logic. If the logic fails,
+ * triggerDown should be called after this duration to unblock CUJ.
+ */
+const TRIGGERDOWN_FALLBACK_DELAY = 10000;
 
-    // If element has behaviors call functions on them in reverse order,
-    // ignoring case when method on element was derived from behavior.
-    for (var i = element.behaviors.length - 1; i >= 0; i--) {
-      const behavior = element.behaviors[i];
-      const behaviorMethod = behavior[name];
-      if (!behaviorMethod || typeof behaviorMethod !== 'function') {
-        continue;
-      }
-      if (behaviorMethod == method) {
-        continue;
-      }
-      behaviorMethod.apply(element, args);
-    }
+/**
+ * As Polymer behaviors do not provide true inheritance, when two behaviors
+ * would declare same method one of them will be hidden. Also, if element
+ * re-declares the method it needs explicitly iterate over behaviors and call
+ * method on them. This function simplifies such interaction by calling
+ * method on element and all behaviors in the same order as lifecycle
+ * callbacks are called.
+ * @param {Element} element
+ * @param {string} name function name
+ * @param {...*} args arguments for the function
+ *
+ * @suppress {missingProperties}
+ * element.behaviors
+ * TODO(crbug.com/1229130) - Remove this suppression.
+ */
+export function invokePolymerMethod(element, name, ...args) {
+  const method = element[name];
+  if (!method || typeof method !== 'function') {
+    return;
   }
+  method.apply(element, args);
+  if (!element.behaviors) {
+    return;
+  }
+
+  // If element has behaviors call functions on them in reverse order,
+  // ignoring case when method on element was derived from behavior.
+  for (let i = element.behaviors.length - 1; i >= 0; i--) {
+    const behavior = element.behaviors[i];
+    const behaviorMethod = behavior[name];
+    if (!behaviorMethod || typeof behaviorMethod !== 'function') {
+      continue;
+    }
+    if (behaviorMethod == method) {
+      continue;
+    }
+    behaviorMethod.apply(element, args);
+  }
+}
 
   /**
    * A display manager that manages initialization of screens,
    * transitions, error messages display.
    */
-  /* #export */ class DisplayManager {
+  export class DisplayManager {
     constructor() {
       /**
        * Registered screens.
@@ -113,10 +118,6 @@ cr.define('cr.ui.login', function() {
        * @private
        */
       this.demoModeStartListener_ = null;
-    }
-
-    get virtualKeyboardShown() {
-      return this.virtualKeyboardShown_;
     }
 
     set virtualKeyboardShown(shown) {
@@ -172,7 +173,7 @@ cr.define('cr.ui.login', function() {
     set forceKeyboardFlow(value) {
       this.forceKeyboardFlow_ = value;
       if (value) {
-        keyboard.initializeKeyboardFlow(false);
+        globalOobeKeyboard.initializeKeyboardFlow();
       }
     }
 
@@ -222,6 +223,10 @@ cr.define('cr.ui.login', function() {
       const nextStepId = this.screens_[nextStepIndex];
       const oldStep = $(currentStepId);
       const newStep = $(nextStepId);
+      const innerContainer = $('inner-container');
+      const oobeContainer = $('oobe');
+      const isBootAnimationEnabled =
+          loadTimeData.getBoolean('isBootAnimationEnabled');
 
       invokePolymerMethod(oldStep, 'onBeforeHide');
 
@@ -256,7 +261,6 @@ cr.define('cr.ui.login', function() {
       // Default control to be focused (if specified).
       const defaultControl = newStep.defaultControl;
 
-      const innerContainer = $('inner-container');
       if (this.currentStep_ != nextStepIndex &&
           !oldStep.classList.contains('hidden')) {
         oldStep.classList.add('hidden');
@@ -267,17 +271,12 @@ cr.define('cr.ui.login', function() {
       } else {
         // First screen on OOBE launch.
         if (this.isOobeUI() && innerContainer.classList.contains('down')) {
-          innerContainer.classList.remove('down');
-          innerContainer.addEventListener('transitionend', function f(e) {
-            innerContainer.removeEventListener('transitionend', f);
-            // Refresh defaultControl. It could have changed.
-            const defaultControl = newStep.defaultControl;
-            if (defaultControl) {
-              defaultControl.focus();
-            }
-          });
-          ensureTransitionEndEvent(
-              innerContainer, MAX_SCREEN_TRANSITION_DURATION);
+          if (isBootAnimationEnabled &&
+              oobeContainer.classList.contains('connect')) {
+            setTimeout(this.triggerDown.bind(this), TRIGGERDOWN_FALLBACK_DELAY);
+          } else {
+            this.triggerDown();
+          }
         } else {
           if (defaultControl) {
             defaultControl.focus();
@@ -293,7 +292,22 @@ cr.define('cr.ui.login', function() {
       $('oobe').dispatchEvent(
           new CustomEvent('screenchanged', {detail: this.currentScreen.id}));
       chrome.send('updateCurrentScreen', [this.currentScreen.id]);
+
+      // Post a task to finish initial animation once a frame is rendered.
+      // Posting the task makes sure it will be executed after all other
+      // pending calls happening in JS that might delay the paint event.
+      if (isBootAnimationEnabled && innerContainer.classList.contains('down')) {
+        afterNextRender(this, () => this.sendBackdropLoaded());
+      }
     }
+
+    /**
+     * Notify browser that backdrop is ready.
+     */
+    sendBackdropLoaded() {
+      chrome.send('backdropLoaded');
+    }
+
 
     /**
      * Show screen of given screen id.
@@ -360,7 +374,7 @@ cr.define('cr.ui.login', function() {
         }
       }
       const dynamicElements = document.getElementsByClassName('i18n-dynamic');
-      for (var child of dynamicElements) {
+      for (const child of dynamicElements) {
         if (typeof (child.i18nUpdateLocale) === 'function') {
           child.i18nUpdateLocale();
         }
@@ -386,9 +400,10 @@ cr.define('cr.ui.login', function() {
 
     /**
      * Updates "device in tablet mode" state when tablet mode is changed.
-     * @param {Boolean} isInTabletMode True when in tablet mode.
+     * @param {boolean} isInTabletMode True when in tablet mode.
      */
     setTabletModeState_(isInTabletMode) {
+      document.documentElement.setAttribute('tablet', isInTabletMode);
       for (let i = 0; i < this.screens_.length; ++i) {
         const screenId = this.screens_[i];
         const screen = $(screenId);
@@ -396,6 +411,29 @@ cr.define('cr.ui.login', function() {
           screen.setTabletModeState(isInTabletMode);
         }
       }
+    }
+
+    /**
+     * Trigger of play down animation for current screen step.
+     */
+    triggerDown() {
+      const innerContainer = $('inner-container');
+      if (!this.isOobeUI() || !innerContainer.classList.contains('down')) {
+        return;
+      }
+
+      innerContainer.classList.remove('down');
+      innerContainer.addEventListener('transitionend', () => {
+        // Refresh defaultControl. It could have changed.
+        const stepId = this.screens_[this.currentStep_];
+        const step = $(stepId);
+        const defaultControl = step.defaultControl;
+        innerContainer.classList.add('down-finished');
+        if (defaultControl) {
+          defaultControl.focus();
+        }
+      }, /*AddEventListenerOptions=*/ {once: true});
+      ensureTransitionEndEvent(innerContainer, MAX_SCREEN_TRANSITION_DURATION);
     }
 
     /** Initializes demo mode start listener.
@@ -478,10 +516,3 @@ cr.define('cr.ui.login', function() {
       $('bluetooth-name').textContent = bluetoothName;
     }
   }
-  // #cr_define_end
-  // Export
-  return {
-    DisplayManager: DisplayManager,
-    invokePolymerMethod: invokePolymerMethod,
-  };
-});

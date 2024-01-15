@@ -5,13 +5,13 @@
 #ifndef CHROME_BROWSER_ASH_CROSAPI_ENVIRONMENT_PROVIDER_H_
 #define CHROME_BROWSER_ASH_CROSAPI_ENVIRONMENT_PROVIDER_H_
 
+#include <optional>
 #include <string>
 
 #include "chromeos/crosapi/mojom/crosapi.mojom.h"
 #include "components/account_manager_core/account.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/values_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace crosapi {
 
@@ -32,15 +32,11 @@ class EnvironmentProvider {
   // the device account, not the Lacros profile.
   virtual crosapi::mojom::DefaultPathsPtr GetDefaultPaths();
 
-  // Deprecated. Use `GetDeviceAccount` instead.
-  // TODO(crbug.com/1195865): Remove this in M93.
-  virtual std::string GetDeviceAccountGaiaId();
-
   // Returns the account used to sign into the device. May be a Gaia account or
   // a Microsoft Active Directory account.
   // Returns a `nullopt` for Guest Sessions, Managed Guest Sessions,
   // Demo Mode, and Kiosks.
-  virtual absl::optional<account_manager::Account> GetDeviceAccount();
+  virtual std::optional<account_manager::Account> GetDeviceAccount();
 
   // Getter and setter for device account policy data. Used to pass data from
   // Ash to Lacros. The format is serialized PolicyFetchResponse object. See

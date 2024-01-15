@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "media/base/android/media_server_crash_listener.h"
 
@@ -77,7 +77,8 @@ MediaServiceThrottler::~MediaServiceThrottler() {}
 MediaServiceThrottler::MediaServiceThrottler()
     : clock_(base::DefaultTickClock::GetInstance()),
       current_crashes_(0),
-      crash_listener_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      crash_listener_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {
   // base::Unretained is safe because the MediaServiceThrottler is supposed to
   // live until the process dies.
   release_crash_listener_cb_ = base::BindRepeating(

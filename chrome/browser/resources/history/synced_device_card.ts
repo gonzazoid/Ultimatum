@@ -13,13 +13,13 @@ import './strings.m.js';
 
 import {FocusRow} from 'chrome://resources/js/focus_row.js';
 import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {IronCollapseElement} from 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import type {IronCollapseElement} from 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserServiceImpl} from './browser_service.js';
 import {SYNCED_TABS_HISTOGRAM_NAME, SyncedTabsHistogram} from './constants.js';
-import {ForeignSessionTab} from './externs.js';
+import type {ForeignSessionTab} from './externs.js';
 import {getTemplate} from './synced_device_card.html.js';
 
 interface OpenTabEvent {
@@ -123,8 +123,7 @@ export class HistorySyncedDeviceCardElement extends PolymerElement {
     browserService.recordHistogram(
         SYNCED_TABS_HISTOGRAM_NAME, SyncedTabsHistogram.LINK_CLICKED,
         SyncedTabsHistogram.LIMIT);
-    browserService.openForeignSessionTab(
-        this.sessionTag, tab.windowId, tab.sessionId, e);
+    browserService.openForeignSessionTab(this.sessionTag, tab.sessionId, e);
     e.preventDefault();
   }
 
@@ -180,7 +179,7 @@ export class HistorySyncedDeviceCardElement extends PolymerElement {
                     loadTimeData.getString('expandSessionButton');
   }
 
-  private onMenuButtonTap_(e: Event) {
+  private onMenuButtonClick_(e: Event) {
     this.fire_('synced-device-card-open-menu', {
       target: e.target,
       tag: this.sessionTag,

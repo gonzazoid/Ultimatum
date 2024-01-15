@@ -200,11 +200,11 @@ TEST_F(V4ProtocolManagerUtilTest, CanonicalizeUrl) {
       {"http://%20leadingspace.com/", "%20leadingspace.com", "/", ""},
       {"https://www.securesite.com/", "www.securesite.com", "/", ""},
       {"http://host.com/ab%23cd", "host.com", "/ab%23cd", ""},
-      {"http://host%3e.com//twoslashes?more//slashes", "host>.com",
+      {"http://host%7d.com//twoslashes?more//slashes", "host}.com",
        "/twoslashes", "more//slashes"},
       {"http://host.com/abc?val=xyz#anything", "host.com", "/abc", "val=xyz"},
       {"http://abc:def@host.com/xyz", "host.com", "/xyz", ""},
-      {"http://host%3e.com/abc/%2e%2e%2fdef", "host>.com", "/def", ""},
+      {"http://host%7d.com/abc/%2e%2e%2fdef", "host}.com", "/def", ""},
       {"http://.......host...com.....//abc/////def%2F%2F%2Fxyz", "host.com",
        "/abc/def/xyz", ""},
       {"ftp://host.com/foo?bar", "host.com", "/foo", "bar"},
@@ -226,37 +226,6 @@ TEST_F(V4ProtocolManagerUtilTest, CanonicalizeUrl) {
     EXPECT_EQ(tests[i].expected_canonicalized_hostname, canonicalized_hostname);
     EXPECT_EQ(tests[i].expected_canonicalized_path, canonicalized_path);
     EXPECT_EQ(tests[i].expected_canonicalized_query, canonicalized_query);
-  }
-}
-
-TEST_F(V4ProtocolManagerUtilTest, TestIPAddressToEncodedIPV6) {
-  // To verify the test values, here's the python code:
-  // >> import socket, hashlib, binascii
-  // >> hashlib.sha1(socket.inet_pton(socket.AF_INET6, input)).digest() +
-  // chr(128)
-  // For example:
-  // >>> hashlib.sha1(socket.inet_pton(socket.AF_INET6,
-  // '::ffff:192.168.1.1')).digest() + chr(128)
-  // 'X\xf8\xa1\x17I\xe6Pl\xfd\xdb\xbb\xa0\x0c\x02\x9d#\n|\xe7\xcd\x80'
-  std::vector<std::tuple<bool, std::string, std::string>> test_cases = {
-      std::make_tuple(false, "", ""),
-      std::make_tuple(
-          true, "192.168.1.1",
-          "X\xF8\xA1\x17I\xE6Pl\xFD\xDB\xBB\xA0\f\x2\x9D#\n|\xE7\xCD\x80"),
-      std::make_tuple(
-          true,
-          "::", "\xE1)\xF2|Q\x3\xBC\\\xC4K\xCD\xF0\xA1^\x16\rDPf\xFF\x80")};
-  for (size_t i = 0; i < test_cases.size(); i++) {
-    DVLOG(1) << "Running case: " << i;
-    bool success = std::get<0>(test_cases[i]);
-    const auto& input = std::get<1>(test_cases[i]);
-    const auto& expected_output = std::get<2>(test_cases[i]);
-    std::string encoded_ip;
-    ASSERT_EQ(success, V4ProtocolManagerUtil::IPAddressToEncodedIPV6Hash(
-                           input, &encoded_ip));
-    if (success) {
-      ASSERT_EQ(expected_output, encoded_ip);
-    }
   }
 }
 

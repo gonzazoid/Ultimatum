@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
@@ -15,7 +16,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "components/history_clusters/core/filter_cluster_processor.h"
 #include "components/history_clusters/core/history_clusters_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -66,14 +67,15 @@ std::vector<history::Cluster> GetClustersFromFile() {
   }
 
   // Parse the JSON.
-  const base::Value* json_clusters = json_value->FindKey("clusters");
-  if (!json_clusters || !json_clusters->is_list()) {
+  const base::Value::List* json_clusters =
+      json_value->GetDict().FindList("clusters");
+  if (!json_clusters) {
     return {};
   }
   std::vector<history::Cluster> clusters;
-  clusters.reserve(json_clusters->GetList().size());
+  clusters.reserve(json_clusters->size());
 
-  for (const auto& json_cluster : json_clusters->GetList()) {
+  for (const auto& json_cluster : *json_clusters) {
     const auto& json_cluster_dict = json_cluster.GetDict();
 
     history::Cluster cluster;
@@ -110,10 +112,8 @@ std::vector<history::Cluster> GetClustersFromFile() {
       const base::Value::List* duplicate_visit_ids =
           json_visit_dict.FindList("duplicateVisitIds");
       if (duplicate_visit_ids) {
-        LOG(ERROR) << "Found duplicate visit";
         for (const auto& json_duplicate_visit_id : *duplicate_visit_ids) {
           int64_t duplicate_visit_id;
-          LOG(ERROR) << "Serializing " << json_duplicate_visit_id.GetString();
           if (base::StringToInt64(json_duplicate_visit_id.GetString(),
                                   &duplicate_visit_id)) {
             cluster_visit.duplicate_visits.push_back({duplicate_visit_id});
@@ -121,6 +121,11 @@ std::vector<history::Cluster> GetClustersFromFile() {
         }
       }
 
+      const std::string* image_url_string =
+          json_visit_dict.FindString("imageUrl");
+      if (image_url_string) {
+        cluster_visit.image_url = GURL(*image_url_string);
+      }
       cluster.visits.push_back(cluster_visit);
     }
 
@@ -227,11 +232,73 @@ FileClusteringBackend::CreateIfEnabled() {
 void FileClusteringBackend::GetClusters(
     ClusteringRequestSource clustering_request_source,
     ClustersCallback callback,
-    std::vector<history::AnnotatedVisit> visits) {
+    std::vector<history::AnnotatedVisit> visits,
+    bool unused_requires_ui_and_triggerability) {
   background_task_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(&GetClustersOnBackgroundThread, std::move(visits)),
       base::BindOnce(std::move(callback)));
+}
+
+void FileClusteringBackend::GetClustersForUI(
+    ClusteringRequestSource clustering_request_source,
+    QueryClustersFilterParams filter_params,
+    ClustersCallback callback,
+    std::vector<history::Cluster> clusters) {
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&FileClusteringBackend::GetClustersForUIOnBackgroundThread,
+                     clustering_request_source, std::move(filter_params),
+                     std::move(clusters)),
+      base::BindOnce(std::move(callback)));
+}
+
+std::vector<history::Cluster>
+FileClusteringBackend::GetClustersForUIOnBackgroundThread(
+    ClusteringRequestSource clustering_request_source,
+    QueryClustersFilterParams filter_params,
+    std::vector<history::Cluster> persisted_clusters) {
+  // Return if no persisted_clusters.
+  if (persisted_clusters.empty()) {
+    return {};
+  }
+
+  // Construct map of all visit ids to visits in persisted clusters.
+  std::vector<history::Cluster> clusters_from_command_line =
+      GetClustersFromFile();
+  base::flat_map<int64_t, history::ClusterVisit> persisted_visit_id_visit_map;
+  for (const auto& cluster : persisted_clusters) {
+    for (auto& visit : cluster.visits) {
+      persisted_visit_id_visit_map.insert(
+          {visit.annotated_visit.visit_row.visit_id, visit});
+    }
+  }
+
+  // Patch visits from persistence onto clusters from command line.
+  for (auto& cluster : clusters_from_command_line) {
+    for (auto it = cluster.visits.begin(); it != cluster.visits.end(); ++it) {
+      if (persisted_visit_id_visit_map.contains(
+              it->annotated_visit.visit_row.visit_id)) {
+        *it = persisted_visit_id_visit_map[it->annotated_visit.visit_row
+                                               .visit_id];
+        continue;
+      }
+      cluster.visits.erase(it);
+    }
+  }
+
+  // Apply any filtering after we've patched clusters from file.
+  auto filterer = std::make_unique<FilterClusterProcessor>(
+      clustering_request_source, filter_params,
+      /*engagement_score_provider_is_valid=*/true);
+  filterer->ProcessClusters(&clusters_from_command_line);
+  return clusters_from_command_line;
+}
+
+void FileClusteringBackend::GetClusterTriggerability(
+    ClustersCallback callback,
+    std::vector<history::Cluster> clusters) {
+  std::move(callback).Run(std::move(clusters));
 }
 
 }  // namespace history_clusters

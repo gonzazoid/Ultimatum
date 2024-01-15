@@ -12,11 +12,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
@@ -36,8 +36,6 @@ namespace {
 
 constexpr base::FilePath::CharType kAppWithLocaleBinaryPbFileName[] =
     FILE_PATH_LITERAL("app_data.textproto");
-constexpr base::FilePath::CharType kDeduplicationBinaryPbFileName[] =
-    FILE_PATH_LITERAL("deduplication_data.pb");
 
 // The SHA256 of the SubjectPublicKeyInfo used to sign the extension.
 // The extension id is: fellaebeeieagcalnmmpapfioejgihci
@@ -49,31 +47,21 @@ constexpr uint8_t kAppProvisioningPublicKeySHA256[32] = {
 constexpr char kAppProvisioningManifestName[] = "App Provisioning";
 
 absl::optional<apps::ComponentFileContents> LoadAppMetadataFromDisk(
-    const base::FilePath& app_with_locale_pb_path,
-    const base::FilePath& deduplication_pb_path) {
-  if (app_with_locale_pb_path.empty() || deduplication_pb_path.empty())
+    const base::FilePath& app_with_locale_pb_path) {
+  if (app_with_locale_pb_path.empty()) {
     return absl::nullopt;
+  }
 
   VLOG(1) << "Reading Download App Metadata from file: "
-          << app_with_locale_pb_path.value()
-          << " and file: " << deduplication_pb_path.value();
+          << app_with_locale_pb_path.value();
   std::string app_with_locale_binary_pb;
-  std::string deduplication_binary_pb;
   if (!base::ReadFileToString(app_with_locale_pb_path,
                               &app_with_locale_binary_pb)) {
     VLOG(1) << "Failed reading from " << app_with_locale_pb_path.value();
     return absl::nullopt;
   }
 
-  if (base::FeatureList::IsEnabled(features::kAppDeduplicationService) &&
-      !base::ReadFileToString(deduplication_pb_path,
-                              &deduplication_binary_pb)) {
-    VLOG(1) << "Failed reading from " << deduplication_pb_path.value();
-    return absl::nullopt;
-  }
-
-  return apps::ComponentFileContents{app_with_locale_binary_pb,
-                                     deduplication_binary_pb};
+  return apps::ComponentFileContents{app_with_locale_binary_pb};
 }
 
 void UpdateAppMetadataOnUI(
@@ -92,13 +80,11 @@ namespace component_updater {
 
 // Called during startup and installation before ComponentReady().
 bool AppProvisioningComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the proto here, since we'll do the checking
   // in `PopulateFromDynamicUpdate()`.
-  return base::PathExists(GetAppWithLocaleInstalledPath(install_dir)) &&
-         (!base::FeatureList::IsEnabled(features::kAppDeduplicationService) ||
-          base::PathExists(GetDeduplicationInstalledPath(install_dir)));
+  return base::PathExists(GetAppWithLocaleInstalledPath(install_dir));
 }
 
 bool AppProvisioningComponentInstallerPolicy::
@@ -113,7 +99,7 @@ bool AppProvisioningComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 AppProvisioningComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -123,14 +109,13 @@ void AppProvisioningComponentInstallerPolicy::OnCustomUninstall() {}
 void AppProvisioningComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::BindOnce(&LoadAppMetadataFromDisk,
-                     GetAppWithLocaleInstalledPath(install_dir),
-                     GetDeduplicationInstalledPath(install_dir)),
+                     GetAppWithLocaleInstalledPath(install_dir)),
       base::BindOnce(&UpdateAppMetadataOnUI, install_dir));
 }
 
@@ -160,17 +145,9 @@ AppProvisioningComponentInstallerPolicy::GetAppWithLocaleInstalledPath(
   return base.Append(kAppWithLocaleBinaryPbFileName);
 }
 
-base::FilePath
-AppProvisioningComponentInstallerPolicy::GetDeduplicationInstalledPath(
-    const base::FilePath& base) {
-  return base.Append(kDeduplicationBinaryPbFileName);
-}
-
-void RegisterAppProvisioningComponent(component_updater::ComponentUpdateService* cus) {
-  // If either of these flags are enabled, register the component. Otherwise,
-  // don't.
-  if (base::FeatureList::IsEnabled(features::kAppProvisioningStatic) ||
-      chromeos::features::IsCloudGamingDeviceEnabled()) {
+void RegisterAppProvisioningComponent(
+    component_updater::ComponentUpdateService* cus) {
+  if (chromeos::features::IsCloudGamingDeviceEnabled()) {
     VLOG(1) << "Registering App Provisioning component.";
     auto installer = base::MakeRefCounted<ComponentInstaller>(
         std::make_unique<AppProvisioningComponentInstallerPolicy>());

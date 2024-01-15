@@ -17,7 +17,6 @@
       "name": "LayoutNGBlockFlow (positioned) DIV",
       "position": [8, 0],
       "bounds": [200, 200],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {

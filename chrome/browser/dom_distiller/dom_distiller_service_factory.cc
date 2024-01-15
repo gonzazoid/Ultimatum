@@ -36,7 +36,8 @@ DomDistillerContextKeyedService::DomDistillerContextKeyedService(
 
 // static
 DomDistillerServiceFactory* DomDistillerServiceFactory::GetInstance() {
-  return base::Singleton<DomDistillerServiceFactory>::get();
+  static base::NoDestructor<DomDistillerServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -52,11 +53,17 @@ DomDistillerServiceFactory::DomDistillerServiceFactory()
           "DomDistillerService",
           // Makes normal profile and off-the-record profile use same service
           // instance.
-          ProfileSelections::BuildRedirectedInIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
-DomDistillerServiceFactory::~DomDistillerServiceFactory() {}
+DomDistillerServiceFactory::~DomDistillerServiceFactory() = default;
 
-KeyedService* DomDistillerServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DomDistillerServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   scoped_refptr<base::SequencedTaskRunner> background_task_runner =
@@ -94,12 +101,9 @@ KeyedService* DomDistillerServiceFactory::BuildServiceInstanceFor(
       std::make_unique<dom_distiller::android::DistillerUIHandleAndroid>();
 #endif  // BUILDFLAG(IS_ANDROID)
 
-  DomDistillerContextKeyedService* service =
-      new DomDistillerContextKeyedService(
-          std::move(distiller_factory), std::move(distiller_page_factory),
-          std::move(distilled_page_prefs), std::move(distiller_ui_handle));
-
-  return service;
+  return std::make_unique<DomDistillerContextKeyedService>(
+      std::move(distiller_factory), std::move(distiller_page_factory),
+      std::move(distilled_page_prefs), std::move(distiller_ui_handle));
 }
 
 }  // namespace dom_distiller

@@ -11,12 +11,14 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_context.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_java_ref.h"
@@ -30,6 +32,9 @@ class PrefStore;
 class ProfileDestroyer;
 class ProfileKey;
 class TestingProfile;
+class ThemeService;
+class TemplateURLService;
+class InstantService;
 
 namespace base {
 class FilePath;
@@ -38,17 +43,16 @@ class Time;
 }
 
 namespace content {
-class ResourceContext;
 class WebUI;
 }
 
 namespace policy {
 class SchemaRegistryService;
 class ProfilePolicyConnector;
+class ProfileCloudPolicyManager;
 class UserCloudPolicyManager;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-class ActiveDirectoryPolicyManager;
 class UserCloudPolicyManagerAsh;
 #endif
 }  // namespace policy
@@ -127,6 +131,11 @@ class Profile : public content::BrowserContext {
 
     bool AllowsBrowserWindows() const;
 
+#if BUILDFLAG(IS_CHROMEOS)
+    // Returns true if the OTR Profile was created for captive portal signin.
+    bool IsCaptivePortal() const;
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
     // Constructs a Java OTRProfileID from the provided C++ OTRProfileID
     base::android::ScopedJavaLocalRef<jobject> ConvertToJavaOTRProfileID(
@@ -149,7 +158,6 @@ class Profile : public content::BrowserContext {
 #endif
 
    private:
-    friend class ProfileDestroyer;
     friend std::ostream& operator<<(std::ostream& out,
                                     const OTRProfileID& profile_id);
 
@@ -232,8 +240,6 @@ class Profile : public content::BrowserContext {
 
   variations::VariationsClient* GetVariationsClient() override;
 
-  content::ResourceContext* GetResourceContext() override;
-
   // Returns the creation time of this profile. This will either be the creation
   // time of the profile directory or, for ephemeral off-the-record profiles,
   // the creation time of the profile object instance.
@@ -294,6 +300,10 @@ class Profile : public content::BrowserContext {
   virtual const Profile* GetOriginalProfile() const = 0;
 
   // Returns whether the profile is associated with the account of a child.
+  // This method should not be used in new code to gate child-specific
+  // functionality. Prefer a feture specific method
+  // (eg. `SupervisedUserService::IsURLFilteringEnabled()`) or alternatively
+  // use `SupervisedUserService::IsSubjectToParentalControls()`.
   virtual bool IsChild() const = 0;
 
   // Returns whether opening browser windows is allowed in this profile. For
@@ -342,13 +352,10 @@ class Profile : public content::BrowserContext {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Returns the UserCloudPolicyManagerAsh.
   virtual policy::UserCloudPolicyManagerAsh* GetUserCloudPolicyManagerAsh() = 0;
-
-  // Returns the ActiveDirectoryPolicyManager.
-  virtual policy::ActiveDirectoryPolicyManager*
-  GetActiveDirectoryPolicyManager() = 0;
 #else
   // Returns the UserCloudPolicyManager.
   virtual policy::UserCloudPolicyManager* GetUserCloudPolicyManager() = 0;
+  virtual policy::ProfileCloudPolicyManager* GetProfileCloudPolicyManager() = 0;
 #endif
 
   virtual policy::ProfilePolicyConnector* GetProfilePolicyConnector() = 0;
@@ -412,6 +419,9 @@ class Profile : public content::BrowserContext {
 
   // Returns whether it is an Incognito profile. An Incognito profile is an
   // off-the-record profile that is used for incognito mode.
+  //
+  // TODO(crbug.com/1348572): Also returns true for Lacros in a Ash guest
+  // profile.
   bool IsIncognitoProfile() const;
 
   // Returns true if this is a primary OffTheRecord profile, which covers the
@@ -488,6 +498,30 @@ class Profile : public content::BrowserContext {
 
   virtual void RecordPrimaryMainFrameNavigation() = 0;
 
+  base::WeakPtr<const Profile> GetWeakPtr() const;
+  base::WeakPtr<Profile> GetWeakPtr();
+
+  // Experimental getters/setters to gauge the performance of caching
+  // frequently used KeyedServices in a Profile pointer.
+  void set_theme_service(ThemeService* theme_service) {
+    theme_service_ = theme_service;
+  }
+  const absl::optional<raw_ptr<ThemeService>>& theme_service() {
+    return theme_service_;
+  }
+  void set_template_url_service(TemplateURLService* template_url_service) {
+    template_url_service_ = template_url_service;
+  }
+  const absl::optional<raw_ptr<TemplateURLService>>& template_url_service() {
+    return template_url_service_;
+  }
+  void set_instant_service(InstantService* instant_service) {
+    instant_service_ = instant_service;
+  }
+  const absl::optional<raw_ptr<InstantService>>& instant_service() {
+    return instant_service_;
+  }
+
  protected:
   // Creates an OffTheRecordProfile which points to this Profile.
   static std::unique_ptr<Profile> CreateOffTheRecordProfile(
@@ -500,21 +534,12 @@ class Profile : public content::BrowserContext {
                                              bool incognito_pref_store);
 
   void NotifyOffTheRecordProfileCreated(Profile* off_the_record);
+  void NotifyProfileInitializationComplete();
 
   // Returns whether the user has signed in this profile to an account.
   virtual bool IsSignedIn() = 0;
 
  private:
-  friend class ProfileDestroyer;
-
-  base::WeakPtr<Profile> GetWeakPtr();
-
-  // Created on the UI thread, and returned by GetResourceContext(), but
-  // otherwise lives on and is destroyed on the IO thread.
-  //
-  // TODO(https://crbug.com/908955): Get rid of ResourceContext.
-  std::unique_ptr<content::ResourceContext> resource_context_;
-
   bool restored_last_session_ = false;
 
   // Used to prevent the notification that this Profile is destroyed from
@@ -526,6 +551,12 @@ class Profile : public content::BrowserContext {
   // increment and decrement the level, respectively, rather than set it to
   // true or false, so that calls can be nested.
   int accessibility_pause_level_ = 0;
+
+  // Experimental objects to gauge the performance of caching frequently used
+  // KeyedServices in a Profile pointer.
+  absl::optional<raw_ptr<ThemeService>> theme_service_;
+  absl::optional<raw_ptr<TemplateURLService>> template_url_service_;
+  absl::optional<raw_ptr<InstantService>> instant_service_;
 
   base::ObserverList<ProfileObserver,
                      /*check_empty=*/true,

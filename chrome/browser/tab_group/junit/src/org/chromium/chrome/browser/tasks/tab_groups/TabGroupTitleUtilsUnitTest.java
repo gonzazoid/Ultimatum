@@ -4,8 +4,9 @@
 
 package org.chromium.chrome.browser.tasks.tab_groups;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -25,36 +26,27 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.testing.local.LocalRobolectricTestRunner;
 
-/**
- * Tests for {@link TabGroupTitleUtils}.
- */
-@RunWith(LocalRobolectricTestRunner.class)
+/** Tests for {@link TabGroupTitleUtils}. */
+@RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TabGroupTitleUtilsUnitTest {
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
     private static final String TAB_GROUP_TITLES_FILE_NAME = "tab_group_titles";
 
     private static final int TAB_ID = 456;
     private static final String TAB_TITLE = "Tab";
 
-    @Mock
-    Context mContext;
-    @Mock
-    Tab mTab;
-    @Mock
-    SharedPreferences mSharedPreferences;
-    @Mock
-    SharedPreferences.Editor mEditor;
-    @Mock
-    SharedPreferences.Editor mPutStringEditor;
-    @Mock
-    SharedPreferences.Editor mRemoveEditor;
+    @Mock Context mContext;
+    @Mock Tab mTab;
+    @Mock SharedPreferences mSharedPreferences;
+    @Mock SharedPreferences.Editor mEditor;
+    @Mock SharedPreferences.Editor mPutStringEditor;
+    @Mock SharedPreferences.Editor mRemoveEditor;
 
     @Before
     public void setUp() {

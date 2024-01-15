@@ -4,6 +4,7 @@
 
 #include "chromeos/crosapi/mojom/app_service_types_mojom_traits.h"
 
+#include <cstddef>
 #include <string>
 #include <utility>
 
@@ -14,23 +15,31 @@
 namespace {
 
 crosapi::mojom::OptionalBool ConvertOptionalBoolToMojomOptionalBool(
-    const absl::optional<bool>& option_bool) {
+    const std::optional<bool>& option_bool) {
   if (!option_bool.has_value())
     return crosapi::mojom::OptionalBool::kUnknown;
   return option_bool.value() ? crosapi::mojom::OptionalBool::kTrue
                              : crosapi::mojom::OptionalBool::kFalse;
 }
 
-absl::optional<bool> ConvertMojomOptionalBoolToOptionalBool(
+std::optional<bool> ConvertMojomOptionalBoolToOptionalBool(
     const crosapi::mojom::OptionalBool& mojom_option_bool) {
   switch (mojom_option_bool) {
     case crosapi::mojom::OptionalBool::kUnknown:
-      return absl::nullopt;
+      return std::nullopt;
     case crosapi::mojom::OptionalBool::kTrue:
       return true;
     case crosapi::mojom::OptionalBool::kFalse:
       return false;
   }
+}
+
+apps::IconKeyPtr ConvertOptionalIconKeyToIconKeyPtr(
+    const std::optional<apps::IconKey>& icon_key) {
+  if (!icon_key.has_value()) {
+    return nullptr;
+  }
+  return icon_key->Clone();
 }
 
 }  // namespace
@@ -39,15 +48,18 @@ namespace mojo {
 
 apps::IconKeyPtr StructTraits<crosapi::mojom::AppDataView,
                               apps::AppPtr>::icon_key(const apps::AppPtr& r) {
-  return r->icon_key.has_value()
-             ? std::make_unique<apps::IconKey>(r->icon_key.value().timeline,
-                                               r->icon_key.value().resource_id,
-                                               r->icon_key.value().icon_effects)
-             : nullptr;
+  if (!r->icon_key.has_value()) {
+    return nullptr;
+  }
+
+  auto icon_key = std::make_unique<apps::IconKey>(r->icon_key->resource_id,
+                                                  r->icon_key->icon_effects);
+  icon_key->update_version = r->icon_key->update_version;
+  return icon_key;
 }
 
 // static
-absl::optional<std::string>
+std::optional<std::string>
 StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::deprecated_policy_id(
     const apps::AppPtr& r) {
   if (!r->policy_ids.empty()) {
@@ -133,6 +145,27 @@ StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::is_platform_app(
   return ConvertOptionalBoolToMojomOptionalBool(r->is_platform_app);
 }
 
+// static
+std::optional<uint64_t>
+StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::app_size_in_bytes(
+    const apps::AppPtr& r) {
+  return r->app_size_in_bytes;
+}
+
+// static
+std::optional<uint64_t>
+StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::data_size_in_bytes(
+    const apps::AppPtr& r) {
+  return r->data_size_in_bytes;
+}
+
+// static
+crosapi::mojom::OptionalBool
+StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::allow_close(
+    const apps::AppPtr& r) {
+  return ConvertOptionalBoolToMojomOptionalBool(r->allow_close);
+}
+
 bool StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::Read(
     crosapi::mojom::AppDataView data,
     apps::AppPtr* out) {
@@ -148,23 +181,23 @@ bool StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::Read(
   if (!data.ReadReadiness(&readiness))
     return false;
 
-  absl::optional<std::string> name;
+  std::optional<std::string> name;
   if (!data.ReadName(&name))
     return false;
 
-  absl::optional<std::string> short_name;
+  std::optional<std::string> short_name;
   if (!data.ReadShortName(&short_name))
     return false;
 
-  absl::optional<std::string> publisher_id;
+  std::optional<std::string> publisher_id;
   if (!data.ReadPublisherId(&publisher_id))
     return false;
 
-  absl::optional<std::string> description;
+  std::optional<std::string> description;
   if (!data.ReadDescription(&description))
     return false;
 
-  absl::optional<std::string> version;
+  std::optional<std::string> version;
   if (!data.ReadVersion(&version))
     return false;
 
@@ -176,11 +209,11 @@ bool StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::Read(
   if (!data.ReadIconKey(&icon_key))
     return false;
 
-  absl::optional<base::Time> last_launch_time;
+  std::optional<base::Time> last_launch_time;
   if (!data.ReadLastLaunchTime(&last_launch_time))
     return false;
 
-  absl::optional<base::Time> install_time;
+  std::optional<base::Time> install_time;
   if (!data.ReadInstallTime(&install_time))
     return false;
 
@@ -188,7 +221,7 @@ bool StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::Read(
   if (!data.ReadInstallReason(&install_reason))
     return false;
 
-  absl::optional<std::string> deprecated_policy_id;
+  std::optional<std::string> deprecated_policy_id;
   if (!data.ReadDeprecatedPolicyId(&deprecated_policy_id))
     return false;
 
@@ -248,13 +281,18 @@ bool StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::Read(
   if (!data.ReadHandlesIntents(&handles_intents))
     return false;
 
-  apps::Shortcuts shortcuts;
-  if (!data.ReadShortcuts(&shortcuts))
-    return false;
-
   crosapi::mojom::OptionalBool is_platform_app;
   if (!data.ReadIsPlatformApp(&is_platform_app))
     return false;
+
+  std::optional<uint64_t> app_size_in_bytes = data.app_size_in_bytes();
+
+  std::optional<uint64_t> data_size_in_bytes = data.data_size_in_bytes();
+
+  crosapi::mojom::OptionalBool allow_close;
+  if (!data.ReadAllowClose(&allow_close)) {
+    return false;
+  }
 
   auto app = std::make_unique<apps::App>(app_type, app_id);
   app->readiness = readiness;
@@ -293,9 +331,11 @@ bool StructTraits<crosapi::mojom::AppDataView, apps::AppPtr>::Read(
       ConvertMojomOptionalBoolToOptionalBool(allow_uninstall);
   app->handles_intents =
       ConvertMojomOptionalBoolToOptionalBool(handles_intents);
-  app->shortcuts = std::move(shortcuts);
   app->is_platform_app =
       ConvertMojomOptionalBoolToOptionalBool(is_platform_app);
+  app->app_size_in_bytes = app_size_in_bytes;
+  app->data_size_in_bytes = data_size_in_bytes;
+  app->allow_close = ConvertMojomOptionalBoolToOptionalBool(allow_close);
   *out = std::move(app);
   return true;
 }
@@ -320,11 +360,11 @@ EnumTraits<crosapi::mojom::AppType, apps::AppType>::ToMojom(
     case apps::AppType::kCrostini:
     case apps::AppType::kChromeApp:
     case apps::AppType::kExtension:
-    case apps::AppType::kMacOs:
     case apps::AppType::kPluginVm:
     case apps::AppType::kStandaloneBrowser:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
+    case apps::AppType::kBruschetta:
       NOTREACHED();
       return crosapi::mojom::AppType::kUnknown;
   }
@@ -378,8 +418,8 @@ EnumTraits<crosapi::mojom::Readiness, apps::Readiness>::ToMojom(
       return crosapi::mojom::Readiness::kUninstalledByUser;
     case apps::Readiness::kRemoved:
       return crosapi::mojom::Readiness::kRemoved;
-    case apps::Readiness::kUninstalledByMigration:
-      return crosapi::mojom::Readiness::kUninstalledByMigration;
+    case apps::Readiness::kUninstalledByNonUser:
+      return crosapi::mojom::Readiness::kUninstalledByNonUser;
   }
 
   NOTREACHED();
@@ -413,8 +453,8 @@ bool EnumTraits<crosapi::mojom::Readiness, apps::Readiness>::FromMojom(
     case crosapi::mojom::Readiness::kRemoved:
       *output = apps::Readiness::kRemoved;
       return true;
-    case crosapi::mojom::Readiness::kUninstalledByMigration:
-      *output = apps::Readiness::kUninstalledByMigration;
+    case crosapi::mojom::Readiness::kUninstalledByNonUser:
+      *output = apps::Readiness::kUninstalledByNonUser;
       return true;
   }
 
@@ -422,11 +462,50 @@ bool EnumTraits<crosapi::mojom::Readiness, apps::Readiness>::FromMojom(
   return false;
 }
 
+crosapi::mojom::IconUpdateVersionDataView::Tag UnionTraits<
+    crosapi::mojom::IconUpdateVersionDataView,
+    apps::IconKey::UpdateVersion>::GetTag(const apps::IconKey::UpdateVersion&
+                                              r) {
+  if (absl::holds_alternative<bool>(r)) {
+    return crosapi::mojom::IconUpdateVersionDataView::Tag::kRawIconUpdated;
+  }
+  if (absl::holds_alternative<int32_t>(r)) {
+    return crosapi::mojom::IconUpdateVersionDataView::Tag::kTimeline;
+  }
+  NOTREACHED();
+  return crosapi::mojom::IconUpdateVersionDataView::Tag::kRawIconUpdated;
+}
+
+bool UnionTraits<crosapi::mojom::IconUpdateVersionDataView,
+                 apps::IconKey::UpdateVersion>::
+    Read(crosapi::mojom::IconUpdateVersionDataView data,
+         apps::IconKey::UpdateVersion* out) {
+  switch (data.tag()) {
+    case crosapi::mojom::IconUpdateVersionDataView::Tag::kRawIconUpdated: {
+      *out = data.raw_icon_updated();
+      return true;
+    }
+    case crosapi::mojom::IconUpdateVersionDataView::Tag::kTimeline: {
+      *out = data.timeline();
+      return true;
+    }
+  }
+  NOTREACHED();
+  return false;
+}
+
 bool StructTraits<crosapi::mojom::IconKeyDataView, apps::IconKeyPtr>::Read(
     crosapi::mojom::IconKeyDataView data,
     apps::IconKeyPtr* out) {
-  *out = std::make_unique<apps::IconKey>(
-      data.timeline(), apps::IconKey::kInvalidResourceId, data.icon_effects());
+  apps::IconKey::UpdateVersion update_version;
+  if (!data.ReadUpdateVersion(&update_version)) {
+    return false;
+  }
+
+  *out = std::make_unique<apps::IconKey>(apps::IconKey::kInvalidResourceId,
+                                         data.icon_effects());
+  (*out)->update_version = std::move(update_version);
+
   return true;
 }
 
@@ -499,40 +578,6 @@ bool EnumTraits<crosapi::mojom::InstallReason, apps::InstallReason>::FromMojom(
   return false;
 }
 
-crosapi::mojom::OptionalBool
-EnumTraits<crosapi::mojom::OptionalBool, apps::mojom::OptionalBool>::ToMojom(
-    apps::mojom::OptionalBool input) {
-  switch (input) {
-    case apps::mojom::OptionalBool::kUnknown:
-      return crosapi::mojom::OptionalBool::kUnknown;
-    case apps::mojom::OptionalBool::kFalse:
-      return crosapi::mojom::OptionalBool::kFalse;
-    case apps::mojom::OptionalBool::kTrue:
-      return crosapi::mojom::OptionalBool::kTrue;
-  }
-
-  NOTREACHED();
-}
-
-bool EnumTraits<crosapi::mojom::OptionalBool, apps::mojom::OptionalBool>::
-    FromMojom(crosapi::mojom::OptionalBool input,
-              apps::mojom::OptionalBool* output) {
-  switch (input) {
-    case crosapi::mojom::OptionalBool::kUnknown:
-      *output = apps::mojom::OptionalBool::kUnknown;
-      return true;
-    case crosapi::mojom::OptionalBool::kFalse:
-      *output = apps::mojom::OptionalBool::kFalse;
-      return true;
-    case crosapi::mojom::OptionalBool::kTrue:
-      *output = apps::mojom::OptionalBool::kTrue;
-      return true;
-  }
-
-  NOTREACHED();
-  return false;
-}
-
 bool StructTraits<crosapi::mojom::IntentFilterDataView, apps::IntentFilterPtr>::
     Read(crosapi::mojom::IntentFilterDataView data,
          apps::IntentFilterPtr* out) {
@@ -541,10 +586,10 @@ bool StructTraits<crosapi::mojom::IntentFilterDataView, apps::IntentFilterPtr>::
   apps::Conditions conditions;
   if (!data.ReadConditions(&conditions))
     return false;
-  absl::optional<std::string> activity_name;
+  std::optional<std::string> activity_name;
   if (!data.ReadActivityName(&activity_name))
     return false;
-  absl::optional<std::string> activity_label;
+  std::optional<std::string> activity_label;
   if (!data.ReadActivityLabel(&activity_label))
     return false;
 
@@ -576,8 +621,8 @@ EnumTraits<crosapi::mojom::ConditionType, apps::ConditionType>::ToMojom(
   switch (input) {
     case apps::ConditionType::kScheme:
       return crosapi::mojom::ConditionType::kScheme;
-    case apps::ConditionType::kHost:
-      return crosapi::mojom::ConditionType::kHost;
+    case apps::ConditionType::kAuthority:
+      return crosapi::mojom::ConditionType::kAuthority;
     case apps::ConditionType::kPath:
       return crosapi::mojom::ConditionType::kPath;
     case apps::ConditionType::kAction:
@@ -613,8 +658,8 @@ bool EnumTraits<crosapi::mojom::ConditionType, apps::ConditionType>::FromMojom(
     case crosapi::mojom::ConditionType::kScheme:
       *output = apps::ConditionType::kScheme;
       return true;
-    case crosapi::mojom::ConditionType::kHost:
-      *output = apps::ConditionType::kHost;
+    case crosapi::mojom::ConditionType::kAuthority:
+      *output = apps::ConditionType::kAuthority;
       return true;
     case crosapi::mojom::ConditionType::kPath:
       *output = apps::ConditionType::kPath;
@@ -831,6 +876,7 @@ bool StructTraits<crosapi::mojom::IconValueDataView, apps::IconValuePtr>::Read(
   icon_value->uncompressed = std::move(uncompressed);
   icon_value->compressed = std::move(compressed);
   icon_value->is_placeholder_icon = data.is_placeholder_icon();
+  icon_value->is_maskable_icon = data.is_maskable_icon();
   *out = std::move(icon_value);
   return true;
 }
@@ -938,10 +984,17 @@ EnumTraits<crosapi::mojom::LaunchSource, apps::LaunchSource>::ToMojom(
       return crosapi::mojom::LaunchSource::kFromProtocolHandler;
     case apps::LaunchSource::kFromUrlHandler:
       return crosapi::mojom::LaunchSource::kFromUrlHandler;
+    case apps::LaunchSource::kFromSysTrayCalendar:
+      return crosapi::mojom::LaunchSource::kFromSysTrayCalendar;
+    case apps::LaunchSource::kFromInstaller:
+      return crosapi::mojom::LaunchSource::kFromInstaller;
     // TODO(crbug.com/1343692): Make lock screen apps use lacros browser.
     case apps::LaunchSource::kFromLockScreen:
     case apps::LaunchSource::kFromCommandLine:
     case apps::LaunchSource::kFromBackgroundMode:
+    case apps::LaunchSource::kFromAppHomePage:
+    case apps::LaunchSource::kFromReparenting:
+    case apps::LaunchSource::kFromProfileMenu:
       NOTREACHED();
       return crosapi::mojom::LaunchSource::kUnknown;
   }
@@ -1042,6 +1095,12 @@ bool EnumTraits<crosapi::mojom::LaunchSource, apps::LaunchSource>::FromMojom(
     case crosapi::mojom::LaunchSource::kFromUrlHandler:
       *output = apps::LaunchSource::kFromUrlHandler;
       return true;
+    case crosapi::mojom::LaunchSource::kFromSysTrayCalendar:
+      *output = apps::LaunchSource::kFromSysTrayCalendar;
+      return true;
+    case crosapi::mojom::LaunchSource::kFromInstaller:
+      *output = apps::LaunchSource::kFromInstaller;
+      return true;
   }
 
   NOTREACHED();
@@ -1054,7 +1113,7 @@ bool StructTraits<crosapi::mojom::PermissionDataView, apps::PermissionPtr>::
   if (!data.ReadPermissionType(&permission_type))
     return false;
 
-  apps::PermissionValuePtr value;
+  apps::Permission::PermissionValue value;
   if (!data.ReadValue(&value))
     return false;
 
@@ -1158,13 +1217,14 @@ bool EnumTraits<crosapi::mojom::TriState, apps::TriState>::FromMojom(
   return false;
 }
 
-crosapi::mojom::PermissionValueDataView::Tag UnionTraits<
-    crosapi::mojom::PermissionValueDataView,
-    apps::PermissionValuePtr>::GetTag(const apps::PermissionValuePtr& r) {
-  if (absl::holds_alternative<bool>(r->value)) {
+crosapi::mojom::PermissionValueDataView::Tag
+UnionTraits<crosapi::mojom::PermissionValueDataView,
+            apps::Permission::PermissionValue>::
+    GetTag(const apps::Permission::PermissionValue& r) {
+  if (absl::holds_alternative<bool>(r)) {
     return crosapi::mojom::PermissionValueDataView::Tag::kBoolValue;
   }
-  if (absl::holds_alternative<apps::TriState>(r->value)) {
+  if (absl::holds_alternative<apps::TriState>(r)) {
     return crosapi::mojom::PermissionValueDataView::Tag::kTristateValue;
   }
   NOTREACHED();
@@ -1172,19 +1232,19 @@ crosapi::mojom::PermissionValueDataView::Tag UnionTraits<
 }
 
 bool UnionTraits<crosapi::mojom::PermissionValueDataView,
-                 apps::PermissionValuePtr>::
+                 apps::Permission::PermissionValue>::
     Read(crosapi::mojom::PermissionValueDataView data,
-         apps::PermissionValuePtr* out) {
+         apps::Permission::PermissionValue* out) {
   switch (data.tag()) {
     case crosapi::mojom::PermissionValueDataView::Tag::kBoolValue: {
-      *out = std::make_unique<apps::PermissionValue>(data.bool_value());
+      *out = data.bool_value();
       return true;
     }
     case crosapi::mojom::PermissionValueDataView::Tag::kTristateValue: {
       apps::TriState tristate_value;
       if (!data.ReadTristateValue(&tristate_value))
         return false;
-      *out = std::make_unique<apps::PermissionValue>(tristate_value);
+      *out = tristate_value;
       return true;
     }
   }
@@ -1226,19 +1286,46 @@ bool StructTraits<crosapi::mojom::PreferredAppChangesDataView,
   return true;
 }
 
-bool StructTraits<crosapi::mojom::ShortcutDataView, apps::ShortcutPtr>::Read(
-    crosapi::mojom::ShortcutDataView data,
+apps::IconKeyPtr
+StructTraits<crosapi::mojom::AppShortcutDataView, apps::ShortcutPtr>::icon_key(
+    const apps::ShortcutPtr& r) {
+  return ConvertOptionalIconKeyToIconKeyPtr(r->icon_key);
+}
+
+bool StructTraits<crosapi::mojom::AppShortcutDataView, apps::ShortcutPtr>::Read(
+    crosapi::mojom::AppShortcutDataView data,
     apps::ShortcutPtr* out) {
-  std::string shortcut_id;
-  if (!data.ReadShortcutId(&shortcut_id))
+  std::string host_app_id;
+  if (!data.ReadHostAppId(&host_app_id)) {
     return false;
+  }
 
-  std::string name;
-  if (!data.ReadName(&name))
+  std::string local_id;
+  if (!data.ReadLocalId(&local_id)) {
     return false;
+  }
 
-  *out = std::make_unique<apps::Shortcut>(shortcut_id, name, data.position());
+  std::optional<std::string> name;
+  if (!data.ReadName(&name)) {
+    return false;
+  }
 
+  apps::IconKeyPtr icon_key;
+  if (!data.ReadIconKey(&icon_key)) {
+    return false;
+  }
+
+  auto shortcut = std::make_unique<apps::Shortcut>(host_app_id, local_id);
+  shortcut->name = name;
+  // Currently all shortcuts are User created, will add this field on crosapi
+  // when we support developer created shortcuts.
+  shortcut->shortcut_source = apps::ShortcutSource::kUser;
+  if (icon_key) {
+    shortcut->icon_key = std::move(*icon_key);
+  }
+  shortcut->allow_removal = data.allow_removal();
+
+  *out = std::move(shortcut);
   return true;
 }
 

@@ -15,6 +15,9 @@
 #include "ui/accessibility/platform/ax_platform_node_unittest.h"
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
 
+// TODO(https://crbug.com/1394423): Remove this again.
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 namespace {
 
 // ATK window activated event will be held until AT-SPI bridge is ready. For
@@ -2128,42 +2131,14 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkPopupWindowActive) {
 }
 
 TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkSelectionInterface) {
-  AXNodeData root;
-  root.id = 1;
-  root.role = ax::mojom::Role::kListBox;
-  root.AddState(ax::mojom::State::kFocusable);
-  root.AddState(ax::mojom::State::kMultiselectable);
-  root.child_ids.push_back(2);
-  root.child_ids.push_back(3);
-  root.child_ids.push_back(4);
-  root.child_ids.push_back(5);
+  ui::TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kListBox states=kFocusable,kMultiselectable
+    ++++2 kListBoxOption
+    ++++3 kListBoxOption
+    ++++4 kListBoxOption
+    ++++5 kListItem
+  )HTML"));
 
-  AXNodeData item_1;
-  item_1.id = 2;
-  item_1.role = ax::mojom::Role::kListBoxOption;
-
-  AXNodeData item_2;
-  item_2.id = 3;
-  item_2.role = ax::mojom::Role::kListBoxOption;
-
-  AXNodeData item_3;
-  item_3.id = 4;
-  item_3.role = ax::mojom::Role::kListBoxOption;
-
-  // Add a final item which is not selectable.
-  AXNodeData item_4;
-  item_4.id = 5;
-  item_4.role = ax::mojom::Role::kListItem;
-
-  AXTreeUpdate update;
-  update.root_id = 1;
-  update.nodes.push_back(root);
-  update.nodes.push_back(item_1);
-  update.nodes.push_back(item_2);
-  update.nodes.push_back(item_3);
-  update.nodes.push_back(item_4);
-  update.has_tree_data = true;
-  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   Init(update);
 
   AtkObject* root_atk_object(GetRootAtkObject());
@@ -2406,15 +2381,6 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAllReverseAtkRelations) {
     g_object_unref(G_OBJECT(relations));
   };
 
-  auto test_int_relation = [&](ax::mojom::IntAttribute relation,
-                               AtkRelationType expected_relation,
-                               AtkRelationType expected_reverse_relation) {
-    auto setter = [&](AXNodeData* data, int target_id) {
-      data->AddIntAttribute(relation, target_id);
-    };
-    test_relation(setter, expected_relation, expected_reverse_relation);
-  };
-
   auto test_int_list_relation = [&](ax::mojom::IntListAttribute relation,
                                     AtkRelationType expected_relation,
                                     AtkRelationType expected_reverse_relation) {
@@ -2427,8 +2393,8 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAllReverseAtkRelations) {
 
   test_int_list_relation(ax::mojom::IntListAttribute::kDetailsIds,
                          ATK_RELATION_DETAILS, ATK_RELATION_DETAILS_FOR);
-  test_int_relation(ax::mojom::IntAttribute::kErrormessageId,
-                    ATK_RELATION_ERROR_MESSAGE, ATK_RELATION_ERROR_FOR);
+  test_int_list_relation(ax::mojom::IntListAttribute::kErrormessageIds,
+                         ATK_RELATION_ERROR_MESSAGE, ATK_RELATION_ERROR_FOR);
   test_int_list_relation(ax::mojom::IntListAttribute::kControlsIds,
                          ATK_RELATION_CONTROLLER_FOR,
                          ATK_RELATION_CONTROLLED_BY);
@@ -2713,6 +2679,7 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkObjectExpandRebuildsPlatformNode) {
   root_data = AXNodeData();
   root_data.id = 1;
   root_data.role = ax::mojom::Role::kListBox;
+  root_data.AddState(ax::mojom::State::kCollapsed);
   GetRoot()->SetData(root_data);
 
   ASSERT_EQ(original_atk_object, GetRootAtkObject());
@@ -2880,83 +2847,6 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestDialogActiveWhenChildFocused) {
       ->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
   EXPECT_TRUE(saw_active_state_change);
   EXPECT_FALSE(AtkObjectHasState(dialog_obj, ATK_STATE_ACTIVE));
-}
-
-// Tests if kActiveDescendantChanged on unfocused node triggers a focused event.
-TEST_F(AXPlatformNodeAuraLinuxTest,
-       TestActiveDescendantChangedOnUnfocusedNode) {
-  AXNodeData menu;
-  menu.id = 1;
-  menu.role = ax::mojom::Role::kMenu;
-  menu.AddIntAttribute(ax::mojom::IntAttribute::kActivedescendantId, 4);
-  menu.child_ids = {2, 3};
-
-  AXNodeData input;
-  input.id = 2;
-  input.role = ax::mojom::Role::kTextField;
-  input.AddState(ax::mojom::State::kFocusable);
-  input.AddIntAttribute(ax::mojom::IntAttribute::kActivedescendantId, 4);
-
-  AXNodeData container;
-  container.id = 3;
-  container.role = ax::mojom::Role::kGenericContainer;
-  container.child_ids = {4, 5};
-
-  AXNodeData menu_item_1;
-  menu_item_1.id = 4;
-  menu_item_1.role = ax::mojom::Role::kMenuItemCheckBox;
-
-  AXNodeData menu_item_2;
-  menu_item_2.id = 5;
-  menu_item_2.role = ax::mojom::Role::kMenuItemCheckBox;
-
-  Init(menu, input, container, menu_item_1, menu_item_2);
-  TestAXNodeWrapper::SetGlobalIsWebContent(true);
-
-  // Creates TestAXNodeWrapper for the first menu item to keep the current
-  // active descendant.
-  AtkObjectFromNode(GetRoot()->children()[1]->children()[0]);
-
-  // Sets focus to the input node.
-  AXNode* input_node = GetRoot()->children()[0];
-  GetPlatformNode(input_node)
-      ->NotifyAccessibilityEvent(ax::mojom::Event::kFocus);
-
-  bool saw_active_focus_state_change = false;
-  AtkObject* menu_2_atk_object =
-      AtkObjectFromNode(GetRoot()->children()[1]->children()[1]);
-  EXPECT_TRUE(ATK_IS_OBJECT(menu_2_atk_object));
-  g_object_ref(menu_2_atk_object);
-  // Registers callback to get focus event on |menu_2_atk_object|.
-  g_signal_connect(menu_2_atk_object, "state-change",
-                   G_CALLBACK(+[](AtkObject* atkobject, gchar* state_changed,
-                                  gboolean new_value, bool* flag) {
-                     if (!g_strcmp0(state_changed, "focused") && new_value)
-                       *flag = true;
-                   }),
-                   &saw_active_focus_state_change);
-
-  // Updates the active descendant node from the node id 4 to the node id 5;
-  AXNode* menu_node = GetRoot();
-  AXNodeData menu_new_data(menu);
-  menu_new_data.AddIntAttribute(ax::mojom::IntAttribute::kActivedescendantId,
-                                5);
-  menu_node->SetData(menu_new_data);
-
-  AXNodeData input_new_data(input);
-  input_new_data.AddIntAttribute(ax::mojom::IntAttribute::kActivedescendantId,
-                                 5);
-  input_node->SetData(input_new_data);
-
-  // Notifies active descendant is changed.
-  GetPlatformNode(menu_node)->NotifyAccessibilityEvent(
-      ax::mojom::Event::kActiveDescendantChanged);
-  // The current active descendant node, |menu_2_atk_object|, should get the
-  // focused event.
-  EXPECT_TRUE(saw_active_focus_state_change);
-
-  TestAXNodeWrapper::SetGlobalIsWebContent(false);
-  g_object_unref(menu_2_atk_object);
 }
 
 }  // namespace ui

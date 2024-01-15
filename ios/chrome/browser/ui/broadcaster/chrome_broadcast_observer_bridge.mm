@@ -5,10 +5,7 @@
 #import "ios/chrome/browser/ui/broadcaster/chrome_broadcast_observer_bridge.h"
 
 #import "base/check.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/common/features.h"
 
 ChromeBroadcastObserverInterface::~ChromeBroadcastObserverInterface() = default;
 
@@ -24,6 +21,7 @@ ChromeBroadcastObserverInterface::~ChromeBroadcastObserverInterface() = default;
 }
 
 - (void)broadcastScrollViewSize:(CGSize)scrollViewSize {
+  CHECK(base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault));
   self.observer->OnScrollViewSizeBroadcasted(scrollViewSize);
 }
 
@@ -32,35 +30,44 @@ ChromeBroadcastObserverInterface::~ChromeBroadcastObserverInterface() = default;
 }
 
 - (void)broadcastScrollViewContentInset:(UIEdgeInsets)contentInset {
+  CHECK(base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault));
   self.observer->OnScrollViewContentInsetBroadcasted(contentInset);
 }
 
 - (void)broadcastContentScrollOffset:(CGFloat)offset {
+  CHECK(base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault));
   self.observer->OnContentScrollOffsetBroadcasted(offset);
 }
 
 - (void)broadcastScrollViewIsScrolling:(BOOL)scrolling {
+  CHECK(base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault));
   self.observer->OnScrollViewIsScrollingBroadcasted(scrolling);
 }
 
 - (void)broadcastScrollViewIsZooming:(BOOL)zooming {
+  CHECK(base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault));
   self.observer->OnScrollViewIsZoomingBroadcasted(zooming);
 }
 
 - (void)broadcastScrollViewIsDragging:(BOOL)dragging {
+  CHECK(base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault));
   self.observer->OnScrollViewIsDraggingBroadcasted(dragging);
 }
 
-- (void)broadcastCollapsedToolbarHeight:(CGFloat)height {
-  self.observer->OnCollapsedToolbarHeightBroadcasted(height);
+- (void)broadcastCollapsedTopToolbarHeight:(CGFloat)height {
+  self.observer->OnCollapsedTopToolbarHeightBroadcasted(height);
 }
 
-- (void)broadcastExpandedToolbarHeight:(CGFloat)height {
-  self.observer->OnExpandedToolbarHeightBroadcasted(height);
+- (void)broadcastExpandedTopToolbarHeight:(CGFloat)height {
+  self.observer->OnExpandedTopToolbarHeightBroadcasted(height);
 }
 
-- (void)broadcastBottomToolbarHeight:(CGFloat)height {
-  self.observer->OnBottomToolbarHeightBroadcasted(height);
+- (void)broadcastExpandedBottomToolbarHeight:(CGFloat)height {
+  self.observer->OnExpandedBottomToolbarHeightBroadcasted(height);
+}
+
+- (void)broadcastCollapsedBottomToolbarHeight:(CGFloat)height {
+  self.observer->OnCollapsedBottomToolbarHeightBroadcasted(height);
 }
 
 @end

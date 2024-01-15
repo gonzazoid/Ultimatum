@@ -3,12 +3,16 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager_impl.h"
+#include <memory>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
+#include "chrome/browser/ash/guest_os/guest_os_dlc_helper.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path.h"
+#include "chrome/browser/ash/guest_os/public/types.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_engagement_metrics_service.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_features.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_files.h"
@@ -23,7 +27,6 @@
 #include "chrome/browser/ui/simple_message_box.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
-#include "chromeos/ash/components/dbus/dlcservice/dlcservice.pb.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/prefs/pref_service.h"
@@ -122,6 +125,15 @@ PluginVmManagerImpl::PluginVmManagerImpl(Profile* profile)
     : profile_(profile),
       owner_id_(ash::ProfileHelper::GetUserIdHashFromProfile(profile)) {
   ash::VmPluginDispatcherClient::Get()->AddObserver(this);
+  availability_subscription_ =
+      std::make_unique<PluginVmAvailabilitySubscription>(
+          profile_,
+          base::BindRepeating(&PluginVmManagerImpl::OnAvailabilityChanged,
+                              weak_ptr_factory_.GetWeakPtr()));
+
+  if (PluginVmFeatures::Get()->IsEnabled(profile_)) {
+    OnAvailabilityChanged(true, true);
+  }
 }
 
 PluginVmManagerImpl::~PluginVmManagerImpl() {
@@ -351,8 +363,9 @@ void PluginVmManagerImpl::OnVmStateChanged(
     LaunchFailed(PluginVmLaunchResult::kStoppedWaitingForVmTools);
   }
 
-  if (pending_destroy_disk_image_ && !VmIsStopping(vm_state_))
+  if (pending_destroy_disk_image_ && !VmIsStopping(vm_state_)) {
     DestroyDiskImage();
+  }
 
   // When the VM_STATE_RUNNING signal is received:
   // 1) Call Concierge::GetVmInfo to get seneschal server handle.
@@ -408,30 +421,28 @@ void PluginVmManagerImpl::InstallDlcAndUpdateVmState(
     base::OnceCallback<void(bool default_vm_exists)> success_callback,
     base::OnceClosure error_callback) {
   LOG_FUNCTION_CALL();
-  dlcservice::InstallRequest install_request;
-  install_request.set_id(kPitaDlc);
-  ash::DlcserviceClient::Get()->Install(
-      install_request,
-      base::BindOnce(&PluginVmManagerImpl::OnInstallPluginVmDlc,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     std::move(success_callback), std::move(error_callback)),
-      base::DoNothing());
+  in_progress_installation_ =
+      std::make_unique<guest_os::GuestOsDlcInstallation>(
+          kPitaDlc,
+          base::BindOnce(&PluginVmManagerImpl::OnInstallPluginVmDlc,
+                         weak_ptr_factory_.GetWeakPtr(),
+                         std::move(success_callback),
+                         std::move(error_callback)),
+          base::DoNothing());
 }
 
 void PluginVmManagerImpl::OnInstallPluginVmDlc(
     base::OnceCallback<void(bool default_vm_exists)> success_callback,
     base::OnceClosure error_callback,
-    const ash::DlcserviceClient::InstallResult& install_result) {
+    guest_os::GuestOsDlcInstallation::Result install_result) {
   LOG_FUNCTION_CALL();
-  if (install_result.error == dlcservice::kErrorNone) {
+  if (install_result.has_value()) {
     StartDispatcher(base::BindOnce(
         &PluginVmManagerImpl::OnStartDispatcher, weak_ptr_factory_.GetWeakPtr(),
         std::move(success_callback), std::move(error_callback)));
   } else {
-    // TODO(kimjae): Unify the dlcservice error handler with
-    // PluginVmInstaller.
     LOG(ERROR) << "Couldn't install PluginVM DLC after import: "
-               << install_result.error;
+               << install_result.error();
     std::move(error_callback).Run();
   }
 }
@@ -788,6 +799,17 @@ void PluginVmManagerImpl::UninstallFailed(
   uninstaller_notification_.reset();
 }
 
+void PluginVmManagerImpl::OnAvailabilityChanged(bool is_allowed,
+                                                bool is_configured) {
+  bool is_enabled = is_allowed && is_configured;
+  auto* share_path = guest_os::GuestOsSharePath::GetForProfile(profile_);
+  guest_os::GuestId id{guest_os::VmType::PLUGIN_VM, kPluginVmName, ""};
+  if (is_enabled) {
+    share_path->RegisterGuest(id);
+  } else {
+    share_path->UnregisterGuest(id);
+  }
+}
 }  // namespace plugin_vm
 
 #undef LOG_FUNCTION_CALL

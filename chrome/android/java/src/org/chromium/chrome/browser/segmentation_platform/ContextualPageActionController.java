@@ -9,8 +9,9 @@ import android.os.Looper;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Callback;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel;
@@ -19,12 +20,12 @@ import org.chromium.chrome.browser.tab.CurrentTabObserver;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonController;
+import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonVariant;
 import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarFeatures;
-import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarFeatures.AdaptiveToolbarButtonVariant;
-import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarStatePredictor;
 import org.chromium.components.commerce.core.ShoppingService;
-import org.chromium.components.segmentation_platform.SegmentSelectionResult;
-import org.chromium.url.GURL;
+import org.chromium.components.segmentation_platform.Constants;
+import org.chromium.components.segmentation_platform.InputContext;
+import org.chromium.components.segmentation_platform.ProcessedValue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +54,7 @@ public class ContextualPageActionController {
          * @param tab The current tab for which the action was shown.
          * @param action Enum value of the action shown.
          */
-        default void onActionShown(Tab tab, @AdaptiveToolbarButtonVariant int action){};
+        default void onActionShown(Tab tab, @AdaptiveToolbarButtonVariant int action) {}
     }
 
     private final ObservableSupplier<Profile> mProfileSupplier;
@@ -71,7 +72,8 @@ public class ContextualPageActionController {
      * @param adaptiveToolbarButtonController The {@link AdaptiveToolbarButtonController} that
      *         handles the logic to decide between multiple buttons to show.
      */
-    public ContextualPageActionController(ObservableSupplier<Profile> profileSupplier,
+    public ContextualPageActionController(
+            ObservableSupplier<Profile> profileSupplier,
             ObservableSupplier<Tab> tabSupplier,
             AdaptiveToolbarButtonController adaptiveToolbarButtonController,
             Supplier<ShoppingService> shoppingServiceSupplier,
@@ -79,36 +81,45 @@ public class ContextualPageActionController {
         mProfileSupplier = profileSupplier;
         mTabSupplier = tabSupplier;
         mAdaptiveToolbarButtonController = adaptiveToolbarButtonController;
-        profileSupplier.addObserver(profile -> {
-            if (profile.isOffTheRecord()) return;
+        profileSupplier.addObserver(
+                profile -> {
+                    if (profile.isOffTheRecord()) return;
 
-            // The profile supplier observer will be invoked every time the profile is changed.
-            // Ignore the subsequent calls since we are only interested in initializing tab
-            // observers once.
-            if (mCurrentTabObserver != null) return;
+                    // The profile supplier observer will be invoked every time the profile is
+                    // changed.
+                    // Ignore the subsequent calls since we are only interested in initializing tab
+                    // observers once.
+                    if (mCurrentTabObserver != null) return;
+                    mAdaptiveToolbarButtonController.initializePageLoadMetricsRecorder(tabSupplier);
 
-            if (!AdaptiveToolbarFeatures.isContextualPageActionsEnabled()) return;
+                    if (!AdaptiveToolbarFeatures.isContextualPageActionsEnabled()) return;
 
-            // TODO(shaktisahu): Observe the right method to handle tab switch, same-page
-            // navigations. Also handle chrome:// URLs if not already handled.
-            mCurrentTabObserver = new CurrentTabObserver(tabSupplier, new EmptyTabObserver() {
-                @Override
-                public void didFirstVisuallyNonEmptyPaint(Tab tab) {
-                    if (tab != null) maybeShowContextualPageAction();
-                }
-            }, this::activeTabChanged);
+                    // TODO(shaktisahu): Observe the right method to handle tab switch, same-page
+                    // navigations. Also handle chrome:// URLs if not already handled.
+                    mCurrentTabObserver =
+                            new CurrentTabObserver(
+                                    tabSupplier,
+                                    new EmptyTabObserver() {
+                                        @Override
+                                        public void didFirstVisuallyNonEmptyPaint(Tab tab) {
+                                            if (tab != null) maybeShowContextualPageAction();
+                                        }
+                                    },
+                                    this::activeTabChanged);
 
-            initActionProviders(shoppingServiceSupplier, bookmarkModelSupplier);
-        });
+                    initActionProviders(shoppingServiceSupplier, bookmarkModelSupplier);
+                });
     }
 
     @VisibleForTesting
-    protected void initActionProviders(Supplier<ShoppingService> shoppingServiceSupplier,
+    protected void initActionProviders(
+            Supplier<ShoppingService> shoppingServiceSupplier,
             Supplier<BookmarkModel> bookmarkModelSupplier) {
         mActionProviders.clear();
         if (AdaptiveToolbarFeatures.isPriceTrackingPageActionEnabled()) {
-            mActionProviders.add(new PriceTrackingActionProvider(
-                    shoppingServiceSupplier, bookmarkModelSupplier));
+            mActionProviders.add(
+                    new PriceTrackingActionProvider(
+                            shoppingServiceSupplier, bookmarkModelSupplier, mProfileSupplier));
         }
         if (AdaptiveToolbarFeatures.isReaderModePageActionEnabled()) {
             mActionProviders.add(new ReaderModeActionProvider());
@@ -148,28 +159,30 @@ public class ContextualPageActionController {
     private void findBestAction(SignalAccumulator signalAccumulator) {
         Tab tab = getValidActiveTab();
         if (tab == null) return;
-        // TODO(crbug/1373905): Remove this after segmentation integration for reader mode.
-        boolean canTrackPrice =
-                signalAccumulator.hasPriceTracking() || signalAccumulator.hasReaderMode();
-        ContextualPageActionControllerJni.get().computeContextualPageAction(
-                mProfileSupplier.get(), tab.getUrl(), canTrackPrice, result -> {
-                    if (tab.isDestroyed()) return;
+        InputContext inputContext = new InputContext();
+        inputContext.addEntry(
+                Constants.CONTEXTUAL_PAGE_ACTIONS_PRICE_TRACKING_INPUT,
+                ProcessedValue.fromFloat(signalAccumulator.hasPriceTracking() ? 1.0f : 0.0f));
+        inputContext.addEntry(
+                Constants.CONTEXTUAL_PAGE_ACTIONS_READER_MODE_INPUT,
+                ProcessedValue.fromFloat(signalAccumulator.hasReaderMode() ? 1.0f : 0.0f));
+        inputContext.addEntry("url", ProcessedValue.fromGURL(tab.getUrl()));
 
-                    boolean isSameTab =
-                            mTabSupplier.get() != null && mTabSupplier.get().getId() == tab.getId();
-                    if (!isSameTab) return;
+        ContextualPageActionControllerJni.get()
+                .computeContextualPageAction(
+                        mProfileSupplier.get(),
+                        inputContext,
+                        result -> {
+                            if (tab.isDestroyed()) return;
 
-                    if (!AdaptiveToolbarFeatures.isContextualPageActionUiEnabled()) return;
-                    int action = AdaptiveToolbarStatePredictor
-                                         .getAdaptiveToolbarButtonVariantFromSegmentId(
-                                                 result.selectedSegment);
-                    // TODO(crbug/1373905): Remove this after segmentation integration for reader
-                    // mode.
-                    if (signalAccumulator.hasReaderMode()) {
-                        action = AdaptiveToolbarButtonVariant.READER_MODE;
-                    }
-                    showDynamicAction(action);
-                });
+                            boolean isSameTab =
+                                    mTabSupplier.get() != null
+                                            && mTabSupplier.get().getId() == tab.getId();
+                            if (!isSameTab) return;
+
+                            if (!AdaptiveToolbarFeatures.isContextualPageActionUiEnabled()) return;
+                            showDynamicAction(result);
+                        });
     }
 
     private void showDynamicAction(@AdaptiveToolbarButtonVariant int action) {
@@ -191,7 +204,7 @@ public class ContextualPageActionController {
 
     @NativeMethods
     interface Natives {
-        void computeContextualPageAction(Profile profile, GURL url, boolean canTrackPrice,
-                Callback<SegmentSelectionResult> callback);
+        void computeContextualPageAction(
+                Profile profile, InputContext inputContext, Callback<Integer> callback);
     }
 }

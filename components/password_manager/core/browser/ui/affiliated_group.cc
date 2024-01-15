@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,16 @@
 
 namespace password_manager {
 
+namespace {
+
+constexpr char kFavicon[] = "favicon.ico";
+
+}  // namespace
+
 AffiliatedGroup::AffiliatedGroup() = default;
-
-AffiliatedGroup::AffiliatedGroup(
-    const std::vector<CredentialUIEntry> credential_groups)
-    : credential_groups_(std::move(credential_groups)) {}
-
+AffiliatedGroup::AffiliatedGroup(std::vector<CredentialUIEntry> credentials,
+                                 const FacetBrandingInfo& branding)
+    : branding_info_(branding), credential_groups_(std::move(credentials)) {}
 AffiliatedGroup::AffiliatedGroup(const AffiliatedGroup& other) = default;
 AffiliatedGroup::AffiliatedGroup(AffiliatedGroup&& other) = default;
 
@@ -21,31 +25,28 @@ AffiliatedGroup::~AffiliatedGroup() = default;
 
 AffiliatedGroup& AffiliatedGroup::operator=(const AffiliatedGroup& other) =
     default;
-
 AffiliatedGroup& AffiliatedGroup::operator=(AffiliatedGroup&& other) = default;
 
-void AffiliatedGroup::AddCredential(const CredentialUIEntry& credential) {
-  credential_groups_.push_back(credential);
+GURL AffiliatedGroup::GetFallbackIconURL() const {
+  for (const auto& credential : credential_groups_) {
+    for (const auto& facet : credential.facets) {
+      // Ignore non https schemes.
+      if (facet.url.SchemeIs(url::kHttpsScheme)) {
+        GURL::Replacements replacements;
+        replacements.SetPathStr(kFavicon);
+        return facet.url.GetWithEmptyPath().ReplaceComponents(replacements);
+      }
+    }
+  }
+  return GURL();
 }
 
 bool operator==(const AffiliatedGroup& lhs, const AffiliatedGroup& rhs) {
-  if (lhs.GetCredentialGroups().size() != rhs.GetCredentialGroups().size()) {
+  if (!base::ranges::equal(lhs.GetCredentials(), rhs.GetCredentials())) {
     return false;
   }
-
-  // Sort credential groups vectors.
-  std::vector<CredentialUIEntry> lhs_credential_groups =
-      lhs.GetCredentialGroups();
-  std::sort(lhs_credential_groups.begin(), lhs_credential_groups.end());
-
-  std::vector<CredentialUIEntry> rhs_credential_groups =
-      rhs.GetCredentialGroups();
-  std::sort(rhs_credential_groups.begin(), rhs_credential_groups.end());
-
-  if (!base::ranges::equal(lhs_credential_groups, rhs_credential_groups)) {
-    return false;
-  }
-  return true;
+  return lhs.GetDisplayName() == rhs.GetDisplayName() &&
+         lhs.GetIconURL() == rhs.GetIconURL();
 }
 
 }  // namespace password_manager

@@ -8,22 +8,17 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.View;
 
-import androidx.annotation.IdRes;
 import androidx.annotation.Nullable;
 
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 
 import java.util.List;
 
-/**
- * App Menu helper that handles hiding and showing menu items based on activity state.
- */
+/** App Menu helper that handles hiding and showing menu items based on activity state. */
 public interface AppMenuPropertiesDelegate {
     int INVALID_ITEM_ID = -1;
 
-    /**
-     * Provides unique custom item view type across all custom binders.
-     */
+    /** Provides unique custom item view type across all custom binders. */
     public interface CustomItemViewTypeProvider {
         /**
          * Return custom item view type from menu item id.
@@ -33,9 +28,7 @@ public interface AppMenuPropertiesDelegate {
         int fromMenuItemId(int id);
     }
 
-    /**
-     * Called when the containing activity is being destroyed.
-     */
+    /** Called when the containing activity is being destroyed. */
     void destroy();
 
     /**
@@ -80,9 +73,10 @@ public interface AppMenuPropertiesDelegate {
      */
     void loadingStateChanged(boolean isLoading);
 
-    /**
-     * Notify the delegate that menu was dismissed.
-     */
+    /** Notify the delegate that menu was shown. */
+    void onMenuShown();
+
+    /** Notify the delegate that menu was dismissed. */
     void onMenuDismissed();
 
     /**
@@ -138,16 +132,6 @@ public interface AppMenuPropertiesDelegate {
      *         should show the icon before the text.
      */
     boolean shouldShowIconBeforeItem();
-
-    /**
-     * Called to record that the menu item {@code menuItemId} was highlighted.
-     */
-    void recordHighlightedMenuItemShown(@Nullable @IdRes Integer menuItemId);
-
-    /**
-     * Called to record that user clicked on highlighted menu item {@code menuItemId}.
-     */
-    void recordHighlightedMenuItemClicked(@Nullable @IdRes Integer menuItemId);
 
     /** Returns whether the menu icon is positioned at the start. */
     boolean isMenuIconAtStart();

@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/bluetooth_socket.h"
 #include "extensions/browser/api/bluetooth_socket/bluetooth_api_socket.h"
@@ -27,7 +27,7 @@ bluetooth_socket::ReceiveError MapReceiveErrorReason(
     BluetoothApiSocket::ErrorReason value) {
   switch (value) {
     case BluetoothApiSocket::kDisconnected:
-      return bluetooth_socket::RECEIVE_ERROR_DISCONNECTED;
+      return bluetooth_socket::ReceiveError::kDisconnected;
     case BluetoothApiSocket::kNotConnected:
     // kNotConnected is impossible since a socket has to be connected to be
     // able to call Receive() on it.
@@ -37,7 +37,7 @@ bluetooth_socket::ReceiveError MapReceiveErrorReason(
     // handles this specific error.
     // fallthrough
     default:
-      return bluetooth_socket::RECEIVE_ERROR_SYSTEM_ERROR;
+      return bluetooth_socket::ReceiveError::kSystemError;
   }
 }
 
@@ -51,7 +51,7 @@ bluetooth_socket::AcceptError MapAcceptErrorReason(
     // able to call Accept() on it.
     // fallthrough
     default:
-      return bluetooth_socket::ACCEPT_ERROR_SYSTEM_ERROR;
+      return bluetooth_socket::AcceptError::kSystemError;
   }
 }
 
@@ -95,14 +95,14 @@ BluetoothSocketEventDispatcher::BluetoothSocketEventDispatcher(
   sockets_ = manager->data_;
 }
 
-BluetoothSocketEventDispatcher::~BluetoothSocketEventDispatcher() {}
+BluetoothSocketEventDispatcher::~BluetoothSocketEventDispatcher() = default;
 
-BluetoothSocketEventDispatcher::SocketParams::SocketParams() {}
+BluetoothSocketEventDispatcher::SocketParams::SocketParams() = default;
 
 BluetoothSocketEventDispatcher::SocketParams::SocketParams(
     const SocketParams& other) = default;
 
-BluetoothSocketEventDispatcher::SocketParams::~SocketParams() {}
+BluetoothSocketEventDispatcher::SocketParams::~SocketParams() = default;
 
 void BluetoothSocketEventDispatcher::OnSocketConnect(
     const std::string& extension_id,

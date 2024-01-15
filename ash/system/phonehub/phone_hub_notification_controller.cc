@@ -4,10 +4,6 @@
 
 #include "ash/system/phonehub/phone_hub_notification_controller.h"
 
-#include "ash/components/phonehub/notification.h"
-#include "ash/components/phonehub/notification_interaction_handler.h"
-#include "ash/components/phonehub/phone_hub_manager.h"
-#include "ash/components/phonehub/phone_model.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
@@ -15,20 +11,25 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/message_center/ash_notification_view.h"
-#include "ash/system/message_center/message_view_factory.h"
+#include "ash/system/notification_center/views/ash_notification_view.h"
+#include "ash/system/notification_center/message_view_factory.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/phonehub/phone_hub_metrics.h"
 #include "ash/system/tray/tray_popup_utils.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/notification.h"
+#include "chromeos/ash/components/phonehub/notification_interaction_handler.h"
+#include "chromeos/ash/components/phonehub/phone_hub_manager.h"
+#include "chromeos/ash/components/phonehub/phone_model.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/display/types/display_constants.h"
@@ -37,7 +38,6 @@
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 #include "ui/message_center/views/notification_header_view.h"
-#include "ui/message_center/views/notification_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/view.h"
@@ -71,99 +71,6 @@ constexpr base::TimeDelta kMaxRecentNotificationAge = base::Seconds(15);
 // be received before the former one).
 constexpr base::TimeDelta kInlineReplyDisableTime = base::Seconds(1);
 
-class PhoneHubNotificationView : public message_center::NotificationView {
- public:
-  explicit PhoneHubNotificationView(
-      const message_center::Notification& notification,
-      const std::u16string& phone_name)
-      : message_center::NotificationView(notification) {
-    // Add customized header.
-    message_center::NotificationHeaderView* header_row =
-        static_cast<message_center::NotificationHeaderView*>(
-            GetViewByID(message_center::NotificationView::kHeaderRow));
-    views::View* app_name_view =
-        GetViewByID(message_center::NotificationView::kAppNameView);
-    views::Label* summary_text_view = static_cast<views::Label*>(
-        GetViewByID(message_center::NotificationView::kSummaryTextView));
-
-    // The app name should be displayed in full, leaving the rest of the space
-    // for device name. App name will only be truncated when it reached it
-    // maximum width.
-    int app_name_width = std::min(app_name_view->GetPreferredSize().width(),
-                                  kNotificationAppNameMaxWidth);
-    int device_name_width = kNotificationHeaderTextWidth - app_name_width;
-    header_row->SetSummaryText(
-        gfx::ElideText(phone_name, summary_text_view->font_list(),
-                       device_name_width, gfx::ELIDE_TAIL));
-    custom_view_type_ = notification.custom_view_type();
-    if (custom_view_type_ == kNotificationCustomCallViewType) {
-      // Expand the action buttons row by default for Call Style notification.
-      SetManuallyExpandedOrCollapsed(true);
-      SetExpanded(true);
-      return;
-    }
-    action_buttons_row_ =
-        GetViewByID(message_center::NotificationView::kActionButtonsRow);
-    if (!action_buttons_row_->children().empty())
-      reply_button_ = static_cast<views::View*>(
-          action_buttons_row_->children()[kReplyButtonIndex]);
-
-    inline_reply_ = static_cast<message_center::NotificationInputContainer*>(
-        GetViewByID(message_center::NotificationView::kInlineReply));
-  }
-
-  ~PhoneHubNotificationView() override = default;
-  PhoneHubNotificationView(const PhoneHubNotificationView&) = delete;
-  PhoneHubNotificationView& operator=(const PhoneHubNotificationView&) = delete;
-
-  // message_center::NotificationViewBase
-  void ActionButtonPressed(size_t index, const ui::Event& event) override {
-    if (custom_view_type_ == kNotificationCustomCallViewType) {
-      message_center::MessageCenter::Get()->ClickOnNotificationButton(
-          notification_id(), static_cast<int>(index));
-    } else {
-      message_center::NotificationView::ActionButtonPressed(index, event);
-    }
-  }
-
-  // message_center::NotificationView:
-  void OnNotificationInputSubmit(size_t index,
-                                 const std::u16string& text) override {
-    message_center::NotificationView::OnNotificationInputSubmit(index, text);
-
-    DCHECK(reply_button_);
-
-    // After sending a reply, take the UI back to action buttons and clear out
-    // text input.
-    inline_reply_->SetVisible(false);
-    action_buttons_row_->SetVisible(true);
-    inline_reply_->textfield()->SetText(std::u16string());
-
-    // Briefly disable reply button.
-    reply_button_->SetEnabled(false);
-    enable_reply_timer_ = std::make_unique<base::OneShotTimer>();
-    enable_reply_timer_->Start(
-        FROM_HERE, kInlineReplyDisableTime,
-        base::BindOnce(&PhoneHubNotificationView::EnableReplyButton,
-                       base::Unretained(this)));
-  }
-
-  void EnableReplyButton() {
-    reply_button_->SetEnabled(true);
-    enable_reply_timer_.reset();
-  }
-
- private:
-  // Owned by view hierarchy.
-  views::View* action_buttons_row_ = nullptr;
-  views::View* reply_button_ = nullptr;
-  message_center::NotificationInputContainer* inline_reply_ = nullptr;
-
-  // Timer that fires to enable reply button after a brief period of time.
-  std::unique_ptr<base::OneShotTimer> enable_reply_timer_;
-  std::string custom_view_type_;
-};
-
 class PhoneHubAshNotificationView : public AshNotificationView {
  public:
   explicit PhoneHubAshNotificationView(
@@ -192,7 +99,9 @@ class PhoneHubAshNotificationView : public AshNotificationView {
     custom_view_type_ = notification.custom_view_type();
     if (custom_view_type_ == kNotificationCustomCallViewType) {
       // Expand the action buttons row by default for Call Style notification.
-      SetManuallyExpandedOrCollapsed(true);
+      SetManuallyExpandedOrCollapsed(
+          !IsExpanded() ? message_center::ExpandState::USER_EXPANDED
+                        : message_center::ExpandState::USER_COLLAPSED);
       SetExpanded(true);
       return;
     }
@@ -224,6 +133,8 @@ class PhoneHubAshNotificationView : public AshNotificationView {
   // message_center::NotificationView:
   void OnNotificationInputSubmit(size_t index,
                                  const std::u16string& text) override {
+    if (text.empty())
+      return;
     AshNotificationView::OnNotificationInputSubmit(index, text);
 
     DCHECK(reply_button_);
@@ -233,6 +144,11 @@ class PhoneHubAshNotificationView : public AshNotificationView {
     inline_reply_->SetVisible(false);
     action_buttons_row_->SetVisible(true);
     inline_reply_->textfield()->SetText(std::u16string());
+
+    // Since the focus may still be on the now-hidden buttons used to send a
+    // message, refocus on the entire notification.
+    CHECK(GetFocusManager());
+    GetFocusManager()->SetFocusedView(this);
 
     // Briefly disable reply button.
     reply_button_->SetEnabled(false);
@@ -249,9 +165,9 @@ class PhoneHubAshNotificationView : public AshNotificationView {
 
  private:
   // Owned by view hierarchy.
-  views::View* action_buttons_row_ = nullptr;
-  views::View* reply_button_ = nullptr;
-  message_center::NotificationInputContainer* inline_reply_ = nullptr;
+  raw_ptr<views::View> action_buttons_row_ = nullptr;
+  raw_ptr<views::View> reply_button_ = nullptr;
+  raw_ptr<message_center::NotificationInputContainer> inline_reply_ = nullptr;
 
   // Timer that fires to enable reply button after a brief period of time.
   base::OneShotTimer enable_reply_timer_;
@@ -311,8 +227,8 @@ class PhoneHubNotificationController::NotificationDelegate
     controller_->DismissNotification(phone_hub_id_);
   }
 
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override {
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override {
     if (!controller_)
       return;
 
@@ -357,7 +273,7 @@ class PhoneHubNotificationController::NotificationDelegate
   enum OngoingCallButton { BUTTON_HANGUP };
 
   // The parent controller, which owns this object.
-  PhoneHubNotificationController* controller_ = nullptr;
+  raw_ptr<PhoneHubNotificationController> controller_ = nullptr;
 
   // The notification ID tracked by PhoneHub.
   const int64_t phone_hub_id_;
@@ -490,7 +406,7 @@ void PhoneHubNotificationController::OnAttemptConnectionScanFailed() {
   // Add a notification if tether failed.
   scoped_refptr<message_center::NotificationDelegate> delegate =
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-          base::BindRepeating([](absl::optional<int> button_index) {
+          base::BindRepeating([](std::optional<int> button_index) {
             // When clicked, open Tether Settings page if we can open WebUI
             // settings, otherwise do nothing.
             if (TrayPopupUtils::CanOpenWebUISettings()) {
@@ -504,7 +420,7 @@ void PhoneHubNotificationController::OnAttemptConnectionScanFailed() {
             }
           }));
   std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
+      CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE,
           kPhoneHubInstantTetherNotificationId,
           l10n_util::GetStringUTF16(
@@ -550,7 +466,7 @@ PhoneHubNotificationController::CreateCameraRollGenericNotification(
           base::BindRepeating(
               [](phonehub::CameraRollManager* manager,
                  const CameraRollItemMetadata& metadata,
-                 absl::optional<int> button_index) {
+                 std::optional<int> button_index) {
                 // When button is clicked, close notification and retry the
                 // download
                 if (button_index.has_value()) {
@@ -568,7 +484,7 @@ PhoneHubNotificationController::CreateCameraRollGenericNotification(
   button.title = l10n_util::GetStringUTF16(
       IDS_ASH_PHONE_HUB_CAMERA_ROLL_ERROR_GENERIC_ACTION);
   optional_fields.buttons.push_back(button);
-  return CreateSystemNotification(
+  return CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       kPhoneHubCameraRollNotificationId,
       l10n_util::GetStringUTF16(IDS_ASH_PHONE_HUB_CAMERA_ROLL_ERROR_TITLE),
@@ -586,7 +502,7 @@ PhoneHubNotificationController::CreateCameraRollStorageNotification(
     const CameraRollItemMetadata& metadata) {
   scoped_refptr<message_center::NotificationDelegate> delegate =
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-          base::BindRepeating([](absl::optional<int> button_index) {
+          base::BindRepeating([](std::optional<int> button_index) {
             // When button is clicked, close notification and open Storage
             // Management Settings page if we can open WebUI settings.
             if (button_index.has_value()) {
@@ -612,7 +528,7 @@ PhoneHubNotificationController::CreateCameraRollStorageNotification(
   button.title = l10n_util::GetStringUTF16(
       IDS_ASH_PHONE_HUB_CAMERA_ROLL_ERROR_STORAGE_ACTION);
   optional_fields.buttons.push_back(button);
-  return CreateSystemNotification(
+  return CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       kPhoneHubCameraRollNotificationId,
       l10n_util::GetStringUTF16(IDS_ASH_PHONE_HUB_CAMERA_ROLL_ERROR_TITLE),
@@ -630,7 +546,7 @@ PhoneHubNotificationController::CreateCameraRollNetworkNotification(
     const CameraRollItemMetadata& metadata) {
   scoped_refptr<message_center::NotificationDelegate> delegate =
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-          base::BindRepeating([](absl::optional<int> button_index) {
+          base::BindRepeating([](std::optional<int> button_index) {
             // When button is clicked, close notification and open Network
             // Settings page if we can open WebUI settings.
             if (button_index.has_value()) {
@@ -654,7 +570,7 @@ PhoneHubNotificationController::CreateCameraRollNetworkNotification(
   button.title = l10n_util::GetStringUTF16(
       IDS_ASH_PHONE_HUB_CAMERA_ROLL_ERROR_NETWORK_ACTION);
   optional_fields.buttons.push_back(button);
-  return CreateSystemNotification(
+  return CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       kPhoneHubCameraRollNotificationId,
       l10n_util::GetStringUTF16(IDS_ASH_PHONE_HUB_CAMERA_ROLL_ERROR_TITLE),
@@ -767,22 +683,18 @@ PhoneHubNotificationController::CreateNotification(
   std::u16string display_source = app_metadata.visible_app_name;
 
   message_center::RichNotificationData optional_fields;
-  optional_fields.small_image = app_metadata.icon;
+  optional_fields.small_image = app_metadata.monochrome_icon_mask.has_value()
+                                    ? app_metadata.monochrome_icon_mask.value()
+                                    : app_metadata.color_icon;
   optional_fields.timestamp = notification->timestamp();
   optional_fields.accessible_name = l10n_util::GetStringFUTF16(
       IDS_ASH_PHONE_HUB_NOTIFICATION_ACCESSIBLE_NAME, display_source, title,
       message, PhoneHubNotificationController::GetPhoneName());
   if (app_metadata.icon_is_monochrome) {
     optional_fields.accent_color = app_metadata.icon_color;
-    if (features::IsNotificationsRefreshEnabled()) {
-      optional_fields.ignore_accent_color_for_small_image = true;
-      optional_fields.ignore_accent_color_for_text = false;
-      optional_fields.small_image_needs_additional_masking = true;
-    } else {
-      optional_fields.ignore_accent_color_for_small_image = false;
-      optional_fields.ignore_accent_color_for_text = true;
-      optional_fields.small_image_needs_additional_masking = false;
-    }
+    optional_fields.ignore_accent_color_for_small_image = true;
+    optional_fields.ignore_accent_color_for_text = false;
+    optional_fields.small_image_needs_additional_masking = true;
   } else {
     optional_fields.ignore_accent_color_for_small_image = true;
     optional_fields.ignore_accent_color_for_text = false;
@@ -876,13 +788,8 @@ PhoneHubNotificationController::CreateCustomNotificationView(
     bool shown_in_popup) {
   DCHECK(notification.custom_view_type() == kNotificationCustomViewType);
 
-  if (features::IsNotificationsRefreshEnabled()) {
-    return std::make_unique<PhoneHubAshNotificationView>(
-        notification, shown_in_popup,
-        ash::GetPhoneName(notification_controller));
-  }
-  return std::make_unique<PhoneHubNotificationView>(
-      notification, ash::GetPhoneName(notification_controller));
+  return std::make_unique<PhoneHubAshNotificationView>(
+      notification, shown_in_popup, ash::GetPhoneName(notification_controller));
 }
 
 // static
@@ -893,13 +800,8 @@ PhoneHubNotificationController::CreateCustomActionNotificationView(
     bool shown_in_popup) {
   DCHECK(notification.custom_view_type() == kNotificationCustomCallViewType);
 
-  if (features::IsNotificationsRefreshEnabled()) {
-    return std::make_unique<PhoneHubAshNotificationView>(
-        notification, shown_in_popup,
-        ash::GetPhoneName(notification_controller));
-  }
-  return std::make_unique<PhoneHubNotificationView>(
-      notification, ash::GetPhoneName(notification_controller));
+  return std::make_unique<PhoneHubAshNotificationView>(
+      notification, shown_in_popup, ash::GetPhoneName(notification_controller));
 }
 
 }  // namespace ash

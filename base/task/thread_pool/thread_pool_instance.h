@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
@@ -58,11 +58,17 @@ class BASE_EXPORT ThreadPoolInstance {
     };
 
     InitParams(size_t max_num_foreground_threads_in);
+    InitParams(size_t max_num_foreground_threads_in,
+               size_t max_num_utility_threads_in);
     ~InitParams();
 
     // Maximum number of unblocked tasks that can run concurrently in the
     // foreground thread group.
     size_t max_num_foreground_threads;
+
+    // Maximum number of unblocked tasks that can run concurrently in the
+    // utility thread group.
+    size_t max_num_utility_threads;
 
     // Whether COM is initialized when running sequenced and parallel tasks.
     CommonThreadPoolEnvironment common_thread_pool_environment =
@@ -115,6 +121,19 @@ class BASE_EXPORT ThreadPoolInstance {
     ScopedBestEffortExecutionFence& operator=(
         const ScopedBestEffortExecutionFence&) = delete;
     ~ScopedBestEffortExecutionFence();
+  };
+
+  // Used to allow posting `BLOCK_SHUTDOWN` tasks after shutdown in a scope. The
+  // tasks will fizzle (not run) but not trigger any checks that aim to catch
+  // this class of ordering bugs.
+  class BASE_EXPORT ScopedFizzleBlockShutdownTasks {
+   public:
+    ScopedFizzleBlockShutdownTasks();
+    ScopedFizzleBlockShutdownTasks(const ScopedFizzleBlockShutdownTasks&) =
+        delete;
+    ScopedFizzleBlockShutdownTasks& operator=(
+        const ScopedFizzleBlockShutdownTasks&) = delete;
+    ~ScopedFizzleBlockShutdownTasks();
   };
 
   // Destroying a ThreadPoolInstance is not allowed in production; it is always
@@ -173,6 +192,9 @@ class BASE_EXPORT ThreadPoolInstance {
   // instance to create task runners or post tasks is not permitted during or
   // after this call.
   virtual void JoinForTesting() = 0;
+
+  virtual void BeginFizzlingBlockShutdownTasks() = 0;
+  virtual void EndFizzlingBlockShutdownTasks() = 0;
 
   // CreateAndStartWithDefaultParams(), Create(), and SetInstance() register a
   // ThreadPoolInstance to handle tasks posted through the thread_pool.h API for

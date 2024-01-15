@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "remoting/signaling/signal_strategy.h"
 #include "remoting/signaling/signaling_id_util.h"
@@ -29,8 +28,9 @@ std::unique_ptr<jingle_xmpp::XmlElement> IqSender::MakeIqStanza(
   std::unique_ptr<jingle_xmpp::XmlElement> stanza(
       new jingle_xmpp::XmlElement(kQNameIq));
   stanza->AddAttr(kQNameType, type);
-  if (!addressee.empty())
+  if (!addressee.empty()) {
     stanza->AddAttr(kQNameTo, addressee);
+  }
   stanza->AddElement(iq_body.release());
   return stanza;
 }
@@ -60,8 +60,9 @@ std::unique_ptr<IqRequest> IqSender::SendIq(
   bool callback_exists = !callback.is_null();
   auto request =
       std::make_unique<IqRequest>(this, std::move(callback), addressee);
-  if (callback_exists)
+  if (callback_exists) {
     requests_[id] = request.get();
+  }
   return request;
 }
 
@@ -86,10 +87,10 @@ void IqSender::RemoveRequest(IqRequest* request) {
   }
 }
 
-void IqSender::OnSignalStrategyStateChange(SignalStrategy::State state) {
-}
+void IqSender::OnSignalStrategyStateChange(SignalStrategy::State state) {}
 
-bool IqSender::OnSignalStrategyIncomingStanza(const jingle_xmpp::XmlElement* stanza) {
+bool IqSender::OnSignalStrategyIncomingStanza(
+    const jingle_xmpp::XmlElement* stanza) {
   if (stanza->Name() != kQNameIq) {
     LOG(WARNING) << "Received unexpected non-IQ packet " << stanza->Str();
     return false;
@@ -143,15 +144,16 @@ IqRequest::~IqRequest() {
 }
 
 void IqRequest::SetTimeout(base::TimeDelta timeout) {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&IqRequest::OnTimeout, weak_factory_.GetWeakPtr()),
       timeout);
 }
 
 void IqRequest::CallCallback(const jingle_xmpp::XmlElement* stanza) {
-  if (!callback_.is_null())
+  if (!callback_.is_null()) {
     std::move(callback_).Run(this, stanza);
+  }
 }
 
 void IqRequest::OnTimeout() {
@@ -161,14 +163,16 @@ void IqRequest::OnTimeout() {
 void IqRequest::OnResponse(const jingle_xmpp::XmlElement* stanza) {
   // It's unsafe to delete signal strategy here, and the callback may
   // want to do that, so we post task to invoke the callback later.
-  std::unique_ptr<jingle_xmpp::XmlElement> stanza_copy(new jingle_xmpp::XmlElement(*stanza));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  std::unique_ptr<jingle_xmpp::XmlElement> stanza_copy(
+      new jingle_xmpp::XmlElement(*stanza));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&IqRequest::DeliverResponse, weak_factory_.GetWeakPtr(),
                      std::move(stanza_copy)));
 }
 
-void IqRequest::DeliverResponse(std::unique_ptr<jingle_xmpp::XmlElement> stanza) {
+void IqRequest::DeliverResponse(
+    std::unique_ptr<jingle_xmpp::XmlElement> stanza) {
   CallCallback(stanza.get());
 }
 

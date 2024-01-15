@@ -33,6 +33,7 @@ def _setup_sys_path():
 
 _setup_sys_path()
 
+from .async_iterator import generate_async_iterators
 from .callback_function import generate_callback_functions
 from .callback_interface import generate_callback_interfaces
 from .dictionary import generate_dictionaries
@@ -40,6 +41,7 @@ from .enumeration import generate_enumerations
 from .interface import generate_interfaces
 from .namespace import generate_namespaces
 from .observable_array import generate_observable_arrays
+from .sync_iterator import generate_sync_iterators
 from .task_queue import TaskQueue
 from .typedef import generate_typedefs
 from .union import generate_unions

@@ -8,13 +8,14 @@
 // Utility functions for App Service intent handling.
 
 #include <string>
+#include <string_view>
 
 #include "base/values.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/intent_filter.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace apps_util {
 
@@ -64,6 +65,12 @@ apps::IntentPtr MakeShareIntent(const GURL& filesystem_url,
 apps::IntentPtr MakeShareIntent(const std::string& text,
                                 const std::string& title);
 
+// Creates an intent for sharing |filesystem_urls|, with |dlpSourceUrls|.
+apps::IntentPtr MakeShareIntent(
+    const std::vector<GURL>& filesystem_urls,
+    const std::vector<std::string>& mime_types,
+    const std::vector<std::string>& dlp_source_urls);
+
 // Create an edit intent for the file with a given |filesystem_url| and
 // |mime_type|.
 apps::IntentPtr MakeEditIntent(const GURL& filesystem_url,
@@ -74,98 +81,23 @@ apps::IntentPtr MakeIntentForActivity(const std::string& activity,
                                       const std::string& start_type,
                                       const std::string& category);
 
-// TODO(crbug.com/1253250): Remove below functions after migrating to non-mojo
-// AppService.
-
-// Create an intent struct from URL.
-apps::mojom::IntentPtr CreateIntentFromUrl(const GURL& url);
-
 // Create an intent struct for a Create Note action.
 apps::IntentPtr CreateCreateNoteIntent();
 
 // Create an intent struct for a "Start On Lock Screen" action.
 apps::IntentPtr CreateStartOnLockScreenIntent();
 
-// Create an intent struct with the list of files with action kIntentActionView.
-apps::mojom::IntentPtr CreateViewIntentFromFiles(
-    std::vector<apps::mojom::IntentFilePtr> files);
-
-// Create an intent struct from the filesystem urls and mime types
-// of a list of files with action kIntentActionSend{Multiple}.
-apps::mojom::IntentPtr CreateShareIntentFromFiles(
-    const std::vector<GURL>& filesystem_urls,
-    const std::vector<std::string>& mime_types);
-
-// Create an intent struct from the filesystem urls, mime types
-// of a list of files, and the share text and title.
-apps::mojom::IntentPtr CreateShareIntentFromFiles(
-    const std::vector<GURL>& filesystem_urls,
-    const std::vector<std::string>& mime_types,
-    const std::string& share_text,
-    const std::string& share_title);
-
-// Create an intent struct from the filesystem url, mime type
-// and the drive share url for a Google Drive file.
-apps::mojom::IntentPtr CreateShareIntentFromDriveFile(
-    const GURL& filesystem_url,
-    const std::string& mime_type,
-    const GURL& drive_share_url,
-    bool is_directory);
-
-// Create an intent struct from share text and title.
-apps::mojom::IntentPtr CreateShareIntentFromText(
-    const std::string& share_text,
-    const std::string& share_title);
-
-// Create an edit intent struct for the file with a given filesystem:// URL and
-// mime type.
-apps::mojom::IntentPtr CreateEditIntentFromFile(const GURL& filesystem_url,
-                                                const std::string& mime_type);
-
-// Create an intent struct from activity and start type.
-apps::mojom::IntentPtr CreateIntentForActivity(const std::string& activity,
-                                               const std::string& start_type,
-                                               const std::string& category);
-
 // Return true if |value| matches with the |condition_value|, based on the
 // pattern match type in the |condition_value|.
-bool ConditionValueMatches(const std::string& value,
+bool ConditionValueMatches(std::string_view value,
                            const apps::ConditionValuePtr& condition_value);
 
-// Return true if |value| matches with the |condition_value|, based on the
-// pattern match type in the |condition_value|.
-// TODO(crbug.com/1253250): Remove this function after migrating to non-mojo
-// AppService.
-bool ConditionValueMatches(
-    const std::string& value,
-    const apps::mojom::ConditionValuePtr& condition_value);
-
-// Return true if |intent| matches with any of the values in |condition|.
-// TODO(crbug.com/1253250): Remove this function after migrating to non-mojo
-// AppService.
-bool IntentMatchesCondition(const apps::mojom::IntentPtr& intent,
-                            const apps::mojom::ConditionPtr& condition);
-
-// Return true if a |filter| matches an |intent|. This is true when intent
-// matches all existing conditions in the filter.
-bool IntentMatchesFilter(const apps::mojom::IntentPtr& intent,
-                         const apps::mojom::IntentFilterPtr& filter);
-
-// Return true if |filter| only contains file extension pattern matches.
-bool FilterIsForFileExtensions(const apps::mojom::IntentFilterPtr& filter);
+bool PatternMatchValue(std::string_view test_value,
+                       apps::PatternMatchType match_type,
+                       std::string_view match_value);
 
 bool IsGenericFileHandler(const apps::IntentPtr& intent,
                           const apps::IntentFilterPtr& filter);
-
-// TODO(crbug.com/1253250): Remove this function after migrating to non-mojo
-// AppService.
-bool IsGenericFileHandler(const apps::mojom::IntentPtr& intent,
-                          const apps::mojom::IntentFilterPtr& filter);
-
-// Return true if `intent` corresponds to a share intent.
-// TODO(crbug.com/1253250): Remove this function after migrating to non-mojo
-// AppService.
-bool IsShareIntent(const apps::mojom::IntentPtr& intent);
 
 // Return true if |value| matches |pattern| with simple glob syntax.
 // In this syntax, you can use the '*' character to match against zero or
@@ -176,7 +108,7 @@ bool IsShareIntent(const apps::mojom::IntentPtr& intent);
 // This function is transcribed from android's PatternMatcher#matchPattern.
 // See
 // https://android.googlesource.com/platform/frameworks/base.git/+/e93165456c3c28278f275566bd90bfbcf1a0e5f7/core/java/android/os/PatternMatcher.java#186
-bool MatchGlob(const std::string& value, const std::string& pattern);
+bool MatchGlob(std::string_view value, std::string_view pattern);
 
 // TODO(crbug.com/1092784): Handle file path with extension with mime type.
 // Unlike Android mime type matching logic, if the intent mime type has *, it
@@ -186,21 +118,11 @@ bool MatchGlob(const std::string& value, const std::string& pattern);
 // match with any filter. e.g. If we select a .zip, .jep and a .txt, the common
 // mime type will be */*, with Android matching logic, it will match with filter
 // that has mime type video, which is not what we expected.
-bool MimeTypeMatched(const std::string& intent_mime_type,
-                     const std::string& filter_mime_type);
+bool MimeTypeMatched(std::string_view intent_mime_type,
+                     std::string_view filter_mime_type);
 
 bool ExtensionMatched(const std::string& file_name,
                       const std::string& filter_extension);
-
-// Check if the intent only mean to share to Google Drive.
-// TODO(crbug.com/1253250): Remove this function after migrating to non-mojo
-// AppService.
-bool OnlyShareToDrive(const apps::mojom::IntentPtr& intent);
-
-// Check the if the intent is valid, e.g. action matches content.
-// TODO(crbug.com/1253250): Remove this function after migrating to non-mojo
-// AppService.
-bool IsIntentValid(const apps::mojom::IntentPtr& intent);
 
 // Converts |intent| to base::Value, e.g.:
 // {
@@ -215,37 +137,6 @@ bool IsIntentValid(const apps::mojom::IntentPtr& intent);
 // }
 base::Value ConvertIntentToValue(const apps::IntentPtr& intent);
 
-// Gets the string value from base::DictionaryValue, e.g. { "key": "value" }
-// returns "value".
-absl::optional<std::string> GetStringValueFromDict(
-    const base::Value::Dict& dict,
-    const std::string& key_name);
-
-// Gets absl::optional<bool> value from base::DictionaryValue, e.g. {
-// "key": "value" } returns "value".
-absl::optional<bool> GetBoolValueFromDict(const base::DictionaryValue& dict,
-                                          const std::string& key_name);
-
-// Gets GURL from base::DictionaryValue, e.g. { "url": "abc.com" } returns
-// "abc.com".
-absl::optional<GURL> GetGurlValueFromDict(const base::DictionaryValue& dict,
-                                          const std::string& key_name);
-
-// Gets std::vector<IntentFilePtr> from base::DictionaryValue, e.g. {
-// "file_urls": "/abc, /a" } returns
-// std::vector<apps::IntentFilePtr>{"/abc", "/a"}.
-std::vector<apps::IntentFilePtr> GetFilesFromDict(
-    const base::DictionaryValue& dict,
-    const std::string& key_name);
-
-std::vector<std::string> GetCategoriesFromDict(
-    const base::DictionaryValue& dict,
-    const std::string& key_name);
-
-base::flat_map<std::string, std::string> GetExtrasFromDict(
-    const base::DictionaryValue& dict,
-    const std::string& key_name);
-
 // Converts base::Value to Intent. Returns nullptr for invalid base::Values.
 apps::IntentPtr ConvertValueToIntent(base::Value&& value);
 apps::IntentPtr ConvertDictToIntent(const base::Value::Dict& dict);
@@ -258,12 +149,41 @@ std::string CalculateCommonMimeType(const std::vector<std::string>& mime_types);
 
 // Extracts the text from |share_text| to populate the SharedText struct. If
 // |SharedText.url| is populated, the value will always be a valid parsed URL.
-// The |share_text| passed in here should be the share_text field from
-// apps::mojom::IntentPtr.
+// The |share_text| passed in here should be the share_text field from Intent.
 //
 // Testing covered by share_target_utils_unittest.cc as this function was
 // migrated out from web_app::ShareTargetUtils.
 SharedText ExtractSharedText(const std::string& share_text);
+
+// A view object onto a host and optional port string, represents the same thing
+// as arc::IntentFilter::AuthorityEntry with an emphasis on string
+// encoding/decoding for use with ConditionValue's std::string value.
+// The underlying strings must be kept alive while the AuthorityView is around.
+struct AuthorityView {
+  const std::string_view host;
+  const absl::optional<std::string_view> port;
+
+  // Stringifies the effective port of `url` if there is one. Not all URL
+  // schemes have ports.
+  static absl::optional<std::string> PortToString(const GURL& url);
+  static absl::optional<std::string> PortToString(const url::Origin& url);
+
+  // Decodes strings of the form:
+  // "www.example.com:1234" into {.host="www.example.com", .port="1234"}
+  // or "www.example.com" into {.host="www.example.com", .port=nullopt}
+  static AuthorityView Decode(std::string_view);
+
+  // Delegates to Encode().
+  static std::string Encode(const GURL& url);
+  static std::string Encode(const url::Origin& origin);
+
+  // Encodes into the form:
+  // "www.example.com:1234" if port is set
+  // or "www.example.com" if port is unset.
+  // Note that the default scheme port will be used even if not explicitly
+  // specified e.g.: Encode(GURL("https://www.foo.com")) == "www.foo.com:443"
+  std::string Encode();
+};
 
 }  // namespace apps_util
 

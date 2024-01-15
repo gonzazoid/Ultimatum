@@ -12,6 +12,7 @@
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
@@ -265,8 +266,9 @@ class ContentSubresourceFilterThrottleManager
                            SubframeNavigationTaggedAsAdByRenderer);
   FRIEND_TEST_ALL_PREFIXES(ContentSubresourceFilterThrottleManagerTest,
                            GrandchildNavigationTaggedAsAdByRenderer);
-  FRIEND_TEST_ALL_PREFIXES(ContentSubresourceFilterThrottleManagerTest,
-                           AdTagCarriesAcrossProcesses);
+  FRIEND_TEST_ALL_PREFIXES(
+      SitePerProcessContentSubresourceFilterThrottleManagerTest,
+      AdTagCarriesAcrossProcesses);
   FRIEND_TEST_ALL_PREFIXES(ContentSubresourceFilterThrottleManagerTest,
                            FirstDisallowedLoadCalledOutOfOrder);
   std::unique_ptr<ChildFrameNavigationFilteringThrottle>
@@ -404,7 +406,8 @@ class ContentSubresourceFilterThrottleManager
   bool current_committed_load_has_notified_disallowed_load_ = false;
 
   // This member outlives this class.
-  raw_ptr<VerifiedRulesetDealer::Handle> dealer_handle_;
+  raw_ptr<VerifiedRulesetDealer::Handle, AcrossTasksDanglingUntriaged>
+      dealer_handle_;
 
   scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager> database_manager_;
 
@@ -420,7 +423,7 @@ class ContentSubresourceFilterThrottleManager
   // The helper class is attached to the WebContents so it is guaranteed to
   // outlive this class which is owned by either a Page or NavigationHandle in
   // the WebContents.
-  ContentSubresourceFilterWebContentsHelper& web_contents_helper_;
+  const raw_ref<ContentSubresourceFilterWebContentsHelper> web_contents_helper_;
 
   base::WeakPtrFactory<ContentSubresourceFilterThrottleManager>
       weak_ptr_factory_{this};

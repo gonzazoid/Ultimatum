@@ -5,6 +5,7 @@
 #ifndef NET_SOCKET_FUZZED_DATAGRAM_CLIENT_SOCKET_H_
 #define NET_SOCKET_FUZZED_DATAGRAM_CLIENT_SOCKET_H_
 
+#include "base/memory/raw_ptr.h"
 #include "net/socket/datagram_client_socket.h"
 
 #include <stdint.h>
@@ -71,13 +72,14 @@ class FuzzedDatagramClientSocket : public DatagramClientSocket {
   int SetReceiveBufferSize(int32_t size) override;
   int SetSendBufferSize(int32_t size) override;
   int SetDoNotFragment() override;
+  int SetRecvEcn() override;
   void SetMsgConfirm(bool confirm) override {}
 
  private:
   void OnReadComplete(net::CompletionOnceCallback callback, int result);
   void OnWriteComplete(net::CompletionOnceCallback callback, int result);
 
-  FuzzedDataProvider* data_provider_;
+  raw_ptr<FuzzedDataProvider> data_provider_;
 
   bool connected_ = false;
   bool read_pending_ = false;

@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/i18n/time_formatting.h"
 #include "chrome/browser/browsing_topics/browsing_topics_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
-#include "chrome/browser/optimization_guide/browser_test_util.h"
-#include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
-#include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
-#include "chrome/browser/optimization_guide/page_content_annotations_service_factory.h"
+#include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
+#include "chrome/browser/privacy_sandbox/privacy_sandbox_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -16,12 +15,11 @@
 #include "components/browsing_topics/epoch_topics.h"
 #include "components/browsing_topics/test_util.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/optimization_guide/content/browser/page_content_annotations_service.h"
-#include "components/optimization_guide/content/browser/test_page_content_annotator.h"
-#include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/optimization_guide/core/test_model_info_builder.h"
-#include "components/optimization_guide/core/test_optimization_guide_model_provider.h"
+#include "components/prefs/pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
+#include "components/strings/grit/components_strings.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browsing_topics_test_util.h"
@@ -29,23 +27,15 @@
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/re2/src/re2/re2.h"
+#include "ui/base/l10n/l10n_util.h"
 
 namespace browsing_topics {
 
 namespace {
 
 const char kBrowsingTopicsInternalsUrl[] = "chrome://topics-internals/";
-
-std::vector<optimization_guide::WeightedIdentifier> TopicsWithUniformWeight(
-    const std::vector<int32_t>& topics,
-    double weight) {
-  std::vector<optimization_guide::WeightedIdentifier> result;
-  for (int32_t topic : topics) {
-    result.emplace_back(topic, weight);
-  }
-
-  return result;
-}
+const char kBrowsingTopicsInternalsConsentInfoUrl[] =
+    "chrome://topics-internals/#consent-info";
 
 class FixedBrowsingTopicsService
     : public browsing_topics::BrowsingTopicsService {
@@ -63,6 +53,10 @@ class FixedBrowsingTopicsService
     return false;
   }
 
+  int NumVersionsInEpochs(const url::Origin& main_frame_origin) const override {
+    return 0;
+  }
+
   void GetBrowsingTopicsStateForWebUi(
       bool calculate_now,
       browsing_topics::mojom::PageHandler::GetBrowsingTopicsStateCallback
@@ -77,6 +71,8 @@ class FixedBrowsingTopicsService
     return {};
   }
 
+  Annotator* GetAnnotator() override { return &test_annotator_; }
+
   void ClearTopic(
       const privacy_sandbox::CanonicalTopic& canonical_topic) override {}
 
@@ -89,8 +85,11 @@ class FixedBrowsingTopicsService
     result_override_ = std::move(result);
   }
 
+  TestAnnotator* test_annotator() { return &test_annotator_; }
+
  private:
   browsing_topics::mojom::WebUIGetBrowsingTopicsStateResultPtr result_override_;
+  TestAnnotator test_annotator_;
 };
 
 }  //  namespace
@@ -265,6 +264,66 @@ result
 
     return html_content;
   }
+
+  std::string GetConsentInfoTabContent() {
+    std::string html_content = EvalJsInWebUI(R"(
+let result = '';
+
+let consentDivs = document.querySelector('.consent-info-div')
+  .querySelectorAll('div');
+consentDivs.forEach(consentDiv => {
+  result += consentDiv.textContent + '\n';
+});
+
+result
+      )");
+
+    return html_content;
+  }
+
+  std::string BuildExpectedConsentInfoString(int consent_status_string_id,
+                                             int consent_source_string_id) {
+    auto* privacy_sandbox_service =
+        PrivacySandboxServiceFactory::GetForProfile(browser()->profile());
+
+    auto consent_text = privacy_sandbox_service->TopicsConsentLastUpdateText();
+
+    auto last_update_time = browser()->profile()->GetPrefs()->GetTime(
+        prefs::kPrivacySandboxTopicsConsentLastUpdateTime);
+
+    std::string expected_text =
+        "{topicsConsentStatusLabel} {topicsConsentStatus}\n"
+        "{topicsConsentSourceLabel} {topicsConsentSource}\n"
+        "{topicsConsentTimeLabel} {topicsConsentTime}\n"
+        "{topicsConsentTextLabel} {topicsConsentText}\n";
+
+    RE2::Replace(&expected_text, "{topicsConsentStatusLabel}",
+                 l10n_util::GetStringUTF8(
+                     IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_STATUS_LABEL));
+    RE2::Replace(
+        &expected_text, "{topicsConsentSourceLabel}",
+        l10n_util::GetStringUTF8(
+            IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_LAST_UPDATE_SOURCE_LABEL));
+    RE2::Replace(
+        &expected_text, "{topicsConsentTimeLabel}",
+        l10n_util::GetStringUTF8(
+            IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_LAST_UPDATE_TIME_LABEL));
+    RE2::Replace(
+        &expected_text, "{topicsConsentTextLabel}",
+        l10n_util::GetStringUTF8(
+            IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_LAST_UPDATE_TEXT_LABEL));
+
+    RE2::Replace(&expected_text, "{topicsConsentStatus}",
+                 l10n_util::GetStringUTF8(consent_status_string_id));
+    RE2::Replace(&expected_text, "{topicsConsentSource}",
+                 l10n_util::GetStringUTF8(consent_source_string_id));
+    RE2::Replace(&expected_text, "{topicsConsentTime}",
+                 base::UTF16ToUTF8(
+                     base::TimeFormatFriendlyDateAndTime(last_update_time)));
+    RE2::Replace(&expected_text, "{topicsConsentText}", consent_text);
+
+    return expected_text;
+  }
 };
 
 class BrowsingTopicsDisabledInternalsBrowserTest
@@ -275,10 +334,8 @@ class BrowsingTopicsDisabledInternalsBrowserTest
         /*enabled_features=*/{},
         /*disabled_features=*/{
             blink::features::kBrowsingTopics,
+            blink::features::kBrowsingTopicsParameters,
             features::kPrivacySandboxAdsAPIsOverride,
-            privacy_sandbox::kPrivacySandboxSettings3,
-            optimization_guide::features::kPageContentAnnotations,
-            optimization_guide::features::kPageContentAnnotationsValidation,
         });
   }
 
@@ -293,19 +350,22 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsDisabledInternalsBrowserTest,
 
   EXPECT_EQ(GetFeaturesAndParametersTabContent(), R"(BrowsingTopics: disabled
 PrivacySandboxAdsAPIsOverride: disabled
-PrivacySandboxSettings3: disabled
 OverridePrivacySandboxSettingsLocalTesting: disabled
 BrowsingTopicsBypassIPIsPubliclyRoutableCheck: disabled
-BrowsingTopics:number_of_epochs_to_expose: 3
-BrowsingTopics:time_period_per_epoch: 7d-0h-0m-0s
-BrowsingTopics:number_of_top_topics_per_epoch: 5
-BrowsingTopics:use_random_topic_probability_percent: 5
-BrowsingTopics:number_of_epochs_of_observation_data_to_use_for_filtering: 3
-BrowsingTopics:max_number_of_api_usage_context_domains_to_keep_per_topic: 1000
-BrowsingTopics:max_number_of_api_usage_context_entries_to_load_per_epoch: 100000
-BrowsingTopics:max_number_of_api_usage_context_domains_to_store_per_page_load: 30
-BrowsingTopics:config_version: 1
-BrowsingTopics:taxonomy_version: 1
+BrowsingTopicsDocumentAPI: enabled
+Configuration version: 2
+BrowsingTopicsParameters: disabled
+BrowsingTopicsParameters:number_of_epochs_to_expose: 3
+BrowsingTopicsParameters:time_period_per_epoch: 7d-0h-0m-0s
+BrowsingTopicsParameters:number_of_top_topics_per_epoch: 5
+BrowsingTopicsParameters:use_random_topic_probability_percent: 5
+BrowsingTopicsParameters:max_epoch_introduction_delay: 2d-0h-0m-0s
+BrowsingTopicsParameters:number_of_epochs_of_observation_data_to_use_for_filtering: 3
+BrowsingTopicsParameters:max_number_of_api_usage_context_domains_to_keep_per_topic: 1000
+BrowsingTopicsParameters:max_number_of_api_usage_context_entries_to_load_per_epoch: 100000
+BrowsingTopicsParameters:max_number_of_api_usage_context_domains_to_store_per_page_load: 30
+BrowsingTopicsParameters:taxonomy_version: 2
+BrowsingTopicsParameters:disabled_topics_list: 
 )");
 }
 
@@ -326,8 +386,21 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsDisabledInternalsBrowserTest,
 
   EXPECT_EQ(
       GetModelInfoContent(),
-      R"(No PageContentAnnotationsService: the "BrowsingTopics" feature is disabled.
+      R"(No BrowsingTopicsService: the "BrowsingTopics" or other depend-on features are disabled.
 )");
+}
+
+IN_PROC_BROWSER_TEST_F(BrowsingTopicsDisabledInternalsBrowserTest,
+                       ConsentInfo_ConsentNotRequired) {
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(kBrowsingTopicsInternalsConsentInfoUrl)));
+
+  auto consent_string = GetConsentInfoTabContent();
+  auto expected_string = BuildExpectedConsentInfoString(
+      IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_NOT_REQUIRED,
+      IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_UPDATE_SOURCE_DEFAULT);
+
+  EXPECT_EQ(expected_string, consent_string);
 }
 
 class BrowsingTopicsInternalsBrowserTest
@@ -335,11 +408,13 @@ class BrowsingTopicsInternalsBrowserTest
  public:
   BrowsingTopicsInternalsBrowserTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        {{blink::features::kBrowsingTopics,
+        {{blink::features::kBrowsingTopicsParameters,
           {{"number_of_top_topics_per_epoch", "2"},
            {"time_period_per_epoch", "15s"}}},
+         {blink::features::kBrowsingTopics, {}},
          {features::kPrivacySandboxAdsAPIsOverride, {}},
-         {privacy_sandbox::kPrivacySandboxSettings3, {}}},
+         {privacy_sandbox::kPrivacySandboxSettings4,
+          {{"consent-required", "true"}}}},
         /*disabled_features=*/{});
   }
 
@@ -361,11 +436,6 @@ class BrowsingTopicsInternalsBrowserTest
 
  protected:
   void OnWillCreateBrowserContextServices(content::BrowserContext* context) {
-    PageContentAnnotationsServiceFactory::GetInstance()->SetTestingFactory(
-        context, base::BindRepeating(&BrowsingTopicsInternalsBrowserTest::
-                                         CreatePageContentAnnotationsService,
-                                     base::Unretained(this)));
-
     browsing_topics::BrowsingTopicsServiceFactory::GetInstance()
         ->SetTestingFactory(
             context, base::BindRepeating(&BrowsingTopicsInternalsBrowserTest::
@@ -377,37 +447,6 @@ class BrowsingTopicsInternalsBrowserTest
       content::BrowserContext* context) {
     return std::make_unique<FixedBrowsingTopicsService>();
   }
-
-  std::unique_ptr<KeyedService> CreatePageContentAnnotationsService(
-      content::BrowserContext* context) {
-    Profile* profile = Profile::FromBrowserContext(context);
-
-    history::HistoryService* history_service =
-        HistoryServiceFactory::GetForProfile(
-            profile, ServiceAccessType::IMPLICIT_ACCESS);
-
-    DCHECK(!base::Contains(optimization_guide_model_providers_, profile));
-    optimization_guide_model_providers_.emplace(
-        profile, std::make_unique<
-                     optimization_guide::TestOptimizationGuideModelProvider>());
-
-    auto page_content_annotations_service =
-        std::make_unique<optimization_guide::PageContentAnnotationsService>(
-            "en-US", optimization_guide_model_providers_.at(profile).get(),
-            history_service, nullptr, base::FilePath(), nullptr, nullptr);
-
-    page_content_annotations_service->OverridePageContentAnnotatorForTesting(
-        &test_page_content_annotator_);
-
-    return page_content_annotations_service;
-  }
-
-  std::map<
-      Profile*,
-      std::unique_ptr<optimization_guide::TestOptimizationGuideModelProvider>>
-      optimization_guide_model_providers_;
-
-  optimization_guide::TestPageContentAnnotator test_page_content_annotator_;
 
   base::CallbackListSubscription subscription_;
 
@@ -424,19 +463,22 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest, FeaturesEnabled) {
 
   EXPECT_EQ(GetFeaturesAndParametersTabContent(), R"(BrowsingTopics: enabled
 PrivacySandboxAdsAPIsOverride: enabled
-PrivacySandboxSettings3: enabled
 OverridePrivacySandboxSettingsLocalTesting: disabled
 BrowsingTopicsBypassIPIsPubliclyRoutableCheck: disabled
-BrowsingTopics:number_of_epochs_to_expose: 3
-BrowsingTopics:time_period_per_epoch: 0d-0h-0m-15s
-BrowsingTopics:number_of_top_topics_per_epoch: 2
-BrowsingTopics:use_random_topic_probability_percent: 5
-BrowsingTopics:number_of_epochs_of_observation_data_to_use_for_filtering: 3
-BrowsingTopics:max_number_of_api_usage_context_domains_to_keep_per_topic: 1000
-BrowsingTopics:max_number_of_api_usage_context_entries_to_load_per_epoch: 100000
-BrowsingTopics:max_number_of_api_usage_context_domains_to_store_per_page_load: 30
-BrowsingTopics:config_version: 1
-BrowsingTopics:taxonomy_version: 1
+BrowsingTopicsDocumentAPI: enabled
+Configuration version: 2
+BrowsingTopicsParameters: enabled
+BrowsingTopicsParameters:number_of_epochs_to_expose: 3
+BrowsingTopicsParameters:time_period_per_epoch: 0d-0h-0m-15s
+BrowsingTopicsParameters:number_of_top_topics_per_epoch: 2
+BrowsingTopicsParameters:use_random_topic_probability_percent: 5
+BrowsingTopicsParameters:max_epoch_introduction_delay: 2d-0h-0m-0s
+BrowsingTopicsParameters:number_of_epochs_of_observation_data_to_use_for_filtering: 3
+BrowsingTopicsParameters:max_number_of_api_usage_context_domains_to_keep_per_topic: 1000
+BrowsingTopicsParameters:max_number_of_api_usage_context_entries_to_load_per_epoch: 100000
+BrowsingTopicsParameters:max_number_of_api_usage_context_domains_to_store_per_page_load: 30
+BrowsingTopicsParameters:taxonomy_version: 2
+BrowsingTopicsParameters:disabled_topics_list: 
 )");
 }
 
@@ -630,8 +672,7 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest,
       browsing_topics::mojom::WebUIGetBrowsingTopicsStateResult::
           NewOverrideStatusMessage("Failed to get the topics state."));
 
-  // Configure the (mock) model.
-  test_page_content_annotator_.UsePageTopics(absl::nullopt, {});
+  // The |ModelInfo| is not set so the model will not be marked as available.
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(kBrowsingTopicsInternalsUrl)));
@@ -647,14 +688,17 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest, ClassifierTab) {
           NewOverrideStatusMessage("Failed to get the topics state."));
 
   // Configure the (mock) model.
-  test_page_content_annotator_.UsePageTopics(
+
+  fixed_browsing_topics_service()->test_annotator()->UseModelInfo(
       *optimization_guide::TestModelInfoBuilder()
            .SetVersion(1)
            .SetModelFilePath(
                base::FilePath::FromASCII("/test_path/test_model.tflite"))
-           .Build(),
-      {{"foo2.com", TopicsWithUniformWeight({3, 4, 5}, 0.1)},
-       {"foo1.com", TopicsWithUniformWeight({1, 2}, 0.1)}});
+           .Build());
+  fixed_browsing_topics_service()->test_annotator()->UseAnnotations({
+      {"foo1.com", {1, 2}},
+      {"foo2.com", {3, 4, 5}},
+  });
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(kBrowsingTopicsInternalsUrl)));
@@ -689,14 +733,17 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest,
           NewOverrideStatusMessage("Failed to get the topics state."));
 
   // Configure the (mock) model.
-  test_page_content_annotator_.UsePageTopics(
+
+  fixed_browsing_topics_service()->test_annotator()->UseModelInfo(
       *optimization_guide::TestModelInfoBuilder()
            .SetVersion(1)
            .SetModelFilePath(
                base::FilePath::FromASCII("/test_path/test_model.tflite"))
-           .Build(),
-      {{"foo2.com", TopicsWithUniformWeight({3, 4, 5}, 0.1)},
-       {"foo1.com", TopicsWithUniformWeight({1, 2}, 0.1)}});
+           .Build());
+  fixed_browsing_topics_service()->test_annotator()->UseAnnotations({
+      {"foo1.com", {1, 2}},
+      {"foo2.com", {3, 4, 5}},
+  });
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(kBrowsingTopicsInternalsUrl)));
@@ -717,6 +764,74 @@ IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest,
             R"(Host "https://foo1.com" contains invalid character: "/"
 Host "foo1.com/path" contains invalid character: "/"
 )");
+}
+
+IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest,
+                       ConsentInfo_RequiresFragment) {
+  fixed_browsing_topics_service()->SetWebUIGetBrowsingTopicsStateResultOverride(
+      browsing_topics::mojom::WebUIGetBrowsingTopicsStateResult::
+          NewOverrideStatusMessage("Failed to get the topics state."));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(kBrowsingTopicsInternalsUrl)));
+
+  constexpr char consent_tab_display[] = R"(
+    let element = document.querySelector('#consent-info')
+    window.getComputedStyle(element).display
+  )";
+
+  EXPECT_EQ("none", EvalJsInWebUI(consent_tab_display))
+      << "Consent info tab should be hidden if not fragment target";
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(kBrowsingTopicsInternalsConsentInfoUrl)));
+
+  EXPECT_EQ("block", EvalJsInWebUI(consent_tab_display))
+      << "Consent info tab should be visible if fragment target";
+}
+
+IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest,
+                       ConsentInfo_ActiveConsent) {
+  fixed_browsing_topics_service()->SetWebUIGetBrowsingTopicsStateResultOverride(
+      browsing_topics::mojom::WebUIGetBrowsingTopicsStateResult::
+          NewOverrideStatusMessage("Failed to get the topics state."));
+
+  auto* privacy_sandbox_service =
+      PrivacySandboxServiceFactory::GetForProfile(browser()->profile());
+
+  privacy_sandbox_service->PromptActionOccurred(
+      PrivacySandboxService::PromptAction::kConsentAccepted);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(kBrowsingTopicsInternalsConsentInfoUrl)));
+
+  auto consent_string = GetConsentInfoTabContent();
+  auto expected_string = BuildExpectedConsentInfoString(
+      IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_ACTIVE,
+      IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_UPDATE_SOURCE_CONFIRMATION);
+
+  EXPECT_EQ(expected_string, consent_string);
+}
+
+IN_PROC_BROWSER_TEST_F(BrowsingTopicsInternalsBrowserTest,
+                       ConsentInfo_InactiveConsent) {
+  fixed_browsing_topics_service()->SetWebUIGetBrowsingTopicsStateResultOverride(
+      browsing_topics::mojom::WebUIGetBrowsingTopicsStateResult::
+          NewOverrideStatusMessage("Failed to get the topics state."));
+
+  auto* privacy_sandbox_service =
+      PrivacySandboxServiceFactory::GetForProfile(browser()->profile());
+
+  privacy_sandbox_service->TopicsToggleChanged(/*new_value=*/false);
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(kBrowsingTopicsInternalsConsentInfoUrl)));
+
+  auto consent_string = GetConsentInfoTabContent();
+  auto expected_string = BuildExpectedConsentInfoString(
+      IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_INACTIVE,
+      IDS_PRIVACY_SANDBOX_TOPICS_CONSENT_UPDATE_SOURCE_SETTINGS);
+
+  EXPECT_EQ(expected_string, consent_string);
 }
 
 }  // namespace browsing_topics

@@ -9,6 +9,7 @@
 #include "chromeos/ui/frame/desks/move_to_desks_menu_model.h"
 #include "chromeos/ui/wm/desks/chromeos_desks_histogram_enums.h"
 #include "chromeos/ui/wm/desks/desks_helper.h"
+#include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/widget/widget.h"
 
@@ -53,8 +54,9 @@ bool MoveToDesksMenuDelegate::IsCommandIdChecked(int command_id) const {
 }
 
 bool MoveToDesksMenuDelegate::IsCommandIdEnabled(int command_id) const {
-  if (IsAssignToAllDesksCommand(command_id))
+  if (IsAssignToAllDesksCommand(command_id)) {
     return true;
+  }
 
   if (!IsMoveToDeskCommand(command_id))
     return false;

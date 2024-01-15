@@ -4,8 +4,9 @@
 
 #include "extensions/renderer/bindings/api_event_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -19,7 +20,6 @@
 #include "gin/converter.h"
 #include "gin/public/context_holder.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -465,7 +465,7 @@ TEST_F(APIEventHandlerTest, RemovingListenersWhileHandlingEvent) {
       "})();";
 
   // Create and add a bunch of listeners.
-  std::vector<v8::Local<v8::Function>> listeners;
+  v8::LocalVector<v8::Function> listeners(isolate());
   const size_t kNumListeners = 20u;
   listeners.reserve(kNumListeners);
   for (size_t i = 0; i < kNumListeners; ++i)
@@ -910,10 +910,10 @@ TEST_F(APIEventHandlerTest, TestUnmanagedEvents) {
   v8::HandleScope handle_scope(isolate());
   v8::Local<v8::Context> context = MainContext();
 
-  auto fail_on_notified =
-      [](const std::string& event_name, binding::EventListenersChanged changed,
-         const base::DictionaryValue* filter, bool was_manual,
-         v8::Local<v8::Context> context) { ADD_FAILURE(); };
+  auto fail_on_notified = [](const std::string& event_name,
+                             binding::EventListenersChanged changed,
+                             const base::Value::Dict* filter, bool was_manual,
+                             v8::Local<v8::Context> context) { ADD_FAILURE(); };
 
   APIEventHandler handler(base::BindRepeating(fail_on_notified),
                           base::BindRepeating(&GetContextOwner), nullptr);

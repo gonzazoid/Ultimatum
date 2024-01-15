@@ -4,25 +4,21 @@
 
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey_ui.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/ios/ios_util.h"
-#import "base/mac/foundation_util.h"
 #import "base/test/ios/wait_util.h"
 #import "build/build_config.h"
 #import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_constants.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_ui_constants.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
-#import "ios/chrome/browser/ui/table_view/table_view_constants.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Redefine EarlGrey macro to use line number and file name taken from the place
 // of BookmarkEarlGreyUIImpl macro instantiation, rather than local line number
@@ -59,10 +55,10 @@ id<GREYMatcher> BookmarksContextMenuEditButton() {
   // exclusion by accessibility ID and ancestry.
   return grey_allOf(
       EditButton(), grey_userInteractionEnabled(),
-      grey_not(grey_accessibilityID(kBookmarkHomeTrailingButtonIdentifier)),
+      grey_not(grey_accessibilityID(kBookmarksHomeTrailingButtonIdentifier)),
       grey_not(TabGridEditButton()),
       grey_not(grey_ancestor(
-          grey_accessibilityID(kBookmarkHomeTrailingButtonIdentifier))),
+          grey_accessibilityID(kBookmarksHomeTrailingButtonIdentifier))),
       nil);
 }
 
@@ -70,8 +66,8 @@ id<GREYMatcher> BookmarksDeleteSwipeButton() {
   return ButtonWithAccessibilityLabelId(IDS_IOS_BOOKMARK_ACTION_DELETE);
 }
 
-id<GREYMatcher> BookmarkHomeDoneButton() {
-  return grey_accessibilityID(kBookmarkHomeNavigationBarDoneButtonIdentifier);
+id<GREYMatcher> BookmarksHomeDoneButton() {
+  return grey_accessibilityID(kBookmarksHomeNavigationBarDoneButtonIdentifier);
 }
 
 id<GREYMatcher> BookmarksSaveEditDoneButton() {
@@ -84,24 +80,25 @@ id<GREYMatcher> BookmarksSaveEditFolderButton() {
 }
 
 id<GREYMatcher> ContextBarLeadingButtonWithLabel(NSString* label) {
-  return grey_allOf(grey_accessibilityID(kBookmarkHomeLeadingButtonIdentifier),
+  return grey_allOf(grey_accessibilityID(kBookmarksHomeLeadingButtonIdentifier),
                     grey_accessibilityLabel(label),
                     grey_accessibilityTrait(UIAccessibilityTraitButton),
                     grey_sufficientlyVisible(), nil);
 }
 
 id<GREYMatcher> ContextBarCenterButtonWithLabel(NSString* label) {
-  return grey_allOf(grey_accessibilityID(kBookmarkHomeCenterButtonIdentifier),
+  return grey_allOf(grey_accessibilityID(kBookmarksHomeCenterButtonIdentifier),
                     grey_accessibilityLabel(label),
                     grey_accessibilityTrait(UIAccessibilityTraitButton),
                     grey_sufficientlyVisible(), nil);
 }
 
 id<GREYMatcher> ContextBarTrailingButtonWithLabel(NSString* label) {
-  return grey_allOf(grey_accessibilityID(kBookmarkHomeTrailingButtonIdentifier),
-                    grey_accessibilityLabel(label),
-                    grey_accessibilityTrait(UIAccessibilityTraitButton),
-                    grey_sufficientlyVisible(), nil);
+  return grey_allOf(
+      grey_accessibilityID(kBookmarksHomeTrailingButtonIdentifier),
+      grey_accessibilityLabel(label),
+      grey_accessibilityTrait(UIAccessibilityTraitButton),
+      grey_sufficientlyVisible(), nil);
 }
 
 id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
@@ -110,7 +107,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
 }
 
 id<GREYMatcher> SearchIconButton() {
-  return grey_accessibilityID(kBookmarkHomeSearchBarIdentifier);
+  return grey_accessibilityID(kBookmarksHomeSearchBarIdentifier);
 }
 
 }  // namespace chrome_test_util
@@ -165,9 +162,9 @@ id<GREYMatcher> SearchIconButton() {
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Tap on "Create New Folder."
-  [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   kBookmarkCreateNewFolderCellIdentifier)]
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     kBookmarkCreateNewLocalOrSyncableFolderCellIdentifier)]
       performAction:grey_tap()];
 
   // Verify the folder creator is displayed.
@@ -198,7 +195,8 @@ id<GREYMatcher> SearchIconButton() {
                     error:&error];
     return error == nil;
   };
-  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(base::Seconds(10),
+                                                          condition),
              @"Waiting for bookmark to go away");
 }
 
@@ -211,9 +209,9 @@ id<GREYMatcher> SearchIconButton() {
                     error:&error];
     return error == nil;
   };
-  EG_TEST_HELPER_ASSERT_TRUE(
-      base::test::ios::WaitUntilConditionOrTimeout(10, condition),
-      @"Waiting for undo toast to go away");
+  EG_TEST_HELPER_ASSERT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+                                 base::Seconds(10), condition),
+                             @"Waiting for undo toast to go away");
 }
 
 - (void)renameBookmarkFolderWithFolderTitle:(NSString*)folderTitle {
@@ -234,7 +232,7 @@ id<GREYMatcher> SearchIconButton() {
   // Change to edit mode
   [[EarlGrey
       selectElementWithMatcher:grey_accessibilityID(
-                                   kBookmarkHomeTrailingButtonIdentifier)]
+                                   kBookmarksHomeTrailingButtonIdentifier)]
       performAction:grey_tap()];
 
   // Select URLs.
@@ -300,7 +298,7 @@ id<GREYMatcher> SearchIconButton() {
 - (void)verifyActionSheetsForSingleURLWithEditEnabled:(BOOL)editEnabled {
   // Verify it shows the action sheets.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeContextMenuIdentifier)]
+                                          kBookmarksHomeContextMenuIdentifier)]
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Verify options on the action sheets..
@@ -330,7 +328,7 @@ id<GREYMatcher> SearchIconButton() {
 - (void)verifyActionSheetsForSingleFolderWithEditEnabled:(BOOL)editEnabled {
   // Verify it shows the action sheets.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeContextMenuIdentifier)]
+                                          kBookmarksHomeContextMenuIdentifier)]
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Verify options on the action sheets.
@@ -352,7 +350,7 @@ id<GREYMatcher> SearchIconButton() {
 - (void)dismissActionSheets {
   // Verify it shows the context menu.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeContextMenuIdentifier)]
+                                          kBookmarksHomeContextMenuIdentifier)]
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Dismiss the context menu. On non compact width tap the Bookmarks TableView
@@ -363,7 +361,7 @@ id<GREYMatcher> SearchIconButton() {
         performAction:grey_tap()];
   } else {
     [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                            kBookmarkHomeTableViewIdentifier)]
+                                            kBookmarksHomeTableViewIdentifier)]
         performAction:grey_tap()];
   }
 }
@@ -372,7 +370,7 @@ id<GREYMatcher> SearchIconButton() {
                                        newFolderEnabled:(BOOL)newFolderEnabled {
   // Verify the context bar is shown.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeUIToolbarIdentifier)]
+                                          kBookmarksHomeUIToolbarIdentifier)]
       assertWithMatcher:grey_notNil()];
 
   // Verify context bar shows enabled "New Folder" and enabled "Select".
@@ -403,7 +401,7 @@ id<GREYMatcher> SearchIconButton() {
 - (void)verifyContextBarInEditMode {
   // Verify the context bar is shown.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeUIToolbarIdentifier)]
+                                          kBookmarksHomeUIToolbarIdentifier)]
       assertWithMatcher:grey_notNil()];
 
   [[EarlGrey
@@ -436,9 +434,22 @@ id<GREYMatcher> SearchIconButton() {
                                           IDS_IOS_BOOKMARK_EMPTY_TITLE))]
       assertWithMatcher:grey_sufficientlyVisible()];
 
+  // First make sure the empty message is visible at all, so the user knows it
+  // exists.
   [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
                                           IDS_IOS_BOOKMARK_EMPTY_MESSAGE))]
-      assertWithMatcher:grey_sufficientlyVisible()];
+      assertWithMatcher:grey_minimumVisiblePercent(0.25)];
+
+  // Then make sure that scrolling the bookmark table view makes the empty
+  // message sufficiently visible.
+  [[[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_text(l10n_util::GetNSString(
+                                              IDS_IOS_BOOKMARK_EMPTY_MESSAGE)),
+                                          grey_sufficientlyVisible(), nil)]
+         usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 200)
+      onElementWithMatcher:grey_accessibilityID(
+                               kBookmarksHomeTableViewIdentifier)]
+      assertWithMatcher:grey_notNil()];
 }
 
 - (void)verifyEmptyBackgroundIsAbsent {
@@ -478,7 +489,7 @@ id<GREYMatcher> SearchIconButton() {
   // Provide a start points since it prevents some tests timing out under
   // certain configurations.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeTableViewIdentifier)]
+                                          kBookmarksHomeTableViewIdentifier)]
       performAction:grey_scrollToContentEdgeWithStartPoint(
                         kGREYContentEdgeBottom, 0.5, 0.5)];
 }
@@ -557,8 +568,9 @@ id<GREYMatcher> SearchIconButton() {
   id<GREYMatcher> dismissMatcher = BookmarksSaveEditDoneButton();
   // If a folder is being edited use the EditFolder button dismiss matcher
   // instead.
-  if ([editorId isEqualToString:kBookmarkFolderEditViewContainerIdentifier])
+  if ([editorId isEqualToString:kBookmarkFolderEditViewContainerIdentifier]) {
     dismissMatcher = BookmarksSaveEditFolderButton();
+  }
   [[EarlGrey selectElementWithMatcher:dismissMatcher] performAction:grey_tap()];
 
   // Verify the Editor was dismissed.
@@ -647,22 +659,27 @@ id<GREYMatcher> SearchIconButton() {
 - (void)createNewBookmarkFolderWithFolderTitle:(NSString*)folderTitle
                                    pressReturn:(BOOL)pressReturn {
   // Click on "New Folder".
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeLeadingButtonIdentifier)]
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kBookmarksHomeLeadingButtonIdentifier)]
       performAction:grey_tap()];
 
   NSString* titleIdentifier = @"bookmark_editing_text";
 
-  // Type the folder title.
+  // Type the folder title, tapping to provide focus first so that we can \n
+  // later.
+  [[EarlGrey
+      selectElementWithMatcher:[self textFieldMatcherForID:titleIdentifier]]
+      performAction:grey_tap()];
   [[EarlGrey
       selectElementWithMatcher:[self textFieldMatcherForID:titleIdentifier]]
       performAction:grey_replaceText(folderTitle)];
 
   // Press the keyboard return key.
   if (pressReturn) {
-    [[EarlGrey
-        selectElementWithMatcher:[self textFieldMatcherForID:titleIdentifier]]
-        performAction:grey_typeText(@"\n")];
+    // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+    // replaceText can properly handle \n.
+    [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 
     // Wait until the editing textfield is gone.
     ConditionBlock condition = ^{
@@ -673,7 +690,8 @@ id<GREYMatcher> SearchIconButton() {
                       error:&error];
       return error == nil;
     };
-    GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
+    GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(base::Seconds(10),
+                                                            condition),
                @"Waiting for textfield to go away");
   }
 }

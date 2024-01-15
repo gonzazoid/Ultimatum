@@ -11,6 +11,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "base/time/time.h"
 #include "components/translate/content/common/translate.mojom.h"
 #include "components/translate/core/browser/translate_driver.h"
@@ -90,12 +91,12 @@ class ContentTranslateDriver : public TranslateDriver,
                      const std::string& source_lang,
                      const std::string& target_lang) override;
   void RevertTranslation(int page_seq_no) override;
-  bool IsIncognito() override;
+  bool IsIncognito() const override;
   const std::string& GetContentsMimeType() override;
-  const GURL& GetLastCommittedURL() override;
+  const GURL& GetLastCommittedURL() const override;
   const GURL& GetVisibleURL() override;
   ukm::SourceId GetUkmSourceId() override;
-  bool HasCurrentPage() override;
+  bool HasCurrentPage() const override;
   void OpenUrlInNewTab(const GURL& url) override;
 
   // content::WebContentsObserver implementation.
@@ -115,24 +116,13 @@ class ContentTranslateDriver : public TranslateDriver,
   void RegisterPage(
       mojo::PendingRemote<translate::mojom::TranslateAgent> translate_agent,
       const translate::LanguageDetectionDetails& details,
-      bool page_level_translation_critiera_met) override;
+      bool page_level_translation_criteria_met) override;
 
   // translate::mojom::ContentTranslateDriver implementation:
   void GetLanguageDetectionModel(
       GetLanguageDetectionModelCallback callback) override;
 
  protected:
-  const base::ObserverList<TranslationObserver, true>& translation_observers()
-      const {
-    return translation_observers_;
-  }
-
-  TranslateManager* translate_manager() const { return translate_manager_; }
-
-  language::UrlLanguageHistogram* language_histogram() const {
-    return language_histogram_;
-  }
-
   bool IsAutoHrefTranslateAllOriginsEnabled() const;
 
  private:
@@ -153,6 +143,12 @@ class ContentTranslateDriver : public TranslateDriver,
   raw_ptr<TranslateManager, DanglingUntriaged> translate_manager_;
 
   base::ObserverList<TranslationObserver, true> translation_observers_;
+
+  // Whether the associated browser context is off the record.
+  bool is_otr_context_;
+
+  // The last committed URL of the primary main frame of the contents.
+  GURL last_committed_url_;
 
   // Max number of attempts before checking if a page has been reloaded.
   int max_reload_check_attempts_;
@@ -186,5 +182,25 @@ class ContentTranslateDriver : public TranslateDriver,
 };
 
 }  // namespace translate
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    translate::ContentTranslateDriver,
+    translate::ContentTranslateDriver::TranslationObserver> {
+  static void AddObserver(
+      translate::ContentTranslateDriver* source,
+      translate::ContentTranslateDriver::TranslationObserver* observer) {
+    source->AddTranslationObserver(observer);
+  }
+  static void RemoveObserver(
+      translate::ContentTranslateDriver* source,
+      translate::ContentTranslateDriver::TranslationObserver* observer) {
+    source->RemoveTranslationObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // COMPONENTS_TRANSLATE_CONTENT_BROWSER_CONTENT_TRANSLATE_DRIVER_H_

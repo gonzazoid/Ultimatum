@@ -44,10 +44,10 @@ FEDropShadow::FEDropShadow(Filter* filter,
       shadow_opacity_(shadow_opacity) {}
 
 gfx::RectF FEDropShadow::MapEffect(const gfx::SizeF& std_deviation,
-                                   const gfx::PointF& offset,
+                                   const gfx::Vector2dF& offset,
                                    const gfx::RectF& rect) {
   gfx::RectF offset_rect = rect;
-  offset_rect.Offset(offset.OffsetFromOrigin());
+  offset_rect.Offset(offset);
   gfx::RectF blurred_rect =
       FEGaussianBlur::MapEffect(std_deviation, offset_rect);
   return gfx::UnionRects(blurred_rect, rect);
@@ -56,8 +56,8 @@ gfx::RectF FEDropShadow::MapEffect(const gfx::SizeF& std_deviation,
 gfx::RectF FEDropShadow::MapEffect(const gfx::RectF& rect) const {
   const Filter* filter = GetFilter();
   DCHECK(filter);
-  gfx::PointF offset(filter->ApplyHorizontalScale(dx_),
-                     filter->ApplyVerticalScale(dy_));
+  gfx::Vector2dF offset(filter->ApplyHorizontalScale(dx_),
+                        filter->ApplyVerticalScale(dy_));
   gfx::SizeF std_error(filter->ApplyHorizontalScale(std_x_),
                        filter->ApplyVerticalScale(std_y_));
   return MapEffect(std_error, offset, rect);
@@ -70,13 +70,14 @@ sk_sp<PaintFilter> FEDropShadow::CreateImageFilter() {
   float dy = GetFilter()->ApplyVerticalScale(dy_);
   float std_x = GetFilter()->ApplyHorizontalScale(std_x_);
   float std_y = GetFilter()->ApplyVerticalScale(std_y_);
-  Color color = AdaptColorToOperatingInterpolationSpace(
-      shadow_color_.CombineWithAlpha(shadow_opacity_));
+  Color drop_shadow_color = shadow_color_;
+  drop_shadow_color.SetAlpha(shadow_opacity_ * drop_shadow_color.Alpha());
+  drop_shadow_color =
+      AdaptColorToOperatingInterpolationSpace(drop_shadow_color);
   absl::optional<PaintFilter::CropRect> crop_rect = GetCropRect();
-  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
   return sk_make_sp<DropShadowPaintFilter>(
       SkFloatToScalar(dx), SkFloatToScalar(dy), SkFloatToScalar(std_x),
-      SkFloatToScalar(std_y), SkColor4f::FromColor(color.Rgb()),
+      SkFloatToScalar(std_y), drop_shadow_color.toSkColor4f(),
       DropShadowPaintFilter::ShadowMode::kDrawShadowAndForeground,
       std::move(input), base::OptionalToPtr(crop_rect));
 }

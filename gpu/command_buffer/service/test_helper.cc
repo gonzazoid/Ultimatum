@@ -676,7 +676,10 @@ void TestHelper::SetupFeatureInfoInitExpectationsWithGLVersion(
         .RetiresOnSaturation();
   }
 
-#if !BUILDFLAG(IS_MAC)
+  // These expectations are for IsGL_REDSupportedOnFBOs(), which is
+  // skipped universally on macOS, and by default (with a Finch
+  // kill-switch) on Android.
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_ANDROID)
   if (gl_info.is_es3 || gl_info.is_desktop_core_profile ||
       gfx::HasExtension(extension_set, "GL_EXT_texture_rg") ||
       (gfx::HasExtension(extension_set, "GL_ARB_texture_rg"))) {
@@ -687,7 +690,7 @@ void TestHelper::SetupFeatureInfoInitExpectationsWithGLVersion(
 #endif
     static const GLuint tx_ids[] = {101, 102};
     static const GLuint fb_ids[] = {103, 104};
-    const GLsizei width = 1;
+    const GLsizei width = 8;
     EXPECT_CALL(*gl, GetIntegerv(GL_FRAMEBUFFER_BINDING, _))
         .WillOnce(SetArgPointee<1>(fb_ids[0]))
         .RetiresOnSaturation();
@@ -736,107 +739,6 @@ void TestHelper::SetupFeatureInfoInitExpectationsWithGLVersion(
 #endif
   }
 #endif  // !BUILDFLAG(IS_MAC)
-}
-
-void TestHelper::SetupExpectationsForClearingUniforms(::gl::MockGLInterface* gl,
-                                                      UniformInfo* uniforms,
-                                                      size_t num_uniforms) {
-  for (size_t ii = 0; ii < num_uniforms; ++ii) {
-    const UniformInfo& info = uniforms[ii];
-    switch (info.type) {
-    case GL_FLOAT:
-      EXPECT_CALL(*gl, Uniform1fv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_FLOAT_VEC2:
-      EXPECT_CALL(*gl, Uniform2fv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_FLOAT_VEC3:
-      EXPECT_CALL(*gl, Uniform3fv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_FLOAT_VEC4:
-      EXPECT_CALL(*gl, Uniform4fv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_INT:
-    case GL_BOOL:
-    case GL_SAMPLER_2D:
-    case GL_SAMPLER_CUBE:
-    case GL_SAMPLER_EXTERNAL_OES:
-    case GL_SAMPLER_3D_OES:
-    case GL_SAMPLER_2D_RECT_ARB:
-    case GL_SAMPLER_2D_ARRAY:
-      EXPECT_CALL(*gl, Uniform1iv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_UNSIGNED_INT:
-      EXPECT_CALL(*gl, Uniform1uiv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_INT_VEC2:
-    case GL_BOOL_VEC2:
-      EXPECT_CALL(*gl, Uniform2iv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_UNSIGNED_INT_VEC2:
-      EXPECT_CALL(*gl, Uniform2uiv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_INT_VEC3:
-    case GL_BOOL_VEC3:
-      EXPECT_CALL(*gl, Uniform3iv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_UNSIGNED_INT_VEC3:
-      EXPECT_CALL(*gl, Uniform3uiv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_INT_VEC4:
-    case GL_BOOL_VEC4:
-      EXPECT_CALL(*gl, Uniform4iv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_UNSIGNED_INT_VEC4:
-      EXPECT_CALL(*gl, Uniform4uiv(info.real_location, info.size, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_FLOAT_MAT2:
-      EXPECT_CALL(*gl, UniformMatrix2fv(
-          info.real_location, info.size, false, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_FLOAT_MAT3:
-      EXPECT_CALL(*gl, UniformMatrix3fv(
-          info.real_location, info.size, false, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    case GL_FLOAT_MAT4:
-      EXPECT_CALL(*gl, UniformMatrix4fv(
-          info.real_location, info.size, false, _))
-          .Times(1)
-          .RetiresOnSaturation();
-      break;
-    default:
-      NOTREACHED();
-      break;
-    }
-  }
 }
 
 void TestHelper::SetupProgramSuccessExpectations(

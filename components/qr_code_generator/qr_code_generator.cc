@@ -11,8 +11,14 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/containers/span_rust.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/numerics/safe_conversions.h"
+#include "components/qr_code_generator/features.h"
+#include "components/qr_code_generator/qr_code_generator_ffi_glue.rs.h"
+
+namespace qr_code_generator {
 
 // kMaxVersionWithSmallLengths is the maximum QR version that uses the smaller
 // length fields, i.e. that is |VersionClass::SMALL|. See table 3.
@@ -91,7 +97,9 @@ struct QRVersionInfo {
   const std::array<int, 3> alignment_locations;
 
   // Total number of tiles for the QR code, size*size.
-  constexpr int total_size() const { return size * size; }
+  constexpr size_t total_size() const {
+    return base::checked_cast<size_t>(size * size);
+  }
 
   constexpr size_t total_bytes() const { return group1_bytes + group2_bytes; }
 
@@ -255,6 +263,9 @@ constexpr QRVersionInfo version_infos[] = {
         // Alignment locations
         {6, 32, 58},
     },
+
+    // Adding larger sizes here? Consider whether `kMaxInputSize` needs to be
+    // updated.
 };
 
 const QRVersionInfo* GetVersionForDataSize(size_t num_data_bytes,
@@ -316,9 +327,9 @@ base::span<const uint16_t, 8> FormatInformationForECC(QRVersionInfo::ECC ecc) {
 
   switch (ecc) {
     case QRVersionInfo::ECC::kLow:
-      return base::span<const uint16_t, 8>(kFormatInformation, 8);
+      return base::span<const uint16_t, 8>(kFormatInformation, 8u);
     case QRVersionInfo::ECC::kMedium:
-      return base::span<const uint16_t, 8>(&kFormatInformation[8], 8);
+      return base::span<const uint16_t, 8>(&kFormatInformation[8], 8u);
   }
 }
 
@@ -561,6 +572,31 @@ size_t SegmentSpanLength(base::span<const QRCodeGenerator::Segment> segments) {
   return sum;
 }
 
+absl::optional<QRCodeGenerator::GeneratedCode> GenerateQrCodeUsingRust(
+    base::span<const uint8_t> in,
+    absl::optional<int> min_version) {
+  rust::Slice<const uint8_t> rs_in = base::SpanToRustSlice(in);
+
+  // `min_version` might come from a fuzzer and therefore we use a lenient
+  // `saturated_cast` instead of a `checked_cast`.
+  int16_t rs_min_version =
+      base::saturated_cast<int16_t>(min_version.value_or(0));
+
+  std::vector<uint8_t> result_pixels;
+  size_t result_width = 0;
+  bool result_is_success = generate_qr_code_using_rust(
+      rs_in, rs_min_version, result_pixels, result_width);
+
+  if (!result_is_success) {
+    return absl::nullopt;
+  }
+  QRCodeGenerator::GeneratedCode code;
+  code.data = std::move(result_pixels);
+  code.qr_size = base::checked_cast<int>(result_width);
+  CHECK_EQ(code.data.size(), static_cast<size_t>(code.qr_size * code.qr_size));
+  return code;
+}
+
 }  // namespace
 
 QRCodeGenerator::QRCodeGenerator() = default;
@@ -570,13 +606,20 @@ QRCodeGenerator::~QRCodeGenerator() = default;
 QRCodeGenerator::GeneratedCode::GeneratedCode() = default;
 QRCodeGenerator::GeneratedCode::GeneratedCode(
     QRCodeGenerator::GeneratedCode&&) = default;
+QRCodeGenerator::GeneratedCode& QRCodeGenerator::GeneratedCode::operator=(
+    QRCodeGenerator::GeneratedCode&&) = default;
 QRCodeGenerator::GeneratedCode::~GeneratedCode() = default;
 
 absl::optional<QRCodeGenerator::GeneratedCode> QRCodeGenerator::Generate(
     base::span<const uint8_t> in,
-    absl::optional<int> min_version,
-    absl::optional<uint8_t> mask) {
-  CHECK(!mask || *mask <= kMaxMask);
+    absl::optional<int> min_version) {
+  if (IsRustyQrCodeGeneratorFeatureEnabled()) {
+    return GenerateQrCodeUsingRust(in, min_version);
+  }
+
+  if (in.size() > kMaxInputSize) {
+    return absl::nullopt;
+  }
 
   std::vector<Segment> segments;
   const QRVersionInfo* version_info = nullptr;
@@ -605,10 +648,13 @@ absl::optional<QRCodeGenerator::GeneratedCode> QRCodeGenerator::Generate(
       VersionClassForVersion(version_info->version);
   if (version_info != version_info_) {
     version_info_ = version_info;
-    d_.resize(version_info_->total_size());
   }
-  // Previous data and "set" bits must be cleared.
-  memset(&d_[0], 0, version_info_->total_size());
+
+  // If this is the first time `Generate` is called, then `d_` is a brand-new
+  // (empty) vector.  If `Generate` has been called in the past, then `d_` is a
+  // vector in a moved-from state.  Either way, we need to construct a new
+  // vector.
+  d_ = std::vector<uint8_t>(version_info_->total_size(), 0);
 
   const size_t framed_input_size =
       version_info_->group1_data_bytes() + version_info_->group2_data_bytes();
@@ -747,12 +793,11 @@ absl::optional<QRCodeGenerator::GeneratedCode> QRCodeGenerator::Generate(
   }
   DCHECK_EQ(k, total_bytes);
 
-  uint8_t best_mask = mask.value_or(0);
+  // Evaluate each masking function to find the one with the lowest penalty
+  // score.
+  uint8_t best_mask = 0;
   absl::optional<unsigned> lowest_penalty;
-
-  // If |mask| was not specified, then evaluate each masking function to find
-  // the one with the lowest penalty score.
-  for (uint8_t mask_num = 0; !mask && mask_num <= kMaxMask; mask_num++) {
+  for (uint8_t mask_num = 0; mask_num <= kMaxMask; mask_num++) {
     // FormatInformationForECC returns an array of encoded formatting words for
     // the QR code that this code generates. See tables 10 and 12. For example:
     //                  00 011
@@ -778,8 +823,10 @@ absl::optional<QRCodeGenerator::GeneratedCode> QRCodeGenerator::Generate(
           kMaskFunctions[best_mask]);
 
   GeneratedCode code;
-  code.data = base::span<uint8_t>(&d_[0], version_info_->total_size());
+  code.data = std::move(d_);
   code.qr_size = version_info_->size;
+  CHECK_EQ(code.data.size(), version_info_->total_size());
+  CHECK_EQ(code.data.size(), static_cast<size_t>(code.qr_size * code.qr_size));
   return code;
 }
 
@@ -1587,3 +1634,5 @@ std::vector<QRCodeGenerator::Segment> QRCodeGenerator::SegmentInput(
 
   return segments;
 }
+
+}  // namespace qr_code_generator

@@ -65,17 +65,19 @@ void WebSigninBridge::OnAccountsInCookieUpdated(
 
 void WebSigninBridge::OnStateChanged(
     signin_metrics::AccountReconcilorState state) {
-  if (state !=
-      signin_metrics::AccountReconcilorState::ACCOUNT_RECONCILOR_ERROR) {
+  if (state != signin_metrics::AccountReconcilorState::kError) {
     return;
   }
 
   bool is_auth_error =
       identity_manager_->HasAccountWithRefreshTokenInPersistentErrorState(
           signin_account_.account_id);
-  OnSigninCompleted(GoogleServiceAuthError(
-      is_auth_error ? GoogleServiceAuthError::State::INVALID_GAIA_CREDENTIALS
-                    : GoogleServiceAuthError::State::CONNECTION_FAILED));
+  OnSigninCompleted(
+      is_auth_error ? GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+                          GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+                              CREDENTIALS_REJECTED_BY_SERVER)
+                    : GoogleServiceAuthError(
+                          GoogleServiceAuthError::State::CONNECTION_FAILED));
 }
 
 void WebSigninBridge::OnSigninCompleted(const GoogleServiceAuthError& error) {

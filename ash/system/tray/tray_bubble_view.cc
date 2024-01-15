@@ -9,7 +9,7 @@
 #include <numeric>
 
 #include "ash/accelerators/accelerator_controller_impl.h"
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/bubble/bubble_constants.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/accelerators.h"
@@ -17,8 +17,10 @@
 #include "ash/shell.h"
 #include "ash/style/ash_color_id.h"
 #include "ash/style/system_shadow.h"
+#include "ash/system/tray/system_tray_notifier.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/unified_system_tray_view.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPath.h"
@@ -28,6 +30,7 @@
 #include "ui/aura/window.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_type.h"
 #include "ui/compositor_extra/shadow.h"
@@ -120,8 +123,9 @@ class BottomAlignedBoxLayout : public views::BoxLayout {
          i != host->children().rend() && consumed_height < host->height();
          ++i) {
       View* child = *i;
-      if (!child->GetVisible())
+      if (!child->GetVisible()) {
         continue;
+      }
       gfx::Size size = child->GetPreferredSize();
       child->SetBounds(0, host->height() - consumed_height - size.height(),
                        host->width(), size.height());
@@ -129,7 +133,7 @@ class BottomAlignedBoxLayout : public views::BoxLayout {
     }
   }
 
-  TrayBubbleView* bubble_view_;
+  raw_ptr<TrayBubbleView> bubble_view_;
 };
 
 }  // namespace
@@ -152,17 +156,15 @@ bool TrayBubbleView::Delegate::ShouldEnableExtraKeyboardAccessibility() {
   return false;
 }
 
-void TrayBubbleView::Delegate::HideBubble(const TrayBubbleView* bubble_view) {}
-
 base::WeakPtr<TrayBubbleView::Delegate> TrayBubbleView::Delegate::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
 }
 
-absl::optional<AcceleratorAction>
+std::optional<AcceleratorAction>
 TrayBubbleView::Delegate::GetAcceleratorAction() const {
   // TODO(crbug/1234891) Make this a pure virtual function so all
   // bubble delegates need to specify accelerator actions.
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 TrayBubbleView::InitParams::InitParams() = default;
@@ -214,8 +216,9 @@ void TrayBubbleView::RerouteEventHandler::OnKeyEvent(ui::KeyEvent* event) {
 
     tray_bubble_view_->GetWidget()->OnKeyEvent(event);
 
-    if (event->handled())
+    if (event->handled()) {
       return;
+    }
   }
 
   // Always consumes key event not to pass it to other widgets. Calling
@@ -255,11 +258,10 @@ TrayBubbleView::TrayBubbleView(const InitParams& init_params)
   // We set the dialog role because views::BubbleDialogDelegate defaults this to
   // an alert dialog. This would make screen readers announce the whole of the
   // system tray which is undesirable.
-  SetAccessibleRole(ax::mojom::Role::kDialog);
+  SetAccessibleWindowRole(ax::mojom::Role::kDialog);
   // We force to create contents background since the bubble border background
   // is not shown in this view.
-  if (features::IsDarkLightModeEnabled())
-    set_force_create_contents_background(true);
+  set_force_create_contents_background(true);
   // Bubbles that use transparent colors should not paint their ClientViews to a
   // layer as doing so could result in visual artifacts.
   SetPaintClientToLayer(false);
@@ -270,7 +272,7 @@ TrayBubbleView::TrayBubbleView(const InitParams& init_params)
   DCHECK((init_params.anchor_mode != TrayBubbleView::AnchorMode::kView) ||
          anchor_widget());
   set_parent_window(params_.parent_window);
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   SetCanActivate(controller->spoken_feedback().enabled() ||
                  controller->dictation().enabled());
@@ -282,8 +284,7 @@ TrayBubbleView::TrayBubbleView(const InitParams& init_params)
   if (init_params.translucent) {
     // TODO(crbug/1313073): In the dark light mode feature, remove layer
     // creation in children views of this view to improve performance.
-    SetPaintToLayer(features::IsDarkLightModeEnabled() ? ui::LAYER_TEXTURED
-                                                       : ui::LAYER_SOLID_COLOR);
+    SetPaintToLayer(ui::LAYER_TEXTURED);
     layer()->SetFillsBoundsOpaquely(false);
     layer()->SetRoundedCornerRadius(
         gfx::RoundedCornersF{static_cast<float>(params_.corner_radius)});
@@ -296,7 +297,7 @@ TrayBubbleView::TrayBubbleView(const InitParams& init_params)
     // NativeViewHost and may steal events.
     SetPaintToLayer(ui::LAYER_NOT_DRAWN);
 
-    if (features::IsDarkLightModeEnabled() && !init_params.transparent) {
+    if (!init_params.transparent) {
       SetPaintToLayer();
       layer()->SetRoundedCornerRadius(
           gfx::RoundedCornersF{static_cast<float>(params_.corner_radius)});
@@ -307,10 +308,16 @@ TrayBubbleView::TrayBubbleView(const InitParams& init_params)
     set_color(SK_ColorTRANSPARENT);
   }
 
-  if (params_.has_shadow && features::IsSystemTrayShadowEnabled()) {
-    shadow_ = SystemShadow::CreateShadowOnNinePatchLayerForView(
-        this, params_.shadow_type);
-    shadow_->SetRoundedCornerRadius(params_.corner_radius);
+  if (params_.has_shadow) {
+    // Draws shadow on texture layer for large corner radius bubbles.
+    if (params_.has_large_corner_radius) {
+      shadow_ = SystemShadow::CreateShadowOnTextureLayer(params_.shadow_type);
+      shadow_->SetRoundedCornerRadius(params_.corner_radius);
+    } else if (features::IsSystemTrayShadowEnabled()) {
+      shadow_ = SystemShadow::CreateShadowOnNinePatchLayerForView(
+          this, params_.shadow_type);
+      shadow_->SetRoundedCornerRadius(params_.corner_radius);
+    }
   }
 
   auto layout = std::make_unique<BottomAlignedBoxLayout>(this);
@@ -321,9 +328,13 @@ TrayBubbleView::TrayBubbleView(const InitParams& init_params)
     SetAnchorView(nullptr);
     SetAnchorRect(init_params.anchor_rect);
   }
+
+  message_center::MessageCenter::Get()->AddObserver(this);
 }
 
 TrayBubbleView::~TrayBubbleView() {
+  message_center::MessageCenter::Get()->RemoveObserver(this);
+
   mouse_watcher_.reset();
 
   if (delegate_) {
@@ -336,15 +347,22 @@ void TrayBubbleView::InitializeAndShowBubble() {
   GetWidget()->Show();
   UpdateBubble();
 
-  if (IsAnchoredToStatusArea()) {
-    tray_bubble_counter_.emplace(
-        StatusAreaWidget::ForWindow(GetWidget()->GetNativeView()));
+  // Manually sets the shadow position since `CreateShadowOnTextureLayer` only
+  // constructs the shadow but doesn't deal with shadow positioning.
+  if (params_.has_shadow && params_.has_large_corner_radius) {
+    AddLayerToRegion(shadow_->GetLayer(), views::LayerRegion::kBelow);
+    shadow_->SetContentBounds(layer()->bounds());
   }
 
   // Register pre target event handler to reroute key
   // events to the widget for activating the view or closing it.
-  if (!CanActivate() && params_.reroute_event_handler)
+  if (!CanActivate() && params_.reroute_event_handler) {
     reroute_event_handler_ = std::make_unique<RerouteEventHandler>(this);
+  }
+
+  if (IsAnchoredToStatusArea()) {
+    NotifyTrayBubbleOpen();
+  }
 }
 
 void TrayBubbleView::UpdateBubble() {
@@ -356,8 +374,9 @@ void TrayBubbleView::UpdateBubble() {
 
 void TrayBubbleView::SetMaxHeight(int height) {
   params_.max_height = height;
-  if (GetWidget())
+  if (GetWidget()) {
     SizeToContents();
+  }
 }
 
 void TrayBubbleView::SetBottomPadding(int padding) {
@@ -365,11 +384,13 @@ void TrayBubbleView::SetBottomPadding(int padding) {
 }
 
 void TrayBubbleView::SetPreferredWidth(int width) {
-  if (preferred_width_ == width)
+  if (preferred_width_ == width) {
     return;
+  }
   preferred_width_ = width;
-  if (GetWidget())
+  if (GetWidget()) {
     SizeToContents();
+  }
 }
 
 gfx::Insets TrayBubbleView::GetBorderInsets() const {
@@ -377,7 +398,7 @@ gfx::Insets TrayBubbleView::GetBorderInsets() const {
   return bubble_border ? bubble_border->GetInsets() : gfx::Insets();
 }
 
-absl::optional<AcceleratorAction> TrayBubbleView::GetAcceleratorAction() const {
+std::optional<AcceleratorAction> TrayBubbleView::GetAcceleratorAction() const {
   return delegate_->GetAcceleratorAction();
 }
 
@@ -405,8 +426,16 @@ bool TrayBubbleView::IsAnchoredToStatusArea() const {
   return params_.is_anchored_to_status_area;
 }
 
+bool TrayBubbleView::IsAnchoredToShelfCorner() const {
+  return params_.anchor_to_shelf_corner;
+}
+
 void TrayBubbleView::StopReroutingEvents() {
   reroute_event_handler_.reset();
+}
+
+TrayBubbleView::TrayBubbleType TrayBubbleView::GetBubbleType() const {
+  return params_.type;
 }
 
 void TrayBubbleView::OnWidgetClosing(Widget* widget) {
@@ -414,10 +443,11 @@ void TrayBubbleView::OnWidgetClosing(Widget* widget) {
   // closing.
   reroute_event_handler_.reset();
 
-  BubbleDialogDelegateView::OnWidgetClosing(widget);
+  if (IsAnchoredToStatusArea()) {
+    NotifyTrayBubbleClosed();
+  }
 
-  if (IsAnchoredToStatusArea())
-    tray_bubble_counter_.reset();
+  BubbleDialogDelegateView::OnWidgetClosing(widget);
 }
 
 void TrayBubbleView::OnWidgetActivationChanged(Widget* widget, bool active) {
@@ -428,9 +458,15 @@ void TrayBubbleView::OnWidgetActivationChanged(Widget* widget, bool active) {
   BubbleDialogDelegateView::OnWidgetActivationChanged(widget, active);
 }
 
+void TrayBubbleView::OnWidgetBoundsChanged(views::Widget* widget,
+                                           const gfx::Rect& bounds) {
+  Shell::Get()->system_tray_notifier()->NotifyTrayBubbleBoundsChanged(this);
+}
+
 ui::LayerType TrayBubbleView::GetLayerType() const {
-  if (params_.translucent)
+  if (params_.translucent) {
     return ui::LAYER_NOT_DRAWN;
+  }
   return ui::LAYER_TEXTURED;
 }
 
@@ -439,11 +475,13 @@ std::unique_ptr<NonClientFrameView> TrayBubbleView::CreateNonClientFrameView(
   // Create the customized bubble border.
   std::unique_ptr<BubbleBorder> bubble_border =
       std::make_unique<BubbleBorder>(arrow(), BubbleBorder::NO_SHADOW);
-  if (params_.corner_radius)
+  if (params_.corner_radius) {
     bubble_border->SetCornerRadius(params_.corner_radius);
+  }
   bubble_border->set_avoid_shadow_overlap(true);
-  if (params_.anchor_mode == AnchorMode::kRect && params_.insets.has_value())
+  if (params_.anchor_mode == AnchorMode::kRect && params_.insets.has_value()) {
     bubble_border->set_insets(params_.insets.value());
+  }
 
   auto frame = BubbleDialogDelegateView::CreateNonClientFrameView(widget);
   static_cast<BubbleFrameView*>(frame.get())
@@ -461,10 +499,20 @@ void TrayBubbleView::GetWidgetHitTestMask(SkPath* mask) const {
 }
 
 std::u16string TrayBubbleView::GetAccessibleWindowTitle() const {
-  if (delegate_)
+  if (delegate_) {
     return delegate_->GetAccessibleNameForBubble();
-  else
+  } else {
     return std::u16string();
+  }
+}
+
+void TrayBubbleView::AddedToWidget() {
+  // If the view has a shadow on texture layer, should make it observe widget
+  // theme change to update its colors. The function is called here since we
+  // should guarantee that `GetWidget()` returns non-nullptr.
+  if (params_.has_shadow && params_.has_large_corner_radius) {
+    shadow_->ObserveColorProviderSource(GetWidget());
+  }
 }
 
 gfx::Size TrayBubbleView::CalculatePreferredSize() const {
@@ -478,6 +526,9 @@ int TrayBubbleView::GetHeightForWidth(int width) const {
   };
   const int height = std::accumulate(children().cbegin(), children().cend(),
                                      GetInsets().height(), visible_height);
+  if (params_.use_fixed_height) {
+    return (params_.max_height != 0) ? params_.max_height : height;
+  }
   return (params_.max_height != 0) ? std::min(height, params_.max_height)
                                    : height;
 }
@@ -502,8 +553,9 @@ void TrayBubbleView::OnMouseExited(const ui::MouseEvent& event) {
   // Disable any MouseWatcher waiting for user interaction inside the bubble.
   mouse_watcher_.reset();
   // Only notify the delegate on exit if it was notified on enter.
-  if (delegate_ && mouse_actively_entered_)
+  if (delegate_ && mouse_actively_entered_) {
     delegate_->OnMouseExitedView();
+  }
 }
 
 void TrayBubbleView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
@@ -515,29 +567,85 @@ void TrayBubbleView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 
 void TrayBubbleView::OnThemeChanged() {
   views::BubbleDialogDelegateView::OnThemeChanged();
-  if (params_.transparent)
-    return;
-
-  if (features::IsDarkLightModeEnabled()) {
-    SetBorder(std::make_unique<views::HighlightBorder>(
-        params_.corner_radius, views::HighlightBorder::Type::kHighlightBorder1,
-        /*use_light_colors=*/false));
-    set_color(GetColorProvider()->GetColor(kColorAshShieldAndBase80));
+  if (params_.transparent) {
     return;
   }
 
-  DCHECK(layer());
-  if (layer()->type() != ui::LAYER_SOLID_COLOR)
-    return;
-  layer()->SetColor(GetColorProvider()->GetColor(kColorAshShieldAndBase80));
+  SetBorder(std::make_unique<views::HighlightBorder>(
+      params_.corner_radius,
+      chromeos::features::IsJellyrollEnabled()
+          ? views::HighlightBorder::Type::kHighlightBorderOnShadow
+          : views::HighlightBorder::Type::kHighlightBorder1));
+  set_color(GetColorProvider()->GetColor(
+      chromeos::features::IsJellyEnabled()
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysSystemBaseElevated)
+          : kColorAshShieldAndBase80));
 }
 
 void TrayBubbleView::MouseMovedOutOfHost() {
   // The user moved the mouse that was over the bubble when it was first shown.
-  if (delegate_)
+  if (delegate_) {
     delegate_->OnMouseEnteredView();
+  }
   mouse_actively_entered_ = true;
   mouse_watcher_.reset();
+}
+
+bool TrayBubbleView::ShouldUseFixedHeight() const {
+  return params_.use_fixed_height;
+}
+
+void TrayBubbleView::SetShouldUseFixedHeight(bool shoud_use_fixed_height) {
+  params_.use_fixed_height = shoud_use_fixed_height;
+}
+
+void TrayBubbleView::OnNotificationDisplayed(
+    const std::string& notification_id,
+    const message_center::DisplaySource source) {
+  // Stack bubble view at the bottom when a new popup is displayed so popup
+  // collection can be shown in the front.
+  if (source == message_center::DISPLAY_SOURCE_POPUP) {
+    aura::Window* tray_window = GetWidget()->GetNativeView();
+    tray_window->parent()->StackChildAtBottom(tray_window);
+  }
+}
+
+void TrayBubbleView::NotifyTrayBubbleOpen() {
+  DCHECK(IsAnchoredToStatusArea());
+
+  if (GetBubbleType() == TrayBubbleType::kShelfPodBubble) {
+    StatusAreaWidget::ForWindow(GetWidget()->GetNativeView())
+        ->SetOpenShelfPodBubble(this);
+  }
+
+  Shell::Get()
+      ->system_tray_notifier()
+      ->NotifyStatusAreaAnchoredBubbleVisibilityChanged(/*tray_bubble=*/this,
+                                                        /*visible=*/true);
+}
+
+void TrayBubbleView::NotifyTrayBubbleClosed() {
+  DCHECK(IsAnchoredToStatusArea());
+
+  auto* status_area = StatusAreaWidget::ForWindow(GetWidget()->GetNativeView());
+
+  // `TrayBubbleView` may live longer than `StatusAreaWidget`.
+  if (status_area && GetBubbleType() == TrayBubbleType::kShelfPodBubble) {
+    status_area->SetOpenShelfPodBubble(nullptr);
+  }
+
+  Shell::Get()
+      ->system_tray_notifier()
+      ->NotifyStatusAreaAnchoredBubbleVisibilityChanged(/*tray_bubble=*/this,
+                                                        /*visible=*/false);
+}
+
+void TrayBubbleView::CloseBubbleView() {
+  if (!delegate_) {
+    return;
+  }
+
+  delegate_->HideBubble(this);
 }
 
 void TrayBubbleView::ChildPreferredSizeChanged(View* child) {
@@ -545,15 +653,9 @@ void TrayBubbleView::ChildPreferredSizeChanged(View* child) {
 }
 
 void TrayBubbleView::SetBubbleBorderInsets(gfx::Insets insets) {
-  if (GetBubbleFrameView()->bubble_border())
+  if (GetBubbleFrameView()->bubble_border()) {
     GetBubbleFrameView()->bubble_border()->set_insets(insets);
-}
-
-void TrayBubbleView::CloseBubbleView() {
-  if (!delegate_)
-    return;
-
-  delegate_->HideBubble(this);
+  }
 }
 
 BEGIN_METADATA(TrayBubbleView, views::BubbleDialogDelegateView)

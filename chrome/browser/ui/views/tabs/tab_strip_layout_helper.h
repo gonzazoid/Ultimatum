@@ -5,17 +5,17 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_LAYOUT_HELPER_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_LAYOUT_HELPER_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/tabs/tab_types.h"
 #include "chrome/browser/ui/views/tabs/tab_layout_state.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_view.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_layout.h"
 #include "chrome/browser/ui/views/tabs/tab_width_constraints.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/view_model.h"
 
@@ -50,8 +50,6 @@ class TabStripLayoutHelper {
 
   int active_tab_width() { return active_tab_width_; }
   int inactive_tab_width() { return inactive_tab_width_; }
-  int first_non_pinned_tab_index() { return first_non_pinned_tab_index_; }
-  int first_non_pinned_tab_x() { return first_non_pinned_tab_x_; }
 
   // Returns the number of pinned tabs in the tabstrip.
   size_t GetPinnedTabCount() const;
@@ -74,7 +72,7 @@ class TabStripLayoutHelper {
 
   // Moves the tab at |prev_index| with group |moving_tab_group| to |new_index|.
   // Also updates the group header's location if necessary.
-  void MoveTab(absl::optional<tab_groups::TabGroupId> moving_tab_group,
+  void MoveTab(std::optional<tab_groups::TabGroupId> moving_tab_group,
                int prev_index,
                int new_index);
 
@@ -93,8 +91,8 @@ class TabStripLayoutHelper {
   void UpdateGroupHeaderIndex(tab_groups::TabGroupId group);
 
   // Changes the active tab from |prev_active_index| to |new_active_index|.
-  void SetActiveTab(absl::optional<size_t> prev_active_index,
-                    absl::optional<size_t> new_active_index);
+  void SetActiveTab(std::optional<size_t> prev_active_index,
+                    std::optional<size_t> new_active_index);
 
   // Calculates the smallest width the tabs can occupy.
   int CalculateMinimumWidth();
@@ -114,7 +112,7 @@ class TabStripLayoutHelper {
   // Calculates the bounds each tab should occupy, subject to the provided
   // width constraint.
   std::vector<gfx::Rect> CalculateIdealBounds(
-      absl::optional<int> available_width);
+      std::optional<int> available_width);
 
   // Given |model_index| for a tab already present in |slots_|, return
   // the corresponding index in |slots_|.
@@ -124,7 +122,7 @@ class TabStripLayoutHelper {
   // |slots_|. |group| is the new tab's group.
   int GetSlotInsertionIndexForNewTab(
       int new_model_index,
-      absl::optional<tab_groups::TabGroupId> group) const;
+      std::optional<tab_groups::TabGroupId> group) const;
 
   // Used internally in the above two functions. For a tabstrip with N
   // tabs, this takes 0 <= |model_index| <= N and returns the first
@@ -139,11 +137,6 @@ class TabStripLayoutHelper {
   // Given a group ID, returns the index of its header's corresponding TabSlot
   // in |slots_|.
   int GetSlotIndexForGroupHeader(tab_groups::TabGroupId group) const;
-
-  // Compares |cached_slots_| to the TabAnimations in |animator_| and DCHECKs if
-  // the TabAnimation::ViewType do not match. Prevents bugs that could cause the
-  // wrong callback being run when a tab or group is deleted.
-  void VerifyAnimationsMatchTabSlots() const;
 
   // Updates the value of either |active_tab_width_| or |inactive_tab_width_|,
   // as appropriate.
@@ -169,9 +162,6 @@ class TabStripLayoutHelper {
   // into these widths, the initial tabs in the strip will be 1 px larger.
   int active_tab_width_;
   int inactive_tab_width_;
-
-  int first_non_pinned_tab_index_;
-  int first_non_pinned_tab_x_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_LAYOUT_HELPER_H_

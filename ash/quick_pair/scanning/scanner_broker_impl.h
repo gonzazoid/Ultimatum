@@ -11,7 +11,8 @@
 #include "ash/quick_pair/scanning/fast_pair/fast_pair_scanner.h"
 #include "ash/quick_pair/scanning/fast_pair/fast_pair_scanner_impl.h"
 #include "ash/quick_pair/scanning/scanner_broker.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -26,7 +27,7 @@ namespace quick_pair {
 
 class FastPairDiscoverableScanner;
 class FastPairNotDiscoverableScanner;
-struct Device;
+class Device;
 class QuickPairProcessManager;
 
 class ScannerBrokerImpl : public ScannerBroker, public SessionObserver {
@@ -55,7 +56,8 @@ class ScannerBrokerImpl : public ScannerBroker, public SessionObserver {
   void OnLoginStatusChanged(LoginStatus login_status) override;
 
   SEQUENCE_CHECKER(sequence_checker_);
-  QuickPairProcessManager* process_manager_ = nullptr;
+  raw_ptr<QuickPairProcessManager, DanglingUntriaged> process_manager_ =
+      nullptr;
   std::vector<base::OnceClosure> start_scanning_on_adapter_callbacks_;
   scoped_refptr<FastPairScanner> fast_pair_scanner_;
   scoped_refptr<device::BluetoothAdapter> adapter_;

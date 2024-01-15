@@ -5,16 +5,16 @@
 #include <stdint.h>
 
 #include <map>
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "android_webview/test/webview_instrumentation_test_jni/EmbeddedComponentLoaderTest_jni.h"
 #include "android_webview/test/webview_instrumentation_test_native_jni/EmbeddedComponentLoaderFactory_jni.h"
-#include "android_webview/test/webview_instrumentation_test_native_jni/EmbeddedComponentLoaderTest_jni.h"
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/files/scoped_file.h"
 #include "base/values.h"
@@ -52,16 +52,15 @@ class AvailableComponentLoaderPolicy : public ComponentLoaderPolicy {
   AvailableComponentLoaderPolicy() = default;
   ~AvailableComponentLoaderPolicy() override = default;
 
-  void ComponentLoaded(
-      const base::Version& version,
-      base::flat_map<std::string, base::ScopedFD>& fd_map,
-      std::unique_ptr<base::DictionaryValue> manifest) override {
+  void ComponentLoaded(const base::Version& version,
+                       base::flat_map<std::string, base::ScopedFD>& fd_map,
+                       base::Value::Dict manifest) override {
     // Make sure these values match the values in the
     // EmbeddedComponentLoaderTest.
     ExpectTrueToJava(version.GetString() == "123.456.789",
                      "version != 123.456.789");
     ExpectTrueToJava(fd_map.size() == 1u, "fd_map.size != 1");
-    ExpectTrueToJava(fd_map.find("file.test") != fd_map.end(),
+    ExpectTrueToJava(base::Contains(fd_map, "file.test"),
                      "file.test is not found in the fd_map");
     Java_EmbeddedComponentLoaderTest_onComponentLoaded(
         base::android::AttachCurrentThread());
@@ -85,10 +84,9 @@ class UnavailableComponentLoaderPolicy : public ComponentLoaderPolicy {
   UnavailableComponentLoaderPolicy() = default;
   ~UnavailableComponentLoaderPolicy() override = default;
 
-  void ComponentLoaded(
-      const base::Version& version,
-      base::flat_map<std::string, base::ScopedFD>& fd_map,
-      std::unique_ptr<base::DictionaryValue> manifest) override {
+  void ComponentLoaded(const base::Version& version,
+                       base::flat_map<std::string, base::ScopedFD>& fd_map,
+                       base::Value::Dict manifest) override {
     ExpectTrueToJava(
         false, "UnavailableComponentLoaderPolicy#ComponentLoaded is called");
   }

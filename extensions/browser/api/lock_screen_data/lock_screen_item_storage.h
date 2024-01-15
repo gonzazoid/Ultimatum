@@ -11,12 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/values.h"
 #include "extensions/browser/api/lock_screen_data/data_item.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
@@ -234,7 +236,7 @@ class LockScreenItemStorage : public ExtensionRegistryObserver {
   void OnGotExtensionItems(const std::string& extension_id,
                            const base::TimeTicks& start_time,
                            OperationResult result,
-                           std::unique_ptr<base::DictionaryValue> items);
+                           base::Value::Dict items);
 
   // Callback for registration operation of a newly created data item - it adds
   // the item to the cached data item state, and invoked the callback.
@@ -243,19 +245,6 @@ class LockScreenItemStorage : public ExtensionRegistryObserver {
                         const base::TimeTicks& start_time,
                         CreateCallback callback,
                         OperationResult result);
-
-  // Callback for data item write operation - it invokes the callback with the
-  // operation result.
-  void OnItemWritten(const base::TimeTicks& start_time,
-                     WriteCallback callback,
-                     OperationResult result);
-
-  // Callback for data item read operation - it invokes the callback with the
-  // operation result.
-  void OnItemRead(const base::TimeTicks& start_time,
-                  ReadCallback callback,
-                  OperationResult result,
-                  std::unique_ptr<std::vector<char>> data);
 
   // Callback for item deletion operation. It removes the item from the cached
   // state and invokes the callback with the operation result.
@@ -301,14 +290,14 @@ class LockScreenItemStorage : public ExtensionRegistryObserver {
   // run.
   void RunExtensionDataLoadCallbacks(CachedExtensionData* cache_data);
 
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext> context_;
 
   // The user associated with the primary profile.
   const std::string user_id_;
   const std::string crypto_key_;
-  PrefService* local_state_;
+  raw_ptr<PrefService> local_state_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   SessionLockedState session_locked_state_ = SessionLockedState::kUnknown;
 

@@ -5,22 +5,24 @@
 #ifndef ASH_SYSTEM_UNIFIED_QUIET_MODE_FEATURE_POD_CONTROLLER_H_
 #define ASH_SYSTEM_UNIFIED_QUIET_MODE_FEATURE_POD_CONTROLLER_H_
 
+#include <optional>
 #include <string>
 
 #include "ash/ash_export.h"
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/public/cpp/notifier_settings_observer.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "ui/message_center/message_center_observer.h"
 
 namespace ash {
 
 class UnifiedSystemTrayController;
 
-// Controller of a feature pod button that toggles do-not-disturb mode.
-// If the do-not-disturb mode is enabled, the button indicates it by bright
-// background color and different icon.
+// Controller of a feature tile that toggles do-not-disturb mode. If the
+// do-not-disturb mode is enabled, this tile indicates it by bright background
+// color and different icon.
 class ASH_EXPORT QuietModeFeaturePodController
     : public FeaturePodControllerBase,
       public message_center::MessageCenterObserver,
@@ -35,8 +37,12 @@ class ASH_EXPORT QuietModeFeaturePodController
 
   ~QuietModeFeaturePodController() override;
 
+  // Referenced by `UnifiedSystemTrayController` to know whether to construct a
+  // Primary or Compact tile.
+  static bool CalculateButtonVisibility();
+
   // FeaturePodControllerBase:
-  FeaturePodButton* CreateButton() override;
+  std::unique_ptr<FeatureTile> CreateTile(bool compact = false) override;
   QsFeatureCatalogName GetCatalogName() override;
   void OnIconPressed() override;
   void OnLabelPressed() override;
@@ -53,11 +59,14 @@ class ASH_EXPORT QuietModeFeaturePodController
 
   void RecordDisabledNotifierCount(int disabled_count);
 
-  UnifiedSystemTrayController* const tray_controller_;
+  const raw_ptr<UnifiedSystemTrayController> tray_controller_;
 
-  FeaturePodButton* button_ = nullptr;
+  // Owned by the views hierarchy.
+  raw_ptr<FeatureTile, DanglingUntriaged> tile_ = nullptr;
 
-  absl::optional<int> last_disabled_count_;
+  std::optional<int> last_disabled_count_;
+
+  base::WeakPtrFactory<QuietModeFeaturePodController> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

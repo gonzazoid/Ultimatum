@@ -8,20 +8,20 @@
 #include "base/component_export.h"
 #include "base/containers/queue.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 
 namespace ash {
 
+class DeviceState;
 class NetworkStateHandler;
 class NetworkDeviceHandler;
 
@@ -75,6 +75,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularInhibitor
     kRefreshingProfileList,
     kResettingEuiccMemory,
     kDisablingProfile,
+    kRequestingAvailableProfiles,
   };
   friend std::ostream& operator<<(std::ostream& stream,
                                   const InhibitReason& state);
@@ -84,14 +85,16 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularInhibitor
   using InhibitCallback =
       base::OnceCallback<void(std::unique_ptr<InhibitLock>)>;
 
-  // Puts the Cellular device in Inhibited state and returns an InhibitLock
-  // object which when destroyed automatically uninhibits the Cellular device. A
-  // call to this method will block until the last issues lock is deleted.
+  // This function attempts to put the cellular device into an inhibited state.
+  // On success, this method will provide a lock to |callback| that will prevent
+  // the cellular device from becoming uninhibited until the lock is freed. On
+  // failure, e.g. this function fails to set the corresponding Shill device
+  // property, |nullptr| is provided to |callback|.
   void InhibitCellularScanning(InhibitReason reason, InhibitCallback callback);
 
   // Returns the reason that cellular scanning is currently inhibited, or null
   // if it is not inhibited.
-  absl::optional<InhibitReason> GetInhibitReason() const;
+  std::optional<InhibitReason> GetInhibitReason() const;
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
@@ -155,7 +158,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularInhibitor
   void ProcessRequests();
   // Called when inhibit completes. |result| is the operation error result and
   // is set only for failures.
-  void OnInhibit(bool success, absl::optional<InhibitOperationResult> result);
+  void OnInhibit(bool success, std::optional<InhibitOperationResult> result);
   void AttemptUninhibit();
   void OnUninhibit(bool success);
 
@@ -179,13 +182,13 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularInhibitor
   // error result and is set only for failures.
   void ReturnSetInhibitPropertyResult(
       bool success,
-      absl::optional<InhibitOperationResult> result);
+      std::optional<InhibitOperationResult> result);
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
   base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
-  NetworkDeviceHandler* network_device_handler_ = nullptr;
+  raw_ptr<NetworkDeviceHandler> network_device_handler_ = nullptr;
 
   State state_ = State::kIdle;
   base::queue<std::unique_ptr<InhibitRequest>> inhibit_requests_;
@@ -208,10 +211,5 @@ std::ostream& COMPONENT_EXPORT(CHROMEOS_NETWORK) operator<<(
     const ash::CellularInhibitor::InhibitReason& inhibit_reason);
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CellularInhibitor;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_INHIBITOR_H_

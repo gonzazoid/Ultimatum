@@ -10,11 +10,11 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_util.h"
@@ -42,18 +42,6 @@ using extensions::Manifest;
 
 const char kFakeExtensionPrefix[] = "fakeextension";
 
-SyncExtensionHelper::ExtensionState::ExtensionState()
-    : enabled_state(ENABLED), disable_reasons(0), incognito_enabled(false) {}
-
-SyncExtensionHelper::ExtensionState::~ExtensionState() = default;
-
-bool SyncExtensionHelper::ExtensionState::Equals(
-    const SyncExtensionHelper::ExtensionState& other) const {
-  return ((enabled_state == other.enabled_state) &&
-          (disable_reasons == other.disable_reasons) &&
-          (incognito_enabled == other.incognito_enabled));
-}
-
 // static
 SyncExtensionHelper* SyncExtensionHelper::GetInstance() {
   SyncExtensionHelper* instance = base::Singleton<SyncExtensionHelper>::get();
@@ -61,7 +49,7 @@ SyncExtensionHelper* SyncExtensionHelper::GetInstance() {
   return instance;
 }
 
-SyncExtensionHelper::SyncExtensionHelper() : setup_completed_(false) {}
+SyncExtensionHelper::SyncExtensionHelper() = default;
 
 SyncExtensionHelper::~SyncExtensionHelper() = default;
 
@@ -70,7 +58,8 @@ void SyncExtensionHelper::SetupIfNecessary(SyncTest* test) {
     return;
   }
 
-  extension_name_prefix_ = kFakeExtensionPrefix + base::GenerateGUID();
+  extension_name_prefix_ =
+      kFakeExtensionPrefix + base::Uuid::GenerateRandomV4().AsLowercaseString();
   for (int i = 0; i < test->num_clients(); ++i) {
     SetupProfile(test->GetProfile(i));
   }
@@ -110,12 +99,11 @@ std::vector<std::string> SyncExtensionHelper::GetInstalledExtensionNames(
     Profile* profile) const {
   std::vector<std::string> names;
 
-  std::unique_ptr<const extensions::ExtensionSet> extensions(
+  const extensions::ExtensionSet extensions =
       extensions::ExtensionRegistry::Get(profile)
-          ->GenerateInstalledExtensionsSet());
-  for (extensions::ExtensionSet::const_iterator it = extensions->begin();
-       it != extensions->end(); ++it) {
-    names.push_back((*it)->name());
+          ->GenerateInstalledExtensionsSet();
+  for (const auto& extension : extensions) {
+    names.push_back(extension->name());
   }
 
   return names;
@@ -219,22 +207,20 @@ SyncExtensionHelper::ExtensionStateMap SyncExtensionHelper::GetExtensionStates(
 
   ExtensionStateMap extension_state_map;
 
-  std::unique_ptr<const extensions::ExtensionSet> extensions(
+  const extensions::ExtensionSet extensions =
       extensions::ExtensionRegistry::Get(profile)
-          ->GenerateInstalledExtensionsSet());
+          ->GenerateInstalledExtensionsSet();
 
   extensions::ExtensionService* extension_service =
       extensions::ExtensionSystem::Get(profile)->extension_service();
-  for (const scoped_refptr<const Extension>& extension : *extensions) {
+  for (const scoped_refptr<const Extension>& extension : extensions) {
     const std::string& id = extension->id();
-    ExtensionState& extension_state = extension_state_map[id];
-    extension_state.enabled_state = extension_service->IsExtensionEnabled(id)
-                                        ? ExtensionState::ENABLED
-                                        : ExtensionState::DISABLED;
-    extension_state.disable_reasons =
-        ExtensionPrefs::Get(profile)->GetDisableReasons(id);
-    extension_state.incognito_enabled =
-        extensions::util::IsIncognitoEnabled(id, profile);
+    extension_state_map[id] = {
+        .enabled_state = extension_service->IsExtensionEnabled(id)
+                             ? ExtensionState::ENABLED
+                             : ExtensionState::DISABLED,
+        .disable_reasons = ExtensionPrefs::Get(profile)->GetDisableReasons(id),
+        .incognito_enabled = extensions::util::IsIncognitoEnabled(id, profile)};
 
     DVLOG(2) << "Extension " << id << " in profile " << profile_debug_name
              << " is "
@@ -249,12 +235,10 @@ SyncExtensionHelper::ExtensionStateMap SyncExtensionHelper::GetExtensionStates(
       pending_extension_manager->GetPendingIdsForUpdateCheck();
 
   for (const std::string& id : pending_crx_ids) {
-    ExtensionState& extension_state = extension_state_map[id];
-    extension_state.enabled_state = ExtensionState::PENDING;
-    extension_state.disable_reasons =
-        ExtensionPrefs::Get(profile)->GetDisableReasons(id);
-    extension_state.incognito_enabled =
-        extensions::util::IsIncognitoEnabled(id, profile);
+    extension_state_map[id] = {
+        .enabled_state = ExtensionState::PENDING,
+        .disable_reasons = ExtensionPrefs::Get(profile)->GetDisableReasons(id),
+        .incognito_enabled = extensions::util::IsIncognitoEnabled(id, profile)};
     DVLOG(2) << "Extension " << id << " in profile " << profile_debug_name
              << " is pending";
   }
@@ -281,7 +265,7 @@ bool SyncExtensionHelper::ExtensionStatesMatch(Profile* profile1,
       DVLOG(1) << "Extensions for profile " << profile1->GetDebugName()
                << " do not match profile " << profile2->GetDebugName();
       return false;
-    } else if (!app_state1.Equals(app_state2)) {
+    } else if (app_state1 != app_state2) {
       DVLOG(1) << "Extension states for profile " << profile1->GetDebugName()
                << " do not match profile " << profile2->GetDebugName();
       return false;
@@ -330,36 +314,37 @@ std::string NameToPublicKey(const std::string& name) {
 scoped_refptr<Extension> CreateExtension(const base::FilePath& base_dir,
                                          const std::string& name,
                                          Manifest::Type type) {
-  base::DictionaryValue source;
-  source.SetString(extensions::manifest_keys::kName, name);
+  base::Value::Dict source;
+  source.SetByDottedPath(extensions::manifest_keys::kName, name);
   const std::string& public_key = NameToPublicKey(name);
-  source.SetString(extensions::manifest_keys::kPublicKey, public_key);
-  source.SetString(extensions::manifest_keys::kVersion, "0.0.0.0");
-  source.SetInteger(extensions::manifest_keys::kManifestVersion, 2);
+  source.SetByDottedPath(extensions::manifest_keys::kPublicKey, public_key);
+  source.SetByDottedPath(extensions::manifest_keys::kVersion, "0.0.0.0");
+  source.SetByDottedPath(extensions::manifest_keys::kManifestVersion, 2);
   switch (type) {
     case Manifest::TYPE_EXTENSION:
       // Do nothing.
       break;
     case Manifest::TYPE_THEME:
-      source.Set(extensions::manifest_keys::kTheme,
-                 std::make_unique<base::DictionaryValue>());
+      source.SetByDottedPath(extensions::manifest_keys::kTheme,
+                             base::Value::Dict());
       break;
     case Manifest::TYPE_HOSTED_APP:
     case Manifest::TYPE_LEGACY_PACKAGED_APP:
-      source.Set(extensions::manifest_keys::kApp,
-                 std::make_unique<base::DictionaryValue>());
-      source.SetString(extensions::manifest_keys::kLaunchWebURL,
-                       "http://www.example.com");
+      source.SetByDottedPath(extensions::manifest_keys::kApp,
+                             base::Value::Dict());
+      source.SetByDottedPath(extensions::manifest_keys::kLaunchWebURL,
+                             "http://www.example.com");
       break;
     case Manifest::TYPE_PLATFORM_APP: {
-      source.Set(extensions::manifest_keys::kApp,
-                 std::make_unique<base::DictionaryValue>());
-      source.Set(extensions::manifest_keys::kPlatformAppBackground,
-                 std::make_unique<base::DictionaryValue>());
-      auto scripts = std::make_unique<base::ListValue>();
-      scripts->Append("main.js");
-      source.Set(extensions::manifest_keys::kPlatformAppBackgroundScripts,
-                 std::move(scripts));
+      source.SetByDottedPath(extensions::manifest_keys::kApp,
+                             base::Value::Dict());
+      source.SetByDottedPath(extensions::manifest_keys::kPlatformAppBackground,
+                             base::Value::Dict());
+      base::Value::List scripts;
+      scripts.Append("main.js");
+      source.SetByDottedPath(
+          extensions::manifest_keys::kPlatformAppBackgroundScripts,
+          std::move(scripts));
       break;
     }
     default:

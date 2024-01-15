@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_COMPOSITING_PROPERTY_TREE_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_COMPOSITING_PROPERTY_TREE_MANAGER_H_
 
+#include "base/memory/raw_ref.h"
 #include "cc/layers/layer_collections.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -46,6 +47,8 @@ class PropertyTreeManagerClient {
       bool needs_layer,
       CompositorElementId& mask_isolation_id,
       CompositorElementId& mask_effect_id) = 0;
+  virtual bool NeedsCompositedScrolling(
+      const TransformPaintPropertyNode& scroll_translation) const = 0;
 };
 
 // Mutates a cc property tree to reflect Blink paint property tree
@@ -98,18 +101,27 @@ class PropertyTreeManager {
   // Returns the compositor transform node id. If a compositor transform node
   // does not exist, it is created. Any transforms that are for scroll offset
   // translation will ensure the associated scroll node exists.
+  // TODO(ScrollUnification): Remove the code that ensures the scroll node.
   int EnsureCompositorTransformNode(const TransformPaintPropertyNode&);
   int EnsureCompositorClipNode(const ClipPaintPropertyNode&);
-  // Ensure the compositor scroll node using the associated scroll offset
-  // translation.
-  int EnsureCompositorScrollNode(
+
+  // Ensure the compositor scroll and transform nodes for a scroll translation
+  // transform node. Returns the id of the scroll node.
+  int EnsureCompositorScrollAndTransformNode(
       const TransformPaintPropertyNode& scroll_offset_translation);
 
   // Same as above but marks the scroll nodes as being the viewport.
-  int EnsureCompositorInnerScrollNode(
+  int EnsureCompositorInnerScrollAndTransformNode(
       const TransformPaintPropertyNode& scroll_offset_translation);
-  int EnsureCompositorOuterScrollNode(
+  int EnsureCompositorOuterScrollAndTransformNode(
       const TransformPaintPropertyNode& scroll_offset_translation);
+
+  // Ensures a cc::ScrollNode for a scroll translation node.
+  // transform_id of the cc::ScrollNode is set to kInvalidPropertyNodeId.
+  // To associate the cc::ScrollNode to a cc::TransformNode, use
+  // EnsureCompositorScrollAndTransformNode() instead of this function or after
+  // this function.
+  int EnsureCompositorScrollNode(const TransformPaintPropertyNode&);
 
   int EnsureCompositorPageScaleTransformNode(const TransformPaintPropertyNode&);
 
@@ -151,14 +163,10 @@ class PropertyTreeManager {
                                       CompositorElementId,
                                       const gfx::PointF&);
 
-  // Ensures a cc::ScrollNode for all scroll translations.
-  void EnsureCompositorScrollNodes(
-      const Vector<const TransformPaintPropertyNode*>&
-          scroll_translation_nodes);
-
-  // Sets the cc::ScrollNode::is_composited bit to true for the node with ID
-  // |cc_node_id|.
-  void SetCcScrollNodeIsComposited(int cc_node_id);
+  static uint32_t GetMainThreadScrollingReasons(const cc::LayerTreeHost&,
+                                                const ScrollPaintPropertyNode&);
+  static bool UsesCompositedScrolling(const cc::LayerTreeHost&,
+                                      const ScrollPaintPropertyNode&);
 
   // Updates conditional render surface reasons for all effect nodes in
   // |GetEffectTree|. Every effect is supposed to have render surface enabled
@@ -177,6 +185,8 @@ class PropertyTreeManager {
   void SetupRootClipNode();
   void SetupRootEffectNode();
   void SetupRootScrollNode();
+
+  int EnsureCompositorScrollNodeInternal(const ScrollPaintPropertyNode&);
 
   // The type of operation the current cc effect node applies.
   enum CcEffectType {
@@ -276,8 +286,7 @@ class PropertyTreeManager {
   void CloseCcEffect();
   void PopulateCcEffectNode(cc::EffectNode&,
                             const EffectPaintPropertyNode& effect,
-                            int output_clip_id,
-                            bool can_be_shared_element_resource);
+                            int output_clip_id);
 
   bool IsCurrentCcEffectSynthetic() const { return current_.effect_type; }
   bool IsCurrentCcEffectSyntheticForNonTrivialClip() const {
@@ -295,33 +304,26 @@ class PropertyTreeManager {
                              const ClipPaintPropertyNode&,
                              const TransformPaintPropertyNode&);
 
-  // Should only be called from EnsureCompositorTransformNode as part of
-  // creating the associated scroll offset transform node.
-  void CreateCompositorScrollNode(
-      const ScrollPaintPropertyNode&,
-      const cc::TransformNode& scroll_offset_translation,
-      bool is_composited);
-
   void UpdatePixelMovingFilterClipExpanders();
 
-  PropertyTreeManagerClient& client_;
+  const raw_ref<PropertyTreeManagerClient, ExperimentalRenderer> client_;
 
   // Property trees which should be updated by the manager.
-  cc::PropertyTrees& property_trees_;
+  const raw_ref<cc::PropertyTrees, ExperimentalRenderer> property_trees_;
 
   // See comment above EffectState about holding direct references to data
   // owned by PropertyTrees.
-  cc::ClipTree& clip_tree_;
-  cc::EffectTree& effect_tree_;
-  cc::ScrollTree& scroll_tree_;
-  cc::TransformTree& transform_tree_;
+  const raw_ref<cc::ClipTree, ExperimentalRenderer> clip_tree_;
+  const raw_ref<cc::EffectTree, ExperimentalRenderer> effect_tree_;
+  const raw_ref<cc::ScrollTree, ExperimentalRenderer> scroll_tree_;
+  const raw_ref<cc::TransformTree, ExperimentalRenderer> transform_tree_;
 
   // The special layer which is the parent of every other layers.
   // This is where clip mask layers we generated for synthesized clips are
   // appended into.
-  cc::Layer& root_layer_;
+  const raw_ref<cc::Layer, ExperimentalRenderer> root_layer_;
 
-  LayerListBuilder& layer_list_builder_;
+  const raw_ref<LayerListBuilder, ExperimentalRenderer> layer_list_builder_;
 
   int new_sequence_number_;
 

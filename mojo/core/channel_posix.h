@@ -7,15 +7,13 @@
 
 #include "mojo/core/channel.h"
 
-#include "base/containers/queue.h"
-#include "base/logging.h"
-#include "base/memory/ref_counted.h"
+#include "base/containers/circular_deque.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/synchronization/lock.h"
 #include "base/task/current_thread.h"
-#include "base/task/task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
-#include "mojo/core/core.h"
 
 namespace mojo {
 namespace core {
@@ -100,12 +98,7 @@ class ChannelPosix : public Channel,
   bool CloseHandles(const int* fds, size_t num_fds);
 #endif  // BUILDFLAG(IS_IOS)
 
-  // We may be initialized with a server socket, in which case this will be
-  // valid until it accepts an incoming connection.
-  PlatformChannelServerEndpoint server_;
-
-  // The socket over which to communicate. May be passed in at construction time
-  // or accepted over |server_|.
+  // The socket over which to communicate.
   base::ScopedFD socket_;
 
   // These watchers must only be accessed on the IO thread.

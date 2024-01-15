@@ -4,62 +4,33 @@
 
 #include "chrome/browser/ui/webui/ash/parent_access/parent_access_ui.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 
-#include "base/command_line.h"
+#include "ash/constants/ash_features.h"
+#include "ash/webui/common/trusted_types_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/system/sys_info.h"
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/webui/ash/parent_access/parent_access_dialog.h"
 #include "chrome/browser/ui/webui/ash/parent_access/parent_access_ui.mojom.h"
+#include "chrome/browser/ui/webui/ash/parent_access/parent_access_ui_handler_impl.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/google/core/common/google_util.h"
+#include "chrome/grit/parent_access_resources.h"
+#include "chrome/grit/parent_access_resources_map.h"
+#include "chrome/grit/supervision_resources.h"
+#include "chrome/grit/supervision_resources_map.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
-#include "url/gurl.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
 
 namespace ash {
-
-namespace {
-
-const char kParentAccessDefaultURL[] =
-    "https://families.google.com/parentaccess";
-const char kParentAccessSwitch[] = "parent-access-url";
-
-// Returns the URL of the Parent Access flow from the command-line switch,
-// or the default value if it's not defined.
-GURL GetParentAccessURL(std::string caller_id,
-                        std::string platform_version,
-                        std::string language_code) {
-  std::string url;
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(kParentAccessSwitch)) {
-    url = command_line->GetSwitchValueASCII(kParentAccessSwitch);
-  } else {
-    url = kParentAccessDefaultURL;
-    DCHECK(GURL(url).DomainIs("google.com"));
-  }
-  const GURL base_url(url);
-  GURL::Replacements replacements;
-  std::string query_string = base::StringPrintf(
-      "callerid=%s&hl=%s&platform_version=%s&cros-origin=chrome://"
-      "parent-access",
-      caller_id.c_str(), language_code.c_str(), platform_version.c_str());
-  replacements.SetQueryStr(query_string);
-  const GURL result = base_url.ReplaceComponents(replacements);
-  DCHECK(result.is_valid()) << "Invalid URL \"" << url << "\" for switch \""
-                            << kParentAccessSwitch << "\"";
-  return result;
-}
-
-}  // namespace
 
 // static
 signin::IdentityManager* ParentAccessUI::test_identity_manager_ = nullptr;
@@ -78,67 +49,55 @@ void ParentAccessUI::SetUpForTest(signin::IdentityManager* identity_manager) {
 }
 
 void ParentAccessUI::BindInterface(
-    mojo::PendingReceiver<parent_access_ui::mojom::ParentAccessUIHandler>
+    mojo::PendingReceiver<parent_access_ui::mojom::ParentAccessUiHandler>
         receiver) {
   signin::IdentityManager* identity_manager =
       test_identity_manager_
           ? test_identity_manager_
           : IdentityManagerFactory::GetForProfile(Profile::FromWebUI(web_ui()));
 
-  mojo_api_handler_ = std::make_unique<ParentAccessUIHandlerImpl>(
-      std::move(receiver), web_ui(), identity_manager);
+  // The dialog instance could be null if the webui's url is entered in the
+  // browser address bar.  The handler should handle that scenario.
+  mojo_api_handler_ = std::make_unique<ParentAccessUiHandlerImpl>(
+      std::move(receiver), identity_manager, ParentAccessDialog::GetInstance());
 }
 
-const GURL ParentAccessUI::GetWebContentURLForTesting() {
-  return web_content_url_;
+void ParentAccessUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
 }
 
-parent_access_ui::mojom::ParentAccessUIHandler*
+parent_access_ui::mojom::ParentAccessUiHandler*
 ParentAccessUI::GetHandlerForTest() {
   return mojo_api_handler_.get();
 }
 
 void ParentAccessUI::SetUpResources() {
-  Profile* profile = Profile::FromWebUI(web_ui());
-  std::unique_ptr<content::WebUIDataSource> source(
-      content::WebUIDataSource::Create(chrome::kChromeUIParentAccessHost));
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui()), chrome::kChromeUIParentAccessHost);
+  ash::EnableTrustedTypesCSP(source);
 
-  web_content_url_ = GetParentAccessURL(
-      "39454505", /* TODO(b/200853161): Set caller id from params. */
-      base::SysInfo::OperatingSystemVersion(),
-      google_util::GetGoogleLocale(g_browser_process->GetApplicationLocale()));
-
-  // The Polymer JS bundle requires this at the moment because it sets innerHTML
-  // on an element, which violates the Trusted Types CSP.
-  source->DisableTrustedTypesCSP();
   source->EnableReplaceI18nInJS();
 
   // Forward data to the WebUI.
-  source->AddResourcePath("parent_access_controller.js",
-                          IDR_PARENT_ACCESS_CONTROLLER_JS);
-  source->AddResourcePath("parent_access_app.js", IDR_PARENT_ACCESS_APP_JS);
-  source->AddResourcePath("parent_access_ui.js", IDR_PARENT_ACCESS_UI_JS);
-  source->AddResourcePath("parent_access_ui_handler.js",
-                          IDR_PARENT_ACCESS_UI_HANDLER_JS);
-  source->AddResourcePath("parent_access_after.js", IDR_PARENT_ACCESS_AFTER_JS);
-  source->AddResourcePath("flows/local_web_approvals_after.js",
-                          IDR_LOCAL_WEB_APPROVALS_AFTER_JS);
-  source->AddResourcePath("parent_access_ui.mojom-webui.js",
-                          IDR_PARENT_ACCESS_UI_MOJOM_WEBUI_JS);
-  source->AddResourcePath("webview_manager.js",
-                          IDR_PARENT_ACCESS_WEBVIEW_MANAGER_JS);
+  source->AddResourcePaths(
+      base::make_span(kParentAccessResources, kParentAccessResourcesSize));
+  source->AddResourcePaths(
+      base::make_span(kSupervisionResources, kSupervisionResourcesSize));
 
   source->UseStringsJs();
-  source->SetDefaultResource(IDR_PARENT_ACCESS_HTML);
-  source->AddString("webviewUrl", web_content_url_.spec());
-  // Set the filter to accept postMessages from the webviewURL's origin only.
-  source->AddString("eventOriginFilter",
-                    web_content_url_.GetWithEmptyPath().spec());
+  source->AddBoolean("isParentAccessJellyEnabled",
+                     features::IsParentAccessJellyEnabled());
+  source->SetDefaultResource(IDR_PARENT_ACCESS_PARENT_ACCESS_HTML);
 
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
       {"pageTitle", IDS_PARENT_ACCESS_PAGE_TITLE},
+      {"closeButtonTitle", IDS_PARENT_ACCESS_CLOSE_BUTTON_TITLE},
       {"approveButtonText", IDS_PARENT_ACCESS_AFTER_APPROVE_BUTTON},
       {"denyButtonText", IDS_PARENT_ACCESS_AFTER_DENY_BUTTON},
+      {"askInPersonButtonText", IDS_PARENT_ACCESS_ASK_IN_PERSON_BUTTON},
+      {"okButtonText", IDS_PARENT_ACCESS_OK_BUTTON},
       {"localWebApprovalsAfterTitle",
        IDS_PARENT_ACCESS_LOCAL_WEB_APPROVALS_AFTER_TITLE},
       {"localWebApprovalsAfterSubtitle",
@@ -146,17 +105,37 @@ void ParentAccessUI::SetUpResources() {
       {"localWebApprovalsAfterDetails",
        IDS_PARENT_ACCESS_LOCAL_WEB_APPROVALS_AFTER_DETAILS},
       {"webviewLoadingMessage", IDS_PARENT_ACCESS_WEBVIEW_LOADING_MESSAGE},
-  };
+      {"supervisedUserOfflineTitle", IDS_SUPERVISED_USER_OFFLINE_TITLE},
+      {"supervisedUserOfflineDescription",
+       IDS_SUPERVISED_USER_OFFLINE_DESCRIPTION},
+      {"supervisedUserErrorTitle", IDS_SUPERVISED_USER_ERROR_TITLE},
+      {"supervisedUserErrorDescription", IDS_SUPERVISED_USER_ERROR_DESCRIPTION},
+      {"extensionApprovalsDisabledTitle",
+       IDS_PARENT_ACCESS_EXTENSION_APPROVALS_DISABLED_TITLE},
+      {"extensionApprovalsDisabledSubtitle",
+       IDS_PARENT_ACCESS_EXTENSION_APPROVALS_DISABLED_SUBTITLE},
+      {"extensionApprovalsBeforeTitle",
+       IDS_PARENT_ACCESS_EXTENSION_APPROVALS_BEFORE_TITLE},
+      {"extensionApprovalsBeforeSubtitle",
+       IDS_PARENT_ACCESS_EXTENSION_APPROVALS_BEFORE_SUBTITLE},
+      {"extensionApprovalsAfterTitle",
+       IDS_PARENT_ACCESS_EXTENSION_APPROVALS_AFTER_TITLE},
+      {"extensionApprovalsPermissionsHeader",
+       IDS_PARENT_ACCESS_EXTENSION_PERMISSIONS_HEADER},
+      {"extensionApprovalsShowDetailsButton",
+       IDS_PARENT_ACCESS_EXTENSION_PERMISSION_SHOW_DETAILS},
+      {"extensionApprovalsHideDetailsButton",
+       IDS_PARENT_ACCESS_EXTENSION_PERMISSION_HIDE_DETAILS}};
+
   source->AddLocalizedStrings(kLocalizedStrings);
 
   // Enables use of test_loader.html
-  webui::SetJSModuleDefaults(source.get());
+  webui::SetJSModuleDefaults(source);
 
   // Allows loading of local content into an iframe for testing.
   source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::FrameSrc, "frame-src chrome://test/;");
-
-  content::WebUIDataSource::Add(profile, source.release());
+      network::mojom::CSPDirectiveName::FrameSrc,
+      "frame-src chrome://webui-test/;");
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(ParentAccessUI)

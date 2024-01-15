@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -29,15 +30,15 @@ class ExceptionState;
 class ScriptPromiseResolver;
 class ScriptState;
 
-class CookieStore final : public EventTargetWithInlineData,
-                          public ExecutionContextLifecycleObserver,
+class CookieStore final : public EventTarget,
+                          public ExecutionContextClient,
                           public network::mojom::blink::CookieChangeListener {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   CookieStore(
       ExecutionContext*,
-      mojo::Remote<network::mojom::blink::RestrictedCookieManager> backend);
+      HeapMojoRemote<network::mojom::blink::RestrictedCookieManager> backend);
   // Needed because of the
   // mojo::Remote<network::mojom::blink::RestrictedCookieManager>
   ~CookieStore() override;
@@ -64,10 +65,7 @@ class CookieStore final : public EventTargetWithInlineData,
   // GarbageCollected
   void Trace(Visitor* visitor) const override;
 
-  // ExecutionContextLifecycleObserver
-  void ContextDestroyed() override;
-
-  // EventTargetWithInlineData
+  // EventTarget
   DEFINE_ATTRIBUTE_EVENT_LISTENER(change, kChange)
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
@@ -129,7 +127,7 @@ class CookieStore final : public EventTargetWithInlineData,
   void StopObserving();
 
   // Wraps an always-on Mojo pipe for sending requests to the Network Service.
-  mojo::Remote<network::mojom::blink::RestrictedCookieManager> backend_;
+  HeapMojoRemote<network::mojom::blink::RestrictedCookieManager> backend_;
 
   // Wraps a Mojo pipe used to receive cookie change notifications.
   //
@@ -150,7 +148,7 @@ class CookieStore final : public EventTargetWithInlineData,
   const net::SiteForCookies default_site_for_cookies_;
 
   // The context in which cookies are accessed.
-  const scoped_refptr<SecurityOrigin> default_top_frame_origin_;
+  const scoped_refptr<const SecurityOrigin> default_top_frame_origin_;
 };
 
 }  // namespace blink

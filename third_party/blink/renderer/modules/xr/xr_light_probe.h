@@ -12,20 +12,22 @@
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 
+namespace gfx {
+class Transform;
+}
+
 namespace blink {
 
-class TransformationMatrix;
 class XRCubeMap;
 class XRLightEstimate;
 class XRLightProbeInit;
 class XRSession;
 class XRSpace;
 
-class XRLightProbe : public EventTargetWithInlineData {
+class XRLightProbe : public EventTarget {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -36,13 +38,13 @@ class XRLightProbe : public EventTargetWithInlineData {
     kReflectionFormatRGBA16F = 1
   };
 
-  XRSession* session() const { return session_; }
+  XRSession* session() const { return session_.Get(); }
 
   XRSpace* probeSpace() const;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(reflectionchange, kReflectionchange)
 
-  absl::optional<TransformationMatrix> MojoFromObject() const;
+  absl::optional<gfx::Transform> MojoFromObject() const;
 
   device::mojom::blink::XRNativeOriginInformationPtr NativeOrigin() const;
 
@@ -50,7 +52,7 @@ class XRLightProbe : public EventTargetWithInlineData {
       const device::mojom::blink::XRLightEstimationData* data,
       double timestamp);
 
-  XRLightEstimate* getLightEstimate() { return light_estimate_; }
+  XRLightEstimate* getLightEstimate() { return light_estimate_.Get(); }
   XRCubeMap* getReflectionCubeMap() { return cube_map_.get(); }
 
   XRReflectionFormat ReflectionFormat() const { return reflection_format_; }

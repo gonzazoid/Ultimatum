@@ -9,9 +9,8 @@
 #include "ash/wm/window_state.h"
 #include "base/base64.h"
 #include "chrome/browser/ash/borealis/borealis_window_manager_mock.h"
-#include "chrome/browser/ash/borealis/borealis_window_manager_test_helper.h"
 #include "chrome/browser/ash/borealis/testing/apps.h"
-#include "chrome/browser/ash/borealis/testing/widgets.h"
+#include "chrome/browser/ash/borealis/testing/windows.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
 #include "chrome/test/base/chrome_ash_test_base.h"
@@ -63,14 +62,14 @@ TEST_F(BorealisWindowManagerTest, NonBorealisWindowHasNoId) {
 TEST_F(BorealisWindowManagerTest, BorealisWindowHasAnId) {
   BorealisWindowManager window_manager(profile());
   std::unique_ptr<aura::Window> window =
-      MakeWindow("org.chromium.borealis.foobarbaz");
+      MakeWindow("org.chromium.guest_os.borealis.foobarbaz");
   EXPECT_NE(window_manager.GetShelfAppId(window.get()), "");
 }
 
 TEST_F(BorealisWindowManagerTest, BorealisWindowHasCorrectId) {
   BorealisWindowManager window_manager(profile());
   std::unique_ptr<aura::Window> window =
-      MakeWindow("org.chromium.borealis.xprop.456789");
+      MakeWindow("org.chromium.guest_os.borealis.xprop.456789");
   CreateFakeApp(profile(), "some_app", "steam://rungameid/456789");
   EXPECT_EQ(window_manager.GetShelfAppId(window.get()), FakeAppId("some_app"));
 }
@@ -78,7 +77,7 @@ TEST_F(BorealisWindowManagerTest, BorealisWindowHasCorrectId) {
 TEST_F(BorealisWindowManagerTest, MismatchedWindowHasDifferentId) {
   BorealisWindowManager window_manager(profile());
   std::unique_ptr<aura::Window> window =
-      MakeWindow("org.chromium.borealis.xprop.2468");
+      MakeWindow("org.chromium.guest_os.borealis.xprop.2468");
   CreateFakeApp(profile(), "some_app", "steam://rungameid/456789");
   EXPECT_NE(window_manager.GetShelfAppId(window.get()), FakeAppId("some_app"));
 }
@@ -92,7 +91,7 @@ TEST_F(BorealisWindowManagerTest, IdDetectionDoesNotImplyTracking) {
   window_manager.AddObserver(&life_observer);
 
   std::unique_ptr<aura::Window> window =
-      MakeWindow("org.chromium.borealis.foobarbaz");
+      MakeWindow("org.chromium.guest_os.borealis.foobarbaz");
   window_manager.GetShelfAppId(window.get());
 
   window_manager.RemoveObserver(&anon_observer);
@@ -125,7 +124,7 @@ TEST_F(BorealisWindowManagerTest, ObserverCalledForAnonymousApp) {
   BorealisWindowManager window_manager(profile());
   window_manager.AddObserver(&observer);
   std::unique_ptr<ScopedTestWindow> window = MakeAndTrackWindow(
-      "org.chromium.borealis.anonymous_app", &window_manager);
+      "org.chromium.guest_os.borealis.anonymous_app", &window_manager);
 
   EXPECT_CALL(observer,
               OnAnonymousAppRemoved(testing::ContainsRegex("anonymous_app")));
@@ -148,18 +147,18 @@ TEST_F(BorealisWindowManagerTest, LifetimeObserverTracksWindows) {
   EXPECT_CALL(observer, OnAppStarted(_));
   EXPECT_CALL(observer, OnWindowStarted(_, _));
   std::unique_ptr<ScopedTestWindow> first_foo =
-      MakeAndTrackWindow("org.chromium.borealis.foo", &window_manager);
+      MakeAndTrackWindow("org.chromium.guest_os.borealis.foo", &window_manager);
 
   // A window for the same app only starts that window.
   EXPECT_CALL(observer, OnWindowStarted(_, _));
   std::unique_ptr<ScopedTestWindow> second_foo =
-      MakeAndTrackWindow("org.chromium.borealis.foo", &window_manager);
+      MakeAndTrackWindow("org.chromium.guest_os.borealis.foo", &window_manager);
 
   // Whereas a new app starts both the app and the window.
   EXPECT_CALL(observer, OnAppStarted(_));
   EXPECT_CALL(observer, OnWindowStarted(_, _));
   std::unique_ptr<ScopedTestWindow> only_bar =
-      MakeAndTrackWindow("org.chromium.borealis.bar", &window_manager);
+      MakeAndTrackWindow("org.chromium.guest_os.borealis.bar", &window_manager);
 
   // Deleting an app window while one still exists does not end the app.
   EXPECT_CALL(observer, OnWindowFinished(_, _));
@@ -190,9 +189,9 @@ TEST_F(BorealisWindowManagerTest, HandlesMultipleAnonymousWindows) {
   EXPECT_CALL(observer, OnAnonymousAppAdded(_, _)).Times(1);
 
   std::unique_ptr<ScopedTestWindow> window1 = MakeAndTrackWindow(
-      "org.chromium.borealis.anonymous_app", &window_manager);
+      "org.chromium.guest_os.borealis.anonymous_app", &window_manager);
   std::unique_ptr<ScopedTestWindow> window2 = MakeAndTrackWindow(
-      "org.chromium.borealis.anonymous_app", &window_manager);
+      "org.chromium.guest_os.borealis.anonymous_app", &window_manager);
 
   // We only expect to see the app removed after the last window closes.
   window1.reset();
@@ -219,63 +218,53 @@ TEST_F(BorealisWindowManagerTest, AnonymousObserverNotCalledForKnownApp) {
 
   BorealisWindowManager window_manager(profile());
   window_manager.AddObserver(&observer);
-  std::unique_ptr<ScopedTestWindow> window =
-      MakeAndTrackWindow("org.chromium.borealis.wmclass.foo", &window_manager);
+  std::unique_ptr<ScopedTestWindow> window = MakeAndTrackWindow(
+      "org.chromium.guest_os.borealis.wmclass.foo", &window_manager);
 
   window_manager.RemoveObserver(&observer);
 }
 
-TEST_F(BorealisWindowManagerTest, DontMinimizeWhenWindowIsntBorealisClient) {
-  std::unique_ptr<views::Widget> active_widget =
-      SetupMinimizeTest((std::string(kBorealisWindowPrefix) + "foo.bar"));
+TEST_F(BorealisWindowManagerTest, SteamClientIsNonGameBorealisWindow) {
+  std::unique_ptr<aura::Window> window = MakeWindow(GetBorealisClientId());
 
-  std::string new_window_id = std::string(kBorealisWindowPrefix) + "foo.bar";
-
+  EXPECT_TRUE(BorealisWindowManager::IsBorealisWindow(window.get()));
   EXPECT_FALSE(
-      BorealisWindowManager::ShouldNewWindowBeMinimized(new_window_id));
+      BorealisWindowManager::IsSteamGameWindow(profile(), window.get()));
 }
 
-TEST_F(BorealisWindowManagerTest, DontMinimizeWhenActiveWindowIsNotBorealis) {
-  std::unique_ptr<views::Widget> active_widget =
-      SetupMinimizeTest("not.borealis.foo.bar");
+TEST_F(BorealisWindowManagerTest, NewSteamClientIsNonGameBorealisWindow) {
+  std::unique_ptr<aura::Window> window =
+      MakeWindow("org.chromium.guest_os.borealis.xprop.769");
 
-  std::string new_window_id = GetBorealisClientId();
-
+  EXPECT_TRUE(BorealisWindowManager::IsBorealisWindow(window.get()));
   EXPECT_FALSE(
-      BorealisWindowManager::ShouldNewWindowBeMinimized(new_window_id));
+      BorealisWindowManager::IsSteamGameWindow(profile(), window.get()));
 }
 
-TEST_F(BorealisWindowManagerTest, DontMinimizeWhenActiveWindowIsNotFullscreen) {
-  std::unique_ptr<views::Widget> active_widget =
-      SetupMinimizeTest(std::string(kBorealisWindowPrefix) + "foo.bar2");
-  active_widget->SetFullscreen(false);
+TEST_F(BorealisWindowManagerTest, ArbitraryBorealisWindowsAreNotGames) {
+  std::unique_ptr<aura::Window> window =
+      MakeWindow("org.chromium.guest_os.borealis.foo");
 
-  std::string new_window_id = GetBorealisClientId();
-
+  EXPECT_TRUE(BorealisWindowManager::IsBorealisWindow(window.get()));
   EXPECT_FALSE(
-      BorealisWindowManager::ShouldNewWindowBeMinimized(new_window_id));
+      BorealisWindowManager::IsSteamGameWindow(profile(), window.get()));
+}
+TEST_F(BorealisWindowManagerTest, CanIdentifySteamGames) {
+  std::unique_ptr<aura::Window> window =
+      MakeWindow("org.chromium.guest_os.borealis.xprop.123");
+
+  EXPECT_TRUE(BorealisWindowManager::IsBorealisWindow(window.get()));
+  EXPECT_TRUE(
+      BorealisWindowManager::IsSteamGameWindow(profile(), window.get()));
 }
 
-TEST_F(BorealisWindowManagerTest,
-       DontMinimizeWhenActiveWindowIsBorealisClient) {
-  std::unique_ptr<views::Widget> active_widget =
-      SetupMinimizeTest(kFullscreenClientShellId);
+TEST_F(BorealisWindowManagerTest, TerminaWindowsAreNotBorealisWindowsOrGames) {
+  std::unique_ptr<aura::Window> window =
+      MakeWindow("org.chromium.guest_os.termina.xprop.123");
 
-  std::string new_window_id = GetBorealisClientId();
-
+  EXPECT_FALSE(BorealisWindowManager::IsBorealisWindow(window.get()));
   EXPECT_FALSE(
-      BorealisWindowManager::ShouldNewWindowBeMinimized(new_window_id));
-}
-
-TEST_F(
-    BorealisWindowManagerTest,
-    MinimizeWhenActiveBorealisWindowIsFullscreenAndNewWindowIsBorealisClient) {
-  std::unique_ptr<views::Widget> active_widget =
-      SetupMinimizeTest(std::string(kBorealisWindowPrefix) + "foo.bar");
-
-  std::string new_window_id = GetBorealisClientId();
-
-  EXPECT_TRUE(BorealisWindowManager::ShouldNewWindowBeMinimized(new_window_id));
+      BorealisWindowManager::IsSteamGameWindow(profile(), window.get()));
 }
 
 }  // namespace

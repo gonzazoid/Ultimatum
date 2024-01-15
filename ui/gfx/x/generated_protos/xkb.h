@@ -7,36 +7,19 @@
 //    ../../third_party/xcbproto/src \
 //    gen/ui/gfx/x \
 //    bigreq \
-//    composite \
-//    damage \
-//    dpms \
-//    dri2 \
 //    dri3 \
-//    ge \
 //    glx \
-//    present \
 //    randr \
-//    record \
 //    render \
-//    res \
 //    screensaver \
 //    shape \
 //    shm \
 //    sync \
-//    xc_misc \
-//    xevie \
-//    xf86dri \
-//    xf86vidmode \
 //    xfixes \
-//    xinerama \
 //    xinput \
 //    xkb \
-//    xprint \
 //    xproto \
-//    xselinux \
-//    xtest \
-//    xv \
-//    xvmc
+//    xtest
 
 #ifndef UI_GFX_X_GENERATED_PROTOS_XKB_H_
 #define UI_GFX_X_GENERATED_PROTOS_XKB_H_
@@ -1194,7 +1177,7 @@ class COMPONENT_EXPORT(X11) Xkb {
   static_assert(std::is_trivially_copyable<Action>::value, "");
 
   struct NewKeyboardNotifyEvent {
-    static constexpr int type_id = 40;
+    static constexpr uint8_t type_id = 32;
     static constexpr uint8_t opcode = 0;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1208,12 +1191,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint8_t requestMajor{};
     uint8_t requestMinor{};
     NKNDetail changed{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct MapNotifyEvent {
-    static constexpr int type_id = 41;
+    static constexpr uint8_t type_id = 33;
     static constexpr uint8_t opcode = 1;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1238,12 +1219,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     KeyCode firstVModMapKey{};
     uint8_t nVModMapKeys{};
     VMod virtualMods{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct StateNotifyEvent {
-    static constexpr int type_id = 42;
+    static constexpr uint8_t type_id = 34;
     static constexpr uint8_t opcode = 2;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1268,12 +1247,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint8_t eventType{};
     uint8_t requestMajor{};
     uint8_t requestMinor{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct ControlsNotifyEvent {
-    static constexpr int type_id = 43;
+    static constexpr uint8_t type_id = 35;
     static constexpr uint8_t opcode = 3;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1287,12 +1264,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint8_t eventType{};
     uint8_t requestMajor{};
     uint8_t requestMinor{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct IndicatorStateNotifyEvent {
-    static constexpr int type_id = 44;
+    static constexpr uint8_t type_id = 36;
     static constexpr uint8_t opcode = 4;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1300,12 +1275,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint8_t deviceID{};
     uint32_t state{};
     uint32_t stateChanged{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct IndicatorMapNotifyEvent {
-    static constexpr int type_id = 45;
+    static constexpr uint8_t type_id = 37;
     static constexpr uint8_t opcode = 5;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1313,12 +1286,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint8_t deviceID{};
     uint32_t state{};
     uint32_t mapChanged{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct NamesNotifyEvent {
-    static constexpr int type_id = 46;
+    static constexpr uint8_t type_id = 38;
     static constexpr uint8_t opcode = 6;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1336,12 +1307,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     KeyCode firstKey{};
     uint8_t nKeys{};
     uint32_t changedIndicators{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct CompatMapNotifyEvent {
-    static constexpr int type_id = 47;
+    static constexpr uint8_t type_id = 39;
     static constexpr uint8_t opcode = 7;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1351,12 +1320,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint16_t firstSI{};
     uint16_t nSI{};
     uint16_t nTotalSI{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct BellNotifyEvent {
-    static constexpr int type_id = 48;
+    static constexpr uint8_t type_id = 40;
     static constexpr uint8_t opcode = 8;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1370,12 +1337,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     Atom name{};
     Window window{};
     uint8_t eventOnly{};
-
-    x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
   };
 
   struct ActionMessageEvent {
-    static constexpr int type_id = 49;
+    static constexpr uint8_t type_id = 41;
     static constexpr uint8_t opcode = 9;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1387,12 +1352,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     ModMask mods{};
     Group group{};
     std::array<String8, 8> message{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct AccessXNotifyEvent {
-    static constexpr int type_id = 50;
+    static constexpr uint8_t type_id = 42;
     static constexpr uint8_t opcode = 10;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1402,12 +1365,10 @@ class COMPONENT_EXPORT(X11) Xkb {
     AXNDetail detailt{};
     uint16_t slowKeysDelay{};
     uint16_t debounceDelay{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct ExtensionDeviceNotifyEvent {
-    static constexpr int type_id = 51;
+    static constexpr uint8_t type_id = 43;
     static constexpr uint8_t opcode = 11;
     uint8_t xkbType{};
     uint16_t sequence{};
@@ -1422,8 +1383,6 @@ class COMPONENT_EXPORT(X11) Xkb {
     uint8_t nButtons{};
     XIFeature supported{};
     XIFeature unsupported{};
-
-    x11::Window* GetWindow() { return nullptr; }
   };
 
   struct UseExtensionRequest {

@@ -10,8 +10,8 @@
 
 #include "chrome/browser/subresource_filter/subresource_filter_browser_test_harness.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/pattern.h"
@@ -518,7 +518,7 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTest,
 
   // Will return false if the navigation was successfully aborted.
   ASSERT_FALSE(manager.WaitForResponse());
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
 
   // Now, dynamically insert a frame and expect that it is still activated.
   ASSERT_NO_FATAL_FAILURE(InsertDynamicFrameWithScript());
@@ -1022,11 +1022,6 @@ void ExpectHistogramsAreRecordedForTestFrameSet(
                           time_recorded ? num_subresource_checks : 0);
   tester.ExpectTotalCount(SubresourceFilterBrowserTest::kEvaluationCPUDuration,
                           time_recorded ? num_subresource_checks : 0);
-
-  tester.ExpectUniqueSample(
-      SubresourceFilterBrowserTest::kDocumentLoadActivationLevel,
-      static_cast<base::Histogram::Sample>(mojom::ActivationLevel::kEnabled),
-      6);
 }
 
 }  // namespace
@@ -1095,10 +1090,6 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTestWithoutAdTagging,
   tester.ExpectTotalCount(kEvaluationCPUDuration, 0);
 
   // Although SubresourceFilterAgents still record the activation decision.
-  tester.ExpectUniqueSample(
-      kDocumentLoadActivationLevel,
-      static_cast<base::Histogram::Sample>(mojom::ActivationLevel::kDisabled),
-      6);
 }
 
 IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTest,
@@ -1194,7 +1185,7 @@ IN_PROC_BROWSER_TEST_F(SubresourceFilterBrowserTest,
   auto* child_rfh =
       navigation_manager.GetNavigationHandle()->GetRenderFrameHost();
   ASSERT_TRUE(child_rfh);
-  navigation_manager.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation_manager.WaitForNavigationFinished());
   ASSERT_EQ(child_rfh->GetLastCommittedURL(), kFrameUrl);
 
   // Wait until the iframe is loaded.
@@ -1367,9 +1358,9 @@ IN_PROC_BROWSER_TEST_P(AutomaticLazyLoadFrameBrowserTest, UKM) {
   const GURL kSameOriginEmbedUrl(
       embedded_test_server()->GetURL(kMainFrameOrigin, "/title1.html"));
 
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), kMainFrameUrl));
   content::RenderFrameHost* render_frame_host =
-      ui_test_utils::NavigateToURL(browser(), kMainFrameUrl);
-  ASSERT_TRUE(render_frame_host);
+      web_contents()->GetPrimaryMainFrame();
 
   InitTestPage(render_frame_host);
 
@@ -1403,6 +1394,7 @@ IN_PROC_BROWSER_TEST_P(AutomaticLazyLoadFrameBrowserTest, UKM) {
   // LazyEmbeds and LazyAds must be disabled when the page is reloaded.
   EXPECT_TRUE(render_frame_host->Reload());
   EXPECT_TRUE(content::WaitForLoadStop(web_contents()));
+  render_frame_host = web_contents()->GetPrimaryMainFrame();
   InitTestPage(render_frame_host);
   AddAdIframe(render_frame_host, kAdUrl);
   AddIframe(render_frame_host, kEmbedUrl);

@@ -7,18 +7,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/desktop_capturer.h"
 #include "remoting/protocol/frame_stats.h"
 #include "remoting/protocol/host_video_stats_dispatcher.h"
+#include "remoting/protocol/no_op_webrtc_frame_scheduler.h"
 #include "remoting/protocol/webrtc_frame_scheduler_constant_rate.h"
 #include "remoting/protocol/webrtc_transport.h"
 #include "remoting/protocol/webrtc_video_encoder_factory.h"
@@ -29,6 +29,25 @@
 #include "third_party/webrtc/api/peer_connection_interface.h"
 
 namespace remoting::protocol {
+
+class ScopedAllowSyncPrimitivesForWebRtcVideoStream
+    : public base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope {};
+
+FrameStatsMessage::VideoCodec VideoCodecToProtoEnum(
+    webrtc::VideoCodecType codec) {
+  switch (codec) {
+    case webrtc::VideoCodecType::kVideoCodecVP8:
+      return FrameStatsMessage::VP8;
+    case webrtc::VideoCodecType::kVideoCodecVP9:
+      return FrameStatsMessage::VP9;
+    case webrtc::VideoCodecType::kVideoCodecAV1:
+      return FrameStatsMessage::AV1;
+    case webrtc::VideoCodecType::kVideoCodecH264:
+      return FrameStatsMessage::H264;
+    default:
+      return FrameStatsMessage::UNKNOWN;
+  }
+}
 
 struct WebrtcVideoStream::FrameStats : public WebrtcVideoEncoder::FrameStats {
   FrameStats() = default;
@@ -42,7 +61,6 @@ struct WebrtcVideoStream::FrameStats : public WebrtcVideoEncoder::FrameStats {
   base::TimeDelta capture_delay;
 
   uint32_t capturer_id = 0;
-  webrtc::ScreenId screen_id = webrtc::kInvalidScreenId;
 };
 
 class WebrtcVideoStream::Core : public webrtc::DesktopCapturer::Callback {
@@ -59,6 +77,7 @@ class WebrtcVideoStream::Core : public webrtc::DesktopCapturer::Callback {
   void Start();
 
   // webrtc::DesktopCapturer::Callback interface.
+  void OnFrameCaptureStart() override;
   void OnCaptureResult(webrtc::DesktopCapturer::Result result,
                        std::unique_ptr<webrtc::DesktopFrame> frame) override;
 
@@ -71,6 +90,8 @@ class WebrtcVideoStream::Core : public webrtc::DesktopCapturer::Callback {
   void SetComposeEnabled(bool enabled);
   void SetMouseCursor(std::unique_ptr<webrtc::MouseCursor> mouse_cursor);
   void SetMouseCursorPosition(const webrtc::DesktopVector& position);
+  void BoostFramerate(base::TimeDelta capture_interval,
+                      base::TimeDelta boost_duration);
 
   // Called by the video track source to set the max frame rate for the stream.
   void SetMaxFramerateFps(int max_framerate_fps);
@@ -95,7 +116,7 @@ class WebrtcVideoStream::Core : public webrtc::DesktopCapturer::Callback {
   std::unique_ptr<DesktopCapturer> capturer_;
 
   // Schedules the next video frame.
-  WebrtcFrameSchedulerConstantRate scheduler_;
+  std::unique_ptr<WebrtcFrameScheduler> scheduler_;
 
   // Provides event timestamps which are used for |current_frame_stats|.
   scoped_refptr<InputEventTimestampsSource> event_timestamps_source_;
@@ -113,7 +134,13 @@ WebrtcVideoStream::Core::Core(std::unique_ptr<DesktopCapturer> capturer,
                               base::WeakPtr<WebrtcVideoStream> video_stream)
     : capturer_(std::move(capturer)),
       video_stream_(std::move(video_stream)),
-      video_stream_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      video_stream_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {
+  if (capturer_->SupportsFrameCallbacks()) {
+    scheduler_ = std::make_unique<NoOpWebrtcFrameScheduler>(capturer_.get());
+  } else {
+    scheduler_ = std::make_unique<WebrtcFrameSchedulerConstantRate>();
+  }
   DETACH_FROM_THREAD(thread_checker_);
 }
 
@@ -123,8 +150,18 @@ void WebrtcVideoStream::Core::Start() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   capturer_->Start(this);
-  scheduler_.Start(base::BindRepeating(
+  scheduler_->Start(base::BindRepeating(
       &WebrtcVideoStream::Core::CaptureNextFrame, base::Unretained(this)));
+}
+
+void WebrtcVideoStream::Core::OnFrameCaptureStart() {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  current_frame_stats_ = std::make_unique<FrameStats>();
+  current_frame_stats_->capture_started_time = base::TimeTicks::Now();
+  current_frame_stats_->input_event_timestamps =
+      event_timestamps_source_->TakeLastEventTimestamps();
+  current_frame_stats_->screen_id = screen_id_;
 }
 
 void WebrtcVideoStream::Core::OnCaptureResult(
@@ -137,7 +174,7 @@ void WebrtcVideoStream::Core::OnCaptureResult(
       base::Milliseconds(frame ? frame->capture_time_ms() : 0);
 
   if (!frame || frame->size().is_empty()) {
-    scheduler_.OnFrameCaptured(nullptr);
+    scheduler_->OnFrameCaptured(nullptr);
     return;
   }
 
@@ -156,7 +193,7 @@ void WebrtcVideoStream::Core::OnCaptureResult(
 
   current_frame_stats_->capturer_id = frame->capturer_id();
 
-  scheduler_.OnFrameCaptured(frame.get());
+  scheduler_->OnFrameCaptured(frame.get());
 
   video_stream_task_runner_->PostTask(
       FROM_HERE,
@@ -172,12 +209,13 @@ void WebrtcVideoStream::Core::SetEventTimestampsSource(
 
 void WebrtcVideoStream::Core::Pause(bool pause) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  scheduler_.Pause(pause);
+  scheduler_->Pause(pause);
 }
 
 void WebrtcVideoStream::Core::SelectSource(webrtc::ScreenId id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   screen_id_ = id;
+  VLOG(0) << "SelectSource: id=" << id;
   capturer_->SelectSource(id);
 }
 
@@ -197,9 +235,15 @@ void WebrtcVideoStream::Core::SetMouseCursorPosition(
   capturer_->SetMouseCursorPosition(position);
 }
 
+void WebrtcVideoStream::Core::BoostFramerate(base::TimeDelta capture_interval,
+                                             base::TimeDelta boost_duration) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  scheduler_->BoostCaptureRate(capture_interval, boost_duration);
+}
+
 void WebrtcVideoStream::Core::SetMaxFramerateFps(int max_framerate_fps) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  scheduler_.SetMaxFramerateFps(max_framerate_fps);
+  scheduler_->SetMaxFramerateFps(max_framerate_fps);
 }
 
 void WebrtcVideoStream::Core::CaptureNextFrame() {
@@ -224,7 +268,7 @@ WebrtcVideoStream::WebrtcVideoStream(const std::string& stream_name,
       {base::TaskPriority::HIGHEST},
       base::SingleThreadTaskRunnerThreadMode::DEDICATED);
 #else
-  core_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  core_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 #endif
 }
 
@@ -261,8 +305,8 @@ void WebrtcVideoStream::Start(
       base::BindRepeating(&WebrtcVideoStream::OnSinkAddedOrUpdated,
                           weak_factory_.GetWeakPtr()));
   rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track =
-      peer_connection_factory->CreateVideoTrack(stream_name_,
-                                                video_track_source_.get());
+      peer_connection_factory->CreateVideoTrack(video_track_source_,
+                                                stream_name_);
 
   webrtc::RtpTransceiverInit init;
   init.stream_ids = {stream_name_};
@@ -273,8 +317,8 @@ void WebrtcVideoStream::Start(
 
   webrtc_transport->OnVideoTransceiverCreated(transceiver_);
 
-  video_encoder_factory->SetVideoChannelStateObserver(
-      weak_factory_.GetWeakPtr());
+  video_encoder_factory->video_stream_event_router()
+      .SetVideoChannelStateObserver(stream_name_, weak_factory_.GetWeakPtr());
 
   core_ = std::make_unique<Core>(std::move(desktop_capturer),
                                  weak_factory_.GetWeakPtr());
@@ -316,14 +360,6 @@ void WebrtcVideoStream::Pause(bool pause) {
                                 base::Unretained(core_.get()), pause));
 }
 
-void WebrtcVideoStream::SetLosslessEncode(bool want_lossless_encode) {
-  NOTIMPLEMENTED();
-}
-
-void WebrtcVideoStream::SetLosslessColor(bool want_lossless_color) {
-  NOTIMPLEMENTED();
-}
-
 void WebrtcVideoStream::SetObserver(Observer* observer) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   observer_ = observer;
@@ -363,18 +399,23 @@ void WebrtcVideoStream::SetMouseCursorPosition(
                      base::Unretained(core_.get()), position));
 }
 
-void WebrtcVideoStream::OnKeyFrameRequested() {
+void WebrtcVideoStream::BoostFramerate(base::TimeDelta capture_interval,
+                                       base::TimeDelta boost_duration) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  // Unretained is sound as |core_| is owned by |this| and destroyed on
+  // |core_task_runner_|.
+  core_task_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&WebrtcVideoStream::Core::BoostFramerate,
+                                base::Unretained(core_.get()), capture_interval,
+                                boost_duration));
 }
 
-void WebrtcVideoStream::OnTargetBitrateChanged(int bitrate_kbps) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-}
-
-void WebrtcVideoStream::OnTargetFramerateChanged(int framerate) {
+void WebrtcVideoStream::SetTargetFramerate(int framerate) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK_GT(framerate, 0);
   DCHECK_LE(framerate, 1000);
+  target_framerate_ = framerate;
 
   if (!transceiver_) {
     LOG(WARNING) << "No transceiver, can't set updated framerate.";
@@ -391,21 +432,9 @@ void WebrtcVideoStream::OnTargetFramerateChanged(int framerate) {
     encoding.max_framerate = framerate;
   }
 
+  ScopedAllowSyncPrimitivesForWebRtcVideoStream allow_wait;
   webrtc::RTCError result = transceiver_->sender()->SetParameters(parameters);
   DCHECK(result.ok()) << "SetParameters() failed: " << result.message();
-}
-
-void WebrtcVideoStream::OnFrameEncoded(
-    WebrtcVideoEncoder::EncodeResult encode_result,
-    const WebrtcVideoEncoder::EncodedFrame* frame) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-  // Setting this here allows us to skip a PostTask roundtrip to the scheduler.
-  if (frame && frame->stats) {
-    // WebrtcFrameSchedulerConstantRate cannot estimate this delay. Set it to 0
-    // so the client can still calculate the derived stats.
-    frame->stats->send_pending_delay = base::TimeDelta();
-  }
 }
 
 void WebrtcVideoStream::OnEncodedFrameSent(
@@ -419,70 +448,96 @@ void WebrtcVideoStream::OnEncodedFrameSent(
     return;
   }
 
-  // Send FrameStats message.
-  if (video_stats_dispatcher_ && video_stats_dispatcher_->is_connected()) {
-    // The down-cast is safe, because the |stats| object was originally created
-    // by this class and attached to the frame.
-    const auto* current_frame_stats =
-        static_cast<const FrameStats*>(frame.stats.get());
-    DCHECK(current_frame_stats);
-
-    HostFrameStats stats;
-    stats.bandwidth_estimate_kbps =
-        current_frame_stats->bandwidth_estimate_kbps;
-    stats.rtt_estimate = current_frame_stats->rtt_estimate;
-    stats.send_pending_delay = current_frame_stats->send_pending_delay;
-
-    stats.frame_size = frame.data->size();
-
-    if (!current_frame_stats->input_event_timestamps.is_null()) {
-      stats.capture_pending_delay =
-          current_frame_stats->capture_started_time -
-          current_frame_stats->input_event_timestamps.host_timestamp;
-      stats.latest_event_timestamp =
-          current_frame_stats->input_event_timestamps.client_timestamp;
-    }
-
-    stats.capture_delay = current_frame_stats->capture_delay;
-
-    // Total overhead time for IPC and threading when capturing frames.
-    stats.capture_overhead_delay = (current_frame_stats->capture_ended_time -
-                                    current_frame_stats->capture_started_time) -
-                                   stats.capture_delay;
-
-    stats.encode_pending_delay = current_frame_stats->encode_started_time -
-                                 current_frame_stats->capture_ended_time;
-
-    stats.encode_delay = current_frame_stats->encode_ended_time -
-                         current_frame_stats->encode_started_time;
-
-    stats.capturer_id = current_frame_stats->capturer_id;
-
-    // Convert the frame quantizer to a measure of frame quality between 0 and
-    // 100, for a simple visualization of quality over time. The quantizer from
-    // VP8/VP9 encoder lies within 0-63, with 0 representing a lossless frame.
-    // TODO(crbug.com/891571): Remove |quantizer| from the WebrtcVideoEncoder
-    // interface, and move this logic to the encoders.
-    stats.frame_quality = (63 - frame.quantizer) * 100 / 63;
-
-    stats.screen_id = current_frame_stats->screen_id;
-
-    video_stats_dispatcher_->OnVideoFrameStats(result.frame_id, stats);
+  // Exit early if we aren't able to send a FrameStats message.
+  if (!video_stats_dispatcher_ || !video_stats_dispatcher_->is_connected()) {
+    return;
   }
+
+  // The down-cast is safe, because the |stats| object was originally created by
+  // this class and attached to the frame.
+  const auto* current_frame_stats =
+      static_cast<const FrameStats*>(frame.stats.get());
+  DCHECK(current_frame_stats);
+
+  HostFrameStats stats;
+  stats.bandwidth_estimate_kbps = current_frame_stats->bandwidth_estimate_kbps;
+  stats.rtt_estimate = current_frame_stats->rtt_estimate;
+  stats.send_pending_delay = current_frame_stats->send_pending_delay;
+
+  stats.frame_size = frame.data->size();
+
+  if (!current_frame_stats->input_event_timestamps.is_null()) {
+    stats.capture_pending_delay =
+        current_frame_stats->capture_started_time -
+        current_frame_stats->input_event_timestamps.host_timestamp;
+    stats.latest_event_timestamp =
+        current_frame_stats->input_event_timestamps.client_timestamp;
+  }
+
+  stats.capture_delay = current_frame_stats->capture_delay;
+
+  // Total overhead time for IPC and threading when capturing frames.
+  stats.capture_overhead_delay = (current_frame_stats->capture_ended_time -
+                                  current_frame_stats->capture_started_time) -
+                                 stats.capture_delay;
+
+  stats.encode_pending_delay = current_frame_stats->encode_started_time -
+                               current_frame_stats->capture_ended_time;
+
+  stats.encode_delay = current_frame_stats->encode_ended_time -
+                       current_frame_stats->encode_started_time;
+
+  stats.capturer_id = current_frame_stats->capturer_id;
+
+  // Convert the frame quantizer to a measure of frame quality between 0 and
+  // 100, for a simple visualization of quality over time. The quantizer from
+  // VP8/VP9 encoder lies within 0-63, with 0 representing a lossless frame.
+  // TODO(crbug.com/891571): Remove |quantizer| from the WebrtcVideoEncoder
+  // interface, and move this logic to the encoders.
+  stats.frame_quality = (63 - frame.quantizer) * 100 / 63;
+
+  stats.screen_id = current_frame_stats->screen_id;
+
+  stats.codec = VideoCodecToProtoEnum(frame.codec);
+  stats.profile = frame.profile;
+  stats.encoded_rect_width = frame.encoded_rect_width;
+  stats.encoded_rect_height = frame.encoded_rect_height;
+
+  video_stats_dispatcher_->OnVideoFrameStats(result.frame_id, stats);
 }
 
 void WebrtcVideoStream::OnSinkAddedOrUpdated(const rtc::VideoSinkWants& wants) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  VLOG(0) << "WebRTC requested max framerate: " << wants.max_framerate_fps
-          << " FPS";
+  auto framerate = wants.max_framerate_fps;
+  VLOG(0) << "WebRTC requested max framerate: " << framerate << " FPS";
+
+  // OnSinkAddedOrUpdated() is called when:
+  //   - A new stream is added
+  //   - An SDP renegotiation is requested
+  //   - A new max framerate is requested
+  //   - WebRTC artificially lowers the framerate due to network conditions
+  //
+  // We need to update the max_framerate for the stream in some of the scenarios
+  // but not for the others. In order to determine whether to update the
+  // RTPSender, we check the current max_framerate rather than the framerate in
+  // |wants|.
+  auto sender = transceiver_->sender();
+  if (sender) {
+    for (auto& encoding : sender->GetParameters().encodings) {
+      if (encoding.max_framerate != target_framerate_) {
+        VLOG(0) << "Setting target framerate for new sink: "
+                << target_framerate_;
+        SetTargetFramerate(target_framerate_);
+      }
+    }
+  }
 
   // Unretained is sound as |core_| is owned by |this| and destroyed on
   // |core_task_runner_|.
   core_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&WebrtcVideoStream::Core::SetMaxFramerateFps,
-                     base::Unretained(core_.get()), wants.max_framerate_fps));
+      FROM_HERE, base::BindOnce(&WebrtcVideoStream::Core::SetMaxFramerateFps,
+                                base::Unretained(core_.get()), framerate));
 }
 
 void WebrtcVideoStream::OnVideoSizeChanged(webrtc::DesktopSize frame_size,

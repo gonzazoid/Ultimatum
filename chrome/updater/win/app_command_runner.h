@@ -7,24 +7,17 @@
 
 #include <windows.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
 #include "base/process/process.h"
-#include "base/scoped_generic.h"
 #include "chrome/updater/updater_scope.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/updater/util/win_util.h"
 
 namespace updater {
-
-struct LocalAllocTraits {
-  static HLOCAL InvalidValue() { return nullptr; }
-  static void Free(HLOCAL mem) { ::LocalFree(mem); }
-};
-
-using ScopedLocalAlloc = base::ScopedGeneric<HLOCAL, LocalAllocTraits>;
 
 // AppCommandRunner loads and runs a pre-registered command line from the
 // registry.
@@ -35,12 +28,12 @@ class AppCommandRunner {
   AppCommandRunner& operator=(const AppCommandRunner&);
   ~AppCommandRunner();
 
-  // Loads and initializes an `AppCommandRunner` object corresponding to
-  // `app_id` and `command_id`.
-  static HRESULT LoadAppCommand(UpdaterScope scope,
-                                const std::wstring& app_id,
-                                const std::wstring& command_id,
-                                AppCommandRunner& app_command_runner);
+  // Creates an instance of `AppCommandRunner` object corresponding to `app_id`
+  // and `command_id`.
+  static HResultOr<AppCommandRunner> LoadAppCommand(
+      UpdaterScope scope,
+      const std::wstring& app_id,
+      const std::wstring& command_id);
 
   // Loads and returns a vector of `AppCommandRunner` objects corresponding to
   // "AutoRunOnOsUpgradeAppCommands" for `app_id`.
@@ -54,10 +47,10 @@ class AppCommandRunner {
               base::Process& process) const;
 
  private:
-  // Starts a process with separate `executable` and `command_line` components.
+  // Starts a process with separate `executable` and `parameters` components.
   // `executable` needs to be an absolute path.
   static HRESULT StartProcess(const base::FilePath& executable,
-                              const std::wstring& command_line,
+                              const std::wstring& parameters,
                               base::Process& process);
 
   // Separates a command line in `command_format` into an `executable` and
@@ -70,6 +63,18 @@ class AppCommandRunner {
       base::FilePath& executable,
       std::vector<std::wstring>& parameters);
 
+  // Formats a single `parameter` using
+  // `base::internal::DoReplaceStringPlaceholders`. Any placeholder `%N` in
+  // `parameter` is replaced with substitutions[N - 1]. Any literal `%` needs to
+  // be escaped with a `%`.
+  //
+  // Returns `std::nullopt` if:
+  // * a placeholder %N is encountered where N > substitutions.size().
+  // * a literal `%` is not escaped with a `%`.
+  static std::optional<std::wstring> FormatParameter(
+      const std::wstring& parameter,
+      const std::vector<std::wstring>& substitutions);
+
   // Formats a vector of `parameters` using the provided `substitutions` and
   // returns a resultant command line. Any placeholder `%N` in `parameters` is
   // replaced with substitutions[N - 1]. Any literal `%` needs to be escaped
@@ -79,10 +84,10 @@ class AppCommandRunner {
   // parameter will be interpreted as a single command-line parameter according
   // to the rules for ::CommandLineToArgvW.
   //
-  // Returns `absl::nullopt` if:
+  // Returns `std::nullopt` if:
   // * a placeholder %N is encountered where N > substitutions.size().
   // * a literal `%` is not escaped with a `%`.
-  static absl::optional<std::wstring> FormatAppCommandLine(
+  static std::optional<std::wstring> FormatAppCommandLine(
       const std::vector<std::wstring>& parameters,
       const std::vector<std::wstring>& substitutions);
 
@@ -96,14 +101,14 @@ class AppCommandRunner {
   base::FilePath executable_;
   std::vector<std::wstring> parameters_;
 
-  FRIEND_TEST_ALL_PREFIXES(AppCommandRunnerTest,
-                           GetAppCommandFormatComponents_InvalidPaths);
-  FRIEND_TEST_ALL_PREFIXES(AppCommandRunnerTest,
-                           GetAppCommandFormatComponents_ProgramFilesPaths);
-  FRIEND_TEST_ALL_PREFIXES(
-      AppCommandRunnerTest,
-      GetAppCommandFormatComponents_And_FormatAppCommandLine);
-  FRIEND_TEST_ALL_PREFIXES(AppCommandRunnerTest, ExecuteAppCommand);
+  FRIEND_TEST_ALL_PREFIXES(AppCommandFormatComponentsInvalidPathsTest,
+                           TestCases);
+  FRIEND_TEST_ALL_PREFIXES(AppCommandFormatComponentsProgramFilesPathsTest,
+                           TestCases);
+  FRIEND_TEST_ALL_PREFIXES(AppCommandFormatParameterTest, TestCases);
+  FRIEND_TEST_ALL_PREFIXES(AppCommandFormatComponentsAndCommandLineTest,
+                           TestCases);
+  FRIEND_TEST_ALL_PREFIXES(AppCommandExecuteTest, TestCases);
 };
 
 }  // namespace updater

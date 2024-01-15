@@ -6,15 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/personal_data_manager_observer.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/password_store_change.h"
-#include "components/password_manager/core/browser/password_store_consumer.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#import "components/password_manager/core/browser/password_store/password_store_change.h"
+#import "components/password_manager/core/browser/password_store/password_store_consumer.h"
+#import "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_profile_internal.h"
@@ -23,10 +23,6 @@
 #import "ios/web_view/public/cwv_autofill_data_manager_observer.h"
 #import "ios/web_view/public/cwv_credential_provider_extension_utils.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Typedefs of |completionHandler| in |fetchProfilesWithCompletionHandler:|,
 // |fetchCreditCardsWithCompletionHandler:|, and
@@ -72,10 +68,6 @@ class WebViewPersonalDataManagerObserverBridge
   // autofill::PersonalDataManagerObserver implementation.
   void OnPersonalDataChanged() override {
     [data_manager_ personalDataDidChange];
-  }
-
-  void OnInsufficientFormData() override {
-    // Nop.
   }
 
  private:
@@ -330,7 +322,7 @@ class WebViewPasswordStoreObserver
   form.url = password_manager_util::StripAuthAndParams(url);
   form.signon_realm = form.url.DeprecatedGetOriginAsURL().spec();
   form.username_value = base::SysNSStringToUTF16(username);
-  form.encrypted_password = base::SysNSStringToUTF8(keychainIdentifier);
+  form.keychain_identifier = base::SysNSStringToUTF8(keychainIdentifier);
 
   _passwordStore->AddLogin(form);
 }

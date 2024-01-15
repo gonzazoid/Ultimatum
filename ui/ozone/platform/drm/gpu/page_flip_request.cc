@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/gfx/presentation_feedback.h"
 
 namespace ui {
@@ -14,8 +14,7 @@ namespace ui {
 PageFlipRequest::PageFlipRequest(const base::TimeDelta& refresh_interval)
     : refresh_interval_(refresh_interval) {}
 
-PageFlipRequest::~PageFlipRequest() {
-}
+PageFlipRequest::~PageFlipRequest() = default;
 
 void PageFlipRequest::TakeCallback(PresentationOnceCallback callback) {
   DCHECK(!callback_);

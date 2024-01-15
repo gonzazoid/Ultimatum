@@ -4,18 +4,19 @@
 
 #import "ios/chrome/browser/ui/reading_list/reading_list_table_view_item.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/i18n/time_formatting.h"
-#import "base/mac/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "base/time/time.h"
 #import "components/url_formatter/elide_url.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_url_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/util/pasteboard_util.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item_custom_action_factory.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item_util.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_url_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/util/pasteboard_util.h"
+#import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/favicon/favicon_view.h"
 #import "ios/chrome/common/ui/table_view/table_view_url_cell_favicon_badge_view.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -24,14 +25,10 @@
 #import "ui/strings/grit/ui_strings.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // The size of the symbol badge image.
-const CGFloat kSymbolBadgeImagePointSize = 13;
+constexpr CGFloat kSymbolBadgeImagePointSize = 13;
 
 // The string format used to append the distillation date to the URL host.
 NSString* const kURLAndDistillationDateFormat = @"%@ • %@";
@@ -43,6 +40,9 @@ NSString* const kURLAndDistillationDateFormat = @"%@ • %@";
 // The image to supply as to the TableViewURLCell's `faviconBadgeView`.
 @property(nonatomic, strong) UIImage* distillationBadgeImage;
 
+// The color to supply as to the TableViewURLCell's `tintColor`.
+@property(nonatomic, strong) UIColor* distillationBadgeTintColor;
+
 @end
 
 @implementation ReadingListTableViewItem
@@ -50,12 +50,11 @@ NSString* const kURLAndDistillationDateFormat = @"%@ • %@";
 @synthesize entryURL = _entryURL;
 @synthesize faviconPageURL = _faviconPageURL;
 @synthesize distillationState = _distillationState;
-@synthesize distillationSizeText = _distillationSizeText;
 @synthesize distillationDateText = _distillationDateText;
 @synthesize estimatedReadTimeText = _estimatedReadTimeText;
+@synthesize showCloudSlashIcon = _showCloudSlashIcon;
 @synthesize customActionFactory = _customActionFactory;
 @synthesize attributes = _attributes;
-@synthesize distillationBadgeImage = _distillationBadgeImage;
 
 - (instancetype)initWithType:(NSInteger)type {
   if (self = [super initWithType:type]) {
@@ -73,17 +72,14 @@ NSString* const kURLAndDistillationDateFormat = @"%@ • %@";
   _distillationState = distillationState;
   switch (_distillationState) {
     case ReadingListUIDistillationStatusFailure:
-      self.distillationBadgeImage =
-          UseSymbols() ? DefaultSymbolTemplateWithPointSize(
-                             kErrorCircleFillSymbol, kSymbolBadgeImagePointSize)
-                       : [UIImage imageNamed:@"distillation_fail_new"];
+      self.distillationBadgeImage = DefaultSymbolTemplateWithPointSize(
+          kErrorCircleFillSymbol, kSymbolBadgeImagePointSize);
+      self.distillationBadgeTintColor = [UIColor colorNamed:kGrey600Color];
       break;
     case ReadingListUIDistillationStatusSuccess:
-      self.distillationBadgeImage =
-          UseSymbols()
-              ? DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol,
-                                                   kSymbolBadgeImagePointSize)
-              : [UIImage imageNamed:@"table_view_cell_check_mark"];
+      self.distillationBadgeImage = DefaultSymbolTemplateWithPointSize(
+          kCheckmarkCircleFillSymbol, kSymbolBadgeImagePointSize);
+      self.distillationBadgeTintColor = [UIColor colorNamed:kGreen500Color];
       break;
     case ReadingListUIDistillationStatusPending:
       self.distillationBadgeImage = nil;
@@ -96,20 +92,27 @@ NSString* const kURLAndDistillationDateFormat = @"%@ • %@";
 - (void)configureCell:(TableViewCell*)cell
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:cell withStyler:styler];
-  TableViewURLCell* URLCell = base::mac::ObjCCastStrict<TableViewURLCell>(cell);
+  TableViewURLCell* URLCell =
+      base::apple::ObjCCastStrict<TableViewURLCell>(cell);
   URLCell.titleLabel.text = [self titleLabelText];
   URLCell.URLLabel.text = [self URLLabelText];
-  URLCell.metadataLabel.text = self.distillationSizeText;
   URLCell.cellUniqueIdentifier = base::SysUTF8ToNSString(self.entryURL.host());
   URLCell.accessibilityTraits |= UIAccessibilityTraitButton;
-
+  URLCell.metadataImage.image =
+      self.showCloudSlashIcon
+          ? CustomSymbolWithPointSize(kCloudSlashSymbol,
+                                      kCloudSlashSymbolPointSize)
+          : nil;
+  URLCell.metadataImage.tintColor = CloudSlashTintColor();
   if (styler.cellTitleColor)
     URLCell.titleLabel.textColor = styler.cellTitleColor;
   [URLCell.faviconView configureWithAttributes:self.attributes];
   URLCell.faviconBadgeView.image = self.distillationBadgeImage;
+  URLCell.faviconBadgeView.tintColor = self.distillationBadgeTintColor;
   cell.isAccessibilityElement = YES;
   cell.accessibilityLabel = GetReadingListCellAccessibilityLabel(
-      self.title, [self hostname], self.distillationState);
+      self.title, [self hostname], self.distillationState,
+      self.showCloudSlashIcon);
   cell.accessibilityCustomActions =
       [self.customActionFactory customActionsForItem:self];
   [URLCell configureUILayout];

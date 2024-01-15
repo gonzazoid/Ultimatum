@@ -26,8 +26,6 @@ struct MostVisitedTheme {
   skia.mojom.SkColor background_color;
   // True if |background_color| is dark.
   bool use_white_tile_icon;
-  // True if the shortcuts titles should be wrapped in a pill.
-  bool use_title_pill;
   // True if the theme is dark (e.g. NTP background color is dark).
   bool is_dark;
 };
@@ -66,6 +64,10 @@ interface MostVisitedPageHandler {
   UpdateMostVisitedTile(url.mojom.Url url,
                         url.mojom.Url new_url,
                         string new_title) => (bool success);
+  // Prerenders |tile|.
+  PrerenderMostVisitedTile(MostVisitedTile tile, bool is_hover_trigger);
+  // Cancel the on-going prerender if exists.
+  CancelPrerender();
   // ======= METRICS =======
   // Logs that |tiles| were displayed / updated at |time|. The first instance of
   // this event is used as a proxy for when the NTP has finished loading.

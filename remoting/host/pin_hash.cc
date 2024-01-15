@@ -15,11 +15,13 @@ bool ParsePinHashFromConfig(const std::string& value,
                             const std::string& host_id,
                             std::string* pin_hash_out) {
   size_t separator = value.find(':');
-  if (separator == std::string::npos)
+  if (separator == std::string::npos) {
     return false;
+  }
 
-  if (!base::Base64Decode(value.substr(separator + 1), pin_hash_out))
+  if (!base::Base64Decode(value.substr(separator + 1), pin_hash_out)) {
     return false;
+  }
 
   std::string function_name = value.substr(0, separator);
   if (function_name == "plain") {
@@ -36,8 +38,7 @@ bool ParsePinHashFromConfig(const std::string& value,
 std::string MakeHostPinHash(const std::string& host_id,
                             const std::string& pin) {
   std::string hash = protocol::GetSharedSecretHash(host_id, pin);
-  std::string hash_base64;
-  base::Base64Encode(hash, &hash_base64);
+  std::string hash_base64 = base::Base64Encode(hash);
   return "hmac:" + hash_base64;
 }
 

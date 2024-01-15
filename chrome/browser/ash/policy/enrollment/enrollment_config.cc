@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/policy/enrollment/enrollment_config.h"
 
+#include <optional>
 #include <string>
 
 #include "base/logging.h"
@@ -16,23 +17,10 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/install_attributes/install_attributes.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
-
-// Get a machine flag from |statistics_provider|, returning the given
-// |default_value| if not present.
-bool GetMachineFlag(chromeos::system::StatisticsProvider* statistics_provider,
-                    const std::string& key,
-                    bool default_value) {
-  bool value = default_value;
-  if (!statistics_provider->GetMachineFlag(key, &value))
-    return default_value;
-
-  return value;
-}
 
 std::string GetString(const base::Value::Dict& dict, base::StringPiece key) {
   const std::string* value = dict.FindString(key);
@@ -47,6 +35,27 @@ bool IsEnrollingAfterRollback() {
   return wizard_context && ash::IsRollbackFlow(*wizard_context);
 }
 
+// Returns the license type to use based on the license type, assigned
+// upgrade type and the license packaged from device state.
+policy::LicenseType GetLicenseTypeToUse(
+    const std::string license_type, const bool is_license_packaged_with_device,
+    const std::string assigned_upgrade_type) {
+  if (license_type == policy::kDeviceStateLicenseTypeEnterprise) {
+    return policy::LicenseType::kEnterprise;
+  } else if (license_type == policy::kDeviceStateLicenseTypeEducation) {
+    return policy::LicenseType::kEducation;
+  } else if (license_type == policy::kDeviceStateLicenseTypeTerminal) {
+    return policy::LicenseType::kTerminal;
+  }
+
+  if (!is_license_packaged_with_device &&
+      assigned_upgrade_type == policy::kDeviceStateAssignedUpgradeTypeKiosk) {
+    return policy::LicenseType::kTerminal;
+  }
+
+  return policy::LicenseType::kNone;
+}
+
 }  // namespace
 
 namespace policy {
@@ -59,14 +68,14 @@ EnrollmentConfig::~EnrollmentConfig() = default;
 EnrollmentConfig EnrollmentConfig::GetPrescribedEnrollmentConfig() {
   return GetPrescribedEnrollmentConfig(
       *g_browser_process->local_state(), *ash::InstallAttributes::Get(),
-      chromeos::system::StatisticsProvider::GetInstance());
+      ash::system::StatisticsProvider::GetInstance());
 }
 
 // static
 EnrollmentConfig EnrollmentConfig::GetPrescribedEnrollmentConfig(
     const PrefService& local_state,
     const ash::InstallAttributes& install_attributes,
-    chromeos::system::StatisticsProvider* statistics_provider) {
+    ash::system::StatisticsProvider* statistics_provider) {
   DCHECK(statistics_provider);
 
   EnrollmentConfig config;
@@ -86,9 +95,6 @@ EnrollmentConfig EnrollmentConfig::GetPrescribedEnrollmentConfig(
       break;
 
     case ZeroTouchEnrollmentMode::FORCED:
-    case ZeroTouchEnrollmentMode::HANDS_OFF:
-      // Hands-off implies the same authentication method as Forced.
-
       // Only use attestation to authenticate since zero-touch is forced.
       config.auth_mechanism = EnrollmentConfig::AUTH_MECHANISM_ATTESTATION;
       break;
@@ -111,7 +117,8 @@ EnrollmentConfig EnrollmentConfig::GetPrescribedEnrollmentConfig(
     // registration gets lost.
     if (local_state.GetBoolean(prefs::kEnrollmentRecoveryRequired)) {
       LOG(WARNING) << "Enrollment recovery required according to pref.";
-      if (statistics_provider->GetEnterpriseMachineID().empty())
+      const auto serial_number = statistics_provider->GetMachineID();
+      if (!serial_number || serial_number->empty())
         LOG(WARNING) << "Postponing recovery because machine id is missing.";
       else
         config.mode = EnrollmentConfig::MODE_RECOVERY;
@@ -136,18 +143,20 @@ EnrollmentConfig EnrollmentConfig::GetPrescribedEnrollmentConfig(
       device_state.FindBool(kDeviceStatePackagedLicense).value_or(false);
   const std::string license_type =
       GetString(device_state, kDeviceStateLicenseType);
+  const std::string assigned_upgrade_type = GetString(device_state, kDeviceStateAssignedUpgradeType);
 
   config.is_license_packaged_with_device = is_license_packaged_with_device;
 
-  if (license_type == kDeviceStateLicenseTypeEnterprise) {
-    config.license_type = LicenseType::kEnterprise;
-  } else if (license_type == kDeviceStateLicenseTypeEducation) {
-    config.license_type = LicenseType::kEducation;
-  } else if (license_type == kDeviceStateLicenseTypeTerminal) {
-    config.license_type = LicenseType::kTerminal;
-  } else {
-    config.license_type = LicenseType::kNone;
+  if(assigned_upgrade_type == kDeviceStateAssignedUpgradeTypeChromeEnterprise) {
+    config.assigned_upgrade_type =
+        AssignedUpgradeType::kAssignedUpgradeTypeChromeEnterprise;
+  } else if(assigned_upgrade_type == kDeviceStateAssignedUpgradeTypeKiosk) {
+    config.assigned_upgrade_type =
+        AssignedUpgradeType::kAssignedUpgradeTypeKioskAndSignage;
   }
+
+  config.license_type = GetLicenseTypeToUse(
+      license_type, is_license_packaged_with_device, assigned_upgrade_type);
 
   const bool pref_enrollment_auto_start_present =
       local_state.HasPrefPath(prefs::kDeviceEnrollmentAutoStart);
@@ -159,11 +168,15 @@ EnrollmentConfig EnrollmentConfig::GetPrescribedEnrollmentConfig(
   const bool pref_enrollment_can_exit =
       local_state.GetBoolean(prefs::kDeviceEnrollmentCanExit);
 
-  const bool oem_is_managed = GetMachineFlag(
-      statistics_provider, chromeos::system::kOemIsEnterpriseManagedKey, false);
-  const bool oem_can_exit_enrollment = GetMachineFlag(
-      statistics_provider, chromeos::system::kOemCanExitEnterpriseEnrollmentKey,
-      true);
+  const bool oem_is_managed = ash::system::StatisticsProvider::FlagValueToBool(
+      statistics_provider->GetMachineFlag(
+          ash::system::kOemIsEnterpriseManagedKey),
+      /*default_value=*/false);
+  const bool oem_can_exit_enrollment =
+      ash::system::StatisticsProvider::FlagValueToBool(
+          statistics_provider->GetMachineFlag(
+              ash::system::kOemCanExitEnterpriseEnrollmentKey),
+          /*default_value=*/true);
 
   // Decide enrollment mode. Give precedence to forced variants.
   if (IsEnrollingAfterRollback()) {
@@ -228,8 +241,8 @@ EnrollmentConfig::Mode EnrollmentConfig::GetManualFallbackMode(
     case EnrollmentConfig::MODE_ATTESTATION:
     case EnrollmentConfig::MODE_ATTESTATION_LOCAL_FORCED:
     case EnrollmentConfig::MODE_ATTESTATION_MANUAL_FALLBACK:
-    case EnrollmentConfig::MODE_OFFLINE_DEMO_DEPRECATED:
-    case EnrollmentConfig::OBSOLETE_MODE_ENROLLED_ROLLBACK:
+    case EnrollmentConfig::DEPRECATED_MODE_OFFLINE_DEMO:
+    case EnrollmentConfig::DEPRECATED_MODE_ENROLLED_ROLLBACK:
     case EnrollmentConfig::MODE_INITIAL_SERVER_FORCED:
     case EnrollmentConfig::MODE_ATTESTATION_INITIAL_MANUAL_FALLBACK:
     case EnrollmentConfig::MODE_ATTESTATION_ROLLBACK_MANUAL_FALLBACK:

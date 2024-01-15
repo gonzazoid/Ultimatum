@@ -40,4 +40,14 @@ void TestSearchResult::SetDetails(const std::u16string& details) {
   SetDetailsTextVector(StringToTextVector(details));
 }
 
+void TestSearchResult::SetCategory(
+    const ash::AppListSearchResultCategory category) {
+  SearchResult::set_category(category);
+}
+
+void TestSearchResult::SetSystemInfoAnswerCardData(
+    const ash::SystemInfoAnswerCardData& system_info_data) {
+  SearchResult::set_system_info_answer_card_data(system_info_data);
+}
+
 }  // namespace ash

@@ -9,12 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/dev_ui_browser_resources.h"
+#include "chrome/grit/engagement_resources.h"
+#include "chrome/grit/engagement_resources_map.h"
 #include "components/site_engagement/content/site_engagement_service.h"
 #include "components/site_engagement/core/mojom/site_engagement_details.mojom.h"
 #include "content/public/browser/web_ui.h"
@@ -71,7 +73,7 @@ class SiteEngagementDetailsProviderImpl
 
   void SetSiteEngagementBaseScoreForUrl(const GURL& origin,
                                         double score) override {
-    if (!origin.is_valid() || score < 0 ||
+    if (!origin.is_valid() || !origin.SchemeIsHTTPOrHTTPS() || score < 0 ||
         score > site_engagement::SiteEngagementService::GetMaxPoints() ||
         std::isnan(score)) {
       return;
@@ -95,16 +97,11 @@ class SiteEngagementDetailsProviderImpl
 SiteEngagementUI::SiteEngagementUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui) {
   // Set up the chrome://site-engagement/ source.
-  std::unique_ptr<content::WebUIDataSource> source(
-      content::WebUIDataSource::Create(chrome::kChromeUISiteEngagementHost));
-  source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://webui-test 'self';");
-  source->AddResourcePath("site_engagement.js", IDR_SITE_ENGAGEMENT_JS);
-  source->AddResourcePath("site_engagement_details.mojom-webui.js",
-                          IDR_SITE_ENGAGEMENT_DETAILS_MOJOM_WEBUI_JS);
-  source->SetDefaultResource(IDR_SITE_ENGAGEMENT_HTML);
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source.release());
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUISiteEngagementHost);
+  webui::SetupWebUIDataSource(
+      source, base::make_span(kEngagementResources, kEngagementResourcesSize),
+      IDR_ENGAGEMENT_SITE_ENGAGEMENT_HTML);
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(SiteEngagementUI)

@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -19,7 +19,6 @@
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
 #include "chrome/browser/extensions/external_testing_loader.h"
@@ -33,7 +32,6 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/pref_names.h"
 #include "extensions/browser/updater/extension_cache_fake.h"
@@ -47,8 +45,8 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/customization/customization_document.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/user_manager/scoped_user_manager.h"
 #endif
 
@@ -132,8 +130,8 @@ class ExternalProviderImplTest : public ExtensionServiceTestBase {
         switches::kDisableDefaultApps);
 
     ProviderCollection providers;
-    extensions::ExternalProviderImpl::CreateExternalProviders(
-        service_, profile_.get(), &providers);
+    ExternalProviderImpl::CreateExternalProviders(service_, profile_.get(),
+                                                  &providers);
 
     for (std::unique_ptr<ExternalProviderInterface>& provider : providers)
       service_->AddProviderForTesting(std::move(provider));
@@ -169,12 +167,10 @@ class ExternalProviderImplTest : public ExtensionServiceTestBase {
   }
 
   void InitializeExtensionServiceWithUpdaterAndPrefs() {
-    ExtensionServiceInitParams params = CreateDefaultInitParams();
-    params.autoupdate_enabled = true;
+    ExtensionServiceInitParams params;
     // Create prefs file to make the profile not new.
-    const char prefs[] = "{}";
-    EXPECT_EQ(base::WriteFile(params.pref_file, prefs, sizeof(prefs)),
-              int(sizeof(prefs)));
+    params.prefs_content = "{}";
+    params.autoupdate_enabled = true;
     InitializeExtensionService(params);
     service_->updater()->Start();
     content::RunAllTasksUntilIdle();
@@ -243,8 +239,8 @@ class ExternalProviderImplTest : public ExtensionServiceTestBase {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // chromeos::ServicesCustomizationExternalLoader is hooked up as an
-  // extensions::ExternalLoader and depends on a functioning StatisticsProvider.
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  // ExternalLoader and depends on a functioning StatisticsProvider.
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
 #endif
 
 #if BUILDFLAG(IS_WIN)

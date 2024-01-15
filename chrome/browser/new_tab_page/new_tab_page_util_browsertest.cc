@@ -22,8 +22,7 @@ class NewTabPageUtilEnableFlagBrowserTest : public NewTabPageUtilBrowserTest {
   NewTabPageUtilEnableFlagBrowserTest() {
     features_.InitWithFeatures(
         {ntp_features::kNtpRecipeTasksModule,
-         ntp_features::kNtpChromeCartModule, ntp_features::kNtpDriveModule,
-         ntp_features::kNtpModulesFirstRunExperience},
+         ntp_features::kNtpChromeCartModule, ntp_features::kNtpDriveModule},
         {});
   }
 };
@@ -31,38 +30,20 @@ class NewTabPageUtilEnableFlagBrowserTest : public NewTabPageUtilBrowserTest {
 class NewTabPageUtilDisableFlagBrowserTest : public NewTabPageUtilBrowserTest {
  public:
   NewTabPageUtilDisableFlagBrowserTest() {
-    features_.InitWithFeatures(
-        {}, {ntp_features::kNtpRecipeTasksModule,
-             ntp_features::kNtpChromeCartModule, ntp_features::kNtpDriveModule,
-             ntp_features::kNtpModulesFirstRunExperience});
+    features_.InitWithFeatures({}, {ntp_features::kNtpRecipeTasksModule,
+                                    ntp_features::kNtpChromeCartModule,
+                                    ntp_features::kNtpDriveModule});
   }
 };
 
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, EnableRecipesByToT) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
-  EXPECT_TRUE(IsRecipeTasksModuleEnabled());
-#else
-  EXPECT_FALSE(IsRecipeTasksModuleEnabled());
-#endif
-}
-
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, DisableRecipesByToT) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("ca");
-  EXPECT_FALSE(IsRecipeTasksModuleEnabled());
-}
-
 IN_PROC_BROWSER_TEST_F(NewTabPageUtilEnableFlagBrowserTest,
-                       EnableRecipesByFlag) {
+                       EnableRecipesThroughOverride) {
+  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
+  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
   EXPECT_TRUE(IsRecipeTasksModuleEnabled());
 }
 
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilDisableFlagBrowserTest,
-                       DisableRecipesByFlag) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
+IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, RecipesDisabled) {
   EXPECT_FALSE(IsRecipeTasksModuleEnabled());
 }
 
@@ -94,19 +75,11 @@ IN_PROC_BROWSER_TEST_F(NewTabPageUtilDisableFlagBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, EnableDriveByToT) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
   EXPECT_TRUE(IsDriveModuleEnabled());
 #else
   EXPECT_FALSE(IsDriveModuleEnabled());
 #endif
-}
-
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, DisableDriveByToT) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("ca");
-  EXPECT_FALSE(IsDriveModuleEnabled());
 }
 
 IN_PROC_BROWSER_TEST_F(NewTabPageUtilEnableFlagBrowserTest, EnableDriveByFlag) {
@@ -115,29 +88,5 @@ IN_PROC_BROWSER_TEST_F(NewTabPageUtilEnableFlagBrowserTest, EnableDriveByFlag) {
 
 IN_PROC_BROWSER_TEST_F(NewTabPageUtilDisableFlagBrowserTest,
                        DisableDriveByFlag) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
   EXPECT_FALSE(IsDriveModuleEnabled());
-}
-
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, EnableFreByToT) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
-  EXPECT_TRUE(IsModuleFreEnabled());
-}
-
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, DisableFreByToT) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("ca");
-  EXPECT_FALSE(IsModuleFreEnabled());
-}
-
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilEnableFlagBrowserTest, EnableFreByFlag) {
-  EXPECT_TRUE(IsModuleFreEnabled());
-}
-
-IN_PROC_BROWSER_TEST_F(NewTabPageUtilDisableFlagBrowserTest, DisableFreByFlag) {
-  auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
-  g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
-  EXPECT_FALSE(IsModuleFreEnabled());
 }

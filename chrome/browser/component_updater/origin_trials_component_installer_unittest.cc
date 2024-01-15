@@ -2,14 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/component_updater/chrome_origin_trials_component_installer.h"
-
 #include <utility>
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/component_updater/chrome_origin_trials_component_installer.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "components/embedder_support/origin_trials/pref_names.h"
@@ -23,9 +22,9 @@ namespace {
 // constants, as want to catch inadvertent changes in the tests. The keys will
 // will be generated server-side, so any changes need to be intentional and
 // coordinated.
-static const char kManifestOriginTrialsKey[] = "origin-trials";
-static const char kTestUpdateVersion[] = "1.0";
-static const char kExistingPublicKey[] = "existing public key";
+constexpr char kManifestOriginTrialsKey[] = "origin-trials";
+constexpr char kTestUpdateVersion[] = "1.0";
+constexpr char kExistingPublicKey[] = "existing public key";
 
 }  // namespace
 
@@ -49,9 +48,9 @@ class OriginTrialsComponentInstallerTest : public PlatformTest {
     policy_ = std::make_unique<ChromeOriginTrialsComponentInstallerPolicy>();
   }
 
-  void LoadUpdates(base::Value manifest) {
-    if (manifest.DictEmpty()) {
-      manifest.SetKey(kManifestOriginTrialsKey, base::Value());
+  void LoadUpdates(base::Value::Dict manifest) {
+    if (manifest.empty()) {
+      manifest.Set(kManifestOriginTrialsKey, base::Value());
     }
     ASSERT_TRUE(policy_->VerifyInstallation(manifest, temp_dir_.GetPath()));
     const base::Version expected_version(kTestUpdateVersion);
@@ -76,7 +75,7 @@ TEST_F(OriginTrialsComponentInstallerTest,
       local_state()->GetString(embedder_support::prefs::kOriginTrialPublicKey));
 
   // Load with empty section in manifest
-  LoadUpdates(base::Value(base::Value::Type::DICTIONARY));
+  LoadUpdates(base::Value::Dict());
 
   EXPECT_FALSE(local_state()->HasPrefPath(
       embedder_support::prefs::kOriginTrialPublicKey));

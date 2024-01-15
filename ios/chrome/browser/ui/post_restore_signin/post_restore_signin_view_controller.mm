@@ -5,10 +5,10 @@
 #import "ios/chrome/browser/ui/post_restore_signin/post_restore_signin_view_controller.h"
 
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/signin/signin_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/signin/model/signin_util.h"
 #import "ios/chrome/browser/ui/authentication/authentication_constants.h"
 #import "ios/chrome/browser/ui/authentication/views/identity_button_control.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/branded_images/branded_images_api.h"
 #import "ios/public/provider/chrome/browser/signin/signin_resources_api.h"
@@ -16,10 +16,6 @@
 #import "ui/base/l10n/l10n_util_mac.h"
 
 #import <Foundation/Foundation.h>
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface PostRestoreSignInViewController ()
 
@@ -42,7 +38,7 @@
 @end
 
 @implementation PostRestoreSignInViewController {
-  absl::optional<AccountInfo> _accountInfo;
+  std::optional<AccountInfo> _accountInfo;
 }
 
 #pragma mark - Initialization

@@ -250,6 +250,27 @@ message ChromeRootStoreDebugInfo {
   optional int64 chrome_root_store_version = 1;
 }
 
+message TrustStoreNSSDebugInfo {
+  reserved 2;
+
+  optional bool ignore_system_trust_settings = 1;
+
+  // Corresponds to TrustStoreNSS:ResultDebugData::SlotFilterType, however the
+  // numeric values are NOT equivalent.
+  enum SlotFilterType {
+    UNKNOWN_SLOT_FILTER_TYPE = 0;
+    DONT_FILTER = 1;
+    DO_NOT_ALLOW_USER_SLOTS = 2;
+    ALLOW_SPECIFIED_USER_SLOT = 3;
+  }
+  optional SlotFilterType slot_filter_type = 3;
+}
+
+message AiaFetchDebugInfo {
+  optional int32 aia_fetch_failure = 1;
+  optional int32 aia_fetch_success = 2;
+}
+
 // Contains the results of verification by the trial verifier. All fields
 // have the same meaning as those of the same name in CertLoggerRequest.
 message TrialVerificationInfo {
@@ -305,6 +326,7 @@ message TrialVerificationInfo {
     MAC_TRUST_IMPL_SIMPLE = 2;
     MAC_TRUST_IMPL_MRU_CACHE = 3;
     MAC_TRUST_IMPL_DOMAIN_CACHE_FULL_CERTS = 4;
+    MAC_TRUST_IMPL_KEYCHAIN_CACHE_FULL_CERTS = 5;
   };
   optional MacTrustImplType mac_trust_impl = 13;
 
@@ -331,4 +353,26 @@ message TrialVerificationInfo {
 
   // Debug information pertaining to the Chrome Root Store (if it was used).
   optional ChromeRootStoreDebugInfo chrome_root_store_debug_info = 15;
+
+  // The NSS library version (if NSS is used).
+  optional string nss_version = 16;
+
+  // Debug information pertaining to the TrustStoreNSS instance used by the
+  // primary verifier (if NSS is used).
+  optional TrustStoreNSSDebugInfo primary_nss_debug_info = 17;
+
+  // Debug information pertaining to the TrustStoreNSS instance used by the
+  // trial verifier (if NSS is used).
+  optional TrustStoreNSSDebugInfo trial_nss_debug_info = 18;
+
+  // The Linux distribution name, if report is from Linux.
+  optional string linux_distro = 19;
+
+  // Information about AIA fetching from the trial cert verifier reports.
+  // TODO(hchao): primary AIA fetching information should probably go in
+  // CertLoggerRequest, but the code currently only provides this information if
+  // we're running a Trial Cert Verifier. If this changes, move the primary
+  // information out of here into CertLoggerRequest.
+  optional AiaFetchDebugInfo primary_aia_fetch_debug_info = 20;
+  optional AiaFetchDebugInfo trial_aia_fetch_debug_info = 21;
 }

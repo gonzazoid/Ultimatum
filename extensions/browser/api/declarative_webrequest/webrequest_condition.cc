@@ -4,8 +4,8 @@
 
 #include "extensions/browser/api/declarative_webrequest/webrequest_condition.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/url_matcher/url_matcher_factory.h"
@@ -66,7 +66,7 @@ WebRequestDataWithMatchIds::WebRequestDataWithMatchIds(
     const WebRequestData* request_data)
     : data(request_data) {}
 
-WebRequestDataWithMatchIds::~WebRequestDataWithMatchIds() {}
+WebRequestDataWithMatchIds::~WebRequestDataWithMatchIds() = default;
 
 //
 // WebRequestCondition
@@ -84,7 +84,7 @@ WebRequestCondition::WebRequestCondition(
   }
 }
 
-WebRequestCondition::~WebRequestCondition() {}
+WebRequestCondition::~WebRequestCondition() = default;
 
 bool WebRequestCondition::IsFulfilled(
     const MatchData& request_data) const {

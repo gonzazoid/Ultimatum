@@ -31,16 +31,15 @@
 #include "base/memory/ptr_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/html/parser/html_attributes_ranges.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_options.h"
 #include "third_party/blink/renderer/core/html/parser/html_token.h"
 #include "third_party/blink/renderer/core/html/parser/input_stream_preprocessor.h"
 #include "third_party/blink/renderer/core/html_names.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/text/segmented_string.h"
-#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
-
-struct HTMLTokenizerSnapshot;
 
 class CORE_EXPORT HTMLTokenizer {
   USING_FAST_MALLOC(HTMLTokenizer);
@@ -53,12 +52,16 @@ class CORE_EXPORT HTMLTokenizer {
 
   void Reset();
 
+  void ClearToken() { token_.Clear(); }
+
   enum State {
     kDataState,
     kCharacterReferenceInDataState,
     kRCDATAState,
     kCharacterReferenceInRCDATAState,
     kRAWTEXTState,
+    kChildNodePartStartState,
+    kChildNodePartEndState,
     kScriptDataState,
     kPLAINTEXTState,
     kTagOpenState,
@@ -130,13 +133,10 @@ class CORE_EXPORT HTMLTokenizer {
     kCDATASectionEndState,
   };
 
-  void GetSnapshot(HTMLTokenizerSnapshot& snapshot) const;
-  void RestoreSnapshot(const HTMLTokenizerSnapshot& snapshot);
-
   // This function returns true if it emits a token. Otherwise, callers
   // must provide the same (in progress) token on the next call (unless
   // they call reset() first).
-  bool NextToken(SegmentedString&, HTMLToken&);
+  HTMLToken* NextToken(SegmentedString&);
 
   // Returns a copy of any characters buffered internally by the tokenizer.
   // The tokenizer buffers characters when searching for the </script> token
@@ -183,6 +183,16 @@ class CORE_EXPORT HTMLTokenizer {
   bool ShouldAllowCDATA() const { return should_allow_cdata_; }
   void SetShouldAllowCDATA(bool value) { should_allow_cdata_ = value; }
 
+  bool ShouldAllowDOMParts() const {
+    DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled() ||
+           !should_allow_dom_parts_);
+    return should_allow_dom_parts_;
+  }
+  void SetShouldAllowDOMParts(bool value) {
+    DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled());
+    should_allow_dom_parts_ = value;
+  }
+
   ALWAYS_INLINE State GetState() const { return state_; }
   void SetState(State state) { state_ = state; }
 
@@ -209,9 +219,19 @@ class CORE_EXPORT HTMLTokenizer {
     }
   }
 
- private:
-  friend class HTMLTokenizerTest;
+  // Returns the ranges of the attributes for the current token. This is only
+  // updated if `HTMLParserOptions::track_attributes_ranges` was set.
+  // Additionally, if attributes are tracked HTMLAttributesRanges::Clear()
+  // must be called after every token.
+  HTMLAttributesRanges& attributes_ranges() {
+    // If `track_attributes_ranges_` is is false, `attributes_ranges_` is not
+    // updated.
+    DCHECK(track_attributes_ranges_);
+    return attributes_ranges_;
+  }
 
+ private:
+  bool NextTokenImpl(SegmentedString&);
   inline bool ProcessEntity(SegmentedString&);
 
   // Returns true if it has skipped all the whitespaces and we still have
@@ -223,20 +243,20 @@ class CORE_EXPORT HTMLTokenizer {
 
   inline void BufferCharacter(UChar character) {
     DCHECK_NE(character, kEndOfFileMarker);
-    token_->EnsureIsCharacterToken();
-    token_->AppendToCharacter(character);
+    token_.EnsureIsCharacterToken();
+    token_.AppendToCharacter(character);
   }
 
-  inline bool EmitAndResumeIn(SegmentedString& source, State state) {
+  inline bool EmitAndResumeInDataState(SegmentedString& source) {
     SaveEndTagNameIfNeeded();
-    state_ = state;
-    source.AdvanceAndUpdateLineNumber();
+    state_ = kDataState;
+    source.AdvancePastNonNewline();
     return true;
   }
 
-  inline bool EmitAndReconsumeIn(SegmentedString&, State state) {
+  inline bool EmitAndReconsumeInDataState() {
     SaveEndTagNameIfNeeded();
-    state_ = state;
+    state_ = kDataState;
     return true;
   }
 
@@ -247,18 +267,19 @@ class CORE_EXPORT HTMLTokenizer {
   inline bool EmitEndOfFile(SegmentedString& source) {
     if (HaveBufferedCharacterToken())
       return true;
-    state_ = HTMLTokenizer::kDataState;
+    state_ = kDataState;
     source.AdvanceAndUpdateLineNumber();
-    token_->Clear();
-    token_->MakeEndOfFile();
+    token_.Clear();
+    token_.MakeEndOfFile();
     return true;
   }
 
-  inline bool FlushEmitAndResumeIn(SegmentedString&, State);
+  inline bool FlushEmitAndResumeInDataState(SegmentedString& source);
 
   // Return whether we need to emit a character token before dealing with
   // the buffered end tag.
-  inline bool FlushBufferedEndTag(SegmentedString&);
+  inline bool FlushBufferedEndTag(SegmentedString&,
+                                  bool current_char_may_be_newline);
   inline bool TemporaryBufferIs(const String&);
 
   // Sometimes we speculatively consume input characters and we don't
@@ -267,23 +288,25 @@ class CORE_EXPORT HTMLTokenizer {
   inline void AddToPossibleEndTag(LChar cc);
 
   inline void SaveEndTagNameIfNeeded() {
-    DCHECK_NE(token_->GetType(), HTMLToken::kUninitialized);
-    if (token_->GetType() == HTMLToken::kStartTag)
-      appropriate_end_tag_name_ = token_->GetName();
+    DCHECK_NE(token_.GetType(), HTMLToken::kUninitialized);
+    if (token_.GetType() == HTMLToken::kStartTag)
+      appropriate_end_tag_name_ = token_.GetName();
   }
   inline bool IsAppropriateEndTag();
 
   inline bool HaveBufferedCharacterToken() {
-    return token_->GetType() == HTMLToken::kCharacter;
+    return token_.GetType() == HTMLToken::kCharacter;
   }
+
+  HTMLToken token_;
 
   State state_;
   bool force_null_character_replacement_;
   bool should_allow_cdata_;
-
-  // token_ is owned by the caller. If NextToken is not on the stack,
-  // this member might be pointing to unallocated memory.
-  HTMLToken* token_;
+  bool should_allow_dom_parts_{false};
+  // This value is also stored in `options_`, but it's kept as a member as doing
+  // so gives a slight performance boost.
+  const bool track_attributes_ranges_;
 
   // http://www.whatwg.org/specs/web-apps/current-work/#additional-allowed-character
   UChar additional_allowed_character_;
@@ -301,20 +324,14 @@ class CORE_EXPORT HTMLTokenizer {
   // token here so we remember it next time we re-enter the tokenizer.
   LCharLiteralBuffer<32> buffered_end_tag_name_;
 
-  HTMLParserOptions options_;
-};
+  const HTMLParserOptions options_;
 
-// Snapshot of the tokenizers state. Used by HTMLTokenProducer when it switches
-// from producing tokens in the background thread to the main thread.
-struct CORE_EXPORT HTMLTokenizerSnapshot {
-  USING_FAST_MALLOC(HTMLTokenizerSnapshot);
+  // This is only updated if `track_attributes_ranges_` is true.
+  HTMLAttributesRanges attributes_ranges_;
 
- public:
-  HTMLTokenizer::State state;
-  String appropriate_end_tag_name;
-  String buffered_end_tag_name;
-  // NOTE: This does not include `force_null_character_replacement` and
-  // `should_allow_cdata` as they are never changed in the background tokenizer.
+#if DCHECK_IS_ON()
+  bool token_should_be_in_uninitialized_state_ = true;
+#endif
 };
 
 }  // namespace blink

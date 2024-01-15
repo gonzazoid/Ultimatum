@@ -29,8 +29,8 @@ size_t GetUnderestimatedStackSize() {
 // FIXME: On Mac OSX and Linux, this method cannot estimate stack size
 // correctly for the main thread.
 
-#elif defined(__GLIBC__) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FREEBSD) || \
-    BUILDFLAG(IS_FUCHSIA)
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+    BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FREEBSD) || BUILDFLAG(IS_FUCHSIA)
   // pthread_getattr_np() can fail if the thread is not invoked by
   // pthread_create() (e.g., the main thread of blink_unittests).
   // If so, a conservative size estimate is returned.
@@ -62,7 +62,7 @@ size_t GetUnderestimatedStackSize() {
   //    low as 512k.
   //
   return 512 * 1024;
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   // pthread_get_stacksize_np() returns too low a value for the main thread on
   // OSX 10.9,
   // http://mail.openjdk.java.net/pipermail/hotspot-dev/2013-October/011369.html
@@ -73,7 +73,7 @@ size_t GetUnderestimatedStackSize() {
   // https://developer.apple.com/library/mac/documentation/Cocoa/Conceptual/Multithreading/CreatingThreads/CreatingThreads.html
   // on why hardcoding sizes is reasonable.)
   if (pthread_main_np()) {
-#if defined(IOS)
+#if BUILDFLAG(IS_IOS)
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     size_t guardSize = 0;
@@ -97,8 +97,8 @@ size_t GetUnderestimatedStackSize() {
 }
 
 void* GetStackStart() {
-#if defined(__GLIBC__) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FREEBSD) || \
-    BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_FREEBSD) || BUILDFLAG(IS_FUCHSIA)
   pthread_attr_t attr;
   int error;
 #if BUILDFLAG(IS_FREEBSD)
@@ -125,10 +125,11 @@ void* GetStackStart() {
   // See https://code.google.com/p/nativeclient/issues/detail?id=3431.
   return __libc_stack_end;
 #else
-  NOTREACHED();
+  NOTREACHED() << "pthread_getattr_np() failed for stack end and no "
+                  "glibc __libc_stack_end is present.";
   return nullptr;
 #endif
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   return pthread_get_stackaddr_np(pthread_self());
 #elif BUILDFLAG(IS_WIN) && defined(COMPILER_MSVC)
 // On Windows stack limits for the current thread are available in

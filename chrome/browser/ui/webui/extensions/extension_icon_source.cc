@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -31,8 +31,8 @@
 #include "extensions/common/manifest_handlers/icons_handler.h"
 #include "extensions/grit/extensions_browser_resources.h"
 #include "skia/ext/image_operations.h"
-#include "ui/base/layout.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/favicon_size.h"
@@ -210,8 +210,8 @@ void ExtensionIconSource::LoadExtensionImage(const ExtensionResource& icon,
   ExtensionIconRequest* request = GetData(request_id);
   ImageLoader::Get(profile_)->LoadImageAsync(
       request->extension.get(), icon, gfx::Size(request->size, request->size),
-      base::BindOnce(&ExtensionIconSource::OnImageLoaded, AsWeakPtr(),
-                     request_id));
+      base::BindOnce(&ExtensionIconSource::OnImageLoaded,
+                     weak_ptr_factory_.GetWeakPtr(), request_id));
 }
 
 void ExtensionIconSource::LoadFaviconImage(int request_id) {

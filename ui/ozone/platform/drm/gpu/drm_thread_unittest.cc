@@ -6,28 +6,13 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
-#include "base/files/scoped_temp_dir.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/gfx/linux/test/mock_gbm_device.h"
-#include "ui/ozone/platform/drm/gpu/drm_device_generator.h"
-#include "ui/ozone/platform/drm/gpu/mock_drm_device.h"
-
+#include "ui/ozone/platform/drm/gpu/fake_drm_device_generator.h"
 namespace ui {
 
 namespace {
-
-class FakeDrmDeviceGenerator : public DrmDeviceGenerator {
-  // DrmDeviceGenerator:
-  scoped_refptr<DrmDevice> CreateDevice(const base::FilePath& path,
-                                        base::File file,
-                                        bool is_primary_device) override {
-    auto gbm_device = std::make_unique<MockGbmDevice>();
-    return base::MakeRefCounted<MockDrmDevice>(std::move(gbm_device));
-  }
-};
 
 void StubTask() {}
 
@@ -75,7 +60,9 @@ class DrmThreadTest : public testing::Test {
     base::FilePath file_path("/dev/null");
     base::File file(file_path, base::File::FLAG_OPEN | base::File::FLAG_WRITE |
                                    base::File::FLAG_READ);
-    drm_device_->AddGraphicsDevice(file_path, std::move(file));
+    drm_device_->AddGraphicsDevice(
+        file_path,
+        mojo::PlatformHandle(base::ScopedFD(file.TakePlatformFile())));
   }
 
   base::test::TaskEnvironment env_;

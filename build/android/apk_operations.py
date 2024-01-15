@@ -6,14 +6,12 @@
 # Using colorama.Fore/Back/Style members
 # pylint: disable=no-member
 
-from __future__ import print_function
 
 import argparse
 import collections
 import json
 import logging
 import os
-import pipes
 import posixpath
 import random
 import re
@@ -128,12 +126,12 @@ def _GenerateBundleApks(info,
 def _InstallBundle(devices, apk_helper_instance, modules, fake_modules):
 
   def Install(device):
-    device.Install(
-        apk_helper_instance,
-        permissions=[],
-        modules=modules,
-        fake_modules=fake_modules,
-        allow_downgrade=True)
+    device.Install(apk_helper_instance,
+                   permissions=[],
+                   modules=modules,
+                   fake_modules=fake_modules,
+                   allow_downgrade=True,
+                   reinstall=True)
 
   # Basic checks for |modules| and |fake_modules|.
   # * |fake_modules| cannot include 'base'.
@@ -188,24 +186,95 @@ def _NormalizeProcessName(debug_process_name, package_name):
   return debug_process_name
 
 
-def _LaunchUrl(devices, package_name, argv=None, command_line_flags_file=None,
-               url=None, apk=None, wait_for_java_debugger=False,
-               debug_process_name=None, nokill=None):
+def _ResolveActivity(device, package_name, category, action):
+  # E.g.:
+  # Activity Resolver Table:
+  #   Schemes:
+  #     http:
+  #       67e97c0 org.chromium.pkg/.MainActivityfilter c91d43e
+  #         Action: "android.intent.action.VIEW"
+  #         Category: "android.intent.category.DEFAULT"
+  #         Category: "android.intent.category.BROWSABLE"
+  #         Scheme: "http"
+  #         Scheme: "https"
+  #
+  #   Non-Data Actions:
+  #     android.intent.action.MAIN:
+  #       67e97c0 org.chromium.pkg/.MainActivity filter 4a34cf9
+  #         Action: "android.intent.action.MAIN"
+  #         Category: "android.intent.category.LAUNCHER"
+  lines = device.RunShellCommand(['dumpsys', 'package', package_name],
+                                 check_return=True)
+
+  # Extract the Activity Resolver Table: section.
+  start_idx = next((i for i, l in enumerate(lines)
+                    if l.startswith('Activity Resolver Table:')), None)
+  if start_idx is None:
+    if not device.IsApplicationInstalled(package_name):
+      raise Exception('Package not installed: ' + package_name)
+    raise Exception('No Activity Resolver Table in:\n' + '\n'.join(lines))
+  line_count = next(i for i, l in enumerate(lines[start_idx + 1:])
+                    if l and not l[0].isspace())
+  data = '\n'.join(lines[start_idx:start_idx + line_count])
+
+  # Split on each Activity entry.
+  entries = re.split(r'^        [0-9a-f]+ ', data, flags=re.MULTILINE)
+
+  def activity_name_from_entry(entry):
+    assert entry.startswith(package_name), 'Got: ' + entry
+    activity_name = entry[len(package_name) + 1:].split(' ', 1)[0]
+    if activity_name[0] == '.':
+      activity_name = package_name + activity_name
+    return activity_name
+
+  # Find the one with the text we want.
+  category_text = f'Category: "{category}"'
+  action_text = f'Action: "{action}"'
+  matched_entries = [
+      e for e in entries[1:] if category_text in e and action_text in e
+  ]
+
+  if not matched_entries:
+    raise Exception(f'Did not find {category_text}, {action_text} in\n{data}')
+  if len(matched_entries) > 1:
+    # When there are multiple matches, look for the one marked as default.
+    # Necessary for Monochrome, which also has MonochromeLauncherActivity.
+    default_entries = [
+        e for e in matched_entries if 'android.intent.category.DEFAULT' in e
+    ]
+    matched_entries = default_entries or matched_entries
+
+  # See if all matches point to the same activity.
+  activity_names = {activity_name_from_entry(e) for e in matched_entries}
+
+  if len(activity_names) > 1:
+    raise Exception('Found multiple launcher activities:\n * ' +
+                    '\n * '.join(sorted(activity_names)))
+  return next(iter(activity_names))
+
+
+def _LaunchUrl(devices,
+               package_name,
+               argv=None,
+               command_line_flags_file=None,
+               url=None,
+               wait_for_java_debugger=False,
+               debug_process_name=None,
+               nokill=None):
   if argv and command_line_flags_file is None:
     raise Exception('This apk does not support any flags.')
-  if url:
-    # TODO(agrieve): Launch could be changed to require only package name by
-    #     parsing "dumpsys package" rather than relying on the apk.
-    if not apk:
-      raise Exception('Launching with URL is not supported when using '
-                      '--package-name. Use --apk-path instead.')
-    view_activity = apk.GetViewActivityName()
-    if not view_activity:
-      raise Exception('APK does not support launching with URLs.')
 
   debug_process_name = _NormalizeProcessName(debug_process_name, package_name)
 
+  if url is None:
+    category = 'android.intent.category.LAUNCHER'
+    action = 'android.intent.action.MAIN'
+  else:
+    category = 'android.intent.category.BROWSABLE'
+    action = 'android.intent.action.VIEW'
+
   def launch(device):
+    activity = _ResolveActivity(device, package_name, category, action)
     # --persistent is required to have Settings.Global.DEBUG_APP be set, which
     # we currently use to allow reading of flags. https://crbug.com/784947
     if not nokill:
@@ -228,18 +297,13 @@ def _LaunchUrl(devices, package_name, argv=None, command_line_flags_file=None,
         except device_errors.AdbShellCommandFailedError:
           logging.exception('Failed to set flags')
 
-    if url is None:
-      # Simulate app icon click if no url is present.
-      cmd = [
-          'am', 'start', '-p', package_name, '-c',
-          'android.intent.category.LAUNCHER', '-a', 'android.intent.action.MAIN'
-      ]
-      device.RunShellCommand(cmd, check_return=True)
-    else:
-      launch_intent = intent.Intent(action='android.intent.action.VIEW',
-                                    activity=view_activity, data=url,
-                                    package=package_name)
-      device.StartActivity(launch_intent)
+    launch_intent = intent.Intent(action=action,
+                                  activity=activity,
+                                  data=url,
+                                  package=package_name)
+    logging.info('Sending launch intent for %s', activity)
+    device.StartActivity(launch_intent)
+
   device_utils.DeviceUtils.parallel(devices).pMap(launch)
   if wait_for_java_debugger:
     print('Waiting for debugger to attach to process: ' +
@@ -294,10 +358,57 @@ def _RunGdb(device, package_name, debug_process_name, pid, output_directory,
     cmd.append('--verbose')
   if target_cpu:
     cmd.append('--target-arch=%s' % _TargetCpuToTargetArch(target_cpu))
-  logging.warning('Running: %s', ' '.join(pipes.quote(x) for x in cmd))
+  logging.warning('Running: %s', ' '.join(shlex.quote(x) for x in cmd))
   print(_Colorize('All subsequent output is from adb_gdb script.',
                   colorama.Fore.YELLOW))
   os.execv(gdb_script_path, cmd)
+
+
+def _RunLldb(device,
+             package_name,
+             debug_process_name,
+             pid,
+             output_directory,
+             port,
+             target_cpu=None,
+             ndk_dir=None,
+             lldb_server=None,
+             lldb=None,
+             verbose=None):
+  if not pid:
+    debug_process_name = _NormalizeProcessName(debug_process_name, package_name)
+    pid = device.GetApplicationPids(debug_process_name, at_most_one=True)
+  if not pid:
+    # Attaching lldb makes the app run so slow that it takes *minutes* to start
+    # up (as of 2018). Better to just fail than to start & attach.
+    raise Exception('App not running.')
+
+  lldb_script_path = os.path.dirname(__file__) + '/connect_lldb.sh'
+  cmd = [
+      lldb_script_path,
+      '--package-name=%s' % package_name,
+      '--output-directory=%s' % output_directory,
+      '--adb=%s' % adb_wrapper.AdbWrapper.GetAdbPath(),
+      '--device=%s' % device.serial,
+      '--pid=%s' % pid,
+      '--port=%d' % port,
+  ]
+  # Enable verbose output of connect_lldb.sh if it's set for this script.
+  if verbose:
+    cmd.append('--verbose')
+  if target_cpu:
+    cmd.append('--target-arch=%s' % _TargetCpuToTargetArch(target_cpu))
+  if ndk_dir:
+    cmd.append('--ndk-dir=%s' % ndk_dir)
+  if lldb_server:
+    cmd.append('--lldb-server=%s' % lldb_server)
+  if lldb:
+    cmd.append('--lldb=%s' % lldb)
+  logging.warning('Running: %s', ' '.join(shlex.quote(x) for x in cmd))
+  print(
+      _Colorize('All subsequent output is from connect_lldb.sh script.',
+                colorama.Fore.YELLOW))
+  os.execv(lldb_script_path, cmd)
 
 
 def _PrintPerDeviceOutput(devices, results, single_line=False):
@@ -502,7 +613,7 @@ def _RunDiskUsage(devices, package_name):
               odex_paths.append('/data/dalvik-cache/%s@classes%s.dex' % (
                   mangled_apk_path, suffix))
 
-    odex_sizes = _DuHelper(d, ' '.join(pipes.quote(p) for p in odex_paths))
+    odex_sizes = _DuHelper(d, ' '.join(shlex.quote(p) for p in odex_paths))
 
     return (data_dir_sizes, code_cache_sizes, apk_sizes, lib_sizes, odex_sizes,
             compilation_filter)
@@ -649,7 +760,7 @@ class _LogcatProcessor:
     # START u0 {act=android.intent.action.MAIN \
     # cat=[android.intent.category.LAUNCHER] \
     # flg=0x10000000 pkg=com.google.chromeremotedesktop} from uid 2000
-    self._start_pattern = re.compile(r'START .*pkg=' + package_name)
+    self._start_pattern = re.compile(r'START .*(?:cmp|pkg)=' + package_name)
 
     self.nonce = 'Chromium apk_operations.py nonce={}'.format(random.random())
     # Holds lines buffered on start-up, before we find our nonce message.
@@ -917,7 +1028,7 @@ def _RunCompileDex(devices, package_name, compilation_filter):
 
 
 def _RunProfile(device, package_name, host_build_directory, pprof_out_path,
-                process_specifier, thread_specifier, extra_args):
+                process_specifier, thread_specifier, events, extra_args):
   simpleperf.PrepareDevice(device)
   device_simpleperf_path = simpleperf.InstallSimpleperf(device, package_name)
   with tempfile.NamedTemporaryFile() as fh:
@@ -925,7 +1036,7 @@ def _RunProfile(device, package_name, host_build_directory, pprof_out_path,
 
     with simpleperf.RunSimpleperf(device, device_simpleperf_path, package_name,
                                   process_specifier, thread_specifier,
-                                  extra_args, host_simpleperf_out_path):
+                                  events, extra_args, host_simpleperf_out_path):
       sys.stdout.write('Profiler is running; press Enter to stop...\n')
       sys.stdin.read(1)
       sys.stdout.write('Post-processing data...\n')
@@ -1003,7 +1114,7 @@ class _StackScriptContext:
       cmd.append('--quiet')
     if input_file:
       cmd.append(input_file)
-    logging.info('Running stack.py')
+    logging.info('Running: %s', shlex.join(cmd))
     return subprocess.Popen(cmd, universal_newlines=True, **kwargs)
 
 
@@ -1033,7 +1144,7 @@ def _DisplayArgs(devices, command_line_flags_file):
   print('Existing flags per-device (via /data/local/tmp/{}):'.format(
       command_line_flags_file))
   for flags in _PrintPerDeviceOutput(devices, outputs, single_line=True):
-    quoted_flags = ' '.join(pipes.quote(f) for f in flags)
+    quoted_flags = ' '.join(shlex.quote(f) for f in flags)
     print(quoted_flags or 'No flags set.')
 
 
@@ -1204,6 +1315,60 @@ class _Command:
       ]
     return self.apk_helper is not None
 
+  def _FindSupportedDevices(self, devices):
+    """Returns supported devices and reasons for each not supported one."""
+    app_abis = self.apk_helper.GetAbis()
+    calling_script_name = os.path.basename(sys.argv[0])
+    is_webview = 'webview' in calling_script_name
+    requires_32_bit = self.apk_helper.Get32BitAbiOverride() == '0xffffffff'
+    logging.debug('App supports (requires 32bit: %r, is webview: %r): %r',
+                  requires_32_bit, is_webview, app_abis)
+    # Webview 32_64 targets can work even on 64-bit only devices since only the
+    # webview library in the target needs the correct bitness.
+    if requires_32_bit and not is_webview:
+      app_abis = [abi for abi in app_abis if '64' not in abi]
+      logging.debug('App supports (filtered): %r', app_abis)
+    if not app_abis:
+      # The app does not have any native libs, so all devices can support it.
+      return devices, None
+    fully_supported = []
+    not_supported_reasons = {}
+    for device in devices:
+      device_abis = device.GetSupportedABIs()
+      device_primary_abi = device_abis[0]
+      logging.debug('Device primary: %s', device_primary_abi)
+      logging.debug('Device supports: %r', device_abis)
+
+      # x86/x86_64 emulators sometimes advertises arm support but arm builds do
+      # not work on them. Thus these non-functional ABIs need to be filtered out
+      # here to avoid resulting in hard to understand runtime failures.
+      if device_primary_abi in ('x86', 'x86_64'):
+        device_abis = [abi for abi in device_abis if not abi.startswith('arm')]
+        logging.debug('Device supports (filtered): %r', device_abis)
+
+      if any(abi in app_abis for abi in device_abis):
+        fully_supported.append(device)
+      else:  # No common supported ABIs between the device and app.
+        if device_primary_abi == 'x86':
+          target_cpu = 'x86'
+        elif device_primary_abi == 'x86_64':
+          target_cpu = 'x64'
+        elif device_primary_abi.startswith('arm64'):
+          target_cpu = 'arm64'
+        elif device_primary_abi.startswith('armeabi'):
+          target_cpu = 'arm'
+        else:
+          target_cpu = '<something else>'
+        # pylint: disable=line-too-long
+        native_lib_link = 'https://chromium.googlesource.com/chromium/src/+/main/docs/android_native_libraries.md'
+        not_supported_reasons[device.serial] = (
+            f"none of the app's ABIs ({','.join(app_abis)}) match this "
+            f"device's ABIs ({','.join(device_abis)}), you may need to set "
+            f'target_cpu="{target_cpu}" in your args.gn. If you already set '
+            'the target_cpu arg, you may need to use one of the _64 or _64_32 '
+            f'targets, see {native_lib_link} for more details.')
+    return fully_supported, not_supported_reasons
+
   def ProcessArgs(self, args):
     self.args = args
     # Ensure these keys always exist. They are set by wrapper scripts, but not
@@ -1256,14 +1421,32 @@ class _Command:
 
     self.devices = []
     if self.need_device_args:
-      abis = None
-      if self._CreateApkHelpers(args, incremental_apk_path, install_dict):
-        abis = self.apk_helper.GetAbis()
-      self.devices = device_utils.DeviceUtils.HealthyDevices(
+      # Avoid filtering by ABIs with catapult since some x86 or x86_64 emulators
+      # can still work with the right target_cpu GN arg and the right targets.
+      # Doing this manually allows us to output more informative warnings to
+      # help devs towards the right course, see: https://crbug.com/1335139
+      available_devices = device_utils.DeviceUtils.HealthyDevices(
           device_arg=args.devices,
           enable_device_files_cache=bool(args.output_directory),
-          default_retries=0,
-          abis=abis)
+          default_retries=0)
+      if not available_devices:
+        raise Exception('Cannot find any available devices.')
+
+      if not self._CreateApkHelpers(args, incremental_apk_path, install_dict):
+        self.devices = available_devices
+      else:
+        fully_supported, not_supported_reasons = self._FindSupportedDevices(
+            available_devices)
+        if fully_supported:
+          self.devices = fully_supported
+        else:
+          reason_string = '\n'.join(
+              'The device (serial={}) is not supported because {}'.format(
+                  serial, reason)
+              for serial, reason in not_supported_reasons.items())
+          raise Exception('Cannot find any supported devices for this app.\n\n'
+                          f'{reason_string}')
+
       # TODO(agrieve): Device cache should not depend on output directory.
       #     Maybe put into /tmp?
       _LoadDeviceCaches(self.devices, args.output_directory)
@@ -1399,13 +1582,11 @@ class _LaunchCommand(_Command):
   def Run(self):
     if self.is_test_apk:
       raise Exception('Use the bin/run_* scripts to run test apks.')
-    if self.args.url and self.is_bundle:
-      # TODO(digit): Support this, maybe by using 'dumpsys' as described
-      # in the _LaunchUrl() comment.
-      raise Exception('Launching with URL not supported for bundles yet!')
-    _LaunchUrl(self.devices, self.args.package_name, argv=self.args.args,
+    _LaunchUrl(self.devices,
+               self.args.package_name,
+               argv=self.args.args,
                command_line_flags_file=self.args.command_line_flags_file,
-               url=self.args.url, apk=self.apk_helper,
+               url=self.args.url,
                wait_for_java_debugger=self.args.wait_for_java_debugger,
                debug_process_name=self.args.debug_process_name,
                nokill=self.args.nokill)
@@ -1481,6 +1662,54 @@ If no apk process is currently running, sends a launch intent.
     # Same default port that ndk-gdb.py uses.
     group.add_argument('--port', type=int, default=5039,
                        help='Use the given port for the GDB connection')
+
+
+class _LldbCommand(_Command):
+  name = 'lldb'
+  description = 'Runs //build/android/connect_lldb.sh with apk-specific args.'
+  long_description = description + """
+
+To attach to a process other than the APK's main process, use --pid=1234.
+To list all PIDs, use the "ps" command.
+
+If no apk process is currently running, sends a launch intent.
+"""
+  needs_package_name = True
+  needs_output_directory = True
+  calls_exec = True
+  supports_multiple_devices = False
+
+  def Run(self):
+    _RunLldb(device=self.devices[0],
+             package_name=self.args.package_name,
+             debug_process_name=self.args.debug_process_name,
+             pid=self.args.pid,
+             output_directory=self.args.output_directory,
+             port=self.args.port,
+             target_cpu=self.args.target_cpu,
+             ndk_dir=self.args.ndk_dir,
+             lldb_server=self.args.lldb_server,
+             lldb=self.args.lldb,
+             verbose=bool(self.args.verbose_count))
+
+  def _RegisterExtraArgs(self, group):
+    pid_group = group.add_mutually_exclusive_group()
+    pid_group.add_argument('--debug-process-name',
+                           help='Name of the process to attach to. '
+                           'E.g. "privileged_process0", or "foo.bar:baz"')
+    pid_group.add_argument('--pid',
+                           help='The process ID to attach to. Defaults to '
+                           'the main process for the package.')
+    group.add_argument('--ndk-dir',
+                       help='Select alternative NDK root directory.')
+    group.add_argument('--lldb-server',
+                       help='Select alternative on-device lldb-server.')
+    group.add_argument('--lldb', help='Select alternative client lldb.sh.')
+    # Same default port that ndk-gdb.py uses.
+    group.add_argument('--port',
+                       type=int,
+                       default=5039,
+                       help='Use the given port for the LLDB connection')
 
 
 class _LogcatCommand(_Command):
@@ -1661,15 +1890,18 @@ class _PrintCertsCommand(_Command):
             self.bundle_generation_info.keystore_password, '-alias',
             self.bundle_generation_info.keystore_alias, '-file', f.name
         ]
+        logging.warning('Running: %s', shlex.join(cmd))
         subprocess.check_output(cmd, stderr=subprocess.STDOUT)
         cmd = [keytool, '-printcert', '-file', f.name]
-        logging.warning('Running: %s', ' '.join(cmd))
+        logging.warning('Running: %s', shlex.join(cmd))
         subprocess.check_call(cmd)
         if self.args.full_cert:
           # Redirect stderr to hide a keytool warning about using non-standard
           # keystore format.
+          cmd += ['-rfc']
+          logging.warning('Running: %s', shlex.join(cmd))
           pem_encoded_certificate = subprocess.check_output(
-              cmd + ['-rfc'], stderr=subprocess.STDOUT).decode()
+              cmd, stderr=subprocess.STDOUT).decode()
     else:
 
       def run_apksigner(min_sdk_version):
@@ -1678,7 +1910,7 @@ class _PrintCertsCommand(_Command):
             str(min_sdk_version), '--print-certs-pem', '--verbose',
             self.apk_helper.path
         ]
-        logging.warning('Running: %s', ' '.join(cmd))
+        logging.warning('Running: %s', shlex.join(cmd))
         env = os.environ.copy()
         env['PATH'] = os.path.pathsep.join(
             [os.path.join(_JAVA_HOME, 'bin'),
@@ -1769,13 +2001,18 @@ class _ProfileCommand(_Command):
               'use --profile-thread=main).'))
     group.add_argument('--profile-output', default='profile.pb',
                        help='Output file for profiling data')
+    group.add_argument('--profile-events', default='cpu-cycles',
+                      help=('A comma separated list of perf events to capture '
+                      '(e.g. \'cpu-cycles,branch-misses\'). Run '
+                      '`simpleperf list` on your device to see available '
+                      'events.'))
 
   def Run(self):
     extra_args = shlex.split(self.args.args or '')
     _RunProfile(self.devices[0], self.args.package_name,
                 self.args.output_directory, self.args.profile_output,
                 self.args.profile_process, self.args.profile_thread,
-                extra_args)
+                self.args.profile_events, extra_args)
 
 
 class _RunCommand(_InstallCommand, _LaunchCommand, _LogcatCommand):
@@ -1859,8 +2096,9 @@ class _ManifestCommand(_Command):
       apkanalyzer = os.path.join(_DIR_SOURCE_ROOT, 'third_party', 'android_sdk',
                                  'public', 'cmdline-tools', 'latest', 'bin',
                                  'apkanalyzer')
-      subprocess.check_call(
-          [apkanalyzer, 'manifest', 'print', self.apk_helper.path])
+      cmd = [apkanalyzer, 'manifest', 'print', self.apk_helper.path]
+      logging.info('Running: %s', shlex.join(cmd))
+      subprocess.check_call(cmd)
 
 
 class _StackCommand(_Command):
@@ -1898,6 +2136,7 @@ _COMMANDS = [
     _ClearDataCommand,
     _ArgvCommand,
     _GdbCommand,
+    _LldbCommand,
     _LogcatCommand,
     _PsCommand,
     _DiskUsageCommand,

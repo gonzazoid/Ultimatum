@@ -9,7 +9,6 @@
 
 #include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -45,17 +44,19 @@ class VIZ_SERVICE_EXPORT DisplayScheduler
   ~DisplayScheduler() override;
 
   // DisplaySchedulerBase implementation.
+  void SetDamageTracker(DisplayDamageTracker* damage_tracker) override;
   void SetVisible(bool visible) override;
   void ForceImmediateSwapIfPossible() override;
   void SetNeedsOneBeginFrame(bool needs_draw) override;
   void DidSwapBuffers() override;
   void DidReceiveSwapBuffersAck() override;
   void OutputSurfaceLost() override;
-  void ReportFrameTime(
-      base::TimeDelta frame_time,
-      base::flat_set<base::PlatformThreadId> thread_ids) override;
+  void ReportFrameTime(base::TimeDelta frame_time,
+                       base::flat_set<base::PlatformThreadId> thread_ids,
+                       base::TimeTicks draw_start,
+                       HintSession::BoostType boost_type) override;
 
-  // DisplayDamageTrackerObserver implementation.
+  // DisplayDamageTracker::Delegate implementation.
   void OnDisplayDamaged(SurfaceId surface_id) override;
   void OnRootFrameMissing(bool missing) override;
   void OnPendingSurfacesChanged() override;

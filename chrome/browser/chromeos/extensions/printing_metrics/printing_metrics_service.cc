@@ -88,19 +88,37 @@ void PrintingMetricsService::OnListenerAdded(const EventListenerInfo&) {
 void PrintingMetricsService::GetPrintJobs(
     crosapi::mojom::PrintingMetricsForProfile::GetPrintJobsCallback callback) {
   EnsureInit();
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // We might need to call the older version if Ash version is not up-to-date.
+  if (chromeos::LacrosService::Get()
+          ->GetInterfaceVersion<crosapi::mojom::PrintingMetricsForProfile>() <
+      static_cast<int>(
+          crosapi::mojom::PrintingMetricsForProfile::kGetPrintJobsMinVersion)) {
+    remote_->DeprecatedGetPrintJobs(
+        base::BindOnce([](std::vector<base::Value> print_jobs) {
+          base::Value::List jobs;
+          for (auto& print_job : print_jobs) {
+            jobs.Append(std::move(print_job));
+          }
+          return jobs;
+        }).Then(std::move(callback)));
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   remote_->GetPrintJobs(std::move(callback));
 }
 
 void PrintingMetricsService::OnPrintJobFinished(base::Value print_job) {
-  std::unique_ptr<api::printing_metrics::PrintJobInfo> print_job_info =
+  absl::optional<api::printing_metrics::PrintJobInfo> print_job_info =
       api::printing_metrics::PrintJobInfo::FromValue(std::move(print_job));
-  DCHECK(print_job_info);
+  DCHECK(print_job_info.has_value());
 
   auto event = std::make_unique<Event>(
       events::PRINTING_METRICS_ON_PRINT_JOB_FINISHED,
       api::printing_metrics::OnPrintJobFinished::kEventName,
       api::printing_metrics::OnPrintJobFinished::Create(
-          std::move(*print_job_info)));
+          std::move(print_job_info).value()));
 
   EventRouter::Get(context_)->BroadcastEvent(std::move(event));
 }

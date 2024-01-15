@@ -6,14 +6,13 @@
 
 #include <stdint.h>
 
+#include <memory>
 #include <string>
-#include <utility>
-#include <vector>
 
-#include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
+#include "components/sync/base/features.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
 #include "components/sync/test/mock_invalidation.h"
-#include "components/sync/test/model_type_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace syncer {
@@ -112,15 +111,15 @@ TEST_F(NudgeTrackerTest, OriginPriorities) {
   EXPECT_EQ(sync_pb::SyncEnums::RETRY, nudge_tracker_.GetOrigin());
 
   // Track a local nudge.
-  nudge_tracker_.RecordLocalChange(BOOKMARKS);
+  nudge_tracker_.RecordLocalChange(BOOKMARKS, false);
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, nudge_tracker_.GetOrigin());
 
   // A refresh request will override it.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(TYPED_URLS));
+  nudge_tracker_.RecordLocalRefreshRequest({PASSWORDS});
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, nudge_tracker_.GetOrigin());
 
   // Another local nudge will not be enough to change it.
-  nudge_tracker_.RecordLocalChange(BOOKMARKS);
+  nudge_tracker_.RecordLocalChange(BOOKMARKS, false);
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, nudge_tracker_.GetOrigin());
 
   // An invalidation will override the refresh request source.
@@ -128,9 +127,9 @@ TEST_F(NudgeTrackerTest, OriginPriorities) {
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, nudge_tracker_.GetOrigin());
 
   // Neither local nudges nor refresh requests will override it.
-  nudge_tracker_.RecordLocalChange(BOOKMARKS);
+  nudge_tracker_.RecordLocalChange(BOOKMARKS, false);
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, nudge_tracker_.GetOrigin());
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(TYPED_URLS));
+  nudge_tracker_.RecordLocalRefreshRequest({PASSWORDS});
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, nudge_tracker_.GetOrigin());
 }
 
@@ -176,7 +175,7 @@ TEST_F(NudgeTrackerTest, WriteLocallyModifiedTypesToProto) {
   EXPECT_EQ(0, ProtoLocallyModifiedCount(PREFERENCES));
 
   // Record a local bookmark change.  Verify it was registered correctly.
-  nudge_tracker_.RecordLocalChange(PREFERENCES);
+  nudge_tracker_.RecordLocalChange(PREFERENCES, false);
   EXPECT_EQ(1, ProtoLocallyModifiedCount(PREFERENCES));
 
   // Record a successful sync cycle.  Verify the count is cleared.
@@ -191,7 +190,7 @@ TEST_F(NudgeTrackerTest, WriteRefreshRequestedTypesToProto) {
   EXPECT_EQ(0, ProtoRefreshRequestedCount(SESSIONS));
 
   // Record a local refresh request.  Verify it was registered correctly.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(SESSIONS));
+  nudge_tracker_.RecordLocalRefreshRequest({SESSIONS});
   EXPECT_EQ(1, ProtoRefreshRequestedCount(SESSIONS));
 
   // Record a successful sync cycle.  Verify the count is cleared.
@@ -230,13 +229,13 @@ TEST_F(NudgeTrackerTest, IsSyncRequired) {
   EXPECT_FALSE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // Local changes.
-  nudge_tracker_.RecordLocalChange(SESSIONS);
+  nudge_tracker_.RecordLocalChange(SESSIONS, false);
   EXPECT_TRUE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
   nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet::All());
   EXPECT_FALSE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // Refresh requests.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(SESSIONS));
+  nudge_tracker_.RecordLocalRefreshRequest({SESSIONS});
   EXPECT_TRUE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
   nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet::All());
   EXPECT_FALSE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
@@ -267,13 +266,13 @@ TEST_F(NudgeTrackerTest, IsGetUpdatesRequired) {
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // Local changes.
-  nudge_tracker_.RecordLocalChange(SESSIONS);
+  nudge_tracker_.RecordLocalChange(SESSIONS, false);
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
   nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet::All());
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // Refresh requests.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(SESSIONS));
+  nudge_tracker_.RecordLocalRefreshRequest({SESSIONS});
   EXPECT_TRUE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
   nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet::All());
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
@@ -298,17 +297,16 @@ TEST_F(NudgeTrackerTest, IsSyncRequired_Throttling_Backoff) {
   EXPECT_FALSE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // A local change to sessions enables the flag.
-  nudge_tracker_.RecordLocalChange(SESSIONS);
+  nudge_tracker_.RecordLocalChange(SESSIONS, false);
   EXPECT_TRUE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // But the throttling of sessions unsets it.
-  nudge_tracker_.SetTypesThrottledUntil(ModelTypeSet(SESSIONS), throttle_length,
-                                        now);
+  nudge_tracker_.SetTypesThrottledUntil({SESSIONS}, throttle_length, now);
   EXPECT_TRUE(IsTypeThrottled(SESSIONS));
   EXPECT_FALSE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // A refresh request for bookmarks means we have reason to sync again.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(BOOKMARKS));
+  nudge_tracker_.RecordLocalRefreshRequest({BOOKMARKS});
   EXPECT_TRUE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // But the backoff of bookmarks unsets it.
@@ -318,7 +316,7 @@ TEST_F(NudgeTrackerTest, IsSyncRequired_Throttling_Backoff) {
   EXPECT_FALSE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // A refresh request for preferences means we have reason to sync again.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(PREFERENCES));
+  nudge_tracker_.RecordLocalRefreshRequest({PREFERENCES});
   EXPECT_TRUE(nudge_tracker_.IsSyncRequired(ModelTypeSet::All()));
 
   // A successful sync cycle means we took care of preferences.
@@ -343,16 +341,15 @@ TEST_F(NudgeTrackerTest, IsGetUpdatesRequired_Throttling_Backoff) {
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // A refresh request to sessions enables the flag.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(SESSIONS));
+  nudge_tracker_.RecordLocalRefreshRequest({SESSIONS});
   EXPECT_TRUE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // But the throttling of sessions unsets it.
-  nudge_tracker_.SetTypesThrottledUntil(ModelTypeSet(SESSIONS), throttle_length,
-                                        now);
+  nudge_tracker_.SetTypesThrottledUntil({SESSIONS}, throttle_length, now);
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // A refresh request for bookmarks means we have reason to sync again.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(BOOKMARKS));
+  nudge_tracker_.RecordLocalRefreshRequest({BOOKMARKS});
   EXPECT_TRUE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // But the backoff of bookmarks unsets it.
@@ -362,7 +359,7 @@ TEST_F(NudgeTrackerTest, IsGetUpdatesRequired_Throttling_Backoff) {
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // A refresh request for preferences means we have reason to sync again.
-  nudge_tracker_.RecordLocalRefreshRequest(ModelTypeSet(PREFERENCES));
+  nudge_tracker_.RecordLocalRefreshRequest({PREFERENCES});
   EXPECT_TRUE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
   // A successful sync cycle means we took care of preferences.
@@ -390,7 +387,7 @@ TEST_F(NudgeTrackerTest, ThrottleAndUnthrottle) {
   const base::TimeTicks now = base::TimeTicks::Now();
   const base::TimeDelta throttle_length = base::Minutes(0);
 
-  nudge_tracker_.SetTypesThrottledUntil(ModelTypeSet(SESSIONS, PREFERENCES),
+  nudge_tracker_.SetTypesThrottledUntil({SESSIONS, PREFERENCES},
                                         throttle_length, now);
 
   EXPECT_TRUE(nudge_tracker_.IsAnyTypeBlocked());
@@ -433,18 +430,18 @@ TEST_F(NudgeTrackerTest, OverlappingThrottleIntervals) {
   const base::TimeDelta throttle2_length = base::Minutes(20);
 
   // Setup the longer of two intervals.
-  nudge_tracker_.SetTypesThrottledUntil(ModelTypeSet(SESSIONS, PREFERENCES),
+  nudge_tracker_.SetTypesThrottledUntil({SESSIONS, PREFERENCES},
                                         throttle2_length, now);
-  EXPECT_TRUE(ModelTypeSetEquals(ModelTypeSet(SESSIONS, PREFERENCES),
+  EXPECT_TRUE(ModelTypeSetEquals({SESSIONS, PREFERENCES},
                                  nudge_tracker_.GetBlockedTypes()));
   EXPECT_TRUE(IsTypeThrottled(SESSIONS));
   EXPECT_TRUE(IsTypeThrottled(PREFERENCES));
   EXPECT_GE(throttle2_length, nudge_tracker_.GetTimeUntilNextUnblock());
 
   // Setup the shorter interval.
-  nudge_tracker_.SetTypesThrottledUntil(ModelTypeSet(SESSIONS, BOOKMARKS),
-                                        throttle1_length, now);
-  EXPECT_TRUE(ModelTypeSetEquals(ModelTypeSet(SESSIONS, PREFERENCES, BOOKMARKS),
+  nudge_tracker_.SetTypesThrottledUntil({SESSIONS, BOOKMARKS}, throttle1_length,
+                                        now);
+  EXPECT_TRUE(ModelTypeSetEquals({SESSIONS, PREFERENCES, BOOKMARKS},
                                  nudge_tracker_.GetBlockedTypes()));
   EXPECT_TRUE(IsTypeThrottled(SESSIONS));
   EXPECT_TRUE(IsTypeThrottled(PREFERENCES));
@@ -456,7 +453,7 @@ TEST_F(NudgeTrackerTest, OverlappingThrottleIntervals) {
 
   // SESSIONS appeared in both intervals.  We expect it will be throttled for
   // the longer of the two, so it's still throttled at time t1.
-  EXPECT_TRUE(ModelTypeSetEquals(ModelTypeSet(SESSIONS, PREFERENCES),
+  EXPECT_TRUE(ModelTypeSetEquals({SESSIONS, PREFERENCES},
                                  nudge_tracker_.GetBlockedTypes()));
   EXPECT_TRUE(IsTypeThrottled(SESSIONS));
   EXPECT_TRUE(IsTypeThrottled(PREFERENCES));
@@ -473,7 +470,7 @@ TEST_F(NudgeTrackerTest, OverlappingBackoffIntervals) {
   // Setup the longer of two intervals.
   nudge_tracker_.SetTypeBackedOff(SESSIONS, backoff2_length, now);
   nudge_tracker_.SetTypeBackedOff(PREFERENCES, backoff2_length, now);
-  EXPECT_TRUE(ModelTypeSetEquals(ModelTypeSet(SESSIONS, PREFERENCES),
+  EXPECT_TRUE(ModelTypeSetEquals({SESSIONS, PREFERENCES},
                                  nudge_tracker_.GetBlockedTypes()));
   EXPECT_TRUE(IsTypeBackedOff(SESSIONS));
   EXPECT_TRUE(IsTypeBackedOff(PREFERENCES));
@@ -482,7 +479,7 @@ TEST_F(NudgeTrackerTest, OverlappingBackoffIntervals) {
   // Setup the shorter interval.
   nudge_tracker_.SetTypeBackedOff(SESSIONS, backoff1_length, now);
   nudge_tracker_.SetTypeBackedOff(BOOKMARKS, backoff1_length, now);
-  EXPECT_TRUE(ModelTypeSetEquals(ModelTypeSet(SESSIONS, PREFERENCES, BOOKMARKS),
+  EXPECT_TRUE(ModelTypeSetEquals({SESSIONS, PREFERENCES, BOOKMARKS},
                                  nudge_tracker_.GetBlockedTypes()));
   EXPECT_TRUE(IsTypeBackedOff(SESSIONS));
   EXPECT_TRUE(IsTypeBackedOff(PREFERENCES));
@@ -494,7 +491,7 @@ TEST_F(NudgeTrackerTest, OverlappingBackoffIntervals) {
 
   // SESSIONS appeared in both intervals.  We expect it will be backed off for
   // the longer of the two, so it's still backed off at time t1.
-  EXPECT_TRUE(ModelTypeSetEquals(ModelTypeSet(SESSIONS, PREFERENCES),
+  EXPECT_TRUE(ModelTypeSetEquals({SESSIONS, PREFERENCES},
                                  nudge_tracker_.GetBlockedTypes()));
   EXPECT_TRUE(IsTypeBackedOff(SESSIONS));
   EXPECT_TRUE(IsTypeBackedOff(PREFERENCES));
@@ -578,7 +575,7 @@ TEST_F(NudgeTrackerTest, IsRetryRequired_MidCycleUpdate2) {
   const base::TimeTicks t6 = t0 + base::Seconds(6);
 
   // Schedule a future retry, and a nudge unrelated to it.
-  nudge_tracker_.RecordLocalChange(BOOKMARKS);
+  nudge_tracker_.RecordLocalChange(BOOKMARKS, false);
   nudge_tracker_.SetNextRetryTime(t1);
   nudge_tracker_.SetSyncCycleStartTime(t0);
   EXPECT_FALSE(nudge_tracker_.IsRetryRequired());
@@ -672,30 +669,32 @@ TEST_F(NudgeTrackerTest, IsRetryRequired_FailedCycleIncludesUpdate) {
 // Test the default nudge delays for various types.
 TEST_F(NudgeTrackerTest, NudgeDelayTest) {
   // Most data types have a medium delay.
-  EXPECT_EQ(nudge_tracker_.RecordLocalChange(TYPED_URLS),
-            nudge_tracker_.RecordLocalChange(PASSWORDS));
-  EXPECT_EQ(nudge_tracker_.RecordLocalChange(TYPED_URLS),
-            nudge_tracker_.RecordLocalChange(EXTENSIONS));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(CONTACT_INFO, false),
+            nudge_tracker_.RecordLocalChange(PASSWORDS, false));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(CONTACT_INFO, false),
+            nudge_tracker_.RecordLocalChange(EXTENSIONS, false));
 
   // Bookmarks and preferences sometimes have automatic changes (not directly
   // caused by a user actions), so they have bigger delays.
-  EXPECT_GT(nudge_tracker_.RecordLocalChange(BOOKMARKS),
-            nudge_tracker_.RecordLocalChange(TYPED_URLS));
-  EXPECT_EQ(nudge_tracker_.RecordLocalChange(BOOKMARKS),
-            nudge_tracker_.RecordLocalChange(PREFERENCES));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(BOOKMARKS, false),
+            nudge_tracker_.RecordLocalChange(CONTACT_INFO, false));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(BOOKMARKS, false),
+            nudge_tracker_.RecordLocalChange(PREFERENCES, false));
 
-  // Sessions has an even bigger delay.
-  EXPECT_GT(nudge_tracker_.RecordLocalChange(SESSIONS),
-            nudge_tracker_.RecordLocalChange(BOOKMARKS));
+  // Sessions and history have an even bigger delay.
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(SESSIONS, false),
+            nudge_tracker_.RecordLocalChange(BOOKMARKS, false));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(HISTORY, false),
+            nudge_tracker_.RecordLocalChange(BOOKMARKS, false));
 
   // Autofill and UserEvents are "accompany types" that rely on nudges from
   // other types. They have the longest delay of all, which really only acts as
   // a last-resort fallback.
-  EXPECT_GT(nudge_tracker_.RecordLocalChange(AUTOFILL),
-            nudge_tracker_.RecordLocalChange(SESSIONS));
-  EXPECT_GT(nudge_tracker_.RecordLocalChange(AUTOFILL), base::Hours(1));
-  EXPECT_EQ(nudge_tracker_.RecordLocalChange(AUTOFILL),
-            nudge_tracker_.RecordLocalChange(USER_EVENTS));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(AUTOFILL, false),
+            nudge_tracker_.RecordLocalChange(SESSIONS, false));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(AUTOFILL, false), base::Hours(1));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(AUTOFILL, false),
+            nudge_tracker_.RecordLocalChange(USER_EVENTS, false));
 }
 
 // Test that custom nudge delays are used over the defaults.
@@ -707,19 +706,57 @@ TEST_F(NudgeTrackerTest, CustomDelayTest) {
                                                        base::Seconds(2));
 
   // Only those with custom delays should be affected, not another type.
-  EXPECT_NE(nudge_tracker_.RecordLocalChange(BOOKMARKS),
-            nudge_tracker_.RecordLocalChange(PREFERENCES));
+  EXPECT_NE(nudge_tracker_.RecordLocalChange(BOOKMARKS, false),
+            nudge_tracker_.RecordLocalChange(PREFERENCES, false));
 
-  EXPECT_EQ(base::Seconds(10), nudge_tracker_.RecordLocalChange(BOOKMARKS));
-  EXPECT_EQ(base::Seconds(2), nudge_tracker_.RecordLocalChange(SESSIONS));
+  EXPECT_EQ(base::Seconds(10),
+            nudge_tracker_.RecordLocalChange(BOOKMARKS, false));
+  EXPECT_EQ(base::Seconds(2),
+            nudge_tracker_.RecordLocalChange(SESSIONS, false));
 }
 
 TEST_F(NudgeTrackerTest, DoNotUpdateDelayIfTooSmall) {
-  base::TimeDelta initial_delay = nudge_tracker_.RecordLocalChange(BOOKMARKS);
+  base::TimeDelta initial_delay =
+      nudge_tracker_.RecordLocalChange(BOOKMARKS, false);
   // The tracker should enforce a minimum threshold that prevents setting a
   // delay too small.
   nudge_tracker_.UpdateLocalChangeDelay(BOOKMARKS, base::Microseconds(100));
-  EXPECT_EQ(initial_delay, nudge_tracker_.RecordLocalChange(BOOKMARKS));
+  EXPECT_EQ(initial_delay, nudge_tracker_.RecordLocalChange(BOOKMARKS, false));
+}
+
+// Test the default nudge delays for various types.
+TEST_F(NudgeTrackerTest, NudgeDelaysForSingleClientUser_FeatureDisabled) {
+  base::test::ScopedFeatureList feature_disabled;
+  feature_disabled.InitAndDisableFeature(
+      kSyncIncreaseNudgeDelayForSingleClient);
+
+  // With the feature disabled, it shouldn't matter whether it's a single-client
+  // user or not.
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(SESSIONS, true),
+            nudge_tracker_.RecordLocalChange(SESSIONS, false));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(HISTORY, true),
+            nudge_tracker_.RecordLocalChange(HISTORY, false));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(PASSWORDS, true),
+            nudge_tracker_.RecordLocalChange(PASSWORDS, false));
+  EXPECT_EQ(nudge_tracker_.RecordLocalChange(BOOKMARKS, true),
+            nudge_tracker_.RecordLocalChange(BOOKMARKS, false));
+}
+
+// Test the default nudge delays for various types.
+TEST_F(NudgeTrackerTest, NudgeDelaysForSingleClientUser_FeatureEnabled) {
+  base::test::ScopedFeatureList feature_enabled;
+  feature_enabled.InitAndEnableFeature(kSyncIncreaseNudgeDelayForSingleClient);
+
+  // With the feature enabled, the nudge delays for single-client users should
+  // be increased.
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(SESSIONS, true),
+            nudge_tracker_.RecordLocalChange(SESSIONS, false));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(HISTORY, true),
+            nudge_tracker_.RecordLocalChange(HISTORY, false));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(PASSWORDS, true),
+            nudge_tracker_.RecordLocalChange(PASSWORDS, false));
+  EXPECT_GT(nudge_tracker_.RecordLocalChange(BOOKMARKS, true),
+            nudge_tracker_.RecordLocalChange(BOOKMARKS, false));
 }
 
 }  // namespace syncer

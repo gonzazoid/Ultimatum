@@ -58,8 +58,11 @@ class AppNotificationLauncher : public AppIconLoaderDelegate,
   // AppIconLoaderDelegate overrides:
   // This is triggered from FetchImage() in InitAndShow(), and can be called
   // multiple times, synchronously or asynchronously.
-  void OnAppImageUpdated(const std::string& id,
-                         const gfx::ImageSkia& image) override {
+  void OnAppImageUpdated(
+      const std::string& id,
+      const gfx::ImageSkia& image,
+      bool is_placeholder_icon,
+      const absl::optional<gfx::ImageSkia>& badge_image) override {
     pending_notification_->set_icon(ui::ImageModel::FromImageSkia(image));
     auto* notification_display_service =
         NotificationDisplayService::GetForProfile(profile_);
@@ -79,7 +82,7 @@ class AppNotificationLauncher : public AppIconLoaderDelegate,
  private:
   ~AppNotificationLauncher() override = default;
 
-  base::raw_ptr<Profile> profile_;
+  raw_ptr<Profile> profile_;
   std::unique_ptr<AppIconLoader> icon_loader_;
   std::unique_ptr<message_center::Notification> pending_notification_;
 };

@@ -4,21 +4,26 @@
 
 package org.chromium.components.browser_ui.share;
 
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.doAnswer;
+
 import android.app.DownloadManager;
+import android.content.ClipData;
+import android.content.ClipDescription;
+import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
 import android.os.Environment;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.test.filters.SmallTest;
 
@@ -26,6 +31,8 @@ import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ContentUriUtils;
@@ -35,11 +42,10 @@ import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.MaxAndroidSdkLevel;
-import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.chrome.browser.FileProviderHelper;
 import org.chromium.ui.base.Clipboard;
+import org.chromium.ui.base.ClipboardImpl;
 import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
 
 import java.io.File;
@@ -47,9 +53,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Tests of {@link ShareImageFileUtils}.
- */
+/** Tests of {@link ShareImageFileUtils}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
     private static final long WAIT_TIMEOUT_SECONDS = 30L;
@@ -80,17 +84,68 @@ public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
         }
     }
 
+    /** Convenient class to mark timestamp for ClipDescription. */
+    private static class TestClipDescriptionWrapper extends ClipDescription {
+        public static ClipDescription create(ClipDescription origin) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return origin;
+            return new TestClipDescriptionWrapper(origin);
+        }
+
+        private final long mTimeStamp;
+
+        private TestClipDescriptionWrapper(ClipDescription other) {
+            super(other);
+            mTimeStamp = SystemClock.elapsedRealtime();
+        }
+
+        @Override
+        public long getTimestamp() {
+            return mTimeStamp;
+        }
+    }
+
+    @Mock ClipboardManager mMockClipboardManager;
+
+    @Nullable ClipData mPrimaryClip;
+    @Nullable ClipDescription mPrimaryClipDescription;
+
     @Override
     public void setUpTest() throws Exception {
         super.setUpTest();
+        MockitoAnnotations.openMocks(this);
         Looper.prepare();
         ContentUriUtils.setFileProviderUtil(new FileProviderHelper());
-        Clipboard.getInstance().setImageFileProvider(new ClipboardImageFileProvider());
+        ClipboardImpl clipboard = (ClipboardImpl) Clipboard.getInstance();
+        clipboard.setImageFileProvider(new ClipboardImageFileProvider());
+
+        // Setup mock clipboard manager for test.
+        doAnswer(
+                        invocationOnMock -> {
+                            mPrimaryClip = invocationOnMock.getArgument(0);
+                            mPrimaryClipDescription =
+                                    new TestClipDescriptionWrapper(mPrimaryClip.getDescription());
+                            return null;
+                        })
+                .when(mMockClipboardManager)
+                .setPrimaryClip(notNull());
+        doAnswer(
+                        (invocationOnMock -> {
+                            return mPrimaryClip;
+                        }))
+                .when(mMockClipboardManager)
+                .getPrimaryClip();
+        doAnswer(
+                        (invocationOnMock -> {
+                            return mPrimaryClipDescription;
+                        }))
+                .when(mMockClipboardManager)
+                .getPrimaryClipDescription();
+        clipboard.overrideClipboardManagerForTesting(mMockClipboardManager);
     }
 
     @Override
     public void tearDownTest() throws Exception {
-        Clipboard.getInstance().setText("");
+        Clipboard.resetForTesting();
         clearSharedImages();
         deleteAllTestImages();
         super.tearDownTest();
@@ -127,10 +182,12 @@ public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
                 TEST_IMAGE_DATA, fileExtension, imageCallback);
         imageCallback.waitForCallback(0, 1, WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         Clipboard.getInstance().setImageUri(imageCallback.getImageUri());
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(Clipboard.getInstance().getImageUri(),
-                    Matchers.is(imageCallback.getImageUri()));
-        });
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(
+                            Clipboard.getInstance().getImageUri(),
+                            Matchers.is(imageCallback.getImageUri()));
+                });
         return imageCallback.getImageUri();
     }
 
@@ -157,12 +214,13 @@ public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
     }
 
     private void deleteAllTestImages() throws TimeoutException {
-        AsyncTask.SERIAL_EXECUTOR.execute(() -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                deleteMediaStoreFiles();
-            }
-            deleteExternalStorageFiles();
-        });
+        AsyncTask.SERIAL_EXECUTOR.execute(
+                () -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        deleteMediaStoreFiles();
+                    }
+                    deleteExternalStorageFiles();
+                });
         waitForAsync();
     }
 
@@ -179,8 +237,9 @@ public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
     }
 
     public void deleteExternalStorageFiles() {
-        File externalStorageDir = ContextUtils.getApplicationContext().getExternalFilesDir(
-                Environment.DIRECTORY_DOWNLOADS);
+        File externalStorageDir =
+                ContextUtils.getApplicationContext()
+                        .getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
         String[] children = externalStorageDir.list();
         for (int i = 0; i < children.length; i++) {
             new File(externalStorageDir, children[i]).delete();
@@ -193,17 +252,6 @@ public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
 
     private boolean fileExistsInShareDirectory(Uri fileUri) throws IOException {
         return filepathExists(ShareImageFileUtils.getSharedFilesDirectory(), fileUri.getPath());
-    }
-
-    private Bitmap getTestBitmap() {
-        int size = 10;
-        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-
-        Canvas canvas = new Canvas(bitmap);
-        Paint paint = new Paint();
-        paint.setColor(android.graphics.Color.GREEN);
-        canvas.drawRect(0F, 0F, (float) size, (float) size, paint);
-        return bitmap;
     }
 
     @Test
@@ -237,88 +285,18 @@ public class ShareImageFileUtilsTest extends BlankUiTestActivityTestCase {
 
     @Test
     @SmallTest
-    @DisabledTest(message = "crbug.com/1056059")
-    public void testSaveBitmap() throws IOException, TimeoutException {
-        String fileName = TEST_IMAGE_FILE_NAME + "_save_bitmap";
-        ShareImageFileUtils.OnImageSaveListener listener =
-                new ShareImageFileUtils.OnImageSaveListener() {
-                    @Override
-                    public void onImageSaved(Uri uri, String displayName) {
-                        Assert.assertNotNull(uri);
-                        Assert.assertEquals(fileName, displayName);
-                        AsyncTask.SERIAL_EXECUTOR.execute(() -> {
-                            File file = new File(uri.getPath());
-                            Assert.assertTrue(file.exists());
-                            Assert.assertTrue(file.isFile());
-                        });
-
-                        // Wait for the above checks to complete.
-                        try {
-                            waitForAsync();
-                        } catch (TimeoutException ex) {
-                        }
-                    }
-
-                    @Override
-                    public void onImageSaveError(String displayName) {
-                        Assert.fail();
-                    }
-                };
-        ShareImageFileUtils.saveBitmapToExternalStorage(
-                getActivity(), fileName, getTestBitmap(), listener);
-        waitForAsync();
-    }
-
-    @Test
-    @SmallTest
-    @MinAndroidSdkLevel(value = VERSION_CODES.Q, reason = "Added to completed downloads on P-")
-    public void testSaveBitmapAndMediaStore() throws IOException, TimeoutException {
-        String fileName = TEST_IMAGE_FILE_NAME + "_mediastore";
-        ShareImageFileUtils.OnImageSaveListener listener =
-                new ShareImageFileUtils.OnImageSaveListener() {
-                    @Override
-                    public void onImageSaved(Uri uri, String displayName) {
-                        Assert.assertNotNull(uri);
-                        Assert.assertEquals(fileName, displayName);
-                        AsyncTask.SERIAL_EXECUTOR.execute(() -> {
-                            Cursor cursor = getActivity().getContentResolver().query(
-                                    uri, null, null, null, null);
-                            Assert.assertNotNull(cursor);
-                            Assert.assertTrue(cursor.moveToFirst());
-                            Assert.assertEquals(fileName + TEST_JPG_IMAGE_FILE_EXTENSION,
-                                    cursor.getString(cursor.getColumnIndex(
-                                            MediaStore.MediaColumns.DISPLAY_NAME)));
-                        });
-
-                        // Wait for the above checks to complete.
-                        try {
-                            waitForAsync();
-                        } catch (TimeoutException ex) {
-                        }
-                    }
-
-                    @Override
-                    public void onImageSaveError(String displayName) {
-                        Assert.fail();
-                    }
-                };
-        ShareImageFileUtils.saveBitmapToExternalStorage(
-                getActivity(), fileName, getTestBitmap(), listener);
-        waitForAsync();
-    }
-
-    @Test
-    @SmallTest
     public void testGetNextAvailableFile() throws IOException {
         String fileName = TEST_IMAGE_FILE_NAME + "_next_availble";
         File externalStorageDir =
                 getActivity().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-        File imageFile = ShareImageFileUtils.getNextAvailableFile(
-                externalStorageDir.getPath(), fileName, TEST_JPG_IMAGE_FILE_EXTENSION);
+        File imageFile =
+                ShareImageFileUtils.getNextAvailableFile(
+                        externalStorageDir.getPath(), fileName, TEST_JPG_IMAGE_FILE_EXTENSION);
         Assert.assertTrue(imageFile.exists());
 
-        File imageFile2 = ShareImageFileUtils.getNextAvailableFile(
-                externalStorageDir.getPath(), fileName, TEST_JPG_IMAGE_FILE_EXTENSION);
+        File imageFile2 =
+                ShareImageFileUtils.getNextAvailableFile(
+                        externalStorageDir.getPath(), fileName, TEST_JPG_IMAGE_FILE_EXTENSION);
         Assert.assertTrue(imageFile2.exists());
         Assert.assertNotEquals(imageFile.getPath(), imageFile2.getPath());
     }

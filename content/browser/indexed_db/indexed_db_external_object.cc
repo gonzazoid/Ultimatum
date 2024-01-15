@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "content/browser/indexed_db/indexed_db_leveldb_coding.h"
 #include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom.h"
 
@@ -41,7 +41,7 @@ void IndexedDBExternalObject::ConvertToMojo(
       }
       case ObjectType::kFileSystemAccessHandle:
         // Contents of token will be filled in later by
-        // IndexedDBDispatcherHost::CreateAllExternalObjects.
+        // IndexedDBBucketContext::CreateAllExternalObjects.
         mojo_objects->push_back(
             blink::mojom::IDBExternalObject::NewFileSystemAccessToken(
                 mojo::NullRemote()));
@@ -107,9 +107,10 @@ IndexedDBExternalObject::IndexedDBExternalObject(
       token_remote_(std::move(token_remote)) {}
 
 IndexedDBExternalObject::IndexedDBExternalObject(
-    std::vector<uint8_t> file_system_access_token)
+    std::vector<uint8_t> serialized_file_system_access_handle)
     : object_type_(ObjectType::kFileSystemAccessHandle),
-      file_system_access_token_(std::move(file_system_access_token)) {}
+      serialized_file_system_access_handle_(
+          std::move(serialized_file_system_access_handle)) {}
 
 IndexedDBExternalObject::IndexedDBExternalObject(
     const IndexedDBExternalObject& other) = default;
@@ -141,10 +142,10 @@ void IndexedDBExternalObject::set_last_modified(const base::Time& time) {
   last_modified_ = time;
 }
 
-void IndexedDBExternalObject::set_file_system_access_token(
+void IndexedDBExternalObject::set_serialized_file_system_access_handle(
     std::vector<uint8_t> token) {
   DCHECK_EQ(object_type_, ObjectType::kFileSystemAccessHandle);
-  file_system_access_token_ = std::move(token);
+  serialized_file_system_access_handle_ = std::move(token);
 }
 
 void IndexedDBExternalObject::set_blob_number(int64_t blob_number) {

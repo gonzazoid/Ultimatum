@@ -5,6 +5,9 @@
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder_test_helpers.h"
 
 #include <memory>
+
+#include "base/strings/strcat.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_frame.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
@@ -91,8 +94,9 @@ void TestByteByByteDecode(DecoderCreator create_decoder,
     EXPECT_LE(frame_count, decoder->FrameCount());
     frame_count = decoder->FrameCount();
 
-    if (!decoder->IsSizeAvailable())
+    if (!decoder->IsSizeAvailable()) {
       continue;
+    }
 
     for (size_t i = frames_decoded; i < frame_count; ++i) {
       // In ICOImageDecoder memory layout could differ from frame order.
@@ -101,8 +105,9 @@ void TestByteByByteDecode(DecoderCreator create_decoder,
       // When file is completely received frame_count would return 2 and
       // only then both frames could be completely decoded.
       ImageFrame* frame = decoder->DecodeFrameBufferAtIndex(i);
-      if (frame && frame->GetStatus() == ImageFrame::kFrameComplete)
+      if (frame && frame->GetStatus() == ImageFrame::kFrameComplete) {
         ++frames_decoded;
+      }
     }
   }
 
@@ -302,8 +307,9 @@ static void TestProgressiveDecoding(DecoderCreator create_decoder,
     progressive_hashes.push_back(HashBitmap(frame->Bitmap()));
   }
 
-  for (size_t i = 0; i < truncated_hashes.size(); ++i)
+  for (size_t i = 0; i < truncated_hashes.size(); ++i) {
     ASSERT_EQ(truncated_hashes[i], progressive_hashes[i]);
+  }
 }
 
 void TestUpdateRequiredPreviousFrameAfterFirstDecode(
@@ -504,17 +510,20 @@ static void VerifyFramesMatch(const char* file,
   for (int y = 0; y < bitmap_a.height(); ++y) {
     for (int x = 0; x < bitmap_a.width(); ++x) {
       uint32_t color_a = *bitmap_a.getAddr32(x, y);
-      if (!a->PremultiplyAlpha())
+      if (!a->PremultiplyAlpha()) {
         color_a = PremultiplyColor(color_a);
+      }
       uint32_t color_b = *bitmap_b.getAddr32(x, y);
-      if (!b->PremultiplyAlpha())
+      if (!b->PremultiplyAlpha()) {
         color_b = PremultiplyColor(color_b);
+      }
       uint8_t* pixel_a = reinterpret_cast<uint8_t*>(&color_a);
       uint8_t* pixel_b = reinterpret_cast<uint8_t*>(&color_b);
       for (int channel = 0; channel < 4; ++channel) {
         const int difference = abs(pixel_a[channel] - pixel_b[channel]);
-        if (difference > max_difference)
+        if (difference > max_difference) {
           max_difference = difference;
+        }
       }
     }
   }
@@ -546,6 +555,32 @@ void TestAlphaBlending(DecoderCreatorWithAlpha create_decoder,
     VerifyFramesMatch(file, decoder_a->DecodeFrameBufferAtIndex(i),
                       decoder_b->DecodeFrameBufferAtIndex(i));
   }
+}
+
+void TestBppHistogram(DecoderCreator create_decoder,
+                      const char* image_type,
+                      const char* image_name,
+                      const char* histogram_name,
+                      base::HistogramBase::Sample sample) {
+  base::HistogramTester histogram_tester;
+  std::unique_ptr<ImageDecoder> decoder = create_decoder();
+  decoder->SetData(ReadFile(image_name), true);
+  ASSERT_TRUE(decoder->IsSizeAvailable());
+  if (histogram_name) {
+    histogram_tester.ExpectTotalCount(histogram_name, 0);
+  }
+  ImageFrame* frame = decoder->DecodeFrameBufferAtIndex(0);
+  ASSERT_TRUE(frame);
+  EXPECT_EQ(ImageFrame::kFrameComplete, frame->GetStatus());
+  EXPECT_FALSE(decoder->Failed());
+  base::HistogramTester::CountsMap expected_counts;
+  if (histogram_name) {
+    histogram_tester.ExpectUniqueSample(histogram_name, sample, 1);
+    expected_counts[histogram_name] = 1;
+  }
+  EXPECT_THAT(histogram_tester.GetTotalCountsForPrefix(base::StrCat(
+                  {"Blink.DecodedImage.", image_type, "Density.Count."})),
+              testing::ContainerEq(expected_counts));
 }
 
 }  // namespace blink

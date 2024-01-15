@@ -3,24 +3,23 @@
 # found in the LICENSE file.
 
 source_set("ios") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   sources = [
+    "device_accounts_provider.cc",
     "device_accounts_provider.h",
-    "device_accounts_provider.mm",
   ]
 
-  public_deps = [ "//base" ]
+  public_deps = [
+    "//base",
+    "//third_party/abseil-cpp:absl",
+  ]
 }
 
 source_set("test_support") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   testonly = true
 
   sources = [
+    "fake_device_accounts_provider.cc",
     "fake_device_accounts_provider.h",
-    "fake_device_accounts_provider.mm",
   ]
 
   public_deps = [

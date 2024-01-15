@@ -7,10 +7,14 @@
 
 #include <string>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "ui/gfx/gfx_export.h"
 #include "ui/gfx/native_widget_types.h"
+
+#if BUILDFLAG(IS_APPLE)
+#include <CoreText/CoreText.h>
+#endif
 
 namespace gfx {
 
@@ -31,10 +35,12 @@ class PlatformFont;
 class GFX_EXPORT Font {
  public:
   // The following constants indicate the font style.
+  // These are treated as bitwise operators.
   enum FontStyle {
-    NORMAL = 0,
-    ITALIC = 1,
-    UNDERLINE = 2,
+    NORMAL = 0b0,
+    ITALIC = 0b1,
+    STRIKE_THROUGH = 0b10,
+    UNDERLINE = 0b100,
   };
 
   // Standard font weights as used in Pango and Windows. The values must match
@@ -60,8 +66,8 @@ class GFX_EXPORT Font {
   Font& operator=(const Font& other);
 
 #if BUILDFLAG(IS_APPLE)
-  // Creates a font from the specified native font.
-  explicit Font(NativeFont native_font);
+  // Creates a font from the specified CTFontRef.
+  explicit Font(CTFontRef ct_font);
 #endif
 
   // Constructs a Font object with the specified PlatformFont object. The Font
@@ -117,10 +123,9 @@ class GFX_EXPORT Font {
   const FontRenderParams& GetFontRenderParams() const;
 
 #if BUILDFLAG(IS_APPLE)
-  // Returns the native font handle.
-  // Lifetime lore:
-  // Mac:     The object is owned by the system and should not be released.
-  NativeFont GetNativeFont() const;
+  // Returns the CTFontRef. This is owned by the gfx::Font as per the standard
+  // "get" idiom.
+  CTFontRef GetCTFont() const;
 #endif
 
   // Raw access to the underlying platform font implementation.

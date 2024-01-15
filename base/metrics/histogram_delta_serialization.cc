@@ -23,7 +23,7 @@ void DeserializeHistogramAndAddSamples(PickleIterator* iter) {
   if (!histogram)
     return;
 
-  if (histogram->flags() & HistogramBase::kIPCSerializationSourceFlag) {
+  if (histogram->HasFlags(HistogramBase::kIPCSerializationSourceFlag)) {
     DVLOG(1) << "Single process mode, histogram observed and not copied: "
              << histogram->histogram_name();
     return;
@@ -74,8 +74,7 @@ void HistogramDeltaSerialization::RecordDelta(
   Pickle pickle;
   histogram.SerializeInfo(&pickle);
   snapshot.Serialize(&pickle);
-  serialized_deltas_->push_back(
-      std::string(static_cast<const char*>(pickle.data()), pickle.size()));
+  serialized_deltas_->emplace_back(pickle.data_as_char(), pickle.size());
 }
 
 }  // namespace base

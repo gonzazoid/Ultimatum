@@ -5,24 +5,20 @@
 #include "chrome/browser/policy/policy_path_parser.h"
 
 #import <Cocoa/Cocoa.h>
-#include <stddef.h>
-#import <SystemConfiguration/SCDynamicStore.h>
-#import <SystemConfiguration/SCDynamicStoreCopySpecific.h>
 #import <SystemConfiguration/SystemConfiguration.h>
+#include <stddef.h>
 
 #include <string>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/strings/sys_string_conversions.h"
 #include "build/branding_buildflags.h"
 #include "components/policy/policy_constants.h"
 
-namespace policy {
-
-namespace path_parser {
+namespace policy::path_parser {
 
 const char kUserNamePolicyVarName[] = "${user_name}";
 const char kMachineNamePolicyVarName[] = "${machine_name}";
@@ -31,7 +27,7 @@ const char kMacDocumentsFolderVarName[] = "${documents}";
 
 struct MacFolderNamesToSPDMapping {
   const char* name;
-  NSSearchPathDirectory id;
+  NSSearchPathDirectory search_path_directory;
 };
 
 // Mapping from variable names to MacOS NSSearchPathDirectory ids.
@@ -57,10 +53,10 @@ base::FilePath::StringType ExpandPathVariables(
   for (const auto& mapping : mac_folder_mapping) {
     size_t position = result.find(mapping.name);
     if (position != std::string::npos) {
-      NSArray* searchpaths = NSSearchPathForDirectoriesInDomains(
-          mapping.id, NSAllDomainsMask, true);
-      if ([searchpaths count] > 0) {
-        NSString* variable_value = searchpaths[0];
+      NSArray<NSString*>* search_paths = NSSearchPathForDirectoriesInDomains(
+          mapping.search_path_directory, NSAllDomainsMask, true);
+      if (search_paths.count > 0) {
+        NSString* variable_value = search_paths[0];
         result.replace(position, strlen(mapping.name),
                        base::SysNSStringToUTF8(variable_value));
       }
@@ -80,13 +76,13 @@ base::FilePath::StringType ExpandPathVariables(
   position = result.find(kMachineNamePolicyVarName);
   if (position != std::string::npos) {
     SCDynamicStoreContext context = {0, nullptr, nullptr, nullptr};
-    base::ScopedCFTypeRef<SCDynamicStoreRef> store(SCDynamicStoreCreate(
+    base::apple::ScopedCFTypeRef<SCDynamicStoreRef> store(SCDynamicStoreCreate(
         kCFAllocatorDefault, CFSTR("policy_subsystem"), nullptr, &context));
-    base::ScopedCFTypeRef<CFStringRef> machinename(
-        SCDynamicStoreCopyLocalHostName(store));
-    if (machinename) {
+    base::apple::ScopedCFTypeRef<CFStringRef> machine_name(
+        SCDynamicStoreCopyLocalHostName(store.get()));
+    if (machine_name) {
       result.replace(position, strlen(kMachineNamePolicyVarName),
-                     base::SysCFStringRefToUTF8(machinename));
+                     base::SysCFStringRefToUTF8(machine_name.get()));
     } else {
       int error = SCError();
       LOG(ERROR) << "Machine name variable can not be resolved. Error: "
@@ -107,18 +103,20 @@ void CheckUserDataDirPolicy(base::FilePath* user_data_dir) {
   // policies.
   CFStringRef bundle_id = CFSTR("com.google.Chrome");
 #else
-  base::ScopedCFTypeRef<CFStringRef> bundle_id(
-      base::SysUTF8ToCFStringRef(base::mac::BaseBundleID()));
+  base::apple::ScopedCFTypeRef<CFStringRef> bundle_id_scoper =
+      base::SysUTF8ToCFStringRef(base::apple::BaseBundleID());
+  CFStringRef bundle_id = bundle_id_scoper.get();
 #endif
 
-  base::ScopedCFTypeRef<CFStringRef> key(
-      base::SysUTF8ToCFStringRef(policy::key::kUserDataDir));
-  base::ScopedCFTypeRef<CFPropertyListRef> value(
-      CFPreferencesCopyAppValue(key, bundle_id));
+  base::apple::ScopedCFTypeRef<CFStringRef> key =
+      base::SysUTF8ToCFStringRef(policy::key::kUserDataDir);
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
+      CFPreferencesCopyAppValue(key.get(), bundle_id));
 
-  if (!value || !CFPreferencesAppValueIsForced(key, bundle_id))
+  if (!value || !CFPreferencesAppValueIsForced(key.get(), bundle_id)) {
     return;
-  CFStringRef value_string = base::mac::CFCast<CFStringRef>(value);
+  }
+  CFStringRef value_string = base::apple::CFCast<CFStringRef>(value.get());
   if (!value_string)
     return;
 
@@ -128,6 +126,4 @@ void CheckUserDataDirPolicy(base::FilePath* user_data_dir) {
   *user_data_dir = base::FilePath(string_value);
 }
 
-}  // namespace path_parser
-
-}  // namespace policy
+}  // namespace policy::path_parser

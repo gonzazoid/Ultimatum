@@ -11,12 +11,15 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/test/bind.h"
 #include "chrome/browser/ash/file_system_provider/fake_extension_provider.h"
 #include "chrome/browser/ash/file_system_provider/fake_provided_file_system.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
@@ -35,8 +38,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -65,8 +67,8 @@ storage::FileSystemURL CreateFileSystemURL(const std::string& mount_point_name,
 
 class FileSystemProviderFileStreamWriter : public testing::Test {
  protected:
-  FileSystemProviderFileStreamWriter() {}
-  ~FileSystemProviderFileStreamWriter() override {}
+  FileSystemProviderFileStreamWriter() = default;
+  ~FileSystemProviderFileStreamWriter() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
@@ -95,13 +97,41 @@ class FileSystemProviderFileStreamWriter : public testing::Test {
     wrong_file_url_ = CreateFileSystemURL(
         mount_point_name, base::FilePath(FILE_PATH_LITERAL("im-not-here.txt")));
     ASSERT_TRUE(wrong_file_url_.is_valid());
+    provided_file_system_->SetFlushRequired(false);
+  }
+
+  std::pair<int, int> FlushAndWait(FileStreamWriter& writer,
+                                   storage::FlushMode mode) {
+    base::RunLoop run_loop;
+    int callback_result = 0;
+    auto quit = base::BindLambdaForTesting([&](int code) {
+      callback_result = code;
+      run_loop.Quit();
+    });
+    const int result = writer.Flush(mode, quit);
+    run_loop.Run();
+    return std::make_pair(result, callback_result);
+  }
+
+  std::pair<int, int> WriteAndWait(FileStreamWriter& writer,
+                                   const std::string& text) {
+    auto io_buffer = base::MakeRefCounted<net::StringIOBuffer>(text);
+    base::RunLoop run_loop;
+    int callback_result = 0;
+    auto quit = base::BindLambdaForTesting([&](int code) {
+      callback_result = code;
+      run_loop.Quit();
+    });
+    const int result = writer.Write(io_buffer.get(), io_buffer->size(), quit);
+    run_loop.Run();
+    return std::make_pair(result, callback_result);
   }
 
   content::BrowserTaskEnvironment task_environment_;
   base::ScopedTempDir data_dir_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* profile_;  // Owned by TestingProfileManager.
-  FakeProvidedFileSystem* provided_file_system_;  // Owned by Service.
+  raw_ptr<TestingProfile> profile_;  // Owned by TestingProfileManager.
+  raw_ptr<FakeProvidedFileSystem> provided_file_system_;  // Owned by Service.
   storage::FileSystemURL file_url_;
   storage::FileSystemURL wrong_file_url_;
 };
@@ -154,6 +184,64 @@ TEST_F(FileSystemProviderFileStreamWriter, Write) {
     EXPECT_EQ(expected_contents,
               entry->contents.substr(0, expected_contents.size()));
   }
+}
+
+TEST_F(FileSystemProviderFileStreamWriter, WriteWithFlush) {
+  provided_file_system_->SetFlushRequired(true);
+
+  FileStreamWriter writer(file_url_, /*initial_offset=*/0);
+  auto io_buffer = base::MakeRefCounted<net::StringIOBuffer>(kTextToWrite);
+
+  const FakeEntry* const entry =
+      provided_file_system_->GetEntry(base::FilePath(kFakeFilePath));
+  ASSERT_TRUE(entry);
+
+  {
+    const auto write_result = WriteAndWait(writer, kTextToWrite);
+    EXPECT_EQ(net::ERR_IO_PENDING, write_result.first);
+    const auto flush_result =
+        FlushAndWait(writer, storage::FlushMode::kDefault);
+    EXPECT_EQ(std::make_pair(net::ERR_IO_PENDING, net::OK), flush_result);
+
+    // Nothing is written yet.
+    EXPECT_EQ(kFakeFileText, entry->contents);
+  }
+
+  // Write more data and flush.
+  {
+    const auto write_result = WriteAndWait(writer, kTextToWrite);
+    EXPECT_EQ(net::ERR_IO_PENDING, write_result.first);
+    const auto flush_result =
+        FlushAndWait(writer, storage::FlushMode::kEndOfFile);
+    EXPECT_EQ(std::make_pair(net::ERR_IO_PENDING, net::OK), flush_result);
+
+    // The testing text is written twice.
+    const std::string expected_contents =
+        std::string(kTextToWrite) + kTextToWrite;
+    EXPECT_EQ(expected_contents,
+              entry->contents.substr(0, expected_contents.size()));
+  }
+}
+
+TEST_F(FileSystemProviderFileStreamWriter, Flush) {
+  FileStreamWriter writer(file_url_, /*initial_offset=*/0);
+
+  // Invalid without write.
+  // TODO(b/291165362): this should not be an error.
+  auto flush_result = FlushAndWait(writer, storage::FlushMode::kEndOfFile);
+  EXPECT_EQ(std::make_pair(net::ERR_IO_PENDING, net::ERR_FAILED), flush_result);
+
+  // Do a write.
+  const auto write_result = WriteAndWait(writer, kTextToWrite);
+  EXPECT_EQ(net::ERR_IO_PENDING, write_result.first);
+
+  // Flush after write.
+  flush_result = FlushAndWait(writer, storage::FlushMode::kEndOfFile);
+  EXPECT_EQ(std::make_pair(net::ERR_IO_PENDING, net::OK), flush_result);
+
+  // Second flush is a no-op.
+  flush_result = FlushAndWait(writer, storage::FlushMode::kEndOfFile);
+  EXPECT_EQ(std::make_pair(net::ERR_IO_PENDING, net::OK), flush_result);
 }
 
 TEST_F(FileSystemProviderFileStreamWriter, Cancel) {
@@ -242,5 +330,4 @@ TEST_F(FileSystemProviderFileStreamWriter, Write_Append) {
   EXPECT_EQ(expected_contents, entry->contents);
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

@@ -49,29 +49,13 @@ const char kHistogramAMPSubframeFirstInputDelay[] =
     "InteractiveTiming.FirstInputDelay4.Subframe";
 const char kHistogramAMPSubframeFirstInputDelayFullNavigation[] =
     "InteractiveTiming.FirstInputDelay4.Subframe.FullNavigation";
-const char kHistogramAMPSubframeLayoutInstabilityShiftScore[] =
-    "LayoutInstability.CumulativeShiftScore.Subframe";
-const char kHistogramAMPSubframeLayoutInstabilityShiftScoreFullNavigation[] =
-    "LayoutInstability.CumulativeShiftScore.Subframe.FullNavigation";
 
 const char kHistogramAMPSubframeNumInteractions[] =
     "InteractiveTiming.NumInteractions.Subframe";
 const char
-    kHistogramAMPSubframeAverageUserInteractionLatencyOverBudgetMaxEventDuration
-        [] = "InteractiveTiming.AverageUserInteractionLatencyOverBudget."
-             "MaxEventDuration.Subframe";
-const char
-    kHistogramAMPSubframeSlowUserInteractionLatencyOverBudgetHighPercentile2MaxEventDuration
-        [] = "InteractiveTiming.SlowUserInteractionLatencyOverBudget."
-             "HighPercentile2.MaxEventDuration.Subframe";
-const char
     kHistogramAMPSubframeUserInteractionHighPercentile2MaxEventDuration[] =
         "InteractiveTiming.UserInteractionLatency."
         "HighPercentile2.MaxEventDuration.Subframe";
-const char
-    kHistogramAMPSubframeSumOfUserInteractionLatencyOverBudgetMaxEventDuration
-        [] = "InteractiveTiming.SumOfUserInteractionLatencyOverBudget."
-             "MaxEventDuration.Subframe";
 
 const char kHistogramAMPSubframeWorstUserInteractionLatencyMaxEventDuration[] =
     "InteractiveTiming.WorstUserInteractionLatency.MaxEventDuration.Subframe";
@@ -142,8 +126,7 @@ page_load_metrics::PageLoadMetricsObserver::ObservePolicy
 AMPPageLoadMetricsObserver::OnFencedFramesStart(
     content::NavigationHandle* navigation_handle,
     const GURL& currently_committed_url) {
-  // This class needs forwarding for the events OnMobileFriendlinessUpdate and
-  // OnSubFrameRenderDataUpdate.
+  // This class needs forwarding for the events OnSubFrameRenderDataUpdate.
   return FORWARD_OBSERVING;
 }
 
@@ -287,26 +270,6 @@ void AMPPageLoadMetricsObserver::OnInputTimingUpdate(
             input_timing_delta.num_interactions,
             *(input_timing_delta.max_event_durations));
   }
-}
-
-void AMPPageLoadMetricsObserver::OnMobileFriendlinessUpdate(
-    const blink::MobileFriendliness& mf) {
-  if (mf == blink::MobileFriendliness() ||
-      current_main_frame_nav_info_ == nullptr ||
-      current_main_frame_nav_info_->subframe_rfh == nullptr)
-    return;
-
-  auto it = amp_subframe_info_.find(current_main_frame_nav_info_->subframe_rfh);
-  if (it == amp_subframe_info_.end())
-    return;
-
-  SubFrameInfo& subframe_info = it->second;
-  if (subframe_info.viewer_url != current_main_frame_nav_info_->url ||
-      !subframe_info.amp_document_loaded) {
-    return;
-  }
-
-  subframe_info.mobile_friendliness = mf;
 }
 
 void AMPPageLoadMetricsObserver::OnSubFrameRenderDataUpdate(
@@ -563,13 +526,13 @@ void AMPPageLoadMetricsObserver::MaybeRecordAmpDocumentMetrics() {
               .InMilliseconds());
 
       if (current_main_frame_nav_info_->is_same_document_navigation) {
-        UMA_HISTOGRAM_CUSTOM_TIMES(
+        base::UmaHistogramCustomTimes(
             std::string(kHistogramPrefix)
                 .append(kHistogramAMPSubframeFirstInputDelay),
             subframe_info.timing->interactive_timing->first_input_delay.value(),
             base::Milliseconds(1), base::Seconds(60), 50);
       } else {
-        UMA_HISTOGRAM_CUSTOM_TIMES(
+        base::UmaHistogramCustomTimes(
             std::string(kHistogramPrefix)
                 .append(kHistogramAMPSubframeFirstInputDelayFullNavigation),
             subframe_info.timing->interactive_timing->first_input_delay.value(),
@@ -604,14 +567,8 @@ void AMPPageLoadMetricsObserver::MaybeRecordAmpDocumentMetrics() {
                     .session_windows_gap1000ms_max5000ms_max_cls));
   }
 
-  // For UMA, report (shift_score * 10) an an int in the range [0,100].
-  int32_t uma_value = static_cast<int>(roundf(clamped_shift_score * 10.0f));
-  if (current_main_frame_nav_info_->is_same_document_navigation) {
-    UMA_HISTOGRAM_COUNTS_100(
-        std::string(kHistogramPrefix)
-            .append(kHistogramAMPSubframeLayoutInstabilityShiftScore),
-        uma_value);
-    if (!normalized_cls_data.data_tainted) {
+  if (!normalized_cls_data.data_tainted) {
+    if (current_main_frame_nav_info_->is_same_document_navigation) {
       base::UmaHistogramCounts100(
           "PageLoad.Clients.AMP.LayoutInstability.MaxCumulativeShiftScore."
           "Subframe.SessionWindow.Gap1000ms.Max5000ms",
@@ -623,15 +580,7 @@ void AMPPageLoadMetricsObserver::MaybeRecordAmpDocumentMetrics() {
           page_load_metrics::LayoutShiftUmaValue10000(
               normalized_cls_data.session_windows_gap1000ms_max5000ms_max_cls),
           1, 24000, 50);
-    }
-    RecordMobileFriendliness(builder);
-  } else {
-    UMA_HISTOGRAM_COUNTS_100(
-        std::string(kHistogramPrefix)
-            .append(
-                kHistogramAMPSubframeLayoutInstabilityShiftScoreFullNavigation),
-        uma_value);
-    if (!normalized_cls_data.data_tainted) {
+    } else {
       base::UmaHistogramCounts100(
           "PageLoad.Clients.AMP.LayoutInstability.MaxCumulativeShiftScore."
           "Subframe.FullNavigation.SessionWindow.Gap1000ms.Max5000ms",
@@ -641,82 +590,53 @@ void AMPPageLoadMetricsObserver::MaybeRecordAmpDocumentMetrics() {
   }
 
   RecordNormalizedResponsivenessMetrics(
-      subframe_info.responsiveness_metrics_normalization
-          .GetNormalizedResponsivenessMetrics(),
-      builder);
+      subframe_info.responsiveness_metrics_normalization, builder);
   builder.Record(ukm::UkmRecorder::Get());
 }
 
 void AMPPageLoadMetricsObserver::RecordNormalizedResponsivenessMetrics(
-    const page_load_metrics::NormalizedResponsivenessMetrics&
-        normalized_responsiveness_metrics,
+    const page_load_metrics::ResponsivenessMetricsNormalization&
+        responsiveness_metrics_normalization,
     ukm::builders::AmpPageLoad& builder) {
   DCHECK(!GetDelegate().IsInPrerenderingBeforeActivationStart());
 
-  if (!normalized_responsiveness_metrics.num_user_interactions)
+  if (!responsiveness_metrics_normalization.num_user_interactions()) {
     return;
+  }
 
   const std::string histogram_suffix =
       current_main_frame_nav_info_->is_same_document_navigation
           ? ""
           : ".FullNavigation";
-  auto& max_event_durations =
-      normalized_responsiveness_metrics.normalized_max_event_durations;
 
   builder
       .SetSubFrame_InteractiveTiming_WorstUserInteractionLatency_MaxEventDuration2(
-          max_event_durations.worst_latency.InMilliseconds());
+          responsiveness_metrics_normalization.worst_latency()
+              .value()
+              .interaction_latency.InMilliseconds());
   base::UmaHistogramCustomTimes(
       std::string(kHistogramPrefix)
           .append(
               kHistogramAMPSubframeWorstUserInteractionLatencyMaxEventDuration)
           .append(histogram_suffix),
-      max_event_durations.worst_latency, base::Milliseconds(1),
-      base::Seconds(60), 50);
+      responsiveness_metrics_normalization.worst_latency()
+          .value()
+          .interaction_latency,
+      base::Milliseconds(1), base::Seconds(60), 50);
 
-  base::TimeDelta high_percentile2_max_event_duration = page_load_metrics::
-      ResponsivenessMetricsNormalization::ApproximateHighPercentile(
-          normalized_responsiveness_metrics.num_user_interactions,
-          max_event_durations.worst_ten_latencies);
-  base::TimeDelta high_percentile2_max_event_duration_over_budget =
-      page_load_metrics::ResponsivenessMetricsNormalization::
-          ApproximateHighPercentile(
-              normalized_responsiveness_metrics.num_user_interactions,
-              max_event_durations.worst_ten_latencies_over_budget);
+  base::TimeDelta high_percentile2_max_event_duration =
+      responsiveness_metrics_normalization.ApproximateHighPercentile()
+          .value()
+          .interaction_latency;
 
-  builder
-      .SetSubFrame_InteractiveTiming_SumOfUserInteractionLatencyOverBudget_MaxEventDuration2(
-          max_event_durations.sum_of_latency_over_budget.InMilliseconds());
-  builder
-      .SetSubFrame_InteractiveTiming_AverageUserInteractionLatencyOverBudget_MaxEventDuration2(
-          max_event_durations.sum_of_latency_over_budget.InMilliseconds() /
-          normalized_responsiveness_metrics.num_user_interactions);
   builder
       .SetSubFrame_InteractiveTiming_UserInteractionLatency_HighPercentile2_MaxEventDuration(
           high_percentile2_max_event_duration.InMilliseconds());
-  builder
-      .SetSubFrame_InteractiveTiming_SlowUserInteractionLatencyOverBudget_HighPercentile2_MaxEventDuration2(
-          high_percentile2_max_event_duration_over_budget.InMilliseconds());
 
   builder.SetSubFrame_InteractiveTiming_NumInteractions(
       ukm::GetExponentialBucketMinForCounts1000(
-          normalized_responsiveness_metrics.num_user_interactions));
+          responsiveness_metrics_normalization.num_user_interactions()));
 
-  base::UmaHistogramCustomTimes(
-      std::string(kHistogramPrefix)
-          .append(
-              kHistogramAMPSubframeAverageUserInteractionLatencyOverBudgetMaxEventDuration)
-          .append(histogram_suffix),
-      max_event_durations.sum_of_latency_over_budget /
-          normalized_responsiveness_metrics.num_user_interactions,
-      base::Milliseconds(1), base::Seconds(60), 50);
-  base::UmaHistogramCustomTimes(
-      std::string(kHistogramPrefix)
-          .append(
-              kHistogramAMPSubframeSlowUserInteractionLatencyOverBudgetHighPercentile2MaxEventDuration)
-          .append(histogram_suffix),
-      high_percentile2_max_event_duration_over_budget, base::Milliseconds(1),
-      base::Seconds(60), 50);
   base::UmaHistogramCustomTimes(
       std::string(kHistogramPrefix)
           .append(
@@ -724,50 +644,8 @@ void AMPPageLoadMetricsObserver::RecordNormalizedResponsivenessMetrics(
           .append(histogram_suffix),
       high_percentile2_max_event_duration, base::Milliseconds(1),
       base::Seconds(60), 50);
-  base::UmaHistogramCustomTimes(
-      std::string(kHistogramPrefix)
-          .append(
-              kHistogramAMPSubframeSumOfUserInteractionLatencyOverBudgetMaxEventDuration)
-          .append(histogram_suffix),
-      max_event_durations.sum_of_latency_over_budget, base::Milliseconds(1),
-      base::Seconds(60), 50);
   base::UmaHistogramCounts1000(
       std::string(kHistogramPrefix)
           .append(kHistogramAMPSubframeNumInteractions),
-      normalized_responsiveness_metrics.num_user_interactions);
-}
-
-void AMPPageLoadMetricsObserver::RecordMobileFriendliness(
-    ukm::builders::AmpPageLoad& builder) {
-  DCHECK(!GetDelegate().IsInPrerenderingBeforeActivationStart());
-
-  auto it = amp_subframe_info_.find(current_main_frame_nav_info_->subframe_rfh);
-  if (it == amp_subframe_info_.end())
-    return;
-
-  const SubFrameInfo& subframe_info = it->second;
-  if (subframe_info.viewer_url != current_main_frame_nav_info_->url)
-    return;
-
-  if (!subframe_info.amp_document_loaded)
-    return;
-
-  const blink::MobileFriendliness& mf = subframe_info.mobile_friendliness;
-
-  // Make sure at least one MF evaluation happen.
-  if (mf.small_text_ratio == -1 && mf.bad_tap_targets_ratio == -1)
-    return;
-
-  builder.SetSubFrame_MobileFriendliness_ViewportDeviceWidth(
-      mf.viewport_device_width);
-  builder.SetSubFrame_MobileFriendliness_AllowUserZoom(mf.allow_user_zoom);
-  builder.SetSubFrame_MobileFriendliness_SmallTextRatio(mf.small_text_ratio);
-  builder.SetSubFrame_MobileFriendliness_ViewportInitialScaleX10(
-      page_load_metrics::GetBucketedViewportInitialScale(mf));
-  builder.SetSubFrame_MobileFriendliness_ViewportHardcodedWidth(
-      page_load_metrics::GetBucketedViewportHardcodedWidth(mf));
-  builder.SetSubFrame_MobileFriendliness_TextContentOutsideViewportPercentage(
-      mf.text_content_outside_viewport_percentage);
-  builder.SetSubFrame_MobileFriendliness_BadTapTargetsRatio(
-      mf.bad_tap_targets_ratio);
+      responsiveness_metrics_normalization.num_user_interactions());
 }

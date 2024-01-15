@@ -5,7 +5,6 @@
 #include "ash/shortcut_viewer/views/ksv_search_box_view.h"
 
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/search_box/search_box_constants.h"
 #include "ash/search_box/search_box_view_base.h"
@@ -16,11 +15,14 @@
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/textfield/textfield.h"
+#include "ui/views/widget/widget.h"
 
 namespace keyboard_shortcut_viewer {
 
@@ -95,9 +97,10 @@ void KSVSearchBoxView::OnKeyEvent(ui::KeyEvent* event) {
 void KSVSearchBoxView::OnThemeChanged() {
   ash::SearchBoxViewBase::OnThemeChanged();
 
-  close_button()->SetImage(
+  close_button()->SetImageModel(
       views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(ash::kKsvSearchCloseIcon, GetCloseButtonColor()));
+      ui::ImageModel::FromVectorIcon(ash::kKsvSearchCloseIcon,
+                                     GetCloseButtonColor()));
   search_box()->SetBackgroundColor(SK_ColorTRANSPARENT);
   search_box()->SetColor(GetPrimaryTextColor());
   search_box()->set_placeholder_text_color(GetPlaceholderTextColor());
@@ -158,17 +161,7 @@ void KSVSearchBoxView::CloseButtonPressed() {
 }
 
 SkColor KSVSearchBoxView::GetBackgroundColor() {
-  constexpr SkColor kBackgroundDarkColor =
-      SkColorSetARGB(0xFF, 0x32, 0x33, 0x34);
-
-  if (ShouldUseDarkThemeColors()) {
-    return kBackgroundDarkColor;
-  }
-
-  return ShouldUseFocusedColors()
-             ? gfx::kGoogleGrey100
-             : ash::AppListColorProvider::Get()->GetSearchBoxBackgroundColor(
-                   GetWidget());
+  return GetColorProvider()->GetColor(cros_tokens::kToolbarSearchBgColor);
 }
 
 SkColor KSVSearchBoxView::GetBorderColor() {
@@ -176,13 +169,7 @@ SkColor KSVSearchBoxView::GetBorderColor() {
     return SK_ColorTRANSPARENT;
   }
 
-  constexpr SkColor kActiveBorderLightColor =
-      SkColorSetARGB(0x7F, 0x1A, 0x73, 0xE8);
-  const SkColor kActiveBorderDarkColor =
-      ash::AppListColorProvider::Get()->GetFocusRingColor(GetWidget());
-
-  return ShouldUseDarkThemeColors() ? kActiveBorderDarkColor
-                                    : kActiveBorderLightColor;
+  return GetColorProvider()->GetColor(ui::kColorAshFocusRing);
 }
 
 SkColor KSVSearchBoxView::GetCloseButtonColor() {
@@ -207,8 +194,10 @@ bool KSVSearchBoxView::ShouldUseFocusedColors() {
 }
 
 bool KSVSearchBoxView::ShouldUseDarkThemeColors() {
-  return ash::features::IsDarkLightModeEnabled() &&
-         ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
+  return ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
 }
+
+BEGIN_METADATA(KSVSearchBoxView)
+END_METADATA
 
 }  // namespace keyboard_shortcut_viewer

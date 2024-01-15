@@ -5,22 +5,21 @@
 #include "ash/wm/desks/templates/saved_desk_test_util.h"
 
 #include "ash/shell.h"
-#include "ash/style/close_button.h"
-#include "ash/wm/desks/desks_bar_view.h"
-#include "ash/wm/desks/expanded_desks_bar_button.h"
+#include "ash/style/icon_button.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
+#include "ash/wm/desks/templates/saved_desk_controller.h"
 #include "ash/wm/desks/templates/saved_desk_dialog_controller.h"
 #include "ash/wm/desks/templates/saved_desk_icon_container.h"
-#include "ash/wm/desks/templates/saved_desk_item_view.h"
-#include "ash/wm/desks/templates/saved_desk_library_view.h"
 #include "ash/wm/desks/templates/saved_desk_presenter.h"
 #include "ash/wm/desks/templates/saved_desk_util.h"
-#include "ash/wm/desks/zero_state_button.h"
 #include "ash/wm/overview/overview_grid.h"
-#include "ash/wm/overview/overview_test_util.h"
+#include "ash/wm/overview/overview_utils.h"
+#include "base/memory/raw_ref.h"
+#include "base/test/bind.h"
+#include "ui/compositor/layer.h"
 #include "ui/views/animation/bounds_animator.h"
 #include "ui/views/animation/bounds_animator_observer.h"
 #include "ui/views/widget/widget_delegate.h"
-#include "ui/views/window/dialog_delegate.h"
 
 namespace ash {
 
@@ -41,17 +40,18 @@ class BoundsAnimatorWaiter : public views::BoundsAnimatorObserver {
  public:
   explicit BoundsAnimatorWaiter(views::BoundsAnimator& animator)
       : animator_(animator) {
-    animator_.AddObserver(this);
+    animator_->AddObserver(this);
   }
 
   BoundsAnimatorWaiter(const BoundsAnimatorWaiter&) = delete;
   BoundsAnimatorWaiter& operator=(const BoundsAnimatorWaiter&) = delete;
 
-  ~BoundsAnimatorWaiter() override { animator_.RemoveObserver(this); }
+  ~BoundsAnimatorWaiter() override { animator_->RemoveObserver(this); }
 
   void Wait() {
-    if (!animator_.IsAnimating())
+    if (!animator_->IsAnimating()) {
       return;
+    }
 
     run_loop_ = std::make_unique<base::RunLoop>();
     run_loop_->Run();
@@ -65,7 +65,7 @@ class BoundsAnimatorWaiter : public views::BoundsAnimatorObserver {
       run_loop_->Quit();
   }
 
-  views::BoundsAnimator& animator_;
+  const raw_ref<views::BoundsAnimator> animator_;
   std::unique_ptr<base::RunLoop> run_loop_;
 };
 
@@ -99,7 +99,7 @@ void SavedDeskPresenterTestApi::SetOnUpdateUiClosure(
 
 void SavedDeskPresenterTestApi::MaybeWaitForModel() {
   if (presenter_->weak_ptr_factory_.HasWeakPtrs())
-    WaitForDesksTemplatesUI();
+    WaitForSavedDeskUI();
 }
 
 SavedDeskLibraryViewTestApi::SavedDeskLibraryViewTestApi(
@@ -107,8 +107,9 @@ SavedDeskLibraryViewTestApi::SavedDeskLibraryViewTestApi(
     : library_view_(library_view) {}
 
 void SavedDeskLibraryViewTestApi::WaitForAnimationDone() {
-  for (auto* grid_view : library_view_->grid_views())
+  for (ash::SavedDeskGridView* grid_view : library_view_->grid_views()) {
     SavedDeskGridViewTestApi(grid_view).WaitForItemMoveAnimationDone();
+  }
 }
 
 SavedDeskGridViewTestApi::SavedDeskGridViewTestApi(SavedDeskGridView* grid_view)
@@ -132,22 +133,52 @@ SavedDeskItemViewTestApi::~SavedDeskItemViewTestApi() = default;
 
 std::vector<SavedDeskIconView*> SavedDeskItemViewTestApi::GetIconViews() const {
   std::vector<SavedDeskIconView*> casted_icon_views;
-  for (auto* icon_view : item_view_->icon_container_view_->children()) {
+  for (views::View* icon_view : item_view_->icon_container_view_->children()) {
     casted_icon_views.push_back(static_cast<SavedDeskIconView*>(icon_view));
   }
   return casted_icon_views;
 }
 
+SavedDeskItemHoverState SavedDeskItemViewTestApi::GetHoverState() const {
+  float hover_layer_opacity =
+      item_view_->hover_container_->layer()->GetTargetOpacity();
+  float icon_layer_opacity =
+      item_view_->icon_container_view_->layer()->GetTargetOpacity();
+
+  if (hover_layer_opacity == 1.0f && icon_layer_opacity == 0.0f) {
+    return SavedDeskItemHoverState::kHover;
+  }
+  if (hover_layer_opacity == 0.0f && icon_layer_opacity == 1.0f) {
+    return SavedDeskItemHoverState::kIcons;
+  }
+  return SavedDeskItemHoverState::kIndeterminate;
+}
+
 SavedDeskIconViewTestApi::SavedDeskIconViewTestApi(
-    const SavedDeskIconView* desks_templates_icon_view)
-    : desks_templates_icon_view_(desks_templates_icon_view) {
-  DCHECK(desks_templates_icon_view_);
+    const SavedDeskIconView* saved_desk_icon_view)
+    : saved_desk_icon_view_(saved_desk_icon_view) {
+  DCHECK(saved_desk_icon_view_);
 }
 
 SavedDeskIconViewTestApi::~SavedDeskIconViewTestApi() = default;
 
+SavedDeskControllerTestApi::SavedDeskControllerTestApi(
+    SavedDeskController* saved_desk_controller)
+    : saved_desk_controller_(saved_desk_controller) {}
+
+SavedDeskControllerTestApi::~SavedDeskControllerTestApi() = default;
+
+void SavedDeskControllerTestApi::SetAdminTemplate(
+    std::unique_ptr<DeskTemplate> admin_template) {
+  saved_desk_controller_->SetAdminTemplateForTesting(std::move(admin_template));
+}
+
+void SavedDeskControllerTestApi::ResetAutoLaunch() {
+  saved_desk_controller_->ResetAutoLaunchForTesting();
+}
+
 std::vector<SavedDeskItemView*> GetItemViewsFromDeskLibrary(
-    const OverviewGrid* overview_grid) {
+    OverviewGrid* overview_grid) {
   SavedDeskLibraryView* saved_desk_library_view =
       overview_grid->GetSavedDeskLibraryView();
   return GetItemViewsFromDeskLibrary(saved_desk_library_view);
@@ -157,14 +188,15 @@ std::vector<SavedDeskItemView*> GetItemViewsFromDeskLibrary(
     SavedDeskLibraryView* saved_desk_library_view) {
   DCHECK(saved_desk_library_view);
   std::vector<SavedDeskItemView*> grid_items;
-  for (auto* grid_view : saved_desk_library_view->grid_views()) {
+  for (ash::SavedDeskGridView* grid_view :
+       saved_desk_library_view->grid_views()) {
     auto& items = grid_view->grid_items();
     grid_items.insert(grid_items.end(), items.begin(), items.end());
   }
   return grid_items;
 }
 
-SavedDeskItemView* GetItemViewFromTemplatesGrid(size_t grid_item_index) {
+SavedDeskItemView* GetItemViewFromSavedDeskGrid(size_t grid_item_index) {
   auto* overview_grid = GetPrimaryOverviewGrid();
   DCHECK(overview_grid);
 
@@ -180,63 +212,51 @@ SavedDeskItemView* GetItemViewFromTemplatesGrid(size_t grid_item_index) {
   return item_view;
 }
 
-views::Button* GetZeroStateDesksTemplatesButton() {
+const views::Button* GetLibraryButton() {
   const auto* overview_grid = GetPrimaryOverviewGrid();
   if (!overview_grid)
     return nullptr;
 
   // May be null in tablet mode.
   const auto* desks_bar_view = overview_grid->desks_bar_view();
-  return desks_bar_view ? desks_bar_view->zero_state_desks_templates_button()
-                        : nullptr;
-}
-
-views::Button* GetExpandedStateDesksTemplatesButton() {
-  const auto* overview_grid = GetPrimaryOverviewGrid();
-  if (!overview_grid)
+  if (!desks_bar_view) {
     return nullptr;
+  }
 
-  // May be null in tablet mode.
-  const auto* desks_bar_view = overview_grid->desks_bar_view();
-  return desks_bar_view
-             ? desks_bar_view->expanded_state_desks_templates_button()
-                   ->GetInnerButton()
-             : nullptr;
+  return desks_bar_view->library_button();
 }
 
-views::Button* GetSaveDeskAsTemplateButton() {
-  const auto* overview_grid = GetPrimaryOverviewGrid();
-  if (!overview_grid)
-    return nullptr;
-  return overview_grid->GetSaveDeskAsTemplateButton();
+const views::Button* GetSaveDeskAsTemplateButton() {
+  auto* overview_grid = GetPrimaryOverviewGrid();
+  return overview_grid ? overview_grid->GetSaveDeskAsTemplateButton() : nullptr;
 }
 
-views::Button* GetSaveDeskForLaterButton() {
-  const auto* overview_grid = GetPrimaryOverviewGrid();
+const views::Button* GetSaveDeskForLaterButton() {
+  auto* overview_grid = GetPrimaryOverviewGrid();
   return overview_grid ? overview_grid->GetSaveDeskForLaterButton() : nullptr;
 }
 
-views::Button* GetTemplateItemButton(int index) {
-  auto* item = GetItemViewFromTemplatesGrid(index);
+const views::Button* GetSavedDeskItemButton(int index) {
+  auto* item = GetItemViewFromSavedDeskGrid(index);
   return item ? static_cast<views::Button*>(item) : nullptr;
 }
 
-views::Button* GetTemplateItemDeleteButton(int index) {
-  auto* item = GetItemViewFromTemplatesGrid(index);
-  return item ? static_cast<views::Button*>(const_cast<CloseButton*>(
-                    SavedDeskItemViewTestApi(item).delete_button()))
+const views::Button* GetSavedDeskItemDeleteButton(int index) {
+  auto* item = GetItemViewFromSavedDeskGrid(index);
+  return item ? const_cast<IconButton*>(
+                    SavedDeskItemViewTestApi(item).delete_button())
               : nullptr;
 }
 
-views::Button* GetSavedDeskDialogAcceptButton() {
-  const views::Widget* dialog_widget =
-      saved_desk_util::GetSavedDeskDialogController()->dialog_widget();
-  if (!dialog_widget)
-    return nullptr;
-  return dialog_widget->widget_delegate()->AsDialogDelegate()->GetOkButton();
+const views::Button* GetSavedDeskDialogAcceptButton() {
+  if (auto* dialog_widget_view = saved_desk_util::GetSavedDeskDialogController()
+                                     ->GetSystemDialogViewForTesting()) {
+    return dialog_widget_view->GetAcceptButtonForTesting();
+  }
+  return nullptr;
 }
 
-void WaitForDesksTemplatesUI() {
+void WaitForSavedDeskUI() {
   auto* overview_session = GetOverviewSession();
   DCHECK(overview_session);
 
@@ -244,6 +264,70 @@ void WaitForDesksTemplatesUI() {
   SavedDeskPresenterTestApi(overview_session->saved_desk_presenter())
       .SetOnUpdateUiClosure(run_loop.QuitClosure());
   run_loop.Run();
+}
+
+const app_restore::AppRestoreData* QueryRestoreData(
+    const DeskTemplate& saved_desk,
+    std::optional<std::string> app_id,
+    std::optional<int32_t> window_id) {
+  const auto& app_id_to_launch_list =
+      saved_desk.desk_restore_data()->app_id_to_launch_list();
+
+  auto app_it = app_id ? app_id_to_launch_list.find(*app_id)
+                       : app_id_to_launch_list.begin();
+  if (app_it == app_id_to_launch_list.end()) {
+    // No matching app found, or the app list is empty.
+    return nullptr;
+  }
+
+  const auto& launch_list = app_it->second;
+  auto window_it =
+      window_id ? launch_list.find(*window_id) : launch_list.begin();
+  if (window_it == launch_list.end()) {
+    // No matching window found, or the window list is is empty.
+    return nullptr;
+  }
+
+  return window_it->second.get();
+}
+
+void AddSavedDeskEntry(desks_storage::DeskModel* desk_model,
+                       std::unique_ptr<DeskTemplate> saved_desk) {
+  base::RunLoop loop;
+  desk_model->AddOrUpdateEntry(
+      std::move(saved_desk),
+      base::BindLambdaForTesting(
+          [&](desks_storage::DeskModel::AddOrUpdateEntryStatus status,
+              std::unique_ptr<ash::DeskTemplate> new_entry) {
+            CHECK_EQ(desks_storage::DeskModel::AddOrUpdateEntryStatus::kOk,
+                     status);
+            loop.Quit();
+          }));
+  loop.Run();
+}
+
+void AddSavedDeskEntry(desks_storage::DeskModel* desk_model,
+                       const base::Uuid& uuid,
+                       const std::string& name,
+                       base::Time created_time,
+                       DeskTemplateSource source,
+                       DeskTemplateType type,
+                       std::unique_ptr<app_restore::RestoreData> restore_data) {
+  auto saved_desk =
+      std::make_unique<DeskTemplate>(uuid, source, name, created_time, type);
+  saved_desk->set_desk_restore_data(std::move(restore_data));
+
+  AddSavedDeskEntry(desk_model, std::move(saved_desk));
+}
+
+void AddSavedDeskEntry(desks_storage::DeskModel* desk_model,
+                       const base::Uuid& uuid,
+                       const std::string& name,
+                       base::Time created_time,
+                       DeskTemplateType type) {
+  AddSavedDeskEntry(desk_model, uuid, name, created_time,
+                    DeskTemplateSource::kUser, type,
+                    std::make_unique<app_restore::RestoreData>());
 }
 
 }  // namespace ash

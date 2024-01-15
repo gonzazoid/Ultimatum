@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -17,7 +17,9 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/common/chrome_content_client.h"
+#include "components/gcm_driver/gcm_driver.h"
 #include "components/gcm_driver/gcm_profile_service.h"
+#include "components/gcm_driver/instance_id/instance_id_driver.h"
 #include "components/gcm_driver/instance_id/instance_id_profile_service.h"
 #include "components/invalidation/impl/fcm_invalidation_service.h"
 #include "components/invalidation/impl/fcm_network_handler.h"
@@ -54,6 +56,7 @@ std::unique_ptr<InvalidationService> CreateInvalidationServiceForSenderId(
           gcm::GCMProfileServiceFactory::GetForProfile(profile)->driver(),
           instance_id::InstanceIDProfileServiceFactory::GetForProfile(profile)
               ->driver()),
+      base::BindRepeating(&invalidation::FCMInvalidationListener::Create),
       base::BindRepeating(
           &PerUserTopicSubscriptionManager::Create, identity_provider,
           profile->GetPrefs(),
@@ -91,13 +94,22 @@ ProfileInvalidationProvider* ProfileInvalidationProviderFactory::GetForProfile(
 // static
 ProfileInvalidationProviderFactory*
 ProfileInvalidationProviderFactory::GetInstance() {
-  return base::Singleton<ProfileInvalidationProviderFactory>::get();
+  static base::NoDestructor<ProfileInvalidationProviderFactory> instance;
+  return instance.get();
 }
 
 ProfileInvalidationProviderFactory::ProfileInvalidationProviderFactory()
-    : ProfileKeyedServiceFactory("InvalidationService") {
+    : ProfileKeyedServiceFactory(
+          "InvalidationService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
   DependsOn(gcm::GCMProfileServiceFactory::GetInstance());
+  DependsOn(instance_id::InstanceIDProfileServiceFactory::GetInstance());
 }
 
 ProfileInvalidationProviderFactory::~ProfileInvalidationProviderFactory() =
@@ -108,10 +120,11 @@ void ProfileInvalidationProviderFactory::RegisterTestingFactory(
   testing_factory_ = std::move(testing_factory);
 }
 
-KeyedService* ProfileInvalidationProviderFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ProfileInvalidationProviderFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   if (testing_factory_)
-    return testing_factory_.Run(context).release();
+    return testing_factory_.Run(context);
 
   std::unique_ptr<IdentityProvider> identity_provider;
 
@@ -132,14 +145,10 @@ KeyedService* ProfileInvalidationProviderFactory::BuildServiceInstanceFor(
     identity_provider = std::make_unique<ProfileIdentityProvider>(
         IdentityManagerFactory::GetForProfile(profile));
   }
-  auto service =
-      CreateInvalidationServiceForSenderId(profile, identity_provider.get(),
-                                           /* sender_id = */ "");
   auto custom_sender_id_factory = base::BindRepeating(
       &CreateInvalidationServiceForSenderId, profile, identity_provider.get());
-  return new ProfileInvalidationProvider(std::move(service),
-                                         std::move(identity_provider),
-                                         std::move(custom_sender_id_factory));
+  return std::make_unique<ProfileInvalidationProvider>(
+      std::move(identity_provider), std::move(custom_sender_id_factory));
 }
 
 void ProfileInvalidationProviderFactory::RegisterProfilePrefs(

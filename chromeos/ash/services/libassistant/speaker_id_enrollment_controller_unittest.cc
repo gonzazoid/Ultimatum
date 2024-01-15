@@ -8,7 +8,7 @@
 #include "base/test/task_environment.h"
 #include "chromeos/ash/services/libassistant/test_support/libassistant_service_tester.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -65,16 +65,68 @@ class AssistantSpeakerIdEnrollmentControllerTest : public ::testing::Test {
 
   LibassistantServiceTester& service_tester() { return service_tester_; }
 
-  chromeos::assistant::FakeAssistantManagerInternal&
-  assistant_manager_internal() {
-    return service_tester().assistant_manager_internal();
-  }
-
   assistant_client::SpeakerIdEnrollmentUpdate CreateUpdate(
       SpeakerIdEnrollmentState state) {
     assistant_client::SpeakerIdEnrollmentUpdate result;
     result.state = state;
     return result;
+  }
+
+  bool IsSpeakerIdEnrollmentInProgress() {
+    return service_tester_.service()
+        .speaker_id_enrollment_controller_for_testing()
+        .IsSpeakerIdEnrollmentInProgressForTesting();
+  }
+
+  void CallUpdateCallback(
+      const ::assistant_client::SpeakerIdEnrollmentUpdate& update) {
+    ::assistant::api::OnSpeakerIdEnrollmentEventRequest request;
+    ::assistant::api::events::SpeakerIdEnrollmentEvent* event =
+        request.mutable_event();
+    switch (update.state) {
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::INIT: {
+        event->mutable_init_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::CHECK: {
+        event->mutable_check_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::LISTEN: {
+        event->mutable_listen_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::PROCESS: {
+        event->mutable_process_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::UPLOAD: {
+        event->mutable_upload_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::FETCH: {
+        event->mutable_fetch_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::DONE: {
+        event->mutable_done_state();
+        break;
+      }
+      case ::assistant_client::SpeakerIdEnrollmentUpdate::State::FAILURE: {
+        event->mutable_failure_state();
+        break;
+      }
+    }
+
+    service_tester_.service()
+        .speaker_id_enrollment_controller_for_testing()
+        .OnGrpcMessageForTesting(std::move(request));
+  }
+
+  void CallGetStatusCallback(bool user_model_exists) {
+    service_tester_.service()
+        .speaker_id_enrollment_controller_for_testing()
+        .SendGetStatusResponseForTesting(user_model_exists);
   }
 
  private:
@@ -92,8 +144,7 @@ TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
 
   FlushForTesting();
 
-  EXPECT_FALSE(
-      assistant_manager_internal().is_speaker_id_enrollment_in_progress());
+  EXPECT_FALSE(IsSpeakerIdEnrollmentInProgress());
 }
 
 TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
@@ -114,8 +165,7 @@ TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
 
   FlushForTesting();
 
-  EXPECT_TRUE(
-      assistant_manager_internal().is_speaker_id_enrollment_in_progress());
+  EXPECT_TRUE(IsSpeakerIdEnrollmentInProgress());
 }
 
 TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
@@ -130,8 +180,7 @@ TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
 
   FlushForTesting();
 
-  EXPECT_FALSE(
-      assistant_manager_internal().is_speaker_id_enrollment_in_progress());
+  EXPECT_FALSE(IsSpeakerIdEnrollmentInProgress());
 }
 
 TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
@@ -143,34 +192,29 @@ TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
                                         /*skip_cloud_enrollment=*/false,
                                         client.BindNewPipeAndPassRemote());
   FlushForTesting();
-  ASSERT_TRUE(
-      assistant_manager_internal().is_speaker_id_enrollment_in_progress());
-
-  auto callback =
-      assistant_manager_internal().speaker_id_enrollment_update_callback();
-  ASSERT_TRUE(callback);
+  EXPECT_TRUE(IsSpeakerIdEnrollmentInProgress());
 
   // These are ignored
-  callback(CreateUpdate(SpeakerIdEnrollmentState::INIT));
-  callback(CreateUpdate(SpeakerIdEnrollmentState::CHECK));
-  callback(CreateUpdate(SpeakerIdEnrollmentState::UPLOAD));
-  callback(CreateUpdate(SpeakerIdEnrollmentState::FETCH));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::INIT));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::CHECK));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::UPLOAD));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::FETCH));
   client.FlushForTesting();
 
   EXPECT_CALL(client, OnListeningHotword);
-  callback(CreateUpdate(SpeakerIdEnrollmentState::LISTEN));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::LISTEN));
   client.FlushForTesting();
 
   EXPECT_CALL(client, OnProcessingHotword);
-  callback(CreateUpdate(SpeakerIdEnrollmentState::PROCESS));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::PROCESS));
   client.FlushForTesting();
 
   EXPECT_CALL(client, OnSpeakerIdEnrollmentDone);
-  callback(CreateUpdate(SpeakerIdEnrollmentState::DONE));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::DONE));
   client.FlushForTesting();
 
   EXPECT_CALL(client, OnSpeakerIdEnrollmentFailure);
-  callback(CreateUpdate(SpeakerIdEnrollmentState::FAILURE));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::FAILURE));
   client.FlushForTesting();
 }
 
@@ -192,17 +236,9 @@ TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
 
   FlushForTesting();
 
-  // Note: our FakeAssistantManagerInternal ensures the first enrollment was
-  // stopped (with an EXPECT_FALSE).
-  // To ensure the second enrollment was started, we send an enrollment update,
-  // which should be received by the second client and not the first one.
-
-  auto callback =
-      assistant_manager_internal().speaker_id_enrollment_update_callback();
-  ASSERT_TRUE(callback);
-
   EXPECT_CALL(second_client, OnProcessingHotword);
-  callback(CreateUpdate(SpeakerIdEnrollmentState::PROCESS));
+  CallUpdateCallback(CreateUpdate(SpeakerIdEnrollmentState::PROCESS));
+
   first_client.FlushForTesting();
   second_client.FlushForTesting();
 }
@@ -233,10 +269,7 @@ TEST_F(AssistantSpeakerIdEnrollmentControllerTest,
   controller().GetSpeakerIdEnrollmentStatus("user-id", callback.Get());
   FlushForTesting();
 
-  auto libassistant_callback =
-      assistant_manager_internal().speaker_id_enrollment_status_callback();
-  libassistant_callback(SpeakerIdEnrollmentStatus{/*user_model_exists=*/true});
-
+  CallGetStatusCallback(/*user_model_exists=*/true);
   FlushForTesting();
 }
 

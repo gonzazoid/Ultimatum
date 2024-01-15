@@ -9,12 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/singleton.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "storage/browser/quota/quota_client_type.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
@@ -44,37 +44,15 @@ void MockQuotaClient::AddBucketsData(
   bucket_data_.insert(mock_data.begin(), mock_data.end());
 }
 
-void MockQuotaClient::ModifyStorageKeyAndNotify(
-    const blink::StorageKey& storage_key,
-    blink::mojom::StorageType storage_type,
-    int64_t delta) {
-  auto it = base::ranges::find_if(
-      bucket_data_,
-      [storage_key, storage_type](std::pair<BucketLocator, int64_t> entry) {
-        return entry.first.is_default &&
-               entry.first.storage_key == storage_key &&
-               entry.first.type == storage_type;
-      });
-  DCHECK(it != bucket_data_.end());
-  it->second += delta;
-  DCHECK_GE(it->second, 0);
-
-  // TODO(tzik): Check quota to prevent usage exceed
-  quota_manager_proxy_->NotifyStorageModified(
-      client_type_, storage_key, storage_type, delta, IncrementMockTime(),
-      base::SequencedTaskRunnerHandle::Get(), base::DoNothing());
-}
-
-void MockQuotaClient::ModifyBucketAndNotify(BucketId bucket_id, int64_t delta) {
-  auto it = base::ranges::find(
-      bucket_data_, bucket_id,
-      [](std::pair<BucketLocator, int64_t> entry) { return entry.first.id; });
+void MockQuotaClient::ModifyBucketAndNotify(const BucketLocator& bucket,
+                                            int64_t delta) {
+  auto it = bucket_data_.find(bucket);
   DCHECK(it != bucket_data_.end());
   it->second += delta;
   DCHECK_GE(it->second, 0);
   quota_manager_proxy_->NotifyBucketModified(
-      client_type_, bucket_id, delta, IncrementMockTime(),
-      base::SequencedTaskRunnerHandle::Get(), base::DoNothing());
+      client_type_, bucket, delta, IncrementMockTime(),
+      base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
 }
 
 void MockQuotaClient::AddBucketToErrorSet(const BucketLocator& bucket) {
@@ -83,12 +61,13 @@ void MockQuotaClient::AddBucketToErrorSet(const BucketLocator& bucket) {
 
 base::Time MockQuotaClient::IncrementMockTime() {
   ++mock_time_counter_;
-  return base::Time::FromDoubleT(mock_time_counter_ * 10.0);
+  return base::Time::FromSecondsSinceUnixEpoch(mock_time_counter_ * 10.0);
 }
 
 void MockQuotaClient::GetBucketUsage(const BucketLocator& bucket,
                                      GetBucketUsageCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  ++get_bucket_usage_call_count_;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockQuotaClient::RunGetBucketUsage,
                      weak_factory_.GetWeakPtr(), bucket, std::move(callback)));
@@ -97,7 +76,7 @@ void MockQuotaClient::GetBucketUsage(const BucketLocator& bucket,
 void MockQuotaClient::GetStorageKeysForType(
     blink::mojom::StorageType type,
     GetStorageKeysForTypeCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockQuotaClient::RunGetStorageKeysForType,
                      weak_factory_.GetWeakPtr(), type, std::move(callback)));
@@ -105,7 +84,7 @@ void MockQuotaClient::GetStorageKeysForType(
 
 void MockQuotaClient::DeleteBucketData(const BucketLocator& bucket,
                                        DeleteBucketDataCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockQuotaClient::RunDeleteBucketData,
                      weak_factory_.GetWeakPtr(), bucket, std::move(callback)));
@@ -154,10 +133,9 @@ void MockQuotaClient::RunDeleteBucketData(const BucketLocator& bucket,
   }
 
   int64_t delta = it->second;
-  quota_manager_proxy_->NotifyStorageModified(
-      client_type_, blink::StorageKey(bucket.storage_key), bucket.type, -delta,
-      base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
-      base::DoNothing());
+  quota_manager_proxy_->NotifyBucketModified(
+      client_type_, bucket, -delta, base::Time::Now(),
+      base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
   bucket_data_.erase(it);
   std::move(callback).Run(blink::mojom::QuotaStatusCode::kOk);
 }

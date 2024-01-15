@@ -19,7 +19,6 @@ struct AutocompleteMatch;
 class AutocompleteClassifier;
 class AutocompleteSchemeClassifier;
 class RemoteSuggestionsService;
-class DocumentSuggestionsService;
 class GURL;
 class InMemoryURLIndex;
 class KeywordExtensionsDelegate;
@@ -30,6 +29,9 @@ class PrefService;
 class ShortcutsBackend;
 class TabMatcher;
 class ZeroSuggestCacheService;
+class AutocompleteScoringModelService;
+class OnDeviceTailModelService;
+struct ProviderStateService;
 
 namespace bookmarks {
 class BookmarkModel;
@@ -39,7 +41,7 @@ namespace history {
 class HistoryService;
 class URLDatabase;
 class TopSites;
-}
+}  // namespace history
 
 namespace history_clusters {
 class HistoryClustersService;
@@ -77,14 +79,13 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
   virtual history::HistoryService* GetHistoryService() = 0;
   virtual history_clusters::HistoryClustersService* GetHistoryClustersService();
   virtual scoped_refptr<history::TopSites> GetTopSites() = 0;
-  virtual bookmarks::BookmarkModel* GetBookmarkModel() = 0;
+  virtual bookmarks::BookmarkModel* GetLocalOrSyncableBookmarkModel() = 0;
+  virtual bookmarks::BookmarkModel* GetAccountBookmarkModel() = 0;
   virtual history::URLDatabase* GetInMemoryDatabase() = 0;
   virtual InMemoryURLIndex* GetInMemoryURLIndex() = 0;
   virtual TemplateURLService* GetTemplateURLService() = 0;
   virtual const TemplateURLService* GetTemplateURLService() const = 0;
   virtual RemoteSuggestionsService* GetRemoteSuggestionsService(
-      bool create_if_necessary) const = 0;
-  virtual DocumentSuggestionsService* GetDocumentSuggestionsService(
       bool create_if_necessary) const = 0;
   virtual ZeroSuggestCacheService* GetZeroSuggestCacheService() = 0;
   virtual const ZeroSuggestCacheService* GetZeroSuggestCacheService() const = 0;
@@ -96,6 +97,10 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
   virtual query_tiles::TileService* GetQueryTileService() const = 0;
   virtual OmniboxTriggeredFeatureService* GetOmniboxTriggeredFeatureService()
       const = 0;
+  virtual AutocompleteScoringModelService* GetAutocompleteScoringModelService()
+      const = 0;
+  virtual OnDeviceTailModelService* GetOnDeviceTailModelService() const = 0;
+  virtual ProviderStateService* GetProviderStateService() const = 0;
 
   // The value to use for Accept-Languages HTTP header when making an HTTP
   // request.
@@ -126,8 +131,13 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
 
   // Returns the signin::IdentityManager associated with the current profile.
   virtual signin::IdentityManager* GetIdentityManager() const = 0;
-
+  // In desktop platforms, this returns true for both guest and Incognito mode.
+  // In mobile platforms, we don't have a guest mode and therefore, it returns
+  // true only for Incognito mode.
   virtual bool IsOffTheRecord() const = 0;
+  virtual bool IsIncognitoProfile() const = 0;
+  virtual bool IsGuestSession() const = 0;
+
   virtual bool SearchSuggestEnabled() const = 0;
 
   // True for almost all users except ones with a specific enterprise policy.

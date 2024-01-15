@@ -6,10 +6,8 @@ package test;
 
 import android.app.Application;
 
-/**
- * Class which fails 'DefaultLocale' lint check.
- */
-public class LintTest extends Application {
+/** Class which fails 'DefaultLocale' lint check. */
+public class DefaultLocaleLintTest extends Application {
     public String testTriggerDefaultLocaleCheck(int any) {
         // String format with an integer requires a Locale since it may be formatted differently.
         return String.format("Test %d", any);

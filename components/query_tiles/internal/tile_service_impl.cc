@@ -7,11 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/rand_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "components/query_tiles/internal/proto_conversion.h"
 #include "components/query_tiles/internal/tile_config.h"
 
@@ -95,7 +94,7 @@ void TileServiceImpl::OnFetchFinished(
     if (parse_success) {
       TileGroup group;
       TileGroupFromResponse(response_proto, &group);
-      group.id = base::GenerateGUID();
+      group.id = base::Uuid::GenerateRandomV4().AsLowercaseString();
       group.last_updated_ts = clock_->Now();
       auto group_copy = std::make_unique<TileGroup>(group);
       tile_manager_->SaveTiles(

@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/printing/history/print_job_reporting_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ash/printing/history/print_job_reporting_service.h"
 
 namespace ash {
@@ -19,19 +19,26 @@ PrintJobReportingService* PrintJobReportingServiceFactory::GetForBrowserContext(
 // static
 PrintJobReportingServiceFactory*
 PrintJobReportingServiceFactory::GetInstance() {
-  return base::Singleton<PrintJobReportingServiceFactory>::get();
+  static base::NoDestructor<PrintJobReportingServiceFactory> instance;
+  return instance.get();
 }
 
 PrintJobReportingServiceFactory::PrintJobReportingServiceFactory()
-    : ProfileKeyedServiceFactory("PrintJobReportingServiceFactory") {}
+    : ProfileKeyedServiceFactory(
+          "PrintJobReportingServiceFactory",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 PrintJobReportingServiceFactory::~PrintJobReportingServiceFactory() = default;
 
-KeyedService* PrintJobReportingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PrintJobReportingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  auto reporting_service = PrintJobReportingService::Create();
-
-  return reporting_service.release();
+  return PrintJobReportingService::Create();
 }
 
 bool PrintJobReportingServiceFactory::ServiceIsNULLWhileTesting() const {

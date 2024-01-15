@@ -132,7 +132,19 @@ def main():
   parser.add_argument(
       '--target',
       required=True,
-      choices=['win32', 'win64', 'mac', 'mac-arm', 'linux'],
+      choices=[
+          'win-arm64',
+          'win32',
+          'win64',
+          'mac',
+          'mac-arm',
+          'linux',
+          'lacros64',
+          'lacros-arm',
+          'lacros-arm64',
+          'android-arm32',
+          'android-arm64',
+      ],
       help='Identifier of a specific target platform + architecture.')
   subparsers = parser.add_subparsers()
 

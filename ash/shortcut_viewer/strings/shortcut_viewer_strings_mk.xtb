@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Нагласете го редот со лентата за адреси</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> или <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Режим на преглед</translation>
+<translation id="4275283744500212192">Отвори ги опциите за распоред на прозорецот</translation>
 <translation id="4382340674111381977">Врати се назад на претходната страница</translation>
 <translation id="4458670250301149821">Преместувајте икона на апликација внатре/надвор од решетката на апликацијата</translation>
 <translation id="4472417192667361414">Поставки за систем и екран</translation>
@@ -193,16 +194,17 @@
 <translation id="8388247778047144397">Повлечете го линкот до празен простор на лентата за картички</translation>
 <translation id="8389638407792712197">Отворете нов прозорец</translation>
 <translation id="8429696719963529183">Користете ги копчињата F (F1 до F12)</translation>
+<translation id="8539396513118402548">Список со кратенки</translation>
 <translation id="85690795166292698">Отворете го линкот во нова картичка</translation>
 <translation id="8609384513243082612">Отворете нова картичка</translation>
-<translation id="8644639153978066712">Прикажете ги сокриените датотеки во апликацијата „Датотеки“</translation>
+<translation id="8644639153978066712">Прикажувај ги скриените датотеки во апликацијата „Датотеки“</translation>
 <translation id="8717459106217102612">Изберете претходен збор или буква</translation>
 <translation id="8727232706774971183">Погледнете ги известувањата</translation>
 <translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> од 1. до 8.</translation>
 <translation id="8881584919399569791">Преместете го активниот прозорец на работниот простор лево</translation>
 <translation id="88986195241502842">Страница подолу</translation>
 <translation id="8924883688469390268">Префрли на претходниот корисник</translation>
-<translation id="8941626538514548667">Фокусирај веб-содржини во прелистувачот</translation>
+<translation id="8941626538514548667">Фокусирај интернет-содржини во прелистувачот</translation>
 <translation id="8977648847395357314">Изберете ја содржината во лентата за адреса</translation>
 <translation id="8982190978301344584">Го прикажува менито со список на достапни IME</translation>
 <translation id="8990356943438003669"><ph name="ALT" /><ph name="SEPARATOR" /> 1 до 8</translation>

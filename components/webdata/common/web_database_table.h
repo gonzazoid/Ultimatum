@@ -40,13 +40,6 @@ class WEBDATA_EXPORT WebDatabaseTable {
   // Returns true on success, false on failure.
   virtual bool CreateTablesIfNecessary() = 0;
 
-  // In order to encourage developers to think about sync when adding or
-  // or altering new tables, this method must be implemented. Please get in
-  // contact with the sync team if you believe you're making a change that they
-  // should be aware of (or if you could break something).
-  // TODO(andybons): Implement something more robust.
-  virtual bool IsSyncable() = 0;
-
   // Migrates this table to |version|. Returns false if there was
   // migration work to do and it failed, true otherwise.
   //
@@ -62,8 +55,8 @@ class WEBDATA_EXPORT WebDatabaseTable {
   // class exists. Since lifetime of WebDatabaseTable objects slightly
   // exceeds that of WebDatabase, they should not be used in
   // ~WebDatabaseTable.
-  raw_ptr<sql::Database, DanglingUntriaged> db_;
-  raw_ptr<sql::MetaTable, DanglingUntriaged> meta_table_;
+  raw_ptr<sql::Database, AcrossTasksDanglingUntriaged> db_;
+  raw_ptr<sql::MetaTable, AcrossTasksDanglingUntriaged> meta_table_;
 };
 
 #endif  // COMPONENTS_WEBDATA_COMMON_WEB_DATABASE_TABLE_H_

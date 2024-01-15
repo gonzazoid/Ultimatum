@@ -6,15 +6,15 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_event_type.h"
@@ -31,12 +31,12 @@ namespace net {
 WebSocketTransportClientSocketPool::WebSocketTransportClientSocketPool(
     int max_sockets,
     int max_sockets_per_group,
-    const ProxyServer& proxy_server,
+    const ProxyChain& proxy_chain,
     const CommonConnectJobParams* common_connect_job_params)
     : ClientSocketPool(/*is_for_websockets=*/true,
                        common_connect_job_params,
                        std::make_unique<ConnectJobFactory>()),
-      proxy_server_(proxy_server),
+      proxy_chain_(proxy_chain),
       max_sockets_(max_sockets) {
   DCHECK(common_connect_job_params->websocket_endpoint_lock_manager);
 }
@@ -44,10 +44,10 @@ WebSocketTransportClientSocketPool::WebSocketTransportClientSocketPool(
 WebSocketTransportClientSocketPool::~WebSocketTransportClientSocketPool() {
   // Clean up any pending connect jobs.
   FlushWithError(ERR_ABORTED, "");
-  DCHECK(pending_connects_.empty());
-  DCHECK_EQ(0, handed_out_socket_count_);
-  DCHECK(stalled_request_queue_.empty());
-  DCHECK(stalled_request_map_.empty());
+  CHECK(pending_connects_.empty());
+  CHECK_EQ(0, handed_out_socket_count_);
+  CHECK(stalled_request_queue_.empty());
+  CHECK(stalled_request_map_.empty());
 }
 
 // static
@@ -104,7 +104,7 @@ int WebSocketTransportClientSocketPool::RequestSocket(
                                            request_net_log);
 
   std::unique_ptr<ConnectJob> connect_job =
-      CreateConnectJob(group_id, params, proxy_server_, proxy_annotation_tag,
+      CreateConnectJob(group_id, params, proxy_chain_, proxy_annotation_tag,
                        priority, SocketTag(), connect_job_delegate.get());
 
   int result = connect_job_delegate->Connect(std::move(connect_job));
@@ -160,8 +160,12 @@ void WebSocketTransportClientSocketPool::CancelRequest(
   if (socket)
     ReleaseSocket(handle->group_id(), std::move(socket),
                   handle->group_generation());
-  if (!DeleteJob(handle))
-    pending_callbacks_.erase(handle);
+  if (DeleteJob(handle)) {
+    CHECK(!base::Contains(pending_callbacks_,
+                          reinterpret_cast<ClientSocketHandleID>(handle)));
+  } else {
+    pending_callbacks_.erase(reinterpret_cast<ClientSocketHandleID>(handle));
+  }
 
   ActivateStalledRequest();
 }
@@ -230,7 +234,7 @@ LoadState WebSocketTransportClientSocketPool::GetLoadState(
     const ClientSocketHandle* handle) const {
   if (stalled_request_map_.find(handle) != stalled_request_map_.end())
     return LOAD_STATE_WAITING_FOR_AVAILABLE_SOCKET;
-  if (pending_callbacks_.count(handle))
+  if (pending_callbacks_.count(reinterpret_cast<ClientSocketHandleID>(handle)))
     return LOAD_STATE_CONNECTING;
   return LookupConnectJob(handle)->GetLoadState();
 }
@@ -238,15 +242,15 @@ LoadState WebSocketTransportClientSocketPool::GetLoadState(
 base::Value WebSocketTransportClientSocketPool::GetInfoAsValue(
     const std::string& name,
     const std::string& type) const {
-  base::Value::Dict dict;
-  dict.Set("name", name);
-  dict.Set("type", type);
-  dict.Set("handed_out_socket_count", handed_out_socket_count_);
-  dict.Set("connecting_socket_count",
-           static_cast<int>(pending_connects_.size()));
-  dict.Set("idle_socket_count", 0);
-  dict.Set("max_socket_count", max_sockets_);
-  dict.Set("max_sockets_per_group", max_sockets_);
+  auto dict = base::Value::Dict()
+                  .Set("name", name)
+                  .Set("type", type)
+                  .Set("handed_out_socket_count", handed_out_socket_count_)
+                  .Set("connecting_socket_count",
+                       static_cast<int>(pending_connects_.size()))
+                  .Set("idle_socket_count", 0)
+                  .Set("max_socket_count", max_sockets_)
+                  .Set("max_sockets_per_group", max_sockets_);
   return base::Value(std::move(dict));
 }
 
@@ -331,7 +335,7 @@ void WebSocketTransportClientSocketPool::OnConnectJobComplete(
   ClientSocketHandle* const handle = connect_job_delegate->socket_handle();
 
   bool delete_succeeded = DeleteJob(handle);
-  DCHECK(delete_succeeded);
+  CHECK(delete_succeeded);
 
   connect_job_delegate = nullptr;
 
@@ -345,22 +349,25 @@ void WebSocketTransportClientSocketPool::InvokeUserCallbackLater(
     ClientSocketHandle* handle,
     CompletionOnceCallback callback,
     int rv) {
-  DCHECK(!pending_callbacks_.count(handle));
-  pending_callbacks_.insert(handle);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  const auto handle_id = reinterpret_cast<ClientSocketHandleID>(handle);
+  CHECK(!pending_callbacks_.count(handle_id));
+  pending_callbacks_.insert(handle_id);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&WebSocketTransportClientSocketPool::InvokeUserCallback,
-                     weak_factory_.GetWeakPtr(),
-                     base::UnsafeDanglingUntriaged(handle), std::move(callback),
-                     rv));
+                     weak_factory_.GetWeakPtr(), handle_id,
+                     handle->GetWeakPtr(), std::move(callback), rv));
 }
 
 void WebSocketTransportClientSocketPool::InvokeUserCallback(
-    ClientSocketHandle* handle,
+    ClientSocketHandleID handle_id,
+    base::WeakPtr<ClientSocketHandle> weak_handle,
     CompletionOnceCallback callback,
     int rv) {
-  if (pending_callbacks_.erase(handle))
+  if (pending_callbacks_.erase(handle_id)) {
+    CHECK(weak_handle);
     std::move(callback).Run(rv);
+  }
 }
 
 bool WebSocketTransportClientSocketPool::ReachedMaxSocketsLimit() const {
@@ -396,7 +403,7 @@ void WebSocketTransportClientSocketPool::AddJob(
       pending_connects_
           .insert(PendingConnectsMap::value_type(handle, std::move(delegate)))
           .second;
-  DCHECK(inserted);
+  CHECK(inserted);
 }
 
 bool WebSocketTransportClientSocketPool::DeleteJob(ClientSocketHandle* handle) {

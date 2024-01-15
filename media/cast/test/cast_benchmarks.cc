@@ -27,14 +27,15 @@
 
 #include <map>
 #include <memory>
+#include <numeric>
 #include <utility>
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/debug/profiler.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -49,6 +50,7 @@
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
 #include "media/base/fake_single_thread_task_runner.h"
+#include "media/base/mock_filters.h"
 #include "media/base/video_frame.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/cast_environment.h"
@@ -334,7 +336,7 @@ class RunOneBenchmark {
 
   void Run(const MeasuringPoint& p) {
     available_bitrate_ = p.bitrate;
-    Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+    Configure(Codec::kVideoFake, Codec::kAudioPcm16);
     Create(p);
     StartBasicPlayer();
 
@@ -497,9 +499,10 @@ void RunOneBenchmark::Create(const MeasuringPoint& p) {
 
   cast_sender_->InitializeAudio(audio_sender_config_,
                                 base::BindOnce(&ExpectAudioSuccess));
-  cast_sender_->InitializeVideo(video_sender_config_,
-                                base::BindRepeating(&ExpectVideoSuccess),
-                                base::DoNothing());
+  cast_sender_->InitializeVideo(
+      video_sender_config_,
+      std::make_unique<media::MockVideoEncoderMetricsProvider>(),
+      base::BindRepeating(&ExpectVideoSuccess), base::DoNothing());
 
   receiver_to_sender_->Initialize(CreateSimplePipe(p),
                                   transport_sender_.PacketReceiverForTesting(),
@@ -621,7 +624,7 @@ class CastBenchmark {
     }
 
     while (max - min > accuracy) {
-      double avg = (min + max) / 2;
+      double avg = std::midpoint(min, max);
       if (RunOnePoint(v, avg)) {
         min = avg;
       } else {

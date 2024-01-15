@@ -10,13 +10,13 @@
 
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "dbus/message.h"
 #include "dbus/mock_bus.h"
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_path.h"
 #include "dbus/object_proxy.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -185,13 +185,7 @@ class GeolocationWifiDataProviderLinuxTest : public testing::Test {
             dbus::Response::CreateEmpty();
         dbus::MessageWriter writer(response.get());
 
-        if (property_name == "Ssid") {
-          const uint8_t kSsid[] = {0x74, 0x65, 0x73, 0x74};  // "test"
-          dbus::MessageWriter variant_writer(response.get());
-          writer.OpenVariant("ay", &variant_writer);
-          variant_writer.AppendArrayOfBytes(kSsid, std::size(kSsid));
-          writer.CloseContainer(&variant_writer);
-        } else if (property_name == "HwAddress") {
+        if (property_name == "HwAddress") {
           // This will be converted to "00-11-22-33-44-55".
           const std::string kMacAddress = "00:11:22:33:44:55";
           writer.AppendVariantOfString(kMacAddress);
@@ -218,13 +212,11 @@ TEST_F(GeolocationWifiDataProviderLinuxTest, GetAccessPointData) {
   ASSERT_TRUE(wlan_api_->GetAccessPointData(&access_point_data_set));
 
   ASSERT_EQ(1U, access_point_data_set.size());
-  const AccessPointData& access_point_data = *access_point_data_set.begin();
+  const auto& access_point_data = *access_point_data_set.begin();
 
   // Check the contents of the access point data.
   // The expected values come from CreateAccessPointProxyResponse() above.
-  EXPECT_EQ("test", base::UTF16ToUTF8(access_point_data.ssid));
-  EXPECT_EQ("00-11-22-33-44-55",
-            base::UTF16ToUTF8(access_point_data.mac_address));
+  EXPECT_EQ("00-11-22-33-44-55", access_point_data.mac_address);
   EXPECT_EQ(-50, access_point_data.radio_signal_strength);
   EXPECT_EQ(4, access_point_data.channel);
 }

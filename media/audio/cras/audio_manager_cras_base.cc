@@ -10,17 +10,16 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/nix/xdg_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/audio_features.h"
 #include "media/audio/cras/cras_input.h"
@@ -55,7 +54,8 @@ AudioOutputStream* AudioManagerCrasBase::MakeLinearOutputStream(
     const LogCallback& log_callback) {
   DCHECK_EQ(AudioParameters::AUDIO_PCM_LINEAR, params.format());
   // Pinning stream is not supported for MakeLinearOutputStream.
-  return MakeOutputStream(params, AudioDeviceDescription::kDefaultDeviceId);
+  return MakeOutputStream(params, AudioDeviceDescription::kDefaultDeviceId,
+                          std::move(log_callback));
 }
 
 AudioOutputStream* AudioManagerCrasBase::MakeLowLatencyOutputStream(
@@ -63,7 +63,7 @@ AudioOutputStream* AudioManagerCrasBase::MakeLowLatencyOutputStream(
     const std::string& device_id,
     const LogCallback& log_callback) {
   DCHECK_EQ(AudioParameters::AUDIO_PCM_LOW_LATENCY, params.format());
-  return MakeOutputStream(params, device_id);
+  return MakeOutputStream(params, device_id, std::move(log_callback));
 }
 
 AudioInputStream* AudioManagerCrasBase::MakeLinearInputStream(
@@ -71,7 +71,7 @@ AudioInputStream* AudioManagerCrasBase::MakeLinearInputStream(
     const std::string& device_id,
     const LogCallback& log_callback) {
   DCHECK_EQ(AudioParameters::AUDIO_PCM_LINEAR, params.format());
-  return MakeInputStream(params, device_id);
+  return MakeInputStream(params, device_id, std::move(log_callback));
 }
 
 AudioInputStream* AudioManagerCrasBase::MakeLowLatencyInputStream(
@@ -79,32 +79,38 @@ AudioInputStream* AudioManagerCrasBase::MakeLowLatencyInputStream(
     const std::string& device_id,
     const LogCallback& log_callback) {
   DCHECK_EQ(AudioParameters::AUDIO_PCM_LOW_LATENCY, params.format());
-  return MakeInputStream(params, device_id);
+  return MakeInputStream(params, device_id, std::move(log_callback));
 }
 
 AudioOutputStream* AudioManagerCrasBase::MakeOutputStream(
     const AudioParameters& params,
-    const std::string& device_id) {
-  return new CrasUnifiedStream(params, this, device_id);
+    const std::string& device_id,
+    const LogCallback& log_callback) {
+  return new CrasUnifiedStream(params, this, device_id,
+                               std::move(log_callback));
 }
 
 AudioInputStream* AudioManagerCrasBase::MakeInputStream(
-    const AudioParameters& params, const std::string& device_id) {
-  return new CrasInputStream(params, this, device_id);
+    const AudioParameters& params,
+    const std::string& device_id,
+    const LogCallback& log_callback) {
+  return new CrasInputStream(params, this, device_id, std::move(log_callback));
 }
 
 void AudioManagerCrasBase::RegisterSystemAecDumpSource(
     AecdumpRecordingSource* stream) {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
-  if (aecdump_recording_manager_)
+  if (aecdump_recording_manager_) {
     aecdump_recording_manager_->RegisterAecdumpSource(stream);
+  }
 }
 
 void AudioManagerCrasBase::DeregisterSystemAecDumpSource(
     AecdumpRecordingSource* stream) {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
-  if (aecdump_recording_manager_)
+  if (aecdump_recording_manager_) {
     aecdump_recording_manager_->DeregisterAecdumpSource(stream);
+  }
 }
 
 void AudioManagerCrasBase::SetAecDumpRecordingManager(

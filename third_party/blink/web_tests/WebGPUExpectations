@@ -1,4 +1,4 @@
-# tags: [ Android Fuchsia Linux Mac Mac10.13 Mac11 Mac12 Win Win10.20h2 Win11 ]
+# tags: [ Android Fuchsia Linux Mac Mac11 Mac12 Mac13 Mac13-arm64 Win Win10.20h2 Win11 Win11-arm64 ]
 # tags: [ Release Debug ]
 # results: [ Timeout Crash Pass Failure Slow Skip RetryOnFailure ]
 
@@ -10,17 +10,6 @@
 # Workaround page loaded when content_shell starts, but not run as a test.
 crbug.com/1231599 wpt_internal/webgpu/000_run_me_first.https.html [ Skip ]
 
-# VVL failure
-crbug.com/1083478 [ Linux ] wpt_internal/webgpu/web_platform/reftests/canvas_size_different_with_back_buffer_size.https.html [ Crash ]
-
-# Mac doesn't support rgba8unorm for the swapchain format (yet)
-crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_complex_rgba8unorm_copy.https.html [ Skip ]
-crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_complex_rgba8unorm_draw.https.html [ Skip ]
-crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_composite_alpha_rgba8unorm_opaque_copy.https.html [ Skip ]
-crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_composite_alpha_rgba8unorm_opaque_draw.https.html [ Skip ]
-crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_composite_alpha_rgba8unorm_premultiplied_copy.https.html [ Skip ]
-crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_composite_alpha_rgba8unorm_premultiplied_draw.https.html [ Skip ]
-
 # STORAGE_BINDING is only support on WIN.
 crbug.com/1241369 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_complex_rgba8unorm_store.https.html [ Skip ]
 crbug.com/1241369 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_complex_rgba16float_store.https.html [ Skip ]
@@ -30,3 +19,22 @@ crbug.com/1241369 [ Linux ] wpt_internal/webgpu/web_platform/reftests/canvas_com
 # SharedImageBackingFactoryIOSurface takes rgba8unorm as bgra8unorm.
 # https://source.chromium.org/chromium/chromium/src/+/main:gpu/command_buffer/service/shared_image_backing_factory_iosurface.mm;l=217?q=SharedImageBackingFactoryIOSurface::CreateSharedImage&ss=chromium%2Fchromium%2Fsrc
 crbug.com/1241369 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_clear.https.html [ Skip ]
+
+# Test fails due to scaling precision issues
+crbug.com/1515185 wpt_internal/webgpu/web_platform/reftests/canvas_image_rendering.https.html [ Failure ]
+
+# Reference test didn't generate pixel results
+crbug.com/1515749 wpt_internal/webgpu/web_platform/reftests/canvas_composite_alpha_rgba16float_premultiplied_copy.https.html [ Failure ]
+
+# Linux/Nvidia times out for colorspace tests
+crbug.com/1409154 [ Linux ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_bgra8unorm.https.html [ Skip ]
+crbug.com/1409154 [ Linux ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_rgba16float.https.html [ Skip ]
+crbug.com/1409154 [ Linux ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_rgba8unorm.https.html [ Skip ]
+
+# Incorrect texture filtering: crbug.com/1285023 and crbug.com/1405548
+crbug.com/1298618 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_rgba8unorm.https.html [ Failure ]
+crbug.com/1405548 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_bgra8unorm.https.html [ Failure ]
+crbug.com/1405548 [ Mac ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_rgba16float.https.html [ Failure ]
+crbug.com/1405548 [ Win ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_bgra8unorm.https.html [ Failure ]
+crbug.com/1405548 [ Win ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_rgba16float.https.html [ Failure ]
+crbug.com/1405548 [ Win ] wpt_internal/webgpu/web_platform/reftests/canvas_colorspace_rgba8unorm.https.html [ Failure ]

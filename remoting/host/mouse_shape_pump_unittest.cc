@@ -33,7 +33,7 @@ static const int kCursorHeight = 32;
 static const int kHotspotX = 11;
 static const int kHotspotY = 12;
 
-class TestMouseCursorMonitor : public webrtc::MouseCursorMonitor  {
+class TestMouseCursorMonitor : public webrtc::MouseCursorMonitor {
  public:
   TestMouseCursorMonitor() : callback_(nullptr) {}
 
@@ -51,6 +51,7 @@ class TestMouseCursorMonitor : public webrtc::MouseCursorMonitor  {
 
   void Capture() override {
     ASSERT_TRUE(callback_);
+    capture_call_count_++;
 
     std::unique_ptr<webrtc::MouseCursor> mouse_cursor(new webrtc::MouseCursor(
         new webrtc::BasicDesktopFrame(
@@ -60,7 +61,10 @@ class TestMouseCursorMonitor : public webrtc::MouseCursorMonitor  {
     callback_->OnMouseCursor(mouse_cursor.release());
   }
 
+  int get_capture_call_count() const { return capture_call_count_; }
+
  private:
+  int capture_call_count_ = 0;
   raw_ptr<Callback> callback_;
 };
 
@@ -69,7 +73,8 @@ class MouseShapePumpTest : public testing::Test {
   void SetCursorShape(const protocol::CursorShapeInfo& cursor_shape);
 
  protected:
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   base::RunLoop run_loop_;
   std::unique_ptr<MouseShapePump> pump_;
 
@@ -96,9 +101,8 @@ void MouseShapePumpTest::SetCursorShape(
 TEST_F(MouseShapePumpTest, FirstCursor) {
   // Stop the |run_loop_| once it has captured the cursor.
   EXPECT_CALL(client_stub_, SetCursorShape(_))
-      .WillOnce(DoAll(
-          Invoke(this, &MouseShapePumpTest::SetCursorShape),
-          InvokeWithoutArgs(&run_loop_, &base::RunLoop::Quit)))
+      .WillOnce(DoAll(Invoke(this, &MouseShapePumpTest::SetCursorShape),
+                      InvokeWithoutArgs(&run_loop_, &base::RunLoop::Quit)))
       .RetiresOnSaturation();
 
   // Start the pump.
@@ -106,6 +110,52 @@ TEST_F(MouseShapePumpTest, FirstCursor) {
       base::WrapUnique(new TestMouseCursorMonitor()), &client_stub_);
 
   run_loop_.Run();
+}
+
+TEST_F(MouseShapePumpTest, DefaultCaptureInterval) {
+  EXPECT_CALL(client_stub_, SetCursorShape(_)).Times(2);
+
+  std::unique_ptr<TestMouseCursorMonitor> monitor =
+      std::make_unique<TestMouseCursorMonitor>();
+  TestMouseCursorMonitor* test_monitor = monitor.get();
+
+  // Start the pump.
+  pump_ = std::make_unique<MouseShapePump>(std::move(monitor), &client_stub_);
+  // Default capture interval is 100ms.
+  base::TimeDelta default_capure_interval = base::Milliseconds(100);
+
+  task_environment_.FastForwardBy(default_capure_interval -
+                                  base::Milliseconds(1));
+  ASSERT_EQ(test_monitor->get_capture_call_count(), 0);
+
+  task_environment_.FastForwardBy(base::Milliseconds(2));
+  ASSERT_EQ(test_monitor->get_capture_call_count(), 1);
+
+  task_environment_.FastForwardBy(default_capure_interval);
+  ASSERT_EQ(test_monitor->get_capture_call_count(), 2);
+}
+
+TEST_F(MouseShapePumpTest, UpdatedCaptureInterval) {
+  EXPECT_CALL(client_stub_, SetCursorShape(_)).Times(2);
+
+  std::unique_ptr<TestMouseCursorMonitor> monitor =
+      std::make_unique<TestMouseCursorMonitor>();
+  TestMouseCursorMonitor* test_monitor = monitor.get();
+
+  // Start the pump.
+  pump_ = std::make_unique<MouseShapePump>(std::move(monitor), &client_stub_);
+  base::TimeDelta test_capture_interval = base::Milliseconds(15);
+  pump_->SetCursorCaptureInterval(test_capture_interval);
+
+  task_environment_.FastForwardBy(test_capture_interval -
+                                  base::Milliseconds(1));
+  ASSERT_EQ(test_monitor->get_capture_call_count(), 0);
+
+  task_environment_.FastForwardBy(base::Milliseconds(2));
+  ASSERT_EQ(test_monitor->get_capture_call_count(), 1);
+
+  task_environment_.FastForwardBy(test_capture_interval);
+  ASSERT_EQ(test_monitor->get_capture_call_count(), 2);
 }
 
 }  // namespace remoting

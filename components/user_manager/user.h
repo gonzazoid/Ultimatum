@@ -9,18 +9,20 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user_image/user_image.h"
 #include "components/user_manager/user_info.h"
 #include "components/user_manager/user_manager_export.h"
 #include "components/user_manager/user_type.h"
 
+class PrefService;
+
 namespace ash {
 class ChromeUserManagerImpl;
 class FakeChromeUserManager;
-class MockUserManager;
 class UserAddingScreenTest;
 class UserSessionManager;
 class UserImageManagerImpl;
@@ -81,8 +83,6 @@ class USER_MANAGER_EXPORT User : public UserInfo {
   // Returns true if user represents any type of the kiosk.
   static bool TypeIsKiosk(UserType user_type);
 
-  explicit User(const AccountId& account_id);
-
   User(const User&) = delete;
   User& operator=(const User&) = delete;
 
@@ -96,10 +96,10 @@ class USER_MANAGER_EXPORT User : public UserInfo {
   const AccountId& GetAccountId() const override;
 
   // Returns the user type.
-  virtual UserType GetType() const = 0;
+  UserType GetType() const { return type_; }
 
   // Will LOG(FATAL) unless overridden.
-  virtual void UpdateType(UserType user_type);
+  void UpdateType(UserType new_type);
 
   // Returns true if user has gaia account. True for users of types
   // USER_TYPE_REGULAR and USER_TYPE_CHILD.
@@ -110,9 +110,6 @@ class USER_MANAGER_EXPORT User : public UserInfo {
 
   // Returns true if user is child.
   virtual bool IsChild() const;
-
-  // True if user image can be synced.
-  virtual bool CanSyncImage() const;
 
   // The displayed (non-canonical) user email.
   virtual std::string display_email() const;
@@ -131,6 +128,12 @@ class USER_MANAGER_EXPORT User : public UserInfo {
 
   // True if the user is a kiosk.
   bool IsKioskType() const;
+
+  // Returns PrefService of the Profile corresponding this User.
+  // If Profile and its PrefService is not yet ready, or it is already
+  // destroyed, this API returns nullptr.
+  PrefService* GetProfilePrefs() { return profile_prefs_.get(); }
+  const PrefService* GetProfilePrefs() const { return profile_prefs_.get(); }
 
   // The displayed user name.
   std::u16string display_name() const { return display_name_; }
@@ -183,7 +186,7 @@ class USER_MANAGER_EXPORT User : public UserInfo {
   bool can_lock() const;
 
   // Returns empty string when home dir hasn't been mounted yet.
-  std::string username_hash() const;
+  const std::string& username_hash() const;
 
   // True if current user is logged in.
   bool is_logged_in() const;
@@ -224,7 +227,6 @@ class USER_MANAGER_EXPORT User : public UserInfo {
   // For testing:
   friend class FakeUserManager;
   friend class ash::FakeChromeUserManager;
-  friend class ash::MockUserManager;
   friend class ash::UserAddingScreenTest;
   friend class policy::ProfilePolicyConnectorTest;
   FRIEND_TEST_ALL_PREFIXES(UserTest, DeviceLocalAccountAffiliation);
@@ -239,6 +241,8 @@ class USER_MANAGER_EXPORT User : public UserInfo {
   static User* CreateWebKioskAppUser(const AccountId& web_kiosk_account_id);
   static User* CreatePublicAccountUser(const AccountId& account_id,
                                        bool is_using_saml = false);
+
+  User(const AccountId& account_id, UserType type);
 
   const std::string* GetAccountLocale() const { return account_locale_.get(); }
 
@@ -292,10 +296,13 @@ class USER_MANAGER_EXPORT User : public UserInfo {
 
   void SetProfileIsCreated();
 
+  void SetProfilePrefs(PrefService* prefs) { profile_prefs_ = prefs; }
+
   virtual void SetAffiliation(bool is_affiliated);
 
  private:
   AccountId account_id_;
+  UserType type_;
   std::u16string display_name_;
   std::u16string given_name_;
   // User email for display, which may include capitals and non-significant
@@ -339,6 +346,9 @@ class USER_MANAGER_EXPORT User : public UserInfo {
   // True if user Profile is created
   bool profile_is_created_ = false;
 
+  // Owned by Profile.
+  raw_ptr<PrefService> profile_prefs_ = nullptr;
+
   // True if the user is affiliated to the device.
   absl::optional<bool> is_affiliated_;
 
@@ -348,7 +358,7 @@ class USER_MANAGER_EXPORT User : public UserInfo {
 };
 
 // List of known users.
-using UserList = std::vector<User*>;
+using UserList = std::vector<raw_ptr<User, VectorExperimental>>;
 
 }  // namespace user_manager
 

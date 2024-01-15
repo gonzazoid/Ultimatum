@@ -9,17 +9,21 @@ import static android.view.View.LAYOUT_DIRECTION_RTL;
 import android.animation.Animator;
 import android.app.Activity;
 import android.graphics.Canvas;
+import android.os.Build;
+import android.os.Build.VERSION;
 import android.view.View;
 import android.view.View.OnKeyListener;
 
 import androidx.annotation.IdRes;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.TooltipCompat;
 
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
 import org.chromium.chrome.browser.theme.ThemeColorProvider;
+import org.chromium.chrome.browser.toolbar.R;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonProperties.ShowBadgeProperty;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonProperties.ThemeProperty;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuButtonHelper;
@@ -63,35 +67,63 @@ public class MenuButtonCoordinator {
      * @param onMenuButtonClicked Runnable to run on menu button click.
      * @param menuButtonId Resource id that should be used to locate the underlying view.
      */
-    public MenuButtonCoordinator(OneshotSupplier<AppMenuCoordinator> appMenuCoordinatorSupplier,
+    public MenuButtonCoordinator(
+            OneshotSupplier<AppMenuCoordinator> appMenuCoordinatorSupplier,
             BrowserStateBrowserControlsVisibilityDelegate controlsVisibilityDelegate,
-            WindowAndroid windowAndroid, SetFocusFunction setUrlBarFocusFunction,
-            Runnable requestRenderRunnable, boolean shouldShowAppUpdateBadge,
-            Supplier<Boolean> isInOverviewModeSupplier, ThemeColorProvider themeColorProvider,
-            Supplier<MenuButtonState> menuButtonStateSupplier, Runnable onMenuButtonClicked,
+            WindowAndroid windowAndroid,
+            SetFocusFunction setUrlBarFocusFunction,
+            Runnable requestRenderRunnable,
+            boolean shouldShowAppUpdateBadge,
+            Supplier<Boolean> isInOverviewModeSupplier,
+            ThemeColorProvider themeColorProvider,
+            Supplier<MenuButtonState> menuButtonStateSupplier,
+            Runnable onMenuButtonClicked,
             @IdRes int menuButtonId) {
         mActivity = windowAndroid.getActivity().get();
         mMenuButton = mActivity.findViewById(menuButtonId);
-        mPropertyModel = new PropertyModel.Builder(MenuButtonProperties.ALL_KEYS)
-                                 .with(MenuButtonProperties.SHOW_UPDATE_BADGE,
-                                         new ShowBadgeProperty(false, false))
-                                 .with(MenuButtonProperties.THEME,
-                                         new ThemeProperty(themeColorProvider.getTint(),
-                                                 themeColorProvider.getBrandedColorScheme()))
-                                 .with(MenuButtonProperties.IS_VISIBLE, true)
-                                 .with(MenuButtonProperties.STATE_SUPPLIER, menuButtonStateSupplier)
-                                 .build();
-        mMediator = new MenuButtonMediator(mPropertyModel, shouldShowAppUpdateBadge,
-                ()
-                        -> mActivity.isFinishing() || mActivity.isDestroyed(),
-                requestRenderRunnable, themeColorProvider, isInOverviewModeSupplier,
-                controlsVisibilityDelegate, setUrlBarFocusFunction, appMenuCoordinatorSupplier,
-                windowAndroid, menuButtonStateSupplier, onMenuButtonClicked);
-        mMediator.getMenuButtonHelperSupplier().addObserver(
-                (helper) -> mAppMenuButtonHelper = helper);
+        mPropertyModel =
+                new PropertyModel.Builder(MenuButtonProperties.ALL_KEYS)
+                        .with(
+                                MenuButtonProperties.SHOW_UPDATE_BADGE,
+                                new ShowBadgeProperty(false, false))
+                        .with(
+                                MenuButtonProperties.THEME,
+                                new ThemeProperty(
+                                        themeColorProvider.getTint(),
+                                        themeColorProvider.getBrandedColorScheme()))
+                        .with(MenuButtonProperties.IS_VISIBLE, true)
+                        .with(MenuButtonProperties.STATE_SUPPLIER, menuButtonStateSupplier)
+                        .build();
+        mMediator =
+                new MenuButtonMediator(
+                        mPropertyModel,
+                        shouldShowAppUpdateBadge,
+                        () -> mActivity.isFinishing() || mActivity.isDestroyed(),
+                        requestRenderRunnable,
+                        themeColorProvider,
+                        isInOverviewModeSupplier,
+                        controlsVisibilityDelegate,
+                        setUrlBarFocusFunction,
+                        appMenuCoordinatorSupplier,
+                        windowAndroid,
+                        menuButtonStateSupplier,
+                        onMenuButtonClicked);
+        mMediator
+                .getMenuButtonHelperSupplier()
+                .addObserver((helper) -> mAppMenuButtonHelper = helper);
         if (mMenuButton != null) {
-            mChangeProcessor = PropertyModelChangeProcessor.create(
-                    mPropertyModel, mMenuButton, new MenuButtonViewBinder());
+            mChangeProcessor =
+                    PropertyModelChangeProcessor.create(
+                            mPropertyModel, mMenuButton, new MenuButtonViewBinder());
+
+            // Set tooltip text for menu button.
+            if (VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                TooltipCompat.setTooltipText(
+                        mMenuButton,
+                        mActivity
+                                .getResources()
+                                .getString(R.string.accessibility_toolbar_btn_menu));
+            }
         }
     }
 
@@ -105,9 +137,7 @@ public class MenuButtonCoordinator {
         mMediator.updateReloadingState(isLoading);
     }
 
-    /**
-     * Disables the menu button, removing it from the view hierarchy and destroying it.
-     */
+    /** Disables the menu button, removing it from the view hierarchy and destroying it. */
     public void disableMenuButton() {
         if (mMenuButton != null) {
             UiUtils.removeViewFromParent(mMenuButton);
@@ -128,8 +158,9 @@ public class MenuButtonCoordinator {
         if (mChangeProcessor != null) {
             mChangeProcessor.destroy();
         }
-        mChangeProcessor = PropertyModelChangeProcessor.create(
-                mPropertyModel, menuButton, new MenuButtonViewBinder());
+        mChangeProcessor =
+                PropertyModelChangeProcessor.create(
+                        mPropertyModel, menuButton, new MenuButtonViewBinder());
     }
 
     /**
@@ -239,7 +270,8 @@ public class MenuButtonCoordinator {
      *         fading out of view, or un-focusing, meaning it's fading into view.
      */
     public Animator getUrlFocusingAnimator(boolean isFocusingUrl) {
-        return mMediator.getUrlFocusingAnimator(isFocusingUrl,
+        return mMediator.getUrlFocusingAnimator(
+                isFocusingUrl,
                 mMenuButton != null && mMenuButton.getLayoutDirection() == LAYOUT_DIRECTION_RTL);
     }
 

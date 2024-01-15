@@ -25,15 +25,27 @@ E2ETestBase = class extends AccessibilityTestBase {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('EventGenerator', '/common/event_generator.js');
-    await importModule('KeyCode', '/common/key_code.js');
-    await importModule('constants', '/common/constants.js');
+
+    await Promise.all([
+      // Alphabetical by file path.
+      importModule('AsyncUtil', '/common/async_util.js'),
+      importModule('EventGenerator', '/common/event_generator.js'),
+      importModule('KeyCode', '/common/key_code.js'),
+      importModule('constants', '/common/constants.js'),
+    ]);
   }
 
   /** @override */
   testGenCppIncludes() {
     GEN(`
+  #include "ash/accessibility/accessibility_delegate.h"
+  #include "ash/shell.h"
+  #include "base/functional/bind.h"
+  #include "base/functional/callback.h"
+  #include "base/containers/flat_set.h"
+  #include "chrome/browser/ash/accessibility/accessibility_manager.h"
   #include "chrome/browser/ash/crosapi/browser_manager.h"
+  #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
   #include "chrome/browser/speech/extension_api/tts_engine_extension_api.h"
   #include "chrome/browser/ui/browser.h"
   #include "chrome/common/extensions/extension_constants.h"
@@ -52,6 +64,10 @@ E2ETestBase = class extends AccessibilityTestBase {
       crosapi::BrowserManager::Get()->NewTab();
       ASSERT_TRUE(crosapi::BrowserManager::Get()->IsRunning());
     }
+    // For ChromeVoxBackgroundTest.NewWindowWebSpeech:
+    // chrome.runtime.openOptionsPage opens a SWA when Lacros is enabled.
+    ash::SystemWebAppManager::GetForTest(GetProfile())
+      ->InstallSystemAppsForTesting();
       `);
   }
 
@@ -66,27 +82,38 @@ E2ETestBase = class extends AccessibilityTestBase {
     `);
   }
 
-  testGenPreambleCommon(extensionIdName, failOnConsoleError = true) {
+  testGenPreambleCommon(
+      extensionIdName, failOnConsoleError = true, allowedMessages = []) {
+    const messages = allowedMessages.reduce(
+        (accumulator, message) => accumulator + `u"${message}",`, '');
     GEN(`
     WaitForExtension(extension_misc::${extensionIdName}, std::move(load_cb));
 
     extensions::ExtensionHost* host =
-        extensions::ProcessManager::Get(browser()->profile())
+        extensions::ProcessManager::Get(GetProfile())
             ->GetBackgroundHostForExtension(
                 extension_misc::${extensionIdName});
 
     bool fail_on_console_error = ${failOnConsoleError};
+    // Convert |allowedMessages| into a C++ set.
+    base::flat_set<std::u16string> allowed_messages({${messages}});
     content::WebContentsConsoleObserver console_observer(host->host_contents());
-    // A11y extensions should not log warnings or errors: these should cause
-    // test failures.
+    // In most cases, A11y extensions should not log warnings or errors.
+    // However, informational messages may be logged in some cases and should
+    // be specified in |allowed_messages|. All other messages should cause test
+    // failures.
     auto filter =
-        [](const content::WebContentsConsoleObserver::Message& message) {
+        [](const base::flat_set<std::u16string>& allowed,
+           const content::WebContentsConsoleObserver::Message& message) {
+          if (allowed.contains(message.message))
+            return false;
+
           return message.log_level ==
               blink::mojom::ConsoleMessageLevel::kWarning ||
               message.log_level == blink::mojom::ConsoleMessageLevel::kError;
         };
     if (fail_on_console_error) {
-      console_observer.SetFilter(base::BindRepeating(filter));
+      console_observer.SetFilter(base::BindRepeating(filter, allowed_messages));
     }
     `);
   }
@@ -230,7 +257,7 @@ E2ETestBase = class extends AccessibilityTestBase {
     return new Promise(this.newCallback(async resolve => {
       // Make sure the test doesn't finish until this function has resolved.
       let callback = this.newCallback(resolve);
-      this.desktop_ = await new Promise(r => chrome.automation.getDesktop(r));
+      this.desktop_ = await AsyncUtil.getDesktop();
       const url = opt_params.url || DocUtils.createUrlForDoc(doc);
 
       const hasLacrosChromePath = await new Promise(
@@ -250,10 +277,10 @@ E2ETestBase = class extends AccessibilityTestBase {
           // We have yet to request navigation in the Lacros tab. Do so now by
           // getting the default focus (the address bar), setting the value to
           // the url and then performing do default on the auto completion node.
-          const focus = await new Promise(r => chrome.automation.getFocus(r));
+          const focus = await AsyncUtil.getFocus();
           // It's possible focus is elsewhere; wait until it lands on the
           // address bar text field.
-          if (focus.role !== chrome.automation.RoleType.TEXT_FIELD) {
+          if (!focus || focus.role !== chrome.automation.RoleType.TEXT_FIELD) {
             return;
           }
 
@@ -296,6 +323,31 @@ E2ETestBase = class extends AccessibilityTestBase {
         });
       }
     }));
+  }
+
+  /**
+   * Gets the desktop from the automation API and launches new tabs with
+   * the given url, returns when load complete has fired on each document.
+   * @param {Array<string>} urls HTML snippets to open in the URLs.
+   * @return {!Promise}
+   */
+  async runWithLoadedTabs(urls) {
+    console.assert(urls.length !== 0);
+    const hasLacrosChromePath = await new Promise(
+        r => chrome.commandLinePrivate.hasSwitch('lacros-chrome-path', r));
+    if (!hasLacrosChromePath) {
+      for (const url of urls) {
+        await this.runWithLoadedTree(url);
+      }
+      return;
+    }
+    await this.runWithLoadedTree(urls[0]);
+    for (let i = 1; i < urls.length; i++) {
+      // Open a new tab with ctrl+t.
+      EventGenerator.sendKeyPress(KeyCode.T, {ctrl: true});
+      // Open the URL in the new tab.
+      await this.runWithLoadedTree(urls[i]);
+    }
   }
 
   /**

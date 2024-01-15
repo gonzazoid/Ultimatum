@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
 (async function() {
   TestRunner.addResult(`Tests that adding a new blank property works.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <div id="inspected" style="font-size: 12px">Text</div>
@@ -28,7 +30,7 @@
     treeElement.nameElement.dispatchEvent(TestRunner.createKeyEvent('Enter'));
 
     treeElement.valueElement.textContent = '1px';
-    treeElement.valueElement.firstChild.select();
+    TestRunner.selectTextInTextNode(treeElement.valueElement.firstChild);
     treeElement.valueElement.dispatchEvent(TestRunner.createKeyEvent('ArrowUp'));
     ElementsTestRunner.waitForStyleApplied(incrementProperty);
   }

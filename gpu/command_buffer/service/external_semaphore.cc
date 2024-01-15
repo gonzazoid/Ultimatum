@@ -4,7 +4,7 @@
 
 #include "gpu/command_buffer/service/external_semaphore.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "components/viz/common/gpu/vulkan_context_provider.h"
@@ -81,14 +81,13 @@ GLuint ImportSemaphoreHandleToGLSemaphore(SemaphoreHandle handle) {
 // static
 ExternalSemaphore ExternalSemaphore::Create(
     viz::VulkanContextProvider* context_provider) {
-  auto* implementation = context_provider->GetVulkanImplementation();
   VkDevice device = context_provider->GetDeviceQueue()->GetVulkanDevice();
 
-  VkSemaphore semaphore = implementation->CreateExternalSemaphore(device);
+  VkSemaphore semaphore = CreateVkOpaqueExternalSemaphore(device);
   if (semaphore == VK_NULL_HANDLE)
     return {};
 
-  auto handle = implementation->GetSemaphoreHandle(device, semaphore);
+  auto handle = ExportVkOpaqueExternalSemaphore(device, semaphore);
   if (!handle.is_valid()) {
     vkDestroySemaphore(device, semaphore, /*pAllocator=*/nullptr);
     return {};
@@ -153,13 +152,13 @@ void ExternalSemaphore::Reset() {
   }
 
   if (gl_semaphore_ != 0) {
-    auto* current_gl = gl::g_current_gl_context_tls->Get();
-    auto* api = current_gl->Driver ? current_gl->Api : nullptr;
     // We assume there is always one GL context current. If there isn't a
     // GL context current, we assume the last GL context is destroyed, in that
     // case, we will skip glDeleteSemaphoresEXT().
-    if (api)
+    if (gl::g_current_gl_driver) {
+      gl::GLApi* const api = gl::g_current_gl_context;
       api->glDeleteSemaphoresEXTFn(1, &gl_semaphore_);
+    }
   }
 
   context_provider_ = nullptr;

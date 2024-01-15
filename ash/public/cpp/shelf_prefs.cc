@@ -8,7 +8,6 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "base/feature_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
@@ -22,6 +21,9 @@ namespace ash {
 
 const char kShelfAutoHideBehaviorAlways[] = "Always";
 const char kShelfAutoHideBehaviorNever[] = "Never";
+
+const char kDeskButtonInShelfShown[] = "Shown";
+const char kDeskButtonInShelfHidden[] = "Hidden";
 
 // If any of the following ShelfAlignment values changed, the ShelfAlignment
 // policy should be updated.
@@ -72,7 +74,8 @@ std::string GetPerDisplayPref(PrefService* prefs,
     // and check if the prefs for other display is already specified.
     std::string unused_value;
     for (const auto iter : shelf_prefs) {
-      if (iter.second.is_dict() && iter.second.FindStringPath(path)) {
+      if (iter.second.is_dict() &&
+          iter.second.GetDict().FindStringByDottedPath(path)) {
         has_per_display_prefs = true;
         break;
       }
@@ -178,7 +181,7 @@ ShelfAutoHideBehavior GetShelfAutoHideBehaviorPref(PrefService* prefs,
                           prefs::kShelfAutoHideBehavior));
   }
 
-  const bool is_in_tablet_mode = TabletMode::Get()->InTabletMode();
+  const bool is_in_tablet_mode = display::Screen::GetScreen()->InTabletMode();
   // See comment in |kShelfAlignment| as to why we consider two prefs.
   return AutoHideBehaviorFromPref(GetPerDisplayPref(
       prefs, display_id,
@@ -208,7 +211,7 @@ void SetShelfAutoHideBehaviorPref(PrefService* prefs,
     return;
   }
 
-  const bool is_in_tablet_mode = TabletMode::Get()->InTabletMode();
+  const bool is_in_tablet_mode = display::Screen::GetScreen()->InTabletMode();
   SetPerDisplayShelfPref(prefs, display_id,
                          is_in_tablet_mode
                              ? prefs::kShelfAutoHideTabletModeBehavior
@@ -249,6 +252,24 @@ void SetShelfAlignmentPref(PrefService* prefs,
     prefs->SetString(prefs::kShelfAlignmentLocal, value);
     prefs->SetString(prefs::kShelfAlignment, value);
   }
+}
+
+bool GetDeskButtonVisibility(PrefService* prefs) {
+  const std::string visibility =
+      prefs->GetString(prefs::kShowDeskButtonInShelf);
+  if (!visibility.empty()) {
+    return visibility == kDeskButtonInShelfShown;
+  }
+  return prefs->GetBoolean(prefs::kDeviceUsesDesks);
+}
+
+void SetShowDeskButtonInShelfPref(PrefService* prefs, bool show) {
+  prefs->SetString(prefs::kShowDeskButtonInShelf,
+                   show ? kDeskButtonInShelfShown : kDeskButtonInShelfHidden);
+}
+
+void SetDeviceUsesDesksPref(PrefService* prefs, bool uses_desks) {
+  prefs->SetBoolean(prefs::kDeviceUsesDesks, uses_desks);
 }
 
 }  // namespace ash

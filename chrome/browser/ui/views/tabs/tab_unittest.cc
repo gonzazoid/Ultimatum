@@ -11,9 +11,11 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
+#include "chrome/browser/ui/tabs/tab_style.h"
 #include "chrome/browser/ui/tabs/tab_types.h"
 #include "chrome/browser/ui/tabs/tab_utils.h"
 #include "chrome/browser/ui/views/tabs/alert_indicator_button.h"
@@ -27,6 +29,7 @@
 #include "chrome/browser/ui/views/tabs/tab_style_views.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/views/chrome_views_test_base.h"
+#include "components/content_settings/core/common/features.h"
 #include "components/tab_groups/tab_group_id.h"
 #include "components/tab_groups/tab_group_visual_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -49,7 +52,7 @@ class TabTest : public ChromeViewsTestBase {
     // Prevent the fake clock from starting at 0 which is the null time.
     fake_clock_.Advance(base::Milliseconds(2000));
   }
-  ~TabTest() override {}
+  ~TabTest() override = default;
 
   static TabIcon* GetTabIcon(Tab* tab) { return tab->icon_; }
 
@@ -59,9 +62,7 @@ class TabTest : public ChromeViewsTestBase {
     return tab->alert_indicator_button_;
   }
 
-  static views::ImageButton* GetCloseButton(Tab* tab) {
-    return tab->close_button_;
-  }
+  static TabCloseButton* GetCloseButton(Tab* tab) { return tab->close_button_; }
 
   static int GetTitleWidth(Tab* tab) { return tab->title_->bounds().width(); }
 
@@ -270,14 +271,23 @@ class AlertIndicatorButtonTest : public ChromeViewsTestBase {
     return tab->showing_alert_indicator_;
   }
 
+  base::Time get_camera_mic_indicator_start_time(Tab* tab) {
+    return tab->alert_indicator_button_->camera_mic_indicator_start_time_;
+  }
+
+  base::TimeDelta get_fadeout_animation_duration_for_testing_(Tab* tab) {
+    return tab->alert_indicator_button_
+        ->fadeout_animation_duration_for_testing_;
+  }
+
   void StopAnimation(Tab* tab) {
     ASSERT_TRUE(tab->alert_indicator_button_->fade_animation_);
     tab->alert_indicator_button_->fade_animation_->Stop();
   }
 
   // Owned by TabStrip.
-  raw_ptr<FakeBaseTabStripController> controller_ = nullptr;
-  raw_ptr<TabStrip> tab_strip_ = nullptr;
+  raw_ptr<FakeBaseTabStripController, DanglingUntriaged> controller_ = nullptr;
+  raw_ptr<TabStrip, DanglingUntriaged> tab_strip_ = nullptr;
   std::unique_ptr<views::Widget> widget_;
 };
 
@@ -308,8 +318,8 @@ TEST_F(TabTest, HitTestTopPixel) {
 }
 
 TEST_F(TabTest, LayoutAndVisibilityOfElements) {
-  static const absl::optional<TabAlertState> kAlertStatesToTest[] = {
-      absl::nullopt,
+  static const std::optional<TabAlertState> kAlertStatesToTest[] = {
+      std::nullopt,
       TabAlertState::TAB_CAPTURING,
       TabAlertState::AUDIO_PLAYING,
       TabAlertState::AUDIO_MUTING,
@@ -323,13 +333,14 @@ TEST_F(TabTest, LayoutAndVisibilityOfElements) {
   SkBitmap bitmap;
   bitmap.allocN32Pixels(16, 16);
   TabRendererData data;
-  data.favicon = gfx::ImageSkia::CreateFrom1xBitmap(bitmap);
+  data.favicon =
+      ui::ImageModel::FromImageSkia(gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
 
   // Perform layout over all possible combinations, checking for correct
   // results.
   for (bool is_pinned_tab : {false, true}) {
     for (bool is_active_tab : {false, true}) {
-      for (absl::optional<TabAlertState> alert_state : kAlertStatesToTest) {
+      for (std::optional<TabAlertState> alert_state : kAlertStatesToTest) {
         SCOPED_TRACE(
             ::testing::Message()
             << (is_active_tab ? "Active " : "Inactive ")
@@ -349,11 +360,12 @@ TEST_F(TabTest, LayoutAndVisibilityOfElements) {
         // Test layout for every width from standard to minimum.
         int width, min_width;
         if (is_pinned_tab) {
-          width = min_width = TabStyle::GetPinnedWidth();
+          width = min_width = tab->tab_style()->GetPinnedWidth();
         } else {
-          width = TabStyle::GetStandardWidth();
-          min_width = is_active_tab ? TabStyleViews::GetMinimumActiveWidth()
-                                    : TabStyleViews::GetMinimumInactiveWidth();
+          width = tab->tab_style()->GetStandardWidth();
+          min_width = is_active_tab
+                          ? TabStyle::Get()->GetMinimumActiveWidth()
+                          : TabStyle::Get()->GetMinimumInactiveWidth();
         }
         const int height = GetLayoutConstant(TAB_HEIGHT);
         for (; width >= min_width; --width) {
@@ -380,9 +392,6 @@ TEST_F(TabTest, CloseButtonLayout) {
   EXPECT_EQ(close_button_insets.left(), close_button_insets_2.left());
   EXPECT_EQ(close_button_insets.bottom(), close_button_insets_2.bottom());
   EXPECT_EQ(close_button_insets.right(), close_button_insets_2.right());
-
-  // Also make sure the close button is sized as large as the tab.
-  EXPECT_EQ(50, GetCloseButton(&tab)->bounds().height());
 }
 
 // Regression test for http://crbug.com/609701. Ensure TabCloseButton does not
@@ -392,7 +401,7 @@ TEST_F(TabTest, CloseButtonFocus) {
   std::unique_ptr<views::Widget> widget = CreateTestWidget();
   Tab* tab = widget->SetContentsView(std::make_unique<Tab>(controller.get()));
 
-  views::ImageButton* tab_close_button = GetCloseButton(tab);
+  TabCloseButton* tab_close_button = GetCloseButton(tab);
 
   // Verify tab_close_button does not get focus on right click.
   ui::MouseEvent right_click_event(ui::ET_KEY_PRESSED, gfx::Point(),
@@ -533,7 +542,7 @@ TEST_F(TabTest, SmallTabsHideCloseButton) {
   auto controller = std::make_unique<FakeTabSlotController>();
   std::unique_ptr<views::Widget> widget = CreateTestWidget();
   Tab* tab = widget->SetContentsView(std::make_unique<Tab>(controller.get()));
-  const int width = tab->tab_style()->GetContentsInsets().width() +
+  const int width = tab->tab_style_views()->GetContentsInsets().width() +
                     Tab::kMinimumContentsWidthForCloseButtons;
   tab->SetBounds(0, 0, width, 50);
   const views::View* close = GetCloseButton(tab);
@@ -635,14 +644,24 @@ TEST_F(TabTest, TitleTextHasSufficientContrast) {
   Tab* tab = widget->SetContentsView(std::make_unique<Tab>(controller.get()));
 
   for (const auto& colors : color_schemes) {
-    controller->SetTabColors(colors.bg_active, colors.fg_active,
-                             colors.bg_inactive, colors.fg_inactive);
+    tab->GetColorProvider()->SetColorForTesting(
+        kColorTabBackgroundActiveFrameActive, colors.bg_active);
+    tab->GetColorProvider()->SetColorForTesting(
+        kColorTabBackgroundActiveFrameInactive, colors.bg_active);
+    tab->GetColorProvider()->SetColorForTesting(
+        kColorTabBackgroundInactiveFrameActive, colors.bg_inactive);
+    tab->GetColorProvider()->SetColorForTesting(
+        kColorTabBackgroundInactiveFrameInactive, colors.bg_inactive);
+    controller->SetTabColors(colors.fg_active, colors.fg_inactive);
     for (TabActive active : {TabActive::kInactive, TabActive::kActive}) {
       controller->set_active_tab(active == TabActive::kActive ? tab : nullptr);
       tab->UpdateForegroundColors();
       const SkColor fg_color = tab->title_->GetEnabledColor();
-      const SkColor bg_color = controller->GetTabBackgroundColor(
-          active, BrowserFrameActiveState::kUseCurrent);
+      const SkColor bg_color = TabStyle::Get()->GetTabBackgroundColor(
+          active == TabActive::kActive ? TabStyle::TabSelectionState::kActive
+                                       : TabStyle::TabSelectionState::kInactive,
+          /*hovered=*/false, tab->GetWidget()->ShouldPaintAsActive(),
+          *tab->GetColorProvider());
       const float contrast = color_utils::GetContrastRatio(fg_color, bg_color);
       EXPECT_GE(contrast, color_utils::kMinimumReadableContrastRatio);
     }
@@ -688,4 +707,75 @@ TEST_F(AlertIndicatorButtonTest, ShowsAndHidesAlertIndicator) {
   EXPECT_TRUE(showing_icon(media_tab));
   EXPECT_FALSE(showing_alert_indicator(media_tab));
   EXPECT_FALSE(showing_close_button(media_tab));
+}
+
+// This test verifies that the alert indicator for a camera and/or mic is
+// visible at least for 5 seconds even if a camera/mic stopped being used.
+TEST_F(AlertIndicatorButtonTest, MinHoldDurationTest) {
+  base::test::ScopedFeatureList scoped_feature_list_;
+  scoped_feature_list_.InitAndEnableFeature(
+      content_settings::features::kImprovedSemanticsActivityIndicators);
+
+  controller_->AddTab(0, TabActive::kActive);
+  Tab* media_tab = tab_strip_->tab_at(0);
+
+  EXPECT_FALSE(showing_alert_indicator(media_tab));
+
+  EXPECT_EQ(base::Time(), get_camera_mic_indicator_start_time(media_tab));
+
+  TabRendererData start_media;
+  start_media.alert_state = {TabAlertState::MEDIA_RECORDING};
+  start_media.pinned = media_tab->data().pinned;
+  media_tab->SetData(std::move(start_media));
+
+  // When audio starts, pinned inactive tab shows indicator.
+  EXPECT_TRUE(showing_alert_indicator(media_tab));
+  EXPECT_NE(base::Time(), get_camera_mic_indicator_start_time(media_tab));
+
+  TabRendererData stop_media;
+  stop_media.pinned = media_tab->data().pinned;
+  media_tab->SetData(std::move(stop_media));
+
+  // The indicator's start time should be reset.
+  EXPECT_EQ(base::Time(), get_camera_mic_indicator_start_time(media_tab));
+  EXPECT_EQ(base::Seconds(5),
+            get_fadeout_animation_duration_for_testing_(media_tab));
+}
+
+// This test verifies that the alert indicator for a camera and/or mic has
+// 1-second fadeout animation after it was visible for longer than 5 seconds.
+TEST_F(AlertIndicatorButtonTest, 1SecondFadeoutAnimationTest) {
+  base::test::ScopedFeatureList scoped_feature_list_;
+  scoped_feature_list_.InitAndEnableFeature(
+      content_settings::features::kImprovedSemanticsActivityIndicators);
+
+  controller_->AddTab(0, TabActive::kActive);
+  Tab* media_tab = tab_strip_->tab_at(0);
+
+  EXPECT_FALSE(showing_alert_indicator(media_tab));
+
+  EXPECT_EQ(base::Time(), get_camera_mic_indicator_start_time(media_tab));
+
+  TabRendererData start_media;
+  start_media.alert_state = {TabAlertState::MEDIA_RECORDING};
+  start_media.pinned = media_tab->data().pinned;
+  media_tab->SetData(std::move(start_media));
+
+  // When audio starts, pinned inactive tab shows indicator.
+  EXPECT_TRUE(showing_alert_indicator(media_tab));
+  EXPECT_NE(base::Time(), get_camera_mic_indicator_start_time(media_tab));
+
+  // After the indicator was displayed for 6 seconds, it should have 1-second
+  // fadeout animation.
+  task_environment()->AdvanceClock(base::Seconds(6));
+  base::RunLoop().RunUntilIdle();
+
+  TabRendererData stop_media;
+  stop_media.pinned = media_tab->data().pinned;
+  media_tab->SetData(std::move(stop_media));
+
+  // The indicator's start time should be reset.
+  EXPECT_EQ(base::Time(), get_camera_mic_indicator_start_time(media_tab));
+  EXPECT_EQ(base::Seconds(1),
+            get_fadeout_animation_duration_for_testing_(media_tab));
 }

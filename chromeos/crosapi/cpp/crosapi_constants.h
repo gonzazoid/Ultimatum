@@ -11,7 +11,9 @@ namespace crosapi {
 
 COMPONENT_EXPORT(CROSAPI) extern const char kLacrosAppIdPrefix[];
 
+COMPONENT_EXPORT(CROSAPI) extern const char kAshDataDir[];
 COMPONENT_EXPORT(CROSAPI) extern const char kLacrosUserDataPath[];
+COMPONENT_EXPORT(CROSAPI) extern const char kLacrosSharedDataPath[];
 
 COMPONENT_EXPORT(CROSAPI) extern const char kSharedResourcesPackName[];
 COMPONENT_EXPORT(CROSAPI) extern const char kSharedChrome100PercentPackName[];
@@ -23,6 +25,8 @@ COMPONENT_EXPORT(CROSAPI) extern const char kReleaseChannelCanary[];
 COMPONENT_EXPORT(CROSAPI) extern const char kReleaseChannelDev[];
 COMPONENT_EXPORT(CROSAPI) extern const char kReleaseChannelBeta[];
 COMPONENT_EXPORT(CROSAPI) extern const char kReleaseChannelStable[];
+COMPONENT_EXPORT(CROSAPI) extern const char kReleaseChannelLtc[];
+COMPONENT_EXPORT(CROSAPI) extern const char kReleaseChannelLts[];
 
 COMPONENT_EXPORT(CROSAPI) extern const char kCrosapiMojoPlatformChannelHandle[];
 

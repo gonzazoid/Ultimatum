@@ -7,36 +7,19 @@
 //    ../../third_party/xcbproto/src \
 //    gen/ui/gfx/x \
 //    bigreq \
-//    composite \
-//    damage \
-//    dpms \
-//    dri2 \
 //    dri3 \
-//    ge \
 //    glx \
-//    present \
 //    randr \
-//    record \
 //    render \
-//    res \
 //    screensaver \
 //    shape \
 //    shm \
 //    sync \
-//    xc_misc \
-//    xevie \
-//    xf86dri \
-//    xf86vidmode \
 //    xfixes \
-//    xinerama \
 //    xinput \
 //    xkb \
-//    xprint \
 //    xproto \
-//    xselinux \
-//    xtest \
-//    xv \
-//    xvmc
+//    xtest
 
 #ifndef UI_GFX_X_GENERATED_PROTOS_XPROTO_H_
 #define UI_GFX_X_GENERATED_PROTOS_XPROTO_H_
@@ -895,7 +878,7 @@ struct Setup {
 };
 
 struct KeyEvent {
-  static constexpr int type_id = 54;
+  static constexpr uint8_t type_id = 44;
   enum Opcode {
     Press = 2,
     Release = 3,
@@ -912,12 +895,10 @@ struct KeyEvent {
   int16_t event_y{};
   KeyButMask state{};
   uint8_t same_screen{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct ButtonEvent {
-  static constexpr int type_id = 55;
+  static constexpr uint8_t type_id = 45;
   enum Opcode {
     Press = 4,
     Release = 5,
@@ -934,12 +915,10 @@ struct ButtonEvent {
   int16_t event_y{};
   KeyButMask state{};
   uint8_t same_screen{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct MotionNotifyEvent {
-  static constexpr int type_id = 56;
+  static constexpr uint8_t type_id = 46;
   static constexpr uint8_t opcode = 6;
   Motion detail{};
   uint16_t sequence{};
@@ -953,12 +932,10 @@ struct MotionNotifyEvent {
   int16_t event_y{};
   KeyButMask state{};
   uint8_t same_screen{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct CrossingEvent {
-  static constexpr int type_id = 57;
+  static constexpr uint8_t type_id = 47;
   enum Opcode {
     EnterNotify = 7,
     LeaveNotify = 8,
@@ -976,12 +953,10 @@ struct CrossingEvent {
   KeyButMask state{};
   NotifyMode mode{};
   uint8_t same_screen_focus{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct FocusEvent {
-  static constexpr int type_id = 58;
+  static constexpr uint8_t type_id = 48;
   enum Opcode {
     In = 9,
     Out = 10,
@@ -990,20 +965,16 @@ struct FocusEvent {
   uint16_t sequence{};
   Window event{};
   NotifyMode mode{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct KeymapNotifyEvent {
-  static constexpr int type_id = 59;
+  static constexpr uint8_t type_id = 49;
   static constexpr uint8_t opcode = 11;
   std::array<uint8_t, 31> keys{};
-
-  x11::Window* GetWindow() { return nullptr; }
 };
 
 struct ExposeEvent {
-  static constexpr int type_id = 60;
+  static constexpr uint8_t type_id = 50;
   static constexpr uint8_t opcode = 12;
   uint16_t sequence{};
   Window window{};
@@ -1012,12 +983,10 @@ struct ExposeEvent {
   uint16_t width{};
   uint16_t height{};
   uint16_t count{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct GraphicsExposureEvent {
-  static constexpr int type_id = 61;
+  static constexpr uint8_t type_id = 51;
   static constexpr uint8_t opcode = 13;
   uint16_t sequence{};
   Drawable drawable{};
@@ -1028,33 +997,27 @@ struct GraphicsExposureEvent {
   uint16_t minor_opcode{};
   uint16_t count{};
   uint8_t major_opcode{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&drawable); }
 };
 
 struct NoExposureEvent {
-  static constexpr int type_id = 62;
+  static constexpr uint8_t type_id = 52;
   static constexpr uint8_t opcode = 14;
   uint16_t sequence{};
   Drawable drawable{};
   uint16_t minor_opcode{};
   uint8_t major_opcode{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&drawable); }
 };
 
 struct VisibilityNotifyEvent {
-  static constexpr int type_id = 63;
+  static constexpr uint8_t type_id = 53;
   static constexpr uint8_t opcode = 15;
   uint16_t sequence{};
   Window window{};
   Visibility state{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct CreateNotifyEvent {
-  static constexpr int type_id = 64;
+  static constexpr uint8_t type_id = 54;
   static constexpr uint8_t opcode = 16;
   uint16_t sequence{};
   Window parent{};
@@ -1065,54 +1028,44 @@ struct CreateNotifyEvent {
   uint16_t height{};
   uint16_t border_width{};
   uint8_t override_redirect{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct DestroyNotifyEvent {
-  static constexpr int type_id = 65;
+  static constexpr uint8_t type_id = 55;
   static constexpr uint8_t opcode = 17;
   uint16_t sequence{};
   Window event{};
   Window window{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct UnmapNotifyEvent {
-  static constexpr int type_id = 66;
+  static constexpr uint8_t type_id = 56;
   static constexpr uint8_t opcode = 18;
   uint16_t sequence{};
   Window event{};
   Window window{};
   uint8_t from_configure{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct MapNotifyEvent {
-  static constexpr int type_id = 67;
+  static constexpr uint8_t type_id = 57;
   static constexpr uint8_t opcode = 19;
   uint16_t sequence{};
   Window event{};
   Window window{};
   uint8_t override_redirect{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct MapRequestEvent {
-  static constexpr int type_id = 68;
+  static constexpr uint8_t type_id = 58;
   static constexpr uint8_t opcode = 20;
   uint16_t sequence{};
   Window parent{};
   Window window{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct ReparentNotifyEvent {
-  static constexpr int type_id = 69;
+  static constexpr uint8_t type_id = 59;
   static constexpr uint8_t opcode = 21;
   uint16_t sequence{};
   Window event{};
@@ -1121,12 +1074,10 @@ struct ReparentNotifyEvent {
   int16_t x{};
   int16_t y{};
   uint8_t override_redirect{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct ConfigureNotifyEvent {
-  static constexpr int type_id = 70;
+  static constexpr uint8_t type_id = 60;
   static constexpr uint8_t opcode = 22;
   uint16_t sequence{};
   Window event{};
@@ -1138,12 +1089,10 @@ struct ConfigureNotifyEvent {
   uint16_t height{};
   uint16_t border_width{};
   uint8_t override_redirect{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct ConfigureRequestEvent {
-  static constexpr int type_id = 71;
+  static constexpr uint8_t type_id = 61;
   static constexpr uint8_t opcode = 23;
   StackMode stack_mode{};
   uint16_t sequence{};
@@ -1156,35 +1105,29 @@ struct ConfigureRequestEvent {
   uint16_t height{};
   uint16_t border_width{};
   ConfigWindow value_mask{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct GravityNotifyEvent {
-  static constexpr int type_id = 72;
+  static constexpr uint8_t type_id = 62;
   static constexpr uint8_t opcode = 24;
   uint16_t sequence{};
   Window event{};
   Window window{};
   int16_t x{};
   int16_t y{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct ResizeRequestEvent {
-  static constexpr int type_id = 73;
+  static constexpr uint8_t type_id = 63;
   static constexpr uint8_t opcode = 25;
   uint16_t sequence{};
   Window window{};
   uint16_t width{};
   uint16_t height{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct CirculateEvent {
-  static constexpr int type_id = 74;
+  static constexpr uint8_t type_id = 64;
   enum Opcode {
     Notify = 26,
     Request = 27,
@@ -1193,35 +1136,29 @@ struct CirculateEvent {
   Window event{};
   Window window{};
   Place place{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&event); }
 };
 
 struct PropertyNotifyEvent {
-  static constexpr int type_id = 75;
+  static constexpr uint8_t type_id = 65;
   static constexpr uint8_t opcode = 28;
   uint16_t sequence{};
   Window window{};
   Atom atom{};
   Time time{};
   Property state{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct SelectionClearEvent {
-  static constexpr int type_id = 76;
+  static constexpr uint8_t type_id = 66;
   static constexpr uint8_t opcode = 29;
   uint16_t sequence{};
   Time time{};
   Window owner{};
   Atom selection{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&owner); }
 };
 
 struct SelectionRequestEvent {
-  static constexpr int type_id = 77;
+  static constexpr uint8_t type_id = 67;
   static constexpr uint8_t opcode = 30;
   uint16_t sequence{};
   Time time{};
@@ -1230,12 +1167,10 @@ struct SelectionRequestEvent {
   Atom selection{};
   Atom target{};
   Atom property{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&owner); }
 };
 
 struct SelectionNotifyEvent {
-  static constexpr int type_id = 78;
+  static constexpr uint8_t type_id = 68;
   static constexpr uint8_t opcode = 31;
   uint16_t sequence{};
   Time time{};
@@ -1243,22 +1178,16 @@ struct SelectionNotifyEvent {
   Atom selection{};
   Atom target{};
   Atom property{};
-
-  x11::Window* GetWindow() {
-    return reinterpret_cast<x11::Window*>(&requestor);
-  }
 };
 
 struct ColormapNotifyEvent {
-  static constexpr int type_id = 79;
+  static constexpr uint8_t type_id = 69;
   static constexpr uint8_t opcode = 32;
   uint16_t sequence{};
   Window window{};
   ColorMap colormap{};
   uint8_t c_new{};
   ColormapState state{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 union ClientMessageData {
@@ -1271,34 +1200,28 @@ union ClientMessageData {
 static_assert(std::is_trivially_copyable<ClientMessageData>::value, "");
 
 struct ClientMessageEvent {
-  static constexpr int type_id = 80;
+  static constexpr uint8_t type_id = 70;
   static constexpr uint8_t opcode = 33;
   uint8_t format{};
   uint16_t sequence{};
   Window window{};
   Atom type{};
   ClientMessageData data{};
-
-  x11::Window* GetWindow() { return reinterpret_cast<x11::Window*>(&window); }
 };
 
 struct MappingNotifyEvent {
-  static constexpr int type_id = 81;
+  static constexpr uint8_t type_id = 71;
   static constexpr uint8_t opcode = 34;
   uint16_t sequence{};
   Mapping request{};
   KeyCode first_keycode{};
   uint8_t count{};
-
-  x11::Window* GetWindow() { return nullptr; }
 };
 
 struct GeGenericEvent {
-  static constexpr int type_id = 82;
+  static constexpr uint8_t type_id = 72;
   static constexpr uint8_t opcode = 35;
   uint16_t sequence{};
-
-  x11::Window* GetWindow() { return nullptr; }
 };
 
 struct RequestError : public x11::Error {

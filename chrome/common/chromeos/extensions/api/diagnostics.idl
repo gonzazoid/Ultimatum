@@ -6,8 +6,14 @@
 //
 // Many types defined here map with Mojo structs defined in
 // chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.
-[implemented_in = "chrome/browser/chromeos/extensions/telemetry/api/diagnostics_api.h"]
+[implemented_in = "chrome/browser/chromeos/extensions/telemetry/api/diagnostics/diagnostics_api.h"]
 namespace os.diagnostics {
+// Note: Please update documentation as well when this interface is changed.
+// The documentation lives here: //docs/telemetry_extension/api_overview.md.
+// LINT.IfChange
+
+
+// ----------------- DIAGNOSTICS API V1 -----------------
   enum RoutineType {
     ac_power,
     battery_capacity,
@@ -26,7 +32,20 @@ namespace os.diagnostics {
     lan_connectivity,
     signal_strength,
     dns_resolver_present,
-    gateway_can_be_pinged
+    gateway_can_be_pinged,
+    sensitive_sensor,
+    nvme_self_test,
+    fingerprint_alive,
+    smartctl_check_with_percentage_used,
+    emmc_lifetime,
+    bluetooth_power,
+    ufs_lifetime,
+    power_button,
+    audio_driver,
+    bluetooth_discovery,
+    bluetooth_scanning,
+    bluetooth_pairing,
+    fan
   };
 
   enum RoutineStatus {
@@ -55,7 +74,8 @@ namespace os.diagnostics {
   enum UserMessageType {
     unknown,
     unplug_ac_power,
-    plug_in_ac_power
+    plug_in_ac_power,
+    press_power_button
   };
 
   enum DiskReadRoutineType {
@@ -105,6 +125,14 @@ namespace os.diagnostics {
     long maximum_discharge_percent_allowed;
   };
 
+  dictionary RunBluetoothPairingRoutineRequest {
+    DOMString peripheral_id;
+  };
+
+  dictionary RunBluetoothScanningRoutineRequest {
+    long length_seconds;
+  };
+
   dictionary RunCpuRoutineRequest {
     long length_seconds;
   };
@@ -115,8 +143,25 @@ namespace os.diagnostics {
     long file_size_mb;
   };
 
+  enum NvmeSelfTestType {
+    short_test,
+    long_test
+  };
+
+  dictionary RunNvmeSelfTestRequest {
+    NvmeSelfTestType test_type;
+  };
+
   dictionary RunNvmeWearLevelRequest {
     long wear_level_threshold;
+  };
+
+  dictionary RunSmartctlCheckRequest {
+    long? percentage_used_threshold;
+  };
+
+  dictionary RunPowerButtonRequest {
+    long timeout_seconds;
   };
 
   dictionary RunRoutineResponse {
@@ -130,6 +175,197 @@ namespace os.diagnostics {
   callback GetRoutineUpdateCallback = void (GetRoutineUpdateResponse response);
 
   callback RunRoutineCallback = void (RunRoutineResponse response);
+
+  // ----------------- DIAGNOSTICS API V2 -----------------
+
+  dictionary RoutineInitializedInfo {
+    DOMString? uuid;
+  };
+
+  dictionary RoutineRunningInfo {
+    DOMString? uuid;
+    long? percentage;
+  };
+
+  enum RoutineWaitingReason {
+    waiting_to_be_scheduled,
+    waiting_user_input
+  };
+
+  dictionary RoutineWaitingInfo {
+    DOMString? uuid;
+    long? percentage;
+    // Reason why the routine waits.
+    RoutineWaitingReason? reason;
+    // Additional information, may be used to pass instruction or explanation.
+    DOMString? message;
+  };
+
+  enum ExceptionReason {
+    unknown,
+    // Any other exceptions that we don't expect to happen. Clients should
+    // simply report the error.
+    unexpected,
+    // Raises this if clients try to run an unsupported feature. Note that
+    // clients should use methods which return `SupportStatus` for
+    // support status check.
+    unsupported,
+    // The corresponding App UI was closed and thus stopped the routine
+    // execution.
+    app_ui_closed
+  };
+
+  dictionary ExceptionInfo {
+    DOMString? uuid;
+    ExceptionReason reason;
+    // A human readable message for debugging. Don't rely on the content because
+    // it could change anytime.
+    DOMString? debugMessage;
+  };
+
+  enum MemtesterTestItemEnum {
+    // The memtester test is not recognized.
+    unknown,
+
+    // Test that all memory addresses to be tested can be set to itself and its
+    // complement.
+    stuck_address,
+
+    // These tests test different operation of a random int64 with buffer
+    // initialized as 0xFFFFFFFF, repeating over 64 bit blocks.
+    // Perform AND operation.
+    compare_and,
+    // Perform DIV operation.
+    compare_div,
+    // Perform MUL operation.
+    compare_mul,
+    // Perform OR operation.
+    compare_or,
+    // Perform SUB operation.
+    compare_sub,
+    // Perform XOR operation.
+    compare_xor,
+    // Perform ADD operation.
+    sequential_increment,
+
+    // These tests test setting memory regions in a certain pattern, repeating
+    // over each 64 bit blocks.
+    // Test Pattern: |0*10*| and |1*01*|.
+    bit_flip,
+    // Test Pattern:|0*1010*| and |1*0101*|.
+    bit_spread,
+    // Test Pattern: all 256 possible combinations of a 8 bit block, repeated 8
+    // times.
+    block_sequential,
+    // Test Pattern: Alternating 0 and 1.
+    checkerboard,
+    // Test Pattern: Random 64 bits.
+    random_value,
+    // Test Pattern: all 0s and all 1s.
+    solid_bits,
+    // Test Pattern: |0*10*|.
+    walking_ones,
+    // Test Pattern: |1*01*|.
+    walking_zeroes,
+
+    // These tests test writing random n bit words across the memory regions.
+    // Test Pattern: 8 bit random words.
+    eight_bit_writes,
+    // Test Pattern: 16 bit random words.
+    sixteen_bit_writes
+  };
+
+  dictionary MemtesterResult {
+    MemtesterTestItemEnum[] passed_items;
+    MemtesterTestItemEnum[] failed_items;
+  };
+
+  dictionary MemoryRoutineFinishedInfo {
+    DOMString? uuid;
+    boolean? has_passed;
+    // Number of bytes tested in the memory routine.
+    double? bytesTested;
+    // Contains the memtester test results.
+    MemtesterResult? result;
+  };
+
+  dictionary RunMemoryRoutineArguments {
+    // An optional field to indicate how much memory should be tested. If the
+    // value is null, memory test will run with as much memory as possible.
+    long? maxTestingMemKib;
+  };
+
+  enum VolumeButtonType {
+    // The volume up button.
+    volume_up,
+    // The volume down button.
+    volume_down
+  };
+
+  dictionary VolumeButtonRoutineFinishedInfo {
+    DOMString? uuid;
+    boolean? has_passed;
+  };
+
+  dictionary RunVolumeButtonRoutineArguments {
+    // The volume button to be tested.
+    VolumeButtonType button_type;
+    // Length of time to listen to the volume button events. The value should be
+    // positive and less or equal to 600 seconds.
+    long timeout_seconds;
+  };
+
+  enum HardwarePresenceStatus {
+    // The hardware presence matches the description.
+    matched,
+    // The hardware presence does not match the description.
+    not_matched,
+    // There is no description available, skipping check.
+    not_configured
+  };
+
+  dictionary FanRoutineFinishedInfo {
+    DOMString? uuid;
+    boolean? has_passed;
+    // The ids of fans that can be controlled.
+    long[]? passed_fan_ids;
+    // The ids of fans that cannot be controlled.
+    long[]? failed_fan_ids;
+    // Whether the number of fan probed is matched.
+    HardwarePresenceStatus? fan_count_status;
+  };
+
+  dictionary RunFanRoutineArguments {
+  };
+
+  dictionary CreateRoutineResponse {
+    DOMString? uuid;
+  };
+
+  callback CreateRoutineCallback = void (CreateRoutineResponse response);
+
+  enum RoutineSupportStatus {
+    supported,
+    unsupported
+  };
+
+  dictionary RoutineSupportStatusInfo {
+    RoutineSupportStatus? status;
+  };
+
+  callback RoutineSupportStatusInfoCallback = void (RoutineSupportStatusInfo info);
+
+  dictionary StartRoutineRequest {
+    DOMString uuid;
+  };
+
+  callback StartRoutineCallback = void ();
+
+  dictionary CancelRoutineRequest {
+    DOMString uuid;
+  };
+
+  callback CancelRoutineCallback = void ();
 
   interface Functions {
     [supportsPromises] static void getAvailableRoutines(GetAvailableRoutinesCallback callback);
@@ -150,6 +386,16 @@ namespace os.diagnostics {
 
     [supportsPromises] static void runBatteryHealthRoutine(RunRoutineCallback callback);
 
+    [supportsPromises] static void runBluetoothDiscoveryRoutine(RunRoutineCallback callback);
+
+    [supportsPromises] static void runBluetoothPairingRoutine(RunBluetoothPairingRoutineRequest request,
+                                                              RunRoutineCallback callback);
+
+    [supportsPromises] static void runBluetoothPowerRoutine(RunRoutineCallback callback);
+
+    [supportsPromises] static void runBluetoothScanningRoutine(RunBluetoothScanningRoutineRequest request,
+                                                               RunRoutineCallback callback);
+
     [supportsPromises] static void runCpuCacheRoutine(RunCpuRoutineRequest request,
                                                       RunRoutineCallback callback);
 
@@ -169,17 +415,98 @@ namespace os.diagnostics {
 
     [supportsPromises] static void runDnsResolverPresentRoutine(RunRoutineCallback callback);
 
+    [supportsPromises] static void runEmmcLifetimeRoutine(RunRoutineCallback callback);
+
+    [supportsPromises] static void runFingerprintAliveRoutine(RunRoutineCallback callback);
+
     [supportsPromises] static void runGatewayCanBePingedRoutine(RunRoutineCallback callback);
 
     [supportsPromises] static void runLanConnectivityRoutine(RunRoutineCallback callback);
 
     [supportsPromises] static void runMemoryRoutine(RunRoutineCallback callback);
 
+    [supportsPromises] static void runNvmeSelfTestRoutine(RunNvmeSelfTestRequest request, RunRoutineCallback callback);
+
     [supportsPromises] static void runNvmeWearLevelRoutine(RunNvmeWearLevelRequest request,
                                                            RunRoutineCallback callback);
 
+    [supportsPromises] static void runSensitiveSensorRoutine(RunRoutineCallback callback);
+
     [supportsPromises] static void runSignalStrengthRoutine(RunRoutineCallback callback);
 
-    [supportsPromises] static void runSmartctlCheckRoutine(RunRoutineCallback callback);
+    [supportsPromises] static void runSmartctlCheckRoutine(optional RunSmartctlCheckRequest request, RunRoutineCallback callback);
+
+    [supportsPromises] static void runUfsLifetimeRoutine(RunRoutineCallback callback);
+
+    [supportsPromises] static void runPowerButtonRoutine(RunPowerButtonRequest request, RunRoutineCallback callback);
+
+    [supportsPromises] static void runAudioDriverRoutine(RunRoutineCallback callback);
+
+    [supportsPromises] static void runFanRoutine(RunRoutineCallback callback);
+
+    // ----------------- DIAGNOSTICS API V2 -----------------
+
+    // Starts execution of a routine. This can only be expected to work after
+    // `onRoutineInitialized` was emitted for the routine with `UUID`.
+    [supportsPromises] static void startRoutine(StartRoutineRequest request, StartRoutineCallback callback);
+
+    // Stops executing the routine identified by `UUID` and removes all related resources from the system.
+    [supportsPromises] static void cancelRoutine(CancelRoutineRequest request, CancelRoutineCallback callback);
+
+    [supportsPromises] static void createMemoryRoutine(RunMemoryRoutineArguments args,
+                                                       CreateRoutineCallback callback);
+
+    // Checks whether a certain `RunMemoryRoutineArguments` is supported on the platform.
+    [supportsPromises] static void isMemoryRoutineArgumentSupported(RunMemoryRoutineArguments args,
+                                                          RoutineSupportStatusInfoCallback callback);
+
+    [supportsPromises] static void createVolumeButtonRoutine(RunVolumeButtonRoutineArguments args,
+                                                             CreateRoutineCallback callback);
+
+    // Checks whether a certain `RunVolumeButtonRoutineArguments` is supported on the platform.
+    [supportsPromises] static void isVolumeButtonRoutineArgumentSupported(RunVolumeButtonRoutineArguments args,
+                                                                          RoutineSupportStatusInfoCallback callback);
+
+    [supportsPromises] static void createFanRoutine(RunFanRoutineArguments args,
+                                                       CreateRoutineCallback callback);
+
+    // Checks whether a certain `RunFanRoutineArguments` is supported on the platform.
+    [supportsPromises] static void isFanRoutineArgumentSupported(RunFanRoutineArguments args,
+                                                          RoutineSupportStatusInfoCallback callback);
   };
+
+  interface Events {
+    // Informs the extension that a routine was intitialized.
+    static void onRoutineInitialized(RoutineInitializedInfo initializedInfo);
+
+    // Informs the extension that a routine started running. This can happen in
+    // two situations:
+    // 1. `startRoutine` was called and the routine successfully started
+    //    execution.
+    // 2. The routine exited the "waiting" state and returned to running.
+    static void onRoutineRunning(RoutineRunningInfo runningInfo);
+
+    // Informs the extension that a routine stopped execution and waits for an
+    // event, e.g. user interaction. `RoutineWaitingInfo` contains information
+    // about what the routine is waiting for (see prototype above).
+    static void onRoutineWaiting(RoutineWaitingInfo waitingInfo);
+
+    // Informs the extension that a memory routine finished.
+    static void onMemoryRoutineFinished(MemoryRoutineFinishedInfo finishedInfo);
+
+    // Informs the extension that a volume button routine finished.
+    static void onVolumeButtonRoutineFinished(VolumeButtonRoutineFinishedInfo finishedInfo);
+
+    // Informs the extension that a fan routine finished.
+    static void onFanRoutineFinished(FanRoutineFinishedInfo finishedInfo);
+
+    // Informs the extension that an exception occured. The error passed in
+    // `ExceptionInfo` is non-recoverable.
+    static void onRoutineException(ExceptionInfo exceptionInfo);
+  };
+
+  // LINT.ThenChange(//docs/telemetry_extension/api_overview.md)
+  // The following is an empty definition, since the IDL compiler only accepts
+  // comments over valid definitions.
+  callback EOF = void();
 };

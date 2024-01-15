@@ -175,6 +175,55 @@ void LogCaptureDeviceMetrics(
       }
     }
   }
+  base::UmaHistogramCustomCounts("Media.VideoCapture.Device.TotalAvailable",
+                                 devices_info.size(), 0, 5, 5);
+}
+
+void LogCaptureDeviceHashedModelId(
+    const media::VideoCaptureDeviceDescriptor& descriptor) {
+  // descriptor.model_id has the form "XXXX:XXXX" when a USB device is detected,
+  // and empty otherwise.
+  constexpr int kModelIdStrLength = 9;
+  constexpr int kColonPosIndex = 4;
+  uint32_t mapping = 0;
+  if (descriptor.model_id.length() == kModelIdStrLength) {
+    const std::string vid = descriptor.model_id.substr(0, kColonPosIndex);
+    const std::string pid =
+        descriptor.model_id.substr(kColonPosIndex + 1, kModelIdStrLength);
+    const std::string usb_id = vid + pid;
+    // Check if resulting usb_id is a valid Hex Number, otherwise reporting 0
+    if (std::all_of(usb_id.begin(), usb_id.end(), ::isxdigit)) {
+      std::stringstream ss;
+      ss << std::hex << usb_id;
+      ss >> mapping;
+    }
+  }
+  UMA_HISTOGRAM_SPARSE("Media.VideoCapture.Device.Opened.ByModelId", mapping);
+}
+
+void LogCaptureCurrentDeviceResolution(int width, int height) {
+  // This method combines width and height into a single uint32_t value.
+  constexpr int kMinValue = 0;
+  constexpr int kMaxValue = 65535;
+  uint32_t result = 0;
+
+  // Check if width and height are valid, otherwise metric will be 0.
+  if (width > kMinValue && width <= kMaxValue && height > kMinValue &&
+      height <= kMaxValue) {
+    // Store the width in the first 16 bits
+    result |= static_cast<uint16_t>(width) << 16;
+    // Store the height in the last 16 bits
+    result |= static_cast<uint16_t>(height);
+  }
+  base::UmaHistogramSparse("Media.VideoCapture.Device.Opened.Resolution",
+                           result);
+}
+
+void LogCaptureCurrentDevicePixelFormat(
+    const media::VideoPixelFormat pixel_format) {
+  base::UmaHistogramEnumeration("Media.VideoCapture.Device.Opened.PixelFormat",
+                                pixel_format,
+                                media::VideoPixelFormat::PIXEL_FORMAT_MAX);
 }
 
 }  // namespace media

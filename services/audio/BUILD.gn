@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//media/media_options.gni")
 import("//testing/test.gni")
@@ -60,8 +60,6 @@ source_set("audio") {
     "service.h",
     "service_factory.cc",
     "service_factory.h",
-    "service_metrics.cc",
-    "service_metrics.h",
     "snooper_node.cc",
     "snooper_node.h",
     "stream_factory.cc",
@@ -174,7 +172,6 @@ source_set("tests") {
     "public/cpp/input_ipc_unittest.cc",
     "public/cpp/output_device_unittest.cc",
     "realtime_audio_thread_test.cc",
-    "service_metrics_unittest.cc",
     "snooper_node_unittest.cc",
     "sync_reader_unittest.cc",
     "test/audio_system_to_service_adapter_test.cc",
@@ -210,6 +207,7 @@ source_set("tests") {
       "public/cpp/sounds/audio_stream_handler_unittest.cc",
       "public/cpp/sounds/sounds_manager_unittest.cc",
     ]
+    data = [ "//media/test/data/" ]
   }
 
   if (chrome_wide_echo_cancellation_supported) {

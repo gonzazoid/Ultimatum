@@ -4,34 +4,34 @@
 
 #import "ios/web_view/internal/component_updater/web_view_component_updater_configurator.h"
 
-#include <stdint.h>
+#import <stdint.h>
 
-#include <memory>
-#include <string>
-#include <vector>
+#import <memory>
+#import <optional>
+#import <string>
+#import <vector>
 
-#include "base/containers/flat_map.h"
-#include "base/version.h"
-#include "components/component_updater/component_updater_command_line_config_policy.h"
-#include "components/component_updater/configurator_impl.h"
-#include "components/services/patch/in_process_file_patcher.h"
-#include "components/services/unzip/in_process_unzipper.h"
-#include "components/update_client/activity_data_service.h"
-#include "components/update_client/crx_downloader_factory.h"
-#include "components/update_client/net/network_chromium.h"
-#include "components/update_client/patch/patch_impl.h"
-#include "components/update_client/patcher.h"
-#include "components/update_client/protocol_handler.h"
-#include "components/update_client/unzip/unzip_impl.h"
-#include "components/update_client/unzipper.h"
-#include "components/update_client/update_query_params.h"
-#include "ios/web_view/internal/app/application_context.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/containers/flat_map.h"
+#import "base/files/file_path.h"
+#import "base/path_service.h"
+#import "base/time/time.h"
+#import "base/version.h"
+#import "components/component_updater/component_updater_command_line_config_policy.h"
+#import "components/component_updater/configurator_impl.h"
+#import "components/services/patch/in_process_file_patcher.h"
+#import "components/services/unzip/in_process_unzipper.h"
+#import "components/update_client/activity_data_service.h"
+#import "components/update_client/crx_downloader_factory.h"
+#import "components/update_client/net/network_chromium.h"
+#import "components/update_client/patch/patch_impl.h"
+#import "components/update_client/patcher.h"
+#import "components/update_client/persisted_data.h"
+#import "components/update_client/protocol_handler.h"
+#import "components/update_client/unzip/unzip_impl.h"
+#import "components/update_client/unzipper.h"
+#import "components/update_client/update_query_params.h"
+#import "ios/web_view/internal/app/application_context.h"
+#import "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace ios_web_view {
 
@@ -39,16 +39,16 @@ namespace {
 
 // A //ios/web_view specific configurator.
 // See similar implementation at
-// //ios/chrome/browser/component_updater/ios_component_updater_configurator.mm
+// //ios/chrome/browser/component_updater/model/ios_component_updater_configurator.mm
 class WebViewConfigurator : public update_client::Configurator {
  public:
   explicit WebViewConfigurator(const base::CommandLine* cmdline);
 
   // update_client::Configurator overrides.
-  double InitialDelay() const override;
-  int NextCheckDelay() const override;
-  int OnDemandDelay() const override;
-  int UpdateDelay() const override;
+  base::TimeDelta InitialDelay() const override;
+  base::TimeDelta NextCheckDelay() const override;
+  base::TimeDelta OnDemandDelay() const override;
+  base::TimeDelta UpdateDelay() const override;
   std::vector<GURL> UpdateUrl() const override;
   std::vector<GURL> PingUrl() const override;
   std::string GetProdId() const override;
@@ -68,17 +68,20 @@ class WebViewConfigurator : public update_client::Configurator {
   bool EnabledBackgroundDownloader() const override;
   bool EnabledCupSigning() const override;
   PrefService* GetPrefService() const override;
-  update_client::ActivityDataService* GetActivityDataService() const override;
+  update_client::PersistedData* GetPersistedData() const override;
   bool IsPerUserInstall() const override;
   std::unique_ptr<update_client::ProtocolHandlerFactory>
   GetProtocolHandlerFactory() const override;
-  absl::optional<bool> IsMachineExternallyManaged() const override;
+  std::optional<bool> IsMachineExternallyManaged() const override;
   update_client::UpdaterStateProvider GetUpdaterStateProvider() const override;
+  std::optional<base::FilePath> GetCrxCachePath() const override;
+  bool IsConnectionMetered() const override;
 
  private:
   friend class base::RefCountedThreadSafe<WebViewConfigurator>;
 
   component_updater::ConfiguratorImpl configurator_impl_;
+  std::unique_ptr<update_client::PersistedData> persisted_data_;
   scoped_refptr<update_client::NetworkFetcherFactory> network_fetcher_factory_;
   scoped_refptr<update_client::CrxDownloaderFactory> crx_downloader_factory_;
   scoped_refptr<update_client::UnzipperFactory> unzip_factory_;
@@ -93,21 +96,24 @@ class WebViewConfigurator : public update_client::Configurator {
 WebViewConfigurator::WebViewConfigurator(const base::CommandLine* cmdline)
     : configurator_impl_(
           component_updater::ComponentUpdaterCommandLineConfigPolicy(cmdline),
-          /*require_encryption=*/false) {}
+          /*require_encryption=*/false),
+      persisted_data_(update_client::CreatePersistedData(
+          ApplicationContext::GetInstance()->GetLocalState(),
+          nullptr)) {}
 
-double WebViewConfigurator::InitialDelay() const {
+base::TimeDelta WebViewConfigurator::InitialDelay() const {
   return configurator_impl_.InitialDelay();
 }
 
-int WebViewConfigurator::NextCheckDelay() const {
+base::TimeDelta WebViewConfigurator::NextCheckDelay() const {
   return configurator_impl_.NextCheckDelay();
 }
 
-int WebViewConfigurator::OnDemandDelay() const {
+base::TimeDelta WebViewConfigurator::OnDemandDelay() const {
   return configurator_impl_.OnDemandDelay();
 }
 
-int WebViewConfigurator::UpdateDelay() const {
+base::TimeDelta WebViewConfigurator::UpdateDelay() const {
   return configurator_impl_.UpdateDelay();
 }
 
@@ -205,9 +211,8 @@ PrefService* WebViewConfigurator::GetPrefService() const {
   return ApplicationContext::GetInstance()->GetLocalState();
 }
 
-update_client::ActivityDataService*
-WebViewConfigurator::GetActivityDataService() const {
-  return nullptr;
+update_client::PersistedData* WebViewConfigurator::GetPersistedData() const {
+  return persisted_data_.get();
 }
 
 bool WebViewConfigurator::IsPerUserInstall() const {
@@ -219,13 +224,25 @@ WebViewConfigurator::GetProtocolHandlerFactory() const {
   return configurator_impl_.GetProtocolHandlerFactory();
 }
 
-absl::optional<bool> WebViewConfigurator::IsMachineExternallyManaged() const {
+std::optional<bool> WebViewConfigurator::IsMachineExternallyManaged() const {
   return configurator_impl_.IsMachineExternallyManaged();
 }
 
 update_client::UpdaterStateProvider
 WebViewConfigurator::GetUpdaterStateProvider() const {
   return configurator_impl_.GetUpdaterStateProvider();
+}
+
+std::optional<base::FilePath> WebViewConfigurator::GetCrxCachePath() const {
+  base::FilePath path;
+  if (!base::PathService::Get(base::DIR_CACHE, &path)) {
+    return std::nullopt;
+  }
+  return path.Append(FILE_PATH_LITERAL("ios_webview_crx_cache"));
+}
+
+bool WebViewConfigurator::IsConnectionMetered() const {
+  return configurator_impl_.IsConnectionMetered();
 }
 
 }  // namespace

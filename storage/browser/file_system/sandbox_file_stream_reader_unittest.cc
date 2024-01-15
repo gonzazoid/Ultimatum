@@ -10,11 +10,13 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -50,16 +52,18 @@ class SandboxFileStreamReaderTest : public FileStreamReaderTest {
 
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get(), special_storage_policy_);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     file_system_context_ = CreateFileSystemContextForTesting(
         quota_manager_proxy_.get(), dir_.GetPath());
 
     file_system_context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        /*bucket=*/absl::nullopt, kFileSystemTypeTemporary,
+        /*bucket=*/std::nullopt, kFileSystemTypeTemporary,
         OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
         base::BindOnce([](const FileSystemURL& root_url,
                           const std::string& name, base::File::Error result) {
@@ -80,14 +84,12 @@ class SandboxFileStreamReaderTest : public FileStreamReaderTest {
   }
 
   void WriteFile(const std::string& file_name,
-                 const char* buf,
-                 size_t buf_size,
+                 std::string_view data,
                  base::Time* modification_time) override {
     FileSystemURL url = GetFileSystemURL(file_name);
 
-    ASSERT_EQ(base::File::FILE_OK,
-              AsyncFileTestHelper::CreateFileWithData(
-                  file_system_context_.get(), url, buf, buf_size));
+    ASSERT_EQ(base::File::FILE_OK, AsyncFileTestHelper::CreateFileWithData(
+                                       file_system_context_.get(), url, data));
 
     base::File::Info file_info;
     ASSERT_EQ(base::File::FILE_OK,

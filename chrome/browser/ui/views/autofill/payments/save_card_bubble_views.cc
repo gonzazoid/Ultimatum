@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "build/build_config.h"
+#include "chrome/browser/ui/autofill/payments/save_card_ui.h"
 #include "chrome/browser/ui/views/autofill/payments/dialog_view_ids.h"
 #include "chrome/browser/ui/views/autofill/payments/payments_view_util.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -15,6 +16,8 @@
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/payments/legal_message_line.h"
 #include "components/autofill/core/common/autofill_features.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
+#include "components/grit/components_scaled_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -42,8 +45,6 @@ SaveCardBubbleViews::SaveCardBubbleViews(views::View* anchor_view,
   DCHECK(controller);
   SetButtonLabel(ui::DIALOG_BUTTON_OK, controller->GetAcceptButtonText());
   SetButtonLabel(ui::DIALOG_BUTTON_CANCEL, controller->GetDeclineButtonText());
-  SetCancelCallback(base::BindOnce(&SaveCardBubbleViews::OnDialogCancelled,
-                                   base::Unretained(this)));
   SetAcceptCallback(base::BindOnce(&SaveCardBubbleViews::OnDialogAccepted,
                                    base::Unretained(this)));
 
@@ -72,15 +73,15 @@ void SaveCardBubbleViews::Hide() {
 }
 
 void SaveCardBubbleViews::OnDialogAccepted() {
-  // TODO(https://crbug.com/1046793): Maybe delete this.
-  if (controller_)
+  if (controller_) {
     controller_->OnSaveButton({});
+  }
 }
 
-void SaveCardBubbleViews::OnDialogCancelled() {
-  // TODO(https://crbug.com/1046793): Maybe delete this.
-  if (controller_)
-    controller_->OnCancelButton();
+void SaveCardBubbleViews::OnBeforeBubbleWidgetInit(
+    views::Widget::InitParams* params,
+    views::Widget* widget) const {
+  params->name = "SaveCardBubble";
 }
 
 void SaveCardBubbleViews::AddedToWidget() {
@@ -90,9 +91,8 @@ void SaveCardBubbleViews::AddedToWidget() {
   if (!controller_->IsUploadSave())
     return;
 
-  GetBubbleFrameView()->SetTitleView(
-      std::make_unique<TitleWithIconAndSeparatorView>(
-          GetWindowTitle(), TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY));
+  GetBubbleFrameView()->SetTitleView(CreateTitleView(
+      GetWindowTitle(), TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY));
 }
 
 std::u16string SaveCardBubbleViews::GetWindowTitle() const {
@@ -112,7 +112,7 @@ views::View* SaveCardBubbleViews::GetFootnoteViewForTesting() {
 }
 
 const std::u16string SaveCardBubbleViews::GetCardIdentifierString() const {
-  return controller_->GetCard().CardIdentifierStringForAutofillDisplay();
+  return controller_->GetCard().CardNameAndLastFourDigits();
 }
 
 SaveCardBubbleViews::~SaveCardBubbleViews() = default;
@@ -126,7 +126,7 @@ std::unique_ptr<views::View> SaveCardBubbleViews::CreateMainContentView() {
   view->SetBetweenChildSpacing(
       provider->GetDistanceMetric(views::DISTANCE_UNRELATED_CONTROL_VERTICAL));
 
-  // If applicable, add the upload explanation label.  Appears above the card
+  // If applicable, add the upload explanation label. Appears above the card
   // info.
   std::u16string explanation = controller_->GetExplanatoryMessage();
   if (!explanation.empty()) {
@@ -145,33 +145,21 @@ std::unique_ptr<views::View> SaveCardBubbleViews::CreateMainContentView() {
       provider->GetDistanceMetric(views::DISTANCE_RELATED_BUTTON_HORIZONTAL));
 
   const CreditCard& card = controller_->GetCard();
-  auto* const card_network_icon =
-      description_view->AddChildView(std::make_unique<views::ImageView>());
-  card_network_icon->SetImage(
-      ui::ResourceBundle::GetSharedInstance()
-          .GetImageNamed(CreditCard::IconResourceId(card.network()))
-          .AsImageSkia());
+  auto* const card_network_icon = description_view->AddChildView(
+      std::make_unique<views::ImageView>(ui::ImageModel::FromImage(
+          ui::ResourceBundle::GetSharedInstance().GetImageNamed(
+              CreditCard::IconResourceId(card.network())))));
   card_network_icon->SetTooltipText(card.NetworkForDisplay());
+  auto* card_identifier_view =
+      description_view->AddChildView(GetCardIdentifierView());
 
-  auto* const card_identifier_label =
-      description_view->AddChildView(std::make_unique<views::Label>(
-          GetCardIdentifierString(), views::style::CONTEXT_DIALOG_BODY_TEXT,
-          views::style::STYLE_PRIMARY));
-  card_identifier_label->SetMultiLine(true);
-  card_identifier_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-
-  // Flex |card_identifier_label| to fill up remaining space and tail align the
-  // expiry date.
-  description_view->SetFlexForView(card_identifier_label, 1);
-
-  if (!card.IsExpired(base::Time::Now())) {
-    auto* expiration_date_label =
-        description_view->AddChildView(std::make_unique<views::Label>(
-            card.AbbreviatedExpirationDateForDisplay(false),
-            views::style::CONTEXT_DIALOG_BODY_TEXT,
-            views::style::STYLE_SECONDARY));
-    expiration_date_label->SetID(DialogViewId::EXPIRATION_DATE_LABEL);
+  // Flex |card_identifier_view| to fill up space before the expiry date or CVC
+  // icon.
+  if (controller()->GetBubbleType() == BubbleType::LOCAL_CVC_SAVE ||
+      controller()->GetBubbleType() == BubbleType::UPLOAD_CVC_SAVE) {
+    description_view->SetFlexForView(card_identifier_view, 1);
   }
+
   return view;
 }
 
@@ -179,6 +167,68 @@ void SaveCardBubbleViews::InitFootnoteView(views::View* footnote_view) {
   DCHECK(!footnote_view_);
   footnote_view_ = footnote_view;
   footnote_view_->SetID(DialogViewId::FOOTNOTE_VIEW);
+}
+
+std::unique_ptr<views::View> SaveCardBubbleViews::GetCardIdentifierView() {
+  bool is_cvc_only_save =
+      controller()->GetBubbleType() == BubbleType::LOCAL_CVC_SAVE ||
+      controller()->GetBubbleType() == BubbleType::UPLOAD_CVC_SAVE;
+
+  // If `AutofillMoveLegalTermsAndIconForNewCardEnrollment` is enabled,
+  // display the card expiration date in a separate line for credit card saves.
+  // Else, the card name, last 4 digit and expiration date or CVC icon will be
+  // shown in the same line
+  auto card_identifier_view = std::make_unique<views::BoxLayoutView>();
+  if (is_cvc_only_save) {
+    card_identifier_view->SetBetweenChildSpacing(
+        ChromeLayoutProvider::Get()->GetDistanceMetric(
+            views::DISTANCE_RELATED_BUTTON_HORIZONTAL));
+  } else {
+    card_identifier_view->SetOrientation(
+        views::BoxLayout::Orientation::kVertical);
+    card_identifier_view->SetCrossAxisAlignment(
+        views::BoxLayout::CrossAxisAlignment::kStart);
+  }
+
+  const CreditCard& card = controller_->GetCard();
+  auto* const card_identifier_label =
+      card_identifier_view->AddChildView(std::make_unique<views::Label>(
+          is_cvc_only_save ? card.CardNameForAutofillDisplay()
+                           : GetCardIdentifierString(),
+          views::style::CONTEXT_DIALOG_BODY_TEXT, views::style::STYLE_PRIMARY));
+  // Disable multi line for CVC-only save (prompted after card usage) as the
+  // name can be very long with card name and art enabled. This change does not
+  // affect credit card upload save (prompted after a new or local card is
+  // entered).
+  card_identifier_label->SetMultiLine(!is_cvc_only_save);
+  card_identifier_label->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
+
+  // Flex |card_identifier_label| to fill up remaining space and tail align
+  // the expiry date or CVC icon if the card info will be shown in the same
+  // line.
+  if (is_cvc_only_save) {
+    card_identifier_view->SetFlexForView(card_identifier_label, /*flex=*/1);
+  }
+
+  // Show CVC icon for CVC only save cases and card expiration in other cases
+  if (is_cvc_only_save) {
+    card_identifier_view->AddChildView(std::make_unique<views::Label>(
+        card.ObfuscatedNumberWithVisibleLastFourDigits(),
+        views::style::CONTEXT_DIALOG_BODY_TEXT, views::style::STYLE_PRIMARY));
+    card_identifier_view->AddChildView(
+        std::make_unique<views::ImageView>(ui::ImageModel::FromImage(
+            ui::ResourceBundle::GetSharedInstance().GetImageNamed(
+                IDR_CREDIT_CARD_CVC_HINT_BACK))));
+  } else if (!card.IsExpired(base::Time::Now())) {
+    auto* expiration_date_label =
+        card_identifier_view->AddChildView(std::make_unique<views::Label>(
+            card.AbbreviatedExpirationDateForDisplay(false),
+            views::style::CONTEXT_DIALOG_BODY_TEXT,
+            views::style::STYLE_SECONDARY));
+    expiration_date_label->SetID(DialogViewId::EXPIRATION_DATE_LABEL);
+  }
+
+  return card_identifier_view;
 }
 
 void SaveCardBubbleViews::AssignIdsToDialogButtons() {
@@ -196,14 +246,17 @@ void SaveCardBubbleViews::Init() {
   // For server cards, there is an explanation between the title and the
   // controls; use DialogContentType::kText. For local cards, since there is no
   // explanation, use DialogContentType::kControl instead.
+  // There are legal messages before the buttons for server cards, so use
+  // DialogContentType::kText. For local card, since there is no legal message,
+  // use DialogContentType::kControl instead.
   set_margins(ChromeLayoutProvider::Get()->GetDialogInsetsForContentType(
       controller_->GetExplanatoryMessage().empty()
           ? views::DialogContentType::kControl
           : views::DialogContentType::kText,
-      GetDialogButtons() == ui::DIALOG_BUTTON_NONE
+      !controller_->GetLegalMessageLines().empty()
           ? views::DialogContentType::kText
           : views::DialogContentType::kControl));
-  AddChildView(CreateMainContentView().release());
+  AddChildView(CreateMainContentView());
 }
 
 }  // namespace autofill

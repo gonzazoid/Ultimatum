@@ -8,6 +8,7 @@
 #include <string>
 
 #include "build/build_config.h"
+#include "components/signin/public/base/signin_metrics.h"
 #include "components/signin/public/identity_manager/account_capabilities.h"
 #include "components/signin/public/identity_manager/tribool.h"
 #include "google_apis/gaia/core_account_id.h"
@@ -25,7 +26,7 @@ extern const char kNoPictureURLFound[];
 
 // Stores the basic information about an account that is always known
 // about the account (from the moment it is added to the system until
-// it is removed). It will unfrequently, if ever, change.
+// it is removed). It will infrequently, if ever, change.
 struct CoreAccountInfo {
   CoreAccountInfo();
   ~CoreAccountInfo();
@@ -38,6 +39,10 @@ struct CoreAccountInfo {
 
   CoreAccountId account_id;
   std::string gaia;
+
+  // Displaying the `email` in display fields (e.g. Android View) can be
+  // restricted. Please verify displayability using
+  // `AccountInfo::CanHaveEmailAddressDisplayed()`.
   std::string email;
 
   bool is_under_advanced_protection = false;
@@ -66,6 +71,11 @@ struct AccountInfo : public CoreAccountInfo {
   std::string last_downloaded_image_url_with_size;
   gfx::Image account_image;
 
+  // For metrics. This field is not consistently set on all platforms.
+  // Not persisted to disk. Resets to `ACCESS_POINT_UNKNOWN` on restart.
+  signin_metrics::AccessPoint access_point =
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN;
+
   AccountCapabilities capabilities;
   signin::Tribool is_child_account = signin::Tribool::kUnknown;
 
@@ -73,8 +83,8 @@ struct AccountInfo : public CoreAccountInfo {
   bool IsEmpty() const;
 
   // Returns true if all non-optional fields in this account info are filled.
-  // Note: IsValid() does not check if `is_child_account` or `capabilities` are
-  // filled.
+  // Note: IsValid() does not check if `access_point`, `is_child_account` or
+  // `capabilities` are filled.
   bool IsValid() const;
 
   // Updates the empty fields of |this| with |other|. Returns whether at least
@@ -87,12 +97,31 @@ struct AccountInfo : public CoreAccountInfo {
   // hosted_domain is still unknown (empty), this information will become
   // available asynchronously.
   static bool IsManaged(const std::string& hosted_domain);
+
+  // Returns true if the account has no hosted domain but is a dasher account.
+  bool IsMemberOfFlexOrg() const;
+
   bool IsManaged() const;
+
+  // Returns true if the account email can be used in display fields.
+  // If `capabilities.can_have_email_address_displayed()` is unknown at the time
+  // this function is called, the email address will be considered displayable.
+  bool CanHaveEmailAddressDisplayed() const;
 };
 
 bool operator==(const CoreAccountInfo& l, const CoreAccountInfo& r);
 bool operator!=(const CoreAccountInfo& l, const CoreAccountInfo& r);
 std::ostream& operator<<(std::ostream& os, const CoreAccountInfo& account);
+
+// Comparing `AccountInfo`s is likely a mistake. You should compare either
+// `CoreAccountId` or `CoreAccountInfo` instead:
+//
+//   AccountInfo l, r;
+//   // if (l == r) {
+//   if (l.account_id == r.account_id) {}
+//
+bool operator==(const AccountInfo& l, const AccountInfo& r) = delete;
+bool operator!=(const AccountInfo& l, const AccountInfo& r) = delete;
 
 #if BUILDFLAG(IS_ANDROID)
 // Constructs a Java CoreAccountInfo from the provided C++ CoreAccountInfo

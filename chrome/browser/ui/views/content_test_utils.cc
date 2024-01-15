@@ -5,7 +5,7 @@
 #include "chrome/browser/ui/views/content_test_utils.h"
 
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/test/event_generator.h"
@@ -21,7 +21,7 @@ namespace {
 // only when there is no better way to synchronize.
 void GiveItSomeTime(base::TimeDelta delta) {
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), delta);
   run_loop.Run();
 }
@@ -31,7 +31,7 @@ void GiveItSomeTime(base::TimeDelta delta) {
 void TestTextInputViaKeyEvent(content::WebContents* contents) {
   // Replace the dialog content with a single text input element and focus it.
   ASSERT_TRUE(content::WaitForLoadStop(contents));
-  ASSERT_TRUE(content::ExecuteScript(contents, R"(
+  ASSERT_TRUE(content::ExecJs(contents, R"(
     document.body.innerHTML = trustedTypes.emptyHTML;
     const input = document.createElement('input');
     input.type = 'text';
@@ -53,9 +53,8 @@ void TestTextInputViaKeyEvent(content::WebContents* contents) {
   while (result != "a") {
     GiveItSomeTime(base::Milliseconds(100));
 
-    ASSERT_TRUE(content::ExecuteScriptAndExtractString(contents, R"(
-      window.domAutomationController.send(
-          document.getElementById('text-id').value);
-    )", &result));
+    result =
+        content::EvalJs(contents, "document.getElementById('text-id').value;")
+            .ExtractString();
   }
 }

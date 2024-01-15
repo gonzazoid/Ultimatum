@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/media_galleries/media_galleries_dialog_controller.h"
 #include "chrome/browser/media_galleries/media_galleries_preferences.h"
@@ -120,7 +120,7 @@ class MediaGalleriesPermissionController
   void OnPreferencesInitialized();
 
   // SelectFileDialog::Listener implementation:
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file_info,
                     int index,
                     void* params) override;
   void FileSelectionCanceled(void* params) override;

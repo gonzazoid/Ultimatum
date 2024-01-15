@@ -10,20 +10,24 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/koid.h"
 #include "base/fuchsia/mem_buffer_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
+#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "build/chromecast_buildflags.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
+#include "fuchsia_web/webengine/browser/trace_event.h"
 #include "fuchsia_web/webengine/browser/web_engine_devtools_controller.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom.h"
+#include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 
 #if BUILDFLAG(ENABLE_CAST_RECEIVER)
 #include "components/cast_streaming/browser/public/network_context_getter.h"  // nogncheck
@@ -40,9 +44,15 @@ ContextImpl::ContextImpl(
                                           base::Unretained(this))) {
   DCHECK(browser_context_);
   DCHECK(devtools_controller_);
+
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/Context created",
+              perfetto::Flow::FromPointer(this));
 }
 
-ContextImpl::~ContextImpl() = default;
+ContextImpl::~ContextImpl() {
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/Context destroyed",
+              perfetto::TerminatingFlow::FromPointer(this));
+}
 
 void ContextImpl::DestroyFrame(FrameImpl* frame) {
   auto iter = frames_.find(frame);
@@ -63,22 +73,29 @@ void ContextImpl::SetCastStreamingEnabled() {
 #endif
 
 void ContextImpl::CreateFrame(
-    fidl::InterfaceRequest<fuchsia::web::Frame> frame) {
-  CreateFrameWithParams(fuchsia::web::CreateFrameParams(), std::move(frame));
+    fidl::InterfaceRequest<fuchsia::web::Frame> frame_request) {
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/Context.CreateFrame",
+              perfetto::Flow::FromPointer(this));
+
+  CreateFrameWithParams(fuchsia::web::CreateFrameParams(),
+                        std::move(frame_request));
 }
 
 void ContextImpl::CreateFrameWithParams(
     fuchsia::web::CreateFrameParams params,
-    fidl::InterfaceRequest<fuchsia::web::Frame> frame) {
-  // FrameImpl clones the params used to create it when creating popup Frames.
-  // Ensure the params can be cloned to avoid problems when handling popups.
-  // TODO(fxbug.dev/65750): Consider removing this restriction if clients
-  // become responsible for providing parameters for [each] popup.
+    fidl::InterfaceRequest<fuchsia::web::Frame> frame_request) {
+  if (!params.IsEmpty()) {
+    TRACE_EVENT(kWebEngineFidlCategory,
+                "fuchsia.web/Context.CreateFrameWithParams",
+                perfetto::Flow::FromPointer(this));
+  }
+
+  // Ensure the params can be cloned as required by CreateFrameForWebContents().
   fuchsia::web::CreateFrameParams cloned_params;
   zx_status_t status = params.Clone(&cloned_params);
   if (status != ZX_OK) {
     ZX_LOG(ERROR, status) << "CreateFrameParams Clone() failed";
-    frame.Close(ZX_ERR_INVALID_ARGS);
+    frame_request.Close(ZX_ERR_INVALID_ARGS);
     return;
   }
 
@@ -89,7 +106,7 @@ void ContextImpl::CreateFrameWithParams(
   auto web_contents = content::WebContents::Create(create_params);
 
   CreateFrameForWebContents(std::move(web_contents), std::move(params),
-                            std::move(frame));
+                            std::move(frame_request));
 }
 
 FrameImpl* ContextImpl::CreateFrameForWebContents(
@@ -109,12 +126,11 @@ FrameImpl* ContextImpl::CreateFrameForWebContents(
     return nullptr;
   }
 
-  // |params.debug_name| is not currently supported.
-  // TODO(crbug.com/1051533): Determine whether it is still needed.
+  // |params.debug_name| is handled by FrameImpl.
 
   // Verify the explicit sites filter error page content. If the parameter is
   // present, it will be provided to the FrameImpl after it is created below.
-  absl::optional<std::string> explicit_sites_filter_error_page;
+  std::optional<std::string> explicit_sites_filter_error_page;
   if (params.has_explicit_sites_filter_error_page()) {
     explicit_sites_filter_error_page =
         base::StringFromMemData(params.explicit_sites_filter_error_page());
@@ -122,18 +138,6 @@ FrameImpl* ContextImpl::CreateFrameForWebContents(
       frame_request.Close(ZX_ERR_INVALID_ARGS);
       return nullptr;
     }
-  }
-
-  // FrameImpl clones the params used to create it when creating popup Frames.
-  // Ensure the params can be cloned to avoid problems when creating popups.
-  // TODO(http://fxbug.dev/65750): Remove this limitation once a soft migration
-  // to a new solution has been completed.
-  fuchsia::web::CreateFrameParams cloned_params;
-  zx_status_t status = params.Clone(&cloned_params);
-  if (status != ZX_OK) {
-    ZX_LOG(ERROR, status) << "CreateFrameParams clone failed";
-    frame_request.Close(ZX_ERR_INVALID_ARGS);
-    return nullptr;
   }
 
   // Wrap the WebContents into a FrameImpl owned by |this|.
@@ -155,11 +159,18 @@ FrameImpl* ContextImpl::CreateFrameForWebContents(
 
 void ContextImpl::GetCookieManager(
     fidl::InterfaceRequest<fuchsia::web::CookieManager> request) {
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/Context.GetCookieManager",
+              perfetto::Flow::FromPointer(this));
+
   cookie_manager_bindings_.AddBinding(&cookie_manager_, std::move(request));
 }
 
 void ContextImpl::GetRemoteDebuggingPort(
     GetRemoteDebuggingPortCallback callback) {
+  TRACE_EVENT(kWebEngineFidlCategory,
+              "fuchsia.web/Context.GetRemoteDebuggingPort",
+              perfetto::Flow::FromPointer(this));
+
   devtools_controller_->GetDevToolsPort(base::BindOnce(
       [](GetRemoteDebuggingPortCallback callback, uint16_t port) {
         if (port == 0) {

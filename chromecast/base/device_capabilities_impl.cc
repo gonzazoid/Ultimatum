@@ -8,14 +8,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 
 namespace chromecast {
@@ -27,7 +27,7 @@ const char kPathSeparator = '.';
 // Determines if a key passed to Register() is valid. No path separators can
 // be present in the key and it must not be empty.
 bool IsValidRegisterKey(const std::string& key) {
-  return !key.empty() && key.find(kPathSeparator) == std::string::npos;
+  return !key.empty() && !base::Contains(key, kPathSeparator);
 }
 
 // Determines if a path is valid. This is true if there are no empty keys
@@ -109,7 +109,8 @@ DeviceCapabilities::Data::Data(base::Value::Dict dictionary)
 DeviceCapabilitiesImpl::Data::~Data() {}
 
 DeviceCapabilitiesImpl::ValidatorInfo::ValidatorInfo(Validator* validator)
-    : validator_(validator), task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+    : validator_(validator),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DCHECK(validator_);
   DCHECK(task_runner_.get());
 }
@@ -132,7 +133,8 @@ void DeviceCapabilitiesImpl::ValidatorInfo::Validate(
 DeviceCapabilitiesImpl::DeviceCapabilitiesImpl()
     : all_data_(CreateData()),
       public_data_(CreateData()),
-      task_runner_for_writes_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_for_writes_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()),
       observer_list_(new base::ObserverListThreadSafe<Observer>) {
   DCHECK(task_runner_for_writes_.get());
 }
@@ -276,10 +278,9 @@ void DeviceCapabilitiesImpl::SetCapability(const std::string& path,
   SetPublicValidatedValue(path, std::move(proposed_value));
 }
 
-void DeviceCapabilitiesImpl::MergeDictionary(const base::Value& dict_value) {
-  DCHECK(dict_value.is_dict());
-  for (const auto kv : dict_value.DictItems()) {
-    SetCapability(kv.first, kv.second.Clone());
+void DeviceCapabilitiesImpl::MergeDictionary(const base::Value::Dict& dict) {
+  for (const auto [key, value] : dict) {
+    SetCapability(key, value.Clone());
   }
 }
 

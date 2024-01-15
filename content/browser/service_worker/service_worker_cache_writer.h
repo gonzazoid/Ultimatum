@@ -11,7 +11,7 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/services/storage/public/mojom/service_worker_storage_control.mojom.h"
@@ -20,6 +20,10 @@
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+
+namespace crypto {
+class SecureHash;
+}  // namespace crypto
 
 namespace content {
 
@@ -38,6 +42,16 @@ namespace content {
 class CONTENT_EXPORT ServiceWorkerCacheWriter {
  public:
   using OnWriteCompleteCallback = base::OnceCallback<void(net::Error)>;
+
+  // These values indicates the timing when the checksum update happens. As the
+  // sha256 checksum is a hash string calculated from script data, basically
+  // |kCacheMismatch| is preferable in terms of the efficiency.
+  //
+  // kCacheMismatch: Update the checksum when a cache mismatch and write data
+  // back to the cache.
+  // kAlways: Update the checksum regardless of whether there is a cache
+  // mismatch or not.
+  enum class ChecksumUpdateTiming { kCacheMismatch, kAlways };
 
   // This class defines the interfaces of observer that observes write
   // operations. The observer is notified when response head or data
@@ -89,7 +103,8 @@ class CONTENT_EXPORT ServiceWorkerCacheWriter {
       mojo::Remote<storage::mojom::ServiceWorkerResourceReader> copy_reader,
       mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer,
       int64_t writer_resource_id,
-      bool pause_when_not_identical);
+      bool pause_when_not_identical,
+      ChecksumUpdateTiming checksum_update_timing);
 
   ~ServiceWorkerCacheWriter();
 
@@ -142,6 +157,15 @@ class CONTENT_EXPORT ServiceWorkerCacheWriter {
   }
 
   void FlushRemotesForTesting();
+
+  // Gets the hex-encoded checksum hash string calculated from the script body.
+  // This function should be called only once as it destroys the underlying data
+  // of the checksum. It resets |checksum_| not to be called multiple times.
+  std::string GetSha256Checksum();
+
+  ChecksumUpdateTiming checksum_update_timing() const {
+    return checksum_update_timing_;
+  }
 
  private:
   class ReadResponseHeadCallbackAdapter;
@@ -211,7 +235,8 @@ class CONTENT_EXPORT ServiceWorkerCacheWriter {
       mojo::Remote<storage::mojom::ServiceWorkerResourceReader> copy_reader,
       mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer,
       int64_t writer_resource_id,
-      bool pause_when_not_identical);
+      bool pause_when_not_identical,
+      ChecksumUpdateTiming checksum_update_timing);
 
   // Drives this class's state machine. This function steps the state machine
   // until one of:
@@ -263,14 +288,15 @@ class CONTENT_EXPORT ServiceWorkerCacheWriter {
   // to observer then WriteResponseHeadToResponseWriter() or
   // WriteDataToResponseWriter() is called.
   int WriteResponseHead(network::mojom::URLResponseHeadPtr response_head);
-  int WriteData(scoped_refptr<net::IOBuffer> data, int length);
+  int WriteData(scoped_refptr<net::IOBuffer> data, size_t length);
   int WriteResponseHeadToResponseWriter(
       network::mojom::URLResponseHeadPtr response_head);
-  int WriteDataToResponseWriter(scoped_refptr<net::IOBuffer> data, int length);
+  int WriteDataToResponseWriter(scoped_refptr<net::IOBuffer> data,
+                                size_t length);
 
   // Called when |write_observer_| finishes its WillWriteData() operation.
   void OnWillWriteDataCompleted(scoped_refptr<net::IOBuffer> data,
-                                int length,
+                                size_t length,
                                 net::Error error);
 
   void OnRemoteDisconnected();
@@ -337,6 +363,16 @@ class CONTENT_EXPORT ServiceWorkerCacheWriter {
   mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer_;
   const int64_t writer_resource_id_ =
       blink::mojom::kInvalidServiceWorkerResourceId;
+
+  // Normally, the sha256 hash string is calculated only when there is an update
+  // on the script. But if |checksum_update_timing_| is kAlways, the hash
+  // string is calculated even when there is no update in the script.
+  const ChecksumUpdateTiming checksum_update_timing_;
+
+  // Calculate the hash string for the written bytes. This will be used for the
+  // experiment which needs to identify some specific service worker scripts
+  // (crbug.com/1371756).
+  std::unique_ptr<crypto::SecureHash> checksum_;
 
   base::WeakPtrFactory<ServiceWorkerCacheWriter> weak_factory_{this};
 };

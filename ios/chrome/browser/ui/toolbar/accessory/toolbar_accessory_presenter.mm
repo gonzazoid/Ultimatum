@@ -6,19 +6,13 @@
 
 #import "base/i18n/rtl.h"
 #import "base/logging.h"
-#import "ios/chrome/browser/ui/image_util/image_util.h"
+#import "ios/chrome/browser/shared/ui/util/image/image_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/presenters/contained_presenter_delegate.h"
 #import "ios/chrome/browser/ui/toolbar/accessory/toolbar_accessory_constants.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/browser/ui/util/layout_guide_names.h"
-#import "ios/chrome/browser/ui/util/named_guide.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kToolbarAccessoryWidthRegularRegular = 375;
@@ -216,14 +210,11 @@ const CGFloat kAnimationDuration = 0.15;
   self.animationConstraint = [self.backgroundView.leadingAnchor
       constraintEqualToAnchor:self.baseViewController.view.trailingAnchor];
 
-  UILayoutGuide* toolbarLayoutGuide =
-      [NamedGuide guideWithName:kPrimaryToolbarGuide
-                           view:self.baseViewController.view];
-
+  [self.baseViewController.view addLayoutGuide:_toolbarLayoutGuide];
   [NSLayoutConstraint activateConstraints:@[
     // Anchors accessory below the the toolbar.
     [self.backgroundView.topAnchor
-        constraintEqualToAnchor:toolbarLayoutGuide.bottomAnchor],
+        constraintEqualToAnchor:_toolbarLayoutGuide.bottomAnchor],
     self.animationConstraint,
     widthConstraint,
     [self.backgroundView.widthAnchor
@@ -231,7 +222,7 @@ const CGFloat kAnimationDuration = 0.15;
                                               .widthAnchor
                                  constant:-2 * kRegularRegularHorizontalMargin],
     [self.backgroundView.heightAnchor
-        constraintEqualToConstant:kPrimaryToolbarHeight],
+        constraintEqualToConstant:kPrimaryToolbarWithOmniboxHeight],
   ]];
   // Layouts `shadow` around `self.backgroundView`.
   AddSameConstraintsToSidesWithInsets(
@@ -251,11 +242,9 @@ const CGFloat kAnimationDuration = 0.15;
 
   // Make sure the background doesn't shrink when the toolbar goes to fullscreen
   // mode.
-  UILayoutGuide* toolbarLayoutGuide =
-      [NamedGuide guideWithName:kPrimaryToolbarGuide
-                           view:self.baseViewController.view];
+  [self.baseViewController.view addLayoutGuide:_toolbarLayoutGuide];
   [self.backgroundView.bottomAnchor
-      constraintGreaterThanOrEqualToAnchor:toolbarLayoutGuide.bottomAnchor]
+      constraintGreaterThanOrEqualToAnchor:_toolbarLayoutGuide.bottomAnchor]
       .active = YES;
 }
 
@@ -297,7 +286,7 @@ const CGFloat kAnimationDuration = 0.15;
         constraintGreaterThanOrEqualToAnchor:self.presentedViewController.view
                                                  .heightAnchor],
     [self.presentedViewController.view.heightAnchor
-        constraintEqualToConstant:kPrimaryToolbarHeight],
+        constraintEqualToConstant:kPrimaryToolbarWithOmniboxHeight],
     [self.presentedViewController.view.leadingAnchor
         constraintEqualToAnchor:self.centeringGuide.leadingAnchor],
     [self.presentedViewController.view.trailingAnchor

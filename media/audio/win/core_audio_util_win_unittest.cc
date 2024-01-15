@@ -104,12 +104,6 @@ TEST_F(CoreAudioUtilWinTest, WaveFormatWrapperExtended) {
   EXPECT_TRUE(wave_format_ex.IsFloat());
 }
 
-TEST_F(CoreAudioUtilWinTest, GetIAudioClientVersion) {
-  uint32_t client_version = CoreAudioUtil::GetIAudioClientVersion();
-  EXPECT_GE(client_version, 1u);
-  EXPECT_LE(client_version, 3u);
-}
-
 TEST_F(CoreAudioUtilWinTest, NumberOfActiveDevices) {
   ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
 
@@ -286,8 +280,7 @@ TEST_F(CoreAudioUtilWinTest, CreateClient) {
 }
 
 TEST_F(CoreAudioUtilWinTest, CreateClient3) {
-  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable() &&
-                          CoreAudioUtil::GetIAudioClientVersion() >= 3);
+  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
 
   EDataFlow data[] = {eRender, eCapture};
 
@@ -610,76 +603,6 @@ TEST_F(CoreAudioUtilWinTest, GetMatchingOutputDeviceID) {
   }
 
   EXPECT_TRUE(found_a_pair);
-}
-
-TEST_F(CoreAudioUtilWinTest, CheckGetPreferredAudioParametersUMAStats) {
-  base::HistogramTester tester;
-  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
-
-  // Check that when input stream parameters are created, hr values are not
-  // erroneously tracked in output stream parameters UMA histograms
-  AudioParameters input_params;
-  HRESULT hr = CoreAudioUtil::GetPreferredAudioParameters(
-      AudioDeviceDescription::kDefaultDeviceId, false, &input_params);
-  EXPECT_TRUE(SUCCEEDED(hr));
-  EXPECT_TRUE(input_params.IsValid());
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceEnumeratorResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateClientResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "GetMixFormatResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "GetDevicePeriodResult",
-      0);
-
-  // Check that when output stream parameters are created, hr values for all
-  // expected steps are tracked in UMA histograms
-  AudioParameters output_params;
-  hr = CoreAudioUtil::GetPreferredAudioParameters(
-      AudioDeviceDescription::kDefaultDeviceId, true, &output_params);
-  EXPECT_TRUE(SUCCEEDED(hr));
-  EXPECT_TRUE(output_params.IsValid());
-
-  AudioParameters::HardwareCapabilities output_hardware_capabilities =
-      output_params.hardware_capabilities().value_or(
-          AudioParameters::HardwareCapabilities());
-
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceEnumeratorResult",
-      1);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceResult",
-      1);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateClientResult",
-      1);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "GetMixFormatResult",
-      1);
-
-  // If we have a min_frames_per_buffer then it came from the new API.
-  if (!output_hardware_capabilities.min_frames_per_buffer) {
-    tester.ExpectTotalCount(
-        "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-        "GetDevicePeriodResult",
-        1);
-  }
 }
 
 TEST_F(CoreAudioUtilWinTest, SharedModeLowerBufferSize) {

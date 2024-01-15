@@ -7,9 +7,9 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/string_escape.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
@@ -17,6 +17,7 @@
 #include "components/translate/core/common/translate_util.h"
 #import "components/translate/ios/browser/js_translate_web_frame_manager.h"
 #import "components/translate/ios/browser/js_translate_web_frame_manager_factory.h"
+#import "components/translate/ios/browser/translate_java_script_feature.h"
 #include "ios/web/public/browser_state.h"
 #include "ios/web/public/js_messaging/web_frame.h"
 #include "ios/web/public/navigation/navigation_context.h"
@@ -27,10 +28,6 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace translate {
 
@@ -79,11 +76,19 @@ TranslateController::TranslateController(
       weak_method_factory_(this) {
   DCHECK(web_state_);
   web_state_->AddObserver(this);
+  if (web_state_->IsRealized()) {
+    TranslateJavaScriptFeature::GetInstance()
+        ->GetWebFramesManager(web_state_)
+        ->AddObserver(this);
+  }
 }
 
 TranslateController::~TranslateController() {
   if (web_state_) {
     web_state_->RemoveObserver(this);
+    TranslateJavaScriptFeature::GetInstance()
+        ->GetWebFramesManager(web_state_)
+        ->RemoveObserver(this);
     web_state_ = nullptr;
   }
 }
@@ -290,29 +295,16 @@ void TranslateController::OnRequestFetchComplete(
   request_fetchers_.erase(it);
 }
 
-// web::WebStateObserver implementation.
-
-void TranslateController::WebFrameDidBecomeAvailable(web::WebState* web_state,
-                                                     web::WebFrame* web_frame) {
-  DCHECK_EQ(web_state_, web_state);
-  if (web_frame->IsMainFrame()) {
-    js_manager_factory_->CreateForWebFrame(web_frame);
-    main_web_frame_ = web_frame;
-  }
-}
-
-void TranslateController::WebFrameWillBecomeUnavailable(
-    web::WebState* web_state,
-    web::WebFrame* web_frame) {
-  DCHECK_EQ(web_state_, web_state);
-  if (web_frame == main_web_frame_) {
-    main_web_frame_ = nullptr;
-  }
-}
+#pragma mark - web::WebStateObserver implementation
 
 void TranslateController::WebStateDestroyed(web::WebState* web_state) {
   DCHECK_EQ(web_state_, web_state);
   web_state_->RemoveObserver(this);
+  if (web_state_->IsRealized()) {
+    TranslateJavaScriptFeature::GetInstance()
+        ->GetWebFramesManager(web_state_)
+        ->RemoveObserver(this);
+  }
   web_state_ = nullptr;
   main_web_frame_ = nullptr;
 
@@ -326,6 +318,31 @@ void TranslateController::DidStartNavigation(
   if (!navigation_context->IsSameDocument()) {
     request_fetchers_.clear();
     script_fetcher_.reset();
+  }
+}
+
+void TranslateController::WebStateRealized(web::WebState* web_state) {
+  TranslateJavaScriptFeature::GetInstance()
+      ->GetWebFramesManager(web_state_)
+      ->AddObserver(this);
+}
+
+#pragma mark - web::WebFramesManager implementation
+
+void TranslateController::WebFrameBecameAvailable(
+    web::WebFramesManager* web_frames_manager,
+    web::WebFrame* web_frame) {
+  if (web_frame->IsMainFrame()) {
+    js_manager_factory_->CreateForWebFrame(web_frame);
+    main_web_frame_ = web_frame;
+  }
+}
+
+void TranslateController::WebFrameBecameUnavailable(
+    web::WebFramesManager* web_frames_manager,
+    const std::string& frame_id) {
+  if (web_frames_manager->GetFrameWithId(frame_id) == main_web_frame_) {
+    main_web_frame_ = nullptr;
   }
 }
 

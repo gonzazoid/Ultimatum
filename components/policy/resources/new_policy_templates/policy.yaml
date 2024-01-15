@@ -36,10 +36,11 @@
 
 # This field is a list of strings which describe the group of people responsible
 # for maintaining the policy and can help answer questions or solve issues with
-# the policy. The entries can be either emails of committers or
-# file:// references to OWNERS files in the Chromium repository.
-# There should be at least 2 owners per policies, and ideally a file://
-# references to an OWNERS files
+# the policy. The entries can be either emails of committers or file://
+# references to OWNERS files in the Chromium repository.
+# There should be at least 2 owners per policies. At least one entry must be an
+# email of the individual person or the team responsible for the policy.
+# Additionally a file:// reference to an OWNERS file can also be specified.
 owners:
 - your-ldap@chromium.org
 - file://components/policy/OWNERS
@@ -73,9 +74,16 @@ desc: |-
   This is the second line.
   This is a <ph name="PLACEHOLDER">placeholder</ph>
 
-# List of platforms where the policy is planned to be released.
-# The policy has to be listed in the EnableExperimentalPolicies policy to be
-# available in the Dev and Canary channel.
+# If a platform is listed as "future_on", it means that this policy:
+# 1. will be available on that platform if chrome is on
+#    - the Canary channel
+#    - the Dev channel
+#    - an Unknown channel (e.g. locally built chrome)
+# 2. will not be available by default on that platform if chrome is on
+#   - the Beta channel
+#   - the Stable channel
+# 3. will be available (overriding 2.) if this policy's name is listed in the
+#    EnableExperimentalPolicies policy
 # Currently supported platforms:
 #   `chrome.win`, `chrome.win7`, `chrome.mac`, `chrome.linux`, `chrome.*`
 #   `chrome_os`, `android`, `webview_android`, `ios`, `fuchsia`, `chrome_frame`
@@ -97,7 +105,6 @@ supported_on:
 - chrome.*:105-
 - chrome_os:100-1001
 
-
 # Optional field that is `false` by default.
 # Set to true if the policy has been deprecated.
 deprecated: false
@@ -108,11 +115,6 @@ deprecated: false
 # assumed that it will be added to the DevicePolicy Protobuf manually. Device
 # policy only exists on ChromeOS.
 device_only: false
-
-# ChromeOS devices can either be managed through the Google cloud or through
-# Active Directory. Most policies are supported for both management types, but
-# some are not. The supported values are 'google_cloud', 'active_directory'.
-supported_chrome_os_management: ['google_cloud', 'active_directory']
 
 features:
   # Optional field that is `true` by default.
@@ -289,7 +291,7 @@ items:
   value: null
 
 # Indicates the behavior of the controlled setting/feature when the policy is no
-# set. If this is set to `true`, when the poolicy is not set, the feature
+# set. If this is set to `true`, when the policy is not set, the feature
 # controlled by the policy behaves as if the policy was set to `true`.
 # If the default value cannot be expressed with the given type and is equivalent
 # to unset, it should be represent with `null`.
@@ -365,7 +367,7 @@ example_value: false
 max_size: 123456
 
 # Each policy is tagged with risk tags that indicate potential privacy or
-# security risks. They are defined in `components/policy/templates/risk_tag_definitions.yaml`.
+# security risks. They are defined in `components/policy/resources/templates/risk_tag_definitions.yaml`.
 # Each risk tag contains the following information:
 #   - name: The name of the risk tag. May not contain spaces.
 #   - description: Description for developers so they know which tags apply to

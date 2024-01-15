@@ -9,15 +9,17 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_service_impl.h"
 #include "components/password_manager/core/browser/password_manager_constants.h"
-#include "components/password_manager/core/browser/site_affiliation/affiliation_service_impl.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/storage_partition.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 AffiliationServiceFactory::AffiliationServiceFactory()
-    : ProfileKeyedServiceFactory("AffiliationService") {}
+    : ProfileKeyedServiceFactory(
+          "AffiliationService",
+          ProfileSelections::BuildRedirectedInIncognito()) {}
 
 AffiliationServiceFactory::~AffiliationServiceFactory() = default;
 
@@ -32,7 +34,8 @@ password_manager::AffiliationService* AffiliationServiceFactory::GetForProfile(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
-KeyedService* AffiliationServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AffiliationServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory =
@@ -40,8 +43,9 @@ KeyedService* AffiliationServiceFactory::BuildServiceInstanceFor(
           ->GetURLLoaderFactoryForBrowserProcess();
   auto backend_task_runner = base::ThreadPool::CreateSequencedTaskRunner(
       {base::MayBlock(), base::TaskPriority::USER_VISIBLE});
-  auto* affiliation_service = new password_manager::AffiliationServiceImpl(
-      url_loader_factory, backend_task_runner);
+  auto affiliation_service =
+          std::make_unique<password_manager::AffiliationServiceImpl>(
+              url_loader_factory, backend_task_runner);
 
   base::FilePath database_path =
       profile->GetPath().Append(password_manager::kAffiliationDatabaseFileName);

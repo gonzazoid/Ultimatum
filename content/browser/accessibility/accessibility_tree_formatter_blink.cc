@@ -6,7 +6,7 @@
 
 #include <cmath>
 #include <cstddef>
-
+#include <optional>
 #include <utility>
 
 #include "base/strings/string_number_conversions.h"
@@ -16,7 +16,6 @@
 #include "base/values.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_selection.h"
@@ -28,15 +27,14 @@
 namespace content {
 namespace {
 
-absl::optional<std::string> GetStringAttribute(
-    const ui::AXNode& node,
-    ax::mojom::StringAttribute attr) {
+std::optional<std::string> GetStringAttribute(const ui::AXNode& node,
+                                              ax::mojom::StringAttribute attr) {
   // Language is different from other string attributes as it inherits and has
   // a method to compute it.
   if (attr == ax::mojom::StringAttribute::kLanguage) {
     std::string value = node.GetLanguage();
     if (value.empty()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     return value;
   }
@@ -45,7 +43,7 @@ absl::optional<std::string> GetStringAttribute(
   if (attr == ax::mojom::StringAttribute::kFontFamily) {
     std::string value = node.GetInheritedStringAttribute(attr);
     if (value.empty()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     return value;
   }
@@ -56,7 +54,7 @@ absl::optional<std::string> GetStringAttribute(
   if (node.GetStringAttribute(attr, &value)) {
     return value;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string FormatColor(int argb) {
@@ -107,12 +105,14 @@ std::string IntAttrToString(const ui::AXNode& node,
       return ui::ToString(static_cast<ax::mojom::DefaultActionVerb>(value));
     case ax::mojom::IntAttribute::kDescriptionFrom:
       return ui::ToString(static_cast<ax::mojom::DescriptionFrom>(value));
-    case ax::mojom::IntAttribute::kDropeffect:
+    case ax::mojom::IntAttribute::kDropeffectDeprecated:
       return node.data().DropeffectBitfieldToString();
     case ax::mojom::IntAttribute::kHasPopup:
       return ui::ToString(static_cast<ax::mojom::HasPopup>(value));
     case ax::mojom::IntAttribute::kInvalidState:
       return ui::ToString(static_cast<ax::mojom::InvalidState>(value));
+    case ax::mojom::IntAttribute::kIsPopup:
+      return ui::ToString(static_cast<ax::mojom::IsPopup>(value));
     case ax::mojom::IntAttribute::kListStyle:
       return ui::ToString(static_cast<ax::mojom::ListStyle>(value));
     case ax::mojom::IntAttribute::kNameFrom:
@@ -147,16 +147,18 @@ std::string IntAttrToString(const ui::AXNode& node,
     case ax::mojom::IntAttribute::kAriaRowCount:
     case ax::mojom::IntAttribute::kColorValue:
     case ax::mojom::IntAttribute::kDOMNodeId:
-    case ax::mojom::IntAttribute::kErrormessageId:
+    case ax::mojom::IntAttribute::kErrormessageIdDeprecated:
     case ax::mojom::IntAttribute::kHierarchicalLevel:
     case ax::mojom::IntAttribute::kInPageLinkTargetId:
     case ax::mojom::IntAttribute::kMemberOfId:
     case ax::mojom::IntAttribute::kNextFocusId:
     case ax::mojom::IntAttribute::kNextOnLineId:
+    case ax::mojom::IntAttribute::kNextWindowFocusId:
     case ax::mojom::IntAttribute::kPosInSet:
     case ax::mojom::IntAttribute::kPopupForId:
     case ax::mojom::IntAttribute::kPreviousFocusId:
     case ax::mojom::IntAttribute::kPreviousOnLineId:
+    case ax::mojom::IntAttribute::kPreviousWindowFocusId:
     case ax::mojom::IntAttribute::kScrollX:
     case ax::mojom::IntAttribute::kScrollXMax:
     case ax::mojom::IntAttribute::kScrollXMin:
@@ -347,7 +349,8 @@ void AccessibilityTreeFormatterBlink::AddProperties(
        state_index <= static_cast<int32_t>(ax::mojom::State::kMaxValue);
        ++state_index) {
     auto state = static_cast<ax::mojom::State>(state_index);
-    if (node.HasState(state))
+    if (state == ax::mojom::State::kFocusable ? node.IsFocusable()
+                                              : node.HasState(state))
       dict->SetByDottedPath(ui::ToString(state), true);
   }
 
@@ -606,10 +609,11 @@ std::string AccessibilityTreeFormatterBlink::ProcessTreeForOutput(
 
   std::string line;
 
-  if (show_ids()) {
-    int id_value = dict.FindInt("id").value_or(0);
-    WriteAttribute(true, base::NumberToString(id_value), &line);
-  }
+  std::string id_value = base::NumberToString(dict.FindInt("id").value_or(0));
+  if (show_ids())  // Show id on every line.
+    WriteAttribute(true, id_value, &line);
+  else  // Show id if @BlINK-ALLOW:id#=* specified.
+    WriteAttribute(false, std::string("id#=") + id_value, &line);
 
   const std::string* role_value = dict.FindString("internalRole");
   if (role_value) {
@@ -708,7 +712,7 @@ std::string AccessibilityTreeFormatterBlink::ProcessTreeForOutput(
        attr_index <= static_cast<int32_t>(ax::mojom::BoolAttribute::kMaxValue);
        ++attr_index) {
     auto attr = static_cast<ax::mojom::BoolAttribute>(attr_index);
-    absl::optional<bool> bool_value = dict.FindBool(ui::ToString(attr));
+    std::optional<bool> bool_value = dict.FindBool(ui::ToString(attr));
     if (!bool_value.has_value())
       continue;
     WriteAttribute(false,
@@ -721,7 +725,7 @@ std::string AccessibilityTreeFormatterBlink::ProcessTreeForOutput(
        attr_index <= static_cast<int32_t>(ax::mojom::FloatAttribute::kMaxValue);
        ++attr_index) {
     auto attr = static_cast<ax::mojom::FloatAttribute>(attr_index);
-    absl::optional<double> float_value = dict.FindDouble(ui::ToString(attr));
+    std::optional<double> float_value = dict.FindDouble(ui::ToString(attr));
     if (!float_value)
       continue;
     WriteAttribute(

@@ -5,20 +5,24 @@
 #include "device/vr/android/arcore/arcore_impl.h"
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/math_constants.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "base/types/pass_key.h"
 #include "device/vr/android/arcore/arcore_math_utils.h"
 #include "device/vr/android/arcore/arcore_plane_manager.h"
-#include "device/vr/android/arcore/type_converters.h"
+#include "device/vr/android/arcore/vr_service_type_converters.h"
+#include "device/vr/create_anchor_request.h"
 #include "device/vr/public/mojom/pose.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
+#include "device/vr/public/mojom/xr_session.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -51,9 +55,6 @@ device::mojom::VRPosePtr GetMojomVRPoseFromArPose(const ArSession* session,
   return result;
 }
 
-// Helper, creates new ArPose* with position and orientation set to match the
-// position and orientation of passed in |pose|.
-
 ArTrackableType GetArCoreEntityType(
     device::mojom::EntityTypeForHitTest entity_type) {
   switch (entity_type) {
@@ -68,8 +69,8 @@ std::set<ArTrackableType> GetArCoreEntityTypes(
     const std::vector<device::mojom::EntityTypeForHitTest>& entity_types) {
   std::set<ArTrackableType> result;
 
-  std::transform(entity_types.begin(), entity_types.end(),
-                 std::inserter(result, result.end()), GetArCoreEntityType);
+  base::ranges::transform(entity_types, std::inserter(result, result.end()),
+                          GetArCoreEntityType);
 
   return result;
 }
@@ -308,259 +309,14 @@ constexpr float kDefaultFloorHeightEstimation = 1.2;
 
 namespace device {
 
-ArCoreImpl::ArCoreImpl()
-    : gl_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+namespace {
 
-ArCoreImpl::~ArCoreImpl() {
-  for (auto& create_anchor : create_anchor_requests_) {
-    create_anchor.TakeCallback().Run(mojom::CreateAnchorResult::FAILURE, 0);
-  }
-
-  for (auto& create_anchor : create_plane_attached_anchor_requests_) {
-    create_anchor.TakeCallback().Run(mojom::CreateAnchorResult::FAILURE, 0);
-  }
-}
-
-absl::optional<ArCore::InitializeResult> ArCoreImpl::Initialize(
-    base::android::ScopedJavaLocalRef<jobject> context,
-    const std::unordered_set<device::mojom::XRSessionFeature>&
-        required_features,
-    const std::unordered_set<device::mojom::XRSessionFeature>&
-        optional_features,
-    const std::vector<device::mojom::XRTrackedImagePtr>& tracked_images,
-    absl::optional<ArCore::DepthSensingConfiguration> depth_sensing_config) {
-  DCHECK(IsOnGlThread());
-  DCHECK(!arcore_session_.is_valid());
-
-  // TODO(https://crbug.com/837944): Notify error earlier if this will fail.
-
-  JNIEnv* env = base::android::AttachCurrentThread();
-  if (!env) {
-    DLOG(ERROR) << "Unable to get JNIEnv for ArCore";
-    return absl::nullopt;
-  }
-
-  // Use a local scoped ArSession for the next steps, we want the
-  // arcore_session_ member to remain null until we complete successful
-  // initialization.
-  internal::ScopedArCoreObject<ArSession*> session;
-
-  ArStatus status = ArSession_create(
-      env, context.obj(),
-      internal::ScopedArCoreObject<ArSession*>::Receiver(session).get());
-  if (status != AR_SUCCESS) {
-    DLOG(ERROR) << "ArSession_create failed: " << status;
-    return absl::nullopt;
-  }
-
-  // Set incognito mode for ARCore session - this is done unconditionally as we
-  // always want to limit the amount of logging done by ARCore.
-  ArSession_enableIncognitoMode_private(session.get());
-  DVLOG(1) << __func__ << ": ARCore incognito mode enabled";
-
-  absl::optional<std::unordered_set<device::mojom::XRSessionFeature>>
-      maybe_enabled_features =
-          ConfigureFeatures(session.get(), required_features, optional_features,
-                            tracked_images, depth_sensing_config);
-
-  if (!maybe_enabled_features) {
-    DLOG(ERROR) << "Failed to configure session features";
-    return absl::nullopt;
-  }
-
-  if (!ConfigureCamera(session.get())) {
-    DLOG(ERROR) << "Failed to configure session camera";
-    return absl::nullopt;
-  }
-
-  internal::ScopedArCoreObject<ArFrame*> frame;
-  ArFrame_create(session.get(),
-                 internal::ScopedArCoreObject<ArFrame*>::Receiver(frame).get());
-  if (!frame.is_valid()) {
-    DLOG(ERROR) << "ArFrame_create failed";
-    return absl::nullopt;
-  }
-
-  if (base::Contains(*maybe_enabled_features,
-                     device::mojom::XRSessionFeature::LIGHT_ESTIMATION)) {
-    internal::ScopedArCoreObject<ArLightEstimate*> light_estimate;
-    ArLightEstimate_create(
-        session.get(),
-        internal::ScopedArCoreObject<ArLightEstimate*>::Receiver(light_estimate)
-            .get());
-    if (!light_estimate.is_valid()) {
-      DVLOG(1) << "ArLightEstimate_create failed";
-      return absl::nullopt;
-    }
-    arcore_light_estimate_ = std::move(light_estimate);
-  }
-
-  // Success, we now have a valid session and a valid frame.
-  arcore_frame_ = std::move(frame);
-  arcore_session_ = std::move(session);
-
-  if (base::Contains(*maybe_enabled_features,
-                     device::mojom::XRSessionFeature::ANCHORS)) {
-    anchor_manager_ = std::make_unique<ArCoreAnchorManager>(
-        base::PassKey<ArCoreImpl>(), arcore_session_.get());
-  }
-  if (base::Contains(*maybe_enabled_features,
-                     device::mojom::XRSessionFeature::PLANE_DETECTION)) {
-    plane_manager_ = std::make_unique<ArCorePlaneManager>(
-        base::PassKey<ArCoreImpl>(), arcore_session_.get());
-  }
-
-  return ArCore::InitializeResult(*maybe_enabled_features,
-                                  depth_configuration_);
-}
-
-absl::optional<std::unordered_set<device::mojom::XRSessionFeature>>
-ArCoreImpl::ConfigureFeatures(
+// Helper, returns the best available camera config that is using
+// `facing_direction`.
+internal::ScopedArCoreObject<ArCameraConfig*> GetBestConfig(
     ArSession* ar_session,
-    const std::unordered_set<device::mojom::XRSessionFeature>&
-        required_features,
-    const std::unordered_set<device::mojom::XRSessionFeature>&
-        optional_features,
-    const std::vector<device::mojom::XRTrackedImagePtr>& tracked_images,
-    const absl::optional<ArCore::DepthSensingConfiguration>&
-        depth_sensing_config) {
-  // Let's assume we will be able to configure a session with all features -
-  // this will be adjusted if it turns out we can only create a session w/o some
-  // optional features. Currently, only depth sensing is not supported across
-  // all the ARCore-capable devices.
-  std::unordered_set<device::mojom::XRSessionFeature> enabled_features;
-  enabled_features.insert(required_features.begin(), required_features.end());
-  enabled_features.insert(optional_features.begin(), optional_features.end());
-
-  internal::ScopedArCoreObject<ArConfig*> arcore_config;
-  ArConfig_create(
-      ar_session,
-      internal::ScopedArCoreObject<ArConfig*>::Receiver(arcore_config).get());
-  if (!arcore_config.is_valid()) {
-    DLOG(ERROR) << __func__ << ": ArConfig_create failed";
-    return absl::nullopt;
-  }
-
-  const bool light_estimation_requested =
-      base::Contains(required_features,
-                     device::mojom::XRSessionFeature::LIGHT_ESTIMATION) ||
-      base::Contains(optional_features,
-                     device::mojom::XRSessionFeature::LIGHT_ESTIMATION);
-
-  if (light_estimation_requested) {
-    // Enable lighting estimation with spherical harmonics
-    ArConfig_setLightEstimationMode(ar_session, arcore_config.get(),
-                                    AR_LIGHT_ESTIMATION_MODE_ENVIRONMENTAL_HDR);
-  }
-
-  const bool image_tracking_requested =
-      base::Contains(required_features,
-                     device::mojom::XRSessionFeature::IMAGE_TRACKING) ||
-      base::Contains(optional_features,
-                     device::mojom::XRSessionFeature::IMAGE_TRACKING);
-
-  if (image_tracking_requested) {
-    internal::ScopedArCoreObject<ArAugmentedImageDatabase*> image_db;
-    ArAugmentedImageDatabase_create(
-        ar_session,
-        internal::ScopedArCoreObject<ArAugmentedImageDatabase*>::Receiver(
-            image_db)
-            .get());
-    if (!image_db.is_valid()) {
-      DLOG(ERROR) << "ArAugmentedImageDatabase creation failed";
-      return absl::nullopt;
-    }
-
-    // Populate the image tracking database and set up data structures,
-    // this doesn't modify the ArConfig or session yet.
-    BuildImageDatabase(ar_session, image_db.get(), tracked_images);
-
-    if (!tracked_image_arcore_id_to_index_.empty()) {
-      // Image tracking with a non-empty image DB adds a few frames of
-      // synchronization delay internally in ARCore, has a high CPU cost, and
-      // reconfigures its graphics pipeline. Only activate it if we got images.
-      // (Apparently an empty image db is equivalent, but that seems fragile.)
-      ArConfig_setAugmentedImageDatabase(ar_session, arcore_config.get(),
-                                         image_db.get());
-      // Switch to autofocus mode when tracking images. The default fixed focus
-      // mode has trouble tracking close images since they end up blurry.
-      ArConfig_setFocusMode(ar_session, arcore_config.get(),
-                            AR_FOCUS_MODE_AUTO);
-    }
-  }
-
-  const bool depth_api_optional =
-      base::Contains(optional_features, device::mojom::XRSessionFeature::DEPTH);
-  const bool depth_api_required =
-      base::Contains(required_features, device::mojom::XRSessionFeature::DEPTH);
-  const bool depth_api_requested = depth_api_required || depth_api_optional;
-
-  const bool depth_api_configuration_successful =
-      depth_api_requested && ConfigureDepthSensing(depth_sensing_config);
-
-  if (depth_api_configuration_successful) {
-    // Don't try to set the depth mode if we know we won't be able to support
-    // the desired usage and data format.
-    ArConfig_setDepthMode(ar_session, arcore_config.get(),
-                          AR_DEPTH_MODE_AUTOMATIC);
-  }
-
-  ArStatus status = ArSession_configure(ar_session, arcore_config.get());
-  if (status != AR_SUCCESS && depth_api_requested &&
-      depth_api_configuration_successful && !depth_api_required) {
-    // Configuring an ARCore session failed for some reason, and we know depth
-    // API was requested but is not required to be enabled.
-    // Depth API may not be available on some ARCore-capable devices - since it
-    // was requested optionally, let's try to request the session w/o it.
-    // Currently, Depth API is the only feature that is not supported across the
-    // board, so we speculatively assume that it is the reason why the session
-    // creation failed.
-
-    DLOG(WARNING) << __func__
-                  << ": Depth API was optionally requested and the session "
-                     "creation failed, re-trying with depth API disabled";
-
-    enabled_features.erase(device::mojom::XRSessionFeature::DEPTH);
-
-    ArConfig_setDepthMode(ar_session, arcore_config.get(),
-                          AR_DEPTH_MODE_DISABLED);
-
-    status = ArSession_configure(ar_session, arcore_config.get());
-  }
-
-  if (status != AR_SUCCESS) {
-    DLOG(ERROR) << __func__ << ": ArSession_configure failed: " << status;
-    return absl::nullopt;
-  }
-
-  return enabled_features;
-}
-
-bool ArCoreImpl::ConfigureDepthSensing(
-    const absl::optional<ArCore::DepthSensingConfiguration>&
-        depth_sensing_config) {
-  if (!depth_sensing_config) {
-    return false;
-  }
-
-  if (!base::Contains(depth_sensing_config->depth_usage_preference,
-                      device::mojom::XRDepthUsage::kCPUOptimized)) {
-    return false;
-  }
-
-  if (!base::Contains(depth_sensing_config->depth_data_format_preference,
-                      device::mojom::XRDepthDataFormat::kLuminanceAlpha)) {
-    return false;
-  }
-
-  depth_configuration_ = device::mojom::XRDepthConfig(
-      device::mojom::XRDepthUsage::kCPUOptimized,
-      device::mojom::XRDepthDataFormat::kLuminanceAlpha);
-
-  return true;
-}
-
-bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
+    ArCameraConfigFacingDirection facing_direction) {
+  DVLOG(3) << __func__ << ": facing_direction=" << facing_direction;
   internal::ScopedArCoreObject<ArCameraConfigFilter*> camera_config_filter;
   ArCameraConfigFilter_create(
       ar_session, internal::ScopedArCoreObject<ArCameraConfigFilter*>::Receiver(
@@ -568,12 +324,16 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
                       .get());
   if (!camera_config_filter.is_valid()) {
     DLOG(ERROR) << "ArCameraConfigFilter_create failed";
-    return false;
+    return {};
   }
+
+  ArCameraConfigFilter_setFacingDirection(
+      ar_session, camera_config_filter.get(), facing_direction);
 
   // We only want to work at 30fps for now.
   ArCameraConfigFilter_setTargetFps(ar_session, camera_config_filter.get(),
                                     AR_CAMERA_CONFIG_TARGET_FPS_30);
+
   // We do not care if depth sensor is available or not for now.
   // The default depth sensor usage of the newly created filter is not
   // documented, so let's set the filter explicitly to accept both cameras with
@@ -591,14 +351,14 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
 
   if (!camera_config_list.is_valid()) {
     DLOG(ERROR) << "ArCameraConfigList_create failed";
-    return false;
+    return {};
   }
 
   ArSession_getSupportedCameraConfigsWithFilter(
       ar_session, camera_config_filter.get(), camera_config_list.get());
   if (!camera_config_list.is_valid()) {
     DLOG(ERROR) << "ArSession_getSupportedCameraConfigsWithFilter failed";
-    return false;
+    return {};
   }
 
   int32_t available_configs_count;
@@ -610,6 +370,7 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
 
   std::vector<internal::ScopedArCoreObject<ArCameraConfig*>> available_configs;
   available_configs.reserve(available_configs_count);
+
   for (int32_t i = 0; i < available_configs_count; ++i) {
     internal::ScopedArCoreObject<ArCameraConfig*> camera_config;
     ArCameraConfig_create(
@@ -627,19 +388,12 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
     ArCameraConfigList_getItem(ar_session, camera_config_list.get(), i,
                                camera_config.get());
 
-    ArCameraConfigFacingDirection facing_direction;
-    ArCameraConfig_getFacingDirection(ar_session, camera_config.get(),
-                                      &facing_direction);
+    if constexpr (DCHECK_IS_ON()) {
+      ArCameraConfigFacingDirection camera_facing_direction;
+      ArCameraConfig_getFacingDirection(ar_session, camera_config.get(),
+                                        &camera_facing_direction);
+      DCHECK_EQ(camera_facing_direction, facing_direction);
 
-    if (facing_direction != AR_CAMERA_CONFIG_FACING_DIRECTION_BACK) {
-      DVLOG(2)
-          << __func__
-          << ": camera config does not refer to back-facing camera, ignoring";
-      continue;
-    }
-
-#if DCHECK_IS_ON()
-    {
       int32_t tex_width, tex_height;
       ArCameraConfig_getTextureDimensions(ar_session, camera_config.get(),
                                           &tex_width, &tex_height);
@@ -661,16 +415,16 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
                << tex_width << "x" << tex_height
                << ", image dimensions= " << img_width << "x" << img_height
                << ", depth sensor usage=" << depth_sensor_usage
-               << ", min_fps=" << min_fps << ", max_fps=" << max_fps;
+               << ", min_fps=" << min_fps << ", max_fps=" << max_fps
+               << ", camera_facing_direction=" << camera_facing_direction;
     }
-#endif
 
     available_configs.push_back(std::move(camera_config));
   }
 
   if (available_configs.empty()) {
     DLOG(ERROR) << "No matching configs found";
-    return false;
+    return {};
   }
 
   auto best_config = std::max_element(
@@ -736,14 +490,7 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
         }
       });
 
-  int32_t fps_min, fps_max;
-  ArCameraConfig_getFpsRange(ar_session, best_config->get(), &fps_min,
-                             &fps_max);
-  target_framerate_range_ = {static_cast<float>(fps_min),
-                             static_cast<float>(fps_max)};
-
-#if DCHECK_IS_ON()
-  {
+  if constexpr (DCHECK_IS_ON()) {
     int32_t tex_width, tex_height;
     ArCameraConfig_getTextureDimensions(ar_session, best_config->get(),
                                         &tex_width, &tex_height);
@@ -755,20 +502,325 @@ bool ArCoreImpl::ConfigureCamera(ArSession* ar_session) {
     uint32_t depth_sensor_usage;
     ArCameraConfig_getDepthSensorUsage(ar_session, best_config->get(),
                                        &depth_sensor_usage);
+
+    int32_t fps_min, fps_max;
+    ArCameraConfig_getFpsRange(ar_session, best_config->get(), &fps_min,
+                               &fps_max);
+
     DVLOG(3) << __func__
              << ": selected camera config with texture dimensions=" << tex_width
              << "x" << tex_height << ", image dimensions=" << img_width << "x"
              << img_height << ", depth sensor usage=" << depth_sensor_usage
-             << ", min_fps=" << target_framerate_range_.min
-             << ", max_fps=" << target_framerate_range_.max;
+             << ", fps_min=" << fps_min << ", fps_max=" << fps_max;
   }
-#endif
 
-  ArStatus status = ArSession_setCameraConfig(ar_session, best_config->get());
+  return std::move(*best_config);
+}
+
+}  // namespace
+
+ArCoreImpl::ArCoreImpl()
+    : gl_thread_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {}
+
+ArCoreImpl::~ArCoreImpl() {
+  for (auto& create_anchor : create_anchor_requests_) {
+    create_anchor.TakeCallback().Run(mojom::CreateAnchorResult::FAILURE, 0);
+  }
+
+  for (auto& create_anchor : create_plane_attached_anchor_requests_) {
+    create_anchor.TakeCallback().Run(mojom::CreateAnchorResult::FAILURE, 0);
+  }
+}
+
+absl::optional<ArCore::InitializeResult> ArCoreImpl::Initialize(
+    base::android::ScopedJavaLocalRef<jobject> context,
+    const std::unordered_set<device::mojom::XRSessionFeature>&
+        required_features,
+    const std::unordered_set<device::mojom::XRSessionFeature>&
+        optional_features,
+    const std::vector<device::mojom::XRTrackedImagePtr>& tracked_images,
+    absl::optional<ArCore::DepthSensingConfiguration> depth_sensing_config) {
+  DCHECK(IsOnGlThread());
+  DCHECK(!arcore_session_.is_valid());
+
+  // TODO(https://crbug.com/837944): Notify error earlier if this will fail.
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  if (!env) {
+    DLOG(ERROR) << "Unable to get JNIEnv for ArCore";
+    return absl::nullopt;
+  }
+
+  // Use a local scoped ArSession for the next steps, we want the
+  // arcore_session_ member to remain null until we complete successful
+  // initialization.
+  internal::ScopedArCoreObject<ArSession*> session;
+
+  ArStatus status = ArSession_create(
+      env, context.obj(),
+      internal::ScopedArCoreObject<ArSession*>::Receiver(session).get());
   if (status != AR_SUCCESS) {
-    DLOG(ERROR) << "ArSession_setCameraConfig failed: " << status;
+    DLOG(ERROR) << "ArSession_create failed: " << status;
+    return absl::nullopt;
+  }
+
+  // Set incognito mode for ARCore session - this is done unconditionally as we
+  // always want to limit the amount of logging done by ARCore.
+  ArSession_enableIncognitoMode_private(session.get());
+  DVLOG(1) << __func__ << ": ARCore incognito mode enabled";
+
+  // Let's assume we will be able to configure a session with all features -
+  // this will be adjusted if it turns out we can only create a session w/o some
+  // optional features. Currently, only depth sensing is not supported across
+  // all the ARCore-capable devices. Additionally, front-facing camera may
+  // affect availability of other features.
+  std::unordered_set<device::mojom::XRSessionFeature> enabled_features;
+  enabled_features.insert(required_features.begin(), required_features.end());
+  enabled_features.insert(optional_features.begin(), optional_features.end());
+
+  if (!ConfigureCamera(session.get(), required_features, optional_features,
+                       enabled_features)) {
+    DLOG(ERROR) << "Failed to configure session camera";
+    return absl::nullopt;
+  }
+
+  if (!ConfigureFeatures(session.get(), required_features, optional_features,
+                         tracked_images, depth_sensing_config,
+                         enabled_features)) {
+    DLOG(ERROR) << "Failed to configure session features";
+    return absl::nullopt;
+  }
+
+  internal::ScopedArCoreObject<ArFrame*> frame;
+  ArFrame_create(session.get(),
+                 internal::ScopedArCoreObject<ArFrame*>::Receiver(frame).get());
+  if (!frame.is_valid()) {
+    DLOG(ERROR) << "ArFrame_create failed";
+    return absl::nullopt;
+  }
+
+  if (base::Contains(enabled_features,
+                     device::mojom::XRSessionFeature::LIGHT_ESTIMATION)) {
+    internal::ScopedArCoreObject<ArLightEstimate*> light_estimate;
+    ArLightEstimate_create(
+        session.get(),
+        internal::ScopedArCoreObject<ArLightEstimate*>::Receiver(light_estimate)
+            .get());
+    if (!light_estimate.is_valid()) {
+      DVLOG(1) << "ArLightEstimate_create failed";
+      return absl::nullopt;
+    }
+    arcore_light_estimate_ = std::move(light_estimate);
+  }
+
+  // Success, we now have a valid session and a valid frame.
+  arcore_frame_ = std::move(frame);
+  arcore_session_ = std::move(session);
+
+  if (base::Contains(enabled_features,
+                     device::mojom::XRSessionFeature::ANCHORS)) {
+    anchor_manager_ = std::make_unique<ArCoreAnchorManager>(
+        base::PassKey<ArCoreImpl>(), arcore_session_.get());
+  }
+  if (base::Contains(enabled_features,
+                     device::mojom::XRSessionFeature::PLANE_DETECTION)) {
+    plane_manager_ = std::make_unique<ArCorePlaneManager>(
+        base::PassKey<ArCoreImpl>(), arcore_session_.get());
+  }
+
+  return ArCore::InitializeResult(enabled_features, depth_configuration_);
+}
+
+bool ArCoreImpl::ConfigureFeatures(
+    ArSession* ar_session,
+    const std::unordered_set<device::mojom::XRSessionFeature>&
+        required_features,
+    const std::unordered_set<device::mojom::XRSessionFeature>&
+        optional_features,
+    const std::vector<device::mojom::XRTrackedImagePtr>& tracked_images,
+    const absl::optional<ArCore::DepthSensingConfiguration>&
+        depth_sensing_config,
+    std::unordered_set<device::mojom::XRSessionFeature>& enabled_features) {
+  internal::ScopedArCoreObject<ArConfig*> arcore_config;
+  ArConfig_create(
+      ar_session,
+      internal::ScopedArCoreObject<ArConfig*>::Receiver(arcore_config).get());
+  if (!arcore_config.is_valid()) {
+    DLOG(ERROR) << __func__ << ": ArConfig_create failed";
     return false;
   }
+
+  const bool light_estimation_requested =
+      base::Contains(required_features,
+                     device::mojom::XRSessionFeature::LIGHT_ESTIMATION) ||
+      base::Contains(optional_features,
+                     device::mojom::XRSessionFeature::LIGHT_ESTIMATION);
+
+  if (light_estimation_requested) {
+    // Enable lighting estimation with spherical harmonics
+    ArConfig_setLightEstimationMode(ar_session, arcore_config.get(),
+                                    AR_LIGHT_ESTIMATION_MODE_ENVIRONMENTAL_HDR);
+  }
+
+  const bool image_tracking_requested =
+      base::Contains(required_features,
+                     device::mojom::XRSessionFeature::IMAGE_TRACKING) ||
+      base::Contains(optional_features,
+                     device::mojom::XRSessionFeature::IMAGE_TRACKING);
+
+  if (image_tracking_requested) {
+    internal::ScopedArCoreObject<ArAugmentedImageDatabase*> image_db;
+    ArAugmentedImageDatabase_create(
+        ar_session,
+        internal::ScopedArCoreObject<ArAugmentedImageDatabase*>::Receiver(
+            image_db)
+            .get());
+    if (!image_db.is_valid()) {
+      DLOG(ERROR) << "ArAugmentedImageDatabase creation failed";
+      return false;
+    }
+
+    // Populate the image tracking database and set up data structures,
+    // this doesn't modify the ArConfig or session yet.
+    BuildImageDatabase(ar_session, image_db.get(), tracked_images);
+
+    if (!tracked_image_arcore_id_to_index_.empty()) {
+      // Image tracking with a non-empty image DB adds a few frames of
+      // synchronization delay internally in ARCore, has a high CPU cost, and
+      // reconfigures its graphics pipeline. Only activate it if we got images.
+      // (Apparently an empty image db is equivalent, but that seems fragile.)
+      ArConfig_setAugmentedImageDatabase(ar_session, arcore_config.get(),
+                                         image_db.get());
+      // Switch to autofocus mode when tracking images. The default fixed focus
+      // mode has trouble tracking close images since they end up blurry.
+      ArConfig_setFocusMode(ar_session, arcore_config.get(),
+                            AR_FOCUS_MODE_AUTO);
+    }
+  }
+
+  const bool depth_api_optional =
+      base::Contains(optional_features, device::mojom::XRSessionFeature::DEPTH);
+  const bool depth_api_required =
+      base::Contains(required_features, device::mojom::XRSessionFeature::DEPTH);
+  const bool depth_api_requested = depth_api_required || depth_api_optional;
+
+  const bool depth_api_configuration_successful =
+      depth_api_requested && ConfigureDepthSensing(depth_sensing_config);
+
+  if (depth_api_configuration_successful) {
+    // Don't try to set the depth mode if we know we won't be able to support
+    // the desired usage and data format.
+    ArConfig_setDepthMode(ar_session, arcore_config.get(),
+                          AR_DEPTH_MODE_AUTOMATIC);
+  }
+
+  ArStatus status = ArSession_configure(ar_session, arcore_config.get());
+  if (status != AR_SUCCESS && depth_api_requested &&
+      depth_api_configuration_successful && !depth_api_required) {
+    // Configuring an ARCore session failed for some reason, and we know depth
+    // API was requested but is not required to be enabled.
+    // Depth API may not be available on some ARCore-capable devices - since it
+    // was requested optionally, let's try to request the session w/o it.
+    // Currently, Depth API is the only feature that is not supported across the
+    // board, so we speculatively assume that it is the reason why the session
+    // creation failed.
+
+    DLOG(WARNING) << __func__
+                  << ": Depth API was optionally requested and the session "
+                     "creation failed, re-trying with depth API disabled";
+
+    enabled_features.erase(device::mojom::XRSessionFeature::DEPTH);
+
+    ArConfig_setDepthMode(ar_session, arcore_config.get(),
+                          AR_DEPTH_MODE_DISABLED);
+
+    status = ArSession_configure(ar_session, arcore_config.get());
+  }
+
+  if (status != AR_SUCCESS) {
+    DLOG(ERROR) << __func__ << ": ArSession_configure failed: " << status;
+    return false;
+  }
+
+  return true;
+}
+
+bool ArCoreImpl::ConfigureDepthSensing(
+    const absl::optional<ArCore::DepthSensingConfiguration>&
+        depth_sensing_config) {
+  if (!depth_sensing_config) {
+    return false;
+  }
+
+  if (!base::Contains(depth_sensing_config->depth_usage_preference,
+                      device::mojom::XRDepthUsage::kCPUOptimized)) {
+    return false;
+  }
+
+  if (!base::Contains(depth_sensing_config->depth_data_format_preference,
+                      device::mojom::XRDepthDataFormat::kLuminanceAlpha)) {
+    return false;
+  }
+
+  depth_configuration_ = device::mojom::XRDepthConfig(
+      device::mojom::XRDepthUsage::kCPUOptimized,
+      device::mojom::XRDepthDataFormat::kLuminanceAlpha);
+
+  return true;
+}
+
+bool ArCoreImpl::ConfigureCamera(
+    ArSession* ar_session,
+    const std::unordered_set<device::mojom::XRSessionFeature>&
+        required_features,
+    const std::unordered_set<device::mojom::XRSessionFeature>&
+        optional_features,
+    std::unordered_set<device::mojom::XRSessionFeature>& enabled_features) {
+  const bool front_facing_camera_required = base::Contains(
+      required_features, device::mojom::XRSessionFeature::FRONT_FACING);
+  const bool front_facing_camera_optional = base::Contains(
+      optional_features, device::mojom::XRSessionFeature::FRONT_FACING);
+  const bool front_facing_camera_requested =
+      front_facing_camera_required || front_facing_camera_optional;
+
+  DVLOG(3) << __func__ << ": front_facing_camera_requested="
+           << front_facing_camera_requested;
+
+  auto best_config =
+      GetBestConfig(ar_session, front_facing_camera_requested
+                                    ? AR_CAMERA_CONFIG_FACING_DIRECTION_FRONT
+                                    : AR_CAMERA_CONFIG_FACING_DIRECTION_BACK);
+
+  ArStatus status = best_config.is_valid() ? ArSession_setCameraConfig(
+                                                 ar_session, best_config.get())
+                                           : AR_ERROR_CAMERA_NOT_AVAILABLE;
+  if (status != AR_SUCCESS && front_facing_camera_requested &&
+      !front_facing_camera_required) {
+    DLOG(WARNING) << "ArSession_setCameraConfig failed, status=" << status
+                  << ", best_config.is_valid()=" << best_config.is_valid();
+
+    // Front-facing camera was requested but optional and camera configuration
+    // failed - let's try to configure back-facing camera:
+    enabled_features.erase(device::mojom::XRSessionFeature::FRONT_FACING);
+
+    best_config =
+        GetBestConfig(ar_session, AR_CAMERA_CONFIG_FACING_DIRECTION_BACK);
+    status = best_config.is_valid()
+                 ? ArSession_setCameraConfig(ar_session, best_config.get())
+                 : AR_ERROR_CAMERA_NOT_AVAILABLE;
+  }
+
+  if (status != AR_SUCCESS) {
+    DLOG(ERROR) << "ArSession_setCameraConfig failed, status=" << status
+                << ", best_config.is_valid()=" << best_config.is_valid();
+    return false;
+  }
+
+  int32_t fps_min, fps_max;
+  ArCameraConfig_getFpsRange(ar_session, best_config.get(), &fps_min, &fps_max);
+  target_framerate_range_ = {static_cast<float>(fps_min),
+                             static_cast<float>(fps_max)};
 
   return true;
 }
@@ -793,7 +845,7 @@ void ArCoreImpl::BuildImageDatabase(
                           kOpaque_SkAlphaType),
         SkBitmap::kZeroPixels_AllocFlag);
     SkCanvas gray_canvas(canvas_bitmap);
-    sk_sp<SkImage> src_image = SkImage::MakeFromBitmap(src_bitmap);
+    sk_sp<SkImage> src_image = SkImages::RasterFromBitmap(src_bitmap);
     gray_canvas.drawImage(src_image, 0, 0);
     SkPixmap gray_pixmap;
     if (!gray_canvas.peekPixels(&gray_pixmap)) {
@@ -1765,7 +1817,7 @@ void ArCoreImpl::ProcessAnchorCreationRequestsHelper(
       continue;
     }
 
-    mojom::XRNativeOriginInformation native_origin_information =
+    const mojom::XRNativeOriginInformation& native_origin_information =
         create_anchor.GetNativeOriginInformation();
 
     if (!NativeOriginExists(native_origin_information, input_state)) {
@@ -1842,7 +1894,7 @@ mojom::XRDepthDataPtr ArCoreImpl::GetDepthData() {
   DVLOG(3) << __func__;
 
   internal::ScopedArCoreObject<ArImage*> ar_image;
-  ArStatus status = ArFrame_acquireDepthImage(
+  ArStatus status = ArFrame_acquireDepthImage16Bits(
       arcore_session_.get(), arcore_frame_.get(),
       internal::ScopedArCoreObject<ArImage*>::Receiver(ar_image).get());
 
@@ -1859,17 +1911,16 @@ mojom::XRDepthDataPtr ArCoreImpl::GetDepthData() {
 
   // The image returned from ArFrame_acquireDepthImage() is documented to have
   // a single 16-bit plane at index 0. The ArImage format is documented to be
-  // AR_IMAGE_FORMAT_DEPTH16 (equivalent to ImageFormat.DEPTH16). There should
-  // be no need to validate this in non-debug builds.
-  // https://developers.google.com/ar/reference/c/group/ar-frame#arframe_acquiredepthimage
-  // https://developer.android.com/reference/android/graphics/ImageFormat#DEPTH16
+  // AR_IMAGE_FORMAT_D_16 (equivalent to HardwareBuffer.D_16).
+  // https://developers.google.com/ar/reference/c/group/ar-frame#arframe_acquiredepthimage16bits
+  // https://developer.android.com/reference/android/hardware/HardwareBuffer#D_16
 
   ArImageFormat image_format;
   ArImage_getFormat(arcore_session_.get(), ar_image.get(), &image_format);
 
-  CHECK_EQ(image_format, AR_IMAGE_FORMAT_DEPTH16)
-      << "Depth image format must be AR_IMAGE_FORMAT_DEPTH16, found: "
-      << image_format;
+  CHECK_EQ(image_format, AR_IMAGE_FORMAT_D_16)
+      << "Depth image format must be AR_IMAGE_FORMAT_D_16 ("
+      << AR_IMAGE_FORMAT_D_16 << "), found: " << image_format;
 
   int32_t num_planes;
   ArImage_getNumberOfPlanes(arcore_session_.get(), ar_image.get(), &num_planes);
@@ -1965,40 +2016,12 @@ std::unique_ptr<ArCore> ArCoreImplFactory::Create() {
   return std::make_unique<ArCoreImpl>();
 }
 
-CreateAnchorRequest::CreateAnchorRequest(
-    const mojom::XRNativeOriginInformation& native_origin_information,
-    const gfx::Transform& native_origin_from_anchor,
-    ArCore::CreateAnchorCallback callback)
-    : native_origin_information_(native_origin_information),
-      native_origin_from_anchor_(native_origin_from_anchor),
-      request_start_time_(base::TimeTicks::Now()),
-      callback_(std::move(callback)) {}
-CreateAnchorRequest::CreateAnchorRequest(CreateAnchorRequest&& other) = default;
-CreateAnchorRequest::~CreateAnchorRequest() = default;
-
-mojom::XRNativeOriginInformation
-CreateAnchorRequest::GetNativeOriginInformation() const {
-  return native_origin_information_;
-}
-
-gfx::Transform CreateAnchorRequest::GetNativeOriginFromAnchor() const {
-  return native_origin_from_anchor_;
-}
-
-base::TimeTicks CreateAnchorRequest::GetRequestStartTime() const {
-  return request_start_time_;
-}
-
-ArCore::CreateAnchorCallback CreateAnchorRequest::TakeCallback() {
-  return std::move(callback_);
-}
-
 CreatePlaneAttachedAnchorRequest::CreatePlaneAttachedAnchorRequest(
     const mojom::XRNativeOriginInformation& native_origin_information,
     const gfx::Transform& native_origin_from_anchor,
     uint64_t plane_id,
-    ArCore::CreateAnchorCallback callback)
-    : native_origin_information_(native_origin_information),
+    CreateAnchorCallback callback)
+    : native_origin_information_(native_origin_information.Clone()),
       native_origin_from_anchor_(native_origin_from_anchor),
       plane_id_(plane_id),
       request_start_time_(base::TimeTicks::Now()),
@@ -2007,9 +2030,9 @@ CreatePlaneAttachedAnchorRequest::CreatePlaneAttachedAnchorRequest(
     CreatePlaneAttachedAnchorRequest&& other) = default;
 CreatePlaneAttachedAnchorRequest::~CreatePlaneAttachedAnchorRequest() = default;
 
-mojom::XRNativeOriginInformation
+const mojom::XRNativeOriginInformation&
 CreatePlaneAttachedAnchorRequest::GetNativeOriginInformation() const {
-  return native_origin_information_;
+  return *native_origin_information_;
 }
 
 uint64_t CreatePlaneAttachedAnchorRequest::GetPlaneId() const {
@@ -2025,7 +2048,7 @@ base::TimeTicks CreatePlaneAttachedAnchorRequest::GetRequestStartTime() const {
   return request_start_time_;
 }
 
-ArCore::CreateAnchorCallback CreatePlaneAttachedAnchorRequest::TakeCallback() {
+CreateAnchorCallback CreatePlaneAttachedAnchorRequest::TakeCallback() {
   return std::move(callback_);
 }
 

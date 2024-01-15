@@ -5,13 +5,14 @@
 #ifndef UI_ACCESSIBILITY_AX_COMMON_H_
 #define UI_ACCESSIBILITY_AX_COMMON_H_
 
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 
 #if (!defined(NDEBUG) || defined(ADDRESS_SANITIZER) ||            \
      defined(LEAK_SANITIZER) || defined(MEMORY_SANITIZER) ||      \
      defined(THREAD_SANITIZER) || defined(UNDEFINED_SANITIZER) || \
      DCHECK_IS_ON()) &&                                           \
-    !BUILDFLAG(IS_IOS)
+    BUILDFLAG(USE_BLINK)
 // Enable fast fails on clusterfuzz and other builds used to debug Chrome,
 // in order to help narrow down illegal states more quickly.
 #define AX_FAIL_FAST_BUILD
@@ -39,7 +40,7 @@
 #define SANITIZER_CHECK_LT(val1, val2) DCHECK_LT(val1, val2)
 #define SANITIZER_CHECK_GE(val1, val2) DCHECK_GE(val1, val2)
 #define SANITIZER_CHECK_GT(val1, val2) DCHECK_GT(val1, val2)
-#define SANITIZER_NOTREACHED() NOTREACHED()
+#define SANITIZER_NOTREACHED() DUMP_WILL_BE_NOTREACHED_NORETURN()
 #endif  // AX_FAIL_FAST_BUILD && !DCHECK_IS_ON()
 
 #endif  // UI_ACCESSIBILITY_AX_COMMON_H_

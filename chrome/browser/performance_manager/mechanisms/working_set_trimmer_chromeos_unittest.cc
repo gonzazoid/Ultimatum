@@ -8,16 +8,21 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/memory/arc_memory_bridge.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_arc_session.h"
 #include "ash/components/arc/test/fake_memory_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/timer/elapsed_timer.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
+#include "chrome/browser/ash/arc/vmm/arcvm_working_set_trim_executor.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "content/public/test/browser_task_environment.h"
@@ -29,7 +34,8 @@ namespace mechanism {
 
 class TestWorkingSetTrimmerChromeOS : public testing::Test {
  public:
-  TestWorkingSetTrimmerChromeOS() = default;
+  TestWorkingSetTrimmerChromeOS()
+      : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
   TestWorkingSetTrimmerChromeOS(const TestWorkingSetTrimmerChromeOS&) = delete;
   TestWorkingSetTrimmerChromeOS& operator=(
       const TestWorkingSetTrimmerChromeOS&) = delete;
@@ -114,8 +120,12 @@ class TestWorkingSetTrimmerChromeOS : public testing::Test {
       return static_cast<arc::FakeArcSession*>(
           runner_->GetArcSessionForTesting());
     }
-    arc::ArcSessionRunner* runner_;
+    raw_ptr<arc::ArcSessionRunner> runner_;
   };
+
+  content::BrowserTaskEnvironment& task_environment() {
+    return task_environment_;
+  }
 
   std::unique_ptr<WorkingSetTrimmerChromeOS> trimmer_;
 
@@ -196,6 +206,123 @@ TEST_F(TestWorkingSetTrimmerChromeOS, TrimArcVmWorkingSetNoArcSessionManager) {
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(result);
   EXPECT_FALSE(*result);
+}
+
+TEST_F(TestWorkingSetTrimmerChromeOS,
+       TrimArcVmWorkingSet_GuestReclaimEnabled_Success) {
+  base::HistogramTester histogram_tester;
+  base::ScopedMockElapsedTimersForTest mock_elapsed_timers;
+  base::test::ScopedFeatureList feature_list;
+  base::FieldTrialParams params;
+  params["guest_reclaim_enabled"] = "true";
+  feature_list.InitAndEnableFeatureWithParameters(arc::kGuestZram, params);
+  memory_instance()->set_reclaim_all_result(2, 1);
+  // Making arc session trim result to be false to be sure it's not being used.
+  FakeArcSessionHolder session_holder(arc_session_runner());
+  session_holder.session()->set_trim_result(false, "test_reason");
+
+  absl::optional<bool> result;
+  TrimArcVmWorkingSet(base::BindLambdaForTesting(
+      [&result](bool r, const std::string&) { result = r; }));
+  base::RunLoop().RunUntilIdle();
+
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.SuccessfulReclaim", 1, 1);
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.ReclaimedProcess", 2, 1);
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.UnreclaimedProcess", 1, 1);
+  histogram_tester.ExpectUniqueTimeSample(
+      "Arc.GuestZram.TotalReclaimTime",
+      base::ScopedMockElapsedTimersForTest::kMockElapsedTime, 1);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(*result);
+}
+
+TEST_F(TestWorkingSetTrimmerChromeOS,
+       TrimArcVmWorkingSet_GuestReclaimEnabled_Failure) {
+  base::HistogramTester histogram_tester;
+  base::ScopedMockElapsedTimersForTest mock_elapsed_timers;
+  base::test::ScopedFeatureList feature_list;
+  base::FieldTrialParams params;
+  params["guest_reclaim_enabled"] = "true";
+  feature_list.InitAndEnableFeatureWithParameters(arc::kGuestZram, params);
+  memory_instance()->set_reclaim_all_result(0, 0);
+
+  absl::optional<bool> result;
+  TrimArcVmWorkingSet(base::BindLambdaForTesting(
+      [&result](bool r, const std::string&) { result = r; }));
+  base::RunLoop().RunUntilIdle();
+
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.SuccessfulReclaim", 0, 1);
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.ReclaimedProcess", 0, 0);
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.UnreclaimedProcess", 0, 0);
+  histogram_tester.ExpectUniqueTimeSample(
+      "Arc.GuestZram.TotalReclaimTime",
+      base::ScopedMockElapsedTimersForTest::kMockElapsedTime, 0);
+  ASSERT_TRUE(result);
+  ASSERT_FALSE(*result);
+}
+
+TEST_F(TestWorkingSetTrimmerChromeOS,
+       TrimArcVmWorkingSet_GuestReclaimEnabled_AnonPagesOnly) {
+  base::HistogramTester histogram_tester;
+  base::ScopedMockElapsedTimersForTest mock_elapsed_timers;
+  base::test::ScopedFeatureList feature_list;
+  base::FieldTrialParams params;
+  params["guest_reclaim_enabled"] = "true";
+  params["guest_reclaim_only_anonymous"] = "true";
+  feature_list.InitAndEnableFeatureWithParameters(arc::kGuestZram, params);
+  memory_instance()->set_reclaim_all_result(0, 0);
+  memory_instance()->set_reclaim_anon_result(2, 0);
+
+  absl::optional<bool> result;
+  TrimArcVmWorkingSet(base::BindLambdaForTesting(
+      [&result](bool r, const std::string&) { result = r; }));
+  base::RunLoop().RunUntilIdle();
+
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.SuccessfulReclaim", 1, 1);
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.ReclaimedProcess", 2, 1);
+  histogram_tester.ExpectUniqueSample("Arc.GuestZram.UnreclaimedProcess", 0, 1);
+  histogram_tester.ExpectUniqueTimeSample(
+      "Arc.GuestZram.TotalReclaimTime",
+      base::ScopedMockElapsedTimersForTest::kMockElapsedTime, 1);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(*result);
+}
+
+TEST_F(TestWorkingSetTrimmerChromeOS,
+       TrimArcVmWorkingSet_GuestZramDisabled_ArcSessionIsUsed) {
+  FakeArcSessionHolder session_holder(arc_session_runner());
+  session_holder.session()->set_trim_result(true, "");
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(arc::kGuestZram);
+  // If memory_instance is used then the trim operation should fail.
+  memory_instance()->set_reclaim_all_result(0, 0);
+
+  absl::optional<bool> result;
+  TrimArcVmWorkingSet(base::BindLambdaForTesting(
+      [&result](bool r, const std::string&) { result = r; }));
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(*result);
+}
+
+TEST_F(
+    TestWorkingSetTrimmerChromeOS,
+    TrimArcVmWorkingSet_GuestZramEnabledWithNoGuestReclaim_ArcSessionIsUsed) {
+  FakeArcSessionHolder session_holder(arc_session_runner());
+  session_holder.session()->set_trim_result(true, "");
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(arc::kGuestZram);
+  // If memory_instance is used then the trim operation should fail.
+  memory_instance()->set_reclaim_all_result(0, 0);
+
+  absl::optional<bool> result;
+  TrimArcVmWorkingSet(base::BindLambdaForTesting(
+      [&result](bool r, const std::string&) { result = r; }));
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(*result);
 }
 
 // Tests that TrimArcVmWorkingSetDropPageCachesOnly runs the passed callback.

@@ -36,9 +36,15 @@
       "2FCBCE08B34CCA1728A85F1EFBD9A34DD2558B2E"
     ]
   },
-  "activeTab": {
+  "accessibilityServicePrivate": {
     "channel": "stable",
-    "extension_types": ["extension", "legacy_packaged_app"]
+    "component_extensions_auto_granted": false,
+    "extension_types": ["extension"],
+    "location": "component",
+    "platforms": ["chromeos", "lacros"],
+    "allowlist": [
+      "3CD7D4ABEB04E8C4D20552C60B8B20983DD10A2F"   // Embedded A11y Helper.
+    ]
   },
   "activityLogPrivate": {
     "channel": "stable",
@@ -192,7 +198,8 @@
       "58B0C2968C335964D5433E89CA4D86628A0E3D4B",  // Secure Shell App (dev)
       "3BC1ED0B3E6EFDC7BD4D3D1D75D44B52DEE0A226",  // Secure Shell Ext (stable)
       "38C361D4A0726CE45D3572D65071B6BDB3092371",  // Secure Shell Ext (dev)
-      "06BE211D5F014BAB34BC22D9DDA09C63A81D828E"   // http://crbug.com/946241
+      "06BE211D5F014BAB34BC22D9DDA09C63A81D828E",  // http://crbug.com/946241
+      "1B1388598AC9A5608F43DE38316D6FB5FAD3574A"   // OneDrive FS extension
     ]
   },
   "debugger": [
@@ -233,14 +240,10 @@
     "channel": "stable",
     "extension_types": ["extension", "platform_app"]
   },
-  "desktopCapturePrivate": {
-    "channel": "stable",
-    "extension_types": ["extension", "platform_app"]
-  },
   "documentScan": {
     "channel": "stable",
     "extension_types": ["extension", "platform_app"],
-    "platforms": ["chromeos"]
+    "platforms": ["chromeos", "lacros"]
   },
   "downloads": {
     "channel": "stable",
@@ -287,6 +290,21 @@
     "extension_types": ["extension"],
     "location": "policy"
   },
+  "enterprise.kioskInput": {
+    "channel": "stable",
+    "extension_types": ["extension"],
+    "location": "policy",
+    // TODO(b/303379531): Add support for Lacros
+    "platforms": ["chromeos"],
+    "session_types": ["kiosk"],
+    "allowlist": [
+      "E62CAB6E5341E96208DA8E0E6896770907FFA00C",  // https://b/303379761
+      "36139D0E820CE4B911D38D10D8C23448431D098B",  // https://b/303379761
+      "51DC616F82F8E8B3FA5185A83699F0E5CDACFF41"   // https://b/303379761
+    ],
+    // TODO(b/307230150): Clean up API flag
+    "feature_flag": "ApiEnterpriseKioskInput"
+  },
   "enterprise.platformKeys": [{
     "channel": "stable",
     "platforms": ["chromeos", "lacros"],
@@ -306,7 +324,16 @@
     "location": "external_component",
     "platforms": ["chromeos"],
     "allowlist": [
-      "EC8EA268128FECE14CEC68B90686D87755D87083"  // http://crbug.com/854695
+      "EC8EA268128FECE14CEC68B90686D87755D87083"   // http://crbug.com/854695
+    ]
+  },
+  {
+    "channel": "stable",
+    "platforms": ["chromeos", "lacros"],
+    "extension_types": ["extension"],
+    "allowlist": [
+      "A4CC6F00ACF41015AF38F1D5C98E97C2B8B3B320",  // http://crbug.com/1483151
+      "4E09F1C1EEC4D27F1F7DF18BA3643307107A7C41"   // http://crbug.com/1483151
     ]
   }],
   "enterprise.platformKeysPrivate": {
@@ -352,11 +379,12 @@
   },
   "fileManagerPrivate": {
     "channel": "stable",
-    "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
+    "extension_types": ["extension", "platform_app"],
+    "location": "component",
     "platforms": ["chromeos"],
     "allowlist": [
-      "74E2D32A61B08D29521A8C4E360F581DE78F5CA5",  // Image loader
-      "A948368FC53BE437A55FEB414106E207925482F5"   // Files app
+      // Only used for API tests by test ext pkplfbidichfdicaijlchgnapepdginl.
+      "5065C83E84321221675D20FBE4DC43C655CC8C6F"
     ]
   },
   "fileSystemProvider": [{
@@ -414,13 +442,6 @@
     "channel": "stable",
     "extension_types": ["extension", "platform_app"]
   },
-  "identityPrivate": {
-    "channel": "stable",
-    "extension_types": [
-      "legacy_packaged_app", "platform_app"
-    ],
-    "location": "component"
-  },
   "idltest": {
     "channel": "trunk",
     "extension_types": ["extension"]
@@ -429,6 +450,16 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app"],
     "platforms": ["chromeos", "win", "linux"]
+  },
+  "imageLoaderPrivate": {
+    "channel": "stable",
+    "component_extensions_auto_granted": false,
+    "extension_types": ["extension"],
+    "location": "component",
+    "platforms": ["chromeos"],
+    "allowlist": [
+      "74E2D32A61B08D29521A8C4E360F581DE78F5CA5"  // Image loader
+    ]
   },
   "inputMethodPrivate": [{
     "channel": "stable",
@@ -476,35 +507,44 @@
     ]
   },
   "login": [{
-  "channel": "stable",
-  "dependencies": ["behavior:imprivata_extension"],
-  "extension_types": ["extension","login_screen_extension"],
-  "location": "policy",
-  "platforms": ["chromeos", "lacros"]
+    "channel": "stable",
+    "dependencies": ["behavior:imprivata_extension"],
+    "extension_types": ["extension", "login_screen_extension"],
+    "location": "policy",
+    "platforms": ["chromeos", "lacros"]
   }, {
     "channel": "stable",
-    "extension_types": ["extension","login_screen_extension"],
+    "extension_types": ["extension", "login_screen_extension"],
     "location": "policy",
     "platforms": ["chromeos", "lacros"],
     "allowlist": [
+      "93B7178E8C275515C38D4F43D9DF4648F0EA9B03", // Badge Based Auth Extension
       "7FE4A999359A456C4B0FB7B7AD85CEA29CA50519", // Login screen APIs test extension
-      "3F5995FE79A861F019C6F093BEF98D73FA9D3A5F"  // Login screen APIs in-sesesion test extension
+      "3F5995FE79A861F019C6F093BEF98D73FA9D3A5F"  // Login screen APIs in-session test extension
     ]
   }],
   "loginScreenStorage": [{
     "channel": "stable",
     "dependencies": ["behavior:imprivata_extension"],
-    "extension_types": ["extension","login_screen_extension"],
+    "extension_types": ["extension", "login_screen_extension"],
     "location": "policy",
     "platforms": ["chromeos", "lacros"]
   }, {
     "channel": "canary",
-    "extension_types": ["extension","login_screen_extension"],
+    "extension_types": ["extension", "login_screen_extension"],
     "location": "policy",
     "platforms": ["chromeos", "lacros"],
     "allowlist": [
       "7FE4A999359A456C4B0FB7B7AD85CEA29CA50519", // Login screen APIs test extension
-      "3F5995FE79A861F019C6F093BEF98D73FA9D3A5F"  // Login screen APIs in-sesesion test extension
+      "3F5995FE79A861F019C6F093BEF98D73FA9D3A5F"  // Login screen APIs in-session test extension
+    ]
+  }, {
+    "channel": "stable",
+    "extension_types": ["extension", "login_screen_extension"],
+    "location": "policy",
+    "platforms": ["chromeos", "lacros"],
+    "allowlist": [
+      "93B7178E8C275515C38D4F43D9DF4648F0EA9B03" // Badge Based Auth Extension
     ]
   }],
   "loginScreenUi": [{
@@ -533,8 +573,9 @@
     "location": "policy",
     "platforms": ["chromeos"],
     "allowlist": [
-      // https://crbug.com/1233881
-      "EC3DE21E048B67319893889529354DFBFA96FD23",   // Smart Card Connector
+      "93B7178E8C275515C38D4F43D9DF4648F0EA9B03",   // Badge Based Auth Extension
+      "EC3DE21E048B67319893889529354DFBFA96FD23",   // https://crbug.com/1233881
+      "A19608AC34215B127FF9D7C006D67F5C8ED8146D",   // https://crbug.com/1233881
       // https://crbug.com/1194693
       "6B748A5C005F21B7CBCF4170C2F883E435DEB511",   // CSSI Smart Card Middleware
       "075FF17D52ED6E3C2E5EC4D99F188E7A25AF47EA"    // Beta CSSI Smart Card Middleware
@@ -549,7 +590,8 @@
     "extension_types": ["platform_app"],
     "platforms": ["chromeos", "lacros"],
     "allowlist": [
-      "EC3DE21E048B67319893889529354DFBFA96FD23"  // Smart Card Connector
+      "EC3DE21E048B67319893889529354DFBFA96FD23",  // https://crbug.com/1233881
+      "A19608AC34215B127FF9D7C006D67F5C8ED8146D"   // https://crbug.com/1233881
     ]
   }],
   "webcamPrivate": {
@@ -565,7 +607,8 @@
       "4AC2B6C63C6480D150DFDA13E4A5956EB1D0DDBB",  // http://crbug.com/891460
       "81986D4F846CEDDDB962643FA501D1780DD441BB",  // http://crbug.com/891460
       "A9A9FC0228ADF541F0334F22BEFB8F9C245B21D7"   // http://crbug.com/891460
-    ]
+    ],
+    "platforms": ["chromeos", "lacros"]
   },
   "management": [
     {
@@ -600,8 +643,7 @@
       "allowlist": [
         "B44D08FD98F1523ED5837D78D0A606EA9D6206E5"  // Web Store
       ]
-    },
-    {
+    }, {
       "channel": "stable",
       "extension_types": ["platform_app"],
       "session_types": ["kiosk"]
@@ -609,6 +651,14 @@
       "channel": "stable",
       "dependencies": ["behavior:imprivata_login_screen_extension"],
       "extension_types": ["login_screen_extension"]
+    }, {
+      "channel": "stable",
+      "extension_types": ["login_screen_extension"],
+      "location": "policy",
+      "platforms": ["chromeos"],
+      "allowlist": [
+        "93B7178E8C275515C38D4F43D9DF4648F0EA9B03" // Badge Based Auth Extension
+      ]
     }
   ],
   "mediaPlayerPrivate": {
@@ -617,21 +667,12 @@
     "location": "component",
     "platforms": ["chromeos"]
   },
-  "mediaRouterPrivate": {
-    "channel": "stable",
-    "extension_types": ["extension"],
-    "allowlist": [
-      "63ED55E43214C211F82122ED56407FF1A807F2A3",  // Media Router Dev
-      "226CF815E39A363090A1E547D53063472B8279FA"   // Media Router Stable
-    ]
-  },
   "mdns": [{
     "channel": "stable",
     "extension_types": ["extension"],
     "allowlist": [
-      "63ED55E43214C211F82122ED56407FF1A807F2A3",  // Media Router Dev
-      "226CF815E39A363090A1E547D53063472B8279FA",  // Media Router Stable
-      "1BFB3A47AA4A1E1C4714D919217602685CDD0FA7"   // http://crbug.com/574600
+      "1BFB3A47AA4A1E1C4714D919217602685CDD0FA7",  // http://crbug.com/574600
+      "DD87C93131FF8D3DE4E483DC1EB298D73C7223A6"   // http://crbug.com/1328114
     ]
   },
   {
@@ -680,6 +721,13 @@
     "extension_types": ["extension", "platform_app"],
     "location": "component"
   },
+  "pdfViewerPrivate": {
+    "channel": "stable",
+    "extension_types": ["extension"],
+    "allowlist": [
+      "CBCC42ABED43A4B58FE3810E62AFFA010EB0349F"  // PDF Viewer
+    ]
+  },
   "platformKeys": [{
     "channel": "stable",
     "extension_types": ["extension", "platform_app"],
@@ -697,7 +745,10 @@
   "printing": {
     "channel": "stable",
     "platforms": ["chromeos", "lacros"],
-    "extension_types": ["extension"]
+    "extension_types": [
+      "extension",
+      "platform_app"
+    ]
   },
   "printingMetrics": {
     "channel": "stable",
@@ -756,6 +807,11 @@
       "CF6B19571334F49878327D557597D23B1458AA39"   // https://crbug.com/1201800
     ]
   },
+  "readingList": {
+    "channel": "stable",
+    "extension_types": ["extension"],
+    "min_manifest_version": 3
+  },
   "resourcesPrivate": {
     "channel": "stable",
     "extension_types": [
@@ -801,6 +857,9 @@
     "location": "component"
   },
   {
+    // TODO(devlin): Remove these entries. Unfortunately, this causes a bit of
+    // a problem, because accessibility component extensions are relying an
+    // implicit allowlisting from this entry.
     "channel": "stable",
     "extension_types": ["extension"],
     "allowlist": [
@@ -826,9 +885,17 @@
     ]
   }],
   "sidePanel": {
-    "channel": "canary",
+    "channel": "stable",
     "extension_types": ["extension"],
     "min_manifest_version": 3
+  },
+  "smartCardProviderPrivate": {
+    "channel": "dev",
+    "platforms": ["chromeos", "lacros"],
+    "extension_types": ["extension", "platform_app"],
+    "allowlist": [
+      "EC3DE21E048B67319893889529354DFBFA96FD23"   // Smart Card Connector
+    ]
   },
   "speechRecognitionPrivate": {
     "channel": "stable",
@@ -839,6 +906,24 @@
       "371AC6869D2138CE58123741E69F67469206909F" // AccessibilityCommon extension. https://crbug.com/1220107
     ]
   },
+  // For now, systemLog API is private to avoid 3rd party logs being sent to
+  // Google in feedback reports. More info: http://crbug.com/1264234
+  "systemLog": [{
+    "channel": "stable",
+    "dependencies": ["behavior:imprivata_extension"],
+    "extension_types": ["extension", "login_screen_extension"],
+    "location": "policy",
+    "platforms": ["chromeos", "lacros"]
+  }, {
+    "channel": "stable",
+    "extension_types": ["extension", "login_screen_extension", "platform_app"],
+    "platforms": ["chromeos", "lacros"],
+    "allowlist": [
+      "EC3DE21E048B67319893889529354DFBFA96FD23", // Smart Card Connector
+      "6B748A5C005F21B7CBCF4170C2F883E435DEB511", // CSSI Smart Card Middleware
+      "075FF17D52ED6E3C2E5EC4D99F188E7A25AF47EA"  // Beta CSSI Smart Card Middleware
+    ]
+  }],
   "systemPrivate": {
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
@@ -911,23 +996,12 @@
     "extension_types": ["platform_app", "extension"],
     "platforms": ["chromeos", "lacros"]
   },
-  "webAuthenticationProxy": [{
-    "channel": "trunk",
-    "extension_types": ["extension"],
-    "min_manifest_version": 3,
-    "platforms": ["win", "linux", "mac"]
-  }, {
+  "webAuthenticationProxy": {
     "channel": "stable",
     "extension_types": ["extension"],
     "min_manifest_version": 3,
-    "platforms": ["win", "linux", "mac"],
-    "allowlist": [
-      // Chrome Remote Desktop Security Key extension
-      "3CDF65D2CA48FCA9A96B01936FA97049F8332737",
-      // Chrome Remote Desktop Security Key dev extension
-      "2981AC9CF0999EEFFB4599E3C02395054167A521"
-    ]
-  }],
+    "platforms": ["win", "linux", "mac"]
+  },
   "webNavigation": {
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app"]
@@ -964,10 +1038,6 @@
       "80B9DC58E5210749F052F5B4DB239C50CF72AEB6",
       // Hangout Services component extension.
       "DF84F03F9B960409CCDE0D895B9650EBE81C0A8E",
-      // Media Router dev extension
-      "63ED55E43214C211F82122ED56407FF1A807F2A3",
-      // Media Router release extension
-      "226CF815E39A363090A1E547D53063472B8279FA",
       // Extension used for API test.
       "ADFA45434ABA2F1A4647E673F53FF37F8F6047A3",
       "4F25792AF1AA7483936DE29C07806F203C7170A0",  // http://crbug.com/777967
@@ -1000,14 +1070,15 @@
   "wmDesksPrivate": {
     "channel": "stable",
     "extension_types": ["extension", "platform_app"],
-    "platforms": ["chromeos"],
+    "platforms": ["chromeos","lacros"],
     "allowlist": [
       // Extension id hash for API test.
       "74801F84D31D23D08BEA48AB82C6A6120EDB4D45",
       "6A4D7AEC6414492BD25219C7A479265BF1177D42",  // http://crbug.com/1206836
       "F80B163C896D50A685E0B683BEEEA94217F253D6",  // http://crbug.com/1206836
       "454738352012A22901C55B348E5E530BDE1AF2B0",  // http://crbug.com/1259253
-      "7D5A66C88A25019F997E548DEC5E0011E2855591"   // http://crbug.com/1206836
+      "7D5A66C88A25019F997E548DEC5E0011E2855591",  // http://crbug.com/1206836
+      "F740D260E7E2107B3AE454F512B65AE6CF244433"   // http://b/273392894
     ]
   }
 }

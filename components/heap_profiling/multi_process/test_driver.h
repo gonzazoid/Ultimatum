@@ -7,16 +7,13 @@
 
 #include <vector>
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_for_testing.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/process/process_handle.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/values.h"
 #include "components/services/heap_profiling/public/cpp/settings.h"
 #include "components/services/heap_profiling/public/mojom/heap_profiling_client.mojom.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace heap_profiling {
 
@@ -104,8 +101,8 @@ class TestDriver {
                      bool success,
                      std::string trace_json);
 
-  bool ValidateBrowserAllocations(base::Value* dump_json);
-  bool ValidateRendererAllocations(base::Value* dump_json);
+  bool ValidateBrowserAllocations(const base::Value::Dict& dump_json);
+  bool ValidateRendererAllocations(const base::Value::Dict& dump_json);
 
   bool ShouldProfileBrowser();
   bool ShouldProfileRenderer();
@@ -131,7 +128,7 @@ class TestDriver {
   size_t total_variadic_allocations_ = 0;
 
   // Use to make PA allocations, which should also be shimmed.
-  partition_alloc::PartitionAllocator partition_allocator_;
+  partition_alloc::PartitionAllocatorAllowLeaksForTesting partition_allocator_;
 
   // Contains nothing until |CollectResults| has been called.
   std::string serialized_trace_;

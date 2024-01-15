@@ -17,14 +17,12 @@
 // Converts `type` to the appropriate icon type for this match type to show in
 // the omnibox.
 OmniboxSuggestionIconType GetOmniboxSuggestionIconTypeForAutocompleteMatchType(
-    AutocompleteMatchType::Type type,
-    bool is_starred);
+    AutocompleteMatchType::Type type);
 
 // Converts `type` to the appropriate icon for this type to show in the omnibox.
 // Returns UI Refresh icons.
 UIImage* GetOmniboxSuggestionIconForAutocompleteMatchType(
-    AutocompleteMatchType::Type type,
-    bool is_starred);
+    AutocompleteMatchType::Type type);
 
 #pragma mark - Security icons.
 
@@ -39,5 +37,8 @@ LocationBarSecurityIconType GetLocationBarSecurityIconTypeForSecurityState(
 // rendering mode.
 UIImage* GetLocationBarSecurityIconForSecurityState(
     security_state::SecurityLevel security_level);
+
+// Returns the icon for an offline page.
+UIImage* GetLocationBarOfflineIcon();
 
 #endif  // IOS_CHROME_BROWSER_UI_OMNIBOX_OMNIBOX_UTIL_H_

@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/safe_sprintf.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/android/usage_stats/website_event.pb.h"
 #include "chrome/browser/profiles/profile.h"
@@ -154,8 +155,8 @@ void UsageStatsDatabase::QueryEventsInRange(base::Time startTime,
   // represented by integers, [startTime, endTime) is equivalent to  [startTime,
   // endTime - 1].
   website_event_db_->LoadKeysAndEntriesInRange(
-      CreateWebsiteEventKey(startTime.ToDoubleT(), ""),
-      CreateWebsiteEventKey(endTime.ToDoubleT() - 1, ""),
+      CreateWebsiteEventKey(startTime.InSecondsFSinceUnixEpoch(), ""),
+      CreateWebsiteEventKey(endTime.InSecondsFSinceUnixEpoch() - 1, ""),
       base::BindOnce(&UsageStatsDatabase::OnLoadEntriesForQueryEventsInRange,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -226,8 +227,8 @@ void UsageStatsDatabase::DeleteEventsInRange(base::Time startTime,
   // represented by integers, [startTime, endTime) is equivalent to  [startTime,
   // endTime - 1].
   website_event_db_->LoadKeysAndEntriesInRange(
-      CreateWebsiteEventKey(startTime.ToDoubleT(), ""),
-      CreateWebsiteEventKey(endTime.ToDoubleT() - 1, ""),
+      CreateWebsiteEventKey(startTime.InSecondsFSinceUnixEpoch(), ""),
+      CreateWebsiteEventKey(endTime.InSecondsFSinceUnixEpoch() - 1, ""),
       base::BindOnce(&UsageStatsDatabase::OnLoadEntriesForDeleteEventsInRange,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -255,7 +256,7 @@ void UsageStatsDatabase::DeleteEventsWithMatchingDomains(
 void UsageStatsDatabase::ExpireEvents(base::Time now) {
   base::Time seven_days_ago = now - base::Days(EXPIRY_THRESHOLD_DAYS);
   DeleteEventsInRange(
-      base::Time::FromDoubleT(1), seven_days_ago,
+      base::Time::FromSecondsSinceUnixEpoch(1), seven_days_ago,
       base::BindOnce(&UsageStatsDatabase::OnWebsiteEventExpiryDone,
                      weak_ptr_factory_.GetWeakPtr()));
 }

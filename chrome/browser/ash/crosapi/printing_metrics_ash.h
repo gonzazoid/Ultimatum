@@ -16,7 +16,7 @@
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "printing/buildflags/buildflags.h"
 
-#if !defined(USE_CUPS)
+#if !BUILDFLAG(USE_CUPS)
 #error PrintingMetricsAsh must be used with the USE_CUPS flag.
 #endif
 
@@ -34,6 +34,7 @@ class PrintingMetricsForProfileAsh
   ~PrintingMetricsForProfileAsh() override;
 
   // crosapi::mojom::PrintingMetricsForProfile:
+  void DeprecatedGetPrintJobs(DeprecatedGetPrintJobsCallback) override;
   void GetPrintJobs(GetPrintJobsCallback) override;
 
   // ash::PrintJobHistoryService::Observer:

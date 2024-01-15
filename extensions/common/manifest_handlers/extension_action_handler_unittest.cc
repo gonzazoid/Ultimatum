@@ -9,7 +9,6 @@
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "components/version_info/channel.h"
 #include "extensions/common/api/extension_action/action_info.h"
@@ -103,10 +102,8 @@ TEST_F(ExtensionActionHandlerManifestTest, NoActionSpecified_ManifestV2) {
            "version": "0.1"
          })";
 
-  base::Value manifest_value = base::test::ParseJson(kManifest);
-  ASSERT_TRUE(manifest_value.is_dict());
   scoped_refptr<const Extension> extension =
-      LoadAndExpectSuccess(ManifestData(std::move(manifest_value), "test"));
+      LoadAndExpectSuccess(ManifestData::FromJSON(kManifest));
   ASSERT_TRUE(extension);
 
   const ActionInfo* action_info =
@@ -122,10 +119,8 @@ TEST_F(ExtensionActionHandlerManifestTest, NoActionSpecified_ManifestV3) {
            "version": "0.1"
          })";
 
-  base::Value manifest_value = base::test::ParseJson(kManifest);
-  ASSERT_TRUE(manifest_value.is_dict());
   scoped_refptr<const Extension> extension =
-      LoadAndExpectSuccess(ManifestData(std::move(manifest_value), "test"));
+      LoadAndExpectSuccess(ManifestData::FromJSON(kManifest));
   ASSERT_TRUE(extension);
 
   const ActionInfo* action_info =
@@ -140,13 +135,13 @@ class ExtensionActionManifestTest
     : public ManifestTest,
       public testing::WithParamInterface<ActionInfo::Type> {
  public:
-  ExtensionActionManifestTest() {}
+  ExtensionActionManifestTest() = default;
 
   ExtensionActionManifestTest(const ExtensionActionManifestTest&) = delete;
   ExtensionActionManifestTest& operator=(const ExtensionActionManifestTest&) =
       delete;
 
-  ~ExtensionActionManifestTest() override {}
+  ~ExtensionActionManifestTest() override = default;
 
   // Constructs and returns a ManifestData object with the provided
   // |action_spec|.
@@ -159,20 +154,19 @@ class ExtensionActionManifestTest
              "%s": %s
            })";
 
-    const char* action_key = GetManifestKeyForActionType(GetParam());
+    const char* action_key =
+        ActionInfo::GetManifestKeyForActionType(GetParam());
 
-    base::Value manifest_value = base::test::ParseJson(
+    return ManifestData::FromJSON(
         base::StringPrintf(kManifestStub, action_key, action_spec));
-    EXPECT_TRUE(manifest_value.is_dict());
-    EXPECT_FALSE(manifest_value.is_none());
-    return ManifestData(std::move(manifest_value), "test");
   }
 
   scoped_refptr<Extension> LoadExtensionWithDefaultPopup(
       const char* popup_file_name,
       int manifest_version,
       TestExtensionDir* test_extension_dir) {
-    const char* action_key = GetManifestKeyForActionType(GetParam());
+    const char* action_key =
+        ActionInfo::GetManifestKeyForActionType(GetParam());
 
     test_extension_dir->WriteManifest(base::StringPrintf(
         R"({
@@ -371,20 +365,20 @@ TEST_P(ExtensionActionManifestTest, DefaultState) {
     // The expected error, if parsing was unsuccessful.
     const char* expected_error;
     // The expected state, if parsing was successful.
-    absl::optional<ActionInfo::DefaultState> expected_state;
+    std::optional<ActionInfo::DefaultState> expected_state;
   } test_cases[] = {
       {kDefaultStateDisabled,
        default_state_allowed ? nullptr : key_disallowed_error.c_str(),
-       default_state_allowed ? absl::make_optional(ActionInfo::STATE_DISABLED)
-                             : absl::nullopt},
+       default_state_allowed ? std::make_optional(ActionInfo::STATE_DISABLED)
+                             : std::nullopt},
       {kDefaultStateEnabled,
        default_state_allowed ? nullptr : key_disallowed_error.c_str(),
-       default_state_allowed ? absl::make_optional(ActionInfo::STATE_ENABLED)
-                             : absl::nullopt},
+       default_state_allowed ? std::make_optional(ActionInfo::STATE_ENABLED)
+                             : std::nullopt},
       {kDefaultStateInvalid,
        default_state_allowed ? invalid_action_error.c_str()
                              : key_disallowed_error.c_str(),
-       absl::nullopt},
+       std::nullopt},
   };
 
   for (const auto& test_case : test_cases) {

@@ -38,6 +38,7 @@ class LensUnifiedSidePanelView : public views::FlexLayoutView,
 
   // views::View
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   content::WebContents* GetWebContents();
 
@@ -69,9 +70,27 @@ class LensUnifiedSidePanelView : public views::FlexLayoutView,
   // if the lens results page is showing.
   void SetContentAndNewTabButtonVisible(bool visible,
                                         bool enable_new_tab_button);
+  // Sets the content and new tab button visibility for the given URL.
+  // The contents will be made visible if the URL is a valid Lens results URL,
+  // an error page, or a non-Lens URL. The new tab button will be made visible
+  // only if the URL is a valid Lens results URL.
+  void MaybeSetContentAndNewTabButtonVisible(const GURL& url);
+
+  // Registers a WebContentsModalDialogManager for our WebContents in order to
+  // display web modal dialogs triggered by it.
+  void RegisterModalDialogManager(Browser* browser);
 
   // content::WebContentsObserver:
+  // TODO(crbug/1452161): Clean up unused listeners and flags after determining
+  // which ones we want to listen to for server-side rendering backends.
   void DocumentOnLoadCompletedInPrimaryMainFrame() override;
+  void DOMContentLoaded(content::RenderFrameHost* render_frame_host) override;
+  void DidFinishNavigation(
+      content::NavigationHandle* navigation_handle) override;
+  void NavigationEntryCommitted(
+      const content::LoadCommittedDetails& load_details) override;
+  void DidFinishLoad(content::RenderFrameHost* render_frame_host,
+                     const GURL& validated_url) override;
   void PrimaryPageChanged(content::Page& page) override;
   void DidOpenRequestedURL(content::WebContents* new_contents,
                            content::RenderFrameHost* source_render_frame_host,
@@ -83,8 +102,13 @@ class LensUnifiedSidePanelView : public views::FlexLayoutView,
                            bool renderer_initiated) override;
 
   // content::WebContentsDelegate:
-  bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
-                         const content::ContextMenuParams& params) override;
+  content::WebContents* OpenURLFromTab(
+      content::WebContents* source,
+      const content::OpenURLParams& params) override;
+  void RequestMediaAccessPermission(
+      content::WebContents* web_contents,
+      const content::MediaStreamRequest& request,
+      content::MediaResponseCallback callback) override;
 
   raw_ptr<BrowserView> browser_view_;
   raw_ptr<views::Separator> separator_;

@@ -8,8 +8,7 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace crx_file {
-namespace id_util {
+namespace crx_file::id_util {
 
 TEST(IDUtilTest, GenerateID) {
   const uint8_t public_key_info[] = {
@@ -33,7 +32,7 @@ TEST(IDUtilTest, GenerateID) {
   EXPECT_EQ("melddjfinppjdikinhbgehiennejpfhp", extension_id);
 
   EXPECT_EQ("daibjpdaanagajckigeiigphanababab",
-            GenerateIdFromHash(public_key_info, sizeof(public_key_info)));
+            GenerateIdFromHash(public_key_info));
 
   EXPECT_EQ("jpignaibiiemhngfjkcpokkamffknabf", GenerateId("test"));
 
@@ -51,5 +50,4 @@ TEST(IDUtilTest, GenerateID) {
       GenerateId("this_string_is_longer_than_a_single_sha256_hash_digest"));
 }
 
-}  // namespace id_util
-}  // namespace crx_file
+}  // namespace crx_file::id_util

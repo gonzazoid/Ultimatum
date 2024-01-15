@@ -3,8 +3,9 @@
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.sheet_tabs;
-import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
+
+import static org.chromium.chrome.browser.autofill.AutofillUiUtils.getCardIcon;
+
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -12,11 +13,12 @@ import androidx.annotation.DrawableRes;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.recyclerview.widget.RecyclerView;
 
-import org.chromium.chrome.browser.autofill.PersonalDataManager;
+import org.chromium.chrome.browser.autofill.AutofillUiUtils;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.keyboard_accessory.R;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.browser.keyboard_accessory.data.UserInfoField;
-import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece;
+import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece;
 import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabViewBinder.ElementViewHolder;
 import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.ui.modelutil.RecyclerViewAdapter;
@@ -53,9 +55,7 @@ class CreditCardAccessorySheetViewBinder {
         }
     }
 
-    /**
-     * View which represents a single credit card and its selectable fields.
-     */
+    /** View which represents a single credit card and its selectable fields. */
     static class CreditCardInfoViewHolder
             extends ElementViewHolder<KeyboardAccessoryData.UserInfo, CreditCardAccessoryInfoView> {
         CreditCardInfoViewHolder(ViewGroup parent) {
@@ -70,60 +70,60 @@ class CreditCardAccessorySheetViewBinder {
             bindChipView(view.getCardholder(), info.getFields().get(3));
             bindChipView(view.getCvc(), info.getFields().get(4));
 
-            view.getExpiryGroup().setVisibility(view.getExpYear().getVisibility() == View.VISIBLE
-                                    || view.getExpMonth().getVisibility() == View.VISIBLE
-                            ? View.VISIBLE
-                            : View.GONE);
-            // If the icon url is present, fetch the bitmap from the PersonalDataManager. In
-            // the event that the bitmap is not present in the PersonalDataManager, fall back to the
-            // icon corresponding to the `mOrigin`.
-            Bitmap iconBitmap = null;
-            if (info.getIconUrl() != null && info.getIconUrl().isValid()) {
-                iconBitmap =
-                        PersonalDataManager.getInstance()
-                                .getCustomImageForAutofillSuggestionIfAvailable(info.getIconUrl());
-            }
-            if (iconBitmap != null) {
-                view.setIcon(new BitmapDrawable(view.getContext().getResources(), iconBitmap));
-            } else {
-                view.setIcon(AppCompatResources.getDrawable(
-                        view.getContext(), getDrawableForOrigin(info.getOrigin())));
-            }
+            view.getExpiryGroup()
+                    .setVisibility(
+                            view.getExpYear().getVisibility() == View.VISIBLE
+                                            || view.getExpMonth().getVisibility() == View.VISIBLE
+                                    ? View.VISIBLE
+                                    : View.GONE);
+            view.setIcon(
+                    getCardIcon(
+                            view.getContext(),
+                            info.getIconUrl(),
+                            getDrawableForOrigin(info.getOrigin()),
+                            AutofillUiUtils.CardIconSize.SMALL,
+                            /* showCustomIcon= */ true));
         }
 
         private static @DrawableRes int getDrawableForOrigin(String origin) {
+            boolean use_new_data =
+                    ChromeFeatureList.isEnabled(
+                            ChromeFeatureList.AUTOFILL_ENABLE_NEW_CARD_ART_AND_NETWORK_IMAGES);
+
             switch (origin) {
                 case "americanExpressCC":
-                    return R.drawable.amex_card;
+                    return use_new_data ? R.drawable.amex_metadata_card : R.drawable.amex_card;
                 case "dinersCC":
-                    return R.drawable.diners_card;
+                    return use_new_data ? R.drawable.diners_metadata_card : R.drawable.diners_card;
                 case "discoverCC":
-                    return R.drawable.discover_card;
+                    return use_new_data
+                            ? R.drawable.discover_metadata_card
+                            : R.drawable.discover_card;
                 case "eloCC":
-                    return R.drawable.elo_card;
+                    return use_new_data ? R.drawable.elo_metadata_card : R.drawable.elo_card;
                 case "jcbCC":
-                    return R.drawable.jcb_card;
+                    return use_new_data ? R.drawable.jcb_metadata_card : R.drawable.jcb_card;
                 case "masterCardCC":
-                    return R.drawable.mc_card;
+                    return use_new_data ? R.drawable.mc_metadata_card : R.drawable.mc_card;
                 case "mirCC":
-                    return R.drawable.mir_card;
+                    return use_new_data ? R.drawable.mir_metadata_card : R.drawable.mir_card;
                 case "troyCC":
-                    return R.drawable.troy_card;
+                    return use_new_data ? R.drawable.troy_metadata_card : R.drawable.troy_card;
                 case "unionPayCC":
-                    return R.drawable.unionpay_card;
+                    return use_new_data
+                            ? R.drawable.unionpay_metadata_card
+                            : R.drawable.unionpay_card;
                 case "visaCC":
-                    return R.drawable.visa_card;
+                    return use_new_data ? R.drawable.visa_metadata_card : R.drawable.visa_card;
             }
             return R.drawable.infobar_autofill_cc;
         }
     }
 
-    /**
-     * View which represents a single Promo Code Offer and its fields.
-     */
+    /** View which represents a single Promo Code Offer and its fields. */
     static class PromoCodeInfoViewHolder
-            extends ElementViewHolder<KeyboardAccessoryData.PromoCodeInfo,
-                    PromoCodeAccessoryInfoView> {
+            extends ElementViewHolder<
+                    KeyboardAccessoryData.PromoCodeInfo, PromoCodeAccessoryInfoView> {
         PromoCodeInfoViewHolder(ViewGroup parent) {
             super(parent, R.layout.keyboard_accessory_sheet_tab_promo_code_info);
         }
@@ -133,19 +133,23 @@ class CreditCardAccessorySheetViewBinder {
                 KeyboardAccessoryData.PromoCodeInfo info, PromoCodeAccessoryInfoView view) {
             bindChipView(view.getPromoCode(), info.getPromoCode());
             view.getDetailsText().setText(info.getDetailsText());
-            view.getDetailsText().setVisibility(
-                    info.getDetailsText().isEmpty() ? View.GONE : View.VISIBLE);
+            view.getDetailsText()
+                    .setVisibility(info.getDetailsText().isEmpty() ? View.GONE : View.VISIBLE);
 
-            view.setIcon(AppCompatResources.getDrawable(
-                    view.getContext(), R.drawable.ic_logo_googleg_24dp));
+            view.setIcon(
+                    AppCompatResources.getDrawable(
+                            view.getContext(), R.drawable.ic_logo_googleg_24dp));
         }
     }
 
-    static void initializeView(RecyclerView view, AccessorySheetTabModel model) {
-        view.setAdapter(new RecyclerViewAdapter<>(
-                new SimpleRecyclerViewMcp<>(model, AccessorySheetDataPiece::getType,
-                        AccessorySheetTabViewBinder.ElementViewHolder::bind),
-                CreditCardAccessorySheetViewBinder::create));
+    static void initializeView(RecyclerView view, AccessorySheetTabItemsModel model) {
+        view.setAdapter(
+                new RecyclerViewAdapter<>(
+                        new SimpleRecyclerViewMcp<>(
+                                model,
+                                AccessorySheetDataPiece::getType,
+                                AccessorySheetTabViewBinder.ElementViewHolder::bind),
+                        CreditCardAccessorySheetViewBinder::create));
         view.addItemDecoration(new DynamicInfoViewBottomSpacer(CreditCardAccessoryInfoView.class));
         view.addItemDecoration(new DynamicInfoViewBottomSpacer(PromoCodeAccessoryInfoView.class));
     }

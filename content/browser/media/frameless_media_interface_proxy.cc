@@ -6,7 +6,7 @@
 
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "content/public/browser/media_service.h"
@@ -16,10 +16,10 @@
 #include "media/mojo/mojom/renderer_extensions.mojom.h"
 #include "media/mojo/mojom/stable/stable_video_decoder.mojom.h"
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 #include "content/public/browser/stable_video_decoder_factory.h"
 #include "media/base/media_switches.h"
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
 namespace content {
 
@@ -67,8 +67,8 @@ void FramelessMediaInterfaceProxy::CreateVideoDecoder(
 
   mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
       oop_video_decoder;
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  if (base::FeatureList::IsEnabled(media::kUseOutOfProcessVideoDecoding)) {
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  if (media::IsOutOfProcessVideoDecodingEnabled()) {
     if (!render_process_host_) {
       if (!stable_vd_factory_remote_.is_bound()) {
         LaunchStableVideoDecoderFactory(
@@ -76,17 +76,16 @@ void FramelessMediaInterfaceProxy::CreateVideoDecoder(
         stable_vd_factory_remote_.reset_on_disconnect();
       }
 
-      if (!stable_vd_factory_remote_.is_bound())
-        return;
+      CHECK(stable_vd_factory_remote_.is_bound());
 
       stable_vd_factory_remote_->CreateStableVideoDecoder(
-          oop_video_decoder.InitWithNewPipeAndPassReceiver());
+          oop_video_decoder.InitWithNewPipeAndPassReceiver(), /*tracker=*/{});
     } else {
       render_process_host_->CreateStableVideoDecoder(
           oop_video_decoder.InitWithNewPipeAndPassReceiver());
     }
   }
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
   factory->CreateVideoDecoder(std::move(receiver),
                               std::move(oop_video_decoder));
 }

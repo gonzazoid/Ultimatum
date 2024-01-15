@@ -5,6 +5,7 @@
 #include "ash/app_list/app_list_metrics.h"
 
 #include <algorithm>
+#include <map>
 #include <string>
 
 #include "ash/app_list/app_list_controller_impl.h"
@@ -12,14 +13,16 @@
 #include "ash/app_list/model/app_list_folder_item.h"
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/model/app_list_item_list.h"
-#include "ash/app_list/model/search/search_result.h"
 #include "ash/app_list/views/continue_section_view.h"
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/shell.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/strcat.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "ui/compositor/compositor.h"
 
 namespace ash {
@@ -28,16 +31,8 @@ namespace ash {
 int g_continue_file_removals_in_session = 0;
 
 // The UMA histogram that logs smoothness of pagination animation.
-constexpr char kPaginationTransitionAnimationSmoothness[] =
-    "Apps.PaginationTransition.AnimationSmoothness";
 constexpr char kPaginationTransitionAnimationSmoothnessInTablet[] =
     "Apps.PaginationTransition.AnimationSmoothness.TabletMode";
-constexpr char kPaginationTransitionAnimationSmoothnessInClamshell[] =
-    "Apps.PaginationTransition.AnimationSmoothness.ClamshellMode";
-
-// The UMA histogram that logs which state search results are opened from.
-constexpr char kAppListSearchResultOpenSourceHistogram[] =
-    "Apps.AppListSearchResultOpenedSource";
 
 // The UMA histogram that logs smoothness of cardified animation.
 constexpr char kCardifiedStateAnimationSmoothnessEnter[] =
@@ -46,11 +41,6 @@ constexpr char kCardifiedStateAnimationSmoothnessEnter[] =
 constexpr char kCardifiedStateAnimationSmoothnessExit[] =
     "Apps.AppList.CardifiedStateAnimation.AnimationSmoothness."
     "ExitCardifiedState";
-
-// The UMA hisotogram that logs the action user performs on zero state
-// search result.
-constexpr char kAppListZeroStateSearchResultUserActionHistogram[] =
-    "Apps.AppList.ZeroStateSearchResultUserActionType";
 
 // The UMA histogram that logs user's decision (remove or cancel) for search
 // result removal confirmation. Result removal is enabled outside zero state
@@ -127,15 +117,33 @@ constexpr char kAppListOpenTimePrefix[] = "Apps.AppListOpenTime.";
 constexpr char kContinueSectionFilesRemovedInSessionHistogram[] =
     "Apps.AppList.Search.ContinueSectionFilesRemovedPerSession";
 
-// The different sources from which a search result is displayed. These values
-// are written to logs.  New enum values can be added, but existing enums must
-// never be renumbered or deleted and reused.
-enum class ApplistSearchResultOpenedSource {
-  kHalfClamshell = 0,  // DEPRECATED.
-  kFullscreenClamshell = 1,
-  kFullscreenTablet = 2,
-  kMaxApplistSearchResultOpenedSource = 3,
-};
+constexpr char kSearchCategoryFilterMenuOpened[] =
+    "Apps.AppList.Search.SearchCategoryFilterMenuOpenedCount";
+constexpr char kSearchCategoriesEnableStateHeader[] =
+    "Apps.AppList.Search.SearchCategoriesEnableState.";
+
+std::string GetCategoryString(AppListSearchControlCategory category) {
+  switch (category) {
+    case AppListSearchControlCategory::kApps:
+      return "Apps";
+    case AppListSearchControlCategory::kAppShortcuts:
+      return "AppShortcuts";
+    case AppListSearchControlCategory::kFiles:
+      return "Files";
+    case AppListSearchControlCategory::kGames:
+      return "Games";
+    case AppListSearchControlCategory::kHelp:
+      return "Helps";
+    case AppListSearchControlCategory::kImages:
+      return "Images";
+    case AppListSearchControlCategory::kPlayStore:
+      return "PlayStore";
+    case AppListSearchControlCategory::kWeb:
+      return "Web";
+    case AppListSearchControlCategory::kCannotToggle:
+      NOTREACHED_NORETURN();
+  }
+}
 
 AppLaunchedMetricParams::AppLaunchedMetricParams() = default;
 
@@ -183,28 +191,6 @@ void RecordPageSwitcherSource(AppListPageSwitcherSource source) {
                             kMaxAppListPageSwitcherSource);
 }
 
-void RecordSearchResultOpenSource(const SearchResult* result,
-                                  AppListViewState state,
-                                  bool is_tablet_mode) {
-  // Record the search metric if the SearchResult is not a suggested app.
-  if (result->is_recommendation())
-    return;
-
-  ApplistSearchResultOpenedSource source =
-      is_tablet_mode ? ApplistSearchResultOpenedSource::kFullscreenTablet
-                     : ApplistSearchResultOpenedSource::kFullscreenClamshell;
-
-  UMA_HISTOGRAM_ENUMERATION(
-      kAppListSearchResultOpenSourceHistogram, source,
-      ApplistSearchResultOpenedSource::kMaxApplistSearchResultOpenedSource);
-}
-
-void RecordZeroStateSearchResultUserActionHistogram(
-    ZeroStateSearchResultUserActionType action) {
-  UMA_HISTOGRAM_ENUMERATION(kAppListZeroStateSearchResultUserActionHistogram,
-                            action);
-}
-
 void RecordSearchResultRemovalDialogDecision(
     SearchResultRemovalConfirmation removal_decision) {
   base::UmaHistogramEnumeration(kSearchResultRemovalDialogDecisionHistogram,
@@ -219,7 +205,7 @@ std::string GetAppListOpenMethod(AppListShowSource source) {
     case AppListShowSource::kSearchKeyFullscreen_DEPRECATED:
       return "SearchKey";
     case AppListShowSource::kShelfButton:
-    case AppListShowSource::kShelfButtonFullscreen_DEPRACTED:
+    case AppListShowSource::kShelfButtonFullscreen_DEPRECATED:
       return "HomeButton";
     case AppListShowSource::kSwipeFromShelf:
       return "Swipe";
@@ -227,6 +213,8 @@ std::string GetAppListOpenMethod(AppListShowSource source) {
       return "Scroll";
     case AppListShowSource::kTabletMode:
     case AppListShowSource::kAssistantEntryPoint:
+    case AppListShowSource::kBrowser:
+    case AppListShowSource::kWelcomeTour:
       return "Others";
   }
   NOTREACHED();
@@ -249,8 +237,6 @@ void RecordPeriodicAppListMetrics() {
   AppListItemList* const item_list = model->top_level_item_list();
   for (size_t i = 0; i < item_list->item_count(); ++i) {
     AppListItem* item = item_list->item_at(i);
-    if (item->is_page_break())
-      continue;
     number_of_root_level_items++;
 
     // Item is a folder.
@@ -310,7 +296,11 @@ void RecordAppListAppLaunched(AppListLaunchedFrom launched_from,
 
   switch (app_list_state) {
     case AppListViewState::kClosed:
-      NOTREACHED();
+      // The app list state may be set to closed while the device is animating
+      // to tablet mode. While this transition is running, a user may be able to
+      // launch an app.
+      DCHECK_EQ(launched_from, AppListLaunchedFrom::kLaunchedFromShelf);
+      UMA_HISTOGRAM_ENUMERATION(kAppListAppLaunchedClosed, launched_from);
       break;
     case AppListViewState::kFullscreenAllApps:
       if (is_tablet_mode) {
@@ -348,7 +338,7 @@ void RecordAppListAppLaunched(AppListLaunchedFrom launched_from,
 ASH_EXPORT void RecordLauncherWorkflowMetrics(
     AppListUserAction action,
     bool is_tablet_mode,
-    absl::optional<base::TimeTicks> launcher_show_time) {
+    std::optional<base::TimeTicks> launcher_show_time) {
   if (is_tablet_mode) {
     base::UmaHistogramEnumeration(kLauncherUserActionInTablet, action);
 
@@ -416,9 +406,7 @@ bool IsCommandIdAnAppLaunch(int command_id_number) {
     case CommandId::UNINSTALL:
     case CommandId::REMOVE_FROM_FOLDER:
     case CommandId::INSTALL:
-    case CommandId::USE_LAUNCH_TYPE_PINNED:
     case CommandId::USE_LAUNCH_TYPE_REGULAR:
-    case CommandId::USE_LAUNCH_TYPE_FULLSCREEN:
     case CommandId::USE_LAUNCH_TYPE_WINDOW:
     case CommandId::USE_LAUNCH_TYPE_TABBED_WINDOW:
     case CommandId::USE_LAUNCH_TYPE_COMMAND_END:
@@ -443,6 +431,8 @@ bool IsCommandIdAnAppLaunch(int command_id_number) {
     case CommandId::DEPRECATED_LAUNCH_TYPE_WINDOW:
     case CommandId::DEPRECATED_LAUNCH_TYPE_TABBED_WINDOW:
     case CommandId::DEPRECATED_LAUNCH_TYPE_FULLSCREEN:
+    case CommandId::DEPRECATED_USE_LAUNCH_TYPE_PINNED:
+    case CommandId::DEPRECATED_USE_LAUNCH_TYPE_FULLSCREEN:
       NOTREACHED();
       return false;
   }
@@ -450,17 +440,9 @@ bool IsCommandIdAnAppLaunch(int command_id_number) {
   return false;
 }
 
-void ReportPaginationSmoothness(bool is_tablet_mode, int smoothness) {
-  UMA_HISTOGRAM_PERCENTAGE(kPaginationTransitionAnimationSmoothness,
+void ReportPaginationSmoothness(int smoothness) {
+  UMA_HISTOGRAM_PERCENTAGE(kPaginationTransitionAnimationSmoothnessInTablet,
                            smoothness);
-
-  if (is_tablet_mode) {
-    UMA_HISTOGRAM_PERCENTAGE(kPaginationTransitionAnimationSmoothnessInTablet,
-                             smoothness);
-  } else {
-    UMA_HISTOGRAM_PERCENTAGE(
-        kPaginationTransitionAnimationSmoothnessInClamshell, smoothness);
-  }
 }
 
 void ReportCardifiedSmoothness(bool is_entering_cardified, int smoothness) {
@@ -534,6 +516,20 @@ void RecordHideContinueSectionMetric() {
     base::UmaHistogramBoolean(
         "Apps.AppList.ContinueSectionHiddenByUser.ClamshellMode",
         hide_continue_section);
+  }
+}
+
+void RecordSearchCategoryFilterMenuOpened() {
+  base::UmaHistogramCounts100(kSearchCategoryFilterMenuOpened, 1);
+}
+
+void RecordSearchCategoryEnableState(
+    const CategoryEnableStateMap& category_to_state) {
+  for (auto category_state_pair : category_to_state) {
+    std::string histogram =
+        base::StrCat({kSearchCategoriesEnableStateHeader,
+                      GetCategoryString(category_state_pair.first)});
+    base::UmaHistogramEnumeration(histogram, category_state_pair.second);
   }
 }
 

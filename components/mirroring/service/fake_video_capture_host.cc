@@ -21,7 +21,10 @@ constexpr bool kNotPremapped = false;
 FakeVideoCaptureHost::FakeVideoCaptureHost(
     mojo::PendingReceiver<media::mojom::VideoCaptureHost> receiver)
     : receiver_(this, std::move(receiver)) {}
-FakeVideoCaptureHost::~FakeVideoCaptureHost() {}
+
+FakeVideoCaptureHost::~FakeVideoCaptureHost() {
+  Stop(base::UnguessableToken());
+}
 
 void FakeVideoCaptureHost::Start(
     const base::UnguessableToken& device_id,
@@ -45,6 +48,16 @@ void FakeVideoCaptureHost::Stop(const base::UnguessableToken& device_id) {
   OnStopped();
 }
 
+void FakeVideoCaptureHost::Pause(const base::UnguessableToken& device_id) {
+  paused_ = true;
+}
+
+void FakeVideoCaptureHost::Resume(const base::UnguessableToken& device_id,
+                                  const base::UnguessableToken& session_id,
+                                  const media::VideoCaptureParams& params) {
+  paused_ = false;
+}
+
 void FakeVideoCaptureHost::SendOneFrame(const gfx::Size& size,
                                         base::TimeTicks capture_time) {
   if (!observer_)
@@ -63,7 +76,7 @@ void FakeVideoCaptureHost::SendOneFrame(const gfx::Size& size,
              base::TimeDelta(), metadata, media::PIXEL_FORMAT_I420, size,
              gfx::Rect(size), kNotPremapped, gfx::ColorSpace::CreateREC709(),
              nullptr));
-  observer_->OnBufferReady(std::move(buffer), {});
+  observer_->OnBufferReady(std::move(buffer));
 }
 
 media::VideoCaptureParams FakeVideoCaptureHost::GetVideoCaptureParams() const {

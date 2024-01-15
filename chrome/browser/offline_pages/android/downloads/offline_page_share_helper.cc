@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/download/android/download_controller_base.h"
 #include "chrome/browser/download/android/download_utils.h"
 #include "chrome/browser/offline_pages/offline_page_mhtml_archiver.h"
@@ -67,12 +67,11 @@ void OfflinePageShareHelper::OnPageGetForShare(
     return;
   }
   const OfflinePageItem& page = pages[0];
-  const bool is_suggested = GetPolicy(page.client_id.name_space).is_suggested;
   const bool in_private_dir = model_->IsArchiveInInternalDir(page.file_path);
 
   // Need to publish internal page to public directory to share the file with
   // content URI instead of the web page URL.
-  if (!is_suggested && in_private_dir) {
+  if (in_private_dir) {
     AcquireFileAccessPermission();
     return;
   }
@@ -123,7 +122,7 @@ void OfflinePageShareHelper::NotifyCompletion(
     ShareResult result,
     std::unique_ptr<OfflineItemShareInfo> share_info) {
   DCHECK(result_cb_);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(result_cb_), result, content_id_,
                                 std::move(share_info)));
 }

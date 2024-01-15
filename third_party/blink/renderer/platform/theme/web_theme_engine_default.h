@@ -26,6 +26,7 @@ class WebThemeEngineDefault : public WebThemeEngine {
              const gfx::Rect& rect,
              const WebThemeEngine::ExtraParams* extra_params,
              mojom::ColorScheme color_scheme,
+             const ui::ColorProvider* color_provider,
              const absl::optional<SkColor>& accent_color) override;
   void GetOverlayScrollbarStyle(WebThemeEngine::ScrollbarStyle*) override;
   bool SupportsNinePatch(Part part) const override;
@@ -33,6 +34,7 @@ class WebThemeEngineDefault : public WebThemeEngine {
   gfx::Rect NinePatchAperture(Part part) const override;
   absl::optional<SkColor> GetSystemColor(
       WebThemeEngine::SystemThemeColor system_theme_color) const override;
+  absl::optional<SkColor> GetAccentColor() const override;
 #if BUILDFLAG(IS_WIN)
   // Caches the scrollbar metrics. These are retrieved in the browser and passed
   // to the renderer in RendererPreferences because the required Windows
@@ -48,14 +50,42 @@ class WebThemeEngineDefault : public WebThemeEngine {
   void ResetToSystemColors(
       WebThemeEngine::SystemColorInfoState system_color_info_state) override;
   WebThemeEngine::SystemColorInfoState GetSystemColorInfo() override;
-  bool UpdateColorProviders(const ui::RendererColorMap& light_colors,
-                            const ui::RendererColorMap& dark_colors) override;
+  bool UpdateColorProviders(
+      const ui::RendererColorMap& light_colors,
+      const ui::RendererColorMap& dark_colors,
+      const ui::RendererColorMap& forced_colors_map) override;
+  void EmulateForcedColors(bool is_dark_theme, bool is_web_test) override;
+  bool IsFluentOverlayScrollbarEnabled() const override;
+  int GetPaintedScrollbarTrackInset() const override;
 
  protected:
   const ui::ColorProvider* GetColorProviderForPainting(
       mojom::ColorScheme color_scheme) const;
 
  private:
+  void SetEmulateForcedColors(bool emulate_forced_colors) {
+    emulate_forced_colors_ = emulate_forced_colors;
+  }
+  // Returns whether `part` should be affected by the accent color depending on
+  // the type of part and its state.
+  bool ShouldPartBeAffectedByAccentColor(
+      WebThemeEngine::Part part,
+      WebThemeEngine::State state,
+      const WebThemeEngine::ExtraParams* extra_params) const;
+  SkColor GetContrastingColorFor(mojom::ColorScheme color_scheme,
+                                 WebThemeEngine::Part part,
+                                 WebThemeEngine::State state) const;
+  // This returns a color scheme which provides enough contrast with the custom
+  // `accent_color` to make it easy to see. `light_contrasting_color` is the
+  // color which is used to paint adjacent to `accent_color` from the
+  // `light_color_provider_`, and `dark_contrasting_color` is the one used from
+  // `dark_color_provider_`.
+  mojom::ColorScheme CalculateColorSchemeForAccentColor(
+      absl::optional<SkColor> accent_color,
+      mojom::ColorScheme color_scheme,
+      SkColor light_contrasting_color,
+      SkColor dark_contrasting_color) const;
+  bool emulate_forced_colors_ = false;
   // These providers are kept in sync with ColorProviders in the browser and
   // will be updated when the theme changes.
   // TODO(crbug.com/1251637): Currently these reflect the ColorProviders
@@ -64,6 +94,13 @@ class WebThemeEngineDefault : public WebThemeEngine {
   // hosting Page.
   ui::ColorProvider light_color_provider_;
   ui::ColorProvider dark_color_provider_;
+  ui::ColorProvider forced_colors_provider_;
+
+  // This provider is used when forced color emulation is enabled, overriding
+  // the light, dark or forced colors color providers.
+  // TODO(samomekarajr): Remove this provider when we figure out how to change
+  // the ForcedColors key from the renderer.
+  ui::ColorProvider emulated_forced_colors_provider_;
 };
 
 }  // namespace blink

@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/cancelable_callback.h"
-#include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "ios/web/js_messaging/web_frame_internal.h"
 #include "ios/web/public/js_messaging/web_frame.h"
@@ -48,15 +47,13 @@ class WebFrameImpl : public WebFrame,
   std::string GetFrameId() const override;
   bool IsMainFrame() const override;
   GURL GetSecurityOrigin() const override;
-  bool CanCallJavaScriptFunction() const override;
   BrowserState* GetBrowserState() override;
 
+  bool CallJavaScriptFunction(const std::string& name,
+                              const base::Value::List& parameters) override;
   bool CallJavaScriptFunction(
       const std::string& name,
-      const std::vector<base::Value>& parameters) override;
-  bool CallJavaScriptFunction(
-      const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       base::OnceCallback<void(const base::Value*)> callback,
       base::TimeDelta timeout) override;
 
@@ -70,11 +67,11 @@ class WebFrameImpl : public WebFrame,
   // WebFrameContentWorldAPI:
   bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world) override;
   bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world,
       base::OnceCallback<void(const base::Value*)> callback,
       base::TimeDelta timeout) override;
@@ -90,7 +87,7 @@ class WebFrameImpl : public WebFrame,
   // function will be sent back to the receiver with `CompleteRequest()`.
   bool CallJavaScriptFunctionInContentWorld(
       const std::string& name,
-      const std::vector<base::Value>& parameters,
+      const base::Value::List& parameters,
       JavaScriptContentWorld* content_world,
       bool reply_with_result);
 
@@ -114,7 +111,7 @@ class WebFrameImpl : public WebFrame,
   // will be sent back to the receiver.
   bool ExecuteJavaScriptFunction(JavaScriptContentWorld* content_world,
                                  const std::string& name,
-                                 const std::vector<base::Value>& parameters,
+                                 const base::Value::List& parameters,
                                  int message_id,
                                  bool reply_with_result);
 
@@ -162,8 +159,6 @@ class WebFrameImpl : public WebFrame,
   GURL security_origin_;
   // The associated web state.
   web::WebState* web_state_ = nullptr;
-
-  base::WeakPtrFactory<WebFrameImpl> weak_ptr_factory_;
 };
 
 }  // namespace web

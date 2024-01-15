@@ -11,22 +11,123 @@ declare global {
   export namespace chrome {
     export namespace autofillPrivate {
 
-      export enum AddressField {
-        HONORIFIC = 'HONORIFIC',
-        FULL_NAME = 'FULL_NAME',
-        COMPANY_NAME = 'COMPANY_NAME',
-        ADDRESS_LINES = 'ADDRESS_LINES',
-        ADDRESS_LEVEL_1 = 'ADDRESS_LEVEL_1',
-        ADDRESS_LEVEL_2 = 'ADDRESS_LEVEL_2',
-        ADDRESS_LEVEL_3 = 'ADDRESS_LEVEL_3',
-        POSTAL_CODE = 'POSTAL_CODE',
-        SORTING_CODE = 'SORTING_CODE',
-        COUNTRY_CODE = 'COUNTRY_CODE',
+      export interface AccountInfo {
+        email: string;
+        isSyncEnabledForAutofillProfiles: boolean;
+        isEligibleForAddressAccountStorage: boolean;
+      }
+
+      /**
+       * This enum must be kept in sync with:
+       * components/autofill/core/browser/field_types.h.
+       */
+      export enum FieldType {
+        NO_SERVER_DATA,
+        UNKNOWN_TYPE,
+        EMPTY_TYPE,
+        NAME_FIRST,
+        NAME_MIDDLE,
+        NAME_LAST,
+        NAME_MIDDLE_INITIAL,
+        NAME_FULL,
+        NAME_SUFFIX,
+        EMAIL_ADDRESS,
+        PHONE_HOME_NUMBER,
+        PHONE_HOME_CITY_CODE,
+        PHONE_HOME_COUNTRY_CODE,
+        PHONE_HOME_CITY_AND_NUMBER,
+        PHONE_HOME_WHOLE_NUMBER,
+        ADDRESS_HOME_LINE1,
+        ADDRESS_HOME_LINE2,
+        ADDRESS_HOME_APT_NUM,
+        ADDRESS_HOME_CITY,
+        ADDRESS_HOME_STATE,
+        ADDRESS_HOME_ZIP,
+        ADDRESS_HOME_COUNTRY,
+        CREDIT_CARD_NAME_FULL,
+        CREDIT_CARD_NUMBER,
+        CREDIT_CARD_EXP_MONTH,
+        CREDIT_CARD_EXP_2_DIGIT_YEAR,
+        CREDIT_CARD_EXP_4_DIGIT_YEAR,
+        CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR,
+        CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR,
+        CREDIT_CARD_TYPE,
+        CREDIT_CARD_VERIFICATION_CODE,
+        COMPANY_NAME,
+        FIELD_WITH_DEFAULT_VALUE,
+        MERCHANT_EMAIL_SIGNUP,
+        MERCHANT_PROMO_CODE,
+        PASSWORD,
+        ACCOUNT_CREATION_PASSWORD,
+        ADDRESS_HOME_STREET_ADDRESS,
+        ADDRESS_HOME_SORTING_CODE,
+        ADDRESS_HOME_DEPENDENT_LOCALITY,
+        ADDRESS_HOME_LINE3,
+        NOT_ACCOUNT_CREATION_PASSWORD,
+        USERNAME,
+        USERNAME_AND_EMAIL_ADDRESS,
+        NEW_PASSWORD,
+        PROBABLY_NEW_PASSWORD,
+        NOT_NEW_PASSWORD,
+        CREDIT_CARD_NAME_FIRST,
+        CREDIT_CARD_NAME_LAST,
+        PHONE_HOME_EXTENSION,
+        CONFIRMATION_PASSWORD,
+        AMBIGUOUS_TYPE,
+        SEARCH_TERM,
+        PRICE,
+        NOT_PASSWORD,
+        SINGLE_USERNAME,
+        NOT_USERNAME,
+        UPI_VPA,
+        ADDRESS_HOME_STREET_NAME,
+        ADDRESS_HOME_HOUSE_NUMBER,
+        ADDRESS_HOME_SUBPREMISE,
+        ADDRESS_HOME_OTHER_SUBUNIT,
+        NAME_LAST_FIRST,
+        NAME_LAST_CONJUNCTION,
+        NAME_LAST_SECOND,
+        NAME_HONORIFIC_PREFIX,
+        ADDRESS_HOME_ADDRESS,
+        ADDRESS_HOME_ADDRESS_WITH_NAME,
+        ADDRESS_HOME_FLOOR,
+        NAME_FULL_WITH_HONORIFIC_PREFIX,
+        BIRTHDATE_DAY,
+        BIRTHDATE_MONTH,
+        BIRTHDATE_4_DIGIT_YEAR,
+        PHONE_HOME_CITY_CODE_WITH_TRUNK_PREFIX,
+        PHONE_HOME_CITY_AND_NUMBER_WITHOUT_TRUNK_PREFIX,
+        PHONE_HOME_NUMBER_PREFIX,
+        PHONE_HOME_NUMBER_SUFFIX,
+        IBAN_VALUE,
+        CREDIT_CARD_STANDALONE_VERIFICATION_CODE,
+        NUMERIC_QUANTITY,
+        ONE_TIME_CODE,
+        DELIVERY_INSTRUCTIONS,
+        ADDRESS_HOME_OVERFLOW,
+        ADDRESS_HOME_LANDMARK,
+        ADDRESS_HOME_OVERFLOW_AND_LANDMARK,
+        ADDRESS_HOME_ADMIN_LEVEL2,
+        ADDRESS_HOME_STREET_LOCATION,
+        ADDRESS_HOME_BETWEEN_STREETS,
+        ADDRESS_HOME_BETWEEN_STREETS_OR_LANDMARK,
+        ADDRESS_HOME_BETWEEN_STREETS_1,
+        ADDRESS_HOME_BETWEEN_STREETS_2,
+        SINGLE_USERNAME_FORGOT_PASSWORD,
+        ADDRESS_HOME_APT,
+        ADDRESS_HOME_APT_TYPE,
+        SINGLE_USERNAME_WITH_INTERMEDIATE_VALUES,
+      }
+
+      export enum AddressSource {
+        LOCAL_OR_SYNCABLE = 'LOCAL_OR_SYNCABLE',
+        ACCOUNT = 'ACCOUNT',
       }
 
       export interface AutofillMetadata {
         summaryLabel: string;
         summarySublabel?: string;
+        source?: AddressSource;
         isLocal?: boolean;
         isCached?: boolean;
         isMigratable?: boolean;
@@ -34,20 +135,16 @@ declare global {
         isVirtualCardEnrolled?: boolean;
       }
 
+      export interface AddressField {
+        type: FieldType;
+        value: string|undefined;
+      }
+
       export interface AddressEntry {
         guid?: string;
-        fullNames?: string[];
-        honorific?: string;
-        companyName?: string;
-        addressLines?: string;
-        addressLevel1?: string;
-        addressLevel2?: string;
-        addressLevel3?: string;
-        postalCode?: string;
-        sortingCode?: string;
-        countryCode?: string;
-        phoneNumbers?: string[];
-        emailAddresses?: string[];
+
+        fields: AddressField[];
+
         languageCode?: string;
         metadata?: AutofillMetadata;
       }
@@ -58,9 +155,10 @@ declare global {
       }
 
       export interface AddressComponent {
-        field: AddressField;
+        field: FieldType;
         fieldName: string;
         isLongField: boolean;
+        isRequired: boolean;
         placeholder?: string;
       }
 
@@ -75,6 +173,7 @@ declare global {
 
       export interface CreditCardEntry {
         guid?: string;
+        instrumentId?: string;
         name?: string;
         cardNumber?: string;
         expirationMonth?: string;
@@ -82,6 +181,14 @@ declare global {
         nickname?: string;
         network?: string;
         imageSrc?: string;
+        cvc?: string;
+        metadata?: AutofillMetadata;
+      }
+
+      export interface IbanEntry {
+        guid?: string;
+        value?: string;
+        nickname?: string;
         metadata?: AutofillMetadata;
       }
 
@@ -91,31 +198,35 @@ declare global {
         countryCode: string;
       }
 
+      export function getAccountInfo(): Promise<AccountInfo|undefined>;
       export function saveAddress(address: AddressEntry): void;
-      export function getCountryList(
-          callback: (entries: CountryEntry[]) => void): void;
+      export function getCountryList(): Promise<CountryEntry[]>;
       export function getAddressComponents(
-          countryCode: string,
-          callback: (components: AddressComponents) => void): void;
-      export function getAddressList(
-          callback: (entries: AddressEntry[]) => void): void;
+          countryCode: string): Promise<AddressComponents>;
+      export function getAddressList(): Promise<AddressEntry[]>;
       export function saveCreditCard(card: CreditCardEntry): void;
+      export function saveIban(iban: IbanEntry): void;
       export function removeEntry(guid: string): void;
       export function validatePhoneNumbers(
-          params: ValidatePhoneParams,
-          callback: (numbers: string[]) => void): void;
-      export function getCreditCardList(
-          callback: (entries: CreditCardEntry[]) => void): void;
+          params: ValidatePhoneParams): Promise<string[]>;
+      export function getCreditCardList(): Promise<CreditCardEntry[]>;
+      export function getIbanList(): Promise<IbanEntry[]>;
+      export function isValidIban(ibanValue: string): Promise<boolean>;
       export function maskCreditCard(guid: string): void;
       export function migrateCreditCards(): void;
       export function logServerCardLinkClicked(): void;
+      export function logServerIbanLinkClicked(): void;
       export function setCreditCardFIDOAuthEnabledState(enabled: boolean): void;
-      export function getUpiIdList(callback: (items: string[]) => void): void;
       export function addVirtualCard(cardId: string): void;
       export function removeVirtualCard(cardId: string): void;
+      export function authenticateUserAndFlipMandatoryAuthToggle(): void;
+      export function getLocalCard(guid: string): Promise<CreditCardEntry|null>;
+      export function checkIfDeviceAuthAvailable(): Promise<boolean>;
+      export function bulkDeleteAllCvcs(): void;
 
       export const onPersonalDataChanged: ChromeEvent<
-          (addresses: AddressEntry[], creditCards: CreditCardEntry[]) => void>;
+          (addresses: AddressEntry[], creditCards: CreditCardEntry[],
+           ibans: IbanEntry[], accountInfo?: AccountInfo) => void>;
     }
   }
 }

@@ -8,7 +8,7 @@
 
 #include "base/metrics/user_metrics.h"
 #include "chrome/common/url_constants.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace ash {
@@ -17,8 +17,8 @@ namespace {
 
 // Dialog width and height in DIPs.
 const int kDefaultWidth = 530;
-const int kDefaultHeightWithTimezone = 286;
-const int kDefaultHeightWithoutTimezone = 228;
+const int kDefaultHeightWithTimezone = 396;
+const int kDefaultHeightWithoutTimezone = 258;
 
 }  // namespace
 

@@ -8,8 +8,7 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
-#include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "ios/web/public/webui/url_data_source_ios.h"
 #include "ios/web/public/webui/web_ui_ios_data_source.h"
@@ -37,6 +36,7 @@ class WebUIIOSDataSourceImpl : public URLDataSourceIOSImpl,
   void EnableReplaceI18nInJS() override;
   bool ShouldReplaceI18nInJS() const override;
   void AddResourcePath(const std::string& path, int resource_id) override;
+  void AddResourcePaths(base::span<const webui::ResourcePath> paths) override;
   void SetDefaultResource(int resource_id) override;
   void DisableDenyXFrameOptions() override;
   const ui::TemplateReplacements* GetReplacements() const override;

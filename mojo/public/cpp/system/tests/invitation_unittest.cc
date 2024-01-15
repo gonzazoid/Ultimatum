@@ -4,18 +4,21 @@
 
 #include "mojo/public/cpp/system/invitation.h"
 
+#include <optional>
+#include <string_view>
 #include <utility>
 
 #include "base/base_paths.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
 #include "base/test/bind.h"
 #include "base/test/multiprocess_test.h"
 #include "base/test/task_environment.h"
@@ -23,16 +26,22 @@
 #include "build/build_config.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/core/test/test_switches.h"
+#include "mojo/public/c/system/invitation.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 #include "mojo/public/cpp/system/wait.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/multiprocess_func_list.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
 #include "mojo/public/cpp/platform/named_platform_channel.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
+#include "base/win/access_token.h"
 #endif
 
 namespace mojo {
@@ -41,13 +50,20 @@ namespace {
 enum class InvitationType {
   kNormal,
   kIsolated,
+#if BUILDFLAG(IS_WIN)
+  // For now, the concept of an elevated process is only meaningful on Windows.
+  kElevated,
+#endif
 };
 
 enum class TransportType {
   kChannel,
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
   // Fuchsia has no named pipe support.
   kChannelServer,
+  // Test the scenario of calling SendIsolated without providing remote process
+  // handle.
+  kChannelServerWithoutHandle,
 #endif
 };
 
@@ -55,19 +71,26 @@ enum class TransportType {
 // should be testing against.
 const char kTransportTypeSwitch[] = "test-transport-type";
 const char kTransportTypeChannel[] = "channel";
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
 const char kTransportTypeChannelServer[] = "channel-server";
 #endif
 
-class InvitationCppTest : public testing::Test,
-                          public testing::WithParamInterface<TransportType> {
+// TODO(https://crbug.com/1428561): Flaky on Tsan.
+#if defined(THREAD_SANITIZER)
+#define MAYBE_InvitationCppTest DISABLED_InvitationCppTest
+#else
+#define MAYBE_InvitationCppTest InvitationCppTest
+#endif
+class MAYBE_InvitationCppTest
+    : public testing::Test,
+      public testing::WithParamInterface<TransportType> {
  public:
-  InvitationCppTest() = default;
+  MAYBE_InvitationCppTest() = default;
 
-  InvitationCppTest(const InvitationCppTest&) = delete;
-  InvitationCppTest& operator=(const InvitationCppTest&) = delete;
+  MAYBE_InvitationCppTest(const MAYBE_InvitationCppTest&) = delete;
+  MAYBE_InvitationCppTest& operator=(const MAYBE_InvitationCppTest&) = delete;
 
-  ~InvitationCppTest() override = default;
+  ~MAYBE_InvitationCppTest() override = default;
 
  protected:
   void LaunchChildTestClient(const std::string& test_client_name,
@@ -80,7 +103,7 @@ class InvitationCppTest : public testing::Test,
         base::GetMultiProcessTestChildBaseCommandLine());
 
     base::LaunchOptions launch_options;
-    absl::optional<PlatformChannel> channel;
+    std::optional<PlatformChannel> channel;
     PlatformChannelEndpoint channel_endpoint;
     PlatformChannelServerEndpoint server_endpoint;
     switch (transport_type) {
@@ -95,8 +118,9 @@ class InvitationCppTest : public testing::Test,
         channel_endpoint = channel->TakeLocalEndpoint();
         break;
       }
-#if !BUILDFLAG(IS_FUCHSIA)
-      case TransportType::kChannelServer: {
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
+      case TransportType::kChannelServer:
+      case TransportType::kChannelServerWithoutHandle: {
         command_line.AppendSwitchASCII(kTransportTypeSwitch,
                                        kTransportTypeChannelServer);
         NamedPlatformChannel::Options named_channel_options;
@@ -129,40 +153,70 @@ class InvitationCppTest : public testing::Test,
       channel->RemoteProcessLaunchAttempted();
 
     OutgoingInvitation invitation;
-    if (invitation_type == InvitationType::kNormal) {
+    if (invitation_type != InvitationType::kIsolated) {
       for (uint64_t name = 0; name < num_primordial_pipes; ++name)
         primordial_pipes[name] = invitation.AttachMessagePipe(name);
     }
 
+#if BUILDFLAG(IS_WIN)
+    if (invitation_type == InvitationType::kElevated) {
+      // We can't elevate the child process because of UAC, so instead we just
+      // lower the integrity level on the IO thread, so that OpenProcess() will
+      // fail with access denied error on the server side, forcing the client
+      // to be responsible for handle duplication. This trick works regardless
+      // of whether the current process is elevated.
+      core::GetIOTaskRunner()->PostTask(
+          FROM_HERE, base::BindOnce(&LowerCurrentThreadIntegrityLevel));
+
+      invitation.set_extra_flags(MOJO_SEND_INVITATION_FLAG_ELEVATED);
+    }
+#endif
+
     switch (transport_type) {
       case TransportType::kChannel:
         DCHECK(channel_endpoint.is_valid());
-        if (invitation_type == InvitationType::kNormal) {
+        if (invitation_type != InvitationType::kIsolated) {
           OutgoingInvitation::Send(std::move(invitation),
                                    child_process_.Handle(),
                                    std::move(channel_endpoint), error_callback);
         } else {
           DCHECK(primordial_pipes);
           DCHECK_EQ(num_primordial_pipes, 1u);
-          primordial_pipes[0] =
-              OutgoingInvitation::SendIsolated(std::move(channel_endpoint));
+          primordial_pipes[0] = OutgoingInvitation::SendIsolated(
+              std::move(channel_endpoint), {}, child_process_.Handle());
         }
         break;
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
       case TransportType::kChannelServer:
         DCHECK(server_endpoint.is_valid());
-        if (invitation_type == InvitationType::kNormal) {
+        if (invitation_type != InvitationType::kIsolated) {
           OutgoingInvitation::Send(std::move(invitation),
                                    child_process_.Handle(),
                                    std::move(server_endpoint), error_callback);
         } else {
           DCHECK(primordial_pipes);
           DCHECK_EQ(num_primordial_pipes, 1u);
-          primordial_pipes[0] =
-              OutgoingInvitation::SendIsolated(std::move(server_endpoint));
+          // Provide the remote process handle when calling SendIsolated
+          // function.
+          primordial_pipes[0] = OutgoingInvitation::SendIsolated(
+              std::move(server_endpoint), {}, child_process_.Handle());
         }
         break;
-#endif  // !BUILDFLAG(IS_FUCHSIA)
+      case TransportType::kChannelServerWithoutHandle:
+        DCHECK(server_endpoint.is_valid());
+        if (invitation_type != InvitationType::kIsolated) {
+          OutgoingInvitation::Send(std::move(invitation), {},
+                                   std::move(server_endpoint), error_callback);
+        } else {
+          DCHECK(primordial_pipes);
+          DCHECK_EQ(num_primordial_pipes, 1u);
+          // Don't provide the remote process handle when calling SendIsolated
+          // function.
+          primordial_pipes[0] =
+              OutgoingInvitation::SendIsolated(std::move(server_endpoint), {});
+        }
+        break;
+#endif  // !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
     }
   }
 
@@ -175,7 +229,7 @@ class InvitationCppTest : public testing::Test,
   }
 
   static void WriteMessage(const ScopedMessagePipeHandle& pipe,
-                           base::StringPiece message) {
+                           std::string_view message) {
     CHECK_EQ(MOJO_RESULT_OK,
              WriteMessageRaw(pipe.get(), message.data(), message.size(),
                              nullptr, 0, MOJO_WRITE_MESSAGE_FLAG_NONE));
@@ -191,19 +245,34 @@ class InvitationCppTest : public testing::Test,
     return std::string(payload.begin(), payload.end());
   }
 
+#if BUILDFLAG(IS_WIN)
+  static void LowerCurrentThreadIntegrityLevel() {
+    auto restricted_access_token = base::win::AccessToken::FromCurrentProcess(
+        /* impersonation= */ true, TOKEN_ALL_ACCESS);
+    PCHECK(restricted_access_token);
+    CHECK(restricted_access_token->IsImpersonation());
+    CHECK_GT(restricted_access_token->IntegrityLevel(),
+             static_cast<DWORD>(SECURITY_MANDATORY_UNTRUSTED_RID))
+        << "Current integrity level must be higher than UNTRUSTED.";
+    PCHECK(restricted_access_token->SetIntegrityLevel(
+        SECURITY_MANDATORY_UNTRUSTED_RID));
+    PCHECK(ImpersonateLoggedOnUser(restricted_access_token->get()));
+  }
+#endif
+
  private:
   base::test::TaskEnvironment task_environment_;
   base::Process child_process_;
 };
 
-class TestClientBase : public InvitationCppTest {
+class TestClientBase : public MAYBE_InvitationCppTest {
  public:
   TestClientBase(const TestClientBase&) = delete;
   TestClientBase& operator=(const TestClientBase&) = delete;
 
   static PlatformChannelEndpoint RecoverEndpointFromCommandLine() {
     const auto& command_line = *base::CommandLine::ForCurrentProcess();
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
     std::string transport_type_string =
         command_line.GetSwitchValueASCII(kTransportTypeSwitch);
     CHECK(!transport_type_string.empty());
@@ -214,8 +283,9 @@ class TestClientBase : public InvitationCppTest {
     return PlatformChannel::RecoverPassedEndpointFromCommandLine(command_line);
   }
 
-  static IncomingInvitation AcceptInvitation() {
-    return IncomingInvitation::Accept(RecoverEndpointFromCommandLine());
+  static IncomingInvitation AcceptInvitation(
+      MojoAcceptInvitationFlags flags = MOJO_ACCEPT_INVITATION_FLAG_NONE) {
+    return IncomingInvitation::Accept(RecoverEndpointFromCommandLine(), flags);
   }
 
   static ScopedMessagePipeHandle AcceptIsolatedInvitation() {
@@ -237,7 +307,7 @@ class TestClientBase : public InvitationCppTest {
 const char kTestMessage1[] = "hello";
 const char kTestMessage2[] = "hello";
 
-TEST_P(InvitationCppTest, Send) {
+TEST_P(MAYBE_InvitationCppTest, Send) {
   ScopedMessagePipeHandle pipe;
   LaunchChildTestClient("CppSendClient", &pipe, 1, InvitationType::kNormal,
                         GetParam());
@@ -251,7 +321,7 @@ DEFINE_TEST_CLIENT(CppSendClient) {
   CHECK_EQ(kTestMessage1, ReadMessage(pipe));
 }
 
-TEST_P(InvitationCppTest, SendIsolated) {
+TEST_P(MAYBE_InvitationCppTest, SendIsolated) {
   ScopedMessagePipeHandle pipe;
   LaunchChildTestClient("CppSendIsolatedClient", &pipe, 1,
                         InvitationType::kIsolated, GetParam());
@@ -264,7 +334,23 @@ DEFINE_TEST_CLIENT(CppSendIsolatedClient) {
   CHECK_EQ(kTestMessage1, ReadMessage(pipe));
 }
 
-TEST_P(InvitationCppTest, SendWithMultiplePipes) {
+#if BUILDFLAG(IS_WIN)
+TEST_P(MAYBE_InvitationCppTest, SendElevated) {
+  ScopedMessagePipeHandle pipe;
+  LaunchChildTestClient("CppSendElevatedClient", &pipe, 1,
+                        InvitationType::kElevated, GetParam());
+  WriteMessage(pipe, kTestMessage1);
+  WaitForChildExit();
+}
+
+DEFINE_TEST_CLIENT(CppSendElevatedClient) {
+  auto invitation = AcceptInvitation(MOJO_ACCEPT_INVITATION_FLAG_ELEVATED);
+  auto pipe = invitation.ExtractMessagePipe(0);
+  CHECK_EQ(kTestMessage1, ReadMessage(pipe));
+}
+#endif  // BUILDFLAG(IS_WIN)
+
+TEST_P(MAYBE_InvitationCppTest, SendWithMultiplePipes) {
   ScopedMessagePipeHandle pipes[2];
   LaunchChildTestClient("CppSendWithMultiplePipesClient", pipes, 2,
                         InvitationType::kNormal, GetParam());
@@ -281,7 +367,7 @@ DEFINE_TEST_CLIENT(CppSendWithMultiplePipesClient) {
   CHECK_EQ(kTestMessage2, ReadMessage(pipe1));
 }
 
-TEST(InvitationCppTest_NoParam, SendIsolatedInvitationWithDuplicateName) {
+TEST(MAYBE_InvitationCppTest_NoParam, SendIsolatedInvitationWithDuplicateName) {
   if (mojo::core::IsMojoIpczEnabled()) {
     // This feature is not particularly useful in a world where isolated
     // connections are only supported between broker nodes.
@@ -311,7 +397,7 @@ const char kDisconnectMessage[] = "go away plz";
 #define MAYBE_ProcessErrors ProcessErrors
 #endif
 
-TEST_P(InvitationCppTest, MAYBE_ProcessErrors) {
+TEST_P(MAYBE_InvitationCppTest, MAYBE_ProcessErrors) {
   ProcessErrorCallback actual_error_callback;
 
   ScopedMessagePipeHandle pipe;
@@ -332,7 +418,7 @@ TEST_P(InvitationCppTest, MAYBE_ProcessErrors) {
   base::RunLoop error_loop;
   actual_error_callback =
       base::BindLambdaForTesting([&](const std::string& error_message) {
-        EXPECT_NE(error_message.find(kErrorMessage), std::string::npos);
+        EXPECT_TRUE(base::Contains(error_message, kErrorMessage));
         error_loop.Quit();
       });
   EXPECT_EQ(MOJO_RESULT_OK,
@@ -355,14 +441,16 @@ DEFINE_TEST_CLIENT(CppProcessErrorsClient) {
   EXPECT_EQ(kDisconnectMessage, ReadMessage(pipe));
 }
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         InvitationCppTest,
-                         testing::Values(TransportType::kChannel
-#if !BUILDFLAG(IS_FUCHSIA)
-                                         ,
-                                         TransportType::kChannelServer
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    MAYBE_InvitationCppTest,
+    testing::Values(TransportType::kChannel
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
+                    ,
+                    TransportType::kChannelServer,
+                    TransportType::kChannelServerWithoutHandle
 #endif
-                                         ));
+                    ));
 
 }  // namespace
 }  // namespace mojo

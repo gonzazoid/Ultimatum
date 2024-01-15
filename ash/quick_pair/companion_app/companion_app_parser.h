@@ -5,14 +5,15 @@
 #ifndef ASH_QUICK_PAIR_COMPANION_APP_COMPANION_APP_PARSER_H_
 #define ASH_QUICK_PAIR_COMPANION_APP_COMPANION_APP_PARSER_H_
 
-#include "base/callback_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace quick_pair {
 
-struct Device;
+class Device;
 class DeviceMetadata;
 
 // CompanionAppParser finds the name of a device's companion app
@@ -28,17 +29,17 @@ class CompanionAppParser {
   // The optional string in the callback will be null if an error
   // occurs or if no companion app for this device was found
   void GetAppPackageName(scoped_refptr<Device> device,
-                         base::OnceCallback<void(absl::optional<std::string>)>
+                         base::OnceCallback<void(std::optional<std::string>)>
                              on_companion_app_parsed);
 
  private:
   void OnDeviceMetadataRetrieved(
       scoped_refptr<Device> device,
-      base::OnceCallback<void(absl::optional<std::string>)> callback,
+      base::OnceCallback<void(std::optional<std::string>)> callback,
       DeviceMetadata* device_metadata,
       bool retryable_err);
 
-  absl::optional<std::string> GetCompanionAppExtra(
+  std::optional<std::string> GetCompanionAppExtra(
       const std::string& intent_as_string);
 
   base::WeakPtrFactory<CompanionAppParser> weak_pointer_factory_{this};

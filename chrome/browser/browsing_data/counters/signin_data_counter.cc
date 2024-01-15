@@ -6,7 +6,8 @@
 
 #include <string>
 #include <utility>
-#include "components/password_manager/core/browser/password_store_interface.h"
+
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 
 namespace browsing_data {
 
@@ -39,10 +40,11 @@ void SigninDataCounter::CountWebAuthnCredentials(base::Time start,
   credential_store_->CountCredentials(
       start, end,
       base::BindOnce(&SigninDataCounter::OnCountWebAuthnCredentialsFinished,
-                     weak_factory_.GetWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void SigninDataCounter::Count() {
+  weak_ptr_factory_.InvalidateWeakPtrs();
   passwords_counter_fetch_done_ = webauthn_credentials_fetch_done_ = false;
   PasswordsCounter::Count();
   CountWebAuthnCredentials(GetPeriodStart(), GetPeriodEnd());

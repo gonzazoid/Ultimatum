@@ -11,9 +11,10 @@
 #include <stdlib.h>
 #include <string>
 
+#include <algorithm>
+
 #include "base/at_exit.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
@@ -96,7 +97,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
   logging::SetEventSource("GCPW", GCPW_CATEGORY, MSG_LOG_MESSAGE);
 
   if (GetGlobalFlagOrDefault(kRegEnableVerboseLogging, 1))
-    logging::SetMinLogLevel(logging::LOG_VERBOSE);
+    logging::SetMinLogLevel(logging::LOGGING_VERBOSE);
 
   // Set GCPW as the default credential provider for the end user.
   MakeGcpwDefaultCP();
@@ -154,8 +155,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance,
   LOGFN(INFO) << "Args: " << lpCmdLine;
   LOGFN(INFO) << "Version: " << TEXT(CHROME_VERSION_STRING);
 
-  LOGFN(INFO) << "Windows: "
-              << base::win::OSInfo::GetInstance()->Kernel32BaseVersion()
+  LOGFN(INFO) << "Windows: " << base::win::OSInfo::Kernel32BaseVersion()
               << " Version:" << credential_provider::GetWindowsVersion();
 
   // If running from omaha, make sure machine install is used.

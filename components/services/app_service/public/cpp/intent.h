@@ -12,7 +12,6 @@
 #include "base/containers/flat_map.h"
 #include "base/files/safe_base_name.h"
 #include "components/services/app_service/public/cpp/intent_filter.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
@@ -55,6 +54,9 @@ struct IntentFile {
   uint64_t file_size = 0;
   // Whether this is a directory or not.
   absl::optional<bool> is_directory;
+  // Source URL the file was downloaded from. Used to check Data Leak Prevention
+  // (DLP) restrictions when resolving the intent.
+  absl::optional<std::string> dlp_source_url;
 };
 
 using IntentFilePtr = std::unique_ptr<IntentFile>;
@@ -81,6 +83,10 @@ struct Intent {
   // Gets the field that need to be checked/matched based on `condition_type`.
   absl::optional<std::string> GetIntentConditionValueByType(
       ConditionType condition_type);
+
+  // Returns true if matches the authority `condition`, otherwise, returns
+  // false.
+  bool MatchAuthorityCondition(const ConditionPtr& condition);
 
   // Returns true if matches the file `condition`, otherwise, returns false.
   bool MatchFileCondition(const ConditionPtr& condition);
@@ -132,19 +138,6 @@ struct Intent {
 };
 
 using IntentPtr = std::unique_ptr<Intent>;
-
-// TODO(crbug.com/1253250): Remove these functions after migrating to non-mojo
-// AppService.
-IntentFilePtr ConvertMojomIntentFileToIntentFile(
-    const apps::mojom::IntentFilePtr& mojom_intent_file);
-
-apps::mojom::IntentFilePtr ConvertIntentFileToMojomIntentFile(
-    const IntentFilePtr& intent_file);
-
-IntentPtr ConvertMojomIntentToIntent(
-    const apps::mojom::IntentPtr& mojom_intent);
-
-apps::mojom::IntentPtr ConvertIntentToMojomIntent(const IntentPtr& intent);
 
 }  // namespace apps
 

@@ -3,9 +3,25 @@
 // found in the LICENSE file.
 
 #include "device/vr/openxr/openxr_scene.h"
+
+#include <array>
+#include <vector>
+
 #include "base/check_op.h"
+#include "device/vr/openxr/openxr_extension_helper.h"
+#include "device/vr/openxr/openxr_util.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
+
+namespace {
+// Insert an extension struct into the next chain of an xrStruct
+template <typename XrStruct, typename XrExtension>
+void InsertExtensionStruct(XrStruct& xrStruct, XrExtension& xrExtension) {
+  xrExtension.next = xrStruct.next;
+  xrStruct.next = &xrExtension;
+}
+}  // anonymous namespace
 
 OpenXrScene::OpenXrScene(const device::OpenXrExtensionHelper& extensions,
                          XrSceneObserverMSFT scene_observer)
@@ -26,21 +42,21 @@ XrResult OpenXrScene::GetPlanes(std::vector<OpenXrScenePlane>& out_planes) {
   XrSceneComponentsGetInfoMSFT get_info{XR_TYPE_SCENE_COMPONENTS_GET_INFO_MSFT};
   get_info.componentType = XR_SCENE_COMPONENT_TYPE_PLANE_MSFT;
 
-  static const std::vector<OpenXrSceneObject::Type> plane_filters{
+  static constexpr std::array<OpenXrSceneObject::Type, 6> kPlaneFilters{
       XR_SCENE_OBJECT_TYPE_BACKGROUND_MSFT, XR_SCENE_OBJECT_TYPE_WALL_MSFT,
       XR_SCENE_OBJECT_TYPE_FLOOR_MSFT,      XR_SCENE_OBJECT_TYPE_CEILING_MSFT,
       XR_SCENE_OBJECT_TYPE_PLATFORM_MSFT,   XR_SCENE_OBJECT_TYPE_INFERRED_MSFT};
 
   XrSceneObjectTypesFilterInfoMSFT types_filter{
       XR_TYPE_SCENE_OBJECT_TYPES_FILTER_INFO_MSFT};
-  types_filter.objectTypeCount = static_cast<uint32_t>(plane_filters.size());
-  types_filter.objectTypes = plane_filters.data();
+  types_filter.objectTypeCount = static_cast<uint32_t>(kPlaneFilters.size());
+  types_filter.objectTypes = kPlaneFilters.data();
   device::InsertExtensionStruct(get_info, types_filter);
 
   // Before we get back the array of components/planes, we need to query
   // for the size of the array and has to do the allocation first.
   XrSceneComponentsMSFT scene_components{XR_TYPE_SCENE_COMPONENTS_MSFT};
-  RETURN_IF_XR_FAILED(extensions_.ExtensionMethods().xrGetSceneComponentsMSFT(
+  RETURN_IF_XR_FAILED(extensions_->ExtensionMethods().xrGetSceneComponentsMSFT(
       scene_.get(), &get_info, &scene_components));
   const uint32_t count = scene_components.componentCountOutput;
 
@@ -57,7 +73,7 @@ XrResult OpenXrScene::GetPlanes(std::vector<OpenXrScenePlane>& out_planes) {
   scenePlanes.scenePlanes = planes.data();
   device::InsertExtensionStruct(scene_components, scenePlanes);
 
-  RETURN_IF_XR_FAILED(extensions_.ExtensionMethods().xrGetSceneComponentsMSFT(
+  RETURN_IF_XR_FAILED(extensions_->ExtensionMethods().xrGetSceneComponentsMSFT(
       scene_.get(), &get_info, &scene_components));
   // The count should stay the same
   DCHECK_EQ(count, scene_components.componentCountOutput);
@@ -94,7 +110,7 @@ XrResult OpenXrScene::LocateObjects(XrSpace base_space,
   component_locations.locations = plane_locations.data();
 
   XrResult locate_result =
-      extensions_.ExtensionMethods().xrLocateSceneComponentsMSFT(
+      extensions_->ExtensionMethods().xrLocateSceneComponentsMSFT(
           scene_.get(), &locate_info, &component_locations);
 
   if (XR_SUCCEEDED(locate_result)) {

@@ -6,10 +6,13 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/events/event.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/views/animation/animation_builder.h"
 #include "ui/views/animation/slide_out_controller_delegate.h"
@@ -84,7 +87,7 @@ void SlideOutController::OnGestureEvent(ui::GestureEvent* event) {
         gesture_amount_ = swipe_control_width_;
         break;
       default:
-        NOTREACHED();
+        NOTREACHED_NORETURN();
     }
     delegate_->OnSlideStarted();
   } else if (event->type() == ui::ET_GESTURE_SCROLL_UPDATE) {
@@ -133,6 +136,36 @@ void SlideOutController::OnGestureEvent(ui::GestureEvent* event) {
   }
 
   event->SetHandled();
+}
+
+void SlideOutController::OnScrollEvent(ui::ScrollEvent* event) {
+  if (!trackpad_gestures_enabled_) {
+    return;
+  }
+
+  // This threshold has been set to 20.f to stay consistent with the trackpad
+  // scroll threshold used to determine if the app list should be opened when
+  // scrolling on the shelf in ChromeOS.
+  constexpr float kScrollOffsetThreshold = 20.f;
+  if (abs(event->x_offset()) < kScrollOffsetThreshold ||
+      event->finger_count() != 2) {
+    return;
+  }
+
+  if (mode_ == SlideMode::kFull) {
+    auto* layer = delegate_->GetSlideOutLayer();
+    gfx::Transform transform;
+    transform.Translate(layer->bounds().width(), 0);
+    AnimationBuilder()
+        .OnEnded(base::BindOnce(&SlideOutController::OnSlideOut,
+                                weak_ptr_factory_.GetWeakPtr()))
+        .Once()
+        .SetDuration(base::Milliseconds(kSwipeOutTotalDurationMs))
+        .SetTransform(layer, transform, kSwipeTweenType)
+        .SetOpacity(layer, 0.f);
+    event->SetHandled();
+    return;
+  }
 }
 
 void SlideOutController::RestoreVisualState() {
@@ -223,7 +256,7 @@ void SlideOutController::OnAnimationsCompleted() {
   // OnImplicitAnimationsCompleted is called from BeginMainFrame, so we should
   // delay operation that might result in deletion of LayerTreeHost.
   // https://crbug.com/895883
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SlideOutController::OnSlideOut,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

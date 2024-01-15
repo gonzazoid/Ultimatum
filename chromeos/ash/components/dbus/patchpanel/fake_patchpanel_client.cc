@@ -6,9 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
 
 namespace ash {
 
@@ -26,6 +25,8 @@ FakePatchPanelClient* FakePatchPanelClient::Get() {
 FakePatchPanelClient::FakePatchPanelClient() {
   DCHECK(!g_instance);
   g_instance = this;
+  notify_android_interactive_state_count_ = 0;
+  notify_android_wifi_multicast_lock_change_count_ = 0;
 }
 
 FakePatchPanelClient::~FakePatchPanelClient() {
@@ -34,6 +35,25 @@ FakePatchPanelClient::~FakePatchPanelClient() {
 }
 
 void FakePatchPanelClient::GetDevices(GetDevicesCallback callback) {}
+
+void FakePatchPanelClient::NotifyAndroidInteractiveState(bool interactive) {
+  notify_android_interactive_state_count_++;
+}
+
+int FakePatchPanelClient::GetAndroidInteractiveStateNotifyCount() {
+  return notify_android_interactive_state_count_;
+}
+
+void FakePatchPanelClient::NotifyAndroidWifiMulticastLockChange(bool is_held) {
+  notify_android_wifi_multicast_lock_change_count_++;
+}
+
+int FakePatchPanelClient::GetAndroidWifiMulticastLockChangeNotifyCount() {
+  return notify_android_wifi_multicast_lock_change_count_;
+}
+
+void FakePatchPanelClient::NotifySocketConnectionEvent(
+    const patchpanel::SocketConnectionEvent& msg) {}
 
 void FakePatchPanelClient::AddObserver(Observer* observer) {
   observer_list_.AddObserver(observer);
@@ -47,5 +67,9 @@ void FakePatchPanelClient::NotifyNetworkConfigurationChanged() {
   for (auto& observer : observer_list_)
     observer.NetworkConfigurationChanged();
 }
+
+void FakePatchPanelClient::SetFeatureFlag(
+    patchpanel::SetFeatureFlagRequest::FeatureFlag flag,
+    bool enabled) {}
 
 }  // namespace ash

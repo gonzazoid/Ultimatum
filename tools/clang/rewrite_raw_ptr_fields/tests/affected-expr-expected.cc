@@ -21,14 +21,14 @@ struct MyStruct {
   raw_ptr<SomeClass> ptr2;
   raw_ptr<const SomeClass> const_ptr;
   int (*func_ptr_field)();
-  raw_ptr<const char> const_char_ptr;
+  const char* const_char_ptr;
 
-  // Expected rewrite: raw_ref<SomeClass> ref1_;
-  raw_ref<SomeClass> ref1_;
-  // Expected rewrite: raw_ref<SomeClass> ref2_;
-  raw_ref<SomeClass> ref2_;
-  // Expected rewrite: raw_ref<const SomeClass> const_ref_;
-  raw_ref<const SomeClass> const_ref_;
+  // Expected rewrite: const raw_ref<SomeClass> ref1_;
+  const raw_ref<SomeClass> ref1_;
+  // Expected rewrite: const raw_ref<SomeClass> ref2_;
+  const raw_ref<SomeClass> ref2_;
+  // Expected rewrite: const raw_ref<const SomeClass> const_ref_;
+  const raw_ref<const SomeClass> const_ref_;
 };
 
 namespace auto_tests {
@@ -273,24 +273,20 @@ void foo(int x) {
   MyStruct my_struct(s, s, s);
   std::string other_str = "other";
 
-  // To avoid the following error type:
-  //   error: invalid operands to binary expression ... basic_string ... and ...
-  //   raw_ptr ...
-  // we need to append |.get()| to |my_struct.const_char_ptr| below.
-  //
-  // Expected rewrite: ... my_struct.const_char_ptr.get() ...
-  bool v1 = my_struct.const_char_ptr.get() == other_str;
-  bool v2 = other_str == my_struct.const_char_ptr.get();
-  bool v3 = my_struct.const_char_ptr.get() > other_str;
-  bool v4 = other_str > my_struct.const_char_ptr.get();
-  bool v5 = my_struct.const_char_ptr.get() >= other_str;
-  bool v6 = other_str >= my_struct.const_char_ptr.get();
-  bool v7 = my_struct.const_char_ptr.get() < other_str;
-  bool v8 = other_str < my_struct.const_char_ptr.get();
-  bool v9 = my_struct.const_char_ptr.get() <= other_str;
-  bool v10 = other_str <= my_struct.const_char_ptr.get();
-  std::string v11 = my_struct.const_char_ptr.get() + other_str;
-  std::string v12 = other_str + my_struct.const_char_ptr.get();
+  // No rewrite expected. (for now)
+  // TODO(crbug.com/1381955) |const char| pointer fields are not supported yet.
+  bool v1 = my_struct.const_char_ptr == other_str;
+  bool v2 = other_str == my_struct.const_char_ptr;
+  bool v3 = my_struct.const_char_ptr > other_str;
+  bool v4 = other_str > my_struct.const_char_ptr;
+  bool v5 = my_struct.const_char_ptr >= other_str;
+  bool v6 = other_str >= my_struct.const_char_ptr;
+  bool v7 = my_struct.const_char_ptr < other_str;
+  bool v8 = other_str < my_struct.const_char_ptr;
+  bool v9 = my_struct.const_char_ptr <= other_str;
+  bool v10 = other_str <= my_struct.const_char_ptr;
+  std::string v11 = my_struct.const_char_ptr + other_str;
+  std::string v12 = other_str + my_struct.const_char_ptr;
 }
 
 }  // namespace string_comparison_operator_tests
@@ -412,7 +408,7 @@ void AffectedFunctionWithDeepT(MyTemplate<T>& blah) {}
 template <typename T>
 struct StructWithPointerToTemplate {
   StructWithPointerToTemplate(MyTemplate<T>& ref) : ref_to_template(ref) {}
-  raw_ref<MyTemplate<T>> ref_to_template;
+  const raw_ref<MyTemplate<T>> ref_to_template;
 };
 
 void foo() {
@@ -448,7 +444,7 @@ void foo() {
 
 namespace implicit_constructors {
 
-// Based on //base/strings/string_piece_forward.h:
+// Based on //base/strings/string_piece.h:
 template <typename CharT>
 class BasicStringPiece;
 typedef BasicStringPiece<char> StringPiece;
@@ -473,13 +469,10 @@ void foo() {
   SomeClass s;
   MyStruct my_struct(s, s, s);
 
-  // Expected rewrite - appending: .get().  This avoids the following error:
-  // error: no matching function for call to 'FunctionTakingBasicStringPiece'
-  // note: candidate function not viable: no known conversion from
-  // 'base::raw_ptr<const char>' to 'templated_functions::StringPiece' (aka
-  // 'BasicStringPiece<char>') for 1st argument
-  FunctionTakingBasicStringPiece(my_struct.const_char_ptr.get());
-  FunctionTakingBasicStringPieceRef(my_struct.const_char_ptr.get());
+  // No rewrite expected. (for now)
+  // TODO(crbug.com/1381955) |const char| pointer fields are not supported yet.
+  FunctionTakingBasicStringPiece(my_struct.const_char_ptr);
+  FunctionTakingBasicStringPieceRef(my_struct.const_char_ptr);
 
   // No rewrite expected.
   FunctionTakingBasicStringPiece(StringPiece(my_struct.const_char_ptr));
@@ -494,7 +487,7 @@ void foo() {
 
 namespace implicit_constructors_raw_ref_tests {
 
-// Based on //base/strings/string_piece_forward.h:
+// Based on //base/strings/string_piece.h:
 template <typename CharT>
 class BasicStringPiece;
 typedef BasicStringPiece<char> StringPiece;
@@ -604,20 +597,20 @@ namespace affected_implicit_template_specialization_raw_ref_tests {
 
 template <typename T, typename T2>
 struct MyTemplate {
-  raw_ref<T> t_ref;
-  raw_ref<T2> t2_ref;
+  const raw_ref<T> t_ref;
+  const raw_ref<T2> t2_ref;
 
   struct NestedStruct {
-    raw_ref<SomeClass> nested_ref_field;
-    raw_ref<T> nested_t_ref_field;
+    const raw_ref<SomeClass> nested_ref_field;
+    const raw_ref<T> nested_t_ref_field;
   };
   NestedStruct nested_struct_field;
 };
 
 template <typename T3>
 struct MyTemplate<SomeClass, T3> {
-  raw_ref<SomeClass> some_ptr;
-  raw_ref<T3> t3_ptr;
+  const raw_ref<SomeClass> some_ptr;
+  const raw_ref<T3> t3_ptr;
 };
 }  // namespace affected_implicit_template_specialization_raw_ref_tests
 

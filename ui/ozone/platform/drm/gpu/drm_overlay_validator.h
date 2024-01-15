@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/containers/lru_cache.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_plane.h"
 #include "ui/ozone/public/overlay_surface_candidate.h"
 
@@ -17,7 +18,7 @@ class DrmWindow;
 
 class DrmOverlayValidator {
  public:
-  DrmOverlayValidator(DrmWindow* window);
+  explicit DrmOverlayValidator(DrmWindow* window);
 
   DrmOverlayValidator(const DrmOverlayValidator&) = delete;
   DrmOverlayValidator& operator=(const DrmOverlayValidator&) = delete;
@@ -40,7 +41,7 @@ class DrmOverlayValidator {
       const OverlaySurfaceCandidate& param,
       std::vector<scoped_refptr<DrmFramebuffer>>& reusable_buffers);
 
-  DrmWindow* const window_;  // Not owned.
+  const raw_ptr<DrmWindow, DanglingUntriaged> window_;  // Not owned.
 };
 
 }  // namespace ui

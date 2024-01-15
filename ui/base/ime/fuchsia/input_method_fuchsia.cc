@@ -4,7 +4,6 @@
 
 #include "ui/base/ime/fuchsia/input_method_fuchsia.h"
 
-#include <fuchsia/ui/input/cpp/fidl.h>
 #include <lib/sys/cpp/component_context.h>
 #include <memory>
 #include <utility>
@@ -21,7 +20,7 @@ namespace ui {
 InputMethodFuchsia::InputMethodFuchsia(
     bool enable_virtual_keyboard,
     ImeKeyEventDispatcher* ime_key_event_dispatcher,
-    fuchsia::ui::views::ViewRef view_ref)
+    fuchsia_ui_views::ViewRef view_ref)
     : InputMethodBase(ime_key_event_dispatcher) {
   if (enable_virtual_keyboard)
     virtual_keyboard_controller_.emplace(std::move(view_ref), this);

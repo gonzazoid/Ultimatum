@@ -22,4 +22,10 @@ extern NSString* const kNTPFeedHeaderSortButtonIdentifier;
 // Represents the segmented control of the feed header.
 extern NSString* const kNTPFeedHeaderSegmentedControlIdentifier;
 
+// Represents the identity disc of the feed header.
+extern NSString* const kNTPFeedHeaderIdentityDisc;
+
+// The corner radius for the module containers on the Home surface.
+extern const CGFloat kHomeModuleContainerCornerRadius;
+
 #endif  // IOS_CHROME_BROWSER_UI_NTP_NEW_TAB_PAGE_CONSTANTS_H_

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 
 namespace remoting {
@@ -20,14 +21,15 @@ class HostExtensionSession;
 namespace protocol {
 class ClientStub;
 class ExtensionMessage;
-}
+}  // namespace protocol
 
 // Helper class used to create and manage a set of HostExtensionSession
 // instances depending upon the set of registered HostExtensions, and the
 // set of capabilities negotiated between client and host.
 class HostExtensionSessionManager {
  public:
-  using HostExtensions = std::vector<HostExtension*>;
+  using HostExtensions =
+      std::vector<raw_ptr<HostExtension, VectorExperimental>>;
 
   // Creates an extension manager for the specified |extensions|.
   HostExtensionSessionManager(const HostExtensions& extensions,
@@ -42,6 +44,11 @@ class HostExtensionSessionManager {
   // Returns the union of all capabilities supported by registered extensions.
   std::string GetCapabilities() const;
 
+  // Finds an extension session with the matching capability. Returns nullptr if
+  // the extension session is not found, or capability negotiation has not
+  // completed.
+  HostExtensionSession* FindExtensionSession(const std::string& capability);
+
   // Handles completion of authentication and capabilities negotiation, creating
   // the set of HostExtensionSessions to match the client's capabilities.
   void OnNegotiatedCapabilities(protocol::ClientStub* client_stub,
@@ -54,7 +61,8 @@ class HostExtensionSessionManager {
 
  private:
   using HostExtensionSessions =
-      std::vector<std::unique_ptr<HostExtensionSession>>;
+      base::flat_map</* capability */ std::string,
+                     std::unique_ptr<HostExtensionSession>>;
 
   // Passed to HostExtensionSessions to allow them to send messages,
   // disconnect the session, etc.

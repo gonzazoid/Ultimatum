@@ -7,14 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/apps/app_info_dialog.h"
 #include "chrome/browser/ui/browser.h"
@@ -34,6 +32,7 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/manifest_handlers/app_display_info.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
@@ -46,9 +45,10 @@
 #include "ui/views/window/dialog_delegate.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/arc/arc_util.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/ui/views/apps/app_info_dialog/arc_app_info_links_panel.h"
 #endif
 
@@ -68,9 +68,9 @@ bool CanPlatformShowAppInfoDialog() {
 
 bool CanShowAppInfoDialog(Profile* profile, const std::string& extension_id) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  bool is_system_web_app =
-      ash::SystemWebAppManager::Get(profile)->IsSystemWebApp(extension_id);
-  if (is_system_web_app) {
+  auto* system_web_app_manager = ash::SystemWebAppManager::Get(profile);
+  if (system_web_app_manager &&
+      system_web_app_manager->IsSystemWebApp(extension_id)) {
     return false;
   }
 
@@ -84,7 +84,7 @@ bool CanShowAppInfoDialog(Profile* profile, const std::string& extension_id) {
   }
 
   // App Management only displays apps that are displayed in the launcher.
-  if (!extension->ShouldDisplayInAppLauncher()) {
+  if (!extensions::AppDisplayInfo::ShouldDisplayInAppLauncher(*extension)) {
     return false;
   }
 #endif
@@ -165,14 +165,15 @@ AppInfoDialog::AppInfoDialog(Profile* profile, const extensions::Extension* app)
   layout->SetFlexForView(dialog_body_, 1);
 
   auto dialog_footer = AppInfoFooterPanel::CreateFooterPanel(profile, app);
-  if (dialog_footer)
+  if (dialog_footer) {
     dialog_footer_ = AddChildView(std::move(dialog_footer));
+  }
 
   // Close the dialog if the app is uninstalled, unloaded, or if the profile is
   // destroyed.
   StartObservingExtensionRegistry();
 
-  GetLastDialogForTesting() = AsWeakPtr();
+  GetLastDialogForTesting() = weak_ptr_factory_.GetWeakPtr();
 }
 
 AppInfoDialog::~AppInfoDialog() {
@@ -191,8 +192,9 @@ void AppInfoDialog::StartObservingExtensionRegistry() {
 }
 
 void AppInfoDialog::StopObservingExtensionRegistry() {
-  if (extension_registry_)
+  if (extension_registry_) {
     extension_registry_->RemoveObserver(this);
+  }
   extension_registry_ = nullptr;
 }
 
@@ -213,8 +215,9 @@ void AppInfoDialog::OnExtensionUnloaded(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension,
     extensions::UnloadedExtensionReason reason) {
-  if (extension->id() != app_id_)
+  if (extension->id() != app_id_) {
     return;
+  }
 
   Close();
 }
@@ -223,8 +226,9 @@ void AppInfoDialog::OnExtensionUninstalled(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension,
     extensions::UninstallReason reason) {
-  if (extension->id() != app_id_)
+  if (extension->id() != app_id_) {
     return;
+  }
 
   Close();
 }
@@ -235,5 +239,5 @@ void AppInfoDialog::OnShutdown(extensions::ExtensionRegistry* registry) {
   Close();
 }
 
-BEGIN_METADATA(AppInfoDialog, views::View)
+BEGIN_METADATA(AppInfoDialog)
 END_METADATA

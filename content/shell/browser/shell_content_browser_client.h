@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/public/browser/content_browser_client.h"
@@ -18,15 +18,16 @@
 
 class PrefService;
 
-namespace device {
-class FakeGeolocationManager;
+#if BUILDFLAG(IS_IOS)
+namespace permissions {
+class BluetoothDelegateImpl;
 }
+#endif
 
 namespace content {
 class ShellBrowserContext;
 class ShellBrowserMainParts;
 
-std::string GetShellUserAgent();
 std::string GetShellLanguage();
 blink::UserAgentMetadata GetShellUserAgentMetadata();
 
@@ -57,18 +58,35 @@ class ShellContentBrowserClient : public ContentBrowserClient {
       BrowserContext* browser_context,
       const base::RepeatingCallback<WebContents*()>& wc_getter,
       NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override;
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override;
+  bool AreIsolatedWebAppsEnabled(BrowserContext* browser_context) override;
   void AppendExtraCommandLineSwitches(base::CommandLine* command_line,
                                       int child_process_id) override;
   std::string GetAcceptLangs(BrowserContext* context) override;
   std::string GetDefaultDownloadName() override;
   std::unique_ptr<WebContentsViewDelegate> GetWebContentsViewDelegate(
       WebContents* web_contents) override;
-  bool ShouldUrlUseApplicationIsolationLevel(BrowserContext* browser_context,
-                                             const GURL& url) override;
+  bool IsIsolatedContextAllowedForUrl(BrowserContext* browser_context,
+                                      const GURL& lock_url) override;
+  bool IsSharedStorageAllowed(content::BrowserContext* browser_context,
+                              content::RenderFrameHost* rfh,
+                              const url::Origin& top_frame_origin,
+                              const url::Origin& accessing_origin) override;
+  bool IsSharedStorageSelectURLAllowed(
+      content::BrowserContext* browser_context,
+      const url::Origin& top_frame_origin,
+      const url::Origin& accessing_origin) override;
+  bool IsCookieDeprecationLabelAllowed(
+      content::BrowserContext* browser_context) override;
+  bool IsCookieDeprecationLabelAllowedForContext(
+      content::BrowserContext* browser_context,
+      const url::Origin& top_frame_origin,
+      const url::Origin& context_origin) override;
   GeneratedCodeCacheSettings GetGeneratedCodeCacheSettings(
       content::BrowserContext* context) override;
   base::OnceClosure SelectClientCertificate(
+      BrowserContext* browser_context,
       WebContents* web_contents,
       net::SSLCertRequestInfo* cert_request_info,
       net::ClientCertIdentityList client_certs,
@@ -77,7 +95,6 @@ class ShellContentBrowserClient : public ContentBrowserClient {
       override;
   void OverrideWebkitPrefs(WebContents* web_contents,
                            blink::web_pref::WebPreferences* prefs) override;
-  base::FilePath GetFontLookupTableCacheDir() override;
   std::unique_ptr<content::DevToolsManagerDelegate>
   CreateDevToolsManagerDelegate() override;
   void ExposeInterfacesToRenderer(
@@ -97,6 +114,7 @@ class ShellContentBrowserClient : public ContentBrowserClient {
   std::unique_ptr<LoginDelegate> CreateLoginDelegate(
       const net::AuthChallengeInfo& auth_info,
       content::WebContents* web_contents,
+      content::BrowserContext* browser_context,
       const content::GlobalRequestID& request_id,
       bool is_main_frame,
       const GURL& url,
@@ -106,9 +124,8 @@ class ShellContentBrowserClient : public ContentBrowserClient {
   base::Value::Dict GetNetLogConstants() override;
   base::FilePath GetSandboxedStorageServiceDataDirectory() override;
   base::FilePath GetFirstPartySetsDirectory() override;
+  std::optional<base::FilePath> GetLocalTracesDirectory() override;
   std::string GetUserAgent() override;
-  std::string GetFullUserAgent() override;
-  std::string GetReducedUserAgent() override;
   blink::UserAgentMetadata GetUserAgentMetadata() override;
   void OverrideURLLoaderFactoryParams(
       BrowserContext* browser_context,
@@ -131,16 +148,17 @@ class ShellContentBrowserClient : public ContentBrowserClient {
       cert_verifier::mojom::CertVerifierCreationParams*
           cert_verifier_creation_params) override;
   std::vector<base::FilePath> GetNetworkContextsParentDirectory() override;
+#if BUILDFLAG(IS_IOS)
+  BluetoothDelegate* GetBluetoothDelegate() override;
+#endif
   void BindBrowserControlInterface(mojo::ScopedMessagePipeHandle pipe) override;
   void GetHyphenationDictionary(
       base::OnceCallback<void(const base::FilePath&)>) override;
   bool HasErrorPage(int http_status_code) override;
-  void OnNetworkServiceCreated(
-      network::mojom::NetworkService* network_service) override;
 
   // Turns on features via permissions policy for Isolated App
   // Web Platform Tests.
-  absl::optional<blink::ParsedPermissionsPolicy>
+  std::optional<blink::ParsedPermissionsPolicy>
   GetPermissionsPolicyForIsolatedWebApp(
       content::BrowserContext* browser_context,
       const url::Origin& app_origin) override;
@@ -149,9 +167,7 @@ class ShellContentBrowserClient : public ContentBrowserClient {
 
   ShellBrowserContext* browser_context();
   ShellBrowserContext* off_the_record_browser_context();
-  ShellBrowserMainParts* shell_browser_main_parts() {
-    return shell_browser_main_parts_;
-  }
+  ShellBrowserMainParts* shell_browser_main_parts();
 
   // Used for content_browsertests.
   using SelectClientCertificateCallback = base::OnceCallback<base::OnceClosure(
@@ -191,18 +207,9 @@ class ShellContentBrowserClient : public ContentBrowserClient {
     override_web_preferences_callback_ = std::move(callback);
   }
 
-  // Sets a global that enables certificate transparency. Uses a global because
-  // test fixtures don't otherwise have a chance to set this between when the
-  // ShellContentBrowserClient is created and when the StoragePartition creates
-  // the NetworkContext.
-  static void set_enable_expect_ct_for_testing(
-      bool enable_expect_ct_for_testing);
-
  protected:
   // Call this if CreateBrowserMainParts() is overridden in a subclass.
-  void set_browser_main_parts(ShellBrowserMainParts* parts) {
-    shell_browser_main_parts_ = parts;
-  }
+  void set_browser_main_parts(ShellBrowserMainParts* parts);
 
   // Used by ConfigureNetworkContextParams(), and can be overridden to change
   // the parameters used there.
@@ -213,9 +220,17 @@ class ShellContentBrowserClient : public ContentBrowserClient {
           cert_verifier_creation_params);
 
  private:
-  std::unique_ptr<PrefService> CreateLocalState();
+  // For GetShellContentBrowserClientInstances().
+  friend class ContentBrowserTestContentBrowserClient;
+
   // Needed so that content_shell can use fieldtrial_testing_config.
   void SetUpFieldTrials();
+
+  // Returns the list of ShellContentBrowserClients ordered by time created.
+  // If a test overrides ContentBrowserClient, this list will have more than
+  // one item.
+  static const std::vector<ShellContentBrowserClient*>&
+  GetShellContentBrowserClientInstances();
 
   static bool allow_any_cors_exempt_header_for_browser_;
 
@@ -230,15 +245,17 @@ class ShellContentBrowserClient : public ContentBrowserClient {
       create_throttles_for_navigation_callback_;
   base::RepeatingCallback<void(blink::web_pref::WebPreferences*)>
       override_web_preferences_callback_;
-#if BUILDFLAG(IS_MAC)
-  std::unique_ptr<device::FakeGeolocationManager> location_manager_;
+#if BUILDFLAG(IS_IOS)
+  std::unique_ptr<permissions::BluetoothDelegateImpl> bluetooth_delegate_;
 #endif
 
-  // Owned by content::BrowserMainLoop.
-  raw_ptr<ShellBrowserMainParts, DanglingUntriaged> shell_browser_main_parts_ =
-      nullptr;
-
-  std::unique_ptr<PrefService> local_state_;
+  // NOTE: Tests may install a second ShellContentBrowserClient that becomes
+  // the ContentBrowserClient used by content. This has subtle implications
+  // for any state (variables) that are needed by ShellContentBrowserClient.
+  // Any state that needs to be the same across all ShellContentBrowserClients
+  // should be placed in SharedState (declared in
+  // shell_content_browser_client.cc). Any state that is specific to a
+  // particular instance should be placed here.
 };
 
 // The delay for sending reports when running with --run-web-tests

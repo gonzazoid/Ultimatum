@@ -16,13 +16,10 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
-import org.chromium.chrome.browser.explore_sites.ExploreSitesBridge;
-import org.chromium.chrome.browser.explore_sites.ExploreSitesCatalogUpdateRequestSource;
 import org.chromium.chrome.browser.native_page.ContextMenuManager;
 import org.chromium.chrome.browser.native_page.ContextMenuManager.ContextMenuItemId;
 import org.chromium.chrome.browser.offlinepages.OfflinePageBridge;
 import org.chromium.chrome.browser.offlinepages.OfflinePageItem;
-import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.chrome.browser.suggestions.SuggestionsMetrics;
 import org.chromium.chrome.browser.suggestions.SuggestionsOfflineModelObserver;
@@ -37,9 +34,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-/**
- * The model and controller for a group of site suggestion tiles.
- */
+/** The model and controller for a group of site suggestion tiles. */
 public class TileGroup implements MostVisitedSites.Observer {
     /**
      * Performs work in other parts of the system that the {@link TileGroup} should not know about.
@@ -77,9 +72,7 @@ public class TileGroup implements MostVisitedSites.Observer {
         void destroy();
     }
 
-    /**
-     * An observer for events in the {@link TileGroup}.
-     */
+    /** An observer for events in the {@link TileGroup}. */
     public interface Observer {
         /**
          * Called when the tile group is initialised and when any of the tile data has changed,
@@ -87,9 +80,7 @@ public class TileGroup implements MostVisitedSites.Observer {
          */
         void onTileDataChanged();
 
-        /**
-         * Called when the number of tiles has changed.
-         */
+        /** Called when the number of tiles has changed. */
         void onTileCountChanged();
 
         /**
@@ -122,9 +113,7 @@ public class TileGroup implements MostVisitedSites.Observer {
         Runnable createIconLoadCallback(Tile tile);
     }
 
-    /**
-     * Delegate for handling interactions with tiles.
-     */
+    /** Delegate for handling interactions with tiles. */
     public interface TileInteractionDelegate extends OnClickListener, OnCreateContextMenuListener {
         /**
          * Set a runnable for click events on the tile. This is primarily used to track interaction
@@ -197,47 +186,45 @@ public class TileGroup implements MostVisitedSites.Observer {
     private SparseArray<List<Tile>> mTileSections = createEmptyTileData();
 
     /** Most recently received tile data that has not been displayed yet. */
-    @Nullable
-    private List<SiteSuggestion> mPendingTiles;
+    @Nullable private List<SiteSuggestion> mPendingTiles;
 
     /**
      * URL of the most recently removed tile. Used to identify when a tile removal is confirmed by
      * the tile backend.
      */
-    @Nullable
-    private GURL mPendingRemovalUrl;
+    @Nullable private GURL mPendingRemovalUrl;
 
     /**
      * URL of the most recently added tile. Used to identify when a given tile's insertion is
      * confirmed by the tile backend. This is relevant when a previously existing tile is removed,
      * then the user undoes the action and wants that tile back.
      */
-    @Nullable
-    private GURL mPendingInsertionUrl;
+    @Nullable private GURL mPendingInsertionUrl;
 
     private boolean mHasReceivedData;
-    private boolean mExploreSitesLoaded;
 
     // TODO(dgn): Attempt to avoid cycling dependencies with TileRenderer. Is there a better way?
-    private final TileSetupDelegate mTileSetupDelegate = new TileSetupDelegate() {
-        @Override
-        public TileInteractionDelegate createInteractionDelegate(Tile tile) {
-            return new TileInteractionDelegateImpl(tile.getData());
-        }
+    private final TileSetupDelegate mTileSetupDelegate =
+            new TileSetupDelegate() {
+                @Override
+                public TileInteractionDelegate createInteractionDelegate(Tile tile) {
+                    return new TileInteractionDelegateImpl(tile.getData());
+                }
 
-        @Override
-        public Runnable createIconLoadCallback(Tile tile) {
-            // TODO(dgn): We could save on fetches by avoiding a new one when there is one pending
-            // for the same URL, and applying the result to all matched URLs.
-            boolean trackLoad =
-                    isLoadTracked() && tile.getSectionType() == TileSectionType.PERSONALIZED;
-            if (trackLoad) addTask(TileTask.FETCH_ICON);
-            return () -> {
-                mObserver.onTileIconChanged(tile);
-                if (trackLoad) removeTask(TileTask.FETCH_ICON);
+                @Override
+                public Runnable createIconLoadCallback(Tile tile) {
+                    // TODO(dgn): We could save on fetches by avoiding a new one when there is one
+                    // pending for the same URL, and applying the result to all matched URLs.
+                    boolean trackLoad =
+                            isLoadTracked()
+                                    && tile.getSectionType() == TileSectionType.PERSONALIZED;
+                    if (trackLoad) addTask(TileTask.FETCH_ICON);
+                    return () -> {
+                        mObserver.onTileIconChanged(tile);
+                        if (trackLoad) removeTask(TileTask.FETCH_ICON);
+                    };
+                }
             };
-        }
-    };
 
     /**
      * @param tileRenderer Used to render icons.
@@ -247,8 +234,12 @@ public class TileGroup implements MostVisitedSites.Observer {
      * @param observer Will be notified of changes to the tile data.
      * @param offlinePageBridge Used to update the offline badge of the tiles.
      */
-    public TileGroup(TileRenderer tileRenderer, SuggestionsUiDelegate uiDelegate,
-            ContextMenuManager contextMenuManager, Delegate tileGroupDelegate, Observer observer,
+    public TileGroup(
+            TileRenderer tileRenderer,
+            SuggestionsUiDelegate uiDelegate,
+            ContextMenuManager contextMenuManager,
+            Delegate tileGroupDelegate,
+            Observer observer,
             OfflinePageBridge offlinePageBridge) {
         mUiDelegate = uiDelegate;
         mContextMenuManager = contextMenuManager;
@@ -275,11 +266,6 @@ public class TileGroup implements MostVisitedSites.Observer {
             if (suggestion.sectionType != TileSectionType.PERSONALIZED) continue;
             if (suggestion.url.equals(mPendingRemovalUrl)) removalCompleted = false;
             if (suggestion.url.equals(mPendingInsertionUrl)) insertionCompleted = true;
-            if (suggestion.source == TileSource.EXPLORE && !mExploreSitesLoaded) {
-                mExploreSitesLoaded = true;
-                ExploreSitesBridge.initializeCatalog(Profile.getLastUsedRegularProfile(),
-                        ExploreSitesCatalogUpdateRequestSource.NEW_TAB_PAGE);
-            }
         }
 
         boolean expectedChangeCompleted = false;
@@ -399,8 +385,7 @@ public class TileGroup implements MostVisitedSites.Observer {
 
         if (!dataChanged) return;
 
-        mOfflineModelObserver.updateAllSuggestionsOfflineAvailability(
-                /* reportPrefetchedSuggestionsCount = */ false);
+        mOfflineModelObserver.updateAllSuggestionsOfflineAvailability();
 
         if (countChanged) mObserver.onTileCountChanged();
 
@@ -410,8 +395,7 @@ public class TileGroup implements MostVisitedSites.Observer {
         if (isInitialLoad) removeTask(TileTask.FETCH_DATA);
     }
 
-    @Nullable
-    private Tile findTile(SiteSuggestion suggestion) {
+    private @Nullable Tile findTile(SiteSuggestion suggestion) {
         if (mTileSections.get(suggestion.sectionType) == null) return null;
         for (Tile tile : mTileSections.get(suggestion.sectionType)) {
             if (tile.getData().equals(suggestion)) return tile;
@@ -477,8 +461,7 @@ public class TileGroup implements MostVisitedSites.Observer {
         return mPendingTasks.contains(task);
     }
 
-    @Nullable
-    public SiteSuggestion getHomepageTileData() {
+    public @Nullable SiteSuggestion getHomepageTileData() {
         for (Tile tile : mTileSections.get(TileSectionType.PERSONALIZED)) {
             if (tile.getSource() == TileSource.HOMEPAGE) {
                 return tile.getData();
@@ -499,9 +482,7 @@ public class TileGroup implements MostVisitedSites.Observer {
         return newTileData;
     }
 
-    /**
-     * Called before this instance is abandoned to the garbage collector.
-     */
+    /** Called before this instance is abandoned to the garbage collector. */
     public void destroy() {
         // The mOfflineModelObserver which implements SuggestionsOfflineModelObserver adds itself
         // as the offlinePageBridge's observer. Calling onDestroy() removes itself from subscribers.
@@ -570,13 +551,9 @@ public class TileGroup implements MostVisitedSites.Observer {
         @Override
         public boolean isItemSupported(@ContextMenuItemId int menuItemId) {
             switch (menuItemId) {
-                // Personalized tiles are the only tiles that can be removed.  Additionally, the
-                // Explore tile counts as a personalized tile but cannot be removed.
+                    // Personalized tiles are the only tiles that can be removed.
                 case ContextMenuItemId.REMOVE:
-                    return mSuggestion.sectionType == TileSectionType.PERSONALIZED
-                            && mSuggestion.source != TileSource.EXPLORE;
-                case ContextMenuItemId.OPEN_IN_INCOGNITO_TAB:
-                    return mSuggestion.source != TileSource.EXPLORE;
+                    return mSuggestion.sectionType == TileSectionType.PERSONALIZED;
                 default:
                     return true;
             }

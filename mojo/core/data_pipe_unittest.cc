@@ -7,10 +7,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "mojo/core/embedder/embedder.h"
@@ -18,6 +20,7 @@
 #include "mojo/public/c/system/data_pipe.h"
 #include "mojo/public/c/system/functions.h"
 #include "mojo/public/c/system/message_pipe.h"
+#include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -1758,7 +1761,102 @@ TEST_F(DataPipeTest, CreateOversized) {
   ASSERT_EQ(MOJO_RESULT_RESOURCE_EXHAUSTED, Create(&options));
 }
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
+
+constexpr size_t kNoSpuriousEvents_NumIterations = 1000;
+
+TEST_F(DataPipeTest, NoSpuriousEvents) {
+  // Regression test for https://crbug.com/1409259. Verifies that data pipe read
+  // events are never spurious.
+  RunTestClient("NoSpuriousEventsHost", [&](MojoHandle host) {
+    RunTestClient("NoSpuriousEventsClient", [&](MojoHandle client) {
+      MojoHandle host_to_client;
+      MojoHandle client_to_host;
+      MojoCreateMessagePipe(nullptr, &host_to_client, &client_to_host);
+      WriteMessageWithHandles(host, "x", &host_to_client, 1);
+      WriteMessageWithHandles(client, "x", &client_to_host, 1);
+      EXPECT_EQ("done", ReadMessage(client));
+      WriteMessage(client, "bye");
+    });
+    EXPECT_EQ("done", ReadMessage(host));
+    WriteMessage(host, "bye");
+  });
+}
+
+DEFINE_TEST_CLIENT_TEST_WITH_PIPE(NoSpuriousEventsHost, DataPipeTest, parent) {
+  const char kData[1024] = {'x'};
+
+  MojoHandle client;
+  EXPECT_EQ("x", ReadMessageWithHandles(parent, &client, 1));
+
+  for (size_t j = 0; j < kNoSpuriousEvents_NumIterations; ++j) {
+    ScopedDataPipeProducerHandle producer;
+    ScopedDataPipeConsumerHandle consumer;
+    CHECK_EQ(MOJO_RESULT_OK, mojo::CreateDataPipe(2048, producer, consumer));
+
+    MojoHandle ch = consumer.release().value();
+    WriteMessageWithHandles(client, "hi", &ch, 1);
+
+    for (size_t i = 0; i < 9; ++i) {
+      WaitForSignals(producer.get().value(), MOJO_HANDLE_SIGNAL_WRITABLE);
+      uint32_t size = 512;
+      producer->WriteData(kData, &size, MOJO_WRITE_DATA_FLAG_NONE);
+    }
+  }
+
+  WriteMessage(parent, "done");
+  EXPECT_EQ("bye", ReadMessage(parent));
+  MojoClose(client);
+  MojoClose(parent);
+}
+
+DEFINE_TEST_CLIENT_TEST_WITH_PIPE(NoSpuriousEventsClient,
+                                  DataPipeTest,
+                                  parent) {
+  base::test::TaskEnvironment task_environment;
+
+  MojoHandle host;
+  EXPECT_EQ("x", ReadMessageWithHandles(parent, &host, 1));
+
+  size_t num_spurious_events = 0;
+  for (size_t j = 0; j < kNoSpuriousEvents_NumIterations; ++j) {
+    MojoHandle ch;
+    ASSERT_EQ("hi", ReadMessageWithHandles(host, &ch, 1));
+    ScopedDataPipeConsumerHandle consumer(DataPipeConsumerHandle{ch});
+
+    SimpleWatcher watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::MANUAL);
+    base::RunLoop loop;
+    watcher.Watch(consumer.get(), MOJO_HANDLE_SIGNAL_READABLE,
+                  MOJO_TRIGGER_CONDITION_SIGNALS_SATISFIED,
+                  base::BindLambdaForTesting(
+                      [&](MojoResult result, const HandleSignalsState& state) {
+                        if (result == MOJO_RESULT_OK) {
+                          if (!state.readable()) {
+                            ++num_spurious_events;
+                          }
+
+                          // Drain everything.
+                          const void* buffer;
+                          uint32_t num_bytes;
+                          consumer->BeginReadData(&buffer, &num_bytes, 0);
+                          consumer->EndReadData(num_bytes);
+                          watcher.ArmOrNotify();
+                        } else {
+                          CHECK(state.never_readable());
+                          loop.Quit();
+                        }
+                      }));
+    watcher.ArmOrNotify();
+    loop.Run();
+  }
+
+  EXPECT_EQ(0u, num_spurious_events);
+
+  WriteMessage(parent, "done");
+  EXPECT_EQ("bye", ReadMessage(parent));
+  MojoClose(host);
+  MojoClose(parent);
+}
 
 TEST_F(DataPipeTest, Multiprocess) {
   const uint32_t kTestDataSize =
@@ -2020,12 +2118,12 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(DataPipeStatusChangeInTransitClient,
             loop->Quit();
         },
         &run_loop, &count);
-    SimpleWatcher producer_watcher(FROM_HERE,
-                                   SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                                   base::SequencedTaskRunnerHandle::Get());
-    SimpleWatcher consumer_watcher(FROM_HERE,
-                                   SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                                   base::SequencedTaskRunnerHandle::Get());
+    SimpleWatcher producer_watcher(
+        FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
+        base::SequencedTaskRunner::GetCurrentDefault());
+    SimpleWatcher consumer_watcher(
+        FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
+        base::SequencedTaskRunner::GetCurrentDefault());
     producer_watcher.Watch(Handle(producers[1]), MOJO_HANDLE_SIGNAL_PEER_CLOSED,
                            callback);
     consumer_watcher.Watch(Handle(consumers[1]), MOJO_HANDLE_SIGNAL_PEER_CLOSED,
@@ -2110,7 +2208,7 @@ TEST_F(DataPipeTest, CreateOversizedInChild) {
   });
 }
 
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 }  // namespace
 }  // namespace core

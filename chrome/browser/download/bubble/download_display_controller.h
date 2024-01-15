@@ -7,35 +7,34 @@
 
 #include "base/power_monitor/power_observer.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/download/bubble/download_icon_state.h"
 #include "chrome/browser/download/offline_item_model.h"
+#include "chrome/browser/ui/download/download_display.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_observer.h"
 #include "components/download/content/public/all_download_item_notifier.h"
 #include "components/offline_items_collection/core/offline_content_aggregator.h"
 #include "components/offline_items_collection/core/offline_content_provider.h"
 
-namespace content {
-class DownloadManager;
-}  // namespace content
-
+struct DownloadBubbleDisplayInfo;
 class DownloadBubbleUIController;
+class DownloadDisplay;
 
 namespace base {
 class TimeDelta;
 class OneShotTimer;
 }  // namespace base
 
-class DownloadDisplay;
+namespace offline_items_collection {
+struct ContentId;
+}
 
 // Used to control the DownloadToolbar Button, through the DownloadDisplay
 // interface. Supports both regular Download and Offline items. When in the
 // future OfflineItems include regular Download on Desktop platforms,
 // we can remove AllDownloadItemNotifier::Observer.
-class DownloadDisplayController
-    : public download::AllDownloadItemNotifier::Observer,
-      public FullscreenObserver,
-      public base::PowerSuspendObserver {
+// TODO(chlily): Consolidate this with DownloadBubbleUIController.
+class DownloadDisplayController : public FullscreenObserver,
+                                  public base::PowerSuspendObserver {
  public:
   DownloadDisplayController(DownloadDisplay* display,
                             Browser* browser,
@@ -45,32 +44,6 @@ class DownloadDisplayController
       delete;
   ~DownloadDisplayController() override;
 
-  struct ProgressInfo {
-    bool progress_certain = true;
-    int progress_percentage = 0;
-    int download_count = 0;
-  };
-
-  struct IconInfo {
-    download::DownloadIconState icon_state =
-        download::DownloadIconState::kComplete;
-    bool is_active = false;
-  };
-
-  // Returns a ProgressInfo where |download_count| is the number of currently
-  // active downloads. If we know the final size of all downloads,
-  // |progress_certain| is true. |progress_percentage| is the percentage
-  // complete of all in-progress  downloads.
-  //
-  // This implementation will match the one in download_status_updater.cc
-  ProgressInfo GetProgress();
-
-  // Returns an IconInfo that contains current state of the icon.
-  IconInfo GetIconInfo();
-
-  // Returns whether the display is showing details.
-  bool IsDisplayShowingDetails();
-
   // Notifies the controller that the button is pressed. Called by `display_`.
   void OnButtonPressed();
 
@@ -78,15 +51,17 @@ class DownloadDisplayController
   void HandleButtonPressed();
 
   // Common methods for new downloads or new offline items.
-  // Called from bubble controller when new item(s) are added, with
-  // |show_details| as argument if the partial view should be shown.
   // These methods are virtual so that they can be overridden for fake
   // controllers in testing.
-  virtual void OnNewItem(bool show_details);
+
+  // Called from bubble controller when new item(s) are added.
+  // |show_animation| specifies whether a small animated arrow should be shown.
+  virtual void OnNewItem(bool show_animation);
   // Called from bubble controller when an item is updated, with |is_done|
-  // indicating if it was marked done, and with
-  // |show_details_if_done| as argument if the partial view should be shown.
-  virtual void OnUpdatedItem(bool is_done, bool show_details_if_done);
+  // indicating if it was marked done, and with |may_show_details| indicating
+  // whether the partial view can be shown. (Whether the partial view is
+  // actually shown may depend on the state of the other downloads.)
+  virtual void OnUpdatedItem(bool is_done, bool may_show_details);
   // Called from bubble controller when an item is deleted.
   virtual void OnRemovedItem(const ContentId& id);
 
@@ -96,6 +71,17 @@ class DownloadDisplayController
   // Asks `display_` to hide the toolbar button details. Does nothing if the
   // details are already hidden.
   void HideBubble();
+
+  // Opens the primary dialog to the item and scrolls to the item, and opens
+  // the security dialog if the item has a security warning. Returns whether
+  // bubble was opened to the requested item.
+  // Note: This method is currently used only for Lacros download notifications.
+  // It does not explicitly handle fullscreen conditions. See comment in
+  // implementation. In the future if there are other entry points to this
+  // method, non-immersive fullscreen (i.e. exclusive access bubble) will have
+  // to be handled explicitly.
+  bool OpenMostSpecificDialog(
+      const offline_items_collection::ContentId& content_id);
 
   // Start listening to full screen changes. This is separate from the
   // constructor as the exclusive access manager is constructed after
@@ -111,16 +97,15 @@ class DownloadDisplayController
   // Returns the DownloadDisplay. Should always return a valid display.
   DownloadDisplay* download_display_for_testing() { return display_; }
 
-  download::AllDownloadItemNotifier& get_download_notifier_for_testing() {
-    return download_notifier_;
-  }
-
-  void set_manager_for_testing(content::DownloadManager* manager) {
-    download_manager_ = manager;
-  }
+  void OpenSecuritySubpage(const offline_items_collection::ContentId& id);
 
  private:
   friend class DownloadDisplayControllerTest;
+
+  // Gets info about all models to display and progress ring info from the
+  // update service, then updates the toolbar button state accordingly. Returns
+  // the info about all models.
+  const DownloadBubbleDisplayInfo& UpdateButtonStateFromUpdateService();
 
   // Stops and restarts `icon_disappearance_timer_`. The toolbar button will
   // be hidden after the `interval`.
@@ -133,42 +118,30 @@ class DownloadDisplayController
   // button is already showing.
   void ShowToolbarButton();
 
-  // Based on the information from `download_manager_`, updates the icon state
-  // of the `display_`.
+  // Updates the icon state of the `display_`, including the progress ring.
   void UpdateToolbarButtonState(
-      std::vector<std::unique_ptr<DownloadUIModel>>& all_models);
+      const DownloadBubbleDisplayInfo& info,
+      const DownloadDisplay::ProgressInfo& progress_info);
+
   // Asks `display_` to make the download icon inactive.
   void UpdateDownloadIconToInactive();
 
   // Decides whether the toolbar button should be shown when it is created.
   virtual void MaybeShowButtonWhenCreated();
-  // Whether the last download complete time is less than `interval` ago.
-  bool HasRecentCompleteDownload(base::TimeDelta interval,
-                                 base::Time last_complete_time);
-
-  // AllDownloadItemNotifier::Observer
-  void OnManagerGoingDown(content::DownloadManager* manager) override;
-
-  base::Time GetLastCompleteTime(
-      const offline_items_collection::OfflineContentAggregator::OfflineItemList&
-          offline_items);
 
   // The pointer is created in ToolbarView and owned by ToolbarView.
   raw_ptr<DownloadDisplay> const display_;
   raw_ptr<Browser> browser_;
   base::ScopedObservation<FullscreenController, FullscreenObserver>
       observation_{this};
-  raw_ptr<content::DownloadManager> download_manager_;
-  download::AllDownloadItemNotifier download_notifier_;
   base::OneShotTimer icon_disappearance_timer_;
   base::OneShotTimer icon_inactive_timer_;
-  IconInfo icon_info_;
   bool fullscreen_notification_shown_ = false;
-  bool download_completed_while_fullscreen_ = false;
+  bool should_show_details_on_exit_fullscreen_ = false;
   // DownloadDisplayController and DownloadBubbleUIController have the same
   // lifetime. Both are owned, constructed together, and destructed together by
   // DownloadToolbarButtonView. If one is valid, so is the other.
-  raw_ptr<DownloadBubbleUIController> bubble_controller_;
+  raw_ptr<DownloadBubbleUIController, DanglingUntriaged> bubble_controller_;
 
   base::WeakPtrFactory<DownloadDisplayController> weak_factory_{this};
 };

@@ -13,6 +13,7 @@ import sys
 import zipfile
 
 from util import build_utils
+import zip_helpers
 
 sys.path.append(
     os.path.abspath(os.path.join(sys.path[0], '../../../google_apis')))
@@ -81,7 +82,7 @@ def _DoWriteJarOutput(output_path, constant_definition):
   with zipfile.ZipFile(output_path, 'w') as srcjar:
     path = '%s/%s' % (PACKAGE.replace('.', '/'), CLASSNAME + '.java')
     data = GenerateOutput(constant_definition)
-    build_utils.AddToZipHermetic(srcjar, path, data=data)
+    zip_helpers.add_to_zip_hermetic(srcjar, path, data=data)
 
 
 def _DoMain(argv):
@@ -106,8 +107,6 @@ def _DoMain(argv):
       'REMOTING_HOST')
   values['GOOGLE_CLIENT_SECRET_REMOTING_HOST'] = (google_api_keys.
       GetClientSecret('REMOTING_HOST'))
-  values['GOOGLE_CLIENT_ID_REMOTING_IDENTITY_API'] = (google_api_keys.
-      GetClientID('REMOTING_IDENTITY_API'))
 
   if options.out:
     _DoWriteJavaOutput(options.out, values)

@@ -4,10 +4,10 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -30,7 +30,6 @@
 #include "components/policy/policy_constants.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -41,7 +40,6 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/test_extension_registry_observer.h"
 #include "extensions/browser/updater/extension_downloader.h"
 #include "extensions/common/mojom/view_type.mojom.h"
@@ -164,12 +162,8 @@ class ExtensionManagementTest : public extensions::ExtensionBrowserTest {
     if (!ext_host)
       return false;
 
-    std::string version_from_bg;
-    bool exec = content::ExecuteScriptAndExtractString(
-        ext_host->host_contents(), "version()", &version_from_bg);
-    EXPECT_TRUE(exec);
-    if (!exec)
-      return false;
+    std::string version_from_bg =
+        content::EvalJs(ext_host->host_contents(), "version()").ExtractString();
 
     if (version_from_bg != expected_version ||
         extension->VersionString() != expected_version)
@@ -327,49 +321,6 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, DisableEnable) {
   EXPECT_TRUE(manager->GetBackgroundHostForExtension(extension_id));
 }
 
-// Used for testing notifications sent during extension updates.
-class NotificationListener : public content::NotificationObserver {
- public:
-  NotificationListener() {
-    registrar_.Add(this, extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-                   content::NotificationService::AllSources());
-  }
-  ~NotificationListener() override {}
-
-  bool finished() { return finished_; }
-
-  const std::set<std::string>& updates() { return updates_; }
-
-  void Reset() {
-    finished_ = false;
-    updates_.clear();
-  }
-
-  // Implements content::NotificationObserver interface.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override {
-    DCHECK_EQ(extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND, type);
-    const std::string& id =
-        content::Details<extensions::UpdateDetails>(details)->id;
-    updates_.insert(id);
-  }
-
-  void OnFinished() {
-    EXPECT_FALSE(finished_);
-    finished_ = true;
-  }
-
- private:
-  content::NotificationRegistrar registrar_;
-
-  // Did we see EXTENSION_UPDATING_FINISHED?
-  bool finished_ = false;
-
-  // The set of extension id's we've seen via EXTENSION_UPDATE_FOUND.
-  std::set<std::string> updates_;
-};
-
 #if BUILDFLAG(IS_WIN)
 // Fails consistently on Windows XP, see: http://crbug.com/120640.
 #define MAYBE_AutoUpdate DISABLED_AutoUpdate
@@ -406,7 +357,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, MAYBE_AutoUpdate) {
   ExtensionService* service = extension_service();
   ExtensionRegistry* registry = extension_registry();
   const size_t size_before = registry->enabled_extensions().size();
-  ASSERT_TRUE(registry->disabled_extensions().is_empty());
+  EXPECT_TRUE(registry->disabled_extensions().empty());
   const Extension* extension = InstallExtension(crx_v1_path, 1);
   ASSERT_TRUE(extension);
   EXPECT_TRUE(listener1.WaitUntilSatisfied());
@@ -417,23 +368,28 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, MAYBE_AutoUpdate) {
   // Run autoupdate and make sure version 2 of the extension was installed.
   ExtensionTestMessageListener listener2("v2 installed");
 
-  extensions::TestExtensionRegistryObserver install_observer(registry);
-  NotificationListener notification_listener;
-  extensions::ExtensionUpdater::CheckParams params1;
-  params1.callback = base::BindOnce(&NotificationListener::OnFinished,
-                                    base::Unretained(&notification_listener));
-  service->updater()->CheckNow(std::move(params1));
-  install_observer.WaitForExtensionWillBeInstalled();
-  EXPECT_TRUE(listener2.WaitUntilSatisfied());
-  ASSERT_EQ(size_before + 1, registry->enabled_extensions().size());
-  extension = registry->enabled_extensions().GetByID(
-      "ogjcoiohnmldgjemafoockdghcjciccf");
-  ASSERT_TRUE(extension);
-  ASSERT_EQ("2.0", extension->VersionString());
-  ASSERT_TRUE(notification_listener.finished());
-  ASSERT_TRUE(base::Contains(notification_listener.updates(),
-                             "ogjcoiohnmldgjemafoockdghcjciccf"));
-  notification_listener.Reset();
+  {
+    extensions::TestExtensionRegistryObserver install_observer(registry);
+    extensions::ExtensionUpdater::CheckParams params1;
+    bool install_finished = false;
+    std::set<std::string> updates;
+    params1.update_found_callback = base::BindLambdaForTesting(
+        [&updates](const std::string& id, const base::Version&) {
+          updates.insert(id);
+        });
+    params1.callback = base::BindLambdaForTesting(
+        [&install_finished]() { install_finished = true; });
+    service->updater()->CheckNow(std::move(params1));
+    install_observer.WaitForExtensionWillBeInstalled();
+    EXPECT_TRUE(listener2.WaitUntilSatisfied());
+    ASSERT_EQ(size_before + 1, registry->enabled_extensions().size());
+    extension = registry->enabled_extensions().GetByID(
+        "ogjcoiohnmldgjemafoockdghcjciccf");
+    ASSERT_TRUE(extension);
+    ASSERT_EQ("2.0", extension->VersionString());
+    ASSERT_TRUE(install_finished);
+    ASSERT_TRUE(base::Contains(updates, "ogjcoiohnmldgjemafoockdghcjciccf"));
+  }
 
   // Now try doing an update to version 3, which has been incorrectly
   // signed. This should fail.
@@ -444,19 +400,19 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, MAYBE_AutoUpdate) {
   ASSERT_NO_FATAL_FAILURE(SetUpExtensionUpdateResponse(
       temp_dir.GetPath(), "v3.crx", "manifest_v3.xml.template"));
 
-  extensions::ExtensionUpdater::CheckParams params2;
   {
+    extensions::ExtensionUpdater::CheckParams params2;
     base::RunLoop run_loop;
-    params2.callback = base::BindLambdaForTesting([&]() {
-      notification_listener.OnFinished();
-      run_loop.Quit();
-    });
+    std::set<std::string> updates;
+    params2.update_found_callback = base::BindLambdaForTesting(
+        [&updates](const std::string& id, const base::Version&) {
+          updates.insert(id);
+        });
+    params2.callback = run_loop.QuitClosure();
     service->updater()->CheckNow(std::move(params2));
     run_loop.Run();
+    ASSERT_TRUE(base::Contains(updates, "ogjcoiohnmldgjemafoockdghcjciccf"));
   }
-  ASSERT_TRUE(notification_listener.finished());
-  ASSERT_TRUE(base::Contains(notification_listener.updates(),
-                             "ogjcoiohnmldgjemafoockdghcjciccf"));
 
   // Make sure the extension state is the same as before.
   ASSERT_EQ(size_before + 1, registry->enabled_extensions().size());
@@ -515,10 +471,15 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   extensions::TestExtensionRegistryObserver install_observer(registry);
   // Run autoupdate and make sure version 2 of the extension was installed but
   // is still disabled.
-  NotificationListener notification_listener;
+  bool install_finished = false;
+  std::set<std::string> updates;
   extensions::ExtensionUpdater::CheckParams params;
-  params.callback = base::BindOnce(&NotificationListener::OnFinished,
-                                   base::Unretained(&notification_listener));
+  params.update_found_callback = base::BindLambdaForTesting(
+      [&updates](const std::string& id, const base::Version&) {
+        updates.insert(id);
+      });
+  params.callback = base::BindLambdaForTesting(
+      [&install_finished]() { install_finished = true; });
   service->updater()->CheckNow(std::move(params));
   install_observer.WaitForExtensionWillBeInstalled();
   ASSERT_EQ(disabled_size_before + 1, registry->disabled_extensions().size());
@@ -535,10 +496,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   ASSERT_FALSE(listener2.was_satisfied());
   EnableExtension(extension->id());
   EXPECT_TRUE(listener2.WaitUntilSatisfied());
-  ASSERT_TRUE(notification_listener.finished());
-  ASSERT_TRUE(base::Contains(notification_listener.updates(),
-                             "ogjcoiohnmldgjemafoockdghcjciccf"));
-  notification_listener.Reset();
+  ASSERT_TRUE(install_finished);
+  ASSERT_TRUE(base::Contains(updates, "ogjcoiohnmldgjemafoockdghcjciccf"));
 }
 
 IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, ExternalUrlUpdate) {
@@ -560,7 +519,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, ExternalUrlUpdate) {
 
   ExtensionRegistry* registry = extension_registry();
   const size_t size_before = registry->enabled_extensions().size();
-  ASSERT_TRUE(registry->disabled_extensions().is_empty());
+  EXPECT_TRUE(registry->disabled_extensions().empty());
 
   extensions::PendingExtensionManager* pending_extension_manager =
       service->pending_extension_manager();
@@ -647,7 +606,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, ExternalPolicyRefresh) {
 
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser()->profile());
   const size_t size_before = registry->enabled_extensions().size();
-  ASSERT_TRUE(registry->disabled_extensions().is_empty());
+  EXPECT_TRUE(registry->disabled_extensions().empty());
 
   ASSERT_TRUE(extensions::ExtensionManagementFactory::GetForBrowserContext(
                   browser()->profile())
@@ -655,13 +614,14 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest, ExternalPolicyRefresh) {
                   .empty())
       << kForceInstallNotEmptyHelp;
 
-  base::Value forcelist(base::Value::Type::LIST);
+  base::Value::List forcelist;
   forcelist.Append(BuildForceInstallPolicyValue(kExtensionId,
                                                 GetUpdateUrl().spec().c_str()));
   PolicyMap policies;
   policies.Set(policy::key::kExtensionInstallForcelist,
                policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-               policy::POLICY_SOURCE_CLOUD, forcelist.Clone(), nullptr);
+               policy::POLICY_SOURCE_CLOUD, base::Value(std::move(forcelist)),
+               nullptr);
   extensions::TestExtensionRegistryObserver install_observer(registry);
   UpdateProviderPolicy(policies);
   install_observer.WaitForExtensionWillBeInstalled();
@@ -715,7 +675,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser()->profile());
   const char kExtensionId[] = "ogjcoiohnmldgjemafoockdghcjciccf";
   const size_t size_before = registry->enabled_extensions().size();
-  ASSERT_TRUE(registry->disabled_extensions().is_empty());
+  EXPECT_TRUE(registry->disabled_extensions().empty());
 
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::ScopedTempDir temp_dir;
@@ -747,13 +707,14 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   EXPECT_TRUE(service->IsExtensionEnabled(kExtensionId));
 
   // Setup the force install policy. It should override the location.
-  base::Value forcelist(base::Value::Type::LIST);
+  base::Value::List forcelist;
   forcelist.Append(BuildForceInstallPolicyValue(kExtensionId,
                                                 GetUpdateUrl().spec().c_str()));
   PolicyMap policies;
   policies.Set(policy::key::kExtensionInstallForcelist,
                policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-               policy::POLICY_SOURCE_CLOUD, forcelist.Clone(), nullptr);
+               policy::POLICY_SOURCE_CLOUD, base::Value(forcelist.Clone()),
+               nullptr);
   extensions::TestExtensionRegistryObserver install_observer(registry);
   UpdateProviderPolicy(policies);
 
@@ -781,7 +742,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   ASSERT_TRUE(extension);
   EXPECT_EQ(ManifestLocation::kInternal, extension->location());
   EXPECT_TRUE(service->IsExtensionEnabled(kExtensionId));
-  EXPECT_TRUE(registry->disabled_extensions().is_empty());
+  EXPECT_TRUE(registry->disabled_extensions().empty());
 
   DisableExtension(kExtensionId);
   EXPECT_EQ(1u, registry->disabled_extensions().size());
@@ -793,7 +754,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   // and force enable it too.
   policies.Set(policy::key::kExtensionInstallForcelist,
                policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-               policy::POLICY_SOURCE_CLOUD, forcelist.Clone(), nullptr);
+               policy::POLICY_SOURCE_CLOUD, base::Value(std::move(forcelist)),
+               nullptr);
 
   extensions::TestExtensionRegistryObserver extension_observer(registry);
   UpdateProviderPolicy(policies);
@@ -803,5 +765,5 @@ IN_PROC_BROWSER_TEST_F(ExtensionManagementTest,
   ASSERT_TRUE(extension);
   EXPECT_EQ(ManifestLocation::kExternalPolicyDownload, extension->location());
   EXPECT_TRUE(service->IsExtensionEnabled(kExtensionId));
-  EXPECT_TRUE(registry->disabled_extensions().is_empty());
+  EXPECT_TRUE(registry->disabled_extensions().empty());
 }

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/nacl/renderer/nexe_load_manager.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/platform/web_url_error.h"
@@ -85,7 +85,7 @@ void FileDownloader::DidFail(const blink::WebURLError& error) {
     status_ = ACCESS_DENIED;
 
   // Delete url_loader to prevent didFinishLoading from being called, which
-  // some implementations of blink::WebURLLoader will do after calling didFail.
+  // some implementations of blink::URLLoader will do after calling didFail.
   url_loader_.reset();
 
   std::move(status_cb_).Run(status_, std::move(file_), http_status_code_);

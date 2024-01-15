@@ -10,12 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/sequence_checker.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/printing/ppd_provider_factory.h"
 #include "chrome/browser/ash/printing/printer_configurer.h"
 #include "chrome/browser/ash/printing/printer_event_tracker.h"
@@ -40,13 +39,6 @@
 
 namespace ash {
 namespace {
-
-// Given a usb device, guesses the make and model for a driver lookup.
-std::string GuessEffectiveMakeAndModel(
-    const device::mojom::UsbDeviceInfo& device) {
-  return base::StrCat({base::UTF16ToUTF8(GetManufacturerName(device)), " ",
-                       base::UTF16ToUTF8(GetProductName(device))});
-}
 
 // The PrinterDetector that drives the flow for setting up a USB printer to use
 // CUPS backend.
@@ -118,7 +110,10 @@ class UsbPrinterDetectorImpl : public UsbPrinterDetector,
       return;
     }
     std::string make_and_model = GuessEffectiveMakeAndModel(device_info);
-    PRINTER_LOG(EVENT) << "USB printer was detected: " << make_and_model;
+    PRINTER_LOG(EVENT) << "USB printer "
+                       << base::StringPrintf("%04x:%04x", device_info.vendor_id,
+                                             device_info.product_id)
+                       << " was detected: " << make_and_model;
 
     entry.ppd_search_data.usb_vendor_id = device_info.vendor_id;
     entry.ppd_search_data.usb_product_id = device_info.product_id;
@@ -141,8 +136,8 @@ class UsbPrinterDetectorImpl : public UsbPrinterDetector,
   void OnGetDeviceId(DetectedPrinter entry,
                      std::string guid,
                      chromeos::UsbPrinterId printer_id) {
-    PRINTER_LOG(EVENT) << "USB printer returned ID: " << printer_id.make()
-                       << " " << printer_id.model();
+    PRINTER_LOG(EVENT) << entry.ppd_search_data.make_and_model.front()
+                       << " returned USB device ID: " << printer_id.raw_id();
     entry.ppd_search_data.printer_id = std::move(printer_id);
 
     // Add detected printer.

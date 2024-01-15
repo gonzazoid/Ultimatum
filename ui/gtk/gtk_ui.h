@@ -7,12 +7,13 @@
 
 #include <map>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "base/containers/fixed_flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "printing/buildflags/buildflags.h"
-#include "ui/base/glib/glib_signal.h"
+#include "ui/base/glib/scoped_gsignal.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/font_render_params.h"
 #include "ui/gtk/gtk_ui_platform.h"
@@ -25,6 +26,8 @@
 #endif
 
 typedef struct _GParamSpec GParamSpec;
+typedef struct _GdkDisplay GdkDisplay;
+typedef struct _GdkMonitor GdkMonitor;
 typedef struct _GtkParamSpec GtkParamSpec;
 typedef struct _GtkSettings GtkSettings;
 typedef struct _GtkStyle GtkStyle;
@@ -63,7 +66,6 @@ class GtkUi : public ui::LinuxUiAndTheme {
   gfx::Image GetIconForContentType(const std::string& content_type,
                                    int size,
                                    float scale) const override;
-  float GetDeviceScaleFactor() const override;
   base::flat_map<std::string, std::string> GetKeyboardLayoutMap() override;
 #if BUILDFLAG(ENABLE_PRINTING)
   printing::PrintDialogLinuxInterface* CreatePrintDialog(
@@ -79,6 +81,7 @@ class GtkUi : public ui::LinuxUiAndTheme {
       ui::LinuxInputMethodContextDelegate* delegate) const override;
   bool GetTextEditCommandsForEvent(
       const ui::Event& event,
+      int text_flags,
       std::vector<ui::TextEditCommandAuraLinux>* commands) override;
   gfx::FontRenderParams GetDefaultFontRenderParams() const override;
   void GetDefaultFontDescription(
@@ -99,37 +102,42 @@ class GtkUi : public ui::LinuxUiAndTheme {
   ui::NativeTheme* GetNativeTheme() const override;
   bool GetColor(int id, SkColor* color, bool use_custom_frame) const override;
   bool GetDisplayProperty(int id, int* result) const override;
-  SkColor GetFocusRingColor() const override;
-  SkColor GetActiveSelectionBgColor() const override;
-  SkColor GetActiveSelectionFgColor() const override;
-  SkColor GetInactiveSelectionBgColor() const override;
-  SkColor GetInactiveSelectionFgColor() const override;
+  void GetFocusRingColor(SkColor* color) const override;
+  void GetActiveSelectionBgColor(SkColor* color) const override;
+  void GetActiveSelectionFgColor(SkColor* color) const override;
+  void GetInactiveSelectionBgColor(SkColor* color) const override;
+  void GetInactiveSelectionFgColor(SkColor* color) const override;
   bool PreferDarkTheme() const override;
+  void SetDarkTheme(bool dark) override;
   std::unique_ptr<ui::NavButtonProvider> CreateNavButtonProvider() override;
-  ui::WindowFrameProvider* GetWindowFrameProvider(bool solid_frame) override;
+  ui::WindowFrameProvider* GetWindowFrameProvider(bool solid_frame,
+                                                  bool tiled) override;
 
  private:
   using TintMap = std::map<int, color_utils::HSL>;
 
-  CHROMEG_CALLBACK_1(GtkUi, void, OnThemeChanged, GtkSettings*, GtkParamSpec*);
+  void OnThemeChanged(GtkSettings* settings, GtkParamSpec* param);
 
-  CHROMEG_CALLBACK_1(GtkUi,
-                     void,
-                     OnCursorThemeNameChanged,
-                     GtkSettings*,
-                     GtkParamSpec*);
+  void OnCursorThemeNameChanged(GtkSettings* settings, GtkParamSpec* param);
 
-  CHROMEG_CALLBACK_1(GtkUi,
-                     void,
-                     OnCursorThemeSizeChanged,
-                     GtkSettings*,
-                     GtkParamSpec*);
+  void OnCursorThemeSizeChanged(GtkSettings* settings, GtkParamSpec* param);
 
-  CHROMEG_CALLBACK_1(GtkUi,
-                     void,
-                     OnDeviceScaleFactorMaybeChanged,
-                     void*,
-                     GParamSpec*);
+  void OnEnableAnimationsChanged(GtkSettings* settings, GtkParamSpec* param);
+
+  void OnGtkXftDpiChanged(GtkSettings* settings, GParamSpec* param);
+
+  void OnScreenResolutionChanged(GdkScreen* screen, GParamSpec* param);
+
+  void OnMonitorChanged(GdkMonitor* monitor, GParamSpec* param);
+
+  void OnMonitorAdded(GdkDisplay* display, GdkMonitor* monitor);
+
+  void OnMonitorRemoved(GdkDisplay* display, GdkMonitor* monitor);
+
+  void OnMonitorsChanged(GListModel* list,
+                         guint position,
+                         guint removed,
+                         guint added);
 
   // Loads all GTK-provided settings.
   void LoadGtkValues();
@@ -141,11 +149,14 @@ class GtkUi : public ui::LinuxUiAndTheme {
   // Updates |default_font_*|.
   void UpdateDefaultFont();
 
+  // Listen for scale factor changes on `monitor`.
+  void TrackMonitor(GdkMonitor* monitor);
+
   // Updates the device scale factor so that the default font size can be
   // recalculated.
   void UpdateDeviceScaleFactor();
 
-  float GetRawDeviceScaleFactor();
+  ui::DisplayConfig GetDisplayConfig() const;
 
   std::unique_ptr<GtkUiPlatform> platform_;
 
@@ -188,17 +199,21 @@ class GtkUi : public ui::LinuxUiAndTheme {
   base::flat_map<WindowFrameActionSource, WindowFrameAction>
       window_frame_actions_;
 
-  float device_scale_factor_ = 1.0f;
-
   // Paints a native window frame.  Typically only one of these will be
   // non-null.  The exception is when the user starts or stops their compositor
-  // while Chrome is running.
-  std::unique_ptr<ui::WindowFrameProvider> solid_frame_provider_;
-  std::unique_ptr<ui::WindowFrameProvider> transparent_frame_provider_;
+  // while Chrome is running.  This 2D array is indexed first by whether the
+  // frame is translucent (0) or solid(1), then by whether the frame is normal
+  // (0) or tiled (1).
+  std::unique_ptr<ui::WindowFrameProvider> frame_providers_[2][2];
 
   // Objects to notify when the window frame button order changes.
   base::ObserverList<ui::WindowButtonOrderObserver>::Unchecked
       window_button_order_observer_list_;
+
+  std::vector<ScopedGSignal> signals_;
+  // Two signals are registered for each monitor, so keep them in a pair.
+  std::unordered_map<GdkMonitor*, std::pair<ScopedGSignal, ScopedGSignal>>
+      monitor_signals_;
 };
 
 }  // namespace gtk

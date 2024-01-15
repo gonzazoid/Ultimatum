@@ -294,7 +294,15 @@ class AutocompleteInput {
     return added_default_scheme_to_typed_url_;
   }
 
+  bool typed_url_had_http_scheme() const { return typed_url_had_http_scheme_; }
+
   void WriteIntoTrace(perfetto::TracedValue context) const;
+
+  // Returns true if in zero prefix input state.
+  // Zero-Suggest state is determined from focus type and is used to inform
+  // autocomplete providers, tab matching, and action attachment. Note that the
+  // Zero-Suggest state does NOT mean that `text_` is empty.
+  bool IsZeroSuggest() const;
 
  private:
   friend class AutocompleteProviderTest;
@@ -329,7 +337,8 @@ class AutocompleteInput {
 
   // Flags for OmniboxDefaultNavigationsToHttps feature.
   bool should_use_https_as_default_scheme_;
-  bool added_default_scheme_to_typed_url_;
+  bool added_default_scheme_to_typed_url_ = false;
+  bool typed_url_had_http_scheme_ = false;
   // Port used by the embedded https server in tests. This is used to determine
   // the correct port while upgrading URLs to https if the original URL has a
   // non-default port.

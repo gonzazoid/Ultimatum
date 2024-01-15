@@ -18,11 +18,15 @@ enum InspectorIssueCode {
   kBlockedByResponseIssue,
   kContentSecurityPolicyIssue,
   kSharedArrayBufferIssue,
-  kTrustedWebActivityIssue,
   kHeavyAdIssue,
+  kAttributionReportingIssue,
   kLowTextContrastIssue,
   kFederatedAuthRequestIssue,
+  kBounceTrackingIssue,
+  kCookieDeprecationMetadataIssue,
   kGenericIssue,
+  kDeprecationIssue,
+  kFederatedAuthUserInfoRequestIssue,
 };
 
 // Information about a cookie that is affected by an issue.
@@ -72,6 +76,29 @@ struct HeavyAdIssueDetails {
   AffectedFrame frame;
 };
 
+enum AttributionReportingIssueType {
+  kPermissionPolicyDisabled,
+  kUntrustworthyReportingOrigin,
+  kInsecureContext,
+  kInvalidRegisterSourceHeader,
+  kInvalidRegisterTriggerHeader,
+  kSourceAndTriggerHeaders,
+  kSourceIgnored,
+  kTriggerIgnored,
+  kOsSourceIgnored,
+  kOsTriggerIgnored,
+  kInvalidRegisterOsSourceHeader,
+  kInvalidRegisterOsTriggerHeader,
+  kWebAndOsHeaders,
+  kNoWebOrOsSupport,
+};
+
+struct AttributionReportingIssueDetails {
+  AttributionReportingIssueType violation_type;
+  AffectedRequest? request;
+  string? invalid_parameter;
+};
+
 enum MixedContentResolutionStatus {
   kMixedContentBlocked,
   kMixedContentAutomaticallyUpgraded,
@@ -119,6 +146,7 @@ enum CookieExclusionReason {
   kExcludeSameSiteLax,
   kExcludeSameSiteStrict,
   kExcludeDomainNonASCII,
+  kExcludeThirdPartyPhaseout,
 };
 
 // Reasons to warn about a cookie, see net/cookies/cookie_inclusion_status.h
@@ -133,6 +161,8 @@ enum CookieWarningReason {
   kWarnSameSiteLaxCrossDowngradeLax,
   kWarnAttributeValueExceedsMaxSize,
   kWarnDomainNonASCII,
+  kWarnThirdPartyPhaseout,
+  kWarnCrossSiteRedirectDowngradeChangesInclusion,
 };
 
 // Specific information about |kCookieIssue| type issues.
@@ -157,21 +187,6 @@ struct SharedArrayBufferIssueDetails {
   SharedArrayBufferIssueType type;
 };
 
-enum TwaQualityEnforcementViolationType {
-  kHttpError,
-  kUnavailableOffline,
-  kDigitalAssetLinks,
-};
-
-struct TrustedWebActivityIssueDetails {
-  url.mojom.Url url;
-  TwaQualityEnforcementViolationType violation_type;
-  // 0 is not a valid code and is used to indicate absence.
-  int32 http_error_code = 0;
-  string? package_name;
-  string? signature;
-};
-
 struct LowTextContrastIssue {
   int32 violating_node_id;
   string violating_node_selector;
@@ -191,25 +206,37 @@ enum FederatedAuthRequestResult {
   kShouldEmbargo,
   kErrorDisabledInSettings,
   kErrorTooManyRequests,
-  kErrorFetchingManifestListHttpNotFound,
-  kErrorFetchingManifestListNoResponse,
-  kErrorFetchingManifestListInvalidResponse,
-  kErrorManifestNotInManifestList,
-  kErrorManifestListTooBig,
-  kErrorFetchingManifestHttpNotFound,
-  kErrorFetchingManifestNoResponse,
-  kErrorFetchingManifestInvalidResponse,
+  kErrorFetchingWellKnownHttpNotFound,
+  kErrorFetchingWellKnownNoResponse,
+  kErrorFetchingWellKnownInvalidResponse,
+  kErrorFetchingWellKnownListEmpty,
+  kErrorFetchingWellKnownInvalidContentType,
+  kErrorConfigNotInWellKnown,
+  kErrorWellKnownTooBig,
+  kErrorFetchingConfigHttpNotFound,
+  kErrorFetchingConfigNoResponse,
+  kErrorFetchingConfigInvalidResponse,
+  kErrorFetchingConfigInvalidContentType,
   kErrorFetchingClientMetadataHttpNotFound,
   kErrorFetchingClientMetadataNoResponse,
   kErrorFetchingClientMetadataInvalidResponse,
+  kErrorFetchingClientMetadataInvalidContentType,
   kErrorFetchingAccountsHttpNotFound,
   kErrorFetchingAccountsNoResponse,
   kErrorFetchingAccountsInvalidResponse,
+  kErrorFetchingAccountsListEmpty,
+  kErrorFetchingAccountsInvalidContentType,
   kErrorFetchingIdTokenHttpNotFound,
   kErrorFetchingIdTokenNoResponse,
   kErrorFetchingIdTokenInvalidResponse,
+  kErrorFetchingIdTokenIdpErrorResponse,
+  kErrorFetchingIdTokenCrossSiteIdpErrorResponse,
+  kErrorFetchingIdTokenInvalidContentType,
   kErrorCanceled,
   kErrorRpPageNotVisible,
+  kErrorSilentMediationFailure,
+  kErrorThirdPartyCookiesBlocked,
+  kErrorNotSignedInWithIdp,
   kError,
 };
 
@@ -217,13 +244,68 @@ struct FederatedAuthRequestIssueDetails {
   FederatedAuthRequestResult status;
 };
 
+// Represents the fetch result from a getUserInfo() call. Should
+// be updated alongside FederatedAuthUserInfoRequestIssueReason in
+// third_party/blink/public/devtools_protocol/browser_protocol.pdl,
+// which includes all cases except for kSuccess and kUnhandledRequest.
+// Do not modify or reorder existing values, as this is used in metrics
+// recording.
+enum FederatedAuthUserInfoRequestResult {
+  kSuccess,
+  kNotSameOrigin,
+  kNotIframe,
+  kNotPotentiallyTrustworthy,
+  kNoApiPermission,
+  kNotSignedInWithIdp,
+  kNoAccountSharingPermission,
+  kInvalidConfigOrWellKnown,
+  kInvalidAccountsResponse,
+  kNoReturningUserFromFetchedAccounts,
+  kUnhandledRequest
+};
+
+struct FederatedAuthUserInfoRequestIssueDetails {
+  FederatedAuthUserInfoRequestResult status;
+};
+
+struct BounceTrackingIssueDetails {
+  array<string> tracking_sites;
+};
+
+struct CookieDeprecationMetadataIssueDetails {
+  array<string> allowed_sites;
+};
+
 enum GenericIssueErrorType {
   kCrossOriginPortalPostMessageError,
+  kFormLabelForNameError,
+  kFormDuplicateIdForInputError,
+  kFormInputWithNoLabelError,
+  kFormAutocompleteAttributeEmptyError,
+  kFormEmptyIdAndNameAttributesForInputError,
+  kFormAriaLabelledByToNonExistingId,
+  kFormInputAssignedAutocompleteValueToIdOrNameAttributeError,
+  kFormLabelHasNeitherForNorNestedInput,
+  kFormLabelForMatchesNonExistingIdError,
+  kFormInputHasWrongButWellIntendedAutocompleteValueError,
+  kResponseWasBlockedByORB,
 };
 
 struct GenericIssueDetails {
   GenericIssueErrorType error_type;
   string? frame_id;
+  // 0 is not a valid node id and is used to indicate absence.
+  int32 violating_node_id = 0;
+  string? violating_node_attribute;
+};
+
+enum DeprecationIssueType {
+  kPrivacySandboxExtensionsAPI,
+};
+
+struct DeprecationIssueDetails {
+  DeprecationIssueType type;
+  AffectedLocation affected_location;
 };
 
 // A collection of optional fields that may store additional data depending
@@ -234,11 +316,15 @@ struct InspectorIssueDetails {
   BlockedByResponseIssueDetails? blocked_by_response_issue_details;
   ContentSecurityPolicyIssueDetails? csp_issue_details;
   SharedArrayBufferIssueDetails? sab_issue_details;
-  TrustedWebActivityIssueDetails? twa_issue_details;
   HeavyAdIssueDetails? heavy_ad_issue_details;
+  AttributionReportingIssueDetails? attribution_reporting_issue_details;
   LowTextContrastIssue? low_text_contrast_details;
   FederatedAuthRequestIssueDetails? federated_auth_request_details;
+  BounceTrackingIssueDetails? bounce_tracking_issue_details;
+  CookieDeprecationMetadataIssueDetails? cookie_deprecation_metadata_issue_details;
   GenericIssueDetails? generic_issue_details;
+  DeprecationIssueDetails? deprecation_issue_details;
+  FederatedAuthUserInfoRequestIssueDetails? federated_auth_user_info_request_details;
   mojo_base.mojom.UnguessableToken? issue_id;
 };
 

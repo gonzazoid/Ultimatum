@@ -45,37 +45,38 @@ AutofillPopupControllerImplMac::AutofillPopupControllerImplMac(
                                   web_contents,
                                   container_view,
                                   element_bounds,
-                                  text_direction),
+                                  text_direction,
+                                  base::DoNothing(),
+                                  std::nullopt),
       touch_bar_controller_(nil),
       is_credit_card_popup_(delegate->GetPopupType() ==
                             PopupType::kCreditCards) {}
 
-AutofillPopupControllerImplMac::~AutofillPopupControllerImplMac() {}
+AutofillPopupControllerImplMac::~AutofillPopupControllerImplMac() = default;
 
 void AutofillPopupControllerImplMac::Show(
-    const std::vector<autofill::Suggestion>& suggestions,
-    AutoselectFirstSuggestion autoselect_first_suggestion,
-    PopupType popup_type) {
+    std::vector<autofill::Suggestion> suggestions,
+    AutofillSuggestionTriggerSource trigger_source,
+    AutoselectFirstSuggestion autoselect_first_suggestion) {
   if (!suggestions.empty() && is_credit_card_popup_) {
     touch_bar_controller_ = [WebTextfieldTouchBarController
         controllerForWindow:[container_view().GetNativeNSView() window]];
     [touch_bar_controller_ showCreditCardAutofillWithController:this];
   }
 
-  AutofillPopupControllerImpl::Show(suggestions, autoselect_first_suggestion,
-                                    popup_type);
+  AutofillPopupControllerImpl::Show(std::move(suggestions), trigger_source,
+                                    autoselect_first_suggestion);
   // No code below this line!
   // |Show| may hide the popup and destroy |this|, so |Show| should be the last
   // line.
 }
 
 void AutofillPopupControllerImplMac::UpdateDataListValues(
-    const std::vector<std::u16string>& values,
-    const std::vector<std::u16string>& labels) {
+    base::span<const SelectOption> options) {
   if (touch_bar_controller_)
     [touch_bar_controller_ invalidateTouchBar];
 
-  AutofillPopupControllerImpl::UpdateDataListValues(values, labels);
+  AutofillPopupControllerImpl::UpdateDataListValues(options);
   // No code below this line!
   // |UpdateDataListValues| may hide the popup and destroy |this|, so
   // |UpdateDataListValues| should be the last line.

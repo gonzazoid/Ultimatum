@@ -1,9 +1,14 @@
 // The Shared Storage API.
 // https://github.com/pythagoraskitty/shared-storage/blob/main/README.md
+
+typedef (USVString or FencedFrameConfig) SharedStorageResponse;
+
 [
   RuntimeEnabled=SharedStorageAPI,
-  Exposed=(Window)
+  Exposed=(Window, SharedStorageWorklet)
 ] interface SharedStorage {
+  [Exposed=SharedStorageWorklet] async iterable<DOMString, DOMString>;
+
   [
     CallWith=ScriptState,
     RaisesException,
@@ -30,18 +35,48 @@
   ] Promise<any> clear();
 
   [
+    Exposed=SharedStorageWorklet,
+    CallWith=ScriptState,
+    RaisesException
+  ] Promise<DOMString> get(DOMString key);
+
+  [
+    Exposed=SharedStorageWorklet,
+    CallWith=ScriptState,
+    RaisesException
+  ] Promise<unsigned long> length();
+
+  [
+    Exposed=SharedStorageWorklet,
+    CallWith=ScriptState,
+    RaisesException
+  ] Promise<double> remainingBudget();
+
+  [
+    Exposed=SharedStorageWorklet,
+    CallWith=ScriptState,
+    RaisesException
+  ] readonly attribute any context;
+
+  [
+    Exposed=Window,
     CallWith=ScriptState,
     RaisesException,
     MeasureAs=SharedStorageAPI_SelectURL_Method
-  ] Promise<USVString> selectURL(DOMString name,
+  ] Promise<SharedStorageResponse> selectURL(DOMString name,
                                  FrozenArray<SharedStorageUrlWithMetadata> urls,
                                  optional SharedStorageRunOperationMethodOptions options);
 
   [
+    Exposed=Window,
     CallWith=ScriptState,
     RaisesException,
     MeasureAs=SharedStorageAPI_Run_Method
   ] Promise<any> run(DOMString name, optional SharedStorageRunOperationMethodOptions options);
 
-  [CallWith=ScriptState, RaisesException] readonly attribute SharedStorageWorklet worklet;
+  [
+    Exposed=Window,
+    CallWith=ScriptState,
+    RaisesException
+  ] readonly attribute SharedStorageWorklet worklet;
 };

@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 #include <cmath>
-#include <unordered_map>
 
 #include "base/command_line.h"
+#include "base/containers/flat_map.h"
 #include "base/files/file_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/trace_event_analyzer.h"
@@ -54,7 +54,7 @@ constexpr char kEventSuffixFailRate[] = "FailRate";
 constexpr char kEventSuffixLatency[] = "Latency";
 constexpr char kEventCommitAndDrawCompositorFrame[] =
     "WidgetBase::DidCommitAndDrawCompositorFrame";
-const std::unordered_map<std::string, std::string> kEventToMetricMap(
+const base::flat_map<std::string, std::string> kEventToMetricMap(
     {{kEventCapture, kMetricCaptureMs},
      {std::string(kEventCapture) + kEventSuffixFailRate,
       kMetricCaptureFailRatePercent},
@@ -304,8 +304,9 @@ IN_PROC_BROWSER_TEST_P(TabCapturePerformanceTest, MAYBE_Performance) {
   const base::Value response = SendMessageToExtension(
       base::StringPrintf("{start:true, passThroughWebRTC:%s}",
                          HasFlag(kTestThroughWebRTC) ? "true" : "false"));
-  const std::string* reason = response.FindStringKey("reason");
-  ASSERT_TRUE(response.FindBoolKey("success").value_or(false))
+  ASSERT_TRUE(response.is_dict());
+  const std::string* reason = response.GetDict().FindString("reason");
+  ASSERT_TRUE(response.GetDict().FindBool("success").value_or(false))
       << (reason ? *reason : std::string("<MISSING REASON>"));
 
   // Observe the running browser for a while, collecting a trace.

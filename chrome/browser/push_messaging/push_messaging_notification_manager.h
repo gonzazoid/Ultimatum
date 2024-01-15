@@ -8,17 +8,13 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/push_messaging/budget_database.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/android_sms/android_sms_app_manager.h"
-#include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
-#endif
+#include "extensions/buildflags/buildflags.h"
 
 class GURL;
 class Profile;
@@ -55,18 +51,24 @@ class PushMessagingNotificationManager {
 
   // Enforces the requirements implied for push subscriptions which must display
   // a Web Notification in response to an incoming message.
+  // `requested_user_visible_only` is the userVisibleOnly value a worker based
+  // extension sets on push subscription.
   void EnforceUserVisibleOnlyRequirements(
       const GURL& origin,
       int64_t service_worker_registration_id,
-      EnforceRequirementsCallback message_handled_callback);
+      EnforceRequirementsCallback message_handled_callback,
+      bool requested_user_visible_only);
+
+  // Checks if userVisibleOnly can be skipped in certain scenarios. Currently
+  // that is only allowed for extensions that set userVisibleOnly as false on
+  // subscription.
+  bool ShouldSkipUserVisibleOnlyRequirements(const GURL& origin,
+                                             bool requested_user_visible_only);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(PushMessagingNotificationManagerTest, IsTabVisible);
   FRIEND_TEST_ALL_PREFIXES(PushMessagingNotificationManagerTest,
                            IsTabVisibleViewSource);
-  FRIEND_TEST_ALL_PREFIXES(
-      PushMessagingNotificationManagerTest,
-      SkipEnforceUserVisibleOnlyRequirementsForAndroidMessages);
 
   void DidCountVisibleNotifications(
       const GURL& origin,
@@ -92,28 +94,18 @@ class PushMessagingNotificationManager {
       bool success,
       const std::string& notification_id);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  bool ShouldSkipUserVisibleOnlyRequirements(const GURL& origin);
-
-  void SetTestMultiDeviceSetupClient(
-      ash::multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client);
-
-  void SetTestAndroidSmsAppManager(
-      ash::android_sms::AndroidSmsAppManager* android_sms_app_manager);
-#endif
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // For extensions builds, skip userVisibleOnly requirement for worker-based
+  // extensions that set it to false.
+  bool ShouldSkipExtensionUserVisibleOnlyRequirements(
+      const GURL& origin,
+      bool requested_user_visible_only);
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   // Weak. This manager is owned by a keyed service on this profile.
   raw_ptr<Profile> profile_;
 
   BudgetDatabase budget_database_;
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::multidevice_setup::MultiDeviceSetupClient*
-      test_multidevice_setup_client_ = nullptr;
-
-  ash::android_sms::AndroidSmsAppManager* test_android_sms_app_manager_ =
-      nullptr;
-#endif
 
   base::WeakPtrFactory<PushMessagingNotificationManager> weak_factory_{this};
 };

@@ -7,12 +7,12 @@
 
 namespace ui {
 
-constexpr int kFluentScrollbarThickness = 14;
-constexpr int kFluentScrollbarThumbThickness = 6;
+constexpr int kFluentScrollbarThickness = 15;
+constexpr int kFluentScrollbarThumbThickness = 9;
 
 // A sufficiently large value ensures the most round curve for the corners of
-// the scrollbar thumb.
-constexpr int kFluentScrollbarThumbRadius = 999;
+// the scrollbar thumb and overlay buttons.
+constexpr int kFluentScrollbarPartsRadius = 999;
 
 // The value specifies the minimum length the scrollbar thumb can have*.
 // We choose 17px for compatibility reasons with the default scrollbar on the
@@ -32,21 +32,24 @@ constexpr int kFluentScrollbarMinimalThumbLength = 17;
 constexpr int kFluentScrollbarButtonSideLength = 18;
 
 // Arrow rect side length. The height and width of the rect are equal.
-constexpr int kFluentScrollbarArrowRectLength = 8;
+constexpr int kFluentScrollbarArrowRectLength = 9;
 
 // Arrow rect side length when the button is pressed. The height and width of
 // the rect are equal.
-constexpr int kFluentScrollbarPressedArrowRectLength = 7;
+constexpr int kFluentScrollbarPressedArrowRectLength = 8;
 
 // Use this length only when the font that contains arrow icons is not present
 // on the device and the default arrows are painted using SkPath. Since the
 // scrollbar thickness is an even number, we shift the odd rect from the
 // button's center. Also, we can avoid the usage of anti-aliasing, which tends
 // to produce visual defects on specific scales.
-constexpr int kFluentScrollbarPressedArrowRectFallbackLength = 6;
+constexpr int kFluentScrollbarPressedArrowRectFallbackLength = 7;
 
 // Offset the arrow icon by this amount off-center, away from the thumb.
 constexpr int kFluentScrollbarArrowOffset = 1;
+
+// The outline width used to paint track and buttons in High Contrast mode.
+constexpr float kFluentScrollbarTrackOutlineWidth = 1.0f;
 
 // The font that supports the drawing of Fluent scrollbar arrow icons.
 // Currently, it's only available on Windows 11 by default.
@@ -57,6 +60,11 @@ constexpr char kFluentScrollbarUpArrow[] = "\uEDDB";
 constexpr char kFluentScrollbarDownArrow[] = "\uEDDC";
 constexpr char kFluentScrollbarLeftArrow[] = "\uEDD9";
 constexpr char kFluentScrollbarRightArrow[] = "\uEDDA";
+
+// Track and button inset to be applied at the time of painting overlay
+// scrollbars. This will yield a 1dp border around the track that is
+// transparent yet interactive.
+constexpr int kFluentPaintedScrollbarTrackInset = 1;
 
 }  // namespace ui
 

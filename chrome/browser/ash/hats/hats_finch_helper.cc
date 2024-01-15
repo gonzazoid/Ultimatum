@@ -17,6 +17,8 @@ namespace ash {
 
 // These values should match the param key values in the finch config file.
 // static
+const char HatsFinchHelper::kEnabledForGooglersParam[] = "enabled_for_googlers";
+// static
 const char HatsFinchHelper::kCustomClientDataParam[] = "custom_client_data";
 // static
 const char HatsFinchHelper::kProbabilityParam[] = "prob";
@@ -71,6 +73,12 @@ std::string HatsFinchHelper::GetCustomClientDataAsString(
                                                 kCustomClientDataParam);
 }
 
+bool HatsFinchHelper::IsEnabledForGooglers(const HatsConfig& hats_config) {
+  DCHECK(base::FeatureList::IsEnabled(hats_config.feature));
+  return base::GetFieldTrialParamByFeatureAsBool(
+      hats_config.feature, kEnabledForGooglersParam, false);
+}
+
 HatsFinchHelper::HatsFinchHelper(Profile* profile,
                                  const HatsConfig& hats_config)
     : profile_(profile), hats_config_(hats_config) {
@@ -121,10 +129,11 @@ void HatsFinchHelper::LoadFinchParamValues(const HatsConfig& hats_config) {
                << first_survey_start_date_ms;
     // Set a random date in the distant future so that the survey never starts
     // until a new finch seed is received with the correct start date.
-    first_survey_start_date_ms = 2 * base::Time::Now().ToJsTime();
+    first_survey_start_date_ms =
+        2 * base::Time::Now().InMillisecondsFSinceUnixEpoch();
   }
   first_survey_start_date_ =
-      base::Time().FromJsTime(first_survey_start_date_ms);
+      base::Time().FromMillisecondsSinceUnixEpoch(first_survey_start_date_ms);
 
   trigger_id_ = GetTriggerID(hats_config);
 
@@ -138,14 +147,14 @@ void HatsFinchHelper::LoadFinchParamValues(const HatsConfig& hats_config) {
   if (reset_survey_cycle_ || reset_hats_) {
     probability_of_pick_ = 0;
     survey_cycle_length_ = INT_MAX;
-    first_survey_start_date_ =
-        base::Time().FromJsTime(2 * base::Time::Now().ToJsTime());
+    first_survey_start_date_ = base::Time().FromMillisecondsSinceUnixEpoch(
+        2 * base::Time::Now().InMillisecondsFSinceUnixEpoch());
   }
 }
 
 bool HatsFinchHelper::HasPreviousCycleEnded() {
   int64_t serialized_timestamp = profile_->GetPrefs()->GetInt64(
-      hats_config_.cycle_end_timestamp_pref_name);
+      hats_config_->cycle_end_timestamp_pref_name);
   base::Time recent_survey_cycle_end_time =
       base::Time::FromInternalValue(serialized_timestamp);
   return recent_survey_cycle_end_time < base::Time::Now();
@@ -167,7 +176,7 @@ void HatsFinchHelper::CheckForDeviceSelection() {
   // for the current cycle, then return the stored value of the result.
   if (!HasPreviousCycleEnded()) {
     device_is_selected_for_cycle_ =
-        profile_->GetPrefs()->GetBoolean(hats_config_.is_selected_pref_name);
+        profile_->GetPrefs()->GetBoolean(hats_config_->is_selected_pref_name);
     return;
   }
 
@@ -179,7 +188,7 @@ void HatsFinchHelper::CheckForDeviceSelection() {
   base::Time survey_cycle_end_date = ComputeNextEndDate();
 
   PrefService* pref_service = profile_->GetPrefs();
-  pref_service->SetInt64(hats_config_.cycle_end_timestamp_pref_name,
+  pref_service->SetInt64(hats_config_->cycle_end_timestamp_pref_name,
                          survey_cycle_end_date.ToInternalValue());
 
   double rand_double = base::RandDouble();
@@ -191,7 +200,7 @@ void HatsFinchHelper::CheckForDeviceSelection() {
   // of around 26 characters.
   is_selected = is_selected && (trigger_id_.length() > 15);
 
-  pref_service->SetBoolean(hats_config_.is_selected_pref_name, is_selected);
+  pref_service->SetBoolean(hats_config_->is_selected_pref_name, is_selected);
   device_is_selected_for_cycle_ = is_selected;
 }
 

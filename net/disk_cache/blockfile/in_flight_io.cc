@@ -4,13 +4,12 @@
 
 #include "net/disk_cache/blockfile/in_flight_io.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace disk_cache {
 
@@ -21,8 +20,10 @@ BackgroundIO::BackgroundIO(InFlightIO* controller)
 
 // Runs on the primary thread.
 void BackgroundIO::OnIOSignalled() {
-  if (controller_)
+  if (controller_) {
+    did_notify_controller_io_signalled_ = true;
     controller_->InvokeCallback(this, false);
+  }
 }
 
 void BackgroundIO::Cancel() {
@@ -41,7 +42,8 @@ BackgroundIO::~BackgroundIO() = default;
 // ---------------------------------------------------------------------------
 
 InFlightIO::InFlightIO()
-    : callback_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : callback_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
+}
 
 InFlightIO::~InFlightIO() = default;
 

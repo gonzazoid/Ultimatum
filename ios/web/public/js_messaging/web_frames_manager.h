@@ -5,8 +5,10 @@
 #ifndef IOS_WEB_PUBLIC_JS_MESSAGING_WEB_FRAMES_MANAGER_H_
 #define IOS_WEB_PUBLIC_JS_MESSAGING_WEB_FRAMES_MANAGER_H_
 
-#include <set>
-#include <string>
+#import <set>
+#import <string>
+
+#import "base/observer_list_types.h"
 
 namespace web {
 
@@ -14,17 +16,40 @@ class WebFrame;
 
 // Stores and provides access to all WebFrame objects associated with a
 // particular WebState.
-// NOTE: Code that store references to WebFrames must clear them in
-// WebStateObserver::WebFrameWillBecomeUnavailable, which is emitted when
-// WebFrames in current page become invalid and will be removed from
-// WebFramesManager (e.g. A new navigation is committed or failed, the web
-// process crashed, etc.).
 class WebFramesManager {
  public:
+  // Observer class to notify objects when WebFrames are added or removed.
+  class Observer : public base::CheckedObserver {
+   public:
+    Observer() = default;
+    ~Observer() override = default;
+
+    // Called when a frame is created or the user navigates to a new document.
+    // Receivers can keep references to `web_frame` only until
+    // `WebFrameBecameUnavailable` at which point the pointer will become
+    // invalid.
+    // TODO(crbug.com/1465518): This should pass a WeakPtr instead.
+    virtual void WebFrameBecameAvailable(WebFramesManager* web_frames_manager,
+                                         WebFrame* web_frame) {}
+
+    // Called when a frame is deleted or the user navigates away from
+    // `web_frame` before it is removed from the WebFramesManager. Receivers of
+    // this callback must clear any stored references to the `web_frame` with
+    // `frame_id`.
+    virtual void WebFrameBecameUnavailable(WebFramesManager* web_frames_manager,
+                                           const std::string& frame_id) {}
+  };
+
   WebFramesManager(const WebFramesManager&) = delete;
   WebFramesManager& operator=(const WebFramesManager&) = delete;
 
   virtual ~WebFramesManager() {}
+
+  // Adds and removes observers of WebFrame availability.
+  virtual void AddObserver(Observer* observer) = 0;
+  virtual void RemoveObserver(Observer* observer) = 0;
+
+  // TODO(crbug.com/1465518): Transition the below functions to return WeakPtrs.
 
   // Returns a list of all the web frames associated with WebState.
   // NOTE: Due to the asynchronous nature of renderer, this list may be

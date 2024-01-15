@@ -6,29 +6,31 @@
 #define CONTENT_PUBLIC_TEST_BROWSER_TEST_UTILS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/queue.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
+#include "base/strings/string_piece.h"
 #include "base/template_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/types/strong_alias.h"
 #include "build/build_config.h"
 #include "cc/test/pixel_test_utils.h"
 #include "components/viz/common/quads/compositor_frame.h"
-#include "content/public/browser/browser_message_filter.h"
 #include "content/public/browser/commit_deferring_condition.h"
+#include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/render_frame_metadata_provider.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
@@ -41,15 +43,14 @@
 #include "content/public/test/test_utils.h"
 #include "ipc/message_filter.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/self_owned_associated_receiver.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "net/base/load_flags.h"
 #include "net/cookies/cookie_options.h"
 #include "net/cookies/cookie_partition_key_collection.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
 #include "third_party/blink/public/common/context_menu_data/untrustworthy_context_menu_params.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
@@ -133,6 +134,7 @@ class RenderFrameHostImpl;
 class RenderFrameMetadataProviderImpl;
 class RenderFrameProxyHost;
 class RenderWidgetHost;
+class RenderWidgetHostImpl;
 class RenderWidgetHostView;
 class ScopedAllowRendererCrashes;
 class ToRenderFrameHost;
@@ -185,6 +187,24 @@ void NavigateToURLBlockUntilNavigationsComplete(
     int number_of_navigations,
     bool ignore_uncommitted_navigations = true);
 
+// Helpers for performing renderer-initiated navigations. Note these helpers are
+// only suitable when the navigation is expected to at least start successfully,
+// i.e. result in a `DidStartNavigation()` notification.
+//
+// To write a test where the renderer itself blocks or cancels the navigation,
+// use `ExecJs()` or `EvalJs()`, e.g.:
+//
+//   EXPECT_THAT(ExecJs("try { location = ''; } catch (e) { e.message; }")
+//                   .ExtractString(),
+//               HasSubStr("..."));
+//
+// To write a test where the navigation results in a bad message kill, use
+// `ExecuteScriptAsync()` + `RenderProcessHostBadMojoMessageWaiter`, e.g.:
+//
+//   ExecuteScriptAsync(rfh, JsReplace("location = $1", "/title2.html"));
+//   RenderProcessHostBadMojoMessageWaiter kill_waiter(rfh->GetProcess());
+//   EXPECT_THAT(kill_waiter.Wait(), Optional(HasSubstr("...")));
+
 // Perform a renderer-initiated navigation of |window| to |url|, blocking
 // until the navigation finishes.  The navigation is done by assigning
 // location.href in the frame |adapter|. Returns true if the page was loaded
@@ -197,21 +217,20 @@ void NavigateToURLBlockUntilNavigationsComplete(
 [[nodiscard]] bool NavigateToURLFromRenderer(const ToRenderFrameHost& adapter,
                                              const GURL& url,
                                              const GURL& expected_commit_url);
+
+// Similar to the two helpers above, but perform the renderer-initiated
+// navigation without a user gesture.
 [[nodiscard]] bool NavigateToURLFromRendererWithoutUserGesture(
     const ToRenderFrameHost& adapter,
     const GURL& url);
-// Similar to above but takes in an additional URL, |expected_commit_url|, to
-// which the navigation should eventually commit. (See the browser-initiated
-// counterpart for more details).
+
 [[nodiscard]] bool NavigateToURLFromRendererWithoutUserGesture(
     const ToRenderFrameHost& adapter,
     const GURL& url,
     const GURL& expected_commit_url);
 
-// Perform a renderer-initiated navigation of |window| to |url|. Unlike the
-// previous set of helpers, does not block. The navigation is done by assigning
-// location.href in the frame |adapter|. Returns the result of executing the IPC
-// to evaluate the JS that assigns location.href.
+// Perform a renderer-initiated navigation of `window` to `url`. Returns true if
+// the navigation started successfully and false otherwise.
 [[nodiscard]] bool BeginNavigateToURLFromRenderer(
     const ToRenderFrameHost& adapter,
     const GURL& url);
@@ -222,20 +241,20 @@ void NavigateToURLBlockUntilNavigationsComplete(
 //
 // This method does not trigger a user activation before the navigation.  If
 // necessary, a user activation can be triggered right before calling this
-// method, e.g. by calling |ExecuteScript(frame_tree_node, "")|.
+// method, e.g. by calling |ExecJs(frame_tree_node, "")|.
 bool NavigateIframeToURL(WebContents* web_contents,
-                         const std::string& iframe_id,
+                         base::StringPiece iframe_id,
                          const GURL& url);
 
 // Similar to |NavigateIframeToURL()| but returns as soon as the navigation is
 // initiated.
 bool BeginNavigateIframeToURL(WebContents* web_contents,
-                              const std::string& iframe_id,
+                              base::StringPiece iframe_id,
                               const GURL& url);
 
 // Generate a URL for a file path including a query string.
 GURL GetFileUrlWithQuery(const base::FilePath& path,
-                         const std::string& query_string);
+                         base::StringPiece query_string);
 
 // Checks whether the page type of the last committed navigation entry matches
 // |page_type|.
@@ -321,13 +340,13 @@ void SimulateMouseClickAt(WebContents* web_contents,
 // TODO(https://crbug.com/1199644): Make the Simulate* methods more user
 // friendly by taking zooming into account.
 gfx::PointF GetCenterCoordinatesOfElementWithId(
-    content::WebContents* web_contents,
-    const std::string& id);
+    const ToRenderFrameHost& adapter,
+    base::StringPiece id);
 
 // Retrieves the center coordinates of the element with id |id| and simulates a
 // mouse click there using SimulateMouseClickAt().
 void SimulateMouseClickOrTapElementWithId(content::WebContents* web_contents,
-                                          const std::string& id);
+                                          base::StringPiece id);
 
 // Simulates asynchronously a mouse enter/move/leave event. The mouse event is
 // routed through RenderWidgetHostInputEventRouter and thus can target OOPIFs.
@@ -347,7 +366,7 @@ void SimulateMouseWheelEvent(WebContents* web_contents,
 
 #if !BUILDFLAG(IS_MAC)
 // Simulate a mouse wheel event with the ctrl modifier set.
-void SimulateMouseWheelCtrlZoomEvent(WebContents* web_contents,
+void SimulateMouseWheelCtrlZoomEvent(RenderWidgetHost* render_widget_host,
                                      const gfx::Point& point,
                                      bool zoom_in,
                                      blink::WebMouseWheelEvent::Phase phase);
@@ -519,102 +538,45 @@ class ScopedSimulateModifierKeyPress {
 // Method to check what devices we have on the system.
 bool IsWebcamAvailableOnSystem(WebContents* web_contents);
 
-// Allow ExecuteScript* methods to target either a WebContents or a
+// Allow ExecJs/EvalJs methods to target either a WebContents or a
 // RenderFrameHost.  Targeting a WebContents means executing the script in the
 // RenderFrameHost returned by WebContents::GetPrimaryMainFrame(), which is the
 // main frame.  Pass a specific RenderFrameHost to target it. Embedders may
 // declare additional ConvertToRenderFrameHost functions for convenience.
 class ToRenderFrameHost {
  public:
-  template <typename T>
-  ToRenderFrameHost(T* frame_convertible_value)
-      : render_frame_host_(ConvertToRenderFrameHost(frame_convertible_value)) {}
+  template <typename Ptr>
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  ToRenderFrameHost(Ptr frame_convertible_value)
+      : render_frame_host_(ConvertToRenderFrameHost(
+            std::to_address(frame_convertible_value))) {}
 
   // Extract the underlying frame.
   RenderFrameHost* render_frame_host() const { return render_frame_host_; }
 
  private:
-  RenderFrameHost* render_frame_host_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union
+  RAW_PTR_EXCLUSION RenderFrameHost* render_frame_host_;
 };
 
 RenderFrameHost* ConvertToRenderFrameHost(RenderFrameHost* render_view_host);
 RenderFrameHost* ConvertToRenderFrameHost(WebContents* web_contents);
 
-// Deprecated: in new code, prefer ExecJs() -- it works the same, but has
-// better error handling. (Note: still use ExecuteScript() on pages with a
-// Content Security Policy).
-//
-// Executes the passed |script| in the specified frame with the user gesture.
-//
-// Appends |domAutomationController.send(...)| to the end of |script| and waits
-// until the response comes back (pumping the message loop while waiting).  The
-// |script| itself should not invoke domAutomationController.send(); if you want
-// to call domAutomationController.send(...) yourself and extract the result,
-// then use one of ExecuteScriptAndExtract... functions).
-//
-// Returns true on success (if the renderer responded back with the expected
-// value).  Returns false otherwise (e.g. if the script threw an exception
-// before calling the appended |domAutomationController.send(...)|, or if the
-// renderer died or if the renderer called |domAutomationController.send(...)|
-// with a malformed or unexpected value).
+// Executes the passed |script| in the specified frame with a user gesture,
+// without waiting for |script| completion.
 //
 // See also:
-// - ExecJs (preferred replacement with better error handling)
+// - ExecJs (if you want to wait for script completion, or detect syntax errors)
 // - EvalJs (if you want to retrieve a value)
-// - ExecuteScriptAsync (if you don't want to block for |script| completion)
 // - DOMMessageQueue (to manually wait for domAutomationController.send(...))
-[[nodiscard]] bool ExecuteScript(const ToRenderFrameHost& adapter,
-                                 const std::string& script);
-
-// Same as content::ExecuteScript but doesn't send a user gesture to the
-// renderer.
-[[nodiscard]] bool ExecuteScriptWithoutUserGesture(
-    const ToRenderFrameHost& adapter,
-    const std::string& script);
-
-// Similar to ExecuteScript above, but
-// - Doesn't modify the |script|.
-// - Kicks off execution of the |script| in the specified frame and returns
-//   immediately (without waiting for a response from the renderer and/or
-//   without checking that the script succeeded).
 void ExecuteScriptAsync(const ToRenderFrameHost& adapter,
-                        const std::string& script);
+                        base::StringPiece script);
 
 // Same as `content::ExecuteScriptAsync()`, but doesn't send a user gesture to
 // the renderer.
 void ExecuteScriptAsyncWithoutUserGesture(const ToRenderFrameHost& adapter,
-                                          const std::string& script);
-
-// The following methods execute the passed |script| in the specified frame and
-// sets |result| to the value passed to "window.domAutomationController.send" by
-// the executed script. They return true on success, false if the script
-// execution failed or did not evaluate to the expected type.
-//
-// Deprecated: Use EvalJs().
-[[nodiscard]] bool ExecuteScriptAndExtractDouble(
-    const ToRenderFrameHost& adapter,
-    const std::string& script,
-    double* result);
-[[nodiscard]] bool ExecuteScriptAndExtractInt(const ToRenderFrameHost& adapter,
-                                              const std::string& script,
-                                              int* result);
-[[nodiscard]] bool ExecuteScriptAndExtractBool(const ToRenderFrameHost& adapter,
-                                               const std::string& script,
-                                               bool* result);
-[[nodiscard]] bool ExecuteScriptAndExtractString(
-    const ToRenderFrameHost& adapter,
-    const std::string& script,
-    std::string* result);
-
-// Same as above but the script executed without user gesture.
-[[nodiscard]] bool ExecuteScriptWithoutUserGestureAndExtractBool(
-    const ToRenderFrameHost& adapter,
-    const std::string& script,
-    bool* result);
-[[nodiscard]] bool ExecuteScriptWithoutUserGestureAndExtractString(
-    const ToRenderFrameHost& adapter,
-    const std::string& script,
-    std::string* result);
+                                          base::StringPiece script);
 
 // JsLiteralHelper is a helper class that determines what types are legal to
 // pass to StringifyJsLiteral. Legal types include int, string, StringPiece,
@@ -629,10 +591,6 @@ struct JsLiteralHelper {
   }
 
   static base::Value Convert(const base::Value& value) { return value.Clone(); }
-
-  static base::Value Convert(const base::ListValue& value) {
-    return value.Clone();
-  }
 };
 
 // Specialization allowing GURL to be passed to StringifyJsLiteral.
@@ -660,7 +618,7 @@ struct JsLiteralHelper<url::Origin> {
 template <typename... Args>
 base::Value ListValueOf(Args&&... args) {
   base::Value::List values;
-  (values.Append(JsLiteralHelper<base::remove_cvref_t<Args>>::Convert(
+  (values.Append(JsLiteralHelper<std::remove_cvref_t<Args>>::Convert(
        std::forward<Args>(args))),
    ...);
   return base::Value(std::move(values));
@@ -680,7 +638,7 @@ base::Value ListValueOf(Args&&... args) {
 // Example 1:
 //
 //   GURL page_url("http://example.com");
-//   EXPECT_TRUE(ExecuteScript(
+//   EXPECT_TRUE(ExecJs(
 //       shell(), JsReplace("window.open($1, '_blank');", page_url)));
 //
 // $1 is replaced with a double-quoted JS string literal:
@@ -689,7 +647,7 @@ base::Value ListValueOf(Args&&... args) {
 // Example 2:
 //
 //   bool forced_reload = true;
-//   EXPECT_TRUE(ExecuteScript(
+//   EXPECT_TRUE(ExecJs(
 //       shell(), JsReplace("window.location.reload($1);", forced_reload)));
 //
 // This becomes "window.location.reload(true);" -- because bool values are
@@ -732,12 +690,18 @@ struct EvalJsResult {
   const base::Value value;  // Value; if things went well.
   const std::string error;  // Error; if things went badly.
 
-  // Creates an ExecuteScript result. If |error| is non-empty, |value| will be
+  // Creates an EvalJs result. If |error| is non-empty, |value| will be
   // ignored.
-  EvalJsResult(base::Value value, const std::string& error);
+  EvalJsResult(base::Value value, base::StringPiece error);
 
   // Copy ctor.
   EvalJsResult(const EvalJsResult& value);
+
+  // Matchers for successful & unsuccessful runs.
+  static auto IsOk() {
+    return testing::Field(&EvalJsResult::error, testing::Eq(""));
+  }
+  static auto IsError() { return testing::Not(IsOk()); }
 
   // Extract a result value of the requested type, or die trying.
   //
@@ -763,34 +727,62 @@ template <typename T>
 bool operator==(const T& a, const EvalJsResult& b) {
   return b.error.empty() && (JsLiteralHelper<T>::Convert(a) == b.value);
 }
+template <typename T>
+bool operator==(const EvalJsResult& a, const T& b) {
+  return b == a;
+}
 
 template <typename T>
 bool operator!=(const T& a, const EvalJsResult& b) {
   return b.error.empty() && (JsLiteralHelper<T>::Convert(a) != b.value);
+}
+template <typename T>
+bool operator!=(const EvalJsResult& a, const T& b) {
+  return b != a;
 }
 
 template <typename T>
 bool operator>=(const T& a, const EvalJsResult& b) {
   return b.error.empty() && (JsLiteralHelper<T>::Convert(a) >= b.value);
 }
+template <typename T>
+bool operator>=(const EvalJsResult& a, const T& b) {
+  return b < a;
+}
 
 template <typename T>
 bool operator<=(const T& a, const EvalJsResult& b) {
   return b.error.empty() && (JsLiteralHelper<T>::Convert(a) <= b.value);
+}
+template <typename T>
+bool operator<=(const EvalJsResult& a, const T& b) {
+  return b > a;
 }
 
 template <typename T>
 bool operator<(const T& a, const EvalJsResult& b) {
   return b.error.empty() && (JsLiteralHelper<T>::Convert(a) < b.value);
 }
+template <typename T>
+bool operator<(const EvalJsResult& a, const T& b) {
+  return b >= a;
+}
 
 template <typename T>
 bool operator>(const T& a, const EvalJsResult& b) {
   return b.error.empty() && (JsLiteralHelper<T>::Convert(a) > b.value);
 }
+template <typename T>
+bool operator>(const EvalJsResult& a, const T& b) {
+  return b <= a;
+}
 
 inline bool operator==(std::nullptr_t a, const EvalJsResult& b) {
   return b.error.empty() && (base::Value() == b.value);
+}
+template <typename T>
+inline bool operator==(const EvalJsResult& a, std::nullptr_t b) {
+  return nullptr == a;
 }
 
 // Provides informative failure messages when the result of EvalJs() is
@@ -804,16 +796,10 @@ enum EvalJsOptions {
   // that.
   EXECUTE_SCRIPT_NO_USER_GESTURE = (1 << 0),
 
-  // This bit controls how the result is obtained. By default, EvalJs's runner
-  // script will call domAutomationController.send() with the completion
-  // value. Setting this bit will disable that, requiring |script| to provide
-  // its own call to domAutomationController.send() instead.
-  EXECUTE_SCRIPT_USE_MANUAL_REPLY = (1 << 1),
-
   // By default, when the script passed to EvalJs evaluates to a Promise, the
   // execution continues until the Promise resolves, and the resolved value is
   // returned. Setting this bit disables such Promise resolution.
-  EXECUTE_SCRIPT_NO_RESOLVE_PROMISES = (1 << 2),
+  EXECUTE_SCRIPT_NO_RESOLVE_PROMISES = (1 << 1),
 };
 
 // EvalJs() -- run |script| in |execution_target| and return its value or error.
@@ -847,33 +833,9 @@ enum EvalJsOptions {
 // until the Promise resolves, which happens when the async function returns
 // the HTTP status code -- which is expected, in this case, to be 200.
 //
-// Quick migration guide for users of the classic ExecuteScriptAndExtract*():
-//  - If your page has a Content SecurityPolicy, don't migrate [yet]; CSP can
-//    interfere with the internal mechanism used here.
-//  - Get rid of the out-param. You call EvalJs no matter what your return
-//    type is.
 //  - If possible, pass the result of EvalJs() into the second argument of an
 //    EXPECT_EQ macro. This will trigger failure (and a nice message) if an
 //    error occurs.
-//  - Eliminate calls to domAutomationController.send() in |script|. In simple
-//    cases, |script| is just an expression you want the value of.
-//  - When a script previously installed a callback or event listener that
-//    invoked domAutomationController.send(x) asynchronously, there is a choice:
-//     * Preferred, but more rewriting: Use EvalJs with a Promise which
-//       resolves to the value you previously passed to send().
-//     * Less rewriting of |script|, but with some drawbacks: Use
-//       EXECUTE_SCRIPT_USE_MANUAL_REPLY in |options|. When specified, this
-//       means that |script| must continue to call
-//       domAutomationController.send(). Note that this option option disables
-//       some error-catching safeguards, but you still get the benefit of having
-//       an EvalJsResult that can be passed to EXPECT.
-//
-// Why prefer EvalJs over ExecuteScriptAndExtractString(), etc? Because:
-//
-//  - It's one function, that does everything, and more succinctly.
-//  - Can be used directly in EXPECT_EQ macros (no out- param pointers like
-//    ExecuteScriptAndExtractBool()) -- no temporary variable is required,
-//    usually resulting in fewer lines of code.
 //  - JS exceptions are reliably captured and will appear as C++ assertion
 //    failures.
 //  - JS stack traces arising from exceptions are annotated with the
@@ -882,13 +844,13 @@ enum EvalJsOptions {
 //  - |script| doesn't need to call domAutomationController.send directly.
 //  - When a script doesn't produce a result, it's likely an assertion
 //    failure rather than a hang.  Doesn't get confused by crosstalk with
-//    other callers of domAutomationController.send() -- script results carry
-//    a GUID.
+//    callers of domAutomationController.send() -- EvalJs does not rely on
+//    domAutomationController.
 //  - Lists, dicts, null values, etc. can be returned as base::Values.
 //
 // It is guaranteed that EvalJs works even when the target frame is frozen.
 [[nodiscard]] EvalJsResult EvalJs(const ToRenderFrameHost& execution_target,
-                                  const std::string& script,
+                                  base::StringPiece script,
                                   int options = EXECUTE_SCRIPT_DEFAULT_OPTIONS,
                                   int32_t world_id = ISOLATED_WORLD_ID_GLOBAL);
 
@@ -899,8 +861,8 @@ enum EvalJsOptions {
 // processed by the browser.
 [[nodiscard]] EvalJsResult EvalJsAfterLifecycleUpdate(
     const ToRenderFrameHost& execution_target,
-    const std::string& raf_script,
-    const std::string& script,
+    base::StringPiece raf_script,
+    base::StringPiece script,
     int options = EXECUTE_SCRIPT_DEFAULT_OPTIONS,
     int32_t world_id = ISOLATED_WORLD_ID_GLOBAL);
 
@@ -911,14 +873,10 @@ enum EvalJsOptions {
 // exception.
 //
 // As with EvalJs(), if the script passed evaluates to a Promise, this waits
-// until it resolves.
-//
-// Unlike ExecuteScript(), this catches syntax errors and uncaught exceptions,
-// and gives more useful error messages when things go wrong. Prefer ExecJs to
-// ExecuteScript(), unless your page has a CSP.
+// until it resolves (by default).
 [[nodiscard]] ::testing::AssertionResult ExecJs(
     const ToRenderFrameHost& execution_target,
-    const std::string& script,
+    base::StringPiece script,
     int options = EXECUTE_SCRIPT_DEFAULT_OPTIONS,
     int32_t world_id = ISOLATED_WORLD_ID_GLOBAL);
 
@@ -937,7 +895,7 @@ RenderFrameHost* FrameMatchingPredicate(
     base::RepeatingCallback<bool(RenderFrameHost*)> predicate);
 
 // Predicates for use with FrameMatchingPredicate[OrNullPtr]().
-bool FrameMatchesName(const std::string& name, RenderFrameHost* frame);
+bool FrameMatchesName(base::StringPiece name, RenderFrameHost* frame);
 bool FrameIsChildOfMainFrame(RenderFrameHost* frame);
 bool FrameHasSourceUrl(const GURL& url, RenderFrameHost* frame);
 
@@ -948,6 +906,9 @@ RenderFrameHost* ChildFrameAt(const ToRenderFrameHost& adapter, size_t index);
 // Returns true if |frame| has origin-keyed process isolation due to the
 // OriginAgentCluster header.
 bool HasOriginKeyedProcess(RenderFrameHost* frame);
+
+// Returns true if `frame` has a sandboxed SiteInstance.
+bool HasSandboxedSiteInstance(RenderFrameHost* frame);
 
 // Returns the frames visited by |RenderFrameHost::ForEachRenderFrameHost| in
 // the same order.
@@ -960,6 +921,10 @@ std::vector<RenderFrameHost*> CollectAllRenderFrameHosts(Page& page);
 // the same order.
 std::vector<RenderFrameHost*> CollectAllRenderFrameHosts(
     WebContents* web_contents);
+
+// Returns all WebContents. Note that this includes WebContents from any
+// BrowserContext.
+std::vector<WebContents*> GetAllWebContents();
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Executes the WebUI resource tests. Injects the test runner script prior to
@@ -987,28 +952,15 @@ std::vector<net::CanonicalCookie> GetCanonicalCookies(
     net::CookiePartitionKeyCollection key_collection =
         net::CookiePartitionKeyCollection::ContainsAll());
 
-// Sets a cookie for the given url. Uses inclusive SameSiteCookieContext and
-// SamePartyContext::Type by default, which get cookies regardless of their
-// SameSite and SameParty attributes. Returns true on success.
+// Sets a cookie for the given url. Uses inclusive SameSiteCookieContext by
+// default, which gets cookies regardless of their SameSite attribute. The
+// cookie is unpartitioned by default. Returns true on success.
 bool SetCookie(BrowserContext* browser_context,
                const GURL& url,
                const std::string& value,
                net::CookieOptions::SameSiteCookieContext context =
                    net::CookieOptions::SameSiteCookieContext::MakeInclusive(),
-               net::SamePartyContext::Type party_context =
-                   net::SamePartyContext::Type::kSameParty);
-
-// Same as `SetCookie`, but sets a Partitioned cookie with the given partition
-// key. `value` is expected to use the `Partitioned` attribute.
-bool SetPartitionedCookie(
-    BrowserContext* browser_context,
-    const GURL& url,
-    const std::string& value,
-    const net::CookiePartitionKey& cookie_partition_key,
-    net::CookieOptions::SameSiteCookieContext context =
-        net::CookieOptions::SameSiteCookieContext::MakeInclusive(),
-    net::SamePartyContext::Type party_context =
-        net::SamePartyContext::Type::kSameParty);
+               net::CookiePartitionKey* cookie_partition_key = nullptr);
 
 // Deletes cookies matching the provided filter. Returns the number of cookies
 // that were deleted.
@@ -1049,9 +1001,6 @@ void SetFileSystemAccessPermissionContext(
     FileSystemAccessPermissionContext* permission_context);
 
 // Waits until all resources have loaded in the given RenderFrameHost.
-// When the load completes, this function sends a "pageLoadComplete" message
-// via domAutomationController. The caller should make sure this extra
-// message is handled properly.
 [[nodiscard]] bool WaitForRenderFrameReady(RenderFrameHost* rfh);
 
 // Enable accessibility support for all of the frames in this WebContents
@@ -1074,7 +1023,7 @@ void WaitForAccessibilityTreeToChange(WebContents* web_contents);
 // WaitForAccessibilityTreeToChange, above, and then checks again.
 // Keeps looping until the text is found (or the test times out).
 void WaitForAccessibilityTreeToContainNodeWithName(WebContents* web_contents,
-                                                   const std::string& name);
+                                                   base::StringPiece name);
 
 // Get a snapshot of a web page's accessibility tree.
 ui::AXTreeUpdate GetAccessibilityTreeSnapshot(WebContents* web_contents);
@@ -1090,8 +1039,8 @@ ui::AXPlatformNodeDelegate* GetRootAccessibilityNode(WebContents* web_contents);
 struct FindAccessibilityNodeCriteria {
   FindAccessibilityNodeCriteria();
   ~FindAccessibilityNodeCriteria();
-  absl::optional<ax::mojom::Role> role;
-  absl::optional<std::string> name;
+  std::optional<ax::mojom::Role> role;
+  std::optional<std::string> name;
 };
 ui::AXPlatformNodeDelegate* FindAccessibilityNode(
     WebContents* web_contents,
@@ -1128,7 +1077,7 @@ RenderWidgetHost* GetMouseLockWidget(WebContents* web_contents);
 // all keys will be considered locked.  If |codes| has a value, then at least
 // one key must be specified.
 bool RequestKeyboardLock(WebContents* web_contents,
-                         absl::optional<base::flat_set<ui::DomCode>> codes);
+                         std::optional<base::flat_set<ui::DomCode>> codes);
 void CancelKeyboardLock(WebContents* web_contents);
 
 // Returns the screen orientation provider that's been set via
@@ -1244,7 +1193,7 @@ class RenderProcessHostKillWaiter {
   // |uma_name| is the name of the histogram from which the |bad_message_reason|
   // can be extracted.
   RenderProcessHostKillWaiter(RenderProcessHost* render_process_host,
-                              const std::string& uma_name);
+                              base::StringPiece uma_name);
 
   RenderProcessHostKillWaiter(const RenderProcessHostKillWaiter&) = delete;
   RenderProcessHostKillWaiter& operator=(const RenderProcessHostKillWaiter&) =
@@ -1252,9 +1201,9 @@ class RenderProcessHostKillWaiter {
 
   // Waits until the renderer process exits.  Extracts and returns the bad
   // message reason that should be logged in the |uma_name_| histogram.
-  // Returns |absl::nullopt| if the renderer exited normally or didn't log
+  // Returns |std::nullopt| if the renderer exited normally or didn't log
   // the |uma_name_| histogram.
-  [[nodiscard]] absl::optional<int> Wait();
+  [[nodiscard]] std::optional<int> Wait();
 
  private:
   RenderProcessHostWatcher exit_watcher_;
@@ -1282,15 +1231,15 @@ class RenderProcessHostBadMojoMessageWaiter {
 
   // Waits until |render_process_host| from the constructor is terminated
   // because of a bad/invalid mojo message and returns the associated error
-  // string.  Returns absl::nullopt if the process was terminated for an
+  // string.  Returns std::nullopt if the process was terminated for an
   // unrelated reason.
-  [[nodiscard]] absl::optional<std::string> Wait();
+  [[nodiscard]] std::optional<std::string> Wait();
 
  private:
   void OnBadMojoMessage(int render_process_id, const std::string& error);
 
   int monitored_render_process_id_;
-  absl::optional<std::string> observed_mojo_error_;
+  std::optional<std::string> observed_mojo_error_;
   RenderProcessHostKillWaiter kill_waiter_;
 };
 
@@ -1325,6 +1274,12 @@ class DOMMessageQueue {
   // message. Returns true on success.
   [[nodiscard]] bool WaitForMessage(std::string* message);
 
+  // Facilitates asynchronous use of the DOMMessageQueue. The given callback
+  // will be called once a message was put into the queue (or when there is a
+  // renderer crash).
+  // NOTE: This is incompatible with the DOMMessageQueue(RenderFrameHost*) ctor.
+  void SetOnMessageAvailableCallback(base::OnceClosure callback);
+
   // If there is a message in the queue, then copies it to |message| and returns
   // true.  Otherwise (if the queue is empty), returns false.
   [[nodiscard]] bool PopMessage(std::string* message);
@@ -1346,7 +1301,7 @@ class DOMMessageQueue {
   std::set<std::unique_ptr<MessageObserver>> observers_;
   base::CallbackListSubscription web_contents_creation_subscription_;
   base::queue<std::string> message_queue_;
-  base::OnceClosure quit_closure_;
+  base::OnceClosure callback_;
   bool renderer_crashed_ = false;
   raw_ptr<RenderFrameHost, DanglingUntriaged> render_frame_host_ = nullptr;
 };
@@ -1371,7 +1326,7 @@ class WebContentsAddedObserver {
 
   base::CallbackListSubscription creation_subscription_;
 
-  raw_ptr<WebContents, DanglingUntriaged> web_contents_ = nullptr;
+  raw_ptr<WebContents, AcrossTasksDanglingUntriaged> web_contents_ = nullptr;
   base::OnceClosure quit_closure_;
 };
 
@@ -1492,7 +1447,10 @@ class MainThreadFrameObserver {
  private:
   void Quit(bool);
 
-  raw_ptr<RenderWidgetHost> render_widget_host_;
+  // This dangling raw_ptr occurred in:
+  // browser_tests: All/NavigationPageLoadMetricsBrowserTest.FirstInputDelay/1
+  // https://ci.chromium.org/ui/p/chromium/builders/try/win-rel/180209/test-results?q=ExactID%3Aninja%3A%2F%2Fchrome%2Ftest%3Abrowser_tests%2FNavigationPageLoadMetricsBrowserTest.FirstInputDelay%2FAll.1+VHash%3Abdbee181b3e0309b
+  raw_ptr<RenderWidgetHost, FlakyDanglingUntriaged> render_widget_host_;
   base::OnceClosure quit_closure_;
   int routing_id_;
 };
@@ -1566,9 +1524,9 @@ class InputEventAckWaiter : public RenderWidgetHost::InputEventObserver {
                        const blink::WebInputEvent& event) override;
 
  private:
-  raw_ptr<RenderWidgetHost> render_widget_host_;
+  base::WeakPtr<RenderWidgetHostImpl> render_widget_host_;
   InputEventAckPredicate predicate_;
-  bool event_received_;
+  bool event_received_ = false;
   base::OnceClosure quit_closure_;
 };
 
@@ -1669,8 +1627,9 @@ class TestNavigationManager : public WebContentsObserver {
   // where throttles run and none defer, this will break at the same time as
   // WaitForRequestStart. Note: since we won't know which throttle deferred,
   // don't use ResumeNavigation() after this call since it assumes we paused
-  // from the TestNavigationManagerThrottle.
-  void WaitForFirstYieldAfterDidStartNavigation();
+  // from the TestNavigationManagerThrottle. Returns false if the waiting was
+  // terminated before reaching DidStartNavigation (e.g. timeout).
+  bool WaitForFirstYieldAfterDidStartNavigation();
 
   // Waits until the navigation request is ready to be sent to the network
   // stack. This will wait until all NavigationThrottles have proceeded through
@@ -1684,8 +1643,9 @@ class TestNavigationManager : public WebContentsObserver {
   [[nodiscard]] bool WaitForResponse();
 
   // Waits until the navigation has been finished. Will automatically resume
-  // navigations paused before this point.
-  void WaitForNavigationFinished();
+  // navigations paused before this point. Returns false if the waiting was
+  // terminated before reaching DidStartNavigation (e.g. timeout).
+  [[nodiscard]] bool WaitForNavigationFinished();
 
   // Resume the navigation.
   // * Called after |WaitForRequestStart|, it causes the request to be sent.
@@ -1737,7 +1697,7 @@ class TestNavigationManager : public WebContentsObserver {
 
   // Waits for the desired state. Returns false if the desired state cannot be
   // reached (eg the navigation finishes before reaching this state).
-  bool WaitForDesiredState();
+  [[nodiscard]] bool WaitForDesiredState();
 
   // Called when the state of the navigation has changed. This will either stop
   // the message loop if the state specified by the user has been reached, or
@@ -1747,7 +1707,9 @@ class TestNavigationManager : public WebContentsObserver {
   void ResumeIfPaused();
 
   const GURL url_;
-  NavigationRequest* request_ = nullptr;
+  // This field is not a raw_ptr<> because of incompatibilities with tracing
+  // (TRACE_EVENT*), perfetto::TracedDictionary::Add and gmock/EXPECT_THAT.
+  RAW_PTR_EXCLUSION NavigationRequest* request_ = nullptr;
   bool navigation_paused_ = false;
   NavigationState current_state_ = NavigationState::INITIAL;
   NavigationState desired_state_ = NavigationState::WILL_START;
@@ -1795,6 +1757,9 @@ class TestActivationManager : public WebContentsObserver {
   // given URL starts running its CommitDeferringConditions. It'll also be
   // cleared when the navigation finishes.
   NavigationHandle* GetNavigationHandle();
+
+  // Sets the callback that is called after all commit deferring conditions run.
+  void SetCallbackCalledAfterActivationIsReady(base::OnceClosure callback);
 
   // Whether the navigation successfully committed.
   bool was_committed() const { return was_committed_; }
@@ -1870,6 +1835,10 @@ class TestActivationManager : public WebContentsObserver {
   bool was_successful_ = false;
   bool was_activated_ = false;
 
+  // Callback to be called in the last condition callback after all commit
+  // deferring conditions run.
+  base::OnceClosure callback_in_last_condition;
+
   base::WeakPtrFactory<TestActivationManager> weak_factory_{this};
 };
 
@@ -1897,7 +1866,7 @@ class NavigationHandleCommitObserver : public content::WebContentsObserver {
 class WebContentsConsoleObserver : public WebContentsObserver {
  public:
   struct Message {
-    raw_ptr<RenderFrameHost, DanglingUntriaged> source_frame;
+    raw_ptr<RenderFrameHost, AcrossTasksDanglingUntriaged> source_frame;
     blink::mojom::ConsoleMessageLevel log_level;
     std::u16string message;
     int32_t line_no;
@@ -1914,7 +1883,7 @@ class WebContentsConsoleObserver : public WebContentsObserver {
 
   // Waits for a message to come in that matches the set filter, if any. If no
   // filter is set, waits for the first message that comes in.
-  bool Wait();
+  [[nodiscard]] bool Wait();
 
   // Sets a custom filter to be used while waiting for a message, allowing
   // more custom filtering (e.g. based on source).
@@ -1938,12 +1907,35 @@ class WebContentsConsoleObserver : public WebContentsObserver {
       const std::u16string& message,
       int32_t line_no,
       const std::u16string& source_id,
-      const absl::optional<std::u16string>& untrusted_stack_trace) override;
+      const std::optional<std::u16string>& untrusted_stack_trace) override;
 
   Filter filter_;
   std::string pattern_;
   WaiterHelper waiter_helper_;
   std::vector<Message> messages_;
+};
+
+// A helper class to get DevTools inspector log messages (e.g. network errors).
+class DevToolsInspectorLogWatcher : public DevToolsAgentHostClient {
+ public:
+  explicit DevToolsInspectorLogWatcher(WebContents* web_contents);
+  ~DevToolsInspectorLogWatcher() override;
+
+  void FlushAndStopWatching();
+  std::string last_message() { return last_message_; }
+  GURL last_url() { return last_url_; }
+
+  // DevToolsAgentHostClient:
+  void DispatchProtocolMessage(DevToolsAgentHost* host,
+                               base::span<const uint8_t> message) override;
+  void AgentHostClosed(DevToolsAgentHost* host) override;
+
+ private:
+  scoped_refptr<DevToolsAgentHost> host_;
+  base::RunLoop run_loop_enable_log_;
+  base::RunLoop run_loop_disable_log_;
+  std::string last_message_;
+  GURL last_url_;
 };
 
 // Static methods that simulates Mojo methods as if they were called by a
@@ -2076,7 +2068,7 @@ class BlobURLStoreInterceptor
       const GURL& url,
       // TODO(https://crbug.com/1224926): Remove these once experiment is over.
       const base::UnguessableToken& unsafe_agent_cluster_id,
-      const absl::optional<net::SchemefulSite>& unsafe_top_level_site,
+      const std::optional<net::SchemefulSite>& unsafe_top_level_site,
       RegisterCallback callback) override;
 
  private:
@@ -2350,7 +2342,7 @@ class CreateAndLoadWebContentsObserver {
   // be called multiple times.
   void UnregisterIfNeeded();
 
-  absl::optional<LoadStopObserver> load_stop_observer_;
+  std::optional<LoadStopObserver> load_stop_observer_;
   base::CallbackListSubscription creation_subscription_;
 
   raw_ptr<WebContents, DanglingUntriaged> web_contents_ = nullptr;
@@ -2360,12 +2352,38 @@ class CreateAndLoadWebContentsObserver {
   int num_new_contents_seen_ = 0;
 };
 
+// Waits for the given number of calls to
+// WebContentsObserver::OnCookiesAccessed.
+class CookieChangeObserver : public content::WebContentsObserver {
+ public:
+  explicit CookieChangeObserver(content::WebContents* web_contents,
+                                int num_expected_calls = 1);
+  ~CookieChangeObserver() override;
+
+  void Wait();
+
+ private:
+  void OnCookiesAccessed(content::RenderFrameHost* render_frame_host,
+                         const content::CookieAccessDetails& details) override;
+  void OnCookiesAccessed(content::NavigationHandle* navigation,
+                         const content::CookieAccessDetails& details) override;
+
+  void OnCookieAccessed();
+
+  base::RunLoop run_loop_;
+  int num_seen_ = 0;
+  int num_expected_calls_;
+};
+
 [[nodiscard]] base::CallbackListSubscription
 RegisterWebContentsCreationCallback(
     base::RepeatingCallback<void(WebContents*)> callback);
 
-// Functions to traverse history and wait until the traversal completes. These
-// are wrappers around the same-named methods of the `NavigationController`.
+// Functions to traverse history and wait until the traversal completes, even if
+// the loading is stopped halfway (e.g. if a BackForwardCache entry is evicted
+// during the restoration, causing the old NavigationRequest to be reset and a
+// new NavigationRequest to be restarted). These are wrappers around the
+// same-named methods of the `NavigationController`.
 [[nodiscard]] bool HistoryGoToIndex(WebContents* wc, int index);
 [[nodiscard]] bool HistoryGoToOffset(WebContents* wc, int offset);
 [[nodiscard]] bool HistoryGoBack(WebContents* wc);

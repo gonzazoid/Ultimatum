@@ -4,22 +4,22 @@
 
 import 'chrome://diagnostics/diagnostics_app.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {DiagnosticsAppElement} from 'chrome://diagnostics/diagnostics_app.js';
 import {DiagnosticsBrowserProxyImpl} from 'chrome://diagnostics/diagnostics_browser_proxy.js';
 import {fakeBatteryChargeStatus, fakeBatteryHealth, fakeBatteryInfo, fakeCpuUsage, fakeKeyboards, fakeMemoryUsage, fakeSystemInfo, fakeTouchDevices} from 'chrome://diagnostics/fake_data.js';
 import {FakeInputDataProvider} from 'chrome://diagnostics/fake_input_data_provider.js';
 import {FakeSystemDataProvider} from 'chrome://diagnostics/fake_system_data_provider.js';
-import {KeyboardInfo} from 'chrome://diagnostics/input_data_provider.mojom-webui.js';
+import {KeyboardInfo} from 'chrome://diagnostics/input.mojom-webui.js';
 import {setInputDataProviderForTesting, setSystemDataProviderForTesting} from 'chrome://diagnostics/mojo_interface_provider.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertFalse, assertTrue} from '../../chai_assert.js';
 
 import {TestDiagnosticsBrowserProxy} from './test_diagnostics_browser_proxy.js';
 
-export function appTestSuiteForInputHiding() {
+suite('appTestSuiteForInputHiding', function() {
   /** @type {?DiagnosticsAppElement} */
   let page = null;
 
@@ -50,7 +50,7 @@ export function appTestSuiteForInputHiding() {
   });
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
 
     loadTimeData.overrideValues(
         {isTouchpadEnabled: false, isTouchscreenEnabled: false});
@@ -107,4 +107,4 @@ export function appTestSuiteForInputHiding() {
     await flushTasks();
     assertFalse(navigationSelectorHasId('input'));
   });
-}
+});

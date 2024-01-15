@@ -6,13 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "device/bluetooth/bluetooth_gatt_notify_session.h"
 #include "device/bluetooth/bluetooth_remote_gatt_descriptor.h"
 
@@ -171,14 +170,14 @@ void BluetoothRemoteGattCharacteristic::ExecuteStartNotifySession(
   // this command should be resolved with the same result.
   if (previous_command.type == CommandType::kStart) {
     if (!previous_command.error_code) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
               &BluetoothRemoteGattCharacteristic::OnStartNotifySessionSuccess,
               GetWeakPtr(), std::move(callback)));
       return;
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
               &BluetoothRemoteGattCharacteristic::OnStartNotifySessionError,
@@ -194,7 +193,7 @@ void BluetoothRemoteGattCharacteristic::ExecuteStartNotifySession(
                  << "notification_type";
     else
       LOG(ERROR) << "Characteristic needs NOTIFY or INDICATE";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &BluetoothRemoteGattCharacteristic::OnStartNotifySessionError,
@@ -207,7 +206,7 @@ void BluetoothRemoteGattCharacteristic::ExecuteStartNotifySession(
   // subscribe again. All we need to do is call the success callback, which
   // will create and return a session object to the caller.
   if (IsNotifying()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &BluetoothRemoteGattCharacteristic::OnStartNotifySessionSuccess,
@@ -223,7 +222,7 @@ void BluetoothRemoteGattCharacteristic::ExecuteStartNotifySession(
   if (ccc_descriptor.size() != 1u) {
     LOG(ERROR) << "Found " << ccc_descriptor.size()
                << " client characteristic configuration descriptors.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &BluetoothRemoteGattCharacteristic::OnStartNotifySessionError,
@@ -267,9 +266,9 @@ void BluetoothRemoteGattCharacteristic::OnStartNotifySessionSuccess(
   DCHECK(notify_command_running_);
   pending_notify_commands_.pop();
 
-  std::unique_ptr<device::BluetoothGattNotifySession> notify_session(
-      new BluetoothGattNotifySession(weak_ptr_factory_.GetWeakPtr()));
-  notify_sessions_.insert(notify_session.get());
+  auto notify_session = std::make_unique<device::BluetoothGattNotifySession>(
+      weak_ptr_factory_.GetWeakPtr());
+  notify_sessions_.insert(notify_session->unique_id());
 
   auto this_ptr = GetWeakPtr();
   std::move(callback).Run(std::move(notify_session));
@@ -305,7 +304,7 @@ void BluetoothRemoteGattCharacteristic::OnStartNotifySessionError(
 }
 
 void BluetoothRemoteGattCharacteristic::StopNotifySession(
-    BluetoothGattNotifySession* session,
+    BluetoothGattNotifySession::Id session,
     base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto split_callback = base::SplitOnceCallback(std::move(callback));
@@ -323,7 +322,7 @@ void BluetoothRemoteGattCharacteristic::StopNotifySession(
 }
 
 void BluetoothRemoteGattCharacteristic::ExecuteStopNotifySession(
-    BluetoothGattNotifySession* session,
+    BluetoothGattNotifySession::Id session,
     base::OnceClosure callback,
     CommandStatus previous_command) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -332,7 +331,7 @@ void BluetoothRemoteGattCharacteristic::ExecuteStopNotifySession(
   // If the session does not even belong to this characteristic, we return an
   // error right away.
   if (session_iterator == notify_sessions_.end()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &BluetoothRemoteGattCharacteristic::OnStopNotifySessionError,
@@ -343,7 +342,7 @@ void BluetoothRemoteGattCharacteristic::ExecuteStopNotifySession(
 
   // If there are more active sessions, then we return right away.
   if (notify_sessions_.size() > 1) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &BluetoothRemoteGattCharacteristic::OnStopNotifySessionSuccess,
@@ -359,7 +358,7 @@ void BluetoothRemoteGattCharacteristic::ExecuteStopNotifySession(
   if (ccc_descriptor.size() != 1u) {
     LOG(ERROR) << "Found " << ccc_descriptor.size()
                << " client characteristic configuration descriptors.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &BluetoothRemoteGattCharacteristic::OnStopNotifySessionError,
@@ -387,7 +386,7 @@ void BluetoothRemoteGattCharacteristic::CancelStopNotifySession(
 }
 
 void BluetoothRemoteGattCharacteristic::OnStopNotifySessionSuccess(
-    BluetoothGattNotifySession* session,
+    BluetoothGattNotifySession::Id session,
     base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(notify_command_running_);
@@ -408,7 +407,7 @@ void BluetoothRemoteGattCharacteristic::OnStopNotifySessionSuccess(
 }
 
 void BluetoothRemoteGattCharacteristic::OnStopNotifySessionError(
-    BluetoothGattNotifySession* session,
+    BluetoothGattNotifySession::Id session,
     base::OnceClosure callback,
     BluetoothGattService::GattErrorCode error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);

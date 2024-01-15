@@ -7,8 +7,8 @@
 
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/bindings/dictionary_base.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
 
@@ -17,28 +17,84 @@ namespace blink {
 class MLGraphBuilder;
 class MLOperand;
 
-class MODULES_EXPORT MLOperator final : public ScriptWrappable {
-  DEFINE_WRAPPERTYPEINFO();
-
+class MODULES_EXPORT MLOperator : public GarbageCollected<MLOperator> {
  public:
   enum class OperatorKind {
     // Keep the order as the same as build methods of MLGraphBuilder.
+    kArgMin,
+    kArgMax,
+    kBatchNormalization,
+    kCast,
     kClamp,
+    kConcat,
     kConv2d,
+    kConvTranspose2d,
     kAdd,
     kSub,
     kMul,
     kDiv,
-    kMax,
     kMin,
+    kMax,
+    kPow,
+    kEqual,
+    kGreater,
+    kGreaterOrEqual,
+    kLesser,
+    kLesserOrEqual,
+    kAbs,
+    kCeil,
+    kCos,
+    kExp,
+    kFloor,
+    kLog,
+    kNeg,
+    kSin,
+    kTan,
+    kErf,
+    kIdentity,
+    kLogicalNot,
+    kReciprocal,
+    kSqrt,
+    kInstanceNormalization,
+    kLayerNormalization,
+    kLeakyRelu,
+    kLinear,
+    kElu,
+    kExpand,
+    kGather,
     kGemm,
+    kHardSigmoid,
     kHardSwish,
     kAveragePool2d,
+    kMatmul,
     kMaxPool2d,
+    kPad,
+    kPRelu,
+    kReduceL1,
+    kReduceL2,
+    kReduceLogSum,
+    kReduceLogSumExp,
+    kReduceMax,
+    kReduceMean,
+    kReduceMin,
+    kReduceProduct,
+    kReduceSum,
+    kReduceSumSquare,
     kRelu,
     kReshape,
-    kSoftmax
+    kResample2d,
+    kSigmoid,
+    kSlice,
+    kSoftmax,
+    kSoftplus,
+    kSoftsign,
+    kSplit,
+    kTanh,
+    kTranspose,
+    kWhere
   };
+
+  static String OperatorKindToString(MLOperator::OperatorKind kind);
 
   // It is safe for a caller, usually a MLGraphBuidler operation build method,
   // that passes the reference of the options dictionary argument received from
@@ -59,9 +115,9 @@ class MODULES_EXPORT MLOperator final : public ScriptWrappable {
   MLOperator(const MLOperator&) = delete;
   MLOperator& operator=(const MLOperator&) = delete;
 
-  ~MLOperator() override;
+  ~MLOperator();
 
-  void Trace(Visitor* visitor) const override;
+  void Trace(Visitor* visitor) const;
 
   OperatorKind Kind() const;
   const bindings::DictionaryBase* Options() const;
@@ -85,14 +141,90 @@ class MODULES_EXPORT MLOperator final : public ScriptWrappable {
   // OperatorKind is kClamp, options_ could static_cast to MLClampOptions.
   Member<const bindings::DictionaryBase> options_;
   // is_conneted_ indicates whether the operator is connected with operands.
-  // According to WebNN spec https://www.w3.org/TR/webnn/#api-mloperator, an
-  // operator without operand connections could be used as an activation
-  // function that is fused into another operator.
+  // An operator without operand connections could be used by an MLActivation
+  // to represent an activation function that is fused into another operator.
   bool is_connected_{false};
   HeapVector<Member<const MLOperand>> inputs_;
   HeapVector<Member<const MLOperand>> outputs_;
 };
 
+class MODULES_EXPORT MLConcatOperator : public MLOperator {
+ public:
+  MLConcatOperator(MLGraphBuilder* builder, const uint32_t axis);
+
+  MLConcatOperator(const MLConcatOperator&) = delete;
+  MLConcatOperator& operator=(const MLConcatOperator&) = delete;
+
+  ~MLConcatOperator();
+
+  uint32_t Axis() const;
+
+ private:
+  uint32_t axis_;
+};
+
+class MODULES_EXPORT MLPadOperator : public MLOperator {
+ public:
+  MLPadOperator(MLGraphBuilder* builder,
+                const Vector<uint32_t>& beginning_padding,
+                const Vector<uint32_t>& ending_padding,
+                const bindings::DictionaryBase* options = nullptr);
+
+  MLPadOperator(const MLPadOperator&) = delete;
+  MLPadOperator& operator=(const MLPadOperator&) = delete;
+
+  ~MLPadOperator();
+
+  const Vector<uint32_t>& BeginningPadding() const;
+  const Vector<uint32_t>& EndingPadding() const;
+
+ private:
+  Vector<uint32_t> beginning_padding_;
+  Vector<uint32_t> ending_padding_;
+};
+
+class MODULES_EXPORT MLSliceOperator : public MLOperator {
+ public:
+  MLSliceOperator(MLGraphBuilder* builder,
+                  const Vector<uint32_t>& beginning_padding,
+                  const Vector<uint32_t>& ending_padding);
+
+  MLSliceOperator(const MLSliceOperator&) = delete;
+  MLSliceOperator& operator=(const MLSliceOperator&) = delete;
+
+  ~MLSliceOperator();
+
+  const Vector<uint32_t>& Starts() const;
+  const Vector<uint32_t>& Sizes() const;
+
+ private:
+  Vector<uint32_t> starts_;
+  Vector<uint32_t> sizes_;
+};
+
+class MODULES_EXPORT MLSplitOperator : public MLOperator {
+ public:
+  MLSplitOperator(MLGraphBuilder* builder,
+                  const uint32_t splits,
+                  const bindings::DictionaryBase* options = nullptr);
+  MLSplitOperator(MLGraphBuilder* builder,
+                  const Vector<uint32_t>& splits,
+                  const bindings::DictionaryBase* options = nullptr);
+
+  MLSplitOperator(const MLSplitOperator&) = delete;
+  MLSplitOperator& operator=(const MLSplitOperator&) = delete;
+
+  ~MLSplitOperator();
+
+  bool IsEvenSplit() const;
+  uint32_t SplitNumber() const;
+  const Vector<uint32_t>& SplitSizes() const;
+
+ private:
+  bool is_even_split_;
+  uint32_t split_number_;
+  Vector<uint32_t> split_sizes_;
+};
 }  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_MODULES_ML_WEBNN_ML_OPERATOR_H_

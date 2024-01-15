@@ -19,6 +19,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/scoped_group_bookmark_actions.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
@@ -32,17 +33,16 @@ namespace {
 
 scoped_refptr<const Extension> CreateExtensionWithBookmarksPermission(
     bool include_bookmarks) {
-  ListBuilder permissions;
+  base::Value::List permissions;
   permissions.Append("declarativeContent");
   if (include_bookmarks)
     permissions.Append("bookmarks");
   return ExtensionBuilder()
-      .SetManifest(DictionaryBuilder()
+      .SetManifest(base::Value::Dict()
                        .Set("name", "Test extension")
                        .Set("version", "1.0")
                        .Set("manifest_version", 2)
-                       .Set("permissions", permissions.Build())
-                       .Build())
+                       .Set("permissions", std::move(permissions)))
       .Build();
 }
 
@@ -257,7 +257,7 @@ TEST_F(DeclarativeContentIsBookmarkedConditionTrackerTest,
 
   // Remove the bookmark.
   delegate_.evaluation_requests().clear();
-  bookmark_model_->Remove(node);
+  bookmark_model_->Remove(node, bookmarks::metrics::BookmarkEditSource::kOther);
   EXPECT_THAT(delegate_.evaluation_requests(),
               UnorderedElementsAre(tabs[0].get()));
   EXPECT_TRUE(CheckPredicates(tabs[0].get(), false));
@@ -307,7 +307,8 @@ TEST_F(DeclarativeContentIsBookmarkedConditionTrackerTest, ExtensiveChanges) {
     // removed nodes.
     delegate_.evaluation_requests().clear();
     bookmark_model_->BeginExtensiveChanges();
-    bookmark_model_->Remove(node);
+    bookmark_model_->Remove(node,
+                            bookmarks::metrics::BookmarkEditSource::kOther);
     EXPECT_TRUE(delegate_.evaluation_requests().empty());
     EXPECT_TRUE(CheckPredicates(tabs[0].get(), true));
     EXPECT_TRUE(CheckPredicates(tabs[1].get(), false));
@@ -341,7 +342,8 @@ TEST_F(DeclarativeContentIsBookmarkedConditionTrackerTest, ExtensiveChanges) {
     delegate_.evaluation_requests().clear();
     {
       bookmarks::ScopedGroupBookmarkActions scoped_group(bookmark_model_);
-      bookmark_model_->Remove(node);
+      bookmark_model_->Remove(node,
+                              bookmarks::metrics::BookmarkEditSource::kOther);
       EXPECT_TRUE(delegate_.evaluation_requests().empty());
       EXPECT_TRUE(CheckPredicates(tabs[0].get(), true));
       EXPECT_TRUE(CheckPredicates(tabs[1].get(), false));

@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
@@ -20,15 +20,19 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/chrome_extension_browser_constants.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/webui/extensions/extensions_hats_handler.h"
 #include "chrome/browser/ui/webui/favicon_source.h"
 #include "chrome/browser/ui/webui/managed_ui_handler.h"
 #include "chrome/browser/ui/webui/metrics_handler.h"
+#include "chrome/browser/ui/webui/page_not_available_for_guest/page_not_available_for_guest_ui.h"
+#include "chrome/browser/ui/webui/plural_string_handler.h"
 #include "chrome/browser/ui/webui/webui_util.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/browser_resources.h"
-#include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/extensions_resources.h"
 #include "chrome/grit/extensions_resources_map.h"
 #include "chrome/grit/generated_resources.h"
@@ -67,13 +71,14 @@ std::string GetLoadTimeClasses(bool in_dev_mode) {
   return in_dev_mode ? "in-dev-mode" : std::string();
 }
 
-content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
-                                                 bool in_dev_mode) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIExtensionsHost);
+content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
+                                                       bool in_dev_mode) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIExtensionsHost);
   webui::SetupWebUIDataSource(
       source, base::make_span(kExtensionsResources, kExtensionsResourcesSize),
       IDR_EXTENSIONS_EXTENSIONS_HTML);
+  webui::SetupChromeRefresh2023(source);
 
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
     // Add common strings.
@@ -117,6 +122,12 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
      IDS_EXTENSIONS_EDIT_SITE_PERMISSIONS_CUSTOMIZE_PER_EXTENSION},
     {"editSitePermissionsRestrictExtensions",
      IDS_EXTENSIONS_EDIT_SITE_PERMISSIONS_RESTRICT_EXTENSIONS},
+    {"enableToggleTooltipDisabled",
+     IDS_EXTENSIONS_ENABLE_TOGGLE_TOOLTIP_DISABLED},
+    {"enableToggleTooltipEnabled",
+     IDS_EXTENSIONS_ENABLE_TOGGLE_TOOLTIP_ENABLED},
+    {"enableToggleTooltipEnabledWithSiteAccess",
+     IDS_EXTENSIONS_ENABLE_TOGGLE_TOOLTIP_ENABLED_WITH_SITE_ACCESS},
     {"errorsPageHeading", IDS_EXTENSIONS_ERROR_PAGE_HEADING},
     {"clearActivities", IDS_EXTENSIONS_CLEAR_ACTIVITIES},
     {"clearAll", IDS_EXTENSIONS_ERROR_CLEAR_ALL},
@@ -127,18 +138,24 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
     {"anonymousFunction", IDS_EXTENSIONS_ERROR_ANONYMOUS_FUNCTION},
     {"errorContext", IDS_EXTENSIONS_ERROR_CONTEXT},
     {"errorContextUnknown", IDS_EXTENSIONS_ERROR_CONTEXT_UNKNOWN},
+    {"safetyCheckExtensionsDetailPagePrimaryLabel",
+     IDS_EXTENSIONS_SAFETY_CHECK_PRIMARY_LABEL},
+    {"safetyCheckExtensionsKeep", IDS_CONFIRM_DOWNLOAD},
     {"stackTrace", IDS_EXTENSIONS_ERROR_STACK_TRACE},
     // TODO(dpapad): Unify with Settings' IDS_SETTINGS_WEB_STORE.
-    {"openChromeWebStore", IDS_EXTENSIONS_SIDEBAR_OPEN_CHROME_WEB_STORE},
+    {"sidebarDiscoverMore", IDS_EXTENSIONS_SIDEBAR_DISCOVER_MORE},
     {"keyboardShortcuts", IDS_EXTENSIONS_SIDEBAR_KEYBOARD_SHORTCUTS},
     {"incognitoInfoWarning", IDS_EXTENSIONS_INCOGNITO_WARNING},
     {"hostPermissionsDescription", IDS_EXTENSIONS_HOST_PERMISSIONS_DESCRIPTION},
+    {"permissionsLearnMoreLabel",
+     IDS_EXTENSIONS_PERMISSIONS_LEARN_MORE_A11Y_LABEL},
     {"hostPermissionsEdit", IDS_EXTENSIONS_HOST_PERMISSIONS_EDIT},
     {"hostPermissionsHeading", IDS_EXTENSIONS_ITEM_HOST_PERMISSIONS_HEADING},
     {"newHostPermissionsHeading", IDS_EXTENSIONS_NEW_HOST_PERMISSIONS_HEADING},
     {"hostPermissionsSubHeading", IDS_EXTENSIONS_HOST_PERMISSIONS_SUB_HEADING},
+    {"hostAccessAskOnEveryVisit",
+     IDS_EXTENSIONS_HOST_ACCESS_ASK_ON_EVERY_VISIT},
     {"hostAccessOnClick", IDS_EXTENSIONS_HOST_ACCESS_ON_CLICK},
-    {"hostAccessWhenClicked", IDS_EXTENSIONS_HOST_ACCESS_WHEN_CLICKED},
     {"hostAccessOnSpecificSites", IDS_EXTENSIONS_HOST_ACCESS_ON_SPECIFIC_SITES},
     {"hostAccessAllowOnSpecificSites",
      IDS_EXTENSIONS_HOST_ACCESS_ALLOW_ON_SPECIFIC_SITES},
@@ -204,6 +221,7 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
     {"itemPermissionsEmpty", IDS_EXTENSIONS_ITEM_PERMISSIONS_EMPTY},
     {"itemPermissionsAndSiteAccessEmpty",
      IDS_EXTENSIONS_ITEM_PERMISSIONS_AND_SITE_ACCESS_EMPTY},
+    {"itemPinToToolbar", IDS_EXTENSIONS_ITEM_PIN_TO_TOOLBAR},
     {"itemRemoveExtension", IDS_EXTENSIONS_ITEM_REMOVE_EXTENSION},
     {"itemShowAccessRequestsInToolbar",
      IDS_EXTENSIONS_ITEM_SHOW_ACCESS_REQUESTS_IN_TOOLBAR},
@@ -251,6 +269,7 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
     {"missingOrUninstalledExtension", IDS_MISSING_OR_UNINSTALLED_EXTENSION},
     {"noActivities", IDS_EXTENSIONS_NO_ACTIVITIES},
     {"noErrorsToShow", IDS_EXTENSIONS_ERROR_NO_ERRORS_CODE_MESSAGE},
+    {"opensInNewTab", IDS_EXTENSIONS_OPENS_IN_NEW_TAB},
     {"removeSitesDialogTitle", IDS_EXTENSIONS_REMOVE_SITES_DIALOG_TITLE},
     {"runtimeHostsDialogInputError",
      IDS_EXTENSIONS_RUNTIME_HOSTS_DIALOG_INPUT_ERROR},
@@ -267,15 +286,23 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
     {"packDialogKeyFile", IDS_EXTENSIONS_PACK_DIALOG_KEY_FILE_LABEL},
     {"packDialogContent", IDS_EXTENSION_PACK_DIALOG_HEADING},
     {"packDialogConfirm", IDS_EXTENSIONS_PACK_DIALOG_CONFIRM_BUTTON},
+    {"publishedInStoreRequiredByPolicy",
+     IDS_EXTENSIONS_DISABLED_PUBLISHED_IN_STORE_REQUIRED_BY_POLICY},
     {"sitePermissions", IDS_EXTENSIONS_SITE_PERMISSIONS},
     {"sitePermissionsAllSitesPageTitle",
      IDS_EXTENSIONS_SITE_PERMISSIONS_ALL_SITES_PAGE_TITLE},
     {"sitePermissionsAllSitesExtensionCount",
+     // TODO(crbug.com/1402795): Convert the below two strings to use plural
+     // strings.
      IDS_EXTENSIONS_SITE_PERMISSIONS_ALL_SITES_EXTENSION_COUNT},
+    {"sitePermissionsAllSitesOneExtension",
+     IDS_EXTENSIONS_SITE_PERMISSIONS_ALL_SITES_ONE_EXTENSION},
     {"sitePermissionsAlwaysOnAllSites",
      IDS_EXTENSIONS_SITE_PERMISSIONS_ALWAYS_ON_ALL_SITES},
     {"sitePermissionsAlwaysOnThisSite",
      IDS_EXTENSIONS_SITE_PERMISSIONS_ALWAYS_ON_THIS_SITE},
+    {"sitePermissionsAskOnEveryVisit",
+     IDS_EXTENSIONS_SITE_PERMISSIONS_ASK_ON_EVERY_VISIT},
     {"sitePermissionsPageTitle", IDS_EXTENSIONS_SITE_PERMISSIONS_PAGE_TITLE},
     {"sitePermissionsAddSiteDialogTitle",
      IDS_EXTENSIONS_SITE_PERMISSIONS_ADD_SITE_DIALOG_TITLE},
@@ -290,13 +317,16 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
     {"sitePermissionsEditPermissionsDialogTitle",
      IDS_EXTENSIONS_SITE_PERMISSIONS_EDIT_PERMISSIONS_DIALOG_TITLE},
     {"sitePermissionsEditUrl", IDS_EXTENSIONS_SITE_PERMISSIONS_EDIT_URL},
-    {"sitePermissionsOnClick", IDS_EXTENSIONS_SITE_PERMISSIONS_ON_CLICK},
+    {"sitePermissionsIncludesSubdomains",
+     IDS_EXTENSIONS_SITE_PERMISSIONS_INCLUDES_SUBDOMAINS},
     {"sitePermissionsViewAllSites",
      IDS_EXTENSIONS_SITE_PERMISSIONS_VIEW_ALL_SITES},
+    {"siteSettings", IDS_EXTENSIONS_SITE_SETTINGS},
     {"permittedSites", IDS_EXTENSIONS_PERMITTED_SITES},
     {"restrictedSites", IDS_EXTENSIONS_RESTRICTED_SITES},
     {"noSitesAdded", IDS_EXTENSIONS_NO_SITES_ADDED},
-    {"editShortcut", IDS_EXTENSIONS_EDIT_SHORTCUT},
+    {"editShortcutInputLabel", IDS_EXTENSIONS_EDIT_SHORTCUT_INPUT_LABEL},
+    {"editShortcutButtonLabel", IDS_EXTENSIONS_EDIT_SHORTCUT_BUTTON_LABEL},
     {"shortcutNotSet", IDS_EXTENSIONS_SHORTCUT_NOT_SET},
     {"shortcutScopeGlobal", IDS_EXTENSIONS_SHORTCUT_SCOPE_GLOBAL},
     {"shortcutScopeLabel", IDS_EXTENSIONS_SHORTCUT_SCOPE_LABEL},
@@ -325,7 +355,14 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
     {"viewInactive", IDS_EXTENSIONS_VIEW_INACTIVE},
     {"viewIframe", IDS_EXTENSIONS_VIEW_IFRAME},
     {"viewServiceWorker", IDS_EXTENSIONS_SERVICE_WORKER_BACKGROUND},
-
+    {"safetyCheckKeepExtension", IDS_EXTENSIONS_SC_KEEP_EXT},
+    {"safetyCheckRemoveAll", IDS_EXTENSIONS_SC_REMOVE_ALL},
+    {"safetyCheckAllExtensions", IDS_EXTENSIONS_SC_ALL_EXTENSIONS},
+    {"safetyHubHeader", IDS_SETTINGS_SAFETY_HUB},
+    {"safetyCheckRemoveButtonA11yLabel",
+     IDS_EXTENSIONS_SC_REMOVE_BUTTON_A11Y_LABEL},
+    {"safetyCheckOptionMenuA11yLabel",
+     IDS_EXTENSIONS_SC_OPTION_MENU_A11Y_LABEL},
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     {"manageKioskApp", IDS_EXTENSIONS_MANAGE_KIOSK_APP},
     {"kioskAddApp", IDS_EXTENSIONS_KIOSK_ADD_APP},
@@ -359,9 +396,8 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
                              GURL(chrome::kRemoveNonCWSExtensionURL),
                              g_browser_process->GetApplicationLocale())
                              .spec()));
-  source->AddString(
-      "enhancedSafeBrowsingWarningHelpUrl",
-      base::ASCIIToUTF16(chrome::kCwsEnhancedSafeBrowsingLearnMoreURL));
+  source->AddString("enhancedSafeBrowsingWarningHelpUrl",
+                    chrome::kCwsEnhancedSafeBrowsingLearnMoreURL);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   source->AddString(
       "kioskDisableBailoutWarningBody",
@@ -373,7 +409,9 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
       "getMoreExtensionsUrl",
       base::ASCIIToUTF16(
           google_util::AppendGoogleLocaleParam(
-              GURL(extension_urls::GetWebstoreExtensionsCategoryURL()),
+              extension_urls::AppendUtmSource(
+                  GURL(extension_urls::GetWebstoreExtensionsCategoryURL()),
+                  extension_urls::kExtensionsSidebarUtmSource),
               g_browser_process->GetApplicationLocale())
               .spec()));
   source->AddString("hostPermissionsLearnMoreLink",
@@ -385,17 +423,46 @@ content::WebUIDataSource* CreateExtensionsSource(Profile* profile,
 
   source->AddString(kLoadTimeClassesKey, GetLoadTimeClasses(in_dev_mode));
 
+  source->AddBoolean(
+      "safetyCheckExtensionsReviewEnabled",
+      base::FeatureList::IsEnabled(features::kSafetyCheckExtensions));
+
   source->AddBoolean(kEnableEnhancedSiteControls,
                      base::FeatureList::IsEnabled(
                          extensions_features::kExtensionsMenuAccessControl));
   source->AddString(
       "showAccessRequestsInToolbarLearnMoreLink",
       chrome_extension_constants::kShowAccessRequestsInToolbarHelpURL);
+  source->AddBoolean(
+      "enableUserPermittedSites",
+      base::FeatureList::IsEnabled(
+          extensions_features::kExtensionsMenuAccessControlWithPermittedSites));
+  source->AddBoolean(
+      "safetyCheckShowReviewPanel",
+      base::FeatureList::IsEnabled(features::kSafetyCheckExtensions));
+  source->AddBoolean("safetyHubShowReviewPanel",
+                     base::FeatureList::IsEnabled(features::kSafetyHub));
 
   return source;
 }
 
 }  // namespace
+
+ExtensionsUIConfig::ExtensionsUIConfig()
+    : WebUIConfig(content::kChromeUIScheme, chrome::kChromeUIExtensionsHost) {}
+
+ExtensionsUIConfig::~ExtensionsUIConfig() = default;
+
+std::unique_ptr<content::WebUIController>
+ExtensionsUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                          const GURL& url) {
+  Profile* profile = Profile::FromWebUI(web_ui);
+  if (profile->IsGuestSession()) {
+    return std::make_unique<PageNotAvailableForGuestUI>(
+        web_ui, chrome::kChromeUIExtensionsHost);
+  }
+  return std::make_unique<ExtensionsUI>(web_ui);
+}
 
 ExtensionsUI::ExtensionsUI(content::WebUI* web_ui)
     : WebUIController(web_ui),
@@ -409,8 +476,12 @@ ExtensionsUI::ExtensionsUI(content::WebUI* web_ui)
                     base::BindRepeating(&ExtensionsUI::OnDevModeChanged,
                                         base::Unretained(this)));
 
-  source = CreateExtensionsSource(profile, *in_dev_mode_);
+  source = CreateAndAddExtensionsSource(profile, *in_dev_mode_);
   ManagedUIHandler::Initialize(web_ui, source);
+
+  auto safety_check_hats_handler =
+      std::make_unique<ExtensionsHatsHandler>(profile);
+  web_ui->AddMessageHandler(std::move(safety_check_hats_handler));
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   auto kiosk_app_handler = std::make_unique<ash::KioskAppsHandler>(
@@ -423,10 +494,19 @@ ExtensionsUI::ExtensionsUI(content::WebUI* web_ui)
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ObjectSrc, "object-src 'self';");
 
-  content::WebUIDataSource::Add(profile, source);
   content::URLDataSource::Add(
       profile, std::make_unique<FaviconSource>(
                    profile, chrome::FaviconUrlFormat::kFavicon2));
+
+  // Add a handler to provide pluralized strings.
+  auto plural_string_handler = std::make_unique<PluralStringHandler>();
+  plural_string_handler->AddLocalizedString("safetyCheckTitle",
+                                            IDS_EXTENSIONS_SC_TITLE);
+  plural_string_handler->AddLocalizedString("safetyCheckDescription",
+                                            IDS_EXTENSIONS_SC_DESCRIPTION);
+  plural_string_handler->AddLocalizedString("safetyCheckAllDoneForNow",
+                                            IDS_EXTENSIONS_SC_ALL_DONE_FOR_NOW);
+  web_ui->AddMessageHandler(std::move(plural_string_handler));
 }
 
 ExtensionsUI::~ExtensionsUI() = default;

@@ -5,24 +5,11 @@
 module network.mojom;
 
 import "mojo/public/mojom/base/big_buffer.mojom";
-import "services/network/public/mojom/url_loader_network_service_observer.mojom";
-import "services/network/public/mojom/client_security_state.mojom";
-import "services/network/public/mojom/cors.mojom";
-import "services/network/public/mojom/cookie_access_observer.mojom";
-import "services/network/public/mojom/chunked_data_pipe_getter.mojom";
-import "services/network/public/mojom/data_pipe_getter.mojom";
 import "services/network/public/mojom/early_hints.mojom";
-import "services/network/public/mojom/fetch_api.mojom";
 import "services/network/public/mojom/http_request_headers.mojom";
-import "services/network/public/mojom/isolation_info.mojom";
-import "services/network/public/mojom/network_param.mojom";
 import "services/network/public/mojom/request_priority.mojom";
-import "services/network/public/mojom/site_for_cookies.mojom";
-import "services/network/public/mojom/trust_tokens.mojom";
 import "services/network/public/mojom/url_loader_completion_status.mojom";
-import "services/network/public/mojom/url_request.mojom";
 import "services/network/public/mojom/url_response_head.mojom";
-import "services/network/public/mojom/web_bundle_handle.mojom";
 import "url/mojom/url.mojom";
 
 [Native]
@@ -41,8 +28,7 @@ interface URLLoader {
   // description, to notify the service side.
   const uint32 kClientDisconnectReason = 1;
 
-  // If the associated request has |auto_follow_redirects| set to false, then
-  // upon receiving an URLResponse with a non-NULL |redirect_url| field,
+  // Upon receiving a redirect through |URLLoaderClient::OnReceiveRedirect|,
   // |FollowRedirect| may be called to load the URL indicated by the redirect.
   //
   // |removed_headers| can be used to remove existing headers for the redirect.
@@ -132,7 +118,7 @@ interface URLLoaderClient {
   // The loader should only call this after it has finished the load or
   // errored, as the client could potentially close the Mojo connection upon
   // receiving this which may delete the loader. For example, if it passed a
-  // data pipe to OnStartLoadingResponseBody(), the loader should only call
+  // data pipe to OnReceiveResponse(), the loader should only call
   // OnComplete() after it has finished writing to the data pipe (or errored).
   // Note that the client might not have finished reading the body by the time
   // it receives this message, and only knows it is done when the data pipe is

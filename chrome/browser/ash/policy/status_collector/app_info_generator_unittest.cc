@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
@@ -16,8 +17,6 @@
 #include "chrome/browser/apps/app_service/publisher_host.h"
 #include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
-#include "chrome/browser/web_applications/test/fake_install_finalizer.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
 #include "chrome/browser/web_applications/web_app.h"
@@ -30,8 +29,8 @@
 #include "components/session_manager/core/session_manager.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/scoped_user_manager.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_task_environment.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::AllOf;
@@ -53,21 +52,26 @@ namespace {
 class TimePeriodMatcher : public MatcherInterface<const em::TimePeriod&> {
  public:
   explicit TimePeriodMatcher(const em::TimePeriod& time_period)
-      : start_(base::Time::FromJavaTime(time_period.start_timestamp())),
-        end_(base::Time::FromJavaTime(time_period.end_timestamp())) {}
+      : start_(base::Time::FromMillisecondsSinceUnixEpoch(
+            time_period.start_timestamp())),
+        end_(base::Time::FromMillisecondsSinceUnixEpoch(
+            time_period.end_timestamp())) {}
 
   bool MatchAndExplain(const em::TimePeriod& time_period,
                        MatchResultListener* listener) const override {
     bool start_timestamp_equal =
-        time_period.start_timestamp() == start_.ToJavaTime();
+        time_period.start_timestamp() == start_.InMillisecondsSinceUnixEpoch();
     if (!start_timestamp_equal) {
       *listener << " |start_timestamp| is "
-                << base::Time::FromJavaTime(time_period.start_timestamp());
+                << base::Time::FromMillisecondsSinceUnixEpoch(
+                       time_period.start_timestamp());
     }
-    bool end_timestamp_equal = time_period.end_timestamp() == end_.ToJavaTime();
+    bool end_timestamp_equal =
+        time_period.end_timestamp() == end_.InMillisecondsSinceUnixEpoch();
     if (!end_timestamp_equal) {
       *listener << " |end_timestamp| is "
-                << base::Time::FromJavaTime(time_period.end_timestamp());
+                << base::Time::FromMillisecondsSinceUnixEpoch(
+                       time_period.end_timestamp());
     }
     return start_timestamp_equal && end_timestamp_equal;
   }
@@ -113,8 +117,8 @@ auto EqApp(const std::string& app_id,
 
 auto MakeActivity(const base::Time& start_time, const base::Time& end_time) {
   em::TimePeriod time_period;
-  time_period.set_start_timestamp(start_time.ToJavaTime());
-  time_period.set_end_timestamp(end_time.ToJavaTime());
+  time_period.set_start_timestamp(start_time.InMillisecondsSinceUnixEpoch());
+  time_period.set_end_timestamp(end_time.InMillisecondsSinceUnixEpoch());
   return time_period;
 }
 
@@ -143,8 +147,8 @@ class AppInfoGeneratorTest : public ::testing::Test {
     apps::AppType app_type = app->app_type;
     std::vector<apps::AppPtr> deltas;
     deltas.push_back(std::move(app));
-    GetCache().OnApps(std::move(deltas), app_type,
-                      /*should_notify_initialized=*/false);
+    AppServiceProxy()->OnApps(std::move(deltas), app_type,
+                              /*should_notify_initialized=*/false);
   }
 
   void PushApp(const std::string& app_id,
@@ -198,6 +202,9 @@ class AppInfoGeneratorTest : public ::testing::Test {
     profile_ = CreateProfile(account_id_);
     test_clock().SetNow(MakeLocalTime("25-MAR-2020 1:30am"));
 
+    // Wait for AppServiceProxy to be ready.
+    app_service_test_.SetUp(profile_.get());
+
     auto* provider = web_app::FakeWebAppProvider::Get(profile_.get());
     provider->SetRunSubsystemStartupTasks(true);
     provider->Start();
@@ -205,9 +212,8 @@ class AppInfoGeneratorTest : public ::testing::Test {
     app_registrar_ = &provider->GetRegistrarMutable();
   }
 
-  apps::AppRegistryCache& GetCache() {
-    return apps::AppServiceProxyFactory::GetForProfile(profile_.get())
-        ->AppRegistryCache();
+  apps::AppServiceProxy* AppServiceProxy() {
+    return apps::AppServiceProxyFactory::GetForProfile(profile_.get());
   }
 
   apps::InstanceRegistry& GetInstanceRegistry() {
@@ -229,7 +235,7 @@ class AppInfoGeneratorTest : public ::testing::Test {
   }
 
   void RegisterApp(std::unique_ptr<web_app::WebApp> web_app) {
-    web_app::AppId app_id = web_app->app_id();
+    webapps::AppId app_id = web_app->app_id();
     DCHECK(!app_registrar_->GetAppById(app_id));
     app_registrar_->registry().emplace(std::move(app_id), std::move(web_app));
   }
@@ -242,9 +248,10 @@ class AppInfoGeneratorTest : public ::testing::Test {
 
   static auto EqActivity(const base::Time& start_time,
                          const base::Time& end_time) {
-    return AllOf(
-        Property(&em::TimePeriod::start_timestamp, start_time.ToJavaTime()),
-        Property(&em::TimePeriod::end_timestamp, end_time.ToJavaTime()));
+    return AllOf(Property(&em::TimePeriod::start_timestamp,
+                          start_time.InMillisecondsSinceUnixEpoch()),
+                 Property(&em::TimePeriod::end_timestamp,
+                          end_time.InMillisecondsSinceUnixEpoch()));
   }
 
   base::Time MakeLocalTime(const std::string& time_string) {
@@ -269,14 +276,15 @@ class AppInfoGeneratorTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   AccountId account_id_;
   std::unique_ptr<TestingProfile> profile_;
-  web_app::WebAppRegistrarMutable* app_registrar_;
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<web_app::WebAppRegistrarMutable> app_registrar_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
   TestingPrefServiceSimple pref_service_;
 
   session_manager::SessionManager session_manager_;
 
   base::SimpleTestClock test_clock_;
+  apps::AppServiceTest app_service_test_;
 };
 
 TEST_F(AppInfoGeneratorTest, GenerateInventoryList) {
@@ -304,7 +312,7 @@ TEST_F(AppInfoGeneratorTest, GenerateInventoryList) {
 TEST_F(AppInfoGeneratorTest, GenerateWebApp) {
   user_manager()->LoginUser(account_id(), true);
   auto generator = GetReadyGenerator();
-  web_app::AppId app_id;
+  webapps::AppId app_id;
   {
     auto web_app = web_app::test::CreateWebApp(
         GURL("http://app.com/app/path"), web_app::WebAppManagement::kDefault);
@@ -339,7 +347,7 @@ TEST_F(AppInfoGeneratorTest, GenerateWebApp) {
 TEST_F(AppInfoGeneratorTest, GenerateSystemWebApp) {
   user_manager()->LoginUser(account_id(), true);
   auto generator = GetReadyGenerator();
-  web_app::AppId app_id;
+  webapps::AppId app_id;
   {
     auto web_app = web_app::test::CreateWebApp(
         GURL("http://app.com/app/path"), web_app::WebAppManagement::kDefault);

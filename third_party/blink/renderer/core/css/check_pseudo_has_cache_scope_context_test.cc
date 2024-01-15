@@ -77,15 +77,16 @@ class CheckPseudoHasCacheScopeContextTest : public PageTestBase {
     HeapVector<CSSSelector> arena;
     base::span<CSSSelector> selector_vector = CSSParser::ParseSelector(
         MakeGarbageCollected<CSSParserContext>(
-            *document, NullURL(), true /* origin_clean */, Referrer(),
-            WTF::TextEncoding(), CSSParserContext::kSnapshotProfile),
-        /*parent_rule_for_nesting=*/nullptr, nullptr, selector_text, arena);
+            *document, NullURL(), true /* origin_clean */, Referrer()),
+        CSSNestingType::kNone,
+        /*parent_rule_for_nesting=*/nullptr, /*is_within_scope=*/false, nullptr,
+        selector_text, arena);
     CSSSelectorList* selector_list =
         CSSSelectorList::AdoptSelectorVector(selector_vector);
     const CSSSelector* selector = nullptr;
     for (selector = selector_list->First();
          selector && selector->GetPseudoType() != CSSSelector::kPseudoHas;
-         selector = selector->TagHistory()) {
+         selector = selector->NextSimpleSelector()) {
     }
     if (!selector) {
       ADD_FAILURE() << "Failed : " << query_name << " (Cannot find :has() in "
@@ -107,8 +108,8 @@ class CheckPseudoHasCacheScopeContextTest : public PageTestBase {
       String test_name =
           String::Format("[%s] cache result of %s", query_name.Utf8().c_str(),
                          expected_result_cache_entry.element_query);
-      Element* element =
-          document->QuerySelector(expected_result_cache_entry.element_query);
+      Element* element = document->QuerySelector(
+          AtomicString(expected_result_cache_entry.element_query));
       DCHECK(element) << "Failed to get `"
                       << expected_result_cache_entry.element_query << "'";
 
@@ -157,7 +158,7 @@ class CheckPseudoHasCacheScopeContextTest : public PageTestBase {
                    unsigned expected_fast_reject_filter_cache_count,
                    unsigned expected_bloom_filter_allocation_count) const {
     Element* query_scope_element =
-        document->getElementById(query_scope_element_id);
+        document->getElementById(AtomicString(query_scope_element_id));
     ASSERT_TRUE(query_scope_element);
 
     CheckPseudoHasCacheScope cache_scope(document);
@@ -166,7 +167,7 @@ class CheckPseudoHasCacheScopeContextTest : public PageTestBase {
                                        query_scope_element_id, selector_text);
 
     EXPECT_EQ(expected_match_result,
-              query_scope_element->matches(selector_text))
+              query_scope_element->matches(AtomicString(selector_text)))
         << "Failed : " << query_name;
 
     CheckCacheResults(
@@ -187,7 +188,7 @@ class CheckPseudoHasCacheScopeContextTest : public PageTestBase {
       unsigned expected_fast_reject_filter_cache_count,
       unsigned expected_bloom_filter_allocation_count) const {
     Element* query_scope_element =
-        document->getElementById(query_scope_element_id);
+        document->getElementById(AtomicString(query_scope_element_id));
     ASSERT_TRUE(query_scope_element);
 
     CheckPseudoHasCacheScope cache_scope(document);
@@ -196,15 +197,15 @@ class CheckPseudoHasCacheScopeContextTest : public PageTestBase {
                                        query_scope_element_id, selector_text);
 
     StaticElementList* result =
-        query_scope_element->QuerySelectorAll(selector_text);
+        query_scope_element->QuerySelectorAll(AtomicString(selector_text));
 
     EXPECT_EQ(query_result_size, result->length()) << "Failed : " << query_name;
     unsigned size_max = query_result_size > result->length() ? query_result_size
                                                              : result->length();
     for (unsigned i = 0; i < size_max; ++i) {
-      EXPECT_EQ(
-          (i < query_result_size ? expected_results[i] : "<null>"),
-          (i < result->length() ? result->item(i)->GetIdAttribute() : "<null>"))
+      EXPECT_EQ((i < query_result_size ? expected_results[i] : "<null>"),
+                (i < result->length() ? result->item(i)->GetIdAttribute()
+                                      : AtomicString()))
           << "Failed :" << query_name << " result at index " << i;
     }
 

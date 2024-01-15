@@ -1894,13 +1894,13 @@
   <message desc="Backslash (\) character description." name="IDS_CHROMEVOX_BACKSLASH">
     {COUNT, plural, =1 {backslash}other {# backslashes}}
   </message>
-  <message desc="BULLET (•) character description." name="IDS_CHROMEVOX_BULLET">
+  <message desc="BULLET (•) character description announced by ChromeVox screen reader." name="IDS_CHROMEVOX_BULLET">
     {COUNT, plural, =1 {bullet}other {# bullets}}
   </message>
-  <message desc="Second level bullet (◦) character description." name="IDS_CHROMEVOX_WHITE_BULLET">
+  <message desc="Second level bullet (◦) character description announced by ChromeVox screen reader." name="IDS_CHROMEVOX_WHITE_BULLET">
     {COUNT, plural, =1 {white bullet}other {# white bullets}}
   </message>
-  <message desc="Third level bullet (■) character description." name="IDS_CHROMEVOX_SQUARE_BULLET">
+  <message desc="Third level bullet (■) character description announced by ChromeVox screen reader." name="IDS_CHROMEVOX_SQUARE_BULLET">
     {COUNT, plural, =1 {square bullet}other {# square bullets}}
   </message>
   <message desc="Describes the braille click command. Displayed in the options page." name="IDS_CHROMEVOX_BRAILLE_ROUTING">
@@ -1959,6 +1959,9 @@
   </message>
   <message desc="Describes the pass through key command. Shown in options page." name="IDS_CHROMEVOX_PASS_THROUGH_KEY_DESCRIPTION">
     Pass through key
+  </message>
+  <message desc="Spoken after pressing the pass through key command while sticky mode is enabled." name="IDS_CHROMEVOX_PASS_THROUGH_UNAVAILABLE_WITH_STICKY_MODE" is_accessibility_with_no_ui="true">
+    Pass through is unavailable with sticky mode on
   </message>
   <message desc="Describes the show context menu command. Shown in options page." name="IDS_CHROMEVOX_SHOW_CONTEXT_MENU">
     Show context menu
@@ -2055,20 +2058,8 @@
   <message desc="Title displayed in the panel for the menuitem to report an issue." name="IDS_CHROMEVOX_PANEL_MENU_ITEM_REPORT_ISSUE">
     Report an issue
   </message>
-  <message desc="Title of a notification that ChromeVox has been updated." name="IDS_CHROMEVOX_UPDATE_TITLE">
-    ChromeVox Updated
-  </message>
-  <message desc="Message text for a notification that ChromeVox has been updated for a new release." name="IDS_CHROMEVOX_UPDATE_MESSAGE_NEW">
-    Press ChromeVox o, n to find out what's new
-  </message>
   <message desc="Description of button that closes the ChromeVox Tutorial" name="IDS_CHROMEVOX_CLOSE_TUTORIAL">
     Close ChromeVox Tutorial
-  </message>
-  <message desc="Button that goes to the previous page in the ChromeVox Tutorial" name="IDS_CHROMEVOX_TUTORIAL_PREVIOUS">
-    Previous
-  </message>
-  <message desc="Button that goes to the next page in the ChromeVox Tutorial" name="IDS_CHROMEVOX_TUTORIAL_NEXT">
-    Next
   </message>
   <message desc="Heading that welcomes users to the ChromeVox tutorial" name="IDS_CHROMEVOX_TUTORIAL_WELCOME_HEADING">
     Welcome to ChromeVox!
@@ -2159,21 +2150,6 @@
     Congratulations! You’ve learned the essentials to use ChromeVox successfully. Remember that you can open the ChromeVox command menu at any time by pressing Search+Period. To learn even more about ChromeVox and ChromeOS, visit the following articles.
     If you're done with the tutorial, use ChromeVox to navigate to the Close button and click it.
   </message>
-  <message desc="Part of the ChromeVox update notes for m63, title." name="IDS_CHROMEVOX_UPDATE_63_TITLE">
-    You've been updated to ChromeVox 63!
-  </message>
-  <message desc="Part of the ChromeVox update notes for m63, introductory text." name="IDS_CHROMEVOX_UPDATE_63_INTRO">
-    We have some exciting changes in this new release; here's what's new:
-  </message>
-  <message desc="Part of the ChromeVox update notes for 63, new items 1." name="IDS_CHROMEVOX_UPDATE_63_ITEM_1">
-    Classic removed. The keyboard toggle to switch back into ChromeVox Classic has been removed.
-  </message>
-  <message desc="Part of the ChromeVox update notes for m63, new items 2." name="IDS_CHROMEVOX_UPDATE_63_ITEM_2">
-    Rich text support. ChromeVox now supports rich text fields including jump commands, braille cursor routing, selection, and more.
-  </message>
-  <message desc="Part of the ChromeVox update notes for m63, new items 3." name="IDS_CHROMEVOX_UPDATE_63_ITEM_3">
-    Android apps for Chrome. If you have Play Store on your device, get a sneak peek at ChromeVox with Android apps. Try the experimental support by downloading Google Chrome Canary from the Play Store.
-  </message>
   <message desc="Title of an article on the command reference for 'ChromeVox'" name="IDS_CHROMEVOX_NEXT_COMMAND_REFERENCE">
     ChromeVox Command Reference
   </message>
@@ -2210,6 +2186,9 @@
   <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_CHECK_ON_EARCON_DESCRIPTION">
     A checked checkbox
   </message>
+  <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_CHROMEVOX_LOADING_EARCON_DESCRIPTION">
+    ChromeVox is loading
+  </message>
   <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_EDITABLE_TEXT_EARCON_DESCRIPTION">
     An editable text field
   </message>
@@ -2222,6 +2201,9 @@
   <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_LISTBOX_EARCON_DESCRIPTION">
     A listbox or combo box
   </message>
+  <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_NO_POINTER_ANCHOR_EARCON_DESCRIPTION">
+    No pointer anchor
+  </message>
   <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_PAGE_START_LOADING_EARCON_DESCRIPTION">
     A page load in progress
   </message>
@@ -2230,6 +2212,12 @@
   </message>
   <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_SLIDER_EARCON_DESCRIPTION">
     A slider
+  </message>
+  <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_SMART_STICKY_MODE_OFF_EARCON_DESCRIPTION">
+    Smart sticky mode off
+  </message>
+  <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_SMART_STICKY_MODE_ON_EARCON_DESCRIPTION">
+    Smart sticky mode on
   </message>
   <message desc="Describes an audio clip that gets played for a specific event or control type. Use the default string as a guide to what the audio clip represents or conveys." name="IDS_CHROMEVOX_WRAP_EARCON_DESCRIPTION">
     Wrap from beginning to end or end to beginning inside of a page, dialog, or other container
@@ -3401,5 +3389,8 @@
   </message>
   <message desc="Spoken message notifying users that using TalkBack on Chromebook is no longer supported and keyboard shortcut are no longer customized for Chromebooks." name="IDS_CHROMEVOX_ANNOUNCE_TALKBACK_DEPRECATION" is_accessibility_with_no_ui="true">
     TalkBack no longer provides customization for Chromebooks. You can still use it, but use TalkBack default keyboard shortcuts. Press Search+A, then K to see available shortcuts. If you still want to use TalkBack, press the command again.
+  </message>
+  <message desc="Short message spoken by ChromeVox screen reader when a user adds, deletes, or moves a cursor caret across a character in a password field." name="IDS_CHROMEVOX_PASSWORD_CHAR" is_accessibility_with_no_ui="true">
+    bullet
   </message>
 </grit-part>

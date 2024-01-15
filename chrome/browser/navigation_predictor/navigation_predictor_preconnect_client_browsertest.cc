@@ -6,6 +6,7 @@
 
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "build/build_config.h"
@@ -213,7 +214,7 @@ IN_PROC_BROWSER_TEST_F(
 
   // We should not see additional preresolves.
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
   run_loop.Run();
 
@@ -471,7 +472,7 @@ class NavigationPredictorPreconnectClientPrerenderBrowserTestNoDelay
       delete;
 
   void SetUp() override {
-    prerender_test_helper_.SetUp(https_server_.get());
+    prerender_test_helper_.RegisterServerRequestMonitor(https_server_.get());
     NavigationPredictorPreconnectClientBrowserTestPreconnectOnDidFinishNavigationNoDelay::
         SetUp();
   }

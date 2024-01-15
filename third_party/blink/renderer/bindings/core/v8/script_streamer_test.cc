@@ -9,20 +9,19 @@
 
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
-#include "third_party/blink/public/platform/web_url_loader.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/public/platform/web_url_request_extra_data.h"
 #include "third_party/blink/renderer/bindings/core/v8/referrer_script_info.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_evaluation_result.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_local_compile_hints_consumer.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_local_compile_hints_producer.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_script_runner.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
@@ -37,13 +36,16 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/response_body_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/script_fetch_options.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader.h"
 #include "third_party/blink/renderer/platform/loader/testing/mock_fetch_context.h"
 #include "third_party/blink/renderer/platform/loader/testing/test_resource_fetcher_properties.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_pool.h"
 #include "third_party/blink/renderer/platform/testing/mock_context_lifecycle_notifier.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support_with_mock_scheduler.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
@@ -81,49 +83,51 @@ class TestResourceClient final : public GarbageCollected<TestResourceClient>,
 // TODO(leszeks): This class has a similar class in resource_loader_test.cc,
 // the two should probably share the same class.
 class NoopLoaderFactory final : public ResourceFetcher::LoaderFactory {
-  std::unique_ptr<WebURLLoader> CreateURLLoader(
-      const ResourceRequest& request,
+  std::unique_ptr<URLLoader> CreateURLLoader(
+      const network::ResourceRequest& request,
       const ResourceLoaderOptions& options,
       scoped_refptr<base::SingleThreadTaskRunner> freezable_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> unfreezable_task_runner,
-      WebBackForwardCacheLoaderHelper) override {
-    return std::make_unique<NoopWebURLLoader>(std::move(freezable_task_runner));
+      BackForwardCacheLoaderHelper*,
+      const absl::optional<base::UnguessableToken>&
+          service_worker_race_network_request_token,
+      bool is_from_origin_dirty_style_sheet) override {
+    return std::make_unique<NoopURLLoader>(std::move(freezable_task_runner));
   }
-  std::unique_ptr<WebCodeCacheLoader> CreateCodeCacheLoader() override {
-    return std::make_unique<CodeCacheLoaderMock>();
-  }
+  CodeCacheHost* GetCodeCacheHost() override { return nullptr; }
 
-  class NoopWebURLLoader final : public WebURLLoader {
+  class NoopURLLoader final : public URLLoader {
    public:
-    explicit NoopWebURLLoader(
+    explicit NoopURLLoader(
         scoped_refptr<base::SingleThreadTaskRunner> task_runner)
         : task_runner_(std::move(task_runner)) {}
-    ~NoopWebURLLoader() override = default;
+    ~NoopURLLoader() override = default;
     void LoadSynchronously(
         std::unique_ptr<network::ResourceRequest> request,
-        scoped_refptr<WebURLRequestExtraData> url_request_extra_data,
-        bool pass_response_pipe_to_client,
+        scoped_refptr<const SecurityOrigin> top_frame_origin,
+        bool download_to_blob,
         bool no_mime_sniffing,
         base::TimeDelta timeout_interval,
-        WebURLLoaderClient*,
+        URLLoaderClient*,
         WebURLResponse&,
         absl::optional<WebURLError>&,
-        WebData&,
+        scoped_refptr<SharedBuffer>&,
         int64_t& encoded_data_length,
-        int64_t& encoded_body_length,
-        WebBlobInfo& downloaded_blob,
+        uint64_t& encoded_body_length,
+        scoped_refptr<BlobDataHandle>& downloaded_blob,
         std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
             resource_load_info_notifier_wrapper) override {
       NOTREACHED();
     }
     void LoadAsynchronously(
         std::unique_ptr<network::ResourceRequest> request,
-        scoped_refptr<WebURLRequestExtraData> url_request_extra_data,
+        scoped_refptr<const SecurityOrigin> top_frame_origin,
         bool no_mime_sniffing,
         std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
             resource_load_info_notifier_wrapper,
-        WebURLLoaderClient*) override {}
-    void Freeze(WebLoaderFreezeMode) override {}
+        CodeCacheHost* code_cache_host,
+        URLLoaderClient*) override {}
+    void Freeze(LoaderFreezeMode) override {}
     void DidChangePriority(WebURLRequest::Priority, int) override {
       NOTREACHED();
     }
@@ -143,7 +147,7 @@ class ScriptStreamingTest : public testing::Test {
     auto* properties = MakeGarbageCollected<TestResourceFetcherProperties>();
     FetchContext* context = MakeGarbageCollected<MockFetchContext>();
     scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-        base::ThreadTaskRunnerHandle::Get();
+        scheduler::GetSingleThreadTaskRunnerForTesting();
     auto* fetcher = MakeGarbageCollected<ResourceFetcher>(ResourceFetcherInit(
         properties->MakeDetachable(), context, task_runner, task_runner,
         MakeGarbageCollected<NoopLoaderFactory>(),
@@ -159,17 +163,22 @@ class ScriptStreamingTest : public testing::Test {
     resource_client_ =
         MakeGarbageCollected<TestResourceClient>(run_loop_.QuitClosure());
     FetchParameters params = FetchParameters::CreateForTest(std::move(request));
-    resource_ = ScriptResource::Fetch(params, fetcher, resource_client_,
-                                      ScriptResource::kAllowStreaming);
+    constexpr v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
+        kNoCompileHintsProducer = nullptr;
+    constexpr v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*
+        kNoCompileHintsConsumer = nullptr;
+    resource_ = ScriptResource::Fetch(
+        params, fetcher, resource_client_, ScriptResource::kAllowStreaming,
+        kNoCompileHintsProducer, kNoCompileHintsConsumer);
     resource_->AddClient(resource_client_, task_runner.get());
 
     ResourceResponse response(url_);
     response.SetHttpStatusCode(200);
     resource_->SetResponse(response);
 
-    resource_->Loader()->DidReceiveResponse(WrappedResourceResponse(response));
-    resource_->Loader()->DidStartLoadingResponseBody(
-        std::move(consumer_handle_));
+    resource_->Loader()->DidReceiveResponse(WrappedResourceResponse(response),
+                                            std::move(consumer_handle_),
+                                            /*cached_metadata=*/absl::nullopt);
   }
 
   ClassicScript* CreateClassicScript() const {
@@ -209,7 +218,7 @@ class ScriptStreamingTest : public testing::Test {
   }
 
   void Finish() {
-    resource_->Loader()->DidFinishLoading(base::TimeTicks(), 0, 0, 0, false);
+    resource_->Loader()->DidFinishLoading(base::TimeTicks(), 0, 0, 0);
     producer_handle_.reset();
     resource_->SetStatus(ResourceStatus::kCached);
   }
@@ -218,6 +227,7 @@ class ScriptStreamingTest : public testing::Test {
 
   void RunUntilResourceLoaded() { run_loop_.Run(); }
 
+  test::TaskEnvironment task_environment_;
   KURL url_;
 
   base::RunLoop run_loop_;
@@ -375,6 +385,52 @@ TEST_F(ScriptStreamingTest, SuppressingStreaming) {
   // the streaming and resumed the non-streaming code path for script
   // compilation.
   EXPECT_FALSE(classic_script->Streamer());
+}
+
+TEST_F(ScriptStreamingTest, ConsumeLocalCompileHints) {
+  // If we notice before streaming that there is a compile hints cache, we use
+  // it for eager compilation.
+  base::test::ScopedFeatureList flag_on(features::kLocalCompileHints);
+  V8TestingScope scope;
+
+  CachedMetadataHandler* cache_handler = resource_->CacheHandler();
+  EXPECT_TRUE(cache_handler);
+  cache_handler->DisableSendToPlatformForTesting();
+  // CodeCacheHost can be nullptr since we disabled sending data to
+  // GeneratedCodeCacheHost for testing.
+
+  // Create fake compile hints (what the real compile hints are is internal to
+  // v8).
+  std::vector<int> compile_hints = {200, 230};
+  uint64_t timestamp = V8CodeCache::GetTimestamp();
+
+  std::unique_ptr<v8::ScriptCompiler::CachedData> cached_data(
+      v8_compile_hints::V8LocalCompileHintsProducer::
+          CreateCompileHintsCachedDataForScript(compile_hints, timestamp));
+
+  cache_handler->SetCachedMetadata(
+      /*code_cache_host*/ nullptr,
+      V8CodeCache::TagForCompileHints(cache_handler), cached_data->data,
+      cached_data->length);
+
+  AppendData("/*this doesn't matter*/");
+  Finish();
+  RunUntilResourceLoaded();
+  EXPECT_TRUE(resource_client_->Finished());
+
+  ResourceScriptStreamer* resource_script_streamer =
+      std::get<0>(ResourceScriptStreamer::TakeFrom(
+          resource_, mojom::blink::ScriptType::kClassic));
+  EXPECT_TRUE(resource_script_streamer);
+
+  v8_compile_hints::V8LocalCompileHintsConsumer* local_compile_hints_consumer =
+      resource_script_streamer->GetV8LocalCompileHintsConsumer();
+  EXPECT_TRUE(local_compile_hints_consumer);
+
+  EXPECT_TRUE(local_compile_hints_consumer->GetCompileHint(200));
+  EXPECT_FALSE(local_compile_hints_consumer->GetCompileHint(210));
+  EXPECT_TRUE(local_compile_hints_consumer->GetCompileHint(230));
+  EXPECT_FALSE(local_compile_hints_consumer->GetCompileHint(240));
 }
 
 TEST_F(ScriptStreamingTest, EmptyScripts) {
@@ -585,6 +641,49 @@ TEST_P(InlineScriptStreamingTest, InlineScript) {
             ScriptEvaluationResult::ResultType::kSuccess);
   EXPECT_EQ(
       5, result.GetSuccessValue()->Int32Value(scope.GetContext()).FromJust());
+}
+
+// TODO(crbug.com/1515152) Re-enable when the source of the hard-crashes has
+// been addressed.
+TEST_F(ScriptStreamingTest,
+       DISABLED_ProduceLocalCompileHintsForStreamedScript) {
+  // Test that we can produce local compile hints when a script is streamed.
+  base::test::ScopedFeatureList flag_on(features::kLocalCompileHints);
+  V8TestingScope scope;
+
+  AppendData("function foo() { return 5; }");
+  AppendData("foo();");
+  EXPECT_FALSE(resource_client_->Finished());
+  Finish();
+
+  // Process tasks on the main thread until the resource has notified that it
+  // has finished loading.
+  RunUntilResourceLoaded();
+  EXPECT_TRUE(resource_client_->Finished());
+  ClassicScript* classic_script = CreateClassicScript();
+  EXPECT_TRUE(classic_script->Streamer());
+  v8::TryCatch try_catch(scope.GetIsolate());
+  v8::Local<v8::Script> script;
+  v8::ScriptCompiler::CompileOptions compile_options;
+  V8CodeCache::ProduceCacheOptions produce_cache_options;
+  v8::ScriptCompiler::NoCacheReason no_cache_reason;
+  std::tie(compile_options, produce_cache_options, no_cache_reason) =
+      V8CodeCache::GetCompileOptions(mojom::blink::V8CacheOptions::kDefault,
+                                     *classic_script);
+  EXPECT_TRUE(V8ScriptRunner::CompileScript(
+                  scope.GetScriptState(), *classic_script,
+                  classic_script->CreateScriptOrigin(scope.GetIsolate()),
+                  compile_options, no_cache_reason)
+                  .ToLocal(&script));
+  EXPECT_FALSE(try_catch.HasCaught());
+
+  v8::Local<v8::Value> return_value;
+  EXPECT_TRUE(script->Run(scope.GetContext()).ToLocal(&return_value));
+
+  // Expect that we got a compile hint for the function which was run. Don't
+  // assert what it is (that's internal to V8).
+  std::vector<int> compile_hints = script->GetProducedCompileHints();
+  EXPECT_EQ(1UL, compile_hints.size());
 }
 
 INSTANTIATE_TEST_SUITE_P(

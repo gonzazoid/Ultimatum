@@ -8,7 +8,6 @@
 #include "base/files/file.h"
 #include "cc/paint/paint_record.h"
 #include "components/paint_preview/common/mojom/paint_preview_recorder.mojom-forward.h"
-#include "mojo/public/cpp/base/big_buffer.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkStream.h"
 #include "ui/gfx/geometry/rect.h"
@@ -21,20 +20,16 @@ namespace paint_preview {
 
 class PaintPreviewTracker;
 
-// Pre processes the PaintOpBuffer prior to conversion to SkPicture.
+// Converts `recording` into an SkPicture, tracking embedded content. During
+// conversion:
 // 1. Walks |buffer| to extract all the glyphs from its text blobs and links.
 //    The extracted data is written to `tracker`.
 // 2. Tracks geometry changes for frames and saves them to `tracker`.
 // 3. Unaccelerates GPU accelerated PaintImages.
-void PreProcessPaintOpBuffer(const cc::PaintOpBuffer* buffer,
-                             PaintPreviewTracker* tracker);
-
-// Convert |recording| into an SkPicture, tracking embedded content. Will return
-// |nullptr| if the resulting picture failed or zero sized.
-sk_sp<const SkPicture> PaintRecordToSkPicture(
-    sk_sp<const cc::PaintRecord> recording,
-    PaintPreviewTracker* tracker,
-    const gfx::Rect& bounds);
+// Returns `nullptr` if the resulting picture failed or zero sized.
+sk_sp<const SkPicture> PaintRecordToSkPicture(const cc::PaintRecord& recording,
+                                              PaintPreviewTracker* tracker,
+                                              const gfx::Rect& bounds);
 
 // NOTE: |tracker| is effectively const here despite being passed by pointer.
 void BuildResponse(PaintPreviewTracker* tracker,

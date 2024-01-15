@@ -8,9 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -114,7 +115,7 @@ class ProfileAuthDataTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
 
-  network::NetworkService* network_service_;
+  raw_ptr<network::NetworkService> network_service_;
   TestingProfile login_browser_context_;
   TestingProfile user_browser_context_;
   std::unique_ptr<network::NetworkContext> login_network_context_;
@@ -232,7 +233,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
           kSAMLIdPCookieDomainWithWildcard, std::string(), base::Time(),
           base::Time(), base::Time(), true, false,
           net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-          false, absl::nullopt),
+          std::nullopt),
       GURL(kSAMLIdPCookieURL), options, base::DoNothing());
 
   cookies->SetCanonicalCookie(
@@ -240,7 +241,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
           GURL(kSAMLIdPCookieURL), kCookieName, cookie_value, std::string(),
           std::string(), base::Time(), base::Time(), base::Time(), true, false,
           net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-          false, absl::nullopt),
+          std::nullopt),
       GURL(kSAMLIdPCookieURL), options, base::DoNothing());
 
   cookies->SetCanonicalCookie(
@@ -248,7 +249,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
           GURL(kGAIACookieURL), kCookieName, cookie_value, std::string(),
           std::string(), base::Time(), base::Time(), base::Time(), true, false,
           net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-          false, absl::nullopt),
+          std::nullopt),
       GURL(kGAIACookieURL), options, base::DoNothing());
 }
 

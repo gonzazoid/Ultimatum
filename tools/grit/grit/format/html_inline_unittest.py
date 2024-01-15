@@ -5,7 +5,6 @@
 
 '''Unit tests for grit.format.html_inline'''
 
-from __future__ import print_function
 
 import os
 import re
@@ -19,13 +18,17 @@ from grit import util
 from grit.format import html_inline
 
 
-class FakeGrdNode(object):
+class FakeGrdNode:
   def EvaluateCondition(self, cond):
     return eval(cond)
 
 
 class HtmlInlineUnittest(unittest.TestCase):
   '''Unit tests for HtmlInline.'''
+
+  @classmethod
+  def setUpClass(cls):
+    os.environ["root_gen_dir"] = "gen"
 
   def testGetResourceFilenames(self):
     '''Tests that all included files are returned by GetResourceFilenames.'''
@@ -43,6 +46,7 @@ class HtmlInlineUnittest(unittest.TestCase):
           <include src='test.html'>
           <include
               src="really-long-long-long-long-long-test-file-omg-so-long.html">
+          <script src="foo.js"></script>
         </body>
       </html>
       ''',
@@ -72,6 +76,10 @@ class HtmlInlineUnittest(unittest.TestCase):
       ''',
 
       'test.png': 'PNG DATA',
+
+      'foo.js': '''
+      console.log('hello foo');
+      ''',
     }
 
     source_resources = set()
@@ -82,7 +90,43 @@ class HtmlInlineUnittest(unittest.TestCase):
     resources = html_inline.GetResourceFilenames(tmp_dir.GetPath('index.html'),
                                                  None)
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
+    tmp_dir.CleanUp()
+
+  def testGetResourceFilenamesWithGeneratedFile(self):
+    '''Tests that included files are returned by GetResourceFilenames, even when
+       generated files are inlined, and that no exception is thrown by
+       accidentally trying to read generated files which are not guaranteed to
+       exist yet (prod case is when this is invoked from grit_info.py).'''
+
+    # Create an HTML file that attempts to inline a generated JS file.
+    # Intentionally don't create the generated JS file to simulate he case where
+    # it does not exist yet, by the time GetResourceFilenames() is invoked.
+    files = {
+      'index.html': '''
+      <!DOCTYPE HTML>
+      <html>
+        <body>
+          <script src="%ROOT_GEN_DIR%/does_not_exist.js"></script>
+        </body>
+      </html>
+      ''',
+    }
+
+    source_resources = set()
+    tmp_dir = util.TempDir(files)
+    # `root_gen_dir` environment valiable must be specified relative to the
+    # current working directory.
+    os.environ["root_gen_dir"] = os.path.relpath(
+        os.path.join(tmp_dir.GetPath(), 'gen'))
+
+    source_resources.add(
+        tmp_dir.GetPath(os.path.join('gen', 'does_not_exist.js')))
+
+    resources = html_inline.GetResourceFilenames(tmp_dir.GetPath('index.html'),
+                                                 None)
+
+    self.assertEqual(resources, source_resources)
     tmp_dir.CleanUp()
 
   def testUnmatchedEndIfBlock(self):
@@ -107,7 +151,7 @@ class HtmlInlineUnittest(unittest.TestCase):
 
     with self.assertRaises(Exception) as cm:
       html_inline.GetResourceFilenames(tmp_dir.GetPath('index.html'), None)
-    self.failUnlessEqual(str(cm.exception), 'Unmatched </if>')
+    self.assertEqual(str(cm.exception), 'Unmatched </if>')
     tmp_dir.CleanUp()
 
   def testCompressedJavaScript(self):
@@ -127,7 +171,7 @@ class HtmlInlineUnittest(unittest.TestCase):
     resources = html_inline.GetResourceFilenames(tmp_dir.GetPath('index.js'),
                                                  None)
     resources.add(tmp_dir.GetPath('index.js'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
     tmp_dir.CleanUp()
 
   def testInlineCSSImports(self):
@@ -182,8 +226,8 @@ class HtmlInlineUnittest(unittest.TestCase):
     result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
 
     tmp_dir.CleanUp()
@@ -262,8 +306,8 @@ class HtmlInlineUnittest(unittest.TestCase):
     result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
 
     tmp_dir.CleanUp()
@@ -312,8 +356,8 @@ class HtmlInlineUnittest(unittest.TestCase):
     result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -356,7 +400,7 @@ class HtmlInlineUnittest(unittest.TestCase):
     resources = html_inline.GetResourceFilenames(tmp_dir.GetPath('index.html'),
                                                  None)
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
     tmp_dir.CleanUp()
 
   def testInlineCSSLinks(self):
@@ -402,10 +446,46 @@ class HtmlInlineUnittest(unittest.TestCase):
     result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
+
+  def testFilenameRootGenDirExpansion(self):
+    '''Tests that %ROOT_GEN_DIR tokens in filenames are properly expanded'''
+
+    files = {
+      'index.html': '''
+      <html>
+      <body>
+      <script src="%ROOT_GEN_DIR%/foo/bar/generated.js"></script>
+      </body>
+      </html>
+      ''',
+    }
+    files[os.path.join('gen', 'foo', 'bar', 'generated.js')] = \
+        '''console.log('hello generated');'''
+
+    expected_inlined = '''
+      <html>
+      <body>
+      <script>console.log('hello generated');</script>
+      </body>
+      </html>
+      '''
+
+    source_resources = set()
+    tmp_dir = util.TempDir(files)
+    os.environ["root_gen_dir"] = os.path.relpath(
+        os.path.join(tmp_dir.GetPath(), 'gen'))
+    for filename in files:
+      source_resources.add(tmp_dir.GetPath(filename))
+
+    result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
+    resources = result.inlined_files
+    resources.add(tmp_dir.GetPath('index.html'))
+    self.assertEqual(resources, source_resources)
+    self.assertMultiLineEqual(expected_inlined, result.inlined_data)
 
   def testFilenameVariableExpansion(self):
     '''Tests that variables are expanded in filenames before inlining.'''
@@ -453,8 +533,8 @@ class HtmlInlineUnittest(unittest.TestCase):
         filename_expansion_function=replacer('WHICH', '1'))
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
 
     # Test names-only inlining.
@@ -465,7 +545,7 @@ class HtmlInlineUnittest(unittest.TestCase):
         filename_expansion_function=replacer('WHICH', '1'))
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
     tmp_dir.CleanUp()
 
   def testWithCloseTags(self):
@@ -530,8 +610,8 @@ class HtmlInlineUnittest(unittest.TestCase):
         None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -553,8 +633,8 @@ class HtmlInlineUnittest(unittest.TestCase):
     result = html_inline.DoInline(tmp_dir.GetPath('include.js'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('include.js'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -590,8 +670,8 @@ class HtmlInlineUnittest(unittest.TestCase):
     resources = result.inlined_files
 
     resources.add(tmp_dir.GetPath('if.js'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -821,8 +901,8 @@ L17 /*grit-removed-lines:4*/
         None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -853,8 +933,8 @@ L17 /*grit-removed-lines:4*/
     result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -910,8 +990,8 @@ L17 /*grit-removed-lines:4*/
     result = html_inline.DoInline(tmp_dir.GetPath('index.html'), None)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
-    self.failUnlessEqual(expected_inlined,
+    self.assertEqual(resources, source_resources)
+    self.assertEqual(expected_inlined,
                          util.FixLineEnd(result.inlined_data, '\n'))
     tmp_dir.CleanUp()
 
@@ -980,13 +1060,13 @@ L17 /*grit-removed-lines:4*/
         FakeGrdNode())
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
 
     # ignore whitespace
     expected_inlined = re.sub(r'\s+', ' ', expected_inlined)
     actually_inlined = re.sub(r'\s+', ' ',
                               util.FixLineEnd(result.inlined_data, '\n'))
-    self.failUnlessEqual(expected_inlined, actually_inlined);
+    self.assertEqual(expected_inlined, actually_inlined);
     tmp_dir.CleanUp()
 
   def testPreprocessOnlyEvaluatesIncludeAndIf(self):
@@ -1034,13 +1114,13 @@ L17 /*grit-removed-lines:4*/
                                   preprocess_only=True)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
 
     # Ignore whitespace
     expected_inlined = re.sub(r'\s+', ' ', expected_inlined)
     actually_inlined = re.sub(r'\s+', ' ',
                               util.FixLineEnd(result.inlined_data, '\n'))
-    self.failUnlessEqual(expected_inlined, actually_inlined)
+    self.assertEqual(expected_inlined, actually_inlined)
 
     tmp_dir.CleanUp()
 
@@ -1078,13 +1158,13 @@ L17 /*grit-removed-lines:4*/
                                   preprocess_only=True)
     resources = result.inlined_files
     resources.add(tmp_dir.GetPath('index.html'))
-    self.failUnlessEqual(resources, source_resources)
+    self.assertEqual(resources, source_resources)
 
     # Ignore whitespace
     expected_inlined = re.sub(r'\s+', ' ', expected_inlined)
     actually_inlined = re.sub(r'\s+', ' ',
                               util.FixLineEnd(result.inlined_data, '\n'))
-    self.failUnlessEqual(expected_inlined, actually_inlined)
+    self.assertEqual(expected_inlined, actually_inlined)
 
     tmp_dir.CleanUp()
 

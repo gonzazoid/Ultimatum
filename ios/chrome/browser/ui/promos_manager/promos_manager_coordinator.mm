@@ -3,22 +3,45 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/promos_manager/promos_manager_coordinator.h"
+#import "ios/chrome/browser/ui/promos_manager/promos_manager_coordinator+Testing.h"
 
 #import <Foundation/Foundation.h>
+
 #import <map>
+#import <optional>
 
 #import "base/check.h"
 #import "base/containers/small_map.h"
+#import "base/debug/dump_without_crashing.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/main/browser.h"
+#import "components/crash/core/common/crash_key.h"
+#import "components/feature_engagement/public/tracker.h"
+#import "components/sync/service/sync_service.h"
+#import "ios/chrome/app/tests_hook.h"
+#import "ios/chrome/browser/credential_provider_promo/model/features.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/promos_manager/features.h"
+#import "ios/chrome/browser/promos_manager/promo_config.h"
+#import "ios/chrome/browser/promos_manager/promos_manager.h"
+#import "ios/chrome/browser/promos_manager/promos_manager_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/credential_provider_promo_commands.h"
+#import "ios/chrome/browser/shared/public/commands/promos_manager_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/app_store_rating/app_store_rating_display_handler.h"
 #import "ios/chrome/browser/ui/app_store_rating/features.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/promos_manager_commands.h"
-#import "ios/chrome/browser/ui/post_restore_signin/features.h"
+#import "ios/chrome/browser/ui/credential_provider_promo/credential_provider_promo_display_handler.h"
+#import "ios/chrome/browser/ui/default_promo/post_restore/features.h"
+#import "ios/chrome/browser/ui/default_promo/post_restore/post_restore_default_browser_promo_provider.h"
+#import "ios/chrome/browser/ui/default_promo/promo_handler/default_browser_promo_display_handler.h"
+#import "ios/chrome/browser/ui/default_promo/promo_handler/default_browser_remind_me_later_promo_display_handler.h"
+#import "ios/chrome/browser/ui/first_run/omnibox_position/promo/omnibox_position_choice_display_handler.h"
 #import "ios/chrome/browser/ui/post_restore_signin/post_restore_signin_provider.h"
 #import "ios/chrome/browser/ui/promos_manager/bannered_promo_view_provider.h"
 #import "ios/chrome/browser/ui/promos_manager/promos_manager_mediator.h"
@@ -32,12 +55,8 @@
 #import "ios/chrome/common/ui/promo_style/promo_style_view_controller.h"
 #import "ios/chrome/common/ui/promo_style/promo_style_view_controller_delegate.h"
 #import "ios/chrome/grit/ios_strings.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
+#import "ios/public/provider/chrome/browser/signin/choice_api.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface PromosManagerCoordinator () <
     ConfirmationAlertActionHandler,
@@ -62,6 +81,12 @@
   base::small_map<
       std::map<promos_manager::Promo, id<StandardPromoAlertProvider>>>
       _alertProviderPromos;
+
+  // The currently displayed promo data, if any.
+  std::optional<PromoDisplayData> _currentPromoData;
+
+  // The handler for the CredentialProviderPromoCommands.
+  id<CredentialProviderPromoCommands> _credentialProviderPromoCommandHandler;
 }
 
 // A mediator that observes when it's a good time to display a promo.
@@ -86,9 +111,12 @@
 #pragma mark - Initialization
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
-                                   browser:(Browser*)browser {
+                                   browser:(Browser*)browser
+            credentialProviderPromoHandler:
+                (id<CredentialProviderPromoCommands>)handler {
   if (self = [super initWithBaseViewController:viewController
                                        browser:browser]) {
+    _credentialProviderPromoCommandHandler = handler;
     [self registerPromos];
 
     BOOL promosExist = _displayHandlerPromos.size() > 0 ||
@@ -99,8 +127,10 @@
     if (promosExist) {
       // Don't create PromosManagerMediator unless promos exist that are
       // registered with PromosManagerCoordinator via `registerPromos`.
+      PromosManager* promosManager =
+          PromosManagerFactory::GetForBrowserState(browser->GetBrowserState());
       _mediator = [[PromosManagerMediator alloc]
-          initWithPromosManager:GetApplicationContext()->GetPromosManager()
+          initWithPromosManager:promosManager
           promoImpressionLimits:[self promoImpressionLimits]];
     }
   }
@@ -111,11 +141,7 @@
 #pragma mark - Public
 
 - (void)start {
-  absl::optional<promos_manager::Promo> nextPromoForDisplay =
-      [self.mediator nextPromoForDisplay];
-
-  if (nextPromoForDisplay.has_value())
-    [self displayPromo:nextPromoForDisplay.value()];
+  [self displayPromoIfAvailable:YES];
 }
 
 - (void)stop {
@@ -123,32 +149,76 @@
   [self dismissViewControllers];
 }
 
-- (void)dismissViewControllers {
-  if (self.viewController) {
-    [self.viewController.presentingViewController
-        dismissViewControllerAnimated:YES
-                           completion:nil];
-    self.viewController = nil;
-  }
+- (void)displayPromoIfAvailable {
+  [self displayPromoIfAvailable:NO];
+}
 
-  if (self.banneredViewController) {
-    [self.banneredViewController.presentingViewController
-        dismissViewControllerAnimated:YES
-                           completion:nil];
-    self.banneredViewController = nil;
+// Display a promo if one is available, with special behavior if this is the
+// first time this coordinator has shown a promo.
+- (void)displayPromoIfAvailable:(BOOL)isFirstShownPromo {
+  if (ShouldPromosManagerUseFET()) {
+    // Wait to present a promo until the feature engagement tracker database
+    // is fully initialized.
+    __weak __typeof(self) weakSelf = self;
+    void (^onInitializedBlock)(bool) = ^(bool successfullyLoaded) {
+      if (!successfullyLoaded) {
+        return;
+      }
+      [weakSelf displayPromoCallback:isFirstShownPromo];
+    };
+
+    feature_engagement::Tracker* tracker =
+        feature_engagement::TrackerFactory::GetForBrowserState(
+            self.browser->GetBrowserState());
+    tracker->AddOnInitializedCallback(base::BindOnce(onInitializedBlock));
+  } else {
+    [self displayPromoCallback:isFirstShownPromo];
   }
 }
 
-- (void)displayPromo:(promos_manager::Promo)promo {
+- (void)displayPromoCallback:(BOOL)isFirstShownPromo {
+  // If there's already a displayed promo, skip.
+  if (_currentPromoData.has_value()) {
+    return;
+  }
+
+  std::optional<PromoDisplayData> nextPromoForDisplay =
+      [self.mediator nextPromoForDisplay:isFirstShownPromo];
+
+  if (nextPromoForDisplay.has_value()) {
+    [self displayPromo:nextPromoForDisplay.value()];
+  }
+}
+
+- (void)promoWasDismissed {
+  if (ShouldPromosManagerUseFET() && _currentPromoData.has_value() &&
+      !_currentPromoData.value().was_forced) {
+    PromoConfigsSet configs = [self promoImpressionLimits];
+    auto it = configs.find(_currentPromoData.value().promo);
+    if (it == configs.end() || !it->feature_engagement_feature) {
+      return;
+    }
+
+    feature_engagement::Tracker* tracker =
+        feature_engagement::TrackerFactory::GetForBrowserState(
+            self.browser->GetBrowserState());
+    tracker->Dismissed(*it->feature_engagement_feature);
+  }
+  _currentPromoData = std::nullopt;
+}
+
+- (void)displayPromo:(PromoDisplayData)promoData {
+  if (tests_hook::DisablePromoManagerFullScreenPromos()) {
+    return;
+  }
+
+  promos_manager::Promo promo = promoData.promo;
+  _currentPromoData = promoData;
+
   auto handler_it = _displayHandlerPromos.find(promo);
   auto provider_it = _viewProviderPromos.find(promo);
   auto bannered_provider_it = _banneredViewProviderPromos.find(promo);
   auto alert_provider_it = _alertProviderPromos.find(promo);
-
-  DCHECK(handler_it == _displayHandlerPromos.end() ||
-         provider_it == _viewProviderPromos.end() ||
-         bannered_provider_it == _banneredViewProviderPromos.end() ||
-         alert_provider_it == _alertProviderPromos.end());
 
   id<PromosManagerCommands> promosManagerCommandsHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), PromosManagerCommands);
@@ -161,7 +231,7 @@
 
     [handler handleDisplay];
 
-    [self.mediator recordImpression:handler.identifier];
+    [self.mediator recordImpression:handler.config.identifier];
 
     base::UmaHistogramEnumeration("IOS.PromosManager.Promo", promo);
     base::UmaHistogramEnumeration("IOS.PromosManager.Promo.Type",
@@ -187,7 +257,7 @@
                                           animated:YES
                                         completion:nil];
 
-    [self.mediator recordImpression:provider.identifier];
+    [self.mediator recordImpression:provider.config.identifier];
 
     base::UmaHistogramEnumeration("IOS.PromosManager.Promo", promo);
     base::UmaHistogramEnumeration(
@@ -214,7 +284,7 @@
                                           animated:YES
                                         completion:nil];
 
-    [self.mediator recordImpression:banneredProvider.identifier];
+    [self.mediator recordImpression:banneredProvider.config.identifier];
 
     base::UmaHistogramEnumeration("IOS.PromosManager.Promo", promo);
     base::UmaHistogramEnumeration(
@@ -259,6 +329,8 @@
                   if ([alertProvider respondsToSelector:@selector
                                      (standardPromoAlertDefaultAction)])
                     [alertProvider standardPromoAlertDefaultAction];
+
+                  [self dismissViewControllers];
                 }];
 
     UIAlertAction* cancelAction = [UIAlertAction
@@ -268,8 +340,8 @@
                   if ([alertProvider respondsToSelector:@selector
                                      (standardPromoAlertCancelAction)]) {
                     [alertProvider standardPromoAlertCancelAction];
-                    [self dismissViewControllers];
                   }
+                  [self dismissViewControllers];
                 }];
 
     [alert addAction:defaultAction];
@@ -280,7 +352,7 @@
                                           animated:YES
                                         completion:nil];
 
-    [self.mediator recordImpression:alertProvider.identifier];
+    [self.mediator recordImpression:alertProvider.config.identifier];
 
     base::UmaHistogramEnumeration("IOS.PromosManager.Promo", promo);
     base::UmaHistogramEnumeration(
@@ -291,7 +363,33 @@
       [alertProvider promoWasDisplayed];
     }
   } else {
-    NOTREACHED();
+    // Deregister the promo in edge cases:
+    //
+    // 1. When promos are forced for display (via Experimental Settings toggle)
+    // but not properly enabled (via chrome://flags).
+    //
+    // 2. When the promo's flag is disabled but was registered before and hasn't
+    // been displayed yet.
+    //
+    // These are niche edge cases that almost exclusively occur during local,
+    // manual testing.
+    std::optional<promos_manager::Promo> maybeForcedPromo =
+        promos_manager::PromoForName(base::SysNSStringToUTF8(
+            experimental_flags::GetForcedPromoToDisplay()));
+
+    if (maybeForcedPromo.has_value()) {
+      promos_manager::Promo forcedPromo = maybeForcedPromo.value();
+
+      if ([self isPromoUnregistered:forcedPromo]) {
+        base::UmaHistogramEnumeration(
+            "IOS.PromosManager.Promo.ForcedDisplayFailure", forcedPromo);
+      }
+    } else {
+      base::UmaHistogramEnumeration("IOS.PromosManager.Promo.DisplayFailure",
+                                    promo);
+
+      [self.mediator deregisterPromo:promo];
+    }
   }
 }
 
@@ -427,6 +525,24 @@
 
 #pragma mark - Private
 
+- (void)dismissViewControllers {
+  if (self.viewController) {
+    [self.viewController.presentingViewController
+        dismissViewControllerAnimated:YES
+                           completion:nil];
+    self.viewController = nil;
+  }
+
+  if (self.banneredViewController) {
+    [self.banneredViewController.presentingViewController
+        dismissViewControllerAnimated:YES
+                           completion:nil];
+    self.banneredViewController = nil;
+  }
+
+  [self promoWasDismissed];
+}
+
 - (void)registerPromos {
   // Add StandardPromoDisplayHandler promos here. For example:
   if (IsAppStoreRatingEnabled()) {
@@ -437,48 +553,73 @@
   // Add StandardPromoViewProvider promos here. For example:
   // TODO(crbug.com/1360880): Create first StandardPromoViewProvider promo.
 
-  // BanneredPromoViewProvider promo(s) below:
-  if (post_restore_signin::features::CurrentPostRestoreSignInType() ==
-      post_restore_signin::features::PostRestoreSignInType::kFullscreen)
-    _banneredViewProviderPromos
-        [promos_manager::Promo::PostRestoreSignInFullscreen] =
-            [[PostRestoreSignInProvider alloc] init];
-
   // StandardPromoAlertProvider promo(s) below:
-  if (post_restore_signin::features::CurrentPostRestoreSignInType() ==
-      post_restore_signin::features::PostRestoreSignInType::kAlert)
-    _alertProviderPromos[promos_manager::Promo::PostRestoreSignInAlert] =
-        [[PostRestoreSignInProvider alloc] init];
+  syncer::SyncUserSettings* syncUserSettings =
+      SyncServiceFactory::GetForBrowserState(self.browser->GetBrowserState())
+          ->GetUserSettings();
+  _alertProviderPromos[promos_manager::Promo::PostRestoreSignInAlert] =
+      [[PostRestoreSignInProvider alloc]
+          initWithSyncUserSettings:syncUserSettings];
+  if (GetPostRestoreDefaultBrowserPromoType() ==
+      PostRestoreDefaultBrowserPromoType::kAlert) {
+    _alertProviderPromos
+        [promos_manager::Promo::PostRestoreDefaultBrowserAlert] =
+            [[PostRestoreDefaultBrowserPromoProvider alloc] init];
+  }
 
   // WhatsNewPromoHandler promo below:
-  if (IsWhatsNewEnabled()) {
-    _displayHandlerPromos[promos_manager::Promo::WhatsNew] =
-        [[WhatsNewPromoDisplayHandler alloc] init];
+  _displayHandlerPromos[promos_manager::Promo::WhatsNew] =
+      [[WhatsNewPromoDisplayHandler alloc]
+          initWithPromosManager:PromosManagerFactory::GetForBrowserState(
+                                    self.browser->GetBrowserState())];
+
+  // CredentialProvider Promo handler
+  _displayHandlerPromos[promos_manager::Promo::CredentialProviderExtension] =
+      [[CredentialProviderPromoDisplayHandler alloc]
+          initWithHandler:_credentialProviderPromoCommandHandler];
+
+  // DefaultBrowser Promo handler
+  _displayHandlerPromos[promos_manager::Promo::DefaultBrowser] =
+      [[DefaultBrowserPromoDisplayHandler alloc] init];
+  _displayHandlerPromos[promos_manager::Promo::DefaultBrowserRemindMeLater] =
+      [[DefaultBrowserRemindMeLaterPromoDisplayHandler alloc] init];
+
+  // Omnibox position choice promo handler.
+  if (IsBottomOmniboxPromoFlagEnabled(BottomOmniboxPromoType::kAppLaunch)) {
+    _displayHandlerPromos[promos_manager::Promo::OmniboxPosition] =
+        [[OmniboxPositionChoiceDisplayHandler alloc] init];
   }
 }
 
-- (base::small_map<std::map<promos_manager::Promo, NSArray<ImpressionLimit*>*>>)
-    promoImpressionLimits {
-  base::small_map<std::map<promos_manager::Promo, NSArray<ImpressionLimit*>*>>
-      result;
+- (PromoConfigsSet)promoImpressionLimits {
+  PromoConfigsSet result;
 
   for (auto const& [promo, handler] : _displayHandlerPromos)
-    if ([handler respondsToSelector:@selector(impressionLimits)])
-      result[promo] = handler.impressionLimits;
+    result.emplace(handler.config);
 
   for (auto const& [promo, provider] : _viewProviderPromos)
-    if ([provider respondsToSelector:@selector(impressionLimits)])
-      result[promo] = provider.impressionLimits;
+    result.emplace(provider.config);
 
   for (auto const& [promo, banneredProvider] : _banneredViewProviderPromos)
-    if ([banneredProvider respondsToSelector:@selector(impressionLimits)])
-      result[promo] = banneredProvider.impressionLimits;
+    result.emplace(banneredProvider.config);
 
   for (auto const& [promo, alertProvider] : _alertProviderPromos)
-    if ([alertProvider respondsToSelector:@selector(impressionLimits)])
-      result[promo] = alertProvider.impressionLimits;
+    result.emplace(alertProvider.config);
 
   return result;
+}
+
+// Checks if `promo` is properly registered within this coordinator.
+- (BOOL)isPromoUnregistered:(promos_manager::Promo)promo {
+  auto handler_it = _displayHandlerPromos.find(promo);
+  auto provider_it = _viewProviderPromos.find(promo);
+  auto bannered_provider_it = _banneredViewProviderPromos.find(promo);
+  auto alert_provider_it = _alertProviderPromos.find(promo);
+
+  return handler_it == _displayHandlerPromos.end() &&
+         provider_it == _viewProviderPromos.end() &&
+         bannered_provider_it == _banneredViewProviderPromos.end() &&
+         alert_provider_it == _alertProviderPromos.end();
 }
 
 @end

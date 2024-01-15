@@ -43,6 +43,10 @@ Footer in section
 Written by Julie
 Visit us at:www.chromium.org
 
+Main Heading
+Subheading
+
+Smaller Subheading
 
 January
 
@@ -131,7 +135,7 @@ AXRole: AXGenericContainer
                         AXRole: AXInlineTextBox "𝑏"
     AXRole: AXMain
         AXRole: AXArticle
-            AXRole: AXHeaderAsNonLandmark
+            AXRole: AXHeader
                 AXRole: AXHeading "Most important heading here"
                     AXRole: AXStaticText "Most important heading here"
                         AXRole: AXInlineTextBox "Most important heading here"
@@ -141,7 +145,7 @@ AXRole: AXGenericContainer
             AXRole: AXParagraph
                 AXRole: AXStaticText "Google Chrome is a free, open-source web browser developed by Google, released in 2008."
                     AXRole: AXInlineTextBox "Google Chrome is a free, open-source web browser developed by Google, released in 2008."
-            AXRole: AXFooterAsNonLandmark
+            AXRole: AXFooter
                 AXRole: AXParagraph
                     AXRole: AXStaticText "Footer in article"
                         AXRole: AXInlineTextBox "Footer in article"
@@ -165,7 +169,7 @@ AXRole: AXGenericContainer
         AXRole: AXParagraph
             AXRole: AXStaticText "Text that appears under aside"
                 AXRole: AXInlineTextBox "Text that appears under aside"
-    AXRole: AXPre
+    AXRole: AXGenericContainer
         AXRole: AXStaticText "Text in a    pre
 element
 "
@@ -176,14 +180,14 @@ element
             AXRole: AXInlineTextBox "
 "
     AXRole: AXSection
-        AXRole: AXHeaderAsNonLandmark
+        AXRole: AXHeader
             AXRole: AXHeading "Most important heading here"
                 AXRole: AXStaticText "Most important heading here"
                     AXRole: AXInlineTextBox "Most important heading here"
         AXRole: AXParagraph
             AXRole: AXStaticText "Section"
                 AXRole: AXInlineTextBox "Section"
-        AXRole: AXFooterAsNonLandmark
+        AXRole: AXFooter
             AXRole: AXParagraph
                 AXRole: AXStaticText "Footer in section"
                     AXRole: AXInlineTextBox "Footer in section"
@@ -200,6 +204,16 @@ element
 "
             AXRole: AXInlineTextBox "
 "
+    AXRole: AXGroup
+        AXRole: AXHeading "Main Heading"
+            AXRole: AXStaticText "Main Heading"
+                AXRole: AXInlineTextBox "Main Heading"
+        AXRole: AXHeading "Subheading"
+            AXRole: AXStaticText "Subheading"
+                AXRole: AXInlineTextBox "Subheading"
+        AXRole: AXParagraph
+            AXRole: AXStaticText "Smaller Subheading"
+                AXRole: AXInlineTextBox "Smaller Subheading"
     AXRole: AXParagraph
         AXRole: AXStaticText "January"
             AXRole: AXInlineTextBox "January"

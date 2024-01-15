@@ -12,7 +12,7 @@ cc_library_with_tflite(
     srcs = ["processor.cc"],
     hdrs = ["processor.h"],
     tflite_deps = [
-        "@org_tensorflow//tensorflow/lite/core/shims:common",
+        "@org_tensorflow//tensorflow/lite/c:common",
         "//tensorflow_lite_support/cc/task/core:tflite_engine",
     ],
     deps = [

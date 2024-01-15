@@ -14,7 +14,14 @@
 
 CastMediaNotificationProducerKeyedServiceFactory::
     CastMediaNotificationProducerKeyedServiceFactory()
-    : ProfileKeyedServiceFactory("CastMediaNotificationProducerKeyedService") {
+    : ProfileKeyedServiceFactory(
+          "CastMediaNotificationProducerKeyedService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(media_router::ChromeMediaRouterFactory::GetInstance());
 }
 CastMediaNotificationProducerKeyedServiceFactory::
@@ -28,14 +35,21 @@ CastMediaNotificationProducerKeyedServiceFactory::GetInstance() {
   return factory.get();
 }
 
-KeyedService*
-CastMediaNotificationProducerKeyedServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
-  if (!media_router::MediaRouterEnabled(context) ||
-      !base::FeatureList::IsEnabled(media::kGlobalMediaControlsForCast)) {
+// static
+CastMediaNotificationProducerKeyedService*
+CastMediaNotificationProducerKeyedServiceFactory::GetForProfile(
+    Profile* profile) {
+  return static_cast<CastMediaNotificationProducerKeyedService*>(
+      GetInstance()->GetServiceForBrowserContext(profile, true));
+}
+
+std::unique_ptr<KeyedService> CastMediaNotificationProducerKeyedServiceFactory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
+  if (!media_router::MediaRouterEnabled(context)) {
     return nullptr;
   }
-  return new CastMediaNotificationProducerKeyedService(
+  return std::make_unique<CastMediaNotificationProducerKeyedService>(
       Profile::FromBrowserContext(context));
 }
 

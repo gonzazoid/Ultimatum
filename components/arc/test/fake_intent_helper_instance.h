@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "ash/components/arc/mojom/intent_helper.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -62,6 +62,13 @@ class FakeIntentHelperInstance : public mojom::IntentHelperInstance {
   std::vector<Broadcast> GetBroadcastsForAction(
       const std::string& action) const;
 
+  arc::mojom::CaptionStylePtr GetCaptionStyle() const {
+    return caption_style_->Clone();
+  }
+  arc::mojom::AccessibilityFeaturesPtr GetAccessibilityFeatures() const {
+    return accessibility_features_->Clone();
+  }
+
   // Sets a list of intent handlers to be returned in response to
   // RequestIntentHandlerList() calls with intents containing |action|.
   void SetIntentHandlers(const std::string& action,
@@ -74,10 +81,6 @@ class FakeIntentHelperInstance : public mojom::IntentHelperInstance {
   ~FakeIntentHelperInstance() override;
 
   void AddPreferredPackage(const std::string& package_name) override;
-
-  void AddPreferredApp(const std::string& package_name,
-                       IntentFilter intent_filter,
-                       mojom::IntentInfoPtr intent) override;
 
   void SetVerifiedLinks(const std::vector<std::string>& package_names,
                         bool always_open) override;
@@ -127,6 +130,11 @@ class FakeIntentHelperInstance : public mojom::IntentHelperInstance {
 
   void RequestDomainVerificationStatusUpdate() override;
 
+  void SetCaptionStyle(arc::mojom::CaptionStylePtr caption_style) override;
+
+  void EnableAccessibilityFeatures(
+      arc::mojom::AccessibilityFeaturesPtr accessibility_features) override;
+
  private:
   std::vector<Broadcast> broadcasts_;
 
@@ -143,6 +151,10 @@ class FakeIntentHelperInstance : public mojom::IntentHelperInstance {
   // Keeps the binding alive so that calls to this class can be correctly
   // routed.
   mojo::Remote<mojom::IntentHelperHost> host_remote_;
+
+  arc::mojom::CaptionStylePtr caption_style_;
+
+  arc::mojom::AccessibilityFeaturesPtr accessibility_features_;
 };
 
 }  // namespace arc

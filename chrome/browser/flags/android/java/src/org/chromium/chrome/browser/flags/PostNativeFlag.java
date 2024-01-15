@@ -4,16 +4,34 @@
 
 package org.chromium.chrome.browser.flags;
 
+import org.chromium.base.FeatureList;
+import org.chromium.base.FeatureMap;
+import org.chromium.base.Flag;
+
 /**
  * Flags of this type assume native is loaded and the value can be retrieved directly from native.
  */
 public class PostNativeFlag extends Flag {
-    public PostNativeFlag(String featureName) {
-        super(featureName);
+    private Boolean mInMemoryCachedValue;
+
+    public PostNativeFlag(FeatureMap featureMap, String featureName) {
+        super(featureMap, featureName);
     }
 
     @Override
     public boolean isEnabled() {
-        return ChromeFeatureList.isEnabled(mFeatureName);
+        if (mInMemoryCachedValue != null) return mInMemoryCachedValue;
+
+        if (FeatureList.hasTestFeature(mFeatureName)) {
+            return mFeatureMap.isEnabledInNative(mFeatureName);
+        }
+
+        mInMemoryCachedValue = mFeatureMap.isEnabledInNative(mFeatureName);
+        return mInMemoryCachedValue;
+    }
+
+    @Override
+    protected void clearInMemoryCachedValueForTesting() {
+        mInMemoryCachedValue = null;
     }
 }

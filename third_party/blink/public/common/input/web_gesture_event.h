@@ -58,6 +58,7 @@ class BLINK_COMMON_EXPORT WebGestureEvent : public WebInputEvent {
     } tap;
 
     struct {
+      int tap_down_count;
       float width;
       float height;
     } tap_down;
@@ -87,7 +88,9 @@ class BLINK_COMMON_EXPORT WebGestureEvent : public WebInputEvent {
       // this is used in scroll unification to perform a main thread hit test,
       // in which case |main_thread_hit_tested| is true, it is also used in
       // other cases like scroll events reinjected for scrollbar scrolling.
-      cc::ElementIdType scrollable_area_element_id;
+      // Using `cc::ElementId::InternalValue` because  `cc::ElementId` has a
+      // non-trivial constructor and is not allowed in a union.
+      cc::ElementId::InternalValue scrollable_area_element_id;
       // Initial motion that triggered the scroll.
       float delta_x_hint;
       float delta_y_hint;
@@ -105,14 +108,14 @@ class BLINK_COMMON_EXPORT WebGestureEvent : public WebInputEvent {
       // True if this event is generated from a mousewheel or scrollbar.
       // Synthetic GSB(s) are ignored by the blink::ElasticOverscrollController.
       bool synthetic;
-      // If true, this event has been hit tested by the main thread and the
-      // result is stored in scrollable_area_element_id. Used only in scroll
-      // unification when the event is sent back the the compositor for a
-      // second time after the main thread hit test is complete.
-      bool main_thread_hit_tested;
       // If true, this event will be used for cursor control instead of
       // scrolling. the entire scroll sequence will be used for cursor control.
       bool cursor_control;
+      // If nonzero, this event has been hit tested by the main thread and the
+      // result is stored in scrollable_area_element_id. Used only in scroll
+      // unification when the event is sent back the the compositor for a
+      // second time after the main thread hit test is complete.
+      uint32_t main_thread_hit_tested_reasons;
     } scroll_begin;
 
     struct {
@@ -244,6 +247,7 @@ class BLINK_COMMON_EXPORT WebGestureEvent : public WebInputEvent {
 
   gfx::SizeF TapAreaInRootFrame() const;
   int TapCount() const;
+  int TapDownCount() const;
 
   void ApplyTouchAdjustment(const gfx::PointF& root_frame_coords);
 
@@ -271,6 +275,7 @@ class BLINK_COMMON_EXPORT WebGestureEvent : public WebInputEvent {
       case Type::kGestureShortPress:
       case Type::kGestureLongPress:
       case Type::kGestureLongTap:
+      case Type::kGestureDoubleTap:
         return false;
       default:
         NOTREACHED();
@@ -352,16 +357,15 @@ class BLINK_COMMON_EXPORT WebGestureEvent : public WebInputEvent {
   static bool IsCompatibleScrollorPinch(const WebGestureEvent& new_event,
                                         const WebGestureEvent& event_in_queue);
 
-  // Generate a scroll gesture event (begin, update, or end), based on the
-  // parameters passed in. Populates the data field of the created
-  // WebGestureEvent based on the type.
-  static std::unique_ptr<blink::WebGestureEvent> GenerateInjectedScrollGesture(
-      WebInputEvent::Type type,
-      base::TimeTicks timestamp,
-      WebGestureDevice device,
-      gfx::PointF position_in_widget,
-      gfx::Vector2dF scroll_delta,
-      ui::ScrollGranularity granularity);
+  // For a scrollbar gesture, generate a scroll gesture event (begin, update,
+  // or end), based on the parameters passed in. Populates the data field of
+  // the created WebGestureEvent based on the type.
+  static std::unique_ptr<blink::WebGestureEvent>
+  GenerateInjectedScrollbarGestureScroll(WebInputEvent::Type type,
+                                         base::TimeTicks timestamp,
+                                         gfx::PointF position_in_widget,
+                                         gfx::Vector2dF scroll_delta,
+                                         ui::ScrollGranularity granularity);
 };
 
 }  // namespace blink

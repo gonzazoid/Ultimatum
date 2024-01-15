@@ -10,10 +10,6 @@
 
 #include "base/values.h"
 
-namespace base {
-class DictionaryValue;
-}  // namespace base
-
 namespace content {
 class WebContents;
 }  // namespace content
@@ -40,16 +36,19 @@ class GuestViewManagerDelegate {
   // Dispatches the event with |name| with the provided |args| to the embedder
   // of the given |guest| with |instance_id| for routing.
   virtual void DispatchEvent(const std::string& event_name,
-                             std::unique_ptr<base::DictionaryValue> args,
+                             base::Value::Dict args,
                              GuestViewBase* guest,
                              int instance_id) {}
 
   // Indicates whether the |guest| can be used within the context of where it
   // was created.
-  virtual bool IsGuestAvailableToContext(GuestViewBase* guest);
+  virtual bool IsGuestAvailableToContext(const GuestViewBase* guest) const;
 
   // Indicates whether the |guest| is owned by an extension or Chrome App.
-  virtual bool IsOwnedByExtension(GuestViewBase* guest);
+  virtual bool IsOwnedByExtension(const GuestViewBase* guest);
+
+  // Indicates whether the |guest| is owned by a Controlled Frame embedder.
+  virtual bool IsOwnedByControlledFrameEmbedder(const GuestViewBase* guest);
 
   // Registers additional GuestView types the delegator (GuestViewManger) can
   // create.

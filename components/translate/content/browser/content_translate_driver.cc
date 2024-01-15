@@ -8,16 +8,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/supports_user_data.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/google/core/common/google_util.h"
 #include "components/language/core/browser/url_language_histogram.h"
 #include "components/translate/content/browser/content_record_page_language.h"
@@ -64,6 +63,7 @@ ContentTranslateDriver::ContentTranslateDriver(
     translate::TranslateModelService* translate_model_service)
     : content::WebContentsObserver(&web_contents),
       translate_manager_(nullptr),
+      is_otr_context_(web_contents.GetBrowserContext()->IsOffTheRecord()),
       max_reload_check_attempts_(kMaxTranslateLoadCheckAttempts),
       next_page_seq_no_(0),
       language_histogram_(url_language_histogram),
@@ -92,7 +92,7 @@ void ContentTranslateDriver::InitiateTranslation(const std::string& page_lang,
   // has finished.
   if (web_contents()->IsLoading() && attempt < max_reload_check_attempts_) {
     int backoff = attempt * kMaxTranslateLoadCheckAttempts;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&ContentTranslateDriver::InitiateTranslation,
                        weak_pointer_factory_.GetWeakPtr(), page_lang,
@@ -108,8 +108,7 @@ void ContentTranslateDriver::InitiateTranslation(const std::string& page_lang,
 // TranslateDriver methods
 
 bool ContentTranslateDriver::IsLinkNavigation() {
-  return web_contents()->GetController().GetLastCommittedEntry() &&
-         ui::PageTransitionCoreTypeIs(web_contents()
+  return ui::PageTransitionCoreTypeIs(web_contents()
                                           ->GetController()
                                           .GetLastCommittedEntry()
                                           ->GetTransitionType(),
@@ -148,16 +147,16 @@ void ContentTranslateDriver::RevertTranslation(int page_seq_no) {
   it->second->RevertTranslation();
 }
 
-bool ContentTranslateDriver::IsIncognito() {
-  return web_contents()->GetBrowserContext()->IsOffTheRecord();
+bool ContentTranslateDriver::IsIncognito() const {
+  return is_otr_context_;
 }
 
 const std::string& ContentTranslateDriver::GetContentsMimeType() {
   return web_contents()->GetContentsMimeType();
 }
 
-const GURL& ContentTranslateDriver::GetLastCommittedURL() {
-  return web_contents()->GetLastCommittedURL();
+const GURL& ContentTranslateDriver::GetLastCommittedURL() const {
+  return last_committed_url_;
 }
 
 const GURL& ContentTranslateDriver::GetVisibleURL() {
@@ -168,13 +167,11 @@ ukm::SourceId ContentTranslateDriver::GetUkmSourceId() {
   return web_contents()->GetPrimaryMainFrame()->GetPageUkmSourceId();
 }
 
-bool ContentTranslateDriver::HasCurrentPage() {
-  // TODO(https://crbug.com/524208): This function used to check the existence
-  // of GetLastCommittedEntry(), which will always exist now. Consider removing
-  // this function, making the callers assume HasCurrentPage() is always true.
-  content::NavigationEntry* current_entry =
-      web_contents()->GetController().GetLastCommittedEntry();
-  return current_entry && !current_entry->IsInitialEntry();
+bool ContentTranslateDriver::HasCurrentPage() const {
+  // TODO(crbug.com/524208): This method previously checked for the existence of
+  // GetLastCommittedEntry(), which always exists now. Check if this is true for
+  // other implementations and consider removing this method.
+  return true;
 }
 
 void ContentTranslateDriver::OpenUrlInNewTab(const GURL& url) {
@@ -225,14 +222,15 @@ void ContentTranslateDriver::InitiateTranslationIfReload(
   }
 
   if (!translate_manager_->GetLanguageState()
-           ->page_level_translation_critiera_met())
+           ->page_level_translation_criteria_met()) {
     return;
+  }
 
   // Note that we delay it as the ordering of the processing of this callback
   // by WebContentsObservers is undefined and might result in the current
   // infobars being removed. Since the translation initiation process might add
   // an infobar, it must be done after that.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ContentTranslateDriver::InitiateTranslation,
                      weak_pointer_factory_.GetWeakPtr(),
@@ -260,6 +258,9 @@ void ContentTranslateDriver::DidFinishNavigation(
   if (!navigation_handle->IsInPrimaryMainFrame()) {
     return;
   }
+
+  // Store the main frame committed URL.
+  last_committed_url_ = web_contents()->GetLastCommittedURL();
 
   InitiateTranslationIfReload(navigation_handle);
 
@@ -310,7 +311,7 @@ void ContentTranslateDriver::AddReceiver(
 void ContentTranslateDriver::RegisterPage(
     mojo::PendingRemote<translate::mojom::TranslateAgent> translate_agent,
     const translate::LanguageDetectionDetails& details,
-    const bool page_level_translation_critiera_met) {
+    const bool page_level_translation_criteria_met) {
   base::TimeTicks language_determined_time = base::TimeTicks::Now();
   ReportLanguageDeterminedDuration(finish_navigation_time_,
                                    language_determined_time);
@@ -327,7 +328,7 @@ void ContentTranslateDriver::RegisterPage(
   translate_manager_->set_current_seq_no(next_page_seq_no_);
 
   translate_manager_->GetLanguageState()->LanguageDetermined(
-      details.adopted_language, page_level_translation_critiera_met);
+      details.adopted_language, page_level_translation_criteria_met);
 
   if (web_contents()) {
     translate_manager_->InitiateTranslation(details.adopted_language);
@@ -341,8 +342,7 @@ void ContentTranslateDriver::RegisterPage(
     // associated, thus avoiding the potential for corner cases where the
     // detected language is attributed to the wrong page.
     auto* const entry = web_contents()->GetController().GetLastCommittedEntry();
-    if (entry != nullptr)
-      SetPageLanguageInNavigation(details.adopted_language, entry);
+    SetPageLanguageInNavigation(details.adopted_language, entry);
   }
 
   for (auto& observer : language_detection_observers())

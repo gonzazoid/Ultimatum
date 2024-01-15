@@ -4,40 +4,52 @@
 
 #include "chrome/browser/ui/views/side_panel/read_anything/read_anything_button_view.h"
 
-#include "chrome/browser/ui/views/side_panel/read_anything/read_anything_constants.h"
+#include "chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.h"
+#include "chrome/common/accessibility/read_anything_constants.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/views/controls/button/image_button_factory.h"
+#include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/layout/box_layout.h"
 
 ReadAnythingButtonView::ReadAnythingButtonView(
     views::ImageButton::PressedCallback callback,
-    const gfx::ImageSkia& icon,
-    const std::u16string& tooltip) {
-  // Create and set a BoxLayout with insets to hold the button.
-  auto button_layout_manager = std::make_unique<views::BoxLayout>(
-      views::BoxLayout::Orientation::kHorizontal);
-  button_layout_manager->set_inside_border_insets(
-      gfx::Insets().set_left(kButtonPadding).set_right(kButtonPadding));
-  button_layout_manager->set_cross_axis_alignment(
-      views::BoxLayout::CrossAxisAlignment::kCenter);
-  button_layout_manager->set_main_axis_alignment(
-      views::BoxLayout::MainAxisAlignment::kCenter);
-
-  SetLayoutManager(std::move(button_layout_manager));
-
-  // Create the image button.
-  auto button = std::make_unique<views::ImageButton>(std::move(callback));
-  button->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
-  button->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
-  button->SetImageModel(views::Button::STATE_NORMAL,
-                        ui::ImageModel::FromImageSkia(icon));
-  button->SetTooltipText(tooltip);
-
-  // Add the button to the view.
-  button_ = AddChildView(std::move(button));
+    const gfx::VectorIcon& icon,
+    int icon_size,
+    SkColor icon_color,
+    const std::u16string& tooltip)
+    : ImageButton(std::move(callback)) {
+  views::SetImageFromVectorIconWithColorId(this, icon, icon_color, icon_color,
+                                           icon_size);
+  ConfigureInkDropForToolbar(this);
+  views::InstallCircleHighlightPathGenerator(this);
+  SetTooltipText(tooltip);
 }
 
-void ReadAnythingButtonView::UpdateIcon(const gfx::ImageSkia& icon) {
-  button_->SetImage(views::Button::STATE_NORMAL, icon);
+bool ReadAnythingButtonView::IsGroupFocusTraversable() const {
+  // Only the first item in the toolbar should be reachable with tab
+  return false;
 }
+
+void ReadAnythingButtonView::UpdateIcon(const gfx::VectorIcon& icon,
+                                        int icon_size,
+                                        ui::ColorId icon_color,
+                                        ui::ColorId focus_ring_color) {
+  views::SetImageFromVectorIconWithColorId(this, icon, icon_color, icon_color,
+                                           icon_size);
+  DCHECK(views::FocusRing::Get(this));
+  views::FocusRing::Get(this)->SetColorId(focus_ring_color);
+}
+
+void ReadAnythingButtonView::Enable() {
+  SetState(views::Button::ButtonState::STATE_NORMAL);
+}
+
+void ReadAnythingButtonView::Disable() {
+  SetState(views::Button::ButtonState::STATE_DISABLED);
+}
+
+BEGIN_METADATA(ReadAnythingButtonView)
+END_METADATA
 
 ReadAnythingButtonView::~ReadAnythingButtonView() = default;

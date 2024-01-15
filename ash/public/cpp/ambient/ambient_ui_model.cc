@@ -4,11 +4,26 @@
 
 #include "ash/public/cpp/ambient/ambient_ui_model.h"
 
+#include "base/check_op.h"
+
 namespace ash {
 
 namespace {
 
 AmbientUiModel* g_ambient_ui_model = nullptr;
+
+constexpr AmbientJitterConfig kSlideshowPeripheralUiJitterConfig{
+    .step_size = 5,
+    .x_min_translation = 0,
+    .x_max_translation = 20,
+    .y_min_translation = -20,
+    .y_max_translation = 0};
+
+constexpr AmbientJitterConfig kAnimationJitterConfig{.step_size = 2,
+                                                     .x_min_translation = -10,
+                                                     .x_max_translation = 10,
+                                                     .y_min_translation = -10,
+                                                     .y_max_translation = 10};
 
 }  // namespace
 
@@ -67,6 +82,15 @@ void AmbientUiModel::SetPhotoRefreshInterval(base::TimeDelta interval) {
   photo_refresh_interval_ = interval;
 }
 
+AmbientJitterConfig AmbientUiModel::GetSlideshowPeripheralUiJitterConfig() {
+  return jitter_config_for_testing_.value_or(
+      kSlideshowPeripheralUiJitterConfig);
+}
+
+AmbientJitterConfig AmbientUiModel::GetAnimationJitterConfig() {
+  return jitter_config_for_testing_.value_or(kAnimationJitterConfig);
+}
+
 void AmbientUiModel::NotifyAmbientUiVisibilityChanged() {
   for (auto& observer : observers_)
     observer.OnAmbientUiVisibilityChanged(ui_visibility_);
@@ -100,8 +124,11 @@ std::ostream& operator<<(std::ostream& out, AmbientUiMode mode) {
 
 std::ostream& operator<<(std::ostream& out, AmbientUiVisibility visibility) {
   switch (visibility) {
-    case AmbientUiVisibility::kShown:
+    case AmbientUiVisibility::kShouldShow:
       out << "kShown";
+      break;
+    case AmbientUiVisibility::kPreview:
+      out << "kPreview";
       break;
     case AmbientUiVisibility::kHidden:
       out << "kHidden";

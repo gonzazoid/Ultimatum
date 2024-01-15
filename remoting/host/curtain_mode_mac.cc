@@ -9,10 +9,10 @@
 #include <Security/Security.h>
 #include <unistd.h>
 
-#include "base/bind.h"
+#include "base/apple/scoped_cftyperef.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/client_session_control.h"
@@ -74,10 +74,9 @@ bool IsRunningHeadless() {
 // on the UI thread as well.
 class SessionWatcher : public base::RefCountedThreadSafe<SessionWatcher> {
  public:
-  SessionWatcher(
-      scoped_refptr<base::SingleThreadTaskRunner> caller_task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-      base::WeakPtr<ClientSessionControl> client_session_control);
+  SessionWatcher(scoped_refptr<base::SingleThreadTaskRunner> caller_task_runner,
+                 scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
+                 base::WeakPtr<ClientSessionControl> client_session_control);
 
   SessionWatcher(const SessionWatcher&) = delete;
   SessionWatcher& operator=(const SessionWatcher&) = delete;
@@ -126,8 +125,7 @@ SessionWatcher::SessionWatcher(
     : caller_task_runner_(caller_task_runner),
       ui_task_runner_(ui_task_runner),
       client_session_control_(client_session_control),
-      event_handler_(nullptr) {
-}
+      event_handler_(nullptr) {}
 
 void SessionWatcher::Start() {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
@@ -162,7 +160,7 @@ void SessionWatcher::ActivateCurtain() {
     return;
   }
 
-  base::ScopedCFTypeRef<CFDictionaryRef> session(
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> session(
       CGSessionCopyCurrentDictionary());
 
   // CGSessionCopyCurrentDictionary has been observed to return nullptr in some
@@ -172,14 +170,14 @@ void SessionWatcher::ActivateCurtain() {
   // this, or how common it is, a crash report is useful in this case (note
   // that the connection would have to be refused in any case, so this is no
   // loss of functionality).
-  CHECK(session != nullptr)
-      << "Error activating curtain-mode: "
-      << "CGSessionCopyCurrentDictionary() returned NULL. "
-      << "Logging out and back in should resolve this error.";
+  CHECK(session) << "Error activating curtain-mode: "
+                 << "CGSessionCopyCurrentDictionary() returned NULL. "
+                 << "Logging out and back in should resolve this error.";
 
-  const void* on_console = CFDictionaryGetValue(session,
-                                                kCGSessionOnConsoleKey);
-  const void* logged_in = CFDictionaryGetValue(session, kCGSessionLoginDoneKey);
+  const void* on_console =
+      CFDictionaryGetValue(session.get(), kCGSessionOnConsoleKey);
+  const void* logged_in =
+      CFDictionaryGetValue(session.get(), kCGSessionLoginDoneKey);
   if (logged_in == kCFBooleanTrue && on_console == kCFBooleanTrue) {
     // If IsRunningHeadless() returns true then we know that CGSession will fail
     // silently w/o curtaining the session. This is a publicly known issue for
@@ -270,15 +268,16 @@ void SessionWatcher::DisconnectSession(protocol::ErrorCode error) {
     return;
   }
 
-  if (client_session_control_)
+  if (client_session_control_) {
     client_session_control_->DisconnectSession(error);
+  }
 }
 
 OSStatus SessionWatcher::SessionActivateHandler(EventHandlerCallRef handler,
                                                 EventRef event,
                                                 void* user_data) {
-  static_cast<SessionWatcher*>(user_data)
-      ->DisconnectSession(protocol::ErrorCode::OK);
+  static_cast<SessionWatcher*>(user_data)->DisconnectSession(
+      protocol::ErrorCode::OK);
   return noErr;
 }
 
@@ -286,10 +285,9 @@ OSStatus SessionWatcher::SessionActivateHandler(EventHandlerCallRef handler,
 
 class CurtainModeMac : public CurtainMode {
  public:
-  CurtainModeMac(
-      scoped_refptr<base::SingleThreadTaskRunner> caller_task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-      base::WeakPtr<ClientSessionControl> client_session_control);
+  CurtainModeMac(scoped_refptr<base::SingleThreadTaskRunner> caller_task_runner,
+                 scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
+                 base::WeakPtr<ClientSessionControl> client_session_control);
 
   CurtainModeMac(const CurtainModeMac&) = delete;
   CurtainModeMac& operator=(const CurtainModeMac&) = delete;
@@ -309,8 +307,7 @@ CurtainModeMac::CurtainModeMac(
     base::WeakPtr<ClientSessionControl> client_session_control)
     : session_watcher_(new SessionWatcher(caller_task_runner,
                                           ui_task_runner,
-                                          client_session_control)) {
-}
+                                          client_session_control)) {}
 
 CurtainModeMac::~CurtainModeMac() {
   session_watcher_->Stop();

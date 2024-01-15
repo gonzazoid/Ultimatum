@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -234,12 +235,12 @@ class flat_map : public ::base::internal::
   iterator insert_or_assign(const_iterator hint, K&& key, M&& obj);
 
   template <class K, class... Args>
-  std::enable_if_t<std::is_constructible<key_type, K&&>::value,
+  std::enable_if_t<std::is_constructible_v<key_type, K&&>,
                    std::pair<iterator, bool>>
   try_emplace(K&& key, Args&&... args);
 
   template <class K, class... Args>
-  std::enable_if_t<std::is_constructible<key_type, K&&>::value, iterator>
+  std::enable_if_t<std::is_constructible_v<key_type, K&&>, iterator>
   try_emplace(const_iterator hint, K&& key, Args&&... args);
 
   // --------------------------------------------------------------------------
@@ -323,7 +324,7 @@ template <class Key, class Mapped, class Compare, class Container>
 template <class K, class... Args>
 auto flat_map<Key, Mapped, Compare, Container>::try_emplace(K&& key,
                                                             Args&&... args)
-    -> std::enable_if_t<std::is_constructible<key_type, K&&>::value,
+    -> std::enable_if_t<std::is_constructible_v<key_type, K&&>,
                         std::pair<iterator, bool>> {
   return tree::emplace_key_args(
       key, std::piecewise_construct,
@@ -336,7 +337,7 @@ template <class K, class... Args>
 auto flat_map<Key, Mapped, Compare, Container>::try_emplace(const_iterator hint,
                                                             K&& key,
                                                             Args&&... args)
-    -> std::enable_if_t<std::is_constructible<key_type, K&&>::value, iterator> {
+    -> std::enable_if_t<std::is_constructible_v<key_type, K&&>, iterator> {
   return tree::emplace_hint_key_args(
              hint, key, std::piecewise_construct,
              std::forward_as_tuple(std::forward<K>(key)),
@@ -369,7 +370,7 @@ template <class Key,
           class KeyCompare = std::less<>,
           class Container = std::vector<std::pair<Key, Mapped>>,
           class InputContainer,
-          class Projection = base::identity>
+          class Projection = std::identity>
 constexpr flat_map<Key, Mapped, KeyCompare, Container> MakeFlatMap(
     const InputContainer& unprojected_elements,
     const KeyCompare& comp = KeyCompare(),
@@ -381,6 +382,18 @@ constexpr flat_map<Key, Mapped, KeyCompare, Container> MakeFlatMap(
   return flat_map<Key, Mapped, KeyCompare, Container>(std::move(elements),
                                                       comp);
 }
+
+// Deduction guide to construct a flat_map from a Container of std::pair<Key,
+// Mapped> elements. The container does not have to be sorted or contain only
+// unique keys; construction will automatically discard duplicate keys, keeping
+// only the first.
+template <
+    class Container,
+    class Compare = std::less<>,
+    class Key = typename std::decay_t<Container>::value_type::first_type,
+    class Mapped = typename std::decay_t<Container>::value_type::second_type>
+flat_map(Container&&, Compare comp = {})
+    -> flat_map<Key, Mapped, Compare, std::decay_t<Container>>;
 
 }  // namespace base
 

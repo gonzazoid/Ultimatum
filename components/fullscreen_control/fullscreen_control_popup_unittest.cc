@@ -7,11 +7,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/fullscreen_control/fullscreen_control_popup.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -66,7 +65,7 @@ class FullscreenControlPopupTest : public views::test::WidgetTest {
 
  private:
   std::unique_ptr<gfx::AnimationTestApi> animation_api_;
-  raw_ptr<views::Widget> parent_widget_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged> parent_widget_ = nullptr;
 };
 
 TEST_F(FullscreenControlPopupTest, ShowPopupAnimated) {

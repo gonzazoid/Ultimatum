@@ -11,11 +11,11 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_window_builder.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
@@ -44,7 +44,8 @@ class LogoutConfirmationControllerTest : public testing::Test {
   bool log_out_called_;
 
   scoped_refptr<base::TestMockTimeTaskRunner> runner_;
-  base::ThreadTaskRunnerHandle runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      runner_current_default_handle_;
 
   LogoutConfirmationController controller_;
 };
@@ -52,7 +53,7 @@ class LogoutConfirmationControllerTest : public testing::Test {
 LogoutConfirmationControllerTest::LogoutConfirmationControllerTest()
     : log_out_called_(false),
       runner_(new base::TestMockTimeTaskRunner),
-      runner_handle_(runner_) {
+      runner_current_default_handle_(runner_) {
   controller_.SetClockForTesting(runner_->GetMockTickClock());
   controller_.SetLogoutCallbackForTesting(base::BindRepeating(
       &LogoutConfirmationControllerTest::LogOut, base::Unretained(this)));

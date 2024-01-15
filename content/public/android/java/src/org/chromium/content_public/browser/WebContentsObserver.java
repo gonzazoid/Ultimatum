@@ -57,13 +57,6 @@ public abstract class WebContentsObserver {
     public void didStartNavigationInPrimaryMainFrame(NavigationHandle navigationHandle) {}
 
     /**
-     * TODO(crbug.com/1351884) Remove when NotifyJavaSpuriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling didStartNavigation in only the primary main
-     * frame vs calling it in all frames.
-     */
-    public void didStartNavigationNoop(NavigationHandle navigationHandle) {}
-
-    /**
      * Called when the browser process redirect a navigation.
      * @param navigationHandle
      *        NavigationHandle are proided to several WebContentsObserver methods to allow
@@ -81,13 +74,6 @@ public abstract class WebContentsObserver {
      *        NavigationHandle at the end of this function.
      */
     public void didFinishNavigationInPrimaryMainFrame(NavigationHandle navigationHandle) {}
-
-    /**
-     * TODO(crbug.com/1351884) Remove when NotifyJavaSpuriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling didFinishNavigation in only the primary main
-     * frame vs calling it in all frames.
-     */
-    public void didFinishNavigationNoop(NavigationHandle navigationHandle) {}
 
     /**
      * Called when the a page starts loading.
@@ -111,9 +97,7 @@ public abstract class WebContentsObserver {
      */
     public void loadProgressChanged(float progress) {}
 
-    /**
-     * Called when a page's visible security state has changed.
-     */
+    /** Called when a page's visible security state has changed. */
     public void didChangeVisibleSecurityState() {}
 
     /**
@@ -123,22 +107,19 @@ public abstract class WebContentsObserver {
      * @param failingUrl The url that was loading when the error occurred.
      * @param frameLifecycleState The lifecycle state of the associated RenderFrameHost.
      */
-    public void didFailLoad(boolean isInPrimaryMainFrame, int errorCode, GURL failingUrl,
+    public void didFailLoad(
+            boolean isInPrimaryMainFrame,
+            int errorCode,
+            GURL failingUrl,
             @LifecycleState int rfhLifecycleState) {}
 
-    /**
-     * Called when the page had painted something non-empty.
-     */
+    /** Called when the page had painted something non-empty. */
     public void didFirstVisuallyNonEmptyPaint() {}
 
-    /**
-     * The web contents was shown.
-     */
+    /** The web contents was shown. */
     public void wasShown() {}
 
-    /**
-     * The web contents was hidden.
-     */
+    /** The web contents was hidden. */
     public void wasHidden() {}
 
     /**
@@ -147,9 +128,7 @@ public abstract class WebContentsObserver {
      */
     public void titleWasSet(String title) {}
 
-    /**
-     * Called once the window.document object of the main frame was created.
-     */
+    /** Called once the window.document object of the main frame was created. */
     public void primaryMainDocumentElementAvailable() {}
 
     /**
@@ -159,15 +138,11 @@ public abstract class WebContentsObserver {
      * @param isKnownValid Whether the URL is known to be valid.
      * @param rfhLifecycleState The lifecycle state of the associated frame.
      */
-    public void didFinishLoadInPrimaryMainFrame(GlobalRenderFrameHostId rfhId, GURL url,
-            boolean isKnownValid, @LifecycleState int rfhLifecycleState) {}
-
-    /**
-     * TODO(crbug.com/1351884) Remove when NotifyJavaSpuriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling didFinishLoad in only the primary main frame.
-     */
-    public void didFinishLoadNoop(GlobalRenderFrameHostId rfhId, GURL url, boolean isKnownValid,
-            boolean isInPrimaryMainFrame, @LifecycleState int rfhLifecycleState) {}
+    public void didFinishLoadInPrimaryMainFrame(
+            GlobalRenderFrameHostId rfhId,
+            GURL url,
+            boolean isKnownValid,
+            @LifecycleState int rfhLifecycleState) {}
 
     /**
      * Notifies that the document has finished loading for the primary main frame.
@@ -178,37 +153,21 @@ public abstract class WebContentsObserver {
             GlobalRenderFrameHostId rfhId, @LifecycleState int rfhLifecycleState) {}
 
     /**
-     * TODO(crbug.com/1351884) Remove when NotifyJavaSupriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling documentLoadedInFrame in only the primary main
-     * frame vs calling it in all frames.
-     */
-    public void documentLoadedInFrameNoop(GlobalRenderFrameHostId rfhId,
-            boolean isInPrimaryMainFrame, @LifecycleState int rfhLifecycleState) {}
-
-    /**
      * Notifies that a navigation entry has been committed.
      * @param details Details of committed navigation entry.
      */
     public void navigationEntryCommitted(LoadCommittedDetails details) {}
 
-    /**
-     * Called when navigation entries were removed.
-     */
+    /** Called when navigation entries were removed. */
     public void navigationEntriesDeleted() {}
 
-    /**
-     * Called when navigation entries were changed.
-     */
+    /** Called when navigation entries were changed. */
     public void navigationEntriesChanged() {}
 
-    /**
-     * Called when a frame receives user activation.
-     */
+    /** Called when a frame receives user activation. */
     public void frameReceivedUserActivation() {}
 
-    /**
-     * Called when the theme color was changed.
-     */
+    /** Called when the theme color was changed. */
     public void didChangeThemeColor() {}
 
     /**
@@ -231,6 +190,7 @@ public abstract class WebContentsObserver {
 
     /**
      * Called when the Web Contents is toggled into or out of fullscreen mode by the renderer.
+     *
      * @param enteredFullscreen whether fullscreen is being entered or left.
      * @param willCauseResize whether the change to fullscreen will cause the contents to resize.
      */
@@ -256,9 +216,7 @@ public abstract class WebContentsObserver {
      */
     public void virtualKeyboardModeChanged(@VirtualKeyboardMode.EnumType int mode) {}
 
-    /**
-     * This method is invoked when a RenderWidgetHost for a WebContents gains focus.
-     */
+    /** This method is invoked when a RenderWidgetHost for a WebContents gains focus. */
     public void onWebContentsFocused() {}
 
     /**
@@ -271,9 +229,7 @@ public abstract class WebContentsObserver {
     /** Called when the top level WindowAndroid changes. */
     public void onTopLevelNativeWindowChanged(@Nullable WindowAndroid windowAndroid) {}
 
-    /**
-     * Stop observing the web contents and clean up associated references.
-     */
+    /** Stop observing the web contents and clean up associated references. */
     public void destroy() {
         if (mWebContents == null) return;
         final WebContents webContents = mWebContents.get();

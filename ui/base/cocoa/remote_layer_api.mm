@@ -30,8 +30,13 @@ bool RemoteLayerAPISupported() {
   // Note that because the contextId and layer properties are dynamic,
   // instancesRespondToSelector will return NO for them.
   static bool caContextClassValid =
-      [caContextClass respondsToSelector:
-          @selector(contextWithCGSConnection:options:)] &&
+#if BUILDFLAG(IS_MAC)
+      [caContextClass
+          respondsToSelector:@selector(contextWithCGSConnection:options:)] &&
+#else
+      [caContextClass
+          respondsToSelector:@selector(remoteContextWithOptions:)] &&
+#endif
       class_getProperty(caContextClass, "contextId") &&
       class_getProperty(caContextClass, "layer");
   if (!caContextClassValid)

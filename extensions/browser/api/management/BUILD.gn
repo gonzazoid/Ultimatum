@@ -16,9 +16,13 @@ source_set("management") {
     "management_api_delegate.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//build:chromeos_buildflags",
-    "//extensions/browser/api",
+    "//components/supervised_user/core/common:buildflags",
+    "//components/supervised_user/core/common:common",
+    "//content/public/browser",
     "//extensions/common",
     "//extensions/common/api",
   ]

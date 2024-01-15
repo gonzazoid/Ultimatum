@@ -15,14 +15,21 @@ PinnedTabService* PinnedTabServiceFactory::GetForProfile(
 }
 
 PinnedTabServiceFactory* PinnedTabServiceFactory::GetInstance() {
-  return base::Singleton<PinnedTabServiceFactory>::get();
+  static base::NoDestructor<PinnedTabServiceFactory> instance;
+  return instance.get();
 }
 
 PinnedTabServiceFactory::PinnedTabServiceFactory()
-    : ProfileKeyedServiceFactory("PinnedTabService") {}
+    : ProfileKeyedServiceFactory(
+          "PinnedTabService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-PinnedTabServiceFactory::~PinnedTabServiceFactory() {
-}
+PinnedTabServiceFactory::~PinnedTabServiceFactory() = default;
 
 KeyedService* PinnedTabServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* profile) const {

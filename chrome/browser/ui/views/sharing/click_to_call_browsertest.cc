@@ -5,12 +5,14 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/policy/policy_test_utils.h"
@@ -23,7 +25,7 @@
 #include "chrome/browser/sharing/sharing_sync_preference.h"
 #include "chrome/browser/sync/test/integration/sessions_helper.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
 #include "chrome/browser/ui/views/sharing/sharing_browsertest.h"
 #include "chrome/browser/ui/views/sharing/sharing_dialog_view.h"
@@ -31,7 +33,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
-#include "components/sync/driver/sync_service_impl.h"
+#include "components/sync/service/sync_service_impl.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/test/browser_test.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -84,6 +86,9 @@ class ClickToCallBrowserTest : public SharingBrowserTest {
       const base::HistogramTester& histograms) {
     return histograms.GetTotalCountsForPrefix(HistogramName(""));
   }
+
+ private:
+  base::test::ScopedFeatureList features_{kClickToCall};
 };
 
 // TODO(himanshujaju): Add UI checks.
@@ -162,32 +167,6 @@ IN_PROC_BROWSER_TEST_F(ClickToCallBrowserTest, ContextMenu_EscapedCharacters) {
 }
 
 IN_PROC_BROWSER_TEST_F(ClickToCallBrowserTest,
-                       ContextMenu_DevicesAvailable_SyncTurnedOff) {
-  if (base::FeatureList::IsEnabled(kSharingSendViaSync)) {
-    // Turning off sync will have no effect when Click to Call is available on
-    // sign-in.
-    return;
-  }
-
-  Init(sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2,
-       sync_pb::SharingSpecificFields::UNKNOWN);
-  auto devices = sharing_service()->GetDeviceCandidates(
-      sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2);
-  ASSERT_EQ(1u, devices.size());
-
-  // Disable syncing preferences which is necessary for Sharing.
-  GetSyncService(0)->GetUserSettings()->SetSelectedTypes(false, {});
-  ASSERT_TRUE(AwaitQuiescence());
-
-  std::unique_ptr<TestRenderViewContextMenu> menu =
-      InitContextMenu(GURL(kTelUrl), kLinkText, kTextWithoutPhoneNumber);
-  EXPECT_FALSE(menu->IsItemPresent(
-      IDC_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE));
-  EXPECT_FALSE(menu->IsItemPresent(
-      IDC_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_MULTIPLE_DEVICES));
-}
-
-IN_PROC_BROWSER_TEST_F(ClickToCallBrowserTest,
                        ContextMenu_TelLink_MultipleDevicesAvailable) {
   Init(sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2,
        sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2);
@@ -248,7 +227,7 @@ IN_PROC_BROWSER_TEST_F(ClickToCallBrowserTest,
     sub_menu_model->ActivatedAt(device_id);
 
     CheckLastReceiver(*device);
-    absl::optional<std::string> expected_number =
+    std::optional<std::string> expected_number =
         ExtractPhoneNumberForClickToCall(GetProfile(0), kTextWithPhoneNumber);
     ASSERT_TRUE(expected_number.has_value());
     CheckLastSharingMessageSent(expected_number.value());
@@ -341,8 +320,8 @@ IN_PROC_BROWSER_TEST_F(ClickToCallBrowserTest, ContextMenu_UKM) {
 
   // Expect UKM metrics to be logged
   run_loop.Run();
-  std::vector<const ukm::mojom::UkmEntry*> ukm_entries =
-      ukm_recorder.GetEntriesByName(
+  std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>>
+      ukm_entries = ukm_recorder.GetEntriesByName(
           ukm::builders::Sharing_ClickToCall::kEntryName);
   ASSERT_EQ(1u, ukm_entries.size());
 
@@ -515,6 +494,9 @@ class ClickToCallPolicyTest
 
     provider_.UpdateChromePolicy(policies);
   }
+
+ private:
+  base::test::ScopedFeatureList features_{kClickToCall};
 };
 
 IN_PROC_BROWSER_TEST_P(ClickToCallPolicyTest, RunTest) {
@@ -531,7 +513,7 @@ IN_PROC_BROWSER_TEST_P(ClickToCallPolicyTest, RunTest) {
   EXPECT_EQ(expected_enabled, ShouldOfferClickToCallForURL(browser()->profile(),
                                                            GURL(kPhoneLink)));
 
-  absl::optional<std::string> extracted =
+  std::optional<std::string> extracted =
       ExtractPhoneNumberForClickToCall(browser()->profile(), kPhoneNumber);
   if (expected_enabled)
     EXPECT_EQ(kPhoneNumber, extracted.value());

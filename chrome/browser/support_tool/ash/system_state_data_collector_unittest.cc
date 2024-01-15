@@ -16,14 +16,15 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager.h"
@@ -43,12 +44,12 @@ const std::map<std::string, std::string> kExpectedDebugdLogs = {
      // file.
      "Sample Log.txt",
      // Redacted version of "Your email address is abc@abc.com"
-     "Your email address is <email: 1>"}};
+     "Your email address is (email: 1)"}};
 
 // The PII in the sample logs that `FakeDebugDaemonClient` returns in
 // `GetFeedbackLogs()` call.
 const PIIMap kExpectedPIIInFeedbackLogs = {
-    {feedback::PIIType::kEmail, {"abc@abc.com"}}};
+    {redaction::PIIType::kEmail, {"abc@abc.com"}}};
 
 }  // namespace
 
@@ -63,7 +64,7 @@ class SystemStateDataCollectorTest : public ::testing::Test {
     task_runner_for_redaction_tool_ =
         base::ThreadPool::CreateSequencedTaskRunner({});
     redaction_tool_container_ =
-        base::MakeRefCounted<feedback::RedactionToolContainer>(
+        base::MakeRefCounted<redaction::RedactionToolContainer>(
             task_runner_for_redaction_tool_, nullptr);
   }
 
@@ -107,7 +108,7 @@ class SystemStateDataCollectorTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   base::ScopedTempDir temp_dir_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool_;
-  scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container_;
+  scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container_;
 };
 
 TEST_F(SystemStateDataCollectorTest, CollectAndExportData) {

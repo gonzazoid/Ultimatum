@@ -8,14 +8,15 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
+import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
+import androidx.core.widget.ImageViewCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.components.browser_ui.widget.R;
 import org.chromium.components.browser_ui.widget.RoundedCornerOutlineProvider;
 
@@ -28,12 +29,11 @@ public class TileView extends FrameLayout {
     private ImageView mBadgeView;
     private TextView mTitleView;
     private Runnable mOnFocusViaSelectionListener;
-    private ImageView mIconView;
     private RoundedCornerOutlineProvider mRoundingOutline;
+    protected ImageView mIconView;
+    protected View mIconBackgroundView;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public TileView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
@@ -54,6 +54,7 @@ public class TileView extends FrameLayout {
         mIconView = findViewById(R.id.tile_view_icon);
         mBadgeView = findViewById(R.id.offline_badge);
         mTitleView = findViewById(R.id.tile_view_title);
+        mIconBackgroundView = findViewById(R.id.tile_view_icon_background);
         mRoundingOutline = new RoundedCornerOutlineProvider();
         mIconView.setOutlineProvider(mRoundingOutline);
         mIconView.setClipToOutline(true);
@@ -74,18 +75,14 @@ public class TileView extends FrameLayout {
         setTitle(title, titleLines);
     }
 
-    /**
-     * Renders the icon or clears it from the view if the icon is null.
-     */
+    /** Renders the icon or clears it from the view if the icon is null. */
     public void setIconDrawable(Drawable icon) {
         mIconView.setImageDrawable(icon);
     }
 
-    /**
-     * Applies or clears icon tint.
-     */
+    /** Applies or clears icon tint. */
     public void setIconTint(ColorStateList color) {
-        ApiCompatibilityUtils.setImageTintList(mIconView, color);
+        ImageViewCompat.setImageTintList(mIconView, color);
     }
 
     /** Shows or hides the offline badge to reflect the offline availability. */
@@ -99,17 +96,6 @@ public class TileView extends FrameLayout {
         mTitleView.setText(title);
     }
 
-    /**
-     * Returns the ImageView for the icon.
-     * This method is only to allow legacy code to continue to work. New code should not use this
-     * method.
-     * TODO(crbug.com/1179455): Clean up all usages and remove this method.
-     */
-    @Deprecated
-    public ImageView getIconView() {
-        return mIconView;
-    }
-
     /** Specify the handler that will be invoked when this tile is highlighted by the user. */
     void setOnFocusViaSelectionListener(Runnable listener) {
         mOnFocusViaSelectionListener = listener;
@@ -121,12 +107,12 @@ public class TileView extends FrameLayout {
     }
 
     /** Retrieves the radius used to round the image content. */
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     int getRoundingRadiusForTesting() {
         return mRoundingOutline.getRadiusForTesting();
     }
 
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    @VisibleForTesting(otherwise = VisibleForTesting.PROTECTED)
     public @NonNull TextView getTitleView() {
         return mTitleView;
     }

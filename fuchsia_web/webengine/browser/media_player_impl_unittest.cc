@@ -4,12 +4,19 @@
 
 #include "fuchsia_web/webengine/browser/media_player_impl.h"
 
+#include <fidl/fuchsia.media.sessions2/cpp/fidl.h>
+#include <lib/async/default.h>
+
+#include "base/fuchsia/fidl_event_handler.h"
+#include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "content/public/browser/media_session.h"
+#include "content/public/test/mock_media_session.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -17,43 +24,13 @@
 
 namespace {
 
-class FakeMediaSession : public content::MediaSession {
+class FakeMediaSession : public content::MockMediaSession {
  public:
   // content::MediaSession APIs mocked to observe if/when they are called.
   void SetDuckingVolumeMultiplier(double multiplier) override { ADD_FAILURE(); }
   void SetAudioFocusGroupId(const base::UnguessableToken& group_id) override {
     ADD_FAILURE();
   }
-  MOCK_METHOD1(Suspend, void(SuspendType));
-  MOCK_METHOD1(Resume, void(SuspendType));
-  MOCK_METHOD0(StartDucking, void());
-  MOCK_METHOD0(StopDucking, void());
-  MOCK_METHOD0(PreviousTrack, void());
-  MOCK_METHOD0(NextTrack, void());
-  MOCK_METHOD0(SkipAd, void());
-  MOCK_METHOD1(Seek, void(base::TimeDelta));
-  MOCK_METHOD1(Stop, void(SuspendType));
-  MOCK_METHOD1(SeekTo, void(base::TimeDelta));
-  MOCK_METHOD1(ScrubTo, void(base::TimeDelta));
-  MOCK_METHOD0(EnterPictureInPicture, void());
-  MOCK_METHOD0(ExitPictureInPicture, void());
-  MOCK_METHOD1(SetAudioSinkId, void(const absl::optional<std::string>& id));
-  MOCK_METHOD0(ToggleMicrophone, void());
-  MOCK_METHOD0(ToggleCamera, void());
-  MOCK_METHOD0(HangUp, void());
-  MOCK_METHOD0(Raise, void());
-  MOCK_METHOD1(SetMute, void(bool));
-
-  // content::MediaSession APIs faked to implement testing behaviour.
-  MOCK_METHOD1(DidReceiveAction,
-               void(media_session::mojom::MediaSessionAction));
-  MOCK_METHOD1(GetMediaSessionInfo, void(GetMediaSessionInfoCallback));
-  MOCK_METHOD1(GetDebugInfo, void(GetDebugInfoCallback));
-  MOCK_METHOD4(GetMediaImageBitmap,
-               void(const media_session::MediaImage& image,
-                    int minimum_size_px,
-                    int desired_size_px,
-                    GetMediaImageBitmapCallback callback));
 
   // content::MediaSession APIs faked to implement testing behaviour.
   void AddObserver(
@@ -74,8 +51,8 @@ class FakeMediaSession : public content::MediaSession {
   mojo::Remote<media_session::mojom::MediaSessionObserver> observer_;
 };
 
-bool HasFlag(const fuchsia::media::sessions2::PlayerCapabilityFlags bits,
-             const fuchsia::media::sessions2::PlayerCapabilityFlags flag) {
+bool HasFlag(const fuchsia_media_sessions2::PlayerCapabilityFlags bits,
+             const fuchsia_media_sessions2::PlayerCapabilityFlags flag) {
   return (bits & flag) == flag;
 }
 
@@ -84,67 +61,111 @@ bool HasFlag(const fuchsia::media::sessions2::PlayerCapabilityFlags bits,
 class MediaPlayerImplTest : public testing::Test {
  public:
   MediaPlayerImplTest()
-      : task_environment_(base::test::TaskEnvironment::MainThreadType::IO) {}
+      : task_environment_(base::test::TaskEnvironment::MainThreadType::IO),
+        player_error_handler_(
+            base::BindRepeating(&MediaPlayerImplTest::OnPlayerFidlError,
+                                base::Unretained(this))) {
+    auto player_endpoints =
+        fidl::CreateEndpoints<fuchsia_media_sessions2::Player>();
+    ZX_CHECK(player_endpoints.is_ok(), player_endpoints.status_value());
+    player_.Bind(std::move(player_endpoints->client),
+                 async_get_default_dispatcher(), &player_error_handler_);
+    player_server_end_ = std::move(player_endpoints->server);
+  }
 
   MediaPlayerImplTest(const MediaPlayerImplTest&) = delete;
   MediaPlayerImplTest& operator=(const MediaPlayerImplTest&) = delete;
 
   ~MediaPlayerImplTest() override = default;
 
-  void OnPlayerDisconnected() {}
+  void SetPlayerFidlErrorCallback(
+      base::RepeatingCallback<void(fidl::UnbindInfo)>
+          player_fidl_error_callback) {
+    player_fidl_error_callback_ = std::move(player_fidl_error_callback);
+  }
 
  protected:
+  void OnPlayerFidlError(fidl::UnbindInfo error) {
+    if (player_fidl_error_callback_) {
+      player_fidl_error_callback_.Run(std::move(error));
+    }
+  }
+
   base::test::SingleThreadTaskEnvironment task_environment_;
 
   testing::StrictMock<FakeMediaSession> fake_session_;
-  fuchsia::media::sessions2::PlayerPtr player_;
+  fidl::Client<fuchsia_media_sessions2::Player> player_;
+  base::FidlErrorEventHandler<fuchsia_media_sessions2::Player>
+      player_error_handler_;
+  base::RepeatingCallback<void(fidl::UnbindInfo)> player_fidl_error_callback_;
+
+  fidl::ServerEnd<fuchsia_media_sessions2::Player> player_server_end_;
 
   std::unique_ptr<MediaPlayerImpl> player_impl_;
 };
 
-// Verify that the |on_disconnect| closure is invoked if the client disconnects.
+// Verify that the `on_disconnect` closure is invoked if the client disconnects.
 TEST_F(MediaPlayerImplTest, OnDisconnectCalledOnDisconnect) {
   base::RunLoop run_loop;
   player_impl_ = std::make_unique<MediaPlayerImpl>(
-      &fake_session_, player_.NewRequest(), run_loop.QuitClosure());
-  player_.Unbind();
+      &fake_session_, std::move(player_server_end_), run_loop.QuitClosure());
+  player_ = {};
   run_loop.Run();
 }
 
-// Verify that the |on_disconnect| closure is invoked if the client calls the
+// Verify that the `on_disconnect` closure is invoked if the client calls the
 // WatchInfoChange() API incorrectly.
 TEST_F(MediaPlayerImplTest, ClientDisconnectedOnBadApiUsage) {
   base::RunLoop on_disconnected_loop;
   base::RunLoop player_error_loop;
 
   player_impl_ = std::make_unique<MediaPlayerImpl>(
-      &fake_session_, player_.NewRequest(), on_disconnected_loop.QuitClosure());
-  player_.set_error_handler([&player_error_loop](zx_status_t status) {
-    EXPECT_EQ(status, ZX_ERR_BAD_STATE);
-    player_error_loop.Quit();
-  });
+      &fake_session_, std::move(player_server_end_),
+      on_disconnected_loop.QuitClosure());
+  SetPlayerFidlErrorCallback(
+      base::BindLambdaForTesting([&player_error_loop](fidl::UnbindInfo error) {
+        EXPECT_EQ(error.status(), ZX_ERR_BAD_STATE);
+        player_error_loop.Quit();
+      }));
 
   // Call WatchInfoChange() three times in succession. The first call may
   // immediately invoke the callback, with initial state, but since there will
   // be no state-change between that and the second, it will hold the callback,
   // and the third call will therefore be a protocol violation.
-  player_->WatchInfoChange([](fuchsia::media::sessions2::PlayerInfoDelta) {});
-  player_->WatchInfoChange(
-      [](fuchsia::media::sessions2::PlayerInfoDelta) { ADD_FAILURE(); });
-  player_->WatchInfoChange(
-      [](fuchsia::media::sessions2::PlayerInfoDelta) { ADD_FAILURE(); });
+  player_->WatchInfoChange().Then([](auto& result) {
+    ASSERT_TRUE(result.is_ok()) << result.error_value().status_string();
+  });
+  player_->WatchInfoChange().Then(
+      [](auto& result) { ASSERT_TRUE(result.is_error()); });
+  player_->WatchInfoChange().Then(
+      [](auto& result) { ASSERT_TRUE(result.is_error()); });
 
   // Wait for both on-disconnected and player error handler to be invoked.
   on_disconnected_loop.Run();
   player_error_loop.Run();
 }
 
+// Verify that the completer is Closed on destruction of `MediaPlayerImpl`.
+// Otherwise it will trigger a CHECK for failing to reply.
+TEST_F(MediaPlayerImplTest, WatchInfoChangeAsyncCompleterClosedOnDestruction) {
+  player_impl_ = std::make_unique<MediaPlayerImpl>(
+      &fake_session_, std::move(player_server_end_),
+      MakeExpectedNotRunClosure(FROM_HERE));
+  player_->WatchInfoChange().Then([](auto result) {});
+  // The first call always replies immediately, so call a second call to hold a
+  // pending completer.
+  player_->WatchInfoChange().Then([](auto result) {});
+
+  // Pump the message loop to process the WatchInfoChange() call.
+  base::RunLoop().RunUntilIdle();
+}
+
 // Verify that the first WatchInfoChange() registers the observer.
 TEST_F(MediaPlayerImplTest, WatchInfoChangeRegistersObserver) {
-  player_impl_ =
-      std::make_unique<MediaPlayerImpl>(&fake_session_, player_.NewRequest(),
-                                        MakeExpectedNotRunClosure(FROM_HERE));
-  player_->WatchInfoChange([](fuchsia::media::sessions2::PlayerInfoDelta) {});
+  player_impl_ = std::make_unique<MediaPlayerImpl>(
+      &fake_session_, std::move(player_server_end_),
+      MakeExpectedNotRunClosure(FROM_HERE));
+  player_->WatchInfoChange().Then([](auto result) {});
 
   ASSERT_FALSE(fake_session_.observer());
 
@@ -157,33 +178,42 @@ TEST_F(MediaPlayerImplTest, WatchInfoChangeRegistersObserver) {
 // Verify that the initial session state is returned via WatchInfoChange(),
 // potentially via several calls to it.
 TEST_F(MediaPlayerImplTest, WatchInfoChangeReturnsInitialState) {
-  player_impl_ =
-      std::make_unique<MediaPlayerImpl>(&fake_session_, player_.NewRequest(),
-                                        MakeExpectedNotRunClosure(FROM_HERE));
+  player_impl_ = std::make_unique<MediaPlayerImpl>(
+      &fake_session_, std::move(player_server_end_),
+      MakeExpectedNotRunClosure(FROM_HERE));
 
   base::RunLoop return_info_loop;
-  fuchsia::media::sessions2::PlayerInfoDelta initial_info;
-  std::function<void(fuchsia::media::sessions2::PlayerInfoDelta)> watch_info =
-      [this, &initial_info, &watch_info,
-       &return_info_loop](fuchsia::media::sessions2::PlayerInfoDelta delta) {
-        if (delta.has_player_status())
-          initial_info.set_player_status(
-              std::move(*delta.mutable_player_status()));
-        if (delta.has_metadata())
-          initial_info.set_metadata(delta.metadata());
-        if (delta.has_player_capabilities())
-          initial_info.set_player_capabilities(
-              std::move(*delta.mutable_player_capabilities()));
+  fuchsia_media_sessions2::PlayerInfoDelta initial_info;
+  std::function<void(
+      fidl::Result<fuchsia_media_sessions2::Player::WatchInfoChange>&)>
+      on_info_change =
+          [this, &initial_info, &on_info_change, &return_info_loop](
+              fidl::Result<fuchsia_media_sessions2::Player::WatchInfoChange>&
+                  result) {
+            ASSERT_TRUE(result.is_ok()) << result.error_value().status_string();
+            auto delta = result->player_info_delta();
+            if (delta.player_status().has_value()) {
+              initial_info.player_status(
+                  std::move(delta.player_status().value()));
+            }
+            if (delta.metadata().has_value()) {
+              initial_info.metadata(std::move(delta.metadata().value()));
+            }
+            if (delta.player_capabilities().has_value()) {
+              initial_info.player_capabilities(
+                  std::move(delta.player_capabilities().value()));
+            }
 
-        // Only quit the loop once all of the expected fields are present.
-        if (initial_info.has_player_status() && initial_info.has_metadata() &&
-            initial_info.has_player_capabilities()) {
-          return_info_loop.Quit();
-        } else {
-          player_->WatchInfoChange(watch_info);
-        }
-      };
-  player_->WatchInfoChange(watch_info);
+            // Only quit the loop once all of the expected fields are present.
+            if (initial_info.player_status().has_value() &&
+                initial_info.metadata().has_value() &&
+                initial_info.player_capabilities().has_value()) {
+              return_info_loop.Quit();
+            } else {
+              player_->WatchInfoChange().Then(on_info_change);
+            }
+          };
+  player_->WatchInfoChange().Then(on_info_change);
 
   // Pump the message loop to process the WatchInfoChange() call.
   base::RunLoop().RunUntilIdle();
@@ -224,61 +254,65 @@ TEST_F(MediaPlayerImplTest, WatchInfoChangeReturnsInitialState) {
   return_info_loop.Run();
 
   // Verify that all of the expected fields are present, and correct.
-  ASSERT_TRUE(initial_info.has_player_status());
-  ASSERT_TRUE(initial_info.player_status().has_player_state());
-  EXPECT_EQ(initial_info.player_status().player_state(),
-            fuchsia::media::sessions2::PlayerState::PAUSED);
-  ASSERT_TRUE(initial_info.has_metadata());
+  ASSERT_TRUE(initial_info.player_status().has_value());
+  EXPECT_EQ(initial_info.player_status()->player_state(),
+            fuchsia_media_sessions2::PlayerState::kPaused);
+  ASSERT_TRUE(initial_info.metadata().has_value());
   std::map<std::string, std::string> received_metadata;
-  for (auto& property : initial_info.metadata().properties)
-    received_metadata[property.label] = property.value;
-  EXPECT_EQ(received_metadata[fuchsia::media::METADATA_LABEL_TITLE],
+  for (auto& property : initial_info.metadata()->properties()) {
+    received_metadata[property.label()] = property.value();
+  }
+  EXPECT_EQ(received_metadata[fuchsia_media::kMetadataLabelTitle],
             kExpectedTitle);
-  EXPECT_EQ(received_metadata[fuchsia::media::METADATA_LABEL_ARTIST],
+  EXPECT_EQ(received_metadata[fuchsia_media::kMetadataLabelArtist],
             kExpectedArtist);
-  EXPECT_EQ(received_metadata[fuchsia::media::METADATA_LABEL_ALBUM],
+  EXPECT_EQ(received_metadata[fuchsia_media::kMetadataLabelAlbum],
             kExpectedAlbum);
-  EXPECT_EQ(received_metadata[fuchsia::media::METADATA_SOURCE_TITLE],
+  EXPECT_EQ(received_metadata[fuchsia_media::kMetadataSourceTitle],
             kExpectedSourceTitle);
-  ASSERT_TRUE(initial_info.has_player_capabilities());
-  ASSERT_TRUE(initial_info.player_capabilities().has_flags());
-  const fuchsia::media::sessions2::PlayerCapabilityFlags received_flags =
-      initial_info.player_capabilities().flags();
+  ASSERT_TRUE(initial_info.player_capabilities().has_value());
+  ASSERT_TRUE(initial_info.player_capabilities()->flags().has_value());
+  const fuchsia_media_sessions2::PlayerCapabilityFlags received_flags =
+      initial_info.player_capabilities()->flags().value();
   EXPECT_TRUE(HasFlag(received_flags,
-                      fuchsia::media::sessions2::PlayerCapabilityFlags::PLAY));
+                      fuchsia_media_sessions2::PlayerCapabilityFlags::kPlay));
   EXPECT_TRUE(HasFlag(
       received_flags,
-      fuchsia::media::sessions2::PlayerCapabilityFlags::CHANGE_TO_NEXT_ITEM));
+      fuchsia_media_sessions2::PlayerCapabilityFlags::kChangeToNextItem));
   EXPECT_FALSE(HasFlag(received_flags,
-                       fuchsia::media::sessions2::PlayerCapabilityFlags::SEEK));
-  EXPECT_FALSE(HasFlag(
-      received_flags, fuchsia::media::sessions2::PlayerCapabilityFlags::PAUSE));
+                       fuchsia_media_sessions2::PlayerCapabilityFlags::kSeek));
+  EXPECT_FALSE(HasFlag(received_flags,
+                       fuchsia_media_sessions2::PlayerCapabilityFlags::kPause));
 }
 
 // Verify that WatchInfoChange() waits for the next change to the session state
 // before returning.
 TEST_F(MediaPlayerImplTest, WatchInfoChangeWaitsForNextChange) {
-  player_impl_ =
-      std::make_unique<MediaPlayerImpl>(&fake_session_, player_.NewRequest(),
-                                        MakeExpectedNotRunClosure(FROM_HERE));
+  player_impl_ = std::make_unique<MediaPlayerImpl>(
+      &fake_session_, std::move(player_server_end_),
+      MakeExpectedNotRunClosure(FROM_HERE));
 
   // Start watching, which will connect the observer, and send some initial
   // state so that WatchInfoChange() will return.
   base::RunLoop player_state_loop;
-  std::function<void(fuchsia::media::sessions2::PlayerInfoDelta)>
-      watch_for_player_state =
-          [this, &watch_for_player_state, &player_state_loop](
-              fuchsia::media::sessions2::PlayerInfoDelta delta) {
-            if (!delta.has_player_status() ||
-                !delta.player_status().has_player_state()) {
-              player_->WatchInfoChange(watch_for_player_state);
+  std::function<void(
+      fidl::Result<fuchsia_media_sessions2::Player::WatchInfoChange>&)>
+      on_info_change =
+          [this, &on_info_change, &player_state_loop](
+              fidl::Result<fuchsia_media_sessions2::Player::WatchInfoChange>&
+                  result) {
+            ASSERT_TRUE(result.is_ok()) << result.error_value().status_string();
+            auto delta = result->player_info_delta();
+            if (!delta.player_status().has_value() ||
+                !delta.player_status()->player_state().has_value()) {
+              player_->WatchInfoChange().Then(on_info_change);
               return;
             }
-            EXPECT_EQ(delta.player_status().player_state(),
-                      fuchsia::media::sessions2::PlayerState::PAUSED);
+            EXPECT_EQ(delta.player_status()->player_state().value(),
+                      fuchsia_media_sessions2::PlayerState::kPaused);
             player_state_loop.Quit();
           };
-  player_->WatchInfoChange(watch_for_player_state);
+  player_->WatchInfoChange().Then(on_info_change);
 
   // Pump the message loop to process the first WatchInfoChange() call.
   base::RunLoop().RunUntilIdle();
@@ -295,14 +329,18 @@ TEST_F(MediaPlayerImplTest, WatchInfoChangeWaitsForNextChange) {
   // Calling WatchInfoChange() now should succeed, but not immediately return
   // any new data.
   base::RunLoop change_loop;
-  absl::optional<fuchsia::media::sessions2::PlayerState> state_after_change;
+  std::optional<fuchsia_media_sessions2::PlayerState> state_after_change;
 
-  player_->WatchInfoChange(
-      [&change_loop,
-       &state_after_change](fuchsia::media::sessions2::PlayerInfoDelta delta) {
-        ASSERT_TRUE(delta.has_player_status());
-        ASSERT_TRUE(delta.player_status().has_player_state());
-        state_after_change.emplace(delta.player_status().player_state());
+  player_->WatchInfoChange().Then(
+      [&change_loop, &state_after_change](
+          fidl::Result<fuchsia_media_sessions2::Player::WatchInfoChange>&
+              result) {
+        ASSERT_TRUE(result.is_ok()) << result.error_value().status_string();
+        auto delta = result->player_info_delta();
+        ASSERT_TRUE(delta.player_status().has_value());
+        ASSERT_TRUE(delta.player_status()->player_state().has_value());
+        state_after_change.emplace(
+            delta.player_status()->player_state().value());
         change_loop.Quit();
       });
 
@@ -317,7 +355,7 @@ TEST_F(MediaPlayerImplTest, WatchInfoChangeWaitsForNextChange) {
   change_loop.Run();
   ASSERT_TRUE(state_after_change.has_value());
   EXPECT_EQ(*state_after_change,
-            fuchsia::media::sessions2::PlayerState::PLAYING);
+            fuchsia_media_sessions2::PlayerState::kPlaying);
 }
 
 // Verify that each of the fire-and-forget playback controls are routed to the
@@ -337,18 +375,18 @@ TEST_F(MediaPlayerImplTest, PlaybackControls) {
   EXPECT_CALL(fake_session_, NextTrack());
   EXPECT_CALL(fake_session_, PreviousTrack());
 
-  player_impl_ =
-      std::make_unique<MediaPlayerImpl>(&fake_session_, player_.NewRequest(),
-                                        MakeExpectedNotRunClosure(FROM_HERE));
+  player_impl_ = std::make_unique<MediaPlayerImpl>(
+      &fake_session_, std::move(player_server_end_),
+      MakeExpectedNotRunClosure(FROM_HERE));
 
-  player_->Play();
-  player_->Pause();
-  player_->Stop();
-  player_->Seek(0);
-  player_->SkipForward();
-  player_->SkipReverse();
-  player_->NextItem();
-  player_->PrevItem();
+  EXPECT_TRUE(player_->Play().is_ok());
+  EXPECT_TRUE(player_->Pause().is_ok());
+  EXPECT_TRUE(player_->Stop().is_ok());
+  EXPECT_TRUE(player_->Seek(0).is_ok());
+  EXPECT_TRUE(player_->SkipForward().is_ok());
+  EXPECT_TRUE(player_->SkipReverse().is_ok());
+  EXPECT_TRUE(player_->NextItem().is_ok());
+  EXPECT_TRUE(player_->PrevItem().is_ok());
 
   // Pump the message loop to process each of the calls.
   base::RunLoop().RunUntilIdle();

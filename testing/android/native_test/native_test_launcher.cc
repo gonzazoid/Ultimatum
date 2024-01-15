@@ -11,6 +11,7 @@
 
 #include <android/log.h>
 #include <errno.h>
+#include <pthread.h>
 #include <signal.h>
 #include <string.h>
 
@@ -30,7 +31,7 @@
 #include "base/threading/thread_restrictions.h"
 #include "gtest/gtest.h"
 #include "testing/android/native_test/main_runner.h"
-#include "testing/android/native_test/native_test_jni_headers/NativeTest_jni.h"
+#include "testing/android/native_test/native_test_jni/NativeTest_jni.h"
 #include "testing/android/native_test/native_test_util.h"
 
 #if BUILDFLAG(CLANG_PROFILING)
@@ -77,13 +78,15 @@ void AndroidLog(int priority, const char* format, ...) {
 
 static void JNI_NativeTest_RunTests(
     JNIEnv* env,
-    const JavaParamRef<jobject>& obj,
     const JavaParamRef<jstring>& jcommand_line_flags,
     const JavaParamRef<jstring>& jcommand_line_file_path,
     const JavaParamRef<jstring>& jstdout_file_path,
     const JavaParamRef<jobject>& app_context,
     const JavaParamRef<jstring>& jtest_data_dir) {
   base::ScopedAllowBlockingForTesting allow;
+
+  // Required for DEATH_TESTS.
+  pthread_atfork(nullptr, nullptr, base::android::DisableJvmForTesting);
 
   // Command line initialized basically, will be fully initialized later.
   static const char* const kInitialArgv[] = { "ChromeTestActivity" };

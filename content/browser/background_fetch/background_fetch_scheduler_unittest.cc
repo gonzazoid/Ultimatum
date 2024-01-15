@@ -6,12 +6,12 @@
 
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/cxx20_erase.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/uuid.h"
 #include "content/browser/background_fetch/background_fetch_job_controller.h"
 #include "content/browser/background_fetch/background_fetch_request_info.h"
 #include "content/browser/background_fetch/background_fetch_test_base.h"
@@ -87,7 +87,7 @@ class BackgroundFetchSchedulerTest : public BackgroundFetchTestBase {
         storage_partition()->GetBackgroundFetchContext();
     scheduler_ = std::make_unique<BackgroundFetchScheduler>(
         background_fetch_context, data_manager_.get(), nullptr,
-        delegate_proxy_.get(), devtools_context().get(),
+        delegate_proxy_.get(), devtools_context(),
         embedded_worker_test_helper()->context_wrapper());
   }
 
@@ -116,7 +116,8 @@ class BackgroundFetchSchedulerTest : public BackgroundFetchTestBase {
 
     int64_t sw_id = RegisterServiceWorkerForOrigin(storage_key.origin());
     BackgroundFetchRegistrationId registration_id(
-        sw_id, storage_key, base::GenerateGUID(), base::GenerateGUID());
+        sw_id, storage_key, base::Uuid::GenerateRandomV4().AsLowercaseString(),
+        base::Uuid::GenerateRandomV4().AsLowercaseString());
     data_manager_->CreateRegistration(
         registration_id, std::move(fetch_requests),
         blink::mojom::BackgroundFetchOptions::New(), SkBitmap(),
@@ -132,7 +133,7 @@ class BackgroundFetchSchedulerTest : public BackgroundFetchTestBase {
                                         requests.size(),
                                         /* active_fetch_requests= */ {},
                                         /* start_paused= */ false,
-                                        /* isolation_info= */ absl::nullopt);
+                                        /* isolation_info= */ std::nullopt);
     scheduler_->job_controllers_[registration_id.unique_id()] =
         std::move(controller);
     scheduler_->controller_ids_.push_back(registration_id);
@@ -202,12 +203,12 @@ TEST_F(BackgroundFetchSchedulerTest, TwoControllersSynchronous) {
 
   // Create a controller with A1 -> A4.
   InitializeControllerWithRequests(
-      blink::StorageKey(url::Origin::Create(GURL("https://A.com"))),
+      blink::StorageKey::CreateFromStringForTesting("https://A.com"),
       std::vector<std::string>(all_requests.begin(), all_requests.begin() + 4));
 
   // Create a controller with B1 -> B4.
   InitializeControllerWithRequests(
-      blink::StorageKey(url::Origin::Create(GURL("https://B.com"))),
+      blink::StorageKey::CreateFromStringForTesting("https://B.com"),
       std::vector<std::string>(all_requests.begin() + 4, all_requests.end()));
 
   RunSchedulerToCompletion();
@@ -222,12 +223,12 @@ TEST_F(BackgroundFetchSchedulerTest, TwoControllersConcurrent) {
 
   // Create a controller with A1 -> A4.
   InitializeControllerWithRequests(
-      blink::StorageKey(url::Origin::Create(GURL("https://A.com"))),
+      blink::StorageKey::CreateFromStringForTesting("https://A.com"),
       std::vector<std::string>(all_requests.begin(), all_requests.begin() + 4));
 
   // Create a controller with B1 -> B4.
   InitializeControllerWithRequests(
-      blink::StorageKey(url::Origin::Create(GURL("https://B.com"))),
+      blink::StorageKey::CreateFromStringForTesting("https://B.com"),
       std::vector<std::string>(all_requests.begin() + 4, all_requests.end()));
 
   RunSchedulerToCompletion();

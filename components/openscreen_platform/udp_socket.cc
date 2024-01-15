@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "components/openscreen_platform/network_context.h"
 #include "components/openscreen_platform/network_util.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -23,7 +23,7 @@ namespace openscreen {
 
 // static
 ErrorOr<std::unique_ptr<UdpSocket>> UdpSocket::Create(
-    TaskRunner* task_runner,
+    TaskRunner& task_runner,
     Client* client,
     const IPEndpoint& local_endpoint) {
   network::mojom::NetworkContext* const network_context =
@@ -158,7 +158,6 @@ void UdpSocket::OnReceived(
     client_->OnRead(this, Error::Code::kSocketReadFailure);
   } else if (data) {
     UdpPacket packet(data->begin(), data->end());
-    packet.set_socket(this);
     if (source_endpoint) {
       packet.set_source(
           openscreen_platform::ToOpenScreenEndPoint(source_endpoint.value()));

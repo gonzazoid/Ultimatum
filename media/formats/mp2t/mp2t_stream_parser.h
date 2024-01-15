@@ -13,7 +13,8 @@
 #include <set>
 
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/byte_queue.h"
 #include "media/base/decrypt_config.h"
@@ -47,7 +48,6 @@ class MEDIA_EXPORT Mp2tStreamParser : public StreamParser {
   void Init(InitCB init_cb,
             NewConfigCB config_cb,
             NewBuffersCB new_buffers_cb,
-            bool ignore_text_tracks,
             EncryptedMediaInitDataCB encrypted_media_init_data_cb,
             NewMediaSegmentCB new_segment_cb,
             EndMediaSegmentCB end_of_segment_cb,
@@ -115,7 +115,6 @@ class MEDIA_EXPORT Mp2tStreamParser : public StreamParser {
   std::unique_ptr<EsParser> CreateAacParser(int pes_pid);
   std::unique_ptr<EsParser> CreateMpeg1AudioParser(int pes_pid);
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
   bool ShouldForceEncryptedParser();
   std::unique_ptr<EsParser> CreateEncryptedH264Parser(int pes_pid,
                                                       bool emit_clear_buffers);
@@ -141,7 +140,6 @@ class MEDIA_EXPORT Mp2tStreamParser : public StreamParser {
   void RegisterPsshBoxes(const std::vector<uint8_t>& init_data);
 
   const DecryptConfig* GetDecryptConfig() { return decrypt_config_.get(); }
-#endif
 
   // List of callbacks.
   InitCB init_cb_;
@@ -150,7 +148,7 @@ class MEDIA_EXPORT Mp2tStreamParser : public StreamParser {
   EncryptedMediaInitDataCB encrypted_media_init_data_cb_;
   NewMediaSegmentCB new_segment_cb_;
   EndMediaSegmentCB end_of_segment_cb_;
-  MediaLog* media_log_;
+  raw_ptr<MediaLog> media_log_;
 
   // List of allowed stream types for this parser.
   std::set<int> allowed_stream_types_;
@@ -192,13 +190,11 @@ class MEDIA_EXPORT Mp2tStreamParser : public StreamParser {
   // So the unroller is global between PES pids.
   TimestampUnroller timestamp_unroller_;
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
   EncryptionScheme initial_encryption_scheme_ = EncryptionScheme::kUnencrypted;
 
   // TODO(jrummell): Rather than store the key_id and iv in a DecryptConfig,
   // provide a better way to access the last values seen in a ECM packet.
   std::unique_ptr<DecryptConfig> decrypt_config_;
-#endif
 };
 
 }  // namespace mp2t

@@ -4,9 +4,9 @@
 
 #include "chrome/browser/ash/printing/printer_info.h"
 
-#include "base/bind.h"
 #include "base/check.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/printing/cups_printer_status.h"
 #include "printing/printer_status.h"
 
@@ -19,11 +19,18 @@ void QueryIppPrinter(const std::string& host,
                      PrinterInfoCallback callback) {
   DCHECK(!host.empty());
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  // Add a printer status to every response.
+  printing::PrinterStatus printer_status;
+  printer_status.reasons.push_back(
+      {printing::PrinterStatus::PrinterReason::Reason::kMediaJam,
+       printing::PrinterStatus::PrinterReason::Severity::kError});
+
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback),
-                                printing::PrinterQueryResult::kUnknownFailure,
-                                printing::PrinterStatus(), "Foo Bar",
-                                std::vector<std::string>{}, false,
+                                printing::PrinterQueryResult::kSuccess,
+                                printer_status, /*make_and_model=*/"Foo Bar",
+                                /*document_formats=*/std::vector<std::string>{},
+                                /*ipp_everywhere=*/false,
                                 chromeos::PrinterAuthenticationInfo{}));
 }
 

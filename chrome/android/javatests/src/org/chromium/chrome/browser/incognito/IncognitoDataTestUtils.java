@@ -12,7 +12,8 @@ import static org.chromium.chrome.browser.customtabs.CustomTabsIntentTestUtils.c
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.support.test.InstrumentationRegistry;
+
+import androidx.test.core.app.ApplicationProvider;
 
 import org.hamcrest.Matchers;
 
@@ -37,9 +38,8 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
- * This class provides helper methods for launching any Urls in CCT or Tabs.
- * This also provides parameters for tests. Parameters include pair of activity types.
- *
+ * This class provides helper methods for launching any Urls in CCT or Tabs. This also provides
+ * parameters for tests. Parameters include pair of activity types.
  */
 public class IncognitoDataTestUtils {
     public enum ActivityType {
@@ -56,8 +56,10 @@ public class IncognitoDataTestUtils {
             this.cct = cct;
         }
 
-        public Tab launchUrl(ChromeTabbedActivityTestRule chromeTabbedActivityRule,
-                CustomTabActivityTestRule customTabActivityTestRule, String url) {
+        public Tab launchUrl(
+                ChromeTabbedActivityTestRule chromeTabbedActivityRule,
+                CustomTabActivityTestRule customTabActivityTestRule,
+                String url) {
             if (cct) {
                 return launchUrlInCCT(customTabActivityTestRule, url, incognito);
             } else {
@@ -66,6 +68,10 @@ public class IncognitoDataTestUtils {
         }
     }
 
+    /**
+     * A class providing test parameters encapsulating different Activity type pairs spliced on
+     * regular and Incognito mode. This is used for tests which check leakages to/from Incognito.
+     */
     public static class TestParams {
         private static List<ParameterSet> getParameters(
                 boolean firstIncognito, boolean secondIncognito) {
@@ -82,9 +88,10 @@ public class IncognitoDataTestUtils {
 
                     if (activity1.incognito == firstIncognito
                             && activity2.incognito == secondIncognito) {
-                        tests.add(new ParameterSet()
-                                          .value(activity1.toString(), activity2.toString())
-                                          .name(activity1.toString() + "_" + activity2.toString()));
+                        tests.add(
+                                new ParameterSet()
+                                        .value(activity1.toString(), activity2.toString())
+                                        .name(activity1.toString() + "_" + activity2.toString()));
                     }
                 }
             }
@@ -92,6 +99,11 @@ public class IncognitoDataTestUtils {
             return tests;
         }
 
+        /**
+         * A class providing test parameters encapsulating different Activity type pairs where the
+         * Activity from which we check the leak from is Regular mode, and the leak to is Incognito
+         * mode.
+         */
         public static class RegularToIncognito implements ParameterProvider {
             @Override
             public List<ParameterSet> getParameters() {
@@ -99,6 +111,11 @@ public class IncognitoDataTestUtils {
             }
         }
 
+        /**
+         * A class providing test parameters encapsulating different Activity type pairs where the
+         * Activity from which we check the leak from is Incognito mode, and the leak to is Regular
+         * mode.
+         */
         public static class IncognitoToRegular implements ParameterProvider {
             @Override
             public List<ParameterSet> getParameters() {
@@ -106,6 +123,11 @@ public class IncognitoDataTestUtils {
             }
         }
 
+        /**
+         * A class providing test parameters encapsulating different Activity type pairs where the
+         * Activity from which we check the leak from is Incognito mode, and the leak to is also
+         * Incognito mode.
+         */
         public static class IncognitoToIncognito implements ParameterProvider {
             @Override
             public List<ParameterSet> getParameters() {
@@ -113,6 +135,11 @@ public class IncognitoDataTestUtils {
             }
         }
 
+        /**
+         * A class providing test parameters encapsulating different Activity type pairs where the
+         * Activity from which we check the leak from is Regular mode, and the leak to is also
+         * Regular mode.
+         */
         public static class RegularToRegular implements ParameterProvider {
             @Override
             public List<ParameterSet> getParameters() {
@@ -120,6 +147,10 @@ public class IncognitoDataTestUtils {
             }
         }
 
+        /**
+         * A general class providing test parameters encapsulating different Activity type pairs
+         * spliced on Regular and Incognito mod between whom we want to test leakage.
+         */
         public static class AllTypesToAllTypes implements ParameterProvider {
             @Override
             public List<ParameterSet> getParameters() {
@@ -159,9 +190,11 @@ public class IncognitoDataTestUtils {
 
     private static Tab launchUrlInCCT(
             CustomTabActivityTestRule testRule, String url, boolean incognito) {
-        Context context = InstrumentationRegistry.getContext();
-        Intent intent = incognito ? createMinimalIncognitoCustomTabIntent(context, url)
-                                  : createMinimalCustomTabIntent(context, url);
+        Context context = ApplicationProvider.getApplicationContext();
+        Intent intent =
+                incognito
+                        ? createMinimalIncognitoCustomTabIntent(context, url)
+                        : createMinimalCustomTabIntent(context, url);
 
         testRule.startCustomTabActivityWithIntent(intent);
         Tab tab = testRule.getActivity().getActivityTab();
@@ -181,25 +214,26 @@ public class IncognitoDataTestUtils {
         activity.getTabModelSelector().getModel(true).closeAllTabs();
     }
 
-    // Warming up CCT so that the native is initialized before we access the CCT_INCOGNITO
-    // feature flag.
+    // Warming up CCT so that the native is initialized before we access feature flags.
     public static void fireAndWaitForCctWarmup() throws TimeoutException {
         CallbackHelper startUpCallback = new CallbackHelper();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowserStartupController.getInstance().addStartupCompletedObserver(
-                    new BrowserStartupController.StartupCallback() {
-                        @Override
-                        public void onSuccess() {
-                            startUpCallback.notifyCalled();
-                        }
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowserStartupController.getInstance()
+                            .addStartupCompletedObserver(
+                                    new BrowserStartupController.StartupCallback() {
+                                        @Override
+                                        public void onSuccess() {
+                                            startUpCallback.notifyCalled();
+                                        }
 
-                        @Override
-                        public void onFailure() {
-                            // Need a successful startup for test.
-                            assert false;
-                        }
-                    });
-        });
+                                        @Override
+                                        public void onFailure() {
+                                            // Need a successful startup for test.
+                                            assert false;
+                                        }
+                                    });
+                });
 
         CustomTabsConnection.getInstance().warmup(0);
         startUpCallback.waitForCallback(0);

@@ -8,7 +8,7 @@
 
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/base/media_permission.h"
 #include "third_party/blink/renderer/platform/p2p/ipc_network_manager.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -48,9 +48,6 @@ FilteringNetworkManager::FilteringNetworkManager(
 
 FilteringNetworkManager::~FilteringNetworkManager() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  // This helps to catch the case if permission never comes back.
-  if (!start_updating_time_.is_null())
-    ReportMetrics(false);
 }
 
 base::WeakPtr<FilteringNetworkManager> FilteringNetworkManager::GetWeakPtr() {
@@ -68,8 +65,8 @@ void FilteringNetworkManager::StartUpdating() {
   DCHECK(started_permission_check_);
   DCHECK(network_manager_for_signaling_thread_);
 
-  if (start_updating_time_.is_null()) {
-    start_updating_time_ = base::TimeTicks::Now();
+  if (!start_updating_called_) {
+    start_updating_called_ = true;
     network_manager_for_signaling_thread_->SignalNetworksChanged.connect(
         this, &FilteringNetworkManager::OnNetworksChanged);
   }
@@ -137,11 +134,11 @@ void FilteringNetworkManager::CheckPermission() {
   VLOG(1) << "FilteringNetworkManager checking permission status.";
   // Request for media permission asynchronously.
   media_permission_->HasPermission(
-      media::MediaPermission::AUDIO_CAPTURE,
+      media::MediaPermission::Type::kAudioCapture,
       WTF::BindOnce(&FilteringNetworkManager::OnPermissionStatus,
                     GetWeakPtr()));
   media_permission_->HasPermission(
-      media::MediaPermission::VIDEO_CAPTURE,
+      media::MediaPermission::Type::kVideoCapture,
       WTF::BindOnce(&FilteringNetworkManager::OnPermissionStatus,
                     GetWeakPtr()));
 }
@@ -200,15 +197,6 @@ void FilteringNetworkManager::OnNetworksChanged() {
     FireEventIfStarted();
 }
 
-void FilteringNetworkManager::ReportMetrics(bool report_start_latency) {
-  if (report_start_latency) {
-    blink::ReportTimeToUpdateNetworkList(base::TimeTicks::Now() -
-                                         start_updating_time_);
-  }
-
-  ReportIPPermissionStatus(GetIPPermissionStatus());
-}
-
 blink::IPPermissionStatus FilteringNetworkManager::GetIPPermissionStatus()
     const {
   if (enumeration_permission() == ENUMERATION_ALLOWED) {
@@ -228,13 +216,10 @@ void FilteringNetworkManager::FireEventIfStarted() {
   if (!start_count_)
     return;
 
-  if (!sent_first_update_)
-    ReportMetrics(true);
-
   // Post a task to avoid reentrancy.
   //
   // TODO(crbug.com/787254): Use Frame-based TaskRunner here.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       WTF::BindOnce(&FilteringNetworkManager::SendNetworksChangedSignal,
                     GetWeakPtr()));

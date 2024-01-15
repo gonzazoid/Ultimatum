@@ -8,7 +8,9 @@
 #include "ash/public/cpp/accessibility_controller_enums.h"
 #include "ash/public/cpp/keyboard/keyboard_controller_observer.h"
 #include "ash/shell_observer.h"
+#include "ash/system/tray/system_tray_observer.h"
 #include "ash/system/tray/tray_bubble_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/layout/box_layout_view.h"
@@ -34,6 +36,8 @@ class FloatingAccessibilityBubbleView : public TrayBubbleView {
   // TrayBubbleView:
   bool IsAnchoredToStatusArea() const override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
+
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 };
 
 BEGIN_VIEW_BUILDER(/* no export */,
@@ -49,7 +53,8 @@ END_VIEW_BUILDER
 // ----  | [Change menu location]
 class FloatingAccessibilityView : public views::BoxLayoutView,
                                   public views::ViewObserver,
-                                  public KeyboardControllerObserver {
+                                  public KeyboardControllerObserver,
+                                  public SystemTrayObserver {
  public:
   METADATA_HEADER(FloatingAccessibilityView);
 
@@ -100,19 +105,23 @@ class FloatingAccessibilityView : public views::BoxLayoutView,
   // KeyboardControllerObserver:
   void OnKeyboardVisibilityChanged(bool visible) override;
 
+  // SystemTrayObserver:
+  void OnFocusLeavingSystemTray(bool reverse) override;
+  void OnImeMenuTrayBubbleShown() override;
+
   // Feature buttons:
-  TrayBackgroundView* dictation_button_ = nullptr;
-  TrayBackgroundView* select_to_speak_button_ = nullptr;
-  TrayBackgroundView* virtual_keyboard_button_ = nullptr;
+  raw_ptr<TrayBackgroundView> dictation_button_ = nullptr;
+  raw_ptr<TrayBackgroundView> select_to_speak_button_ = nullptr;
+  raw_ptr<TrayBackgroundView> virtual_keyboard_button_ = nullptr;
 
   // Button to list all available features.
-  FloatingMenuButton* a11y_tray_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> a11y_tray_button_ = nullptr;
   // Button to move the view around corners.
-  FloatingMenuButton* position_button_ = nullptr;
+  raw_ptr<FloatingMenuButton> position_button_ = nullptr;
   // Button to list all available keyboard languages.
-  ImeMenuTray* ime_button_ = nullptr;
+  raw_ptr<ImeMenuTray> ime_button_ = nullptr;
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate> delegate_;
 };
 
 BEGIN_VIEW_BUILDER(/* no export */,

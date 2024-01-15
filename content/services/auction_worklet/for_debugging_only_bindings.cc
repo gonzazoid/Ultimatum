@@ -5,21 +5,22 @@
 #include "content/services/auction_worklet/for_debugging_only_bindings.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
-#include "gin/converter.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "content/services/auction_worklet/webidl_compat.h"
 #include "third_party/blink/public/common/features.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 #include "v8/include/v8-exception.h"
 #include "v8/include/v8-external.h"
 #include "v8/include/v8-function-callback.h"
+#include "v8/include/v8-function.h"
 #include "v8/include/v8-template.h"
 
 namespace auction_worklet {
@@ -28,12 +29,10 @@ ForDebuggingOnlyBindings::ForDebuggingOnlyBindings(AuctionV8Helper* v8_helper)
     : v8_helper_(v8_helper) {}
 ForDebuggingOnlyBindings::~ForDebuggingOnlyBindings() = default;
 
-void ForDebuggingOnlyBindings::FillInGlobalTemplate(
-    v8::Local<v8::ObjectTemplate> global_template) {
+void ForDebuggingOnlyBindings::AttachToContext(v8::Local<v8::Context> context) {
   v8::Isolate* isolate = v8_helper_->isolate();
   v8::Local<v8::External> v8_this = v8::External::New(isolate, this);
-  v8::Local<v8::ObjectTemplate> debugging_template =
-      v8::ObjectTemplate::New(isolate);
+  v8::Local<v8::Object> debugging = v8::Object::New(isolate);
 
   v8::Local<v8::FunctionTemplate> loss_template = v8::FunctionTemplate::New(
       isolate, &ForDebuggingOnlyBindings::ReportAdAuctionLoss, v8_this);
@@ -50,21 +49,26 @@ void ForDebuggingOnlyBindings::FillInGlobalTemplate(
     win_template = v8::FunctionTemplate::New(isolate);
   }
   loss_template->RemovePrototype();
-  debugging_template->Set(
-      v8_helper_->CreateStringFromLiteral("reportAdAuctionLoss"),
-      loss_template);
+  debugging
+      ->Set(context, v8_helper_->CreateStringFromLiteral("reportAdAuctionLoss"),
+            loss_template->GetFunction(context).ToLocalChecked())
+      .Check();
 
   win_template->RemovePrototype();
-  debugging_template->Set(
-      v8_helper_->CreateStringFromLiteral("reportAdAuctionWin"), win_template);
+  debugging
+      ->Set(context, v8_helper_->CreateStringFromLiteral("reportAdAuctionWin"),
+            win_template->GetFunction(context).ToLocalChecked())
+      .Check();
 
-  global_template->Set(v8_helper_->CreateStringFromLiteral("forDebuggingOnly"),
-                       debugging_template);
+  context->Global()
+      ->Set(context, v8_helper_->CreateStringFromLiteral("forDebuggingOnly"),
+            debugging)
+      .Check();
 }
 
 void ForDebuggingOnlyBindings::Reset() {
-  loss_report_url_ = absl::nullopt;
-  win_report_url_ = absl::nullopt;
+  loss_report_url_ = std::nullopt;
+  win_report_url_ = std::nullopt;
 }
 
 void ForDebuggingOnlyBindings::ReportAdAuctionLoss(
@@ -73,12 +77,14 @@ void ForDebuggingOnlyBindings::ReportAdAuctionLoss(
       v8::External::Cast(*args.Data())->Value());
   AuctionV8Helper* v8_helper = bindings->v8_helper_;
 
+  AuctionV8Helper::TimeLimitScope time_limit_scope(v8_helper->GetTimeLimit());
+  ArgsConverter args_converter(v8_helper, time_limit_scope,
+                               "reportAdAuctionLoss(): ", &args,
+                               /*min_required_args=*/1);
+
   std::string url_string;
-  if (args.Length() < 1 || args[0].IsEmpty() ||
-      !gin::ConvertFromV8(v8_helper->isolate(), args[0], &url_string)) {
-    args.GetIsolate()->ThrowException(
-        v8::Exception::TypeError(v8_helper->CreateStringFromLiteral(
-            "reportAdAuctionLoss requires 1 string parameter")));
+  if (!args_converter.ConvertArg(0, "url", url_string)) {
+    args_converter.TakeStatus().PropagateErrorsToV8(v8_helper);
     return;
   }
 
@@ -98,12 +104,14 @@ void ForDebuggingOnlyBindings::ReportAdAuctionWin(
       v8::External::Cast(*args.Data())->Value());
   AuctionV8Helper* v8_helper = bindings->v8_helper_;
 
+  AuctionV8Helper::TimeLimitScope time_limit_scope(v8_helper->GetTimeLimit());
+  ArgsConverter args_converter(v8_helper, time_limit_scope,
+                               "reportAdAuctionWin(): ", &args,
+                               /*min_required_args=*/1);
+
   std::string url_string;
-  if (args.Length() < 1 || args[0].IsEmpty() ||
-      !gin::ConvertFromV8(v8_helper->isolate(), args[0], &url_string)) {
-    args.GetIsolate()->ThrowException(
-        v8::Exception::TypeError(v8_helper->CreateStringFromLiteral(
-            "reportAdAuctionWin requires 1 string parameter")));
+  if (!args_converter.ConvertArg(0, "url", url_string)) {
+    args_converter.TakeStatus().PropagateErrorsToV8(v8_helper);
     return;
   }
 

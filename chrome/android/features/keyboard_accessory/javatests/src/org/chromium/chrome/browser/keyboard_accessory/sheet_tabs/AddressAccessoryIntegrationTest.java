@@ -21,7 +21,6 @@ import static org.hamcrest.Matchers.not;
 
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.selectTabWithDescription;
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.whenDisplayed;
-import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabTestHelper.isKeyboardAccessoryTabLayout;
 
 import android.widget.TextView;
 
@@ -29,7 +28,6 @@ import androidx.test.filters.MediumTest;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -38,25 +36,20 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.chrome.browser.ChromeWindow;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.keyboard_accessory.FakeKeyboard;
 import org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper;
 import org.chromium.chrome.browser.keyboard_accessory.R;
+import org.chromium.chrome.browser.keyboard_accessory.button_group_component.KeyboardAccessoryButtonGroupView;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
+import org.chromium.components.autofill.AutofillProfile;
 import org.chromium.content_public.browser.test.util.DOMUtils;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Integration tests for address accessory views.
- */
+/** Integration tests for address accessory views. */
 @RunWith(ChromeJUnit4ClassRunner.class)
-@EnableFeatures({ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY})
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class AddressAccessoryIntegrationTest {
     @Rule
@@ -72,39 +65,42 @@ public class AddressAccessoryIntegrationTest {
 
     private void loadTestPage(ChromeWindow.KeyboardVisibilityDelegateFactory keyboardDelegate)
             throws TimeoutException {
-        mHelper.loadTestPage("/chrome/test/data/autofill/autofill_test_form.html", false, false,
+        mHelper.loadTestPage(
+                "/chrome/test/data/autofill/autofill_test_form.html",
+                false,
+                false,
                 keyboardDelegate);
-        new AutofillTestHelper().setProfile(new AutofillProfile("", "https://www.example.com",
-                "" /* honorific prefix */, "Marcus McSpartangregor", "Acme Inc", "1 Main\nApt A",
-                "CA", "San Francisco", "", "94102", "", "US", "(415) 999-0000",
-                "marc@acme-mail.inc", "en"));
+        new AutofillTestHelper()
+                .setProfile(
+                        AutofillProfile.builder()
+                                .setFullName("Marcus McSpartangregor")
+                                .setCompanyName("Acme Inc")
+                                .setStreetAddress("1 Main\nApt A")
+                                .setRegion("CA")
+                                .setLocality("San Francisco")
+                                .setPostalCode("94102")
+                                .setCountryCode("US")
+                                .setPhoneNumber("(415) 999-0000")
+                                .setEmailAddress("marc@acme-mail.inc")
+                                .setLanguageCode("en")
+                                .build());
         DOMUtils.waitForNonZeroNodeBounds(mHelper.getWebContents(), "NAME_FIRST");
     }
 
     @Test
     @SmallTest
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_MANUAL_FALLBACK_ANDROID})
     public void testAddressSheetIsAvailable() {
         mHelper.loadTestPage(false);
 
-        CriteriaHelper.pollUiThread(() -> {
-            return mHelper.getOrCreateAddressAccessorySheet() != null;
-        }, "Address sheet should be bound to accessory sheet.");
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    return mHelper.getOrCreateAddressAccessorySheet() != null;
+                },
+                "Address sheet should be bound to accessory sheet.");
     }
 
     @Test
     @SmallTest
-    @DisableFeatures({ChromeFeatureList.AUTOFILL_MANUAL_FALLBACK_ANDROID})
-    public void testAddressSheetUnavailableWithoutFeature() {
-        mHelper.loadTestPage(false);
-
-        Assert.assertNull("Address sheet should not have been created.",
-                mHelper.getOrCreateAddressAccessorySheet());
-    }
-
-    @Test
-    @SmallTest
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_MANUAL_FALLBACK_ANDROID})
     public void testDisplaysEmptyStateMessageWithoutSavedPasswords() throws TimeoutException {
         mHelper.loadTestPage(false);
 
@@ -113,8 +109,10 @@ public class AddressAccessoryIntegrationTest {
         mHelper.waitForKeyboardAccessoryToBeShown();
 
         // Click the tab to show the sheet and hide the keyboard.
-        whenDisplayed(allOf(withContentDescription(R.string.address_accessory_sheet_toggle),
-                              not(isAssignableFrom(TextView.class))))
+        whenDisplayed(
+                        allOf(
+                                withContentDescription(R.string.address_accessory_sheet_toggle),
+                                not(isAssignableFrom(TextView.class))))
                 .perform(click());
         mHelper.waitForKeyboardToDisappear();
         whenDisplayed(withId(R.id.addresses_sheet));
@@ -123,7 +121,6 @@ public class AddressAccessoryIntegrationTest {
 
     @Test
     @MediumTest
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_MANUAL_FALLBACK_ANDROID})
     public void testFillsSuggestionOnClick() throws TimeoutException {
         loadTestPage(FakeKeyboard::new);
         mHelper.clickNodeAndShowKeyboard("NAME_FIRST", 1);
@@ -131,8 +128,10 @@ public class AddressAccessoryIntegrationTest {
 
         // Scroll to last element and click the second icon:
         whenDisplayed(withId(R.id.bar_items_view))
-                .perform(scrollTo(isKeyboardAccessoryTabLayout()),
-                        actionOnItem(isKeyboardAccessoryTabLayout(),
+                .perform(
+                        scrollTo(isAssignableFrom(KeyboardAccessoryButtonGroupView.class)),
+                        actionOnItem(
+                                isAssignableFrom(KeyboardAccessoryButtonGroupView.class),
                                 selectTabWithDescription(R.string.address_accessory_sheet_toggle)));
 
         // Wait for the sheet to come up and be stable.
@@ -141,8 +140,9 @@ public class AddressAccessoryIntegrationTest {
         // Click a suggestion.
         whenDisplayed(withText("Marcus McSpartangregor")).perform(click());
 
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            return mHelper.getFieldText("NAME_FIRST").equals("Marcus McSpartangregor");
-        });
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    return mHelper.getFieldText("NAME_FIRST").equals("Marcus McSpartangregor");
+                });
     }
 }

@@ -13,14 +13,15 @@
 #include "android_webview/browser/safe_browsing/aw_ping_manager_factory.h"
 #include "android_webview/browser/safe_browsing/aw_safe_browsing_blocking_page.h"
 #include "android_webview/common/aw_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "components/safe_browsing/content/browser/base_ui_manager.h"
 #include "components/safe_browsing/content/browser/safe_browsing_network_context.h"
+#include "components/safe_browsing/content/browser/unsafe_resource_util.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safebrowsing_constants.h"
-#include "components/security_interstitials/content/unsafe_resource_util.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_controller.h"
@@ -70,7 +71,7 @@ void AwSafeBrowsingUIManager::DisplayBlockingPage(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   WebContents* web_contents =
-      security_interstitials::GetWebContentsForResource(resource);
+      safe_browsing::unsafe_resource_util::GetWebContentsForResource(resource);
   // Check the size of the view
   UIManagerClient* client = UIManagerClient::FromWebContents(web_contents);
   if (!client || !client->CanShowInterstitial()) {
@@ -83,19 +84,27 @@ void AwSafeBrowsingUIManager::DisplayBlockingPage(
 }
 
 scoped_refptr<network::SharedURLLoaderFactory>
-AwSafeBrowsingUIManager::GetURLLoaderFactoryOnIOThread() {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  if (!shared_url_loader_factory_on_io_) {
-    content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&AwSafeBrowsingUIManager::CreateURLLoaderFactoryForIO,
-                       this,
-                       url_loader_factory_on_io_.BindNewPipeAndPassReceiver()));
-    shared_url_loader_factory_on_io_ =
+AwSafeBrowsingUIManager::GetURLLoaderFactoryOnSBThread() {
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? content::BrowserThread::UI
+          : content::BrowserThread::IO);
+  if (!shared_url_loader_factory_on_sb_) {
+    if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+      CreateURLLoaderFactoryForSB(
+          url_loader_factory_on_sb_.BindNewPipeAndPassReceiver());
+    } else {
+      content::GetUIThreadTaskRunner({})->PostTask(
+          FROM_HERE,
+          base::BindOnce(
+              &AwSafeBrowsingUIManager::CreateURLLoaderFactoryForSB, this,
+              url_loader_factory_on_sb_.BindNewPipeAndPassReceiver()));
+    }
+    shared_url_loader_factory_on_sb_ =
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-            url_loader_factory_on_io_.get());
+            url_loader_factory_on_sb_.get());
   }
-  return shared_url_loader_factory_on_io_;
+  return shared_url_loader_factory_on_sb_;
 }
 
 int AwSafeBrowsingUIManager::GetErrorUiType(
@@ -129,7 +138,7 @@ AwSafeBrowsingUIManager::CreateBlockingPageForSubresource(
   return blocking_page;
 }
 
-void AwSafeBrowsingUIManager::CreateURLLoaderFactoryForIO(
+void AwSafeBrowsingUIManager::CreateURLLoaderFactoryForSB(
     mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   auto url_loader_factory_params =

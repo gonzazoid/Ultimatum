@@ -9,9 +9,9 @@
 #include <utility>
 
 #include "ash/constants/app_types.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/app_constants/constants.h"
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/app_restore_info.h"
@@ -54,6 +54,10 @@ FullRestoreReadHandler::~FullRestoreReadHandler() = default;
 void FullRestoreReadHandler::OnWindowInitialized(aura::Window* window) {
   int32_t window_id = window->GetProperty(app_restore::kRestoreWindowIdKey);
 
+  // Ignore desk template and saved desk windows.
+  if (window_id < app_restore::kParentToHiddenContainer)
+    return;
+
   if (app_restore::IsArcWindow(window)) {
     // If there isn't restore data for ARC apps, we don't need to handle ARC app
     // windows restoration.
@@ -70,8 +74,6 @@ void FullRestoreReadHandler::OnWindowInitialized(aura::Window* window) {
   }
 
   if (app_restore::IsLacrosWindow(window)) {
-    DCHECK(window_id > app_restore::kParentToHiddenContainer);
-
     return;
   }
 
@@ -172,7 +174,7 @@ void FullRestoreReadHandler::ReadFromFile(const base::FilePath& profile_path,
     // in FullRestoreAppLaunchHandler calls the init function of
     // FullRestoreService. If we don't use post task, and call the callback
     // function directly, it could cause deadloop.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback),
                        (it->second ? it->second->Clone() : nullptr)));

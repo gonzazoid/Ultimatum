@@ -8,12 +8,12 @@
 
 #include <algorithm>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "net/base/io_buffer.h"
 #include "services/device/public/cpp/bluetooth/bluetooth_utils.h"
-#include "services/device/public/cpp/serial/serial_switches.h"
+#include "services/device/public/cpp/device_features.h"
 
 namespace device {
 
@@ -26,8 +26,8 @@ void BluetoothSerialPortImpl::Open(
     mojo::PendingRemote<mojom::SerialPortClient> client,
     mojo::PendingRemote<mojom::SerialPortConnectionWatcher> watcher,
     OpenCallback callback) {
-  DCHECK(base::CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kEnableBluetoothSerialPortProfileInSerialApi));
+  DCHECK(base::FeatureList::IsEnabled(
+      features::kEnableBluetoothSerialPortProfileInSerialApi));
 
   // This BluetoothSerialPortImpl is owned by its |receiver_| and |watcher_| and
   // will self-destruct on connection failure.
@@ -135,12 +135,12 @@ void BluetoothSerialPortImpl::StartReading(
     mojo::ScopedDataPipeProducerHandle producer) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (out_stream_) {
-    mojo::ReportBadMessage("Data pipe producer still open.");
+    receiver_.ReportBadMessage("Data pipe producer still open.");
     return;
   }
 
   if (!bluetooth_socket_) {
-    mojo::ReportBadMessage("No Bluetooth socket.");
+    receiver_.ReportBadMessage("No Bluetooth socket.");
     return;
   }
 
@@ -381,7 +381,7 @@ void BluetoothSerialPortImpl::WriteMore() {
   write_pending_ = true;
   // Copying the buffer because we might want to close in_stream_, thus
   // invalidating |buffer|, which is passed to Send().
-  auto io_buffer = base::MakeRefCounted<net::IOBuffer>(buffer_size);
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(buffer_size);
   std::copy(static_cast<const char*>(buffer),
             static_cast<const char*>(buffer) + buffer_size, io_buffer->data());
 

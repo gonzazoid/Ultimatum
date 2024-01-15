@@ -11,11 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "base/memory/ptr_util.h"
@@ -26,7 +26,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "cc/base/switches.h"
 #include "chromecast/base/bind_to_task_runner.h"
@@ -46,6 +45,7 @@
 #include "chromecast/browser/cast_web_service.h"
 #include "chromecast/browser/devtools/remote_debugging_server.h"
 #include "chromecast/browser/media/media_caps_impl.h"
+#include "chromecast/browser/media/supported_codec_finder.h"
 #include "chromecast/browser/metrics/cast_browser_metrics.h"
 #include "chromecast/browser/metrics/metrics_helper_impl.h"
 #include "chromecast/browser/mojom/cast_web_service.mojom.h"
@@ -98,8 +98,6 @@
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chromecast/app/android/crash_handler.h"
-#include "chromecast/base/pref_names.h"
 #include "components/crash/content/browser/child_exit_observer_android.h"
 #include "components/crash/content/browser/child_process_crash_observer_android.h"
 #include "net/android/network_change_notifier_factory_android.h"
@@ -374,8 +372,7 @@ void AddDefaultCommandLineSwitches(base::CommandLine* command_line) {
 
 CastBrowserMainParts::CastBrowserMainParts(
     CastContentBrowserClient* cast_content_browser_client)
-    : BrowserMainParts(),
-      cast_browser_process_(new CastBrowserProcess()),
+    : cast_browser_process_(new CastBrowserProcess()),
       cast_content_browser_client_(cast_content_browser_client),
       media_caps_(std::make_unique<media::MediaCapsImpl>()),
       metrics_helper_(std::make_unique<metrics::MetricsHelperImpl>()) {
@@ -566,13 +563,6 @@ int CastBrowserMainParts::PreMainMessageLoopRun() {
   cast_content_browser_client_->SetPersistentCookieAccessSettings(
       cast_browser_process_->pref_service());
 
-#if BUILDFLAG(IS_ANDROID)
-  crash_reporter_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
-      {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
-       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
-  StartPeriodicCrashReportUpload();
-#endif  // BUILDFLAG(IS_ANDROID)
-
   cast_browser_process_->SetBrowserContext(
       std::make_unique<CastBrowserContext>());
 
@@ -639,7 +629,16 @@ int CastBrowserMainParts::PreMainMessageLoopRun() {
 
   cast_content_browser_client_->media_resource_tracker()->InitializeMediaLib();
   ::media::InitializeMediaLibrary();
-  media_caps_->Initialize();
+  // Query the supported codec/profile/levels asynchronously after initializing
+  // the media library. This query can block and cause App Not Responding (ANR)
+  // errors if CPU resources are tight during browser initialization.
+  cast_content_browser_client_->GetMediaTaskRunner()
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE,
+          base::BindOnce(
+              &media::SupportedCodecFinder::FindSupportedCodecProfileLevels),
+          base::BindOnce(&CastBrowserMainParts::AddSupportedCodecProfileLevels,
+                         weak_factory_.GetWeakPtr()));
 
   display_settings_manager_ = std::make_unique<DisplaySettingsManagerImpl>(
       window_manager_.get(),
@@ -689,36 +688,6 @@ int CastBrowserMainParts::PreMainMessageLoopRun() {
 
   return content::RESULT_CODE_NORMAL_EXIT;
 }
-
-#if BUILDFLAG(IS_ANDROID)
-void CastBrowserMainParts::StartPeriodicCrashReportUpload() {
-  OnStartPeriodicCrashReportUpload();
-  crash_reporter_timer_.reset(new base::RepeatingTimer());
-  crash_reporter_timer_->Start(
-      FROM_HERE, base::Minutes(20), this,
-      &CastBrowserMainParts::OnStartPeriodicCrashReportUpload);
-}
-
-void CastBrowserMainParts::OnStartPeriodicCrashReportUpload() {
-  crash_reporter_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&CastBrowserMainParts::UploadCrashReport,
-                     weak_factory_.GetWeakPtr(),
-                     cast_browser_process_->pref_service()->GetBoolean(
-                         prefs::kOptInStats)));
-}
-
-void CastBrowserMainParts::UploadCrashReport(bool opt_in_stats) {
-  DCHECK(crash_reporter_runner_->RunsTasksInCurrentSequence());
-  base::FilePath crash_dir;
-  if (!CrashHandler::GetCrashDumpLocation(&crash_dir))
-    return;
-  base::FilePath reports_dir;
-  if (!CrashHandler::GetCrashReportsLocation(&reports_dir))
-    return;
-  CrashHandler::UploadDumps(crash_dir, reports_dir, "", "", opt_in_stats);
-}
-#endif  // BUILDFLAG(IS_ANDROID)
 
 void CastBrowserMainParts::WillRunMainMessageLoop(
     std::unique_ptr<base::RunLoop>& run_loop) {
@@ -779,6 +748,15 @@ void CastBrowserMainParts::PostDestroyThreads() {
 #if !BUILDFLAG(IS_ANDROID)
   cast_content_browser_client_->ResetMediaResourceTracker();
 #endif  // !BUILDFLAG(IS_ANDROID)
+}
+
+void CastBrowserMainParts::AddSupportedCodecProfileLevels(
+    base::span<const media::CodecProfileLevel> codec_profile_levels) {
+  LOG(INFO) << "Adding " << codec_profile_levels.size()
+            << " supported codec profiles/levels";
+  for (const auto& cpl : codec_profile_levels) {
+    media_caps_->AddSupportedCodecProfileLevel(cpl);
+  }
 }
 
 }  // namespace shell

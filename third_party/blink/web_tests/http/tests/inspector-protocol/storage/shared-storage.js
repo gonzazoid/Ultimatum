@@ -32,6 +32,11 @@
   async function getPromiseForEventCount(numEvents) {
     totalEventsSoFar += numEvents;
     return dp.Storage.onceSharedStorageAccessed(messageObject => {
+      // Skip testing the content of `serializedData`, as it can contain
+      // non-printable characters.
+      if (messageObject.params.params.serializedData !== undefined) {
+        messageObject.params.params.serializedData = '';
+      }
       events.push(messageObject.params);
       return (events.length === totalEventsSoFar);
     });
@@ -63,7 +68,7 @@
 
   // Generates 10 events.
   await session.evaluateAsync(`
-        sharedStorage.run("test-operation");
+        sharedStorage.run("test-operation", {keepAlive: true});
   `);
 
   // We wait before calling into the worklet again in order to ensure that
@@ -76,7 +81,8 @@
   await session.evaluateAsync(`
         sharedStorage.selectURL(
           "test-url-selection-operation",
-          [{url: "https://google.com/"}, {url: "https://chromium.org/"}]);
+          [{url: "https://google.com/"}, {url: "https://chromium.org/"}],
+          {keepAlive: true});
   `);
 
   // We wait before calling into the worklet again in order to ensure that

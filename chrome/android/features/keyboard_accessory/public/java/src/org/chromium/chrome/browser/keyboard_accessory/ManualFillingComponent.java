@@ -23,9 +23,7 @@ import org.chromium.ui.AsyncViewStub;
 import org.chromium.ui.DropdownPopupWindow;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * This component handles the new, non-popup filling UI.
- */
+/** This component handles the new, non-popup filling UI. */
 public interface ManualFillingComponent extends BackPressHandler {
     /**
      * Observers are added with {@link #addObserver} and removed with {@link #removeObserver}.
@@ -96,13 +94,15 @@ public interface ManualFillingComponent extends BackPressHandler {
      * @param backPressManager A {@link BackPressManager} to register {@link BackPressHandler}.
      * @param barStub The {@link AsyncViewStub} used to inflate the keyboard accessory bar.
      */
-    void initialize(WindowAndroid windowAndroid, BottomSheetController sheetController,
-            SoftKeyboardDelegate keyboardDelegate, BackPressManager backPressManager,
-            AsyncViewStub sheetStub, AsyncViewStub barStub);
+    void initialize(
+            WindowAndroid windowAndroid,
+            BottomSheetController sheetController,
+            SoftKeyboardDelegate keyboardDelegate,
+            BackPressManager backPressManager,
+            AsyncViewStub sheetStub,
+            AsyncViewStub barStub);
 
-    /**
-     * Cleans up the manual UI by destroying the accessory bar and its bottom sheet.
-     */
+    /** Cleans up the manual UI by destroying the accessory bar and its bottom sheet. */
     void destroy();
 
     /**
@@ -111,9 +111,7 @@ public interface ManualFillingComponent extends BackPressHandler {
      */
     boolean onBackPressed();
 
-    /**
-     * Ensures that keyboard accessory and keyboard are hidden and reset.
-     */
+    /** Ensures that keyboard accessory and keyboard are hidden and reset. */
     void dismiss();
 
     /**
@@ -129,7 +127,9 @@ public interface ManualFillingComponent extends BackPressHandler {
      * @param sheetType The type of sheet to instantiate and to provide data for.
      * @param sheetDataProvider The {@link PropertyProvider} the tab will get its data from.
      */
-    void registerSheetDataProvider(WebContents webContents, @AccessoryTabType int sheetType,
+    void registerSheetDataProvider(
+            WebContents webContents,
+            @AccessoryTabType int sheetType,
             PropertyProvider<KeyboardAccessoryData.AccessorySheetData> sheetDataProvider);
 
     /**
@@ -146,7 +146,8 @@ public interface ManualFillingComponent extends BackPressHandler {
      * @param webContents The {@link WebContents} the provided data is meant for.
      * @param actionProvider The {@link PropertyProvider} providing actions.
      */
-    void registerActionProvider(WebContents webContents,
+    void registerActionProvider(
+            WebContents webContents,
             PropertyProvider<KeyboardAccessoryData.Action[]> actionProvider);
 
     /**
@@ -159,9 +160,10 @@ public interface ManualFillingComponent extends BackPressHandler {
             PropertyProvider<AutofillSuggestion[]> autofillProvider, AutofillDelegate delegate);
 
     /**
-     * Signals that the accessory has permission to show if the user focuses a form field.
+     * Signals that the accessory has permission to show.
+     * @param waitForKeyboard signals if the keyboard is requested.
      */
-    void showWhenKeyboardIsVisible();
+    void show(boolean waitForKeyboard);
 
     /**
      * Requests to close the active tab in the keyboard accessory. If there is no active tab, this
@@ -174,9 +176,7 @@ public interface ManualFillingComponent extends BackPressHandler {
      */
     void swapSheetWithKeyboard();
 
-    /**
-     * Hides the sheet until undone with {@link #showWhenKeyboardIsVisible()}.
-     */
+    /** Hides the sheet until undone with {@link #show()}. */
     void hide();
 
     /**
@@ -185,14 +185,10 @@ public interface ManualFillingComponent extends BackPressHandler {
      */
     void showAccessorySheetTab(@AccessoryTabType int tabType);
 
-    /**
-     * Notifies the component that the activity it's living in was resumed.
-     */
+    /** Notifies the component that the activity it's living in was resumed. */
     void onResume();
 
-    /**
-     * Notifies the component that the activity it's living in was paused.
-     */
+    /** Notifies the component that the activity it's living in was paused. */
     void onPause();
 
     /**
@@ -222,9 +218,25 @@ public interface ManualFillingComponent extends BackPressHandler {
 
     /**
      * Show a confimation dialog.
+     *
      * @param title A title of the confirmation dialog.
      * @param message The message of the confirmation dialog.
      * @param confirmedCallback A {@link Runnable} to trigger upon confirmation.
+     * @param declinedCallback A {@link Runnable} to trigger upon rejection.
      */
-    void confirmOperation(String title, String message, Runnable confirmedCallback);
+    void confirmOperation(
+            String title, String message, Runnable confirmedCallback, Runnable declinedCallback);
+
+    /**
+     * Returns the amount that the keyboard will be extended by the filling component when shown.
+     * i.e. The height of any accessories to be shown on top of the keyboard.
+     */
+    int getKeyboardExtensionHeight();
+
+    /**
+     * Will force the accessory to show when the keyboard is shown.
+     * TODO(crbug.com/1385400): Ideally this would live in a test utility like
+     * ManualFillingTestHelper.
+     */
+    void forceShowForTesting();
 }

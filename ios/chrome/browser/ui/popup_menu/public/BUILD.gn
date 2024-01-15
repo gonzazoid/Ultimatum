@@ -3,17 +3,12 @@
 # found in the LICENSE file.
 
 source_set("public") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-  sources = [
-    "popup_menu_long_press_delegate.h",
-    "popup_menu_ui_updating.h",
-  ]
+  sources = [ "popup_menu_ui_updating.h" ]
   deps = [ "//base" ]
   frameworks = [ "UIKit.framework" ]
 }
 
 source_set("popup_menu_ui") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "popup_menu_consumer.h",
     "popup_menu_presenter.h",
@@ -29,7 +24,11 @@ source_set("popup_menu_ui") {
   deps = [
     ":ui_constants",
     "//base",
-    "//ios/chrome/browser/ui/image_util",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/shared/ui/util/image",
+    "//ios/chrome/browser/ui/keyboard",
     "//ios/chrome/browser/ui/popup_menu:metrics_protocols",
     "//ios/chrome/browser/ui/popup_menu/cells",
     "//ios/chrome/browser/ui/popup_menu/overflow_menu:feature_flags",
@@ -38,9 +37,6 @@ source_set("popup_menu_ui") {
     "//ios/chrome/browser/ui/presenters",
     "//ios/chrome/browser/ui/reading_list:reading_list_constants",
     "//ios/chrome/browser/ui/resources:menu_shadow",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:styler",
-    "//ios/chrome/browser/ui/util",
     "//ios/chrome/common",
     "//ios/chrome/common/ui/util",
     "//ui/base",
@@ -52,7 +48,6 @@ source_set("popup_menu_ui") {
 }
 
 source_set("ui_constants") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "popup_menu_ui_constants.h",
     "popup_menu_ui_constants.mm",

@@ -108,19 +108,6 @@ IN_PROC_BROWSER_TEST_F(JourneyLoggerTest,
   EXPECT_THAT(eval_js_result.ExtractString(),
               testing::StartsWith("NotSupportedError"));
 
-  // Make sure that it is not logged as an abort.
-  for (int i = 0; i < static_cast<int>(JourneyLogger::ABORT_REASON_MAX); ++i) {
-    histogram_tester.ExpectBucketCount(
-        "PaymentRequest.CheckoutFunnel.Aborted",
-        static_cast<JourneyLogger::AbortReason>(i), 0);
-  }
-
-  // Make sure that it was logged as a reason why the Payment Request was not
-  // shown.
-  histogram_tester.ExpectBucketCount(
-      "PaymentRequest.CheckoutFunnel.NoShow",
-      JourneyLogger::NOT_SHOWN_REASON_NO_SUPPORTED_PAYMENT_METHOD, 1);
-
   // Make sure the events were logged correctly.
   std::vector<base::Bucket> buckets =
       histogram_tester.GetAllSamples("PaymentRequest.Events");
@@ -167,12 +154,16 @@ IN_PROC_BROWSER_TEST_F(JourneyLoggerTest, GooglePaymentApp) {
 // Make sure the UKM was logged correctly.
 IN_PROC_BROWSER_TEST_F(JourneyLoggerTest,
                        UKMCheckoutEventsRecordedForAppOrigin) {
+  std::string payment_method;
+  InstallPaymentApp("payment-app.com", "/payment_handler_sw.js",
+                    &payment_method);
+
   GURL merchant_url = https_server()->GetURL("/payment_handler.html");
   ASSERT_TRUE(content::NavigateToURL(GetActiveWebContents(), merchant_url));
-  EXPECT_EQ("success", content::EvalJs(GetActiveWebContents(), "install()"));
-
   ResetEventWaiterForSingleEvent(TestEvent::kPaymentCompleted);
-  EXPECT_EQ("success", content::EvalJs(GetActiveWebContents(), "launch()"));
+  EXPECT_EQ("success",
+            content::EvalJs(GetActiveWebContents(),
+                            content::JsReplace("launch($1)", payment_method)));
   WaitForObservedEvent();
 
   // UKM for merchant's website origin.
@@ -187,8 +178,8 @@ IN_PROC_BROWSER_TEST_F(JourneyLoggerTest,
       ukm::builders::PaymentApp_CheckoutEvents::kEntryName);
   num_entries = entries.size();
   EXPECT_EQ(1u, num_entries);
-  test_ukm_recorder()->ExpectEntrySourceHasUrl(entries[0],
-                                               https_server()->GetURL("/"));
+  test_ukm_recorder()->ExpectEntrySourceHasUrl(
+      entries[0], https_server()->GetURL("payment-app.com", "/"));
 }
 
 IN_PROC_BROWSER_TEST_F(
@@ -218,9 +209,9 @@ IN_PROC_BROWSER_TEST_F(
     JourneyLoggerTest,
     UKMCheckoutEventsNotRecordedForAppOriginWhenNoAppInvoked) {
   std::string a_payment_method;
-  InstallPaymentApp("a.com", "/nickpay.com/app.js", &a_payment_method);
+  InstallPaymentApp("a.com", "/nickpay.test/app.js", &a_payment_method);
   std::string b_payment_method;
-  InstallPaymentApp("b.com", "/nickpay.com/app.js", &b_payment_method);
+  InstallPaymentApp("b.com", "/nickpay.test/app.js", &b_payment_method);
 
   NavigateTo("/journey_logger_test.html");
   ResetEventWaiterForSingleEvent(TestEvent::kAppListReady);

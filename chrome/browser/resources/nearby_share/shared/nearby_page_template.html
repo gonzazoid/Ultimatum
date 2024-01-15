@@ -1,4 +1,7 @@
 <style include="cr-icons cr-shared-style"></style>
+<if expr="chromeos_ash">
+<style include="cros-color-overrides"></style>
+</if>
 <style>
   :host {
     --nearby-page-linear-gradient-color-start: var(--google-blue-50);
@@ -11,6 +14,10 @@
       --nearby-page-linear-gradient-color-start:
           rgba(var(--google-blue-300-rgb), 0.2);
     }
+  }
+
+  :host-context(body.jelly-enabled):host {
+    --nearby-page-linear-gradient-color-start: var(--cros-sys-highlight_shape);
   }
 
   #pageContainer {
@@ -42,20 +49,38 @@
   }
 
   #pageTitle {
-    color: var(--cros-text-color-primary);
+    margin: 0;
+  }
+
+  /* TODO(b/279623883): Remove once Jelly is launched. */
+  :host-context(body:not(.jelly-enabled)) #pageTitle {
     font-family: 'Google Sans';
     font-size: 16px;
     font-weight: normal;
     line-height: 24px;
-    margin: 0;
+    color: var(--cros-text-color-primary);
+  }
+
+  :host-context(body.jelly-enabled) #pageTitle {
+    color: var(--cros-sys-on_surface);
+    font: var(--cros-title-1-font);
   }
 
   #pageSubTitle {
+    margin: 0;
+  }
+
+  /* TODO(b/279623883): Remove once Jelly is launched. */
+  :host-context(body:not(.jelly-enabled)) #pageSubTitle {
     color: var(--cros-text-color-secondary);
     font-size: 14px;
     font-weight: inherit;
     line-height: 20px;
-    margin: 0;
+  }
+
+  :host-context(body.jelly-enabled) #pageSubTitle {
+    color: var(--cros-sys-on_surface_variant);
+    font: var(--cros-body-2-font);
   }
 
   #a11yAnnouncedPageSubTitle {
@@ -86,11 +111,11 @@
     aria-labelledby$="[[getDialogAriaLabelledBy_(a11yAnnouncedSubTitle)]]"
     tabindex="-1">
   <div id="header">
-    <h1 id="pageTitle">[[title]]</h1>
-    <h2 id="pageSubTitle"
+    <h2 id="pageTitle">[[title]]</h2>
+    <h3 id="pageSubTitle"
         aria-hidden$="[[getSubTitleAriaHidden_(a11yAnnouncedSubTitle)]]">
       [[subTitle]]
-    </h2>
+    </h3>
     <div id="a11yAnnouncedPageSubTitle" aria-live="polite">
       [[a11yAnnouncedSubTitle]]
     </div>

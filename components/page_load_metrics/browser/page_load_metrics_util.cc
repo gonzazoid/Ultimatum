@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "base/metrics/histogram_functions.h"
 #include "components/page_load_metrics/common/page_load_timing.h"
 #include "components/page_load_metrics/common/page_visit_final_status.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -123,6 +122,8 @@ bool WasStartedInForegroundOptionalEventInForeground(
           event.value() <= delegate.GetTimeToFirstBackground().value());
 }
 
+// There is a copy of this function in prerender_page_load_metrics_observer.cc.
+// Please keep this consistent with the function.
 bool WasActivatedInForegroundOptionalEventInForeground(
     const absl::optional<base::TimeDelta>& event,
     const PageLoadMetricsObserverDelegate& delegate) {
@@ -162,6 +163,7 @@ absl::optional<base::TimeDelta> GetNonPrerenderingBackgroundStartTiming(
     const PageLoadMetricsObserverDelegate& delegate) {
   switch (delegate.GetPrerenderingState()) {
     case PrerenderingState::kNoPrerendering:
+    case PrerenderingState::kInPreview:
       if (delegate.StartedInForeground()) {
         return delegate.GetTimeToFirstBackground();
       } else {
@@ -207,6 +209,7 @@ base::TimeDelta CorrectEventAsNavigationOrActivationOrigined(
 
   switch (delegate.GetPrerenderingState()) {
     case PrerenderingState::kNoPrerendering:
+    case PrerenderingState::kInPreview:
       return event;
     case PrerenderingState::kInPrerendering:
     case PrerenderingState::kActivatedNoActivationStart:
@@ -322,6 +325,11 @@ bool IsGoogleSearchRedirectorUrl(const GURL& url) {
   return url.path_piece() == "/searchurl/r.html" && url.has_ref();
 }
 
+bool IsZstdUrl(const GURL& url) {
+  return url.DomainIs("facebook.com") || url.DomainIs("instagram.com") ||
+         url.DomainIs("whatsapp.com") || url.DomainIs("messenger.com");
+}
+
 bool QueryContainsComponent(const base::StringPiece query,
                             const base::StringPiece component) {
   return QueryContainsComponentHelper(query, component, false);
@@ -343,7 +351,7 @@ int32_t LayoutShiftUmaValue(float shift_score) {
 }
 
 int32_t LayoutShiftUmaValue10000(float shift_score) {
-  // Report (shift_score * 10000) as an int in the range [0, 1000].
+  // Report (shift_score * 10000) as an int in the range [0, 100000].
   return static_cast<int>(roundf(std::min(shift_score, 10.0f) * 10000.0f));
 }
 
@@ -358,8 +366,6 @@ PageVisitFinalStatus RecordPageVisitFinalStatusForTiming(
                             ? PageVisitFinalStatus::kReachedFCP
                             : PageVisitFinalStatus::kAborted;
   }
-  UMA_HISTOGRAM_ENUMERATION("UserPerceivedPageVisit.PageVisitFinalStatus",
-                            page_visit_status);
   ukm::builders::UserPerceivedPageVisit pageVisitBuilder(source_id);
   pageVisitBuilder.SetPageVisitFinalStatus(static_cast<int>(page_visit_status));
   pageVisitBuilder.Record(ukm::UkmRecorder::Get());

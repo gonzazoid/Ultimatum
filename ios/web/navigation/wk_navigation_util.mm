@@ -6,8 +6,8 @@
 
 #import <algorithm>
 
+#import "base/apple/bundle_locations.h"
 #import "base/json/json_writer.h"
-#import "base/mac/bundle_locations.h"
 #import "base/metrics/field_trial_params.h"
 #import "base/strings/escape.h"
 #import "base/strings/string_util.h"
@@ -19,10 +19,6 @@
 #import "ios/web/public/web_client.h"
 #import "net/base/url_util.h"
 #import "url/url_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace wk_navigation_util {
@@ -79,8 +75,8 @@ bool URLNeedsUserAgentType(const GURL& url) {
 
 GURL GetRestoreSessionBaseUrl() {
   std::string restore_session_resource_path = base::SysNSStringToUTF8(
-      [base::mac::FrameworkBundle() pathForResource:@"restore_session"
-                                             ofType:@"html"]);
+      [base::apple::FrameworkBundle() pathForResource:@"restore_session"
+                                               ofType:@"html"]);
   GURL::Replacements replacements;
   replacements.SetSchemeStr(url::kFileScheme);
   replacements.SetPathStr(restore_session_resource_path);
@@ -104,19 +100,19 @@ void CreateRestoreSessionUrl(
   // The URLs and titles of the restored entries are stored in two separate
   // lists instead of a single list of objects to reduce the size of the JSON
   // string to be included in the query parameter.
-  base::Value restored_urls(base::Value::Type::LIST);
-  base::Value restored_titles(base::Value::Type::LIST);
+  base::Value::List restored_urls;
+  base::Value::List restored_titles;
   for (int i = first_restored_item_offset;
        i < new_size + first_restored_item_offset; i++) {
     NavigationItem* item = items[i].get();
     restored_urls.Append(item->GetURL().spec());
     restored_titles.Append(item->GetTitle());
   }
-  base::Value session(base::Value::Type::DICTIONARY);
+  base::Value::Dict session;
   int committed_item_offset = new_last_committed_item_index + 1 - new_size;
-  session.SetKey("offset", base::Value(committed_item_offset));
-  session.SetKey("urls", std::move(restored_urls));
-  session.SetKey("titles", std::move(restored_titles));
+  session.Set("offset", committed_item_offset);
+  session.Set("urls", std::move(restored_urls));
+  session.Set("titles", std::move(restored_titles));
 
   std::string session_json;
   base::JSONWriter::Write(session, &session_json);
@@ -134,19 +130,9 @@ bool IsRestoreSessionUrl(const GURL& url) {
 }
 
 bool IsRestoreSessionUrl(NSURL* url) {
-  return
-      [url.scheme isEqual:@"file"] &&
-      [url.path
-          isEqual:base::SysUTF8ToNSString(GetRestoreSessionBaseUrl().path())];
-}
-
-GURL CreateRedirectUrl(const GURL& target_url) {
-  GURL::Replacements replacements;
-  std::string ref =
-      kRestoreSessionTargetUrlHashPrefix +
-      base::EscapeQueryParamValue(target_url.spec(), false /* use_plus */);
-  replacements.SetRefStr(ref);
-  return GetRestoreSessionBaseUrl().ReplaceComponents(replacements);
+  return [url.scheme isEqualToString:@"file"] &&
+         [url.path isEqualToString:base::SysUTF8ToNSString(
+                                       GetRestoreSessionBaseUrl().path())];
 }
 
 bool ExtractTargetURL(const GURL& restore_session_url, GURL* target_url) {
@@ -154,8 +140,8 @@ bool ExtractTargetURL(const GURL& restore_session_url, GURL* target_url) {
       << restore_session_url.possibly_invalid_spec()
       << " is not a restore session URL";
   std::string target_url_spec;
-  bool success =
-      restore_session_url.ref().find(kRestoreSessionTargetUrlHashPrefix) == 0;
+  bool success = base::StartsWith(restore_session_url.ref(),
+                                  kRestoreSessionTargetUrlHashPrefix);
   if (success) {
     std::string encoded_target_url = restore_session_url.ref().substr(
         strlen(kRestoreSessionTargetUrlHashPrefix));

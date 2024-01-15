@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -28,15 +28,6 @@
 #endif  // BUILDFLAG(IS_MAC)
 
 namespace {
-
-constexpr const char* kBatterySamplingDelayHistogramName =
-    "Power.BatterySamplingDelay";
-
-bool IsWithinTolerance(base::TimeDelta value,
-                       base::TimeDelta expected,
-                       base::TimeDelta tolerance) {
-  return (value - expected).magnitude() < tolerance;
-}
 
 // Calculates the UKM bucket |value| falls in and returns it. This uses an
 // exponential bucketing approach with an exponent base of 1.3, resulting in
@@ -209,8 +200,7 @@ void PowerMetricsReporter::OnAggregatedMetricsSampled(
     //       |battery_level_provider_|.
     battery_level_provider_->GetBatteryState(base::BindOnce(
         &PowerMetricsReporter::OnBatteryAndAggregatedProcessMetricsSampled,
-        base::Unretained(this), metrics, interval_duration,
-        /*battery_sample_begin_time=*/now));
+        base::Unretained(this), metrics, interval_duration));
   } else {
     // Get usage scenario data.
     auto long_interval_data =
@@ -222,40 +212,16 @@ void PowerMetricsReporter::OnAggregatedMetricsSampled(
 void PowerMetricsReporter::OnBatteryAndAggregatedProcessMetricsSampled(
     const ProcessMonitor::Metrics& aggregated_process_metrics,
     base::TimeDelta interval_duration,
-    base::TimeTicks battery_sample_begin_time,
     const absl::optional<base::BatteryLevelProvider::BatteryState>&
         new_battery_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(battery_level_provider_);
-
-  // Report time it took to sample the battery state.
-  base::UmaHistogramMicrosecondsTimes(
-      kBatterySamplingDelayHistogramName,
-      base::TimeTicks::Now() - battery_sample_begin_time);
 
   // Evaluate battery discharge mode and rate.
   auto previous_battery_state =
       std::exchange(battery_state_, new_battery_state);
   auto battery_discharge = GetBatteryDischargeDuringInterval(
       previous_battery_state, new_battery_state, interval_duration);
-
-#if BUILDFLAG(IS_WIN)
-  // Report battery max capacity. We suspect that the max capacity is 100 for a
-  // significant portion of clients on Windows, which doesn't provide sufficient
-  // granularity (the battery typically discharges by less than 1% per 2
-  // minutes). This histogram will allow us to validate the hypothesis.
-  if (new_battery_state.has_value()) {
-    CHECK_EQ(new_battery_state->full_charged_capacity.has_value(),
-             new_battery_state->charge_unit.has_value());
-    if (new_battery_state->full_charged_capacity.has_value() &&
-        new_battery_state->charge_unit.value() ==
-            base::BatteryLevelProvider::BatteryLevelUnit::kMWh) {
-      base::UmaHistogramCounts10000(
-          "Power.BatteryMaxCapacity",
-          new_battery_state->full_charged_capacity.value());
-    }
-  }
-#endif
 
   // Get usage scenario data.
   auto long_interval_data =
@@ -331,22 +297,6 @@ void PowerMetricsReporter::ReportBatterySpecificMetrics(
   // Report UKMs.
   ReportBatteryUKMs(long_interval_data, aggregated_process_metrics,
                     interval_duration, battery_discharge);
-
-  // Ratio by which the time elapsed can deviate from
-  // |kLongPowerMetricsIntervalDuration| without invalidating this sample.
-  // TODO(pmonette): Change to DCHECK after ensuring this never triggers.
-  CHECK_GE(interval_duration, kLongPowerMetricsIntervalDuration);
-  constexpr double kTolerableTimeElapsedRatio = 0.10;
-  if (battery_discharge.mode == BatteryDischargeMode::kDischarging &&
-      !IsWithinTolerance(
-          interval_duration, kLongPowerMetricsIntervalDuration,
-          kLongPowerMetricsIntervalDuration * kTolerableTimeElapsedRatio)) {
-    battery_discharge.mode = BatteryDischargeMode::kInvalidInterval;
-  }
-
-  ReportBatteryHistograms(
-      interval_duration, battery_discharge,
-      {"", GetLongIntervalScenario(long_interval_data).histogram_suffix});
 }
 
 void PowerMetricsReporter::ReportBatteryUKMs(
@@ -388,7 +338,6 @@ void PowerMetricsReporter::ReportBatteryUKMs(
 #if BUILDFLAG(IS_MAC)
   builder.SetIdleWakeUps(metrics.idle_wakeups);
   builder.SetPackageExits(metrics.package_idle_wakeups);
-  builder.SetEnergyImpactScore(metrics.energy_impact);
 #endif
   builder.SetMaxTabCount(
       ukm::GetExponentialBucketMinForCounts1000(interval_data.max_tab_count));

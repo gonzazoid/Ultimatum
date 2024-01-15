@@ -5,14 +5,16 @@ Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
-       xmlns:app="http://schemas.android.com/apk/res-auto">
+       xmlns:app="http://schemas.android.com/apk/res-auto"
+       xmlns:tools="http://schemas.android.com/tools">
     <org.chromium.ui.widget.ChromeImageView
         android:id="@+id/background_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/tab_grid_card_background"
         android:layout_margin="@dimen/tab_grid_card_margin"
-        android:visibility="gone"/>
+        android:visibility="gone"
+        android:importantForAccessibility="no" />
     <FrameLayout
         android:id="@+id/content_view"
         android:layout_width="match_parent"
@@ -45,17 +47,17 @@ found in the LICENSE file.
                 android:ellipsize="none"
                 android:singleLine="true"
                 android:textAppearance="@style/TextAppearance.TextMediumThick.Primary"/>
-            <org.chromium.chrome.browser.tasks.tab_management.TabGridThumbnailView
+            <org.chromium.chrome.browser.tasks.tab_management.TabThumbnailView
                 android:id="@+id/tab_thumbnail"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:layout_below="@id/tab_title"
                 android:layout_marginLeft="@dimen/tab_grid_card_thumbnail_margin"
                 android:layout_marginRight="@dimen/tab_grid_card_thumbnail_margin"
                 android:layout_marginBottom="@dimen/tab_grid_card_thumbnail_margin"
                 android:gravity="center_horizontal"
                 android:scaleType="fitCenter"
-                android:adjustViewBounds="true"
+                android:adjustViewBounds="false"
                 android:importantForAccessibility="no"
                 android:src="@color/thumbnail_placeholder_on_primary_bg"
                 app:cornerRadiusTopStart="@dimen/tab_grid_card_thumbnail_corner_radius_top"
@@ -70,23 +72,6 @@ found in the LICENSE file.
                 android:layout_height="56dp"
                 android:layout_marginStart="4dp"
                 android:visibility="gone"/>
-            <org.chromium.chrome.browser.tasks.tab_management.CouponCardView
-                android:id="@+id/coupon_info_box_outer"
-                android:layout_below="@id/tab_title"
-                android:background="@drawable/price_card_scrim"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:visibility="gone"/>
-            <!-- TODO(crbug/1198288): Make decision on duplication of PriceCardView code.-->
-            <org.chromium.chrome.browser.tasks.tab_management.StoreHoursCardView
-                android:id="@+id/store_hours_box_outer"
-                android:layout_below="@id/tab_title"
-                android:background="@drawable/price_card_scrim"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:visibility="gone"/>
             <org.chromium.ui.widget.ButtonCompat
                 android:id="@+id/create_group_button"
                 android:layout_width="wrap_content"
@@ -98,17 +83,6 @@ found in the LICENSE file.
                 android:text="@string/tabswitcher_create_group"
                 android:visibility="gone"
                 style="@style/FilledButton"/>
-            <org.chromium.components.browser_ui.widget.chips.ChipView
-                android:id="@+id/page_info_button"
-                android:gravity="center"
-                android:layout_height="wrap_content"
-                android:layout_width="wrap_content"
-                android:layout_alignParentBottom="true"
-                android:layout_centerHorizontal="true"
-                android:layout_margin="8dp"
-                android:elevation="4dp"
-                android:visibility="gone"
-                style="@style/SearchShortcutChip" />
         </RelativeLayout>
         <org.chromium.ui.widget.ChromeImageView
             android:id="@+id/action_button"
@@ -117,6 +91,7 @@ found in the LICENSE file.
             android:layout_margin="@dimen/tab_list_card_action_button_margin"
             android:scaleType="center"
             android:layout_gravity="end"
-            android:tint="@macro/default_icon_color"/>
+            android:tint="@macro/default_icon_color"
+            tools:ignore="ContentDescription" />
     </FrameLayout>
 </merge>

@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
 import org.chromium.chrome.browser.ui.signin.R;
+import org.chromium.chrome.browser.ui.signin.SigninUtils;
 import org.chromium.chrome.browser.ui.signin.account_picker.AccountPickerBottomSheetProperties.ViewState;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.ui.widget.ButtonCompat;
@@ -34,9 +35,7 @@ import org.chromium.ui.widget.TextViewWithLeading;
  * options like "Add account".
  */
 class AccountPickerBottomSheetView implements BottomSheetContent {
-    /**
-     * Listener for the back-press button.
-     */
+    /** Listener for the back-press button. */
     interface BackPressListener {
         /**
          * Notifies when user clicks the back-press button.
@@ -59,14 +58,15 @@ class AccountPickerBottomSheetView implements BottomSheetContent {
      * each id corresponds to the value of {@link ViewState}. It is used to set focus
      * on title when the view flipper moves to a new screen.
      */
-    private static final @IdRes int[] sTitleIds = new int[] {
-            R.id.account_picker_header_title,
-            R.id.account_picker_header_title,
-            R.id.account_picker_header_title,
-            R.id.account_picker_signin_in_progress_title,
-            R.id.account_picker_general_error_title,
-            R.id.account_picker_auth_error_title,
-    };
+    private static final @IdRes int[] sTitleIds =
+            new int[] {
+                R.id.account_picker_header_title,
+                R.id.account_picker_header_title,
+                R.id.account_picker_header_title,
+                R.id.account_picker_signin_in_progress_title,
+                R.id.account_picker_general_error_title,
+                R.id.account_picker_auth_error_title,
+            };
 
     private final Activity mActivity;
     private final BackPressListener mBackPressListener;
@@ -83,45 +83,50 @@ class AccountPickerBottomSheetView implements BottomSheetContent {
     AccountPickerBottomSheetView(Activity activity, BackPressListener backPressListener) {
         mActivity = activity;
         mBackPressListener = backPressListener;
-        mContentView = LayoutInflater.from(mActivity).inflate(
-                R.layout.account_picker_bottom_sheet_view, null);
+        mContentView =
+                LayoutInflater.from(mActivity)
+                        .inflate(R.layout.account_picker_bottom_sheet_view, null);
 
         mViewFlipper = mContentView.findViewById(R.id.account_picker_state_view_flipper);
         checkViewFlipperChildrenAndViewStateMatch(mViewFlipper);
-        mAccountListView = mViewFlipper.getChildAt(ViewState.EXPANDED_ACCOUNT_LIST)
-                                   .findViewById(R.id.account_picker_account_list);
-        mAccountListView.setLayoutManager(new LinearLayoutManager(
-                mAccountListView.getContext(), LinearLayoutManager.VERTICAL, false));
-        mSelectedAccountView = mViewFlipper.getChildAt(ViewState.COLLAPSED_ACCOUNT_LIST)
-                                       .findViewById(R.id.account_picker_selected_account);
-        mDismissButton = mViewFlipper.getChildAt(ViewState.COLLAPSED_ACCOUNT_LIST)
-                                 .findViewById(R.id.account_picker_dismiss_button);
+        mAccountListView =
+                mViewFlipper
+                        .getChildAt(ViewState.EXPANDED_ACCOUNT_LIST)
+                        .findViewById(R.id.account_picker_account_list);
+        mAccountListView.setLayoutManager(
+                new LinearLayoutManager(
+                        mAccountListView.getContext(), LinearLayoutManager.VERTICAL, false));
+        mSelectedAccountView =
+                mViewFlipper
+                        .getChildAt(ViewState.COLLAPSED_ACCOUNT_LIST)
+                        .findViewById(R.id.account_picker_selected_account);
+        mDismissButton =
+                mViewFlipper
+                        .getChildAt(ViewState.COLLAPSED_ACCOUNT_LIST)
+                        .findViewById(R.id.account_picker_dismiss_button);
 
-        setUpContinueButton(mViewFlipper.getChildAt(ViewState.NO_ACCOUNTS),
+        setUpContinueButton(
+                mViewFlipper.getChildAt(ViewState.NO_ACCOUNTS),
                 R.string.signin_add_account_to_device);
-        setUpContinueButton(mViewFlipper.getChildAt(ViewState.SIGNIN_GENERAL_ERROR),
+        setUpContinueButton(
+                mViewFlipper.getChildAt(ViewState.SIGNIN_GENERAL_ERROR),
                 R.string.signin_account_picker_general_error_button);
-        setUpContinueButton(mViewFlipper.getChildAt(ViewState.SIGNIN_AUTH_ERROR),
+        setUpContinueButton(
+                mViewFlipper.getChildAt(ViewState.SIGNIN_AUTH_ERROR),
                 R.string.auth_error_card_button);
     }
 
-    /**
-     * The account list view is visible when the account list is expanded.
-     */
+    /** The account list view is visible when the account list is expanded. */
     RecyclerView getAccountListView() {
         return mAccountListView;
     }
 
-    /**
-     * The selected account is visible when the account list is collapsed.
-     */
+    /** The selected account is visible when the account list is collapsed. */
     View getSelectedAccountView() {
         return mSelectedAccountView;
     }
 
-    /**
-     * Sets the listener of the continue button.
-     */
+    /** Sets the listener of the continue button. */
     void setOnClickListenerOfContinueButton(OnClickListener listener) {
         for (int i = 0; i < mViewFlipper.getChildCount(); ++i) {
             ButtonCompat continueButton =
@@ -132,16 +137,12 @@ class AccountPickerBottomSheetView implements BottomSheetContent {
         }
     }
 
-    /**
-     * The button to dismiss the bottom sheet.
-     */
+    /** The button to dismiss the bottom sheet. */
     ButtonCompat getDismissButton() {
         return mDismissButton;
     }
 
-    /**
-     * Sets the displayed view according to the given {@link ViewState}.
-     */
+    /** Sets the displayed view according to the given {@link ViewState}. */
     void setDisplayedView(@ViewState int state) {
         mViewFlipper.setDisplayedChild(state);
         View titleView = mViewFlipper.getChildAt(state).findViewById(sTitleIds[state]);
@@ -160,20 +161,23 @@ class AccountPickerBottomSheetView implements BottomSheetContent {
         ExistingAccountRowViewBinder.bindAccountView(accountProfileData, mSelectedAccountView);
 
         ButtonCompat continueButton = view.findViewById(R.id.account_picker_continue_as_button);
-        String continueAsButtonText = mActivity.getString(R.string.sync_promo_continue_as,
-                accountProfileData.getGivenNameOrFullNameOrEmail());
-        continueButton.setText(continueAsButtonText);
+        continueButton.setText(
+                SigninUtils.getContinueAsButtonText(view.getContext(), accountProfileData));
     }
 
-    /**
-     * Adjusts the strings in the header and dismiss button for the send-tab-to-self entry point.
-     */
-    void setSendTabToSelfHeaderAndDismissButtonText() {
-        setSendTabToSelfHeaderText(ViewState.COLLAPSED_ACCOUNT_LIST);
-        setSendTabToSelfHeaderText(ViewState.EXPANDED_ACCOUNT_LIST);
-        setSendTabToSelfHeaderText(ViewState.NO_ACCOUNTS);
-
-        mDismissButton.setText(R.string.cancel);
+    /** Sets the title, subtitle, and dismiss button text. */
+    void setBottomSheetStrings(
+            @StringRes int title, @StringRes int subtitle, @StringRes int cancelButton) {
+        final int[] viewStates = {
+            ViewState.COLLAPSED_ACCOUNT_LIST, ViewState.EXPANDED_ACCOUNT_LIST, ViewState.NO_ACCOUNTS
+        };
+        for (int viewState : viewStates) {
+            final View view = mViewFlipper.getChildAt(viewState);
+            ((TextView) view.findViewById(R.id.account_picker_header_title)).setText(title);
+            ((TextViewWithLeading) view.findViewById(R.id.account_picker_header_subtitle))
+                    .setText(subtitle);
+        }
+        mDismissButton.setText(cancelButton);
     }
 
     @Override
@@ -250,14 +254,6 @@ class AccountPickerBottomSheetView implements BottomSheetContent {
         return R.string.account_picker_bottom_sheet_accessibility_closed;
     }
 
-    private void setSendTabToSelfHeaderText(@ViewState int viewState) {
-        final View view = mViewFlipper.getChildAt(viewState);
-        ((TextView) view.findViewById(R.id.account_picker_header_title))
-                .setText(R.string.signin_account_picker_bottom_sheet_title_for_send_tab_to_self);
-        ((TextViewWithLeading) view.findViewById(R.id.account_picker_header_subtitle))
-                .setText(R.string.signin_account_picker_bottom_sheet_subtitle_for_send_tab_to_self);
-    }
-
     private static void setUpContinueButton(View view, @StringRes int buttonId) {
         ButtonCompat continueButton = view.findViewById(R.id.account_picker_continue_as_button);
         continueButton.setText(buttonId);
@@ -270,9 +266,13 @@ class AccountPickerBottomSheetView implements BottomSheetContent {
                 viewFlipper, ViewState.COLLAPSED_ACCOUNT_LIST, R.id.account_picker_state_collapsed);
         checkViewFlipperChildIdAndViewStateMatch(
                 viewFlipper, ViewState.EXPANDED_ACCOUNT_LIST, R.id.account_picker_state_expanded);
-        checkViewFlipperChildIdAndViewStateMatch(viewFlipper, ViewState.SIGNIN_IN_PROGRESS,
+        checkViewFlipperChildIdAndViewStateMatch(
+                viewFlipper,
+                ViewState.SIGNIN_IN_PROGRESS,
                 R.id.account_picker_state_signin_in_progress);
-        checkViewFlipperChildIdAndViewStateMatch(viewFlipper, ViewState.SIGNIN_GENERAL_ERROR,
+        checkViewFlipperChildIdAndViewStateMatch(
+                viewFlipper,
+                ViewState.SIGNIN_GENERAL_ERROR,
                 R.id.account_picker_state_general_error);
         checkViewFlipperChildIdAndViewStateMatch(
                 viewFlipper, ViewState.SIGNIN_AUTH_ERROR, R.id.account_picker_state_auth_error);

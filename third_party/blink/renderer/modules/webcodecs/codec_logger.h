@@ -83,10 +83,7 @@ class MODULES_EXPORT CodecLogger final {
     // instance of |CodecLogger|.
     if (parent_media_log_) {
       parent_media_log_->Stop();
-      // This task runner may be destroyed without running tasks, so don't use
-      // DeleteSoon() which can leak the log. See https://crbug.com/1376851.
-      task_runner_->PostTask(FROM_HERE, base::DoNothingWithBoundArgs(
-                                            std::move(parent_media_log_)));
+      task_runner_->DeleteSoon(FROM_HERE, std::move(parent_media_log_));
     }
   }
 
@@ -100,7 +97,7 @@ class MODULES_EXPORT CodecLogger final {
   // the given |status| in |media_log_|.
   // Since |status| can come from platform codecs, its contents won't be
   // surfaced to JS, since we could leak important information.
-  DOMException* MakeException(std::string error_msg, StatusImpl status) {
+  DOMException* MakeOperationError(std::string error_msg, StatusImpl status) {
     media_log_->NotifyError(status);
 
     if (!status_code_)
@@ -110,13 +107,37 @@ class MODULES_EXPORT CodecLogger final {
                                               error_msg.c_str());
   }
 
-  // Convenience wrapper for MakeException(), where |error_msg| is shared for
-  // both the exception message and the status message.
-  DOMException* MakeException(
+  // Convenience wrapper for MakeOperationError(), where |error_msg| is shared
+  // for both the exception message and the status message.
+  DOMException* MakeOperationError(
       std::string error_msg,
       typename StatusImpl::Codes code,
       const base::Location& location = base::Location::Current()) {
-    return MakeException(error_msg, StatusImpl(code, error_msg, location));
+    return MakeOperationError(error_msg, StatusImpl(code, error_msg, location));
+  }
+
+  // Creates an EncodingError DOMException with the given |error_msg|, and logs
+  // the given |status| in |media_log_|.
+  // Since |status| can come from platform codecs, its contents won't be
+  // surfaced to JS, since we could leak important information.
+  DOMException* MakeEncodingError(std::string error_msg, StatusImpl status) {
+    media_log_->NotifyError(status);
+
+    if (!status_code_) {
+      status_code_ = status.code();
+    }
+
+    return MakeGarbageCollected<DOMException>(DOMExceptionCode::kEncodingError,
+                                              error_msg.c_str());
+  }
+
+  // Convenience wrapper for MakeEncodingError(), where |error_msg| is shared
+  // for both the exception message and the status message.
+  DOMException* MakeEncodingError(
+      std::string error_msg,
+      typename StatusImpl::Codes code,
+      const base::Location& location = base::Location::Current()) {
+    return MakeEncodingError(error_msg, StatusImpl(code, error_msg, location));
   }
 
   // Safe to use on any thread. |this| should still outlive users of log().
@@ -133,7 +154,7 @@ class MODULES_EXPORT CodecLogger final {
 
   // Records the first media::Status passed to MakeException.
   typename StatusImpl::Codes status_code() const {
-    return status_code_.value_or(StatusImpl::Traits::DefaultEnumValue());
+    return status_code_.value_or(StatusImpl::Codes::kOk);
   }
 
  private:

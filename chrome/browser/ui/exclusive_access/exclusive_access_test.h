@@ -7,12 +7,13 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "chrome/browser/ui/exclusive_access/exclusive_access_bubble.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_hide_callback.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_type.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
@@ -29,6 +30,36 @@ class Browser;
 namespace base {
 class TickClock;
 }  // namespace base
+
+// BrowserFullscreenModeWaiter can be used to wait for entering or exiting
+// browser fullscreen mode.
+class BrowserFullscreenModeWaiter : public FullscreenObserver {
+ public:
+  BrowserFullscreenModeWaiter(Browser* browser,
+                              bool wait_until_exit_fullscreen_mode);
+
+  BrowserFullscreenModeWaiter(const BrowserFullscreenModeWaiter&) = delete;
+  BrowserFullscreenModeWaiter& operator=(const BrowserFullscreenModeWaiter&) =
+      delete;
+
+  ~BrowserFullscreenModeWaiter() override;
+
+  // Runs a loop until it enters or exits the expected fullscreen mode.
+  void Wait();
+
+  // FullscreenObserver:
+  void OnFullscreenStateChanged() override;
+
+ protected:
+  // If true, wait until browser fullscreen mode is off; otherwise wait until
+  // browser fullscreen mode is on.
+  const bool wait_until_exit_fullscreen_mode_;
+  bool observed_change_ = false;
+  raw_ptr<FullscreenController> controller_;  // not owned
+  base::ScopedObservation<FullscreenController, FullscreenObserver>
+      observation_{this};
+  base::RunLoop run_loop_;
+};
 
 // Observer for fullscreen state change notifications.
 class FullscreenNotificationObserver : public FullscreenObserver {
@@ -62,6 +93,8 @@ class ExclusiveAccessTest : public InProcessBrowserTest {
  public:
   ExclusiveAccessTest(const ExclusiveAccessTest&) = delete;
   ExclusiveAccessTest& operator=(const ExclusiveAccessTest&) = delete;
+
+  static bool IsBubbleDownloadNotification(ExclusiveAccessBubble* bubble);
 
  protected:
   ExclusiveAccessTest();

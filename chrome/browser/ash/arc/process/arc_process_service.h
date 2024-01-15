@@ -7,12 +7,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <vector>
 
 #include "ash/components/arc/mojom/process.mojom-forward.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_iterator.h"
@@ -21,7 +23,6 @@
 #include "chrome/browser/ash/arc/process/arc_process.h"
 #include "chrome/browser/ash/process_snapshot_server.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -35,10 +36,10 @@ class ArcBridgeService;
 //
 // Call RequestAppProcessList() / RequestSystemProcessList() on the main UI
 // thread to get a list of all ARC app / system processes. It returns
-// absl::optional<vector<arc::ArcProcess>>, which includes pid <-> nspid
+// std::optional<vector<arc::ArcProcess>>, which includes pid <-> nspid
 // mapping. Example:
 //   void OnUpdateProcessList(
-//       absl::optional<vector<arc::ArcProcess>> processes) {
+//       std::optional<vector<arc::ArcProcess>> processes) {
 //     if (!processes) {
 //         // Arc process service is not ready.
 //        return;
@@ -70,7 +71,7 @@ class ArcProcessService : public KeyedService,
   static ArcProcessService* GetForBrowserContext(
       content::BrowserContext* context);
 
-  using OptionalArcProcessList = absl::optional<std::vector<ArcProcess>>;
+  using OptionalArcProcessList = std::optional<std::vector<ArcProcess>>;
   using RequestProcessListCallback =
       base::OnceCallback<void(OptionalArcProcessList)>;
   using RequestMemoryInfoCallback =
@@ -97,7 +98,7 @@ class ArcProcessService : public KeyedService,
 
   // If ARC IPC is ready for the process list request, the result is returned
   // as the argument of |callback|. Otherwise, |callback| is called with
-  // absl::nullopt.
+  // std::nullopt.
   // The process list maybe stale of up to |kProcessSnapshotRefreshTime|.
   void RequestAppProcessList(RequestProcessListCallback callback);
   void RequestSystemProcessList(RequestProcessListCallback callback);
@@ -143,6 +144,8 @@ class ArcProcessService : public KeyedService,
     PidMap pidmap_;
   };
 
+  static void EnsureFactoryBuilt();
+
  private:
   void OnReceiveProcessList(
       RequestProcessListCallback callback,
@@ -177,7 +180,8 @@ class ArcProcessService : public KeyedService,
   void ContinueAppMemoryInfoRequest(RequestMemoryInfoCallback callback);
   void ContinueSystemMemoryInfoRequest(RequestMemoryInfoCallback callback);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // The most recent process snapshot received from the ProcessSnapshotServer.
   base::ProcessIterator::ProcessEntries cached_process_snapshot_;

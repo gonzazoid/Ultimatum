@@ -11,10 +11,10 @@
 #include <set>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -25,6 +25,7 @@
 #include "components/prefs/persistent_pref_store.h"
 #include "components/prefs/pref_filter.h"
 #include "components/prefs/prefs_export.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefFilter;
 
@@ -37,10 +38,10 @@ class WriteCallbacksObserver;
 }  // namespace base
 
 // A writable PrefStore implementation that is used for user preferences.
-class COMPONENTS_PREFS_EXPORT JsonPrefStore
+class COMPONENTS_PREFS_EXPORT JsonPrefStore final
     : public PersistentPrefStore,
       public base::ImportantFileWriter::DataSerializer,
-      public base::SupportsWeakPtr<JsonPrefStore> {
+      public base::ImportantFileWriter::BackgroundDataSerializer {
  public:
   struct ReadResult;
 
@@ -120,9 +121,11 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   void RegisterOnNextSuccessfulWriteReply(
       base::OnceClosure on_next_successful_write_reply);
 
-  void ClearMutableValues() override;
-
   void OnStoreDeletionFromDisk() override;
+
+  base::WeakPtr<JsonPrefStore> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
 #if defined(UNIT_TEST)
   base::ImportantFileWriter& get_writer() { return writer_; }
@@ -134,6 +137,10 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   friend class base::WriteCallbacksObserver;
 
   ~JsonPrefStore() override;
+
+  // Perform pre-serialization bookkeeping common to either serialization flow
+  // (main thread or background thread).
+  void PerformPreserializationTasks();
 
   // If |write_success| is true, runs |on_next_successful_write_|.
   // Otherwise, re-registers |on_next_successful_write_|.
@@ -162,7 +169,10 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   void OnFileRead(std::unique_ptr<ReadResult> read_result);
 
   // ImportantFileWriter::DataSerializer overrides:
-  bool SerializeData(std::string* output) override;
+  absl::optional<std::string> SerializeData() override;
+  // ImportantFileWriter::BackgroundDataSerializer implementation.
+  base::ImportantFileWriter::BackgroundDataProducerCallback
+  GetSerializedDataProducerForBackgroundSequence() override;
 
   // This method is called after the JSON file has been read and the result has
   // potentially been intercepted and modified by |pref_filter_|.
@@ -172,7 +182,7 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   // (typically because the |pref_filter_| has already altered the |prefs|) --
   // this will be ignored if this store is read-only.
   void FinalizeFileRead(bool initialization_successful,
-                        std::unique_ptr<base::DictionaryValue> prefs,
+                        base::Value::Dict prefs,
                         bool schedule_write);
 
   // Schedule a write with the file writer as long as |flags| doesn't contain
@@ -182,7 +192,7 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   const base::FilePath path_;
   const scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
 
-  std::unique_ptr<base::DictionaryValue> prefs_;
+  base::Value::Dict prefs_;
 
   bool read_only_;
 
@@ -205,6 +215,8 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   base::OnceClosure on_next_successful_write_reply_;
 
   SEQUENCE_CHECKER(sequence_checker_);
+
+  base::WeakPtrFactory<JsonPrefStore> weak_ptr_factory_{this};
 };
 
 #endif  // COMPONENTS_PREFS_JSON_PREF_STORE_H_

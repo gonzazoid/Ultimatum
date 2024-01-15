@@ -5,7 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_PERMISSIONS_POLICY_ORIGIN_WITH_POSSIBLE_WILDCARDS_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_PERMISSIONS_POLICY_ORIGIN_WITH_POSSIBLE_WILDCARDS_H_
 
+#include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "third_party/blink/public/common/common_export.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-shared.h"
 #include "url/origin.h"
 
 namespace blink {
@@ -15,7 +17,8 @@ namespace blink {
 // Note that https://*.foo.com/ matches domains like https://example.foo.com/
 // or https://test.example.foo.com/ but does not match https://foo.com/.
 // Origins that do have wildcards cannot be opaque.
-struct BLINK_COMMON_EXPORT OriginWithPossibleWildcards {
+class BLINK_COMMON_EXPORT OriginWithPossibleWildcards {
+ public:
   // Indicates the source of a parsed permissions policy. kHeader represents a
   // permissions policy in an HTTP header. kAttribute represents an iframe allow
   // policy. kUnknown indicated an unknown source. This affects which wildcards
@@ -23,18 +26,31 @@ struct BLINK_COMMON_EXPORT OriginWithPossibleWildcards {
   enum NodeType { kHeader, kAttribute, kUnknown };
 
   OriginWithPossibleWildcards();
-  OriginWithPossibleWildcards(const url::Origin& origin,
-                              bool has_subdomain_wildcard);
   OriginWithPossibleWildcards(const OriginWithPossibleWildcards& rhs);
   OriginWithPossibleWildcards& operator=(
       const OriginWithPossibleWildcards& rhs);
   ~OriginWithPossibleWildcards();
 
+  // This is a shortcut for making a wildcard-free OriginWithPossibleWildcards.
+  // The returned value will be empty if the origin is opaque or Parse fails.
+  static absl::optional<OriginWithPossibleWildcards> FromOrigin(
+      const url::Origin& origin);
+
+  // This is a shortcut for making a OriginWithPossibleWildcards while
+  // overriding the wildcard options. Non-tests should use Parse() if they want
+  // wildcard support, or FromOrigin() if they don't need it.
+  // The returned value will be empty if the origin is opaque or Parse fails.
+  static absl::optional<OriginWithPossibleWildcards>
+  FromOriginAndWildcardsForTest(const url::Origin& origin,
+                                bool has_subdomain_wildcard);
+
   // This constructs a OriginWithPossibleWildcards from an allowlist_entry which
   // might or might not have a subdomain wildcard (only if the type is kHeader).
   // This does not support special types like *, 'self', 'src', or 'none'.
-  static OriginWithPossibleWildcards Parse(const std::string& allowlist_entry,
-                                           const NodeType type);
+  // If the entry cannot be parsed then absl::nullopt is returned.
+  static absl::optional<OriginWithPossibleWildcards> Parse(
+      const std::string& allowlist_entry,
+      const NodeType type);
 
   // This should neatly undo the work of Parse, which is to say it
   // serializes the origin and inserts a *. back into the front of the host
@@ -55,16 +71,26 @@ struct BLINK_COMMON_EXPORT OriginWithPossibleWildcards {
   // https://github.com/w3c/webappsec-permissions-policy/pull/482
   bool DoesMatchOrigin(const url::Origin& match_origin) const;
 
-  url::Origin origin;
-  bool has_subdomain_wildcard{false};
-};
+  const network::mojom::CSPSource& CSPSourceForTest() const {
+    return csp_source;
+  }
 
-bool BLINK_COMMON_EXPORT operator==(const OriginWithPossibleWildcards& lhs,
-                                    const OriginWithPossibleWildcards& rhs);
-bool BLINK_COMMON_EXPORT operator!=(const OriginWithPossibleWildcards& lhs,
-                                    const OriginWithPossibleWildcards& rhs);
-bool BLINK_COMMON_EXPORT operator<(const OriginWithPossibleWildcards& lhs,
-                                   const OriginWithPossibleWildcards& rhs);
+ private:
+  friend struct mojo::StructTraits<
+      blink::mojom::OriginWithPossibleWildcardsDataView,
+      blink::OriginWithPossibleWildcards>;
+  BLINK_COMMON_EXPORT
+  friend bool operator==(const OriginWithPossibleWildcards& lhs,
+                         const OriginWithPossibleWildcards& rhs);
+  BLINK_COMMON_EXPORT
+  friend bool operator!=(const OriginWithPossibleWildcards& lhs,
+                         const OriginWithPossibleWildcards& rhs);
+  BLINK_COMMON_EXPORT
+  friend bool operator<(const OriginWithPossibleWildcards& lhs,
+                        const OriginWithPossibleWildcards& rhs);
+
+  network::mojom::CSPSource csp_source;
+};
 
 }  // namespace blink
 

@@ -9,6 +9,8 @@
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "third_party/skia/include/effects/SkGradientShader.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_owner.h"
 #include "ui/events/event.h"
@@ -26,7 +28,7 @@ namespace ash {
 constexpr int kPointRadius = 20;
 constexpr SkColor4f kProjectionFillColor{0.96f, 0.96f, 0.86f, 1.0f};
 constexpr SkColor4f kProjectionStrokeColor = SkColors::kGray;
-constexpr int kProjectionAlpha = 0xB0;
+constexpr float kProjectionAlpha = 0xB0 / 255.0f;
 constexpr base::TimeDelta kFadeoutDuration = base::Milliseconds(250);
 constexpr int kFadeoutFrameRate = 60;
 
@@ -34,6 +36,8 @@ constexpr int kFadeoutFrameRate = 60;
 class TouchPointView : public views::View,
                        public views::AnimationDelegateViews,
                        public views::WidgetObserver {
+  METADATA_HEADER(TouchPointView, views::View)
+
  public:
   explicit TouchPointView(views::Widget* parent_widget)
       : views::AnimationDelegateViews(this) {
@@ -71,12 +75,12 @@ class TouchPointView : public views::View,
  private:
   // views::View:
   void OnPaint(gfx::Canvas* canvas) override {
-    int alpha = kProjectionAlpha;
-    if (fadeout_)
-      alpha = static_cast<int>(fadeout_->CurrentValueBetween(alpha, 0));
+    const float alpha =
+        fadeout_ ? fadeout_->CurrentValueBetween(kProjectionAlpha, 0.0f)
+                 : kProjectionAlpha;
 
     cc::PaintFlags fill_flags;
-    fill_flags.setAlpha(alpha);
+    fill_flags.setAlphaf(alpha);
 
     constexpr SkColor4f gradient_colors[2] = {kProjectionFillColor,
                                               kProjectionStrokeColor};
@@ -93,7 +97,7 @@ class TouchPointView : public views::View,
     cc::PaintFlags stroke_flags;
     stroke_flags.setStyle(cc::PaintFlags::kStroke_Style);
     stroke_flags.setColor(kProjectionStrokeColor);
-    stroke_flags.setAlpha(alpha);
+    stroke_flags.setAlphaf(alpha);
     canvas->DrawCircle(center, SkIntToScalar(kPointRadius), stroke_flags);
   }
 
@@ -126,6 +130,9 @@ class TouchPointView : public views::View,
   base::ScopedObservation<views::Widget, views::WidgetObserver>
       widget_observation_{this};
 };
+
+BEGIN_METADATA(TouchPointView)
+END_METADATA
 
 TouchHudRenderer::TouchHudRenderer(views::Widget* parent_widget)
     : parent_widget_(parent_widget) {

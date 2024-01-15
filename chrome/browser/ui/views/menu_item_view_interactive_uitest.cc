@@ -117,7 +117,8 @@ class MenuItemViewTestInsert : public MenuTestBase {
   }
 
  private:
-  raw_ptr<views::MenuItemView> inserted_item_ = nullptr;
+  raw_ptr<views::MenuItemView, AcrossTasksDanglingUntriaged> inserted_item_ =
+      nullptr;
 };
 
 // MenuItemViewTestInsertXY inserts an item at index X and selects the
@@ -132,19 +133,40 @@ using MenuItemViewTestInsert20 = MenuItemViewTestInsert<2, 0>;
 using MenuItemViewTestInsert22 = MenuItemViewTestInsert<2, 2>;
 
 // If this flakes, disable and log details in http://crbug.com/523255.
-VIEW_TEST(MenuItemViewTestInsert00, InsertItem00)
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_InsertItem00 DISABLED_InsertItem00
+#else
+#define MAYBE_InsertItem00 InsertItem00
+#endif
+VIEW_TEST(MenuItemViewTestInsert00, MAYBE_InsertItem00)
 
+// TODO(b/523255): Test is failing consistently on "Linux Tests (Wayland)".
 // If this flakes, disable and log details in http://crbug.com/523255.
-VIEW_TEST(MenuItemViewTestInsert02, InsertItem02)
+// #if defined(MEMORY_SANITIZER)
+// #define MAYBE_InsertItem02 DISABLED_InsertItem02
+// #else
+// #define MAYBE_InsertItem02 InsertItem02
+// #endif
+VIEW_TEST(MenuItemViewTestInsert02, DISABLED_InsertItem02)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
 VIEW_TEST(MenuItemViewTestInsert10, InsertItem10)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
-VIEW_TEST(MenuItemViewTestInsert12, InsertItem12)
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_InsertItem12 DISABLED_InsertItem12
+#else
+#define MAYBE_InsertItem12 InsertItem12
+#endif
+VIEW_TEST(MenuItemViewTestInsert12, MAYBE_InsertItem12)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
-VIEW_TEST(MenuItemViewTestInsert20, InsertItem20)
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_InsertItem20 DISABLED_InsertItem20
+#else
+#define MAYBE_InsertItem20 InsertItem20
+#endif
+VIEW_TEST(MenuItemViewTestInsert20, MAYBE_InsertItem20)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
 VIEW_TEST(MenuItemViewTestInsert22, InsertItem22)
@@ -204,8 +226,9 @@ class MenuItemViewTestInsertWithSubmenu : public MenuTestBase {
   }
 
  private:
-  raw_ptr<views::MenuItemView> submenu_ = nullptr;
-  raw_ptr<views::MenuItemView> inserted_item_ = nullptr;
+  raw_ptr<views::MenuItemView, AcrossTasksDanglingUntriaged> submenu_ = nullptr;
+  raw_ptr<views::MenuItemView, AcrossTasksDanglingUntriaged> inserted_item_ =
+      nullptr;
 };
 
 // MenuItemViewTestInsertWithSubmenuX posts a menu and its submenu,
@@ -217,13 +240,7 @@ using MenuItemViewTestInsertWithSubmenu1 = MenuItemViewTestInsertWithSubmenu<1>;
 VIEW_TEST(MenuItemViewTestInsertWithSubmenu0, InsertItemWithSubmenu0)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
-// Failing on Linux Ozone Tester (Wayland) (See crbug.com/1236048).
-#if defined(USE_OZONE)
-#define MAYBE_InsertItemWithSubmenu1 DISABLED_InsertItemWithSubmenu1
-#else
-#define MAYBE_InsertItemWithSubmenu1 InsertItemWithSubmenu1
-#endif
-VIEW_TEST(MenuItemViewTestInsertWithSubmenu1, MAYBE_InsertItemWithSubmenu1)
+VIEW_TEST(MenuItemViewTestInsertWithSubmenu1, InsertItemWithSubmenu1)
 
 // Test class for removing a menu item while the menu is open.
 template <int REMOVE_INDEX, int SELECT_INDEX>
@@ -284,7 +301,13 @@ using MenuItemViewTestRemove21 = MenuItemViewTestRemove<2, 1>;
 VIEW_TEST(MenuItemViewTestRemove00, RemoveItem00)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
-VIEW_TEST(MenuItemViewTestRemove01, RemoveItem01)
+// Super flaky on Wayland.
+#if BUILDFLAG(IS_OZONE)
+#define MAYBE_RemoveItem01 DISABLED_RemoveItem01
+#else
+#define MAYBE_RemoveItem01 RemoveItem01
+#endif
+VIEW_TEST(MenuItemViewTestRemove01, MAYBE_RemoveItem01)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
 VIEW_TEST(MenuItemViewTestRemove10, RemoveItem10)
@@ -296,7 +319,13 @@ VIEW_TEST(MenuItemViewTestRemove11, RemoveItem11)
 VIEW_TEST(MenuItemViewTestRemove20, RemoveItem20)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
-VIEW_TEST(MenuItemViewTestRemove21, RemoveItem21)
+// Flaky on Wayland.
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_LINUX)
+#define MAYBE_RemoveItem21 DISABLED_RemoveItem21
+#else
+#define MAYBE_RemoveItem21 RemoveItem21
+#endif
+VIEW_TEST(MenuItemViewTestRemove21, MAYBE_RemoveItem21)
 
 // Test class for removing a menu item while a submenu is open.
 template <int REMOVE_INDEX>
@@ -353,7 +382,7 @@ class MenuItemViewTestRemoveWithSubmenu : public MenuTestBase {
   }
 
  private:
-  raw_ptr<views::MenuItemView> submenu_ = nullptr;
+  raw_ptr<views::MenuItemView, AcrossTasksDanglingUntriaged> submenu_ = nullptr;
 };
 
 using MenuItemViewTestRemoveWithSubmenu0 = MenuItemViewTestRemoveWithSubmenu<0>;
@@ -364,7 +393,7 @@ VIEW_TEST(MenuItemViewTestRemoveWithSubmenu0, RemoveItemWithSubmenu0)
 
 // If this flakes, disable and log details in http://crbug.com/523255.
 // TODO(https://crbug.com/1379761): Flaky on Wayland.
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_RemoveItemWithSubmenu1 DISABLED_RemoveItemWithSubmenu1
 #else
 #define MAYBE_RemoveItemWithSubmenu1 RemoveItemWithSubmenu1

@@ -4,17 +4,17 @@
 
 #include "chromeos/ash/services/libassistant/libassistant_loader_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
+#include "base/system/sys_info.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
@@ -27,8 +27,8 @@ namespace ash::libassistant {
 
 namespace {
 
-using InstallResult = chromeos::assistant::LibassistantDlcInstallResult;
-using LoadStatus = chromeos::assistant::LibassistantDlcLoadStatus;
+using InstallResult = assistant::LibassistantDlcInstallResult;
+using LoadStatus = assistant::LibassistantDlcLoadStatus;
 
 base::TaskTraits GetTaskTraits() {
   return {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
@@ -48,11 +48,7 @@ base::FilePath GetLibassisantPath(const std::string& root_path) {
   DCHECK(root_path == kLibAssistantDlcRootPath);
   base::FilePath libassistant_dlc_root =
       base::FilePath(root_path).AsEndingWithSeparator();
-  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    return libassistant_dlc_root.Append(base::FilePath(kLibAssistantV2DlcPath));
-  }
-
-  return libassistant_dlc_root.Append(base::FilePath(kLibAssistantV1DlcPath));
+  return libassistant_dlc_root.Append(base::FilePath(kLibAssistantV2DlcPath));
 }
 
 void RecordLibassistantDlcInstallResult(
@@ -89,11 +85,6 @@ void RecordLibassistantDlcLoadStatus(const LoadStatus& status) {
 }  // namespace
 
 void LibassistantLoaderImpl::Load(LoadCallback callback) {
-  if (!chromeos::assistant::features::IsLibAssistantDlcEnabled()) {
-    std::move(callback).Run(/*success=*/true);
-    return;
-  }
-
   if (entry_point_) {
     std::move(callback).Run(/*success=*/true);
     return;
@@ -107,16 +98,19 @@ void LibassistantLoaderImpl::LoadBlocking(const std::string& root_path) {
   // Since we are not in the main thread, we can call the blocking method.
   DCHECK(!entry_point_);
 
-#if !BUILDFLAG(IS_CHROMEOS_DEVICE)
   // If the gRPC socket files exist, libassistant gRPC server could not start
   // because the binding to the new socket files will fail, with error message
   // that the files already exist.
-  // This cleanup is only needed for running the sandbox on gLinux.
-  // On a real device, these files will be cleaned up on the OS side when Chrome
-  // starts.
+  const bool is_chromeos_device = base::SysInfo::IsRunningOnChromeOS();
   DVLOG(3) << "Clean up temporary libassistant directory.";
-  base::DeletePathRecursively(base::FilePath(kLibAssistantSocketPath));
-#endif
+  auto socket_path = base::FilePath(kLibAssistantSocketPath);
+  base::DeletePathRecursively(socket_path);
+  if (!is_chromeos_device) {
+    // Make sure the directory exists. On a real device, this directory will be
+    // created on the OS side when Chrome starts.
+    CHECK(base::CreateDirectory(socket_path));
+  }
+
   base::FilePath path = GetLibassisantPath(root_path);
   base::ScopedNativeLibrary library = base::ScopedNativeLibrary(path);
   OnLibraryLoaded(std::move(library));
@@ -163,7 +157,7 @@ void LibassistantLoaderImpl::OnInstallDlcComplete(
     return;
   }
 
-  if (chromeos::assistant::features::IsLibAssistantSandboxEnabled()) {
+  if (assistant::features::IsLibAssistantSandboxEnabled()) {
     // Will load the library later in the utility process.
     RunCallback(/*success=*/true);
     return;
@@ -177,6 +171,14 @@ void LibassistantLoaderImpl::OnInstallDlcComplete(
       FROM_HERE,
       base::BindOnce(
           [](const base::FilePath& path) {
+            const bool is_chromeos_device =
+                base::SysInfo::IsRunningOnChromeOS();
+            if (!is_chromeos_device) {
+              // Make sure the directory exists. On a real device, this
+              // directory will be created on the OS side when Chrome starts.
+              auto socket_path = base::FilePath(kLibAssistantSocketPath);
+              CHECK(base::CreateDirectory(socket_path));
+            }
             return base::ScopedNativeLibrary(path);
           },
           path),

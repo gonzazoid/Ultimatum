@@ -31,10 +31,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerSelectedPaymentAppTest,
                        TestSelectedPaymentMethod) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_no_shipping_test.html");
@@ -93,12 +93,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoSupportedPaymentMethodTest,
   content::WebContents* web_contents = GetActiveWebContents();
   const std::string click_buy_button_js =
       "(function() { document.getElementById('buy').click(); })();";
-  ASSERT_TRUE(content::ExecuteScript(web_contents, click_buy_button_js));
-  WaitForObservedEvent();
-
-  histogram_tester.ExpectBucketCount(
-      "PaymentRequest.CheckoutFunnel.NoShow",
-      JourneyLogger::NOT_SHOWN_REASON_NO_SUPPORTED_PAYMENT_METHOD, 1);
+  ASSERT_TRUE(content::ExecJs(web_contents, click_buy_button_js));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -138,10 +134,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerMultipleShowTest,
                        ShowSameRequest) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("c.com", "/payment_request_multiple_show_test.html");
@@ -157,7 +153,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerMultipleShowTest,
   content::WebContents* web_contents = GetActiveWebContents();
   const std::string click_buy_button_js =
       "(function() { document.getElementById('showAgain').click(); })();";
-  ASSERT_TRUE(content::ExecuteScript(web_contents, click_buy_button_js));
+  ASSERT_TRUE(content::ExecJs(web_contents, click_buy_button_js));
 
   // Complete the original Payment Request.
   ResetEventWaiterForSequence(
@@ -205,10 +201,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerMultipleShowTest,
                        StartNewRequest) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_multiple_show_test.html");
@@ -226,7 +222,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerMultipleShowTest,
 
   // Try to show a second request.
   content::WebContents* web_contents = GetActiveWebContents();
-  ASSERT_TRUE(content::ExecuteScript(
+  ASSERT_TRUE(content::ExecJs(
       web_contents,
       content::JsReplace("showSecondRequestWithMethods([{supportedMethods:$1}, "
                          "{supportedMethods:$2}]);",
@@ -236,11 +232,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerMultipleShowTest,
   ResetEventWaiterForSequence(
       {DialogEvent::PROCESSING_SPINNER_SHOWN, DialogEvent::DIALOG_CLOSED});
   ClickOnDialogViewAndWait(DialogViewID::PAY_BUTTON, first_dialog_view);
-
-  // There is one no show and one shown (verified below).
-  histogram_tester.ExpectBucketCount(
-      "PaymentRequest.CheckoutFunnel.NoShow",
-      JourneyLogger::NOT_SHOWN_REASON_CONCURRENT_REQUESTS, 1);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -317,17 +308,17 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerMultipleShowTest,
 using PaymentRequestJourneyLoggerAllSectionStatsTest =
     PaymentRequestBrowserTestBase;
 
-// Tests that the correct number of suggestions shown for each section is logged
-// when a Payment Request is completed.
+// Tests that the correct PaymentRequest.Events metrics are logged when a
+// Payment Request is completed.
 IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerAllSectionStatsTest,
-                       NumberOfSuggestionsShown_Completed) {
+                       EventsMetric_Completed) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
 
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("c.com",
@@ -345,15 +336,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerAllSectionStatsTest,
   ResetEventWaiterForSequence(
       {DialogEvent::PROCESSING_SPINNER_SHOWN, DialogEvent::DIALOG_CLOSED});
   ClickOnDialogViewAndWait(DialogViewID::PAY_BUTTON, dialog_view());
-
-  // Expect the appropriate number of suggestions shown to be logged.
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.Completed", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ShippingAddress.Completed", 2,
-      1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ContactInfo.Completed", 2, 1);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -386,17 +368,17 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerAllSectionStatsTest,
   EXPECT_FALSE(buckets[0].min & JourneyLogger::EVENT_COULD_NOT_SHOW);
 }
 
-// Tests that the correct number of suggestions shown for each section is logged
-// when a Payment Request is aborted by the user.
+// Tests that the correct PaymentRequest.Events metrics are logged when a
+// Payment Request is aborted by the user.
 IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerAllSectionStatsTest,
-                       NumberOfSuggestionsShown_UserAborted) {
+                       EventsMetric_UserAborted) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
 
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("c.com",
@@ -412,16 +394,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerAllSectionStatsTest,
       "buyWithMethods([{supportedMethods:$1}, {supportedMethods:$2}]);",
       a_method_name, b_method_name));
   ClickOnCancel();
-
-  // Expect the appropriate number of suggestions shown to be logged.
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.UserAborted", 2,
-      1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ShippingAddress.UserAborted", 2,
-      1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ContactInfo.UserAborted", 2, 1);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -457,16 +429,16 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerAllSectionStatsTest,
 using PaymentRequestJourneyLoggerNoShippingSectionStatsTest =
     PaymentRequestBrowserTestBase;
 
-// Tests that the correct number of suggestions shown for each section is logged
-// when a Payment Request is completed.
+// Tests that the correct PaymentRequest.Events metrics are logged when a
+// Payment Request is completed.
 IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoShippingSectionStatsTest,
-                       NumberOfSuggestionsShown_Completed) {
+                       EventsMetric_Completed) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("c.com", "/payment_request_contact_details_test.html");
@@ -483,16 +455,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoShippingSectionStatsTest,
   ResetEventWaiterForSequence(
       {DialogEvent::PROCESSING_SPINNER_SHOWN, DialogEvent::DIALOG_CLOSED});
   ClickOnDialogViewAndWait(DialogViewID::PAY_BUTTON, dialog_view());
-
-  // Expect the appropriate number of suggestions shown to be logged.
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.Completed", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ContactInfo.Completed", 2, 1);
-
-  // There should be no log for shipping address since it was not requested.
-  histogram_tester.ExpectTotalCount(
-      "PaymentRequest.NumberOfSuggestionsShown.ShippingAddress.Completed", 0);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -525,16 +487,16 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoShippingSectionStatsTest,
   EXPECT_FALSE(buckets[0].min & JourneyLogger::EVENT_COULD_NOT_SHOW);
 }
 
-// Tests that the correct number of suggestions shown for each section is logged
-// when a Payment Request is aborted by the user.
+// Tests that the correct PaymentRequest.Events metrics are logged when a
+// Payment Request is aborted by the user.
 IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoShippingSectionStatsTest,
-                       NumberOfSuggestionsShown_UserAborted) {
+                       EventsMetric_UserAborted) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("c.com", "/payment_request_contact_details_test.html");
@@ -549,17 +511,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoShippingSectionStatsTest,
       "buyWithMethods([{supportedMethods:$1}, {supportedMethods:$2}]);",
       a_method_name, b_method_name));
   ClickOnCancel();
-
-  // Expect the appropriate number of suggestions shown to be logged.
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.UserAborted", 2,
-      1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ContactInfo.UserAborted", 2, 1);
-
-  // There should be no log for shipping address since it was not requested.
-  histogram_tester.ExpectTotalCount(
-      "PaymentRequest.NumberOfSuggestionsShown.ShippingAddress.UserAborted", 0);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -595,17 +546,17 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestJourneyLoggerNoShippingSectionStatsTest,
 using PaymentRequestJourneyLoggerNoContactDetailSectionStatsTest =
     PaymentRequestBrowserTestBase;
 
-// Tests that the correct number of suggestions shown for each section is logged
-// when a Payment Request is completed.
+// Tests that the correct PaymentRequest.Events metrics are logged when a
+// Payment Request is completed.
 IN_PROC_BROWSER_TEST_F(
     PaymentRequestJourneyLoggerNoContactDetailSectionStatsTest,
-    NumberOfSuggestionsShown_Completed) {
+    EventsMetric_Completed) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("c.com", "/payment_request_free_shipping_test.html");
@@ -622,17 +573,6 @@ IN_PROC_BROWSER_TEST_F(
   ResetEventWaiterForSequence(
       {DialogEvent::PROCESSING_SPINNER_SHOWN, DialogEvent::DIALOG_CLOSED});
   ClickOnDialogViewAndWait(DialogViewID::PAY_BUTTON, dialog_view());
-
-  // Expect the appropriate number of suggestions shown to be logged.
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.Completed", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ShippingAddress.Completed", 2,
-      1);
-
-  // There should be no log for contact info since it was not requested.
-  histogram_tester.ExpectTotalCount(
-      "PaymentRequest.NumberOfSuggestionsShown.ContactInfo.Completed", 0);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -665,17 +605,17 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_FALSE(buckets[0].min & JourneyLogger::EVENT_COULD_NOT_SHOW);
 }
 
-// Tests that the correct number of suggestions shown for each section is logged
-// when a Payment Request is aborted by the user.
+// Tests that the correct PaymentRequest.Events metrics are logged when a
+// Payment Request is aborted by the user.
 IN_PROC_BROWSER_TEST_F(
     PaymentRequestJourneyLoggerNoContactDetailSectionStatsTest,
-    NumberOfSuggestionsShown_UserAborted) {
+    EventsMetric_UserAborted) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_free_shipping_test.html");
@@ -690,18 +630,6 @@ IN_PROC_BROWSER_TEST_F(
       "buyWithMethods([{supportedMethods:$1}, {supportedMethods:$2}]);",
       a_method_name, b_method_name));
   ClickOnCancel();
-
-  // Expect the appropriate number of suggestions shown to be logged.
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.PaymentMethod.UserAborted", 2,
-      1);
-  histogram_tester.ExpectUniqueSample(
-      "PaymentRequest.NumberOfSuggestionsShown.ShippingAddress.UserAborted", 2,
-      1);
-
-  // There should be no log for contact info since it was not requested.
-  histogram_tester.ExpectTotalCount(
-      "PaymentRequest.NumberOfSuggestionsShown.ContactInfo.UserAborted", 0);
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -741,10 +669,10 @@ using PaymentRequestNotShownTest = PaymentRequestBrowserTestBase;
 IN_PROC_BROWSER_TEST_F(PaymentRequestNotShownTest, OnlyNotShownMetricsLogged) {
   // Installs two apps so that canMakePayment is true.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_can_make_payment_metrics_test.html");
@@ -756,21 +684,16 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestNotShownTest, OnlyNotShownMetricsLogged) {
                                DialogEvent::HAS_ENROLLED_INSTRUMENT_RETURNED});
 
   // Initiate a Payment Request without showing it.
-  ASSERT_TRUE(content::ExecuteScript(
+  ASSERT_TRUE(content::ExecJs(
       GetActiveWebContents(),
       content::JsReplace("queryNoShowWithMethods([{supportedMethods:$1}"
                          ", {supportedMethods:$2}]);",
                          a_method_name, b_method_name)));
 
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Navigate away to abort the Payment Request and trigger the logs.
   NavigateTo("/payment_request_email_test.html");
-
-  // Abort should be logged.
-  histogram_tester.ExpectBucketCount(
-      "PaymentRequest.CheckoutFunnel.Aborted",
-      JourneyLogger::ABORT_REASON_USER_NAVIGATION, 1);
 
   // Some events should be logged.
   std::vector<base::Bucket> buckets =
@@ -784,11 +707,6 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestNotShownTest, OnlyNotShownMetricsLogged) {
                 JourneyLogger::EVENT_REQUEST_METHOD_OTHER |
                 JourneyLogger::EVENT_AVAILABLE_METHOD_OTHER,
             buckets[0].min);
-
-  // Make sure that the metrics that required the Payment Request to be shown
-  // are not logged.
-  histogram_tester.ExpectTotalCount("PaymentRequest.NumberOfSuggestionsShown",
-                                    0);
 }
 
 using PaymentRequestCompleteSuggestionsForEverythingTest =
@@ -798,10 +716,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCompleteSuggestionsForEverythingTest,
                        UserHadCompleteSuggestionsForEverything) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_email_test.html");
@@ -869,9 +787,11 @@ class PaymentRequestIframeTest : public PaymentRequestBrowserTestBase {
 IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, CrossOriginIframe) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js", &a_method);
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
+                    &a_method);
   std::string b_method;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js", &b_method);
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
+                    &b_method);
 
   base::HistogramTester histogram_tester;
 
@@ -895,7 +815,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, CrossOriginIframe) {
       content::JsReplace("triggerPaymentRequestWithMethods([{supportedMethods:$"
                          "1}, {supportedMethods:$2}])",
                          a_method, b_method)));
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Simulate that the user cancels the PR.
   ClickOnCancel();
@@ -923,7 +843,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, CrossOriginIframe) {
   auto entries = test_ukm_recorder_->GetEntriesByName(
       ukm::builders::PaymentRequest_CheckoutEvents::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     test_ukm_recorder_->ExpectEntrySourceHasUrl(entry, main_frame_url);
     EXPECT_EQ(3U, entry->metrics.size());
     test_ukm_recorder_->ExpectEntryMetric(
@@ -939,9 +859,11 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, CrossOriginIframe) {
 IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, IframeNavigation_UserAborted) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js", &a_method);
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
+                    &a_method);
   std::string b_method;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js", &b_method);
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
+                    &b_method);
 
   NavigateTo("c.com", "/payment_request_free_shipping_with_iframe_test.html");
   base::HistogramTester histogram_tester;
@@ -953,7 +875,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, IframeNavigation_UserAborted) {
 
   // Make the iframe navigate away.
   EXPECT_TRUE(NavigateIframeToURL(GetActiveWebContents(), "theIframe",
-                                  GURL("https://www.example.com")));
+                                  GURL("https://www.example.test")));
 
   // Simulate that the user cancels the PR.
   ClickOnCancel();
@@ -992,9 +914,11 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, IframeNavigation_UserAborted) {
 IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, IframeNavigation_Completed) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js", &a_method);
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
+                    &a_method);
   std::string b_method;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js", &b_method);
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
+                    &b_method);
 
   NavigateTo("/payment_request_free_shipping_with_iframe_test.html");
   base::HistogramTester histogram_tester;
@@ -1010,7 +934,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, IframeNavigation_Completed) {
 
   // Make the iframe navigate away.
   EXPECT_TRUE(NavigateIframeToURL(GetActiveWebContents(), "theIframe",
-                                  GURL("https://www.example.com")));
+                                  GURL("https://www.example.test")));
 
   // Complete the Payment Request.
   ResetEventWaiterForSequence(
@@ -1051,9 +975,11 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, IframeNavigation_Completed) {
 IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, HistoryPushState_UserAborted) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js", &a_method);
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
+                    &a_method);
   std::string b_method;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js", &b_method);
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
+                    &b_method);
 
   NavigateTo("/payment_request_free_shipping_with_iframe_test.html");
   base::HistogramTester histogram_tester;
@@ -1064,10 +990,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, HistoryPushState_UserAborted) {
       a_method, b_method));
 
   // PushState on the history.
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "window.history.pushState(\"\", \"\", "
-                                     "\"/favicon/"
-                                     "pushstate_with_favicon_pushed.html\");"));
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(),
+                              "window.history.pushState(\"\", \"\", "
+                              "\"/favicon/"
+                              "pushstate_with_favicon_pushed.html\");"));
 
   // Simulate that the user cancels the PR.
   ClickOnCancel();
@@ -1106,9 +1032,11 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, HistoryPushState_UserAborted) {
 IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, HistoryPushState_Completed) {
   // Installs two apps to ensure that the payment request UI is shown.
   std::string a_method;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js", &a_method);
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
+                    &a_method);
   std::string b_method;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js", &b_method);
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
+                    &b_method);
 
   NavigateTo("/payment_request_free_shipping_with_iframe_test.html");
   base::HistogramTester histogram_tester;
@@ -1123,10 +1051,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestIframeTest, HistoryPushState_Completed) {
       a_method, b_method));
 
   // PushState on the history.
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "window.history.pushState(\"\", \"\", "
-                                     "\"/favicon/"
-                                     "pushstate_with_favicon_pushed.html\");"));
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(),
+                              "window.history.pushState(\"\", \"\", "
+                              "\"/favicon/"
+                              "pushstate_with_favicon_pushed.html\");"));
 
   // Complete the Payment Request.
   ResetEventWaiterForSequence(

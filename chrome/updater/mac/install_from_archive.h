@@ -5,15 +5,14 @@
 #ifndef CHROME_UPDATER_MAC_INSTALL_FROM_ARCHIVE_H_
 #define CHROME_UPDATER_MAC_INSTALL_FROM_ARCHIVE_H_
 
+#include <optional>
 #include <string>
-
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class FilePath;
 class TimeDelta;
 class Version;
-}
+}  // namespace base
 
 namespace updater {
 
@@ -47,20 +46,23 @@ enum class InstallErrors {
 
   // An install executable was signaled or timed out.
   kExecutableWaitForExitFailed = -9,
+
+  // Pipes for stdout/stderr could not be created.
+  kExecutablePipeFailed = -10,
 };
 
 // Choose which type of archive to install from. Possible types of archives are
 // DMG, Zip and just the App. From there, it calls the archive specific
 // installation method.
-int InstallFromArchive(
-    const base::FilePath& file_path,
-    const base::FilePath& existence_checker_path,
-    const std::string& ap,
-    const UpdaterScope& scope,
-    const base::Version& pv,
-    const std::string& arguments,
-    const absl::optional<base::FilePath>& installer_data_file,
-    const base::TimeDelta& timeout);
+int InstallFromArchive(const base::FilePath& file_path,
+                       const base::FilePath& existence_checker_path,
+                       const std::string& ap,
+                       const UpdaterScope& scope,
+                       const base::Version& pv,
+                       const std::string& arguments,
+                       const std::optional<base::FilePath>& installer_data_file,
+                       bool usage_stats_enabled,
+                       const base::TimeDelta& timeout);
 
 }  // namespace updater
 

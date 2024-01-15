@@ -6,16 +6,15 @@
 
 #include <stdint.h>
 
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "base/version.h"
@@ -36,8 +35,9 @@ absl::optional<std::string> LoadKeyCommitmentsFromDisk(base::ScopedFD fd) {
   base::ScopedFILE file_stream(
       base::FileToFILE(base::File(std::move(fd)), "r"));
   std::string commitments;
-  if (!base::ReadStreamToString(file_stream.get(), &commitments))
+  if (!base::ReadStreamToString(file_stream.get(), &commitments)) {
     return absl::nullopt;
+  }
 
   return commitments;
 }
@@ -57,7 +57,7 @@ TrustTokenKeyCommitmentsComponentLoaderPolicy::
 void TrustTokenKeyCommitmentsComponentLoaderPolicy::ComponentLoaded(
     const base::Version& version,
     base::flat_map<std::string, base::ScopedFD>& fd_map,
-    std::unique_ptr<base::DictionaryValue> manifest) {
+    base::Value::Dict manifest) {
   auto keys_fd_iterator = fd_map.find(kTrustTokenKeyCommitmentsFileName);
   if (keys_fd_iterator == fd_map.end()) {
     VLOG(1) << "TrustTokenKeyCommitmentsComponentLoaderPolicy#ComponentLoaded "

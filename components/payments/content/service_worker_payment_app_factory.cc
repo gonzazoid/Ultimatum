@@ -7,9 +7,9 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/payments/content/developer_console_logger.h"
@@ -28,10 +28,9 @@ namespace payments {
 
 class ServiceWorkerPaymentAppCreator {
  public:
-  ServiceWorkerPaymentAppCreator(
-      ServiceWorkerPaymentAppFactory* owner,
+  explicit ServiceWorkerPaymentAppCreator(
       base::WeakPtr<PaymentAppFactory::Delegate> delegate)
-      : owner_(owner), delegate_(delegate), log_(delegate->GetWebContents()) {}
+      : delegate_(delegate), log_(delegate->GetWebContents()) {}
 
   ServiceWorkerPaymentAppCreator(const ServiceWorkerPaymentAppCreator&) =
       delete;
@@ -135,13 +134,14 @@ class ServiceWorkerPaymentAppCreator {
   }
 
  private:
-  void OnSWPaymentAppValidated(ServiceWorkerPaymentApp* app, bool result) {
-    if (!delegate_) {
+  void OnSWPaymentAppValidated(base::WeakPtr<ServiceWorkerPaymentApp> app,
+                               bool result) {
+    if (!app || !delegate_) {
       FinishAndCleanup();
       return;
     }
 
-    auto iterator = available_apps_.find(app);
+    auto iterator = available_apps_.find(app.get());
     if (iterator != available_apps_.end()) {
       if (result)
         delegate_->OnPaymentAppCreated(std::move(iterator->second));
@@ -155,10 +155,8 @@ class ServiceWorkerPaymentAppCreator {
   void FinishAndCleanup() {
     if (delegate_)
       delegate_->OnDoneCreatingPaymentApps();
-    owner_->DeleteCreator(this);
   }
 
-  raw_ptr<ServiceWorkerPaymentAppFactory> owner_;
   base::WeakPtr<PaymentAppFactory::Delegate> delegate_;
   std::map<PaymentApp*, std::unique_ptr<PaymentApp>> available_apps_;
   DeveloperConsoleLogger log_;
@@ -180,10 +178,7 @@ void ServiceWorkerPaymentAppFactory::Create(base::WeakPtr<Delegate> delegate) {
       !rfh->IsFeatureEnabled(blink::mojom::PermissionsPolicyFeature::kPayment))
     return;
 
-  auto creator = std::make_unique<ServiceWorkerPaymentAppCreator>(
-      /*owner=*/this, delegate);
-  ServiceWorkerPaymentAppCreator* creator_raw_pointer = creator.get();
-  creators_[creator_raw_pointer] = std::move(creator);
+  creator_ = std::make_unique<ServiceWorkerPaymentAppCreator>(delegate);
 
   ServiceWorkerPaymentAppFinder::GetOrCreateForCurrentDocument(rfh)
       ->GetAllPaymentApps(
@@ -191,17 +186,11 @@ void ServiceWorkerPaymentAppFactory::Create(base::WeakPtr<Delegate> delegate) {
           delegate->GetPaymentManifestWebDataService(),
           mojo::Clone(delegate->GetMethodData()), delegate->GetCSPChecker(),
           base::BindOnce(&ServiceWorkerPaymentAppCreator::CreatePaymentApps,
-                         creator_raw_pointer->GetWeakPtr()),
+                         creator_->GetWeakPtr()),
           base::BindOnce([]() {
             // Nothing needs to be done after writing cache. This callback is
             // used only in tests.
           }));
-}
-
-void ServiceWorkerPaymentAppFactory::DeleteCreator(
-    ServiceWorkerPaymentAppCreator* creator_raw_pointer) {
-  size_t number_of_deleted_creators = creators_.erase(creator_raw_pointer);
-  DCHECK_EQ(1U, number_of_deleted_creators);
 }
 
 }  // namespace payments

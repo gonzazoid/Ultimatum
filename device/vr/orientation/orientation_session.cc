@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "device/vr/orientation/orientation_device.h"
 
 namespace device {
@@ -50,13 +50,6 @@ void VROrientationSession::GetEnvironmentIntegrationProvider(
   // be made on this device.
   magic_window_receiver_.ReportBadMessage(
       "Environment integration is not supported.");
-}
-
-void VROrientationSession::SetInputSourceButtonListener(
-    mojo::PendingAssociatedRemote<device::mojom::XRInputSourceButtonListener>) {
-  // Input eventing is not supported. This call should not
-  // be made on this device.
-  magic_window_receiver_.ReportBadMessage("Input eventing is not supported.");
 }
 
 // XRSessionController

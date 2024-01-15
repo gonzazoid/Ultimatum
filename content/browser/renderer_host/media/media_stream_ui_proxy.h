@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
@@ -89,7 +89,7 @@ class CONTENT_EXPORT MediaStreamUIProxy {
       const DesktopMediaID& new_media_id);
 
   virtual void OnRegionCaptureRectChanged(
-      const absl::optional<gfx::Rect>& region_capture_rect);
+      const std::optional<gfx::Rect>& region_capture_rect);
 
 #if !BUILDFLAG(IS_ANDROID)
   // Determines whether the captured display surface represented by |media_id|
@@ -150,6 +150,7 @@ class CONTENT_EXPORT FakeMediaStreamUIProxy : public MediaStreamUIProxy {
   void SetAvailableDevices(const blink::MediaStreamDevices& devices);
   void SetMicAccess(bool access);
   void SetCameraAccess(bool access);
+  void SetAudioShare(bool audio_share);
 
   // MediaStreamUIProxy overrides.
   void RequestAccess(std::unique_ptr<MediaStreamRequest> request,
@@ -175,8 +176,9 @@ class CONTENT_EXPORT FakeMediaStreamUIProxy : public MediaStreamUIProxy {
   blink::MediaStreamDevices devices_;
 
   // These are used for CheckAccess().
-  bool mic_access_;
-  bool camera_access_;
+  bool mic_access_ = true;
+  bool camera_access_ = true;
+  bool audio_share_ = true;
 };
 
 }  // namespace content

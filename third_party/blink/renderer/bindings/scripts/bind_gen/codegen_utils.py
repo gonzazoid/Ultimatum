@@ -92,6 +92,15 @@ def collect_forward_decls_and_include_headers(idl_types):
                 "third_party/blink/renderer/bindings/core/v8/script_value.h")
         elif idl_type.is_boolean or idl_type.is_numeric:
             pass
+        elif idl_type.is_bigint:
+            header_include_headers.add(
+                "third_party/blink/renderer/platform/bindings/bigint.h")
+        elif idl_type.is_data_view:
+            header_include_headers.update([
+                "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h",
+                "third_party/blink/renderer/core/typed_arrays/dom_data_view.h",
+                "third_party/blink/renderer/platform/heap/member.h",
+            ])
         elif idl_type.is_buffer_source_type:
             header_include_headers.update([
                 "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h",
@@ -114,7 +123,7 @@ def collect_forward_decls_and_include_headers(idl_types):
                 "third_party/blink/renderer/platform/wtf/text/wtf_string.h")
         elif idl_type.is_typedef:
             pass
-        elif idl_type.is_void:
+        elif idl_type.is_undefined:
             pass
         elif idl_type.type_definition_object:
             type_def_obj = idl_type.type_definition_object

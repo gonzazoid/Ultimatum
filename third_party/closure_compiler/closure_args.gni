@@ -18,7 +18,6 @@ strict_error_checking_closure_args = [
   "jscomp_error=missingReturn",
   "jscomp_error=nonStandardJsDocs",
   "jscomp_error=suspiciousCode",
-  "jscomp_error=undefinedNames",
   "jscomp_error=undefinedVars",
   "jscomp_error=unknownDefines",
   "jscomp_error=uselessCode",
@@ -34,16 +33,11 @@ default_closure_args = strict_error_checking_closure_args + [
                          "extra_annotation_name=demo",
                          "extra_annotation_name=element",
 
-                         "language_in=ECMASCRIPT_2017",
+                         "language_in=ECMASCRIPT_2020",
                          "language_out=ECMASCRIPT5_STRICT",
 
                          "jscomp_off=duplicate",
                        ]
-
-legacy_modules_args = [
-  "chrome_pass",
-  "polymer_version=1",
-]
 
 js_modules_args = [
   "js_module_root=" + rebase_path("//ui/webui/resources/", root_build_dir),
@@ -63,6 +57,9 @@ if (is_chromeos_ash) {
     "js_module_root=gen/ash/webui/common/resources/",
     "browser_resolver_prefix_replacements=\"chrome://resources/ash/common/=./\"",
     "browser_resolver_prefix_replacements=\"//resources/ash/common/=./\"",
+    "js_module_root=" +
+        rebase_path("//chrome/test/data/webui/", root_build_dir),
+    "browser_resolver_prefix_replacements=\"chrome://webui-test/=./\"",
   ]
 }
 
@@ -84,6 +81,7 @@ mojom_js_args = [
   # as gen/<path-to-module> for compilation, so we can rewrite them as absolute
   # paths.
   "browser_resolver_prefix_replacements=\"chrome://resources/mojo/=/\"",
+  "browser_resolver_prefix_replacements=\"//resources/mojo/=/\"",
 ]
 
 polymer3_args = [

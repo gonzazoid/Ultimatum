@@ -57,12 +57,8 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
   }
 
  private:
-  friend class FlatlandSurfaceTest;
-
-  struct PresentationState {
-    base::TimeTicks presentation_time;
-    base::TimeDelta interval;
-  };
+  template <typename T>
+  friend class FlatlandSurfaceTestBase;
 
   struct PresentedFrame {
     PresentedFrame(fuchsia::ui::composition::ContentId image_id,
@@ -101,18 +97,22 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
   struct FlatlandIds {
     fuchsia::ui::composition::ContentId image_id;
     fuchsia::ui::composition::TransformId transform_id;
+    gfx::Size image_size;
   };
 
   void OnGetLayout(fuchsia::ui::composition::LayoutInfo info);
 
   void RemovePixmapResources(FlatlandPixmapId pixmap_id);
 
-  void OnPresentComplete(zx_time_t actual_presentation_time);
+  void OnPresentComplete(base::TimeTicks actual_presentation_time,
+                         base::TimeDelta presentation_interval);
 
   FlatlandIds CreateOrGetFlatlandIds(gfx::NativePixmap* pixmap,
                                      bool is_primary_plane);
 
   void ClearScene();
+
+  void OnFlatlandError(fuchsia::ui::composition::FlatlandError error);
 
   fuchsia::ui::composition::AllocatorPtr flatland_allocator_;
   FlatlandConnection flatland_;
@@ -141,11 +141,12 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
   fuchsia::ui::composition::ParentViewportWatcherPtr parent_viewport_watcher_;
   fuchsia::ui::composition::ChildViewWatcherPtr main_plane_view_watcher_;
   absl::optional<gfx::Size> logical_size_;
+  absl::optional<float> device_pixel_ratio_;
 
   // FlatlandSurface might receive a Present() call before OnGetLayout(),
   // because the present loop is tied to the parent Flatland instance in
-  // FlatlandWindow. There is no |logical_size_| in that case, so we should hold
-  // onto the Present until receiving |logical_size_|.
+  // FlatlandWindow. There is no |logical_size_| or |device_pixel_ratio_| in
+  // that case, so we should hold onto the Present until receiving them.
   std::vector<base::OnceClosure> pending_present_closures_;
 
   FlatlandSurfaceFactory* const flatland_surface_factory_;

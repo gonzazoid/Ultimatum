@@ -194,6 +194,21 @@ bool SyscallSets::IsFileSystem(int sysno) {
   }
 }
 
+bool SyscallSets::IsTruncate(int sysno) {
+  switch (sysno) {
+    case __NR_ftruncate:
+    case __NR_truncate:
+#if defined(__i386__) || defined(__arm__) || \
+    (defined(ARCH_CPU_MIPS_FAMILY) && defined(ARCH_CPU_32_BITS))
+    case __NR_ftruncate64:
+    case __NR_truncate64:
+#endif
+      return true;
+    default:
+      return false;
+  }
+}
+
 bool SyscallSets::IsAllowedFileSystemAccessViaFd(int sysno) {
   switch (sysno) {
     case __NR_fstat:
@@ -476,22 +491,6 @@ bool SyscallSets::IsAllowedEpoll(int sysno) {
 #endif
 #if defined(__x86_64__)
     case __NR_epoll_wait_old:
-#endif
-      return false;
-  }
-}
-
-bool SyscallSets::IsAllowedGetOrModifySocket(int sysno) {
-  switch (sysno) {
-#if !defined(__aarch64__)
-    case __NR_pipe:
-#endif
-    case __NR_pipe2:
-      return true;
-    default:
-#if defined(__x86_64__) || defined(__arm__) || defined(__mips__) || \
-    defined(__aarch64__)
-    case __NR_socketpair:  // We will want to inspect its argument.
 #endif
       return false;
   }
@@ -1097,9 +1096,6 @@ bool SyscallSets::IsExtendedAttributes(int sysno) {
 // TODO(jln): classify this better.
 bool SyscallSets::IsMisc(int sysno) {
   switch (sysno) {
-#if !defined(__mips__)
-    case __NR_getrandom:
-#endif
     case __NR_name_to_handle_at:
     case __NR_open_by_handle_at:
     case __NR_perf_event_open:

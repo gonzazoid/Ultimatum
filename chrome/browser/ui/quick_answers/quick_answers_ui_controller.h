@@ -10,15 +10,18 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/quick_answers/ui/quick_answers_view.h"
+#include "chrome/browser/ui/quick_answers/ui/rich_answers_view.h"
 #include "chrome/browser/ui/quick_answers/ui/user_consent_view.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/views/view_tracker.h"
+#include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
 
+class Profile;
 class QuickAnswersView;
 class QuickAnswersControllerImpl;
 
 namespace quick_answers {
+class RichAnswersView;
 class UserConsentView;
 struct QuickAnswer;
 }  // namespace quick_answers
@@ -33,8 +36,9 @@ class QuickAnswersUiController {
   QuickAnswersUiController(const QuickAnswersUiController&) = delete;
   QuickAnswersUiController& operator=(const QuickAnswersUiController&) = delete;
 
-  // Constructs/resets |quick_answers_view_|.
-  void CreateQuickAnswersView(const gfx::Rect& anchor_bounds,
+  // Constructs/resets the Quick Answers card view.
+  void CreateQuickAnswersView(Profile* profile,
+                              const gfx::Rect& anchor_bounds,
                               const std::string& title,
                               const std::string& query,
                               bool is_internal);
@@ -42,7 +46,12 @@ class QuickAnswersUiController {
   // Returns true if there was a QuickAnswersView to close.
   bool CloseQuickAnswersView();
 
+  // Returns true if there was a RichAnswersView to close.
+  bool CloseRichAnswersView();
+
   void OnQuickAnswersViewPressed();
+
+  void OnGoogleSearchLabelPressed();
 
   void OnRetryLabelPressed();
 
@@ -51,7 +60,7 @@ class QuickAnswersUiController {
       const gfx::Rect& bounds,
       const quick_answers::QuickAnswer& quick_answer);
 
-  void SetActiveQuery(const std::string& query);
+  void SetActiveQuery(Profile* profile, const std::string& query);
 
   // Show retry option in the quick answers view.
   void ShowRetry();
@@ -88,21 +97,35 @@ class QuickAnswersUiController {
   // showing.
   bool IsShowingQuickAnswersView() const;
 
-  QuickAnswersView* quick_answers_view() {
-    return static_cast<QuickAnswersView*>(quick_answers_view_tracker_.view());
+  // Used by the controller to check if the RichAnswers view is currently
+  // showing.
+  bool IsShowingRichAnswersView() const;
+
+  quick_answers::QuickAnswersView* quick_answers_view() {
+    return static_cast<quick_answers::QuickAnswersView*>(
+        quick_answers_widget_->GetContentsView());
   }
   quick_answers::UserConsentView* user_consent_view() {
     return static_cast<quick_answers::UserConsentView*>(
-        user_consent_view_tracker_.view());
+        user_consent_widget_->GetContentsView());
+  }
+  quick_answers::RichAnswersView* rich_answers_view() {
+    return static_cast<quick_answers::RichAnswersView*>(
+        rich_answers_widget_->GetContentsView());
   }
 
  private:
+  // Constructs/resets the Quick Answers rich card view.
+  void CreateRichAnswersView();
+
   raw_ptr<QuickAnswersControllerImpl> controller_ = nullptr;
 
-  // Trackers for quick answers and user consent view.
-  views::ViewTracker quick_answers_view_tracker_;
-  views::ViewTracker user_consent_view_tracker_;
+  // Widget pointers for quick answers related views.
+  views::UniqueWidgetPtr quick_answers_widget_;
+  views::UniqueWidgetPtr user_consent_widget_;
+  views::UniqueWidgetPtr rich_answers_widget_;
 
+  raw_ptr<Profile> profile_ = nullptr;
   std::string query_;
 
   base::WeakPtrFactory<QuickAnswersUiController> weak_factory_{this};

@@ -10,9 +10,8 @@
 namespace ash {
 
 base::Value SystemWebAppData::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetIntKey("system_app_type", static_cast<int>(system_app_type));
-  return root;
+  return base::Value(base::Value::Dict().Set(
+      "system_app_type", static_cast<int>(system_app_type)));
 }
 
 bool operator==(const SystemWebAppData& chromeos_data1,

@@ -5,6 +5,7 @@
 #include "components/ui_devtools/views/overlay_agent_views.h"
 
 #include <memory>
+#include <utility>
 
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -56,8 +57,10 @@ void DrawRulers(const gfx::Rect& screen_bounds,
                       SK_ColorMAGENTA);
 
   int short_stroke = 5;
+  int mid_stroke = 7;
   int long_stroke = 10;
-  int gap_between_strokes = 4;
+  int gap_between_strokes = 5;
+  int gap_between_mid_stroke = 25;
   int gap_between_long_stroke = 100;
 
   // Draw top horizontal ruler.
@@ -71,6 +74,9 @@ void DrawRulers(const gfx::Rect& screen_bounds,
       DrawRulerText(utf16_text, gfx::Point(x + 2, long_stroke), canvas,
                     render_text_);
 
+    } else if (x % gap_between_mid_stroke == 0) {
+      canvas->Draw1pxLine(gfx::PointF(x, 0.0f), gfx::PointF(x, mid_stroke),
+                          SK_ColorMAGENTA);
     } else {
       canvas->Draw1pxLine(gfx::PointF(x, 0.0f), gfx::PointF(x, short_stroke),
                           SK_ColorMAGENTA);
@@ -115,7 +121,7 @@ void DrawSizeOfRectangle(const gfx::Rect& hovered_rect,
     // If both width() and height() are empty, canvas won't draw size.
     return;
   }
-  render_text_->SetText(utf16_text);
+  render_text_->SetText(std::move(utf16_text));
   render_text_->SetColor(SK_ColorRED);
 
   const gfx::Size& text_size = render_text_->GetStringSize();
@@ -399,7 +405,7 @@ protocol::Response OverlayAgentViews::setInspectMode(
 protocol::Response OverlayAgentViews::highlightNode(
     std::unique_ptr<protocol::Overlay::HighlightConfig> highlight_config,
     protocol::Maybe<int> node_id) {
-  return HighlightNode(node_id.fromJust());
+  return HighlightNode(node_id.value());
 }
 
 protocol::Response OverlayAgentViews::hideHighlight() {

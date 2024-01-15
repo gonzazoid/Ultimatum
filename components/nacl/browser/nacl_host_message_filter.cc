@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/system/sys_info.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -180,9 +180,6 @@ void NaClHostMessageFilter::LaunchNaClContinuation(
   nacl::NaClLaunchParams safe_launch_params(launch_params);
   safe_launch_params.resource_prefetch_request_list.clear();
 
-  // TODO(yusukes): Fix NaClProcessHost::~NaClProcessHost() and remove the
-  // ifdef.
-#if !BUILDFLAG(IS_WIN)
   const std::vector<NaClResourcePrefetchRequest>& original_request_list =
       launch_params.resource_prefetch_request_list;
   content::SiteInstance* site_instance = rfh->GetSiteInstance();
@@ -195,7 +192,6 @@ void NaClHostMessageFilter::LaunchNaClContinuation(
     safe_launch_params.resource_prefetch_request_list.push_back(
         original_request);
   }
-#endif
 
   // Process a list of resource file URLs in
   // |launch_params.resource_files_to_prefetch|.

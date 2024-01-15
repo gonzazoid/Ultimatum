@@ -16,8 +16,8 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/perf_time_logger.h"
@@ -158,12 +158,10 @@ void RunSomeTests(
     const int real_length = static_cast<int>(test_string.length());
     const int times = (1 << 24) / real_length;
     for (size_t test_index = 0; test_index < test_count; ++test_index) {
-      EXPECT_TRUE(RunTest(StringPrintf(format,
-                                       test_functions[test_index].function_name,
-                                       real_length,
-                                       times),
-                          test_functions[test_index].function,
-                          test_string,
+      EXPECT_TRUE(RunTest(StringPrintfNonConstexpr(
+                              format, test_functions[test_index].function_name,
+                              real_length, times),
+                          test_functions[test_index].function, test_string,
                           times));
     }
   }

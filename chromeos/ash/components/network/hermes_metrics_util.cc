@@ -6,12 +6,28 @@
 
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/time/tick_clock.h"
 
 namespace ash::hermes_metrics {
 
-void LogInstallViaQrCodeResult(HermesResponseStatus status) {
+void LogInstallViaQrCodeResult(HermesResponseStatus status,
+                               dbus::DBusResult dbusResult,
+                               bool is_initial_install) {
   base::UmaHistogramEnumeration("Network.Cellular.ESim.InstallViaQrCode.Result",
                                 status);
+  if (is_initial_install) {
+    base::UmaHistogramEnumeration(
+        "Network.Cellular.ESim.InstallViaQrCode.Result.InitialAttempt", status);
+  } else {
+    base::UmaHistogramEnumeration(
+        "Network.Cellular.ESim.InstallViaQrCode.Result.Retry", status);
+  }
+
+  if (status == HermesResponseStatus::kErrorUnknownResponse) {
+    base::UmaHistogramEnumeration(
+        "Network.Cellular.ESim.InstallViaQrCode.DBusResult", dbusResult);
+  }
 
   if (status == HermesResponseStatus::kSuccess ||
       !base::Contains(kHermesUserErrorCodes, status)) {
@@ -40,9 +56,9 @@ void LogUninstallProfileResult(HermesResponseStatus status) {
                                 status);
 }
 
-void LogRequestPendingProfilesResult(HermesResponseStatus status) {
-  base::UmaHistogramEnumeration(
-      "Network.Cellular.ESim.RequestPendingProfiles.Result", status);
+void LogRequestPendingProfilesLatency(base::TimeDelta call_latency) {
+  UMA_HISTOGRAM_LONG_TIMES(
+      "Network.Cellular.ESim.RequestPendingProfiles.Latency", call_latency);
 }
 
 }  // namespace ash::hermes_metrics

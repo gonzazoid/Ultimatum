@@ -9,17 +9,13 @@ There are two ways to use Headless Chromium:
 
 ## Usage via the DevTools remote debugging protocol
 
-1. Start a normal Chrome binary with the `--headless` command line flag
-(Linux-only for now):
+1. Start a normal Chrome binary with the `--headless` command line flag:
 
+```sh
+$ chrome --headless --remote-debugging-port=9222 https://chromium.org/
 ```
-$ chrome --headless --remote-debugging-port=9222 https://chromium.org
-```
 
-Currently you'll also need to use `--disable-gpu` to avoid an error from a
-missing Mesa library.
-
-2. Navigate to `http://localhost:9222` in another browser to open the
+2. Navigate to `http://localhost:9222/` in another browser to open the
 [DevTools](https://developer.chrome.com/devtools) interface or use a tool such
 as [Selenium](http://www.seleniumhq.org/) to drive the headless browser.
 
@@ -28,7 +24,7 @@ as [Selenium](http://www.seleniumhq.org/) to drive the headless browser.
 For example, the [chrome-remote-interface](https://github.com/cyrus-and/chrome-remote-interface)
 Node.js package can be used to extract a page's DOM like this:
 
-```
+```js
 const CDP = require('chrome-remote-interface');
 
 CDP((client) => {
@@ -66,7 +62,7 @@ is a small sample application which demonstrates the use of the headless C++
 API. It loads a web page and outputs the resulting DOM. To run it, first
 initialize a headless build configuration:
 
-```
+```sh
 $ mkdir -p out/Debug
 $ echo 'import("//build/args/headless.gn")' > out/Debug/args.gn
 $ gn gen out/Debug
@@ -74,14 +70,14 @@ $ gn gen out/Debug
 
 Then build the example:
 
-```
+```sh
 $ ninja -C out/Debug headless_example
 ```
 
 After the build completes, the example can be run with the following command:
 
-```
-$ out/Debug/headless_example https://www.google.com
+```sh
+$ out/Debug/headless_example https://www.google.com/
 ```
 
 [Headless Shell](https://cs.chromium.org/chromium/src/headless/app/headless_shell.cc)
@@ -90,12 +86,16 @@ debugging with the [DevTools](https://developer.chrome.com/devtools) protocol.
 To do this, start the application with an argument specifying the debugging
 port:
 
-```
+```sh
 $ ninja -C out/Debug headless_shell
-$ out/Debug/headless_shell --remote-debugging-port=9222 https://youtube.com
+$ out/Debug/headless_shell --remote-debugging-port=9222 https://youtube.com/
 ```
 
-Then navigate to `http://localhost:9222` with your browser.
+Then navigate to `http://localhost:9222/` with your browser.
+
+As of M118, precompiled `headless_shell` binaries are available for download
+under the name `chrome-headless-shell` via [Chrome for Testing
+infrastructure](https://googlechromelabs.github.io/chrome-for-testing/).
 
 ## Embedder API
 
@@ -138,11 +138,10 @@ Bug tracker: [Internals>Headless](https://bugs.chromium.org/p/chromium/issues/li
 * [Runtime headless mode for Chrome](https://docs.google.com/document/d/1aIJUzQr3eougZQp90bp4mqGr5gY6hdUice8UPa-Ys90/edit#)
 * [Virtual Time in
   Blink](https://docs.google.com/document/d/1y9KDT_ZEzT7pBeY6uzVt1dgKlwc1OB_vY4NZO1zBQmo/edit?usp=sharing)
-* [Headless Chrome architecture](https://docs.google.com/document/d/11zIkKkLBocofGgoTeeyibB2TZ_k7nR78v7kNelCatUE/edit)
+* [Headless Chrome architecture (Design Doc)](https://docs.google.com/document/d/11zIkKkLBocofGgoTeeyibB2TZ_k7nR78v7kNelCatUE)
 * [Headless Chrome C++ DevTools API](https://docs.google.com/document/d/1rlqcp8nk-ZQvldNJWdbaMbwfDbJoOXvahPCDoPGOwhQ/edit#heading=h.ng2bxb15li9a)
 * [Session isolation in Headless Chrome](https://docs.google.com/document/d/1XAKvrxtSEoe65vNghSWC5S3kJ--z2Zpt2UWW1Fi8GiM/edit)
 * [Headless Chrome mojo service](https://docs.google.com/document/d/1Fr6_DJH6OK9rG3-ibMvRPTNnHsAXPk0VzxxiuJDSK3M/edit#heading=h.qh0udvlk963d)
 * [Controlling BeginFrame through DevTools](https://docs.google.com/document/d/1LVMYDkfjrrX9PNkrD8pJH5-Np_XUTQHIuJ8IEOirQH4/edit?ts=57d96dbd#heading=h.ndv831lc9uf0)
 * [Viewport bounds and scale for screenshots](https://docs.google.com/document/d/1VTcYz4q_x0f1O5IVrvRX4u1DVd_K34IVUl1VULLTCWw/edit#heading=h.ndv831lc9uf0)
 * [BlinkOn 6 presentation slides](https://docs.google.com/presentation/d/1gqK9F4lGAY3TZudAtdcxzMQNEE7PcuQrGu83No3l0lw/edit#slide=id.p)
-* [Architecture design doc](https://docs.google.com/document/d/11zIkKkLBocofGgoTeeyibB2TZ_k7nR78v7kNelCatUE)

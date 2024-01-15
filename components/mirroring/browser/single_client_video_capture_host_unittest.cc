@@ -4,12 +4,13 @@
 
 #include "components/mirroring/browser/single_client_video_capture_host.h"
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/token.h"
 #include "media/capture/mojom/video_capture_types.mojom.h"
@@ -48,10 +49,13 @@ class MockVideoCaptureDevice final
                                       base::OnceClosure done_cb) override {}
   MOCK_METHOD0(MaybeSuspendDevice, void());
   MOCK_METHOD0(ResumeDevice, void());
-  MOCK_METHOD3(Crop,
-               void(const base::Token&,
-                    uint32_t,
-                    base::OnceCallback<void(media::mojom::CropRequestResult)>));
+  MOCK_METHOD4(
+      ApplySubCaptureTarget,
+      void(
+          media::mojom::SubCaptureTargetType,
+          const base::Token&,
+          uint32_t,
+          base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>));
   MOCK_METHOD0(RequestRefreshFrame, void());
   MOCK_METHOD1(OnUtilizationReport, void(media::VideoCaptureFeedback));
 };
@@ -68,23 +72,26 @@ class FakeDeviceLauncher final : public content::VideoCaptureDeviceLauncher {
   FakeDeviceLauncher(const FakeDeviceLauncher&) = delete;
   FakeDeviceLauncher& operator=(const FakeDeviceLauncher&) = delete;
 
-  ~FakeDeviceLauncher() override {}
+  ~FakeDeviceLauncher() override = default;
 
   // content::VideoCaptureDeviceLauncher implementation.
-  void LaunchDeviceAsync(const std::string& device_id,
-                         blink::mojom::MediaStreamType stream_type,
-                         const VideoCaptureParams& params,
-                         base::WeakPtr<VideoFrameReceiver> receiver,
-                         base::OnceClosure connection_lost_cb,
-                         Callbacks* callbacks,
-                         base::OnceClosure done_cb) override {
+  void LaunchDeviceAsync(
+      const std::string& device_id,
+      blink::mojom::MediaStreamType stream_type,
+      const VideoCaptureParams& params,
+      base::WeakPtr<VideoFrameReceiver> receiver,
+      base::OnceClosure connection_lost_cb,
+      Callbacks* callbacks,
+      base::OnceClosure done_cb,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager) override {
     if (!params.IsValid()) {
       callbacks->OnDeviceLaunchFailed(
           media::VideoCaptureError::
               kVideoCaptureControllerInvalidOrUnsupportedVideoCaptureParametersRequested);
       return;
     }
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FakeDeviceLauncher::OnDeviceLaunched,
                                   weak_factory_.GetWeakPtr(), receiver,
                                   callbacks, std::move(done_cb)));
@@ -137,9 +144,7 @@ class MockVideoCaptureObserver final
     OnBufferCreatedCall(buffer_id);
   }
   MOCK_METHOD1(OnBufferReadyCall, void(int buffer_id));
-  void OnBufferReady(
-      media::mojom::ReadyBufferPtr buffer,
-      std::vector<media::mojom::ReadyBufferPtr> scaled_buffers) override {
+  void OnBufferReady(media::mojom::ReadyBufferPtr buffer) override {
     EXPECT_TRUE(buffers_.find(buffer->buffer_id) != buffers_.end());
     EXPECT_EQ(frame_infos_.find(buffer->buffer_id), frame_infos_.end());
     frame_infos_[buffer->buffer_id] = std::move(buffer->info);
@@ -156,8 +161,10 @@ class MockVideoCaptureObserver final
     buffers_.erase(iter);
     OnBufferDestroyedCall(buffer_id);
   }
+  MOCK_METHOD1(OnFrameDropped, void(media::VideoCaptureFrameDropReason reason));
 
-  MOCK_METHOD1(OnNewCropVersion, void(uint32_t crop_version));
+  MOCK_METHOD1(OnNewSubCaptureTargetVersion,
+               void(uint32_t sub_capture_target_version));
 
   MOCK_METHOD1(OnStateChangedCall, void(media::mojom::VideoCaptureState state));
   MOCK_METHOD1(OnVideoCaptureErrorCall, void(media::VideoCaptureError error));
@@ -248,6 +255,8 @@ class SingleClientVideoCaptureHostTest : public ::testing::Test {
                 OnStateChangedCall(media::mojom::VideoCaptureState::ENDED))
         .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
     consumer_->Stop();
+
+    launched_device_ = nullptr;
     run_loop.Run();
   }
 
@@ -269,11 +278,9 @@ class SingleClientVideoCaptureHostTest : public ::testing::Test {
     base::RunLoop run_loop;
     EXPECT_CALL(*consumer_, OnBufferReadyCall(buffer_context_id))
         .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
-    frame_receiver_->OnFrameReadyInBuffer(
-        media::ReadyFrameInBuffer(buffer_id, feedback_id,
-                                  std::make_unique<StubReadWritePermission>(),
-                                  GetVideoFrameInfo()),
-        {});
+    frame_receiver_->OnFrameReadyInBuffer(media::ReadyFrameInBuffer(
+        buffer_id, feedback_id, std::make_unique<StubReadWritePermission>(),
+        GetVideoFrameInfo()));
     run_loop.Run();
   }
 

@@ -24,7 +24,7 @@ class CORE_EXPORT PerformanceEventTiming final : public PerformanceEntry {
                                         DOMHighResTimeStamp processing_end,
                                         bool cancelable,
                                         Node* target,
-                                        uint32_t navigation_id);
+                                        DOMWindow* source);
 
   static PerformanceEventTiming* CreateFirstInputTiming(
       PerformanceEventTiming* entry);
@@ -36,10 +36,10 @@ class CORE_EXPORT PerformanceEventTiming final : public PerformanceEntry {
                          DOMHighResTimeStamp processing_end,
                          bool cancelable,
                          Node* target,
-                         uint32_t navigation_id);
+                         DOMWindow* source);
   ~PerformanceEventTiming() override;
 
-  AtomicString entryType() const override { return entry_type_; }
+  const AtomicString& entryType() const override { return entry_type_; }
   PerformanceEntryType EntryTypeEnum() const override;
 
   bool cancelable() const { return cancelable_; }
@@ -51,7 +51,10 @@ class CORE_EXPORT PerformanceEventTiming final : public PerformanceEntry {
 
   uint32_t interactionId() const;
 
-  void SetInteractionId(uint32_t interaction_id);
+  uint32_t interactionOffset() const;
+
+  void SetInteractionIdAndOffset(uint32_t interaction_id,
+                                 uint32_t interaction_offset);
 
   base::TimeTicks unsafePresentationTimestamp() const;
 
@@ -72,6 +75,7 @@ class CORE_EXPORT PerformanceEventTiming final : public PerformanceEntry {
   bool cancelable_;
   WeakMember<Node> target_;
   uint32_t interaction_id_ = 0;
+  uint32_t interaction_offset_ = 0;
 
   // This is the exact (non-rounded) monotonic timestamp for presentation, which
   // is currently only used by eventTiming trace events to report accurate

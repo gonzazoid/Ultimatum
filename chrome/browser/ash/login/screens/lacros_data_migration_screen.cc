@@ -10,8 +10,8 @@
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/crosapi/browser_data_migrator.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
@@ -19,6 +19,7 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/ui/webui/ash/login/lacros_data_migration_screen_handler.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
@@ -55,7 +56,7 @@ void LacrosDataMigrationScreen::OnViewVisible() {
 
   // Post a delayed task to show the skip button after
   // `kShowSkipButtonDuration`.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&LacrosDataMigrationScreen::ShowSkipButton,
                      weak_factory_.GetWeakPtr()),
@@ -96,11 +97,11 @@ void LacrosDataMigrationScreen::ShowImpl() {
     const base::FilePath profile_data_dir =
         user_data_dir.Append(ProfileHelper::GetUserProfileDir(user_id_hash));
 
-    base::RepeatingCallback<void(int)> progress_callback = base::BindPostTask(
-        base::SequencedTaskRunnerHandle::Get(),
-        base::BindRepeating(&LacrosDataMigrationScreen::OnProgressUpdate,
-                            weak_factory_.GetWeakPtr()),
-        FROM_HERE);
+    base::RepeatingCallback<void(int)> progress_callback =
+        base::BindPostTaskToCurrentDefault(
+            base::BindRepeating(&LacrosDataMigrationScreen::OnProgressUpdate,
+                                weak_factory_.GetWeakPtr()),
+            FROM_HERE);
 
     migrator_ = std::make_unique<BrowserDataMigratorImpl>(
         profile_data_dir, user_id_hash, progress_callback,
@@ -120,12 +121,7 @@ void LacrosDataMigrationScreen::ShowImpl() {
     return;
   }
 
-  crosapi::browser_util::MigrationMode mode;
-  if (mode_str == browser_data_migrator_util::kCopySwitchValue) {
-    mode = crosapi::browser_util::MigrationMode::kCopy;
-  } else if (mode_str == browser_data_migrator_util::kMoveSwitchValue) {
-    mode = crosapi::browser_util::MigrationMode::kMove;
-  } else {
+  if (mode_str != browser_data_migrator_util::kMoveSwitchValue) {
     NOTREACHED() << "Unsupported mode";
 
     LOG(ERROR) << "Unsupported mode " << switches::kBrowserDataMigrationMode
@@ -135,8 +131,7 @@ void LacrosDataMigrationScreen::ShowImpl() {
     return;
   }
 
-  migrator_->Migrate(mode,
-                     base::BindOnce(&LacrosDataMigrationScreen::OnMigrated,
+  migrator_->Migrate(base::BindOnce(&LacrosDataMigrationScreen::OnMigrated,
                                     weak_factory_.GetWeakPtr()));
 
   if (LoginDisplayHost::default_host() &&
@@ -207,7 +202,6 @@ void LacrosDataMigrationScreen::OnDestroyingOobeUI() {
 
 void LacrosDataMigrationScreen::OnMigrated(BrowserDataMigrator::Result result) {
   switch (result.kind) {
-    case BrowserDataMigrator::ResultKind::kSkipped:
     case BrowserDataMigrator::ResultKind::kSucceeded:
     case BrowserDataMigrator::ResultKind::kCancelled:
       attempt_restart_.Run();
@@ -238,7 +232,7 @@ void LacrosDataMigrationScreen::PowerChanged(
 }
 
 void LacrosDataMigrationScreen::UpdateLowBatteryStatus() {
-  const absl::optional<power_manager::PowerSupplyProperties>& proto =
+  const std::optional<power_manager::PowerSupplyProperties>& proto =
       chromeos::PowerManagerClient::Get()->GetLastStatus();
   if (!proto.has_value())
     return;

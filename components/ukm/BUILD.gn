@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/chromeos/ui_mode.gni")
 import("//testing/test.gni")
 
 component("ukm_recorder") {
@@ -45,6 +46,8 @@ static_library("ukm") {
     "app_source_url_recorder.h",
     "field_trials_provider_helper.cc",
     "field_trials_provider_helper.h",
+    "singular_ukm_entry.cc",
+    "singular_ukm_entry.h",
     "ukm_pref_names.cc",
     "ukm_pref_names.h",
     "ukm_reporting_service.cc",
@@ -59,6 +62,7 @@ static_library("ukm") {
 
   public_deps = [
     ":ukm_recorder",
+    "//components/ukm/debug:resources",
     "//services/metrics/public/cpp:metrics_cpp",
     "//services/metrics/public/cpp:ukm_builders",
     "//services/metrics/public/mojom",
@@ -91,10 +95,18 @@ static_library("observers") {
   deps = [
     "//base",
     "//components/history/core/browser",
+    "//components/metrics",
     "//components/sync/base",
-    "//components/sync/driver",
+    "//components/sync/service",
     "//google_apis",
+    "//services/metrics/public/cpp:metrics_cpp",
   ]
+  if (is_chromeos) {
+    deps += [
+      "//chromeos/components/kiosk",
+      "//chromeos/components/mgs",
+    ]
+  }
 
   public_deps = [ "//components/unified_consent" ]
 }
@@ -123,6 +135,7 @@ source_set("unit_tests") {
   sources = [
     "app_source_url_recorder_test.cc",
     "observers/ukm_consent_state_observer_unittest.cc",
+    "singular_ukm_entry_unittest.cc",
     "ukm_recorder_impl_unittest.cc",
     "ukm_service_unittest.cc",
   ]
@@ -140,11 +153,21 @@ source_set("unit_tests") {
     "//components/sync_preferences:test_support",
     "//components/variations",
     "//net:test_support",
+    "//services/metrics",
     "//services/metrics/public/cpp:ukm_builders",
     "//testing/gtest",
     "//third_party/zlib/google:compression_utils",
     "//url",
   ]
+  if (is_chromeos) {
+    deps += [
+      "//chromeos/components/kiosk:test_support",
+      "//chromeos/components/mgs:test_support",
+    ]
+  }
+  if (is_chromeos_ash) {
+    deps += [ "//components/user_manager:test_support" ]
+  }
 }
 
 # Convenience testing target

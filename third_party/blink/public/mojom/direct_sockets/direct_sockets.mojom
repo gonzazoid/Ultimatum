@@ -8,42 +8,83 @@ module blink.mojom;
 // https://github.com/WICG/direct-sockets/blob/main/docs/explainer.md
 
 import "mojo/public/mojom/base/read_only_buffer.mojom";
+import "services/network/public/mojom/host_resolver.mojom";
 import "services/network/public/mojom/ip_endpoint.mojom";
 import "services/network/public/mojom/mutable_network_traffic_annotation_tag.mojom";
+import "services/network/public/mojom/network_param.mojom";
+import "services/network/public/mojom/restricted_udp_socket.mojom";
 import "services/network/public/mojom/tcp_socket.mojom";
 import "services/network/public/mojom/udp_socket.mojom";
 
-// This enum is used to track how often each permission check cause
-// Permission Denied failures. Used for histograms, don't renumber.
-enum DirectSocketFailureType {
-  kPermissionsPolicy = 0,
-  kTransientActivation = 1,
-  kUserDialog = 2,
-  kResolvingToNonPublic = 3,
-  kRateLimiting = 4,
-  kCORS = 5,
-  kEnterprisePolicy = 6
-};
+struct DirectTCPSocketOptions {
+  network.mojom.HostPortPair remote_addr;
+  network.mojom.IPEndPoint? local_addr;
 
-enum DirectSocketProtocolType {
-  kTcp = 0,
-  kUdp = 1,
-};
+  // Sets the OS send buffer size (in bytes) for the socket. This is the
+  // SO_SNDBUF socket option. If not specified, OS's default value will be used.
+  // The value will be clamped to a reasonable range.
+  int32? send_buffer_size;
 
-struct DirectSocketOptions {
-  string? local_hostname;
-  uint16 local_port = 0;
+  // Sets the OS receive buffer size (in bytes) for the socket. This is the
+  // SO_RCVBUF socket option. If not specified, OS's default value will be used.
+  // The value will be clamped to a reasonable range.
+  int32? receive_buffer_size;
 
-  string remote_hostname;
-  uint16 remote_port = 0;
-
-  int32 send_buffer_size = 0;
-  int32 receive_buffer_size = 0;
-
-  // Only relevant for TCP:
   bool no_delay = false;
 
   network.mojom.TCPKeepAliveOptions? keep_alive_options;
+
+  network.mojom.DnsQueryType? dns_query_type;
+};
+
+struct DirectConnectedUDPSocketOptions {
+  network.mojom.HostPortPair remote_addr;
+
+  // Sets the OS send buffer size (in bytes) for the socket. This is the
+  // SO_SNDBUF socket option. If not specified, OS's default value will be used.
+  // The value will be clamped to a reasonable range.
+  int32? send_buffer_size;
+
+  // Sets the OS receive buffer size (in bytes) for the socket. This is the
+  // SO_RCVBUF socket option. If not specified, OS's default value will be used.
+  // The value will be clamped to a reasonable range.
+  int32? receive_buffer_size;
+
+  network.mojom.DnsQueryType? dns_query_type;
+};
+
+struct DirectBoundUDPSocketOptions {
+  network.mojom.IPEndPoint local_addr;
+
+  // Sets the OS send buffer size (in bytes) for the socket. This is the
+  // SO_SNDBUF socket option. If not specified, OS's default value will be used.
+  // The value will be clamped to a reasonable range.
+  int32? send_buffer_size;
+
+  // Sets the OS receive buffer size (in bytes) for the socket. This is the
+  // SO_RCVBUF socket option. If not specified, OS's default value will be used.
+  // The value will be clamped to a reasonable range.
+  int32? receive_buffer_size;
+
+  // Sets IPV6_V6ONLY on the socket to enable/disable dual stack mode.
+  // |true| restricts incoming connections to IPv6 only; |false| allows both
+  // IPv4/IPv6 connections. Leaving this value unset results in platform default
+  // being applied (|true| on Windows, |false| on Posix).
+  bool? ipv6_only;
+};
+
+struct DirectTCPServerSocketOptions {
+  network.mojom.IPEndPoint local_addr;
+
+  // Sets IPV6_V6ONLY on the socket to enable/disable dual stack mode.
+  // |true| restricts incoming connections to IPv6 only; |false| allows both
+  // IPv4/IPv6 connections. Leaving this value unset results in platform default
+  // being applied (|true| on Windows, |false| on Posix).
+  bool? ipv6_only;
+
+  // |backlog| defines the size of the OS accept queue. If not specified, will
+  // be substituted by a reasonable default.
+  uint32? backlog;
 };
 
 // This wraps network.mojom.NetworkContext and handles extra work such as
@@ -57,8 +98,8 @@ interface DirectSocketsService {
   // error on the newly established connection.
   // Caller is to use |send_stream| to send data and |receive_stream|
   // to receive data over the connection.
-  OpenTcpSocket(
-      DirectSocketOptions options,
+  OpenTCPSocket(
+      DirectTCPSocketOptions options,
       pending_receiver<network.mojom.TCPConnectedSocket> receiver,
       pending_remote<network.mojom.SocketObserver>? observer)
       => (int32 result,
@@ -67,31 +108,44 @@ interface DirectSocketsService {
           handle<data_pipe_consumer>? receive_stream,
           handle<data_pipe_producer>? send_stream);
 
-  // Creates a 'connected' UDP socket.
-  // |result| is a net::Error code (net::OK on success).
+  // Creates a Connected Restricted UDP socket.
   // Caller can supply a |listener| to listen for incoming datagrams.
-  OpenUdpSocket(
-      DirectSocketOptions options,
-      pending_receiver<DirectUDPSocket> receiver,
+  //
+  // On success |result| is net::OK. |local_addr| is the real local address
+  // used, |peer_addr| is the resolved address the socket is connected to.
+  //
+  // On failure |result| is a negative network error code.
+  // |local_addr| and |peer_addr| are null.
+  OpenConnectedUDPSocket(
+      DirectConnectedUDPSocketOptions options,
+      pending_receiver<network.mojom.RestrictedUDPSocket> receiver,
       pending_remote<network.mojom.UDPSocketListener>? listener)
       => (int32 result,
           network.mojom.IPEndPoint? local_addr,
           network.mojom.IPEndPoint? peer_addr);
-};
 
-// This wraps network.mojom.UDPSocket, exposing only the functionality needed
-// after connection has occurred.
-interface DirectUDPSocket {
-  // Notifies that the listener is ready to accept datagrams. OnReceived() of
-  // the UDPSocketListener interface will be called |num_additional_datagrams|
-  // times (errors also count), unless the connection is closed before that.
-  ReceiveMore(uint32 num_additional_datagrams);
+  // Creates a Bound Restricted UDP socket.
+  // Caller can supply a |listener| to listen for incoming datagrams.
+  //
+  // On success |result| is net::OK. |local_addr| is the real local address
+  // used.
+  //
+  // On failure |result| is a negative network error code, |local_addr| is null.
+  OpenBoundUDPSocket(
+      DirectBoundUDPSocketOptions options,
+      pending_receiver<network.mojom.RestrictedUDPSocket> receiver,
+      pending_remote<network.mojom.UDPSocketListener>? listener)
+      => (int32 result,
+          network.mojom.IPEndPoint? local_addr);
 
-  // Sends a UDP datagram. Upon successfully handing the data to the OS,
-  // |result| is net::OK. On failure, |result| is a network error code.
-  Send(mojo_base.mojom.ReadOnlyBuffer data)
-      => (int32 result);
-
-  // Closes the socket.
-  Close();
+  // Creates a listening (server) TCP socket configured with |options|.
+  //
+  // On success, |result| is net::OK and |local_addr| is set to the real local
+  // address used.
+  // On failure, |result| is a negative network error code. |local_addr| is
+  // null.
+  OpenTCPServerSocket(
+      DirectTCPServerSocketOptions options,
+      pending_receiver<network.mojom.TCPServerSocket> receiver)
+      => (int32 result, network.mojom.IPEndPoint? local_addr);
 };

@@ -8,14 +8,15 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/rand_util.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "gpu/command_buffer/common/command_buffer_id.h"
@@ -32,6 +33,9 @@ class SingleThreadTaskRunner;
 namespace gpu {
 class SyncPointManager;
 struct GpuPreferences;
+
+// Forward-decl of the new DFS-based Scheduler.
+class SchedulerDfs;
 
 class GPU_EXPORT Scheduler {
   // A callback to be used for reporting when the task is ready to run (when the
@@ -109,9 +113,9 @@ class GPU_EXPORT Scheduler {
   // Schedules task (closure) to run on the sequence. The task is blocked until
   // the sync token fences are released or determined to be invalid. Tasks are
   // run in the order in which they are submitted.
-  void ScheduleTask(Task task);
+  void ScheduleTask(Scheduler::Task task);
 
-  void ScheduleTasks(std::vector<Task> tasks);
+  void ScheduleTasks(std::vector<Scheduler::Task> tasks);
 
   // Continue running task on the sequence with the closure. This must be called
   // while running a previously scheduled task.
@@ -120,12 +124,12 @@ class GPU_EXPORT Scheduler {
   // If the sequence should yield so that a higher priority sequence may run.
   bool ShouldYield(SequenceId sequence_id);
 
-  // Takes and resets current accumulated blocking time. Not available on all
-  // platforms. Must be enabled with --enable-gpu-blocked-time.
-  // Returns TimeDelta::Min() when not available.
-  base::TimeDelta TakeTotalBlockingTime();
-
   base::SingleThreadTaskRunner* GetTaskRunnerForTesting(SequenceId sequence_id);
+
+  // Returns pointer to a SchedulerDfs instance if the feature flag
+  // kUseGpuSchedulerDfs is enabled. Otherwise returns null. Used in unit test
+  // to directly test methods that exist only in SchedulerDfs.
+  SchedulerDfs* GetSchedulerDfsForTesting() { return scheduler_dfs_.get(); }
 
  private:
   struct SchedulingState {
@@ -370,7 +374,7 @@ class GPU_EXPORT Scheduler {
                               SequenceId release_sequence_id,
                               SequenceId waiting_sequence_id);
 
-  void ScheduleTaskHelper(Task task);
+  void ScheduleTaskHelper(Scheduler::Task task);
 
   void TryScheduleSequence(Sequence* sequence);
 
@@ -413,11 +417,14 @@ class GPU_EXPORT Scheduler {
   base::flat_map<base::SingleThreadTaskRunner*, PerThreadState>
       per_thread_state_map_ GUARDED_BY(lock_);
 
-  // Accumulated time the thread was blocked during running task
-  base::TimeDelta total_blocked_time_ GUARDED_BY(lock_);
-  const bool blocked_time_collection_enabled_;
+  // A pointer to a SchedulerDfs instance. If set, all public SchedulerDfs
+  // methods are forwarded to this SchedulerDfs instance. |scheduler_dfs_| is
+  // set depending on a Finch experimental feature.
+  std::unique_ptr<SchedulerDfs> scheduler_dfs_;
 
  private:
+  base::MetricsSubSampler metrics_subsampler_;
+
   FRIEND_TEST_ALL_PREFIXES(SchedulerTest, StreamPriorities);
   FRIEND_TEST_ALL_PREFIXES(SchedulerTest, StreamDestroyRemovesPriorities);
   FRIEND_TEST_ALL_PREFIXES(SchedulerTest, StreamPriorityChangeWhileReleasing);

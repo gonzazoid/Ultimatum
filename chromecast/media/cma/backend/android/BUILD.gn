@@ -6,6 +6,7 @@ import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
 import("//chromecast/chromecast.gni")
 import("//testing/test.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 cast_source_set("cast_media_android") {
   sources = [
@@ -51,6 +52,7 @@ generate_jni("audio_track_jni_headers") {
 }
 
 android_library("audio_track_java") {
+  srcjar_deps = [ ":audio_track_jni_headers" ]
   sources = [
     "java/src/org/chromium/chromecast/cma/backend/android/AudioSinkAudioTrackImpl.java",
     "java/src/org/chromium/chromecast/cma/backend/android/ThrottledLog.java",
@@ -60,13 +62,12 @@ android_library("audio_track_java") {
 
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//chromecast/base:base_java",
     "//chromecast/public:volume_control_enums_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 }
 
 test("cast_android_cma_backend_unittests") {

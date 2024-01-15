@@ -3,9 +3,13 @@
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
+import("//gpu/vulkan/features.gni")
 import("//media/gpu/args.gni")
 import("//testing/test.gni")
 import("//third_party/protobuf/proto_library.gni")
+
+# V4L2 and VAAPI for video acceleration should not be enabled simultaneously.
+assert(!(use_v4l2_codec && use_vaapi))
 
 assert(use_v4l2_codec || use_vaapi)
 
@@ -28,6 +32,7 @@ source_set("chromeos") {
     "//base",
     "//build/config/linux/libdrm",
     "//media",
+    "//media/gpu:buffer_validation",
     "//media/gpu:buildflags",
     "//media/gpu:command_buffer_helper",
     "//media/gpu:common",
@@ -55,6 +60,8 @@ source_set("chromeos") {
 source_set("common") {
   defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
   sources = [
+    "chromeos_compressed_gpu_memory_buffer_video_frame_utils.cc",
+    "chromeos_compressed_gpu_memory_buffer_video_frame_utils.h",
     "chromeos_status.h",
     "dmabuf_video_frame_pool.cc",
     "dmabuf_video_frame_pool.h",
@@ -78,13 +85,12 @@ source_set("common") {
     "platform_video_frame_pool.h",
     "platform_video_frame_utils.cc",
     "platform_video_frame_utils.h",
+    "shaders/shaders.h",
     "vd_video_decode_accelerator.cc",
     "vd_video_decode_accelerator.h",
     "vda_video_frame_pool.cc",
     "vda_video_frame_pool.h",
     "video_decoder_pipeline.h",
-    "video_frame_converter.cc",
-    "video_frame_converter.h",
   ]
 
   # TODO(crbug.com/1012587): Merge :fourcc to :common.
@@ -92,6 +98,7 @@ source_set("common") {
     ":fourcc",
     "//gpu/ipc/service",
     "//media/mojo/mojom/stable:stable_video_decoder",
+    "//ui/ozone",
   ]
 
   deps = [
@@ -100,6 +107,7 @@ source_set("common") {
     "//build:chromeos_buildflags",
     "//build/config/linux/libdrm",
     "//gpu/ipc/common:common",
+    "//gpu/vulkan/init:init",
     "//media",
     "//media/gpu:buffer_validation",
     "//media/gpu:buildflags",
@@ -108,12 +116,22 @@ source_set("common") {
     "//media/gpu:video_frame_mapper_common",
     "//third_party/libyuv",
     "//ui/gfx:buffer_types",
+    "//ui/gfx:gfx_switches",
     "//ui/gfx:memory_buffer",
     "//ui/gfx/geometry",
     "//ui/gfx/linux:drm",
     "//ui/gfx/linux:gbm",
     "//ui/gl",
   ]
+
+  if (enable_vulkan) {
+    sources += [
+      "vulkan_image_processor.cc",
+      "vulkan_image_processor.h",
+    ]
+    deps += [ "//gpu/command_buffer/service:gles2" ]
+  }
+
   if (is_chromeos) {
     sources += [
       "decoder_buffer_transcryptor.cc",
@@ -153,11 +171,13 @@ source_set("video_frame_mapper") {
   ]
 
   deps = [
+    ":common",
     "//base",
     "//media",
     "//media/gpu:command_buffer_helper",
     "//media/gpu:common",
     "//media/gpu:video_frame_mapper_common",
+    "//third_party/libyuv",
   ]
 }
 
@@ -170,12 +190,29 @@ if (is_chromeos) {
   }
 }
 
-source_set("unit_tests") {
+source_set(
+    "chromeos_compressed_gpu_memory_buffer_video_frame_utils_test_support") {
   testonly = true
+  sources = [
+    "fake_chromeos_intel_compressed_gpu_memory_buffer.cc",
+    "fake_chromeos_intel_compressed_gpu_memory_buffer.h",
+  ]
   deps = [
     ":common",
     "//base",
+    "//build/config/linux/libdrm",
+    "//ui/gfx",
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  deps = [
+    ":chromeos_compressed_gpu_memory_buffer_video_frame_utils_test_support",
+    ":common",
+    "//base",
     "//base/test:test_support",
+    "//build/config/linux/libdrm",
     "//gpu/ipc/service:service",
     "//media",
     "//media:test_support",
@@ -188,6 +225,7 @@ source_set("unit_tests") {
     "//ui/gfx/geometry",
   ]
   sources = [
+    "chromeos_compressed_gpu_memory_buffer_video_frame_utils_unittest.cc",
     "fourcc_unittests.cc",
     "mailbox_video_frame_converter_unittest.cc",
     "platform_video_frame_pool_unittest.cc",
@@ -208,6 +246,7 @@ test("image_processor_test") {
     "//build:chromeos_buildflags",
     "//media:test_support",
     "//media/gpu:buildflags",
+    "//media/gpu:video_frame_mapper_common",
     "//media/gpu/test:frame_file_writer",
     "//media/gpu/test:frame_validator",
     "//media/gpu/test:helpers",
@@ -215,5 +254,33 @@ test("image_processor_test") {
     "//media/gpu/test:video_test_environment",
     "//mojo/core/embedder",
     "//testing/gtest",
+    "//third_party/libyuv",
+    "//ui/gl",
+    "//ui/gl:test_support",
   ]
+  if (enable_vulkan) {
+    deps += [ "//gpu/command_buffer/service:gles2" ]
+  }
+}
+
+if (use_v4l2_codec) {
+  test("image_processor_perf_test") {
+    sources = [ "image_processor_perf_test.cc" ]
+    deps = [
+      ":chromeos",
+      "//base/test:test_support",
+      "//media:test_support",
+      "//media/gpu:video_frame_mapper_common",
+      "//media/gpu/test:helpers",
+      "//media/gpu/test:video_test_environment",
+      "//testing/gtest",
+      "//testing/perf",
+      "//third_party/libyuv",
+      "//ui/gl",
+      "//ui/gl:test_support",
+    ]
+    if (enable_vulkan) {
+      deps += [ "//gpu/command_buffer/service:gles2" ]
+    }
+  }
 }

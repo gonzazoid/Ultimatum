@@ -7,12 +7,15 @@ See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
 for more details about the presubmit API built into depot_tools.
 """
 
-USE_PYTHON3 = True
 
 _EXTRA_PATHS_COMPONENTS = [('testing', )]
 
 # pylint: disable=invalid-name,missing-function-docstring
 def CommonChecks(input_api, output_api):
+    # Neither running nor linting Fuchsia tests is supported on Windows.
+    if input_api.is_windows:
+        return []
+
     tests = []
 
     chromium_src_path = input_api.os_path.realpath(

@@ -6,6 +6,7 @@
 #define GIN_ARGUMENTS_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "gin/converter.h"
 #include "gin/gin_export.h"
 
@@ -98,7 +99,13 @@ class GIN_EXPORT Arguments {
   // Returns all arguments. Since this doesn't require any conversion, it
   // cannot fail. This does not rely on or modify the current position in the
   // array used by Get/PeekNext().
-  std::vector<v8::Local<v8::Value>> GetAll() const;
+  v8::LocalVector<v8::Value> GetAll() const;
+
+  // Returns the original v8::FunctionCallbackInfo used to construct this
+  // Arguments if it exists, or nullptr otherwise.
+  const v8::FunctionCallbackInfo<v8::Value>* GetFunctionCallbackInfo() const {
+    return info_for_function_;
+  }
 
   void ThrowError() const;
   void ThrowTypeError(const std::string& message) const;
@@ -112,8 +119,14 @@ class GIN_EXPORT Arguments {
  private:
   raw_ptr<v8::Isolate> isolate_;
   union {
-    const v8::FunctionCallbackInfo<v8::Value>* info_for_function_;
-    const v8::PropertyCallbackInfo<v8::Value>* info_for_property_;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION const v8::FunctionCallbackInfo<v8::Value>*
+        info_for_function_;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION const v8::PropertyCallbackInfo<v8::Value>*
+        info_for_property_;
   };
   int next_ = 0;
   bool insufficient_arguments_ = false;

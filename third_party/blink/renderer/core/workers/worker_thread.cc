@@ -33,6 +33,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "third_party/blink/public/common/loader/worker_main_script_load_parameters.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-shared.h"
@@ -59,6 +60,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
 #include "third_party/blink/renderer/platform/loader/fetch/worker_resource_timing_notifier.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
+#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_thread_scheduler.h"
@@ -161,7 +163,6 @@ WorkerThread::~WorkerThread() {
 
   DCHECK(child_threads_.empty());
   DCHECK_NE(ExitCode::kNotTerminated, exit_code_);
-  base::UmaHistogramEnumeration("WorkerThread.ExitCode", exit_code_);
 }
 
 void WorkerThread::Start(
@@ -454,7 +455,7 @@ void WorkerThread::ChildThreadTerminatedOnWorkerThread(WorkerThread* child) {
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy)
     : WorkerThread(worker_reporting_proxy,
-                   Thread::Current()->GetDeprecatedTaskRunner()) {}
+                   ThreadScheduler::Current()->CleanupTaskRunner()) {}
 
 WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy,
                            scoped_refptr<base::SingleThreadTaskRunner>
@@ -575,6 +576,7 @@ void WorkerThread::InitializeSchedulerOnWorkerThread(
       TaskType::kPermission,
       TaskType::kPostedMessage,
       TaskType::kRemoteEvent,
+      TaskType::kStorage,
       TaskType::kUserInteraction,
       TaskType::kWakeLock,
       TaskType::kWebGL,
@@ -635,6 +637,7 @@ void WorkerThread::InitializeOnWorkerThread(
       debugger->WorkerThreadCreated(this);
 
     GlobalScope()->ScriptController()->Initialize(url_for_debugger);
+    GlobalScope()->WillBeginLoading();
     v8::HandleScope handle_scope(GetIsolate());
     Platform::Current()->WorkerContextCreated(
         GlobalScope()->ScriptController()->GetContext());
@@ -665,6 +668,9 @@ void WorkerThread::InitializeOnWorkerThread(
   // from another thread and try to resume "pause on start" before
   // we even paused.
   worker_inspector_controller_->WaitForDebuggerIfNeeded();
+  // Note the above call runs nested message loop which may result in
+  // worker thread being torn down by request from the parent thread,
+  // while waiting for debugger.
 }
 
 void WorkerThread::EvaluateClassicScriptOnWorkerThread(

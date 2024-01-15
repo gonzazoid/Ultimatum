@@ -4,8 +4,9 @@
 
 #include "content/renderer/media/android/stream_texture_factory.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gpu/ipc/client/client_shared_image_interface.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
@@ -90,7 +91,7 @@ void StreamTextureProxy::OnFrameWithInfoAvailable(
     const gpu::Mailbox& mailbox,
     const gfx::Size& coded_size,
     const gfx::Rect& visible_rect,
-    const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info) {
+    const std::optional<gpu::VulkanYCbCrInfo>& ycbcr_info) {
   base::AutoLock lock(lock_);
   // Set the ycbcr info before running the received frame callback so that the
   // first frame has it.

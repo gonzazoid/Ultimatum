@@ -16,8 +16,8 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/network_service_instance.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/common/content_switches.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "media/base/media_switches.h"
@@ -124,7 +124,7 @@ class WebRtcBrowserTest : public WebRtcTestBase {
     }
 
     mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-    content::GetNetworkService()->BindTestInterface(
+    content::GetNetworkService()->BindTestInterfaceForTesting(
         network_service_test.BindNewPipeAndPassReceiver());
     // TODO(crbug.com/901026): Make sure the network process is started to avoid
     // a deadlock on Android.
@@ -158,8 +158,8 @@ class WebRtcBrowserTest : public WebRtcTestBase {
     HangUp(right_tab_);
   }
 
-  raw_ptr<content::WebContents, DanglingUntriaged> left_tab_;
-  raw_ptr<content::WebContents, DanglingUntriaged> right_tab_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> left_tab_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> right_tab_;
 };
 
 IN_PROC_BROWSER_TEST_F(WebRtcBrowserTest,
@@ -255,18 +255,6 @@ IN_PROC_BROWSER_TEST_F(WebRtcBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(WebRtcBrowserTest,
-                       RunsAudioVideoWebRTCCallInTwoTabsGetStatsCallback) {
-  StartServerAndOpenTabs();
-  SetupPeerconnectionWithLocalStream(left_tab_);
-  SetupPeerconnectionWithLocalStream(right_tab_);
-  NegotiateCall(left_tab_, right_tab_);
-
-  VerifyStatsGeneratedCallback(left_tab_);
-
-  DetectVideoAndHangUp();
-}
-
-IN_PROC_BROWSER_TEST_F(WebRtcBrowserTest,
                        GetPeerToPeerConnectionsCountChangeFromNetworkService) {
   EXPECT_EQ(0u, GetPeerToPeerConnectionsCountChangeFromNetworkService());
 
@@ -276,34 +264,10 @@ IN_PROC_BROWSER_TEST_F(WebRtcBrowserTest,
   SetupPeerconnectionWithLocalStream(right_tab_);
   NegotiateCall(left_tab_, right_tab_);
 
-  VerifyStatsGeneratedCallback(left_tab_);
   EXPECT_EQ(2u, GetPeerToPeerConnectionsCountChangeFromNetworkService());
 
   DetectVideoAndHangUp();
   EXPECT_EQ(0u, GetPeerToPeerConnectionsCountChangeFromNetworkService());
-}
-
-IN_PROC_BROWSER_TEST_F(WebRtcBrowserTest,
-                       RunsAudioVideoWebRTCCallInTwoTabsGetStatsPromise) {
-  StartServerAndOpenTabs();
-  SetupPeerconnectionWithLocalStream(left_tab_);
-  SetupPeerconnectionWithLocalStream(right_tab_);
-  CreateDataChannel(left_tab_, "data");
-  CreateDataChannel(right_tab_, "data");
-  NegotiateCall(left_tab_, right_tab_);
-
-  std::set<std::string> missing_expected_stats;
-  for (const std::string& type : GetMandatoryStatsTypes(left_tab_)) {
-    missing_expected_stats.insert(type);
-  }
-  for (const std::string& type : VerifyStatsGeneratedPromise(left_tab_)) {
-    missing_expected_stats.erase(type);
-  }
-  for (const std::string& type : missing_expected_stats) {
-    EXPECT_TRUE(false) << "Expected stats dictionary is missing: " << type;
-  }
-
-  DetectVideoAndHangUp();
 }
 
 IN_PROC_BROWSER_TEST_F(

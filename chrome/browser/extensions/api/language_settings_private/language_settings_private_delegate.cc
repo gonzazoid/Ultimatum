@@ -9,19 +9,17 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/spellchecker/spellcheck_factory.h"
 #include "chrome/browser/spellchecker/spellcheck_service.h"
 #include "components/prefs/pref_service.h"
 #include "components/spellcheck/browser/pref_names.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/notification_source.h"
 #include "content/public/browser/storage_partition.h"
 
 namespace extensions {
@@ -33,8 +31,7 @@ LanguageSettingsPrivateDelegate::LanguageSettingsPrivateDelegate(
     : custom_dictionary_(nullptr),
       context_(context),
       listening_spellcheck_(false),
-      listening_input_method_(false),
-      profile_added_(false) {
+      listening_input_method_(false) {
   // Register with the event router so we know when renderers are listening to
   // our events. We first check and see if there *is* an event router, because
   // some unit tests try to create all context services, but don't initialize
@@ -52,14 +49,8 @@ LanguageSettingsPrivateDelegate::LanguageSettingsPrivateDelegate(
   event_router->RegisterObserver(
       this, language_settings_private::OnInputMethodRemoved::kEventName);
 
-  // SpellcheckService cannot be created until Profile::DoFinalInit() has been
-  // called. http://crbug.com/171406
-  notification_registrar_.Add(this,
-      chrome::NOTIFICATION_PROFILE_ADDED,
-      content::Source<Profile>(Profile::FromBrowserContext(context_)));
-
-  pref_change_registrar_.Init(Profile::FromBrowserContext(context_)->
-      GetPrefs());
+  pref_change_registrar_.Init(
+      Profile::FromBrowserContext(context_)->GetPrefs());
 
   StartOrStopListeningForSpellcheckChanges();
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -71,12 +62,11 @@ LanguageSettingsPrivateDelegate::~LanguageSettingsPrivateDelegate() {
   DCHECK(!listening_spellcheck_);
   DCHECK(!listening_input_method_);
   pref_change_registrar_.RemoveAll();
-  notification_registrar_.RemoveAll();
 }
 
-LanguageSettingsPrivateDelegate* LanguageSettingsPrivateDelegate::Create(
-    content::BrowserContext* context) {
-  return new LanguageSettingsPrivateDelegate(context);
+std::unique_ptr<LanguageSettingsPrivateDelegate>
+LanguageSettingsPrivateDelegate::Create(content::BrowserContext* context) {
+  return std::make_unique<LanguageSettingsPrivateDelegate>(context);
 }
 
 std::vector<language_settings_private::SpellcheckDictionaryStatus>
@@ -152,14 +142,6 @@ void LanguageSettingsPrivateDelegate::OnListenerRemoved(
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
-void LanguageSettingsPrivateDelegate::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  profile_added_ = true;
-  StartOrStopListeningForSpellcheckChanges();
-}
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void LanguageSettingsPrivateDelegate::InputMethodChanged(
     ash::input_method::InputMethodManager* manager,
@@ -229,10 +211,8 @@ void LanguageSettingsPrivateDelegate::OnCustomDictionaryChanged(
   EventRouter::Get(context_)->BroadcastEvent(std::move(extension_event));
 }
 
-void LanguageSettingsPrivateDelegate::RefreshDictionaries(
-    bool was_listening, bool should_listen) {
-  if (!profile_added_)
-    return;
+void LanguageSettingsPrivateDelegate::RefreshDictionaries(bool was_listening,
+                                                          bool should_listen) {
   if (was_listening)
     RemoveDictionaryObservers();
   hunspell_dictionaries_.clear();

@@ -2,12 +2,14 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="ca">
 <translation id="1000498691615767391">Seleccioneu una carpeta per obrir</translation>
+<translation id="1014208178561091457">No s'ha pogut copiar <ph name="FILE_NAME" /> perquè està encriptat.</translation>
 <translation id="1047956942837015229">S'estan suprimint <ph name="COUNT" /> elements...</translation>
 <translation id="1049926623896334335">Document de Word</translation>
 <translation id="1056775291175587022">Cap xarxa</translation>
 <translation id="1056898198331236512">Advertiment</translation>
 <translation id="1060368002126861100">Per obrir fitxers amb <ph name="APP_NAME" />, primer mou-los a la carpeta de fitxers de Windows.</translation>
 <translation id="1062407476771304334">Substitueix</translation>
+<translation id="1119383441774809183">Mostra els missatges de text</translation>
 <translation id="1119447706177454957">Error intern</translation>
 <translation id="1120073797882051782">Romaja de hangul</translation>
 <translation id="112387589102719461">Anglès (EUA) amb teclat Dvorak per a programadors</translation>
@@ -27,28 +29,34 @@
 <translation id="1201402288615127009">Següent</translation>
 <translation id="1209796539517632982">Servidors de noms automàtics</translation>
 <translation id="1210831758834677569">Laosià</translation>
+<translation id="1221555006497674479">Només et queda un <ph name="REMAINING_PERCENTAGE" />% de l'emmagatzematge de què disposes a la unitat compartida (<ph name="TOTAL_SPACE" />).</translation>
 <translation id="1243314992276662751">Penja</translation>
 <translation id="1249250836236328755">Gènere</translation>
 <translation id="1254593899333212300">Connexió directa a Internet</translation>
 <translation id="1272293450992660632">Els valors del PIN no coincideixen.</translation>
 <translation id="1280820357415527819">S'estan cercant xarxes mòbils</translation>
-<translation id="1291603679744561561">SIM bloquejada</translation>
 <translation id="1293556467332435079">Fitxers</translation>
 <translation id="1297922636971898492">En aquest moment Google Drive no està disponible. La pujada es reiniciarà automàticament quan Google Drive torni a estar actiu.</translation>
+<translation id="1306130176943817227">No es pot suprimir. L'element s'està utilitzant.</translation>
 <translation id="1307931752636661898">No es poden mostrar fitxers de Linux</translation>
 <translation id="1313405956111467313">Configuració automàtica del servidor intermediari</translation>
+<translation id="134645005685694099">El dispositiu no té prou espai d'emmagatzematge per mantenir la sincronització de fitxers activada. Els fitxers nous ja no se sincronitzaran automàticament.</translation>
 <translation id="1353686479385938207"><ph name="PROVIDER_NAME" />: <ph name="NETWORK_NAME" /></translation>
 <translation id="1358735829858566124">El fitxer o directori no es pot fer servir.</translation>
 <translation id="1363028406613469049">Pista</translation>
 <translation id="1378727793141957596">Us donem la benvinguda a Google Drive.</translation>
 <translation id="1379911846207762492">Pots fer que els fitxers estiguin disponibles sense connexió per accedir-hi quan no tinguis Internet.</translation>
 <translation id="1383876407941801731">Cerca</translation>
+<translation id="1388045380422025115">Tots els tipus</translation>
 <translation id="1395262318152388157">Control lliscant de cerca</translation>
 <translation id="1399511500114202393">Sense certificat d'usuari</translation>
+<translation id="1403008701842173542">A tot arreu</translation>
 <translation id="1404323374378969387">Noruec</translation>
 <translation id="1433628812591023318">Per deixar anar fitxers a Parallels Desktop, s'han de moure a Fitxers de Windows.</translation>
 <translation id="1435838927755162558">Comparteix la carpeta amb Parallels Desktop</translation>
 <translation id="1439919885608649279">Persona amb flors</translation>
+<translation id="1458457385801829801">Expulsa <ph name="TARGET_NAME" /></translation>
+<translation id="146691674290220697">No s'han pogut copiar <ph name="NUMBER_OF_FILES" /> fitxers perquè estan encriptats.</translation>
 <translation id="1471718551822868769">Eslovac</translation>
 <translation id="1482884275703521657">Finès</translation>
 <translation id="148466539719134488">Suís</translation>
@@ -56,7 +64,6 @@
 <translation id="1499943022354839699">Anglès (EUA) amb teclat Dvorak</translation>
 <translation id="1515909359182093592"><ph name="INPUT_LABEL" /> - Amfitrió</translation>
 <translation id="1521655867290435174">Fulls de càlcul de Google</translation>
-<translation id="1538729222189715449">S'estan obrint els fitxers de Linux...</translation>
 <translation id="1547964879613821194">Anglès canadenc</translation>
 <translation id="1556189134700913550">Aplica-ho a tot</translation>
 <translation id="1561842594491319104">dispositius Chrome</translation>
@@ -69,8 +76,8 @@
 <translation id="162175252992296058">Portuguès amb teclat internacional dels EUA</translation>
 <translation id="1629521517399325891">El certificat de l'usuari no està disponible per a l'autenticació de xarxa.</translation>
 <translation id="1641780993263690097">Xinès (pinyin)</translation>
-<translation id="1646019627374511909">S'està fent que <ph name="NUMBER_OF_ITEMS" /> fitxers estiguin disponibles sense connexió</translation>
 <translation id="164969095109328410">Dispositiu Chrome</translation>
+<translation id="1661207570040737402">Has fet servir tot el teu espai d'emmagatzematge a la unitat compartida de Google Workspace.</translation>
 <translation id="1661867754829461514">Falta el PIN</translation>
 <translation id="166439687370499867">No es pot canviar la configuració de la xarxa compartida</translation>
 <translation id="1665611772925418501">El fitxer no s'ha pogut modificar.</translation>
@@ -80,6 +87,7 @@
 <translation id="1722487484194605434">S'estan comprimint <ph name="NUMBER_OF_ITEMS" /> elements...</translation>
 <translation id="1722687688096767818">S'està afegint el perfil...</translation>
 <translation id="1726100011689679555">Servidors de noms</translation>
+<translation id="1727562178154619254">A punt per sincronitzar</translation>
 <translation id="1729953886957086472">Alemany (Alemanya)</translation>
 <translation id="1730235522912993863">Xinès (cangjie)</translation>
 <translation id="1731889557567069540"><ph name="NUMBER_OF_ITEMS" /> elements copiats.</translation>
@@ -89,6 +97,7 @@
 <translation id="174937106936716857">Total de fitxers</translation>
 <translation id="1755345808328621801">Aquest fitxer està dissenyat per a un ordinador amb programari Windows. No és compatible amb el teu dispositiu, que funciona amb Chrome OS. Cerca una aplicació alternativa adequada a Chrome Web Store.</translation>
 <translation id="1757915090001272240">Llatí ample</translation>
+<translation id="1761091787730831947">Comparteix amb <ph name="VM_NAME" /></translation>
 <translation id="1773212559869067373">S'ha rebutjat el certificat d'autenticació de manera local</translation>
 <translation id="1775381402323441512">Informació del vídeo</translation>
 <translation id="180035236176489073">Heu d'estar en línia per accedir a aquests fitxers.</translation>
@@ -103,18 +112,18 @@
 <translation id="1838709767668011582">Lloc de Google</translation>
 <translation id="1853795129690976061">Aquesta carpeta es comparteix amb Linux</translation>
 <translation id="1864756863218646478">No s'ha pogut trobar el fitxer.</translation>
+<translation id="1877377730633446520">Aquesta acció utilitzarà aproximadament <ph name="REQUIRED_SPACE" />. Actualment tens <ph name="FREE_SPACE" /> disponibles.</translation>
 <translation id="1884013283844450420">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, connecta</translation>
 <translation id="1920670151694390848">Malaiàlam (transliteració)</translation>
 <translation id="1920798810075583923">Síndria</translation>
 <translation id="1924372192547904021">S'ha formatat <ph name="DRIVE_NAME" /></translation>
 <translation id="1931134289871235022">Eslovac</translation>
-<translation id="1933345018156373194">El trasllat ha fallat, s'ha produït un error inesperat: <ph name="ERROR_MESSAGE" /></translation>
 <translation id="1936717151811561466">Finès</translation>
 <translation id="1942765061641586207">Resolució de la imatge</translation>
 <translation id="1972984168337863910">Desplega els taulers amb informació dels fitxers</translation>
 <translation id="1995337122023280937">Ves a la ubicació del fitxer</translation>
-<translation id="1999709132469742660">Tots els URL poden accedir al fitxer</translation>
 <translation id="2001796770603320721">Gestiona a Drive</translation>
+<translation id="2004942826429452291">Els fitxers s'emmagatzemaran al núvol i en aquest Chromebook.</translation>
 <translation id="2009067268969781306">En formatar una unitat, se'n suprimeixen totes les dades que s'hi hagin emmagatzemat. Aquesta acció no es pot desfer.</translation>
 <translation id="2025955442973426285">Tigrinya</translation>
 <translation id="2037845485764049925">Rus</translation>
@@ -125,6 +134,9 @@
 <translation id="2084108471225856927">Configuració del dispositiu</translation>
 <translation id="2084809735218147718">Signe de gràcies</translation>
 <translation id="2088690981887365033">Xarxa VPN</translation>
+<translation id="209653272837065803">No hi ha prou espai d'emmagatzematge per continuar sincronitzant fitxers</translation>
+<translation id="2111134541987263231">Activa l'opció <ph name="BEGIN_BOLD" />Permet en mode d'incògnit<ph name="END_BOLD" /></translation>
+<translation id="2114191879048183086">Se suprimiran <ph name="NUMBER_OF_ITEMS" /> elements i no els podràs restaurar.</translation>
 <translation id="2122305276694332719">La connexió automàtica a una xarxa amagada permet que altres usuaris puguin veure el teu dispositiu i algunes opcions de configuració de la xarxa. Per tant, no és recomanable.</translation>
 <translation id="2125607626296734455">Khmer</translation>
 <translation id="2139545522194199494">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, gestionada per l'administrador, connecta</translation>
@@ -133,15 +145,19 @@
 <translation id="2143778271340628265">Configuració del servidor intermediari manual</translation>
 <translation id="2148716181193084225">Avui</translation>
 <translation id="2163152940313951844">Caràcter no vàlid: <ph name="CHARACTER_NAME" /></translation>
+<translation id="2178056538281447670">Microsoft 365</translation>
 <translation id="2184934335987813305">Portuguès amb teclat internacional dels EUA (PC)</translation>
 <translation id="2193661397560634290"><ph name="SPACE_USED" /> en ús</translation>
 <translation id="2198315389084035571">Xinès simplificat</translation>
 <translation id="22085916256174561">Coreà</translation>
 <translation id="2208919847696382164">Instal·la per a Linux</translation>
+<translation id="2215692307449050019">Queda poca bateria. La sincronització de fitxers es reprendrà quan et connectis a l'alimentació.</translation>
 <translation id="2225536596944493418">Confirmes que vols suprimir <ph name="NUMBER_OF_ITEMS" /> elements?</translation>
 <translation id="2230062665678605299">No es pot crear la carpeta "<ph name="FOLDER_NAME" />". <ph name="ERROR_MESSAGE" /></translation>
 <translation id="2239068707900391003">Persona amb un cafè</translation>
+<translation id="2247561763838186830">S'ha tancat la sessió</translation>
 <translation id="2251368349685848079">Restaura de la paperera</translation>
+<translation id="2278133026967558505">Tots els llocs web i tots els URL poden accedir al fitxer</translation>
 <translation id="2282155092769082568">URL de configuració automàtica:</translation>
 <translation id="2284767815536050991">emmagatzematge extraïble</translation>
 <translation id="2288278176040912387">Tocadiscos</translation>
@@ -150,12 +166,14 @@
 <translation id="2304820083631266885">Planeta</translation>
 <translation id="2305020378527873881">S'ha expulsat <ph name="VOLUME_NAME" />.</translation>
 <translation id="2307462900900812319">Configura la xarxa</translation>
+<translation id="2312704192806647271">{COUNT,plural, =1{No es troba cap extensió amb l'identificador: <ph name="BEGIN_LIST" /><ph name="END_LIST" /> Contacta amb l'administrador.}other{No es troben extensions amb els identificadors: <ph name="BEGIN_LIST" /><ph name="END_LIST" /> Contacta amb l'administrador.}}</translation>
 <translation id="2325650632570794183">Aquest tipus de fitxer no és compatible. Visiteu Chrome Web Store per trobar una aplicació que pugui obrir aquest tipus de fitxer.</translation>
 <translation id="2326539130272988168">Búlgar</translation>
+<translation id="233822363739146957">No hi ha prou espai d'emmagatzematge per sincronitzar tots els fitxers</translation>
 <translation id="23721837607121582">Baixa el perfil mòbil, xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" /></translation>
 <translation id="2377319039870049694">Canvia a la visualització de llista</translation>
 <translation id="2377590462528165447">S'han compartit <ph name="NUMBER_OF_ITEMS" /> carpetes amb Linux</translation>
-<translation id="2378075407703503998"><ph name="SELCTED_FILE_COUNT" /> fitxers seleccionats</translation>
+<translation id="2379576081295865700">S'està comprovant l'espai d'emmagatzematge… S'ha trobat 1 element.</translation>
 <translation id="2383454254762599978">Mou a la paperera</translation>
 <translation id="2387458720915042159">Tipus de connexió del servidor intermediari</translation>
 <translation id="2389832672041313158">Birmà (Birmània)</translation>
@@ -170,6 +188,7 @@
 <translation id="2464089476039395325">Servidor intermediari HTTP</translation>
 <translation id="2467267713099745100">Xarxa <ph name="NETWORK_TYPE" /> (desactivada)</translation>
 <translation id="2468402215065996499">Tamagotxi</translation>
+<translation id="2468470447085858632">Accedeix sense connexió als teus fitxers de Google Drive amb la sincronització de fitxers</translation>
 <translation id="2470939964922472929">S'ha introduït un PIN incorrecte massa vegades. Per configurar un PIN nou, introdueix el número personal de desbloqueig (PUK) de 8 dígits proporcionat per l'operador.</translation>
 <translation id="2500392669976258912">Gujarati fonètic</translation>
 <translation id="2515586267016047495">Alt</translation>
@@ -183,6 +202,7 @@
 <translation id="2563185590376525700">Granota</translation>
 <translation id="2578394532502990878">Tàmil fonètic</translation>
 <translation id="2579959351793446050">Oriya</translation>
+<translation id="2587195714949534472">S'està preparant per sincronitzar <ph name="FILE_NAME" />...</translation>
 <translation id="2602810353103180630">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, bloquejada per l'administrador, detalls</translation>
 <translation id="2614589611416690597">Vídeo <ph name="VIDEO_TYPE" /></translation>
 <translation id="2620090360073999360">No es pot contactar amb Google Drive en aquest moment.</translation>
@@ -195,6 +215,7 @@
 <translation id="2718540689505416944">Instal·la l'aplicació per a Linux</translation>
 <translation id="2719020180254996569">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, detalls</translation>
 <translation id="2724954091494693138">Turc amb teclat F</translation>
+<translation id="2732288874651063549">Administra l'ús compartit de <ph name="VM_NAME" /></translation>
 <translation id="2732839045120506979">Vietnamita (VNI)</translation>
 <translation id="2735623501230989521">Dona permís a Parallels Desktop per accedir als fitxers de la carpeta <ph name="FOLDER_NAME" /></translation>
 <translation id="2764206540577097904">Has fet servir tot el teu emmagatzematge individual de Google Workspace.</translation>
@@ -203,6 +224,7 @@
 <translation id="2782104745158847185">S'ha produït un error en instal·lar l'aplicació per a Linux</translation>
 <translation id="2802583107108007218">Més informació sobre aquestes restriccions</translation>
 <translation id="2803375539583399270">Introdueix el PIN</translation>
+<translation id="2819519502129272135">La sincronització de fitxers està desactivada</translation>
 <translation id="2820957248982571256">S'està cercant...</translation>
 <translation id="2830077785865012357">Xinès (zhuyin)</translation>
 <translation id="2843806747483486897">Canvia els valors predeterminats...</translation>
@@ -212,9 +234,11 @@
 <translation id="2888807692577297075">Cap fitxer coincideix amb &lt;b&gt;"<ph name="SEARCH_STRING" />"&lt;/b&gt;</translation>
 <translation id="2894654529758326923">Informació</translation>
 <translation id="2902734494705624966">Nord-americà ampliat</translation>
+<translation id="2904378509913846215">Ja existeix una carpeta anomenada <ph name="FILENAME" />. Vols substituir-la per la que estàs movent?</translation>
 <translation id="290843123675549676">Marathi</translation>
 <translation id="2923240520113693977">Estonià</translation>
 <translation id="2938685643439809023">Mongol</translation>
+<translation id="293972288692056847">{COUNT,plural, =1{No es troba l'extensió}other{No es troben les extensions}}</translation>
 <translation id="2943503720238418293">Utilitza un nom més curt</translation>
 <translation id="2949781154072577687">S'està formatant <ph name="DRIVE_NAME" />...</translation>
 <translation id="2951236788251446349">Medusa</translation>
@@ -253,13 +277,16 @@
 <translation id="3253225298092156258">No disponible</translation>
 <translation id="3254434849914415189">Tria l'aplicació predeterminada per als fitxers <ph name="FILE_TYPE" />:</translation>
 <translation id="3255159654094949700">Àrab</translation>
+<translation id="326396468955264502">No s'han pogut moure <ph name="NUMBER_OF_FILES" /> fitxers perquè estan encriptats.</translation>
 <translation id="3264582393905923483">Context</translation>
 <translation id="3272909651715601089"><ph name="PATH" /> no s'ha pogut obrir</translation>
 <translation id="3280431534455935878">S'està preparant</translation>
+<translation id="3280719573299097127">Tens connexió a una xarxa d'ús mesurat. La sincronització de fitxers s'ha posat en pausa.</translation>
 <translation id="3280987981688031357">Disc de vinil</translation>
 <translation id="3290356915286466215">No segura</translation>
 <translation id="3291218047831493686">Connecta amb aquesta xarxa per canviar la configuració del bloqueig de la SIM</translation>
 <translation id="3293023191599135697">No s'admeten les xarxes WEP</translation>
+<translation id="3295006446256079333">Aquest volum</translation>
 <translation id="3295357220137379386">El dispositiu està ocupat</translation>
 <translation id="3296763833017966289">Georgià</translation>
 <translation id="3307875152560779385">Ucraïnès</translation>
@@ -269,6 +296,7 @@
 <translation id="3356580349448036450">Completada</translation>
 <translation id="3358452157379365236">Guitarra</translation>
 <translation id="3368922792935385530">Connectat</translation>
+<translation id="3372635229069101468">Fes clic a <ph name="BEGIN_BOLD" />Detalls<ph name="END_BOLD" /></translation>
 <translation id="3382143449143186018">Nepalès amb teclat InScript</translation>
 <translation id="338691029516748599">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, gestionada per l'administrador, connecta</translation>
 <translation id="3408072735282270043">Activa, <ph name="NETWORK_NAME" /></translation>
@@ -280,11 +308,13 @@
 <translation id="3475447146579922140">Full de càlcul de Google</translation>
 <translation id="3479552764303398839">Ara no</translation>
 <translation id="3486821258960016770">Mongol</translation>
-<translation id="3495304270784461826"><ph name="COUNT" /> errors.</translation>
 <translation id="3509680540198371098">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, <ph name="CONNECTION_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, detalls</translation>
+<translation id="3511705761158917664">S'està preparant per sincronitzar <ph name="NUMBER_OF_ITEMS" /> elements...</translation>
 <translation id="3522708245912499433">Portuguès</translation>
+<translation id="3523225005467146490">S'ha compartit 1 carpeta amb <ph name="VM_NAME" /></translation>
 <translation id="3524311639100184459">Compte: aquests fitxers són temporals i és possible que se suprimeixin automàticament per alliberar espai de disc.  <ph name="BEGIN_LINK" />Més informació<ph name="END_LINK" /></translation>
 <translation id="3527085408025491307">Carpeta</translation>
+<translation id="3529424493985988200">Contacta amb l'administrador per obtenir detalls.</translation>
 <translation id="3548125359243647069">S'ha introduït un PIN incorrecte massa vegades.</translation>
 <translation id="3549797760399244642">Ves a drive.google.com...</translation>
 <translation id="3553048479571901246">Per obrir fitxers amb <ph name="APP_NAME" />, primer copia'ls a la carpeta de fitxers de Windows.</translation>
@@ -301,7 +331,9 @@
 <translation id="3619115746895587757">Caputxino</translation>
 <translation id="3619593063686672873">No hi ha cap vídeo recent</translation>
 <translation id="3634507049637220048">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, gestionada per l'administrador, detalls</translation>
+<translation id="36451918667380448">El servei de xarxa mòbil està bloquejat. Contacta amb el proveïdor per obtenir assistència.</translation>
 <translation id="3645233063072417428"><ph name="NUMBER_OF_ITEMS" /> elements moguts.</translation>
+<translation id="3658269352872031728">S'han seleccionat <ph name="SELECTED_FILE_COUNT" /> fitxers</translation>
 <translation id="3685122418104378273">La sincronització amb Google Drive està desactivada de manera predeterminada en utilitzar les dades mòbils.</translation>
 <translation id="3689865792480713551">Cancel·la <ph name="ACTIVITY_DESCRIPTION" />.</translation>
 <translation id="3690128548376345212">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, desactivada, <ph name="CONNECTION_STATUS" />, intensitat del senyal <ph name="SIGNAL_STRENGTH" />%, detalls</translation>
@@ -311,7 +343,6 @@
 <translation id="3727148787322499904">Els canvis en aquesta opció de configuració afectaran totes les xarxes compartides</translation>
 <translation id="3737576078404241332">Suprimeix de la barra lateral</translation>
 <translation id="3749289110408117711">Nom del fitxer</translation>
-<translation id="3780536599611287598">No tens permís per moure fitxers a <ph name="FOLDER_NAME" />.</translation>
 <translation id="3786301125658655746">No tens connexió</translation>
 <translation id="3789841737615482174">Instal·la</translation>
 <translation id="3793469551756281394">Temps restant aproximat: <ph name="REMAINING_TIME_HOUR" /> i <ph name="REMAINING_TIME_MINUTE" /></translation>
@@ -319,6 +350,7 @@
 <translation id="3801082500826908679">Feroès</translation>
 <translation id="3809272675881623365">Conill</translation>
 <translation id="3810973564298564668">Gestiona</translation>
+<translation id="3811408895933919563">Anglès (Pakistan)</translation>
 <translation id="3811494700605067549">1 fitxer seleccionat</translation>
 <translation id="3817579325494460411">No s'ha proporcionat</translation>
 <translation id="3819448694985509187">El PIN no és correcte. Et queda 1 intent.</translation>
@@ -335,19 +367,25 @@
 <translation id="3906232975181435906">S'està instal·lant el perfil mòbil, xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />.</translation>
 <translation id="3924145049010392604">Meta</translation>
 <translation id="3943857333388298514">Enganxa</translation>
+<translation id="3950820424414687140">Inicia la sessió</translation>
 <translation id="3952872973865944257">Telugu fonètic</translation>
 <translation id="3958548648197196644">Kiwi</translation>
+<translation id="397105322502079400">S’està calculant...</translation>
 <translation id="3971140002794351170">Baixa el perfil mòbil, xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" /></translation>
 <translation id="3973925058222872294">Anglès (Regne Unit)</translation>
 <translation id="3975895378829046965">Bengalí fonètic</translation>
+<translation id="3999574733850440202">Els fitxers de Microsoft oberts recentment s'han mogut a OneDrive</translation>
 <translation id="4002066346123236978">Títol</translation>
 <translation id="4017788180641807848">Anglès (EUA) amb teclat Workman</translation>
 <translation id="4019998208269143058">Fixa als fitxers ràpids</translation>
 <translation id="4040753847560036377">El PUK no és correcte</translation>
 <translation id="4057991113334098539">S'està activant...</translation>
 <translation id="4092890906744441904">Irlandès</translation>
+<translation id="4124731372776320263">S'està sincronitzant 1 fitxer de Drive</translation>
 <translation id="4124935795427217608">Unicorn</translation>
 <translation id="4131235941541910880">Mou els elements que no necessitis a la paperera</translation>
+<translation id="4134804435730168042">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" />, Activa després de la configuració del dispositiu</translation>
+<translation id="41501027364808384">{COUNT,plural, =1{Activa l'extensió següent en mode d'incògnit:}other{Activa les extensions següents en mode d'incògnit:}}</translation>
 <translation id="4153015322587141338">Fes clic amb el botó dret en un fitxer i selecciona <ph name="PIN_COMMAND" /> per accedir ràpidament als teus fitxers al prestatge.</translation>
 <translation id="4157569377477607576">La política de l'administrador no recomana:</translation>
 <translation id="4159731583141908892"><ph name="FILE_NAME" /> s'ha mogut.</translation>
@@ -386,13 +424,18 @@
 <translation id="4398096759193130964">Restaura els elements o arrossega'ls a una carpeta nova fora de la paperera</translation>
 <translation id="4401287888955153199">Extreu-ho tot</translation>
 <translation id="4410695710508688828">L'operació d'extracció ha fallat. <ph name="ERROR_MESSAGE" /></translation>
+<translation id="4414834425328380570"><ph name="FILE_NAME" /> se suprimirà i no el podràs restaurar.</translation>
 <translation id="4418686080762064601">Crea una drecera per als fitxers</translation>
 <translation id="4425149324548788773">La meva unitat</translation>
+<translation id="4432921877815220091">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Activa després de la configuració del dispositiu, Gestionada pel teu administrador</translation>
 <translation id="4439427728133035643">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, connecta</translation>
 <translation id="4442424173763614572">La cerca de DNS ha fallat</translation>
+<translation id="4445896958353114391">S'estan sincronitzant els fitxers</translation>
 <translation id="4462159676511157176">Servidors de noms personalitzats</translation>
 <translation id="4465725236958772856">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, gestionada per l'administrador, connecta</translation>
 <translation id="4470564870223067757">Configuració 2 de hangul</translation>
+<translation id="4472575034687746823">Comença</translation>
+<translation id="4474142134969976028">No hi ha cap resultat coincident</translation>
 <translation id="4477002475007461989">Romanès</translation>
 <translation id="4477219268485577442">Fonètic búlgar</translation>
 <translation id="4508265954913339219">S'ha produït un error en l'activació.</translation>
@@ -403,13 +446,13 @@
 <translation id="4552759165874948005">Xarxa <ph name="NETWORK_TYPE" /> (intensitat del senyal: <ph name="SIGNAL_STRENGTH" /> per cent)</translation>
 <translation id="4559767610552730302">Bokeh</translation>
 <translation id="4572815280350369984">Fitxer <ph name="FILE_TYPE" /></translation>
-<translation id="457386861538956877">Més...</translation>
 <translation id="4579744207439506346">S'ha afegit <ph name="ENTRY_NAME" /> a la selecció.</translation>
 <translation id="4583436353463424810">No hi ha cap document recent</translation>
 <translation id="4594543368593301662">Es mostren els resultats per a <ph name="SEARCH_TERM" />.</translation>
 <translation id="4599600860674643278">S'ha restablert el filtre.</translation>
 <translation id="4603392156942865207">S'està copiant <ph name="FILE_NAME" /> a la carpeta <ph name="FOLDER_NAME" /></translation>
 <translation id="4631887759990505102">Artista</translation>
+<translation id="4635373743001040938">Queda molt poc espai d'emmagatzematge. La sincronització de fitxers s'ha desactivat.</translation>
 <translation id="4642769377300286600">S'està instal·lant el perfil mòbil, xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" /></translation>
 <translation id="4646813851450205600">Txec amb teclat QWERTY</translation>
 <translation id="4656777537938206294">Fes que els fitxers estiguin disponibles sense connexió</translation>
@@ -435,18 +478,20 @@
 <translation id="4779136857077979611">Onigiri</translation>
 <translation id="4784330909746505604">Presentació de PowerPoint</translation>
 <translation id="4788401404269709922"><ph name="NUMBER_OF_KB" /> kB</translation>
-<translation id="4789067489790477934">Dona permís a Parallels Desktop per accedir als teus fitxers de Google Drive. Els canvis se sincronitzaran amb els altres dispositius.</translation>
+<translation id="4789067489790477934">Dona permís a Parallels Desktop per accedir als fitxers que hi ha al teu Google Drive. Els canvis se sincronitzaran amb els altres dispositius que tinguis.</translation>
 <translation id="4790766916287588578">Hindi amb teclat InScript</translation>
 <translation id="4801956050125744859">Mantén-les totes dues</translation>
 <translation id="4804827417948292437">Alvocat</translation>
 <translation id="4805966553127040832">S'estan restaurant <ph name="COUNT" /> elements</translation>
-<translation id="4823651846660089135">El dispositiu és només de lectura</translation>
+<translation id="4816695657735045067">{COUNT,plural, =1{Per utilitzar el mode d'incògnit, la teva organització requereix una extensió}other{Per utilitzar el mode d'incògnit, la teva organització requereix algunes extensions}}</translation>
 <translation id="4826849268470072925">Tàmil (itrans)</translation>
-<translation id="4839847978919684242"><ph name="SELCTED_FILES_COUNT" /> elements seleccionats</translation>
+<translation id="482932175346970750">Escriu <ph name="BEGIN_BOLD" />chrome://extensions<ph name="END_BOLD" /> al navegador</translation>
 <translation id="4843566743023903107">dispositius Chromebase</translation>
 <translation id="4850886885716139402">Mostra</translation>
 <translation id="485316830061041779">Alemany</translation>
+<translation id="4862885579661885411">Configuració de Fitxers</translation>
 <translation id="4867079195717347957">Fes clic per veure les dades de la columna en ordre descendent.</translation>
+<translation id="4867297348137739678">Darrera setmana</translation>
 <translation id="4873265419374180291"><ph name="NUMBER_OF_BYTES" /> bytes</translation>
 <translation id="4874569719830985133">Suprimeix definitivament</translation>
 <translation id="4880214202172289027">Control lliscant de volum</translation>
@@ -458,11 +503,13 @@
 <translation id="4935975195727477204">Flor de gazània</translation>
 <translation id="4943368462779413526">Pilota de futbol americà</translation>
 <translation id="4961158930123534723">S'ha compartit 1 carpeta amb Parallels Desktop</translation>
+<translation id="4965874878399872778">S'està comprovant que els fitxers compleixin les polítiques de seguretat de la teva organització...</translation>
 <translation id="496656650103537022"><ph name="FILE_NAME" /> s'ha restaurat</translation>
 <translation id="4969785127455456148">Àlbum</translation>
+<translation id="4972330214479971536">No s'ha pogut acabar de configurar la sincronització de fitxers</translation>
 <translation id="4973523518332075481">Utilitza un nom que tingui <ph name="MAX_LENGTH" /> caràcters com a màxim</translation>
-<translation id="4973970068702235170">S'ha produït un error en la compressió; error inesperat: <ph name="ERROR_MESSAGE" /></translation>
 <translation id="4984616446166309645">Japonès</translation>
+<translation id="4987699874727873250">Anglès (Índia)</translation>
 <translation id="4988205478593450158">Estàs segur que vols suprimir "<ph name="FILE_NAME" />"?</translation>
 <translation id="498902553138568924">Papallona vermella</translation>
 <translation id="4992066212339426712">Deixa de silenciar</translation>
@@ -482,6 +529,7 @@
 <translation id="5102922915594634436">Gestiona les carpetes sincronitzades</translation>
 <translation id="5109254780565519649">S'ha produït un error. És possible que alguns elements no s'hagin restaurat.</translation>
 <translation id="5110329002213341433">Anglès (Canadà)</translation>
+<translation id="5119780910075847424">La sincronització s'ha posat en pausa</translation>
 <translation id="5123433949759960244">Pilota de bàsquet</translation>
 <translation id="5129662217315786329">Polonès</translation>
 <translation id="5144820558584035333">Configuració 3 de hangul (390)</translation>
@@ -500,6 +548,7 @@
 <translation id="5218183485292899140">Francès suís</translation>
 <translation id="5234764350956374838">Ignora</translation>
 <translation id="5253070652067921974">Creat per</translation>
+<translation id="5254207638927440400">No es pot moure el fitxer. El fitxer s'està utilitzant.</translation>
 <translation id="5257456363153333584">Libèl·lula</translation>
 <translation id="5262311848634918433"><ph name="MARKUP_1" />Accediu a fitxers des de qualsevol lloc, fins i tot sense connexió.<ph name="MARKUP_2" />
     Els fitxers que són a Google Drive estan actualitzats i disponibles des de qualsevol dispositiu.<ph name="MARKUP_3" />
@@ -509,9 +558,8 @@
     amb altres persones; tot en un sol lloc.<ph name="MARKUP_9" /></translation>
 <translation id="5275973617553375938">Fitxers recuperats de Google Drive</translation>
 <translation id="5278111733643988471">Per restaurar aquest element, arrossega'l a una carpeta nova fora de la paperera. La carpeta original "<ph name="PARENT_FOLDER_NAME" />" d'aquest element s'ha suprimit.</translation>
-<translation id="5286194356314741248">S'està cercant</translation>
+<translation id="5283101102242354279">Activa una extensió en mode d'incògnit:</translation>
 <translation id="5288441970121584418">Hamburguesa</translation>
-<translation id="5288481194217812690"><ph name="FILENAME" /></translation>
 <translation id="5293615890992542006">La política de l'administrador ha bloquejat l'opció de moure aquest fitxer</translation>
 <translation id="5305688511332277257">Cap d'instal·lat</translation>
 <translation id="5317780077021120954">Desa</translation>
@@ -519,7 +567,6 @@
 <translation id="5323213332664049067">Espanyol d'Amèrica Llatina</translation>
 <translation id="5330145655348521461">Aquests fitxers s'han obert en un altre escriptori. Aneu a <ph name="USER_NAME" /> (<ph name="MAIL_ADDRESS" />) per veure'l.</translation>
 <translation id="5330512191124428349">Mostra la informació</translation>
-<translation id="5337538975554986899">Tots els URL poden accedir al fitxer, excepte <ph name="NON_RESTRICTED_DESTINATIONS" /></translation>
 <translation id="535792325654997756">Persona amb gats</translation>
 <translation id="5358764674931277">Fotogrames per segon</translation>
 <translation id="5363339716524495120">L'idioma d'introducció és el xinès</translation>
@@ -531,6 +578,7 @@
 <translation id="5422221874247253874">Punt d'accés</translation>
 <translation id="5428105026674456456">Espanyol</translation>
 <translation id="5438282218546237410">No hi ha cap resultat per a <ph name="SEARCH_TERM" />.</translation>
+<translation id="5447680084201416734">No hi ha prou espai d'emmagatzematge.</translation>
 <translation id="5449551289610225147">La contrasenya no és vàlida</translation>
 <translation id="5459064203055649751">Ja existeix un fitxer anomenat <ph name="FILENAME" />. Vols substituir-lo pel que estàs movent?</translation>
 <translation id="5463231940765244860">Introdueix</translation>
@@ -546,9 +594,11 @@
 <translation id="5533102081734025921">Imatge <ph name="IMAGE_TYPE" /></translation>
 <translation id="5534520101572674276">S'està calculant la mida</translation>
 <translation id="554153475311314364">Grec (transliteració)</translation>
+<translation id="5554171655917412781">S'han seleccionat <ph name="SELECTED_FOLDERS_COUNT" /> carpetes</translation>
 <translation id="5580591966435005537">màquina virtual</translation>
 <translation id="5583640892426849032">Retrocés</translation>
 <translation id="5583664733673201137">L'amplada de la puntuació és completa</translation>
+<translation id="5596627076506792578">Més opcions</translation>
 <translation id="5602622065581044566">Búlgar amb teclat fonètic</translation>
 <translation id="5605830556594064952">Dvorak nord-americà</translation>
 <translation id="5618330573454123917">Aquest fitxer està dissenyat per a un ordinador amb programari Macintosh. No és compatible amb el teu dispositiu, que funciona amb Chrome OS. <ph name="BEGIN_LINK_HELP" />Obtén més informació<ph name="END_LINK_HELP" /> sobre com pots obrir fitxers a Chrome OS.</translation>
@@ -565,7 +615,10 @@
 <translation id="5700087501958648444">Informació de l'àudio</translation>
 <translation id="5720028165859493293">S'ha mogut <ph name="FILE_NAME" /> a la paperera</translation>
 <translation id="5724172041621205163">Tai amb teclat pattachote</translation>
+<translation id="57383366388012121">Darrer mes</translation>
+<translation id="575175778971367197">Ara mateix no es pot sincronitzar aquest fitxer</translation>
 <translation id="5756666464756035725">QWERTY hongarès</translation>
+<translation id="5760252553414789727">S'han seleccionat <ph name="SELECTED_FILES_COUNT" /> elements</translation>
 <translation id="5763377084591234761">Alemany (Suïssa)</translation>
 <translation id="5769519078756170258">Amfitrió o domini que vols excloure</translation>
 <translation id="5775750595919327203">Urdú</translation>
@@ -583,23 +636,26 @@
 <translation id="5838451609423551646">S'han suprimit totes les entrades de la selecció.</translation>
 <translation id="5838825566232597749">Workman nord-americà internacional</translation>
 <translation id="5845721951356578987">Infermer</translation>
+<translation id="5858478190805449225">El mode d'estalvi de bateria està activat. Torna-ho a provar quan aquest mode estigui desactivat.</translation>
+<translation id="5860491529813859533">Activa</translation>
 <translation id="5861477046012235702">Jugador de videojocs</translation>
 <translation id="5864471791310927901">Error en la cerca de DHCP</translation>
 <translation id="5896749729057314184">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, desactivada, intensitat del senyal <ph name="SIGNAL_STRENGTH" />%, detalls</translation>
 <translation id="5911887972742538906">S'ha produït un error en instal·lar l'aplicació per a Linux.</translation>
 <translation id="5912396950572065471">Format</translation>
-<translation id="5913638992615760742">L'operació de còpia ha fallat; s'ha produït un error inesperat: <ph name="ERROR_MESSAGE" /></translation>
+<translation id="5918480239180455431">Ara hi ha noves funcions de cerca disponibles</translation>
 <translation id="5926082595146149752">Neerlandès (Països Baixos) amb teclat internacional dels EUA (PC)</translation>
 <translation id="5932901536148835538">Chromebit</translation>
+<translation id="5948255720516436063">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Activa després de la configuració del dispositiu</translation>
 <translation id="5955954492236143329"><ph name="NUMBER_OF_ITEMS" /> elements</translation>
 <translation id="5957366693331451795">dispositius Chromebox</translation>
 <translation id="5982621672636444458">Ordena les opcions</translation>
-<translation id="6007237601604674381">El trasllat ha fallat. <ph name="ERROR_MESSAGE" /></translation>
 <translation id="6011074160056912900">Xarxa Ethernet</translation>
 <translation id="60357267506638014">QWERTY txec</translation>
 <translation id="603895874132768835">No podràs utilitzar aquesta xarxa fins que no configuris un PIN nou</translation>
 <translation id="6040143037577758943">Tanca</translation>
 <translation id="6055907707645252013">Xarxa <ph name="NETWORK_TYPE" /> (no connectada)</translation>
+<translation id="6073060579181816027">Diverses ubicacions de fitxer</translation>
 <translation id="6074825444536523002">Formulari de Google</translation>
 <translation id="6079871810119356840">Hongarès amb teclat QWERTY</translation>
 <translation id="6096979789310008754">El text de cerca s'ha esborrat. Es mostren tots els fitxers i carpetes.</translation>
@@ -615,6 +671,8 @@
 <translation id="6164412158936057769">Papallones</translation>
 <translation id="6165508094623778733">Més informació</translation>
 <translation id="6170470584681422115">Entrepà</translation>
+<translation id="6177854567773392726">S'està comprovant l'espai d'emmagatzematge… S'han trobat <ph name="ITEMS_FOUND" /> elements.</translation>
+<translation id="6181912134988520389">Dona permís a <ph name="VM_NAME" /> per accedir als fitxers que hi ha al teu Google Drive. Els canvis se sincronitzaran amb els altres dispositius.</translation>
 <translation id="6187719147498869044">Hongarès</translation>
 <translation id="6198252989419008588">Canvia el PIN</translation>
 <translation id="6199801702437275229">S'està esperant per rebre informació sobre l'espai...</translation>
@@ -625,6 +683,7 @@
 <translation id="6241349547798190358">Neerlandès (Bèlgica)</translation>
 <translation id="6267547857941397424">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="PHONE_NAME" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, <ph name="BATTERY_STATUS" />% de bateria al telèfon, connecta</translation>
 <translation id="6269630227984243955">Malai</translation>
+<translation id="6271903698064569429">No es poden penjar els fitxers perquè "<ph name="SHARED_DRIVE_NAME" />" no té prou espai d'emmagatzematge.</translation>
 <translation id="6287852322318138013">Selecció d'una aplicació per obrir el fitxer</translation>
 <translation id="6295542640242147836">Bloqueja la SIM</translation>
 <translation id="6296410173147755564">El PUK no és vàlid</translation>
@@ -636,7 +695,6 @@
 <translation id="6327785803543103246">Detecció automàtica de servidors intermediaris web</translation>
 <translation id="6337014272874260727">Deixa de fixar als fitxers ràpids</translation>
 <translation id="6339145975392024142">Teclat internacional dels EUA (PC)</translation>
-<translation id="6346310558342052870">Accés restringit</translation>
 <translation id="6356685157277930264">Finestra de suggeriments en fitxers</translation>
 <translation id="6358884629796491903">Drac</translation>
 <translation id="636254897931573416">Valor no vàlid de sufix de domini coincident</translation>
@@ -645,10 +703,13 @@
 <translation id="637062427944097960">Aquest fitxer s'ha obert en un altre escriptori. Aneu a <ph name="USER_NAME" /> (<ph name="MAIL_ADDRESS" />) per veure'l.</translation>
 <translation id="6394388407447716302">Només de lectura</translation>
 <translation id="6395575651121294044"><ph name="NUMBER_OF_FILES" /> elements</translation>
+<translation id="6407769893376380348">No s'ha pogut moure <ph name="FILE_NAME" /> perquè està encriptat.</translation>
 <translation id="642282551015776456">Aquest nom no es pot utilitzar com a nom de fitxer o de carpeta</translation>
 <translation id="6423031066725912715">Vietnamita amb teclat TCVN</translation>
 <translation id="6430271654280079150">Et queda 1 intent.</translation>
 <translation id="643243556292470964">Els fitxers suprimits ara són a la paperera</translation>
+<translation id="6438480100790416671">S'està comprovant l'espai d'emmagatzematge…</translation>
+<translation id="6451527188465304418">S'està comprovant que el fitxer compleixi les polítiques de seguretat de la teva organització...</translation>
 <translation id="6485131920355264772">No s'ha pogut recuperar informació sobre l'espai</translation>
 <translation id="6495925982925244349">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, <ph name="CONNECTION_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, gestionada per l'administrador, detalls</translation>
 <translation id="649877868557234318">S'està extraient <ph name="FILE_NAME" /> a la carpeta <ph name="FOLDER_NAME" /></translation>
@@ -656,11 +717,11 @@
 <translation id="6503285896705205014">La política de l'administrador ha bloquejat l'opció de copiar <ph name="COUNT" /> fitxers</translation>
 <translation id="6509122719576673235">Noruec</translation>
 <translation id="6528513914570774834">Permet que els altres usuaris d'aquest dispositiu facin servir aquesta xarxa</translation>
-<translation id="653019979737152879">S'està sincronitzant <ph name="FILE_NAME" />...</translation>
 <translation id="6549689063733911810">Recent</translation>
 <translation id="6558280019477628686">S'ha produït un error. És possible que alguns elements no s'hagin suprimit.</translation>
 <translation id="656398493051028875">S'està suprimint "<ph name="FILENAME" />"...</translation>
 <translation id="6581162200855843583">Enllaç de Google Drive</translation>
+<translation id="6588648400954570689">Configuració de la sincronització de fitxers</translation>
 <translation id="6594855146910089723">Aquesta carpeta es comparteix amb Linux i Parallels Desktop</translation>
 <translation id="6607272825297743757">Informació del fitxer</translation>
 <translation id="6609332149380188670">S'han compartit <ph name="NUMBER_OF_ITEMS" /> carpetes amb Parallels Desktop</translation>
@@ -670,10 +731,12 @@
 <translation id="6657585470893396449">Contrasenya</translation>
 <translation id="6658865850469097484">Els fitxers que faci més de 30 dies que són a la paperera se suprimiran automàticament.</translation>
 <translation id="6673674183150363784">Francès (França) amb teclat BÉPO</translation>
+<translation id="670380500182402678">Substitueix-ho tot</translation>
 <translation id="6710022688720561421">Robot</translation>
 <translation id="6710213216561001401">Anterior</translation>
 <translation id="6732801395666424405">Els certificats no s'han carregat.</translation>
 <translation id="6736329909263487977"><ph name="ISSUED_BY" /> [<ph name="ISSUED_TO" />]</translation>
+<translation id="6750737795876287924">Directori actual</translation>
 <translation id="6751256176799620176">1 carpeta seleccionada</translation>
 <translation id="6755827872271341378">Dispositiu ChromeOS Flex</translation>
 <translation id="6790428901817661496">Reprodueix</translation>
@@ -693,7 +756,6 @@
 <translation id="6874758081814639712">Persona fent taitxí</translation>
 <translation id="6876155724392614295">Bicicleta</translation>
 <translation id="6878261347041253038">Teclat devanagari (fonètic)</translation>
-<translation id="6881853403185175088">Office</translation>
 <translation id="6885780034956018177">Caragol</translation>
 <translation id="6896758677409633944">Copia</translation>
 <translation id="6898028766943174120">Més subcarpetes...</translation>
@@ -703,6 +765,7 @@
 <translation id="6935521024859866267">Cap per avall</translation>
 <translation id="6943836128787782965">La sol·licitud HTTP ha fallat</translation>
 <translation id="6949408524333579394">Serbi (transliteració)</translation>
+<translation id="69548399407432279">Darrer any</translation>
 <translation id="6960565108681981554">No està activada. Contacta amb l'operador.</translation>
 <translation id="696203921837389374">Activa la sincronització mitjançant dades mòbils</translation>
 <translation id="6965382102122355670">D'acord</translation>
@@ -714,7 +777,7 @@
 <translation id="6989942356279143254">Suec</translation>
 <translation id="6990081529015358884">Us heu quedat sense espai</translation>
 <translation id="6993826899923627728">Aquests elements són a la paperera</translation>
-<translation id="6998711733709403587">S'han seleccionat <ph name="SELCTED_FOLDERS_COUNT" /> carpetes</translation>
+<translation id="6996593023542748157">Comparteix la carpeta amb <ph name="VM_NAME" /></translation>
 <translation id="7008426324576352165">La teva organització requereix més emmagatzematge per completar la pujada.</translation>
 <translation id="7009985720488544166">La política de l'administrador ha bloquejat l'opció de moure <ph name="COUNT" /> fitxers</translation>
 <translation id="7012943028104619157"><ph name="ROOT_TITLE" /> (<ph name="ROOT_SUMMARY" />)</translation>
@@ -733,8 +796,10 @@
 <translation id="7126604456862387217">"&lt;b&gt;<ph name="SEARCH_STRING" />&lt;/b&gt;": &lt;em&gt;cerca a Drive&lt;/em&gt;</translation>
 <translation id="7135561821015524160">Kannada fonètic</translation>
 <translation id="714034171374937760">Chromebase</translation>
+<translation id="7162080671816799010">Cal emplenar els camps "Nom alternatiu d'assumpte coincident" o "Sufix de domini coincident" per validar la identitat del servidor d'autenticació</translation>
 <translation id="7165320105431587207">No s'ha pogut configurar la xarxa</translation>
 <translation id="7170041865419449892">Fora de l'interval</translation>
+<translation id="7179579940054351344">Tots els llocs web i tots els URL poden accedir al fitxer, excepte <ph name="NON_RESTRICTED_DESTINATIONS" /></translation>
 <translation id="7180611975245234373">Actualitza</translation>
 <translation id="7189874332498648577"><ph name="NUMBER_OF_GB" /> GB</translation>
 <translation id="7191454237977785534">Anomena i desa</translation>
@@ -744,8 +809,11 @@
 <translation id="7238643356913091553"><ph name="NETWORK_NAME" />, detalls</translation>
 <translation id="7246947237293279874">Servidor intermediari FTP</translation>
 <translation id="7248671827512403053">Aplicació</translation>
+<translation id="7252604552361840748">Cerca l'extensió anterior</translation>
 <translation id="7256405249507348194">Error no reconegut: <ph name="DESC" /></translation>
 <translation id="7268659760406822741">Serveis disponibles</translation>
+<translation id="7291818353625820805">Vols que les tecles es repeteixin? Desactiva les marques d'accentuació a Configuració del teclat.</translation>
+<translation id="729236380049459563">La sincronització de fitxers està activada</translation>
 <translation id="7292816689782057017">La política de l'administrador restringeix l'opció de desar en algunes ubicacions.</translation>
 <translation id="7294063083760278948">Telugu (transliteració)</translation>
 <translation id="7295662345261934369">Comparteix amb altres persones</translation>
@@ -753,6 +821,7 @@
 <translation id="7309413087278791451">Alemany (Bèlgica)</translation>
 <translation id="7339898014177206373">Finestra nova</translation>
 <translation id="7343393116438664539">Vietnamita (tèlex)</translation>
+<translation id="7347346221088620549">Fitxer encriptat</translation>
 <translation id="7357762654218998920">Aquest tipus de fitxer no és compatible. <ph name="BEGIN_LINK_HELP" />Obtén més informació<ph name="END_LINK_HELP" /> sobre com pots obrir fitxers a Chrome OS.</translation>
 <translation id="7359359531237882347">S'estan copiant <ph name="NUMBER_OF_ITEMS" /> elements...</translation>
 <translation id="7375951387215729722">La llista de fitxers es mostra per <ph name="COLUMN_NAME" /> en ordre descendent.</translation>
@@ -773,14 +842,14 @@
 <translation id="751507702149411736">Bielorús</translation>
 <translation id="7521790570754130607">Es requereix un PIN per utilitzar dades mòbils</translation>
 <translation id="7532029025027028521">Persa (transliteració)</translation>
-<translation id="7544830582642184299">Dona permís a les aplicacions de Linux per accedir als teus fitxers de Google Drive. Els canvis se sincronitzaran amb els altres dispositius.</translation>
+<translation id="7544830582642184299">Dona permís a les aplicacions de Linux per accedir als fitxers que hi ha al teu Google Drive. Els canvis se sincronitzaran amb els altres dispositius que tinguis.</translation>
 <translation id="7547009467130558110">Vamba</translation>
 <translation id="7547780573915868306">Lituà</translation>
 <translation id="7547811415869834682">Neerlandès</translation>
 <translation id="7551643184018910560">Fixa al prestatge</translation>
 <translation id="7553492409867692754">Dona permís a les aplicacions de Linux per accedir als fitxers de la carpeta <ph name="FOLDER_NAME" /></translation>
+<translation id="7555339735447658365">En aquests moments no tens connexió. La sincronització de fitxers es reprendrà quan tinguis connexió a Internet.</translation>
 <translation id="7589661784326793847">Espereu un moment.</translation>
-<translation id="7592775719802218421">S'està fent que <ph name="FILE_NAME" /> estigui disponible sense connexió</translation>
 <translation id="7600126690270271294">Serbi</translation>
 <translation id="7603724359189955920">Quadrícules</translation>
 <translation id="7627790789328695202"><ph name="FILE_NAME" /> ja existeix. Canvieu-ne el nom i torneu-ho a provar.</translation>
@@ -790,17 +859,20 @@
 <translation id="7655441028674523381">Accedeix fàcilment a Google Fotos</translation>
 <translation id="7658239707568436148">Cancel·la</translation>
 <translation id="7663224033570512922">Hindi</translation>
+<translation id="7665680517722058469">Prova una altra cerca</translation>
 <translation id="7689532716264131859">S'han mogut <ph name="NUMBER_OF_ITEMS" /> elements a la paperera</translation>
 <translation id="7693909743393669729">En formatar una unitat, se n'esborren totes les dades que s'hi hagin emmagatzemat i se'n suprimeixen totes les particions existents, incloses algunes que potser no es veuen. Aquesta acció no es pot desfer.</translation>
 <translation id="7695430100978772476">No s'ha pogut formatar <ph name="DRIVE_NAME" /></translation>
 <translation id="76959938259365003">No s'ha pogut buidar la paperera.</translation>
 <translation id="770015031906360009">Grec</translation>
 <translation id="7705251383879779343"><ph name="FILE_NAME" /> s'ha copiat.</translation>
+<translation id="7707941139430559579">No es pot moure el fitxer. <ph name="ERROR_MESSAGE" /></translation>
 <translation id="7708271999969613024">Per utilitzar aquesta xarxa, has d'introduir el número personal de desbloqueig (PUK) de 8 dígits proporcionat per l'operador.</translation>
 <translation id="7711920809702896782">Informació de la imatge</translation>
 <translation id="7724603315864178912">Retalla</translation>
 <translation id="7732111077498238432">La xarxa està controlada per una política</translation>
 <translation id="7736003208887389532">Vols suprimir permanentment aquests fitxers?</translation>
+<translation id="7740287852186792672">Resultats de la cerca</translation>
 <translation id="7748626145866214022">Hi ha més opcions disponibles a la barra d'accions. Prem Alt+A per posar el focus a la barra d'accions.</translation>
 <translation id="7760449188139285140">Xinès (wubi)</translation>
 <translation id="7765158879357617694">Mou</translation>
@@ -816,6 +888,7 @@
 <translation id="7805768142964895445">Estat</translation>
 <translation id="7806708061868529807">Hebreu</translation>
 <translation id="78104721049218340">Tai amb teclat kedmanee</translation>
+<translation id="7814857791038398352">Microsoft OneDrive</translation>
 <translation id="7827012282502221009"><ph name="NUMBER_OF_TB" /> TB</translation>
 <translation id="7831491651892296503">S'ha produït un error en configurar la xarxa</translation>
 <translation id="7839804798877833423">Per obtenir aquests fitxers s'utilitzaran aproximadament <ph name="FILE_SIZE" /> de dades mòbils.</translation>
@@ -828,9 +901,10 @@
 <translation id="7903984238293908205">Katakana</translation>
 <translation id="7908793776359722643">En formatar una partició, se n'esborren totes les dades que s'hi hagin emmagatzemat. Aquesta acció no es pot desfer.</translation>
 <translation id="7911118814695487383">Linux</translation>
+<translation id="7920501309908018401">Els fitxers de La meva unitat se sincronitzaran amb el Chromebook automàticament perquè hi puguis accedir sense connexió a Internet.</translation>
 <translation id="7925247922861151263">Error en la comprovació d'AAA</translation>
-<translation id="7925686952655276919">No utilitzis les dades mòbils per a la sincronització</translation>
 <translation id="7928710562641958568">Expulsa el dispositiu</translation>
+<translation id="7933875256234974853">S'està preparant la sincronització dels fitxers de Drive...</translation>
 <translation id="7943385054491506837">Colemak nord-americà</translation>
 <translation id="7953739707111622108">Aquest dispositiu no es pot obrir perquè el seu sistema de fitxers no s'ha reconegut.</translation>
 <translation id="7969525169268594403">Eslovè</translation>
@@ -840,26 +914,34 @@
 <translation id="8000066093800657092">No hi ha cap xarxa</translation>
 <translation id="8008366997883261463">Gos</translation>
 <translation id="8028993641010258682">Mida</translation>
+<translation id="8034974485549318493">Per a la configuració inicial, t'has de connectar a Internet perquè es puguin sincronitzar els fitxers.</translation>
 <translation id="803771048473350947">Fitxer</translation>
 <translation id="8038111231936746805">(predeterminada)</translation>
 <translation id="8042602468072383151">Àudio <ph name="AUDIO_TYPE" /></translation>
 <translation id="8045462269890919536">Romanès</translation>
 <translation id="8049184478152619004">Introdueix el número personal de desbloqueig (PUK)</translation>
+<translation id="8055538340801153769">Aquesta carpeta</translation>
 <translation id="807187749540895545">S'està extraient <ph name="FILE_NAME" />...</translation>
 <translation id="8087576439476816834">Baixa, <ph name="PROFILE_NAME" /></translation>
 <translation id="8106045200081704138">Compartit amb mi</translation>
 <translation id="8116072619078571545">Aigua amb gel</translation>
+<translation id="8120392982188717723">Permet la sincronització en xarxes d'ús mesurat</translation>
+<translation id="8124093710070495550">Problema de sincronització</translation>
 <translation id="8128733386027980860">Anglès (Regne Unit) amb teclat Dvorak</translation>
 <translation id="8137331602592933310">El fitxer "<ph name="FILENAME" />" s'ha compartit amb l'usuari. No el podeu suprimir perquè no és vostre.</translation>
+<translation id="8138705869659070104">Activa després de configurar</translation>
 <translation id="813913629614996137">S'està inicialitzant…</translation>
 <translation id="8147028810663464959">L'amplada dels caràcters és completa</translation>
 <translation id="8151638057146502721">Configura</translation>
+<translation id="8154666764013920974">{NUM_ERROR,plural, =1{1 error.}other{# errors.}}</translation>
 <translation id="8154842056504218462">S'han seleccionat totes les entrades.</translation>
 <translation id="8157684860301034423">No s'ha pogut recuperar la informació de l'aplicació.</translation>
 <translation id="8175731104491895765">Francès (Bèlgica)</translation>
+<translation id="8175799081768705361">S'estan sincronitzant <ph name="NUMBER_OF_FILES_SYNCING" /> fitxers de Drive</translation>
 <translation id="8179976553408161302">Retorn</translation>
 <translation id="8193175696669055101">Model de dispositiu</translation>
 <translation id="8223479393428528563">Per desar aquests fitxers per utilitzar-los fora de línia, connecteu-vos a una xarxa, feu clic amb el botó dret als fitxers i seleccioneu l'opció <ph name="OFFLINE_CHECKBOX_NAME" />.</translation>
+<translation id="8241139360630443550">Mostra l'emmagatzematge</translation>
 <translation id="8249296373107784235">Cancel·la</translation>
 <translation id="8250690786522693009">Llatí</translation>
 <translation id="8250920743982581267">Documents</translation>
@@ -870,23 +952,30 @@
 <translation id="8264024885325823677">El teu administrador gestiona aquesta opció de configuració.</translation>
 <translation id="8269755669432358899">Replega els taulers amb informació dels fitxers</translation>
 <translation id="8280151743281770066">Fonètic armeni</translation>
+<translation id="8285791779547722821"><ph name="ORIGINAL_MIME_TYPE" /> encriptat</translation>
 <translation id="8294431847097064396">Font</translation>
 <translation id="8297012244086013755">Configuració 3 de hangul (sense majúscules)</translation>
 <translation id="8299269255470343364">Japonès</translation>
 <translation id="8300849813060516376">Error d'OTASP</translation>
 <translation id="8312871300878166382">Enganxa a la carpeta</translation>
 <translation id="8329978297633540474">Text sense format</translation>
+<translation id="8332007959299458842">Els fitxers de Microsoft oberts recentment s'han mogut a Google Drive</translation>
 <translation id="8335587457941836791">Deixa de fixar al prestatge</translation>
 <translation id="8335837413233998004">Bielorús</translation>
 <translation id="8336153091935557858">Ahir a les <ph name="YESTERDAY_DAYTIME" /></translation>
 <translation id="8342318071240498787">Ja existeix un fitxer o un directori amb aquest nom.</translation>
+<translation id="83651606385705612">Dona permís a <ph name="VM_NAME" /> per accedir als fitxers que hi ha a la carpeta <ph name="FOLDER_NAME" /></translation>
 <translation id="8372369524088641025">Clau WEP no vàlida</translation>
 <translation id="8372852072747894550">Grec</translation>
+<translation id="8377269993083688872">Dissenys de correu electrònic</translation>
 <translation id="8386903983509584791">S'ha completat la cerca</translation>
 <translation id="8387733224523483503">S'ha extret <ph name="FILE_NAME" />.</translation>
 <translation id="8395901698320285466">Dimensions</translation>
+<translation id="8404498045299006085">Conserva-ho tot</translation>
 <translation id="8408068190360279472">Xarxa <ph name="NETWORK_TYPE" /> (connectant)</translation>
 <translation id="8425213833346101688">Canvia</translation>
+<translation id="8428213095426709021">Configuració</translation>
+<translation id="8429998526804961548">S'han compartit <ph name="NUMBER_OF_ITEMS" /> carpetes amb <ph name="VM_NAME" /></translation>
 <translation id="8431909052837336408">Canvia el PIN de la SIM</translation>
 <translation id="8437209419043462667">Nord-americà</translation>
 <translation id="8452135315243592079">Falta la targeta SIM</translation>
@@ -901,6 +990,8 @@
 <translation id="8487700953926739672">Disponible sense connexió</translation>
 <translation id="8492972329130824181">La xarxa domèstica no està disponible. La itinerància de dades mòbils ha d'estar activada per poder connectar-t'hi.</translation>
 <translation id="8499098729323186194">S'estan extraient <ph name="NUMBER_OF_ITEMS" /> elements...</translation>
+<translation id="8502913769543567768">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" />, Activa després de la configuració del dispositiu, Gestionada pel teu administrador</translation>
+<translation id="8512483403832814140">En qualsevol moment</translation>
 <translation id="8521441079177373948">Regne Unit</translation>
 <translation id="853494022971700746">Francès (França)</translation>
 <translation id="8540608333167683902">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, detalls</translation>
@@ -911,21 +1002,23 @@
 <translation id="8560515948038859357">Cantonès</translation>
 <translation id="8561206103590473338">Elefant</translation>
 <translation id="8566466896628108558">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, bloquejada per l'administrador, detalls</translation>
+<translation id="8568374623837201676">Vols suprimir permanentment aquest fitxer?</translation>
 <translation id="8569764466147087991">Seleccioneu el fitxer que vulgueu obrir</translation>
 <translation id="8577897833047451336">Croat</translation>
 <translation id="8578308463707544055">Indonesi</translation>
-<translation id="8579285237314169903">S'estan sincronitzant <ph name="NUMBER_OF_FILES" /> elements...</translation>
 <translation id="8600173386174225982">La llista de fitxers ha canviat a la visualització de miniatures.</translation>
 <translation id="8601932370724196034">Fitxer d'imatge de Crostini</translation>
 <translation id="8609695766746872526">Islandès</translation>
 <translation id="863903787380594467">El PIN no és correcte. Et queden <ph name="RETRIES" /> intents.</translation>
 <translation id="8639391553632924850"><ph name="INPUT_LABEL" /> - Port</translation>
+<translation id="8656407365183407932">Els fitxers sense connexió s'han hagut de suprimir</translation>
 <translation id="8656768832129462377">No comprovis</translation>
 <translation id="8688591111840995413">Contrasenya incorrecta</translation>
 <translation id="8698464937041809063">Dibuix de Google</translation>
 <translation id="8698877009525468705">Aquest fitxer és confidencial i està subjecte a restriccions en funció de la política de l'administrador.</translation>
 <translation id="8712637175834984815">Entesos</translation>
 <translation id="8713112442029511308">Maltès</translation>
+<translation id="8714138378966541668">Bloquejada pel proveïdor</translation>
 <translation id="8714406895390098252">Bicicleta</translation>
 <translation id="8719721339511222681">S'ha seleccionat <ph name="ENTRY_NAME" />.</translation>
 <translation id="872537912056138402">Croat</translation>
@@ -933,6 +1026,7 @@
 <translation id="8787254343425541995">Permet servidors intermediaris per a xarxes compartides</translation>
 <translation id="8790981080411996443">Persona regant les plantes</translation>
 <translation id="8798099450830957504">Predeterminat</translation>
+<translation id="8806832560029769670">{NUM_WARNING,plural, =1{1 advertiment.}other{# advertiments.}}</translation>
 <translation id="8808686172382650546">Gat</translation>
 <translation id="8810671769985673465">S'ha produït un error en la compressió; l'element existeix: "<ph name="FILE_NAME" />"</translation>
 <translation id="8813284582615685103">Espanyol (Espanya)</translation>
@@ -943,15 +1037,19 @@
 <translation id="8866284467018526531">Àrab (transliteració)</translation>
 <translation id="8873014196523807561">Per restaurar aquests elements, arrossega'ls a una carpeta nova. Les carpetes originals d'alguns d'aquests elements s'han suprimit.</translation>
 <translation id="8874184842967597500">No connectada</translation>
+<translation id="8876368061475701452">A la cua</translation>
 <translation id="8900820606136623064">Hongarès</translation>
 <translation id="8903931173357132290">Graduat</translation>
 <translation id="8912078710089354287">Gos remenant la cua</translation>
 <translation id="8919081441417203123">Danès</translation>
 <translation id="8949925099261528566">Connectat, sense Internet</translation>
 <translation id="8965697826696209160">No hi ha prou espai.</translation>
+<translation id="8970887620466824814">S'ha produït un error.</translation>
+<translation id="8971742885766657349">S'està sincronitzant - <ph name="PERCENT" />%</translation>
 <translation id="8997962250644902079">Xinès tradicional (pinyin)</translation>
 <translation id="8998871447376656508">No hi ha prou espai lliure a Google Drive per completar la pujada.</translation>
 <translation id="9003940392834790328">Xarxa <ph name="NETWORK_INDEX" /> de <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, <ph name="SIGNAL_STRENGTH" />% d'intensitat del senyal, gestionada per l'administrador, detalls</translation>
+<translation id="9007990314804111233">Inicia la sessió al teu compte de Microsoft</translation>
 <translation id="9017798300203431059">Fonètic rus</translation>
 <translation id="9034924485347205037">Fitxers de Linux</translation>
 <translation id="9035012421917565900">Com que els elements no es poden retornar a <ph name="DESTINATION_NAME" />, aquesta acció no es pot desfer.</translation>
@@ -960,6 +1058,7 @@
 <translation id="9046895021617826162">S'ha produït un error en la connexió</translation>
 <translation id="9065512565307033593">Si no fas la verificació, l'accés a la xarxa es desactivarà.</translation>
 <translation id="908378762078012445">Rus amb teclat AATSEEL fonètic</translation>
+<translation id="9086302186042011942">Sincronització</translation>
 <translation id="9099674669267916096">Nombre de pàgines</translation>
 <translation id="9100610230175265781">S'ha d'introduir una frase de contrasenya </translation>
 <translation id="9110990317705400362">Mai no deixem de cercar maneres de millorar la seguretat de la navegació. Anteriorment, des de qualsevol lloc web se us podia demanar que afegíssiu una extensió al navegador. A les versions més recents de Google Chrome, heu d'afegir aquestes extensions mitjançant la pàgina Extensions per fer saber explícitament a Chrome que voleu instal·lar-les. <ph name="BEGIN_LINK" />Més informació<ph name="END_LINK" /></translation>

@@ -8,13 +8,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "services/device/geolocation/network_location_provider.h"
 #include "services/device/geolocation/wifi_polling_policy.h"
 #include "services/device/public/cpp/geolocation/geoposition.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace device {
@@ -25,21 +27,25 @@ const base::TimeDelta LocationArbitrator::kFixStaleTimeoutTimeDelta =
     base::Seconds(11);
 
 LocationArbitrator::LocationArbitrator(
-    const CustomLocationProviderCallback& custom_location_provider_getter,
+    CustomLocationProviderCallback custom_location_provider_getter,
     GeolocationManager* geolocation_manager,
     const scoped_refptr<base::SingleThreadTaskRunner>& main_task_runner,
     const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
     const std::string& api_key,
-    std::unique_ptr<PositionCache> position_cache)
-    : custom_location_provider_getter_(custom_location_provider_getter),
+    std::unique_ptr<PositionCache> position_cache,
+    base::RepeatingClosure internals_updated_closure,
+    NetworkLocationProvider::NetworkRequestCallback network_request_callback,
+    NetworkLocationProvider::NetworkResponseCallback network_response_callback)
+    : custom_location_provider_getter_(
+          std::move(custom_location_provider_getter)),
       geolocation_manager_(geolocation_manager),
       main_task_runner_(main_task_runner),
       url_loader_factory_(url_loader_factory),
       api_key_(api_key),
-      position_provider_(nullptr),
-      is_permission_granted_(false),
       position_cache_(std::move(position_cache)),
-      is_running_(false) {}
+      internals_updated_closure_(std::move(internals_updated_closure)),
+      network_request_callback_(std::move(network_request_callback)),
+      network_response_callback_(std::move(network_response_callback)) {}
 
 LocationArbitrator::~LocationArbitrator() {
   // Release the global wifi polling policy state.
@@ -70,9 +76,9 @@ void LocationArbitrator::DoStartProviders() {
   if (providers_.empty()) {
     // If no providers are available, we report an error to avoid
     // callers waiting indefinitely for a reply.
-    mojom::Geoposition position;
-    position.error_code = mojom::Geoposition::ErrorCode::POSITION_UNAVAILABLE;
-    arbitrator_update_callback_.Run(this, position);
+    arbitrator_update_callback_.Run(
+        this, mojom::GeopositionResult::NewError(mojom::GeopositionError::New(
+                  mojom::GeopositionErrorCode::kPositionUnavailable, "", "")));
     return;
   }
   for (const auto& provider : providers_) {
@@ -81,11 +87,11 @@ void LocationArbitrator::DoStartProviders() {
 }
 
 void LocationArbitrator::StopProvider() {
-  // Reset the reference location state (provider+position)
+  // Reset the reference location state (provider+result)
   // so that future starts use fresh locations from
   // the newly constructed providers.
   position_provider_ = nullptr;
-  position_ = mojom::Geoposition();
+  result_.reset();
 
   providers_.clear();
   is_running_ = false;
@@ -123,19 +129,45 @@ void LocationArbitrator::RegisterProviders() {
 
 void LocationArbitrator::OnLocationUpdate(
     const LocationProvider* provider,
-    const mojom::Geoposition& new_position) {
-  DCHECK(ValidateGeoposition(new_position) ||
-         new_position.error_code != mojom::Geoposition::ErrorCode::NONE);
-  if (!IsNewPositionBetter(position_, new_position,
-                           provider == position_provider_))
+    mojom::GeopositionResultPtr new_result) {
+  DCHECK(new_result);
+  DCHECK(new_result->is_error() ||
+         new_result->is_position() &&
+             ValidateGeoposition(*new_result->get_position()));
+  if (result_ && !IsNewPositionBetter(*result_, *new_result,
+                                      provider == position_provider_)) {
     return;
+  }
   position_provider_ = provider;
-  position_ = new_position;
-  arbitrator_update_callback_.Run(this, position_);
+  result_ = std::move(new_result);
+  arbitrator_update_callback_.Run(this, result_.Clone());
 }
 
-const mojom::Geoposition& LocationArbitrator::GetPosition() {
-  return position_;
+const mojom::GeopositionResult* LocationArbitrator::GetPosition() {
+  return result_.get();
+}
+
+void LocationArbitrator::FillDiagnostics(
+    mojom::GeolocationDiagnostics& diagnostics) {
+  if (!is_running_ || providers_.empty()) {
+    diagnostics.provider_state =
+        mojom::GeolocationDiagnostics::ProviderState::kStopped;
+    return;
+  }
+  for (auto& provider : providers_) {
+    provider->FillDiagnostics(diagnostics);
+  }
+  if (position_cache_) {
+    diagnostics.position_cache_diagnostics =
+        mojom::PositionCacheDiagnostics::New();
+    position_cache_->FillDiagnostics(*diagnostics.position_cache_diagnostics);
+  }
+  if (WifiPollingPolicy::IsInitialized()) {
+    diagnostics.wifi_polling_policy_diagnostics =
+        mojom::WifiPollingPolicyDiagnostics::New();
+    WifiPollingPolicy::Get()->FillDiagnostics(
+        *diagnostics.wifi_polling_policy_diagnostics);
+  }
 }
 
 void LocationArbitrator::SetUpdateCallback(
@@ -155,7 +187,8 @@ LocationArbitrator::NewNetworkLocationProvider(
 #else
   return std::make_unique<NetworkLocationProvider>(
       std::move(url_loader_factory), geolocation_manager_, main_task_runner_,
-      api_key, position_cache_.get());
+      api_key, position_cache_.get(), internals_updated_closure_,
+      network_request_callback_, network_response_callback_);
 #endif
 }
 
@@ -174,16 +207,18 @@ base::Time LocationArbitrator::GetTimeNow() const {
 }
 
 bool LocationArbitrator::IsNewPositionBetter(
-    const mojom::Geoposition& old_position,
-    const mojom::Geoposition& new_position,
+    const mojom::GeopositionResult& old_result,
+    const mojom::GeopositionResult& new_result,
     bool from_same_provider) const {
   // Updates location_info if it's better than what we currently have,
   // or if it's a newer update from the same provider.
-  if (!ValidateGeoposition(old_position)) {
+  if (old_result.is_error()) {
     // Older location wasn't locked.
     return true;
   }
-  if (ValidateGeoposition(new_position)) {
+  const mojom::Geoposition& old_position = *old_result.get_position();
+  if (new_result.is_position()) {
+    const mojom::Geoposition& new_position = *new_result.get_position();
     // New location is locked, let's check if it's any better.
     if (old_position.accuracy >= new_position.accuracy) {
       // Accuracy is better.

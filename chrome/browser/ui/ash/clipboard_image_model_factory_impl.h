@@ -10,17 +10,16 @@
 #include <string>
 
 #include "ash/public/cpp/clipboard_image_model_factory.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/ui/ash/clipboard_image_model_request.h"
 
-class Profile;
-
 // Implements the singleton ClipboardImageModelFactory.
 class ClipboardImageModelFactoryImpl : public ash::ClipboardImageModelFactory {
  public:
-  explicit ClipboardImageModelFactoryImpl(Profile* primary_profile);
+  ClipboardImageModelFactoryImpl();
   ClipboardImageModelFactoryImpl(ClipboardImageModelFactoryImpl&) = delete;
   ClipboardImageModelFactoryImpl& operator=(ClipboardImageModelFactoryImpl&) =
       delete;
@@ -43,10 +42,6 @@ class ClipboardImageModelFactoryImpl : public ash::ClipboardImageModelFactory {
 
   // Called when |request_| has been idle for 2 minutes, to clean up resources.
   void OnRequestIdle();
-
-  // The primary profile, used instead of the active profile to create the
-  // WebContents that renders html.
-  Profile* const primary_profile_;
 
   // Whether ClipboardImageModelFactoryImpl is activated. If not, requests are
   // queued until Activate().

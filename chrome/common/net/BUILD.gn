@@ -11,9 +11,9 @@ static_library("net") {
   sources = [
     "net_resource_provider.cc",
     "net_resource_provider.h",
-    "safe_search_util.cc",
-    "safe_search_util.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//base",

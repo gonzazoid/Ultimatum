@@ -16,6 +16,8 @@ option optimize_for = LITE_RUNTIME;
 
 package sync_pb;
 
+import "components/sync/protocol/sync_enums.proto";
+
 // A workspace desk entry. This proto contains the fields synced to represent
 // a saved desk in user's workspace.
 message WorkspaceDeskSpecifics {
@@ -36,6 +38,13 @@ message WorkspaceDeskSpecifics {
 
   // The type of a desk.
   optional DeskType desk_type = 6;
+
+  // The cache guid of the syncing client. Used to identify a unique device
+  // that's syncing data.
+  optional string client_cache_guid = 7;
+
+  // The form factor of the device.
+  optional SyncEnums.DeviceFormFactor device_form_factor = 8;
 
   // Represent a snapshot of the information on a desk.
   message Desk {
@@ -85,6 +94,10 @@ message WorkspaceDeskSpecifics {
     // mode. Empty/unset for non-snapped windows. This should be a value between
     // 0 and 100.
     optional int32 snap_percentage = 12;
+
+    // The override URL can be specified by apps to override the default URL at
+    // launch.
+    optional string override_url = 13;
   }
 
   message AppOneOf {
@@ -218,6 +231,8 @@ message WorkspaceDeskSpecifics {
     // in landscape screen orientation and bottom in portrait screen
     // orientation.
     SECONDARY_SNAPPED = 6;
+    // Floated window state.
+    FLOATED = 7;
   }
 
   // Enumeration for how a window opens.  Maps to base::WindowOpenDisposition.
@@ -253,6 +268,7 @@ message WorkspaceDeskSpecifics {
     UNKNOWN_TYPE = 0;
     TEMPLATE = 1;
     SAVE_AND_RECALL = 2;
+    FLOATING_WORKSPACE = 3;
   }
 
   // Enumerates the possible colors that a tab group can have.  This mirrors

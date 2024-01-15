@@ -8,9 +8,8 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (relative positioned) DIV id='container'",
+      "name": "LayoutNGBlockFlow (relative positioned, children-inline) DIV id='container'",
       "bounds": [100, 50],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [12, 0, 12, 12],
         [10, 0, 12, 12]
@@ -40,9 +39,8 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (relative positioned) DIV id='container'",
+      "name": "LayoutNGBlockFlow (relative positioned, children-inline) DIV id='container'",
       "bounds": [100, 50],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [11, 0, 13, 12],
         [9, 0, 13, 12]
@@ -72,9 +70,8 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (relative positioned) DIV id='container'",
+      "name": "LayoutNGBlockFlow (relative positioned, children-inline) DIV id='container'",
       "bounds": [100, 50],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [12, 0, 13, 12],
         [10, 0, 13, 12]
@@ -104,9 +101,8 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (relative positioned) DIV id='container'",
+      "name": "LayoutNGBlockFlow (relative positioned, children-inline) DIV id='container'",
       "bounds": [100, 50],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [12, 0, 13, 12],
         [10, 0, 13, 12]
@@ -136,9 +132,8 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (relative positioned) DIV id='container'",
+      "name": "LayoutNGBlockFlow (relative positioned, children-inline) DIV id='container'",
       "bounds": [100, 50],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [12, 0, 13, 12],
         [10, 0, 13, 12]

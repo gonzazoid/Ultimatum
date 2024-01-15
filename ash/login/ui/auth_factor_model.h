@@ -6,7 +6,8 @@
 #define ASH_LOGIN_UI_AUTH_FACTOR_MODEL_H_
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -162,7 +163,7 @@ class ASH_EXPORT AuthFactorModel {
   virtual void DoHandleTapOrClick() = 0;
 
   base::RepeatingClosure update_state_callback_;
-  AuthIconView* icon_ = nullptr;
+  raw_ptr<AuthIconView> icon_ = nullptr;
 };
 
 }  // namespace ash

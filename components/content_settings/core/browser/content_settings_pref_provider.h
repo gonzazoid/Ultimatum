@@ -48,17 +48,44 @@ class PrefProvider : public UserModifiableProvider {
   // UserModifiableProvider implementations.
   std::unique_ptr<RuleIterator> GetRuleIterator(
       ContentSettingsType content_type,
-      bool off_the_record) const override;
+      bool off_the_record,
+      const PartitionKey& partition_key) const override;
+
+  std::unique_ptr<Rule> GetRule(
+      const GURL& primary_url,
+      const GURL& secondary_url,
+      ContentSettingsType content_type,
+      bool off_the_record,
+      const PartitionKey& partition_key) const override;
+
   bool SetWebsiteSetting(const ContentSettingsPattern& primary_pattern,
                          const ContentSettingsPattern& secondary_pattern,
                          ContentSettingsType content_type,
                          base::Value&& value,
-                         const ContentSettingConstraints& constraints) override;
-  void ClearAllContentSettingsRules(ContentSettingsType content_type) override;
+                         const ContentSettingConstraints& constraints,
+                         const PartitionKey& partition_key) override;
+  void ClearAllContentSettingsRules(ContentSettingsType content_type,
+                                    const PartitionKey& partition_key) override;
   void ShutdownOnUIThread() override;
+  bool UpdateLastUsedTime(const GURL& primary_url,
+                          const GURL& secondary_url,
+                          ContentSettingsType content_type,
+                          const base::Time time,
+                          const PartitionKey& partition_key) override;
+  bool ResetLastVisitTime(const ContentSettingsPattern& primary_pattern,
+                          const ContentSettingsPattern& secondary_pattern,
+                          ContentSettingsType content_type,
+                          const PartitionKey& partition_key) override;
   bool UpdateLastVisitTime(const ContentSettingsPattern& primary_pattern,
                            const ContentSettingsPattern& secondary_pattern,
-                           ContentSettingsType content_type) override;
+                           ContentSettingsType content_type,
+                           const PartitionKey& partition_key) override;
+  absl::optional<base::TimeDelta> RenewContentSetting(
+      const GURL& primary_url,
+      const GURL& secondary_url,
+      ContentSettingsType content_type,
+      absl::optional<ContentSetting> setting_to_match,
+      const PartitionKey& partition_key) override;
   void SetClockForTesting(base::Clock* clock) override;
 
   void ClearPrefs();
@@ -71,6 +98,19 @@ class PrefProvider : public UserModifiableProvider {
   void Notify(const ContentSettingsPattern& primary_pattern,
               const ContentSettingsPattern& secondary_pattern,
               ContentSettingsType content_type);
+
+  bool SetLastVisitTime(const ContentSettingsPattern& primary_pattern,
+                        const ContentSettingsPattern& secondary_pattern,
+                        ContentSettingsType content_type,
+                        const base::Time time);
+
+  // Finds the first setting whose Rule satisfies `is_match`, and performs some
+  // update. `perform_update` may modify the Rule in-place, and should return
+  // true if any modifications were made.  Returns whether or not any setting
+  // was updated.
+  bool UpdateSetting(ContentSettingsType content_type,
+                     base::FunctionRef<bool(const Rule&)> is_match,
+                     base::FunctionRef<bool(Rule&)> perform_update);
 
   // Clean up the obsolete preferences from the user's profile.
   void DiscardOrMigrateObsoletePreferences();
@@ -88,7 +128,7 @@ class PrefProvider : public UserModifiableProvider {
 
   bool store_last_modified_;
 
-  PrefChangeRegistrar pref_change_registrar_;
+  std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 
   std::map<ContentSettingsType, std::unique_ptr<ContentSettingsPref>>
       content_settings_prefs_;

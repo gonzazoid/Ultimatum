@@ -30,8 +30,7 @@ void BluetoothSocketThread::CleanupForTesting() {
   g_instance.Get().reset();
 }
 
-BluetoothSocketThread::BluetoothSocketThread()
-    : active_socket_count_(0) {}
+BluetoothSocketThread::BluetoothSocketThread() = default;
 
 BluetoothSocketThread::~BluetoothSocketThread() {
   if (thread_) {
@@ -43,13 +42,13 @@ BluetoothSocketThread::~BluetoothSocketThread() {
 
 void BluetoothSocketThread::OnSocketActivate() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  active_socket_count_++;
+  active_socket_count_ += 1;
   EnsureStarted();
 }
 
 void BluetoothSocketThread::OnSocketDeactivate() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  active_socket_count_--;
+  active_socket_count_ -= 1;
 }
 
 void BluetoothSocketThread::EnsureStarted() {
@@ -66,7 +65,7 @@ void BluetoothSocketThread::EnsureStarted() {
 
 scoped_refptr<base::SequencedTaskRunner> BluetoothSocketThread::task_runner()
     const {
-  DCHECK(active_socket_count_ > 0);
+  DCHECK(active_socket_count_.load(std::memory_order_relaxed) > 0);
   DCHECK(thread_);
   DCHECK(task_runner_.get());
 

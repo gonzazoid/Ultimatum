@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/geoposition.h"
 #include "chrome/test/chromedriver/chrome/status.h"
@@ -29,12 +28,11 @@ Status GeolocationOverrideManager::OnConnected(DevToolsClient* client) {
   return ApplyOverrideIfNeeded();
 }
 
-Status GeolocationOverrideManager::OnEvent(
-    DevToolsClient* client,
-    const std::string& method,
-    const base::DictionaryValue& params) {
+Status GeolocationOverrideManager::OnEvent(DevToolsClient* client,
+                                           const std::string& method,
+                                           const base::Value::Dict& params) {
   if (method == "Page.frameNavigated") {
-    if (!params.FindPath("frame.parentId"))
+    if (!params.FindByDottedPath("frame.parentId"))
       return ApplyOverrideIfNeeded();
   }
   return Status(kOk);

@@ -9,12 +9,16 @@
 #include <string>
 
 #include "ash/shell_delegate.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "url/gurl.h"
 
 namespace ash {
+
+class UserEducationDelegate;
+class WindowState;
 
 class TestShellDelegate : public ShellDelegate {
  public:
@@ -33,19 +37,37 @@ class TestShellDelegate : public ShellDelegate {
     multidevice_setup_binder_ = std::move(binder);
   }
 
+  // Allows tests to override the `UserEducationDelegate` creation behavior for
+  // this `TestShellDelegate`.
+  using UserEducationDelegateFactory =
+      base::RepeatingCallback<std::unique_ptr<UserEducationDelegate>()>;
+  void SetUserEducationDelegateFactory(UserEducationDelegateFactory factory) {
+    user_education_delegate_factory_ = std::move(factory);
+  }
+
   // Overridden from ShellDelegate:
   bool CanShowWindowForUser(const aura::Window* window) const override;
   std::unique_ptr<CaptureModeDelegate> CreateCaptureModeDelegate()
       const override;
-  std::unique_ptr<GlanceablesDelegate> CreateGlanceablesDelegate(
-      GlanceablesController* controller) const override;
+  std::unique_ptr<ClipboardHistoryControllerDelegate>
+  CreateClipboardHistoryControllerDelegate() const override;
+  std::unique_ptr<GameDashboardDelegate> CreateGameDashboardDelegate()
+      const override;
+  std::unique_ptr<AcceleratorPrefsDelegate> CreateAcceleratorPrefsDelegate()
+      const override;
   AccessibilityDelegate* CreateAccessibilityDelegate() override;
   std::unique_ptr<BackGestureContextualNudgeDelegate>
   CreateBackGestureContextualNudgeDelegate(
       BackGestureContextualNudgeController* controller) override;
+  std::unique_ptr<MediaNotificationProvider> CreateMediaNotificationProvider()
+      override;
   std::unique_ptr<NearbyShareDelegate> CreateNearbyShareDelegate(
       NearbyShareController* controller) const override;
-  std::unique_ptr<DesksTemplatesDelegate> CreateDesksTemplatesDelegate()
+  std::unique_ptr<SavedDeskDelegate> CreateSavedDeskDelegate() const override;
+  std::unique_ptr<SystemSoundsDelegate> CreateSystemSoundsDelegate()
+      const override;
+  std::unique_ptr<api::TasksDelegate> CreateTasksDelegate() const override;
+  std::unique_ptr<UserEducationDelegate> CreateUserEducationDelegate()
       const override;
   scoped_refptr<network::SharedURLLoaderFactory>
   GetGeolocationUrlLoaderFactory() const override;
@@ -62,10 +84,12 @@ class TestShellDelegate : public ShellDelegate {
       mojo::PendingReceiver<video_capture::mojom::MultiCaptureService> receiver)
       override;
   bool IsSessionRestoreInProgress() const override;
-  void SetUpEnvironmentForLockedFullscreen(bool locked) override {}
+  void SetUpEnvironmentForLockedFullscreen(
+      const WindowState& window_state) override {}
   const GURL& GetLastCommittedURLForWindowIfAny(aura::Window* window) override;
   void ForceSkipWarningUserOnClose(
-      const std::vector<aura::Window*>& windows) override {}
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows)
+      override {}
 
   void SetCanGoBack(bool can_go_back);
   void SetShouldExitFullscreenBeforeLock(
@@ -74,7 +98,9 @@ class TestShellDelegate : public ShellDelegate {
   void SetSessionRestoreInProgress(bool in_progress);
   bool IsLoggingRedirectDisabled() const override;
   base::FilePath GetPrimaryUserDownloadsFolder() const override;
-  void OpenFeedbackPageForPersistentDesksBar() override {}
+  void OpenFeedbackDialog(FeedbackSource source,
+                          const std::string& description_template) override {}
+  void OpenProfileManager() override {}
   void SetLastCommittedURLForWindow(const GURL& url);
   version_info::Channel GetChannel() override;
   std::string GetVersionString() override;
@@ -105,6 +131,7 @@ class TestShellDelegate : public ShellDelegate {
   bool session_restore_in_progress_ = false;
 
   MultiDeviceSetupBinder multidevice_setup_binder_;
+  UserEducationDelegateFactory user_education_delegate_factory_;
 
   GURL last_committed_url_ = GURL::EmptyGURL();
 

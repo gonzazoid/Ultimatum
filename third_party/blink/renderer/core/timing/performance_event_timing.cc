@@ -22,13 +22,13 @@ PerformanceEventTiming* PerformanceEventTiming::Create(
     DOMHighResTimeStamp processing_end,
     bool cancelable,
     Node* target,
-    uint32_t navigation_id) {
+    DOMWindow* source) {
   // TODO(npm): enable this DCHECK once https://crbug.com/852846 is fixed.
   // DCHECK_LE(start_time, processing_start);
   DCHECK_LE(processing_start, processing_end);
   return MakeGarbageCollected<PerformanceEventTiming>(
       event_type, performance_entry_names::kEvent, start_time, processing_start,
-      processing_end, cancelable, target, navigation_id);
+      processing_end, cancelable, target, source);
 }
 
 // static
@@ -38,7 +38,7 @@ PerformanceEventTiming* PerformanceEventTiming::CreateFirstInputTiming(
       MakeGarbageCollected<PerformanceEventTiming>(
           entry->name(), performance_entry_names::kFirstInput,
           entry->startTime(), entry->processingStart(), entry->processingEnd(),
-          entry->cancelable(), entry->target(), entry->navigationId());
+          entry->cancelable(), entry->target(), entry->source());
   first_input->SetDuration(entry->duration());
   return first_input;
 }
@@ -51,8 +51,8 @@ PerformanceEventTiming::PerformanceEventTiming(
     DOMHighResTimeStamp processing_end,
     bool cancelable,
     Node* target,
-    uint32_t navigation_id)
-    : PerformanceEntry(event_type, start_time, 0.0, navigation_id),
+    DOMWindow* source)
+    : PerformanceEntry(event_type, start_time, 0.0, source),
       entry_type_(entry_type),
       processing_start_(processing_start),
       processing_end_(processing_end),
@@ -83,8 +83,15 @@ uint32_t PerformanceEventTiming::interactionId() const {
   return interaction_id_;
 }
 
-void PerformanceEventTiming::SetInteractionId(uint32_t interaction_id) {
+uint32_t PerformanceEventTiming::interactionOffset() const {
+  return interaction_offset_;
+}
+
+void PerformanceEventTiming::SetInteractionIdAndOffset(
+    uint32_t interaction_id,
+    uint32_t interaction_offset) {
   interaction_id_ = interaction_id;
+  interaction_offset_ = interaction_offset;
 }
 
 base::TimeTicks PerformanceEventTiming::unsafePresentationTimestamp() const {
@@ -125,8 +132,12 @@ std::unique_ptr<TracedValue> PerformanceEventTiming::ToTracedValue(
   traced_value->SetBoolean("cancelable", cancelable());
   // If int overflows occurs, the static_cast may not work correctly.
   traced_value->SetInteger("interactionId", static_cast<int>(interactionId()));
-  traced_value->SetInteger("nodeId", DOMNodeIds::IdForNode(target_));
-  traced_value->SetString("frame", String::FromUTF8(ToTraceValue(frame)));
+  traced_value->SetInteger("interactionOffset",
+                           static_cast<int>(interactionOffset()));
+  traced_value->SetInteger(
+      "nodeId", target_ ? target_->GetDomNodeId() : kInvalidDOMNodeId);
+  traced_value->SetString("frame",
+                          String::FromUTF8(GetFrameIdForTracing(frame)));
   return traced_value;
 }
 

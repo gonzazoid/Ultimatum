@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ash/crostini/crostini_shared_devices.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_pref_names.h"
@@ -33,7 +33,14 @@ class CrostiniSharedDevicesFactory : public ProfileKeyedServiceFactory {
   friend class base::NoDestructor<CrostiniSharedDevicesFactory>;
 
   CrostiniSharedDevicesFactory()
-      : ProfileKeyedServiceFactory("CrostiniSharedDevicesService") {}
+      : ProfileKeyedServiceFactory(
+            "CrostiniSharedDevicesService",
+            ProfileSelections::Builder()
+                .WithRegular(ProfileSelection::kOriginalOnly)
+                // TODO(crbug.com/1418376): Check if this service is needed in
+                // Guest mode.
+                .WithGuest(ProfileSelection::kOriginalOnly)
+                .Build()) {}
 
   ~CrostiniSharedDevicesFactory() override = default;
 
@@ -100,6 +107,10 @@ void CrostiniSharedDevices::SetVmDeviceShared(guest_os::GuestId container_id,
   }
 }
 
+void CrostiniSharedDevices::EnsureFactoryBuilt() {
+  CrostiniSharedDevicesFactory::GetInstance();
+}
+
 void CrostiniSharedDevices::ApplySharingState(
     const guest_os::GuestId container_id,
     base::Value::Dict next_shared_devices,
@@ -134,7 +145,7 @@ void CrostiniSharedDevices::OnUpdateContainerDevices(
     const guest_os::GuestId container_id,
     base::Value::Dict next_shared_devices,
     ResultCallback callback,
-    absl::optional<vm_tools::cicerone::UpdateContainerDevicesResponse>
+    std::optional<vm_tools::cicerone::UpdateContainerDevicesResponse>
         response) {
   bool success = true;
   if (!response.has_value()) {

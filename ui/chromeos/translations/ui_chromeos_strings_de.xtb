@@ -2,12 +2,14 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="de">
 <translation id="1000498691615767391">Zu öffnenden Ordner auswählen</translation>
+<translation id="1014208178561091457"><ph name="FILE_NAME" /> konnte nicht kopiert werden, weil die Datei verschlüsselt ist.</translation>
 <translation id="1047956942837015229"><ph name="COUNT" /> Elemente werden gelöscht...</translation>
 <translation id="1049926623896334335">Word-Dokument</translation>
 <translation id="1056775291175587022">Keine Netzw.</translation>
 <translation id="1056898198331236512">Warnung</translation>
 <translation id="1060368002126861100">Wenn du Dateien mit der App „<ph name="APP_NAME" />“ öffnen möchtest, verschiebe sie zuerst in den Ordner mit Windows-Dateien.</translation>
 <translation id="1062407476771304334">Ersetzen</translation>
+<translation id="1119383441774809183">Nachrichten einblenden</translation>
 <translation id="1119447706177454957">Interner Fehler</translation>
 <translation id="1120073797882051782">Hangul Romaja</translation>
 <translation id="112387589102719461">Englisch (USA) mit „Programmer Dvorak“-Tastatur</translation>
@@ -27,28 +29,34 @@
 <translation id="1201402288615127009">Weiter</translation>
 <translation id="1209796539517632982">Automatische Wahl des Nameservers</translation>
 <translation id="1210831758834677569">Lao</translation>
+<translation id="1221555006497674479">Nur noch <ph name="REMAINING_PERCENTAGE" /> % von <ph name="TOTAL_SPACE" /> Speicherplatz in der geteilten Ablage frei.</translation>
 <translation id="1243314992276662751">Hochladen</translation>
 <translation id="1249250836236328755">Genre</translation>
 <translation id="1254593899333212300">Direkte Internetverbindung</translation>
 <translation id="1272293450992660632">Die PIN-Werte stimmen nicht überein.</translation>
 <translation id="1280820357415527819">Nach Mobilfunknetzen wird gesucht</translation>
-<translation id="1291603679744561561">SIM-Karte gesperrt</translation>
 <translation id="1293556467332435079">Dateien</translation>
 <translation id="1297922636971898492">Google Drive ist momentan nicht verfügbar. Das Hochladen deiner Dateien wird automatisch fortgesetzt, sobald Google Drive wieder verfügbar ist.</translation>
+<translation id="1306130176943817227">Das Element kann nicht gelöscht werden, da es momentan verwendet wird.</translation>
 <translation id="1307931752636661898">Linux-Dateien können nicht angezeigt werden</translation>
 <translation id="1313405956111467313">Automatische Proxy-Konfiguration</translation>
+<translation id="134645005685694099">Auf deinem Gerät ist nicht genügend Speicherplatz vorhanden, um die Dateisynchronisierung aktiviert zu lassen. Neue Dateien werden nicht mehr automatisch synchronisiert.</translation>
 <translation id="1353686479385938207"><ph name="PROVIDER_NAME" />: <ph name="NETWORK_NAME" /></translation>
 <translation id="1358735829858566124">Die Datei oder das Verzeichnis kann nicht verwendet werden.</translation>
 <translation id="1363028406613469049">Titel</translation>
 <translation id="1378727793141957596">Willkommen bei Google Drive!</translation>
 <translation id="1379911846207762492">Du kannst Dateien offline verfügbar machen, wenn du keine Internetverbindung hast.</translation>
 <translation id="1383876407941801731">Durchsuchen</translation>
+<translation id="1388045380422025115">Alle Typen</translation>
 <translation id="1395262318152388157">Schieberegler für die Suche</translation>
 <translation id="1399511500114202393">Kein Nutzerzertifikat</translation>
+<translation id="1403008701842173542">Überall</translation>
 <translation id="1404323374378969387">Norwegisch</translation>
 <translation id="1433628812591023318">Um Dateien in Parallels Desktop per Drag-and-drop abzulegen, muss die Datei in „Windows-Dateien“ verschoben werden.</translation>
 <translation id="1435838927755162558">Ordner für Parallels Desktop freigeben</translation>
 <translation id="1439919885608649279">Person mit Blumen</translation>
+<translation id="1458457385801829801"><ph name="TARGET_NAME" /> trennen</translation>
+<translation id="146691674290220697"><ph name="NUMBER_OF_FILES" /> Dateien konnten nicht kopiert werden, weil sie verschlüsselt sind.</translation>
 <translation id="1471718551822868769">Slowakisch</translation>
 <translation id="1482884275703521657">Finnisch</translation>
 <translation id="148466539719134488">Schweizerdeutsch</translation>
@@ -56,7 +64,6 @@
 <translation id="1499943022354839699">Englisch (USA) mit Dvorak-Tastatur</translation>
 <translation id="1515909359182093592"><ph name="INPUT_LABEL" /> – Host</translation>
 <translation id="1521655867290435174">Google Tabellen</translation>
-<translation id="1538729222189715449">Linux-Dateien werden geöffnet…</translation>
 <translation id="1547964879613821194">Kanadisches Englisch</translation>
 <translation id="1556189134700913550">Auf alle anwenden</translation>
 <translation id="1561842594491319104">Chrome-Geräte</translation>
@@ -69,8 +76,8 @@
 <translation id="162175252992296058">Portugiesisch mit internationaler US-amerikanischer Tastatur</translation>
 <translation id="1629521517399325891">Das Nutzerzertifikat ist nicht für die Netzwerkauthentifizierung verfügbar.</translation>
 <translation id="1641780993263690097">Chinesisch (Pinyin)</translation>
-<translation id="1646019627374511909"><ph name="NUMBER_OF_ITEMS" /> Dateien werden offline verfügbar gemacht</translation>
 <translation id="164969095109328410">Chrome-Gerät</translation>
+<translation id="1661207570040737402">Dein gesamter Google Workspace-Speicherplatz in der geteilten Ablage ist belegt.</translation>
 <translation id="1661867754829461514">PIN fehlt</translation>
 <translation id="166439687370499867">Freigegebene Netzwerkkonfigurationen dürfen nicht geändert werden</translation>
 <translation id="1665611772925418501">Die Datei konnte nicht geändert werden.</translation>
@@ -80,6 +87,7 @@
 <translation id="1722487484194605434"><ph name="NUMBER_OF_ITEMS" /> Elemente werden gezippt...</translation>
 <translation id="1722687688096767818">Profil wird hinzugefügt…</translation>
 <translation id="1726100011689679555">Nameserver</translation>
+<translation id="1727562178154619254">Bereit zur Synchronisierung</translation>
 <translation id="1729953886957086472">Deutsch (Deutschland)</translation>
 <translation id="1730235522912993863">Chinesisch (Cangjie)</translation>
 <translation id="1731889557567069540"><ph name="NUMBER_OF_ITEMS" /> Elemente kopiert.</translation>
@@ -89,6 +97,7 @@
 <translation id="174937106936716857">Gesamtanzahl der Dateien</translation>
 <translation id="1755345808328621801">Diese Datei wurde für Computer mit Windows-Software entwickelt. Sie ist nicht mit deinem Chrome OS-Gerät kompatibel. Suche im Chrome Web Store nach einer geeigneten Ersatz-App.</translation>
 <translation id="1757915090001272240">Wide Latin</translation>
+<translation id="1761091787730831947">Für <ph name="VM_NAME" /> freigeben</translation>
 <translation id="1773212559869067373">Lokale Ablehnung des Authentifizierungszertifikats</translation>
 <translation id="1775381402323441512">Videoinformationen</translation>
 <translation id="180035236176489073">Du musst online sein, um auf diese Dateien zugreifen zu können.</translation>
@@ -103,28 +112,31 @@
 <translation id="1838709767668011582">Google Sites-Website</translation>
 <translation id="1853795129690976061">Dieser Ordner wird für Linux freigegeben</translation>
 <translation id="1864756863218646478">Die Datei wurde nicht gefunden.</translation>
+<translation id="1877377730633446520">Dafür wird Speicherplatz von ungefähr <ph name="REQUIRED_SPACE" /> belegt. Momentan ist Speicherplatz von <ph name="FREE_SPACE" /> verfügbar.</translation>
 <translation id="1884013283844450420">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Verbinden</translation>
 <translation id="1920670151694390848">Malayalam (Transliteration)</translation>
 <translation id="1920798810075583923">Wassermelone</translation>
 <translation id="1924372192547904021">"<ph name="DRIVE_NAME" />" wurde formatiert</translation>
 <translation id="1931134289871235022">Slowakisch</translation>
-<translation id="1933345018156373194">Unerwarteter Fehler beim Verschieben: <ph name="ERROR_MESSAGE" /></translation>
 <translation id="1936717151811561466">Finnisch</translation>
 <translation id="1942765061641586207">Bildauflösung</translation>
 <translation id="1972984168337863910">Erweiterte Dateiinformationen maximieren</translation>
 <translation id="1995337122023280937">Zum Dateispeicherort</translation>
-<translation id="1999709132469742660">Dateizugriff über alle URLs</translation>
 <translation id="2001796770603320721">In Drive verwalten</translation>
+<translation id="2004942826429452291">Dateien werden in der Cloud und auf deinem Chromebook gespeichert.</translation>
 <translation id="2009067268969781306">Durch die Formatierung eines Laufwerks werden alle darauf gespeicherten Daten gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <translation id="2025955442973426285">Tigrinya</translation>
 <translation id="2037845485764049925">Russisch</translation>
 <translation id="2044023416777079300">Modem nicht registriert</translation>
 <translation id="2046702855113914483">Ramen</translation>
 <translation id="2070909990982335904">Namen, die mit einem Punkt beginnen, sind für das System reserviert. Wähle einen anderen Namen aus.</translation>
-<translation id="2079545284768500474">Rückgängig machen</translation>
+<translation id="2079545284768500474">Rückgängig</translation>
 <translation id="2084108471225856927">Geräteeinstellungen</translation>
 <translation id="2084809735218147718">Person, die in Zeichensprache „danke“ sagt</translation>
 <translation id="2088690981887365033">VPN-Netzwerk</translation>
+<translation id="209653272837065803">Es ist nicht genügend Speicherplatz vorhanden, um die Dateisynchronisierung fortzusetzen</translation>
+<translation id="2111134541987263231">Aktiviere die Option <ph name="BEGIN_BOLD" />Im Inkognitomodus zulassen<ph name="END_BOLD" /></translation>
+<translation id="2114191879048183086"><ph name="NUMBER_OF_ITEMS" /> Elemente werden gelöscht und können nicht wiederhergestellt werden.</translation>
 <translation id="2122305276694332719">Wenn automatisch eine Verbindung zu einem verborgenen Netzwerk hergestellt wird, können andere dein Gerät sowie einige Netzwerkeinstellungen sehen. Dies wird nicht empfohlen.</translation>
 <translation id="2125607626296734455">Khmer</translation>
 <translation id="2139545522194199494">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, von deinem Administrator verwaltet, Verbinden</translation>
@@ -133,15 +145,19 @@
 <translation id="2143778271340628265">Manuelle Proxy-Konfiguration</translation>
 <translation id="2148716181193084225">Heute</translation>
 <translation id="2163152940313951844">Ungültiges Zeichen: <ph name="CHARACTER_NAME" /></translation>
+<translation id="2178056538281447670">Microsoft 365</translation>
 <translation id="2184934335987813305">Portugiesisch mit internationaler US-amerikanischer PC-Tastatur</translation>
 <translation id="2193661397560634290"><ph name="SPACE_USED" /> belegt</translation>
 <translation id="2198315389084035571">Chinesisch (vereinfacht)</translation>
 <translation id="22085916256174561">Koreanisch</translation>
 <translation id="2208919847696382164">Mit Linux installieren</translation>
+<translation id="2215692307449050019">Akku ist schwach. Die Dateisynchronisierung wird fortgesetzt, wenn das Gerät an die Stromversorgung angeschlossen wird.</translation>
 <translation id="2225536596944493418">Möchtest du wirklich <ph name="NUMBER_OF_ITEMS" /> Elemente löschen?</translation>
 <translation id="2230062665678605299">Ordner "<ph name="FOLDER_NAME" />" kann nicht erstellt werden. <ph name="ERROR_MESSAGE" /></translation>
 <translation id="2239068707900391003">Person mit Kaffee</translation>
+<translation id="2247561763838186830">Du wurdest abgemeldet</translation>
 <translation id="2251368349685848079">Aus Papierkorb wiederherstellen</translation>
+<translation id="2278133026967558505">Dateizugriff durch alle Websites und URLs</translation>
 <translation id="2282155092769082568">URL für Autokonfiguration:</translation>
 <translation id="2284767815536050991">Wechselmedium</translation>
 <translation id="2288278176040912387">Plattenspieler</translation>
@@ -150,12 +166,14 @@
 <translation id="2304820083631266885">Planet</translation>
 <translation id="2305020378527873881">"<ph name="VOLUME_NAME" />" wurde ausgeworfen.</translation>
 <translation id="2307462900900812319">Netzwerk konfigurieren</translation>
+<translation id="2312704192806647271">{COUNT,plural, =1{Es konnte keine Erweiterung mit der ID <ph name="BEGIN_LIST" /><ph name="END_LIST" /> gefunden werden. Wende dich an deinen Administrator.}other{Es konnten keine Erweiterungen mit den IDs <ph name="BEGIN_LIST" /><ph name="END_LIST" /> gefunden werden. Wende dich an deinen Administrator.}}</translation>
 <translation id="2325650632570794183">Dieser Dateityp wird nicht unterstützt. Finde im Chrome Web Store eine App, mit der du diesen Dateityp öffnen kannst.</translation>
 <translation id="2326539130272988168">Bulgarisch</translation>
+<translation id="233822363739146957">Es ist nicht genügend Speicherplatz vorhanden, um alle deine Dateien zu synchronisieren</translation>
 <translation id="23721837607121582">Mobiles Profil herunterladen, Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" /></translation>
 <translation id="2377319039870049694">Zur Listenansicht wechseln</translation>
 <translation id="2377590462528165447"><ph name="NUMBER_OF_ITEMS" /> Ordner für Linux freigegeben</translation>
-<translation id="2378075407703503998"><ph name="SELCTED_FILE_COUNT" /> Dateien ausgewählt</translation>
+<translation id="2379576081295865700">Speicherplatz wird geprüft… 1 Element gefunden</translation>
 <translation id="2383454254762599978">In Papierkorb verschieben</translation>
 <translation id="2387458720915042159">Proxy-Verbindungstyp</translation>
 <translation id="2389832672041313158">Burmesisch (Myanmar)</translation>
@@ -170,6 +188,7 @@
 <translation id="2464089476039395325">HTTP-Proxy</translation>
 <translation id="2467267713099745100">Netzwerk: <ph name="NETWORK_TYPE" />, deaktiviert</translation>
 <translation id="2468402215065996499">Tamagotchi</translation>
+<translation id="2468470447085858632">Offlinezugriff auf Google Drive-Dateien mit der Dateisynchronisierung</translation>
 <translation id="2470939964922472929">Es wurde zu oft die falsche PIN eingegeben. Gib zum Festlegen einer neuen PIN den achtstelligen PIN-Entsperrschlüssel (PUK) ein, den du von deinem Mobilfunkanbieter erhalten hast.</translation>
 <translation id="2500392669976258912">Gujarati (phonetisch)</translation>
 <translation id="2515586267016047495">Alt</translation>
@@ -183,6 +202,7 @@
 <translation id="2563185590376525700">Frosch</translation>
 <translation id="2578394532502990878">Tamil (phonetisch)</translation>
 <translation id="2579959351793446050">Oriya</translation>
+<translation id="2587195714949534472">Synchronisierung von „<ph name="FILE_NAME" />“ wird vorbereitet…</translation>
 <translation id="2602810353103180630">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, Signalstärke <ph name="SIGNAL_STRENGTH" /> %, vom Administrator blockiert, Details</translation>
 <translation id="2614589611416690597"><ph name="VIDEO_TYPE" />-Video</translation>
 <translation id="2620090360073999360">Google Drive ist momentan nicht erreichbar.</translation>
@@ -195,6 +215,7 @@
 <translation id="2718540689505416944">App mit Linux installieren</translation>
 <translation id="2719020180254996569">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, Details</translation>
 <translation id="2724954091494693138">Türkisch mit F-Tastatur</translation>
+<translation id="2732288874651063549"><ph name="VM_NAME" />-Freigaben verwalten</translation>
 <translation id="2732839045120506979">Vietnamesisch (VNI)</translation>
 <translation id="2735623501230989521">Parallels Desktop erlauben, Dateien im Ordner „<ph name="FOLDER_NAME" />“ zu ändern</translation>
 <translation id="2764206540577097904">Dein gesamter individueller Google Workspace-Speicher ist belegt.</translation>
@@ -203,6 +224,7 @@
 <translation id="2782104745158847185">Fehler beim Installieren der Linux-Anwendung</translation>
 <translation id="2802583107108007218">Weitere Informationen zu diesen Einschränkungen</translation>
 <translation id="2803375539583399270">PIN eingeben</translation>
+<translation id="2819519502129272135">Dateisynchronisierung deaktiviert</translation>
 <translation id="2820957248982571256">Wird gescannt...</translation>
 <translation id="2830077785865012357">Chinesisch (Zhuyin)</translation>
 <translation id="2843806747483486897">Standardeinstellungen ändern...</translation>
@@ -212,9 +234,11 @@
 <translation id="2888807692577297075">Keine Elemente für &lt;b&gt;<ph name="SEARCH_STRING" />&lt;/b&gt; gefunden</translation>
 <translation id="2894654529758326923">Informationen</translation>
 <translation id="2902734494705624966">USA – erweitert</translation>
+<translation id="2904378509913846215">Ein Ordner mit dem Namen „<ph name="FILENAME" />“ ist bereits vorhanden. Möchtest du ihn durch den zu verschiebenden Ordner ersetzen?</translation>
 <translation id="290843123675549676">Marathi</translation>
 <translation id="2923240520113693977">Estnisch</translation>
 <translation id="2938685643439809023">Mongolisch</translation>
+<translation id="293972288692056847">{COUNT,plural, =1{Erweiterung kann nicht gefunden werden}other{Erweiterungen können nicht gefunden werden}}</translation>
 <translation id="2943503720238418293">Verwende einen kürzeren Namen</translation>
 <translation id="2949781154072577687">"<ph name="DRIVE_NAME" />" wird formatiert...</translation>
 <translation id="2951236788251446349">Qualle</translation>
@@ -253,13 +277,16 @@
 <translation id="3253225298092156258">Nicht verfügbar</translation>
 <translation id="3254434849914415189">Wähle eine Standard-App für <ph name="FILE_TYPE" />-Dateien:</translation>
 <translation id="3255159654094949700">Arabisch</translation>
+<translation id="326396468955264502"><ph name="NUMBER_OF_FILES" /> Dateien konnten nicht verschoben werden, weil sie verschlüsselt sind.</translation>
 <translation id="3264582393905923483">Kontext</translation>
 <translation id="3272909651715601089">„<ph name="PATH" />“ konnte nicht geöffnet werden</translation>
 <translation id="3280431534455935878">In Vorbereitung</translation>
+<translation id="3280719573299097127">Du befindest dich in einem kostenpflichtigen Netzwerk. Daher wurde die Dateisynchronisierung pausiert.</translation>
 <translation id="3280987981688031357">Schallplatte</translation>
 <translation id="3290356915286466215">Ungesichert</translation>
 <translation id="3291218047831493686">Mit diesem Netzwerk verbinden, um die Einstellung zum Sperren der SIM-Karte zu ändern</translation>
 <translation id="3293023191599135697">WEP-Netzwerke werden nicht unterstützt</translation>
+<translation id="3295006446256079333">Dieses Volumen</translation>
 <translation id="3295357220137379386">Gerät ist beschäftigt</translation>
 <translation id="3296763833017966289">Georgisch</translation>
 <translation id="3307875152560779385">Ukrainisch</translation>
@@ -269,6 +296,7 @@
 <translation id="3356580349448036450">Fertig</translation>
 <translation id="3358452157379365236">Gitarre</translation>
 <translation id="3368922792935385530">Verbunden</translation>
+<translation id="3372635229069101468">Klicke auf <ph name="BEGIN_BOLD" />Details<ph name="END_BOLD" /></translation>
 <translation id="3382143449143186018">Nepalesisch mit InScript-Tastatur</translation>
 <translation id="338691029516748599">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, von deinem Administrator verwaltet, Verbinden</translation>
 <translation id="3408072735282270043">Aktivieren, <ph name="NETWORK_NAME" /></translation>
@@ -280,11 +308,13 @@
 <translation id="3475447146579922140">Google-Tabellendokument</translation>
 <translation id="3479552764303398839">Jetzt nicht</translation>
 <translation id="3486821258960016770">Mongolisch</translation>
-<translation id="3495304270784461826"><ph name="COUNT" /> Fehler</translation>
 <translation id="3509680540198371098">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, <ph name="CONNECTION_STATUS" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, Details</translation>
+<translation id="3511705761158917664">Synchronisierung von <ph name="NUMBER_OF_ITEMS" /> Elementen wird vorbereitet…</translation>
 <translation id="3522708245912499433">Portugiesisch</translation>
+<translation id="3523225005467146490">1 Ordner für <ph name="VM_NAME" /> freigegeben</translation>
 <translation id="3524311639100184459">Vorsicht: Dies sind temporäre Dateien, die möglicherweise automatisch gelöscht werden, um Speicherplatz freizugeben.  <ph name="BEGIN_LINK" />Weitere Informationen<ph name="END_LINK" /></translation>
 <translation id="3527085408025491307">Ordner</translation>
+<translation id="3529424493985988200">Wende dich für weitere Informationen an deinen Administrator.</translation>
 <translation id="3548125359243647069">Es wurde zu oft die falsche PIN eingegeben.</translation>
 <translation id="3549797760399244642">Zu drive.google.com wechseln...</translation>
 <translation id="3553048479571901246">Wenn du Dateien mit der App „<ph name="APP_NAME" />“ öffnen möchtest, kopiere sie zuerst in den Ordner mit Windows-Dateien.</translation>
@@ -301,7 +331,9 @@
 <translation id="3619115746895587757">Cappuccino</translation>
 <translation id="3619593063686672873">Keine zuletzt angesehenen Videos</translation>
 <translation id="3634507049637220048">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, von deinem Administrator verwaltet, Details</translation>
+<translation id="36451918667380448">Mobilfunkanbieter ist gesperrt. Wende dich an deinen Anbieter, um Unterstützung zu erhalten.</translation>
 <translation id="3645233063072417428"><ph name="NUMBER_OF_ITEMS" /> Elemente verschoben.</translation>
+<translation id="3658269352872031728"><ph name="SELECTED_FILE_COUNT" /> Dateien ausgewählt</translation>
 <translation id="3685122418104378273">Die Google Drive-Synchronisierung ist bei der mobilen Datennutzung standardmäßig deaktiviert.</translation>
 <translation id="3689865792480713551"><ph name="ACTIVITY_DESCRIPTION" /> abbrechen.</translation>
 <translation id="3690128548376345212">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, nicht aktiviert, <ph name="CONNECTION_STATUS" />, Signalstärke <ph name="SIGNAL_STRENGTH" /> %, Details</translation>
@@ -311,7 +343,6 @@
 <translation id="3727148787322499904">Änderungen dieser Einstellung wirken sich auf alle freigegebenen Netzwerke aus</translation>
 <translation id="3737576078404241332">Aus der Seitenleiste entfernen</translation>
 <translation id="3749289110408117711">Dateiname</translation>
-<translation id="3780536599611287598">Du bist nicht dazu berechtigt, Dateien in "<ph name="FOLDER_NAME" />" zu verschieben.</translation>
 <translation id="3786301125658655746">Du bist offline</translation>
 <translation id="3789841737615482174">Installieren</translation>
 <translation id="3793469551756281394">Noch ungefähr <ph name="REMAINING_TIME_HOUR" /> <ph name="REMAINING_TIME_MINUTE" /></translation>
@@ -319,6 +350,7 @@
 <translation id="3801082500826908679">Färöisch</translation>
 <translation id="3809272675881623365">Kaninchen</translation>
 <translation id="3810973564298564668">Verwalten</translation>
+<translation id="3811408895933919563">Englisch (Pakistan)</translation>
 <translation id="3811494700605067549">1 Datei ausgewählt</translation>
 <translation id="3817579325494460411">Keine Angabe</translation>
 <translation id="3819448694985509187">Falsche PIN. Du hast noch 1 Versuch.</translation>
@@ -335,19 +367,25 @@
 <translation id="3906232975181435906">Mobiles Profil wird installiert, Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" /></translation>
 <translation id="3924145049010392604">Meta</translation>
 <translation id="3943857333388298514">Einfügen</translation>
+<translation id="3950820424414687140">Anmelden</translation>
 <translation id="3952872973865944257">Telugu (phonetisch)</translation>
 <translation id="3958548648197196644">Kiwi</translation>
+<translation id="397105322502079400">Wird berechnet...</translation>
 <translation id="3971140002794351170">Mobiles Profil herunterladen, Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" /></translation>
 <translation id="3973925058222872294">Englisch (Vereinigtes Königreich)</translation>
 <translation id="3975895378829046965">Bengalisch (phonetisch)</translation>
+<translation id="3999574733850440202">Kürzlich geöffnete Microsoft-Dateien wurden in OneDrive verschoben</translation>
 <translation id="4002066346123236978">Titel</translation>
 <translation id="4017788180641807848">Englisch (USA) mit Workman-Tastatur</translation>
 <translation id="4019998208269143058">An Schnellzugriff anpinnen</translation>
 <translation id="4040753847560036377">Falscher PUK</translation>
 <translation id="4057991113334098539">Wird aktiviert...</translation>
 <translation id="4092890906744441904">Irisch</translation>
+<translation id="4124731372776320263">1 Drive-Datei wird synchronisiert</translation>
 <translation id="4124935795427217608">Einhorn</translation>
 <translation id="4131235941541910880">Verschiebe nicht benötigte Elemente in den Papierkorb</translation>
+<translation id="4134804435730168042">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" />, Nach Geräteeinrichtung aktivieren</translation>
+<translation id="41501027364808384">{COUNT,plural, =1{Aktiviere die folgende Erweiterung im Inkognitomodus:}other{Aktiviere die folgenden Erweiterungen im Inkognitomodus:}}</translation>
 <translation id="4153015322587141338">Klicke mit der rechten Maustaste auf eine Datei und wähle „<ph name="PIN_COMMAND" />“ aus, um schnell auf die Datei in der Ablage zugreifen zu können.</translation>
 <translation id="4157569377477607576">Gemäß der Administratorrichtlinie wird Folgendes nicht empfohlen:</translation>
 <translation id="4159731583141908892"><ph name="FILE_NAME" /> verschoben.</translation>
@@ -386,13 +424,18 @@
 <translation id="4398096759193130964">Stelle die Elemente wieder her oder ziehe sie in einen neuen Ordner außerhalb des Papierkorbs</translation>
 <translation id="4401287888955153199">Alles extrahieren</translation>
 <translation id="4410695710508688828">Fehler beim Extrahieren. <ph name="ERROR_MESSAGE" /></translation>
+<translation id="4414834425328380570">„<ph name="FILE_NAME" />“ wird gelöscht und kann nicht wiederhergestellt werden.</translation>
 <translation id="4418686080762064601">Verknüpfung zu Dateien erstellen</translation>
 <translation id="4425149324548788773">Meine Ablage</translation>
+<translation id="4432921877815220091">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Nach Geräteeinrichtung aktivieren, Von deinem Administrator verwaltet</translation>
 <translation id="4439427728133035643">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, Verbinden</translation>
 <translation id="4442424173763614572">DNS-Suche fehlgeschlagen</translation>
+<translation id="4445896958353114391">Dateien werden synchronisiert</translation>
 <translation id="4462159676511157176">Benutzerdefinierte Nameserver</translation>
 <translation id="4465725236958772856">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, von deinem Administrator verwaltet, Verbinden</translation>
 <translation id="4470564870223067757">Hangul 2 Set</translation>
+<translation id="4472575034687746823">Jetzt starten</translation>
+<translation id="4474142134969976028">Keine passenden Ergebnisse</translation>
 <translation id="4477002475007461989">Rumänisch</translation>
 <translation id="4477219268485577442">Bulgarisch – phonetisch</translation>
 <translation id="4508265954913339219">Aktivierung fehlgeschlagen</translation>
@@ -403,13 +446,13 @@
 <translation id="4552759165874948005">Netzwerk: <ph name="NETWORK_TYPE" />, Signalstärke: <ph name="SIGNAL_STRENGTH" /> %</translation>
 <translation id="4559767610552730302">Bokeh</translation>
 <translation id="4572815280350369984"><ph name="FILE_TYPE" />-Datei</translation>
-<translation id="457386861538956877">Mehr...</translation>
 <translation id="4579744207439506346"><ph name="ENTRY_NAME" /> wurde zur Auswahl hinzugefügt.</translation>
 <translation id="4583436353463424810">Keine kürzlich verwendeten Dokumente</translation>
 <translation id="4594543368593301662">Ergebnisse für <ph name="SEARCH_TERM" />.</translation>
 <translation id="4599600860674643278">Filter wurde zurückgesetzt.</translation>
 <translation id="4603392156942865207"><ph name="FILE_NAME" /> wird in den Ordner "<ph name="FOLDER_NAME" />" kopiert</translation>
 <translation id="4631887759990505102">Künstler</translation>
+<translation id="4635373743001040938">Sehr wenig verfügbarer Speicherplatz. Die Dateisynchronisierung wurde deaktiviert.</translation>
 <translation id="4642769377300286600">Mobiles Profil wird installiert, Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" /></translation>
 <translation id="4646813851450205600">Tschechisch mit Qwerty-Tastatur</translation>
 <translation id="4656777537938206294">Dateien offline verfügbar machen</translation>
@@ -440,13 +483,15 @@
 <translation id="4801956050125744859">Beide behalten</translation>
 <translation id="4804827417948292437">Avocado</translation>
 <translation id="4805966553127040832"><ph name="COUNT" /> Elemente werden wiederhergestellt…</translation>
-<translation id="4823651846660089135">Gerät ist schreibgeschützt</translation>
+<translation id="4816695657735045067">{COUNT,plural, =1{Für die Verwendung des Inkognitomodus ist in deiner Organisation eine Erweiterung erforderlich}other{Für die Verwendung des Inkognitomodus sind in deiner Organisation einige Erweiterungen erforderlich}}</translation>
 <translation id="4826849268470072925">Tamil (ITRANS)</translation>
-<translation id="4839847978919684242"><ph name="SELCTED_FILES_COUNT" /> Elemente ausgewählt</translation>
+<translation id="482932175346970750">Gib <ph name="BEGIN_BOLD" />chrome://extensions<ph name="END_BOLD" /> in deinen Browser ein</translation>
 <translation id="4843566743023903107">Chromebases</translation>
 <translation id="4850886885716139402">Anzeigen</translation>
 <translation id="485316830061041779">Deutsch</translation>
+<translation id="4862885579661885411">Einstellungen für „Dateien“</translation>
 <translation id="4867079195717347957">Klicken, um die Spalte in absteigender Reihenfolge zu sortieren.</translation>
+<translation id="4867297348137739678">Letzte Woche</translation>
 <translation id="4873265419374180291"><ph name="NUMBER_OF_BYTES" /> Byte</translation>
 <translation id="4874569719830985133">Endgültig löschen</translation>
 <translation id="4880214202172289027">Schieberegler für die Lautstärke</translation>
@@ -458,11 +503,13 @@
 <translation id="4935975195727477204">Mittagsgoldblume</translation>
 <translation id="4943368462779413526">American Football</translation>
 <translation id="4961158930123534723">1 Ordner für Parallels Desktop freigegeben</translation>
+<translation id="4965874878399872778">Diese Dateien werden auf die Einhaltung der Sicherheitsrichtlinien deiner Organisation geprüft…</translation>
 <translation id="496656650103537022">„<ph name="FILE_NAME" />“ wiederhergestellt</translation>
 <translation id="4969785127455456148">Album</translation>
+<translation id="4972330214479971536">Die Einrichtung der Dateisynchronisierung konnte nicht abgeschlossen werden</translation>
 <translation id="4973523518332075481">Der Name darf höchstens <ph name="MAX_LENGTH" /> Zeichen lang sein</translation>
-<translation id="4973970068702235170">Fehler beim Zippen, unerwarteter Fehler: <ph name="ERROR_MESSAGE" /></translation>
 <translation id="4984616446166309645">Japanisch</translation>
+<translation id="4987699874727873250">Englisch (Indien)</translation>
 <translation id="4988205478593450158">Soll "<ph name="FILE_NAME" />" wirklich gelöscht werden?</translation>
 <translation id="498902553138568924">Roter Schmetterling</translation>
 <translation id="4992066212339426712">Stummschaltung aufheben</translation>
@@ -482,6 +529,7 @@
 <translation id="5102922915594634436">Synchronisierte Ordner verwalten</translation>
 <translation id="5109254780565519649">Ein Fehler ist aufgetreten. Einige Elemente wurden möglicherweise nicht wiederhergestellt.</translation>
 <translation id="5110329002213341433">Englisch (Kanada)</translation>
+<translation id="5119780910075847424">Synchronisierung pausiert</translation>
 <translation id="5123433949759960244">Basketball</translation>
 <translation id="5129662217315786329">Polnisch</translation>
 <translation id="5144820558584035333">Hangul 3 Set (390)</translation>
@@ -500,6 +548,7 @@
 <translation id="5218183485292899140">Schweizer Französisch</translation>
 <translation id="5234764350956374838">Schließen</translation>
 <translation id="5253070652067921974">Erstellt von</translation>
+<translation id="5254207638927440400">Die Datei kann nicht verschoben werden, da sie momentan verwendet wird.</translation>
 <translation id="5257456363153333584">Libelle</translation>
 <translation id="5262311848634918433"><ph name="MARKUP_1" />Greife überall auf deine Dateien zu, auch offline.<ph name="MARKUP_2" />
     Dateien in Google Drive sind aktuell und auf jedem Gerät verfügbar.<ph name="MARKUP_3" />
@@ -509,9 +558,8 @@
     deine Dateien mit anderen an einem zentralen Ort.<ph name="MARKUP_9" /></translation>
 <translation id="5275973617553375938">Wiederhergestellte Dateien von Google Drive</translation>
 <translation id="5278111733643988471">Wenn du dieses Element wiederherstellen möchtest, ziehe es in einen neuen Ordner außerhalb des Papierkorbs. Der ursprüngliche Ordner „<ph name="PARENT_FOLDER_NAME" />“ für dieses Element wurde gelöscht.</translation>
-<translation id="5286194356314741248">Durchsuchen</translation>
+<translation id="5283101102242354279">So aktivierst du eine Erweiterung im Inkognitomodus:</translation>
 <translation id="5288441970121584418">Hamburger</translation>
-<translation id="5288481194217812690"><ph name="FILENAME" /></translation>
 <translation id="5293615890992542006">Die Administratorrichtlinie blockiert das Verschieben dieser Datei</translation>
 <translation id="5305688511332277257">Keine installiert</translation>
 <translation id="5317780077021120954">Speichern</translation>
@@ -519,7 +567,6 @@
 <translation id="5323213332664049067">Lateinamerikanisch</translation>
 <translation id="5330145655348521461">Diese Dateien wurden auf einem anderen Desktop geöffnet. Wechsle zu <ph name="USER_NAME" /> (<ph name="MAIL_ADDRESS" />), um sie anzusehen.</translation>
 <translation id="5330512191124428349">Informationen ansehen</translation>
-<translation id="5337538975554986899">Dateizugriff über alle URLs außer <ph name="NON_RESTRICTED_DESTINATIONS" /></translation>
 <translation id="535792325654997756">Person mit Katzen</translation>
 <translation id="5358764674931277">Framerate</translation>
 <translation id="5363339716524495120">Eingabesprache ist Chinesisch</translation>
@@ -531,6 +578,7 @@
 <translation id="5422221874247253874">Zugangspunkt</translation>
 <translation id="5428105026674456456">Spanisch</translation>
 <translation id="5438282218546237410">Für "<ph name="SEARCH_TERM" />" gibt es keine Ergebnisse.</translation>
+<translation id="5447680084201416734">Nicht genügend Speicherplatz verfügbar.</translation>
 <translation id="5449551289610225147">Ungültiges Passwort</translation>
 <translation id="5459064203055649751">Eine Datei mit dem Namen „<ph name="FILENAME" />“ ist bereits vorhanden. Möchtest du sie durch die zu verschiebende Datei ersetzen?</translation>
 <translation id="5463231940765244860">Eingabe</translation>
@@ -546,9 +594,11 @@
 <translation id="5533102081734025921"><ph name="IMAGE_TYPE" />-Bild</translation>
 <translation id="5534520101572674276">Größe wird berechnet.</translation>
 <translation id="554153475311314364">Griechisch (Transliteration)</translation>
+<translation id="5554171655917412781"><ph name="SELECTED_FOLDERS_COUNT" /> Ordner ausgewählt</translation>
 <translation id="5580591966435005537">virtuelle Maschine</translation>
 <translation id="5583640892426849032">Rücktaste</translation>
 <translation id="5583664733673201137">Punktbreite ist „Voll“</translation>
+<translation id="5596627076506792578">Weitere Optionen</translation>
 <translation id="5602622065581044566">Bulgarisch mit phonetischer Tastatur</translation>
 <translation id="5605830556594064952">USA – Dvorak</translation>
 <translation id="5618330573454123917">Diese Datei wurde für Computer mit Macintosh-Software entwickelt. Sie ist nicht mit deinem Chrome OS-Gerät kompatibel. <ph name="BEGIN_LINK_HELP" />Weitere Informationen zum Öffnen von Dateien unter Chrome OS<ph name="END_LINK_HELP" /></translation>
@@ -565,7 +615,10 @@
 <translation id="5700087501958648444">Audioinformationen</translation>
 <translation id="5720028165859493293">„<ph name="FILE_NAME" />“ in Papierkorb verschoben</translation>
 <translation id="5724172041621205163">Thai mit Pattachote-Tastatur</translation>
+<translation id="57383366388012121">Letzter Monat</translation>
+<translation id="575175778971367197">Diese Datei kann momentan nicht synchronisiert werden</translation>
 <translation id="5756666464756035725">Ungarisch – QWERTY</translation>
+<translation id="5760252553414789727"><ph name="SELECTED_FILES_COUNT" /> Elemente ausgewählt</translation>
 <translation id="5763377084591234761">Deutsch (Schweiz)</translation>
 <translation id="5769519078756170258">Auszuschließende Host oder Domain</translation>
 <translation id="5775750595919327203">Urdu</translation>
@@ -583,23 +636,26 @@
 <translation id="5838451609423551646">Auswahl aller Einträge wurde aufgehoben.</translation>
 <translation id="5838825566232597749">Internationale US-amerikanische Workman-Tastatur</translation>
 <translation id="5845721951356578987">Pflegekraft</translation>
+<translation id="5858478190805449225">Der Energiesparmodus ist aktiviert. Versuch es noch einmal, wenn er deaktiviert ist.</translation>
+<translation id="5860491529813859533">Aktivieren</translation>
 <translation id="5861477046012235702">Gamer</translation>
 <translation id="5864471791310927901">DHCP-Suche fehlgeschlagen</translation>
 <translation id="5896749729057314184">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, nicht aktiviert, Signalstärke <ph name="SIGNAL_STRENGTH" /> %, Details</translation>
 <translation id="5911887972742538906">Bei der Installation deiner Linux-Anwendung ist ein Fehler aufgetreten.</translation>
 <translation id="5912396950572065471">Format</translation>
-<translation id="5913638992615760742">Unerwarteter Fehler beim Kopieren: <ph name="ERROR_MESSAGE" /></translation>
+<translation id="5918480239180455431">Es sind neue Suchfunktionen verfügbar</translation>
 <translation id="5926082595146149752">Niederländisch (Niederlande) mit internationaler US-amerikanischer PC-Tastatur</translation>
 <translation id="5932901536148835538">Chromebit</translation>
+<translation id="5948255720516436063">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, Nach Geräteeinrichtung aktivieren</translation>
 <translation id="5955954492236143329"><ph name="NUMBER_OF_ITEMS" /> Elemente</translation>
 <translation id="5957366693331451795">Chromeboxes</translation>
 <translation id="5982621672636444458">Sortieroptionen</translation>
-<translation id="6007237601604674381">Fehler beim Verschieben. <ph name="ERROR_MESSAGE" /></translation>
 <translation id="6011074160056912900">Ethernet-Netzwerk</translation>
 <translation id="60357267506638014">Tschechisch – QWERTY</translation>
 <translation id="603895874132768835">Du kannst dieses Mobilfunknetz erst verwenden, wenn du eine neue PIN festlegst</translation>
 <translation id="6040143037577758943">Schließen</translation>
 <translation id="6055907707645252013">Netzwerk: <ph name="NETWORK_TYPE" />, nicht verbunden</translation>
+<translation id="6073060579181816027">Mehrere Dateispeicherorte</translation>
 <translation id="6074825444536523002">Google-Formular</translation>
 <translation id="6079871810119356840">Ungarisch mit Qwerty-Tastatur</translation>
 <translation id="6096979789310008754">Die Sucheingabe wurde gelöscht. Alle Dateien und Ordner werden angezeigt.</translation>
@@ -615,6 +671,8 @@
 <translation id="6164412158936057769">Schmetterlinge</translation>
 <translation id="6165508094623778733">Weitere Informationen</translation>
 <translation id="6170470584681422115">Sandwich</translation>
+<translation id="6177854567773392726">Speicherplatz wird geprüft… <ph name="ITEMS_FOUND" /> Elemente gefunden</translation>
+<translation id="6181912134988520389">Du gibst <ph name="VM_NAME" /> die Berechtigung, auf Dateien in Google Drive zuzugreifen. Änderungen werden mit deinen anderen Geräten synchronisiert.</translation>
 <translation id="6187719147498869044">Ungarisch</translation>
 <translation id="6198252989419008588">PIN ändern</translation>
 <translation id="6199801702437275229">Speicherplatzangaben werden abgerufen...</translation>
@@ -625,6 +683,7 @@
 <translation id="6241349547798190358">Niederländisch (Belgien)</translation>
 <translation id="6267547857941397424">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="PHONE_NAME" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, Smartphone-Akku bei <ph name="BATTERY_STATUS" /> %, Verbinden</translation>
 <translation id="6269630227984243955">Malaiisch</translation>
+<translation id="6271903698064569429">Die Dateien können nicht hochgeladen werden, weil in „<ph name="SHARED_DRIVE_NAME" />“ nicht genügend Speicherplatz vorhanden ist.</translation>
 <translation id="6287852322318138013">App zum Öffnen der Datei auswählen</translation>
 <translation id="6295542640242147836">SIM-Karte sperren</translation>
 <translation id="6296410173147755564">Ungültiger PUK</translation>
@@ -636,7 +695,6 @@
 <translation id="6327785803543103246">Web-Proxy Autodiscovery</translation>
 <translation id="6337014272874260727">Von Schnellzugriff loslösen</translation>
 <translation id="6339145975392024142">US-amerikanisch (PC)</translation>
-<translation id="6346310558342052870">Zugriff eingeschränkt</translation>
 <translation id="6356685157277930264">Feedbackfenster für "Meine Dateien"</translation>
 <translation id="6358884629796491903">Drache</translation>
 <translation id="636254897931573416">Ungültige Übereinstimmung für das Domain-Suffix</translation>
@@ -645,10 +703,13 @@
 <translation id="637062427944097960">Diese Datei wurde auf einem anderen Desktop geöffnet. Wechsle zu <ph name="USER_NAME" /> (<ph name="MAIL_ADDRESS" />), um die Datei anzusehen.</translation>
 <translation id="6394388407447716302">Schreibgeschützt</translation>
 <translation id="6395575651121294044"><ph name="NUMBER_OF_FILES" /> Elemente</translation>
+<translation id="6407769893376380348"><ph name="FILE_NAME" /> konnte nicht verschoben werden, weil die Datei verschlüsselt ist.</translation>
 <translation id="642282551015776456">Dieser Name darf nicht als Datei- oder Ordnername verwendet werden.</translation>
 <translation id="6423031066725912715">Vietnamesisch mit TCVN-Tastatur</translation>
 <translation id="6430271654280079150">Du hast noch 1 Versuch.</translation>
 <translation id="643243556292470964">Gelöschte Dateien werden jetzt in den Papierkorb verschoben</translation>
+<translation id="6438480100790416671">Speicherplatz wird geprüft…</translation>
+<translation id="6451527188465304418">Diese Datei wird auf die Einhaltung der Sicherheitsrichtlinien deiner Organisation geprüft…</translation>
 <translation id="6485131920355264772">Angaben zum Speicherplatz konnten nicht abgerufen werden.</translation>
 <translation id="6495925982925244349">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, <ph name="CONNECTION_STATUS" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, von deinem Administrator verwaltet, Details</translation>
 <translation id="649877868557234318"><ph name="FILE_NAME" /> wird in <ph name="FOLDER_NAME" /> extrahiert</translation>
@@ -656,11 +717,11 @@
 <translation id="6503285896705205014">Die Administratorrichtlinie blockiert das Kopieren von <ph name="COUNT" /> Dateien</translation>
 <translation id="6509122719576673235">Norwegisch</translation>
 <translation id="6528513914570774834">Anderen Nutzern des Geräts erlauben, dieses Netzwerk zu verwenden</translation>
-<translation id="653019979737152879"><ph name="FILE_NAME" /> wird synchronisiert...</translation>
 <translation id="6549689063733911810">Zuletzt geöffnet</translation>
 <translation id="6558280019477628686">Ein Fehler ist aufgetreten. Einige Elemente wurden möglicherweise nicht gelöscht.</translation>
 <translation id="656398493051028875">"<ph name="FILENAME" />" wird gelöscht...</translation>
 <translation id="6581162200855843583">Google Drive-Link</translation>
+<translation id="6588648400954570689">Einstellungen für die Dateisynchronisierung</translation>
 <translation id="6594855146910089723">Dieser Ordner ist für Linux und Parallels Desktop freigegeben</translation>
 <translation id="6607272825297743757">Dateiinformationen</translation>
 <translation id="6609332149380188670"><ph name="NUMBER_OF_ITEMS" /> Ordner für Parallels Desktop freigegeben</translation>
@@ -670,10 +731,12 @@
 <translation id="6657585470893396449">Passwort</translation>
 <translation id="6658865850469097484">Dateien im Papierkorb werden nach 30 Tagen automatisch gelöscht.</translation>
 <translation id="6673674183150363784">Französisch (Frankreich) mit Bépo-Tastatur</translation>
+<translation id="670380500182402678">Alle ersetzen</translation>
 <translation id="6710022688720561421">Roboter</translation>
 <translation id="6710213216561001401">Zurück</translation>
 <translation id="6732801395666424405">Zertifikate nicht geladen</translation>
 <translation id="6736329909263487977"><ph name="ISSUED_BY" /> [<ph name="ISSUED_TO" />]</translation>
+<translation id="6750737795876287924">Aktuelles Verzeichnis</translation>
 <translation id="6751256176799620176">1 Ordner ausgewählt</translation>
 <translation id="6755827872271341378">Chrome OS Flex-Gerät</translation>
 <translation id="6790428901817661496">Wiedergabe</translation>
@@ -693,7 +756,6 @@
 <translation id="6874758081814639712">Person beim Tai-Chi</translation>
 <translation id="6876155724392614295">Fahrrad</translation>
 <translation id="6878261347041253038">Devanagari-Tastatur (phonetisch)</translation>
-<translation id="6881853403185175088">Office</translation>
 <translation id="6885780034956018177">Schnecke</translation>
 <translation id="6896758677409633944">Kopieren</translation>
 <translation id="6898028766943174120">Weitere Unterordner…</translation>
@@ -703,6 +765,7 @@
 <translation id="6935521024859866267">Auf dem Kopf</translation>
 <translation id="6943836128787782965">HTTP-Abruf fehlgeschlagen</translation>
 <translation id="6949408524333579394">Serbisch (Transliteration)</translation>
+<translation id="69548399407432279">Letztes Jahr</translation>
 <translation id="6960565108681981554">Nicht aktiviert. Wende dich bitte an deinen Mobilfunkanbieter.</translation>
 <translation id="696203921837389374">Synchronisierung über mobile Daten aktivieren</translation>
 <translation id="6965382102122355670">Ok</translation>
@@ -714,7 +777,7 @@
 <translation id="6989942356279143254">Schwedisch</translation>
 <translation id="6990081529015358884">Du hast keinen freien Speicherplatz mehr.</translation>
 <translation id="6993826899923627728">Diese Elemente befinden sich im Papierkorb</translation>
-<translation id="6998711733709403587"><ph name="SELCTED_FOLDERS_COUNT" /> Ordner ausgewählt</translation>
+<translation id="6996593023542748157">Ordner für <ph name="VM_NAME" /> freigeben</translation>
 <translation id="7008426324576352165">Deine Organisation benötigt mehr Speicherplatz, um den Upload abzuschließen.</translation>
 <translation id="7009985720488544166">Die Administratorrichtlinie blockiert das Verschieben von <ph name="COUNT" /> Dateien</translation>
 <translation id="7012943028104619157"><ph name="ROOT_TITLE" /> (<ph name="ROOT_SUMMARY" />)</translation>
@@ -733,8 +796,10 @@
 <translation id="7126604456862387217">'&lt;b&gt;<ph name="SEARCH_STRING" />&lt;/b&gt;' – &lt;em&gt;Ablage durchsuchen&lt;/em&gt;</translation>
 <translation id="7135561821015524160">Kannada (phonetisch)</translation>
 <translation id="714034171374937760">Chromebase</translation>
+<translation id="7162080671816799010">Fehlende Angabe bei „Alternativer Name für Betreff stimmt überein“ oder „Domain-Suffix stimmt überein“ zur Bestätigung der Identität des Authentifizierungsservers</translation>
 <translation id="7165320105431587207">Fehler beim Konfigurieren des Netzwerks</translation>
 <translation id="7170041865419449892">Außer Reichweite</translation>
+<translation id="7179579940054351344">Dateizugriff durch alle Websites und URLs außer <ph name="NON_RESTRICTED_DESTINATIONS" /></translation>
 <translation id="7180611975245234373">Aktualisieren</translation>
 <translation id="7189874332498648577"><ph name="NUMBER_OF_GB" /> GB</translation>
 <translation id="7191454237977785534">Datei speichern unter</translation>
@@ -744,8 +809,11 @@
 <translation id="7238643356913091553"><ph name="NETWORK_NAME" />, Details</translation>
 <translation id="7246947237293279874">FTP-Proxy</translation>
 <translation id="7248671827512403053">App</translation>
+<translation id="7252604552361840748">Suche nach der Erweiterung oben</translation>
 <translation id="7256405249507348194">Unbekannter Fehler: <ph name="DESC" /></translation>
 <translation id="7268659760406822741">Verfügbare Dienste</translation>
+<translation id="7291818353625820805">Du möchtest, dass die Tasteneingabe wiederholt wird? Deaktiviere die Akzentzeichen in den Tastatureinstellungen.</translation>
+<translation id="729236380049459563">Dateisynchronisierung ist aktiviert</translation>
 <translation id="7292816689782057017">Das Speichern an einigen Orten wird durch eine Administratorrichtlinie eingeschränkt.</translation>
 <translation id="7294063083760278948">Telugu (Transliteration)</translation>
 <translation id="7295662345261934369">Mit anderen teilen</translation>
@@ -753,6 +821,7 @@
 <translation id="7309413087278791451">Deutsch (Belgien)</translation>
 <translation id="7339898014177206373">Neues Fenster</translation>
 <translation id="7343393116438664539">Vietnamesisch (Telex)</translation>
+<translation id="7347346221088620549">Verschlüsselte Datei</translation>
 <translation id="7357762654218998920">Dieser Dateityp wird nicht unterstützt. <ph name="BEGIN_LINK_HELP" />Weitere Informationen zum Öffnen von Dateien unter Chrome OS<ph name="END_LINK_HELP" /></translation>
 <translation id="7359359531237882347"><ph name="NUMBER_OF_ITEMS" /> Elemente werden kopiert...</translation>
 <translation id="7375951387215729722">Die Dateiliste wurde in absteigender Reihenfolge nach "<ph name="COLUMN_NAME" />" sortiert.</translation>
@@ -779,8 +848,8 @@
 <translation id="7547811415869834682">Niederländisch</translation>
 <translation id="7551643184018910560">An Ablage anpinnen</translation>
 <translation id="7553492409867692754">Du gibst Linux-Apps die Berechtigung, auf Dateien im Ordner „<ph name="FOLDER_NAME" />“ zuzugreifen</translation>
+<translation id="7555339735447658365">Du bist momentan offline. Die Dateisynchronisierung wird fortgesetzt, wenn du mit dem Internet verbunden bist</translation>
 <translation id="7589661784326793847">Einen Moment bitte</translation>
-<translation id="7592775719802218421"><ph name="FILE_NAME" /> wird offline bereitgestellt</translation>
 <translation id="7600126690270271294">Serbisch</translation>
 <translation id="7603724359189955920">Gitter</translation>
 <translation id="7627790789328695202">Hoppla, <ph name="FILE_NAME" /> existiert bereits. Gib einen anderen Namen ein und versuche es erneut.</translation>
@@ -790,17 +859,20 @@
 <translation id="7655441028674523381">Einfacher Zugriff auf Google Fotos</translation>
 <translation id="7658239707568436148">Abbrechen</translation>
 <translation id="7663224033570512922">Hindi</translation>
+<translation id="7665680517722058469">Versuch es mit einer anderen Suchanfrage</translation>
 <translation id="7689532716264131859"><ph name="NUMBER_OF_ITEMS" /> Elemente in Papierkorb verschoben</translation>
 <translation id="7693909743393669729">Durch die Formatierung eines Laufwerks werden alle darauf gespeicherten Daten gelöscht und alle vorhandenen Partitionen entfernt. Dies schließt ggf. auch Partitionen ein, die nicht sichtbar sind. Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <translation id="7695430100978772476">"<ph name="DRIVE_NAME" />" konnte nicht formatiert werden</translation>
 <translation id="76959938259365003">Der Papierkorb konnte nicht geleert werden.</translation>
 <translation id="770015031906360009">Griechisch</translation>
 <translation id="7705251383879779343"><ph name="FILE_NAME" /> kopiert.</translation>
+<translation id="7707941139430559579">Datei kann nicht verschoben werden. <ph name="ERROR_MESSAGE" /></translation>
 <translation id="7708271999969613024">Wenn du dieses Netzwerk nutzen möchtest, musst du den 8-stelligen PUK (Personal Unblocking Key) eingeben, den du vom Mobilfunkanbieter erhalten hast.</translation>
 <translation id="7711920809702896782">Bildinformationen</translation>
 <translation id="7724603315864178912">Ausschneiden</translation>
 <translation id="7732111077498238432">Das Netzwerk ist richtliniengesteuert</translation>
 <translation id="7736003208887389532">Diese Dateien endgültig löschen?</translation>
+<translation id="7740287852186792672">Suchergebnisse</translation>
 <translation id="7748626145866214022">Auf der Aktionsleiste sind weitere Optionen verfügbar. Drücke Alt + A, um den Fokus auf die Aktionsleiste zu setzen.</translation>
 <translation id="7760449188139285140">Chinesisch (Wubi)</translation>
 <translation id="7765158879357617694">Verschieben</translation>
@@ -816,6 +888,7 @@
 <translation id="7805768142964895445">Status</translation>
 <translation id="7806708061868529807">Hebräisch</translation>
 <translation id="78104721049218340">Thai mit Kedmanee-Tastatur</translation>
+<translation id="7814857791038398352">Microsoft OneDrive</translation>
 <translation id="7827012282502221009"><ph name="NUMBER_OF_TB" /> TB</translation>
 <translation id="7831491651892296503">Fehler bei der Netzwerkkonfiguration</translation>
 <translation id="7839804798877833423">Zum Abrufen dieser Dateien werden etwa <ph name="FILE_SIZE" /> mobile Daten benötigt.</translation>
@@ -828,9 +901,10 @@
 <translation id="7903984238293908205">Katakana</translation>
 <translation id="7908793776359722643">Durch die Formatierung einer Partition werden alle darauf gespeicherten Daten gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <translation id="7911118814695487383">Linux</translation>
+<translation id="7920501309908018401">Die Dateien in „Meine Ablage“ werden automatisch mit deinem Chromebook synchronisiert, sodass du auch ohne Internetverbindung darauf zugreifen kannst.</translation>
 <translation id="7925247922861151263">AAA-Prüfung fehlgeschlagen</translation>
-<translation id="7925686952655276919">Keine mobilen Daten für die Synchronisierung verwenden</translation>
 <translation id="7928710562641958568">Gerät auswerfen</translation>
+<translation id="7933875256234974853">Synchronisierung der Drive-Dateien wird vorbereitet...</translation>
 <translation id="7943385054491506837">USA – Colemak</translation>
 <translation id="7953739707111622108">Dieses Gerät kann nicht geöffnet werden, da das Dateisystem nicht erkannt wurde.</translation>
 <translation id="7969525169268594403">Slowenisch</translation>
@@ -840,26 +914,34 @@
 <translation id="8000066093800657092">Kein Netzwerk</translation>
 <translation id="8008366997883261463">Jack Russell</translation>
 <translation id="8028993641010258682">Größe</translation>
+<translation id="8034974485549318493">Zur Ersteinrichtung musst du mit dem Internet verbunden sein, damit Dateien synchronisiert werden können.</translation>
 <translation id="803771048473350947">Datei</translation>
 <translation id="8038111231936746805">(Standard)</translation>
 <translation id="8042602468072383151"><ph name="AUDIO_TYPE" />-Audio</translation>
 <translation id="8045462269890919536">Rumänisch</translation>
 <translation id="8049184478152619004">PIN-Entsperrschlüssel (PUK) eingeben</translation>
+<translation id="8055538340801153769">Dieser Ordner</translation>
 <translation id="807187749540895545"><ph name="FILE_NAME" /> wird extrahiert...</translation>
 <translation id="8087576439476816834">Herunterladen, <ph name="PROFILE_NAME" /></translation>
 <translation id="8106045200081704138">Für mich freigegeben</translation>
 <translation id="8116072619078571545">Wasser mit Eis</translation>
+<translation id="8120392982188717723">Synchronisierung in kostenpflichtigen Netzwerken zulassen</translation>
+<translation id="8124093710070495550">Synchronisierungsproblem</translation>
 <translation id="8128733386027980860">Englisch (Vereinigtes Königreich) mit Dvorak-Tastatur</translation>
 <translation id="8137331602592933310">"<ph name="FILENAME" />" wurde mit dir geteilt. Du kannst die Datei nicht löschen, da du nicht der Inhaber bist.</translation>
+<translation id="8138705869659070104">Nach Einrichtung aktivieren</translation>
 <translation id="813913629614996137">Initialisierung…</translation>
 <translation id="8147028810663464959">Zeichenbreite ist „Voll“</translation>
 <translation id="8151638057146502721">Konfigurieren</translation>
+<translation id="8154666764013920974">{NUM_ERROR,plural, =1{1 Fehler.}other{# Fehler.}}</translation>
 <translation id="8154842056504218462">Alle Einträge wurden ausgewählt.</translation>
 <translation id="8157684860301034423">Fehler beim Abrufen der App-Informationen.</translation>
 <translation id="8175731104491895765">Französisch (Belgien)</translation>
+<translation id="8175799081768705361"><ph name="NUMBER_OF_FILES_SYNCING" /> Drive-Dateien werden synchronisiert</translation>
 <translation id="8179976553408161302">Eingabetaste</translation>
 <translation id="8193175696669055101">Gerätemodell</translation>
 <translation id="8223479393428528563">Wenn du diese Dateien zur Offline-Nutzung speichern möchtest, gehe online, klicke mit der rechten Maustaste auf die Dateien und wähle die Option „<ph name="OFFLINE_CHECKBOX_NAME" />“ aus.</translation>
+<translation id="8241139360630443550">Speicher anzeigen</translation>
 <translation id="8249296373107784235">Abbrechen</translation>
 <translation id="8250690786522693009">Latein</translation>
 <translation id="8250920743982581267">Dokumente</translation>
@@ -870,23 +952,30 @@
 <translation id="8264024885325823677">Diese Einstellung wird von deinem Administrator verwaltet.</translation>
 <translation id="8269755669432358899">Erweiterte Dateiinformationen minimieren</translation>
 <translation id="8280151743281770066">Armenisch – phonetisch</translation>
+<translation id="8285791779547722821"><ph name="ORIGINAL_MIME_TYPE" />, verschlüsselt</translation>
 <translation id="8294431847097064396">Quelle</translation>
 <translation id="8297012244086013755">Hangul 3 Set (Kein Umschalttaste)</translation>
 <translation id="8299269255470343364">Japanisch</translation>
 <translation id="8300849813060516376">OTASP fehlgeschlagen</translation>
 <translation id="8312871300878166382">In Ordner einfügen</translation>
 <translation id="8329978297633540474">Unformatierter Text</translation>
+<translation id="8332007959299458842">Kürzlich geöffnete Microsoft-Dateien wurden in Google Drive verschoben</translation>
 <translation id="8335587457941836791">Von Ablage loslösen</translation>
 <translation id="8335837413233998004">Belarussisch</translation>
 <translation id="8336153091935557858">Gestern <ph name="YESTERDAY_DAYTIME" /></translation>
 <translation id="8342318071240498787">Es ist bereits eine Datei oder ein Verzeichnis mit dem gleichen Namen vorhanden.</translation>
+<translation id="83651606385705612">Du gibst <ph name="VM_NAME" /> die Berechtigung, auf Dateien im Ordner „<ph name="FOLDER_NAME" />“ zuzugreifen</translation>
 <translation id="8372369524088641025">Ungültiger WEP-Schlüssel</translation>
 <translation id="8372852072747894550">Griechisch</translation>
+<translation id="8377269993083688872">E-Mail-Layouts</translation>
 <translation id="8386903983509584791">Suche abgeschlossen</translation>
 <translation id="8387733224523483503"><ph name="FILE_NAME" /> extrahiert.</translation>
 <translation id="8395901698320285466">Abmessungen</translation>
+<translation id="8404498045299006085">Alle beibehalten</translation>
 <translation id="8408068190360279472">Netzwerk: <ph name="NETWORK_TYPE" />, Verbindung wird hergestellt</translation>
 <translation id="8425213833346101688">Ändern</translation>
+<translation id="8428213095426709021">Einstellungen</translation>
+<translation id="8429998526804961548"><ph name="NUMBER_OF_ITEMS" /> Ordner für <ph name="VM_NAME" /> freigegeben</translation>
 <translation id="8431909052837336408">PIN für SIM-Karte ändern</translation>
 <translation id="8437209419043462667">USA</translation>
 <translation id="8452135315243592079">Keine SIM-Karte vorhanden</translation>
@@ -901,6 +990,8 @@
 <translation id="8487700953926739672">Offline verfügbar</translation>
 <translation id="8492972329130824181">Heimnetzwerk ist nicht verfügbar. Mobiles Daten-Roaming muss aktiviert sein, um eine Verbindung herzustellen.</translation>
 <translation id="8499098729323186194"><ph name="NUMBER_OF_ITEMS" /> Elemente werden extrahiert...</translation>
+<translation id="8502913769543567768">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="NETWORK_PROVIDER_NAME" />, Nach Geräteeinrichtung aktivieren, Von deinem Administrator verwaltet</translation>
+<translation id="8512483403832814140">Beliebiger Zeitraum</translation>
 <translation id="8521441079177373948">UK</translation>
 <translation id="853494022971700746">Französisch (Frankreich)</translation>
 <translation id="8540608333167683902">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, Details</translation>
@@ -911,21 +1002,23 @@
 <translation id="8560515948038859357">Kantonesisch</translation>
 <translation id="8561206103590473338">Elefant</translation>
 <translation id="8566466896628108558">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="SECURITY_STATUS" />, Signalstärke <ph name="SIGNAL_STRENGTH" /> %, vom Administrator blockiert, Details</translation>
+<translation id="8568374623837201676">Diese Datei endgültig löschen?</translation>
 <translation id="8569764466147087991">Zu öffnende Datei auswählen</translation>
 <translation id="8577897833047451336">Kroatisch</translation>
 <translation id="8578308463707544055">Indonesisch</translation>
-<translation id="8579285237314169903"><ph name="NUMBER_OF_FILES" /> Elemente werden synchronisiert...</translation>
 <translation id="8600173386174225982">Die Dateiliste wird jetzt in der Miniaturansicht angezeigt.</translation>
 <translation id="8601932370724196034">Crostini-Bilddatei</translation>
 <translation id="8609695766746872526">Isländisch</translation>
 <translation id="863903787380594467">Falsche PIN. Du hast noch <ph name="RETRIES" /> Versuche.</translation>
 <translation id="8639391553632924850"><ph name="INPUT_LABEL" /> – Port</translation>
+<translation id="8656407365183407932">Deine Offlinedateien mussten entfernt werden</translation>
 <translation id="8656768832129462377">Nicht überprüfen</translation>
 <translation id="8688591111840995413">Passwort ungültig</translation>
 <translation id="8698464937041809063">Google-Zeichnung</translation>
 <translation id="8698877009525468705">Diese Datei ist vertraulich und unterliegt den Einschränkungen durch die Administratorrichtlinie.</translation>
-<translation id="8712637175834984815">Alles klar</translation>
+<translation id="8712637175834984815">Ok</translation>
 <translation id="8713112442029511308">Maltesisch</translation>
+<translation id="8714138378966541668">Vom Anbieter gesperrt</translation>
 <translation id="8714406895390098252">Fahrrad</translation>
 <translation id="8719721339511222681"><ph name="ENTRY_NAME" /> wurde ausgewählt.</translation>
 <translation id="872537912056138402">Kroatisch</translation>
@@ -933,6 +1026,7 @@
 <translation id="8787254343425541995">Proxys für freigegebene Netzwerke zulassen</translation>
 <translation id="8790981080411996443">Person beim Blumengießen</translation>
 <translation id="8798099450830957504">Standard</translation>
+<translation id="8806832560029769670">{NUM_WARNING,plural, =1{1 Warnung.}other{# Warnungen.}}</translation>
 <translation id="8808686172382650546">Katze</translation>
 <translation id="8810671769985673465">Fehler beim Zippen, Element bereits vorhanden: "<ph name="FILE_NAME" />"</translation>
 <translation id="8813284582615685103">Spanisch (Spanien)</translation>
@@ -943,15 +1037,19 @@
 <translation id="8866284467018526531">Arabisch (Transliteration)</translation>
 <translation id="8873014196523807561">Wenn du diese Elemente wiederherstellen möchtest, ziehe sie in einen neuen Ordner. Die ursprünglichen Ordner für einige dieser Elemente wurden gelöscht.</translation>
 <translation id="8874184842967597500">Nicht verbunden</translation>
+<translation id="8876368061475701452">In der Warteschlange</translation>
 <translation id="8900820606136623064">Ungarisch</translation>
 <translation id="8903931173357132290">Absolvent</translation>
 <translation id="8912078710089354287">Hund, der mit dem Schwanz wedelt</translation>
 <translation id="8919081441417203123">Dänisch</translation>
 <translation id="8949925099261528566">Verbunden, kein Internet</translation>
 <translation id="8965697826696209160">Nicht genügend Speicherplatz.</translation>
+<translation id="8970887620466824814">Es gab ein Problem.</translation>
+<translation id="8971742885766657349">Wird synchronisiert – <ph name="PERCENT" /> %</translation>
 <translation id="8997962250644902079">Chinesisch (traditionell) (Pinyin)</translation>
 <translation id="8998871447376656508">In deinem Google Drive ist nicht genügend freier Speicherplatz vorhanden, um den Upload abzuschließen.</translation>
 <translation id="9003940392834790328">Netzwerk <ph name="NETWORK_INDEX" /> von <ph name="NETWORK_COUNT" />, <ph name="NETWORK_NAME" />, <ph name="CONNECTION_STATUS" />, Signalstärke bei <ph name="SIGNAL_STRENGTH" /> %, von deinem Administrator verwaltet, Details</translation>
+<translation id="9007990314804111233">Im Microsoft-Konto anmelden</translation>
 <translation id="9017798300203431059">Russisch – phonetisch</translation>
 <translation id="9034924485347205037">Linux-Dateien</translation>
 <translation id="9035012421917565900">Diese Elemente können nicht in "<ph name="DESTINATION_NAME" />" zurückverschoben werden. Diese Aktion lässt sich also nicht rückgängig machen.</translation>
@@ -960,6 +1058,7 @@
 <translation id="9046895021617826162">Verbindungsaufbau fehlgeschlagen</translation>
 <translation id="9065512565307033593">Ohne diese Bestätigung wird der Netzwerkzugriff deaktiviert.</translation>
 <translation id="908378762078012445">Russisch mit phonetischer Tastatur (AATSEEL)</translation>
+<translation id="9086302186042011942">Synchronisierung läuft...</translation>
 <translation id="9099674669267916096">Seitenzahl</translation>
 <translation id="9100610230175265781">Passphrase erforderlich</translation>
 <translation id="9110990317705400362">Wir arbeiten stets daran, das Surfen für dich sicherer zu machen. Früher konntest du von jeder beliebigen Website aufgefordert werden, deinem Browser eine Erweiterung hinzuzufügen. In neueren Versionen von Google Chrome musst du Chrome ausdrücklich mitteilen, dass du diese Erweiterungen installieren möchtest, indem du sie über die Seite „Erweiterungen“ hinzufügst. <ph name="BEGIN_LINK" />Weitere Informationen<ph name="END_LINK" /></translation>

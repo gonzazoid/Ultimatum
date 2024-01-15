@@ -8,8 +8,8 @@
 
 #include <commdlg.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/run_loop.h"
@@ -47,7 +47,7 @@ class FakePdfPrinterHandler : public PdfPrinterHandler {
       : PdfPrinterHandler(profile, contents, sticky_settings),
         save_failed_(false) {}
 
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* params) override {
     // Since we always cancel the dialog as soon as it is initialized, this

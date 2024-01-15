@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
@@ -38,8 +38,7 @@ static void CreateFile(const base::FilePath& file,
                        size_t size,
                        const base::Time& timestamp) {
   const std::string data(size, 0);
-  EXPECT_EQ(base::WriteFile(file, data.data(), data.size()),
-            static_cast<int>(size));
+  EXPECT_TRUE(base::WriteFile(file, data));
   EXPECT_TRUE(base::TouchFile(file, timestamp, timestamp));
 }
 

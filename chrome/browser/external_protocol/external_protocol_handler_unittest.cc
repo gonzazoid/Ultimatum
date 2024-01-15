@@ -8,7 +8,9 @@
 #include <utility>
 
 #include "base/run_loop.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/values.h"
+#include "build/build_config.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -21,16 +23,22 @@
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_utils.h"
 #include "content/public/test/web_contents_tester.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/jni_android.h"
+#include "components/navigation_interception/intercept_navigation_delegate.h"
+#endif
+
 class FakeExternalProtocolHandlerWorker
-    : public shell_integration::DefaultProtocolClientWorker {
+    : public shell_integration::DefaultSchemeClientWorker {
  public:
   FakeExternalProtocolHandlerWorker(
       const GURL& url,
       shell_integration::DefaultWebClientState os_state,
       const std::u16string& program_name)
-      : shell_integration::DefaultProtocolClientWorker(url),
+      : shell_integration::DefaultSchemeClientWorker(url),
         os_state_(os_state),
         program_name_(program_name) {}
 
@@ -64,8 +72,8 @@ class FakeExternalProtocolHandlerDelegate
         on_complete_(std::move(on_complete)),
         program_name_(u"") {}
 
-  scoped_refptr<shell_integration::DefaultProtocolClientWorker>
-  CreateShellWorker(const GURL& url) override {
+  scoped_refptr<shell_integration::DefaultSchemeClientWorker> CreateShellWorker(
+      const GURL& url) override {
     return new FakeExternalProtocolHandlerWorker(url, os_state_, program_name_);
   }
 
@@ -153,6 +161,9 @@ class FakeExternalProtocolHandlerDelegate
 };
 
 class ExternalProtocolHandlerTest : public testing::Test {
+ public:
+  content::WebContents* GetWebContents() const { return web_contents_.get(); }
+
  protected:
   ExternalProtocolHandlerTest() : delegate_(run_loop_.QuitClosure()) {}
 
@@ -208,7 +219,12 @@ class ExternalProtocolHandlerTest : public testing::Test {
                             base::Unretained(this)),
         ui::PAGE_TRANSITION_LINK, /*has_user_gesture=*/true,
         /*is_in_fenced_frame_tree=*/false, initiating_origin,
-        content::WeakDocumentPtr());
+        content::WeakDocumentPtr()
+#if BUILDFLAG(IS_ANDROID)
+            ,
+        nullptr
+#endif
+    );
     run_loop_.Run();
     ExternalProtocolHandler::SetDelegateForTesting(nullptr);
 
@@ -227,8 +243,6 @@ class ExternalProtocolHandlerTest : public testing::Test {
       EXPECT_FALSE(delegate_.initiating_origin().has_value());
     }
   }
-
-  content::WebContents* GetWebContents() const { return web_contents_.get(); }
 
   content::BrowserTaskEnvironment task_environment_;
 
@@ -260,6 +274,9 @@ TEST_F(ExternalProtocolHandlerTest,
   DoTest(ExternalProtocolHandler::BLOCK,
          shell_integration::OTHER_MODE_IS_DEFAULT, Action::BLOCK);
 }
+
+// Android doesn't use the external protocol dialog.
+#if !BUILDFLAG(IS_ANDROID)
 
 TEST_F(ExternalProtocolHandlerTest, TestLaunchSchemeUnBlockedChromeDefault) {
   DoTest(ExternalProtocolHandler::DONT_BLOCK, shell_integration::IS_DEFAULT,
@@ -314,6 +331,54 @@ TEST_F(ExternalProtocolHandlerTest, TestUrlEscape) {
             delegate_.launch_or_prompt_url());
 }
 
+#else  // if !BUILDFLAG(IS_ANDROID)
+
+class MockInterceptNavigationDelegate
+    : public navigation_interception::InterceptNavigationDelegate {
+ public:
+  MockInterceptNavigationDelegate()
+      : InterceptNavigationDelegate(base::android::AttachCurrentThread(),
+                                    nullptr) {}
+
+  MOCK_METHOD5(HandleSubframeExternalProtocol,
+               void(const GURL&,
+                    ui::PageTransition,
+                    bool,
+                    const absl::optional<url::Origin>&,
+                    mojo::PendingRemote<network::mojom::URLLoaderFactory>*));
+};
+
+TEST_F(ExternalProtocolHandlerTest, TestUrlEscape_Android) {
+  GURL url("alert:test message\" --bad%2B\r\n 文本 \"file");
+  GURL escaped(
+      "alert:test%20message%22%20--bad%2B%20%E6%96%87%E6%9C%AC%20%22file");
+
+  auto delegate = std::make_unique<MockInterceptNavigationDelegate>();
+
+  url::Origin precursor_origin =
+      url::Origin::Create(GURL("https://precursor.test"));
+  url::Origin opaque_origin =
+      url::Origin::Resolve(GURL("data:text/html,hi"), precursor_origin);
+
+  EXPECT_CALL(*delegate.get(),
+              HandleSubframeExternalProtocol(testing::Eq(escaped), testing::_,
+                                             true, testing::Eq(opaque_origin),
+                                             testing::Eq(nullptr)));
+
+  navigation_interception::InterceptNavigationDelegate::Associate(
+      web_contents_.get(), std::move(delegate));
+
+  ExternalProtocolHandler::LaunchUrl(
+      url,
+      base::BindRepeating(&ExternalProtocolHandlerTest::GetWebContents,
+                          base::Unretained(this)),
+      ui::PAGE_TRANSITION_LINK, /*has_user_gesture=*/true,
+      /*is_in_fenced_frame_tree=*/false, opaque_origin,
+      content::WeakDocumentPtr(), nullptr);
+}
+
+#endif  // if !BUILDFLAG(IS_ANDROID)
+
 TEST_F(ExternalProtocolHandlerTest, TestUrlEscapeNoChecks) {
   GURL url("alert:test message\" --bad%2B\r\n 文本 \"file");
 
@@ -341,15 +406,29 @@ TEST_F(ExternalProtocolHandlerTest, TestUrlEscapeNoChecks) {
 }
 
 TEST_F(ExternalProtocolHandlerTest, TestGetBlockStateUnknown) {
+  base::HistogramTester histogram_tester;
+
   ExternalProtocolHandler::BlockState block_state =
       ExternalProtocolHandler::GetBlockState("tel", nullptr, profile_.get());
   EXPECT_EQ(ExternalProtocolHandler::UNKNOWN, block_state);
+  block_state =
+      ExternalProtocolHandler::GetBlockState("news", nullptr, profile_.get());
+  EXPECT_EQ(ExternalProtocolHandler::UNKNOWN, block_state);
+  block_state =
+      ExternalProtocolHandler::GetBlockState("snews", nullptr, profile_.get());
+  EXPECT_EQ(ExternalProtocolHandler::UNKNOWN, block_state);
+
   EXPECT_TRUE(profile_->GetPrefs()
                   ->GetDict(prefs::kProtocolHandlerPerOriginAllowedProtocols)
                   .empty());
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kPrompt, 3);
 }
 
 TEST_F(ExternalProtocolHandlerTest, TestGetBlockStateDefaultBlock) {
+  base::HistogramTester histogram_tester;
+
   ExternalProtocolHandler::BlockState block_state =
       ExternalProtocolHandler::GetBlockState("afp", nullptr, profile_.get());
   EXPECT_EQ(ExternalProtocolHandler::BLOCK, block_state);
@@ -363,21 +442,33 @@ TEST_F(ExternalProtocolHandlerTest, TestGetBlockStateDefaultBlock) {
   block_state =
       ExternalProtocolHandler::GetBlockState("mk", nullptr, profile_.get());
   EXPECT_EQ(ExternalProtocolHandler::BLOCK, block_state);
+
   EXPECT_TRUE(profile_->GetPrefs()
                   ->GetDict(prefs::kProtocolHandlerPerOriginAllowedProtocols)
                   .empty());
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kDeniedDefault, 4);
 }
 
 TEST_F(ExternalProtocolHandlerTest, TestGetBlockStateDefaultDontBlock) {
+  base::HistogramTester histogram_tester;
+
   ExternalProtocolHandler::BlockState block_state =
       ExternalProtocolHandler::GetBlockState("mailto", nullptr, profile_.get());
   EXPECT_EQ(ExternalProtocolHandler::DONT_BLOCK, block_state);
+
   EXPECT_TRUE(profile_->GetPrefs()
                   ->GetDict(prefs::kProtocolHandlerPerOriginAllowedProtocols)
                   .empty());
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kAllowedDefaultMail, 1);
 }
 
 TEST_F(ExternalProtocolHandlerTest, TestSetBlockState) {
+  base::HistogramTester histogram_tester;
+
   const char kScheme_1[] = "custom1";
   const char kScheme_2[] = "custom2";
   url::Origin example_origin_1 =
@@ -400,6 +491,9 @@ TEST_F(ExternalProtocolHandlerTest, TestSetBlockState) {
   EXPECT_TRUE(profile_->GetPrefs()
                   ->GetDict(prefs::kProtocolHandlerPerOriginAllowedProtocols)
                   .empty());
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kPrompt, 4);
 
   // Set to DONT_BLOCK for {kScheme_1, example_origin_1}, and make sure it is
   // written to prefs.
@@ -418,6 +512,12 @@ TEST_F(ExternalProtocolHandlerTest, TestSetBlockState) {
   block_state = ExternalProtocolHandler::GetBlockState(
       kScheme_2, &example_origin_2, profile_.get());
   EXPECT_EQ(ExternalProtocolHandler::UNKNOWN, block_state);
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kAllowedByPreference, 1);
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kPrompt, 7);
 
   // Set to DONT_BLOCK for {kScheme_2, example_origin_2}, and make sure it is
   // written to prefs independently of {kScheme_1, example_origin_1}.
@@ -436,6 +536,12 @@ TEST_F(ExternalProtocolHandlerTest, TestSetBlockState) {
   block_state = ExternalProtocolHandler::GetBlockState(
       kScheme_2, &example_origin_2, profile_.get());
   EXPECT_EQ(ExternalProtocolHandler::DONT_BLOCK, block_state);
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kAllowedByPreference, 3);
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kPrompt, 9);
 
   const base::Value::Dict& protocol_origin_pairs =
       profile_->GetPrefs()->GetDict(
@@ -472,6 +578,12 @@ TEST_F(ExternalProtocolHandlerTest, TestSetBlockState) {
   EXPECT_TRUE(profile_->GetPrefs()
                   ->GetDict(prefs::kProtocolHandlerPerOriginAllowedProtocols)
                   .empty());
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kAllowedByPreference, 3);
+  histogram_tester.ExpectBucketCount(
+      ExternalProtocolHandler::kBlockStateMetric,
+      ExternalProtocolHandler::BlockStateMetric::kPrompt, 11);
 }
 
 TEST_F(ExternalProtocolHandlerTest, TestSetBlockStateWithUntrustowrthyOrigin) {
@@ -502,6 +614,7 @@ TEST_F(ExternalProtocolHandlerTest, TestSetBlockStateWithUntrustowrthyOrigin) {
                   .empty());
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // Test that an opaque initiating origin gets transformed to its precursor
 // origin when the dialog is shown.
 TEST_F(ExternalProtocolHandlerTest, TestOpaqueInitiatingOrigin) {
@@ -513,3 +626,4 @@ TEST_F(ExternalProtocolHandlerTest, TestOpaqueInitiatingOrigin) {
          Action::PROMPT, GURL("mailto:test@test.test"), opaque_origin,
          precursor_origin, u"TestApp");
 }
+#endif

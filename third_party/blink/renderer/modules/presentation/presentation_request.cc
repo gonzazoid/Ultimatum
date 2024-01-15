@@ -38,7 +38,7 @@ bool IsKnownProtocolForPresentationUrl(const KURL& url) {
 }
 
 int GetPlayoutDelay(const PresentationSource& source) {
-  if (!source.hasLatencyHint()) {
+  if (!source.hasLatencyHint() || !source.latencyHint()) {
     return 400;
   }
   switch (source.latencyHint()->AsEnum()) {
@@ -52,7 +52,7 @@ int GetPlayoutDelay(const PresentationSource& source) {
 }
 
 KURL CreateMirroringUrl(const PresentationSource& source) {
-  int capture_audio = !source.hasAudioPlayback() ||
+  int capture_audio = !source.hasAudioPlayback() || !source.audioPlayback() ||
                               (source.audioPlayback()->AsEnum() ==
                                V8AudioPlaybackDestination::Enum::kReceiver)
                           ? 1
@@ -176,8 +176,7 @@ ExecutionContext* PresentationRequest::GetExecutionContext() const {
 void PresentationRequest::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   if (event_type == event_type_names::kConnectionavailable) {
     UseCounter::Count(
         GetExecutionContext(),
@@ -218,7 +217,8 @@ ScriptPromise PresentationRequest::start(ScriptState* script_state,
   }
 
   PresentationController* controller = PresentationController::From(*window);
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
 
   controller->GetPresentationService()->StartPresentation(
       urls_,
@@ -240,7 +240,8 @@ ScriptPromise PresentationRequest::reconnect(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
 
   ControllerPresentationConnection* existing_connection =
       controller->FindExistingConnection(urls_, id);
@@ -291,12 +292,14 @@ const Vector<KURL>& PresentationRequest::Urls() const {
 
 void PresentationRequest::Trace(Visitor* visitor) const {
   visitor->Trace(availability_property_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 
 PresentationRequest::PresentationRequest(ExecutionContext* execution_context,
                                          const Vector<KURL>& urls)
-    : ExecutionContextClient(execution_context), urls_(urls) {}
+    : ActiveScriptWrappable<PresentationRequest>({}),
+      ExecutionContextClient(execution_context),
+      urls_(urls) {}
 
 }  // namespace blink

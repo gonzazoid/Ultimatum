@@ -14,11 +14,17 @@ namespace web_package {
 static_assert(Ed25519PublicKey::kLength == ED25519_PUBLIC_KEY_LEN);
 
 Ed25519PublicKey::Ed25519PublicKey(const Ed25519PublicKey&) = default;
+Ed25519PublicKey& Ed25519PublicKey::operator=(const Ed25519PublicKey&) =
+    default;
+
+Ed25519PublicKey::Ed25519PublicKey(Ed25519PublicKey&&) noexcept = default;
+Ed25519PublicKey& Ed25519PublicKey::operator=(Ed25519PublicKey&&) noexcept =
+    default;
 
 Ed25519PublicKey::~Ed25519PublicKey() = default;
 
 bool Ed25519PublicKey::operator==(const Ed25519PublicKey& other) const {
-  return bytes_ == other.bytes_;
+  return *bytes_ == *other.bytes_;
 }
 
 bool Ed25519PublicKey::operator!=(const Ed25519PublicKey& other) const {

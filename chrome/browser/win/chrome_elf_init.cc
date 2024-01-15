@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -148,11 +148,12 @@ void InitializeChromeElf() {
 
   if (enable_extension_point_policy) {
     if (!browser_extension_point_registry_key.Valid()) {
-      browser_extension_point_registry_key.Create(HKEY_CURRENT_USER,
-                                                  reg_path.c_str(), KEY_WRITE);
-    } else {
-      if (browser_extension_point_registry_key.Valid())
-        browser_extension_point_registry_key.DeleteKey(L"");
+      (void)browser_extension_point_registry_key.Create(
+          HKEY_CURRENT_USER, reg_path.c_str(), KEY_WRITE);
+    }
+  } else {
+    if (browser_extension_point_registry_key.Valid()) {
+      browser_extension_point_registry_key.DeleteKey(L"");
     }
   }
 }

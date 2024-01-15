@@ -23,17 +23,18 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_BASE_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_BASE_ELEMENT_H_
 
+#include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 
 namespace blink {
 
-class HTMLBaseElement final : public HTMLElement {
+class CORE_EXPORT HTMLBaseElement final : public HTMLElement {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   explicit HTMLBaseElement(Document&);
 
-  KURL href() const;
+  String href() const;
   void setHref(const AtomicString&);
 
  private:

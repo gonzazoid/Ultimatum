@@ -4,7 +4,7 @@
 
 #include "components/history_clusters/core/history_clusters_prefs.h"
 
-#include "components/pref_registry/pref_registry_syncable.h"
+#include "components/prefs/pref_registry_simple.h"
 
 namespace history_clusters {
 
@@ -13,8 +13,20 @@ namespace prefs {
 // Whether History Clusters are visible to the user. True by default.
 const char kVisible[] = "history_clusters.visible";
 
-void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+// Dictionary containing the short keyword cache and associated timestamp.
+const char kShortCache[] = "history_clusters.short_cache";
+
+// Dictionary containing the "all keywords" cache and associated timestamp.
+const char kAllCache[] = "history_clusters.all_cache";
+
+// Integer controlling which tab should be opened by default.
+const char kLastSelectedTab[] = "history_clusters.last_selected_tab";
+
+void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(prefs::kVisible, true);
+  registry->RegisterDictionaryPref(prefs::kAllCache);
+  registry->RegisterDictionaryPref(prefs::kShortCache);
+  registry->RegisterIntegerPref(prefs::kLastSelectedTab, TabbedPage::DATE);
 }
 
 }  // namespace prefs

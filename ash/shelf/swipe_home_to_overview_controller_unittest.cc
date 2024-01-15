@@ -4,6 +4,7 @@
 
 #include "ash/shelf/swipe_home_to_overview_controller.h"
 
+#include <optional>
 #include <tuple>
 
 #include "ash/app_list/app_list_controller_impl.h"
@@ -19,14 +20,15 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
 #include "ui/compositor/test/test_utils.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect_f.h"
@@ -85,7 +87,7 @@ class SwipeHomeToOverviewControllerTest : public AshTestBase {
   }
 
   void EndDrag(const gfx::PointF& location_in_screen,
-               absl::optional<float> velocity_y) {
+               std::optional<float> velocity_y) {
     home_to_overview_controller_->EndDrag(location_in_screen, velocity_y);
   }
 
@@ -106,17 +108,12 @@ class SwipeHomeToOverviewControllerTest : public AshTestBase {
   }
 
   void WaitForHomeLauncherAnimationToFinish() {
-    auto* compositor =
-        Shell::GetPrimaryRootWindowController()->GetHost()->compositor();
-    // Wait until home launcher animation finishes.
-    while (GetAppListTestHelper()
-               ->GetAppListView()
-               ->GetWidget()
-               ->GetLayer()
-               ->GetAnimator()
-               ->is_animating()) {
-      EXPECT_TRUE(ui::WaitForNextFrameToBePresented(compositor));
-    }
+    ui::LayerAnimationStoppedWaiter animation_waiter;
+    ui::Layer* app_list_layer =
+        GetAppListTestHelper()->GetAppListView()->GetWidget()->GetLayer();
+    animation_waiter.Wait(app_list_layer);
+
+    ui::Compositor* compositor = app_list_layer->GetCompositor();
 
     // Ensure there is one more frame presented after animation finishes
     // to allow animation throughput data is passed from cc to ui.

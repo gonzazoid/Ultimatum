@@ -11,6 +11,8 @@
                 "chrome_pwa_launcher.exe",
                 "chrome_wer.dll",
                 "D3DCompiler_47.dll",
+                "dxcompiler.dll",
+                "dxil.dll",
                 "elevation_service.exe",
                 "eventlog_provider.dll",
                 "First Run",
@@ -21,7 +23,6 @@
                 "MEIPreload\\manifest.json",
                 "MEIPreload\\preloaded_data.pb",
                 "mojo_core.dll",
-                "nacl_irt_x86_64.nexe",
                 "notification_helper.exe",
                 "resources.pak",
                 "v8_context_snapshot.bin",
@@ -101,8 +102,6 @@
         },
         {
             "files": [
-                "blink_deprecated_test_plugin.dll",
-                "blink_test_plugin.dll",
                 "content_shell.exe",
                 "content_shell.pak",
                 "icudtl.dat",
@@ -158,15 +157,6 @@
             "gcs_bucket": "chromium-browser-snapshots",
             "gcs_path": "Win_x64/{%position%}",
             "archive_type": "ARCHIVE_TYPE_FILES"
-        },
-        {
-            "dirs": ["pnacl"],
-            "rename_dirs": [
-                {"from_dir": ".", "to_dir": "pnacl"}
-            ],
-            "gcs_bucket": "chromium-browser-snapshots",
-            "gcs_path": "Win_x64/{%position%}/pnacl.zip",
-            "archive_type": "ARCHIVE_TYPE_ZIP"
         },
         {
             "files": [

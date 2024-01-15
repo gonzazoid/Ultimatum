@@ -4,8 +4,8 @@
 
 #include "components/keyed_service/ios/refcounted_browser_state_keyed_service_factory.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "components/keyed_service/core/refcounted_keyed_service.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
 #include "ios/web/public/browser_state.h"
@@ -23,21 +23,6 @@ void RefcountedBrowserStateKeyedServiceFactory::SetTestingFactory(
   }
   RefcountedKeyedServiceFactory::SetTestingFactory(context,
                                                    std::move(wrapped_factory));
-}
-
-scoped_refptr<RefcountedKeyedService>
-RefcountedBrowserStateKeyedServiceFactory::SetTestingFactoryAndUse(
-    web::BrowserState* context,
-    TestingFactory testing_factory) {
-  DCHECK(testing_factory);
-  return RefcountedKeyedServiceFactory::SetTestingFactoryAndUse(
-      context,
-      base::BindRepeating(
-          [](const TestingFactory& testing_factory, void* context) {
-            return testing_factory.Run(
-                static_cast<web::BrowserState*>(context));
-          },
-          std::move(testing_factory)));
 }
 
 RefcountedBrowserStateKeyedServiceFactory::

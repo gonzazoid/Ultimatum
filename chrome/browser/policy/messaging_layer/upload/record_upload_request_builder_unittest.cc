@@ -6,21 +6,27 @@
 
 #include <cstdint>
 #include <string>
-#include "base/logging.h"
+#include <string_view>
 
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/token.h"
+#include "base/uuid.h"
+#include "build/build_config.h"
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
+#include "chrome/browser/policy/messaging_layer/upload/record_handler_impl.h"
 #include "chrome/browser/policy/messaging_layer/util/test_request_payload.h"
-#include "components/reporting/resources/memory_resource_impl.h"
-#include "components/reporting/resources/resource_interface.h"
-#include "testing/gmock/include/gmock/gmock.h"
+#include "components/policy/core/common/management/management_service.h"
+#include "components/policy/core/common/management/scoped_management_service_override_for_testing.h"
+#include "components/reporting/resources/resource_manager.h"
+#include "components/reporting/util/encrypted_reporting_json_keys.h"
+#include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::AllOf;
 using ::testing::Eq;
-using ::testing::Not;
+using ::testing::Lt;
 
 namespace reporting {
 namespace {
@@ -39,17 +45,20 @@ constexpr CompressionInformation::CompressionAlgorithm kCompressionAlgorithm =
 class RecordUploadRequestBuilderTest : public ::testing::TestWithParam<bool> {
  public:
   RecordUploadRequestBuilderTest() = default;
+  const std::string kGenerationGuid =
+      base::Uuid::GenerateRandomV4().AsLowercaseString();
 
  protected:
-  static EncryptedRecord GenerateEncryptedRecord(
-      const base::StringPiece encrypted_wrapped_record,
-      const bool set_compression = false) {
+  EncryptedRecord GenerateEncryptedRecord(
+      const std::string_view encrypted_wrapped_record,
+      const bool set_compression = false) const {
     EncryptedRecord record;
     record.set_encrypted_wrapped_record(std::string(encrypted_wrapped_record));
 
     auto* const sequence_information = record.mutable_sequence_information();
     sequence_information->set_sequencing_id(GetNextSequencingId());
     sequence_information->set_generation_id(kGenerationId);
+    sequence_information->set_generation_guid(kGenerationGuid);
     sequence_information->set_priority(kPriority);
 
     auto* const encryption_info = record.mutable_encryption_info();
@@ -68,7 +77,7 @@ class RecordUploadRequestBuilderTest : public ::testing::TestWithParam<bool> {
   std::pair<ScopedReservation, std::vector<EncryptedRecord>>
   GetRecordListWithCorruptionAtIndex(size_t num_records,
                                      size_t corrupted_record_index) {
-    DCHECK(corrupted_record_index < num_records)
+    EXPECT_THAT(corrupted_record_index, Lt(num_records))
         << "Corrupted record index greater than or equal to record count";
 
     std::vector<EncryptedRecord> records;
@@ -96,8 +105,8 @@ class RecordUploadRequestBuilderTest : public ::testing::TestWithParam<bool> {
   }
 
   void SetUp() override {
-    memory_resource_ = base::MakeRefCounted<MemoryResourceImpl>(
-        4u * 1024LLu * 1024LLu);  // 4 MiB
+    memory_resource_ =
+        base::MakeRefCounted<ResourceManager>(4u * 1024LLu * 1024LLu);  // 4 MiB
   }
 
   void TearDown() override {
@@ -106,8 +115,66 @@ class RecordUploadRequestBuilderTest : public ::testing::TestWithParam<bool> {
 
   bool need_encryption_key() const { return GetParam(); }
 
-  scoped_refptr<ResourceInterface> memory_resource_;
+  content::BrowserTaskEnvironment task_environment_;
+  scoped_refptr<ResourceManager> memory_resource_;
+
+  // Set up device as a managed device by default. To set the device as
+  // unmanaged, create a new `policy::ScopedManagementServiceOverrideForTesting`
+  // inside the test.
+  policy::ScopedManagementServiceOverrideForTesting scoped_management_service_ =
+      policy::ScopedManagementServiceOverrideForTesting(
+          policy::ManagementServiceFactory::GetForPlatform(),
+          policy::EnterpriseManagementAuthority::CLOUD_DOMAIN);
 };
+
+#if !BUILDFLAG(IS_CHROMEOS)
+TEST_F(RecordUploadRequestBuilderTest,
+       GenerationGuidNotRequiredForManagedBrowsersOnNonChromeOSDevices) {
+  // Set up as CBCM enrolled browser on non-ChromeOS device.
+  policy::ScopedManagementServiceOverrideForTesting scoped_management_service =
+      policy::ScopedManagementServiceOverrideForTesting(
+          policy::ManagementServiceFactory::GetForPlatform(),
+          policy::EnterpriseManagementAuthority::CLOUD_DOMAIN);
+
+  ASSERT_THAT(
+      policy::ManagementServiceFactory::GetForPlatform()->IsBrowserManaged(),
+      Eq(true));
+
+  SequenceInformation sequence_info;
+  sequence_info.set_generation_id(12345678);
+  sequence_info.set_priority(IMMEDIATE);
+  sequence_info.set_sequencing_id(0);
+  EXPECT_THAT(
+      SequenceInformationDictionaryBuilder(sequence_info).Build().has_value(),
+      Eq(true));
+}
+#endif  // BUILDFLAG(!IS_CHROMEOS)
+
+#if BUILDFLAG(IS_CHROMEOS)
+TEST_F(RecordUploadRequestBuilderTest,
+       GenerationGuidRequiredForUnmanagedChromeOSDevices) {
+  // Set up as an unmanaged ChromeOS device.
+  policy::ScopedManagementServiceOverrideForTesting scoped_management_service =
+      policy::ScopedManagementServiceOverrideForTesting(
+          policy::ManagementServiceFactory::GetForPlatform(),
+          policy::EnterpriseManagementAuthority::NONE);
+
+  ASSERT_THAT(
+      policy::ManagementServiceFactory::GetForPlatform()->IsBrowserManaged(),
+      Eq(false));
+
+  EXPECT_THAT(SequenceInformationDictionaryBuilder::GenerationGuidIsRequired(),
+              Eq(true));
+
+  SequenceInformation sequence_info;
+  sequence_info.set_generation_id(12345678);
+  sequence_info.set_priority(IMMEDIATE);
+  sequence_info.set_sequencing_id(0);
+
+  EXPECT_THAT(SequenceInformationDictionaryBuilder(sequence_info).Build(),
+              Eq(absl::nullopt));
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 TEST_P(RecordUploadRequestBuilderTest, AcceptEncryptedRecordsList) {
   static constexpr size_t kNumRecords = 10;
@@ -214,8 +281,37 @@ TEST_P(RecordUploadRequestBuilderTest, DenyPoorlyFormedEncryptedRecords) {
   // Finish correctly setting encryption info - expect complete call.
   encryption_info->set_public_key_id(1234);
 
-  const auto record_dict =
+  auto record_dict =
       EncryptedRecordDictionaryBuilder(record, record_reservation).Build();
+  ASSERT_TRUE(record_dict.has_value());
+  EXPECT_THAT(record_dict.value(), IsRecordValid<>());
+  EXPECT_TRUE(record_reservation.reserved());
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Now, verify that generation guid is required when the device is in an
+  // unmanaged state. The generation guid is not set, so we just need to ensure
+  // the device is unmanaged.
+
+  //  Change device state from managed to unmanaged. (Device is set to a managed
+  //  state at the beginning of each tests via `scoped_management_service_` in
+  //  `RecordUploadRequestBuilderTest` class )
+  const auto scoped_management_service =
+      policy::ScopedManagementServiceOverrideForTesting(
+          policy::ManagementServiceFactory::GetForPlatform(),
+          policy::EnterpriseManagementAuthority::NONE);
+
+  // Generation guid is not set and the device is unmanaged, so expect failure.
+  EXPECT_FALSE(EncryptedRecordDictionaryBuilder(record, record_reservation)
+                   .Build()
+                   .has_value());
+
+  // Set the generation id - expect complete call.
+  sequence_information->set_generation_guid(kGenerationGuid);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  record_dict =
+      EncryptedRecordDictionaryBuilder(record, record_reservation).Build();
+
   ASSERT_TRUE(record_dict.has_value());
   EXPECT_THAT(record_dict.value(), IsRecordValid<>());
   EXPECT_TRUE(record_reservation.reserved());
@@ -230,8 +326,8 @@ TEST_P(RecordUploadRequestBuilderTest, AcceptRequestId) {
   ASSERT_TRUE(request_payload.has_value());
   EXPECT_THAT(request_payload.value(),
               IsEncryptionKeyRequestUploadRequestValid(need_encryption_key()));
-  auto* payload_request_id = request_payload->FindString(
-      UploadEncryptedReportingRequestBuilder::kRequestId);
+  auto* payload_request_id =
+      request_payload->FindString(reporting::json_keys::kRequestId);
   EXPECT_THAT(*payload_request_id, ::testing::StrEq(request_id));
 }
 
@@ -291,6 +387,41 @@ TEST_P(RecordUploadRequestBuilderTest, IncludeCompressionRequest) {
           .AppendMatcher(RecordMatcher::SetMode(
               CompressionInformationMatcher(), RecordMatcher::Mode::RecordOnly))
           .Build());
+}
+
+TEST_P(RecordUploadRequestBuilderTest, ConfigFileRequestExperimentEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(kShouldRequestConfigurationFile);
+  UploadEncryptedReportingRequestBuilder builder(need_encryption_key());
+
+  EXPECT_THAT(builder.Build().value(),
+              IsConfigurationFileRequestUploadRequestValid(true));
+}
+
+TEST_P(RecordUploadRequestBuilderTest, ConfigFileRequestExperimentDisabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(kShouldRequestConfigurationFile);
+  UploadEncryptedReportingRequestBuilder builder(need_encryption_key());
+
+  EXPECT_THAT(builder.Build().value(),
+              IsConfigurationFileRequestUploadRequestValid(false));
+}
+
+TEST_P(RecordUploadRequestBuilderTest, ClientAutomatedTestExperimentEnabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(kClientAutomatedTest);
+  UploadEncryptedReportingRequestBuilder builder(need_encryption_key());
+
+  EXPECT_THAT(builder.Build().value(), IsSourceRequestUploadRequestValid(true));
+}
+
+TEST_P(RecordUploadRequestBuilderTest, ClientAutomatedTestExperimentDisabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(kClientAutomatedTest);
+  UploadEncryptedReportingRequestBuilder builder(need_encryption_key());
+
+  EXPECT_THAT(builder.Build().value(),
+              IsSourceRequestUploadRequestValid(false));
 }
 
 INSTANTIATE_TEST_SUITE_P(NeedOrNoNeedKey,

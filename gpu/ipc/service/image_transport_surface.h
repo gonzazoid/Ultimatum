@@ -13,6 +13,7 @@
 #include "gpu/ipc/common/surface_handle.h"
 #include "gpu/ipc/service/gpu_ipc_service_export.h"
 #include "ui/gl/gl_surface.h"
+#include "ui/gl/presenter.h"
 
 namespace gpu {
 class ImageTransportSurfaceDelegate;
@@ -24,10 +25,19 @@ class ImageTransportSurfaceDelegate;
 
 class GPU_IPC_SERVICE_EXPORT ImageTransportSurface {
  public:
+  // Creates the appropriate presenter if surfaceless presentation is supported.
+  // This will be implemented separately by each platform. On failure, a null
+  // scoped_refptr should be returned. Callers should try to fallback to
+  // presentation using GLSurface by calling `CreateNativeGLSurface` below.
+  static scoped_refptr<gl::Presenter> CreatePresenter(
+      gl::GLDisplay* display,
+      base::WeakPtr<ImageTransportSurfaceDelegate> stub,
+      SurfaceHandle surface_handle);
+
   // Creates the appropriate native surface depending on the GL implementation.
   // This will be implemented separately by each platform. On failure, a null
   // scoped_refptr should be returned.
-  static scoped_refptr<gl::GLSurface> CreateNativeSurface(
+  static scoped_refptr<gl::GLSurface> CreateNativeGLSurface(
       gl::GLDisplay* display,
       base::WeakPtr<ImageTransportSurfaceDelegate> stub,
       SurfaceHandle surface_handle,

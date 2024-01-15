@@ -13,10 +13,11 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "printing/mojom/print.mojom.h"
 #include "third_party/icu/source/common/unicode/uchar.h"
 #include "ui/gfx/text_elider.h"
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 #include <unicode/ulocdata.h>
 
 #include <cmath>
@@ -26,13 +27,19 @@
 #include "ui/gfx/geometry/size.h"
 #endif
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
+#include "printing/printing_features.h"
+#endif
+
 namespace printing {
 
 namespace {
 
 constexpr size_t kMaxDocumentTitleLength = 80;
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 constexpr gfx::Size kIsoA4Microns = gfx::Size(210000, 297000);
 #endif
 
@@ -85,7 +92,7 @@ std::u16string FormatDocumentTitleWithOwner(const std::u16string& owner,
                                                kMaxDocumentTitleLength);
 }
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 gfx::Size GetDefaultPaperSizeFromLocaleMicrons(base::StringPiece locale) {
   if (locale.empty())
     return kIsoA4Microns;
@@ -102,7 +109,7 @@ gfx::Size GetDefaultPaperSizeFromLocaleMicrons(base::StringPiece locale) {
     return kIsoA4Microns;
   }
   // Convert millis to microns
-  return gfx::Size(width * 1000, height * 1000);
+  return gfx::Size(width * kMicronsPerMm, height * kMicronsPerMm);
 }
 
 bool SizesEqualWithinEpsilon(const gfx::Size& lhs,
@@ -116,7 +123,7 @@ bool SizesEqualWithinEpsilon(const gfx::Size& lhs,
   return std::abs(lhs.width() - rhs.width()) <= epsilon &&
          std::abs(lhs.height() - rhs.height()) <= epsilon;
 }
-#endif  // defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_WIN)
 gfx::Rect GetCenteredPageContentRect(const gfx::Size& paper_size,
@@ -133,11 +140,41 @@ gfx::Rect GetCenteredPageContentRect(const gfx::Size& paper_size,
   }
   return content_rect;
 }
+
+gfx::Rect GetPrintableAreaDeviceUnits(HDC hdc) {
+  DCHECK(hdc);
+
+  gfx::Size physical_size_device_units(GetDeviceCaps(hdc, PHYSICALWIDTH),
+                                       GetDeviceCaps(hdc, PHYSICALHEIGHT));
+  gfx::Rect printable_area_device_units(
+      GetDeviceCaps(hdc, PHYSICALOFFSETX), GetDeviceCaps(hdc, PHYSICALOFFSETY),
+      GetDeviceCaps(hdc, HORZRES), GetDeviceCaps(hdc, VERTRES));
+
+  // Sanity check the printable_area: we've seen crashes caused by a printable
+  // area rect of 0, 0, 0, 0, so it seems some drivers don't set it.
+  if (printable_area_device_units.IsEmpty() ||
+      !gfx::Rect(physical_size_device_units)
+           .Contains(printable_area_device_units)) {
+    printable_area_device_units = gfx::Rect(physical_size_device_units);
+  }
+
+  return printable_area_device_units;
+}
 #endif  // BUILDFLAG(IS_WIN)
 
 bool LooksLikePdf(base::span<const char> maybe_pdf_data) {
   return maybe_pdf_data.size() >= 50u &&
          std::memcmp(maybe_pdf_data.data(), "%PDF-", 5) == 0;
+}
+
+mojom::SkiaDocumentType GetPrintDocumentType(bool source_is_pdf) {
+#if BUILDFLAG(IS_WIN)
+  return printing::features::ShouldPrintUsingXps(source_is_pdf)
+             ? mojom::SkiaDocumentType::kXPS
+             : mojom::SkiaDocumentType::kPDF;
+#else
+  return mojom::SkiaDocumentType::kPDF;
+#endif
 }
 
 }  // namespace printing

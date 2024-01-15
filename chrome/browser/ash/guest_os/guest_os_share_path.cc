@@ -8,7 +8,6 @@
 #include "ash/components/arc/arc_util.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
-#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/task/thread_pool.h"
@@ -20,6 +19,7 @@
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/guest_os_pref_names.h"
+#include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path_factory.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager.h"
@@ -29,8 +29,8 @@
 #include "chrome/browser/ash/smb_client/smb_service_factory.h"
 #include "chrome/browser/ash/smb_client/smbfs_share.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -89,8 +89,9 @@ class ErrorCapture {
       : num_callbacks_left_(num_callbacks_left),
         callback_(std::move(callback)) {
     DCHECK_GE(num_callbacks_left, 0);
-    if (num_callbacks_left == 0)
+    if (num_callbacks_left == 0) {
       std::move(callback_).Run(true, "");
+    }
   }
 
   void Run(const base::FilePath& cros_path,
@@ -106,8 +107,9 @@ class ErrorCapture {
       }
     }
 
-    if (!--num_callbacks_left_)
+    if (!--num_callbacks_left_) {
       std::move(callback_).Run(success_, first_failure_reason_);
+    }
   }
 
  private:
@@ -161,6 +163,11 @@ SharedPathInfo::SharedPathInfo(std::unique_ptr<base::FilePathWatcher> watcher,
 SharedPathInfo::SharedPathInfo(SharedPathInfo&&) = default;
 SharedPathInfo::~SharedPathInfo() = default;
 
+GuestOsSharePath::PathsToShare::PathsToShare() = default;
+GuestOsSharePath::PathsToShare::PathsToShare(GuestOsSharePath::PathsToShare&) =
+    default;
+GuestOsSharePath::PathsToShare::~PathsToShare() = default;
+
 GuestOsSharePath* GuestOsSharePath::GetForProfile(Profile* profile) {
   return GuestOsSharePathFactory::GetForProfile(profile);
 }
@@ -170,7 +177,9 @@ GuestOsSharePath::GuestOsSharePath(Profile* profile)
       file_watcher_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::USER_VISIBLE})),
       seneschal_callback_(base::BindRepeating(LogErrorResult)) {
-  ash::ConciergeClient::Get()->AddVmObserver(this);
+  if (auto* client = ash::ConciergeClient::Get()) {
+    client->AddVmObserver(this);
+  }
 
   if (auto* vmgr = file_manager::VolumeManager::Get(profile_)) {
     vmgr->AddObserver(this);
@@ -178,11 +187,9 @@ GuestOsSharePath::GuestOsSharePath(Profile* profile)
 
   // We receive notifications from DriveFS about any deleted paths so
   // that we can remove any that are shared paths.
-  if (auto* integration_service =
+  if (drive::DriveIntegrationService* const service =
           drive::DriveIntegrationServiceFactory::FindForProfile(profile_)) {
-    if (integration_service->GetDriveFsHost()) {
-      integration_service->GetDriveFsHost()->AddObserver(this);
-    }
+    Observe(service->GetDriveFsHost());
   }
 }
 
@@ -190,7 +197,13 @@ GuestOsSharePath::~GuestOsSharePath() = default;
 
 void GuestOsSharePath::Shutdown() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  ash::ConciergeClient::Get()->RemoveVmObserver(this);
+  if (auto* client = ash::ConciergeClient::Get()) {
+    client->RemoveVmObserver(this);
+  }
+
+  if (auto* vmgr = file_manager::VolumeManager::Get(profile_)) {
+    vmgr->RemoveObserver(this);
+  }
 
   for (auto& shared_path : shared_paths_) {
     if (shared_path.second.watcher) {
@@ -202,6 +215,10 @@ void GuestOsSharePath::Shutdown() {
 
 void GuestOsSharePath::AddObserver(Observer* obs) {
   observers_.AddObserver(obs);
+}
+
+void GuestOsSharePath::RemoveObserver(Observer* obs) {
+  observers_.RemoveObserver(obs);
 }
 
 void GuestOsSharePath::CallSeneschalSharePath(const std::string& vm_name,
@@ -304,7 +321,7 @@ void GuestOsSharePath::CallSeneschalSharePath(const std::string& vm_name,
     // Allow Android files and subdirs.
     allowed_path = true;
     request.set_storage_location(
-        base::FeatureList::IsEnabled(arc::kEnableVirtioBlkForData)
+        arc::IsArcVmEnabled()
             ? vm_tools::seneschal::SharePathRequest::PLAY_FILES_GUEST_OS
             : vm_tools::seneschal::SharePathRequest::PLAY_FILES);
   } else if (removable_media.AppendRelativePath(path, &relative_path)) {
@@ -461,10 +478,9 @@ void GuestOsSharePath::UnsharePath(const std::string& vm_name,
   }
 }
 
-bool GuestOsSharePath::GetAndSetFirstForSession() {
-  bool result = first_for_session_;
-  first_for_session_ = false;
-  return result;
+bool GuestOsSharePath::GetAndSetFirstForSession(const std::string& vm_name) {
+  auto result = first_for_session_.insert(vm_name);
+  return result.second;
 }
 
 std::vector<base::FilePath> GuestOsSharePath::GetPersistedSharedPaths(
@@ -762,6 +778,57 @@ bool GuestOsSharePath::RemoveSharedPathInfo(SharedPathInfo& info,
     return true;
   }
   return false;
+}
+
+void GuestOsSharePath::RegisterGuest(const GuestId& guest) {
+  guests_.insert(guest);
+  for (auto& observer : observers_) {
+    observer.OnGuestRegistered(guest);
+  }
+}
+void GuestOsSharePath::UnregisterGuest(const GuestId& guest) {
+  guests_.erase(guest);
+  for (auto& observer : observers_) {
+    observer.OnGuestUnregistered(guest);
+  }
+}
+
+const base::flat_set<GuestId>& GuestOsSharePath::ListGuests() {
+  return guests_;
+}
+
+absl::variant<GuestOsSharePath::PathsToShare, std::string>
+GuestOsSharePath::ConvertArgsToPathsToShare(
+    const guest_os::GuestOsRegistryService::Registration& registration,
+    const std::vector<guest_os::LaunchArg>& args,
+    const base::FilePath& vm_mount,
+    bool map_crostini_home) {
+  PathsToShare out;
+  const std::string& vm_name = registration.VmName();
+
+  // Convert any paths not in the VM.
+  out.launch_args.reserve(args.size());
+  for (const auto& arg : args) {
+    if (absl::holds_alternative<std::string>(arg)) {
+      out.launch_args.push_back(absl::get<std::string>(arg));
+      continue;
+    }
+    const storage::FileSystemURL& url = absl::get<storage::FileSystemURL>(arg);
+    base::FilePath path;
+    if (!file_manager::util::ConvertFileSystemURLToPathInsideVM(
+            profile_, url, vm_mount, map_crostini_home, &path)) {
+      return "Cannot share URL with VM.";
+    }
+    if (url.mount_filesystem_id() !=
+            file_manager::util::GetGuestOsMountPointName(
+                profile_, registration.ToGuestId()) &&
+
+        !IsPathShared(vm_name, url.path())) {
+      out.paths_to_share.push_back(url.path());
+    }
+    out.launch_args.push_back(path.value());
+  }
+  return out;
 }
 
 }  // namespace guest_os

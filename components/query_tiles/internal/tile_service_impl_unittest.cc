@@ -9,13 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/query_tiles/internal/image_prefetcher.h"
 #include "components/query_tiles/test/empty_logger.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"

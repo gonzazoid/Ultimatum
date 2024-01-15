@@ -13,31 +13,6 @@
 
 namespace video_capture {
 
-namespace {
-void OnFrameDone(mojo::Remote<crosapi::mojom::ScopedAccessPermission>
-                     remote_access_permission) {
-  // There's nothing to do here, except to serve as a keep-alive for the
-  // remote until the callback is run. So just let it be destroyed now.
-}
-
-std::unique_ptr<media::ScopedFrameDoneHelper> GetAccessPermissionHelper(
-    mojo::PendingRemote<crosapi::mojom::ScopedAccessPermission>
-        pending_remote_access_permission) {
-  return std::make_unique<media::ScopedFrameDoneHelper>(base::BindOnce(
-      &OnFrameDone, mojo::Remote<crosapi::mojom::ScopedAccessPermission>(
-                        std::move(pending_remote_access_permission))));
-}
-
-media::ReadyFrameInBuffer ToMediaBuffer(
-    crosapi::mojom::ReadyFrameInBufferPtr buffer) {
-  return media::ReadyFrameInBuffer(
-      buffer->buffer_id, buffer->frame_feedback_id,
-      GetAccessPermissionHelper(std::move(buffer->access_permission)),
-      ConvertToMediaVideoFrameInfo(std::move(buffer->frame_info)));
-}
-
-}  // namespace
-
 ReceiverMediaToCrosapiAdapter::ReceiverMediaToCrosapiAdapter(
     mojo::PendingReceiver<crosapi::mojom::VideoFrameHandler> proxy_receiver,
     std::unique_ptr<media::VideoFrameReceiver> handler)
@@ -47,6 +22,10 @@ ReceiverMediaToCrosapiAdapter::ReceiverMediaToCrosapiAdapter(
 
 ReceiverMediaToCrosapiAdapter::~ReceiverMediaToCrosapiAdapter() = default;
 
+void ReceiverMediaToCrosapiAdapter::OnCaptureConfigurationChanged() {
+  handler_->OnCaptureConfigurationChanged();
+}
+
 void ReceiverMediaToCrosapiAdapter::OnNewBuffer(
     int buffer_id,
     crosapi::mojom::VideoBufferHandlePtr buffer_handle) {
@@ -54,16 +33,15 @@ void ReceiverMediaToCrosapiAdapter::OnNewBuffer(
                         ConvertToMediaVideoBuffer(std::move(buffer_handle)));
 }
 
-void ReceiverMediaToCrosapiAdapter::OnFrameReadyInBuffer(
+void ReceiverMediaToCrosapiAdapter::DEPRECATED_OnFrameReadyInBuffer(
     crosapi::mojom::ReadyFrameInBufferPtr buffer,
-    std::vector<crosapi::mojom::ReadyFrameInBufferPtr> scaled_buffers) {
-  std::vector<media::ReadyFrameInBuffer> media_scaled_buffers;
-  for (auto& b : scaled_buffers) {
-    media_scaled_buffers.push_back(ToMediaBuffer(std::move(b)));
-  }
+    std::vector<crosapi::mojom::ReadyFrameInBufferPtr> /*scaled_buffers*/) {
+  OnFrameReadyInBuffer(std::move(buffer));
+}
 
-  handler_->OnFrameReadyInBuffer(ToMediaBuffer(std::move(buffer)),
-                                 std::move(media_scaled_buffers));
+void ReceiverMediaToCrosapiAdapter::OnFrameReadyInBuffer(
+    crosapi::mojom::ReadyFrameInBufferPtr buffer) {
+  handler_->OnFrameReadyInBuffer(ConvertToMediaReadyFrame(std::move(buffer)));
 }
 
 void ReceiverMediaToCrosapiAdapter::OnBufferRetired(int buffer_id) {
@@ -79,8 +57,14 @@ void ReceiverMediaToCrosapiAdapter::OnFrameDropped(
   handler_->OnFrameDropped(reason);
 }
 
-void ReceiverMediaToCrosapiAdapter::OnNewCropVersion(uint32_t crop_version) {
-  handler_->OnNewCropVersion(crop_version);
+void ReceiverMediaToCrosapiAdapter::DEPRECATED_OnNewCropVersion(
+    uint32_t crop_version) {
+  OnNewSubCaptureTargetVersion(crop_version);
+}
+
+void ReceiverMediaToCrosapiAdapter::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {
+  handler_->OnNewSubCaptureTargetVersion(sub_capture_target_version);
 }
 
 void ReceiverMediaToCrosapiAdapter::OnFrameWithEmptyRegionCapture() {

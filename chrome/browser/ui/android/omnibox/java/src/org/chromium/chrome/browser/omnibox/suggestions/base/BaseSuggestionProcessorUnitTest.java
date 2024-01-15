@@ -4,7 +4,8 @@
 
 package org.chromium.chrome.browser.omnibox.suggestions.base;
 
-import static org.mockito.Mockito.eq;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import android.content.Context;
@@ -17,6 +18,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -25,32 +27,40 @@ import org.mockito.junit.MockitoRule;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLog;
 
+import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.omnibox.OmniboxSuggestionType;
-import org.chromium.chrome.browser.omnibox.suggestions.FaviconFetcher;
-import org.chromium.chrome.browser.omnibox.suggestions.FaviconFetcher.FaviconFetchCompleteListener;
-import org.chromium.chrome.browser.omnibox.suggestions.FaviconFetcher.FaviconType;
-import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionUiType;
+import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.omnibox.OmniboxMetrics;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxDrawableState;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxImageSupplier;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionHost;
+import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
+import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.omnibox.AutocompleteMatch;
 import org.chromium.components.omnibox.AutocompleteMatchBuilder;
+import org.chromium.components.omnibox.OmniboxSuggestionType;
+import org.chromium.components.omnibox.suggestions.OmniboxSuggestionUiType;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
-import org.chromium.url.ShadowGURL;
 
-/**
- * Tests for {@link BaseSuggestionViewProcessor}.
- */
+/** Tests for {@link BaseSuggestionViewProcessor}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowGURL.class, ShadowLog.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowLog.class})
 public class BaseSuggestionProcessorUnitTest {
     private class TestBaseSuggestionProcessor extends BaseSuggestionViewProcessor {
         private final Context mContext;
+
         public TestBaseSuggestionProcessor(
-                Context context, SuggestionHost suggestionHost, FaviconFetcher faviconFetcher) {
-            super(context, suggestionHost, faviconFetcher);
+                Context context,
+                SuggestionHost suggestionHost,
+                OmniboxImageSupplier imageSupplier) {
+            super(context, suggestionHost, imageSupplier);
             mContext = context;
         }
 
@@ -72,20 +82,18 @@ public class BaseSuggestionProcessorUnitTest {
         @Override
         public void populateModel(AutocompleteMatch suggestion, PropertyModel model, int position) {
             super.populateModel(suggestion, model, position);
-            setSuggestionDrawableState(model,
-                    SuggestionDrawableState.Builder.forBitmap(mContext, mDefaultBitmap).build());
             fetchSuggestionFavicon(model, suggestion.getUrl());
         }
     }
 
-    private static final GURL TEST_URL = JUnitTestGURLs.getGURL(JUnitTestGURLs.URL_1);
+    private static final GURL TEST_URL = JUnitTestGURLs.URL_1;
 
     public @Rule MockitoRule mMockitoRule = MockitoJUnit.rule();
+    public @Rule TestRule mFeaturesProcessor = new Features.JUnitProcessor();
 
     private @Mock SuggestionHost mSuggestionHost;
-    private @Mock FaviconFetcher mFaviconFetcher;
+    private @Mock OmniboxImageSupplier mImageSupplier;
     private @Mock Bitmap mBitmap;
-    private @Mock Bitmap mDefaultBitmap;
 
     private TestBaseSuggestionProcessor mProcessor;
     private AutocompleteMatch mSuggestion;
@@ -93,15 +101,14 @@ public class BaseSuggestionProcessorUnitTest {
 
     @Before
     public void setUp() {
-        mProcessor = new TestBaseSuggestionProcessor(
-                ContextUtils.getApplicationContext(), mSuggestionHost, mFaviconFetcher);
+        mProcessor =
+                new TestBaseSuggestionProcessor(
+                        ContextUtils.getApplicationContext(), mSuggestionHost, mImageSupplier);
     }
 
-    /**
-     * Create Suggestion for test.
-     */
-    private void createSuggestion(int type, GURL url) {
-        mSuggestion = AutocompleteMatchBuilder.searchWithType(type).setUrl(url).build();
+    /** Create Suggestion for test. */
+    private void createSuggestion(int type, boolean isSearch, GURL url) {
+        mSuggestion = new AutocompleteMatchBuilder(type).setIsSearch(isSearch).setUrl(url).build();
         mModel = mProcessor.createModel();
         mProcessor.populateModel(mSuggestion, mModel, 0);
     }
@@ -109,16 +116,14 @@ public class BaseSuggestionProcessorUnitTest {
     @Test
     @SmallTest
     public void suggestionFavicons_showFaviconWhenAvailable() {
-        final ArgumentCaptor<FaviconFetchCompleteListener> callback =
-                ArgumentCaptor.forClass(FaviconFetchCompleteListener.class);
-        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, TEST_URL);
-        SuggestionDrawableState icon1 = mModel.get(BaseSuggestionViewProperties.ICON);
+        final ArgumentCaptor<Callback<Bitmap>> callback = ArgumentCaptor.forClass(Callback.class);
+        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, false, TEST_URL);
+        OmniboxDrawableState icon1 = mModel.get(BaseSuggestionViewProperties.ICON);
         Assert.assertNotNull(icon1);
 
-        verify(mFaviconFetcher)
-                .fetchFaviconWithBackoff(eq(TEST_URL), eq(false), callback.capture());
-        callback.getValue().onFaviconFetchComplete(mBitmap, FaviconType.REGULAR);
-        SuggestionDrawableState icon2 = mModel.get(BaseSuggestionViewProperties.ICON);
+        verify(mImageSupplier).fetchFavicon(eq(TEST_URL), callback.capture());
+        callback.getValue().onResult(mBitmap);
+        OmniboxDrawableState icon2 = mModel.get(BaseSuggestionViewProperties.ICON);
         Assert.assertNotNull(icon2);
 
         Assert.assertNotEquals(icon1, icon2);
@@ -128,18 +133,58 @@ public class BaseSuggestionProcessorUnitTest {
     @Test
     @SmallTest
     public void suggestionFavicons_doNotReplaceFallbackIconWhenNoFaviconIsAvailable() {
-        final ArgumentCaptor<FaviconFetchCompleteListener> callback =
-                ArgumentCaptor.forClass(FaviconFetchCompleteListener.class);
-        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, TEST_URL);
-        SuggestionDrawableState icon1 = mModel.get(BaseSuggestionViewProperties.ICON);
+        final ArgumentCaptor<Callback<Bitmap>> callback = ArgumentCaptor.forClass(Callback.class);
+        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, false, TEST_URL);
+        OmniboxDrawableState icon1 = mModel.get(BaseSuggestionViewProperties.ICON);
         Assert.assertNotNull(icon1);
 
-        verify(mFaviconFetcher)
-                .fetchFaviconWithBackoff(eq(TEST_URL), eq(false), callback.capture());
-        callback.getValue().onFaviconFetchComplete(null, FaviconType.NONE);
-        SuggestionDrawableState icon2 = mModel.get(BaseSuggestionViewProperties.ICON);
+        verify(mImageSupplier).fetchFavicon(eq(TEST_URL), callback.capture());
+        callback.getValue().onResult(null);
+        OmniboxDrawableState icon2 = mModel.get(BaseSuggestionViewProperties.ICON);
         Assert.assertNotNull(icon2);
 
         Assert.assertEquals(icon1, icon2);
+    }
+
+    @Test
+    @SmallTest
+    @DisableFeatures({ChromeFeatureList.OMNIBOX_TOUCH_DOWN_TRIGGER_FOR_PREFETCH})
+    public void touchDownForPrefetch_featureDisabled() {
+        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, true, TEST_URL);
+
+        Runnable touchDownListener = mModel.get(BaseSuggestionViewProperties.ON_TOUCH_DOWN_EVENT);
+        Assert.assertNull(touchDownListener);
+    }
+
+    @Test
+    @SmallTest
+    @EnableFeatures({ChromeFeatureList.OMNIBOX_TOUCH_DOWN_TRIGGER_FOR_PREFETCH})
+    public void touchDownForPrefetch_featureEnabled() {
+        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, true, TEST_URL);
+
+        Runnable touchDownListener = mModel.get(BaseSuggestionViewProperties.ON_TOUCH_DOWN_EVENT);
+        Assert.assertNotNull(touchDownListener);
+
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecord(
+                                OmniboxMetrics.HISTOGRAM_SEARCH_PREFETCH_TOUCH_DOWN_PROCESS_TIME)
+                        .build();
+
+        touchDownListener.run();
+
+        histogramWatcher.assertExpected();
+        verify(mSuggestionHost, times(1)).onSuggestionTouchDown(mSuggestion, /* matchIndex= */ 0);
+    }
+
+    @Test
+    @SmallTest
+    @EnableFeatures({ChromeFeatureList.OMNIBOX_TOUCH_DOWN_TRIGGER_FOR_PREFETCH})
+    public void touchDownForPrefetch_nonSearchSuggestion() {
+        // The touch down listener is only added for search suggestions.
+        createSuggestion(OmniboxSuggestionType.URL_WHAT_YOU_TYPED, false, TEST_URL);
+
+        Runnable touchDownListener = mModel.get(BaseSuggestionViewProperties.ON_TOUCH_DOWN_EVENT);
+        Assert.assertNull(touchDownListener);
     }
 }

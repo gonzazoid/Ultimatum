@@ -11,7 +11,10 @@
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "ui/android/ui_android_export.h"
 #include "ui/compositor/compositor_lock.h"
-#include "ui/gfx/presentation_feedback.h"
+
+namespace viz {
+class SurfaceId;
+}
 
 namespace ui {
 
@@ -33,8 +36,11 @@ class UI_ANDROID_EXPORT WindowAndroidCompositor {
 
   // While there are outstanding ReadbackRefs, Compositor will attempt to
   // ensure any pending viz::CopyOutputRequest in any part of the compositor
-  // surface tree are fulfilled in a timely manner.
-  virtual std::unique_ptr<ReadbackRef> TakeReadbackRef() = 0;
+  // surface tree are fulfilled in a timely manner. `surface_id` corresponds to
+  // the `Surface` being copied. The GPU contents of this `surface_id` are kept
+  // alive as long as there is an outstanding `ReadbackRef` for it.
+  virtual std::unique_ptr<ReadbackRef> TakeReadbackRef(
+      const viz::SurfaceId& surface_id) = 0;
   virtual void RequestCopyOfOutputOnRootLayer(
       std::unique_ptr<viz::CopyOutputRequest> request) = 0;
   virtual void SetNeedsAnimate() = 0;
@@ -50,15 +56,15 @@ class UI_ANDROID_EXPORT WindowAndroidCompositor {
   virtual std::unique_ptr<ui::CompositorLock> GetCompositorLock(
       base::TimeDelta timeout) = 0;
   virtual void OnUpdateOverlayTransform() = 0;
-  // This parallels ui::Compositor::RequestPresentationTimeForNextFrame, which
-  // while defined in ui is only implemented within
-  // content/browser/renderer_host which is not visible to other ui code. The
-  // majority of ui abstracts away ui::Compositor under
-  // ui::WindowAndroidCompositor.
-  using PresentationTimeCallback =
-      base::OnceCallback<void(const gfx::PresentationFeedback&)>;
-  virtual void PostRequestPresentationTimeForNextFrame(
-      PresentationTimeCallback callback) = 0;
+  // This parallels
+  // ui::Compositor::RequestSuccessfulPresentationTimeForNextFrame, which while
+  // defined in ui is only implemented within content/browser/renderer_host
+  // which is not visible to other ui code. The majority of ui abstracts away
+  // ui::Compositor under ui::WindowAndroidCompositor.
+  using SuccessfulPresentationTimeCallback =
+      base::OnceCallback<void(base::TimeTicks)>;
+  virtual void PostRequestSuccessfulPresentationTimeForNextFrame(
+      SuccessfulPresentationTimeCallback callback) = 0;
 };
 
 }  // namespace ui

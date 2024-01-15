@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import {isRTL} from 'chrome://resources/js/util.js';
+
 import {ViewerZoomToolbarElement} from './elements/viewer-zoom-toolbar.js';
 
 /**

@@ -2,14 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as Network from 'devtools/panels/network/network.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   await TestRunner.showPanel('network');
 
-  var panel = UI.panels.network;
+  var panel = Network.NetworkPanel.NetworkPanel.instance();
   var target = panel.networkLogView;
-  var types = Common.resourceTypes;
+  var types = Common.ResourceType.resourceTypes;
 
-  var requestFoo = SDK.NetworkRequest.create('', '', '', '', '');
+  var requestFoo = SDK.NetworkRequest.NetworkRequest.create('', '', '', '', '');
   requestFoo.setResourceType(types.XHR);
   requestFoo.setRequestIdForTest('foo');
   TestRunner.addResult('Showing request foo');

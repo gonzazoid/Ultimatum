@@ -4,20 +4,25 @@
 
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_util.h"
 #include <memory>
+#include <optional>
 
+#include "ash/constants/ash_switches.h"
 #include "base/check.h"
 #include "base/memory/ptr_util.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/test/scoped_command_line.h"
 #include "base/time/time.h"
 #include "base/time/time_delta_from_string.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_executor.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/icu/source/common/unicode/unistr.h"
 #include "third_party/icu/source/i18n/unicode/timezone.h"
 
 namespace policy {
 
 namespace {
+
+constexpr base::TimeDelta kDefaultGracePeriod = base::Hours(1);
 
 base::Time TimeFromUtcString(const char* time) {
   base::Time delayult;
@@ -41,7 +46,7 @@ TEST(ScheduledTaskUtilTest, DailyTaskShouldBeScheduledInSameDay) {
   data.hour = 12;
   data.minute = 52;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Jan 3 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -54,7 +59,7 @@ TEST(ScheduledTaskUtilTest, TaskShouldBeDelayedIfTimesMatch) {
   data.hour = 12;
   data.minute = 52;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Jan 3 2021, 12:52"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -67,7 +72,7 @@ TEST(ScheduledTaskUtilTest, DailyTaskShouldBeScheduledNextDay) {
   data.hour = 8;
   data.minute = 52;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Jan 3 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -81,7 +86,7 @@ TEST(ScheduledTaskUtilTest,
   data.hour = 8;
   data.minute = 52;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Jan 31 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -95,7 +100,7 @@ TEST(ScheduledTaskUtilTest, WeeklyTaskShouldBeScheduled) {
   data.minute = 52;
   data.day_of_week = UCAL_TUESDAY;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Sunday Jan 3 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -109,7 +114,7 @@ TEST(ScheduledTaskUtilTest, MonthlyTaskShouldBeScheduled) {
   data.minute = 52;
   data.day_of_month = 23;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Jan 3 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -123,7 +128,7 @@ TEST(ScheduledTaskUtilTest, MonthlyTaskShouldBeScheduledForNextMonth) {
   data.minute = 52;
   data.day_of_month = 23;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Jan 31 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
@@ -138,22 +143,89 @@ TEST(ScheduledTaskUtilTest,
   data.minute = 52;
   data.day_of_month = 31;
 
-  absl::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
+  std::optional<base::TimeDelta> delay = CalculateNextScheduledTaskTimerDelay(
       data, TimeFromUtcString("Sunday Jan 31 2021, 09:33"), *GetUtcTimeZone());
 
   ASSERT_TRUE(delay.has_value());
   EXPECT_EQ(delay.value(), base::TimeDeltaFromString("671h19m"));  // 27d23h19m
 }
 
-TEST(ScheduledTaskUtilTest, GenerateRandomDelayInRange) {
-  base::TimeDelta min_delay = base::Milliseconds(0);
-  base::TimeDelta max_delay = base::Milliseconds(120 * 1000);
+TEST(ScheduledTaskUtilTest, ParsesEmptyGracePeriodSwitch) {
+  base::test::ScopedCommandLine command_line;
 
-  for (int i = 0; i < 50; i++) {
-    base::TimeDelta delay = scheduled_task_util::GenerateRandomDelay(120);
-    EXPECT_GE(delay, min_delay);
-    EXPECT_LT(delay, max_delay);
-  }
+  // Check that returns default with empty command line.
+  EXPECT_EQ(scheduled_task_util::GetScheduledRebootGracePeriod(),
+            kDefaultGracePeriod);
+
+  // Check that returns default with empty switch.
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting, "");
+  EXPECT_EQ(scheduled_task_util::GetScheduledRebootGracePeriod(),
+            kDefaultGracePeriod);
+}
+
+TEST(ScheduledTaskUtilTest, ParsesNonNumbericGracePeriodSwitch) {
+  base::test::ScopedCommandLine command_line;
+
+  // Check that returns default with incorrect value.
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting,
+      "one-hundred");
+  EXPECT_EQ(scheduled_task_util::GetScheduledRebootGracePeriod(),
+            kDefaultGracePeriod);
+}
+
+TEST(ScheduledTaskUtilTest, ParsesNegativeGracePeriodSwitch) {
+  base::test::ScopedCommandLine command_line;
+
+  // Check that returns default with negative value.
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting, "-100");
+  EXPECT_EQ(scheduled_task_util::GetScheduledRebootGracePeriod(),
+            kDefaultGracePeriod);
+}
+
+TEST(ScheduledTaskUtilTest, ParsesValidGracePeriodSwitch) {
+  base::test::ScopedCommandLine command_line;
+
+  // Check that returns default with negative value.
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting, "100");
+  EXPECT_EQ(scheduled_task_util::GetScheduledRebootGracePeriod(),
+            base::Seconds(100));
+}
+
+TEST(ScheduledTaskUtilTest, SkipsRebootWithinGracePeriod) {
+  constexpr base::TimeDelta kGracePeriod = base::Hours(1);
+
+  base::test::ScopedCommandLine command_line;
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting,
+      base::NumberToString(kGracePeriod.InSeconds()));
+
+  const base::Time boot_time;
+
+  // Check that allows reboot outside of grace time period.
+  const base::Time reboot_time_outside_grace_time =
+      boot_time + kGracePeriod + base::Seconds(1);
+  EXPECT_FALSE(scheduled_task_util::ShouldSkipRebootDueToGracePeriod(
+      boot_time, reboot_time_outside_grace_time));
+}
+
+TEST(ScheduledTaskUtilTest, DoesNotSkipRebootWithinGracePeriod) {
+  constexpr base::TimeDelta kGracePeriod = base::Hours(1);
+
+  base::test::ScopedCommandLine command_line;
+  command_line.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting,
+      base::NumberToString(kGracePeriod.InSeconds()));
+
+  const base::Time boot_time;
+
+  // Check that does not allow reboot inside grace time period.
+  const base::Time reboot_time_within_grace_time = boot_time + kGracePeriod;
+  EXPECT_TRUE(scheduled_task_util::ShouldSkipRebootDueToGracePeriod(
+      boot_time, reboot_time_within_grace_time));
 }
 
 }  // namespace policy

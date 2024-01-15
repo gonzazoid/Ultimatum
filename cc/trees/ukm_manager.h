@@ -38,11 +38,6 @@ class CC_EXPORT UkmManager {
 
   void SetSourceId(ukm::SourceId source_id);
 
-  void RecordThroughputUKM(FrameSequenceTrackerType tracker_type,
-                           FrameInfo::SmoothEffectDrivingThread thread_type,
-                           int64_t throughput) const;
-  void RecordAggregateThroughput(AggregationType aggregation_type,
-                                 int64_t throughput_percent) const;
   void RecordCompositorLatencyUKM(
       const CompositorFrameReporter::FrameReportTypes& report_types,
       const std::vector<CompositorFrameReporter::StageData>& stage_history,
@@ -60,7 +55,9 @@ class CC_EXPORT UkmManager {
       const CompositorFrameReporter::ProcessedVizBreakdown&
           processed_viz_breakdown) const;
 
-  ukm::UkmRecorder* recorder_for_testing() { return recorder_.get(); }
+  ukm::UkmRecorder* recorder() { return recorder_.get(); }
+
+  ukm::SourceId source_id() { return source_id_; }
 
  private:
   ukm::SourceId source_id_ = ukm::kInvalidSourceId;

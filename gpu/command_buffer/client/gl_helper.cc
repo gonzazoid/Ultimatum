@@ -11,11 +11,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/bits.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -125,11 +126,11 @@ class I420ConverterImpl : public I420Converter {
   const std::unique_ptr<GLHelper::ScalerInterface> v_planerizer_;
 
   // Intermediate texture, holding the scaler's output.
-  absl::optional<TextureHolder> intermediate_;
+  std::optional<TextureHolder> intermediate_;
 
   // Intermediate texture, holding the UV interim output (if the MRT shader
   // is being used).
-  absl::optional<ScopedTexture> uv_;
+  std::optional<ScopedTexture> uv_;
 };
 
 }  // namespace
@@ -150,6 +151,7 @@ class GLHelper::CopyTextureToImpl
 
   void ReadbackTextureAsync(GLuint texture,
                             GLenum texture_target,
+                            const gfx::Point& src_starting_point,
                             const gfx::Size& dst_size,
                             unsigned char* out,
                             size_t row_stride_bytes,
@@ -159,7 +161,8 @@ class GLHelper::CopyTextureToImpl
 
   // Reads back bytes from the currently bound frame buffer.
   // Note that dst_size is specified in bytes, not pixels.
-  void ReadbackAsync(const gfx::Size& dst_size,
+  void ReadbackAsync(const gfx::Point& src_starting_point,
+                     const gfx::Size& dst_size,
                      size_t bytes_per_row,     // generally dst_size.width() * 4
                      size_t row_stride_bytes,  // generally dst_size.width() * 4
                      unsigned char* out,
@@ -346,6 +349,7 @@ std::unique_ptr<GLHelper::ScalerInterface> GLHelper::CreateScaler(
 }
 
 void GLHelper::CopyTextureToImpl::ReadbackAsync(
+    const gfx::Point& src_starting_point,
     const gfx::Size& dst_size,
     size_t bytes_per_row,
     size_t row_stride_bytes,
@@ -371,8 +375,8 @@ void GLHelper::CopyTextureToImpl::ReadbackAsync(
   request->query = 0u;
   gl_->GenQueriesEXT(1, &request->query);
   gl_->BeginQueryEXT(GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM, request->query);
-  gl_->ReadPixels(0, 0, dst_size.width(), dst_size.height(), format, type,
-                  nullptr);
+  gl_->ReadPixels(src_starting_point.x(), src_starting_point.y(),
+                  dst_size.width(), dst_size.height(), format, type, nullptr);
   gl_->EndQueryEXT(GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM);
   gl_->BindBuffer(GL_PIXEL_PACK_TRANSFER_BUFFER_CHROMIUM, 0);
   context_support_->SignalQuery(
@@ -383,6 +387,7 @@ void GLHelper::CopyTextureToImpl::ReadbackAsync(
 void GLHelper::CopyTextureToImpl::ReadbackTextureAsync(
     GLuint texture,
     GLenum texture_target,
+    const gfx::Point& src_starting_point,
     const gfx::Size& dst_size,
     unsigned char* out,
     size_t row_stride_bytes,
@@ -408,8 +413,9 @@ void GLHelper::CopyTextureToImpl::ReadbackTextureAsync(
   gl_->BindTexture(texture_target, texture);
   gl_->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                             texture_target, texture, 0);
-  ReadbackAsync(dst_size, kBytesPerRow, row_stride_bytes, out, format,
-                GL_UNSIGNED_BYTE, kBytesPerPixel, flip_y, std::move(callback));
+  ReadbackAsync(src_starting_point, dst_size, kBytesPerRow, row_stride_bytes,
+                out, format, GL_UNSIGNED_BYTE, kBytesPerPixel, flip_y,
+                std::move(callback));
   gl_->BindTexture(texture_target, 0);
 }
 
@@ -492,8 +498,7 @@ bool GLHelper::CopyTextureToImpl::IsBGRAReadbackSupported() {
     if (auto* extensions = gl_->GetString(GL_EXTENSIONS)) {
       const std::string extensions_string =
           " " + std::string(reinterpret_cast<const char*>(extensions)) + " ";
-      if (extensions_string.find(" GL_EXT_read_format_bgra ") !=
-          std::string::npos) {
+      if (base::Contains(extensions_string, " GL_EXT_read_format_bgra ")) {
         bgra_support_ = BGRA_SUPPORTED;
       }
     }
@@ -509,6 +514,7 @@ GLHelper::~GLHelper() {}
 
 void GLHelper::ReadbackTextureAsync(GLuint texture,
                                     GLenum texture_target,
+                                    const gfx::Point& src_starting_point,
                                     const gfx::Size& dst_size,
                                     unsigned char* out,
                                     size_t row_stride_bytes,
@@ -516,9 +522,9 @@ void GLHelper::ReadbackTextureAsync(GLuint texture,
                                     GLenum format,
                                     base::OnceCallback<void(bool)> callback) {
   InitCopyTextToImpl();
-  copy_texture_to_impl_->ReadbackTextureAsync(texture, texture_target, dst_size,
-                                              out, row_stride_bytes, flip_y,
-                                              format, std::move(callback));
+  copy_texture_to_impl_->ReadbackTextureAsync(
+      texture, texture_target, src_starting_point, dst_size, out,
+      row_stride_bytes, flip_y, format, std::move(callback));
 }
 
 void GLHelper::InitCopyTextToImpl() {
@@ -541,8 +547,7 @@ GLint GLHelper::MaxDrawBuffers() {
     if (extensions) {
       const std::string extensions_string =
           " " + std::string(reinterpret_cast<const char*>(extensions)) + " ";
-      if (extensions_string.find(" GL_EXT_draw_buffers ") !=
-          std::string::npos) {
+      if (base::Contains(extensions_string, " GL_EXT_draw_buffers ")) {
         gl_->GetIntegerv(GL_MAX_DRAW_BUFFERS_EXT, &max_draw_buffers_);
         DCHECK_GE(max_draw_buffers_, 0);
       }
@@ -567,7 +572,8 @@ void GLHelper::CopyTextureToImpl::ReadbackPlane(
   // multiple YUV planes.
   const bool kFlipY = false;
   size_t bytes_per_row = paste_rect.width() >> size_shift;
-  ReadbackAsync(texture_size, bytes_per_row, row_stride_bytes, data + offset,
+  ReadbackAsync(gfx::Point(), texture_size, bytes_per_row, row_stride_bytes,
+                data + offset,
                 (swizzle == kSwizzleBGRA) ? GL_BGRA_EXT : GL_RGBA,
                 GL_UNSIGNED_BYTE, 4, kFlipY, std::move(callback));
 }
@@ -690,7 +696,7 @@ void I420ConverterImpl::EnsureTexturesSizedFor(
     if (!intermediate_ || intermediate_->size() != scaler_output_size)
       intermediate_.emplace(gl_, scaler_output_size);
   } else {
-    intermediate_ = absl::nullopt;
+    intermediate_ = std::nullopt;
   }
 
   // Size the interim UV plane and the three output planes.

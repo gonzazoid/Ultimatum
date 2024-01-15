@@ -12,7 +12,7 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
-#include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_string_resource.h"
 #include "third_party/blink/renderer/core/streams/transform_stream_default_controller.h"
 #include "third_party/blink/renderer/core/streams/transform_stream_transformer.h"
@@ -41,12 +41,13 @@ class TextEncoderStream::Transformer final : public TransformStreamTransformer {
   ScriptPromise Transform(v8::Local<v8::Value> chunk,
                           TransformStreamDefaultController* controller,
                           ExceptionState& exception_state) override {
-    V8StringResource<> input_resource{chunk};
-    if (!input_resource.Prepare(script_state_->GetIsolate(), exception_state))
+    V8StringResource<> input_resource{script_state_->GetIsolate(), chunk};
+    if (!input_resource.Prepare(exception_state)) {
       return ScriptPromise();
+    }
     const String input = input_resource;
     if (input.empty())
-      return ScriptPromise::CastUndefined(script_state_);
+      return ScriptPromise::CastUndefined(script_state_.Get());
 
     const absl::optional<UChar> high_surrogate = pending_high_surrogate_;
     pending_high_surrogate_ = absl::nullopt;
@@ -64,7 +65,7 @@ class TextEncoderStream::Transformer final : public TransformStreamTransformer {
       bool have_output =
           Encode16BitString(input, high_surrogate, &prefix, &result);
       if (!have_output)
-        return ScriptPromise::CastUndefined(script_state_);
+        return ScriptPromise::CastUndefined(script_state_.Get());
     }
 
     DOMUint8Array* array =
@@ -72,14 +73,14 @@ class TextEncoderStream::Transformer final : public TransformStreamTransformer {
     controller->enqueue(script_state_, ScriptValue::From(script_state_, array),
                         exception_state);
 
-    return ScriptPromise::CastUndefined(script_state_);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
   // Implements the "encode and flush" algorithm.
   ScriptPromise Flush(TransformStreamDefaultController* controller,
                       ExceptionState& exception_state) override {
     if (!pending_high_surrogate_.has_value())
-      return ScriptPromise::CastUndefined(script_state_);
+      return ScriptPromise::CastUndefined(script_state_.Get());
 
     const std::string replacement_character = ReplacementCharacterInUtf8();
     const uint8_t* u8buffer =
@@ -92,10 +93,10 @@ class TextEncoderStream::Transformer final : public TransformStreamTransformer {
                                             replacement_character.length()))),
         exception_state);
 
-    return ScriptPromise::CastUndefined(script_state_);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(script_state_);

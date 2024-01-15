@@ -7,21 +7,17 @@
 #import "base/metrics/field_trial_params.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/url_formatter/url_formatter.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/history/history_tab_helper.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/tabs/tab_helper_util.h"
+#import "ios/chrome/browser/history/model/history_tab_helper.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/tabs/model/tab_helper_util.h"
 #import "ios/chrome/browser/ui/context_menu/link_preview/link_preview_mediator.h"
 #import "ios/chrome/browser/ui/context_menu/link_preview/link_preview_view_controller.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_feature.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface LinkPreviewCoordinator () {
   // The WebState used for loading the preview.
@@ -97,28 +93,19 @@
 
 // Configures the web state that used to load the preview.
 - (void)configureWebState {
-  // Make a copy of the active web state.
-  web::WebState* currentWebState =
+  web::WebState* activeWebState =
       self.browser->GetWebStateList()->GetActiveWebState();
-  ChromeBrowserState* browserState =
-      ChromeBrowserState::FromBrowserState(currentWebState->GetBrowserState());
+  CHECK(activeWebState);
 
-  // Use web::WebState::CreateWithStorageSession to clone the
-  // currentWebState navigation history. This may create an
-  // unrealized WebState, however, LinkPreview needs a realized
-  // one, so force the realization.
-  // TODO(crbug.com/1291626): remove when there is a way to
-  // clone a WebState navigation history.
-  web::WebState::CreateParams createParams(browserState);
-  createParams.last_active_time = base::Time::Now();
-  _previewWebState = web::WebState::CreateWithStorageSession(
-      createParams, currentWebState->BuildSessionStorage());
-  _previewWebState->ForceRealized();
+  // To avoid losing the navigation history when the user navigates to
+  // the previewed tab, clone the tab that will be replaced, and start
+  // the navigation in the new tab.
+  _previewWebState = activeWebState->Clone();
 
   // Attach tab helpers to use _previewWebState as a browser tab. It ensures
   // _previewWebState has all the expected tab helpers, including the
   // history tab helper which adding the history entry of the preview.
-  AttachTabHelpers(_previewWebState.get(), /*for_prerender=*/false);
+  AttachTabHelpers(_previewWebState.get(), /*for_prerender=*/true);
   _previewWebState->SetWebUsageEnabled(true);
 
   // Delay the history record when showing the preview. (The history entry will

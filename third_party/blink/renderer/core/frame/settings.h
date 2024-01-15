@@ -43,9 +43,11 @@
 #include "third_party/blink/renderer/core/loader/frame_loader_types.h"
 #include "third_party/blink/renderer/core/settings_macros.h"
 #include "third_party/blink/renderer/platform/fonts/generic_font_family_settings.h"
+#include "third_party/blink/renderer/platform/graphics/lcd_text_preference.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "ui/base/pointer/pointer_device.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace blink {
@@ -55,6 +57,9 @@ class CORE_EXPORT Settings {
 
  public:
   Settings();
+
+  // Default copy and assignment are forbidden because SettingsDelegate only
+  // supports 1:1 relationship with Settings.
   Settings(const Settings&) = delete;
   Settings& operator=(const Settings&) = delete;
 
@@ -66,6 +71,8 @@ class CORE_EXPORT Settings {
   }
 
   SETTINGS_GETTERS_AND_SETTERS
+
+  void SetPreferCompositingToLCDTextForTesting(bool enabled);
 
   void SetDelegate(SettingsDelegate*);
 

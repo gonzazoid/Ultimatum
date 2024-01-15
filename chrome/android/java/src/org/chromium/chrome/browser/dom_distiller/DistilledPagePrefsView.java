@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.dom_distiller;
 
 import android.content.Context;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -80,8 +81,7 @@ public class DistilledPagePrefsView extends LinearLayout
     }
 
     public static DistilledPagePrefsView create(Context context) {
-        return (DistilledPagePrefsView) LayoutInflater.from(context)
-                .inflate(VIEW_LAYOUT, null);
+        return (DistilledPagePrefsView) LayoutInflater.from(context).inflate(VIEW_LAYOUT, null);
     }
 
     public static void showDialog(Context context) {
@@ -95,12 +95,9 @@ public class DistilledPagePrefsView extends LinearLayout
     public void onFinishInflate() {
         super.onFinishInflate();
         mRadioGroup = (RadioGroup) findViewById(R.id.radio_button_group);
-        mColorModeButtons.put(Theme.LIGHT,
-                initializeAndGetButton(R.id.light_mode, Theme.LIGHT));
-        mColorModeButtons.put(Theme.DARK,
-                initializeAndGetButton(R.id.dark_mode, Theme.DARK));
-        mColorModeButtons.put(Theme.SEPIA,
-                initializeAndGetButton(R.id.sepia_mode, Theme.SEPIA));
+        mColorModeButtons.put(Theme.LIGHT, initializeAndGetButton(R.id.light_mode, Theme.LIGHT));
+        mColorModeButtons.put(Theme.DARK, initializeAndGetButton(R.id.dark_mode, Theme.DARK));
+        mColorModeButtons.put(Theme.SEPIA, initializeAndGetButton(R.id.sepia_mode, Theme.SEPIA));
         mColorModeButtons.get(mDistilledPagePrefs.getTheme()).setChecked(true);
 
         mFontScaleSeekBar = (SeekBar) findViewById(R.id.font_size);
@@ -119,55 +116,59 @@ public class DistilledPagePrefsView extends LinearLayout
         // components/dom_distiller/core/font_family_list.h
         // TODO(wychen): fix getStringArray issue (https://crbug/803117#c2)
         String[] fonts = {
-                getResources().getString(R.string.sans_serif),
-                getResources().getString(R.string.serif),
-                getResources().getString(R.string.monospace)};
-        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<CharSequence>(
-                getContext(), android.R.layout.simple_spinner_item, fonts) {
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                View view = super.getView(position, convertView, parent);
-                return overrideTypeFace(view, position);
-            }
-
-            @Override
-            public View getDropDownView(int position, View convertView, ViewGroup parent) {
-                View view = super.getDropDownView(position, convertView, parent);
-                return overrideTypeFace(view, position);
-            }
-
-            private View overrideTypeFace(View view, int family) {
-                FontFamily.validate(family);
-                if (view instanceof TextView) {
-                    TextView textView = (TextView) view;
-                    if (family == FontFamily.MONOSPACE) {
-                        textView.setTypeface(Typeface.MONOSPACE);
-                    } else if (family == FontFamily.SANS_SERIF) {
-                        textView.setTypeface(Typeface.SANS_SERIF);
-                    } else if (family == FontFamily.SERIF) {
-                        textView.setTypeface(Typeface.SERIF);
-                    }
-                }
-                return view;
-            }
+            getResources().getString(R.string.sans_serif),
+            getResources().getString(R.string.serif),
+            getResources().getString(R.string.monospace)
         };
+        ArrayAdapter<CharSequence> adapter =
+                new ArrayAdapter<CharSequence>(
+                        getContext(), android.R.layout.simple_spinner_item, fonts) {
+                    @Override
+                    public View getView(int position, View convertView, ViewGroup parent) {
+                        View view = super.getView(position, convertView, parent);
+                        return overrideTypeFace(view, position);
+                    }
+
+                    @Override
+                    public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                        View view = super.getDropDownView(position, convertView, parent);
+                        return overrideTypeFace(view, position);
+                    }
+
+                    private View overrideTypeFace(View view, int family) {
+                        FontFamily.validate(family);
+                        if (view instanceof TextView) {
+                            TextView textView = (TextView) view;
+                            if (family == FontFamily.MONOSPACE) {
+                                textView.setTypeface(Typeface.MONOSPACE);
+                            } else if (family == FontFamily.SANS_SERIF) {
+                                textView.setTypeface(Typeface.SANS_SERIF);
+                            } else if (family == FontFamily.SERIF) {
+                                textView.setTypeface(Typeface.SERIF);
+                            }
+                        }
+                        return view;
+                    }
+                };
 
         adapter.setDropDownViewResource(R.layout.distilled_page_font_family_spinner);
         mFontFamilySpinner.setAdapter(adapter);
         mFontFamilySpinner.setSelection(mDistilledPagePrefs.getFontFamily());
-        mFontFamilySpinner.setOnItemSelectedListener(new OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int family, long id) {
-                if (FontFamily.isKnownValue(family)) {
-                    mDistilledPagePrefs.setFontFamily(family);
-                }
-            }
+        mFontFamilySpinner.setOnItemSelectedListener(
+                new OnItemSelectedListener() {
+                    @Override
+                    public void onItemSelected(
+                            AdapterView<?> parent, View view, int family, long id) {
+                        if (FontFamily.isKnownValue(family)) {
+                            mDistilledPagePrefs.setFontFamily(family);
+                        }
+                    }
 
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                // Nothing to do.
-            }
-        });
+                    @Override
+                    public void onNothingSelected(AdapterView<?> parent) {
+                        // Nothing to do.
+                    }
+                });
     }
 
     @Override
@@ -217,9 +218,7 @@ public class DistilledPagePrefsView extends LinearLayout
         mFontFamilySpinner.setSelection(fontFamily);
     }
 
-    /**
-     * Changes which button is selected if the theme is changed in another tab.
-     */
+    /** Changes which button is selected if the theme is changed in another tab. */
     @Override
     public void onChangeTheme(int theme) {
         Theme.validate(theme);
@@ -258,28 +257,39 @@ public class DistilledPagePrefsView extends LinearLayout
     private RadioButton initializeAndGetButton(int id, final int theme) {
         Theme.validate(theme);
         final RadioButton button = (RadioButton) findViewById(id);
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mDistilledPagePrefs.setTheme(theme);
-            }
-        });
+        button.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        mDistilledPagePrefs.setTheme(theme);
+                    }
+                });
         return button;
     }
 
-    /**
-     * Sets the progress of mFontScaleSeekBar.
-     */
+    /** Sets the progress of mFontScaleSeekBar. */
     private void setFontScaleProgress(float newValue) {
         // newValue = .50, .55, .60, ..., 1.95, 2.00 (supported font scales)
         // progress = [0, 30]
         int progress = (int) Math.round((newValue - .5) * 20);
         mFontScaleSeekBar.setProgress(progress);
+
+        // On Android R+, use stateDescription so the only percentage announced to the user is
+        // the scaling percent. For previous versions the SeekBar percentage is always announced.
+        String userFriendlyFontDescription =
+                getContext()
+                        .getResources()
+                        .getString(
+                                R.string.font_size_accessibility_label,
+                                mPercentageFormatter.format(newValue));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            mFontScaleSeekBar.setStateDescription(userFriendlyFontDescription);
+        } else {
+            mFontScaleSeekBar.setContentDescription(userFriendlyFontDescription);
+        }
     }
 
-    /**
-     * Sets the text for the font scale text view.
-     */
+    /** Sets the text for the font scale text view. */
     private void setFontScaleTextView(float newValue) {
         mFontScaleTextView.setText(mPercentageFormatter.format(newValue));
     }

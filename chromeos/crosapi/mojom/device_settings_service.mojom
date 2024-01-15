@@ -31,7 +31,7 @@ struct UsbDeviceId {
 
 // All the device settings data that are needed in Lacros should be here.
 //
-// Next MinVersion: 4
+// Next MinVersion: 6
 [Stable]
 struct DeviceSettings {
   // The value of AttestationForContentProtectionEnabled device setting.
@@ -43,8 +43,7 @@ struct DeviceSettings {
   // The value of UsbDetachableAllowlist device policy.
   UsbDetachableAllowlist? usb_detachable_allow_list@2;
 
-  // The value of DeviceEphemeralUsersEnabled device policy.
-  [MinVersion=1] OptionalBool device_ephemeral_users_enabled@3;
+  [MinVersion=1] OptionalBool REMOVED_3@3;
 
   // The value of DeviceRestrictedManagedGuestSessionEnabled device policy.
   [MinVersion=2]
@@ -61,6 +60,14 @@ struct DeviceSettings {
   // The value of ReportDeviceNetworkTelemetryCollectionRateMs device policy.
   [MinVersion=3]
   NullableInt64? report_device_network_telemetry_collection_rate_ms@7;
+
+  // The value of DeviceVariationsRestrictParameter device policy.
+  [MinVersion=4]
+  string? device_variations_restrict_parameter@8;
+
+  // The value of DeviceGuestModeEnabled device policy.
+  [MinVersion=5]
+  OptionalBool? device_guest_mode_enabled@9;
 
   [Stable]
   enum OptionalBool {

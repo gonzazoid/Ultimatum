@@ -4,21 +4,18 @@
 
 #import "ios/chrome/browser/ui/omnibox/keyboard_assist/omnibox_input_assistant_items.h"
 
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/omnibox/keyboard_assist/omnibox_assistive_keyboard_delegate.h"
 #import "ios/chrome/browser/ui/omnibox/keyboard_assist/omnibox_assistive_keyboard_views.h"
 #import "ios/chrome/browser/ui/omnibox/keyboard_assist/omnibox_assistive_keyboard_views_utils.h"
 #import "ios/chrome/browser/ui/omnibox/keyboard_assist/omnibox_ui_bar_button_item.h"
-#import "ios/chrome/browser/ui/omnibox/keyboard_assist/voice_search_keyboard_bar_button_item.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/browser/voice/voice_search_availability.h"
 #import "ios/chrome/grit/ios_strings.h"
+#import "ios/public/provider/chrome/browser/voice_search/voice_search_api.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 #pragma mark - Util Functions
 
@@ -30,12 +27,12 @@ NSArray<UIBarButtonItemGroup*>* OmniboxAssistiveKeyboardLeadingBarButtonGroups(
   UIImage* voiceSearchIcon =
       [[UIImage imageNamed:@"keyboard_accessory_voice_search"]
           imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
-  UIBarButtonItem* voiceSearchItem = [[VoiceSearchKeyboardBarButtonItem alloc]
-                initWithImage:voiceSearchIcon
-                        style:UIBarButtonItemStylePlain
-                       target:delegate
-                       action:@selector(keyboardAccessoryVoiceSearchTapped:)
-      voiceSearchAvailability:std::make_unique<VoiceSearchAvailability>()];
+  UIBarButtonItem* voiceSearchItem = [[UIBarButtonItem alloc]
+      initWithImage:voiceSearchIcon
+              style:UIBarButtonItemStylePlain
+             target:delegate
+             action:@selector(keyboardAccessoryVoiceSearchTapped:)];
+  voiceSearchItem.enabled = ios::provider::IsVoiceSearchEnabled();
   NSString* accessibilityLabel =
       l10n_util::GetNSString(IDS_IOS_KEYBOARD_ACCESSORY_VIEW_VOICE_SEARCH);
   voiceSearchItem.accessibilityLabel = accessibilityLabel;
@@ -75,6 +72,20 @@ NSArray<UIBarButtonItemGroup*>* OmniboxAssistiveKeyboardLeadingBarButtonGroups(
       [items addObject:pasteButtonItem];
     }
 #endif  // defined(__IPHONE_16_0)
+  }
+  if (experimental_flags::IsOmniboxDebuggingEnabled()) {
+    UIImageSymbolConfiguration* configuration = [UIImageSymbolConfiguration
+        configurationWithPointSize:kOmniboxAssistiveKeyboardSymbolPointSize
+                            weight:UIImageSymbolWeightSemibold
+                             scale:UIImageSymbolScaleMedium];
+    UIImage* debuggerIcon =
+        DefaultSymbolWithConfiguration(kSettingsSymbol, configuration);
+    UIBarButtonItem* debuggerItem = [[UIBarButtonItem alloc]
+        initWithImage:debuggerIcon
+                style:UIBarButtonItemStylePlain
+               target:delegate
+               action:@selector(keyboardAccessoryDebuggerTapped)];
+    [items addObject:debuggerItem];
   }
 
   UIBarButtonItemGroup* group =

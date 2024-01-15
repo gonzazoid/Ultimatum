@@ -9,10 +9,11 @@
 
 #include "ash/public/cpp/network_config_service.h"
 #include "ash/system/network/vpn_list.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_observer.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -20,17 +21,17 @@
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 
-using chromeos::network_config::mojom::ConnectionStateType;
+namespace ash {
+
+namespace {
+
 using chromeos::network_config::mojom::DeviceStateProperties;
 using chromeos::network_config::mojom::DeviceStatePropertiesPtr;
 using chromeos::network_config::mojom::DeviceStateType;
 using chromeos::network_config::mojom::FilterType;
 using chromeos::network_config::mojom::NetworkFilter;
-using chromeos::network_config::mojom::NetworkStateProperties;
 using chromeos::network_config::mojom::NetworkStatePropertiesPtr;
 using chromeos::network_config::mojom::NetworkType;
-
-namespace {
 
 const int kUpdateFrequencyMs = 1000;
 
@@ -49,8 +50,6 @@ NetworkStatePropertiesPtr GetConnectingOrConnected(
 }
 
 }  // namespace
-
-namespace ash {
 
 class TrayNetworkStateModel::Impl
     : public chromeos::network_config::CrosNetworkConfigObserver {
@@ -108,6 +107,16 @@ class TrayNetworkStateModel::Impl
     return remote_cros_network_config_.get();
   }
 
+  void ConfigureRemoteForTesting(  // IN-TEST
+      mojo::PendingRemote<chromeos::network_config::mojom::CrosNetworkConfig>
+          cros_network_config) {
+    remote_cros_network_config_.reset();
+    cros_network_config_observer_receiver_.reset();
+    remote_cros_network_config_.Bind(std::move(cros_network_config));
+    remote_cros_network_config_->AddObserver(
+        cros_network_config_observer_receiver_.BindNewPipeAndPassRemote());
+  }
+
  private:
   // CrosNetworkConfigObserver
   void OnActiveNetworksChanged(
@@ -129,7 +138,7 @@ class TrayNetworkStateModel::Impl
     GetGlobalPolicy();
   }
 
-  TrayNetworkStateModel* model_;
+  raw_ptr<TrayNetworkStateModel> model_;
   mojo::Remote<chromeos::network_config::mojom::CrosNetworkConfig>
       remote_cros_network_config_;
   mojo::Receiver<chromeos::network_config::mojom::CrosNetworkConfigObserver>
@@ -154,6 +163,12 @@ TrayNetworkStateModel::TrayNetworkStateModel()
 
 TrayNetworkStateModel::~TrayNetworkStateModel() {
   vpn_list_.reset();
+}
+
+void TrayNetworkStateModel::ConfigureRemoteForTesting(
+    mojo::PendingRemote<chromeos::network_config::mojom::CrosNetworkConfig>
+        cros_network_config) {
+  impl_->ConfigureRemoteForTesting(std::move(cros_network_config));  // IN-TEST
 }
 
 void TrayNetworkStateModel::AddObserver(TrayNetworkStateObserver* observer) {
@@ -182,14 +197,9 @@ void TrayNetworkStateModel::SetNetworkTypeEnabledState(NetworkType type,
   impl_->SetNetworkTypeEnabledState(type, enabled);
 }
 
-void TrayNetworkStateModel::FlushGlobalPolicyForTesting() {
-  impl_->GetGlobalPolicy();
-}
-
 bool TrayNetworkStateModel::IsBuiltinVpnProhibited() const {
-  return TrayNetworkStateModel::GetDeviceState(
-             chromeos::network_config::mojom::NetworkType::kVPN) ==
-         chromeos::network_config::mojom::DeviceStateType::kProhibited;
+  return TrayNetworkStateModel::GetDeviceState(NetworkType::kVPN) ==
+         DeviceStateType::kProhibited;
 }
 
 chromeos::network_config::mojom::CrosNetworkConfig*

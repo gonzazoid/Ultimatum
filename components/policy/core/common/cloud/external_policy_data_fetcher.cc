@@ -4,14 +4,15 @@
 
 #include "components/policy/core/common/cloud/external_policy_data_fetcher.h"
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -40,7 +41,7 @@ class ExternalPolicyDataFetcher::Job
                          const network::mojom::URLResponseHead& response_head);
 
   // network::SimpleURLLoaderStreamConsumer implementation
-  void OnDataReceived(base::StringPiece string_piece,
+  void OnDataReceived(std::string_view string_piece,
                       base::OnceClosure resume) override;
   void OnComplete(bool success) override;
   void OnRetry(base::OnceClosure start_retry) override;
@@ -146,7 +147,7 @@ void ExternalPolicyDataFetcher::Job::OnResponseStarted(
 }
 
 void ExternalPolicyDataFetcher::Job::OnDataReceived(
-    base::StringPiece string_piece,
+    std::string_view string_piece,
     base::OnceClosure resume) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -222,7 +223,7 @@ ExternalPolicyDataFetcher::ExternalPolicyDataFetcher(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     scoped_refptr<base::SequencedTaskRunner> task_runner)
     : task_runner_(std::move(task_runner)),
-      job_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      job_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   // |url_loader_factory| is null in some tests.
   if (url_loader_factory)
     pending_url_loader_factory_ = url_loader_factory->Clone();

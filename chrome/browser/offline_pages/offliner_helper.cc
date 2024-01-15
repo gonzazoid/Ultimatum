@@ -5,7 +5,7 @@
 #include "chrome/browser/offline_pages/offliner_helper.h"
 
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
@@ -22,8 +22,9 @@ bool AreThirdPartyCookiesBlocked(content::BrowserContext* browser_context) {
 
 bool IsNetworkPredictionDisabled(content::BrowserContext* browser_context) {
   DCHECK(Profile::FromBrowserContext(browser_context)->GetPrefs());
-  return !prefetch::IsSomePreloadingEnabled(
-      *Profile::FromBrowserContext(browser_context)->GetPrefs());
+  return prefetch::IsSomePreloadingEnabled(
+             *Profile::FromBrowserContext(browser_context)->GetPrefs()) !=
+         content::PreloadingEligibility::kEligible;
 }
 
 }  // namespace offline_pages

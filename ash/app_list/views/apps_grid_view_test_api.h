@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/app_list/views/apps_grid_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace gfx {
 class Rect;
@@ -24,7 +25,6 @@ class View;
 namespace ash {
 
 class AppListItemView;
-class PagedViewStructure;
 
 namespace test {
 
@@ -48,7 +48,15 @@ class AppsGridViewTestApi {
 
   void PressItemAt(int index);
 
-  size_t TilesPerPage(int page) const;
+  // Returns the number of tiles per page in paged apps grid. It should not be
+  // called for scrollable apps grid, in which case number of tiles per page is
+  // not defined.
+  size_t TilesPerPageInPagedGrid(int page) const;
+
+  // Returns number of tiles allowed on the page for paged apps grid, or
+  // `default_value` for scrollable apps grid, for which number of tiles per
+  // page is not defined.
+  size_t TilesPerPageOr(int page, size_t default_value) const;
 
   int AppsOnPage(int page) const;
 
@@ -88,12 +96,8 @@ class AppsGridViewTestApi {
 
   AppListItemList* GetItemList() { return view_->item_list_; }
 
-  PagedViewStructure* GetPagedViewStructure() {
-    return &view_->view_structure_;
-  }
-
  private:
-  AppsGridView* view_;
+  raw_ptr<AppsGridView, DanglingUntriaged> view_;
 };
 
 }  // namespace test

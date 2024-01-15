@@ -5,6 +5,7 @@
 #ifndef MEDIA_CAPTURE_VIDEO_CHROMEOS_DISPLAY_ROTATION_OBSERVER_H_
 #define MEDIA_CAPTURE_VIDEO_CHROMEOS_DISPLAY_ROTATION_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
 #include "ui/display/display.h"
@@ -15,7 +16,7 @@ namespace media {
 
 class DisplayRotationObserver {
  public:
-  virtual void SetDisplayRotation(const display::Display& display) = 0;
+  virtual void SetInternalDisplayRotation(int rotation) = 0;
 };
 
 // Registers itself as an observer at |display::Screen::GetScreen()| and
@@ -26,7 +27,7 @@ class ScreenObserverDelegate
       public base::RefCountedThreadSafe<ScreenObserverDelegate> {
  public:
   static scoped_refptr<ScreenObserverDelegate> Create(
-      DisplayRotationObserver* observer,
+      base::WeakPtr<DisplayRotationObserver> observer,
       scoped_refptr<base::SingleThreadTaskRunner> display_task_runner);
 
   ScreenObserverDelegate() = delete;
@@ -41,7 +42,7 @@ class ScreenObserverDelegate
   friend class base::RefCountedThreadSafe<ScreenObserverDelegate>;
 
   ScreenObserverDelegate(
-      DisplayRotationObserver* observer,
+      base::WeakPtr<DisplayRotationObserver> observer,
       scoped_refptr<base::SingleThreadTaskRunner> display_task_runner);
   ~ScreenObserverDelegate() override;
 
@@ -52,11 +53,12 @@ class ScreenObserverDelegate
   void AddObserverOnDisplayThread();
   void RemoveObserverOnDisplayThread();
 
-  // Post the screen rotation change from the display thread to capture thread
-  void SendDisplayRotation(const display::Display& display);
-  void SendDisplayRotationOnCaptureThread(const display::Display& display);
+  // Post the screen rotation change of the internal display from the display
+  // thread to capture thread.
+  void SendInternalDisplayRotation(int rotation);
+  void SendInternalDisplayRotationOnCaptureThread(int rotation);
 
-  DisplayRotationObserver* observer_;
+  base::WeakPtr<DisplayRotationObserver> observer_;
 
   absl::optional<display::ScopedDisplayObserver> display_observer_;
 

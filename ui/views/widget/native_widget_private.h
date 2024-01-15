@@ -84,6 +84,8 @@ class VIEWS_EXPORT NativeWidgetPrivate : public NativeWidget {
   // initialization.
   virtual void OnWidgetInitDone() = 0;
 
+  virtual void ReparentNativeViewImpl(gfx::NativeView new_parent) = 0;
+
   // Returns a NonClientFrameView for the widget's NonClientView, or NULL if
   // the NativeWidget wants no special NonClientFrameView.
   virtual std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() = 0;
@@ -189,6 +191,7 @@ class VIEWS_EXPORT NativeWidgetPrivate : public NativeWidget {
   virtual void Activate() = 0;
   virtual void Deactivate() = 0;
   virtual bool IsActive() const = 0;
+  virtual void PaintAsActiveChanged();
   virtual void SetZOrderLevel(ui::ZOrderLevel order) = 0;
   virtual ui::ZOrderLevel GetZOrderLevel() const = 0;
   virtual void SetVisibleOnAllWorkspaces(bool always_visible) = 0;
@@ -203,7 +206,16 @@ class VIEWS_EXPORT NativeWidgetPrivate : public NativeWidget {
   virtual void SetCanAppearInExistingFullscreenSpaces(
       bool can_appear_in_existing_fullscreen_spaces) = 0;
   virtual void SetOpacity(float opacity) = 0;
-  virtual void SetAspectRatio(const gfx::SizeF& aspect_ratio) = 0;
+  // The size of the widget will be set such that it is in the same proportion
+  // as `aspect_ratio` after subtracting `excluded_margin` from the widget size.
+  //
+  // This allows the aspect ratio to refer to just a subrectangle of the widget,
+  // to leave room for, e.g., a client-drawn title bar or window decorations.
+  // System-drawn decorations are excluded automatically, but the system has no
+  // idea if we decide to draw our own.  By setting `excluded_margin` to our
+  // custom-drawn decorations, we can maintain the same behavior.
+  virtual void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                              const gfx::Size& excluded_margin) = 0;
   virtual void FlashFrame(bool flash) = 0;
   virtual void RunShellDrag(View* view,
                             std::unique_ptr<ui::OSExchangeData> data,
@@ -230,7 +242,6 @@ class VIEWS_EXPORT NativeWidgetPrivate : public NativeWidget {
       const base::TimeDelta& duration) = 0;
   virtual void SetVisibilityAnimationTransition(
       Widget::VisibilityTransition transition) = 0;
-  virtual bool IsTranslucentWindowOpacitySupported() const = 0;
   virtual ui::GestureRecognizer* GetGestureRecognizer() = 0;
   virtual ui::GestureConsumer* GetGestureConsumer() = 0;
   virtual void OnSizeConstraintsChanged() = 0;
@@ -240,6 +251,8 @@ class VIEWS_EXPORT NativeWidgetPrivate : public NativeWidget {
 
   // Returns an internal name that matches the name of the associated Widget.
   virtual std::string GetName() const = 0;
+
+  virtual base::WeakPtr<NativeWidgetPrivate> GetWeakPtr() = 0;
 
   // Overridden from NativeWidget:
   internal::NativeWidgetPrivate* AsNativeWidgetPrivate() override;

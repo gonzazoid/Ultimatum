@@ -6,9 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "third_party/blink/public/mojom/blob/data_element.mojom.h"
@@ -105,7 +106,7 @@ class DataPipeTransportStrategy : public BlobTransportStrategy {
         limits_(limits),
         watcher_(FROM_HERE,
                  mojo::SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                 base::SequencedTaskRunnerHandle::Get()) {}
+                 base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   void AddBytesElement(
       blink::mojom::DataElementBytes* bytes,
@@ -322,7 +323,7 @@ class FileTransportStrategy : public BlobTransportStrategy {
  private:
   void OnReply(BlobDataBuilder::FutureFile future_file,
                scoped_refptr<ShareableFileReference> file_reference,
-               absl::optional<base::Time> time_file_modified) {
+               std::optional<base::Time> time_file_modified) {
     if (!time_file_modified) {
       // Writing to the file failed in the renderer.
       std::move(result_callback_).Run(BlobStatus::ERR_FILE_WRITE_FAILED);

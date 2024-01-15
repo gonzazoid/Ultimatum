@@ -2,11 +2,12 @@ Name: Puffin deterministic deflate recompressor
 Short Name: Puffin
 URL: https://android.googlesource.com/platform/external/puffin
 Version: 1.0.0
-Date: Tues May 10 13:55:00 2022
+Date: 2022-10-05
 Revision: e0820dcfebfb4df925be2e37ad8f56c00dc624f5
-License: Chromium OS BSD
+License: BSD 3-Clause
 License File: LICENSE
 Security Critical: yes
+Shipped: yes
 License Android Compatible: yes
 
 Description:
@@ -48,3 +49,15 @@ and output patch filepaths as arguments.
 pass/fail bool.
 - Removing Requirement to find deflates; in puffin::PuffDiff if a file doesn't
 have deflates, we can still generate a raw patch.
+- Updating puffdiff.cc, puffpatch.cc, and puffin_stream.cc to close streams properly.
+This is an existing bug in the AOSP implementation, will notify the owners.
+- Removing unnecessary symlink at third_party/puffin/src.
+- Fixing one case where a stream is closed early.
+- Updating patching_unittest with zucchini v2 patches to fix broken tests.
+- missed one stream close in puffdiff.cc.
+- Making sure to call FindDeflateSubBlocks in PuffDiff to prepopulate deflate
+subblocks.
+- Removing complete_static_lib = true from libpuffpatch to fix duplicate symbol
+issue in nonembedded android component_updater.
+- Removing logs to reduce chromium binary size.
+- Fixed missing cstring includes for memcpy calls.

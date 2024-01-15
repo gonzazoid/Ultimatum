@@ -181,13 +181,16 @@ HungPagesTableModel::WebContentsObserverImpl::WebContentsObserverImpl(
     WebContents* tab)
     : content::WebContentsObserver(tab), model_(model) {}
 
-void HungPagesTableModel::WebContentsObserverImpl::RenderViewHostChanged(
-    content::RenderViewHost* old_host,
-    content::RenderViewHost* new_host) {
+void HungPagesTableModel::WebContentsObserverImpl::RenderFrameHostChanged(
+    content::RenderFrameHost* old_host,
+    content::RenderFrameHost* new_host) {
+  if (!new_host->IsInPrimaryMainFrame())
+    return;
+
   // If |new_host| is currently responsive dismiss this dialog, otherwise
   // let the model know the tab has been updated. Updating the tab will
   // dismiss the current dialog but restart the hung renderer timeout.
-  if (!new_host->GetWidget()->IsCurrentlyUnresponsive()) {
+  if (!new_host->GetRenderWidgetHost()->IsCurrentlyUnresponsive()) {
     model_->TabDestroyed(this);
     return;
   }
@@ -236,8 +239,9 @@ void HungRendererDialogView::Show(
     return;
 
   // Only show for WebContents in a browser window.
-  if (!chrome::FindBrowserWithWebContents(contents))
+  if (!chrome::FindBrowserWithTab(contents)) {
     return;
+  }
 
   // Don't show the warning unless the foreground window is the frame. If the
   // user has another window or application selected, activating ourselves is
@@ -286,8 +290,9 @@ HungRendererDialogView::HungRendererDialogView(WebContents* web_contents)
 
   hung_pages_table_model_ = std::make_unique<HungPagesTableModel>(this);
   const std::vector<ui::TableColumn> columns = {ui::TableColumn()};
-  auto hung_pages_table = std::make_unique<views::TableView>(
-      hung_pages_table_model_.get(), columns, views::ICON_AND_TEXT, true);
+  auto hung_pages_table =
+      std::make_unique<views::TableView>(hung_pages_table_model_.get(), columns,
+                                         views::TableType::kIconAndText, true);
   hung_pages_table_ = hung_pages_table.get();
 
   SetButtonLabel(
@@ -443,5 +448,5 @@ void HungRendererDialogView::BypassActiveBrowserRequirementForTests() {
   g_bypass_active_browser_requirement = true;
 }
 
-BEGIN_METADATA(HungRendererDialogView, views::DialogDelegateView)
+BEGIN_METADATA(HungRendererDialogView)
 END_METADATA

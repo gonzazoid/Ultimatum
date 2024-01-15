@@ -14,14 +14,25 @@
 
 #include "dpf/internal/proto_validator.h"
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
+#include <stdint.h>
 
+#include <cmath>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "dpf/distributed_point_function.pb.h"
 #include "dpf/internal/proto_validator_test_textproto_embed.h"
 #include "dpf/internal/status_matchers.h"
 #include "dpf/tuple.h"
+#include "gmock/gmock.h"
+#include "google/protobuf/repeated_field.h"
 #include "google/protobuf/text_format.h"
+#include "gtest/gtest.h"
 
 namespace distributed_point_functions {
 namespace dpf_internal {
@@ -73,6 +84,15 @@ TEST_F(ProtoValidatorTest, CreateFailsWhenDomainSizeNegative) {
   EXPECT_THAT(ProtoValidator::Create(parameters_),
               StatusIs(absl::StatusCode::kInvalidArgument,
                        "`log_domain_size` must be non-negative"));
+}
+
+TEST_F(ProtoValidatorTest, CreateFailsWhenDomainSizeTooLarge) {
+  parameters_.resize(1);
+  parameters_[0].set_log_domain_size(129);
+
+  EXPECT_THAT(ProtoValidator::Create(parameters_),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       "`log_domain_size` must be <= 128"));
 }
 
 TEST_F(ProtoValidatorTest, CreateFailsWhenElementBitsizeNegative) {
@@ -251,16 +271,17 @@ TEST_F(ProtoValidatorTest,
                        "This context has already been fully evaluated"));
 }
 
-TEST_F(
-    ProtoValidatorTest,
-    ValidateEvaluationContextFailsIfPreviousHierarchyLevelEqualsHierarchyLevel) {
-  ctx_.set_previous_hierarchy_level(ctx_.partial_evaluations_level());
+TEST_F(ProtoValidatorTest,
+       ValidateEvaluationContextFailsIfPartialEvaluationsLevelTooLarge) {
+  ctx_.set_previous_hierarchy_level(0);
+  ctx_.set_partial_evaluations_level(1);
   ctx_.add_partial_evaluations();
 
-  EXPECT_THAT(proto_validator_->ValidateEvaluationContext(ctx_),
-              StatusIs(absl::StatusCode::kInvalidArgument,
-                       "ctx.previous_hierarchy_level must be less than "
-                       "ctx.partial_evaluations_level"));
+  EXPECT_THAT(
+      proto_validator_->ValidateEvaluationContext(ctx_),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               "ctx.partial_evaluations_level must be less than or equal to "
+               "ctx.previous_hierarchy_level"));
 }
 
 TEST_F(ProtoValidatorTest, ValidateValueFailsIfTypeNotInteger) {

@@ -12,7 +12,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/branding_buildflags.h"
-#include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/sync_service_factory.h"
@@ -21,9 +20,9 @@
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/password_manager/core/browser/android_affiliation/affiliation_utils.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/leak_detection_dialog_utils.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
@@ -31,8 +30,8 @@
 #include "components/password_manager/core/browser/password_manager_util.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/strings/grit/components_strings.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "components/url_formatter/elide_url.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/web_contents.h"
@@ -152,6 +151,13 @@ std::u16string GetManagePasswordsDialogTitleText(
                       : IDS_MANAGE_PASSWORDS_NO_PASSWORDS_TITLE);
 }
 
+std::u16string GetConfirmationManagePasswordsDialogTitleText(bool is_update) {
+  return is_update ? l10n_util::GetStringUTF16(
+                         IDS_PASSWORD_MANAGER_CONFIRM_UPDATE_TITLE)
+                   : l10n_util::GetStringUTF16(
+                         IDS_PASSWORD_MANAGER_CONFIRM_SAVED_TITLE);
+}
+
 std::u16string GetDisplayUsername(const password_manager::PasswordForm& form) {
   return form.username_value.empty()
              ? l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_EMPTY_LOGIN)
@@ -171,13 +177,21 @@ std::u16string GetDisplayFederation(
       form.federation_origin, url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC);
 }
 
+std::u16string GetDisplayPassword(const password_manager::PasswordForm& form) {
+  return form.federation_origin.opaque()
+             ? form.password_value
+             : l10n_util::GetStringFUTF16(IDS_PASSWORDS_VIA_FEDERATION,
+                                          GetDisplayFederation(form));
+}
+
 bool IsSyncingAutosignSetting(Profile* profile) {
   const syncer::SyncService* sync_service =
       SyncServiceFactory::GetForProfile(profile);
-  return (sync_service &&
-          sync_service->GetUserSettings()->IsFirstSetupComplete() &&
-          sync_service->IsSyncFeatureActive() &&
-          sync_service->GetActiveDataTypes().Has(syncer::PRIORITY_PREFERENCES));
+  return (
+      sync_service &&
+      sync_service->GetUserSettings()->IsInitialSyncFeatureSetupComplete() &&
+      sync_service->IsSyncFeatureActive() &&
+      sync_service->GetActiveDataTypes().Has(syncer::PRIORITY_PREFERENCES));
 }
 
 GURL GetGooglePasswordManagerURL(ManagePasswordsReferrer referrer) {
@@ -210,17 +224,21 @@ GURL GetGooglePasswordManagerURL(ManagePasswordsReferrer referrer) {
         return "password_generation_prompt_in_autofill_dropdown";
       case ManagePasswordsReferrer::kPasswordsGoogleWebsite:
         return "passwords_google";
+      case ManagePasswordsReferrer::kAddUsernameBubble:
+        return "add_username_bubble";
       case ManagePasswordsReferrer::kPasswordsAccessorySheet:
       case ManagePasswordsReferrer::kTouchToFill:
       case ManagePasswordsReferrer::kPasswordBreachDialog:
       case ManagePasswordsReferrer::kSafetyCheck:
-      case ManagePasswordsReferrer::kAutomatedPasswordChangeSuccessLink:
       case ManagePasswordsReferrer::kBiometricAuthenticationBeforeFillingDialog:
-        NOTREACHED();
+      case ManagePasswordsReferrer::kChromeMenuItem:
+      case ManagePasswordsReferrer::kSharedPasswordsNotificationBubble:
+      case ManagePasswordsReferrer::kSearchPasswordsWidget:
+      case ManagePasswordsReferrer::kOmniboxPedalSuggestion:
+        NOTREACHED_NORETURN();
     }
 
-    NOTREACHED();
-    return "";
+    NOTREACHED_NORETURN();
   }();
 
   return net::AppendQueryParameter(url, "utm_campaign", campaign);
@@ -228,14 +246,6 @@ GURL GetGooglePasswordManagerURL(ManagePasswordsReferrer referrer) {
 
 // Navigation is handled differently on Android.
 #if !BUILDFLAG(IS_ANDROID)
-void NavigateToGooglePasswordManager(Profile* profile,
-                                     ManagePasswordsReferrer referrer) {
-  NavigateParams params(profile, GetGooglePasswordManagerURL(referrer),
-                        ui::PAGE_TRANSITION_LINK);
-  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-  Navigate(&params);
-}
-
 void NavigateToManagePasswordsPage(Browser* browser,
                                    ManagePasswordsReferrer referrer) {
   UMA_HISTOGRAM_ENUMERATION("PasswordManager.ManagePasswordsReferrer",

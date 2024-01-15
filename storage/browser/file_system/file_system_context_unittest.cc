@@ -9,10 +9,12 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/services/storage/public/cpp/quota_error_or.h"
@@ -60,7 +62,8 @@ class FileSystemContextTest : public testing::Test {
 
     mock_quota_manager_ = base::MakeRefCounted<MockQuotaManager>(
         false /* is_incognito */, data_dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get().get(), storage_policy_.get());
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+        storage_policy_.get());
   }
 
  protected:
@@ -69,12 +72,13 @@ class FileSystemContextTest : public testing::Test {
     std::vector<std::unique_ptr<storage::FileSystemBackend>>
         additional_providers;
     additional_providers.push_back(std::make_unique<TestFileSystemBackend>(
-        base::ThreadTaskRunnerHandle::Get().get(), data_dir_.GetPath()));
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+        data_dir_.GetPath()));
     return FileSystemContext::Create(
-        base::ThreadTaskRunnerHandle::Get(),
-        base::ThreadTaskRunnerHandle::Get(), std::move(external_mount_points),
-        storage_policy_, mock_quota_manager_->proxy(),
-        std::move(additional_providers),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        std::move(external_mount_points), storage_policy_,
+        mock_quota_manager_->proxy(), std::move(additional_providers),
         std::vector<URLRequestAutoMountHandler>(), data_dir_.GetPath(),
         CreateAllowFileAccessOptions());
   }
@@ -99,8 +103,7 @@ class FileSystemContextTest : public testing::Test {
     EXPECT_EQ(expect_filesystem_id, url.filesystem_id());
   }
 
-  inline static absl::optional<FileSystemURL> last_resolved_url_ =
-      absl::nullopt;
+  inline static std::optional<FileSystemURL> last_resolved_url_ = std::nullopt;
 
  private:
   base::ScopedTempDir data_dir_;
@@ -215,17 +218,17 @@ TEST_F(FileSystemContextTest, ResolveURLOnOpenFileSystem_CustomBucket) {
       bucket_future;
   proxy()->CreateBucketForTesting(
       storage_key, "custom_bucket", blink::mojom::StorageType::kTemporary,
-      base::SequencedTaskRunnerHandle::Get(), bucket_future.GetCallback());
-  auto bucket = bucket_future.Take();
-  EXPECT_TRUE(bucket.ok());
+      base::SequencedTaskRunner::GetCurrentDefault(),
+      bucket_future.GetCallback());
+  ASSERT_OK_AND_ASSIGN(auto bucket, bucket_future.Take());
   ASSERT_FALSE(last_resolved_url_.has_value());
 
   file_system_context->ResolveURLOnOpenFileSystemForTesting(
-      storage_key, bucket->ToBucketLocator(), kFileSystemTypeTest,
+      storage_key, bucket.ToBucketLocator(), kFileSystemTypeTest,
       OpenFileSystemMode::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
       std::move(open_callback));
   ASSERT_TRUE(last_resolved_url_.has_value());
-  ASSERT_EQ(last_resolved_url_.value().bucket(), bucket->ToBucketLocator());
+  ASSERT_EQ(last_resolved_url_.value().bucket(), bucket.ToBucketLocator());
 }
 
 TEST_F(FileSystemContextTest, CrackFileSystemURL) {
@@ -252,8 +255,7 @@ TEST_F(FileSystemContextTest, CrackFileSystemURL) {
   // Register a system external mount point with the same name/id as the
   // registered isolated mount point.
   ASSERT_TRUE(ExternalMountPoints::GetSystemInstance()->RegisterFileSystem(
-      kIsolatedFileSystemID, kFileSystemTypeRestrictedLocal,
-      FileSystemMountOption(),
+      kIsolatedFileSystemID, kFileSystemTypeLocal, FileSystemMountOption(),
       base::FilePath(DRIVE FPL("/test/system/isolated"))));
   // Add a mount points with the same name as a system mount point to
   // FileSystemContext's external mount points.
@@ -296,7 +298,7 @@ TEST_F(FileSystemContextTest, CrackFileSystemURL) {
       {"system", "external", true /* is_valid */, kFileSystemTypeExternal,
        kFileSystemTypeLocal, DRIVE FPL("/test/sys/root/file"), "system"},
       {kIsolatedFileSystemID, "external", true /* is_valid */,
-       kFileSystemTypeExternal, kFileSystemTypeRestrictedLocal,
+       kFileSystemTypeExternal, kFileSystemTypeLocal,
        DRIVE FPL("/test/system/isolated/root/file"), kIsolatedFileSystemID},
       // Should be cracked by FileSystemContext's ExternalMountPoints.
       {"ext", "external", true /* is_valid */, kFileSystemTypeExternal,
@@ -388,7 +390,7 @@ TEST_F(FileSystemContextTest, CanServeURLRequest) {
 // See http://crbug.com/447027
 TEST_F(FileSystemContextTest, IsolatedFileSystemsTypesHandled) {
   // This does not provide any "additional" file system handlers. In particular,
-  // on Chrome OS it does not provide chromeos::FileSystemBackend.
+  // on Chrome OS it does not provide ash::FileSystemBackend.
   scoped_refptr<FileSystemContext> file_system_context =
       CreateFileSystemContextForTest(/*external_mount_points=*/nullptr);
 

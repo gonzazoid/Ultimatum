@@ -9,10 +9,12 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_performance_mark_options.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/performance_entry_names.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
+#include "third_party/blink/renderer/platform/wtf/uuid.h"
 
 namespace blink {
 
@@ -29,8 +31,8 @@ TEST(PerformanceMarkTest, CreateWithOptions) {
   PerformanceMarkOptions* options = PerformanceMarkOptions::Create();
   options->setDetail(script_value);
 
-  PerformanceMark* pm = PerformanceMark::Create(script_state, "mark-name",
-                                                options, exception_state);
+  PerformanceMark* pm = PerformanceMark::Create(
+      script_state, AtomicString("mark-name"), options, exception_state);
   ASSERT_EQ(pm->entryType(), performance_entry_names::kMark);
   ASSERT_EQ(pm->EntryTypeEnum(), PerformanceEntry::EntryType::kMark);
   ASSERT_EQ(payload_string->Deserialize(isolate),
@@ -45,14 +47,15 @@ TEST(PerformanceMarkTest, Construction) {
   v8::Isolate* isolate = scope.GetIsolate();
 
   PerformanceMark* pm = MakeGarbageCollected<PerformanceMark>(
-      "mark-name", 0, base::TimeTicks(), SerializedScriptValue::NullValue(),
-      exception_state, 1);
+      AtomicString("mark-name"), 0, base::TimeTicks(),
+      SerializedScriptValue::NullValue(), exception_state,
+      LocalDOMWindow::From(script_state));
   ASSERT_EQ(pm->entryType(), performance_entry_names::kMark);
   ASSERT_EQ(pm->EntryTypeEnum(), PerformanceEntry::EntryType::kMark);
 
   ASSERT_EQ(SerializedScriptValue::NullValue()->Deserialize(isolate),
             pm->detail(script_state).V8Value());
-  ASSERT_EQ(1u, pm->navigationId());
+  ASSERT_TRUE(WTF::IsValidUUID(pm->navigationId()));
 }
 
 TEST(PerformanceMarkTest, ConstructionWithDetail) {
@@ -65,7 +68,8 @@ TEST(PerformanceMarkTest, ConstructionWithDetail) {
       SerializedScriptValue::Create(String("some-payload"));
 
   PerformanceMark* pm = MakeGarbageCollected<PerformanceMark>(
-      "mark-name", 0, base::TimeTicks(), payload_string, exception_state);
+      AtomicString("mark-name"), 0, base::TimeTicks(), payload_string,
+      exception_state, LocalDOMWindow::From(script_state));
   ASSERT_EQ(pm->entryType(), performance_entry_names::kMark);
   ASSERT_EQ(pm->EntryTypeEnum(), PerformanceEntry::EntryType::kMark);
 
@@ -79,19 +83,19 @@ TEST(PerformanceMarkTest, BuildJSONValue) {
   ExceptionState& exception_state = scope.GetExceptionState();
   ScriptState* script_state = scope.GetScriptState();
 
-  const AtomicString expected_name = "mark-name";
-  const uint32_t expected_navigation_count = 2;
+  const AtomicString expected_name("mark-name");
   const double expected_start_time = 0;
   const double expected_duration = 0;
-  const AtomicString expected_entry_type = "mark";
+  const AtomicString expected_entry_type("mark");
   PerformanceMark pm(expected_name, expected_start_time, base::TimeTicks(),
                      SerializedScriptValue::NullValue(), exception_state,
-                     expected_navigation_count);
+                     LocalDOMWindow::From(script_state));
 
   ScriptValue json_object = pm.toJSONForBinding(script_state);
   EXPECT_TRUE(json_object.IsObject());
 
   String json_string = ToBlinkString<String>(
+      scope.GetIsolate(),
       v8::JSON::Stringify(scope.GetContext(),
                           json_object.V8Value().As<v8::Object>())
           .ToLocalChecked(),
@@ -108,8 +112,6 @@ TEST(PerformanceMarkTest, BuildJSONValue) {
             parsed_json->GetDict().FindDouble("startTime").value());
   EXPECT_EQ(expected_duration,
             parsed_json->GetDict().FindDouble("duration").value());
-  EXPECT_EQ(expected_navigation_count,
-            (uint32_t)parsed_json->GetDict().FindInt("navigationId").value());
 
   EXPECT_EQ(5ul, parsed_json->GetDict().size());
 }

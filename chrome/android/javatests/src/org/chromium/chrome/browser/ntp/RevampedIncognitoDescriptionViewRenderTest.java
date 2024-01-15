@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.ntp;
 
 import android.app.Activity;
 import android.view.View;
+import android.view.ViewStub;
 
 import androidx.test.filters.MediumTest;
 
@@ -19,6 +20,7 @@ import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
@@ -27,9 +29,7 @@ import org.chromium.ui.test.util.NightModeTestUtils;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Render test of revamped incognito description in the incognito ntp.
- */
+/** Render test of revamped incognito description in the incognito ntp. */
 @RunWith(ParameterizedRunner.class)
 @UseRunnerDelegate(ChromeJUnit4RunnerDelegate.class)
 public class RevampedIncognitoDescriptionViewRenderTest extends BlankUiTestActivityTestCase {
@@ -52,11 +52,11 @@ public class RevampedIncognitoDescriptionViewRenderTest extends BlankUiTestActiv
     @Override
     public void setUpTest() throws Exception {
         super.setUpTest();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Activity activity = getActivity();
-            activity.setContentView(
-                    org.chromium.chrome.R.layout.revamped_incognito_description_layout);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Activity activity = getActivity();
+                    activity.setContentView(R.layout.revamped_incognito_description_layout);
+                });
     }
 
     @Test
@@ -64,9 +64,29 @@ public class RevampedIncognitoDescriptionViewRenderTest extends BlankUiTestActiv
     @Feature({"RenderTest"})
     public void testRender_RevampedIncognitoDescriptionView() throws IOException {
         View view = getActivity().findViewById(android.R.id.content);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            view.setBackgroundResource(org.chromium.chrome.R.color.ntp_bg_incognito);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    view.setBackgroundResource(R.color.ntp_bg_incognito);
+                    ViewStub cardStub = getActivity().findViewById(R.id.cookie_card_stub);
+                    cardStub.setLayoutResource(R.layout.revamped_incognito_cookie_controls_card);
+                    cardStub.inflate();
+                });
         mRenderTestRule.render(view, "revamped_incognito_description_view");
+    }
+
+    @Test
+    @MediumTest
+    @Feature({"RenderTest"})
+    public void testRender_RevampedIncognitoDescriptionViewTrackingProtection() throws IOException {
+        View view = getActivity().findViewById(android.R.id.content);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    view.setBackgroundResource(R.color.ntp_bg_incognito);
+                    ViewStub cardStub = getActivity().findViewById(R.id.cookie_card_stub);
+                    cardStub.setLayoutResource(
+                            R.layout.revamped_incognito_tracking_protection_card);
+                    cardStub.inflate();
+                });
+        mRenderTestRule.render(view, "revamped_incognito_description_view_tracking_protection");
     }
 }

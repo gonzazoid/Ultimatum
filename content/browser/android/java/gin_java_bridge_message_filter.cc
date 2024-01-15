@@ -5,6 +5,8 @@
 #include "content/browser/android/java/gin_java_bridge_message_filter.h"
 
 #include "base/auto_reset.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/types/pass_key.h"
 #include "build/build_config.h"
 #include "content/browser/android/java/gin_java_bridge_dispatcher_host.h"
@@ -34,7 +36,7 @@ GinJavaBridgeMessageFilter::GinJavaBridgeMessageFilter(
     AgentSchedulingGroupHost& agent_scheduling_group)
     : BrowserMessageFilter(GinJavaBridgeMsgStart),
       agent_scheduling_group_(agent_scheduling_group),
-      current_routing_id_(MSG_ROUTING_NONE) {}
+      render_process_id_(agent_scheduling_group.GetProcess()->GetID()) {}
 
 GinJavaBridgeMessageFilter::~GinJavaBridgeMessageFilter() {
 }
@@ -76,20 +78,24 @@ void GinJavaBridgeMessageFilter::AddRoutingIdForHost(
       GinJavaBridgeDispatcherHost* host,
       RenderFrameHost* render_frame_host) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  int routing_id = render_frame_host->GetRoutingID();
+
   base::AutoLock locker(hosts_lock_);
-  hosts_[render_frame_host->GetRoutingID()] = host;
+  hosts_[routing_id] = host;
+  hosts_is_in_primary_main_frame_[routing_id] =
+      render_frame_host->IsInPrimaryMainFrame();
 }
 
-void GinJavaBridgeMessageFilter::RemoveHost(GinJavaBridgeDispatcherHost* host) {
+void GinJavaBridgeMessageFilter::RemoveRoutingIdForHost(
+    RenderFrameHost* render_frame_host) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  int routing_id = render_frame_host->GetRoutingID();
+
   base::AutoLock locker(hosts_lock_);
-  auto iter = hosts_.begin();
-  while (iter != hosts_.end()) {
-    if (iter->second == host)
-      hosts_.erase(iter++);
-    else
-      ++iter;
-  }
+  hosts_is_in_primary_main_frame_.erase(routing_id);
+  hosts_.erase(routing_id);
 }
 
 void GinJavaBridgeMessageFilter::RenderProcessExited(
@@ -99,7 +105,7 @@ void GinJavaBridgeMessageFilter::RenderProcessExited(
   {
     scoped_refptr<GinJavaBridgeMessageFilter> filter =
         base::UserDataAdapter<GinJavaBridgeMessageFilter>::Get(
-            &agent_scheduling_group_, kGinJavaBridgeMessageFilterKey);
+            &*agent_scheduling_group_, kGinJavaBridgeMessageFilterKey);
     DCHECK_EQ(this, filter.get());
   }
 #endif
@@ -118,7 +124,7 @@ void GinJavaBridgeMessageFilter::RenderProcessExited(
   // restarted and new frames are created, a new `GinJavaBridgeMessageFilter`
   // will be created and installed on the IPC channel associated with
   // `agent_scheduling_group_`.
-  agent_scheduling_group_.RemoveUserData(kGinJavaBridgeMessageFilterKey);
+  agent_scheduling_group_->RemoveUserData(kGinJavaBridgeMessageFilterKey);
 
   // DO NOT use `this` from here on, as the object has been destroyed.
 }
@@ -144,12 +150,22 @@ scoped_refptr<GinJavaBridgeMessageFilter> GinJavaBridgeMessageFilter::FromHost(
   return filter;
 }
 
-scoped_refptr<GinJavaBridgeDispatcherHost>
-GinJavaBridgeMessageFilter::FindHost() {
+scoped_refptr<GinJavaBridgeDispatcherHost> GinJavaBridgeMessageFilter::FindHost(
+    bool* is_in_primary_main_frame) {
   base::AutoLock locker(hosts_lock_);
   auto iter = hosts_.find(current_routing_id_);
-  if (iter != hosts_.end())
+  if (iter != hosts_.end()) {
+    if (is_in_primary_main_frame) {
+      auto main_frame_iter =
+          hosts_is_in_primary_main_frame_.find(current_routing_id_);
+      CHECK(main_frame_iter != hosts_is_in_primary_main_frame_.end());
+
+      *is_in_primary_main_frame = main_frame_iter->second;
+    }
+
     return iter->second;
+  }
+
   // Not being able to find a host is OK -- we can receive messages from
   // RenderFrames for which the corresponding host part has already been
   // destroyed. That means, any references to Java objects that the host was
@@ -165,13 +181,13 @@ GinJavaBridgeMessageFilter::FindHost() {
 
 void GinJavaBridgeMessageFilter::OnGetMethods(
     GinJavaBoundObject::ObjectID object_id,
-    std::set<std::string>* returned_method_names) {
+    std::vector<std::string>* returned_method_names) {
   DCHECK(JavaBridgeThread::CurrentlyOn());
   scoped_refptr<GinJavaBridgeDispatcherHost> host = FindHost();
   if (host) {
     host->OnGetMethods(object_id, returned_method_names);
   } else {
-    *returned_method_names = std::set<std::string>();
+    *returned_method_names = std::vector<std::string>();
   }
 }
 
@@ -193,15 +209,22 @@ void GinJavaBridgeMessageFilter::OnInvokeMethod(
     const std::string& method_name,
     const base::Value::List& arguments,
     base::Value::List* wrapped_result,
-    content::GinJavaBridgeError* error_code) {
+    mojom::GinJavaBridgeError* error_code) {
   DCHECK(JavaBridgeThread::CurrentlyOn());
-  scoped_refptr<GinJavaBridgeDispatcherHost> host = FindHost();
+
+  bool is_in_primary_main_frame = false;
+  scoped_refptr<GinJavaBridgeDispatcherHost> host =
+      FindHost(&is_in_primary_main_frame);
+
   if (host) {
-    host->OnInvokeMethod(current_routing_id_, object_id, method_name, arguments,
-                         wrapped_result, error_code);
+    UMA_HISTOGRAM_BOOLEAN(
+        "Android.WebView.JavaBridge.InvocationIsInPrimaryMainFrame",
+        is_in_primary_main_frame);
+    host->OnInvokeMethod({render_process_id_, current_routing_id_}, object_id,
+                         method_name, arguments, wrapped_result, error_code);
   } else {
     wrapped_result->Append(base::Value());
-    *error_code = kGinJavaBridgeRenderFrameDeleted;
+    *error_code = mojom::GinJavaBridgeError::kGinJavaBridgeRenderFrameDeleted;
   }
 }
 
@@ -210,7 +233,8 @@ void GinJavaBridgeMessageFilter::OnObjectWrapperDeleted(
   DCHECK(JavaBridgeThread::CurrentlyOn());
   scoped_refptr<GinJavaBridgeDispatcherHost> host = FindHost();
   if (host)
-    host->OnObjectWrapperDeleted(current_routing_id_, object_id);
+    host->OnObjectWrapperDeleted({render_process_id_, current_routing_id_},
+                                 object_id);
 }
 
 }  // namespace content

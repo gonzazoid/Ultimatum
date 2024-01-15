@@ -10,6 +10,7 @@
 
 #include "ash/webui/camera_app_ui/camera_app_helper.mojom.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -52,12 +53,14 @@ class CameraAppWindowStateController
   void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
   void OnWidgetBoundsChanged(views::Widget* widget,
                              const gfx::Rect& new_bounds) override;
+  void OnWidgetDestroying(views::Widget* widget) override;
 
  private:
   void OnWindowStateChanged();
+  void OnWindowFocusChanged(bool is_focus);
   base::flat_set<WindowStateType> GetCurrentWindowStates();
 
-  views::Widget* widget_;
+  raw_ptr<views::Widget> widget_;
   base::flat_set<WindowStateType> window_states_;
   mojo::ReceiverSet<camera_app::mojom::WindowStateController> receivers_;
   std::vector<mojo::Remote<WindowStateMonitor>> monitors_;

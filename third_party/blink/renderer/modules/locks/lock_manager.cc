@@ -41,8 +41,8 @@ namespace blink {
 
 namespace {
 
-constexpr char kRequestAbortedMessage[] = "The request was aborted.";
 constexpr char kSecurityErrorMessage[] = "The request was denied.";
+constexpr char kInvalidStateErrorMessage[] = "The document is not active.";
 
 LockInfo* ToLockInfo(const mojom::blink::LockInfoPtr& record) {
   LockInfo* info = LockInfo::Create();
@@ -114,10 +114,11 @@ class LockManager::LockRequestImpl final
     abort_handle_ = &handle;
   }
 
-  void Abort(const String& reason) override {
+  void Abort(AbortSignal* signal) {
     // Abort signal after acquisition should be ignored.
-    if (!manager_->IsPendingRequest(this))
+    if (!manager_->IsPendingRequest(this)) {
       return;
+    }
 
     manager_->RemovePendingRequest(this);
     receiver_.reset();
@@ -134,8 +135,7 @@ class LockManager::LockRequestImpl final
 
     ScriptState::Scope script_state_scope(script_state);
 
-    resolver_->Reject(V8ThrowDOMException::CreateOrDie(
-        script_state->GetIsolate(), DOMExceptionCode::kAbortError, reason));
+    resolver_->Reject(signal->reason(script_state));
   }
 
   void Failed() override {
@@ -270,8 +270,11 @@ ScriptPromise LockManager::request(ScriptState* script_state,
                                    V8LockGrantedCallback* callback,
                                    ExceptionState& exception_state) {
   // Observed context may be gone if frame is detached.
-  if (!GetExecutionContext())
+  if (!GetExecutionContext()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      kInvalidStateErrorMessage);
     return ScriptPromise();
+  }
 
   ExecutionContext* context = ExecutionContext::From(script_state);
   DCHECK(context->IsContextThread());
@@ -338,47 +341,40 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  // 10. Otherwise, if options’ signal dictionary member is present and its
-  // aborted flag is set, then reject promise with an "AbortError" DOMException.
+  // If options["signal"] exists and is aborted, then return a promise rejected
+  // with options["signal"]'s abort reason.
   if (options->hasSignal() && options->signal()->aborted()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kAbortError,
-                                      kRequestAbortedMessage);
-    return ScriptPromise();
+    return ScriptPromise::Reject(script_state,
+                                 options->signal()->reason(script_state));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   CheckStorageAccessAllowed(
       context, resolver,
-      WTF::BindOnce(&LockManager::RequestImpl, WrapWeakPersistent(this),
-                    WrapPersistent(resolver), WrapPersistent(options), name,
-                    WrapPersistent(callback), mode));
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
+          &LockManager::RequestImpl, WrapWeakPersistent(this),
+          WrapPersistent(options), name, WrapPersistent(callback), mode)));
 
   // 12. Return promise.
   return promise;
 }
 
-void LockManager::RequestImpl(ScriptPromiseResolver* resolver,
-                              const LockOptions* options,
+void LockManager::RequestImpl(const LockOptions* options,
                               const String& name,
                               V8LockGrantedCallback* callback,
-                              mojom::blink::LockMode mode) {
+                              mojom::blink::LockMode mode,
+                              ScriptPromiseResolver* resolver) {
   ExecutionContext* context = resolver->GetExecutionContext();
-
-  if (!resolver->GetExecutionContext() ||
-      resolver->GetExecutionContext()->IsContextDestroyed()) {
-    return;
-  }
-
   if (!service_.is_bound()) {
     context->GetBrowserInterfaceBroker().GetInterface(
         service_.BindNewPipeAndPassReceiver(
             context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
 
     if (!service_.is_bound()) {
-      resolver->Reject(
-          MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError, "");
     }
   }
   if (!observer_.is_bound()) {
@@ -387,8 +383,7 @@ void LockManager::RequestImpl(ScriptPromiseResolver* resolver,
             context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
 
     if (!observer_.is_bound()) {
-      resolver->Reject(
-          MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError, "");
     }
   }
 
@@ -416,12 +411,11 @@ void LockManager::RequestImpl(ScriptPromiseResolver* resolver,
   // 11.2. If options’ signal dictionary member is present, then add the
   // following abort steps to options’ signal dictionary member:
   if (options->hasSignal()) {
-    // 11.2.1. Enqueue the steps to abort the request request to the lock task
-    // queue.
-    // 11.2.2. Reject promise with an "AbortError" DOMException.
+    // In "Request a lock": If signal is present, then add the algorithm signal
+    // to abort the request request with signal to signal.
     AbortSignal::AlgorithmHandle* handle = options->signal()->AddAlgorithm(
         WTF::BindOnce(&LockRequestImpl::Abort, WrapWeakPersistent(request),
-                      String(kRequestAbortedMessage)));
+                      WrapPersistent(options->signal())));
     request->InitializeAbortAlgorithm(*handle);
   }
   service_->RequestLock(name, mode, wait, std::move(request_remote));
@@ -431,6 +425,8 @@ ScriptPromise LockManager::query(ScriptState* script_state,
                                  ExceptionState& exception_state) {
   // Observed context may be gone if frame is detached.
   if (!GetExecutionContext()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      kInvalidStateErrorMessage);
     return ScriptPromise();
   }
   ExecutionContext* context = ExecutionContext::From(script_state);
@@ -445,31 +441,26 @@ ScriptPromise LockManager::query(ScriptState* script_state,
     UseCounter::Count(context, WebFeature::kFileAccessedLocks);
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   CheckStorageAccessAllowed(
       context, resolver,
-      WTF::BindOnce(&LockManager::QueryImpl, WrapWeakPersistent(this),
-                    WrapPersistent(resolver)));
+      resolver->WrapCallbackInScriptScope(
+          WTF::BindOnce(&LockManager::QueryImpl, WrapWeakPersistent(this))));
   return promise;
 }
 
 void LockManager::QueryImpl(ScriptPromiseResolver* resolver) {
   ExecutionContext* context = resolver->GetExecutionContext();
-
-  if (!resolver->GetScriptState()->ContextIsValid()) {
-    return;
-  }
-
   if (!service_.is_bound()) {
     context->GetBrowserInterfaceBroker().GetInterface(
         service_.BindNewPipeAndPassReceiver(
             context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
 
     if (!service_.is_bound()) {
-      resolver->Reject(
-          MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError, "");
     }
   }
 

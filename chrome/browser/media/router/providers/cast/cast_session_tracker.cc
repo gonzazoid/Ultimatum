@@ -4,9 +4,10 @@
 
 #include "chrome/browser/media/router/providers/cast/cast_session_tracker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/media/router/providers/cast/chrome_cast_message_handler.h"
 #include "chrome/browser/media/router/providers/cast/dual_media_sink_service.h"
 #include "components/media_router/common/providers/cast/channel/cast_socket_service.h"
@@ -15,7 +16,11 @@ namespace media_router {
 
 CastSessionTracker::Observer::~Observer() = default;
 
-CastSessionTracker::~CastSessionTracker() = default;
+CastSessionTracker::~CastSessionTracker() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  media_sink_service_->RemoveObserver(this);
+  message_handler_->RemoveObserver(this);
+}
 
 // static
 CastSessionTracker* CastSessionTracker::GetInstance() {
@@ -212,6 +217,9 @@ void CastSessionTracker::OnSinkRemoved(const MediaSinkInternal& sink) {
       observer.OnSessionRemoved(sink);
   }
 }
+
+void CastSessionTracker::OnAppMessage(int channel_id,
+                                      const CastMessage& message) {}
 
 void CastSessionTracker::OnInternalMessage(
     int channel_id,

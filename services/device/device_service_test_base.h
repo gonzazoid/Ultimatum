@@ -5,6 +5,7 @@
 #ifndef SERVICES_DEVICE_DEVICE_SERVICE_TEST_BASE_H_
 #define SERVICES_DEVICE_DEVICE_SERVICE_TEST_BASE_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -13,10 +14,13 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS)
+#include "services/device/public/cpp/test/fake_geolocation_manager.h"
+#endif
+
 namespace device {
 
 class DeviceService;
-class FakeGeolocationManager;
 
 const char kTestGeolocationApiKey[] = "FakeApiKeyForTest";
 
@@ -51,8 +55,8 @@ class DeviceServiceTestBase : public testing::Test {
   scoped_refptr<base::SingleThreadTaskRunner> file_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
 
-#if BUILDFLAG(IS_MAC)
-  std::unique_ptr<FakeGeolocationManager> fake_geolocation_manager_;
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS)
+  raw_ptr<FakeGeolocationManager> fake_geolocation_manager_;
 #endif
 
   network::TestURLLoaderFactory test_url_loader_factory_;

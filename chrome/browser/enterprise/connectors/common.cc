@@ -12,10 +12,14 @@
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_downloads_delegate.h"
 #include "chrome/browser/enterprise/connectors/connectors_prefs.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
+#include "chrome/browser/enterprise/util/affiliation.h"
+#include "chrome/browser/policy/dm_token_utils.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "components/user_manager/user.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -24,12 +28,11 @@
 #include "components/policy/core/common/policy_loader_lacros.h"
 #endif
 
+using safe_browsing::BinaryUploadService;
+
 namespace enterprise_connectors {
 
 namespace {
-
-constexpr char kDlpTag[] = "dlp";
-constexpr char kMalwareTag[] = "malware";
 
 bool ContentAnalysisActionAllowsDataUse(TriggeredRule::Action action) {
   switch (action) {
@@ -58,41 +61,45 @@ ContentAnalysisAcknowledgement::FinalAction RuleActionToAckAction(
 
 }  // namespace
 
-bool ResultShouldAllowDataUse(
-    const AnalysisSettings& settings,
-    safe_browsing::BinaryUploadService::Result upload_result) {
-  using safe_browsing::BinaryUploadService;
+bool ResultShouldAllowDataUse(const AnalysisSettings& settings,
+                              BinaryUploadService::Result upload_result) {
+  bool default_action_allow_data_use =
+      settings.default_action == DefaultAction::kAllow;
+
   // Keep this implemented as a switch instead of a simpler if statement so that
   // new values added to BinaryUploadService::Result cause a compiler error.
   switch (upload_result) {
     case BinaryUploadService::Result::SUCCESS:
-    case BinaryUploadService::Result::UPLOAD_FAILURE:
-    case BinaryUploadService::Result::TIMEOUT:
-    case BinaryUploadService::Result::FAILED_TO_GET_TOKEN:
-    case BinaryUploadService::Result::TOO_MANY_REQUESTS:
     // UNAUTHORIZED allows data usage since it's a result only obtained if the
     // browser is not authorized to perform deep scanning. It does not make
     // sense to block data in this situation since no actual scanning of the
     // data was performed, so it's allowed.
     case BinaryUploadService::Result::UNAUTHORIZED:
-    case BinaryUploadService::Result::UNKNOWN:
       return true;
+
+    case BinaryUploadService::Result::UPLOAD_FAILURE:
+    case BinaryUploadService::Result::TIMEOUT:
+    case BinaryUploadService::Result::FAILED_TO_GET_TOKEN:
+    case BinaryUploadService::Result::TOO_MANY_REQUESTS:
+    case BinaryUploadService::Result::UNKNOWN:
+      DVLOG(1) << __func__
+               << ": handled by fail-closed settings, "
+                  "default_action_allow_data_use="
+               << default_action_allow_data_use;
+      return default_action_allow_data_use;
 
     case BinaryUploadService::Result::FILE_TOO_LARGE:
       return !settings.block_large_files;
 
     case BinaryUploadService::Result::FILE_ENCRYPTED:
       return !settings.block_password_protected_files;
-
-    case BinaryUploadService::Result::DLP_SCAN_UNSUPPORTED_FILE_TYPE:
-      return !settings.block_unsupported_file_types;
   }
 }
 
 RequestHandlerResult CalculateRequestHandlerResult(
     const AnalysisSettings& settings,
-    safe_browsing::BinaryUploadService::Result upload_result,
-    ContentAnalysisResponse response) {
+    BinaryUploadService::Result upload_result,
+    const ContentAnalysisResponse& response) {
   std::string tag;
   auto action = GetHighestPrecedenceAction(response, &tag);
 
@@ -101,22 +108,28 @@ RequestHandlerResult CalculateRequestHandlerResult(
 
   RequestHandlerResult result;
   result.complies = file_complies;
+  result.request_token = response.request_token();
   result.tag = tag;
-  if (!file_complies) {
-    if (upload_result ==
-        safe_browsing::BinaryUploadService::Result::FILE_TOO_LARGE) {
-      result.final_result = FinalContentAnalysisResult::LARGE_FILES;
-    } else if (upload_result ==
-               safe_browsing::BinaryUploadService::Result::FILE_ENCRYPTED) {
-      result.final_result = FinalContentAnalysisResult::ENCRYPTED_FILES;
-    } else if (action == TriggeredRule::WARN) {
-      result.final_result = FinalContentAnalysisResult::WARNING;
-    } else {
-      result.final_result = FinalContentAnalysisResult::FAILURE;
-    }
-  } else {
+
+  if (file_complies) {
     result.final_result = FinalContentAnalysisResult::SUCCESS;
+    return result;
   }
+
+  // If file is non-compliant, map it to the specific case.
+  if (ResultIsFailClosed(upload_result)) {
+    DVLOG(1) << __func__ << ": result mapped to fail-closed.";
+    result.final_result = FinalContentAnalysisResult::FAIL_CLOSED;
+  } else if (upload_result == BinaryUploadService::Result::FILE_TOO_LARGE) {
+    result.final_result = FinalContentAnalysisResult::LARGE_FILES;
+  } else if (upload_result == BinaryUploadService::Result::FILE_ENCRYPTED) {
+    result.final_result = FinalContentAnalysisResult::ENCRYPTED_FILES;
+  } else if (action == TriggeredRule::WARN) {
+    result.final_result = FinalContentAnalysisResult::WARNING;
+  } else {
+    result.final_result = FinalContentAnalysisResult::FAILURE;
+  }
+
   return result;
 }
 
@@ -160,15 +173,6 @@ ReportingSettings::ReportingSettings(const ReportingSettings&) = default;
 ReportingSettings& ReportingSettings::operator=(ReportingSettings&&) = default;
 ReportingSettings::~ReportingSettings() = default;
 
-FileSystemSettings::FileSystemSettings() = default;
-FileSystemSettings::FileSystemSettings(const FileSystemSettings&) = default;
-FileSystemSettings::FileSystemSettings(FileSystemSettings&&) = default;
-FileSystemSettings& FileSystemSettings::operator=(const FileSystemSettings&) =
-    default;
-FileSystemSettings& FileSystemSettings::operator=(FileSystemSettings&&) =
-    default;
-FileSystemSettings::~FileSystemSettings() = default;
-
 const char* ConnectorPref(AnalysisConnector connector) {
   switch (connector) {
     case AnalysisConnector::BULK_DATA_ENTRY:
@@ -180,7 +184,7 @@ const char* ConnectorPref(AnalysisConnector connector) {
     case AnalysisConnector::PRINT:
       return kOnPrintPref;
     case AnalysisConnector::FILE_TRANSFER:
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
       return kOnFileTransferPref;
 #endif
     case AnalysisConnector::ANALYSIS_CONNECTOR_UNSPECIFIED:
@@ -196,13 +200,6 @@ const char* ConnectorPref(ReportingConnector connector) {
   }
 }
 
-const char* ConnectorPref(FileSystemConnector connector) {
-  switch (connector) {
-    case FileSystemConnector::SEND_DOWNLOAD_TO_CLOUD:
-      return kSendDownloadToCloudPref;
-  }
-}
-
 const char* ConnectorScopePref(AnalysisConnector connector) {
   switch (connector) {
     case AnalysisConnector::BULK_DATA_ENTRY:
@@ -214,7 +211,7 @@ const char* ConnectorScopePref(AnalysisConnector connector) {
     case AnalysisConnector::PRINT:
       return kOnPrintScopePref;
     case AnalysisConnector::FILE_TRANSFER:
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
       return kOnFileTransferScopePref;
 #endif
     case AnalysisConnector::ANALYSIS_CONNECTOR_UNSPECIFIED:
@@ -362,7 +359,19 @@ bool IncludeDeviceInfo(Profile* profile, bool per_profile) {
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   return policy::PolicyLoaderLacros::IsMainUserAffiliated();
 #else
-  return !per_profile;
+  // A browser managed through the device can send device info.
+  if (!per_profile) {
+    return true;
+  }
+
+  // An unmanaged browser shouldn't share its device info for privacy reasons.
+  if (!policy::GetDMToken(profile).is_valid()) {
+    return false;
+  }
+
+  // A managed device can share its info with the profile if they are
+  // affiliated.
+  return chrome::enterprise_util::IsProfileAffiliated(profile);
 #endif
 }
 
@@ -430,16 +439,22 @@ void ShowDownloadReviewDialog(const std::u16string& filename,
       /* file_count */ 1, state, download_item);
 }
 
-bool CloudResultIsFailure(safe_browsing::BinaryUploadService::Result result) {
-  return result != safe_browsing::BinaryUploadService::Result::SUCCESS;
+bool CloudResultIsFailure(BinaryUploadService::Result result) {
+  return result != BinaryUploadService::Result::SUCCESS;
 }
 
-bool LocalResultIsFailure(safe_browsing::BinaryUploadService::Result result) {
-  return result != safe_browsing::BinaryUploadService::Result::SUCCESS &&
-         result != safe_browsing::BinaryUploadService::Result::FILE_TOO_LARGE &&
-         result != safe_browsing::BinaryUploadService::Result::FILE_ENCRYPTED &&
-         result != safe_browsing::BinaryUploadService::Result::
-                       DLP_SCAN_UNSUPPORTED_FILE_TYPE;
+bool LocalResultIsFailure(BinaryUploadService::Result result) {
+  return result != BinaryUploadService::Result::SUCCESS &&
+         result != BinaryUploadService::Result::FILE_TOO_LARGE &&
+         result != BinaryUploadService::Result::FILE_ENCRYPTED;
+}
+
+bool ResultIsFailClosed(BinaryUploadService::Result result) {
+  return result == BinaryUploadService::Result::UPLOAD_FAILURE ||
+         result == BinaryUploadService::Result::TIMEOUT ||
+         result == BinaryUploadService::Result::FAILED_TO_GET_TOKEN ||
+         result == BinaryUploadService::Result::TOO_MANY_REQUESTS ||
+         result == BinaryUploadService::Result::UNKNOWN;
 }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)

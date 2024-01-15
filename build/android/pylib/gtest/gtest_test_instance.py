@@ -4,6 +4,7 @@
 
 
 
+import html.parser
 import json
 import logging
 import os
@@ -12,7 +13,6 @@ import tempfile
 import threading
 import xml.etree.ElementTree
 
-import six
 from devil.android import apk_helper
 from pylib import constants
 from pylib.constants import host_paths
@@ -31,6 +31,7 @@ BROWSER_TEST_SUITES = [
     'android_sync_integration_tests',
     'components_browsertests',
     'content_browsertests',
+    'weblayer_browsertests',
 ]
 
 # The max number of tests to run on a shard during the test run.
@@ -104,10 +105,14 @@ _RE_TEST_STATUS = re.compile(
 _RE_TEST_ERROR = re.compile(r'FAILURES!!! Tests run: \d+,'
                                     r' Failures: \d+, Errors: 1')
 _RE_TEST_CURRENTLY_RUNNING = re.compile(
-    r'\[ERROR:.*?\] Currently running: (.*)')
+    r'\[.*ERROR:.*?\] Currently running: (.*)')
 _RE_TEST_DCHECK_FATAL = re.compile(r'\[.*:FATAL:.*\] (.*)')
 _RE_DISABLED = re.compile(r'DISABLED_')
 _RE_FLAKY = re.compile(r'FLAKY_')
+
+# Regex that matches the printout when there are test failures.
+# matches "[  FAILED  ] 1 test, listed below:"
+_RE_ANY_TESTS_FAILED = re.compile(r'\[ +FAILED +\].*listed below')
 
 # Detect stack line in stdout.
 _STACK_LINE_RE = re.compile(r'\s*#\d+')
@@ -228,6 +233,9 @@ def ParseGTestOutput(output, symbolizer, device_abi):
       else:
         log.append(l)
 
+    if _RE_ANY_TESTS_FAILED.match(l):
+      break
+
     if result_type and test_name:
       # Don't bother symbolizing output if the test passed.
       if result_type == base_test_result.ResultType.PASS:
@@ -237,7 +245,10 @@ def ParseGTestOutput(output, symbolizer, device_abi):
           log=symbolize_stack_and_merge_with_log()))
       test_name = None
 
-  handle_possibly_unknown_test()
+  else:
+    # Executing this after tests have finished with a failure causes a
+    # duplicate test entry to be added to results. crbug/1380825
+    handle_possibly_unknown_test()
 
   return results
 
@@ -248,7 +259,7 @@ def ParseGTestXML(xml_content):
   if not xml_content:
     return results
 
-  html = six.moves.html_parser.HTMLParser()
+  html_parser = html.parser.HTMLParser()
 
   testsuites = xml.etree.ElementTree.fromstring(xml_content)
   for testsuite in testsuites:
@@ -259,7 +270,7 @@ def ParseGTestXML(xml_content):
       log = []
       for failure in testcase:
         result_type = base_test_result.ResultType.FAIL
-        log.append(html.unescape(failure.attrib['message']))
+        log.append(html_parser.unescape(failure.attrib['message']))
 
       results.append(base_test_result.BaseTestResult(
           '%s.%s' % (suite_name, TestNameWithoutDisabledPrefix(case_name)),
@@ -296,7 +307,7 @@ def ParseGTestJSON(json_content):
         result_type = base_test_result.ResultType.FAIL
       results.append(base_test_result.BaseTestResult(name, result_type))
     else:
-      openstack += [("%s.%s" % (name, k), v) for k, v in six.iteritems(value)]
+      openstack += [("%s.%s" % (name, k), v) for k, v in value.items()]
 
   return results
 

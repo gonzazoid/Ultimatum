@@ -4,10 +4,10 @@
 
 #include "chrome/browser/commerce/merchant_viewer/merchant_viewer_data_manager_factory.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/commerce/merchant_viewer/merchant_signal_db.h"
 #include "chrome/browser/commerce/merchant_viewer/merchant_viewer_data_manager.h"
@@ -18,7 +18,7 @@
 // static
 MerchantViewerDataManager* MerchantViewerDataManagerFactory::GetForProfile(
     Profile* profile) {
-  if (!profile || profile->IsOffTheRecord()) {
+  if (!profile) {
     return nullptr;
   }
 
@@ -36,16 +36,22 @@ MerchantViewerDataManagerFactory::GetInstance() {
 }
 
 MerchantViewerDataManagerFactory::MerchantViewerDataManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "MerchantViewerDataManager",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(SessionProtoDBFactory<
             MerchantViewerDataManager::MerchantSignalProto>::GetInstance());
 }
 
 MerchantViewerDataManagerFactory::~MerchantViewerDataManagerFactory() = default;
 
-KeyedService* MerchantViewerDataManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+MerchantViewerDataManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new MerchantViewerDataManager(context);
+  return std::make_unique<MerchantViewerDataManager>(context);
 }

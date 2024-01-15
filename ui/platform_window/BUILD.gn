@@ -32,11 +32,13 @@ component("platform_window") {
       "fuchsia/initialize_presenter_api_view.cc",
       "fuchsia/initialize_presenter_api_view.h",
       "fuchsia/scenic_window_delegate.h",
+      "fuchsia/view_ref_pair.cc",
+      "fuchsia/view_ref_pair.h",
     ]
 
     public_deps += [
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.element",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.views",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.element:fuchsia.element_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.views:fuchsia.ui.views_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/scenic_cpp",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
     ]
@@ -53,6 +55,7 @@ component("platform_window") {
       "extensions/wayland_extension.cc",
       "extensions/wayland_extension.h",
     ]
+    deps += [ "//ui/base/dragdrop/mojom:mojom_headers" ]
   }
   if (is_linux || is_chromeos_ash) {
     sources += [

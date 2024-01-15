@@ -5,11 +5,15 @@
 #ifndef DEVICE_VR_PUBLIC_CPP_VR_DEVICE_PROVIDER_H_
 #define DEVICE_VR_PUBLIC_CPP_VR_DEVICE_PROVIDER_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "device/vr/public/cpp/xr_frame_sink_client.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+
+namespace content {
+class WebContents;
+}
 
 namespace device {
 
@@ -34,7 +38,12 @@ class COMPONENT_EXPORT(VR_PUBLIC_CPP) VRDeviceProvider {
 
   // If the VR API requires initialization that should happen here.
   // Note that the client must be guaranteed to outlive the device provider.
-  virtual void Initialize(VRDeviceProviderClient* client) = 0;
+  // The WebContents provided will be suitable to be used synchronously, but
+  // ownership should not be taken on it. This may also not ultimately be the
+  // WebContents creating a session.
+  // Guaranteed to only be called once.
+  virtual void Initialize(VRDeviceProviderClient* client,
+                          content::WebContents* initializing_web_contents) = 0;
 
   // Returns true if initialization is complete.
   virtual bool Initialized() = 0;

@@ -102,6 +102,7 @@ class BluetoothHidDetectorImpl
   void ProcessQueue();
   void OnPairDevice(std::unique_ptr<base::ElapsedTimer> pairing_timer,
                     bluetooth_config::mojom::PairingResult pairing_result);
+  void OnPairingTimeout();
 
   // Removes any state related to the current pairing device. This will cancel
   // pairing with the device if there is an ongoing pairing.
@@ -127,12 +128,12 @@ class BluetoothHidDetectorImpl
           base::queue<bluetooth_config::mojom::BluetoothDevicePropertiesPtr>>();
 
   // The device currently being paired with.
-  absl::optional<bluetooth_config::mojom::BluetoothDevicePropertiesPtr>
+  std::optional<bluetooth_config::mojom::BluetoothDevicePropertiesPtr>
       current_pairing_device_;
 
   // If defined, indicates that the current pairing requires an authorization
   // code that should be displayed to the user for them to enter into the HID.
-  absl::optional<BluetoothHidPairingState> current_pairing_state_;
+  std::optional<BluetoothHidPairingState> current_pairing_state_;
 
   // A timer started when the current pairing begins. If the pairing session
   // finishes, the timer's callback is invalidated. If the timer exceeds

@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_MEDIA_MEDIA_ACCESS_HANDLER_H_
 #define CHROME_BROWSER_MEDIA_MEDIA_ACCESS_HANDLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/media_request_state.h"
 #include "content/public/browser/media_stream_request.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
@@ -35,7 +35,7 @@ class MediaAccessHandler {
   // made from a drive-by page.
   virtual bool CheckMediaAccessPermission(
       content::RenderFrameHost* render_frame_host,
-      const GURL& security_origin,
+      const url::Origin& security_origin,
       blink::mojom::MediaStreamType type,
       const extensions::Extension* extension) = 0;
 

@@ -9,6 +9,7 @@
 #include <ostream>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
@@ -59,8 +60,8 @@ class CrostiniPackageNotification
   // message_center::NotificationObserver:
   void Close(bool by_user) override;
 
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override;
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override;
 
   // GuestOsRegistryService::Observer:
   void OnRegistryUpdated(
@@ -109,8 +110,8 @@ class CrostiniPackageNotification
   base::TimeTicks running_start_time_;
 
   // These notifications are owned by the package service.
-  CrostiniPackageService* package_service_;
-  Profile* profile_;
+  raw_ptr<CrostiniPackageService> package_service_;
+  raw_ptr<Profile> profile_;
   const NotificationSettings notification_settings_;
 
   std::unique_ptr<message_center::Notification> notification_;

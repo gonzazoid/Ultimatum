@@ -25,6 +25,12 @@ CastMessagePortSenderImpl::CastMessagePortSenderImpl(
 CastMessagePortSenderImpl::~CastMessagePortSenderImpl() = default;
 
 void CastMessagePortSenderImpl::MaybeClose() {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  // We may be called multiple times, but only want to close once.
+  if (is_closed_) {
+    return;
+  }
+
   if (message_port_) {
     message_port_.reset();
   }
@@ -35,15 +41,18 @@ void CastMessagePortSenderImpl::MaybeClose() {
       std::move(on_close_).Run();
     }
   }
+  is_closed_ = true;
 }
 
 void CastMessagePortSenderImpl::SetClient(
     openscreen::cast::MessagePort::Client& client) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   VLOG(2) << __func__;
   client_ = &client;
 }
 
 void CastMessagePortSenderImpl::ResetClient() {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   client_ = nullptr;
   MaybeClose();
 }
@@ -52,6 +61,7 @@ void CastMessagePortSenderImpl::PostMessage(
     const std::string& sender_id,
     const std::string& message_namespace,
     const std::string& message) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   VLOG(3) << __func__;
   if (!message_port_) {
     return;
@@ -64,7 +74,7 @@ void CastMessagePortSenderImpl::PostMessage(
 }
 
 bool CastMessagePortSenderImpl::OnMessage(
-    base::StringPiece message,
+    std::string_view message,
     std::vector<std::unique_ptr<cast_api_bindings::MessagePort>> ports) {
   VLOG(3) << __func__;
 

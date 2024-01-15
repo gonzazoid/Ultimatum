@@ -4,8 +4,10 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/common/metrics_utils.h"
 
+#include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
+#include "chrome/browser/enterprise/connectors/device_trust/common/common_types.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chromeos/ash/components/install_attributes/install_attributes.h"
@@ -44,18 +46,55 @@ DTHandshakeResult ResponseToResult(const DeviceTrustResponse& response) {
   }
 }
 
+bool ContainsPolicyLevel(const std::set<DTCPolicyLevel>& levels,
+                         const DTCPolicyLevel& level) {
+  return levels.find(level) != levels.end();
+}
+
+DTAttestationPolicyLevel GetAttestationPolicyLevel(
+    const std::set<DTCPolicyLevel>& levels) {
+  if (levels.empty()) {
+    return DTAttestationPolicyLevel::kNone;
+  }
+
+  if (ContainsPolicyLevel(levels, DTCPolicyLevel::kBrowser)) {
+    if (ContainsPolicyLevel(levels, DTCPolicyLevel::kUser)) {
+      return DTAttestationPolicyLevel::kUserAndBrowser;
+    }
+    return DTAttestationPolicyLevel::kBrowser;
+  }
+
+  if (ContainsPolicyLevel(levels, DTCPolicyLevel::kUser)) {
+    return DTAttestationPolicyLevel::kUser;
+  }
+
+  return DTAttestationPolicyLevel::kUnknown;
+}
+
 }  // namespace
 
 void LogAttestationFunnelStep(DTAttestationFunnelStep step) {
   static constexpr char kFunnelStepHistogram[] =
       "Enterprise.DeviceTrust.Attestation.Funnel";
   base::UmaHistogramEnumeration(kFunnelStepHistogram, step);
+  VLOG(1) << "Device Trust attestation step: " << static_cast<int>(step);
+}
+
+void LogAttestationPolicyLevel(const std::set<DTCPolicyLevel>& levels) {
+  static constexpr char kAttestationPolicyLevelHistogram[] =
+      "Enterprise.DeviceTrust.Attestation.PolicyLevel";
+  base::UmaHistogramEnumeration(kAttestationPolicyLevelHistogram,
+                                GetAttestationPolicyLevel(levels));
 }
 
 void LogAttestationResult(DTAttestationResult result) {
   static constexpr char kAttestationResultHistogram[] =
       "Enterprise.DeviceTrust.Attestation.Result";
   base::UmaHistogramEnumeration(kAttestationResultHistogram, result);
+  if (!IsSuccessAttestationResult(result)) {
+    LOG(ERROR) << "Device Trust attestation error: "
+               << AttestationErrorToString(result);
+  }
 }
 
 void LogDeviceTrustResponse(const DeviceTrustResponse& response,

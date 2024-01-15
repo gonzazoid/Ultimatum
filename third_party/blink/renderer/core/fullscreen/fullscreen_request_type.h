@@ -25,7 +25,7 @@ enum class FullscreenRequestType {
   // No bits set, equivalent to unprefixed with no other properties
   kNull = 0,
 
-  // True for Element.requestFullscreen(), false for
+  // False for Element.requestFullscreen(), true for
   // Element.webkitRequestFullscreen()/webkitRequestFullScreen() and
   // HTMLVideoElement.webkitEnterFullscreen()/webkitEnterFullScreen()
   kPrefixed = 1,
@@ -42,7 +42,11 @@ enum class FullscreenRequestType {
   // the status bar should stay visible.
   kForXrArWithCamera = 8,
 
-  // Explicit name for "no options" for backwards compatibility and convenience
+  // For fullscreen requests which originate from window.open().
+  // See: https://chromestatus.com/feature/6002307972464640
+  kForWindowOpen = 16,
+
+  // Convenience value for "no flags".
   kUnprefixed = kNull,
 };
 

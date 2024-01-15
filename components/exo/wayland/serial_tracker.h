@@ -9,6 +9,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 struct wl_display;
@@ -29,6 +30,8 @@ class SerialTracker {
 
     OTHER_EVENT,
   };
+
+  static std::string ToString(EventType type);
 
   explicit SerialTracker(struct wl_display* display);
   SerialTracker(const SerialTracker&) = delete;
@@ -61,8 +64,10 @@ class SerialTracker {
   // never sent or is too old.
   absl::optional<EventType> GetEventType(uint32_t serial) const;
 
+  std::string ToString() const;
+
  private:
-  struct wl_display* display_;
+  raw_ptr<struct wl_display, DanglingUntriaged> display_;
 
   // EventTypes are stored in a circular buffer, because serial numbers are
   // issued sequentially and we only want to store the most recent events.

@@ -21,6 +21,7 @@ import "components/sync/protocol/client_commands.proto";
 import "components/sync/protocol/client_debug_info.proto";
 import "components/sync/protocol/data_type_progress_marker.proto";
 import "components/sync/protocol/get_updates_caller_info.proto";
+import "components/sync/protocol/password_sharing_invitation_specifics.proto";
 import "components/sync/protocol/sync_entity.proto";
 import "components/sync/protocol/sync_enums.proto";
 import "components/sync/protocol/sharing_message_specifics.proto";
@@ -47,7 +48,8 @@ message ClientConfigParams {
   repeated int32 enabled_type_ids = 1;
 
   // Whether the PROXY_TABS proxy datatype is enabled on this client.
-  optional bool tabs_datatype_enabled = 2;
+  // Deprecated and not populated anymore since M120.
+  optional bool tabs_datatype_enabled = 2 [deprecated = true];
 
   // Whether the account(s) present in the content area's cookie jar match the
   // chrome account. If multiple accounts are present in the cookie jar, a
@@ -63,6 +65,7 @@ message ClientConfigParams {
   // set depending on interested data types of other devices, e.g. if there are
   // other devices but they are not interested in SESSION data type, and current
   // commit request contains only SESSION, it will be set to true.
+  // Introduced in M88.
   optional bool single_client = 4;
 
   // A list of FCM registration tokens which are obtained from other clients.
@@ -79,6 +82,7 @@ message ClientConfigParams {
   // could be mixed up with older clients). The server doesn't have to use this
   // field and can ignore it. Note that this list does not take into account
   // interested data types from the other clients.
+  // Introduced in M89.
   repeated string devices_fcm_registration_tokens = 5;
 
   // Similar to |single_client| but takes into account only clients with enabled
@@ -108,6 +112,18 @@ message ClientConfigParams {
   // field and can ignore it.
   // Introduced in M105.
   repeated string fcm_registration_tokens_for_interested_clients = 7;
+
+  // Similar to |single_client| but takes into account only clients which are
+  // subscribed to old invalidations (i.e. not subscribed to sync standalone
+  // invalidations). When set to true, there are no other clients subscribed to
+  // old invalidations. Note that opposed to |single_client|, this flag does not
+  // always take into account the list of interested data types (because
+  // interested data types were introduced in M89). When the list is empty, a
+  // client is considered to be subscribed to all data types. Note that "single
+  // client" is a bit misleading since this will also be true if there are no
+  // clients with old invalidations at all.
+  // Introduced in M110.
+  optional bool single_client_with_old_invalidations = 8;
 }
 
 message CommitMessage {
@@ -172,11 +188,6 @@ message GetUpdatesMessage {
   // other datatypes, so repeated usage will likely result in throttling.
   optional bool need_encryption_key = 8 [default = false];
 
-  // Whether to create the mobile bookmarks folder if it's not
-  // already created.  Set to true by all modern clients.
-  optional bool create_mobile_bookmarks_folder = 1000
-      [default = false, deprecated = true];
-
   // This value is an updated version of the GetUpdatesCallerInfo's
   // GetUpdatesSource.  It describes the reason for the GetUpdate request.
   // Introduced in M29.
@@ -195,6 +206,8 @@ message GetUpdatesMessage {
   reserved "requested_types";
   reserved 5;
   reserved "batch_size";
+  reserved 1000;
+  reserved "create_mobile_bookmarks_folder";
 }
 
 // Message from a client asking the server to clear its data. This causes the
@@ -271,8 +284,6 @@ message ClientToServerMessage {
   reserved 6;
   reserved "authenticate";
 
-  reserved 9;
-
   // Opaque server-provided ID representing an "epoch" of the server-side data.
   // Clients must hand this opaque ID back to the server as part of all requests
   // within the same sync session (i.e. for all requests to the server except
@@ -280,9 +291,9 @@ message ClientToServerMessage {
   // ClientToServerResponse.store_birthday for more details about its lifetime.
   optional string store_birthday = 7;
 
-  // The client sets this if it detects a sync issue. The server will tell it
-  // if it should perform a refresh.
-  optional bool sync_problem_detected = 8 [default = false];
+  reserved 8;
+  reserved "sync_problem_detected";
+  reserved 9;
 
   // Client side state information for debugging purpose.
   // This is only sent on the first getupdates of every sync cycle,
@@ -304,7 +315,8 @@ message ClientToServerMessage {
   // The ID that our invalidation client used to identify itself to the server.
   // Sending the ID here allows the server to not send notifications of our own
   // changes to our invalidator.
-  optional string invalidator_client_id = 14;
+  // The field was deprecated in M117 and is no longer populated.
+  optional string invalidator_client_id = 14 [deprecated = true];
 
   // Identifies this ClientToServerMessage as a clear server data request. This
   // field is present when message_contents is CLEAR_SERVER_DATA.
@@ -354,6 +366,8 @@ message CommitResponse {
     message DatatypeSpecificError {
       oneof datatype_error {
         SharingMessageCommitError sharing_message_error = 1;
+        OutgoingPasswordSharingInvitationCommitError
+            outgoing_password_sharing_invitation_error = 2;
       }
     }
     // Datatype specific error (if any).

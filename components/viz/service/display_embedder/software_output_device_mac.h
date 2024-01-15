@@ -5,11 +5,13 @@
 #ifndef COMPONENTS_VIZ_SERVICE_DISPLAY_EMBEDDER_SOFTWARE_OUTPUT_DEVICE_MAC_H_
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_EMBEDDER_SOFTWARE_OUTPUT_DEVICE_MAC_H_
 
-#include <IOSurface/IOSurface.h>
+#include <IOSurface/IOSurfaceRef.h>
 #include <list>
+#include <memory>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/viz_service_export.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -50,7 +52,7 @@ class VIZ_SERVICE_EXPORT SoftwareOutputDeviceMac : public SoftwareOutputDevice {
   struct Buffer {
     Buffer();
     ~Buffer();
-    base::ScopedCFTypeRef<IOSurfaceRef> io_surface;
+    base::apple::ScopedCFTypeRef<IOSurfaceRef> io_surface;
     // The damage of all BeginPaints since this buffer was the back buffer.
     SkRegion accumulated_damage;
   };

@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_SPEECH_EXTENSION_API_TTS_ENGINE_EXTENSION_OBSERVER_CHROMEOS_H_
 #define CHROME_BROWSER_SPEECH_EXTENSION_API_TTS_ENGINE_EXTENSION_OBSERVER_CHROMEOS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
@@ -61,6 +62,8 @@ class TtsEngineExtensionObserverChromeOS
     return &tts_service_;
   }
 
+  static void EnsureFactoryBuilt();
+
  private:
   explicit TtsEngineExtensionObserverChromeOS(Profile* profile);
   ~TtsEngineExtensionObserverChromeOS() override;
@@ -76,7 +79,7 @@ class TtsEngineExtensionObserverChromeOS
                           extensions::ExtensionRegistryObserver>
       extension_registry_observation_{this};
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   std::set<std::string> engine_extension_ids_;
 

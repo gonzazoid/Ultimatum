@@ -6,6 +6,7 @@
 
 #include "components/media_router/common/media_source.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
+#include "components/media_router/common/providers/cast/channel/cast_device_capability.h"
 #include "services/network/public/cpp/ip_address_mojom_traits.h"
 #include "services/network/public/cpp/ip_endpoint_mojom_traits.h"
 #include "url/mojom/url_gurl_mojom_traits.h"
@@ -19,9 +20,6 @@ bool StructTraits<media_router::mojom::IssueDataView, media_router::IssueInfo>::
   if (!data.ReadTitle(&out->title))
     return false;
 
-  if (!data.ReadDefaultAction(&out->default_action))
-    return false;
-
   if (!data.ReadSeverity(&out->severity))
     return false;
 
@@ -31,16 +29,11 @@ bool StructTraits<media_router::mojom::IssueDataView, media_router::IssueInfo>::
 
   out->message = message.value_or(std::string());
 
-  if (!data.ReadSecondaryActions(&out->secondary_actions))
-    return false;
-
   if (!data.ReadRouteId(&out->route_id))
     return false;
 
   if (!data.ReadSinkId(&out->sink_id))
     return false;
-
-  out->help_page_id = data.help_page_id();
 
   return true;
 }
@@ -77,20 +70,6 @@ bool StructTraits<media_router::mojom::MediaSinkDataView,
     return false;
 
   out->sink().set_name(name);
-
-  absl::optional<std::string> description;
-  if (!data.ReadDescription(&description))
-    return false;
-
-  if (description)
-    out->sink().set_description(*description);
-
-  absl::optional<std::string> domain;
-  if (!data.ReadDomain(&domain))
-    return false;
-
-  if (domain)
-    out->sink().set_domain(*domain);
 
   media_router::SinkIconType icon_type;
   if (!data.ReadIconType(&icon_type))
@@ -163,7 +142,8 @@ bool StructTraits<media_router::mojom::CastMediaSinkDataView,
   if (!data.ReadModelName(&out->model_name))
     return false;
 
-  out->capabilities = data.capabilities();
+  out->capabilities = cast_channel::CastDeviceCapabilitySet::FromEnumBitmask(
+      data.capabilities());
   out->cast_channel_id = data.cast_channel_id();
 
   return true;
@@ -211,7 +191,6 @@ bool StructTraits<media_router::mojom::MediaRouteDataView,
   out->set_controller_type(controller_type);
 
   out->set_local(data.is_local());
-  out->set_off_the_record(data.is_off_the_record());
   out->set_local_presentation(data.is_local_presentation());
   out->set_is_connecting(data.is_connecting());
 

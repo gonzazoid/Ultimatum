@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_offset_string_conversions.h"
 #include "base/values.h"
@@ -38,19 +39,6 @@ class OmniboxPedalProvider {
   // trigger. The |input| is used to determine suitability for current context.
   OmniboxPedal* FindReadyPedalMatch(const AutocompleteInput& input,
                                     const std::u16string& match_text);
-
-  // "Fake" implementation of AutocompleteProvider AddProviderInfo, though this
-  // class is not a true subclass of AutocompleteProvider. This is used
-  // for logging and reporting for our field trial.
-  void AddProviderInfo(ProvidersInfo* provider_info) const;
-
-  // "Fake" implementation of AutocompleteProvider::ResetSession. Resets the
-  // field trial flags.
-  void ResetSession();
-
-  void set_field_trial_triggered(bool triggered) {
-    field_trial_triggered_ = triggered;
-  }
 
   // Estimates memory usage for this and all contained Pedals.
   size_t EstimateMemoryUsage() const;
@@ -92,7 +80,7 @@ class OmniboxPedalProvider {
       bool match_once,
       std::u16string synonyms_csv);
 
-  AutocompleteProviderClient& client_;
+  const raw_ref<AutocompleteProviderClient> client_;
 
   // Contains mapping from well-known identifier to Pedal implementation.
   // Note: since the set is small, we use one map here for simplicity; but if
@@ -117,10 +105,6 @@ class OmniboxPedalProvider {
 
   // This holds the tokens currently being matched against.
   OmniboxPedal::TokenSequence match_tokens_;
-
-  // Whether a field trial has triggered for this query and this session
-  bool field_trial_triggered_ = false;
-  bool field_trial_triggered_in_session_ = false;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_ACTIONS_OMNIBOX_PEDAL_PROVIDER_H_

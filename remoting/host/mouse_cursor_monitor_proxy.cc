@@ -6,11 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_options.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
@@ -19,6 +18,10 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "remoting/host/chromeos/mouse_cursor_monitor_aura.h"
+#endif
+
+#if defined(REMOTING_USE_X11)
+#include "remoting/host/linux/wayland_utils.h"
 #endif
 
 namespace remoting {
@@ -55,7 +58,8 @@ class MouseCursorMonitorProxy::Core
 
 MouseCursorMonitorProxy::Core::Core(
     base::WeakPtr<MouseCursorMonitorProxy> proxy)
-    : proxy_(proxy), caller_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+    : proxy_(proxy),
+      caller_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   thread_checker_.DetachFromThread();
 }
 
@@ -69,29 +73,37 @@ void MouseCursorMonitorProxy::Core::CreateMouseCursorMonitor(
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   mouse_cursor_monitor_ = std::make_unique<MouseCursorMonitorAura>();
-#elif defined(REMOTING_USE_WAYLAND)
-  mouse_cursor_monitor_ = webrtc::MouseCursorMonitor::Create(options);
+#elif BUILDFLAG(IS_LINUX)
+  if (IsRunningWayland()) {
+    mouse_cursor_monitor_ = webrtc::MouseCursorMonitor::Create(options);
+  } else {
+    mouse_cursor_monitor_.reset(webrtc::MouseCursorMonitor::CreateForScreen(
+        options, webrtc::kFullDesktopScreenId));
+  }
 #else   // BUILDFLAG(IS_CHROMEOS_ASH)
   mouse_cursor_monitor_.reset(webrtc::MouseCursorMonitor::CreateForScreen(
       options, webrtc::kFullDesktopScreenId));
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  if (!mouse_cursor_monitor_)
+  if (!mouse_cursor_monitor_) {
     LOG(ERROR) << "Failed to initialize MouseCursorMonitor.";
+  }
 }
 
 void MouseCursorMonitorProxy::Core::Init(
     webrtc::MouseCursorMonitor::Mode mode) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (mouse_cursor_monitor_)
+  if (mouse_cursor_monitor_) {
     mouse_cursor_monitor_->Init(this, mode);
+  }
 }
 
 void MouseCursorMonitorProxy::Core::Capture() {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (mouse_cursor_monitor_)
+  if (mouse_cursor_monitor_) {
     mouse_cursor_monitor_->Capture();
+  }
 }
 
 void MouseCursorMonitorProxy::Core::SetMouseCursorMonitorForTests(

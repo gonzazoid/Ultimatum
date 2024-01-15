@@ -21,21 +21,21 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/containers/queue.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "crypto/rsa_private_key.h"
 #include "net/base/address_list.h"
@@ -46,8 +46,6 @@
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/cert/cert_status_flags.h"
-#include "net/cert/ct_policy_enforcer.h"
-#include "net/cert/ct_policy_status.h"
 #include "net/cert/mock_cert_verifier.h"
 #include "net/cert/mock_client_cert_verifier.h"
 #include "net/cert/signed_certificate_timestamp_and_status.h"
@@ -85,10 +83,13 @@ namespace net {
 
 namespace {
 
+// Client certificates are disabled on iOS.
+#if BUILDFLAG(ENABLE_CLIENT_CERTIFICATES)
 const char kClientCertFileName[] = "client_1.pem";
 const char kClientPrivateKeyFileName[] = "client_1.pk8";
 const char kWrongClientCertFileName[] = "client_2.pem";
 const char kWrongClientPrivateKeyFileName[] = "client_2.pk8";
+#endif  // BUILDFLAG(ENABLE_CLIENT_CERTIFICATES)
 
 const uint16_t kEcdheCiphers[] = {
     0xc007,  // ECDHE_ECDSA_WITH_RC4_128_SHA
@@ -103,18 +104,6 @@ const uint16_t kEcdheCiphers[] = {
     0xc030,  // ECDHE_RSA_WITH_AES_256_GCM_SHA384
     0xcca8,  // ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
     0xcca9,  // ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-};
-
-class MockCTPolicyEnforcer : public CTPolicyEnforcer {
- public:
-  MockCTPolicyEnforcer() = default;
-  ~MockCTPolicyEnforcer() override = default;
-  ct::CTPolicyCompliance CheckCompliance(
-      X509Certificate* cert,
-      const ct::SCTList& verified_scts,
-      const NetLogWithSource& net_log) override {
-    return ct::CTPolicyCompliance::CT_POLICY_COMPLIES_VIA_SCTS;
-  }
 };
 
 class FakeDataChannel {
@@ -148,7 +137,7 @@ class FakeDataChannel {
         return ERR_CONNECTION_RESET;
       write_called_after_close_ = true;
       write_callback_ = std::move(callback);
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&FakeDataChannel::DoWriteCallback,
                                     weak_factory_.GetWeakPtr()));
       return ERR_IO_PENDING;
@@ -157,7 +146,7 @@ class FakeDataChannel {
     data_.push(base::MakeRefCounted<DrainableIOBuffer>(
         base::MakeRefCounted<StringIOBuffer>(std::string(buf->data(), buf_len)),
         buf_len));
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FakeDataChannel::DoReadCallback,
                                   weak_factory_.GetWeakPtr()));
     return buf_len;
@@ -170,7 +159,7 @@ class FakeDataChannel {
   void Close() {
     closed_ = true;
     if (!read_callback_.is_null()) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&FakeDataChannel::DoReadCallback,
                                     weak_factory_.GetWeakPtr()));
     }
@@ -290,8 +279,6 @@ class FakeSocket : public StreamSocket {
 
   bool WasEverUsed() const override { return true; }
 
-  bool WasAlpnNegotiated() const override { return false; }
-
   NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
 
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
@@ -324,10 +311,8 @@ TEST(FakeSocketTest, DataTransfer) {
   const char kTestData[] = "testing123";
   const int kTestDataSize = strlen(kTestData);
   const int kReadBufSize = 1024;
-  scoped_refptr<IOBuffer> write_buf =
-      base::MakeRefCounted<StringIOBuffer>(kTestData);
-  scoped_refptr<IOBuffer> read_buf =
-      base::MakeRefCounted<IOBuffer>(kReadBufSize);
+  auto write_buf = base::MakeRefCounted<StringIOBuffer>(kTestData);
+  auto read_buf = base::MakeRefCounted<IOBufferWithSize>(kReadBufSize);
 
   // Write then read.
   int written =
@@ -367,7 +352,6 @@ class SSLServerSocketTest : public PlatformTest, public WithTaskEnvironment {
         cert_verifier_(std::make_unique<MockCertVerifier>()),
         client_cert_verifier_(std::make_unique<MockClientCertVerifier>()),
         transport_security_state_(std::make_unique<TransportSecurityState>()),
-        ct_policy_enforcer_(std::make_unique<MockCTPolicyEnforcer>()),
         ssl_client_session_cache_(std::make_unique<SSLClientSessionCache>(
             SSLClientSessionCache::Config())) {}
 
@@ -394,8 +378,8 @@ class SSLServerSocketTest : public PlatformTest, public WithTaskEnvironment {
 
     client_context_ = std::make_unique<SSLClientContext>(
         ssl_config_service_.get(), cert_verifier_.get(),
-        transport_security_state_.get(), ct_policy_enforcer_.get(),
-        ssl_client_session_cache_.get(), nullptr);
+        transport_security_state_.get(), ssl_client_session_cache_.get(),
+        nullptr);
   }
 
  protected:
@@ -439,6 +423,8 @@ class SSLServerSocketTest : public PlatformTest, public WithTaskEnvironment {
     ASSERT_TRUE(server_socket_);
   }
 
+// Client certificates are disabled on iOS.
+#if BUILDFLAG(ENABLE_CLIENT_CERTIFICATES)
   void ConfigureClientCertsForClient(const char* cert_file_name,
                                      const char* private_key_file_name) {
     scoped_refptr<X509Certificate> client_cert =
@@ -473,6 +459,7 @@ class SSLServerSocketTest : public PlatformTest, public WithTaskEnvironment {
 
     server_ssl_config_.client_cert_verifier = client_cert_verifier_.get();
   }
+#endif  // BUILDFLAG(ENABLE_CLIENT_CERTIFICATES)
 
   std::unique_ptr<crypto::RSAPrivateKey> ReadTestKey(base::StringPiece name) {
     base::FilePath certs_dir(GetTestCertsDirectory());
@@ -495,7 +482,7 @@ class SSLServerSocketTest : public PlatformTest, public WithTaskEnvironment {
         base::MakeRefCounted<StringIOBuffer>("testing123");
     scoped_refptr<DrainableIOBuffer> read_buf =
         base::MakeRefCounted<DrainableIOBuffer>(
-            base::MakeRefCounted<IOBuffer>(kReadBufSize), kReadBufSize);
+            base::MakeRefCounted<IOBufferWithSize>(kReadBufSize), kReadBufSize);
     TestCompletionCallback write_callback;
     TestCompletionCallback read_callback;
     int server_ret = server_socket_->Write(write_buf.get(), write_buf->size(),
@@ -520,7 +507,6 @@ class SSLServerSocketTest : public PlatformTest, public WithTaskEnvironment {
   std::unique_ptr<MockCertVerifier> cert_verifier_;
   std::unique_ptr<MockClientCertVerifier> client_cert_verifier_;
   std::unique_ptr<TransportSecurityState> transport_security_state_;
-  std::unique_ptr<MockCTPolicyEnforcer> ct_policy_enforcer_;
   std::unique_ptr<SSLClientSessionCache> ssl_client_session_cache_;
   std::unique_ptr<SSLClientContext> client_context_;
   std::unique_ptr<SSLServerContext> server_context_;
@@ -702,6 +688,8 @@ TEST_F(SSLServerSocketTest, HandshakeCachedContextSwitch) {
   EXPECT_EQ(ssl_server_info2.handshake_type, SSLInfo::HANDSHAKE_FULL);
 }
 
+// Client certificates are disabled on iOS.
+#if BUILDFLAG(ENABLE_CLIENT_CERTIFICATES)
 // This test executes Connect() on SSLClientSocket and Handshake() on
 // SSLServerSocket to make sure handshaking between the two sockets is
 // completed successfully, using client certificate.
@@ -916,7 +904,7 @@ TEST_F(SSLServerSocketTest, HandshakeWithWrongClientCertSupplied) {
   const int kReadBufSize = 1024;
   scoped_refptr<DrainableIOBuffer> read_buf =
       base::MakeRefCounted<DrainableIOBuffer>(
-          base::MakeRefCounted<IOBuffer>(kReadBufSize), kReadBufSize);
+          base::MakeRefCounted<IOBufferWithSize>(kReadBufSize), kReadBufSize);
   TestCompletionCallback read_callback;
   client_ret = client_socket_->Read(read_buf.get(), read_buf->BytesRemaining(),
                                     read_callback.callback());
@@ -974,7 +962,7 @@ TEST_F(SSLServerSocketTest, HandshakeWithWrongClientCertSuppliedCached) {
   const int kReadBufSize = 1024;
   scoped_refptr<DrainableIOBuffer> read_buf =
       base::MakeRefCounted<DrainableIOBuffer>(
-          base::MakeRefCounted<IOBuffer>(kReadBufSize), kReadBufSize);
+          base::MakeRefCounted<IOBufferWithSize>(kReadBufSize), kReadBufSize);
   TestCompletionCallback read_callback;
   client_ret = client_socket_->Read(read_buf.get(), read_buf->BytesRemaining(),
                                     read_callback.callback());
@@ -1003,6 +991,7 @@ TEST_F(SSLServerSocketTest, HandshakeWithWrongClientCertSuppliedCached) {
   client_ret = read_callback.GetResult(client_ret);
   EXPECT_EQ(ERR_BAD_SSL_CLIENT_AUTH_CERT, client_ret);
 }
+#endif  // BUILDFLAG(ENABLE_CLIENT_CERTIFICATES)
 
 TEST_P(SSLServerSocketReadTest, DataTransfer) {
   ASSERT_NO_FATAL_FAILURE(CreateContext());
@@ -1027,7 +1016,7 @@ TEST_P(SSLServerSocketReadTest, DataTransfer) {
       base::MakeRefCounted<StringIOBuffer>("testing123");
   scoped_refptr<DrainableIOBuffer> read_buf =
       base::MakeRefCounted<DrainableIOBuffer>(
-          base::MakeRefCounted<IOBuffer>(kReadBufSize), kReadBufSize);
+          base::MakeRefCounted<IOBufferWithSize>(kReadBufSize), kReadBufSize);
 
   // Write then read.
   TestCompletionCallback write_callback;
@@ -1143,7 +1132,7 @@ TEST_F(SSLServerSocketTest, ClientWriteAfterServerClose) {
   EXPECT_GT(client_ret, 0);
 
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(10));
   run_loop.Run();
 }
@@ -1259,6 +1248,69 @@ TEST_F(SSLServerSocketTest, HandshakeServerSSLPrivateKey) {
   EXPECT_TRUE(is_aead);
 }
 
+namespace {
+
+// Helper that wraps an underlying SSLPrivateKey to allow the test to
+// do some work immediately before a `Sign()` operation is performed.
+class SSLPrivateKeyHook : public SSLPrivateKey {
+ public:
+  SSLPrivateKeyHook(scoped_refptr<SSLPrivateKey> private_key,
+                    base::RepeatingClosure on_sign)
+      : private_key_(std::move(private_key)), on_sign_(std::move(on_sign)) {}
+
+  // SSLPrivateKey implementation.
+  std::string GetProviderName() override {
+    return private_key_->GetProviderName();
+  }
+  std::vector<uint16_t> GetAlgorithmPreferences() override {
+    return private_key_->GetAlgorithmPreferences();
+  }
+  void Sign(uint16_t algorithm,
+            base::span<const uint8_t> input,
+            SignCallback callback) override {
+    on_sign_.Run();
+    private_key_->Sign(algorithm, input, std::move(callback));
+  }
+
+ private:
+  ~SSLPrivateKeyHook() override = default;
+
+  const scoped_refptr<SSLPrivateKey> private_key_;
+  const base::RepeatingClosure on_sign_;
+};
+
+}  // namespace
+
+// Verifies that if the client disconnects while during private key signing then
+// the disconnection is correctly reported to the `Handshake()` completion
+// callback, with `ERR_CONNECTION_CLOSED`.
+// This is a regression test for crbug.com/1449461.
+TEST_F(SSLServerSocketTest,
+       HandshakeServerSSLPrivateKeyDisconnectDuringSigning_ReturnsError) {
+  auto on_sign = base::BindLambdaForTesting([&]() {
+    client_socket_->Disconnect();
+    ASSERT_FALSE(client_socket_->IsConnected());
+  });
+  server_ssl_private_key_ = base::MakeRefCounted<SSLPrivateKeyHook>(
+      std::move(server_ssl_private_key_), on_sign);
+  ASSERT_NO_FATAL_FAILURE(CreateContextSSLPrivateKey());
+  ASSERT_NO_FATAL_FAILURE(CreateSockets());
+
+  TestCompletionCallback handshake_callback;
+  int server_ret = server_socket_->Handshake(handshake_callback.callback());
+  ASSERT_EQ(server_ret, net::ERR_IO_PENDING);
+
+  TestCompletionCallback connect_callback;
+  client_socket_->Connect(connect_callback.callback());
+
+  // If resuming the handshake after private-key signing is not handled
+  // correctly as per crbug.com/1449461 then the test will hang and timeout
+  // at this point, due to the server-side completion callback not being
+  // correctly invoked.
+  server_ret = handshake_callback.GetResult(server_ret);
+  EXPECT_EQ(server_ret, net::ERR_CONNECTION_CLOSED);
+}
+
 // Verifies that non-ECDHE ciphers are disabled when using SSLPrivateKey as the
 // server key.
 TEST_F(SSLServerSocketTest, HandshakeServerSSLPrivateKeyRequireEcdhe) {
@@ -1366,7 +1418,7 @@ TEST_F(SSLServerSocketTest, CancelReadIfReady) {
   // Attempt to read from the server socket. There will not be anything to read.
   // Cancel the read immediately afterwards.
   TestCompletionCallback read_callback;
-  auto read_buf = base::MakeRefCounted<IOBuffer>(1);
+  auto read_buf = base::MakeRefCounted<IOBufferWithSize>(1);
   int read_ret =
       server_socket_->ReadIfReady(read_buf.get(), 1, read_callback.callback());
   ASSERT_THAT(read_ret, IsError(ERR_IO_PENDING));

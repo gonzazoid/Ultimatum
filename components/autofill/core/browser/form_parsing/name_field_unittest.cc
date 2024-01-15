@@ -25,11 +25,9 @@ class NameFieldTest
   NameFieldTest& operator=(const NameFieldTest&) = delete;
 
  protected:
-  std::unique_ptr<FormField> Parse(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language = LanguageCode("us")) override {
-    return NameField::Parse(scanner, page_language, GetActivePatternSource(),
-                            /*log_manager=*/nullptr);
+  std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                   AutofillScanner* scanner) override {
+    return NameField::Parse(context, scanner);
   }
 };
 

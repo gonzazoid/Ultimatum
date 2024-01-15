@@ -12,12 +12,13 @@ import androidx.annotation.Nullable;
 
 import com.google.android.material.appbar.AppBarLayout;
 
-import org.chromium.base.supplier.OneshotSupplier;
+import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.ntp.NewTabPageLaunchOrigin;
+import org.chromium.chrome.browser.tasks.tab_management.RecyclerViewPosition;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcherCustomViewManager;
-import org.chromium.chrome.features.tasks.TasksSurface;
+import org.chromium.chrome.features.tasks.TasksView;
 
 /** Interface to communicate with the start surface. */
 public interface StartSurface {
@@ -29,19 +30,13 @@ public interface StartSurface {
      */
     void initialize();
 
-    /**
-     * Called when activity is being destroyed.
-     */
+    /** Called when activity is being destroyed. */
     void destroy();
 
-    /**
-     * Show the Start surface homepage. Used only when refactor is enabled.
-     */
+    /** Show the Start surface homepage. Used only when refactor is enabled. */
     void show(boolean animate);
 
-    /**
-     * Hide the Start surface homepage. Used only when refactor is enabled.
-     */
+    /** Hide the Start surface homepage. Used only when refactor is enabled. */
     void hide(boolean animate);
 
     /**
@@ -50,9 +45,10 @@ public interface StartSurface {
      */
     void onHide();
 
-    /**
-     * Called before start surface starts hiding.
-     */
+    /** Called before the tab switcher starts showing. */
+    void beforeShowTabSwitcherView();
+
+    /** Called before tab switcher starts hiding. */
     void beforeHideTabSwitcherView();
 
     /**
@@ -96,9 +92,7 @@ public interface StartSurface {
      */
     void removeStateChangeObserver(StateObserver observer);
 
-    /**
-     * Defines an interface to pass out tab selecting event.
-     */
+    /** Defines an interface to pass out tab selecting event. */
     interface OnTabSelectingListener extends TabSwitcher.OnTabSelectingListener {}
 
     /**
@@ -107,33 +101,21 @@ public interface StartSurface {
      */
     void setOnTabSelectingListener(OnTabSelectingListener listener);
 
-    /**
-     * Called when native initialization is completed.
-     */
+    /** Called when native initialization is completed. */
     void initWithNative();
 
-    /**
-     * An observer that is notified when the tab switcher view state changes.
-     */
+    /** An observer that is notified when the tab switcher view state changes. */
     interface TabSwitcherViewObserver {
-        /**
-         * Called when tab switcher starts showing.
-         */
+        /** Called when tab switcher starts showing. */
         void startedShowing();
 
-        /**
-         * Called when tab switcher finishes showing.
-         */
+        /** Called when tab switcher finishes showing. */
         void finishedShowing();
 
-        /**
-         * Called when tab switcher starts hiding.
-         */
+        /** Called when tab switcher starts hiding. */
         void startedHiding();
 
-        /**
-         * Called when tab switcher finishes hiding.
-         */
+        /** Called when tab switcher finishes hiding. */
         void finishedHiding();
     }
 
@@ -157,7 +139,8 @@ public interface StartSurface {
      * Show the overview.
      * @param animate Whether we should animate while showing.
      */
-    // TODO(crbug.com/1315676): Decouple Start surface layout and Grid tab switcher layout.
+    // TODO(crbug.com/1315676): Rename this function once the Start surface layout and Grid tab
+    // switcher layout are decoupled.
     void showOverview(boolean animate);
 
     /**
@@ -177,16 +160,23 @@ public interface StartSurface {
     void setStartSurfaceState(@StartSurfaceState int state);
 
     /**
+     * Set the launch origin.
+     * @param launchOrigin The {@link NewTabPageLaunchOrigin} representing what launched the
+     *         start surface.
+     */
+    void setLaunchOrigin(@NewTabPageLaunchOrigin int launchOrigin);
+
+    /**
+     * Resets the scroll position. This is called when Start surface is showing but not via back
+     * operations.
+     */
+    void resetScrollPosition();
+
+    /**
      * Called by the TabSwitcherLayout when the system back button is pressed.
      * @return Whether or not the TabSwitcher consumed the event.
      */
     boolean onBackPressed();
-
-    /**
-     * Enable recording the first meaningful paint event of StartSurface.
-     * @param activityCreateTimeMs {@link SystemClock#elapsedRealtime} at activity creation.
-     */
-    void enableRecordingFirstMeaningfulPaint(long activityCreateTimeMs);
 
     /**
      * @return The current {@link StartSurfaceState}.
@@ -206,6 +196,12 @@ public interface StartSurface {
     ViewGroup getTabSwitcherContainer();
 
     /**
+     * @return The Tab switcher controller.
+     */
+    @Nullable
+    TabSwitcher.Controller getGridTabSwitcherController();
+
+    /**
      * Sets the parent view for snackbars. If <code>null</code> is given, the original parent
      * view is restored.
      *
@@ -213,10 +209,24 @@ public interface StartSurface {
      */
     void setSnackbarParentView(ViewGroup parentView);
 
+    @Deprecated
     /*
      * Returns whether start surface homepage is showing.
+     *
+     * TODO(1347089): Removes this test after the refactoring is enabled by default. This function
+     * is only used by {@link TabSwitcherAndStartSurfaceLayout} which will go away after the
+     * refactoring. This API add an additional check of {@link StartSurfaceState#SHOWING_PREVIOUS}
+     * to prevent shrinking animation when returns to Start surface from a Tab.
+     * See crbug.com/1248680.
      */
     boolean isShowingStartSurfaceHomepage();
+
+    /*
+     * Returns whether start surface homepage is showing. Compared with
+     * isShowingStartSurfaceHomepage(), this API only checks state
+     * {@link StartSurfaceState#SHOWN_HOMEPAGE} when the refactoring is disabled.
+     */
+    boolean isHomepageShown();
 
     /**
      * Returns the TabListDelegate implementation that can be used to access the Tab list of the
@@ -226,10 +236,11 @@ public interface StartSurface {
 
     /**
      * Returns the TabListDelegate implementation that can be used to access the Tab list of the
-     * carousel/single tab switcher when start surface is enabled; when start surface is disabled,
-     * null should be returned.
+     * single tab switcher when start surface is enabled; when start surface is disabled, null
+     * should be returned.
      */
-    TabSwitcher.TabListDelegate getCarouselOrSingleTabListDelegate();
+    // TODO(crbug.com/1315676): Remove this API after the refactoring is done.
+    TabSwitcher.TabListDelegate getSingleTabListDelegate();
 
     /**
      * @return {@link Supplier} that provides dialog visibility.
@@ -246,17 +257,25 @@ public interface StartSurface {
             boolean isOverviewShownOnStartup, final long activityCreationTimeMs);
 
     /**
-     * Returns the primary {@link TasksSurface} (omnibox, most visited, feed, etc.). Can be null if
+     * Returns the primary {@link TasksView} (omnibox, most visited, feed, etc.). Can be null if
      * grid tab switcher is enabled but Start surface is disabled.
      */
     @Nullable
-    TasksSurface getPrimaryTasksSurface();
+    TasksView getPrimarySurfaceView();
 
     /**
      * TODO(crbug.com/1315676): Remove this API after the bug is resolved.
      *
-     * @return A {@link OneShotSupplier <TabSwitcherCustomViewManager>}.
+     * @return A {@link ObservableSupplier <TabSwitcherCustomViewManager>}.
      */
     @NonNull
-    OneshotSupplier<TabSwitcherCustomViewManager> getTabSwitcherCustomViewManagerSupplier();
+    ObservableSupplier<TabSwitcherCustomViewManager> getTabSwitcherCustomViewManagerSupplier();
+
+    /**
+     * @return The number of elements in the tab switcher's tab list model.
+     */
+    int getTabSwitcherTabListModelSize();
+
+    /** Set the tab switcher's current RecyclerViewPosition. */
+    void setTabSwitcherRecyclerViewPosition(RecyclerViewPosition recyclerViewPosition);
 }

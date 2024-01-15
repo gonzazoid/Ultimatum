@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.uid;
 
 import static org.mockito.Mockito.doReturn;
 
-import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -26,13 +25,11 @@ import org.chromium.chrome.browser.util.HashUtil;
 @Batch(UniqueIdentificationGeneratorFactoryTest.IDENTITY_GENERATOR_BATCH_NAME)
 public class SettingsSecureBasedIdentificationGeneratorTest {
     // Tell R8 this class is spied on and shouldn't be made final.
-    @Spy
-    SettingsSecureBasedIdentificationGenerator mGenerator;
+    @Spy SettingsSecureBasedIdentificationGenerator mGenerator;
 
     @Before
     public void setUp() {
-        mGenerator = Mockito.spy(new SettingsSecureBasedIdentificationGenerator(
-                ApplicationProvider.getApplicationContext()));
+        mGenerator = Mockito.spy(new SettingsSecureBasedIdentificationGenerator());
     }
 
     @Test

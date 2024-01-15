@@ -5,10 +5,12 @@
 #include "ui/linux/fake_linux_ui.h"
 
 #include "base/time/time.h"
+#include "ui/base/ime/linux/linux_input_method_context.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/font_render_params.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
+#include "ui/linux/nav_button_provider.h"
 #include "ui/shell_dialogs/select_file_policy.h"
 
 namespace ui {
@@ -54,24 +56,24 @@ bool FakeLinuxUi::GetDisplayProperty(int id, int* result) const {
   return false;
 }
 
-SkColor FakeLinuxUi::GetFocusRingColor() const {
-  return gfx::kPlaceholderColor;
+void FakeLinuxUi::GetFocusRingColor(SkColor* color) const {
+  *color = gfx::kPlaceholderColor;
 }
 
-SkColor FakeLinuxUi::GetActiveSelectionBgColor() const {
-  return gfx::kPlaceholderColor;
+void FakeLinuxUi::GetActiveSelectionBgColor(SkColor* color) const {
+  *color = gfx::kPlaceholderColor;
 }
 
-SkColor FakeLinuxUi::GetActiveSelectionFgColor() const {
-  return gfx::kPlaceholderColor;
+void FakeLinuxUi::GetActiveSelectionFgColor(SkColor* color) const {
+  *color = gfx::kPlaceholderColor;
 }
 
-SkColor FakeLinuxUi::GetInactiveSelectionBgColor() const {
-  return gfx::kPlaceholderColor;
+void FakeLinuxUi::GetInactiveSelectionBgColor(SkColor* color) const {
+  *color = gfx::kPlaceholderColor;
 }
 
-SkColor FakeLinuxUi::GetInactiveSelectionFgColor() const {
-  return gfx::kPlaceholderColor;
+void FakeLinuxUi::GetInactiveSelectionFgColor(SkColor* color) const {
+  *color = gfx::kPlaceholderColor;
 }
 
 base::TimeDelta FakeLinuxUi::GetCursorBlinkInterval() const {
@@ -89,13 +91,11 @@ LinuxUi::WindowFrameAction FakeLinuxUi::GetWindowFrameAction(
   return WindowFrameAction::kNone;
 }
 
-float FakeLinuxUi::GetDeviceScaleFactor() const {
-  return 1.0f;
-}
-
 bool FakeLinuxUi::PreferDarkTheme() const {
   return false;
 }
+
+void FakeLinuxUi::SetDarkTheme(bool dark) {}
 
 bool FakeLinuxUi::AnimationsEnabled() const {
   return true;
@@ -111,7 +111,8 @@ std::unique_ptr<ui::NavButtonProvider> FakeLinuxUi::CreateNavButtonProvider() {
   return nullptr;
 }
 
-ui::WindowFrameProvider* FakeLinuxUi::GetWindowFrameProvider(bool solid_frame) {
+ui::WindowFrameProvider* FakeLinuxUi::GetWindowFrameProvider(bool solid_frame,
+                                                             bool tiled) {
   return nullptr;
 }
 
@@ -133,6 +134,7 @@ ui::NativeTheme* FakeLinuxUi::GetNativeTheme() const {
 
 bool FakeLinuxUi::GetTextEditCommandsForEvent(
     const ui::Event& event,
+    int text_falgs,
     std::vector<ui::TextEditCommandAuraLinux>* commands) {
   return false;
 }

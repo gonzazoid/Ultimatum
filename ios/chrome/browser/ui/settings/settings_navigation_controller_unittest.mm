@@ -5,25 +5,32 @@
 #import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
 
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 
 #import <memory>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/test/metrics/user_action_tester.h"
 #import "components/password_manager/core/browser/password_manager_test_utils.h"
-#import "components/password_manager/core/browser/test_password_store.h"
+#import "components/password_manager/core/browser/password_store/test_password_store.h"
 #import "components/search_engines/template_url_service.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state_manager.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_delegate_fake.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state_manager.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/sync/model/sync_setup_service.h"
+#import "ios/chrome/browser/sync/model/sync_setup_service_factory.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_chrome_browser_state_manager.h"
+#import "ios/testing/protocol_fake.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/gtest/include/gtest/gtest.h"
@@ -31,10 +38,6 @@
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -54,20 +57,32 @@ class SettingsNavigationControllerTest : public PlatformTest {
     test_cbs_builder.AddTestingFactory(
         ios::TemplateURLServiceFactory::GetInstance(),
         ios::TemplateURLServiceFactory::GetDefaultFactory());
-    chrome_browser_state_ = test_cbs_builder.Build();
-    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
-        chrome_browser_state_.get(),
-        std::make_unique<AuthenticationServiceDelegateFake>());
-    browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get());
-
-    mockDelegate_ = [OCMockObject
-        niceMockForProtocol:@protocol(SettingsNavigationControllerDelegate)];
-
-    IOSChromePasswordStoreFactory::GetInstance()->SetTestingFactory(
-        browser_->GetBrowserState(),
+    test_cbs_builder.AddTestingFactory(
+        IOSChromeProfilePasswordStoreFactory::GetInstance(),
         base::BindRepeating(
             &password_manager::BuildPasswordStore<
                 web::BrowserState, password_manager::TestPasswordStore>));
+    chrome_browser_state_ = test_cbs_builder.Build();
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        chrome_browser_state_.get(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
+    browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get());
+
+    NSArray<Protocol*>* command_protocols = @[
+      @protocol(ApplicationCommands), @protocol(BrowserCommands),
+      @protocol(BrowsingDataCommands), @protocol(ApplicationSettingsCommands),
+      @protocol(SnackbarCommands)
+    ];
+    fake_command_endpoint_ =
+        [[ProtocolFake alloc] initWithProtocols:command_protocols];
+    for (Protocol* protocol in command_protocols) {
+      [browser_->GetCommandDispatcher()
+          startDispatchingToTarget:fake_command_endpoint_
+                       forProtocol:protocol];
+    }
+
+    mockDelegate_ = [OCMockObject
+        niceMockForProtocol:@protocol(SettingsNavigationControllerDelegate)];
 
     TemplateURLService* template_url_service =
         ios::TemplateURLServiceFactory::GetForBrowserState(
@@ -97,12 +112,12 @@ class SettingsNavigationControllerTest : public PlatformTest {
   std::unique_ptr<Browser> browser_;
   id mockDelegate_;
   NSString* initialValueForSpdyProxyEnabled_;
+  ProtocolFake* fake_command_endpoint_;
 };
 
 // When navigation stack has more than one view controller,
 // -popViewControllerAnimated: successfully removes the top view controller.
 TEST_F(SettingsNavigationControllerTest, PopController) {
-  @autoreleasepool {
     SettingsNavigationController* settingsController =
         [SettingsNavigationController
             mainSettingsControllerForBrowser:browser_.get()
@@ -117,13 +132,11 @@ TEST_F(SettingsNavigationControllerTest, PopController) {
     EXPECT_NSEQ(viewController, poppedViewController);
     EXPECT_EQ(1U, [[settingsController viewControllers] count]);
     [settingsController cleanUpSettings];
-  }
 }
 
 // When the navigation stack has only one view controller,
 // -popViewControllerAnimated: returns false.
 TEST_F(SettingsNavigationControllerTest, DontPopRootController) {
-  @autoreleasepool {
     SettingsNavigationController* settingsController =
         [SettingsNavigationController
             mainSettingsControllerForBrowser:browser_.get()
@@ -132,7 +145,6 @@ TEST_F(SettingsNavigationControllerTest, DontPopRootController) {
 
     EXPECT_FALSE([settingsController popViewControllerAnimated:NO]);
     [settingsController cleanUpSettings];
-  }
 }
 
 // When the settings navigation stack has more than one view controller, calling
@@ -140,7 +152,6 @@ TEST_F(SettingsNavigationControllerTest, DontPopRootController) {
 // reveal the view controller underneath.
 TEST_F(SettingsNavigationControllerTest,
        PopWhenNavigationStackSizeIsGreaterThanOne) {
-  @autoreleasepool {
     SettingsNavigationController* settingsController =
         [SettingsNavigationController
             mainSettingsControllerForBrowser:browser_.get()
@@ -154,7 +165,6 @@ TEST_F(SettingsNavigationControllerTest,
     EXPECT_EQ(1U, [[settingsController viewControllers] count]);
     EXPECT_OCMOCK_VERIFY(mockDelegate_);
     [settingsController cleanUpSettings];
-  }
 }
 
 // When the settings navigation stack only has one view controller, calling
@@ -163,7 +173,6 @@ TEST_F(SettingsNavigationControllerTest,
 TEST_F(SettingsNavigationControllerTest,
        CloseSettingsWhenNavigationStackSizeIsOne) {
   base::UserActionTester user_action_tester;
-  @autoreleasepool {
     SettingsNavigationController* settingsController =
         [SettingsNavigationController
             mainSettingsControllerForBrowser:browser_.get()
@@ -175,7 +184,22 @@ TEST_F(SettingsNavigationControllerTest,
     EXPECT_EQ(1, user_action_tester.GetActionCount("MobileSettingsClose"));
     EXPECT_OCMOCK_VERIFY(mockDelegate_);
     [settingsController cleanUpSettings];
-  }
+}
+
+// Checks that metrics are correctly reported.
+TEST_F(SettingsNavigationControllerTest, Metrics) {
+  base::UserActionTester user_action_tester;
+    SettingsNavigationController* settingsController =
+        [SettingsNavigationController
+            mainSettingsControllerForBrowser:browser_.get()
+                                    delegate:mockDelegate_];
+    std::string user_action = "MobileKeyCommandClose";
+    ASSERT_EQ(user_action_tester.GetActionCount(user_action), 0);
+
+    [settingsController keyCommand_close];
+
+    EXPECT_EQ(user_action_tester.GetActionCount(user_action), 1);
+    [settingsController cleanUpSettings];
 }
 
 }  // namespace

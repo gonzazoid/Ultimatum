@@ -6,15 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "components/viz/common/features.h"
+#include "components/viz/common/performance_hint_utils.h"
 #include "components/viz/common/surfaces/surface_info.h"
 #include "components/viz/host/renderer_settings_creation.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
@@ -24,9 +24,7 @@
 namespace viz {
 
 HostFrameSinkManager::HostFrameSinkManager()
-    : enable_sync_window_destruction_(
-          features::IsSyncWindowDestructionEnabled()),
-      debug_renderer_settings_(CreateDefaultDebugRendererSettings()) {}
+    : debug_renderer_settings_(CreateDefaultDebugRendererSettings()) {}
 
 HostFrameSinkManager::~HostFrameSinkManager() = default;
 
@@ -68,7 +66,16 @@ void HostFrameSinkManager::RegisterFrameSinkId(
   DCHECK(client);
 
   FrameSinkData& data = frame_sink_data_map_[frame_sink_id];
-  DCHECK(!data.IsFrameSinkRegistered());
+  if (data.IsFrameSinkRegistered()) {
+    // Note that `report_activation` causes dispatch of OnFirstSurfaceActivation
+    // for the first frame associated with each SurfaceId. This means the new
+    // client will receive this notification (if `report_activation` is set)
+    // the next time a new SurfaceId is submitted for this `frame_sink_id`.
+    CHECK_EQ(data.report_activation, report_activation);
+    data.client = client;
+    return;
+  }
+
   DCHECK(!data.has_created_compositor_frame_sink);
   data.client = client;
   data.report_activation = report_activation;
@@ -83,11 +90,13 @@ bool HostFrameSinkManager::IsFrameSinkIdRegistered(
 }
 
 void HostFrameSinkManager::InvalidateFrameSinkId(
-    const FrameSinkId& frame_sink_id) {
+    const FrameSinkId& frame_sink_id,
+    HostFrameSinkClient* client) {
   DCHECK(frame_sink_id.is_valid());
 
   FrameSinkData& data = frame_sink_data_map_[frame_sink_id];
-  DCHECK(data.IsFrameSinkRegistered());
+  CHECK(data.IsFrameSinkRegistered());
+  CHECK_EQ(data.client, client);
 
   const bool destroy_synchronously =
       data.has_created_compositor_frame_sink && data.wait_on_destruction;
@@ -125,12 +134,17 @@ void HostFrameSinkManager::SetFrameSinkDebugLabel(
   FrameSinkData& data = frame_sink_data_map_[frame_sink_id];
   DCHECK(data.IsFrameSinkRegistered());
 
+  if (data.debug_label == debug_label) {
+    return;
+  }
+
   data.debug_label = debug_label;
   frame_sink_manager_->SetFrameSinkDebugLabel(frame_sink_id, debug_label);
 }
 
 void HostFrameSinkManager::CreateRootCompositorFrameSink(
-    mojom::RootCompositorFrameSinkParamsPtr params) {
+    mojom::RootCompositorFrameSinkParamsPtr params,
+    bool maybe_wait_on_destruction /*=true*/) {
   // Should only be used with an out-of-process display compositor.
   DCHECK(frame_sink_manager_remote_);
 
@@ -150,7 +164,7 @@ void HostFrameSinkManager::CreateRootCompositorFrameSink(
 
   // Only wait on destruction if using GPU compositing for the window.
   data.wait_on_destruction =
-      enable_sync_window_destruction_ && params->gpu_compositing;
+      maybe_wait_on_destruction && params->gpu_compositing;
 
   frame_sink_manager_->CreateRootCompositorFrameSink(std::move(params));
   display_hit_test_query_[frame_sink_id] = std::make_unique<HitTestQuery>();
@@ -227,13 +241,13 @@ bool HostFrameSinkManager::RegisterFrameSinkHierarchy(
     return false;
   }
 
+  FrameSinkData& parent_data = iter->second;
+  CHECK(!base::Contains(parent_data.children, child_frame_sink_id));
+  parent_data.children.push_back(child_frame_sink_id);
+
   // Register and store the parent.
   frame_sink_manager_->RegisterFrameSinkHierarchy(parent_frame_sink_id,
                                                   child_frame_sink_id);
-
-  FrameSinkData& parent_data = iter->second;
-  DCHECK(!base::Contains(parent_data.children, child_frame_sink_id));
-  parent_data.children.push_back(child_frame_sink_id);
 
   return true;
 }
@@ -243,8 +257,9 @@ void HostFrameSinkManager::UnregisterFrameSinkHierarchy(
     const FrameSinkId& child_frame_sink_id) {
   // Unregister and clear the stored parent.
   FrameSinkData& parent_data = frame_sink_data_map_[parent_frame_sink_id];
-  DCHECK(base::Contains(parent_data.children, child_frame_sink_id));
-  base::Erase(parent_data.children, child_frame_sink_id);
+  size_t num_erased = base::Erase(parent_data.children, child_frame_sink_id);
+  CHECK_EQ(num_erased, 1u);
+
   if (parent_data.IsEmpty())
     frame_sink_data_map_.erase(parent_frame_sink_id);
 
@@ -279,8 +294,10 @@ void HostFrameSinkManager::EvictSurfaces(
 
 void HostFrameSinkManager::RequestCopyOfOutput(
     const SurfaceId& surface_id,
-    std::unique_ptr<CopyOutputRequest> request) {
-  frame_sink_manager_->RequestCopyOfOutput(surface_id, std::move(request));
+    std::unique_ptr<CopyOutputRequest> request,
+    bool capture_exact_surface_id) {
+  frame_sink_manager_->RequestCopyOfOutput(surface_id, std::move(request),
+                                           capture_exact_surface_id);
 }
 
 void HostFrameSinkManager::Throttle(const std::vector<FrameSinkId>& ids,
@@ -390,6 +407,16 @@ void HostFrameSinkManager::OnAggregatedHitTestRegionListUpdated(
     observer.OnAggregatedHitTestRegionListUpdated(frame_sink_id, hit_test_data);
 }
 
+#if BUILDFLAG(IS_ANDROID)
+void HostFrameSinkManager::VerifyThreadIdsDoNotBelongToHost(
+    const std::vector<int32_t>& thread_ids,
+    VerifyThreadIdsDoNotBelongToHostCallback callback) {
+  base::flat_set<base::PlatformThreadId> tids(thread_ids.begin(),
+                                              thread_ids.end());
+  std::move(callback).Run(CheckThreadIdsDoNotBelongToCurrentProcess(tids));
+}
+#endif
+
 uint32_t HostFrameSinkManager::CacheBackBufferForRootSink(
     const FrameSinkId& root_sink_id) {
   auto it = frame_sink_data_map_.find(root_sink_id);
@@ -429,6 +456,19 @@ void HostFrameSinkManager::UpdateDebugRendererSettings(
     const DebugRendererSettings& debug_settings) {
   debug_renderer_settings_ = debug_settings;
   frame_sink_manager_->UpdateDebugRendererSettings(debug_settings);
+}
+
+void HostFrameSinkManager::StartFrameCountingForTest(
+    base::TimeTicks start_time,
+    base::TimeDelta bucket_size) {
+  frame_sink_manager_->StartFrameCountingForTest(start_time,  // IN-TEST
+                                                 bucket_size);
+}
+
+void HostFrameSinkManager::StopFrameCountingForTest(
+    mojom::FrameSinkManager::StopFrameCountingForTestCallback callback) {
+  frame_sink_manager_->StopFrameCountingForTest(  // IN-TEST
+      std::move(callback));
 }
 
 HostFrameSinkManager::FrameSinkData::FrameSinkData() = default;

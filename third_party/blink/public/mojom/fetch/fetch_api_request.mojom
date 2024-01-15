@@ -5,6 +5,7 @@
 module blink.mojom;
 
 import "mojo/public/mojom/base/unguessable_token.mojom";
+import "services/network/public/mojom/attribution.mojom";
 import "services/network/public/mojom/ip_address_space.mojom";
 import "services/network/public/mojom/chunked_data_pipe_getter.mojom";
 import "services/network/public/mojom/fetch_api.mojom";
@@ -52,6 +53,7 @@ enum RequestContextType {
   SCRIPT,
   SERVICE_WORKER,
   SHARED_WORKER,
+  SPECULATION_RULES,
   SUBRESOURCE,
   SUBRESOURCE_WEBBUNDLE,
   STYLE,
@@ -207,4 +209,13 @@ struct FetchAPIRequest {
   network.mojom.TrustTokenParams? trust_token_params;
 
   network.mojom.IPAddressSpace target_address_space = network.mojom.IPAddressSpace.kUnknown;
+
+  network.mojom.AttributionReportingEligibility attribution_reporting_eligibility =
+    network.mojom.AttributionReportingEligibility.kUnset;
+
+  // Used for BestEffortServiceWorker(crbug.com/1420517). Specifies the ID of
+  // the RaceNetworkRequest if the RaceNetworkRequest is triggered. This value
+  // is referred by the fetch process in blink, in order to detect and dedupe
+  // the corresponding fetch event in ServiceWorker.
+  mojo_base.mojom.UnguessableToken? service_worker_race_network_request_token;
 };

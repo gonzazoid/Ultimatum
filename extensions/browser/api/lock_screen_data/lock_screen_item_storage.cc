@@ -7,11 +7,12 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -318,9 +319,9 @@ void LockScreenItemStorage::CreateItemImpl(const std::string& extension_id,
     return;
   }
 
-  std::unique_ptr<DataItem> item =
-      CreateDataItem(base::GenerateGUID(), extension_id, context_,
-                     value_store_cache_.get(), task_runner_.get(), crypto_key_);
+  std::unique_ptr<DataItem> item = CreateDataItem(
+      base::Uuid::GenerateRandomV4().AsLowercaseString(), extension_id,
+      context_, value_store_cache_.get(), task_runner_.get(), crypto_key_);
   DataItem* item_ptr = item.get();
   item_ptr->Register(base::BindOnce(
       &LockScreenItemStorage::OnItemRegistered, weak_ptr_factory_.GetWeakPtr(),
@@ -358,10 +359,7 @@ void LockScreenItemStorage::SetItemContentImpl(const std::string& extension_id,
     return;
   }
 
-  item->Write(data,
-              base::BindOnce(&LockScreenItemStorage::OnItemWritten,
-                             weak_ptr_factory_.GetWeakPtr(),
-                             tick_clock_->NowTicks(), std::move(callback)));
+  item->Write(data, std::move(callback));
 }
 
 void LockScreenItemStorage::GetItemContentImpl(const std::string& extension_id,
@@ -373,9 +371,7 @@ void LockScreenItemStorage::GetItemContentImpl(const std::string& extension_id,
     return;
   }
 
-  item->Read(base::BindOnce(&LockScreenItemStorage::OnItemRead,
-                            weak_ptr_factory_.GetWeakPtr(),
-                            tick_clock_->NowTicks(), std::move(callback)));
+  item->Read(std::move(callback));
 }
 
 void LockScreenItemStorage::DeleteItemImpl(const std::string& extension_id,
@@ -397,16 +393,6 @@ void LockScreenItemStorage::OnItemRegistered(std::unique_ptr<DataItem> item,
                                              const base::TimeTicks& start_time,
                                              CreateCallback callback,
                                              OperationResult result) {
-  if (result == OperationResult::kSuccess) {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.OperationDuration.RegisterItem",
-        tick_clock_->NowTicks() - start_time);
-  } else {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.FailedOperationDuration.RegisterItem",
-        tick_clock_->NowTicks() - start_time);
-  }
-
   if (result != OperationResult::kSuccess) {
     std::move(callback).Run(result, nullptr);
     return;
@@ -428,55 +414,11 @@ void LockScreenItemStorage::OnItemRegistered(std::unique_ptr<DataItem> item,
   std::move(callback).Run(OperationResult::kSuccess, item_ptr);
 }
 
-void LockScreenItemStorage::OnItemWritten(const base::TimeTicks& start_time,
-                                          WriteCallback callback,
-                                          OperationResult result) {
-  if (result == OperationResult::kSuccess) {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.OperationDuration.WriteItem",
-        tick_clock_->NowTicks() - start_time);
-  } else {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.FailedOperationDuration.WriteItem",
-        tick_clock_->NowTicks() - start_time);
-  }
-
-  std::move(callback).Run(result);
-}
-
-void LockScreenItemStorage::OnItemRead(
-    const base::TimeTicks& start_time,
-    ReadCallback callback,
-    OperationResult result,
-    std::unique_ptr<std::vector<char>> data) {
-  if (result == OperationResult::kSuccess) {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.OperationDuration.ReadItem",
-        tick_clock_->NowTicks() - start_time);
-  } else {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.FailedOperationDuration.ReadItem",
-        tick_clock_->NowTicks() - start_time);
-  }
-
-  std::move(callback).Run(result, std::move(data));
-}
-
 void LockScreenItemStorage::OnItemDeleted(const std::string& extension_id,
                                           const std::string& item_id,
                                           const base::TimeTicks& start_time,
                                           WriteCallback callback,
                                           OperationResult result) {
-  if (result == OperationResult::kSuccess) {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.OperationDuration.DeleteItem",
-        tick_clock_->NowTicks() - start_time);
-  } else {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.FailedOperationDuration.DeleteItem",
-        tick_clock_->NowTicks() - start_time);
-  }
-
   data_item_cache_[extension_id].data_items.erase(item_id);
   {
     ScopedDictPrefUpdate update(local_state_, kLockScreenDataPrefKey);
@@ -537,40 +479,20 @@ void LockScreenItemStorage::OnGotExtensionItems(
     const std::string& extension_id,
     const base::TimeTicks& start_time,
     OperationResult result,
-    std::unique_ptr<base::DictionaryValue> items) {
+    base::Value::Dict items) {
   ExtensionDataMap::iterator data = data_item_cache_.find(extension_id);
   if (data == data_item_cache_.end() ||
       data->second.state != CachedExtensionData::State::kLoading) {
     return;
   }
 
-  UMA_HISTOGRAM_ENUMERATION(
-      "Apps.LockScreen.DataItemStorage.OperationResult.GetRegisteredItems",
-      result, OperationResult::kCount);
-
   if (result == OperationResult::kSuccess) {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.OperationDuration.GetRegisteredItems",
-        tick_clock_->NowTicks() - start_time);
-  } else {
-    UMA_HISTOGRAM_TIMES(
-        "Apps.LockScreen.DataItemStorage.FailedOperationDuration."
-        "GetRegisteredItems",
-        tick_clock_->NowTicks() - start_time);
-  }
-
-  if (result == OperationResult::kSuccess) {
-    for (const auto item : items->GetDict()) {
+    for (const auto item : items) {
       std::unique_ptr<DataItem> data_item = CreateDataItem(
           item.first, extension_id, context_, value_store_cache_.get(),
           task_runner_.get(), crypto_key_);
       data->second.data_items.emplace(item.first, std::move(data_item));
     }
-
-    // Record number of registered items.
-    UMA_HISTOGRAM_COUNTS_100(
-        "Apps.LockScreen.DataItemStorage.RegisteredItemsCount",
-        data->second.data_items.size());
   }
 
   {
@@ -619,9 +541,9 @@ std::set<std::string> LockScreenItemStorage::GetExtensionsWithDataItems(
     if (it.second.is_int() && (include_empty || it.second.GetInt() > 0)) {
       result.insert(it.first);
     } else if (it.second.is_dict()) {
-      const base::Value* count = it.second.FindKeyOfType(
-          kExtensionItemCountPrefKey, base::Value::Type::INTEGER);
-      if (include_empty || (count && count->GetInt() > 0)) {
+      std::optional<int> count =
+          it.second.GetDict().FindInt(kExtensionItemCountPrefKey);
+      if (include_empty || (count && *count > 0)) {
         result.insert(it.first);
       }
     }

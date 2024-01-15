@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -33,9 +33,7 @@ class ContextualSearchFieldTrial;
 
 // Handles tasks for the ContextualSearchManager including communicating with
 // the server. This class has no JNI in order to keep it separable and testable.
-class ContextualSearchDelegateImpl
-    : public ContextualSearchDelegate,
-      public base::SupportsWeakPtr<ContextualSearchDelegateImpl> {
+class ContextualSearchDelegateImpl final : public ContextualSearchDelegate {
  public:
   // Constructs a delegate that uses the given url_loader_factory and
   // template_url_service for all contextual search requests.
@@ -169,10 +167,12 @@ class ContextualSearchDelegateImpl
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
   // Holds the TemplateURLService. Not owned.
-  raw_ptr<TemplateURLService> template_url_service_;
+  raw_ptr<TemplateURLService, DanglingUntriaged> template_url_service_;
 
   // The field trial helper instance, always set up by the constructor.
   std::unique_ptr<ContextualSearchFieldTrial> field_trial_;
+
+  base::WeakPtrFactory<ContextualSearchDelegateImpl> weak_ptr_factory_{this};
 };
 
 #endif  // COMPONENTS_CONTEXTUAL_SEARCH_CORE_BROWSER_CONTEXTUAL_SEARCH_DELEGATE_IMPL_H_

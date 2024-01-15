@@ -5,11 +5,11 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_TEST_ENROLLMENT_UI_MIXIN_H_
 #define CHROME_BROWSER_ASH_LOGIN_TEST_ENROLLMENT_UI_MIXIN_H_
 
+#include <optional>
 #include <string>
 
 #include "chrome/browser/ash/login/enrollment/enrollment_screen.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace test {
@@ -63,6 +63,7 @@ class EnrollmentUIMixin : public InProcessBrowserTestMixin {
 
   void ExpectErrorMessage(int error_message_id, bool can_retry);
   void RetryAfterError();
+  void RetryAndWaitForSigninStep();
   void CancelAfterError();
 
   // Fills out the UI with device attribute information and submits it.
@@ -88,32 +89,13 @@ class EnrollmentUIMixin : public InProcessBrowserTestMixin {
   EnrollmentScreen::Result WaitForScreenExit();
 
  private:
-  absl::optional<EnrollmentScreen::Result> screen_result_;
-  absl::optional<base::RunLoop> screen_exit_waiter_;
+  std::optional<EnrollmentScreen::Result> screen_result_;
+  std::optional<base::RunLoop> screen_exit_waiter_;
 
   void HandleScreenExit(EnrollmentScreen::Result result);
 };
 
 }  // namespace test
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace test {
-using ::ash::test::EnrollmentUIMixin;
-namespace ui {
-using ::ash::test::ui::kEnrollmentStepADJoin;
-using ::ash::test::ui::kEnrollmentStepDeviceAttributes;
-using ::ash::test::ui::kEnrollmentStepError;
-using ::ash::test::ui::kEnrollmentStepSignin;
-using ::ash::test::ui::kEnrollmentStepSuccess;
-}  // namespace ui
-namespace values {
-using ::ash::test::values::kAssetId;
-using ::ash::test::values::kLocation;
-}  // namespace values
-}  // namespace test
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_ENROLLMENT_UI_MIXIN_H_

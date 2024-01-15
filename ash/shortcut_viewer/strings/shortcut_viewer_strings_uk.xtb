@@ -75,7 +75,7 @@
 <translation id="3622741593887335780">Наближає (коли ввімкнено закріплену лупу чи лупу для всього екрана)</translation>
 <translation id="3633851487917460983">Відкрити буфер обміну</translation>
 <translation id="3649256019230929621">Згорнути вікно</translation>
-<translation id="3655154169297074232">Вкладки та вікна</translation>
+<translation id="3655154169297074232">Вкладки й вікна</translation>
 <translation id="3668361878347172356">Повторити останню дію</translation>
 <translation id="3710784500737332588">Відкрити довідковий центр</translation>
 <translation id="3720939646656082033">Відкрити посилання в новій вкладці та перейти на неї</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Виділити адресний рядок</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> або <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Режим огляду</translation>
+<translation id="4275283744500212192">Відкрити варіанти макета вікна</translation>
 <translation id="4382340674111381977">Повернутися до попередньої сторінки</translation>
 <translation id="4458670250301149821">Перемістити значок додатка в папку чи з папки в сітці додатків</translation>
 <translation id="4472417192667361414">Налаштування системи й екрана</translation>
@@ -163,7 +164,7 @@
 <translation id="6755851152783057058">Вибрати останній використаний метод введення</translation>
 <translation id="6760706756348334449">Зменшити гучність</translation>
 <translation id="6941333068993625698">Надіслати відгук</translation>
-<translation id="6981982820502123353">Спеціальні можливості</translation>
+<translation id="6981982820502123353">Доступність</translation>
 <translation id="7020813747703216897">Відповідних результатів не знайдено</translation>
 <translation id="7025325401470358758">Наступна панель</translation>
 <translation id="7076878155205969899">Вимикає звук</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">Перетягніть посилання на порожнє місце на панелі вкладок</translation>
 <translation id="8389638407792712197">Відкрити нове вікно</translation>
 <translation id="8429696719963529183">Натиснути функціональну клавішу (від F1 до F12)</translation>
+<translation id="8539396513118402548">Список швидких команд</translation>
 <translation id="85690795166292698">Відкрити посилання в новій вкладці</translation>
 <translation id="8609384513243082612">Відкрити нову вкладку</translation>
 <translation id="8644639153978066712">Показати сховані файли в додатку Файли</translation>
@@ -212,7 +214,7 @@
 <translation id="906458777597946297">Розгорнути вікно</translation>
 <translation id="9072882242928138086"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="SHIFT" />, тоді <ph name="LEFT" /> або <ph name="RIGHT" /> або <ph name="UP" /> або <ph name="DOWN" /></translation>
 <translation id="9091855755813503076">Перейти на початок рядка</translation>
-<translation id="9106898733795143799">Сторінка та веб-переглядач</translation>
+<translation id="9106898733795143799">Сторінка й веб-переглядач</translation>
 <translation id="9162942292291287644">Немає результатів пошуку за запитом "<ph name="QUERY" />"</translation>
 <translation id="9179672198516322668">Популярні комбінації клавіш</translation>
 <translation id="93603345341560814">Натиснути <ph name="SHIFT" /> і посилання</translation>

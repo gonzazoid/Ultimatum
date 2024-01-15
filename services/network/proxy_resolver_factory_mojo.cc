@@ -10,9 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -50,11 +49,11 @@ namespace network {
 
 namespace {
 
-base::Value NetLogErrorParams(int line_number, const std::string& message) {
-  base::Value::Dict dict;
-  dict.Set("line_number", line_number);
-  dict.Set("message", message);
-  return base::Value(std::move(dict));
+base::Value::Dict NetLogErrorParams(int line_number,
+                                    const std::string& message) {
+  return base::Value::Dict()
+      .Set("line_number", line_number)
+      .Set("message", message);
 }
 
 // A mixin that forwards logging to (Bound)NetLog and ProxyResolverErrorObserver
@@ -108,9 +107,9 @@ class ClientMixin : public ClientInterface {
       mojo::PendingRemote<proxy_resolver::mojom::HostResolverRequestClient>
           client) override {
     if (operation == net::ProxyResolveDnsOperation::MY_IP_ADDRESS) {
-      my_ip_address_impl_ex_->AddRequest(std::move(client));
-    } else if (operation == net::ProxyResolveDnsOperation::MY_IP_ADDRESS_EX) {
       my_ip_address_impl_->AddRequest(std::move(client));
+    } else if (operation == net::ProxyResolveDnsOperation::MY_IP_ADDRESS_EX) {
+      my_ip_address_impl_ex_->AddRequest(std::move(client));
     } else {
       bool is_ex = operation == net::ProxyResolveDnsOperation::DNS_RESOLVE_EX;
       // Request was for dnsResolve() or dnsResolveEx().
@@ -120,6 +119,11 @@ class ClientMixin : public ClientInterface {
   }
 
  protected:
+  void DetachMixin() {
+    error_observer_ = nullptr;
+    net_log_ = nullptr;
+  }
+
   // TODO(eroman): This doesn't track being blocked in myIpAddress(Ex) handler.
   bool dns_request_in_progress() {
     return host_resolver_.request_in_progress();
@@ -133,9 +137,8 @@ class ClientMixin : public ClientInterface {
   std::unique_ptr<MyIpAddressImpl> my_ip_address_impl_;
   std::unique_ptr<MyIpAddressImpl> my_ip_address_impl_ex_;
 
-  const raw_ptr<net::ProxyResolverErrorObserver, DanglingUntriaged>
-      error_observer_;
-  const raw_ptr<net::NetLog> net_log_;
+  raw_ptr<net::ProxyResolverErrorObserver> error_observer_;
+  raw_ptr<net::NetLog> net_log_;
   const net::NetLogWithSource net_log_with_source_;
 
   base::WeakPtrFactory<ClientMixin> weak_ptr_factory_{this};
@@ -269,6 +272,9 @@ void ProxyResolverMojo::Job::CompleteRequest(int result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   net::CompletionOnceCallback callback = std::move(callback_);
   receiver_.reset();
+  // Clear raw pointers from the mojo mixin --- the callback may clean up stuff,
+  // and it can't be invoked without `receiver_` connected anyway.
+  DetachMixin();
   std::move(callback).Run(result);
 }
 
@@ -279,7 +285,7 @@ void ProxyResolverMojo::Job::ReportResult(int32_t error,
 
   if (error == net::OK) {
     *results_ = proxy_info;
-    DVLOG(1) << "Servers: " << results_->ToPacString();
+    DVLOG(1) << "Servers: " << results_->ToDebugString();
   }
 
   CompleteRequest(error);
@@ -363,6 +369,11 @@ class ProxyResolverFactoryMojo::Job
                        base::Unretained(this)));
   }
 
+  ~Job() override {
+    // Clear pointer to `error_observer_` our base class stores.
+    DetachMixin();
+  }
+
   void OnMojoDisconnect() { ReportResult(net::ERR_PAC_SCRIPT_TERMINATED); }
 
  private:
@@ -370,6 +381,10 @@ class ProxyResolverFactoryMojo::Job
     // Prevent any other messages arriving unexpectedly, in the case |this|
     // isn't destroyed immediately.
     receiver_.reset();
+
+    // Clear raw pointers from the mojo mixin --- the callback may clean up
+    // stuff, and it can't be invoked without `receiver_` connected anyway.
+    DetachMixin();
 
     if (error == net::OK) {
       *resolver_ = std::make_unique<ProxyResolverMojo>(

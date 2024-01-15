@@ -6,7 +6,6 @@
 #include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/public/web/web_script_source.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
@@ -15,6 +14,8 @@
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
+#include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 
 using testing::_;
 
@@ -68,15 +69,18 @@ TEST_F(SchedulingAffectingFeaturesTest, WebSocketIsTracked) {
       "</script>");
 
   EXPECT_FALSE(GetPageScheduler()->OptedOutFromAggressiveThrottlingForTest());
-  EXPECT_THAT(
-      GetNonTrivialMainFrameFeatures(),
-      testing::UnorderedElementsAre(SchedulingPolicy::Feature::kWebSocket));
+  EXPECT_THAT(GetNonTrivialMainFrameFeatures(),
+              testing::UnorderedElementsAre(
+                  SchedulingPolicy::Feature::kWebSocket,
+                  SchedulingPolicy::Feature::kWebSocketSticky));
+  test::RunPendingTasks();
 
   MainFrame().ExecuteScript(WebScriptSource(WebString("socket.close();")));
 
   EXPECT_FALSE(GetPageScheduler()->OptedOutFromAggressiveThrottlingForTest());
   EXPECT_THAT(GetNonTrivialMainFrameFeatures(),
-              testing::UnorderedElementsAre());
+              testing::UnorderedElementsAre(
+                  SchedulingPolicy::Feature::kWebSocketSticky));
 }
 
 TEST_F(SchedulingAffectingFeaturesTest, CacheControl_NoStore) {

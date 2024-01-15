@@ -7,9 +7,8 @@
  * automatically remove WebUI listeners when detached.
  */
 
-import {dedupingMixin, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {addWebUIListener, removeWebUIListener, WebUIListener} from '../js/cr.m.js';
+import {addWebUiListener, removeWebUiListener, WebUiListener} from '//resources/js/cr.js';
+import {dedupingMixin, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 type Constructor<T> = new (...args: any[]) => T;
 
@@ -22,25 +21,25 @@ export const WebUiListenerMixin = dedupingMixin(
          * Holds WebUI listeners that need to be removed when this element is
          * destroyed.
          */
-        private webUIListeners_: WebUIListener[] = [];
+        private webUiListeners_: WebUiListener[] = [];
 
         /**
          * Adds a WebUI listener and registers it for automatic removal when
          * this element is detached. Note: Do not use this method if you intend
-         * to remove this listener manually (use addWebUIListener directly
+         * to remove this listener manually (use addWebUiListener directly
          * instead).
          *
          * @param eventName The event to listen to.
          * @param callback The callback run when the event is fired.
          */
-        addWebUIListener(eventName: string, callback: Function) {
-          this.webUIListeners_.push(addWebUIListener(eventName, callback));
+        addWebUiListener(eventName: string, callback: Function) {
+          this.webUiListeners_.push(addWebUiListener(eventName, callback));
         }
 
         override disconnectedCallback() {
           super.disconnectedCallback();
-          while (this.webUIListeners_.length > 0) {
-            removeWebUIListener(this.webUIListeners_.pop()!);
+          while (this.webUiListeners_.length > 0) {
+            removeWebUiListener(this.webUiListeners_.pop()!);
           }
         }
       }
@@ -48,5 +47,5 @@ export const WebUiListenerMixin = dedupingMixin(
     });
 
 export interface WebUiListenerMixinInterface {
-  addWebUIListener(eventName: string, callback: Function): void;
+  addWebUiListener(eventName: string, callback: Function): void;
 }

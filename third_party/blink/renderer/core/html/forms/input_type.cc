@@ -32,6 +32,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/debug/crash_logging.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
@@ -76,6 +77,56 @@
 #include "third_party/blink/renderer/platform/text/text_break_iterator.h"
 
 namespace blink {
+
+const AtomicString& InputType::TypeToString(Type type) {
+  switch (type) {
+    case Type::kButton:
+      return input_type_names::kButton;
+    case Type::kCheckbox:
+      return input_type_names::kCheckbox;
+    case Type::kColor:
+      return input_type_names::kColor;
+    case Type::kDate:
+      return input_type_names::kDate;
+    case Type::kDateTimeLocal:
+      return input_type_names::kDatetimeLocal;
+    case Type::kEmail:
+      return input_type_names::kEmail;
+    case Type::kFile:
+      return input_type_names::kFile;
+    case Type::kHidden:
+      return input_type_names::kHidden;
+    case Type::kImage:
+      return input_type_names::kImage;
+    case Type::kMonth:
+      return input_type_names::kMonth;
+    case Type::kNumber:
+      return input_type_names::kNumber;
+    case Type::kPassword:
+      return input_type_names::kPassword;
+    case Type::kRadio:
+      return input_type_names::kRadio;
+    case Type::kRange:
+      return input_type_names::kRange;
+    case Type::kReset:
+      return input_type_names::kReset;
+    case Type::kSearch:
+      return input_type_names::kSearch;
+    case Type::kSubmit:
+      return input_type_names::kSubmit;
+    case Type::kTelephone:
+      return input_type_names::kTel;
+    case Type::kText:
+      return input_type_names::kText;
+    case Type::kTime:
+      return input_type_names::kTime;
+    case Type::kURL:
+      return input_type_names::kUrl;
+    case Type::kWeek:
+      return input_type_names::kWeek;
+  }
+  NOTREACHED_NORETURN();
+}
 
 // Listed once to avoid any discrepancy between InputType::Create and
 // InputType::NormalizeTypeName.
@@ -140,7 +191,15 @@ void InputType::Trace(Visitor* visitor) const {
   visitor->Trace(element_);
 }
 
+const AtomicString& InputType::FormControlTypeAsString() const {
+  return TypeToString(type_);
+}
+
 bool InputType::IsTextField() const {
+  return false;
+}
+
+bool InputType::IsAutoDirectionalityFormAssociated() const {
   return false;
 }
 
@@ -218,7 +277,17 @@ bool InputType::IsFormDataAppendable() const {
 }
 
 void InputType::AppendToFormData(FormData& form_data) const {
-  form_data.AppendFromElement(GetElement().GetName(), GetElement().Value());
+  if (!IsSubmitInputType()) {
+    form_data.AppendFromElement(GetElement().GetName(), GetElement().Value());
+  }
+  if (IsAutoDirectionalityFormAssociated()) {
+    const AtomicString& dirname_attr_value =
+        GetElement().FastGetAttribute(html_names::kDirnameAttr);
+    if (!dirname_attr_value.IsNull()) {
+      form_data.AppendFromElement(dirname_attr_value,
+                                  GetElement().DirectionForFormData());
+    }
+  }
 }
 
 String InputType::ResultForDialogSubmit() const {
@@ -498,12 +567,26 @@ String InputType::ValueNotEqualText(const Decimal& value) const {
 }
 
 String InputType::RangeOverflowText(const Decimal&) const {
-  NOTREACHED();
+  static auto* input_type = base::debug::AllocateCrashKeyString(
+      "input-type", base::debug::CrashKeySize::Size32);
+  base::debug::SetCrashKeyString(
+      input_type, FormControlTypeAsString().GetString().Utf8().c_str());
+  NOTREACHED() << "This should not get called. Check if input type '"
+               << FormControlTypeAsString()
+               << "' should have a RangeOverflowText implementation."
+               << "See crbug.com/1423280";
   return String();
 }
 
 String InputType::RangeUnderflowText(const Decimal&) const {
-  NOTREACHED();
+  static auto* input_type = base::debug::AllocateCrashKeyString(
+      "input-type", base::debug::CrashKeySize::Size32);
+  base::debug::SetCrashKeyString(
+      input_type, FormControlTypeAsString().GetString().Utf8().c_str());
+  NOTREACHED() << "This should not get called. Check if input type '"
+               << FormControlTypeAsString()
+               << "' should have a RangeUnderflowText implementation."
+               << "See crbug.com/1423280";
   return String();
 }
 
@@ -514,7 +597,14 @@ String InputType::ReversedRangeOutOfRangeText(const Decimal&,
 }
 
 String InputType::RangeInvalidText(const Decimal&, const Decimal&) const {
-  NOTREACHED();
+  static auto* input_type = base::debug::AllocateCrashKeyString(
+      "input-type", base::debug::CrashKeySize::Size32);
+  base::debug::SetCrashKeyString(
+      input_type, FormControlTypeAsString().GetString().Utf8().c_str());
+  NOTREACHED() << "This should not get called. Check if input type '"
+               << FormControlTypeAsString()
+               << "' should have a RangeInvalidText implementation."
+               << "See crbug.com/1474270";
   return String();
 }
 
@@ -690,8 +780,12 @@ bool InputType::CanSetStringValue() const {
   return false;
 }
 
-bool InputType::IsKeyboardFocusable() const {
-  return GetElement().IsBaseElementFocusable();
+bool InputType::IsKeyboardFocusable(
+    Element::UpdateBehavior update_behavior) const {
+  // Inputs are always keyboard focusable if they are focusable at all,
+  // and don't have a negative tabindex set.
+  return GetElement().IsFocusable(update_behavior) &&
+         GetElement().tabIndex() >= 0;
 }
 
 bool InputType::MayTriggerVirtualKeyboard() const {
@@ -871,9 +965,9 @@ bool InputType::IsSteppable() const {
   return false;
 }
 
-HTMLFormControlElement::PopupTriggerSupport InputType::SupportsPopupTriggering()
-    const {
-  return HTMLFormControlElement::PopupTriggerSupport::kNone;
+HTMLFormControlElement::PopoverTriggerSupport
+InputType::SupportsPopoverTriggering() const {
+  return HTMLFormControlElement::PopoverTriggerSupport::kNone;
 }
 
 bool InputType::ShouldRespectHeightAndWidthAttributes() {
@@ -909,10 +1003,6 @@ Decimal InputType::FindClosestTickMarkValue(const Decimal&) {
 
 bool InputType::HasLegalLinkAttribute(const QualifiedName&) const {
   return false;
-}
-
-const QualifiedName& InputType::SubResourceAttributeName() const {
-  return QualifiedName::Null();
 }
 
 void InputType::CopyNonAttributeProperties(const HTMLInputElement&) {}

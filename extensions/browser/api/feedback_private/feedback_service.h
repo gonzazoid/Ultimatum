@@ -5,7 +5,8 @@
 #ifndef EXTENSIONS_BROWSER_API_FEEDBACK_PRIVATE_FEEDBACK_SERVICE_H_
 #define EXTENSIONS_BROWSER_API_FEEDBACK_PRIVATE_FEEDBACK_SERVICE_H_
 
-#include "base/bind.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_base.h"
@@ -34,6 +35,10 @@ struct FeedbackParams {
   bool send_histograms = false;
   // If true, include bluetooth logs in the feedback.
   bool send_bluetooth_logs = false;
+  // If true, include wifi debug logs in the feedback.
+  bool send_wifi_debug_logs = false;
+  // If true, include autofill metadata in the feedback.
+  bool send_autofill_metadata = false;
   // The time when the feedback form submission was received by the backend.
   base::TimeTicks form_submit_time;
 };
@@ -54,17 +59,25 @@ class FeedbackService : public base::RefCountedThreadSafe<FeedbackService> {
   FeedbackService(const FeedbackService&) = delete;
   FeedbackService& operator=(const FeedbackService&) = delete;
 
-  virtual void SendFeedback(const FeedbackParams& params,
-                            scoped_refptr<feedback::FeedbackData> feedback_data,
-                            SendFeedbackCallback callback);
+  virtual void RedactThenSendFeedback(
+      const FeedbackParams& params,
+      scoped_refptr<feedback::FeedbackData> feedback_data,
+      SendFeedbackCallback callback);
 
   FeedbackPrivateDelegate* GetFeedbackPrivateDelegate() { return delegate_; }
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void SetLogFilesRootPathForTesting(const base::FilePath& log_file_root);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
  protected:
   virtual ~FeedbackService();
 
  private:
   friend class base::RefCountedThreadSafe<FeedbackService>;
+
+  void SendFeedback(const FeedbackParams& params,
+                    scoped_refptr<feedback::FeedbackData> feedback_data,
+                    SendFeedbackCallback callback);
 
   void FetchAttachedFileAndScreenshot(
       scoped_refptr<feedback::FeedbackData> feedback_data,
@@ -93,12 +106,15 @@ class FeedbackService : public base::RefCountedThreadSafe<FeedbackService> {
       const FeedbackParams& params,
       scoped_refptr<feedback::FeedbackData> feedback_data,
       const std::string& compressed_histograms);
+  // Root file path for log files. It can be overwritten for testing purpose.
+  base::FilePath log_file_root_{FILE_PATH_LITERAL("/var/log/")};
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   void OnAllLogsFetched(const FeedbackParams& params,
                         scoped_refptr<feedback::FeedbackData> feedback_data);
 
-  raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context_;
-  raw_ptr<FeedbackPrivateDelegate, DanglingUntriaged> delegate_;
+  raw_ptr<content::BrowserContext, AcrossTasksDanglingUntriaged>
+      browser_context_;
+  raw_ptr<FeedbackPrivateDelegate, AcrossTasksDanglingUntriaged> delegate_;
 };
 
 }  // namespace extensions

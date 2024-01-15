@@ -12,6 +12,10 @@ TestSystemTrayClient::~TestSystemTrayClient() = default;
 
 void TestSystemTrayClient::ShowSettings(int64_t display_id) {}
 
+void TestSystemTrayClient::ShowAccountSettings() {
+  show_account_settings_count_++;
+}
+
 void TestSystemTrayClient::ShowBluetoothSettings() {
   show_bluetooth_settings_count_++;
 }
@@ -22,7 +26,7 @@ void TestSystemTrayClient::ShowBluetoothSettings(const std::string& device_id) {
 }
 
 void TestSystemTrayClient::ShowBluetoothPairingDialog(
-    absl::optional<base::StringPiece> device_address) {
+    std::optional<base::StringPiece> device_address) {
   show_bluetooth_pairing_dialog_count_++;
 }
 
@@ -60,6 +64,10 @@ void TestSystemTrayClient::ShowAccessibilityHelp() {}
 
 void TestSystemTrayClient::ShowAccessibilitySettings() {}
 
+void TestSystemTrayClient::ShowColorCorrectionSettings() {
+  show_color_correction_settings_count_++;
+}
+
 void TestSystemTrayClient::ShowGestureEducationHelp() {}
 
 void TestSystemTrayClient::ShowPaletteHelp() {}
@@ -68,6 +76,14 @@ void TestSystemTrayClient::ShowPaletteSettings() {}
 
 void TestSystemTrayClient::ShowPrivacyAndSecuritySettings() {
   show_os_settings_privacy_and_security_count_++;
+}
+
+void TestSystemTrayClient::ShowPrivacyHubSettings() {
+  show_os_settings_privacy_hub_count_++;
+}
+
+void TestSystemTrayClient::ShowSpeakOnMuteDetectionSettings() {
+  show_speak_on_mute_detection_count_++;
 }
 
 void TestSystemTrayClient::ShowSmartPrivacySettings() {
@@ -90,14 +106,29 @@ void TestSystemTrayClient::ShowSettingsSimUnlock() {
   ++show_sim_unlock_settings_count_;
 }
 
-void TestSystemTrayClient::ShowThirdPartyVpnCreate(
-    const std::string& extension_id) {}
+void TestSystemTrayClient::ShowApnSubpage(const std::string& network_id) {
+  ++show_apn_subpage_count_;
+  last_apn_subpage_network_id_ = network_id;
+}
 
-void TestSystemTrayClient::ShowArcVpnCreate(const std::string& app_id) {}
+void TestSystemTrayClient::ShowThirdPartyVpnCreate(
+    const std::string& extension_id) {
+  ++show_third_party_vpn_create_count_;
+  last_third_party_vpn_extension_id_ = extension_id;
+}
+
+void TestSystemTrayClient::ShowArcVpnCreate(const std::string& app_id) {
+  ++show_arc_vpn_create_count_;
+  last_arc_vpn_app_id_ = app_id;
+}
 
 void TestSystemTrayClient::ShowNetworkSettings(const std::string& network_id) {
   show_network_settings_count_++;
   last_network_settings_network_id_ = network_id;
+}
+
+void TestSystemTrayClient::ShowHotspotSubpage() {
+  show_hotspot_subpage_count_++;
 }
 
 void TestSystemTrayClient::ShowMultiDeviceSetup() {
@@ -112,14 +143,21 @@ void TestSystemTrayClient::SetLocaleAndExit(
     const std::string& locale_iso_code) {}
 
 void TestSystemTrayClient::ShowAccessCodeCastingDialog(
-    AccessCodeCastDialogOpenLocation open_location) {}
+    AccessCodeCastDialogOpenLocation open_location) {
+  ++show_access_code_casting_dialog_count_;
+}
 
 void TestSystemTrayClient::ShowCalendarEvent(
-    const absl::optional<GURL>& event_url,
+    const std::optional<GURL>& event_url,
     const base::Time& date,
     bool& opened_pwa,
     GURL& final_event_url) {
   show_calendar_event_count_++;
+}
+
+void TestSystemTrayClient::ShowVideoConference(
+    const GURL& video_conference_url) {
+  show_video_conference_count_++;
 }
 
 void TestSystemTrayClient::ShowChannelInfoAdditionalDetails() {
@@ -130,8 +168,34 @@ void TestSystemTrayClient::ShowChannelInfoGiveFeedback() {
   ++show_channel_info_give_feedback_count_;
 }
 
+void TestSystemTrayClient::ShowAudioSettings() {
+  ++show_audio_settings_count_;
+}
+
 bool TestSystemTrayClient::IsUserFeedbackEnabled() {
   return user_feedback_enabled_;
+}
+
+void TestSystemTrayClient::ShowEolInfoPage() {
+  ++show_eol_info_count_;
+}
+
+void TestSystemTrayClient::RecordEolNoticeShown() {}
+
+void TestSystemTrayClient::ShowGraphicsTabletSettings() {
+  ++show_graphics_tablet_settings_count_;
+}
+
+void TestSystemTrayClient::ShowMouseSettings() {
+  ++show_mouse_settings_count_;
+}
+
+void TestSystemTrayClient::ShowTouchpadSettings() {
+  ++show_touchpad_settings_count_;
+}
+
+void TestSystemTrayClient::ShowRemapKeysSubpage(int device_id) {
+  ++show_remap_keys_subpage_count_;
 }
 
 }  // namespace ash

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "cc/cc_export.h"
 
@@ -18,24 +19,24 @@ class Task;
 
 // This class provides states to manage life cycle of a task and given below is
 // how it is used by TaskGraphWorkQueue to process life cycle of a task.
-// Task is in NEW state when it is created. When task is added to
-// |ready_to_run_tasks| then its state is changed to SCHEDULED. Task can be
-// canceled from NEW state (not yet scheduled to run) or from SCHEDULED state,
-// when new ScheduleTasks() is triggered and its state is changed to CANCELED.
+// Task is in kNew state when it is created. When task is added to
+// |ready_to_run_tasks| then its state is changed to kScheduled. Task can be
+// canceled from kNew state (not yet scheduled to run) or from kScheduled state,
+// when new ScheduleTasks() is triggered and its state is changed to kCanceled.
 // When task is about to run it is added |running_tasks| and its state is
-// changed to RUNNING. Once task finishes running, its state is changed to
-// FINISHED. Both CANCELED and FINISHED tasks are added to |completed_tasks|.
+// changed to kRunning. Once task finishes running, its state is changed to
+// kFinished. Both kCanceled and kFinished tasks are added to |completed_tasks|.
 //                ╔═════╗
-//         +------║ NEW ║------+
+//         +------║ kNew║------+
 //         |      ╚═════╝      |
 //         v                   v
 //   ┌───────────┐        ╔══════════╗
-//   │ SCHEDULED │------> ║ CANCELED ║
+//   │ kScheduled│------> ║ kCanceled║
 //   └───────────┘        ╚══════════╝
 //         |
 //         v
 //    ┌─────────┐         ╔══════════╗
-//    │ RUNNING │-------> ║ FINISHED ║
+//    │ kRunning│-------> ║ kFinished║
 //    └─────────┘         ╚══════════╝
 class CC_EXPORT TaskState {
  public:
@@ -49,7 +50,7 @@ class CC_EXPORT TaskState {
   // only from TaskGraphWorkQueue where the life cycle of a task is decided or
   // from tests. These functions are not thread-safe. Caller is responsible for
   // thread safety.
-  void Reset();  // Sets state to NEW.
+  void Reset();  // Sets state to kNew.
   void DidSchedule();
   void DidStart();
   void DidFinish();
@@ -64,7 +65,13 @@ class CC_EXPORT TaskState {
   TaskState();
   ~TaskState();
 
-  enum class Value : uint16_t { NEW, SCHEDULED, RUNNING, FINISHED, CANCELED };
+  enum class Value : uint16_t {
+    kNew,
+    kScheduled,
+    kRunning,
+    kFinished,
+    kCanceled
+  };
 
   Value value_;
 };
@@ -80,6 +87,11 @@ class CC_EXPORT Task : public base::RefCountedThreadSafe<Task> {
   void set_frame_number(int64_t frame_number) { frame_number_ = frame_number; }
   int64_t frame_number() { return frame_number_; }
 
+  // Unique trace flow id for the given task, used to connect the places where
+  // the task was posted from and the task itself.
+  uint64_t trace_task_id() { return trace_task_id_; }
+  void set_trace_task_id(uint64_t id) { trace_task_id_ = id; }
+
   // Subclasses should implement this method. RunOnWorkerThread may be called
   // on any thread, and subclasses are responsible for locking and thread
   // safety.
@@ -94,6 +106,7 @@ class CC_EXPORT Task : public base::RefCountedThreadSafe<Task> {
  private:
   TaskState state_;
   int64_t frame_number_ = -1;
+  int64_t trace_task_id_ = 0;
 };
 
 // A task dependency graph describes the order in which to execute a set
@@ -108,7 +121,7 @@ struct CC_EXPORT TaskGraph {
   struct CC_EXPORT Node {
     typedef std::vector<Node> Vector;
 
-    Node(scoped_refptr<Task> task,
+    Node(scoped_refptr<Task> new_task,
          uint16_t category,
          uint16_t priority,
          uint32_t dependencies);
@@ -131,8 +144,8 @@ struct CC_EXPORT TaskGraph {
     Edge(const Task* task, Task* dependent)
         : task(task), dependent(dependent) {}
 
-    const Task* task;
-    Task* dependent;
+    raw_ptr<const Task, AcrossTasksDanglingUntriaged> task;
+    raw_ptr<Task, AcrossTasksDanglingUntriaged> dependent;
   };
 
   TaskGraph();

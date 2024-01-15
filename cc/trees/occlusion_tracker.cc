@@ -59,30 +59,33 @@ void OcclusionTracker::EnterLayer(
     const EffectTreeLayerListIterator::Position& iterator) {
   RenderSurfaceImpl* render_target = iterator.target_render_surface;
 
-  if (iterator.state == EffectTreeLayerListIterator::State::LAYER)
+  if (iterator.state == EffectTreeLayerListIterator::State::kLayer) {
     EnterRenderTarget(render_target);
-  else if (iterator.state == EffectTreeLayerListIterator::State::TARGET_SURFACE)
+  } else if (iterator.state ==
+             EffectTreeLayerListIterator::State::kTargetSurface) {
     FinishedRenderTarget(render_target);
+  }
 }
 
 void OcclusionTracker::LeaveLayer(
     const EffectTreeLayerListIterator::Position& iterator) {
   RenderSurfaceImpl* render_target = iterator.target_render_surface;
 
-  if (iterator.state == EffectTreeLayerListIterator::State::LAYER)
+  if (iterator.state == EffectTreeLayerListIterator::State::kLayer) {
     MarkOccludedBehindLayer(iterator.current_layer);
+  }
   // TODO(danakj): This should be done when entering the contributing surface,
   // but in a way that the surface's own occlusion won't occlude itself.
   else if (iterator.state ==
-           EffectTreeLayerListIterator::State::CONTRIBUTING_SURFACE)
+           EffectTreeLayerListIterator::State::kContributingSurface) {
     LeaveToRenderTarget(render_target);
+  }
 }
 
 static gfx::Rect ScreenSpaceClipRectInTargetSurface(
     const RenderSurfaceImpl* target_surface,
     const gfx::Rect& screen_space_clip_rect) {
-  gfx::Transform inverse_screen_space_transform(
-      gfx::Transform::kSkipInitialization);
+  gfx::Transform inverse_screen_space_transform;
   if (!target_surface->screen_space_transform().GetInverse(
           &inverse_screen_space_transform))
     return target_surface->content_rect();
@@ -147,9 +150,7 @@ void OcclusionTracker::EnterRenderTarget(
       new_occlusion_immune_ancestor &&
       new_occlusion_immune_ancestor != old_occlusion_immune_ancestor;
 
-  gfx::Transform inverse_new_target_screen_space_transform(
-      // Note carefully, not used if screen space transform is uninvertible.
-      gfx::Transform::kSkipInitialization);
+  gfx::Transform inverse_new_target_screen_space_transform;
   bool have_transform_from_screen_to_new_target =
       new_target_surface->screen_space_transform().GetInverse(
           &inverse_new_target_screen_space_transform);
@@ -205,7 +206,7 @@ void OcclusionTracker::FinishedRenderTarget(
       !IsOccludingBlendMode(finished_target_surface->BlendMode()) ||
       target_is_only_for_copy_request_or_force_render_surface ||
       finished_target_surface->Filters().HasFilterThatAffectsOpacity() ||
-      finished_target_surface->GetDocumentTransitionSharedElementId().valid()) {
+      finished_target_surface->GetViewTransitionElementId().valid()) {
     stack_.back().occlusion_from_outside_target.Clear();
     stack_.back().occlusion_from_inside_target.Clear();
   }
@@ -228,12 +229,8 @@ static void ReduceOcclusionBelowSurface(
     return;
 
   gfx::Rect affected_area_in_target =
-      contributing_surface->BackdropFilters().HasFilterOfType(
-          FilterOperation::FilterType::BLUR)
-          ? contributing_surface->BackdropFilters().MapRect(target_rect,
-                                                            SkMatrix::I())
-          : contributing_surface->BackdropFilters().MapRectReverse(
-                target_rect, SkMatrix::I());
+      contributing_surface->BackdropFilters().MapRectReverse(target_rect,
+                                                             SkMatrix::I());
   // Unite target_rect because we only care about positive outsets.
   affected_area_in_target.Union(target_rect);
 

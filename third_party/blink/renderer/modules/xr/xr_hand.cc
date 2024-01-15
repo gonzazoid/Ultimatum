@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ref.h"
 #include "third_party/blink/renderer/modules/xr/xr_input_source.h"
 #include "third_party/blink/renderer/modules/xr/xr_joint_space.h"
 #include "third_party/blink/renderer/modules/xr/xr_utils.h"
@@ -14,44 +15,46 @@
 namespace blink {
 
 class XRHandIterationSource final
-    : public PairIterable<String,
-                          IDLString,
-                          Member<XRJointSpace>,
-                          XRJointSpace>::IterationSource {
+    : public PairSyncIterable<XRHand>::IterationSource {
  public:
-  explicit XRHandIterationSource(HeapVector<Member<XRJointSpace>>& joints)
-      : index_(0), joints_(joints) {}
+  explicit XRHandIterationSource(HeapVector<Member<XRJointSpace>>& joints,
+                                 XRHand* xr_hand)
+      : index_(0), joints_(joints), xr_hand_(xr_hand) {}
 
-  bool Next(ScriptState*,
-            String& key,
-            Member<XRJointSpace>& value,
-            ExceptionState&) override {
-    if (index_ >= joints_.size())
+  bool FetchNextItem(ScriptState*,
+                     V8XRHandJoint& key,
+                     XRJointSpace*& value,
+                     ExceptionState&) override {
+    if (index_ >= V8XRHandJoint::kEnumSize)
       return false;
 
-    key = MojomHandJointToString(
-        static_cast<device::mojom::blink::XRHandJoint>(index_));
-    value = joints_.at(index_);
+    key = V8XRHandJoint(static_cast<V8XRHandJoint::Enum>(index_));
+    value = joints_->at(index_);
     index_++;
     return true;
   }
 
   void Trace(Visitor* visitor) const override {
-    PairIterable<String, IDLString, Member<XRJointSpace>,
-                 XRJointSpace>::IterationSource::Trace(visitor);
+    visitor->Trace(xr_hand_);
+    PairSyncIterable<XRHand>::IterationSource::Trace(visitor);
   }
 
  private:
   wtf_size_t index_;
-  const HeapVector<Member<XRJointSpace>>& joints_;
+  const raw_ref<const HeapVector<Member<XRJointSpace>>, ExperimentalRenderer>
+      joints_;
+  Member<XRHand> xr_hand_;  // Owner object of `joints_`
 };
 
 XRHand::XRHand(const device::mojom::blink::XRHandTrackingData* state,
                XRInputSource* input_source)
     : joints_(kNumJoints) {
+  DCHECK_EQ(kNumJoints, V8XRHandJoint::kEnumSize);
   for (unsigned i = 0; i < kNumJoints; ++i) {
     device::mojom::blink::XRHandJoint joint =
         static_cast<device::mojom::blink::XRHandJoint>(i);
+    DCHECK_EQ(MojomHandJointToString(joint),
+              V8XRHandJoint(static_cast<V8XRHandJoint::Enum>(i)).AsString());
     joints_[i] = MakeGarbageCollected<XRJointSpace>(
         this, input_source->session(), nullptr, joint, 0.0f,
         input_source->xr_handedness());
@@ -60,10 +63,9 @@ XRHand::XRHand(const device::mojom::blink::XRHandTrackingData* state,
   updateFromHandTrackingData(state, input_source);
 }
 
-XRJointSpace* XRHand::get(const String& key) {
-  device::mojom::blink::XRHandJoint joint = StringToMojomHandJoint(key);
-  unsigned index = static_cast<unsigned>(joint);
-  return joints_[index];
+XRJointSpace* XRHand::get(const V8XRHandJoint& key) const {
+  wtf_size_t index = static_cast<wtf_size_t>(key.AsEnum());
+  return joints_[index].Get();
 }
 
 void XRHand::updateFromHandTrackingData(
@@ -75,11 +77,11 @@ void XRHand::updateFromHandTrackingData(
   for (const auto& hand_joint : state->hand_joint_data) {
     unsigned joint_index = static_cast<unsigned>(hand_joint->joint);
 
-    std::unique_ptr<TransformationMatrix> mojo_from_joint = nullptr;
+    std::unique_ptr<gfx::Transform> mojo_from_joint = nullptr;
     if (hand_joint->mojo_from_joint) {
       new_poses = true;
       mojo_from_joint =
-          std::make_unique<TransformationMatrix>(*hand_joint->mojo_from_joint);
+          std::make_unique<gfx::Transform>(*hand_joint->mojo_from_joint);
     } else {
       new_missing_poses = true;
     }
@@ -98,10 +100,10 @@ void XRHand::updateFromHandTrackingData(
   }
 }
 
-XRHand::IterationSource* XRHand::StartIteration(
+XRHand::IterationSource* XRHand::CreateIterationSource(
     ScriptState* script_state,
     ExceptionState& exception_state) {
-  return MakeGarbageCollected<XRHandIterationSource>(joints_);
+  return MakeGarbageCollected<XRHandIterationSource>(joints_, this);
 }
 
 void XRHand::Trace(Visitor* visitor) const {

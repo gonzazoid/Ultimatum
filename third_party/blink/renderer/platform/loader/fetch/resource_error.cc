@@ -200,8 +200,10 @@ bool ResourceError::IsTrustTokenCacheHit() const {
 bool ResourceError::IsUnactionableTrustTokensStatus() const {
   return IsTrustTokenCacheHit() ||
          (error_code_ == net::ERR_TRUST_TOKEN_OPERATION_FAILED &&
-          trust_token_operation_error_ ==
-              network::mojom::TrustTokenOperationStatus::kUnavailable);
+          (trust_token_operation_error_ ==
+               network::mojom::TrustTokenOperationStatus::kUnavailable ||
+           trust_token_operation_error_ ==
+               network::mojom::TrustTokenOperationStatus::kUnauthorized));
 }
 
 bool ResourceError::IsCacheMiss() const {
@@ -210,6 +212,10 @@ bool ResourceError::IsCacheMiss() const {
 
 bool ResourceError::WasBlockedByResponse() const {
   return error_code_ == net::ERR_BLOCKED_BY_RESPONSE;
+}
+
+bool ResourceError::WasBlockedByORB() const {
+  return error_code_ == net::ERR_BLOCKED_BY_ORB;
 }
 
 namespace {
@@ -315,6 +321,9 @@ String DescriptionForBlockedByClientOrResponse(
       break;
     case ResourceRequestBlockedReason::kConversionRequest:
       detail = "ConversionRequest";
+      break;
+    case ResourceRequestBlockedReason::kSupervisedUserUrlBlocked:
+      detail = "SupervisedUserUrlBlocked";
       break;
   }
   return WebString::FromASCII(net::ErrorToString(error) + "." + detail);

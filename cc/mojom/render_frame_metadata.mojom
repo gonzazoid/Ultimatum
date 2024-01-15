@@ -4,7 +4,6 @@
 
 module cc.mojom;
 
-import "mojo/public/mojom/base/time.mojom";
 import "services/viz/public/mojom/compositing/local_surface_id.mojom";
 import "services/viz/public/mojom/compositing/selection.mojom";
 import "services/viz/public/mojom/compositing/vertical_scroll_direction.mojom";
@@ -81,62 +80,75 @@ struct RenderFrameMetadata {
 
   viz.mojom.VerticalScrollDirection new_vertical_scroll_direction;
 
-  // The cumulative time spent performing visual updates since the last commit.
-  // Tracked for all `local_surface_id` before this one.
-  mojo_base.mojom.TimeDelta previous_surfaces_visual_update_duration;
-
-  // The cumulative time spend performing visual updates for the current
-  // `local_surface_id` since the last commit.
-  mojo_base.mojom.TimeDelta current_surface_visual_update_duration;
-
-  // Used to position Android bottom bar, whose position is computed by the
+  // Used to position Android/iOS bottom bar, whose position is computed by the
   // renderer compositor.
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   float bottom_controls_height;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   float bottom_controls_shown_ratio;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   float top_controls_min_height_offset;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   float bottom_controls_min_height_offset;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   float min_page_scale_factor;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   float max_page_scale_factor;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   bool root_overflow_y_hidden;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   gfx.mojom.SizeF scrollable_viewport_size;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   gfx.mojom.SizeF root_layer_size;
 
-  [EnableIf=is_android]
+  [EnableIf=is_android_or_ios]
   bool has_transparent_background;
+};
+
+[EnableIf=is_android]
+enum RootScrollOffsetUpdateFrequency {
+  // The client will only be notified of root scroll offsets via the regular
+  // RenderFrameMetadata updates. This is the default behavior. See
+  // `RenderFrameMetadataObserverImpl::ShouldSendRenderFrameMetadata()` for
+  // details on when the RenderFrameMetadata updates occur.
+  kNone,
+  // The client will also be notified with an updated root scroll offset when a
+  // scroll ends in addition to offset updates sent via RenderFrameMetadata
+  // updates.
+  kOnScrollEnd,
+  // The client will be notified of any change to the root scroll offset.
+  kAllUpdates,
 };
 
 // This interface is provided by the renderer. It impacts the frequency with
 // which a fully populated RenderFrameMetadata object (above) is delivered to
 // the RenderFrameMetadataObserverClient.
 interface RenderFrameMetadataObserver {
-  // When |enabled| is set to true this notifies the client of any change to the
-  // root scroll offset. The client is notified in two ways:
+  // When `frequency` is set to a value other than `kNone`, this notifies the
+  // client of changes to the root scroll offset. The client is notified in
+  // several ways:
   // . OnRenderFrameMetadataChanged(), is sent if the client would normally be
-  //   notified of the frame (for example, the viewport changed).
+  //   notified of the frame (for example, the viewport changed). If `frequency`
+  //   is `kNone`, the client is not sent `OnRootScrollOffsetChanged()`.
   // . OnRootScrollOffsetChanged() if the client is not notified of the frame
-  //   change, but the root scroll offset has changed. In other words, if this
-  //   is sent, *only* the root-scroll-offset has changed and the client is not
-  //   sent a OnRenderFrameMetadataChanged() for the frame.
+  //   change:
+  //   - but `frequency` is `kOnScrollEnd` and a scroll has just ended.
+  //   - but `frequency` is `kAllUpdates` and the scroll offset has changed.
+  //
+  // In other words, if this is sent, *only* the root-scroll-offset has changed
+  // and the client is not sent a OnRenderFrameMetadataChanged() for the frame.
   // Used on Android for acessibility and GestureListenerManager.
   [EnableIf=is_android]
-  ReportAllRootScrolls(bool enabled);
+  UpdateRootScrollOffsetUpdateFrequency(
+      RootScrollOffsetUpdateFrequency frequency);
 
   // When |enabled| is set to true, this will send RenderFrameMetadata to
   // the RenderFrameMetadataObserverClient for all frames. Only used for
@@ -148,7 +160,7 @@ interface RenderFrameMetadataObserver {
 // RenderFrameMetadata. It can be notified of all frame submissions, via
 // RenderFrameMetadataObserver::ReportAllFrameSubmissionsForTesting, or of
 // additional frames with root scroll offset changes via
-// RenderFrameMetadataObserver::ReportAllRootScrolls.
+// RenderFrameMetadataObserver::UpdateRootScrollOffsetUpdateFrequency.
 interface RenderFrameMetadataObserverClient {
   // Notified when RenderFrameMetadata has changed.
   OnRenderFrameMetadataChanged(uint32 frame_token,
@@ -157,8 +169,7 @@ interface RenderFrameMetadataObserverClient {
   // Notified on all frame submissions.
   OnFrameSubmissionForTesting(uint32 frame_token);
 
-  // Only called if ReportAllRootScrolls(true) has been called. See
-  // ReportAllRootScrolls() for details.
+  // Only called if UpdateRootScrollOffsetUpdateFrequency() has been called.
   [EnableIf=is_android]
   OnRootScrollOffsetChanged(gfx.mojom.PointF root_scroll_offset);
 };

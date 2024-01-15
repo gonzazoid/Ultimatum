@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,73 +12,46 @@ import '//resources/polymer/v3_0/iron-media-query/iron-media-query.js';
 import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import './base_page.js';
 
-import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
-import {Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ESimProfileProperties, ESimProfileRemote} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
+import {I18nBehavior, I18nBehaviorInterface} from '//resources/ash/common/i18n_behavior.js';
+import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {mojoString16ToString} from 'chrome://resources/js/mojo_type_util.js';
+import {ESimProfileProperties} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
 
 import {getTemplate} from './confirmation_code_page.html.js';
 
-Polymer({
-  _template: getTemplate(),
-  is: 'confirmation-code-page',
+/**
+ * @constructor
+ * @extends {PolymerElement}
+ * @implements {I18nBehaviorInterface}
+ */
+const ConfirmationCodePageElementBase =
+    mixinBehaviors([I18nBehavior], PolymerElement);
 
-  behaviors: [I18nBehavior],
+/** @polymer */
+class ConfirmationCodePageElement extends ConfirmationCodePageElementBase {
+  static get is() {
+    return 'confirmation-code-page';
+  }
 
-  properties: {
-    /**
-     * @type {?ESimProfileRemote}
-     */
-    profile: {
-      type: Object,
-      observer: 'onProfileChanged_',
-    },
+  static get template() {
+    return getTemplate();
+  }
 
-    confirmationCode: {
-      type: String,
-      notify: true,
-    },
+  static get properties() {
+    return {
+      /**
+       * @type {?ESimProfileProperties}
+       */
+      profileProperties: Object,
 
-    showError: {
-      type: Boolean,
-    },
+      confirmationCode: {
+        type: String,
+        notify: true,
+      },
 
-    /**
-     * Indicates the UI is busy with an operation and cannot be interacted with.
-     */
-    showBusy: {
-      type: Boolean,
-      value: false,
-    },
-
-    /**
-     * @type {?ESimProfileProperties}
-     * @private
-     */
-    profileProperties_: {
-      type: Object,
-      value: null,
-    },
-
-    /**
-     * @type {boolean}
-     * @private
-     */
-    isDarkModeActive_: {
-      type: Boolean,
-      value: false,
-    },
-  },
-
-  /** @private */
-  onProfileChanged_() {
-    if (!this.profile) {
-      this.profileProperties_ = null;
-      return;
-    }
-    this.profile.getProperties().then(response => {
-      this.profileProperties_ = response.properties;
-    });
-  },
+      showError: Boolean,
+    };
+  }
 
   /**
    * @param {KeyboardEvent} e
@@ -86,37 +59,25 @@ Polymer({
    */
   onKeyDown_(e) {
     if (e.key === 'Enter') {
-      this.fire('forward-navigation-requested');
+      this.dispatchEvent(new CustomEvent('forward-navigation-requested', {
+        bubbles: true,
+        composed: true,
+      }));
     }
     e.stopPropagation();
-  },
-
-  /**
-   * @return {boolean}
-   * @private
-   */
-  shouldShowProfileDetails_() {
-    return !!this.profile;
-  },
+  }
 
   /**
    * @return {string}
    * @private
    */
   getProfileName_() {
-    if (!this.profileProperties_) {
+    if (!this.profileProperties) {
       return '';
     }
-    return String.fromCharCode(...this.profileProperties_.name.data);
-  },
+    return mojoString16ToString(this.profileProperties.name);
+  }
+}
 
-  /**
-   * @return {string}
-   * @private
-   */
-  getProfileImage_() {
-    return this.isDarkModeActive_ ?
-        'chrome://resources/ash/common/cellular_setup/default_esim_profile_dark.svg' :
-        'chrome://resources/ash/common/cellular_setup/default_esim_profile.svg';
-  },
-});
+customElements.define(
+    ConfirmationCodePageElement.is, ConfirmationCodePageElement);

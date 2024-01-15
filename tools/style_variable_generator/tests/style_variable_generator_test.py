@@ -21,13 +21,12 @@ import unittest
 
 print(os.path.join(os.path.dirname(__file__)))
 
-
 class BaseStyleGeneratorTest:
     def assertEqualToFile(self, value, filename):
         path = os.path.join(os.path.dirname(__file__), 'goldens', filename)
         with open(path, 'r') as f:
             self.maxDiff = None
-            self.assertEqual(value, f.read())
+            self.assertEqual(value, f.read(), f'Did not match golden: {path}')
 
     def AddJSONFilesToModel(self, files):
         relpaths_from_cwd = [
@@ -122,6 +121,12 @@ class CSSStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
         self.AddJSONFilesToModel(
             ['colors_ref_tokens_test.json5', 'colors_sys_tokens_test.json5'])
         expected_file_name = 'colors_tokens_test_expected.css'
+        self.assertEqualToFile(self.generator.Render(), expected_file_name)
+
+    def testLegacyColors(self):
+        self.generator = CSSStyleGenerator()
+        self.AddJSONFilesToModel(['legacy_mappings_test.json5'])
+        expected_file_name = 'legacy_mappings_test_expected.css'
         self.assertEqualToFile(self.generator.Render(), expected_file_name)
 
 
@@ -273,6 +278,18 @@ class BlendStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
         self.AddJSONFilesToModel(
             ['colors_test_palette.json5', 'blend_colors_test.json5'])
         self.expected_output_file = 'blend_colors_test_expected.css'
+
+    def testColorTestJSON(self):
+        self.assertEqualToFile(self.generator.Render(),
+                               self.expected_output_file)
+
+
+class PreBlendStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
+    def setUp(self):
+        self.generator = CSSStyleGenerator()
+        self.AddJSONFilesToModel(
+            ['colors_test_palette.json5', 'preblend_colors_test.json5'])
+        self.expected_output_file = 'preblend_colors_test_expected.css'
 
     def testColorTestJSON(self):
         self.assertEqualToFile(self.generator.Render(),

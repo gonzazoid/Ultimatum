@@ -6,21 +6,24 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/trace_event/trace_event.h"
 #include "base/unguessable_token.h"
+#include "base/version.h"
 #include "components/paint_preview/common/capture_result.h"
 #include "components/paint_preview/common/mojom/paint_preview_recorder.mojom-forward.h"
 #include "components/paint_preview/common/proto_validator.h"
 #include "components/paint_preview/common/version.h"
+#include "components/version_info/version_info.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
@@ -129,8 +132,10 @@ mojom::PaintPreviewCaptureParamsPtr CreateRecordingRequestParams(
 
 // Unconditionally create or overwrite a file for writing.
 base::File CreateOrOverwriteFileForWriting(const base::FilePath& path) {
-  base::File file(path,
-                  base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+  uint32_t flags = base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE;
+  // This file will be passed to an untrusted process.
+  flags = base::File::AddFlagsForPassingToUntrustedProcess(flags);
+  base::File file(path, flags);
   return file;
 }
 
@@ -307,12 +312,20 @@ void PaintPreviewClient::CapturePaintPreview(
   metadata->set_url(url.spec());
   metadata->set_version(kPaintPreviewVersion);
   auto* chromeVersion = metadata->mutable_chrome_version();
-  chromeVersion->set_major(CHROME_VERSION_MAJOR);
-  chromeVersion->set_minor(CHROME_VERSION_MINOR);
-  chromeVersion->set_build(CHROME_VERSION_BUILD);
-  chromeVersion->set_patch(CHROME_VERSION_PATCH);
+  const auto& current_chrome_version = version_info::GetVersion();
+  chromeVersion->set_major(current_chrome_version.components()[0]);
+  chromeVersion->set_minor(current_chrome_version.components()[1]);
+  chromeVersion->set_build(current_chrome_version.components()[2]);
+  chromeVersion->set_patch(current_chrome_version.components()[3]);
   document_data.callback = std::move(callback);
+
+  // Ensure the frame is not under prerendering state as the UKM cannot be
+  // recorded while prerendering. Current callers pass frames that are under
+  // the primary page.
+  CHECK(!render_frame_host->IsInLifecycleState(
+      content::RenderFrameHost::LifecycleState::kPrerendering));
   document_data.source_id = render_frame_host->GetPageUkmSourceId();
+
   document_data.accepted_tokens = CreateAcceptedTokenList(render_frame_host);
   auto token = render_frame_host->GetEmbeddingToken();
   if (token.has_value()) {
@@ -584,7 +597,7 @@ void PaintPreviewClient::OnFinished(
     // At a minimum one frame was captured successfully, it is up to the
     // caller to decide if a partial success is acceptable based on what is
     // contained in the proto.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(document_data->callback), guid,
                        document_data->had_error
@@ -593,7 +606,7 @@ void PaintPreviewClient::OnFinished(
                        std::move(*document_data).IntoCaptureResult()));
   } else {
     // A proto could not be created indicating all frames failed to capture.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(document_data->callback), guid,
                                   mojom::PaintPreviewStatus::kFailed, nullptr));
   }

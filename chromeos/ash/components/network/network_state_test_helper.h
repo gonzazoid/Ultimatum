@@ -5,12 +5,32 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_STATE_TEST_HELPER_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_STATE_TEST_HELPER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/network/network_test_helper_base.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
 
 namespace ash {
 
 class NetworkDeviceHandler;
 class NetworkStateHandler;
+class TechnologyStateController;
+
+// Fake TechnologyStateController::HotspotOperationDelegate implementation for
+// tests.
+class FakeHotspotOperationDelegate
+    : public TechnologyStateController::HotspotOperationDelegate {
+ public:
+  FakeHotspotOperationDelegate(
+      TechnologyStateController* technology_state_controller);
+  ~FakeHotspotOperationDelegate() override;
+
+  // TechnologyStateController::HotspotOperationDelegate:
+  void PrepareEnableWifi(
+      base::OnceCallback<void(bool prepare_success)> callback) override;
+
+ private:
+  raw_ptr<TechnologyStateController> technology_state_controller_ = nullptr;
+};
 
 // Helper class for tests that use NetworkStateHandler and/or
 // NetworkDeviceHandler. Handles initialization and shutdown of Shill and Hermes
@@ -44,16 +64,18 @@ class NetworkStateTestHelper : public NetworkTestHelperBase {
     return network_device_handler_.get();
   }
 
+  TechnologyStateController* technology_state_controller() {
+    return technology_state_controller_.get();
+  }
+
  private:
   std::unique_ptr<NetworkStateHandler> network_state_handler_;
   std::unique_ptr<NetworkDeviceHandler> network_device_handler_;
+  std::unique_ptr<TechnologyStateController> technology_state_controller_;
+  std::unique_ptr<FakeHotspotOperationDelegate>
+      fake_hotspot_operation_delegate_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::NetworkStateTestHelper;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_STATE_TEST_HELPER_H_

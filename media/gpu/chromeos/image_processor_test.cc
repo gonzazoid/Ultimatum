@@ -2,32 +2,67 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <sys/mman.h>
+#include <sys/poll.h>
 #include <memory>
 #include <string>
 #include <tuple>
+#include <vector>
 
+#include "base/bits.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/hash/md5.h"
+#include "base/rand_util.h"
+#include "base/run_loop.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_suite.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "gpu/command_buffer/common/mailbox.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
+#include "gpu/command_buffer/service/shared_context_state.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_frame_layout.h"
 #include "media/base/video_types.h"
+#include "media/gpu/chromeos/chromeos_compressed_gpu_memory_buffer_video_frame_utils.h"
 #include "media/gpu/chromeos/fourcc.h"
 #include "media/gpu/chromeos/image_processor.h"
+#include "media/gpu/chromeos/image_processor_backend.h"
+#include "media/gpu/chromeos/image_processor_factory.h"
+#include "media/gpu/chromeos/platform_video_frame_utils.h"
+#include "media/gpu/chromeos/vulkan_image_processor.h"
 #include "media/gpu/test/image.h"
 #include "media/gpu/test/image_processor/image_processor_client.h"
 #include "media/gpu/test/video_frame_file_writer.h"
 #include "media/gpu/test/video_frame_helpers.h"
 #include "media/gpu/test/video_frame_validator.h"
 #include "media/gpu/test/video_test_environment.h"
+#include "media/gpu/video_frame_mapper.h"
+#include "media/gpu/video_frame_mapper_factory.h"
 #include "mojo/core/embedder/embedder.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/libyuv/include/libyuv.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gl/gl_bindings.h"
+#include "ui/gl/gl_context.h"
+#include "ui/gl/gl_surface.h"
+#include "ui/gl/gl_utils.h"
+#include "ui/gl/init/gl_factory.h"
+#include "ui/gl/test/gl_surface_test_support.h"
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/ozone/public/ozone_platform.h"
+#endif
+
+#define MM21_TILE_WIDTH 32
+#define MM21_TILE_HEIGHT 16
 
 namespace media {
 namespace {
@@ -91,13 +126,11 @@ const base::FilePath::CharType* kI420Image360P =
 const base::FilePath::CharType* kI420Image270P =
     FILE_PATH_LITERAL("puppets-480x270.i420.yuv");
 
-// Files for rotation test.
-const base::FilePath::CharType* kNV12Image90 =
-    FILE_PATH_LITERAL("bear_192x320_90.nv12.yuv");
-const base::FilePath::CharType* kNV12Image180 =
-    FILE_PATH_LITERAL("bear_320x192_180.nv12.yuv");
-const base::FilePath::CharType* kNV12Image270 =
-    FILE_PATH_LITERAL("bear_192x320_270.nv12.yuv");
+#if BUILDFLAG(USE_V4L2_CODEC)
+// File for MM21 detile and scaling test.
+const base::FilePath::CharType* kMM21Image270P =
+    FILE_PATH_LITERAL("puppets-480x270.mm21.yuv");
+#endif
 
 enum class YuvSubsampling {
   kYuv420,
@@ -131,6 +164,173 @@ bool IsFormatTestedForDmabufAndGbm(VideoPixelFormat format) {
   }
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(USE_V4L2_CODEC)
+bool SupportsNecessaryGLExtension() {
+  bool ret;
+
+  scoped_refptr<gl::GLSurface> gl_surface =
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size());
+  if (!gl_surface) {
+    LOG(ERROR) << "Error creating GL surface";
+    return false;
+  }
+  scoped_refptr<gl::GLContext> gl_context = gl::init::CreateGLContext(
+      nullptr, gl_surface.get(), gl::GLContextAttribs());
+  if (!gl_context) {
+    LOG(ERROR) << "Error creating GL context";
+    return false;
+  }
+  if (!gl_context->MakeCurrent(gl_surface.get())) {
+    LOG(ERROR) << "Error making GL context current";
+    return false;
+  }
+  ret = gl_context->HasExtension("GL_EXT_YUV_target");
+  gl_context->ReleaseCurrent(gl_surface.get());
+
+  return ret;
+}
+
+scoped_refptr<VideoFrame> CreateNV12Frame(const gfx::Size& size,
+                                          VideoFrame::StorageType type) {
+  const gfx::Rect visible_rect(size);
+  constexpr base::TimeDelta kNullTimestamp;
+  if (type == VideoFrame::STORAGE_GPU_MEMORY_BUFFER) {
+    return CreateGpuMemoryBufferVideoFrame(
+        VideoPixelFormat::PIXEL_FORMAT_NV12, size, visible_rect, size,
+        kNullTimestamp, gfx::BufferUsage::SCANOUT_CPU_READ_WRITE);
+  } else {
+    DCHECK(type == VideoFrame::STORAGE_DMABUFS);
+    return CreatePlatformVideoFrame(VideoPixelFormat::PIXEL_FORMAT_NV12, size,
+                                    visible_rect, size, kNullTimestamp,
+                                    gfx::BufferUsage::SCANOUT_CPU_READ_WRITE);
+  }
+}
+
+scoped_refptr<VideoFrame> CreateRandomMM21Frame(const gfx::Size& size,
+                                                VideoFrame::StorageType type) {
+  DCHECK_EQ(size.width(), base::bits::AlignUpDeprecatedDoNotUse(
+                              size.width(), MM21_TILE_WIDTH));
+  DCHECK_EQ(size.height(), base::bits::AlignUpDeprecatedDoNotUse(
+                               size.height(), MM21_TILE_HEIGHT));
+
+  scoped_refptr<VideoFrame> ret = CreateNV12Frame(size, type);
+  if (!ret) {
+    LOG(ERROR) << "Failed to create MM21 frame";
+    return nullptr;
+  }
+
+  // The MM21 path only makes sense for V4L2, so we should never get an Intel
+  // media compressed buffer here.
+  CHECK(!IsIntelMediaCompressedModifier(ret->layout().modifier()));
+  std::unique_ptr<VideoFrameMapper> frame_mapper =
+      VideoFrameMapperFactory::CreateMapper(
+          VideoPixelFormat::PIXEL_FORMAT_NV12, type,
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
+  if (!frame_mapper) {
+    LOG(ERROR) << "Unable to create a VideoFrameMapper";
+    return nullptr;
+  }
+  scoped_refptr<VideoFrame> mapped_ret =
+      frame_mapper->Map(ret, PROT_READ | PROT_WRITE);
+  if (!mapped_ret) {
+    LOG(ERROR) << "Unable to map MM21 frame";
+    return nullptr;
+  }
+
+  uint8_t* y_plane = mapped_ret->GetWritableVisibleData(VideoFrame::kYPlane);
+  uint8_t* uv_plane = mapped_ret->GetWritableVisibleData(VideoFrame::kUVPlane);
+  for (int row = 0; row < size.height(); row++) {
+    for (int col = 0; col < size.width(); col++) {
+      y_plane[col] = base::RandInt(/*min=*/0, /*max=*/255);
+      if (row % 2 == 0) {
+        uv_plane[col] = base::RandInt(/*min=*/0, /*max=*/255);
+      }
+    }
+    y_plane += mapped_ret->stride(VideoFrame::kYPlane);
+    if (row % 2 == 0) {
+      uv_plane += mapped_ret->stride(VideoFrame::kUVPlane);
+    }
+  }
+
+  return ret;
+}
+
+bool CompareNV12VideoFrames(scoped_refptr<VideoFrame> test_frame,
+                            scoped_refptr<VideoFrame> golden_frame) {
+  if (test_frame->coded_size() != golden_frame->coded_size() ||
+      test_frame->visible_rect() != golden_frame->visible_rect() ||
+      test_frame->format() != VideoPixelFormat::PIXEL_FORMAT_NV12 ||
+      golden_frame->format() != VideoPixelFormat::PIXEL_FORMAT_NV12) {
+    return false;
+  }
+
+  // We run this test for the V4L2 path only, so we should never get Intel media
+  // compressed frames here.
+  CHECK(!IsIntelMediaCompressedModifier(test_frame->layout().modifier()));
+  CHECK(!IsIntelMediaCompressedModifier(golden_frame->layout().modifier()));
+
+  std::unique_ptr<VideoFrameMapper> test_frame_mapper =
+      VideoFrameMapperFactory::CreateMapper(
+          VideoPixelFormat::PIXEL_FORMAT_NV12, test_frame->storage_type(),
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
+  if (!test_frame_mapper) {
+    return false;
+  }
+  std::unique_ptr<VideoFrameMapper> golden_frame_mapper =
+      VideoFrameMapperFactory::CreateMapper(
+          VideoPixelFormat::PIXEL_FORMAT_NV12, golden_frame->storage_type(),
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
+  if (!golden_frame_mapper) {
+    return false;
+  }
+  scoped_refptr<VideoFrame> mapped_test_frame =
+      test_frame_mapper->Map(test_frame, PROT_READ | PROT_WRITE);
+  if (!mapped_test_frame) {
+    LOG(ERROR) << "Unable to map test frame";
+    return false;
+  }
+  scoped_refptr<VideoFrame> mapped_golden_frame =
+      golden_frame_mapper->Map(golden_frame, PROT_READ | PROT_WRITE);
+  if (!mapped_golden_frame) {
+    LOG(ERROR) << "Unable to map golden frame";
+    return false;
+  }
+
+  const uint8_t* test_y_plane =
+      mapped_test_frame->visible_data(VideoFrame::kYPlane);
+  const uint8_t* test_uv_plane =
+      mapped_test_frame->visible_data(VideoFrame::kUVPlane);
+  const uint8_t* golden_y_plane =
+      mapped_golden_frame->visible_data(VideoFrame::kYPlane);
+  const uint8_t* golden_uv_plane =
+      mapped_golden_frame->visible_data(VideoFrame::kUVPlane);
+  for (int y = 0; y < test_frame->coded_size().height(); y++) {
+    for (int x = 0; x < test_frame->coded_size().width(); x++) {
+      if (test_y_plane[x] != golden_y_plane[x]) {
+        return false;
+      }
+
+      if (y % 2 == 0) {
+        if (test_uv_plane[x] != golden_uv_plane[x]) {
+          return false;
+        }
+      }
+    }
+    test_y_plane += mapped_test_frame->stride(VideoFrame::kYPlane);
+    golden_y_plane += mapped_golden_frame->stride(VideoFrame::kYPlane);
+    if (y % 2 == 0) {
+      test_uv_plane += mapped_test_frame->stride(VideoFrame::kUVPlane);
+      golden_uv_plane += mapped_golden_frame->stride(VideoFrame::kUVPlane);
+    }
+  }
+
+  return true;
+}
+#endif
 
 class ImageProcessorParamTest
     : public ::testing::Test,
@@ -171,27 +371,7 @@ class ImageProcessorParamTest
     ImageProcessor::PortConfig output_config(
         output_fourcc, output_image->Size(), output_layout->planes(),
         output_image->VisibleRect(), output_storage_types);
-    int rotation = (output_image->Rotation() - input_image.Rotation()) % 360;
-    if (rotation < 0)
-      rotation += 360;
-    VideoRotation relative_rotation = VIDEO_ROTATION_0;
-    switch (rotation) {
-      case 0:
-        relative_rotation = VIDEO_ROTATION_0;
-        break;
-      case 90:
-        relative_rotation = VIDEO_ROTATION_90;
-        break;
-      case 180:
-        relative_rotation = VIDEO_ROTATION_180;
-        break;
-      case 270:
-        relative_rotation = VIDEO_ROTATION_270;
-        break;
-      default:
-        NOTREACHED() << "Invalid rotation: " << rotation;
-        return nullptr;
-    }
+
     // TODO(crbug.com/917951): Select more appropriate number of buffers.
     constexpr size_t kNumBuffers = 1;
     LOG_ASSERT(output_image->IsMetadataLoaded());
@@ -235,8 +415,7 @@ class ImageProcessorParamTest
     }
 
     auto ip_client = test::ImageProcessorClient::Create(
-        input_config, output_config, kNumBuffers, relative_rotation,
-        std::move(frame_processors));
+        input_config, output_config, kNumBuffers, std::move(frame_processors));
     return ip_client;
   }
 
@@ -406,21 +585,321 @@ INSTANTIATE_TEST_SUITE_P(NV12CroppingAndScaling,
                          ::testing::Values(std::make_tuple(kNV12Image360PIn480P,
                                                            kNV12Image270P)));
 
-// Rotate frame to specified rotation.
-// Now only VaapiIP maybe support rotaion.
-INSTANTIATE_TEST_SUITE_P(
-    NV12Rotation,
-    ImageProcessorParamTest,
-    ::testing::Values(std::make_tuple(kNV12Image, kNV12Image90),
-                      std::make_tuple(kNV12Image, kNV12Image180),
-                      std::make_tuple(kNV12Image, kNV12Image270),
-                      std::make_tuple(kNV12Image180, kNV12Image90),
-                      std::make_tuple(kNV12Image180, kNV12Image)));
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // TODO(hiroh): Add more tests.
 // MEM->DMABUF (V4L2VideoEncodeAccelerator),
 #endif
+
+#if BUILDFLAG(USE_V4L2_CODEC)
+TEST(ImageProcessorBackendTest, CompareLibYUVAndGLBackendsForMM21Image) {
+  if (!SupportsNecessaryGLExtension()) {
+    GTEST_SKIP() << "Skipping GL Backend test, unsupported platform.";
+  }
+
+  constexpr gfx::Size kTestImageSize(1920, 1088);
+  constexpr gfx::Rect kTestImageVisibleRect(kTestImageSize);
+  const ImageProcessor::PixelLayoutCandidate candidate = {Fourcc(Fourcc::MM21),
+                                                          kTestImageSize};
+  std::vector<ImageProcessor::PixelLayoutCandidate> candidates = {candidate};
+
+  auto client_task_runner = base::SequencedTaskRunner::GetCurrentDefault();
+  base::RunLoop run_loop;
+  base::RepeatingClosure quit_closure = run_loop.QuitClosure();
+  bool image_processor_error = false;
+  ImageProcessor::ErrorCB error_cb = base::BindRepeating(
+      [](scoped_refptr<base::SequencedTaskRunner> client_task_runner,
+         base::RepeatingClosure quit_closure, bool* image_processor_error) {
+        CHECK(client_task_runner->RunsTasksInCurrentSequence());
+        *image_processor_error = true;
+        quit_closure.Run();
+      },
+      client_task_runner, quit_closure, &image_processor_error);
+  ImageProcessorFactory::PickFormatCB pick_format_cb = base::BindRepeating(
+      [](const std::vector<Fourcc>&, absl::optional<Fourcc>) {
+        return absl::make_optional<Fourcc>(Fourcc::NV12);
+      });
+
+  std::unique_ptr<ImageProcessor> libyuv_image_processor =
+      ImageProcessorFactory::
+          CreateLibYUVImageProcessorWithInputCandidatesForTesting(
+              candidates, kTestImageVisibleRect, kTestImageSize,
+              /*num_buffers=*/1, client_task_runner, pick_format_cb, error_cb);
+  ASSERT_TRUE(libyuv_image_processor)
+      << "Error creating LibYUV image processor";
+  std::unique_ptr<ImageProcessor> gl_image_processor = ImageProcessorFactory::
+      CreateGLImageProcessorWithInputCandidatesForTesting(
+          candidates, kTestImageVisibleRect, kTestImageSize, /*num_buffers=*/1,
+          client_task_runner, pick_format_cb, error_cb);
+  ASSERT_TRUE(gl_image_processor) << "Error creating GLImageProcessor";
+
+  scoped_refptr<VideoFrame> input_frame =
+      CreateRandomMM21Frame(kTestImageSize, VideoFrame::STORAGE_DMABUFS);
+  ASSERT_TRUE(input_frame) << "Error creating input frame";
+  scoped_refptr<VideoFrame> gl_output_frame =
+      CreateNV12Frame(kTestImageSize, VideoFrame::STORAGE_GPU_MEMORY_BUFFER);
+  ASSERT_TRUE(gl_output_frame) << "Error creating GL output frame";
+  scoped_refptr<VideoFrame> libyuv_output_frame =
+      CreateNV12Frame(kTestImageSize, VideoFrame::STORAGE_GPU_MEMORY_BUFFER);
+  ASSERT_TRUE(libyuv_output_frame) << "Error creating LibYUV output frame";
+
+  int outstanding_processors = 2;
+  ImageProcessor::FrameReadyCB libyuv_callback = base::BindOnce(
+      [](scoped_refptr<base::SequencedTaskRunner> client_task_runner,
+         base::RepeatingClosure quit_closure, int* outstanding_processors,
+         scoped_refptr<VideoFrame>* libyuv_output_frame,
+         scoped_refptr<VideoFrame> frame) {
+        CHECK(client_task_runner->RunsTasksInCurrentSequence());
+        *libyuv_output_frame = std::move(frame);
+        if (!(--*outstanding_processors)) {
+          quit_closure.Run();
+        }
+      },
+      client_task_runner, quit_closure, &outstanding_processors,
+      &libyuv_output_frame);
+
+  ImageProcessor::FrameReadyCB gl_callback = base::BindOnce(
+      [](scoped_refptr<base::SequencedTaskRunner> client_task_runner,
+         base::RepeatingClosure quit_closure, int* outstanding_processors,
+         scoped_refptr<VideoFrame>* gl_output_frame,
+         scoped_refptr<VideoFrame> frame) {
+        CHECK(client_task_runner->RunsTasksInCurrentSequence());
+        *gl_output_frame = std::move(frame);
+        if (!(--*outstanding_processors)) {
+          quit_closure.Run();
+        }
+      },
+      client_task_runner, quit_closure, &outstanding_processors,
+      &gl_output_frame);
+
+  libyuv_image_processor->Process(input_frame, libyuv_output_frame,
+                                  std::move(libyuv_callback));
+  gl_image_processor->Process(input_frame, gl_output_frame,
+                              std::move(gl_callback));
+
+  run_loop.Run();
+
+  ASSERT_FALSE(image_processor_error);
+  ASSERT_TRUE(libyuv_output_frame);
+  ASSERT_TRUE(gl_output_frame);
+  ASSERT_TRUE(CompareNV12VideoFrames(gl_output_frame, libyuv_output_frame));
+}
+
+#if BUILDFLAG(ENABLE_VULKAN)
+TEST(ImageProcessorBackendTest, VulkanDetileScaleTest) {
+  test::Image input_image(BuildSourceFilePath(base::FilePath(kMM21Image270P)));
+  ASSERT_TRUE(input_image.Load());
+  gfx::Size coded_size = input_image.Size();
+  gfx::Rect visible_rect = input_image.VisibleRect();
+  scoped_refptr<VideoFrame> mm21_frame = CreateNV12Frame(
+      input_image.Size(), VideoFrame::STORAGE_GPU_MEMORY_BUFFER);
+
+  // The MM21 path only makes sense for V4L2, so we should never get an Intel
+  // media compressed buffer here.
+  ASSERT_FALSE(IsIntelMediaCompressedModifier(mm21_frame->layout().modifier()));
+  std::unique_ptr<VideoFrameMapper> frame_mapper =
+      VideoFrameMapperFactory::CreateMapper(
+          VideoPixelFormat::PIXEL_FORMAT_NV12,
+          VideoFrame::STORAGE_GPU_MEMORY_BUFFER,
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
+  scoped_refptr<VideoFrame> mapped_mm21_frame =
+      frame_mapper->Map(mm21_frame, PROT_READ | PROT_WRITE);
+  ASSERT_TRUE(mapped_mm21_frame);
+  uint8_t* input_y_plane =
+      (uint8_t*)mapped_mm21_frame->GetWritableVisibleData(VideoFrame::kYPlane);
+  uint8_t* input_uv_plane =
+      (uint8_t*)mapped_mm21_frame->GetWritableVisibleData(VideoFrame::kUVPlane);
+  libyuv::NV12Copy(
+      input_image.Data(), coded_size.width(),
+      input_image.Data() + coded_size.GetArea(), coded_size.width(),
+      input_y_plane, mapped_mm21_frame->stride(VideoFrame::kYPlane),
+      input_uv_plane, mapped_mm21_frame->stride(VideoFrame::kUVPlane),
+      coded_size.width(), coded_size.height());
+
+  gfx::Size output_size(1000, 1000);
+  gfx::Rect output_visible_rect(output_size);
+  constexpr base::TimeDelta kNullTimestamp;
+  Fourcc output_fourcc(Fourcc::AR24);
+  scoped_refptr<VideoFrame> vulkan_output_frame =
+      CreateGpuMemoryBufferVideoFrame(VideoPixelFormat::PIXEL_FORMAT_ARGB,
+                                      output_size, output_visible_rect,
+                                      output_size, kNullTimestamp,
+                                      gfx::BufferUsage::SCANOUT_CPU_READ_WRITE);
+
+  auto input_layout =
+      test::CreateVideoFrameLayout(input_image.PixelFormat(), coded_size);
+  auto output_layout = test::CreateVideoFrameLayout(
+      output_fourcc.ToVideoPixelFormat(), output_size);
+  auto in_gmb = CreateGpuMemoryBufferHandle(mm21_frame.get());
+  auto out_gmb = CreateGpuMemoryBufferHandle(vulkan_output_frame.get());
+
+  // Initialize shared image infrastructure.
+  auto share_group = base::MakeRefCounted<gl::GLShareGroup>();
+  auto surface =
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size());
+  auto context = gl::init::CreateGLContext(share_group.get(), surface.get(),
+                                           gl::GLContextAttribs());
+  context->MakeCurrent(surface.get());
+  auto context_state = base::MakeRefCounted<gpu::SharedContextState>(
+      share_group, surface, context, false, base::DoNothing(),
+      gpu::GpuPreferences().gr_context_type);
+  gpu::SharedImageManager shared_image_manager;
+  gpu::GpuPreferences gpu_preferences;
+  gpu::GpuDriverBugWorkarounds gpu_workarounds;
+  gpu::GpuFeatureInfo gpu_info;
+  gpu::SharedImageFactory shared_image_factory(
+      gpu_preferences, gpu_workarounds, gpu_info, context_state.get(),
+      &shared_image_manager, nullptr, false);
+
+  // Wrap input and output frames in shared images.
+  auto input_mailbox = gpu::Mailbox::GenerateForSharedImage();
+  auto output_mailbox = gpu::Mailbox::GenerateForSharedImage();
+  viz::SharedImageFormat format_nv12 = viz::SharedImageFormat::MultiPlane(
+      viz::SharedImageFormat::PlaneConfig::kY_UV,
+      viz::SharedImageFormat::Subsampling::k420,
+      viz::SharedImageFormat::ChannelFormat::k8);
+  format_nv12.SetPrefersExternalSampler();
+  shared_image_factory.CreateSharedImage(
+      input_mailbox, format_nv12, coded_size, gfx::ColorSpace::CreateSRGB(),
+      kTopLeft_GrSurfaceOrigin, kOpaque_SkAlphaType,
+      gpu::SharedImageUsage::SHARED_IMAGE_USAGE_DISPLAY_READ, "TestLabel",
+      std::move(in_gmb));
+  shared_image_factory.CreateSharedImage(
+      output_mailbox, viz::SinglePlaneFormat::kRGBA_8888, coded_size,
+      gfx::ColorSpace::CreateSRGB(), kTopLeft_GrSurfaceOrigin,
+      kUnpremul_SkAlphaType,
+      gpu::SharedImageUsage::SHARED_IMAGE_USAGE_DISPLAY_WRITE |
+          gpu::SharedImageUsage::SHARED_IMAGE_USAGE_SCANOUT,
+      "TestLabel", std::move(out_gmb));
+
+  auto vulkan_image_processor = VulkanImageProcessor::Create();
+  ASSERT_TRUE(vulkan_image_processor);
+
+  auto input_vulkan_representation = shared_image_manager.ProduceVulkan(
+      input_mailbox, nullptr, vulkan_image_processor->GetVulkanDeviceQueue(),
+      vulkan_image_processor->GetVulkanImplementation());
+  auto output_vulkan_representation = shared_image_manager.ProduceVulkan(
+      output_mailbox, nullptr, vulkan_image_processor->GetVulkanDeviceQueue(),
+      vulkan_image_processor->GetVulkanImplementation());
+  {
+    std::vector<VkSemaphore> begin_semaphores;
+    std::vector<VkSemaphore> end_semaphores;
+    auto input_access = input_vulkan_representation->BeginScopedAccess(
+        gpu::RepresentationAccessMode::kRead, begin_semaphores, end_semaphores);
+    auto output_access = output_vulkan_representation->BeginScopedAccess(
+        gpu::RepresentationAccessMode::kWrite, begin_semaphores,
+        end_semaphores);
+
+    vulkan_image_processor->Process(
+        input_access->GetVulkanImage(), coded_size, visible_rect.size(),
+        output_access->GetVulkanImage(), output_size,
+        output_visible_rect.size(), begin_semaphores, end_semaphores);
+  }
+
+  // This implicitly waits for all semaphores to signal.
+  vulkan_image_processor->GetVulkanDeviceQueue()
+      ->GetFenceHelper()
+      ->PerformImmediateCleanup();
+
+  // Replicate this operation using LibYUV. Note that we don't use the image
+  // processor since we need to do a very specific conversion and scale
+  // operation that the LibYUV image processor backend doesn't support.
+  size_t i420_y_size = visible_rect.size().GetArea();
+  size_t i420_u_v_size =
+      ((visible_rect.width() + 1) / 2) * ((visible_rect.height() + 1) / 2);
+  uint8_t* i420_y = (uint8_t*)mmap(nullptr, i420_y_size, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  uint8_t* i420_u =
+      (uint8_t*)mmap(nullptr, i420_u_v_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  uint8_t* i420_v =
+      (uint8_t*)mmap(nullptr, i420_u_v_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  libyuv::MM21ToI420(
+      input_image.Data(), coded_size.width(),
+      input_image.Data() + coded_size.GetArea(),
+      ((coded_size.width() + 1) & (~1)), i420_y, visible_rect.width(), i420_u,
+      (visible_rect.width() + 1) / 2, i420_v, (visible_rect.width() + 1) / 2,
+      visible_rect.width(), visible_rect.height());
+  size_t i420_scaled_y_size = output_size.GetArea();
+  size_t i420_scaled_u_v_size =
+      ((output_size.width() + 1) / 2) * ((output_size.width() + 1) / 2);
+  uint8_t* i420_scaled_y =
+      (uint8_t*)mmap(nullptr, i420_scaled_y_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  uint8_t* i420_scaled_u =
+      (uint8_t*)mmap(nullptr, i420_scaled_u_v_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  uint8_t* i420_scaled_v =
+      (uint8_t*)mmap(nullptr, i420_scaled_u_v_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  libyuv::I420Scale(i420_y, visible_rect.width(), i420_u,
+                    (visible_rect.width() + 1) / 2, i420_v,
+                    (visible_rect.width() + 1) / 2, visible_rect.width(),
+                    visible_rect.height(), i420_scaled_y, output_size.width(),
+                    i420_scaled_u, (output_size.width() + 1) / 2, i420_scaled_v,
+                    (output_size.height() + 1) / 2, output_size.width(),
+                    output_size.height(), libyuv::kFilterBilinear);
+  munmap(i420_y, i420_y_size);
+  munmap(i420_u, i420_u_v_size);
+  munmap(i420_v, i420_u_v_size);
+
+  // Convert the vulkan frame into I420. We really want to scan this out as
+  // ARGB since that's what the display controller supports, but the LibYUV
+  // PSNR calculator only takes I420.
+  uint8_t* vulkan_output_y =
+      (uint8_t*)mmap(nullptr, i420_scaled_y_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  uint8_t* vulkan_output_u =
+      (uint8_t*)mmap(nullptr, i420_scaled_u_v_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  uint8_t* vulkan_output_v =
+      (uint8_t*)mmap(nullptr, i420_scaled_u_v_size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+  // The MM21 de-tiling path only makes sense for V4L2, so we should never get
+  // an Intel media compressed buffer here.
+  ASSERT_FALSE(
+      IsIntelMediaCompressedModifier(vulkan_output_frame->layout().modifier()));
+  std::unique_ptr<VideoFrameMapper> output_frame_mapper =
+      VideoFrameMapperFactory::CreateMapper(
+          VideoPixelFormat::PIXEL_FORMAT_ARGB,
+          VideoFrame::STORAGE_GPU_MEMORY_BUFFER,
+          /*force_linear_buffer_mapper=*/true,
+          /*must_support_intel_media_compressed_buffers=*/false);
+  scoped_refptr<VideoFrame> mapped_output_frame =
+      output_frame_mapper->Map(vulkan_output_frame, PROT_READ | PROT_WRITE);
+  const uint8_t* argb_plane =
+      mapped_output_frame->visible_data(VideoFrame::kARGBPlane);
+  libyuv::ARGBToI420(
+      argb_plane, mapped_output_frame->stride(VideoFrame::kARGBPlane),
+      vulkan_output_y, output_size.width(), vulkan_output_u,
+      (output_size.width() + 1) / 2, vulkan_output_v,
+      (output_size.width() + 1) / 2, output_size.width(), output_size.height());
+
+  // Calculate PSNR. Note that we can't just do a byte by byte comparison
+  // because floating point inacuracies in both the color conversion and the
+  // bilinear filtering will result in small differences between these two
+  // methods.
+  double psnr = libyuv::I420Psnr(
+      i420_scaled_y, output_size.width(), i420_scaled_u,
+      (output_size.width() + 1) / 2, i420_scaled_v,
+      (output_size.width() + 1) / 2, vulkan_output_y, output_size.width(),
+      vulkan_output_u, (output_size.width() + 1) / 2, vulkan_output_v,
+      (output_size.width() + 1) / 2, output_size.width(), output_size.height());
+  constexpr double kPsnrThreshold = 45.0;
+  ASSERT_TRUE(psnr >= kPsnrThreshold);
+
+  munmap(i420_scaled_y, i420_scaled_y_size);
+  munmap(i420_scaled_u, i420_scaled_u_v_size);
+  munmap(i420_scaled_v, i420_scaled_u_v_size);
+  munmap(vulkan_output_y, i420_scaled_y_size);
+  munmap(vulkan_output_u, i420_scaled_u_v_size);
+  munmap(vulkan_output_v, i420_scaled_u_v_size);
+}
+#endif
+#endif
+
 }  // namespace
 }  // namespace media
 
@@ -460,5 +939,22 @@ int main(int argc, char** argv) {
   auto* const test_environment = new media::test::VideoTestEnvironment;
   media::g_env = reinterpret_cast<media::test::VideoTestEnvironment*>(
       testing::AddGlobalTestEnvironment(test_environment));
+
+// TODO(b/316374371) Try to remove Ozone and replace with EGL and GL.
+#if BUILDFLAG(IS_OZONE)
+  ui::OzonePlatform::InitParams ozone_param;
+  ozone_param.single_process = true;
+#if BUILDFLAG(ENABLE_VULKAN)
+  ui::OzonePlatform::InitializeForUI(ozone_param);
+#endif
+  ui::OzonePlatform::InitializeForGPU(ozone_param);
+#endif
+
+#if BUILDFLAG(USE_V4L2_CODEC)
+  gl::GLSurfaceTestSupport::InitializeOneOffImplementation(
+      gl::GLImplementationParts(gl::kGLImplementationEGLGLES2),
+      /*fallback_to_software_gl=*/false);
+#endif
+
   return RUN_ALL_TESTS();
 }

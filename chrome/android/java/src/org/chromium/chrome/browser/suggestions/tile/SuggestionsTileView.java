@@ -8,11 +8,15 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.util.AttributeSet;
 
+import androidx.appcompat.content.res.AppCompatResources;
+
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ntp.TitleUtil;
 import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.components.browser_ui.widget.tile.TileView;
 import org.chromium.url.GURL;
+
 /**
  * The view for a site suggestion tile. Displays the title of the site beneath a large icon. If a
  * large icon isn't available, displays a rounded rectangle with a single letter in its place.
@@ -21,9 +25,7 @@ public class SuggestionsTileView extends TileView {
     /** The data currently associated to this tile. */
     private SiteSuggestion mData;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public SuggestionsTileView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
@@ -35,10 +37,15 @@ public class SuggestionsTileView extends TileView {
      * @param titleLines The number of text lines to use for the tile title.
      */
     public void initialize(Tile tile, int titleLines) {
-        super.initialize(TitleUtil.getTitleForDisplay(tile.getTitle(), tile.getUrl()),
-                tile.isOfflineAvailable(), tile.getIcon(), titleLines);
+        super.initialize(
+                TitleUtil.getTitleForDisplay(tile.getTitle(), tile.getUrl()),
+                tile.isOfflineAvailable(),
+                tile.getIcon(),
+                titleLines);
         mData = tile.getData();
         setIconViewLayoutParams(tile);
+        setTitleParams();
+        setTileViewIconBackground();
     }
 
     /** Retrieves data associated with this view.  */
@@ -63,7 +70,7 @@ public class SuggestionsTileView extends TileView {
     }
 
     protected void setIconViewLayoutParams(Tile tile) {
-        MarginLayoutParams params = (MarginLayoutParams) getIconView().getLayoutParams();
+        MarginLayoutParams params = (MarginLayoutParams) mIconView.getLayoutParams();
         Resources resources = getResources();
         if (tile.getType() == TileVisualType.ICON_COLOR
                 || tile.getType() == TileVisualType.ICON_DEFAULT) {
@@ -77,6 +84,25 @@ public class SuggestionsTileView extends TileView {
             params.topMargin =
                     resources.getDimensionPixelSize(R.dimen.tile_view_icon_margin_top_modern);
         }
-        getIconView().setLayoutParams(params);
+        mIconView.setLayoutParams(params);
+    }
+
+    /** Updates the margin of the title in the tile element for polishing purposes. */
+    private void setTitleParams() {
+        if (!ChromeFeatureList.sSurfacePolish.isEnabled()) return;
+
+        MarginLayoutParams marginLayoutParams =
+                (MarginLayoutParams) getTitleView().getLayoutParams();
+        marginLayoutParams.topMargin =
+                getResources()
+                        .getDimensionPixelSize(R.dimen.tile_view_title_margin_top_modern_polish);
+    }
+
+    /** Update the background for the tile view icon for polishing purposes. */
+    private void setTileViewIconBackground() {
+        if (!ChromeFeatureList.sSurfacePolish.isEnabled()) return;
+
+        mIconBackgroundView.setBackground(
+                AppCompatResources.getDrawable(getContext(), R.drawable.oval_surface_3));
     }
 }

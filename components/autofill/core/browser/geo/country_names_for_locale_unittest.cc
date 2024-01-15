@@ -7,8 +7,6 @@
 #include <string>
 #include <utility>
 
-#include "base/containers/contains.h"
-#include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -38,8 +36,19 @@ TEST(CountryNamesForLocaleTest, EmptyCountryCodeForInvalidLocale) {
 // The behavior depends on the platform. On Android the locale reverts back to
 // the standard locale.
 #if !BUILDFLAG(IS_ANDROID)
+// TODO:(crbug.com/1456465) Re-enable test for iOS
+// In iOS17, NSLocale's internal implementation was modified resulting in
+// redefined behavior for existing functions. As a result,
+// `l10n_util::GetDisplayNameForCountry` no longer produces the same output in
+// iOS17 as previous versions.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_EmptyCountryCodeForEmptyLocale \
+  DISABLED_EmptyCountryCodeForEmptyLocale
+#else
+#define MAYBE_EmptyCountryCodeForEmptyLocale EmptyCountryCodeForEmptyLocale
+#endif
 // Test that an empty string is returned for an empty locale.
-TEST(CountryNamesForLocaleTest, EmptyCountryCodeForEmptyLocale) {
+TEST(CountryNamesForLocaleTest, MAYBE_EmptyCountryCodeForEmptyLocale) {
   CountryNamesForLocale empty_locale_names("");
   EXPECT_EQ("", empty_locale_names.GetCountryCode(u"United States"));
 }
@@ -68,17 +77,6 @@ TEST(CountryNamesForLocaleTest, MoveConstructior) {
 
   // Test that the new instance returns the correct values.
   EXPECT_EQ("DE", moved_names.GetCountryCode(u"Deutschland"));
-}
-
-TEST(CountryNamesForLocaleTest, GetLocallyLocalizedNames) {
-  base::span<const icu::Locale> available_locales = GetAvailableLocales();
-  if (!base::Contains(available_locales, "de-IT")) {
-    LOG(INFO) << "Skipping test because locale de-IT is not installed";
-  }
-
-  CountryNamesForLocale local_names(kPseudoLocaleOfNativeTranslations);
-  EXPECT_EQ("IT", local_names.GetCountryCode(u"Italien"));
-  EXPECT_EQ("", local_names.GetCountryCode(u"Italy"));
 }
 
 }  // namespace autofill

@@ -23,43 +23,47 @@ const char kKeyActivationCode[] = "ActivationCode";
 }  // namespace
 
 // static
-absl::optional<CellularESimProfile> CellularESimProfile::FromDictionaryValue(
-    const base::Value& value) {
-  if (!value.is_dict())
-    return absl::nullopt;
+std::optional<CellularESimProfile> CellularESimProfile::FromDictionaryValue(
+    const base::Value::Dict& value) {
+  const std::string* path = value.FindString(kKeyPath);
+  if (!path) {
+    return std::nullopt;
+  }
 
-  const std::string* path = value.FindStringPath(kKeyPath);
-  if (!path)
-    return absl::nullopt;
+  std::optional<int> state = value.FindInt(kKeyState);
+  if (!state) {
+    return std::nullopt;
+  }
 
-  absl::optional<int> state = value.FindIntPath(kKeyState);
-  if (!state)
-    return absl::nullopt;
+  const std::string* eid = value.FindString(kKeyEid);
+  if (!eid) {
+    return std::nullopt;
+  }
 
-  const std::string* eid = value.FindStringPath(kKeyEid);
-  if (!eid)
-    return absl::nullopt;
+  const std::string* iccid = value.FindString(kKeyIccid);
+  if (!iccid) {
+    return std::nullopt;
+  }
 
-  const std::string* iccid = value.FindStringPath(kKeyIccid);
-  if (!iccid)
-    return absl::nullopt;
+  const std::string* name = value.FindString(kKeyName);
+  if (!name) {
+    return std::nullopt;
+  }
 
-  const std::string* name = value.FindStringPath(kKeyName);
-  if (!name)
-    return absl::nullopt;
+  const std::string* nickname = value.FindString(kKeyNickname);
+  if (!nickname) {
+    return std::nullopt;
+  }
 
-  const std::string* nickname = value.FindStringPath(kKeyNickname);
-  if (!nickname)
-    return absl::nullopt;
+  const std::string* service_provider = value.FindString(kKeyServiceProvider);
+  if (!service_provider) {
+    return std::nullopt;
+  }
 
-  const std::string* service_provider =
-      value.FindStringPath(kKeyServiceProvider);
-  if (!service_provider)
-    return absl::nullopt;
-
-  const std::string* activation_code = value.FindStringPath(kKeyActivationCode);
-  if (!activation_code)
-    return absl::nullopt;
+  const std::string* activation_code = value.FindString(kKeyActivationCode);
+  if (!activation_code) {
+    return std::nullopt;
+  }
 
   return CellularESimProfile(
       static_cast<State>(*state), dbus::ObjectPath(*path), *eid, *iccid,
@@ -91,17 +95,16 @@ CellularESimProfile& CellularESimProfile::operator=(
 
 CellularESimProfile::~CellularESimProfile() = default;
 
-base::Value CellularESimProfile::ToDictionaryValue() const {
-  base::Value dictionary(base::Value::Type::DICTIONARY);
-  dictionary.SetKey(kKeyState, base::Value(static_cast<int>(state_)));
-  dictionary.SetKey(kKeyPath, base::Value(path_.value()));
-  dictionary.SetKey(kKeyEid, base::Value(eid_));
-  dictionary.SetKey(kKeyIccid, base::Value(iccid_));
-  dictionary.SetKey(kKeyName, base::Value(name_));
-  dictionary.SetKey(kKeyNickname, base::Value(nickname_));
-  dictionary.SetKey(kKeyServiceProvider, base::Value(service_provider_));
-  dictionary.SetKey(kKeyActivationCode, base::Value(activation_code_));
-  return dictionary;
+base::Value::Dict CellularESimProfile::ToDictionaryValue() const {
+  return base::Value::Dict()
+      .Set(kKeyState, static_cast<int>(state_))
+      .Set(kKeyPath, path_.value())
+      .Set(kKeyEid, eid_)
+      .Set(kKeyIccid, iccid_)
+      .Set(kKeyName, name_)
+      .Set(kKeyNickname, nickname_)
+      .Set(kKeyServiceProvider, service_provider_)
+      .Set(kKeyActivationCode, activation_code_);
 }
 
 bool CellularESimProfile::operator==(const CellularESimProfile& other) const {

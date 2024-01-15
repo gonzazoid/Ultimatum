@@ -39,7 +39,7 @@ namespace {
 
 class MockTRS : public sessions::TabRestoreServiceImpl {
  public:
-  MockTRS(Profile* profile)
+  explicit MockTRS(Profile* profile)
       : sessions::TabRestoreServiceImpl(
             std::make_unique<ChromeTabRestoreServiceClient>(profile),
             profile->GetPrefs(),
@@ -99,14 +99,14 @@ std::unique_ptr<HistoryMenuBridge::HistoryItem> CreateItem(
 
 class MockBridge : public HistoryMenuBridge {
  public:
-  MockBridge(Profile* profile)
+  explicit MockBridge(Profile* profile)
       : HistoryMenuBridge(profile),
         menu_([[NSMenu alloc] initWithTitle:@"History"]) {}
 
-  NSMenu* HistoryMenu() override { return menu_.get(); }
+  NSMenu* HistoryMenu() override { return menu_; }
 
  private:
-  base::scoped_nsobject<NSMenu> menu_;
+  NSMenu* __strong menu_;
 };
 
 class HistoryMenuBridgeTest : public BrowserWithTestWindowTest {
@@ -118,17 +118,12 @@ class HistoryMenuBridgeTest : public BrowserWithTestWindowTest {
  protected:
   void SetUp() override {
     BrowserWithTestWindowTest::SetUp();
-    appController_.reset([[AppController alloc] init]);
-    [appController_ setLastProfileForTesting:profile()];
-    previousApplicationDelegate_ = [NSApp delegate];
-    [NSApp setDelegate:appController_];
+    [AppController.sharedController setLastProfileForTesting:profile()];
 
     bridge_ = std::make_unique<MockBridge>(profile());
   }
 
   void TearDown() override {
-    [NSApp setDelegate:previousApplicationDelegate_];
-    appController_.reset();
     bridge_.reset();
     BrowserWithTestWindowTest::TearDown();
   }
@@ -159,12 +154,13 @@ class HistoryMenuBridgeTest : public BrowserWithTestWindowTest {
                             NSString* title,
                             SEL selector,
                             int tag) {
-    NSMenuItem* item = [[[NSMenuItem alloc] initWithTitle:title action:NULL
-                                            keyEquivalent:@""] autorelease];
+    NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title
+                                                  action:nullptr
+                                           keyEquivalent:@""];
     [item setTag:tag];
     if (selector) {
       [item setAction:selector];
-      [item setTarget:bridge_->controller_.get()];
+      [item setTarget:bridge_->controller_];
     }
     [menu addItem:item];
     return item;
@@ -193,10 +189,6 @@ class HistoryMenuBridgeTest : public BrowserWithTestWindowTest {
 
  protected:
   std::unique_ptr<MockBridge> bridge_;
-
- private:
-  base::scoped_nsobject<AppController> appController_;
-  id<NSApplicationDelegate> previousApplicationDelegate_;
 };
 
 class HistoryMenuBridgeLifetimeTest : public testing::Test {
@@ -217,6 +209,9 @@ class HistoryMenuBridgeLifetimeTest : public testing::Test {
                            NSInteger index) {
     bridge->AddItemToMenu(std::move(item), menu, tag, index);
   }
+
+ private:
+  content::BrowserTaskEnvironment task_environment_;
 };
 
 void CheckMenuItemVisibility(HistoryMenuBridgeTest* test, bool is_incognito) {
@@ -224,13 +219,13 @@ void CheckMenuItemVisibility(HistoryMenuBridgeTest* test, bool is_incognito) {
   NSInteger always_visible_items[] = {IDC_HOME, IDC_BACK, IDC_FORWARD};
   for (size_t i = 0; i < std::size(always_visible_items); i++) {
     // Create a fake item with tag.
-    base::scoped_nsobject<NSMenuItem> item([[NSMenuItem alloc] init]);
-    item.get().tag = always_visible_items[i];
+    NSMenuItem* item = [[NSMenuItem alloc] init];
+    item.tag = always_visible_items[i];
     EXPECT_TRUE(test->ShouldMenuItemBeVisible(item));
   }
 
-  // Check visibilty of items belong to regular mode. They should be visible for
-  // regular mode, not for incognito mode.
+  // Check visibility of items belong to regular mode. They should be visible
+  // for regular mode, not for incognito mode.
   NSInteger regular_visible_items[] = {
       HistoryMenuBridge::kRecentlyClosedSeparator,
       HistoryMenuBridge::kRecentlyClosedTitle,
@@ -240,16 +235,16 @@ void CheckMenuItemVisibility(HistoryMenuBridgeTest* test, bool is_incognito) {
       IDC_SHOW_HISTORY};
   for (size_t i = 0; i < std::size(regular_visible_items); i++) {
     // Create a fake item with tag.
-    base::scoped_nsobject<NSMenuItem> item([[NSMenuItem alloc] init]);
-    item.get().tag = regular_visible_items[i];
+    NSMenuItem* item = [[NSMenuItem alloc] init];
+    item.tag = regular_visible_items[i];
     EXPECT_EQ(!is_incognito, test->ShouldMenuItemBeVisible(item));
   }
 }
 
 // Edge case test for clearing until the end of a menu.
 TEST_F(HistoryMenuBridgeTest, ClearHistoryMenuUntilEnd) {
-  NSMenu* menu = [[[NSMenu alloc] initWithTitle:@"history foo"] autorelease];
-  AddItemToMenu(menu, @"HEADER", NULL, HistoryMenuBridge::kVisitedTitle);
+  NSMenu* menu = [[NSMenu alloc] initWithTitle:@"history foo"];
+  AddItemToMenu(menu, @"HEADER", nullptr, HistoryMenuBridge::kVisitedTitle);
 
   NSInteger tag = HistoryMenuBridge::kVisited;
   AddItemToMenu(menu, @"alpha", @selector(openHistoryMenuItem:), tag);
@@ -266,13 +261,14 @@ TEST_F(HistoryMenuBridgeTest, ClearHistoryMenuUntilEnd) {
 
 // Skip menu items that are not hooked up to |-openHistoryMenuItem:|.
 TEST_F(HistoryMenuBridgeTest, ClearHistoryMenuSkipping) {
-  NSMenu* menu = [[[NSMenu alloc] initWithTitle:@"history foo"] autorelease];
-  AddItemToMenu(menu, @"HEADER", NULL, HistoryMenuBridge::kVisitedTitle);
+  NSMenu* menu = [[NSMenu alloc] initWithTitle:@"history foo"];
+  AddItemToMenu(menu, @"HEADER", nullptr, HistoryMenuBridge::kVisitedTitle);
 
   NSInteger tag = HistoryMenuBridge::kVisited;
   AddItemToMenu(menu, @"alpha", @selector(openHistoryMenuItem:), tag);
   AddItemToMenu(menu, @"bravo", @selector(openHistoryMenuItem:), tag);
-  AddItemToMenu(menu, @"TITLE", NULL, HistoryMenuBridge::kRecentlyClosedTitle);
+  AddItemToMenu(menu, @"TITLE", nullptr,
+                HistoryMenuBridge::kRecentlyClosedTitle);
   AddItemToMenu(menu, @"charlie", @selector(openHistoryMenuItem:), tag);
 
   ClearMenuSection(menu, tag);
@@ -286,8 +282,8 @@ TEST_F(HistoryMenuBridgeTest, ClearHistoryMenuSkipping) {
 
 // Edge case test for clearing an empty menu.
 TEST_F(HistoryMenuBridgeTest, ClearHistoryMenuEmpty) {
-  NSMenu* menu = [[[NSMenu alloc] initWithTitle:@"history foo"] autorelease];
-  AddItemToMenu(menu, @"HEADER", NULL, HistoryMenuBridge::kVisited);
+  NSMenu* menu = [[NSMenu alloc] initWithTitle:@"history foo"];
+  AddItemToMenu(menu, @"HEADER", nullptr, HistoryMenuBridge::kVisited);
 
   ClearMenuSection(menu, HistoryMenuBridge::kVisited);
 
@@ -298,7 +294,7 @@ TEST_F(HistoryMenuBridgeTest, ClearHistoryMenuEmpty) {
 
 // Test that AddItemToMenu() properly adds HistoryItem objects as menus.
 TEST_F(HistoryMenuBridgeTest, AddItemToMenu) {
-  NSMenu* menu = [[[NSMenu alloc] initWithTitle:@"history foo"] autorelease];
+  NSMenu* menu = [[NSMenu alloc] initWithTitle:@"history foo"];
 
   const std::u16string short_url = u"http://foo/";
   const std::u16string long_url =
@@ -546,7 +542,7 @@ TEST_F(HistoryMenuBridgeTest, GotFaviconData) {
 
   // Set up the HistoryItem.
   HistoryMenuBridge::HistoryItem item;
-  item.menu_item.reset([[NSMenuItem alloc] init]);
+  item.menu_item = [[NSMenuItem alloc] init];
   GetFaviconForHistoryItem(&item);
 
   // Cancel the request so there will be no race.
@@ -559,7 +555,7 @@ TEST_F(HistoryMenuBridgeTest, GotFaviconData) {
 
   // Make sure the callback works.
   EXPECT_FALSE(item.icon_requested);
-  EXPECT_TRUE(item.icon.get());
+  EXPECT_TRUE(item.icon);
   EXPECT_TRUE([item.menu_item image]);
 }
 
@@ -568,8 +564,6 @@ TEST_F(HistoryMenuBridgeTest, MenuItemVisibilityForRegularMode) {
 }
 
 TEST_F(HistoryMenuBridgeTest, MenuItemVisibilityForIncognitoMode) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      features::kUpdateHistoryEntryPointsInIncognito);
   bridge_ = std::make_unique<MockBridge>(
       profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true));
   CheckMenuItemVisibility(this, true);
@@ -577,7 +571,6 @@ TEST_F(HistoryMenuBridgeTest, MenuItemVisibilityForIncognitoMode) {
 
 // Does a full setup and tear down of the bridge.
 TEST_F(HistoryMenuBridgeLifetimeTest, ShutdownAfterProfile) {
-  content::BrowserTaskEnvironment task_environment;
   TestingProfile::Builder profile_builder;
   profile_builder.AddTestingFactory(
       TabRestoreServiceFactory::GetInstance(),
@@ -587,14 +580,13 @@ TEST_F(HistoryMenuBridgeLifetimeTest, ShutdownAfterProfile) {
   std::unique_ptr<TestingProfile> profile = profile_builder.Build();
 
   auto bridge = std::make_unique<HistoryMenuBridge>(profile.get());
-  profile.reset();
   // Should not crash.
   bridge.reset();
+  profile.reset();
 }
 
 // Does a full setup and tear down of the bridge.
 TEST_F(HistoryMenuBridgeLifetimeTest, ShutdownBeforeProfile) {
-  content::BrowserTaskEnvironment task_environment;
   TestingProfile::Builder profile_builder;
   profile_builder.AddTestingFactory(
       TabRestoreServiceFactory::GetInstance(),
@@ -605,12 +597,12 @@ TEST_F(HistoryMenuBridgeLifetimeTest, ShutdownBeforeProfile) {
 
   auto bridge = std::make_unique<HistoryMenuBridge>(profile.get());
   bridge.reset();
+  profile.reset();
 }
 
 // Initializes the menu, then destroys the Profile but keeps the
 // HistoryMenuBridge around.
 TEST_F(HistoryMenuBridgeLifetimeTest, StillValidAfterProfileShutdown) {
-  content::BrowserTaskEnvironment task_environment;
   TestingProfile::Builder profile_builder;
   profile_builder.AddTestingFactory(FaviconServiceFactory::GetInstance(),
                                     FaviconServiceFactory::GetDefaultFactory());
@@ -621,9 +613,8 @@ TEST_F(HistoryMenuBridgeLifetimeTest, StillValidAfterProfileShutdown) {
                                     HistoryServiceFactory::GetDefaultFactory());
   std::unique_ptr<TestingProfile> profile = profile_builder.Build();
   base::FilePath profile_dir = profile->GetPath();
-  base::scoped_nsobject<AppController> appController(
-      [[AppController alloc] init]);
-  [NSApp setDelegate:appController];
+  // Ensure the AppController is the NSApp delegate.
+  std::ignore = AppController.sharedController;
 
   auto bridge = std::make_unique<MockBridge>(profile.get());
   std::unique_ptr<MockTRS> trs(new MockTRS(profile.get()));
@@ -678,7 +669,39 @@ TEST_F(HistoryMenuBridgeLifetimeTest, StillValidAfterProfileShutdown) {
   EXPECT_EQ(4u, menu_item_map(bridge.get()).size());
 
   bridge.reset();
-  [NSApp setDelegate:nil];
+}
+
+TEST_F(HistoryMenuBridgeLifetimeTest, EmptyTabRestoreService) {
+  TestingProfile::Builder profile_builder;
+  profile_builder.AddTestingFactory(FaviconServiceFactory::GetInstance(),
+                                    FaviconServiceFactory::GetDefaultFactory());
+  profile_builder.AddTestingFactory(
+      TabRestoreServiceFactory::GetInstance(),
+      TabRestoreServiceFactory::GetDefaultFactory());
+  profile_builder.AddTestingFactory(HistoryServiceFactory::GetInstance(),
+                                    HistoryServiceFactory::GetDefaultFactory());
+  std::unique_ptr<TestingProfile> profile = profile_builder.Build();
+  base::FilePath profile_dir = profile->GetPath();
+
+  auto bridge = std::make_unique<MockBridge>(profile.get());
+  NSMenu* menu = HistoryMenu(bridge.get());
+
+  // Prepopulate the menu with some recently closed item.
+  AddItemToBridgeMenu(bridge.get(), CreateItem(u"http://foo/"), menu,
+                      HistoryMenuBridge::kRecentlyClosed, 0);
+  EXPECT_EQ(1, [menu numberOfItems]);
+
+  // Load an empty `TabRestoreService`. `TabRestoreServiceChanged()` is not
+  // called because the service is empty.
+  std::unique_ptr<MockTRS> trs(new MockTRS(profile.get()));
+  MockTRS::Entries no_entries;
+  EXPECT_CALL(*trs.get(), entries()).WillOnce(testing::ReturnRef(no_entries));
+  bridge->TabRestoreServiceLoaded(trs.get());
+
+  // Recently closed tabs are removed.
+  EXPECT_EQ(0, [menu numberOfItems]);
+
+  bridge.reset();
 }
 
 }  // namespace

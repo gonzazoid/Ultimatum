@@ -24,8 +24,10 @@
 #if BUILDFLAG(IS_MAC)
 #include <IOKit/IOTypes.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/mac/scoped_ionotificationportref.h"
+#include "base/power_monitor/battery_level_provider.h"
+#include "base/power_monitor/iopm_power_source_sampling_event_source.h"
 #include "base/power_monitor/thermal_state_observer_mac.h"
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -82,9 +84,9 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
                                          LPARAM lparam);
 
     // Instance of the module containing the window procedure.
-    HMODULE instance_;
+    HMODULE instance_ = nullptr;
     // A hidden message-only window.
-    HWND message_hwnd_;
+    HWND message_hwnd_ = nullptr;
     // A handle, returned when we register for power setting notification
     HPOWERNOTIFY power_notify_handle_ = nullptr;
   };
@@ -123,6 +125,11 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
   PowerThermalObserver::DeviceThermalState GetCurrentThermalState() override;
   int GetInitialSpeedLimit() override;
 
+  // Retrieves the current battery state to update `is_on_battery_`.
+  void GetBatteryState();
+  void OnBatteryStateReceived(
+      const absl::optional<BatteryLevelProvider::BatteryState>& battery_state);
+
   // Reference to the system IOPMrootDomain port.
   io_connect_t power_manager_port_ = IO_OBJECT_NULL;
 
@@ -132,11 +139,15 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
   // Notifier reference for the |notification_port_|.
   io_object_t notifier_ = IO_OBJECT_NULL;
 
-  // Run loop source to observe power-source-change events.
-  ScopedCFTypeRef<CFRunLoopSourceRef> power_source_run_loop_source_;
+  // Generates power-source-change events.
+  IOPMPowerSourceSamplingEventSource power_source_event_source_;
+
+  std::unique_ptr<BatteryLevelProvider> battery_level_provider_;
 
   // Observer of thermal state events: critical temperature etc.
   std::unique_ptr<ThermalStateObserverMac> thermal_state_observer_;
+
+  bool is_on_battery_ = false;
 #endif
 
 #if BUILDFLAG(IS_IOS)

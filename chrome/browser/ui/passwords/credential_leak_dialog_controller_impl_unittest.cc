@@ -26,7 +26,6 @@ namespace {
 constexpr ukm::SourceId kTestSourceId = 0x1234;
 
 using password_manager::CreateLeakType;
-using password_manager::HasChangeScript;
 using password_manager::IsReused;
 using password_manager::IsSaved;
 using password_manager::IsSyncing;
@@ -46,8 +45,8 @@ class MockCredentialLeakPrompt : public CredentialLeakPrompt {
   MockCredentialLeakPrompt(const MockCredentialLeakPrompt&) = delete;
   MockCredentialLeakPrompt& operator=(const MockCredentialLeakPrompt&) = delete;
 
-  MOCK_METHOD0(ShowCredentialLeakPrompt, void());
-  MOCK_METHOD0(ControllerGone, void());
+  MOCK_METHOD(void, ShowCredentialLeakPrompt, (), (override));
+  MOCK_METHOD(void, ControllerGone, (), (override));
 };
 
 class CredentialLeakDialogControllerTest : public testing::Test {
@@ -91,7 +90,7 @@ void CheckUkmMetricsExpectations(
     LeakDialogDismissalReason expected_dismissal_reason) {
   const auto& entries = recorder.GetEntriesByName(UkmEntry::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* entry : entries) {
+  for (const ukm::mojom::UkmEntry* entry : entries) {
     EXPECT_EQ(kTestSourceId, entry->source_id);
     recorder.ExpectEntryMetric(entry,
                                UkmEntry::kPasswordLeakDetectionDialogTypeName,
@@ -103,8 +102,8 @@ void CheckUkmMetricsExpectations(
 }
 
 TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogClose) {
-  SetUpController(CreateLeakType(IsSaved(false), IsReused(false),
-                                 IsSyncing(false), HasChangeScript(false)));
+  SetUpController(
+      CreateLeakType(IsSaved(false), IsReused(false), IsSyncing(false)));
 
   EXPECT_CALL(leak_prompt(), ShowCredentialLeakPrompt());
   controller().ShowCredentialLeakPrompt(&leak_prompt());
@@ -127,8 +126,8 @@ TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogClose) {
 }
 
 TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogOk) {
-  SetUpController(CreateLeakType(IsSaved(true), IsReused(false),
-                                 IsSyncing(false), HasChangeScript(false)));
+  SetUpController(
+      CreateLeakType(IsSaved(true), IsReused(false), IsSyncing(false)));
 
   EXPECT_CALL(leak_prompt(), ShowCredentialLeakPrompt());
   controller().ShowCredentialLeakPrompt(&leak_prompt());
@@ -151,8 +150,8 @@ TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogOk) {
 }
 
 TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogCancel) {
-  SetUpController(CreateLeakType(IsSaved(false), IsReused(true),
-                                 IsSyncing(true), HasChangeScript(false)));
+  SetUpController(
+      CreateLeakType(IsSaved(false), IsReused(true), IsSyncing(true)));
 
   EXPECT_CALL(leak_prompt(), ShowCredentialLeakPrompt());
   controller().ShowCredentialLeakPrompt(&leak_prompt());
@@ -176,8 +175,8 @@ TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogCancel) {
 }
 
 TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogCheckPasswords) {
-  SetUpController(CreateLeakType(IsSaved(true), IsReused(true), IsSyncing(true),
-                                 HasChangeScript(false)));
+  SetUpController(
+      CreateLeakType(IsSaved(true), IsReused(true), IsSyncing(true)));
 
   EXPECT_CALL(leak_prompt(), ShowCredentialLeakPrompt());
   controller().ShowCredentialLeakPrompt(&leak_prompt());
@@ -200,33 +199,6 @@ TEST_F(CredentialLeakDialogControllerTest, CredentialLeakDialogCheckPasswords) {
   CheckUkmMetricsExpectations(
       test_ukm_recorder(), LeakDialogType::kCheckup,
       LeakDialogDismissalReason::kClickedCheckPasswords);
-
-  EXPECT_CALL(leak_prompt(), ControllerGone());
-}
-
-TEST_F(CredentialLeakDialogControllerTest,
-       CredentialLeakDialogAutomatedPasswordChange) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(
-      password_manager::features::kPasswordChange);
-  SetUpController(CreateLeakType(IsSaved(true), IsReused(true), IsSyncing(true),
-                                 HasChangeScript(true)));
-
-  EXPECT_CALL(leak_prompt(), ShowCredentialLeakPrompt());
-  controller().ShowCredentialLeakPrompt(&leak_prompt());
-
-  EXPECT_CALL(ui_controller_mock(), StartAutomatedPasswordChange(
-                                        GURL(kUrl), std::u16string(kUsername)));
-  EXPECT_CALL(ui_controller_mock(), OnLeakDialogHidden());
-  controller().OnAcceptDialog();
-
-  histogram_tester().ExpectUniqueSample(
-      "PasswordManager.LeakDetection.DialogDismissalReason",
-      LeakDialogDismissalReason::kClickedChangePasswordAutomatically, 1);
-
-  histogram_tester().ExpectUniqueSample(
-      "PasswordManager.LeakDetection.DialogDismissalReason.ChangeAutomatically",
-      LeakDialogDismissalReason::kClickedChangePasswordAutomatically, 1);
 
   EXPECT_CALL(leak_prompt(), ControllerGone());
 }

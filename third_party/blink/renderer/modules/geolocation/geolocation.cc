@@ -27,6 +27,7 @@
 
 #include "third_party/blink/renderer/modules/geolocation/geolocation.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "services/device/public/mojom/geoposition.mojom-blink.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
@@ -69,23 +70,19 @@ Geoposition* CreateGeoposition(
 }
 
 GeolocationPositionError* CreatePositionError(
-    device::mojom::blink::Geoposition::ErrorCode mojom_error_code,
-    const String& error) {
+    const device::mojom::blink::GeopositionError& error) {
   GeolocationPositionError::ErrorCode error_code =
       GeolocationPositionError::kPositionUnavailable;
-  switch (mojom_error_code) {
-    case device::mojom::blink::Geoposition::ErrorCode::PERMISSION_DENIED:
+  switch (error.error_code) {
+    case device::mojom::blink::GeopositionErrorCode::kPermissionDenied:
       error_code = GeolocationPositionError::kPermissionDenied;
       break;
-    case device::mojom::blink::Geoposition::ErrorCode::POSITION_UNAVAILABLE:
+    case device::mojom::blink::GeopositionErrorCode::kPositionUnavailable:
       error_code = GeolocationPositionError::kPositionUnavailable;
       break;
-    case device::mojom::blink::Geoposition::ErrorCode::NONE:
-    case device::mojom::blink::Geoposition::ErrorCode::TIMEOUT:
-      NOTREACHED();
-      break;
   }
-  return MakeGarbageCollected<GeolocationPositionError>(error_code, error);
+  return MakeGarbageCollected<GeolocationPositionError>(error_code,
+                                                        error.error_message);
 }
 
 static void ReportGeolocationViolation(LocalDOMWindow* window) {
@@ -97,6 +94,12 @@ static void ReportGeolocationViolation(LocalDOMWindow* window) {
         "Only request geolocation information in response to a user gesture.",
         base::TimeDelta(), nullptr);
   }
+}
+
+bool ValidateGeoposition(const device::mojom::blink::Geoposition& position) {
+  return position.latitude >= -90. && position.latitude <= 90. &&
+         position.longitude >= -180. && position.longitude <= 180. &&
+         position.accuracy >= 0. && !position.timestamp.is_null();
 }
 
 }  // namespace
@@ -118,7 +121,8 @@ Geolocation* Geolocation::geolocation(Navigator& navigator) {
 }
 
 Geolocation::Geolocation(Navigator& navigator)
-    : Supplement<Navigator>(navigator),
+    : ActiveScriptWrappable<Geolocation>({}),
+      Supplement<Navigator>(navigator),
       ExecutionContextLifecycleObserver(navigator.DomWindow()),
       PageVisibilityObserver(navigator.DomWindow()->GetFrame()->GetPage()),
       one_shots_(MakeGarbageCollected<GeoNotifierSet>()),
@@ -494,22 +498,27 @@ void Geolocation::QueryNextPosition() {
 }
 
 void Geolocation::OnPositionUpdated(
-    device::mojom::blink::GeopositionPtr position) {
+    device::mojom::blink::GeopositionResultPtr result) {
   disconnected_geolocation_ = false;
-  if (position->valid) {
-    last_position_ = CreateGeoposition(*position);
+  if (result->is_position()) {
+    if (!ValidateGeoposition(*result->get_position())) {
+      return;
+    }
+    last_position_ = CreateGeoposition(*result->get_position());
     PositionChanged();
   } else {
+    DCHECK(result->is_error());
+    const auto& geoposition_error = *result->get_error();
     GeolocationPositionError* position_error =
-        CreatePositionError(position->error_code, position->error_message);
+        CreatePositionError(geoposition_error);
 
     auto* context = GetExecutionContext();
     DCHECK(context);
-    if (!position->error_technical.empty()) {
+    if (!geoposition_error.error_technical.empty()) {
       context->AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
           mojom::blink::ConsoleMessageSource::kNetwork,
           mojom::blink::ConsoleMessageLevel::kError,
-          position->error_technical));
+          geoposition_error.error_technical));
     }
 
     if (position_error->code() == GeolocationPositionError::kPermissionDenied) {

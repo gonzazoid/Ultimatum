@@ -7,8 +7,8 @@
 #include <tuple>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/debug/alias.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -22,9 +22,13 @@
 #include "third_party/skia/include/core/SkSurfaceProps.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
 #include "third_party/skia/include/gpu/gl/GrGLTypes.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_context.h"
+#include "ui/gl/gl_features.h"
+#include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_version_info.h"
 
@@ -45,6 +49,50 @@ NOINLINE void CheckForLoopFailures() {
 
 }  // namespace
 
+class SkiaOutputDeviceGL::MultiSurfaceSwapBuffersTracker {
+ public:
+  // Returns true if multiple surface swaps detected.
+  bool TrackSwapBuffers() {
+    static int next_global_swap_generation = 0;
+    static int num_swaps_in_current_swap_generation = 0;
+    static int last_multi_window_swap_generation = 0;
+
+    // This code is a simple way of enforcing that we only vsync if one surface
+    // is swapping per frame. This provides single window cases a stable refresh
+    // while allowing multi-window cases to not slow down due to multiple syncs
+    // on a single thread. A better way to fix this problem would be to have
+    // each surface present on its own thread.
+
+    // If next global swap generation equals to our surface's next swap
+    // generation means we start new swap generation and this is first surface
+    // to swap.
+    if (next_global_swap_generation == next_surface_swap_generation_) {
+      // Start new generation.
+      next_global_swap_generation++;
+
+      // Store number of swaps in the previous generation.
+      if (num_swaps_in_current_swap_generation > 1) {
+        last_multi_window_swap_generation = next_global_swap_generation;
+      }
+      num_swaps_in_current_swap_generation = 0;
+    }
+
+    next_surface_swap_generation_ = next_global_swap_generation;
+    num_swaps_in_current_swap_generation++;
+
+    // Number of swap generations before vsync is re-enabled after we've stopped
+    // doing multiple swaps per frame.
+    constexpr int kMultiWindowSwapEnableVSyncDelay = 60;
+
+    return (num_swaps_in_current_swap_generation > 1) ||
+           (next_global_swap_generation - last_multi_window_swap_generation <
+            kMultiWindowSwapEnableVSyncDelay);
+  }
+
+ private:
+  int next_surface_swap_generation_ = 0;
+};
+
 SkiaOutputDeviceGL::SkiaOutputDeviceGL(
     gpu::SharedContextState* context_state,
     scoped_refptr<gl::GLSurface> gl_surface,
@@ -52,6 +100,7 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
     gpu::MemoryTracker* memory_tracker,
     DidSwapBufferCompleteCallback did_swap_buffer_complete_callback)
     : SkiaOutputDevice(context_state->gr_context(),
+                       context_state->graphite_context(),
                        memory_tracker,
                        std::move(did_swap_buffer_complete_callback)),
       context_state_(context_state),
@@ -64,15 +113,9 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
           .disable_post_sub_buffers_for_onscreen_surfaces) {
     capabilities_.supports_post_sub_buffer = false;
   }
-  if (feature_info->workarounds().supports_two_yuv_hardware_overlays) {
-    capabilities_.supports_two_yuv_hardware_overlays = true;
-  }
   capabilities_.pending_swap_params.max_pending_swaps =
       gl_surface_->GetBufferCount() - 1;
-  capabilities_.supports_commit_overlay_planes =
-      gl_surface_->SupportsCommitOverlayPlanes();
   capabilities_.supports_gpu_vsync = gl_surface_->SupportsGpuVSync();
-  capabilities_.supports_dc_layers = gl_surface_->SupportsDCLayers();
 #if BUILDFLAG(IS_ANDROID)
   // TODO(weiliangc): This capability is used to check whether we should do
   // overlay. Since currently none of the other overlay system is implemented,
@@ -91,14 +134,6 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   DCHECK(context_state_);
   DCHECK(gl_surface_);
 
-  if (gl_surface_->SupportsSwapTimestamps()) {
-    gl_surface_->SetEnableSwapTimestamps();
-
-    // Changes to swap timestamp queries are only picked up when making current.
-    context_state_->ReleaseCurrent(nullptr);
-    context_state_->MakeCurrent(gl_surface_.get());
-  }
-
   DCHECK(context_state_->gr_context());
   DCHECK(context_state_->context());
 
@@ -109,7 +144,7 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   int alpha_bits = 0;
   glBindFramebufferEXT(GL_FRAMEBUFFER, 0);
   gr_context->resetContext(kRenderTarget_GrGLBackendState);
-  const auto* version = current_gl->Version;
+  const auto* version = current_gl->Version.get();
   if (version->is_desktop_core_profile) {
     glGetFramebufferAttachmentParameterivEXT(
         GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE,
@@ -122,9 +157,8 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   auto color_type = kRGBA_8888_SkColorType;
 
   if (alpha_bits == 0) {
-    color_type = gl_surface_->GetFormat().GetBufferSize() == 16
-                     ? kRGB_565_SkColorType
-                     : kRGB_888x_SkColorType;
+    color_type = gl_surface_->GetFormat().IsRGB565() ? kRGB_565_SkColorType
+                                                     : kRGB_888x_SkColorType;
     // Skia disables RGBx on some GPUs, fallback to RGBA if it's the
     // case. This doesn't change framebuffer itself, as we already allocated it,
     // but will change any temporary buffer Skia needs to allocate.
@@ -150,6 +184,19 @@ SkiaOutputDeviceGL::SkiaOutputDeviceGL(
   // scRGB linear
   capabilities_.sk_color_types[static_cast<int>(gfx::BufferFormat::RGBA_F16)] =
       kRGBA_F16_SkColorType;
+
+  if (features::UseGpuVsync()) {
+    // Historically we never disabled vsync on Android and it's very rare
+    // use-case to have multiple active windows there. On other platforms we
+    // disable GLSurface's VSync if we're swapping multiple surfaces per frame
+    // to prevent SwapBuffers from blocking and slowing down other windows.
+#if !BUILDFLAG(IS_ANDROID)
+    multisurface_swapbuffers_tracker_ =
+        std::make_unique<MultiSurfaceSwapBuffersTracker>();
+#endif
+  } else {
+    gl_surface_->SetVSyncEnabled(false);
+  }
 }
 
 SkiaOutputDeviceGL::~SkiaOutputDeviceGL() {
@@ -157,19 +204,18 @@ SkiaOutputDeviceGL::~SkiaOutputDeviceGL() {
   memory_type_tracker_->TrackMemFree(backbuffer_estimated_size_);
 }
 
-bool SkiaOutputDeviceGL::Reshape(
-    const SkSurfaceCharacterization& characterization,
-    const gfx::ColorSpace& color_space,
-    float device_scale_factor,
-    gfx::OverlayTransform transform) {
+bool SkiaOutputDeviceGL::Reshape(const SkImageInfo& image_info,
+                                 const gfx::ColorSpace& color_space,
+                                 int sample_count,
+                                 float device_scale_factor,
+                                 gfx::OverlayTransform transform) {
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   DCHECK_EQ(transform, gfx::OVERLAY_TRANSFORM_NONE);
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
-  const gfx::Size size = gfx::SkISizeToSize(characterization.dimensions());
-  const SkColorType color_type = characterization.colorType();
-  const bool has_alpha =
-      !SkAlphaTypeIsOpaque(characterization.imageInfo().alphaType());
+  const gfx::Size size = gfx::SkISizeToSize(image_info.dimensions());
+  const SkColorType color_type = image_info.colorType();
+  const bool has_alpha = !image_info.isOpaque();
 
   if (!gl_surface_->Resize(size, device_scale_factor, color_space, has_alpha)) {
     CheckForLoopFailures();
@@ -177,44 +223,30 @@ bool SkiaOutputDeviceGL::Reshape(
     base::debug::Alias(nullptr);
     return false;
   }
-  SkSurfaceProps surface_props{0, kUnknown_SkPixelGeometry};
+  SkSurfaceProps surface_props;
 
   GrGLFramebufferInfo framebuffer_info = {0};
   DCHECK_EQ(gl_surface_->GetBackingFramebufferObject(), 0u);
 
-  switch (color_type) {
-    case kRGBA_8888_SkColorType:
-      framebuffer_info.fFormat = GL_RGBA8;
-      break;
-    case kRGB_888x_SkColorType:
-      framebuffer_info.fFormat = GL_RGB8;
-      break;
-    case kRGB_565_SkColorType:
-      framebuffer_info.fFormat = GL_RGB565;
-      break;
-    case kRGBA_1010102_SkColorType:
-      framebuffer_info.fFormat = GL_RGB10_A2_EXT;
-      break;
-    case kRGBA_F16_SkColorType:
-      framebuffer_info.fFormat = GL_RGBA16F;
-      break;
-    default:
-      NOTREACHED() << "color_type: " << color_type;
-  }
+  auto* gr_context = context_state_->gr_context();
 
-  GrBackendRenderTarget render_target(size.width(), size.height(),
-                                      characterization.sampleCount(),
-                                      /*stencilBits=*/0, framebuffer_info);
+  GrBackendFormat backend_format =
+      gr_context->defaultBackendFormat(color_type, GrRenderable::kYes);
+  DCHECK(backend_format.isValid()) << "color_type: " << color_type;
+  framebuffer_info.fFormat = GrBackendFormats::AsGLFormatEnum(backend_format);
+
+  auto render_target =
+      GrBackendRenderTargets::MakeGL(size.width(), size.height(), sample_count,
+                                     /*stencilBits=*/0, framebuffer_info);
   auto origin = (gl_surface_->GetOrigin() == gfx::SurfaceOrigin::kTopLeft)
                     ? kTopLeft_GrSurfaceOrigin
                     : kBottomLeft_GrSurfaceOrigin;
-  sk_surface_ = SkSurface::MakeFromBackendRenderTarget(
-      context_state_->gr_context(), render_target, origin, color_type,
-      characterization.refColorSpace(), &surface_props);
+  sk_surface_ = SkSurfaces::WrapBackendRenderTarget(
+      gr_context, render_target, origin, color_type, image_info.refColorSpace(),
+      &surface_props);
   if (!sk_surface_) {
     LOG(ERROR) << "Couldn't create surface:"
-               << "\n  abandoned()="
-               << context_state_->gr_context()->abandoned()
+               << "\n  abandoned()=" << gr_context->abandoned()
                << "\n  color_type=" << color_type
                << "\n  framebuffer_info.fFBOID=" << framebuffer_info.fFBOID
                << "\n  framebuffer_info.fFormat=" << framebuffer_info.fFormat
@@ -240,70 +272,44 @@ bool SkiaOutputDeviceGL::Reshape(
   return !!sk_surface_;
 }
 
-void SkiaOutputDeviceGL::SwapBuffers(BufferPresentedCallback feedback,
-                                     OutputSurfaceFrame frame) {
-  StartSwapBuffers({});
-
-  gfx::Size surface_size =
-      gfx::Size(sk_surface_->width(), sk_surface_->height());
-
-  auto data = std::move(frame.data);
-  if (supports_async_swap_) {
-    auto callback = base::BindOnce(
-        &SkiaOutputDeviceGL::DoFinishSwapBuffersAsync,
-        weak_ptr_factory_.GetWeakPtr(), surface_size, std::move(frame));
-    gl_surface_->SwapBuffersAsync(std::move(callback), std::move(feedback),
-                                  std::move(data));
-  } else {
-    gfx::SwapResult result =
-        gl_surface_->SwapBuffers(std::move(feedback), std::move(data));
-    DoFinishSwapBuffers(surface_size, std::move(frame),
-                        gfx::SwapCompletionResult(result));
+void SkiaOutputDeviceGL::Present(const absl::optional<gfx::Rect>& update_rect,
+                                 BufferPresentedCallback feedback,
+                                 OutputSurfaceFrame frame) {
+  if (multisurface_swapbuffers_tracker_) {
+    const bool multiple_surface_swaps =
+        multisurface_swapbuffers_tracker_->TrackSwapBuffers();
+    gl_surface_->SetVSyncEnabled(!multiple_surface_swaps);
   }
-}
 
-void SkiaOutputDeviceGL::PostSubBuffer(const gfx::Rect& rect,
-                                       BufferPresentedCallback feedback,
-                                       OutputSurfaceFrame frame) {
   StartSwapBuffers({});
 
   gfx::Size surface_size =
       gfx::Size(sk_surface_->width(), sk_surface_->height());
 
-  auto data = std::move(frame.data);
+  auto data = frame.data;
   if (supports_async_swap_) {
     auto callback = base::BindOnce(
         &SkiaOutputDeviceGL::DoFinishSwapBuffersAsync,
         weak_ptr_factory_.GetWeakPtr(), surface_size, std::move(frame));
-    gl_surface_->PostSubBufferAsync(rect.x(), rect.y(), rect.width(),
-                                    rect.height(), std::move(callback),
-                                    std::move(feedback), std::move(data));
+
+    if (update_rect) {
+      gl_surface_->PostSubBufferAsync(
+          update_rect->x(), update_rect->y(), update_rect->width(),
+          update_rect->height(), std::move(callback), std::move(feedback),
+          std::move(data));
+    } else {
+      gl_surface_->SwapBuffersAsync(std::move(callback), std::move(feedback),
+                                    std::move(data));
+    }
   } else {
-    gfx::SwapResult result = gl_surface_->PostSubBuffer(
-        rect.x(), rect.y(), rect.width(), rect.height(), std::move(feedback),
-        std::move(data));
-    DoFinishSwapBuffers(surface_size, std::move(frame),
-                        gfx::SwapCompletionResult(result));
-  }
-}
-
-void SkiaOutputDeviceGL::CommitOverlayPlanes(BufferPresentedCallback feedback,
-                                             OutputSurfaceFrame frame) {
-  StartSwapBuffers({});
-
-  gfx::Size surface_size =
-      gfx::Size(sk_surface_->width(), sk_surface_->height());
-
-  auto data = std::move(frame.data);
-  if (supports_async_swap_) {
-    auto callback = base::BindOnce(
-        &SkiaOutputDeviceGL::DoFinishSwapBuffersAsync,
-        weak_ptr_factory_.GetWeakPtr(), surface_size, std::move(frame));
-    gl_surface_->CommitOverlayPlanesAsync(std::move(callback),
-                                          std::move(feedback), std::move(data));
-  } else {
-    gfx::SwapResult result =
-        gl_surface_->CommitOverlayPlanes(std::move(feedback), std::move(data));
+    gfx::SwapResult result;
+    if (update_rect) {
+      result = gl_surface_->PostSubBuffer(
+          update_rect->x(), update_rect->y(), update_rect->width(),
+          update_rect->height(), std::move(feedback), std::move(data));
+    } else {
+      result = gl_surface_->SwapBuffers(std::move(feedback), std::move(data));
+    }
     DoFinishSwapBuffers(surface_size, std::move(frame),
                         gfx::SwapCompletionResult(result));
   }
@@ -322,23 +328,6 @@ void SkiaOutputDeviceGL::DoFinishSwapBuffers(const gfx::Size& size,
                                              gfx::SwapCompletionResult result) {
   DCHECK(result.release_fence.is_null());
   FinishSwapBuffers(std::move(result), size, std::move(frame));
-}
-
-bool SkiaOutputDeviceGL::SetDrawRectangle(const gfx::Rect& draw_rectangle) {
-  return gl_surface_->SetDrawRectangle(draw_rectangle);
-}
-
-void SkiaOutputDeviceGL::SetGpuVSyncEnabled(bool enabled) {
-  gl_surface_->SetGpuVSyncEnabled(enabled);
-}
-
-void SkiaOutputDeviceGL::SetEnableDCLayers(bool enable) {
-  gl_surface_->SetEnableDCLayers(enable);
-}
-
-void SkiaOutputDeviceGL::ScheduleOverlays(
-    SkiaOutputSurface::OverlayList overlays) {
-  NOTREACHED();
 }
 
 void SkiaOutputDeviceGL::EnsureBackbuffer() {

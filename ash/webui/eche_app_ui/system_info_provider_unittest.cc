@@ -5,20 +5,21 @@
 #include "ash/webui/eche_app_ui/system_info_provider.h"
 
 #include "ash/public/cpp/network_config_service.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "ash/webui/eche_app_ui/system_info.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
+#include "ui/display/test/test_screen.h"
 
-namespace ash {
-namespace eche_app {
+namespace ash::eche_app {
 
-using chromeos::network_config::mojom::ConnectionStateType;
-// TODO(https://crbug.com/1164001): remove when it moved to ash.
 namespace network_config = ::chromeos::network_config;
+using network_config::mojom::ConnectionStateType;
 
 const char kFakeDeviceName[] = "Guanru's Chromebook";
 const char kFakeBoardName[] = "atlas";
@@ -28,9 +29,13 @@ const ConnectionStateType kFakeWifiConnectionState =
 const bool kFakeDebugMode = false;
 const char kFakeGaiaId[] = "123";
 const char kFakeDeviceType[] = "Chromebook";
+const char kFakeOsVersion[] = "1.2.3.4";
+const char kFakeChannel[] = "Dev";
 const bool kFakeMeasureLatency = false;
-const bool kFakeSendStartSignaling = false;
+const bool kFakeSendStartSignaling = true;
 const bool kFakeDisableStunServer = false;
+const bool kFakeCheckAndroidNetworkInfo = true;
+const bool kFakeProcessAndroidAccessibilityTree = false;
 
 void ParseJson(const std::string& json,
                std::string& device_name,
@@ -40,10 +45,14 @@ void ParseJson(const std::string& json,
                bool& debug_mode,
                std::string& gaia_id,
                std::string& device_type,
+               std::string& os_version,
+               std::string& channel,
                bool& measure_latency,
                bool& send_start_signaling,
-               bool& disable_stun_server) {
-  absl::optional<base::Value> message_value = base::JSONReader::Read(json);
+               bool& disable_stun_server,
+               bool& check_android_network_info,
+               bool& process_android_accessibility_tree) {
+  std::optional<base::Value> message_value = base::JSONReader::Read(json);
   base::Value::Dict* message_dictionary = message_value->GetIfDict();
   const std::string* device_name_ptr =
       message_dictionary->FindString(kJsonDeviceNameKey);
@@ -53,7 +62,7 @@ void ParseJson(const std::string& json,
       message_dictionary->FindString(kJsonBoardNameKey);
   if (board_name_ptr)
     board_name = *board_name_ptr;
-  absl::optional<bool> tablet_mode_opt =
+  std::optional<bool> tablet_mode_opt =
       message_dictionary->FindBool(kJsonTabletModeKey);
   if (tablet_mode_opt.has_value())
     tablet_mode = tablet_mode_opt.value();
@@ -61,7 +70,7 @@ void ParseJson(const std::string& json,
       message_dictionary->FindString(kJsonWifiConnectionStateKey);
   if (wifi_connection_state_ptr)
     wifi_connection_state = *wifi_connection_state_ptr;
-  absl::optional<bool> debug_mode_opt =
+  std::optional<bool> debug_mode_opt =
       message_dictionary->FindBool(kJsonDebugModeKey);
   if (debug_mode_opt.has_value())
     debug_mode = debug_mode_opt.value();
@@ -73,18 +82,36 @@ void ParseJson(const std::string& json,
       message_dictionary->FindString(kJsonDeviceTypeKey);
   if (device_type_ptr)
     device_type = *device_type_ptr;
-  absl::optional<bool> measure_latency_opt =
+  const std::string* os_version_ptr =
+      message_dictionary->FindString(kJsonOsVersionKey);
+  if (os_version_ptr) {
+    os_version = *os_version_ptr;
+  }
+  const std::string* channel_ptr =
+      message_dictionary->FindString(kJsonChannelKey);
+  if (channel_ptr) {
+    channel = *channel_ptr;
+  }
+  std::optional<bool> measure_latency_opt =
       message_dictionary->FindBool(kJsonMeasureLatencyKey);
   if (measure_latency_opt.has_value())
     measure_latency = measure_latency_opt.value();
-  absl::optional<bool> send_start_signaling_opt =
+  std::optional<bool> send_start_signaling_opt =
       message_dictionary->FindBool(kJsonSendStartSignalingKey);
   if (send_start_signaling_opt.has_value())
     send_start_signaling = send_start_signaling_opt.value();
-  absl::optional<bool> disable_stun_server_opt =
+  std::optional<bool> disable_stun_server_opt =
       message_dictionary->FindBool(kJsonDisableStunServerKey);
   if (disable_stun_server_opt.has_value())
     disable_stun_server = disable_stun_server_opt.value();
+  std::optional<bool> check_android_network_info_opt =
+      message_dictionary->FindBool(kJsonCheckAndroidNetworkInfoKey);
+  if (check_android_network_info_opt.has_value())
+    check_android_network_info = check_android_network_info_opt.value();
+  std::optional<bool> process_android_accessibility_tree_opt =
+      message_dictionary->FindBool(kJsonProcessAndroidAccessibilityTreeKey);
+  if (process_android_accessibility_tree_opt.has_value())
+    process_android_accessibility_tree = process_android_accessibility_tree_opt.value();
 }
 
 class TaskRunner {
@@ -101,45 +128,6 @@ class TaskRunner {
   base::RunLoop run_loop_;
 };
 
-class FakeTabletMode : public ash::TabletMode {
- public:
-  FakeTabletMode() = default;
-  ~FakeTabletMode() override = default;
-
-  // ash::TabletMode:
-  void AddObserver(ash::TabletModeObserver* observer) override {
-    DCHECK(!observer_);
-    observer_ = observer;
-  }
-
-  void RemoveObserver(ash::TabletModeObserver* observer) override {
-    DCHECK_EQ(observer_, observer);
-    observer_ = nullptr;
-  }
-
-  bool InTabletMode() const override { return in_tablet_mode; }
-
-  bool ForceUiTabletModeState(absl::optional<bool> enabled) override {
-    return false;
-  }
-
-  void SetEnabledForTest(bool enabled) override {
-    bool changed = (in_tablet_mode != enabled);
-    in_tablet_mode = enabled;
-
-    if (changed && observer_) {
-      if (in_tablet_mode)
-        observer_->OnTabletModeStarted();
-      else
-        observer_->OnTabletModeEnded();
-    }
-  }
-
- private:
-  ash::TabletModeObserver* observer_ = nullptr;
-  bool in_tablet_mode = false;
-};
-
 class FakeObserver : public mojom::SystemInfoObserver {
  public:
   FakeObserver() = default;
@@ -149,6 +137,7 @@ class FakeObserver : public mojom::SystemInfoObserver {
     return num_backlight_state_calls_;
   }
   size_t num_tablet_state_calls() const { return num_tablet_state_calls_; }
+  size_t num_android_state_calls() const { return num_android_state_calls_; }
 
   // mojom::SystemInfoObserver:
   void OnScreenBacklightStateChanged(
@@ -167,6 +156,15 @@ class FakeObserver : public mojom::SystemInfoObserver {
     }
   }
 
+  void OnAndroidDeviceNetworkInfoChanged(
+      bool is_different_network,
+      bool android_device_on_cellular) override {
+    ++num_android_state_calls_;
+    if (task_runner_) {
+      task_runner_->Finish();
+    }
+  }
+
   static void setTaskRunner(TaskRunner* task_runner) {
     task_runner_ = task_runner;
   }
@@ -176,6 +174,7 @@ class FakeObserver : public mojom::SystemInfoObserver {
  private:
   size_t num_backlight_state_calls_ = 0;
   size_t num_tablet_state_calls_ = 0;
+  size_t num_android_state_calls_ = 0;
   static TaskRunner* task_runner_;
 };
 
@@ -203,19 +202,20 @@ class SystemInfoProviderTest : public testing::Test {
   SystemInfoProviderTest(const SystemInfoProviderTest&) = delete;
   SystemInfoProviderTest& operator=(const SystemInfoProviderTest&) = delete;
   ~SystemInfoProviderTest() override = default;
-  std::unique_ptr<FakeTabletMode> tablet_mode_controller_;
-  std::unique_ptr<FakeObserver> fake_observer_;
 
   // testing::Test:
   void SetUp() override {
-    tablet_mode_controller_ = std::make_unique<FakeTabletMode>();
-    tablet_mode_controller_->SetEnabledForTest(true);
+    display::Screen::GetScreen()->OverrideTabletStateForTesting(
+        display::TabletState::kInTabletMode);
+
     system_info_provider_ =
         std::make_unique<SystemInfoProvider>(SystemInfo::Builder()
                                                  .SetDeviceName(kFakeDeviceName)
                                                  .SetBoardName(kFakeBoardName)
                                                  .SetGaiaId(kFakeGaiaId)
                                                  .SetDeviceType(kFakeDeviceType)
+                                                 .SetOsVersion(kFakeOsVersion)
+                                                 .SetChannel(kFakeChannel)
                                                  .Build(),
                                              remote_cros_network_config_.get());
     fake_observer_ = std::make_unique<FakeObserver>();
@@ -235,7 +235,8 @@ class SystemInfoProviderTest : public testing::Test {
   }
 
   void SetWifiConnectionStateList() {
-    system_info_provider_->OnWifiNetworkList(GetWifiNetworkStateList());
+    system_info_provider_->OnActiveWifiNetworkListFetched(
+        GetWifiNetworkStateList());
   }
 
   void SetOnScreenBacklightStateChanged() {
@@ -243,17 +244,67 @@ class SystemInfoProviderTest : public testing::Test {
         ash::ScreenBacklightState::OFF);
   }
 
-  void OnTabletModeStarted() { system_info_provider_->OnTabletModeStarted(); }
+  void SetAndroidDeviceNetworkInfoChanged() {
+    system_info_provider_->SetAndroidDeviceNetworkInfoChanged(false, false);
+  }
 
-  void OnTabletModeEnded() { system_info_provider_->OnTabletModeEnded(); }
+  void StartTabletMode() {
+    system_info_provider_->OnDisplayTabletStateChanged(
+        display::TabletState::kInTabletMode);
+  }
+
+  void EndTabletMode() {
+    system_info_provider_->OnDisplayTabletStateChanged(
+        display::TabletState::kInClamshellMode);
+  }
 
   std::vector<network_config::mojom::NetworkStatePropertiesPtr>
   GetWifiNetworkStateList() {
     std::vector<network_config::mojom::NetworkStatePropertiesPtr> result;
-    auto network =
-        ::chromeos::network_config::mojom::NetworkStateProperties::New();
-    network->type = chromeos::network_config::mojom::NetworkType::kWiFi;
+
+    // Create a WiFiStatePropertiesPtr object
+    network_config::mojom::WiFiStatePropertiesPtr wifi_state_properties =
+        network_config::mojom::WiFiStateProperties::New();
+
+    // Set the required properties
+    wifi_state_properties->bssid = "00:11:22:33:44:55";
+    wifi_state_properties->frequency = 2412;
+    wifi_state_properties->hex_ssid = "48656c6c6f";
+    wifi_state_properties->security =
+        network_config::mojom::SecurityType::kNone;
+    wifi_state_properties->signal_strength = -50;
+    wifi_state_properties->ssid = "Test";
+    wifi_state_properties->hidden_ssid = false;
+
+    // Create a new NetworkTypeStateProperties object with the
+    // WiFiStateProperties
+    network_config::mojom::NetworkTypeStatePropertiesPtr
+        network_type_state_properties =
+            network_config::mojom::NetworkTypeStateProperties::NewWifi(
+                std::move(wifi_state_properties));
+
+    auto network = network_config::mojom::NetworkStateProperties::New(
+        /*connectable=*/true,
+        /*connect_requested=*/false,
+        /*connection_state=*/
+        kFakeWifiConnectionState,
+        /*error_state=*/std::nullopt,
+        /*guid=*/"some_guid",
+        /*name=*/"some_name",
+        /*portal_state=*/
+        network_config::mojom::PortalState::kUnknown,
+        /*portal_probe_url=*/std::nullopt,
+        /*priority=*/1,
+        /*proxy_mode=*/network_config::mojom::ProxyMode::kDirect,
+        /*prohibited_by_policy=*/false,
+        /*source=*/
+        network_config::mojom::OncSource::kUser,
+        /*network_type*/ network_config::mojom::NetworkType::kWiFi,
+        /*network_type_state*/ std::move(network_type_state_properties));
+
+    network->type = network_config::mojom::NetworkType::kWiFi;
     network->connection_state = kFakeWifiConnectionState;
+
     result.emplace_back(std::move(network));
     return result;
   }
@@ -264,12 +315,19 @@ class SystemInfoProviderTest : public testing::Test {
   size_t GetNumBacklightStateObserverCalls() const {
     return fake_observer_->num_backlight_state_calls();
   }
+  size_t GetNumAndroidStateObserverCalls() const {
+    return fake_observer_->num_android_state_calls();
+  }
+
   TaskRunner task_runner_;
 
+  std::unique_ptr<FakeObserver> fake_observer_;
+
  private:
-  // base::test::TaskEnvironment task_environment_;
+  display::test::TestScreen test_screen_{/*create_display=*/true,
+                                         /*register_screen=*/true};
   std::unique_ptr<SystemInfoProvider> system_info_provider_;
-  mojo::Remote<chromeos::network_config::mojom::CrosNetworkConfig>
+  mojo::Remote<network_config::mojom::CrosNetworkConfig>
       remote_cros_network_config_;
 };
 
@@ -281,15 +339,20 @@ TEST_F(SystemInfoProviderTest, GetSystemInfoHasCorrectJson) {
   bool debug_mode = true;
   std::string gaia_id = "";
   std::string device_type = "";
+  std::string os_version = "";
+  std::string channel = "";
   bool measure_latency = true;
   bool send_start_signaling = false;
   bool disable_stun_server = true;
+  bool check_android_network_info = true;
+  bool process_android_accessibility_tree = true;
 
   GetSystemInfo();
   std::string json = Callback::GetSystemInfo();
   ParseJson(json, device_name, board_name, tablet_mode, wifi_connection_state,
-            debug_mode, gaia_id, device_type, measure_latency,
-            send_start_signaling, disable_stun_server);
+            debug_mode, gaia_id, device_type, os_version, channel,
+            measure_latency, send_start_signaling, disable_stun_server,
+            check_android_network_info, process_android_accessibility_tree);
 
   EXPECT_EQ(device_name, kFakeDeviceName);
   EXPECT_EQ(board_name, kFakeBoardName);
@@ -298,9 +361,13 @@ TEST_F(SystemInfoProviderTest, GetSystemInfoHasCorrectJson) {
   EXPECT_EQ(debug_mode, kFakeDebugMode);
   EXPECT_EQ(gaia_id, kFakeGaiaId);
   EXPECT_EQ(device_type, kFakeDeviceType);
+  EXPECT_EQ(os_version, kFakeOsVersion);
+  EXPECT_EQ(channel, kFakeChannel);
   EXPECT_EQ(measure_latency, kFakeMeasureLatency);
   EXPECT_EQ(send_start_signaling, kFakeSendStartSignaling);
   EXPECT_EQ(disable_stun_server, kFakeDisableStunServer);
+  EXPECT_EQ(check_android_network_info, kFakeCheckAndroidNetworkInfo);
+  EXPECT_EQ(process_android_accessibility_tree, kFakeProcessAndroidAccessibilityTree);
 }
 
 TEST_F(SystemInfoProviderTest, ObserverCalledWhenBacklightChanged) {
@@ -313,7 +380,7 @@ TEST_F(SystemInfoProviderTest, ObserverCalledWhenBacklightChanged) {
 
 TEST_F(SystemInfoProviderTest, ObserverCalledWhenTabletModeStarted) {
   FakeObserver::setTaskRunner(&task_runner_);
-  OnTabletModeStarted();
+  StartTabletMode();
   task_runner_.WaitForResult();
 
   EXPECT_EQ(1u, GetNumTabletStateObserverCalls());
@@ -321,11 +388,19 @@ TEST_F(SystemInfoProviderTest, ObserverCalledWhenTabletModeStarted) {
 
 TEST_F(SystemInfoProviderTest, ObserverCalledWhenTabletModeEnded) {
   FakeObserver::setTaskRunner(&task_runner_);
-  OnTabletModeEnded();
+  EndTabletMode();
   task_runner_.WaitForResult();
 
   EXPECT_EQ(1u, GetNumTabletStateObserverCalls());
 }
 
-}  // namespace eche_app
-}  // namespace ash
+TEST_F(SystemInfoProviderTest,
+       ObserverCalledWhenAndroidDeviceNetworkStateChanged) {
+  FakeObserver::setTaskRunner(&task_runner_);
+  SetAndroidDeviceNetworkInfoChanged();
+  task_runner_.WaitForResult();
+
+  EXPECT_EQ(1u, GetNumAndroidStateObserverCalls());
+}
+
+}  // namespace ash::eche_app

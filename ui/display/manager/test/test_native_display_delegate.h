@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/display/manager/test/action_logger.h"
 #include "ui/display/manager/test/action_logger_util.h"
@@ -40,12 +41,6 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
 
   ~TestNativeDisplayDelegate() override;
 
-  const std::vector<DisplaySnapshot*>& outputs() const { return outputs_; }
-
-  void set_outputs(const std::vector<DisplaySnapshot*>& outputs) {
-    outputs_ = outputs;
-  }
-
   void set_max_configurable_pixels(int pixels) {
     max_configurable_pixels_ = pixels;
   }
@@ -75,6 +70,12 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
 
   void set_run_async(bool run_async) { run_async_ = run_async; }
 
+  const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>> GetOutputs()
+      const;
+
+  // Sets and takes ownership of the provided |outputs|.
+  void SetOutputs(std::vector<std::unique_ptr<DisplaySnapshot>> outputs);
+
   // NativeDisplayDelegate overrides:
   void Initialize() override;
   void TakeDisplayControl(DisplayControlCallback callback) override;
@@ -84,18 +85,27 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
       const std::vector<display::DisplayConfigurationParams>& config_requests,
       ConfigureCallback callback,
       uint32_t modeset_flag) override;
+  void SetHdcpKeyProp(int64_t display_id,
+                      const std::string& key,
+                      SetHdcpKeyPropCallback callback) override;
   void GetHDCPState(const DisplaySnapshot& output,
                     GetHDCPStateCallback callback) override;
   void SetHDCPState(const DisplaySnapshot& output,
                     HDCPState state,
                     ContentProtectionMethod protection_method,
                     SetHDCPStateCallback callback) override;
+  void SetColorTemperatureAdjustment(
+      int64_t display_id,
+      const ColorTemperatureAdjustment& cta) override;
+  void SetColorCalibration(int64_t display_id,
+                           const ColorCalibration& calibration) override;
+  void SetGammaAdjustment(int64_t display_id,
+                          const GammaAdjustment& gamma) override;
   bool SetColorMatrix(int64_t display_id,
                       const std::vector<float>& color_matrix) override;
-  bool SetGammaCorrection(
-      int64_t display_id,
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut) override;
+  bool SetGammaCorrection(int64_t display_id,
+                          const display::GammaCurve& degamma,
+                          const display::GammaCurve& gamma) override;
   void SetPrivacyScreen(int64_t display_id,
                         bool enabled,
                         SetPrivacyScreenCallback callback) override;
@@ -118,7 +128,9 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
       const std::vector<display::DisplayConfigurationParams>& config_requests);
 
   // Outputs to be returned by GetDisplays().
-  std::vector<DisplaySnapshot*> outputs_;
+  std::vector<std::unique_ptr<DisplaySnapshot>> outputs_;
+  // Outputs which are scheduled for deletion after the next invalidation.
+  std::vector<std::unique_ptr<DisplaySnapshot>> cached_outputs_;
 
   // |max_configurable_pixels_| represents the maximum number of pixels that
   // Configure will support.  Tests can use this to force Configure
@@ -141,12 +153,13 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
   // If true, the callbacks are posted on the message loop.
   bool run_async_;
 
-  ActionLogger* log_;  // Not owned.
+  raw_ptr<ActionLogger, DanglingUntriaged> log_;  // Not owned.
 
   base::ObserverList<NativeDisplayObserver>::Unchecked observers_;
 };
 
 }  // namespace test
+
 }  // namespace display
 
 #endif  // UI_DISPLAY_MANAGER_TEST_TEST_NATIVE_DISPLAY_DELEGATE_H_

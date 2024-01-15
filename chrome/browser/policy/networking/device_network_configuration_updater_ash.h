@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/policy/networking/network_configuration_updater.h"
 #include "components/onc/onc_constants.h"
@@ -69,15 +70,17 @@ class DeviceNetworkConfigurationUpdaterAsh
   // NetworkConfigurationUpdater:
   void Init() override;
   void ImportClientCertificates() override;
-  void ApplyNetworkPolicy(base::Value::List network_configs_onc,
-                          base::Value::Dict global_network_config) override;
+  void ApplyNetworkPolicy(
+      const base::Value::List& network_configs_onc,
+      const base::Value::Dict& global_network_config) override;
   void OnDataRoamingSettingChanged();
 
   // Pointer to the global singleton or a test instance.
-  ash::ManagedNetworkConfigurationHandler* const network_config_handler_;
+  const raw_ptr<ash::ManagedNetworkConfigurationHandler>
+      network_config_handler_;
 
-  ash::NetworkDeviceHandler* const network_device_handler_;
-  ash::CrosSettings* const cros_settings_;
+  const raw_ptr<ash::NetworkDeviceHandler> network_device_handler_;
+  const raw_ptr<ash::CrosSettings> cros_settings_;
   base::CallbackListSubscription data_roaming_setting_subscription_;
 
   // Returns the device's administrator-set asset id.

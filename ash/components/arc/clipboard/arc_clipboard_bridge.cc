@@ -114,7 +114,8 @@ void ProcessHTML(const mojom::ClipRepresentation* repr,
   DCHECK(repr->value->is_text());
   DCHECK(writer);
 
-  writer->WriteHTML(base::UTF8ToUTF16(repr->value->get_text()), std::string());
+  writer->WriteHTML(base::UTF8ToUTF16(repr->value->get_text()), std::string(),
+                    ui::ClipboardContentType::kSanitized);
 }
 
 void ProcessPlainText(const mojom::ClipRepresentation* repr,
@@ -196,6 +197,11 @@ void ArcClipboardBridge::GetClipContent(GetClipContentCallback callback) {
   ui::Clipboard* clipboard = ui::Clipboard::GetForCurrentThread();
   mojom::ClipDataPtr clip_data = GetClipData(clipboard);
   std::move(callback).Run(std::move(clip_data));
+}
+
+// static
+void ArcClipboardBridge::EnsureFactoryBuilt() {
+  ArcClipboardBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

@@ -3,14 +3,15 @@
 // found in the LICENSE file.
 
 #include "base/test/task_environment.h"
+#include "chromeos/ash/services/libassistant/display_connection.h"
 #include "chromeos/ash/services/libassistant/libassistant_service.h"
 #include "chromeos/ash/services/libassistant/public/mojom/speech_recognition_observer.mojom.h"
 #include "chromeos/ash/services/libassistant/test_support/libassistant_service_tester.h"
 #include "chromeos/assistant/internal/internal_util.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/assistant/internal/proto/assistant/display_connection.pb.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/display_interface.pb.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -78,12 +79,17 @@ class AssistantSpeechRecognitionObserverTest : public ::testing::Test {
 
   SpeechRecognitionObserverMock& observer_mock() { return observer_mock_; }
 
-  assistant_client::DisplayConnection& display_connection() {
-    return *service_tester_.assistant_manager_internal().display_connection();
-  }
-
   assistant_client::ConversationStateListener& conversation_state_listener() {
     return *service_tester_.assistant_manager().conversation_state_listener();
+  }
+
+  void SendDisplayConnectionEvent(const std::string& event) {
+    ::assistant::api::OnAssistantDisplayEventRequest request;
+    auto* assistant_display_event = request.mutable_event();
+    auto* on_assistant_event =
+        assistant_display_event->mutable_on_assistant_event();
+    on_assistant_event->set_assistant_event_bytes(event);
+    service_tester_.GetDisplayConnection().OnGrpcMessage(request);
   }
 
  private:
@@ -95,8 +101,7 @@ class AssistantSpeechRecognitionObserverTest : public ::testing::Test {
 TEST_F(AssistantSpeechRecognitionObserverTest,
        ShouldReceiveSpeechLevelUpdates) {
   EXPECT_CALL(observer_mock(), OnSpeechLevelUpdated(0.5));
-  display_connection().OnAssistantEvent(
-      CreateDisplayAssistantEvent(/*speech_level=*/0.5));
+  SendDisplayConnectionEvent(CreateDisplayAssistantEvent(/*speech_level=*/0.5));
   observer_mock().FlushForTesting();
 }
 

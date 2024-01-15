@@ -4,7 +4,7 @@
 
 #include "chrome/updater/app/app_wake.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/updater/app/app.h"
 #include "chrome/updater/constants.h"
@@ -24,25 +24,11 @@ class AppWake : public App {
 
   // Overrides for App.
   void FirstTaskRun() override;
-  void Uninitialize() override;
-
-  scoped_refptr<UpdateServiceInternal> update_service_internal_;
 };
 
 void AppWake::FirstTaskRun() {
-  // The service creation might need task runners and the update service
-  // internal needs to be instantiated after the base class has initialized
-  // the thread pool.
-  //
-  // TODO(crbug.com/1113448) - consider initializing the thread pool in the
-  // constructor of the base class or earlier, in the updater main.
-  update_service_internal_ = CreateUpdateServiceInternalProxy(updater_scope());
-  update_service_internal_->Run(
-      base::BindOnce(&AppWake::Shutdown, this, kErrorOk));
-}
-
-void AppWake::Uninitialize() {
-  update_service_internal_->Uninitialize();
+  CreateUpdateServiceInternalProxy(updater_scope())
+      ->Run(base::BindOnce(&AppWake::Shutdown, this, kErrorOk));
 }
 
 scoped_refptr<App> MakeAppWake() {

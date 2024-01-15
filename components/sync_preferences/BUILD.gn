@@ -7,14 +7,21 @@ import("//build/config/features.gni")
 
 static_library("sync_preferences") {
   sources = [
+    "dual_layer_user_pref_store.cc",
+    "dual_layer_user_pref_store.h",
     "pref_model_associator.cc",
     "pref_model_associator.h",
+    "pref_model_associator_client.cc",
     "pref_model_associator_client.h",
     "pref_service_syncable.cc",
     "pref_service_syncable.h",
     "pref_service_syncable_factory.cc",
     "pref_service_syncable_factory.h",
     "pref_service_syncable_observer.h",
+    "preferences_merge_helper.cc",
+    "preferences_merge_helper.h",
+    "syncable_prefs_database.cc",
+    "syncable_prefs_database.h",
     "synced_pref_observer.h",
   ]
 
@@ -32,11 +39,41 @@ static_library("sync_preferences") {
   }
 }
 
+source_set("common_syncable_prefs_database") {
+  sources = [
+    "common_syncable_prefs_database.cc",
+    "common_syncable_prefs_database.h",
+  ]
+  deps = [
+    ":sync_preferences",
+    "//base",
+    "//components/autofill/core/common",
+    "//components/bookmarks/common",
+    "//components/browsing_data/core",
+    "//components/commerce/core:pref_names",
+    "//components/content_settings/core/common",
+    "//components/dom_distiller/core",
+    "//components/language/core/browser",
+    "//components/metrics",
+    "//components/metrics/demographics",
+    "//components/ntp_tiles",
+    "//components/omnibox/browser",
+    "//components/password_manager/core/common",
+    "//components/payments/core",
+    "//components/safe_browsing/core/common:safe_browsing_prefs",
+    "//components/search_engines",
+    "//components/translate/core/browser",
+    "//components/variations/service",
+  ]
+}
+
 static_library("test_support") {
   testonly = true
   sources = [
     "pref_service_mock_factory.cc",
     "pref_service_mock_factory.h",
+    "test_syncable_prefs_database.cc",
+    "test_syncable_prefs_database.h",
     "testing_pref_service_syncable.cc",
     "testing_pref_service_syncable.h",
   ]
@@ -53,8 +90,10 @@ static_library("test_support") {
 source_set("unit_tests") {
   testonly = true
   sources = [
+    "dual_layer_user_pref_store_unittest.cc",
     "pref_model_associator_unittest.cc",
     "pref_service_syncable_unittest.cc",
+    "preferences_merge_helper_unittest.cc",
   ]
 
   deps = [

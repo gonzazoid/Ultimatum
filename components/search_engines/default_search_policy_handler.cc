@@ -19,6 +19,7 @@
 #include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/search_terms_data.h"
 #include "components/search_engines/template_url.h"
+#include "components/search_engines/template_url_data.h"
 #include "components/strings/grit/components_strings.h"
 
 namespace policy {
@@ -70,8 +71,6 @@ const PolicyToPreferenceMapEntry kDefaultSearchPolicyDataMap[] = {
      base::Value::Type::STRING},
     {key::kDefaultSearchProviderSuggestURL,
      DefaultSearchManager::kSuggestionsURL, base::Value::Type::STRING},
-    {key::kDefaultSearchProviderIconURL, DefaultSearchManager::kFaviconURL,
-     base::Value::Type::STRING},
     {key::kDefaultSearchProviderEncodings,
      DefaultSearchManager::kInputEncodings, base::Value::Type::LIST},
     {key::kDefaultSearchProviderAlternateURLs,
@@ -171,8 +170,6 @@ void DefaultSearchPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
                   DefaultSearchManager::kURL, dict);
   SetStringInPref(policies, key::kDefaultSearchProviderSuggestURL,
                   DefaultSearchManager::kSuggestionsURL, dict);
-  SetStringInPref(policies, key::kDefaultSearchProviderIconURL,
-                  DefaultSearchManager::kFaviconURL, dict);
   SetListInPref(policies, key::kDefaultSearchProviderEncodings,
                 DefaultSearchManager::kInputEncodings, dict);
   SetListInPref(policies, key::kDefaultSearchProviderAlternateURLs,
@@ -191,9 +188,9 @@ void DefaultSearchPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
   SetBooleanInPref(policies,
                    key::kDefaultSearchProviderContextMenuAccessAllowed,
                    prefs::kDefaultSearchProviderContextMenuAccessAllowed, dict);
-  size_t policyCount = 14;
-#else
   size_t policyCount = 13;
+#else
+  size_t policyCount = 12;
 #endif
 
   CHECK_EQ(policyCount, std::size(kDefaultSearchPolicyDataMap));
@@ -211,7 +208,9 @@ void DefaultSearchPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
   dict.Set(DefaultSearchManager::kLastModified,
            static_cast<double>(base::Time::Now().ToInternalValue()));
   dict.Set(DefaultSearchManager::kUsageCount, 0);
-  dict.Set(DefaultSearchManager::kCreatedByPolicy, true);
+  dict.Set(DefaultSearchManager::kCreatedByPolicy,
+           static_cast<int>(
+               TemplateURLData::CreatedByPolicy::kDefaultSearchProvider));
 
   // For the name and keyword, default to the host if not specified.  If
   // there is no host (as is the case with file URLs of the form:

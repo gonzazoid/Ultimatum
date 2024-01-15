@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "dbus/message.h"
@@ -100,9 +100,9 @@ void ServiceProviderTestHelper::SetUpReturnSignal(
 
 std::unique_ptr<dbus::Response> ServiceProviderTestHelper::CallMethod(
     dbus::MethodCall* method_call) {
-  return mock_object_proxy_->CallMethodAndBlock(
-      method_call,
-      dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+  return mock_object_proxy_
+      ->CallMethodAndBlock(method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+      .value_or(nullptr);
 }
 
 void ServiceProviderTestHelper::MockExportMethod(
@@ -133,7 +133,7 @@ std::unique_ptr<dbus::Response> ServiceProviderTestHelper::CallMethodAndBlock(
                                       base::Unretained(this), &response));
   // Check for a response.
   if (!response)
-    base::RunLoop().Run();
+    loop_.Run();
   // Return response.
   return response;
 }
@@ -159,8 +159,7 @@ void ServiceProviderTestHelper::OnResponse(
     std::unique_ptr<dbus::Response>* out_response,
     std::unique_ptr<dbus::Response> response) {
   *out_response = std::move(response);
-  if (base::RunLoop::IsRunningOnCurrentThread())
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  loop_.QuitWhenIdle();
 }
 
 }  // namespace ash

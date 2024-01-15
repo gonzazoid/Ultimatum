@@ -54,16 +54,12 @@ class TableViewTestHelper;
 // - only text
 // - a small icon (16x16) and some text
 // - a check box and some text
-enum TableTypes {
-  TEXT_ONLY = 0,
-  ICON_AND_TEXT,
-};
+enum class TableType { kTextOnly, kIconAndText };
 
-class VIEWS_EXPORT TableView : public views::View,
-                               public ui::TableModelObserver {
+class VIEWS_EXPORT TableView : public View, public ui::TableModelObserver {
+  METADATA_HEADER(TableView, View)
+
  public:
-  METADATA_HEADER(TableView);
-
   // Used by AdvanceActiveVisibleColumn(), AdvanceSelection() and
   // ResizeColumnViaKeyboard() to determine the direction to change the
   // selection.
@@ -108,7 +104,7 @@ class VIEWS_EXPORT TableView : public views::View,
   TableView();
   TableView(ui::TableModel* model,
             const std::vector<ui::TableColumn>& columns,
-            TableTypes table_type,
+            TableType table_type,
             bool single_selection);
 
   TableView(const TableView&) = delete;
@@ -128,7 +124,7 @@ class VIEWS_EXPORT TableView : public views::View,
   // Initialize the table with the appropriate data.
   void Init(ui::TableModel* model,
             const std::vector<ui::TableColumn>& columns,
-            TableTypes table_type,
+            TableType table_type,
             bool single_selection);
 
   // Assigns a new model to the table view, detaching the old one if present.
@@ -140,8 +136,8 @@ class VIEWS_EXPORT TableView : public views::View,
 
   void SetColumns(const std::vector<ui::TableColumn>& columns);
 
-  void SetTableType(TableTypes table_type);
-  TableTypes GetTableType() const;
+  void SetTableType(TableType table_type);
+  TableType GetTableType() const;
 
   void SetSingleSelection(bool single_selection);
   bool GetSingleSelection() const;
@@ -342,6 +338,15 @@ class VIEWS_EXPORT TableView : public views::View,
   // Updates the |x| and |width| of each of the columns in |visible_columns_|.
   void UpdateVisibleColumnSizes();
 
+  // Returns to the src icon bounds. If it exceeds the drawn boundary.It needs
+  // to be clipped, and this method has done so for the caller.
+  gfx::Rect GetPaintIconSrcBounds(const gfx::Size& image_size,
+                                  int image_dest_width) const;
+
+  // Returns the paint icon bounds in the cell.
+  gfx::Rect GetPaintIconDestBounds(const gfx::Rect& cell_bounds,
+                                   int text_bounds_x) const;
+
   // Returns the cell's that need to be painted for the specified region.
   // |bounds| is in terms of |this|.
   PaintRegion GetPaintRegion(const gfx::Rect& bounds) const;
@@ -500,7 +505,7 @@ class VIEWS_EXPORT TableView : public views::View,
   // is the header row, since the selection model doesn't support that.
   bool header_row_is_active_ = false;
 
-  TableTypes table_type_ = TableTypes::TEXT_ONLY;
+  TableType table_type_ = TableType::kTextOnly;
 
   bool single_selection_ = true;
 
@@ -555,7 +560,7 @@ VIEW_BUILDER_PROPERTY(const std::vector<ui::TableColumn>&,
                       Columns,
                       std::vector<ui::TableColumn>)
 VIEW_BUILDER_PROPERTY(ui::TableModel*, Model)
-VIEW_BUILDER_PROPERTY(TableTypes, TableType)
+VIEW_BUILDER_PROPERTY(TableType, TableType)
 VIEW_BUILDER_PROPERTY(bool, SingleSelection)
 VIEW_BUILDER_PROPERTY(TableGrouper*, Grouper)
 VIEW_BUILDER_PROPERTY(TableViewObserver*, Observer)

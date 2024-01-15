@@ -5,6 +5,10 @@
 #ifndef BASE_TRACE_EVENT_TRACED_VALUE_SUPPORT_H_
 #define BASE_TRACE_EVENT_TRACED_VALUE_SUPPORT_H_
 
+#include <string_view>
+
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
@@ -89,6 +93,36 @@ struct TraceFormatTraits<::absl::optional<T>,
   }
 };
 
+// If T is serialisable into a trace, raw_ptr<T> is serialisable as well.
+template <class T, ::base::RawPtrTraits Traits>
+struct TraceFormatTraits<::base::raw_ptr<T, Traits>,
+                         perfetto::check_traced_value_support_t<T>> {
+  static void WriteIntoTrace(perfetto::TracedValue context,
+                             const ::base::raw_ptr<T, Traits>& value) {
+    perfetto::WriteIntoTracedValue(std::move(context), value.get());
+  }
+
+  static void WriteIntoTrace(perfetto::TracedValue context,
+                             ::base::raw_ptr<T, Traits>& value) {
+    perfetto::WriteIntoTracedValue(std::move(context), value.get());
+  }
+};
+
+// If T is serialisable into a trace, raw_ref<T> is serialisable as well.
+template <class T, ::base::RawPtrTraits Traits>
+struct TraceFormatTraits<::base::raw_ref<T, Traits>,
+                         perfetto::check_traced_value_support_t<T>> {
+  static void WriteIntoTrace(perfetto::TracedValue context,
+                             const ::base::raw_ref<T, Traits>& value) {
+    perfetto::WriteIntoTracedValue(std::move(context), value.get());
+  }
+
+  static void WriteIntoTrace(perfetto::TracedValue context,
+                             ::base::raw_ref<T, Traits>& value) {
+    perfetto::WriteIntoTracedValue(std::move(context), value.get());
+  }
+};
+
 // Time-related classes.
 // TODO(altimin): Make them first-class primitives in TracedValue and Perfetto
 // UI.
@@ -168,7 +202,7 @@ struct TraceFormatTraits<wchar_t[N]> {
   static void WriteIntoTrace(perfetto::TracedValue context,
                              const wchar_t value[N]) {
     return std::move(context).WriteString(
-        ::base::WideToUTF8(::base::WStringPiece(value)));
+        ::base::WideToUTF8(::std::wstring_view(value)));
   }
 };
 
@@ -177,19 +211,11 @@ struct TraceFormatTraits<const wchar_t*> {
   static void WriteIntoTrace(perfetto::TracedValue context,
                              const wchar_t* value) {
     return std::move(context).WriteString(
-        ::base::WideToUTF8(::base::WStringPiece(value)));
+        ::base::WideToUTF8(::std::wstring_view(value)));
   }
 };
 
 // base::StringPiece support.
-template <>
-struct TraceFormatTraits<::base::StringPiece> {
-  static void WriteIntoTrace(perfetto::TracedValue context,
-                             ::base::StringPiece value) {
-    return std::move(context).WriteString(value.data(), value.length());
-  }
-};
-
 template <>
 struct TraceFormatTraits<::base::StringPiece16> {
   static void WriteIntoTrace(perfetto::TracedValue context,
@@ -199,9 +225,9 @@ struct TraceFormatTraits<::base::StringPiece16> {
 };
 
 template <>
-struct TraceFormatTraits<::base::WStringPiece> {
+struct TraceFormatTraits<::std::wstring_view> {
   static void WriteIntoTrace(perfetto::TracedValue context,
-                             ::base::WStringPiece value) {
+                             ::std::wstring_view value) {
     return std::move(context).WriteString(::base::WideToUTF8(value));
   }
 };

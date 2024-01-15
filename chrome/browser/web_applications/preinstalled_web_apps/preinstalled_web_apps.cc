@@ -4,13 +4,16 @@
 
 #include "chrome/browser/web_applications/preinstalled_web_apps/preinstalled_web_apps.h"
 
+#include <optional>
+#include <string>
+#include <utility>
+
+#include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/no_destructor.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "chrome/browser/web_applications/preinstalled_app_install_features.h"
-#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/common/chrome_switches.h"
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -54,7 +57,9 @@ bool IsGoogleInternalAccount() {
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-std::vector<ExternalInstallOptions> GetChromeBrandedApps() {
+std::vector<ExternalInstallOptions> GetChromeBrandedApps(Profile& profile) {
+  bool is_standalone_tabbed =
+      IsPreinstalledDocsSheetsSlidesDriveStandaloneTabbed(profile);
   // TODO(crbug.com/1104692): Replace these C++ configs with JSON configs like
   // those seen in: chrome/test/data/web_app_default_apps/good_json
   // This requires:
@@ -67,10 +72,10 @@ std::vector<ExternalInstallOptions> GetChromeBrandedApps() {
   return {
       // clang-format off
       GetConfigForGmail(),
-      GetConfigForGoogleDocs(),
-      GetConfigForGoogleDrive(),
-      GetConfigForGoogleSheets(),
-      GetConfigForGoogleSlides(),
+      GetConfigForGoogleDocs(is_standalone_tabbed),
+      GetConfigForGoogleDrive(/*is_standalone=*/is_standalone_tabbed),
+      GetConfigForGoogleSheets(is_standalone_tabbed),
+      GetConfigForGoogleSlides(is_standalone_tabbed),
       GetConfigForYouTube(),
 #if BUILDFLAG(IS_CHROMEOS)
       GetConfigForCalculator(),
@@ -90,7 +95,7 @@ bool PreinstalledWebAppsDisabled() {
       ::switches::kDisableDefaultApps);
 }
 
-std::vector<ExternalInstallOptions> GetPreinstalledWebApps() {
+std::vector<ExternalInstallOptions> GetPreinstalledWebApps(Profile& profile) {
   if (g_preinstalled_app_data_for_testing)
     return *g_preinstalled_app_data_for_testing;
 
@@ -101,13 +106,13 @@ std::vector<ExternalInstallOptions> GetPreinstalledWebApps() {
 #if BUILDFLAG(IS_CHROMEOS)
   // TODO(crbug/1346167): replace with config in admin console.
   if (IsGoogleInternalAccount()) {
-    std::vector<ExternalInstallOptions> apps = GetChromeBrandedApps();
+    std::vector<ExternalInstallOptions> apps = GetChromeBrandedApps(profile);
     apps.push_back(GetConfigForMessagesDogfood());
     return apps;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-  return GetChromeBrandedApps();
+  return GetChromeBrandedApps(profile);
 #else
   return {};
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -131,7 +136,8 @@ PreinstalledWebAppMigration::~PreinstalledWebAppMigration() = default;
 std::vector<PreinstalledWebAppMigration> GetPreinstalledWebAppMigrations(
     Profile& profile) {
   std::vector<PreinstalledWebAppMigration> migrations;
-  for (const ExternalInstallOptions& options : GetPreinstalledWebApps()) {
+  for (const ExternalInstallOptions& options :
+       GetPreinstalledWebApps(profile)) {
     if (!options.expected_app_id)
       continue;
 
@@ -160,8 +166,8 @@ std::vector<PreinstalledWebAppMigration> GetPreinstalledWebAppMigrations(
     // This is a temporary measure while the default web app duplication
     // issue is cleaned up.
     // TODO(crbug.com/1290716): Clean up once no longer needed.
-    if (IsPreinstalledAppInstallFeatureEnabled(
-            kMigrateDefaultChromeAppToWebAppsGSuite.name, profile)) {
+    // Default installed GSuite web apps.
+    {
       PreinstalledWebAppMigration keep_migration;
       keep_migration.install_url =
           GURL("https://keep.google.com/installwebapp?usp=chrome_default");
@@ -170,8 +176,8 @@ std::vector<PreinstalledWebAppMigration> GetPreinstalledWebAppMigrations(
       migrations.push_back(std::move(keep_migration));
     }
 
-    if (IsPreinstalledAppInstallFeatureEnabled(
-            kMigrateDefaultChromeAppToWebAppsNonGSuite.name, profile)) {
+    // Default installed non-GSuite web apps.
+    {
       PreinstalledWebAppMigration books_migration;
       books_migration.install_url =
           GURL("https://play.google.com/books/installwebapp?usp=chromedefault");

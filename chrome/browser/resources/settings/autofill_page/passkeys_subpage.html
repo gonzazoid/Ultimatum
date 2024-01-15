@@ -34,15 +34,15 @@
   <div id="passkeys-list-header"
        class="list-item column-header right-pad"
        aria-hidden="true">
-    <div class="website-column">$i18n{editPasswordWebsiteLabel}</div>
-    <div class="username-column">$i18n{editPasswordUsernameLabel}</div>
+    <div class="website-column">$i18n{editPasskeySiteLabel}</div>
+    <div class="username-column">$i18n{editPasskeyUsernameLabel}</div>
   </div>
   <div class="cr-separators list-with-header">
     <template is="dom-repeat" items="[[passkeys_]]"
         filter="[[filterFunction_(filter)]]">
       <div class="list-item" focus-row-container>
         <div class="website-column no-min-width">
-          <site-favicon url="[[getIconURL_(item)]]"></site-favicon>
+          <site-favicon url="[[getIconUrl_(item)]]"></site-favicon>
           <span class="text-elide elide-left">[[item.relyingPartyId]]</span>
         </div>
 
@@ -85,9 +85,12 @@
 </cr-lazy-render>
 
 <template is="dom-if" if="[[showDeleteConfirmationDialog_]]" restamp>
-  <settings-passkeys-delete-confirmation-dialog id="deleteConfirmDialog"
+  <settings-simple-confirmation-dialog id="deleteConfirmDialog"
+      title-text="$i18n{managePasskeysDeleteConfirmationTitle}"
+      body-text="$i18n{managePasskeysDeleteConfirmationDescription}"
+      confirm-text="$i18n{delete}" no-primary-button
       on-close="onConfirmDialogClose_">
-  </settings-passkeys-delete-confirmation-dialog>
+  </settings-simple-confirmation-dialog>
 </template>
 <if expr="is_macosx">
   <template is="dom-if" if="[[showEditDialog_]]" restamp>

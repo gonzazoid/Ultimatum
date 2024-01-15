@@ -15,7 +15,6 @@ import static org.hamcrest.CoreMatchers.allOf;
 
 import static org.chromium.chrome.features.start_surface.StartSurfaceTestUtils.INSTANT_START_TEST_BASE_PARAMS;
 import static org.chromium.ui.test.util.ViewUtils.onViewWaiting;
-import static org.chromium.ui.test.util.ViewUtils.waitForView;
 
 import android.view.View;
 
@@ -24,6 +23,7 @@ import androidx.test.filters.SmallTest;
 
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,7 +31,6 @@ import org.junit.runner.RunWith;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
@@ -44,8 +43,10 @@ import org.chromium.chrome.browser.toolbar.top.StartSurfaceToolbarCoordinator;
 import org.chromium.chrome.browser.toolbar.top.TopToolbarCoordinator;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ActivityTestUtils;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
+import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.UiRestriction;
@@ -57,17 +58,22 @@ import java.io.IOException;
  * startup.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
-// clang-format off
-@CommandLineFlags.
-    Add({ChromeSwitches.DISABLE_NATIVE_INITIALIZATION, ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
-    "force-fieldtrials=Study/Group"})
-@EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-    ChromeFeatureList.TAB_SWITCHER_ON_RETURN + "<Study,",
-    ChromeFeatureList.START_SURFACE_ANDROID + "<Study", ChromeFeatureList.INSTANT_START})
-@Restriction({Restriction.RESTRICTION_TYPE_NON_LOW_END_DEVICE,
-    UiRestriction.RESTRICTION_TYPE_PHONE})
+@CommandLineFlags.Add({
+    ChromeSwitches.DISABLE_NATIVE_INITIALIZATION,
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    "force-fieldtrials=Study/Group"
+})
+@EnableFeatures({
+    ChromeFeatureList.START_SURFACE_RETURN_TIME + "<Study,",
+    ChromeFeatureList.START_SURFACE_ANDROID + "<Study",
+    ChromeFeatureList.INSTANT_START
+})
+@DisableFeatures({ChromeFeatureList.SHOW_NTP_AT_STARTUP_ANDROID})
+@Restriction({
+    Restriction.RESTRICTION_TYPE_NON_LOW_END_DEVICE,
+    UiRestriction.RESTRICTION_TYPE_PHONE
+})
 public class InstantStartToolbarTest {
-    // clang-format on
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
@@ -77,6 +83,11 @@ public class InstantStartToolbarTest {
                     .setRevision(1)
                     .setBugComponent(ChromeRenderTestRule.Component.UI_BROWSER_MOBILE_START)
                     .build();
+
+    @Before
+    public void setUp() {
+        ReturnToChromeUtil.setSkipInitializationCheckForTesting(true);
+    }
 
     @After
     public void tearDown() {
@@ -97,43 +108,40 @@ public class InstantStartToolbarTest {
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
         Assert.assertFalse(cta.isTablet());
         Assert.assertTrue(ChromeFeatureList.sInstantStart.isEnabled());
-        Assert.assertEquals("single", StartSurfaceConfiguration.START_SURFACE_VARIATION.getValue());
-        Assert.assertTrue(ReturnToChromeUtil.shouldShowTabSwitcher(-1));
+        Assert.assertTrue(ReturnToChromeUtil.shouldShowTabSwitcher(-1, false));
 
-        StartSurfaceTestUtils.waitForOverviewVisible(cta);
+        StartSurfaceTestUtils.waitForStartSurfaceVisible(cta);
 
         Assert.assertFalse(LibraryLoader.getInstance().isInitialized());
         TopToolbarCoordinator topToolbarCoordinator =
                 (TopToolbarCoordinator) cta.getToolbarManager().getToolbar();
 
-        onViewWaiting(
-                allOf(withId(org.chromium.chrome.test.R.id.tab_switcher_toolbar), isDisplayed()));
+        onViewWaiting(allOf(withId(R.id.tab_switcher_toolbar), isDisplayed()));
 
         StartSurfaceToolbarCoordinator startSurfaceToolbarCoordinator =
                 topToolbarCoordinator.getStartSurfaceToolbarForTesting();
-        // Verifies that the TabCountProvider for incognito toggle tab layout hasn't been set when
+        // Verifies that the TabModelSelector for incognito toggle tab layout hasn't been set when
         // the {@link StartSurfaceToolbarCoordinator#inflate()} is called.
         Assert.assertNull(
-                startSurfaceToolbarCoordinator.getIncognitoToggleTabCountProviderForTesting());
+                startSurfaceToolbarCoordinator.getIncognitoToggleTabModelSelectorForTesting());
 
         // Initializes native.
         StartSurfaceTestUtils.startAndWaitNativeInitialization(mActivityTestRule);
         CriteriaHelper.pollInstrumentationThread(
-                ()
-                        -> startSurfaceToolbarCoordinator
-                                   .getIncognitoToggleTabCountProviderForTesting()
-                        != null);
+                () ->
+                        startSurfaceToolbarCoordinator
+                                        .getIncognitoToggleTabModelSelectorForTesting()
+                                != null);
     }
 
     @Test
     @SmallTest
     @Feature({"RenderTest"})
     @CommandLineFlags.Add({INSTANT_START_TEST_BASE_PARAMS})
-    @DisabledTest(message = "https://crbug.com/1314462")
     public void renderSingleAsHomepage_NoTab_scrollToolbarToTop() throws IOException {
         StartSurfaceTestUtils.startMainActivityFromLauncher(mActivityTestRule);
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
-        StartSurfaceTestUtils.waitForOverviewVisible(cta);
+        StartSurfaceTestUtils.waitForStartSurfaceVisible(cta);
 
         // Initializes native.
         StartSurfaceTestUtils.startAndWaitNativeInitialization(mActivityTestRule);
@@ -142,17 +150,17 @@ public class InstantStartToolbarTest {
 
         StartSurfaceTestUtils.scrollToolbar(cta);
 
-        View surface = cta.findViewById(org.chromium.chrome.test.R.id.control_container);
+        View surface = cta.findViewById(R.id.control_container);
         ChromeRenderTestRule.sanitize(surface);
         mRenderTestRule.render(surface, "singlePane_floatingTopToolbar");
 
         // Focus the omnibox.
-        UrlBar urlBar = cta.findViewById(org.chromium.chrome.R.id.url_bar);
+        UrlBar urlBar = cta.findViewById(R.id.url_bar);
         TestThreadUtils.runOnUiThreadBlocking((Runnable) urlBar::requestFocus);
         // Clear the focus.
         TestThreadUtils.runOnUiThreadBlocking(urlBar::clearFocus);
         // Default search engine logo should still show.
-        surface = cta.findViewById(org.chromium.chrome.test.R.id.control_container);
+        surface = cta.findViewById(R.id.control_container);
         ChromeRenderTestRule.sanitize(surface);
         mRenderTestRule.render(surface, "singlePane_floatingTopToolbar");
     }
@@ -160,85 +168,92 @@ public class InstantStartToolbarTest {
     @Test
     @SmallTest
     @Feature({"RenderTest"})
-    @CommandLineFlags.Add({INSTANT_START_TEST_BASE_PARAMS,
-            ChromeSwitches.FORCE_UPDATE_MENU_UPDATE_TYPE + "=update_available"})
-    public void
-    testMenuUpdateBadgeWithUpdateAvailable() throws IOException {
-        testMenuUpdateBadge(/*shouldShowUpdateBadgeOnStartAndTabs=*/true);
+    @CommandLineFlags.Add({
+        INSTANT_START_TEST_BASE_PARAMS,
+        ChromeSwitches.FORCE_UPDATE_MENU_UPDATE_TYPE + "=update_available"
+    })
+    public void testMenuUpdateBadgeWithUpdateAvailable() throws IOException {
+        testMenuUpdateBadge(/* shouldShowUpdateBadgeOnStartAndTabs= */ true);
     }
 
     @Test
     @SmallTest
     @Feature({"RenderTest"})
-    @CommandLineFlags.Add({INSTANT_START_TEST_BASE_PARAMS,
-            ChromeSwitches.FORCE_UPDATE_MENU_UPDATE_TYPE + "=unsupported_os_version"})
-    public void
-    testMenuUpdateBadgeWithUnsupportedOsVersion() throws IOException {
-        testMenuUpdateBadge(/*shouldShowUpdateBadgeOnStartAndTabs=*/true);
+    @CommandLineFlags.Add({
+        INSTANT_START_TEST_BASE_PARAMS,
+        ChromeSwitches.FORCE_UPDATE_MENU_UPDATE_TYPE + "=unsupported_os_version"
+    })
+    public void testMenuUpdateBadgeWithUnsupportedOsVersion() throws IOException {
+        testMenuUpdateBadge(/* shouldShowUpdateBadgeOnStartAndTabs= */ true);
     }
 
     @Test
     @SmallTest
     @Feature({"RenderTest"})
-    @CommandLineFlags.
-    Add({INSTANT_START_TEST_BASE_PARAMS, ChromeSwitches.FORCE_UPDATE_MENU_UPDATE_TYPE + "=none"})
+    @CommandLineFlags.Add({
+        INSTANT_START_TEST_BASE_PARAMS,
+        ChromeSwitches.FORCE_UPDATE_MENU_UPDATE_TYPE + "=none"
+    })
     public void testMenuUpdateBadgeWithoutUpdate() throws IOException {
-        testMenuUpdateBadge(/*shouldShowUpdateBadgeOnStartAndTabs=*/false);
+        testMenuUpdateBadge(/* shouldShowUpdateBadgeOnStartAndTabs= */ false);
     }
 
     private void testMenuUpdateBadge(boolean shouldShowUpdateBadgeOnStartAndTabs)
             throws IOException {
-        StartSurfaceTestUtils.createTabStateFile(new int[] {0, 1, 2});
+        StartSurfaceTestUtils.createTabStatesAndMetadataFile(new int[] {0, 1, 2});
         StartSurfaceTestUtils.startMainActivityFromLauncher(mActivityTestRule);
         ChromeTabbedActivity cta = mActivityTestRule.getActivity();
-        StartSurfaceTestUtils.waitForOverviewVisible(cta);
+        StartSurfaceTestUtils.waitForStartSurfaceVisible(cta);
         StartSurfaceTestUtils.startAndWaitNativeInitialization(mActivityTestRule);
         StartSurfaceTestUtils.waitForTabModel(cta);
 
         // Check whether the update badge shows on start surface toolbar.
         if (shouldShowUpdateBadgeOnStartAndTabs) {
-            onViewWaiting(allOf(withId(org.chromium.chrome.test.R.id.menu_badge),
-                                  isDescendantOfA(withId(
-                                          org.chromium.chrome.test.R.id.tab_switcher_toolbar))))
+            onViewWaiting(
+                            allOf(
+                                    withId(R.id.menu_badge),
+                                    isDescendantOfA(withId(R.id.tab_switcher_toolbar))))
                     .check(matches(isDisplayed()));
         } else {
-            onView(allOf(withId(org.chromium.chrome.test.R.id.menu_badge),
-                           isDescendantOfA(
-                                   withId(org.chromium.chrome.test.R.id.tab_switcher_toolbar))))
+            onView(
+                            allOf(
+                                    withId(R.id.menu_badge),
+                                    isDescendantOfA(withId(R.id.tab_switcher_toolbar))))
                     .check(matches(withEffectiveVisibility(Visibility.INVISIBLE)));
         }
 
         // Navigate to any tab to check whether the update badge shows on toolbar layout.
-        StartSurfaceTestUtils.launchFirstMVTile(cta, /* currentTabCount = */ 3);
+        StartSurfaceTestUtils.launchFirstMVTile(cta, /* currentTabCount= */ 3);
         if (shouldShowUpdateBadgeOnStartAndTabs) {
-            onViewWaiting(allOf(withId(org.chromium.chrome.test.R.id.menu_badge),
-                                  isDescendantOfA(withId(org.chromium.chrome.test.R.id.toolbar))))
+            onViewWaiting(allOf(withId(R.id.menu_badge), isDescendantOfA(withId(R.id.toolbar))))
                     .check(matches(isDisplayed()));
         } else {
-            onView(allOf(withId(org.chromium.chrome.test.R.id.menu_badge),
-                           isDescendantOfA(withId(org.chromium.chrome.test.R.id.toolbar))))
+            onView(allOf(withId(R.id.menu_badge), isDescendantOfA(withId(R.id.toolbar))))
                     .check(matches(withEffectiveVisibility(Visibility.INVISIBLE)));
         }
 
         // Update badge shouldn't show on tab switcher surface toolbar.
         TabUiTestHelper.enterTabSwitcher(cta);
-        waitForView(withId(org.chromium.chrome.test.R.id.secondary_tasks_surface_view));
-        onViewWaiting(allOf(withId(org.chromium.chrome.test.R.id.menu_button),
-                              isDescendantOfA(
-                                      withId(org.chromium.chrome.test.R.id.tab_switcher_toolbar))))
+        StartSurfaceTestUtils.waitForTabSwitcherVisible(cta);
+        onViewWaiting(
+                        allOf(
+                                withId(R.id.menu_button),
+                                isDescendantOfA(withId(R.id.tab_switcher_toolbar))))
                 .check(matches(isDisplayed()));
         if (shouldShowUpdateBadgeOnStartAndTabs) {
             // If the update badge should show on homepage and tabs, it's suppressed in
             // StartSurfaceToolbarMediator#onStartSurfaceStateChanged when tab switcher surface is
             // shown. So its visibility should be Gone instead of Invisible (as initialized).
-            onView(allOf(withId(org.chromium.chrome.test.R.id.menu_badge),
-                           isDescendantOfA(
-                                   withId(org.chromium.chrome.test.R.id.tab_switcher_toolbar))))
+            onView(
+                            allOf(
+                                    withId(R.id.menu_badge),
+                                    isDescendantOfA(withId(R.id.tab_switcher_toolbar))))
                     .check(matches(withEffectiveVisibility(Visibility.GONE)));
         } else {
-            onView(allOf(withId(org.chromium.chrome.test.R.id.menu_badge),
-                           isDescendantOfA(
-                                   withId(org.chromium.chrome.test.R.id.tab_switcher_toolbar))))
+            onView(
+                            allOf(
+                                    withId(R.id.menu_badge),
+                                    isDescendantOfA(withId(R.id.tab_switcher_toolbar))))
                     .check(matches(withEffectiveVisibility(Visibility.INVISIBLE)));
         }
     }

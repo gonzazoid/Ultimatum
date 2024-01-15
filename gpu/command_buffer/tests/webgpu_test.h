@@ -32,6 +32,7 @@ namespace webgpu {
 class WebGPUCmdHelper;
 class WebGPUDecoder;
 class WebGPUImplementation;
+class WebGPUInterface;
 
 }  // namespace webgpu
 
@@ -44,7 +45,13 @@ class WebGPUTest : public testing::Test {
     SharedMemoryLimits shared_memory_limits =
         SharedMemoryLimits::ForWebGPUContext();
     bool force_fallback_adapter = false;
+    bool compatibility_mode = false;
     bool enable_unsafe_webgpu = false;
+    bool use_skia_graphite = false;
+
+    // By default, disable the blocklist so all adapters
+    // can be tested.
+    bool adapter_blocklist = false;
   };
 
  protected:
@@ -58,7 +65,8 @@ class WebGPUTest : public testing::Test {
 
   void Initialize(const Options& options);
 
-  webgpu::WebGPUImplementation* webgpu() const;
+  webgpu::WebGPUInterface* webgpu() const;
+  webgpu::WebGPUImplementation* webgpu_impl() const;
   webgpu::WebGPUCmdHelper* webgpu_cmds() const;
   SharedImageInterface* GetSharedImageInterface() const;
   webgpu::WebGPUDecoder* GetDecoder() const;
@@ -83,10 +91,6 @@ class WebGPUTest : public testing::Test {
   std::unique_ptr<viz::TestGpuServiceHolder> gpu_service_holder_;
   std::unique_ptr<WebGPUInProcessContext> context_;
   std::unique_ptr<webgpu::WebGPUCmdHelper> cmd_helper_;
-#if BUILDFLAG(IS_MAC)
-  // SharedImages on macOS require a valid image factory.
-  GpuMemoryBufferFactoryIOSurface image_factory_;
-#endif
 };
 
 #define EXPECT_WEBGPU_ERROR(device, type, statement)                           \

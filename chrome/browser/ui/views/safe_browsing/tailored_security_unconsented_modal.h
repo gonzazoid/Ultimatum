@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_TAILORED_SECURITY_UNCONSENTED_MODAL_H_
 #define CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_TAILORED_SECURITY_UNCONSENTED_MODAL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/views/window/dialog_delegate.h"
 
@@ -22,9 +22,9 @@ namespace safe_browsing {
 // TODO(crbug.com/1336052): Remove this modal after launching
 // `TailoredSecurityDesktopModal`.
 class TailoredSecurityUnconsentedModal : public views::DialogDelegateView {
- public:
-  METADATA_HEADER(TailoredSecurityUnconsentedModal);
+  METADATA_HEADER(TailoredSecurityUnconsentedModal, views::DialogDelegateView)
 
+ public:
   // Show this dialog for the given |web_contents|.
   static void ShowForWebContents(content::WebContents* web_contents);
 

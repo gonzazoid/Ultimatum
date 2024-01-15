@@ -17,45 +17,42 @@ class CORE_EXPORT CSSParserLocalContext {
   STACK_ALLOCATED();
 
  public:
-  CSSParserLocalContext();
+  CSSParserLocalContext() = default;
 
-  // When parsing registered custom properties, a different result is required
-  // depending on the context.
-  enum class VariableMode {
-    // The custom property is parsed according to the registered syntax (if
-    // available).
-    kTyped,
-    // The registration of the custom property (if any) is ignored; the custom
-    // property will parse as if unregistered.
-    kUntyped,
-    // The custom property will be parsed as if unregistered (that is,
-    // a CSSCustomPropertyDeclaration will be returned), but the tokens must
-    // also match the registered syntax (if any). This is useful for CSSOM,
-    // where incoming values must validate against the registered syntax, but
-    // are otherwise treated as unregistered.
-    kValidatedUntyped
-  };
+  CSSParserLocalContext WithAliasParsing(bool use_alias_parsing) const {
+    CSSParserLocalContext context = *this;
+    context.use_alias_parsing_ = use_alias_parsing;
+    return context;
+  }
 
-  CSSParserLocalContext WithAliasParsing(bool) const;
-  CSSParserLocalContext WithAnimationTainted(bool) const;
-  CSSParserLocalContext WithCurrentShorthand(CSSPropertyID) const;
-  CSSParserLocalContext WithVariableMode(VariableMode) const;
+  CSSParserLocalContext WithAnimationTainted(bool is_animation_tainted) const {
+    CSSParserLocalContext context = *this;
+    context.is_animation_tainted_ = is_animation_tainted;
+    return context;
+  }
 
-  bool UseAliasParsing() const;
+  CSSParserLocalContext WithCurrentShorthand(
+      CSSPropertyID current_shorthand) const {
+    CSSParserLocalContext context = *this;
+    context.current_shorthand_ = current_shorthand;
+    return context;
+  }
+
+  bool UseAliasParsing() const { return use_alias_parsing_; }
+
   // Any custom property used in a @keyframes rule becomes animation-tainted,
   // which prevents the custom property from being substituted into the
   // 'animation' property, or one of its longhands.
   //
   // https://drafts.csswg.org/css-variables/#animation-tainted
-  bool IsAnimationTainted() const;
-  CSSPropertyID CurrentShorthand() const;
-  VariableMode GetVariableMode() const;
+  bool IsAnimationTainted() const { return is_animation_tainted_; }
+
+  CSSPropertyID CurrentShorthand() const { return current_shorthand_; }
 
  private:
-  bool use_alias_parsing_;
-  bool is_animation_tainted_;
-  CSSPropertyID current_shorthand_;
-  VariableMode variable_mode_;
+  bool use_alias_parsing_ = false;
+  bool is_animation_tainted_ = false;
+  CSSPropertyID current_shorthand_ = CSSPropertyID::kInvalid;
 };
 
 }  // namespace blink

@@ -67,8 +67,7 @@ IN_PROC_BROWSER_TEST_F(HeavyAdHelperBrowserTest,
   controller.LoadPostCommitErrorPage(
       child, url,
       heavy_ad_intervention::PrepareHeavyAdPage(
-          g_browser_process->GetApplicationLocale()),
-      net::ERR_BLOCKED_BY_CLIENT);
+          g_browser_process->GetApplicationLocale()));
   error_observer.Wait();
 
   for (const auto& message : console_observer.messages()) {
@@ -96,17 +95,10 @@ IN_PROC_BROWSER_TEST_F(HeavyAdHelperBrowserTest,
   controller.LoadPostCommitErrorPage(
       child, url,
       heavy_ad_intervention::PrepareHeavyAdPage(
-          g_browser_process->GetApplicationLocale()),
-      net::ERR_BLOCKED_BY_CLIENT);
+          g_browser_process->GetApplicationLocale()));
   error_observer.Wait();
 
-  // With error page isolation, the error page will be loaded in the error
-  // page process, therefore it will have a different RenderFrameHost
-  // instance.
-  if (content::SiteIsolationPolicy::IsErrorPageIsolationEnabled(
-          /* in_main_frame = */ false)) {
-    child = ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0);
-  }
+  child = ChildFrameAt(web_contents->GetPrimaryMainFrame(), 0);
 
   EXPECT_TRUE(IsContentInDocument(
       child,

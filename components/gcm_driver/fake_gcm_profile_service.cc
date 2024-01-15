@@ -6,18 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/gcm_driver/crypto/gcm_encryption_result.h"
-#include "components/gcm_driver/fake_gcm_client_factory.h"
 #include "components/gcm_driver/gcm_driver.h"
 #include "components/gcm_driver/instance_id/fake_gcm_driver_for_instance_id.h"
 
@@ -26,7 +23,10 @@ namespace gcm {
 class FakeGCMProfileService::CustomFakeGCMDriver
     : public instance_id::FakeGCMDriverForInstanceID {
  public:
-  explicit CustomFakeGCMDriver(FakeGCMProfileService* service);
+  CustomFakeGCMDriver();
+
+  // Must be called before any other methods.
+  void SetService(FakeGCMProfileService* service);
 
   CustomFakeGCMDriver(const CustomFakeGCMDriver&) = delete;
   CustomFakeGCMDriver& operator=(const CustomFakeGCMDriver&) = delete;
@@ -39,9 +39,6 @@ class FakeGCMProfileService::CustomFakeGCMDriver
   void OnSendFinished(const std::string& app_id,
                       const std::string& message_id,
                       GCMClient::Result result);
-
-  void OnDispatchMessage(const std::string& app_id,
-                         const IncomingMessage& message);
 
   // GCMDriver overrides:
   void EncryptMessage(const std::string& app_id,
@@ -81,7 +78,7 @@ class FakeGCMProfileService::CustomFakeGCMDriver
               const std::string& receiver_id,
               const OutgoingMessage& message);
 
-  raw_ptr<FakeGCMProfileService> service_;
+  raw_ptr<FakeGCMProfileService> service_ = nullptr;
 
   // Used to give each registration a unique registration id. Does not decrease
   // when unregister is called.
@@ -91,11 +88,9 @@ class FakeGCMProfileService::CustomFakeGCMDriver
       this};  // Must be last.
 };
 
-FakeGCMProfileService::CustomFakeGCMDriver::CustomFakeGCMDriver(
-    FakeGCMProfileService* service)
-    : service_(service) {}
+FakeGCMProfileService::CustomFakeGCMDriver::CustomFakeGCMDriver() = default;
 
-FakeGCMProfileService::CustomFakeGCMDriver::~CustomFakeGCMDriver() {}
+FakeGCMProfileService::CustomFakeGCMDriver::~CustomFakeGCMDriver() = default;
 
 void FakeGCMProfileService::CustomFakeGCMDriver::RegisterImpl(
     const std::string& app_id,
@@ -110,7 +105,7 @@ void FakeGCMProfileService::CustomFakeGCMDriver::RegisterImpl(
       "%" PRIuS "-%d", sender_ids.size(), registration_count_);
   ++registration_count_;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CustomFakeGCMDriver::DoRegister,
                                 weak_factory_.GetWeakPtr(), app_id, sender_ids,
                                 registration_id));
@@ -137,7 +132,7 @@ void FakeGCMProfileService::CustomFakeGCMDriver::UnregisterImpl(
     result = service_->unregister_responses_.front();
     service_->unregister_responses_.pop_front();
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CustomFakeGCMDriver::UnregisterFinished,
                                 weak_factory_.GetWeakPtr(), app_id, result));
 }
@@ -155,7 +150,7 @@ void FakeGCMProfileService::CustomFakeGCMDriver::SendImpl(
   if (service_->is_offline_)
     return;  // Drop request.
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&CustomFakeGCMDriver::DoSend, weak_factory_.GetWeakPtr(),
                      app_id, receiver_id, message));
@@ -170,6 +165,11 @@ void FakeGCMProfileService::CustomFakeGCMDriver::EncryptMessage(
     EncryptMessageCallback callback) {
   // Pretend that message has been encrypted.
   std::move(callback).Run(GCMEncryptionResult::ENCRYPTED_DRAFT_08, message);
+}
+
+void FakeGCMProfileService::CustomFakeGCMDriver::SetService(
+    FakeGCMProfileService* service) {
+  service_ = service;
 }
 
 void FakeGCMProfileService::CustomFakeGCMDriver::DoSend(
@@ -208,24 +208,22 @@ void FakeGCMProfileService::CustomFakeGCMDriver::DeleteToken(
       app_id, authorized_entity, scope, std::move(callback));
 }
 
-void FakeGCMProfileService::CustomFakeGCMDriver::OnDispatchMessage(
-    const std::string& app_id,
-    const IncomingMessage& message) {
-  DispatchMessage(app_id, message);
-}
-
 // static
 std::unique_ptr<KeyedService> FakeGCMProfileService::Build(
     content::BrowserContext* context) {
-  std::unique_ptr<FakeGCMProfileService> service =
-      std::make_unique<FakeGCMProfileService>();
-  service->SetDriverForTesting(
-      std::make_unique<CustomFakeGCMDriver>(service.get()));
+  auto custom_driver = std::make_unique<CustomFakeGCMDriver>();
+  CustomFakeGCMDriver* custom_driver_ptr = custom_driver.get();
 
+  std::unique_ptr<FakeGCMProfileService> service =
+      std::make_unique<FakeGCMProfileService>(std::move(custom_driver));
+
+  custom_driver_ptr->SetService(service.get());
   return service;
 }
 
-FakeGCMProfileService::FakeGCMProfileService() = default;
+FakeGCMProfileService::FakeGCMProfileService(
+    std::unique_ptr<instance_id::FakeGCMDriverForInstanceID> fake_gcm_driver)
+    : GCMProfileService(std::move(fake_gcm_driver)) {}
 
 FakeGCMProfileService::~FakeGCMProfileService() = default;
 
@@ -236,9 +234,12 @@ void FakeGCMProfileService::AddExpectedUnregisterResponse(
 
 void FakeGCMProfileService::DispatchMessage(const std::string& app_id,
                                             const IncomingMessage& message) {
-  CustomFakeGCMDriver* custom_driver =
-      static_cast<CustomFakeGCMDriver*>(driver());
-  custom_driver->OnDispatchMessage(app_id, message);
+  GetFakeGCMDriver()->DispatchMessage(app_id, message);
+}
+
+instance_id::FakeGCMDriverForInstanceID*
+FakeGCMProfileService::GetFakeGCMDriver() {
+  return static_cast<instance_id::FakeGCMDriverForInstanceID*>(driver());
 }
 
 }  // namespace gcm

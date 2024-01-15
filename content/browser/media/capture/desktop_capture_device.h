@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "content/common/content_export.h"
@@ -50,13 +51,24 @@ class CONTENT_EXPORT DesktopCaptureDevice : public media::VideoCaptureDevice {
   void AllocateAndStart(const media::VideoCaptureParams& params,
                         std::unique_ptr<Client> client) override;
   void StopAndDeAllocate() override;
+  // If currently stopped, starts the refresh frame timer to guarantee a frame
+  // representing the most up-to-date content will be sent to the consumer in
+  // the near future. This refresh operation will be canceled if a default
+  // capture event triggers a frame capture in the meantime, and will result in
+  // a frame sent to the consumer with a delay of up to one second.
+  void RequestRefreshFrame() override;
 
   // Set the platform-dependent window id for the notification window.
   void SetNotificationWindowId(gfx::NativeViewId window_id);
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(DesktopCaptureDeviceTest,
+                           RequestRefreshFrameBeforeStart);
+  FRIEND_TEST_ALL_PREFIXES(DesktopCaptureDeviceTest,
+                           RequestRefreshFrameAfterStop);
   friend class DesktopCaptureDeviceTest;
   friend class DesktopCaptureDeviceThrottledTest;
+  friend class DesktopCaptureDeviceRequestRefreshFrameTest;
   class Core;
 
   DesktopCaptureDevice(

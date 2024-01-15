@@ -6,6 +6,7 @@
 #define CC_RASTER_PLAYBACK_IMAGE_PROVIDER_H_
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "cc/cc_export.h"
 #include "cc/paint/image_id.h"
 #include "cc/paint/image_provider.h"
@@ -43,7 +44,7 @@ class CC_EXPORT PlaybackImageProvider : public ImageProvider {
   // If no settings are provided, all images are skipped during rasterization.
   PlaybackImageProvider(ImageDecodeCache* cache,
                         const TargetColorParams& target_color_params,
-                        absl::optional<Settings>&& settings);
+                        std::optional<Settings>&& settings);
   PlaybackImageProvider(const PlaybackImageProvider&) = delete;
   PlaybackImageProvider(PlaybackImageProvider&& other);
   ~PlaybackImageProvider() override;
@@ -56,9 +57,11 @@ class CC_EXPORT PlaybackImageProvider : public ImageProvider {
       const DrawImage& draw_image) override;
 
  private:
-  ImageDecodeCache* cache_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union
+  RAW_PTR_EXCLUSION ImageDecodeCache* cache_;
   TargetColorParams target_color_params_;
-  absl::optional<Settings> settings_;
+  std::optional<Settings> settings_;
 };
 
 }  // namespace cc

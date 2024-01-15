@@ -5,8 +5,9 @@
 #include "chrome/browser/ui/ash/multi_user/multi_user_context_menu.h"
 
 #include "ash/public/cpp/multi_user_window_manager.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/profiles/profile.h"
@@ -45,7 +46,7 @@ class MultiUserContextMenuChromeos : public ui::SimpleMenuModel,
 
  private:
   // The window for which this menu is.
-  aura::Window* window_;
+  raw_ptr<aura::Window> window_;
 };
 
 MultiUserContextMenuChromeos::MultiUserContextMenuChromeos(aura::Window* window)

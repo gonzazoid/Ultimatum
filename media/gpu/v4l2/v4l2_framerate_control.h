@@ -7,11 +7,10 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/moving_window.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
-#include "media/base/moving_average.h"
 #include "media/base/video_frame.h"
-#include "media/gpu/v4l2/v4l2_device.h"
 
 namespace media {
 
@@ -23,7 +22,9 @@ namespace media {
 // can be decoded simultaneously.
 class V4L2FrameRateControl {
  public:
-  V4L2FrameRateControl(scoped_refptr<V4L2Device> device,
+  using IoctlAsCallback = base::RepeatingCallback<int(int, void*)>;
+
+  V4L2FrameRateControl(const IoctlAsCallback& ioctl_cb,
                        scoped_refptr<base::SequencedTaskRunner> task_runner);
   ~V4L2FrameRateControl();
 
@@ -43,11 +44,12 @@ class V4L2FrameRateControl {
  private:
   void UpdateFrameRate();
 
-  scoped_refptr<V4L2Device> device_;
+  const IoctlAsCallback ioctl_cb_;
   const bool framerate_control_present_;
   int64_t current_frame_duration_avg_ms_;
   base::TimeTicks last_frame_display_time_;
-  MovingAverage frame_duration_moving_average_;
+  base::MovingAverage<base::TimeDelta, base::TimeDelta>
+      frame_duration_moving_average_;
 
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
 

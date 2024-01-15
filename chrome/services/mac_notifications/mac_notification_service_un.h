@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/common/notifications/notification_image_retainer.h"
@@ -28,46 +28,53 @@ namespace mac_notifications {
 
 // Implementation of the MacNotificationService mojo interface using the
 // UNNotification system API.
-class API_AVAILABLE(macos(10.14)) MacNotificationServiceUN
-    : public mojom::MacNotificationService {
+class MacNotificationServiceUN : public mojom::MacNotificationService {
  public:
   // Timer interval used to synchronize displayed notifications.
   static constexpr auto kSynchronizationInterval = base::Minutes(10);
 
   MacNotificationServiceUN(
-      mojo::PendingReceiver<mojom::MacNotificationService> service,
       mojo::PendingRemote<mojom::MacNotificationActionHandler> handler,
       UNUserNotificationCenter* notification_center);
   MacNotificationServiceUN(const MacNotificationServiceUN&) = delete;
   MacNotificationServiceUN& operator=(const MacNotificationServiceUN&) = delete;
   ~MacNotificationServiceUN() override;
 
+  // Binds or re-binds the notification service mojo receiver. If already bound,
+  // this replaces the existing binding with the newly passed in one.
+  void Bind(mojo::PendingReceiver<mojom::MacNotificationService> service);
+
+  // Requests notification permissions from the system. This will ask the user
+  // to accept permissions if not granted or denied already. If a permission
+  // request is already pending, this does nothing.
+  void RequestPermission();
+
   // mojom::MacNotificationService:
   void DisplayNotification(mojom::NotificationPtr notification) override;
   void GetDisplayedNotifications(
       mojom::ProfileIdentifierPtr profile,
+      const absl::optional<GURL>& origin,
       GetDisplayedNotificationsCallback callback) override;
   void CloseNotification(mojom::NotificationIdentifierPtr identifier) override;
   void CloseNotificationsForProfile(
       mojom::ProfileIdentifierPtr profile) override;
   void CloseAllNotifications() override;
+  void OkayToTerminateService(OkayToTerminateServiceCallback callback) override;
 
  private:
-  // Requests notification permissions from the system. This will ask the user
-  // to accept permissions if not granted or denied already.
-  void RequestPermission();
+  void DoDisplayNotification(mojom::NotificationPtr notification);
 
   // Initializes the |delivered_notifications_| with notifications currently
   // shown in the macOS notification center.
-  void InitializeDeliveredNotifications(base::OnceClosure callback);
+  void InitializeDeliveredNotifications();
   void DoInitializeDeliveredNotifications(
-      base::OnceClosure callback,
-      base::scoped_nsobject<NSArray<UNNotification*>> notifications,
-      base::scoped_nsobject<NSSet<UNNotificationCategory*>> categories);
+      NSArray<UNNotification*>* notifications,
+      NSSet<UNNotificationCategory*>* categories);
 
   // Called regularly while we think that notifications are on screen to detect
   // when they get closed.
   void ScheduleSynchronizeNotifications();
+  void SynchronizeNotifications(base::OnceClosure done);
   void DoSynchronizeNotifications(
       std::vector<mojom::NotificationIdentifierPtr> notifications);
 
@@ -79,8 +86,15 @@ class API_AVAILABLE(macos(10.14)) MacNotificationServiceUN
 
   mojo::Receiver<mojom::MacNotificationService> binding_;
   mojo::Remote<mojom::MacNotificationActionHandler> action_handler_;
-  base::scoped_nsobject<AlertUNNotificationCenterDelegate> delegate_;
-  base::scoped_nsobject<UNUserNotificationCenter> notification_center_;
+  AlertUNNotificationCenterDelegate* __strong delegate_;
+  UNUserNotificationCenter* __strong notification_center_;
+
+  // Set to true when initialization has finished, and this service is ready
+  // to receive mojo calls. `binding_` will not be bound until this happens.
+  bool finished_initialization_ GUARDED_BY_CONTEXT(sequence_checker_) = false;
+  // If set, this callback is called when initialization completes.
+  base::OnceClosure after_initialization_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Category manager for action buttons.
   NotificationCategoryManager category_manager_;
@@ -91,6 +105,15 @@ class API_AVAILABLE(macos(10.14)) MacNotificationServiceUN
   base::flat_map<std::string, mojom::NotificationMetadataPtr>
       delivered_notifications_ GUARDED_BY_CONTEXT(sequence_checker_);
   base::RepeatingTimer synchronize_displayed_notifications_timer_;
+  bool is_synchronizing_notifications_ = false;
+  std::vector<base::OnceClosure> synchronize_notifications_done_callbacks_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+
+  // Set to true anytime a RequestPermission() call is call is pending. Makes
+  // sure chrome doesn't terminate the service while we're showing a permission
+  // prompt.
+  bool permission_request_is_pending_ GUARDED_BY_CONTEXT(sequence_checker_) =
+      false;
 
   // Ensures that the methods in this class are called on the same sequence.
   SEQUENCE_CHECKER(sequence_checker_);

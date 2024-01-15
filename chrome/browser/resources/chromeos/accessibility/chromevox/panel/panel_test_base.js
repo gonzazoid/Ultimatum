@@ -3,12 +3,12 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Base class for Panel tests.
  */
-ChromeVoxPanelTestBase = class extends ChromeVoxNextE2ETest {
+ChromeVoxPanelTestBase = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
@@ -19,14 +19,15 @@ ChromeVoxPanelTestBase = class extends ChromeVoxNextE2ETest {
         '/chromevox/common/panel_command.js');
 
     await new PanelCommand(PanelCommandType.ENABLE_TEST_HOOKS).send();
+    await this.waitForPendingMethods();
+    this.getPanelWindow().MenuManager.disableMissingMsgsErrorsForTesting = true;
   }
 
   getPanelWindow() {
     let panelWindow = null;
     while (!panelWindow) {
-      panelWindow = chrome.extension.getViews().find(function(view) {
-        return view.location.href.indexOf('chromevox/panel/panel.html') > 0;
-      });
+      panelWindow = chrome.extension.getViews().find(
+          view => view.location.href.indexOf('chromevox/panel/panel.html') > 0);
     }
     return panelWindow;
   }
@@ -38,5 +39,18 @@ ChromeVoxPanelTestBase = class extends ChromeVoxNextE2ETest {
    */
   getPanel() {
     return this.getPanelWindow().Panel;
+  }
+
+  async waitForMenu(menuMsg) {
+    const menuManager = this.getPanel().instance.menuManager_;
+
+    // Menu and menu item updates occur in a different js context, so tests need
+    // to wait until an update has been made.
+    return new Promise(
+        resolve =>
+            this.addCallbackPostMethod(menuManager, 'activateMenu', () => {
+              assertEquals(menuMsg, menuManager.activeMenu_.menuMsg);
+              resolve();
+            }, () => true));
   }
 };

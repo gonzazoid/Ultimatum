@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/stl_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -18,11 +20,12 @@
 #include "build/chromeos_buildflags.h"
 #include "components/cbor/diagnostic_writer.h"
 #include "components/device_event_log/device_event_log.h"
-#include "device/fido/device_public_key_extension.h"
+#include "device/fido/features.h"
 #include "device/fido/fido_authenticator.h"
 #include "device/fido/fido_discovery_factory.h"
 #include "device/fido/fido_parsing_utils.h"
 #include "device/fido/fido_transport_protocol.h"
+#include "device/fido/fido_types.h"
 #include "device/fido/filter.h"
 #include "device/fido/make_credential_task.h"
 
@@ -50,9 +53,8 @@ const std::set<pin::Permissions> GetMakeCredentialRequestPermissions(
     FidoAuthenticator* authenticator) {
   std::set<pin::Permissions> permissions = {pin::Permissions::kMakeCredential,
                                             pin::Permissions::kGetAssertion};
-  if (authenticator->Options() &&
-      authenticator->Options()->bio_enrollment_availability ==
-          BioEnrollmentAvailability::kSupportedButUnprovisioned) {
+  if (authenticator->Options().bio_enrollment_availability ==
+      BioEnrollmentAvailability::kSupportedButUnprovisioned) {
     permissions.insert(pin::Permissions::kBioEnrollment);
   }
   return permissions;
@@ -96,20 +98,22 @@ bool IsCandidateAuthenticatorPreTouch(
     FidoAuthenticator* authenticator,
     AuthenticatorAttachment requested_attachment,
     bool allow_platform_authenticator_for_make_credential_request) {
-  const auto& opt_options = authenticator->Options();
-  if (!opt_options) {
-    // This authenticator doesn't know its capabilities yet, so we need
-    // to assume it can handle the request. This is the case for Windows,
-    // where we proxy the request to the native API.
-    return true;
-  }
+  switch (authenticator->Options().is_platform_device) {
+    case AuthenticatorSupportedOptions::PlatformDevice::kYes:
+      if (requested_attachment == AuthenticatorAttachment::kCrossPlatform &&
+          !allow_platform_authenticator_for_make_credential_request) {
+        return false;
+      }
+      break;
 
-  if ((requested_attachment == AuthenticatorAttachment::kPlatform &&
-       !opt_options->is_platform_device) ||
-      (requested_attachment == AuthenticatorAttachment::kCrossPlatform &&
-       opt_options->is_platform_device &&
-       !allow_platform_authenticator_for_make_credential_request)) {
-    return false;
+    case AuthenticatorSupportedOptions::PlatformDevice::kNo:
+      if (requested_attachment == AuthenticatorAttachment::kPlatform) {
+        return false;
+      }
+      break;
+
+    case AuthenticatorSupportedOptions::PlatformDevice::kBoth:
+      break;
   }
 
   return true;
@@ -122,18 +126,23 @@ MakeCredentialStatus IsCandidateAuthenticatorPostTouch(
     FidoAuthenticator* authenticator,
     const MakeCredentialOptions& options,
     const FidoRequestHandlerBase::Observer* observer) {
+  const AuthenticatorSupportedOptions& auth_options = authenticator->Options();
   if (options.cred_protect_request && options.cred_protect_request->second &&
-      !authenticator->SupportsCredProtectExtension()) {
+      !auth_options.supports_cred_protect) {
     return MakeCredentialStatus::kAuthenticatorMissingResidentKeys;
   }
 
-  const absl::optional<AuthenticatorSupportedOptions>& auth_options =
-      authenticator->Options();
-  if (!auth_options) {
-    // This authenticator doesn't know its capabilities yet, so we need
-    // to assume it can handle the request. This is the case for Windows,
-    // where we proxy the request to the native API.
-    return MakeCredentialStatus::kSuccess;
+  // The largeBlobs extension only works for resident credentials on CTAP 2.1
+  // authenticators or on some Windows versions.
+  if (options.large_blob_support == LargeBlobSupport::kRequired &&
+      (!auth_options.large_blob_type ||
+       !request.resident_key_required
+#if BUILDFLAG(IS_WIN)
+       // Windows only supports large blobs for cross-platform credentials.
+       || request.authenticator_attachment == AuthenticatorAttachment::kPlatform
+#endif
+       )) {
+    return MakeCredentialStatus::kAuthenticatorMissingLargeBlob;
   }
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -142,7 +151,8 @@ MakeCredentialStatus IsCandidateAuthenticatorPostTouch(
   // DeviceSecondFactorAuthentication enterprise policy.
   if (options.authenticator_attachment ==
           AuthenticatorAttachment::kCrossPlatform &&
-      auth_options->is_platform_device) {
+      auth_options.is_platform_device ==
+          AuthenticatorSupportedOptions::PlatformDevice::kYes) {
     if (options.resident_key == ResidentKeyRequirement::kRequired) {
       return MakeCredentialStatus::kAuthenticatorMissingResidentKeys;
     }
@@ -154,20 +164,13 @@ MakeCredentialStatus IsCandidateAuthenticatorPostTouch(
 #endif
 
   if (options.resident_key == ResidentKeyRequirement::kRequired &&
-      !auth_options->supports_resident_key) {
+      !auth_options.supports_resident_key) {
     return MakeCredentialStatus::kAuthenticatorMissingResidentKeys;
   }
 
   if (authenticator->PINUVDispositionForMakeCredential(request, observer) ==
       PINUVDisposition::kUnsatisfiable) {
     return MakeCredentialStatus::kAuthenticatorMissingUserVerification;
-  }
-
-  // The largeBlobs extension only works for resident credentials on CTAP 2.1
-  // authenticators.
-  if (options.large_blob_support == LargeBlobSupport::kRequired &&
-      (!auth_options->supports_large_blobs || !request.resident_key_required)) {
-    return MakeCredentialStatus::kAuthenticatorMissingLargeBlob;
   }
 
   absl::optional<base::span<const int32_t>> supported_algorithms(
@@ -226,11 +229,11 @@ base::flat_set<FidoTransportProtocol> GetTransportsAllowedByRP(
   return base::flat_set<FidoTransportProtocol>();
 }
 
-void ReportMakeCredentialRequestTransport(FidoAuthenticator* authenticator) {
-  if (authenticator->AuthenticatorTransport()) {
+void ReportMakeCredentialResponseTransport(
+    absl::optional<FidoTransportProtocol> transport) {
+  if (transport) {
     base::UmaHistogramEnumeration(
-        "WebAuthentication.MakeCredentialRequestTransport",
-        *authenticator->AuthenticatorTransport());
+        "WebAuthentication.MakeCredentialResponseTransport", *transport);
   }
 }
 
@@ -247,9 +250,8 @@ CredProtect CredProtectForAuthenticator(
     case CredProtectRequest::kUVRequired:
       return CredProtect::kUVRequired;
     case CredProtectRequest::kUVOrCredIDRequiredOrBetter:
-      if (authenticator.Options() &&
-          authenticator.Options()->default_cred_protect ==
-              CredProtect::kUVRequired) {
+      if (authenticator.Options().default_cred_protect ==
+          CredProtect::kUVRequired) {
         return CredProtect::kUVRequired;
       }
       return CredProtect::kUVOrCredIDRequired;
@@ -259,10 +261,12 @@ CredProtect CredProtectForAuthenticator(
 // ValidateResponseExtensions returns true iff |extensions| is valid as a
 // response to |request| from an authenticator that reports that it supports
 // |options|.
-bool ValidateResponseExtensions(const CtapMakeCredentialRequest& request,
-                                const MakeCredentialOptions& options,
-                                const FidoAuthenticator& authenticator,
-                                const cbor::Value& extensions) {
+bool ValidateResponseExtensions(
+    const CtapMakeCredentialRequest& request,
+    const MakeCredentialOptions& options,
+    const FidoAuthenticator& authenticator,
+    const AuthenticatorMakeCredentialResponse& response,
+    const cbor::Value& extensions) {
   if (!extensions.is_map()) {
     return false;
   }
@@ -274,7 +278,7 @@ bool ValidateResponseExtensions(const CtapMakeCredentialRequest& request,
     const std::string& ext_name = it.first.GetString();
 
     if (ext_name == kExtensionCredProtect) {
-      if (!authenticator.SupportsCredProtectExtension() ||
+      if (!authenticator.Options().supports_cred_protect ||
           !it.second.is_integer()) {
         return false;
       }
@@ -309,18 +313,6 @@ bool ValidateResponseExtensions(const CtapMakeCredentialRequest& request,
       if (!request.min_pin_length_requested || !it.second.is_unsigned()) {
         return false;
       }
-    } else if (ext_name == kExtensionDevicePublicKey) {
-      if (!request.device_public_key) {
-        FIDO_LOG(ERROR) << "unsolicited devicePubKey extension output";
-        return false;
-      }
-      const absl::optional<const char*> error =
-          CheckDevicePublicKeyExtensionForErrors(
-              it.second, request.device_public_key->attestation);
-      if (error.has_value()) {
-        FIDO_LOG(ERROR) << error.value();
-        return false;
-      }
     } else {
       // Authenticators may not return unknown extensions.
       return false;
@@ -345,18 +337,9 @@ bool ResponseValid(const FidoAuthenticator& authenticator,
   const absl::optional<cbor::Value>& extensions =
       response.attestation_object.authenticator_data().extensions();
   if (extensions && !ValidateResponseExtensions(request, options, authenticator,
-                                                *extensions)) {
+                                                response, *extensions)) {
     FIDO_LOG(ERROR) << "Invalid extensions block: "
                     << cbor::DiagnosticWriter::Write(*extensions);
-    return false;
-  }
-
-  const bool has_dpk_extension =
-      extensions &&
-      extensions->GetMap().count(cbor::Value(kExtensionDevicePublicKey));
-  if (has_dpk_extension != response.device_public_key_signature.has_value()) {
-    FIDO_LOG(ERROR)
-        << "DPK extension isn't coherent with presence of DPK signature";
     return false;
   }
 
@@ -370,13 +353,27 @@ bool ResponseValid(const FidoAuthenticator& authenticator,
     return false;
   }
 
-  if (request.large_blob_key && !response.large_blob_key) {
-    FIDO_LOG(ERROR) << "Large blob key requested but not returned";
+  if ((request.large_blob_key &&
+       response.large_blob_type != LargeBlobSupportType::kKey) ||
+      (options.large_blob_support == LargeBlobSupport::kRequired &&
+       !response.large_blob_type)) {
+    FIDO_LOG(ERROR) << "Large blob requested but not returned";
     return false;
   }
 
   return true;
 }
+
+UserVerificationRequirement AtLeastUVPreferred(UserVerificationRequirement uv) {
+  switch (uv) {
+    case UserVerificationRequirement::kDiscouraged:
+      return UserVerificationRequirement::kPreferred;
+    case UserVerificationRequirement::kPreferred:
+    case UserVerificationRequirement::kRequired:
+      return uv;
+  }
+}
+
 }  // namespace
 
 MakeCredentialRequestHandler::MakeCredentialRequestHandler(
@@ -400,9 +397,15 @@ MakeCredentialRequestHandler::MakeCredentialRequestHandler(
       options_.is_off_the_record_context;
   transport_availability_info().resident_key_requirement =
       options_.resident_key;
+  transport_availability_info().user_verification_requirement =
+      request_.user_verification;
+  transport_availability_info().request_is_internal_only =
+      options_.authenticator_attachment == AuthenticatorAttachment::kPlatform;
+  transport_availability_info().make_credential_attachment =
+      options_.authenticator_attachment;
 
   base::flat_set<FidoTransportProtocol> allowed_transports =
-      GetTransportsAllowedByRP(options.authenticator_attachment);
+      GetTransportsAllowedByRP(options_.authenticator_attachment);
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Attempt to instantiate the ChromeOS platform authenticator for
@@ -420,6 +423,14 @@ MakeCredentialRequestHandler::MakeCredentialRequestHandler(
       fido_discovery_factory,
       base::STLSetIntersection<base::flat_set<FidoTransportProtocol>>(
           supported_transports, allowed_transports));
+  std::string json_string;
+  if (!options_.json ||
+      !base::JSONWriter::WriteWithOptions(
+          *options_.json->value, base::JsonOptions::OPTIONS_PRETTY_PRINT,
+          &json_string)) {
+    json_string = "no JSON";
+  }
+  FIDO_LOG(EVENT) << "Starting MakeCredential flow: " << json_string;
   Start();
 }
 
@@ -473,18 +484,8 @@ void MakeCredentialRequestHandler::DispatchRequest(
       IsCandidateAuthenticatorPostTouch(*request.get(), authenticator, options_,
                                         observer());
   if (post_touch_status != MakeCredentialStatus::kSuccess) {
-#if BUILDFLAG(IS_WIN)
-    // If the Windows API cannot handle a request, just reject the request
-    // outright. There are no other authenticators to attempt, so calling
-    // GetTouch() would not make sense.
-    if (authenticator->GetType() == FidoAuthenticator::Type::kWinNative) {
-      HandleInapplicableAuthenticator(authenticator, post_touch_status);
-      return;
-    }
-#endif  // BUILDFLAG(IS_WIN)
-
-    if (authenticator->Options() &&
-        authenticator->Options()->is_platform_device) {
+    if (authenticator->Options().is_platform_device !=
+        AuthenticatorSupportedOptions::PlatformDevice::kNo) {
       HandleInapplicableAuthenticator(authenticator, post_touch_status);
       return;
     }
@@ -546,7 +547,8 @@ void MakeCredentialRequestHandler::DispatchRequestAfterAppIdExclude(
   auto uv_disposition = authenticator->PINUVDispositionForMakeCredential(
       *request.get(), observer());
   switch (uv_disposition) {
-    case PINUVDisposition::kNoUV:
+    case PINUVDisposition::kUVNotSupportedNorRequired:
+    case PINUVDisposition::kNoUVRequired:
     case PINUVDisposition::kNoTokenInternalUV:
     case PINUVDisposition::kNoTokenInternalUVPINFallback:
       break;
@@ -559,8 +561,6 @@ void MakeCredentialRequestHandler::DispatchRequestAfterAppIdExclude(
       NOTREACHED();
       return;
   }
-
-  ReportMakeCredentialRequestTransport(authenticator);
 
   auto request_copy(*request.get());  // can't copy and move in the same stmt.
   authenticator->MakeCredential(
@@ -680,9 +680,9 @@ void MakeCredentialRequestHandler::HavePINUVAuthTokenResultForAuthenticator(
 
   // If the authenticator supports biometric enrollment but is not enrolled,
   // offer enrollment with the request.
-  if (authenticator->Options()->bio_enrollment_availability ==
+  if (authenticator->Options().bio_enrollment_availability ==
           BioEnrollmentAvailability::kSupportedButUnprovisioned ||
-      authenticator->Options()->bio_enrollment_availability_preview ==
+      authenticator->Options().bio_enrollment_availability_preview ==
           BioEnrollmentAvailability::kSupportedButUnprovisioned) {
     state_ = State::kBioEnrollment;
     bio_enroller_ =
@@ -742,7 +742,7 @@ void MakeCredentialRequestHandler::HandleResponse(
   }
 
 #if BUILDFLAG(IS_WIN)
-  if (authenticator->GetType() == FidoAuthenticator::Type::kWinNative) {
+  if (authenticator->GetType() == AuthenticatorType::kWinNative) {
     state_ = State::kFinished;
     if (status != CtapDeviceResponseCode::kSuccess) {
       std::move(completion_callback_)
@@ -761,6 +761,7 @@ void MakeCredentialRequestHandler::HandleResponse(
       return;
     }
     CancelActiveAuthenticators(authenticator->GetId());
+    ReportMakeCredentialResponseTransport(response->transport_used);
     response->attestation_should_be_filtered = suppress_attestation_;
     std::move(completion_callback_)
         .Run(WinCtapDeviceResponseCodeToMakeCredentialStatus(status),
@@ -825,6 +826,13 @@ void MakeCredentialRequestHandler::HandleResponse(
       std::move(completion_callback_)
           .Run(MakeCredentialStatus::kAuthenticatorResponseInvalid,
                absl::nullopt, authenticator);
+    } else if (authenticator->GetType() == AuthenticatorType::kPhone) {
+      FIDO_LOG(ERROR) << "Status " << static_cast<int>(status) << " from "
+                      << authenticator->GetDisplayName()
+                      << " is fatal to the request";
+      std::move(completion_callback_)
+          .Run(MakeCredentialStatus::kHybridTransportError, absl::nullopt,
+               authenticator);
     } else {
       FIDO_LOG(ERROR) << "Ignoring status " << static_cast<int>(status)
                       << " from " << authenticator->GetDisplayName();
@@ -837,8 +845,7 @@ void MakeCredentialRequestHandler::HandleResponse(
 
   if (status != CtapDeviceResponseCode::kSuccess) {
     FIDO_LOG(ERROR) << "Failing make credential request due to status "
-                    << static_cast<int>(status) << " from "
-                    << authenticator->GetDisplayName();
+                    << status << " from " << authenticator->GetDisplayName();
     std::move(completion_callback_)
         .Run(*maybe_result, absl::nullopt, authenticator);
     return;
@@ -855,12 +862,7 @@ void MakeCredentialRequestHandler::HandleResponse(
     return;
   }
 
-  if (authenticator->AuthenticatorTransport()) {
-    base::UmaHistogramEnumeration(
-        "WebAuthentication.MakeCredentialResponseTransport",
-        *authenticator->AuthenticatorTransport());
-  }
-
+  ReportMakeCredentialResponseTransport(response->transport_used);
   response->attestation_should_be_filtered = suppress_attestation_;
   std::move(completion_callback_)
       .Run(MakeCredentialStatus::kSuccess, std::move(*response), authenticator);
@@ -941,8 +943,6 @@ void MakeCredentialRequestHandler::DispatchRequestWithToken(
       token.PinAuth(request->client_data_hash);
   request->pin_token_for_exclude_list_probing = std::move(token);
 
-  ReportMakeCredentialRequestTransport(authenticator);
-
   auto request_copy(*request.get());  // can't copy and move in the same stmt.
   authenticator->MakeCredential(
       std::move(request_copy), options_,
@@ -969,8 +969,7 @@ void MakeCredentialRequestHandler::SpecializeRequestForAuthenticator(
   // Only Windows cares about |authenticator_attachment| on the request.
   request->authenticator_attachment = options_.authenticator_attachment;
 
-  const absl::optional<AuthenticatorSupportedOptions>&
-      auth_options_empty_on_win = authenticator->Options();
+  const AuthenticatorSupportedOptions& auth_options = authenticator->Options();
   switch (options_.resident_key) {
     case ResidentKeyRequirement::kRequired:
       request->resident_key_required = true;
@@ -982,13 +981,12 @@ void MakeCredentialRequestHandler::SpecializeRequestForAuthenticator(
       request->resident_key_required =
 #if BUILDFLAG(IS_WIN)
           // Windows does not yet support rk=preferred.
-          authenticator->GetType() != FidoAuthenticator::Type::kWinNative &&
+          authenticator->GetType() != AuthenticatorType::kWinNative &&
 #endif
-          auth_options_empty_on_win &&
-          auth_options_empty_on_win->supports_resident_key &&
+          auth_options.supports_resident_key &&
           !authenticator->DiscoverableCredentialStorageFull() &&
           (observer()->SupportsPIN() ||
-           auth_options_empty_on_win->user_verification_availability ==
+           auth_options.user_verification_availability ==
                AuthenticatorSupportedOptions::UserVerificationAvailability::
                    kSupportedAndConfigured);
       break;
@@ -998,50 +996,71 @@ void MakeCredentialRequestHandler::SpecializeRequestForAuthenticator(
       break;
   }
 
+  bool want_large_blob = false;
   switch (options_.large_blob_support) {
     case LargeBlobSupport::kRequired:
-      request->large_blob_key = true;
+      want_large_blob = true;
       break;
     case LargeBlobSupport::kPreferred:
-      request->large_blob_key =
-          auth_options_empty_on_win &&
-          auth_options_empty_on_win->supports_large_blobs &&
-          request->resident_key_required;
+      want_large_blob =
+          auth_options.large_blob_type && request->resident_key_required;
       break;
     case LargeBlobSupport::kNotRequested:
-      request->large_blob_key = false;
       break;
   }
 
-  if (request->resident_key_required ||
-      (auth_options_empty_on_win && auth_options_empty_on_win->always_uv)) {
-    request->user_verification = UserVerificationRequirement::kRequired;
-  } else {
-    request->user_verification = options_.user_verification;
+  if (auth_options.large_blob_type == LargeBlobSupportType::kExtension) {
+    if (want_large_blob) {
+      request->large_blob_support = options_.large_blob_support;
+    }
+  } else if (auth_options.large_blob_type == LargeBlobSupportType::kKey) {
+    request->large_blob_key = want_large_blob;
   }
 
+  // "Upgrade" uv to `required` for discoverable credentials on non-platform
+  // authenticators, and on security keys that have the `alwaysUv` config
+  // enabled.
+  const bool upgrade_uv = (request->resident_key_required &&
+                           authenticator->AuthenticatorTransport() !=
+                               FidoTransportProtocol::kInternal) ||
+                          auth_options.always_uv;
+  request->user_verification = upgrade_uv
+                                   ? UserVerificationRequirement::kRequired
+                                   : options_.user_verification;
+
   if (options_.cred_protect_request &&
-      authenticator->SupportsCredProtectExtension()) {
+      authenticator->Options().supports_cred_protect) {
     request->cred_protect = CredProtectForAuthenticator(
         options_.cred_protect_request->first, *authenticator);
     request->cred_protect_enforce = options_.cred_protect_request->second;
   }
 
-  if (request->hmac_secret && !authenticator->SupportsHMACSecretExtension()) {
-    request->hmac_secret = false;
+  if (request->hmac_secret) {
+    request->prf = auth_options.supports_prf;
+    request->hmac_secret =
+        !auth_options.supports_prf && auth_options.supports_hmac_secret;
+    if (request->prf || request->hmac_secret) {
+      // CTAP2 devices have two PRFs per credential: one for non-UV assertions
+      // and another for UV assertions. WebAuthn only exposes the latter so UV
+      // is needed if supported by the authenticator. When `hmac_secret` is
+      // true, uv=preferred is taken to be a stronger signal and will configure
+      // UV on authenticators without it.
+      request->user_verification =
+          AtLeastUVPreferred(request->user_verification);
+    }
+    // Evaluating the PRF at creation time is only supported with the "prf"
+    // extension.
+    if (request->prf_input && !auth_options.supports_prf) {
+      request->prf_input.reset();
+    }
   }
 
-  if (request->large_blob_key && auth_options_empty_on_win &&
-      !auth_options_empty_on_win->supports_large_blobs) {
-    request->large_blob_key = false;
-  }
-
-  if (request->min_pin_length_requested && auth_options_empty_on_win &&
-      !auth_options_empty_on_win->supports_min_pin_length_extension) {
+  if (request->min_pin_length_requested &&
+      !auth_options.supports_min_pin_length_extension) {
     request->min_pin_length_requested = false;
   }
 
-  if (!authenticator->SupportsEnterpriseAttestation()) {
+  if (!authenticator->Options().enterprise_attestation) {
     switch (request->attestation_preference) {
       case AttestationConveyancePreference::kEnterpriseApprovedByBrowser:
         // If enterprise attestation is approved by policy then downgrade to
@@ -1063,12 +1082,10 @@ void MakeCredentialRequestHandler::SpecializeRequestForAuthenticator(
   }
 
   if (request->cred_blob &&
-      !authenticator->SupportsCredBlobOfSize(request->cred_blob->size())) {
+      (!authenticator->Options().max_cred_blob_length.has_value() ||
+       authenticator->Options().max_cred_blob_length.value() <
+           request->cred_blob->size())) {
     request->cred_blob.reset();
-  }
-
-  if (request->device_public_key && !authenticator->SupportsDevicePublicKey()) {
-    request->device_public_key.reset();
   }
 }
 

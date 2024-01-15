@@ -9,6 +9,7 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/password_manager/content/common/web_ui_constants.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -16,10 +17,9 @@
 
 namespace {
 
-content::WebUIDataSource* CreateHTMLSource(Profile* profile,
-                                           const std::string& host_name) {
+void CreateAndAddHTMLSource(Profile* profile, const std::string& host_name) {
   content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(host_name);
+      content::WebUIDataSource::CreateAndAdd(profile, host_name);
 
   std::u16string page_title;
   if (host_name == chrome::kChromeUIBookmarksHost)
@@ -28,7 +28,7 @@ content::WebUIDataSource* CreateHTMLSource(Profile* profile,
     page_title = l10n_util::GetStringUTF16(IDS_HISTORY_TITLE);
   else if (host_name == chrome::kChromeUIExtensionsHost)
     page_title = l10n_util::GetStringUTF16(IDS_EXTENSIONS_TOOLBAR_TITLE);
-  else if (host_name == chrome::kChromeUIPasswordManagerHost)
+  else if (host_name == password_manager::kChromeUIPasswordManagerHost)
     page_title = l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_UI_TITLE);
   else
     page_title = base::UTF8ToUTF16(host_name);
@@ -39,8 +39,6 @@ content::WebUIDataSource* CreateHTMLSource(Profile* profile,
   source->AddString("pageHeading", page_heading);
 
   source->SetDefaultResource(IDR_PAGE_NOT_AVAILABLE_FOR_GUEST_APP_HTML);
-
-  return source;
 }
 
 }  // namespace
@@ -49,6 +47,5 @@ PageNotAvailableForGuestUI::PageNotAvailableForGuestUI(
     content::WebUI* web_ui,
     const std::string& host_name)
     : WebUIController(web_ui) {
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateHTMLSource(profile, host_name));
+  CreateAndAddHTMLSource(Profile::FromWebUI(web_ui), host_name);
 }

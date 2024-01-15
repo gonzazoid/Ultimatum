@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
@@ -71,11 +72,10 @@ class PLATFORM_EXPORT WidgetBaseInputHandler {
                               const gfx::Vector2dF& velocity,
                               const cc::OverscrollBehavior& behavior);
 
-  void InjectGestureScrollEvent(blink::WebGestureDevice device,
-                                const gfx::Vector2dF& delta,
-                                ui::ScrollGranularity granularity,
-                                cc::ElementId scrollable_area_element_id,
-                                blink::WebInputEvent::Type injected_type);
+  void InjectScrollbarGestureScroll(const gfx::Vector2dF& delta,
+                                    ui::ScrollGranularity granularity,
+                                    cc::ElementId scrollable_area_element_id,
+                                    blink::WebInputEvent::Type injected_type);
 
   bool handling_input_event() const { return handling_input_event_; }
   void set_handling_input_event(bool handling_input_event) {
@@ -93,7 +93,6 @@ class PLATFORM_EXPORT WidgetBaseInputHandler {
  private:
   class HandlingState;
   struct InjectScrollGestureParams {
-    WebGestureDevice device;
     gfx::Vector2dF scroll_delta;
     ui::ScrollGranularity granularity;
     cc::ElementId scrollable_area_element_id;
@@ -109,19 +108,19 @@ class PLATFORM_EXPORT WidgetBaseInputHandler {
   // latency info, and its metrics, respectively, used in generating new
   // gestures along with their latency info and metrics.
   void HandleInjectedScrollGestures(
-      std::vector<InjectScrollGestureParams> injected_scroll_params,
+      Vector<InjectScrollGestureParams> injected_scroll_params,
       const WebInputEvent& input_event,
       const ui::LatencyInfo& original_latency_info,
       const cc::EventMetrics* original_metrics);
 
-  WidgetBase* widget_;
+  raw_ptr<WidgetBase, ExperimentalRenderer> widget_;
 
   // Are we currently handling an input event?
   bool handling_input_event_ = false;
 
   // Current state from HandleInputEvent. This variable is stack allocated
   // and is not owned.
-  HandlingState* handling_input_state_ = nullptr;
+  raw_ptr<HandlingState, ExperimentalRenderer> handling_input_state_ = nullptr;
 
   // We store the current cursor object so we can avoid spamming SetCursor
   // messages.

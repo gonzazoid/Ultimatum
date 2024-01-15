@@ -4,6 +4,8 @@
 
 #include "ash/assistant/assistant_ui_controller_impl.h"
 
+#include <optional>
+
 #include "ash/assistant/assistant_controller_impl.h"
 #include "ash/assistant/model/assistant_interaction_model.h"
 #include "ash/assistant/ui/assistant_ui_constants.h"
@@ -20,14 +22,13 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/toast/toast_manager_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
@@ -45,7 +46,6 @@ PrefService* pref_service() {
 
 // Toast -----------------------------------------------------------------------
 
-constexpr char kStylusPromptToastId[] = "stylus_prompt_for_embedded_ui";
 constexpr char kUnboundServiceToastId[] =
     "assistant_controller_unbound_service";
 
@@ -53,7 +53,7 @@ void ShowToast(const std::string& id,
                ToastCatalogName catalog_name,
                int message_id) {
   ToastData toast(id, catalog_name, l10n_util::GetStringUTF16(message_id));
-  Shell::Get()->toast_manager()->Show(toast);
+  Shell::Get()->toast_manager()->Show(std::move(toast));
 }
 
 }  // namespace
@@ -65,8 +65,6 @@ AssistantUiControllerImpl::AssistantUiControllerImpl(
     : assistant_controller_(assistant_controller) {
   model_.AddObserver(this);
   assistant_controller_observation_.Observe(AssistantController::Get());
-  highlighter_controller_observation_.Observe(
-      Shell::Get()->highlighter_controller());
   overview_controller_observation_.Observe(Shell::Get()->overview_controller());
 }
 
@@ -131,10 +129,10 @@ void AssistantUiControllerImpl::ShowUi(AssistantEntryPoint entry_point) {
   model_.SetVisible(entry_point);
 }
 
-absl::optional<base::ScopedClosureRunner> AssistantUiControllerImpl::CloseUi(
+std::optional<base::ScopedClosureRunner> AssistantUiControllerImpl::CloseUi(
     AssistantExitPoint exit_point) {
   if (model_.visibility() != AssistantVisibility::kVisible)
-    return absl::nullopt;
+    return std::nullopt;
 
   // Set visibility to `kClosing`.
   model_.SetClosing(exit_point);
@@ -155,8 +153,8 @@ void AssistantUiControllerImpl::SetAppListBubbleWidth(int width) {
 }
 
 void AssistantUiControllerImpl::ToggleUi(
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   // When not visible, toggling will show the UI.
   if (model_.visibility() != AssistantVisibility::kVisible) {
     DCHECK(entry_point.has_value());
@@ -203,8 +201,8 @@ void AssistantUiControllerImpl::OnOpeningUrl(const GURL& url,
 void AssistantUiControllerImpl::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   weak_factory_for_delayed_visibility_changes_.InvalidateWeakPtrs();
 
   if (new_visibility == AssistantVisibility::kVisible) {
@@ -213,10 +211,6 @@ void AssistantUiControllerImpl::OnUiVisibilityChanged(
   }
 
   if (old_visibility == AssistantVisibility::kVisible) {
-    // Metalayer should not be sticky. Disable when the UI is no longer visible.
-    if (exit_point != AssistantExitPoint::kStylus)
-      Shell::Get()->highlighter_controller()->AbortSession();
-
     // Only record the exit point when Assistant UI becomes invisible to
     // avoid recording duplicate events (e.g. pressing ESC key).
     assistant::util::RecordAssistantExitPoint(exit_point.value());
@@ -232,16 +226,6 @@ void AssistantUiControllerImpl::OnOnboardingShown() {
   // Update the number of user sessions in which Assistant onboarding was shown.
   pref_service()->SetInteger(prefs::kAssistantNumSessionsWhereOnboardingShown,
                              GetNumberOfSessionsWhereOnboardingShown() + 1);
-}
-
-void AssistantUiControllerImpl::OnHighlighterEnabledChanged(
-    HighlighterEnabledState state) {
-  if (state != HighlighterEnabledState::kEnabled)
-    return;
-
-  ShowToast(kStylusPromptToastId, ToastCatalogName::kStylusPrompt,
-            IDS_ASH_ASSISTANT_PROMPT_STYLUS);
-  CloseUi(AssistantExitPoint::kStylus);
 }
 
 void AssistantUiControllerImpl::OnOverviewModeWillStart() {

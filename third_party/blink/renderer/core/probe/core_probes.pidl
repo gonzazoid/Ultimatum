@@ -58,12 +58,16 @@ interface CoreProbes {
   class FontCustomPlatformData;
   class FontFace;
   class HTMLDocumentParser;
-  class XMLHttpRequest;
   class HTMLInputElement;
-  class HTMLPortalElement;
+  class JSBasedEventListener;
   class PerformanceEntry;
+  class Script;
+  class ScriptState;
+  class SpeculationCandidate;
+  class XMLHttpRequest;
 
   void DidClearDocumentOfWindowObject([Keep] LocalFrame*);
+  void DidCreateMainWorldContext([Keep] LocalFrame*);
   void WillInsertDOMNode([Keep] Node* parent);
   void DidInsertDOMNode([Keep] Node*);
   void WillRemoveDOMNode([Keep] Node*);
@@ -82,6 +86,7 @@ interface CoreProbes {
   void WillPopShadowRoot([Keep] Element* host, ShadowRoot*);
   void WillSendXMLHttpOrFetchNetworkRequest(ExecutionContext*, const String& url);
   void DidCreateCanvasContext(Document*);
+  void DidCreateOffscreenCanvasContext(OffscreenCanvas*);
   void DidFireWebGLError(Element*, const String& error_name);
   void DidFireWebGLWarning(Element*);
   void DidFireWebGLErrorOrWarning(Element*, const String& message);
@@ -94,20 +99,21 @@ interface CoreProbes {
   void DidBlockRequest(CoreProbeSink*, const ResourceRequest&, DocumentLoader*, const KURL& fetch_context_url, const ResourceLoaderOptions&, ResourceRequestBlockedReason, ResourceType);
   void DidChangeResourcePriority(LocalFrame*, DocumentLoader*, uint64_t identifier, ResourceLoadPriority load_priority);
   void PrepareRequest(CoreProbeSink*, DocumentLoader*, ResourceRequest&, ResourceLoaderOptions&, ResourceType);
-  void WillSendRequest(CoreProbeSink*, DocumentLoader*, const KURL& fetch_context_url, const ResourceRequest&, const ResourceResponse& redirect_response, const ResourceLoaderOptions&, ResourceType, RenderBlockingBehavior, base::TimeTicks timestamp);
+  void WillSendRequest([Keep] ExecutionContext*, DocumentLoader*, const KURL& fetch_context_url, const ResourceRequest&, const ResourceResponse& redirect_response, const ResourceLoaderOptions&, ResourceType, RenderBlockingBehavior, base::TimeTicks timestamp);
   void WillSendNavigationRequest(CoreProbeSink*, uint64_t identifier, DocumentLoader*, const KURL&, const AtomicString& http_method, EncodedFormData*);
   void MarkResourceAsCached(LocalFrame*, DocumentLoader*, uint64_t identifier);
   void DidReceiveResourceResponse(CoreProbeSink*, uint64_t identifier, DocumentLoader*, const ResourceResponse&, const Resource*);
   void DidReceiveData(CoreProbeSink*, uint64_t identifier, DocumentLoader*, const char* data, uint64_t data_length);
   void DidReceiveBlob(CoreProbeSink*, uint64_t identifier, DocumentLoader*, BlobDataHandle*);
   void DidReceiveEncodedDataLength(CoreProbeSink*, DocumentLoader* loader, uint64_t identifier, size_t encoded_data_length);
-  void DidFinishLoading(CoreProbeSink*, uint64_t identifier, DocumentLoader*, base::TimeTicks finish_time, int64_t encoded_data_length, int64_t decoded_body_length, bool should_report_corb_blocking);
+  void DidFinishLoading(CoreProbeSink*, uint64_t identifier, DocumentLoader*, base::TimeTicks finish_time, int64_t encoded_data_length, int64_t decoded_body_length);
   void DidReceiveCorsRedirectResponse(ExecutionContext*, uint64_t identifier, DocumentLoader*, const ResourceResponse&, Resource*);
   void DidFailLoading([Keep] CoreProbeSink*, uint64_t identifier, DocumentLoader*, const ResourceError&, const base::UnguessableToken&);
   void WillSendEventSourceRequest(ExecutionContext*);
   void WillDispatchEventSourceEvent(ExecutionContext*, uint64_t identifier, const AtomicString& event_name, const AtomicString& event_id, const String& data);
   void WillLoadXHR([Keep] ExecutionContext*, const AtomicString& method, const KURL& url, bool async, const HTTPHeaderMap& headers, bool include_credentials);
   void DidFinishXHR(ExecutionContext*, XMLHttpRequest* xhr);
+  void DidFinishSyncXHR(ExecutionContext* context, const base::TimeDelta blocking_time);
   void ScriptImported(ExecutionContext*, uint64_t identifier, const String& source_string);
   void ScriptExecutionBlockedByCSP(ExecutionContext*, const String& directive_text);
   void DidReceiveScriptResponse(ExecutionContext*, uint64_t identifier);
@@ -156,11 +162,20 @@ interface CoreProbes {
   void DocumentWriteFetchScript([Keep] Document*);
   void DidChangeViewport(LocalFrame* document);
   void BreakableLocation(ExecutionContext* context, const char* name);
+  void WillHandlePromise(ExecutionContext* context, ScriptState* script_state, bool resolving, const char* class_like_name, const String& property_like_name, const String& script_url);
   RecalculateStyle(Document* document);
   UpdateLayout(Document* document);
-  ExecuteScript([Keep] ExecutionContext* context, const v8::Local<v8::Context>& v8_context, const String& script_url, int script_id);
-  CallFunction([Keep] ExecutionContext* context, const v8::Local<v8::Context>& v8_context, v8::Local<v8::Function> function, int depth = 0);
-  UserCallback([Keep] ExecutionContext* context, const char* name, const AtomicString& atomic_name, bool recurring, EventTarget* event_target = nullptr);
+
+  /* This is called only for script generated from script blocks (script element, setTimeout with code */
+  EvaluateScriptBlock(ScriptState* script_state, const KURL& source_url, bool is_module, bool sanitize);
+
+  /* This is called once the script is ready to execute */
+  ExecuteScript([Keep] ExecutionContext* context, v8::Local<v8::Context> v8_context, const String& script_url, int script_id);
+
+  CallFunction([Keep] ExecutionContext* context, v8::Local<v8::Context> v8_context, v8::Local<v8::Function> function, int depth = 0);
+  UserCallback([Keep] ExecutionContext* context, const char* name, AtomicString atomic_name, bool recurring, EventTarget* event_target = nullptr, Event* event = nullptr, EventListener* listener = nullptr);
+  InvokeCallback(ScriptState* script_state, const char* name, CallbackFunctionBase* callback, v8::MaybeLocal<v8::Value> function = v8::MaybeLocal<v8::Value>());
+  InvokeEventHandler(ScriptState* script_state, Event* event = nullptr, JSBasedEventListener* listener = nullptr);
   V8Compile([Keep] ExecutionContext* context, const String& file_name, int line, int column);
   ParseHTML(Document* document, HTMLDocumentParser* parser);
   void ForcePseudoState([Keep] Element* element, CSSSelector::PseudoType pseudo_state, bool* result);
@@ -172,14 +187,13 @@ interface CoreProbes {
   void DidFinishDebuggerTask(CoreProbeSink*);
   void LifecycleEvent([Keep] LocalFrame*, DocumentLoader*, const char* name, double timestamp);
   void PaintTiming([Keep] Document*, const char* name, double timestamp);
-  void DidCreateAudioContext(Document*);
-  void DidCloseAudioContext(Document*);
-  void DidResumeAudioContext(Document*);
-  void DidSuspendAudioContext(Document*);
+  void DidCreateAudioContext(ExecutionContext*);
+  void DidCloseAudioContext(ExecutionContext*);
+  void DidResumeAudioContext(ExecutionContext*);
+  void DidSuspendAudioContext(ExecutionContext*);
   void DidProduceCompilationCache(CoreProbeSink*, const ClassicScript&, v8::Local<v8::Script> script);
   void ApplyCompilationModeOverride(ExecutionContext*, const ClassicScript&, v8::ScriptCompiler::CachedData** cached_data, v8::ScriptCompiler::CompileOptions*);
   void NodeCreated([Keep] Node* node);
-  void PortalRemoteFrameCreated(Document*, HTMLPortalElement* portal_element);
   void FileChooserOpened([Keep] LocalFrame* frame, HTMLInputElement* element, bool multiple, bool* intercepted);
   void PlayerErrorsRaised(ExecutionContext* context, String player_id, const Vector<InspectorPlayerError>& errors);
   void PlayerEventsAdded(ExecutionContext* context, String player_id, const Vector<InspectorPlayerEvent>& events);
@@ -188,6 +202,8 @@ interface CoreProbes {
   void PlayersCreated(ExecutionContext* context, const Vector<WebString>& players);
   void SetDevToolsIds(CoreProbeSink*, ResourceRequest& request, const FetchInitiatorInfo&);
   void DidMutateStyleSheet(Document*, CSSStyleSheet* style_sheet);
+  void DidReplaceStyleSheetText(Document*, CSSStyleSheet* style_sheet, const String& text);
+  void GetTextPosition(Document*, wtf_size_t offset, const String* text, TextPosition* result);
   void LocalFontsEnabled(ExecutionContext*, bool* result);
   void DidUpdateComputedStyle([Keep] Element*, const ComputedStyle* old_style, const ComputedStyle* new_style);
   void GetDisabledImageTypes(ExecutionContext*, HashSet<String>* result);
@@ -195,4 +211,8 @@ interface CoreProbes {
   void IsCacheDisabled(ExecutionContext*, bool* is_cache_disabled);
   void PerformanceEntryAdded([Keep] ExecutionContext*, PerformanceEntry*);
   void ApplyAutomationOverride(ExecutionContext*, bool& enabled);
+  void DidAddSpeculationRuleSet([Keep] Document&, const SpeculationRuleSet& rule_set);
+  void DidRemoveSpeculationRuleSet(Document&, const SpeculationRuleSet& rule_set);
+  void SpeculationCandidatesUpdated([Keep] Document&, const HeapVector<Member<SpeculationCandidate>>& candidates);
+  void DidInitializeFrameWidget(LocalFrame* document);
 }

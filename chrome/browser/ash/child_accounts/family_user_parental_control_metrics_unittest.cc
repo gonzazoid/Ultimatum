@@ -15,6 +15,8 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/child_accounts/child_user_service.h"
 #include "chrome/browser/ash/child_accounts/child_user_service_factory.h"
 #include "chrome/browser/ash/child_accounts/time_limit_test_utils.h"
@@ -26,8 +28,6 @@
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
@@ -56,7 +56,6 @@ arc::mojom::ArcPackageInfoPtr CreateArcAppPackage(
   package->last_backup_android_id = 1;
   package->last_backup_time = 1;
   package->sync = false;
-  package->system = false;
   return package;
 }
 
@@ -265,7 +264,7 @@ TEST_F(FamilyUserParentalControlMetricsTest, AppTimeLimitMetrics) {
 
     builder.SetResetTime(6, 0);
     GetPrefs()->SetDict(prefs::kPerAppTimeLimitsPolicy,
-                        builder.value().GetDict().Clone());
+                        builder.value().Clone());
   }
 
   histogram_tester_.ExpectBucketCount(

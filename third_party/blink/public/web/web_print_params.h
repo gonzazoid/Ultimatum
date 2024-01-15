@@ -32,27 +32,28 @@
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_PRINT_PARAMS_H_
 
 #include "printing/mojom/print.mojom-shared.h"
-#include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/geometry/size.h"
+#include "third_party/blink/public/web/web_print_page_description.h"
+#include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/size_f.h"
 
 namespace blink {
 
 struct WebPrintParams {
-  // Specifies printable content rect in points (a point is 1/72 of an inch).
-  gfx::Rect print_content_area;
-
   // Specifies the selected printer default printable area details in
-  // points.
-  gfx::Rect printable_area;
+  // in CSS pixels (a CSS pixel is 1/96 of an inch).
+  gfx::RectF printable_area_in_css_pixels;
 
-  // Specifies the selected printer default paper size in points.
-  gfx::Size paper_size;
+  // The page size and margins as provided by the system / user. This will be
+  // used as a base when handling @page rules, to fill in the blanks (rules may
+  // provide or omit declarations for the page size and/or any margin side).
+  // In CSS pixels.
+  WebPrintPageDescription default_page_description;
 
   // Specifies user selected DPI for printing.
   int printer_dpi = 72;
 
-  // Specifies the scale factor in percent. 100 is 1:1 (default scaling).
-  int scale_factor = 100;
+  // Specifies the scale factor.
+  float scale_factor = 1.0f;
 
   // Specifies whether to print PDFs as image.
   bool rasterize_pdf = false;
@@ -70,13 +71,12 @@ struct WebPrintParams {
 
   WebPrintParams() = default;
 
-  WebPrintParams(const gfx::Size& paper_size)
+  explicit WebPrintParams(const gfx::SizeF& paper_size)
       : WebPrintParams(paper_size, true) {}
 
-  WebPrintParams(const gfx::Size& paper_size, bool use_printing_layout)
-      : print_content_area(paper_size),
-        printable_area(print_content_area),
-        paper_size(paper_size),
+  WebPrintParams(const gfx::SizeF& paper_size, bool use_printing_layout)
+      : printable_area_in_css_pixels(paper_size),
+        default_page_description(paper_size),
         print_scaling_option(printing::mojom::PrintScalingOption::kSourceSize),
         use_printing_layout(use_printing_layout) {}
 };

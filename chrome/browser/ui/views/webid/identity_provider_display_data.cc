@@ -7,12 +7,16 @@
 IdentityProviderDisplayData::IdentityProviderDisplayData(
     const std::u16string& idp_etld_plus_one,
     const content::IdentityProviderMetadata& idp_metadata,
-    const content::ClientIdData& client_data,
-    const std::vector<content::IdentityRequestAccount>& accounts)
-    : idp_etld_plus_one_(idp_etld_plus_one),
-      idp_metadata_(idp_metadata),
-      client_data_(client_data),
-      accounts_(accounts) {}
+    const content::ClientMetadata& client_metadata,
+    const std::vector<content::IdentityRequestAccount>& accounts,
+    bool request_permission,
+    bool has_login_status_mismatch)
+    : idp_etld_plus_one(idp_etld_plus_one),
+      idp_metadata(idp_metadata),
+      client_metadata(client_metadata),
+      accounts(accounts),
+      request_permission(request_permission),
+      has_login_status_mismatch(has_login_status_mismatch) {}
 
 IdentityProviderDisplayData::IdentityProviderDisplayData(
     const IdentityProviderDisplayData& other) = default;

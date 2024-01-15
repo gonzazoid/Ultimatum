@@ -26,6 +26,9 @@ namespace prefs {
 // A list of times at which CSD pings were sent.
 extern const char kSafeBrowsingCsdPingTimestamps[];
 
+// Boolean that is true when deep scanning is allowed.
+extern const char kSafeBrowsingDeepScanningEnabled[];
+
 // Boolean that is true when SafeBrowsing is enabled.
 extern const char kSafeBrowsingEnabled[];
 
@@ -41,9 +44,19 @@ extern const char kSafeBrowsingEnterpriseRealTimeUrlCheckMode[];
 // kSafeBrowsingEnterpriseRealTimeUrlCheckMode pref is set.
 extern const char kSafeBrowsingEnterpriseRealTimeUrlCheckScope[];
 
-// Boolean that tells us whether users are given the option to opt in to Safe
-// Browsing extended reporting. This is exposed as a preference that can be
-// overridden by enterprise policy.
+// Timestamp indicating the last time a protego ping with a token was sent.
+// This is only set if the user has enhanced protection enabled and is signed
+// in with their account.
+extern const char kSafeBrowsingEsbProtegoPingWithTokenLastLogTime[];
+
+// Timestamp indicating the last time a protego ping without a token was sent.
+// This is only set if the user has enhanced protection enabled and is not
+// signed in with their account.
+extern const char kSafeBrowsingEsbProtegoPingWithoutTokenLastLogTime[];
+
+// Boolean that tells us whether users are given the option to opt in to
+// Safe Browsing extended reporting. This is exposed as a preference that
+// can be overridden by enterprise policy.
 extern const char kSafeBrowsingExtendedReportingOptInAllowed[];
 
 // A dictionary mapping incident types to a dict of incident key:digest pairs.
@@ -115,12 +128,47 @@ extern const char kSafeBrowsingMetricsLastLogTime[];
 // Used for logging metrics. Structure: go/sb-event-ts-pref-struct.
 extern const char kSafeBrowsingEventTimestamps[];
 
+// A timestamp indicating the expiration time of the Oblivious HTTP key used by
+// hash prefix real time URL check.
+extern const char kSafeBrowsingHashRealTimeOhttpExpirationTime[];
+
+// The Oblivious HTTP key used by hash prefix real time URL check.
+extern const char kSafeBrowsingHashRealTimeOhttpKey[];
+
+// Boolean indicating whether users can receive surveys.
+extern const char kSafeBrowsingSurveysEnabled[];
+
 // A timestamp indicating the last time the account tailored security boolean
 // was updated.
 extern const char kAccountTailoredSecurityUpdateTimestamp[];
 
+// Timestamp indicating when the next time the sync flow retry can happen is.
+// This value is managed by the ChromeTailoredSecurityService.
+extern const char kTailoredSecurityNextSyncFlowTimestamp[];
+
+// Timestamp indicating the last time the tailored security sync flow ran.
+extern const char kTailoredSecuritySyncFlowLastRunTime[];
+
+// Integer that maps to TailoredSecurityUserInteractionState. Indicates the
+// last known state of the tailored security sync flow.
+// TODO(crbug.com/1469133): remove this preference value.
+extern const char kTailoredSecuritySyncFlowLastUserInteractionState[];
+
+// Integer that maps to TailoredSecurityRetryState. Indicates the last
+// known state of the tailored security sync flow retry mechanism.
+extern const char kTailoredSecuritySyncFlowRetryState[];
+
+// Timestamp indicating when the last user interaction state was observed as
+// having the value of `UNSET`. It is possible that this value will never be
+// set. This will only be set for syncing users where the retry detection logic
+// ran and no outcome was set -- indicating that tailored security with retry
+// capabilities had never run.
+extern const char kTailoredSecuritySyncFlowObservedOutcomeUnsetTimestamp[];
+
 // Whether the user was shown the notification that they may want to enable
 // Enhanced Safe Browsing due to their account tailored security state.
+// This value is only relevant to the tailored security flow for non-syncing
+// users.
 extern const char kAccountTailoredSecurityShownNotification[];
 
 // A boolean indicating if Enhanced Protection was enabled in sync with
@@ -130,6 +178,20 @@ extern const char kEnhancedProtectionEnabledViaTailoredSecurity[];
 // The last time the Extension Telemetry Service successfully
 // uploaded its data.
 extern const char kExtensionTelemetryLastUploadTime[];
+
+// The saved copy of the current configuration that will be used by
+// the Extension Telemetry Service.
+extern const char kExtensionTelemetryConfig[];
+
+// A dictionary of extension ids and their file data from the
+// Telemetry Service's file processor.
+extern const char kExtensionTelemetryFileData[];
+
+// A boolean indicating if hash-prefix real-time lookups are allowed by policy.
+// If false, the lookups will instead be hash-prefix database lookups. If true,
+// there is no such override; the hash-prefix real-time lookups might still not
+// occur for unrelated reasons.
+extern const char kHashPrefixRealTimeChecksAllowedByPolicy[];
 
 }  // namespace prefs
 
@@ -146,6 +208,26 @@ enum ExtendedReportingLevel {
   // The Scout level of extended reporting is available, some data can be
   // collected to actively detect dangerous apps and sites.
   SBER_LEVEL_SCOUT = 2,
+};
+
+// Enumerates the states used for determining whether the Tailored Security flow
+// needs to be retried.
+enum TailoredSecurityRetryState {
+  // Initialization value meaning that the tailored security feature has not
+  // touched this value.
+  UNSET = 0,
+  // The flow started but has not completed yet. Note that the flow may never
+  // complete because Chrome can exit before the logic is able to record a
+  // different value. RUNNING was not selected as the name for this state
+  // because the tailored security flow may or may not be running when this
+  // state is observed.
+  UNKNOWN = 1,
+  // Retry is needed. This could be because the notification flow failed.
+  RETRY_NEEDED = 2,
+  // No retry is needed. This could be because either the notification was shown
+  // to the user or the flow found a state that a notification is not shown for,
+  // for example: if the account is controlled by a policy.
+  NO_RETRY_NEEDED = 3
 };
 
 // Enumerates all the places where the Safe Browsing Extended Reporting
@@ -209,9 +291,6 @@ void SetSafeBrowsingState(PrefService* prefs,
 // Returns whether Safe Browsing is enabled for the user.
 bool IsSafeBrowsingEnabled(const PrefService& prefs);
 
-// Returns whether Safe Browsing Standard Protection is enabled for the user.
-bool IsStandardProtectionEnabled(const PrefService& prefs);
-
 // Returns whether Safe Browsing enhanced protection is enabled for the user.
 bool IsEnhancedProtectionEnabled(const PrefService& prefs);
 
@@ -240,6 +319,22 @@ bool IsExtendedReportingPolicyManaged(const PrefService& prefs);
 // SafeBrowsingProtectionLevel policy(new).
 bool IsSafeBrowsingPolicyManaged(const PrefService& prefs);
 
+// Return whether the Safe Browsing preference is controlled by an extension.
+bool IsSafeBrowsingExtensionControlled(const PrefService& prefs);
+
+// Returns whether a user can receive HaTS surveys.
+bool IsSafeBrowsingSurveysEnabled(const PrefService& prefs);
+
+// Returns whether a user can bypass a warning.
+bool IsSafeBrowsingProceedAnywayDisabled(const PrefService& prefs);
+
+// Returns whether hash-prefix real-time lookups are allowed for the user based
+// on enterprise policy.
+bool AreHashPrefixRealTimeLookupsAllowedByPolicy(const PrefService& prefs);
+
+// Returns whether deep scanning is allowed based on enterprise policy.
+bool AreDeepScansAllowedByPolicy(const PrefService& prefs);
+
 // Updates UMA metrics about Safe Browsing Extended Reporting states.
 void RecordExtendedReportingMetrics(const PrefService& prefs);
 
@@ -259,6 +354,18 @@ void SetExtendedReportingPrefAndMetric(PrefService* prefs,
 // This variant is used to simplify test code by omitting the location.
 void SetExtendedReportingPrefForTests(PrefService* prefs, bool value);
 
+// Set the current configuration being used by the Extension Telemetry Service
+void SetExtensionTelemetryConfig(PrefService& prefs,
+                                 const base::Value::Dict& config);
+
+// Get the current configuration being used by the Extension Telemetry Service
+const base::Value::Dict& GetExtensionTelemetryConfig(const PrefService& prefs);
+
+// Get the current processed file data stored in the Extension Telemetry
+// Service.
+const base::Value::Dict& GetExtensionTelemetryFileData(
+    const PrefService& prefs);
+
 // Sets the last time the Extension Telemetry Service successfully uploaded
 // its data.
 void SetLastUploadTimeForExtensionTelemetry(PrefService& prefs,
@@ -276,14 +383,6 @@ void SetEnhancedProtectionPref(PrefService* prefs, bool value);
 
 // Set prefs to enable Safe Browsing Standard Protection.
 void SetStandardProtectionPref(PrefService* prefs, bool value);
-
-// Called when a security interstitial is closed by the user.
-// |on_show_pref_existed| indicates whether the pref existed when the
-// interstitial was shown. |on_show_pref_value| contains the pref value when the
-// interstitial was shown.
-void UpdateMetricsAfterSecurityInterstitial(const PrefService& prefs,
-                                            bool on_show_pref_existed,
-                                            bool on_show_pref_value);
 
 // Called to indicate that a security interstitial is about to be shown to the
 // user. This may trigger the user to begin seeing the Scout opt-in text

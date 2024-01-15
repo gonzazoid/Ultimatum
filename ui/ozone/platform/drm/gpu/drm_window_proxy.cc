@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
@@ -24,7 +24,7 @@ DrmWindowProxy::DrmWindowProxy(gfx::AcceleratedWidget widget,
                                DrmThread* drm_thread)
     : widget_(widget), drm_thread_(drm_thread) {}
 
-DrmWindowProxy::~DrmWindowProxy() {}
+DrmWindowProxy::~DrmWindowProxy() = default;
 
 void DrmWindowProxy::SchedulePageFlip(
     std::vector<DrmOverlayPlane> planes,

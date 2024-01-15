@@ -46,7 +46,7 @@ CC_BASE_EXPORT extern const char kRequestMainThreadFrame[];
 CC_BASE_EXPORT extern const char kDroppedFrame[];
 CC_BASE_EXPORT extern const char kBeginMainThreadFrame[];
 CC_BASE_EXPORT extern const char kDrawFrame[];
-CC_BASE_EXPORT extern const char kCompositeLayers[];
+CC_BASE_EXPORT extern const char kCommit[];
 }  // namespace internal
 
 extern const char kPaintSetup[];
@@ -72,7 +72,7 @@ class CC_BASE_EXPORT ScopedLayerTask {
 
 class CC_BASE_EXPORT ScopedImageTask {
  public:
-  enum ImageType { kJxl, kAvif, kBmp, kGif, kIco, kJpeg, kPng, kWebP, kOther };
+  enum class ImageType { kAvif, kBmp, kGif, kIco, kJpeg, kPng, kWebP, kOther };
 
   explicit ScopedImageTask(ImageType image_type)
       : image_type_(image_type), start_time_(base::TimeTicks::Now()) {}
@@ -106,8 +106,8 @@ class CC_BASE_EXPORT ScopedImageUploadTask : public ScopedImageTask {
 
 class CC_BASE_EXPORT ScopedImageDecodeTask : public ScopedImageTask {
  public:
-  enum TaskType { kInRaster, kOutOfRaster };
-  enum DecodeType { kSoftware, kGpu };
+  enum class TaskType { kInRaster, kOutOfRaster };
+  enum class DecodeType { kSoftware, kGpu };
 
   ScopedImageDecodeTask(const void* image_ptr,
                         DecodeType decode_type,
@@ -147,15 +147,13 @@ class CC_BASE_EXPORT ScopedLayerTreeTask {
 struct CC_BASE_EXPORT ScopedCommitTrace {
  public:
   explicit ScopedCommitTrace(int layer_tree_host_id, uint64_t sequence_number) {
-    TRACE_EVENT_BEGIN2(internal::CategoryName::kTimeline,
-                       internal::kCompositeLayers, internal::kLayerTreeId,
-                       layer_tree_host_id, internal::kFrameSequenceNumber,
-                       sequence_number);
+    TRACE_EVENT_BEGIN2(internal::CategoryName::kTimeline, internal::kCommit,
+                       internal::kLayerTreeId, layer_tree_host_id,
+                       internal::kFrameSequenceNumber, sequence_number);
   }
   ScopedCommitTrace(const ScopedCommitTrace&) = delete;
   ~ScopedCommitTrace() {
-    TRACE_EVENT_END0(internal::CategoryName::kTimeline,
-                     internal::kCompositeLayers);
+    TRACE_EVENT_END0(internal::CategoryName::kTimeline, internal::kCommit);
   }
 
   ScopedCommitTrace& operator=(const ScopedCommitTrace&) = delete;

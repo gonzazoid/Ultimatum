@@ -5,17 +5,17 @@
 #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy_chromeos.h"
 
 #include "ash/components/arc/arc_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/process/arc_process.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
+#include "chrome/browser/ash/arc/vmm/arcvm_working_set_trim_executor.h"
 #include "chrome/browser/performance_manager/mechanisms/working_set_trimmer.h"
 #include "chrome/browser/performance_manager/policies/policy_features.h"
 #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy_arcvm.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "components/performance_manager/performance_manager_impl.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/graph.h"
@@ -33,13 +33,6 @@ namespace {
 // GraphOwned once performance_manager code is migrated to UI thread.
 WorkingSetTrimmerPolicyChromeOS::ArcVmDelegate* g_arcvm_delegate_for_testing =
     nullptr;
-
-// Reports ARCVM trim metrics every |kArcVmTrimMetricReportDelay| minutes.
-constexpr base::TimeDelta kArcVmTrimMetricReportDelay = base::Minutes(30);
-
-// It is very unlikely to do the trim more than |kArcVmTrimMetricMaxCount|
-// times in |kArcVmTrimMetricReportDelay|.
-constexpr int kArcVmTrimMetricMaxCount = 30;
 
 enum ArcProcessType { kApp, kSystem };
 void GetArcProcessListOnUIThread(
@@ -236,14 +229,10 @@ WorkingSetTrimmerPolicyChromeOS::GetTrimmer() {
       mechanism::WorkingSetTrimmer::GetInstance());
 }
 
-bool WorkingSetTrimmerPolicyChromeOS::TrimArcProcess(base::ProcessId pid) {
+void WorkingSetTrimmerPolicyChromeOS::TrimArcProcess(base::ProcessId pid) {
   SetArcProcessLastTrimTime(pid, base::TimeTicks::Now());
 
-  static int arc_processes_trimmed = 0;
-  base::UmaHistogramCounts10000("Memory.WorkingSetTrim.ArcProcessTrimCount",
-                                ++arc_processes_trimmed);
-
-  return GetTrimmer()->TrimWorkingSet(pid);
+  GetTrimmer()->TrimWorkingSet(pid);
 }
 
 void WorkingSetTrimmerPolicyChromeOS::TrimReceivedArcProcesses(
@@ -381,14 +370,6 @@ void WorkingSetTrimmerPolicyChromeOS::OnTrimArcVmProcesses(
     }
   }
 
-  // keep track of actually-chosen page limits. The 1M limit is reasonable
-  // because we will cap the computing with a maximum, that will for sure be
-  // less than 1M. Limiting at more than 1M pages (4GB of RAM) is
-  // meaningless, because if we reclaim this much as once, it will cause
-  // enough jank to defeat the purpose of limiting pages.
-  base::UmaHistogramCounts1M("Memory.WorkingSetTrim.ArcVmTrimPageLimit",
-                             page_limit);
-
   // TODO(crbug.com/1189677): Remove the PostTask once performance_manager code
   // is migrated to UI thread.
   content::GetUIThreadTaskRunner({})->PostTask(
@@ -436,7 +417,6 @@ void WorkingSetTrimmerPolicyChromeOS::OnTrimArcVmWorkingSetOnUIThread(
 
 void WorkingSetTrimmerPolicyChromeOS::OnArcVmTrimStarting() {
   last_arcvm_trim_ = base::TimeTicks::Now();
-  ++arcvm_trim_count_;
 }
 
 void WorkingSetTrimmerPolicyChromeOS::OnArcVmTrimEnded(
@@ -446,65 +426,10 @@ void WorkingSetTrimmerPolicyChromeOS::OnArcVmTrimEnded(
     return;
   if (success)
     last_arcvm_trim_success_ = base::TimeTicks::Now();
-  else
-    ++arcvm_trim_fail_count_;
-}
-
-// static
-size_t WorkingSetTrimmerPolicyChromeOS::GetArcVmTrimCountForFinalReport(
-    size_t current_arcvm_trim_count,
-    const base::TimeDelta& time_since_last_arcvm_trim_metric_report,
-    const base::TimeDelta& arcvm_trim_backoff_time,
-    const base::TimeDelta& arcvm_trim_metric_report_delay) {
-  DCHECK_NE(0, time_since_last_arcvm_trim_metric_report.InMinutes());
-  DCHECK_NE(0, arcvm_trim_backoff_time.InMinutes());
-
-  // In |kArcVmTrimMetricReportDelay|, only |max_trim_count| times of ARCVM
-  // trims can happen.
-  const size_t max_trim_count = arcvm_trim_metric_report_delay.InMinutes() /
-                                    arcvm_trim_backoff_time.InMinutes() +
-                                1;
-
-  // Adjust |current_arcvm_trim_count|
-  // before the final report. Use std::min() to avoid reporting unrealistically
-  // large counts.
-  return std::min<size_t>(
-      current_arcvm_trim_count * arcvm_trim_metric_report_delay.InMinutes() /
-          time_since_last_arcvm_trim_metric_report.InMinutes(),
-      max_trim_count);
-}
-
-void WorkingSetTrimmerPolicyChromeOS::ReportArcVmTrimMetric() {
-  base::UmaHistogramExactLinear("Memory.WorkingSetTrim.ArcVmTrimCountPer30Mins",
-                                arcvm_trim_count_, kArcVmTrimMetricMaxCount);
-  base::UmaHistogramExactLinear(
-      "Memory.WorkingSetTrim.ArcVmTrimFailCountPer30Mins",
-      arcvm_trim_fail_count_, kArcVmTrimMetricMaxCount + 1);
-  time_since_last_arcvm_trim_metric_report_ = base::ElapsedTimer();
-  // TODO(raging):  remove arcvm_trim_count_ and the metric for it
-  arcvm_trim_count_ = 0;
-  arcvm_trim_fail_count_ = 0;
-}
-
-void WorkingSetTrimmerPolicyChromeOS::ReportArcVmTrimMetricOnDestruction() {
-  if (!trim_arcvm_on_memory_pressure_)
-    return;
-
-  const base::TimeDelta elapsed =
-      time_since_last_arcvm_trim_metric_report_.Elapsed();
-  if (!elapsed.InMinutes())
-    return;
-
-  arcvm_trim_count_ = GetArcVmTrimCountForFinalReport(
-      arcvm_trim_count_, elapsed, params_.arcvm_trim_backoff_time,
-      kArcVmTrimMetricReportDelay);
-  ReportArcVmTrimMetric();
 }
 
 void WorkingSetTrimmerPolicyChromeOS::OnTakenFromGraph(Graph* graph) {
   memory_pressure_listener_.reset();
-  arcvm_trim_metric_report_timer_.Stop();
-  ReportArcVmTrimMetricOnDestruction();
   graph_ = nullptr;
   WorkingSetTrimmerPolicy::OnTakenFromGraph(graph);
 }
@@ -524,14 +449,6 @@ void WorkingSetTrimmerPolicyChromeOS::OnPassedToGraph(Graph* graph) {
       FROM_HERE,
       base::BindRepeating(&WorkingSetTrimmerPolicyChromeOS::OnMemoryPressure,
                           base::Unretained(this)));
-
-  if (trim_arcvm_on_memory_pressure_) {
-    arcvm_trim_metric_report_timer_.Start(
-        FROM_HERE, kArcVmTrimMetricReportDelay,
-        base::BindRepeating(
-            &WorkingSetTrimmerPolicyChromeOS::ReportArcVmTrimMetric,
-            weak_ptr_factory_.GetWeakPtr()));
-  }
 
   graph_ = graph;
   WorkingSetTrimmerPolicy::OnPassedToGraph(graph);

@@ -22,19 +22,16 @@ import org.chromium.chrome.browser.history_clusters.HistoryClustersMetricsLogger
 import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
-import org.chromium.url.ShadowGURL;
 
 import java.util.ArrayList;
 
 /** Unit tests for HistoryClustersMetricsLogger. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowGURL.class})
+@Config(manifest = Config.NONE)
 public class HistoryClustersMetricsLoggerTest {
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock
-    private TemplateUrlService mTemplateUrlService;
+    @Mock private TemplateUrlService mTemplateUrlService;
 
     private ClusterVisit mSrpVisit;
     private ClusterVisit mNonSrpVisit;
@@ -44,13 +41,31 @@ public class HistoryClustersMetricsLoggerTest {
 
     @Before
     public void setUp() {
-        mSrpGurl = new GURL(JUnitTestGURLs.GOOGLE_URL_CAT);
-        mNonSrpGurl = new GURL(JUnitTestGURLs.EXAMPLE_URL);
-        mSrpVisit = new ClusterVisit(1.0F, mSrpGurl, "Title 4", "url3.com/foo", new ArrayList<>(),
-                new ArrayList<>(), mSrpGurl, 123L, new ArrayList<>());
+        mSrpGurl = JUnitTestGURLs.GOOGLE_URL_CAT;
+        mNonSrpGurl = JUnitTestGURLs.EXAMPLE_URL;
+        mSrpVisit =
+                new ClusterVisit(
+                        1.0F,
+                        mSrpGurl,
+                        "Title 4",
+                        "url3.com/foo",
+                        new ArrayList<>(),
+                        new ArrayList<>(),
+                        mSrpGurl,
+                        123L,
+                        new ArrayList<>());
         mSrpVisit.setIndexInParent(0);
-        mNonSrpVisit = new ClusterVisit(1.0F, mNonSrpGurl, "Title 4", "url3.com/foo",
-                new ArrayList<>(), new ArrayList<>(), mNonSrpGurl, 123L, new ArrayList<>());
+        mNonSrpVisit =
+                new ClusterVisit(
+                        1.0F,
+                        mNonSrpGurl,
+                        "Title 4",
+                        "url3.com/foo",
+                        new ArrayList<>(),
+                        new ArrayList<>(),
+                        mNonSrpGurl,
+                        123L,
+                        new ArrayList<>());
         mNonSrpVisit.setIndexInParent(1);
         doReturn(true).when(mTemplateUrlService).isLoaded();
         doReturn(true)
@@ -63,32 +78,41 @@ public class HistoryClustersMetricsLoggerTest {
     @Test
     public void testDestroyBeforeInitialStateSet() {
         mMetricsLogger.destroy();
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.InitialState"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.InitialState"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.NumberLinksOpened"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.NumberLinksOpened"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.NumberRelatedSearchesClicked"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.NumberRelatedSearchesClicked"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.NumberVisibilityToggles"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.NumberVisibilityToggles"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.NumberIndividualVisitsDeleted"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.NumberIndividualVisitsDeleted"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.TogglesToBasicHistory"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.TogglesToBasicHistory"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.WasSuccessful"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.WasSuccessful"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.DidMakeQuery"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.DidMakeQuery"),
                 0);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.NumQueries"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.NumQueries"),
                 0);
     }
 
@@ -98,11 +122,13 @@ public class HistoryClustersMetricsLoggerTest {
         mMetricsLogger.setInitialState(InitialState.INDIRECT_NAVIGATION);
         mMetricsLogger.destroy();
 
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.InitialState"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.InitialState"),
                 1);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.Actions.InitialState", InitialState.SAME_DOCUMENT),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.Actions.InitialState", InitialState.SAME_DOCUMENT),
                 1);
     }
 
@@ -110,16 +136,19 @@ public class HistoryClustersMetricsLoggerTest {
     public void testRelatedSearchesClickNoQueries() {
         mMetricsLogger.setInitialState(InitialState.SAME_DOCUMENT);
         mMetricsLogger.recordRelatedSearchesClick(3);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.UIActions.RelatedSearch.Clicked", 3),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.UIActions.RelatedSearch.Clicked", 3),
                 1);
 
         mMetricsLogger.destroy();
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.Actions.InitialState", InitialState.SAME_DOCUMENT),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.Actions.InitialState", InitialState.SAME_DOCUMENT),
                 1);
-        assertEquals(RecordHistogram.getHistogramTotalCountForTesting(
-                             "History.Clusters.Actions.FinalState.NumberRelatedSearchesClicked"),
+        assertEquals(
+                RecordHistogram.getHistogramTotalCountForTesting(
+                        "History.Clusters.Actions.FinalState.NumberRelatedSearchesClicked"),
                 1);
         assertEquals(
                 RecordHistogram.getHistogramValueCountForTesting(
@@ -138,22 +167,26 @@ public class HistoryClustersMetricsLoggerTest {
                 RecordHistogram.getHistogramValueCountForTesting(
                         "History.Clusters.UIActions.Visit.Deleted", mSrpVisit.getIndexInParent()),
                 1);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.UIActions.Visit.Clicked",
-                             mNonSrpVisit.getIndexInParent()),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.UIActions.Visit.Clicked",
+                        mNonSrpVisit.getIndexInParent()),
                 1);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.UIActions.SRPVisit.Deleted",
-                             mSrpVisit.getIndexInParent()),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.UIActions.SRPVisit.Deleted",
+                        mSrpVisit.getIndexInParent()),
                 1);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.UIActions.nonSRPVisit.Clicked",
-                             mNonSrpVisit.getIndexInParent()),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.UIActions.nonSRPVisit.Clicked",
+                        mNonSrpVisit.getIndexInParent()),
                 1);
 
         mMetricsLogger.destroy();
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.Actions.FinalState.NumberLinksOpened", 1),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.Actions.FinalState.NumberLinksOpened", 1),
                 1);
     }
 
@@ -170,16 +203,18 @@ public class HistoryClustersMetricsLoggerTest {
                 RecordHistogram.getHistogramValueCountForTesting(
                         "History.Clusters.Actions.InitialState", InitialState.INDIRECT_NAVIGATION),
                 1);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.Actions.FinalState.WasSuccessful",
-                             /* int equivalent of true */ 1),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.Actions.FinalState.WasSuccessful",
+                        /* int equivalent of true */ 1),
                 1);
         assertEquals(
                 RecordHistogram.getHistogramValueCountForTesting(
                         "History.Clusters.Actions.DidMakeQuery", /* int equivalent of true */ 1),
                 1);
-        assertEquals(RecordHistogram.getHistogramValueCountForTesting(
-                             "History.Clusters.Actions.NumQueries", 2),
+        assertEquals(
+                RecordHistogram.getHistogramValueCountForTesting(
+                        "History.Clusters.Actions.NumQueries", 2),
                 1);
     }
 }

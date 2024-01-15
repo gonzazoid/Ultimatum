@@ -10,7 +10,8 @@
 #include <stdint.h>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ref.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "media/cast/cast_config.h"
@@ -36,8 +37,10 @@ class FrameSenderImpl : public FrameSender {
   void SetTargetPlayoutDelay(base::TimeDelta new_target_playout_delay) override;
   base::TimeDelta GetTargetPlayoutDelay() const override;
   bool NeedsKeyFrame() const override;
-  bool EnqueueFrame(std::unique_ptr<SenderEncodedFrame> encoded_frame) override;
-  bool ShouldDropNextFrame(base::TimeDelta frame_duration) const override;
+  CastStreamingFrameDropReason EnqueueFrame(
+      std::unique_ptr<SenderEncodedFrame> encoded_frame) override;
+  CastStreamingFrameDropReason ShouldDropNextFrame(
+      base::TimeDelta frame_duration) override;
   RtpTimeTicks GetRecordedRtpTimestamp(FrameId frame_id) const override;
   int GetUnacknowledgedFrameCount() const override;
   int GetSuggestedBitrate(base::TimeTicks playout_time,
@@ -47,7 +50,7 @@ class FrameSenderImpl : public FrameSender {
   base::TimeDelta TargetPlayoutDelay() const override;
   base::TimeDelta CurrentRoundTripTime() const override;
   base::TimeTicks LastSendTime() const override;
-  FrameId LatestAckedFrameId() const override;
+  FrameId LastAckedFrameId() const override;
   void OnReceivedCastFeedback(const RtcpCastMessage& cast_feedback) override;
   void OnReceivedPli() override;
   void OnMeasuredRoundTripTime(base::TimeDelta rtt) override;
@@ -115,7 +118,7 @@ class FrameSenderImpl : public FrameSender {
   const raw_ptr<CastTransport> transport_sender_;
 
   // The frame sender client.
-  Client& client_;
+  const raw_ref<Client> client_;
 
   // Whether this is an audio or video frame sender.
   const bool is_audio_;

@@ -14,7 +14,6 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_checker.h"
 #include "net/base/completion_once_callback.h"
@@ -135,7 +134,7 @@ class NET_EXPORT ConfiguredProxyResolutionService
   bool MarkProxiesAsBadUntil(
       const ProxyInfo& results,
       base::TimeDelta retry_delay,
-      const std::vector<ProxyServer>& additional_bad_proxies,
+      const std::vector<ProxyChain>& additional_bad_proxies,
       const NetLogWithSource& net_log) override;
 
   // ProxyResolutionService
@@ -307,11 +306,13 @@ class NET_EXPORT ConfiguredProxyResolutionService
   // Called when proxy resolution has completed (either synchronously or
   // asynchronously). Handles logging the result, and cleaning out
   // bad entries from the results list.
-  int DidFinishResolvingProxy(const GURL& url,
-                              const std::string& method,
-                              ProxyInfo* result,
-                              int result_code,
-                              const NetLogWithSource& net_log);
+  int DidFinishResolvingProxy(
+      const GURL& url,
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const std::string& method,
+      ProxyInfo* result,
+      int result_code,
+      const NetLogWithSource& net_log);
 
   // Start initialization using |fetched_config_|.
   void InitializeUsingLastFetchedConfig();

@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "components/feature_engagement/internal/proto/availability.pb.h"
@@ -92,7 +92,7 @@ class PersistentAvailabilityStoreTest : public testing::Test {
   std::map<std::string, Availability> db_availabilities_;
 
   // The database that is in use.
-  raw_ptr<leveldb_proto::test::FakeDB<Availability>> db_;
+  raw_ptr<leveldb_proto::test::FakeDB<Availability>, DanglingUntriaged> db_;
 
   // Constant test data.
   base::FilePath storage_dir_;

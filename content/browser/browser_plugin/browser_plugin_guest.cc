@@ -21,17 +21,14 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 
-#if BUILDFLAG(IS_MAC)
-#include "content/browser/browser_plugin/browser_plugin_popup_menu_helper_mac.h"
-#endif
-
 namespace content {
 
 BrowserPluginGuest::BrowserPluginGuest(WebContentsImpl* web_contents,
                                        BrowserPluginGuestDelegate* delegate)
-    : WebContentsObserver(web_contents), delegate_(delegate) {
-  DCHECK(web_contents);
-  DCHECK(delegate);
+    : WebContentsObserver(web_contents),
+      delegate_(delegate->GetGuestDelegateWeakPtr()) {
+  CHECK(web_contents);
+  CHECK(delegate_);
   RecordAction(base::UserMetricsAction("BrowserPlugin.Guest.Create"));
 }
 
@@ -78,12 +75,8 @@ void BrowserPluginGuest::InitInternal(WebContentsImpl* owner_web_contents) {
   // navigations still continue to function inside the app.
   renderer_prefs->browser_handles_all_top_level_requests = false;
 
-  // TODO(chrishtr): this code is wrong. The navigate_on_drag_drop field will
-  // be reset again the next time preferences are updated.
-  blink::web_pref::WebPreferences prefs =
-      GetWebContents()->GetOrCreateWebPreferences();
-  prefs.navigate_on_drag_drop = false;
-  GetWebContents()->SetWebPreferences(prefs);
+  // Also disable drag/drop navigations.
+  renderer_prefs->can_accept_load_drops = false;
 }
 
 BrowserPluginGuest::~BrowserPluginGuest() = default;
@@ -98,6 +91,16 @@ void BrowserPluginGuest::CreateInWebContents(
 
 WebContentsImpl* BrowserPluginGuest::GetWebContents() const {
   return static_cast<WebContentsImpl*>(web_contents());
+}
+
+RenderFrameHostImpl* BrowserPluginGuest::GetProspectiveOuterDocument() {
+  if (!delegate_) {
+    // The guest delegate may only be null during some destruction scenarios.
+    CHECK(web_contents()->IsBeingDestroyed());
+    return nullptr;
+  }
+  return static_cast<RenderFrameHostImpl*>(
+      delegate_->GetProspectiveOuterDocument());
 }
 
 void BrowserPluginGuest::DidStartNavigation(
@@ -142,28 +145,5 @@ void BrowserPluginGuest::PrimaryMainFrameRenderProcessGone(
       break;
   }
 }
-
-#if BUILDFLAG(IS_MAC)
-void BrowserPluginGuest::ShowPopupMenu(
-    RenderFrameHost* render_frame_host,
-    mojo::PendingRemote<blink::mojom::PopupMenuClient>* popup_client,
-    const gfx::Rect& bounds,
-    int32_t item_height,
-    double font_size,
-    int32_t selected_item,
-    std::vector<blink::mojom::MenuItemPtr>* menu_items,
-    bool right_aligned,
-    bool allow_multiple_selection) {
-  gfx::Rect translated_bounds(bounds);
-  auto* guest_rwhv = render_frame_host->GetView();
-  translated_bounds.set_origin(
-      guest_rwhv->TransformPointToRootCoordSpace(translated_bounds.origin()));
-  BrowserPluginPopupMenuHelper popup_menu_helper(render_frame_host,
-                                                 std::move(*popup_client));
-  popup_menu_helper.ShowPopupMenu(translated_bounds, item_height, font_size,
-                                  selected_item, std::move(*menu_items),
-                                  right_aligned, allow_multiple_selection);
-}
-#endif
 
 }  // namespace content

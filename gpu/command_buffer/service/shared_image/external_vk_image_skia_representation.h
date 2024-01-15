@@ -13,9 +13,11 @@
 
 namespace gpu {
 
-class ExternalVkImageSkiaImageRepresentation : public SkiaImageRepresentation {
+class ExternalVkImageSkiaImageRepresentation
+    : public SkiaGaneshImageRepresentation {
  public:
-  ExternalVkImageSkiaImageRepresentation(SharedImageManager* manager,
+  ExternalVkImageSkiaImageRepresentation(GrDirectContext* gr_context,
+                                         SharedImageManager* manager,
                                          SharedImageBacking* backing,
                                          MemoryTypeTracker* tracker);
   ~ExternalVkImageSkiaImageRepresentation() override;
@@ -27,16 +29,16 @@ class ExternalVkImageSkiaImageRepresentation : public SkiaImageRepresentation {
       const gfx::Rect& update_rect,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
-  std::vector<sk_sp<SkPromiseImageTexture>> BeginWriteAccess(
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginWriteAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
   void EndWriteAccess() override;
-  std::vector<sk_sp<SkPromiseImageTexture>> BeginReadAccess(
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginReadAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
   void EndReadAccess() override;
 
  private:
@@ -47,23 +49,19 @@ class ExternalVkImageSkiaImageRepresentation : public SkiaImageRepresentation {
     return backing_impl()->fence_helper();
   }
 
-  sk_sp<SkPromiseImageTexture> BeginAccess(
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginAccess(
       bool readonly,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores);
 
   void EndAccess(bool readonly);
 
-  enum AccessMode {
-    kNone = 0,
-    kRead = 1,
-    kWrite = 2,
-  };
-  AccessMode access_mode_ = kNone;
+  const scoped_refptr<SharedContextState> context_state_;
+  AccessMode access_mode_ = AccessMode::kNone;
   int surface_msaa_count_ = 0;
   std::vector<ExternalSemaphore> begin_access_semaphores_;
   ExternalSemaphore end_access_semaphore_;
-  sk_sp<SkSurface> write_surface_;
+  std::vector<sk_sp<SkSurface>> write_surfaces_;
 };
 
 }  // namespace gpu

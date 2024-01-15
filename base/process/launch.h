@@ -22,6 +22,7 @@
 #include "base/process/process_handle.h"
 #include "base/strings/string_piece.h"
 #include "base/threading/thread_restrictions.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -35,11 +36,12 @@
 #include "base/posix/file_descriptor_shuffle.h"
 #endif
 
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/mach_port_rendezvous.h"
-#endif
-
 namespace base {
+
+#if BUILDFLAG(IS_APPLE)
+class MachRendezvousPort;
+using MachPortsForRendezvous = std::map<uint32_t, MachRendezvousPort>;
+#endif
 
 #if BUILDFLAG(IS_WIN)
 typedef std::vector<HANDLE> HandlesToInheritVector;
@@ -211,9 +213,13 @@ struct BASE_EXPORT LaunchOptions {
 
   // Sets parent process death signal to SIGKILL.
   bool kill_on_parent_death = false;
+
+  // File descriptors of the parent process with FD_CLOEXEC flag to be removed
+  // before calling exec*().
+  std::vector<int> fds_to_remove_cloexec;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_IOS) && BUILDFLAG(USE_BLINK))
   // Mach ports that will be accessible to the child process. These are not
   // directly inherited across process creation, but they are stored by a Mach
   // IPC server that a child process can communicate with to retrieve them.
@@ -224,6 +230,12 @@ struct BASE_EXPORT LaunchOptions {
   // See base/mac/mach_port_rendezvous.h for details.
   MachPortsForRendezvous mach_ports_for_rendezvous;
 
+  // Apply a process scheduler policy to enable mitigations against CPU side-
+  // channel attacks.
+  bool enable_cpu_security_mitigations = false;
+#endif  // BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_IOS) && BUILDFLAG(USE_BLINK))
+
+#if BUILDFLAG(IS_MAC)
   // When a child process is launched, the system tracks the parent process
   // with a concept of "responsibility". The responsible process will be
   // associated with any requests for private data stored on the system via
@@ -231,11 +243,7 @@ struct BASE_EXPORT LaunchOptions {
   // code, the responsibility for the child process should be disclaimed so
   // that any TCC requests are not associated with the parent.
   bool disclaim_responsibility = false;
-
-  // Apply a process scheduler policy to enable mitigations against CPU side-
-  // channel attacks.
-  bool enable_cpu_security_mitigations = false;
-#endif  // BUILDFLAG(IS_MAC)
+#endif  // BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_IOS) && BUILDFLAG(USE_BLINK))
 
 #if BUILDFLAG(IS_FUCHSIA)
   // If valid, launches the application in that job object.
@@ -269,11 +277,14 @@ struct BASE_EXPORT LaunchOptions {
   // the child process. If |paths_to_clone| is empty then the process will
   // receive either a full copy of the parent's namespace, or an empty one,
   // depending on whether FDIO_SPAWN_CLONE_NAMESPACE is set.
+  // Process launch will fail if `paths_to_clone` and `paths_to_transfer`
+  // together contain conflicting paths (e.g. overlaps or duplicates).
   std::vector<FilePath> paths_to_clone;
 
   // Specifies handles which will be installed as files or directories in the
-  // child process' namespace. Paths installed by |paths_to_clone| will be
-  // overridden by these entries.
+  // child process' namespace.
+  // Process launch will fail if `paths_to_clone` and `paths_to_transfer`
+  // together contain conflicting paths (e.g. overlaps or duplicates).
   std::vector<PathToTransfer> paths_to_transfer;
 
   // Suffix that will be added to the process name. When specified process name
@@ -443,8 +454,8 @@ namespace internal {
 // GetAppOutputInternal() to join a process. GetAppOutputInternal() can't itself
 // be a friend of ScopedAllowBaseSyncPrimitives because it is in the anonymous
 // namespace.
-class GetAppOutputScopedAllowBaseSyncPrimitives
-    : public base::ScopedAllowBaseSyncPrimitives {};
+class [[maybe_unused, nodiscard]] GetAppOutputScopedAllowBaseSyncPrimitives
+    : public base::ScopedAllowBaseSyncPrimitives{};
 
 }  // namespace internal
 

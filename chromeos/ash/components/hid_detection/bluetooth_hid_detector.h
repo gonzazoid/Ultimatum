@@ -5,9 +5,10 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_HID_DETECTION_BLUETOOTH_HID_DETECTOR_H_
 #define CHROMEOS_ASH_COMPONENTS_HID_DETECTION_BLUETOOTH_HID_DETECTOR_H_
 
+#include <optional>
 #include <string>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash::hid_detection {
 
@@ -55,19 +56,19 @@ class BluetoothHidDetector {
   // Struct representing the current status of BluetoothHidDetector.
   struct BluetoothHidDetectionStatus {
     BluetoothHidDetectionStatus(
-        absl::optional<BluetoothHidMetadata> current_pairing_device,
-        absl::optional<BluetoothHidPairingState> pairing_state);
+        std::optional<BluetoothHidMetadata> current_pairing_device,
+        std::optional<BluetoothHidPairingState> pairing_state);
     BluetoothHidDetectionStatus(BluetoothHidDetectionStatus&& other);
     BluetoothHidDetectionStatus& operator=(BluetoothHidDetectionStatus&& other);
     ~BluetoothHidDetectionStatus();
 
     // The metadata of the device currently being paired with.
-    absl::optional<BluetoothHidMetadata> current_pairing_device;
+    std::optional<BluetoothHidMetadata> current_pairing_device;
 
     // Set if the current pairing requires a code that should be displayed to
     // the user to enter. This will always be null if |current_pairing_device|
     // is null.
-    absl::optional<BluetoothHidPairingState> pairing_state;
+    std::optional<BluetoothHidPairingState> pairing_state;
   };
 
   class Delegate {
@@ -115,7 +116,7 @@ class BluetoothHidDetector {
   void NotifyBluetoothHidDetectionStatusChanged();
 
  private:
-  Delegate* delegate_ = nullptr;
+  raw_ptr<Delegate> delegate_ = nullptr;
 };
 
 }  // namespace ash::hid_detection

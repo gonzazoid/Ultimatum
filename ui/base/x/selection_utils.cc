@@ -17,27 +17,22 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/clipboard/clipboard_constants.h"
-#include "ui/gfx/x/x11_atom_cache.h"
+#include "ui/gfx/x/atom_cache.h"
 
 namespace ui {
 
 std::vector<x11::Atom> GetTextAtomsFrom() {
-  static const std::vector<x11::Atom> atoms = {
-      x11::GetAtom(kMimeTypeLinuxUtf8String),
-      x11::GetAtom(kMimeTypeLinuxString), x11::GetAtom(kMimeTypeLinuxText),
-      x11::GetAtom(kMimeTypeText), x11::GetAtom(kMimeTypeTextUtf8)};
-  return atoms;
+  return {x11::GetAtom(kMimeTypeLinuxUtf8String),
+          x11::GetAtom(kMimeTypeLinuxString), x11::GetAtom(kMimeTypeLinuxText),
+          x11::GetAtom(kMimeTypeText), x11::GetAtom(kMimeTypeTextUtf8)};
 }
 
 std::vector<x11::Atom> GetURLAtomsFrom() {
-  static const std::vector<x11::Atom> atoms = {
-      x11::GetAtom(kMimeTypeURIList), x11::GetAtom(kMimeTypeMozillaURL)};
-  return atoms;
+  return {x11::GetAtom(kMimeTypeURIList), x11::GetAtom(kMimeTypeMozillaURL)};
 }
 
 std::vector<x11::Atom> GetURIListAtomsFrom() {
-  static const std::vector<x11::Atom> atoms = {x11::GetAtom(kMimeTypeURIList)};
-  return atoms;
+  return {x11::GetAtom(kMimeTypeURIList)};
 }
 
 void GetAtomIntersection(const std::vector<x11::Atom>& desired,

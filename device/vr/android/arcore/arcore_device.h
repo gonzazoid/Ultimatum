@@ -11,8 +11,9 @@
 #include <utility>
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "device/vr/android/arcore/arcore_gl.h"
 #include "device/vr/public/cpp/xr_frame_sink_client.h"
 #include "device/vr/vr_device.h"
@@ -32,7 +33,8 @@ namespace device {
 class ArImageTransportFactory;
 class ArCoreFactory;
 class ArCoreGlThread;
-class ArCoreSessionUtils;
+class XrJavaCoordinator;
+class CompositorDelegateProvider;
 class MailboxToSurfaceBridge;
 class MailboxToSurfaceBridgeFactory;
 
@@ -43,7 +45,8 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCoreDevice : public VRDeviceBase {
       std::unique_ptr<ArImageTransportFactory> ar_image_transport_factory,
       std::unique_ptr<MailboxToSurfaceBridgeFactory>
           mailbox_to_surface_bridge_factory,
-      std::unique_ptr<ArCoreSessionUtils> arcore_session_utils,
+      std::unique_ptr<XrJavaCoordinator> xr_java_coordinator,
+      std::unique_ptr<CompositorDelegateProvider> compositor_delegate_provider,
       XrFrameSinkClientFactory xr_frame_sink_client_factory);
 
   ArCoreDevice(const ArCoreDevice&) = delete;
@@ -75,22 +78,6 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCoreDevice : public VRDeviceBase {
   void OnDrawingSurfaceDestroyed();
   void OnSessionEnded();
 
-  template <typename... Args>
-  static void RunCallbackOnTaskRunner(
-      const scoped_refptr<base::TaskRunner>& task_runner,
-      base::OnceCallback<void(Args...)> callback,
-      Args... args) {
-    task_runner->PostTask(
-        FROM_HERE,
-        base::BindOnce(std::move(callback), std::forward<Args>(args)...));
-  }
-  template <typename... Args>
-  base::OnceCallback<void(Args...)> CreateMainThreadCallback(
-      base::OnceCallback<void(Args...)> callback) {
-    return base::BindOnce(&ArCoreDevice::RunCallbackOnTaskRunner<Args...>,
-                          main_thread_task_runner_, std::move(callback));
-  }
-
   void PostTaskToGlThread(base::OnceClosure task);
 
   bool IsOnMainThread();
@@ -103,7 +90,7 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCoreDevice : public VRDeviceBase {
 
   // Replies to the pending mojo RequestSession request.
   void CallDeferredRequestSessionCallback(
-      absl::optional<ArCoreGlInitializeResult> arcore_initialization_result);
+      ArCoreGlInitializeStatus arcore_initialization_result);
 
   // Tells the GL thread to initialize a GL context and other resources,
   // using the supplied window as a drawing surface.
@@ -115,7 +102,7 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCoreDevice : public VRDeviceBase {
 
   // Called when the GL thread's GL context initialization completes.
   void OnArCoreGlInitializationComplete(
-      absl::optional<ArCoreGlInitializeResult> arcore_initialization_result);
+      ArCoreGlInitializeStatus arcore_initialization_result);
 
   void OnCreateSessionCallback(
       mojom::XRRuntime::RequestSessionCallback deferred_callback,
@@ -126,7 +113,8 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCoreDevice : public VRDeviceBase {
   std::unique_ptr<ArCoreFactory> arcore_factory_;
   std::unique_ptr<ArImageTransportFactory> ar_image_transport_factory_;
   std::unique_ptr<MailboxToSurfaceBridgeFactory> mailbox_bridge_factory_;
-  std::unique_ptr<ArCoreSessionUtils> arcore_session_utils_;
+  std::unique_ptr<XrJavaCoordinator> xr_java_coordinator_;
+  std::unique_ptr<CompositorDelegateProvider> compositor_delegate_provider_;
   XrFrameSinkClientFactory xr_frame_sink_client_factory_;
 
   std::unique_ptr<MailboxToSurfaceBridge> mailbox_bridge_;
@@ -171,6 +159,14 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCoreDevice : public VRDeviceBase {
     // Trace ID of the requestSession() call that resulted in creating this
     // session state.
     uint64_t request_session_trace_id_;
+
+    // In case of driver bugs that need workarounds (see
+    // ArImageTransport::OnSurfaceBridgeReady), allow a one-time
+    // retry of session creation. This needs a copy of the original
+    // session creation options.
+    bool allow_retry_ = true;
+    mojom::XRRuntimeSessionOptionsPtr options_clone_for_retry_;
+    bool initiate_retry_ = false;
   };
 
   // This object is reset to initial values when ending a session. This helps

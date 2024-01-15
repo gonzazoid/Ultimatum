@@ -6,6 +6,7 @@
 
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -13,8 +14,9 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profiles_state.h"
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#include "chromeos/components/mgs/managed_guest_session_utils.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
@@ -47,20 +49,20 @@ UserTypeByDeviceTypeMetricsProvider::~UserTypeByDeviceTypeMetricsProvider() {
     session_manager->RemoveObserver(this);
 }
 
-void UserTypeByDeviceTypeMetricsProvider::ProvideCurrentSessionData(
-    metrics::ChromeUserMetricsExtension* uma_proto_unused) {
+bool UserTypeByDeviceTypeMetricsProvider::ProvideHistograms() {
   if (!user_segment_ || !device_segment_)
-    return;
+    return false;
 
   int uma_val =
       ConstructUmaValue(user_segment_.value(), device_segment_.value());
 
   if (uma_val == kMgsOnUnmanagedDevice) {
     LOG(WARNING) << "Can't have MGS on unmanaged device!";
-    return;
+    return false;
   }
 
   base::UmaHistogramSparse(kHistogramName, uma_val);
+  return true;
 }
 
 void UserTypeByDeviceTypeMetricsProvider::OnUserSessionStarted(
@@ -88,16 +90,18 @@ void UserTypeByDeviceTypeMetricsProvider::OnUserSessionStarted(
 
 UserTypeByDeviceTypeMetricsProvider::UserSegment
 UserTypeByDeviceTypeMetricsProvider::GetUserSegment(Profile* profile) {
-  // Check for Managed Guest Session
-  if (profiles::IsPublicSession()) {
+  if (profiles::IsDemoSession()) {
+    return UserSegment::kDemoMode;
+  }
+
+  if (chromeos::IsManagedGuestSession()) {
     return UserSegment::kManagedGuestSession;
   }
 
-  if (profiles::IsKioskSession()) {
+  if (chromeos::IsKioskSession()) {
     return UserSegment::kKioskApp;
   }
 
-  // Check for off-the-record profiles.
   if (profile->IsOffTheRecord()) {
     return UserSegment::kUnmanaged;
   }

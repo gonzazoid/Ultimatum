@@ -8,7 +8,6 @@
 
 #include "ash/accelerators/accelerator_controller_impl.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/frame/header_view.h"
 #include "ash/frame/wide_frame_view.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
@@ -20,18 +19,18 @@
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/splitview/split_view_controller.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
-#include "base/test/scoped_feature_list.h"
-#include "chromeos/constants/chromeos_features.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "chromeos/ui/frame/default_frame_header.h"
+#include "chromeos/ui/frame/header_view.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller_test_api.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
@@ -40,9 +39,9 @@
 #include "ui/aura/window_targeter.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/accelerators/test_accelerator_target.h"
-#include "ui/base/ui_base_features.h"
 #include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/compositor/test/draw_waiter_for_test.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/rect.h"
@@ -97,13 +96,13 @@ class NonClientFrameViewAshTestWidgetDelegate
     return non_client_frame_view_;
   }
 
-  HeaderView* header_view() const {
-    return non_client_frame_view_->header_view_;
+  chromeos::HeaderView* header_view() const {
+    return non_client_frame_view_->GetHeaderView();
   }
 
  private:
   // Not owned.
-  NonClientFrameViewAsh* non_client_frame_view_ = nullptr;
+  raw_ptr<NonClientFrameViewAsh> non_client_frame_view_ = nullptr;
 };
 
 class TestWidgetConstraintsDelegate
@@ -291,8 +290,8 @@ TEST_F(NonClientFrameViewAshTest, ToggleTabletModeOnMinimizedWindow) {
   widget->Minimize();
 
   // Enter and exit tablet mode while the window is minimized.
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(false);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
+  ash::TabletModeControllerTestApi().LeaveTabletMode();
 
   // When unminimizing in non-tablet mode, size button should match with
   // maximized window state, which is restore icon.
@@ -310,7 +309,7 @@ TEST_F(NonClientFrameViewAshTest, FrameHiddenInTabletModeForMaximizedWindows) {
   std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
   widget->Maximize();
 
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
   EXPECT_EQ(0, delegate->GetNonClientFrameViewTopBorderHeight());
 }
 
@@ -321,7 +320,7 @@ TEST_F(NonClientFrameViewAshTest,
   auto* delegate = new NonClientFrameViewAshTestWidgetDelegate();
   std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
 
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
   EXPECT_EQ(views::GetCaptionButtonLayoutSize(
                 views::CaptionButtonLayoutSize::kNonBrowserCaption)
                 .height(),
@@ -338,9 +337,9 @@ TEST_F(NonClientFrameViewAshTest,
 
   widget->SetFullscreen(true);
   EXPECT_EQ(0, delegate->GetNonClientFrameViewTopBorderHeight());
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
   EXPECT_EQ(0, delegate->GetNonClientFrameViewTopBorderHeight());
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(false);
+  ash::TabletModeControllerTestApi().LeaveTabletMode();
   EXPECT_EQ(0, delegate->GetNonClientFrameViewTopBorderHeight());
 }
 
@@ -349,7 +348,7 @@ TEST_F(NonClientFrameViewAshTest, OpeningAppsInTabletMode) {
   std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
   widget->Maximize();
 
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
   EXPECT_EQ(0, delegate->GetNonClientFrameViewTopBorderHeight());
 
   // Verify that after minimizing and showing the widget, the height of the
@@ -366,7 +365,7 @@ TEST_F(NonClientFrameViewAshTest, OpeningAppsInTabletMode) {
   WindowState::Get(widget->GetNativeWindow())->OnWMEvent(&event);
   EXPECT_EQ(0, delegate->GetNonClientFrameViewTopBorderHeight());
 
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(false);
+  ash::TabletModeControllerTestApi().LeaveTabletMode();
   EXPECT_EQ(views::GetCaptionButtonLayoutSize(
                 views::CaptionButtonLayoutSize::kNonBrowserCaption)
                 .height(),
@@ -376,7 +375,7 @@ TEST_F(NonClientFrameViewAshTest, OpeningAppsInTabletMode) {
 // Test if creating a new window in tablet mode uses maximzied state
 // and immersive mode.
 TEST_F(NonClientFrameViewAshTest, GetPreferredOnScreenHeightInTabletMaximzied) {
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
 
   auto* delegate = new TestWidgetConstraintsDelegate;
   std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
@@ -404,7 +403,7 @@ TEST_F(NonClientFrameViewAshTest, MinimizedWindowsInTabletMode) {
       aura::client::kResizeBehaviorCanMaximize);
   widget->Maximize();
   widget->Minimize();
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
 
   widget->Show();
   EXPECT_EQ(widget->non_client_view()->bounds(),
@@ -414,18 +413,30 @@ TEST_F(NonClientFrameViewAshTest, MinimizedWindowsInTabletMode) {
 TEST_F(NonClientFrameViewAshTest, HeaderVisibilityInFullscreen) {
   auto* delegate = new NonClientFrameViewAshTestWidgetDelegate();
   std::unique_ptr<views::Widget> widget = CreateTestWidget(delegate);
+
+  auto* controller = ImmersiveFullscreenController::Get(widget.get());
+  ImmersiveFullscreenControllerTestApi test_api(controller);
+  ui::ScopedAnimationDurationScaleMode test_duration_mode(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
   NonClientFrameViewAsh* non_client_frame_view =
       delegate->non_client_frame_view();
-  HeaderView* header_view = non_client_frame_view->GetHeaderView();
+  chromeos::HeaderView* header_view = non_client_frame_view->GetHeaderView();
   EXPECT_FALSE(header_view->in_immersive_mode());
   EXPECT_TRUE(header_view->GetVisible());
+
   widget->SetFullscreen(true);
   widget->LayoutRootViewIfNecessary();
   EXPECT_TRUE(header_view->in_immersive_mode());
   EXPECT_TRUE(header_view->GetVisible());
+  test_api.EndAnimation();
+  EXPECT_FALSE(header_view->GetVisible());
+
   widget->SetFullscreen(false);
   widget->LayoutRootViewIfNecessary();
   EXPECT_FALSE(header_view->in_immersive_mode());
+  EXPECT_TRUE(header_view->GetVisible());
+  test_api.EndAnimation();
   EXPECT_TRUE(header_view->GetVisible());
 
   // Turn immersive off, and make sure that header view is invisible
@@ -510,7 +521,7 @@ TEST_F(NonClientFrameViewAshTest, BackButton) {
       delegate->non_client_frame_view();
   non_client_frame_view->SetCaptionButtonModel(std::move(model));
 
-  HeaderView* header_view = non_client_frame_view->GetHeaderView();
+  chromeos::HeaderView* header_view = non_client_frame_view->GetHeaderView();
   EXPECT_FALSE(header_view->GetBackButton());
   model_ptr->SetVisible(views::CAPTION_BUTTON_ICON_BACK, true);
   non_client_frame_view->SizeConstraintsChanged();
@@ -593,23 +604,26 @@ TEST_F(NonClientFrameViewAshTest, CustomButtonModel) {
       delegate->non_client_frame_view();
   non_client_frame_view->SetCaptionButtonModel(std::move(model));
 
-  HeaderView* header_view = non_client_frame_view->GetHeaderView();
+  chromeos::HeaderView* header_view = non_client_frame_view->GetHeaderView();
   FrameCaptionButtonContainerView::TestApi test_api(
       header_view->caption_button_container());
 
-  // CLOSE button is always enabled.
-  EXPECT_TRUE(test_api.close_button());
   EXPECT_FALSE(test_api.close_button()->GetVisible());
-  EXPECT_TRUE(test_api.close_button()->GetEnabled());
+  EXPECT_FALSE(test_api.minimize_button()->GetVisible());
+  EXPECT_FALSE(test_api.size_button()->GetVisible());
+  EXPECT_FALSE(test_api.menu_button()->GetVisible());
 
+  // Close button
   model_ptr->SetVisible(views::CAPTION_BUTTON_ICON_CLOSE, true);
   non_client_frame_view->SizeConstraintsChanged();
   widget->LayoutRootViewIfNecessary();
   EXPECT_TRUE(test_api.close_button()->GetVisible());
+  EXPECT_FALSE(test_api.close_button()->GetEnabled());
 
-  EXPECT_FALSE(test_api.minimize_button()->GetVisible());
-  EXPECT_FALSE(test_api.size_button()->GetVisible());
-  EXPECT_FALSE(test_api.menu_button()->GetVisible());
+  model_ptr->SetEnabled(views::CAPTION_BUTTON_ICON_CLOSE, true);
+  non_client_frame_view->SizeConstraintsChanged();
+  widget->LayoutRootViewIfNecessary();
+  EXPECT_TRUE(test_api.close_button()->GetEnabled());
 
   // Back button
   model_ptr->SetVisible(views::CAPTION_BUTTON_ICON_BACK, true);
@@ -680,14 +694,14 @@ TEST_F(NonClientFrameViewAshTest, WideFrame) {
 
   NonClientFrameViewAsh* non_client_frame_view =
       delegate->non_client_frame_view();
-  HeaderView* header_view = non_client_frame_view->GetHeaderView();
+  chromeos::HeaderView* header_view = non_client_frame_view->GetHeaderView();
   widget->Maximize();
 
   std::unique_ptr<WideFrameView> wide_frame_view =
       std::make_unique<WideFrameView>(widget.get());
   wide_frame_view->GetWidget()->Show();
 
-  HeaderView* wide_header_view = wide_frame_view->header_view();
+  chromeos::HeaderView* wide_header_view = wide_frame_view->header_view();
   display::Screen* screen = display::Screen::GetScreen();
 
   const gfx::Rect work_area = screen->GetPrimaryDisplay().work_area();
@@ -760,7 +774,7 @@ TEST_F(NonClientFrameViewAshTest, WideFrameButton) {
   std::unique_ptr<WideFrameView> wide_frame_view =
       std::make_unique<WideFrameView>(widget.get());
   wide_frame_view->GetWidget()->Show();
-  HeaderView* header_view = wide_frame_view->header_view();
+  chromeos::HeaderView* header_view = wide_frame_view->header_view();
   FrameCaptionButtonContainerView::TestApi test_api(
       header_view->caption_button_container());
 
@@ -952,21 +966,18 @@ TEST_P(NonClientFrameViewAshFrameColorTest, WideFrameInitialColor) {
 
   std::unique_ptr<WideFrameView> wide_frame_view =
       std::make_unique<WideFrameView>(widget.get());
-  HeaderView* wide_header_view = wide_frame_view->header_view();
+  chromeos::HeaderView* wide_header_view = wide_frame_view->header_view();
   DefaultFrameHeader* header = wide_header_view->GetFrameHeader();
-  EXPECT_EQ(new_active_color, header->active_frame_color_for_testing());
-  EXPECT_EQ(new_inactive_color, header->inactive_frame_color_for_testing());
+  EXPECT_EQ(new_active_color, header->active_frame_color_);
+  EXPECT_EQ(new_inactive_color, header->inactive_frame_color_);
 }
 
 // Tests to make sure that the NonClientFrameViewAsh tracks default frame colors
 // for both light and dark mode.
 TEST_P(NonClientFrameViewAshFrameColorTest, DefaultFrameColorsDarkAndLight) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      chromeos::features::kDarkLightMode);
   auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
   dark_light_mode_controller->OnActiveUserPrefServiceChanged(
       Shell::Get()->session_controller()->GetActivePrefService());
-  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
   const bool initial_dark_mode_status =
       dark_light_mode_controller->IsDarkModeEnabled();
 
@@ -1010,12 +1021,9 @@ TEST_P(NonClientFrameViewAshFrameColorTest, DefaultFrameColorsDarkAndLight) {
 // colors when the kTrackDefaultFrameColors property is set to false.
 TEST_P(NonClientFrameViewAshFrameColorTest,
        CanSetPersistentFrameColorsDarkAndLight) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      chromeos::features::kDarkLightMode);
   auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
   dark_light_mode_controller->OnActiveUserPrefServiceChanged(
       Shell::Get()->session_controller()->GetActivePrefService());
-  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
   const bool initial_dark_mode_status =
       dark_light_mode_controller->IsDarkModeEnabled();
 

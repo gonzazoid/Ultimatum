@@ -139,7 +139,7 @@ class ConsistencyCookieManager : public AccountReconcilor::Observer {
   const raw_ptr<SigninClient> signin_client_;
   const raw_ptr<AccountReconcilor> account_reconcilor_;
   signin_metrics::AccountReconcilorState account_reconcilor_state_ =
-      signin_metrics::ACCOUNT_RECONCILOR_INACTIVE;
+      signin_metrics::AccountReconcilorState::kInactive;
   int scoped_update_count_ = 0;
 
   // Cached value of the cookie, equal to the last value that was either set or
@@ -155,7 +155,8 @@ class ConsistencyCookieManager : public AccountReconcilor::Observer {
   // Extra cookie managers where the cookie is also written. These are never
   // read, and if they go out of sync with the main cookie manager, they may
   // not be updated correctly.
-  std::vector<network::mojom::CookieManager*> extra_cookie_managers_;
+  std::vector<raw_ptr<network::mojom::CookieManager, VectorExperimental>>
+      extra_cookie_managers_;
 
   base::ScopedObservation<AccountReconcilor, AccountReconcilor::Observer>
       account_reconcilor_observation_{this};

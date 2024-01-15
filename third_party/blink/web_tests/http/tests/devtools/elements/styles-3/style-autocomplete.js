@@ -2,9 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as Platform from 'devtools/core/platform/platform.js';
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(`Tests that autocompletions are computed correctly when editing the Styles pane.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -21,12 +26,12 @@
   await ElementsTestRunner.selectNodeAndWaitForStylesPromise('inner');
 
   var colorTreeElement = ElementsTestRunner.getMatchedStylePropertyTreeItem('color');
-  var namePrompt = new Elements.StylesSidebarPane.CSSPropertyPrompt(colorTreeElement, true /* isEditingName */);
+  var namePrompt = new ElementsModule.StylesSidebarPane.CSSPropertyPrompt(colorTreeElement, true /* isEditingName */);
   var valuePrompt = valuePromptFor('color');
 
   function valuePromptFor(name) {
     var treeElement = ElementsTestRunner.getMatchedStylePropertyTreeItem(name);
-    return new Elements.StylesSidebarPane.CSSPropertyPrompt(treeElement, false /* isEditingName */);
+    return new ElementsModule.StylesSidebarPane.CSSPropertyPrompt(treeElement, false /* isEditingName */);
   }
   TestRunner.runTestSuite([
     function testEmptyName(next) {
@@ -120,8 +125,7 @@
     } else {
       selectionRange.selectNodeContents(proxyElement);
     }
-    var range = selectionRange.startContainer.rangeOfWord(
-        selectionRange.startOffset, prompt.completionStopCharacters, proxyElement, 'backward');
+    var range = Platform.DOMUtilities.rangeOfWord(selectionRange.startContainer, selectionRange.startOffset, prompt.completionStopCharacters, proxyElement, 'backward');
     var prefix = range.toString();
     prompt.buildPropertyCompletions(inputText.substring(0, inputText.length - prefix.length), prefix, force)
         .then(completions);

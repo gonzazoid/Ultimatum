@@ -4,10 +4,10 @@
 
 #include "chrome/browser/ash/app_restore/arc_ghost_window_handler.h"
 
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/app_restore/arc_ghost_window_shell_surface.h"
 #include "chrome/browser/ash/app_restore/arc_window_utils.h"
 #include "chrome/browser/ash/arc/window_predictor/window_predictor_utils.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "components/app_restore/app_restore_data.h"
 #include "components/app_restore/full_restore_utils.h"
@@ -30,6 +30,12 @@ void ArcGhostWindowHandler::WindowSessionResolver::PopulateProperties(
   if (params.window_session_id <= 0)
     return;
   auto* handler = ArcGhostWindowHandler::Get();
+  if (!handler) {
+    // TODO(b/291693166): Remove this null check after change the lifecycle of
+    // the handler.
+    LOG(ERROR) << "ArcGhostWindowHandler haven't been initialized.";
+    return;
+  }
   auto it =
       handler->session_id_to_shell_surface_.find(params.window_session_id);
   if (it != handler->session_id_to_shell_surface_.end()) {
@@ -68,6 +74,9 @@ ArcGhostWindowHandler::~ArcGhostWindowHandler() {
     auto* lifetime_manager = exo::WMHelper::GetInstance()->GetLifetimeManager();
     if (lifetime_manager)
       lifetime_manager->RemoveObserver(this);
+  }
+  for (auto& observer : observer_list_) {
+    observer.OnGhostWindowHandlerDestroy();
   }
   g_instance = nullptr;
 }
@@ -187,16 +196,20 @@ void ArcGhostWindowHandler::OnWindowInfoUpdated(int window_id,
   auto window_info = ::arc::mojom::WindowInfo::New();
   window_info->window_id = window_id;
   window_info->display_id = display_id;
-  window_info->bounds = gfx::Rect(bounds);
   window_info->state = state;
-
-  if (is_app_instance_connected_) {
-    ::arc::UpdateWindowInfo(std::move(window_info));
-    return;
+  // Do not override bounds in window info if the window state type is not
+  // specified when ghost window launched.
+  if (window_info->state !=
+      static_cast<int32_t>(chromeos::WindowStateType::kDefault)) {
+    window_info->bounds = gfx::Rect(bounds);
   }
 
   session_id_to_pending_window_info_[window_info->window_id] =
-      std::move(window_info);
+      window_info->Clone();
+
+  if (is_app_instance_connected_) {
+    ::arc::UpdateWindowInfo(std::move(window_info));
+  }
 }
 
 }  // namespace ash::full_restore

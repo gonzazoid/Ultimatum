@@ -8,11 +8,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include <cctype>  // std::isupper()
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "third_party/jsoncpp/source/include/json/json.h"
 #include "third_party/re2/src/re2/re2.h"
@@ -33,7 +33,7 @@ class FilterBuffer {
 
   size_t remaining() { return kFilterBufferSize - (cursor_ - data_); }
   void Reset() { cursor_ = data_; }
-  re2::StringPiece Get() { return re2::StringPiece(data_, cursor_ - data_); }
+  std::string_view Get() { return std::string_view(data_, cursor_ - data_); }
 
   void Append(char c) {
     if (remaining() > 0) {
@@ -58,6 +58,8 @@ FilterBuffer filter_buffer;
 
 std::unique_ptr<SizeInfo> info;
 std::unique_ptr<SizeInfo> before_info;
+std::vector<std::string> removed_sources;
+std::vector<std::string> added_sources;
 std::unique_ptr<DeltaSizeInfo> diff_info;
 std::unique_ptr<TreeBuilder> builder;
 
@@ -72,13 +74,9 @@ std::string JsonSerialize(const Json::Value& value) {
   return s.str();
 }
 
-re2::StringPiece Re2StringPiece(std::string_view str) {
-  return re2::StringPiece(str.data(), str.size());
-}
-
 bool ContainsUpper(const char* str) {
   while (*str) {
-    if (std::isupper(*str)) {
+    if (*str >= 'A' && *str <= 'Z') {
       return true;
     }
     ++str;
@@ -108,7 +106,7 @@ bool MatchesRegex(const GroupedPath& id_path,
     return true;
   }
 
-  return RE2::PartialMatch(Re2StringPiece(sym.ContainerName()), regex);
+  return RE2::PartialMatch(sym.ContainerName(), regex);
 }
 
 bool IsMultiContainer() {
@@ -116,24 +114,37 @@ bool IsMultiContainer() {
   return info->containers.size() > 1 || !info->containers[0].name.empty();
 }
 
+void ClearInfoAndBuilderObjects() {
+  builder.reset(nullptr);
+  diff_info.reset(nullptr);
+  before_info.reset(nullptr);
+  info.reset(nullptr);
+  removed_sources = {};
+  added_sources = {};
+}
+
 }  // namespace
 
 extern "C" {
 void LoadSizeFile(char* compressed, size_t size) {
+  ClearInfoAndBuilderObjects();
   if (IsDiffSizeInfo(compressed, size)) {
     info = std::make_unique<SizeInfo>();
     before_info = std::make_unique<SizeInfo>();
-    diff_info.reset(nullptr);
-    ParseDiffSizeInfo(compressed, size, before_info.get(), info.get());
+    ParseDiffSizeInfo(compressed, size, before_info.get(), info.get(),
+                      &removed_sources, &added_sources);
+    // DeltaSizeInfo instantiation for sparse diff.
+    diff_info.reset(new DeltaSizeInfo(
+        Diff(before_info.get(), info.get(), &removed_sources, &added_sources)));
   } else {
-    diff_info.reset(nullptr);
     info = std::make_unique<SizeInfo>();
     ParseSizeInfo(compressed, size, info.get());
   }
 }
 
 void LoadBeforeSizeFile(const char* compressed, size_t size) {
-  diff_info.reset(nullptr);
+  // Don't call ClearInfoAndBuilderObjects(): It's assumed that LoadSizeFile()
+  // was called immediately before.
   before_info = std::make_unique<SizeInfo>();
   ParseSizeInfo(compressed, size, before_info.get());
 }
@@ -239,7 +250,9 @@ bool BuildTree(bool method_count_mode,
   // viewer, but if we already have a DeltaSizeInfo we can skip regenerating it
   // and let the TreeBuilder filter the symbols we care about.
   if (diff_mode && !diff_info) {
-    diff_info.reset(new DeltaSizeInfo(Diff(before_info.get(), info.get())));
+    // DeltaSizeInfo instantiation for dense diff.
+    diff_info.reset(new DeltaSizeInfo(
+        Diff(before_info.get(), info.get(), nullptr, nullptr)));
   }
 
   if (diff_mode) {
@@ -274,23 +287,24 @@ bool BuildTree(bool method_count_mode,
   return bool(diff_info);
 }
 
-// Returns a string that can be parsed to a JS object.
+// Returns a JSON string representing root data.
 const char* Open(const char* path) {
-  static std::string result;
+  static std::string cached_result;
   Json::Value v = builder->Open(path);
-  result = JsonSerialize(v);
-  return result.c_str();
+  cached_result = JsonSerialize(v);
+  return cached_result.c_str();
 }
 
-// Returns a string representing the metadata that can be parsed to a JS object.
+// Returns a JSON string representing the metadata.
 const char* GetMetadata() {
-  static std::string result;
-  result = "\"size_file\" : " + JsonSerialize(info->fields);
+  static std::string cached_result;
+  Json::Value v;
+  v["size_file"] = info->fields;
   if (before_info != nullptr) {
-    result += ", \"before_size_file\" : " + JsonSerialize(before_info->fields);
+    v["before_size_file"] = before_info->fields;
   }
-  result = "{" + result + "}";
-  return result.c_str();
+  cached_result = JsonSerialize(v);
+  return cached_result.c_str();
 }
 
 // Returns global properties.
@@ -300,6 +314,14 @@ const char* QueryProperty(const char* key) {
   }
   std::cerr << "Unknown property: " << key << std::endl;
   exit(1);
+}
+
+const char* QueryAncestryById(uint32_t id) {
+  static std::string cached_result;
+  Json::Value v;
+  v["ancestorIds"] = builder->GetAncestryById(id);
+  cached_result = JsonSerialize(v);
+  return cached_result.c_str();
 }
 
 }  // extern "C"

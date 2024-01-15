@@ -4,6 +4,7 @@
 
 #include "components/download/public/common/download_ukm_helper.h"
 
+#include "base/numerics/safe_conversions.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 
 namespace download {
@@ -17,7 +18,8 @@ double CalcBucketIncrement() {
 }  // namespace
 
 int DownloadUkmHelper::CalcExponentialBucket(int value) {
-  return static_cast<int>(floor(log10(value + 1) / CalcBucketIncrement()));
+  return base::saturated_cast<int>(
+      floor(log10(value + 1) / CalcBucketIncrement()));
 }
 
 int DownloadUkmHelper::CalcNearestKB(int num_bytes) {
@@ -46,7 +48,7 @@ void DownloadUkmHelper::RecordDownloadInterrupted(
     int resulting_file_size,
     const base::TimeDelta& time_since_start,
     int64_t bytes_wasted) {
-  ukm::SourceId source_id = ukm::UkmRecorder::GetNewSourceID();
+  ukm::SourceId source_id = ukm::NoURLSourceId();
   ukm::builders::Download_Interrupted builder(source_id);
   builder.SetDownloadId(download_id)
       .SetReason(static_cast<int>(reason))
@@ -65,7 +67,7 @@ void DownloadUkmHelper::RecordDownloadResumed(
     int download_id,
     ResumeMode mode,
     const base::TimeDelta& time_since_start) {
-  ukm::SourceId source_id = ukm::UkmRecorder::GetNewSourceID();
+  ukm::SourceId source_id = ukm::NoURLSourceId();
   ukm::builders::Download_Resumed(source_id)
       .SetDownloadId(download_id)
       .SetMode(static_cast<int>(mode))
@@ -78,7 +80,7 @@ void DownloadUkmHelper::RecordDownloadCompleted(
     int resulting_file_size,
     const base::TimeDelta& time_since_start,
     int64_t bytes_wasted) {
-  ukm::SourceId source_id = ukm::UkmRecorder::GetNewSourceID();
+  ukm::SourceId source_id = ukm::NoURLSourceId();
   ukm::builders::Download_Completed(source_id)
       .SetDownloadId(download_id)
       .SetResultingFileSize(

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -76,11 +77,6 @@ class CrostiniSshfs : ContainerShutdownObserver {
                                    base::Time started,
                                    bool success);
 
-  void OnGetContainerSshKeys(bool success,
-                             const std::string& container_public_key,
-                             const std::string& host_private_key,
-                             const std::string& hostname);
-
   struct InProgressMount {
     std::string source_path;
     guest_os::GuestId container_id;
@@ -106,12 +102,9 @@ class CrostiniSshfs : ContainerShutdownObserver {
     PendingRequest& operator=(PendingRequest&& other) noexcept;
     ~PendingRequest();
   };
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
-  base::ScopedObservation<CrostiniManager,
-                          ContainerShutdownObserver,
-                          &CrostiniManager::AddContainerShutdownObserver,
-                          &CrostiniManager::RemoveContainerShutdownObserver>
+  base::ScopedObservation<CrostiniManager, ContainerShutdownObserver>
       container_shutdown_observer_{this};
 
   std::unique_ptr<InProgressMount> in_progress_mount_;

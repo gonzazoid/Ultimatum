@@ -48,6 +48,10 @@ const char kGoogleUserInfoEmail[] =
 const char kGoogleUserInfoProfile[] =
     "https://www.googleapis.com/auth/userinfo.profile";
 
+// OAuth2 scope for IP protection proxy authentication
+const char kIpProtectionAuthScope[] =
+    "https://www.googleapis.com/auth/ip-protection";
+
 // OAuth2 scope for access to the parent approval widget.
 const char kParentApprovalOAuth2Scope[] =
     "https://www.googleapis.com/auth/kids.parentapproval";
@@ -89,10 +93,6 @@ extern const char kSecureConnectOAuth2Scope[] =
 const char kCastBackdropOAuth2Scope[] =
     "https://www.googleapis.com/auth/cast.backdrop";
 
-// OAuth scope for access to Cloud Translation API.
-const char kCloudTranslationOAuth2Scope[] =
-    "https://www.googleapis.com/auth/cloud-translation";
-
 // OAuth2 scope for access to passwords leak checking API.
 const char kPasswordsLeakCheckOAuth2Scope[] =
     "https://www.googleapis.com/auth/identity.passwords.leak.check";
@@ -117,6 +117,10 @@ const char kCryptAuthOAuth2Scope[] =
 // OAuth2 scope for access to Drive.
 const char kDriveOAuth2Scope[] = "https://www.googleapis.com/auth/drive";
 
+// OAuth2 scope for access for DriveFS to access flags.
+const char kExperimentsAndConfigsOAuth2Scope[] =
+    "https://www.googleapis.com/auth/experimentsandconfigs";
+
 // The scope required for an access token in order to query ItemSuggest.
 const char kDriveReadOnlyOAuth2Scope[] =
     "https://www.googleapis.com/auth/drive.readonly";
@@ -132,6 +136,10 @@ const char kCloudPlatformProjectsOAuth2Scope[] =
 // OAuth2 scope for access to nearby sharing.
 const char kNearbyShareOAuth2Scope[] =
     "https://www.googleapis.com/auth/nearbysharing-pa";
+
+// OAuth2 scope for access to nearby sharing.
+const char kNearbyPresenceOAuth2Scope[] =
+    "https://www.googleapis.com/auth/nearbypresence-pa";
 
 // OAuth2 scopes for access to GCM account tracker.
 const char kGCMGroupServerOAuth2Scope[] = "https://www.googleapis.com/auth/gcm";
@@ -164,6 +172,38 @@ const char kFeedOAuth2Scope[] = "https://www.googleapis.com/auth/googlenow";
 // OAuth 2 scope for the k-Anonymity Service API.
 const char kKAnonymityServiceOAuth2Scope[] =
     "https://www.googleapis.com/auth/chromekanonymity";
+
+// OAuth 2 scope for readonly access to Calendar.
+const char kCalendarReadOnlyOAuth2Scope[] =
+    "https://www.googleapis.com/auth/calendar.readonly";
+
+// OAuth 2 scope for Google Password Manager passkey enclaves.
+const char kPasskeysEnclaveOAuth2Scope[] =
+  "https://www.googleapis.com/auth/secureidentity.action";
+
+// OAuth 2 scopes for Google Tasks API.
+const char kTasksReadOnlyOAuth2Scope[] =
+    "https://www.googleapis.com/auth/tasks.readonly";
+const char kTasksOAuth2Scope[] = "https://www.googleapis.com/auth/tasks";
+
+// OAuth 2 scopes for Google Classroom API.
+const char kClassroomReadOnlyCoursesOAuth2Scope[] =
+    "https://www.googleapis.com/auth/classroom.courses.readonly";
+const char kClassroomReadOnlyCourseWorkSelfOAuth2Scope[] =
+    "https://www.googleapis.com/auth/classroom.coursework.me.readonly";
+const char kClassroomReadOnlyCourseWorkStudentsOAuth2Scope[] =
+    "https://www.googleapis.com/auth/classroom.coursework.students.readonly";
+const char kClassroomReadOnlyStudentSubmissionsSelfOAuth2Scope[] =
+    "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly";
+const char kClassroomReadOnlyStudentSubmissionsStudentsOAuth2Scope[] =
+    "https://www.googleapis.com/auth/"
+    "classroom.student-submissions.students.readonly";
+
+// OAuth2 scopes for Optimization Guide.
+const char kOptimizationGuideServiceGetHintsOAuth2Scope[] =
+    "https://www.googleapis.com/auth/chrome-optimization-guide";
+const char kOptimizationGuideServiceModelExecutionOAuth2Scope[] =
+    "https://www.googleapis.com/auth/chrome-model-execution";
 
 // Used to build ClientOAuth requests.  These are the names of keys used when
 // building base::DictionaryValue that represent the json data that makes up

@@ -8,9 +8,9 @@
 #include <sstream>
 
 #include "ash/public/cpp/accelerators.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
@@ -24,19 +24,19 @@ using assistant::prefs::AssistantOnboardingMode;
 #define PRINT_VALUE(value) PrintValue(&result, #value, value())
 
 template <typename T, std::enable_if_t<std::is_enum<T>::value>* = nullptr>
-void PrintValue(std::stringstream* result, const absl::optional<T>& value) {
+void PrintValue(std::stringstream* result, const std::optional<T>& value) {
   *result << base::NumberToString(static_cast<int>(value.value()));
 }
 
 template <typename T, std::enable_if_t<!std::is_enum<T>::value>* = nullptr>
-void PrintValue(std::stringstream* result, const absl::optional<T>& value) {
+void PrintValue(std::stringstream* result, const std::optional<T>& value) {
   *result << value.value();
 }
 
 template <typename T>
 void PrintValue(std::stringstream* result,
                 const std::string& name,
-                const absl::optional<T>& value) {
+                const std::optional<T>& value) {
   *result << std::endl << "  " << name << ": ";
   if (value.has_value())
     PrintValue(result, value);
@@ -138,7 +138,7 @@ bool AssistantStateBase::IsScreenContextAllowed() const {
 bool AssistantStateBase::HasAudioInputDevice() const {
   ash::AudioDeviceList devices;
   ash::CrasAudioHandler::Get()->GetAudioDevices(&devices);
-  for (const chromeos::AudioDevice& device : devices) {
+  for (const AudioDevice& device : devices) {
     if (device.is_input)
       return true;
   }

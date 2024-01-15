@@ -9,6 +9,8 @@
 #include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_resource_getter.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
@@ -16,7 +18,7 @@
 
 void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
-      {"nearbyShareAccountRowLabel", IDS_NEARBY_ACCOUNT_ROW_LABEL},
+      {"nearbyShareAccountRowLabel", IDS_NEARBY_ACCOUNT_ROW_LABEL_PH},
       {"nearbyShareActionsAccept", IDS_NEARBY_ACTIONS_ACCEPT},
       {"nearbyShareActionsCancel", IDS_NEARBY_ACTIONS_CANCEL},
       {"nearbyShareActionsClose", IDS_NEARBY_ACTIONS_CLOSE},
@@ -32,12 +34,14 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
       {"nearbyShareContactVisibilityAll", IDS_NEARBY_VISIBLITY_ALL_CONTACTS},
       {"nearbyShareContactVisibilityAllDescription",
        IDS_NEARBY_VISIBLITY_ALL_CONTACTS_DESCRIPTION},
+      {"nearbyShareAllContactsToggle",
+       IDS_NEARBY_VISIBILITY_ALL_CONTACTS_TOGGLE},
+      {"nearbyShareContactVisiblityContactsButton",
+       IDS_NEARBY_VISIBILITY_CONTACTS_BUTTON},
       {"nearbyShareContactVisibilityDownloadFailed",
        IDS_NEARBY_CONTACT_VISIBILITY_DOWNLOAD_FAILED},
       {"nearbyShareContactVisibilityDownloading",
        IDS_NEARBY_CONTACT_VISIBILITY_DOWNLOADING},
-      {"nearbyShareContactVisibilityNoContactsSubtitle",
-       IDS_NEARBY_CONTACT_VISIBILITY_NO_CONTACTS_SUBTITLE},
       {"nearbyShareContactVisibilityNoContactsTitle",
        IDS_NEARBY_CONTACT_VISIBILITY_NO_CONTACTS_TITLE},
       {"nearbyShareContactVisibilityNone", IDS_NEARBY_VISIBLITY_HIDDEN},
@@ -45,13 +49,23 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
        IDS_NEARBY_VISIBLITY_HIDDEN_DESCRIPTION},
       {"nearbyShareContactVisibilityOwnAll",
        IDS_NEARBY_CONTACT_VISIBILITY_OWN_ALL},
+      {"nearbyShareContactVisibilityOwnAllSelfShare",
+       IDS_NEARBY_CONTACT_VISIBILITY_OWN_ALL_SELF_SHARE},
       {"nearbyShareContactVisibilityOwnNone",
        IDS_NEARBY_CONTACT_VISIBILITY_OWN_NONE},
       {"nearbyShareContactVisibilityOwnSome",
        IDS_NEARBY_CONTACT_VISIBILITY_OWN_SOME},
+      {"nearbyShareContactVisibilityOwnSomeSelfShare",
+       IDS_NEARBY_CONTACT_VISIBILITY_OWN_SOME_SELF_SHARE},
+      {"nearbyShareContactVisibilityOwnYourDevices",
+       IDS_NEARBY_CONTACT_VISIBILITY_OWN_YOUR_DEVICES},
       {"nearbyShareContactVisibilitySome", IDS_NEARBY_VISIBLITY_SOME_CONTACTS},
       {"nearbyShareContactVisibilitySomeDescription",
        IDS_NEARBY_VISIBLITY_SOME_CONTACTS_DESCRIPTION},
+      {"nearbyShareContactVisibilityYourDevices",
+       IDS_NEARBY_VISIBILITY_YOUR_DEVICES},
+      {"nearbyShareContactVisibilityYourDevicesDescription",
+       IDS_NEARBY_VISIBILITY_YOUR_DEVICES_DESCRIPTION},
       {"nearbyShareContactVisibilityUnknown", IDS_NEARBY_VISIBLITY_UNKNOWN},
       {"nearbyShareContactVisibilityUnknownDescription",
        IDS_NEARBY_VISIBLITY_UNKNOWN_DESCRIPTION},
@@ -66,7 +80,6 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
       {"nearbyShareDiscoveryPagePlaceholder",
        IDS_NEARBY_DISCOVERY_PAGE_PLACEHOLDER},
       {"nearbyShareDiscoveryPageSubtitle", IDS_NEARBY_DISCOVERY_PAGE_SUBTITLE},
-      {"nearbyShareDiscoveryPageTitle", IDS_NEARBY_DISCOVERY_PAGE_TITLE},
       {"nearbyShareErrorCancelled", IDS_NEARBY_ERROR_CANCELLED},
       {"nearbyShareErrorCantReceive", IDS_NEARBY_ERROR_CANT_RECEIVE},
       {"nearbyShareErrorCantShare", IDS_NEARBY_ERROR_CANT_SHARE},
@@ -80,7 +93,6 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
       {"nearbyShareErrorTryAgain", IDS_NEARBY_ERROR_TRY_AGAIN},
       {"nearbyShareErrorUnsupportedFileType",
        IDS_NEARBY_ERROR_UNSUPPORTED_FILE_TYPE},
-      {"nearbyShareFeatureName", IDS_NEARBY_SHARE_FEATURE_NAME},
       {"nearbyShareOnboardingPageDeviceName",
        IDS_NEARBY_ONBOARDING_PAGE_DEVICE_NAME},
       {"nearbyShareOnboardingPageDeviceNameHelp",
@@ -91,11 +103,11 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
        IDS_NEARBY_ONBOARDING_PAGE_DEVICE_VISIBILITY_HELP_ALL_CONTACTS},
       {"nearbyShareOnboardingPageSubtitle",
        IDS_NEARBY_ONBOARDING_PAGE_SUBTITLE},
-      {"nearbyShareOnboardingPageTitle", IDS_NEARBY_ONBOARDING_PAGE_TITLE},
       {"nearbySharePreviewMultipleFileTitle",
        IDS_NEARBY_PREVIEW_TITLE_MULTIPLE_FILE},
       {"nearbyShareSecureConnectionId", IDS_NEARBY_SECURE_CONNECTION_ID},
-      {"nearbyShareSettingsHelpCaption", IDS_NEARBY_SETTINGS_HELP_CAPTION},
+      {"nearbyShareSettingsHelpCaptionBottom",
+       IDS_NEARBY_SETTINGS_HELP_CAPTION_BOTTOM},
       {"nearbyShareVisibilityPageManageContacts",
        IDS_NEARBY_VISIBILITY_PAGE_MANAGE_CONTACTS},
       {"nearbyShareVisibilityPageSubtitle",
@@ -117,8 +129,6 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
        IDS_NEARBY_RECEIVE_CONFIRM_PAGE_CONNECTION_ID},
       {"nearbyShareErrorNoConnectionMedium",
        IDS_NEARBY_HIGH_VISIBILITY_CONNECTION_MEDIUM_ERROR},
-      {"nearbyShareErrorNoConnectionMediumDescription",
-       IDS_NEARBY_HIGH_VISIBILITY_CONNECTION_MEDIUM_DESCRIPTION},
       {"nearbyShareErrorTransferInProgressTitle",
        IDS_NEARBY_HIGH_VISIBILITY_TRANSFER_IN_PROGRESS_ERROR},
       {"nearbyShareErrorTransferInProgressDescription",
@@ -126,9 +136,47 @@ void RegisterNearbySharedStrings(content::WebUIDataSource* data_source) {
   data_source->AddLocalizedStrings(kLocalizedStrings);
 
   data_source->AddString("nearbyShareLearnMoreLink",
-                         base::ASCIIToUTF16(chrome::kNearbyShareLearnMoreURL));
+                         chrome::kNearbyShareLearnMoreURL);
 
-  data_source->AddString(
-      "nearbyShareManageContactsUrl",
-      base::ASCIIToUTF16(chrome::kNearbyShareManageContactsURL));
+  data_source->AddString("nearbyShareManageContactsUrl",
+                         chrome::kNearbyShareManageContactsURL);
+
+  if (features::IsNameEnabled()) {
+    static constexpr webui::LocalizedString kLocalizedPlaceholderStringPairs[] =
+        {
+            {"nearbyShareContactVisibilityNoContactsSubtitle",
+             IDS_NEARBY_CONTACT_VISIBILITY_NO_CONTACTS_SUBTITLE_PH},
+            {"nearbyShareDiscoveryPageTitle",
+             IDS_NEARBY_DISCOVERY_PAGE_TITLE_PH},
+            {"nearbyShareOnboardingPageTitle",
+             IDS_NEARBY_ONBOARDING_PAGE_TITLE_PH},
+            {"nearbyShareFeatureName", IDS_NEARBY_SHARE_FEATURE_NAME_PH},
+            {"nearbyShareErrorNoConnectionMediumDescription",
+             IDS_NEARBY_HIGH_VISIBILITY_CONNECTION_MEDIUM_DESCRIPTION_PH},
+            {"nearbyShareSettingsHelpCaptionTop",
+             IDS_NEARBY_SETTINGS_HELP_CAPTION_TOP_PH},
+        };
+
+    for (const webui::LocalizedString string_pair :
+         kLocalizedPlaceholderStringPairs) {
+      data_source->AddString(
+          string_pair.name,
+          NearbyShareResourceGetter::GetInstance()->GetStringWithFeatureName(
+              string_pair.id));
+    }
+  } else {
+    static constexpr webui::LocalizedString kLocalizedStringPairs[] = {
+        {"nearbyShareContactVisibilityNoContactsSubtitle",
+         IDS_NEARBY_CONTACT_VISIBILITY_NO_CONTACTS_SUBTITLE},
+        {"nearbyShareDiscoveryPageTitle", IDS_NEARBY_DISCOVERY_PAGE_TITLE},
+        {"nearbyShareOnboardingPageTitle", IDS_NEARBY_ONBOARDING_PAGE_TITLE},
+        {"nearbyShareFeatureName", IDS_NEARBY_SHARE_FEATURE_NAME},
+        {"nearbyShareErrorNoConnectionMediumDescription",
+         IDS_NEARBY_HIGH_VISIBILITY_CONNECTION_MEDIUM_DESCRIPTION},
+        {"nearbyShareSettingsHelpCaptionTop",
+         IDS_NEARBY_SETTINGS_HELP_CAPTION_TOP},
+    };
+
+    data_source->AddLocalizedStrings(kLocalizedStringPairs);
+  }
 }

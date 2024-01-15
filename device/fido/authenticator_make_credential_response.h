@@ -20,8 +20,6 @@
 
 namespace device {
 
-struct DevicePublicKeyOutput;
-
 // Attestation object which includes attestation format, authentication
 // data, and attestation statement returned by the authenticator as a response
 // to MakeCredential request.
@@ -51,10 +49,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorMakeCredentialResponse {
 
   std::vector<uint8_t> GetCBOREncodedAttestationObject() const;
 
-  // Returns the output the the devicePubKey extension, if any.
-  absl::optional<device::DevicePublicKeyOutput> GetDevicePublicKeyResponse()
-      const;
-
   const std::array<uint8_t, kRpIdHashLength>& GetRpIdHash() const;
 
   AttestationObject attestation_object;
@@ -79,19 +73,24 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorMakeCredentialResponse {
   // authenticator, if known.
   absl::optional<base::flat_set<FidoTransportProtocol>> transports;
 
-  // device_public_key_signature contains the optional signature from the
-  // device-bound key. See
-  // https://github.com/fido-alliance/fido-2-specs/pull/1346
-  absl::optional<std::vector<uint8_t>> device_public_key_signature;
-
   // Contains the transport used to register the credential in this case. It is
   // nullopt for cases where we cannot determine the transport (Windows).
   absl::optional<FidoTransportProtocol> transport_used;
 
-  // The large blob key associated to the credential. This value is only
-  // returned if the credential is created with the largeBlobKey extension on a
-  // capable authenticator.
-  absl::optional<std::array<uint8_t, kLargeBlobKeyLength>> large_blob_key;
+  // Whether the credential that was created has an associated large blob key or
+  // supports the largeBlob extension. This can only be true if the credential
+  // is created with the largeBlob or largeBlobKey extension on a capable
+  // authenticator.
+  absl::optional<LargeBlobSupportType> large_blob_type;
+
+  // Whether a PRF is configured for this credential. This only reflects the
+  // output of the `prf` extension. Any output from the `hmac-secret` extension
+  // is in the authenticator data. However, note that the WebAuthn-level prf
+  // extension may be using the `hmac-secret` extension at the CTAP layer.
+  bool prf_enabled = false;
+
+  // hmac-secret contains the output of the prf extension.
+  absl::optional<std::vector<uint8_t>> prf_results;
 };
 
 // Through cbor::Writer, produces a CTAP style CBOR-encoded byte array

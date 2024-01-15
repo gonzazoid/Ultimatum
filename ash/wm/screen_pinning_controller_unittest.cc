@@ -13,14 +13,16 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
+#include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "ui/aura/window.h"
 
 namespace ash {
 namespace {
 
-int FindIndex(const std::vector<aura::Window*>& windows,
-              const aura::Window* target) {
+int FindIndex(
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows,
+    const aura::Window* target) {
   auto iter = base::ranges::find(windows, target);
   return iter != windows.end() ? iter - windows.begin() : -1;
 }
@@ -73,7 +75,8 @@ TEST_F(ScreenPinningControllerTest, FullscreenInPinnedMode) {
   window_util::PinWindow(w1, /* trusted */ false);
   {
     // Window w1 should be in front of w2.
-    std::vector<aura::Window*> siblings = w1->parent()->children();
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> siblings =
+        w1->parent()->children();
     int index1 = FindIndex(siblings, w1);
     int index2 = FindIndex(siblings, w2);
     EXPECT_NE(-1, index1);
@@ -89,7 +92,8 @@ TEST_F(ScreenPinningControllerTest, FullscreenInPinnedMode) {
   }
   {
     // Verify that w1 is still in front of w2.
-    std::vector<aura::Window*> siblings = w1->parent()->children();
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> siblings =
+        w1->parent()->children();
     int index1 = FindIndex(siblings, w1);
     int index2 = FindIndex(siblings, w2);
     EXPECT_NE(-1, index1);
@@ -105,7 +109,8 @@ TEST_F(ScreenPinningControllerTest, FullscreenInPinnedMode) {
   }
   {
     // Verify that w1 is still in front of w2.
-    std::vector<aura::Window*> siblings = w1->parent()->children();
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> siblings =
+        w1->parent()->children();
     int index1 = FindIndex(siblings, w1);
     int index2 = FindIndex(siblings, w2);
     EXPECT_NE(-1, index1);
@@ -121,7 +126,8 @@ TEST_F(ScreenPinningControllerTest, FullscreenInPinnedMode) {
   }
   {
     // Verify that w1 is still in front of w2.
-    std::vector<aura::Window*> siblings = w1->parent()->children();
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> siblings =
+        w1->parent()->children();
     int index1 = FindIndex(siblings, w1);
     int index2 = FindIndex(siblings, w2);
     EXPECT_NE(-1, index1);
@@ -137,7 +143,8 @@ TEST_F(ScreenPinningControllerTest, FullscreenInPinnedMode) {
   }
   {
     // Verify that w1 is still in front of w2.
-    std::vector<aura::Window*> siblings = w1->parent()->children();
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> siblings =
+        w1->parent()->children();
     int index1 = FindIndex(siblings, w1);
     int index2 = FindIndex(siblings, w2);
     EXPECT_NE(-1, index1);
@@ -156,7 +163,8 @@ TEST_F(ScreenPinningControllerTest, FullscreenInPinnedMode) {
   }
   {
     // Verify that w1 is still in front of w2.
-    std::vector<aura::Window*> siblings = w1->parent()->children();
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> siblings =
+        w1->parent()->children();
     int index1 = FindIndex(siblings, w1);
     int index2 = FindIndex(siblings, w2);
     EXPECT_NE(-1, index1);
@@ -172,9 +180,10 @@ TEST_F(ScreenPinningControllerTest, TrustedPinnedWithAccelerator) {
   window_util::PinWindow(w1, /* trusted */ true);
   EXPECT_TRUE(Shell::Get()->screen_pinning_controller()->IsPinned());
 
-  Shell::Get()->accelerator_controller()->PerformActionIfEnabled(UNPIN, {});
-  // The UNPIN accelerator key is disabled for trusted pinned and the window
-  // must be still pinned.
+  Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
+      AcceleratorAction::kUnpin, {});
+  // The AcceleratorAction::kUnpin accelerator key is disabled for trusted
+  // pinned and the window must be still pinned.
   EXPECT_TRUE(Shell::Get()->screen_pinning_controller()->IsPinned());
 }
 
@@ -204,12 +213,13 @@ TEST_F(ScreenPinningControllerTest, CleanUpObserversAndDimmer) {
   ash::WindowState* ws = ash::WindowState::Get(w.get());
   auto delegate = std::make_unique<TestClientControlledStateDelegate>();
   auto state = std::make_unique<ClientControlledState>(std::move(delegate));
+  auto* state_raw = state.get();
   ws->SetStateObject(std::move(state));
 
   wm::ActivateWindow(w.get());
 
   // Observer should be added to |w|, and |w->parent()|.
-  window_util::PinWindow(w.get(), /* truested */ false);
+  state_raw->EnterNextState(ws, chromeos::WindowStateType::kPinned);
   EXPECT_TRUE(WindowState::Get(w.get())->IsPinned());
 
   const aura::Window* container = w->parent();

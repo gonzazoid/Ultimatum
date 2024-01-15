@@ -6,16 +6,13 @@
 '''Unit tests for grit.shortcuts
 '''
 
-from __future__ import print_function
-
+import io
 import os
 import sys
-if __name__ == '__main__':
-  sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import unittest
 
-from six import StringIO
+if __name__ == '__main__':
+  sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from grit import shortcuts
 from grit import clique
@@ -34,7 +31,7 @@ class ShortcutsUnittest(unittest.TestCase):
     c.AddToShortcutGroup('group_name')
 
     warnings = shortcuts.GenerateDuplicateShortcutsWarnings(self.uq, 'PROJECT')
-    self.failUnless(warnings)
+    self.assertTrue(warnings)
 
   def testAmpersandEscaping(self):
     c = self.uq.MakeClique(tclib.Message(text="Hello &there"))
@@ -43,10 +40,11 @@ class ShortcutsUnittest(unittest.TestCase):
     c.AddToShortcutGroup('group_name')
 
     warnings = shortcuts.GenerateDuplicateShortcutsWarnings(self.uq, 'PROJECT')
-    self.failUnless(len(warnings) == 0)
+    self.assertTrue(len(warnings) == 0)
 
   def testDialog(self):
-    dlg = rc.Dialog(StringIO('''\
+    dlg = rc.Dialog(
+        io.StringIO('''\
 IDD_SIDEBAR_RSS_PANEL_PROPPAGE DIALOGEX 0, 0, 239, 221
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
@@ -76,4 +74,4 @@ END'''), 'IDD_SIDEBAR_RSS_PANEL_PROPPAGE')
     dlg.Parse()
 
     warnings = shortcuts.GenerateDuplicateShortcutsWarnings(self.uq, 'PROJECT')
-    self.failUnless(len(warnings) == 0)
+    self.assertTrue(len(warnings) == 0)

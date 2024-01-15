@@ -7,7 +7,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-#import "base/bind.h"
+#import "base/containers/contains.h"
+#import "base/functional/bind.h"
 #import "base/run_loop.h"
 #import "base/strings/stringprintf.h"
 #import "base/strings/sys_string_conversions.h"
@@ -18,10 +19,6 @@
 #import "ios/web/public/web_state.h"
 #import "net/base/mac/url_conversions.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForDownloadTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -107,7 +104,7 @@ bool IsWebViewContainingText(web::WebState* web_state,
       web::test::ExecuteJavaScript(web_state, kGetDocumentBodyJavaScript);
   std::string body;
   if (value && value->is_string()) {
-    return value->GetString().find(text) != std::string::npos;
+    return base::Contains(value->GetString(), text);
   }
   return false;
 }
@@ -116,13 +113,14 @@ bool IsWebViewContainingTextInFrame(web::WebState* web_state,
                                     const std::string& text) {
   __block NSInteger number_frames_processing = 0;
   __block bool text_found = false;
-  for (WebFrame* frame : web_state->GetWebFramesManager()->GetAllWebFrames()) {
+  for (WebFrame* frame :
+       web_state->GetPageWorldWebFramesManager()->GetAllWebFrames()) {
     number_frames_processing++;
 
     FindInPageJavaScriptFeature* find_in_page_feature =
         FindInPageJavaScriptFeature::GetInstance();
     find_in_page_feature->Search(
-        frame, text, base::BindOnce(^(absl::optional<int> result_matches) {
+        frame, text, base::BindOnce(^(std::optional<int> result_matches) {
           if (result_matches && result_matches.value() >= 1) {
             text_found = true;
           }

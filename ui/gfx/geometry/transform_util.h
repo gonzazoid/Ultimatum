@@ -30,6 +30,13 @@ BlendDecomposedTransforms(const DecomposedTransform& to,
                           const DecomposedTransform& from,
                           double progress);
 
+// Accumulates the decomposed components |to| with |from| using the
+// routines described in
+// https://www.w3.org/TR/css-transforms-2/#combining-transform-lists
+GEOMETRY_SKIA_EXPORT DecomposedTransform
+AccumulateDecomposedTransforms(const DecomposedTransform& to,
+                               const DecomposedTransform& from);
+
 // Calculates a transform with a transformed origin. The resulting transform is
 // created by composing P * T * P^-1 where P is a constant transform to the new
 // origin.
@@ -55,7 +62,7 @@ GEOMETRY_SKIA_EXPORT AxisTransform2d WindowTransform(int x,
                                                      int width,
                                                      int height);
 
-// Compute 2D scale if possible; return whether it was set.
+// Compute 2D scale if possible, clamped with ClampFloatGeometry().
 GEOMETRY_SKIA_EXPORT absl::optional<Vector2dF>
 TryComputeTransform2dScaleComponents(const Transform& transform);
 

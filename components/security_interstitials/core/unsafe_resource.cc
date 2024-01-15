@@ -9,8 +9,19 @@
 namespace security_interstitials {
 
 constexpr UnsafeResource::RenderProcessId UnsafeResource::kNoRenderProcessId;
-constexpr UnsafeResource::RenderFrameId UnsafeResource::kNoRenderFrameId;
 constexpr UnsafeResource::FrameTreeNodeId UnsafeResource::kNoFrameTreeNodeId;
+
+UnsafeResource::UrlCheckResult::UrlCheckResult(
+    bool proceed,
+    bool showed_interstitial,
+    bool has_post_commit_interstitial_skipped)
+    : proceed(proceed),
+      showed_interstitial(showed_interstitial),
+      has_post_commit_interstitial_skipped(
+          has_post_commit_interstitial_skipped) {
+  CHECK(!has_post_commit_interstitial_skipped || !proceed)
+      << "If post commit interstitial is skipped, proceed must be false.";
+}
 
 UnsafeResource::UnsafeResource()
     : is_subresource(false),
@@ -23,16 +34,15 @@ UnsafeResource::UnsafeResource(const UnsafeResource& other) = default;
 
 UnsafeResource::~UnsafeResource() = default;
 
-bool UnsafeResource::IsMainPageLoadBlocked() const {
+bool UnsafeResource::IsMainPageLoadPendingWithSyncCheck() const {
   // Subresource hits cannot happen until after main page load is committed.
   if (is_subresource)
     return false;
 
   switch (threat_type) {
-    // Client-side phishing/malware detection interstitials never block the main
+    // Client-side phishing detection interstitials never block the main
     // frame load, since they happen after the page is finished loading.
     case safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING:
-    case safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE:
     // Malicious ad activity reporting happens in the background.
     case safe_browsing::SB_THREAT_TYPE_BLOCKED_AD_POPUP:
     case safe_browsing::SB_THREAT_TYPE_BLOCKED_AD_REDIRECT:
@@ -61,15 +71,18 @@ bool UnsafeResource::IsMainPageLoadBlocked() const {
   return true;
 }
 
-void UnsafeResource::DispatchCallback(const base::Location& from_here,
-                                      bool proceed,
-                                      bool showed_interstitial) const {
+void UnsafeResource::DispatchCallback(
+    const base::Location& from_here,
+    bool proceed,
+    bool showed_interstitial,
+    bool has_post_commit_interstitial_skipped) const {
   if (callback.is_null())
     return;
 
   DCHECK(callback_sequence);
-  callback_sequence->PostTask(
-      from_here, base::BindOnce(callback, proceed, showed_interstitial));
+  UrlCheckResult result(proceed, showed_interstitial,
+                        has_post_commit_interstitial_skipped);
+  callback_sequence->PostTask(from_here, base::BindOnce(callback, result));
 }
 
 }  // namespace security_interstitials

@@ -87,6 +87,10 @@ class ExtensionForceInstallMixin final : public InProcessBrowserTestMixin {
     kLoad,
     // Wait until the extension's background page is loaded for the first time.
     kBackgroundPageFirstLoad,
+    // Wait until the extension is loaded and its (presumably javascript
+    // typescript) code sends the hard-coded message 'ready'. The extension
+    // needs to send a message via `chrome.test.sendMessage('ready')`.
+    kReadyMessageReceived,
   };
 
   // The type of the waiting mode for the force-installed extension update.
@@ -239,14 +243,16 @@ class ExtensionForceInstallMixin final : public InProcessBrowserTestMixin {
   base::ScopedTempDir temp_dir_;
   net::EmbeddedTestServer embedded_test_server_;
   bool initialized_ = false;
-  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> profile_ = nullptr;
   raw_ptr<policy::MockConfigurationPolicyProvider> mock_policy_provider_ =
       nullptr;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::DeviceStateMixin* device_state_mixin_ = nullptr;
-  policy::DevicePolicyCrosTestHelper* device_policy_cros_test_helper_ = nullptr;
-  ash::EmbeddedPolicyTestServerMixin* policy_test_server_mixin_ = nullptr;
-  policy::UserPolicyBuilder* user_policy_builder_ = nullptr;
+  raw_ptr<ash::DeviceStateMixin> device_state_mixin_ = nullptr;
+  raw_ptr<policy::DevicePolicyCrosTestHelper> device_policy_cros_test_helper_ =
+      nullptr;
+  raw_ptr<ash::EmbeddedPolicyTestServerMixin> policy_test_server_mixin_ =
+      nullptr;
+  raw_ptr<policy::UserPolicyBuilder> user_policy_builder_ = nullptr;
   // |account_id_| and |policy_type_| are only used with
   // |policy_test_server_mixin_|.
   std::string account_id_;

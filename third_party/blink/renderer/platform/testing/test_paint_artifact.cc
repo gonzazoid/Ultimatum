@@ -90,10 +90,10 @@ TestPaintArtifact& TestPaintArtifact::RectDrawing(DisplayItemClient& client,
                                                   const gfx::Rect& bounds,
                                                   Color color) {
   PaintRecorder recorder;
-  cc::PaintCanvas* canvas = recorder.beginRecording(gfx::RectToSkRect(bounds));
+  cc::PaintCanvas* canvas = recorder.beginRecording();
   if (!bounds.IsEmpty()) {
     cc::PaintFlags flags;
-    flags.setColor(color.Rgb());
+    flags.setColor(color.toSkColor4f());
     canvas->drawRect(gfx::RectToSkRect(bounds), flags);
   }
   paint_artifact_->GetDisplayItemList()
@@ -105,8 +105,10 @@ TestPaintArtifact& TestPaintArtifact::RectDrawing(DisplayItemClient& client,
   paint_artifact_->RecordDebugInfo(client.Id(), client.DebugName(),
                                    client.OwnerNodeId());
   auto& chunk = paint_artifact_->PaintChunks().back();
-  chunk.background_color = color;
-  chunk.background_color_area = bounds.size().GetArea();
+  chunk.background_color.color = color.toSkColor4f();
+  chunk.background_color.area = bounds.size().GetArea();
+  // is_solid_color should be set explicitly with IsSolidColor().
+  chunk.background_color.is_solid_color = false;
   DidAddDisplayItem();
   return *this;
 }
@@ -115,8 +117,9 @@ TestPaintArtifact& TestPaintArtifact::ScrollHitTest(
     DisplayItemClient& client,
     const gfx::Rect& rect,
     const TransformPaintPropertyNode* scroll_translation) {
-  auto& hit_test_data =
-      paint_artifact_->PaintChunks().back().EnsureHitTestData();
+  auto& chunk = paint_artifact_->PaintChunks().back();
+  chunk.hit_test_opaqueness = cc::HitTestOpaqueness::kOpaque;
+  auto& hit_test_data = chunk.EnsureHitTestData();
   hit_test_data.scroll_hit_test_rect = rect;
   hit_test_data.scroll_translation = scroll_translation;
   return *this;
@@ -147,6 +150,13 @@ TestPaintArtifact& TestPaintArtifact::HasText() {
   auto& chunk = paint_artifact_->PaintChunks().back();
   chunk.has_text = true;
   chunk.text_known_to_be_on_opaque_background = false;
+  return *this;
+}
+
+TestPaintArtifact& TestPaintArtifact::IsSolidColor() {
+  auto& chunk = paint_artifact_->PaintChunks().back();
+  DCHECK_EQ(chunk.size(), 1u);
+  chunk.background_color.is_solid_color = true;
   return *this;
 }
 
@@ -197,8 +207,9 @@ void TestPaintArtifact::DidAddDisplayItem() {
   DCHECK_EQ(chunk.end_index, paint_artifact_->GetDisplayItemList().size() - 1);
   const auto& item = paint_artifact_->GetDisplayItemList().back();
   chunk.bounds.Union(item.VisualRect());
-  if (item.DrawsContent())
+  if (item.DrawsContent()) {
     chunk.drawable_bounds.Union(item.VisualRect());
+  }
   chunk.end_index++;
 }
 

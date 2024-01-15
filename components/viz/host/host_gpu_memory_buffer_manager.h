@@ -8,7 +8,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/unsafe_shared_memory_pool.h"
@@ -18,7 +18,7 @@
 #include "base/trace_event/memory_dump_provider.h"
 #include "components/viz/host/viz_host_export.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
-#include "gpu/ipc/host/gpu_memory_buffer_support.h"
+#include "gpu/ipc/common/gpu_memory_buffer_support.h"
 
 namespace gpu {
 class GpuMemoryBufferSupport;
@@ -72,9 +72,7 @@ class VIZ_HOST_EXPORT HostGpuMemoryBufferManager
   // on requests. Must be called from UI thread.
   void Shutdown();
 
-  void DestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
-                              int client_id,
-                              const gpu::SyncToken& sync_token);
+  void DestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id, int client_id);
 
   void DestroyAllGpuMemoryBufferForClient(int client_id);
 
@@ -98,8 +96,6 @@ class VIZ_HOST_EXPORT HostGpuMemoryBufferManager
       gfx::BufferUsage usage,
       gpu::SurfaceHandle surface_handle,
       base::WaitableEvent* shutdown_event) override;
-  void SetDestructionSyncToken(gfx::GpuMemoryBuffer* buffer,
-                               const gpu::SyncToken& sync_token) override;
   void CopyGpuMemoryBufferAsync(
       gfx::GpuMemoryBufferHandle buffer_handle,
       base::UnsafeSharedMemoryRegion memory_region,
@@ -136,7 +132,7 @@ class VIZ_HOST_EXPORT HostGpuMemoryBufferManager
 
   using AllocatedBuffers =
       std::unordered_map<gfx::GpuMemoryBufferId,
-                         AllocatedBufferInfo,
+                         gpu::AllocatedBufferInfo,
                          std::hash<gfx::GpuMemoryBufferId>>;
 
   mojom::GpuService* GetGpuService();

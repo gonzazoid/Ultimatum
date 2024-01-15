@@ -22,10 +22,10 @@ ScrollOffsetAnimationsImpl::ScrollOffsetAnimationsImpl(
     AnimationHost* animation_host)
     : animation_host_(animation_host),
       scroll_offset_timeline_(
-          AnimationTimeline::Create(AnimationIdProvider::NextTimelineId())),
+          AnimationTimeline::Create(AnimationIdProvider::NextTimelineId(),
+                                    /* is_impl_only */ true)),
       scroll_offset_animation_(
           Animation::Create(AnimationIdProvider::NextAnimationId())) {
-  scroll_offset_timeline_->set_is_impl_only(true);
   scroll_offset_animation_->set_animation_delegate(this);
 
   animation_host_->AddAnimationTimeline(scroll_offset_timeline_.get());
@@ -51,6 +51,7 @@ void ScrollOffsetAnimationsImpl::AutoScrollAnimationCreate(
                          autoscroll_velocity);
   ScrollAnimationCreateInternal(element_id, std::move(curve),
                                 animation_start_offset);
+  animation_is_autoscroll_ = true;
 }
 
 void ScrollOffsetAnimationsImpl::MouseWheelScrollAnimationCreate(
@@ -67,6 +68,7 @@ void ScrollOffsetAnimationsImpl::MouseWheelScrollAnimationCreate(
   curve->SetInitialValue(current_offset, delayed_by);
   ScrollAnimationCreateInternal(element_id, std::move(curve),
                                 animation_start_offset);
+  animation_is_autoscroll_ = false;
 }
 
 void ScrollOffsetAnimationsImpl::ScrollAnimationCreateInternal(
@@ -90,7 +92,8 @@ void ScrollOffsetAnimationsImpl::ScrollAnimationCreateInternal(
   scroll_offset_animation_->AddKeyframeModel(std::move(keyframe_model));
 }
 
-bool ScrollOffsetAnimationsImpl::ScrollAnimationUpdateTarget(
+std::optional<gfx::PointF>
+ScrollOffsetAnimationsImpl::ScrollAnimationUpdateTarget(
     const gfx::Vector2dF& scroll_delta,
     const gfx::PointF& max_scroll_offset,
     base::TimeTicks frame_monotonic_time,
@@ -99,7 +102,7 @@ bool ScrollOffsetAnimationsImpl::ScrollAnimationUpdateTarget(
   if (!scroll_offset_animation_->element_animations()) {
     TRACE_EVENT_INSTANT0("cc", "No element animation exists",
                          TRACE_EVENT_SCOPE_THREAD);
-    return false;
+    return std::nullopt;
   }
 
   KeyframeModel* keyframe_model =
@@ -108,14 +111,15 @@ bool ScrollOffsetAnimationsImpl::ScrollAnimationUpdateTarget(
     scroll_offset_animation_->DetachElement();
     TRACE_EVENT_INSTANT0("cc", "No keyframe model exists",
                          TRACE_EVENT_SCOPE_THREAD);
-    return false;
+    return std::nullopt;
   }
-  if (scroll_delta.IsZero())
-    return true;
 
   ScrollOffsetAnimationCurve* curve =
       ScrollOffsetAnimationCurve::ToScrollOffsetAnimationCurve(
           keyframe_model->curve());
+  if (scroll_delta.IsZero()) {
+    return curve->target_value();
+  }
 
   gfx::PointF new_target = curve->target_value() + scroll_delta;
   new_target.SetToMax(gfx::PointF());
@@ -139,7 +143,7 @@ bool ScrollOffsetAnimationsImpl::ScrollAnimationUpdateTarget(
                        TRACE_EVENT_SCOPE_THREAD, "UpdatedDuration",
                        curve->Duration().InMillisecondsF());
 
-  return true;
+  return curve->target_value();
 }
 
 void ScrollOffsetAnimationsImpl::ScrollAnimationApplyAdjustment(
@@ -180,7 +184,10 @@ void ScrollOffsetAnimationsImpl::ScrollAnimationApplyAdjustment(
   new_keyframe_model->SetIsImplOnly();
   new_keyframe_model->set_affects_active_elements(false);
 
-  // Abort the old animation.
+  // Abort the old animation. AutoReset here will restore the current value of
+  // animation_is_autoscroll_ after ScrollAnimationAbort resets it.
+  base::AutoReset<bool> autoscroll(&animation_is_autoscroll_,
+                                   animation_is_autoscroll_);
   ScrollAnimationAbort(/* needs_completion */ false);
 
   // Start a new one with the adjusment.
@@ -195,6 +202,7 @@ void ScrollOffsetAnimationsImpl::ScrollAnimationAbort(bool needs_completion) {
       TargetProperty::SCROLL_OFFSET, needs_completion);
   TRACE_EVENT_INSTANT1("cc", "ScrollAnimationAbort", TRACE_EVENT_SCOPE_THREAD,
                        "needs_completion", needs_completion);
+  animation_is_autoscroll_ = false;
 }
 
 void ScrollOffsetAnimationsImpl::AnimatingElementRemovedByCommit() {
@@ -234,6 +242,10 @@ bool ScrollOffsetAnimationsImpl::IsAnimating() const {
     case KeyframeModel::ABORTED_BUT_NEEDS_COMPLETION:
       return false;
   }
+}
+
+bool ScrollOffsetAnimationsImpl::IsAutoScrolling() const {
+  return IsAnimating() && animation_is_autoscroll_;
 }
 
 ElementId ScrollOffsetAnimationsImpl::GetElementId() const {

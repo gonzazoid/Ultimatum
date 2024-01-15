@@ -15,14 +15,6 @@ bool ComboboxMenuModel::UseCheckmarks() const {
 }
 
 // Overridden from MenuModel:
-bool ComboboxMenuModel::HasIcons() const {
-  for (size_t i = 0; i < GetItemCount(); ++i) {
-    if (!GetIconAt(i).IsEmpty())
-      return true;
-  }
-  return false;
-}
-
 size_t ComboboxMenuModel::GetItemCount() const {
   return model_->GetItemCount();
 }
@@ -102,4 +94,19 @@ void ComboboxMenuModel::ActivatedAt(size_t index, int event_flags) {
 
 ui::MenuModel* ComboboxMenuModel::GetSubmenuModelAt(size_t index) const {
   return nullptr;
+}
+
+absl::optional<ui::ColorId> ComboboxMenuModel::GetForegroundColorId(
+    size_t index) {
+  return model_->GetDropdownForegroundColorIdAt(index);
+}
+
+absl::optional<ui::ColorId> ComboboxMenuModel::GetSubmenuBackgroundColorId(
+    size_t index) {
+  return model_->GetDropdownBackgroundColorIdAt(index);
+}
+
+absl::optional<ui::ColorId> ComboboxMenuModel::GetSelectedBackgroundColorId(
+    size_t index) {
+  return model_->GetDropdownSelectedBackgroundColorIdAt(index);
 }

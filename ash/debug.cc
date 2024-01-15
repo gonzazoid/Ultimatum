@@ -14,6 +14,7 @@
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
+#include "base/memory/raw_ptr.h"
 #include "cc/debug/layer_tree_debug_state.h"
 #include "ui/accessibility/aura/aura_window_properties.h"
 #include "ui/aura/client/aura_constants.h"
@@ -27,14 +28,30 @@
 namespace ash {
 namespace debug {
 
+namespace {
+
+std::unique_ptr<DebugWindowHierarchyDelegate> instance = nullptr;
+
+}  // namespace
+
+void SetDebugWindowHierarchyDelegate(
+    std::unique_ptr<DebugWindowHierarchyDelegate> delegate) {
+  instance = std::move(delegate);
+}
+
 void PrintLayerHierarchy(std::ostringstream* out) {
+  ui::DebugLayerChildCallback child_cb =
+      instance ? base::BindRepeating(
+                     &DebugWindowHierarchyDelegate::GetAdjustedLayerChildren,
+                     base::Unretained(instance.get()))
+               : ui::DebugLayerChildCallback();
   for (aura::Window* root : Shell::Get()->GetAllRootWindows()) {
     ui::Layer* layer = root->layer();
     if (layer) {
       ui::PrintLayerHierarchy(
           layer,
           RootWindowController::ForWindow(root)->GetLastMouseLocationInRoot(),
-          out);
+          out, child_cb);
     }
   }
 }
@@ -85,7 +102,8 @@ void PrintWindowHierarchy(const aura::Window* active_window,
                                        window->GetOcclusionState()))
                      .c_str()
                : "")
-       << " " << window->bounds().ToString();
+       << " " << window->bounds().ToString()
+       << " scale=" + window->transform().To2dScale().ToString();
   if (!subpixel_position_offset.IsZero())
     *out << " subpixel offset=" + subpixel_position_offset.ToString();
   std::string* tree_id = window->GetProperty(ui::kChildAXTreeID);
@@ -114,7 +132,10 @@ void PrintWindowHierarchy(const aura::Window* active_window,
     views::PrintWidgetInformation(*widget, /*detailed*/ false, out);
   }
 
-  for (aura::Window* child : window->children()) {
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> children =
+      instance ? instance->GetAdjustedWindowChildren(window)
+               : window->children();
+  for (aura::Window* child : children) {
     PrintWindowHierarchy(active_window, focused_window, capture_window, child,
                          indent + 3, scrub_data, out_window_titles, out);
   }
@@ -138,7 +159,7 @@ std::vector<std::string> PrintWindowHierarchy(std::ostringstream* out,
 void ToggleShowDebugBorders() {
   aura::Window::Windows root_windows = Shell::Get()->GetAllRootWindows();
   std::unique_ptr<cc::DebugBorderTypes> value;
-  for (auto* window : root_windows) {
+  for (aura::Window* window : root_windows) {
     ui::Compositor* compositor = window->GetHost()->compositor();
     cc::LayerTreeDebugState state = compositor->GetLayerTreeDebugState();
     if (!value.get())
@@ -152,7 +173,7 @@ void ToggleShowDebugBorders() {
 void ToggleShowFpsCounter() {
   aura::Window::Windows root_windows = Shell::Get()->GetAllRootWindows();
   std::unique_ptr<bool> value;
-  for (auto* window : root_windows) {
+  for (aura::Window* window : root_windows) {
     ui::Compositor* compositor = window->GetHost()->compositor();
     cc::LayerTreeDebugState state = compositor->GetLayerTreeDebugState();
     if (!value.get())
@@ -165,7 +186,7 @@ void ToggleShowFpsCounter() {
 void ToggleShowPaintRects() {
   aura::Window::Windows root_windows = Shell::Get()->GetAllRootWindows();
   std::unique_ptr<bool> value;
-  for (auto* window : root_windows) {
+  for (aura::Window* window : root_windows) {
     ui::Compositor* compositor = window->GetHost()->compositor();
     cc::LayerTreeDebugState state = compositor->GetLayerTreeDebugState();
     if (!value.get())

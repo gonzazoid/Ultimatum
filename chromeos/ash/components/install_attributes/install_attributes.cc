@@ -8,9 +8,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_base.h"
@@ -18,7 +18,6 @@
 #include "base/path_service.h"
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
@@ -118,7 +117,7 @@ InstallAttributes::InstallAttributes(
     InstallAttributesClient* userdataauth_client)
     : install_attributes_client_(userdataauth_client) {}
 
-InstallAttributes::~InstallAttributes() {}
+InstallAttributes::~InstallAttributes() = default;
 
 void InstallAttributes::Init(const base::FilePath& cache_file) {
   DCHECK(!device_locked_);
@@ -181,7 +180,7 @@ void InstallAttributes::ReadImmutableAttributes(base::OnceClosure callback) {
 
 void InstallAttributes::ReadAttributesIfReady(
     base::OnceClosure callback,
-    absl::optional<user_data_auth::InstallAttributesGetStatusReply> reply) {
+    std::optional<user_data_auth::InstallAttributesGetStatusReply> reply) {
   base::ScopedClosureRunner callback_runner(std::move(callback));
 
   // Can't proceed if the call failed.
@@ -204,9 +203,9 @@ void InstallAttributes::ReadAttributesIfReady(
     device_locked_ = true;
 
     static const char* const kEnterpriseAttributes[] = {
-        kAttrEnterpriseDeviceId,   kAttrEnterpriseDomain, kAttrEnterpriseRealm,
-        kAttrEnterpriseMode,       kAttrEnterpriseOwned,  kAttrEnterpriseUser,
-        kAttrConsumerKioskEnabled,
+        kAttrEnterpriseDeviceId, kAttrEnterpriseDomain,
+        kAttrEnterpriseRealm,    kAttrEnterpriseMode,
+        kAttrEnterpriseOwned,    kAttrConsumerKioskEnabled,
     };
     std::map<std::string, std::string> attr_map;
     for (size_t i = 0; i < std::size(kEnterpriseAttributes); ++i) {
@@ -247,8 +246,6 @@ void InstallAttributes::LockDevice(policy::DeviceMode device_mode,
                                    LockResultCallback callback) {
   CHECK((device_mode == policy::DEVICE_MODE_ENTERPRISE && !domain.empty() &&
          realm.empty() && !device_id.empty()) ||
-        (device_mode == policy::DEVICE_MODE_ENTERPRISE_AD && domain.empty() &&
-         !realm.empty() && !device_id.empty()) ||
         (device_mode == policy::DEVICE_MODE_DEMO && !domain.empty() &&
          realm.empty() && !device_id.empty()) ||
         (device_mode == policy::DEVICE_MODE_CONSUMER_KIOSK_AUTOLAUNCH &&
@@ -304,7 +301,7 @@ void InstallAttributes::LockDeviceIfAttributesIsReady(
     const std::string& realm,
     const std::string& device_id,
     LockResultCallback callback,
-    absl::optional<user_data_auth::InstallAttributesGetStatusReply> reply) {
+    std::optional<user_data_auth::InstallAttributesGetStatusReply> reply) {
   if (!reply.has_value() ||
       reply->state() == ::user_data_auth::InstallAttributesState::UNKNOWN ||
       reply->state() ==
@@ -398,15 +395,7 @@ bool InstallAttributes::IsEnterpriseManaged() const {
     return false;
   }
   return registration_mode_ == policy::DEVICE_MODE_ENTERPRISE ||
-         registration_mode_ == policy::DEVICE_MODE_ENTERPRISE_AD ||
          registration_mode_ == policy::DEVICE_MODE_DEMO;
-}
-
-bool InstallAttributes::IsActiveDirectoryManaged() const {
-  if (!device_locked_) {
-    return false;
-  }
-  return registration_mode_ == policy::DEVICE_MODE_ENTERPRISE_AD;
 }
 
 bool InstallAttributes::IsCloudManaged() const {
@@ -436,7 +425,7 @@ void InstallAttributes::OnTpmStatusComplete(
       dbus_retries_remaining) {
     LOG(WARNING) << "Failed to get tpm status reply; status: "
                  << reply.status();
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&InstallAttributes::TriggerConsistencyCheck,
                        weak_ptr_factory_.GetWeakPtr(),
@@ -484,7 +473,6 @@ void InstallAttributes::OnClearStoredOwnerPassword(
 // that all changes to the constants are reflected there as well.
 const char InstallAttributes::kConsumerDeviceMode[] = "consumer";
 const char InstallAttributes::kEnterpriseDeviceMode[] = "enterprise";
-const char InstallAttributes::kEnterpriseADDeviceMode[] = "enterprise_ad";
 const char InstallAttributes::kLegacyRetailDeviceMode[] = "kiosk";
 const char InstallAttributes::kConsumerKioskDeviceMode[] = "consumer_kiosk";
 const char InstallAttributes::kDemoDeviceMode[] = "demo_mode";
@@ -495,7 +483,6 @@ const char InstallAttributes::kAttrEnterpriseDomain[] = "enterprise.domain";
 const char InstallAttributes::kAttrEnterpriseRealm[] = "enterprise.realm";
 const char InstallAttributes::kAttrEnterpriseMode[] = "enterprise.mode";
 const char InstallAttributes::kAttrEnterpriseOwned[] = "enterprise.owned";
-const char InstallAttributes::kAttrEnterpriseUser[] = "enterprise.user";
 const char InstallAttributes::kAttrConsumerKioskEnabled[] =
     "consumer.app_kiosk_enabled";
 
@@ -515,8 +502,6 @@ std::string InstallAttributes::GetDeviceModeString(policy::DeviceMode mode) {
       return InstallAttributes::kConsumerDeviceMode;
     case policy::DEVICE_MODE_ENTERPRISE:
       return InstallAttributes::kEnterpriseDeviceMode;
-    case policy::DEVICE_MODE_ENTERPRISE_AD:
-      return InstallAttributes::kEnterpriseADDeviceMode;
     case policy::DEPRECATED_DEVICE_MODE_LEGACY_RETAIL_MODE:
       return InstallAttributes::kLegacyRetailDeviceMode;
     case policy::DEVICE_MODE_CONSUMER_KIOSK_AUTOLAUNCH:
@@ -537,8 +522,6 @@ policy::DeviceMode InstallAttributes::GetDeviceModeFromString(
     return policy::DEVICE_MODE_CONSUMER;
   if (mode == InstallAttributes::kEnterpriseDeviceMode)
     return policy::DEVICE_MODE_ENTERPRISE;
-  if (mode == InstallAttributes::kEnterpriseADDeviceMode)
-    return policy::DEVICE_MODE_ENTERPRISE_AD;
   if (mode == InstallAttributes::kLegacyRetailDeviceMode)
     return policy::DEPRECATED_DEVICE_MODE_LEGACY_RETAIL_MODE;
   if (mode == InstallAttributes::kConsumerKioskDeviceMode)
@@ -564,7 +547,6 @@ void InstallAttributes::DecodeInstallAttributes(
   const std::string domain = ReadMapKey(attr_map, kAttrEnterpriseDomain);
   const std::string realm = ReadMapKey(attr_map, kAttrEnterpriseRealm);
   const std::string device_id = ReadMapKey(attr_map, kAttrEnterpriseDeviceId);
-  const std::string user_deprecated = ReadMapKey(attr_map, kAttrEnterpriseUser);
 
   if (enterprise_owned == "true") {
     WarnIfNonempty(attr_map, kAttrConsumerKioskEnabled);
@@ -573,7 +555,6 @@ void InstallAttributes::DecodeInstallAttributes(
     // Set registration_mode_.
     registration_mode_ = GetDeviceModeFromString(mode);
     if (registration_mode_ != policy::DEVICE_MODE_ENTERPRISE &&
-        registration_mode_ != policy::DEVICE_MODE_ENTERPRISE_AD &&
         registration_mode_ != policy::DEVICE_MODE_DEMO) {
       if (!mode.empty()) {
         LOG(WARNING) << "Bad " << kAttrEnterpriseMode << ": " << mode;
@@ -588,9 +569,6 @@ void InstallAttributes::DecodeInstallAttributes(
       if (!domain.empty()) {
         // The canonicalization is for compatibility with earlier versions.
         registration_domain_ = gaia::CanonicalizeDomain(domain);
-      } else if (!user_deprecated.empty()) {
-        // Compatibility for pre M19 code.
-        registration_domain_ = gaia::ExtractDomainName(user_deprecated);
       } else {
         LOG(WARNING) << "Couldn't read domain.";
       }
@@ -611,16 +589,13 @@ void InstallAttributes::DecodeInstallAttributes(
   WarnIfNonempty(attr_map, kAttrEnterpriseDomain);
   WarnIfNonempty(attr_map, kAttrEnterpriseRealm);
   WarnIfNonempty(attr_map, kAttrEnterpriseDeviceId);
-  WarnIfNonempty(attr_map, kAttrEnterpriseUser);
   if (consumer_kiosk_enabled == "true") {
     registration_mode_ = policy::DEVICE_MODE_CONSUMER_KIOSK_AUTOLAUNCH;
     return;
   }
 
   WarnIfNonempty(attr_map, kAttrConsumerKioskEnabled);
-  if (user_deprecated.empty()) {
-    registration_mode_ = policy::DEVICE_MODE_CONSUMER;
-  }
+  registration_mode_ = policy::DEVICE_MODE_CONSUMER;
 }
 
 }  // namespace ash

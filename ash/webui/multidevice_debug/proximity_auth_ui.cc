@@ -6,19 +6,17 @@
 
 #include <memory>
 
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "ash/webui/grit/ash_multidevice_debug_resources.h"
 #include "ash/webui/multidevice_debug/proximity_auth_webui_handler.h"
 #include "ash/webui/multidevice_debug/url_constants.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 
-namespace ash {
-
-namespace multidevice {
+namespace ash::multidevice {
 
 ProximityAuthUI::ProximityAuthUI(
     content::WebUI* web_ui,
@@ -54,6 +52,4 @@ void ProximityAuthUI::BindInterface(
 
 WEB_UI_CONTROLLER_TYPE_IMPL(ProximityAuthUI)
 
-}  // namespace multidevice
-
-}  // namespace ash
+}  // namespace ash::multidevice

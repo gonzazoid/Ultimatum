@@ -7,36 +7,19 @@
 //    ../../third_party/xcbproto/src \
 //    gen/ui/gfx/x \
 //    bigreq \
-//    composite \
-//    damage \
-//    dpms \
-//    dri2 \
 //    dri3 \
-//    ge \
 //    glx \
-//    present \
 //    randr \
-//    record \
 //    render \
-//    res \
 //    screensaver \
 //    shape \
 //    shm \
 //    sync \
-//    xc_misc \
-//    xevie \
-//    xf86dri \
-//    xf86vidmode \
 //    xfixes \
-//    xinerama \
 //    xinput \
 //    xkb \
-//    xprint \
 //    xproto \
-//    xselinux \
-//    xtest \
-//    xv \
-//    xvmc
+//    xtest
 
 #ifndef UI_GFX_X_GENERATED_PROTOS_DRI3_H_
 #define UI_GFX_X_GENERATED_PROTOS_DRI3_H_
@@ -69,7 +52,7 @@ class Future;
 class COMPONENT_EXPORT(X11) Dri3 {
  public:
   static constexpr unsigned major_version = 1;
-  static constexpr unsigned minor_version = 2;
+  static constexpr unsigned minor_version = 3;
 
   Dri3(Connection* connection, const x11::QueryExtensionReply& info);
 
@@ -283,6 +266,20 @@ class COMPONENT_EXPORT(X11) Dri3 {
       const BuffersFromPixmapRequest& request);
 
   Future<BuffersFromPixmapReply> BuffersFromPixmap(const Pixmap& pixmap = {});
+
+  struct SetDRMDeviceInUseRequest {
+    Window window{};
+    uint32_t drmMajor{};
+    uint32_t drmMinor{};
+  };
+
+  using SetDRMDeviceInUseResponse = Response<void>;
+
+  Future<void> SetDRMDeviceInUse(const SetDRMDeviceInUseRequest& request);
+
+  Future<void> SetDRMDeviceInUse(const Window& window = {},
+                                 const uint32_t& drmMajor = {},
+                                 const uint32_t& drmMinor = {});
 
  private:
   Connection* const connection_;

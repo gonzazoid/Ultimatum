@@ -5,9 +5,11 @@
 #ifndef COMPONENTS_PAGE_LOAD_METRICS_RENDERER_PAGE_TIMING_METADATA_RECORDER_H_
 #define COMPONENTS_PAGE_LOAD_METRICS_RENDERER_PAGE_TIMING_METADATA_RECORDER_H_
 
+#include <cstdint>
 #include "base/profiler/sample_metadata.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 
 namespace page_load_metrics {
 
@@ -33,9 +35,17 @@ class PageTimingMetadataRecorder {
 
     absl::optional<base::TimeTicks> first_input_timestamp;
     absl::optional<base::TimeDelta> first_input_delay;
+    // Frame local largest contentful paint timestamp.
+    absl::optional<base::TimeTicks> frame_largest_contentful_paint;
+
+    // Stores the `DocumentToken` so that we can use it to find the value of
+    // some browser side calculated metrics. Currently it is used to retrieve
+    // Largest Contentful Paint value on the browser side.
+    absl::optional<blink::DocumentToken> document_token;
   };
 
-  PageTimingMetadataRecorder(const MonotonicTiming& initial_timing);
+  PageTimingMetadataRecorder(const MonotonicTiming& initial_timing,
+                             const bool is_main_frame);
   ~PageTimingMetadataRecorder();
 
   PageTimingMetadataRecorder(const PageTimingMetadataRecorder&) = delete;
@@ -46,6 +56,17 @@ class PageTimingMetadataRecorder {
   // `PageTimingMetricsSender::Update` is called.
   void UpdateMetadata(const MonotonicTiming& timing);
 
+  // Adds interaction duration metadata to past samples for a user interaction
+  // with the given start and end time.
+  void AddInteractionDurationMetadata(const base::TimeTicks interaction_start,
+                                      const base::TimeTicks interaction_end);
+
+  // Packs the 32 bit instance_id and interaction_id into one 64 bit signed int
+  // to fit the int64 key field of the Metadata API. Public for testing.
+  static int64_t CreateInteractionDurationMetadataKey(
+      const uint32_t instance_id,
+      const uint32_t interaction_id);
+
  protected:
   // To be overridden by test class.
   virtual void ApplyMetadataToPastSamples(base::TimeTicks period_start,
@@ -54,6 +75,11 @@ class PageTimingMetadataRecorder {
                                           int64_t key,
                                           int64_t value,
                                           base::SampleMetadataScope scope);
+  // To be overridden by test class.
+  virtual void AddProfileMetadata(base::StringPiece name,
+                                  int64_t key,
+                                  int64_t value,
+                                  base::SampleMetadataScope scope);
 
  private:
   void UpdateFirstInputDelayMetadata(
@@ -62,13 +88,24 @@ class PageTimingMetadataRecorder {
   void UpdateFirstContentfulPaintMetadata(
       const absl::optional<base::TimeTicks>& navigation_start,
       const absl::optional<base::TimeTicks>& first_contentful_paint);
+  void UpdateLargestContentfulPaintMetadata(
+      const absl::optional<base::TimeTicks>& navigation_start,
+      const absl::optional<base::TimeTicks>& largest_contentful_paint,
+      const absl::optional<blink::DocumentToken>& document_token);
 
   // Uniquely identifies an instance of the PageTimingMetadataRecorder. Used to
   // distinguish page loads for different documents when applying sample
   // metadata.
-  const int instance_id_;
+  const uint32_t instance_id_;
+
+  // Uniquely identifies an interaction in the current instance of
+  // PageTimingMetadataRecorder. Intentionally 32-bit because it will be packed
+  // with another 32-bit integer into a 64-bit integer.
+  uint32_t interaction_count_ = 0;
 
   MonotonicTiming timing_;
+
+  const bool is_main_frame_;
 };
 
 }  // namespace page_load_metrics

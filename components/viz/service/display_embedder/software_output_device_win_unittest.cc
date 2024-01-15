@@ -11,6 +11,7 @@
 #include "services/viz/privileged/mojom/compositing/layered_window_updater.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/frame_data.h"
 
 using base::test::RunOnceClosure;
 using testing::_;
@@ -58,7 +59,7 @@ class SoftwareOutputDeviceWinProxyTest : public testing::Test {
             testing::WithArg<1>([](base::UnsafeSharedMemoryRegion region) {
               EXPECT_TRUE(region.IsValid());
               size_t required_bytes = ResourceSizes::CheckedSizeInBytes<size_t>(
-                  kDefaultSize, ResourceFormat::RGBA_8888);
+                  kDefaultSize, SinglePlaneFormat::kRGBA_8888);
               EXPECT_GE(region.GetSize(), required_bytes);
             }));
     device_.Resize(kDefaultSize, 1.0f);
@@ -83,8 +84,10 @@ TEST_F(SoftwareOutputDeviceWinProxyTest, DrawWithSwap) {
   // OnSwapBuffers() is called before DrawAck() so the swap buffers callback
   // shouldn't run yet.
   bool called = false;
-  device_.OnSwapBuffers(base::BindOnce(
-      [](bool* val, const gfx::Size& size) { *val = true; }, &called));
+  device_.OnSwapBuffers(
+      base::BindOnce([](bool* val, const gfx::Size& size) { *val = true; },
+                     &called),
+      gfx::FrameData());
   EXPECT_FALSE(called);
 
   // Verify that DrawAck() runs the swap buffers callback.

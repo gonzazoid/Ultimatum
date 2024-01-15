@@ -7,7 +7,8 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -20,10 +21,12 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/strings/grit/components_strings.h"
+#include "content/public/browser/isolated_context_util.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "services/device/public/cpp/usb/usb_utils.h"
 #include "services/device/public/mojom/usb_enumeration_options.mojom.h"
+#include "third_party/blink/public/common/features_generated.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
@@ -88,13 +91,11 @@ void OnDeviceInfoRefreshed(
 
 UsbChooserController::UsbChooserController(
     RenderFrameHost* render_frame_host,
-    std::vector<device::mojom::UsbDeviceFilterPtr> device_filters,
+    blink::mojom::WebUsbRequestDeviceOptionsPtr options,
     blink::mojom::WebUsbService::GetPermissionCallback callback)
-    : ChooserController(CreateExtensionAwareChooserTitle(
-          render_frame_host,
-          IDS_USB_DEVICE_CHOOSER_PROMPT_ORIGIN,
-          IDS_USB_DEVICE_CHOOSER_PROMPT_EXTENSION_NAME)),
-      filters_(std::move(device_filters)),
+    : ChooserController(
+          CreateChooserTitle(render_frame_host, IDS_USB_DEVICE_CHOOSER_PROMPT)),
+      options_(std::move(options)),
       callback_(std::move(callback)),
       requesting_frame_(render_frame_host) {
   RenderFrameHost* main_frame = requesting_frame_->GetMainFrame();
@@ -262,11 +263,30 @@ void UsbChooserController::GotUsbDeviceList(
 
 bool UsbChooserController::DisplayDevice(
     const device::mojom::UsbDeviceInfo& device_info) const {
-  if (!device::UsbDeviceFilterMatchesAny(filters_, device_info))
+  if (!device::UsbDeviceFilterMatchesAny(options_->filters, device_info)) {
     return false;
+  }
 
-  if (UsbBlocklist::Get().IsExcluded(device_info))
+  if (base::ranges::any_of(
+          options_->exclusion_filters, [&device_info](const auto& filter) {
+            return device::UsbDeviceFilterMatches(*filter, device_info);
+          })) {
     return false;
+  }
+
+  bool is_usb_unrestricted = false;
+  if (base::FeatureList::IsEnabled(blink::features::kUnrestrictedUsb)) {
+    is_usb_unrestricted =
+        requesting_frame_ &&
+        requesting_frame_->IsFeatureEnabled(
+            blink::mojom::PermissionsPolicyFeature::kUsbUnrestricted) &&
+        content::HasIsolatedContextCapability(requesting_frame_);
+  }
+  // Isolated context with permission to access the policy-controlled feature
+  // "usb-unrestricted" can bypass the USB blocklist.
+  if (!is_usb_unrestricted && UsbBlocklist::Get().IsExcluded(device_info)) {
+    return false;
+  }
 
   return true;
 }

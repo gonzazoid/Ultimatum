@@ -4,6 +4,8 @@
 
 #include "ui/ozone/platform/flatland/ozone_platform_flatland.h"
 
+#include <fidl/fuchsia.ui.views/cpp/hlcpp_conversion.h>
+
 #include <memory>
 #include <utility>
 #include <vector>
@@ -14,11 +16,11 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/base/cursor/cursor_factory.h"
 #include "ui/base/ime/fuchsia/input_method_fuchsia.h"
-#include "ui/display/fake/fake_display_delegate.h"
 #include "ui/events/ozone/layout/keyboard_layout_engine_manager.h"
 #include "ui/events/ozone/layout/stub/stub_keyboard_layout_engine.h"
 #include "ui/events/platform/platform_event_source.h"
@@ -31,14 +33,15 @@
 #include "ui/ozone/platform/flatland/flatland_sysmem_buffer_collection.h"
 #include "ui/ozone/platform/flatland/flatland_window.h"
 #include "ui/ozone/platform/flatland/flatland_window_manager.h"
+#include "ui/ozone/platform/flatland/mojom/scenic_gpu_service.mojom.h"
 #include "ui/ozone/platform/flatland/overlay_manager_flatland.h"
-#include "ui/ozone/platform/scenic/mojom/scenic_gpu_service.mojom.h"
 #include "ui/ozone/platform_selection.h"
 #include "ui/ozone/public/gpu_platform_support_host.h"
 #include "ui/ozone/public/input_controller.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/ozone_switches.h"
 #include "ui/ozone/public/system_input_injector.h"
+#include "ui/platform_window/fuchsia/view_ref_pair.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
 #if BUILDFLAG(IS_FUCHSIA)
@@ -103,15 +106,12 @@ class OzonePlatformFlatland : public OzonePlatform,
           zx::channel::create(0, &parent_token.value, &child_token.value);
       CHECK_EQ(ZX_OK, status) << "zx_channel_create";
       properties.view_creation_token = std::move(child_token);
-      properties.view_ref_pair = scenic::ViewRefPair::New();
+      properties.view_ref_pair = ::ui::ViewRefPair::New();
       properties.view_controller =
           ::ui::fuchsia::GetFlatlandViewPresenter().Run(
               std::move(parent_token));
     }
 
-    // TODO(fxbug.dev/93998): Add a hook for the RootPresenter equivalent of
-    // Flatland to ui::fuchsia::InitializeViewTokenAndPresentView() create a
-    // window.
     CHECK(properties.view_creation_token.value.is_valid());
     return std::make_unique<FlatlandWindow>(window_manager_.get(), delegate,
                                             std::move(properties));
@@ -121,9 +121,8 @@ class OzonePlatformFlatland : public OzonePlatform,
     static base::NoDestructor<OzonePlatform::PlatformProperties> properties;
     static bool initialised = false;
     if (!initialised) {
-      properties->needs_view_token = false;
       properties->message_pump_type_for_gpu = base::MessagePumpType::IO;
-      properties->supports_vulkan_swap_chain = true;
+      properties->supports_vulkan_swap_chain = false;
 
       initialised = true;
     }
@@ -134,7 +133,7 @@ class OzonePlatformFlatland : public OzonePlatform,
   std::unique_ptr<display::NativeDisplayDelegate> CreateNativeDisplayDelegate()
       override {
     NOTIMPLEMENTED();
-    return std::make_unique<display::FakeDisplayDelegate>();
+    return nullptr;
   }
 
   std::unique_ptr<PlatformScreen> CreateScreen() override {
@@ -149,7 +148,8 @@ class OzonePlatformFlatland : public OzonePlatform,
     return std::make_unique<InputMethodFuchsia>(
         window_manager_->GetWindow(widget)->virtual_keyboard_enabled(),
         ime_key_event_dispatcher,
-        window_manager_->GetWindow(widget)->CloneViewRef());
+        fidl::HLCPPToNatural(
+            window_manager_->GetWindow(widget)->CloneViewRef()));
   }
 
   bool InitializeUI(const InitParams& params) override {
@@ -172,7 +172,7 @@ class OzonePlatformFlatland : public OzonePlatform,
     if (!surface_factory_)
       surface_factory_ = std::make_unique<FlatlandSurfaceFactory>();
 
-    if (base::ThreadTaskRunnerHandle::IsSet())
+    if (base::SingleThreadTaskRunner::HasCurrentDefault())
       BindInMainProcessIfNecessary();
 
     return true;
@@ -199,19 +199,15 @@ class OzonePlatformFlatland : public OzonePlatform,
 
   const PlatformRuntimeProperties& GetPlatformRuntimeProperties() override {
     static OzonePlatform::PlatformRuntimeProperties properties;
-
-    // This property is set when the GetPlatformRuntimeProperties is
-    // called on the gpu process side.
-    if (has_initialized_gpu())
-      properties.supports_native_pixmaps = true;
-
+    properties.supports_native_pixmaps = true;
+    properties.supports_overlays = true;
     return properties;
   }
 
   void AddInterfaces(mojo::BinderMap* binders) override {
     binders->Add<mojom::ScenicGpuService>(
         flatland_gpu_service_->GetBinderCallback(),
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   bool IsNativePixmapConfigSupported(gfx::BufferFormat format,

@@ -8,13 +8,12 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <string>
-#include <vector>
+#include <string_view>
 
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class FilePath;
@@ -56,10 +55,10 @@ class UploadDataPresenter {
   UploadDataPresenter& operator=(const UploadDataPresenter&) = delete;
 
   virtual ~UploadDataPresenter();
-  virtual void FeedBytes(base::StringPiece bytes) = 0;
+  virtual void FeedBytes(std::string_view bytes) = 0;
   virtual void FeedFile(const base::FilePath& path) = 0;
   virtual bool Succeeded() = 0;
-  virtual absl::optional<base::Value> TakeResult() = 0;
+  virtual std::optional<base::Value> TakeResult() = 0;
 
  protected:
   UploadDataPresenter() {}
@@ -78,10 +77,10 @@ class RawDataPresenter : public UploadDataPresenter {
   ~RawDataPresenter() override;
 
   // Implementation of UploadDataPresenter.
-  void FeedBytes(base::StringPiece bytes) override;
+  void FeedBytes(std::string_view bytes) override;
   void FeedFile(const base::FilePath& path) override;
   bool Succeeded() override;
-  absl::optional<base::Value> TakeResult() override;
+  std::optional<base::Value> TakeResult() override;
 
  private:
   void FeedNextBytes(const char* bytes, size_t size);
@@ -94,12 +93,12 @@ class RawDataPresenter : public UploadDataPresenter {
 // This class inspects the contents of bytes elements. It uses the
 // parser classes inheriting from FormDataParser to parse the concatenated
 // content of such elements. If the parsing is successful, the parsed form is
-// returned as a DictionaryValue. For example, a form consisting of
+// returned as a Value of type DICT. For example, a form consisting of
 // <input name="check" type="checkbox" value="A" checked />
 // <input name="check" type="checkbox" value="B" checked />
 // <input name="text" type="text" value="abc" />
 // would be represented as {"check": ["A", "B"], "text": ["abc"]} (although as a
-// DictionaryValue, not as a JSON string).
+// Value, not as a JSON string).
 class ParsedDataPresenter : public UploadDataPresenter {
  public:
   explicit ParsedDataPresenter(const net::HttpRequestHeaders& request_headers);
@@ -110,10 +109,10 @@ class ParsedDataPresenter : public UploadDataPresenter {
   ~ParsedDataPresenter() override;
 
   // Implementation of UploadDataPresenter.
-  void FeedBytes(base::StringPiece bytes) override;
+  void FeedBytes(std::string_view bytes) override;
   void FeedFile(const base::FilePath& path) override;
   bool Succeeded() override;
-  absl::optional<base::Value> TakeResult() override;
+  std::optional<base::Value> TakeResult() override;
 
   // Allows to create ParsedDataPresenter without request headers. Uses the
   // parser for "application/x-www-form-urlencoded" form encoding. Only use this
@@ -129,7 +128,7 @@ class ParsedDataPresenter : public UploadDataPresenter {
 
   std::unique_ptr<FormDataParser> parser_;
   bool success_;
-  absl::optional<base::Value::Dict> dictionary_;
+  std::optional<base::Value::Dict> dictionary_;
 };
 
 }  // namespace extensions

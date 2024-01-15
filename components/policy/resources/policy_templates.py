@@ -30,6 +30,13 @@ except ImportError:
   # to know which version of pyyaml to use.
   import yaml as pyyaml
 
+def _SafeListDir(directory):
+  '''Wrapper around os.listdir() that ignores files created by Finder.app.'''
+  # On macOS, Finder.app creates .DS_Store files when a user visit a
+  # directory causing failure of the script laters on because there
+  # are no such group as .DS_Store. Skip the file to prevent the error.
+  return filter(lambda name:(name != '.DS_Store'),sorted(os.listdir(directory)))
+
 TEMPLATES_PATH =  os.path.join(
   os.path.dirname(__file__), 'templates')
 
@@ -60,9 +67,9 @@ def _SubstituteSchemaRefNames(node, child_key, common_schema, parent_refs,
       node[child_key]['id'] = ref_name
     refs_seen.add(ref_name)
 
-  for ck in node[child_key].keys():
-    # Copy parents ref so that parents are unique for each child branch and do not mix with sibling
-    # nodes.
+  for ck in sorted(node[child_key].keys()):
+    # Copy parents ref so that parents are unique for each child branch and do
+    # not mix with sibling nodes.
     _SubstituteSchemaRefNames(node[child_key], ck, common_schema,
                               parent_refs.copy(), refs_seen)
 
@@ -71,16 +78,15 @@ def _SubstituteSchemaRefs(policies, common_schema):
   '''Converts objects with the key '$ref' into their actual schema.
 
     Args:
-      policies: List of policiesal.
+      policies: List of policies.
       common_schema: Dictionary of schemas by their ref names.'''
-  list_dict_policies = [policy for policy in policies if 'schema' in policy]
+  policy_list = [policy for policy in policies if 'schema' in policy]
 
   refs_seen = set()
-  for policy in list_dict_policies:
+  for policy in sorted(policy_list, key=lambda policy: policy['id']):
     parent_refs = set()
     _SubstituteSchemaRefNames(policy, 'schema', common_schema, parent_refs,
                               refs_seen)
-  for policy in list_dict_policies:
     parent_refs = set()
     _SubstituteSchemaRefNames(policy, 'validation_schema', common_schema,
                               parent_refs, refs_seen)
@@ -216,7 +222,7 @@ def _GetMetadata():
   '''Returns an object containing the policy metadata in order to build the
      policy definition template.'''
   result = {}
-  for file in os.listdir(TEMPLATES_PATH):
+  for file in _SafeListDir(TEMPLATES_PATH):
     filename = os.fsdecode(file)
     file_basename, file_extension = os.path.splitext(filename)
     if not file_extension == ".yaml":
@@ -232,13 +238,13 @@ def _GetPoliciesAndGroups():
   '''
   result = {}
   policy_definitions_path = os.path.join(TEMPLATES_PATH, POLICY_DEFINITIONS_KEY)
-  for group_name in os.listdir(policy_definitions_path):
+  for group_name in _SafeListDir(policy_definitions_path):
     result[group_name] = {'policies': {}, 'policy_atomic_groups': {}}
     group_path = os.path.join(policy_definitions_path, group_name)
     if not os.path.isdir(group_path):
       continue
 
-    for file in os.listdir(group_path):
+    for file in _SafeListDir(group_path):
       filename = os.fsdecode(file)
       file_basename, file_extension = os.path.splitext(filename)
       file_path = os.path.join(group_path, filename)

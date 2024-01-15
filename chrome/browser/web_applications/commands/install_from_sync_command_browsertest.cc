@@ -4,18 +4,20 @@
 
 #include "chrome/browser/web_applications/commands/install_from_sync_command.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/web_app_icon_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_command_manager.h"
-#include "chrome/browser/web_applications/web_app_data_retriever.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "components/services/app_service/public/cpp/icon_info.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/web_contents_observer_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -34,32 +36,30 @@ IN_PROC_BROWSER_TEST_F(InstallFromSyncCommandTest, SimpleInstall) {
   GURL test_url = https_server()->GetURL(
       "/banners/"
       "manifest_test_page.html");
-  AppId id = GenerateAppId(absl::nullopt, test_url);
+  webapps::AppId id = GenerateAppId(absl::nullopt, test_url);
 
-  auto url_loader = std::make_unique<WebAppUrlLoader>();
   auto* provider = WebAppProvider::GetForTest(profile());
   base::RunLoop loop;
   InstallFromSyncCommand::Params params = InstallFromSyncCommand::Params(
-      id, absl::nullopt, test_url, "Test Title",
-      https_server()->GetURL("/banners/"), absl::nullopt,
-      UserDisplayMode::kStandalone,
+      id, GenerateManifestIdFromStartUrlOnly(test_url), /*start_url=*/test_url,
+      "Test Title",
+      /*scope=*/https_server()->GetURL("/banners/"),
+      /*theme_color=*/absl::nullopt, mojom::UserDisplayMode::kStandalone,
       {apps::IconInfo(https_server()->GetURL("/banners/launcher-icon-2x.png"),
                       96)});
   provider->command_manager().ScheduleCommand(
       std::make_unique<InstallFromSyncCommand>(
-          url_loader.get(), profile(), &provider->install_finalizer(),
-          &provider->registrar(), std::make_unique<WebAppDataRetriever>(),
-          params,
-          base::BindLambdaForTesting(
-              [&](const AppId& app_id, webapps::InstallResultCode code) {
-                EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
-                EXPECT_EQ(app_id, id);
-                loop.Quit();
-              })));
+          profile(), params,
+          base::BindLambdaForTesting([&](const webapps::AppId& app_id,
+                                         webapps::InstallResultCode code) {
+            EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
+            EXPECT_EQ(app_id, id);
+            loop.Quit();
+          })));
   loop.Run();
-  EXPECT_TRUE(provider->registrar().IsInstalled(id));
+  EXPECT_TRUE(provider->registrar_unsafe().IsInstalled(id));
   EXPECT_EQ(AreAppsLocallyInstalledBySync(),
-            provider->registrar().IsLocallyInstalled(id));
+            provider->registrar_unsafe().IsLocallyInstalled(id));
 
   SkColor icon_color =
       IconManagerReadAppIconPixel(provider->icon_manager(), id, 96);
@@ -70,28 +70,26 @@ IN_PROC_BROWSER_TEST_F(InstallFromSyncCommandTest, TwoInstalls) {
   GURL test_url = https_server()->GetURL(
       "/banners/"
       "manifest_test_page.html");
-  AppId id = GenerateAppId(absl::nullopt, test_url);
+  webapps::AppId id = GenerateAppId(absl::nullopt, test_url);
   GURL other_test_url = https_server()->GetURL(
       "/banners/"
       "manifest_no_service_worker.html");
-  AppId other_id = GenerateAppId(absl::nullopt, test_url);
+  webapps::AppId other_id = GenerateAppId(absl::nullopt, test_url);
 
-  auto url_loader = std::make_unique<WebAppUrlLoader>();
   auto* provider = WebAppProvider::GetForTest(profile());
   base::RunLoop loop;
   {
     InstallFromSyncCommand::Params params = InstallFromSyncCommand::Params(
-        id, absl::nullopt, test_url, "Test Title",
-        https_server()->GetURL("/banners/"), absl::nullopt,
-        UserDisplayMode::kStandalone,
+        id, GenerateManifestIdFromStartUrlOnly(test_url),
+        /*start_url=*/test_url, "Test Title",
+        /*scope=*/https_server()->GetURL("/banners/"),
+        /*theme_color=*/absl::nullopt, mojom::UserDisplayMode::kStandalone,
         {apps::IconInfo(https_server()->GetURL("/banners/launcher-icon-2x.png"),
                         96)});
     provider->command_manager().ScheduleCommand(
         std::make_unique<InstallFromSyncCommand>(
-            url_loader.get(), profile(), &provider->install_finalizer(),
-            &provider->registrar(), std::make_unique<WebAppDataRetriever>(),
-            params,
-            base::BindLambdaForTesting([&](const AppId& app_id,
+            profile(), params,
+            base::BindLambdaForTesting([&](const webapps::AppId& app_id,
                                            webapps::InstallResultCode code) {
               EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
               EXPECT_EQ(app_id, id);
@@ -99,17 +97,16 @@ IN_PROC_BROWSER_TEST_F(InstallFromSyncCommandTest, TwoInstalls) {
   }
   {
     InstallFromSyncCommand::Params params = InstallFromSyncCommand::Params(
-        other_id, absl::nullopt, other_test_url, "Test Title",
-        https_server()->GetURL("/banners/"), absl::nullopt,
-        UserDisplayMode::kStandalone,
+        other_id, GenerateManifestIdFromStartUrlOnly(other_test_url),
+        /*start_url=*/other_test_url, "Test Title",
+        /*scope=*/https_server()->GetURL("/banners/"),
+        /*theme_color=*/absl::nullopt, mojom::UserDisplayMode::kStandalone,
         {apps::IconInfo(https_server()->GetURL("/banners/launcher-icon-2x.png"),
                         96)});
     provider->command_manager().ScheduleCommand(
         std::make_unique<InstallFromSyncCommand>(
-            url_loader.get(), profile(), &provider->install_finalizer(),
-            &provider->registrar(), std::make_unique<WebAppDataRetriever>(),
-            params,
-            base::BindLambdaForTesting([&](const AppId& app_id,
+            profile(), params,
+            base::BindLambdaForTesting([&](const webapps::AppId& app_id,
                                            webapps::InstallResultCode code) {
               EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
               EXPECT_EQ(app_id, other_id);
@@ -119,9 +116,9 @@ IN_PROC_BROWSER_TEST_F(InstallFromSyncCommandTest, TwoInstalls) {
   loop.Run();
   // Check first install.
   {
-    EXPECT_TRUE(provider->registrar().IsInstalled(id));
+    EXPECT_TRUE(provider->registrar_unsafe().IsInstalled(id));
     EXPECT_EQ(AreAppsLocallyInstalledBySync(),
-              provider->registrar().IsLocallyInstalled(id));
+              provider->registrar_unsafe().IsLocallyInstalled(id));
 
     SkColor icon_color =
         IconManagerReadAppIconPixel(provider->icon_manager(), id, 96);
@@ -129,14 +126,59 @@ IN_PROC_BROWSER_TEST_F(InstallFromSyncCommandTest, TwoInstalls) {
   }
   // Check second install.
   {
-    EXPECT_TRUE(provider->registrar().IsInstalled(other_id));
+    EXPECT_TRUE(provider->registrar_unsafe().IsInstalled(other_id));
     EXPECT_EQ(AreAppsLocallyInstalledBySync(),
-              provider->registrar().IsLocallyInstalled(other_id));
+              provider->registrar_unsafe().IsLocallyInstalled(other_id));
 
     SkColor icon_color =
         IconManagerReadAppIconPixel(provider->icon_manager(), other_id, 96);
     EXPECT_THAT(icon_color, testing::Eq(SkColorSetARGB(255, 0, 51, 102)));
   }
+}
+
+// Note: This test may become flaky if the posted task to shutdown the command
+// manager happens after the installation is complete. If this is the case, then
+// something must be added to stop the install from sync command from
+// completing, perhaps by swapping out a system dependency like the
+// WebContentsManager to have the load start but never report 'finished' to the
+// command.
+IN_PROC_BROWSER_TEST_F(InstallFromSyncCommandTest, AbortInstall) {
+  GURL test_url = https_server()->GetURL(
+      "/banners/"
+      "manifest_test_page.html");
+  webapps::AppId id = GenerateAppId(absl::nullopt, test_url);
+
+  auto* provider = WebAppProvider::GetForTest(profile());
+  InstallFromSyncCommand::Params params = InstallFromSyncCommand::Params(
+      id, GenerateManifestIdFromStartUrlOnly(test_url), /*start_url=*/test_url,
+      "Test Title",
+      /*scope=*/https_server()->GetURL("/banners/"),
+      /*theme_color=*/absl::nullopt, mojom::UserDisplayMode::kStandalone, {});
+  std::unique_ptr<InstallFromSyncCommand> command = std::make_unique<
+      InstallFromSyncCommand>(
+      profile(), params,
+      base::BindLambdaForTesting([&](const webapps::AppId& app_id,
+                                     webapps::InstallResultCode code) {
+        EXPECT_EQ(
+            code,
+            webapps::InstallResultCode::kCancelledOnWebAppProviderShuttingDown);
+      }));
+  provider->command_manager().ScheduleCommand(std::move(command));
+  content::NavigationStartObserver navigation_started_observer(
+      provider->command_manager().web_contents_for_testing(),
+      base::BindLambdaForTesting([&](content::NavigationHandle* handle) {
+        if (handle && handle->GetURL() == test_url) {
+          // This must be posted as a task because web contents cannot be
+          // destroyed inside of a observation method.
+          base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+              FROM_HERE,
+              base::BindOnce(&WebAppProvider::Shutdown, provider->AsWeakPtr()));
+        }
+      }));
+  content::WebContentsDestroyedWatcher web_contents_destroyed_observer(
+      provider->command_manager().web_contents_for_testing());
+  web_contents_destroyed_observer.Wait();
+  EXPECT_FALSE(provider->registrar_unsafe().IsInstalled(id));
 }
 
 }  // namespace

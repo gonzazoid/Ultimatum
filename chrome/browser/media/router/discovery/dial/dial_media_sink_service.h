@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/callback_list.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -44,7 +43,7 @@ class DialMediaSinkService {
   // Marked virtual for tests.
   virtual void Start(const OnSinksDiscoveredCallback& sink_discovery_cb);
 
-  virtual void OnUserGesture();
+  virtual void DiscoverSinksNow();
 
   // Returns a raw pointer to |impl_|. This method is only valid to call after
   // |Start()| has been called. Always returns non-null.

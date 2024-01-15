@@ -190,18 +190,96 @@ TEST_P(HistogramTest, DeltaTest) {
   EXPECT_EQ(1, samples->GetCount(10));
   EXPECT_EQ(1, samples->GetCount(50));
   EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(61, samples->sum());
 
   samples = histogram->SnapshotDelta();
   EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(0, samples->sum());
 
   histogram->Add(10);
   histogram->Add(10);
   samples = histogram->SnapshotDelta();
   EXPECT_EQ(2, samples->TotalCount());
   EXPECT_EQ(2, samples->GetCount(10));
+  EXPECT_EQ(20, samples->sum());
 
   samples = histogram->SnapshotDelta();
   EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(0, samples->sum());
+
+  // Verify that the logged samples contain everything emitted.
+  samples = histogram->SnapshotSamples();
+  EXPECT_EQ(5, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(3, samples->GetCount(10));
+  EXPECT_EQ(1, samples->GetCount(50));
+  EXPECT_EQ(81, samples->sum());
+}
+
+// Check that delta calculations work correctly with SnapshotUnloggedSamples()
+// and MarkSamplesAsLogged().
+TEST_P(HistogramTest, UnloggedSamplesTest) {
+  HistogramBase* histogram = Histogram::FactoryGet("DeltaHistogram", 1, 64, 8,
+                                                   HistogramBase::kNoFlags);
+  histogram->Add(1);
+  histogram->Add(10);
+  histogram->Add(50);
+
+  std::unique_ptr<HistogramSamples> samples =
+      histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(3, samples->TotalCount());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(1, samples->GetCount(10));
+  EXPECT_EQ(1, samples->GetCount(50));
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(61, samples->sum());
+
+  // Snapshot unlogged samples again, which would be the same as above.
+  samples = histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(3, samples->TotalCount());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(1, samples->GetCount(10));
+  EXPECT_EQ(1, samples->GetCount(50));
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(61, samples->sum());
+
+  // Verify that marking the samples as logged works correctly, and that
+  // SnapshotDelta() will not pick up the samples.
+  histogram->MarkSamplesAsLogged(*samples);
+  samples = histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(0, samples->sum());
+  samples = histogram->SnapshotDelta();
+  EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(0, samples->sum());
+
+  // Similarly, verify that SnapshotDelta() marks the samples as logged.
+  histogram->Add(1);
+  histogram->Add(10);
+  histogram->Add(50);
+  samples = histogram->SnapshotDelta();
+  EXPECT_EQ(3, samples->TotalCount());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(1, samples->GetCount(10));
+  EXPECT_EQ(1, samples->GetCount(50));
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(61, samples->sum());
+  samples = histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(0, samples->sum());
+
+  // Verify that the logged samples contain everything emitted.
+  samples = histogram->SnapshotSamples();
+  EXPECT_EQ(6, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(2, samples->GetCount(1));
+  EXPECT_EQ(2, samples->GetCount(10));
+  EXPECT_EQ(2, samples->GetCount(50));
+  EXPECT_EQ(122, samples->sum());
 }
 
 // Check that final-delta calculations work correctly.
@@ -227,6 +305,29 @@ TEST_P(HistogramTest, FinalDeltaTest) {
   EXPECT_EQ(1, samples->GetCount(2));
   EXPECT_EQ(1, samples->GetCount(50));
   EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+}
+
+// Check that IsDefinitelyEmpty() works with the results of SnapshotDelta().
+TEST_P(HistogramTest, IsDefinitelyEmpty_SnapshotDelta) {
+  HistogramBase* histogram = Histogram::FactoryGet("DeltaHistogram", 1, 64, 8,
+                                                   HistogramBase::kNoFlags);
+  // No samples initially.
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+
+  // Verify when |histogram| is using SingleSample.
+  histogram->Add(1);
+  EXPECT_FALSE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  histogram->Add(10);
+  histogram->Add(10);
+  EXPECT_FALSE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+
+  // Verify when |histogram| uses a counts array instead of SingleSample.
+  histogram->Add(1);
+  histogram->Add(50);
+  EXPECT_FALSE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
 }
 
 TEST_P(HistogramTest, ExponentialRangesTest) {

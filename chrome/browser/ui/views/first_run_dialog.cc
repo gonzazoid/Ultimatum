@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -20,7 +20,7 @@
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/crash/core/app/crashpad.h"
 #include "components/strings/grit/components_strings.h"
@@ -38,7 +38,7 @@ void ShowFirstRunDialog() {
   // Don't show first run dialog when running in headless mode since this
   // would effectively block the UI because there is no one to interact with
   // the dialog.
-  if (headless::IsChromeNativeHeadless())
+  if (headless::IsHeadlessMode())
     return;
 
 #if BUILDFLAG(IS_MAC)
@@ -124,9 +124,8 @@ bool FirstRunDialog::Accept() {
 }
 
 void FirstRunDialog::WindowClosing() {
-  first_run::SetShouldShowWelcomePage();
   Done();
 }
 
-BEGIN_METADATA(FirstRunDialog, views::DialogDelegateView)
+BEGIN_METADATA(FirstRunDialog)
 END_METADATA

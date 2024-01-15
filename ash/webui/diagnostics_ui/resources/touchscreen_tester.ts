@@ -6,7 +6,9 @@ import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {CanvasDrawingProvider} from './drawing_provider.js';
@@ -43,13 +45,25 @@ interface Point {
 const TouchscreenTesterElementBase = I18nMixin(PolymerElement);
 
 export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
-  static get is() {
+  static get is(): string {
     return 'touchscreen-tester';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
+
+  static get properties(): PolymerElementProperties {
+    return {
+      touchscreenIdUnderTesting: {
+        type: Number,
+        value: -1,
+        notify: true,
+      },
+    };
+  }
+
+  protected touchscreenIdUnderTesting: number;
 
   // Drawing provider.
   private drawingProvider: CanvasDrawingProvider;
@@ -62,7 +76,10 @@ export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
   // Indicates if the laptop is in tablet mode.
   private isTabletMode: boolean = false;
 
-  private receiver_: TabletModeObserverReceiver|null = null;
+  // Manages all event listeners.
+  private eventTracker: EventTracker = new EventTracker();
+
+  private receiver: TabletModeObserverReceiver|null = null;
 
   private inputDataProvider: InputDataProviderInterface =
       getInputDataProvider();
@@ -82,11 +99,17 @@ export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
   }
 
   /**
-   *
    * For testing only.
    */
   getIsTabletMode(): boolean {
     return this.isTabletMode;
+  }
+
+  /**
+   * For testing only.
+   */
+  getEventTracker(): EventTracker {
+    return this.eventTracker;
   }
 
   getDialog(dialogId: string): CrDialogElement {
@@ -98,49 +121,67 @@ export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
   /**
    * Shows the tester's dialog.
    */
-  async showTester(): Promise<void> {
-    this.receiver_ = new TabletModeObserverReceiver(this);
+  async showTester(evdevId: number): Promise<void> {
+    this.inputDataProvider.moveAppToTestingScreen(evdevId);
+
+    this.receiver = new TabletModeObserverReceiver(this);
     const {isTabletMode} = await this.inputDataProvider.observeTabletMode(
-        this.receiver_.$.bindNewPipeAndPassRemote());
+        this.receiver.$.bindNewPipeAndPassRemote());
     this.isTabletMode = isTabletMode;
 
     const introDialog = this.getDialog(DialogType.INTRO);
     await introDialog.requestFullscreen();
     introDialog.showModal();
 
-    this.closeDialogWhenExitFullscreen();
-    this.exitTesterWhenVolumeUpButtonPressed();
+    this.addListeners();
   }
 
   /**
-   * When user presses 'Ecs' key, the tester will only exit the fullscreen
-   * mode. However, we want the tester to close when user has exited the
-   * fullscreen mode. Add a event listener to listen to the
-   * 'fullscreenchange' event to handle this case.
+   * Add various event listeners.
    */
-  private closeDialogWhenExitFullscreen(): void {
-    this.shadowRoot!.addEventListener('fullscreenchange', (e: Event) => {
+  private addListeners(): void {
+    //  When user presses 'Esc' key, the tester will only exit the fullscreen
+    //  mode. However, we want the tester to close when user has exited the
+    //  fullscreen mode. Add a event listener to listen to the
+    //  'fullscreenchange' event to handle this case.
+    this.eventTracker.add(document, 'fullscreenchange', (e: Event) => {
       e.preventDefault();
-      if (!document.fullscreenElement) {
-        this.getDialog(DialogType.INTRO).close();
-        this.getDialog(DialogType.CANVAS).close();
-        if (this.receiver_) {
-          this.receiver_.$.close();
-        }
+      if (!document.fullscreenElement &&
+          this.touchscreenIdUnderTesting !== -1) {
+        this.closeTester();
+        // Only when users closes the tester themselves, we call
+        // moveAppBackToPreviousScreen function. If the screen is disconnected
+        // or untestable, the window movement will be handled by display manager
+        // itself.
+        this.inputDataProvider.moveAppBackToPreviousScreen();
       }
     });
-  }
 
-  /**
-   * When in tablet mode, pressing volume up button will exit the tester.
-   */
-  private exitTesterWhenVolumeUpButtonPressed(): void {
-    window.addEventListener('keydown', (e: Event) => {
+    // When in tablet mode, pressing volume up button will exit the tester.
+    this.eventTracker.add(window, 'keydown', (e: Event) => {
       if ((e as KeyboardEvent).key === 'AudioVolumeUp' && this.isTabletMode) {
         // Exit fullscreen will trigger closing the tester.
         document.exitFullscreen();
       }
     });
+  }
+
+  /**
+   * Close touchscreen tester.
+   */
+  closeTester(): void {
+    this.getDialog(DialogType.INTRO).close();
+    this.getDialog(DialogType.CANVAS).close();
+    this.eventTracker.removeAll();
+    this.inputDataProvider.setA11yTouchPassthrough(/*enabled=*/ false);
+    this.touchscreenIdUnderTesting = -1;
+    // Make sure to exit fullscreen if it's not already.
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+    if (this.receiver) {
+      this.receiver.$.close();
+    }
   }
 
   /**
@@ -151,6 +192,7 @@ export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
     this.getDialog(DialogType.CANVAS).showModal();
 
     this.setupCanvas();
+    this.inputDataProvider.setA11yTouchPassthrough(/*enabled=*/ true);
   }
 
   /**
@@ -186,7 +228,7 @@ export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
     for (const eventType
              of [TouchEventType.START, TouchEventType.MOVE,
                  TouchEventType.END]) {
-      canvas.addEventListener(eventType, (e: Event) => {
+      this.eventTracker.add(canvas, eventType, (e: Event) => {
         e.preventDefault();
         for (let i = 0; i < (e as TouchEvent).changedTouches.length; i++) {
           const currentTouch = (e as TouchEvent).changedTouches[i];
@@ -258,7 +300,7 @@ export class TouchscreenTesterElement extends TouchscreenTesterElementBase {
    * Implements TabletModeObserver.OnTabletModeChanged.
    * @param isTabletMode Is current display on tablet mode.
    */
-  onTabletModeChanged(isTabletMode: boolean) {
+  onTabletModeChanged(isTabletMode: boolean): void {
     this.isTabletMode = isTabletMode;
     // TODO(wenyu): Show exit instruction toaster.
   }

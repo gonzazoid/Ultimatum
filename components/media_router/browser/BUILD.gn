@@ -17,6 +17,9 @@ source_set("browser") {
     "media_routes_observer.h",
     "media_sinks_observer.cc",
     "media_sinks_observer.h",
+    "mirroring_media_controller_host.h",
+    "mirroring_media_controller_host_impl.cc",
+    "mirroring_media_controller_host_impl.h",
     "presentation/browser_presentation_connection_proxy.cc",
     "presentation/browser_presentation_connection_proxy.h",
     "presentation/local_presentation_manager.cc",
@@ -35,8 +38,8 @@ source_set("browser") {
     "presentation/start_presentation_context.h",
     "presentation/web_contents_presentation_manager.cc",
     "presentation/web_contents_presentation_manager.h",
-    "route_message_observer.cc",
-    "route_message_observer.h",
+    "presentation_connection_message_observer.cc",
+    "presentation_connection_message_observer.h",
     "route_message_util.cc",
     "route_message_util.h",
   ]
@@ -63,6 +66,7 @@ source_set("browser") {
     "//components/media_router/common",
     "//components/media_router/common/mojom:media_router",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   if (is_android) {
     sources += [
@@ -86,6 +90,9 @@ source_set("browser") {
       "log_util.h",
       "logger_impl.cc",
       "logger_impl.h",
+      "media_router_debugger.h",
+      "mirroring_to_flinging_switcher.cc",
+      "mirroring_to_flinging_switcher.h",
       "presentation/presentation_navigation_policy.cc",
       "presentation/presentation_navigation_policy.h",
     ]
@@ -119,6 +126,7 @@ source_set("unit_tests") {
     "media_router_factory_unittest.cc",
     "media_router_metrics_unittest.cc",
     "media_sinks_observer_unittest.cc",
+    "mirroring_media_controller_host_impl_unittest.cc",
     "presentation/browser_presentation_connection_proxy_unittest.cc",
     "presentation/local_presentation_manager_unittest.cc",
     "presentation/presentation_media_sinks_observer_unittest.cc",
@@ -142,6 +150,7 @@ source_set("unit_tests") {
     sources += [
       "issue_manager_unittest.cc",
       "logger_impl_unittest.cc",
+      "mirroring_to_flinging_switcher_unittest.cc",
     ]
   }
 }

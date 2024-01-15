@@ -5,8 +5,8 @@
 #ifndef CHROME_BROWSER_FEED_FEED_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_FEED_FEED_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/no_destructor.h"
+#include "base/strings/string_piece.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
@@ -32,13 +32,13 @@ class FeedServiceFactory : public ProfileKeyedServiceFactory {
   static FeedServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<FeedServiceFactory>;
+  friend base::NoDestructor<FeedServiceFactory>;
 
   FeedServiceFactory();
   ~FeedServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

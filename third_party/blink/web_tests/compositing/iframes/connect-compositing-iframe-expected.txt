@@ -10,15 +10,7 @@
       "name": "LayoutIFrame IFRAME id='parent-iframe'",
       "position": [-30, -30],
       "bounds": [390, 240],
-      "contentsOpaqueForText": true,
       "transform": 1
-    },
-    {
-      "name": "VerticalScrollbar",
-      "position": [285, 0],
-      "bounds": [15, 150],
-      "contentsOpaque": true,
-      "transform": 2
     },
     {
       "name": "Scrolling background of LayoutView #document",
@@ -35,10 +27,16 @@
       "transform": 3
     },
     {
+      "name": "VerticalScrollbar",
+      "position": [285, 0],
+      "bounds": [15, 150],
+      "contentsOpaque": true,
+      "transform": 2
+    },
+    {
       "name": "LayoutNGBlockFlow (positioned) DIV class='overlay'",
       "position": [5, 5],
       "bounds": [50, 50],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#00000033"
     }
   ],

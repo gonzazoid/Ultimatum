@@ -8,14 +8,13 @@
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
 #include "gpu/command_buffer/service/scheduler_sequence.h"
@@ -39,6 +38,12 @@
 #if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/gpu_platform_support_host.h"
 #include "ui/ozone/public/ozone_platform.h"
+#endif
+
+#if BUILDFLAG(USE_DAWN) || BUILDFLAG(SKIA_USE_DAWN)
+#include <dawn/dawn_proc.h>
+#include <dawn/dawn_thread_dispatch_proc.h>
+#include <dawn/native/DawnNative.h>
 #endif
 
 namespace viz {
@@ -180,6 +185,16 @@ TestGpuServiceHolder::TestGpuServiceHolder(
         "been started.");
   }
 
+#if BUILDFLAG(USE_DAWN) || BUILDFLAG(SKIA_USE_DAWN)
+  // The test will run both service and client in the same process, so we need
+  // to set dawn procs for both.
+  dawnProcSetProcs(&dawnThreadDispatchProcTable);
+
+  // Use the native procs as default procs for all threads. It will be used
+  // for GPU service side threads.
+  dawnProcSetDefaultThreadProcs(&dawn::native::GetProcs());
+#endif
+
   base::Thread::Options gpu_thread_options;
 #if BUILDFLAG(IS_OZONE)
   gpu_thread_options.message_pump_type = ui::OzonePlatform::GetInstance()
@@ -286,7 +301,7 @@ void TestGpuServiceHolder::InitializeOnGpuThread(
   gpu::GpuFeatureInfo gpu_feature_info = gpu::ComputeGpuFeatureInfo(
       gpu_info, gpu_preferences, base::CommandLine::ForCurrentProcess(),
       /*needs_more_info=*/nullptr);
-  gpu_feature_info.status_values[gpu::GPU_FEATURE_TYPE_GPU_RASTERIZATION] =
+  gpu_feature_info.status_values[gpu::GPU_FEATURE_TYPE_GPU_TILE_RASTERIZATION] =
       gpu::kGpuFeatureStatusEnabled;
 
   // On MacOS, the default texture target for native GpuMemoryBuffers is
@@ -324,7 +339,7 @@ void TestGpuServiceHolder::InitializeOnGpuThread(
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service_->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
       gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
       /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
       /*scheduler=*/nullptr, /*shutdown_event=*/nullptr);

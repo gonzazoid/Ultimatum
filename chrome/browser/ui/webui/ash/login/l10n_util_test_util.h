@@ -8,10 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "chrome/browser/ash/input_method/mock_input_method_manager_impl.h"
 #include "ui/base/ime/ash/input_method_descriptor.h"
+#include "ui/base/ime/ash/mock_input_method_manager_impl.h"
 
-namespace chromeos {
+namespace ash {
 
 class MockInputMethodManagerWithInputMethods
     : public input_method::MockInputMethodManagerImpl {
@@ -33,6 +33,6 @@ class MockInputMethodManagerWithInputMethods
   input_method::InputMethodDescriptors descriptors_;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_L10N_UTIL_TEST_UTIL_H_

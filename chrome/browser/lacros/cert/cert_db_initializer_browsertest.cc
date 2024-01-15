@@ -21,7 +21,7 @@
 #include "chromeos/lacros/lacros_service.h"
 #include "chromeos/lacros/lacros_test_helper.h"
 #include "components/version_info/version_info.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
 #include "net/cert/cert_database.h"
@@ -36,7 +36,7 @@
 // NOTE: Tests in this file modify the certificate store. That is potentially a
 // lasting side effect that can affect other tests.
 // * To prevent interference with tests that are run in parallel, these tests
-// are a part of lacros_chrome_browsertests_run_in_series test suite.
+// are a part of lacros_chrome_browsertests test suite.
 // * To prevent interference with following tests, they try to clean up all the
 // side effects themself, e.g. if a test adds a cert, it is also responsible for
 // deleting it.
@@ -177,7 +177,8 @@ void DeleteCaCert(Profile* profile) {
   issuer.GenerateRSAKey();
   auto cert_builder =
       net::CertBuilder::FromSubjectPublicKeyInfo(public_key_spki, &issuer);
-  cert_builder->SetSignatureAlgorithm(net::SignatureAlgorithm::kRsaPkcs1Sha256);
+  cert_builder->SetSignatureAlgorithm(
+      bssl::SignatureAlgorithm::kRsaPkcs1Sha256);
   cert_builder->SetValidity(base::Time::Now(),
                             base::Time::Now() + base::Days(30));
 
@@ -199,7 +200,7 @@ class ScopedCertDatabaseObserver : public net::CertDatabase::Observer {
     net::CertDatabase::GetInstance()->RemoveObserver(this);
   }
 
-  void OnCertDBChanged() override {
+  void OnClientCertStoreChanged() override {
     notifications_received_++;
     run_loop_.Quit();
   }

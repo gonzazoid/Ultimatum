@@ -2,16 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/router/chrome_media_router_factory.h"
+#include "chrome/browser/media/router/media_router_feature.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/global_media_controls/media_toolbar_button_observer.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -29,15 +32,20 @@
 #include "components/feature_engagement/public/feature_constants.h"
 #include "components/global_media_controls/public/views/media_item_ui_list_view.h"
 #include "components/global_media_controls/public/views/media_item_ui_view.h"
+#include "components/live_caption/caption_util.h"
+#include "components/live_caption/pref_names.h"
 #include "components/media_message_center/media_notification_view_impl.h"
 #include "components/media_router/browser/media_routes_observer.h"
 #include "components/media_router/browser/presentation/web_contents_presentation_manager.h"
 #include "components/media_router/browser/test/mock_media_router.h"
+#include "components/prefs/pref_change_registrar.h"
+#include "components/sessions/content/session_tab_helper.h"
 #include "components/soda/constants.h"
 #include "content/public/browser/presentation_observer.h"
 #include "content/public/browser/presentation_request.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/media_start_stop_observer.h"
 #include "media/base/media_switches.h"
@@ -281,10 +289,15 @@ class TestWebContentsPresentationManager
     observers_.RemoveObserver(observer);
   }
 
-  MOCK_CONST_METHOD0(HasDefaultPresentationRequest, bool());
-  MOCK_CONST_METHOD0(GetDefaultPresentationRequest,
-                     const content::PresentationRequest&());
-  MOCK_METHOD0(GetMediaRoutes, std::vector<media_router::MediaRoute>());
+  MOCK_METHOD(bool, HasDefaultPresentationRequest, (), (const, override));
+  MOCK_METHOD(const content::PresentationRequest&,
+              GetDefaultPresentationRequest,
+              (),
+              (const, override));
+  MOCK_METHOD(std::vector<media_router::MediaRoute>,
+              GetMediaRoutes,
+              (),
+              (override));
 
   void OnPresentationResponse(
       const content::PresentationRequest& presentation_request,
@@ -313,24 +326,13 @@ class TestMediaRouter : public media_router::MockMediaRouter {
     return logger_.get();
   }
 
-  void RegisterMediaRoutesObserver(
-      media_router::MediaRoutesObserver* observer) override {
-    routes_observers_.push_back(observer);
-  }
-
-  void UnregisterMediaRoutesObserver(
-      media_router::MediaRoutesObserver* observer) override {
-    base::Erase(routes_observers_, observer);
-  }
-
   void NotifyMediaRoutesChanged(
       const std::vector<media_router::MediaRoute>& routes) {
-    for (auto* observer : routes_observers_)
-      observer->OnRoutesUpdated(routes);
+    for (auto& observer : routes_observers_)
+      observer.OnRoutesUpdated(routes);
   }
 
  private:
-  std::vector<media_router::MediaRoutesObserver*> routes_observers_;
   std::unique_ptr<media_router::LoggerImpl> logger_;
 };
 
@@ -338,7 +340,13 @@ class TestMediaRouter : public media_router::MockMediaRouter {
 
 class MediaDialogViewBrowserTest : public InProcessBrowserTest {
  public:
-  MediaDialogViewBrowserTest() = default;
+  MediaDialogViewBrowserTest() {
+    feature_list_.InitWithFeatures(
+        {media::kGlobalMediaControls, media::kLiveCaption,
+         feature_engagement::kIPHLiveCaptionFeature,
+         media::kLiveCaptionMultiLanguage, media::kLiveTranslate},
+        {});
+  }
 
   MediaDialogViewBrowserTest(const MediaDialogViewBrowserTest&) = delete;
   MediaDialogViewBrowserTest& operator=(const MediaDialogViewBrowserTest&) =
@@ -353,12 +361,6 @@ class MediaDialogViewBrowserTest : public InProcessBrowserTest {
   }
 
   void SetUp() override {
-    feature_list_.InitWithFeatures(
-        {media::kGlobalMediaControls, media::kLiveCaption,
-         feature_engagement::kIPHLiveCaptionFeature,
-         media::kLiveCaptionMultiLanguage},
-        {});
-
     presentation_manager_ =
         std::make_unique<TestWebContentsPresentationManager>();
     media_router::WebContentsPresentationManager::SetTestInstance(
@@ -385,6 +387,8 @@ class MediaDialogViewBrowserTest : public InProcessBrowserTest {
         media_router::ChromeMediaRouterFactory::GetInstance()
             ->SetTestingFactoryAndUse(
                 context, base::BindRepeating(&TestMediaRouter::Create)));
+    ON_CALL(*media_router_, RegisterMediaSinksObserver)
+        .WillByDefault(testing::Return(true));
   }
 
   void OpenTestURL() {
@@ -483,10 +487,30 @@ class MediaDialogViewBrowserTest : public InProcessBrowserTest {
 
   void ClickEnableLiveCaptionOnDialog() {
     base::RunLoop().RunUntilIdle();
+    base::RunLoop run_loop;
+    PrefChangeRegistrar change_observer;
+    change_observer.Init(browser()->profile()->GetPrefs());
+    change_observer.Add(prefs::kLiveCaptionEnabled, run_loop.QuitClosure());
+
     ASSERT_TRUE(MediaDialogView::IsShowing());
     views::Button* live_caption_button = static_cast<views::Button*>(
         MediaDialogView::GetDialogViewForTesting()->live_caption_button_);
     ui_test_utils::ClickOnView(live_caption_button);
+    run_loop.Run();
+  }
+
+  void ClickEnableLiveTranslateOnDialog() {
+    base::RunLoop().RunUntilIdle();
+    base::RunLoop run_loop;
+    PrefChangeRegistrar change_observer;
+    change_observer.Init(browser()->profile()->GetPrefs());
+    change_observer.Add(prefs::kLiveTranslateEnabled, run_loop.QuitClosure());
+
+    ASSERT_TRUE(MediaDialogView::IsShowing());
+    views::Button* live_translate_button = static_cast<views::Button*>(
+        MediaDialogView::GetDialogViewForTesting()->live_translate_button_);
+    ui_test_utils::ClickOnView(live_translate_button);
+    run_loop.Run();
   }
 
   void ClickItemByTitle(const std::u16string& title) {
@@ -536,6 +560,10 @@ class MediaDialogViewBrowserTest : public InProcessBrowserTest {
 
   views::Label* GetLiveCaptionTitleLabel() {
     return MediaDialogView::GetDialogViewForTesting()->live_caption_title_;
+  }
+
+  views::Label* GetLiveTranslateTitleLabel() {
+    return MediaDialogView::GetDialogViewForTesting()->live_translate_title_;
   }
 
   void OnSodaProgress(int progress) {
@@ -602,11 +630,8 @@ class MediaDialogViewBrowserTest : public InProcessBrowserTest {
   base::CallbackListSubscription subscription_;
 };
 
-// This test was first disabled on BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
-// for https://crbug.com/1222873.
-// Then got disabled on all platforms for https://crbug.com/1225531.
 IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
-                       DISABLED_ShowsMetadataAndControlsMedia) {
+                       ShowsMetadataAndControlsMedia) {
   // The toolbar icon should not start visible.
   EXPECT_FALSE(ui_.IsToolbarIconVisible());
 
@@ -654,16 +679,8 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
   EXPECT_FALSE(ui_.IsDialogVisible());
 }
 
-// TODO(crbug.com/1225531, crbug.com/1222873): Flaky.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
-#define MAYBE_ShowsMetadataAndControlsMediaInRTL \
-  DISABLED_ShowsMetadataAndControlsMediaInRTL
-#else
-#define MAYBE_ShowsMetadataAndControlsMediaInRTL \
-  ShowsMetadataAndControlsMediaInRTL
-#endif
 IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
-                       MAYBE_ShowsMetadataAndControlsMediaInRTL) {
+                       ShowsMetadataAndControlsMediaInRTL) {
   base::i18n::SetICUDefaultLocale("ar");
   ASSERT_TRUE(base::i18n::IsRTL());
 
@@ -809,7 +826,7 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest, ShowsCastSession) {
 
   const std::string route_description = "Casting: Big Buck Bunny";
   const std::string sink_name = "My Sink";
-  media_router::MediaRoute route("id", media_router::MediaSource("source_id"),
+  media_router::MediaRoute route("id", media_router::MediaSource("cast:123456"),
                                  "sink_id", route_description, true);
   route.set_media_sink_name(sink_name);
   route.set_controller_type(media_router::RouteControllerType::kGeneric);
@@ -871,15 +888,9 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
   ui_.WaitForPictureInPictureButtonVisibility(true);
 }
 
-// Flaky on linux (https://crbug.com/1218003).
-#if BUILDFLAG(IS_LINUX)
-#define MAYBE_PlayingSessionAlwaysDisplayFirst \
-  DISABLED_PlayingSessionAlwaysDisplayFirst
-#else
-#define MAYBE_PlayingSessionAlwaysDisplayFirst PlayingSessionAlwaysDisplayFirst
-#endif
+// Flaky on multiple platforms (crbug.com/1218003,crbug.com/1383904).
 IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
-                       MAYBE_PlayingSessionAlwaysDisplayFirst) {
+                       DISABLED_PlayingSessionAlwaysDisplayFirst) {
   OpenTestURL();
   StartPlayback();
   WaitForStart();
@@ -911,8 +922,8 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
   EXPECT_TRUE(IsPlayingSessionDisplayedFirst());
 }
 
-// TODO(crbug.com/1225531, crbug.com/1222873, crbug.com/1271131): Flaky.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+// TODO(crbug.com/1425041): Live captioning not supported on Arm64 Windows.
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64) || BUILDFLAG(IS_MAC)
 #define MAYBE_LiveCaption DISABLED_LiveCaption
 #else
 #define MAYBE_LiveCaption LiveCaption
@@ -987,9 +998,11 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest, MAYBE_LiveCaption) {
             GetLiveCaptionTitleLabel()->GetText());
 }
 
-#if BUILDFLAG(IS_MAC)
+#if (BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)) || BUILDFLAG(IS_MAC)
 // https://crbug.com/1222873
 // Flaky on all Mac bots: https://crbug.com/1274967
+// TODO(https://crbug.com/1425041): Renable on WinArm64 when live captioning is
+// enabled.
 #define MAYBE_LiveCaptionProgressUpdate DISABLED_LiveCaptionProgressUpdate
 #else
 #define MAYBE_LiveCaptionProgressUpdate LiveCaptionProgressUpdate
@@ -1056,7 +1069,9 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
 }
 
 // TODO(crbug.com/1225531, crbug.com/1222873): Flaky.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
+// TODO(https://crbug.com/1425041): Renable on WinArm64 when live captioning is
+// enabled.
+#if (BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)) || BUILDFLAG(IS_MAC)
 #define MAYBE_LiveCaptionShowLanguage DISABLED_LiveCaptionShowLanguage
 #else
 #define MAYBE_LiveCaptionShowLanguage LiveCaptionShowLanguage
@@ -1107,28 +1122,67 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
             base::UTF16ToUTF8(GetLiveCaptionTitleLabel()->GetText()));
 }
 
+IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest, LiveTranslate) {
+  // Live captioning is not currently supported on Win Arm64.
+  if (!captions::IsLiveCaptionFeatureSupported()) {
+    GTEST_SKIP() << "Live caption feature not supported";
+  }
+  // Open a tab and play media.
+  OpenTestURL();
+  StartPlayback();
+  WaitForStart();
+  speech::SodaInstaller::GetInstance()->NeverDownloadSodaForTesting();
+
+  // Open the media dialog.
+  EXPECT_TRUE(ui_.WaitForToolbarIconShown());
+  ui_.ClickToolbarIcon();
+  EXPECT_TRUE(ui_.WaitForDialogOpened());
+  EXPECT_TRUE(ui_.IsDialogVisible());
+
+  // Click the Live Caption toggle to toggle it on.
+  ClickEnableLiveCaptionOnDialog();
+  EXPECT_TRUE(
+      browser()->profile()->GetPrefs()->GetBoolean(prefs::kLiveCaptionEnabled));
+
+  // The Live Translate title should appear.
+  EXPECT_TRUE(GetLiveTranslateTitleLabel()->GetVisible());
+  EXPECT_EQ("Live Translate",
+            base::UTF16ToUTF8(GetLiveTranslateTitleLabel()->GetText()));
+
+  // Click the Live Translate toggle to toggle it on.
+  ClickEnableLiveTranslateOnDialog();
+  EXPECT_TRUE(browser()->profile()->GetPrefs()->GetBoolean(
+      prefs::kLiveTranslateEnabled));
+
+  // Click the Live Caption toggle to toggle it off, which toggles off Live
+  // Translate as well.
+  ClickEnableLiveCaptionOnDialog();
+  EXPECT_FALSE(
+      browser()->profile()->GetPrefs()->GetBoolean(prefs::kLiveCaptionEnabled));
+  EXPECT_FALSE(browser()->profile()->GetPrefs()->GetBoolean(
+      prefs::kLiveTranslateEnabled));
+}
+
 class MediaDialogViewWithBackForwardCacheBrowserTest
     : public MediaDialogViewBrowserTest {
  protected:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    MediaDialogViewBrowserTest::SetUpCommandLine(command_line);
-
-    std::vector<base::test::FeatureRefAndParams> enabled_features;
-    std::map<std::string, std::string> params;
+  MediaDialogViewWithBackForwardCacheBrowserTest() {
+    feature_list_.InitWithFeaturesAndParameters(
+        content::GetBasicBackForwardCacheFeatureForTesting({
 #if BUILDFLAG(IS_ANDROID)
-    params["process_binding_strength"] = "NORMAL";
+          {features::kBackForwardCache,
+           {
+             { "process_binding_strength",
+               "NORMAL" }
+           }},
 #endif
-    enabled_features.emplace_back(features::kBackForwardCache, params);
-    enabled_features.emplace_back(
-        features::kBackForwardCacheMediaSessionService,
-        std::map<std::string, std::string>{});
-
-    std::vector<base::test::FeatureRef> disabled_features = {
-        features::kBackForwardCacheMemoryControls,
-    };
-
-    feature_list_.InitWithFeaturesAndParameters(enabled_features,
-                                                disabled_features);
+          {
+            features::kBackForwardCacheMediaSessionService, {
+              {}
+            }
+          }
+        }),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
   void SetUpOnMainThread() override {

@@ -14,13 +14,12 @@ import {getCddTemplate} from './print_preview_test_utils.js';
 suite('DpiSettingsTest', function() {
   let dpiSection: PrintPreviewDpiSettingsElement;
 
-  const dpiCapability: LabelledDpiCapability =
-      assert(getCddTemplate('FooPrinter')!.capabilities!.printer!.dpi!) as
-      LabelledDpiCapability;
+  const dpi = getCddTemplate('FooPrinter')!.capabilities!.printer!.dpi;
+  assert(dpi);
 
-  const expectedCapabilityWithLabels: LabelledDpiCapability =
-      assert(getCddTemplate('FooPrinter')!.capabilities!.printer!.dpi!) as
-      LabelledDpiCapability;
+  const dpiCapability: LabelledDpiCapability = dpi as LabelledDpiCapability;
+
+  const expectedCapabilityWithLabels: LabelledDpiCapability = dpiCapability;
 
   expectedCapabilityWithLabels.option.forEach(option => {
     option.name = option.horizontal_dpi.toString() + ' dpi';

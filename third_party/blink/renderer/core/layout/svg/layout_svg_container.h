@@ -60,6 +60,7 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
     NOT_DESTROYED();
     needs_boundaries_update_ = true;
   }
+  void SetNeedsTransformUpdate() override;
   bool DidScreenScaleFactorChange() const {
     NOT_DESTROYED();
     return did_screen_scale_factor_change_;
@@ -95,12 +96,20 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
     return content_;
   }
 
-  bool IsOfType(LayoutObjectType type) const override {
+  bool IsSVGContainer() const final {
     NOT_DESTROYED();
-    return type == kLayoutObjectSVGContainer ||
-           LayoutSVGModelObject::IsOfType(type);
+    return true;
   }
   void UpdateLayout() override;
+  // Update LayoutObject state after layout has completed. Returns true if
+  // boundaries needs to be propagated (because of a change to the transform).
+  bool UpdateAfterLayout(SVGTransformChange transform_change,
+                         bool bbox_changed);
+
+  void SetTransformUsesReferenceBox(bool transform_uses_reference_box) {
+    NOT_DESTROYED();
+    transform_uses_reference_box_ = transform_uses_reference_box;
+  }
 
   void AddChild(LayoutObject* child,
                 LayoutObject* before_child = nullptr) final;
@@ -108,7 +117,12 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
 
   gfx::RectF StrokeBoundingBox() const final {
     NOT_DESTROYED();
-    return content_.StrokeBoundingBox();
+    return content_.ComputeStrokeBoundingBox();
+  }
+
+  gfx::RectF DecoratedBoundingBox() const final {
+    NOT_DESTROYED();
+    return content_.DecoratedBoundingBox();
   }
 
   bool NodeAtPoint(HitTestResult&,
@@ -117,7 +131,8 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
                    HitTestPhase) override;
 
   // Called during layout to update the local transform.
-  virtual SVGTransformChange CalculateLocalTransform(bool bounds_changed);
+  virtual SVGTransformChange UpdateLocalTransform(
+      const gfx::RectF& reference_box);
 
   bool UpdateCachedBoundaries();
 
@@ -127,7 +142,9 @@ class LayoutSVGContainer : public LayoutSVGModelObject {
   SVGContentContainer content_;
   bool object_bounding_box_valid_;
   bool needs_boundaries_update_ : 1;
+  bool needs_transform_update_ : 1;
   bool did_screen_scale_factor_change_ : 1;
+  bool transform_uses_reference_box_ : 1;
   mutable bool has_non_isolated_blending_descendants_ : 1;
   mutable bool has_non_isolated_blending_descendants_dirty_ : 1;
 };

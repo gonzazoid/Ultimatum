@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
@@ -40,12 +40,10 @@ class PrefDelegateImpl
   void SetDictionaryValue(const base::Value::Dict& dict) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     pref_service_->SetDict(path_, dict.Clone());
-    UMA_HISTOGRAM_EXACT_LINEAR("NQE.Prefs.WriteCount", 1, 2);
   }
 
   base::Value::Dict GetDictionaryValue() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    UMA_HISTOGRAM_EXACT_LINEAR("NQE.Prefs.ReadCount", 1, 2);
     return pref_service_->GetDict(path_).Clone();
   }
 

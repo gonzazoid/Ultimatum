@@ -8,16 +8,17 @@ import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import './strings.m.js';
 
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {highlightUpdatedItems, trackUpdatedItems} from './api_listener.js';
+import {BookmarksApiProxyImpl} from './bookmarks_api_proxy.js';
 import {DialogFocusManager} from './dialog_focus_manager.js';
 import {getTemplate} from './edit_dialog.html.js';
-import {BookmarkNode} from './types.js';
+import type {BookmarkNode} from './types.js';
 
 export interface BookmarksEditDialogElement {
   $: {
@@ -137,7 +138,7 @@ export class BookmarksEditDialogElement extends PolymerElement {
     return false;
   }
 
-  private onSaveButtonTap_() {
+  private onSaveButtonClick_() {
     const edit: { title: string, url?: string, parentId?: string|null } =
         { 'title': this.titleValue_ };
     if (!this.isFolder_) {
@@ -153,12 +154,13 @@ export class BookmarksEditDialogElement extends PolymerElement {
     } else {
       edit['parentId'] = this.parentId_;
       trackUpdatedItems();
-      chrome.bookmarks.create(edit, highlightUpdatedItems);
+      BookmarksApiProxyImpl.getInstance().create(edit).then(
+          highlightUpdatedItems);
     }
     this.$.dialog.close();
   }
 
-  private onCancelButtonTap_() {
+  private onCancelButtonClick_() {
     this.$.dialog.cancel();
   }
 }

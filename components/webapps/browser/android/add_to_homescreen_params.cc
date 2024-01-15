@@ -11,4 +11,9 @@ namespace webapps {
 AddToHomescreenParams::AddToHomescreenParams() = default;
 AddToHomescreenParams::~AddToHomescreenParams() = default;
 
+bool AddToHomescreenParams::HasMaskablePrimaryIcon() {
+  return app_type != AddToHomescreenParams::AppType::NATIVE &&
+         shortcut_info->is_primary_icon_maskable;
+}
+
 }  // namespace webapps

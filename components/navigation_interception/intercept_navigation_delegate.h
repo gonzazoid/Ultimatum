@@ -8,8 +8,14 @@
 #include <memory>
 
 #include "base/android/jni_weak_ref.h"
+#include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
 #include "components/navigation_interception/intercept_navigation_throttle.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/mojom/url_loader.mojom.h"
+#include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
 #include "ui/base/page_transition_types.h"
 
 namespace content {
@@ -17,6 +23,15 @@ class NavigationHandle;
 class NavigationThrottle;
 class WebContents;
 }
+
+namespace network {
+struct ResourceRequest;
+
+namespace mojom {
+class URLLoader;
+class URLLoaderClient;
+}  // namespace mojom
+}  // namespace network
 
 namespace url {
 class Origin;
@@ -70,19 +85,39 @@ class InterceptNavigationDelegate : public base::SupportsUserData::Data {
 
   bool ShouldIgnoreNavigation(content::NavigationHandle* navigation_handle);
 
-  void HandleExternalProtocolDialog(
+  // See ContentBrowserClient::HandleExternalProtocol for the semantics around
+  // |out_factory|.
+  virtual void HandleSubframeExternalProtocol(
       const GURL& url,
       ui::PageTransition page_transition,
       bool has_user_gesture,
-      const absl::optional<url::Origin>& initiating_origin);
+      const absl::optional<url::Origin>& initiating_origin,
+      mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory);
 
   // To be called when a main frame requests a resource with a user gesture (eg.
   // xrh, fetch, etc.)
   void OnResourceRequestWithGesture();
 
+  void OnSubframeAsyncActionTaken(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& j_gurl);
+
  private:
+  void LoaderCallback(
+      const network::ResourceRequest& resource_request,
+      mojo::PendingReceiver<network::mojom::URLLoader> pending_receiver,
+      mojo::PendingRemote<network::mojom::URLLoaderClient> pending_client);
+
+  void MaybeHandleSubframeAction();
+
   JavaObjectWeakGlobalRef weak_jdelegate_;
   bool escape_external_handler_value_ = false;
+
+  mojo::SelfOwnedReceiverRef<network::mojom::URLLoader> url_loader_;
+  // An empty URL if an async action is pending, or a URL to redirect to when
+  // the URLLoader is ready.
+  std::unique_ptr<GURL> subframe_redirect_url_;
+  base::WeakPtrFactory<InterceptNavigationDelegate> weak_ptr_factory_{this};
 };
 
 }  // namespace navigation_interception

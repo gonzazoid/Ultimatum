@@ -7,7 +7,6 @@
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "net/base/address_list.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
@@ -42,7 +41,7 @@ AudioSocketService::AudioSocketService(const std::string& endpoint,
     : max_accept_loop_(max_accept_loop),
       use_socket_descriptor_(false),
       delegate_(delegate),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DCHECK_GT(max_accept_loop_, 0);
   DCHECK(delegate_);
 
@@ -51,7 +50,8 @@ AudioSocketService::AudioSocketService(const std::string& endpoint,
   listen_socket_ = std::make_unique<net::TCPServerSocket>(nullptr /* net_log */,
                                                           net::NetLogSource());
   int result = listen_socket_->Listen(
-      net::IPEndPoint(net::IPAddress::IPv4Localhost(), port), kListenBacklog);
+      net::IPEndPoint(net::IPAddress::IPv4Localhost(), port), kListenBacklog,
+      /*ipv6_only=*/std::nullopt);
 
   if (result != net::OK) {
     LOG(ERROR) << "Listen failed: " << net::ErrorToString(result);

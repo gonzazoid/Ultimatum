@@ -13,8 +13,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "components/history/core/browser/page_usage_data.h"
@@ -163,9 +163,9 @@ SegmentID VisitSegmentDatabase::CreateSegment(URLID url_id,
   return 0;
 }
 
-bool VisitSegmentDatabase::IncreaseSegmentVisitCount(SegmentID segment_id,
-                                                     base::Time ts,
-                                                     int amount) {
+bool VisitSegmentDatabase::UpdateSegmentVisitCount(SegmentID segment_id,
+                                                   base::Time ts,
+                                                   int amount) {
   base::Time t = ts.LocalMidnight();
 
   sql::Statement select(GetDB().GetCachedStatement(SQL_FROM_HERE,
@@ -184,7 +184,7 @@ bool VisitSegmentDatabase::IncreaseSegmentVisitCount(SegmentID segment_id,
     update.BindInt64(1, select.ColumnInt64(0));
 
     return update.Run();
-  } else {
+  } else if (amount > 0) {
     sql::Statement insert(GetDB().GetCachedStatement(SQL_FROM_HERE,
         "INSERT INTO segment_usage "
         "(segment_id, time_slot, visit_count) VALUES (?, ?, ?)"));
@@ -194,6 +194,8 @@ bool VisitSegmentDatabase::IncreaseSegmentVisitCount(SegmentID segment_id,
 
     return insert.Run();
   }
+
+  return true;
 }
 
 std::vector<std::unique_ptr<PageUsageData>>
@@ -224,16 +226,24 @@ VisitSegmentDatabase::QuerySegmentUsage(
     }
 
     base::Time timeslot = statement.ColumnTime(1);
+    if (timeslot > segments.back()->GetLastVisitTimeslot()) {
+      segments.back()->SetLastVisitTimeslot(timeslot);
+    }
+
     int visit_count = statement.ColumnInt(2);
-    int days_ago = (now - timeslot).InDays();
+    segments.back()->SetVisitCount(segments.back()->GetVisitCount() +
+                                   visit_count);
 
     // Score for this day in isolation.
-    float day_visits_score = 1.0f + log(static_cast<float>(visit_count));
+    float day_visits_score = visit_count <= 0.0f
+                                 ? 0.0f
+                                 : 1.0f + log(static_cast<float>(visit_count));
     // Recent visits count more than historical ones, so we multiply in a boost
     // related to how long ago this day was.
     // This boost is a curve that smoothly goes through these values:
     // Today gets 3x, a week ago 2x, three weeks ago 1.5x, falling off to 1x
     // at the limit of how far we reach into the past.
+    int days_ago = (now - timeslot).InDays();
     float recency_boost = 1.0f + (2.0f * (1.0f / (1.0f + days_ago/7.0f)));
     float score = recency_boost * day_visits_score;
     segments.back()->SetScore(segments.back()->GetScore() + score);
@@ -273,6 +283,14 @@ VisitSegmentDatabase::QuerySegmentUsage(
   }
 
   return results;
+}
+
+bool VisitSegmentDatabase::DeleteSegmentDataOlderThan(base::Time older_than) {
+  sql::Statement statement(GetDB().GetCachedStatement(
+      SQL_FROM_HERE, "DELETE FROM segment_usage WHERE time_slot < ?"));
+  statement.BindTime(0, older_than.LocalMidnight());
+
+  return statement.Run();
 }
 
 bool VisitSegmentDatabase::DeleteSegmentForURL(URLID url_id) {
@@ -358,7 +376,7 @@ bool VisitSegmentDatabase::MergeSegments(SegmentID from_segment_id,
   while (select.Step()) {
     base::Time ts = select.ColumnTime(0);
     int64_t visit_count = select.ColumnInt64(1);
-    IncreaseSegmentVisitCount(to_segment_id, ts, visit_count);
+    UpdateSegmentVisitCount(to_segment_id, ts, visit_count);
   }
 
   // Update all references in the visits database.

@@ -8,8 +8,8 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "components/sync/model/data_batch.h"
@@ -208,13 +208,13 @@ TEST_F(UserEventSyncBridgeTest, SingleRecord) {
               ElementsAre(Pair(storage_key, MatchesUserEvent(specifics))));
 }
 
-TEST_F(UserEventSyncBridgeTest, ApplyStopSyncChanges) {
+TEST_F(UserEventSyncBridgeTest, ApplyDisableSyncChanges) {
   WaitUntilModelReadyToSync();
   const UserEventSpecifics specifics(CreateSpecifics(1u, 2u, 3u));
   bridge()->RecordUserEvent(std::make_unique<UserEventSpecifics>(specifics));
   ASSERT_THAT(GetAllData(), SizeIs(1));
 
-  bridge()->ApplyStopSyncChanges(WriteBatch::CreateMetadataChangeList());
+  bridge()->ApplyDisableSyncChanges(WriteBatch::CreateMetadataChangeList());
   // The bridge may asynchronously query the store to choose what to delete.
   base::RunLoop().RunUntilIdle();
 
@@ -242,7 +242,7 @@ TEST_F(UserEventSyncBridgeTest, MultipleRecords) {
   EXPECT_THAT(GetAllData(), SizeIs(2));
 }
 
-TEST_F(UserEventSyncBridgeTest, ApplySyncChanges) {
+TEST_F(UserEventSyncBridgeTest, ApplyIncrementalSyncChanges) {
   WaitUntilModelReadyToSync();
   std::string storage_key1;
   std::string storage_key2;
@@ -256,7 +256,7 @@ TEST_F(UserEventSyncBridgeTest, ApplySyncChanges) {
 
   syncer::EntityChangeList entity_change_list;
   entity_change_list.push_back(EntityChange::CreateDelete(storage_key1));
-  auto error_on_delete = bridge()->ApplySyncChanges(
+  auto error_on_delete = bridge()->ApplyIncrementalSyncChanges(
       bridge()->CreateMetadataChangeList(), std::move(entity_change_list));
   EXPECT_FALSE(error_on_delete);
   EXPECT_THAT(GetAllData(), SizeIs(1));
@@ -292,7 +292,7 @@ TEST_F(UserEventSyncBridgeTest, HandleGlobalIdChange) {
                                                 1u, third_id, 2u)))));
   syncer::EntityChangeList entity_change_list;
   entity_change_list.push_back(EntityChange::CreateDelete(storage_key));
-  auto error_on_delete = bridge()->ApplySyncChanges(
+  auto error_on_delete = bridge()->ApplyIncrementalSyncChanges(
       bridge()->CreateMetadataChangeList(), std::move(entity_change_list));
   EXPECT_FALSE(error_on_delete);
   EXPECT_THAT(GetAllData(), IsEmpty());

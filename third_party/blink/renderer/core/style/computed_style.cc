@@ -27,13 +27,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/memory/values_equivalent.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/clamped_math.h"
 #include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "cc/input/overscroll_behavior.h"
+#include "cc/paint/paint_flags.h"
 #include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink.h"
 #include "third_party/blink/renderer/core/animation/css/css_animation_data.h"
 #include "third_party/blink/renderer/core/animation/css/css_transition_data.h"
@@ -44,23 +44,31 @@
 #include "third_party/blink/renderer/core/css/properties/computed_style_utils.h"
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
 #include "third_party/blink/renderer/core/css/properties/longhand.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/html/html_body_element.h"
 #include "third_party/blink/renderer/core/html/html_html_element.h"
 #include "third_party/blink/renderer/core/html/html_progress_element.h"
+#include "third_party/blink/renderer/core/layout/custom/layout_worklet.h"
+#include "third_party/blink/renderer/core/layout/layout_block.h"
+#include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/layout/layout_theme.h"
-#include "third_party/blink/renderer/core/layout/ng/custom/layout_worklet.h"
+#include "third_party/blink/renderer/core/layout/map_coordinates_flags.h"
 #include "third_party/blink/renderer/core/layout/text_autosizer.h"
 #include "third_party/blink/renderer/core/paint/compositing/compositing_reason_finder.h"
 #include "third_party/blink/renderer/core/style/applied_text_decoration.h"
+#include "third_party/blink/renderer/core/style/basic_shapes.h"
 #include "third_party/blink/renderer/core/style/border_edge.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/core/style/computed_style_initial_values.h"
 #include "third_party/blink/renderer/core/style/content_data.h"
+#include "third_party/blink/renderer/core/style/coord_box_offset_path_operation.h"
 #include "third_party/blink/renderer/core/style/cursor_data.h"
+#include "third_party/blink/renderer/core/style/reference_offset_path_operation.h"
 #include "third_party/blink/renderer/core/style/shadow_list.h"
+#include "third_party/blink/renderer/core/style/shape_offset_path_operation.h"
 #include "third_party/blink/renderer/core/style/style_difference.h"
 #include "third_party/blink/renderer/core/style/style_fetched_image.h"
 #include "third_party/blink/renderer/core/style/style_generated_image.h"
@@ -69,6 +77,8 @@
 #include "third_party/blink/renderer/core/style/style_non_inherited_variables.h"
 #include "third_party/blink/renderer/core/style/style_ray.h"
 #include "third_party/blink/renderer/core/svg/svg_element.h"
+#include "third_party/blink/renderer/core/svg/svg_geometry_element.h"
+#include "third_party/blink/renderer/core/svg/svg_length_functions.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/fonts/font_selector.h"
 #include "third_party/blink/renderer/platform/geometry/length_functions.h"
@@ -86,15 +96,9 @@
 #include "third_party/blink/renderer/platform/wtf/text/case_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/math_transform.h"
 #include "ui/base/ui_base_features.h"
+#include "ui/gfx/geometry/point_f.h"
 
 namespace blink {
-
-struct SameSizeAsBorderValue {
-  StyleColor color_;
-  unsigned bitfield_;
-};
-
-ASSERT_SIZE(BorderValue, SameSizeAsBorderValue);
 
 // Since different compilers/architectures pack ComputedStyle differently,
 // re-create the same structure for an accurate size comparison.
@@ -103,25 +107,23 @@ ASSERT_SIZE(BorderValue, SameSizeAsBorderValue);
 // inheritance structure. Make sure the fields have the same access specifiers
 // as in the "real" class since it can affect the layout. Reference the fields
 // so that they are not seen as unused (-Wunused-private-field).
-struct SameSizeAsComputedStyleBase {
+struct SameSizeAsComputedStyleBase
+    : public GarbageCollected<SameSizeAsComputedStyleBase> {
   SameSizeAsComputedStyleBase() {
-    base::debug::Alias(&data_refs);
     base::debug::Alias(&pointers);
     base::debug::Alias(&bitfields);
   }
 
  private:
-  void* data_refs[8];
-  void* pointers[1];
+  Member<void*> pointers[10];
   unsigned bitfields[5];
 };
 
-struct SameSizeAsComputedStyle : public SameSizeAsComputedStyleBase,
-                                 public RefCounted<SameSizeAsComputedStyle> {
+struct SameSizeAsComputedStyle : public SameSizeAsComputedStyleBase {
   SameSizeAsComputedStyle() { base::debug::Alias(&own_ptrs); }
 
  private:
-  void* own_ptrs[1];
+  Member<void*> own_ptrs[1];
 };
 
 // If this assert fails, it means that size of ComputedStyle has changed. Please
@@ -131,8 +133,9 @@ struct SameSizeAsComputedStyle : public SameSizeAsComputedStyleBase,
 ASSERT_SIZE(ComputedStyle, SameSizeAsComputedStyle);
 
 StyleCachedData& ComputedStyle::EnsureCachedData() const {
-  if (!cached_data_)
-    cached_data_ = std::make_unique<StyleCachedData>();
+  if (!cached_data_) {
+    cached_data_ = MakeGarbageCollected<StyleCachedData>();
+  }
   return *cached_data_;
 }
 
@@ -142,26 +145,28 @@ bool ComputedStyle::HasCachedPseudoElementStyles() const {
 }
 
 PseudoElementStyleCache* ComputedStyle::GetPseudoElementStyleCache() const {
-  if (cached_data_)
-    return cached_data_->pseudo_element_styles_.get();
+  if (cached_data_) {
+    return cached_data_->pseudo_element_styles_.Get();
+  }
   return nullptr;
 }
 
 PseudoElementStyleCache& ComputedStyle::EnsurePseudoElementStyleCache() const {
   if (!cached_data_ || !cached_data_->pseudo_element_styles_) {
     EnsureCachedData().pseudo_element_styles_ =
-        std::make_unique<PseudoElementStyleCache>();
+        MakeGarbageCollected<PseudoElementStyleCache>();
   }
   return *cached_data_->pseudo_element_styles_;
 }
 
-scoped_refptr<ComputedStyle> ComputedStyle::CreateInitialStyleSingleton() {
-  return base::MakeRefCounted<ComputedStyle>(PassKey());
+const ComputedStyle* ComputedStyle::CreateInitialStyleSingleton() {
+  return MakeGarbageCollected<ComputedStyle>(PassKey());
 }
 
 Vector<AtomicString>* ComputedStyle::GetVariableNamesCache() const {
-  if (cached_data_)
+  if (cached_data_) {
     return cached_data_->variable_names_.get();
+  }
   return nullptr;
 }
 
@@ -173,75 +178,80 @@ Vector<AtomicString>& ComputedStyle::EnsureVariableNamesCache() const {
   return *cached_data_->variable_names_;
 }
 
-void ComputedStyle::ClearVariableNamesCache() const {
-  if (cached_data_)
-    cached_data_->variable_names_.reset();
-}
-
 const ComputedStyle* ComputedStyle::AddCachedPositionFallbackStyle(
-    scoped_refptr<const ComputedStyle> style,
+    const ComputedStyle* style,
     unsigned index) const {
-  EnsurePositionFallbackStyleCache(index + 1)[index] = std::move(style);
-  return (*cached_data_->position_fallback_styles_)[index].get();
+  EnsurePositionFallbackStyleCache(index + 1)[index] = style;
+  return (*cached_data_->position_fallback_styles_)[index].Get();
 }
 
 const ComputedStyle* ComputedStyle::GetCachedPositionFallbackStyle(
     unsigned index) const {
   if (!cached_data_ || !cached_data_->position_fallback_styles_ ||
-      index >= cached_data_->position_fallback_styles_->size())
+      index >= cached_data_->position_fallback_styles_->size()) {
     return nullptr;
-  return (*cached_data_->position_fallback_styles_)[index].get();
+  }
+  return (*cached_data_->position_fallback_styles_)[index].Get();
 }
 
 PositionFallbackStyleCache& ComputedStyle::EnsurePositionFallbackStyleCache(
     unsigned ensure_size) const {
   if (!cached_data_ || !cached_data_->position_fallback_styles_) {
     EnsureCachedData().position_fallback_styles_ =
-        std::make_unique<PositionFallbackStyleCache>();
+        MakeGarbageCollected<PositionFallbackStyleCache>();
   }
-  if (cached_data_->position_fallback_styles_->size() < ensure_size)
+  if (cached_data_->position_fallback_styles_->size() < ensure_size) {
     cached_data_->position_fallback_styles_->resize(ensure_size);
+  }
   return *cached_data_->position_fallback_styles_;
 }
 
-scoped_refptr<ComputedStyle> ComputedStyle::Clone(const ComputedStyle& other) {
-  return base::AdoptRef(new ComputedStyle(PassKey(), other));
-}
+ALWAYS_INLINE ComputedStyle::ComputedStyle() = default;
 
-ALWAYS_INLINE ComputedStyle::ComputedStyle()
-    : ComputedStyleBase(), RefCounted<ComputedStyle>() {}
+ALWAYS_INLINE ComputedStyle::ComputedStyle(const ComputedStyle& initial_style)
+    : ComputedStyleBase(initial_style) {}
 
-ALWAYS_INLINE ComputedStyle::ComputedStyle(const ComputedStyle& o)
-    : ComputedStyleBase(o), RefCounted<ComputedStyle>() {}
+ALWAYS_INLINE ComputedStyle::ComputedStyle(const ComputedStyleBuilder& builder)
+    : ComputedStyleBase(builder) {}
 
 ALWAYS_INLINE ComputedStyle::ComputedStyle(PassKey key) : ComputedStyle() {}
 
-ALWAYS_INLINE ComputedStyle::ComputedStyle(PassKey key, const ComputedStyle& o)
-    : ComputedStyle(o) {}
+ALWAYS_INLINE ComputedStyle::ComputedStyle(BuilderPassKey key,
+                                           const ComputedStyle& initial_style)
+    : ComputedStyle(initial_style) {}
+
+ALWAYS_INLINE ComputedStyle::ComputedStyle(BuilderPassKey key,
+                                           const ComputedStyleBuilder& builder)
+    : ComputedStyle(builder) {}
 
 static bool PseudoElementStylesEqual(const ComputedStyle& old_style,
                                      const ComputedStyle& new_style) {
   if (!old_style.HasAnyPseudoElementStyles() &&
-      !new_style.HasAnyPseudoElementStyles())
+      !new_style.HasAnyPseudoElementStyles()) {
     return true;
+  }
   for (PseudoId pseudo_id = kFirstPublicPseudoId;
        pseudo_id <= kLastTrackedPublicPseudoId;
        pseudo_id = static_cast<PseudoId>(pseudo_id + 1)) {
     if (!old_style.HasPseudoElementStyle(pseudo_id) &&
-        !new_style.HasPseudoElementStyle(pseudo_id))
+        !new_style.HasPseudoElementStyle(pseudo_id)) {
       continue;
+    }
     // Highlight pseudo styles are stored in StyleHighlightData, and compared
     // like any other inherited field, yielding Difference::kInherited.
-    if (UsesHighlightPseudoInheritance(pseudo_id))
+    if (UsesHighlightPseudoInheritance(pseudo_id)) {
       continue;
+    }
     const ComputedStyle* new_pseudo_style =
         new_style.GetCachedPseudoElementStyle(pseudo_id);
-    if (!new_pseudo_style)
+    if (!new_pseudo_style) {
       return false;
+    }
     const ComputedStyle* old_pseudo_style =
         old_style.GetCachedPseudoElementStyle(pseudo_id);
-    if (old_pseudo_style && *old_pseudo_style != *new_pseudo_style)
+    if (old_pseudo_style && *old_pseudo_style != *new_pseudo_style) {
       return false;
+    }
   }
   return true;
 }
@@ -252,7 +262,8 @@ static bool DiffAffectsContainerQueries(const ComputedStyle& old_style,
       !new_style.IsContainerForSizeContainerQueries()) {
     return false;
   }
-  if ((old_style.ContainerName() != new_style.ContainerName()) ||
+  if (!base::ValuesEquivalent(old_style.ContainerName(),
+                              new_style.ContainerName()) ||
       (old_style.ContainerType() != new_style.ContainerType())) {
     return true;
   }
@@ -267,28 +278,19 @@ static bool DiffAffectsContainerQueries(const ComputedStyle& old_style,
 
 static bool DiffAffectsScrollAnimations(const ComputedStyle& old_style,
                                         const ComputedStyle& new_style) {
-  if ((old_style.ScrollTimelineName() != new_style.ScrollTimelineName()) ||
+  if (!base::ValuesEquivalent(old_style.ScrollTimelineName(),
+                              new_style.ScrollTimelineName()) ||
       (old_style.ScrollTimelineAxis() != new_style.ScrollTimelineAxis())) {
     return true;
   }
-  if ((old_style.ViewTimelineName() != new_style.ViewTimelineName()) ||
+  if (!base::ValuesEquivalent(old_style.ViewTimelineName(),
+                              new_style.ViewTimelineName()) ||
       (old_style.ViewTimelineAxis() != new_style.ViewTimelineAxis()) ||
       (old_style.ViewTimelineInset() != new_style.ViewTimelineInset())) {
     return true;
   }
-  return false;
-}
-
-// The transition to/from nullptr style can affect subsequent siblings
-// if they reference a named timeline which appeared/disappeared.
-static bool AffectsScrollAnimations(const ComputedStyle* old_style,
-                                    const ComputedStyle* new_style) {
-  if (old_style && !(old_style->ScrollTimelineName().empty() &&
-                     old_style->ViewTimelineName().empty())) {
-    return true;
-  }
-  if (new_style && !(new_style->ScrollTimelineName().empty() &&
-                     new_style->ViewTimelineName().empty())) {
+  if (!base::ValuesEquivalent(old_style.TimelineScope(),
+                              new_style.TimelineScope())) {
     return true;
   }
   return false;
@@ -297,31 +299,39 @@ static bool AffectsScrollAnimations(const ComputedStyle* old_style,
 bool ComputedStyle::NeedsReattachLayoutTree(const Element& element,
                                             const ComputedStyle* old_style,
                                             const ComputedStyle* new_style) {
-  if (old_style == new_style)
+  if (old_style == new_style) {
     return false;
-  if (!old_style || !new_style)
+  }
+  if (!old_style || !new_style) {
     return true;
-  if (old_style->Display() != new_style->Display())
+  }
+  if (old_style->Display() != new_style->Display()) {
     return true;
+  }
   if (old_style->HasPseudoElementStyle(kPseudoIdFirstLetter) !=
-      new_style->HasPseudoElementStyle(kPseudoIdFirstLetter))
+      new_style->HasPseudoElementStyle(kPseudoIdFirstLetter)) {
     return true;
-  if (!old_style->ContentDataEquivalent(*new_style))
+  }
+  if (!old_style->ContentDataEquivalent(*new_style)) {
     return true;
-  if (old_style->HasTextCombine() != new_style->HasTextCombine())
+  }
+  if (old_style->HasTextCombine() != new_style->HasTextCombine()) {
     return true;
+  }
   // line-clamping is currently only handled by LayoutDeprecatedFlexibleBox,
   // so that if line-clamping changes then the LayoutObject needs to be
   // recreated.
   if (old_style->IsDeprecatedFlexboxUsingFlexLayout() !=
-      new_style->IsDeprecatedFlexboxUsingFlexLayout())
+      new_style->IsDeprecatedFlexboxUsingFlexLayout()) {
     return true;
+  }
   // We need to perform a reattach if a "display: layout(foo)" has changed to a
   // "display: layout(bar)". This is because one custom layout could be
   // registered and the other may not, affecting the box-tree construction.
   if (old_style->DisplayLayoutCustomName() !=
-      new_style->DisplayLayoutCustomName())
+      new_style->DisplayLayoutCustomName()) {
     return true;
+  }
   if (old_style->HasEffectiveAppearance() !=
           new_style->HasEffectiveAppearance() &&
       IsA<HTMLProgressElement>(element)) {
@@ -335,17 +345,13 @@ bool ComputedStyle::NeedsReattachLayoutTree(const Element& element,
   if (UNLIKELY(IsA<HTMLLegendElement>(element) &&
                (old_style->IsFloating() != new_style->IsFloating() ||
                 old_style->HasOutOfFlowPosition() !=
-                    new_style->HasOutOfFlowPosition())))
+                    new_style->HasOutOfFlowPosition()))) {
     return true;
+  }
 
-  if (!RuntimeEnabledFeatures::LayoutNGEnabled())
-    return false;
-
-  // We use LayoutNGTextCombine only for vertical writing mode.
-  if (RuntimeEnabledFeatures::LayoutNGEnabled() &&
-      new_style->HasTextCombine() &&
-      old_style->IsHorizontalWritingMode() !=
-          new_style->IsHorizontalWritingMode()) {
+  // We use LayoutTextCombine only for vertical writing mode.
+  if (new_style->HasTextCombine() && old_style->IsHorizontalWritingMode() !=
+                                         new_style->IsHorizontalWritingMode()) {
     DCHECK_EQ(old_style->HasTextCombine(), new_style->HasTextCombine());
     return true;
   }
@@ -353,20 +359,26 @@ bool ComputedStyle::NeedsReattachLayoutTree(const Element& element,
   // LayoutNG needs an anonymous inline wrapper if ::first-line is applied.
   // Also see |LayoutBlockFlow::NeedsAnonymousInlineWrapper()|.
   if (new_style->HasPseudoElementStyle(kPseudoIdFirstLine) &&
-      !old_style->HasPseudoElementStyle(kPseudoIdFirstLine))
+      !old_style->HasPseudoElementStyle(kPseudoIdFirstLine)) {
     return true;
+  }
 
+  if (old_style->Overlay() != new_style->Overlay()) {
+    return true;
+  }
+  if (old_style->ListStylePosition() != new_style->ListStylePosition()) {
+    return true;
+  }
   return false;
 }
 
 ComputedStyle::Difference ComputedStyle::ComputeDifference(
     const ComputedStyle* old_style,
     const ComputedStyle* new_style) {
-  if (old_style == new_style)
+  if (old_style == new_style) {
     return Difference::kEqual;
+  }
   if (!old_style || !new_style) {
-    if (AffectsScrollAnimations(old_style, new_style))
-      return Difference::kSiblingDescendantAffecting;
     return Difference::kInherited;
   }
 
@@ -396,18 +408,28 @@ ComputedStyle::ComputeDifferenceIgnoringInheritedFirstLineStyle(
     const ComputedStyle& old_style,
     const ComputedStyle& new_style) {
   DCHECK_NE(&old_style, &new_style);
-  if (DiffAffectsScrollAnimations(old_style, new_style))
-    return Difference::kSiblingDescendantAffecting;
+  if (DiffAffectsScrollAnimations(old_style, new_style)) {
+    return Difference::kDescendantAffecting;
+  }
   if (old_style.Display() != new_style.Display() &&
-      old_style.BlockifiesChildren() != new_style.BlockifiesChildren())
+      (old_style.BlockifiesChildren() != new_style.BlockifiesChildren() ||
+       old_style.InlinifiesChildren() != new_style.InlinifiesChildren())) {
     return Difference::kDescendantAffecting;
+  }
   // TODO(crbug.com/1213888): Only recalc affected descendants.
-  if (DiffAffectsContainerQueries(old_style, new_style))
+  if (DiffAffectsContainerQueries(old_style, new_style)) {
     return Difference::kDescendantAffecting;
-  if (!old_style.NonIndependentInheritedEqual(new_style))
+  }
+  if (!old_style.NonIndependentInheritedEqual(new_style)) {
     return Difference::kInherited;
-  if (old_style.JustifyItems() != new_style.JustifyItems())
+  }
+  if (old_style.JustifyItems() != new_style.JustifyItems()) {
     return Difference::kInherited;
+  }
+  if (old_style.AppliedTextDecorations() !=
+      new_style.AppliedTextDecorations()) {
+    return Difference::kInherited;
+  }
   bool non_inherited_equal = old_style.NonInheritedEqual(new_style);
   if (!non_inherited_equal && old_style.ChildHasExplicitInheritance()) {
     return Difference::kInherited;
@@ -415,53 +437,45 @@ ComputedStyle::ComputeDifferenceIgnoringInheritedFirstLineStyle(
   bool variables_independent =
       !old_style.HasVariableReference() && !old_style.HasVariableDeclaration();
   bool inherited_variables_equal = old_style.InheritedVariablesEqual(new_style);
-  if (!inherited_variables_equal && !variables_independent)
+  if (!inherited_variables_equal && !variables_independent) {
     return Difference::kInherited;
+  }
   if (!old_style.IndependentInheritedEqual(new_style) ||
       !inherited_variables_equal) {
     return Difference::kIndependentInherited;
   }
   if (non_inherited_equal) {
     DCHECK(old_style == new_style);
-    if (PseudoElementStylesEqual(old_style, new_style))
+    if (PseudoElementStylesEqual(old_style, new_style)) {
       return Difference::kEqual;
+    }
     return Difference::kPseudoElementStyle;
   }
   if (new_style.HasAnyPseudoElementStyles() ||
-      old_style.HasAnyPseudoElementStyles())
+      old_style.HasAnyPseudoElementStyles()) {
     return Difference::kPseudoElementStyle;
-  if (old_style.Display() != new_style.Display() &&
-      (new_style.Display() == EDisplay::kListItem ||
-       old_style.Display() == EDisplay::kListItem))
-    return Difference::kPseudoElementStyle;
-  return Difference::kNonInherited;
-}
-
-void ComputedStyle::PropagateIndependentInheritedProperties(
-    const ComputedStyle& parent_style) {
-  ComputedStyleBase::PropagateIndependentInheritedProperties(parent_style);
-  if (!HasVariableReference() && !HasVariableDeclaration() &&
-      (InheritedVariables() != parent_style.InheritedVariables())) {
-    MutableInheritedVariablesInternal() =
-        parent_style.InheritedVariablesInternal();
   }
+  if (old_style.Display() != new_style.Display() &&
+      (new_style.IsDisplayListItem() || old_style.IsDisplayListItem())) {
+    return Difference::kPseudoElementStyle;
+  }
+  return Difference::kNonInherited;
 }
 
 StyleSelfAlignmentData ResolvedSelfAlignment(
     const StyleSelfAlignmentData& value,
-    ItemPosition normal_value_behavior) {
+    ItemPosition normal_value_behavior,
+    bool has_out_of_flow_position) {
   if (value.GetPosition() == ItemPosition::kLegacy ||
       value.GetPosition() == ItemPosition::kNormal ||
-      value.GetPosition() == ItemPosition::kAuto)
+      value.GetPosition() == ItemPosition::kAuto) {
     return {normal_value_behavior, OverflowAlignment::kDefault};
+  }
+  if (!has_out_of_flow_position &&
+      value.GetPosition() == ItemPosition::kAnchorCenter) {
+    return {ItemPosition::kCenter, value.Overflow(), value.PositionType()};
+  }
   return value;
-}
-
-StyleSelfAlignmentData ComputedStyle::ResolvedAlignItems(
-    ItemPosition normal_value_behaviour) const {
-  // We will return the behaviour of 'normal' value if needed, which is specific
-  // of each layout model.
-  return ResolvedSelfAlignment(AlignItems(), normal_value_behaviour);
 }
 
 StyleSelfAlignmentData ComputedStyle::ResolvedAlignSelf(
@@ -469,18 +483,14 @@ StyleSelfAlignmentData ComputedStyle::ResolvedAlignSelf(
     const ComputedStyle* parent_style) const {
   // We will return the behaviour of 'normal' value if needed, which is specific
   // of each layout model.
-  if (!parent_style || AlignSelf().GetPosition() != ItemPosition::kAuto)
-    return ResolvedSelfAlignment(AlignSelf(), normal_value_behaviour);
+  if (!parent_style || AlignSelf().GetPosition() != ItemPosition::kAuto) {
+    return ResolvedSelfAlignment(AlignSelf(), normal_value_behaviour,
+                                 HasOutOfFlowPosition());
+  }
 
   // The 'auto' keyword computes to the parent's align-items computed value.
-  return parent_style->ResolvedAlignItems(normal_value_behaviour);
-}
-
-StyleSelfAlignmentData ComputedStyle::ResolvedJustifyItems(
-    ItemPosition normal_value_behaviour) const {
-  // We will return the behaviour of 'normal' value if needed, which is specific
-  // of each layout model.
-  return ResolvedSelfAlignment(JustifyItems(), normal_value_behaviour);
+  return ResolvedSelfAlignment(parent_style->AlignItems(),
+                               normal_value_behaviour, HasOutOfFlowPosition());
 }
 
 StyleSelfAlignmentData ComputedStyle::ResolvedJustifySelf(
@@ -488,11 +498,14 @@ StyleSelfAlignmentData ComputedStyle::ResolvedJustifySelf(
     const ComputedStyle* parent_style) const {
   // We will return the behaviour of 'normal' value if needed, which is specific
   // of each layout model.
-  if (!parent_style || JustifySelf().GetPosition() != ItemPosition::kAuto)
-    return ResolvedSelfAlignment(JustifySelf(), normal_value_behaviour);
+  if (!parent_style || JustifySelf().GetPosition() != ItemPosition::kAuto) {
+    return ResolvedSelfAlignment(JustifySelf(), normal_value_behaviour,
+                                 HasOutOfFlowPosition());
+  }
 
   // The auto keyword computes to the parent's justify-items computed value.
-  return parent_style->ResolvedJustifyItems(normal_value_behaviour);
+  return ResolvedSelfAlignment(parent_style->JustifyItems(),
+                               normal_value_behaviour, HasOutOfFlowPosition());
 }
 
 StyleContentAlignmentData ResolvedContentAlignment(
@@ -560,91 +573,86 @@ ContentDistributionType ComputedStyle::ResolvedAlignContentDistribution(
                                               normal_value_behavior);
 }
 
-void ComputedStyle::InheritFrom(const ComputedStyle& inherit_parent,
-                                IsAtShadowBoundary is_at_shadow_boundary) {
-  EUserModify current_user_modify = UserModify();
-
-  ComputedStyleBase::InheritFrom(inherit_parent, is_at_shadow_boundary);
-
-  if (is_at_shadow_boundary == kAtShadowBoundary) {
-    // Even if surrounding content is user-editable, shadow DOM should act as a
-    // single unit, and not necessarily be editable
-    SetUserModify(current_user_modify);
-  }
-}
-
-void ComputedStyle::CopyNonInheritedFromCached(const ComputedStyle& other) {
-  DCHECK(MatchedPropertiesCache::IsStyleCacheable(other));
-
-  ComputedStyleBase::CopyNonInheritedFromCached(other);
-
-  // The flags are copied one-by-one because they contain
-  // bunch of stuff other than real style data.
-  // See comments for each skipped flag below.
-
-  // Correctly set during selector matching:
-  // m_styleType
-  // m_pseudoBits
-
-  // Set correctly while computing style for children:
-  // m_explicitInheritance
-
-  // The following flags are set during matching before we decide that we get a
-  // match in the MatchedPropertiesCache which in turn calls this method. The
-  // reason why we don't copy these flags is that they're already correctly set
-  // and that they may differ between elements which have the same set of
-  // matched properties. For instance, given the rule:
-  //
-  // :-webkit-any(:hover, :focus) { background-color: green }"
-  //
-  // A hovered element, and a focused element may use the same cached matched
-  // properties here, but the affectedBy flags will be set differently based on
-  // the matching order of the :-webkit-any components.
-  //
-  // m_emptyState
-  // m_affectedByFocus
-  // m_affectedByHover
-  // m_affectedByActive
-  // m_affectedByDrag
-  // m_isLink
-}
-
 bool ComputedStyle::operator==(const ComputedStyle& o) const {
-  return InheritedEqual(o) && NonInheritedEqual(o);
+  return InheritedEqual(o) && NonInheritedEqual(o) &&
+         InheritedVariablesEqual(o);
+}
+
+bool ComputedStyle::HighlightPseudoElementStylesDependOnRelativeUnits() const {
+  const StyleHighlightData& highlight_data = HighlightData();
+  if (highlight_data.Selection() &&
+      (highlight_data.Selection()->HasFontRelativeUnits() ||
+       highlight_data.Selection()->HasContainerRelativeUnits() ||
+       highlight_data.Selection()->HasLogicalDirectionRelativeUnits())) {
+    return true;
+  }
+  if (highlight_data.TargetText() &&
+      (highlight_data.TargetText()->HasFontRelativeUnits() ||
+       highlight_data.TargetText()->HasContainerRelativeUnits() ||
+       highlight_data.TargetText()->HasLogicalDirectionRelativeUnits())) {
+    return true;
+  }
+  if (highlight_data.SpellingError() &&
+      (highlight_data.SpellingError()->HasFontRelativeUnits() ||
+       highlight_data.SpellingError()->HasContainerRelativeUnits() ||
+       highlight_data.SpellingError()->HasLogicalDirectionRelativeUnits())) {
+    return true;
+  }
+  if (highlight_data.GrammarError() &&
+      (highlight_data.GrammarError()->HasFontRelativeUnits() ||
+       highlight_data.GrammarError()->HasContainerRelativeUnits() ||
+       highlight_data.GrammarError()->HasLogicalDirectionRelativeUnits())) {
+    return true;
+  }
+  const CustomHighlightsStyleMap& custom_highlights =
+      highlight_data.CustomHighlights();
+  for (auto custom_highlight : custom_highlights) {
+    if (custom_highlight.value->HasFontRelativeUnits() ||
+        custom_highlight.value->HasContainerRelativeUnits() ||
+        custom_highlight.value->HasLogicalDirectionRelativeUnits()) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 const ComputedStyle* ComputedStyle::GetCachedPseudoElementStyle(
     PseudoId pseudo_id,
     const AtomicString& pseudo_argument) const {
-  if (!HasCachedPseudoElementStyles())
+  if (!HasCachedPseudoElementStyles()) {
     return nullptr;
+  }
 
   for (const auto& pseudo_style : *GetPseudoElementStyleCache()) {
     if (pseudo_style->StyleType() == pseudo_id &&
         (!PseudoElementHasArguments(pseudo_id) ||
-         pseudo_style->PseudoArgument() == pseudo_argument))
-      return pseudo_style.get();
+         pseudo_style->PseudoArgument() == pseudo_argument)) {
+      return pseudo_style.Get();
+    }
   }
 
   return nullptr;
 }
 
 bool ComputedStyle::CachedPseudoElementStylesDependOnFontMetrics() const {
-  if (!HasCachedPseudoElementStyles())
+  if (!HasCachedPseudoElementStyles()) {
     return false;
+  }
 
   DCHECK_EQ(StyleType(), kPseudoIdNone);
 
   for (const auto& pseudo_style : *GetPseudoElementStyleCache()) {
-    if (pseudo_style->DependsOnFontMetrics())
+    if (pseudo_style->DependsOnFontMetrics()) {
       return true;
+    }
   }
 
   return false;
 }
 
 const ComputedStyle* ComputedStyle::AddCachedPseudoElementStyle(
-    scoped_refptr<const ComputedStyle> pseudo,
+    const ComputedStyle* pseudo,
     PseudoId pseudo_id,
     const AtomicString& pseudo_argument) const {
   DCHECK(pseudo);
@@ -661,7 +669,7 @@ const ComputedStyle* ComputedStyle::AddCachedPseudoElementStyle(
   DCHECK(!GetCachedPseudoElementStyle(pseudo->StyleType(),
                                       pseudo->PseudoArgument()));
 
-  const ComputedStyle* result = pseudo.get();
+  const ComputedStyle* result = pseudo;
 
   EnsurePseudoElementStyleCache().push_back(std::move(pseudo));
 
@@ -669,7 +677,7 @@ const ComputedStyle* ComputedStyle::AddCachedPseudoElementStyle(
 }
 
 const ComputedStyle* ComputedStyle::ReplaceCachedPseudoElementStyle(
-    scoped_refptr<const ComputedStyle> pseudo_style,
+    const ComputedStyle* pseudo_style,
     PseudoId pseudo_id,
     const AtomicString& pseudo_argument) const {
   DCHECK(pseudo_style->StyleType() != kPseudoIdNone &&
@@ -681,7 +689,7 @@ const ComputedStyle* ComputedStyle::ReplaceCachedPseudoElementStyle(
            cached_style->PseudoArgument() == pseudo_argument)) {
         SECURITY_CHECK(cached_style->IsEnsuredInDisplayNone());
         cached_style = pseudo_style;
-        return pseudo_style.get();
+        return pseudo_style;
       }
     }
   }
@@ -689,38 +697,23 @@ const ComputedStyle* ComputedStyle::ReplaceCachedPseudoElementStyle(
 }
 
 void ComputedStyle::ClearCachedPseudoElementStyles() const {
-  if (cached_data_ && cached_data_->pseudo_element_styles_)
+  if (cached_data_ && cached_data_->pseudo_element_styles_) {
     cached_data_->pseudo_element_styles_->clear();
+  }
 }
 
 const ComputedStyle* ComputedStyle::GetBaseComputedStyle() const {
-  if (auto* base_data = BaseData().get())
+  if (StyleBaseData* base_data = BaseData()) {
     return base_data->GetBaseComputedStyle();
+  }
   return nullptr;
 }
 
 const CSSBitset* ComputedStyle::GetBaseImportantSet() const {
-  if (auto* base_data = BaseData().get())
+  if (StyleBaseData* base_data = BaseData()) {
     return base_data->GetBaseImportantSet();
+  }
   return nullptr;
-}
-
-StyleHighlightData& ComputedStyle::MutableHighlightData() {
-  scoped_refptr<StyleHighlightData>& data = MutableHighlightDataInternal();
-  if (!data)
-    data = StyleHighlightData::Create();
-  else if (!data->HasOneRef())
-    data = data->Copy();
-  return *data;
-}
-
-void ComputedStyle::SetHasCustomHighlightName(
-    const AtomicString& custom_highlight_name) {
-  std::unique_ptr<HashSet<AtomicString>>& names_set =
-      MutableCustomHighlightNamesInternal();
-  if (!names_set)
-    names_set = std::make_unique<HashSet<AtomicString>>();
-  names_set->insert(custom_highlight_name);
 }
 
 bool ComputedStyle::InheritedEqual(const ComputedStyle& other) const {
@@ -744,73 +737,56 @@ bool ComputedStyle::NonInheritedEqual(const ComputedStyle& other) const {
 }
 
 bool ComputedStyle::InheritedDataShared(const ComputedStyle& other) const {
-  // This is a fast check that only looks if the data structures are shared.
+  // We use a by-value check that is a bit more expensive than
+  // pointer comparison, but yields many more full MPC hits,
+  // so it generally makes up for it.
   return ComputedStyleBase::InheritedDataShared(other);
-}
-
-static bool DependenceOnContentHeightHasChanged(const ComputedStyle& a,
-                                                const ComputedStyle& b) {
-  // If top or bottom become auto/non-auto then it means we either have to solve
-  // height based on the content or stop doing so
-  // (http://www.w3.org/TR/CSS2/visudet.html#abs-non-replaced-height)
-  // - either way requires a layout.
-  return a.LogicalTop().IsAuto() != b.LogicalTop().IsAuto() ||
-         a.LogicalBottom().IsAuto() != b.LogicalBottom().IsAuto();
 }
 
 StyleDifference ComputedStyle::VisualInvalidationDiff(
     const Document& document,
     const ComputedStyle& other) const {
-  // Note, we use .Get() on each DataRef below because DataRef::operator== will
-  // do a deep compare, which is duplicate work when we're going to compare each
-  // property inside this function anyway.
-
   StyleDifference diff;
   if (DiffNeedsReshapeAndFullLayoutAndPaintInvalidation(*this, other)) {
     diff.SetNeedsReshape();
     diff.SetNeedsFullLayout();
-    diff.SetNeedsPaintInvalidation();
+    diff.SetNeedsNormalPaintInvalidation();
   }
 
-  if ((!diff.NeedsFullLayout() || !diff.NeedsPaintInvalidation()) &&
+  if ((!diff.NeedsFullLayout() || !diff.NeedsNormalPaintInvalidation()) &&
       DiffNeedsFullLayoutAndPaintInvalidation(other)) {
     diff.SetNeedsFullLayout();
-    diff.SetNeedsPaintInvalidation();
+    diff.SetNeedsNormalPaintInvalidation();
   }
 
-  if (!diff.NeedsFullLayout() && DiffNeedsFullLayout(document, other))
+  if (!diff.NeedsFullLayout() && DiffNeedsFullLayout(document, other)) {
     diff.SetNeedsFullLayout();
+  }
 
   if (!diff.NeedsFullLayout() && !MarginEqual(other)) {
-    // Relative-positioned elements collapse their margins so need a full
-    // layout.
-    if (HasOutOfFlowPosition())
+    // Inflow elements participate in margin-collapsing so need a full layout.
+    if (HasOutOfFlowPosition()) {
       diff.SetNeedsPositionedMovementLayout();
-    else
+    } else {
       diff.SetNeedsFullLayout();
+    }
   }
 
   if (!diff.NeedsFullLayout() && GetPosition() != EPosition::kStatic &&
-      !OffsetEqual(other)) {
-    // Optimize for the case where a positioned layer is moving but not changing
-    // size.
-    if (DependenceOnContentHeightHasChanged(*this, other))
-      diff.SetNeedsFullLayout();
-    else
-      diff.SetNeedsPositionedMovementLayout();
+      (!InsetsEqual(other) ||
+       (HasOutOfFlowPosition() && GetInsetArea() != other.GetInsetArea()))) {
+    diff.SetNeedsPositionedMovementLayout();
   }
 
   AdjustDiffForNeedsPaintInvalidation(other, diff, document);
-
-  if (DiffNeedsVisualRectUpdate(other))
-    diff.SetNeedsVisualRectUpdate();
 
   UpdatePropertySpecificDifferences(other, diff);
 
   // The following condition needs to be at last, because it may depend on
   // conditions in diff computed above.
-  if (ScrollAnchorDisablingPropertyChanged(other, diff))
+  if (ScrollAnchorDisablingPropertyChanged(other, diff)) {
     diff.SetScrollAnchorDisablingPropertyChanged();
+  }
 
   // Cursors are not checked, since they will be set appropriately in response
   // to mouse events, so they don't need to cause any paint invalidation or
@@ -826,11 +802,13 @@ StyleDifference ComputedStyle::VisualInvalidationDiff(
 bool ComputedStyle::ScrollAnchorDisablingPropertyChanged(
     const ComputedStyle& other,
     const StyleDifference& diff) const {
-  if (ComputedStyleBase::ScrollAnchorDisablingPropertyChanged(*this, other))
+  if (ComputedStyleBase::ScrollAnchorDisablingPropertyChanged(*this, other)) {
     return true;
+  }
 
-  if (diff.TransformChanged())
+  if (diff.TransformChanged()) {
     return true;
+  }
 
   return false;
 }
@@ -844,14 +822,17 @@ bool ComputedStyle::DiffNeedsFullLayoutAndPaintInvalidation(
   // - or the layoutObject knows how to exactly invalidate paints caused by the
   //   layout change instead of forced full paint invalidation.
 
-  if (ComputedStyleBase::DiffNeedsFullLayoutAndPaintInvalidation(*this, other))
+  if (ComputedStyleBase::DiffNeedsFullLayoutAndPaintInvalidation(*this,
+                                                                 other)) {
     return true;
+  }
 
   if (IsDisplayTableType(Display())) {
     if (ComputedStyleBase::
             DiffNeedsFullLayoutAndPaintInvalidationDisplayTableType(*this,
-                                                                    other))
+                                                                    other)) {
       return true;
+    }
 
     // In the collapsing border model, 'hidden' suppresses other borders, while
     // 'none' does not, so these style differences can be width differences.
@@ -871,18 +852,21 @@ bool ComputedStyle::DiffNeedsFullLayoutAndPaintInvalidation(
          (BorderRightStyle() == EBorderStyle::kHidden &&
           other.BorderRightStyle() == EBorderStyle::kNone) ||
          (BorderRightStyle() == EBorderStyle::kNone &&
-          other.BorderRightStyle() == EBorderStyle::kHidden)))
+          other.BorderRightStyle() == EBorderStyle::kHidden))) {
       return true;
-  } else if (Display() == EDisplay::kListItem) {
+    }
+  } else if (IsDisplayListItem()) {
     if (ComputedStyleBase::
             DiffNeedsFullLayoutAndPaintInvalidationDisplayListItem(*this,
-                                                                   other))
+                                                                   other)) {
       return true;
+    }
   }
 
   if ((Visibility() == EVisibility::kCollapse) !=
-      (other.Visibility() == EVisibility::kCollapse))
+      (other.Visibility() == EVisibility::kCollapse)) {
     return true;
+  }
 
   // Movement of non-static-positioned object is special cased in
   // ComputedStyle::VisualInvalidationDiff().
@@ -892,17 +876,20 @@ bool ComputedStyle::DiffNeedsFullLayoutAndPaintInvalidation(
 
 bool ComputedStyle::DiffNeedsFullLayout(const Document& document,
                                         const ComputedStyle& other) const {
-  if (ComputedStyleBase::DiffNeedsFullLayout(*this, other))
+  if (ComputedStyleBase::DiffNeedsFullLayout(*this, other)) {
     return true;
+  }
 
   if (IsDisplayLayoutCustomBox()) {
-    if (DiffNeedsFullLayoutForLayoutCustom(document, other))
+    if (DiffNeedsFullLayoutForLayoutCustom(document, other)) {
       return true;
+    }
   }
 
   if (DisplayLayoutCustomParentName()) {
-    if (DiffNeedsFullLayoutForLayoutCustomChild(document, other))
+    if (DiffNeedsFullLayoutForLayoutCustomChild(document, other)) {
       return true;
+    }
   }
 
   return false;
@@ -916,19 +903,24 @@ bool ComputedStyle::DiffNeedsFullLayoutForLayoutCustom(
   LayoutWorklet* worklet = LayoutWorklet::From(*document.domWindow());
   const AtomicString& name = DisplayLayoutCustomName();
 
-  if (!worklet->GetDocumentDefinitionMap()->Contains(name))
+  if (!worklet->GetDocumentDefinitionMap()->Contains(name)) {
     return false;
+  }
 
   const DocumentLayoutDefinition* definition =
       worklet->GetDocumentDefinitionMap()->at(name);
-  if (definition == kInvalidDocumentLayoutDefinition)
+  if (definition == kInvalidDocumentLayoutDefinition) {
     return false;
+  }
 
-  if (!PropertiesEqual(definition->NativeInvalidationProperties(), other))
+  if (!PropertiesEqual(definition->NativeInvalidationProperties(), other)) {
     return true;
+  }
 
-  if (!CustomPropertiesEqual(definition->CustomInvalidationProperties(), other))
+  if (!CustomPropertiesEqual(definition->CustomInvalidationProperties(),
+                             other)) {
     return true;
+  }
 
   return false;
 }
@@ -939,20 +931,25 @@ bool ComputedStyle::DiffNeedsFullLayoutForLayoutCustomChild(
   LayoutWorklet* worklet = LayoutWorklet::From(*document.domWindow());
   const AtomicString& name = DisplayLayoutCustomParentName();
 
-  if (!worklet->GetDocumentDefinitionMap()->Contains(name))
+  if (!worklet->GetDocumentDefinitionMap()->Contains(name)) {
     return false;
+  }
 
   const DocumentLayoutDefinition* definition =
       worklet->GetDocumentDefinitionMap()->at(name);
-  if (definition == kInvalidDocumentLayoutDefinition)
+  if (definition == kInvalidDocumentLayoutDefinition) {
     return false;
+  }
 
-  if (!PropertiesEqual(definition->ChildNativeInvalidationProperties(), other))
+  if (!PropertiesEqual(definition->ChildNativeInvalidationProperties(),
+                       other)) {
     return true;
+  }
 
   if (!CustomPropertiesEqual(definition->ChildCustomInvalidationProperties(),
-                             other))
+                             other)) {
     return true;
+  }
 
   return false;
 }
@@ -962,20 +959,22 @@ void ComputedStyle::AdjustDiffForNeedsPaintInvalidation(
     StyleDifference& diff,
     const Document& document) const {
   if (ComputedStyleBase::DiffNeedsPaintInvalidation(*this, other) ||
-      !BorderVisuallyEqual(other) || !RadiiEqual(other))
-    diff.SetNeedsPaintInvalidation();
+      !BorderVisuallyEqual(other) || !RadiiEqual(other)) {
+    diff.SetNeedsNormalPaintInvalidation();
+  }
 
   AdjustDiffForClipPath(other, diff);
   AdjustDiffForBackgroundVisuallyEqual(other, diff);
 
-  if (diff.NeedsPaintInvalidation())
+  if (diff.NeedsNormalPaintInvalidation()) {
     return;
+  }
 
   if (PaintImagesInternal()) {
     for (const auto& image : *PaintImagesInternal()) {
       DCHECK(image);
       if (DiffNeedsPaintInvalidationForPaintImage(*image, other, document)) {
-        diff.SetNeedsPaintInvalidation();
+        diff.SetNeedsNormalPaintInvalidation();
         return;
       }
     }
@@ -995,7 +994,7 @@ void ComputedStyle::AdjustDiffForClipPath(const ComputedStyle& other,
 void ComputedStyle::AdjustDiffForBackgroundVisuallyEqual(
     const ComputedStyle& other,
     StyleDifference& diff) const {
-  if (BackgroundColorInternal() != other.BackgroundColorInternal()) {
+  if (BackgroundColor() != other.BackgroundColor()) {
     // If the background color change is not due to a composited animation, then
     // paint invalidation is required; but we can defer the decision until we
     // know whether the color change will be rendered by the compositor.
@@ -1009,7 +1008,7 @@ void ComputedStyle::AdjustDiffForBackgroundVisuallyEqual(
   }
 
   if (!BackgroundInternal().VisuallyEqual(other.BackgroundInternal())) {
-    diff.SetNeedsPaintInvalidation();
+    diff.SetNeedsNormalPaintInvalidation();
     return;
   }
   // If the background image depends on currentColor
@@ -1020,7 +1019,7 @@ void ComputedStyle::AdjustDiffForBackgroundVisuallyEqual(
       (GetCurrentColor() != other.GetCurrentColor() ||
        GetInternalVisitedCurrentColor() !=
            other.GetInternalVisitedCurrentColor())) {
-    diff.SetNeedsPaintInvalidation();
+    diff.SetNeedsNormalPaintInvalidation();
   }
 }
 
@@ -1030,8 +1029,9 @@ bool ComputedStyle::DiffNeedsPaintInvalidationForPaintImage(
     const Document& document) const {
   // https://crbug.com/835589: early exit when paint target is associated with
   // a link.
-  if (InsideLink() != EInsideLink::kNotInsideLink)
+  if (InsideLink() != EInsideLink::kNotInsideLink) {
     return false;
+  }
 
   CSSPaintValue* value = To<CSSPaintValue>(image.CssValue());
 
@@ -1039,15 +1039,18 @@ bool ComputedStyle::DiffNeedsPaintInvalidationForPaintImage(
   // we haven't yet been painted (and can't provide the invalidation
   // properties yet).
   if (!value->NativeInvalidationProperties(document) ||
-      !value->CustomInvalidationProperties(document))
+      !value->CustomInvalidationProperties(document)) {
     return true;
+  }
 
-  if (!PropertiesEqual(*value->NativeInvalidationProperties(document), other))
+  if (!PropertiesEqual(*value->NativeInvalidationProperties(document), other)) {
     return true;
+  }
 
   if (!CustomPropertiesEqual(*value->CustomInvalidationProperties(document),
-                             other))
+                             other)) {
     return true;
+  }
 
   return false;
 }
@@ -1060,8 +1063,9 @@ bool ComputedStyle::PropertiesEqual(const Vector<CSSPropertyID>& properties,
     const CSSProperty& property = CSSProperty::Get(property_id);
     if (!property.IsInterpolable() ||
         !CSSPropertyEquality::PropertiesEqual(PropertyHandle(property), *this,
-                                              other))
+                                              other)) {
       return false;
+    }
   }
 
   return true;
@@ -1071,8 +1075,9 @@ bool ComputedStyle::CustomPropertiesEqual(
     const Vector<AtomicString>& properties,
     const ComputedStyle& other) const {
   // Short-circuit if neither of the styles have custom properties.
-  if (!HasVariables() && !other.HasVariables())
+  if (!HasVariables() && !other.HasVariables()) {
     return true;
+  }
 
   for (const AtomicString& property_name : properties) {
     if (!base::ValuesEquivalent(GetVariableData(property_name),
@@ -1086,15 +1091,6 @@ bool ComputedStyle::CustomPropertiesEqual(
   }
 
   return true;
-}
-
-// This doesn't include conditions needing layout or overflow recomputation
-// which implies visual rect update.
-bool ComputedStyle::DiffNeedsVisualRectUpdate(
-    const ComputedStyle& other) const {
-  // Visual rect is empty if visibility is hidden. Also need to update visual
-  // rect of the resizer.
-  return ComputedStyleBase::DiffNeedsVisualRectUpdate(*this, other);
 }
 
 bool ComputedStyle::PotentialCompositingReasonsFor3DTransformChanged(
@@ -1111,8 +1107,10 @@ bool ComputedStyle::PotentialCompositingReasonsFor3DTransformChanged(
 void ComputedStyle::UpdatePropertySpecificDifferences(
     const ComputedStyle& other,
     StyleDifference& diff) const {
-  if (ComputedStyleBase::UpdatePropertySpecificDifferencesZIndex(*this, other))
+  if (ComputedStyleBase::UpdatePropertySpecificDifferencesZIndex(*this,
+                                                                 other)) {
     diff.SetZIndexChanged();
+  }
 
   if (ComputedStyleBase::UpdatePropertySpecificDifferencesTransform(*this,
                                                                     other)) {
@@ -1124,33 +1122,41 @@ void ComputedStyle::UpdatePropertySpecificDifferences(
     diff.SetOtherTransformPropertyChanged();
   }
 
-  if (ComputedStyleBase::UpdatePropertySpecificDifferencesOpacity(*this, other))
+  if (ComputedStyleBase::UpdatePropertySpecificDifferencesOpacity(*this,
+                                                                  other)) {
     diff.SetOpacityChanged();
+  }
 
-  if (ComputedStyleBase::UpdatePropertySpecificDifferencesFilter(*this, other))
+  if (ComputedStyleBase::UpdatePropertySpecificDifferencesFilter(*this,
+                                                                 other)) {
     diff.SetFilterChanged();
+  }
 
   if (ComputedStyleBase::
-          UpdatePropertySpecificDifferencesNeedsRecomputeVisualOverflow(*this,
-                                                                        other))
+          UpdatePropertySpecificDifferencesNeedsRecomputeVisualOverflow(
+              *this, other)) {
     diff.SetNeedsRecomputeVisualOverflow();
+  }
 
-  if (!diff.NeedsPaintInvalidation() &&
+  if (!diff.NeedsNormalPaintInvalidation() &&
       ComputedStyleBase::UpdatePropertySpecificDifferencesTextDecorationOrColor(
           *this, other)) {
     diff.SetTextDecorationOrColorChanged();
   }
 
-  if (ComputedStyleBase::UpdatePropertySpecificDifferencesMask(*this, other))
+  if (ComputedStyleBase::UpdatePropertySpecificDifferencesMask(*this, other)) {
     diff.SetMaskChanged();
+  }
 
   bool has_clip = HasOutOfFlowPosition() && !HasAutoClip();
   bool other_has_clip = other.HasOutOfFlowPosition() && !other.HasAutoClip();
-  if (has_clip != other_has_clip || (has_clip && Clip() != other.Clip()))
+  if (has_clip != other_has_clip || (has_clip && Clip() != other.Clip())) {
     diff.SetCSSClipChanged();
+  }
 
-  if (GetBlendMode() != other.GetBlendMode())
+  if (GetBlendMode() != other.GetBlendMode()) {
     diff.SetBlendModeChanged();
+  }
 
   if (HasCurrentTransformAnimation() != other.HasCurrentTransformAnimation() ||
       HasCurrentScaleAnimation() != other.HasCurrentScaleAnimation() ||
@@ -1168,7 +1174,7 @@ void ComputedStyle::UpdatePropertySpecificDifferences(
       ContainsPaint() != other.ContainsPaint() ||
       IsOverflowVisibleAlongBothAxes() !=
           other.IsOverflowVisibleAlongBothAxes() ||
-      !BackdropFilterDataEquivalent(other) ||
+      BackdropFilter() != other.BackdropFilter() ||
       PotentialCompositingReasonsFor3DTransformChanged(other)) {
     diff.SetCompositingReasonsChanged();
   }
@@ -1180,13 +1186,6 @@ void ComputedStyle::UpdatePropertySpecificDifferences(
        other.CompositablePaintAnimationChanged())) {
     diff.SetCompositablePaintEffectChanged();
   }
-}
-
-void ComputedStyle::AddPaintImage(StyleImage* image) {
-  if (!MutablePaintImagesInternal()) {
-    SetPaintImagesInternal(std::make_unique<PaintImages>());
-  }
-  MutablePaintImagesInternal()->push_back(image);
 }
 
 bool ComputedStyle::HasCSSPaintImagesUsingCustomProperty(
@@ -1206,26 +1205,8 @@ bool ComputedStyle::HasCSSPaintImagesUsingCustomProperty(
   return false;
 }
 
-void ComputedStyle::AddCursor(StyleImage* image,
-                              bool hot_spot_specified,
-                              const gfx::Point& hot_spot) {
-  if (!CursorDataInternal())
-    SetCursorDataInternal(MakeGarbageCollected<CursorList>());
-  MutableCursorDataInternal()->push_back(
-      CursorData(image, hot_spot_specified, hot_spot));
-}
-
-void ComputedStyle::SetCursorList(CursorList* other) {
-  SetCursorDataInternal(other);
-}
-
 bool ComputedStyle::QuotesDataEquivalent(const ComputedStyle& other) const {
   return base::ValuesEquivalent(Quotes(), other.Quotes());
-}
-
-void ComputedStyle::ClearCursorList() {
-  if (CursorDataInternal())
-    SetCursorDataInternal(nullptr);
 }
 
 static bool HasPropertyThatCreatesStackingContext(
@@ -1242,6 +1223,7 @@ static bool HasPropertyThatCreatesStackingContext(
       case CSSPropertyID::kOffsetPath:
       case CSSPropertyID::kOffsetPosition:
       case CSSPropertyID::kWebkitMask:
+      case CSSPropertyID::kAlternativeMask:
       case CSSPropertyID::kWebkitMaskBoxImage:
       case CSSPropertyID::kClipPath:
       case CSSPropertyID::kWebkitBoxReflect:
@@ -1252,52 +1234,13 @@ static bool HasPropertyThatCreatesStackingContext(
       case CSSPropertyID::kMixBlendMode:
       case CSSPropertyID::kIsolation:
       case CSSPropertyID::kContain:
+      case CSSPropertyID::kViewTransitionName:
         return true;
       default:
         break;
     }
   }
   return false;
-}
-
-void ComputedStyle::UpdateIsStackingContextWithoutContainment(
-    bool is_document_element,
-    bool is_in_top_layer,
-    bool is_svg_stacking) {
-  if (IsStackingContextWithoutContainment())
-    return;
-
-  // Force a stacking context for transform-style: preserve-3d. This happens
-  // even if preserves-3d is ignored due to a 'grouping property' being present
-  // which requires flattening. See:
-  // ComputedStyle::HasGroupingPropertyForUsedTransformStyle3D().
-  // This is legacy behavior that is left ambiguous in the official specs.
-  // See https://crbug.com/663650 for more details.
-  if (TransformStyle3D() == ETransformStyle3D::kPreserve3d) {
-    SetIsStackingContextWithoutContainment(true);
-    return;
-  }
-
-  if (is_document_element || is_in_top_layer || is_svg_stacking ||
-      StyleType() == kPseudoIdBackdrop || HasTransformRelatedProperty() ||
-      HasStackingGroupingProperty(BoxReflect()) ||
-      GetPosition() == EPosition::kFixed ||
-      GetPosition() == EPosition::kSticky ||
-      HasPropertyThatCreatesStackingContext(WillChangeProperties()) ||
-      /* TODO(882625): This becomes unnecessary when will-change correctly takes
-      into account active animations. */
-      ShouldCompositeForCurrentAnimations()) {
-    SetIsStackingContextWithoutContainment(true);
-  }
-}
-
-void ComputedStyle::AddCallbackSelector(const String& selector) {
-  if (!CallbackSelectors().Contains(selector))
-    MutableCallbackSelectorsInternal().push_back(selector);
-}
-
-void ComputedStyle::SetContent(ContentData* content_data) {
-  SetContentInternal(content_data);
 }
 
 static bool IsWillChangeTransformHintProperty(CSSPropertyID property) {
@@ -1330,8 +1273,9 @@ static bool IsWillChangeHintForAnyTransformProperty(CSSPropertyID property) {
 }
 
 static bool IsWillChangeCompositingHintProperty(CSSPropertyID property) {
-  if (IsWillChangeHintForAnyTransformProperty(property))
+  if (IsWillChangeHintForAnyTransformProperty(property)) {
     return true;
+  }
   switch (ResolveCSSPropertyID(property)) {
     case CSSPropertyID::kOpacity:
     case CSSPropertyID::kFilter:
@@ -1368,11 +1312,13 @@ bool ComputedStyle::RequireTransformOrigin(
   // transform-origin brackets the transform with translate operations.
   // Optimize for the case where the only transform is a translation, since the
   // transform-origin is irrelevant in that case.
-  if (apply_origin != kIncludeTransformOrigin)
+  if (apply_origin != kIncludeTransformOrigin) {
     return false;
+  }
 
-  if (apply_motion_path == kIncludeMotionPath)
+  if (apply_motion_path == kIncludeMotionPath) {
     return true;
+  }
 
   for (const auto& operation : Transform().Operations()) {
     TransformOperation::OperationType type = operation->GetType();
@@ -1380,19 +1326,22 @@ bool ComputedStyle::RequireTransformOrigin(
         type != TransformOperation::kTranslateY &&
         type != TransformOperation::kTranslate &&
         type != TransformOperation::kTranslateZ &&
-        type != TransformOperation::kTranslate3D)
+        type != TransformOperation::kTranslate3D) {
       return true;
+    }
   }
 
   return Scale() || Rotate();
 }
 
 InterpolationQuality ComputedStyle::GetInterpolationQuality() const {
-  if (ImageRendering() == EImageRendering::kPixelated)
+  if (ImageRendering() == EImageRendering::kPixelated) {
     return kInterpolationNone;
+  }
 
-  if (ImageRendering() == EImageRendering::kWebkitOptimizeContrast)
+  if (ImageRendering() == EImageRendering::kWebkitOptimizeContrast) {
     return kInterpolationLow;
+  }
 
   return kInterpolationDefault;
 }
@@ -1402,36 +1351,40 @@ void ComputedStyle::LoadDeferredImages(Document& document) const {
     for (const FillLayer* background_layer = &BackgroundLayers();
          background_layer; background_layer = background_layer->Next()) {
       if (StyleImage* image = background_layer->GetImage()) {
-        if (image->IsImageResource() && image->IsLazyloadPossiblyDeferred())
+        if (image->IsImageResource() && image->IsLazyloadPossiblyDeferred()) {
           To<StyleFetchedImage>(image)->LoadDeferredImage(document);
+        }
       }
     }
   }
 }
 
 void ComputedStyle::ApplyTransform(
-    TransformationMatrix& result,
-    const LayoutSize& border_box_size,
+    gfx::Transform& result,
+    const LayoutBox* box,
+    const PhysicalRect& reference_box,
     ApplyTransformOperations apply_operations,
     ApplyTransformOrigin apply_origin,
     ApplyMotionPath apply_motion_path,
     ApplyIndependentTransformProperties apply_independent_transform_properties)
     const {
-  ApplyTransform(result, gfx::RectF(gfx::SizeF(border_box_size)),
-                 apply_operations, apply_origin, apply_motion_path,
+  ApplyTransform(result, box, gfx::RectF(reference_box), apply_operations,
+                 apply_origin, apply_motion_path,
                  apply_independent_transform_properties);
 }
 
 void ComputedStyle::ApplyTransform(
-    TransformationMatrix& result,
+    gfx::Transform& result,
+    const LayoutBox* box,
     const gfx::RectF& bounding_box,
     ApplyTransformOperations apply_operations,
     ApplyTransformOrigin apply_origin,
     ApplyMotionPath apply_motion_path,
     ApplyIndependentTransformProperties apply_independent_transform_properties)
     const {
-  if (!HasOffset())
+  if (!HasOffset()) {
     apply_motion_path = kExcludeMotionPath;
+  }
   bool apply_transform_origin =
       RequireTransformOrigin(apply_origin, apply_motion_path);
 
@@ -1456,22 +1409,27 @@ void ComputedStyle::ApplyTransform(
 
   if (apply_independent_transform_properties ==
       kIncludeIndependentTransformProperties) {
-    if (Translate())
+    if (Translate()) {
       Translate()->Apply(result, box_size);
+    }
 
-    if (Rotate())
+    if (Rotate()) {
       Rotate()->Apply(result, box_size);
+    }
 
-    if (Scale())
+    if (Scale()) {
       Scale()->Apply(result, box_size);
+    }
   }
 
-  if (apply_motion_path == kIncludeMotionPath)
-    ApplyMotionPathTransform(origin_x, origin_y, bounding_box, result);
+  if (apply_motion_path == kIncludeMotionPath) {
+    ApplyMotionPathTransform(origin_x, origin_y, box, bounding_box, result);
+  }
 
   if (apply_operations == kIncludeTransformOperations) {
-    for (const auto& operation : Transform().Operations())
+    for (const auto& operation : Transform().Operations()) {
       operation->Apply(result, box_size);
+    }
   }
 
   if (apply_transform_origin) {
@@ -1479,81 +1437,271 @@ void ComputedStyle::ApplyTransform(
   }
 }
 
-bool ComputedStyle::HasFilters() const {
-  return FilterInternal().Get() && !FilterInternal()->operations_.IsEmpty();
+namespace {
+
+gfx::RectF GetReferenceBox(const LayoutBox* box, CoordBox coord_box) {
+  if (box) {
+    if (const LayoutBlock* containing_block = box->ContainingBlock()) {
+      // In SVG contexts, all values behave as view-box.
+      if (box->IsSVG()) {
+        return gfx::RectF(SVGViewportResolver(*box).ResolveViewport());
+      }
+      // https://drafts.csswg.org/css-box-4/#typedef-coord-box
+      switch (coord_box) {
+        case CoordBox::kFillBox:
+        case CoordBox::kContentBox:
+          return gfx::RectF(containing_block->PhysicalContentBoxRect());
+        case CoordBox::kPaddingBox:
+          return gfx::RectF(containing_block->PhysicalPaddingBoxRect());
+        case CoordBox::kViewBox:
+        case CoordBox::kStrokeBox:
+        case CoordBox::kBorderBox:
+          return gfx::RectF(containing_block->PhysicalBorderBoxRect());
+      }
+    }
+  }
+  // As the motion path calculations can be called before all the layout
+  // has been correctly calculated, we can end up here.
+  return gfx::RectF();
 }
 
-void ComputedStyle::ApplyMotionPathTransform(
-    float origin_x,
-    float origin_y,
-    const gfx::RectF& bounding_box,
-    TransformationMatrix& transform) const {
-  // TODO(ericwilligers): crbug.com/638055 Apply offset-position.
-  if (!OffsetPath()) {
+gfx::PointF GetOffsetFromContainingBlock(const LayoutBox* box) {
+  if (box) {
+    if (const LayoutBlock* containing_block = box->ContainingBlock()) {
+      gfx::PointF offset = box->LocalToAncestorPoint(
+          gfx::PointF(), containing_block, kIgnoreTransforms);
+      return offset;
+    }
+  }
+  return {0, 0};
+}
+
+// https://drafts.fxtf.org/motion/#offset-position-property
+gfx::PointF GetStartingPointOfThePath(
+    const gfx::PointF& offset_from_reference_box,
+    const LengthPoint& offset_position,
+    const gfx::SizeF& reference_box_size) {
+  if (offset_position.X().IsAuto()) {
+    return offset_from_reference_box;
+  }
+  if (offset_position.X().IsNone()) {
+    // Currently all the use cases will behave as "at center".
+    return PointForLengthPoint(
+        LengthPoint(Length::Percent(50), Length::Percent(50)),
+        reference_box_size);
+  }
+  return PointForLengthPoint(offset_position, reference_box_size);
+}
+
+}  // namespace
+
+PointAndTangent ComputedStyle::CalculatePointAndTangentOnBasicShape(
+    const BasicShape& shape,
+    const gfx::PointF& starting_point,
+    const gfx::SizeF& reference_box_size) const {
+  Path path;
+  if (const auto* circle_or_ellipse =
+          DynamicTo<BasicShapeWithCenterAndRadii>(shape);
+      circle_or_ellipse && !circle_or_ellipse->HasExplicitCenter()) {
+    // For all <basic-shape>s, if they accept an at <position> argument
+    // but that argument is omitted, and the element defines
+    // an offset starting position via offset-position,
+    // it uses the specified offset starting position for that argument.
+    circle_or_ellipse->GetPathFromCenter(
+        path, starting_point, gfx::RectF(reference_box_size), EffectiveZoom());
+  } else {
+    shape.GetPath(path, gfx::RectF(reference_box_size), EffectiveZoom());
+  }
+  float shape_length = path.length();
+  float path_length = FloatValueForLength(OffsetDistance(), shape_length);
+  // All the shapes are closed at this point.
+  if (shape_length > 0) {
+    path_length = fmod(path_length, shape_length);
+    if (path_length < 0) {
+      path_length += shape_length;
+    }
+  }
+  return path.PointAndNormalAtLength(path_length);
+}
+
+PointAndTangent ComputedStyle::CalculatePointAndTangentOnRay(
+    const StyleRay& ray,
+    const LayoutBox* box,
+    const gfx::PointF& starting_point,
+    const gfx::SizeF& reference_box_size) const {
+  float ray_length =
+      ray.CalculateRayPathLength(starting_point, reference_box_size);
+  if (ray.Contain() && box) {
+    // The length of the offset path is reduced so that the element stays
+    // within the containing block even at offset-distance: 100%.
+    // Specifically, the path’s length is reduced by half the width
+    // or half the height of the element’s border box,
+    // whichever is larger, and floored at zero.
+    const PhysicalRect border_box_rect = box->PhysicalBorderBoxRect();
+    const float largest_side = std::max(border_box_rect.Width().ToFloat(),
+                                        border_box_rect.Height().ToFloat());
+    ray_length -= largest_side / 2;
+    ray_length = std::max(ray_length, 0.f);
+  }
+  const float path_length = FloatValueForLength(OffsetDistance(), ray_length);
+  return ray.PointAndNormalAtLength(starting_point, path_length);
+}
+
+PointAndTangent ComputedStyle::CalculatePointAndTangentOnPath(
+    const Path& path) const {
+  float zoom = EffectiveZoom();
+  float path_length = path.length();
+  float float_distance =
+      FloatValueForLength(OffsetDistance(), path_length * zoom) / zoom;
+  float computed_distance;
+  if (path.IsClosed() && path_length > 0) {
+    computed_distance = fmod(float_distance, path_length);
+    if (computed_distance < 0) {
+      computed_distance += path_length;
+    }
+  } else {
+    computed_distance = ClampTo<float>(float_distance, 0, path_length);
+  }
+  PointAndTangent path_position =
+      path.PointAndNormalAtLength(computed_distance);
+  path_position.point.Scale(zoom, zoom);
+  return path_position;
+}
+
+void ComputedStyle::ApplyMotionPathTransform(float origin_x,
+                                             float origin_y,
+                                             const LayoutBox* box,
+                                             const gfx::RectF& bounding_box,
+                                             gfx::Transform& transform) const {
+  const OffsetPathOperation* offset_path = OffsetPath();
+  if (!offset_path) {
     return;
   }
+
   const LengthPoint& position = OffsetPosition();
-  const LengthPoint& anchor = OffsetAnchor();
-  const Length& distance = OffsetDistance();
-  const BasicShape* path = OffsetPath();
   const StyleOffsetRotation& rotate = OffsetRotate();
+  CoordBox coord_box = offset_path->GetCoordBox();
 
   PointAndTangent path_position;
-  if (path->GetType() == BasicShape::kStyleRayType) {
-    // TODO(ericwilligers): crbug.com/641245 Support <size> for ray paths.
-    float float_distance = FloatValueForLength(distance, 0);
-
-    // Use ClampTo() to convert infinite values to min/max finite ones.
-    path_position.tangent_in_degrees =
-        ClampTo<float, float>(To<StyleRay>(*path).Angle() - 90);
-    float tangent_in_radians = Deg2rad(path_position.tangent_in_degrees);
-    path_position.point.set_x(float_distance * cos(tangent_in_radians));
-    path_position.point.set_y(float_distance * sin(tangent_in_radians));
-  } else {
-    float zoom = EffectiveZoom();
-    const StylePath& motion_path = To<StylePath>(*path);
-    float path_length = motion_path.length();
-    float float_distance =
-        FloatValueForLength(distance, path_length * zoom) / zoom;
-    float computed_distance;
-    if (motion_path.IsClosed() && path_length > 0) {
-      computed_distance = fmod(float_distance, path_length);
-      if (computed_distance < 0)
-        computed_distance += path_length;
-    } else {
-      computed_distance = ClampTo<float>(float_distance, 0, path_length);
+  if (const auto* shape_operation =
+          DynamicTo<ShapeOffsetPathOperation>(offset_path)) {
+    const BasicShape& basic_shape = shape_operation->GetBasicShape();
+    switch (basic_shape.GetType()) {
+      case BasicShape::kStylePathType: {
+        const StylePath& path = To<StylePath>(basic_shape);
+        path_position = CalculatePointAndTangentOnPath(path.GetPath());
+        break;
+      }
+      case BasicShape::kStyleRayType: {
+        const gfx::RectF reference_box = GetReferenceBox(box, coord_box);
+        const gfx::PointF offset_from_reference_box =
+            GetOffsetFromContainingBlock(box) -
+            reference_box.OffsetFromOrigin();
+        const gfx::SizeF& reference_box_size = reference_box.size();
+        const StyleRay& ray = To<StyleRay>(basic_shape);
+        // Specifies the origin of the ray, where the ray’s line begins (the 0%
+        // position). It’s resolved by using the <position> to position a 0x0
+        // object area within the box’s containing block. If omitted, it uses
+        // the offset starting position of the element, given by
+        // offset-position. If the element doesn’t have an offset starting
+        // position either, it behaves as at center.
+        // NOTE: In current parsing implementation:
+        // if `at position` is omitted, it will be computed as 50% 50%.
+        gfx::PointF starting_point;
+        if (ray.HasExplicitCenter() || position.X().IsNone()) {
+          starting_point = PointForCenterCoordinate(
+              ray.CenterX(), ray.CenterY(), reference_box_size);
+        } else {
+          starting_point = GetStartingPointOfThePath(
+              offset_from_reference_box, position, reference_box_size);
+        }
+        path_position = CalculatePointAndTangentOnRay(ray, box, starting_point,
+                                                      reference_box_size);
+        // `path_position.point` is now relative to the containing block.
+        // Make it relative to the box.
+        path_position.point -= offset_from_reference_box.OffsetFromOrigin();
+        break;
+      }
+      case BasicShape::kBasicShapeCircleType:
+      case BasicShape::kBasicShapeEllipseType:
+      case BasicShape::kBasicShapeInsetType:
+      case BasicShape::kBasicShapeXYWHType:
+      case BasicShape::kBasicShapeRectType:
+      case BasicShape::kBasicShapePolygonType: {
+        const gfx::RectF reference_box = GetReferenceBox(box, coord_box);
+        const gfx::PointF offset_from_reference_box =
+            GetOffsetFromContainingBlock(box) -
+            reference_box.OffsetFromOrigin();
+        const gfx::SizeF& reference_box_size = reference_box.size();
+        const gfx::PointF starting_point = GetStartingPointOfThePath(
+            offset_from_reference_box, position, reference_box_size);
+        path_position = CalculatePointAndTangentOnBasicShape(
+            basic_shape, starting_point, reference_box_size);
+        // `path_position.point` is now relative to the containing block.
+        // Make it relative to the box.
+        path_position.point -= offset_from_reference_box.OffsetFromOrigin();
+        break;
+      }
     }
-
-    path_position =
-        motion_path.GetPath().PointAndNormalAtLength(computed_distance);
-    path_position.point.Scale(zoom, zoom);
+  } else if (IsA<CoordBoxOffsetPathOperation>(offset_path)) {
+    if (box && box->ContainingBlock()) {
+      scoped_refptr<BasicShapeInset> inset = BasicShapeInset::Create();
+      inset->SetTop(Length::Fixed(0));
+      inset->SetBottom(Length::Fixed(0));
+      inset->SetLeft(Length::Fixed(0));
+      inset->SetRight(Length::Fixed(0));
+      const ComputedStyle& style = box->ContainingBlock()->StyleRef();
+      inset->SetTopLeftRadius(style.BorderTopLeftRadius());
+      inset->SetTopRightRadius(style.BorderTopRightRadius());
+      inset->SetBottomRightRadius(style.BorderBottomRightRadius());
+      inset->SetBottomLeftRadius(style.BorderBottomLeftRadius());
+      const gfx::RectF reference_box = GetReferenceBox(box, coord_box);
+      const gfx::PointF offset_from_reference_box =
+          GetOffsetFromContainingBlock(box) - reference_box.OffsetFromOrigin();
+      const gfx::SizeF& reference_box_size = reference_box.size();
+      const gfx::PointF starting_point = GetStartingPointOfThePath(
+          offset_from_reference_box, position, reference_box_size);
+      path_position = CalculatePointAndTangentOnBasicShape(
+          *inset, starting_point, reference_box_size);
+      // `path_position.point` is now relative to the containing block.
+      // Make it relative to the box.
+      path_position.point -= offset_from_reference_box.OffsetFromOrigin();
+    }
+  } else {
+    const auto* url_operation =
+        DynamicTo<ReferenceOffsetPathOperation>(offset_path);
+    if (!url_operation->Resource()) {
+      return;
+    }
+    const auto* target =
+        DynamicTo<SVGGeometryElement>(url_operation->Resource()->Target());
+    Path path;
+    if (!target || !target->GetComputedStyle()) {
+      // Failure to find a shape should be equivalent to a "m0,0" path.
+      path.MoveTo({0, 0});
+    } else {
+      path = target->AsPath();
+    }
+    path_position = CalculatePointAndTangentOnPath(path);
   }
 
-  if (rotate.type == OffsetRotationType::kFixed)
+  if (rotate.type == OffsetRotationType::kFixed) {
     path_position.tangent_in_degrees = 0;
-
-  float origin_shift_x = 0;
-  float origin_shift_y = 0;
-  // If the offset-position and offset-anchor properties are not yet enabled,
-  // they will have the default value, auto.
-  gfx::PointF anchor_point(origin_x, origin_y);
-  if (!position.X().IsAuto() || !anchor.X().IsAuto()) {
-    anchor_point = PointForLengthPoint(anchor, bounding_box.size());
-    anchor_point += bounding_box.OffsetFromOrigin();
-
-    // Shift the origin from transform-origin to offset-anchor.
-    origin_shift_x = anchor_point.x() - origin_x;
-    origin_shift_y = anchor_point.y() - origin_y;
   }
 
-  transform.Translate(
-      path_position.point.x() - anchor_point.x() + origin_shift_x,
-      path_position.point.y() - anchor_point.y() + origin_shift_y);
+  transform.Translate(path_position.point.x() - origin_x,
+                      path_position.point.y() - origin_y);
   transform.Rotate(path_position.tangent_in_degrees + rotate.angle);
 
-  if (!position.X().IsAuto() || !anchor.X().IsAuto()) {
-    // Shift the origin back to transform-origin.
-    transform.Translate(-origin_shift_x, -origin_shift_y);
+  const LengthPoint& anchor = OffsetAnchor();
+  if (!anchor.X().IsAuto()) {
+    gfx::PointF anchor_point = PointForLengthPoint(anchor, bounding_box.size());
+    anchor_point += bounding_box.OffsetFromOrigin();
+
+    // Shift the origin back to transform-origin and then move it based on the
+    // anchor.
+    transform.Translate(origin_x - anchor_point.x(),
+                        origin_y - anchor_point.y());
   }
 }
 
@@ -1561,35 +1709,8 @@ bool ComputedStyle::TextShadowDataEquivalent(const ComputedStyle& other) const {
   return base::ValuesEquivalent(TextShadow(), other.TextShadow());
 }
 
-StyleImage* ComputedStyle::ListStyleImage() const {
-  return ListStyleImageInternal();
-}
-void ComputedStyle::SetListStyleImage(StyleImage* v) {
-  SetListStyleImageInternal(v);
-}
-
-bool ComputedStyle::SetEffectiveZoom(float f) {
-  // Clamp the effective zoom value to a smaller (but hopeful still large
-  // enough) range, to avoid overflow in derived computations.
-  float clamped_effective_zoom = ClampTo<float>(f, 1e-6, 1e6);
-  if (EffectiveZoom() == clamped_effective_zoom)
-    return false;
-  SetEffectiveZoomInternal(clamped_effective_zoom);
-  // Record UMA for the effective zoom in order to assess the relative
-  // importance of sub-pixel behavior, and related features and bugs.
-  // Clamp to a max of 400%, to make the histogram behave better at no
-  // real cost to our understanding of the zooms in use.
-  base::UmaHistogramSparse(
-      "Blink.EffectiveZoom",
-      base::clamp<float>(clamped_effective_zoom * 100, 0, 400));
-  return true;
-}
-
 bool ComputedStyle::CanRenderBorderImage() const {
-  if (!HasBorderDecoration())
-    return false;
-
-  StyleImage* border_image = BorderImage().GetImage();
+  const StyleImage* border_image = BorderImage().GetImage();
   return border_image && border_image->CanRender() && border_image->IsLoaded();
 }
 
@@ -1597,86 +1718,24 @@ const CounterDirectiveMap* ComputedStyle::GetCounterDirectives() const {
   return CounterDirectivesInternal().get();
 }
 
-CounterDirectiveMap& ComputedStyle::AccessCounterDirectives() {
-  std::unique_ptr<CounterDirectiveMap>& map =
-      MutableCounterDirectivesInternal();
-  if (!map)
-    map = std::make_unique<CounterDirectiveMap>();
-  return *map;
-}
-
 const CounterDirectives ComputedStyle::GetCounterDirectives(
     const AtomicString& identifier) const {
   if (GetCounterDirectives()) {
     auto it = GetCounterDirectives()->find(identifier);
-    if (it != GetCounterDirectives()->end())
+    if (it != GetCounterDirectives()->end()) {
       return it->value;
+    }
   }
   return CounterDirectives();
 }
 
-void ComputedStyle::ClearIncrementDirectives() {
-  if (!GetCounterDirectives())
-    return;
-
-  // This makes us copy even if we may not be removing any items.
-  CounterDirectiveMap& map = AccessCounterDirectives();
-  typedef CounterDirectiveMap::iterator Iterator;
-
-  Iterator end = map.end();
-  for (Iterator it = map.begin(); it != end; ++it)
-    it->value.ClearIncrement();
-}
-
-void ComputedStyle::ClearResetDirectives() {
-  if (!GetCounterDirectives())
-    return;
-
-  // This makes us copy even if we may not be removing any items.
-  CounterDirectiveMap& map = AccessCounterDirectives();
-  typedef CounterDirectiveMap::iterator Iterator;
-
-  Iterator end = map.end();
-  for (Iterator it = map.begin(); it != end; ++it)
-    it->value.ClearReset();
-}
-
-void ComputedStyle::ClearSetDirectives() {
-  if (!GetCounterDirectives())
-    return;
-
-  auto& map = AccessCounterDirectives();
-  for (auto& value_pair : map)
-    value_pair.value.ClearSet();
-}
-
-AtomicString ComputedStyle::LocaleForLineBreakIterator() const {
-  LineBreakIteratorMode mode = LineBreakIteratorMode::kDefault;
-  switch (GetLineBreak()) {
-    case LineBreak::kAuto:
-    case LineBreak::kAfterWhiteSpace:
-    case LineBreak::kAnywhere:
-      return Locale();
-    case LineBreak::kNormal:
-      mode = LineBreakIteratorMode::kNormal;
-      break;
-    case LineBreak::kStrict:
-      mode = LineBreakIteratorMode::kStrict;
-      break;
-    case LineBreak::kLoose:
-      mode = LineBreakIteratorMode::kLoose;
-      break;
-  }
-  if (const LayoutLocale* locale = GetFontDescription().Locale())
-    return locale->LocaleWithBreakKeyword(mode);
-  return Locale();
-}
-
 Hyphenation* ComputedStyle::GetHyphenation() const {
-  if (GetHyphens() != Hyphens::kAuto)
+  if (GetHyphens() != Hyphens::kAuto) {
     return nullptr;
-  if (const LayoutLocale* locale = GetFontDescription().Locale())
+  }
+  if (const LayoutLocale* locale = GetFontDescription().Locale()) {
     return locale->GetHyphenation();
+  }
   return nullptr;
 }
 
@@ -1692,8 +1751,9 @@ Hyphenation* ComputedStyle::GetHyphenationWithLimits() const {
 
 const AtomicString& ComputedStyle::HyphenString() const {
   const AtomicString& hyphenation_string = HyphenationString();
-  if (!hyphenation_string.IsNull())
+  if (!hyphenation_string.IsNull()) {
     return hyphenation_string;
+  }
 
   // FIXME: This should depend on locale.
   DEFINE_STATIC_LOCAL(AtomicString, hyphen_minus_string,
@@ -1707,8 +1767,9 @@ const AtomicString& ComputedStyle::HyphenString() const {
 }
 
 ETextAlign ComputedStyle::GetTextAlign(bool is_last_line) const {
-  if (!is_last_line)
+  if (!is_last_line) {
     return GetTextAlign();
+  }
 
   // When this is the last line of a block, or the line ends with a forced line
   // break.
@@ -1728,8 +1789,9 @@ ETextAlign ComputedStyle::GetTextAlign(bool is_last_line) const {
       return ETextAlign::kJustify;
     case ETextAlignLast::kAuto:
       ETextAlign text_align = GetTextAlign();
-      if (text_align == ETextAlign::kJustify)
+      if (text_align == ETextAlign::kJustify) {
         return ETextAlign::kStart;
+      }
       return text_align;
   }
   NOTREACHED();
@@ -1750,8 +1812,9 @@ bool ComputedStyle::ShouldUseTextIndent(bool is_first_line) const {
 // off when CrOS gets new Georgian fonts covering capital letters.
 // ( https://crbug.com/880144 ).
 static String DisableNewGeorgianCapitalLetters(const String& text) {
-  if (text.IsNull() || text.Is8Bit())
+  if (text.IsNull() || text.Is8Bit()) {
     return text;
+  }
   unsigned length = text.length();
   const StringImpl& input = *(text.Impl());
   StringBuilder result;
@@ -1760,58 +1823,56 @@ static String DisableNewGeorgianCapitalLetters(const String& text) {
   // about surrogate handling.
   for (unsigned i = 0; i < length; ++i) {
     UChar character = input[i];
-    if (Character::IsModernGeorgianUppercase(character))
+    if (Character::IsModernGeorgianUppercase(character)) {
       result.Append(Character::LowercaseModernGeorgianUppercase(character));
-    else
+    } else {
       result.Append(character);
+    }
   }
   return result.ToString();
 }
 
 namespace {
 
-// TODO(https://crbug.com/1076420): this needs to handle all text-transform
-// values.
-static void ApplyMathTransform(String* text, ETextTransform math_variant) {
-  DCHECK(math_variant == ETextTransform::kMathAuto);
-  DCHECK_EQ(text->length(), 1u);
-  UChar character = (*text)[0];
-  UChar32 transformed_char = MathVariant((*text)[0]);
-  if (transformed_char == static_cast<UChar32>(character))
-    return;
+String ApplyMathAutoTransform(const String& text) {
+  if (text.length() != 1) {
+    return text;
+  }
+  UChar character = text[0];
+  UChar32 transformed_char = ItalicMathVariant(text[0]);
+  if (transformed_char == static_cast<UChar32>(character)) {
+    return text;
+  }
 
   Vector<UChar> transformed_text(U16_LENGTH(transformed_char));
   int i = 0;
   U16_APPEND_UNSAFE(transformed_text, i, transformed_char);
-  *text = String(transformed_text);
+  return String(transformed_text);
 }
 
 }  // namespace
 
-void ComputedStyle::ApplyTextTransform(String* text,
-                                       UChar previous_character) const {
+String ComputedStyle::ApplyTextTransform(const String& text,
+                                         UChar previous_character,
+                                         TextOffsetMap* offset_map) const {
   switch (TextTransform()) {
     case ETextTransform::kNone:
-      return;
+      return text;
     case ETextTransform::kCapitalize:
-      *text = Capitalize(*text, previous_character);
-      return;
+      return Capitalize(text, previous_character);
     case ETextTransform::kUppercase: {
       const LayoutLocale* locale = GetFontDescription().Locale();
       CaseMap case_map(locale ? locale->CaseMapLocale() : CaseMap::Locale());
-      *text = DisableNewGeorgianCapitalLetters(case_map.ToUpper(*text));
-      return;
+      return DisableNewGeorgianCapitalLetters(
+          case_map.ToUpper(text, offset_map));
     }
     case ETextTransform::kLowercase: {
       const LayoutLocale* locale = GetFontDescription().Locale();
       CaseMap case_map(locale ? locale->CaseMapLocale() : CaseMap::Locale());
-      *text = case_map.ToLower(*text);
-      return;
+      return case_map.ToLower(text, offset_map);
     }
     case ETextTransform::kMathAuto:
-      if (text->length() == 1)
-        ApplyMathTransform(text, ETextTransform::kMathAuto);
-      return;
+      return ApplyMathAutoTransform(text);
   }
   NOTREACHED();
 }
@@ -1878,26 +1939,13 @@ const AtomicString& ComputedStyle::TextEmphasisMarkString() const {
 
 LineLogicalSide ComputedStyle::GetTextEmphasisLineLogicalSide() const {
   TextEmphasisPosition position = GetTextEmphasisPosition();
-  if (IsHorizontalWritingMode())
+  if (IsHorizontalWritingMode()) {
     return IsOver(position) ? LineLogicalSide::kOver : LineLogicalSide::kUnder;
-  if (GetWritingMode() != WritingMode::kSidewaysLr)
+  }
+  if (GetWritingMode() != WritingMode::kSidewaysLr) {
     return IsRight(position) ? LineLogicalSide::kOver : LineLogicalSide::kUnder;
+  }
   return IsLeft(position) ? LineLogicalSide::kOver : LineLogicalSide::kUnder;
-}
-
-CSSAnimationData& ComputedStyle::AccessAnimations() {
-  std::unique_ptr<CSSAnimationData>& animations = MutableAnimationsInternal();
-  if (!animations)
-    animations = std::make_unique<CSSAnimationData>();
-  return *animations;
-}
-
-CSSTransitionData& ComputedStyle::AccessTransitions() {
-  std::unique_ptr<CSSTransitionData>& transitions =
-      MutableTransitionsInternal();
-  if (!transitions)
-    transitions = std::make_unique<CSSTransitionData>();
-  return *transitions;
 }
 
 FontBaseline ComputedStyle::GetFontBaseline() const {
@@ -1939,46 +1987,21 @@ FontBaseline ComputedStyle::GetFontBaseline() const {
 }
 
 FontHeight ComputedStyle::GetFontHeight(FontBaseline baseline) const {
-  if (const SimpleFontData* font_data = GetFont().PrimaryFont())
+  if (const SimpleFontData* font_data = GetFont().PrimaryFont()) {
     return font_data->GetFontMetrics().GetFontHeight(baseline);
-  NOTREACHED();
-  return FontHeight();
-}
-
-FontOrientation ComputedStyle::ComputeFontOrientation() const {
-  if (IsHorizontalWritingMode())
-    return FontOrientation::kHorizontal;
-
-  switch (GetTextOrientation()) {
-    case ETextOrientation::kMixed:
-      return FontOrientation::kVerticalMixed;
-    case ETextOrientation::kUpright:
-      return FontOrientation::kVerticalUpright;
-    case ETextOrientation::kSideways:
-      return FontOrientation::kVerticalRotated;
-    default:
-      NOTREACHED();
-      return FontOrientation::kVerticalMixed;
   }
-}
-
-void ComputedStyle::UpdateFontOrientation() {
-  FontOrientation orientation = ComputeFontOrientation();
-  if (GetFontDescription().Orientation() == orientation)
-    return;
-  FontDescription font_description = GetFontDescription();
-  font_description.SetOrientation(orientation);
-  SetFontDescription(font_description);
+  return FontHeight();
 }
 
 bool ComputedStyle::TextDecorationVisualOverflowEqual(
     const ComputedStyle& o) const {
-  const Vector<AppliedTextDecoration>& applied_with_this =
+  const Vector<AppliedTextDecoration, 1>& applied_with_this =
       AppliedTextDecorations();
-  const Vector<AppliedTextDecoration>& applied_with_other =
+  const Vector<AppliedTextDecoration, 1>& applied_with_other =
       o.AppliedTextDecorations();
-  if (applied_with_this.size() != applied_with_other.size())
+  if (applied_with_this.size() != applied_with_other.size()) {
     return false;
+  }
   for (auto decoration_index = 0u; decoration_index < applied_with_this.size();
        ++decoration_index) {
     const AppliedTextDecoration& decoration_from_this =
@@ -1989,75 +2012,66 @@ bool ComputedStyle::TextDecorationVisualOverflowEqual(
         decoration_from_this.UnderlineOffset() !=
             decoration_from_other.UnderlineOffset() ||
         decoration_from_this.Style() != decoration_from_other.Style() ||
-        decoration_from_this.Lines() != decoration_from_other.Lines())
+        decoration_from_this.Lines() != decoration_from_other.Lines()) {
       return false;
+    }
   }
-  if (TextUnderlinePosition() != o.TextUnderlinePosition())
+  if (GetTextUnderlinePosition() != o.GetTextUnderlinePosition()) {
     return false;
+  }
 
   return true;
 }
 
 TextDecorationLine ComputedStyle::TextDecorationsInEffect() const {
-  if (HasSimpleUnderlineInternal())
-    return TextDecorationLine::kUnderline;
-  if (!AppliedTextDecorationsInternal())
-    return TextDecorationLine::kNone;
-
-  TextDecorationLine decorations = TextDecorationLine::kNone;
-
-  const Vector<AppliedTextDecoration>& applied = AppliedTextDecorations();
-
-  for (const AppliedTextDecoration& decoration : applied)
-    decorations |= decoration.Lines();
-
+  TextDecorationLine decorations = GetTextDecorationLine();
+  if (const auto& base_decorations = BaseTextDecorationDataInternal()) {
+    for (const AppliedTextDecoration& decoration : base_decorations->data) {
+      decorations |= decoration.Lines();
+    }
+  }
   return decorations;
 }
 
-const Vector<AppliedTextDecoration>& ComputedStyle::AppliedTextDecorations()
-    const {
-  if (HasSimpleUnderlineInternal()) {
-    DEFINE_STATIC_LOCAL(
-        Vector<AppliedTextDecoration>, underline,
-        (1, AppliedTextDecoration(
-                TextDecorationLine::kUnderline, ETextDecorationStyle::kSolid,
-                VisitedDependentColor(GetCSSPropertyTextDecorationColor()),
-                TextDecorationThickness(), Length::Auto())));
-    // Since we only have one of these in memory, just update the color before
-    // returning.
-    underline.at(0).SetColor(
-        VisitedDependentColor(GetCSSPropertyTextDecorationColor()));
-    return underline;
+base::RefCountedData<Vector<AppliedTextDecoration, 1>>*
+ComputedStyle::EnsureAppliedTextDecorationsCache() const {
+  DCHECK(IsDecoratingBox());
+
+  if (!cached_data_ || !cached_data_->applied_text_decorations_) {
+    using DecorationsVector = Vector<AppliedTextDecoration, 1>;
+    DecorationsVector decorations;
+    if (const auto& base_decorations = BaseTextDecorationDataInternal()) {
+      decorations.ReserveInitialCapacity(base_decorations->data.size() + 1u);
+      decorations = base_decorations->data;
+    }
+    decorations.emplace_back(
+        GetTextDecorationLine(), TextDecorationStyle(),
+        VisitedDependentColor(GetCSSPropertyTextDecorationColor()),
+        GetTextDecorationThickness(), TextUnderlineOffset());
+    EnsureCachedData().applied_text_decorations_ =
+        base::MakeRefCounted<base::RefCountedData<DecorationsVector>>(
+            std::move(decorations));
   }
-  if (!AppliedTextDecorationsInternal()) {
-    DEFINE_STATIC_LOCAL(Vector<AppliedTextDecoration>, empty, ());
+
+  return cached_data_->applied_text_decorations_.get();
+}
+
+const Vector<AppliedTextDecoration, 1>& ComputedStyle::AppliedTextDecorations()
+    const {
+  if (!HasAppliedTextDecorations()) {
+    using DecorationsVector = Vector<AppliedTextDecoration, 1>;
+    DEFINE_STATIC_LOCAL(DecorationsVector, empty, ());
     return empty;
   }
 
-  return AppliedTextDecorationsInternal()->data;
-}
-
-bool ComputedStyle::IsAppliedTextDecorationsSame(
-    const ComputedStyle& other) const {
-  if (HasSimpleUnderlineInternal() != other.HasSimpleUnderlineInternal())
-    return false;
-  if (AppliedTextDecorationsInternal().get() ==
-      other.AppliedTextDecorationsInternal().get())
-    return true;
-
-  // Rare but sometimes two instances of |AppliedTextDecorations()| may have the
-  // same items. Check if all items are the same.
-  // e.g., tables/mozilla/bugs/bug126742.html
-  const Vector<AppliedTextDecoration>& decorations = AppliedTextDecorations();
-  const Vector<AppliedTextDecoration>& other_decorations =
-      other.AppliedTextDecorations();
-  if (decorations.size() != other_decorations.size())
-    return false;
-  for (wtf_size_t index = 0; index < decorations.size(); ++index) {
-    if (decorations[index] != other_decorations[index])
-      return false;
+  if (!IsDecoratingBox()) {
+    const auto& base_decorations = BaseTextDecorationDataInternal();
+    DCHECK(base_decorations);
+    DCHECK_GE(base_decorations->data.size(), 1u);
+    return base_decorations->data;
   }
-  return true;
+
+  return EnsureAppliedTextDecorationsCache()->data;
 }
 
 static bool HasInitialVariables(const StyleInitialData* initial_data) {
@@ -2070,24 +2084,29 @@ bool ComputedStyle::HasVariables() const {
 }
 
 wtf_size_t ComputedStyle::GetVariableNamesCount() const {
-  if (!HasVariables())
+  if (!HasVariables()) {
     return 0;
+  }
   return GetVariableNames().size();
 }
 
 const Vector<AtomicString>& ComputedStyle::GetVariableNames() const {
-  if (auto* cache = GetVariableNamesCache())
+  if (auto* cache = GetVariableNamesCache()) {
     return *cache;
+  }
 
   Vector<AtomicString>& cache = EnsureVariableNamesCache();
 
   HashSet<AtomicString> names;
-  if (auto* initial_data = InitialData().get())
+  if (auto* initial_data = InitialData().get()) {
     initial_data->CollectVariableNames(names);
-  if (auto* inherited_variables = InheritedVariables())
+  }
+  if (auto* inherited_variables = InheritedVariables()) {
     inherited_variables->CollectNames(names);
-  if (auto* non_inherited_variables = NonInheritedVariables())
+  }
+  if (auto* non_inherited_variables = NonInheritedVariables()) {
     non_inherited_variables->CollectNames(names);
+  }
   cache.assign(names);
 
   return cache;
@@ -2101,143 +2120,74 @@ const StyleNonInheritedVariables* ComputedStyle::NonInheritedVariables() const {
   return NonInheritedVariablesInternal().get();
 }
 
-StyleInheritedVariables& ComputedStyle::MutableInheritedVariables() {
-  ClearVariableNamesCache();
+namespace {
 
-  scoped_refptr<StyleInheritedVariables>& variables =
-      MutableInheritedVariablesInternal();
-  if (!variables)
-    variables = StyleInheritedVariables::Create();
-  else if (!variables->HasOneRef())
-    variables = variables->Copy();
-  return *variables;
-}
-
-StyleNonInheritedVariables& ComputedStyle::MutableNonInheritedVariables() {
-  ClearVariableNamesCache();
-
-  std::unique_ptr<StyleNonInheritedVariables>& variables =
-      MutableNonInheritedVariablesInternal();
-  if (!variables)
-    variables = std::make_unique<StyleNonInheritedVariables>();
-  return *variables;
-}
-
-void ComputedStyle::SetInitialData(scoped_refptr<StyleInitialData> data) {
-  ClearVariableNamesCache();
-
-  MutableInitialDataInternal() = std::move(data);
-}
-
-void ComputedStyle::SetVariableData(const AtomicString& name,
-                                    scoped_refptr<CSSVariableData> value,
-                                    bool is_inherited_property) {
-  if (is_inherited_property)
-    MutableInheritedVariables().SetData(name, std::move(value));
-  else
-    MutableNonInheritedVariables().SetData(name, std::move(value));
-}
-
-void ComputedStyle::SetVariableValue(const AtomicString& name,
-                                     const CSSValue* value,
-                                     bool is_inherited_property) {
-  if (is_inherited_property)
-    MutableInheritedVariables().SetValue(name, value);
-  else
-    MutableNonInheritedVariables().SetValue(name, value);
-}
-
-static CSSVariableData* GetInitialVariableData(
+template <typename T>
+CSSVariableData* GetVariableData(
+    const T& style_or_builder,
     const AtomicString& name,
-    const StyleInitialData* initial_data) {
-  if (!initial_data)
-    return nullptr;
-  return initial_data->GetVariableData(name);
+    absl::optional<bool> inherited_hint = absl::nullopt) {
+  if (inherited_hint.value_or(true) && style_or_builder.InheritedVariables()) {
+    if (auto data = style_or_builder.InheritedVariables()->GetData(name)) {
+      return *data;
+    }
+  }
+  if (!inherited_hint.value_or(false) &&
+      style_or_builder.NonInheritedVariables()) {
+    if (auto data = style_or_builder.NonInheritedVariables()->GetData(name)) {
+      return *data;
+    }
+  }
+  if (StyleInitialData* initial_data = style_or_builder.InitialData().get()) {
+    return initial_data->GetVariableData(name);
+  }
+  return nullptr;
 }
+
+template <typename T>
+const CSSValue* GetVariableValue(
+    const T& style_or_builder,
+    const AtomicString& name,
+    absl::optional<bool> inherited_hint = absl::nullopt) {
+  if (inherited_hint.value_or(true) && style_or_builder.InheritedVariables()) {
+    if (auto data = style_or_builder.InheritedVariables()->GetValue(name)) {
+      return *data;
+    }
+  }
+  if (!inherited_hint.value_or(false) &&
+      style_or_builder.NonInheritedVariables()) {
+    if (auto data = style_or_builder.NonInheritedVariables()->GetValue(name)) {
+      return *data;
+    }
+  }
+  if (StyleInitialData* initial_data = style_or_builder.InitialData().get()) {
+    return initial_data->GetVariableValue(name);
+  }
+  return nullptr;
+}
+
+}  // namespace
 
 CSSVariableData* ComputedStyle::GetVariableData(
     const AtomicString& name) const {
-  if (InheritedVariables()) {
-    if (auto data = InheritedVariables()->GetData(name))
-      return *data;
-  }
-  if (NonInheritedVariables()) {
-    if (auto data = NonInheritedVariables()->GetData(name))
-      return *data;
-  }
-  return GetInitialVariableData(name, InitialData().get());
+  return blink::GetVariableData(*this, name);
 }
 
 CSSVariableData* ComputedStyle::GetVariableData(
     const AtomicString& name,
     bool is_inherited_property) const {
-  if (is_inherited_property) {
-    if (InheritedVariables()) {
-      if (auto data = InheritedVariables()->GetData(name))
-        return *data;
-    }
-  } else {
-    if (NonInheritedVariables()) {
-      if (auto data = NonInheritedVariables()->GetData(name))
-        return *data;
-    }
-  }
-  return GetInitialVariableData(name, InitialData().get());
-}
-
-static const CSSValue* GetInitialVariableValue(
-    const AtomicString& name,
-    const StyleInitialData* initial_data) {
-  if (!initial_data)
-    return nullptr;
-  return initial_data->GetVariableValue(name);
+  return blink::GetVariableData(*this, name, is_inherited_property);
 }
 
 const CSSValue* ComputedStyle::GetVariableValue(
     const AtomicString& name) const {
-  if (InheritedVariables()) {
-    if (auto value = InheritedVariables()->GetValue(name))
-      return *value;
-  }
-  if (NonInheritedVariables()) {
-    if (auto value = NonInheritedVariables()->GetValue(name))
-      return *value;
-  }
-  return GetInitialVariableValue(name, InitialData().get());
+  return blink::GetVariableValue(*this, name);
 }
 
 const CSSValue* ComputedStyle::GetVariableValue(
     const AtomicString& name,
     bool is_inherited_property) const {
-  if (is_inherited_property) {
-    if (InheritedVariables()) {
-      if (auto value = InheritedVariables()->GetValue(name))
-        return *value;
-    }
-  } else {
-    if (NonInheritedVariables()) {
-      if (auto value = NonInheritedVariables()->GetValue(name))
-        return *value;
-    }
-  }
-  return GetInitialVariableValue(name, InitialData().get());
-}
-
-bool ComputedStyle::SetFontDescription(const FontDescription& v) {
-  if (FontInternal().GetFontDescription() != v) {
-    SetFontInternal(Font(v, FontInternal().GetFontSelector()));
-    return true;
-  }
-  return false;
-}
-
-bool ComputedStyle::HasIdenticalAscentDescentAndLineGap(
-    const ComputedStyle& other) const {
-  const SimpleFontData* font_data = GetFont().PrimaryFont();
-  const SimpleFontData* other_font_data = other.GetFont().PrimaryFont();
-  return font_data && other_font_data &&
-         font_data->GetFontMetrics().HasIdenticalAscentDescentAndLineGap(
-             other_font_data->GetFontMetrics());
+  return blink::GetVariableValue(*this, name, is_inherited_property);
 }
 
 Length ComputedStyle::LineHeight() const {
@@ -2255,18 +2205,23 @@ Length ComputedStyle::LineHeight() const {
   return lh;
 }
 
-float ComputedStyle::ComputedLineHeight() const {
-  const Length& lh = LineHeight();
-
+float ComputedStyle::ComputedLineHeight(const Length& lh, const Font& font) {
   // Negative value means the line height is not set. Use the font's built-in
-  // spacing, if avalible.
-  if (lh.IsNegative() && GetFont().PrimaryFont())
-    return GetFont().PrimaryFont()->GetFontMetrics().LineSpacing();
+  // spacing, if available.
+  if (lh.IsNegative() && font.PrimaryFont()) {
+    return font.PrimaryFont()->GetFontMetrics().LineSpacing();
+  }
 
-  if (lh.IsPercentOrCalc())
-    return MinimumValueForLength(lh, LayoutUnit(ComputedFontSize()));
+  if (lh.IsPercentOrCalc()) {
+    return MinimumValueForLength(
+        lh, LayoutUnit(font.GetFontDescription().ComputedSize()));
+  }
 
   return lh.Value();
+}
+
+float ComputedStyle::ComputedLineHeight() const {
+  return ComputedLineHeight(LineHeight(), GetFont());
 }
 
 LayoutUnit ComputedStyle::ComputedLineHeightAsFixed(const Font& font) const {
@@ -2274,11 +2229,13 @@ LayoutUnit ComputedStyle::ComputedLineHeightAsFixed(const Font& font) const {
 
   // Negative value means the line height is not set. Use the font's built-in
   // spacing, if available.
-  if (lh.IsNegative() && font.PrimaryFont())
+  if (lh.IsNegative() && font.PrimaryFont()) {
     return font.PrimaryFont()->GetFontMetrics().FixedLineSpacing();
+  }
 
-  if (lh.IsPercentOrCalc())
+  if (lh.IsPercentOrCalc()) {
     return MinimumValueForLength(lh, ComputedFontSizeAsFixed(font));
+  }
 
   return LayoutUnit::FromFloatFloor(lh.Value());
 }
@@ -2287,152 +2244,22 @@ LayoutUnit ComputedStyle::ComputedLineHeightAsFixed() const {
   return ComputedLineHeightAsFixed(GetFont());
 }
 
-void ComputedStyle::SetWordSpacing(float word_spacing) {
-  FontDescription desc(GetFontDescription());
-  desc.SetWordSpacing(word_spacing);
-  SetFontDescription(desc);
-}
-
-void ComputedStyle::SetLetterSpacing(float letter_spacing) {
-  FontDescription desc(GetFontDescription());
-  desc.SetLetterSpacing(letter_spacing);
-  SetFontDescription(desc);
-}
-
-void ComputedStyle::SetTextAutosizingMultiplier(float multiplier) {
-  if (TextAutosizingMultiplier() == multiplier)
-    return;
-
-  SetTextAutosizingMultiplierInternal(multiplier);
-
-  float size = SpecifiedFontSize();
-
-  DCHECK(std::isfinite(size));
-  if (!std::isfinite(size) || size < 0)
-    size = 0;
-  else
-    size = std::min(kMaximumAllowedFontSize, size);
-
-  FontDescription desc(GetFontDescription());
-  desc.SetSpecifiedSize(size);
-
-  float computed_size = size * EffectiveZoom();
-
-  float autosized_font_size = TextAutosizer::ComputeAutosizedFontSize(
-      computed_size, multiplier, EffectiveZoom());
-  desc.SetComputedSize(std::min(kMaximumAllowedFontSize, autosized_font_size));
-
-  SetFontDescription(desc);
-}
-
-void ComputedStyle::AddAppliedTextDecoration(
-    const AppliedTextDecoration& decoration) {
-  scoped_refptr<AppliedTextDecorationList>& list =
-      MutableAppliedTextDecorationsInternal();
-
-  if (!list)
-    list = base::MakeRefCounted<AppliedTextDecorationList>();
-  else if (!list->HasOneRef())
-    list = base::MakeRefCounted<AppliedTextDecorationList>(list->data);
-
-  list->data.push_back(decoration);
-
-  // Most of the time, this vector will only have a single element,
-  // and thus, the default Vector initial size of 4 is wasteful.
-  //
-  // In the rare case, AddAppliedTextDecoration() might be called twice
-  // for a single element (if it has both a simple underline and another
-  // decoration), and so this will cause two allocations instead of one,
-  // but that is an edge case we're willing to live with.
-  list->data.shrink_to_fit();
-}
-
-void ComputedStyle::OverrideTextDecorationColors(Color override_color) {
-  scoped_refptr<AppliedTextDecorationList>& list =
-      MutableAppliedTextDecorationsInternal();
-  DCHECK(list);
-  if (!list->HasOneRef())
-    list = base::MakeRefCounted<AppliedTextDecorationList>(list->data);
-
-  for (AppliedTextDecoration& decoration : list->data)
-    decoration.SetColor(override_color);
-}
-
-void ComputedStyle::ApplyTextDecorations(
-    const Color& parent_text_decoration_color,
-    bool override_existing_colors) {
-  if (GetTextDecorationLine() == TextDecorationLine::kNone &&
-      !HasSimpleUnderlineInternal() && !AppliedTextDecorationsInternal())
-    return;
-
-  // If there are any color changes or decorations set by this element, stop
-  // using m_hasSimpleUnderline.
-  Color current_text_decoration_color =
-      VisitedDependentColor(GetCSSPropertyTextDecorationColor());
-  if (HasSimpleUnderlineInternal() &&
-      (GetTextDecorationLine() != TextDecorationLine::kNone ||
-       current_text_decoration_color != parent_text_decoration_color)) {
-    SetHasSimpleUnderlineInternal(false);
-    AddAppliedTextDecoration(AppliedTextDecoration(
-        TextDecorationLine::kUnderline, ETextDecorationStyle::kSolid,
-        parent_text_decoration_color, TextDecorationThickness(),
-        Length::Auto()));
-  }
-  if (override_existing_colors && AppliedTextDecorationsInternal())
-    OverrideTextDecorationColors(current_text_decoration_color);
-  if (GetTextDecorationLine() == TextDecorationLine::kNone)
-    return;
-  DCHECK(!HasSimpleUnderlineInternal());
-  // To save memory, we don't use AppliedTextDecoration objects in the common
-  // case of a single simple underline of currentColor.
-  TextDecorationLine decoration_lines = GetTextDecorationLine();
-  ETextDecorationStyle decoration_style = TextDecorationStyle();
-  bool is_simple_underline =
-      decoration_lines == TextDecorationLine::kUnderline &&
-      decoration_style == ETextDecorationStyle::kSolid &&
-      TextDecorationColor().IsCurrentColor() &&
-      TextUnderlineOffset().IsAuto() && GetTextDecorationThickness().IsAuto();
-  if (is_simple_underline && !AppliedTextDecorationsInternal()) {
-    SetHasSimpleUnderlineInternal(true);
-    return;
-  }
-
-  AddAppliedTextDecoration(AppliedTextDecoration(
-      decoration_lines, decoration_style, current_text_decoration_color,
-      GetTextDecorationThickness(), TextUnderlineOffset()));
-}
-
-void ComputedStyle::ClearAppliedTextDecorations() {
-  SetHasSimpleUnderlineInternal(false);
-
-  if (AppliedTextDecorationsInternal())
-    SetAppliedTextDecorationsInternal(nullptr);
-}
-
-void ComputedStyle::RestoreParentTextDecorations(
-    const ComputedStyle& parent_style) {
-  SetHasSimpleUnderlineInternal(parent_style.HasSimpleUnderlineInternal());
-  if (AppliedTextDecorationsInternal() !=
-      parent_style.AppliedTextDecorationsInternal()) {
-    SetAppliedTextDecorationsInternal(scoped_refptr<AppliedTextDecorationList>(
-        parent_style.AppliedTextDecorationsInternal()));
-  }
-}
-
 StyleColor ComputedStyle::DecorationColorIncludingFallback(
     bool visited_link) const {
   StyleColor style_color = visited_link ? InternalVisitedTextDecorationColor()
                                         : TextDecorationColor();
 
-  if (!style_color.IsCurrentColor())
+  if (!style_color.IsCurrentColor()) {
     return style_color;
+  }
 
   if (TextStrokeWidth()) {
     // Prefer stroke color if possible, but not if it's fully transparent.
     StyleColor text_stroke_style_color =
         visited_link ? InternalVisitedTextStrokeColor() : TextStrokeColor();
     if (!text_stroke_style_color.IsCurrentColor() &&
-        text_stroke_style_color.Resolve(Color(), UsedColorScheme()).Alpha()) {
+        !text_stroke_style_color.Resolve(blink::Color(), UsedColorScheme())
+             .IsFullyTransparent()) {
       return text_stroke_style_color;
     }
   }
@@ -2440,15 +2267,35 @@ StyleColor ComputedStyle::DecorationColorIncludingFallback(
   return visited_link ? InternalVisitedTextFillColor() : TextFillColor();
 }
 
-Color ComputedStyle::VisitedDependentColor(const CSSProperty& color_property,
+bool ComputedStyle::HasBackground() const {
+  // Ostensibly, we should call VisitedDependentColor() here,
+  // but visited does not affect alpha (see VisitedDependentColor()
+  // implementation).
+  blink::Color color = GetCSSPropertyBackgroundColor().ColorIncludingFallback(
+      false, *this,
+      /*is_current_color=*/nullptr);
+  if (!color.IsFullyTransparent()) {
+    return true;
+  }
+  // When background color animation is running on the compositor thread, we
+  // need to trigger repaint even if the background is transparent to collect
+  // artifacts in order to run the animation on the compositor.
+  if (RuntimeEnabledFeatures::CompositeBGColorAnimationEnabled() &&
+      HasCurrentBackgroundColorAnimation()) {
+    return true;
+  }
+  return HasBackgroundImage();
+}
+
+Color ComputedStyle::VisitedDependentColor(const Longhand& color_property,
                                            bool* is_current_color) const {
   DCHECK(!color_property.IsVisited());
 
-  Color unvisited_color =
-      To<Longhand>(color_property)
-          .ColorIncludingFallback(false, *this, is_current_color);
-  if (InsideLink() != EInsideLink::kInsideVisitedLink)
+  blink::Color unvisited_color =
+      color_property.ColorIncludingFallback(false, *this, is_current_color);
+  if (InsideLink() != EInsideLink::kInsideVisitedLink) {
     return unvisited_color;
+  }
 
   // Properties that provide a GetVisitedProperty() must use the
   // ColorIncludingFallback function on that property.
@@ -2456,11 +2303,12 @@ Color ComputedStyle::VisitedDependentColor(const CSSProperty& color_property,
   // TODO(andruud): Simplify this when all properties support
   // GetVisitedProperty.
   const CSSProperty* visited_property = &color_property;
-  if (const CSSProperty* visited = color_property.GetVisitedProperty())
+  if (const CSSProperty* visited = color_property.GetVisitedProperty()) {
     visited_property = visited;
+  }
 
   // Overwrite is_current_color based on the visited color.
-  Color visited_color =
+  blink::Color visited_color =
       To<Longhand>(*visited_property)
           .ColorIncludingFallback(true, *this, is_current_color);
 
@@ -2477,22 +2325,17 @@ Color ComputedStyle::VisitedDependentColor(const CSSProperty& color_property,
   // the flag when the unvisited color is ‘currentColor’ would break tests like
   // css/css-pseudo/selection-link-001 and css/css-pseudo/target-text-008.
   // TODO(dazabani@igalia.com) improve behaviour where unvisited is currentColor
-  return Color(visited_color.Red(), visited_color.Green(), visited_color.Blue(),
-               unvisited_color.Alpha());
+  return Color::FromColorSpace(visited_color.GetColorSpace(),
+                               visited_color.Param0(), visited_color.Param1(),
+                               visited_color.Param2(), unvisited_color.Alpha());
 }
 
-Color ComputedStyle::ResolvedColor(const StyleColor& color,
-                                   bool* is_current_color) const {
+blink::Color ComputedStyle::ResolvedColor(const StyleColor& color,
+                                          bool* is_current_color) const {
   bool visited_link = (InsideLink() == EInsideLink::kInsideVisitedLink);
-  Color current_color =
+  blink::Color current_color =
       visited_link ? GetInternalVisitedCurrentColor() : GetCurrentColor();
   return color.Resolve(current_color, UsedColorScheme(), is_current_color);
-}
-
-bool ComputedStyle::ShouldForceColor(const StyleColor& unforced_color) const {
-  return InForcedColorsMode() &&
-         ForcedColorAdjust() == EForcedColorAdjust::kAuto &&
-         !unforced_color.IsSystemColorIncludingDeprecated();
 }
 
 bool ComputedStyle::StrokeDashArrayDataEquivalent(
@@ -2510,66 +2353,39 @@ bool ComputedStyle::ColumnRuleEquivalent(
 
 TextEmphasisMark ComputedStyle::GetTextEmphasisMark() const {
   TextEmphasisMark mark = TextEmphasisMarkInternal();
-  if (mark != TextEmphasisMark::kAuto)
+  if (mark != TextEmphasisMark::kAuto) {
     return mark;
+  }
 
-  if (IsHorizontalWritingMode())
+  if (IsHorizontalWritingMode()) {
     return TextEmphasisMark::kDot;
+  }
 
   return TextEmphasisMark::kSesame;
 }
 
-LayoutRectOutsets ComputedStyle::ImageOutsets(
+PhysicalBoxStrut ComputedStyle::ImageOutsets(
     const NinePieceImage& image) const {
-  return LayoutRectOutsets(
-      NinePieceImage::ComputeOutset(image.Outset().Top(),
-                                    BorderTopWidth().ToInt()),
-      NinePieceImage::ComputeOutset(image.Outset().Right(),
-                                    BorderRightWidth().ToInt()),
-      NinePieceImage::ComputeOutset(image.Outset().Bottom(),
-                                    BorderBottomWidth().ToInt()),
-      NinePieceImage::ComputeOutset(image.Outset().Left(),
-                                    BorderLeftWidth().ToInt()));
-}
-
-void ComputedStyle::SetBorderImageSource(StyleImage* image) {
-  if (BorderImage().GetImage() == image)
-    return;
-  MutableBorderImageInternal().SetImage(image);
-}
-
-void ComputedStyle::SetBorderImageSlices(const LengthBox& slices) {
-  if (BorderImage().ImageSlices() == slices)
-    return;
-  MutableBorderImageInternal().SetImageSlices(slices);
-}
-
-void ComputedStyle::SetBorderImageSlicesFill(bool fill) {
-  if (BorderImage().Fill() == fill)
-    return;
-  MutableBorderImageInternal().SetFill(fill);
-}
-
-void ComputedStyle::SetBorderImageWidth(const BorderImageLengthBox& slices) {
-  if (BorderImage().BorderSlices() == slices)
-    return;
-  MutableBorderImageInternal().SetBorderSlices(slices);
-}
-
-void ComputedStyle::SetBorderImageOutset(const BorderImageLengthBox& outset) {
-  if (BorderImage().Outset() == outset)
-    return;
-  MutableBorderImageInternal().SetOutset(outset);
+  return {NinePieceImage::ComputeOutset(image.Outset().Top(),
+                                        BorderTopWidth().ToInt()),
+          NinePieceImage::ComputeOutset(image.Outset().Right(),
+                                        BorderRightWidth().ToInt()),
+          NinePieceImage::ComputeOutset(image.Outset().Bottom(),
+                                        BorderBottomWidth().ToInt()),
+          NinePieceImage::ComputeOutset(image.Outset().Left(),
+                                        BorderLeftWidth().ToInt())};
 }
 
 bool ComputedStyle::BorderObscuresBackground() const {
-  if (!HasBorder())
+  if (!HasBorder()) {
     return false;
+  }
 
   // Bail if we have any border-image for now. We could look at the image alpha
   // to improve this.
-  if (BorderImage().GetImage())
+  if (BorderImage().GetImage()) {
     return false;
+  }
 
   BorderEdge edges[4];
   GetBorderEdgeInfo(edges);
@@ -2577,88 +2393,99 @@ bool ComputedStyle::BorderObscuresBackground() const {
   for (unsigned int i = static_cast<unsigned>(BoxSide::kTop);
        i <= static_cast<unsigned>(BoxSide::kLeft); ++i) {
     const BorderEdge& curr_edge = edges[i];
-    if (!curr_edge.ObscuresBackground())
+    if (!curr_edge.ObscuresBackground()) {
       return false;
+    }
   }
 
   return true;
 }
 
-LayoutRectOutsets ComputedStyle::BoxDecorationOutsets() const {
+PhysicalBoxStrut ComputedStyle::BoxDecorationOutsets() const {
   DCHECK(HasVisualOverflowingEffect());
-  LayoutRectOutsets outsets;
+  PhysicalBoxStrut outsets;
 
   if (const ShadowList* box_shadow = BoxShadow()) {
     outsets =
-        EnclosingLayoutRectOutsets(box_shadow->RectOutsetsIncludingOriginal());
+        PhysicalBoxStrut::Enclosing(box_shadow->RectOutsetsIncludingOriginal());
   }
 
-  if (HasBorderImageOutsets())
+  if (HasBorderImageOutsets()) {
     outsets.Unite(BorderImageOutsets());
+  }
 
-  if (HasMaskBoxImageOutsets())
+  if (HasMaskBoxImageOutsets()) {
     outsets.Unite(MaskBoxImageOutsets());
+  }
 
   return outsets;
 }
 
 void ComputedStyle::GetBorderEdgeInfo(BorderEdge edges[],
                                       PhysicalBoxSides sides_to_include) const {
-  edges[static_cast<unsigned>(BoxSide::kTop)] = BorderEdge(
-      BorderTopWidth(), VisitedDependentColor(GetCSSPropertyBorderTopColor()),
-      BorderTopStyle(), sides_to_include.top);
+  edges[static_cast<unsigned>(BoxSide::kTop)] =
+      BorderEdge(BorderTopWidth().ToInt(),
+                 VisitedDependentColor(GetCSSPropertyBorderTopColor()),
+                 BorderTopStyle(), sides_to_include.top);
 
   edges[static_cast<unsigned>(BoxSide::kRight)] =
-      BorderEdge(BorderRightWidth(),
+      BorderEdge(BorderRightWidth().ToInt(),
                  VisitedDependentColor(GetCSSPropertyBorderRightColor()),
                  BorderRightStyle(), sides_to_include.right);
 
   edges[static_cast<unsigned>(BoxSide::kBottom)] =
-      BorderEdge(BorderBottomWidth(),
+      BorderEdge(BorderBottomWidth().ToInt(),
                  VisitedDependentColor(GetCSSPropertyBorderBottomColor()),
                  BorderBottomStyle(), sides_to_include.bottom);
 
-  edges[static_cast<unsigned>(BoxSide::kLeft)] = BorderEdge(
-      BorderLeftWidth(), VisitedDependentColor(GetCSSPropertyBorderLeftColor()),
-      BorderLeftStyle(), sides_to_include.left);
+  edges[static_cast<unsigned>(BoxSide::kLeft)] =
+      BorderEdge(BorderLeftWidth().ToInt(),
+                 VisitedDependentColor(GetCSSPropertyBorderLeftColor()),
+                 BorderLeftStyle(), sides_to_include.left);
 }
 
-void ComputedStyle::CopyChildDependentFlagsFrom(const ComputedStyle& other) {
-  if (other.ChildHasExplicitInheritance())
+void ComputedStyle::CopyChildDependentFlagsFrom(
+    const ComputedStyle& other) const {
+  if (other.ChildHasExplicitInheritance()) {
     SetChildHasExplicitInheritance();
+  }
 }
 
-Color ComputedStyle::GetCurrentColor(bool* is_current_color) const {
-  DCHECK(!GetColor().IsCurrentColor());
-  if (is_current_color)
+blink::Color ComputedStyle::GetCurrentColor(bool* is_current_color) const {
+  DCHECK(!Color().IsCurrentColor());
+  if (is_current_color) {
     *is_current_color = ColorIsCurrentColor();
-  return GetColor().Resolve(Color(), UsedColorScheme());
+  }
+  return Color().Resolve(blink::Color(), UsedColorScheme());
 }
 
-Color ComputedStyle::GetInternalVisitedCurrentColor(
+blink::Color ComputedStyle::GetInternalVisitedCurrentColor(
     bool* is_current_color) const {
   DCHECK(!InternalVisitedColor().IsCurrentColor());
-  if (is_current_color)
+  if (is_current_color) {
     *is_current_color = InternalVisitedColorIsCurrentColor();
-  return InternalVisitedColor().Resolve(Color(), UsedColorScheme());
+  }
+  return InternalVisitedColor().Resolve(blink::Color(), UsedColorScheme());
 }
 
-Color ComputedStyle::GetInternalForcedCurrentColor(
+blink::Color ComputedStyle::GetInternalForcedCurrentColor(
     bool* is_current_color) const {
   DCHECK(!InternalForcedColor().IsCurrentColor());
-  if (GetColor().IsSystemColorIncludingDeprecated())
+  if (Color().IsSystemColorIncludingDeprecated()) {
     return GetCurrentColor(is_current_color);
-  return InternalForcedColor().Resolve(Color(), UsedColorScheme(),
+  }
+  return InternalForcedColor().Resolve(blink::Color(), UsedColorScheme(),
                                        is_current_color,
                                        /* is_forced_color */ true);
 }
 
-Color ComputedStyle::GetInternalForcedVisitedCurrentColor(
+blink::Color ComputedStyle::GetInternalForcedVisitedCurrentColor(
     bool* is_current_color) const {
   DCHECK(!InternalForcedVisitedColor().IsCurrentColor());
-  if (InternalVisitedColor().IsSystemColorIncludingDeprecated())
+  if (InternalVisitedColor().IsSystemColorIncludingDeprecated()) {
     return GetInternalVisitedCurrentColor(is_current_color);
-  return InternalForcedVisitedColor().Resolve(Color(), UsedColorScheme(),
+  }
+  return InternalForcedVisitedColor().Resolve(blink::Color(), UsedColorScheme(),
                                               is_current_color,
                                               /* is_forced_color */ true);
 }
@@ -2671,105 +2498,286 @@ bool ComputedStyle::ShadowListHasCurrentColor(const ShadowList* shadow_list) {
                               });
 }
 
-void ComputedStyle::ClearBackgroundImage() {
-  FillLayer* curr_child = &AccessBackgroundLayers();
-  curr_child->SetImage(
-      FillLayer::InitialFillImage(EFillLayerType::kBackground));
-  for (curr_child = curr_child->Next(); curr_child;
-       curr_child = curr_child->Next())
-    curr_child->ClearImage();
-}
-
 const AtomicString& ComputedStyle::ListStyleStringValue() const {
-  if (!ListStyleType() || !ListStyleType()->IsString())
+  if (!ListStyleType() || !ListStyleType()->IsString()) {
     return g_null_atom;
+  }
   return ListStyleType()->GetStringValue();
 }
 
-absl::optional<Color> ComputedStyle::AccentColorResolved() const {
+bool ComputedStyle::MarkerShouldBeInside(const Element& parent) const {
+  // https://w3c.github.io/csswg-drafts/css-lists/#list-style-position-outside
+  // > If the list item is an inline box: this value is equivalent to inside.
+  if (Display() == EDisplay::kInlineListItem) {
+    return true;
+  }
+  return ListStylePosition() == EListStylePosition::kInside ||
+         (IsA<HTMLLIElement>(parent) && !IsInsideListElement());
+}
+
+absl::optional<blink::Color> ComputedStyle::AccentColorResolved() const {
   const StyleAutoColor& auto_color = AccentColor();
-  if (auto_color.IsAutoColor())
+  if (auto_color.IsAutoColor()) {
     return absl::nullopt;
+  }
   return auto_color.Resolve(GetCurrentColor(), UsedColorScheme());
 }
 
-static const int kPaintOrderBitwidth = 2;
-
-static unsigned PaintOrderSequence(EPaintOrderType first,
-                                   EPaintOrderType second,
-                                   EPaintOrderType third) {
-  return (((third << kPaintOrderBitwidth) | second) << kPaintOrderBitwidth) |
-         first;
-}
-
-EPaintOrderType ComputedStyle::PaintOrderType(unsigned index) const {
-  unsigned pt = 0;
-  DCHECK(index < ((1 << kPaintOrderBitwidth) - 1));
-  switch (PaintOrder()) {
-    case kPaintOrderNormal:
-    case kPaintOrderFillStrokeMarkers:
-      pt = PaintOrderSequence(PT_FILL, PT_STROKE, PT_MARKERS);
-      break;
-    case kPaintOrderFillMarkersStroke:
-      pt = PaintOrderSequence(PT_FILL, PT_MARKERS, PT_STROKE);
-      break;
-    case kPaintOrderStrokeFillMarkers:
-      pt = PaintOrderSequence(PT_STROKE, PT_FILL, PT_MARKERS);
-      break;
-    case kPaintOrderStrokeMarkersFill:
-      pt = PaintOrderSequence(PT_STROKE, PT_MARKERS, PT_FILL);
-      break;
-    case kPaintOrderMarkersFillStroke:
-      pt = PaintOrderSequence(PT_MARKERS, PT_FILL, PT_STROKE);
-      break;
-    case kPaintOrderMarkersStrokeFill:
-      pt = PaintOrderSequence(PT_MARKERS, PT_STROKE, PT_FILL);
-      break;
+absl::optional<blink::Color> ComputedStyle::ScrollbarThumbColorResolved()
+    const {
+  const absl::optional<StyleScrollbarColor>& scrollbar_color = ScrollbarColor();
+  if (scrollbar_color.has_value()) {
+    return scrollbar_color.value().GetThumbColor().Resolve(GetCurrentColor(),
+                                                           UsedColorScheme());
   }
-
-  pt =
-      (pt >> (kPaintOrderBitwidth * index)) & ((1u << kPaintOrderBitwidth) - 1);
-  return static_cast<EPaintOrderType>(pt);
+  return absl::nullopt;
 }
 
-bool ComputedStyle::ShouldApplyAnyContainment(const Element& element) const {
+absl::optional<blink::Color> ComputedStyle::ScrollbarTrackColorResolved()
+    const {
+  const absl::optional<StyleScrollbarColor>& scrollbar_color = ScrollbarColor();
+  if (scrollbar_color.has_value()) {
+    return scrollbar_color.value().GetTrackColor().Resolve(GetCurrentColor(),
+                                                           UsedColorScheme());
+  }
+  return absl::nullopt;
+}
+
+bool ComputedStyle::ShouldApplyAnyContainment(const Element& element,
+                                              const DisplayStyle& display_style,
+                                              unsigned effective_containment) {
   DCHECK(IsA<HTMLBodyElement>(element) || IsA<HTMLHtmlElement>(element))
       << "Since elements can override the computed display for which box type "
          "to create, this method is not generally correct. Use "
          "LayoutObject::ShouldApplyAnyContainment if possible.";
-  if (ContainsStyle())
-    return true;
-  if (!element.LayoutObjectIsNeeded(*this))
-    return false;
-  if (Display() == EDisplay::kInline)
-    return false;
-  if ((ContainsInlineSize() || ContainsBlockSize()) &&
-      (!IsDisplayTableType() || Display() == EDisplay::kTableCaption ||
-       ShouldUseContentDataForElement(GetContentData()))) {
+  if (effective_containment & kContainsStyle) {
     return true;
   }
-  return (ContainsLayout() || ContainsPaint()) &&
-         (!IsDisplayTableType() || IsDisplayTableBox() ||
-          Display() == EDisplay::kTableCell ||
-          Display() == EDisplay::kTableCaption);
+  if (!element.LayoutObjectIsNeeded(display_style)) {
+    return false;
+  }
+  EDisplay display = display_style.Display();
+  if (display == EDisplay::kInline) {
+    return false;
+  }
+  if ((effective_containment & kContainsSize) &&
+      (!IsDisplayTableType(display) || display == EDisplay::kTableCaption ||
+       ShouldUseContentDataForElement(display_style.GetContentData()))) {
+    return true;
+  }
+  return (effective_containment & (kContainsLayout | kContainsPaint)) &&
+         (!IsDisplayTableType(display) || IsDisplayTableBox(display) ||
+          display == EDisplay::kTableCell ||
+          display == EDisplay::kTableCaption);
 }
 
 bool ComputedStyle::CanMatchSizeContainerQueries(const Element& element) const {
-  return RuntimeEnabledFeatures::LayoutNGEnabled() &&
-         IsContainerForSizeContainerQueries() &&
-         !element.ShouldForceLegacyLayout() &&
-         (RuntimeEnabledFeatures::LayoutNGPrintingEnabled() ||
-          !element.GetDocument().Printing()) &&
+  return IsContainerForSizeContainerQueries() &&
          (!element.IsSVGElement() ||
           To<SVGElement>(element).IsOutermostSVGSVGElement());
 }
 
 bool ComputedStyle::IsInterleavingRoot(const ComputedStyle* style) {
   const ComputedStyle* unensured = ComputedStyle::NullifyEnsured(style);
-  return unensured && unensured->IsContainerForSizeContainerQueries();
+  return unensured && (unensured->IsContainerForSizeContainerQueries() ||
+                       unensured->PositionFallback());
 }
 
-void ComputedStyle::SetUsedColorScheme(
+bool ComputedStyle::CalculateIsStackingContextWithoutContainment() const {
+  // Force a stacking context for transform-style: preserve-3d. This happens
+  // even if preserves-3d is ignored due to a 'grouping property' being present
+  // which requires flattening. See:
+  // ComputedStyle::HasGroupingPropertyForUsedTransformStyle3D().
+  // This is legacy behavior that is left ambiguous in the official specs.
+  // See https://crbug.com/663650 for more details.
+  if (TransformStyle3D() == ETransformStyle3D::kPreserve3d) {
+    return true;
+  }
+  if (ForcesStackingContext()) {
+    return true;
+  }
+  if (StyleType() == kPseudoIdBackdrop) {
+    return true;
+  }
+  if (HasTransformRelatedProperty()) {
+    return true;
+  }
+  if (HasStackingGroupingProperty(BoxReflect())) {
+    return true;
+  }
+  if (GetPosition() == EPosition::kFixed) {
+    return true;
+  }
+  if (GetPosition() == EPosition::kSticky) {
+    return true;
+  }
+  if (HasPropertyThatCreatesStackingContext(WillChangeProperties())) {
+    return true;
+  }
+  if (ShouldCompositeForCurrentAnimations()) {
+    // TODO(882625): This becomes unnecessary when will-change correctly takes
+    // into account active animations.
+    return true;
+  }
+  return false;
+}
+
+bool ComputedStyle::IsRenderedInTopLayer(const Element& element) const {
+  return (element.IsInTopLayer() && Overlay() == EOverlay::kAuto) ||
+         StyleType() == kPseudoIdBackdrop;
+}
+
+bool ComputedStyle::ApplyControlFixedSize(const Node* node) const {
+  if (FieldSizing() == EFieldSizing::kFixed) {
+    return true;
+  }
+  if (!node) {
+    return false;
+  }
+  const auto* control = DynamicTo<HTMLFormControlElement>(node);
+  if (!control) {
+    control = DynamicTo<HTMLFormControlElement>(node->OwnerShadowHost());
+  }
+  return control && control->GetAutofillState() != WebAutofillState::kNotFilled;
+}
+
+ComputedStyleBuilder::ComputedStyleBuilder(const ComputedStyle& style)
+    : ComputedStyleBuilderBase(style) {}
+
+ComputedStyleBuilder::ComputedStyleBuilder(
+    const ComputedStyle& initial_style,
+    const ComputedStyle& parent_style,
+    IsAtShadowBoundary is_at_shadow_boundary)
+    : ComputedStyleBuilderBase(initial_style, parent_style) {
+  // Even if surrounding content is user-editable, shadow DOM should act as a
+  // single unit, and not necessarily be editable
+  if (is_at_shadow_boundary == kAtShadowBoundary) {
+    SetUserModify(initial_style.UserModify());
+  }
+
+  // TODO(crbug.com/1410068): Once `user-select` isn't inherited, we should
+  // get rid of following if-statement.
+  if (parent_style.UserSelect() == EUserSelect::kContain) {
+    SetUserSelect(EUserSelect::kAuto);  // FIXME(sesse): Is this right?
+  }
+
+  // TODO(sesse): Why do we do this?
+  SetBaseTextDecorationData(parent_style.AppliedTextDecorationData());
+}
+
+const ComputedStyle* ComputedStyleBuilder::TakeStyle() {
+  return MakeGarbageCollected<ComputedStyle>(ComputedStyle::BuilderPassKey(),
+                                             *this);
+}
+
+const ComputedStyle* ComputedStyleBuilder::CloneStyle() const {
+  ResetAccess();
+  return MakeGarbageCollected<ComputedStyle>(ComputedStyle::BuilderPassKey(),
+                                             *this);
+}
+
+void ComputedStyleBuilder::PropagateIndependentInheritedProperties(
+    const ComputedStyle& parent_style) {
+  ComputedStyleBuilderBase::PropagateIndependentInheritedProperties(
+      parent_style);
+  if (!HasVariableReference() && !HasVariableDeclaration() &&
+      (InheritedVariablesInternal().get() !=
+       parent_style.InheritedVariables())) {
+    MutableInheritedVariablesInternal() =
+        parent_style.InheritedVariablesInternal();
+  }
+}
+
+void ComputedStyleBuilder::ClearBackgroundImage() {
+  FillLayer* curr_child = &AccessBackgroundLayers();
+  curr_child->SetImage(
+      FillLayer::InitialFillImage(EFillLayerType::kBackground));
+  for (curr_child = curr_child->Next(); curr_child;
+       curr_child = curr_child->Next()) {
+    curr_child->ClearImage();
+  }
+}
+
+bool ComputedStyleBuilder::SetEffectiveZoom(float f) {
+  // Clamp the effective zoom value to a smaller (but hopeful still large
+  // enough) range, to avoid overflow in derived computations.
+  float clamped_effective_zoom = ClampTo<float>(f, 1e-6, 1e6);
+  if (EffectiveZoom() == clamped_effective_zoom) {
+    return false;
+  }
+  SetEffectiveZoomInternal(clamped_effective_zoom);
+  // Record UMA for the effective zoom in order to assess the relative
+  // importance of sub-pixel behavior, and related features and bugs.
+  // Clamp to a max of 400%, to make the histogram behave better at no
+  // real cost to our understanding of the zooms in use.
+  base::UmaHistogramSparse(
+      "Blink.EffectiveZoom",
+      std::clamp<float>(clamped_effective_zoom * 100, 0, 400));
+  return true;
+}
+
+// Compute the FontOrientation from this style. It's derived from WritingMode
+// and TextOrientation.
+FontOrientation ComputedStyleBuilder::ComputeFontOrientation() const {
+  if (blink::IsHorizontalWritingMode(GetWritingMode())) {
+    return FontOrientation::kHorizontal;
+  }
+  switch (GetTextOrientation()) {
+    case ETextOrientation::kMixed:
+      return FontOrientation::kVerticalMixed;
+    case ETextOrientation::kUpright:
+      return FontOrientation::kVerticalUpright;
+    case ETextOrientation::kSideways:
+      return FontOrientation::kVerticalRotated;
+    default:
+      NOTREACHED();
+      return FontOrientation::kVerticalMixed;
+  }
+}
+
+// Update FontOrientation in FontDescription if it is different. FontBuilder
+// takes care of updating it, but if WritingMode or TextOrientation were
+// changed after the style was constructed, this function synchronizes
+// FontOrientation to match to this style.
+void ComputedStyleBuilder::UpdateFontOrientation() {
+  FontOrientation orientation = ComputeFontOrientation();
+  if (GetFontDescription().Orientation() == orientation) {
+    return;
+  }
+  FontDescription font_description = GetFontDescription();
+  font_description.SetOrientation(orientation);
+  SetFontDescription(font_description);
+}
+
+void ComputedStyleBuilder::SetTextAutosizingMultiplier(float multiplier) {
+  if (TextAutosizingMultiplier() == multiplier) {
+    return;
+  }
+
+  SetTextAutosizingMultiplierInternal(multiplier);
+
+  float size = GetFontDescription().SpecifiedSize();
+
+  DCHECK(std::isfinite(size));
+  if (!std::isfinite(size) || size < 0) {
+    size = 0;
+  } else {
+    size = std::min(kMaximumAllowedFontSize, size);
+  }
+
+  FontDescription desc(GetFontDescription());
+  desc.SetSpecifiedSize(size);
+
+  float computed_size = size * EffectiveZoom();
+
+  float autosized_font_size = TextAutosizer::ComputeAutosizedFontSize(
+      computed_size, multiplier, EffectiveZoom());
+  desc.SetComputedSize(std::min(kMaximumAllowedFontSize, autosized_font_size));
+
+  SetFontDescription(desc);
+}
+
+void ComputedStyleBuilder::SetUsedColorScheme(
     ColorSchemeFlags flags,
     mojom::blink::PreferredColorScheme preferred_color_scheme,
     bool force_dark) {
@@ -2808,6 +2816,54 @@ void ComputedStyle::SetUsedColorScheme(
       (force_dark && !prefers_dark);
 
   SetColorSchemeForced(forced_scheme);
+
+  if (RuntimeEnabledFeatures::UsedColorSchemeRootScrollbarsEnabled()) {
+    const bool is_normal =
+        flags == static_cast<ColorSchemeFlags>(ColorSchemeFlag::kNormal);
+    SetColorSchemeFlagsIsNormal(is_normal);
+  }
+}
+
+CSSVariableData* ComputedStyleBuilder::GetVariableData(
+    const AtomicString& name,
+    bool is_inherited_property) const {
+  return blink::GetVariableData(*this, name, is_inherited_property);
+}
+
+StyleInheritedVariables& ComputedStyleBuilder::MutableInheritedVariables() {
+  scoped_refptr<StyleInheritedVariables>& variables =
+      MutableInheritedVariablesInternal();
+  if (!variables) {
+    variables = StyleInheritedVariables::Create();
+  } else if (!variables->HasOneRef()) {
+    variables = variables->Copy();
+  }
+  return *variables;
+}
+
+StyleNonInheritedVariables&
+ComputedStyleBuilder::MutableNonInheritedVariables() {
+  std::unique_ptr<StyleNonInheritedVariables>& variables =
+      MutableNonInheritedVariablesInternal();
+  if (!variables) {
+    variables = std::make_unique<StyleNonInheritedVariables>();
+  }
+  return *variables;
+}
+
+void ComputedStyleBuilder::CopyInheritedVariablesFrom(
+    const ComputedStyle* style) {
+  if (style->InheritedVariablesInternal()) {
+    MutableInheritedVariablesInternal() = style->InheritedVariablesInternal();
+  }
+}
+
+void ComputedStyleBuilder::CopyNonInheritedVariablesFrom(
+    const ComputedStyle* style) {
+  if (style->NonInheritedVariablesInternal()) {
+    MutableNonInheritedVariablesInternal() =
+        style->NonInheritedVariablesInternal()->Clone();
+  }
 }
 
 STATIC_ASSERT_ENUM(cc::OverscrollBehavior::Type::kAuto,

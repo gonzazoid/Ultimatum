@@ -10,9 +10,13 @@
 #include <string>
 #include <vector>
 
+#include "components/policy/proto/device_management_backend.pb.h"
+
 namespace crypto {
 class RSAPrivateKey;
 }  // namespace crypto
+
+namespace em = enterprise_management;
 
 namespace policy {
 
@@ -35,7 +39,9 @@ class SignatureProvider {
                                std::string* signature) const;
 
     // Signs |str| using the private key.
-    bool Sign(const std::string& str, std::string* signature) const;
+    bool Sign(const std::string& str,
+              em::PolicyFetchRequest::SignatureType signature_type,
+              std::string* signature) const;
 
     const std::string& public_key() const { return public_key_; }
 
@@ -81,6 +87,9 @@ class SignatureProvider {
 
   bool rotate_keys() const { return rotate_keys_; }
   void set_rotate_keys(bool rotate_keys) { rotate_keys_ = rotate_keys; }
+
+  // Sets universal signing keys that can sign any domain.
+  void SetUniversalSigningKeys();
 
  private:
   std::vector<SigningKey> signing_keys_;

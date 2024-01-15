@@ -10,9 +10,10 @@
 #include "media/base/limits.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_platform_media_stream_source.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util.h"
 #include "third_party/blink/renderer/modules/mediastream/mock_constraint_factory.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -40,8 +41,9 @@ void CheckNonFrameRateDefaults(const VideoCaptureSettings& result) {
   EXPECT_EQ(std::string(), result.device_id());
 }
 
-void CheckTrackAdapterSettingsEqualsFormat(const VideoCaptureSettings& result,
-                                           double frame_rate = 0.0) {
+void CheckTrackAdapterSettingsEqualsFormat(
+    const VideoCaptureSettings& result,
+    absl::optional<double> frame_rate = absl::nullopt) {
   // For content capture, resolution and frame rate should always be the same
   // for source and track.
   EXPECT_TRUE(result.track_adapter_settings().target_size().has_value());
@@ -52,7 +54,7 @@ void CheckTrackAdapterSettingsEqualsFormat(const VideoCaptureSettings& result,
 
 void CheckTrackAdapterSettingsEqualsFormatDefaultAspectRatio(
     const VideoCaptureSettings& result,
-    double frame_rate = 0.0) {
+    absl::optional<double> frame_rate = absl::nullopt) {
   EXPECT_EQ(
       static_cast<double>(kMinScreenCastDimension) / kMaxScreenCastDimension,
       result.track_adapter_settings().min_aspect_ratio());
@@ -75,6 +77,7 @@ class MediaStreamConstraintsUtilVideoContentTest : public testing::Test {
                                              kDefaultScreenCastHeight);
   }
 
+  test::TaskEnvironment task_environment_;
   MockConstraintFactory constraint_factory_;
 };
 

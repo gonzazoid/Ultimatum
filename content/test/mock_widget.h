@@ -38,8 +38,8 @@ class MockWidget : public blink::mojom::Widget {
     shown_hidden_callback_ = std::move(callback);
   }
 
-  void ClearHidden() { is_hidden_ = absl::nullopt; }
-  const absl::optional<bool>& IsHidden() const { return is_hidden_; }
+  void ClearHidden() { is_hidden_ = std::nullopt; }
+  const std::optional<bool>& IsHidden() const { return is_hidden_; }
 
   // blink::mojom::Widget overrides.
   void ForceRedraw(ForceRedrawCallback callback) override;
@@ -56,13 +56,13 @@ class MockWidget : public blink::mojom::Widget {
   void WasShown(bool was_evicted,
                 blink::mojom::RecordContentToVisibleTimeRequestPtr
                     record_tab_switch_time_request) override;
-  void RequestPresentationTimeForNextFrame(
+  void RequestSuccessfulPresentationTimeForNextFrame(
       blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
       override;
-  void CancelPresentationTimeRequest() override;
+  void CancelSuccessfulPresentationTimeRequest() override;
 
  private:
-  absl::optional<bool> is_hidden_;
+  std::optional<bool> is_hidden_;
   base::RepeatingClosure shown_hidden_callback_;
   std::vector<blink::VisualProperties> visual_properties_;
   std::vector<std::pair<gfx::Rect, gfx::Rect>> screen_rects_;

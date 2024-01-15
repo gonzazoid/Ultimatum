@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "ash/frame/header_view.h"
 #include "ash/frame/non_client_frame_view_ash.h"
 #include "ash/frame/wide_frame_view.h"
 #include "ash/public/cpp/arc_resize_lock_type.h"
@@ -23,6 +22,7 @@
 #include "ash/wm/client_controlled_state.h"
 #include "ash/wm/collision_detection/collision_detection_utils.h"
 #include "ash/wm/drag_details.h"
+#include "ash/wm/pip/pip_controller.h"
 #include "ash/wm/pip/pip_positioner.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/toplevel_window_event_handler.h"
@@ -32,21 +32,22 @@
 #include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_util.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
-#include "chromeos/ui/base/tablet_state.h"
 #include "chromeos/ui/base/window_pin_type.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "chromeos/ui/frame/caption_buttons/caption_button_model.h"
 #include "chromeos/ui/frame/default_frame_header.h"
+#include "chromeos/ui/frame/header_view.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/exo/surface.h"
-#include "components/exo/wm_helper.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/scoped_window_event_targeting_blocker.h"
 #include "ui/aura/window.h"
@@ -140,7 +141,7 @@ class ClientControlledStateDelegate
   }
 
  private:
-  ClientControlledShellSurface* shell_surface_;
+  raw_ptr<ClientControlledShellSurface> shell_surface_;
 };
 
 // A WindowStateDelegate that implements ToggleFullscreen behavior for
@@ -220,8 +221,8 @@ class ClientControlledWindowStateDelegate : public ash::WindowStateDelegate {
   }
 
  private:
-  ClientControlledShellSurface* shell_surface_;
-  ash::ClientControlledState::Delegate* delegate_;
+  raw_ptr<ClientControlledShellSurface> shell_surface_;
+  raw_ptr<ash::ClientControlledState::Delegate, DanglingUntriaged> delegate_;
 };
 
 bool IsPinned(const ash::WindowState* window_state) {
@@ -278,15 +279,17 @@ class EventTargetingBlocker : aura::WindowObserver {
     window->AddObserver(this);
     event_targeting_blocker_map_[window] =
         std::make_unique<aura::ScopedWindowEventTargetingBlocker>(window);
-    for (auto* child : window->children())
+    for (aura::Window* child : window->children()) {
       Register(child);
+    }
   }
 
   void Unregister(aura::Window* window) {
     window->RemoveObserver(this);
     event_targeting_blocker_map_.erase(window);
-    for (auto* child : window->children())
+    for (aura::Window* child : window->children()) {
       Unregister(child);
+    }
   }
 
   void OnWindowDestroying(aura::Window* window) override {
@@ -298,7 +301,7 @@ class EventTargetingBlocker : aura::WindowObserver {
   std::map<aura::Window*,
            std::unique_ptr<aura::ScopedWindowEventTargetingBlocker>>
       event_targeting_blocker_map_;
-  aura::Window* window_ = nullptr;
+  raw_ptr<aura::Window> window_ = nullptr;
 };
 
 }  // namespace
@@ -316,7 +319,7 @@ class ClientControlledShellSurface::ScopedSetBoundsLocally {
   ~ScopedSetBoundsLocally() { state_->set_bounds_locally(false); }
 
  private:
-  ash::ClientControlledState* const state_;
+  const raw_ptr<ash::ClientControlledState> state_;
 };
 
 class ClientControlledShellSurface::ScopedLockedToRoot {
@@ -332,7 +335,7 @@ class ClientControlledShellSurface::ScopedLockedToRoot {
   ~ScopedLockedToRoot() { window_->ClearProperty(ash::kLockedToRootKey); }
 
  private:
-  aura::Window* const window_;
+  const raw_ptr<aura::Window> window_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -342,10 +345,13 @@ ClientControlledShellSurface::ClientControlledShellSurface(
     Surface* surface,
     bool can_minimize,
     int container,
-    bool default_scale_cancellation)
+    bool default_scale_cancellation,
+    bool supports_floated_state)
     : ShellSurfaceBase(surface, gfx::Point(), can_minimize, container),
-      use_default_scale_cancellation_(default_scale_cancellation) {
+      use_default_scale_cancellation_(default_scale_cancellation),
+      supports_floated_state_(supports_floated_state) {
   server_side_resize_ = true;
+  set_client_submits_surfaces_in_pixel_coordinates(true);
 }
 
 ClientControlledShellSurface::~ClientControlledShellSurface() {
@@ -368,21 +374,7 @@ void ClientControlledShellSurface::SetBounds(int64_t display_id,
     return;
   }
 
-  // When use_default_scale_cancellation_ is false, the client is scale-aware
-  // and we expect that the |bounds| has been calculated by the client based
-  // on the device_scale_factor of the display with |display_id|.
-  // If the display has been changed before |SetBounds()| is called, for some
-  // cases(eg. move ARC window between displays with shortcut), |pending_scale_|
-  // may be stale and tied the old pending_display. Therefore, we re-initialize
-  // it to 0.0 here to force an update on the value in |EnsurePendingScale()|.
-  // Also need to note that we only want to commit |pending_scale_| in the cases
-  // where it hasn't been initialized before this method call.
-  bool const commit_immediately = pending_scale_ == 0.0;
-  if (!use_default_scale_cancellation_ && display_id != pending_display_id_)
-    pending_scale_ = 0.0;
-
   SetDisplay(display_id);
-  EnsurePendingScale(commit_immediately);
 
   const gfx::Rect bounds_dp =
       gfx::ScaleToRoundedRect(bounds, GetClientToDpPendingScale());
@@ -393,9 +385,7 @@ void ClientControlledShellSurface::SetBoundsOrigin(int64_t display_id,
                                                    const gfx::Point& origin) {
   TRACE_EVENT2("exo", "ClientControlledShellSurface::SetBoundsOrigin",
                "display_id", display_id, "origin", origin.ToString());
-
   SetDisplay(display_id);
-  EnsurePendingScale(/*commit_immediately=*/true);
   const gfx::Point origin_dp =
       gfx::ScaleToRoundedPoint(origin, GetClientToDpPendingScale());
   pending_geometry_.set_origin(origin_dp);
@@ -410,7 +400,6 @@ void ClientControlledShellSurface::SetBoundsSize(const gfx::Size& size) {
     return;
   }
 
-  EnsurePendingScale(/*commit_immediately=*/true);
   const gfx::Size size_dp =
       gfx::ScaleToRoundedSize(size, GetClientToDpPendingScale());
   pending_geometry_.set_size(size_dp);
@@ -431,11 +420,13 @@ void ClientControlledShellSurface::SetRestored() {
   pending_window_state_ = chromeos::WindowStateType::kNormal;
 }
 
-void ClientControlledShellSurface::SetFullscreen(bool fullscreen) {
+void ClientControlledShellSurface::SetFullscreen(bool fullscreen,
+                                                 int64_t display_id) {
   TRACE_EVENT1("exo", "ClientControlledShellSurface::SetFullscreen",
                "fullscreen", fullscreen);
   pending_window_state_ = fullscreen ? chromeos::WindowStateType::kFullscreen
                                      : chromeos::WindowStateType::kNormal;
+  // TODO(crbug/1478300): `display_id` might need to be used here somewhere.
 }
 
 void ClientControlledShellSurface::SetPinned(chromeos::WindowPinType type) {
@@ -446,10 +437,12 @@ void ClientControlledShellSurface::SetPinned(chromeos::WindowPinType type) {
     CreateShellSurfaceWidget(ui::SHOW_STATE_NORMAL);
 
   if (type == chromeos::WindowPinType::kNone) {
-    ash::WindowState::Get(widget_->GetNativeWindow())->Restore();
+    // Set other window state mode will automatically cancelled pin mode.
+    // TODO: Add NOTREACH() here after ARC side integration fully landed.
   } else {
     bool trusted = type == chromeos::WindowPinType::kTrustedPinned;
-    ash::window_util::PinWindow(widget_->GetNativeWindow(), trusted);
+    pending_window_state_ = trusted ? chromeos::WindowStateType::kTrustedPinned
+                                    : chromeos::WindowStateType::kPinned;
   }
 }
 
@@ -487,35 +480,6 @@ void ClientControlledShellSurface::SetShadowBounds(const gfx::Rect& bounds) {
   }
 }
 
-void ClientControlledShellSurface::SetScale(double scale) {
-  TRACE_EVENT1("exo", "ClientControlledShellSurface::SetScale", "scale", scale);
-
-  if (scale <= 0.0) {
-    DLOG(WARNING) << "Surface scale must be greater than 0";
-    return;
-  }
-
-  pending_scale_ = scale;
-}
-
-void ClientControlledShellSurface::CommitPendingScale() {
-  if (pending_scale_ == scale_ || pending_scale_ == 0.0)
-    return;
-
-  gfx::Transform transform;
-  transform.Scale(1.0 / pending_scale_, 1.0 / pending_scale_);
-  host_window()->SetTransform(transform);
-  scale_ = pending_scale_;
-  UpdateCornerRadius();
-}
-
-void ClientControlledShellSurface::SetTopInset(int height) {
-  TRACE_EVENT1("exo", "ClientControlledShellSurface::SetTopInset", "height",
-               height);
-
-  pending_top_inset_height_ = height;
-}
-
 void ClientControlledShellSurface::OnWindowStateChangeEvent(
     chromeos::WindowStateType current_state,
     chromeos::WindowStateType next_state) {
@@ -543,22 +507,30 @@ void ClientControlledShellSurface::AttemptToStartDrag(
       ash::Shell::Get()->toplevel_window_event_handler();
   aura::Window* mouse_pressed_handler =
       target->GetHost()->dispatcher()->mouse_pressed_handler();
-  // Start dragging only if ...
-  // 1) touch guesture is in progres.
+  // Start dragging only if:
+  // 1) touch guesture is in progress or
   // 2) mouse was pressed on the target or its subsurfaces.
-  if (toplevel_handler->gesture_target() ||
-      (mouse_pressed_handler && target->Contains(mouse_pressed_handler))) {
-    gfx::PointF point_in_root(location);
+  // If neither condition is met, we do not start the drag.
+  gfx::PointF point_in_root;
+  if (toplevel_handler->gesture_target()) {
+    point_in_root = toplevel_handler->event_location_in_gesture_target();
+    aura::Window::ConvertPointToTarget(
+        toplevel_handler->gesture_target(),
+        widget_->GetNativeWindow()->GetRootWindow(), &point_in_root);
+  } else if (mouse_pressed_handler && target->Contains(mouse_pressed_handler)) {
+    point_in_root = location;
     if (use_default_scale_cancellation_) {
       // When default scale cancellation is enabled, the client sends the
       // location in screen coordinates. Otherwise, the location should already
       // be in the display's coordinates.
       wm::ConvertPointFromScreen(target->GetRootWindow(), &point_in_root);
     }
-    toplevel_handler->AttemptToStartDrag(
-        target, point_in_root, component,
-        ash::ToplevelWindowEventHandler::EndClosure());
+  } else {
+    return;
   }
+  toplevel_handler->AttemptToStartDrag(
+      target, point_in_root, component,
+      ash::ToplevelWindowEventHandler::EndClosure());
 }
 
 bool ClientControlledShellSurface::IsDragging() {
@@ -614,25 +586,19 @@ void ClientControlledShellSurface::SetExtraTitle(
   }
 }
 
-void ClientControlledShellSurface::SetClientAccessibilityId(
-    int32_t accessibility_id) {
-  if (accessibility_id >= 0)
-    client_accessibility_id_ = accessibility_id;
-  else
-    client_accessibility_id_.reset();
-
-  if (widget_ && widget_->GetNativeWindow()) {
-    SetShellClientAccessibilityId(widget_->GetNativeWindow(),
-                                  client_accessibility_id_);
-  }
-}
-
 void ClientControlledShellSurface::RebindRootSurface(
     Surface* root_surface,
     bool can_minimize,
     int container,
-    bool default_scale_cancellation) {
+    bool default_scale_cancellation,
+    bool supports_floated_state) {
   use_default_scale_cancellation_ = default_scale_cancellation;
+  supports_floated_state_ = supports_floated_state;
+  auto* const window = widget_ ? widget_->GetNativeWindow() : nullptr;
+  if (window) {
+    window->SetProperty(chromeos::kSupportsFloatedStateKey,
+                        supports_floated_state_);
+  }
   ShellSurfaceBase::RebindRootSurface(root_surface, can_minimize, container);
 }
 
@@ -674,8 +640,7 @@ void ClientControlledShellSurface::OnBoundsChangeEvent(
   bool is_resize = client_bounds.size() != current_size &&
                    !widget_->IsMaximized() && !widget_->IsFullscreen();
 
-  // Make sure to use the up-to-date scale factor. At this point, |scale_| or
-  // |pending_scale_| may not be updated yet.
+  // Make sure to use the up-to-date scale factor.
   display::Display display;
   const bool display_exists =
       display::Screen::GetScreen()->GetDisplayWithDisplayId(display_id,
@@ -727,7 +692,7 @@ float ClientControlledShellSurface::GetClientToDpScale() const {
   // we expect the client will already send bounds in DP.
   if (use_default_scale_cancellation_)
     return 1.f;
-  return 1.f / scale_;
+  return 1.f / GetScale();
 }
 
 void ClientControlledShellSurface::SetResizeLockType(
@@ -783,12 +748,12 @@ void ClientControlledShellSurface::OnSetFrameColors(SkColor active_color,
   }
 }
 
-void ClientControlledShellSurface::SetSnappedToPrimary() {
+void ClientControlledShellSurface::SetSnapPrimary(float snap_ratio) {
   TRACE_EVENT0("exo", "ClientControlledShellSurface::SetSnappedToPrimary");
   pending_window_state_ = chromeos::WindowStateType::kPrimarySnapped;
 }
 
-void ClientControlledShellSurface::SetSnappedToSecondary() {
+void ClientControlledShellSurface::SetSnapSecondary(float snap_ratio) {
   TRACE_EVENT0("exo", "ClientControlledShellSurface::SetSnappedToSecondary");
   pending_window_state_ = chromeos::WindowStateType::kSecondarySnapped;
 }
@@ -803,8 +768,74 @@ void ClientControlledShellSurface::UnsetPip() {
   SetRestored();
 }
 
+void ClientControlledShellSurface::SetFloatToLocation(
+    chromeos::FloatStartLocation float_start_location) {
+  TRACE_EVENT0("exo", "ClientControlledShellSurface::SetFloatToLocation");
+  pending_window_state_ = chromeos::WindowStateType::kFloated;
+}
+
+void ClientControlledShellSurface::OnDidProcessDisplayChanges(
+    const DisplayConfigurationChange& configuration_change) {
+  ShellSurfaceBase::OnDidProcessDisplayChanges(configuration_change);
+
+  if (!widget_) {
+    return;
+  }
+
+  // The PIP window bounds is adjusted in Ash when the screen is rotated, but
+  // Android has an obsolete bounds for a while and applies it incorrectly.
+  // We need to ignore those bounds change until the states are completely
+  // synced on both sides.
+  const bool any_displays_rotated = base::ranges::any_of(
+      configuration_change.display_metrics_changes,
+      [](const DisplayManagerObserver::DisplayMetricsChange& change) {
+        return change.changed_metrics &
+               display::DisplayObserver::DISPLAY_METRIC_ROTATION;
+      });
+  if (GetWindowState()->IsPip() && any_displays_rotated) {
+    gfx::Rect bounds_after_rotation =
+        ash::PipPositioner::GetSnapFractionAppliedBounds(GetWindowState());
+    display_rotating_with_pip_ =
+        bounds_after_rotation !=
+        GetWindowState()->window()->GetBoundsInScreen();
+  }
+
+  // Early return if no display changes are relevant to the shell surface's host
+  // display.
+  const auto host_display_change = base::ranges::find(
+      configuration_change.display_metrics_changes, output_display_id(),
+      [](const DisplayManagerObserver::DisplayMetricsChange& change) {
+        return change.display->id();
+      });
+  if (host_display_change ==
+      configuration_change.display_metrics_changes.end()) {
+    return;
+  }
+
+  uint32_t changed_metrics = host_display_change->changed_metrics;
+  if (!display::Screen::GetScreen()->InTabletMode() || !widget_->IsActive() ||
+      !(changed_metrics & display::DisplayObserver::DISPLAY_METRIC_ROTATION)) {
+    return;
+  }
+
+  Orientation target_orientation =
+      SizeToOrientation(host_display_change->display->size());
+  if (orientation_ == target_orientation) {
+    return;
+  }
+  expected_orientation_ = target_orientation;
+  EnsureCompositorIsLockedForOrientationChange();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // aura::WindowObserver overrides:
+void ClientControlledShellSurface::OnWindowDestroying(aura::Window* window) {
+  if (client_controlled_state_) {
+    client_controlled_state_->ResetDelegate();
+    client_controlled_state_ = nullptr;
+  }
+  ShellSurfaceBase::OnWindowDestroying(window);
+}
 
 void ClientControlledShellSurface::OnWindowAddedToRootWindow(
     aura::Window* window) {
@@ -884,72 +915,9 @@ gfx::Size ClientControlledShellSurface::GetMaximumSize() const {
 
 void ClientControlledShellSurface::OnDeviceScaleFactorChanged(float old_dsf,
                                                               float new_dsf) {
-  if (!use_default_scale_cancellation_) {
-    SetScale(new_dsf);
-    // Commit scale changes immediately if we expect that the window will not be
-    // resized.
-    if (widget_->IsMaximized() || widget_->IsFullscreen() ||
-        WMHelper::GetInstance()->InTabletMode())
-      CommitPendingScale();
-  }
-
   views::View::OnDeviceScaleFactorChanged(old_dsf, new_dsf);
 
   UpdateFrameWidth();
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// display::DisplayObserver overrides:
-
-void ClientControlledShellSurface::OnDisplayMetricsChanged(
-    const display::Display& new_display,
-    uint32_t changed_metrics) {
-  SurfaceTreeHost::OnDisplayMetricsChanged(new_display, changed_metrics);
-
-  if (!widget_)
-    return;
-
-  // The PIP window bounds is adjusted in Ash when the screen is rotated, but
-  // Android has an obsolete bounds for a while and applies it incorrectly.
-  // We need to ignore those bounds change until the states are completely
-  // synced on both sides.
-  if (GetWindowState()->IsPip() &&
-      changed_metrics & display::DisplayObserver::DISPLAY_METRIC_ROTATION) {
-    gfx::Rect bounds_after_rotation =
-        ash::PipPositioner::GetSnapFractionAppliedBounds(GetWindowState());
-    display_rotating_with_pip_ =
-        bounds_after_rotation !=
-        GetWindowState()->window()->GetBoundsInScreen();
-  }
-
-  const display::Screen* screen = display::Screen::GetScreen();
-  display::Display current_display =
-      screen->GetDisplayNearestWindow(widget_->GetNativeWindow());
-  if (current_display.id() != new_display.id())
-    return;
-
-  bool in_tablet_mode = WMHelper::GetInstance()->InTabletMode();
-
-  if (!use_default_scale_cancellation_ &&
-      changed_metrics &
-          display::DisplayObserver::DISPLAY_METRIC_DEVICE_SCALE_FACTOR) {
-    SetScale(new_display.device_scale_factor());
-    // Commit scale changes immediately if we expect that the window will not be
-    // resized.
-    if (widget_->IsMaximized() || widget_->IsFullscreen() || in_tablet_mode)
-      CommitPendingScale();
-  }
-
-  if (!in_tablet_mode || !widget_->IsActive() ||
-      !(changed_metrics & display::DisplayObserver::DISPLAY_METRIC_ROTATION)) {
-    return;
-  }
-
-  Orientation target_orientation = SizeToOrientation(new_display.size());
-  if (orientation_ == target_orientation)
-    return;
-  expected_orientation_ = target_orientation;
-  EnsureCompositorIsLockedForOrientationChange();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -980,6 +948,7 @@ void ClientControlledShellSurface::SetSystemModal(bool system_modal) {
 
 void ClientControlledShellSurface::SetWidgetBounds(const gfx::Rect& bounds,
                                                    bool adjusted_by_server) {
+  set_bounds_is_dirty(true);
   const auto* screen = display::Screen::GetScreen();
   aura::Window* window = widget_->GetNativeWindow();
   display::Display current_display = screen->GetDisplayNearestWindow(window);
@@ -1009,13 +978,6 @@ void ClientControlledShellSurface::SetWidgetBounds(const gfx::Rect& bounds,
     preserve_widget_bounds_ = false;
   }
 
-  if (!use_default_scale_cancellation_) {
-    bool needs_initial_commit = pending_scale_ == 0.0;
-    SetScale(current_display.device_scale_factor());
-    if (needs_initial_commit)
-      CommitPendingScale();
-  }
-
   // Calculate a minimum window visibility required bounds.
   // TODO(oshima): Move this to ComputeAdjustedBounds.
   gfx::Rect adjusted_bounds = bounds;
@@ -1026,15 +988,29 @@ void ClientControlledShellSurface::SetWidgetBounds(const gfx::Rect& bounds,
     ash::ClientControlledState::AdjustBoundsForMinimumWindowVisibility(
         restriction, &adjusted_bounds);
     // Collision detection to the bounds set by Android should be applied only
-    // to initial bounds. Do not adjust new bounds as it can be obsolete or in
-    // transit during animation, which results in incorrect resting postiion.
-    // The resting position should be fully controlled by chrome afterwards
-    // because Android isn't aware of Chrome OS System UI.
+    // to initial bounds and any client-requested bounds (I.E. Double-Tap to
+    // resize). Do not adjust new bounds for fling/display rotation as it can be
+    // obsolete or in transit during animation, which results in incorrect
+    // resting postiion. The resting position should be fully controlled by
+    // chrome afterwards because Android isn't aware of Chrome OS System UI.
+    bool is_resizing_without_rotation =
+        !display_rotating_with_pip_ && !IsDragging() &&
+        !ash::Shell::Get()->pip_controller()->is_tucked() &&
+        GetWindowState()->GetCurrentBoundsInScreen().size() != bounds.size();
     if (GetWindowState()->IsPip() &&
-        !ash::PipPositioner::HasSnapFraction(GetWindowState())) {
+        (!ash::PipPositioner::HasSnapFraction(GetWindowState()) ||
+         is_resizing_without_rotation)) {
       adjusted_bounds = ash::CollisionDetectionUtils::GetRestingPosition(
           target_display, adjusted_bounds,
           ash::CollisionDetectionUtils::RelativePriority::kPictureInPicture);
+
+      // Only if the window is resizing with a double tap, the bounds should
+      // be applied via a scaling animation. Position changes will be applied
+      // via kAnimate.
+      if (is_resizing_without_rotation && !IsDragging()) {
+        client_controlled_state_->set_next_bounds_change_animation_type(
+            ash::WindowState::BoundsChangeAnimationType::kCrossFade);
+      }
     }
   }
 
@@ -1057,7 +1033,7 @@ void ClientControlledShellSurface::SetWidgetBounds(const gfx::Rect& bounds,
       ScopedSetBoundsLocally scoped_set_bounds(this);
       window->SetBounds(gfx::Rect(origin, adjusted_bounds.size()));
     }
-    UpdateSurfaceBounds();
+    UpdateHostWindowOrigin();
     return;
   }
 
@@ -1078,19 +1054,32 @@ void ClientControlledShellSurface::SetWidgetBounds(const gfx::Rect& bounds,
                         adjusted_bounds_in_display, 0);
   }
 
-  UpdateSurfaceBounds();
+  UpdateHostWindowOrigin();
+}
+gfx::Rect ClientControlledShellSurface::GetVisibleBounds() const {
+  const auto* screen = display::Screen::GetScreen();
+  display::Display display;
+
+  if (geometry_.IsEmpty() ||
+      !screen->GetDisplayWithDisplayId(display_id_, &display)) {
+    return ShellSurfaceBase::GetVisibleBounds();
+  }
+  // ARC sends geometry_ in screen coordinates.
+  return geometry_ + display.bounds().OffsetFromOrigin();
 }
 
 gfx::Rect ClientControlledShellSurface::GetShadowBounds() const {
   gfx::Rect shadow_bounds = ShellSurfaceBase::GetShadowBounds();
   const ash::NonClientFrameViewAsh* frame_view = GetFrameView();
   if (frame_view->GetFrameEnabled() && !shadow_bounds_->IsEmpty() &&
-      !geometry_.IsEmpty()) {
+      !geometry_.IsEmpty() && !frame_view->GetFrameOverlapped()) {
     // The client controlled geometry is only for the client
     // area. When the chrome side frame is enabled, the shadow height
     // has to include the height of the frame, and the total height is
     // equals to the window height computed by
     // |GetWindowBoundsForClientBounds|.
+    // But when the frame is overlapped with the client area, shadow bounds
+    // should be the same as the client area bounds.
     shadow_bounds.set_size(
         frame_view->GetWindowBoundsForClientBounds(shadow_bounds).size());
   }
@@ -1134,18 +1123,27 @@ void ClientControlledShellSurface::InitializeWindowState(
   }
 
   auto* window = widget_->GetNativeWindow();
-  SetShellClientAccessibilityId(window, client_accessibility_id_);
   GrantPermissionToActivateIndefinitely(window);
+
+  window->SetProperty(chromeos::kSupportsFloatedStateKey,
+                      supports_floated_state_);
 }
 
 float ClientControlledShellSurface::GetScale() const {
-  return scale_;
+  return !use_default_scale_cancellation_
+             ? ShellSurfaceBase::GetScaleFactor()
+             : ::exo::GetDefaultDeviceScaleFactor();
+}
+
+float ClientControlledShellSurface::GetScaleFactor() const {
+  // TODO(andreaorru): consolidate Scale and ScaleFactor.
+  return GetScale();
 }
 
 absl::optional<gfx::Rect> ClientControlledShellSurface::GetWidgetBounds()
     const {
   const ash::NonClientFrameViewAsh* frame_view = GetFrameView();
-  if (frame_view->GetFrameEnabled()) {
+  if (frame_view->GetFrameEnabled() && !frame_view->GetFrameOverlapped()) {
     gfx::Rect visible_bounds = GetVisibleBounds();
     if (widget_->IsMaximized() && frame_type_ == SurfaceFrameType::NORMAL) {
       // When the widget is maximized in clamshell mode, client sends
@@ -1155,6 +1153,8 @@ absl::optional<gfx::Rect> ClientControlledShellSurface::GetWidgetBounds()
     return frame_view->GetWindowBoundsForClientBounds(visible_bounds);
   }
 
+  // When frame is overlapped with the client window, widget bounds is the same
+  // as the |geometry_| from client.
   return GetVisibleBounds();
 }
 
@@ -1193,8 +1193,10 @@ bool ClientControlledShellSurface::OnPreWidgetCommit() {
     return true;
   }
 
-  if (IsPinned(window_state)) {
-    VLOG(1) << "State change was requested while pinned";
+  if (IsPinned(window_state) &&
+      (pending_window_state_ == chromeos::WindowStateType::kPinned ||
+       pending_window_state_ == chromeos::WindowStateType::kTrustedPinned)) {
+    VLOG(1) << "Pinned was requested while pinned";
     return true;
   }
 
@@ -1206,16 +1208,23 @@ bool ClientControlledShellSurface::OnPreWidgetCommit() {
             ash::WindowState::BoundsChangeAnimationType::kCrossFade;
       }
       break;
-
+    case chromeos::WindowStateType::kFloated:
+      animation_type =
+          ash::WindowState::BoundsChangeAnimationType::kCrossFadeFloat;
+      break;
     case chromeos::WindowStateType::kMaximized:
     case chromeos::WindowStateType::kFullscreen:
       if (!window_state->IsPip())
         animation_type =
             ash::WindowState::BoundsChangeAnimationType::kCrossFade;
       break;
-
     default:
       break;
+  }
+
+  if (window_state->IsFloated()) {
+    animation_type =
+        ash::WindowState::BoundsChangeAnimationType::kCrossFadeUnfloat;
   }
 
   bool wasPip = window_state->IsPip();
@@ -1227,7 +1236,6 @@ bool ClientControlledShellSurface::OnPreWidgetCommit() {
                                                pending_window_state_)) {
     client_controlled_state_->set_next_bounds_change_animation_type(
         animation_type);
-    UpdateCornerRadius();
   }
 
   if (wasPip && !window_state->IsMinimized()) {
@@ -1271,10 +1279,6 @@ void ClientControlledShellSurface::OnPostWidgetCommit() {
     top_inset_height_ = pending_top_inset_height_;
   }
 
-  // Update surface scale.
-  if (use_default_scale_cancellation_)
-    CommitPendingScale();
-
   widget_->GetNativeWindow()->SetProperty(aura::client::kZOrderingKey,
                                           pending_always_on_top_
                                               ? ui::ZOrderLevel::kFloatingWindow
@@ -1296,13 +1300,11 @@ void ClientControlledShellSurface::OnPostWidgetCommit() {
 }
 
 void ClientControlledShellSurface::OnSurfaceDestroying(Surface* surface) {
-  if (client_controlled_state_)
+  if (client_controlled_state_) {
     client_controlled_state_->ResetDelegate();
+    client_controlled_state_ = nullptr;
+  }
   ShellSurfaceBase::OnSurfaceDestroying(surface);
-}
-
-void ClientControlledShellSurface::OnContentSizeChanged(Surface* surface) {
-  CommitPendingScale();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1395,10 +1397,10 @@ void ClientControlledShellSurface::UpdateFrameWidth() {
   if (shadow_bounds_) {
     float device_scale_factor =
         GetWidget()->GetNativeWindow()->layer()->device_scale_factor();
-    float dsf_to_default_dsf = device_scale_factor / scale_;
+    float dsf_to_default_dsf = device_scale_factor / GetScale();
     width = base::ClampRound(shadow_bounds_->width() * dsf_to_default_dsf);
   }
-  static_cast<ash::HeaderView*>(GetFrameView()->GetHeaderView())
+  static_cast<chromeos::HeaderView*>(GetFrameView()->GetHeaderView())
       ->SetWidthInPixels(width);
 }
 
@@ -1424,7 +1426,7 @@ void ClientControlledShellSurface::UpdateFrameType() {
   UpdateAutoHideFrame();
 
   if (suppress_mouse_event)
-    UpdateSurfaceBounds();
+    UpdateHostWindowOrigin();
 }
 
 bool ClientControlledShellSurface::GetCanResizeFromSizeConstraints() const {
@@ -1469,29 +1471,14 @@ const ash::NonClientFrameViewAsh* ClientControlledShellSurface::GetFrameView()
       widget_->non_client_view()->frame_view());
 }
 
-void ClientControlledShellSurface::EnsurePendingScale(bool commit_immediately) {
-  // Handle the case where we receive bounds from the client before the initial
-  // scale has been set or |pending_scale_| is stale due to change of displays.
-  if (pending_scale_ == 0.0) {
-    DCHECK(!use_default_scale_cancellation_);
-    display::Display display;
-    if (display::Screen::GetScreen()->GetDisplayWithDisplayId(
-            pending_display_id_, &display)) {
-      SetScale(display.device_scale_factor());
-      if (commit_immediately)
-        CommitPendingScale();
-    }
-  }
-}
-
 float ClientControlledShellSurface::GetClientToDpPendingScale() const {
   // When the client is scale-aware, we expect that it will resize windows when
   // reacting to scale changes. Since we do not commit the scale until the
   // buffer size changes, any bounds sent after a scale change and before the
   // scale commit will result in mismatched sizes between widget and the buffer.
-  // To work around this, we use pending_scale_ to calculate bounds in DP
+  // To work around this, we use pending scale factor to calculate bounds in DP
   // instead of GetClientToDpScale().
-  return use_default_scale_cancellation_ ? 1.f : 1.f / pending_scale_;
+  return use_default_scale_cancellation_ ? 1.f : 1.f / GetPendingScaleFactor();
 }
 
 gfx::Rect
@@ -1507,17 +1494,19 @@ ClientControlledShellSurface::GetClientBoundsForWindowBoundsAndWindowState(
       window_state == chromeos::WindowStateType::kSecondarySnapped;
   const bool is_maximized =
       window_state == chromeos::WindowStateType::kMaximized;
-  const display::TabletState tablet_state =
-      chromeos::TabletState::Get()->state();
-  const bool is_tablet_mode = WMHelper::GetInstance()->InTabletMode();
 
-  if (is_maximized || (is_snapped && is_tablet_mode))
+  if (is_maximized ||
+      (is_snapped && display::Screen::GetScreen()->InTabletMode())) {
     return window_bounds;
+  }
 
   gfx::Rect client_bounds =
-      GetFrameView()->GetClientBoundsForWindowBounds(window_bounds);
+      GetFrameView()->GetFrameOverlapped()
+          ? window_bounds
+          : GetFrameView()->GetClientBoundsForWindowBounds(window_bounds);
 
-  if (is_snapped && tablet_state == display::TabletState::kExitingTabletMode) {
+  if (is_snapped && display::Screen::GetScreen()->GetTabletState() ==
+                        display::TabletState::kExitingTabletMode) {
     // Until the next commit, the frame view is in immersive mode, and the above
     // GetClientBoundsForWindowBounds doesn't return bounds taking the caption
     // height into account.

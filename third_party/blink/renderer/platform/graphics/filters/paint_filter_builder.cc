@@ -30,8 +30,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_canvas.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
-#include "third_party/skia/include/effects/SkColorMatrixFilter.h"
-#include "third_party/skia/include/effects/SkTableColorFilter.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 
 namespace blink {
@@ -95,7 +94,7 @@ sk_sp<PaintFilter> TransformInterpolationSpace(
     sk_sp<PaintFilter> input,
     InterpolationSpace src_interpolation_space,
     InterpolationSpace dst_interpolation_space) {
-  sk_sp<SkColorFilter> color_filter =
+  sk_sp<cc::ColorFilter> color_filter =
       interpolation_space_utilities::CreateInterpolationSpaceFilter(
           src_interpolation_space, dst_interpolation_space);
   if (!color_filter)
@@ -111,7 +110,8 @@ static const float kMaxMaskBufferSize =
 sk_sp<PaintFilter> BuildBoxReflectFilter(const BoxReflection& reflection,
                                          sk_sp<PaintFilter> input) {
   sk_sp<PaintFilter> masked_input;
-  if (sk_sp<PaintRecord> mask_record = reflection.Mask()) {
+  PaintRecord mask_record = reflection.Mask();
+  if (!mask_record.empty()) {
     // Since PaintRecords can't be serialized to the browser process, first
     // raster the mask to a bitmap, then encode it in an SkImageSource, which
     // can be serialized.
@@ -128,10 +128,10 @@ sk_sp<PaintFilter> BuildBoxReflectFilter(const BoxReflection& reflection,
       SkiaPaintCanvas canvas(bitmap);
       canvas.clear(SkColors::kTransparent);
       canvas.translate(-mask_record_bounds.x(), -mask_record_bounds.y());
-      canvas.drawPicture(mask_record);
+      canvas.drawPicture(std::move(mask_record));
       PaintImage image = PaintImageBuilder::WithDefault()
                              .set_id(PaintImage::GetNextId())
-                             .set_image(SkImage::MakeFromBitmap(bitmap),
+                             .set_image(SkImages::RasterFromBitmap(bitmap),
                                         PaintImage::GetNextContentId())
                              .TakePaintImage();
 

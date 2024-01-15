@@ -13,9 +13,11 @@
 #include "base/atomicops.h"
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "net/base/net_export.h"
 #include "net/log/net_log_capture_mode.h"
@@ -23,10 +25,6 @@
 #include "net/log/net_log_event_type.h"
 #include "net/log/net_log_source.h"
 #include "net/log/net_log_source_type.h"
-
-namespace base {
-class Value;
-}
 
 namespace net {
 
@@ -165,7 +163,7 @@ class NET_EXPORT NetLog {
                                               const NetLogSource& source,
                                               NetLogEventPhase phase,
                                               base::TimeTicks time,
-                                              base::Value&& params);
+                                              base::Value::Dict params);
 
    private:
     // Friend NetLog so that AddCaptureModeObserver/RemoveCaptureModeObserver
@@ -254,12 +252,12 @@ class NET_EXPORT NetLog {
      public:
       explicit GetParamsImpl(const ParametersCallback& get_params)
           : get_params_(get_params) {}
-      base::Value GetParams(NetLogCaptureMode mode) const override {
-        return get_params_(mode);
+      base::Value::Dict GetParams(NetLogCaptureMode mode) const override {
+        return (*get_params_)(mode);
       }
 
      private:
-      const ParametersCallback& get_params_;
+      const raw_ref<const ParametersCallback> get_params_;
     };
 
     GetParamsImpl wrapper(get_params);
@@ -322,15 +320,17 @@ class NET_EXPORT NetLog {
   // Removes a capture mode observer.
   void RemoveCaptureModeObserver(ThreadSafeCaptureModeObserver* observer);
 
-  // The resulting value contains the number of milliseconds since the origin
+  // Converts a time to the string format that the NetLog uses to represent
+  // times.  Strings are used since integers may overflow.
+  // The resulting string contains the number of milliseconds since the origin
   // or "zero" point of the TimeTicks class, which can vary each time the
   // application is restarted. This number is related to an actual time via the
   // timeTickOffset recorded in GetNetConstants().
-  static base::Value TickCountToValue(const base::TimeTicks& time);
+  static std::string TickCountToString(const base::TimeTicks& time);
 
   // Same as above but takes a base::Time. Should not be used if precise
   // timestamps are desired, but is suitable for e.g. expiration times.
-  static base::Value TimeToValue(const base::Time& time);
+  static std::string TimeToString(const base::Time& time);
 
   // Returns a dictionary that maps event type symbolic names to their enum
   // values.
@@ -349,7 +349,7 @@ class NET_EXPORT NetLog {
  private:
   class GetParamsInterface {
    public:
-    virtual base::Value GetParams(NetLogCaptureMode mode) const = 0;
+    virtual base::Value::Dict GetParams(NetLogCaptureMode mode) const = 0;
     virtual ~GetParamsInterface() = default;
   };
 
@@ -374,7 +374,7 @@ class NET_EXPORT NetLog {
   void AddEntryWithMaterializedParams(NetLogEventType type,
                                       const NetLogSource& source,
                                       NetLogEventPhase phase,
-                                      base::Value&& params);
+                                      base::Value::Dict params);
 
   // Adds an entry at a certain time, using already materialized parameters,
   // when it is already known that the log is capturing (goes straight to
@@ -383,7 +383,7 @@ class NET_EXPORT NetLog {
                                             const NetLogSource& source,
                                             NetLogEventPhase phase,
                                             base::TimeTicks time,
-                                            base::Value&& params);
+                                            base::Value::Dict params);
 
   // Called whenever an observer is added or removed, to update
   // |observer_capture_modes_|. Must have acquired |lock_| prior to calling.
@@ -414,9 +414,10 @@ class NET_EXPORT NetLog {
   //
   // In practice |observers_| will be very small (<5) so O(n)
   // operations on it are fine.
-  std::vector<ThreadSafeObserver*> observers_;
+  std::vector<raw_ptr<ThreadSafeObserver, VectorExperimental>> observers_;
 
-  std::vector<ThreadSafeCaptureModeObserver*> capture_mode_observers_;
+  std::vector<raw_ptr<ThreadSafeCaptureModeObserver, VectorExperimental>>
+      capture_mode_observers_;
 };
 
 }  // namespace net

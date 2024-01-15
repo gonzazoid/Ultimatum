@@ -6,10 +6,11 @@
 
 #include <limits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/ranges.h"
 #include "skia/ext/image_operations.h"
 #include "third_party/skia/include/core/SkPath.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/image/image_skia_operations.h"
@@ -85,8 +86,9 @@ void AnimatedRoundedImageView::OnPaint(gfx::Canvas* canvas) {
   }
 
   // Nothing to render.
-  if (frames_.empty())
+  if (frames_.empty()) {
     return;
+  }
 
   View::OnPaint(canvas);
   gfx::Rect image_bounds(GetContentsBounds());
@@ -148,5 +150,8 @@ void AnimatedRoundedImageView::BuildAnimationFrames(float image_scale) {
     frames_.emplace_back(frame);
   }
 }
+
+BEGIN_METADATA(AnimatedRoundedImageView)
+END_METADATA
 
 }  // namespace ash

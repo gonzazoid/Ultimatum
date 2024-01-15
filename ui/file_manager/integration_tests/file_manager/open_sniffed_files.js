@@ -5,10 +5,10 @@
  * @fileoverview Tests opening files in the browser using content sniffing.
  */
 
-import {addEntries, ENTRIES, EntryType, getBrowserWindows, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
+import {ENTRIES, getBrowserWindows, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {expandTreeItem, mountCrostini, navigateWithDirectoryTree, remoteCall, setupAndWaitUntilReady, waitForMediaApp} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
 
 /**
  * Tests opening a file with missing filename extension from Files app.
@@ -64,7 +64,7 @@ async function sniffedFileOpen(path, entry) {
   // Find the main (normal) browser window.
   let normalWindow = undefined;
   for (let i = 0; i < browserWindows.length; ++i) {
-    if (browserWindows[i].type == 'normal') {
+    if (browserWindows[i].type === 'normal') {
       normalWindow = browserWindows[i];
       break;
     }

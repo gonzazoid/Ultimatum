@@ -23,7 +23,7 @@
 #include "android_webview/browser/safe_browsing/aw_safe_browsing_ui_manager.h"
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/js_injection/browser/js_communication_host.h"
 #include "content/public/browser/web_contents_observer.h"
 
@@ -50,6 +50,8 @@ class PermissionRequestHandler;
 // construction. A native instance is only bound to at most one Java peer over
 // its entire lifetime - see Init() and SetPendingWebContentsForPopup() for the
 // construction points, and SetJavaPeers() where these paths join.
+//
+// Lifetime: WebView
 class AwContents : public FindHelper::Listener,
                    public IconHelper::Listener,
                    public AwRenderViewHostExtClient,
@@ -186,7 +188,11 @@ class AwContents : public FindHelper::Listener,
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& js_object_name);
 
-  base::android::ScopedJavaLocalRef<jobjectArray> GetJsObjectsInfo(
+  base::android::ScopedJavaLocalRef<jobjectArray> GetWebMessageListenerInfos(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jclass>& clazz);
+
+  base::android::ScopedJavaLocalRef<jobjectArray> GetDocumentStartupJavascripts(
       JNIEnv* env,
       const base::android::JavaParamRef<jclass>& clazz);
 
@@ -225,6 +231,9 @@ class AwContents : public FindHelper::Listener,
   void FindNext(JNIEnv* env, jboolean forward);
   void ClearMatches(JNIEnv* env);
   FindHelper* GetFindHelper();
+
+  // Per WebView Javascript Policy
+  bool IsJavaScriptAllowed();
 
   // Per WebView Cookie Policy
   bool AllowThirdPartyCookies();
@@ -279,7 +288,6 @@ class AwContents : public FindHelper::Listener,
   void SetDipScale(JNIEnv* env, jfloat dip_scale);
   base::android::ScopedJavaLocalRef<jstring> GetScheme(JNIEnv* env);
   void OnInputEvent(JNIEnv* env);
-  void SetSaveFormData(bool enabled);
 
   // Sets the java client
   void SetAwAutofillClient(const base::android::JavaRef<jobject>& client);
@@ -295,8 +303,6 @@ class AwContents : public FindHelper::Listener,
   void RendererResponsive(content::RenderProcessHost* render_process_host);
 
   // content::WebContentsObserver overrides
-  void RenderViewHostChanged(content::RenderViewHost* old_host,
-                             content::RenderViewHost* new_host) override;
   void PrimaryPageChanged(content::Page& page) override;
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
@@ -313,8 +319,6 @@ class AwContents : public FindHelper::Listener,
                                               bool crashed) override;
 
  private:
-  void InitAutofillIfNecessary(bool autocomplete_enabled);
-
   // Geolocation API support
   void ShowGeolocationPrompt(const GURL& origin, PermissionCallback);
   void HideGeolocationPrompt(const GURL& origin);

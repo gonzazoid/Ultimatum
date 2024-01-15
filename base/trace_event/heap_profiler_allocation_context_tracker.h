@@ -6,10 +6,10 @@
 #define BASE_TRACE_EVENT_HEAP_PROFILER_ALLOCATION_CONTEXT_TRACKER_H_
 
 #include <atomic>
+#include <cstdint>
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/trace_event/heap_profiler_allocation_context.h"
 
 namespace base {
 namespace trace_event {
@@ -19,17 +19,16 @@ namespace trace_event {
 // |AllocationContext|.
 //
 // A thread-local instance of the context tracker is initialized lazily when it
-// is first accessed. This might be because a context is pushed or popped, or
-// because `GetContextSnapshot()` was called when an allocation occurred
+// is first accessed.
 class BASE_EXPORT AllocationContextTracker {
  public:
   enum class CaptureMode : int32_t {
-    DISABLED,      // Don't capture anything
-    NATIVE_STACK,  // Backtrace has full native backtraces from stack unwinding
+    kDisabled,     // Don't capture anything
+    kNativeStack,  // Backtrace has full native backtraces from stack unwinding
   };
 
   // Globally sets capturing mode.
-  // TODO(primiano): How to guard against *_STACK -> DISABLED -> *_STACK?
+  // TODO(primiano): How to guard against *Stack -> kDisabled -> *Stack?
   static void SetCaptureMode(CaptureMode mode);
 
   // Returns global capturing mode.
@@ -37,13 +36,15 @@ class BASE_EXPORT AllocationContextTracker {
     // A little lag after heap profiling is enabled or disabled is fine, it is
     // more important that the check is as cheap as possible when capturing is
     // not enabled, so do not issue a memory barrier in the fast path.
-    if (capture_mode_.load(std::memory_order_relaxed) == CaptureMode::DISABLED)
-      return CaptureMode::DISABLED;
+    if (capture_mode_.load(std::memory_order_relaxed) ==
+        CaptureMode::kDisabled) {
+      return CaptureMode::kDisabled;
+    }
 
     // In the slow path, an acquire load is required to pair with the release
     // store in |SetCaptureMode|. This is to ensure that the TLS slot for
     // the thread-local allocation context tracker has been initialized if
-    // |capture_mode| returns something other than DISABLED.
+    // |capture_mode| returns something other than kDisabled.
     return capture_mode_.load(std::memory_order_acquire);
   }
 
@@ -59,32 +60,17 @@ class BASE_EXPORT AllocationContextTracker {
   AllocationContextTracker(const AllocationContextTracker&) = delete;
   AllocationContextTracker& operator=(const AllocationContextTracker&) = delete;
 
-  // Starts and ends a new ignore scope between which the allocations are
-  // ignored by the heap profiler. GetContextSnapshot() returns false when
-  // allocations are ignored.
-  void begin_ignore_scope() { ignore_scope_depth_++; }
-  void end_ignore_scope() {
-    if (ignore_scope_depth_)
-      ignore_scope_depth_--;
-  }
-
-  // Pushes and pops a native stack frame onto thread local tracked stack.
-  void PushNativeStackFrame(const void* pc);
-  void PopNativeStackFrame(const void* pc);
-
   // Push and pop current task's context. A stack is used to support nested
   // tasks and the top of the stack will be used in allocation context.
   void PushCurrentTaskContext(const char* context);
   void PopCurrentTaskContext(const char* context);
 
   // Returns most recent task context added by ScopedTaskExecutionTracker.
+  // TODO(https://crbug.com/1378619): Audit callers of TaskContext() to see if
+  // any are useful. If not, remove AllocationContextTracker entirely.
   const char* TaskContext() const {
     return task_contexts_.empty() ? nullptr : task_contexts_.back();
   }
-
-  // Fills a snapshot of the current thread-local context. Doesn't fill and
-  // returns false if allocations are being ignored.
-  bool GetContextSnapshot(AllocationContext* snapshot);
 
   ~AllocationContextTracker();
 
@@ -93,16 +79,11 @@ class BASE_EXPORT AllocationContextTracker {
 
   static std::atomic<CaptureMode> capture_mode_;
 
-  // The pseudo stack where frames are inserted PCs.
-  std::vector<StackFrame> tracked_stack_;
-
   // The thread name is used as the first entry in the pseudo stack.
   const char* thread_name_ = nullptr;
 
   // Stack of tasks' contexts.
   std::vector<const char*> task_contexts_;
-
-  uint32_t ignore_scope_depth_ = 0;
 };
 
 }  // namespace trace_event

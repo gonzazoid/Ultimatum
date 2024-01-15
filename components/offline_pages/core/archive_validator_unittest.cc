@@ -4,10 +4,10 @@
 
 #include "components/offline_pages/core/archive_validator.h"
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -64,7 +64,7 @@ std::string MakeContentOfSize(int size) {
 #if BUILDFLAG(IS_ANDROID)
 base::FilePath GetContentUriPathForTest() {
   base::FilePath test_dir;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &test_dir);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_dir);
   test_dir = test_dir.AppendASCII("net");
   test_dir = test_dir.AppendASCII("data");
   test_dir = test_dir.AppendASCII("file_stream_unittest");
@@ -100,7 +100,7 @@ base::FilePath ArchiveValidatorTest::CreateFileWithContent(
     return base::FilePath();
   base::FilePath temp_file_path =
       temp_dir_.GetPath().Append(FILE_PATH_LITERAL("foo.txt"));
-  base::WriteFile(temp_file_path, content.c_str(), content.length());
+  base::WriteFile(temp_file_path, content);
   return temp_file_path;
 }
 

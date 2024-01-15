@@ -4,7 +4,6 @@
 
 #include "ui/ozone/platform/x11/gl_egl_utility_x11.h"
 
-#include "ui/base/x/visual_picker_glx.h"
 #include "ui/base/x/x11_gl_egl_utility.h"
 #include "ui/base/x/x11_util.h"
 #include "ui/gfx/gpu_extra_info.h"
@@ -28,10 +27,6 @@ void GLEGLUtilityX11::ChooseEGLAlphaAndBufferSize(EGLint* alpha_size,
   ChoosePlatformCustomAlphaAndBufferSize(alpha_size, buffer_size);
 }
 
-bool GLEGLUtilityX11::IsTransparentBackgroundSupported() const {
-  return ui::IsTransparentBackgroundSupported();
-}
-
 void GLEGLUtilityX11::CollectGpuExtraInfo(
     bool enable_native_gpu_memory_buffers,
     gfx::GpuExtraInfo& gpu_extra_info) const {
@@ -41,30 +36,10 @@ void GLEGLUtilityX11::CollectGpuExtraInfo(
         ui::GpuMemoryBufferSupportX11::GetInstance()->supported_configs();
   }
 
-  if (gl::GetGLImplementation() == gl::kGLImplementationDesktopGL) {
-    // Create the VisualPickerGlx singleton now while the GbmSupportX11
-    // singleton is busy being created on another thread.
-    auto* visual_picker = ui::VisualPickerGlx::GetInstance();
-
-    // With GLX, only BGR(A) buffer formats are supported.  EGL does not have
-    // this restriction.
-    gpu_extra_info.gpu_memory_buffer_support_x11.erase(
-        std::remove_if(gpu_extra_info.gpu_memory_buffer_support_x11.begin(),
-                       gpu_extra_info.gpu_memory_buffer_support_x11.end(),
-                       [&](gfx::BufferUsageAndFormat usage_and_format) {
-                         return visual_picker->GetFbConfigForFormat(
-                                    usage_and_format.format) ==
-                                x11::Glx::FbConfig{};
-                       }),
-        gpu_extra_info.gpu_memory_buffer_support_x11.end());
-  } else if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE) {
+  if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE) {
     // ANGLE does not yet support EGL_EXT_image_dma_buf_import[_modifiers].
     gpu_extra_info.gpu_memory_buffer_support_x11.clear();
   }
-}
-
-bool GLEGLUtilityX11::X11DoesVisualHaveAlphaForTest() const {
-  return ui::DoesVisualHaveAlphaForTest();
 }
 
 bool GLEGLUtilityX11::HasVisualManager() {

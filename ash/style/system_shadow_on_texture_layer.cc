@@ -4,13 +4,16 @@
 
 #include "ash/style/system_shadow_on_texture_layer.h"
 
+#include "ash/style/style_util.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/gfx/skia_paint_util.h"
 
 namespace ash {
 
 SystemShadowOnTextureLayer::SystemShadowOnTextureLayer(SystemShadow::Type type)
-    : shadow_values_(gfx::ShadowValue::MakeChromeOSSystemUIShadowValues(
+    : type_(type),
+      shadow_values_(gfx::ShadowValue::MakeChromeOSSystemUIShadowValues(
           SystemShadow::GetElevationFromType(type))) {
   layer_.SetFillsBoundsOpaquely(false);
   layer_.set_delegate(this);
@@ -20,8 +23,8 @@ SystemShadowOnTextureLayer::SystemShadowOnTextureLayer(SystemShadow::Type type)
 SystemShadowOnTextureLayer::~SystemShadowOnTextureLayer() = default;
 
 void SystemShadowOnTextureLayer::SetType(SystemShadow::Type type) {
-  shadow_values_ = gfx::ShadowValue::MakeChromeOSSystemUIShadowValues(
-      SystemShadow::GetElevationFromType(type));
+  type_ = type;
+  UpdateShadowValues();
   UpdateLayer();
 }
 
@@ -32,7 +35,16 @@ void SystemShadowOnTextureLayer::SetContentBounds(const gfx::Rect& bounds) {
 }
 
 void SystemShadowOnTextureLayer::SetRoundedCornerRadius(int corner_radius) {
-  corner_radius_ = corner_radius;
+  SetRoundedCorners(gfx::RoundedCornersF(corner_radius));
+}
+
+void SystemShadowOnTextureLayer::SetRoundedCorners(
+    const gfx::RoundedCornersF& rounded_corners) {
+  if (rounded_corners_ == rounded_corners) {
+    return;
+  }
+
+  rounded_corners_ = rounded_corners;
   UpdateLayer();
 }
 
@@ -54,16 +66,42 @@ gfx::Rect SystemShadowOnTextureLayer::GetLayerBounds() const {
   return layer_bounds;
 }
 
+const gfx::ShadowValues SystemShadowOnTextureLayer::GetShadowValuesForTesting()
+    const {
+  return shadow_values_;
+}
+
 void SystemShadowOnTextureLayer::UpdateLayer() {
   layer_.SchedulePaint(GetLayerBounds());
+}
+
+void SystemShadowOnTextureLayer::UpdateShadowValues() {
+  const int elevation = SystemShadow::GetElevationFromType(type_);
+  auto iter = colors_map_.find(elevation);
+  if (iter == colors_map_.end()) {
+    shadow_values_ =
+        gfx::ShadowValue::MakeChromeOSSystemUIShadowValues(elevation);
+  } else {
+    shadow_values_ = gfx::ShadowValue::MakeChromeOSSystemUIShadowValues(
+        elevation, /*key_shadow_color=*/iter->second.first,
+        /*second_color=*/iter->second.second);
+  }
 }
 
 void SystemShadowOnTextureLayer::OnPaintLayer(const ui::PaintContext& context) {
   // Create a rounded rect of content area.
   const gfx::Rect r_rect_bounds =
       content_bounds_ - GetLayerBounds().OffsetFromOrigin();
-  const SkRRect r_rect = SkRRect::MakeRectXY(gfx::RectToSkRect(r_rect_bounds),
-                                             corner_radius_, corner_radius_);
+  SkRRect r_rect;
+  float upper_left = rounded_corners_.upper_left();
+  float upper_right = rounded_corners_.upper_right();
+  float lower_right = rounded_corners_.lower_right();
+  float lower_left = rounded_corners_.lower_left();
+  SkVector radii[4] = {{upper_left, upper_left},
+                       {upper_right, upper_right},
+                       {lower_right, lower_right},
+                       {lower_left, lower_left}};
+  r_rect.setRectRadii(gfx::RectToSkRect(r_rect_bounds), radii);
 
   // Clip out the center.
   ui::PaintRecorder recorder(context, content_bounds_.size());
@@ -82,5 +120,12 @@ void SystemShadowOnTextureLayer::OnPaintLayer(const ui::PaintContext& context) {
 void SystemShadowOnTextureLayer::OnDeviceScaleFactorChanged(
     float old_device_scale_factor,
     float new_device_scale_factor) {}
+
+void SystemShadowOnTextureLayer::UpdateShadowColors(
+    const ui::ColorProvider* color_provider) {
+  colors_map_ = StyleUtil::CreateShadowElevationToColorsMap(color_provider);
+  UpdateShadowValues();
+  UpdateLayer();
+}
 
 }  // namespace ash

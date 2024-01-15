@@ -6,7 +6,6 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FETCH_BYTES_UPLOADER_H_
 
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "services/network/public/mojom/chunked_data_pipe_getter.mojom-blink.h"
@@ -16,6 +15,8 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/loader/fetch/bytes_consumer.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -74,7 +75,8 @@ class CORE_EXPORT BytesUploader
 
   Member<BytesConsumer> consumer_;
   Member<Client> client_;
-  mojo::Receiver<network::mojom::blink::ChunkedDataPipeGetter> receiver_;
+  HeapMojoReceiver<network::mojom::blink::ChunkedDataPipeGetter, BytesUploader>
+      receiver_;
   mojo::ScopedDataPipeProducerHandle upload_pipe_;
   mojo::SimpleWatcher upload_pipe_watcher_;
   GetSizeCallback get_size_callback_;

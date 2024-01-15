@@ -2,21 +2,27 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include <optional>
+
+#include "base/allocator/partition_alloc_support.h"
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/threading/hang_watcher.h"
 #include "base/threading/platform_thread.h"
+#include "base/time/time.h"
 #include "base/timer/hi_res_timer_manager.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/services/screen_ai/buildflags/buildflags.h"
 #include "content/child/child_process.h"
 #include "content/common/content_switches_internal.h"
-#include "content/common/partition_alloc_support.h"
+#include "content/common/features.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/main_function_params.h"
@@ -26,28 +32,35 @@
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/sandbox.h"
 #include "sandbox/policy/sandbox_type.h"
+#include "services/on_device_model/on_device_model_service.h"
 #include "services/tracing/public/cpp/trace_startup.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/icu/source/common/unicode/unistr.h"
 #include "third_party/icu/source/i18n/unicode/timezone.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "base/file_descriptor_store.h"
+#include "base/files/file_util.h"
+#include "base/pickle.h"
+#include "content/child/sandboxed_process_thread_type_handler.h"
+#include "content/common/gpu_pre_sandbox_hook_linux.h"
+#include "content/public/common/content_descriptor_keys.h"
 #include "content/utility/speech/speech_recognition_sandbox_hook_linux.h"
-#if BUILDFLAG(ENABLE_PRINTING)
-#include "printing/sandbox/print_backend_sandbox_hook_linux.h"
-#endif
+#include "gpu/config/gpu_info_collector.h"
+#include "media/gpu/sandbox/hardware_video_encoding_sandbox_hook_linux.h"
 #include "sandbox/policy/linux/sandbox_linux.h"
 #include "services/audio/audio_sandbox_hook_linux.h"
 #include "services/network/network_sandbox_hook_linux.h"
+// gn check is not smart enough to realize that this include only applies to
+// Linux/ChromeOS and the BUILD.gn dependencies correctly account for that.
+#include "third_party/angle/src/gpu_info_util/SystemInfo.h"  //nogncheck
+
+#if BUILDFLAG(ENABLE_PRINTING)
+#include "printing/sandbox/print_backend_sandbox_hook_linux.h"
+#endif
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-#include "gpu/config/gpu_info_collector.h"
 #include "media/gpu/sandbox/hardware_video_decoding_sandbox_hook_linux.h"
-
-// gn check is not smart enough to realize that this include only applies to
-// Linux/ash-chrome and the BUILD.gn dependencies correctly account for that.
-#include "third_party/angle/src/gpu_info_util/SystemInfo.h"  // nogncheck
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -66,19 +79,121 @@
 #endif
 
 #if BUILDFLAG(IS_MAC)
-#include "base/message_loop/message_pump_mac.h"
+#include "base/message_loop/message_pump_apple.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
+#include "base/native_library.h"
 #include "base/rand_util.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
+#include "content/utility/sandbox_delegate_data.mojom.h"
+#include "sandbox/policy/win/sandbox_warmup.h"
 #include "sandbox/win/src/sandbox.h"
+#endif  // BUILDFLAG(IS_WIN)
 
+#if BUILDFLAG(IS_WIN)
 sandbox::TargetServices* g_utility_target_services = nullptr;
-#endif
+#endif  // BUILDFLAG(IS_WIN)
 
 namespace content {
+
+namespace {
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+std::vector<std::string> GetNetworkContextsParentDirectories() {
+  base::MemoryMappedFile::Region region;
+  base::ScopedFD read_pipe_fd = base::FileDescriptorStore::GetInstance().TakeFD(
+      kNetworkContextParentDirsDescriptor, &region);
+  DCHECK(region == base::MemoryMappedFile::Region::kWholeFile);
+
+  std::string dirs_str;
+  if (!base::ReadStreamToString(fdopen(read_pipe_fd.get(), "r"), &dirs_str)) {
+    LOG(FATAL) << "Failed to read network context parents dirs from pipe.";
+  }
+
+  base::Pickle dirs_pickle(dirs_str.data(), dirs_str.length());
+  base::PickleIterator dirs_pickle_iter(dirs_pickle);
+
+  std::vector<std::string> dirs;
+  std::string dir;
+  while (dirs_pickle_iter.ReadString(&dir)) {
+    dirs.push_back(dir);
+  }
+
+  CHECK(dirs_pickle_iter.ReachedEnd());
+
+  return dirs;
+}
+
+bool ShouldUseAmdGpuPolicy(sandbox::mojom::Sandbox sandbox_type) {
+  const bool obtain_gpu_info =
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+      sandbox_type == sandbox::mojom::Sandbox::kHardwareVideoDecoding ||
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+      sandbox_type == sandbox::mojom::Sandbox::kHardwareVideoEncoding;
+
+  if (obtain_gpu_info) {
+    // The kHardwareVideoDecoding and kHardwareVideoEncoding sandboxes need to
+    // know the GPU type in order to select the right policy.
+    gpu::GPUInfo gpu_info{};
+    gpu::CollectBasicGraphicsInfo(&gpu_info);
+    return angle::IsAMD(gpu_info.active_gpu().vendor_id);
+  }
+
+  return false;
+}
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_WIN)
+// Handle pre-lockdown sandbox hooks
+bool PreLockdownSandboxHook(base::span<const uint8_t> delegate_blob) {
+  // TODO(1435571) Migrate other settable things to delegate_data.
+  CHECK(!delegate_blob.empty());
+  content::mojom::sandbox::UtilityConfigPtr sandbox_config;
+  if (!content::mojom::sandbox::UtilityConfig::Deserialize(
+          delegate_blob.data(), delegate_blob.size(), &sandbox_config)) {
+    NOTREACHED_NORETURN();
+  }
+  if (!sandbox_config->preload_libraries.empty()) {
+    for (const auto& library_path : sandbox_config->preload_libraries) {
+      CHECK(library_path.IsAbsolute());
+      base::NativeLibraryLoadError lib_error;
+      HMODULE h_mod = base::LoadNativeLibrary(library_path, &lib_error);
+      // We deliberately "leak" `h_mod` so that the module stays loaded.
+      if (!h_mod) {
+        base::UmaHistogramSparse(
+            "Process.Sandbox.PreloadLibraryFailed.ErrorCode", lib_error.code);
+        // The browser should not request libraries that do not exist, so crash
+        // on failure.
+        wchar_t dll_name[MAX_PATH];
+        base::wcslcpy(dll_name, library_path.value().c_str(), MAX_PATH);
+        base::debug::Alias(dll_name);
+        base::debug::Alias(&lib_error);
+        NOTREACHED_NORETURN();
+      }
+    }
+  }
+  if (sandbox_config->pin_user32) {
+    base::win::PinUser32();
+  }
+  return true;
+}
+#endif  // BUILDFLAG(IS_WIN)
+
+void SetUtilityThreadName(const std::string utility_sub_type) {
+  // Typical utility sub-types are audio.mojom.AudioService or
+  // proxy_resolver.mojom.ProxyResolverFactory. Using the full sub-type as part
+  // of the thread name is too verbose so we take the text in front of the first
+  // period and use that as a prefix. This give us thread names like
+  // audio.CrUtilityMain and proxy_resolver.CrUtilityMain. If there is no period
+  // then the entire utility_sub_type string will be put in front.
+  auto first_period = utility_sub_type.find('.');
+  base::PlatformThread::SetName(
+      (utility_sub_type.substr(0, first_period) + ".CrUtilityMain").c_str());
+}
+
+}  // namespace
 
 // Mainline routine for running as the utility process.
 int UtilityMain(MainFunctionParams parameters) {
@@ -86,6 +201,11 @@ int UtilityMain(MainFunctionParams parameters) {
       parameters.command_line->HasSwitch(switches::kMessageLoopTypeUi)
           ? base::MessagePumpType::UI
           : base::MessagePumpType::DEFAULT;
+
+  if (parameters.command_line->GetSwitchValueASCII(switches::kUtilitySubType) ==
+      on_device_model::mojom::OnDeviceModelService::Name_) {
+    CHECK(on_device_model::OnDeviceModelService::PreSandboxInit());
+  }
 
 #if BUILDFLAG(IS_MAC)
   auto sandbox_type =
@@ -119,11 +239,11 @@ int UtilityMain(MainFunctionParams parameters) {
 
   // The main task executor of the utility process.
   base::SingleThreadTaskExecutor main_thread_task_executor(message_pump_type);
-  base::PlatformThread::SetName("CrUtilityMain");
+  const std::string utility_sub_type =
+      parameters.command_line->GetSwitchValueASCII(switches::kUtilitySubType);
+  SetUtilityThreadName(utility_sub_type);
 
   if (parameters.command_line->HasSwitch(switches::kUtilityStartupDialog)) {
-    const std::string utility_sub_type =
-        parameters.command_line->GetSwitchValueASCII(switches::kUtilitySubType);
     auto dialog_match = parameters.command_line->GetSwitchValueASCII(
         switches::kUtilityStartupDialog);
     if (dialog_match.empty() || dialog_match == utility_sub_type) {
@@ -132,15 +252,28 @@ int UtilityMain(MainFunctionParams parameters) {
   }
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  // Thread type delegate of the process should be registered before
+  // first thread type change in ChildProcess constructor.
+  // It also needs to be registered before the process has multiple threads,
+  // which may race with application of the sandbox.
+  if (base::FeatureList::IsEnabled(
+          features::kHandleChildThreadTypeChangesInBrowser)) {
+    SandboxedProcessThreadTypeHandler::Create();
+  }
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Initializes the sandbox before any threads are created.
   // TODO(jorgelo): move this after GTK initialization when we enable a strict
   // Seccomp-BPF policy.
   auto sandbox_type =
       sandbox::policy::SandboxTypeFromCommandLine(*parameters.command_line);
+  sandbox::policy::SandboxLinux::Options sandbox_options;
   sandbox::policy::SandboxLinux::PreSandboxHook pre_sandbox_hook;
   switch (sandbox_type) {
     case sandbox::mojom::Sandbox::kNetwork:
-      pre_sandbox_hook = base::BindOnce(&network::NetworkPreSandboxHook);
+      pre_sandbox_hook = base::BindOnce(&network::NetworkPreSandboxHook,
+                                        GetNetworkContextsParentDirectories());
       break;
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
     case sandbox::mojom::Sandbox::kPrintBackend:
@@ -149,6 +282,11 @@ int UtilityMain(MainFunctionParams parameters) {
 #endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
     case sandbox::mojom::Sandbox::kAudio:
       pre_sandbox_hook = base::BindOnce(&audio::AudioPreSandboxHook);
+      break;
+    case sandbox::mojom::Sandbox::kOnDeviceModelExecution:
+      on_device_model::OnDeviceModelService::AddSandboxLinuxOptions(
+          sandbox_options);
+      pre_sandbox_hook = base::BindOnce(&GpuPreSandboxHook);
       break;
     case sandbox::mojom::Sandbox::kSpeechRecognition:
       pre_sandbox_hook =
@@ -165,6 +303,10 @@ int UtilityMain(MainFunctionParams parameters) {
           base::BindOnce(&media::HardwareVideoDecodingPreSandboxHook);
       break;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+    case sandbox::mojom::Sandbox::kHardwareVideoEncoding:
+      pre_sandbox_hook =
+          base::BindOnce(&media::HardwareVideoEncodingPreSandboxHook);
+      break;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     case sandbox::mojom::Sandbox::kIme:
       pre_sandbox_hook = base::BindOnce(&ash::ime::ImePreSandboxHook);
@@ -184,22 +326,36 @@ int UtilityMain(MainFunctionParams parameters) {
   }
   if (!sandbox::policy::IsUnsandboxedSandboxType(sandbox_type) &&
       (parameters.zygote_child || !pre_sandbox_hook.is_null())) {
-    sandbox::policy::SandboxLinux::Options sandbox_options;
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-    if (sandbox_type == sandbox::mojom::Sandbox::kHardwareVideoDecoding) {
-      // The kHardwareVideoDecoding sandbox needs to know the GPU type in order
-      // to select the right policy.
-      gpu::GPUInfo gpu_info{};
-      gpu::CollectBasicGraphicsInfo(&gpu_info);
-      sandbox_options.use_amd_specific_policies =
-          angle::IsAMD(gpu_info.active_gpu().vendor_id);
-    }
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+    sandbox_options.use_amd_specific_policies =
+        ShouldUseAmdGpuPolicy(sandbox_type);
     sandbox::policy::Sandbox::Initialize(
         sandbox_type, std::move(pre_sandbox_hook), sandbox_options);
   }
+
+  // Start the HangWatcher now that the sandbox is engaged, if it hasn't
+  // already been started.
+  if (base::HangWatcher::IsEnabled() &&
+      !base::HangWatcher::GetInstance()->IsStarted()) {
+    DCHECK(parameters.hang_watcher_not_started_time.has_value());
+    base::TimeDelta uncovered_hang_watcher_time =
+        base::TimeTicks::Now() -
+        parameters.hang_watcher_not_started_time.value();
+    base::UmaHistogramTimes("HangWatcher.UtilityProcess.UncoveredStartupTime",
+                            uncovered_hang_watcher_time);
+    base::HangWatcher::GetInstance()->Start();
+  }
+
 #elif BUILDFLAG(IS_WIN)
   g_utility_target_services = parameters.sandbox_info->target_services;
+
+  // Call hooks with data provided by UtilitySandboxedProcessLauncherDelegate.
+  // Must happen before IO thread to preempt any mojo services starting.
+  if (g_utility_target_services) {
+    auto delegate_data = g_utility_target_services->GetDelegateData();
+    if (delegate_data.has_value() && !delegate_data->empty()) {
+      PreLockdownSandboxHook(delegate_data.value());
+    }
+  }
 #endif
 
   ChildProcess utility_process(base::ThreadType::kDefault);
@@ -209,14 +365,12 @@ int UtilityMain(MainFunctionParams parameters) {
   utility_process.set_main_thread(
       new UtilityThreadImpl(run_loop.QuitClosure()));
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
-  // Startup tracing is usually enabled earlier, but if we forked from a zygote,
-  // we can only enable it after mojo IPC support is brought up initialized by
-  // UtilityThreadImpl, because the mojo broker has to create the tracing SMB on
-  // our behalf due to the zygote sandbox.
-  if (parameters.zygote_child)
+  // Mojo IPC support is brought up by UtilityThreadImpl, so startup tracing
+  // is enabled here if it needs to start after mojo init (normally so the mojo
+  // broker can bypass the sandbox to allocate startup tracing's SMB).
+  if (parameters.needs_startup_tracing_after_mojo_init) {
     tracing::EnableStartupTracingIfNeeded();
-#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+  }
 
   // Both utility process and service utility process would come
   // here, but the later is launched without connection to service manager, so
@@ -230,7 +384,7 @@ int UtilityMain(MainFunctionParams parameters) {
   // TODO(leonhsl): Once http://crbug.com/646833 got resolved, re-enable
   // base::HighResolutionTimerManager here for future possible usage of high
   // resolution timer in service utility process.
-  absl::optional<base::HighResolutionTimerManager> hi_res_timer_manager;
+  std::optional<base::HighResolutionTimerManager> hi_res_timer_manager;
   if (base::PowerMonitor::IsInitialized()) {
     hi_res_timer_manager.emplace();
   }
@@ -265,20 +419,17 @@ int UtilityMain(MainFunctionParams parameters) {
 
   if (!sandbox::policy::IsUnsandboxedSandboxType(sandbox_type) &&
       sandbox_type != sandbox::mojom::Sandbox::kCdm &&
-      sandbox_type != sandbox::mojom::Sandbox::kMediaFoundationCdm &&
-      sandbox_type != sandbox::mojom::Sandbox::kWindowsSystemProxyResolver) {
+      sandbox_type != sandbox::mojom::Sandbox::kMediaFoundationCdm) {
     if (!g_utility_target_services)
       return false;
-    char buffer;
-    // Ensure RtlGenRandom is warm before the token is lowered; otherwise,
-    // base::RandBytes() will CHECK fail when v8 is initialized.
-    base::RandBytes(&buffer, sizeof(buffer));
+
+    sandbox::policy::WarmupRandomnessInfrastructure();
 
     g_utility_target_services->LowerToken();
   }
 #endif
 
-  internal::PartitionAllocSupport::Get()->ReconfigureAfterTaskRunnerInit(
+  base::allocator::PartitionAllocSupport::Get()->ReconfigureAfterTaskRunnerInit(
       switches::kUtilityProcess);
 
   run_loop.Run();

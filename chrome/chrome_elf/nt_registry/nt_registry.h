@@ -24,15 +24,16 @@
 #ifndef CHROME_CHROME_ELF_NT_REGISTRY_NT_REGISTRY_H_
 #define CHROME_CHROME_ELF_NT_REGISTRY_NT_REGISTRY_H_
 
+#include <windows.h>
+#include <winternl.h>  // NTSTATUS
+
 #include <string>
 #include <vector>
-
-#include "sandbox/win/src/nt_internals.h"  // NTSTATUS
 
 namespace nt {
 
 // Windows registry maximum lengths (in chars).  Not including null char.
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms724872(v=vs.85).aspx
+// https://learn.microsoft.com/en-us/windows/win32/sysinfo/registry-element-size-limits
 constexpr size_t g_kRegMaxPathLen = 255;
 constexpr size_t g_kRegMaxValueName = 16383;
 
@@ -63,7 +64,7 @@ enum WOW64_OVERRIDE {
 bool CreateRegKey(ROOT_KEY root,
                   const wchar_t* key_path,
                   ACCESS_MASK access,
-                  HANDLE* out_handle OPTIONAL);
+                  HANDLE* out_handle);
 
 // Open existing registry key.
 // - Caller must call CloseRegKey on returned handle (on success).
@@ -72,7 +73,7 @@ bool OpenRegKey(ROOT_KEY root,
                 const wchar_t* key_path,
                 ACCESS_MASK access,
                 HANDLE* out_handle,
-                NTSTATUS* error_code OPTIONAL);
+                NTSTATUS* error_code);
 
 // Delete a registry key.
 // - Caller must still call CloseRegKey after the delete.
@@ -228,33 +229,8 @@ bool SetRegValueMULTISZ(ROOT_KEY root,
                         const std::vector<std::wstring>& values);
 
 //------------------------------------------------------------------------------
-// Enumeration Support
-//------------------------------------------------------------------------------
-
-// Query key information for subkey enumeration.
-// - Key handle should have been opened with OpenRegKey (with at least
-//   KEY_ENUMERATE_SUB_KEYS access rights).
-// - Currently only returns the number of subkeys.  Use |subkey_count|
-//   in a loop for calling QueryRegSubkey.
-bool QueryRegEnumerationInfo(HANDLE key, ULONG* out_subkey_count);
-
-// Enumerate subkeys by index.
-// - Key handle should have been opened with OpenRegKey (with at least
-//   KEY_ENUMERATE_SUB_KEYS access rights).
-// - Get subkey count by calling QueryRegEnumerationInfo.
-bool QueryRegSubkey(HANDLE key,
-                    ULONG subkey_index,
-                    std::wstring* out_subkey_name);
-
-//------------------------------------------------------------------------------
 // Utils
 //------------------------------------------------------------------------------
-
-// Returns the current user SID in string form.
-const wchar_t* GetCurrentUserSidString();
-
-// Returns true if this process is WOW64.
-bool IsCurrentProcWow64();
 
 // Setter function for test suites that use reg redirection.
 bool SetTestingOverride(ROOT_KEY root, const std::wstring& new_path);

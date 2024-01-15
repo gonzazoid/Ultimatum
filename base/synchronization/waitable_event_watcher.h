@@ -16,7 +16,8 @@
 #elif BUILDFLAG(IS_APPLE)
 #include <dispatch/dispatch.h>
 
-#include "base/mac/scoped_dispatch_object.h"
+#include <memory>
+
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event.h"
 #else
@@ -25,7 +26,7 @@
 #endif
 
 #if !BUILDFLAG(IS_WIN)
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #endif
 
 namespace base {
@@ -117,9 +118,7 @@ class BASE_EXPORT WaitableEventWatcher
   win::ObjectWatcher watcher_;
 
   EventCallback callback_;
-  // TODO(crbug.com/1298696): base_unittests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<WaitableEvent, DegradeToNoOpWhenMTE> event_ = nullptr;
+  raw_ptr<WaitableEvent, AcrossTasksDanglingUntriaged> event_ = nullptr;
 #elif BUILDFLAG(IS_APPLE)
   // Invokes the callback and resets the source. Must be called on the task
   // runner on which StartWatching() was called.
@@ -133,10 +132,8 @@ class BASE_EXPORT WaitableEventWatcher
   // is waiting. Null if no event is being watched.
   scoped_refptr<WaitableEvent::ReceiveRight> receive_right_;
 
-  // A TYPE_MACH_RECV dispatch source on |receive_right_|. When a receive event
-  // is delivered, the message queue will be peeked and the bound |callback_|
-  // may be run. This will be null if nothing is currently being watched.
-  ScopedDispatchObject<dispatch_source_t> source_;
+  struct Storage;
+  std::unique_ptr<Storage> storage_;
 
   // Used to vend a weak pointer for calling InvokeCallback() from the
   // |source_| event handler.
@@ -147,9 +144,7 @@ class BASE_EXPORT WaitableEventWatcher
   scoped_refptr<Flag> cancel_flag_;
 
   // Enqueued in the wait list of the watched WaitableEvent.
-  //
-  // TODO(crbug.com/1298696): Breaks base_unittests.
-  raw_ptr<AsyncWaiter, DanglingUntriagedDegradeToNoOpWhenMTE> waiter_ = nullptr;
+  raw_ptr<AsyncWaiter, AcrossTasksDanglingUntriaged> waiter_ = nullptr;
 
   // Kernel of the watched WaitableEvent.
   scoped_refptr<WaitableEvent::WaitableEventKernel> kernel_;

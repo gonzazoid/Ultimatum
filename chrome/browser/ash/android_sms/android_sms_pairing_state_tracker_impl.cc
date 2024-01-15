@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/android_sms/android_sms_urls.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
@@ -31,7 +31,7 @@ AndroidSmsPairingStateTrackerImpl::AndroidSmsPairingStateTrackerImpl(
     AndroidSmsAppManager* android_sms_app_manager)
     : profile_(profile), android_sms_app_manager_(android_sms_app_manager) {
   android_sms_app_manager_->AddObserver(this);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &AndroidSmsPairingStateTrackerImpl::AddCookieChangeListener,
@@ -99,7 +99,7 @@ GURL AndroidSmsPairingStateTrackerImpl::GetPairingUrl() {
   // If the app registry is not ready, we can't see check what is currently
   // installed.
   if (android_sms_app_manager_->IsAppRegistryReady()) {
-    absl::optional<GURL> app_url = android_sms_app_manager_->GetCurrentAppUrl();
+    std::optional<GURL> app_url = android_sms_app_manager_->GetCurrentAppUrl();
     if (app_url)
       return *app_url;
   }

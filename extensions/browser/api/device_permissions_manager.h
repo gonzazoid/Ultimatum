@@ -18,6 +18,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "services/device/public/mojom/hid.mojom.h"
@@ -26,7 +27,6 @@
 namespace base {
 template <typename T>
 struct DefaultSingletonTraits;
-class Value;
 }
 
 namespace content {
@@ -65,7 +65,7 @@ class DevicePermissionEntry : public base::RefCounted<DevicePermissionEntry> {
 
   // Convert the device to a serializable value, returns an is_none() value
   // if the entry is not persistent.
-  base::Value ToValue() const;
+  base::Value::Dict ToValue() const;
 
   std::u16string GetPermissionMessageString() const;
 
@@ -141,6 +141,9 @@ class DevicePermissions {
 // Manages saved device permissions for all extensions.
 class DevicePermissionsManager : public KeyedService {
  public:
+  explicit DevicePermissionsManager(content::BrowserContext* context);
+  ~DevicePermissionsManager() override;
+
   DevicePermissionsManager(const DevicePermissionsManager&) = delete;
   DevicePermissionsManager& operator=(const DevicePermissionsManager&) = delete;
 
@@ -187,9 +190,6 @@ class DevicePermissionsManager : public KeyedService {
   friend class DevicePermissionsManagerFactory;
   FRIEND_TEST_ALL_PREFIXES(DevicePermissionsManagerTest, SuspendExtension);
 
-  explicit DevicePermissionsManager(content::BrowserContext* context);
-  ~DevicePermissionsManager() override;
-
   DevicePermissions* GetInternal(const std::string& extension_id) const;
 
   base::ThreadChecker thread_checker_;
@@ -216,7 +216,7 @@ class DevicePermissionsManagerFactory
   ~DevicePermissionsManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory implementation
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;

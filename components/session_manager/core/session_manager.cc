@@ -6,6 +6,7 @@
 
 #include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/user_manager/user_manager.h"
@@ -66,6 +67,7 @@ bool SessionManager::IsSessionStarted() const {
 }
 
 void SessionManager::SessionStarted() {
+  TRACE_EVENT0("login", "SessionManager::SessionStarted");
   session_started_ = true;
 
   bool is_primary = sessions_.size() == 1;
@@ -101,11 +103,6 @@ void SessionManager::RemoveObserver(SessionManagerObserver* observer) {
 void SessionManager::NotifyUserProfileLoaded(const AccountId& account_id) {
   for (auto& observer : observers_)
     observer.OnUserProfileLoaded(account_id);
-}
-
-void SessionManager::NotifyNetworkErrorScreenShown() {
-  for (auto& observer : observers_)
-    observer.OnNetworkErrorScreenShown();
 }
 
 void SessionManager::NotifyLoginOrLockScreenVisible() {

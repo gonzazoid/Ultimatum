@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,12 +88,11 @@ void DriveIntegrationServiceBrowserTestBase::AddDriveFileWithRelativePath(
                                    &relative_to_drive_fs_mount);
 
   // Update the drive file metadata.
-  GetFakeDriveFsForProfile(profile)->SetMetadata(
-      relative_to_drive_fs_mount, "text/plain",
-      relative_to_drive_fs_mount.BaseName().value(),
-      /*pinned=*/false, /*available_offline=*/false, /*shared=*/false,
-      /*capabilities=*/{},
-      /*folder_feature=*/{}, drive_file_id, /*alternate_url=*/"");
+  drivefs::FakeMetadata metadata;
+  metadata.path = relative_to_drive_fs_mount;
+  metadata.mime_type = "text/plain";
+  metadata.doc_id = drive_file_id;
+  GetFakeDriveFsForProfile(profile)->SetMetadata(std::move(metadata));
 
   // Update the relative/absolute paths to the generated file.
   if (new_file_relative_path)

@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_ATTESTATION_FAKE_ATTESTATION_FLOW_H_
 #define CHROMEOS_ASH_COMPONENTS_ATTESTATION_FAKE_ATTESTATION_FLOW_H_
 
+#include <optional>
 #include <string>
 
 #include "chromeos/ash/components/attestation/attestation_flow.h"
@@ -20,13 +21,16 @@ class FakeAttestationFlow : public AttestationFlow {
   explicit FakeAttestationFlow(const std::string& certificate);
   ~FakeAttestationFlow() override;
 
-  void GetCertificate(AttestationCertificateProfile certificate_profile,
-                      const AccountId& account_id,
-                      const std::string& request_origin,
-                      bool force_new_key,
-                      ::attestation::KeyType key_crypto_type,
-                      const std::string& key_name,
-                      CertificateCallback callback) override;
+  void GetCertificate(
+      AttestationCertificateProfile certificate_profile,
+      const AccountId& account_id,
+      const std::string& request_origin,
+      bool force_new_key,
+      ::attestation::KeyType key_crypto_type,
+      const std::string& key_name,
+      const std::optional<AttestationFlow::CertProfileSpecificData>&
+          profile_specific_data,
+      CertificateCallback callback) override;
 
  private:
   std::string certificate_;

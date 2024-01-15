@@ -6,6 +6,7 @@
 #define CONTENT_PUBLIC_RENDERER_RENDER_ACCESSIBILITY_H_
 
 #include "content/common/content_export.h"
+#include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_tree_data.h"
 #include "ui/accessibility/ax_tree_source.h"
@@ -21,7 +22,9 @@ namespace content {
 // This interface exposes the accessibility tree for one RenderFrame.
 class CONTENT_EXPORT RenderAccessibility {
  public:
+  virtual bool HasActiveDocument() const = 0;
   virtual int GenerateAXID() = 0;
+  virtual ui::AXMode GetAXMode() const = 0;
 
   // These APIs allow a page with a single EMBED element to graft an
   // accessibility tree for the plugin content, implemented as a
@@ -33,6 +36,8 @@ class CONTENT_EXPORT RenderAccessibility {
   virtual void SetPluginTreeSource(PluginAXTreeSource* source) = 0;
   virtual void ShowPluginContextMenu() = 0;
   virtual void OnPluginRootNodeUpdated() = 0;
+
+  virtual void RecordInaccessiblePdfUkm() = 0;
 
  protected:
   ~RenderAccessibility() {}

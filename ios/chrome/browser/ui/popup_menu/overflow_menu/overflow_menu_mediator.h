@@ -7,10 +7,9 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/follow/follow_action_state.h"
+#import "ios/chrome/browser/follow/model/follow_action_state.h"
 #import "ios/chrome/browser/ui/browser_container/browser_container_consumer.h"
 #import "ios/chrome/browser/ui/popup_menu/overflow_menu/overflow_menu_swift.h"
-#import "ios/chrome/browser/ui/popup_menu/popup_menu_carousel_metrics_delegate.h"
 
 namespace bookmarks {
 class BookmarkModel;
@@ -18,48 +17,61 @@ class BookmarkModel;
 namespace feature_engagement {
 class Tracker;
 }
+namespace web {
+class WebState;
+}
+namespace syncer {
+class SyncService;
+}
+
 @protocol ActivityServiceCommands;
 @protocol ApplicationCommands;
+class AuthenticationService;
 @protocol BookmarksCommands;
-@protocol BrowserCommands;
 @protocol BrowserCoordinatorCommands;
 class BrowserPolicyConnectorIOS;
+@protocol FindInPageCommands;
+class FollowBrowserAgent;
+@protocol HelpCommands;
+@protocol OverflowMenuCustomizationCommands;
+@class OverflowMenuOrderer;
 class OverlayPresenter;
 @protocol PageInfoCommands;
 @protocol PopupMenuCommands;
-@protocol PriceNotificationsCommands;
 class PrefService;
-@protocol FindInPageCommands;
+@protocol PriceNotificationsCommands;
+class PromosManager;
+class ReadingListBrowserAgent;
+class ReadingListModel;
 @protocol TextZoomCommands;
 class WebNavigationBrowserAgent;
 class WebStateList;
-class FollowBrowserAgent;
 
 // Mediator for the overflow menu. This object is in charge of creating and
 // updating the items of the overflow menu.
-@interface OverflowMenuMediator
-    : NSObject <BrowserContainerConsumer, PopupMenuCarouselMetricsDelegate>
+@interface OverflowMenuMediator : NSObject <BrowserContainerConsumer>
 
 // The data model for the overflow menu.
-@property(nonatomic, readonly) OverflowMenuModel* overflowMenuModel;
+@property(nonatomic, weak) OverflowMenuModel* model;
 
 // The WebStateList that this mediator listens for any changes on the current
 // WebState.
 @property(nonatomic, assign) WebStateList* webStateList;
 
-// Dispatcher.
-@property(nonatomic, weak) id<ActivityServiceCommands,
-                              ApplicationCommands,
-                              BrowserCommands,
-                              BrowserCoordinatorCommands,
-                              FindInPageCommands,
-                              PriceNotificationsCommands,
-                              TextZoomCommands>
-    dispatcher;
-
-@property(nonatomic, weak) id<BookmarksCommands> bookmarksCommandsHandler;
-@property(nonatomic, weak) id<PopupMenuCommands> popupMenuCommandsHandler;
-@property(nonatomic, weak) id<PageInfoCommands> pageInfoCommandsHandler;
+// Command Handlers.
+@property(nonatomic, weak) id<ActivityServiceCommands> activityServiceHandler;
+@property(nonatomic, weak) id<ApplicationCommands> applicationHandler;
+@property(nonatomic, weak) id<BookmarksCommands> bookmarksHandler;
+@property(nonatomic, weak) id<BrowserCoordinatorCommands>
+    browserCoordinatorHandler;
+@property(nonatomic, weak) id<FindInPageCommands> findInPageHandler;
+@property(nonatomic, weak) id<OverflowMenuCustomizationCommands>
+    overflowMenuCustomizationHandler;
+@property(nonatomic, weak) id<PageInfoCommands> pageInfoHandler;
+@property(nonatomic, weak) id<PopupMenuCommands> popupMenuHandler;
+@property(nonatomic, weak) id<PriceNotificationsCommands>
+    priceNotificationHandler;
+@property(nonatomic, weak) id<TextZoomCommands> textZoomHandler;
 
 // Navigation agent for reloading pages.
 @property(nonatomic, assign) WebNavigationBrowserAgent* navigationAgent;
@@ -67,11 +79,19 @@ class FollowBrowserAgent;
 // If the current session is off the record or not.
 @property(nonatomic, assign) bool isIncognito;
 
+// The Orderer to control the order of the overflow menu.
+@property(nonatomic, weak) OverflowMenuOrderer* menuOrderer;
+
 // BaseViewController for presenting some UI.
 @property(nonatomic, weak) UIViewController* baseViewController;
 
-// The bookmarks model to know if the page is bookmarked.
-@property(nonatomic, assign) bookmarks::BookmarkModel* bookmarkModel;
+// Bookmarks models to know if the page is bookmarked.
+@property(nonatomic, assign)
+    bookmarks::BookmarkModel* localOrSyncableBookmarkModel;
+@property(nonatomic, assign) bookmarks::BookmarkModel* accountBookmarkModel;
+
+// Readinglist model to know if model has finished loading.
+@property(nonatomic, assign) ReadingListModel* readingListModel;
 
 // Pref service to retrieve browser state preference values.
 @property(nonatomic, assign) PrefService* browserStatePrefs;
@@ -94,6 +114,21 @@ class FollowBrowserAgent;
 
 // The FollowBrowserAgent used to manage web channels subscriptions.
 @property(nonatomic, assign) FollowBrowserAgent* followBrowserAgent;
+
+// The Sync Service that provides the status of Sync.
+@property(nonatomic, assign) syncer::SyncService* syncService;
+
+// The Promos Manager to alert if the user uses What's New.
+@property(nonatomic, assign) PromosManager* promosManager;
+
+// The ReadingListBrowserAgent used to add urls to reading list.
+@property(nonatomic, assign) ReadingListBrowserAgent* readingListBrowserAgent;
+
+// The AuthenticationService to get sign-in info.
+@property(nonatomic, assign) AuthenticationService* authenticationService;
+
+// The help handler to present in-product help bubbles.
+@property(nonatomic, weak) id<HelpCommands> helpHandler;
 
 // Disconnect the mediator.
 - (void)disconnect;

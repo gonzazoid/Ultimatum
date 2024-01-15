@@ -7,14 +7,14 @@
 #include "ash/controls/rounded_scroll_bar.h"
 #include "ash/controls/scroll_view_gradient_helper.h"
 #include "ash/public/cpp/desk_template.h"
-#include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/style/rounded_label.h"
+#include "ash/style/typography.h"
 #include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desk_preview_view.h"
+#include "ash/wm/desks/templates/saved_desk_constants.h"
 #include "ash/wm/desks/templates/saved_desk_grid_view.h"
 #include "ash/wm/desks/templates/saved_desk_item_view.h"
 #include "ash/wm/desks/templates/saved_desk_name_view.h"
@@ -22,8 +22,9 @@
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_grid_event_handler.h"
+#include "ash/wm/window_properties.h"
 #include "base/functional/callback_helpers.h"
-#include "base/notreached.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_targeter.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -34,7 +35,6 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/animation/animation_builder.h"
 #include "ui/views/layout/box_layout.h"
-#include "ui/views/view.h"
 #include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/core/window_animations.h"
 #include "ui/wm/core/window_util.h"
@@ -42,19 +42,11 @@
 namespace ash {
 namespace {
 
-constexpr char kGridLabelFont[] = "Roboto";
-constexpr int kGridLabelFontSize = 16;
-
 // Grids use landscape mode if the available width is greater or equal to this.
 constexpr int kLandscapeMinWidth = 756;
 
-// Section label dimensions.
-constexpr gfx::Size kLabelSizeLandscape = {708, 24};
-constexpr gfx::Size kLabelSizePortrait = {464, 24};
-
 // "No items" label dimensions.
 constexpr gfx::Size kNoItemsLabelPadding = {16, 8};
-constexpr int kNoItemsLabelCornerRadius = 16;
 constexpr int kNoItemsLabelHeight = 32;
 
 // Between child spacing of Library page scroll content view.
@@ -89,15 +81,17 @@ constexpr base::TimeDelta kSaveAndRecallLaunchFadeDuration =
 
 struct SavedDesks {
   // Saved desks created as templates.
-  std::vector<const DeskTemplate*> desk_templates;
+  std::vector<raw_ptr<const DeskTemplate, VectorExperimental>> desk_templates;
   // Saved desks created for save & recall.
-  std::vector<const DeskTemplate*> save_and_recall;
+  std::vector<raw_ptr<const DeskTemplate, VectorExperimental>> save_and_recall;
 };
 
-SavedDesks Group(const std::vector<const DeskTemplate*>& saved_desks) {
+SavedDesks Group(
+    const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>&
+        saved_desks) {
   SavedDesks grouped;
 
-  for (auto* saved_desk : saved_desks) {
+  for (const ash::DeskTemplate* saved_desk : saved_desks) {
     switch (saved_desk->type()) {
       case DeskTemplateType::kTemplate:
         grouped.desk_templates.push_back(saved_desk);
@@ -105,8 +99,9 @@ SavedDesks Group(const std::vector<const DeskTemplate*>& saved_desks) {
       case DeskTemplateType::kSaveAndRecall:
         grouped.save_and_recall.push_back(saved_desk);
         break;
+      // Do nothing in the case of a floating workspace type or an unknown type.
+      case DeskTemplateType::kFloatingWorkspace:
       case DeskTemplateType::kUnknown:
-        NOTREACHED();
         break;
     }
   }
@@ -126,16 +121,6 @@ std::unique_ptr<views::View> GetLabelAndGridGroupContents() {
       views::BoxLayout::CrossAxisAlignment::kCenter);
 
   return group_contents;
-}
-
-std::unique_ptr<views::Label> MakeGridLabel(int label_string_id) {
-  auto label = std::make_unique<views::Label>(
-      l10n_util::GetStringUTF16(label_string_id));
-  label->SetFontList(gfx::FontList({kGridLabelFont}, gfx::Font::NORMAL,
-                                   kGridLabelFontSize,
-                                   gfx::Font::Weight::MEDIUM));
-  label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  return label;
 }
 
 }  // namespace
@@ -194,7 +179,7 @@ class SavedDeskLibraryWindowTargeter : public aura::WindowTargeter {
   }
 
  private:
-  SavedDeskLibraryView* const owner_;
+  const raw_ptr<SavedDeskLibraryView> owner_;
 };
 
 // -----------------------------------------------------------------------------
@@ -222,7 +207,7 @@ class SavedDeskLibraryEventHandler : public ui::EventHandler {
   void OnKeyEvent(ui::KeyEvent* event) override { owner_->OnKeyEvent(event); }
 
  private:
-  SavedDeskLibraryView* const owner_;
+  const raw_ptr<SavedDeskLibraryView> owner_;
 };
 
 // -----------------------------------------------------------------------------
@@ -247,7 +232,7 @@ SavedDeskLibraryView::CreateSavedDeskLibraryWidget(aura::Window* root) {
       root, desks_controller->GetDeskIndex(desks_controller->active_desk()));
   params.name = "SavedDeskLibraryWidget";
   params.init_properties_container.SetProperty(kHideInDeskMiniViewKey, true);
-  params.init_properties_container.SetProperty(kExcludeInMruKey, true);
+  params.init_properties_container.SetProperty(kOverviewUiKey, true);
 
   auto widget = std::make_unique<views::Widget>(std::move(params));
   widget->SetContentsView(std::make_unique<SavedDeskLibraryView>());
@@ -255,10 +240,8 @@ SavedDeskLibraryView::CreateSavedDeskLibraryWidget(aura::Window* root) {
   // Not opaque since we want to view the contents of the layer behind.
   widget->GetLayer()->SetFillsBoundsOpaquely(false);
 
-  widget->GetNativeWindow()->SetId(kShellWindowId_SavedDeskLibraryWindow);
-
-  ::wm::SetWindowVisibilityAnimationTransition(widget->GetNativeWindow(),
-                                               ::wm::ANIMATE_NONE);
+  wm::SetWindowVisibilityAnimationTransition(widget->GetNativeWindow(),
+                                             wm::ANIMATE_NONE);
   return widget;
 }
 
@@ -269,7 +252,7 @@ SavedDeskLibraryView::SavedDeskLibraryView() {
   scroll_view_->ClipHeightTo(0, std::numeric_limits<int>::max());
   scroll_view_->SetDrawOverflowIndicator(false);
   // Don't paint a background. The overview grid already has one.
-  scroll_view_->SetBackgroundColor(absl::nullopt);
+  scroll_view_->SetBackgroundColor(std::nullopt);
   scroll_view_->SetAllowKeyboardScrolling(true);
 
   // Scroll view will have a gradient mask layer.
@@ -302,21 +285,17 @@ SavedDeskLibraryView::SavedDeskLibraryView() {
   // Create grids depending on which features are enabled.
   if (saved_desk_util::AreDesksTemplatesEnabled()) {
     auto group_contents = GetLabelAndGridGroupContents();
-    grid_labels_.push_back(group_contents->AddChildView(
-        MakeGridLabel(IDS_ASH_DESKS_TEMPLATES_LIBRARY_TEMPLATES_GRID_LABEL)));
     desk_template_grid_view_ =
         group_contents->AddChildView(std::make_unique<SavedDeskGridView>());
-    grid_views_.push_back(desk_template_grid_view_);
+    grid_views_.push_back(desk_template_grid_view_.get());
 
     scroll_contents->AddChildView(std::move(group_contents));
   }
-  if (saved_desk_util::IsDeskSaveAndRecallEnabled()) {
+  if (saved_desk_util::IsSavedDesksEnabled()) {
     auto group_contents = GetLabelAndGridGroupContents();
-    grid_labels_.push_back(group_contents->AddChildView(MakeGridLabel(
-        IDS_ASH_DESKS_TEMPLATES_LIBRARY_SAVE_AND_RECALL_GRID_LABEL)));
     save_and_recall_grid_view_ =
         group_contents->AddChildView(std::make_unique<SavedDeskGridView>());
-    grid_views_.push_back(save_and_recall_grid_view_);
+    grid_views_.push_back(save_and_recall_grid_view_.get());
 
     scroll_contents->AddChildView(std::move(group_contents));
   }
@@ -324,7 +303,7 @@ SavedDeskLibraryView::SavedDeskLibraryView() {
   no_items_label_ =
       scroll_contents->AddChildView(std::make_unique<RoundedLabel>(
           kNoItemsLabelPadding.width(), kNoItemsLabelPadding.height(),
-          kNoItemsLabelCornerRadius, kNoItemsLabelHeight,
+          kSaveDeskCornerRadius, kNoItemsLabelHeight,
           l10n_util::GetStringUTF16(
               saved_desk_util::AreDesksTemplatesEnabled()
                   ? IDS_ASH_DESKS_TEMPLATES_LIBRARY_NO_TEMPLATES_OR_DESKS_LABEL
@@ -342,8 +321,8 @@ SavedDeskLibraryView::~SavedDeskLibraryView() {
 }
 
 SavedDeskItemView* SavedDeskLibraryView::GetItemForUUID(
-    const base::GUID& uuid) {
-  for (auto* grid_view : grid_views()) {
+    const base::Uuid& uuid) {
+  for (ash::SavedDeskGridView* grid_view : grid_views()) {
     if (auto* item = grid_view->GetItemForUUID(uuid))
       return item;
   }
@@ -351,8 +330,8 @@ SavedDeskItemView* SavedDeskLibraryView::GetItemForUUID(
 }
 
 void SavedDeskLibraryView::AddOrUpdateEntries(
-    const std::vector<const DeskTemplate*>& entries,
-    const base::GUID& order_first_uuid,
+    const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>& entries,
+    const base::Uuid& order_first_uuid,
     bool animate) {
   SavedDesks grouped = Group(entries);
   if (desk_template_grid_view_ && !grouped.desk_templates.empty()) {
@@ -367,7 +346,7 @@ void SavedDeskLibraryView::AddOrUpdateEntries(
   Layout();
 }
 
-void SavedDeskLibraryView::DeleteEntries(const std::vector<base::GUID>& uuids,
+void SavedDeskLibraryView::DeleteEntries(const std::vector<base::Uuid>& uuids,
                                          bool delete_animation) {
   if (desk_template_grid_view_)
     desk_template_grid_view_->DeleteEntries(uuids, delete_animation);
@@ -377,21 +356,25 @@ void SavedDeskLibraryView::DeleteEntries(const std::vector<base::GUID>& uuids,
   Layout();
 }
 
-void SavedDeskLibraryView::AnimateDeskLaunch(const base::GUID& uuid,
+void SavedDeskLibraryView::AnimateDeskLaunch(const base::Uuid& uuid,
                                              DeskMiniView* mini_view) {
+  SavedDeskItemView* grid_item = GetItemForUUID(uuid);
+  DCHECK(grid_item);
+
+  ui::Layer* mini_view_layer = mini_view->layer();
+  // Stop any ongoing animations for the mini view before we try to get the
+  // target screen bounds of it and start the new animation for it below.
+  mini_view_layer->CompleteAllAnimations();
+
   // If we can't the get bounds, then we just bail. The item will be deleted
   // automatically later through desk model observation.
-  absl::optional<gfx::Rect> target_screen_bounds =
+  std::optional<gfx::Rect> target_screen_bounds =
       GetDeskPreviewBoundsForLaunch(mini_view);
   if (!target_screen_bounds)
     return;
 
-  SavedDeskItemView* grid_item = GetItemForUUID(uuid);
-  DCHECK(grid_item);
-
   // Immediately hide the desk mini view. It will later be revealed by the
   // animation below.
-  ui::Layer* mini_view_layer = mini_view->layer();
   mini_view_layer->SetOpacity(0.0);
 
   std::unique_ptr<ui::LayerTreeOwner> item_layer_tree =
@@ -426,8 +409,8 @@ void SavedDeskLibraryView::AnimateDeskLaunch(const base::GUID& uuid,
   DeleteEntries({uuid}, /*delete_animation=*/false);
 }
 
-bool SavedDeskLibraryView::IsAnimating() {
-  for (auto* grid_view : grid_views()) {
+bool SavedDeskLibraryView::IsAnimating() const {
+  for (ash::SavedDeskGridView* grid_view : grid_views()) {
     if (grid_view->IsAnimating())
       return true;
   }
@@ -435,10 +418,11 @@ bool SavedDeskLibraryView::IsAnimating() {
   return false;
 }
 
-bool SavedDeskLibraryView::IntersectsWithUi(const gfx::Point& screen_location) {
+bool SavedDeskLibraryView::IntersectsWithUi(
+    const gfx::Point& screen_location) const {
   // Check saved desk items.
-  for (auto* grid : grid_views()) {
-    for (auto* item : grid->grid_items()) {
+  for (ash::SavedDeskGridView* grid : grid_views()) {
+    for (ash::SavedDeskItemView* item : grid->grid_items()) {
       if (item->GetBoundsInScreen().Contains(screen_location))
         return true;
     }
@@ -488,7 +472,7 @@ void SavedDeskLibraryView::OnLocatedEvent(ui::LocatedEvent* event,
       if (event->type() == ui::ET_GESTURE_SCROLL_BEGIN)
         break;
 
-      for (auto* grid_view : grid_views()) {
+      for (ash::SavedDeskGridView* grid_view : grid_views()) {
         for (SavedDeskItemView* grid_item : grid_view->grid_items())
           grid_item->UpdateHoverButtonsVisibility(screen_location, is_touch);
       }
@@ -520,19 +504,16 @@ void SavedDeskLibraryView::OnLocatedEvent(ui::LocatedEvent* event,
   }
 }
 
-absl::optional<gfx::Rect> SavedDeskLibraryView::GetDeskPreviewBoundsForLaunch(
+std::optional<gfx::Rect> SavedDeskLibraryView::GetDeskPreviewBoundsForLaunch(
     const DeskMiniView* mini_view) {
-  gfx::Transform transform = mini_view->layer()->transform();
-  gfx::Transform inversed;
-  if (!transform.GetInverse(&inversed))
-    return absl::nullopt;
-
   gfx::Rect desk_preview_bounds =
       mini_view->desk_preview()->GetBoundsInScreen();
-  gfx::Point desk_preview_origin =
-      inversed.MapPoint(desk_preview_bounds.origin());
-
-  return gfx::Rect(desk_preview_origin, desk_preview_bounds.size());
+  if (std::optional<gfx::Point> desk_preview_origin =
+          mini_view->layer()->transform().InverseMapPoint(
+              desk_preview_bounds.origin())) {
+    return gfx::Rect(*desk_preview_origin, desk_preview_bounds.size());
+  }
+  return std::nullopt;
 }
 
 void SavedDeskLibraryView::AddedToWidget() {
@@ -551,23 +532,12 @@ void SavedDeskLibraryView::Layout() {
     return;
 
   const bool landscape = width() >= kLandscapeMinWidth;
-  for (auto* grid_view : grid_views()) {
+  size_t total_saved_desks = 0;
+  for (ash::SavedDeskGridView* grid_view : grid_views()) {
     grid_view->set_layout_mode(landscape
                                    ? SavedDeskGridView::LayoutMode::LANDSCAPE
                                    : SavedDeskGridView::LayoutMode::PORTRAIT);
-  }
-
-  size_t total_saved_desks = 0;
-
-  DCHECK_EQ(grid_views_.size(), grid_labels_.size());
-  for (size_t i = 0; i != grid_views_.size(); ++i) {
-    // Make the grid label invisible if the corresponding grid view is
-    // empty. This will exclude it from the box layout.
-    grid_labels_[i]->SetVisible(!grid_views_[i]->grid_items().empty());
-    grid_labels_[i]->SetPreferredSize(landscape ? kLabelSizeLandscape
-                                                : kLabelSizePortrait);
-
-    total_saved_desks += grid_views_[i]->grid_items().size();
+    total_saved_desks += grid_view->grid_items().size();
   }
 
   no_items_label_->SetVisible(total_saved_desks == 0);
@@ -584,7 +554,7 @@ void SavedDeskLibraryView::OnKeyEvent(ui::KeyEvent* event) {
       is_scrolling_event = true;
       // Do not process if home/end key are for text editing.
       for (SavedDeskGridView* grid_view : grid_views_) {
-        if (grid_view->IsTemplateNameBeingModified()) {
+        if (grid_view->IsSavedDeskNameBeingModified()) {
           is_scrolling_event = false;
           break;
         }
@@ -595,24 +565,12 @@ void SavedDeskLibraryView::OnKeyEvent(ui::KeyEvent* event) {
       is_scrolling_event = true;
       break;
     default:
-      // Ignore all other key events as arrow keys are used for moving
-      // highlight.
+      // Ignore all other key events as arrow keys are used for moving focus.
       is_scrolling_event = false;
       break;
   }
   if (is_scrolling_event)
     scroll_view_->vertical_scroll_bar()->OnKeyEvent(event);
-}
-
-void SavedDeskLibraryView::OnThemeChanged() {
-  views::View::OnThemeChanged();
-
-  auto* color_provider = AshColorProvider::Get();
-  for (views::Label* label : grid_labels_) {
-    label->SetBackgroundColor(SK_ColorTRANSPARENT);
-    label->SetEnabledColor(color_provider->GetContentLayerColor(
-        AshColorProvider::ContentLayerType::kTextColorPrimary));
-  }
 }
 
 void SavedDeskLibraryView::OnWindowDestroying(aura::Window* window) {

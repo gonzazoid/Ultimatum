@@ -5,14 +5,18 @@
 #include "chrome/browser/autofill/autofill_image_fetcher_factory.h"
 
 #include "base/no_destructor.h"
-#include "chrome/browser/autofill/autofill_image_fetcher_impl.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/autofill/android/autofill_image_fetcher_impl.h"
+#else
+#include "chrome/browser/autofill/ui/autofill_image_fetcher_impl.h"
+#endif
 
 namespace autofill {
 
 // static
-AutofillImageFetcher* AutofillImageFetcherFactory::GetForProfile(
+AutofillImageFetcherBase* AutofillImageFetcherFactory::GetForProfile(
     Profile* profile) {
   return static_cast<AutofillImageFetcherImpl*>(
       GetInstance()->GetServiceForBrowserContext(profile, /*create=*/true));
@@ -27,7 +31,12 @@ AutofillImageFetcherFactory* AutofillImageFetcherFactory::GetInstance() {
 AutofillImageFetcherFactory::AutofillImageFetcherFactory()
     : ProfileKeyedServiceFactory(
           "AutofillImageFetcher",
-          ProfileSelections::BuildRedirectedInIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 AutofillImageFetcherFactory::~AutofillImageFetcherFactory() = default;
 

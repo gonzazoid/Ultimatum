@@ -7,7 +7,6 @@
 #include "ash/screen_util.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_item.h"
 #include "ash/wm/overview/overview_test_util.h"
 #include "ash/wm/splitview/split_view_controller.h"
@@ -16,10 +15,10 @@
 #include "ash/wm/workspace/backdrop_controller.h"
 #include "ash/wm/workspace/workspace_layout_manager.h"
 #include "ash/wm/workspace_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
-#include "ui/display/display.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/rect.h"
@@ -36,17 +35,18 @@ class OverviewGridTest : public AshTestBase {
 
   ~OverviewGridTest() override = default;
 
-  void InitializeGrid(const std::vector<aura::Window*>& windows) {
+  void InitializeGrid(
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows) {
     aura::Window* root = Shell::GetPrimaryRootWindow();
     grid_ = std::make_unique<OverviewGrid>(root, windows, nullptr);
   }
 
   void CheckAnimationStates(
-      const std::vector<aura::Window*>& windows,
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows,
       const std::vector<gfx::RectF>& target_bounds,
       const std::vector<bool>& expected_start_animations,
       const std::vector<bool>& expected_end_animations,
-      absl::optional<size_t> selected_window_index = absl::nullopt) {
+      std::optional<size_t> selected_window_index = std::nullopt) {
     ASSERT_EQ(windows.size(), target_bounds.size());
     ASSERT_EQ(windows.size(), expected_start_animations.size());
     ASSERT_EQ(windows.size(), expected_end_animations.size());
@@ -69,9 +69,11 @@ class OverviewGridTest : public AshTestBase {
                 grid_->window_list()[i]->should_animate_when_entering());
     }
 
-    for (size_t i = 0; i < grid_->window_list().size(); ++i)
+    for (size_t i = 0; i < grid_->window_list().size(); ++i) {
       grid_->window_list()[i]->set_target_bounds_for_testing(target_bounds[i]);
-    OverviewItem* selected_item =
+    }
+
+    auto* selected_item =
         selected_window_index
             ? grid_->window_list()[*selected_window_index].get()
             : nullptr;
@@ -194,7 +196,7 @@ TEST_F(OverviewGridTest, SelectedWindow) {
                                            gfx::RectF(100.f, 100.f)};
   CheckAnimationStates({window1.get(), window2.get(), window3.get()},
                        target_bounds, {true, true, true}, {false, false, true},
-                       absl::make_optional(2u));
+                       std::make_optional(2u));
 }
 
 TEST_F(OverviewGridTest, WindowWithBackdrop) {
@@ -290,12 +292,10 @@ TEST_F(OverviewGridTest, SnappedWindow) {
   wm::ActivateWindow(window2.get());
 
   Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
-  split_view_controller()->SnapWindow(
-      window1.get(), SplitViewController::SnapPosition::kPrimary);
+  split_view_controller()->SnapWindow(window1.get(), SnapPosition::kPrimary);
 
   // Snap |window2| and check that |window3| is maximized.
-  split_view_controller()->SnapWindow(
-      window2.get(), SplitViewController::SnapPosition::kSecondary);
+  split_view_controller()->SnapWindow(window2.get(), SnapPosition::kSecondary);
   EXPECT_TRUE(WindowState::Get(window3.get())->IsMaximized());
 
   // We cannot create a grid object like in the other tests because creating a
@@ -306,8 +306,8 @@ TEST_F(OverviewGridTest, SnappedWindow) {
   // Tests that |window3| is not animated even though its bounds are larger than
   // |window2| because it is fully occluded by |window1| + |window2| and the
   // split view divider.
-  OverviewItem* item2 = GetOverviewItemForWindow(window2.get());
-  OverviewItem* item3 = GetOverviewItemForWindow(window3.get());
+  auto* item2 = GetOverviewItemForWindow(window2.get());
+  auto* item3 = GetOverviewItemForWindow(window3.get());
   EXPECT_TRUE(item2->should_animate_when_entering());
   EXPECT_FALSE(item3->should_animate_when_entering());
 }

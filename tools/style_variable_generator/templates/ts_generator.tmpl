@@ -11,8 +11,10 @@
 {%- endif %}
 {% macro render_variables_as_css(mode) -%}
 {%- for model_name, color in colors[mode].items() %}
+  {%- if needs_rgb_variant(color) %}
   {{model_name | to_css_var_name}}-rgb: {{color | css_color_rgb}};
-  {{model_name | to_css_var_name}}: {{css_color_var(model_name, color)}};
+  {%- endif %}
+  {{model_name | to_css_var_name}}: {{css_color_var(model_name, color, mode)}};
 {% endfor %}
 
 {%- for name, value in opacities[mode].items() %}
@@ -29,6 +31,12 @@ export interface GetColorsCSSOptions {
    * mode values and ignores the documents prefers-color-scheme.
    */
   lockTheme?: 'light' | 'dark';
+  /**
+   * Opt into using material 3 color tokens (see go/cros-tokens). If true any
+   * legacy mappings specified in the input json5 files will be added into the
+   * document.
+   */
+  useDynamicColors?: boolean;
 }
 
 // Use a ternary expression that can only be evaluated at runtime here to force
@@ -70,6 +78,17 @@ const TYPOGRAPHY_CSS = window ? `
 {% endif -%}
 ` : '';
 
+const LEGACY_MAPPINGS_CSS = window ? `
+{%- for name, color in legacy_mappings[Modes.DEFAULT].items() %}
+{%-   if needs_rgb_variant(color) %}
+    {{name | to_css_var_name_unscoped}}-rgb: {{color | css_color_rgb}};
+{%-   endif %}
+    {{name | to_css_var_name_unscoped}}: {{css_color_var(name, color, mode, True)}};
+    {{name | to_css_var_name_unscoped}}-light: {{css_color_var(name, color, Modes.LIGHT, True)}};
+    {{name | to_css_var_name_unscoped}}-dark: {{css_color_var(name, color, Modes.DARK, True)}};
+{%  endfor -%}
+` : '';
+
 /**
  * Returns a string containing all semantic colors exported in this file as
  * css variables. This string an be used to construct a stylesheet which can be
@@ -79,54 +98,48 @@ const TYPOGRAPHY_CSS = window ? `
  * that all TS constant references resolve correctly.
  */
 export function getColorsCSS(options?: GetColorsCSSOptions) {
-  let cssString;
-  if (options?.lockTheme === 'light') {
-    // Tag strings which are safe with a special comment so copybara can add
-    // the right safety wrappers whem moving this code into Google3.
+  // Tag strings which are safe with a special comment so copybara can add
+  // the right safety wrappers whem moving this code into Google3.
+  let cssString = /* SAFE */ ("");
+{% for lockTheme in ['\'light\'', '\'dark\'', 'undefined'] -%}
+{%-   for useDynamicColors in ['true', 'false'] %}
+  if (options?.lockTheme === {{lockTheme}} && !!options?.useDynamicColors === {{useDynamicColors}}) {
     cssString = /* SAFE */ (`
       html:not(body), :host {
         ${DEFAULT_CSS}
         ${UNTYPED_CSS}
         ${TYPOGRAPHY_CSS}
+{%-       if lockTheme == '\'dark\'' %}
+        ${DARK_MODE_OVERRIDES_CSS}
+{%-       endif %}
+{%-       if useDynamicColors == 'true' %}
+        ${LEGACY_MAPPINGS_CSS}
+{%-       endif %}
       }
       :host([inverted-colors]) {
-        ${DARK_MODE_OVERRIDES_CSS}
-      }
-    `);
-  } else if (options?.lockTheme === 'dark') {
-    cssString = /* SAFE */ (`
-      html:not(body), :host {
+{%-       if lockTheme == '\'dark\'' %}
         ${DEFAULT_CSS}
-        ${UNTYPED_CSS}
-        ${TYPOGRAPHY_CSS}
+{%-       else %}
         ${DARK_MODE_OVERRIDES_CSS}
+{%-       endif %}
       }
-      :host([inverted-colors]) {
-        ${DEFAULT_CSS}
-      }
-    `);
-  } else {
-    cssString = /* SAFE */ (`
-      html:not(body), :host {
-        ${DEFAULT_CSS}
-        ${UNTYPED_CSS}
-        ${TYPOGRAPHY_CSS}
-      }
-      :host([inverted-colors]) {
-        ${DARK_MODE_OVERRIDES_CSS}
-      }
-
+{%       if lockTheme == 'undefined' %}
       @media (prefers-color-scheme: dark) {
         html:not(body), :host {
           ${DARK_MODE_OVERRIDES_CSS}
+{%-       if useDynamicColors == 'true' %}
+          ${LEGACY_MAPPINGS_CSS}
+{%-       endif %}
         }
         :host([inverted-colors]) {
           ${DEFAULT_CSS}
         }
       }
+{%-       endif %}
     `);
   }
-
+{%-   endfor -%}
+{%- endfor %}
   return cssString;
 }
 
@@ -146,7 +159,7 @@ export const {{name | to_ts_var_name}} = css`var({{name | to_css_var_name}})`;
 {%- endif -%}
 {%- if font_families or typefaces %}
 {%-   for name, value in font_families.items() %}
-export const {{name | to_ts_var_name}} = css`var({{name | to_css_var_name}}-font)`;
+export const {{name | to_ts_var_name}} = css`var({{name | to_css_var_name}})`;
 {%-     endfor %}
 {%-   for name, typeface in typefaces.items() %}
 export const {{name | to_ts_var_name}}_FONT = css`var({{name | to_css_var_name}}-font)`;

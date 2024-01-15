@@ -74,7 +74,7 @@ void GetBoundsFields(const Bounds& bounds_spec, gfx::Rect* bounds) {
 // Copy the constraint value from the API to our internal representation of
 // content size constraints. A value of zero resets the constraints. The insets
 // are used to transform window constraints to content constraints.
-void GetConstraintWidth(const absl::optional<int>& width,
+void GetConstraintWidth(const std::optional<int>& width,
                         const gfx::Insets& insets,
                         gfx::Size* size) {
   if (!width)
@@ -84,7 +84,7 @@ void GetConstraintWidth(const absl::optional<int>& width,
                              : kUnboundedSize);
 }
 
-void GetConstraintHeight(const absl::optional<int>& height,
+void GetConstraintHeight(const std::optional<int>& height,
                          const gfx::Insets& insets,
                          gfx::Size* size) {
   if (!height)
@@ -184,8 +184,8 @@ AppCurrentWindowInternalClearAttentionFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction AppCurrentWindowInternalShowFunction::Run() {
-  std::unique_ptr<Show::Params> params(Show::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<Show::Params> params = Show::Params::Create(args());
+  CHECK(params);
   if (params->focused && !*params->focused)
     window()->Show(AppWindow::SHOW_INACTIVE);
   else
@@ -200,8 +200,8 @@ ExtensionFunction::ResponseAction AppCurrentWindowInternalHideFunction::Run() {
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetBoundsFunction::Run() {
-  std::unique_ptr<SetBounds::Params> params(SetBounds::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetBounds::Params> params = SetBounds::Params::Create(args());
+  CHECK(params);
 
   bounds::BoundsType bounds_type = bounds::GetBoundsType(params->bounds_type);
   if (bounds_type == bounds::INVALID_TYPE) {
@@ -265,9 +265,9 @@ AppCurrentWindowInternalSetBoundsFunction::Run() {
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetSizeConstraintsFunction::Run() {
-  std::unique_ptr<SetSizeConstraints::Params> params(
-      SetSizeConstraints::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetSizeConstraints::Params> params =
+      SetSizeConstraints::Params::Create(args());
+  CHECK(params);
 
   bounds::BoundsType bounds_type = bounds::GetBoundsType(params->bounds_type);
   if (bounds_type != bounds::INNER_BOUNDS &&
@@ -311,8 +311,8 @@ AppCurrentWindowInternalSetIconFunction::Run() {
     return RespondNow(Error(kDevChannelOnly));
   }
 
-  std::unique_ptr<SetIcon::Params> params(SetIcon::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetIcon::Params> params = SetIcon::Params::Create(args());
+  CHECK(params);
   // The |icon_url| parameter may be a blob url (e.g. an image fetched with an
   // XMLHttpRequest) or a resource url.
   GURL url(params->icon_url);
@@ -328,7 +328,7 @@ AppCurrentWindowInternalSetShapeFunction::Run() {
   if (!window()->GetBaseWindow()->IsFrameless())
     return RespondNow(Error(kRequiresFramelessWindow));
 
-  std::unique_ptr<SetShape::Params> params(SetShape::Params::Create(args()));
+  std::optional<SetShape::Params> params = SetShape::Params::Create(args());
   const Region& shape = params->region;
 
   // Build the list of hit-test rects from the supplied list of rects.
@@ -358,27 +358,27 @@ AppCurrentWindowInternalSetAlwaysOnTopFunction::Run() {
     return RespondNow(Error(kAlwaysOnTopPermission));
   }
 
-  std::unique_ptr<SetAlwaysOnTop::Params> params(
-      SetAlwaysOnTop::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetAlwaysOnTop::Params> params =
+      SetAlwaysOnTop::Params::Create(args());
+  CHECK(params);
   window()->SetAlwaysOnTop(params->always_on_top);
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetVisibleOnAllWorkspacesFunction::Run() {
-  std::unique_ptr<SetVisibleOnAllWorkspaces::Params> params(
-      SetVisibleOnAllWorkspaces::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetVisibleOnAllWorkspaces::Params> params =
+      SetVisibleOnAllWorkspaces::Params::Create(args());
+  CHECK(params);
   window()->GetBaseWindow()->SetVisibleOnAllWorkspaces(params->always_visible);
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetActivateOnPointerFunction::Run() {
-  std::unique_ptr<SetActivateOnPointer::Params> params(
-      SetActivateOnPointer::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetActivateOnPointer::Params> params =
+      SetActivateOnPointer::Params::Create(args());
+  CHECK(params);
   window()->GetBaseWindow()->SetActivateOnPointer(params->activate_on_pointer);
   return RespondNow(NoArguments());
 }

@@ -19,6 +19,7 @@
 #include "third_party/blink/renderer/platform/blob/testing/fake_blob_url_store.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 namespace blink {
@@ -51,15 +52,12 @@ class TestURLRegistrable : public URLRegistrable {
 
 class FakeURLRegistry : public URLRegistry {
  public:
-  void RegisterURL(SecurityOrigin* origin,
-                   const KURL& url,
-                   URLRegistrable* registrable) override {
-    registrations.push_back(Registration{origin, url, registrable});
+  void RegisterURL(const KURL& url, URLRegistrable* registrable) override {
+    registrations.push_back(Registration{url, registrable});
   }
   void UnregisterURL(const KURL&) override {}
 
   struct Registration {
-    SecurityOrigin* origin;
     KURL url;
     URLRegistrable* registrable;
   };
@@ -128,6 +126,8 @@ class PublicURLManagerTestP
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
+
   PublicURLManagerTestCase test_case_;
   base::test::ScopedFeatureList scoped_feature_list_;
 
@@ -143,8 +143,6 @@ TEST_P(PublicURLManagerTestP, RegisterNonMojoBlob) {
   String url = url_manager().RegisterURL(&registrable);
   ASSERT_EQ(1u, registry.registrations.size());
   EXPECT_EQ(0u, url_store_.registrations.size());
-  EXPECT_EQ(GetExecutionContext()->GetSecurityOrigin(),
-            registry.registrations[0].origin);
   EXPECT_EQ(url, registry.registrations[0].url);
   EXPECT_EQ(&registrable, registry.registrations[0].registrable);
 

@@ -6,9 +6,12 @@ import("//build/config/android/config.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import("//build/config/ui.gni")
+import("//testing/libfuzzer/fuzzer_test.gni")
 import("//testing/test.gni")
 import("//third_party/libaom/options.gni")
 import("//third_party/protobuf/proto_library.gni")
+
+assert(use_blink)
 
 proto_library("logging_proto") {
   sources = [ "logging/proto/raw_events.proto" ]
@@ -132,6 +135,8 @@ source_set("encoding") {
   sources = [
     "encoding/audio_encoder.cc",
     "encoding/audio_encoder.h",
+    "encoding/encoding_support.cc",
+    "encoding/encoding_support.h",
     "encoding/external_video_encoder.cc",
     "encoding/external_video_encoder.h",
     "encoding/fake_software_video_encoder.cc",
@@ -149,14 +154,17 @@ source_set("encoding") {
     "encoding/vpx_quantizer_parser.h",
   ]
 
-  deps = [
-    ":common",
+  public_deps = [
     "//base",
     "//media",
     "//third_party/libaom:libaom_buildflags",
     "//third_party/libvpx",
-    "//third_party/opus",
     "//ui/gfx/geometry",
+  ]
+
+  deps = [
+    ":common",
+    "//third_party/opus",
   ]
 
   # iOS and OS X encoders
@@ -183,10 +191,6 @@ source_set("encoding") {
 
     deps += [ "//third_party/libaom" ]
   }
-
-  if (is_chromeos) {
-    deps += [ "//third_party/re2" ]
-  }
 }
 
 # TODO(https://crbug.com/1327074): should be split into multiple source sets
@@ -208,6 +212,8 @@ source_set("sender") {
     "sender/openscreen_frame_sender.h",
     "sender/performance_metrics_overlay.cc",
     "sender/performance_metrics_overlay.h",
+    "sender/video_bitrate_suggester.cc",
+    "sender/video_bitrate_suggester.h",
     "sender/video_sender.cc",
     "sender/video_sender.h",
   ]
@@ -341,6 +347,7 @@ test("cast_unittests") {
     "common/expanded_value_base_unittest.cc",
     "common/openscreen_conversion_helpers_unittest.cc",
     "encoding/audio_encoder_unittest.cc",
+    "encoding/encoding_support_unittest.cc",
     "encoding/external_video_encoder_unittest.cc",
     "encoding/video_encoder_unittest.cc",
     "encoding/vpx_quantizer_parser_unittest.cc",
@@ -361,6 +368,8 @@ test("cast_unittests") {
     "net/udp_transport_unittest.cc",
     "sender/audio_sender_unittest.cc",
     "sender/congestion_control_unittest.cc",
+    "sender/openscreen_frame_sender_unittest.cc",
+    "sender/video_bitrate_suggester_unittest.cc",
     "sender/video_sender_unittest.cc",
     "test/end2end_unittest.cc",
     "test/receiver/audio_decoder_unittest.cc",
@@ -386,6 +395,7 @@ test("cast_unittests") {
     "//base/test:test_support",
     "//components/openscreen_platform",
     "//media:test_support",
+    "//media/cast/openscreen:unit_tests",
     "//media/test:run_all_unittests",
     "//mojo/public/cpp/bindings",
     "//net",
@@ -455,6 +465,8 @@ if (is_win || is_mac || is_linux || is_chromeos_lacros || is_fuchsia) {
       "//base",
       "//build/win:default_exe_manifest",
       "//media",
+      "//media:test_support",
+      "//testing/gmock",
     ]
   }
 
@@ -532,4 +544,9 @@ if (is_linux || is_chromeos_lacros) {
       "//net",
     ]
   }
+}
+
+fuzzer_test("media_vpx_quantizer_parser_fuzzer") {
+  sources = [ "encoding/vpx_quantizer_parser_fuzzer.cc" ]
+  deps = [ ":encoding" ]
 }

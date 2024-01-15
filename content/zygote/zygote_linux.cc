@@ -18,6 +18,8 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/containers/span.h"
 #include "base/files/file_util.h"
 #include "base/files/platform_file.h"
 #include "base/linux_util.h"
@@ -133,7 +135,7 @@ bool Zygote::ProcessRequests() {
     if (!r)
       _exit(RESULT_CODE_NORMAL_EXIT);
 #else
-    CHECK(r) << "Sending zygote magic failed";
+    PCHECK(r) << "Sending zygote magic failed";
 #endif
   }
 
@@ -458,8 +460,9 @@ int Zygote::ForkWithRealPid(const std::string& process_type,
 
     // Now read back our real PID from the zygote.
     base::ProcessId real_pid;
-    if (!base::ReadFromFD(read_pipe.get(), reinterpret_cast<char*>(&real_pid),
-                          sizeof(real_pid))) {
+    if (!base::ReadFromFD(
+            read_pipe.get(),
+            base::as_writable_chars(base::make_span(&real_pid, 1u)))) {
       LOG(FATAL) << "Failed to synchronise with parent zygote process";
     }
     if (real_pid <= 0) {
@@ -528,7 +531,7 @@ int Zygote::ForkWithRealPid(const std::string& process_type,
   }
 
   // Now set-up this process to be tracked by the Zygote.
-  if (process_info_map_.find(real_pid) != process_info_map_.end()) {
+  if (base::Contains(process_info_map_, real_pid)) {
     LOG(ERROR) << "Already tracking PID " << real_pid;
     NOTREACHED();
   }
@@ -666,7 +669,7 @@ bool Zygote::HandleGetSandboxStatus(int fd, base::PickleIterator iter) {
 
 void Zygote::HandleReinitializeLoggingRequest(base::PickleIterator iter,
                                               std::vector<base::ScopedFD> fds) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   uint32_t logging_dest;
   if (!iter.ReadUInt32(&logging_dest)) {
     LOG(ERROR) << "Missing logging_dest parameter";
@@ -677,22 +680,32 @@ void Zygote::HandleReinitializeLoggingRequest(base::PickleIterator iter,
     LOG(ERROR) << "Wrong number of log fds was passed";
     return;
   }
-  base::PlatformFile log_fd = fds[0].release();
+  base::ScopedFD log_fd(std::move(fds.front()));
 
-  logging::LoggingSettings logging_settings;
-  logging_settings.logging_dest = logging_dest;
-  logging_settings.log_file = fdopen(log_fd, "a");
-  if (!logging_settings.log_file) {
-    close(log_fd);
-    LOG(ERROR) << "Failed to open new log file handle";
-    return;
+  if (logging_dest & logging::LOG_TO_STDERR) {
+    int fd = dup2(log_fd.get(), STDERR_FILENO);
+    if (fd == base::kInvalidPlatformFile)
+      PLOG(ERROR) << "Unable to redirect stderr logging";
   }
-  if (!logging::InitLogging(logging_settings))
-    LOG(ERROR) << "Unable to reinitialize logging";
+
+  if (logging_dest & logging::LOG_TO_FILE) {
+    logging::LoggingSettings logging_settings;
+    logging_settings.logging_dest = logging_dest;
+    logging_settings.log_file = fdopen(log_fd.get(), "a");
+    if (!logging_settings.log_file) {
+      PLOG(ERROR) << "Failed to open new log file handle";
+      return;
+    }
+    if (!logging::InitLogging(logging_settings)) {
+      LOG(ERROR) << "Unable to reinitialize logging";
+      return;
+    }
+    std::ignore = log_fd.release();
+  }
 #else
-  // This method should only be used in ChromeOS (Ash).
+  // This method should only be used in ChromeOS.
   NOTREACHED();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
 }  // namespace content

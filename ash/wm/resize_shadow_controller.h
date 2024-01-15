@@ -39,6 +39,10 @@ class ASH_EXPORT ResizeShadowController : public aura::WindowObserver {
   // Hides all shadows.
   void HideAllShadows();
 
+  // Cross fade animation may reorder the window layer so that the shadow layer
+  // is on top. We should restack the shadow layer below the window layer.
+  void OnCrossFadeAnimationCompleted(aura::Window* window);
+
   // aura::WindowObserver:
   void OnWindowHierarchyChanged(const HierarchyChangeParams& params) override;
   void OnWindowVisibilityChanging(aura::Window* window, bool visible) override;
@@ -51,6 +55,7 @@ class ASH_EXPORT ResizeShadowController : public aura::WindowObserver {
   void OnWindowPropertyChanged(aura::Window* window,
                                const void* key,
                                intptr_t old) override;
+  void OnWindowAddedToRootWindow(aura::Window* window) override;
 
   void UpdateResizeShadowBoundsOfWindow(aura::Window* window,
                                         const gfx::Rect& bounds);

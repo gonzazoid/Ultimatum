@@ -4,17 +4,29 @@
 
 import 'chrome://password-manager/password_manager.js';
 
-import {Page, PasswordManagerAppElement, Router, UrlParam} from 'chrome://password-manager/password_manager.js';
+import {OpenWindowProxyImpl, Page, PasswordManagerAppElement, PasswordManagerImpl, Router, UrlParam} from 'chrome://password-manager/password_manager.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {TestOpenWindowProxy} from 'chrome://webui-test/test_open_window_proxy.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
+
+import {TestPasswordManagerProxy} from './test_password_manager_proxy.js';
+import {createCredentialGroup, createPasswordEntry, makePasswordManagerPrefs} from './test_util.js';
 
 suite('PasswordManagerAppTest', function() {
   let app: PasswordManagerAppElement;
 
+  let openWindowProxy: TestOpenWindowProxy;
+  let passwordManager: TestPasswordManagerProxy;
+
   setup(function() {
     document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    openWindowProxy = new TestOpenWindowProxy();
+    OpenWindowProxyImpl.setInstance(openWindowProxy);
+    passwordManager = new TestPasswordManagerProxy();
+    PasswordManagerImpl.setInstance(passwordManager);
     app = document.createElement('password-manager-app');
     document.body.appendChild(app);
     app.setNarrowForTesting(false);
@@ -53,6 +65,12 @@ suite('PasswordManagerAppTest', function() {
         const ironItem =
             app.$.sidebar.shadowRoot!.querySelector<HTMLElement>(`#${page}`)!;
         assertTrue(ironItem.classList.contains('iron-selected'));
+        if (page === Page.CHECKUP) {
+          assertEquals(
+              'true',
+              String(Router.getInstance().currentRoute.queryParameters.get(
+                  UrlParam.START_CHECK)));
+        }
       }));
 
   test('app drawer', async () => {
@@ -102,4 +120,169 @@ suite('PasswordManagerAppTest', function() {
     // out.
     assertTrue(!!app.shadowRoot!.querySelector('#drawerSidebar'));
   });
+
+  test('Search navigates to Passwords and updates URL parameters', function() {
+    const query = new URLSearchParams();
+    query.set(UrlParam.START_CHECK, 'true');
+    Router.getInstance().navigateTo(Page.CHECKUP, null, query);
+
+    app.$.toolbar.$.mainToolbar.getSearchField().setValue('hello');
+
+    assertEquals(Page.PASSWORDS, Router.getInstance().currentRoute.page);
+    assertEquals(
+        'hello',
+        String(Router.getInstance().currentRoute.queryParameters.get(
+            UrlParam.SEARCH_TERM)));
+    assertFalse(Router.getInstance().currentRoute.queryParameters.has(
+        UrlParam.START_CHECK));
+  });
+
+  test('Test help button', async function() {
+    const button =
+        app.$.toolbar.shadowRoot!.querySelector<HTMLElement>('#helpButton');
+    assertTrue(!!button);
+    button.click();
+    const url = await openWindowProxy.whenCalled('openUrl');
+    assertEquals(url, loadTimeData.getString('passwordManagerLearnMoreURL'));
+  });
+
+  test('Test password removal toast', async () => {
+    const group = createCredentialGroup({
+      name: 'test.com',
+      credentials: [
+        createPasswordEntry({id: 0, username: 'test1'}),
+      ],
+    });
+    Router.getInstance().navigateTo(Page.PASSWORD_DETAILS, group);
+
+    await flushTasks();
+
+    assertFalse(app.$.toast.open);
+    const detailsSection =
+        app.shadowRoot!.querySelector('password-details-section');
+    assertTrue(!!detailsSection);
+
+    detailsSection.dispatchEvent(new CustomEvent('password-removed', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        removedFromStores: chrome.passwordsPrivate.PasswordStoreSet.DEVICE,
+      },
+    }));
+
+    assertTrue(app.$.toast.open);
+    const undoButton =
+        app.shadowRoot!.querySelector<HTMLElement>('#undo-removal');
+    assertTrue(!!undoButton);
+    assertFalse(undoButton.hidden);
+    undoButton.click();
+
+    await passwordManager.whenCalled('undoRemoveSavedPasswordOrException');
+  });
+
+  test('Test passkey removal toast', async () => {
+    const group = createCredentialGroup({
+      name: 'test.com',
+      credentials: [
+        createPasswordEntry({id: 0, username: 'test1', isPasskey: true}),
+      ],
+    });
+    Router.getInstance().navigateTo(Page.PASSWORD_DETAILS, group);
+
+    await flushTasks();
+
+    assertFalse(app.$.toast.open);
+    const detailsSection =
+        app.shadowRoot!.querySelector('password-details-section');
+    assertTrue(!!detailsSection);
+
+    detailsSection.dispatchEvent(new CustomEvent('passkey-removed', {
+      bubbles: true,
+      composed: true,
+    }));
+
+    assertTrue(app.$.toast.open);
+
+    // The undo button should be hidden for passkeys.
+    const undoButton =
+        app.shadowRoot!.querySelector<HTMLElement>('#undo-removal');
+    assertTrue(!!undoButton);
+    assertTrue(undoButton.hidden);
+  });
+
+  test('Test password moved toast', async () => {
+    const testEmail = 'test.user@gmail.com';
+    const group = createCredentialGroup({
+      name: 'test.com',
+      credentials: [
+        createPasswordEntry({id: 0, username: 'test1'}),
+      ],
+    });
+    Router.getInstance().navigateTo(Page.PASSWORD_DETAILS, group);
+
+    await flushTasks();
+
+    assertFalse(app.$.toast.open);
+    const detailsSection =
+        app.shadowRoot!.querySelector('password-details-section');
+    assertTrue(!!detailsSection);
+
+    detailsSection.dispatchEvent(new CustomEvent('password-moved', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        accountEmail: testEmail,
+      },
+    }));
+
+    assertTrue(app.$.toast.open);
+    const undoButton =
+        app.shadowRoot!.querySelector<HTMLElement>('#undo-removal');
+    assertTrue(!!undoButton);
+    assertFalse(isVisible(undoButton));
+    assertTrue(app.$.toast.querySelector<HTMLElement>(
+                              '#removalNotification')!.textContent!.trim()
+                   .includes(testEmail));
+  });
+
+  test('import can be triggered from empty state', async function() {
+    // This is done to avoid flakiness.
+    Router.getInstance().navigateTo(Page.PASSWORDS);
+    await flushTasks();
+
+    assertEquals(Page.PASSWORDS, Router.getInstance().currentRoute.page);
+
+    const passwordsSection = app.shadowRoot!.querySelector('passwords-section');
+    assertTrue(!!passwordsSection);
+    passwordsSection.prefs = makePasswordManagerPrefs();
+    await flushTasks();
+    const importLink = passwordsSection.$.importPasswords.querySelector('a');
+    assertTrue(!!importLink);
+
+    // Should redirect ot Settings page.
+    importLink.click();
+    await flushTasks();
+
+    assertEquals(Page.SETTINGS, Router.getInstance().currentRoute.page);
+    const settingsSection = app.shadowRoot!.querySelector('settings-section');
+    assertTrue(!!settingsSection);
+    settingsSection.prefs = makePasswordManagerPrefs();
+    await flushTasks();
+
+    const importer =
+        settingsSection.shadowRoot!.querySelector('passwords-importer');
+    assertTrue(!!importer);
+
+    const spinner = importer.shadowRoot!.querySelector('paper-spinner-lite');
+    assertTrue(!!spinner);
+    assertTrue(spinner.active);
+  });
+
+  test(
+      'dismiss Safety Hub menu notification for password module',
+      async function() {
+        Router.getInstance().navigateTo(Page.CHECKUP);
+        await passwordManager.whenCalled(
+            'dismissSafetyHubPasswordMenuNotification');
+      });
 });

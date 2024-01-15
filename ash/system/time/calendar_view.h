@@ -9,19 +9,18 @@
 
 #include "ash/ash_export.h"
 #include "ash/shell.h"
-#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/time/calendar_model.h"
+#include "ash/system/time/calendar_up_next_view.h"
 #include "ash/system/time/calendar_view_controller.h"
-#include "ash/system/tray/tray_detailed_view.h"
+#include "ash/system/unified/glanceable_tray_child_bubble.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
-#include "calendar_model.h"
-#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/view.h"
@@ -40,18 +39,19 @@ namespace ash {
 
 class CalendarEventListView;
 class CalendarMonthView;
+class GlanceablesProgressBarView;
 class IconButton;
+class TriView;
 
 // The header of the calendar view, which shows the current month and year.
 class CalendarHeaderView : public views::View {
  public:
+  METADATA_HEADER(CalendarHeaderView);
+
   CalendarHeaderView(const std::u16string& month, const std::u16string& year);
   CalendarHeaderView(const CalendarHeaderView& other) = delete;
   CalendarHeaderView& operator=(const CalendarHeaderView& other) = delete;
   ~CalendarHeaderView() override;
-
-  // views::View:
-  void OnThemeChanged() override;
 
   // Updates the month and year labels.
   void UpdateHeaders(const std::u16string& month, const std::u16string& year);
@@ -61,22 +61,24 @@ class CalendarHeaderView : public views::View {
   friend class CalendarViewTest;
 
   // The main header which shows the month name.
-  views::Label* const header_;
+  const raw_ptr<views::Label> header_;
 
   // The year header which follows the `header_`.
-  views::Label* const header_year_;
+  const raw_ptr<views::Label> header_year_;
 };
 
 // This view displays a scrollable calendar.
 class ASH_EXPORT CalendarView : public CalendarModel::Observer,
                                 public CalendarViewController::Observer,
-                                public TrayDetailedView,
+                                public GlanceableTrayChildBubble,
                                 public views::ViewObserver {
  public:
   METADATA_HEADER(CalendarView);
 
-  CalendarView(DetailedViewDelegate* delegate,
-               UnifiedSystemTrayController* controller);
+  // `for_glanceables_container` - Whether the calendar view is shown as a
+  // bubble in glanceables container, or a `UnifiedSystemTrayBubble` (which is
+  // the case if glanceables feature is not enabled).
+  explicit CalendarView(bool for_glanceables_container);
   CalendarView(const CalendarView& other) = delete;
   CalendarView& operator=(const CalendarView& other) = delete;
   ~CalendarView() override;
@@ -92,6 +94,7 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   void OpenEventList() override;
   void CloseEventList() override;
   void OnSelectedDateUpdated() override;
+  void OnCalendarLoaded() override;
 
   // views::ViewObserver:
   void OnViewBoundsChanged(views::View* observed_view) override;
@@ -100,14 +103,33 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   // views::View:
   void OnEvent(ui::Event* event) override;
 
-  // TrayDetailedView:
-  void CreateExtraTitleRowButtons() override;
-  views::Button* CreateInfoButton(views::Button::PressedCallback callback,
-                                  int info_accessible_name_id) override;
-
   CalendarViewController* calendar_view_controller() {
     return calendar_view_controller_.get();
   }
+
+  CalendarUpNextView* up_next_view() { return up_next_view_; }
+  CalendarEventListView* event_list_view() { return event_list_view_; }
+
+  enum class CalendarSlidingSurfaceBoundsType {
+    // The bounds should be `event_list_view_`'s bounds. This is used when the
+    // `event_list_view_` is showing.
+    EVENT_LIST_VIEW_BOUNDS,
+
+    // The bounds should be `up_next_view_`'s bounds. This is used mostly when
+    // the `up_next_view_` is showing.
+    UP_NEXT_VIEW_BOUNDS,
+
+    // The bounds should be at the bottom of the calendar bubble. This is used
+    // when neither the `event_list_view_` or the `up_next_view_` is showing.
+    CALENDAR_BOTTOM_BOUNDS
+  };
+
+  // Sets the bounds of the container of the `up_next_view_` and
+  // `event_list_view_` to be flush with the bottom of the scroll view. Only the
+  // position will be animated, so give the view its final bounds.
+  // `CalendarSlidingSurfaceBoundsType` needs to be passed in to determine the
+  // state of the bounds.
+  void SetCalendarSlidingSurfaceBounds(CalendarSlidingSurfaceBoundsType type);
 
  private:
   // The header of each month view which shows the month's name. If the year of
@@ -118,6 +140,8 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   // Content view of calendar's scroll view, used for metrics recording.
   // TODO(crbug.com/1297376): Add unit tests for metrics recording.
   class ScrollContentsView : public views::View {
+    METADATA_HEADER(ScrollContentsView, views::View)
+
    public:
     explicit ScrollContentsView(CalendarViewController* controller);
     ScrollContentsView(const ScrollContentsView& other) = delete;
@@ -146,10 +170,10 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
       void OnTouchEvent(ui::TouchEvent* event) override;
 
      private:
-      ScrollContentsView* content_view_;
+      raw_ptr<ScrollContentsView> content_view_;
     };
 
-    CalendarViewController* const controller_;
+    const raw_ptr<CalendarViewController, DanglingUntriaged> controller_;
     StylusEventHandler stylus_event_handler_;
 
     // Since we only record metrics once when we scroll through a particular
@@ -164,19 +188,43 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   enum LabelType { PREVIOUS, CURRENT, NEXT, NEXTNEXT };
 
   friend class CalendarViewTest;
+  friend class CalendarViewPixelTest;
   friend class CalendarViewAnimationTest;
+
+  // For GlanceablesV2: Creates the new header of the calendar view, which
+  // includes a `CalendarHeaderView`, a reset to today button, and up/down
+  // buttons.
+  views::View* CreateCalendarHeaderRow();
+
+  // Creates the calendar view title that includes a label,
+  // `reset_to_today_button_`, and a `settings_button_`.
+  void CreateCalendarTitleRow();
+
+  // Creates the `CalendarHeaderView`s container that contains `header_` and
+  // `temp_header_`.
+  views::View* CreateMonthHeaderContainer();
+
+  // Creates the button container that contains `up_button_` and `down_button_`.
+  views::View* CreateButtonContainer();
 
   // Assigns month views and labels based on the current date on screen.
   void SetMonthViews();
 
   // Returns the current month first row position.
-  int PositionOfCurrentMonth() const;
+  int GetPositionOfCurrentMonth() const;
 
   // Returns the today's row position.
-  int PositionOfToday() const;
+  int GetPositionOfToday() const;
 
   // Returns the selected date's row position.
-  int PositionOfSelectedDate() const;
+  int GetPositionOfSelectedDate() const;
+
+  // Returns the calculated height of a single visible row.
+  int GetSingleVisibleRowHeight() const;
+
+  // Returns the height under todays row. This is needed for scrolling to show
+  // more future dates.
+  int GetHeightUnderTodaysRow() const;
 
   // Adds a month label.
   views::View* AddLabelWithId(LabelType type, bool add_at_front = false);
@@ -230,6 +278,9 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
 
   // Updates the on-screen month map with the current months on screen.
   void UpdateOnScreenMonthMap();
+
+  // Returns whether or not we've finished fetching CalendarEvents.
+  bool EventsFetchComplete();
 
   // Checks if all months in the visible window have finished fetching. If so,
   // stop showing the loading bar.
@@ -319,10 +370,47 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   // shown in `scroll_view_`'s visible window.
   int CalculateFirstFullyVisibleRow();
 
-  // Set the bounds of the EventListView to be flush with the bottom of the
-  // scroll view. Only the position will be animated, so give the view its final
-  // bounds.
-  void SetEventListViewBounds();
+  // Conditionally displays the `up_next_view_`.
+  void MaybeShowUpNextView();
+
+  // Removes the `up_next_view_`.
+  void RemoveUpNextView();
+
+  // Animates scrolling the Calendar `scroll_view_` by the given offset. Uses
+  // layer transforms to mimic scrolling and then sets a final scroll position
+  // on the scroll view to give the illusion of animating scrolling.
+  void AnimateScrollByOffset(int offset);
+
+  // Post animation callback for `AnimateScrollByOffset()`.
+  void OnAnimateScrollByOffsetComplete(int offset);
+
+  // Used by the `CalendarUpNextView` to open the event list for today's date.
+  void OpenEventListForTodaysDate();
+
+  enum class ScrollViewState {
+    FULL_HEIGHT,
+    UP_NEXT_SHOWING,
+    EVENT_LIST_SHOWING
+  };
+  // Used for clipping the calendar scroll view height to the different states
+  // that the calendar view can be in.
+  void ClipScrollViewHeight(ScrollViewState state_to_change_to);
+
+  // Fades in or out the `up_next_view_`.
+  void FadeInUpNextView();
+  void FadeOutUpNextView();
+
+  // Callback after the `FadeInUpNextView()`/`FadeOutUpNextView()` animation has
+  // ended.
+  void OnFadeInUpNextViewAnimationEnded();
+  void OnFadeOutUpNextViewAnimationEnded();
+
+  // Stops the `check_upcoming_events_timer_` if it's running. This is used when
+  // `up_next_view_` fades out, the timer needs to stop as well.
+  void StopUpNextTimer();
+
+  // Checks if `up_next_view_` exists and is visible.
+  bool IsUpNextViewVisible() const;
 
   // Setters for animation flags.
   void set_should_header_animate(bool should_animate) {
@@ -332,38 +420,43 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
     should_months_animate_ = should_animate;
   }
 
-  // Unowned.
-  UnifiedSystemTrayController* controller_;
-
   std::unique_ptr<CalendarViewController> calendar_view_controller_;
+
   // Reset `scrolling_settled_timer_`.
   void reset_scrolling_settled_timer() { scrolling_settled_timer_.Reset(); }
 
   // The content of the `scroll_view_`, which carries months and month labels.
   // Owned by `CalendarView`.
-  ScrollContentsView* content_view_ = nullptr;
+  raw_ptr<ScrollContentsView> content_view_ = nullptr;
+
+  // The container view for the top-most title row. Owned by `CalendarView`.
+  raw_ptr<TriView> tri_view_ = nullptr;
 
   // The following is owned by `CalendarView`.
-  views::ScrollView* scroll_view_ = nullptr;
-  views::View* current_label_ = nullptr;
-  views::View* previous_label_ = nullptr;
-  views::View* next_label_ = nullptr;
-  views::View* next_next_label_ = nullptr;
-  CalendarMonthView* previous_month_ = nullptr;
-  CalendarMonthView* current_month_ = nullptr;
-  CalendarMonthView* next_month_ = nullptr;
-  CalendarMonthView* next_next_month_ = nullptr;
-  CalendarHeaderView* header_ = nullptr;
+  raw_ptr<views::ScrollView> scroll_view_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> current_label_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> previous_label_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> next_label_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> next_next_label_ = nullptr;
+  raw_ptr<CalendarMonthView, DanglingUntriaged> previous_month_ = nullptr;
+  raw_ptr<CalendarMonthView, DanglingUntriaged> current_month_ = nullptr;
+  raw_ptr<CalendarMonthView, DanglingUntriaged> next_month_ = nullptr;
+  raw_ptr<CalendarMonthView, DanglingUntriaged> next_next_month_ = nullptr;
+  raw_ptr<CalendarHeaderView> header_ = nullptr;
   // Temporary header, used for animations.
-  CalendarHeaderView* temp_header_ = nullptr;
-  views::Button* reset_to_today_button_ = nullptr;
-  views::Button* settings_button_ = nullptr;
-  IconButton* managed_button_ = nullptr;
-  IconButton* up_button_ = nullptr;
-  IconButton* down_button_ = nullptr;
-  CalendarEventListView* event_list_view_ = nullptr;
+  raw_ptr<CalendarHeaderView> temp_header_ = nullptr;
+  raw_ptr<views::Button> reset_to_today_button_ = nullptr;
+  raw_ptr<views::Button> settings_button_ = nullptr;
+  raw_ptr<IconButton> managed_button_ = nullptr;
+  raw_ptr<IconButton> up_button_ = nullptr;
+  raw_ptr<IconButton> down_button_ = nullptr;
+  raw_ptr<GlanceablesProgressBarView> progress_bar_ = nullptr;
+  raw_ptr<views::View> calendar_sliding_surface_ = nullptr;
+  raw_ptr<CalendarEventListView, DanglingUntriaged> event_list_view_ = nullptr;
+  // Owned by CalendarView.
+  raw_ptr<CalendarUpNextView, DanglingUntriaged> up_next_view_ = nullptr;
   std::map<base::Time, CalendarModel::FetchingStatus> on_screen_month_;
-  CalendarModel* calendar_model_ =
+  raw_ptr<CalendarModel> calendar_model_ =
       Shell::Get()->system_tray_model()->calendar_model();
 
   // If it `is_resetting_scroll_`, we don't calculate the scroll position and we
@@ -389,6 +482,11 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   // If the Calendar View destructor is being called.
   bool is_destroying_ = false;
 
+  // Set to true if the user has scrolled the Calendar at all, either via the
+  // scroll view directly or used the month arrow buttons, in the lifetime of
+  // the CalendarView.
+  bool user_has_scrolled_ = false;
+
   // Timer that fires when the calendar view is settled on, i.e. finished
   // scrolling to, a currently-visible month
   base::RetainingOneShotTimer scrolling_settled_timer_;
@@ -398,6 +496,9 @@ class ASH_EXPORT CalendarView : public CalendarModel::Observer,
   // duration is `kAnimationDisablingTimeout` ms to enable the next animation.
   base::RetainingOneShotTimer header_animation_restart_timer_;
   base::RetainingOneShotTimer months_animation_restart_timer_;
+
+  // Timer that checks upcoming events periodically.
+  base::RepeatingTimer check_upcoming_events_timer_;
 
   base::CallbackListSubscription on_contents_scrolled_subscription_;
   base::ScopedObservation<CalendarModel, CalendarModel::Observer>

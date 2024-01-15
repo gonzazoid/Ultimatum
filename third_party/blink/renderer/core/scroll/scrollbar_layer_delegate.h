@@ -17,8 +17,7 @@ class Scrollbar;
 // scrollbar state and to paint the image in the scrollbar.
 class CORE_EXPORT ScrollbarLayerDelegate : public cc::Scrollbar {
  public:
-  ScrollbarLayerDelegate(blink::Scrollbar& scrollbar,
-                         float device_scale_factor);
+  explicit ScrollbarLayerDelegate(blink::Scrollbar& scrollbar);
   ScrollbarLayerDelegate(const ScrollbarLayerDelegate&) = delete;
   ScrollbarLayerDelegate& operator=(const ScrollbarLayerDelegate&) = delete;
 
@@ -28,9 +27,12 @@ class CORE_EXPORT ScrollbarLayerDelegate : public cc::Scrollbar {
   bool IsLeftSideVerticalScrollbar() const override;
   bool HasThumb() const override;
   bool IsSolidColor() const override;
+  SkColor4f GetSolidColor() const override;
   bool IsOverlay() const override;
+  bool IsFluentOverlayScrollbarMinimalMode() const override;
   bool SupportsDragSnapBack() const override;
   bool JumpOnTrackClick() const override;
+  bool IsOpaque() const override;
 
   // The following rects are all relative to the scrollbar's origin.
   gfx::Rect ThumbRect() const override;
@@ -40,6 +42,8 @@ class CORE_EXPORT ScrollbarLayerDelegate : public cc::Scrollbar {
 
   float Opacity() const override;
   bool NeedsRepaintPart(cc::ScrollbarPart part) const override;
+  bool NeedsUpdateDisplay() const override;
+  void ClearNeedsUpdateDisplay() override;
   bool HasTickmarks() const override;
   void PaintPart(cc::PaintCanvas* canvas,
                  cc::ScrollbarPart part,
@@ -48,6 +52,8 @@ class CORE_EXPORT ScrollbarLayerDelegate : public cc::Scrollbar {
   bool UsesNinePatchThumbResource() const override;
   gfx::Size NinePatchThumbCanvasSize() const override;
   gfx::Rect NinePatchThumbAperture() const override;
+  gfx::Rect ShrinkMainThreadedMinimalModeThumbRect(
+      gfx::Rect& rect) const override;
 
  private:
   ~ScrollbarLayerDelegate() override;
@@ -55,7 +61,6 @@ class CORE_EXPORT ScrollbarLayerDelegate : public cc::Scrollbar {
   bool ShouldPaint() const;
 
   Persistent<blink::Scrollbar> scrollbar_;
-  float device_scale_factor_;
 };
 
 }  // namespace blink

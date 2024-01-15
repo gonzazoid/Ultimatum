@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "media/base/audio_bus.h"
 
 namespace media {
@@ -132,6 +132,11 @@ void MultiChannelResampler::PrimeWithSilence() {
   DCHECK(!resamplers_.empty());
   for (size_t i = 0; i < resamplers_.size(); ++i)
     resamplers_[i]->PrimeWithSilence();
+}
+
+int MultiChannelResampler::KernelSize() const {
+  DCHECK(!resamplers_.empty());
+  return resamplers_[0]->KernelSize();
 }
 
 }  // namespace media

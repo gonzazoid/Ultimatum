@@ -8,12 +8,14 @@
 #include "base/command_line.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
+#include "chrome/browser/enterprise/connectors/connectors_service.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "components/enterprise/browser/controller/browser_dm_token_storage.h"
+#include "components/policy/core/common/management/management_service.h"
 #include "components/safe_browsing/content/browser/web_ui/safe_browsing_ui.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -38,6 +40,15 @@ const char kSbEnterpriseUploadUrl[] =
 const char kSbConsumerUploadUrl[] =
     "https://safebrowsing.google.com/safebrowsing/uploads/consumer";
 
+constexpr int kInitialBackoffSeconds = 3;
+constexpr int kBackoffFactor = 2;
+constexpr int kMaxRetryAttempt = 2;
+
+bool* IgnoreFCMDelaysStorage() {
+  static bool ignore = false;
+  return &ignore;
+}
+
 bool IsConsumerScanRequest(const CloudBinaryUploadService::Request& request) {
   for (const std::string& tag : request.content_analysis_request().tags()) {
     if (tag == "dlp")
@@ -51,27 +62,38 @@ net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag(bool is_app) {
     return net::DefineNetworkTrafficAnnotation(
         "safe_browsing_binary_upload_app", R"(
         semantics {
-          sender: "Advanced Protection Program"
+          sender: "Safe Browsing"
           description:
-            "For users part of Google's Advanced Protection Program, when a "
-            "file is downloaded, Chrome will upload that file to Safe Browsing "
-            "for detailed scanning."
+            "For users opted in to Enhanced Safe Browsing or Google's Advanced "
+            "Protection Program, when a file is downloaded, Chrome may upload "
+            "that file to Safe Browsing for detailed scanning."
           trigger:
             "The browser will upload the file to Google when the user "
-            "downloads a file, and the browser is enrolled into the "
-            "Advanced Protection Program."
+            "downloads a suspicious file and the user is opted in to Enhanced "
+            "Safe Browsing or Google's Advanced Protection Program."
           data:
-            "The downloaded file."
+            "The downloaded file and metadata about how the user came to "
+            "download that file (including URLs)."
           destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts {
+              owners: "//chrome/browser/safe_browsing/cloud_content_scanning/OWNERS"
+            }
+          }
+          user_data {
+            type: ACCESS_TOKEN
+            type: FILE_DATA
+          }
+          last_reviewed: "2023-07-28"
         }
         policy {
-          cookies_allowed: YES
-          cookies_store: "Safe Browsing Cookie Store"
+          cookies_allowed: NO
           setting: "This is disabled by default an can only be enabled by "
-            "policy."
+            "opting in to Enhanced Safe Browsing or the Advanced Protection "
+            "Program."
           chrome_policy {
-            AdvancedProtectionAllowed {
-              AdvancedProtectionAllowed: false
+            SafeBrowsingDeepScanningEnabled: {
+              SafeBrowsingDeepScanningEnabled: false
             }
           }
         }
@@ -87,13 +109,29 @@ net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag(bool is_app) {
             "Connector for scanning."
           trigger:
             "If the OnFileAttachedEnterpriseConnector, "
-            "OnFileDownloadedEnterpriseConnector or "
-            "OnBulkDataEntryEnterpriseConnector policy is set, a request is made to "
-            "scan a file attached to Chrome, a file downloaded by Chrome or "
-            "data pasted in Chrome respectively."
+            "OnFileDownloadedEnterpriseConnector, "
+            "OnFileTransferEnterpriseConnector, "
+            "OnBulkDataEntryEnterpriseConnector or OnPrintEnterpriseConnector "
+            "policy is set, a request is made to scan a file attached to "
+            "Chrome, a file downloaded by Chrome, a file transfered from a "
+            "ChromeOS file system, data pasted in "
+            "Chrome or data printed from Chrome respectively."
           data:
-            "The uploaded or downloaded file, or pasted data."
+            "The uploaded/downloaded/transfered file, pasted data or printed "
+            "data. Also includes an access token (enterprise only)."
           destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts {
+              owners: "//chrome/browser/safe_browsing/cloud_content_scanning/OWNERS"
+            }
+          }
+          user_data {
+            type: ACCESS_TOKEN
+            type: FILE_DATA
+            type: USER_CONTENT
+            type: WEB_CONTENT
+          }
+          last_reviewed: "2023-07-28"
         }
         policy {
           cookies_allowed: YES
@@ -110,6 +148,12 @@ net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag(bool is_app) {
             OnBulkDataEntryEnterpriseConnector {
               OnBulkDataEntryEnterpriseConnector: "[]"
             }
+            OnFileTransferEnterpriseConnector {
+              OnFileTransferEnterpriseConnector: "[]"
+            }
+            OnPrintEnterpriseConnector {
+              OnPrintEnterpriseConnector: "[]"
+            }
           }
         }
         )");
@@ -123,13 +167,22 @@ bool CanUseAccessToken(const BinaryUploadService::Request& request,
   if (IsConsumerScanRequest(request))
     return false;
 
-    // Allow the access token to be used on unmanaged devices, but not on
-    // managed devices that aren't affiliated.
-#if !BUILDFLAG(IS_CHROMEOS)
-  if (!policy::BrowserDMTokenStorage::Get()->RetrieveDMToken().is_valid())
+  // Allow the access token to be used on unmanaged devices, but not on
+  // managed devices that aren't affiliated.
+  if (!policy::ManagementServiceFactory::GetForProfile(profile)
+           ->HasManagementAuthority(
+               policy::EnterpriseManagementAuthority::CLOUD_DOMAIN)) {
     return true;
-#endif
-  return chrome::enterprise_util::IsProfileAffiliated(profile);
+  }
+
+  // The access token can always be included in affiliated use cases.
+  if (chrome::enterprise_util::IsProfileAffiliated(profile)) {
+    return true;
+  }
+
+  // This code being reached implies that the browser and profile are
+  // not affiliated.
+  return request.per_profile_request();
 }
 
 }  // namespace
@@ -172,6 +225,7 @@ CloudBinaryUploadService::~CloudBinaryUploadService() = default;
 void CloudBinaryUploadService::MaybeUploadForDeepScanning(
     std::unique_ptr<CloudBinaryUploadService::Request> request) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
   if (IsConsumerScanRequest(*request)) {
     DCHECK(!request->IsAuthRequest());
     const bool is_advanced_protection =
@@ -199,7 +253,10 @@ void CloudBinaryUploadService::MaybeUploadForDeepScanning(
     return;
   }
 
-  if (!can_upload_enterprise_data_.contains(token_and_connector)) {
+  // Validate if `token_and_connector` is authorized to upload data if this is
+  // the first time or the previous check failed.
+  if (!can_upload_enterprise_data_.contains(token_and_connector) ||
+      !can_upload_enterprise_data_[token_and_connector]) {
     // Get data from `request` before calling `IsAuthorized` since it is about
     // to move.
     GURL url = request->GetUrlWithParams();
@@ -227,6 +284,10 @@ void CloudBinaryUploadService::MaybeCancelRequests(
   // TODO(1374944): Might consider canceling requests in `request_queue_`.
 }
 
+base::WeakPtr<BinaryUploadService> CloudBinaryUploadService::AsWeakPtr() {
+  return weakptr_factory_.GetWeakPtr();
+}
+
 void CloudBinaryUploadService::MaybeUploadForDeepScanningCallback(
     std::unique_ptr<CloudBinaryUploadService::Request> request,
     bool authorized) {
@@ -249,55 +310,121 @@ void CloudBinaryUploadService::QueueForDeepScanning(
     UploadForDeepScanning(std::move(request));
 }
 
+void CloudBinaryUploadService::RemoveFCMRetryDelaysForTesting() {
+  *IgnoreFCMDelaysStorage() = true;
+}
+
+void CloudBinaryUploadService::RetryFCMConnection(
+    Request::Id request_id,
+    int retry_count,
+    base::TimeDelta next_backoff) {
+  if (!binary_fcm_service_ || !binary_fcm_service_->Connected()) {
+    if (retry_count >= kMaxRetryAttempt) {
+      content::GetUIThreadTaskRunner({})->PostTask(
+          FROM_HERE,
+          base::BindOnce(&CloudBinaryUploadService::FinishIfActive,
+                         weakptr_factory_.GetWeakPtr(), request_id,
+                         Result::FAILED_TO_GET_TOKEN,
+                         enterprise_connectors::ContentAnalysisResponse()));
+    } else {
+      content::GetUIThreadTaskRunner({})->PostDelayedTask(
+          FROM_HERE,
+          base::BindOnce(&CloudBinaryUploadService::RetryFCMConnection,
+                         weakptr_factory_.GetWeakPtr(), request_id,
+                         retry_count + 1, next_backoff * kBackoffFactor),
+          next_backoff);
+    }
+    return;
+  }
+
+  OnFCMConnected(request_id);
+}
+
 void CloudBinaryUploadService::UploadForDeepScanning(
-    std::unique_ptr<CloudBinaryUploadService::Request> request) {
+    std::unique_ptr<Request> request) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   bool is_auth_request = request->IsAuthRequest();
   Request* raw_request = request.get();
-  active_requests_[raw_request] = std::move(request);
-  start_times_[raw_request] = base::TimeTicks::Now();
+  Request::Id id = request_id_generator_.GenerateNextId();
+  request->set_id(id);
+  request->StartRequest();
+  active_requests_[id] = std::move(request);
+  start_times_[id] = base::TimeTicks::Now();
 
   std::string token = raw_request->SetRandomRequestToken();
-  active_tokens_[raw_request] = token;
+  active_tokens_[id] = token;
 
   if ((!binary_fcm_service_ || !binary_fcm_service_->Connected()) &&
-      !is_auth_request) {
-    content::GetUIThreadTaskRunner({})->PostTask(
+      !is_auth_request &&
+      raw_request->analysis_connector() !=
+          enterprise_connectors::AnalysisConnector::BULK_DATA_ENTRY) {
+    base::TimeDelta first_backoff;
+    if (*IgnoreFCMDelaysStorage()) {
+      first_backoff = base::Seconds(0);
+    } else {
+      first_backoff = base::Seconds(kInitialBackoffSeconds);
+    }
+    content::GetUIThreadTaskRunner({})->PostDelayedTask(
         FROM_HERE,
-        base::BindOnce(&CloudBinaryUploadService::FinishRequest,
-                       weakptr_factory_.GetWeakPtr(), raw_request,
-                       Result::FAILED_TO_GET_TOKEN,
-                       enterprise_connectors::ContentAnalysisResponse()));
+        base::BindOnce(&CloudBinaryUploadService::RetryFCMConnection,
+                       weakptr_factory_.GetWeakPtr(), id,
+                       /*retry_count*/ 0, first_backoff * kBackoffFactor),
+        first_backoff);
     return;
   }
 
-  // Auth requests are never going to need waiting for an async response, so
-  // don't bother getting a token from `binary_fcm_service_`.
-  if (is_auth_request) {
-    raw_request->GetRequestData(
-        base::BindOnce(&CloudBinaryUploadService::OnGetRequestData,
-                       weakptr_factory_.GetWeakPtr(), raw_request));
-  } else {
-    binary_fcm_service_->SetCallbackForToken(
-        token, base::BindRepeating(&CloudBinaryUploadService::OnGetResponse,
-                                   weakptr_factory_.GetWeakPtr(), raw_request));
-    binary_fcm_service_->GetInstanceID(
-        base::BindOnce(&CloudBinaryUploadService::OnGetInstanceID,
-                       weakptr_factory_.GetWeakPtr(), raw_request));
-  }
-
-  active_timers_[raw_request] = std::make_unique<base::OneShotTimer>();
-  active_timers_[raw_request]->Start(
-      FROM_HERE, is_auth_request ? kAuthTimeout : kScanningTimeout,
-      base::BindOnce(&CloudBinaryUploadService::OnTimeout,
-                     weakptr_factory_.GetWeakPtr(), raw_request));
+  OnFCMConnected(id);
 }
 
-void CloudBinaryUploadService::OnGetInstanceID(Request* request,
-                                               const std::string& instance_id) {
-  if (!IsActive(request))
+void CloudBinaryUploadService::OnFCMConnected(Request::Id request_id) {
+  Request* request = GetRequest(request_id);
+  if (!request) {
     return;
+  }
+
+  bool is_auth_request = request->IsAuthRequest();
+  // Auth requests and paste requests are never going to need waiting for an
+  // async response, so don't bother getting a token from `binary_fcm_service_`.
+  if (is_auth_request) {
+    request->GetRequestData(
+        base::BindOnce(&CloudBinaryUploadService::OnGetRequestData,
+                       weakptr_factory_.GetWeakPtr(), request_id));
+  } else if (request->analysis_connector() ==
+             enterprise_connectors::AnalysisConnector::BULK_DATA_ENTRY) {
+    MaybeGetAccessToken(request_id);
+  } else {
+    binary_fcm_service_->SetCallbackForToken(
+        request->request_token(),
+        base::BindRepeating(&CloudBinaryUploadService::OnGetResponse,
+                            weakptr_factory_.GetWeakPtr(), request_id));
+    binary_fcm_service_->GetInstanceID(
+        base::BindOnce(&CloudBinaryUploadService::OnGetInstanceID,
+                       weakptr_factory_.GetWeakPtr(), request_id));
+  }
+
+  // `request` might have been destroyed by:
+  // - `OnGetRequestData` or
+  // - `OnGetInstanceID`.
+  request = GetRequest(request_id);
+  if (!request) {
+    return;
+  }
+
+  active_timers_[request_id] = std::make_unique<base::OneShotTimer>();
+  active_timers_[request_id]->Start(
+      FROM_HERE, is_auth_request ? kAuthTimeout : kScanningTimeout,
+      base::BindOnce(&CloudBinaryUploadService::FinishIfActive,
+                     weakptr_factory_.GetWeakPtr(), request_id, Result::TIMEOUT,
+                     enterprise_connectors::ContentAnalysisResponse()));
+}
+
+void CloudBinaryUploadService::OnGetInstanceID(Request::Id request_id,
+                                               const std::string& instance_id) {
+  Request* request = GetRequest(request_id);
+  if (!request) {
+    return;
+  }
 
   if (instance_id == BinaryFCMService::kInvalidId) {
     FinishRequest(request, Result::FAILED_TO_GET_TOKEN,
@@ -307,45 +434,56 @@ void CloudBinaryUploadService::OnGetInstanceID(Request* request,
 
   base::UmaHistogramCustomTimes(
       "SafeBrowsingBinaryUploadRequest.TimeToGetFCMToken",
-      base::TimeTicks::Now() - start_times_[request], base::Milliseconds(1),
+      base::TimeTicks::Now() - start_times_[request_id], base::Milliseconds(1),
       base::Minutes(6), 50);
 
   request->set_fcm_token(instance_id);
+  MaybeGetAccessToken(request_id);
+}
 
-  if (base::FeatureList::IsEnabled(kConnectorsScanningAccessToken) &&
-      CanUseAccessToken(*request, profile_)) {
+void CloudBinaryUploadService::MaybeGetAccessToken(Request::Id request_id) {
+  Request* request = GetRequest(request_id);
+  if (!request) {
+    return;
+  }
+
+  if (CanUseAccessToken(*request, profile_)) {
     if (!token_fetcher_) {
       token_fetcher_ = std::make_unique<SafeBrowsingPrimaryAccountTokenFetcher>(
           IdentityManagerFactory::GetForProfile(profile_));
     }
     token_fetcher_->Start(
         base::BindOnce(&CloudBinaryUploadService::OnGetAccessToken,
-                       weakptr_factory_.GetWeakPtr(), request));
+                       weakptr_factory_.GetWeakPtr(), request_id));
     return;
   }
 
   request->GetRequestData(
       base::BindOnce(&CloudBinaryUploadService::OnGetRequestData,
-                     weakptr_factory_.GetWeakPtr(), request));
+                     weakptr_factory_.GetWeakPtr(), request_id));
 }
 
 void CloudBinaryUploadService::OnGetAccessToken(
-    Request* request,
+    Request::Id request_id,
     const std::string& access_token) {
-  if (!IsActive(request))
+  Request* request = GetRequest(request_id);
+  if (!request) {
     return;
+  }
 
   request->set_access_token(access_token);
   request->GetRequestData(
       base::BindOnce(&CloudBinaryUploadService::OnGetRequestData,
-                     weakptr_factory_.GetWeakPtr(), request));
+                     weakptr_factory_.GetWeakPtr(), request_id));
 }
 
-void CloudBinaryUploadService::OnGetRequestData(Request* request,
+void CloudBinaryUploadService::OnGetRequestData(Request::Id request_id,
                                                 Result result,
                                                 Request::Data data) {
-  if (!IsActive(request))
+  Request* request = GetRequest(request_id);
+  if (!request) {
     return;
+  }
 
   if (result != Result::SUCCESS) {
     FinishRequest(request, result,
@@ -372,7 +510,7 @@ void CloudBinaryUploadService::OnGetRequestData(Request* request,
   net::NetworkTrafficAnnotationTag traffic_annotation =
       GetTrafficAnnotationTag(IsConsumerScanRequest(*request));
   auto callback = base::BindOnce(&CloudBinaryUploadService::OnUploadComplete,
-                                 weakptr_factory_.GetWeakPtr(), request);
+                                 weakptr_factory_.GetWeakPtr(), request_id);
   std::unique_ptr<MultipartUploadRequest> upload_request;
   if (request->IsAuthRequest() || !data.contents.empty()) {
     upload_request = MultipartUploadRequest::CreateStringRequest(
@@ -380,7 +518,7 @@ void CloudBinaryUploadService::OnGetRequestData(Request* request,
         std::move(traffic_annotation), std::move(callback));
   } else if (!data.path.empty()) {
     upload_request = MultipartUploadRequest::CreateFileRequest(
-        url_loader_factory_, std::move(url), metadata, data.path,
+        url_loader_factory_, std::move(url), metadata, data.path, data.size,
         std::move(traffic_annotation), std::move(callback));
   } else if (data.page.IsValid()) {
     upload_request = MultipartUploadRequest::CreatePageRequest(
@@ -395,22 +533,24 @@ void CloudBinaryUploadService::OnGetRequestData(Request* request,
   upload_request->set_access_token(request->access_token());
 
   WebUIInfoSingleton::GetInstance()->AddToDeepScanRequests(
-      request->tab_url(), request->per_profile_request(),
+      request->per_profile_request(), request->access_token(),
       request->content_analysis_request());
 
   // |request| might have been deleted by the call to Start() in tests, so don't
   // dereference it afterwards.
   upload_request->Start();
-  active_uploads_[request] = std::move(upload_request);
+  active_uploads_[request_id] = std::move(upload_request);
 }
 
 void CloudBinaryUploadService::OnUploadComplete(
-    Request* request,
+    Request::Id request_id,
     bool success,
     int http_status,
     const std::string& response_data) {
-  if (!IsActive(request))
+  Request* request = GetRequest(request_id);
+  if (!request) {
     return;
+  }
 
   if (http_status == net::HTTP_TOO_MANY_REQUESTS) {
     FinishRequest(request, Result::TOO_MANY_REQUESTS,
@@ -431,33 +571,40 @@ void CloudBinaryUploadService::OnUploadComplete(
     return;
   }
 
-  active_uploads_.erase(request);
+  active_uploads_.erase(request_id);
 
   // Synchronous scans can return results in the initial response proto, so
   // check for those.
-  OnGetResponse(request, response);
+  OnGetResponse(request_id, response);
 }
 
 void CloudBinaryUploadService::OnGetResponse(
-    Request* request,
+    Request::Id request_id,
     enterprise_connectors::ContentAnalysisResponse response) {
-  if (!IsActive(request))
+  Request* request = GetRequest(request_id);
+  if (!request) {
     return;
+  }
 
   for (const auto& result : response.results()) {
     if (result.has_tag() && !result.tag().empty()) {
       VLOG(1) << "Request " << request->request_token()
               << " finished scanning tag <" << result.tag() << ">";
-      received_connector_results_[request][result.tag()] = result;
+      received_connector_results_[request_id][result.tag()] = result;
     }
   }
 
-  MaybeFinishRequest(request);
+  MaybeFinishRequest(request_id);
 }
 
-void CloudBinaryUploadService::MaybeFinishRequest(Request* request) {
+void CloudBinaryUploadService::MaybeFinishRequest(Request::Id request_id) {
+  Request* request = GetRequest(request_id);
+  if (!request) {
+    return;
+  }
+
   for (const std::string& tag : request->content_analysis_request().tags()) {
-    const auto& results = received_connector_results_[request];
+    const auto& results = received_connector_results_[request_id];
     if (base::ranges::none_of(results, [&tag](const auto& tag_and_result) {
           return tag_and_result.first == tag;
         })) {
@@ -470,30 +617,35 @@ void CloudBinaryUploadService::MaybeFinishRequest(Request* request) {
   // It's OK to move here since the map entry is about to be removed.
   enterprise_connectors::ContentAnalysisResponse response;
   response.set_request_token(request->request_token());
-  for (auto& tag_and_result : received_connector_results_[request])
+  for (auto& tag_and_result : received_connector_results_[request_id]) {
     *response.add_results() = std::move(tag_and_result.second);
+  }
   FinishRequest(request, Result::SUCCESS, std::move(response));
 }
 
-void CloudBinaryUploadService::OnTimeout(Request* request) {
-  if (IsActive(request))
-    FinishRequest(request, Result::TIMEOUT,
-                  enterprise_connectors::ContentAnalysisResponse());
+void CloudBinaryUploadService::FinishIfActive(
+    Request::Id request_id,
+    Result result,
+    enterprise_connectors::ContentAnalysisResponse response) {
+  Request* request = GetRequest(request_id);
+  if (request) {
+    FinishRequest(request, result, response);
+  }
 }
 
 void CloudBinaryUploadService::FinishRequest(
     Request* request,
     Result result,
     enterprise_connectors::ContentAnalysisResponse response) {
-  RecordRequestMetrics(request, result, response);
+  RecordRequestMetrics(request->id(), result, response);
 
-  // We add the request here in case we never actually uploaded anything, so it
-  // wasn't added in OnGetRequestData
+  // We add the request here in case we never actually uploaded anything, so
+  // it wasn't added in OnGetRequestData
   WebUIInfoSingleton::GetInstance()->AddToDeepScanRequests(
-      request->tab_url(), request->per_profile_request(),
+      request->per_profile_request(), request->access_token(),
       request->content_analysis_request());
   WebUIInfoSingleton::GetInstance()->AddToDeepScanResponses(
-      active_tokens_[request], ResultToString(result), response);
+      active_tokens_[request->id()], ResultToString(result), response);
 
   std::string instance_id = request->fcm_notification_token();
   request->FinishRequest(result, response);
@@ -507,14 +659,15 @@ void CloudBinaryUploadService::FinishRequest(
 void CloudBinaryUploadService::FinishRequestCleanup(
     Request* request,
     const std::string& instance_id) {
+  Request::Id request_id = request->id();
   std::string dm_token = request->device_token();
   auto connector = request->analysis_connector();
-  active_requests_.erase(request);
-  active_timers_.erase(request);
-  active_uploads_.erase(request);
-  received_connector_results_.erase(request);
+  active_requests_.erase(request_id);
+  active_timers_.erase(request_id);
+  active_uploads_.erase(request_id);
+  received_connector_results_.erase(request_id);
 
-  auto token_it = active_tokens_.find(request);
+  auto token_it = active_tokens_.find(request_id);
   if (binary_fcm_service_ && token_it != active_tokens_.end())
     binary_fcm_service_->ClearCallbackForToken(token_it->second);
 
@@ -537,7 +690,7 @@ void CloudBinaryUploadService::FinishRequestCleanup(
   // Re-obtain `token_it` as auth requests calls to
   // InstanceIDUnregisteredCallback can result in new requests that invalidate
   // the iterator.
-  token_it = active_tokens_.find(request);
+  token_it = active_tokens_.find(request_id);
   if (token_it != active_tokens_.end()) {
     active_tokens_.erase(token_it);
   }
@@ -558,20 +711,21 @@ void CloudBinaryUploadService::InstanceIDUnregisteredCallback(
   }
 }
 
-void CloudBinaryUploadService::RecordRequestMetrics(Request* request,
+void CloudBinaryUploadService::RecordRequestMetrics(Request::Id request_id,
                                                     Result result) {
   base::UmaHistogramEnumeration("SafeBrowsingBinaryUploadRequest.Result",
                                 result);
-  base::UmaHistogramCustomTimes("SafeBrowsingBinaryUploadRequest.Duration",
-                                base::TimeTicks::Now() - start_times_[request],
-                                base::Milliseconds(1), base::Minutes(6), 50);
+  base::UmaHistogramCustomTimes(
+      "SafeBrowsingBinaryUploadRequest.Duration",
+      base::TimeTicks::Now() - start_times_[request_id], base::Milliseconds(1),
+      base::Minutes(6), 50);
 }
 
 void CloudBinaryUploadService::RecordRequestMetrics(
-    Request* request,
+    Request::Id request_id,
     Result result,
     const enterprise_connectors::ContentAnalysisResponse& response) {
-  RecordRequestMetrics(request, result);
+  RecordRequestMetrics(request_id, result);
   for (const auto& response_result : response.results()) {
     if (response_result.tag() == "malware") {
       base::UmaHistogramBoolean(
@@ -588,8 +742,14 @@ void CloudBinaryUploadService::RecordRequestMetrics(
   }
 }
 
-bool CloudBinaryUploadService::IsActive(Request* request) {
-  return (active_requests_.find(request) != active_requests_.end());
+BinaryUploadService::Request* CloudBinaryUploadService::GetRequest(
+    Request::Id request_id) {
+  auto it = active_requests_.find(request_id);
+  if (it != active_requests_.end()) {
+    return it->second.get();
+  }
+
+  return nullptr;
 }
 
 class ValidateDataUploadRequest : public CloudBinaryUploadService::Request {
@@ -638,7 +798,10 @@ void CloudBinaryUploadService::IsAuthorized(
   }
 
   TokenAndConnector token_and_connector = {dm_token, connector};
-  if (!can_upload_enterprise_data_.contains(token_and_connector)) {
+  // Validate if `token_and_connector` is authorized to upload data if this is
+  // the first time or the previous check failed.
+  if (!can_upload_enterprise_data_.contains(token_and_connector) ||
+      !can_upload_enterprise_data_[token_and_connector]) {
     // Send a request to check if the browser can upload data.
     authorization_callbacks_[token_and_connector].push_back(
         std::move(callback));
@@ -700,11 +863,6 @@ void CloudBinaryUploadService::ResetAuthorizationData(const GURL& url) {
 }
 
 void CloudBinaryUploadService::Shutdown() {
-  if (!active_requests_.empty()) {
-    base::UmaHistogramCounts10000(
-        "SafeBrowsingCloudBinaryUploadService.ActiveRequestsAtShutdown",
-        active_requests_.size());
-  }
   if (binary_fcm_service_)
     binary_fcm_service_->Shutdown();
 }
@@ -725,6 +883,11 @@ void CloudBinaryUploadService::SetAuthForTesting(const std::string& dm_token,
     TokenAndConnector token_and_connector = {dm_token, connector};
     can_upload_enterprise_data_[token_and_connector] = authorized;
   }
+}
+
+void CloudBinaryUploadService::SetTokenFetcherForTesting(
+    std::unique_ptr<SafeBrowsingTokenFetcher> token_fetcher) {
+  token_fetcher_ = std::move(token_fetcher);
 }
 
 // static

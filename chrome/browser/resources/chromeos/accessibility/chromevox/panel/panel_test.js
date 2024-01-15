@@ -10,21 +10,59 @@ GEN_INCLUDE(['panel_test_base.js']);
  */
 ChromeVoxPanelTest = class extends ChromeVoxPanelTestBase {
   /** @override */
+  testGenCppIncludes() {
+    super.testGenCppIncludes();
+    GEN(`#include "ui/accessibility/accessibility_features.h"`);
+  }
+
+  /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'ChromeVoxState', '/chromevox/background/chromevox_state.js');
-    await importModule(
-        'CommandHandlerInterface',
-        '/chromevox/background/command_handler_interface.js');
-    await importModule(
-        'LocaleOutputHelper', '/chromevox/common/locale_output_helper.js');
-    await importModule(
-        ['PanelCommand', 'PanelCommandType'],
-        '/chromevox/common/panel_command.js');
-    await importModule('CursorRange', '/common/cursors/range.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'ChromeVoxRange', '/chromevox/background/chromevox_range.js'),
+      importModule(
+          'CommandHandlerInterface',
+          '/chromevox/background/input/command_handler_interface.js'),
+      importModule('EventSource', '/chromevox/background/event_source.js'),
+      importModule('EventSourceType', '/chromevox/common/event_source_type.js'),
+      importModule(
+          'LocaleOutputHelper', '/chromevox/common/locale_output_helper.js'),
+      importModule(
+          ['PanelCommand', 'PanelCommandType'],
+          '/chromevox/common/panel_command.js'),
+      importModule('MenuManager', '/chromevox/panel/menu_manager.js'),
+      importModule('CursorRange', '/common/cursors/range.js'),
+      importModule('LocalStorage', '/common/local_storage.js'),
+      importModule('SettingsManager', '/chromevox/common/settings_manager.js'),
+    ]);
+
+    globalThis.Gesture = chrome.accessibilityPrivate.Gesture;
+    globalThis.RoleType = chrome.automation.RoleType;
+
+    const panel = this.getPanel().instance;
+    const original = panel.exec_.bind(panel);
+    panel.exec_ = (command) => {
+      original(command);
+      this.onPanelCommandCalled();
+    };
+  }
+
+  onPanelCommandCalled() {
+    if (this.resolvePanelCommandPromise) {
+      this.resolvePanelCommandPromise();
+    }
+  }
+
+  prepareForPanelCommand() {
+    this.panelCommandPromise =
+        new Promise(resolve => this.resolvePanelCommandPromise = resolve);
+  }
+
+  waitForPanelCommand() {
+    return this.panelCommandPromise;
   }
 
   fireMockEvent(key) {
@@ -33,7 +71,7 @@ ChromeVoxPanelTest = class extends ChromeVoxPanelTestBase {
       obj.preventDefault = function() {};
       obj.stopPropagation = function() {};
       obj.key = key;
-      this.getPanel().onKeyDown(obj);
+      this.getPanel().instance.onKeyDown_(obj);
     }.bind(this);
   }
 
@@ -42,33 +80,12 @@ ChromeVoxPanelTest = class extends ChromeVoxPanelTestBase {
       const evt = {};
       evt.target = {};
       evt.target.value = query;
-      this.getPanel().onSearchBarQuery(evt);
+      this.getPanel().instance.menuManager_.onSearchBarQuery(evt);
     }.bind(this);
   }
 
-  async waitForMenu(menuMsg) {
-    // Menu and menu item updates occur in a different js context, so tests need
-    // to wait until an update has been made. Swap in our hook, wait, then
-    // restore after.
-    const makeAssertions = () => {
-      const menu = this.getPanel().activeMenu_;
-      assertEquals(menuMsg, menu.menuMsg);
-    };
-
-    return new Promise(resolve => {
-      const Panel = this.getPanel();
-      const original = Panel.activateMenu;
-      Panel.activateMenu = (menu, activateFirstItem) => {
-        original(menu, activateFirstItem);
-        makeAssertions();
-        Panel.activateMenu = original;
-        resolve();
-      };
-    });
-  }
-
   assertActiveMenuItem(menuMsg, menuItemTitle, opt_menuItemShortcut) {
-    const menu = this.getPanel().activeMenu_;
+    const menu = this.getPanel().instance.menuManager_.activeMenu_;
     const menuItem = menu.items_[menu.activeIndex_];
     assertEquals(menuMsg, menu.menuMsg);
     assertEquals(menuItemTitle, menuItem.menuItemTitle);
@@ -78,14 +95,18 @@ ChromeVoxPanelTest = class extends ChromeVoxPanelTestBase {
   }
 
   assertActiveSearchMenuItem(menuItemTitle) {
-    const searchMenu = this.getPanel().searchMenu;
+    const searchMenu = this.getPanel().instance.menuManager_.searchMenu;
     const activeIndex = searchMenu.activeIndex_;
     const activeItem = searchMenu.items_[activeIndex];
     assertEquals(menuItemTitle, activeItem.menuItemTitle);
   }
 
+  enableTouchMode() {
+    EventSource.set(EventSourceType.TOUCH_GESTURE);
+  }
+
   isMenuTitleMessage(menuTitleMessage) {
-    const menu = this.getPanel().activeMenu_;
+    const menu = this.getPanel().instance.menuManager_.activeMenu_;
     return menuTitleMessage === menu.menuMsg;
   }
 
@@ -191,7 +212,7 @@ AX_TEST_F('ChromeVoxPanelTest', 'DISABLED_Gestures', async function() {
   const desktop = root.parent.root;
   const panelNode = desktop.find(
       {role: 'rootWebArea', attributes: {name: 'ChromeVox Panel'}});
-  ChromeVoxState.instance.setCurrentRange(CursorRange.fromNode(panelNode));
+  ChromeVoxRange.set(CursorRange.fromNode(panelNode));
 
   doGestureAsync(Gesture.SWIPE_RIGHT1);
   await this.waitForMenu('panel_menu_jump');
@@ -207,7 +228,7 @@ AX_TEST_F(
     'ChromeVoxPanelTest', 'InternationalFormControlsMenu', async function() {
       await this.runWithLoadedTree(this.internationalButtonDoc);
       // Turn on language switching and set available voice list.
-      localStorage['languageSwitching'] = 'true';
+      SettingsManager.set('languageSwitching', true);
       LocaleOutputHelper.instance.availableVoices_ =
           [{'lang': 'en-US'}, {'lang': 'es-ES'}];
       CommandHandlerInterface.instance.onCommand('showFormsList');
@@ -232,7 +253,7 @@ AX_TEST_F('ChromeVoxPanelTest', 'ActionsMenu', async function() {
 AX_TEST_F('ChromeVoxPanelTest', 'ActionsMenuLongClick', async function() {
   await this.runWithLoadedTree(this.linksDoc);
   // Get the node that will be checked for actions.
-  const activeNode = ChromeVoxState.instance.currentRange.start.node;
+  const activeNode = ChromeVoxRange.current.start.node;
   // Override the standard actions to have long click.
   Object.defineProperty(activeNode, 'standardActions', {
     value: ['longClick'],
@@ -260,8 +281,6 @@ AX_TEST_F(
       this.assertActiveMenuItem(
           'panel_menu_speech', 'Announce Current Battery Status',
           'Search+O, then B');
-      // Skip the tabs menu.
-      this.fireMockEvent('ArrowRight')();
       this.fireMockEvent('ArrowRight')();
       this.assertActiveMenuItem(
           'panel_menu_chromevox', 'Open keyboard shortcuts menu', 'Ctrl+Alt+/');
@@ -285,7 +304,7 @@ AX_TEST_F(
     'ChromeVoxPanelTest', 'TouchGesturesMenuAvailableWhenInTouchMode',
     async function() {
       await this.runWithLoadedTree(this.linksDoc);
-      this.getPanel().setTouchGestureSourceForTesting();
+      this.enableTouchMode();
       new PanelCommand(PanelCommandType.OPEN_MENUS).send();
       await this.waitForMenu('panel_search_menu');
 
@@ -313,4 +332,33 @@ AX_TEST_F('ChromeVoxPanelTest', 'PerformDoDefaultAction', async function() {
   this.assertActiveMenuItem('panel_menu_actions', 'Perform default action');
   this.fireMockEvent('Enter')();
   await this.waitForEvent(button, chrome.automation.EventType.CLICKED);
+});
+
+AX_TEST_F('ChromeVoxPanelTest', 'PanVirtualBrailleDisplay', async function() {
+  await this.runWithLoadedTree(this.linksDoc);
+
+  this.prepareForPanelCommand();
+  CommandHandlerInterface.instance.onCommand('toggleBrailleCaptions');
+  this.waitForPanelCommand();
+
+  // Locate the buttons to pan left and pan right in the display.
+  const panelDocument = this.getPanelWindow().document;
+  const panLeftButton = panelDocument.getElementById('braille-pan-left');
+  assertNotNullNorUndefined(panLeftButton);
+  const panRightButton = panelDocument.getElementById('braille-pan-right');
+  assertNotNullNorUndefined(panRightButton);
+
+  // Mock out ChromeVox.braille to confirm that the commands are routed from the
+  // panel context to the background context.
+  let panLeft;
+  let panRight;
+  const panLeftDone = new Promise(resolve => panLeft = resolve);
+  const panRightDone = new Promise(resolve => panRight = resolve);
+  ChromeVox.braille = {panLeft, panRight};
+
+  panLeftButton.click();
+  await panLeftDone;
+
+  panRightButton.click();
+  await panRightDone;
 });

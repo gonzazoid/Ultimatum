@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include <optional>
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -19,15 +20,16 @@
 #include "third_party/webrtc/api/video/video_codec_type.h"
 #include "third_party/webrtc/api/video_codecs/sdp_video_format.h"
 #include "third_party/webrtc/api/video_codecs/video_encoder.h"
+#include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
 
 namespace remoting::protocol {
 
-class VideoChannelStateObserver;
+class VideoStreamEventRouter;
 
-// WebrtcVideoEncoderWrapper is a wrapper around the remoting codecs, which
-// implements the webrtc::VideoEncoder interface. This class is instantiated
-// by WebRTC via the webrtc::VideoEncoderFactory, and all methods (including
-// the ctor) are called on WebRTC's foreground worker thread.
+// WebrtcVideoEncoderWrapper is a wrapper around the remoting codecs which
+// implement the webrtc::VideoEncoder interface. This class is instantiated by
+// WebRTC via the webrtc::VideoEncoderFactory, and all methods (including the
+// c'tor) are called on WebRTC's foreground worker thread.
 class WebrtcVideoEncoderWrapper : public webrtc::VideoEncoder {
  public:
   // Called by the VideoEncoderFactory. |video_channel_state_observer| is
@@ -37,7 +39,7 @@ class WebrtcVideoEncoderWrapper : public webrtc::VideoEncoder {
       const SessionOptions& session_options,
       scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> encode_task_runner,
-      base::WeakPtr<VideoChannelStateObserver> video_channel_state_observer);
+      base::WeakPtr<VideoStreamEventRouter> video_stream_event_router);
   ~WebrtcVideoEncoderWrapper() override;
 
   void SetEncoderForTest(std::unique_ptr<WebrtcVideoEncoder> encoder);
@@ -162,12 +164,17 @@ class WebrtcVideoEncoderWrapper : public webrtc::VideoEncoder {
   // TaskRunner used for scheduling encoding tasks.
   scoped_refptr<base::SingleThreadTaskRunner> encode_task_runner_;
 
-  // Stores the target frame rate used for capture and encode scheduling. May be
-  // changed by the client using SDP format parameters for the selected codec.
-  int target_frame_rate_ = kTargetFrameRate;
-  base::TimeDelta target_frame_interval_;
+  // Stores the current frame interval, updated for each frame received.
+  base::TimeDelta current_frame_interval_ = base::Hertz(kTargetFrameRate);
 
-  base::WeakPtr<VideoChannelStateObserver> video_channel_state_observer_;
+  // Stores the timestamp of the last frame that was sent for encoding.
+  base::Time last_frame_received_timestamp_;
+
+  // Represents the screen which is being encoded by this instance. Initialized
+  // after the first captured frame has been received.
+  std::optional<webrtc::ScreenId> screen_id_;
+
+  base::WeakPtr<VideoStreamEventRouter> video_stream_event_router_;
 
   // This class lives on WebRTC's encoding thread. All methods (including ctor
   // and dtor) are expected to be called on the same thread.

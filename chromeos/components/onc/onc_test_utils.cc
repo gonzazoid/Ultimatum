@@ -17,16 +17,15 @@
 #include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 
-namespace chromeos {
-namespace onc {
-namespace test_utils {
+namespace chromeos::onc::test_utils {
+
 namespace {
 
 bool GetTestDataPath(const std::string& filename, base::FilePath* result_path) {
   base::ScopedAllowBlockingForTesting allow_io;
 
   base::FilePath path;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &path)) {
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path)) {
     LOG(FATAL) << "Failed to get the path to root for " << filename;
     return false;
   }
@@ -58,6 +57,8 @@ std::string ReadTestData(const std::string& filename) {
   return result;
 }
 
+namespace {
+
 base::Value ReadTestJson(const std::string& filename) {
   base::FilePath path;
   if (!GetTestDataPath(filename, &path)) {
@@ -75,23 +76,35 @@ base::Value ReadTestJson(const std::string& filename) {
   return std::move(*result);
 }
 
-base::Value ReadTestDictionaryValue(const std::string& filename) {
+}  // namespace
+
+base::Value::Dict ReadTestDictionary(const std::string& filename) {
   base::Value content = ReadTestJson(filename);
   CHECK(content.is_dict())
       << "File '" << filename
       << "' does not contain a dictionary as expected, but type "
       << content.type();
-  return content;
+  return std::move(content.GetDict());
 }
 
-::testing::AssertionResult Equals(const base::Value* expected,
-                                  const base::Value* actual) {
-  CHECK(expected != nullptr);
-  if (actual == nullptr)
-    return ::testing::AssertionFailure() << "Actual value pointer is nullptr";
+base::Value::List ReadTestList(const std::string& filename) {
+  base::Value content = ReadTestJson(filename);
+  CHECK(content.is_list()) << "File '" << filename
+                           << "' does not contain a list as expected, but type "
+                           << content.type();
+  return std::move(content.GetList());
+}
 
-  if (*expected == *actual)
+::testing::AssertionResult Equals(const base::Value::Dict* expected,
+                                  const base::Value::Dict* actual) {
+  CHECK(expected != nullptr);
+  if (actual == nullptr) {
+    return ::testing::AssertionFailure() << "Actual value pointer is nullptr";
+  }
+
+  if (*expected == *actual) {
     return ::testing::AssertionSuccess() << "Values are equal";
+  }
 
   return ::testing::AssertionFailure() << "Values are unequal.\n"
                                        << "Expected value:\n"
@@ -99,6 +112,4 @@ base::Value ReadTestDictionaryValue(const std::string& filename) {
                                        << *actual;
 }
 
-}  // namespace test_utils
-}  // namespace onc
-}  // namespace chromeos
+}  // namespace chromeos::onc::test_utils

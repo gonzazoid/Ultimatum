@@ -33,8 +33,11 @@ public class DiscoveryCallback extends MediaRouter.Callback {
         mRouteSelector = selector;
     }
 
-    public DiscoveryCallback(String sourceUrn, List<MediaSink> knownSinks,
-            DiscoveryDelegate delegate, MediaRouteSelector selector) {
+    public DiscoveryCallback(
+            String sourceUrn,
+            List<MediaSink> knownSinks,
+            DiscoveryDelegate delegate,
+            MediaRouteSelector selector) {
         this(sourceUrn, delegate, selector);
         setAndUpdateSinks(knownSinks);
     }
@@ -43,6 +46,10 @@ public class DiscoveryCallback extends MediaRouter.Callback {
         if (mSourceUrns.add(sourceUrn)) {
             mDiscoveryDelegate.onSinksReceived(sourceUrn, new ArrayList<MediaSink>(mSinks));
         }
+    }
+
+    public boolean containsSourceUrn(String sourceUrn) {
+        return mSourceUrns.contains(sourceUrn);
     }
 
     public void removeSourceUrn(String sourceUrn) {

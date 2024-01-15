@@ -77,7 +77,7 @@ SVGResourceDocumentContent* SVGExternalDocumentCache::Get(
     entry = MakeGarbageCollected<SVGResourceDocumentContent>(
         resource, GetSupplementable()->GetExecutionContext());
   }
-  return entry;
+  return entry.Get();
 }
 
 void SVGExternalDocumentCache::Trace(Visitor* visitor) const {
@@ -121,11 +121,15 @@ Document* SVGResourceDocumentContent::GetDocument() {
     if (!document_ && resource_->HasData())
       document_ = CreateDocument(resource_, context_);
   }
-  return document_;
+  return document_.Get();
 }
 
 const KURL& SVGResourceDocumentContent::Url() const {
   return resource_->Url();
+}
+
+bool SVGResourceDocumentContent::IsLoading() const {
+  return resource_->IsLoading();
 }
 
 void SVGResourceDocumentContent::Trace(Visitor* visitor) const {

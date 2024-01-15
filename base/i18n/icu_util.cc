@@ -25,7 +25,6 @@
 #include "base/metrics/metrics_hashes.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
-#include "base/strings/sys_string_conversions.h"
 #include "build/chromecast_buildflags.h"
 #include "third_party/icu/source/common/unicode/putil.h"
 #include "third_party/icu/source/common/unicode/udata.h"
@@ -41,7 +40,7 @@
 #endif
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 #if BUILDFLAG(IS_FUCHSIA)
@@ -168,9 +167,7 @@ void LazyInitIcuDataFile() {
 
 #else  // !BUILDFLAG(IS_APPLE)
   // Assume it is in the framework bundle's Resources directory.
-  ScopedCFTypeRef<CFStringRef> data_file_name(
-      SysUTF8ToCFStringRef(kIcuDataFileName));
-  FilePath data_path = mac::PathForFrameworkBundleResource(data_file_name);
+  FilePath data_path = apple::PathForFrameworkBundleResource(kIcuDataFileName);
 #if BUILDFLAG(IS_IOS)
   FilePath override_data_path = ios::FilePathOfEmbeddedICU();
   if (!override_data_path.empty()) {
@@ -297,11 +294,11 @@ bool InitializeICUFromDataFile() {
   bool result =
       InitializeICUWithFileDescriptorInternal(g_icudtl_pf, g_icudtl_region);
 
-#if BUILDFLAG(IS_WIN)
   int debug_icu_load = g_debug_icu_load;
   debug::Alias(&debug_icu_load);
   int debug_icu_last_error = g_debug_icu_last_error;
   debug::Alias(&debug_icu_last_error);
+#if BUILDFLAG(IS_WIN)
   int debug_icu_pf_last_error = g_debug_icu_pf_last_error;
   debug::Alias(&debug_icu_pf_last_error);
   int debug_icu_pf_error_details = g_debug_icu_pf_error_details;
@@ -309,8 +306,13 @@ bool InitializeICUFromDataFile() {
   wchar_t debug_icu_pf_filename[_MAX_PATH] = {0};
   wcscpy_s(debug_icu_pf_filename, g_debug_icu_pf_filename);
   debug::Alias(&debug_icu_pf_filename);
-  CHECK(result);  // TODO(brucedawson): http://crbug.com/445616
 #endif            // BUILDFLAG(IS_WIN)
+  // Excluding Chrome OS from this CHECK due to b/289684640.
+#if !BUILDFLAG(IS_CHROMEOS)
+  // https://crbug.com/445616
+  // https://crbug.com/1449816
+  CHECK(result);
+#endif
 
   return result;
 }
@@ -351,9 +353,6 @@ void InitializeIcuTimeZone() {
 #endif  // BUILDFLAG(IS_ANDROID)
 }
 
-const char kICUDataFile[] = "ICU.DataFile";
-const char kICUCreateInstance[] = "ICU.CreateInstance";
-
 enum class ICUCreateInstance {
   kCharacterBreakIterator = 0,
   kWordBreakIterator = 1,
@@ -372,120 +371,6 @@ enum class ICUCreateInstance {
   kMaxValue = kChineseJapaneseBreakEngine
 };
 
-// Callback functions to report the opening of ICU Data File, and creation of
-// key objects to UMA. This help us to understand what built-in ICU data files
-// are rarely used in the user's machines and the distribution of ICU usage.
-static void U_CALLCONV TraceICUEntry(const void*, int32_t fn_number) {
-  switch (fn_number) {
-    case UTRACE_UBRK_CREATE_CHARACTER:
-      base::UmaHistogramEnumeration(kICUCreateInstance,
-                                    ICUCreateInstance::kCharacterBreakIterator);
-      break;
-    case UTRACE_UBRK_CREATE_SENTENCE:
-      base::UmaHistogramEnumeration(kICUCreateInstance,
-                                    ICUCreateInstance::kSentenceBreakIterator);
-      break;
-    case UTRACE_UBRK_CREATE_TITLE:
-      base::UmaHistogramEnumeration(kICUCreateInstance,
-                                    ICUCreateInstance::kTitleBreakIterator);
-      break;
-    case UTRACE_UBRK_CREATE_WORD:
-      base::UmaHistogramEnumeration(kICUCreateInstance,
-                                    ICUCreateInstance::kWordBreakIterator);
-      break;
-    default:
-      return;
-  }
-}
-
-static void U_CALLCONV TraceICUData(const void* context,
-                                    int32_t fn_number,
-                                    int32_t level,
-                                    const char* fmt,
-                                    va_list args) {
-  switch (fn_number) {
-    case UTRACE_UDATA_DATA_FILE: {
-      std::string icu_data_file_name(va_arg(args, const char*));
-      va_end(args);
-      // Skip icu version specified prefix if exist.
-      // path is prefixed with icu version prefix such as "icudt65l-".
-      // Histogram only the part after the -.
-      if (icu_data_file_name.find("icudt") == 0) {
-        size_t dash = icu_data_file_name.find("-");
-        if (dash != std::string::npos) {
-          icu_data_file_name = icu_data_file_name.substr(dash + 1);
-        }
-      }
-      // UmaHistogramSparse should track less than 100 values.
-      // We currently have about total 55 built-in data files inside ICU
-      // so it fit the UmaHistogramSparse usage.
-      int hash = base::HashMetricName(icu_data_file_name);
-      base::UmaHistogramSparse(kICUDataFile, hash);
-      return;
-    }
-    case UTRACE_UBRK_CREATE_LINE: {
-      const char* lb_type = va_arg(args, const char*);
-      auto lb_type_len = strlen(lb_type);
-      va_end(args);
-      ICUCreateInstance value;
-      if (lb_type_len < 6) {
-        DCHECK(strcmp(lb_type, "line") == 0);
-        value = ICUCreateInstance::kLineBreakIterator;
-      } else {
-        switch (lb_type[5]) {
-          case 'l':
-            DCHECK(strcmp(lb_type, "line_loose") == 0);
-            value = ICUCreateInstance::kLineBreakIteratorTypeLoose;
-            break;
-          case 'n':
-            DCHECK(strcmp(lb_type, "line_normal") == 0);
-            value = ICUCreateInstance::kLineBreakIteratorTypeNormal;
-            break;
-          case 's':
-            DCHECK(strcmp(lb_type, "line_strict") == 0);
-            value = ICUCreateInstance::kLineBreakIteratorTypeStrict;
-            break;
-          default:
-            return;
-        }
-      }
-      base::UmaHistogramEnumeration(kICUCreateInstance, value);
-      return;
-    }
-    case UTRACE_UBRK_CREATE_BREAK_ENGINE: {
-      const char* script = va_arg(args, const char*);
-      va_end(args);
-      ICUCreateInstance value;
-      switch (script[0]) {
-        case 'H':
-          DCHECK(strcmp(script, "Hani") == 0);
-          value = ICUCreateInstance::kChineseJapaneseBreakEngine;
-          break;
-        case 'K':
-          DCHECK(strcmp(script, "Khmr") == 0);
-          value = ICUCreateInstance::kKhmerBreakEngine;
-          break;
-        case 'L':
-          DCHECK(strcmp(script, "Laoo") == 0);
-          value = ICUCreateInstance::kLaoBreakEngine;
-          break;
-        case 'M':
-          DCHECK(strcmp(script, "Mymr") == 0);
-          value = ICUCreateInstance::kBurmeseBreakEngine;
-          break;
-        case 'T':
-          DCHECK(strcmp(script, "Thai") == 0);
-          value = ICUCreateInstance::kThaiBreakEngine;
-          break;
-        default:
-          return;
-      }
-      base::UmaHistogramEnumeration(kICUCreateInstance, value);
-      return;
-    }
-  }
-}
-
 // Common initialization to run regardless of how ICU is initialized.
 // There are multiple exposed InitializeIcu* functions. This should be called
 // as at the end of (the last functions in the sequence of) these functions.
@@ -495,8 +380,6 @@ bool DoCommonInitialization() {
   // when requested.
   InitializeIcuTimeZone();
 
-  const void* context = nullptr;
-  utrace_setFunctions(context, TraceICUEntry, nullptr, TraceICUData);
   utrace_setLevel(UTRACE_VERBOSE);
   return true;
 }

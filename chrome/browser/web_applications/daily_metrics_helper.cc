@@ -4,7 +4,18 @@
 
 #include "chrome/browser/web_applications/daily_metrics_helper.h"
 
-#include "base/cxx17_backports.h"
+#include <stdint.h>
+
+#include <algorithm>
+#include <string>
+#include <utility>
+
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/numerics/clamped_math.h"
+#include "base/strings/string_piece.h"
+#include "base/value_iterators.h"
+#include "base/values.h"
 #include "chrome/browser/metrics/ukm_background_recorder_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
@@ -12,9 +23,12 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/ukm/app_source_url_recorder.h"
 #include "content/public/browser/browser_thread.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "url/origin.h"
 
 namespace web_app {
@@ -22,7 +36,7 @@ namespace web_app {
 namespace {
 
 int BucketedDailySeconds(base::TimeDelta delta) {
-  int64_t sample = base::clamp(delta.InSeconds(), static_cast<int64_t>(0),
+  int64_t sample = std::clamp(delta.InSeconds(), static_cast<int64_t>(0),
                                base::Days(1).InSeconds());
   // Result between 1 sec and 1 day, in 50 linear buckets per day.
   int32_t bucket_size = base::Days(1).InSeconds() / 50;
@@ -32,19 +46,19 @@ int BucketedDailySeconds(base::TimeDelta delta) {
 
 }  // namespace
 
-// This class exists just to be friended by |UkmRecorder| to control the
-// emission of Web app UKMs in UkmRecorder.
+// This class exists just to be friended by `AppSourceUrlRecorder` to control
+// the emission of web app AppKMs.
 class DesktopWebAppUkmRecorder {
  public:
   static void Emit(const DailyInteraction& record) {
     DCHECK(record.start_url.is_valid());
     ukm::SourceId source_id =
-        ukm::UkmRecorder::GetSourceIdForDesktopWebAppStartUrl(
-            base::PassKey<DesktopWebAppUkmRecorder>(), record.start_url);
+        ukm::AppSourceUrlRecorder::GetSourceIdForPWA(record.start_url);
     ukm::builders::WebApp_DailyInteraction builder(source_id);
     builder.SetUsed(true)
         .SetInstalled(record.installed)
         .SetDisplayMode(record.effective_display_mode)
+        .SetCapturesLinks(record.captures_links)
         .SetPromotable(record.promotable);
     if (record.install_source)
       builder.SetInstallSource(record.install_source.value());
@@ -56,25 +70,42 @@ class DesktopWebAppUkmRecorder {
           BucketedDailySeconds(record.background_duration));
     if (record.num_sessions > 0)
       builder.SetNumSessions(record.num_sessions);
+#if BUILDFLAG(IS_CHROMEOS)
+    if (record.preinstalled_web_app_window_experiment_user_group) {
+      builder.SetPreinstalledWindowExperimentUserGroup(
+          record.preinstalled_web_app_window_experiment_user_group.value());
+    }
+    if (record.preinstalled_web_app_window_experiment_has_launched_before) {
+      builder.SetPreinstalledWindowExperimentHasLaunchedBefore(
+          record.preinstalled_web_app_window_experiment_has_launched_before
+              .value());
+    }
+#endif
     builder.Record(ukm::UkmRecorder::Get());
+    ukm::AppSourceUrlRecorder::MarkSourceForDeletion(source_id);
   }
 };
 
 namespace {
 
 using absl::optional;
-using base::DictionaryValue;
-using base::Value;
 
 bool skip_origin_check_for_testing_ = false;
 
 const char kInstalled[] = "installed";
 const char kInstallSource[] = "install_source";
 const char kEffectiveDisplayMode[] = "effective_display_mode";
+const char kCapturesLinks[] = "captures_links";
 const char kPromotable[] = "promotable";
 const char kForegroundDurationSec[] = "foreground_duration_sec";
 const char kBackgroundDurationSec[] = "background_duration_sec";
 const char kNumSessions[] = "num_sessions";
+#if BUILDFLAG(IS_CHROMEOS)
+const char kPreinstalledWebAppWindowExperimentUserGroup[] =
+    "preinstalled_app_experiment_user_group";
+const char kPreinstalledWebAppWindowExperimentHasLaunchedBefore[] =
+    "preinstalled_app_experiment_has_launched_before";
+#endif
 
 optional<DailyInteraction> DictToRecord(const std::string& url,
                                         const base::Value::Dict& record_dict) {
@@ -95,6 +126,8 @@ optional<DailyInteraction> DictToRecord(const std::string& url,
   if (!effective_display_mode.has_value())
     return absl::nullopt;
   record.effective_display_mode = *effective_display_mode;
+
+  record.captures_links = record_dict.FindBool(kCapturesLinks).value_or(false);
 
   optional<bool> promotable = record_dict.FindBool(kPromotable);
   if (!promotable.has_value())
@@ -117,22 +150,45 @@ optional<DailyInteraction> DictToRecord(const std::string& url,
   if (num_sessions)
     record.num_sessions = *num_sessions;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  record.preinstalled_web_app_window_experiment_user_group =
+      record_dict.FindInt(kPreinstalledWebAppWindowExperimentUserGroup);
+  record.preinstalled_web_app_window_experiment_has_launched_before =
+      record_dict.FindBool(
+          kPreinstalledWebAppWindowExperimentHasLaunchedBefore);
+#endif
+
   return record;
 }
 
-std::unique_ptr<DictionaryValue> RecordToDict(DailyInteraction& record) {
-  auto record_dict = std::make_unique<DictionaryValue>();
+base::Value::Dict RecordToDict(DailyInteraction& record) {
+  base::Value::Dict record_dict;
   // Note URL is not set here as it is the key for this dict in its parent.
-  record_dict->SetBoolKey(kInstalled, record.installed);
+  record_dict.Set(kInstalled, record.installed);
   if (record.install_source.has_value())
-    record_dict->SetIntKey(kInstallSource, *record.install_source);
-  record_dict->SetIntKey(kEffectiveDisplayMode, record.effective_display_mode);
-  record_dict->SetBoolKey(kPromotable, record.promotable);
-  record_dict->SetIntKey(kForegroundDurationSec,
-                         record.foreground_duration.InSeconds());
-  record_dict->SetIntKey(kBackgroundDurationSec,
-                         record.background_duration.InSeconds());
-  record_dict->SetIntKey(kNumSessions, record.num_sessions);
+    record_dict.Set(kInstallSource, *record.install_source);
+  record_dict.Set(kEffectiveDisplayMode, record.effective_display_mode);
+  record_dict.Set(kCapturesLinks, record.captures_links);
+  record_dict.Set(kPromotable, record.promotable);
+  record_dict.Set(kForegroundDurationSec,
+                  static_cast<int>(record.foreground_duration.InSeconds()));
+  record_dict.Set(kBackgroundDurationSec,
+                  static_cast<int>(record.background_duration.InSeconds()));
+  record_dict.Set(kNumSessions, record.num_sessions);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (record.preinstalled_web_app_window_experiment_user_group.has_value()) {
+    record_dict.Set(kPreinstalledWebAppWindowExperimentUserGroup,
+                    *record.preinstalled_web_app_window_experiment_user_group);
+  }
+  if (record.preinstalled_web_app_window_experiment_has_launched_before
+          .has_value()) {
+    record_dict.Set(
+        kPreinstalledWebAppWindowExperimentHasLaunchedBefore,
+        *record.preinstalled_web_app_window_experiment_has_launched_before);
+  }
+#endif
+
   return record_dict;
 }
 
@@ -164,7 +220,7 @@ void EmitRecords(Profile* profile) {
 
   for (const auto iter : urls_to_features) {
     const std::string& url = iter.first;
-    const Value& val = iter.second;
+    const base::Value& val = iter.second;
     optional<DailyInteraction> record = DictToRecord(url, val.GetDict());
     if (record)
       EmitRecord(*record, profile);
@@ -192,10 +248,10 @@ void UpdateRecord(DailyInteraction& record, PrefService* prefs) {
     }
   }
 
-  std::unique_ptr<DictionaryValue> record_dict = RecordToDict(record);
+  base::Value::Dict record_dict = RecordToDict(record);
   ScopedDictPrefUpdate update(prefs, prefs::kWebAppsDailyMetrics);
 
-  update->Set(url, std::move(*record_dict));
+  update->Set(url, std::move(record_dict));
 }
 
 }  // namespace

@@ -8,9 +8,9 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -79,6 +79,7 @@ class DISPLAY_MANAGER_EXPORT ContentProtectionManager
 
   void set_native_display_delegate(NativeDisplayDelegate* delegate) {
     native_display_delegate_ = delegate;
+    hdcp_key_manager_.set_native_display_delegate(delegate);
   }
 
   using ClientId = absl::optional<uint64_t>;
@@ -171,7 +172,8 @@ class DISPLAY_MANAGER_EXPORT ContentProtectionManager
                                 uint32_t protection_mask);
 
   void QueueContentProtectionTask(ApplyContentProtectionCallback callback,
-                                  ClientId client_id);
+                                  ClientId client_id,
+                                  bool is_key_set);
 
   const raw_ptr<DisplayLayoutManager> layout_manager_;  // Not owned.
   raw_ptr<NativeDisplayDelegate> native_display_delegate_ =

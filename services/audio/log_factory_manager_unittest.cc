@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "media/mojo/mojom/audio_logging.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -64,7 +65,7 @@ class MockAudioLogFactory : public media::mojom::AudioLogFactory {
                           audio_log_receiver) override {
     MockCreateAudioLog(component, component_id);
     mojo::MakeSelfOwnedReceiver(
-        base::WrapUnique(mock_logs_[current_mock_log_++]),
+        base::WrapUnique(mock_logs_[current_mock_log_++].get()),
         std::move(audio_log_receiver));
   }
 
@@ -73,7 +74,7 @@ class MockAudioLogFactory : public media::mojom::AudioLogFactory {
  private:
   mojo::Receiver<media::mojom::AudioLogFactory> receiver_;
   size_t current_mock_log_ = 0;
-  std::vector<MockAudioLog*> mock_logs_;
+  std::vector<raw_ptr<MockAudioLog, VectorExperimental>> mock_logs_;
 };
 
 }  // namespace
@@ -110,7 +111,8 @@ TEST_F(LogFactoryManagerTest, LogFactoryManagerQueuesRequestsAndSetsFactory) {
   const double kVolume1 = 0.5;
   media::AudioLogFactory* log_factory = log_factory_manager_->GetLogFactory();
   std::unique_ptr<media::AudioLog> log1 = log_factory->CreateAudioLog(
-      media::AudioLogFactory::AUDIO_OUTPUT_STREAM, kComponentId1);
+      media::AudioLogFactory::AudioComponent::kAudioOutputStream,
+      kComponentId1);
   log1->OnStarted();
   log1->OnSetVolume(kVolume1);
   log1->OnStopped();
@@ -148,7 +150,7 @@ TEST_F(LogFactoryManagerTest, LogFactoryManagerQueuesRequestsAndSetsFactory) {
   EXPECT_CALL(*mock_log2, OnClosed());
 
   std::unique_ptr<media::AudioLog> log2 = log_factory->CreateAudioLog(
-      media::AudioLogFactory::AUDIO_INPUT_CONTROLLER, 2);
+      media::AudioLogFactory::AudioComponent::kAudioInputController, 2);
   log2->OnStarted();
   log2->OnSetVolume(kVolume2);
   log2->OnStopped();

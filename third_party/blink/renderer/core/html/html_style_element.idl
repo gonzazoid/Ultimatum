@@ -23,8 +23,6 @@
     Exposed=Window,
     HTMLConstructor
 ] interface HTMLStyleElement : HTMLElement {
-    // TODO(foolip): The disabled attribute has been removed from the spec:
-    // https://www.w3.org/Bugs/Public/show_bug.cgi?id=14703
     [Measure] attribute boolean disabled;
     [CEReactions, Reflect] attribute DOMString media;
     [CEReactions, Reflect] attribute DOMString type;
@@ -34,5 +32,5 @@
     readonly attribute StyleSheet? sheet;
 
     // https://html.spec.whatwg.org/multipage/semantics.html#dom-style-blocking
-    [RuntimeEnabled=BlockingAttribute, SameObject, PutForwards=value] readonly attribute DOMTokenList blocking;
+    [SameObject, PutForwards=value] readonly attribute DOMTokenList blocking;
 };

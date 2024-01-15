@@ -10,13 +10,12 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/time.h"
@@ -26,6 +25,7 @@
 #include "components/sync/model/metadata_batch.h"
 #include "components/sync/model/mutable_data_batch.h"
 #include "components/sync/protocol/session_specifics.pb.h"
+#include "components/sync_sessions/session_sync_prefs.h"
 #include "components/sync_sessions/sync_sessions_client.h"
 #include "components/sync_sessions/synced_window_delegate.h"
 #include "components/sync_sessions/synced_window_delegates_getter.h"
@@ -38,7 +38,7 @@ using syncer::MetadataChangeList;
 
 // Default time without activity after which a session is considered stale and
 // becomes a candidate for garbage collection.
-const base::TimeDelta kStaleSessionThreshold = base::Days(14);
+const base::TimeDelta kStaleSessionThreshold = base::Days(28);
 
 std::unique_ptr<syncer::EntityData> MoveToEntityData(
     const std::string& client_name,
@@ -125,12 +125,17 @@ OpenTabsUIDelegate* SessionSyncBridge::GetOpenTabsUIDelegate() {
   return syncing_->open_tabs_ui_delegate.get();
 }
 
+bool SessionSyncBridge::IsLocalDataOutOfSyncForTest() const {
+  return sessions_client_ &&
+         sessions_client_->GetSessionSyncPrefs()->GetLocalDataOutOfSync();
+}
+
 std::unique_ptr<MetadataChangeList>
 SessionSyncBridge::CreateMetadataChangeList() {
   return std::make_unique<syncer::InMemoryMetadataChangeList>();
 }
 
-absl::optional<syncer::ModelError> SessionSyncBridge::MergeSyncData(
+absl::optional<syncer::ModelError> SessionSyncBridge::MergeFullSyncData(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_data) {
   DCHECK(!syncing_);
@@ -138,8 +143,8 @@ absl::optional<syncer::ModelError> SessionSyncBridge::MergeSyncData(
 
   StartLocalSessionEventHandler();
 
-  return ApplySyncChanges(std::move(metadata_change_list),
-                          std::move(entity_data));
+  return ApplyIncrementalSyncChanges(std::move(metadata_change_list),
+                                     std::move(entity_data));
 }
 
 void SessionSyncBridge::StartLocalSessionEventHandler() {
@@ -165,13 +170,22 @@ void SessionSyncBridge::StartLocalSessionEventHandler() {
   // well as the processor.
   local_session_event_router_->StartRoutingTo(
       syncing_->local_session_event_handler.get());
+
+  // Initializing |syncing_| influences the behavior of the public API, because
+  // GetOpenTabsUIDelegate() transitions from returning nullptr to returning an
+  // actual delegate. The nullptr has specifics semantics documented in the
+  // SessionSyncService API, so interested parties (subscribed to changes)
+  // should be notified that the value changed. https://crbug.com/1422634.
+  notify_foreign_session_updated_cb_.Run();
 }
 
-absl::optional<syncer::ModelError> SessionSyncBridge::ApplySyncChanges(
+absl::optional<syncer::ModelError>
+SessionSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_changes) {
   DCHECK(change_processor()->IsTrackingMetadata());
   DCHECK(syncing_);
+  DCHECK(sessions_client_);
 
   // Merging sessions is simple: remote entities are expected to be foreign
   // sessions (identified by the session tag)  and hence must simply be
@@ -179,6 +193,7 @@ absl::optional<syncer::ModelError> SessionSyncBridge::ApplySyncChanges(
   // information is ignored (local wins).
   std::unique_ptr<SessionStore::WriteBatch> batch =
       CreateSessionStoreWriteBatch();
+
   for (const std::unique_ptr<syncer::EntityChange>& change : entity_changes) {
     switch (change->type()) {
       case syncer::EntityChange::ACTION_DELETE:
@@ -190,7 +205,10 @@ absl::optional<syncer::ModelError> SessionSyncBridge::ApplySyncChanges(
           // error or a clock is inaccurate). Just ignore the deletion for now.
           DLOG(WARNING) << "Local session data deleted. Ignoring until next "
                         << "local navigation event.";
-          syncing_->local_data_out_of_sync = true;
+          sessions_client_->GetSessionSyncPrefs()->SetLocalDataOutOfSync(true);
+          static_cast<syncer::InMemoryMetadataChangeList*>(
+              metadata_change_list.get())
+              ->DropMetadataChangeForStorageKey(change->storage_key());
         } else {
           // Deleting an entity (if it's a header entity) may cascade other
           // deletions, so let's assume that whoever initiated remote deletions
@@ -213,7 +231,7 @@ absl::optional<syncer::ModelError> SessionSyncBridge::ApplySyncChanges(
           // info if encryption was turned on. In that case, the data is still
           // the same, so we can ignore.
           DLOG(WARNING) << "Dropping modification to local session.";
-          syncing_->local_data_out_of_sync = true;
+          sessions_client_->GetSessionSyncPrefs()->SetLocalDataOutOfSync(true);
           continue;
         }
 
@@ -273,20 +291,33 @@ std::string SessionSyncBridge::GetStorageKey(
   return SessionStore::GetStorageKey(entity_data.specifics.session());
 }
 
-void SessionSyncBridge::ApplyStopSyncChanges(
+bool SessionSyncBridge::IsEntityDataValid(
+    const syncer::EntityData& entity_data) const {
+  return SessionStore::AreValidSpecifics(entity_data.specifics.session());
+}
+
+void SessionSyncBridge::ApplyDisableSyncChanges(
     std::unique_ptr<MetadataChangeList> delete_metadata_change_list) {
   DCHECK(store_);
-  local_session_event_router_->Stop();
-  if (delete_metadata_change_list) {
-    store_->DeleteAllDataAndMetadata();
 
-    // Ensure that we clear on-demand favicons that were downloaded using user
-    // synced history data, especially by HistoryUiFaviconRequestHandler. We do
-    // it upon disabling of sessions sync to have symmetry with the condition
-    // checked inside that layer to allow downloads (sessions sync enabled).
-    sessions_client_->ClearAllOnDemandFavicons();
-  }
+  local_session_event_router_->Stop();
+  store_->DeleteAllDataAndMetadata();
+
+  // Ensure that we clear on-demand favicons that were downloaded using user
+  // synced history data, especially by HistoryUiFaviconRequestHandler. We do
+  // it upon disabling of sessions sync to have symmetry with the condition
+  // checked inside that layer to allow downloads (sessions sync enabled).
+  sessions_client_->ClearAllOnDemandFavicons();
+
   syncing_.reset();
+  notify_foreign_session_updated_cb_.Run();
+}
+
+void SessionSyncBridge::OnSyncPaused() {
+  DCHECK(store_);
+  local_session_event_router_->Stop();
+  syncing_.reset();
+  notify_foreign_session_updated_cb_.Run();
 }
 
 std::unique_ptr<LocalSessionEventHandlerImpl::WriteBatch>
@@ -296,11 +327,11 @@ SessionSyncBridge::CreateLocalSessionWriteBatch() {
   // If a remote client mangled with our local session (typically deleted
   // entities due to garbage collection), we resubmit all local entities at this
   // point (i.e. local changes observed).
-  if (syncing_->local_data_out_of_sync) {
-    syncing_->local_data_out_of_sync = false;
-    // We use PostTask() to avoid interferring with the ongoing handling of
+  if (sessions_client_->GetSessionSyncPrefs()->GetLocalDataOutOfSync()) {
+    sessions_client_->GetSessionSyncPrefs()->SetLocalDataOutOfSync(false);
+    // We use PostTask() to avoid interfering with the ongoing handling of
     // local changes that triggered this function.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&SessionSyncBridge::ResubmitLocalSession,
                                   weak_ptr_factory_.GetWeakPtr()));
   }
@@ -328,8 +359,8 @@ void SessionSyncBridge::OnSyncStarting(
   // |store_| may be already initialized if sync was previously started and
   // then stopped.
   if (store_) {
-    // If initial sync was already done, MergeSyncData() will never be called so
-    // we need to start syncing local changes.
+    // If initial sync was already done, MergeFullSyncData() will never be
+    // called so we need to start syncing local changes.
     if (change_processor()->IsTrackingMetadata()) {
       StartLocalSessionEventHandler();
     }
@@ -360,8 +391,8 @@ void SessionSyncBridge::OnStoreInitialized(
 
   change_processor()->ModelReadyToSync(std::move(metadata_batch));
 
-  // If initial sync was already done, MergeSyncData() will never be called so
-  // we need to start syncing local changes.
+  // If initial sync was already done, MergeFullSyncData() will never be called
+  // so we need to start syncing local changes.
   if (change_processor()->IsTrackingMetadata()) {
     StartLocalSessionEventHandler();
   }
@@ -384,12 +415,12 @@ void SessionSyncBridge::DoGarbageCollection(SessionStore::WriteBatch* batch) {
 
   // Iterate through all the sessions and delete any with age older than
   // |kStaleSessionThreshold|.
-  for (const auto* session :
+  for (const sync_sessions::SyncedSession* session :
        store_->tracker()->LookupAllForeignSessions(SyncedSessionTracker::RAW)) {
     const base::TimeDelta session_age =
-        base::Time::Now() - session->modified_time;
+        base::Time::Now() - session->GetModifiedTime();
     if (session_age > kStaleSessionThreshold) {
-      const std::string session_tag = session->session_tag;
+      const std::string session_tag = session->GetSessionTag();
       DVLOG(1) << "Found stale session " << session_tag << " with age "
                << session_age.InDays() << " days, deleting.";
       DeleteForeignSessionWithBatch(session_tag, batch);

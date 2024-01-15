@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "cc/cc_export.h"
@@ -52,6 +51,10 @@ class CC_EXPORT Proxy {
   virtual void SetTargetLocalSurfaceId(
       const viz::LocalSurfaceId& target_local_surface_id) = 0;
 
+  // Detaches the InputDelegateForCompositor (InputHandler) bound on the
+  // compositor thread.
+  virtual void DetachInputDelegateAndRenderFrameObserver() = 0;
+
   // Returns true if an animate or commit has been requested, and hasn't
   // completed yet.
   virtual bool RequestedAnimatePending() = 0;
@@ -62,6 +65,10 @@ class CC_EXPORT Proxy {
 
   // Pauses all main and impl-side rendering.
   virtual void SetPauseRendering(bool pause_rendering) = 0;
+
+  // Indicates that the next main frame will contain the result of running an
+  // event handler for an input event.
+  virtual void SetInputResponsePending() = 0;
 
   // Defers commits until at most the given |timeout| period has passed,
   // but continues to update the document lifecycle in
@@ -103,6 +110,10 @@ class CC_EXPORT Proxy {
 
   virtual void SetRenderFrameObserver(
       std::unique_ptr<RenderFrameMetadataObserver> observer) = 0;
+
+  virtual void CompositeImmediatelyForTest(base::TimeTicks frame_begin_time,
+                                           bool raster,
+                                           base::OnceClosure callback) = 0;
 
   // Returns a percentage of dropped frames of the last second.
   // Only implemenented for single threaded proxy.

@@ -10,12 +10,14 @@
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
 #include "ash/public/cpp/style/color_provider.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/holding_space/holding_space_item_views_section.h"
 #include "ash/system/holding_space/holding_space_util.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
@@ -34,20 +36,26 @@ constexpr base::TimeDelta kAnimationDuration = base::Milliseconds(167);
 // Helpers ---------------------------------------------------------------------
 
 // Returns a callback which deletes the associated animation observer after
-// running another `callback`.
-using AnimationCompletedCallback = base::OnceCallback<void(bool aborted)>;
+// running another `callback` by returning true. This workaround is needed
+// because callbacks that bind to a WeakPtr receiver cannot return a non-void
+// type.
+//
+// TODO(crbug.com/1506856): It would be nice if CallbackLayerAnimationObserver
+// took a OnceCallback and used that as an implicit signal to self-delete the
+// observer on completion. Until then, this needs to use a RepeatingCallback,
+// even though the callback only runs once.
+using AnimationCompletedCallback = base::RepeatingCallback<void(bool aborted)>;
 base::RepeatingCallback<bool(const ui::CallbackLayerAnimationObserver&)>
 DeleteObserverAfterRunning(AnimationCompletedCallback callback) {
   return base::BindRepeating(
-      [](AnimationCompletedCallback callback,
+      [](const AnimationCompletedCallback& callback,
          const ui::CallbackLayerAnimationObserver& observer) {
-        // NOTE: It's safe to move `callback` since this code will only run
-        // once due to deletion of the associated `observer`. The `observer` is
-        // deleted by returning `true`.
-        std::move(callback).Run(/*aborted=*/observer.aborted_count() > 0);
+        callback.Run(/*aborted=*/observer.aborted_count() > 0);
+        // Returning true is load-bearing; when returning true, the observer
+        // self-deletes so this callback will only ever run at most once.
         return true;
       },
-      base::Passed(std::move(callback)));
+      std::move(callback));
 }
 
 // Returns whether the given holding space item views `section` has content
@@ -165,11 +173,7 @@ void HoldingSpaceTrayChildBubble::Init() {
       kHoldingSpaceChildBubblePadding, kHoldingSpaceChildBubbleChildSpacing));
 
   // Layer.
-  // TODO(crbug/1313073): In dark light mode, since we have changed to use a
-  // textured layer instead of a solid color layer, we need to remove all the
-  // layer set up in the children of this view to remove layer redundancy.
-  SetPaintToLayer(features::IsDarkLightModeEnabled() ? ui::LAYER_TEXTURED
-                                                     : ui::LAYER_SOLID_COLOR);
+  SetPaintToLayer(ui::LAYER_TEXTURED);
   layer()->GetAnimator()->set_preemption_strategy(
       ui::LayerAnimator::PreemptionStrategy::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
   layer()->SetFillsBoundsOpaquely(false);
@@ -181,6 +185,7 @@ void HoldingSpaceTrayChildBubble::Init() {
 
   if (!features::IsHoldingSpaceRefreshEnabled()) {
     layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+    layer()->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
     layer()->SetIsFastRoundedCorner(true);
     layer()->SetRoundedCornerRadius(gfx::RoundedCornersF{kBubbleCornerRadius});
   }
@@ -196,6 +201,22 @@ void HoldingSpaceTrayChildBubble::Init() {
     sections_.push_back(AddChildView(std::move(section)));
     sections_.back()->Init();
   }
+
+  // When refresh is enabled, backgrounds and borders are implemented in the
+  // top-level bubble rather than per child bubble.
+  if (features::IsHoldingSpaceRefreshEnabled()) {
+    return;
+  }
+
+  SetBackground(views::CreateThemedSolidBackground(
+      chromeos::features::IsJellyEnabled()
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysSystemBaseElevated)
+          : kColorAshShieldAndBase80));
+  SetBorder(std::make_unique<views::HighlightBorder>(
+      kBubbleCornerRadius,
+      chromeos::features::IsJellyrollEnabled()
+          ? views::HighlightBorder::Type::kHighlightBorderOnShadow
+          : views::HighlightBorder::Type::kHighlightBorder1));
 }
 
 void HoldingSpaceTrayChildBubble::Reset() {
@@ -306,10 +327,6 @@ std::unique_ptr<views::View> HoldingSpaceTrayChildBubble::CreatePlaceholder() {
   return nullptr;
 }
 
-const char* HoldingSpaceTrayChildBubble::GetClassName() const {
-  return "HoldingSpaceTrayChildBubble";
-}
-
 void HoldingSpaceTrayChildBubble::ChildPreferredSizeChanged(
     views::View* child) {
   PreferredSizeChanged();
@@ -360,28 +377,6 @@ bool HoldingSpaceTrayChildBubble::OnMousePressed(const ui::MouseEvent& event) {
   return true;
 }
 
-void HoldingSpaceTrayChildBubble::OnThemeChanged() {
-  views::View::OnThemeChanged();
-
-  // When refresh is enabled, backgrounds and borders are implemented in the
-  // top-level bubble rather than per child bubble.
-  if (features::IsHoldingSpaceRefreshEnabled())
-    return;
-
-  if (!features::IsDarkLightModeEnabled()) {
-    layer()->SetColor(AshColorProvider::Get()->GetBaseLayerColor(
-        AshColorProvider::BaseLayerType::kTransparent80));
-    return;
-  }
-
-  SetBackground(
-      views::CreateSolidBackground(AshColorProvider::Get()->GetBaseLayerColor(
-          AshColorProvider::BaseLayerType::kTransparent80)));
-  SetBorder(std::make_unique<views::HighlightBorder>(
-      kBubbleCornerRadius, views::HighlightBorder::Type::kHighlightBorder1,
-      /*use_light_colors=*/false));
-}
-
 void HoldingSpaceTrayChildBubble::MaybeAnimateIn() {
   // Don't preempt an out animation as new content will populate and be animated
   // in, if any exists, once the out animation completes.
@@ -399,9 +394,10 @@ void HoldingSpaceTrayChildBubble::MaybeAnimateIn() {
 
   // NOTE: `animate_in_observer` is deleted after `OnAnimateInCompleted()`.
   ui::CallbackLayerAnimationObserver* animate_in_observer =
-      new ui::CallbackLayerAnimationObserver(DeleteObserverAfterRunning(
-          base::BindOnce(&HoldingSpaceTrayChildBubble::OnAnimateInCompleted,
-                         weak_factory_.GetWeakPtr())));
+      new ui::CallbackLayerAnimationObserver(
+          DeleteObserverAfterRunning(base::BindRepeating(
+              &HoldingSpaceTrayChildBubble::OnAnimateInCompleted,
+              weak_factory_.GetWeakPtr())));
 
   AnimateIn(animate_in_observer);
   animate_in_observer->SetActive();
@@ -418,9 +414,10 @@ void HoldingSpaceTrayChildBubble::MaybeAnimateOut() {
 
   // NOTE: `animate_out_observer` is deleted after `OnAnimateOutCompleted()`.
   ui::CallbackLayerAnimationObserver* animate_out_observer =
-      new ui::CallbackLayerAnimationObserver(DeleteObserverAfterRunning(
-          base::BindOnce(&HoldingSpaceTrayChildBubble::OnAnimateOutCompleted,
-                         weak_factory_.GetWeakPtr())));
+      new ui::CallbackLayerAnimationObserver(
+          DeleteObserverAfterRunning(base::BindRepeating(
+              &HoldingSpaceTrayChildBubble::OnAnimateOutCompleted,
+              weak_factory_.GetWeakPtr())));
 
   AnimateOut(animate_out_observer);
   animate_out_observer->SetActive();
@@ -511,5 +508,8 @@ void HoldingSpaceTrayChildBubble::OnAnimateOutCompleted(bool aborted) {
         }));
   }
 }
+
+BEGIN_METADATA(HoldingSpaceTrayChildBubble, views::View)
+END_METADATA
 
 }  // namespace ash

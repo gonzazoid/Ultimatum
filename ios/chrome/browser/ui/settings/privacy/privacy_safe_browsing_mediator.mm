@@ -4,37 +4,35 @@
 
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_mediator.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/auto_reset.h"
-#import "base/mac/foundation_util.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/notreached.h"
+#import "build/branding_buildflags.h"
 #import "components/prefs/pref_service.h"
+#import "components/safe_browsing/core/browser/hashprefix_realtime/hash_realtime_utils.h"
+#import "components/safe_browsing/core/common/features.h"
 #import "components/safe_browsing/core/common/safe_browsing_prefs.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/policy/policy_util.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
+#import "ios/chrome/browser/policy/model/policy_util.h"
+#import "ios/chrome/browser/settings/model/sync/utils/sync_util.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_backed_boolean.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/utils/observable_boolean.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item_delegate.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_image_detail_text_item.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_constants.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_consumer.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_navigation_commands.h"
-#import "ios/chrome/browser/ui/settings/sync/utils/sync_util.h"
-#import "ios/chrome/browser/ui/settings/utils/observable_boolean.h"
-#import "ios/chrome/browser/ui/settings/utils/pref_backed_boolean.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_item_delegate.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using ItemArray = NSArray<TableViewItem*>*;
 
@@ -133,12 +131,36 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (ItemArray)safeBrowsingItems {
   if (!_safeBrowsingItems) {
     NSMutableArray* items = [NSMutableArray array];
+    NSInteger enhancedProtectionSummary;
+    if (base::FeatureList::IsEnabled(
+            safe_browsing::kFriendlierSafeBrowsingSettingsEnhancedProtection)) {
+      enhancedProtectionSummary =
+          IDS_IOS_PRIVACY_SAFE_BROWSING_ENHANCED_PROTECTION_FRIENDLIER_SUMMARY;
+    } else {
+      enhancedProtectionSummary =
+          IDS_IOS_PRIVACY_SAFE_BROWSING_ENHANCED_PROTECTION_SUMMARY;
+    }
+    NSInteger standardProtectionSummary;
+    if (base::FeatureList::IsEnabled(
+            safe_browsing::kFriendlierSafeBrowsingSettingsStandardProtection)) {
+      standardProtectionSummary =
+          IDS_IOS_PRIVACY_SAFE_BROWSING_STANDARD_PROTECTION_FRIENDLIER_SUMMARY;
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+      if (safe_browsing::hash_realtime_utils::
+              IsHashRealTimeLookupEligibleInSession()) {
+        standardProtectionSummary =
+            IDS_IOS_PRIVACY_SAFE_BROWSING_STANDARD_PROTECTION_FRIENDLIER_SUMMARY_PROXY;
+      }
+#endif
+    } else {
+      standardProtectionSummary =
+          IDS_IOS_PRIVACY_SAFE_BROWSING_STANDARD_PROTECTION_SUMMARY;
+    }
     TableViewInfoButtonItem* safeBrowsingEnhancedProtectionItem = [self
              infoButtonItemType:ItemTypeSafeBrowsingEnhancedProtection
                         titleId:
                             IDS_IOS_PRIVACY_SAFE_BROWSING_ENHANCED_PROTECTION_TITLE
-                     detailText:
-                         IDS_IOS_PRIVACY_SAFE_BROWSING_ENHANCED_PROTECTION_SUMMARY
+                     detailText:enhancedProtectionSummary
         accessibilityIdentifier:kSettingsSafeBrowsingEnhancedProtectionCellId];
     [items addObject:safeBrowsingEnhancedProtectionItem];
 
@@ -146,18 +168,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
              infoButtonItemType:ItemTypeSafeBrowsingStandardProtection
                         titleId:
                             IDS_IOS_PRIVACY_SAFE_BROWSING_STANDARD_PROTECTION_TITLE
-                     detailText:
-                         IDS_IOS_PRIVACY_SAFE_BROWSING_STANDARD_PROTECTION_SUMMARY
+                     detailText:standardProtectionSummary
         accessibilityIdentifier:kSettingsSafeBrowsingStandardProtectionCellId];
     [items addObject:safeBrowsingStandardProtectionItem];
-
+    NSInteger noProtectionSummary;
+    if (base::FeatureList::IsEnabled(
+            safe_browsing::kFriendlierSafeBrowsingSettingsEnhancedProtection)) {
+      noProtectionSummary =
+          IDS_IOS_PRIVACY_SAFE_BROWSING_NO_PROTECTION_FRIENDLIER_SUMMARY;
+    } else {
+      noProtectionSummary = IDS_IOS_PRIVACY_SAFE_BROWSING_NO_PROTECTION_SUMMARY;
+    }
     if (self.enterpriseEnabled) {
       TableViewInfoButtonItem* safeBrowsingNoProtectionItem = [self
                infoButtonItemType:ItemTypeSafeBrowsingNoProtection
                           titleId:
                               IDS_IOS_PRIVACY_SAFE_BROWSING_NO_PROTECTION_TITLE
-                       detailText:
-                           IDS_IOS_PRIVACY_SAFE_BROWSING_NO_PROTECTION_SUMMARY
+                       detailText:noProtectionSummary
           accessibilityIdentifier:kSettingsSafeBrowsingNoProtectionCellId];
       [items addObject:safeBrowsingNoProtectionItem];
     } else {
@@ -165,8 +192,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
                infoButtonItemType:ItemTypeSafeBrowsingNoProtection
                           titleId:
                               IDS_IOS_PRIVACY_SAFE_BROWSING_NO_PROTECTION_TITLE
-                       detailText:
-                           IDS_IOS_PRIVACY_SAFE_BROWSING_NO_PROTECTION_SUMMARY
+                       detailText:noProtectionSummary
           accessibilityIdentifier:kSettingsSafeBrowsingNoProtectionCellId];
       safeBrowsingNoProtectionItem.infoButtonIsHidden = YES;
       [items addObject:safeBrowsingNoProtectionItem];
@@ -203,10 +229,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
   // If Safe Browsing is controlled by enterprise, make non-selected options
   // greyed out.
   if (self.enterpriseEnabled && ![self shouldItemTypeHaveCheckmark:type]) {
-    infoButtonItem.textColor =
-        [[UIColor colorNamed:kTextPrimaryColor] colorWithAlphaComponent:0.4f];
-    infoButtonItem.detailTextColor =
-        [[UIColor colorNamed:kTextSecondaryColor] colorWithAlphaComponent:0.4f];
+    // This item is not controllable; set to lighter colors.
+    infoButtonItem.textColor = [UIColor colorNamed:kTextSecondaryColor];
+    infoButtonItem.detailTextColor = [UIColor colorNamed:kTextTertiaryColor];
     infoButtonItem.accessibilityHint = l10n_util::GetNSString(
         IDS_IOS_TOGGLE_SETTING_MANAGED_ACCESSIBILITY_HINT);
   } else {
@@ -256,7 +281,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)updatePrivacySafeBrowsingSectionAndNotifyConsumer:(BOOL)notifyConsumer {
   for (TableViewItem* item in self.safeBrowsingItems) {
     TableViewInfoButtonItem* infoButtonItem =
-        base::mac::ObjCCast<TableViewInfoButtonItem>(item);
+        base::apple::ObjCCast<TableViewInfoButtonItem>(item);
     ItemType type = static_cast<ItemType>(item.type);
     infoButtonItem.iconTintColor = [self shouldItemTypeHaveCheckmark:type]
                                        ? [UIColor colorNamed:kBlueColor]

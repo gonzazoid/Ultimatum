@@ -11,6 +11,7 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/raw_ptr.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/manifest.h"
 #include "extensions/common/mojom/manifest.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -45,6 +46,13 @@ class ChromeTestExtensionLoader {
   // Loads the extension specified by |file_path|. Works for both packed and
   // unpacked extensions.
   scoped_refptr<const Extension> LoadExtension(const base::FilePath& file_path);
+
+  // A limited asynchronous version of LoadExtension. It only supports unpacked
+  // extensions and the callback is run as soon as the OnExtensionLoaded fires.
+  // It also does not support any of the custom settings below.
+  void LoadUnpackedExtensionAsync(
+      const base::FilePath& file_path,
+      base::OnceCallback<void(const Extension*)> callback);
 
   // Myriad different settings. See the member variable declarations for
   // explanations and defaults.
@@ -124,7 +132,7 @@ class ChromeTestExtensionLoader {
   base::ScopedTempDir temp_dir_;
 
   // The extension id of the loaded extension.
-  std::string extension_id_;
+  ExtensionId extension_id_;
 
   // A provided PEM path to use. If not provided, a temporary one will be
   // created.

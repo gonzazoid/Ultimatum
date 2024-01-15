@@ -27,7 +27,7 @@ FakeWebpageController::FakeWebpageController(
 FakeWebpageController::~FakeWebpageController() = default;
 
 NSView* FakeWebpageController::GetView() {
-  return view_.get();
+  return view_;
 }
 
 void FakeWebpageController::PageURLChangedTo(const GURL& url) {

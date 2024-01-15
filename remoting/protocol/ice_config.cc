@@ -55,34 +55,41 @@ bool AddServerToConfig(std::string url,
   }
 
   size_t colon_pos = url.find(':');
-  if (colon_pos == std::string::npos)
+  if (colon_pos == std::string::npos) {
     return false;
+  }
 
   std::string protocol = url.substr(0, colon_pos);
 
   std::string host;
   int port;
-  if (!net::ParseHostAndPort(url.substr(colon_pos + 1), &host, &port))
+  if (!net::ParseHostAndPort(url.substr(colon_pos + 1), &host, &port)) {
     return false;
+  }
 
   if (protocol == "stun") {
-    if (port == -1)
+    if (port == -1) {
       port = kDefaultStunTurnPort;
-    config->stun_servers.push_back(rtc::SocketAddress(host, port));
+    }
+    config->stun_servers.emplace_back(host, port);
   } else if (protocol == "turn") {
-    if (port == -1)
+    if (port == -1) {
       port = kDefaultStunTurnPort;
-    if (turn_transport_type == cricket::PROTO_LAST)
+    }
+    if (turn_transport_type == cricket::PROTO_LAST) {
       turn_transport_type = cricket::PROTO_UDP;
-    config->turn_servers.push_back(cricket::RelayServerConfig(
-        host, port, username, password, turn_transport_type, false));
+    }
+    config->turn_servers.emplace_back(host, port, username, password,
+                                      turn_transport_type, false);
   } else if (protocol == "turns") {
-    if (port == -1)
+    if (port == -1) {
       port = kDefaultTurnsPort;
-    if (turn_transport_type == cricket::PROTO_LAST)
+    }
+    if (turn_transport_type == cricket::PROTO_LAST) {
       turn_transport_type = cricket::PROTO_TCP;
-    config->turn_servers.push_back(cricket::RelayServerConfig(
-        host, port, username, password, turn_transport_type, true));
+    }
+    config->turn_servers.emplace_back(host, port, username, password,
+                                      turn_transport_type, true);
   } else {
     return false;
   }
@@ -112,9 +119,8 @@ IceConfig::IceConfig(const IceConfig& other) = default;
 IceConfig::~IceConfig() = default;
 
 // static
-IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
-  const base::Value::List* ice_servers_list =
-      dictionary.GetDict().FindList("iceServers");
+IceConfig IceConfig::Parse(const base::Value::Dict& dictionary) {
+  const base::Value::List* ice_servers_list = dictionary.FindList("iceServers");
   if (!ice_servers_list) {
     return IceConfig();
   }
@@ -122,8 +128,7 @@ IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
   IceConfig ice_config;
 
   // Parse lifetimeDuration field.
-  const std::string* lifetime_str =
-      dictionary.FindStringKey("lifetimeDuration");
+  const std::string* lifetime_str = dictionary.FindString("lifetimeDuration");
   base::TimeDelta lifetime;
   if (!lifetime_str || !ParseLifetime(*lifetime_str, &lifetime)) {
     LOG(ERROR) << "Received invalid lifetimeDuration value: " << lifetime_str;
@@ -139,39 +144,42 @@ IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
   bool errors_found = false;
   ice_config.max_bitrate_kbps = 0;
   for (const auto& server : *ice_servers_list) {
-    if (!server.is_dict()) {
+    const base::Value::Dict* server_dict = server.GetIfDict();
+    if (!server_dict) {
       errors_found = true;
       continue;
     }
 
-    const base::Value* urls_list = server.FindListKey("urls");
+    const base::Value::List* urls_list = server_dict->FindList("urls");
     if (!urls_list) {
       errors_found = true;
       continue;
     }
 
     std::string username;
-    const std::string* maybe_username = server.FindStringKey("username");
-    if (maybe_username)
+    const std::string* maybe_username = server_dict->FindString("username");
+    if (maybe_username) {
       username = *maybe_username;
+    }
 
     std::string password;
-    const std::string* maybe_password = server.FindStringKey("credential");
-    if (maybe_password)
+    const std::string* maybe_password = server_dict->FindString("credential");
+    if (maybe_password) {
       password = *maybe_password;
+    }
 
     // Compute the lowest specified bitrate of all the ICE servers.
     // Ideally the bitrate would be stored per ICE server, but it is not
     // possible (at the application level) to look up which particular
     // ICE server was used for the P2P connection.
-    auto new_bitrate_double = server.FindDoubleKey("maxRateKbps");
+    auto new_bitrate_double = server_dict->FindDouble("maxRateKbps");
     if (new_bitrate_double.has_value()) {
       ice_config.max_bitrate_kbps =
           MinimumSpecified(ice_config.max_bitrate_kbps,
                            static_cast<int>(new_bitrate_double.value()));
     }
 
-    for (const auto& url : urls_list->GetListDeprecated()) {
+    for (const auto& url : *urls_list) {
       const std::string* url_str = url.GetIfString();
       if (!url_str) {
         errors_found = true;
@@ -204,25 +212,26 @@ IceConfig IceConfig::Parse(const base::DictionaryValue& dictionary) {
 
 // static
 IceConfig IceConfig::Parse(const std::string& config_json) {
-  std::unique_ptr<base::Value> json =
-      base::JSONReader::ReadDeprecated(config_json);
+  std::optional<base::Value> json = base::JSONReader::Read(config_json);
   if (!json) {
     return IceConfig();
   }
 
-  if (!json->is_dict()) {
+  base::Value::Dict* dictionary = json->GetIfDict();
+  if (!dictionary) {
     return IceConfig();
   }
 
   // Handle the case when the config is wrapped in 'data', i.e. as {'data': {
   // 'iceServers': {...} }}.
-  if (!json->FindKey("iceServers")) {
-    base::Value* data_dictionary = json->FindDictKey("data");
-    if (data_dictionary)
-      return Parse(base::Value::AsDictionaryValue(*data_dictionary));
+  if (!dictionary->Find("iceServers")) {
+    base::Value::Dict* data_dictionary = dictionary->FindDict("data");
+    if (data_dictionary) {
+      return Parse(*data_dictionary);
+    }
   }
 
-  return Parse(base::Value::AsDictionaryValue(*json));
+  return Parse(*dictionary);
 }
 
 // static

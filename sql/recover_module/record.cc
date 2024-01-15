@@ -154,6 +154,12 @@ bool RecordReader::Initialize() {
   return true;
 }
 
+bool RecordReader::IsInitialized() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return value_headers_.size() == static_cast<size_t>(column_count_) &&
+         payload_reader_->IsInitialized();
+}
+
 ValueType RecordReader::GetValueType(int column_index) const {
   DCHECK(IsInitialized());
   DCHECK_GE(column_index, 0);
@@ -303,6 +309,10 @@ int64_t RecordReader::InitializeHeaderBuffer() {
 
   // The header size varint is included in the header size computation.
   const int64_t header_data_size = header_size - header_size_size;
+  if (header_data_size < 0) {
+    return 0;
+  }
+
   header_buffer_.resize(header_data_size);
   if (!payload_reader_->ReadPayload(header_size_size, header_data_size,
                                     header_buffer_.data())) {

@@ -4,11 +4,11 @@
 
 #include "chrome/browser/sync/test/integration/updated_progress_marker_checker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/sync/test/integration/sync_datatype_helper.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
-#include "components/sync/driver/sync_service_impl.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
+#include "components/sync/service/sync_service_impl.h"
 
 UpdatedProgressMarkerChecker::UpdatedProgressMarkerChecker(
     syncer::SyncServiceImpl* service)
@@ -26,9 +26,10 @@ UpdatedProgressMarkerChecker::UpdatedProgressMarkerChecker(
 UpdatedProgressMarkerChecker::~UpdatedProgressMarkerChecker() = default;
 
 bool UpdatedProgressMarkerChecker::IsExitConditionSatisfied(std::ostream* os) {
-  *os << "Waiting for progress markers";
+  *os << "Waiting for progress markers... ";
 
   if (!has_unsynced_items_.has_value()) {
+    *os << "Unknown synced values state.";
     return false;
   }
 
@@ -42,9 +43,22 @@ bool UpdatedProgressMarkerChecker::IsExitConditionSatisfied(std::ostream* os) {
   //    by the test-only 'self-notify' cycle).
   // 3. No pending local changes (which will ultimately generate new progress
   //    markers once submitted to the server).
-  return !snap.download_progress_markers().empty() &&
-         snap.model_neutral_state().num_successful_commits == 0 &&
-         !has_unsynced_items_.value();
+  if (snap.download_progress_markers().empty()) {
+    *os << "Progress markers are empty.";
+    return false;
+  }
+
+  if (snap.model_neutral_state().num_successful_commits > 0) {
+    *os << "Last sync cycle wasn't empty.";
+    return false;
+  }
+
+  if (has_unsynced_items_.value()) {
+    *os << "Has unsynced items.";
+    return false;
+  }
+
+  return true;
 }
 
 void UpdatedProgressMarkerChecker::GotHasUnsyncedItems(

@@ -33,6 +33,12 @@ ServiceProcessHost::Options& ServiceProcessHost::Options::WithDisplayName(
   return *this;
 }
 
+ServiceProcessHost::Options& ServiceProcessHost::Options::WithSite(
+    const GURL& url) {
+  site = url;
+  return *this;
+}
+
 ServiceProcessHost::Options& ServiceProcessHost::Options::WithChildFlags(
     int flags) {
   child_flags = flags;
@@ -51,6 +57,22 @@ ServiceProcessHost::Options& ServiceProcessHost::Options::WithProcessCallback(
   process_callback = std::move(callback);
   return *this;
 }
+
+#if BUILDFLAG(IS_WIN)
+ServiceProcessHost::Options&
+ServiceProcessHost::Options::WithPreloadedLibraries(
+    std::vector<base::FilePath> preloads,
+    base::PassKey<ServiceProcessHostPreloadLibraries> passkey) {
+  preload_libraries = std::move(preloads);
+  return *this;
+}
+
+ServiceProcessHost::Options& ServiceProcessHost::Options::WithPinUser32(
+    base::PassKey<ServiceProcessHostPinUser32> passkey) {
+  pin_user32 = true;
+  return *this;
+}
+#endif  // #if BUILDFLAG(IS_WIN)
 
 ServiceProcessHost::Options ServiceProcessHost::Options::Pass() {
   return std::move(*this);

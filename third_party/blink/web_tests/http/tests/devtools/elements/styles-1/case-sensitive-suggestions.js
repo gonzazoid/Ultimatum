@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(`Tests that text prompt suggestions' casing follows that of the user input.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <div id="inner" style="color:initial;"></div>
@@ -12,7 +16,7 @@
 
   await ElementsTestRunner.selectNodeAndWaitForStylesPromise('inner');
   var colorTreeElement = ElementsTestRunner.getMatchedStylePropertyTreeItem('color');
-  var prompt = new Elements.StylesSidebarPane.CSSPropertyPrompt(colorTreeElement, true /* isEditingName */);
+  var prompt = new ElementsModule.StylesSidebarPane.CSSPropertyPrompt(colorTreeElement, true /* isEditingName */);
 
   TestRunner.runTestSuite([
     function testForUpperCase(next) {

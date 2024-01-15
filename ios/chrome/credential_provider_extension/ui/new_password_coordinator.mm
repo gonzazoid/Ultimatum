@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/credential_provider_extension/ui/new_password_coordinator.h"
+#import "ios/chrome/credential_provider_extension/ui/new_password_coordinator+Testing.h"
 
 #import <AuthenticationServices/AuthenticationServices.h>
 
@@ -13,10 +14,6 @@
 #import "ios/chrome/credential_provider_extension/ui/new_password_view_controller.h"
 #import "ios/chrome/credential_provider_extension/ui/ui_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @interface NewPasswordCoordinator () <NewPasswordViewControllerDelegate>
 
 // Base view controller from where `viewController` is presented.
@@ -24,9 +21,6 @@
 
 // The view controller of this coordinator.
 @property(nonatomic, strong) UINavigationController* viewController;
-
-// The extension context for the credential provider.
-@property(nonatomic, weak) ASCredentialProviderExtensionContext* context;
 
 // The mediator for this coordinator.
 @property(nonatomic, strong) NewPasswordMediator* mediator;
@@ -39,22 +33,27 @@
 // exists.
 @property(nonatomic, weak) id<CredentialStore> existingCredentials;
 
+// The handler to use when a credential is selected.
+@property(nonatomic, weak) id<CredentialResponseHandler>
+    credentialResponseHandler;
+
 @end
 
 @implementation NewPasswordCoordinator
 
 - (instancetype)
     initWithBaseViewController:(UIViewController*)baseViewController
-                       context:(ASCredentialProviderExtensionContext*)context
             serviceIdentifiers:
                 (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers
-           existingCredentials:(id<CredentialStore>)existingCredentials {
+           existingCredentials:(id<CredentialStore>)existingCredentials
+     credentialResponseHandler:
+         (id<CredentialResponseHandler>)credentialResponseHandler {
   self = [super init];
   if (self) {
     _baseViewController = baseViewController;
-    _context = context;
     _serviceIdentifiers = serviceIdentifiers;
     _existingCredentials = existingCredentials;
+    _credentialResponseHandler = credentialResponseHandler;
   }
   return self;
 }
@@ -64,7 +63,7 @@
       initWithUserDefaults:app_group::GetGroupUserDefaults()
          serviceIdentifier:self.serviceIdentifiers.firstObject];
   self.mediator.existingCredentials = self.existingCredentials;
-  self.mediator.context = self.context;
+  self.mediator.credentialResponseHandler = self.credentialResponseHandler;
 
   NewPasswordViewController* newPasswordViewController =
       [[NewPasswordViewController alloc] init];
@@ -76,8 +75,15 @@
   self.mediator.uiHandler = newPasswordViewController;
 
   NSString* identifier = self.serviceIdentifiers.firstObject.identifier;
+  // `url` can be nil when it's malformed or nil.
+  // > "Linked on or after iOS 17, this method parses URLString according to RFC
+  // 3986. Linked before iOS 17, this method parses URLString according to RFCs
+  // 1738 and 1808."
+  // https://developer.apple.com/documentation/foundation/nsurl/1572047-urlwithstring
   NSURL* url = identifier ? [NSURL URLWithString:identifier] : nil;
-  newPasswordViewController.currentHost = url.host;
+  // `url.host` can be nil when it does not conform to RFC 1808.
+  // https://developer.apple.com/documentation/foundation/nsurl/1413640-host
+  newPasswordViewController.currentHost = url && url.host ? url.host : @"";
 
   self.viewController = [[UINavigationController alloc]
       initWithRootViewController:newPasswordViewController];
@@ -97,7 +103,7 @@
 
 - (void)navigationCancelButtonWasPressedInNewPasswordViewController:
     (NewPasswordViewController*)viewController {
-  [self.baseViewController dismissViewControllerAnimated:YES completion:nil];
+  [self.delegate dismissNewPasswordCoordinator:self];
 }
 
 @end

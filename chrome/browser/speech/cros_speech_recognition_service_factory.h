@@ -21,6 +21,8 @@ class CrosSpeechRecognitionServiceFactory : public ProfileKeyedServiceFactory {
   static speech::SpeechRecognitionService* GetForProfile(Profile* profile);
   static CrosSpeechRecognitionServiceFactory* GetInstanceForTest();
 
+  static void EnsureFactoryBuilt();
+
  private:
   friend class base::NoDestructor<CrosSpeechRecognitionServiceFactory>;
   static CrosSpeechRecognitionServiceFactory* GetInstance();
@@ -29,7 +31,7 @@ class CrosSpeechRecognitionServiceFactory : public ProfileKeyedServiceFactory {
   ~CrosSpeechRecognitionServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

@@ -10,14 +10,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
+#include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/policy/core/common/async_policy_loader.h"
@@ -37,10 +38,13 @@
 #if BUILDFLAG(IS_WIN)
 #include "components/policy/core/common/policy_loader_win.h"
 #elif BUILDFLAG(IS_APPLE)
+#include "base/apple/foundation_util.h"
+#include "base/strings/sys_string_conversions.h"
 #include "components/policy/core/common/policy_loader_mac.h"
 #include "components/policy/core/common/preferences_mac.h"
 #elif BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
 #include "components/policy/core/common/config_dir_policy_loader.h"
+#include "components/policy/core/common/policy_paths.h"  // nogncheck
 #endif
 
 namespace remoting {
@@ -50,8 +54,12 @@ namespace key = ::policy::key;
 namespace {
 
 #if BUILDFLAG(IS_WIN)
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 constexpr wchar_t kChromePolicyKey[] = L"SOFTWARE\\Policies\\Google\\Chrome";
-#endif
+#else
+constexpr wchar_t kChromePolicyKey[] = L"SOFTWARE\\Policies\\Chromium";
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#endif  // BUILDFLAG(IS_WIN)
 
 // Copies all policy values from one dictionary to another, using values from
 // |default_values| if they are not set in |from|.
@@ -83,8 +91,7 @@ std::unique_ptr<policy::SchemaRegistry> CreateSchemaRegistry() {
   // impact).
   policy::Schema schema = policy::Schema::Wrap(policy::GetChromeSchemaData());
 
-  std::unique_ptr<policy::SchemaRegistry> schema_registry(
-      new policy::SchemaRegistry());
+  auto schema_registry = std::make_unique<policy::SchemaRegistry>();
   schema_registry->RegisterComponent(GetPolicyNamespace(), schema);
   return schema_registry;
 }
@@ -179,6 +186,11 @@ base::Value::Dict PolicyWatcher::GetDefaultPolicies() {
   result.Set(key::kRemoteAccessHostUdpPortRange, "");
   result.Set(key::kRemoteAccessHostClipboardSizeBytes, -1);
   result.Set(key::kRemoteAccessHostAllowRemoteSupportConnections, true);
+#if BUILDFLAG(IS_CHROMEOS)
+  result.Set(key::kRemoteAccessHostAllowEnterpriseRemoteSupportConnections,
+             true);
+  result.Set(key::kRemoteAccessHostAllowEnterpriseFileTransfer, false);
+#endif
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
   result.Set(key::kRemoteAccessHostMatchUsername, false);
 #endif
@@ -213,10 +225,10 @@ PolicyWatcher::PolicyWatcher(
     std::unique_ptr<policy::ConfigurationPolicyProvider> owned_policy_provider,
     std::unique_ptr<policy::SchemaRegistry> owned_schema_registry)
     : default_values_(GetDefaultPolicies()),
-      policy_service_(policy_service),
       owned_schema_registry_(std::move(owned_schema_registry)),
       owned_policy_provider_(std::move(owned_policy_provider)),
-      owned_policy_service_(std::move(owned_policy_service)) {
+      owned_policy_service_(std::move(owned_policy_service)),
+      policy_service_(policy_service) {
   DCHECK(policy_service_);
   DCHECK(owned_schema_registry_);
 }
@@ -390,9 +402,8 @@ std::unique_ptr<PolicyWatcher> PolicyWatcher::CreateFromPolicyLoader(
     std::unique_ptr<policy::AsyncPolicyLoader> async_policy_loader) {
   std::unique_ptr<policy::SchemaRegistry> schema_registry =
       CreateSchemaRegistry();
-  std::unique_ptr<policy::AsyncPolicyProvider> policy_provider(
-      new policy::AsyncPolicyProvider(schema_registry.get(),
-                                      std::move(async_policy_loader)));
+  auto policy_provider = std::make_unique<policy::AsyncPolicyProvider>(
+      schema_registry.get(), std::move(async_policy_loader));
   policy_provider->Init(schema_registry.get());
 
   policy::PolicyServiceImpl::Providers providers;
@@ -433,7 +444,8 @@ void PolicyWatcher::WatchForRegistryChanges() {
       base::BindOnce(&policy::PolicyService::RefreshPolicies,
                      base::Unretained(policy_service_),
                      base::BindOnce(&PolicyWatcher::WatchForRegistryChanges,
-                                    base::Unretained(this))));
+                                    base::Unretained(this)),
+                     policy::PolicyFetchReason::kCrdHostPolicyWatcher));
   if (!watch_result) {
     LOG(WARNING) << "Failed to register for Chrome policy registry key changes";
     policy_key_.Close();
@@ -452,24 +464,32 @@ std::unique_ptr<PolicyWatcher> PolicyWatcher::CreateWithTaskRunner(
   policy_loader = std::make_unique<policy::PolicyLoaderWin>(
       file_task_runner, management_service, kChromePolicyKey);
 #elif BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  // Explicitly watch the "com.google.Chrome" bundle ID, no matter what this
+  // app's bundle ID actually is. All channels of Chrome should obey the same
+  // policies.
   CFStringRef bundle_id = CFSTR("com.google.Chrome");
+#else
+  base::apple::ScopedCFTypeRef<CFStringRef> bundle_id_scoper =
+      base::SysUTF8ToCFStringRef(base::apple::BaseBundleID());
+  CFStringRef bundle_id = bundle_id_scoper.get();
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
   policy_loader = std::make_unique<policy::PolicyLoaderMac>(
       file_task_runner,
       policy::PolicyLoaderMac::GetManagedPolicyPath(bundle_id),
-      new MacPreferences(), bundle_id);
+      std::make_unique<MacPreferences>(), bundle_id);
 #elif BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
   policy_loader = std::make_unique<policy::ConfigDirPolicyLoader>(
-      file_task_runner,
-      base::FilePath(FILE_PATH_LITERAL("/etc/opt/chrome/policies")),
+      file_task_runner, base::FilePath(policy::kPolicyPath),
       policy::POLICY_SCOPE_MACHINE);
 #elif BUILDFLAG(IS_ANDROID)
   NOTIMPLEMENTED();
   policy::PolicyServiceImpl::Providers providers;
   std::unique_ptr<policy::PolicyService> owned_policy_service(
       new policy::PolicyServiceImpl(providers));
-  return base::WrapUnique(new PolicyWatcher(
-      owned_policy_service.get(), std::move(owned_policy_service), nullptr,
-      CreateSchemaRegistry()));
+  return base::WrapUnique(new PolicyWatcher(owned_policy_service.get(),
+                                            std::move(owned_policy_service),
+                                            nullptr, CreateSchemaRegistry()));
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
   NOTREACHED() << "CreateWithPolicyService() should be used on ChromeOS.";
   return nullptr;

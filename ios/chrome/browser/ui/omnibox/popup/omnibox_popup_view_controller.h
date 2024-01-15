@@ -10,7 +10,7 @@
 #import "ios/chrome/browser/ui/omnibox/omnibox_keyboard_delegate.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_text_change_delegate.h"
 #import "ios/chrome/browser/ui/omnibox/popup/autocomplete_result_consumer.h"
-#import "ios/chrome/browser/ui/omnibox/popup/carousel_item.h"
+#import "ios/chrome/browser/ui/omnibox/popup/carousel/carousel_item.h"
 #import "ios/chrome/browser/ui/omnibox/popup/content_providing.h"
 
 @protocol CarouselItemMenuProvider;
@@ -19,16 +19,16 @@ class LargeIconCache;
 namespace favicon {
 class LargeIconService;
 }
+@class LayoutGuideCenter;
 @protocol ImageRetriever;
 @protocol PopupMatchPreviewDelegate;
 
-// View controller used to display a list of omnibox autocomplete matches in the
-// omnibox popup.
-// It implements up/down arrow handling to highlight autocomplete results.
-// Ideally, that should be implemented as key commands in this view controller,
-// but UITextField has standard handlers for up/down arrows, so when the omnibox
-// is the first responder, this view controller cannot receive these events.
-// Hence the delegation.
+/// View controller used to display a list of omnibox autocomplete matches in
+/// the omnibox popup. It implements up/down arrow handling to highlight
+/// autocomplete results. Ideally, that should be implemented as key commands in
+/// this view controller, but UITextField has standard handlers for up/down
+/// arrows, so when the omnibox is the first responder, this view controller
+/// cannot receive these events. Hence the delegation.
 @interface OmniboxPopupViewController
     : UIViewController <AutocompleteResultConsumer,
                         CarouselItemConsumer,
@@ -48,6 +48,15 @@ class LargeIconService;
 @property(nonatomic, assign) LargeIconCache* largeIconCache;
 @property(nonatomic, weak) id<CarouselItemMenuProvider> carouselMenuProvider;
 
+/// View controller that displays debug information.
+/// Must only be set when OmniboxDebuggingEnabled flag is set.
+/// When set, this view controller will present `debugInfoViewController` when a
+/// special debug gesture is executed.
+@property(nonatomic, strong) UIViewController* debugInfoViewController;
+
+/// The layout guide center to use to refer to the omnibox leading image.
+@property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;
+
 @property(nonatomic, strong)
     NSArray<id<AutocompleteSuggestionGroup>>* currentResult;
 
@@ -56,6 +65,9 @@ class LargeIconService;
 - (instancetype)initWithCoder:(NSCoder*)aDecoder NS_UNAVAILABLE;
 - (instancetype)initWithNibName:(NSString*)nibNameOrNil
                          bundle:(NSBundle*)nibBundleOrNil NS_UNAVAILABLE;
+
+/// Toggle visibility of the omnibox debugger view.
+- (void)toggleOmniboxDebuggerView;
 
 @end
 

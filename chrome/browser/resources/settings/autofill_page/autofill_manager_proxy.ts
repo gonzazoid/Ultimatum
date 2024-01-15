@@ -4,12 +4,19 @@
 
 export type PersonalDataChangedListener =
     (addresses: chrome.autofillPrivate.AddressEntry[],
-     creditCards: chrome.autofillPrivate.CreditCardEntry[]) => void;
+     creditCards: chrome.autofillPrivate.CreditCardEntry[],
+     ibans: chrome.autofillPrivate.IbanEntry[],
+     accountInfo?: chrome.autofillPrivate.AccountInfo) => void;
 
 /**
  * Interface for all callbacks to the autofill API.
  */
 export interface AutofillManagerProxy {
+  /**
+   * Gets currently signed-in user account info, or undefined if not signed-in.
+   */
+  getAccountInfo(): Promise<chrome.autofillPrivate.AccountInfo|undefined>;
+
   /**
    * Add an observer to the list of personal data.
    */
@@ -24,8 +31,7 @@ export interface AutofillManagerProxy {
   /**
    * Request the list of addresses.
    */
-  getAddressList(
-      callback: (entries: chrome.autofillPrivate.AddressEntry[]) => void): void;
+  getAddressList(): Promise<chrome.autofillPrivate.AddressEntry[]>;
 
   /**
    * Saves the given address.
@@ -40,6 +46,10 @@ export interface AutofillManagerProxy {
  * Implementation that accesses the private API.
  */
 export class AutofillManagerImpl implements AutofillManagerProxy {
+  getAccountInfo(): Promise<chrome.autofillPrivate.AccountInfo|undefined> {
+    return chrome.autofillPrivate.getAccountInfo();
+  }
+
   setPersonalDataManagerListener(listener: PersonalDataChangedListener) {
     chrome.autofillPrivate.onPersonalDataChanged.addListener(listener);
   }
@@ -48,9 +58,8 @@ export class AutofillManagerImpl implements AutofillManagerProxy {
     chrome.autofillPrivate.onPersonalDataChanged.removeListener(listener);
   }
 
-  getAddressList(
-      callback: (entries: chrome.autofillPrivate.AddressEntry[]) => void) {
-    chrome.autofillPrivate.getAddressList(callback);
+  getAddressList() {
+    return chrome.autofillPrivate.getAddressList();
   }
 
   saveAddress(address: chrome.autofillPrivate.AddressEntry) {

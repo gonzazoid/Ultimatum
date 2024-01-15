@@ -5,7 +5,7 @@
 import("//build/buildflag_header.gni")
 import("//build/config/android/config.gni")
 import("//build/config/arm.gni")
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/features.gni")
 import("//build/config/linux/pkg_config.gni")
 import("//build/config/ui.gni")
@@ -18,13 +18,23 @@ if (enable_library_cdms) {
   import("//media/cdm/library_cdm/cdm_paths.gni")
 }
 
+if (is_ios) {
+  import("//build/config/ios/bundle_data_from_filelist.gni")
+}
+
 buildflag_header("media_buildflags") {
   header = "media_buildflags.h"
 
+  enable_passthrough_audio_codecs =
+      enable_platform_dts_audio && (is_win || is_linux)
+
   flags = [
+    "ALLOW_OOP_VIDEO_DECODER=$allow_oop_video_decoder",
+    "ALLOW_HOSTING_OOP_VIDEO_DECODER=$allow_hosting_oop_video_decoder",
     "ALTERNATE_CDM_STORAGE_ID_KEY=\"$alternate_cdm_storage_id_key\"",
     "CHROME_WIDE_ECHO_CANCELLATION=$chrome_wide_echo_cancellation_supported",
     "ENABLE_PLATFORM_AC3_EAC3_AUDIO=$enable_platform_ac3_eac3_audio",
+    "ENABLE_PLATFORM_AC4_AUDIO=$enable_platform_ac4_audio",
     "ENABLE_CAST_AUDIO_RENDERER=$enable_cast_audio_renderer",
     "ENABLE_DAV1D_DECODER=$enable_dav1d_decoder",
     "ENABLE_AV1_DECODER=$enable_av1_decoder",
@@ -34,9 +44,8 @@ buildflag_header("media_buildflags") {
     "ENABLE_FFMPEG_VIDEO_DECODERS=$enable_ffmpeg_video_decoders",
     "ENABLE_PLATFORM_HEVC=$enable_platform_hevc",
     "ENABLE_HEVC_PARSER_AND_HW_DECODER=$enable_hevc_parser_and_hw_decoder",
-    "ENABLE_HLS_SAMPLE_AES=$enable_hls_sample_aes",
+    "ENABLE_PLATFORM_VVC=$enable_platform_vvc",
     "ENABLE_HLS_DEMUXER=$enable_hls_demuxer",
-    "ENABLE_LIBGAV1_DECODER=$enable_libgav1_decoder",
     "ENABLE_LIBAOM=$enable_libaom",
     "ENABLE_LIBRARY_CDMS=$enable_library_cdms",
     "ENABLE_LIBVPX=$media_use_libvpx",
@@ -45,14 +54,16 @@ buildflag_header("media_buildflags") {
     "ENABLE_MEDIA_REMOTING=$enable_media_remoting",
     "ENABLE_MEDIA_REMOTING_RPC=$enable_media_remoting_rpc",
     "ENABLE_OPENH264=$media_use_openh264",
+    "ENABLE_PASSTHROUGH_AUDIO_CODECS=$enable_passthrough_audio_codecs",
+    "ENABLE_PLATFORM_DTS_AUDIO=$enable_platform_dts_audio",
     "ENABLE_PLATFORM_MPEG_H_AUDIO=$enable_platform_mpeg_h_audio",
     "ENABLE_MSE_MPEG2TS_STREAM_PARSER=$enable_mse_mpeg2ts_stream_parser",
+    "PLATFORM_HAS_OPTIONAL_HEVC_SUPPORT=$platform_has_optional_hevc_support",
     "USE_ARC_PROTECTED_MEDIA=$use_arc_protected_media",
     "USE_CHROMEOS_MEDIA_ACCELERATION=$use_vaapi||$use_v4l2_codec",
     "USE_CHROMEOS_PROTECTED_AV1=$use_chromeos_protected_av1",
     "USE_CHROMEOS_PROTECTED_MEDIA=$use_chromeos_protected_media",
     "USE_PROPRIETARY_CODECS=$proprietary_codecs",
-    "ENABLE_PLATFORM_DTS_AUDIO=$enable_platform_dts_audio",
   ]
 
   if (enable_library_cdms) {
@@ -100,7 +111,7 @@ config("media_config") {
 #
 config("subcomponent_config") {
   visibility = media_subcomponent_deps
-  if (is_mac) {
+  if (is_apple) {
     visibility += [ "//media/base/mac" ]
   }
   defines = [ "IS_MEDIA_IMPL" ]
@@ -137,7 +148,7 @@ component("media") {
   ]
 
   # This must be included here since it actually depends on //media/base.
-  if (is_mac) {
+  if (is_mac || (use_blink && is_ios)) {
     public_deps += [ "//media/base/mac" ]
   }
 
@@ -159,6 +170,13 @@ source_set("test_support") {
     "//media/renderers:test_support",
     "//media/video:test_support",
   ]
+}
+
+if (is_ios) {
+  bundle_data_from_filelist("unit_tests_bundle_data") {
+    testonly = true
+    filelist_name = "unit_tests_bundle_data.filelist"
+  }
 }
 
 # Contains tests for all targets in the "media" folder.
@@ -215,10 +233,7 @@ test("media_unittests") {
   }
 
   if (is_fuchsia) {
-    deps += [
-      "//media/fuchsia/cdm/service:unittests",
-      "//media/fuchsia/video:unittests",
-    ]
+    deps += [ "//media/fuchsia/video:unittests" ]
 
     # PaintCanvasVideoRendererWithGLTest.* uses SwiftShader, which generates
     # machine code.
@@ -242,6 +257,10 @@ test("media_unittests") {
 
   # The test needs OPUS_FIXED_POINT conditional define.
   configs += [ "//third_party/opus:opus_config" ]
+
+  if (is_ios) {
+    deps += [ ":unit_tests_bundle_data" ]
+  }
 }
 
 test("media_perftests") {
@@ -346,6 +365,7 @@ component("shared_memory_support") {
   deps = [
     "//base",
     "//build:chromeos_buildflags",
+    "//media:media_buildflags",
     "//ui/gfx/geometry",
   ]
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,86 +8,28 @@
 #include <set>
 #include <vector>
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_section.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/holding_space/holding_space_ash_test_base.h"
 #include "ash/system/holding_space/holding_space_item_chip_view.h"
 #include "ash/system/holding_space/holding_space_item_view.h"
 #include "ash/system/holding_space/holding_space_item_views_section.h"
 #include "ash/system/holding_space/holding_space_tray.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
+#include "ash/system/holding_space/test_holding_space_item_views_section.h"
+#include "ash/system/holding_space/test_holding_space_tray_child_bubble.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 
 namespace ash {
-namespace {
-
-// TestHoldingSpaceItemViewsSection --------------------------------------------
-
-class TestHoldingSpaceItemViewsSection : public HoldingSpaceItemViewsSection {
- public:
-  TestHoldingSpaceItemViewsSection(HoldingSpaceViewDelegate* view_delegate,
-                                   HoldingSpaceSectionId section_id)
-      : HoldingSpaceItemViewsSection(view_delegate, section_id) {}
-
- private:
-  // HoldingSpaceItemViewsSection:
-  std::unique_ptr<views::View> CreateHeader() override {
-    return std::make_unique<views::View>();
-  }
-
-  std::unique_ptr<views::View> CreateContainer() override {
-    return std::make_unique<views::View>();
-  }
-
-  std::unique_ptr<HoldingSpaceItemView> CreateView(
-      const HoldingSpaceItem* item) override {
-    return std::make_unique<HoldingSpaceItemChipView>(delegate(), item);
-  }
-};
-
-// TestHoldingSpaceTrayChildBubble ---------------------------------------------
-
-class TestHoldingSpaceTrayChildBubble : public HoldingSpaceTrayChildBubble {
- public:
-  struct Params {
-    base::OnceCallback<
-        std::vector<std::unique_ptr<HoldingSpaceItemViewsSection>>(
-            HoldingSpaceViewDelegate* view_delegate)>
-        create_sections_callback;
-
-    base::OnceCallback<std::unique_ptr<views::View>()>
-        create_placeholder_callback;
-  };
-
-  TestHoldingSpaceTrayChildBubble(HoldingSpaceViewDelegate* view_delegate,
-                                  Params params)
-      : HoldingSpaceTrayChildBubble(view_delegate),
-        params_(std::move(params)) {}
-
- private:
-  // HoldingSpaceChildBubble:
-  std::vector<std::unique_ptr<HoldingSpaceItemViewsSection>> CreateSections()
-      override {
-    return params_.create_sections_callback
-               ? std::move(params_.create_sections_callback).Run(delegate())
-               : std::vector<std::unique_ptr<HoldingSpaceItemViewsSection>>();
-  }
-
-  std::unique_ptr<views::View> CreatePlaceholder() override {
-    return params_.create_placeholder_callback
-               ? std::move(params_.create_placeholder_callback).Run()
-               : nullptr;
-  }
-
-  Params params_;
-};
-
-}  // namespace
-
 // HoldingSpaceTrayChildBubbleTestBase -----------------------------------------
 
 class HoldingSpaceTrayChildBubbleTestBase : public HoldingSpaceAshTestBase {
@@ -133,7 +75,8 @@ class HoldingSpaceTrayChildBubbleTestBase : public HoldingSpaceAshTestBase {
 
   views::UniqueWidgetPtr widget_;
   std::unique_ptr<HoldingSpaceViewDelegate> view_delegate_;
-  HoldingSpaceTrayChildBubble* child_bubble_ = nullptr;
+  raw_ptr<HoldingSpaceTrayChildBubble, DanglingUntriaged> child_bubble_ =
+      nullptr;
 };
 
 // HoldingSpaceTrayChildBubblePlaceholderTest ----------------------------------
@@ -175,14 +118,13 @@ class HoldingSpaceTrayChildBubblePlaceholderTest
       HoldingSpaceViewDelegate* view_delegate) override {
     return std::make_unique<TestHoldingSpaceTrayChildBubble>(
         view_delegate,
-        TestHoldingSpaceTrayChildBubble::Params{
-            .create_sections_callback = base::BindOnce(
+        TestHoldingSpaceTrayChildBubble::Params(
+            base::BindOnce(
                 &HoldingSpaceTrayChildBubblePlaceholderTest::CreateSections,
                 base::Unretained(this)),
-            .create_placeholder_callback = base::BindOnce(
+            base::BindOnce(
                 &HoldingSpaceTrayChildBubblePlaceholderTest::CreatePlaceholder,
-                base::Unretained(this)),
-        });
+                base::Unretained(this))));
   }
 
   std::vector<std::unique_ptr<HoldingSpaceItemViewsSection>> CreateSections(
@@ -203,8 +145,8 @@ class HoldingSpaceTrayChildBubblePlaceholderTest
   }
 
   // Owned by view hierarchy.
-  views::View* placeholder_ = nullptr;
-  views::View* section_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> placeholder_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> section_ = nullptr;
 };
 
 INSTANTIATE_TEST_SUITE_P(All,
@@ -215,6 +157,14 @@ TEST_P(HoldingSpaceTrayChildBubblePlaceholderTest,
        MaybeShowsPlaceholderWhenEmpty) {
   {
     SCOPED_TRACE(testing::Message() << "Initial state.");
+    ExpectPlaceholderOrGone();
+  }
+
+  AddPartiallyInitializedItem(HoldingSpaceItem::Type::kPinnedFile,
+                              base::FilePath("foo"));
+
+  {
+    SCOPED_TRACE(testing::Message() << "Partially initialized state.");
     ExpectPlaceholderOrGone();
   }
 
@@ -274,9 +224,15 @@ TEST_P(HoldingSpaceTrayChildBubbleRefreshTest, HasExpectedBubbleTreatment) {
     // Background.
     auto* background = child_bubble()->GetBackground();
     ASSERT_TRUE(background);
-    EXPECT_EQ(background->get_color(),
-              AshColorProvider::Get()->GetBaseLayerColor(
-                  AshColorProvider::BaseLayerType::kTransparent80));
+    if (chromeos::features::IsJellyEnabled()) {
+      EXPECT_EQ(background->get_color(),
+                child_bubble()->GetColorProvider()->GetColor(
+                    cros_tokens::kCrosSysSystemBaseElevated));
+    } else {
+      EXPECT_EQ(background->get_color(),
+                child_bubble()->GetColorProvider()->GetColor(
+                    kColorAshShieldAndBase80));
+    }
     EXPECT_EQ(layer->background_blur(), ColorProvider::kBackgroundBlurSigma);
 
     // Border.

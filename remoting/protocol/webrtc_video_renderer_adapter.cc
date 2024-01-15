@@ -8,14 +8,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "remoting/protocol/client_video_stats_dispatcher.h"
 #include "remoting/protocol/frame_consumer.h"
 #include "remoting/protocol/frame_stats.h"
@@ -61,7 +60,7 @@ WebrtcVideoRendererAdapter::WebrtcVideoRendererAdapter(
     VideoRenderer* video_renderer)
     : label_(label),
       video_renderer_(video_renderer),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 WebrtcVideoRendererAdapter::~WebrtcVideoRendererAdapter() {
   DCHECK(task_runner_->BelongsToCurrentThread());
@@ -157,8 +156,9 @@ void WebrtcVideoRendererAdapter::OnVideoFrameStats(
   frame_stats.host_stats = host_stats;
   FrameStatsConsumer* frame_stats_consumer =
       video_renderer_->GetFrameStatsConsumer();
-  if (frame_stats_consumer)
+  if (frame_stats_consumer) {
     frame_stats_consumer->OnVideoFrameStats(frame_stats);
+  }
 }
 
 void WebrtcVideoRendererAdapter::OnChannelInitialized(
@@ -211,8 +211,9 @@ void WebrtcVideoRendererAdapter::FrameRendered(
     std::unique_ptr<ClientFrameStats> client_stats) {
   DCHECK(task_runner_->BelongsToCurrentThread());
 
-  if (!video_stats_dispatcher_ || !video_stats_dispatcher_->is_connected())
+  if (!video_stats_dispatcher_ || !video_stats_dispatcher_->is_connected()) {
     return;
+  }
 
   client_stats->time_rendered = base::TimeTicks::Now();
 
@@ -250,8 +251,9 @@ void WebrtcVideoRendererAdapter::FrameRendered(
   host_stats_queue_.pop_front();
   FrameStatsConsumer* frame_stats_consumer =
       video_renderer_->GetFrameStatsConsumer();
-  if (frame_stats_consumer)
+  if (frame_stats_consumer) {
     frame_stats_consumer->OnVideoFrameStats(frame_stats);
+  }
 }
 
 }  // namespace remoting::protocol

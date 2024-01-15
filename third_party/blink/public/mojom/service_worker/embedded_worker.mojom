@@ -30,6 +30,7 @@ import "third_party/blink/public/mojom/user_agent/user_agent_metadata.mojom";
 import "third_party/blink/public/mojom/worker/subresource_loader_updater.mojom";
 import "third_party/blink/public/mojom/worker/worker_content_settings_proxy.mojom";
 import "third_party/blink/public/mojom/worker/worker_main_script_load_params.mojom";
+import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 import "url/mojom/url.mojom";
 
 // Parameters to launch a service worker. This is passed from the browser to the
@@ -150,6 +151,9 @@ struct EmbeddedWorkerStartParams {
 
   // A container for several security policies to be applied to the worker.
   PolicyContainer? policy_container;
+
+  // The StorageKey of the scope where the service worker is created.
+  blink.mojom.StorageKey storage_key;
 };
 
 // Holds timing information about the start worker sequence for UMA.
@@ -227,11 +231,14 @@ interface EmbeddedWorkerInstanceHost {
   // for the browser process to start enforcing timeouts on script execution.
   OnScriptEvaluationStart();
   // Indicates that the worker has started. |thread_id| is the platform
-  // thread id the worker runs on. |fetch_handler_type| represents the fetch
-  // handler type. The type is decided after initial script evaluation, and
-  // it can also represents the fetch event handler does not exist.
+  // thread id the worker runs on. |fetch_handler_type|,
+  // |has_hid_event_handlers|, and |has_usb_event_handlers| are determined
+  // after the initial script evaluation and used by the browser process to
+  // forward the corresponding events to the service worker.
   OnStarted(ServiceWorkerStartStatus status,
             blink.mojom.ServiceWorkerFetchHandlerType fetch_handler_type,
+            bool has_hid_event_handlers,
+            bool has_usb_event_handlers,
             int32 thread_id,
             EmbeddedWorkerStartTiming start_timing);
 

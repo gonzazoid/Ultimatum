@@ -9,16 +9,18 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/loader/url_loader_throttle.h"
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker_mode.mojom-shared.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
 #include "third_party/blink/public/platform/resource_load_info_notifier_wrapper.h"
-#include "third_party/blink/public/platform/web_code_cache_loader.h"
 #include "third_party/blink/public/platform/web_document_subresource_filter.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
+#include "third_party/blink/public/platform/web_vector.h"
 #include "third_party/blink/public/platform/websocket_handshake_throttle.h"
 
 namespace base {
@@ -31,10 +33,10 @@ class SiteForCookies;
 
 namespace blink {
 
-class CodeCacheHost;
 class WebDocumentSubresourceFilter;
-class WebURLLoaderFactory;
+class URLLoaderFactory;
 class WebURLRequest;
+class URLLoaderThrottle;
 
 // Helper class allowing DedicatedOrSharedWorkerFetchContextImpl to notify blink
 // upon an accept languages update. This class will be extended by
@@ -48,13 +50,13 @@ class AcceptLanguagesWatcher {
 // passed to a worker (dedicated, shared and service worker) and initialized on
 // the worker thread by InitializeOnWorkerThread(). It contains information
 // about the resource fetching context (ex: service worker provider id), and is
-// used to create a new WebURLLoader instance in the worker thread.
+// used to create a new URLLoader instance in the worker thread.
 //
 // A single WebWorkerFetchContext is used for both worker
 // subresource fetch (i.e. "insideSettings") and off-the-main-thread top-level
 // worker script fetch (i.e. fetch as "outsideSettings"), as they both should be
 // e.g. controlled by the same ServiceWorker (if any) and thus can share a
-// single WebURLLoaderFactory.
+// single URLLoaderFactory.
 //
 // Note that WebWorkerFetchContext and WorkerFetchContext do NOT correspond 1:1
 // as multiple WorkerFetchContext can be created after crbug.com/880027.
@@ -72,37 +74,29 @@ class WebWorkerFetchContext : public base::RefCounted<WebWorkerFetchContext> {
 
   virtual void InitializeOnWorkerThread(AcceptLanguagesWatcher*) = 0;
 
-  // Returns a WebURLLoaderFactory which is associated with the worker context.
-  // The returned WebURLLoaderFactory is owned by |this|.
-  virtual WebURLLoaderFactory* GetURLLoaderFactory() = 0;
+  // Returns a URLLoaderFactory which is associated with the worker context.
+  // The returned URLLoaderFactory is owned by |this|.
+  virtual URLLoaderFactory* GetURLLoaderFactory() = 0;
 
-  // Returns a new WebURLLoaderFactory that wraps the given
+  // Returns a new URLLoaderFactory that wraps the given
   // network::mojom::URLLoaderFactory.
-  virtual std::unique_ptr<WebURLLoaderFactory> WrapURLLoaderFactory(
+  virtual std::unique_ptr<URLLoaderFactory> WrapURLLoaderFactory(
       CrossVariantMojoRemote<network::mojom::URLLoaderFactoryInterfaceBase>
           url_loader_factory) = 0;
 
-  // Returns a WebCodeCacheLoader that fetches data from code caches. If
-  // a nullptr is returned then data would not be fetched from the code
-  // cache.
-  // TODO(mythria): Currently, code_cache_host can be a nullptr when fetching
-  // cached code from worklets. For these cases we use a per-process mojo
-  // interface. Update worklets to use context specific interface and check that
-  // code_cache_host is not a nullptr.
-  virtual std::unique_ptr<WebCodeCacheLoader> CreateCodeCacheLoader(
-      CodeCacheHost* code_cache_host) {
-    return nullptr;
-  }
-
-  // Returns a WebURLLoaderFactory for loading scripts in this worker context.
+  // Returns a URLLoaderFactory for loading scripts in this worker context.
   // Unlike GetURLLoaderFactory(), this may return nullptr.
-  // The returned WebURLLoaderFactory is owned by |this|.
-  virtual WebURLLoaderFactory* GetScriptLoaderFactory() { return nullptr; }
+  // The returned URLLoaderFactory is owned by |this|.
+  virtual URLLoaderFactory* GetScriptLoaderFactory() { return nullptr; }
 
   // Called when a request is about to be sent out to modify the request to
   // handle the request correctly in the loading stack later. (Example: service
   // worker)
   virtual void WillSendRequest(WebURLRequest&) = 0;
+
+  // Creates URLLoaderThrottles for the `request`.
+  virtual WebVector<std::unique_ptr<URLLoaderThrottle>> CreateThrottles(
+      const network::ResourceRequest& request) = 0;
 
   // Returns whether a controller service worker exists and if it has fetch
   // handler.

@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_FUCHSIA_COMPONENT_SUPPORT_FEEDBACK_REGISTRATION_H_
 #define COMPONENTS_FUCHSIA_COMPONENT_SUPPORT_FEEDBACK_REGISTRATION_H_
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 
 namespace fuchsia_component_support {
 
@@ -15,8 +15,9 @@ namespace fuchsia_component_support {
 // channel. |component_url| must match the current component. The calling
 // process must have access to "fuchsia.feedback.CrashReportingProductRegister".
 // Registration is skipped for unofficial and unbranded builds.
-void RegisterProductDataForCrashReporting(base::StringPiece component_url,
-                                          base::StringPiece crash_product_name);
+void RegisterProductDataForCrashReporting(
+    base::StringPiece absolute_component_url,
+    base::StringPiece crash_product_name);
 
 // Registers basic annotations for the component in |component_namespace|.
 // Feedback reports will contain a namespace |component_namespace| that contains

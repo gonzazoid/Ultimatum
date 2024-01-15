@@ -4,26 +4,27 @@
 
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_scheduler.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/test/values_test_util.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_common.h"
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_test_helpers.h"
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_worker.h"
+#include "chrome/browser/ash/cert_provisioning/mock_cert_provisioning_client.h"
 #include "chrome/browser/ash/cert_provisioning/mock_cert_provisioning_worker.h"
 #include "chrome/browser/ash/platform_keys/mock_platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/dbus/attestation/fake_attestation_client.h"
 #include "chromeos/ash/components/dbus/attestation/interface.pb.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
-#include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 using base::Time;
 using base::test::ParseJson;
@@ -187,7 +188,6 @@ class CertProvisioningSchedulerTest : public testing::Test {
   platform_keys::MockPlatformKeysService platform_keys_service_;
   std::unique_ptr<CertificateHelperForTesting> certificate_helper_;
   TestingPrefServiceSimple pref_service_;
-  policy::MockCloudPolicyClient cloud_policy_client_;
   // Only expected creations are allowed.
   StrictMock<MockCertProvisioningWorkerFactory> mock_factory_;
   NetworkStateTestHelper network_state_test_helper_;
@@ -203,8 +203,8 @@ TEST_F(CertProvisioningSchedulerTest, Success) {
       mock_invalidation_factory_obj.get();
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       std::move(mock_invalidation_factory_obj));
 
@@ -223,7 +223,8 @@ TEST_F(CertProvisioningSchedulerTest, Success) {
   // One worker will be created on prefs update.
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
   MockCertProvisioningWorker* worker =
       mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile);
   worker->SetExpectations(/*do_step_times=*/AtLeast(1),
@@ -263,8 +264,8 @@ TEST_F(CertProvisioningSchedulerTest, WorkerFailed) {
   const CertScope kCertScope = CertScope::kDevice;
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -278,7 +279,8 @@ TEST_F(CertProvisioningSchedulerTest, WorkerFailed) {
   // One worker will be created on prefs update.
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
   MockCertProvisioningWorker* worker =
       mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile);
   worker->SetExpectations(/*do_step_times=*/AtLeast(1),
@@ -326,7 +328,8 @@ TEST_F(CertProvisioningSchedulerTest, InitialAndDailyUpdates) {
 
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
 
   // Add 1 certificate profile to the policy (the values are the same as
   // in |cert_profile|).
@@ -338,8 +341,8 @@ TEST_F(CertProvisioningSchedulerTest, InitialAndDailyUpdates) {
   pref_service_.Set(GetPrefNameForCertProfiles(kCertScope), config);
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -387,8 +390,8 @@ TEST_F(CertProvisioningSchedulerTest, MultipleWorkers) {
   const CertScope kCertScope = CertScope::kDevice;
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -405,19 +408,22 @@ TEST_F(CertProvisioningSchedulerTest, MultipleWorkers) {
   const char kCertProfileVersion0[] = "cert_profile_version_0";
   CertProfile cert_profile0(kCertProfileId0, kCertProfileName0,
                             kCertProfileVersion0,
-                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                            ProtocolVersion::kStatic);
   const char kCertProfileId1[] = "cert_profile_id_1";
   const char kCertProfileName1[] = "Certificate Profile 1";
   const char kCertProfileVersion1[] = "cert_profile_version_1";
   CertProfile cert_profile1(kCertProfileId1, kCertProfileName1,
                             kCertProfileVersion1,
-                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                            ProtocolVersion::kStatic);
   const char kCertProfileId2[] = "cert_profile_id_2";
   const char kCertProfileName2[] = "Certificate Profile 2";
   const char kCertProfileVersion2[] = "cert_profile_version_2";
   CertProfile cert_profile2(kCertProfileId2, kCertProfileName2,
                             kCertProfileVersion2,
-                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                            ProtocolVersion::kStatic);
   MockCertProvisioningWorker* worker0 =
       mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile0);
   worker0->SetExpectations(/*do_step_times=*/AtLeast(1), /*is_waiting=*/false,
@@ -494,8 +500,8 @@ TEST_F(CertProvisioningSchedulerTest, RemoveCertWithoutPolicy) {
   certificate_helper_->AddCert(kCertScope, kCertProfileId);
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -514,7 +520,8 @@ TEST_F(CertProvisioningSchedulerTest, DeserializeWorkers) {
 
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
 
   // Add 1 certificate profile to the policy (the values are the same as
   // in |cert_profile|).
@@ -536,10 +543,11 @@ TEST_F(CertProvisioningSchedulerTest, DeserializeWorkers) {
           "public_key": "fake_public_key_1",
           "state": 1
         })");
-  base::Value all_saved_workers(base::Value::Type::DICTIONARY);
-  all_saved_workers.SetKey("cert_profile_1", saved_worker.Clone());
+  base::Value::Dict all_saved_workers;
+  all_saved_workers.Set("cert_profile_1", saved_worker.Clone());
 
-  pref_service_.Set(GetPrefNameForSerialization(kCertScope), all_saved_workers);
+  pref_service_.SetDict(GetPrefNameForSerialization(kCertScope),
+                        std::move(all_saved_workers));
 
   MockCertProvisioningWorker* worker =
       mock_factory_.ExpectDeserializeReturnMock(kCertScope, saved_worker);
@@ -550,8 +558,8 @@ TEST_F(CertProvisioningSchedulerTest, DeserializeWorkers) {
                           /*failure_message=*/"");
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -567,8 +575,8 @@ TEST_F(CertProvisioningSchedulerTest, InconsistentDataErrorHandling) {
   const char kCertProfileVersion2[] = "cert_profile_version_2";
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -579,9 +587,10 @@ TEST_F(CertProvisioningSchedulerTest, InconsistentDataErrorHandling) {
   // From CertProvisioningScheduler::CleanVaKeysIfIdle.
   VerifyDeleteKeysByPrefixCalledOnce(kCertScope);
 
-  CertProfile cert_profile_v1(
-      kCertProfileId, kCertProfileName, kCertProfileVersion1,
-      /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+  CertProfile cert_profile_v1(kCertProfileId, kCertProfileName,
+                              kCertProfileVersion1,
+                              /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                              ProtocolVersion::kStatic);
 
   MockCertProvisioningWorker* worker =
       mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile_v1);
@@ -628,9 +637,10 @@ TEST_F(CertProvisioningSchedulerTest, InconsistentDataErrorHandling) {
   EXPECT_TRUE(scheduler.GetFailedCertProfileIds().empty());
 
   // Add a new worker to the factory.
-  CertProfile cert_profile_v2(
-      kCertProfileId, kCertProfileName, kCertProfileVersion2,
-      /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+  CertProfile cert_profile_v2(kCertProfileId, kCertProfileName,
+                              kCertProfileVersion2,
+                              /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                              ProtocolVersion::kStatic);
   worker = mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile_v2);
   worker->SetExpectations(/*do_step_times=*/AtLeast(1), /*is_waiting=*/false,
                           cert_profile_v2, /*failure_message=*/"");
@@ -677,7 +687,8 @@ TEST_F(CertProvisioningSchedulerTest, RetryAfterNoInternetConnection) {
 
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
   // Add 1 certificate profile to the policy (the values are the same as
   // in |cert_profile|).
   base::Value config = ParseJson(
@@ -688,8 +699,8 @@ TEST_F(CertProvisioningSchedulerTest, RetryAfterNoInternetConnection) {
   pref_service_.Set(GetPrefNameForCertProfiles(kCertScope), config);
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -715,7 +726,8 @@ TEST_F(CertProvisioningSchedulerTest, DeleteWorkerWithoutPolicy) {
 
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
   // Add 1 certificate profile to the policy (the values are the same as
   // in |cert_profile|).
   base::Value config = ParseJson(
@@ -725,8 +737,8 @@ TEST_F(CertProvisioningSchedulerTest, DeleteWorkerWithoutPolicy) {
            "key_algorithm":"rsa"}])");
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -765,8 +777,8 @@ TEST_F(CertProvisioningSchedulerTest, DeleteVaKeysOnIdle) {
 
   {
     CertProvisioningSchedulerImpl scheduler(
-        kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-        &platform_keys_service_,
+        kCertScope, GetProfile(), &pref_service_,
+        std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
         network_state_test_helper_.network_state_handler(),
         MakeFakeInvalidationFactory());
 
@@ -781,7 +793,8 @@ TEST_F(CertProvisioningSchedulerTest, DeleteVaKeysOnIdle) {
   {
     CertProfile cert_profile(kCertProfileId, kCertProfileName,
                              kCertProfileVersion,
-                             /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                             /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                             ProtocolVersion::kStatic);
 
     // Add 1 serialized worker for the profile (the values are the same as
     // in |cert_profile|).
@@ -796,11 +809,11 @@ TEST_F(CertProvisioningSchedulerTest, DeleteVaKeysOnIdle) {
           "public_key": "fake_public_key_1",
           "state": 1
         })");
-    base::Value all_saved_workers(base::Value::Type::DICTIONARY);
-    all_saved_workers.SetKey("cert_profile_1", saved_worker.Clone());
+    base::Value::Dict all_saved_workers;
+    all_saved_workers.Set("cert_profile_1", saved_worker.Clone());
 
-    pref_service_.Set(GetPrefNameForSerialization(kCertScope),
-                      all_saved_workers);
+    pref_service_.SetDict(GetPrefNameForSerialization(kCertScope),
+                          std::move(all_saved_workers));
 
     MockCertProvisioningWorker* worker =
         mock_factory_.ExpectDeserializeReturnMock(kCertScope, saved_worker);
@@ -811,8 +824,8 @@ TEST_F(CertProvisioningSchedulerTest, DeleteVaKeysOnIdle) {
                             /*failure_message=*/"");
 
     CertProvisioningSchedulerImpl scheduler(
-        kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-        &platform_keys_service_,
+        kCertScope, GetProfile(), &pref_service_,
+        std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
         network_state_test_helper_.network_state_handler(),
         MakeFakeInvalidationFactory());
 
@@ -826,14 +839,15 @@ TEST_F(CertProvisioningSchedulerTest, UpdateOneWorker) {
   const CertScope kCertScope = CertScope::kUser;
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
   CertProfile cert_profile(kCertProfileId, kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
 
   FastForwardBy(base::Seconds(1));
 
@@ -924,9 +938,9 @@ TEST_F(CertProvisioningSchedulerTest, CertRenewal) {
   // 1 day == 86400 seconds.
   const base::TimeDelta kRenewalPeriod = base::Days(1);
 
-  CertProfile cert_profile(kCertProfileId, kCertProfileName,
-                           kCertProfileVersion,
-                           /*is_va_enabled=*/true, kRenewalPeriod);
+  CertProfile cert_profile(
+      kCertProfileId, kCertProfileName, kCertProfileVersion,
+      /*is_va_enabled=*/true, kRenewalPeriod, ProtocolVersion::kStatic);
 
   const Time t1 = Time::Now() - base::Days(1);
   const Time t2 = Time::Now() + base::Days(7);
@@ -945,8 +959,8 @@ TEST_F(CertProvisioningSchedulerTest, CertRenewal) {
   pref_service_.Set(GetPrefNameForCertProfiles(kCertScope), config);
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -981,8 +995,8 @@ TEST_F(CertProvisioningSchedulerTest, PlatformKeysServiceShutDown) {
   EXPECT_CALL(platform_keys_service_, AddObserver(_))
       .WillOnce(SaveArg<0>(&observer));
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -997,9 +1011,10 @@ TEST_F(CertProvisioningSchedulerTest, PlatformKeysServiceShutDown) {
   pref_service_.Set(prefs::kRequiredClientCertificateForDevice, config);
 
   // Same as in the policy.
-  CertProfile cert_profile{kCertProfileId, kCertProfileName,
+  CertProfile cert_profile{kCertProfileId,          kCertProfileName,
                            kCertProfileVersion,
-                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod};
+                           /*is_va_enabled=*/true,  kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic};
 
   MockCertProvisioningWorker* worker =
       mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile);
@@ -1027,8 +1042,8 @@ TEST_F(CertProvisioningSchedulerTest, StateChangeNotifications) {
   const CertScope kCertScope = CertScope::kDevice;
 
   CertProvisioningSchedulerImpl scheduler(
-      kCertScope, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -1049,13 +1064,15 @@ TEST_F(CertProvisioningSchedulerTest, StateChangeNotifications) {
   const char kCertProfileVersion0[] = "cert_profile_version_0";
   CertProfile cert_profile0(kCertProfileId0, kCertProfileName0,
                             kCertProfileVersion0,
-                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                            ProtocolVersion::kStatic);
   const char kCertProfileId1[] = "cert_profile_id_1";
   const char kCertProfileName1[] = "Certificate Profile 1";
   const char kCertProfileVersion1[] = "cert_profile_version_1";
   CertProfile cert_profile1(kCertProfileId1, kCertProfileName1,
                             kCertProfileVersion1,
-                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+                            /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                            ProtocolVersion::kStatic);
 
   MockCertProvisioningWorker* worker0 =
       mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile0);
@@ -1113,8 +1130,8 @@ TEST_F(CertProvisioningSchedulerTest, StateChangeNotifications) {
 
 TEST_F(CertProvisioningSchedulerTest, HoldBackNotifications) {
   CertProvisioningSchedulerImpl scheduler(
-      CertScope::kDevice, GetProfile(), &pref_service_, &cloud_policy_client_,
-      &platform_keys_service_,
+      CertScope::kDevice, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
       network_state_test_helper_.network_state_handler(),
       MakeFakeInvalidationFactory());
 
@@ -1190,6 +1207,58 @@ TEST_F(CertProvisioningSchedulerTest, HoldBackNotifications) {
   }
 }
 
+TEST_F(CertProvisioningSchedulerTest, ResetOneWorker) {
+  const CertScope kCertScope = CertScope::kUser;
+
+  CertProvisioningSchedulerImpl scheduler(
+      kCertScope, GetProfile(), &pref_service_,
+      std::make_unique<MockCertProvisioningClient>(), &platform_keys_service_,
+      network_state_test_helper_.network_state_handler(),
+      MakeFakeInvalidationFactory());
+
+  CertProfile cert_profile(kCertProfileId, kCertProfileName,
+                           kCertProfileVersion,
+                           /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+                           ProtocolVersion::kStatic);
+
+  FastForwardBy(base::Seconds(1));
+
+  // From CertProvisioningScheduler::CleanVaKeysIfIdle.
+  VerifyDeleteKeysByPrefixCalledOnce(kCertScope);
+
+  // There is no policies yet, |kCertProfileId| will not be found.
+  scheduler.UpdateOneWorker(kCertProfileId);
+  FastForwardBy(base::Seconds(1));
+  ASSERT_TRUE(scheduler.GetWorkers().empty());
+
+  MockCertProvisioningWorker* worker =
+      mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile);
+  worker->SetExpectations(/*do_step_times=*/Exactly(1),
+                          /*is_waiting=*/false, cert_profile,
+                          /*failure_message=*/"");
+
+  // Add 1 certificate profile to the policy (the values are the same as
+  // in |cert_profile|).
+  base::Value config = ParseJson(
+      R"([{"name": "Certificate Profile 1",
+           "cert_profile_id":"cert_profile_id_1",
+           "policy_version":"cert_profile_version_1",
+           "key_algorithm":"rsa"}])");
+  pref_service_.Set(GetPrefNameForCertProfiles(kCertScope), config);
+  FastForwardBy(base::Seconds(1));
+
+  {
+    worker->ResetExpected();
+    scheduler.ResetOneWorker(kCertProfileId);
+    ASSERT_EQ(scheduler.GetWorkers().size(), 1U);
+    MockCertProvisioningWorker* second_worker =
+        mock_factory_.ExpectCreateReturnMock(kCertScope, cert_profile);
+    second_worker->SetExpectations(Exactly(1), false, cert_profile, "");
+    scheduler.OnProfileFinished(cert_profile,
+                                CertProvisioningWorkerState::kCanceled);
+    ASSERT_EQ(scheduler.GetWorkers().size(), 1U);
+  }
+}
 }  // namespace
 }  // namespace cert_provisioning
 }  // namespace ash

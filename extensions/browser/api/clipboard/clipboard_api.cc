@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
@@ -48,11 +48,11 @@ void ClipboardAPI::OnClipboardDataChanged() {
   }
 }
 
-ClipboardSetImageDataFunction::~ClipboardSetImageDataFunction() {}
+ClipboardSetImageDataFunction::~ClipboardSetImageDataFunction() = default;
 
 ExtensionFunction::ResponseAction ClipboardSetImageDataFunction::Run() {
-  std::unique_ptr<clipboard::SetImageData::Params> params(
-      clipboard::SetImageData::Params::Create(args()));
+  std::optional<clipboard::SetImageData::Params> params =
+      clipboard::SetImageData::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   // Fill in the omitted additional data items with empty data.
@@ -91,12 +91,12 @@ bool ClipboardSetImageDataFunction::IsAdditionalItemsParamValid(
   bool has_text_html = false;
   for (const clipboard::AdditionalDataItem& item : items) {
     switch (item.type) {
-      case clipboard::DATA_ITEM_TYPE_TEXTPLAIN:
+      case clipboard::DataItemType::kTextPlain:
         if (has_text_plain)
           return false;
         has_text_plain = true;
         break;
-      case clipboard::DATA_ITEM_TYPE_TEXTHTML:
+      case clipboard::DataItemType::kTextHtml:
         if (has_text_html)
           return false;
         has_text_html = true;

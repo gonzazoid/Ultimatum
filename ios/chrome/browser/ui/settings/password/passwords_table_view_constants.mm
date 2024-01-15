@@ -4,38 +4,45 @@
 
 #import "ios/chrome/browser/ui/settings/password/passwords_table_view_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+NSString* const kPasswordsTableViewID = @"PasswordsTableViewID";
+NSString* const kPasswordsSearchBarID = @"PasswordsSearchBar";
+NSString* const kPasswordsScrimViewID = @"PasswordsScrimViewID";
 
-NSString* const kPasswordsTableViewId = @"PasswordsTableViewId";
-NSString* const kPasswordsExportConfirmViewId = @"PasswordsExportConfirmViewId";
-NSString* const kPasswordsSearchBarId = @"PasswordsSearchBar";
-NSString* const kPasswordsScrimViewId = @"PasswordsScrimViewId";
+NSString* const kPasswordDetailsTableViewID = @"PasswordDetailsTableViewID";
+NSString* const kPasswordDetailsDeletionAlertViewID =
+    @"PasswordDetailsDeletionAlertViewID";
+NSString* const kPasswordsAddPasswordSaveButtonID =
+    @"PasswordsAddPasswordSaveButtonID";
+NSString* const kPasswordsAddPasswordCancelButtonID =
+    @"PasswordsAddPasswordCancelButtonID";
 
-NSString* const kOnDeviceEncryptionOptInId = @"OnDeviceEncryptionSuggestion";
-NSString* const kOnDeviceEncryptionLearnMoreId =
-    @"OnDeviceEncryptionLearnMoreId";
-NSString* const kOnDeviceEncryptionSetUpId = @"OnDeviceEncryptionSetUpId";
-NSString* const kOnDeviceEncryptionOptedInTextId =
-    @"OnDeviceEncryptionOptedInTextId";
+NSString* const kAddPasswordButtonID = @"addPasswordItem";
 
-NSString* const kPasswordDetailsTableViewId = @"PasswordDetailsTableViewId";
-NSString* const kPasswordDetailsDeletionAlertViewId =
-    @"PasswordDetailsDeletionAlertViewId";
-NSString* const kPasswordsAddPasswordSaveButtonId =
-    @"PasswordsAddPasswordSaveButtonId";
-NSString* const kPasswordsAddPasswordCancelButtonId =
-    @"PasswordsAddPasswordCancelButtonId";
+NSString* const kPasswordIssuesTableViewID = @"kPasswordIssuesTableViewID";
 
-NSString* const kSavePasswordSwitchTableViewId =
-    @"kSavePasswordSwitchTableViewId";
-NSString* const kSavePasswordManagedTableViewId =
-    @"kSavePasswordSwitchTableViewId";
+NSString* const kDismissedWarningsCellID = @"DismissedWarningsCellID";
 
-NSString* const kSettingsPasswordsInOtherAppsCellId =
-    @"kSettingsPasswordsInOtherAppsCellId";
+NSString* const kUsernameTextfieldForPasswordDetailsID =
+    @"kUsernameTextfieldForPasswordDetailsID";
 
-NSString* const kAddPasswordButtonId = @"addPasswordItem";
+NSString* const kPasswordTextfieldForPasswordDetailsID =
+    @"kPasswordTextfieldForPasswordDetailsID";
 
-NSString* const kPasswordIssuesTableViewId = @"kPasswordIssuesTableViewId";
+NSString* const kDeleteButtonForPasswordDetailsID =
+    @"kDeleteButtonForPasswordDetailsID";
+
+NSString* const kLocalOnlyPasswordIconID = @"kLocalOnlyPasswordIconID";
+
+NSString* const kWidgetPromoImageName = @"password_manager_widget_promo";
+
+NSString* const kWidgetPromoDisabledImageName =
+    @"password_manager_widget_promo_disabled";
+
+NSString* const kWidgetPromoID = @"WidgetPromoID";
+
+NSString* const kWidgetPromoCloseButtonID = @"WidgetPromoCloseButtonID";
+
+NSString* const kWidgetPromoImageID = @"WidgetPromoImageID";
+
+const char kPasswordManagerWidgetPromoActionHistogram[] =
+    "IOS.PasswordManager.WidgetPromo.Action";

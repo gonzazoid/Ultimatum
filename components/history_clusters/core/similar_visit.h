@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/hash/hash.h"
 #include "components/history/core/browser/history_types.h"
 
 namespace history_clusters {
@@ -16,18 +17,37 @@ struct SimilarVisit {
   SimilarVisit() = default;
   explicit SimilarVisit(const history::ClusterVisit& visit)
       : title(visit.annotated_visit.url_row.title()),
-        url_for_deduping(visit.url_for_deduping.spec()) {}
+        // TODO(sophiechang): Remove this duplication once the underlying
+        // persisted change is rolled out in Stable for at least 90 days
+        // (probably around 07/2023).
+        url_for_deduping(visit.annotated_visit.content_annotations
+                                 .search_normalized_url.is_empty()
+                             ? visit.url_for_deduping.spec()
+                             : visit.annotated_visit.content_annotations
+                                   .search_normalized_url.spec()),
+        normalized_url(visit.normalized_url.spec()) {}
   SimilarVisit(const SimilarVisit&) = default;
   ~SimilarVisit() = default;
 
   std::u16string title;
   std::string url_for_deduping;
+  std::string normalized_url;
 
-  struct Comp {
+  struct Hash {
+    size_t operator()(const SimilarVisit& visit) const {
+      // Return the same hash for everything so it falls back to tiebreaking by
+      // the Equals operator.
+      return 0;
+    }
+  };
+
+  struct Equals {
     bool operator()(const SimilarVisit& lhs, const SimilarVisit& rhs) const {
-      if (lhs.title != rhs.title)
-        return lhs.title < rhs.title;
-      return lhs.url_for_deduping < rhs.url_for_deduping;
+      if ((lhs.title == rhs.title) &&
+          (lhs.url_for_deduping == rhs.url_for_deduping)) {
+        return true;
+      }
+      return lhs.normalized_url == rhs.normalized_url;
     }
   };
 };

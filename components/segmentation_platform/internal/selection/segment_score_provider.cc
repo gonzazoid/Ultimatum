@@ -7,7 +7,7 @@
 #include <map>
 
 #include "base/memory/raw_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
 #include "components/segmentation_platform/internal/proto/model_prediction.pb.h"
@@ -39,9 +39,9 @@ class SegmentScoreProviderImpl : public SegmentScoreProvider {
     SegmentScore result;
     auto iter = scores_last_session_.find(segment_id);
     if (iter != scores_last_session_.end())
-      result.score = iter->second;
+      result.scores = iter->second;
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), result));
   }
 
@@ -52,12 +52,13 @@ class SegmentScoreProviderImpl : public SegmentScoreProvider {
     // Read results from last session to memory.
     for (const auto& pair : *all_segments) {
       SegmentId id = pair.first;
-      const proto::SegmentInfo& info = pair.second;
+      const proto::SegmentInfo& info = *pair.second;
       if (!info.has_prediction_result())
         continue;
 
-      float score = info.prediction_result().result();
-      scores_last_session_.emplace(std::make_pair(id, score));
+      const auto& scores = info.prediction_result().result();
+      scores_last_session_.emplace(
+          id, ModelProvider::Response(scores.begin(), scores.end()));
     }
 
     initialized_ = true;
@@ -72,7 +73,7 @@ class SegmentScoreProviderImpl : public SegmentScoreProvider {
 
   // Model scores that are read from db on startup and used for serving the
   // clients in the current session.
-  std::map<SegmentId, float> scores_last_session_;
+  std::map<SegmentId, ModelProvider::Response> scores_last_session_;
 
   // Whether the initialization is complete through an Initialize call.
   bool initialized_{false};

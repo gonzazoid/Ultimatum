@@ -7,11 +7,7 @@
 #import "base/memory/memory_pressure_listener.h"
 #import "base/metrics/histogram_macros.h"
 #import "components/previous_session_info/previous_session_info.h"
-#import "ios/chrome/browser/crash_report/crash_keys_helper.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/crash_report/model/crash_keys_helper.h"
 
 namespace {
 // The number of seconds to wait after a memory warning to clear the flag used
@@ -48,7 +44,7 @@ const CFTimeInterval kOutOfMemoryResetTimeInterval = 5;
   _outOfMemoryResetTime =
       CFAbsoluteTimeGetCurrent() + kOutOfMemoryResetTimeInterval;
 
-  // Add information to breakpad.
+  // Add information to crash keys.
   crash_keys::SetMemoryWarningCount(_foregroundMemoryWarningCount);
   crash_keys::SetMemoryWarningInProgress(true);
 

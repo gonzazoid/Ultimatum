@@ -4,12 +4,25 @@
 
 #include "platform_test.h"
 
-#import <Foundation/Foundation.h>
+// /!\ WARNING!
+//
+// Chromium compiles this file as ARC, but other dependencies pull it in and
+// compile it as non-ARC. Be sure that this file compiles correctly with either
+// build setting.
+//
+// /!\ WARNING!
 
-PlatformTest::PlatformTest()
-    : pool_([[NSAutoreleasePool alloc] init]) {
+// Note that this uses the direct runtime interface to the autorelease pool.
+// https://clang.llvm.org/docs/AutomaticReferenceCounting.html#runtime-support
+// This is so this can work correctly whether or not it's compiled for ARC.
+
+extern "C" {
+void* objc_autoreleasePoolPush(void);
+void objc_autoreleasePoolPop(void* pool);
 }
 
+PlatformTest::PlatformTest() : autorelease_pool_(objc_autoreleasePoolPush()) {}
+
 PlatformTest::~PlatformTest() {
-  [pool_ release];
+  objc_autoreleasePoolPop(autorelease_pool_);
 }

@@ -16,7 +16,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.annotation.Config;
 
-import org.chromium.base.jank_tracker.DummyJankTracker;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
@@ -24,9 +23,7 @@ import org.chromium.chrome.browser.ui.native_page.NativePage.NativePageType;
 import org.chromium.chrome.browser.ui.native_page.NativePageTest.UrlCombo;
 import org.chromium.components.embedder_support.util.UrlConstants;
 
-/**
- * Tests public methods in NativePageFactory.
- */
+/** Tests public methods in NativePageFactory. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class NativePageFactoryTest {
@@ -93,8 +90,9 @@ public class NativePageFactoryTest {
 
     private static class MockNativePageBuilder extends NativePageFactory.NativePageBuilder {
         private MockNativePageBuilder() {
-            super(null, null, null, null, null, null, null, null, null, null,
-                    new DummyJankTracker(), null, null);
+            super(
+                    null, null, null, null, null, null, null, null, null, null, null, null, null,
+                    null, null);
         }
 
         @Override
@@ -120,8 +118,10 @@ public class NativePageFactoryTest {
 
     @Before
     public void setUp() {
-        mNativePageFactory = new NativePageFactory(null, null, null, null, null, null, null, null,
-                null, null, null, new DummyJankTracker(), null, null);
+        mNativePageFactory =
+                new NativePageFactory(
+                        null, null, null, null, null, null, null, null, null, null, null, null,
+                        null, null);
         mNativePageFactory.setNativePageBuilderForTesting(new MockNativePageBuilder());
     }
 
@@ -132,20 +132,34 @@ public class NativePageFactoryTest {
     @Test
     public void testCreateNativePage() {
         @NativePageType
-        int[] candidateTypes = new int[] {NativePageType.NONE, NativePageType.NTP,
-                NativePageType.BOOKMARKS, NativePageType.RECENT_TABS, NativePageType.HISTORY};
+        int[] candidateTypes =
+                new int[] {
+                    NativePageType.NONE,
+                    NativePageType.NTP,
+                    NativePageType.BOOKMARKS,
+                    NativePageType.RECENT_TABS,
+                    NativePageType.HISTORY
+                };
         for (boolean isIncognito : new boolean[] {true, false}) {
             for (UrlCombo urlCombo : VALID_URLS) {
                 if (isIncognito && !isValidInIncognito(urlCombo)) continue;
                 for (@NativePageType int candidateType : candidateTypes) {
-                    MockNativePage candidate = candidateType == NativePageType.NONE ? null
-                            : new MockNativePage(candidateType);
+                    MockNativePage candidate =
+                            candidateType == NativePageType.NONE
+                                    ? null
+                                    : new MockNativePage(candidateType);
                     MockNativePage page =
-                            (MockNativePage) mNativePageFactory.createNativePageForURL(
-                                    urlCombo.url, candidate, null, isIncognito);
-                    String debugMessage = String.format(
-                            "Failed test case: isIncognito=%s, urlCombo={%s,%s}, candidateType=%s",
-                            isIncognito, urlCombo.url, urlCombo.expectedType, candidateType);
+                            (MockNativePage)
+                                    mNativePageFactory.createNativePageForURL(
+                                            urlCombo.url, candidate, null, isIncognito);
+                    String debugMessage =
+                            String.format(
+                                    "Failed test case: isIncognito=%s, urlCombo={%s,%s},"
+                                            + " candidateType=%s",
+                                    isIncognito,
+                                    urlCombo.url,
+                                    urlCombo.expectedType,
+                                    candidateType);
                     Assert.assertNotNull(debugMessage, page);
                     Assert.assertEquals(debugMessage, 1, page.updateForUrlCalls);
                     Assert.assertEquals(debugMessage, urlCombo.expectedType, page.type);
@@ -167,13 +181,15 @@ public class NativePageFactoryTest {
     public void testCreateNativePageWithInvalidUrl() {
         for (UrlCombo urlCombo : VALID_URLS) {
             if (!isValidInIncognito(urlCombo)) {
-                Assert.assertNull(urlCombo.url,
+                Assert.assertNull(
+                        urlCombo.url,
                         mNativePageFactory.createNativePageForURL(urlCombo.url, null, null, true));
             }
         }
         for (boolean isIncognito : new boolean[] {true, false}) {
             for (String invalidUrl : INVALID_URLS) {
-                Assert.assertNull(invalidUrl,
+                Assert.assertNull(
+                        invalidUrl,
                         mNativePageFactory.createNativePageForURL(
                                 invalidUrl, null, null, isIncognito));
             }

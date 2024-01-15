@@ -26,6 +26,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LOADER_RESOURCE_SCRIPT_RESOURCE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LOADER_RESOURCE_SCRIPT_RESOURCE_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_cache_consumer.h"
@@ -46,6 +47,11 @@ class KURL;
 class ResourceFetcher;
 class ScriptCachedMetadataHandler;
 
+namespace v8_compile_hints {
+class V8CrowdsourcedCompileHintsConsumer;
+class V8CrowdsourcedCompileHintsProducer;
+}  // namespace v8_compile_hints
+
 // ScriptResource is a resource representing a JavaScript, either a classic or
 // module script. Based on discussions (crbug.com/1178198) ScriptResources are
 // shared between classic and module scripts.
@@ -64,10 +70,13 @@ class CORE_EXPORT ScriptResource final : public TextResource {
   // is passed in.
   enum StreamingAllowed { kNoStreaming, kAllowStreaming };
 
-  static ScriptResource* Fetch(FetchParameters&,
-                               ResourceFetcher*,
-                               ResourceClient*,
-                               StreamingAllowed);
+  static ScriptResource* Fetch(
+      FetchParameters&,
+      ResourceFetcher*,
+      ResourceClient*,
+      StreamingAllowed,
+      v8_compile_hints::V8CrowdsourcedCompileHintsProducer*,
+      v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*);
 
   // Public for testing
   static ScriptResource* CreateForTest(
@@ -87,19 +96,9 @@ class CORE_EXPORT ScriptResource final : public TextResource {
   void ResponseBodyReceived(
       ResponseBodyLoaderDrainableInterface& body_loader,
       scoped_refptr<base::SingleThreadTaskRunner> loader_task_runner) override;
-
-  class ScriptDecodedDataInfo final : public DecodedDataInfo {
-   public:
-    explicit ScriptDecodedDataInfo(
-        std::unique_ptr<ParkableStringImpl::SecureDigest> digest)
-        : digest_(std::move(digest)) {}
-
-    ResourceType GetType() const override { return ResourceType::kScript; }
-
-    std::unique_ptr<ParkableStringImpl::SecureDigest> digest_;
-  };
-  void DidReceiveDecodedData(const String& data,
-                             std::unique_ptr<DecodedDataInfo> info) override;
+  void DidReceiveDecodedData(
+      const String& data,
+      std::unique_ptr<ParkableStringImpl::SecureDigest> digest) override;
 
   void Trace(Visitor*) const override;
 
@@ -108,13 +107,7 @@ class CORE_EXPORT ScriptResource final : public TextResource {
 
   void SetSerializedCachedMetadata(mojo_base::BigBuffer data) override;
 
-  bool CodeCacheHashRequired() const override;
-
   const ParkableString& SourceText();
-
-  const ParkableString& RawSourceText();
-
-  bool IsWebSnapshot() const;
 
   // Get the resource's current text. This can return partial data, so should
   // not be used outside of the inspector.
@@ -153,6 +146,16 @@ class CORE_EXPORT ScriptResource final : public TextResource {
 
   // Visible for tests.
   void SetRevalidatingRequest(const ResourceRequestHead&) override;
+
+  v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
+  GetV8CrowdsourcedCompileHintsProducer() const {
+    return v8_compile_hints_producer_.Get();
+  }
+
+  v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*
+  GetV8CrowdsourcedCompileHintsConsumer() const {
+    return v8_compile_hints_consumer_.Get();
+  }
 
  protected:
   void DestroyDecodedDataIfPossible() override;
@@ -247,8 +250,6 @@ class CORE_EXPORT ScriptResource final : public TextResource {
   void OnDataPipeReadable(MojoResult result,
                           const mojo::HandleSignalsState& state);
 
-  bool DataHasPrefix(const base::span<const char>& prefix) const;
-
   ParkableString source_text_;
 
   Member<ResourceScriptStreamer> streamer_;
@@ -260,19 +261,28 @@ class CORE_EXPORT ScriptResource final : public TextResource {
   ConsumeCacheState consume_cache_state_;
   const mojom::blink::ScriptType initial_request_script_type_;
   std::unique_ptr<TextResourceDecoder> stream_text_decoder_;
+
+  Member<v8_compile_hints::V8CrowdsourcedCompileHintsProducer>
+      v8_compile_hints_producer_;
+  // The data V8CrowdsourcedCompileHintsConsumer consumes is tied to a Page.
+  // It's possible that another Page requests the same script while streaming is
+  // ongoing, and starts using the same ScriptResource. This is safe to do, as
+  // compile hints only affect what's compiled upfront, but don't change the
+  // semantics of JavaScript. It might lead to compiling a non-optimal set of
+  // functions (compiling too much and consuming memory, or not compiling enough
+  // and increasing the execution time). In practice, the compile hints are
+  // probably mostly reasonable, e.g., pages often use a common library in a
+  // similar way. As this situation is rare and nothing will go too badly wrong,
+  // we don't do anything to avoid false sharing of compile hints via a common
+  // ScriptResource.
+  Member<v8_compile_hints::V8CrowdsourcedCompileHintsConsumer>
+      v8_compile_hints_consumer_;
 };
 
 template <>
 struct DowncastTraits<ScriptResource> {
   static bool AllowFrom(const Resource& resource) {
     return resource.GetType() == ResourceType::kScript;
-  }
-};
-
-template <>
-struct DowncastTraits<ScriptResource::ScriptDecodedDataInfo> {
-  static bool AllowFrom(const Resource::DecodedDataInfo& info) {
-    return info.GetType() == ResourceType::kScript;
   }
 };
 

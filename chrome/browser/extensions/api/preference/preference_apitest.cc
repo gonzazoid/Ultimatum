@@ -4,20 +4,18 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/prefetch/pref_names.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
@@ -31,14 +29,16 @@
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/translate/core/browser/translate_pref_names.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/test_devtools_protocol_client.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/test_extension_registry_observer.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
+#include "extensions/test/test_extension_dir.h"
 #include "media/media_buildflags.h"
 #include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_policy.h"
 
@@ -88,6 +88,18 @@ class ExtensionPreferenceApiTest
         prefs->GetBoolean(password_manager::prefs::kCredentialsEnableService));
     EXPECT_TRUE(prefs->GetBoolean(prefs::kSafeBrowsingEnabled));
     EXPECT_TRUE(prefs->GetBoolean(prefs::kSearchSuggestEnabled));
+    VerifyPrefValueAndControlledState(prefs::kPrivacySandboxM1TopicsEnabled,
+                                      base::Value(false),
+                                      /* expected_controlled */ true);
+    VerifyPrefValueAndControlledState(prefs::kPrivacySandboxM1FledgeEnabled,
+                                      base::Value(false),
+                                      /* expected_controlled */ true);
+    VerifyPrefValueAndControlledState(
+        prefs::kPrivacySandboxM1AdMeasurementEnabled, base::Value(false),
+        /* expected_controlled */ true);
+    VerifyPrefValueAndControlledState(
+        prefs::kPrivacySandboxRelatedWebsiteSetsEnabled, base::Value(false),
+        /* expected_controlled */ true);
   }
 
   void CheckPreferencesCleared() {
@@ -114,6 +126,18 @@ class ExtensionPreferenceApiTest
         prefs->GetBoolean(password_manager::prefs::kCredentialsEnableService));
     EXPECT_FALSE(prefs->GetBoolean(prefs::kSafeBrowsingEnabled));
     EXPECT_FALSE(prefs->GetBoolean(prefs::kSearchSuggestEnabled));
+    VerifyPrefValueAndControlledState(prefs::kPrivacySandboxM1TopicsEnabled,
+                                      base::Value(true),
+                                      /* expected_controlled */ false);
+    VerifyPrefValueAndControlledState(prefs::kPrivacySandboxM1FledgeEnabled,
+                                      base::Value(true),
+                                      /* expected_controlled */ false);
+    VerifyPrefValueAndControlledState(
+        prefs::kPrivacySandboxM1AdMeasurementEnabled, base::Value(true),
+        /* expected_controlled */ false);
+    VerifyPrefValueAndControlledState(
+        prefs::kPrivacySandboxRelatedWebsiteSetsEnabled, base::Value(true),
+        /* expected_controlled */ false);
   }
 
   // Verifies whether the boolean |preference| has the |expected_value| and is
@@ -151,7 +175,7 @@ class ExtensionPreferenceApiTest
   void TearDownOnMainThread() override {
     // BrowserProcess::Shutdown() needs to be called in a message loop, so we
     // post a task to release the keep alive, then run the message loop.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&std::unique_ptr<ScopedKeepAlive>::reset,
                                   base::Unretained(&keep_alive_), nullptr));
     content::RunAllPendingInMessageLoop();
@@ -163,7 +187,7 @@ class ExtensionPreferenceApiTest
   std::unique_ptr<ScopedKeepAlive> keep_alive_;
 };
 
-INSTANTIATE_TEST_SUITE_P(EventPage,
+INSTANTIATE_TEST_SUITE_P(BackgroundPage,
                          ExtensionPreferenceApiTest,
                          ::testing::Values(ContextType::kPersistentBackground));
 
@@ -189,6 +213,10 @@ IN_PROC_BROWSER_TEST_P(ExtensionPreferenceApiTest, Standard) {
   prefs->SetBoolean(prefs::kSearchSuggestEnabled, false);
   prefs->SetString(prefs::kWebRTCIPHandlingPolicy,
                    blink::kWebRTCIPHandlingDefaultPublicInterfaceOnly);
+  prefs->SetBoolean(prefs::kPrivacySandboxM1TopicsEnabled, true);
+  prefs->SetBoolean(prefs::kPrivacySandboxM1FledgeEnabled, true);
+  prefs->SetBoolean(prefs::kPrivacySandboxM1AdMeasurementEnabled, true);
+  prefs->SetBoolean(prefs::kPrivacySandboxRelatedWebsiteSetsEnabled, true);
 
   // The 'protectedContentEnabled' pref is only available on ChromeOS and
   // Windows, so pass a JSON array object with any unsupported prefs into

@@ -7,26 +7,27 @@
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/scoped_feature_list.h"
 #import "base/test/task_environment.h"
+#import "components/policy/core/common/policy_pref_names.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/policy/policy_util.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
+#import "ios/chrome/browser/policy/model/policy_util.h"
 #import "ios/chrome/browser/sessions/test_session_service.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/load_query_commands.h"
-#import "ios/chrome/browser/ui/commands/qr_scanner_commands.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/load_query_commands.h"
+#import "ios/chrome/browser/shared/public/commands/qr_scanner_commands.h"
+#import "ios/chrome/browser/shared/public/commands/save_to_photos_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/menu/menu_action_type.h"
 #import "ios/chrome/browser/ui/menu/menu_histograms.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/window_activities/window_activity_helpers.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/browser/window_activities/model/window_activity_helpers.h"
 #import "ios/chrome/grit/ios_strings.h"
+#import "ios/web/public/test/fakes/fake_web_state.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
@@ -37,30 +38,21 @@
 #import "ui/base/test/ios/ui_image_test_utils.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-MenuScenario kTestMenuScenario = MenuScenario::kHistoryEntry;
+const MenuScenarioHistogram kTestMenuScenario =
+    kMenuScenarioHistogramHistoryEntry;
 }  // namespace
 
 // Test fixture for the BrowserActionFactory.
 class BrowserActionFactoryTest : public PlatformTest {
  protected:
-  BrowserActionFactoryTest()
-      : test_title_(@"SomeTitle"),
-        scene_state_([[SceneState alloc] initWithAppState:nil]) {
-    feature_list_.InitAndEnableFeature(kUseSFSymbols);
-  }
+  BrowserActionFactoryTest() : test_title_(@"SomeTitle") {}
 
   void SetUp() override {
     TestChromeBrowserState::Builder test_cbs_builder;
     chrome_browser_state_ = test_cbs_builder.Build();
 
     test_browser_ = std::make_unique<TestBrowser>(chrome_browser_state_.get());
-
-    SceneStateBrowserAgent::CreateForBrowser(test_browser_.get(), scene_state_);
 
     mock_application_commands_handler_ =
         OCMStrictProtocolMock(@protocol(ApplicationCommands));
@@ -91,6 +83,12 @@ class BrowserActionFactoryTest : public PlatformTest {
     [test_browser_->GetCommandDispatcher()
         startDispatchingToTarget:mock_load_query_commands_handler_
                      forProtocol:@protocol(LoadQueryCommands)];
+
+    mock_save_to_photos_commands_handler_ =
+        OCMStrictProtocolMock(@protocol(SaveToPhotosCommands));
+    [test_browser_->GetCommandDispatcher()
+        startDispatchingToTarget:mock_save_to_photos_commands_handler_
+                     forProtocol:@protocol(SaveToPhotosCommands)];
   }
 
   base::test::ScopedFeatureList feature_list_;
@@ -104,7 +102,7 @@ class BrowserActionFactoryTest : public PlatformTest {
   id mock_browser_coordinator_commands_handler_;
   id mock_qr_scanner_commands_handler_;
   id mock_load_query_commands_handler_;
-  SceneState* scene_state_;
+  id mock_save_to_photos_commands_handler_;
 };
 
 // Tests that the Open in New Tab actions have the right titles and images.
@@ -250,7 +248,7 @@ TEST_F(BrowserActionFactoryTest, OpenNewTabAction) {
   EXPECT_EQ(0U, action.attributes);
 
   chrome_browser_state_->GetTestingPrefService()->SetManagedPref(
-      prefs::kIncognitoModeAvailability,
+      policy::policy_prefs::kIncognitoModeAvailability,
       std::make_unique<base::Value>(
           static_cast<int>(IncognitoModePrefs::kForced)));
 
@@ -276,7 +274,7 @@ TEST_F(BrowserActionFactoryTest, OpenNewIncognitoTabAction) {
   EXPECT_EQ(0U, action.attributes);
 
   chrome_browser_state_->GetTestingPrefService()->SetManagedPref(
-      prefs::kIncognitoModeAvailability,
+      policy::policy_prefs::kIncognitoModeAvailability,
       std::make_unique<base::Value>(
           static_cast<int>(IncognitoModePrefs::kDisabled)));
 
@@ -354,7 +352,7 @@ TEST_F(BrowserActionFactoryTest, StartNewSearchAction) {
   EXPECT_EQ(0U, action.attributes);
 
   chrome_browser_state_->GetTestingPrefService()->SetManagedPref(
-      prefs::kIncognitoModeAvailability,
+      policy::policy_prefs::kIncognitoModeAvailability,
       std::make_unique<base::Value>(
           static_cast<int>(IncognitoModePrefs::kForced)));
 
@@ -380,7 +378,7 @@ TEST_F(BrowserActionFactoryTest, NewIncognitoSearchAction) {
   EXPECT_EQ(0U, action.attributes);
 
   chrome_browser_state_->GetTestingPrefService()->SetManagedPref(
-      prefs::kIncognitoModeAvailability,
+      policy::policy_prefs::kIncognitoModeAvailability,
       std::make_unique<base::Value>(
           static_cast<int>(IncognitoModePrefs::kDisabled)));
 
@@ -434,6 +432,36 @@ TEST_F(BrowserActionFactoryTest, SearchCopiedTextAction) {
       l10n_util::GetNSString(IDS_IOS_TOOLS_MENU_SEARCH_COPIED_TEXT);
 
   UIAction* action = [factory actionToSearchCopiedText];
+
+  EXPECT_TRUE([expectedTitle isEqualToString:action.title]);
+  EXPECT_EQ(expectedImage, action.image);
+}
+
+// Tests that the action has the right title and image.
+TEST_F(BrowserActionFactoryTest, SaveImageInGooglePhotosAction) {
+  BrowserActionFactory* factory =
+      [[BrowserActionFactory alloc] initWithBrowser:test_browser_.get()
+                                           scenario:kTestMenuScenario];
+
+#if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
+  UIImage* expectedImage =
+      CustomSymbolWithPointSize(kGooglePhotosSymbol, kSymbolActionPointSize);
+#else
+  UIImage* expectedImage = DefaultSymbolWithPointSize(kSaveImageActionSymbol,
+                                                      kSymbolActionPointSize);
+#endif
+  NSString* expectedTitle =
+      l10n_util::GetNSString(IDS_IOS_TOOLS_MENU_SAVE_IMAGE_TO_PHOTOS);
+
+  GURL fakeImageURL("https://example.com/image.png");
+  web::Referrer fakeImageReferrer;
+  std::unique_ptr<web::WebState> fakeWebState =
+      std::make_unique<web::FakeWebState>();
+  UIAction* action =
+      [factory actionToSaveToPhotosWithImageURL:fakeImageURL
+                                       referrer:fakeImageReferrer
+                                       webState:fakeWebState.get()
+                                          block:nil];
 
   EXPECT_TRUE([expectedTitle isEqualToString:action.title]);
   EXPECT_EQ(expectedImage, action.image);

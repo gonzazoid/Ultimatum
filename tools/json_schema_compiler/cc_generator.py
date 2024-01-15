@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from code import Code
+from code_util import Code
 from model import PropertyType, Property, Type
 import cpp_util
 import schema_util
@@ -47,6 +47,7 @@ class _Generator(object):
                self._namespace.short_filename))
       .Append()
       .Append('#include <memory>')
+      .Append('#include <optional>')
       .Append('#include <ostream>')
       .Append('#include <string>')
       .Append('#include <utility>')
@@ -60,7 +61,8 @@ class _Generator(object):
       .Append('#include "base/values.h"')
       .Append(self._util_cc_helper.GetIncludePath())
       .Cblock(self._GenerateManifestKeysIncludes())
-      .Cblock(self._type_helper.GenerateIncludes(include_soft=True))
+      .Cblock(self._type_helper.GenerateIncludes(include_soft=True,
+          generate_error_messages=self._generate_error_messages))
       .Append()
       .Append('using base::UTF8ToUTF16;')
       .Append()
@@ -146,9 +148,9 @@ class _Generator(object):
         .Append('%s::~%s() = default;' % (classname_in_namespace, classname))
       )
       # Note: we use 'rhs' because some API objects have a member 'other'.
-      (c.Append('%s::%s(%s&& rhs) = default;' %
+      (c.Append('%s::%s(%s&& rhs) noexcept = default;' %
                     (classname_in_namespace, classname, classname))
-        .Append('%s& %s::operator=(%s&& rhs) = default;' %
+        .Append('%s& %s::operator=(%s&& rhs) noexcept = default;' %
                     (classname_in_namespace, classname_in_namespace,
                      classname))
       )
@@ -159,9 +161,18 @@ class _Generator(object):
             classname_in_namespace, type_.properties.values()))
 
       if type_.origin.from_json:
-        c.Cblock(self._GenerateTypePopulate(classname_in_namespace, type_))
-        if cpp_namespace is None:  # only generate for top-level types
-          c.Cblock(self._GenerateTypeFromValue(classname_in_namespace, type_))
+        c.Cblock(self._GenerateClone(classname_in_namespace, type_))
+        if type_.property_type is not PropertyType.CHOICES:
+          c.Cblock(self._GenerateTypePopulate(classname_in_namespace, type_))
+        c.Cblock(self._GenerateTypePopulateFromValue(
+          classname_in_namespace, type_))
+
+        if type_.property_type is not PropertyType.CHOICES:
+          c.Cblock(self._GenerateTypeFromValue(
+            classname_in_namespace, type_, is_dict=True))
+
+        c.Cblock(self._GenerateTypeFromValue(
+          classname_in_namespace, type_, is_dict=False))
       if type_.origin.from_client:
         c.Cblock(self._GenerateTypeToValue(classname_in_namespace, type_))
 
@@ -172,6 +183,7 @@ class _Generator(object):
     elif type_.property_type == PropertyType.ENUM:
       (c.Cblock(self._GenerateEnumToString(cpp_namespace, type_))
         .Cblock(self._GenerateEnumFromString(cpp_namespace, type_))
+        .Cblock(self._GenerateEnumParseErrorMessage(cpp_namespace, type_))
       )
 
     return c
@@ -183,12 +195,7 @@ class _Generator(object):
 
       real_t = self._type_helper.FollowRef(t)
       if real_t.property_type == PropertyType.ENUM:
-        namespace_prefix = ('%s::' % real_t.namespace.unix_name
-                            if real_t.namespace != self._namespace
-                            else '')
-        items.append('%s(%s%s)' % (prop.unix_name,
-                                   namespace_prefix,
-                                   self._type_helper.GetEnumNoneValue(t)))
+        items.append('{var_name}()'.format(var_name=prop.unix_name))
       elif prop.optional:
         continue
       elif t.property_type == PropertyType.INTEGER:
@@ -219,29 +226,135 @@ class _Generator(object):
     s = s + ' {}'
     return Code().Append(s)
 
+  def _GenerateCloneItem(self, type_, field_name, is_optional):
+    """Generates the cloning statement for an individual data member.
+    """
+
+    underlying_type = self._type_helper.FollowRef(type_)
+    c = Code()
+
+    if (type_.property_type == PropertyType.ARRAY and
+        self._type_helper.FollowRef(type_.item_type).property_type in (
+            PropertyType.ANY,
+            PropertyType.OBJECT)):
+      if is_optional:
+        (c.Sblock('if (%(name)s) {')
+            .Append('out.%(name)s.emplace();')
+            .Append('out.%(name)s->reserve(%(name)s->size());')
+            .Sblock('for (const auto& element : *%(name)s) {')
+              .Append(self._util_cc_helper.AppendToContainer(
+                '*out.%(name)s', 'element.Clone()'))
+            .Eblock('}')
+          .Eblock('}'))
+      else:
+        (c.Append('out.%(name)s.reserve(%(name)s.size());')
+          .Sblock('for (const auto& element : %(name)s) {')
+            .Append(self._util_cc_helper.AppendToContainer(
+              'out.%(name)s', 'element.Clone()'))
+          .Eblock('}'))
+    elif (underlying_type.property_type == PropertyType.OBJECT or
+          underlying_type.property_type == PropertyType.ANY or
+          underlying_type.property_type == PropertyType.CHOICES or
+          (underlying_type.property_type == PropertyType.FUNCTION and not
+          type_.is_serializable_function)):
+      if is_optional:
+        (c.Sblock('if (%(name)s) {')
+          .Append('out.%(name)s = %(name)s->Clone();')
+          .Eblock('}'))
+      else:
+        c.Append('out.%(name)s = %(name)s.Clone();')
+    else:
+      c.Append('out.%(name)s = %(name)s;')
+
+    c.Substitute({'name': field_name})
+    return c
+
+  def _GenerateClone(self, cpp_namespace, type_):
+    """Generates the function for cloning a type.
+    """
+    classname = cpp_util.Classname(schema_util.StripNamespace(type_.name))
+    c = Code()
+    c.Sblock('%(namespace)s %(namespace)s::Clone() const {')
+    c.Append('%(classname)s out;')
+
+    if type_.property_type is PropertyType.CHOICES:
+      for choice in type_.choices:
+        c.Concat(self._GenerateCloneItem(
+          choice, 'as_%s' % choice.unix_name, is_optional=True))
+    else:
+      for prop in type_.properties.values():
+        c.Concat(self._GenerateCloneItem(
+          prop.type_, prop.type_.unix_name, is_optional=prop.optional))
+
+    (c.Append('return out;')
+      .Eblock('}')
+      .Substitute({'namespace': cpp_namespace, 'classname': classname}))
+    return c
+
+
   def _GenerateTypePopulate(self, cpp_namespace, type_):
     """Generates the function for populating a type given a pointer to it.
 
-    E.g for type "Foo", generates Foo::Populate()
+    E.g for type "Foo", generates:
+        bool Foo::Populate(const base::Value::Dict& dict, Foo& out)
     """
     classname = cpp_util.Classname(schema_util.StripNamespace(type_.name))
     c = Code()
     (c.Append('// static')
       .Append('bool %(namespace)s::Populate(')
       .Sblock('    %s) {' % self._GenerateParams(
-          ('const base::Value& value', '%(name)s* out'))))
+          ('const base::Value::Dict& dict', '%(name)s& out'))))
 
-    if self._generate_error_messages:
-      c.Append('DCHECK(error);')
+    # TODO(crbug.com/1145154): The generated code here will ignore
+    # unrecognized keys, but the parsing code for types passed to APIs in the
+    # renderer will hard-error on them. We should probably be consistent with
+    # the renderer here (at least for types also parsed in the renderer).
+    for prop in type_.properties.values():
+      c.Concat(self._InitializePropertyToDefault(prop, 'out'))
+    for prop in type_.properties.values():
+      c.Concat(self._GenerateTypePopulateProperty(prop, 'dict', 'out'))
+    if type_.additional_properties is not None:
+      if type_.additional_properties.property_type == PropertyType.ANY:
+        c.Append('out.additional_properties.Merge(dict.Clone());')
+      else:
+        cpp_type = self._type_helper.GetCppType(type_.additional_properties)
+        (c.Sblock('for (const auto item : dict) {')
+            .Append('%s tmp;' % cpp_type)
+            .Concat(self._GeneratePopulateVariableFromValue(
+                type_.additional_properties,
+                'item.second',
+                'tmp',
+                'false'))
+            .Append('out.additional_properties[item.first] = tmp;')
+          .Eblock('}')
+        )
+    c.Append('return true;')
+    (c.Eblock('}')
+      .Substitute({'namespace': cpp_namespace, 'name': classname}))
+    return c
 
-    if type_.property_type == PropertyType.CHOICES:
+  def _GenerateTypePopulateFromValue(self, cpp_namespace, type_):
+    """Generates the function for populating a type receiving a base::Value
+    instance.
+
+    E.g for choice type "Foo", generates:
+        bool Foo::Populate(const base::Value& value, Foo& out)
+    """
+    classname = cpp_util.Classname(schema_util.StripNamespace(type_.name))
+    c = Code()
+    (c.Append('// static')
+      .Append('bool %(namespace)s::Populate(')
+      .Sblock('    %s) {' % self._GenerateParams(
+          ('const base::Value& value', '%(name)s& out'))))
+
+    if type_.property_type is PropertyType.CHOICES:
       for choice in type_.choices:
         (c.Sblock('if (%s) {' % self._GenerateValueIsTypeExpression('value',
                                                                     choice))
             .Concat(self._GeneratePopulateVariableFromValue(
                 choice,
                 'value',
-                'out->as_%s' % choice.unix_name,
+                'out.as_%s' % choice.unix_name,
                 'false',
                 is_ptr=True))
             .Append('return true;')
@@ -259,34 +372,9 @@ class _Generator(object):
           self._util_cc_helper.GetValueTypeString('value')))
         .Append('return false;')
         .Eblock('}'))
+      (c.Append('return Populate(%s);' %
+        self._GenerateArgs(('value.GetDict()', 'out'))))
 
-      if type_.properties or type_.additional_properties is not None:
-        c.Append('const base::Value::Dict& dict = value.GetDict();')
-
-      # TODO(crbug.com/1145154): The generated code here will ignore
-      # unrecognized keys, but the parsing code for types passed to APIs in the
-      # renderer will hard-error on them. We should probably be consistent with
-      # the renderer here (at least for types also parsed in the renderer).
-      for prop in type_.properties.values():
-        c.Concat(self._InitializePropertyToDefault(prop, 'out'))
-      for prop in type_.properties.values():
-        c.Concat(self._GenerateTypePopulateProperty(prop, 'dict', 'out'))
-      if type_.additional_properties is not None:
-        if type_.additional_properties.property_type == PropertyType.ANY:
-          c.Append('out->additional_properties.Merge(dict.Clone());')
-        else:
-          cpp_type = self._type_helper.GetCppType(type_.additional_properties)
-          (c.Sblock('for (const auto item : dict) {')
-              .Append('%s tmp;' % cpp_type)
-              .Concat(self._GeneratePopulateVariableFromValue(
-                  type_.additional_properties,
-                  'item.second',
-                  'tmp',
-                  'false'))
-              .Append('out->additional_properties[item.first] = tmp;')
-            .Eblock('}')
-          )
-      c.Append('return true;')
     (c.Eblock('}')
       .Substitute({'namespace': cpp_namespace, 'name': classname}))
     return c
@@ -315,13 +403,10 @@ class _Generator(object):
             prop, '(*%s)' % value_var, dst, 'false')))
       underlying_type = self._type_helper.FollowRef(prop.type_)
       if underlying_type.property_type == PropertyType.ENUM:
-        namespace_prefix = ('%s::' % underlying_type.namespace.unix_name
-                            if underlying_type.namespace != self._namespace
-                            else '')
         (c.Append('} else {')
-          .Append('%%(dst)s->%%(name)s = %s%s;' %
-             (namespace_prefix,
-              self._type_helper.GetEnumNoneValue(prop.type_))))
+          .Append('%%(dst)s.%%(name)s = %s;' %
+            self._type_helper.GetEnumDefaultValue(underlying_type,
+                                                  self._namespace)))
       c.Eblock('}')
     else:
       (c.Sblock(
@@ -342,24 +427,42 @@ class _Generator(object):
     })
     return c
 
-  def _GenerateTypeFromValue(self, cpp_namespace, type_):
+  def _GenerateTypeFromValue(self, cpp_namespace, type_, is_dict):
     classname = cpp_util.Classname(schema_util.StripNamespace(type_.name))
+
+    return_type = self._type_helper.GetOptionalReturnType(
+        cpp_namespace, support_errors=self._generate_error_messages)
+
+    param_type = ('base::Value::Dict' if is_dict else 'base::Value')
+
     c = Code()
-    (c.Append('// static')
-      .Append('std::unique_ptr<%s> %s::FromValue(%s) {' % (classname,
-        cpp_namespace, self._GenerateParams(('const base::Value& value',))))
+    (c.Append(f'// static')
+      .Append('{return_type} '
+              '{classname}::FromValue(const {param_type}& value) {{'.format(
+                return_type=return_type,
+                classname=cpp_namespace,
+                param_type=param_type))
     )
     c.Sblock();
+    # TODO(crbug.com/1354063): Once the deprecated version of this method is
+    # removed, we should consider making Populate return an optional, rather
+    # than using an out param.
     if self._generate_error_messages:
-      c.Append('DCHECK(error);')
-    c.Append('auto out = std::make_unique<%s>();' % classname)
+      c.Append('std::u16string error;')
+
+    c.Append(f'{classname} out;')
     c.Append('bool result = Populate(%s);' %
-      self._GenerateArgs(('value', 'out.get()')))
+      self._GenerateArgs(('value', 'out')))
+
+    c.Sblock('if (!result) {')
     if self._generate_error_messages:
-      c.Append('DCHECK_EQ(result, error->empty());')
-    c.Sblock('if (!result)')
-    c.Append('return nullptr;')
-    c.Eblock('return out;')
+      c.Append('DCHECK(!error.empty());')
+      c.Append('return base::unexpected(std::move(error));')
+    else:
+      c.Append('return std::nullopt;')
+    c.Eblock('}')
+
+    c.Append('return out;')
     c.Eblock('}')
     return c
 
@@ -430,7 +533,7 @@ class _Generator(object):
     """
     params = [
       'const base::Value::Dict& root_dict',
-      '%(classname)s* out'
+      '%(classname)s& out'
     ]
 
     c = Code()
@@ -442,12 +545,9 @@ class _Generator(object):
     c.Sblock('%s) {' %
              self._GenerateParams(params, generate_error_messages=True))
 
-    c.Append('DCHECK(out);')
-    c.Append('DCHECK(error);')
     c.Append()
 
-    c.Append('std::vector<base::StringPiece> error_path_reversed_vec;')
-    c.Append('auto* error_path_reversed = &error_path_reversed_vec;')
+    c.Append('std::vector<base::StringPiece> error_path_reversed;')
     c.Append('const base::Value::Dict& dict = root_dict;')
 
     for prop in properties:
@@ -473,9 +573,9 @@ class _Generator(object):
     params = [
       'const base::Value::Dict& root_dict',
       'base::StringPiece key',
-      '%(classname)s* out',
-      'std::u16string* error',
-      'std::vector<base::StringPiece>* error_path_reversed'
+      '%(classname)s& out',
+      'std::u16string& error',
+      'std::vector<base::StringPiece>& error_path_reversed'
     ]
 
     c = Code()
@@ -487,20 +587,20 @@ class _Generator(object):
     c.Sblock('%s) {' %
              self._GenerateParams(params, generate_error_messages=False))
 
-    c.Append('DCHECK(out);')
-    c.Append('DCHECK(error);')
-    c.Append('DCHECK(error_path_reversed);')
     c.Append()
 
     c.Append(
       'const base::Value* value = '
       '::json_schema_compiler::manifest_parse_util::FindKeyOfType('
-      'root_dict, key, base::Value::Type::DICTIONARY, error, '
+      'root_dict, key, base::Value::Type::DICT, error, '
       'error_path_reversed);'
     )
     c.Sblock('if (!value)')
     c.Append('return false;')
-    c.Eblock('const base::Value::Dict& dict = value->GetDict();')
+    if len(properties) > 0:
+      c.Eblock('const base::Value::Dict& dict = value->GetDict();')
+    else:
+      c.Eblock('')
 
     for prop in properties:
       c.Concat(self._InitializePropertyToDefault(prop, 'out'))
@@ -546,7 +646,7 @@ class _Generator(object):
       underlying_type.namespace.name))
 
     property_constant = cpp_util.UnixNameToConstantName(property.unix_name)
-    out_expression = '&out->%s' % property.unix_name
+    out_expression = 'out.%s' % property.unix_name
 
     def get_enum_params(enum_type, include_optional_param):
       # type: (Type, bool) -> List[str]
@@ -564,8 +664,8 @@ class _Generator(object):
       if include_optional_param:
         params.append('true' if property.optional else 'false')
       params += [
-        '%s%s' % (cpp_type_namespace,
-                  self._type_helper.GetEnumNoneValue(enum_type)),
+        '%s' % self._type_helper.GetEnumDefaultValue(enum_type,
+                                                     self._namespace),
         '%s' % out_expression,
         'error',
         'error_path_reversed'
@@ -599,7 +699,7 @@ class _Generator(object):
       c.Append('::json_schema_compiler::manifest_parse_util::'
         'PopulateFinalError(error, error_path_reversed);')
     else:
-      c.Append('error_path_reversed->push_back(key);')
+      c.Append('error_path_reversed.push_back(key);')
     c.Append('return false;')
     c.Eblock('}')
 
@@ -620,15 +720,12 @@ class _Generator(object):
       if prop.optional:
         underlying_type = self._type_helper.FollowRef(prop.type_)
         if underlying_type.property_type == PropertyType.ENUM:
-          # Optional enum values are generated with a NONE enum value,
-          # potentially from another namespace.
-          maybe_namespace = ''
-          if underlying_type.namespace != self._namespace:
-            maybe_namespace = '%s::' % underlying_type.namespace.unix_name
-          c.Sblock('if (%s != %s%s) {' %
+          # Optional enum values are generated with default initialisation (e.g.
+          # kNone), potentially from another namespace.
+          c.Sblock('if (%s != %s) {' %
               (prop_var,
-               maybe_namespace,
-               self._type_helper.GetEnumNoneValue(prop.type_)))
+               self._type_helper.GetEnumDefaultValue(underlying_type,
+                                                     self._namespace)))
         else:
           c.Sblock('if (%s) {' % prop_var)
 
@@ -669,9 +766,20 @@ class _Generator(object):
     c.Append('base::Value result;')
     for choice in type_.choices:
       choice_var = 'as_%s' % choice.unix_name
-      # Enums cannot be wrapped with scoped_ptr, but the XXX_NONE enum value
-      # is equal to 0.
-      (c.Sblock('if (%s) {' % choice_var)
+
+      # Enum class values cannot be checked as a boolean, so they require
+      # specific handling when checking if they are engaged, by comparing it
+      # against kNone.
+      if (self._type_helper.FollowRef(choice).property_type ==
+                                            PropertyType.ENUM):
+        comparison_expr = '{enum_var} != {default_value}'.format(
+          enum_var=choice_var,
+          default_value=self._type_helper.GetEnumDefaultValue(choice,
+                                                              self._namespace))
+      else:
+        comparison_expr = choice_var
+
+      (c.Sblock('if (%s) {' % comparison_expr)
        .Append('DCHECK(result.is_none()) << "Cannot set multiple choices for '
                '%s";' %
                type_.unix_name).Cblock(self._CreateValueFromType(
@@ -703,9 +811,13 @@ class _Generator(object):
       c.Concat(self._GeneratePropertyFunctions('Params', function.params))
       (c.Append('Params::Params() = default;')
         .Append('Params::~Params() = default;')
+        .Append('Params::Params(Params&& rhs) noexcept = default;')
+        .Append('Params& Params::operator=(Params&& rhs) noexcept = default;')
         .Append()
         .Cblock(self._GenerateFunctionParamsCreate(function))
       )
+      if self._generate_error_messages:
+        c.Cblock(self._GenerateFunctionParamsCreateWithExpected(function))
 
     # Results::Create function
     if function.returns_async:
@@ -756,9 +868,9 @@ class _Generator(object):
         # Scope the std::vector variable declaration inside braces.
         (c.Sblock('{')
           .Append('std::vector<std::string> %s;' % enum_list_var)
-          .Append('for (const auto& it : %s) {' % varname)
-          .Append('%s.push_back(%sToString(it));' % (enum_list_var,
-                                                     maybe_namespace))
+          .Sblock('for (const auto& it : %s) {' % varname)
+            .Append('%s.emplace_back(%sToString(it));' % (enum_list_var,
+                                                          maybe_namespace))
           .Eblock('}'))
 
         # Because the std::vector above is always created for both required and
@@ -766,7 +878,7 @@ class _Generator(object):
         # std::vector to create the values.
         (c.Append(code %
             self._GenerateCreateValueFromType(type_, enum_list_var, False))
-          .Append('}'))
+          .Eblock('}'))
         return c
 
     c.Append(code % self._GenerateCreateValueFromType(type_, var, is_ptr))
@@ -806,7 +918,12 @@ class _Generator(object):
     elif underlying_type.property_type == PropertyType.ARRAY:
       if is_ptr:
         var = '*%s' % var
-      return '%s' % self._util_cc_helper.CreateValueFromArray(var)
+      underlying_item_cpp_type = (
+          self._type_helper.GetCppType(underlying_type.item_type))
+      if underlying_item_cpp_type != 'base::Value':
+        return '%s' % self._util_cc_helper.CreateValueFromArray(var)
+      else:
+        return '(%s).Clone()' % var
     elif (underlying_type.property_type.is_fundamental or
               underlying_type.is_serializable_function):
       if is_ptr:
@@ -816,7 +933,7 @@ class _Generator(object):
       raise NotImplementedError('Conversion of %s to base::Value not '
                                 'implemented' % repr(type_.type_))
 
-  def _GenerateParamsCheck(self, function, var):
+  def _GenerateParamsCheck(self, function, var, failure_value):
     """Generates a check for the correct number of arguments when creating
     Params.
     """
@@ -835,10 +952,11 @@ class _Generator(object):
     (c.Concat(self._AppendError16(
         'u"expected %%(total)d arguments, got " '
         '+ base::NumberToString16(%%(var)s.size())'))
-      .Append('return nullptr;')
+      .Append('return %(failure_value)s;')
       .Eblock('}')
       .Substitute({
         'var': var,
+        'failure_value': failure_value,
         'required': num_required,
         'total': len(function.params),
     }))
@@ -853,14 +971,14 @@ class _Generator(object):
     c = Code()
 
     (c.Append('// static')
-      .Sblock('std::unique_ptr<Params> Params::Create(%s) {' %
+      .Sblock('std::optional<Params> Params::Create(%s) {' %
                   self._GenerateParams([
                       'const base::Value::List& args']))
     )
-    if self._generate_error_messages:
-      c.Append('DCHECK(error);')
-    (c.Concat(self._GenerateParamsCheck(function, 'args'))
-      .Append('std::unique_ptr<Params> params(new Params());')
+
+    failure_value = 'std::nullopt'
+    (c.Concat(self._GenerateParamsCheck(function, 'args', failure_value))
+      .Append('Params params;')
     )
 
     for param in function.params:
@@ -871,7 +989,6 @@ class _Generator(object):
       # incorrect or missing, those following it are not processed. Note that
       # for optional arguments, we allow missing arguments and proceed because
       # there may be other arguments following it.
-      failure_value = 'std::unique_ptr<Params>()'
       c.Append()
       value_var = param.unix_name + '_value'
       (c.Append('if (%(i)s < args.size() &&')
@@ -895,6 +1012,33 @@ class _Generator(object):
 
     return c
 
+  def _GenerateFunctionParamsCreateWithExpected(self, function):
+    """An overloaded added to `Create()` communinicating errors through
+    `base::expected`.
+    """
+    # TODO(crbug.com/1415174): This function is being temporarily added
+    # separately to allow us to migrate the places where error is being passed
+    # as an out param. Once that is done, this duplication should be deleted,
+    # and everything should be handled by a single Create function.
+    c = Code()
+
+    (c.Append('// static')
+      .Sblock('base::expected<Params, std::u16string> '
+          'Params::Create(const base::Value::List& args) {')
+    )
+
+    (c.Append('std::u16string error;')
+      .Append('auto result = Params::Create(args, error);')
+      .Sblock('if (!result) {')
+        .Append('DCHECK(!error.empty());')
+        .Append('return base::unexpected(std::move(error));')
+      .Eblock('}')
+      .Append('return std::move(result).value();')
+      .Eblock('}')
+      .Append())
+    return c
+
+
   def _GeneratePopulatePropertyFromValue(self,
                                          prop,
                                          src_var,
@@ -906,7 +1050,7 @@ class _Generator(object):
     """
     return self._GeneratePopulateVariableFromValue(prop.type_,
                                                    src_var,
-                                                   '%s->%s' % (dst_class_var,
+                                                   '%s.%s' % (dst_class_var,
                                                                prop.unix_name),
                                                    failure_value,
                                                    is_ptr=prop.optional)
@@ -948,14 +1092,14 @@ class _Generator(object):
                 type_.name,
                 self._util_cc_helper.GetValueTypeString('%%(src_var)s')))))
       if is_ptr:
-        if cpp_util.ShouldUseAbslOptional(underlying_type):
-          c.Append('%(dst_var)s = absl::nullopt;')
+        if cpp_util.ShouldUseStdOptional(underlying_type):
+          c.Append('%(dst_var)s = std::nullopt;')
         else:
           c.Append('%(dst_var)s.reset();')
       c.Append('return %(failure_value)s;')
       (c.Eblock('}'))
       if is_ptr:
-        if cpp_util.ShouldUseAbslOptional(underlying_type):
+        if cpp_util.ShouldUseStdOptional(underlying_type):
           c.Append('%(dst_var)s = *temp;')
         elif is_string_or_function:
           c.Append('%(dst_var)s = std::make_unique<%(cpp_type)s>(*temp);')
@@ -976,7 +1120,7 @@ class _Generator(object):
           .Sblock('else {')
           .Append('%(cpp_type)s temp;')
           .Append('if (!%%(cpp_type)s::Populate(%s))' % self._GenerateArgs(
-              ('%(src_var)s', '&temp')))
+              ('%(src_var)s.GetDict()', 'temp')))
           .Append('  return %(failure_value)s;')
           .Append('%(dst_var)s = std::move(temp);')
           .Eblock('}')
@@ -989,15 +1133,27 @@ class _Generator(object):
           .Append('return %(failure_value)s;')
           .Eblock('}')
           .Append('if (!%%(cpp_type)s::Populate(%s)) {' % self._GenerateArgs(
-            ('%(src_var)s', '&%(dst_var)s')))
+            ('%(src_var)s.GetDict()', '%(dst_var)s')))
           .Append('  return %(failure_value)s;')
           .Append('}')
         )
     elif underlying_type.property_type == PropertyType.FUNCTION:
       assert not underlying_type.is_serializable_function, \
           'Serializable functions should have been handled above.'
-      if is_ptr: # Non-serializable functions are just represented as dicts.
+      # Non-serializable functions are just represented as empty dicts. If it
+      # was optional we call emplace to construct it in-place, otherwise we just
+      # check we were passed an empty dict.
+      if is_ptr:
         c.Append('%(dst_var)s.emplace();')
+      else:
+        (c.Sblock('if (!%(src_var)s.is_dict() || ' +
+                  '!%(src_var)s.GetDict().empty()) {')
+          .Concat(self._AppendError16(
+            'u"\'%%(key)s\': expected dictionary, got " + ' +
+            self._util_cc_helper.GetValueTypeString('%%(src_var)s')))
+          .Append('return %(failure_value)s;')
+          .Eblock('}')
+        )
     elif underlying_type.property_type == PropertyType.ANY:
       c.Append('%(dst_var)s = %(src_var)s.Clone();')
     elif underlying_type.property_type == PropertyType.ARRAY:
@@ -1019,35 +1175,39 @@ class _Generator(object):
                      failure_value,
                      is_ptr=is_ptr))
       else:
-        args = ['%(src_var)s.GetList()', '&%(dst_var)s']
+        args = ['%(src_var)s.GetList()', '%(dst_var)s']
         if self._generate_error_messages:
           c.Append('std::u16string array_parse_error;')
-          args.append('&array_parse_error')
+          args.append('array_parse_error')
 
-        c.Append('if (!%s(%s)) {' % (
-            self._util_cc_helper.PopulateArrayFromListFunction(is_ptr),
-            self._GenerateArgs(args, generate_error_messages=False)))
-        c.Sblock()
-        if self._generate_error_messages:
-          c.Append(
-            'array_parse_error = u"Error at key \'%(key)s\': " + '
-            'array_parse_error;'
-          )
-          c.Concat(self._AppendError16('array_parse_error'))
-        c.Append('return %(failure_value)s;')
-        c.Eblock('}')
+        item_cpp_type = self._type_helper.GetCppType(item_type)
+        if item_cpp_type != 'base::Value':
+          c.Append('if (!%s(%s)) {' % (
+              self._util_cc_helper.PopulateArrayFromListFunction(is_ptr),
+              self._GenerateArgs(args, generate_error_messages=False)))
+          c.Sblock()
+          if self._generate_error_messages:
+            c.Append(
+              'array_parse_error = u"Error at key \'%(key)s\': " + '
+              'array_parse_error;'
+            )
+            c.Concat(self._AppendError16('array_parse_error'))
+          c.Append('return %(failure_value)s;')
+          c.Eblock('}')
+        else:
+          c.Append('%(dst_var)s = %(src_var)s.GetList().Clone();')
       c.Eblock('}')
     elif underlying_type.property_type == PropertyType.CHOICES:
       if is_ptr:
         (c.Append('%(cpp_type)s temp;')
           .Append('if (!%%(cpp_type)s::Populate(%s))' % self._GenerateArgs(
-              ('%(src_var)s', '&temp')))
+              ('%(src_var)s', 'temp')))
           .Append('  return %(failure_value)s;')
           .Append('%(dst_var)s = std::move(temp);')
         )
       else:
         (c.Append('if (!%%(cpp_type)s::Populate(%s))' % self._GenerateArgs(
-            ('%(src_var)s', '&%(dst_var)s')))
+            ('%(src_var)s', '%(dst_var)s')))
           .Append('  return %(failure_value)s;'))
     elif underlying_type.property_type == PropertyType.ENUM:
       c.Concat(self._GenerateStringToEnumConversion(underlying_type,
@@ -1121,7 +1281,10 @@ class _Generator(object):
     enum_as_string = '%s_as_string' % type_.unix_name
     cpp_type_namespace = ''
     if type_.namespace != self._namespace:
-      cpp_type_namespace = '%s::' % type_.namespace.unix_name
+      namespace = cpp_util.GetCppNamespace(
+        type_.namespace.environment.namespace_pattern,
+        type_.namespace.unix_name)
+      cpp_type_namespace = '%s::' % namespace
     (c.Append('const std::string* %s = %s.GetIfString();' % (enum_as_string,
                                                             src_var))
       .Sblock('if (!%s) {' % enum_as_string)
@@ -1134,15 +1297,15 @@ class _Generator(object):
                                        cpp_type_namespace,
                                        cpp_util.Classname(type_.name),
                                        enum_as_string))
-      .Sblock('if (%s == %s%s) {' % (dst_var,
-                                     cpp_type_namespace,
-                                     self._type_helper.GetEnumNoneValue(type_)))
+      .Sblock('if (%s == %s) {' % (dst_var,
+                        self._type_helper.GetEnumDefaultValue(type_,
+                          self._namespace)))
       .Concat(self._AppendError16(
-        'u\"\'%%(key)s\': expected \\"' +
-        '\\" or \\"'.join(
-            enum_value.name
-            for enum_value in self._type_helper.FollowRef(type_).enum_values) +
-        '\\", got \\"" + UTF8ToUTF16(*%s) + u"\\""' % enum_as_string))
+        'u\"\'%%(key)s\': "' + (
+            ' + %sGet%sParseError(*%s)' %
+            (cpp_type_namespace,
+             cpp_util.Classname(type_.name),
+             enum_as_string))))
       .Append('return %s;' % failure_value)
       .Eblock('}')
       .Substitute({'src_var': src_var, 'key': type_.name})
@@ -1199,7 +1362,7 @@ class _Generator(object):
       c.Append('// static')
     maybe_namespace = '' if cpp_namespace is None else '%s::' % cpp_namespace
 
-    c.Sblock('%s%s %sParse%s(const std::string& enum_string) {' %
+    c.Sblock('%s%s %sParse%s(base::StringPiece enum_string) {' %
                  (maybe_namespace, classname, maybe_namespace, classname))
     for _, enum_value in enumerate(
           self._type_helper.FollowRef(type_).enum_values):
@@ -1213,6 +1376,31 @@ class _Generator(object):
     (c.Append('return %s;' % self._type_helper.GetEnumNoneValue(type_))
       .Eblock('}')
     )
+    return c
+
+  def _GenerateEnumParseErrorMessage(self, cpp_namespace, type_):
+    """Generates Get<ClassName>ParseError() which returns a parse error message
+    for a given string input.
+    """
+
+    c = Code()
+    classname = cpp_util.Classname(schema_util.StripNamespace(type_.name))
+
+    if cpp_namespace is not None:
+      c.Append('// static')
+    maybe_namespace = '' if cpp_namespace is None else '%s::' % cpp_namespace
+
+    c.Sblock(
+        'std::u16string %sGet%sParseError(base::StringPiece enum_string) {' %
+        (maybe_namespace, classname))
+    error_message = (
+        'u\"expected \\"' +
+        '\\" or \\"'.join(
+            enum_value.name
+            for enum_value in self._type_helper.FollowRef(type_).enum_values) +
+        '\\", got \\"" + UTF8ToUTF16(enum_string) + u"\\""')
+    c.Append('return %s;' % error_message)
+    c.Eblock('}')
     return c
 
   def _GenerateAsyncResponseArguments(self, function_scope, params):
@@ -1264,22 +1452,19 @@ class _Generator(object):
   def _InitializePropertyToDefault(self, prop, dst):
     """Initialize a model.Property to its default value inside an object.
 
-    E.g for optional enum "state", generate dst->state = STATE_NONE;
+    E.g for optional enum "state", generate dst.state = STATE_NONE;
 
-    dst: Type*
+    dst: Type
     """
     c = Code()
     underlying_type = self._type_helper.FollowRef(prop.type_)
     if (underlying_type.property_type == PropertyType.ENUM and
         prop.optional):
-      namespace_prefix = ('%s::' % underlying_type.namespace.unix_name
-                          if underlying_type.namespace != self._namespace
-                          else '')
-      c.Append('%s->%s = %s%s;' % (
+      c.Append('%s.%s = %s;' % (
         dst,
         prop.unix_name,
-        namespace_prefix,
-        self._type_helper.GetEnumNoneValue(prop.type_)))
+        self._type_helper.GetEnumDefaultValue(underlying_type,
+                                              self._namespace)))
     return c
 
   def _AppendError16(self, error16):
@@ -1288,11 +1473,12 @@ class _Generator(object):
     c = Code()
     if not self._generate_error_messages:
       return c
-    c.Append('DCHECK(error->empty());')
-    c.Append('*error = %s;' % error16)
+    c.Append('DCHECK(error.empty());')
+    c.Append('error = %s;' % error16)
     return c
 
-  def _GenerateParams(self, params, generate_error_messages=None):
+  def _GenerateParams(
+      self, params, generate_error_messages=None):
     """Builds the parameter list for a function, given an array of parameters.
     If |generate_error_messages| is specified, it overrides
     |self._generate_error_messages|.
@@ -1300,7 +1486,7 @@ class _Generator(object):
     if generate_error_messages is None:
       generate_error_messages = self._generate_error_messages
     if generate_error_messages:
-      params = list(params) + ['std::u16string* error']
+      params = list(params) + ['std::u16string& error']
     return ', '.join(str(p) for p in params)
 
   def _GenerateArgs(self, args, generate_error_messages=None):

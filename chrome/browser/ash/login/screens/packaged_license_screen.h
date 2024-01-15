@@ -7,13 +7,14 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/packaged_license_screen_handler.h"
 
 namespace ash {
+
+class PackagedLicenseView;
 
 // Screen which is shown before login and enterprise screens.
 // It advertises the packaged license which allows user enroll device.
@@ -68,11 +69,5 @@ class PackagedLicenseScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::PackagedLicenseScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_PACKAGED_LICENSE_SCREEN_H_

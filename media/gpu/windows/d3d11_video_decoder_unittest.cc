@@ -8,24 +8,27 @@
 #include <d3d11_1.h>
 #include <initguid.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <memory>
+#include <utility>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/windows_version.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/media_log.h"
 #include "media/base/media_switches.h"
 #include "media/base/media_util.h"
+#include "media/base/supported_types.h"
 #include "media/base/test_helpers.h"
 #include "media/base/win/d3d11_mocks.h"
-#include "media/gpu/windows/d3d11_video_decoder_impl.h"
+#include "media/gpu/test/fake_command_buffer_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -38,20 +41,6 @@ using ::testing::SaveArg;
 using ::testing::SetArgPointee;
 
 namespace media {
-
-class MockD3D11VideoDecoderImpl : public D3D11VideoDecoderImpl {
- public:
-  MockD3D11VideoDecoderImpl(MockD3D11VideoDecoderImpl** thiz)
-      : D3D11VideoDecoderImpl(
-            nullptr,
-            base::RepeatingCallback<scoped_refptr<CommandBufferHelper>()>()) {
-    *thiz = this;
-  }
-
-  void Initialize(InitCB init_cb) override { MockInitialize(); }
-
-  MOCK_METHOD0(MockInitialize, void());
-};
 
 class D3D11VideoDecoderTest : public ::testing::Test {
  public:
@@ -66,6 +55,8 @@ class D3D11VideoDecoderTest : public ::testing::Test {
     gpu_preferences_.use_passthrough_cmd_decoder = false;
     gpu_workarounds_.disable_dxgi_zero_copy_video = false;
     gpu_task_runner_ = task_environment_.GetMainThreadTaskRunner();
+    fake_command_buffer_helper_ =
+        base::MakeRefCounted<FakeCommandBufferHelper>(gpu_task_runner_);
 
     // Create a mock D3D11 device that supports 11.0.  Note that if you change
     // this, then you probably also want VideoDevice1 and friends, below.
@@ -157,13 +148,16 @@ class D3D11VideoDecoderTest : public ::testing::Test {
     *config_count_out = 1;
   }
 
+  scoped_refptr<CommandBufferHelper> GetCommandBufferHelper() {
+    return fake_command_buffer_helper_;
+  }
+
   // Most recently provided video decoder desc.
   absl::optional<D3D11_VIDEO_DECODER_DESC> last_video_decoder_desc_;
   D3D11_VIDEO_DECODER_CONFIG video_decoder_config_;
 
   void TearDown() override {
     decoder_.reset();
-    // Run the gpu thread runner to tear down |impl_|.
     base::RunLoop().RunUntilIdle();
   }
 
@@ -193,8 +187,6 @@ class D3D11VideoDecoderTest : public ::testing::Test {
       supported_configs = D3D11VideoDecoder::GetSupportedVideoDecoderConfigs(
           gpu_preferences_, gpu_workarounds_, get_device_cb);
     }
-    base::SequenceBound<MockD3D11VideoDecoderImpl> impl(gpu_task_runner_,
-                                                        &impl_);
     task_environment_.RunUntilIdle();
 
     // We store it in a std::unique_ptr<VideoDecoder> so that the default
@@ -202,44 +194,39 @@ class D3D11VideoDecoderTest : public ::testing::Test {
     decoder_ = base::WrapUnique<VideoDecoder>(
         d3d11_decoder_raw_ = new D3D11VideoDecoder(
             gpu_task_runner_, std::make_unique<NullMediaLog>(),
-            gpu_preferences_, gpu_workarounds_, std::move(impl),
-            base::RepeatingCallback<scoped_refptr<CommandBufferHelper>()>(),
-            get_device_cb, *supported_configs, system_hdr_enabled_));
+            gpu_preferences_, gpu_workarounds_,
+            base::BindRepeating(&D3D11VideoDecoderTest::GetCommandBufferHelper,
+                                base::Unretained(this)),
+            get_device_cb, *supported_configs, system_hdr_enabled_,
+            CHROME_LUID{0, 0}));
   }
 
-  void InitializeDecoder(const VideoDecoderConfig& config, bool expectSuccess) {
+  void InitializeDecoder(const VideoDecoderConfig& config,
+                         bool expect_success) {
     const bool low_delay = false;
     CdmContext* cdm_context = nullptr;
 
-    if (expectSuccess) {
-      EXPECT_CALL(*this, MockInitCB(_)).Times(0);
-      EXPECT_CALL(*impl_, MockInitialize());
-    } else {
-      EXPECT_CALL(*this, MockInitCB(_)).Times(1);
-    }
     decoder_->Initialize(config, low_delay, cdm_context,
                          base::BindOnce(&D3D11VideoDecoderTest::CheckStatus,
-                                        base::Unretained(this), expectSuccess),
+                                        base::Unretained(this), expect_success),
                          base::DoNothing(), base::DoNothing());
-    base::RunLoop().RunUntilIdle();
+    task_environment_.RunUntilIdle();
   }
 
-  void CheckStatus(bool expectSuccess, DecoderStatus actual) {
-    ASSERT_EQ(expectSuccess, actual.is_ok());
-    MockInitCB(actual);
+  void CheckStatus(bool expect_success, DecoderStatus actual) {
+    ASSERT_EQ(expect_success, actual.is_ok());
   }
-
-  MOCK_METHOD1(MockInitCB, void(DecoderStatus));
 
   base::test::TaskEnvironment task_environment_;
 
   scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner_;
 
+  scoped_refptr<FakeCommandBufferHelper> fake_command_buffer_helper_;
+
   std::unique_ptr<VideoDecoder> decoder_;
-  raw_ptr<D3D11VideoDecoder> d3d11_decoder_raw_ = nullptr;
+  raw_ptr<D3D11VideoDecoder, DanglingUntriaged> d3d11_decoder_raw_ = nullptr;
   gpu::GpuPreferences gpu_preferences_;
   gpu::GpuDriverBugWorkarounds gpu_workarounds_;
-  MockD3D11VideoDecoderImpl* impl_ = nullptr;
 
   Microsoft::WRL::ComPtr<D3D11DeviceMock> mock_d3d11_device_;
   Microsoft::WRL::ComPtr<D3D11DeviceContextMock> mock_d3d11_device_context_;
@@ -265,12 +252,7 @@ TEST_F(D3D11VideoDecoderTest, SupportsVP9Profile0WithDecoderEnabled) {
 
   EnableDecoder(D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0);
   CreateDecoder();
-  // We don't support vp9 on windows 7 and below.
-  if (base::win::GetVersion() <= base::win::Version::WIN7) {
-    InitializeDecoder(configuration, false);
-  } else {
-    InitializeDecoder(configuration, true);
-  }
+  InitializeDecoder(configuration, /*expect_success=*/true);
 }
 
 TEST_F(D3D11VideoDecoderTest, DoesNotSupportVP9WithGPUWorkaroundDisableVPX) {
@@ -280,7 +262,7 @@ TEST_F(D3D11VideoDecoderTest, DoesNotSupportVP9WithGPUWorkaroundDisableVPX) {
 
   EnableDecoder(D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0);
   CreateDecoder();
-  InitializeDecoder(configuration, false);
+  InitializeDecoder(configuration, /*expect_success=*/false);
 }
 
 TEST_F(D3D11VideoDecoderTest, DoesNotSupportVP9WithoutDecoderEnabled) {
@@ -299,7 +281,10 @@ TEST_F(D3D11VideoDecoderTest, DoesNotSupportsH264HIGH10Profile) {
   VideoDecoderConfig high10 = TestVideoConfig::NormalCodecProfile(
       VideoCodec::kH264, H264PROFILE_HIGH10PROFILE);
 
-  InitializeDecoder(high10, false);
+  // When the codec is built in this should fail without H264 decoding being
+  // attempted. If H264 isn't built-in, we should at least attempt initialize.
+  const bool expect_success = !IsBuiltInVideoCodec(VideoCodec::kH264);
+  InitializeDecoder(high10, expect_success);
 }
 
 TEST_F(D3D11VideoDecoderTest, SupportsH264WithAutodetectedConfig) {
@@ -326,7 +311,10 @@ TEST_F(D3D11VideoDecoderTest, DoesNotSupportH264IfNoSupportedConfig) {
   VideoDecoderConfig normal =
       TestVideoConfig::NormalCodecProfile(VideoCodec::kH264, H264PROFILE_MAIN);
 
-  InitializeDecoder(normal, false);
+  // When the codec is built in this should fail without H264 decoding being
+  // attempted. If H264 isn't built-in, we should at least attempt initialize.
+  const bool expect_success = !IsBuiltInVideoCodec(VideoCodec::kH264);
+  InitializeDecoder(normal, expect_success);
 }
 
 TEST_F(D3D11VideoDecoderTest, DoesNotSupportEncryptedConfig) {
@@ -344,6 +332,18 @@ TEST_F(D3D11VideoDecoderTest, WorkaroundTurnsOffDecoder) {
   InitializeDecoder(
       TestVideoConfig::NormalCodecProfile(VideoCodec::kH264, H264PROFILE_MAIN),
       false);
+}
+
+TEST_F(D3D11VideoDecoderTest, CanReadWithoutStalling) {
+  CreateDecoder();
+
+  VideoDecoderConfig normal =
+      TestVideoConfig::NormalCodecProfile(VideoCodec::kH264, H264PROFILE_MAIN);
+
+  InitializeDecoder(normal, true);
+
+  // Should be true prior to picture buffers being assigned.
+  EXPECT_TRUE(decoder_->CanReadWithoutStalling());
 }
 
 }  // namespace media

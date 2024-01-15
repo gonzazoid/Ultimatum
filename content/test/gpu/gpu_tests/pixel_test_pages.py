@@ -7,30 +7,30 @@
 
 from __future__ import print_function
 
-import datetime
-import os
-from typing import Dict, List, Optional
-
 from datetime import date
+import json
+import logging
+import os
+import posixpath
+import time
+from typing import Callable, Dict, List, Optional
 
 from enum import Enum
 
 from gpu_tests import common_browser_args as cba
+from gpu_tests import skia_gold_heartbeat_integration_test_base as sghitb
 from gpu_tests import skia_gold_matching_algorithms as algo
+from gpu_tests.util import websocket_server as wss
 
 import gpu_path_util
 
-CRASH_TYPE_GPU = 'gpu'
+from telemetry.internal.browser import browser as browser_module
 
-# These tests attempt to use test rects that are larger than the small screen
-# on some Fuchsia devices, so we need to use a less-desirable screenshot capture
-# method to get the entire page contents instead of just the visible portion.
-PROBLEMATIC_FUCHSIA_TESTS = [
-    'Maps_maps',
-    'Pixel_BackgroundImage',
-    'Pixel_PrecisionRoundedCorner',
-    'Pixel_SolidColorBackground',
-]
+CRASH_TYPE_BROWSER = 'browser'
+CRASH_TYPE_GPU = 'gpu-process'
+CRASH_TYPE_RENDERER = 'renderer'
+
+SHORT_GLOBAL_TIMEOUT = 30
 
 # Meant to be used when we know a test is going to be noisy, and we want any
 # images it generates to be auto-triaged until we have enough data to calculate
@@ -51,7 +51,7 @@ GENERAL_MP4_ALGO = algo.SobelMatchingAlgorithm(max_different_pixels=56300,
 BrowserArgType = List[str]
 
 
-class PixelTestPage():
+class PixelTestPage(sghitb.SkiaGoldHeartbeatTestCase):
   """A wrapper class mimicking the functionality of the PixelTestsStorySet
   from the old-style GPU tests.
   """
@@ -61,30 +61,22 @@ class PixelTestPage():
       url: str,
       name: str,
       test_rect: List[int],
+      *args,
       browser_args: Optional[BrowserArgType] = None,
-      gpu_process_disabled: bool = False,
-      optional_action: Optional[str] = None,
       restart_browser_after_test: bool = False,
       other_args: Optional[dict] = None,
-      grace_period_end: Optional[datetime.date] = None,
       expected_per_process_crashes: Optional[Dict[str, int]] = None,
-      matching_algorithm: Optional[algo.SkiaGoldMatchingAlgorithm] = None,
-      timeout: int = 300):
-    super().__init__()
+      timeout: int = 300,
+      should_capture_full_screenshot_func: Optional[Callable[
+          [browser_module.Browser], bool]] = None,
+      **kwargs):
+    # Video tests can result in non-hermetic test behavior due to overlays, so
+    # do a full refresh after each one. See crbug.com/1484212.
+    is_video_test = 'video' in name.lower()
+    super().__init__(name, refresh_after_finish=is_video_test, *args, **kwargs)
     self.url = url
-    self.name = name
     self.test_rect = test_rect
     self.browser_args = browser_args
-    # Only a couple of tests run with the GPU process completely
-    # disabled. To prevent regressions, only allow the GPU information
-    # to be incomplete in these cases.
-    self.gpu_process_disabled = gpu_process_disabled
-    # Some of the tests require custom actions to be run. These are
-    # specified as a string which is the name of a method to call in
-    # PixelIntegrationTest. For example if the action here is
-    # "CrashGpuProcess" then it would be defined in a
-    # "_CrashGpuProcess" method in PixelIntegrationTest.
-    self.optional_action = optional_action
     # Whether the browser should be forcibly restarted after the test
     # runs. The browser is always restarted after running tests with
     # optional_actions.
@@ -94,54 +86,148 @@ class PixelTestPage():
     # arguments: pixel_format, zero_copy, no_overlay, video_is_rotated and
     # full_size.
     self.other_args = other_args
-    # This allows a newly added test to be exempted from failures for a
-    # (hopefully) short period after being added. This is so that any slightly
-    # different but valid images that get produced by the waterfall bots can
-    # be triaged without turning the bots red.
-    # This should be a datetime.date object.
-    self.grace_period_end = grace_period_end
     # This lets the test runner know that one or more crashes are expected as
     # part of the test. Should be a map of process type (str) to expected number
     # of crashes (int).
     self.expected_per_process_crashes = expected_per_process_crashes or {}
-    # This should be a child of
-    # skia_gold_matching_algorithms.SkiaGoldMatchingAlgorithm. This specifies
-    # which matching algorithm Skia Gold should use for the test.
-    self.matching_algorithm = (matching_algorithm
-                               or algo.ExactMatchingAlgorithm())
     # Test timeout
     self.timeout = timeout
-
-  # Strings used for the return type since at this point PixelTestPage is
-  # technically a forward reference. Python type hinting specifically supports
-  # string literals for this case.
-  def CopyWithNewBrowserArgsAndSuffix(self, browser_args: BrowserArgType,
-                                      suffix: str) -> 'PixelTestPage':
-    return PixelTestPage(self.url, self.name + suffix, self.test_rect,
-                         browser_args)
-
-  def CopyWithNewBrowserArgsAndPrefix(self, browser_args: BrowserArgType,
-                                      prefix: str) -> 'PixelTestPage':
-    # Assuming the test name is 'Pixel'.
-    split = self.name.split('_', 1)
-    return PixelTestPage(self.url, split[0] + '_' + prefix + split[1],
-                         self.test_rect, browser_args)
+    # Most tests will use the standard capture code path which captures an image
+    # that is more representative of what is shown to a user, but some tests
+    # require capturing the entire web contents for some reason.
+    if should_capture_full_screenshot_func is None:
+      should_capture_full_screenshot_func = lambda _: False
+    self.ShouldCaptureFullScreenshot = should_capture_full_screenshot_func
 
 
-def CopyPagesWithNewBrowserArgsAndSuffix(pages: List[PixelTestPage],
-                                         browser_args: BrowserArgType,
-                                         suffix: str) -> List[PixelTestPage]:
-  return [
-      p.CopyWithNewBrowserArgsAndSuffix(browser_args, suffix) for p in pages
-  ]
+class TestActionCrashGpuProcess(sghitb.TestAction):
+  """Runs JavaScript to crash the GPU process once."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    sghitb.EvalInTestIframe(tab_data.tab,
+                            'chrome.gpuBenchmarking.crashGpuProcess()')
 
 
-def CopyPagesWithNewBrowserArgsAndPrefix(pages: List[PixelTestPage],
-                                         browser_args: BrowserArgType,
-                                         prefix: str) -> List[PixelTestPage]:
-  return [
-      p.CopyWithNewBrowserArgsAndPrefix(browser_args, prefix) for p in pages
-  ]
+class TestActionSwitchTabs(sghitb.TestAction):
+  """Opens and briefly switches to a new tab before switching back."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    tab = tab_data.tab
+    if not tab.browser.supports_tab_control:
+      test_instance.fail('Browser must support tab control')
+    dummy_tab = tab.browser.tabs.New()
+    dummy_tab.Activate()
+    # Wait for 2 seconds so that the new tab becomes visible.
+    dummy_tab.action_runner.Wait(2)
+    tab.Activate()
+
+
+class TestActionSwitchTabsAndCopyImage(sghitb.TestAction):
+  """Opens and closes a new tab before running test-specific JavaScript."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    tab = tab_data.tab
+    if not tab.browser.supports_tab_control:
+      test_instance.fail('Browser must support tab control')
+    dummy_tab = tab.browser.tabs.New()
+    dummy_tab.Activate()
+    # Wait for 2 seconds so that the new tab becomes visible.
+    dummy_tab.action_runner.Wait(2)
+    dummy_tab.Close()
+    sghitb.EvalInTestIframe(tab, 'copyImage()')
+
+
+class TestActionRunOffscreenCanvasIBRCWebGLLowPerfTest(sghitb.TestAction):
+  """Runs steps for an offscreen canvas IBRC WebGL test on the low power GPU."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    tab = tab_data.tab
+    test_instance.AssertLowPowerGPU()
+    sghitb.EvalInTestIframe(tab, 'setup()')
+    # Wait a few seconds for any (incorrect) GPU switched notifications to
+    # propagate throughout the system.
+    time.sleep(5)
+    test_instance.AssertLowPowerGPU()
+    sghitb.EvalInTestIframe(tab, 'render()')
+
+
+class TestActionRunOffscreenCanvasIBRCWebGLHighPerfTest(sghitb.TestAction):
+  """Runs steps for an offscreen canvas IBRC WebGL test on the high perf GPU."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    tab = tab_data.tab
+    test_instance.AssertLowPowerGPU()
+    sghitb.EvalInTestIframe(tab, 'setup(true)')
+    # Wait a few seconds for any (incorrect) GPU switched notifications to
+    # propagate throughout the system.
+    time.sleep(5)
+    test_instance.AssertHighPerformanceGPU()
+    sghitb.EvalInTestIframe(tab, 'render()')
+
+
+class TestActionRunTestWithHighPerformanceTab(sghitb.TestAction):
+  """Runs steps for a specific test with a high perf second tab present."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    tab = tab_data.tab
+    if not test_instance.IsDualGPUMacLaptop():
+      # Short-circuit this test.
+      logging.info('Short-circuiting test because not running on dual-GPU Mac '
+                   'laptop')
+      sghitb.EvalInTestIframe(tab, 'initialize(false)')
+      return
+
+    high_performance_tab = tab.browser.tabs.New()
+    high_performance_file = posixpath.join(
+        gpu_path_util.GPU_DATA_RELATIVE_PATH,
+        'functional_webgl_high_performance.html')
+    high_performance_websocket_server = wss.WebsocketServer()
+    high_performance_websocket_server.StartServer()
+    high_performance_tab_data = sghitb.TabData(
+        high_performance_tab, high_performance_websocket_server)
+    high_performance_loop_state = sghitb.LoopState()
+    try:
+      test_instance.NavigateTo(high_performance_file,
+                               tab_data=high_performance_tab_data)
+      test_instance.HandleMessageLoop(SHORT_GLOBAL_TIMEOUT,
+                                      loop_state=high_performance_loop_state,
+                                      tab_data=high_performance_tab_data)
+      assert high_performance_loop_state.test_finished
+
+      # Wait a few seconds for the GPU switched notification to propagate
+      # throughout the system.
+      time.sleep(5)
+      # Switch back to the main tab and quickly start its rendering, while the
+      # high-power GPU is still active.
+      tab.Activate()
+      sghitb.EvalInTestIframe(tab, 'initialize(true)')
+      test_instance.HandleMessageLoop(SHORT_GLOBAL_TIMEOUT,
+                                      loop_state=loop_state,
+                                      tab_data=tab_data)
+      high_performance_tab.Close()
+    finally:
+      high_performance_websocket_server.StopServer()
+    # Wait for ~15 seconds for the system to switch back to the
+    # integrated GPU.
+    time.sleep(15)
+    # Run the page to completion.
+    sghitb.EvalInTestIframe(tab, 'setTimeout(runToCompletion, 0)')
+
+
+class TestActionRunLowToHighPowerTest(sghitb.TestAction):
+  """Runs steps for the low to high power GPU transition test."""
+  def Run(self, test_case: PixelTestPage, tab_data: sghitb.TabData,
+          loop_state: sghitb.LoopState,
+          test_instance: sghitb.SkiaGoldHeartbeatIntegrationTestBase) -> None:
+    is_dual_gpu = test_instance.IsDualGPUMacLaptop()
+    sghitb.EvalInTestIframe(tab_data.tab,
+                            'initialize(%s)' % json.dumps(is_dual_gpu))
 
 
 def GetMediaStreamTestBrowserArgs(media_stream_source_relpath: str
@@ -153,16 +239,36 @@ def GetMediaStreamTestBrowserArgs(media_stream_source_relpath: str
   ]
 
 
+def CaptureFullScreenshotOnFuchsia(browser: browser_module.Browser) -> bool:
+  return browser.platform.GetOSName() == 'fuchsia'
+
+
 class PixelTestPages():
   @staticmethod
   def DefaultPages(base_name: str) -> List[PixelTestPage]:
     sw_compositing_args = [cba.DISABLE_GPU_COMPOSITING]
-    browser_args_DXVA = [cba.DISABLE_FEATURES_D3D11_VIDEO_DECODER]
+    experimental_hdr_args = [cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES]
+
+    switch_tab_test_actions = [
+        sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+        TestActionSwitchTabs(),
+        sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+    ]
+
+    low_power_test_actions = [
+        sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+        TestActionRunOffscreenCanvasIBRCWebGLLowPerfTest(),
+        sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+    ]
 
     return [
-        PixelTestPage('pixel_background_image.html',
-                      base_name + '_BackgroundImage',
-                      test_rect=[20, 20, 370, 370]),
+        PixelTestPage(
+            'pixel_background_image.html',
+            base_name + '_BackgroundImage',
+            test_rect=[20, 20, 370, 370],
+            # Small Fuchsia screens result in an incomplete capture
+            # without this.
+            should_capture_full_screenshot_func=CaptureFullScreenshotOnFuchsia),
         PixelTestPage('pixel_reflected_div.html',
                       base_name + '_ReflectedDiv',
                       test_rect=[0, 0, 100, 300]),
@@ -197,25 +303,39 @@ class PixelTestPages():
                       base_name +
                       '_WebGLTransparentGreenTriangle_NoAlpha_ImplicitClear',
                       test_rect=[0, 0, 300, 300]),
-        PixelTestPage('pixel_webgl_context_restored.html',
-                      base_name + '_WebGLContextRestored',
-                      test_rect=[0, 0, 300, 300],
-                      optional_action='CrashGpuProcess'),
+        PixelTestPage(
+            'pixel_webgl_context_restored.html',
+            base_name + '_WebGLContextRestored',
+            test_rect=[0, 0, 300, 300],
+            test_actions=[
+                sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+                TestActionCrashGpuProcess(),
+                sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+            ]),
         PixelTestPage(
             'pixel_webgl_sad_canvas.html',
             base_name + '_WebGLSadCanvas',
             test_rect=[0, 0, 300, 300],
-            optional_action='CrashGpuProcessTwiceWaitForContextRestored',
-            grace_period_end=date(2022, 9, 20)),
+            test_actions=[
+                sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+                TestActionCrashGpuProcess(),
+                sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+                TestActionCrashGpuProcess(),
+                sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+            ]),
         PixelTestPage('pixel_scissor.html',
                       base_name + '_ScissorTestWithPreserveDrawingBuffer',
                       test_rect=[0, 0, 300, 300]),
         PixelTestPage('pixel_canvas2d_webgl.html',
                       base_name + '_2DCanvasWebGL',
                       test_rect=[0, 0, 300, 300]),
-        PixelTestPage('pixel_background.html',
-                      base_name + '_SolidColorBackground',
-                      test_rect=[500, 500, 600, 600]),
+        PixelTestPage(
+            'pixel_background.html',
+            base_name + '_SolidColorBackground',
+            test_rect=[500, 500, 600, 600],
+            # Small Fuchsia screens result in an incomplete capture
+            # without this.
+            should_capture_full_screenshot_func=CaptureFullScreenshotOnFuchsia),
         PixelTestPage(
             'pixel_video_mp4.html?width=240&height=135&use_timer=1',
             base_name + '_Video_MP4',
@@ -224,11 +344,6 @@ class PixelTestPages():
             # tends to produce images with all colors shifted by a
             # small amount.
             matching_algorithm=GENERAL_MP4_ALGO),
-        # Surprisingly stable, does not appear to require inexact matching.
-        PixelTestPage('pixel_video_mp4.html?width=240&height=135&use_timer=1',
-                      base_name + '_Video_MP4_DXVA',
-                      browser_args=browser_args_DXVA,
-                      test_rect=[0, 0, 240, 135]),
         PixelTestPage(
             'pixel_video_mp4_four_colors_aspect_4x3.html'
             '?width=240&height=135&use_timer=1',
@@ -275,14 +390,21 @@ class PixelTestPages():
                           pixel_delta_threshold=30,
                           edge_threshold=20,
                           ignored_border_thickness=1)),
-        PixelTestPage('pixel_video_vp9.html?width=240&height=135&use_timer=1',
-                      base_name + '_Video_VP9_DXVA',
-                      browser_args=browser_args_DXVA,
+        PixelTestPage('pixel_video_av1.html?width=240&height=135&use_timer=1',
+                      base_name + '_Video_AV1',
                       test_rect=[0, 0, 240, 135],
                       matching_algorithm=algo.SobelMatchingAlgorithm(
-                          max_different_pixels=31100,
+                          max_different_pixels=114000,
                           pixel_delta_threshold=30,
-                          edge_threshold=250,
+                          edge_threshold=20,
+                          ignored_border_thickness=1)),
+        PixelTestPage('pixel_video_hevc.html?width=240&height=135&use_timer=1',
+                      base_name + '_Video_HEVC',
+                      test_rect=[0, 0, 240, 135],
+                      matching_algorithm=algo.SobelMatchingAlgorithm(
+                          max_different_pixels=114000,
+                          pixel_delta_threshold=30,
+                          edge_threshold=20,
                           ignored_border_thickness=1)),
         PixelTestPage(
             'pixel_video_media_stream_incompatible_stride.html',
@@ -291,17 +413,6 @@ class PixelTestPages():
                 'media/test/data/four-colors-incompatible-stride.y4m'),
             test_rect=[0, 0, 240, 135],
             matching_algorithm=VERY_PERMISSIVE_SOBEL_ALGO),
-        PixelTestPage(
-            'pixel_media_foundation_clear_dcomp.html?src='
-            '/media/test/data/four-colors.mp4',
-            base_name + '_MediaFoundationClearDirectComposition',
-            test_rect=[0, 0, 256, 256],
-            browser_args=[
-                '--enable-features=MediaFoundationClearPlayback, \
-                MediaFoundationClearRendering:strategy/direct-composition'
-            ],
-            matching_algorithm=VERY_PERMISSIVE_SOBEL_ALGO,
-            grace_period_end=date(2022, 10, 24)),
 
         # The MP4 contains H.264 which is primarily hardware decoded on bots.
         PixelTestPage(
@@ -359,42 +470,56 @@ class PixelTestPages():
         PixelTestPage('pixel_canvas2d_tab_switch.html',
                       base_name + '_Canvas2DTabSwitch',
                       test_rect=[0, 0, 100, 100],
-                      optional_action='SwitchTabs'),
+                      test_actions=switch_tab_test_actions),
         PixelTestPage('pixel_canvas2d_tab_switch.html',
                       base_name + '_Canvas2DTabSwitch_SoftwareCompositing',
                       test_rect=[0, 0, 100, 100],
                       browser_args=sw_compositing_args,
-                      optional_action='SwitchTabs'),
+                      test_actions=switch_tab_test_actions),
         PixelTestPage('pixel_webgl_copy_image.html',
                       base_name + '_WebGLCopyImage',
                       test_rect=[0, 0, 200, 100]),
         PixelTestPage('pixel_webgl_read_pixels_tab_switch.html',
                       base_name + '_WebGLReadPixelsTabSwitch',
                       test_rect=[0, 0, 100, 100],
-                      optional_action='SwitchTabs'),
+                      test_actions=switch_tab_test_actions),
         PixelTestPage('pixel_webgl_read_pixels_tab_switch.html',
                       base_name +
                       '_WebGLReadPixelsTabSwitch_SoftwareCompositing',
                       test_rect=[0, 0, 100, 100],
                       browser_args=sw_compositing_args,
-                      optional_action='SwitchTabs'),
+                      test_actions=switch_tab_test_actions),
         PixelTestPage('pixel_offscreen_canvas_ibrc_webgl_main.html',
                       base_name + '_OffscreenCanvasIBRCWebGLMain',
                       test_rect=[0, 0, 300, 300],
-                      optional_action='RunOffscreenCanvasIBRCWebGLTest'),
+                      test_actions=low_power_test_actions),
         PixelTestPage('pixel_offscreen_canvas_ibrc_webgl_worker.html',
                       base_name + '_OffscreenCanvasIBRCWebGLWorker',
                       test_rect=[0, 0, 300, 300],
-                      optional_action='RunOffscreenCanvasIBRCWebGLTest'),
-        PixelTestPage('pixel_webgl_preserved_after_tab_switch.html',
-                      base_name + '_WebGLPreservedAfterTabSwitch',
-                      test_rect=[0, 0, 300, 300],
-                      optional_action='SwitchTabsAndCopyImage'),
+                      test_actions=low_power_test_actions),
+        PixelTestPage(
+            'pixel_webgl_preserved_after_tab_switch.html',
+            base_name + '_WebGLPreservedAfterTabSwitch',
+            test_rect=[0, 0, 300, 300],
+            test_actions=[
+                sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+                TestActionSwitchTabsAndCopyImage(),
+                sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+            ]),
         PixelTestPage('pixel_svg_huge.html',
                       base_name + '_SVGHuge',
-                      test_rect=[0, 0, 400, 400],
-                      optional_action='ScrollOutAndBack',
-                      grace_period_end=date(2022, 8, 29)),
+                      test_rect=[0, 0, 400, 400]),
+        PixelTestPage('pixel_webgl_display_p3.html',
+                      base_name + '_WebGLDisplayP3',
+                      test_rect=[0, 0, 300, 300]),
+        PixelTestPage('pixel_webgl_float.html',
+                      base_name + '_WebGLFloat',
+                      test_rect=[0, 0, 200, 100],
+                      browser_args=experimental_hdr_args),
+        PixelTestPage('pixel_offscreenCanvas_ibrc_worker.html',
+                      base_name + '_OffscreenCanvasIBRCWorker',
+                      test_rect=[0, 0, 100, 100],
+                      grace_period_end=date(2023, 8, 5)),
     ]
 
   @staticmethod
@@ -405,8 +530,7 @@ class PixelTestPages():
       VULKAN_SWIFTSHADER = 2
 
     def webgpu_pages_helper(base_name, mode):
-      webgpu_args = [
-          cba.ENABLE_UNSAFE_WEBGPU,
+      webgpu_args = cba.ENABLE_WEBGPU_FOR_TESTING + [
           cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES
       ]
       video_frame_query_params = '?sourceType=hw_decoder'
@@ -426,23 +550,6 @@ class PixelTestPages():
         video_frame_query_params = '?sourceType=sw_decoder'
 
       return [
-          PixelTestPage('pixel_webgpu_import_webgl_canvas.html',
-                        base_name + '_WebGPUImportWebGLCanvas',
-                        test_rect=[0, 0, 400, 200],
-                        browser_args=webgpu_args),
-          PixelTestPage('pixel_webgpu_import_2d_canvas.html',
-                        base_name + '_WebGPUImport2DCanvas',
-                        test_rect=[0, 0, 400, 200],
-                        browser_args=webgpu_args),
-          PixelTestPage('pixel_webgpu_import_2d_canvas.html',
-                        base_name + '_WebGPUImportUnaccelerated2DCanvas',
-                        test_rect=[0, 0, 400, 200],
-                        browser_args=webgpu_args +
-                        [cba.DISABLE_ACCELERATED_2D_CANVAS]),
-          PixelTestPage('pixel_webgpu_import_webgpu_canvas.html',
-                        base_name + '_WebGPUImportWebGPUCanvas',
-                        test_rect=[0, 0, 400, 200],
-                        browser_args=webgpu_args),
           PixelTestPage('pixel_webgpu_import_video_frame.html' +
                         video_frame_query_params,
                         base_name + '_WebGPUImportVideoFrame',
@@ -506,6 +613,14 @@ class PixelTestPages():
                         base_name + '_WebGPUCopyExternalImageWebGPUCanvas',
                         test_rect=[0, 0, 400, 200],
                         browser_args=webgpu_args),
+          PixelTestPage('pixel_webgpu_display_p3.html',
+                        base_name + '_WebGPUDisplayP3',
+                        test_rect=[0, 0, 300, 300],
+                        browser_args=webgpu_args),
+          PixelTestPage('pixel_webgpu_canvas_format_reinterpretation.html',
+                        base_name + '_WebGPUCanvasFormatReinterpretation',
+                        test_rect=[0, 0, 300, 300],
+                        browser_args=webgpu_args),
       ]
 
     return (webgpu_pages_helper(base_name, mode=Mode.WEBGPU_DEFAULT) +
@@ -514,8 +629,8 @@ class PixelTestPages():
 
   @staticmethod
   def WebGPUCanvasCapturePages(base_name):
-    webgpu_args = [
-        cba.ENABLE_UNSAFE_WEBGPU, cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES
+    webgpu_args = cba.ENABLE_WEBGPU_FOR_TESTING + [
+        cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES
     ]
 
     browser_args_canvas_one_copy_capture = webgpu_args + [
@@ -538,6 +653,12 @@ class PixelTestPages():
         PixelTestPage('pixel_webgpu_canvas_capture_to_video.html',
                       base_name + '_WebGPUCanvasOneCopyCapture',
                       test_rect=[0, 0, 400, 200],
+                      matching_algorithm=GENERAL_MP4_ALGO,
+                      browser_args=browser_args_canvas_one_copy_capture,
+                      other_args=other_args_canvas_one_copy_capture),
+        PixelTestPage('pixel_webgpu_canvas_capture_to_video.html?hidden=true',
+                      base_name + '_WebGPUCanvasOneCopyCapture_Hidden',
+                      test_rect=[0, 0, 200, 200],
                       matching_algorithm=GENERAL_MP4_ALGO,
                       browser_args=browser_args_canvas_one_copy_capture,
                       other_args=other_args_canvas_one_copy_capture),
@@ -569,14 +690,18 @@ class PixelTestPages():
                       base_name + '_GpuRasterization_ConcavePaths',
                       test_rect=[0, 0, 100, 100],
                       browser_args=browser_args),
-        PixelTestPage('pixel_precision_rounded_corner.html',
-                      base_name + '_PrecisionRoundedCorner',
-                      test_rect=[0, 0, 400, 400],
-                      browser_args=browser_args,
-                      matching_algorithm=algo.SobelMatchingAlgorithm(
-                          max_different_pixels=10,
-                          pixel_delta_threshold=30,
-                          edge_threshold=100)),
+        PixelTestPage(
+            'pixel_precision_rounded_corner.html',
+            base_name + '_PrecisionRoundedCorner',
+            test_rect=[0, 0, 400, 400],
+            browser_args=browser_args,
+            matching_algorithm=algo.SobelMatchingAlgorithm(
+                max_different_pixels=10,
+                pixel_delta_threshold=30,
+                edge_threshold=100),
+            # Small Fuchsia screens result in an incomplete capture
+            # without this.
+            should_capture_full_screenshot_func=CaptureFullScreenshotOnFuchsia),
     ]
 
   # Pages that should be run with off-thread paint worklet flags.
@@ -608,6 +733,15 @@ class PixelTestPages():
         cba.DISABLE_ACCELERATED_2D_CANVAS,
         cba.DISABLE_GPU_COMPOSITING,
     ]
+    unaccelerated_canvas_accelerated_compositing_args = [
+        cba.DISABLE_ACCELERATED_2D_CANVAS,
+        cba.DISABLE_SOFTWARE_COMPOSITING_FALLBACK,
+    ]
+
+    # The sRGB tests have been observed to create a large number
+    # (~15,000) of pixels with difference ~3.
+    srgb_fuzzy_algo = algo.FuzzyMatchingAlgorithm(max_different_pixels=20000,
+                                                  pixel_delta_threshold=3)
 
     return [
         PixelTestPage('pixel_offscreenCanvas_transfer_after_style_resize.html',
@@ -626,6 +760,12 @@ class PixelTestPages():
                       base_name + '_OffscreenCanvasTransferToImageBitmap',
                       test_rect=[0, 0, 300, 300],
                       browser_args=browser_args),
+        PixelTestPage(
+            'pixel_offscreenCanvas_transferToImageBitmap_main.html',
+            base_name +
+            '_OffscreenCanvasTransferToImageBitmapSoftwareCompositing',
+            test_rect=[0, 0, 300, 300],
+            browser_args=browser_args + unaccelerated_args),
         PixelTestPage('pixel_offscreenCanvas_transferToImageBitmap_worker.html',
                       base_name + '_OffscreenCanvasTransferToImageBitmapWorker',
                       test_rect=[0, 0, 300, 300],
@@ -664,16 +804,18 @@ class PixelTestPages():
                       base_name + '_OffscreenCanvasUnaccelerated2DWorker',
                       test_rect=[0, 0, 360, 200],
                       browser_args=browser_args + unaccelerated_args),
-        PixelTestPage(
-            'pixel_offscreenCanvas_2d_commit_main.html',
-            base_name + '_OffscreenCanvasUnaccelerated2DGPUCompositing',
-            test_rect=[0, 0, 360, 200],
-            browser_args=browser_args + [cba.DISABLE_ACCELERATED_2D_CANVAS]),
-        PixelTestPage(
-            'pixel_offscreenCanvas_2d_commit_worker.html',
-            base_name + '_OffscreenCanvasUnaccelerated2DGPUCompositingWorker',
-            test_rect=[0, 0, 360, 200],
-            browser_args=browser_args + [cba.DISABLE_ACCELERATED_2D_CANVAS]),
+        PixelTestPage('pixel_offscreenCanvas_2d_commit_main.html',
+                      base_name +
+                      '_OffscreenCanvasUnaccelerated2DGPUCompositing',
+                      test_rect=[0, 0, 360, 200],
+                      browser_args=browser_args +
+                      unaccelerated_canvas_accelerated_compositing_args),
+        PixelTestPage('pixel_offscreenCanvas_2d_commit_worker.html',
+                      base_name +
+                      '_OffscreenCanvasUnaccelerated2DGPUCompositingWorker',
+                      test_rect=[0, 0, 360, 200],
+                      browser_args=browser_args +
+                      unaccelerated_canvas_accelerated_compositing_args),
         PixelTestPage('pixel_offscreenCanvas_2d_resize_on_worker.html',
                       base_name + '_OffscreenCanvas2DResizeOnWorker',
                       test_rect=[0, 0, 200, 200],
@@ -685,16 +827,19 @@ class PixelTestPages():
         PixelTestPage('pixel_canvas_display_srgb.html',
                       base_name + '_CanvasDisplaySRGBAccelerated2D',
                       test_rect=[0, 0, 140, 140],
-                      browser_args=browser_args + accelerated_args),
+                      browser_args=browser_args + accelerated_args,
+                      matching_algorithm=srgb_fuzzy_algo),
         PixelTestPage('pixel_canvas_display_srgb.html',
                       base_name + '_CanvasDisplaySRGBUnaccelerated2D',
                       test_rect=[0, 0, 140, 140],
-                      browser_args=browser_args + unaccelerated_args),
+                      browser_args=browser_args + unaccelerated_args,
+                      matching_algorithm=srgb_fuzzy_algo),
         PixelTestPage(
             'pixel_canvas_display_srgb.html',
             base_name + '_CanvasDisplaySRGBUnaccelerated2DGPUCompositing',
             test_rect=[0, 0, 140, 140],
-            browser_args=browser_args + [cba.DISABLE_ACCELERATED_2D_CANVAS]),
+            browser_args=browser_args + [cba.DISABLE_ACCELERATED_2D_CANVAS],
+            matching_algorithm=srgb_fuzzy_algo),
         PixelTestPage('pixel_webgl_webcodecs_breakoutbox_displays_frame.html',
                       base_name + '_WebGLWebCodecsBreakoutBoxDisplaysFrame',
                       test_rect=[0, 0, 300, 300],
@@ -796,6 +941,8 @@ class PixelTestPages():
     # old GLRenderer path, but continuing to allocate IOSurfaces for
     # WebGL's back buffer.
     no_overlays_args = ['--disable-features=CoreAnimationRenderer']
+
+    angle_gl = ['--use-angle=gl']
 
     # The filter effect tests produce images with lots of gradients and blurs
     # which don't play nicely with Sobel filters, so a fuzzy algorithm instead
@@ -908,35 +1055,58 @@ class PixelTestPages():
                       '_UnacceleratedOffscreenCanvasImageBitmapUsesOverlay',
                       test_rect=[0, 0, 100, 100],
                       browser_args=unaccelerated_2d_canvas_args),
+
+        # Regression test for crbug.com/1410696
+        PixelTestPage('pixel_offscreenCanvas_ibrc_worker.html',
+                      base_name + '_OffscreenCanvasIBRCWorkerAngleGL',
+                      test_rect=[0, 0, 100, 100],
+                      browser_args=angle_gl,
+                      grace_period_end=date(2023, 8, 5)),
     ]
 
   # Pages that should be run only on dual-GPU MacBook Pros (at the
   # present time, anyway).
   @staticmethod
   def DualGPUMacSpecificPages(base_name: str) -> List[PixelTestPage]:
+
+    low_to_high_power_test_actions = [
+        sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+        TestActionRunLowToHighPowerTest(),
+        sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+    ]
+
+    high_perf_test_actions = [
+        sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+        TestActionRunOffscreenCanvasIBRCWebGLHighPerfTest(),
+        sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+    ]
+
     return [
-        PixelTestPage('pixel_webgl_high_to_low_power.html',
-                      base_name + '_WebGLHighToLowPower',
-                      test_rect=[0, 0, 300, 300],
-                      optional_action='RunTestWithHighPerformanceTab'),
+        PixelTestPage(
+            'pixel_webgl_high_to_low_power.html',
+            base_name + '_WebGLHighToLowPower',
+            test_rect=[0, 0, 300, 300],
+            test_actions=[
+                sghitb.TestActionWaitForContinue(SHORT_GLOBAL_TIMEOUT),
+                TestActionRunTestWithHighPerformanceTab(),
+                sghitb.TestActionWaitForFinish(SHORT_GLOBAL_TIMEOUT),
+            ]),
         PixelTestPage('pixel_webgl_low_to_high_power.html',
                       base_name + '_WebGLLowToHighPower',
                       test_rect=[0, 0, 300, 300],
-                      optional_action='RunLowToHighPowerTest'),
+                      test_actions=low_to_high_power_test_actions),
         PixelTestPage('pixel_webgl_low_to_high_power_alpha_false.html',
                       base_name + '_WebGLLowToHighPowerAlphaFalse',
                       test_rect=[0, 0, 300, 300],
-                      optional_action='RunLowToHighPowerTest'),
-        PixelTestPage(
-            'pixel_offscreen_canvas_ibrc_webgl_main.html',
-            base_name + '_OffscreenCanvasIBRCWebGLHighPerfMain',
-            test_rect=[0, 0, 300, 300],
-            optional_action='RunOffscreenCanvasIBRCWebGLHighPerfTest'),
-        PixelTestPage(
-            'pixel_offscreen_canvas_ibrc_webgl_worker.html',
-            base_name + '_OffscreenCanvasIBRCWebGLHighPerfWorker',
-            test_rect=[0, 0, 300, 300],
-            optional_action='RunOffscreenCanvasIBRCWebGLHighPerfTest'),
+                      test_actions=low_to_high_power_test_actions),
+        PixelTestPage('pixel_offscreen_canvas_ibrc_webgl_main.html',
+                      base_name + '_OffscreenCanvasIBRCWebGLHighPerfMain',
+                      test_rect=[0, 0, 300, 300],
+                      test_actions=high_perf_test_actions),
+        PixelTestPage('pixel_offscreen_canvas_ibrc_webgl_worker.html',
+                      base_name + '_OffscreenCanvasIBRCWebGLHighPerfWorker',
+                      test_rect=[0, 0, 300, 300],
+                      test_actions=high_perf_test_actions),
     ]
 
   @staticmethod
@@ -959,12 +1129,12 @@ class PixelTestPages():
     browser_args_BGRA = browser_args + [
         '--direct-composition-video-swap-chain-format=bgra'
     ]
-    browser_args_DXVA = browser_args + [
-        cba.DISABLE_FEATURES_D3D11_VIDEO_DECODER
-    ]
     browser_args_vp_scaling = [
         cba.ENABLE_DIRECT_COMPOSITION_VIDEO_OVERLAYS,
         cba.ENABLE_DIRECT_COMPOSITION_VP_SCALING,
+    ]
+    browser_args_sw_decode = browser_args + [
+        cba.DISABLE_ACCELERATED_VIDEO_DECODE
     ]
 
     # Most tests fall roughly into 3 tiers of noisiness.
@@ -993,11 +1163,6 @@ class PixelTestPages():
                       base_name + '_DirectComposition_Video_MP4',
                       test_rect=[0, 0, 240, 135],
                       browser_args=browser_args,
-                      matching_algorithm=permissive_dc_sobel_algorithm),
-        PixelTestPage('pixel_video_mp4.html?width=240&height=135',
-                      base_name + '_DirectComposition_Video_MP4_DXVA',
-                      browser_args=browser_args_DXVA,
-                      test_rect=[0, 0, 240, 135],
                       matching_algorithm=permissive_dc_sobel_algorithm),
         PixelTestPage('pixel_video_mp4.html?width=960&height=540',
                       base_name + '_DirectComposition_Video_MP4_Fullsize',
@@ -1063,11 +1228,6 @@ class PixelTestPages():
                       test_rect=[0, 0, 240, 135],
                       browser_args=browser_args,
                       matching_algorithm=very_permissive_dc_sobel_algorithm),
-        PixelTestPage('pixel_video_vp9.html?width=240&height=135',
-                      base_name + '_DirectComposition_Video_VP9_DXVA',
-                      browser_args=browser_args_DXVA,
-                      test_rect=[0, 0, 240, 135],
-                      matching_algorithm=very_permissive_dc_sobel_algorithm),
         PixelTestPage(
             'pixel_video_vp9.html?width=960&height=540',
             base_name + '_DirectComposition_Video_VP9_Fullsize',
@@ -1118,11 +1278,6 @@ class PixelTestPages():
                       test_rect=[0, 0, 240, 136],
                       browser_args=browser_args,
                       matching_algorithm=permissive_dc_sobel_algorithm),
-        PixelTestPage('pixel_video_underlay.html?width=240&height=136&swaps=12',
-                      base_name + '_DirectComposition_Underlay_DXVA',
-                      test_rect=[0, 0, 240, 136],
-                      browser_args=browser_args_DXVA,
-                      matching_algorithm=permissive_dc_sobel_algorithm),
         PixelTestPage('pixel_video_underlay.html?width=960&height=540&swaps=12',
                       base_name + '_DirectComposition_Underlay_Fullsize',
                       test_rect=[0, 0, 960, 540],
@@ -1147,21 +1302,22 @@ class PixelTestPages():
             browser_args=[cba.DISABLE_DIRECT_COMPOSITION_VIDEO_OVERLAYS],
             other_args={'no_overlay': True},
             matching_algorithm=very_permissive_dc_sobel_algorithm),
-    ]
-
-  @staticmethod
-  def MediaRecorderFromCanvasPages(base_name: str) -> List[PixelTestPage]:
-    # Full cycle capture-encode-decode test for MediaRecorder capturing canvas.
-    # This test has its own basic logic for validating MediaRecorder's output,
-    # it prevents false negatives, but also makes sure that color channels
-    # are not switched and frames are not black.
-    return [
-        PixelTestPage('pixel_media_recorder_from_canvas_2d.html',
-                      base_name + '_MediaRecorderFrom2DCanvas',
-                      test_rect=[0, 0, 256, 256],
-                      browser_args=[],
-                      matching_algorithm=VERY_PERMISSIVE_SOBEL_ALGO,
-                      grace_period_end=date(2022, 10, 20))
+        PixelTestPage('pixel_video_mp4.html?width=240&height=135',
+                      base_name + '_DirectComposition_Video_SW_Decode',
+                      test_rect=[0, 0, 240, 135],
+                      browser_args=browser_args_sw_decode,
+                      matching_algorithm=very_permissive_dc_sobel_algorithm),
+        PixelTestPage(
+            'pixel_media_foundation_clear_dcomp.html?src='
+            '/media/test/data/four-colors.mp4',
+            base_name + '_MediaFoundationClearDirectComposition',
+            test_rect=[0, 0, 256, 256],
+            browser_args=[
+                '--enable-features=MediaFoundationClearPlayback, \
+                MediaFoundationClearRendering:strategy/direct-composition'
+            ],
+            matching_algorithm=VERY_PERMISSIVE_SOBEL_ALGO,
+            grace_period_end=date(2022, 10, 24)),
     ]
 
   @staticmethod
@@ -1265,6 +1421,20 @@ class PixelTestPages():
             base_name + '_Canvas2DRedBoxHdr10',
             test_rect=[0, 0, 300, 300],
             browser_args=['--force-color-profile=hdr10']),
+    ]
+
+  # Check that the root swap chain claims to be opaque. A root swap chain with a
+  # premultiplied alpha mode has a large negative battery impact (even if all
+  # the pixels are opaque).
+  @staticmethod
+  def RootSwapChainPages(base_name: str) -> List[PixelTestPage]:
+    return [
+        PixelTestPage('wait_for_compositing.html',
+                      base_name + '_IsOpaque',
+                      test_rect=[0, 0, 0, 0],
+                      other_args={
+                          'has_alpha': False,
+                      }),
     ]
 
   # This should only be used with the cast_streaming suite.

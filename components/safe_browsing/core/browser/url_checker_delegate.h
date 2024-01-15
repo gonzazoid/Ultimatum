@@ -7,8 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
+#include "base/types/optional_ref.h"
+#include "base/unguessable_token.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 
 namespace content {
@@ -69,7 +71,7 @@ class UrlCheckerDelegate
 
   // If the method returns true, the entire request won't be checked, including
   // the original URL and redirects.
-  // If neither of |render_process_id| and |render_frame_id| is a sentinel
+  // If neither of |render_process_id| and |render_frame_token| is a sentinel
   // value, they will be used to identify the frame making the request;
   // otherwise |frame_tree_node_id| will be used. Please note that
   // |frame_tree_node_id| could also be a sentinel value, if a request is not
@@ -80,7 +82,7 @@ class UrlCheckerDelegate
       const GURL& original_url,
       int frame_tree_node_id,
       int render_process_id,
-      int render_frame_id,
+      base::optional_ref<const base::UnguessableToken> render_frame_token,
       bool originated_from_service_worker) = 0;
 
   // Notifies the SafeBrowsing Trigger Manager that a suspicious site has been

@@ -19,15 +19,18 @@
 #include "ash/app_list/views/app_list_toast_view.h"
 #include "ash/app_list/views/app_list_view_util.h"
 #include "ash/app_list/views/continue_task_view.h"
+#include "ash/public/cpp/resources/grit/ash_public_unscaled_resources.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/wm/desks/templates/saved_desk_controller.h"
 #include "base/check.h"
 #include "base/strings/string_util.h"
 #include "extensions/common/constants.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/resource/resource_bundle.h"
 #include "ui/compositor/layer.h"
 #include "ui/views/animation/animation_builder.h"
 #include "ui/views/layout/flex_layout.h"
@@ -153,6 +156,10 @@ bool ContinueSectionView::HasMinimumFilesToShow() const {
                        : kMinFilesForContinueSectionClamshellMode);
 }
 
+bool ContinueSectionView::HasDesksAdminTemplates() const {
+  return suggestions_container_->num_desks_admin_template_results() > 0;
+}
+
 bool ContinueSectionView::ShouldShowPrivacyNotice() const {
   if (!nudge_controller_)
     return false;
@@ -163,13 +170,13 @@ bool ContinueSectionView::ShouldShowPrivacyNotice() const {
     return false;
   }
 
-  return HasMinimumFilesToShow() &&
+  return (HasDesksAdminTemplates() || HasMinimumFilesToShow()) &&
          !(nudge_controller_->IsPrivacyNoticeAccepted() ||
            nudge_controller_->WasPrivacyNoticeShown());
 }
 
 bool ContinueSectionView::ShouldShowFilesSection() const {
-  return HasMinimumFilesToShow() &&
+  return (HasDesksAdminTemplates() || HasMinimumFilesToShow()) &&
          (nudge_controller_->IsPrivacyNoticeAccepted() ||
           nudge_controller_->WasPrivacyNoticeShown()) &&
          !privacy_toast_;
@@ -280,7 +287,7 @@ void ContinueSectionView::AnimateShowContinueSection() {
 
 void ContinueSectionView::RemovePrivacyNotice() {
   if (privacy_toast_) {
-    RemoveChildViewT(privacy_toast_);
+    RemoveChildViewT(privacy_toast_.get());
     privacy_toast_ = nullptr;
   }
   UpdateElementsVisibility();
@@ -332,7 +339,9 @@ void ContinueSectionView::MaybeCreatePrivacyNotice() {
                          &ContinueSectionView::OnPrivacyToastAcknowledged,
                          base::Unretained(this)))
           .SetStyleForTabletMode(tablet_mode_)
-          .SetThemingIcons(&kContinueFilesDarkIcon, &kContinueFilesLightIcon)
+          .SetIcon(
+              ui::ResourceBundle::GetSharedInstance().GetThemedLottieImageNamed(
+                  IDR_APP_LIST_CONTINUE_SECTION_NOTICE_IMAGE))
           .SetIconSize(tablet_mode_ ? kPrivacyIconSizeTablet
                                     : kPrivacyIconSizeClamshell)
           .SetIconBackground(true)
@@ -341,6 +350,10 @@ void ContinueSectionView::MaybeCreatePrivacyNotice() {
       views::kFlexBehaviorKey,
       views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToMinimum,
                                views::MaximumFlexSizeRule::kScaleToMaximum));
+  if (available_width_) {
+    privacy_toast_->SetAvailableWidth(*available_width_);
+  }
+
   if (!tablet_mode_)
     privacy_toast_->UpdateInteriorMargins(kPrivacyToastInteriorMarginClamshell);
 }
@@ -372,7 +385,7 @@ void ContinueSectionView::UpdateElementsVisibility() {
   if (view_delegate_->ShouldHideContinueSection()) {
     SetVisible(false);
     if (privacy_toast_) {
-      RemoveChildViewT(privacy_toast_);
+      RemoveChildViewT(privacy_toast_.get());
       privacy_toast_ = nullptr;
       nudge_controller_->SetPrivacyNoticeShown(false);
       privacy_notice_shown_timer_.AbandonAndStop();
@@ -443,7 +456,7 @@ void ContinueSectionView::OnAppListVisibilityChanged(bool shown,
       privacy_toast_->layer()->GetAnimator()->AbortAllAnimations();
 
     if (privacy_toast_) {
-      RemoveChildViewT(privacy_toast_);
+      RemoveChildViewT(privacy_toast_.get());
       privacy_toast_ = nullptr;
     }
   }
@@ -467,6 +480,15 @@ void ContinueSectionView::OnAppListVisibilityChanged(bool shown,
 
   if (privacy_toast_)
     PreferredSizeChanged();
+}
+
+void ContinueSectionView::ConfigureLayoutForAvailableWidth(
+    int available_width) {
+  available_width_ = available_width;
+
+  if (privacy_toast_) {
+    privacy_toast_->SetAvailableWidth(available_width);
+  }
 }
 
 BEGIN_METADATA(ContinueSectionView, views::View)

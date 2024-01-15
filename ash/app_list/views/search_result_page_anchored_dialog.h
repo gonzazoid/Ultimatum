@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "ui/views/view_observer.h"
 #include "ui/views/widget/widget.h"
@@ -66,9 +67,9 @@ class SearchResultPageAnchoredDialog : public views::WidgetObserver,
   views::Widget* widget() { return widget_; }
 
  private:
-  views::Widget* widget_ = nullptr;
+  raw_ptr<views::Widget> widget_ = nullptr;
 
-  views::View* const host_view_;
+  const raw_ptr<views::View> host_view_;
 
   base::OnceClosure callback_;
 

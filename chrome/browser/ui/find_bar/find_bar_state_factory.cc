@@ -15,18 +15,25 @@ FindBarState* FindBarStateFactory::GetForBrowserContext(
 
 // static
 FindBarStateFactory* FindBarStateFactory::GetInstance() {
-  return base::Singleton<FindBarStateFactory>::get();
+  static base::NoDestructor<FindBarStateFactory> instance;
+  return instance.get();
 }
 
 FindBarStateFactory::FindBarStateFactory()
     : ProfileKeyedServiceFactory(
           "FindBarState",
           // Separate instance in incognito.
-          ProfileSelections::BuildForRegularAndIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 FindBarStateFactory::~FindBarStateFactory() = default;
 
-KeyedService* FindBarStateFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FindBarStateFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new FindBarState(context);
+  return std::make_unique<FindBarState>(context);
 }

@@ -5,6 +5,7 @@
 #ifndef CONTENT_BROWSER_RENDERER_HOST_PENDING_BEACON_HOST_H_
 #define CONTENT_BROWSER_RENDERER_HOST_PENDING_BEACON_HOST_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -14,7 +15,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/frame/pending_beacon.mojom.h"
 
 namespace network {
@@ -75,6 +75,39 @@ class CONTENT_EXPORT PendingBeaconHost
   PendingBeaconHost(const PendingBeaconHost&) = delete;
   PendingBeaconHost& operator=(const PendingBeaconHost&) = delete;
 
+  // Please keep in sync with "PendingBeaconHostAction" in
+  // tools/metrics/histograms/enums.xml. These values should not be renumbered.
+  enum class Action {
+    kNone = 0,
+    // Creates a pending beacon. Initiated by renderer.
+    kCreate = 1,
+    // About to send a pending beacon. Initiated by renderer.
+    kSend = 2,
+    // Deletes a pending beacon. Initiated by renderer.
+    kDelete = 3,
+    // Network service is sending a pending beacon.
+    kNetworkSend = 4,
+    // Network service receives response for a pending beacon.
+    // Note that the number of this action is not guaranteed to match the one of
+    // `kNetworkSend`, as RFH may not be alive when a response is sent back.
+    kNetworkComplete = 5,
+
+    kMaxValue = kNetworkComplete,
+  };
+  // Please keep in sync with "PendingBeaconHostBatchAction" in
+  // tools/metrics/histograms/enums.xml. These values should not be renumbered.
+  enum class BatchAction {
+    kNone = 0,
+    // The browser process sends all beacons in this host's dtor.
+    kSendAllOnHostDestroy = 1,
+    // The browser process sends all beacons when a navigation happens.
+    kSendAllOnNavigation = 2,
+    // The browser process sends all beacons when this renderer process exits.
+    kSendAllOnProcessExit = 3,
+
+    kMaxValue = kSendAllOnProcessExit,
+  };
+
   // Creates a new browser-side `Beacon` instance and stores it in this host.
   void CreateBeacon(mojo::PendingReceiver<blink::mojom::PendingBeacon> receiver,
                     const GURL& url,
@@ -116,6 +149,8 @@ class CONTENT_EXPORT PendingBeaconHost
       scoped_refptr<network::SharedURLLoaderFactory> shared_url_factory,
       PendingBeaconService* service);
 
+  // Sends out all stored `beacons_` and clear the references.
+  void SendAll(const BatchAction& action);
   // Encapsulates how `beacons` are sent.
   void Send(const std::vector<std::unique_ptr<Beacon>>& beacons);
 
@@ -205,7 +240,7 @@ class Beacon : public blink::mojom::PendingBeacon {
   std::string content_type_;
   // The beacon data represented as a data element. If `method_` is GET, this
   // field should not be used.
-  absl::optional<network::DataElement> request_element_;
+  std::optional<network::DataElement> request_element_;
 };
 
 }  // namespace content

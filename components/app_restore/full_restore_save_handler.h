@@ -18,6 +18,7 @@
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
+#include "base/uuid.h"
 #include "components/app_restore/app_restore_arc_info.h"
 #include "components/app_restore/arc_save_handler.h"
 #include "components/app_restore/lacros_save_handler.h"
@@ -109,6 +110,10 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreSaveHandler
 
   // Saves |window_info| to |profile_path_to_restore_data_|.
   void SaveWindowInfo(const app_restore::WindowInfo& window_info);
+
+  // Saves `removing_desk_guid` to the restore data for the currently active
+  // profile path.
+  void SaveRemovingDeskGuid(const base::Uuid& removing_desk_guid);
 
   // Invoked when an Chrome app Lacros window is created. `app_id` is the
   // AppService id, and `window_id` is the wayland app_id property for the

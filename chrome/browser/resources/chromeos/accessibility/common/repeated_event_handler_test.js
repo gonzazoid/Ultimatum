@@ -3,21 +3,26 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '../select_to_speak/select_to_speak_e2e_test_base.js',
-]);
+GEN_INCLUDE(['testing/common_e2e_test_base.js']);
 
 /** Test fixture for array_util.js. */
-RepeatedEventHandlerTest = class extends SelectToSpeakE2ETest {
+AccessibilityExtensionRepeatedEventHandlerTest =
+    class extends CommonE2ETestBase {
   /** @override */
   async setUpDeferred() {
-    await importModule(
-        'RepeatedEventHandler', '/common/repeated_event_handler.js');
+    await super.setUpDeferred();
+
+    await Promise.all([
+      importModule('EventGenerator', '/common/event_generator.js'),
+      importModule('KeyCode', '/common/key_code.js'),
+      importModule('RepeatedEventHandler', '/common/repeated_event_handler.js'),
+    ]);
   }
 };
 
 AX_TEST_F(
-    'RepeatedEventHandlerTest', 'RepeatedEventHandledOnce', async function() {
+    'AccessibilityExtensionRepeatedEventHandlerTest',
+    'RepeatedEventHandledOnce', async function() {
       const root = await this.runWithLoadedTree('');
       this.handlerCallCount = 0;
       const handler = () => this.handlerCallCount++;
@@ -37,8 +42,8 @@ AX_TEST_F(
     });
 
 AX_TEST_F(
-    'RepeatedEventHandlerTest', 'NoEventsHandledAfterStopListening',
-    async function() {
+    'AccessibilityExtensionRepeatedEventHandlerTest',
+    'NoEventsHandledAfterStopListening', async function() {
       const root = await this.runWithLoadedTree('');
       this.handlerCallCount = 0;
       const handler = () => this.handlerCallCount++;

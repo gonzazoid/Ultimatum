@@ -6,115 +6,157 @@
 
 #include <utility>
 
+#include "base/debug/leak_annotations.h"
 #include "base/logging.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_base.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/metrics/persistent_histogram_allocator.h"
 #include "base/metrics/persistent_memory_allocator.h"
-#include "components/metrics/metrics_service.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
+#include "components/metrics/metrics_features.h"
 #include "content/public/browser/browser_child_process_host.h"
+#include "content/public/browser/browser_child_process_host_iterator.h"
 #include "content/public/browser/child_process_data.h"
 
 namespace metrics {
 namespace {
 
-// This is used by tests that don't have an easy way to access the global
-// instance of this class.
-SubprocessMetricsProvider* g_subprocess_metrics_provider_for_testing;
+SubprocessMetricsProvider* g_subprocess_metrics_provider = nullptr;
+
+scoped_refptr<base::TaskRunner> CreateTaskRunner() {
+  // This task runner must block shutdown to ensure metrics are not lost.
+  return base::ThreadPool::CreateTaskRunner(
+      {base::TaskPriority::BEST_EFFORT,
+       base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
+}
 
 }  // namespace
 
-SubprocessMetricsProvider::SubprocessMetricsProvider() {
-  base::StatisticsRecorder::RegisterHistogramProvider(
-      weak_ptr_factory_.GetWeakPtr());
-  content::BrowserChildProcessObserver::Add(this);
-  RegisterExistingRenderProcesses();
-  g_subprocess_metrics_provider_for_testing = this;
-}
-
-SubprocessMetricsProvider::~SubprocessMetricsProvider() {
-  // Safe even if this object has never been added as an observer.
-  content::BrowserChildProcessObserver::Remove(this);
-  g_subprocess_metrics_provider_for_testing = nullptr;
+// static
+bool SubprocessMetricsProvider::CreateInstance() {
+  if (g_subprocess_metrics_provider) {
+    return false;
+  }
+  g_subprocess_metrics_provider = new SubprocessMetricsProvider();
+  ANNOTATE_LEAKING_OBJECT_PTR(g_subprocess_metrics_provider);
+  return true;
 }
 
 // static
-void SubprocessMetricsProvider::MergeHistogramDeltasForTesting() {
-  DCHECK(g_subprocess_metrics_provider_for_testing);
-  g_subprocess_metrics_provider_for_testing->MergeHistogramDeltas();
+SubprocessMetricsProvider* SubprocessMetricsProvider::GetInstance() {
+  return g_subprocess_metrics_provider;
 }
 
-void SubprocessMetricsProvider::RegisterExistingRenderProcesses() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+// static
+void SubprocessMetricsProvider::MergeHistogramDeltasForTesting(
+    bool async,
+    base::OnceClosure done_callback) {
+  GetInstance()->MergeHistogramDeltas(async, std::move(done_callback));
+}
 
-  for (auto it(content::RenderProcessHost::AllHostsIterator()); !it.IsAtEnd();
-       it.Advance()) {
-    auto* rph = it.GetCurrentValue();
-    OnRenderProcessHostCreated(rph);
-    if (rph->IsReady())
-      RenderProcessReady(rph);
-  }
+SubprocessMetricsProvider::RefCountedAllocator::RefCountedAllocator(
+    std::unique_ptr<base::PersistentHistogramAllocator> allocator)
+    : allocator_(std::move(allocator)) {
+  CHECK(allocator_);
+}
+
+SubprocessMetricsProvider::RefCountedAllocator::~RefCountedAllocator() =
+    default;
+
+SubprocessMetricsProvider::SubprocessMetricsProvider()
+    : task_runner_(CreateTaskRunner()) {
+  base::StatisticsRecorder::RegisterHistogramProvider(
+      weak_ptr_factory_.GetWeakPtr());
+  content::BrowserChildProcessObserver::Add(this);
+  g_subprocess_metrics_provider = this;
+
+  // Ensure no child processes currently exist so that we do not miss any.
+  CHECK(content::RenderProcessHost::AllHostsIterator().IsAtEnd());
+  CHECK(content::BrowserChildProcessHostIterator().Done());
+}
+
+SubprocessMetricsProvider::~SubprocessMetricsProvider() {
+  // This object should never be deleted since it is leaky.
+  NOTREACHED();
 }
 
 void SubprocessMetricsProvider::RegisterSubprocessAllocator(
     int id,
     std::unique_ptr<base::PersistentHistogramAllocator> allocator) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(!allocators_by_id_.Lookup(id));
+  CHECK(allocator);
 
-  // Stop now if this was called without an allocator, typically because
-  // GetSubprocessHistogramAllocatorOnIOThread exited early and returned
-  // null.
-  if (!allocator)
-    return;
-
-  // Map is "MapOwnPointer" so transfer ownership to it.
-  allocators_by_id_.AddWithID(std::move(allocator), id);
+  // Pass a custom RangesManager so that we do not register the BucketRanges
+  // with the global StatisticsRecorder when creating histogram objects using
+  // the allocator's underlying data. This avoids unnecessary contention on the
+  // global StatisticsRecorder lock.
+  // Note: Since |allocator| may be merged from different threads concurrently,
+  // for example on the UI thread and on a background thread, we must use
+  // ThreadSafeRangesManager.
+  allocator->SetRangesManager(new base::ThreadSafeRangesManager());
+  // Insert the allocator into the internal map and verify that there was no
+  // allocator with the same ID already.
+  auto result = allocators_by_id_.emplace(
+      id, base::MakeRefCounted<RefCountedAllocator>(std::move(allocator)));
+  CHECK(result.second);
 }
 
 void SubprocessMetricsProvider::DeregisterSubprocessAllocator(int id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-  if (!allocators_by_id_.Lookup(id))
+  auto it = allocators_by_id_.find(id);
+  if (it == allocators_by_id_.end()) {
     return;
-
-  // Extract the matching allocator from the list of active ones. It will
-  // be automatically released when this method exits.
-  std::unique_ptr<base::PersistentHistogramAllocator> allocator(
-      allocators_by_id_.Replace(id, nullptr));
-  allocators_by_id_.Remove(id);
-  DCHECK(allocator);
-
-  // Merge the last deltas from the allocator before it is released.
-  MergeHistogramDeltasFromAllocator(id, allocator.get());
-}
-
-void SubprocessMetricsProvider::MergeHistogramDeltasFromAllocator(
-    int id,
-    base::PersistentHistogramAllocator* allocator) {
-  DCHECK(allocator);
-
-  int histogram_count = 0;
-  base::PersistentHistogramAllocator::Iterator hist_iter(allocator);
-  while (true) {
-    std::unique_ptr<base::HistogramBase> histogram = hist_iter.GetNext();
-    if (!histogram)
-      break;
-    allocator->MergeHistogramDeltaToStatisticsRecorder(histogram.get());
-    ++histogram_count;
   }
 
-  DVLOG(1) << "Reported " << histogram_count << " histograms from subprocess #"
-           << id;
+  // Extract the matching allocator from the list of active ones. It is possible
+  // that a background task is currently holding a reference to it. Removing it
+  // from the internal map is fine though, as it is refcounted.
+  scoped_refptr<RefCountedAllocator> allocator = std::move(it->second);
+  allocators_by_id_.erase(it);
+  CHECK(allocator);
+
+  // Merge the last deltas from the allocator before releasing the ref (and
+  // deleting if the last one).
+  auto* allocator_ptr = allocator.get();
+  task_runner_->PostTaskAndReply(
+      FROM_HERE,
+      base::BindOnce(
+          &SubprocessMetricsProvider::MergeHistogramDeltasFromAllocator, id,
+          // Unretained is needed to pass a refcounted class as a raw pointer.
+          // It is safe because it is kept alive by the reply task.
+          base::Unretained(allocator_ptr)),
+      base::BindOnce(
+          &SubprocessMetricsProvider::OnMergeHistogramDeltasFromAllocator,
+          std::move(allocator)));
 }
 
-void SubprocessMetricsProvider::MergeHistogramDeltas() {
+void SubprocessMetricsProvider::MergeHistogramDeltas(
+    bool async,
+    base::OnceClosure done_callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (async) {
+    // Make a copy of the internal allocators map (with its own refptrs) to pass
+    // to the background task.
+    auto allocators = std::make_unique<AllocatorByIdMap>(allocators_by_id_);
+    auto* allocators_ptr = allocators.get();
 
-  for (AllocatorByIdMap::iterator iter(&allocators_by_id_); !iter.IsAtEnd();
-       iter.Advance()) {
-    MergeHistogramDeltasFromAllocator(iter.GetCurrentKey(),
-                                      iter.GetCurrentValue());
+    // This is intentionally not posted to |task_runner_| because not running
+    // this task does not imply data loss, so no point in blocking shutdown
+    // (hence CONTINUE_ON_SHUTDOWN). However, there might be some contention on
+    // the StatisticsRecorder between this task and those posted to
+    // |task_runner_|.
+    base::ThreadPool::PostTaskAndReply(
+        FROM_HERE,
+        {base::TaskPriority::BEST_EFFORT,
+         base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
+        base::BindOnce(&MergeHistogramDeltasFromAllocators, allocators_ptr),
+        base::BindOnce(
+            &SubprocessMetricsProvider::OnMergeHistogramDeltasFromAllocators,
+            std::move(allocators), std::move(done_callback)));
+  } else {
+    MergeHistogramDeltasFromAllocators(&allocators_by_id_);
+    std::move(done_callback).Run();
   }
 }
 
@@ -126,8 +168,11 @@ void SubprocessMetricsProvider::BrowserChildProcessLaunchedAndConnected(
   // This call can only be made on the browser's IO thread.
   content::BrowserChildProcessHost* host =
       content::BrowserChildProcessHost::FromID(data.id);
-  CHECK(host);  // TODO(pmonette): Change to DCHECK after September 1st, after
-                //                 confirming that this never gets hit.
+  // |host| should not be null, but such cases have been observed in the wild so
+  // gracefully handle this scenario.
+  if (!host) {
+    return;
+  }
 
   std::unique_ptr<base::PersistentMemoryAllocator> allocator =
       host->TakeMetricsAllocator();
@@ -201,6 +246,59 @@ void SubprocessMetricsProvider::RenderProcessHostDestroyed(
 
   DeregisterSubprocessAllocator(host->GetID());
   scoped_observations_.RemoveObservation(host);
+}
+
+void SubprocessMetricsProvider::RecreateTaskRunnerForTesting() {
+  task_runner_ = CreateTaskRunner();
+}
+
+// static
+void SubprocessMetricsProvider::MergeHistogramDeltasFromAllocator(
+    int id,
+    RefCountedAllocator* allocator) {
+  DCHECK(allocator);
+
+  int histogram_count = 0;
+  base::PersistentHistogramAllocator* allocator_ptr = allocator->allocator();
+  base::PersistentHistogramAllocator::Iterator hist_iter(allocator_ptr);
+  while (true) {
+    std::unique_ptr<base::HistogramBase> histogram = hist_iter.GetNext();
+    if (!histogram) {
+      break;
+    }
+    allocator_ptr->MergeHistogramDeltaToStatisticsRecorder(histogram.get());
+    ++histogram_count;
+  }
+
+  DVLOG(1) << "Reported " << histogram_count << " histograms from subprocess #"
+           << id;
+}
+
+// static
+void SubprocessMetricsProvider::MergeHistogramDeltasFromAllocators(
+    AllocatorByIdMap* allocators) {
+  for (const auto& iter : *allocators) {
+    MergeHistogramDeltasFromAllocator(iter.first, iter.second.get());
+  }
+}
+
+// static
+void SubprocessMetricsProvider::OnMergeHistogramDeltasFromAllocator(
+    scoped_refptr<RefCountedAllocator> allocator) {
+  // This method does nothing except have ownership on |allocator|. When this
+  // method exits, |allocator| will be released (unless there are background
+  // tasks currently holding references).
+}
+
+// static
+void SubprocessMetricsProvider::OnMergeHistogramDeltasFromAllocators(
+    std::unique_ptr<AllocatorByIdMap> allocators,
+    base::OnceClosure done_callback) {
+  std::move(done_callback).Run();
+  // When this method exits, |allocators| will be released. It's possible some
+  // allocators are from subprocesses that have already been deregistered, so
+  // they will also be released here (assuming no other background tasks
+  // currently hold references).
 }
 
 }  // namespace metrics

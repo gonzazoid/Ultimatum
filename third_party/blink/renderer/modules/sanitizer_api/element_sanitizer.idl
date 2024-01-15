@@ -4,14 +4,12 @@
 
 // https://github.com/WICG/sanitizer-api
 
-[
-  RuntimeEnabled=SanitizerAPIv0
-] dictionary ElementSetHTMLOptions {
+dictionary ElementSetHTMLOptions {
   Sanitizer sanitizer;
 };
 
 [
-  RuntimeEnabled=SanitizerAPIv0,
+  RuntimeEnabled=SanitizerAPI,
   SecureContext,
   ImplementedAs=ElementSanitizer
 ] partial interface Element {

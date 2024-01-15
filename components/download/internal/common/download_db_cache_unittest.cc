@@ -6,12 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
+#include "base/uuid.h"
 #include "components/download/database/download_db_conversions.h"
 #include "components/download/database/download_db_entry.h"
 #include "components/download/database/download_db_impl.h"
@@ -35,7 +35,7 @@ DownloadDBEntry CreateDownloadDBEntry() {
   DownloadDBEntry entry;
   DownloadInfo download_info;
   download_info.in_progress_info = InProgressInfo();
-  download_info.guid = base::GenerateGUID();
+  download_info.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   static int id = 0;
   download_info.id = ++id;
   download_info.in_progress_info->hash = "abc";
@@ -110,7 +110,9 @@ class DownloadDBCacheTest : public testing::Test {
 
  protected:
   std::map<std::string, download_pb::DownloadDBEntry> db_entries_;
-  raw_ptr<leveldb_proto::test::FakeDB<download_pb::DownloadDBEntry>> db_;
+  raw_ptr<leveldb_proto::test::FakeDB<download_pb::DownloadDBEntry>,
+          DanglingUntriaged>
+      db_;
   std::unique_ptr<DownloadDBCache> db_cache_;
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
   base::test::TaskEnvironment task_environment_;
@@ -240,47 +242,6 @@ TEST_F(DownloadDBCacheTest, FilePathChange) {
   ASSERT_EQ(loaded_entries.size(), 1u);
   ASSERT_EQ(loaded_entries[0].download_info->in_progress_info->current_path,
             test_path);
-}
-
-// Test that modifying reroute info will immediately update the DB.
-TEST_F(DownloadDBCacheTest, RerouteInfoChange) {
-  DownloadDBEntry entry = CreateDownloadDBEntry();
-  InProgressInfo info;
-  DownloadItemRerouteInfo test_reroute_info;
-  info.reroute_info = test_reroute_info;
-  entry.download_info->in_progress_info = info;
-  db_entries_.insert(
-      std::make_pair(GetKey(entry.GetGuid()),
-                     DownloadDBConversions::DownloadDBEntryToProto(entry)));
-  CreateDBCache();
-  std::vector<DownloadDBEntry> loaded_entries;
-  db_cache_->Initialize(base::BindOnce(&DownloadDBCacheTest::InitCallback,
-                                       base::Unretained(this),
-                                       &loaded_entries));
-  db_->InitStatusCallback(leveldb_proto::Enums::InitStatus::kOK);
-  db_->LoadCallback(true);
-  ASSERT_EQ(loaded_entries.size(), 1u);
-  absl::optional<InProgressInfo> loaded_info =
-      loaded_entries[0].download_info->in_progress_info;
-  ASSERT_TRUE(RerouteInfosEqual(loaded_info->reroute_info, test_reroute_info))
-      << "Expected: " << loaded_info->reroute_info.DebugString()
-      << "\nActual:" << test_reroute_info.DebugString();
-
-  test_reroute_info.mutable_box()->set_file_id("12345");
-  loaded_info->reroute_info = test_reroute_info;
-  db_cache_->AddOrReplaceEntry(loaded_entries[0]);
-  db_->UpdateCallback(true);
-
-  loaded_entries.clear();
-  DownloadDB* download_db = GetDownloadDB();
-  download_db->LoadEntries(base::BindOnce(&DownloadDBCacheTest::InitCallback,
-                                          base::Unretained(this),
-                                          &loaded_entries));
-  db_->LoadCallback(true);
-  ASSERT_EQ(loaded_entries.size(), 1u);
-  ASSERT_TRUE(RerouteInfosEqual(loaded_info->reroute_info, test_reroute_info))
-      << "Expected: " << loaded_info->reroute_info.DebugString()
-      << "\nActual:" << test_reroute_info.DebugString();
 }
 
 TEST_F(DownloadDBCacheTest, RemoveEntry) {

@@ -5,6 +5,8 @@ from page_sets.login_helpers import login_utils
 
 from page_sets.helpers import override_online
 
+import subprocess
+
 # Selectors for the email, password, and next buttons for google login flow.
 # Use multiple selectors to allow for different versions of the site.
 _EMAIL_SELECTOR = ','.join([
@@ -92,3 +94,34 @@ def NewLoginGoogleAccount(action_runner,
   """ Login for new UI """
   BaseLoginGoogle(action_runner, credential, credentials_path)
   action_runner.WaitForElement(text='Google Account')
+
+
+def LoginWithLoginUrl(action_runner,
+                      target_url,
+                      test_account_email='browserperftester@gmail.com'):
+  """ Get a login url for the provided OTA account for the target url"""
+
+  cmd = [
+      "stubby --proto2 call blade:identity-testaccount-service-prod " +
+      "TestaccountService.GetTestAccountLoginUrl " +
+      "'email:\"%s\" " % test_account_email +
+      "client_id { client_id_enum: CHROME_DESKTOP} " +
+      "target_url:\"%s\"' --field login_url" % target_url
+  ]
+
+  process = None
+  try:
+    # Invoke stubby to get a login url for the account
+    process = subprocess.run(cmd,
+                             stdout=subprocess.PIPE,
+                             shell=True,
+                             text=True,
+                             check=True)
+    stubby_output = process.stdout
+    login_url = stubby_output[1:-2]
+    action_runner.Navigate(login_url)
+  except subprocess.CalledProcessError:
+    # The stubby execution prints the error details during invocation itself
+    print('Error while obtaining LoginUrl for test account.' +
+          'Please look at the logs above for details')
+    raise

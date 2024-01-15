@@ -5,9 +5,11 @@
 #include "chrome/browser/ui/webui/ash/internet_detail_dialog.h"
 
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/connectivity_services.h"
 #include "ash/public/cpp/network_config_service.h"
 #include "base/json/json_writer.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/ash/cellular_setup/cellular_setup_localized_strings_provider.h"
 #include "chrome/browser/ui/webui/webui_util.h"
@@ -21,7 +23,8 @@
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_util.h"
-#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"  // nogncheck
+#include "chromeos/constants/chromeos_features.h"
+#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_ui.h"
@@ -30,6 +33,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/strings/grit/ui_chromeos_strings.h"
 #include "ui/chromeos/strings/network/network_element_localized_strings_provider.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
 
 namespace ash {
 
@@ -94,7 +98,8 @@ class PortalNetworkMessageHandler : public content::WebUIMessageHandler {
       return;
     }
     const std::string& guid = args[0].GetString();
-    NetworkConnect::Get()->ShowPortalSignin(guid);
+    NetworkConnect::Get()->ShowPortalSignin(guid,
+                                            NetworkConnect::Source::kSettings);
   }
 };
 
@@ -129,7 +134,7 @@ void InternetDetailDialog::ShowDialog(const std::string& network_id,
 }
 
 InternetDetailDialog::InternetDetailDialog(const NetworkState& network)
-    : SystemWebDialogDelegate(GURL(chrome::kChromeUIIntenetDetailDialogURL),
+    : SystemWebDialogDelegate(GURL(chrome::kChromeUIInternetDetailDialogURL),
                               /* title= */ std::u16string()),
       network_id_(network.guid()),
       network_type_(network_util::TranslateShillTypeToONC(network.type())),
@@ -141,7 +146,7 @@ InternetDetailDialog::~InternetDetailDialog() {
   --s_internet_detail_dialog_count;
 }
 
-const std::string& InternetDetailDialog::Id() {
+std::string InternetDetailDialog::Id() {
   return network_id_;
 }
 
@@ -151,10 +156,10 @@ void InternetDetailDialog::GetDialogSize(gfx::Size* size) const {
 }
 
 std::string InternetDetailDialog::GetDialogArgs() const {
-  base::DictionaryValue args;
-  args.SetKey("type", base::Value(network_type_));
-  args.SetKey("guid", base::Value(network_id_));
-  args.SetKey("name", base::Value(network_name_));
+  base::Value::Dict args;
+  args.Set("type", network_type_);
+  args.Set("guid", network_id_);
+  args.Set("name", network_name_);
   std::string json;
   base::JSONWriter::Write(args, &json);
   return json;
@@ -166,25 +171,22 @@ InternetDetailDialogUI::InternetDetailDialogUI(content::WebUI* web_ui)
     : ui::MojoWebDialogUI(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<PortalNetworkMessageHandler>());
 
-  content::WebUIDataSource* source = content::WebUIDataSource::Create(
-      chrome::kChromeUIInternetDetailDialogHost);
-  source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUIInternetDetailDialogHost);
   source->AddBoolean("showTechnologyBadge",
                      !features::IsSeparateNetworkIconsEnabled());
-  source->AddBoolean("captivePortalUI2022",
-                     features::IsCaptivePortalUI2022Enabled());
   source->AddBoolean("apnRevamp", features::IsApnRevampEnabled());
+  source->AddBoolean("isJellyEnabled", chromeos::features::IsJellyEnabled());
   cellular_setup::AddNonStringLoadTimeData(source);
   AddInternetStrings(source);
   source->AddLocalizedString("title", IDS_SETTINGS_INTERNET_DETAIL);
-  source->UseStringsJs();
 
   webui::SetupWebUIDataSource(
       source,
       base::make_span(kInternetDetailDialogResources,
                       kInternetDetailDialogResourcesSize),
       IDR_INTERNET_DETAIL_DIALOG_INTERNET_DETAIL_DIALOG_CONTAINER_HTML);
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source);
+  source->DisableTrustedTypesCSP();
 }
 
 InternetDetailDialogUI::~InternetDetailDialogUI() {}
@@ -193,6 +195,18 @@ void InternetDetailDialogUI::BindInterface(
     mojo::PendingReceiver<chromeos::network_config::mojom::CrosNetworkConfig>
         receiver) {
   GetNetworkConfigService(std::move(receiver));
+}
+
+void InternetDetailDialogUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
+}
+
+void InternetDetailDialogUI::BindInterface(
+    mojo::PendingReceiver<chromeos::connectivity::mojom::PasspointService>
+        receiver) {
+  ash::GetPasspointService(std::move(receiver));
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(InternetDetailDialogUI)

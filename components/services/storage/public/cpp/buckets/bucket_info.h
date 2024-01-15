@@ -5,16 +5,26 @@
 #ifndef COMPONENTS_SERVICES_STORAGE_PUBLIC_CPP_BUCKETS_BUCKET_INFO_H_
 #define COMPONENTS_SERVICES_STORAGE_PUBLIC_CPP_BUCKETS_BUCKET_INFO_H_
 
+#include <stdint.h>
+
+#include <set>
+#include <string>
+
+#include "base/component_export.h"
+#include "base/feature_list.h"
 #include "base/time/time.h"
 #include "components/services/storage/public/cpp/buckets/bucket_id.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
-#include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-shared.h"
-#include "url/origin.h"
 
 namespace storage {
+
+// Changes the hard-coded durability for default buckets to relaxed. This only
+// affects IndexedDB.
+COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT)
+BASE_DECLARE_FEATURE(kDefaultBucketUsesRelaxedDurability);
 
 // Snapshot of a bucket's information in the quota database.
 //
@@ -31,7 +41,7 @@ struct COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT) BucketInfo {
              bool persistent,
              blink::mojom::BucketDurability durability);
 
-  BucketInfo() = delete;
+  BucketInfo();
   ~BucketInfo();
 
   BucketInfo(const BucketInfo&);
@@ -53,15 +63,17 @@ struct COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT) BucketInfo {
   }
 
   bool is_default() const { return name == kDefaultBucketName; }
+  bool is_null() const { return !id; }
 
   BucketId id;
   blink::StorageKey storage_key;
-  blink::mojom::StorageType type;
+  blink::mojom::StorageType type = blink::mojom::StorageType::kTemporary;
   std::string name;
   base::Time expiration;
-  int64_t quota;
-  bool persistent;
-  blink::mojom::BucketDurability durability;
+  int64_t quota = 0;
+  bool persistent = false;
+  blink::mojom::BucketDurability durability =
+      blink::mojom::BucketDurability::kRelaxed;
 };
 
 std::set<BucketLocator> COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT)

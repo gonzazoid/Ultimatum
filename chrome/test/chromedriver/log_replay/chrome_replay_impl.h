@@ -9,9 +9,7 @@
 #include "chrome/test/chromedriver/chrome/device_metrics.h"
 
 class DevToolsClient;
-class DevToolsHttpClient;
 class Status;
-struct DeviceMetrics;
 
 // Same as ChromeDesktopImpl except that it completely ignores the existence
 // of the |process| passed into the constructor. This allows running Chrome
@@ -19,12 +17,12 @@ struct DeviceMetrics;
 // a Chrome process at all.
 class ChromeReplayImpl : public ChromeDesktopImpl {
  public:
-  ChromeReplayImpl(std::unique_ptr<DevToolsHttpClient> http_client,
+  ChromeReplayImpl(BrowserInfo browser_info,
+                   std::set<WebViewInfo::Type> window_types,
                    std::unique_ptr<DevToolsClient> websocket_client,
                    std::vector<std::unique_ptr<DevToolsEventListener>>
                        devtools_event_listeners,
-                   std::unique_ptr<DeviceMetrics> device_metrics,
-                   SyncWebSocketFactory socket_factory,
+                   absl::optional<MobileDevice> mobile_device,
                    std::string page_load_strategy,
                    base::Process process,
                    const base::CommandLine& command,

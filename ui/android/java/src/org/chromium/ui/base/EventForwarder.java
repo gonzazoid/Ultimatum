@@ -13,27 +13,38 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 
+import androidx.annotation.IntDef;
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.base.Log;
 import org.chromium.base.TraceEvent;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.compat.ApiHelperForM;
 import org.chromium.base.compat.ApiHelperForQ;
+import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.ui.MotionEventUtils;
 
-/**
- * Class used to forward view, input events down to native.
- */
+import java.lang.reflect.UndeclaredThrowableException;
+
+/** Class used to forward view, input events down to native. */
 @JNINamespace("ui")
 public class EventForwarder {
+    private static final String TAG = "EventForwarder";
     private final boolean mIsDragDropEnabled;
+    private final boolean mConvertTrackpadEventsToMouse;
 
     private long mNativeEventForwarder;
 
     // Offsets for the events that passes through.
     private float mCurrentTouchOffsetX;
     private float mCurrentTouchOffsetY;
+
+    // Offset for the drag events that's dispatching through other views.
+    private float mDragDispatchingOffsetX;
+    private float mDragDispatchingOffsetY;
 
     private int mLastMouseButtonState;
 
@@ -43,9 +54,7 @@ public class EventForwarder {
     // Delegate to call WebContents functionality.
     private StylusWritingDelegate mStylusWritingDelegate;
 
-    /**
-     * Interface to provide stylus writing functionality.
-     */
+    /** Interface to provide stylus writing functionality. */
     public interface StylusWritingDelegate {
         /**
          * Handle touch events for stylus handwriting.
@@ -73,12 +82,23 @@ public class EventForwarder {
 
     @CalledByNative
     private static EventForwarder create(long nativeEventForwarder, boolean isDragDropEnabled) {
-        return new EventForwarder(nativeEventForwarder, isDragDropEnabled);
+        final boolean isAtLeastU = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
+        final boolean convertTrackpadEventsToMouse =
+                isAtLeastU
+                        && UiAndroidFeatureMap.isEnabled(
+                                UiAndroidFeatures.CONVERT_TRACKPAD_EVENTS_TO_MOUSE);
+        return new EventForwarder(
+                nativeEventForwarder, isDragDropEnabled, convertTrackpadEventsToMouse);
     }
 
-    private EventForwarder(long nativeEventForwarder, boolean isDragDropEnabled) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    EventForwarder(
+            long nativeEventForwarder,
+            boolean isDragDropEnabled,
+            boolean convertTrackpadEventsToMouse) {
         mNativeEventForwarder = nativeEventForwarder;
         mIsDragDropEnabled = isDragDropEnabled;
+        mConvertTrackpadEventsToMouse = convertTrackpadEventsToMouse;
     }
 
     @CalledByNative
@@ -86,17 +106,48 @@ public class EventForwarder {
         mNativeEventForwarder = 0;
     }
 
-    // Returns the scaling being applied to the event's source. Typically only used for VR when
-    // drawing Android UI to a texture.
-    private float getEventSourceScaling() {
-        return EventForwarderJni.get()
-                .getJavaWindowAndroid(mNativeEventForwarder, EventForwarder.this)
-                .getDisplay()
-                .getAndroidUIScaling();
-    }
-
     private boolean hasTouchEventOffset() {
         return mCurrentTouchOffsetX != 0.0f || mCurrentTouchOffsetY != 0.0f;
+    }
+
+    // These values are persisted to logs. Entries should not be renumbered and
+    // numeric values should never be reused.
+    @IntDef({
+        InputDeviceSource.OTHER,
+        InputDeviceSource.TOUCHSCREEN,
+        InputDeviceSource.TOUCHPAD,
+        InputDeviceSource.MOUSE,
+        InputDeviceSource.STYLUS,
+        InputDeviceSource.COUNT
+    })
+    private @interface InputDeviceSource {
+        int OTHER = 0;
+        int TOUCHSCREEN = 1;
+        int TOUCHPAD = 2;
+        int MOUSE = 3;
+        int STYLUS = 4;
+        int COUNT = 5;
+    }
+
+    private static final void logActionDown(MotionEvent event) {
+        @InputDeviceSource int source = InputDeviceSource.OTHER;
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE)
+                && event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER) {
+            // On the event a touchpad is not indicated as a distinct source from a mouse, but the
+            // tool type is different.
+            source = InputDeviceSource.TOUCHPAD;
+        } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)
+                && event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
+            source = InputDeviceSource.MOUSE;
+        } else if (event.isFromSource(InputDevice.SOURCE_STYLUS)) {
+            // Check stylus before touchscreen. In the case of a stylus acting on a touchscreen both
+            // will be true, but stylus is more specific.
+            source = InputDeviceSource.STYLUS;
+        } else if (event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) {
+            source = InputDeviceSource.TOUCHSCREEN;
+        }
+        RecordHistogram.recordEnumeratedHistogram(
+                "Android.Event.ActionDown", source, InputDeviceSource.COUNT);
     }
 
     /**
@@ -105,30 +156,11 @@ public class EventForwarder {
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             mLastToolType = event.getToolType(0);
+            logActionDown(event);
         }
 
-        if (mStylusWritingDelegate != null && mStylusWritingDelegate.handleTouchEvent(event)) {
-            // Stylus writing system can consume the touch events once writing is started.
+        if (touchEventRequiresSpecialHandling(event)) {
             return true;
-        }
-
-        // TODO(mustaq): Should we include MotionEvent.TOOL_TYPE_STYLUS here?
-        // crbug.com/592082
-        if (event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
-            // Skip firing mouse events in the follwoing cases:
-            // - In Android L and below, where mouse button info is incomplete.
-            // - A move w/o a button press, which represents a trackpad scroll. Real mouse moves w/o
-            //   buttons goes to onHoverEvent.
-            final int apiVersion = Build.VERSION.SDK_INT;
-            final boolean isTouchpadScroll = event.getButtonState() == 0
-                    && (event.getActionMasked() == MotionEvent.ACTION_DOWN
-                            || event.getActionMasked() == MotionEvent.ACTION_MOVE
-                            || event.getActionMasked() == MotionEvent.ACTION_UP
-                            || event.getActionMasked() == MotionEvent.ACTION_CANCEL);
-
-            if (apiVersion >= android.os.Build.VERSION_CODES.M && !isTouchpadScroll) {
-                return onMouseEvent(event);
-            }
         }
 
         final boolean isTouchHandleEvent = false;
@@ -137,11 +169,42 @@ public class EventForwarder {
 
     /**
      * Called by PopupWindow-based touch handles.
+     *
      * @param event the MotionEvent targeting the handle.
      */
     public boolean onTouchHandleEvent(MotionEvent event) {
         final boolean isTouchHandleEvent = true;
         return sendTouchEvent(event, isTouchHandleEvent);
+    }
+
+    private boolean touchEventRequiresSpecialHandling(MotionEvent event) {
+        if (mStylusWritingDelegate != null && mStylusWritingDelegate.handleTouchEvent(event)) {
+            // Stylus writing system can consume the touch events once writing is started.
+            return true;
+        } else if (isTrackpadToMouseEventConversionEnabled()
+                && isTrackpadClickOrClickAndDragEvent(event)) {
+            return onMouseEvent(event);
+        } else if (event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
+            // TODO(mustaq): Should we include MotionEvent.TOOL_TYPE_STYLUS here?
+            // crbug.com/592082
+
+            // Skip firing mouse events in the following cases:
+            // - In Android L and below, where mouse button info is incomplete.
+            // - A move w/o a button press, which represents a trackpad scroll. Real mouse moves w/o
+            //   buttons goes to onHoverEvent.
+            // TODO(mustaq): Look into the relevancy of this code path
+            final boolean isTouchpadScroll =
+                    event.getButtonState() == 0
+                            && (event.getActionMasked() == MotionEvent.ACTION_DOWN
+                                    || event.getActionMasked() == MotionEvent.ACTION_MOVE
+                                    || event.getActionMasked() == MotionEvent.ACTION_UP
+                                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL);
+
+            if (!isTouchpadScroll) {
+                return onMouseEvent(event);
+            }
+        }
+        return false;
     }
 
     private boolean sendTouchEvent(MotionEvent event, boolean isTouchHandleEvent) {
@@ -151,9 +214,10 @@ public class EventForwarder {
         try {
             // Android may batch multiple events together for efficiency. We
             // want to use the oldest event time as hardware time stamp.
-            final long oldestEventTime = event.getHistorySize() > 0
-                    ? event.getHistoricalEventTime(0)
-                    : event.getEventTime();
+            final long oldestEventTime =
+                    event.getHistorySize() > 0
+                            ? MotionEventUtils.getHistoricalEventTimeNanos(event, 0)
+                            : MotionEventUtils.getEventTimeNanos(event);
 
             int eventAction = event.getActionMasked();
 
@@ -171,9 +235,11 @@ public class EventForwarder {
             final int pointerCount = event.getPointerCount();
 
             float[] touchMajor = {
-                    event.getTouchMajor(), pointerCount > 1 ? event.getTouchMajor(1) : 0};
+                event.getTouchMajor(), pointerCount > 1 ? event.getTouchMajor(1) : 0
+            };
             float[] touchMinor = {
-                    event.getTouchMinor(), pointerCount > 1 ? event.getTouchMinor(1) : 0};
+                event.getTouchMinor(), pointerCount > 1 ? event.getTouchMinor(1) : 0
+            };
 
             for (int i = 0; i < 2; i++) {
                 if (touchMajor[i] < touchMinor[i]) {
@@ -186,27 +252,48 @@ public class EventForwarder {
             float secondPointerX = pointerCount > 1 ? event.getX(1) : 0;
             float secondPointerY = pointerCount > 1 ? event.getY(1) : 0;
 
-            float scale = getEventSourceScaling();
-
             int gestureClassification = 0;
             if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 gestureClassification = ApiHelperForQ.getClassification(event);
             }
 
-            final boolean consumed = EventForwarderJni.get().onTouchEvent(mNativeEventForwarder,
-                    EventForwarder.this, event, oldestEventTime, eventAction, pointerCount,
-                    event.getHistorySize(), event.getActionIndex(), event.getX() / scale,
-                    event.getY() / scale, secondPointerX / scale, secondPointerY / scale,
-                    event.getPointerId(0), pointerCount > 1 ? event.getPointerId(1) : -1,
-                    touchMajor[0] / scale, touchMajor[1] / scale, touchMinor[0] / scale,
-                    touchMinor[1] / scale, event.getOrientation(),
-                    pointerCount > 1 ? event.getOrientation(1) : 0,
-                    event.getAxisValue(MotionEvent.AXIS_TILT),
-                    pointerCount > 1 ? event.getAxisValue(MotionEvent.AXIS_TILT, 1) : 0,
-                    event.getRawX() / scale, event.getRawY() / scale, event.getToolType(0),
-                    pointerCount > 1 ? event.getToolType(1) : MotionEvent.TOOL_TYPE_UNKNOWN,
-                    gestureClassification, event.getButtonState(), event.getMetaState(),
-                    isTouchHandleEvent);
+            final boolean consumed =
+                    EventForwarderJni.get()
+                            .onTouchEvent(
+                                    mNativeEventForwarder,
+                                    EventForwarder.this,
+                                    event,
+                                    oldestEventTime,
+                                    eventAction,
+                                    pointerCount,
+                                    event.getHistorySize(),
+                                    event.getActionIndex(),
+                                    event.getX(),
+                                    event.getY(),
+                                    secondPointerX,
+                                    secondPointerY,
+                                    event.getPointerId(0),
+                                    pointerCount > 1 ? event.getPointerId(1) : -1,
+                                    touchMajor[0],
+                                    touchMajor[1],
+                                    touchMinor[0],
+                                    touchMinor[1],
+                                    event.getOrientation(),
+                                    pointerCount > 1 ? event.getOrientation(1) : 0,
+                                    event.getAxisValue(MotionEvent.AXIS_TILT),
+                                    pointerCount > 1
+                                            ? event.getAxisValue(MotionEvent.AXIS_TILT, 1)
+                                            : 0,
+                                    event.getRawX(),
+                                    event.getRawY(),
+                                    event.getToolType(0),
+                                    pointerCount > 1
+                                            ? event.getToolType(1)
+                                            : MotionEvent.TOOL_TYPE_UNKNOWN,
+                                    gestureClassification,
+                                    event.getButtonState(),
+                                    event.getMetaState(),
+                                    isTouchHandleEvent);
 
             if (didOffsetEvent) event.recycle();
             return consumed;
@@ -217,14 +304,32 @@ public class EventForwarder {
 
     /**
      * Sets the current amount to offset incoming touch events by (including MotionEvent and
-     * DragEvent). This is used to handle content moving and not lining up properly with the
-     * android input system.
+     * DragEvent). This is used to handle content moving and not lining up properly with the android
+     * input system.
+     *
      * @param dx The X offset in pixels to shift touch events.
      * @param dy The Y offset in pixels to shift touch events.
      */
     public void setCurrentTouchEventOffsets(float dx, float dy) {
         mCurrentTouchOffsetX = dx;
         mCurrentTouchOffsetY = dy;
+    }
+
+    /**
+     * Creates a new motion event differed from the given event by current touch offset if the
+     * offset is not zero.
+     *
+     * Sets the current amount to offset incoming drag events by. Used for {@link DragEvent} only.
+     * Usually used when dispatching drag events dispatched from views other than the ContentView.
+     *
+     * @param dx The X offset in pixels to shift drag events.
+     * @param dy The Y offset in pixels to shift drag events.
+     *
+     * @see #setCurrentTouchEventOffsets(float, float) to offset both touch and drag events.
+     */
+    public void setDragDispatchingOffset(float dx, float dy) {
+        mDragDispatchingOffsetX = dx;
+        mDragDispatchingOffsetY = dy;
     }
 
     /**
@@ -243,8 +348,9 @@ public class EventForwarder {
     private static boolean isValidTouchEventActionForNative(int eventAction) {
         // Only these actions have any effect on gesture detection.  Other
         // actions have no corresponding WebTouchEvent type and may confuse the
-        // touch pipline, so we ignore them entirely.
-        return eventAction == MotionEvent.ACTION_DOWN || eventAction == MotionEvent.ACTION_UP
+        // touch pipeline, so we ignore them entirely.
+        return eventAction == MotionEvent.ACTION_DOWN
+                || eventAction == MotionEvent.ACTION_UP
                 || eventAction == MotionEvent.ACTION_CANCEL
                 || eventAction == MotionEvent.ACTION_MOVE
                 || eventAction == MotionEvent.ACTION_POINTER_DOWN
@@ -275,14 +381,22 @@ public class EventForwarder {
             int eventAction = event.getActionMasked();
             if (eventAction == MotionEvent.ACTION_HOVER_ENTER) {
                 if (mLastMouseButtonState == MotionEvent.BUTTON_PRIMARY) {
-                    float scale = getEventSourceScaling();
-                    EventForwarderJni.get().onMouseEvent(mNativeEventForwarder, EventForwarder.this,
-                            event.getEventTime(), MotionEvent.ACTION_BUTTON_RELEASE,
-                            event.getX() / scale, event.getY() / scale, event.getPointerId(0),
-                            event.getPressure(0), event.getOrientation(0),
-                            event.getAxisValue(MotionEvent.AXIS_TILT, 0),
-                            MotionEvent.BUTTON_PRIMARY, event.getButtonState(),
-                            event.getMetaState(), event.getToolType(0));
+                    EventForwarderJni.get()
+                            .onMouseEvent(
+                                    mNativeEventForwarder,
+                                    EventForwarder.this,
+                                    MotionEventUtils.getEventTimeNanos(event),
+                                    MotionEvent.ACTION_BUTTON_RELEASE,
+                                    event.getX(),
+                                    event.getY(),
+                                    event.getPointerId(0),
+                                    event.getPressure(0),
+                                    event.getOrientation(0),
+                                    event.getAxisValue(MotionEvent.AXIS_TILT, 0),
+                                    MotionEvent.BUTTON_PRIMARY,
+                                    event.getButtonState(),
+                                    event.getMetaState(),
+                                    event.getToolType(0));
                 }
                 mLastMouseButtonState = 0;
             }
@@ -313,13 +427,21 @@ public class EventForwarder {
     }
 
     /**
-     * Sends mouse event to native. Hover event is also converted to mouse event,
-     * only differentiated by an internal flag.
+     * Sends mouse event to native. Hover event is also converted to mouse event, only
+     * differentiated by an internal flag.
      */
     private boolean sendNativeMouseEvent(MotionEvent event) {
         assert mNativeEventForwarder != 0;
 
         int eventAction = event.getActionMasked();
+
+        // Ignore ACTION_HOVER_ENTER & ACTION_HOVER_EXIT because every mouse-down on Android
+        // follows a hover-exit and is followed by a hover-enter.  https://crbug.com/715114
+        // filed on distinguishing actual hover enter/exit from these bogus ones.
+        if (eventAction == MotionEvent.ACTION_HOVER_ENTER
+                || eventAction == MotionEvent.ACTION_HOVER_EXIT) {
+            return false;
+        }
 
         // For mousedown and mouseup events, we use ACTION_BUTTON_PRESS
         // and ACTION_BUTTON_RELEASE respectively because they provide
@@ -330,20 +452,33 @@ public class EventForwarder {
             // is provided using ACTION_MOVE touch events.
             return true;
         }
-
-        float scale = getEventSourceScaling();
-
-        EventForwarderJni.get().onMouseEvent(mNativeEventForwarder, EventForwarder.this,
-                event.getEventTime(), eventAction, event.getX() / scale, event.getY() / scale,
-                event.getPointerId(0), event.getPressure(0), event.getOrientation(0),
-                event.getAxisValue(MotionEvent.AXIS_TILT, 0), getMouseEventActionButton(event),
-                event.getButtonState(), event.getMetaState(), event.getToolType(0));
+        boolean shouldConvertToMouseEvent =
+                isTrackpadToMouseEventConversionEnabled()
+                        && isTrackpadClickOrClickAndDragEvent(event);
+        EventForwarderJni.get()
+                .onMouseEvent(
+                        mNativeEventForwarder,
+                        EventForwarder.this,
+                        MotionEventUtils.getEventTimeNanos(event),
+                        eventAction,
+                        event.getX(),
+                        event.getY(),
+                        event.getPointerId(0),
+                        event.getPressure(0),
+                        event.getOrientation(0),
+                        event.getAxisValue(MotionEvent.AXIS_TILT, 0),
+                        getMouseEventActionButton(event),
+                        event.getButtonState(),
+                        event.getMetaState(),
+                        shouldConvertToMouseEvent
+                                ? MotionEvent.TOOL_TYPE_MOUSE
+                                : event.getToolType(0));
         return true;
     }
 
     /**
-     * Manages internal state to work around a device-specific issue. Needs to be called per
-     * every mouse event to update the state.
+     * Manages internal state to work around a device-specific issue. Needs to be called per every
+     * mouse event to update the state.
      */
     private void updateMouseEventState(MotionEvent event) {
         int eventAction = event.getActionMasked();
@@ -355,12 +490,37 @@ public class EventForwarder {
     }
 
     public static int getMouseEventActionButton(MotionEvent event) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return ApiHelperForM.getActionButton(event);
-        }
+        return ApiHelperForM.getActionButton(event);
+    }
 
-        // On <M, the only mice events sent are hover events, which cannot have a button.
-        return 0;
+    public boolean isTrackpadToMouseEventConversionEnabled() {
+        return mConvertTrackpadEventsToMouse;
+    }
+
+    /**
+     * Returns true if a {@link MotionEvent} is a trackpad click and or click & drag event.
+     * Trackpad hover events and non-click gestures (i.e two-finger scroll) should return
+     * false here as they do have an action button pressed. Also we want to make sure we
+     * return true for button release events as well.
+     */
+    public static boolean isTrackpadClickOrClickAndDragEvent(MotionEvent event) {
+        return isTrackpadEvent(event)
+                && (event.getAction() == MotionEvent.ACTION_BUTTON_RELEASE
+                        || event.getButtonState() != 0);
+    }
+
+    /**
+     * Returns true if a {@link MotionEvent} is detected to be a trackpad event.
+     * Note that {@link MotionEvent.TOOL_TYPE_FINGER} is used here along with
+     * {@link InputDevice.SOURCE_MOUSE} instead of {@link InputDevice.SOURCE_TOUCHPAD}
+     * because {@link InputDevice.SOURCE_TOUCHPAD} is used when an app
+     * captures the touchpad meaning that it gets access to the raw finger locations,
+     * dimensions etc. reported by the touchpad rather than those being used for pointer movements
+     * and gestures.
+     */
+    private static boolean isTrackpadEvent(MotionEvent event) {
+        return event.isFromSource(InputDevice.SOURCE_MOUSE)
+                && event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER;
     }
 
     /**
@@ -369,11 +529,15 @@ public class EventForwarder {
      * @param containerView A view on which the drag event is taking place.
      */
     public boolean onDragEvent(DragEvent event, View containerView) {
-        if (mNativeEventForwarder == 0 || Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+        ClipDescription clipDescription = event.getClipDescription();
+        // Do not forward chrome/tab events to native eventForwarder.
+        if (clipDescription != null
+                && clipDescription.hasMimeType(MimeTypeUtils.CHROME_MIMETYPE_TAB)) {
             return false;
         }
-
-        ClipDescription clipDescription = event.getClipDescription();
+        if (mNativeEventForwarder == 0) {
+            return false;
+        }
 
         // text/* will match text/uri-list, text/html, text/plain.
         String[] mimeTypes =
@@ -388,15 +552,24 @@ public class EventForwarder {
             return mimeTypes != null && mimeTypes.length > 0 && mIsDragDropEnabled;
         }
 
-        StringBuilder content = new StringBuilder("");
+        String content = "";
         if (event.getAction() == DragEvent.ACTION_DROP) {
-            // TODO(hush): obtain dragdrop permissions, when dragging files into Chrome/WebView is
-            // supported. Not necessary to do so for now, because only text dragging is supported.
-            ClipData clipData = event.getClipData();
-            final int itemCount = clipData.getItemCount();
-            for (int i = 0; i < itemCount; i++) {
-                ClipData.Item item = clipData.getItemAt(i);
-                content.append(item.coerceToStyledText(containerView.getContext()));
+            try {
+                StringBuilder contentBuilder = new StringBuilder("");
+                ClipData clipData = event.getClipData();
+                final int itemCount = clipData.getItemCount();
+                for (int i = 0; i < itemCount; i++) {
+                    ClipData.Item item = clipData.getItemAt(i);
+                    contentBuilder.append(item.coerceToStyledText(containerView.getContext()));
+                }
+                content = contentBuilder.toString();
+            } catch (UndeclaredThrowableException e) {
+                // When dropped item is not successful for whatever reason, catch before we crash.
+                // While ClipData.Item does capture most common failures, there could be exceptions
+                // that's wrapped by Chrome classes (e.g. ServiceTracingProxyProvider) which changed
+                // the exception signiture. See crbug.com/1406777.
+                Log.e(TAG, "Parsing clip data content failed.", e.getMessage());
+                content = "";
             }
         }
 
@@ -404,16 +577,22 @@ public class EventForwarder {
         containerView.getLocationOnScreen(locationOnScreen);
 
         // All coordinates are in device pixel. Conversion to DIP happens in the native.
-        float x = event.getX() + mCurrentTouchOffsetX;
-        float y = event.getY() + mCurrentTouchOffsetY;
+        float x = event.getX() + mCurrentTouchOffsetX + mDragDispatchingOffsetX;
+        float y = event.getY() + mCurrentTouchOffsetY + mDragDispatchingOffsetY;
         float screenX = x + locationOnScreen[0];
         float screenY = y + locationOnScreen[1];
 
-        float scale = getEventSourceScaling();
-
-        EventForwarderJni.get().onDragEvent(mNativeEventForwarder, EventForwarder.this,
-                event.getAction(), x / scale, y / scale, screenX / scale, screenY / scale,
-                mimeTypes, content.toString());
+        EventForwarderJni.get()
+                .onDragEvent(
+                        mNativeEventForwarder,
+                        EventForwarder.this,
+                        event.getAction(),
+                        x,
+                        y,
+                        screenX,
+                        screenY,
+                        mimeTypes,
+                        content);
         return true;
     }
 
@@ -422,14 +601,13 @@ public class EventForwarder {
      *
      * @param type Type of the gesture event.
      * @param timeMs Time the event occurred in milliseconds.
-     * @param delta Scale factor for pinch gesture relative to the current state,
-     *        1.0 being 100%. If negative, has the effect of reverting
-     *        pinch scale to default.
+     * @param delta Scale factor for pinch gesture relative to the current state, 1.0 being 100%. If
+     *     negative, has the effect of reverting pinch scale to default.
      */
     public boolean onGestureEvent(@GestureEventType int type, long timeMs, float delta) {
         if (mNativeEventForwarder == 0) return false;
-        return EventForwarderJni.get().onGestureEvent(
-                mNativeEventForwarder, EventForwarder.this, type, timeMs, delta);
+        return EventForwarderJni.get()
+                .onGestureEvent(mNativeEventForwarder, EventForwarder.this, type, timeMs, delta);
     }
 
     /**
@@ -437,13 +615,22 @@ public class EventForwarder {
      */
     public boolean onGenericMotionEvent(MotionEvent event) {
         if (mNativeEventForwarder == 0) return false;
-        if ((event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0
-                && event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE) {
+        boolean isMouseEvent =
+                (event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0
+                        && event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE;
+        boolean shouldConvertToMouseEvent =
+                isTrackpadToMouseEventConversionEnabled()
+                        && isTrackpadClickOrClickAndDragEvent(event);
+        if (isMouseEvent || shouldConvertToMouseEvent) {
             updateMouseEventState(event);
         }
 
-        return EventForwarderJni.get().onGenericMotionEvent(
-                mNativeEventForwarder, EventForwarder.this, event, event.getEventTime());
+        return EventForwarderJni.get()
+                .onGenericMotionEvent(
+                        mNativeEventForwarder,
+                        EventForwarder.this,
+                        event,
+                        MotionEventUtils.getEventTimeNanos(event));
     }
 
     /**
@@ -451,8 +638,8 @@ public class EventForwarder {
      */
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (mNativeEventForwarder == 0) return false;
-        return EventForwarderJni.get().onKeyUp(
-                mNativeEventForwarder, EventForwarder.this, event, keyCode);
+        return EventForwarderJni.get()
+                .onKeyUp(mNativeEventForwarder, EventForwarder.this, event, keyCode);
     }
 
     /**
@@ -460,8 +647,8 @@ public class EventForwarder {
      */
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (mNativeEventForwarder == 0) return false;
-        return EventForwarderJni.get().dispatchKeyEvent(
-                mNativeEventForwarder, EventForwarder.this, event);
+        return EventForwarderJni.get()
+                .dispatchKeyEvent(mNativeEventForwarder, EventForwarder.this, event);
     }
 
     /**
@@ -480,7 +667,6 @@ public class EventForwarder {
         EventForwarderJni.get().scrollTo(mNativeEventForwarder, EventForwarder.this, xPix, yPix);
     }
 
-    @VisibleForTesting
     public void doubleTapForTest(long timeMs, int x, int y) {
         if (mNativeEventForwarder == 0) return;
         EventForwarderJni.get().doubleTap(mNativeEventForwarder, EventForwarder.this, timeMs, x, y);
@@ -488,61 +674,147 @@ public class EventForwarder {
 
     /**
      * Flings the viewport with velocity vector (velocityX, velocityY).
+     *
      * @param timeMs the current time.
      * @param velocityX fling speed in x-axis.
      * @param velocityY fling speed in y-axis.
      * @param syntheticScroll true if generated by gamepad (which will make this fixed-velocity
-     * fling)
+     *     fling)
      * @param preventBoost if false, this fling may boost an existing fling. Otherwise, ends the
-     * current fling and starts a new one.
+     *     current fling and starts a new one.
      */
-    public void startFling(long timeMs, float velocityX, float velocityY, boolean syntheticScroll,
+    public void startFling(
+            long timeMs,
+            float velocityX,
+            float velocityY,
+            boolean syntheticScroll,
             boolean preventBoosting) {
         if (mNativeEventForwarder == 0) return;
-        EventForwarderJni.get().startFling(mNativeEventForwarder, EventForwarder.this, timeMs,
-                velocityX, velocityY, syntheticScroll, preventBoosting);
+        EventForwarderJni.get()
+                .startFling(
+                        mNativeEventForwarder,
+                        EventForwarder.this,
+                        timeMs,
+                        velocityX,
+                        velocityY,
+                        syntheticScroll,
+                        preventBoosting);
     }
 
     /**
      * Cancel any fling gestures active.
+     *
      * @param timeMs Current time (in milliseconds).
      */
     public void cancelFling(long timeMs) {
         if (mNativeEventForwarder == 0) return;
-        EventForwarderJni.get().cancelFling(
-                mNativeEventForwarder, EventForwarder.this, timeMs, /*preventBoosting*/ true);
+        EventForwarderJni.get()
+                .cancelFling(
+                        mNativeEventForwarder,
+                        EventForwarder.this,
+                        timeMs,
+                        /* preventBoosting= */ true);
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
     interface Natives {
         WindowAndroid getJavaWindowAndroid(long nativeEventForwarder, EventForwarder caller);
-        // All touch events (including flings, scrolls etc) accept coordinates in physical pixels.
-        boolean onTouchEvent(long nativeEventForwarder, EventForwarder caller, MotionEvent event,
-                long timeMs, int action, int pointerCount, int historySize, int actionIndex,
-                float x0, float y0, float x1, float y1, int pointerId0, int pointerId1,
-                float touchMajor0, float touchMajor1, float touchMinor0, float touchMinor1,
-                float orientation0, float orientation1, float tilt0, float tilt1, float rawX,
-                float rawY, int androidToolType0, int androidToolType1, int gestureClassification,
-                int androidButtonState, int androidMetaState, boolean isTouchHandleEvent);
 
-        void onMouseEvent(long nativeEventForwarder, EventForwarder caller, long timeMs, int action,
-                float x, float y, int pointerId, float pressure, float orientation, float tilt,
-                int changedButton, int buttonState, int metaState, int toolType);
-        void onDragEvent(long nativeEventForwarder, EventForwarder caller, int action, float x,
-                float y, float screenX, float screenY, String[] mimeTypes, String content);
-        boolean onGestureEvent(long nativeEventForwarder, EventForwarder caller, int type,
-                long timeMs, float delta);
+        // All touch events (including flings, scrolls etc) accept coordinates in physical pixels.
+        boolean onTouchEvent(
+                long nativeEventForwarder,
+                EventForwarder caller,
+                MotionEvent event,
+                long timeNs,
+                int action,
+                int pointerCount,
+                int historySize,
+                int actionIndex,
+                float x0,
+                float y0,
+                float x1,
+                float y1,
+                int pointerId0,
+                int pointerId1,
+                float touchMajor0,
+                float touchMajor1,
+                float touchMinor0,
+                float touchMinor1,
+                float orientation0,
+                float orientation1,
+                float tilt0,
+                float tilt1,
+                float rawX,
+                float rawY,
+                int androidToolType0,
+                int androidToolType1,
+                int gestureClassification,
+                int androidButtonState,
+                int androidMetaState,
+                boolean isTouchHandleEvent);
+
+        void onMouseEvent(
+                long nativeEventForwarder,
+                EventForwarder caller,
+                long timeNs,
+                int action,
+                float x,
+                float y,
+                int pointerId,
+                float pressure,
+                float orientation,
+                float tilt,
+                int changedButton,
+                int buttonState,
+                int metaState,
+                int toolType);
+
+        void onDragEvent(
+                long nativeEventForwarder,
+                EventForwarder caller,
+                int action,
+                float x,
+                float y,
+                float screenX,
+                float screenY,
+                String[] mimeTypes,
+                String content);
+
+        boolean onGestureEvent(
+                long nativeEventForwarder,
+                EventForwarder caller,
+                int type,
+                long timeMs,
+                float delta);
+
         boolean onGenericMotionEvent(
-                long nativeEventForwarder, EventForwarder caller, MotionEvent event, long timeMs);
+                long nativeEventForwarder, EventForwarder caller, MotionEvent event, long timeNs);
+
         boolean onKeyUp(
                 long nativeEventForwarder, EventForwarder caller, KeyEvent event, int keyCode);
+
         boolean dispatchKeyEvent(long nativeEventForwarder, EventForwarder caller, KeyEvent event);
+
         void scrollBy(long nativeEventForwarder, EventForwarder caller, float deltaX, float deltaY);
+
         void scrollTo(long nativeEventForwarder, EventForwarder caller, float x, float y);
+
         void doubleTap(long nativeEventForwarder, EventForwarder caller, long timeMs, int x, int y);
-        void startFling(long nativeEventForwarder, EventForwarder caller, long timeMs,
-                float velocityX, float velocityY, boolean syntheticScroll, boolean preventBoosting);
-        void cancelFling(long nativeEventForwarder, EventForwarder caller, long timeMs,
+
+        void startFling(
+                long nativeEventForwarder,
+                EventForwarder caller,
+                long timeMs,
+                float velocityX,
+                float velocityY,
+                boolean syntheticScroll,
+                boolean preventBoosting);
+
+        void cancelFling(
+                long nativeEventForwarder,
+                EventForwarder caller,
+                long timeMs,
                 boolean preventBoosting);
     }
 }

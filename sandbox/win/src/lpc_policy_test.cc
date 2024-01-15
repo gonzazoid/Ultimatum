@@ -6,12 +6,10 @@
 // lock down.
 
 #include <algorithm>
-#include <cctype>
 
 #include <windows.h>
 #include <winioctl.h>
 
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "sandbox/win/src/heap_helper.h"
 #include "sandbox/win/src/sandbox.h"
@@ -26,12 +24,11 @@ namespace sandbox {
 namespace {
 
 bool CsrssDisconnectSupported() {
-  // This functionality has not been verified on versions before Win10.
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return false;
-
-  // Does not work on 32-bit on x64 (ie Wow64).
-  return (!base::win::OSInfo::GetInstance()->IsWowX86OnAMD64());
+#if defined(_WIN64) && !defined(ADDRESS_SANITIZER)
+  return true;
+#else
+  return false;
+#endif  // defined(_WIN64) && !defined(ADDRESS_SANITIZER)
 }
 
 }  // namespace
@@ -99,35 +96,13 @@ TEST(LpcPolicyTest, GetUserDefaultLCID) {
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(cmd.c_str()));
 }
 
-// GetUserDefaultLocaleName is not available on WIN XP.  So we'll
-// load it on-the-fly.
-const wchar_t kKernel32DllName[] = L"kernel32.dll";
-typedef int(WINAPI* GetUserDefaultLocaleNameFunction)(LPWSTR lpLocaleName,
-                                                      int cchLocaleName);
-
 SBOX_TESTS_COMMAND int Lpc_GetUserDefaultLocaleName(int argc, wchar_t** argv) {
   if (argc != 1)
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
   std::wstring expected_locale_name(argv[0]);
-  static GetUserDefaultLocaleNameFunction GetUserDefaultLocaleName_func =
-      nullptr;
-  if (!GetUserDefaultLocaleName_func) {
-    // GetUserDefaultLocaleName is not available on WIN XP.  So we'll
-    // load it on-the-fly.
-    HMODULE kernel32_dll = ::GetModuleHandle(kKernel32DllName);
-    if (!kernel32_dll) {
-      return SBOX_TEST_FAILED;
-    }
-    GetUserDefaultLocaleName_func =
-        reinterpret_cast<GetUserDefaultLocaleNameFunction>(
-            GetProcAddress(kernel32_dll, "GetUserDefaultLocaleName"));
-    if (!GetUserDefaultLocaleName_func) {
-      return SBOX_TEST_FAILED;
-    }
-  }
   wchar_t locale_name[LOCALE_NAME_MAX_LENGTH] = {0};
   // This will cause an exception if not warmed up suitably.
-  int ret = GetUserDefaultLocaleName_func(
+  int ret = ::GetUserDefaultLocaleName(
       locale_name, LOCALE_NAME_MAX_LENGTH * sizeof(wchar_t));
   if (!ret) {
     return SBOX_TEST_FAILED;
@@ -143,20 +118,8 @@ SBOX_TESTS_COMMAND int Lpc_GetUserDefaultLocaleName(int argc, wchar_t** argv) {
 }
 
 TEST(LpcPolicyTest, GetUserDefaultLocaleName) {
-  static GetUserDefaultLocaleNameFunction GetUserDefaultLocaleName_func =
-      nullptr;
-  if (!GetUserDefaultLocaleName_func) {
-    // GetUserDefaultLocaleName is not available on WIN XP.  So we'll
-    // load it on-the-fly.
-    HMODULE kernel32_dll = ::GetModuleHandle(kKernel32DllName);
-    EXPECT_NE(nullptr, kernel32_dll);
-    GetUserDefaultLocaleName_func =
-        reinterpret_cast<GetUserDefaultLocaleNameFunction>(
-            GetProcAddress(kernel32_dll, "GetUserDefaultLocaleName"));
-    EXPECT_NE(nullptr, GetUserDefaultLocaleName_func);
-  }
   wchar_t locale_name[LOCALE_NAME_MAX_LENGTH] = {0};
-  EXPECT_NE(0, GetUserDefaultLocaleName_func(
+  EXPECT_NE(0, ::GetUserDefaultLocaleName(
                    locale_name, LOCALE_NAME_MAX_LENGTH * sizeof(wchar_t)));
   EXPECT_NE(0U, wcsnlen(locale_name, LOCALE_NAME_MAX_LENGTH));
   std::wstring cmd =
@@ -216,11 +179,10 @@ TEST(LpcPolicyTest, TestCanFindCsrPortHeap) {
 #endif
 
 TEST(LpcPolicyTest, MAYBE_TestHeapFlags) {
-  if (!CsrssDisconnectSupported()) {
-    // This functionality has not been verified on versions before Win10.
+  if (!CsrssDisconnectSupported())
     return;
-  }
-  // Windows does not support callers supplying arbritary flag values. So we
+
+  // Windows does not support callers supplying arbitrary flag values. So we
   // write some non-trivial value to reduce the chance we match this in random
   // data.
   DWORD flags = 0x41007;

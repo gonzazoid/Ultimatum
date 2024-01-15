@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,14 +32,20 @@
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track_impl.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_video_track.h"
 #include "third_party/blink/renderer/modules/mediastream/mock_media_stream_video_source.h"
 #include "third_party/blink/renderer/modules/peerconnection/mock_rtc_peer_connection_handler_platform.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_track_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_receiver_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_sender_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_session_description_platform.h"
+#include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/webrtc/api/rtc_error.h"
 #include "v8/include/v8.h"
 
@@ -72,11 +78,23 @@ class RTCPeerConnectionTest : public testing::Test {
   MediaStreamTrack* CreateTrack(V8TestingScope& scope,
                                 MediaStreamSource::StreamType type,
                                 String id) {
+    auto platform_source = std::make_unique<MockMediaStreamVideoSource>();
+    auto* platform_source_ptr = platform_source.get();
     auto* source = MakeGarbageCollected<MediaStreamSource>(
-        "sourceId", type, "sourceName", false,
-        base::WrapUnique(new MockMediaStreamVideoSource()));
-    auto* component =
-        MakeGarbageCollected<MediaStreamComponentImpl>(id, source);
+        "sourceId", type, "sourceName", /*remote=*/false,
+        std::move(platform_source));
+    std::unique_ptr<MediaStreamTrackPlatform> platform_track;
+    if (type == MediaStreamSource::kTypeAudio) {
+      platform_track =
+          std::make_unique<MediaStreamAudioTrack>(/*is_local_track=*/true);
+    } else {
+      platform_track = std::make_unique<MediaStreamVideoTrack>(
+          platform_source_ptr,
+          MediaStreamVideoSource::ConstraintsOnceCallback(),
+          /*enabled=*/true);
+    }
+    auto* component = MakeGarbageCollected<MediaStreamComponentImpl>(
+        id, source, std::move(platform_track));
     return MakeGarbageCollected<MediaStreamTrackImpl>(
         scope.GetExecutionContext(), component);
   }
@@ -102,7 +120,8 @@ class RTCPeerConnectionTest : public testing::Test {
   }
 
  protected:
-  ScopedTestingPlatformSupport<TestingPlatformSupport> platform_;
+  test::TaskEnvironment task_environment_;
+  ScopedTestingPlatformSupport<IOTaskRunnerTestingPlatformSupport> platform_;
 };
 
 TEST_F(RTCPeerConnectionTest, GetAudioTrack) {
@@ -279,13 +298,13 @@ void PostToCompleteRequest(AsyncOperationAction action, RequestType* request) {
       return;
     case AsyncOperationAction::kResolve:
       scheduler::GetSequencedTaskRunnerForTesting()->PostTask(
-          FROM_HERE,
-          base::BindOnce(&CompleteRequest<RequestType>, request, true));
+          FROM_HERE, WTF::BindOnce(&CompleteRequest<RequestType>,
+                                   WrapWeakPersistent(request), true));
       return;
     case AsyncOperationAction::kReject:
       scheduler::GetSequencedTaskRunnerForTesting()->PostTask(
-          FROM_HERE,
-          base::BindOnce(&CompleteRequest<RequestType>, request, false));
+          FROM_HERE, WTF::BindOnce(&CompleteRequest<RequestType>,
+                                   WrapWeakPersistent(request), false));
       return;
   }
 }

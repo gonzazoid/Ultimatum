@@ -10,9 +10,9 @@ import {DomainSecurityPolicyView} from 'chrome://net-internals/domain_security_p
 import {EventsView} from 'chrome://net-internals/events_view.js';
 import {MainView} from 'chrome://net-internals/main.js';
 import {ProxyView} from 'chrome://net-internals/proxy_view.js';
+import {SharedDictionaryView} from 'chrome://net-internals/shared_dictionary_view.js';
 import {SocketsView} from 'chrome://net-internals/sockets_view.js';
-
-import {assertEquals, assertNotEquals, assertTrue} from '../chai_assert.js';
+import {assertEquals, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 /**
  * Returns the view and menu item node for the tab with given id.
@@ -81,6 +81,7 @@ function getTab(tabId) {
       dns: DnsView.TAB_ID,
       sockets: SocketsView.TAB_ID,
       hsts: DomainSecurityPolicyView.TAB_ID,
+      sharedDictionary: SharedDictionaryView.TAB_ID,
       // <if expr="chromeos_ash">
       chromeos: CrosView.TAB_ID,
       // </if>

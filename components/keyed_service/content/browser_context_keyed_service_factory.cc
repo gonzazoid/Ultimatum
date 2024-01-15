@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -87,12 +87,24 @@ void BrowserContextKeyedServiceFactory::BrowserContextDestroyed(
 }
 
 std::unique_ptr<KeyedService>
+BrowserContextKeyedServiceFactory::BuildServiceInstanceForBrowserContext(
+    content::BrowserContext* context) const {
+  // TODO(tsepez): fully deprecate the form below.
+  return base::WrapUnique(BuildServiceInstanceFor(context));
+}
+
+KeyedService* BrowserContextKeyedServiceFactory::BuildServiceInstanceFor(
+    content::BrowserContext* context) const {
+  // Stub to prevent converted sub-classes from needing to implement this form.
+  NOTREACHED();
+  return nullptr;
+}
+
+std::unique_ptr<KeyedService>
 BrowserContextKeyedServiceFactory::BuildServiceInstanceFor(
     void* context) const {
-  // TODO(isherman): The wrapped BuildServiceInstanceFor() should return a
-  // scoped_ptr as well.
-  return base::WrapUnique(
-      BuildServiceInstanceFor(static_cast<content::BrowserContext*>(context)));
+  return BuildServiceInstanceForBrowserContext(
+      static_cast<content::BrowserContext*>(context));
 }
 
 bool BrowserContextKeyedServiceFactory::IsOffTheRecord(void* context) const {

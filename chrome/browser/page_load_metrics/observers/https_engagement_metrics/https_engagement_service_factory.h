@@ -13,7 +13,7 @@ class BrowserContext;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 class HttpsEngagementService;
@@ -31,13 +31,13 @@ class HttpsEngagementServiceFactory : public ProfileKeyedServiceFactory {
       const HttpsEngagementServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<HttpsEngagementServiceFactory>;
+  friend base::NoDestructor<HttpsEngagementServiceFactory>;
 
   HttpsEngagementServiceFactory();
   ~HttpsEngagementServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

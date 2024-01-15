@@ -6,9 +6,11 @@
 #define CHROMECAST_CAST_CORE_GRPC_GRPC_SERVER_H_
 
 #include <grpcpp/grpcpp.h>
+
 #include <unordered_map>
 
-#include "base/callback_forward.h"
+#include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "chromecast/cast_core/grpc/grpc_handler.h"
 #include "chromecast/cast_core/grpc/server_reactor_tracker.h"
@@ -75,8 +77,7 @@ class GrpcServer : public grpc::CallbackGenericService {
   void SetHandler(typename THandler::OnRequestCallback on_request_callback) {
     // The full rpc name is /<fully-qualified-service-type>/method, ie
     // /cast.core.CastCoreService/RegisterRuntime.
-    DCHECK(registered_handlers_.find(THandler::rpc_name()) ==
-           registered_handlers_.end())
+    DCHECK(!base::Contains(registered_handlers_, THandler::rpc_name()))
         << "Duplicate handler: " << THandler::rpc_name();
     registered_handlers_.emplace(
         THandler::rpc_name(),
@@ -86,7 +87,7 @@ class GrpcServer : public grpc::CallbackGenericService {
   }
 
   // Starts the gRPC server.
-  void Start(const std::string& endpoint);
+  ABSL_MUST_USE_RESULT grpc::Status Start(const std::string& endpoint);
 
   // Stops the gRPC server synchronously. May block indefinitely if there's a
   // non-finished pending reactor created by the gRPC framework.

@@ -9,7 +9,6 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.CollectionUtil;
 import org.chromium.payments.mojom.AddressErrors;
 import org.chromium.payments.mojom.PaymentCurrencyAmount;
 import org.chromium.payments.mojom.PaymentDetailsModifier;
@@ -36,7 +35,7 @@ public final class WebPaymentIntentHelperTypeConverter {
             @Nullable PaymentCurrencyAmount currencyAmount) {
         if (currencyAmount == null) return null;
         return new WebPaymentIntentHelperType.PaymentCurrencyAmount(
-                /*currency=*/currencyAmount.currency, /*value=*/currencyAmount.value);
+                /* currency= */ currencyAmount.currency, /* value= */ currencyAmount.value);
     }
 
     @Nullable
@@ -61,35 +60,38 @@ public final class WebPaymentIntentHelperTypeConverter {
             @Nullable PaymentMethodData methodData) {
         if (methodData == null) return null;
         return new WebPaymentIntentHelperType.PaymentMethodData(
-                /*supportedMethod=*/methodData.supportedMethod,
-                /*stringifiedData=*/methodData.stringifiedData);
+                /* supportedMethod= */ methodData.supportedMethod,
+                /* stringifiedData= */ methodData.stringifiedData);
     }
 
     @Nullable
     public static Map<String, WebPaymentIntentHelperType.PaymentMethodData>
-    fromMojoPaymentMethodDataMap(@Nullable Map<String, PaymentMethodData> methodDataMap) {
+            fromMojoPaymentMethodDataMap(@Nullable Map<String, PaymentMethodData> methodDataMap) {
         if (methodDataMap == null) return null;
         Map<String, WebPaymentIntentHelperType.PaymentMethodData> compatibleMethodDataMap =
                 new HashMap<>();
-        CollectionUtil.forEach(methodDataMap,
-                entry
-                -> compatibleMethodDataMap.put(entry.getKey(),
-                        WebPaymentIntentHelperTypeConverter.fromMojoPaymentMethodData(
-                                entry.getValue())));
+        for (var entry : methodDataMap.entrySet()) {
+            compatibleMethodDataMap.put(
+                    entry.getKey(),
+                    WebPaymentIntentHelperTypeConverter.fromMojoPaymentMethodData(
+                            entry.getValue()));
+        }
         return compatibleMethodDataMap;
     }
 
     @Nullable
     public static Map<String, WebPaymentIntentHelperType.PaymentDetailsModifier>
-    fromMojoPaymentDetailsModifierMap(@Nullable Map<String, PaymentDetailsModifier> modifiers) {
+            fromMojoPaymentDetailsModifierMap(
+                    @Nullable Map<String, PaymentDetailsModifier> modifiers) {
         if (modifiers == null) return null;
         Map<String, WebPaymentIntentHelperType.PaymentDetailsModifier> compatibleModifiers =
                 new HashMap<>();
-        CollectionUtil.forEach(modifiers,
-                entry
-                -> compatibleModifiers.put(entry.getKey(),
-                        WebPaymentIntentHelperTypeConverter.fromMojoPaymentDetailsModifier(
-                                entry.getValue())));
+        for (var entry : modifiers.entrySet()) {
+            compatibleModifiers.put(
+                    entry.getKey(),
+                    WebPaymentIntentHelperTypeConverter.fromMojoPaymentDetailsModifier(
+                            entry.getValue()));
+        }
         return compatibleModifiers;
     }
 
@@ -98,10 +100,10 @@ public final class WebPaymentIntentHelperTypeConverter {
             @Nullable List<PaymentItem> paymentItems) {
         if (paymentItems == null) return null;
         List<WebPaymentIntentHelperType.PaymentItem> compatiblePaymentItems = new ArrayList<>();
-        CollectionUtil.forEach(paymentItems,
-                element
-                -> compatiblePaymentItems.add(
-                        WebPaymentIntentHelperTypeConverter.fromMojoPaymentItem(element)));
+        for (var element : paymentItems) {
+            compatiblePaymentItems.add(
+                    WebPaymentIntentHelperTypeConverter.fromMojoPaymentItem(element));
+        }
         return compatiblePaymentItems;
     }
 
@@ -109,8 +111,10 @@ public final class WebPaymentIntentHelperTypeConverter {
     public static WebPaymentIntentHelperType.PaymentShippingOption fromMojoPaymentShippingOption(
             @Nullable PaymentShippingOption shippingOption) {
         if (shippingOption == null) return null;
-        return new WebPaymentIntentHelperType.PaymentShippingOption(shippingOption.id,
-                shippingOption.label, fromMojoPaymentCurrencyAmount(shippingOption.amount),
+        return new WebPaymentIntentHelperType.PaymentShippingOption(
+                shippingOption.id,
+                shippingOption.label,
+                fromMojoPaymentCurrencyAmount(shippingOption.amount),
                 shippingOption.selected);
     }
 
@@ -120,11 +124,10 @@ public final class WebPaymentIntentHelperTypeConverter {
         if (shippingOptions == null) return null;
         List<WebPaymentIntentHelperType.PaymentShippingOption> shippingOptionList =
                 new ArrayList<>();
-        CollectionUtil.forEach(shippingOptions,
-                element
-                -> shippingOptionList.add(
-                        WebPaymentIntentHelperTypeConverter.fromMojoPaymentShippingOption(
-                                element)));
+        for (var element : shippingOptions) {
+            shippingOptionList.add(
+                    WebPaymentIntentHelperTypeConverter.fromMojoPaymentShippingOption(element));
+        }
         return shippingOptionList;
     }
 
@@ -146,9 +149,12 @@ public final class WebPaymentIntentHelperTypeConverter {
                     break;
             }
         }
-        return new WebPaymentIntentHelperType.PaymentOptions(paymentOptions.requestPayerName,
-                paymentOptions.requestPayerEmail, paymentOptions.requestPayerPhone,
-                paymentOptions.requestShipping, shippingType);
+        return new WebPaymentIntentHelperType.PaymentOptions(
+                paymentOptions.requestPayerName,
+                paymentOptions.requestPayerEmail,
+                paymentOptions.requestPayerPhone,
+                paymentOptions.requestShipping,
+                shippingType);
     }
 
     @Nullable
@@ -180,7 +186,7 @@ public final class WebPaymentIntentHelperTypeConverter {
      */
     @Nullable
     public static WebPaymentIntentHelperType.PaymentRequestDetailsUpdate
-    fromMojoPaymentRequestDetailsUpdate(@Nullable PaymentRequestDetailsUpdate update) {
+            fromMojoPaymentRequestDetailsUpdate(@Nullable PaymentRequestDetailsUpdate update) {
         if (update == null) return null;
         return new WebPaymentIntentHelperType.PaymentRequestDetailsUpdate(
                 fromMojoPaymentCurrencyAmount(update.total),
@@ -189,7 +195,8 @@ public final class WebPaymentIntentHelperTypeConverter {
                         ? null
                         : fromMojoShippingOptionList(Arrays.asList(update.shippingOptions)),
                 // update.modifiers is intentionally redacted.
-                update.error, update.stringifiedPaymentMethodErrors,
+                update.error,
+                update.stringifiedPaymentMethodErrors,
                 fromMojoShippingAddressErrors(update.shippingAddressErrors));
     }
 }

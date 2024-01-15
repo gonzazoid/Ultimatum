@@ -9,6 +9,7 @@
 
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/media_export.h"
 
 // Low-level audio output support. To make sound there are 3 objects involved:
@@ -67,16 +68,16 @@ class MEDIA_EXPORT AudioOutputStream {
     // when the first sample added to |dest| is expected to be played out can be
     // calculated by adding |delay| to |delay_timestamp|. The accuracy of
     // |delay| and |delay_timestamp| may vary depending on the platform and
-    // implementation. |prior_frames_skipped| is the number of frames skipped by
-    // the consumer.
+    // implementation. |glitch_info| contains information about all
+    // glitches which have occurred since the last call to OnMoreData().
     virtual int OnMoreData(base::TimeDelta delay,
                            base::TimeTicks delay_timestamp,
-                           int prior_frames_skipped,
+                           const AudioGlitchInfo& glitch_info,
                            AudioBus* dest) = 0;
 
     virtual int OnMoreData(base::TimeDelta delay,
                            base::TimeTicks delay_timestamp,
-                           int prior_frames_skipped,
+                           const AudioGlitchInfo& glitch_info,
                            AudioBus* dest,
                            bool is_mixing);
 
@@ -129,6 +130,11 @@ class MEDIA_EXPORT AudioOutputStream {
   // Flushes the stream. This should only be called if the stream is not
   // playing. (i.e. called after Stop or Open)
   virtual void Flush() = 0;
+
+  // Constrains a timedelta representing a delay to between 0 and 10 seconds.
+  // This is used by OS implementations to prevent miscalculated delay values
+  // from creating large amounts of noise in the delay stats.
+  static base::TimeDelta BoundedDelay(base::TimeDelta delay);
 };
 
 // Models an audio sink receiving recorded audio from the audio driver.
@@ -146,7 +152,8 @@ class MEDIA_EXPORT AudioInputStream {
     // monotonically increasing.
     virtual void OnData(const AudioBus* source,
                         base::TimeTicks capture_time,
-                        double volume) = 0;
+                        double volume,
+                        const AudioGlitchInfo& audio_glitch_info) = 0;
 
     // There was an error while recording audio. The audio sink cannot be
     // destroyed yet. No direct action needed by the AudioInputStream, but it

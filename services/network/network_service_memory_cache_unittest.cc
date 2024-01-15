@@ -8,6 +8,7 @@
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -29,6 +30,7 @@
 #include "services/network/public/cpp/cors/origin_access_list.h"
 #include "services/network/public/cpp/cross_origin_embedder_policy.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/client_security_state.mojom.h"
 #include "services/network/public/mojom/http_raw_headers.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
@@ -260,7 +262,7 @@ class NetworkServiceMemoryCacheTest : public testing::Test {
         network_context_.get(), std::move(factory_params),
         /*resource_scheduler_client=*/nullptr,
         cors_url_loader_factory_remote_.BindNewPipeAndPassReceiver(),
-        &origin_access_list_);
+        &origin_access_list_, /*resource_block_list=*/nullptr);
   }
 
   base::test::TaskEnvironment& task_environment() { return task_environment_; }
@@ -589,7 +591,7 @@ TEST_F(NetworkServiceMemoryCacheTest, CanServe_NetworkIsolationKeyIsTransient) {
 
   ASSERT_TRUE(CanServeFromMemoryCache(request));
   ASSERT_FALSE(CanServeFromMemoryCache(
-      request, net::NetworkIsolationKey::CreateTransient()));
+      request, net::NetworkIsolationKey::CreateTransientForTesting()));
 }
 
 TEST_F(NetworkServiceMemoryCacheTest, CanServe_InvalidURL) {
@@ -819,6 +821,9 @@ TEST_F(NetworkServiceMemoryCacheTest, CanServe_UnsupportedMultipleVaryHeader) {
 }
 
 TEST_F(NetworkServiceMemoryCacheTest, CanServe_DevToolsAttached) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(net::features::kPartitionedCookies);
+
   ResourceRequest request = CreateRequest("/cacheable?max-age=120");
   request.devtools_request_id = "fake-id";
   StoreResponseToMemoryCache(request);
@@ -848,6 +853,26 @@ TEST_F(NetworkServiceMemoryCacheTest, CanServe_DevToolsAttached) {
     }
   }
   ASSERT_TRUE(has_expected_header);
+
+  EXPECT_EQ(net::CookiePartitionKey::FromURLForTesting(request.url),
+            devtools_observer.response_cookie_partition_key());
+}
+
+TEST_F(NetworkServiceMemoryCacheTest, CanServe_ClientSecurityStateProvided) {
+  ResourceRequest request = CreateRequest("/cacheable");
+  StoreResponseToMemoryCache(request);
+
+  request.trusted_params = ResourceRequest::TrustedParams();
+  request.trusted_params->client_security_state =
+      mojom::ClientSecurityState::New();
+
+  // This should not hit any (D)CHECKs.
+  LoaderPair loader_pair = CreateLoaderAndStart(request);
+  loader_pair.client->RunUntilComplete();
+  const URLLoaderCompletionStatus& status =
+      loader_pair.client->completion_status();
+  ASSERT_EQ(status.error_code, net::OK);
+  ASSERT_TRUE(status.exists_in_memory_cache);
 }
 
 TEST_F(NetworkServiceMemoryCacheTest, UpdateStoredCache) {
@@ -1071,8 +1096,8 @@ TEST_F(NetworkServiceMemoryCacheTest, ServeFromCache_LargeBody) {
 
     if (result == MOJO_RESULT_SHOULD_WAIT) {
       base::RunLoop run_loop;
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       run_loop.QuitClosure());
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, run_loop.QuitClosure());
       run_loop.Run();
       continue;
     }
@@ -1120,8 +1145,8 @@ TEST_F(NetworkServiceMemoryCacheTest,
         consumer_handle->ReadData(buf, &num_bytes, MOJO_READ_DATA_FLAG_NONE);
     if (result == MOJO_RESULT_SHOULD_WAIT) {
       base::RunLoop run_loop;
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       run_loop.QuitClosure());
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, run_loop.QuitClosure());
       run_loop.Run();
       continue;
     }

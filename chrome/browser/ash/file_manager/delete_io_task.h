@@ -5,17 +5,17 @@
 #ifndef CHROME_BROWSER_ASH_FILE_MANAGER_DELETE_IO_TASK_H_
 #define CHROME_BROWSER_ASH_FILE_MANAGER_DELETE_IO_TASK_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/file_manager/io_task.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/file_system_url.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace file_manager {
 namespace io_task {
@@ -49,7 +49,7 @@ class DeleteIOTask : public IOTask {
 
   // Stores the id of the copy operation if one is in progress. Used so the
   // delete can be cancelled.
-  absl::optional<storage::FileSystemOperationRunner::OperationID> operation_id_;
+  std::optional<storage::FileSystemOperationRunner::OperationID> operation_id_;
 
   ProgressCallback progress_callback_;
   CompleteCallback complete_callback_;

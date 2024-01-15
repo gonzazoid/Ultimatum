@@ -66,8 +66,12 @@ binary (`updater_integration_tests_helper`) that runs at high privilege
 commands it handles can use gtest asserts.
 
 ### Installation
-IntegrationTest.InstallUninstall tests that the updater can be installed on a
-clean OS, that it is immediately active after installation, and then can be
+IntegrationTest.Install tests that the updater can be installed on a clean OS,
+that it is immediately active after installation, and then can be cleanly
+uninstalled.
+
+IntegrationTest.Handoff tests that the updater can be installed on a clean OS,
+that it can install an app via a "/handoff" command line, and then can be
 cleanly uninstalled.
 
 Overinstall cases are tested by IntegrationTest.OverinstallWorking and
@@ -87,7 +91,7 @@ implementation can install and activate the updater on a machine where no
 updater exists.
 
 IntegrationTest.OfflineInstall, IntegrationTest.SilentOfflineInstall, and
-IntegrationTest.LegacySilentOfflineInstall test that the updater can handle 
+IntegrationTest.LegacySilentOfflineInstall test that the updater can handle
 handoffs from offline installers. *Windows Only*
 
 ### Updates
@@ -109,6 +113,9 @@ data index and transmit it to the server as part of the install request.
 
 IntegrationTest.ReportsActive tests that the updater transmits active telemetry
 for apps.
+
+IntegrationTest.RotateLog tests that the updater rotates its log file after the
+log file grows to a sufficient size.
 
 IntegrationTest.ForceInstallApp tests that the updater will install an app,
 when provided group policies that force installation of that app. *Windows Only*

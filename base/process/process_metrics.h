@@ -19,6 +19,7 @@
 #include "base/process/process_handle.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_APPLE)
@@ -41,13 +42,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/cpu.h"
 #include "base/threading/platform_thread.h"
 #endif
 
 namespace base {
-
-class Value;
 
 // Full declaration is in process_metrics_iocounters.h.
 struct IoCounters;
@@ -176,29 +174,6 @@ class BASE_EXPORT ProcessMetrics {
   // NOTE: Currently only supported on Linux/Android.
   using CPUUsagePerThread = std::vector<std::pair<PlatformThreadId, TimeDelta>>;
   bool GetCumulativeCPUUsagePerThread(CPUUsagePerThread&);
-
-  // Similar to GetCumulativeCPUUsagePerThread, but also splits the cumulative
-  // CPU usage by CPU cluster frequency states. One entry in the output
-  // parameter is added for each thread + cluster core index + frequency state
-  // combination with a non-zero CPU time value.
-  // NOTE: Currently only supported on Linux/Android, and only on devices that
-  // expose per-pid/tid time_in_state files in /proc.
-  struct ThreadTimeInState {
-    PlatformThreadId thread_id;
-    CPU::CoreType core_type;      // type of the cores in this cluster.
-    uint32_t cluster_core_index;  // index of the first core in the cluster.
-    uint64_t core_frequency_khz;
-    TimeDelta cumulative_cpu_time;
-  };
-  using TimeInStatePerThread = std::vector<ThreadTimeInState>;
-  bool GetPerThreadCumulativeCPUTimeInState(TimeInStatePerThread&);
-
-  // Parse the data found in /proc/<pid>/task/<tid>/time_in_state into
-  // TimeInStatePerThread (adding to existing entries). Returns false on error.
-  // Exposed for testing.
-  bool ParseProcTimeInState(const std::string& content,
-                            PlatformThreadId tid,
-                            TimeInStatePerThread& time_in_state_per_thread);
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
         // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_AIX)
 
@@ -221,10 +196,6 @@ class BASE_EXPORT ProcessMetrics {
   // measures such as placing DRAM in to self-refresh (also referred to as
   // auto-refresh), place interconnects into lower-power states etc"
   int GetPackageIdleWakeupsPerSecond();
-
-  // Returns "Energy Impact", a synthetic power estimation metric displayed by
-  // macOS in Activity Monitor and the battery menu.
-  int GetEnergyImpact();
 #endif
 
   // Retrieves accounting information for all I/O operations performed by the
@@ -277,13 +248,10 @@ class BASE_EXPORT ProcessMetrics {
   // See |GetPackageIdleWakeupsForSecond| comment for more info.
   int CalculatePackageIdleWakeupsPerSecond(
       uint64_t absolute_package_idle_wakeups);
-#endif
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
-    BUILDFLAG(IS_AIX)
-  CPU::CoreType GetCoreType(uint32_t core_index);
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
-        // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_AIX)
+  // Queries the port provider if it's set.
+  mach_port_t TaskForPid(ProcessHandle process) const;
+#endif
 
 #if BUILDFLAG(IS_WIN)
   win::ScopedHandle process_;
@@ -314,15 +282,13 @@ class BASE_EXPORT ProcessMetrics {
   // And same thing for package idle exit wakeups.
   TimeTicks last_package_idle_wakeups_time_;
   uint64_t last_absolute_package_idle_wakeups_;
-  double last_energy_impact_;
-  // In mach_absolute_time units.
-  uint64_t last_energy_impact_time_;
+
+  // Works around a race condition when combining two task_info() calls to
+  // measure CPU time.
+  TimeDelta last_measured_cpu_;
 #endif
 
 #if BUILDFLAG(IS_MAC)
-  // Queries the port provider if it's set.
-  mach_port_t TaskForPid(ProcessHandle process) const;
-
   raw_ptr<PortProvider> port_provider_;
 #endif  // BUILDFLAG(IS_MAC)
 };
@@ -364,7 +330,7 @@ struct BASE_EXPORT SystemMemoryInfoKB {
   SystemMemoryInfoKB& operator=(const SystemMemoryInfoKB& other);
 
   // Serializes the platform specific fields to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
   int total = 0;
 
@@ -458,7 +424,7 @@ BASE_EXPORT bool ParseProcMeminfo(StringPiece input,
 // Data from /proc/vmstat.
 struct BASE_EXPORT VmStatInfo {
   // Serializes the platform specific fields to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
   uint64_t pswpin = 0;
   uint64_t pswpout = 0;
@@ -482,7 +448,7 @@ struct BASE_EXPORT SystemDiskInfo {
   SystemDiskInfo& operator=(const SystemDiskInfo&);
 
   // Serializes the platform specific fields to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
   uint64_t reads = 0;
   uint64_t reads_merged = 0;
@@ -524,7 +490,7 @@ struct BASE_EXPORT SwapInfo {
   }
 
   // Serializes the platform specific fields to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
   uint64_t num_reads = 0;
   uint64_t num_writes = 0;
@@ -553,7 +519,7 @@ BASE_EXPORT bool GetSwapInfo(SwapInfo* swap_info);
 // Data about GPU memory usage. These fields will be -1 if not supported.
 struct BASE_EXPORT GraphicsMemoryInfoKB {
   // Serializes the platform specific fields to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
   int gpu_objects = -1;
   int64_t gpu_memory_size = -1;
@@ -573,7 +539,7 @@ struct BASE_EXPORT SystemPerformanceInfo {
   SystemPerformanceInfo& operator=(const SystemPerformanceInfo& other);
 
   // Serializes the platform specific fields to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
   // Total idle time of all processes in the system (units of 100 ns).
   uint64_t idle_time = 0;
@@ -616,7 +582,7 @@ class BASE_EXPORT SystemMetrics {
   static SystemMetrics Sample();
 
   // Serializes the system metrics to value.
-  Value ToValue() const;
+  Value::Dict ToDict() const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(SystemMetricsTest, SystemMetrics);
@@ -636,7 +602,7 @@ class BASE_EXPORT SystemMetrics {
 #endif
 };
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 enum class MachVMRegionResult {
   // There were no more memory regions between |address| and the end of the
   // virtual address space.
@@ -650,17 +616,6 @@ enum class MachVMRegionResult {
 };
 
 // Returns info on the first memory region at or after |address|, including
-// resident memory and share mode. On Success, |size| reflects the size of the
-// memory region.
-// |size| and |info| are output parameters, only valid on Success.
-// |address| is an in-out parameter, than represents both the address to start
-// looking, and the start address of the memory region.
-BASE_EXPORT MachVMRegionResult GetTopInfo(mach_port_t task,
-                                          mach_vm_size_t* size,
-                                          mach_vm_address_t* address,
-                                          vm_region_top_info_data_t* info);
-
-// Returns info on the first memory region at or after |address|, including
 // protection values. On Success, |size| reflects the size of the
 // memory region.
 // Returns info on the first memory region at or after |address|, including
@@ -670,7 +625,18 @@ BASE_EXPORT MachVMRegionResult GetBasicInfo(mach_port_t task,
                                             mach_vm_size_t* size,
                                             mach_vm_address_t* address,
                                             vm_region_basic_info_64* info);
-#endif  // BUILDFLAG(IS_MAC)
+
+// Returns info on the first memory region at or after |address|, including
+// resident memory and share mode. On Success, |size| reflects the size of the
+// memory region.
+// |size| and |info| are output parameters, only valid on Success.
+// |address| is an in-out parameter, than represents both the address to start
+// looking, and the start address of the memory region.
+BASE_EXPORT MachVMRegionResult GetTopInfo(mach_port_t task,
+                                          mach_vm_size_t* size,
+                                          mach_vm_address_t* address,
+                                          vm_region_top_info_data_t* info);
+#endif  // BUILDFLAG(IS_APPLE)
 
 }  // namespace base
 

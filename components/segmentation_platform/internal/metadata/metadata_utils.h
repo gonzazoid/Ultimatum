@@ -8,8 +8,11 @@
 #include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/signal_key.h"
 #include "components/segmentation_platform/internal/execution/processing/query_processor.h"
+#include "components/segmentation_platform/internal/proto/client_results.pb.h"
 #include "components/segmentation_platform/internal/proto/model_prediction.pb.h"
+#include "components/segmentation_platform/public/config.h"
 #include "components/segmentation_platform/public/proto/model_metadata.pb.h"
+#include "components/segmentation_platform/public/proto/output_config.pb.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 #include "components/segmentation_platform/public/proto/types.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -38,7 +41,18 @@ enum class ValidationResult {
   kFeatureSqlQueryEmpty = 13,
   kFeatureBindValuesInvalid = 14,
   kIndexedTensorsInvalid = 15,
-  kMaxValue = kIndexedTensorsInvalid,
+  kMultiClassClassifierHasNoLabels = 16,
+  kMultiClassClassifierUsesBothThresholdTypes = 17,
+  kMultiClassClassifierClassAndThresholdCountMismatch = 18,
+  kDefaultTtlIsMissing = 19,
+  kPredictionTtlTimeUnitInvalid = 20,
+  kGenericPredictorMissingLabels = 21,
+  kBinaryClassifierEmptyLabels = 22,
+  kBinnedClassifierEmptyLabels = 23,
+  kBinnedClassifierBinsUnsorted = 24,
+  kPredictorTypeMissing = 25,
+  kDiscreteMappingAndOutputConfigFound = 26,
+  kMaxValue = kDiscreteMappingAndOutputConfigFound,
 };
 
 // Whether the given SegmentInfo and its metadata is valid to be used for the
@@ -79,6 +93,13 @@ ValidationResult ValidateIndexedTensors(
 ValidationResult ValidateSegmentInfoMetadataAndFeatures(
     const proto::SegmentInfo& segment_info);
 
+// Whether the given output config is valid.
+ValidationResult ValidateOutputConfig(const proto::OutputConfig& output_config);
+
+// Checks whether the given multi-class classifier is valid.
+ValidationResult ValidateMultiClassClassifier(
+    const proto::Predictor_MultiClassClassifier& multi_class_classifier);
+
 // For all features in the given metadata, updates the feature name hash based
 // on the feature name. Note: This mutates the metadata that is passed in.
 void SetFeatureNameHashesFromName(
@@ -94,12 +115,16 @@ bool HasExpiredOrUnavailableResult(const proto::SegmentInfo& segment_info,
 bool HasFreshResults(const proto::SegmentInfo& segment_info,
                      const base::Time& now);
 
-// Helper method to read the time unit from the proto.
+// Helper method to read the time unit from the metadata proto.
 base::TimeDelta GetTimeUnit(
     const proto::SegmentationModelMetadata& model_metadata);
 
+// Helper method to convert the time unit to TimeDelta unit
+base::TimeDelta ConvertToTimeDelta(proto::TimeUnit time_unit);
+
 // Conversion methods between SignalKey::Kind and proto::SignalType.
 SignalKey::Kind SignalTypeToSignalKind(proto::SignalType signal_type);
+proto::SignalType SignalKindToSignalType(SignalKey::Kind kind);
 
 // Helper method to convert continuous to discrete score.
 float ConvertToDiscreteScore(const std::string& mapping_key,
@@ -109,12 +134,40 @@ float ConvertToDiscreteScore(const std::string& mapping_key,
 std::string SegmetationModelMetadataToString(
     const proto::SegmentationModelMetadata& model_metadata);
 
-// Helper method to get all UMAFeatures from a segmentation model's metadata.
+// Helper method to visit all UMAFeatures from a segmentation model's metadata.
 // When |include_outputs| is true, the UMA features for training outputs will be
 // included. Otherwise only input UMA features are included.
+using VisitUmaFeature =
+    base::RepeatingCallback<void(const proto::UMAFeature& feature)>;
+void VisitAllUmaFeatures(const proto::SegmentationModelMetadata& model_metadata,
+                         bool include_outputs,
+                         VisitUmaFeature visit);
+
+// Same as VisitAllUmaFeatures(), but copies the features and returns a vector.
+// Prefer VisitAllUmaFeatures() unless copies are required.
 std::vector<proto::UMAFeature> GetAllUmaFeatures(
     const proto::SegmentationModelMetadata& model_metadata,
     bool include_outputs);
+
+// Creates prediction result for a given segment.
+proto::PredictionResult CreatePredictionResult(
+    const std::vector<float>& model_scores,
+    const proto::OutputConfig& output_config,
+    base::Time timestamp,
+    int64_t model_version);
+
+// Creates client result from prediction result.
+proto::ClientResult CreateClientResultFromPredResult(
+    proto::PredictionResult pred_result,
+    base::Time timestamp);
+
+// Returns true if config has not migrated to multi output and uses legacy
+// output.
+bool ConfigUsesLegacyOutput(const Config* config);
+
+// Returns true if segment has not migrated to multi output and uses legacy
+// output.
+bool SegmentUsesLegacyOutput(proto::SegmentId segment_id);
 
 }  // namespace metadata_utils
 }  // namespace segmentation_platform

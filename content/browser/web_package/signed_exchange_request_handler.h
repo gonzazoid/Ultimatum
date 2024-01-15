@@ -26,7 +26,6 @@ class URLLoaderThrottle;
 namespace content {
 
 class SignedExchangeLoader;
-class SignedExchangePrefetchMetricRecorder;
 
 class SignedExchangeRequestHandler final : public NavigationLoaderInterceptor {
  public:
@@ -41,7 +40,6 @@ class SignedExchangeRequestHandler final : public NavigationLoaderInterceptor {
       const base::UnguessableToken& devtools_navigation_token,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       URLLoaderThrottlesGetter url_loader_throttles_getter,
-      scoped_refptr<SignedExchangePrefetchMetricRecorder> metric_recorder,
       std::string accept_langs);
 
   SignedExchangeRequestHandler(const SignedExchangeRequestHandler&) = delete;
@@ -57,14 +55,14 @@ class SignedExchangeRequestHandler final : public NavigationLoaderInterceptor {
       LoaderCallback callback,
       FallbackCallback fallback_callback) override;
   bool MaybeCreateLoaderForResponse(
+      const network::URLLoaderCompletionStatus& status,
       const network::ResourceRequest& request,
       network::mojom::URLResponseHeadPtr* response_head,
       mojo::ScopedDataPipeConsumerHandle* response_body,
       mojo::PendingRemote<network::mojom::URLLoader>* loader,
       mojo::PendingReceiver<network::mojom::URLLoaderClient>* client_receiver,
       blink::ThrottlingURLLoader* url_loader,
-      bool* skip_other_interceptors,
-      bool* will_return_unsafe_redirect) override;
+      bool* skip_other_interceptors) override;
 
  private:
   void StartResponse(
@@ -83,7 +81,6 @@ class SignedExchangeRequestHandler final : public NavigationLoaderInterceptor {
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   URLLoaderThrottlesGetter url_loader_throttles_getter_;
-  scoped_refptr<SignedExchangePrefetchMetricRecorder> metric_recorder_;
   const std::string accept_langs_;
 
   base::WeakPtrFactory<SignedExchangeRequestHandler> weak_factory_{this};

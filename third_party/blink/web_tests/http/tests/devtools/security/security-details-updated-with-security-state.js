@@ -2,25 +2,30 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SecurityTestRunner} from 'security_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+import * as Security from 'devtools/panels/security/security.js';
+
 (async function() {
   TestRunner.addResult(`Tests that the security details for an origin are updated if its security state changes.\n`);
-  await TestRunner.loadTestModule('security_test_runner');
   await TestRunner.showPanel('security');
 
   // Add a request without security details.
-  const request1 = SDK.NetworkRequest.create(
+  const request1 = SDK.NetworkRequest.NetworkRequest.create(
       0, 'https://foo.test/foo.jpg', 'https://foo.test', 0, 0, null);
   request1.setSecurityState(Protocol.Security.SecurityState.Unknown);
   SecurityTestRunner.dispatchRequestFinished(request1);
 
   // Add an unrelated request.
-  const request2 = SDK.NetworkRequest.create(
+  const request2 = SDK.NetworkRequest.NetworkRequest.create(
       0, 'https://bar.test/bar.jpg', 'https://bar.test', 0, 0, null);
   request2.setSecurityState(Protocol.Security.SecurityState.Unknown);
   SecurityTestRunner.dispatchRequestFinished(request2);
 
   // Add a request to the first origin, this time including security details.
-  const request3 = SDK.NetworkRequest.create(
+  const request3 = SDK.NetworkRequest.NetworkRequest.create(
       0, 'https://foo.test/foo2.jpg', 'https://foo.test', 0, 0, null);
   request3.setSecurityState(Protocol.Security.SecurityState.Secure);
   let securityDetails = {};
@@ -41,7 +46,7 @@
   SecurityTestRunner.dispatchRequestFinished(request3);
 
   // Add a request with both keyExchange and keyExchangeGroup (TLS 1.2 ECDHE), and with empty MAC (an AEAD cipher).
-  const request4 = SDK.NetworkRequest.create(0, 'https://ecdhe.foo.test/foo2.jpg', 'https://ecdhe.foo.test', 0, 0, null);
+  const request4 = SDK.NetworkRequest.NetworkRequest.create(0, 'https://ecdhe.foo.test/foo2.jpg', 'https://ecdhe.foo.test', 0, 0, null);
   request4.setSecurityState(Protocol.Security.SecurityState.Secure);
   securityDetails = {};
   securityDetails.protocol = 'TLS 1.2';
@@ -62,7 +67,7 @@
   SecurityTestRunner.dispatchRequestFinished(request4);
 
   // Add a request with only keyExchangeGroup (TLS 1.3).
-  const request5 = SDK.NetworkRequest.create(0, 'https://tls13.foo.test/foo2.jpg', 'https://tls13.foo.test', 0, 0, null);
+  const request5 = SDK.NetworkRequest.NetworkRequest.create(0, 'https://tls13.foo.test/foo2.jpg', 'https://tls13.foo.test', 0, 0, null);
   request5.setSecurityState(Protocol.Security.SecurityState.Secure);
   securityDetails = {};
   securityDetails.protocol = 'TLS 1.3';
@@ -83,7 +88,7 @@
   SecurityTestRunner.dispatchRequestFinished(request5);
 
   // Add a request with ECH.
-  const request6 = SDK.NetworkRequest.create(0, 'https://ech.foo.test/foo2.jpg', 'https://ech.foo.test', 0, 0, null);
+  const request6 = SDK.NetworkRequest.NetworkRequest.create(0, 'https://ech.foo.test/foo2.jpg', 'https://ech.foo.test', 0, 0, null);
   request6.setSecurityState(Protocol.Security.SecurityState.Secure);
   securityDetails = {};
   securityDetails.protocol = 'TLS 1.3';
@@ -114,9 +119,9 @@
       "https://ech.foo.test",
   ];
   for (const origin of origins) {
-    Security.SecurityPanel.instance().sidebarTree.elementsByOrigin.get(origin).select();
+    Security.SecurityPanel.SecurityPanel.instance().sidebarTree.elementsByOrigin.get(origin).select();
     TestRunner.addResult('Origin view (' + origin + ') ' + '-'.repeat(33 - origin.length));
-    TestRunner.dumpDeepInnerHTML(Security.SecurityPanel.instance().visibleView.contentElement);
+    TestRunner.dumpDeepInnerHTML(Security.SecurityPanel.SecurityPanel.instance().visibleView.contentElement);
   }
 
   TestRunner.completeTest();

@@ -8,8 +8,8 @@
 #import <UIKit/UIKit.h>
 #include <stddef.h>
 
+#include "base/apple/foundation_util.h"
 #import "base/ios/device_util.h"
-#include "base/mac/foundation_util.h"
 #include "base/system/sys_info.h"
 
 namespace {
@@ -18,8 +18,7 @@ std::string* g_icudtl_path_override = nullptr;
 
 }  // namespace
 
-namespace base {
-namespace ios {
+namespace base::ios {
 
 bool IsRunningOnIOS12OrLater() {
   static const bool is_running_on_or_later = IsRunningOnOrLater(12, 0, 0);
@@ -38,6 +37,16 @@ bool IsRunningOnIOS14OrLater() {
 
 bool IsRunningOnIOS15OrLater() {
   static const bool is_running_on_or_later = IsRunningOnOrLater(15, 0, 0);
+  return is_running_on_or_later;
+}
+
+bool IsRunningOnIOS16OrLater() {
+  static const bool is_running_on_or_later = IsRunningOnOrLater(16, 0, 0);
+  return is_running_on_or_later;
+}
+
+bool IsRunningOnIOS17OrLater() {
+  static const bool is_running_on_or_later = IsRunningOnOrLater(17, 0, 0);
   return is_running_on_or_later;
 }
 
@@ -100,5 +109,4 @@ bool HasDynamicIsland() {
   return is_dynamic_island_model;
 }
 
-}  // namespace ios
-}  // namespace base
+}  // namespace base::ios

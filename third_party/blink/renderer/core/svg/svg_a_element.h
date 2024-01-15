@@ -44,22 +44,27 @@ class CORE_EXPORT SVGAElement final : public SVGGraphicsElement,
 
   void SvgAttributeChanged(const SvgAttributeChangedParams&) override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
   void DefaultEventHandler(Event&) override;
   bool HasActivationBehavior() const override;
 
   bool IsLiveLink() const override { return IsLink(); }
 
-  bool SupportsFocus() const override;
+  bool SupportsFocus(UpdateBehavior update_behavior =
+                         UpdateBehavior::kStyleAndLayout) const override;
   bool ShouldHaveFocusAppearance() const final;
-  bool IsMouseFocusable() const override;
-  bool IsKeyboardFocusable() const override;
+  bool IsKeyboardFocusable(UpdateBehavior update_behavior =
+                               UpdateBehavior::kStyleAndLayout) const override;
   bool IsURLAttribute(const Attribute&) const override;
   bool CanStartSelection() const override;
   int DefaultTabIndex() const override;
 
   bool WillRespondToMouseClickEvents() override;
+
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
 
   Member<SVGAnimatedString> svg_target_;
 };

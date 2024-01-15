@@ -17,9 +17,9 @@
 namespace views {
 
 class VIEWS_EXPORT ImageViewBase : public View {
- public:
-  METADATA_HEADER(ImageViewBase);
+  METADATA_HEADER(ImageViewBase, View)
 
+ public:
   enum class Alignment { kLeading, kCenter, kTrailing };
 
   ImageViewBase();
@@ -48,12 +48,9 @@ class VIEWS_EXPORT ImageViewBase : public View {
   void SetTooltipText(const std::u16string& tooltip);
   const std::u16string& GetTooltipText() const;
 
-  // Set / Get the accessible name text.
-  void SetAccessibleName(const std::u16string& name);
-  const std::u16string& GetAccessibleName() const;
-
   // Overridden from View:
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+  void AdjustAccessibleName(std::u16string& new_name,
+                            ax::mojom::NameFrom& name_from) override;
   std::u16string GetTooltipText(const gfx::Point& p) const override;
   gfx::Size CalculatePreferredSize() const override;
   views::PaintInfo::ScaleType GetPaintScaleType() const override;
@@ -84,16 +81,12 @@ class VIEWS_EXPORT ImageViewBase : public View {
 
   // The current tooltip text.
   std::u16string tooltip_text_;
-
-  // The current accessible name text.
-  std::u16string accessible_name_;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, ImageViewBase, View)
 VIEW_BUILDER_PROPERTY(gfx::Size, ImageSize)
 VIEW_BUILDER_PROPERTY(ImageViewBase::Alignment, HorizontalAlignment)
 VIEW_BUILDER_PROPERTY(ImageViewBase::Alignment, VerticalAlignment)
-VIEW_BUILDER_PROPERTY(std::u16string, AccessibleName)
 VIEW_BUILDER_PROPERTY(std::u16string, TooltipText)
 END_VIEW_BUILDER
 

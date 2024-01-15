@@ -4,8 +4,8 @@
 
 #include "content/browser/webrtc/webrtc_content_browsertest_base.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -65,14 +65,6 @@ void WebRtcContentBrowserTestBase::AppendUseFakeUIForMediaStreamFlag() {
       switches::kUseFakeUIForMediaStream);
 }
 
-// Executes |javascript|. The script is required to use
-// window.domAutomationController.send to send a string value back to here.
-std::string WebRtcContentBrowserTestBase::ExecuteJavascriptAndReturnResult(
-    const std::string& javascript) {
-  return EvalJs(shell(), javascript, EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-      .ExtractString();
-}
-
 void WebRtcContentBrowserTestBase::MakeTypicalCall(
     const std::string& javascript,
     const std::string& html_file) {
@@ -82,20 +74,8 @@ void WebRtcContentBrowserTestBase::MakeTypicalCall(
   GURL url(embedded_test_server()->GetURL(html_file));
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
-  ExecuteJavascriptAndWaitForOk(javascript);
+  EXPECT_TRUE(ExecJs(shell(), javascript));
 }
-
-void WebRtcContentBrowserTestBase::ExecuteJavascriptAndWaitForOk(
-    const std::string& javascript) {
-  std::string result = ExecuteJavascriptAndReturnResult(javascript);
-  if (result != "OK") {
-    if (result.empty())
-      result = "(nothing)";
-    printf("From javascript: %s\nWhen executing '%s'\n", result.c_str(),
-           javascript.c_str());
-    FAIL();
-  }
- }
 
  std::string WebRtcContentBrowserTestBase::GenerateGetUserMediaCall(
      const char* function_name,

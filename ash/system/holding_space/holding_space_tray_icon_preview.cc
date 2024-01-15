@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
 #include "ash/public/cpp/holding_space/holding_space_image.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
@@ -14,15 +13,18 @@
 #include "ash/public/cpp/holding_space/holding_space_model_observer.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/shelf/shelf.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/system/holding_space/holding_space_animation_registry.h"
 #include "ash/system/holding_space/holding_space_progress_indicator_util.h"
 #include "ash/system/holding_space/holding_space_tray_icon.h"
 #include "ash/system/progress_indicator/progress_indicator.h"
+#include "ash/system/progress_indicator/progress_indicator_animation_registry.h"
 #include "ash/system/tray/tray_constants.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/paint_recorder.h"
@@ -70,7 +72,7 @@ bool ShouldUseSmallPreviews() {
 // Returns the size for previews. If `use_small_previews` is absent it will be
 // determined from the current shelf configuration.
 gfx::Size GetPreviewSize(
-    const absl::optional<bool>& use_small_previews = absl::nullopt) {
+    const std::optional<bool>& use_small_previews = std::nullopt) {
   return use_small_previews.value_or(ShouldUseSmallPreviews())
              ? gfx::Size(kHoldingSpaceTrayIconSmallPreviewSize,
                          kHoldingSpaceTrayIconSmallPreviewSize)
@@ -199,7 +201,7 @@ class HoldingSpaceTrayIconPreview::ImageLayerOwner
     progress_ring_animation_changed_subscription_ =
         HoldingSpaceAnimationRegistry::GetInstance()
             ->AddProgressRingAnimationChangedCallbackForKey(
-                /*animation_key=*/item_,
+                ProgressIndicatorAnimationRegistry::AsAnimationKey(item_),
                 base::IgnoreArgs<ProgressRingAnimation*>(
                     base::BindRepeating(&ImageLayerOwner::UpdateTransform,
                                         base::Unretained(this))));
@@ -345,7 +347,8 @@ class HoldingSpaceTrayIconPreview::ImageLayerOwner
         !item_->progress().IsHidden() && !item_->progress().IsComplete();
     const bool is_item_animating_progress_ring =
         HoldingSpaceAnimationRegistry::GetInstance()
-            ->GetProgressRingAnimationForKey(item_);
+            ->GetProgressRingAnimationForKey(
+                ProgressIndicatorAnimationRegistry::AsAnimationKey(item_));
 
     const gfx::Transform target_transform =
         is_item_visibly_in_progress || is_item_animating_progress_ring
@@ -369,7 +372,7 @@ class HoldingSpaceTrayIconPreview::ImageLayerOwner
     layer()->SetTransform(target_transform);
   }
 
-  const HoldingSpaceItem* item_ = nullptr;
+  raw_ptr<const HoldingSpaceItem> item_ = nullptr;
   base::CallbackListSubscription item_deletion_subscription_;
   base::CallbackListSubscription item_image_skia_subscription_;
   base::CallbackListSubscription progress_ring_animation_changed_subscription_;
@@ -398,7 +401,7 @@ HoldingSpaceTrayIconPreview::HoldingSpaceTrayIconPreview(
       progress_indicator_(
           holding_space_util::CreateProgressIndicatorForItem(item)),
       use_small_previews_(ShouldUseSmallPreviews()) {
-  container_observer_.Observe(container_);
+  container_observer_.Observe(container_.get());
 }
 
 HoldingSpaceTrayIconPreview::~HoldingSpaceTrayIconPreview() = default;
@@ -421,7 +424,7 @@ void HoldingSpaceTrayIconPreview::AnimateIn(base::TimeDelta additional_delay) {
   if (!NeedsLayer()) {
     // Since the holding space tray icon preview will not be animated, any
     // associated progress icon animation can `Start()` immediately.
-    auto* key = progress_indicator_->animation_key();
+    auto key = progress_indicator_->animation_key();
     auto* registry = HoldingSpaceAnimationRegistry::GetInstance();
     auto* animation = registry->GetProgressIconAnimationForKey(key);
     if (animation && !animation->HasAnimated())
@@ -471,7 +474,8 @@ void HoldingSpaceTrayIconPreview::AnimateIn(base::TimeDelta additional_delay) {
   auto observer = std::make_unique<CallbackLayerAnimationObserver>();
   sequence->AddObserver(observer.get());
   observer->SetAnimationCompletedCallback(base::BindOnce(
-      [](CallbackLayerAnimationObserver* observer, const void* key) {
+      [](CallbackLayerAnimationObserver* observer,
+         ProgressIndicatorAnimationRegistry::AnimationKey key) {
         auto* registry = HoldingSpaceAnimationRegistry::GetInstance();
         auto* animation = registry->GetProgressIconAnimationForKey(key);
         if (animation && !animation->HasAnimated())
@@ -674,8 +678,7 @@ void HoldingSpaceTrayIconPreview::OnPaintLayer(
   // due to pixel rounding. Failure to do so could result in paint artifacts.
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
-  flags.setColor(AshColorProvider::Get()->GetBaseLayerColor(
-      AshColorProvider::BaseLayerType::kOpaque));
+  flags.setColor(GetColor(kColorAshShieldAndBaseOpaque));
   flags.setLooper(gfx::CreateShadowDrawLooper(GetShadowDetails().values));
   canvas->DrawCircle(
       gfx::PointF(contents_bounds.CenterPoint()),
@@ -720,7 +723,8 @@ void HoldingSpaceTrayIconPreview::CreateLayer(
   new_layer->SetName(kClassName);
   new_layer->SetTransform(initial_transform);
   new_layer->Add(image_layer_owner_->CreateLayer());
-  new_layer->Add(progress_indicator_->CreateLayer());
+  new_layer->Add(progress_indicator_->CreateLayer(base::BindRepeating(
+      &HoldingSpaceTrayIconPreview::GetColor, base::Unretained(this))));
   layer_owner_.Reset(std::move(new_layer));
 
   UpdateLayerBounds();
@@ -741,20 +745,6 @@ bool HoldingSpaceTrayIconPreview::NeedsLayer() const {
 void HoldingSpaceTrayIconPreview::InvalidateLayer() {
   if (layer())
     layer()->SchedulePaint(gfx::Rect(layer()->size()));
-}
-
-void HoldingSpaceTrayIconPreview::AdjustForShelfAlignmentAndTextDirection(
-    gfx::Vector2dF* vector_2df) {
-  if (!shelf_->IsHorizontalAlignment()) {
-    const float x = vector_2df->x();
-    vector_2df->set_x(vector_2df->y());
-    vector_2df->set_y(x);
-    return;
-  }
-  // With a horizontal shelf in RTL, translation is a negative offset relative
-  // to the parent layer's right bound. This requires negation of `vector_2df`.
-  if (base::i18n::IsRTL())
-    vector_2df->Scale(-1.f);
 }
 
 void HoldingSpaceTrayIconPreview::UpdateLayerBounds() {
@@ -790,6 +780,25 @@ void HoldingSpaceTrayIconPreview::UpdateLayerBounds() {
   bounds.ClampToCenteredSize(GetPreviewSize());
   image_layer_owner_->layer()->SetBounds(bounds);
   progress_indicator_->layer()->SetBounds(bounds);
+}
+
+void HoldingSpaceTrayIconPreview::AdjustForShelfAlignmentAndTextDirection(
+    gfx::Vector2dF* vector_2df) {
+  if (!shelf_->IsHorizontalAlignment()) {
+    const float x = vector_2df->x();
+    vector_2df->set_x(vector_2df->y());
+    vector_2df->set_y(x);
+    return;
+  }
+  // With a horizontal shelf in RTL, translation is a negative offset relative
+  // to the parent layer's right bound. This requires negation of `vector_2df`.
+  if (base::i18n::IsRTL()) {
+    vector_2df->Scale(-1.f);
+  }
+}
+
+SkColor HoldingSpaceTrayIconPreview::GetColor(ui::ColorId color_id) const {
+  return container_->GetColorProvider()->GetColor(color_id);
 }
 
 }  // namespace ash

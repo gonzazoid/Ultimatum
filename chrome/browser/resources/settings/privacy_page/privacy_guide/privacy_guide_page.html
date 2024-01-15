@@ -81,27 +81,27 @@
   }
 
   #backgroundClouds {
-    transform: translateX(calc(var(--privacy-guide-step) * -10px));
+    transform: translateX(calc(var(--privacy-guide-step) * -4px));
     transition: transform 300ms cubic-bezier(.4, 0, .2, 1);
   }
 
   :host-context([dir='rtl']) #backgroundClouds {
-    transform: translateX(calc(var(--privacy-guide-step) * 10px));
+    transform: translateX(calc(var(--privacy-guide-step) * 4px));
   }
 
   #backgroundHills {
-    transform: translateX(calc(var(--privacy-guide-step) * -5px));
+    transform: translateX(calc(var(--privacy-guide-step) * -2px));
     transition: transform 300ms cubic-bezier(.4, 0, .2, 1);
   }
 
   :host-context([dir='rtl']) #backgroundHills {
-    transform: translateX(calc(var(--privacy-guide-step) * 5px));
+    transform: translateX(calc(var(--privacy-guide-step) * 2px));
   }
 </style>
 <div id="privacyGuideCard" on-keydown="onKeyDown_" part="privacyGuideCard"
     style="--privacy-guide-v2-translate-multiplier: [[translateMultiplier_]]">
   <div id="background" aria-hidden="true"
-      hidden$="[[!showBackground_(privacyGuideStep_, isPrivacyGuideV2)]]"
+      hidden$="[[!showAnySettingFragment_(privacyGuideStep_)]]"
       style="--privacy-guide-step: [[stepIndicatorModel_.active]]">
     <picture id="backgroundClouds">
       <source
@@ -130,21 +130,25 @@
     <privacy-guide-msbb-fragment id="[[privacyGuideStepEnum_.MSBB]]"
         class="managed-fragment" prefs="{{prefs}}" slot="view">
     </privacy-guide-msbb-fragment>
-    <privacy-guide-clear-on-exit-fragment
-        id="[[privacyGuideStepEnum_.CLEAR_ON_EXIT]]" class="managed-fragment"
-        prefs="{{prefs}}" slot="view">
-    </privacy-guide-clear-on-exit-fragment>
     <privacy-guide-history-sync-fragment
         id="[[privacyGuideStepEnum_.HISTORY_SYNC]]" class="managed-fragment"
         prefs="{{prefs}}" slot="view">
     </privacy-guide-history-sync-fragment>
+    <privacy-guide-cookies-fragment id="[[privacyGuideStepEnum_.COOKIES]]"
+        class="managed-fragment" prefs="{{prefs}}" slot="view">
+    </privacy-guide-cookies-fragment>
     <privacy-guide-safe-browsing-fragment
         id="[[privacyGuideStepEnum_.SAFE_BROWSING]]" class="managed-fragment"
         prefs="{{prefs}}" slot="view">
     </privacy-guide-safe-browsing-fragment>
-    <privacy-guide-cookies-fragment id="[[privacyGuideStepEnum_.COOKIES]]"
+    <privacy-guide-search-suggestions-fragment
+        id="[[privacyGuideStepEnum_.SEARCH_SUGGESTIONS]]"
         class="managed-fragment" prefs="{{prefs}}" slot="view">
-    </privacy-guide-cookies-fragment>
+    </privacy-guide-search-suggestions-fragment>
+    <privacy-guide-preload-fragment
+        id="[[privacyGuideStepEnum_.PRELOAD]]"
+        class="managed-fragment" prefs="{{prefs}}" slot="view">
+    </privacy-guide-preload-fragment>
     <privacy-guide-completion-fragment
         id="[[privacyGuideStepEnum_.COMPLETION]]" class="managed-fragment"
         on-back-button-click="onBackButtonClick_" slot="view">

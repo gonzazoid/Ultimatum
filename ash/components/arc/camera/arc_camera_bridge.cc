@@ -8,8 +8,9 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -90,7 +91,7 @@ class ArcCameraBridge::PendingStartCameraServiceResult {
     owner_->pending_start_camera_service_results_.erase(this);
   }
 
-  ArcCameraBridge* const owner_;
+  const raw_ptr<ArcCameraBridge> owner_;
   mojo::Remote<mojom::CameraService> service_;
   ArcCameraBridge::StartCameraServiceCallback callback_;
   base::WeakPtrFactory<PendingStartCameraServiceResult> weak_ptr_factory_{this};
@@ -147,8 +148,8 @@ void ArcCameraBridge::StartCameraService(StartCameraServiceCallback callback) {
 
 void ArcCameraBridge::RegisterCameraHalClientLegacy(
     mojo::PendingRemote<cros::mojom::CameraHalClient> client) {
-  media::CameraHalDispatcherImpl::GetInstance()->RegisterClient(
-      std::move(client));
+  NOTREACHED() << "ArcCameraBridge::RegisterCameraHalClientLegacy is "
+                  "deprecated. CameraHalClient will not be registered.";
 }
 
 void ArcCameraBridge::RegisterCameraHalClient(
@@ -159,6 +160,11 @@ void ArcCameraBridge::RegisterCameraHalClient(
   dispatcher->RegisterClientWithToken(
       std::move(client), type, dispatcher->GetTokenForTrustedClient(type),
       std::move(callback));
+}
+
+// static
+void ArcCameraBridge::EnsureFactoryBuilt() {
+  ArcCameraBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

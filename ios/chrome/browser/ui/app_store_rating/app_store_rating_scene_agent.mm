@@ -4,35 +4,40 @@
 
 #import "ios/chrome/browser/ui/app_store_rating/app_store_rating_scene_agent.h"
 
-#import <Foundation/Foundation.h>
-
+#import "base/json/values_util.h"
+#import "base/metrics/histogram_functions.h"
 #import "base/time/time.h"
+#import "base/values.h"
 #import "components/password_manager/core/browser/password_manager_util.h"
 #import "components/prefs/pref_service.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
+#import "components/version_info/channel.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
 #import "ios/chrome/browser/promos_manager/constants.h"
 #import "ios/chrome/browser/promos_manager/promos_manager.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/ui/app_store_rating/constants.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
-#import "ios/chrome/browser/ui/main/browser_interface_provider.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/ui/app_store_rating/features.h"
+#import "ios/chrome/common/channel_info.h"
 
 @interface AppStoreRatingSceneAgent ()
 
 // Determines whether the user has used Chrome for at least 3
-// different days within the past 7 days.
-@property(nonatomic, assign, readonly, getter=isChromeUsed3DaysInPastWeek)
-    BOOL chromeUsed3DaysInPastWeek;
+// different days within the past 7 days for stable channel.
+// In Canary and Dev channels, the requirement is at least 1 day
+// in the past 7 days.
+@property(nonatomic, assign, readonly, getter=isDaysInPastWeekRequirementMet)
+    BOOL daysInPastWeekRequirementMet;
 
 // Determines whether the user has used Chrome for at least 15
-// different days overall.
-@property(nonatomic, assign, readonly, getter=isChromeUsed15Days)
-    BOOL chromeUsed15Days;
+// different days overall for stable channel. In Canary and Dev channels,
+// the requirement is at least 1 day.
+@property(nonatomic, assign, readonly, getter=isTotalDaysRequirementMet)
+    BOOL totalDaysRequirementMet;
 
 // Determines whether the user has enabled the Credentials
 // Provider Extension.
@@ -53,121 +58,154 @@
 }
 
 - (BOOL)isUserEngaged {
-  return IsChromeLikelyDefaultBrowser() && self.chromeUsed3DaysInPastWeek &&
-         self.chromeUsed15Days && self.CPEEnabled;
+  if (IsAppStoreRatingLoosenedTriggersEnabled()) {
+    return IsChromeLikelyDefaultBrowser() || self.CPEEnabled;
+  }
+  return IsChromeLikelyDefaultBrowser() && self.daysInPastWeekRequirementMet &&
+         self.totalDaysRequirementMet && self.CPEEnabled;
 }
 
 #pragma mark - SceneStateObserver
 
 - (void)sceneState:(SceneState*)sceneState
     transitionedToActivationLevel:(SceneActivationLevel)level {
-  switch (level) {
-    case SceneActivationLevelUnattached:
-      // no-op.
-      break;
-    case SceneActivationLevelBackground:
-      // no-op.
-      break;
-    case SceneActivationLevelForegroundInactive:
-      // no-op.
-      break;
-    case SceneActivationLevelForegroundActive:
-      [self updateUserDefaults];
-      if ([self isUserEngaged]) {
-        [self requestPromoDisplay];
-      }
-      break;
+  if (level == SceneActivationLevelForegroundActive) {
+    [self updateUserDefaults];
+    BOOL isUserEngaged = [self isUserEngaged];
+    base::UmaHistogramBoolean("IOS.AppStoreRating.UserIsEligible",
+                              isUserEngaged);
+    if (isUserEngaged && [self promoShownOver365DaysAgo]) {
+      [self requestPromoDisplay];
+    }
   }
 }
 
 #pragma mark - Getters
 
-- (BOOL)isChromeUsed3DaysInPastWeek {
-  if (![[NSUserDefaults standardUserDefaults]
-          objectForKey:kAppStoreRatingActiveDaysInPastWeekKey]) {
-    return NO;
-  }
-  return [[[NSUserDefaults standardUserDefaults]
-             objectForKey:kAppStoreRatingActiveDaysInPastWeekKey] count] >= 3
-             ? YES
-             : NO;
+- (BOOL)isDaysInPastWeekRequirementMet {
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  const int activeDaysInPastWeek =
+      prefService->GetList(kAppStoreRatingActiveDaysInPastWeekKey).size();
+  const int appStoreRatingTotalDaysOnChromeRequirement =
+      (GetChannel() == version_info::Channel::DEV ||
+       GetChannel() == version_info::Channel::CANARY)
+          ? 1
+          : 3;
+  return activeDaysInPastWeek >= appStoreRatingTotalDaysOnChromeRequirement;
 }
 
-- (BOOL)isChromeUsed15Days {
-  if (![[NSUserDefaults standardUserDefaults]
-          integerForKey:kAppStoreRatingTotalDaysOnChromeKey]) {
-    return NO;
-  }
-  return [[NSUserDefaults standardUserDefaults]
-             integerForKey:kAppStoreRatingTotalDaysOnChromeKey] >= 15
-             ? YES
-             : NO;
+- (BOOL)isTotalDaysRequirementMet {
+  const int appStoreRatingDaysOnChromeInPastWeekRequirement =
+      (GetChannel() == version_info::Channel::DEV ||
+       GetChannel() == version_info::Channel::CANARY)
+          ? 1
+          : 15;
+
+  return GetApplicationContext()->GetLocalState()->GetInteger(
+             kAppStoreRatingTotalDaysOnChromeKey) >=
+         appStoreRatingDaysOnChromeInPastWeekRequirement;
 }
 
 - (BOOL)isCPEEnabled {
-  DCHECK(self.sceneState.interfaceProvider.mainInterface.browser);
+  DCHECK(self.sceneState.browserProviderInterface.mainBrowserProvider.browser);
   PrefService* pref_service =
-      self.sceneState.interfaceProvider.mainInterface.browser->GetBrowserState()
+      self.sceneState.browserProviderInterface.mainBrowserProvider.browser
+          ->GetBrowserState()
           ->GetPrefs();
   return password_manager_util::IsCredentialProviderEnabledOnStartup(
       pref_service);
 }
 
 #pragma mark - Private
+
 // Calls the PromosManager to request iOS displays the
 // App Store Rating prompt to the user.
 - (void)requestPromoDisplay {
-  if (!_promosManager)
+  if (!_promosManager || !GetApplicationContext()->GetLocalState()->GetBoolean(
+                             prefs::kAppStoreRatingPolicyEnabled)) {
     return;
+  }
   _promosManager->RegisterPromoForSingleDisplay(
       promos_manager::Promo::AppStoreRating);
+  [self recordPromoRequested];
+}
+
+// Returns an array of user's active days in the past week, not including the
+// current session.
+- (std::vector<base::Time>)activeDaysInPastWeek {
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  const base::Value::List& storedActiveDaysInPastWeek =
+      prefService->GetList(kAppStoreRatingActiveDaysInPastWeekKey);
+  std::vector<base::Time> activeDaysInPastWeek;
+  base::Time midnightToday = base::Time::Now().UTCMidnight();
+  for (const base::Value& storedDate : storedActiveDaysInPastWeek) {
+    base::Time date = ValueToTime(storedDate)->UTCMidnight();
+    if (midnightToday - date < base::Days(7)) {
+      activeDaysInPastWeek.push_back(date.UTCMidnight());
+    }
+  }
+
+  return activeDaysInPastWeek;
+}
+
+// Stores array of user's active days in the past week to
+// `kAppStoreRatingActiveDaysInPastWeekKey` in ApplicationContext.
+- (void)storeActiveDaysInPastWeek:
+    (const std::vector<base::Time>&)activeDaysInPastWeek {
+  base::Value::List datesToStore;
+  for (base::Time date : activeDaysInPastWeek) {
+    datesToStore.Append(TimeToValue(date));
+  }
+
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  prefService->SetList(kAppStoreRatingActiveDaysInPastWeekKey,
+                       std::move(datesToStore));
 }
 
 // Updates `kAppStoreRatingTotalDaysOnChromeKey` and
-// `kAppStoreRatingActiveDaysInPastWeekKey` in NSUserDefaults. This method is
+// `kAppStoreRatingActiveDaysInPastWeekKey`. This method is
 // destructive and may modify `kAppStoreRatingActiveDaysInPastWeekKey`.
 - (void)updateUserDefaults {
-  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
-  NSCalendar* calendar = [NSCalendar currentCalendar];
+  std::vector<base::Time> activeDaysInPastWeek = [self activeDaysInPastWeek];
 
-  // Add `kAppStoreRatingActiveDaysInPastWeekKey` to NSUserDefaults if it
-  // doesn't already exist.
-  if ([defaults objectForKey:kAppStoreRatingActiveDaysInPastWeekKey] == nil) {
-    [defaults setObject:[[NSMutableArray alloc] init]
-                 forKey:kAppStoreRatingActiveDaysInPastWeekKey];
-  }
-  NSMutableArray* activeDaysInPastWeek = [[defaults
-      objectForKey:kAppStoreRatingActiveDaysInPastWeekKey] mutableCopy];
+  // Check if today has been recorded. If not, record today.
+  base::Time today = base::Time::Now().UTCMidnight();
+  BOOL isTodayRecorded = !activeDaysInPastWeek.empty() &&
+                         today - activeDaysInPastWeek.back() < base::Days(1);
 
-  // Exit early if the last recorded day was today.
-  if ([activeDaysInPastWeek lastObject] != nil &&
-      [calendar isDateInToday:[activeDaysInPastWeek lastObject]]) {
+  if (isTodayRecorded) {
     return;
   }
 
-  NSDate* today = [NSDate date];
+  activeDaysInPastWeek.push_back(today);
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  const int totalDaysOnChrome =
+      prefService->GetInteger(kAppStoreRatingTotalDaysOnChromeKey) + 1;
+  prefService->SetInteger(kAppStoreRatingTotalDaysOnChromeKey,
+                          totalDaysOnChrome);
 
-  // Remove dates longer than 7 days ago from
-  // `kAppStoreRatingActiveDaysInPastWeekKey`.
-  // TODO(crbug.com/1376577): Move `oneWeekAgoInterval` to constants file
-  // once the file is merged.
-  base::TimeDelta oneWeekAgoInterval = base::Days(-7);
-  NSDate* oneWeekAgo =
-      [[NSDate alloc] initWithTimeInterval:oneWeekAgoInterval.InSecondsF()
-                                 sinceDate:today];
-  NSPredicate* greaterThan =
-      [NSPredicate predicateWithFormat:@"SELF > %@", oneWeekAgo];
-  [activeDaysInPastWeek filterUsingPredicate:greaterThan];
-
-  // Update `kAppStoreRatingTotalDaysOnChromeKey` and
-  // `kAppStoreRatingActiveDaysInPastWeekKey`.
-  [defaults
-      setInteger:[defaults integerForKey:kAppStoreRatingTotalDaysOnChromeKey] +
-                 1
-          forKey:kAppStoreRatingTotalDaysOnChromeKey];
-  [activeDaysInPastWeek addObject:today];
-  [defaults setObject:activeDaysInPastWeek
-               forKey:kAppStoreRatingActiveDaysInPastWeekKey];
+  [self storeActiveDaysInPastWeek:activeDaysInPastWeek];
 }
 
+// Called when promo is registered with promos manager. Saves today's date in
+// ApplicationContext.
+- (void)recordPromoRequested {
+  base::Time today = base::Time::Now().UTCMidnight();
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  prefService->SetTime(kAppStoreRatingLastShownPromoDayKey, today);
+}
+
+// Checks if the the promo was already requested for the user within the past
+// 365 days.
+- (BOOL)promoShownOver365DaysAgo {
+  PrefService* prefService = GetApplicationContext()->GetLocalState();
+  base::Time lastShown =
+      prefService->GetTime(kAppStoreRatingLastShownPromoDayKey);
+  if (lastShown == base::Time()) {
+    return YES;
+  }
+  base::TimeDelta daysSincePromoLastShown =
+      base::Time::Now().UTCMidnight() - lastShown;
+  return daysSincePromoLastShown > base::Days(365);
+}
 @end

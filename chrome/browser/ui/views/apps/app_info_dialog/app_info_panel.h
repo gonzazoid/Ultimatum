@@ -24,8 +24,9 @@ class Label;
 // A piece of the App Info dialog that displays information for a particular
 // profile and app. Panels in the App Info dialog extend this class.
 class AppInfoPanel : public views::View {
+  METADATA_HEADER(AppInfoPanel, views::View)
+
  public:
-  METADATA_HEADER(AppInfoPanel);
   AppInfoPanel(Profile* profile, const extensions::Extension* app);
   AppInfoPanel(const AppInfoPanel&) = delete;
   AppInfoPanel& operator=(const AppInfoPanel&) = delete;
@@ -59,8 +60,8 @@ class AppInfoPanel : public views::View {
       std::unique_ptr<views::View> key,
       std::unique_ptr<views::View> value) const;
 
-  const raw_ptr<Profile, DanglingUntriaged> profile_;
-  const raw_ptr<const extensions::Extension> app_;
+  const raw_ptr<Profile, AcrossTasksDanglingUntriaged> profile_;
+  const raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged> app_;
 };
 
 BEGIN_VIEW_BUILDER(/* no export */, AppInfoPanel, views::View)

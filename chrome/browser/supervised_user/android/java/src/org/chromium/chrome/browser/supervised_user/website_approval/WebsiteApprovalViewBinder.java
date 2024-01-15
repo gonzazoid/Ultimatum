@@ -13,7 +13,8 @@ import org.chromium.ui.modelutil.PropertyModel;
  */
 class WebsiteApprovalViewBinder {
     /**
-     * Called whenever a property in the given model changes. It updates the given view accordingly.
+     * Called whenever a property in the given model changes. It updates the given view
+     * accordingly.
      * @param model The observed {@link PropertyModel}. Its data need to be reflected in the view.
      * @param view The {@link WebsiteApprovalSheetContent} to update.
      * @param propertyKey The {@link PropertyKey} which changed.
@@ -26,11 +27,11 @@ class WebsiteApprovalViewBinder {
             view.setDomainText(model.get(WebsiteApprovalProperties.URL));
             view.setFullUrlText(model.get(WebsiteApprovalProperties.URL));
         } else if (propertyKey == WebsiteApprovalProperties.ON_CLICK_APPROVE) {
-            view.getApproveButton().setOnClickListener(
-                    model.get(WebsiteApprovalProperties.ON_CLICK_APPROVE));
+            view.getApproveButton()
+                    .setOnClickListener(model.get(WebsiteApprovalProperties.ON_CLICK_APPROVE));
         } else if (propertyKey == WebsiteApprovalProperties.ON_CLICK_DENY) {
-            view.getDenyButton().setOnClickListener(
-                    model.get(WebsiteApprovalProperties.ON_CLICK_DENY));
+            view.getDenyButton()
+                    .setOnClickListener(model.get(WebsiteApprovalProperties.ON_CLICK_DENY));
         } else if (propertyKey == WebsiteApprovalProperties.FAVICON) {
             view.setFaviconBitmap(model.get(WebsiteApprovalProperties.FAVICON));
         } else {

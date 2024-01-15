@@ -78,6 +78,7 @@ extern const char kWindowTypeValueDevTools[];
 
 // Error messages.
 extern const char kCannotZoomDisabledTabError[];
+extern const char kFileUrlsNotAllowedInExtensionNavigations[];
 extern const char kFrameNotFoundError[];
 extern const char kNoCrashBrowserError[];
 extern const char kNoCurrentWindowError[];
@@ -89,7 +90,9 @@ extern const char kTabIndexNotFoundError[];
 extern const char kNotFoundNextPageError[];
 extern const char kTabNotFoundError[];
 extern const char kCannotDiscardTab[];
+extern const char kCannotDuplicateTab[];
 extern const char kCannotFindTabToDiscard[];
+extern const char kSavedTabGroupNotEditableError[];
 extern const char kTabStripNotEditableError[];
 extern const char kTabStripNotEditableQueryError[];
 extern const char kTabStripDoesNotSupportTabGroupsError[];
@@ -109,7 +112,7 @@ extern const char kScreenshotsDisabledByDlp[];
 extern const char kCannotUpdateMuteCaptured[];
 extern const char kCannotDetermineLanguageOfUnloadedTab[];
 extern const char kMissingLockWindowFullscreenPrivatePermission[];
-extern const char kJavaScriptUrlsNotAllowedInTabsUpdate[];
+extern const char kJavaScriptUrlsNotAllowedInExtensionNavigations[];
 extern const char kBrowserWindowNotAllowed[];
 extern const char kLockedFullscreenModeNewTabError[];
 extern const char kGroupParamsError[];

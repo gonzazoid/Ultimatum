@@ -27,6 +27,8 @@ namespace android_webview {
 class AwVulkanContextProvider;
 
 // Effectively a data struct to pass pointers from render thread to viz thread.
+//
+// Lifetime: WebView
 class OutputSurfaceProviderWebView {
  public:
   explicit OutputSurfaceProviderWebView(
@@ -38,7 +40,7 @@ class OutputSurfaceProviderWebView {
   std::unique_ptr<viz::OutputSurface> CreateOutputSurface(
       viz::DisplayCompositorMemoryAndTaskController*
           display_compositor_controller);
-  void MarkExpectContextLoss();
+  void MarkAllowContextLoss();
 
   const viz::RendererSettings& renderer_settings() const {
     return renderer_settings_;

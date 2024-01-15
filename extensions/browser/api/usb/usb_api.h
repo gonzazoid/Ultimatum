@@ -14,9 +14,8 @@
 
 #include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/values.h"
-#include "extensions/browser/api/api_resource_manager.h"
 #include "extensions/browser/api/usb/usb_device_manager.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/common/api/usb.h"
@@ -76,7 +75,7 @@ class UsbTransferFunction : public UsbConnectionFunction {
   ~UsbTransferFunction() override;
 
   void OnCompleted(device::mojom::UsbTransferStatus status,
-                   std::unique_ptr<base::DictionaryValue> transfer_info);
+                   base::Value::Dict transfer_info);
   void OnTransferInCompleted(device::mojom::UsbTransferStatus status,
                              base::span<const uint8_t> data);
   void OnTransferOutCompleted(device::mojom::UsbTransferStatus status);
@@ -90,7 +89,7 @@ class UsbGenericTransferFunction : public UsbTransferFunction {
 
   // InterruptTransfer::Params and BulkTransfer::Params
   template <typename T>
-  ExtensionFunction::ResponseAction DoTransfer(T params);
+  ExtensionFunction::ResponseAction DoTransfer(const T& params);
 };
 
 class UsbFindDevicesFunction : public UsbExtensionFunction {
@@ -112,7 +111,7 @@ class UsbFindDevicesFunction : public UsbExtensionFunction {
       std::vector<device::mojom::UsbDeviceInfoPtr> devices);
   void OnDeviceOpened(const std::string& guid,
                       mojo::Remote<device::mojom::UsbDevice> device_ptr,
-                      device::mojom::UsbOpenDeviceError error);
+                      device::mojom::UsbOpenDeviceResultPtr result);
   void OpenComplete();
   void OnDisconnect();
 
@@ -216,7 +215,7 @@ class UsbOpenDeviceFunction : public UsbPermissionCheckingFunction {
 
   void OnDeviceOpened(std::string guid,
                       mojo::Remote<device::mojom::UsbDevice> device,
-                      device::mojom::UsbOpenDeviceError error);
+                      device::mojom::UsbOpenDeviceResultPtr result);
   void OnDisconnect();
 };
 
@@ -439,7 +438,7 @@ class UsbResetDeviceFunction : public UsbConnectionFunction {
 
   void OnComplete(bool success);
 
-  std::unique_ptr<api::usb::ResetDevice::Params> parameters_;
+  std::optional<api::usb::ResetDevice::Params> parameters_;
 };
 }  // namespace extensions
 

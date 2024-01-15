@@ -33,17 +33,33 @@ class DevicePostureProviderImpl : public mojom::DevicePostureProvider {
   // Adds this receiver to |receiverss_|.
   void Bind(mojo::PendingReceiver<mojom::DevicePostureProvider> receiver);
   void OnDevicePostureChanged(const mojom::DevicePostureType& posture);
+  void OnViewportSegmentsChanged(const std::vector<gfx::Rect>& segments);
 
  private:
   // DevicePostureProvider implementation.
   void AddListenerAndGetCurrentPosture(
-      mojo::PendingRemote<mojom::DevicePostureProviderClient> client,
+      mojo::PendingRemote<mojom::DevicePostureClient> client,
       AddListenerAndGetCurrentPostureCallback callback) override;
+  void AddListenerAndGetCurrentViewportSegments(
+      mojo::PendingRemote<mojom::DeviceViewportSegmentsClient> client,
+      AddListenerAndGetCurrentViewportSegmentsCallback callback) override;
+  void OverrideDevicePostureForEmulation(
+      mojom::DevicePostureType posture) override;
+  void DisableDevicePostureOverrideForEmulation() override;
   void OnReceiverConnectionError();
+
+  struct DevicePostureClientInformation {
+    bool is_emulated = false;
+    mojo::RemoteSet<mojom::DevicePostureClient> clients;
+    DevicePostureClientInformation();
+    ~DevicePostureClientInformation();
+  };
 
   std::unique_ptr<DevicePosturePlatformProvider> platform_provider_;
   mojo::ReceiverSet<mojom::DevicePostureProvider> receivers_;
-  mojo::RemoteSet<mojom::DevicePostureProviderClient> clients_;
+  std::map<mojo::ReceiverId, DevicePostureClientInformation> posture_clients_;
+  mojo::RemoteSet<mojom::DeviceViewportSegmentsClient>
+      viewport_segments_clients_;
   base::WeakPtrFactory<DevicePostureProviderImpl> weak_ptr_factory_{this};
 };
 

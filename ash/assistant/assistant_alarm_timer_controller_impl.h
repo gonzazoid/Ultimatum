@@ -15,6 +15,7 @@
 #include "ash/public/cpp/assistant/controller/assistant_alarm_timer_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
@@ -74,12 +75,13 @@ class AssistantAlarmTimerControllerImpl
  private:
   void PerformAlarmTimerAction(const assistant::util::AlarmTimerAction& action,
                                const std::string& alarm_timer_id,
-                               const absl::optional<base::TimeDelta>& duration);
+                               const std::optional<base::TimeDelta>& duration);
 
   void ScheduleNextTick(const assistant::AssistantTimer& timer);
   void Tick(const std::string& timer_id);
 
-  AssistantControllerImpl* const assistant_controller_;  // Owned by Shell.
+  const raw_ptr<AssistantControllerImpl>
+      assistant_controller_;  // Owned by Shell.
 
   AssistantAlarmTimerModel model_;
 
@@ -88,7 +90,7 @@ class AssistantAlarmTimerControllerImpl
   std::map<std::string, base::OneShotTimer> tickers_;
 
   // Owned by AssistantService.
-  assistant::Assistant* assistant_;
+  raw_ptr<assistant::Assistant> assistant_;
 
   base::ScopedObservation<AssistantController, AssistantControllerObserver>
       assistant_controller_observation_{this};

@@ -7,8 +7,9 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check_deref.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "content/browser/background_sync/background_sync_manager.h"
 #include "content/browser/background_sync/background_sync_network_observer.h"
@@ -124,6 +125,8 @@ void BackgroundSyncServiceImplTestHarness::TearDown() {
   background_sync_test_util::SetIgnoreNetworkChanges(false);
 
   mojo::SetDefaultProcessErrorHandler(base::NullCallback());
+
+  storage_partition_impl_->OnBrowserContextWillBeDestroyed();
 }
 
 // SetUp helper methods
@@ -158,8 +161,8 @@ void BackgroundSyncServiceImplTestHarness::CreateBackgroundSyncContext() {
   background_sync_context_ = base::MakeRefCounted<TestBackgroundSyncContext>();
   background_sync_context_->Init(
       embedded_worker_helper_->context_wrapper(),
-      static_cast<DevToolsBackgroundServicesContextImpl*>(
-          storage_partition_impl_->GetDevToolsBackgroundServicesContext()));
+      CHECK_DEREF(static_cast<DevToolsBackgroundServicesContextImpl*>(
+          storage_partition_impl_->GetDevToolsBackgroundServicesContext())));
 
   // Tests do not expect the sync event to fire immediately after
   // register (and cleanup up the sync registrations).  Prevent the sync
@@ -180,7 +183,8 @@ void BackgroundSyncServiceImplTestHarness::CreateServiceWorkerRegistration() {
   bool called = false;
   blink::mojom::ServiceWorkerRegistrationOptions options;
   options.scope = GURL(kServiceWorkerScope);
-  blink::StorageKey key(url::Origin::Create(GURL(kServiceWorkerScope)));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFromStringForTesting(kServiceWorkerScope);
   embedded_worker_helper_->context()->RegisterServiceWorker(
       GURL(kServiceWorkerScript), key, options,
       blink::mojom::FetchClientSettingsObject::New(),

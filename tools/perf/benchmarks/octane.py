@@ -16,7 +16,7 @@ import page_sets
 from benchmarks import press
 
 
-@benchmark.Info(emails=['hablich@chromium.org'],
+@benchmark.Info(emails=['vahl@chromium.org', 'mlippautz@chromium.org'],
                 component='Blink>JavaScript')
 class Octane(press._PressBenchmark): # pylint: disable=protected-access
   """Google's Octane JavaScript benchmark.
@@ -29,3 +29,23 @@ class Octane(press._PressBenchmark): # pylint: disable=protected-access
 
   def CreateStorySet(self, options):
     return page_sets.OctaneStorySet()
+
+
+@benchmark.Info(emails=['omerkatz@chromium.org'],
+                component='Blink>JavaScript>GarbageCollection')
+class OctaneNoMinorMS(press._PressBenchmark):  # pylint: disable=protected-access
+  """Google's Octane JavaScript benchmark without the MinorMS flag.
+
+  Shows the performance of Scavenger young generation GC in V8.
+
+  http://chromium.github.io/octane/index.html?auto=1
+  """
+  @classmethod
+  def Name(cls):
+    return 'octane-nominorms'
+
+  def CreateStorySet(self, options):
+    return page_sets.OctaneStorySet()
+
+  def SetExtraBrowserOptions(self, options):
+    options.AppendExtraBrowserArgs('--js-flags=--no-minor-ms')

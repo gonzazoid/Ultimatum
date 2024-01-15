@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.autofill;
 
 import android.content.Context;
 import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -16,14 +15,15 @@ import org.chromium.chrome.browser.autofill.AutofillUiUtils.ErrorType;
 import org.chromium.ui.modaldialog.DialogDismissalCause;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.text.EmptyTextWatcher;
 
 /**
  * Prompt that asks users to confirm the expiration date before saving card to Google.
  * TODO(crbug.com/848955)
  * - Confirm if the month and year needs to be pre-populated in case partial data is available.
  */
-public class AutofillExpirationDateFixFlowPrompt
-        extends AutofillSaveCardPromptBase implements TextWatcher {
+public class AutofillExpirationDateFixFlowPrompt extends AutofillSaveCardPromptBase
+        implements EmptyTextWatcher {
     /**
      * An interface to handle the interaction with an AutofillExpirationDateFixFlowPrompt object.
      */
@@ -49,29 +49,15 @@ public class AutofillExpirationDateFixFlowPrompt
      * @param confirmButtonLabel Label for the confirm button.
      * @return The prompt to confirm expiration data.
      */
-    public static AutofillExpirationDateFixFlowPrompt createAsInfobarFixFlowPrompt(Context context,
-            AutofillExpirationDateFixFlowPromptDelegate delegate, String title, int drawableId,
-            String cardLabel, String confirmButtonLabel) {
+    public static AutofillExpirationDateFixFlowPrompt createAsInfobarFixFlowPrompt(
+            Context context,
+            AutofillExpirationDateFixFlowPromptDelegate delegate,
+            String title,
+            int drawableId,
+            String cardLabel,
+            String confirmButtonLabel) {
         return new AutofillExpirationDateFixFlowPrompt(
-                context, delegate, title, drawableId, cardLabel, null, confirmButtonLabel, false);
-    }
-
-    /**
-     * Create a dialog prompt for the use of message. This dialog prompt includes legal lines.
-     *
-     * @param context The current context.
-     * @param delegate A {@link AutofillExpirationDateFixFlowPromptDelegate} to handle events.
-     * @param title Title of the dialog prompt.
-     * @param cardLabel Label representing a card which will be saved.
-     * @param cardholderAccount The Google account where a card will be saved.
-     * @param confirmButtonLabel Label for the confirm button.
-     * @return The prompt to confirm expiration data.
-     */
-    public static AutofillExpirationDateFixFlowPrompt createAsMessageFixFlowPrompt(Context context,
-            AutofillExpirationDateFixFlowPromptDelegate delegate, String title, String cardLabel,
-            String cardholderAccount, String confirmButtonLabel) {
-        return new AutofillExpirationDateFixFlowPrompt(
-                context, delegate, title, cardLabel, cardholderAccount, confirmButtonLabel);
+                context, delegate, title, drawableId, cardLabel, confirmButtonLabel, false);
     }
 
     private final AutofillExpirationDateFixFlowPromptDelegate mDelegate;
@@ -83,15 +69,24 @@ public class AutofillExpirationDateFixFlowPrompt
     private boolean mDidFocusOnMonth;
     private boolean mDidFocusOnYear;
 
-    /**
-     * Fix flow prompt to confirm expiration date before saving the card to Google.
-     */
-    private AutofillExpirationDateFixFlowPrompt(Context context,
-            AutofillExpirationDateFixFlowPromptDelegate delegate, String title, int drawableId,
-            String cardLabel, String cardholderAccount, String confirmButtonLabel,
+    /** Fix flow prompt to confirm expiration date before saving the card to Google. */
+    private AutofillExpirationDateFixFlowPrompt(
+            Context context,
+            AutofillExpirationDateFixFlowPromptDelegate delegate,
+            String title,
+            int drawableId,
+            String cardLabel,
+            String confirmButtonLabel,
             boolean filledConfirmButton) {
-        super(context, delegate, R.layout.autofill_expiration_date_fix_flow, title, drawableId,
-                cardholderAccount, confirmButtonLabel, filledConfirmButton);
+        super(
+                context,
+                delegate,
+                R.layout.autofill_expiration_date_fix_flow,
+                R.layout.icon_after_title_view,
+                title,
+                drawableId,
+                confirmButtonLabel,
+                filledConfirmButton);
         mDelegate = delegate;
         mErrorMessage = (TextView) mDialogView.findViewById(R.id.error_message);
         // Infobar: show masked card number only.
@@ -102,38 +97,23 @@ public class AutofillExpirationDateFixFlowPrompt
 
         mMonthInput = (EditText) mDialogView.findViewById(R.id.cc_month_edit);
         mMonthInput.addTextChangedListener(this);
-        mMonthInput.setOnFocusChangeListener((view, hasFocus) -> {
-            mDidFocusOnMonth |= hasFocus;
-        });
+        mMonthInput.setOnFocusChangeListener(
+                (view, hasFocus) -> {
+                    mDidFocusOnMonth |= hasFocus;
+                });
 
         mYearInput = (EditText) mDialogView.findViewById(R.id.cc_year_edit);
         mYearInput.addTextChangedListener(this);
-        mYearInput.setOnFocusChangeListener((view, hasFocus) -> {
-            mDidFocusOnYear |= hasFocus;
-        });
-    }
-
-    private AutofillExpirationDateFixFlowPrompt(Context context,
-            AutofillExpirationDateFixFlowPromptDelegate delegate, String title, String cardLabel,
-            String cardholderAccount, String confirmButtonLabel) {
-        // Set drawable id as 0 to remove the icon on the title.
-        this(context, delegate, title, /*drawableId=*/0, cardLabel, cardholderAccount,
-                confirmButtonLabel, true);
-        // Message: show masked card number, divider and gpay logo.
-        mDialogView.findViewById(R.id.message_divider).setVisibility(View.VISIBLE);
-        mDialogView.findViewById(R.id.google_pay_logo).setVisibility(View.VISIBLE);
+        mYearInput.setOnFocusChangeListener(
+                (view, hasFocus) -> {
+                    mDidFocusOnYear |= hasFocus;
+                });
     }
 
     @Override
     public void afterTextChanged(Editable s) {
         validate();
     }
-
-    @Override
-    public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-    @Override
-    public void onTextChanged(CharSequence s, int start, int before, int count) {}
 
     @Override
     public void onClick(PropertyModel model, int buttonType) {
@@ -165,13 +145,14 @@ public class AutofillExpirationDateFixFlowPrompt
      */
     private void validate() {
         @ErrorType
-        int errorType = AutofillUiUtils.getExpirationDateErrorType(
-                mMonthInput, mYearInput, mDidFocusOnMonth, mDidFocusOnYear);
+        int errorType =
+                AutofillUiUtils.getExpirationDateErrorType(
+                        mMonthInput, mYearInput, mDidFocusOnMonth, mDidFocusOnYear);
         mDialogModel.set(
                 ModalDialogProperties.POSITIVE_BUTTON_DISABLED, errorType != ErrorType.NONE);
         AutofillUiUtils.showDetailedErrorMessage(errorType, mContext, mErrorMessage);
         AutofillUiUtils.updateColorForInputs(
-                errorType, mContext, mMonthInput, mYearInput, /*cvcInput=*/null);
+                errorType, mContext, mMonthInput, mYearInput, /* cvcInput= */ null);
         moveFocus(errorType);
     }
 

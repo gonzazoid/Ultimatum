@@ -11,10 +11,6 @@
 #include "components/sync/model/model_type_store_service_impl.h"
 #include "ios/web_view/internal/web_view_browser_state.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace ios_web_view {
 
 // static
@@ -45,7 +41,7 @@ WebViewModelTypeStoreServiceFactory::BuildServiceInstanceFor(
   WebViewBrowserState* browser_state =
       WebViewBrowserState::FromBrowserState(context);
   return std::make_unique<syncer::ModelTypeStoreServiceImpl>(
-      browser_state->GetStatePath());
+      browser_state->GetStatePath(), browser_state->GetPrefs());
 }
 
 web::BrowserState* WebViewModelTypeStoreServiceFactory::GetBrowserStateToUse(

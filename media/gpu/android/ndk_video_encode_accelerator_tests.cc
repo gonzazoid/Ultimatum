@@ -11,8 +11,10 @@
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "media/base/bitstream_buffer.h"
+#include "media/base/media_switches.h"
 #include "media/base/media_util.h"
 #include "media/base/test_helpers.h"
 #include "media/base/video_codecs.h"
@@ -41,6 +43,10 @@ class NdkVideoEncoderAcceleratorTest
   void SetUp() override {
     if (!NdkVideoEncodeAccelerator::IsSupported())
       GTEST_SKIP() << "Not supported Android version";
+
+#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+    feature_list_.InitAndEnableFeature(kPlatformHEVCEncoderSupport);
+#endif
 
     auto args = GetParam();
     profile_ = args.profile;
@@ -79,8 +85,9 @@ class NdkVideoEncoderAcceleratorTest
       loop_.Quit();
   }
 
-  void NotifyError(VideoEncodeAccelerator::Error error) override {
-    error_ = error;
+  void NotifyErrorStatus(const EncoderStatus& status) override {
+    CHECK(!status.is_ok());
+    error_status_ = status;
     if (!OnError())
       loop_.Quit();
   }
@@ -179,8 +186,13 @@ class NdkVideoEncoderAcceleratorTest
     gfx::Size frame_size(640, 480);
     uint32_t framerate = 30;
     auto bitrate = Bitrate::ConstantBitrate(1000000u);
-    return VideoEncodeAccelerator::Config(pixel_format_, frame_size, profile_,
-                                          bitrate, framerate, 1000);
+    auto config = VideoEncodeAccelerator::Config(pixel_format_, frame_size,
+                                                 profile_, bitrate);
+    config.initial_framerate = framerate;
+    config.gop_length = 1000;
+    config.required_encoder_type =
+        VideoEncodeAccelerator::Config::EncoderType::kNoPreference;
+    return config;
   }
 
   void Run() { loop_.Run(); }
@@ -200,6 +212,7 @@ class NdkVideoEncoderAcceleratorTest
   VideoPixelFormat pixel_format_;
 
   base::test::TaskEnvironment task_environment_;
+  base::test::ScopedFeatureList feature_list_;
   base::RunLoop loop_;
   std::unique_ptr<VideoEncodeAccelerator> accelerator_;
   size_t output_buffer_size_ = 0;
@@ -212,7 +225,7 @@ class NdkVideoEncoderAcceleratorTest
     BitstreamBufferMetadata md;
   };
   std::vector<Output> outputs_;
-  absl::optional<VideoEncodeAccelerator::Error> error_;
+  absl::optional<EncoderStatus> error_status_;
   size_t input_buffer_size_ = 0;
   int32_t last_buffer_id_ = 0;
   std::vector<uint8_t> resize_buff_;
@@ -228,7 +241,7 @@ TEST_P(NdkVideoEncoderAcceleratorTest, InitializeAndDestroy) {
   Run();
   EXPECT_GE(id_to_buffer_.size(), 1u);
   accelerator_.reset();
-  EXPECT_FALSE(error_.has_value());
+  EXPECT_FALSE(error_status_.has_value());
 }
 
 TEST_P(NdkVideoEncoderAcceleratorTest, HandleEncodingError) {
@@ -248,7 +261,7 @@ TEST_P(NdkVideoEncoderAcceleratorTest, HandleEncodingError) {
 
   Run();
   EXPECT_EQ(outputs_.size(), 0u);
-  EXPECT_TRUE(error_.has_value());
+  EXPECT_TRUE(error_status_.has_value());
 }
 
 TEST_P(NdkVideoEncoderAcceleratorTest, EncodeSeveralFrames) {
@@ -278,7 +291,7 @@ TEST_P(NdkVideoEncoderAcceleratorTest, EncodeSeveralFrames) {
   }
 
   Run();
-  EXPECT_FALSE(error_.has_value());
+  EXPECT_FALSE(error_status_.has_value());
   EXPECT_GE(outputs_.size(), total_frames_count);
   // Here we'd like to test that an output with at `key_frame_index`
   // has a keyframe flag set to true, but because MediaCodec
@@ -311,6 +324,10 @@ VideoParams kParams[] = {
     {VP8PROFILE_MIN, PIXEL_FORMAT_NV12},
     {H264PROFILE_BASELINE, PIXEL_FORMAT_I420},
     {H264PROFILE_BASELINE, PIXEL_FORMAT_NV12},
+#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+    {HEVCPROFILE_MAIN, PIXEL_FORMAT_I420},
+    {HEVCPROFILE_MAIN, PIXEL_FORMAT_NV12},
+#endif
 };
 
 INSTANTIATE_TEST_SUITE_P(AllNdkEncoderTests,

@@ -9,10 +9,13 @@
 #include <windows.applicationmodel.datatransfer.h>
 #include <wrl/event.h>
 
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include <utility>
+
+#include "base/functional/callback.h"
+#include "base/strings/string_piece.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/win/core_winrt_util.h"
-#include "base/win/windows_version.h"
+#include "base/win/scoped_hstring.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -37,16 +40,6 @@ HRESULT GetDataTransferManagerHandles(
     HWND hwnd,
     IDataTransferManagerInterop** data_transfer_manager_interop,
     IDataTransferManager** data_transfer_manager) {
-  // If the required WinRT functionality is not available, fail the operation
-  // Note: Though the Share APIs are present starting in Windows 8, they are
-  // only fulfilled when invoked from within a UWP app container. Starting in
-  // Windows 10 they are fulfilled for all callers.
-  if ((base::win::GetVersion() < base::win::Version::WIN10) ||
-      !base::win::ResolveCoreWinRTDelayload() ||
-      !base::win::ScopedHString::ResolveCoreWinRTStringDelayload()) {
-    return E_FAIL;
-  }
-
   // IDataTransferManagerInterop is semi-hidden behind a CloakedIid
   // structure on the DataTransferManager, excluding it from things
   // used by RoGetActivationFactory like GetIids(). Because of this,
@@ -148,7 +141,7 @@ void ShowShareUIForWindowOperation::Run(
   // therefore never comes)
   if (SUCCEEDED(hr) && weak_ptr && data_requested_callback_) {
     remove_data_requested_listener_ = std::move(remove_data_requested_listener);
-    if (!base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    if (!base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(&ShowShareUIForWindowOperation::Cancel, weak_ptr),
             kMaxExecutionTime)) {

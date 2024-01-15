@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/time/time.h"
 #include "components/viz/common/surfaces/frame_sink_bundle_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -62,9 +63,9 @@ class TestFrameSinkManagerImpl : public mojom::FrameSinkManager {
   void CreateVideoCapturer(
       mojo::PendingReceiver<mojom::FrameSinkVideoCapturer> receiver) override {}
   void EvictSurfaces(const std::vector<SurfaceId>& surface_ids) override {}
-  void RequestCopyOfOutput(
-      const SurfaceId& surface_id,
-      std::unique_ptr<CopyOutputRequest> request) override {}
+  void RequestCopyOfOutput(const SurfaceId& surface_id,
+                           std::unique_ptr<CopyOutputRequest> request,
+                           bool capture_exact_surface_id) override {}
   void CacheBackBuffer(uint32_t cache_id,
                        const FrameSinkId& root_frame_sink_id) override {}
   void EvictBackBuffer(uint32_t cache_id,
@@ -75,6 +76,10 @@ class TestFrameSinkManagerImpl : public mojom::FrameSinkManager {
                 base::TimeDelta interval) override {}
   void StartThrottlingAllFrameSinks(base::TimeDelta interval) override {}
   void StopThrottlingAllFrameSinks() override {}
+  void StartFrameCountingForTest(base::TimeTicks start_time,
+                                 base::TimeDelta bucket_size) override {}
+  void StopFrameCountingForTest(
+      StopFrameCountingForTestCallback callback) override {}
 
   mojo::Receiver<mojom::FrameSinkManager> receiver_{this};
   mojo::Remote<mojom::FrameSinkManagerClient> client_;

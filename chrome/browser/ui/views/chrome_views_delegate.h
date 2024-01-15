@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/views/views_delegate.h"
@@ -40,6 +40,14 @@ class ChromeViewsDelegate : public views::ViewsDelegate {
   ProcessMenuAcceleratorResult ProcessAcceleratorWhileMenuShowing(
       const ui::Accelerator& accelerator) override;
   bool ShouldCloseMenuIfMouseCaptureLost() const override;
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  bool ShouldWindowHaveRoundedCorners(
+      const gfx::NativeWindow window) const override;
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<views::NonClientFrameView> CreateDefaultNonClientFrameView(
       views::Widget* widget) override;
 #endif

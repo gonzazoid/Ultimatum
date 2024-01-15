@@ -39,10 +39,10 @@
 #include <limits.h>  // For HOST_NAME_MAX
 #endif
 
+#include <algorithm>
 #include <utility>
 
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/notreached.h"
 #include "base/system/sys_info.h"
 #if BUILDFLAG(IS_WIN)
@@ -51,7 +51,7 @@
 #include "components/version_info/version_info.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #endif
@@ -66,8 +66,12 @@
 #include "base/win/windows_version.h"
 #endif
 
+#if BUILDFLAG(IS_MAC)
+#include "base/system/sys_info.h"
+#endif
+
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #endif
@@ -93,31 +97,30 @@ std::string GetMachineName() {
 #elif BUILDFLAG(IS_MAC)
   // Do not use NSHost currentHost, as it's very slow. http://crbug.com/138570
   SCDynamicStoreContext context = {0, NULL, NULL, NULL};
-  base::ScopedCFTypeRef<SCDynamicStoreRef> store(SCDynamicStoreCreate(
+  base::apple::ScopedCFTypeRef<SCDynamicStoreRef> store(SCDynamicStoreCreate(
       kCFAllocatorDefault, CFSTR("chrome_sync"), NULL, &context));
-  base::ScopedCFTypeRef<CFStringRef> machine_name(
+  base::apple::ScopedCFTypeRef<CFStringRef> machine_name(
       SCDynamicStoreCopyLocalHostName(store.get()));
   if (machine_name.get())
     return base::SysCFStringRefToUTF8(machine_name.get());
 
   // Fall back to get computer name.
-  base::ScopedCFTypeRef<CFStringRef> computer_name(
+  base::apple::ScopedCFTypeRef<CFStringRef> computer_name(
       SCDynamicStoreCopyComputerName(store.get(), NULL));
   if (computer_name.get())
     return base::SysCFStringRefToUTF8(computer_name.get());
 
-  // If all else fails, return to using a slightly nicer version of the
-  // hardware model.
-  char modelBuffer[256];
-  size_t length = sizeof(modelBuffer);
-  if (!sysctlbyname("hw.model", modelBuffer, &length, NULL, 0)) {
-    for (size_t i = 0; i < length; i++) {
-      if (base::IsAsciiDigit(modelBuffer[i]))
-        return std::string(modelBuffer, 0, i);
-    }
-    return std::string(modelBuffer, 0, length);
+  // If all else fails, return to using a slightly nicer version of the hardware
+  // model. Warning: This will soon return just a useless "Mac" string.
+  std::string model = base::SysInfo::HardwareModelName();
+  absl::optional<base::SysInfo::HardwareModelNameSplit> split =
+      base::SysInfo::SplitHardwareModelNameDoNotUse(model);
+
+  if (!split) {
+    return model;
   }
-  return std::string();
+
+  return split.value().category;
 #elif BUILDFLAG(IS_WIN)
   wchar_t computer_name[MAX_COMPUTERNAME_LENGTH + 1] = {0};
   DWORD size = std::size(computer_name);
@@ -155,7 +158,7 @@ std::string GetOSVersion() {
 }
 
 std::string GetOSPlatform() {
-  return version_info::GetOSType();
+  return std::string(version_info::GetOSType());
 }
 
 std::string GetOSArchitecture() {
@@ -228,8 +231,9 @@ em::Channel ConvertToProtoChannel(version_info::Channel channel) {
 
 std::string GetDeviceName() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  return chromeos::system::StatisticsProvider::GetInstance()
-      ->GetEnterpriseMachineID();
+  return std::string(
+      ash::system::StatisticsProvider::GetInstance()->GetMachineID().value_or(
+          ""));
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   const chromeos::BrowserParamsProxy* init_params =
       chromeos::BrowserParamsProxy::Get();

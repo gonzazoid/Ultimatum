@@ -5,10 +5,11 @@
 #include "content/browser/background_fetch/background_fetch_service_impl.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/uuid.h"
 #include "content/browser/background_fetch/background_fetch_context.h"
 #include "content/browser/background_fetch/background_fetch_metrics.h"
 #include "content/browser/background_fetch/background_fetch_registration_id.h"
@@ -23,7 +24,6 @@
 #include "content/public/browser/service_worker_version_base_info.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom.h"
 
@@ -39,6 +39,8 @@ void BackgroundFetchServiceImpl::CreateForWorker(
     const net::NetworkIsolationKey& network_isolation_key,
     const ServiceWorkerVersionBaseInfo& info,
     mojo::PendingReceiver<blink::mojom::BackgroundFetchService> receiver) {
+  // TODO(rayankans): Remove `network_isolation_key` parameter since it's no
+  // longer used.
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   RenderProcessHost* render_process_host =
       RenderProcessHost::FromID(info.process_id);
@@ -65,13 +67,11 @@ void BackgroundFetchServiceImpl::CreateForWorker(
     return;
   }
 
-  mojo::MakeSelfOwnedReceiver(
-      std::make_unique<BackgroundFetchServiceImpl>(
-          std::move(context), info.storage_key,
-          net::IsolationInfo::CreatePartial(
-              net::IsolationInfo::RequestType::kOther, network_isolation_key),
-          render_process_host, /*rfh=*/nullptr),
-      std::move(receiver));
+  mojo::MakeSelfOwnedReceiver(std::make_unique<BackgroundFetchServiceImpl>(
+                                  std::move(context), info.storage_key,
+                                  info.storage_key.ToPartialNetIsolationInfo(),
+                                  render_process_host, /*rfh=*/nullptr),
+                              std::move(receiver));
 }
 
 // static
@@ -104,7 +104,7 @@ void BackgroundFetchServiceImpl::CreateForFrame(
                          ->GetBackgroundFetchContext());
   mojo::MakeSelfOwnedReceiver(
       std::make_unique<BackgroundFetchServiceImpl>(
-          std::move(context), rfhi->storage_key(),
+          std::move(context), rfhi->GetStorageKey(),
           rfhi->GetIsolationInfoForSubresources(), rfhi->GetProcess(), rfhi),
       std::move(receiver));
 }
@@ -148,9 +148,9 @@ void BackgroundFetchServiceImpl::Fetch(
 
   // New |unique_id|, since this is a new Background Fetch registration. This is
   // the only place new |unique_id|s should be created outside of tests.
-  BackgroundFetchRegistrationId registration_id(service_worker_registration_id,
-                                                storage_key_, developer_id,
-                                                base::GenerateGUID());
+  BackgroundFetchRegistrationId registration_id(
+      service_worker_registration_id, storage_key_, developer_id,
+      base::Uuid::GenerateRandomV4().AsLowercaseString());
 
   background_fetch_context_->StartFetch(
       registration_id, std::move(requests), std::move(options), icon,
@@ -206,7 +206,7 @@ bool BackgroundFetchServiceImpl::ValidateUniqueId(
     const std::string& unique_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!base::IsValidGUIDOutputString(unique_id)) {
+  if (!base::Uuid::ParseLowercase(unique_id).is_valid()) {
     mojo::ReportBadMessage("Invalid unique_id");
     return false;
   }

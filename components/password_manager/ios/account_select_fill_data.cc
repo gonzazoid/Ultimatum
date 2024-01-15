@@ -36,8 +36,8 @@ void AccountSelectFillData::Add(const autofill::PasswordFormFillData& form_data,
   FormInfo& form_info = iter_ok.first->second;
   form_info.origin = form_data.url;
   form_info.form_id = form_data.form_renderer_id;
-  form_info.username_element_id = form_data.username_field.unique_renderer_id;
-  form_info.password_element_id = form_data.password_field.unique_renderer_id;
+  form_info.username_element_id = form_data.username_element_renderer_id;
+  form_info.password_element_id = form_data.password_element_renderer_id;
 
   // Suggested credentials don't depend on a clicked form. It's better to use
   // the latest known credentials, since credentials can be updated between
@@ -45,14 +45,15 @@ void AccountSelectFillData::Add(const autofill::PasswordFormFillData& form_data,
   credentials_.clear();
 
   credentials_.push_back(
-      {form_data.username_field.value, form_data.password_field.value,
-       is_cross_origin_iframe && form_data.preferred_realm.empty()
+      {form_data.preferred_login.username_value,
+       form_data.preferred_login.password_value,
+       is_cross_origin_iframe && form_data.preferred_login.realm.empty()
            ? form_data.url.spec()
-           : form_data.preferred_realm});
+           : form_data.preferred_login.realm});
 
   for (const auto& username_password_and_realm : form_data.additional_logins) {
-    const std::u16string& username = username_password_and_realm.username;
-    const std::u16string& password = username_password_and_realm.password;
+    const std::u16string& username = username_password_and_realm.username_value;
+    const std::u16string& password = username_password_and_realm.password_value;
     const std::string& realm = username_password_and_realm.realm;
     if (is_cross_origin_iframe && realm.empty()) {
       credentials_.push_back({username, password, form_data.url.spec()});
@@ -66,6 +67,10 @@ void AccountSelectFillData::Reset() {
   forms_.clear();
   credentials_.clear();
   last_requested_form_ = nullptr;
+}
+
+void AccountSelectFillData::ResetCache() {
+  credentials_.clear();
 }
 
 bool AccountSelectFillData::Empty() const {

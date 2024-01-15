@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ash/child_accounts/child_user_service_factory.h"
 
+#include <memory>
+
 #include "base/no_destructor.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/child_accounts/child_user_service.h"
@@ -24,15 +26,23 @@ ChildUserServiceFactory* ChildUserServiceFactory::GetInstance() {
 }
 
 ChildUserServiceFactory::ChildUserServiceFactory()
-    : ProfileKeyedServiceFactory("ChildUserServiceFactory") {
+    : ProfileKeyedServiceFactory(
+          "ChildUserServiceFactory",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(apps::AppServiceProxyFactory::GetInstance());
 }
 
 ChildUserServiceFactory::~ChildUserServiceFactory() = default;
 
-KeyedService* ChildUserServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ChildUserServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ChildUserService(context);
+  return std::make_unique<ChildUserService>(context);
 }
 
 }  // namespace ash

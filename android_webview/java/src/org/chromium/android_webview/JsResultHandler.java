@@ -5,7 +5,7 @@
 package org.chromium.android_webview;
 
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
 
 class JsResultHandler implements JsResultReceiver, JsPromptResultReceiver {
     private AwContentsClientBridge mBridge;
@@ -23,17 +23,21 @@ class JsResultHandler implements JsResultReceiver, JsPromptResultReceiver {
 
     @Override
     public void confirm(final String promptResult) {
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-            if (mBridge != null) mBridge.confirmJsResult(mId, promptResult);
-            mBridge = null;
-        });
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    if (mBridge != null) mBridge.confirmJsResult(mId, promptResult);
+                    mBridge = null;
+                });
     }
 
     @Override
     public void cancel() {
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-            if (mBridge != null) mBridge.cancelJsResult(mId);
-            mBridge = null;
-        });
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    if (mBridge != null) mBridge.cancelJsResult(mId);
+                    mBridge = null;
+                });
     }
 }

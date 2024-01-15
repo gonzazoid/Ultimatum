@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -10,7 +10,6 @@ try to fix them by adding them to the GN files.
 Manual cleaning up is likely required afterwards.
 """
 
-from __future__ import print_function
 
 import argparse
 import os

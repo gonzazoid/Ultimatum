@@ -4,9 +4,12 @@
 
 #include "ui/accessibility/platform/automation/automation_v8_bindings.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_offset_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "gin/arguments.h"
 #include "gin/converter.h"
 #include "gin/data_object_builder.h"
 #include "gin/handle.h"
@@ -22,6 +25,7 @@
 #include "ui/accessibility/platform/automation/automation_tree_manager_owner.h"
 #include "ui/accessibility/platform/automation/automation_v8_router.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "v8/include/v8-function-callback.h"
 
 namespace ui {
 
@@ -42,6 +46,29 @@ v8::Local<v8::Object> RectToV8Object(v8::Isolate* isolate,
       .Build();
 }
 
+// Helper class that wraps a V8 handler function to run with V8 or gin
+// arguments.
+class GenericHandlerFunctionWrapper : public V8HandlerFunctionWrapper {
+ public:
+  explicit GenericHandlerFunctionWrapper(
+      base::RepeatingCallback<void(const v8::FunctionCallbackInfo<v8::Value>&)>
+          handler_function)
+      : handler_function_(handler_function) {}
+
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert callback to use gin::Arguments.
+    const v8::FunctionCallbackInfo<v8::Value>* args =
+        arguments->GetFunctionCallbackInfo();
+    DCHECK(args);
+    handler_function_.Run(*args);
+  }
+
+ private:
+  ~GenericHandlerFunctionWrapper() override = default;
+  base::RepeatingCallback<void(const v8::FunctionCallbackInfo<v8::Value>&)>
+      handler_function_;
+};
+
 //
 // Helper class that helps implement bindings for a JavaScript function
 // that takes a single input argument consisting of a Tree ID. Looks up
@@ -53,7 +80,7 @@ typedef void (*TreeIDFunction)(v8::Isolate* isolate,
                                v8::ReturnValue<v8::Value> result,
                                AutomationAXTreeWrapper* tree_wrapper);
 
-class TreeIDWrapper : public base::RefCountedThreadSafe<TreeIDWrapper> {
+class TreeIDWrapper : public V8HandlerFunctionWrapper {
  public:
   TreeIDWrapper(AutomationTreeManagerOwner* automation_tree_manager_owner,
                 AutomationV8Router* automation_router,
@@ -62,7 +89,11 @@ class TreeIDWrapper : public base::RefCountedThreadSafe<TreeIDWrapper> {
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() != 1 || !args[0]->IsString())
       automation_router_->ThrowInvalidArgumentsException();
@@ -83,12 +114,10 @@ class TreeIDWrapper : public base::RefCountedThreadSafe<TreeIDWrapper> {
   }
 
  private:
-  virtual ~TreeIDWrapper() = default;
+  ~TreeIDWrapper() override = default;
 
-  friend class base::RefCountedThreadSafe<TreeIDWrapper>;
-
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   TreeIDFunction function_;
 };
 
@@ -104,7 +133,7 @@ typedef base::RepeatingCallback<void(v8::Isolate* isolate,
                                      AXNode* node)>
     NodeIDFunction;
 
-class NodeIDWrapper : public base::RefCountedThreadSafe<NodeIDWrapper> {
+class NodeIDWrapper : public V8HandlerFunctionWrapper {
  public:
   NodeIDWrapper(AutomationTreeManagerOwner* automation_tree_manager_owner,
                 AutomationV8Router* automation_router,
@@ -113,7 +142,11 @@ class NodeIDWrapper : public base::RefCountedThreadSafe<NodeIDWrapper> {
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() < 2 || !args[0]->IsString() || !args[1]->IsNumber())
       automation_router_->ThrowInvalidArgumentsException();
@@ -137,12 +170,12 @@ class NodeIDWrapper : public base::RefCountedThreadSafe<NodeIDWrapper> {
   }
 
  private:
-  virtual ~NodeIDWrapper() = default;
+  ~NodeIDWrapper() override = default;
 
   friend class base::RefCountedThreadSafe<NodeIDWrapper>;
 
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   NodeIDFunction function_;
 };
 
@@ -159,8 +192,7 @@ typedef void (*NodeIDPlusAttributeFunction)(v8::Isolate* isolate,
                                             AXNode* node,
                                             const std::string& attribute);
 
-class NodeIDPlusAttributeWrapper
-    : public base::RefCountedThreadSafe<NodeIDPlusAttributeWrapper> {
+class NodeIDPlusAttributeWrapper : public V8HandlerFunctionWrapper {
  public:
   NodeIDPlusAttributeWrapper(
       AutomationTreeManagerOwner* automation_tree_manager_owner,
@@ -170,7 +202,11 @@ class NodeIDPlusAttributeWrapper
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() < 3 || !args[0]->IsString() || !args[1]->IsNumber() ||
         !args[2]->IsString()) {
@@ -198,12 +234,10 @@ class NodeIDPlusAttributeWrapper
   }
 
  private:
-  virtual ~NodeIDPlusAttributeWrapper() = default;
+  ~NodeIDPlusAttributeWrapper() override = default;
 
-  friend class base::RefCountedThreadSafe<NodeIDPlusAttributeWrapper>;
-
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   NodeIDPlusAttributeFunction function_;
 };
 
@@ -223,8 +257,7 @@ typedef base::RepeatingCallback<void(v8::Isolate* isolate,
                                      bool clipped)>
     NodeIDPlusRangeFunction;
 
-class NodeIDPlusRangeWrapper
-    : public base::RefCountedThreadSafe<NodeIDPlusRangeWrapper> {
+class NodeIDPlusRangeWrapper : public V8HandlerFunctionWrapper {
  public:
   NodeIDPlusRangeWrapper(
       AutomationTreeManagerOwner* automation_tree_manager_owner,
@@ -234,7 +267,11 @@ class NodeIDPlusRangeWrapper
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() < 5 || !args[0]->IsString() || !args[1]->IsNumber() ||
         !args[2]->IsNumber() || !args[3]->IsNumber() || !args[4]->IsBoolean()) {
@@ -264,12 +301,10 @@ class NodeIDPlusRangeWrapper
   }
 
  private:
-  virtual ~NodeIDPlusRangeWrapper() = default;
+  ~NodeIDPlusRangeWrapper() override = default;
 
-  friend class base::RefCountedThreadSafe<NodeIDPlusRangeWrapper>;
-
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   NodeIDPlusRangeFunction function_;
 };
 
@@ -281,8 +316,7 @@ typedef base::RepeatingCallback<void(v8::Isolate* isolate,
                                      bool boolVal)>
     NodeIDPlusStringBoolFunction;
 
-class NodeIDPlusStringBoolWrapper
-    : public base::RefCountedThreadSafe<NodeIDPlusStringBoolWrapper> {
+class NodeIDPlusStringBoolWrapper : public V8HandlerFunctionWrapper {
  public:
   NodeIDPlusStringBoolWrapper(
       AutomationTreeManagerOwner* automation_tree_manager_owner,
@@ -292,7 +326,11 @@ class NodeIDPlusStringBoolWrapper
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() < 4 || !args[0]->IsString() || !args[1]->IsNumber() ||
         !args[2]->IsString() || !args[3]->IsBoolean()) {
@@ -321,12 +359,10 @@ class NodeIDPlusStringBoolWrapper
   }
 
  private:
-  virtual ~NodeIDPlusStringBoolWrapper() = default;
+  ~NodeIDPlusStringBoolWrapper() override = default;
 
-  friend class base::RefCountedThreadSafe<NodeIDPlusStringBoolWrapper>;
-
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   NodeIDPlusStringBoolFunction function_;
 };
 
@@ -340,8 +376,7 @@ using NodeIDPlusDimensionsFunction =
                                  int width,
                                  int height)>;
 
-class NodeIDPlusDimensionsWrapper
-    : public base::RefCountedThreadSafe<NodeIDPlusDimensionsWrapper> {
+class NodeIDPlusDimensionsWrapper : public V8HandlerFunctionWrapper {
  public:
   NodeIDPlusDimensionsWrapper(
       AutomationTreeManagerOwner* automation_tree_manager_owner,
@@ -351,7 +386,11 @@ class NodeIDPlusDimensionsWrapper
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() < 6 || !args[0]->IsString() || !args[1]->IsInt32() ||
         !args[2]->IsInt32() || !args[3]->IsInt32() || !args[4]->IsInt32() ||
@@ -382,12 +421,12 @@ class NodeIDPlusDimensionsWrapper
   }
 
  private:
-  virtual ~NodeIDPlusDimensionsWrapper() = default;
+  ~NodeIDPlusDimensionsWrapper() override = default;
 
   friend class base::RefCountedThreadSafe<NodeIDPlusDimensionsWrapper>;
 
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   NodeIDPlusDimensionsFunction function_;
 };
 
@@ -399,8 +438,7 @@ typedef base::RepeatingCallback<void(
     const std::tuple<ax::mojom::Event, AXEventGenerator::Event>& event_type)>
     NodeIDPlusEventFunction;
 
-class NodeIDPlusEventWrapper
-    : public base::RefCountedThreadSafe<NodeIDPlusEventWrapper> {
+class NodeIDPlusEventWrapper : public V8HandlerFunctionWrapper {
  public:
   NodeIDPlusEventWrapper(
       AutomationTreeManagerOwner* automation_tree_manager_owner,
@@ -410,7 +448,11 @@ class NodeIDPlusEventWrapper
         automation_router_(automation_router),
         function_(function) {}
 
-  void Run(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  void Run(gin::Arguments* arguments) override {
+    // TODO: Convert to use gin::Arguments.
+    DCHECK(arguments->GetFunctionCallbackInfo());
+    const v8::FunctionCallbackInfo<v8::Value>& args =
+        *arguments->GetFunctionCallbackInfo();
     v8::Isolate* isolate = automation_router_->GetIsolate();
     if (args.Length() < 3 || !args[0]->IsString() || !args[1]->IsInt32() ||
         !args[2]->IsString()) {
@@ -454,12 +496,10 @@ class NodeIDPlusEventWrapper
   }
 
  private:
-  virtual ~NodeIDPlusEventWrapper() = default;
+  ~NodeIDPlusEventWrapper() override = default;
 
-  friend class base::RefCountedThreadSafe<NodeIDPlusEventWrapper>;
-
-  AutomationTreeManagerOwner* automation_tree_manager_owner_;
-  AutomationV8Router* automation_router_;
+  raw_ptr<AutomationTreeManagerOwner> automation_tree_manager_owner_;
+  raw_ptr<AutomationV8Router> automation_router_;
   NodeIDPlusEventFunction function_;
 };
 
@@ -489,7 +529,7 @@ void AutomationV8Bindings::SendNodesRemovedEvent(const ui::AXTreeID& tree_id,
   base::Value::List args;
   args.Append(tree_id.ToString());
   {
-    base::Value nodes(base::Value::Type::LIST);
+    base::Value::List nodes;
     for (auto id : ids)
       nodes.Append(id);
     args.Append(std::move(nodes));
@@ -507,6 +547,46 @@ void AutomationV8Bindings::SendChildTreeIDEvent(
                                        args);
 }
 
+void AutomationV8Bindings::SendTreeDestroyedEvent(const AXTreeID& tree_id) {
+  base::Value::List args;
+  args.Append(tree_id.ToString());
+  automation_v8_router_->DispatchEvent(
+      "automationInternal.onAccessibilityTreeDestroyed", args);
+}
+
+void AutomationV8Bindings::SendGetTextLocationResult(
+    const ui::AXActionData& data,
+    const absl::optional<gfx::Rect>& rect) {
+  base::Value::Dict params;
+  params.Set("treeID", data.target_tree_id.ToString());
+  params.Set("childTreeID", data.child_tree_id.ToString());
+  params.Set("nodeID", data.target_node_id);
+  params.Set("result", false);
+  if (rect) {
+    params.Set("left", rect.value().x());
+    params.Set("top", rect.value().y());
+    params.Set("width", rect.value().width());
+    params.Set("height", rect.value().height());
+    params.Set("result", true);
+  }
+  params.Set("requestID", data.request_id);
+
+  base::Value::List args;
+  args.Append(std::move(params));
+  automation_v8_router_->DispatchEvent(
+      "automationInternal.onGetTextLocationResult", args);
+}
+
+void AutomationV8Bindings::SendActionResultEvent(const ui::AXActionData& data,
+                                                 bool result) {
+  base::Value::List args;
+  args.Append(data.target_tree_id.ToString());
+  args.Append(data.request_id);
+  args.Append(result);
+  automation_v8_router_->DispatchEvent("automationInternal.onActionResult",
+                                       args);
+}
+
 void AutomationV8Bindings::SendAutomationEvent(
     const AXTreeID& tree_id,
     const AXEvent& event,
@@ -515,33 +595,31 @@ void AutomationV8Bindings::SendAutomationEvent(
   const std::string automation_event_type_str =
       automation_v8_router_->GetEventTypeString(event_type);
 
-  base::Value event_params(base::Value::Type::DICTIONARY);
-  event_params.SetKey("treeID", base::Value(tree_id.ToString()));
-  event_params.SetKey("targetID", base::Value(event.id));
-  event_params.SetKey("eventType", base::Value(automation_event_type_str));
+  base::Value::Dict event_params;
+  event_params.Set("treeID", base::Value(tree_id.ToString()));
+  event_params.Set("targetID", base::Value(event.id));
+  event_params.Set("eventType", base::Value(automation_event_type_str));
 
-  event_params.SetKey("eventFrom", base::Value(ui::ToString(event.event_from)));
-  event_params.SetKey("eventFromAction",
-                      base::Value(ui::ToString(event.event_from_action)));
-  event_params.SetKey("actionRequestID", base::Value(event.action_request_id));
-  event_params.SetKey("mouseX", base::Value(mouse_location.x()));
-  event_params.SetKey("mouseY", base::Value(mouse_location.y()));
+  event_params.Set("eventFrom", base::Value(ui::ToString(event.event_from)));
+  event_params.Set("eventFromAction",
+                   base::Value(ui::ToString(event.event_from_action)));
+  event_params.Set("actionRequestID", base::Value(event.action_request_id));
+  event_params.Set("mouseX", base::Value(mouse_location.x()));
+  event_params.Set("mouseY", base::Value(mouse_location.y()));
 
   // Populate intents.
-  base::Value value_intents(base::Value::Type::LIST);
+  base::Value::List value_intents;
   for (const auto& intent : event.event_intents) {
-    base::Value dict(base::Value::Type::DICTIONARY);
-    dict.SetKey("command", base::Value(ui::ToString(intent.command)));
-    dict.SetKey("inputEventType",
-                base::Value(ui::ToString(intent.input_event_type)));
-    dict.SetKey("textBoundary",
-                base::Value(ui::ToString(intent.text_boundary)));
-    dict.SetKey("moveDirection",
-                base::Value(ui::ToString(intent.move_direction)));
+    base::Value::Dict dict;
+    dict.Set("command", base::Value(ui::ToString(intent.command)));
+    dict.Set("inputEventType",
+             base::Value(ui::ToString(intent.input_event_type)));
+    dict.Set("textBoundary", base::Value(ui::ToString(intent.text_boundary)));
+    dict.Set("moveDirection", base::Value(ui::ToString(intent.move_direction)));
     value_intents.Append(std::move(dict));
   }
 
-  event_params.SetKey("intents", std::move(value_intents));
+  event_params.Set("intents", std::move(value_intents));
 
   base::Value::List args;
   args.Append(std::move(event_params));
@@ -567,10 +645,11 @@ void AutomationV8Bindings::AddV8Routes() {
   // It's safe to use base::Unretained(this) here because these bindings
   // will only be called on a valid AutomationV8Bindings instance
   // and none of the functions have any side effects.
-#define ROUTE_FUNCTION(FN)                     \
-  automation_v8_router_->RouteHandlerFunction( \
-      #FN, "automation",                       \
-      base::BindRepeating(&AutomationV8Bindings::FN, base::Unretained(this)))
+  scoped_refptr<GenericHandlerFunctionWrapper> wrapper;
+#define ROUTE_FUNCTION(FN)                                                     \
+  wrapper = base::MakeRefCounted<GenericHandlerFunctionWrapper>(               \
+      base::BindRepeating(&AutomationV8Bindings::FN, base::Unretained(this))); \
+  automation_v8_router_->RouteHandlerFunction(#FN, wrapper);
   ROUTE_FUNCTION(GetChildIDAtIndex);
   ROUTE_FUNCTION(GetFocus);
   ROUTE_FUNCTION(GetHtmlAttributes);
@@ -580,7 +659,6 @@ void AutomationV8Bindings::AddV8Routes() {
   ROUTE_FUNCTION(DestroyAccessibilityTree);
   ROUTE_FUNCTION(AddTreeChangeObserver);
   ROUTE_FUNCTION(RemoveTreeChangeObserver);
-  ROUTE_FUNCTION(IsInteractPermitted);
   ROUTE_FUNCTION(GetState);
   ROUTE_FUNCTION(StartCachingAccessibilityTrees);
   ROUTE_FUNCTION(StopCachingAccessibilityTrees);
@@ -624,8 +702,7 @@ void AutomationV8Bindings::AddV8Routes() {
       "GetDocLoaded",
       [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result,
          AutomationAXTreeWrapper* tree_wrapper) {
-        result.Set(
-            v8::Boolean::New(isolate, tree_wrapper->ax_tree()->data().loaded));
+        result.Set(tree_wrapper->ax_tree()->data().loaded);
       });
   RouteTreeIDFunction(
       "GetDocLoadingProgress",
@@ -644,8 +721,7 @@ void AutomationV8Bindings::AddV8Routes() {
         if (!anchor)
           return;
 
-        result.Set(v8::Boolean::New(
-            isolate, tree_wrapper->ax_tree()->data().sel_is_backward));
+        result.Set(tree_wrapper->ax_tree()->data().sel_is_backward);
       });
   RouteTreeIDFunction(
       "GetAnchorObjectID",
@@ -881,7 +957,7 @@ void AutomationV8Bindings::AddV8Routes() {
         if (!node->GetBoolAttribute(attribute, &attr_value))
           return;
 
-        result.Set(v8::Boolean::New(isolate, attr_value));
+        result.Set(attr_value);
       });
   RouteNodeIDPlusAttributeFunction(
       "GetIntAttribute",
@@ -1025,7 +1101,7 @@ void AutomationV8Bindings::AddV8Routes() {
             bool value =
                 node->GetIntAttribute(ax::mojom::IntAttribute::kTextPosition) ==
                 static_cast<int32_t>(ax::mojom::TextPosition::kSubscript);
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetSuperscript",
@@ -1035,7 +1111,7 @@ void AutomationV8Bindings::AddV8Routes() {
             bool value =
                 node->GetIntAttribute(ax::mojom::IntAttribute::kTextPosition) ==
                 static_cast<int32_t>(ax::mojom::TextPosition::kSuperscript);
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetBold",
@@ -1043,7 +1119,7 @@ void AutomationV8Bindings::AddV8Routes() {
           [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result,
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value = node->data().HasTextStyle(ax::mojom::TextStyle::kBold);
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetItalic", base::BindRepeating([](v8::Isolate* isolate,
@@ -1051,7 +1127,7 @@ void AutomationV8Bindings::AddV8Routes() {
                                           AutomationAXTreeWrapper* tree_wrapper,
                                           AXNode* node) {
         bool value = node->data().HasTextStyle(ax::mojom::TextStyle::kItalic);
-        result.Set(v8::Boolean::New(isolate, value));
+        result.Set(value);
       }));
   RouteNodeIDFunction(
       "GetUnderline",
@@ -1060,7 +1136,7 @@ void AutomationV8Bindings::AddV8Routes() {
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value =
                 node->data().HasTextStyle(ax::mojom::TextStyle::kUnderline);
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetLineThrough",
@@ -1069,7 +1145,7 @@ void AutomationV8Bindings::AddV8Routes() {
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value =
                 node->data().HasTextStyle(ax::mojom::TextStyle::kLineThrough);
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetDetectedLanguage",
@@ -1081,49 +1157,6 @@ void AutomationV8Bindings::AddV8Routes() {
         result.Set(v8::String::NewFromUtf8(isolate, detectedLanguage.c_str())
                        .ToLocalChecked());
       }));
-
-  RouteNodeIDPlusAttributeFunction(
-      "GetLanguageAnnotationForStringAttribute",
-      [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result, AXTree* tree,
-         AXNode* node, const std::string& attribute_name) {
-        auto attr =
-            ParseAXEnum<ax::mojom::StringAttribute>(attribute_name.c_str());
-        if (attr == ax::mojom::StringAttribute::kNone) {
-          // Set result as empty array.
-          result.Set(v8::Array::New(isolate, 0));
-          return;
-        }
-        std::vector<AXLanguageSpan> language_annotation =
-            tree->language_detection_manager
-                ->GetLanguageAnnotationForStringAttribute(*node, attr);
-        const std::string& attribute_value = node->GetStringAttribute(attr);
-        // Build array.
-        v8::Local<v8::Context> context = isolate->GetCurrentContext();
-        v8::Local<v8::Array> array_result(
-            v8::Array::New(isolate, language_annotation.size()));
-        std::vector<size_t> offsets_for_adjustment(2, 0);
-        for (size_t i = 0; i < language_annotation.size(); ++i) {
-          offsets_for_adjustment[0] =
-              static_cast<size_t>(language_annotation[i].start_index);
-          offsets_for_adjustment[1] =
-              static_cast<size_t>(language_annotation[i].end_index);
-          // Convert UTF-8 offsets into UTF-16 offsets, since these objects
-          // will be used in Javascript.
-          base::UTF8ToUTF16AndAdjustOffsets(attribute_value,
-                                            &offsets_for_adjustment);
-
-          gin::DataObjectBuilder span(isolate);
-          span.Set("startIndex", static_cast<int>(offsets_for_adjustment[0]));
-          span.Set("endIndex", static_cast<int>(offsets_for_adjustment[1]));
-          span.Set("language", language_annotation[i].language);
-          span.Set("probability", language_annotation[i].probability);
-          array_result
-              ->CreateDataProperty(context, static_cast<uint32_t>(i),
-                                   span.Build())
-              .Check();
-        }
-        result.Set(array_result);
-      });
 
   RouteNodeIDFunction(
       "GetCustomActions",
@@ -1302,7 +1335,7 @@ void AutomationV8Bindings::AddV8Routes() {
           [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result,
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value = IsButton(node->GetRole());
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetIsCheckBox",
@@ -1310,7 +1343,7 @@ void AutomationV8Bindings::AddV8Routes() {
           [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result,
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value = IsCheckBox(node->GetRole());
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetIsComboBox",
@@ -1318,7 +1351,7 @@ void AutomationV8Bindings::AddV8Routes() {
           [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result,
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value = IsComboBox(node->GetRole());
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDFunction(
       "GetIsImage",
@@ -1326,7 +1359,7 @@ void AutomationV8Bindings::AddV8Routes() {
           [](v8::Isolate* isolate, v8::ReturnValue<v8::Value> result,
              AutomationAXTreeWrapper* tree_wrapper, AXNode* node) {
             bool value = IsImage(node->GetRole());
-            result.Set(v8::Boolean::New(isolate, value));
+            result.Set(value);
           }));
   RouteNodeIDPlusStringBoolFunction(
       "GetNextTextMatch",
@@ -1461,18 +1494,16 @@ void AutomationV8Bindings::AddV8Routes() {
 
 void AutomationV8Bindings::RouteTreeIDFunction(const std::string& name,
                                                TreeIDFunction callback) {
-  scoped_refptr<TreeIDWrapper> wrapper = new TreeIDWrapper(
+  auto wrapper = base::MakeRefCounted<TreeIDWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&TreeIDWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::RouteNodeIDFunction(const std::string& name,
                                                NodeIDFunction callback) {
   auto wrapper = base::MakeRefCounted<NodeIDWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&NodeIDWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::RouteNodeIDPlusAttributeFunction(
@@ -1480,8 +1511,7 @@ void AutomationV8Bindings::RouteNodeIDPlusAttributeFunction(
     NodeIDPlusAttributeFunction callback) {
   auto wrapper = base::MakeRefCounted<NodeIDPlusAttributeWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&NodeIDPlusAttributeWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::RouteNodeIDPlusRangeFunction(
@@ -1489,8 +1519,7 @@ void AutomationV8Bindings::RouteNodeIDPlusRangeFunction(
     NodeIDPlusRangeFunction callback) {
   auto wrapper = base::MakeRefCounted<NodeIDPlusRangeWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&NodeIDPlusRangeWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::RouteNodeIDPlusStringBoolFunction(
@@ -1498,8 +1527,7 @@ void AutomationV8Bindings::RouteNodeIDPlusStringBoolFunction(
     NodeIDPlusStringBoolFunction callback) {
   auto wrapper = base::MakeRefCounted<NodeIDPlusStringBoolWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&NodeIDPlusStringBoolWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::RouteNodeIDPlusDimensionsFunction(
@@ -1507,8 +1535,7 @@ void AutomationV8Bindings::RouteNodeIDPlusDimensionsFunction(
     NodeIDPlusDimensionsFunction callback) {
   auto wrapper = base::MakeRefCounted<NodeIDPlusDimensionsWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&NodeIDPlusDimensionsWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::RouteNodeIDPlusEventFunction(
@@ -1516,8 +1543,7 @@ void AutomationV8Bindings::RouteNodeIDPlusEventFunction(
     NodeIDPlusEventFunction callback) {
   auto wrapper = base::MakeRefCounted<NodeIDPlusEventWrapper>(
       automation_tree_manager_owner_, automation_v8_router_, callback);
-  automation_v8_router_->RouteHandlerFunction(
-      name, base::BindRepeating(&NodeIDPlusEventWrapper::Run, wrapper));
+  automation_v8_router_->RouteHandlerFunction(name, wrapper);
 }
 
 void AutomationV8Bindings::GetFocus(
@@ -1616,9 +1642,10 @@ void AutomationV8Bindings::GetChildIDAtIndex(
 void AutomationV8Bindings::CreateAutomationPosition(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   v8::Isolate* isolate = automation_v8_router_->GetIsolate();
-  if (args.Length() < 4 || !args[0]->IsString() /* tree id */ ||
-      !args[1]->IsInt32() /* node id */ || !args[2]->IsInt32() /* offset */ ||
-      !args[3]->IsBoolean() /* is upstream affinity */) {
+  if (args.Length() < 5 || !args[0]->IsString() /* tree id */ ||
+      !args[1]->IsInt32() /* node id */ || !args[2]->IsString() /* type */ ||
+      !args[3]->IsInt32() /* offset */ ||
+      !args[4]->IsBoolean() /* is upstream affinity */) {
     automation_v8_router_->ThrowInvalidArgumentsException();
   }
 
@@ -1637,12 +1664,14 @@ void AutomationV8Bindings::CreateAutomationPosition(
   if (!node)
     return;
 
+  AXPositionKind kind =
+      StringToAXPositionKind(*v8::String::Utf8Value(isolate, args[2]));
   int offset =
-      args[2]->Int32Value(automation_v8_router_->GetContext()).ToChecked();
+      args[3]->Int32Value(automation_v8_router_->GetContext()).ToChecked();
   bool is_upstream = args[3]->BooleanValue(isolate);
 
   gin::Handle<AutomationPosition> handle = gin::CreateHandle(
-      isolate, new AutomationPosition(*node, offset, is_upstream));
+      isolate, new AutomationPosition(*node, kind, offset, is_upstream));
   args.GetReturnValue().Set(handle.ToV8().As<v8::Object>());
 }
 
@@ -1871,7 +1900,7 @@ void AutomationV8Bindings::GetMarkers(v8::Isolate* isolate,
   const std::vector<int32_t>& marker_types =
       node->GetIntListAttribute(ax::mojom::IntListAttribute::kMarkerTypes);
 
-  std::vector<v8::Local<v8::Object>> markers;
+  v8::LocalVector<v8::Object> markers(isolate);
   for (size_t i = 0; i < marker_types.size(); ++i) {
     gin::DataObjectBuilder marker_obj(isolate);
     marker_obj.Set("startOffset", marker_starts[i]);
@@ -1895,13 +1924,6 @@ void AutomationV8Bindings::GetMarkers(v8::Isolate* isolate,
   }
 
   result.Set(gin::ConvertToV8(isolate, markers));
-}
-
-void AutomationV8Bindings::IsInteractPermitted(
-    const v8::FunctionCallbackInfo<v8::Value>& args) const {
-  bool permitted = automation_v8_router_->IsInteractPermitted();
-  args.GetReturnValue().Set(
-      v8::Boolean::New(automation_v8_router_->GetIsolate(), permitted));
 }
 
 void AutomationV8Bindings::GetState(

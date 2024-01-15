@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -48,12 +48,25 @@ class BASE_EXPORT BatteryLevelProvider {
     // Fully charged battery capacity. nullopt if `battery_count` != 1.
     absl::optional<uint64_t> full_charged_capacity;
 
+    // The voltage of the battery. Only available on MacOS. nullopt if
+    // `battery_count` != 1.
+    absl::optional<uint64_t> voltage_mv;
+
     // The unit of the battery's charge. Usually kMWh (milliwatt-hour) but can
     // be relative on Windows. nullopt if `battery_count` != 1.
     absl::optional<BatteryLevelUnit> charge_unit;
 
     // The time at which the battery state capture took place.
     base::TimeTicks capture_time;
+
+#if BUILDFLAG(IS_WIN)
+    // The granularity of the battery discharge. Always the most coarse
+    // granularity among all the reporting scales of the battery, regardless of
+    // the current capacity, in milliwatt-hours. Only available on
+    // Windows, and if a battery is present. This value is populated by the
+    // manufacturer and is not guaranteed to be available or accurate.
+    absl::optional<uint32_t> battery_discharge_granularity;
+#endif  // BUILDFLAG(IS_WIN)
   };
 
   // Creates a platform specific BatteryLevelProvider able to retrieve battery
@@ -85,8 +98,25 @@ class BASE_EXPORT BatteryLevelProvider {
     // The battery's fully charged capacity.
     uint64_t full_charged_capacity;
 
+    // The voltage of the battery. Only available on MacOS.
+    absl::optional<uint64_t> voltage_mv;
+
     // The battery's unit of charge.
     BatteryLevelUnit charge_unit;
+
+#if BUILDFLAG(IS_WIN)
+    // The granularity of the |current_capacity| value, in hundredths of a
+    // percent. Only available on Windows, and if a battery is present. This
+    // value is populated by the manufacturer and is not guaranteed to be
+    // available or accurate.
+    absl::optional<uint32_t> battery_discharge_granularity;
+
+    // The most coarse granularity among all the reporting scales of the
+    // battery, in hundredths of a percent. Only available on Windows, and if a
+    // battery is present. This value is populated by the manufacturer and is
+    // not guaranteed to be available or accurate.
+    absl::optional<uint32_t> max_battery_discharge_granularity;
+#endif  // BUILDFLAG(IS_WIN)
   };
 
   // Constructs a `BatteryState` from a list of `BatteryDetails`. The list can

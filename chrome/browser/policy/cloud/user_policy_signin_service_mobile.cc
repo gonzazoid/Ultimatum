@@ -6,16 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/remote_commands/user_remote_commands_service.h"
+#include "chrome/browser/enterprise/remote_commands/user_remote_commands_service_factory.h"
 #include "chrome/browser/enterprise/util/managed_browser_utils.h"
 #include "chrome/browser/policy/cloud/user_policy_signin_service_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -63,9 +64,15 @@ UserPolicySigninService::UserPolicySigninService(
 
 UserPolicySigninService::~UserPolicySigninService() {}
 
-void UserPolicySigninService::ShutdownUserCloudPolicyManager() {
+void UserPolicySigninService::ShutdownCloudPolicyManager() {
   CancelPendingRegistration();
-  UserPolicySigninServiceBase::ShutdownUserCloudPolicyManager();
+  auto* remote_command_service =
+      enterprise_commands::UserRemoteCommandsServiceFactory::GetForProfile(
+          profile_);
+  if (remote_command_service) {
+    remote_command_service->Shutdown();
+  }
+  UserPolicySigninServiceBase::ShutdownCloudPolicyManager();
 }
 
 void UserPolicySigninService::Shutdown() {
@@ -81,9 +88,9 @@ void UserPolicySigninService::OnPrimaryAccountChanged(
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   if (profile_manager && IsSignoutEvent(event)) {
     UpdateProfileAttributesWhenSignout(profile_, profile_manager);
-    ShutdownUserCloudPolicyManager();
+    ShutdownCloudPolicyManager();
   } else if (IsTurnOffSyncEvent(event)) {
-    ShutdownUserCloudPolicyManager();
+    ShutdownCloudPolicyManager();
   }
 }
 
@@ -100,13 +107,13 @@ void UserPolicySigninService::InitializeOnProfileReady(Profile* profile) {
   DCHECK_EQ(profile, profile_);
 
   // If using a TestingProfile with no IdentityManager or
-  // UserCloudPolicyManager, skip initialization.
+  // CloudPolicyManager, skip initialization.
   if (!policy_manager() || !identity_manager()) {
     DVLOG(1) << "Skipping initialization for tests due to missing components.";
     return;
   }
 
-  // Shutdown the UserCloudPolicyManager when the user signs out. We start
+  // Shutdown the CloudPolicyManager when the user signs out. We start
   // observing the IdentityManager here because we don't want to get signout
   // notifications until after the profile has started initializing
   // (http://crbug.com/316229).
@@ -115,7 +122,7 @@ void UserPolicySigninService::InitializeOnProfileReady(Profile* profile) {
   AccountId account_id = AccountIdFromAccountInfo(
       identity_manager()->GetPrimaryAccountInfo(consent_level()));
   if (!CanApplyPolicies(/*check_for_refresh_token=*/false)) {
-    ShutdownUserCloudPolicyManager();
+    ShutdownCloudPolicyManager();
   } else {
     InitializeForSignedInUser(account_id,
                               profile->GetDefaultStoragePartition()
@@ -131,6 +138,28 @@ bool UserPolicySigninService::CanApplyPolicies(bool check_for_refresh_token) {
 
   return (profile_can_be_managed_for_testing_ ||
           chrome::enterprise_util::ProfileCanBeManaged(profile_));
+}
+
+void UserPolicySigninService::InitializeCloudPolicyManager(
+    const AccountId& account_id,
+    std::unique_ptr<CloudPolicyClient> client) {
+  UserPolicySigninServiceBase::InitializeCloudPolicyManager(account_id,
+                                                            std::move(client));
+  // Triggers the initialization of user remote commands service.
+  auto* remote_command_service =
+      enterprise_commands::UserRemoteCommandsServiceFactory::GetForProfile(
+          profile_);
+  if (remote_command_service) {
+    remote_command_service->Init();
+  }
+}
+
+CloudPolicyClient::DeviceDMTokenCallback
+UserPolicySigninService::GetDeviceDMTokenIfAffiliatedCallback() {
+  if (device_dm_token_callback_for_testing_) {
+    return device_dm_token_callback_for_testing_;
+  }
+  return base::BindRepeating(&GetDeviceDMTokenIfAffiliated);
 }
 
 base::TimeDelta UserPolicySigninService::GetTryRegistrationDelay() {

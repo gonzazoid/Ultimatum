@@ -22,7 +22,7 @@ test("some_unittests") {
 }
 ```
 
-To add a Rust file to the test suite, simply add it to the `rs_sources`. Unlike
+To add a Rust file to the test suite, simply add it to the `sources`. Unlike
 other Rust crates, the `crate_root` is not specified, since it is generated from
 the sources list.
 
@@ -32,13 +32,35 @@ test("some_unittests") {
   sources = [
     "a_cpp_file.cc",
     "another_cpp_file.cc",
-  ]
-  rs_sources = [
     "a_rust_file.rs",
   ]
   deps = [
     "//testing/gtest",
   ]
+}
+```
+
+Transitively depending on a `rust_static_library` will include its tests
+(similarly to tests authored in C++), although in that case the
+`rust_static_library` should explicitly declare its dependency on
+`//testing/rust_gtest_interop` and set `testonly` as well as
+`is_gtest_unittests`.
+
+```gn
+rust_static_library("my_rust_lib_unittests") {
+  testonly = true
+  is_gtest_unittests = true
+  crate_root = "my_rust_lib_unittest.rs"
+  sources = [ "my_rust_lib_unittest.rs" ]
+  deps = [
+    ":my_rust_lib",
+    "//testing/rust_gtest_interop",
+  ]
+}
+
+test("some_unittests") {
+  ...
+  deps += [ ":my_rust_lib_unittests" ]
 }
 ```
 
@@ -139,84 +161,3 @@ src/
       starship_test_helper.rs
       starship_test_things.rs
 ```
-
-### Specifying a C++ TestSuite class
-
-In C++, a specific TestSuite, which subclasses `testing::Test`, can be specified
-with the `TEST_F()` macro. For example `TEST_F(SomeSubclassOfTestingTest,
-Gadgets)`. The same can be done in Rust, by specifying a Rust wrapper around a
-C++ class with the `#[gtest_suite]` macro. This macro is specified on the test
-function, and comes after the `#[gtest]` macro. The macro takes an argument
-which is the path to a Rust type that stands in for the C++ subclass of
- `::testing::Test`.
-
-To connect the C++ and Rust sides together:
-1) On the C++ side, the class must subclass `testing::Test`, just as it would
-   for the `TEST_F()` macro.
-2) Also on the C++ side, the implementation of the class (with name `ClassName`)
-   must include the use of the macro `RUST_GTEST_TEST_SUITE_FACTORY(ClassName)`,
-   which generates the factory function for Gtest.
-3) On the Rust side, the C++-wrapper type must implement the unsafe
-   `rust_gtest_interop::TestSuite` trait. It should be implemented by using the
-   `#[extern_test_suite()]` macro, with the macro receiving as input the full
-   path of the C++ class which the Rust type is wrapping. For example
-   `#[extern_test_suite("some::ClassName")]`.
-
-A full example:
-
-
-```cpp
-// C++ header file for a TestSuite class.
-namespace custom {
-
-class CustomTestSuite: public testing::Test {};
-  CustomTestSuite();
-}
-```
-
-```cpp
-// C++ implementation file for a TestSuite class.
-namespace custom {
-
-CustomTestSuite::CustomTestSuite() = default;
-
-RUST_GTEST_TEST_SUITE_FACTORY(CustomTestSuite);
-
-}
-```
-
-```rs
-// Rust wrapper around the TestSuite class.
-use rust_gtest_interop::prelude::*;
-
-// Defines the Rust ffi::CustomTestSuite type that maps to the C++ class.
-#[cxx::bridge]
-mod ffi {
-  unsafe extern "C++" {
-    include!("path/to/custom_test_suite.h")
-    #[namespace="custom"]
-    type CustomTestSuite;
-  }
-}
-// Mark the CustomTestSuite type as being a Gtest TestSuite, which means it
-// must subclass `testing::Test`.
-#[extern_test_suite("custom::CustomTestSuite")]
-unsafe impl rust_gtest_interop::TestSuite for ffi::CustomTestSuite {}
-```
-
-```rs
-// Rust unittests.
-use rust_gtest_interop::prelude::*;
-
-#[gtest(CustomTest, Gadgets)]
-#[gtest_suite(ffi::CustomTestSuite)]
-fn test(ts: Pin<&mut ffi::CustomTestSuite>) {
-  // This test uses CustomTestSuite as its TestSuite, and can access any exposed
-  // methods through its `ts` argument.
-}
-```
-
-Then the `CustomTest.Gadgets` test will run with `CustomTestSuite` as its
-TestSuite class. Since the cxx generator is used here, the rust file containing
-the `#[cxx::bridge]` must also be added to the GN `cxx_bindings` variable (in
-addition to `rs_sources`).

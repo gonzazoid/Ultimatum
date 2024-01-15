@@ -10,14 +10,15 @@
 #include "chrome/browser/safe_browsing/android/jni_headers/SafeBrowsingBridge_jni.h"
 // NOTE: This target is transitively depended on by //chrome/browser and thus
 // can't depend on it.
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
+#include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"  // nogncheck
-#include "components/password_manager/core/browser/leak_detection/leak_detection_check_impl.h"
-#include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/content/common/file_type_policies.h"
+#include "components/safe_browsing/core/browser/hashprefix_realtime/hash_realtime_utils.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
-#include "components/signin/public/identity_manager/identity_manager.h"
 
 using base::android::JavaParamRef;
 
@@ -36,7 +37,7 @@ namespace safe_browsing {
 static jint JNI_SafeBrowsingBridge_UmaValueForFile(
     JNIEnv* env,
     const base::android::JavaParamRef<jstring>& path) {
-  base::FilePath file_path(ConvertJavaStringToUTF8(env, path));
+  base::FilePath file_path(base::android::ConvertJavaStringToUTF8(env, path));
   return safe_browsing::FileTypePolicies::GetInstance()->UmaValueForFile(
       file_path);
 }
@@ -77,19 +78,19 @@ static jboolean JNI_SafeBrowsingBridge_IsSafeBrowsingManaged(JNIEnv* env) {
   return safe_browsing::IsSafeBrowsingPolicyManaged(*GetPrefService());
 }
 
-static jboolean JNI_SafeBrowsingBridge_HasAccountForLeakCheckRequest(
-    JNIEnv* env) {
-  signin::IdentityManager* identity_manager =
-      IdentityManagerFactory::GetForProfile(
-          ProfileManager::GetLastUsedProfile());
-  return password_manager::LeakDetectionCheckImpl::HasAccountForRequest(
-      identity_manager);
+static jboolean JNI_SafeBrowsingBridge_IsUnderAdvancedProtection(JNIEnv* env) {
+  Profile* profile =
+      ProfileManager::GetActiveUserProfile()->GetOriginalProfile();
+  return profile &&
+         safe_browsing::AdvancedProtectionStatusManagerFactory::GetForProfile(
+             profile)
+             ->IsUnderAdvancedProtection();
 }
 
-static jboolean JNI_SafeBrowsingBridge_IsLeakDetectionUnauthenticatedEnabled(
+static jboolean JNI_SafeBrowsingBridge_IsHashRealTimeLookupEligibleInSession(
     JNIEnv* env) {
-  return base::FeatureList::IsEnabled(
-      password_manager::features::kLeakDetectionUnauthenticated);
+  return safe_browsing::hash_realtime_utils::
+      IsHashRealTimeLookupEligibleInSession();
 }
 
 }  // namespace safe_browsing

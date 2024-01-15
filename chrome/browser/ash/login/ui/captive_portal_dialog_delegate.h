@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ui/chrome_web_modal_dialog_manager_delegate.h"
@@ -44,17 +45,7 @@ class CaptivePortalDialogDelegate
   void Close();
 
   // ui::WebDialogDelegate:
-  ui::ModalType GetDialogModalType() const override;
-  std::u16string GetDialogTitle() const override;
-  GURL GetDialogContentURL() const override;
-  void GetWebUIMessageHandlers(
-      std::vector<content::WebUIMessageHandler*>* handlers) const override;
   void GetDialogSize(gfx::Size* size) const override;
-  std::string GetDialogArgs() const override;
-  void OnDialogClosed(const std::string& json_retval) override;
-  void OnCloseContents(content::WebContents* source,
-                       bool* out_close_dialog) override;
-  bool ShouldShowDialogTitle() const override;
 
   // ChromeWebModalDialogManagerDelegate:
   web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost()
@@ -69,14 +60,17 @@ class CaptivePortalDialogDelegate
 
   base::WeakPtr<CaptivePortalDialogDelegate> GetWeakPtr();
 
-  views::Widget* widget_for_test() { return widget_; }
+  views::Widget* widget_for_test() { return widget_.get(); }
   content::WebContents* web_contents_for_test() { return web_contents_; }
 
  private:
-  views::Widget* widget_ = nullptr;
-  views::WebDialogView* view_ = nullptr;
-  views::WebDialogView* host_view_ = nullptr;
-  content::WebContents* web_contents_ = nullptr;
+  // This was changed from a `raw_ptr` to a `WeakPtr` as mitigation of
+  // b/292447218.
+  base::WeakPtr<views::Widget> widget_ = nullptr;
+
+  raw_ptr<views::WebDialogView> view_ = nullptr;
+  raw_ptr<views::WebDialogView, DanglingUntriaged> host_view_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
 
   class ModalDialogManagerCleanup;
   std::unique_ptr<ModalDialogManagerCleanup> modal_dialog_manager_cleanup_;

@@ -4,12 +4,12 @@
 
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {LanguageHelper, LanguagesBrowserProxyImpl, LanguageSettingsActionType, LanguageSettingsMetricsProxyImpl, SettingsTranslatePageElement} from 'chrome://settings/lazy_load.js';
-import {CrSettingsPrefs, loadTimeData} from 'chrome://settings/settings.js';
+import {CrSettingsPrefs} from 'chrome://settings/settings.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {FakeSettingsPrivate} from 'chrome://webui-test/fake_settings_private.js';
 import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
 
 import {FakeLanguageSettingsPrivate, getFakeLanguagePrefs} from './fake_language_settings_private.js';
-import {FakeSettingsPrivate} from './fake_settings_private.js';
 import {TestLanguagesBrowserProxy} from './test_languages_browser_proxy.js';
 import {TestLanguageSettingsMetricsProxy} from './test_languages_settings_metrics_proxy.js';
 
@@ -20,9 +20,6 @@ suite('TranslatePageMetricsBrowser', function() {
   let languageSettingsMetricsProxy: TestLanguageSettingsMetricsProxy;
 
   suiteSetup(function() {
-    loadTimeData.overrideValues({
-      enableDesktopDetailedLanguageSettings: true,
-    });
     CrSettingsPrefs.deferInitialization = true;
   });
 

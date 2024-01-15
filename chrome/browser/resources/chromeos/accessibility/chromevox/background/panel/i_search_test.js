@@ -3,14 +3,12 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for ISearch.
  */
-ChromeVoxISearchTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxISearchTest = class extends ChromeVoxE2ETest {
   /** @override */
   get runtimeDeps() {
     return ['ISearch', 'ISearchHandler'];
@@ -20,9 +18,11 @@ ChromeVoxISearchTest = class extends ChromeVoxNextE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule('ISearch', '/chromevox/background/panel/i_search.js');
-    await importModule('Cursor', '/common/cursors/cursor.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule('ISearch', '/chromevox/background/panel/i_search.js'),
+      importModule('Cursor', '/common/cursors/cursor.js'),
+    ]);
   }
 
   get linksAndHeadingsDoc() {

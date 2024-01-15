@@ -5,9 +5,9 @@
 #ifndef COMPONENTS_MIRRORING_SERVICE_VIDEO_CAPTURE_CLIENT_H_
 #define COMPONENTS_MIRRORING_SERVICE_VIDEO_CAPTURE_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -64,11 +64,14 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) VideoCaptureClient
   void OnStateChanged(media::mojom::VideoCaptureResultPtr result) override;
   void OnNewBuffer(int32_t buffer_id,
                    media::mojom::VideoBufferHandlePtr buffer_handle) override;
-  void OnBufferReady(
-      media::mojom::ReadyBufferPtr buffer,
-      std::vector<media::mojom::ReadyBufferPtr> scaled_buffers) override;
+  void OnBufferReady(media::mojom::ReadyBufferPtr buffer) override;
   void OnBufferDestroyed(int32_t buffer_id) override;
-  void OnNewCropVersion(uint32_t crop_version) override;
+  void OnFrameDropped(media::VideoCaptureFrameDropReason reason) override;
+  void OnNewSubCaptureTargetVersion(
+      uint32_t sub_capture_target_version) override;
+
+  void SwitchVideoCaptureHost(
+      mojo::PendingRemote<media::mojom::VideoCaptureHost> host);
 
  private:
   using BufferFinishedCallback = base::OnceCallback<void()>;
@@ -83,7 +86,7 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) VideoCaptureClient
                               MappingKeepAlive mapping_keep_alive);
 
   const media::VideoCaptureParams params_;
-  const mojo::Remote<media::mojom::VideoCaptureHost> video_capture_host_;
+  mojo::Remote<media::mojom::VideoCaptureHost> video_capture_host_;
 
   // Called when capturing failed to start.
   base::OnceClosure error_callback_;
@@ -113,6 +116,18 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) VideoCaptureClient
   // https://crbug.com/1206325
   std::unique_ptr<media::VideoFramePool> nv12_to_i420_pool_;
   std::vector<uint8_t> nv12_to_i420_tmp_buf_;
+
+  // Indicates whether we're in the middle of switching video capture host.
+  bool switching_video_capture_host_ = false;
+
+  // Represents the timestamp for the last frame sent to be delivered through
+  // `frame_deliver_callback_`.
+  base::TimeDelta last_timestamp_;
+
+  // When capturing stops, it gets assigned the value of the `last_timestamp_`.
+  // Added to frame timestamps when capturing restarts, since frame
+  // timestamps are expected to always increase.
+  base::TimeDelta accumulated_time_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

@@ -8,7 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -26,14 +26,17 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
-import org.chromium.base.Consumer;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chromecast.base.Controller;
 import org.chromium.chromecast.base.Observer;
 import org.chromium.chromecast.base.Scope;
+import org.chromium.chromecast.base.Unit;
 import org.chromium.chromecast.shell.CastWebContentsSurfaceHelper.MediaSessionGetter;
 import org.chromium.chromecast.shell.CastWebContentsSurfaceHelper.StartParams;
 import org.chromium.content.browser.MediaSessionImpl;
 import org.chromium.content_public.browser.WebContents;
+
+import java.util.function.Consumer;
 
 /**
  * Tests for CastWebContentsSurfaceHelper.
@@ -46,11 +49,12 @@ public class CastWebContentsSurfaceHelperTest {
     private CastWebContentsSurfaceHelper mSurfaceHelper;
     private @Mock MediaSessionGetter mMediaSessionGetter;
     private @Mock MediaSessionImpl mMediaSessionImpl;
+    private Controller<Unit> mSurfaceAvailable = new Controller<>();
 
     private static class StartParamsBuilder {
         private String mId = "0";
         private WebContents mWebContents = mock(WebContents.class);
-        private boolean mIsRemoteControlMode;
+        private boolean mShouldRequestAudioFocus;
         private boolean mIsTouchInputEnabled;
 
         public StartParamsBuilder withId(String id) {
@@ -63,8 +67,8 @@ public class CastWebContentsSurfaceHelperTest {
             return this;
         }
 
-        public StartParamsBuilder withIsRemoteControlMode(boolean isRemoteControlMode) {
-            mIsRemoteControlMode = isRemoteControlMode;
+        public StartParamsBuilder withShouldRequestAudioFocus(boolean shouldRequestAudioFocus) {
+            mShouldRequestAudioFocus = shouldRequestAudioFocus;
             return this;
         }
 
@@ -75,7 +79,7 @@ public class CastWebContentsSurfaceHelperTest {
 
         public StartParams build() {
             return new StartParams(CastWebContentsIntentUtils.getInstanceUri(mId), mWebContents,
-                    mIsRemoteControlMode, mIsTouchInputEnabled);
+                    mShouldRequestAudioFocus, mIsTouchInputEnabled);
         }
     }
 
@@ -88,7 +92,8 @@ public class CastWebContentsSurfaceHelperTest {
         MockitoAnnotations.initMocks(this);
         when(mMediaSessionGetter.get(any())).thenReturn(mMediaSessionImpl);
         when(mWebContentsView.open(any())).thenReturn(mock(Scope.class));
-        mSurfaceHelper = new CastWebContentsSurfaceHelper(mWebContentsView, mFinishCallback);
+        mSurfaceHelper = new CastWebContentsSurfaceHelper(
+                mWebContentsView, mFinishCallback, mSurfaceAvailable);
         mSurfaceHelper.setMediaSessionGetterForTesting(mMediaSessionGetter);
     }
 
@@ -101,20 +106,23 @@ public class CastWebContentsSurfaceHelperTest {
     }
 
     @Test
-    public void testRequestsAudioFocusOnNewStartParams() {
+    public void testRequestsAudioFocusWhenNewStartParamsAsk() {
         WebContents webContents = mock(WebContents.class);
-        StartParams params = new StartParamsBuilder().withWebContents(webContents).build();
+        StartParams params = new StartParamsBuilder()
+                                     .withWebContents(webContents)
+                                     .withShouldRequestAudioFocus(true)
+                                     .build();
         mSurfaceHelper.onNewStartParams(params);
         verify(mMediaSessionImpl).requestSystemAudioFocus();
     }
 
     @Test
-    public void testDoesNotTakeAudioFocusInRemoteControlMode() {
+    public void testDoesNotTakeAudioFocusWhenStartParamsAskNotTo() {
         WebContents webContents = mock(WebContents.class);
         StartParams params = new StartParamsBuilder()
                                      .withId("3")
                                      .withWebContents(webContents)
-                                     .withIsRemoteControlMode(true)
+                                     .withShouldRequestAudioFocus(false)
                                      .build();
         mSurfaceHelper.onNewStartParams(params);
         verify(mMediaSessionImpl, never()).requestSystemAudioFocus();
@@ -292,5 +300,18 @@ public class CastWebContentsSurfaceHelperTest {
         mSurfaceHelper.onNewStartParams(params);
         mSurfaceHelper.onDestroy();
         verify(scope).close();
+    }
+
+    @Test
+    public void testWindowAndroidPreSurfaceDestroy() {
+        WebContents webContents = mock(WebContents.class);
+
+        StartParams params = new StartParamsBuilder().withWebContents(webContents).build();
+        mSurfaceHelper.onNewStartParams(params);
+
+        mSurfaceAvailable.set(Unit.unit());
+        mSurfaceAvailable.reset();
+
+        verify(webContents).tearDownDialogOverlays();
     }
 }

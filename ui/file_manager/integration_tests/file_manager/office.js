@@ -63,7 +63,7 @@ async function getExecutedTask(appId, expectedCount = 1) {
   await repeatUntil(async () => {
     const executeTaskCount = await remoteCall.callRemoteTestUtil(
         'staticFakeCounter', appId, ['chrome.fileManagerPrivate.executeTask']);
-    if (executeTaskCount == expectedCount) {
+    if (executeTaskCount === expectedCount) {
       return true;
     }
     chrome.test.assertTrue(executeTaskCount < expectedCount);
@@ -88,6 +88,10 @@ testcase.openOfficeWordFile = async () => {
 
   const appId = await setupAndWaitUntilReady(
       RootPath.DRIVE, [], [ENTRIES.smallDocxHosted]);
+
+  // Disable office setup flow so the dialog doesn't open when the file is
+  // opened.
+  await sendTestMessage({name: 'setOfficeFileHandler'});
 
   // Open file.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -148,9 +152,9 @@ testcase.uploadToDriveRequiresUploadOfficeToCloudEnabled = async () => {
   // instead (QuickOffice or generic task).
   const taskDescriptor = await getExecutedTask(appId);
   chrome.test.assertFalse(
-      taskDescriptor.actionId == openDocWithDriveDescriptor().actionId);
+      taskDescriptor.actionId === openDocWithDriveDescriptor().actionId);
   chrome.test.assertFalse(
-      taskDescriptor.actionId == openDocWithDriveDescriptor().actionId);
+      taskDescriptor.actionId === openDocWithDriveDescriptor().actionId);
 
   // Remove fakes.
   const removedCount = await remoteCall.callRemoteTestUtil(
@@ -386,4 +390,21 @@ testcase.openOfficeWordFromDriveOffline = async () => {
   const removedCount = await remoteCall.callRemoteTestUtil(
       'removeAllForegroundFakes', appId, []);
   chrome.test.assertEq(1, removedCount);
+};
+
+/** Tests that the educational nudge is displayed when the preference is set. */
+testcase.officeShowNudgeGoogleDrive = async () => {
+  // Set the pref emulating that the user has moved a file.
+  await sendTestMessage({
+    name: 'setPrefOfficeFileMovedToGoogleDrive',
+    timestamp: Date.now(),
+  });
+
+  // Open the Files app.
+  const appId = await setupAndWaitUntilReady(
+      RootPath.DRIVE, [], [ENTRIES.smallDocxPinned]);
+
+  // Check that the nudge and its text is visible.
+  await remoteCall.waitNudge(
+      appId, 'Recently opened Microsoft files have moved to Google Drive');
 };

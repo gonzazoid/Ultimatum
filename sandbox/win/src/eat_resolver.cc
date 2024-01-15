@@ -4,9 +4,11 @@
 
 #include "sandbox/win/src/eat_resolver.h"
 
+#include <ntstatus.h>
 #include <stddef.h>
 
 #include "base/win/pe_image.h"
+#include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/sandbox_nt_util.h"
 
 namespace sandbox {

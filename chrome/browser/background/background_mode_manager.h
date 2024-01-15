@@ -10,7 +10,8 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -412,7 +413,8 @@ class BackgroundModeManager : public BrowserListObserver,
 
   // Reference to the ProfileAttributesStorage. It is used to update the
   // background app status of profiles when they open/close background apps.
-  raw_ptr<ProfileAttributesStorage, DanglingUntriaged> profile_storage_;
+  raw_ptr<ProfileAttributesStorage, AcrossTasksDanglingUntriaged>
+      profile_storage_;
 
   // Registrars for managing our change observers.
   base::CallbackListSubscription on_app_terminating_subscription_;

@@ -6,16 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/ash/borealis/infra/expected.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/guest_os/infra/cached_callback.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "storage/browser/file_system/external_mount_points.h"
 
@@ -34,45 +35,36 @@ class ScopedVolume {
       VmType vm_type)
       : profile_(profile),
         mount_label_(std::move(mount_label)),
-        display_name_(std::move(display_name)),
-        mount_path_(mount_info.mount_path),
-        remote_path_(std::move(remote_path)),
         vm_type_(vm_type) {
+    base::FilePath mount_path = base::FilePath(mount_info.mount_path);
     if (!storage::ExternalMountPoints::GetSystemInstance()->RegisterFileSystem(
             mount_label_, storage::kFileSystemTypeLocal,
-            storage::FileSystemMountOption(), mount_path_)) {
+            storage::FileSystemMountOption(), mount_path)) {
       // We don't revoke the filesystem on unmount and this call fails if a
       // filesystem of the same name already exists, so ignore errors.
       // TODO(crbug/1293229): This follows the logic of existing code, but we
       // can probably change it to revoke the filesystem on unmount.
     }
-    AddVolumeForProfile(profile);
-  }
-
-  // Adds the volume to the VolumeManager for `profile`. Since Incognito
-  // profiles have their own volume managers the same mount might be added to
-  // multiple profiles.
-  void AddVolumeForProfile(Profile* profile) {
-    auto* vmgr = file_manager::VolumeManager::Get(profile);
+    auto* vmgr = file_manager::VolumeManager::Get(profile_);
     if (vmgr) {
-      // vmgr may be null in unit tests.
-      vmgr->AddSftpGuestOsVolume(display_name_, mount_path_, remote_path_,
+      // vmgr is null in unit tests.
+      vmgr->AddSftpGuestOsVolume(display_name, mount_path, remote_path,
                                  vm_type_);
     }
   }
 
   ~ScopedVolume() {
     if (profile_->ShutdownStarted()) {
-      // We're shutting down, but because we're not a keyed service we don't get
-      // two-phase shutdown, we just can't call anything. Either the whole
-      // system is shutting down (in which case everything gets undone anyway)
-      // or it's just the browser (in which case it's basically the same as a
-      // browser crash which we also need to handle).
+      // We're shutting down or have shut down, but because we're not a keyed
+      // service we don't get two-phase shutdown, we just can't call anything.
+      // Either the whole system is shutting down (in which case everything
+      // gets undone anyway) or it's just the browser (in which case it's
+      // basically the same as a browser crash which we also need to handle).
       // So do nothing.
       return;
     }
 
-    auto* vmgr = file_manager::VolumeManager::Get(profile_);
+    auto* vmgr = file_manager::VolumeManager::Get(profile_.get());
     if (vmgr) {
       // vmgr is null in unit tests. Also, this calls disk_manager to unmount
       // for us (and we never unregister the filesystem) hence unmount doesn't
@@ -83,11 +75,8 @@ class ScopedVolume {
     }
   }
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   std::string mount_label_;
-  const std::string display_name_;
-  const base::FilePath mount_path_;
-  const base::FilePath remote_path_;
   const VmType vm_type_;
 };
 
@@ -115,6 +104,7 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
                                 weak_ptr_factory_.GetWeakPtr(),
                                 std::move(callback)));
   }
+
   void MountPath(RealCallback callback,
                  bool success,
                  int cid,
@@ -139,6 +129,7 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
                                    weak_ptr_factory_.GetWeakPtr(),
                                    std::move(callback), remote_path));
   }
+
   void OnMountEvent(
       RealCallback callback,
       base::FilePath remote_path,
@@ -162,7 +153,7 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
     std::move(callback).Run(RealResult(std::move(scoped_volume)));
   }
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   const std::string display_name_;
   const guest_os::GuestId container_id_;
   std::string mount_label_;
@@ -176,8 +167,7 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
   base::WeakPtrFactory<GuestOsMountProviderInner> weak_ptr_factory_{this};
 };
 
-void GuestOsMountProvider::Mount(Profile* target_profile,
-                                 base::OnceCallback<void(bool)> callback) {
+void GuestOsMountProvider::Mount(base::OnceCallback<void(bool)> callback) {
   if (!callback_) {
     callback_ = std::make_unique<GuestOsMountProviderInner>(
         profile(), DisplayName(), GuestId(), vm_type(),
@@ -185,14 +175,11 @@ void GuestOsMountProvider::Mount(Profile* target_profile,
                             weak_ptr_factory_.GetWeakPtr()));
   }
   callback_->Get(base::BindOnce(
-      [](base::OnceCallback<void(bool)> callback, Profile* target_profile,
+      [](base::OnceCallback<void(bool)> callback,
          guest_os::GuestOsMountProviderInner::Result result) {
-        if (result) {
-          result.Value()->AddVolumeForProfile(target_profile);
-        }
-        std::move(callback).Run(!!result);
+        std::move(callback).Run(result.has_value());
       },
-      std::move(callback), target_profile));
+      std::move(callback)));
 }
 
 void GuestOsMountProvider::Unmount() {

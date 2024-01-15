@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {CoverageTestRunner} from 'coverage_test_runner';
+
+import * as Coverage from 'devtools/panels/coverage/coverage.js';
+
 (async function() {
   TestRunner.addResult(`Tests the coverage list view after finishing recording in the Coverage view.\n`);
-  await TestRunner.loadLegacyModule('panels/coverage'); await TestRunner.loadTestModule('coverage_test_runner');
   await TestRunner.loadHTML(`
       <p class="class">
       </p>
@@ -23,7 +27,7 @@
   TestRunner.addResult('After second session');
   CoverageTestRunner.dumpCoverageListView();
 
-  var coverageView = Coverage.CoverageView.instance();
+  var coverageView = Coverage.CoverageView.CoverageView.instance();
   coverageView.clear();
   await CoverageTestRunner.startCoverage(false);
   await CoverageTestRunner.stopCoverage();

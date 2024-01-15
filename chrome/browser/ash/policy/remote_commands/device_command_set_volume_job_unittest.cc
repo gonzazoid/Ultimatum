@@ -6,15 +6,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
-#include "base/run_loop.h"
+#include "base/scoped_observation.h"
+#include "base/test/repeating_test_future.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/test/base/chrome_ash_test_base.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace policy {
@@ -35,8 +36,7 @@ em::RemoteCommand GenerateSetVolumeCommandProto(base::TimeDelta age_of_command,
   command_proto.set_command_id(kUniqueID);
   command_proto.set_age_of_command(age_of_command.InMilliseconds());
   std::string payload;
-  base::DictionaryValue root_dict;
-  root_dict.SetIntKey(kVolumeFieldName, volume);
+  auto root_dict = base::Value::Dict().Set(kVolumeFieldName, volume);
   base::JSONWriter::Write(root_dict, &payload);
   command_proto.set_payload(payload);
   return command_proto;
@@ -45,8 +45,7 @@ em::RemoteCommand GenerateSetVolumeCommandProto(base::TimeDelta age_of_command,
 std::unique_ptr<RemoteCommandJob> CreateSetVolumeJob(
     base::TimeTicks issued_time,
     int volume) {
-  auto job =
-      base::WrapUnique<RemoteCommandJob>(new DeviceCommandSetVolumeJob());
+  auto job = std::make_unique<DeviceCommandSetVolumeJob>();
   auto set_volume_command_proto = GenerateSetVolumeCommandProto(
       base::TimeTicks::Now() - issued_time, volume);
   EXPECT_TRUE(job->Init(base::TimeTicks::Now(), set_volume_command_proto,
@@ -55,6 +54,35 @@ std::unique_ptr<RemoteCommandJob> CreateSetVolumeJob(
   EXPECT_EQ(RemoteCommandJob::NOT_STARTED, job->status());
   return job;
 }
+
+class TestAudioObserver : public ash::CrasAudioHandler::AudioObserver {
+ public:
+  TestAudioObserver() : observation_(this) {}
+  TestAudioObserver(const TestAudioObserver&) = delete;
+  TestAudioObserver& operator=(const TestAudioObserver&) = delete;
+  ~TestAudioObserver() override = default;
+
+  void Initialize(ash::CrasAudioHandler& handler) {
+    observation_.Observe(&handler);
+  }
+
+  void Shutdown() { observation_.Reset(); }
+
+  // `ash::CrasAudioHandler::AudioObserver` implementation:
+  void OnOutputNodeVolumeChanged(uint64_t node_id, int volume) override {
+    waiter_.SetValue();
+  }
+
+  void WaitForVolumeChange() {
+    EXPECT_TRUE(waiter_.Wait()) << "Never received a volume changed event";
+  }
+
+ private:
+  base::test::TestFuture<void> waiter_;
+  base::ScopedObservation<ash::CrasAudioHandler,
+                          ash::CrasAudioHandler::AudioObserver>
+      observation_;
+};
 
 }  // namespace
 
@@ -65,57 +93,78 @@ class DeviceCommandSetVolumeTest : public ChromeAshTestBase {
       delete;
 
  protected:
-  DeviceCommandSetVolumeTest();
+  DeviceCommandSetVolumeTest() = default;
 
   // testing::Test
   void SetUp() override;
+  void TearDown() override;
 
-  base::RunLoop run_loop_;
+  void RunJob(RemoteCommandJob& job) {
+    base::test::TestFuture<void> job_finished_future;
+    EXPECT_TRUE(job.Run(base::Time::Now(), base::TimeTicks::Now(),
+                        job_finished_future.GetCallback()));
+    ASSERT_TRUE(job_finished_future.Wait()) << "Job did not finish.";
+  }
+
+  void WaitForVolumeChangeEvent() { audio_observer_.WaitForVolumeChange(); }
+
   base::TimeTicks test_start_time_;
+  TestAudioObserver audio_observer_;
 };
-
-DeviceCommandSetVolumeTest::DeviceCommandSetVolumeTest() {}
 
 void DeviceCommandSetVolumeTest::SetUp() {
   ChromeAshTestBase::SetUp();
   test_start_time_ = base::TimeTicks::Now();
+
+  // On real hardware volume change events are reported asynchronous, so
+  // ensure the test behaves similar so it can catch timing issues.
+  // issues this can cause).
+  ash::FakeCrasAudioClient::Get()->send_volume_change_events_asynchronous();
+
+  audio_observer_.Initialize(*ash::CrasAudioHandler::Get());
 }
 
-void VerifyResults(base::RunLoop* run_loop,
-                   RemoteCommandJob* job,
+void DeviceCommandSetVolumeTest::TearDown() {
+  // The TearDown() call below may destroy the CrasAudioHandler being observed,
+  // so stop observing it before that happens.
+  audio_observer_.Shutdown();
+
+  ChromeAshTestBase::TearDown();
+}
+
+void VerifyResults(const RemoteCommandJob& job,
                    int expected_volume,
                    bool expected_muted) {
-  EXPECT_EQ(RemoteCommandJob::SUCCEEDED, job->status());
-  int volume = chromeos::CrasAudioHandler::Get()->GetOutputVolumePercent();
-  bool muted = chromeos::CrasAudioHandler::Get()->IsOutputMuted();
+  EXPECT_EQ(RemoteCommandJob::SUCCEEDED, job.status());
+  int volume = ash::CrasAudioHandler::Get()->GetOutputVolumePercent();
+  bool muted = ash::CrasAudioHandler::Get()->IsOutputMuted();
   EXPECT_EQ(expected_volume, volume);
   EXPECT_EQ(expected_muted, muted);
-  run_loop->Quit();
 }
 
 TEST_F(DeviceCommandSetVolumeTest, NonMuted) {
   const int kVolume = 45;
   auto job = CreateSetVolumeJob(test_start_time_, kVolume);
-  EXPECT_TRUE(
-      job->Run(base::Time::Now(), base::TimeTicks::Now(),
-               base::BindOnce(&VerifyResults, base::Unretained(&run_loop_),
-                              base::Unretained(job.get()), kVolume, false)));
-  run_loop_.Run();
+  RunJob(*job);
+
+  WaitForVolumeChangeEvent();
+  VerifyResults(*job, kVolume,
+                /*expected_muted=*/false);
 }
 
 TEST_F(DeviceCommandSetVolumeTest, Muted) {
   const int kVolume = 0;
   auto job = CreateSetVolumeJob(test_start_time_, kVolume);
-  EXPECT_TRUE(
-      job->Run(base::Time::Now(), base::TimeTicks::Now(),
-               base::BindOnce(&VerifyResults, base::Unretained(&run_loop_),
-                              base::Unretained(job.get()), kVolume, true)));
-  run_loop_.Run();
+  RunJob(*job);
+
+  WaitForVolumeChangeEvent();
+  VerifyResults(*job, kVolume, /*expected_muted=*/true);
 }
 
 TEST_F(DeviceCommandSetVolumeTest, VolumeOutOfRange) {
   const int kVolume = 110;
-  std::unique_ptr<RemoteCommandJob> job(new DeviceCommandSetVolumeJob());
+
+  auto job = std::make_unique<DeviceCommandSetVolumeJob>();
   auto set_volume_command_proto = GenerateSetVolumeCommandProto(
       base::TimeTicks::Now() - test_start_time_, kVolume);
   EXPECT_FALSE(job->Init(base::TimeTicks::Now(), set_volume_command_proto,

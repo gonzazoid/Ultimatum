@@ -10,16 +10,16 @@
 
 #include "ash/components/arc/arc_util.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/values.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/app_mode/kiosk_cryptohome_remover.h"
 #include "chrome/browser/ash/app_mode/pref_names.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -63,27 +63,28 @@ ArcKioskAppManager::~ArcKioskAppManager() {
 const ArcKioskAppData* ArcKioskAppManager::GetAppByAccountId(
     const AccountId& account_id) {
   for (auto& app : apps_) {
-    if (app->account_id() == account_id)
+    if (app->account_id() == account_id) {
       return app.get();
+    }
   }
   return nullptr;
 }
 
-void ArcKioskAppManager::GetApps(std::vector<App>* apps) const {
-  apps->clear();
-  apps->reserve(apps_.size());
-  for (auto& app : apps_) {
-    apps->emplace_back(*app.get());
+std::vector<ArcKioskAppManager::App> ArcKioskAppManager::GetApps() const {
+  std::vector<App> apps;
+  for (const auto& app : apps_) {
+    apps.emplace_back(*app);
   }
+  return apps;
 }
 
-void ArcKioskAppManager::GetAppsForTesting(
-    std::vector<const ArcKioskAppData*>* apps) const {
-  apps->clear();
-  apps->reserve(apps_.size());
-  for (auto& app : apps_) {
-    apps->push_back(app.get());
+std::vector<const ArcKioskAppData*> ArcKioskAppManager::GetAppsForTesting()
+    const {
+  std::vector<const ArcKioskAppData*> apps;
+  for (const auto& app : apps_) {
+    apps.push_back(app.get());
   }
+  return apps;
 }
 
 void ArcKioskAppManager::UpdateNameAndIcon(const AccountId& account_id,
@@ -133,8 +134,9 @@ void ArcKioskAppManager::UpdateAppsFromPolicy() {
   // Store current apps. We will compare old and new apps to determine which
   // apps are new, and which were deleted.
   std::map<std::string, std::unique_ptr<ArcKioskAppData>> old_apps;
-  for (auto& app : apps_)
+  for (auto& app : apps_) {
     old_apps[app->app_id()] = std::move(app);
+  }
   apps_.clear();
   auto_launch_account_id_.clear();
   auto_launched_with_zero_delay_ = false;
@@ -142,12 +144,13 @@ void ArcKioskAppManager::UpdateAppsFromPolicy() {
   CrosSettings::Get()->GetString(kAccountsPrefDeviceLocalAccountAutoLoginId,
                                  &auto_login_account_id_from_settings);
 
-  // Re-populates |apps_| and reuses existing apps when possible.
+  // Re-populates `apps_` and reuses existing apps when possible.
   const std::vector<policy::DeviceLocalAccount> device_local_accounts =
       policy::GetDeviceLocalAccounts(CrosSettings::Get());
   for (auto account : device_local_accounts) {
-    if (account.type != policy::DeviceLocalAccount::TYPE_ARC_KIOSK_APP)
+    if (account.type != policy::DeviceLocalAccount::TYPE_ARC_KIOSK_APP) {
       continue;
+    }
 
     const AccountId account_id(AccountId::FromUserEmail(account.user_id));
 
@@ -175,8 +178,9 @@ void ArcKioskAppManager::UpdateAppsFromPolicy() {
     } else {
       // Use package name when display name is not specified.
       std::string name = app_info.package_name();
-      if (!app_info.display_name().empty())
+      if (!app_info.display_name().empty()) {
         name = app_info.display_name();
+      }
       apps_.push_back(std::make_unique<ArcKioskAppData>(
           app_id, app_info.package_name(), app_info.class_name(),
           app_info.action(), account_id, name));
@@ -186,8 +190,9 @@ void ArcKioskAppManager::UpdateAppsFromPolicy() {
   }
 
   std::vector<KioskAppDataBase*> old_apps_to_remove;
-  for (auto& entry : old_apps)
+  for (auto& entry : old_apps) {
     old_apps_to_remove.emplace_back(entry.second.get());
+  }
   ClearRemovedApps(old_apps_to_remove);
 
   NotifyKioskAppsChanged();

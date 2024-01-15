@@ -19,7 +19,6 @@
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom.h"
 #include "third_party/blink/public/mojom/frame/viewport_intersection_state.mojom.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
-#include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "third_party/blink/public/mojom/input/pointer_lock_result.mojom-shared.h"
 #include "ui/display/screen_infos.h"
 #include "ui/gfx/geometry/rect.h"
@@ -33,6 +32,10 @@ namespace cc {
 class RenderFrameMetadata;
 }
 
+namespace ui {
+class Cursor;
+}
+
 namespace viz {
 class SurfaceId;
 class SurfaceInfo;
@@ -43,7 +46,6 @@ class RenderFrameHostImpl;
 class RenderFrameProxyHost;
 class RenderWidgetHostViewBase;
 class RenderWidgetHostViewChildFrame;
-class WebCursor;
 
 // CrossProcessFrameConnector provides the platform view abstraction for
 // RenderWidgetHostViewChildFrame allowing RWHVChildFrame to remain ignorant
@@ -145,7 +147,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Request that the platform change the mouse cursor when the mouse is
   // positioned over this view's content.
-  void UpdateCursor(const WebCursor& cursor);
+  void UpdateCursor(const ui::Cursor& cursor);
 
   // Given a point in the current view's coordinate space, return the same
   // point transformed into the coordinate space of the top-level view's
@@ -166,8 +168,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   // for processing.
   void ForwardAckedTouchpadZoomEvent(
       const blink::WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result,
-      blink::mojom::ScrollResultDataPtr scroll_result_data);
+      blink::mojom::InputEventResultState ack_result);
 
   // A gesture scroll sequence that is not consumed by a child must be bubbled
   // to ancestors who may consume it.
@@ -253,8 +254,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   bool has_size() const { return has_size_; }
 
   void DidAckGestureEvent(const blink::WebGestureEvent& event,
-                          blink::mojom::InputEventResultState ack_result,
-                          blink::mojom::ScrollResultDataPtr scroll_result_data);
+                          blink::mojom::InputEventResultState ack_result);
 
   // Called by RenderWidgetHostViewChildFrame to update the visibility of any
   // nested child RWHVCFs inside it.
@@ -286,7 +286,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
                                     bool display_locked);
   void UpdateViewportIntersection(
       const blink::mojom::ViewportIntersectionState& intersection_state,
-      const absl::optional<blink::FrameVisualProperties>& visual_properties);
+      const std::optional<blink::FrameVisualProperties>& visual_properties);
 
   // These enums back crashed frame histograms - see MaybeLogCrash() and
   // MaybeLogShownCrash() below.  Please do not modify or remove existing enum

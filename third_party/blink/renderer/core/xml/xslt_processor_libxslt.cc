@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/xml/parser/xml_document_parser.h"
+#include "third_party/blink/renderer/core/xml/parser/xml_document_parser_scope.h"
 #include "third_party/blink/renderer/core/xml/xsl_style_sheet.h"
 #include "third_party/blink/renderer/core/xml/xslt_extensions.h"
 #include "third_party/blink/renderer/core/xml/xslt_unicode_sort.h"
@@ -65,7 +66,7 @@ void XSLTProcessor::GenericErrorFunc(void*, const char*, ...) {
   // It would be nice to do something with this error message.
 }
 
-void XSLTProcessor::ParseErrorFunc(void* user_data, xmlError* error) {
+void XSLTProcessor::ParseErrorFunc(void* user_data, const xmlError* error) {
   FrameConsole* console = static_cast<FrameConsole*>(user_data);
   if (!console)
     return;
@@ -106,6 +107,9 @@ static xmlDocPtr DocLoaderFunc(const xmlChar* uri,
 
   switch (type) {
     case XSLT_LOAD_DOCUMENT: {
+      XMLDocumentParserScope scope(
+          g_global_processor->XslStylesheet()->OwnerDocument());
+
       xsltTransformContextPtr context = (xsltTransformContextPtr)ctxt;
       xmlChar* base = xmlNodeGetBase(context->document->doc, context->node);
       KURL url(KURL(reinterpret_cast<const char*>(base)),

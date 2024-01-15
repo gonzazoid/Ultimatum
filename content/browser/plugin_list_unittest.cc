@@ -7,6 +7,7 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -29,8 +30,9 @@ bool Contains(const std::vector<WebPluginInfo>& list,
               const WebPluginInfo& plugin) {
   for (std::vector<WebPluginInfo>::const_iterator it = list.begin();
        it != list.end(); ++it) {
-    if (Equals(*it, plugin))
+    if (Equals(*it, plugin)) {
       return true;
+    }
   }
   return false;
 }
@@ -40,7 +42,8 @@ bool Contains(const std::vector<WebPluginInfo>& list,
 class PluginListTest : public testing::Test {
  public:
   PluginListTest()
-      : foo_plugin_(u"Foo PluginListTest",
+      : plugin_list_(nullptr, PluginListDeleter),
+        foo_plugin_(u"Foo PluginListTest",
                     base::FilePath(kFooPath),
                     u"1.2.3",
                     u"foo"),
@@ -48,26 +51,20 @@ class PluginListTest : public testing::Test {
   }
 
   void SetUp() override {
-    // Cannot use std::unique_ptr due to private ctor.
-    plugin_list_ = new PluginList();
+    plugin_list_.reset(new PluginList());
     plugin_list_->RegisterInternalPlugin(bar_plugin_, false);
     foo_plugin_.mime_types.emplace_back(kFooMimeType, kFooFileType,
                                         std::string());
     plugin_list_->RegisterInternalPlugin(foo_plugin_, false);
   }
 
-  void TearDown() override {
-    // Cannot use std::unique_ptr due to private dtor.
-    delete plugin_list_;
-  }
+  static void PluginListDeleter(PluginList* plugin_list) { delete plugin_list; }
 
  protected:
   // Must be first.
   BrowserTaskEnvironment task_environment_;
 
-  // Owns the PluginList but cannot be a std::unique_ptr due to private
-  // ctor/dtor.
-  PluginList* plugin_list_;
+  std::unique_ptr<PluginList, decltype(&PluginListDeleter)> plugin_list_;
   WebPluginInfo foo_plugin_;
   WebPluginInfo bar_plugin_;
 };

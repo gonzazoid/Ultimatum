@@ -29,9 +29,10 @@
 #include "third_party/blink/renderer/platform/image-decoders/segment_stream.h"
 #include "third_party/skia/include/codec/SkCodec.h"
 #include "third_party/skia/include/codec/SkCodecAnimation.h"
+#include "third_party/skia/include/codec/SkEncodedImageFormat.h"
+#include "third_party/skia/include/codec/SkGifDecoder.h"
 #include "third_party/skia/include/core/SkAlphaType.h"
 #include "third_party/skia/include/core/SkColorType.h"
-#include "third_party/skia/include/core/SkEncodedImageFormat.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 
 namespace blink {
@@ -55,7 +56,7 @@ ImageFrame::DisposalMethod ConvertDisposalMethod(
 }  // anonymous namespace
 
 GIFImageDecoder::GIFImageDecoder(AlphaOption alpha_option,
-                                 const ColorBehavior& color_behavior,
+                                 ColorBehavior color_behavior,
                                  wtf_size_t max_decoded_bytes)
     : ImageDecoder(alpha_option,
                    ImageDecoder::kDefaultBitDepth,
@@ -64,53 +65,58 @@ GIFImageDecoder::GIFImageDecoder(AlphaOption alpha_option,
 
 GIFImageDecoder::~GIFImageDecoder() = default;
 
-void GIFImageDecoder::OnSetData(SegmentReader* data) {
+String GIFImageDecoder::FilenameExtension() const {
+  return "gif";
+}
+
+const AtomicString& GIFImageDecoder::MimeType() const {
+  DEFINE_STATIC_LOCAL(const AtomicString, gif_mime_type, ("image/gif"));
+  return gif_mime_type;
+}
+
+void GIFImageDecoder::OnSetData(scoped_refptr<SegmentReader> data) {
   if (!data) {
-    if (segment_stream_)
+    if (segment_stream_) {
       segment_stream_->SetReader(nullptr);
+    }
     return;
   }
 
-  std::unique_ptr<SegmentStream> segment_stream;
-  if (!segment_stream_) {
-    segment_stream = std::make_unique<SegmentStream>();
-    segment_stream_ = segment_stream.get();
-  }
+  if (segment_stream_) {
+    DCHECK(codec_);
+    segment_stream_->SetReader(std::move(data));
+  } else {
+    DCHECK(!codec_);
 
-  segment_stream_->SetReader(data);
+    auto segment_stream = std::make_unique<SegmentStream>();
+    SegmentStream* segment_stream_ptr = segment_stream.get();
+    segment_stream->SetReader(std::move(data));
 
-  if (!codec_) {
     SkCodec::Result codec_creation_result;
-    codec_ = SkCodec::MakeFromStream(std::move(segment_stream),
-                                     &codec_creation_result, nullptr);
-
-    // SkCodec supports many codecs, but this class is only for GIF decoding.
-    if (codec_ && codec_->getEncodedFormat() != SkEncodedImageFormat::kGIF) {
-      SetFailed();
-      return;
+    codec_ =
+        SkGifDecoder::Decode(std::move(segment_stream), &codec_creation_result);
+    if (codec_) {
+      CHECK_EQ(codec_->getEncodedFormat(), SkEncodedImageFormat::kGIF);
     }
 
     switch (codec_creation_result) {
       case SkCodec::kSuccess: {
-        // SkCodec::MakeFromStream will read enough of the image to get the
-        // image size.
+        segment_stream_ = segment_stream_ptr;
+        // SkGifDecoder::Decode will read enough of the image to get the image
+        // size.
         SkImageInfo image_info = codec_->getInfo();
         SetSize(static_cast<unsigned>(image_info.width()),
                 static_cast<unsigned>(image_info.height()));
+
         return;
       }
+
       case SkCodec::kIncompleteInput:
         if (IsAllDataReceived()) {
           SetFailed();
-          return;
         }
-
-        // |segment_stream_|'s ownership is passed into MakeFromStream.
-        // It is deleted if MakeFromStream fails.
-        // If MakeFromStream fails, we set |segment_stream_| to null so
-        // we aren't pointing to reclaimed memory.
-        segment_stream_ = nullptr;
         return;
+
       default:
         SetFailed();
         return;
@@ -119,8 +125,9 @@ void GIFImageDecoder::OnSetData(SegmentReader* data) {
 }
 
 int GIFImageDecoder::RepetitionCount() const {
-  if (!codec_ || segment_stream_->IsCleared())
+  if (!codec_ || segment_stream_->IsCleared()) {
     return repetition_count_;
+  }
 
   DCHECK(!Failed());
 
@@ -158,14 +165,16 @@ int GIFImageDecoder::RepetitionCount() const {
 
 bool GIFImageDecoder::FrameIsReceivedAtIndex(wtf_size_t index) const {
   SkCodec::FrameInfo frame_info;
-  if (!codec_ || !codec_->getFrameInfo(index, &frame_info))
+  if (!codec_ || !codec_->getFrameInfo(index, &frame_info)) {
     return false;
+  }
   return frame_info.fFullyReceived;
 }
 
 base::TimeDelta GIFImageDecoder::FrameDurationAtIndex(wtf_size_t index) const {
-  if (index < frame_buffer_cache_.size())
+  if (index < frame_buffer_cache_.size()) {
     return frame_buffer_cache_[index].Duration();
+  }
   return base::TimeDelta();
 }
 
@@ -176,8 +185,9 @@ bool GIFImageDecoder::SetFailed() {
 }
 
 wtf_size_t GIFImageDecoder::ClearCacheExceptFrame(wtf_size_t index) {
-  if (frame_buffer_cache_.size() <= 1)
+  if (frame_buffer_cache_.size() <= 1) {
     return 0;
+  }
 
   // SkCodec attempts to report the earliest possible required frame. But it is
   // possible that frame has been evicted. A later frame which could also
@@ -197,8 +207,9 @@ wtf_size_t GIFImageDecoder::ClearCacheExceptFrame(wtf_size_t index) {
 }
 
 wtf_size_t GIFImageDecoder::DecodeFrameCount() {
-  if (!codec_ || segment_stream_->IsCleared())
+  if (!codec_ || segment_stream_->IsCleared()) {
     return frame_buffer_cache_.size();
+  }
 
   return codec_->getFrameCount();
 }
@@ -230,16 +241,18 @@ void GIFImageDecoder::InitializeNewFrame(wtf_size_t index) {
 }
 
 void GIFImageDecoder::Decode(wtf_size_t index) {
-  if (!codec_ || segment_stream_->IsCleared())
+  if (!codec_ || segment_stream_->IsCleared() || IsFailedFrameIndex(index)) {
     return;
+  }
 
   DCHECK(!Failed());
 
   DCHECK_LT(index, frame_buffer_cache_.size());
 
   ImageFrame& frame = frame_buffer_cache_[index];
-  if (frame.GetStatus() == ImageFrame::kFrameComplete)
+  if (frame.GetStatus() == ImageFrame::kFrameComplete) {
     return;
+  }
 
   UpdateAggressivePurging(index);
 
@@ -256,7 +269,7 @@ void GIFImageDecoder::Decode(wtf_size_t index) {
       if (previous_frame_index == kNotFound) {
         previous_frame_index = required_previous_frame_index;
         Decode(previous_frame_index);
-        if (Failed()) {
+        if (IsFailedFrameIndex(previous_frame_index)) {
           return;
         }
       }
@@ -269,7 +282,7 @@ void GIFImageDecoder::Decode(wtf_size_t index) {
       if ((!CanReusePreviousFrameBuffer(index) ||
            !frame.TakeBitmapDataIfWritable(&previous_frame)) &&
           !frame.CopyBitmapData(previous_frame)) {
-        SetFailed();
+        SetFailedFrameIndex(index);
         return;
       }
       prior_frame_ = previous_frame_index;
@@ -309,7 +322,7 @@ void GIFImageDecoder::Decode(wtf_size_t index) {
       case SkCodec::kIncompleteInput:
         return;
       default:
-        SetFailed();
+        SetFailedFrameIndex(index);
         return;
     }
     frame.SetStatus(ImageFrame::kFramePartial);
@@ -331,12 +344,12 @@ void GIFImageDecoder::Decode(wtf_size_t index) {
     case SkCodec::kIncompleteInput:
       frame.SetPixelsChanged(true);
       if (FrameIsReceivedAtIndex(index) || IsAllDataReceived()) {
-        SetFailed();
+        SetFailedFrameIndex(index);
       }
       break;
     default:
       frame.SetPixelsChanged(true);
-      SetFailed();
+      SetFailedFrameIndex(index);
       break;
   }
 }
@@ -370,8 +383,9 @@ wtf_size_t GIFImageDecoder::GetViableReferenceFrameIndex(
        i--) {
     const ImageFrame& frame = frame_buffer_cache_[i];
 
-    if (frame.GetDisposalMethod() == ImageFrame::kDisposeOverwritePrevious)
+    if (frame.GetDisposalMethod() == ImageFrame::kDisposeOverwritePrevious) {
       continue;
+    }
 
     if (frame.GetStatus() == ImageFrame::kFrameComplete) {
       return i;
@@ -379,6 +393,17 @@ wtf_size_t GIFImageDecoder::GetViableReferenceFrameIndex(
   }
 
   return kNotFound;
+}
+
+void GIFImageDecoder::SetFailedFrameIndex(wtf_size_t index) {
+  decode_failed_frames_.insert(index);
+  if (decode_failed_frames_.size() == DecodeFrameCount()) {
+    SetFailed();
+  }
+}
+
+bool GIFImageDecoder::IsFailedFrameIndex(wtf_size_t index) const {
+  return decode_failed_frames_.contains(index);
 }
 
 }  // namespace blink

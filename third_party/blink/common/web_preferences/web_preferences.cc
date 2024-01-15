@@ -88,18 +88,21 @@ WebPreferences::WebPreferences()
       should_print_backgrounds(false),
       should_clear_document_background(true),
       enable_scroll_animator(false),
-      threaded_scrolling_enabled(true),
       prefers_reduced_motion(false),
+      prefers_reduced_transparency(false),
+      inverted_colors(false),
       touch_event_feature_detection_enabled(false),
       pointer_events_max_touch_points(0),
       available_pointer_types(0),
       primary_pointer_type(blink::mojom::PointerType::kPointerNone),
       available_hover_types(0),
       primary_hover_type(blink::mojom::HoverType::kHoverNone),
+      output_device_update_ability_type(
+          blink::mojom::OutputDeviceUpdateAbilityType::kFastType),
       dont_send_key_events_to_javascript(false),
       sync_xhr_in_documents_enabled(true),
       number_of_cpu_cores(1),
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
       editing_behavior(mojom::EditingBehavior::kEditingMacBehavior),
 #elif BUILDFLAG(IS_WIN)
       editing_behavior(mojom::EditingBehavior::kEditingWindowsBehavior),
@@ -114,7 +117,7 @@ WebPreferences::WebPreferences()
 #endif
       supports_multiple_windows(true),
       viewport_enabled(false),
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
       viewport_meta_enabled(true),
       auto_zoom_focused_editable_to_legible_scale(true),
       shrinks_viewport_contents_to_fit(true),
@@ -138,7 +141,6 @@ WebPreferences::WebPreferences()
       smart_insert_delete_enabled(false),
 #endif
       spatial_navigation_enabled(false),
-      navigate_on_drag_drop(true),
       fake_no_alloc_direct_call_for_testing_enabled(false),
       v8_cache_options(blink::mojom::V8CacheOptions::kDefault),
       record_whole_document(false),
@@ -151,7 +153,7 @@ WebPreferences::WebPreferences()
       text_tracks_enabled(false),
       text_track_margin_percentage(0.0f),
       immersive_mode_enabled(false),
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE)
       double_tap_to_zoom_enabled(true),
 #else
       double_tap_to_zoom_enabled(false),
@@ -162,10 +164,11 @@ WebPreferences::WebPreferences()
 #else
       text_autosizing_enabled(true),
       font_scale_factor(1.0f),
+      font_weight_adjustment(0),
+      text_size_contrast_factor(0),
       device_scale_adjustment(1.0f),
       force_enable_zoom(false),
       support_deprecated_target_density_dpi(false),
-      use_legacy_background_size_shorthand_behavior(false),
       wide_viewport_quirk(false),
       use_wide_viewport(true),
       force_zero_layout_height(false),
@@ -184,7 +187,7 @@ WebPreferences::WebPreferences()
       scroll_top_left_interop_enabled(true),
       disable_accelerated_small_canvases(false),
 #endif  // BUILDFLAG(IS_ANDROID)
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
       default_minimum_page_scale_factor(0.25f),
       default_maximum_page_scale_factor(5.f),
 #elif BUILDFLAG(IS_MAC)
@@ -200,6 +203,8 @@ WebPreferences::WebPreferences()
       do_not_update_selection_on_mutating_selection_range(false),
       autoplay_policy(
           blink::mojom::AutoplayPolicy::kDocumentUserActivationRequired),
+      require_transient_activation_for_get_display_media(true),
+      require_transient_activation_for_show_file_or_directory_picker(true),
       low_priority_iframes_threshold(
           EffectiveConnectionType::kEffectiveConnectionUnknownType),
       picture_in_picture_enabled(true),
@@ -210,7 +215,11 @@ WebPreferences::WebPreferences()
       always_show_focus(false),
       touch_drag_drop_enabled(IsTouchDragDropEnabled()) {
   standard_font_family_map[web_pref::kCommonScript] = u"Times New Roman";
+#if BUILDFLAG(IS_MAC)
+  fixed_font_family_map[web_pref::kCommonScript] = u"Menlo";
+#else
   fixed_font_family_map[web_pref::kCommonScript] = u"Courier New";
+#endif
   serif_font_family_map[web_pref::kCommonScript] = u"Times New Roman";
   sans_serif_font_family_map[web_pref::kCommonScript] = u"Arial";
   cursive_font_family_map[web_pref::kCommonScript] = u"Script";

@@ -8,8 +8,6 @@ namespace extensions {
 
 namespace behavior_feature {
 
-const char kDoNotSync[] = "do_not_sync";
-
 const char kZoomWithoutBubble[] = "zoom_without_bubble";
 
 const char kAllowUsbDevicesPermissionInterfaceClass[] =
@@ -21,6 +19,8 @@ const char kAllowSecondaryKioskAppEnabledOnLaunch[] =
     "allow_secondary_kiosk_app_enabled_on_launch";
 
 const char kKeyPermissionsInLoginScreen[] = "key_permissions_in_login_screen";
+
+const char kImprivataExtension[] = "imprivata_extension";
 
 const char kImprivataInSessionExtension[] = "imprivata_in_session_extension";
 

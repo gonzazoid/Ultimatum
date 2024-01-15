@@ -4,7 +4,6 @@
 
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_toolbar_button_container.h"
 
-#include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -15,6 +14,7 @@
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_coordinator.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_controller.h"
@@ -56,7 +56,6 @@ base::TimeDelta WebAppToolbarButtonContainer::OriginTotalDuration() {
 }
 
 WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
-    views::Widget* widget,
     BrowserView* browser_view,
     ToolbarButtonProvider* toolbar_button_provider)
     : browser_view_(browser_view),
@@ -93,8 +92,9 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (app_controller->system_app()) {
-    AddChildView(std::make_unique<SystemAppAccessibleName>(
-        app_controller->GetAppShortName()));
+    system_app_accessible_name_ =
+        AddChildView(std::make_unique<SystemAppAccessibleName>(
+            app_controller->GetAppShortName()));
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -151,6 +151,12 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
     extensions_container_ =
         AddChildView(std::make_unique<ExtensionsToolbarContainer>(
             browser_view_->browser(), display_mode));
+    extensions_toolbar_coordinator_ =
+        std::make_unique<ExtensionsToolbarCoordinator>(
+            browser_view_->GetProfile(), extensions_container_);
+
+    extensions_container_->GetExtensionsButton()
+        ->SetAppearDisabledInInactiveWidget(true);
     extensions_container_->SetProperty(
         views::kFlexBehaviorKey,
         views::FlexSpecification(
@@ -161,11 +167,22 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
                                static_cast<int>(HTCLIENT));
   }
 
-  if (download::IsDownloadBubbleEnabled(browser_view_->browser()->profile())) {
+  if (download::IsDownloadBubbleEnabled()) {
     download_button_ = AddChildView(
         std::make_unique<DownloadToolbarButtonView>(browser_view_));
     views::SetHitTestComponent(download_button_, static_cast<int>(HTCLIENT));
+    ConfigureWebAppToolbarButton(download_button_, toolbar_button_provider_);
   }
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  if (app_controller->HasProfileMenuButton()) {
+    avatar_button_ =
+        AddChildView(std::make_unique<AvatarToolbarButton>(browser_view_));
+    avatar_button_->SetID(VIEW_ID_AVATAR_BUTTON);
+    ConfigureWebAppToolbarButton(avatar_button_, toolbar_button_provider_);
+    views::SetHitTestComponent(avatar_button_, static_cast<int>(HTCLIENT));
+  }
+#endif
 
   if (app_controller->HasTitlebarMenuButton()) {
     web_app_menu_button_ =
@@ -178,19 +195,20 @@ WebAppToolbarButtonContainer::WebAppToolbarButtonContainer(
   }
 
   browser_view_->immersive_mode_controller()->AddObserver(this);
-  scoped_widget_observation_.Observe(widget);
 }
 
 WebAppToolbarButtonContainer::~WebAppToolbarButtonContainer() {
   ImmersiveModeController* immersive_controller =
       browser_view_->immersive_mode_controller();
-  if (immersive_controller)
+  if (immersive_controller) {
     immersive_controller->RemoveObserver(this);
+  }
 }
 
 void WebAppToolbarButtonContainer::UpdateStatusIconsVisibility() {
-  if (content_settings_container_)
+  if (content_settings_container_) {
     content_settings_container_->UpdateContentSettingViewsVisibility();
+  }
   page_action_icon_controller_->UpdateAll();
 }
 
@@ -203,16 +221,11 @@ void WebAppToolbarButtonContainer::SetColors(SkColor foreground_color,
     web_app_origin_text_->SetTextColor(foreground_color_,
                                        /*show_text=*/color_changed);
   }
-  if (window_controls_overlay_toggle_button_)
-    window_controls_overlay_toggle_button_->SetColor(foreground_color_);
 
-  if (content_settings_container_)
+  if (content_settings_container_) {
     content_settings_container_->SetIconColor(foreground_color_);
-  if (extensions_container_)
-    extensions_container_->SetIconColor(foreground_color_);
+  }
   page_action_icon_controller_->SetIconColor(foreground_color_);
-  if (web_app_menu_button_)
-    web_app_menu_button_->SetColor(foreground_color_);
 }
 
 views::FlexRule WebAppToolbarButtonContainer::GetFlexRule() const {
@@ -235,8 +248,8 @@ views::FlexRule WebAppToolbarButtonContainer::GetFlexRule() const {
       base::Unretained(toolbar_button_provider_), layout->GetDefaultFlexRule());
 }
 
-void WebAppToolbarButtonContainer::DisableAnimationForTesting() {
-  g_animation_disabled_for_testing = true;
+void WebAppToolbarButtonContainer::DisableAnimationForTesting(bool disable) {
+  g_animation_disabled_for_testing = disable;
 }
 
 void WebAppToolbarButtonContainer::AddPageActionIcon(
@@ -253,8 +266,9 @@ int WebAppToolbarButtonContainer::GetPageActionIconSize() const {
 gfx::Insets WebAppToolbarButtonContainer::GetPageActionIconInsets(
     const PageActionIconView* icon_view) const {
   const int icon_size = icon_view->GetImageView()->GetPreferredSize().height();
-  if (icon_size == 0)
+  if (icon_size == 0) {
     return gfx::Insets();
+  }
 
   const int height = toolbar_button_provider_->GetToolbarButtonSize().height();
   const int inset_size = std::max(0, (height - icon_size) / 2);
@@ -269,24 +283,30 @@ bool WebAppToolbarButtonContainer::GetAnimate() const {
 }
 
 void WebAppToolbarButtonContainer::StartTitlebarAnimation() {
-  if (!GetAnimate())
+  if (!GetAnimate()) {
     return;
+  }
 
-  if (web_app_origin_text_)
+  if (web_app_origin_text_) {
+    web_app_origin_text_->SetAllowedToAnimate(true);
     web_app_origin_text_->StartFadeAnimation();
-  if (web_app_menu_button_)
+  }
+  if (web_app_menu_button_) {
     web_app_menu_button_->StartHighlightAnimation();
+  }
   icon_fade_in_delay_.Start(
       FROM_HERE, OriginTotalDuration(), this,
       &WebAppToolbarButtonContainer::FadeInContentSettingIcons);
 }
 
 void WebAppToolbarButtonContainer::FadeInContentSettingIcons() {
-  if (!GetAnimate())
+  if (!GetAnimate()) {
     return;
+  }
 
-  if (content_settings_container_)
+  if (content_settings_container_) {
     content_settings_container_->FadeIn();
+  }
 }
 
 void WebAppToolbarButtonContainer::ChildPreferredSizeChanged(
@@ -319,19 +339,13 @@ WebAppToolbarButtonContainer::GetContentSettingBubbleModelDelegate() {
   return browser_view_->browser()->content_setting_bubble_model_delegate();
 }
 
-void WebAppToolbarButtonContainer::OnContentSettingImageBubbleShown(
-    ContentSettingImageModel::ImageType type) const {
-  UMA_HISTOGRAM_ENUMERATION(
-      "HostedAppFrame.ContentSettings.ImagePressed", type,
-      ContentSettingImageModel::ImageType::NUM_IMAGE_TYPES);
-}
-
 // ImmersiveModeController::Observer:
 void WebAppToolbarButtonContainer::OnImmersiveRevealStarted() {
   // Don't wait for the fade in animation to make content setting icons
   // visible once in immersive mode.
-  if (content_settings_container_)
+  if (content_settings_container_) {
     content_settings_container_->EnsureVisible();
+  }
 }
 
 // PageActionIconView::Delegate:
@@ -342,14 +356,15 @@ WebAppToolbarButtonContainer::GetWebContentsForPageActionIconView() {
 
 void WebAppToolbarButtonContainer::AddedToWidget() {
   if (GetAnimate()) {
-    if (content_settings_container_)
+    if (content_settings_container_) {
       content_settings_container_->SetUpForFadeIn();
+    }
     animation_start_delay_.Start(
         FROM_HERE, kTitlebarAnimationDelay, this,
         &WebAppToolbarButtonContainer::StartTitlebarAnimation);
   }
 }
 
-BEGIN_METADATA(WebAppToolbarButtonContainer, views::View)
+BEGIN_METADATA(WebAppToolbarButtonContainer)
 ADD_READONLY_PROPERTY_METADATA(bool, Animate)
 END_METADATA

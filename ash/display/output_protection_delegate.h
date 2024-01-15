@@ -8,9 +8,10 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 
 #include "ash/ash_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/display/display_observer.h"
@@ -47,12 +48,15 @@ class ASH_EXPORT OutputProtectionDelegate : public aura::WindowObserver,
       const aura::WindowObserver::HierarchyChangeParams& params) override;
   void OnWindowDestroying(aura::Window* window) override;
 
-  void OnWindowMayHaveMovedToAnotherDisplay();
+  // Called when `window_` may have become a descendant of a different root
+  // window (on a different display), or a descendant of a different window
+  // (e.g. a browser window when `window_` is for a tab that has become active).
+  void OnWindowMayHaveMovedToAnotherDisplayOrWindow();
 
   bool RegisterClientIfNecessary();
 
   // Native window being observed.
-  aura::Window* window_ = nullptr;
+  raw_ptr<aura::Window> window_ = nullptr;
 
   // Display ID of the observed window.
   int64_t display_id_;
@@ -65,7 +69,7 @@ class ASH_EXPORT OutputProtectionDelegate : public aura::WindowObserver,
   struct ClientIdHolder;
   std::unique_ptr<ClientIdHolder> client_;
 
-  absl::optional<display::ScopedDisplayObserver> display_observer_{this};
+  std::optional<display::ScopedDisplayObserver> display_observer_{this};
 };
 
 }  // namespace ash

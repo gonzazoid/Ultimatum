@@ -7,8 +7,9 @@
 #include <utility>
 
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -55,7 +56,8 @@ constexpr uint32_t kProtectableConnectionTypes =
     display::DISPLAY_CONNECTION_TYPE_DISPLAYPORT;
 
 std::vector<int64_t> GetDisplayIdsFromSnapshots(
-    const std::vector<display::DisplaySnapshot*>& snapshots) {
+    const std::vector<raw_ptr<display::DisplaySnapshot, VectorExperimental>>&
+        snapshots) {
   std::vector<int64_t> display_ids;
   for (display::DisplaySnapshot* ds : snapshots) {
     display_ids.push_back(ds->display_id());
@@ -114,14 +116,15 @@ class DisplaySystemDelegateImpl
       display::ContentProtectionManager::ClientId client_id) override {
     content_protection_manager_->UnregisterClient(client_id);
   }
-  const std::vector<display::DisplaySnapshot*>& cached_displays()
-      const override {
+  const std::vector<raw_ptr<display::DisplaySnapshot, VectorExperimental>>&
+  cached_displays() const override {
     return display_configurator_->cached_displays();
   }
 
  private:
-  display::ContentProtectionManager* content_protection_manager_;  // Not owned.
-  display::DisplayConfigurator* display_configurator_;             // Not owned.
+  raw_ptr<display::ContentProtectionManager>
+      content_protection_manager_;  // Not owned.
+  raw_ptr<display::DisplayConfigurator> display_configurator_;  // Not owned.
 };
 
 // These are reported to UMA server. Do not renumber or reuse values.

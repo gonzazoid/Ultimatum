@@ -64,6 +64,8 @@ class ContactCenterInsightsExtensionManager : public KeyedService {
   // Boolean helper that decides if the component extension can be installed.
   bool CanInstallExtension() const;
 
+  static void EnsureFactoryBuilt();
+
  private:
   // Retrieves the factory instance for the
   // `ContactCenterInsightsExtensionManager`.
@@ -79,8 +81,9 @@ class ContactCenterInsightsExtensionManager : public KeyedService {
   // Removes the component extension if it is already installed.
   void RemoveExtensionIfInstalled();
 
-  const raw_ptr<::extensions::ComponentLoader> component_loader_;
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<::extensions::ComponentLoader, DanglingUntriaged>
+      component_loader_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   const std::unique_ptr<Delegate> delegate_;
   PrefChangeRegistrar registrar_;

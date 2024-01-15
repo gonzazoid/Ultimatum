@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,56 +16,103 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.AppPresence;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.FactorySpeed;
-import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
+import org.chromium.components.autofill.AutofillProfile;
 import org.chromium.components.payments.Event;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * A payment integration test for a merchant that requests contact details.
- */
+/** A payment integration test for a merchant that requests contact details. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-public class PaymentRequestContactDetailsTest implements MainActivityStartCallback {
+public class PaymentRequestContactDetailsTest {
     @Rule
     public PaymentRequestTestRule mPaymentRequestTestRule =
-            new PaymentRequestTestRule("payment_request_contact_details_test.html", this);
+            new PaymentRequestTestRule("payment_request_contact_details_test.html");
 
-    @Override
-    public void onMainActivityStarted() throws TimeoutException {
+    @Before
+    public void setUp() throws TimeoutException {
         AutofillTestHelper helper = new AutofillTestHelper();
         // The user has valid payer name, phone number and email address on disk.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA", "Los Angeles",
-                "", "90291", "", "US", "555-555-5555", "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Jon Doe")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but with a different address.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "", "Google", "999 Main St", "CA", "Los Angeles", "",
-                "90291", "", "US", "555-555-5555", "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("")
+                        .setCompanyName("Google")
+                        .setStreetAddress("999 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but without a phone number.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA", "Los Angeles",
-                "", "90291", "", "US", "" /* phone_number */, "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Jon Doe")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("") /* empty phone_number */
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but without an email.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA", "Los Angeles",
-                "", "90291", "", "US", "555-555-5555", "" /* emailAddress */, "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Jon Doe")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("") /* emailAddress */
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but without a name.
-        helper.setProfile(new AutofillProfile("" /* name */, "https://example.com", true,
-                "" /* honorific prefix */, "", "Google", "340 Main St", "CA", "Los Angeles", "",
-                "90291", "", "US", "555-555-5555", "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         mPaymentRequestTestRule.addPaymentAppFactory(
                 AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
@@ -73,10 +121,9 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Provide the existing valid payer name, phone number and email address to the merchant. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testPay() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.button_primary, mPaymentRequestTestRule.getDismissed());
         mPaymentRequestTestRule.expectResultContains(
@@ -86,15 +133,15 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Attempt to add invalid contact information and cancel the transaction. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testAddInvalidContactAndCancel() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_add_option_button, mPaymentRequestTestRule.getReadyToEdit());
-        mPaymentRequestTestRule.setTextInEditorAndWait(new String[] {"", "+++", "jane.jones"},
+        mPaymentRequestTestRule.setTextInEditorAndWait(
+                new String[] {"", "+++", "jane.jones"},
                 mPaymentRequestTestRule.getEditorTextUpdate());
         mPaymentRequestTestRule.clickInEditorAndWait(
                 R.id.editor_dialog_done_button, mPaymentRequestTestRule.getEditorValidationError());
@@ -109,10 +156,9 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Add new payer name, phone number and email address and provide that to the merchant. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testAddContactAndPay() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
@@ -133,24 +179,26 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     @Test
     @MediumTest
     @Feature({"Payments"})
-    @DisabledTest(message = "https://crbug.com/1182528")
     public void testQuickAddContactAndCloseShouldNotCrash() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
 
         // Quickly press on "add contact info" and then [X].
         int callCount = mPaymentRequestTestRule.getReadyToEdit().getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getContactDetailsSectionForTest()
-                    .findViewById(R.id.payments_add_option_button)
-                    .performClick();
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getDialogForTest()
-                    .findViewById(R.id.close_button)
-                    .performClick();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getContactDetailsSectionForTest()
+                            .findViewById(R.id.payments_add_option_button)
+                            .performClick();
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getDialogForTest()
+                            .findViewById(R.id.close_button)
+                            .performClick();
+                });
         mPaymentRequestTestRule.getReadyToEdit().waitForCallback(callCount);
 
         mPaymentRequestTestRule.clickInEditorAndWait(
@@ -164,25 +212,27 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Quickly pressing on [X] and then "add contact info" should not crash. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testQuickCloseAndAddContactShouldNotCrash() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
 
         // Quickly press on [X] and then "add contact info."
         int callCount = mPaymentRequestTestRule.getDismissed().getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getDialogForTest()
-                    .findViewById(R.id.close_button)
-                    .performClick();
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getContactDetailsSectionForTest()
-                    .findViewById(R.id.payments_add_option_button)
-                    .performClick();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getDialogForTest()
+                            .findViewById(R.id.close_button)
+                            .performClick();
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getContactDetailsSectionForTest()
+                            .findViewById(R.id.payments_add_option_button)
+                            .performClick();
+                });
         mPaymentRequestTestRule.getDismissed().waitForCallback(callCount);
 
         mPaymentRequestTestRule.expectResultContains(
@@ -192,10 +242,9 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Test that going into the editor and cancelling will leave the row checked. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testEditContactAndCancelEditorShouldKeepContactSelected() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.expectContactDetailsRowIsSelected(0);
@@ -213,10 +262,9 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Test that going into the "add" flow and cancelling will leave existing row checked. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testAddContactAndCancelEditorShouldKeepContactSelected() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.expectContactDetailsRowIsSelected(0);
@@ -234,25 +282,27 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     /** Quickly pressing on "add contact info" and then "cancel" should not crash. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testQuickAddContactAndCancelShouldNotCrash() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
 
         // Quickly press on "add contact info" and then "cancel."
         int callCount = mPaymentRequestTestRule.getReadyToEdit().getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getContactDetailsSectionForTest()
-                    .findViewById(R.id.payments_add_option_button)
-                    .performClick();
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getDialogForTest()
-                    .findViewById(R.id.button_secondary)
-                    .performClick();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getContactDetailsSectionForTest()
+                            .findViewById(R.id.payments_add_option_button)
+                            .performClick();
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getDialogForTest()
+                            .findViewById(R.id.button_secondary)
+                            .performClick();
+                });
         mPaymentRequestTestRule.getReadyToEdit().waitForCallback(callCount);
 
         mPaymentRequestTestRule.clickInEditorAndWait(
@@ -269,22 +319,25 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testQuickCancelAndAddContactShouldNotCrash() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
 
         // Quickly press on "cancel" and then "add contact info."
         int callCount = mPaymentRequestTestRule.getDismissed().getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getDialogForTest()
-                    .findViewById(R.id.button_secondary)
-                    .performClick();
-            mPaymentRequestTestRule.getPaymentRequestUI()
-                    .getContactDetailsSectionForTest()
-                    .findViewById(R.id.payments_add_option_button)
-                    .performClick();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getDialogForTest()
+                            .findViewById(R.id.button_secondary)
+                            .performClick();
+                    mPaymentRequestTestRule
+                            .getPaymentRequestUI()
+                            .getContactDetailsSectionForTest()
+                            .findViewById(R.id.payments_add_option_button)
+                            .performClick();
+                });
         mPaymentRequestTestRule.getDismissed().waitForCallback(callCount);
 
         mPaymentRequestTestRule.expectResultContains(
@@ -297,10 +350,9 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testSuggestionsDeduped() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         Assert.assertEquals(1, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
@@ -316,19 +368,28 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     @Feature({"Payments"})
     public void testPaymentRequestEventsMetric() throws TimeoutException {
         // Start and complete the Payment Request.
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.button_primary, mPaymentRequestTestRule.getDismissed());
         mPaymentRequestTestRule.expectResultContains(
                 new String[] {"Jon Doe", "+15555555555", "jon.doe@google.com"});
 
-        int expectedSample = Event.SHOWN | Event.COMPLETED | Event.PAY_CLICKED
-                | Event.HAD_INITIAL_FORM_OF_PAYMENT | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS
-                | Event.RECEIVED_INSTRUMENT_DETAILS | Event.REQUEST_PAYER_EMAIL
-                | Event.REQUEST_PAYER_PHONE | Event.REQUEST_PAYER_NAME
-                | Event.REQUEST_METHOD_BASIC_CARD | Event.REQUEST_METHOD_OTHER
-                | Event.SELECTED_OTHER | Event.AVAILABLE_METHOD_OTHER;
-        Assert.assertEquals(1,
+        int expectedSample =
+                Event.SHOWN
+                        | Event.COMPLETED
+                        | Event.PAY_CLICKED
+                        | Event.HAD_INITIAL_FORM_OF_PAYMENT
+                        | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS
+                        | Event.RECEIVED_INSTRUMENT_DETAILS
+                        | Event.REQUEST_PAYER_EMAIL
+                        | Event.REQUEST_PAYER_PHONE
+                        | Event.REQUEST_PAYER_NAME
+                        | Event.REQUEST_METHOD_BASIC_CARD
+                        | Event.REQUEST_METHOD_OTHER
+                        | Event.SELECTED_OTHER
+                        | Event.AVAILABLE_METHOD_OTHER;
+        Assert.assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PaymentRequest.Events", expectedSample));
     }
@@ -338,7 +399,7 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
      * helper text ("Cards and addresses are from...") would try to fetch the signed-in user in
      * incognito and hit a null-deference in doing so.
      *
-     * See https://crbug.com/1311352
+     * <p>See https://crbug.com/1311352
      */
     @Test
     @MediumTest
@@ -346,12 +407,16 @@ public class PaymentRequestContactDetailsTest implements MainActivityStartCallba
     public void testPaymentRequestIncognitoMode() throws TimeoutException {
         // Open the test page in an incognito window.
         mPaymentRequestTestRule.newIncognitoTabFromMenu();
-        mPaymentRequestTestRule.loadUrl(mPaymentRequestTestRule.getTestServer().getURL(
-                "/components/test/data/payments/payment_request_contact_details_test.html"));
+        mPaymentRequestTestRule.loadUrl(
+                mPaymentRequestTestRule
+                        .getTestServer()
+                        .getURL(
+                                "/components/test/data/payments/payment_request_contact_details_test.html"));
+        mPaymentRequestTestRule.setObserversAndWaitForInitialPageLoad();
 
         // Trigger the PaymentRequest, and expand the contact info section to show the text. This is
         // where the code would previously crash.
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
 

@@ -5,6 +5,7 @@
 #ifndef BASE_TEST_POWER_MONITOR_TEST_H_
 #define BASE_TEST_POWER_MONITOR_TEST_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_source.h"
 #include "base/power_monitor/power_observer.h"
@@ -53,7 +54,8 @@ class ScopedPowerMonitorTestSource {
 
  private:
   // Owned by PowerMonitor.
-  PowerMonitorTestSource* power_monitor_test_source_ = nullptr;
+  raw_ptr<PowerMonitorTestSource, DanglingUntriaged>
+      power_monitor_test_source_ = nullptr;
 };
 
 class PowerMonitorTestObserver : public PowerSuspendObserver,

@@ -7,21 +7,28 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
+#include "components/ukm/test_ukm_recorder.h"
+#include "content/browser/back_forward_cache_test_util.h"
 #include "content/browser/browsing_data/shared_storage_clear_site_data_tester.h"
+#include "content/public/browser/back_forward_cache.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
 #include "content/public/browser/browsing_data_remover.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
+#include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/browsing_data_remover_test_util.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
@@ -29,7 +36,9 @@
 #include "content/public/test/test_navigation_observer.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_content_browser_client.h"
+#include "net/base/features.h"
 #include "net/base/net_errors.h"
+#include "net/cookies/cookie_util.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -68,8 +77,9 @@ std::unique_ptr<net::test_server::HttpResponse> HandleHstsRequest(
 // Otherwise serves a Basic Auth challenge.
 std::unique_ptr<net::test_server::HttpResponse> HandleHttpAuthRequest(
     const net::test_server::HttpRequest& request) {
-  if (request.relative_url != kHttpAuthPath)
+  if (request.relative_url != kHttpAuthPath) {
     return nullptr;
+  }
 
   auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
   if (base::Contains(request.headers, "Authorization")) {
@@ -87,7 +97,9 @@ std::unique_ptr<net::test_server::HttpResponse> HandleHttpAuthRequest(
 
 namespace content {
 
-class BrowsingDataRemoverImplBrowserTest : public ContentBrowserTest {
+class BrowsingDataRemoverImplBrowserTest
+    : public ContentBrowserTest,
+      public BackForwardCacheMetricsTestMatcher {
  public:
   BrowsingDataRemoverImplBrowserTest()
       : ssl_server_(net::test_server::EmbeddedTestServer::TYPE_HTTPS) {
@@ -101,7 +113,10 @@ class BrowsingDataRemoverImplBrowserTest : public ContentBrowserTest {
     EXPECT_TRUE(ssl_server_.Start());
   }
 
-  void SetUpOnMainThread() override {}
+  void SetUpOnMainThread() override {
+    ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
+    histogram_tester_ = std::make_unique<base::HistogramTester>();
+  }
 
   void RemoveAndWait(uint64_t remove_mask) {
     content::BrowsingDataRemover* remover =
@@ -139,7 +154,7 @@ class BrowsingDataRemoverImplBrowserTest : public ContentBrowserTest {
         network::SimpleURLLoader::Create(std::move(request),
                                          TRAFFIC_ANNOTATION_FOR_TESTS);
     loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-        url_loader_factory(), loader_helper.GetCallback());
+        url_loader_factory(), loader_helper.GetCallbackDeprecated());
     loader_helper.WaitForCallback();
     ASSERT_TRUE(loader_helper.response_body());
     EXPECT_EQ(kHstsResponseBody, *loader_helper.response_body());
@@ -166,7 +181,7 @@ class BrowsingDataRemoverImplBrowserTest : public ContentBrowserTest {
                                          TRAFFIC_ANNOTATION_FOR_TESTS);
     SimpleURLLoaderTestHelper loader_helper;
     loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-        url_loader_factory(), loader_helper.GetCallback());
+        url_loader_factory(), loader_helper.GetCallbackDeprecated());
     loader_helper.WaitForCallback();
 
     // On success, HSTS was enabled for the domain.
@@ -235,8 +250,21 @@ class BrowsingDataRemoverImplBrowserTest : public ContentBrowserTest {
         ->GetNetworkContext();
   }
 
+  const ukm::TestAutoSetUkmRecorder& ukm_recorder() override {
+    return *ukm_recorder_;
+  }
+  const base::HistogramTester& histogram_tester() override {
+    return *histogram_tester_;
+  }
+
+  const net::test_server::EmbeddedTestServer& ssl_server() {
+    return ssl_server_;
+  }
+
  private:
   net::test_server::EmbeddedTestServer ssl_server_;
+  std::unique_ptr<ukm::TestAutoSetUkmRecorder> ukm_recorder_;
+  std::unique_ptr<base::HistogramTester> histogram_tester_;
 };
 
 // Verify that TransportSecurityState data is cleared for REMOVE_CACHE.
@@ -291,16 +319,337 @@ IN_PROC_BROWSER_TEST_F(BrowsingDataRemoverImplBrowserTest,
   EXPECT_FALSE(IsHttpAuthCacheSet());
 }
 
-namespace {
+IN_PROC_BROWSER_TEST_F(BrowsingDataRemoverImplBrowserTest,
+                       ClearBackForwardCacheEntries) {
+  if (!content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
+    return;
+  }
 
+  GURL url_1 = ssl_server().GetURL("/title1.html");
+  GURL url_2 = ssl_server().GetURL("/title2.html");
+
+  // 1) Navigate to url_1, then to url_2.
+  ASSERT_TRUE(NavigateToURL(shell(), url_1));
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 2) Go back, the page should be restored from BFCache.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectRestored(FROM_HERE);
+
+  // 3) Navigate to url_2 again.
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 4) Remove the browsing data with DATA_TYPE_CACHE and go back, the page
+  // should not be restored from BFCache since the BFCache entry should be
+  // flushed.
+  RemoveAndWait(BrowsingDataRemover::DATA_TYPE_CACHE);
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectNotRestored({BackForwardCacheMetrics::NotRestoredReason::kCacheFlushed},
+                    {}, {}, {}, {}, FROM_HERE);
+}
+
+IN_PROC_BROWSER_TEST_F(BrowsingDataRemoverImplBrowserTest,
+                       ClearBackForwardCacheEntriesWithOrigin_DataTypeCache) {
+  if (!content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
+    return;
+  }
+
+  GURL url_1 = ssl_server().GetURL("/title1.html");
+  GURL url_2 = ssl_server().GetURL("/title2.html");
+
+  // 1) Navigate to url_1, then to url_2.
+  ASSERT_TRUE(NavigateToURL(shell(), url_1));
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 2) Go back, the page should be restored from BFCache.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectRestored(FROM_HERE);
+
+  // 3) Navigate to url_2 again.
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 4) Remove the browsing data with DATA_TYPE_CACHE and some random domain
+  // that doesn't match the BFCached document's origin.
+  auto filter = BrowsingDataFilterBuilder::Create(
+      BrowsingDataFilterBuilder::Mode::kDelete);
+  filter->AddRegisterableDomain("foobar.com");
+  RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_CACHE,
+                          std::move(filter));
+
+  // 5) Go back, the page should be restored from BFCache.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectRestored(FROM_HERE);
+
+  // 6) Navigate to url_2 again.
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 7) Remove the browsing data with DATA_TYPE_CACHE and the domain that
+  // matches the BFCached document's origin.
+  filter = BrowsingDataFilterBuilder::Create(
+      BrowsingDataFilterBuilder::Mode::kDelete);
+  filter->AddRegisterableDomain("localhost");
+  RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_CACHE,
+                          std::move(filter));
+
+  // 8) Go back, and the page should not be restored from BFCache since the
+  // BFCache entry should be flushed.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectNotRestored({BackForwardCacheMetrics::NotRestoredReason::kCacheFlushed},
+                    {}, {}, {}, {}, FROM_HERE);
+}
+
+class BrowsingDataRemoverImplForCacheControlNoStorePageBrowserTest
+    : public BrowsingDataRemoverImplBrowserTest {
+ protected:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    feature_list_.InitAndEnableFeatureWithParameters(
+        features::kCacheControlNoStoreEnterBackForwardCache,
+        {{"level", "store-and-evict"}});
+    BrowsingDataRemoverImplBrowserTest::SetUpCommandLine(command_line);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(
+    BrowsingDataRemoverImplForCacheControlNoStorePageBrowserTest,
+    DoesClearNonCacheControlNoStoreBackForwardCacheEntries_DataTypeCookie) {
+  if (!content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
+    return;
+  }
+
+  GURL url_1 = ssl_server().GetURL("/title1.html");
+  GURL url_2 = ssl_server().GetURL("/title2.html");
+
+  // 1) Navigate to url_1, then to url_2.
+  ASSERT_TRUE(NavigateToURL(shell(), url_1));
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 2) Go back, the page should be restored from BFCache.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectRestored(FROM_HERE);
+
+  // 3) Navigate to url_2 again.
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 4) Remove the browsing data with DATA_TYPE_COOKIES and the domain that
+  // matches the BFCached document's origin.
+  auto filter = BrowsingDataFilterBuilder::Create(
+      BrowsingDataFilterBuilder::Mode::kDelete);
+  filter->AddRegisterableDomain("localhost");
+  RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_COOKIES,
+                          std::move(filter));
+
+  // 5) Go back, and the page should be restored from BFCache.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectRestored(FROM_HERE);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    BrowsingDataRemoverImplForCacheControlNoStorePageBrowserTest,
+    ClearCacheControlNoStoreBackForwardCacheEntries_DataTypeCookie) {
+  if (!content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
+    return;
+  }
+
+  GURL url_1 = ssl_server().GetURL("/echoall/nocache");
+  GURL url_2 = ssl_server().GetURL("/title1.html");
+
+  // 1) Navigate to url_1 with CCNS response, then to url_2.
+  ASSERT_TRUE(NavigateToURL(shell(), url_1));
+  ASSERT_TRUE(NavigateToURL(shell(), url_2));
+
+  // 2) Remove the browsing data with DATA_TYPE_COOKIES and the domain that
+  // matches the BFCached document's origin.
+  auto filter = BrowsingDataFilterBuilder::Create(
+      BrowsingDataFilterBuilder::Mode::kDelete);
+  filter->AddRegisterableDomain("localhost");
+  RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_COOKIES,
+                          std::move(filter));
+
+  // 3) Go back, and the page should not be restored from BFCache since the
+  // BFCache entry should be flushed.
+  ASSERT_TRUE(HistoryGoBack(shell()->web_contents()));
+  ExpectNotRestored(
+      {BackForwardCacheMetrics::NotRestoredReason::kCookieFlushed,
+       BackForwardCacheMetrics::NotRestoredReason::kCacheControlNoStore},
+      {}, {}, {}, {}, FROM_HERE);
+}
+
+class CookiesBrowsingDataRemoverImplBrowserTest
+    : public BrowsingDataRemoverImplBrowserTest {
+ public:
+  CookiesBrowsingDataRemoverImplBrowserTest() {
+    feature_list_.InitAndEnableFeature(net::features::kPartitionedCookies);
+  }
+
+  void SetUpOnMainThread() override {
+    network_context()->GetCookieManager(
+        cookie_manager_.BindNewPipeAndPassReceiver());
+  }
+
+  bool SetCookie(
+      const GURL& url,
+      const std::string& cookie_line,
+      const std::optional<net::CookiePartitionKey>& cookie_partition_key) {
+    auto cookie_obj = net::CanonicalCookie::Create(
+        url, cookie_line, base::Time::Now(), /*server_time=*/std::nullopt,
+        cookie_partition_key);
+
+    base::test::TestFuture<net::CookieAccessResult> future;
+    cookie_manager_->SetCanonicalCookie(*cookie_obj, url,
+                                        net::CookieOptions::MakeAllInclusive(),
+                                        future.GetCallback());
+    return future.Take().status.IsInclude();
+  }
+
+  net::CookieList GetAllCookies() {
+    base::test::TestFuture<const net::CookieList&> future;
+    cookie_manager_->GetAllCookies(future.GetCallback());
+    return future.Take();
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+  mojo::Remote<network::mojom::CookieManager> cookie_manager_;
+};
+
+IN_PROC_BROWSER_TEST_F(CookiesBrowsingDataRemoverImplBrowserTest,
+                       ClearsAllCookiesByDefault) {
+  // Set unpartitioned cookies.
+  ASSERT_TRUE(SetCookie(GURL("http://a.com"), "A=0", std::nullopt));
+  ASSERT_TRUE(SetCookie(GURL("https://a.com"), "B=1; secure; samesite=none",
+                        std::nullopt));
+  ASSERT_TRUE(SetCookie(GURL("https://b.com"),
+                        "C=2; secure; samesite=none; max-age=10000",
+                        std::nullopt));
+  ASSERT_EQ(3u, GetAllCookies().size());
+
+  // Set partitioned cookies.
+  ASSERT_TRUE(SetCookie(
+      GURL("https://c.com"), "A=0; secure; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://d.com"))));
+  ASSERT_TRUE(SetCookie(
+      GURL("https://c.com"), "A=0; secure; samesite=none; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("http://e.com"))));
+  ASSERT_TRUE(SetCookie(
+      GURL("https://f.com"),
+      "B=1; secure; samesite=none; max-age=10000; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://g.com"))));
+  ASSERT_TRUE(
+      SetCookie(GURL("https://f.com"), "C=2; secure; samesite=none",
+                net::CookiePartitionKey::FromURLForTesting(
+                    GURL("https://g.com"), base::UnguessableToken::Create())));
+
+  ASSERT_EQ(7u, GetAllCookies().size());
+  RemoveAndWait(BrowsingDataRemover::DATA_TYPE_COOKIES);
+  EXPECT_EQ(0u, GetAllCookies().size());
+}
+
+IN_PROC_BROWSER_TEST_F(CookiesBrowsingDataRemoverImplBrowserTest,
+                       ClearingCookiesByHostKey) {
+  // Cookies set by a.com, should be removed.
+  // partition_key: null, host_key: a.com
+  ASSERT_TRUE(SetCookie(GURL("https://a.com"), "A=0; secure; partitioned",
+                        /*cookie_partition_key=*/std::nullopt));
+  // partition_key: a.com, host_key: a.com
+  ASSERT_TRUE(SetCookie(
+      GURL("https://a.com"), "B=1; secure; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://a.com"))));
+  // partition_key: b.com, host_key: a.com
+  ASSERT_TRUE(SetCookie(
+      GURL("https://a.com"), "C=2; secure; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://b.com"))));
+
+  // Cookies set by b.com, should not be removed.
+  // partition_key: null, host_key: b.com
+  ASSERT_TRUE(SetCookie(GURL("https://b.com"), "D=3; secure; partitioned",
+                        /*cookie_partition_key=*/std::nullopt));
+  // partition_key: a.com, host_key: b.com
+  ASSERT_TRUE(SetCookie(
+      GURL("https://b.com"), "E=4; secure; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://a.com"))));
+  // partition_key: b.com, host_key: b.com
+  ASSERT_TRUE(SetCookie(
+      GURL("https://b.com"), "F=5; secure; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://b.com"))));
+
+  ASSERT_EQ(6u, GetAllCookies().size());
+
+  std::unique_ptr<BrowsingDataFilterBuilder> builder(
+      BrowsingDataFilterBuilder::Create(
+          BrowsingDataFilterBuilder::Mode::kDelete));
+  builder->AddRegisterableDomain("a.com");
+  RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_COOKIES,
+                          std::move(builder));
+  auto cookies = GetAllCookies();
+  EXPECT_EQ(3u, cookies.size());
+  EXPECT_EQ("D", cookies[0].Name());
+  EXPECT_EQ("E", cookies[1].Name());
+  EXPECT_EQ("F", cookies[2].Name());
+}
+
+// Regression test for https://crbug.com/1457600.
+IN_PROC_BROWSER_TEST_F(CookiesBrowsingDataRemoverImplBrowserTest,
+                       ClearCookiesWithEmptyFilter) {
+  ASSERT_TRUE(SetCookie(GURL("https://a.com"), "A=0; secure",
+                        /*cookie_partition_key=*/std::nullopt));
+  ASSERT_EQ(1u, GetAllCookies().size());
+
+  std::unique_ptr<BrowsingDataFilterBuilder> builder(
+      BrowsingDataFilterBuilder::Create(
+          BrowsingDataFilterBuilder::Mode::kDelete));
+  EXPECT_TRUE(builder->MatchesNothing());
+  // `builder` produces a malformed filter, so it fails a CHECK in
+  // `BrowsingDataRemoverImpl`.
+  EXPECT_DEATH_IF_SUPPORTED(
+      RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_COOKIES,
+                              std::move(builder)),
+      "");
+
+  EXPECT_EQ(1u, GetAllCookies().size());
+}
+
+IN_PROC_BROWSER_TEST_F(CookiesBrowsingDataRemoverImplBrowserTest,
+                       ClearSiteData_PartitionedStateAllowedOnly) {
+  // Unpartitioned cookie should not be removed when third-party cookie blocking
+  // applies to the request that sent Clear-Site-Data.
+  ASSERT_TRUE(SetCookie(GURL("https://a.com"), "A=0; secure;",
+                        /*cookie_partition_key=*/std::nullopt));
+  // Partitioned cookies should still be removed.
+  ASSERT_TRUE(SetCookie(
+      GURL("https://a.com"), "B=1; secure; partitioned",
+      net::CookiePartitionKey::FromURLForTesting(GURL("https://b.com"))));
+  // Nonced partitioned cookies should still be removed.
+  ASSERT_TRUE(
+      SetCookie(GURL("https://a.com"), "C=2; secure;",
+                net::CookiePartitionKey::FromURLForTesting(
+                    GURL("https://b.com"), base::UnguessableToken::Create())));
+
+  std::unique_ptr<BrowsingDataFilterBuilder> builder(
+      BrowsingDataFilterBuilder::Create(
+          BrowsingDataFilterBuilder::Mode::kDelete));
+  builder->AddRegisterableDomain("a.com");
+  builder->SetPartitionedStateAllowedOnly(true);
+
+  RemoveWithFilterAndWait(BrowsingDataRemover::DATA_TYPE_COOKIES,
+                          std::move(builder));
+
+  auto cookies = GetAllCookies();
+  EXPECT_EQ(1u, cookies.size());
+  EXPECT_EQ("A", cookies[0].Name());
+}
+
+namespace {
 // Provide BrowsingDataRemoverImplTrustTokenTest the Trust Tokens
-// feature as a mixin so that it gets set before the superclass initializes the
-// test's NetworkContext, as the NetworkContext's initialization must occur with
-// the feature enabled.
+// feature as a mixin so that it gets set before the superclass initializes
+// the test's NetworkContext, as the NetworkContext's initialization must
+// occur with the feature enabled.
 class WithTrustTokensEnabled {
  public:
   WithTrustTokensEnabled() {
-    feature_list_.InitAndEnableFeature(network::features::kTrustTokens);
+    feature_list_.InitAndEnableFeature(network::features::kPrivateStateTokens);
   }
 
  private:
@@ -378,9 +727,9 @@ class TrustTokensTester {
     // provided to HasTrustTokens(origin, _) calls in AddOrigin:
     // - If data has not been cleared,
     //     HasTrustToken(origin, https://probe.example)
-    //   is expected to fail with kResourceExhausted because |origin| is at its
-    //   number-of-associated-issuers limit, so the answerer will refuse to
-    //   answer a query for an origin it has not yet seen.
+    //   is expected to fail with kResourceExhausted because |origin| is at
+    //   its number-of-associated-issuers limit, so the answerer will refuse
+    //   to answer a query for an origin it has not yet seen.
     // - If data has been cleared, the answerer should be able to fulfill the
     //   query.
     answerer->HasTrustTokens(
@@ -404,7 +753,7 @@ class TrustTokensTester {
   }
 
  private:
-  raw_ptr<network::mojom::NetworkContext, DanglingUntriaged> network_context_;
+  raw_ptr<network::mojom::NetworkContext> network_context_ = nullptr;
 };
 
 }  // namespace

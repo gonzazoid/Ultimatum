@@ -4,7 +4,8 @@
 
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -14,11 +15,31 @@ LoginDisplayHost* LoginDisplayHost::default_host_ = nullptr;
 LoginDisplayHost::LoginDisplayHost() {
   DCHECK(default_host() == nullptr);
   default_host_ = this;
-  metrics_recorder_ = std::make_unique<MetricsRecorder>();
 }
 
 LoginDisplayHost::~LoginDisplayHost() {
+  for (auto& callback : completion_callbacks_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
+  }
+
   default_host_ = nullptr;
+}
+
+void LoginDisplayHost::Finalize(base::OnceClosure completion_callback) {
+  if (completion_callback.is_null()) {
+    return;
+  }
+
+  completion_callbacks_.push_back(std::move(completion_callback));
+}
+
+void LoginDisplayHost::StartUserAdding(base::OnceClosure completion_callback) {
+  if (completion_callback.is_null()) {
+    return;
+  }
+
+  completion_callbacks_.push_back(std::move(completion_callback));
 }
 
 void LoginDisplayHost::AddWizardCreatedObserverForTests(

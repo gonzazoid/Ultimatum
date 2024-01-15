@@ -5,10 +5,6 @@
 #import "base/notreached.h"
 #import "ios/public/provider/chrome/browser/signin/signin_error_api.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace ios {
 namespace provider {
 namespace {
@@ -37,8 +33,9 @@ NSError* CreateMissingIdentitySigninError() {
 }
 
 SigninErrorCategory GetSigninErrorCategory(NSError* error) {
-  if (![error.domain isEqual:kTestSigninErrorDomain])
+  if (![error.domain isEqualToString:kTestSigninErrorDomain]) {
     return SigninErrorCategory::kUnknownError;
+  }
 
   switch (static_cast<TestSigninErrorCode>(error.code)) {
     case TestSigninErrorCode::kUserCancelled:

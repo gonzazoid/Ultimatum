@@ -9,11 +9,10 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
-#include "net/cert/pki/parsed_certificate.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
 
-namespace net {
+namespace bssl {
 class TrustStore;
 }
 
@@ -36,7 +35,7 @@ class CastCRL {
   //
   // Output:
   // Returns true if no certificate in the chain was revoked.
-  virtual bool CheckRevocation(const net::ParsedCertificateList& trusted_chain,
+  virtual bool CheckRevocation(const bssl::ParsedCertificateList& trusted_chain,
                                const base::Time& time) const = 0;
 };
 
@@ -50,7 +49,8 @@ class CastCRL {
 // Output:
 // Returns the CRL object if success, nullptr otherwise.
 std::unique_ptr<CastCRL> ParseAndVerifyCRL(const std::string& crl_proto,
-                                           const base::Time& time);
+                                           const base::Time& time,
+                                           const bool is_fallback_crl);
 
 // This is an overloaded version of ParseAndVerifyCRL that allows
 // the input of a custom TrustStore.
@@ -60,7 +60,12 @@ std::unique_ptr<CastCRL> ParseAndVerifyCRL(const std::string& crl_proto,
 std::unique_ptr<CastCRL> ParseAndVerifyCRLUsingCustomTrustStore(
     const std::string& crl_proto,
     const base::Time& time,
-    net::TrustStore* trust_store);
+    bssl::TrustStore* trust_store,
+    const bool is_fallback_crl);
+
+std::unique_ptr<CastCRL> ParseAndVerifyFallbackCRLUsingCustomTrustStore(
+    const base::Time& time,
+    bssl::TrustStore* trust_store);
 
 }  // namespace cast_certificate
 

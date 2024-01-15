@@ -10,8 +10,8 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -54,10 +54,9 @@ void MediaControllerImpl::RegisterProfilePrefs(PrefRegistrySimple* registry) {
 bool MediaControllerImpl::AreLockScreenMediaKeysEnabled() const {
   PrefService* prefs =
       Shell::Get()->session_controller()->GetPrimaryUserPrefService();
-  DCHECK(prefs);
+  CHECK(prefs);
 
-  return base::FeatureList::IsEnabled(features::kLockScreenMediaControls) &&
-         prefs->GetBoolean(prefs::kLockScreenMediaControlsEnabled) &&
+  return prefs->GetBoolean(prefs::kLockScreenMediaControlsEnabled) &&
          !media_controls_dismissed_;
 }
 

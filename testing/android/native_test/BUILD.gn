@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 source_set("native_test_support") {
   testonly = true
@@ -15,7 +16,8 @@ source_set("native_test_support") {
     "native_test_util.h",
   ]
   deps = [
-    ":native_test_jni_headers",
+    ":native_main_runner_jni",
+    ":native_test_jni",
     "//base",
     "//base/test:test_support",
     "//base/third_party/dynamic_annotations",
@@ -29,7 +31,7 @@ source_set("native_browser_test_support") {
     "native_browser_test_support.cc",
     "native_browser_test_support.h",
   ]
-  deps = [ ":native_browser_test_jni_headers" ]
+  deps = [ ":native_test_jni" ]
   public_deps = [ "//base" ]
 }
 
@@ -43,24 +45,33 @@ source_set("native_test_native_code") {
   ]
 }
 
-android_library("native_main_runner_java") {
+generate_jni("native_main_runner_jni") {
   testonly = true
   sources = [ "java/src/org/chromium/native_test/MainRunner.java" ]
-  deps = [ "//base:jni_java" ]
+}
+
+android_library("native_main_runner_java") {
+  testonly = true
+
+  srcjar_deps = [ ":native_main_runner_jni" ]
+  sources = [ "java/src/org/chromium/native_test/MainRunner.java" ]
+  deps = [ "//third_party/jni_zero:jni_zero_java" ]
 }
 
 android_library("native_test_java") {
   testonly = true
+
   deps = [
     ":native_main_runner_java",
     "//base:base_java",
     "//base:base_java_test_support",
-    "//base:jni_java",
     "//build/android:build_java",
     "//build/android/gtest_apk:native_test_instrumentation_test_runner_java",
     "//testing/android/reporter:reporter_java",
     "//third_party/androidx:androidx_fragment_fragment_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
+  srcjar_deps = [ ":native_test_jni" ]
   sources = [
     "java/src/org/chromium/native_test/NativeBrowserTest.java",
     "java/src/org/chromium/native_test/NativeBrowserTestActivity.java",
@@ -73,15 +84,10 @@ android_library("native_test_java") {
   ]
 }
 
-generate_jni("native_test_jni_headers") {
+generate_jni("native_test_jni") {
   testonly = true
   sources = [
-    "java/src/org/chromium/native_test/MainRunner.java",
+    "java/src/org/chromium/native_test/NativeBrowserTest.java",
     "java/src/org/chromium/native_test/NativeTest.java",
   ]
-}
-
-generate_jni("native_browser_test_jni_headers") {
-  testonly = true
-  sources = [ "java/src/org/chromium/native_test/NativeBrowserTest.java" ]
 }

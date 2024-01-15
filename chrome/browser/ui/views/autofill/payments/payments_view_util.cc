@@ -6,14 +6,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "build/branding_buildflags.h"
 #include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/autofill/payments/dialog_view_ids.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -33,11 +35,13 @@
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/separator.h"
 #include "ui/views/controls/styled_label.h"
-#include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/controls/throbber.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
 
 namespace autofill {
 
@@ -48,58 +52,66 @@ namespace {
 constexpr int kGooglePayLogoWidth = 40;
 #endif
 constexpr int kIconHeight = 16;
-
 constexpr int kSeparatorHeight = 12;
 
-class IconView : public views::ImageView {
- public:
-  METADATA_HEADER(IconView);
-
-  explicit IconView(TitleWithIconAndSeparatorView::Icon icon_to_show) {
-    icon_to_show_ = icon_to_show;
-  }
-
-  // views::ImageView:
-  void OnThemeChanged() override {
-    ImageView::OnThemeChanged();
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-    gfx::ImageSkia image;
-    switch (icon_to_show_) {
-      case TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY:
-        // kGooglePayLogoIcon is square overall, despite the drawn portion being
-        // a rectangular area at the top. CreateTiledImage() will correctly clip
-        // it whereas setting the icon size would rescale it incorrectly and
-        // keep the bottom empty portion.
-        image = gfx::ImageSkiaOperations::CreateTiledImage(
-            gfx::CreateVectorIcon(
-                vector_icons::kGooglePayLogoIcon,
-                GetColorProvider()->GetColor(kColorPaymentsGooglePayLogo)),
-            /*x=*/0, /*y=*/0, kGooglePayLogoWidth, kIconHeight);
-        break;
-      case TitleWithIconAndSeparatorView::Icon::GOOGLE_G:
-        image =
-            gfx::CreateVectorIcon(vector_icons::kGoogleGLogoIcon, kIconHeight,
-                                  GetColorProvider()->GetColor(ui::kColorIcon));
-        break;
-    }
+// kGooglePayLogoIcon is square overall, despite the drawn portion being a
+// rectangular area at the top. CreateTiledImage() will correctly clip it
+// whereas setting the icon size would rescale it incorrectly and keep the
+// bottom empty portion.
+gfx::ImageSkia CreateTiledIcon(const ui::ColorProvider* provider) {
+  return gfx::ImageSkiaOperations::CreateTiledImage(
+      gfx::CreateVectorIcon(vector_icons::kGooglePayLogoIcon,
+                            provider->GetColor(kColorPaymentsGooglePayLogo)),
+      /*x=*/0, /*y=*/0, kGooglePayLogoWidth, kIconHeight);
+}
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
+std::unique_ptr<views::ImageView> CreateIconView(
+    TitleWithIconAndSeparatorView::Icon icon_to_show) {
+  ui::ImageModel model;
+  switch (icon_to_show) {
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+    case TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY:
+      model = ui::ImageModel::FromImageGenerator(
+          base::BindRepeating(&CreateTiledIcon),
+          gfx::Size(kGooglePayLogoWidth, kIconHeight));
+      break;
+    case TitleWithIconAndSeparatorView::Icon::GOOGLE_G: {
+      const gfx::VectorIcon& icon = vector_icons::kGoogleGLogoIcon;
 #else
-    gfx::ImageSkia image =
-        gfx::CreateVectorIcon(kCreditCardIcon, kIconHeight,
-                              GetColorProvider()->GetColor(ui::kColorIcon));
+    case TitleWithIconAndSeparatorView::Icon::GOOGLE_PAY:
+    case TitleWithIconAndSeparatorView::Icon::GOOGLE_G: {
+      const gfx::VectorIcon& icon = kCreditCardIcon;
 #endif
-    SetImage(image);
+      model = ui::ImageModel::FromVectorIcon(icon, ui::kColorIcon, kIconHeight);
+      break;
+    }
   }
-
- private:
-  TitleWithIconAndSeparatorView::Icon icon_to_show_;
-};
-
-BEGIN_METADATA(IconView, views::ImageView)
-END_METADATA
+  return views::Builder<views::ImageView>().SetImage(model).Build();
+}
 
 }  // namespace
 
+ui::ImageModel GetProfileAvatar(const AccountInfo& account_info) {
+  // Get the user avatar icon.
+  gfx::Image account_avatar = account_info.account_image;
+
+  // Check if the avatar is empty, and if so, replace it with a placeholder.
+  if (account_avatar.IsEmpty()) {
+    account_avatar = ui::ResourceBundle::GetSharedInstance().GetImageNamed(
+        profiles::GetPlaceholderAvatarIconResourceID());
+  }
+
+  int avatar_size = views::TypographyProvider::Get().GetLineHeight(
+      views::style::CONTEXT_DIALOG_BODY_TEXT, views::style::STYLE_SECONDARY);
+
+  return ui::ImageModel::FromImage(profiles::GetSizedAvatarIcon(
+      account_avatar, avatar_size, avatar_size, profiles::SHAPE_CIRCLE));
+}
+
+// TODO(crbug.com/1447913): Replace TableLayout with BoxLayout or FlexLayout,
+// since this view is not tabular data.
 TitleWithIconAndSeparatorView::TitleWithIconAndSeparatorView(
     const std::u16string& window_title,
     Icon icon_to_show) {
@@ -114,22 +126,21 @@ TitleWithIconAndSeparatorView::TitleWithIconAndSeparatorView(
                  views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
       .AddRows(1, views::TableLayout::kFixedSize);
 
-  auto* icon_view_ptr = AddChildView(std::make_unique<IconView>(icon_to_show));
+  auto* icon_view_ptr = AddChildView(CreateIconView(icon_to_show));
 
   auto separator = std::make_unique<views::Separator>();
   separator->SetPreferredLength(kSeparatorHeight);
   auto* separator_ptr = AddChildView(std::move(separator));
 
-  auto title_label = std::make_unique<views::Label>(
-      window_title, views::style::CONTEXT_DIALOG_TITLE);
+  auto* title_label = AddChildView(std::make_unique<views::Label>(
+      window_title, views::style::CONTEXT_DIALOG_TITLE));
   title_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   title_label->SetMultiLine(true);
-  auto* title_label_ptr = AddChildView(std::move(title_label));
 
   // Add vertical padding to the icon and the separator so they are aligned with
   // the first line of title label. This needs to be done after we create the
   // title label, so that we can use its preferred size.
-  const int title_label_height = title_label_ptr->GetPreferredSize().height();
+  const int title_label_height = title_label->GetPreferredSize().height();
   icon_view_ptr->SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR((title_label_height - kIconHeight) / 2, 0, 0, 0)));
   // TODO(crbug.com/873140): DISTANCE_RELATED_BUTTON_HORIZONTAL isn't the right
@@ -143,32 +154,77 @@ TitleWithIconAndSeparatorView::TitleWithIconAndSeparatorView(
       0, separator_horizontal_padding)));
 }
 
-TitleWithIconAndSeparatorView::~TitleWithIconAndSeparatorView() {}
+TitleWithIconAndSeparatorView::~TitleWithIconAndSeparatorView() = default;
 
 gfx::Size TitleWithIconAndSeparatorView::GetMinimumSize() const {
-  // View::GetMinimum() defaults to GridLayout::GetPreferredSize(), but that
-  // gives a larger frame width, so the dialog will become wider than it should.
+  // Default View::GetMinimumSize() will make dialogs wider than it should.
+  // To avoid that, just return 0x0.
+  //
+  // TODO(crbug.com/1447933): Replace GetMinimumSize() may generate views
+  // narrower than expected. The ideal solution should be limit the width of
+  // multi-line text views.
+  return gfx::Size(0, 0);
+}
+
+BEGIN_METADATA(TitleWithIconAndSeparatorView)
+END_METADATA
+
+TitleWithIconAfterLabelView::TitleWithIconAfterLabelView(
+    const std::u16string& window_title,
+    TitleWithIconAndSeparatorView::Icon icon_to_show) {
+  SetBetweenChildSpacing(ChromeLayoutProvider::Get()->GetDistanceMetric(
+      views::DISTANCE_RELATED_LABEL_HORIZONTAL));
+  // Align to the top instead of center in vertical direction so that we
+  // can adjust the icon location to align with the first line of title label
+  SetCrossAxisAlignment(views::BoxLayout::CrossAxisAlignment::kStart);
+
+  auto* title_label = AddChildView(std::make_unique<views::Label>(
+      window_title, views::style::CONTEXT_DIALOG_TITLE));
+  title_label->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
+  title_label->SetMultiLine(true);
+  auto* icon_view = AddChildView(CreateIconView(icon_to_show));
+
+  // Center the icon against the first line of the title label. This needs to be
+  // done after we create the title label, so that we can use its preferred
+  // size.
+  const int title_label_height = title_label->GetPreferredSize().height();
+  icon_view->SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::TLBR((title_label_height - kIconHeight) / 2, 0, 0, 0)));
+
+  // Flex |title_label| to fill up remaining space and tail align the GPay icon.
+  SetFlexForView(title_label, 1);
+}
+
+TitleWithIconAfterLabelView::~TitleWithIconAfterLabelView() = default;
+
+// TODO(crbug.com/1447933): Replace GetMinimumSize() may generate views
+// narrower than expected. The ideal solution should be limit the width of
+// multi-line text views.
+gfx::Size TitleWithIconAfterLabelView::GetMinimumSize() const {
+  // Default View::GetMinimumSize() will make dialogs wider than it should.
   // To avoid that, just return 0x0.
   return gfx::Size(0, 0);
 }
 
-BEGIN_METADATA(TitleWithIconAndSeparatorView, views::View)
+BEGIN_METADATA(TitleWithIconAfterLabelView)
 END_METADATA
 
-std::unique_ptr<views::Textfield> CreateCvcTextfield() {
-  auto textfield = std::make_unique<views::Textfield>();
-  textfield->SetPlaceholderText(
-      l10n_util::GetStringUTF16(IDS_AUTOFILL_DIALOG_PLACEHOLDER_CVC));
-  textfield->SetDefaultWidthInChars(8);
-  textfield->SetTextInputType(ui::TextInputType::TEXT_INPUT_TYPE_NUMBER);
-  return textfield;
+std::unique_ptr<views::View> CreateTitleView(
+    const std::u16string& window_title,
+    TitleWithIconAndSeparatorView::Icon icon_to_show) {
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnableMovingGPayLogoToTheRightOnDesktop)) {
+    return std::make_unique<TitleWithIconAfterLabelView>(window_title,
+                                                         icon_to_show);
+  }
+  return std::make_unique<TitleWithIconAndSeparatorView>(window_title,
+                                                         icon_to_show);
 }
 
-LegalMessageView::LegalMessageView(
-    const LegalMessageLines& legal_message_lines,
-    absl::optional<std::u16string> optional_user_email,
-    absl::optional<ui::ImageModel> optional_user_avatar,
-    LinkClickedCallback callback) {
+LegalMessageView::LegalMessageView(const LegalMessageLines& legal_message_lines,
+                                   const std::u16string& user_email,
+                                   const ui::ImageModel& user_avatar,
+                                   LinkClickedCallback callback) {
   SetOrientation(views::BoxLayout::Orientation::kVertical);
   SetBetweenChildSpacing(ChromeLayoutProvider::Get()->GetDistanceMetric(
       DISTANCE_RELATED_CONTROL_VERTICAL_SMALL));
@@ -185,13 +241,9 @@ LegalMessageView::LegalMessageView(
     }
   }
 
-  if (!optional_user_email.has_value() && !optional_user_avatar.has_value())
+  if (user_email.empty() || user_avatar.IsEmpty()) {
     return;
-
-  std::u16string user_email = optional_user_email.value();
-  ui::ImageModel user_avatar = optional_user_avatar.value();
-  if (user_email.empty() && user_avatar.IsEmpty())
-    return;
+  }
 
   // Extra child view for user identity information including the avatar and
   // the email.
@@ -217,14 +269,15 @@ LegalMessageView::LegalMessageView(
 
 LegalMessageView::~LegalMessageView() = default;
 
-BEGIN_METADATA(LegalMessageView, views::View)
+BEGIN_METADATA(LegalMessageView)
 END_METADATA
 
 PaymentsBubbleClosedReason GetPaymentsBubbleClosedReasonFromWidget(
     const views::Widget* widget) {
   DCHECK(widget);
-  if (!widget->IsClosed())
+  if (!widget->IsClosed()) {
     return PaymentsBubbleClosedReason::kUnknown;
+  }
 
   switch (widget->closed_reason()) {
     case views::Widget::ClosedReason::kUnspecified:
@@ -267,7 +320,7 @@ void ProgressBarWithTextView::AddedToWidget() {
   progress_throbber_->Start();
 }
 
-BEGIN_METADATA(ProgressBarWithTextView, views::View)
+BEGIN_METADATA(ProgressBarWithTextView)
 END_METADATA
 
 }  // namespace autofill

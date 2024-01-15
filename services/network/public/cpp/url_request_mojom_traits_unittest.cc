@@ -9,6 +9,7 @@
 #include "mojo/public/cpp/base/unguessable_token_mojom_traits.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "net/base/isolation_info.h"
+#include "net/base/load_flags.h"
 #include "net/filter/source_stream.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_source.h"
@@ -21,6 +22,7 @@
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
+#include "services/network/public/mojom/trust_token_access_observer.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_request.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -67,9 +69,11 @@ TEST(URLRequestMojomTraitsTest, Roundtrips_ResourceRequest) {
       net::ReferrerPolicy::ORIGIN_ONLY_ON_TRANSITION_CROSS_ORIGIN;
   original.headers.SetHeader("Accept", "text/xml");
   original.cors_exempt_headers.SetHeader("X-Requested-With", "ForTesting");
-  original.load_flags = 3;
+  original.load_flags = net::LOAD_VALIDATE_CACHE | net::LOAD_BYPASS_CACHE |
+                        net::LOAD_SHOULD_BYPASS_HSTS;
   original.resource_type = 2;
   original.priority = net::IDLE;
+  original.priority_incremental = net::kDefaultPriorityIncremental;
   original.cors_preflight_policy =
       mojom::CorsPreflightPolicy::kConsiderPreflight;
   original.originated_from_service_worker = false;
@@ -79,6 +83,9 @@ TEST(URLRequestMojomTraitsTest, Roundtrips_ResourceRequest) {
   original.redirect_mode = mojom::RedirectMode::kFollow;
   original.fetch_integrity = "dummy_fetch_integrity";
   original.keepalive = true;
+  original.browsing_topics = true;
+  original.ad_auction_headers = true;
+  original.shared_storage_writable_eligible = true;
   original.has_user_gesture = false;
   original.enable_load_timing = true;
   original.enable_upload_progress = false;
@@ -104,6 +111,7 @@ TEST(URLRequestMojomTraitsTest, Roundtrips_ResourceRequest) {
            net::SourceStream::SourceType::TYPE_GZIP,
            net::SourceStream::SourceType::TYPE_DEFLATE});
   original.target_ip_address_space = mojom::IPAddressSpace::kPrivate;
+  original.has_storage_access = false;
 
   original.trusted_params = ResourceRequest::TrustedParams();
   original.trusted_params->isolation_info = net::IsolationInfo::Create(
@@ -111,11 +119,12 @@ TEST(URLRequestMojomTraitsTest, Roundtrips_ResourceRequest) {
       url::Origin::Create(original.url), url::Origin::Create(original.url),
       original.site_for_cookies);
   original.trusted_params->disable_secure_dns = true;
+  original.trusted_params->allow_cookies_from_browser = true;
 
   original.trust_token_params = network::mojom::TrustTokenParams();
   original.trust_token_params->issuers.push_back(
       url::Origin::Create(GURL("https://issuer.com")));
-  original.trust_token_params->type =
+  original.trust_token_params->operation =
       mojom::TrustTokenOperationType::kRedemption;
   original.trust_token_params->include_timestamp_header = true;
   original.trust_token_params->sign_request_data =

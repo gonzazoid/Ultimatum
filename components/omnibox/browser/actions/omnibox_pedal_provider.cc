@@ -5,8 +5,8 @@
 #include "components/omnibox/browser/actions/omnibox_pedal_provider.h"
 
 #include <numeric>
+#include <unordered_map>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/i18n/case_conversion.h"
 #include "base/i18n/char_iterator.h"
 #include "base/i18n/rtl.h"
@@ -30,7 +30,7 @@ typedef base::StringTokenizerT<std::u16string, std::u16string::const_iterator>
 
 // This is a hard upper bound on the number of tokens that will be processed.
 // The current value is determined from the existing body of translation data.
-constexpr size_t kMaxTokens = 36;
+constexpr size_t kMaxTokens = 61;
 
 // All characters in this string get removed from text before processing.
 // U+200F is a RTL marker punctuation character that seems to throw
@@ -55,7 +55,7 @@ OmniboxPedalProvider::OmniboxPedalProvider(
 
   // Cull Pedals with incomplete data; they won't trigger if not enabled,
   // but there's no need to keep them in the collection (iterated frequently).
-  base::EraseIf(pedals_, [](const auto& it) {
+  std::erase_if(pedals_, [](const auto& it) {
     const OmniboxPedal::LabelStrings& labels = it.second->GetLabelStrings();
     return labels.hint.empty() || labels.suggestion_contents.empty() ||
            labels.accessibility_hint.empty() ||
@@ -64,35 +64,6 @@ OmniboxPedalProvider::OmniboxPedalProvider(
 }
 
 OmniboxPedalProvider::~OmniboxPedalProvider() {}
-
-void OmniboxPedalProvider::AddProviderInfo(ProvidersInfo* provider_info) const {
-  provider_info->push_back(metrics::OmniboxEventProto_ProviderInfo());
-  metrics::OmniboxEventProto_ProviderInfo& new_entry = provider_info->back();
-  // Note: SEARCH is used here because the suggestions that Pedals attach to are
-  // almost exclusively coming from search suggestions (they could in theory
-  // attach to others if the match content were a concept match, but in practice
-  // only search suggestions have the relevant text). PEDAL is not used because
-  // Pedals are not themselves suggestions produced by an autocomplete provider.
-  // This may change. See http://cl/327103601 for context and discussion.
-  new_entry.set_provider(metrics::OmniboxEventProto::SEARCH);
-  new_entry.set_provider_done(true);
-
-  if (field_trial_triggered_ || field_trial_triggered_in_session_) {
-    std::vector<uint32_t> field_trial_hashes;
-    OmniboxFieldTrial::GetActiveSuggestFieldTrialHashes(&field_trial_hashes);
-    for (uint32_t trial : field_trial_hashes) {
-      if (field_trial_triggered_)
-        new_entry.mutable_field_trial_triggered()->Add(trial);
-      if (field_trial_triggered_in_session_)
-        new_entry.mutable_field_trial_triggered_in_session()->Add(trial);
-    }
-  }
-}
-
-void OmniboxPedalProvider::ResetSession() {
-  field_trial_triggered_in_session_ = false;
-  field_trial_triggered_ = false;
-}
 
 size_t OmniboxPedalProvider::EstimateMemoryUsage() const {
   size_t total = 0;
@@ -139,12 +110,9 @@ OmniboxPedal* OmniboxPedalProvider::FindReadyPedalMatch(
     const AutocompleteInput& input,
     const std::u16string& match_text) {
   OmniboxPedal* const found = FindPedalMatch(match_text);
-  if (found == nullptr || !found->IsReadyToTrigger(input, client_)) {
+  if (found == nullptr || !found->IsReadyToTrigger(input, *client_)) {
     return nullptr;
   }
-
-  field_trial_triggered_ = true;
-  field_trial_triggered_in_session_ = true;
 
   return found;
 }

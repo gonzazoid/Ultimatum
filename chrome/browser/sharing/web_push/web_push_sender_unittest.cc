@@ -6,7 +6,7 @@
 
 #include "base/base64.h"
 #include "base/base64url.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "content/public/test/browser_task_environment.h"
 #include "crypto/ec_private_key.h"
@@ -119,12 +119,12 @@ TEST_F(WebPushSenderTest, SendMessageTest) {
       base::JSONReader::Read(payload_decoded);
   ASSERT_TRUE(payload_value);
   ASSERT_TRUE(payload_value->is_dict());
-  EXPECT_EQ(base::Value("https://fcm.googleapis.com"),
-            payload_value->ExtractKey("aud"));
+  EXPECT_EQ("https://fcm.googleapis.com",
+            *payload_value->GetDict().FindString("aud"));
   int secondsSinceEpoch =
       (base::Time::Now() - base::Time::UnixEpoch()).InSeconds();
-  EXPECT_EQ(base::Value(secondsSinceEpoch + 12 * 60 * 60),
-            payload_value->ExtractKey("exp"));
+  EXPECT_EQ(secondsSinceEpoch + 12 * 60 * 60,
+            payload_value->GetDict().FindInt("exp"));
 
   // Make sure public key can be base64 url decoded
   std::string public_key;

@@ -7,11 +7,9 @@
 #import <Cocoa/Cocoa.h>
 #include <stddef.h>
 
-#import "base/mac/scoped_nsobject.h"
-#import "base/mac/scoped_objc_class_swizzler.h"
+#import "base/apple/scoped_objc_class_swizzler.h"
 #include "base/memory/singleton.h"
 #include "base/time/time.h"
-#include "ui/base/cocoa/cocoa_base_utils.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
@@ -49,8 +47,8 @@ NSPoint ConvertRootPointToTarget(NSWindow* target,
   DCHECK(GetActiveGenerator());
   gfx::Point point = point_in_root;
 
-  point -= gfx::ScreenRectFromNSRect([target frame]).OffsetFromOrigin();
-  return NSMakePoint(point.x(), NSHeight([target frame]) - point.y());
+  point -= gfx::ScreenRectFromNSRect(target.frame).OffsetFromOrigin();
+  return NSMakePoint(point.x(), NSHeight(target.frame) - point.y());
 }
 
 // Inverse of ui::EventFlagsFromModifiers().
@@ -114,8 +112,7 @@ NSEventType EventTypeToNative(ui::EventType ui_event_type,
     case ui::ET_SCROLL_FLING_START:
       return NSEventTypeSwipe;
     default:
-      NOTREACHED();
-      return NSEventTypeApplicationDefined;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -140,8 +137,8 @@ void EmulateSendEvent(NSWindow* window, NSEvent* event) {
   // mouseDown, and then keep track of the NSView returned. The toolkit-views
   // RootView does this too. So, for tests, assume tracking will be done there,
   // and the NSWindow's contentView is wrapping a views::internal::RootView.
-  responder = [window contentView];
-  switch ([event type]) {
+  responder = window.contentView;
+  switch (event.type) {
     case NSEventTypeLeftMouseDown:
       [responder mouseDown:event];
       break;
@@ -178,20 +175,17 @@ void EmulateSendEvent(NSWindow* window, NSEvent* event) {
       [responder scrollWheel:event];
       break;
     case NSEventTypeMouseEntered:
+      [responder mouseEntered:event];
+      break;
     case NSEventTypeMouseExited:
-      // With the assumptions in NSEventTypeMouseMoved, it doesn't make sense
-      // for the generator to handle entered/exited separately. It's the
-      // responsibility of views::internal::RootView to convert the moved events
-      // into entered and exited events for the individual views.
-      NOTREACHED();
+      [responder mouseExited:event];
       break;
     case NSEventTypeSwipe:
       // NSEventTypeSwipe events can't be generated using public interfaces on
       // NSEvent, so this will need to be handled at a higher level.
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
     default:
-      NOTREACHED();
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -213,11 +207,23 @@ NSEvent* CreateMouseEventInWindow(NSWindow* window,
   NSPoint point = ConvertRootPointToTarget(window, point_in_root);
   NSUInteger modifiers = 0;
   NSEventType type = EventTypeToNative(event_type, flags, &modifiers);
+  if (event_type == ui::ET_MOUSE_ENTERED || event_type == ui::ET_MOUSE_EXITED) {
+    return
+        [NSEvent enterExitEventWithType:type
+                               location:point
+                          modifierFlags:modifiers
+                              timestamp:ui::EventTimeStampToSeconds(time_stamp)
+                           windowNumber:window.windowNumber
+                                context:nil
+                            eventNumber:0
+                         trackingNumber:0
+                               userData:nil];
+  }
   return [NSEvent mouseEventWithType:type
                             location:point
                        modifierFlags:modifiers
                            timestamp:ui::EventTimeStampToSeconds(time_stamp)
-                        windowNumber:[window windowNumber]
+                        windowNumber:window.windowNumber
                              context:nil
                          eventNumber:0
                           clickCount:click_count
@@ -259,7 +265,7 @@ class EventGeneratorDelegateMac : public ui::EventTarget,
     return swizzle_current_event_->InvokeOriginal<NSEvent*>(receiver, selector);
   }
 
-  NSWindow* target_window() { return target_window_.get(); }
+  NSWindow* target_window() { return target_window_; }
   ui::test::EventGenerator* owner() { return owner_; }
 
   // Overridden from ui::EventTarget:
@@ -301,10 +307,7 @@ class EventGeneratorDelegateMac : public ui::EventTarget,
     return this;
   }
   void SetTargetWindow(gfx::NativeWindow target_window) override {
-    // Retain the NSWindow (note it can be nil). This matches Cocoa's tendency
-    // to have autoreleased objects, or objects still in the event queue, that
-    // reference the NSWindow.
-    target_window_.reset([target_window.GetNativeNSWindow() retain]);
+    target_window_ = target_window.GetNativeNSWindow();
   }
   ui::EventSource* GetEventSource(ui::EventTarget* target) override {
     return this;
@@ -331,11 +334,11 @@ class EventGeneratorDelegateMac : public ui::EventTarget,
   static EventGeneratorDelegateMac* instance_;
 
   raw_ptr<ui::test::EventGenerator> owner_;
-  base::scoped_nsobject<NSWindow> target_window_;
-  std::unique_ptr<base::mac::ScopedObjCClassSwizzler> swizzle_pressed_;
-  std::unique_ptr<base::mac::ScopedObjCClassSwizzler> swizzle_location_;
-  std::unique_ptr<base::mac::ScopedObjCClassSwizzler> swizzle_current_event_;
-  base::scoped_nsobject<NSMenu> fake_menu_;
+  NSWindow* __strong target_window_;
+  std::unique_ptr<base::apple::ScopedObjCClassSwizzler> swizzle_pressed_;
+  std::unique_ptr<base::apple::ScopedObjCClassSwizzler> swizzle_location_;
+  std::unique_ptr<base::apple::ScopedObjCClassSwizzler> swizzle_current_event_;
+  NSMenu* __strong fake_menu_;
 
   // Mac always sends trackpad scroll events between begin/end phase event
   // markers. If |in_trackpad_scroll| is false, a phase begin event is sent
@@ -359,7 +362,7 @@ EventGeneratorDelegateMac::EventGeneratorDelegateMac(
   SetTargetHandler(this);
   // Install a fake "edit" menu. This is normally provided by Chrome's
   // MainMenu.xib, but src/ui shouldn't depend on that.
-  fake_menu_.reset([[NSMenu alloc] initWithTitle:@"Edit"]);
+  fake_menu_ = [[NSMenu alloc] initWithTitle:@"Edit"];
   struct {
     NSString* title;
     SEL action;
@@ -397,18 +400,18 @@ EventGeneratorDelegateMac::EventGeneratorDelegateMac(
   // to find a target starting at the first responder of the key window. Since
   // non-interactive tests have no key window, that won't work. So set (or
   // clear) the target explicitly on all menu items.
-  [[fake_menu_ itemArray]
+  [fake_menu_.itemArray
       makeObjectsPerformSelector:@selector(setTarget:)
                       withObject:[target_window.GetNativeNSWindow()
                                      firstResponder]];
 
   if (owner_) {
-    swizzle_pressed_ = std::make_unique<base::mac::ScopedObjCClassSwizzler>(
+    swizzle_pressed_ = std::make_unique<base::apple::ScopedObjCClassSwizzler>(
         [NSEvent class], [NSEventDonor class], @selector(pressedMouseButtons));
-    swizzle_location_ = std::make_unique<base::mac::ScopedObjCClassSwizzler>(
+    swizzle_location_ = std::make_unique<base::apple::ScopedObjCClassSwizzler>(
         [NSEvent class], [NSEventDonor class], @selector(mouseLocation));
     swizzle_current_event_ =
-        std::make_unique<base::mac::ScopedObjCClassSwizzler>(
+        std::make_unique<base::apple::ScopedObjCClassSwizzler>(
             [NSApplication class], [NSApplicationDonor class],
             @selector(currentEvent));
   }
@@ -461,11 +464,12 @@ void EventGeneratorDelegateMac::OnKeyEvent(ui::KeyEvent* event) {
     case Target::WINDOW:
       // -[NSApp sendEvent:] sends -performKeyEquivalent: if Command or Control
       // modifiers are pressed. Emulate that behavior.
-      if ([ns_event type] == NSEventTypeKeyDown &&
-          ([ns_event modifierFlags] &
+      if (ns_event.type == NSEventTypeKeyDown &&
+          (ns_event.modifierFlags &
            (NSEventModifierFlagControl | NSEventModifierFlagCommand)) &&
-          [target_window_ performKeyEquivalent:ns_event])
+          [target_window_ performKeyEquivalent:ns_event]) {
         break;  // Handled by performKeyEquivalent:.
+      }
 
       [target_window_ sendEvent:ns_event];
       break;
@@ -479,7 +483,7 @@ void EventGeneratorDelegateMac::OnKeyEvent(ui::KeyEvent* event) {
 }
 
 void EventGeneratorDelegateMac::OnTouchEvent(ui::TouchEvent* event) {
-  NOTREACHED() << "Touchscreen events not supported on Chrome Mac.";
+  NOTREACHED_NORETURN() << "Touchscreen events not supported on Chrome Mac.";
 }
 
 void EventGeneratorDelegateMac::OnScrollEvent(ui::ScrollEvent* event) {
@@ -611,8 +615,7 @@ ui::test::EventGenerator* GetActiveGenerator() {
 
 }  // namespace
 
-namespace views {
-namespace test {
+namespace views::test {
 
 std::unique_ptr<ui::test::EventGeneratorDelegate>
 CreateEventGeneratorDelegateMac(ui::test::EventGenerator* owner,
@@ -621,8 +624,7 @@ CreateEventGeneratorDelegateMac(ui::test::EventGenerator* owner,
   return std::make_unique<EventGeneratorDelegateMac>(owner, root_window,
                                                      target_window);
 }
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 @implementation NSEventDonor
 
@@ -655,7 +657,7 @@ CreateEventGeneratorDelegateMac(ui::test::EventGenerator* owner,
   gfx::Point point_in_root = generator->current_screen_location();
   NSWindow* window = EventGeneratorDelegateMac::instance()->target_window();
   NSPoint point_in_window = ConvertRootPointToTarget(window, point_in_root);
-  return ui::ConvertPointFromWindowToScreen(window, point_in_window);
+  return [window convertPointToScreen:point_in_window];
 }
 
 @end

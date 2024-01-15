@@ -21,14 +21,7 @@ namespace ash {
   E_CPONLY(kColorAshShieldAndBase90) \
   E_CPONLY(kColorAshShieldAndBase95) \
   E_CPONLY(kColorAshShieldAndBaseOpaque) \
-  E_CPONLY(kColorAshShieldAndBase20Light) \
-  E_CPONLY(kColorAshShieldAndBase40Light) \
-  E_CPONLY(kColorAshShieldAndBase60Light) \
   E_CPONLY(kColorAshShieldAndBase80Light) \
-  E_CPONLY(kColorAshInvertedShieldAndBase80Light) \
-  E_CPONLY(kColorAshShieldAndBase90Light) \
-  E_CPONLY(kColorAshShieldAndBase95Light) \
-  E_CPONLY(kColorAshShieldAndBaseOpaqueLight) \
   /* Controls Layer colors. */ \
   E_CPONLY(kColorAshHairlineBorderColor) \
   E_CPONLY(kColorAshControlBackgroundColorActive) \
@@ -37,6 +30,7 @@ namespace ash {
   E_CPONLY(kColorAshControlBackgroundColorWarning) \
   E_CPONLY(kColorAshControlBackgroundColorPositive) \
   E_CPONLY(kColorAshFocusAuraColor) \
+  E_CPONLY(kColorAshSecondaryButtonBackgroundColor)\
   /* Content layer colors. */ \
   E_CPONLY(kColorAshScrollBarColor) \
   E_CPONLY(kColorAshSeparatorColor) \
@@ -58,6 +52,10 @@ namespace ash {
   E_CPONLY(kColorAshIconColorProminent) \
   /*  Background for kColorAshIconColorSecondary. */ \
   E_CPONLY(kColorAshIconColorSecondaryBackground) \
+  /* Colors for Bar Chart within System Info Answer Cards in the Launcher. */ \
+  E_CPONLY(kColorAshSystemInfoBarChartColorForeground) \
+  E_CPONLY(kColorAshSystemInfoBarChartWarningColorForeground) \
+  E_CPONLY(kColorAshSystemInfoBarChartColorBackground) \
   /* The default color for button labels. */ \
   E_CPONLY(kColorAshButtonLabelColor) \
   E_CPONLY(kColorAshButtonLabelColorLight) \
@@ -76,6 +74,8 @@ namespace ash {
   E_CPONLY(kColorAshAppStateIndicatorColorInactive) \
   /* Color for the shelf drag handle in tablet mode. */ \
   E_CPONLY(kColorAshShelfHandleColor) \
+  E_CPONLY(kColorAshShelfTooltipBackgroundColor) \
+  E_CPONLY(kColorAshShelfTooltipForegroundColor) \
   E_CPONLY(kColorAshSliderColorActive) \
   E_CPONLY(kColorAshSliderColorInactive) \
   E_CPONLY(kColorAshRadioColorActive) \
@@ -106,6 +106,7 @@ namespace ash {
   E_CPONLY(kColorAshInkDrop) \
   E_CPONLY(kColorAshInkDropOpaqueColor) \
   /* Colors for Google Assistant */ \
+  E_CPONLY(kColorAshAssistantBgPlate) \
   E_CPONLY(kColorAshAssistantGreetingEnabled) \
   E_CPONLY(kColorAshSuggestionChipViewTextView) \
   E_CPONLY(kColorAshAssistantQueryHighConfidenceLabel) \
@@ -117,7 +118,29 @@ namespace ash {
   E_CPONLY(kColorAshButtonIconDisabledColor) \
   E_CPONLY(kColorAshIconSecondaryDisabledColor) \
   E_CPONLY(kColorAshIconPrimaryDisabledColor) \
-  E_CPONLY(KColorAshTextDisabledColor)
+  E_CPONLY(KColorAshTextDisabledColor) \
+  /* Color for icon of the blocked bluetooth device */ \
+  E_CPONLY(kColorAshIconColorBlocked)\
+  /* Color for icon in title of app streaming bubble */ \
+  E_CPONLY(kColorAshEcheIconColorStreaming) \
+  /* Color for text of the holding space view with multi select enabled */ \
+  E_CPONLY(kColorAshMultiSelectTextColor) \
+  /* Color for checkmark icon in holding space */ \
+  E_CPONLY(kColorAshCheckmarkIconColor) \
+  /* Color for drag image overflow badge text in holding space */ \
+  E_CPONLY(kColorAshDragImageOverflowBadgeTextColor) \
+  /* Color for feature tile small circle */ \
+  E_CPONLY(kColorAshTileSmallCircle) \
+  /* Color for the background of the app count indicator on a folder */ \
+  E_CPONLY(kColorAshFolderItemCountBackgroundColor) \
+  /* Color for the background of the phantom window */ \
+  E_CPONLY(kColorAshPhantomWindowBackgroundColor) \
+  /* Color for the stroke on the window header view */ \
+  E_CPONLY(kColorAshWindowHeaderStrokeColor) \
+  /* Color for the 6+ scrollable list view on the login screen */ \
+  E_CPONLY(kColorAshLoginScrollableUserListBackground) \
+  /* Color for the resize shadow */ \
+  E_CPONLY(kColorAshResizeShadowColor)
 
 #include "ui/color/color_id_macros.inc"
 

@@ -36,7 +36,7 @@ namespace {
 
 bool IsGuestModeActive() {
   return user_manager::UserManager::Get()->IsLoggedInAsGuest() ||
-         user_manager::UserManager::Get()->IsLoggedInAsPublicAccount();
+         user_manager::UserManager::Get()->IsLoggedInAsManagedGuestSession();
 }
 
 bool IsESimProfilePropertiesEqualToState(
@@ -272,9 +272,11 @@ void ESimProfile::EnsureProfileExistsOnEuicc(
                          weak_ptr_factory_.GetWeakPtr(), std::move(callback)),
           std::move(inhibit_lock));
     } else {
-      HermesEuiccClient::Get()->RequestPendingProfiles(
-          euicc_->path(), /*root_smds=*/ESimManager::GetRootSmdsAddress(),
-          base::BindOnce(&ESimProfile::OnRequestPendingProfiles,
+      HermesEuiccClient::Get()->RefreshSmdxProfiles(
+          euicc_->path(),
+          /*activation_code=*/ESimManager::GetRootSmdsAddress(),
+          /*restore_slot=*/true,
+          base::BindOnce(&ESimProfile::OnRefreshSmdxProfiles,
                          weak_ptr_factory_.GetWeakPtr(), std::move(callback),
                          std::move(inhibit_lock)));
     }
@@ -292,6 +294,21 @@ void ESimProfile::OnRequestInstalledProfiles(
   if (!success) {
     NET_LOG(ERROR) << "Error requesting installed profiles to ensure profile "
                    << "exists on Euicc";
+  }
+  OnRequestProfiles(std::move(callback), std::move(inhibit_lock), success);
+}
+
+void ESimProfile::OnRefreshSmdxProfiles(
+    EnsureProfileExistsOnEuiccCallback callback,
+    std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock,
+    HermesResponseStatus status,
+    const std::vector<dbus::ObjectPath>& profile_paths) {
+  NET_LOG(EVENT) << "Refresh SM-DX profiles found " << profile_paths.size()
+                 << " available profiles";
+  bool success = status == HermesResponseStatus::kSuccess;
+  if (!success) {
+    NET_LOG(ERROR) << "Error refreshing SM-DX profiles to ensure profile "
+                   << "exists on Euicc; status: " << status;
   }
   OnRequestProfiles(std::move(callback), std::move(inhibit_lock), success);
 }
@@ -391,7 +408,8 @@ void ESimProfile::OnPendingProfileInstallResult(
               weak_ptr_factory_.GetWeakPtr()));
 }
 
-void ESimProfile::OnNewProfileEnableSuccess(const std::string& service_path) {
+void ESimProfile::OnNewProfileEnableSuccess(const std::string& service_path,
+                                            bool auto_connected) {
   const NetworkState* network_state =
       esim_manager_->network_state_handler()->GetNetworkState(service_path);
   if (!network_state) {
@@ -444,12 +462,8 @@ void ESimProfile::OnProfileNicknameSet(
 bool ESimProfile::ProfileExistsOnEuicc() {
   HermesEuiccClient::Properties* euicc_properties =
       HermesEuiccClient::Get()->GetProperties(euicc_->path());
-  const std::vector<dbus::ObjectPath>& profile_paths =
-      IsProfileInstalled()
-          ? euicc_properties->installed_carrier_profiles().value()
-          : euicc_properties->pending_carrier_profiles().value();
 
-  return base::Contains(profile_paths, path_);
+  return base::Contains(euicc_properties->profiles().value(), path_);
 }
 
 bool ESimProfile::IsProfileInstalled() {

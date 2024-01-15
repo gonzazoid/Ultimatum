@@ -25,12 +25,15 @@ namespace {
 
 // For these tests, we use a small LES range to make the expectations simpler.
 const uint32_t kMaxEntropy = 20;
+const uint32_t kLayerId = 1;
+const uint32_t kLayerSalt = kLayerId;
 const char kStudyName[] = "Uniformity";
 
 struct LayerStudySeedOptions {
   bool layer_constrain_study = true;
   bool force_low_entropy_layer = true;
   bool force_low_entropy = false;
+  uint32_t salt = kLayerSalt;
   uint32_t slot_multiplier = 1;
 };
 
@@ -41,7 +44,8 @@ struct LayerStudySeedOptions {
 VariationsSeed LayerStudySeed(LayerStudySeedOptions options) {
   VariationsSeed seed;
   Layer* layer = seed.add_layers();
-  layer->set_id(42);
+  layer->set_id(kLayerId);
+  layer->set_salt(options.salt);
   layer->set_num_slots(10 * options.slot_multiplier);
   if (options.force_low_entropy_layer)
     layer->set_entropy_mode(Layer::LOW);
@@ -63,7 +67,7 @@ VariationsSeed LayerStudySeed(LayerStudySeedOptions options) {
 
   if (options.layer_constrain_study) {
     LayerMemberReference* layer_membership = study->mutable_layer();
-    layer_membership->set_layer_id(42);
+    layer_membership->set_layer_id(kLayerId);
     layer_membership->set_layer_member_id(82);
   }
   // Use 3 arms, which does not divide
@@ -88,8 +92,8 @@ const std::vector<std::string> kExpectedLowEntropyAssignments = {
 // LayeredStudySeed should give the following assignment using the test LES.
 // All 3 arms get 6/20 values, with 2/20 not in the study.
 const std::vector<std::string> kExpectedRemainderEntropyAssignments = {
-    "A", "A", "C", "A", "C", "B", "A", "A", "A", "C",  // 10
-    "B", "B", "C", "",  "C", "B", "C", "B", "",  "B",  // 20
+    "A", "",  "B", "B", "C", "A", "B", "B", "C", "C",  // 10
+    "C", "A", "",  "A", "C", "A", "C", "B", "A", "B",  // 20
 };
 
 // The expected group assignments for the study based on high entropy.
@@ -126,18 +130,21 @@ std::string GetUniformityAssignment(const VariationsSeed& seed,
 }
 
 // Process the seed and return which group the user is assigned for Uniformity.
-std::vector<std::string> GetUniformityAssignments(const VariationsSeed& seed) {
+std::vector<std::string> GetUniformityAssignments(
+    const VariationsSeed& seed,
+    bool enable_benchmarking = false) {
   std::vector<std::string> result;
   // Add 20 clients that do not have client IDs, 1 per low entropy value.
   for (uint32_t i = 0; i < kMaxEntropy; i++) {
-    result.push_back(
-        GetUniformityAssignment(seed, EntropyProviders("", {i, kMaxEntropy})));
+    EntropyProviders providers("", {i, kMaxEntropy}, enable_benchmarking);
+    result.push_back(GetUniformityAssignment(seed, providers));
   }
   // Add 100 clients that do have client IDs, 5 per low entropy value.
   for (uint32_t i = 0; i < kMaxEntropy * 5; i++) {
-    result.push_back(GetUniformityAssignment(
-        seed, EntropyProviders(base::StringPrintf("clientid_%02d", i),
-                               {i % kMaxEntropy, kMaxEntropy})));
+    auto high_entropy = base::StringPrintf("clientid_%02d", i);
+    ValueInRange low_entropy = {i % kMaxEntropy, kMaxEntropy};
+    EntropyProviders providers(high_entropy, low_entropy, enable_benchmarking);
+    result.push_back(GetUniformityAssignment(seed, providers));
   }
   return result;
 }
@@ -217,7 +224,7 @@ TEST(VariationsUniformityTest, LowEntropyLayerDefaultEntropyStudy) {
   });
   // Some high entropy clients are excluded from the layer by low entropy.
   for (int i = 1; i < 6; i++) {
-    for (int les_value : {13, 18}) {
+    for (int les_value : {1, 12}) {
       expected[i * kMaxEntropy + les_value] = "";
     }
   }
@@ -255,13 +262,55 @@ TEST(VariationsUniformityTest, DefaultEntropyLayerDefaultEntropyStudy) {
       &kExpectedHighEntropyStudyAssignments,
   });
   // The following clients are excluded from the layer by high entropy.
-  // This is derived from a sample of the high entropy space, so 6/100 is a
-  // reasonable approximation of the average 10/100.
-  for (int exclusion : {35, 40, 43, 54, 79, 95}) {
+  // This is derived from a sample of the high entropy space, and 18/100
+  // exclusions is a likely (p>0.01) result at 10% exclusions.
+  int exclusions[] = {
+      1,  6,  7,  10, 17,  // 5
+      20, 25, 30, 31, 32,  // 10
+      38, 40, 62, 66, 67,  // 15
+      69, 71, 77           // 18
+  };
+  for (int exclusion : exclusions) {
     expected[kMaxEntropy + exclusion] = "";
   }
 
   EXPECT_THAT(assignments, ::testing::ElementsAreArray(expected));
+}
+
+// Not specifying the `salt` field for the layer should fall back to using the
+// `id` field as salt. Different salt values should result in different layer
+// exclusions.
+TEST(VariationsUniformityTest, LayerSalt) {
+  auto assignments = GetUniformityAssignments(
+      LayerStudySeed({.force_low_entropy_layer = false}));
+
+  auto assignments_salt_not_specified = GetUniformityAssignments(
+      LayerStudySeed({.force_low_entropy_layer = false, .salt = 0}));
+
+  auto assignments_alternative_salt = GetUniformityAssignments(LayerStudySeed(
+      {.force_low_entropy_layer = false, .salt = kLayerSalt + 1}));
+
+  EXPECT_EQ(assignments, assignments_salt_not_specified);
+  EXPECT_NE(assignments, assignments_alternative_salt);
+}
+
+// When enable_benchmarking is passed, layered studies should never activate.
+TEST(VariationsUniformityTest, BenchmarkingDisablesLayeredStudies) {
+  std::vector<std::string> expected(
+      kExpectedLowEntropyAssignments.size() +
+          kExpectedHighEntropyStudyAssignments.size(),
+      "");
+  EXPECT_THAT(GetUniformityAssignments(LayerStudySeed({}),
+                                       /*enable_benchmarking*/ true),
+              ::testing::ElementsAreArray(expected));
+  EXPECT_THAT(
+      GetUniformityAssignments(LayerStudySeed({.force_low_entropy = true}),
+                               /*enable_benchmarking*/ true),
+      ::testing::ElementsAreArray(expected));
+  EXPECT_THAT(GetUniformityAssignments(
+                  LayerStudySeed({.force_low_entropy_layer = false}),
+                  /*enable_benchmarking*/ true),
+              ::testing::ElementsAreArray(expected));
 }
 
 TEST(VariationsUniformityTest, SessionEntropyStudyChiSquare) {

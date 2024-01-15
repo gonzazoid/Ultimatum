@@ -38,7 +38,7 @@ class ModulatorImplBase : public Modulator {
 
   ExecutionContext* GetExecutionContext() const;
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
  private:
   // Implements Modulator
@@ -61,7 +61,8 @@ class ModulatorImplBase : public Modulator {
                  network::mojom::RequestDestination destination,
                  const ScriptFetchOptions&,
                  ModuleScriptCustomFetchType,
-                 ModuleTreeClient*) override;
+                 ModuleTreeClient*,
+                 String referrer) override;
   void FetchDescendantsForInlineScript(
       ModuleScript*,
       ResourceFetcher* fetch_client_settings_object_fetcher,

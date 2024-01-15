@@ -4,7 +4,11 @@
 
 #include "components/performance_manager/graph/worker_node_impl_describer.h"
 
+#include <utility>
+
 #include "base/strings/string_number_conversions.h"
+#include "base/values.h"
+#include "components/performance_manager/graph/worker_node_impl.h"
 #include "components/performance_manager/public/graph/node_data_describer_registry.h"
 #include "components/performance_manager/public/graph/node_data_describer_util.h"
 
@@ -36,19 +40,26 @@ void WorkerNodeImplDescriber::OnTakenFromGraph(Graph* graph) {
   graph->GetNodeDataDescriberRegistry()->UnregisterDescriber(this);
 }
 
-base::Value WorkerNodeImplDescriber::DescribeWorkerNodeData(
+base::Value::Dict WorkerNodeImplDescriber::DescribeWorkerNodeData(
     const WorkerNode* node) const {
   const WorkerNodeImpl* impl = WorkerNodeImpl::FromNode(node);
   if (!impl)
-    return base::Value();
+    return base::Value::Dict();
 
-  base::Value ret(base::Value::Type::DICTIONARY);
-  ret.SetKey("browser_context_id", base::Value(impl->browser_context_id()));
-  ret.SetKey("worker_token", base::Value(impl->worker_token().ToString()));
-  ret.SetKey("url", base::Value(impl->url().spec()));
-  ret.SetKey("worker_type",
-             base::Value(WorkerTypeToString(impl->worker_type())));
-  ret.SetKey("priority", PriorityAndReasonToValue(impl->priority_and_reason()));
+  base::Value::Dict ret;
+  ret.Set("worker_type", WorkerTypeToString(impl->GetWorkerType()));
+  ret.Set("browser_context_id", impl->GetBrowserContextID());
+  ret.Set("worker_token", impl->GetWorkerToken().ToString());
+  ret.Set("resource_context", impl->GetResourceContext().ToString());
+  ret.Set("url", impl->GetURL().spec());
+  ret.Set("priority", PriorityAndReasonToValue(impl->GetPriorityAndReason()));
+
+  base::Value::Dict metrics;
+  metrics.Set("resident_set",
+              base::NumberToString(impl->GetResidentSetKbEstimate()));
+  metrics.Set("private_footprint",
+              base::NumberToString(impl->GetPrivateFootprintKbEstimate()));
+  ret.Set("metrics_estimates", std::move(metrics));
 
   return ret;
 }

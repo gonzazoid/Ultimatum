@@ -7,6 +7,7 @@
 #include "ash/frame/non_client_frame_view_ash.h"
 #include "chromeos/ui/frame/caption_buttons/caption_button_model.h"
 #include "chromeos/ui/frame/default_frame_header.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/caption_button_types.h"
 #include "ui/views/window/frame_caption_button.h"
@@ -37,7 +38,6 @@ class AssistantWebContainerCaptionButtonModel
       case views::CAPTION_BUTTON_ICON_BACK:
         return back_button_visibility_;
 
-      case views::CAPTION_BUTTON_ICON_FLOAT:
       case views::CAPTION_BUTTON_ICON_MINIMIZE:
       case views::CAPTION_BUTTON_ICON_MAXIMIZE_RESTORE:
       case views::CAPTION_BUTTON_ICON_LEFT_TOP_SNAPPED:
@@ -46,6 +46,7 @@ class AssistantWebContainerCaptionButtonModel
       case views::CAPTION_BUTTON_ICON_ZOOM:
       case views::CAPTION_BUTTON_ICON_LOCATION:
       case views::CAPTION_BUTTON_ICON_CENTER:
+      case views::CAPTION_BUTTON_ICON_FLOAT:
       case views::CAPTION_BUTTON_ICON_CUSTOM:
       case views::CAPTION_BUTTON_ICON_COUNT:
         return false;
@@ -79,8 +80,8 @@ void AssistantWebViewDelegateImpl::UpdateBackButtonVisibility(
 
   auto* non_client_view = widget->non_client_view();
 
-  DCHECK_EQ(NonClientFrameViewAsh::kViewClassName,
-            non_client_view->frame_view()->GetClassName());
+  DCHECK(
+      views::IsViewClass<NonClientFrameViewAsh>(non_client_view->frame_view()));
 
   auto* frame_view_ash =
       static_cast<NonClientFrameViewAsh*>(non_client_view->frame_view());

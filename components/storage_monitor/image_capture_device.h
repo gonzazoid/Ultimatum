@@ -8,11 +8,9 @@
 #import <Foundation/Foundation.h>
 #import <ImageCaptureCore/ImageCaptureCore.h>
 
+#include "base/apple/foundation_util.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_nsobject.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -27,7 +25,7 @@ namespace storage_monitor {
 // events through this interface.
 class ImageCaptureDeviceListener {
  public:
-  virtual ~ImageCaptureDeviceListener() {}
+  virtual ~ImageCaptureDeviceListener() = default;
 
   // Get a notification that a particular item has been found on the device.
   // These calls will come automatically after a new device is initialized.
@@ -59,12 +57,7 @@ class ImageCaptureDeviceListener {
 // like "/$device_id/" + name.
 // Note that all interactions with this class must happen on the UI thread.
 @interface ImageCaptureDevice
-    : NSObject<ICCameraDeviceDelegate, ICCameraDeviceDownloadDelegate> {
- @private
-  base::scoped_nsobject<ICCameraDevice> _camera;
-  base::WeakPtr<storage_monitor::ImageCaptureDeviceListener> _listener;
-  bool _closing;
-}
+    : NSObject <ICCameraDeviceDelegate, ICCameraDeviceDownloadDelegate>
 
 - (instancetype)initWithCameraDevice:(ICCameraDevice*)cameraDevice;
 - (void)setListener:

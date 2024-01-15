@@ -7,15 +7,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -132,7 +131,7 @@ class MockVideoDecoder : public VideoDecoder {
       if (buffer->data_size() == kErrorDataSize) {
         // This size buffer indicates that decoder should return an error.
         // |decode_cb| must not be called from the same stack.
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(std::move(decode_cb),
                                       DecoderStatus::Codes::kFailed));
         return;
@@ -153,15 +152,15 @@ class MockVideoDecoder : public VideoDecoder {
     }
 
     // |decode_cb| must not be called from the same stack.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(decode_cb), DecoderStatus::Codes::kOk));
   }
 
   void DoReset(base::OnceClosure& reset_cb) {
     // |reset_cb| must not be called from the same stack.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(reset_cb));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(reset_cb));
   }
 
   base::WeakPtr<MockVideoDecoder> GetWeakPtr() {
@@ -188,7 +187,7 @@ class FakeMojoMediaClient : public MojoMediaClient {
   FakeMojoMediaClient& operator=(const FakeMojoMediaClient&) = delete;
 
   std::unique_ptr<VideoDecoder> CreateVideoDecoder(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
       MediaLog* media_log,
       mojom::CommandBufferIdPtr command_buffer_id,
       RequestOverlayInfoCB request_overlay_info_cb,
@@ -243,8 +242,9 @@ class MojoVideoDecoderIntegrationTest : public ::testing::Test {
     // TODO(sandersd): Pass a GpuVideoAcceleratorFactories so that the cache can
     // be tested.
     client_ = std::make_unique<MojoVideoDecoder>(
-        base::ThreadTaskRunnerHandle::Get(), nullptr, &client_media_log_,
-        CreateRemoteVideoDecoder(), RequestOverlayInfoCB(), gfx::ColorSpace());
+        base::SingleThreadTaskRunner::GetCurrentDefault(), nullptr,
+        &client_media_log_, CreateRemoteVideoDecoder(), RequestOverlayInfoCB(),
+        gfx::ColorSpace());
     if (writer_capacity_)
       client_->set_writer_capacity_for_testing(writer_capacity_);
   }
@@ -351,7 +351,7 @@ class MojoVideoDecoderIntegrationTest : public ::testing::Test {
 
   // MediaLog that the service has provided to |decoder_|. This should be
   // proxied to |client_media_log_|.
-  raw_ptr<MediaLog> decoder_media_log_ = nullptr;
+  raw_ptr<MediaLog, AcrossTasksDanglingUntriaged> decoder_media_log_ = nullptr;
 
  private:
   // Passes |decoder_| to the service.
@@ -547,66 +547,33 @@ TEST_F(MojoVideoDecoderIntegrationTest, ResetDuringDecode_ChunkedWrite) {
   RunUntilIdle();
 }
 
-TEST_F(MojoVideoDecoderIntegrationTest, InitialPlaybackUMASuccess) {
-  base::HistogramTester histogram_tester_;
-  const int frames_to_decode = kMojoDecoderInitialPlaybackFrameCount;
-
+TEST_F(MojoVideoDecoderIntegrationTest, CanReadWithoutStallingAfterReset) {
   ASSERT_TRUE(Initialize());
 
   StrictMock<base::MockCallback<VideoDecoder::DecodeCB>> decode_cb;
+  StrictMock<base::MockCallback<base::OnceClosure>> reset_cb;
 
-  EXPECT_CALL(*decoder_, DidGetReleaseMailboxCB()).Times(AnyNumber());
-  EXPECT_CALL(output_cb_, Run(_)).Times(frames_to_decode);
-  EXPECT_CALL(*decoder_, Decode_(_, _)).Times(frames_to_decode);
+  EXPECT_CALL(*decoder_, DidGetReleaseMailboxCB()).Times(AtLeast(0));
+  EXPECT_CALL(output_cb_, Run(_)).Times(1);
+  EXPECT_CALL(*decoder_, CanReadWithoutStalling())
+      .WillRepeatedly(Return(false));
+  EXPECT_CALL(*decoder_, Decode_(_, _)).Times(1);
+  EXPECT_CALL(*decoder_, Reset_(_));
 
-  EXPECT_CALL(decode_cb, Run(IsOkStatus())).Times(frames_to_decode);
+  EXPECT_TRUE(client_->CanReadWithoutStalling());
 
-  for (int i = 0; i < frames_to_decode - 1; i++)
-    client_->Decode(CreateKeyframe(i * 16), decode_cb.Get());
-
-  RunUntilIdle();
-  histogram_tester_.ExpectBucketCount(
-      kMojoVideoDecoderInitialPlaybackSuccessCodecCounterUMA, 1, 0);
+  InSequence s;  // Make sure all callbacks are fired in order.
+  EXPECT_CALL(decode_cb, Run(_)).Times(1);
+  EXPECT_CALL(reset_cb, Run());
 
   client_->Decode(CreateKeyframe(0), decode_cb.Get());
+  RunUntilIdle();
+
+  EXPECT_FALSE(client_->CanReadWithoutStalling());
+  client_->Reset(reset_cb.Get());
 
   RunUntilIdle();
-  histogram_tester_.ExpectBucketCount(
-      kMojoVideoDecoderInitialPlaybackSuccessCodecCounterUMA, 1, 1);
-}
-
-TEST_F(MojoVideoDecoderIntegrationTest, InitialPlaybackUMAError) {
-  base::HistogramTester histogram_tester_;
-  const int frames_to_decode = kMojoDecoderInitialPlaybackFrameCount;
-
-  ASSERT_TRUE(Initialize());
-
-  StrictMock<base::MockCallback<VideoDecoder::DecodeCB>> decode_cb;
-
-  EXPECT_CALL(*decoder_, DidGetReleaseMailboxCB()).Times(AnyNumber());
-  EXPECT_CALL(output_cb_, Run(_)).Times(frames_to_decode - 1);
-  EXPECT_CALL(*decoder_, Decode_(_, _)).Times(frames_to_decode);
-
-  EXPECT_CALL(decode_cb, Run(IsOkStatus())).Times(frames_to_decode - 1);
-
-  EXPECT_CALL(decode_cb, Run(IsDecodeErrorStatus())).Times(1);
-
-  for (int i = 0; i < frames_to_decode - 1; i++)
-    client_->Decode(CreateKeyframe(i * 16), decode_cb.Get());
-
-  RunUntilIdle();
-  histogram_tester_.ExpectBucketCount(
-      kMojoVideoDecoderInitialPlaybackErrorCodecCounterUMA, 1, 0);
-  histogram_tester_.ExpectBucketCount(
-      kMojoVideoDecoderInitialPlaybackSuccessCodecCounterUMA, 1, 0);
-
-  client_->Decode(CreateErrorFrame(0), decode_cb.Get());
-
-  RunUntilIdle();
-  histogram_tester_.ExpectBucketCount(
-      kMojoVideoDecoderInitialPlaybackErrorCodecCounterUMA, 1, 1);
-  histogram_tester_.ExpectBucketCount(
-      kMojoVideoDecoderInitialPlaybackSuccessCodecCounterUMA, 1, 0);
+  EXPECT_TRUE(client_->CanReadWithoutStalling());
 }
 
 }  // namespace media

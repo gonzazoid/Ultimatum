@@ -7,6 +7,9 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/renderer/core/fetch/fetch_header_list.h"
+#include "third_party/blink/renderer/platform/bindings/exception_context.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -46,6 +49,7 @@ TEST(FetchRequestDataTest, Not_For_ServiceWorkerFetchEvent_Headers) {
 }
 
 TEST(FetchRequestDataTest, CheckTrustTokenParamsAreCopiedWithCreate) {
+  test::TaskEnvironment task_environment;
   // create a fetch API request instance
   auto request = mojom::blink::FetchAPIRequest::New();
   // create a TrustTokenParams instance
@@ -76,6 +80,27 @@ TEST(FetchRequestDataTest, CheckTrustTokenParamsAreCopiedWithCreate) {
   // compare trust token params of request_data to trust_token_params_copy.
   EXPECT_TRUE(request_data->TrustTokenParams());
   EXPECT_EQ(*(request_data->TrustTokenParams()), *(trust_token_params_copy));
+}
+
+TEST(FetchRequestDataTest, CheckServiceworkerRaceNetworkRequestToken) {
+  test::TaskEnvironment task_environment;
+  // create a fetch API request instance
+  auto request = PrepareFetchAPIRequest();
+  const base::UnguessableToken token = base::UnguessableToken::Create();
+  request->service_worker_race_network_request_token = token;
+
+  // Create FetchRequestData
+  FetchRequestData* request_data = FetchRequestData::Create(
+      /*script_state=*/nullptr, std::move(request),
+      FetchRequestData::ForServiceWorkerFetchEvent::kTrue);
+  EXPECT_EQ(token, request_data->ServiceWorkerRaceNetworkRequestToken());
+
+  // Token is not cloned.
+  auto exception_state = ExceptionState(
+      nullptr, ExceptionContext(ExceptionContextType::kUnknown, nullptr));
+  auto* cloned_request_data = request_data->Clone(nullptr, exception_state);
+  EXPECT_TRUE(
+      cloned_request_data->ServiceWorkerRaceNetworkRequestToken().is_empty());
 }
 
 }  // namespace blink

@@ -4,29 +4,46 @@
 
 #include "chrome/updater/remove_uninstalled_apps_task.h"
 
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <optional>
 #include <string>
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/logging.h"
 #include "chrome/updater/constants.h"
-#include "chrome/updater/util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/updater/util/util.h"
 
 namespace updater {
 
-absl::optional<int> RemoveUninstalledAppsTask::GetUnregisterReason(
+namespace {
+
+bool PathOwnedByRoot(const base::FilePath& path) {
+  base::stat_wrapper_t stat_info = {};
+  if (base::File::Lstat(path.value().c_str(), &stat_info) != 0) {
+    VPLOG(1) << "Failed to get information on path " << path.value();
+    return false;
+  }
+  return stat_info.st_uid == 0;
+}
+
+}  // namespace
+
+std::optional<int> RemoveUninstalledAppsTask::GetUnregisterReason(
     const std::string& /*app_id*/,
     const base::FilePath& ecp) const {
   if (ecp.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (!base::PathExists(ecp)) {
-    return absl::make_optional(kUninstallPingReasonUninstalled);
+    return std::make_optional(kUninstallPingReasonUninstalled);
   }
-  if (!PathOwnedByUser(ecp)) {
-    return absl::make_optional(kUninstallPingReasonUserNotAnOwner);
+  if (scope_ == UpdaterScope::kUser && PathOwnedByRoot(ecp)) {
+    return std::make_optional(kUninstallPingReasonUserNotAnOwner);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace updater

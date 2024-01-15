@@ -89,7 +89,7 @@ names, use the functions in histogram_functions.h instead of the macros.
 If you must use the histogram name in multiple places, use a compile-time
 constant of appropriate scope that can be referenced everywhere. Using inline
 strings in multiple places can lead to errors if you ever need to revise the
-name and you update one one location and forget another.
+name and you update one location and forget another.
 
 ### Efficiency
 
@@ -159,6 +159,8 @@ buckets are added later.
 *In C++*, define an `enum class` with a `kMaxValue` enumerator:
 
 ```c++
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
 enum class NewTabPageAction {
   kUseOmnibox = 0,
   kClickTitle = 1,
@@ -263,7 +265,7 @@ You can alternatively follow these steps:
    enum section, with any unique value (just make one up, although whatever it
    is needs to appear in sorted order; `pretty_print.py` can do this for you).
 2. Build `unit_tests`, then run `unit_tests
-   --gtest_filter='AboutFlagsHistogramTest.*'` to compute the correct value.
+   --gtest_filter=AboutFlagsHistogramTest.*` to compute the correct value.
 3. Update the entry in [enums.xml](./enums.xml) with the correct value, and move
    it so the list is sorted by value (`pretty_print.py` can do this for you).
 4. Re-run the test to ensure the value and ordering are correct.
@@ -385,18 +387,20 @@ someone from the OWNERS file.
 ## Histogram Expiry
 
 Histogram expiry is specified by the `expires_after` attribute in histogram
-descriptions in histograms.xml. The attribute can be specified as date in
-**YYYY-MM-DD** format or as Chrome milestone in **M**\*(e.g. M68) format. In the
-latter case, the actual expiry date is about 12 weeks after that branch is cut,
-or basically when it is replaced on the "stable" channel by the following
-release.
+descriptions in histograms.xml. It is a required attribute. The attribute can
+be specified as date in **YYYY-MM-DD** format or as Chrome milestone in
+**M**\*(e.g. M105) format. In the latter case, the actual expiry date is about
+12 weeks after that branch is cut, or basically when it is replaced on the
+"stable" channel by the following release.
 
 After a histogram expires, it ceases to be displayed on the dashboard.
 Follow [these directions](#extending) to extend it.
 
 Once a histogram has expired, the code that records it becomes dead code and
 should be removed from the codebase. You should also [clean up](#obsolete) the
-corresponding entry in histograms.xml.
+corresponding entry in histograms.xml. In _rare_ cases, a histogram may be
+expired intentionally while keeping the code around; such cases must be
+[annotated appropriately](#Intentionally-expired-histograms) in histograms.xml.
 
 In **rare** cases, the expiry can be set to "never". This is used to denote
 metrics of critical importance that are, typically, used for other reports. For
@@ -410,8 +414,10 @@ reviewed by chromium-metrics-reviews@google.com.
 <!-- expires-never: "heartbeat" metric (internal: go/uma-heartbeats) -->
 ```
 
-For all new histograms, the use of expiry attribute is strongly encouraged and
-enforced by the Chrome Metrics team through reviews.
+It is never appropriate to set the expiry to "never" on a new histogram. Most
+new histograms don't turn out to have the properties the implementer wants,
+whether due to bugs in the implementation or simply an evolving understanding
+of what should be measured.
 
 #### How to choose expiry for histograms
 
@@ -477,11 +483,29 @@ crbugs accordingly.
 ### Expired histogram allowlist
 
 If a histogram expires but turns out to be useful, you can add the histogram's
-name to the allowlist until the updated expiration date reaches the stable
-channel. When doing so, update the histogram's summary to document the period
-during which the histogram's data is incomplete. To add a histogram to the
-allowlist, see the internal documentation:
+name to the allowlist to re-enable logging for it, until the updated expiration
+date reaches the Stable channel. When doing so, update the histogram's summary
+to document the period during which the histogram's data is incomplete. To add a
+histogram to the allowlist, see the internal documentation:
 [Histogram Expiry](https://goto.google.com/histogram-expiry-gdoc).
+
+### Intentionally expired histograms
+
+In **rare** cases, a histogram may be expired intentionally while keeping the
+code around. For example, this can be useful for diagnostic metrics that are
+occasionally needed to investigate specific bugs, but do not need to be reported
+otherwise.
+
+To avoid such histograms to be flagged for code clean up, they must be annotated
+in the histograms.xml with the `expired_intentionally` tag as follows:
+
+```xml
+<histogram name="Tab.Open" enum="TabType" expires_after="M100">
+ <expired_intentionally>Kept as a diagnostic metric.</expired_intentionally>
+ <owner>histogramowner@chromium.org</owner>
+ <summary>Histogram summary.</summary>
+</histogram>
+```
 
 ## Testing
 
@@ -491,12 +515,30 @@ the values emitted to are correct. Finally, for count histograms, make sure
 that buckets capture enough precision for your needs over the range.
 
 Pro tip: You can filter the set of histograms shown on `chrome://histograms` by
-specifying a prefix. For example, `chrome://histograms/Extensions.Load` shows
-only histograms whose names match the pattern "Extensions.Load*".
+appending to the URL. For example, `chrome://histograms/UserActions` shows
+only histograms whose names contain "UserActions", such as
+"UMA.UserActionsCount".
 
 In addition to testing interactively, you can have unit tests examine the
 values emitted to histograms. See [histogram_tester.h](https://cs.chromium.org/chromium/src/base/test/metrics/histogram_tester.h)
 for details.
+
+See also `chrome://metrics-internals` ([docs](https://chromium.googlesource.com/chromium/src/+/master/components/metrics/debug/README.md))
+for more thorough manual testing if needed.
+
+By default, histograms in unit or browser tests will not be actually uploaded.
+In general, you can rely on the UMA infrastructure to upload the metrics correctly.
+
+### Don't Use Histograms to Prove Main Logic Correctness
+
+Do not rely upon using histograms in tests as a way to prove correctness of
+your main program logic. If a unit or browser test uses a histogram count as a
+way to validate logic then that test coverage would be lost if the histogram is
+deleted after it has expired. That situation would prevent cleanup of the
+histogram. Construct your tests using other means to validate your general
+logic, and only use
+[`HistogramTester`](https://cs.chromium.org/chromium/src/base/test/metrics/histogram_tester.h)
+to verify that the histogram values are being generated as you would expect.
 
 ## Interpreting the Resulting Data
 
@@ -527,11 +569,18 @@ about is good! But see the note below on
 
 ## Documenting Histograms
 
-Document histograms in [histograms.xml](./histograms.xml). There is also a
-[google-internal version of the file](http://go/chrome-histograms-internal) for
-the rare case in which the histogram is confidential (added only to Chrome code,
-not Chromium code; or, an accurate description about how to interpret the
-histogram would reveal information about Google's plans).
+Document histograms in an appropriate [metadata/foo/histograms.xml](https://source.chromium.org/search?q=f:metadata%2F.*%2Fhistograms.xml&ss=chromium%2Fchromium%2Fsrc)
+file.
+
+There is also a [google-internal version of the file](https://goto.google.com/chrome-histograms-internal)
+for two cases:
+
+* The histogram is confidential (an accurate description about how to interpret
+  the histogram would reveal information about Google's plans). In this case,
+  you must only document the histogram in the internal version.
+* The corresponding code that emits the histogram is internal (added only to
+  Chrome code, not to Chromium code). In this case, you may document the
+  histogram in either the internal or external version.
 
 ### Add Histogram and Documentation in the Same Changelist
 
@@ -621,52 +670,83 @@ with the histogram. If there isn't a parallel DIR_METADATA file with such a
 component, but a parent directory has one, then the parent directory's component
 is used.
 
+### Improvement Direction
+For some histograms, an increase or a decrease in the reported values can be
+associated with either an improvement or a deterioration. For example, if you
+are tracking page load speed, then seeing your metrics tracking page load time
+in milliseconds getting gradually larger values, perhaps as the result of a
+Finch study, may signify worse performance; on the contrary, seeing a reduction
+in the page load speed may indicate an improvement. You can provide this
+information on the movement direction by adding a tag
+ `<improvement direction="LOWER_IS_BETTER"/>` within your `<histogram>`. The
+opposite is `<improvement direction="HIGHER_IS_BETTER"/>`.
+
+For other histograms where there may not be a movement direction that's clearly
+better, you can set `<improvement direction="NEITHER_IS_BETTER"/>`.
+
+This `<improvement>` tag is optional. You can also add/delete this tag or make a
+correction to its `direction` attribute any time.
+
 ### Cleaning Up Histogram Entries {#obsolete}
 
-If a histogram is no longer being emitted to, there are two options to clean up
-the entry: either mark the histogram as obsolete or remove the corresponding
-histograms.xml entry. This also applies to variants of a
+When the code to log a histogram is deleted, its corresponding histograms.xml
+entry should also be removed. Past histogram data will still be available for
+viewing on Google's internal UMA dashboard.
+
+The CL to remove one or more histograms can also specify an obsoletion message
+through special syntax in the CL description. This also applies to variants of a
 [patterned histogram](#Patterned-Histograms) and to suffix entries for a
 suffixed histogram.
 
-However you proceed, a changelist that obsoletes a histogram entry should be
-reviewed by all current owners.
+The changelist that obsoletes a histogram entry should be reviewed by all
+current owners.
 
-Note: the Chrome team is in the process of streamlining this process so that a
-histogram entry can be deleted and an obsoletion message recorded in a single
-change list.
+#### Remove the Entry
 
-#### Option: Add an Obsoletion Message
-
-You can choose to add a message to a histogram entry which will mark it as
-obsolete, and which will also provide relevant information to interested Chrome
-developers.
-
-* Add the obsoletion message between `<obsolete>` and `</obsolete>` tags within
-  the `<histogram>` block.
-* This should include the date or milestone when the entry became obsolete.
-* You could also include information about why the histogram has become
-  obsolete. For example, you might indicate how the histogram's summary did not
-  accurately describe the collected data.
-* If the obsolete histogram is being replaced, include the name of the
-  replacement and make sure that the new description is different from the
-  original to reflect the change between versions.
-
-#### Option: Remove the Entry
-
-If you do not want to add an obsoletion message, you can simply delete the
-entry in the histograms.xml file.
+Delete the entry in the histograms.xml file.
 
 * In some cases there may be artifacts that remain, with some examples being:
-  * Empty `<token>` blocks.
+  * Empty `<token>` blocks, or individual `<variant>`s.
   * `<enum>` blocks from enums.xml that are no longer used.
-  * Suffix entries in histogram_suffixes_list.xml.
+  * Suffix entries in `histogram_suffixes_list.xml`.
 * Please remove these artifacts if you find them.
-  * **Exception**: please mark `<int value=...>` blocks as obsolete rather than
-    deleting them, if the surrounding `<enum>` block is not being deleted.
-* A histogram entry can be removed after an obsoletion message was added, but
-  please check that at least a day has passed since the change landed. This
-  ensures that the message will be recorded by internal tools.
+  * **Exception**: please update the label of `<int value=... label=... />` with
+    the `(Obsolete) ` prefix, e.g.
+    `<int value="1" label="(Obsolete) Navigation failed. Removed in 2023/01."/>`
+    rather than deleting them, if the surrounding `<enum>` block is not being
+    deleted.
+
+#### Add an Obsoletion Message
+
+An obsoletion message is displayed on the dashboard and provides developers
+context for why the histogram was removed and, if applicable, which histogram
+it was replaced by.
+
+**Note:** You can skip this step if the histogram is expired. This is because
+tooling automatically records the date and milestone of a histogram's
+removal.
+
+You can provide a custom obsoletion message for a removed histogram via tags
+on the CL description:
+
+* Add the obsoletion message in the CL description in the format
+  `OBSOLETE_HISTOGRAM[histogram name]=message`, e.g.:
+  `OBSOLETE_HISTOGRAM[Tab.Count]=Replaced by Tab.Count2`
+* To add the same obsoletion message to all the histograms removed in the CL,
+  you can use `OBSOLETE_HISTOGRAMS=message`, e.g.:
+  `OBSOLETE_HISTOGRAMS=Patterned histogram Hist.{Token} is replaced by Hist.{Token}.2`
+* **Notes:**
+  * **The full tag should be put on a single line, even if it is longer than the
+    maximum CL description width.**
+  * You can add multiple obsoletion message tags in one CL.
+  * `OBSOLETE_HISTOGRAMS` messages will be overwritten by histogram-specific
+    ones, if present.
+* You could also include information about why the histogram was removed. For
+  example, you might indicate how the histogram's summary did not accurately
+  describe the collected data.
+* If the histogram is being replaced, include the name of the replacement and
+  make sure that the new description is different from the original to reflect
+  the change between versions.
 
 ### Patterned Histograms
 
@@ -725,13 +805,14 @@ recording a "parent" histogram that aggregates across a set of breakdowns.
 
 You can use the `<variants>` tag to define a set of `<variant>`s out-of-line.
 This is useful for token substitutions that are shared among multiple families
-of histograms. See
+of histograms within the same file. See
 [histograms.xml](https://source.chromium.org/search?q=file:histograms.xml%20%3Cvariants)
 for examples.
 
 *** promo
 Warning: The `name` attribute of the `<variants>` tag is globally scoped, so
-use detailed names to avoid collisions.
+use detailed names to avoid collisions. The `<variants>` defined should only
+be used within the file.
 ***
 
 By default, a `<variant>` inherits the owners declared for the patterned

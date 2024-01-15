@@ -6,13 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/containers/span.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "third_party/cros_system_api/dbus/kerberos/dbus-constants.h"
 
@@ -52,8 +53,9 @@ const char* const kBlocklistedConfigOptions[] = {
 // non-allowlisted keywords. Returns true if no blocklisted items are contained.
 bool ValidateConfigLine(const std::string& line) {
   for (const char* option : kBlocklistedConfigOptions) {
-    if (line.find(option) != std::string::npos)
+    if (base::Contains(line, option)) {
       return false;
+    }
   }
   return true;
 }
@@ -84,7 +86,7 @@ template <class TProto>
 void PostProtoResponse(base::OnceCallback<void(const TProto&)> callback,
                        const TProto& response,
                        base::TimeDelta delay) {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, base::BindOnce(std::move(callback), response), delay);
 }
 
@@ -104,8 +106,9 @@ void PostResponse(base::OnceCallback<void(const TProto&)> callback,
 std::string ReadPassword(int password_fd) {
   std::string password;
   char c;
-  while (base::ReadFromFD(password_fd, &c, 1))
+  while (base::ReadFromFD(password_fd, base::make_span(&c, 1u))) {
     password.push_back(c);
+  }
   return password;
 }
 

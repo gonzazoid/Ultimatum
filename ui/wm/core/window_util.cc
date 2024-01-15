@@ -4,11 +4,14 @@
 
 #include "ui/wm/core/window_util.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_tree_owner.h"
+#include "ui/display/screen.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/wm/core/transient_window_manager.h"
 #include "ui/wm/core/window_properties.h"
 #include "ui/wm/public/activation_client.h"
@@ -23,12 +26,12 @@ namespace {
 void CloneChildren(ui::Layer* to_clone,
                    ui::Layer* parent,
                    const wm::MapLayerFunc& map_func) {
-  typedef std::vector<ui::Layer*> Layers;
+  typedef std::vector<raw_ptr<ui::Layer, VectorExperimental>> Layers;
   // Make a copy of the children since RecreateLayer() mutates it.
   Layers children(to_clone->children());
   for (Layers::const_iterator i = children.begin(); i != children.end(); ++i) {
     ui::LayerOwner* owner = (*i)->owner();
-    ui::Layer* old_layer = owner ? map_func.Run(owner).release() : NULL;
+    ui::Layer* old_layer = owner ? map_func.Run(owner).release() : nullptr;
     if (old_layer) {
       parent->Add(old_layer);
       // RecreateLayer() moves the existing children to the new layer. Create a
@@ -36,6 +39,7 @@ void CloneChildren(ui::Layer* to_clone,
       CloneChildren(owner->layer(), old_layer, map_func);
     }
   }
+  parent->set_no_mutation(true);
 }
 
 // Invokes Mirror() on all the children of |to_mirror|, adding the newly cloned
@@ -45,7 +49,7 @@ void CloneChildren(ui::Layer* to_clone,
 void MirrorChildren(ui::Layer* to_mirror,
                     ui::Layer* parent,
                     bool sync_bounds) {
-  for (auto* child : to_mirror->children()) {
+  for (ui::Layer* child : to_mirror->children()) {
     ui::Layer* mirror = child->Mirror().release();
     mirror->set_sync_bounds_with_source(sync_bounds);
     parent->Add(mirror);
@@ -85,14 +89,33 @@ bool CanActivateWindow(const aura::Window* window) {
   return client && client->CanActivateWindow(window);
 }
 
-void SetWindowFullscreen(aura::Window* window, bool fullscreen) {
+void SetWindowFullscreen(aura::Window* window,
+                         bool fullscreen,
+                         int64_t target_display_id) {
   DCHECK(window);
+  // Should only specify display id when entering fullscreen.
+  DCHECK(target_display_id == display::kInvalidDisplayId || fullscreen);
+
   ui::WindowShowState current_show_state =
       window->GetProperty(aura::client::kShowStateKey);
   const bool is_fullscreen = current_show_state == ui::SHOW_STATE_FULLSCREEN;
-  if (fullscreen == is_fullscreen)
+  if (fullscreen == is_fullscreen &&
+      target_display_id == display::kInvalidDisplayId) {
     return;
+  }
   if (fullscreen) {
+    // We only want the current display id if the window is rooted in a display.
+    // Need to check for root window, otherwise GetDisplayNearestWindow() would
+    // return the primary display by default.
+    int64_t current_display_id =
+        window->GetRootWindow()
+            ? display::Screen::GetScreen()->GetDisplayNearestWindow(window).id()
+            : display::kInvalidDisplayId;
+    if (is_fullscreen && target_display_id == current_display_id) {
+      // Already fullscreened on the target display.
+      return;
+    }
+
     // Save the current show state as its restore show state so that we can
     // correctly restore it after exiting the fullscreen mode.
     // Note `aura::client::kRestoreShowStateKey` can be overwritten later by the
@@ -104,7 +127,12 @@ void SetWindowFullscreen(aura::Window* window, bool fullscreen) {
       window->SetProperty(aura::client::kRestoreShowStateKey,
                           current_show_state);
     }
+    // Set fullscreen display id first, so it's available when the show state
+    // property change is processed.
+    window->SetProperty(aura::client::kFullscreenTargetDisplayIdKey,
+                        target_display_id);
     window->SetProperty(aura::client::kShowStateKey, ui::SHOW_STATE_FULLSCREEN);
+    window->ClearProperty(aura::client::kFullscreenTargetDisplayIdKey);
   } else {
     Restore(window);
   }
@@ -112,6 +140,10 @@ void SetWindowFullscreen(aura::Window* window, bool fullscreen) {
 
 bool WindowStateIs(const aura::Window* window, ui::WindowShowState state) {
   return window->GetProperty(aura::client::kShowStateKey) == state;
+}
+
+ui::WindowShowState GetWindowState(const aura::Window* window) {
+  return window->GetProperty(aura::client::kShowStateKey);
 }
 
 void SetWindowState(aura::Window* window, ui::WindowShowState state) {
@@ -133,7 +165,7 @@ void Unminimize(aura::Window* window) {
 
 aura::Window* GetActivatableWindow(aura::Window* window) {
   ActivationClient* client = GetActivationClient(window->GetRootWindow());
-  return client ? client->GetActivatableWindow(window) : NULL;
+  return client ? client->GetActivatableWindow(window) : nullptr;
 }
 
 aura::Window* GetToplevelWindow(aura::Window* window) {
@@ -143,7 +175,7 @@ aura::Window* GetToplevelWindow(aura::Window* window) {
 
 const aura::Window* GetToplevelWindow(const aura::Window* window) {
   const ActivationClient* client = GetActivationClient(window->GetRootWindow());
-  return client ? client->GetToplevelWindow(window) : NULL;
+  return client ? client->GetToplevelWindow(window) : nullptr;
 }
 
 std::unique_ptr<ui::LayerTreeOwner> RecreateLayers(ui::LayerOwner* root) {
@@ -183,14 +215,15 @@ const aura::Window* GetTransientParent(const aura::Window* window) {
   return manager ? manager->transient_parent() : nullptr;
 }
 
-const std::vector<aura::Window*>& GetTransientChildren(
-    const aura::Window* window) {
+const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+GetTransientChildren(const aura::Window* window) {
   const TransientWindowManager* manager =
       TransientWindowManager::GetIfExists(window);
   if (manager)
     return manager->transient_children();
 
-  static std::vector<aura::Window*>* shared = new std::vector<aura::Window*>;
+  static std::vector<raw_ptr<aura::Window, VectorExperimental>>* shared =
+      new std::vector<raw_ptr<aura::Window, VectorExperimental>>;
   return *shared;
 }
 

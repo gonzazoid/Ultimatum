@@ -4,12 +4,11 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_css_style_declaration.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_set_return_value_for_core.h"
-#include "third_party/blink/renderer/core/css/css_style_declaration.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/range.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -19,6 +18,7 @@
 #include "third_party/blink/renderer/core/xml/dom_parser.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
@@ -155,6 +155,50 @@ void SetupIDLObservableArrayBackingListTemplate(
   instance_template->SetInternalFieldCount(kV8DefaultWrapperInternalFieldCount);
 }
 
+void SetupIDLIteratorTemplate(
+    v8::Isolate* isolate,
+    const WrapperTypeInfo* wrapper_type_info,
+    v8::Local<v8::ObjectTemplate> instance_template,
+    v8::Local<v8::ObjectTemplate> prototype_template,
+    v8::Local<v8::FunctionTemplate> interface_template,
+    v8::Intrinsic parent_intrinsic_prototype,
+    const char* class_string) {
+  DCHECK(parent_intrinsic_prototype == v8::Intrinsic::kAsyncIteratorPrototype ||
+         parent_intrinsic_prototype == v8::Intrinsic::kIteratorPrototype ||
+         parent_intrinsic_prototype == v8::Intrinsic::kMapIteratorPrototype ||
+         parent_intrinsic_prototype == v8::Intrinsic::kSetIteratorPrototype);
+
+  v8::Local<v8::String> v8_class_string = V8String(isolate, class_string);
+
+  // https://webidl.spec.whatwg.org/#es-asynchronous-iterator-prototype-object
+  // https://webidl.spec.whatwg.org/#es-iterator-prototype-object
+  // https://webidl.spec.whatwg.org/#es-map-iterator
+  // https://webidl.spec.whatwg.org/#es-set-iterator
+  v8::Local<v8::FunctionTemplate>
+      intrinsic_iterator_prototype_interface_template =
+          v8::FunctionTemplate::New(isolate, nullptr, v8::Local<v8::Value>(),
+                                    v8::Local<v8::Signature>(), 0,
+                                    v8::ConstructorBehavior::kThrow);
+  // It's not clear whether we need to remove the existing prototype object
+  // before we replace it with another object. Despite that the following test
+  // in V8 removes the existing one before setting a new one with a comment,
+  // it's not yet crystal clear if RemovePrototype() is mandatory or not.
+  // https://source.chromium.org/chromium/chromium/src/+/main:v8/test/cctest/test-api.cc;l=25249;drc=00a341994fa5cc0b41ffa0e886eeef67fce0c804
+  intrinsic_iterator_prototype_interface_template->RemovePrototype();
+  intrinsic_iterator_prototype_interface_template->SetIntrinsicDataProperty(
+      V8AtomicString(isolate, "prototype"), parent_intrinsic_prototype);
+  interface_template->Inherit(intrinsic_iterator_prototype_interface_template);
+
+  interface_template->ReadOnlyPrototype();
+  interface_template->SetClassName(v8_class_string);
+
+  prototype_template->Set(
+      v8::Symbol::GetToStringTag(isolate), v8_class_string,
+      static_cast<v8::PropertyAttribute>(v8::ReadOnly | v8::DontEnum));
+
+  instance_template->SetInternalFieldCount(kV8DefaultWrapperInternalFieldCount);
+}
+
 absl::optional<size_t> FindIndexInEnumStringTable(
     v8::Isolate* isolate,
     v8::Local<v8::Value> value,
@@ -249,7 +293,7 @@ ExecutionContext* ExecutionContextFromV8Wrappable(const DOMParser* parser) {
   return parser->GetWindow();
 }
 
-v8::MaybeLocal<v8::Value> CreateNamedConstructorFunction(
+v8::MaybeLocal<v8::Value> CreateLegacyFactoryFunctionFunction(
     ScriptState* script_state,
     v8::FunctionCallback callback,
     const char* func_name,
@@ -336,84 +380,11 @@ void InstallUnscopablePropertyNames(
 
 v8::Local<v8::Array> EnumerateIndexedProperties(v8::Isolate* isolate,
                                                 uint32_t length) {
-  Vector<v8::Local<v8::Value>> elements;
+  v8::LocalVector<v8::Value> elements(isolate);
   elements.reserve(length);
   for (uint32_t i = 0; i < length; ++i)
-    elements.UncheckedAppend(v8::Integer::New(isolate, i));
+    elements.push_back(v8::Integer::New(isolate, i));
   return v8::Array::New(isolate, elements.data(), elements.size());
-}
-
-void InstallCSSPropertyAttributes(
-    v8::Isolate* isolate,
-    const DOMWrapperWorld& world,
-    v8::Local<v8::Template> instance_template,
-    v8::Local<v8::Template> prototype_template,
-    v8::Local<v8::Template> interface_template,
-    v8::Local<v8::Signature> signature,
-    base::span<const char* const> css_property_names) {
-  const String kGetPrefix = "get ";
-  const String kSetPrefix = "set ";
-  for (const char* const property_name : css_property_names) {
-    v8::Local<v8::Value> v8_property_name = v8::External::New(
-        isolate,
-        const_cast<void*>(reinterpret_cast<const void*>(property_name)));
-    v8::Local<v8::FunctionTemplate> get_func = v8::FunctionTemplate::New(
-        isolate, CSSPropertyAttributeGet, v8_property_name, signature, 0,
-        v8::ConstructorBehavior::kThrow, v8::SideEffectType::kHasNoSideEffect);
-    v8::Local<v8::FunctionTemplate> set_func = v8::FunctionTemplate::New(
-        isolate, CSSPropertyAttributeSet, v8_property_name, signature, 1,
-        v8::ConstructorBehavior::kThrow, v8::SideEffectType::kHasSideEffect);
-    get_func->SetAcceptAnyReceiver(false);
-    set_func->SetAcceptAnyReceiver(false);
-    get_func->SetClassName(
-        V8AtomicString(isolate, String(kGetPrefix + property_name)));
-    set_func->SetClassName(
-        V8AtomicString(isolate, String(kSetPrefix + property_name)));
-    prototype_template->SetAccessorProperty(
-        V8AtomicString(isolate, property_name), get_func, set_func);
-  }
-}
-
-void CSSPropertyAttributeGet(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  CSSStyleDeclaration* blink_receiver =
-      V8CSSStyleDeclaration::ToWrappableUnsafe(info.This());
-  const char* property_name =
-      reinterpret_cast<const char*>(info.Data().As<v8::External>()->Value());
-  // TODO(andruud): AnonymousNamedGetter is not the best function.  Change the
-  // function to a more appropriate one.
-  auto&& return_value = blink_receiver->AnonymousNamedGetter(property_name);
-  bindings::V8SetReturnValue(info, return_value, info.GetIsolate(),
-                             bindings::V8ReturnValue::kNonNullable);
-}
-
-void CSSPropertyAttributeSet(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  v8::Isolate* isolate = info.GetIsolate();
-  const char* const class_like_name = "CSSStyleDeclaration";
-  const char* property_name =
-      reinterpret_cast<const char*>(info.Data().As<v8::External>()->Value());
-  ExceptionState exception_state(isolate, ExceptionState::kSetterContext,
-                                 class_like_name, property_name);
-
-  // [CEReactions]
-  CEReactionsScope ce_reactions_scope;
-
-  v8::Local<v8::Object> v8_receiver = info.This();
-  CSSStyleDeclaration* blink_receiver =
-      V8CSSStyleDeclaration::ToWrappableUnsafe(v8_receiver);
-  v8::Local<v8::Value> v8_property_value = info[0];
-  auto&& arg1_value = NativeValueTraits<IDLAny>::NativeValue(
-      isolate, v8_property_value, exception_state);
-  if (UNLIKELY(exception_state.HadException())) {
-    return;
-  }
-  v8::Local<v8::Context> receiver_context =
-      v8_receiver->GetCreationContextChecked();
-  ScriptState* receiver_script_state = ScriptState::From(receiver_context);
-  // TODO(andruud): AnonymousNamedSetter is not the best function.  Change the
-  // function to a more appropriate one.  It's better to pass |exception_state|
-  // as the implementation of AnonymousNamedSetter needs it.
-  blink_receiver->AnonymousNamedSetter(receiver_script_state, property_name,
-                                       arg1_value);
 }
 
 template <typename IDLType,
@@ -425,7 +396,7 @@ void PerformAttributeSetCEReactionsReflect(
     const char* interface_name,
     const char* attribute_name) {
   v8::Isolate* isolate = info.GetIsolate();
-  ExceptionState exception_state(isolate, ExceptionState::kSetterContext,
+  ExceptionState exception_state(isolate, ExceptionContextType::kAttributeSet,
                                  interface_name, attribute_name);
   if (UNLIKELY(info.Length() < 1)) {
     exception_state.ThrowTypeError(
@@ -469,7 +440,7 @@ void PerformAttributeSetCEReactionsReflectTypeStringLegacyNullToEmptyString(
     const QualifiedName& content_attribute,
     const char* interface_name,
     const char* attribute_name) {
-  PerformAttributeSetCEReactionsReflect<IDLStringTreatNullAsEmptyString,
+  PerformAttributeSetCEReactionsReflect<IDLStringLegacyNullToEmptyString,
                                         const AtomicString&,
                                         &Element::setAttribute>(
       info, content_attribute, interface_name, attribute_name);

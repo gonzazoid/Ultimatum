@@ -8,15 +8,43 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "components/gcm_driver/crypto/gcm_decryption_result.h"
 #include "components/gcm_driver/crypto/gcm_encryption_result.h"
 #include "components/gcm_driver/gcm_app_handler.h"
 
 namespace gcm {
+
+namespace {
+
+// Copied from components/invalidation/impl/fcm_invalidation_service_base.cc.
+constexpr char kFcmInvalidationsApplicationName[] =
+    "com.google.chrome.fcm.invalidations";
+// Copied from components/sync/invalidations/sync_invalidations_service_impl.cc.
+constexpr char kSyncInvalidationsApplicationName[] =
+    "com.google.chrome.sync.invalidations";
+
+void LogDeliveredToAppHandler(const std::string& app_id, bool has_app_handler) {
+  base::UmaHistogramBoolean("GCM.DeliveredToAppHandler", has_app_handler);
+
+  // Record for sync-related app handlers, used to estimate missed sync
+  // invalidations.
+  if (app_id == kSyncInvalidationsApplicationName) {
+    base::UmaHistogramBoolean("GCM.DeliveredToAppHandler.SyncInvalidations",
+                              has_app_handler);
+  } else if (app_id == kFcmInvalidationsApplicationName) {
+    base::UmaHistogramBoolean("GCM.DeliveredToAppHandler.FcmInvalidations",
+                              has_app_handler);
+  }
+}
+
+}  // namespace
 
 InstanceIDHandler::InstanceIDHandler() = default;
 
@@ -163,6 +191,7 @@ void GCMDriver::UnregisterWithSenderIdImpl(const std::string& app_id,
 void GCMDriver::RegisterFinished(const std::string& app_id,
                                  const std::string& registration_id,
                                  GCMClient::Result result) {
+  TRACE_EVENT0("identity", "GCMDriver::RegisterFinished");
   auto callback_iter = register_callbacks_.find(app_id);
   if (callback_iter == register_callbacks_.end()) {
     // The callback could have been removed when the app is uninstalled.
@@ -280,8 +309,10 @@ void GCMDriver::DispatchMessageInternal(const std::string& app_id,
     case GCMDecryptionResult::DECRYPTED_DRAFT_03:
     case GCMDecryptionResult::DECRYPTED_DRAFT_08: {
       GCMAppHandler* handler = GetAppHandler(app_id);
-      UMA_HISTOGRAM_BOOLEAN("GCM.DeliveredToAppHandler", !!handler);
+      LogDeliveredToAppHandler(app_id, !!handler);
 
+      // TODO(crbug.com/1408769): store incoming messages in memory while
+      // AppHandler is not registered.
       if (handler)
         handler->OnMessage(app_id, message);
 
@@ -342,8 +373,6 @@ void GCMDriver::EncryptMessage(const std::string& app_id,
 void GCMDriver::OnMessageEncrypted(EncryptMessageCallback callback,
                                    GCMEncryptionResult result,
                                    std::string message) {
-  UMA_HISTOGRAM_ENUMERATION("GCM.Crypto.EncryptMessageResult", result,
-                            GCMEncryptionResult::ENUM_SIZE);
   std::move(callback).Run(result, std::move(message));
 }
 

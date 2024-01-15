@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/secure_channel/nearby_connector_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/secure_channel/nearby_connection_broker_impl.h"
 #include "chrome/browser/ash/secure_channel/nearby_endpoint_finder_impl.h"
 #include "chrome/browser/ash/secure_channel/util/histogram_util.h"
@@ -168,6 +168,7 @@ void NearbyConnectorImpl::RecordNearbyDisconnectionForActiveBrokers(
       break;
 
     case NearbyProcessShutdownReason::kConnectionsMojoPipeDisconnection:
+    case NearbyProcessShutdownReason::kPresenceMojoPipeDisconnection:
     case NearbyProcessShutdownReason::kDecoderMojoPipeDisconnection:
       disconnection_reason =
           util::NearbyDisconnectionReason::kNearbyProcessMojoDisconnection;

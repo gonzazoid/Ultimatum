@@ -10,8 +10,8 @@
 
 #include "base/base64.h"
 #include "base/base64url.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 #include "chrome/test/chromedriver/chrome/web_view.h"
@@ -96,10 +96,6 @@ Status ExecuteWebAuthnCommand(const WebAuthnCommand& command,
   if (status.IsError())
     return status;
 
-  status = web_view->ConnectIfNecessary();
-  if (status.IsError())
-    return status;
-
   status = web_view->SendCommand("WebAuthn.enable", base::Value::Dict());
   if (status.IsError())
     return status;
@@ -134,7 +130,9 @@ Status ExecuteAddVirtualAuthenticator(WebView* web_view,
       } else if (extension_string == "credBlob") {
         mapped_params.SetByDottedPath("options.hasCredBlob", true);
       } else if (extension_string == "minPinLength") {
-        mapped_params.SetByDottedPath("options.minPinLength", true);
+        mapped_params.SetByDottedPath("options.hasMinPinLength", true);
+      } else if (extension_string == "prf") {
+        mapped_params.SetByDottedPath("options.hasPrf", true);
       } else {
         return Status(kUnsupportedOperation,
                       extension_string + kUnrecognizedExtension);
@@ -166,7 +164,7 @@ Status ExecuteAddVirtualAuthenticator(WebView* web_view,
     return status;
 
   absl::optional<base::Value> authenticator_id =
-      result->ExtractKey("authenticatorId");
+      result->GetDict().Extract("authenticatorId");
   if (!authenticator_id)
     return Status(kUnknownError, kDevToolsDidNotReturnExpectedValue);
 
@@ -219,7 +217,8 @@ Status ExecuteGetCredentials(WebView* web_view,
   if (status.IsError())
     return status;
 
-  absl::optional<base::Value> credentials = result->ExtractKey("credentials");
+  absl::optional<base::Value> credentials =
+      result->GetDict().Extract("credentials");
   if (!credentials)
     return Status(kUnknownError, kDevToolsDidNotReturnExpectedValue);
 

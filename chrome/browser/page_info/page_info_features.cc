@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,31 +11,23 @@
 
 namespace page_info {
 
-bool IsMoreAboutThisSiteFeatureEnabled() {
-#if !BUILDFLAG(IS_ANDROID)
-  // MoreAbout may only be enabled when the side panel is on.
-  if (!base::FeatureList::IsEnabled(features::kUnifiedSidePanel))
-    return false;
-#endif
-
-  if (!page_info::IsAboutThisSiteFeatureEnabled(
-          g_browser_process->GetApplicationLocale())) {
-    return false;
-  }
-
-  return base::FeatureList::IsEnabled(
-      page_info::kPageInfoAboutThisSiteMoreInfo);
+bool IsAboutThisSiteFeatureEnabled() {
+  return page_info::IsAboutThisSiteFeatureEnabled(
+      g_browser_process->GetApplicationLocale());
 }
 
-bool IsDescriptionPlaceholderFeatureEnabled() {
-  return IsMoreAboutThisSiteFeatureEnabled() &&
-         base::FeatureList::IsEnabled(
-             page_info::kPageInfoAboutThisSiteDescriptionPlaceholder);
+bool IsAboutThisSiteAsyncFetchingEnabled() {
+  return IsAboutThisSiteFeatureEnabled() &&
+         base::FeatureList::IsEnabled(kAboutThisSiteAsyncFetching);
 }
+
+BASE_FEATURE(kAboutThisSiteAsyncFetching,
+             "AboutThisSiteAsyncFetching",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 #if !BUILDFLAG(IS_ANDROID)
 bool IsPersistentSidePanelEntryFeatureEnabled() {
-  return IsMoreAboutThisSiteFeatureEnabled() &&
+  return IsAboutThisSiteFeatureEnabled() &&
          base::FeatureList::IsEnabled(
              page_info::kAboutThisSitePersistentSidePanelEntry);
 }
@@ -43,6 +35,7 @@ bool IsPersistentSidePanelEntryFeatureEnabled() {
 BASE_FEATURE(kAboutThisSitePersistentSidePanelEntry,
              "AboutThisSitePersistentSidePanelEntry",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
 #endif
 
 }  // namespace page_info

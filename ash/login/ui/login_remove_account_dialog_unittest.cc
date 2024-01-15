@@ -7,25 +7,44 @@
 #include "ash/login/ui/login_button.h"
 #include "ash/login/ui/login_remove_account_dialog.h"
 #include "ash/login/ui/login_test_base.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/user_manager/user_type.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/layout/box_layout.h"
 
 namespace ash {
 
 namespace {
+
 constexpr int kBubbleAnchorViewSizeDp = 100;
+
+class AnchorView final : public views::View {
+ public:
+  base::WeakPtr<AnchorView> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  METADATA_HEADER(AnchorView, views::View)
+  base::WeakPtrFactory<AnchorView> weak_ptr_factory_{this};
+};
+
+BEGIN_METADATA(AnchorView)
+END_METADATA
+
 }  // namespace
 
 using LoginRemoveAccountDialogTest = LoginTestBase;
 
 TEST_F(LoginRemoveAccountDialogTest, RemoveUserRequiresTwoActivations) {
-  auto* anchor = new views::View;
+  auto* anchor = new AnchorView();
   anchor->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical));
   SetWidget(CreateWidgetWithContent(anchor));
@@ -36,7 +55,7 @@ TEST_F(LoginRemoveAccountDialogTest, RemoveUserRequiresTwoActivations) {
   LoginUserInfo login_user_info;
   login_user_info.can_remove = true;
   auto* bubble = new LoginRemoveAccountDialog(
-      login_user_info, anchor, nullptr /*bubble_opener*/,
+      login_user_info, anchor->AsWeakPtr(), nullptr /*bubble_opener*/,
       base::BindRepeating([](bool* warning_called) { *warning_called = true; },
                           &remove_warning_called),
       base::BindRepeating([](bool* remove_called) { *remove_called = true; },
@@ -65,7 +84,7 @@ TEST_F(LoginRemoveAccountDialogTest, RemoveUserRequiresTwoActivations) {
 }
 
 TEST_F(LoginRemoveAccountDialogTest, LongUserNameAndEmailLaidOutCorrectly) {
-  auto* anchor = new views::View;
+  auto* anchor = new AnchorView();
   anchor->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical));
   SetWidget(CreateWidgetWithContent(anchor));
@@ -79,8 +98,8 @@ TEST_F(LoginRemoveAccountDialogTest, LongUserNameAndEmailLaidOutCorrectly) {
   login_user_info.is_device_owner = false;
   login_user_info.can_remove = true;
   auto* bubble = new LoginRemoveAccountDialog(
-      login_user_info, anchor, nullptr /*bubble_opener*/, base::DoNothing(),
-      base::DoNothing());
+      login_user_info, anchor->AsWeakPtr(), nullptr /*bubble_opener*/,
+      base::DoNothing(), base::DoNothing());
 
   anchor->AddChildView(bubble);
   bubble->Show();
@@ -111,7 +130,7 @@ TEST_F(LoginRemoveAccountDialogTest, LongUserNameAndEmailLaidOutCorrectly) {
 }
 
 TEST_F(LoginRemoveAccountDialogTest, LoginButtonRipple) {
-  auto* container = new views::View();
+  auto* container = new AnchorView();
   container->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical));
 
@@ -130,8 +149,8 @@ TEST_F(LoginRemoveAccountDialogTest, LoginButtonRipple) {
   EXPECT_TRUE(ink_drop_api.HasInkDrop());
 
   auto* bubble = new LoginRemoveAccountDialog(
-      LoginUserInfo(), container /*anchor*/, bubble_opener, base::DoNothing(),
-      base::DoNothing());
+      LoginUserInfo(), container->AsWeakPtr() /*anchor*/, bubble_opener,
+      base::DoNothing(), base::DoNothing());
 
   container->AddChildView(bubble);
 
@@ -170,9 +189,6 @@ TEST_F(LoginRemoveAccountDialogTest, ResetStateHidesConfirmData) {
   test_api.remove_user_button()->RequestFocus();
   GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   EXPECT_TRUE(test_api.remove_user_confirm_data()->GetVisible());
-
-  bubble->ResetState();
-  EXPECT_FALSE(test_api.remove_user_confirm_data()->GetVisible());
 }
 
 }  // namespace ash

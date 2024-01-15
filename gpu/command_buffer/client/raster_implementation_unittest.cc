@@ -13,8 +13,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "cc/paint/raw_memory_transfer_cache_entry.h"
@@ -76,10 +76,7 @@ class RasterImplementationTest : public testing::Test {
       kNumCommandEntries * sizeof(CommandBufferEntry);
   static const uint32_t kTransferBufferSize = 512;
 
-  static const GLint kMaxCombinedTextureImageUnits = 8;
-  static const GLint kMaxTextureImageUnits = 8;
   static const GLint kMaxTextureSize = 128;
-  static const GLint kNumCompressedTextureFormats = 0;
   static const GLuint kStartId = 1024;
   static const GLuint kBuffersStartId = 1;
   static const GLuint kTexturesStartId = 1;
@@ -92,7 +89,6 @@ class RasterImplementationTest : public testing::Test {
     TestContext() : commands_(nullptr), token_(0) {}
 
     bool Initialize(bool bind_generates_resource_client,
-                    bool bind_generates_resource_service,
                     bool lose_context_when_out_of_memory,
                     bool transfer_buffer_initialize_fail,
                     bool sync_query) {
@@ -108,14 +104,7 @@ class RasterImplementationTest : public testing::Test {
       helper_->Initialize(limits.command_buffer_size);
 
       gpu_control_ = std::make_unique<StrictMock<MockClientGpuControl>>();
-      capabilities_.max_combined_texture_image_units =
-          kMaxCombinedTextureImageUnits;
-      capabilities_.max_texture_image_units = kMaxTextureImageUnits;
       capabilities_.max_texture_size = kMaxTextureSize;
-      capabilities_.num_compressed_texture_formats =
-          kNumCompressedTextureFormats;
-      capabilities_.bind_generates_resource_chromium =
-          bind_generates_resource_service ? 1 : 0;
       capabilities_.sync_query = sync_query;
       EXPECT_CALL(*gpu_control_, GetCapabilities())
           .WillOnce(ReturnRef(capabilities_));
@@ -156,6 +145,7 @@ class RasterImplementationTest : public testing::Test {
           .Times(AtLeast(1));
       // The client should be unset.
       EXPECT_CALL(*gpu_control_, SetGpuControlClient(nullptr)).Times(1);
+      EXPECT_CALL(*gpu_control_, CancelAllQueries()).Times(1);
       gl_.reset();
     }
 
@@ -206,12 +196,10 @@ class RasterImplementationTest : public testing::Test {
   struct ContextInitOptions {
     ContextInitOptions()
         : bind_generates_resource_client(true),
-          bind_generates_resource_service(true),
           lose_context_when_out_of_memory(false),
           transfer_buffer_initialize_fail(false),
           sync_query(true) {}
     bool bind_generates_resource_client;
-    bool bind_generates_resource_service;
     bool lose_context_when_out_of_memory;
     bool transfer_buffer_initialize_fail;
     bool sync_query;
@@ -220,7 +208,6 @@ class RasterImplementationTest : public testing::Test {
   bool Initialize(const ContextInitOptions& init_options) {
     bool success = true;
     if (!test_context_.Initialize(init_options.bind_generates_resource_client,
-                                  init_options.bind_generates_resource_service,
                                   init_options.lose_context_when_out_of_memory,
                                   init_options.transfer_buffer_initialize_fail,
                                   init_options.sync_query)) {
@@ -316,6 +303,7 @@ void RasterImplementationTest::SetUp() {
 }
 
 void RasterImplementationTest::TearDown() {
+  gl_ = nullptr;
   test_context_.TearDown();
 }
 
@@ -328,10 +316,7 @@ const uint8_t RasterImplementationTest::kInitialValue;
 const uint32_t RasterImplementationTest::kNumCommandEntries;
 const uint32_t RasterImplementationTest::kCommandBufferSizeBytes;
 const uint32_t RasterImplementationTest::kTransferBufferSize;
-const GLint RasterImplementationTest::kMaxCombinedTextureImageUnits;
-const GLint RasterImplementationTest::kMaxTextureImageUnits;
 const GLint RasterImplementationTest::kMaxTextureSize;
-const GLint RasterImplementationTest::kNumCompressedTextureFormats;
 const GLuint RasterImplementationTest::kStartId;
 const GLuint RasterImplementationTest::kBuffersStartId;
 const GLuint RasterImplementationTest::kTexturesStartId;

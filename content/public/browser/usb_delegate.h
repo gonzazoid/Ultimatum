@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -26,6 +26,7 @@ class Origin;
 namespace content {
 
 class BrowserContext;
+class Page;
 class RenderFrameHost;
 class UsbChooser;
 
@@ -57,8 +58,14 @@ class CONTENT_EXPORT UsbDelegate {
   // below returned false.
   virtual std::unique_ptr<UsbChooser> RunChooser(
       RenderFrameHost& frame,
-      std::vector<device::mojom::UsbDeviceFilterPtr> filters,
+      blink::mojom::WebUsbRequestDeviceOptionsPtr options,
       blink::mojom::WebUsbService::GetPermissionCallback callback) = 0;
+
+  // By returning false, allows the embedder to deny WebUSB access to documents
+  // of the given `page`. This is beyond the restrictions already enforced
+  // within content/. For example, the embedder may be displaying `page` in a
+  // context where prompting for permissions is not appropriate.
+  virtual bool PageMayUseUsb(Page& page) = 0;
 
   // Returns whether `origin` in `browser_context` has permission to request
   // access to a device.
@@ -78,11 +85,12 @@ class CONTENT_EXPORT UsbDelegate {
       const std::string& guid) = 0;
 
   // Returns whether `origin` in `browser_context` has permission to access
-  // the USB device described by `device`.
+  // the USB device described by `device_info`.
   virtual bool HasDevicePermission(
       BrowserContext* browser_context,
+      RenderFrameHost* frame,
       const url::Origin& origin,
-      const device::mojom::UsbDeviceInfo& device) = 0;
+      const device::mojom::UsbDeviceInfo& device_info) = 0;
 
   // These two methods are expected to proxy to the UsbDeviceManager interface
   // owned by the embedder.
@@ -110,6 +118,15 @@ class CONTENT_EXPORT UsbDelegate {
 
   // Returns true if `origin` is allowed to access WebUSB from service workers.
   virtual bool IsServiceWorkerAllowedForOrigin(const url::Origin& origin) = 0;
+
+  // Notify the delegate a connection is created on |origin| by
+  // |browser_context|.
+  virtual void IncrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
+  // Notify the delegate a connection is closed on |origin| by
+  // |browser_context|.
+  virtual void DecrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
 };
 
 }  // namespace content

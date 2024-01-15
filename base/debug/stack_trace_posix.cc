@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -28,11 +29,30 @@
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 
-#if !defined(USE_SYMBOLIZE)
-#include <cxxabi.h>
+// Controls whether `dladdr(...)` is used to print the callstack. This is
+// only used on iOS Official build where `backtrace_symbols(...)` prints
+// misleading symbols (as the binary is stripped).
+#if BUILDFLAG(IS_IOS) && defined(OFFICIAL_BUILD)
+#define HAVE_DLADDR
+#include <dlfcn.h>
 #endif
-#if !defined(__UCLIBC__) && !defined(_AIX)
+
+// Surprisingly, uClibc defines __GLIBC__ in some build configs, but
+// execinfo.h and backtrace(3) are really only present in glibc and in macOS
+// libc.
+#if BUILDFLAG(IS_APPLE) || \
+    (defined(__GLIBC__) && !defined(__UCLIBC__) && !defined(__AIX))
+#define HAVE_BACKTRACE
 #include <execinfo.h>
+#endif
+
+// Controls whether to include code to demangle C++ symbols.
+#if !defined(USE_SYMBOLIZE) && defined(HAVE_BACKTRACE) && !defined(HAVE_DLADDR)
+#define DEMANGLE_SYMBOLS
+#endif
+
+#if defined(DEMANGLE_SYMBOLS)
+#include <cxxabi.h>
 #endif
 
 #if BUILDFLAG(IS_APPLE)
@@ -40,11 +60,12 @@
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include <sys/prctl.h>
+
 #include "base/debug/proc_maps_linux.h"
 #endif
 
 #include "base/cfi_buildflags.h"
-#include "base/cxx17_backports.h"
 #include "base/debug/debugger.h"
 #include "base/debug/stack_trace.h"
 #include "base/files/scoped_file.h"
@@ -77,7 +98,7 @@ volatile sig_atomic_t in_signal_handler = 0;
 bool (*try_handle_signal)(int, siginfo_t*, void*) = nullptr;
 #endif
 
-#if !defined(USE_SYMBOLIZE)
+#if defined(DEMANGLE_SYMBOLS)
 // The prefix used for mangled symbols, per the Itanium C++ ABI:
 // http://www.codesourcery.com/cxx-abi/abi.html#mangling
 const char kMangledSymbolPrefix[] = "_Z";
@@ -86,9 +107,7 @@ const char kMangledSymbolPrefix[] = "_Z";
 // (('a'..'z').to_a+('A'..'Z').to_a+('0'..'9').to_a + ['_']).join
 const char kSymbolCharacters[] =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
-#endif  // !defined(USE_SYMBOLIZE)
 
-#if !defined(USE_SYMBOLIZE)
 // Demangles C++ symbols in the given text. Example:
 //
 // "out/Debug/base_unittests(_ZN10StackTraceC1Ev+0x20) [0x817778c]"
@@ -98,7 +117,6 @@ void DemangleSymbols(std::string* text) {
   // Note: code in this function is NOT async-signal safe (std::string uses
   // malloc internally).
 
-#if !defined(__UCLIBC__) && !defined(_AIX)
   std::string::size_type search_from = 0;
   while (search_from < text->size()) {
     // Look for the start of a mangled symbol, from search_from.
@@ -133,9 +151,8 @@ void DemangleSymbols(std::string* text) {
       search_from = mangled_start + 2;
     }
   }
-#endif  // !defined(__UCLIBC__) && !defined(_AIX)
 }
-#endif  // !defined(USE_SYMBOLIZE)
+#endif  // defined(DEMANGLE_SYMBOLS)
 
 class BacktraceOutputHandler {
  public:
@@ -145,8 +162,8 @@ class BacktraceOutputHandler {
   virtual ~BacktraceOutputHandler() = default;
 };
 
-#if !defined(__UCLIBC__) && !defined(_AIX)
-void OutputPointer(void* pointer, BacktraceOutputHandler* handler) {
+#if defined(HAVE_BACKTRACE)
+void OutputPointer(const void* pointer, BacktraceOutputHandler* handler) {
   // This should be more than enough to store a 64-bit number in hex:
   // 16 hex digits + 1 for null-terminator.
   char buf[17] = { '\0' };
@@ -156,19 +173,25 @@ void OutputPointer(void* pointer, BacktraceOutputHandler* handler) {
   handler->HandleOutput(buf);
 }
 
-#if defined(USE_SYMBOLIZE)
-void OutputFrameId(size_t frame_id, BacktraceOutputHandler* handler) {
+#if defined(HAVE_DLADDR) || defined(USE_SYMBOLIZE)
+void OutputValue(size_t value, BacktraceOutputHandler* handler) {
   // Max unsigned 64-bit number in decimal has 20 digits (18446744073709551615).
   // Hence, 30 digits should be more than enough to represent it in decimal
   // (including the null-terminator).
   char buf[30] = { '\0' };
-  handler->HandleOutput("#");
-  internal::itoa_r(static_cast<intptr_t>(frame_id), buf, sizeof(buf), 10, 1);
+  internal::itoa_r(static_cast<intptr_t>(value), buf, sizeof(buf), 10, 1);
   handler->HandleOutput(buf);
+}
+#endif  // defined(HAVE_DLADDR) || defined(USE_SYMBOLIZE)
+
+#if defined(USE_SYMBOLIZE)
+void OutputFrameId(size_t frame_id, BacktraceOutputHandler* handler) {
+  handler->HandleOutput("#");
+  OutputValue(frame_id, handler);
 }
 #endif  // defined(USE_SYMBOLIZE)
 
-void ProcessBacktrace(void* const* trace,
+void ProcessBacktrace(const void* const* trace,
                       size_t size,
                       const char* prefix_string,
                       BacktraceOutputHandler* handler) {
@@ -195,8 +218,8 @@ void ProcessBacktrace(void* const* trace,
 
     // Subtract by one as return address of function may be in the next
     // function when a function is annotated as noreturn.
-    void* address = static_cast<char*>(trace[i]) - 1;
-    if (google::Symbolize(address, buf, sizeof(buf))) {
+    const void* address = static_cast<const char*>(trace[i]) - 1;
+    if (google::Symbolize(const_cast<void*>(address), buf, sizeof(buf))) {
       handler->HandleOutput(buf);
 #if BUILDFLAG(ENABLE_STACK_TRACE_LINE_NUMBERS)
       // Only output the source line number if the offset was found. Otherwise,
@@ -220,8 +243,33 @@ void ProcessBacktrace(void* const* trace,
   // Below part is async-signal unsafe (uses malloc), so execute it only
   // when we are not executing the signal handler.
   if (in_signal_handler == 0 && IsValueInRangeForNumericType<int>(size)) {
-    std::unique_ptr<char*, FreeDeleter> trace_symbols(
-        backtrace_symbols(trace, static_cast<int>(size)));
+#if defined(HAVE_DLADDR)
+    Dl_info dl_info;
+    for (size_t i = 0; i < size; ++i) {
+      if (prefix_string) {
+        handler->HandleOutput(prefix_string);
+      }
+
+      OutputValue(i, handler);
+      handler->HandleOutput(" ");
+
+      const bool dl_info_found = dladdr(trace[i], &dl_info) != 0;
+      if (dl_info_found) {
+        const char* last_sep = strrchr(dl_info.dli_fname, '/');
+        const char* basename = last_sep ? last_sep + 1 : dl_info.dli_fname;
+        handler->HandleOutput(basename);
+      } else {
+        handler->HandleOutput("???");
+      }
+      handler->HandleOutput(" ");
+      OutputPointer(trace[i], handler);
+
+      handler->HandleOutput("\n");
+    }
+    printed = true;
+#else   // defined(HAVE_DLADDR)
+    std::unique_ptr<char*, FreeDeleter> trace_symbols(backtrace_symbols(
+        const_cast<void* const*>(trace), static_cast<int>(size)));
     if (trace_symbols.get()) {
       for (size_t i = 0; i < size; ++i) {
         std::string trace_symbol = trace_symbols.get()[i];
@@ -234,6 +282,7 @@ void ProcessBacktrace(void* const* trace,
 
       printed = true;
     }
+#endif  // defined(HAVE_DLADDR)
   }
 
   if (!printed) {
@@ -245,13 +294,35 @@ void ProcessBacktrace(void* const* trace,
   }
 #endif  // defined(USE_SYMBOLIZE)
 }
-#endif  // !defined(__UCLIBC__) && !defined(_AIX)
+#endif  // defined(HAVE_BACKTRACE)
 
 void PrintToStderr(const char* output) {
   // NOTE: This code MUST be async-signal safe (it's used by in-process
   // stack dumping signal handler). NO malloc or stdio is allowed here.
   std::ignore = HANDLE_EINTR(write(STDERR_FILENO, output, strlen(output)));
 }
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS)
+void AlarmSignalHandler(int signal, siginfo_t* info, void* void_context) {
+  // We have seen rare cases on AMD linux where the default signal handler
+  // either does not run or a thread (Probably an AMD driver thread) prevents
+  // the termination of the gpu process. We catch this case when the alarm fires
+  // and then call exit_group() to kill all threads of the process. This has
+  // resolved the zombie gpu process issues we have seen on our context lost
+  // test.
+  // Note that many different calls were tried to kill the process when it is in
+  // this state. Only 'exit_group' was found to cause termination and it is
+  // speculated that only this works because only this exit kills all threads in
+  // the process (not simply the current thread).
+  // See: http://crbug.com/1396451.
+  PrintToStderr(
+      "Warning: Default signal handler failed to terminate process.\n");
+  PrintToStderr("Calling exit_group() directly to prevent timeout.\n");
+  // See: https://man7.org/linux/man-pages/man2/exit_group.2.html
+  syscall(SYS_exit_group, EXIT_FAILURE);
+}
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) ||
+        // BUILDFLAG(IS_CHROMEOS)
 
 void StackDumpSignalHandler(int signal, siginfo_t* info, void* void_context) {
   // NOTE: This code MUST be async-signal safe.
@@ -348,6 +419,11 @@ void StackDumpSignalHandler(int signal, siginfo_t* info, void* void_context) {
       PrintToStderr(" SEGV_MAPERR ");
     else if (info->si_code == SEGV_ACCERR)
       PrintToStderr(" SEGV_ACCERR ");
+#if defined(ARCH_CPU_X86_64) && \
+    (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS))
+    else if (info->si_code == SI_KERNEL)
+      PrintToStderr(" SI_KERNEL");
+#endif
     else
       PrintToStderr(" <unknown> ");
   }
@@ -368,6 +444,16 @@ void StackDumpSignalHandler(int signal, siginfo_t* info, void* void_context) {
         "https://www.chromium.org/developers/testing/control-flow-integrity\n");
   }
 #endif  // BUILDFLAG(CFI_ENFORCEMENT_TRAP)
+
+#if defined(ARCH_CPU_X86_64) && \
+    (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS))
+  if (signal == SIGSEGV && info->si_code == SI_KERNEL) {
+    PrintToStderr(
+        " Possibly a General Protection Fault, can be due to a non-canonical "
+        "address dereference. See \"Intel 64 and IA-32 Architectures Software "
+        "Developer’s Manual\", Volume 1, Section 3.3.7.1.\n");
+  }
+#endif
 
   debug::StackTrace().Print();
 
@@ -446,23 +532,61 @@ void StackDumpSignalHandler(int signal, siginfo_t* info, void* void_context) {
 
   PrintToStderr("[end of stack trace]\n");
 
-#if BUILDFLAG(IS_MAC)
   if (::signal(signal, SIG_DFL) == SIG_ERR) {
     _exit(EXIT_FAILURE);
   }
-#elif !BUILDFLAG(IS_LINUX)
-  // For all operating systems but Linux we do not reraise the signal that
-  // brought us here but terminate the process immediately.
-  // Otherwise various tests break on different operating systems, see
-  // https://code.google.com/p/chromium/issues/detail?id=551681 amongst others.
-  PrintToStderr(
-      "Calling _exit(EXIT_FAILURE). Core file will not be generated.\n");
-  _exit(EXIT_FAILURE);
-#endif  // !BUILDFLAG(IS_LINUX)
 
-  // After leaving this handler control flow returns to the point where the
-  // signal was raised, raising the current signal once again but executing the
-  // default handler instead of this one.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS)
+  // Set an alarm to trigger in case the default handler does not terminate
+  // the process. See 'AlarmSignalHandler' for more details.
+  struct sigaction action;
+  memset(&action, 0, sizeof(action));
+  action.sa_flags = static_cast<int>(SA_RESETHAND);
+  action.sa_sigaction = &AlarmSignalHandler;
+  sigemptyset(&action.sa_mask);
+  sigaction(SIGALRM, &action, nullptr);
+  // 'alarm' function is signal handler safe.
+  // https://man7.org/linux/man-pages/man7/signal-safety.7.html
+  // This delay is set to be long enough for the real signal handler to fire but
+  // shorter than chrome's process watchdog timer.
+  constexpr unsigned int kAlarmSignalDelaySeconds = 5;
+  alarm(kAlarmSignalDelaySeconds);
+
+  // The following is mostly from
+  // third_party/crashpad/crashpad/util/posix/signals.cc as re-raising signals
+  // is complicated.
+
+  // If we can raise a signal with siginfo on this platform, do so. This ensures
+  // that we preserve the siginfo information for asynchronous signals (i.e.
+  // signals that do not re-raise autonomously), such as signals delivered via
+  // kill() and asynchronous hardware faults such as SEGV_MTEAERR, which would
+  // otherwise be lost when re-raising the signal via raise().
+  long retval = syscall(SYS_rt_tgsigqueueinfo, getpid(), syscall(SYS_gettid),
+                        info->si_signo, info);
+  if (retval == 0) {
+    return;
+  }
+
+  // Kernels without commit 66dd34ad31e5 ("signal: allow to send any siginfo to
+  // itself"), which was first released in kernel version 3.9, did not permit a
+  // process to send arbitrary signals to itself, and will reject the
+  // rt_tgsigqueueinfo syscall with EPERM. If that happens, follow the non-Linux
+  // code path. Any other errno is unexpected and will cause us to exit.
+  if (errno != EPERM) {
+    _exit(EXIT_FAILURE);
+  }
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) ||
+        // BUILDFLAG(IS_CHROMEOS)
+
+  // Explicitly re-raise the signal even if it might have re-raised itself on
+  // return. Because signal handlers normally execute with their signal blocked,
+  // this raise() cannot immediately deliver the signal. Delivery is deferred
+  // until the signal handler returns and the signal becomes unblocked. The
+  // re-raised signal will appear with the same context as where it was
+  // initially triggered.
+  if (raise(signal) != 0) {
+    _exit(EXIT_FAILURE);
+  }
 }
 
 class PrintBacktraceOutputHandler : public BacktraceOutputHandler {
@@ -640,13 +764,51 @@ class SandboxSymbolizeHelper {
     return -1;
   }
 
+  // This class is copied from
+  // third_party/crashpad/crashpad/util/linux/scoped_pr_set_dumpable.h.
+  // It aims at ensuring the process is dumpable before opening /proc/self/mem.
+  // If the process is already dumpable, this class doesn't do anything.
+  class ScopedPrSetDumpable {
+   public:
+    // Uses `PR_SET_DUMPABLE` to make the current process dumpable.
+    //
+    // Restores the dumpable flag to its original value on destruction. If the
+    // original value couldn't be determined, the destructor attempts to
+    // restore the flag to 0 (non-dumpable).
+    explicit ScopedPrSetDumpable() {
+      int result = prctl(PR_GET_DUMPABLE, 0, 0, 0, 0);
+      was_dumpable_ = result > 0;
+
+      if (!was_dumpable_) {
+        std::ignore = prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
+      }
+    }
+
+    ScopedPrSetDumpable(const ScopedPrSetDumpable&) = delete;
+    ScopedPrSetDumpable& operator=(const ScopedPrSetDumpable&) = delete;
+
+    ~ScopedPrSetDumpable() {
+      if (!was_dumpable_) {
+        std::ignore = prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
+      }
+    }
+
+   private:
+    bool was_dumpable_;
+  };
+
   // Set the base address for each memory region by reading ELF headers in
   // process memory.
   void SetBaseAddressesForMemoryRegions() {
-    base::ScopedFD mem_fd(
-        HANDLE_EINTR(open("/proc/self/mem", O_RDONLY | O_CLOEXEC)));
-    if (!mem_fd.is_valid())
-      return;
+    base::ScopedFD mem_fd;
+    {
+      ScopedPrSetDumpable s;
+      mem_fd = base::ScopedFD(
+          HANDLE_EINTR(open("/proc/self/mem", O_RDONLY | O_CLOEXEC)));
+      if (!mem_fd.is_valid()) {
+        return;
+      }
+    }
 
     auto safe_memcpy = [&mem_fd](void* dst, uintptr_t src, size_t size) {
       return HANDLE_EINTR(pread(mem_fd.get(), dst, size,
@@ -864,19 +1026,18 @@ bool SetStackDumpFirstChanceCallback(bool (*handler)(int, siginfo_t*, void*)) {
 }
 #endif
 
-size_t CollectStackTrace(void** trace, size_t count) {
+size_t CollectStackTrace(const void** trace, size_t count) {
   // NOTE: This code MUST be async-signal safe (it's used by in-process
   // stack dumping signal handler). NO malloc or stdio is allowed here.
 
 #if defined(NO_UNWIND_TABLES) && BUILDFLAG(CAN_UNWIND_WITH_FRAME_POINTERS)
   // If we do not have unwind tables, then try tracing using frame pointers.
-  return base::debug::TraceStackFramePointers(const_cast<const void**>(trace),
-                                              count, 0);
-#elif !defined(__UCLIBC__) && !defined(_AIX)
+  return base::debug::TraceStackFramePointers(trace, count, 0);
+#elif defined(HAVE_BACKTRACE)
   // Though the backtrace API man page does not list any possible negative
   // return values, we take no chance.
   return base::saturated_cast<size_t>(
-      backtrace(trace, base::saturated_cast<int>(count)));
+      backtrace(const_cast<void**>(trace), base::saturated_cast<int>(count)));
 #else
   return 0;
 #endif
@@ -886,13 +1047,13 @@ void StackTrace::PrintWithPrefix(const char* prefix_string) const {
 // NOTE: This code MUST be async-signal safe (it's used by in-process
 // stack dumping signal handler). NO malloc or stdio is allowed here.
 
-#if !defined(__UCLIBC__) && !defined(_AIX)
+#if defined(HAVE_BACKTRACE)
   PrintBacktraceOutputHandler handler;
   ProcessBacktrace(trace_, count_, prefix_string, &handler);
 #endif
 }
 
-#if !defined(__UCLIBC__) && !defined(_AIX)
+#if defined(HAVE_BACKTRACE)
 void StackTrace::OutputToStreamWithPrefix(std::ostream* os,
                                           const char* prefix_string) const {
   StreamBacktraceOutputHandler handler(os);

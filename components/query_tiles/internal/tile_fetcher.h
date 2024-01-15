@@ -8,8 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
 #include "components/query_tiles/internal/tile_types.h"
 #include "net/base/backoff_entry.h"
 #include "url/gurl.h"

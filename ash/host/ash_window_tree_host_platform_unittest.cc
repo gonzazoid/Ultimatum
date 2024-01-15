@@ -54,30 +54,44 @@ class TestInputController : public ui::InputController {
   void SetTouchEventLoggingEnabled(bool enabled) override {
     NOTIMPLEMENTED_LOG_ONCE();
   }
-  void SetTouchpadSensitivity(int value) override {}
-  void SetTouchpadScrollSensitivity(int value) override {}
-  void SetTouchpadHapticFeedback(bool enabled) override {}
-  void SetTouchpadHapticClickSensitivity(int value) override {}
-  void SetTapToClick(bool enabled) override {}
   void SetThreeFingerClick(bool enabled) override {}
-  void SetTapDragging(bool enabled) override {}
-  void SetNaturalScroll(bool enabled) override {}
-  void SetMouseSensitivity(int value) override {}
-  void SetMouseScrollSensitivity(int value) override {}
-  void SetPrimaryButtonRight(bool right) override {}
-  void SetMouseReverseScroll(bool enabled) override {}
-  void SetMouseAcceleration(bool enabled) override {}
-  void SetMouseScrollAcceleration(bool enabled) override {}
-  void SetPointingStickSensitivity(int value) override {}
-  void SetPointingStickPrimaryButtonRight(bool right) override {}
-  void SetPointingStickAcceleration(bool enabled) override {}
+  void SetTouchpadSensitivity(std::optional<int> device_id,
+                              int value) override {}
+  void SetTouchpadScrollSensitivity(std::optional<int> device_id,
+                                    int value) override {}
+  void SetTapToClick(std::optional<int> device_id, bool enabled) override {}
+  void SetTapDragging(std::optional<int> device_id, bool enabled) override {}
+  void SetNaturalScroll(std::optional<int> device_id, bool enabled) override {}
+  void SetTouchpadAcceleration(std::optional<int> device_id,
+                               bool enabled) override {}
+  void SetTouchpadScrollAcceleration(std::optional<int> device_id,
+                                     bool enabled) override {}
+  void SetTouchpadHapticFeedback(std::optional<int> device_id,
+                                 bool enabled) override {}
+  void SetTouchpadHapticClickSensitivity(std::optional<int> device_id,
+                                         int value) override {}
+  void SetMouseSensitivity(std::optional<int> device_id, int value) override {}
+  void SetMouseScrollSensitivity(std::optional<int> device_id,
+                                 int value) override {}
+  void SetPrimaryButtonRight(std::optional<int> device_id,
+                             bool right) override {}
+  void SetMouseReverseScroll(std::optional<int> device_id,
+                             bool enabled) override {}
+  void SetMouseAcceleration(std::optional<int> device_id,
+                            bool enabled) override {}
+  void SetMouseScrollAcceleration(std::optional<int> device_id,
+                                  bool enabled) override {}
+  void SetPointingStickSensitivity(std::optional<int> device_id,
+                                   int value) override {}
+  void SetPointingStickPrimaryButtonRight(std::optional<int> device_id,
+                                          bool right) override {}
+  void SetPointingStickAcceleration(std::optional<int> device_id,
+                                    bool enabled) override {}
   void SetGamepadKeyBitsMapping(
       base::flat_map<int, std::vector<uint64_t>> key_bits_mapping) override {}
   std::vector<uint64_t> GetGamepadKeyBits(int id) override {
     return std::vector<uint64_t>();
   }
-  void SetTouchpadAcceleration(bool enabled) override {}
-  void SetTouchpadScrollAcceleration(bool enabled) override {}
   void SetTapToClickPaused(bool state) override {}
   void GetStylusSwitchState(GetStylusSwitchStateReply reply) override {
     // Return that there is no stylus in the garage; this test class
@@ -90,6 +104,9 @@ class TestInputController : public ui::InputController {
   void GetTouchEventLog(const base::FilePath& out_dir,
                         GetTouchEventLogReply reply) override {
     std::move(reply).Run(std::vector<base::FilePath>());
+  }
+  void DescribeForLog(DescribeForLogReply reply) const override {
+    std::move(reply).Run(std::string());
   }
   void PlayVibrationEffect(int id,
                            uint8_t amplitude,
@@ -110,6 +127,7 @@ class TestInputController : public ui::InputController {
   void GetGesturePropertiesService(
       mojo::PendingReceiver<ui::ozone::mojom::GesturePropertiesService>
           receiver) override {}
+  bool AreAnyKeysPressed() override { return false; }
 
   bool GetAccelerationSuspended() { return acceleration_suspended_; }
 

@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 
 from util import build_utils
 from util import resource_utils
+import action_helpers  # build_utils adds //build to sys.path.
 
 _TextSymbolEntry = collections.namedtuple(
     'RTextEntry', ('java_type', 'resource_type', 'name', 'value'))
@@ -97,12 +98,18 @@ class RTxtGenerator:
       if child.tag == 'declare-styleable':
         ret.update(self._ParseDeclareStyleable(child))
       else:
-        if child.tag == 'item':
+        if child.tag in ('item', 'public'):
           resource_type = child.attrib['type']
         elif child.tag in ('array', 'integer-array', 'string-array'):
           resource_type = 'array'
         else:
           resource_type = child.tag
+        parsed_element = ElementTree.tostring(child, encoding='unicode').strip()
+        assert resource_type in resource_utils.ALL_RESOURCE_TYPES, (
+            f'Infered resource type ({resource_type}) from xml entry '
+            f'({parsed_element}) (found in {xml_path}) is not listed in '
+            'resource_utils.ALL_RESOURCE_TYPES. Teach resources_parser.py how '
+            'to parse this entry and/or add to the list.')
         name = _ResourceNameToJavaSymbol(child.attrib['name'])
         ret.add(_TextSymbolEntry('int', resource_type, name, _DUMMY_RTXT_ID))
     return ret
@@ -141,7 +148,7 @@ class RTxtGenerator:
 
   def WriteRTxtFile(self, rtxt_path):
     resources = self._CollectResourcesListFromDirectories()
-    with build_utils.AtomicOutput(rtxt_path, mode='w') as f:
+    with action_helpers.atomic_output(rtxt_path, mode='w') as f:
       for resource in resources:
         line = '{0.java_type} {0.resource_type} {0.name} {0.value}\n'.format(
             resource)

@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 namespace blink {
@@ -123,6 +124,7 @@ class ImageDocumentTest : public testing::Test {
   void SetForceZeroLayoutHeight(bool);
 
  private:
+  test::TaskEnvironment task_environment_;
   Persistent<WindowToViewportScalingChromeClient> chrome_client_;
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
   float page_zoom_factor_ = 0.0f;
@@ -367,7 +369,7 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
   Compositor().BeginFrame();
 
   HTMLImageElement* img = GetDocument().ImageElement();
-  DOMRect* rect = img->getBoundingClientRect();
+  DOMRect* rect = img->GetBoundingClientRect();
 
   // Some initial sanity checking. We'll use the BoundingClientRect for the
   // image location since that's relative to the layout viewport and the layout
@@ -384,7 +386,7 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
   // layout size so the image location shouldn't change.
   WebView().ResizeWithBrowserControls(gfx::Size(5, 50), 10, 10, false);
   Compositor().BeginFrame();
-  rect = img->getBoundingClientRect();
+  rect = img->GetBoundingClientRect();
   EXPECT_EQ(50, rect->width());
   EXPECT_EQ(50, rect->height());
   EXPECT_EQ(0, rect->x());
@@ -457,7 +459,7 @@ TEST_F(ImageDocumentViewportTest, DivWidth) {
   EXPECT_EQ(1.f, GetVisualViewport().Scale());
   EXPECT_EQ(100, GetVisualViewport().Width());
   EXPECT_EQ(100, GetVisualViewport().Height());
-  DOMRect* rect = img->getBoundingClientRect();
+  DOMRect* rect = img->GetBoundingClientRect();
   EXPECT_EQ(25, rect->x());
   EXPECT_EQ(25, rect->y());
 
@@ -482,7 +484,7 @@ TEST_F(ImageDocumentViewportTest, DivWidth) {
   EXPECT_EQ(0.1f, GetVisualViewport().Scale());
   EXPECT_EQ(20, GetVisualViewport().Width());
   EXPECT_EQ(100, GetVisualViewport().Height());
-  rect = img->getBoundingClientRect();
+  rect = img->GetBoundingClientRect();
   EXPECT_EQ(0, rect->x());
   EXPECT_EQ(40, rect->y());
 }

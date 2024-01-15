@@ -8,12 +8,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "ash/constants/ash_switches.h"
+#include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_feature.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/profiles/profile.h"
@@ -26,10 +30,12 @@
 #include "components/media_router/common/media_sink.h"
 #include "components/media_router/common/media_source.h"
 #include "components/user_manager/user_manager.h"
+#include "third_party/icu/source/common/unicode/uversion.h"
+#include "third_party/icu/source/i18n/unicode/coll.h"
 
 namespace {
 
-absl::optional<media_router::MediaRouter*> media_router_for_test_;
+std::optional<media_router::MediaRouter*> g_media_router_for_test;
 
 Profile* GetProfile() {
   if (!user_manager::UserManager::IsInitialized())
@@ -45,8 +51,9 @@ Profile* GetProfile() {
 // Returns the MediaRouter instance for the current primary profile, if there is
 // one.
 media_router::MediaRouter* GetMediaRouter() {
-  if (media_router_for_test_)
-    return *media_router_for_test_;
+  if (g_media_router_for_test) {
+    return *g_media_router_for_test;
+  }
 
   Profile* profile = GetProfile();
   if (!profile || !media_router::MediaRouterEnabled(profile))
@@ -57,10 +64,6 @@ media_router::MediaRouter* GetMediaRouter() {
   DCHECK(router);
   return router;
 }
-
-// "Cast for Education" extension uses this string and expects the client to
-// interpret it as "signed-in user's domain".
-constexpr char const kDefaultDomain[] = "default";
 
 }  // namespace
 
@@ -95,9 +98,13 @@ class CastDeviceCache : public media_router::MediaRoutesObserver,
   // media_router::MediaRoutesObserver:
   void OnRoutesUpdated(const MediaRoutes& routes) override;
 
+  // Sorts `sinks_` alphabetically.
+  void SortSinks();
+
   MediaSinks sinks_;
   MediaRoutes routes_;
 
+  std::unique_ptr<icu::Collator> collator_;
   base::RepeatingClosure update_devices_callback_;
 };
 
@@ -124,23 +131,37 @@ void CastDeviceCache::OnSinksReceived(const MediaSinks& sinks) {
     if (sink.name().empty())
       continue;
 
-    // Hide all sinks which have a non-default domain (ie, castouts) to meet
-    // privacy requirements. This will be enabled once UI can display the
-    // domain. See crbug.com/624016.
-    if (sink.domain() && !sink.domain()->empty() &&
-        sink.domain() != kDefaultDomain) {
-      continue;
-    }
-
     sinks_.push_back(sink);
   }
-
+  SortSinks();
   update_devices_callback_.Run();
 }
 
 void CastDeviceCache::OnRoutesUpdated(const MediaRoutes& routes) {
   routes_ = routes;
   update_devices_callback_.Run();
+}
+
+void CastDeviceCache::SortSinks() {
+  if (sinks_.size() <= 1) {
+    return;
+  }
+  if (!collator_) {
+    UErrorCode error = U_ZERO_ERROR;
+    const std::string& locale = g_browser_process->GetApplicationLocale();
+    collator_.reset(
+        icu::Collator::createInstance(icu::Locale(locale.c_str()), error));
+    if (U_FAILURE(error)) {
+      collator_.reset();
+      return;
+    }
+  }
+  const icu::Collator* collator_ptr = collator_.get();
+  std::sort(sinks_.begin(), sinks_.end(),
+            [collator_ptr](const media_router::MediaSink& sink1,
+                           const media_router::MediaSink& sink2) {
+              return sink1.CompareUsingCollator(sink2, collator_ptr);
+            });
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -152,12 +173,18 @@ CastConfigControllerMediaRouter::CastConfigControllerMediaRouter() {
   session_observation_.Observe(session_manager::SessionManager::Get());
 }
 
-CastConfigControllerMediaRouter::~CastConfigControllerMediaRouter() = default;
+CastConfigControllerMediaRouter::~CastConfigControllerMediaRouter() {
+  StopObservingMirroringMediaControllerHosts();
+}
+
+void CastConfigControllerMediaRouter::OnFreezeInfoChanged() {
+  UpdateDevices();
+}
 
 // static
 void CastConfigControllerMediaRouter::SetMediaRouterForTest(
     media_router::MediaRouter* media_router) {
-  media_router_for_test_ = media_router;
+  g_media_router_for_test = media_router;
 }
 
 CastDeviceCache* CastConfigControllerMediaRouter::device_cache() {
@@ -173,12 +200,18 @@ CastDeviceCache* CastConfigControllerMediaRouter::device_cache() {
   return device_cache_.get();
 }
 
-void CastConfigControllerMediaRouter::AddObserver(Observer* observer) {
+void CastConfigControllerMediaRouter::AddObserver(
+    CastConfigController::Observer* observer) {
   observers_.AddObserver(observer);
 }
 
-void CastConfigControllerMediaRouter::RemoveObserver(Observer* observer) {
+void CastConfigControllerMediaRouter::RemoveObserver(
+    CastConfigController::Observer* observer) {
   observers_.RemoveObserver(observer);
+}
+
+bool CastConfigControllerMediaRouter::HasMediaRouterForPrimaryProfile() const {
+  return !!GetMediaRouter();
 }
 
 bool CastConfigControllerMediaRouter::HasSinksAndRoutes() const {
@@ -208,24 +241,134 @@ void CastConfigControllerMediaRouter::RequestDeviceRefresh() {
   // Build the old-style SinkAndRoute set out of the MediaRouter
   // source/sink/route setup. We first map the existing sinks, and then we
   // update those sinks with activity information.
+  StopObservingMirroringMediaControllerHosts();
+  UpdateDevices();
+
+  for (auto& device : devices_) {
+    if (device.route.id.size() > 0) {
+      media_router::MirroringMediaControllerHost* freeze_host =
+          GetMediaRouter()->GetMirroringMediaControllerHost(device.route.id);
+      if (freeze_host) {
+        freeze_host->AddObserver(this);
+      }
+    }
+  }
+}
+
+const std::vector<ash::SinkAndRoute>&
+CastConfigControllerMediaRouter::GetSinksAndRoutes() {
+  return devices_;
+}
+
+void CastConfigControllerMediaRouter::CastToSink(const std::string& sink_id) {
+  if (GetMediaRouter()) {
+    // TODO(takumif): Pass in tab casting timeout.
+    GetMediaRouter()->CreateRoute(
+        media_router::MediaSource::ForUnchosenDesktop().id(), sink_id,
+        url::Origin::Create(GURL("http://cros-cast-origin/")), nullptr,
+        base::DoNothing(), base::TimeDelta());
+  }
+}
+
+void CastConfigControllerMediaRouter::StopCasting(const std::string& route_id) {
+  if (GetMediaRouter()) {
+    GetMediaRouter()->TerminateRoute(route_id);
+  }
+}
+
+void CastConfigControllerMediaRouter::FreezeRoute(const std::string& route_id) {
+  if (!GetMediaRouter()) {
+    return;
+  }
+  media_router::MirroringMediaControllerHost* freeze_host =
+      GetMediaRouter()->GetMirroringMediaControllerHost(route_id);
+  if (!freeze_host) {
+    return;
+  }
+  freeze_host->Freeze();
+}
+
+void CastConfigControllerMediaRouter::UnfreezeRoute(
+    const std::string& route_id) {
+  if (!GetMediaRouter()) {
+    return;
+  }
+  media_router::MirroringMediaControllerHost* freeze_host =
+      GetMediaRouter()->GetMirroringMediaControllerHost(route_id);
+  if (!freeze_host) {
+    return;
+  }
+  freeze_host->Unfreeze();
+}
+
+void CastConfigControllerMediaRouter::OnUserProfileLoaded(
+    const AccountId& account_id) {
+  // The active profile has changed, which means that the media router has
+  // as well. Reset the device cache to ensure we are using up-to-date
+  // object instances.
+  device_cache_.reset();
+  RequestDeviceRefresh();
+}
+
+bool CastConfigControllerMediaRouter::IsAccessCodeCastFreezeUiEnabled() {
+  Profile* profile = GetProfile();
+  return profile && media_router::IsAccessCodeCastFreezeUiEnabled(profile);
+}
+
+void CastConfigControllerMediaRouter::
+    StopObservingMirroringMediaControllerHosts() {
+  for (const auto& device : devices_) {
+    auto route_id = device.route.id;
+    if (route_id.size() > 0) {
+      media_router::MirroringMediaControllerHost* mirroring_controller_host =
+          GetMediaRouter()->GetMirroringMediaControllerHost(route_id);
+      if (mirroring_controller_host) {
+        // It is safe to call RemoveObserver even if we are not observing a
+        // particular host.
+        mirroring_controller_host->RemoveObserver(this);
+      }
+    }
+  }
+}
+
+void CastConfigControllerMediaRouter::UpdateDevices() {
   devices_.clear();
 
+#if !defined(OFFICIAL_BUILD)
+  // Optionally add fake cast devices for manual UI testing.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ash::switches::kQsAddFakeCastDevices)) {
+    AddFakeCastDevices();
+  }
+#endif
   for (const media_router::MediaSink& sink : device_cache()->sinks()) {
     ash::SinkAndRoute device;
     device.sink.id = sink.id();
     device.sink.name = sink.name();
-    device.sink.domain = sink.domain().value_or(std::string());
     device.sink.sink_icon_type =
         static_cast<ash::SinkIconType>(sink.icon_type());
     devices_.push_back(std::move(device));
   }
 
   for (const media_router::MediaRoute& route : device_cache()->routes()) {
+    media_router::MirroringMediaControllerHost* freeze_host =
+        IsAccessCodeCastFreezeUiEnabled()
+            ? GetMediaRouter()->GetMirroringMediaControllerHost(
+                  route.media_route_id())
+            : nullptr;
+
     for (ash::SinkAndRoute& device : devices_) {
       if (device.sink.id == route.media_sink_id()) {
         device.route.id = route.media_route_id();
         device.route.title = route.description();
         device.route.is_local_source = route.is_local();
+
+        // Only set freeze info if the appropriate feature is enabled. Else,
+        // values default to false and freeze ui is not shown.
+        if (freeze_host) {
+          device.route.freeze_info.can_freeze = freeze_host->CanFreeze();
+          device.route.freeze_info.is_frozen = freeze_host->IsFrozen();
+        }
 
         // Default to a tab/app capture. This will display the media router
         // description. This means we will properly support DIAL casts.
@@ -242,31 +385,15 @@ void CastConfigControllerMediaRouter::RequestDeviceRefresh() {
     observer.OnDevicesUpdated(devices_);
 }
 
-const std::vector<ash::SinkAndRoute>&
-CastConfigControllerMediaRouter::GetSinksAndRoutes() {
-  return devices_;
-}
-
-void CastConfigControllerMediaRouter::CastToSink(const std::string& sink_id) {
-  if (GetMediaRouter()) {
-    // TODO(imcheng): Pass in tab casting timeout.
-    GetMediaRouter()->CreateRoute(
-        media_router::MediaSource::ForUnchosenDesktop().id(), sink_id,
-        url::Origin::Create(GURL("http://cros-cast-origin/")), nullptr,
-        base::DoNothing(), base::TimeDelta(), false);
+#if !defined(OFFICIAL_BUILD)
+void CastConfigControllerMediaRouter::AddFakeCastDevices() {
+  // Add enough devices that the UI menu will scroll.
+  for (int i = 1; i <= 10; i++) {
+    ash::SinkAndRoute device;
+    device.sink.id = "fake_sink_id_" + base::NumberToString(i);
+    device.sink.name = "Fake Sink " + base::NumberToString(i);
+    device.sink.sink_icon_type = ash::SinkIconType::kCast;
+    devices_.push_back(std::move(device));
   }
 }
-
-void CastConfigControllerMediaRouter::StopCasting(const std::string& route_id) {
-  if (GetMediaRouter())
-    GetMediaRouter()->TerminateRoute(route_id);
-}
-
-void CastConfigControllerMediaRouter::OnUserProfileLoaded(
-    const AccountId& account_id) {
-  // The active profile has changed, which means that the media router has
-  // as well. Reset the device cache to ensure we are using up-to-date
-  // object instances.
-  device_cache_.reset();
-  RequestDeviceRefresh();
-}
+#endif  // defined(OFFICIAL_BUILD)

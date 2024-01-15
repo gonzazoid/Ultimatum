@@ -5,9 +5,10 @@
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/net/network_diagnostics/arc_dns_resolution_routine.h"
 #include "chrome/browser/ash/net/network_diagnostics/arc_http_routine.h"
 #include "chrome/browser/ash/net/network_diagnostics/arc_ping_routine.h"
@@ -26,13 +27,11 @@
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/ash/components/mojo_service_manager/connection.h"
 #include "components/device_event_log/device_event_log.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/mojo/service_constants.h"
 
 namespace ash {
 namespace network_diagnostics {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 NetworkDiagnostics::NetworkDiagnostics(DebugDaemonClient* debug_daemon_client) {
@@ -133,7 +132,7 @@ void NetworkDiagnostics::RunHttpsLatency(RunHttpsLatencyCallback callback) {
 }
 
 void NetworkDiagnostics::RunVideoConferencing(
-    const absl::optional<std::string>& stun_server_name,
+    const std::optional<std::string>& stun_server_name,
     RunVideoConferencingCallback callback) {
   std::unique_ptr<NetworkDiagnosticsRoutine> routine;
   if (stun_server_name) {

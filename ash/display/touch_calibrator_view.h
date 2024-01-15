@@ -8,7 +8,9 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "cc/paint/paint_flags.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/display/display.h"
 #include "ui/gfx/animation/linear_animation.h"
@@ -42,6 +44,8 @@ class HintBox;
 class ASH_EXPORT TouchCalibratorView : public views::View,
                                        public views::AnimationDelegateViews,
                                        public ui::LayerAnimationObserver {
+  METADATA_HEADER(TouchCalibratorView, views::View)
+
  public:
   // Different states of |TouchCalibratorView| in order.
   enum State {
@@ -128,9 +132,9 @@ class ASH_EXPORT TouchCalibratorView : public views::View,
   gfx::RectF background_rect_;
 
   // Text label indicating how to exit the touch calibration.
-  views::Label* exit_label_ = nullptr;
+  raw_ptr<views::Label> exit_label_ = nullptr;
   // Text label indicating the significance of the touch point on screen.
-  views::Label* tap_label_ = nullptr;
+  raw_ptr<views::Label> tap_label_ = nullptr;
 
   // Start and end opacity values used during the fade animation. This is set
   // before the animation begins.
@@ -143,18 +147,18 @@ class ASH_EXPORT TouchCalibratorView : public views::View,
 
   // View responsible for displaying the animated circular icon that the user
   // touches to calibrate the screen.
-  CircularThrobberView* throbber_circle_ = nullptr;
+  raw_ptr<CircularThrobberView> throbber_circle_ = nullptr;
 
   // A hint box displayed next to the first touch point to assist user with
   // information about the next step.
-  HintBox* hint_box_view_ = nullptr;
+  raw_ptr<HintBox> hint_box_view_ = nullptr;
 
   // Final view containing the calibration complete message along with an icon.
-  views::View* completion_message_view_ = nullptr;
+  raw_ptr<views::View> completion_message_view_ = nullptr;
 
   // View that contains the animated throbber circle and a text label informing
   // the user to tap the circle to continue calibration.
-  views::View* touch_point_view_ = nullptr;
+  raw_ptr<views::View> touch_point_view_ = nullptr;
 
   State state_ = UNKNOWN;
 };

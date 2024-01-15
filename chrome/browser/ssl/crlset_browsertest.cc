@@ -29,6 +29,7 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/test_data_directory.h"
+#include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/test/base/android/android_browser_test.h"
@@ -77,7 +78,7 @@ IN_PROC_BROWSER_TEST_F(CRLSetBrowserTest, TestCRLSetRevoked) {
         &crl_set_bytes);
   }
   base::RunLoop run_loop;
-  content::GetNetworkService()->UpdateCRLSet(
+  content::GetCertVerifierServiceFactory()->UpdateCRLSet(
       base::as_bytes(base::make_span(crl_set_bytes)), run_loop.QuitClosure());
   run_loop.Run();
 
@@ -123,7 +124,7 @@ IN_PROC_BROWSER_TEST_F(CRLSetBrowserTest, TestCRLSetBlockedInterception) {
                            &crl_set_bytes);
   }
   base::RunLoop run_loop;
-  content::GetNetworkService()->UpdateCRLSet(
+  content::GetCertVerifierServiceFactory()->UpdateCRLSet(
       base::as_bytes(base::make_span(crl_set_bytes)), run_loop.QuitClosure());
   run_loop.Run();
 
@@ -171,7 +172,7 @@ IN_PROC_BROWSER_TEST_F(CRLSetBrowserTest, TestCRLSetKnownInterception) {
                            &crl_set_bytes);
   }
   base::RunLoop run_loop;
-  content::GetNetworkService()->UpdateCRLSet(
+  content::GetCertVerifierServiceFactory()->UpdateCRLSet(
       base::as_bytes(base::make_span(crl_set_bytes)), run_loop.QuitClosure());
   run_loop.Run();
 

@@ -4,9 +4,9 @@
 
 #include "components/search_engines/keyword_web_data_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/task/single_thread_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "components/search_engines/keyword_table.h"
 #include "components/search_engines/template_url_data.h"
@@ -26,8 +26,9 @@ WebDatabase::State PerformKeywordOperationsImpl(
 std::unique_ptr<WDTypedResult> GetKeywordsImpl(WebDatabase* db) {
   KeywordTable* const keyword_table = KeywordTable::FromWebDatabase(db);
   WDKeywordsResult result;
-  if (!keyword_table->GetKeywords(&result.keywords))
+  if (!keyword_table || !keyword_table->GetKeywords(&result.keywords)) {
     return nullptr;
+  }
 
   result.default_search_provider_id =
       keyword_table->GetDefaultSearchProviderID();
@@ -82,7 +83,7 @@ KeywordWebDataService::BatchModeScoper::~BatchModeScoper() {
 
 KeywordWebDataService::KeywordWebDataService(
     scoped_refptr<WebDatabaseService> wdbs,
-    scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner)
+    scoped_refptr<base::SequencedTaskRunner> ui_task_runner)
     : WebDataServiceBase(std::move(wdbs), std::move(ui_task_runner)),
       timer_(FROM_HERE,
              base::Seconds(5),

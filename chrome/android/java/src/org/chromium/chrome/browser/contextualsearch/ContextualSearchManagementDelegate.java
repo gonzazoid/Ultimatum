@@ -24,9 +24,7 @@ public interface ContextualSearchManagementDelegate {
      */
     Activity getActivity();
 
-    /**
-     * Promotes the current Content View Core in the Contextual Search Panel to its own Tab.
-     */
+    /** Promotes the current Content View Core in the Contextual Search Panel to its own Tab. */
     void promoteToTab();
 
     /**
@@ -74,14 +72,10 @@ public interface ContextualSearchManagementDelegate {
      */
     OverlayContentDelegate getOverlayContentDelegate();
 
-    /**
-     * Log the current state of Contextual Search.
-     */
+    /** Log the current state of Contextual Search. */
     void logCurrentState();
 
-    /**
-     * Called when the Contextual Search panel is closed.
-     */
+    /** Called when the Contextual Search panel is closed. */
     void onPanelFinishedShowing();
 
     /**
@@ -90,19 +84,11 @@ public interface ContextualSearchManagementDelegate {
      * @param suggestionIndex The 0-based index into the list of suggestions provided by the
      *        panel and presented in the UI. E.g. if the user clicked the second chip this value
      *        would be 1.
-     * @param isInBarSuggestion Whether the query was displayed in the Bar or content area of the
-     *                          Panel.
      */
-    void onRelatedSearchesSuggestionClicked(int suggestionIndex, boolean isInBarSuggestion);
+    void onRelatedSearchesSuggestionClicked(int suggestionIndex);
 
     /**
      * @return A {@link ScrimCoordinator} to fade the status bar in and out.
      */
     ScrimCoordinator getScrimCoordinator();
-
-    /**
-     * Returns whether the Delayed Intelligence Feature is currently active for the current user.
-     * A user must be in the undecided privacy state for Delayed Intelligence to take affect.
-     */
-    boolean isDelayedIntelligenceActive();
 }

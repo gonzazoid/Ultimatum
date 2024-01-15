@@ -4,12 +4,14 @@
 
 #include "chrome/browser/ui/views/page_info/security_information_view.h"
 
+#include <utility>
+
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/views/accessibility/non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/page_info/page_info_view_factory.h"
-#include "components/strings/grit/components_chromium_strings.h"
+#include "components/strings/grit/components_branded_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -26,7 +28,10 @@ SecurityInformationView::SecurityInformationView(int side_margin) {
       views::DISTANCE_RELATED_LABEL_HORIZONTAL);
   auto hover_button_insets = layout_provider->GetInsetsMetric(
       ChromeInsetsMetric::INSETS_PAGE_INFO_HOVER_BUTTON);
-
+  // TODO(olesiamarukhno): Unify the column width through all views in the
+  // page info (RichHoverButton, PermissionSelectorRow, ChosenObjectView,
+  // SecurityInformationView). Currently, it isn't same everywhere and it
+  // causes label text next to icon not to be aligned by 1 or 2px.
   views::TableLayout* layout =
       SetLayoutManager(std::make_unique<views::TableLayout>());
   layout->AddPaddingColumn(views::TableLayout::kFixedSize, side_margin)
@@ -145,6 +150,8 @@ void SecurityInformationView::AddResetDecisionsLabel(
   views::StyledLabel* reset_cert_decisions_label =
       reset_decisions_label_container_->AddChildView(
           std::make_unique<views::StyledLabel>());
+  reset_cert_decisions_label->SetID(
+      PageInfoViewFactory::VIEW_ID_PAGE_INFO_RESET_DECISIONS_LABEL);
   reset_cert_decisions_label->SetDefaultTextStyle(
       views::style::STYLE_SECONDARY);
   reset_cert_decisions_label->SetText(text);
@@ -194,21 +201,20 @@ void SecurityInformationView::AddPasswordReuseButtons(
       change_password_template = IDS_PAGE_INFO_PROTECT_ACCOUNT_BUTTON;
       break;
     default:
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
   }
 
   std::unique_ptr<views::MdTextButton> change_password_button;
   if (change_password_template) {
     change_password_button = std::make_unique<views::MdTextButton>(
-        change_password_callback,
+        std::move(change_password_callback),
         l10n_util::GetStringUTF16(change_password_template));
-    change_password_button->SetProminent(true);
+    change_password_button->SetStyle(ui::ButtonStyle::kProminent);
     change_password_button->SetID(
         PageInfoViewFactory::VIEW_ID_PAGE_INFO_BUTTON_CHANGE_PASSWORD);
   }
   auto allowlist_password_reuse_button = std::make_unique<views::MdTextButton>(
-      password_reuse_callback,
+      std::move(password_reuse_callback),
       l10n_util::GetStringUTF16(IDS_PAGE_INFO_ALLOWLIST_PASSWORD_REUSE_BUTTON));
   allowlist_password_reuse_button->SetID(
       PageInfoViewFactory::VIEW_ID_PAGE_INFO_BUTTON_ALLOWLIST_PASSWORD_REUSE);
@@ -246,5 +252,5 @@ void SecurityInformationView::AddPasswordReuseButtons(
   InvalidateLayout();
 }
 
-BEGIN_METADATA(SecurityInformationView, views::View)
+BEGIN_METADATA(SecurityInformationView)
 END_METADATA

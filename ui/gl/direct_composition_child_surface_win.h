@@ -10,6 +10,7 @@
 #include <dcomp.h>
 #include <wrl/client.h>
 
+#include "ui/gfx/frame_data.h"
 #include "ui/gl/gl_export.h"
 #include "ui/gl/gl_surface_egl.h"
 
@@ -17,8 +18,10 @@ namespace gl {
 
 class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL {
  public:
-  DirectCompositionChildSurfaceWin(GLDisplayEGL* display,
-                                   bool use_angle_texture_offset);
+  DirectCompositionChildSurfaceWin(
+      GLDisplayEGL* display,
+      Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device,
+      bool use_angle_texture_offset);
 
   DirectCompositionChildSurfaceWin(const DirectCompositionChildSurfaceWin&) =
       delete;
@@ -32,7 +35,7 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL {
   bool IsOffscreen() override;
   void* GetHandle() override;
   gfx::SwapResult SwapBuffers(PresentationCallback callback,
-                              FrameData data) override;
+                              gfx::FrameData data) override;
   gfx::SurfaceOrigin GetOrigin() const override;
   bool SupportsPostSubBuffer() override;
   bool OnMakeCurrent(GLContext* context) override;
@@ -77,9 +80,6 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL {
   // to it. Returns false if this fails.
   bool ReleaseDrawTexture(bool will_discard);
 
-  Microsoft::WRL::ComPtr<ID3D11Texture2D> GetOffscreenTexture();
-  void CopyOffscreenTextureToDrawTexture();
-
   gfx::Size size_ = gfx::Size(1, 1);
   bool enable_dc_layers_ = false;
   bool has_alpha_ = true;
@@ -107,11 +107,6 @@ class GL_EXPORT DirectCompositionChildSurfaceWin : public GLSurfaceEGL {
   Microsoft::WRL::ComPtr<IDCompositionSurface> dcomp_surface_;
   Microsoft::WRL::ComPtr<IDXGISwapChain1> swap_chain_;
   Microsoft::WRL::ComPtr<ID3D11Texture2D> draw_texture_;
-  POINT dcomp_update_offset_ = {};
-
-  // Used only for kDirectCompositionVerifyDrawOffset to
-  // verify a draw offset bug.
-  Microsoft::WRL::ComPtr<ID3D11Texture2D> offscreen_texture_;
 
   const bool use_angle_texture_offset_;
 };

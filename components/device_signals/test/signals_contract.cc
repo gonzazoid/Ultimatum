@@ -4,16 +4,17 @@
 
 #include "components/device_signals/test/signals_contract.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/test/bind.h"
 #include "build/build_config.h"
+#include "components/device_signals/core/browser/signals_types.h"
 #include "components/device_signals/core/common/signals_constants.h"
 
 namespace device_signals::test {
 
 namespace {
 
-#if BUILDFLAG(IS_WIN)
 // Only return false if the value is set to something other than a string.
 bool VerifyOptionalString(const std::string& signal_name,
                           const base::Value::Dict& signals) {
@@ -23,7 +24,6 @@ bool VerifyOptionalString(const std::string& signal_name,
 
   return signals.FindString(signal_name);
 }
-#endif  // BUILDFLAG(IS_WIN)
 
 bool VerifyIsString(const std::string& signal_name,
                     const base::Value::Dict& signals) {
@@ -84,6 +84,31 @@ bool VerifyUnset(const std::string& signal_name,
   return !signals.Find(signal_name);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void ChangeContractForUnmanagedDevices(
+    base::flat_map<std::string,
+                   base::RepeatingCallback<bool(const base::Value::Dict&)>>&
+        contract) {
+  contract[names::kDeviceAffiliationIds] =
+      base::BindRepeating(VerifyIsStringArray, names::kDeviceAffiliationIds,
+                          /*enforce_value=*/false);
+
+  // Signals containing stable device identifiers should be unset.
+  contract[names::kDisplayName] =
+      base::BindRepeating(VerifyUnset, names::kDisplayName);
+  contract[names::kSystemDnsServers] = base::BindRepeating(
+      base::BindRepeating(VerifyUnset, names::kSystemDnsServers));
+  contract[names::kSerialNumber] =
+      base::BindRepeating(VerifyUnset, names::kSerialNumber);
+  contract[names::kDeviceHostName] =
+      base::BindRepeating(VerifyUnset, names::kDeviceHostName);
+  contract[names::kMacAddresses] =
+      base::BindRepeating(VerifyUnset, names::kMacAddresses);
+  contract[names::kImei] = base::BindRepeating(VerifyUnset, names::kImei);
+  contract[names::kMeid] = base::BindRepeating(VerifyUnset, names::kMeid);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 }  // namespace
 
 base::flat_map<std::string,
@@ -126,12 +151,14 @@ GetSignalsContract() {
   contract[names::kOsFirewall] =
       base::BindRepeating(VerifyIsSettingInteger, names::kOsFirewall);
   contract[names::kSystemDnsServers] = base::BindRepeating(
-      VerifyIsStringArray, names::kSystemDnsServers, /*enforce_value=*/true);
+      VerifyIsStringArray, names::kSystemDnsServers, /*enforce_value=*/false);
 
   // Signals added for both CrOS and Browser but from different collection
   // locations.
   contract[names::kDeviceEnrollmentDomain] =
-      base::BindRepeating(VerifyIsString, names::kDeviceEnrollmentDomain);
+      base::BindRepeating(VerifyOptionalString, names::kDeviceEnrollmentDomain);
+  contract[names::kUserEnrollmentDomain] =
+      base::BindRepeating(VerifyOptionalString, names::kUserEnrollmentDomain);
   contract[names::kDiskEncrypted] =
       base::BindRepeating(VerifyIsSettingInteger, names::kDiskEncrypted);
   contract[names::kSerialNumber] =
@@ -144,24 +171,45 @@ GetSignalsContract() {
       base::BindRepeating(VerifyIsSettingInteger, names::kScreenLockSecured);
 
 #if BUILDFLAG(IS_WIN)
-  contract[names::kChromeCleanupEnabled] =
-      base::BindRepeating(VerifyIsBoolean, names::kChromeCleanupEnabled);
   contract[names::kWindowsMachineDomain] =
       base::BindRepeating(VerifyOptionalString, names::kWindowsMachineDomain);
   contract[names::kWindowsUserDomain] =
       base::BindRepeating(VerifyOptionalString, names::kWindowsUserDomain);
   contract[names::kSecureBootEnabled] =
       base::BindRepeating(VerifyIsSettingInteger, names::kSecureBootEnabled);
+
+  contract[names::kCrowdStrike] =
+      base::BindLambdaForTesting([](const base::Value::Dict& signals) {
+        // CrowdStrike signals are optional. But if the object is set, then at
+        // least one of the values must be present.
+        auto* cs_value = signals.Find(device_signals::names::kCrowdStrike);
+        if (!cs_value) {
+          return true;
+        }
+
+        if (!cs_value->is_dict()) {
+          return false;
+        }
+
+        const auto& cs_dict = cs_value->GetDict();
+        auto* customer_id =
+            cs_dict.FindString(device_signals::names::kCustomerId);
+        auto* agent_id = cs_dict.FindString(device_signals::names::kAgentId);
+
+        return (customer_id && !customer_id->empty()) ||
+               (agent_id && !agent_id->empty());
+      });
+
 #else
   // Windows-only signals that shouldn't be set on other platforms.
-  contract[names::kChromeCleanupEnabled] =
-      base::BindRepeating(VerifyUnset, names::kChromeCleanupEnabled);
   contract[names::kWindowsMachineDomain] =
       base::BindRepeating(VerifyUnset, names::kWindowsMachineDomain);
   contract[names::kWindowsUserDomain] =
       base::BindRepeating(VerifyUnset, names::kWindowsUserDomain);
   contract[names::kSecureBootEnabled] =
       base::BindRepeating(VerifyUnset, names::kSecureBootEnabled);
+  contract[names::kCrowdStrike] =
+      base::BindRepeating(VerifyUnset, names::kCrowdStrike);
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
@@ -169,6 +217,11 @@ GetSignalsContract() {
       base::BindRepeating(VerifyUnset, names::kAllowScreenLock);
   contract[names::kImei] = base::BindRepeating(VerifyUnset, names::kImei);
   contract[names::kMeid] = base::BindRepeating(VerifyUnset, names::kMeid);
+  contract[names::kTrigger] =
+      base::BindLambdaForTesting([](const base::Value::Dict& signals) {
+        return signals.FindInt(names::kTrigger) ==
+               static_cast<int>(device_signals::Trigger::kBrowserNavigation);
+      });
 #else
   // Chrome OS Signals.
   contract[names::kAllowScreenLock] =
@@ -177,9 +230,24 @@ GetSignalsContract() {
       VerifyIsStringArray, names::kImei, /*enforce_value=*/false);
   contract[names::kMeid] = base::BindRepeating(
       VerifyIsStringArray, names::kMeid, /*enforce_value=*/false);
+  contract[names::kTrigger] =
+      base::BindRepeating(VerifyIsIntegerWithRange, names::kTrigger, 0, 2);
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
   return contract;
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+base::flat_map<std::string,
+               base::RepeatingCallback<bool(const base::Value::Dict&)>>
+GetSignalsContractForUnmanagedDevices() {
+  base::flat_map<std::string,
+                 base::RepeatingCallback<bool(const base::Value::Dict&)>>
+      contract = GetSignalsContract();
+
+  ChangeContractForUnmanagedDevices(contract);
+  return contract;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace device_signals::test

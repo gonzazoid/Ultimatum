@@ -13,7 +13,7 @@ void AudioProcessingProperties::DisableDefaultProperties() {
   goog_noise_suppression = false;
   goog_experimental_noise_suppression = false;
   goog_highpass_filter = false;
-  goog_experimental_auto_gain_control = false;
+  voice_isolation = VoiceIsolationType::kVoiceIsolationDefault;
 }
 
 bool AudioProcessingProperties::EchoCancellationEnabled() const {
@@ -41,8 +41,11 @@ bool AudioProcessingProperties::HasSameNonReconfigurableSettings(
          goog_experimental_noise_suppression ==
              other.goog_experimental_noise_suppression &&
          goog_highpass_filter == other.goog_highpass_filter &&
-         goog_experimental_auto_gain_control ==
-             other.goog_experimental_auto_gain_control;
+         voice_isolation == other.voice_isolation;
+}
+
+bool AudioProcessingProperties::GainControlEnabled() const {
+  return goog_auto_gain_control;
 }
 
 media::AudioProcessingSettings
@@ -59,7 +62,6 @@ AudioProcessingProperties::ToAudioProcessingSettings(
 
   out.automatic_gain_control =
       goog_auto_gain_control && !system_gain_control_activated;
-  out.experimental_automatic_gain_control = goog_experimental_auto_gain_control;
 
   out.high_pass_filter = goog_highpass_filter;
   out.multi_channel_capture_processing = multi_channel_capture_processing;

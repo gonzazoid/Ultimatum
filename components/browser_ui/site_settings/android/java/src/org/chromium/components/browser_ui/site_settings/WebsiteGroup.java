@@ -5,6 +5,7 @@
 package org.chromium.components.browser_ui.site_settings;
 
 import org.chromium.components.embedder_support.util.UrlConstants;
+import org.chromium.content_public.browser.BrowserContextHandle;
 import org.chromium.url.GURL;
 
 import java.util.ArrayList;
@@ -12,10 +13,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-/**
- * Represents a group of Websites that either share the same eTLD+1 or are embedded on it.
- */
+/** Represents a group of Websites that either share the same eTLD+1 or are embedded on it. */
 public class WebsiteGroup implements WebsiteEntry {
     // The common eTLD+1.
     private final String mDomainAndRegistry;
@@ -50,7 +50,8 @@ public class WebsiteGroup implements WebsiteEntry {
         // Convert the mapping to a list of WebsiteGroup objects.
         List<WebsiteEntry> entries = new ArrayList<>();
         for (Map.Entry<String, List<Website>> etld : etldMap.entrySet()) {
-            entries.add((etld.getValue().size() == 1)
+            entries.add(
+                    (etld.getValue().size() == 1)
                             ? etld.getValue().get(0)
                             : new WebsiteGroup(etld.getKey(), etld.getValue()));
         }
@@ -87,9 +88,7 @@ public class WebsiteGroup implements WebsiteEntry {
         return mDomainAndRegistry;
     }
 
-    /**
-     * Returns the URL to use for fetching the favicon: https:// + eTLD+1 is returned.
-     */
+    /** Returns the URL to use for fetching the favicon: https:// + eTLD+1 is returned. */
     @Override
     public GURL getFaviconUrl() {
         return new GURL(UrlConstants.HTTPS_URL_PREFIX + mDomainAndRegistry);
@@ -117,6 +116,22 @@ public class WebsiteGroup implements WebsiteEntry {
         return false;
     }
 
+    /**
+     * Some Google-affiliated domains are not allowed to delete cookies for supervised accounts.
+     * @return true only if every single website in the group has the deletion disabled.
+     */
+    @Override
+    public boolean isCookieDeletionDisabled(BrowserContextHandle browserContextHandle) {
+        if (mWebsites.isEmpty()) return false;
+        for (Website site : mWebsites) {
+            if (!site.isCookieDeletionDisabled(browserContextHandle)) {
+                // At least one website is deletable, so the whole group is.
+                return false;
+            }
+        }
+        return true;
+    }
+
     public FPSCookieInfo getFPSInfo() {
         return mFPSInfo;
     }
@@ -127,5 +142,15 @@ public class WebsiteGroup implements WebsiteEntry {
 
     public List<Website> getWebsites() {
         return mWebsites;
+    }
+
+    /** @return whether one of the underlying origins has an associated installed app. */
+    public boolean hasInstalledApp(Set<String> originsWithApps) {
+        for (Website site : mWebsites) {
+            if (originsWithApps.contains(site.getAddress().getOrigin())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

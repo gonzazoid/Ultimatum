@@ -12,6 +12,7 @@
 #include <set>
 
 #include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -71,7 +72,7 @@ PictureLayerTiling::PictureLayerTiling(
       EnclosingContentsRectFromLayerRect(gfx::Rect(raster_source_->GetSize()));
   gfx::Size tiling_size = gfx::Size(content_bounds_rect.bottom_right().x(),
                                     content_bounds_rect.bottom_right().y());
-  tiling_data_.SetTilingSize(tiling_size);
+  SetTilingSize(tiling_size);
   gfx::Size tile_size = client_->CalculateTileSize(tiling_size);
   tiling_data_.SetMaxTextureSize(tile_size);
 }
@@ -82,16 +83,16 @@ Tile* PictureLayerTiling::CreateTile(const Tile::CreateInfo& info) {
   const int i = info.tiling_i_index;
   const int j = info.tiling_j_index;
   TileMapKey key(i, j);
-  DCHECK(tiles_.find(key) == tiles_.end());
+  DCHECK(!base::Contains(tiles_, key));
 
   if (!raster_source_->IntersectsRect(info.enclosing_layer_rect, *client_))
     return nullptr;
 
   all_tiles_done_ = false;
   std::unique_ptr<Tile> tile = client_->CreateTile(info);
-  Tile* raw_ptr = tile.get();
+  Tile* tile_ptr = tile.get();
   tiles_[key] = std::move(tile);
-  return raw_ptr;
+  return tile_ptr;
 }
 
 void PictureLayerTiling::CreateMissingTilesInLiveTilesRect() {
@@ -176,7 +177,7 @@ void PictureLayerTiling::TakeTilesAndPropertiesFrom(
                        pending_twin->current_occlusion_in_layer_space_);
 }
 
-void PictureLayerTiling::SetRasterSourceAndResize(
+bool PictureLayerTiling::SetRasterSourceAndResize(
     scoped_refptr<RasterSource> raster_source) {
   DCHECK(!raster_source->IsSolidColor());
   gfx::Size old_layer_bounds = raster_source_->GetSize();
@@ -188,17 +189,22 @@ void PictureLayerTiling::SetRasterSourceAndResize(
   gfx::Size tile_size = client_->CalculateTileSize(content_rect.size());
 
   if (tile_size != tiling_data_.max_texture_size()) {
-    tiling_data_.SetTilingSize(content_rect.size());
+    SetTilingSize(content_rect.size());
     tiling_data_.SetMaxTextureSize(tile_size);
     // When the tile size changes, the TilingData positions no longer work
     // as valid keys to the TileMap, so just drop all tiles and clear the live
     // tiles rect.
     Reset();
-    return;
+    // When the tile size changes, all tiles and all tile priority rects
+    // including the live tiles rect should be updated, therefore return true to
+    // notify the caller to call |ComputeTilePriorityRects| to do this.
+    return true;
   }
 
+  // When the layer bounds are the same, we need not notify the caller as it
+  // will update tiling as needed, so return false.
   if (old_layer_bounds == new_layer_bounds)
-    return;
+    return false;
 
   // The SetLiveTilesRect() method would drop tiles outside the new bounds,
   // but may do so incorrectly if resizing the tiling causes the number of
@@ -213,7 +219,7 @@ void PictureLayerTiling::SetRasterSourceAndResize(
   // The live_tiles_rect_ is clamped to stay within the tiling size as we
   // change it.
   live_tiles_rect_.Intersect(content_rect);
-  tiling_data_.SetTilingSize(content_rect.size());
+  SetTilingSize(content_rect.size());
 
   int after_right = -1;
   int after_bottom = -1;
@@ -255,6 +261,9 @@ void PictureLayerTiling::SetRasterSourceAndResize(
         CreateTile(info);
     }
   }
+  // We need not notify the caller as it will update tiling as needed, so return
+  // false to ensure the existing logic remains unchanged.
+  return false;
 }
 
 void PictureLayerTiling::Invalidate(const Region& layer_invalidation) {
@@ -957,6 +966,16 @@ gfx::Rect PictureLayerTiling::EnclosingLayerRectFromContentsRect(
     const gfx::Rect& contents_rect) const {
   return ToEnclosingRect(
       raster_transform_.InverseMapRect(gfx::RectF(contents_rect)));
+}
+
+void PictureLayerTiling::SetTilingSize(const gfx::Size& tiling_size) {
+  gfx::Rect tiling_rect(tiling_size);
+  has_visible_rect_tiles_ = tiling_rect.Intersects(current_visible_rect_);
+  has_skewport_rect_tiles_ = tiling_rect.Intersects(current_skewport_rect_);
+  has_soon_border_rect_tiles_ =
+      tiling_rect.Intersects(current_soon_border_rect_);
+  has_eventually_rect_tiles_ = tiling_rect.Intersects(current_eventually_rect_);
+  tiling_data_.SetTilingSize(tiling_size);
 }
 
 PictureLayerTiling::TileIterator::TileIterator(PictureLayerTiling* tiling)

@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -27,9 +27,9 @@ namespace {
 
 int TranslatePowerLineFrequencyToV4L2(PowerLineFrequency frequency) {
   switch (frequency) {
-    case PowerLineFrequency::FREQUENCY_50HZ:
+    case PowerLineFrequency::k50Hz:
       return V4L2_CID_POWER_LINE_FREQUENCY_50HZ;
-    case PowerLineFrequency::FREQUENCY_60HZ:
+    case PowerLineFrequency::k60Hz:
       return V4L2_CID_POWER_LINE_FREQUENCY_60HZ;
     default:
       // If we have no idea of the frequency, at least try and set it to AUTO.
@@ -86,6 +86,12 @@ void VideoCaptureDeviceLinux::AllocateAndStart(
                     FROM_HERE, "Failed to create VideoCaptureDelegate");
     return;
   }
+
+  if (gmb_support_test_) {
+    capture_impl_->SetGPUEnvironmentForTesting(  // IN-TEST
+        std::move(gmb_support_test_));           // IN-TEST
+  }
+
   task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&V4L2CaptureDelegate::AllocateAndStart,
@@ -157,6 +163,11 @@ void VideoCaptureDeviceLinux::StopAndDeAllocateInternal(
   capture_impl_->StopAndDeAllocate();
   capture_impl_.reset();
   waiter->Signal();
+}
+
+void VideoCaptureDeviceLinux::SetGPUEnvironmentForTesting(
+    std::unique_ptr<gpu::GpuMemoryBufferSupport> gmb_support) {
+  gmb_support_test_ = std::move(gmb_support);
 }
 
 }  // namespace media

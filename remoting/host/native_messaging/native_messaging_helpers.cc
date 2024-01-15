@@ -27,7 +27,7 @@ bool ParseNativeMessageJson(const std::string& message,
   }
 
   const std::string* message_type_value =
-      message_value.FindStringKey(kMessageType);
+      message_value.GetDict().FindString(kMessageType);
   if (message_type_value) {
     message_type = *message_type_value;
   }
@@ -37,12 +37,12 @@ bool ParseNativeMessageJson(const std::string& message,
   return true;
 }
 
-absl::optional<base::Value::Dict> CreateNativeMessageResponse(
+std::optional<base::Value::Dict> CreateNativeMessageResponse(
     const base::Value::Dict& request) {
   const std::string* type = request.FindString(kMessageType);
   if (!type) {
     LOG(ERROR) << "'" << kMessageType << "' not found in request.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   base::Value::Dict response;

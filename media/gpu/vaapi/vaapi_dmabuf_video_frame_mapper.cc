@@ -6,15 +6,17 @@
 
 #include <sys/mman.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "build/build_config.h"
 #include "media/base/color_plane_layout.h"
+#include "media/gpu/chromeos/chromeos_compressed_gpu_memory_buffer_video_frame_utils.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/vaapi/vaapi_utils.h"
 #include "media/gpu/vaapi/vaapi_wrapper.h"
+#include "ui/gfx/switches.h"
 
 namespace media {
 
@@ -181,18 +183,34 @@ scoped_refptr<VideoFrame> VaapiDmaBufVideoFrameMapper::Map(
     return nullptr;
   }
 
-  if (!(permissions & PROT_READ && permissions & PROT_WRITE)) {
-    LOG(ERROR) << "VAAPI DMA Buffer must be mapped read/write.";
+  if (!(permissions & PROT_READ)) {
+    LOG(ERROR) << "VAAPI DMA Buffer must be mapped with read permissions.";
     return nullptr;
   }
-
-  if (!video_frame->HasDmaBufs())
-    return nullptr;
 
   if (video_frame->format() != format_) {
     VLOGF(1) << "Unexpected format, got: "
              << VideoPixelFormatToString(video_frame->format())
              << ", expected: " << VideoPixelFormatToString(format_);
+    return nullptr;
+  }
+
+  bool is_intel_media_compression_enabled = false;
+#if BUILDFLAG(IS_CHROMEOS)
+  is_intel_media_compression_enabled =
+      base::FeatureList::IsEnabled(features::kEnableIntelMediaCompression);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  if (IsIntelMediaCompressedModifier(video_frame->layout().modifier()) &&
+      (!is_intel_media_compression_enabled ||
+       video_frame->storage_type() != VideoFrame::STORAGE_GPU_MEMORY_BUFFER)) {
+    // We currently only support Intel media compressed VideoFrames if they are
+    // backed by a GpuMemoryBuffer.
+    VLOGF(1) << "Can't map an Intel media compressed VideoFrame";
+    return nullptr;
+  } else if (!IsIntelMediaCompressedModifier(
+                 video_frame->layout().modifier()) &&
+             !video_frame->HasDmaBufs()) {
     return nullptr;
   }
 

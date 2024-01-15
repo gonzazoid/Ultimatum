@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_STORAGE_H_
 #define CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_STORAGE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
@@ -13,9 +14,11 @@
 class Profile;
 
 namespace ash {
+
 enum class FingerprintState;
 
 namespace quick_unlock {
+
 class AuthToken;
 class FingerprintStorage;
 class PinStoragePrefs;
@@ -59,20 +62,13 @@ class QuickUnlockStorage : public KeyedService {
   // attempt. This always returns false if HasStrongAuth returns false.
   bool TryAuthenticatePin(const Key& key, Purpose purpose);
 
-  // Creates a new authentication token to be used by the quickSettingsPrivate
-  // API for authenticating requests. Resets the expiration timer and
-  // invalidates any previously issued tokens.
-  std::string CreateAuthToken(const UserContext& user_context);
-
-  // Returns true if the current authentication token has expired.
-  bool GetAuthTokenExpired();
-
+  // TODO(b/271249180): cleanup remaining AuthToken refs:
   // Returns the auth token if it is valid or nullptr if it is expired or has
   // not been created. May return nullptr.
   AuthToken* GetAuthToken();
 
   // Fetch the user context if `auth_token` is valid. May return null.
-  const UserContext* GetUserContext(const std::string& auth_token);
+  UserContext* GetUserContext(const std::string& auth_token);
 
   void ReplaceUserContext(const std::string& auth_token,
                           std::unique_ptr<UserContext>);
@@ -96,23 +92,16 @@ class QuickUnlockStorage : public KeyedService {
   // KeyedService:
   void Shutdown() override;
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   base::Time last_strong_auth_;
+  // TODO(b/271249180): cleanup remaining AuthToken refs:
   std::unique_ptr<AuthToken> auth_token_;
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
   std::unique_ptr<FingerprintStorage> fingerprint_storage_;
   std::unique_ptr<PinStoragePrefs> pin_storage_prefs_;
 };
 
 }  // namespace quick_unlock
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace quick_unlock {
-using ::ash::quick_unlock::QuickUnlockStorage;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_STORAGE_H_

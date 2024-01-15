@@ -17,6 +17,7 @@
 #include "gin/public/context_holder.h"
 #include "gin/public/isolate_holder.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_frame.h"
 #include "v8/include/v8.h"
 
@@ -33,7 +34,7 @@ TEST(ScriptContextSetTest, Lifecycle) {
 
   // Do this after construction of the webview, since it may construct the
   // Isolate.
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  v8::Isolate* isolate = web_frame.frame()->GetAgentGroupScheduler()->Isolate();
 
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> v8_context = v8::Context::New(isolate);
@@ -44,8 +45,8 @@ TEST(ScriptContextSetTest, Lifecycle) {
 
   ExtensionIdSet active_extensions;
   ScriptContextSet context_set(&active_extensions);
-  ScriptContext* context =
-      context_set.Register(web_frame.frame(), v8_context, 0);  // no world ID
+  ScriptContext* context = context_set.Register(
+      web_frame.frame(), v8_context, /*world_id=*/0, /*is_webview=*/false);
 
   // Context is valid and resembles correctness.
   EXPECT_TRUE(context->is_valid());

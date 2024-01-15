@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests "Offline" checkbox does not crash. crbug.com/746220\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
   // Note: every test that uses a storage API must manually clean-up state from previous tests.
   await ApplicationTestRunner.resetState();
 
@@ -16,11 +20,11 @@
   await ApplicationTestRunner.waitForActivated(scope);
 
   // Switch offline mode on.
-  const oldNetwork = SDK.multitargetNetworkManager.networkConditions();
-  SDK.multitargetNetworkManager.setNetworkConditions(SDK.NetworkManager.OfflineConditions);
+  const oldNetwork = SDK.NetworkManager.MultitargetNetworkManager.instance().networkConditions();
+  SDK.NetworkManager.MultitargetNetworkManager.instance().setNetworkConditions(SDK.NetworkManager.OfflineConditions);
 
   // Switch offline mode off.
-  SDK.multitargetNetworkManager.setNetworkConditions(oldNetwork);
+  SDK.NetworkManager.MultitargetNetworkManager.instance().setNetworkConditions(oldNetwork);
 
   // The test passes if it doesn't crash.
   TestRunner.completeTest();

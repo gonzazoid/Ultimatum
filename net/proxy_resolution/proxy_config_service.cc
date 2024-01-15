@@ -8,7 +8,8 @@
 
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 
@@ -54,9 +55,8 @@ constexpr net::NetworkTrafficAnnotationTag kSystemProxyConfigTrafficAnnotation =
           "User cannot override system proxy settings, but can change them "
           "through 'Advanced/System/Open proxy settings'."
         policy_exception_justification:
-          "Using either of 'ProxyMode', 'ProxyServer', or 'ProxyPacUrl' "
-          "policies can set Chrome to use a specific proxy settings and avoid "
-          "system proxy."
+          "Using 'ProxySettings' policy can set Chrome to use specific "
+          "proxy settings and avoid system proxy."
       })");
 #endif
 
@@ -116,7 +116,7 @@ ProxyConfigService::CreateSystemProxyConfigService(
   // main loop, so the current thread is where we should be running
   // gsettings calls from.
   scoped_refptr<base::SingleThreadTaskRunner> glib_thread_task_runner =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
 
   // Synchronously fetch the current proxy config (since we are running on
   // glib_default_loop). Additionally register for notifications (delivered in
@@ -129,7 +129,8 @@ ProxyConfigService::CreateSystemProxyConfigService(
   return std::move(linux_config_service);
 #elif BUILDFLAG(IS_ANDROID)
   return std::make_unique<ProxyConfigServiceAndroid>(
-      std::move(main_task_runner), base::ThreadTaskRunnerHandle::Get());
+      std::move(main_task_runner),
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 #elif BUILDFLAG(IS_FUCHSIA)
   // TODO(crbug.com/889195): Implement a system proxy service for Fuchsia.
   return std::make_unique<ProxyConfigServiceDirect>();
@@ -138,6 +139,10 @@ ProxyConfigService::CreateSystemProxyConfigService(
                   "for this platform.";
   return std::make_unique<ProxyConfigServiceDirect>();
 #endif
+}
+
+bool ProxyConfigService::UsesPolling() {
+  return false;
 }
 
 }  // namespace net

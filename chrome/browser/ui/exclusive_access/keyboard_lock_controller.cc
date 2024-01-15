@@ -4,31 +4,22 @@
 
 #include "chrome/browser/ui/exclusive_access/keyboard_lock_controller.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_hide_callback.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
-#include "content/public/browser/native_web_keyboard_event.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 
 using base::TimeTicks;
 using content::WebContents;
 
 namespace {
-
-const char kBubbleReshowsHistogramName[] =
-    "ExclusiveAccess.BubbleReshowsPerSession.KeyboardLock";
-
-const char kForcedBubbleReshowsHistogramName[] =
-    "ExclusiveAccess.BubbleReshowsPerSession.KeyboardLockForced";
 
 // Amount of time the user must hold ESC to exit full screen.
 constexpr base::TimeDelta kHoldEscapeTime = base::Milliseconds(1500);
@@ -69,16 +60,6 @@ void KeyboardLockController::NotifyTabExclusiveAccessLost() {
   UnlockKeyboard();
 }
 
-void KeyboardLockController::RecordBubbleReshowsHistogram(int reshow_count) {
-  UMA_HISTOGRAM_COUNTS_100(kBubbleReshowsHistogramName, reshow_count);
-}
-
-void KeyboardLockController::RecordForcedBubbleReshowsHistogram() {
-  UMA_HISTOGRAM_COUNTS_100(kForcedBubbleReshowsHistogramName,
-                           forced_reshow_count_);
-  forced_reshow_count_ = 0;
-}
-
 bool KeyboardLockController::IsKeyboardLockActive() const {
   DCHECK_EQ(keyboard_lock_state_ == KeyboardLockState::kUnlocked,
             exclusive_access_tab() == nullptr);
@@ -93,9 +74,7 @@ bool KeyboardLockController::RequiresPressAndHoldEscToExit() const {
 
 void KeyboardLockController::RequestKeyboardLock(WebContents* web_contents,
                                                  bool esc_key_locked) {
-  if (!exclusive_access_manager()
-           ->fullscreen_controller()
-           ->IsFullscreenForTabOrPending(web_contents)) {
+  if (!web_contents->IsFullscreen()) {
     return;
   }
 
@@ -175,8 +154,6 @@ void KeyboardLockController::UnlockKeyboard() {
   if (!exclusive_access_tab())
     return;
 
-  RecordExitingUMA();
-  RecordForcedBubbleReshowsHistogram();
   keyboard_lock_state_ = KeyboardLockState::kUnlocked;
 
   exclusive_access_tab()->GotResponseToKeyboardLockRequest(false);
@@ -205,7 +182,6 @@ void KeyboardLockController::ReShowExitBubbleIfNeeded() {
   if (esc_keypress_tracker_.size() >= kEscRepeatCountToTriggerUiReshow) {
     exclusive_access_manager()->UpdateExclusiveAccessExitBubbleContent(
         ExclusiveAccessBubbleHideCallback(), /*force_update=*/true);
-    forced_reshow_count_++;
     esc_keypress_tracker_.clear();
 
     if (esc_repeat_triggered_for_test_)

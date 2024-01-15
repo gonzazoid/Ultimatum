@@ -3,39 +3,50 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for editing tests.
  */
-ChromeVoxEditingTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxEditingTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'BrailleBackground',
-        '/chromevox/background/braille/braille_background.js');
-    await importModule(
-        'BrailleCommandHandler',
-        '/chromevox/background/braille/braille_command_handler.js');
-    await importModule(
-        'DesktopAutomationInterface',
-        '/chromevox/background/desktop_automation_interface.js');
-    await importModule(
-        'EditableLine', '/chromevox/background/editing/editable_line.js');
-    await importModule(
-        'TextEditHandler', '/chromevox/background/editing/editing.js');
-    await importModule(
-        'TtsBackground', '/chromevox/background/tts_background.js');
-    await importModule(
-        ['BrailleKeyEvent', 'BrailleKeyCommand'],
-        '/chromevox/common/braille/braille_key_types.js');
-    await importModule('EventGenerator', '/common/event_generator.js');
-    await importModule('KeyCode', '/common/key_code.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'BrailleCommandHandler',
+          '/chromevox/background/braille/braille_command_handler.js'),
+      importModule(
+          'BrailleDisplayManager',
+          '/chromevox/background/braille/braille_display_manager.js'),
+      importModule(
+          'BrailleTranslatorManager',
+          '/chromevox/background/braille/braille_translator_manager.js'),
+      importModule(
+          'EditableLine', '/chromevox/background/editing/editable_line.js'),
+      importModule(
+          'AutomationRichEditableText',
+          '/chromevox/background/editing/rich_editable_text.js'),
+      importModule(
+          'TextEditHandler',
+          '/chromevox/background/editing/text_edit_handler.js'),
+      importModule(
+          'DesktopAutomationInterface',
+          '/chromevox/background/event/desktop_automation_interface.js'),
+      importModule(
+          ['BrailleKeyEvent', 'BrailleKeyCommand'],
+          '/chromevox/common/braille/braille_key_types.js'),
+      importModule('EventGenerator', '/common/event_generator.js'),
+      importModule('KeyCode', '/common/key_code.js'),
+      importModule('LocalStorage', '/common/local_storage.js'),
+      importModule('SettingsManager', '/chromevox/common/settings_manager.js'),
+    ]);
+
+    globalThis.EventType = chrome.automation.EventType;
+    globalThis.IntentCommandType = chrome.automation.IntentCommandType;
+    globalThis.RoleType = chrome.automation.RoleType;
   }
 
   press(keyCode, modifiers) {
@@ -153,7 +164,7 @@ AX_TEST_F('ChromeVoxEditingTest', 'TextButNoSelectionChange', async function() {
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByLine', async function() {
   // Turn on rich text output settings.
-  localStorage['announceRichTextAttributes'] = 'true';
+  SettingsManager.set('announceRichTextAttributes', true);
 
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree(`
@@ -205,7 +216,7 @@ AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByLine', async function() {
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextMoveByCharacter', async function() {
   // Turn on rich text output settings.
-  localStorage['announceRichTextAttributes'] = 'true';
+  SettingsManager.set('announceRichTextAttributes', true);
 
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree(`
@@ -281,7 +292,7 @@ AX_TEST_F(
     'ChromeVoxEditingTest', 'RichTextMoveByCharacterAllAttributes',
     async function() {
       // Turn on rich text output settings.
-      localStorage['announceRichTextAttributes'] = 'true';
+      SettingsManager.set('announceRichTextAttributes', true);
 
       const mockFeedback = this.createMockFeedback();
       const root = await this.runWithLoadedTree(`
@@ -525,7 +536,7 @@ AX_TEST_F(
 
 AX_TEST_F('ChromeVoxEditingTest', 'RichTextLinkOutput', async function() {
   // Turn on rich text output settings.
-  localStorage['announceRichTextAttributes'] = 'true';
+  SettingsManager.set('announceRichTextAttributes', true);
 
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree(`
@@ -1662,9 +1673,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'MoveByCharSuggestions', async function() {
   await mockFeedback.replay();
 });
 
-// TODO(accessibility): flaky; https://crbug.com/1342870.
 AX_TEST_F(
-    'ChromeVoxEditingTest', 'DISABLED_MoveByWordSuggestions', async function() {
+    'ChromeVoxEditingTest', 'MoveByWordSuggestions', async function() {
       const mockFeedback = this.createMockFeedback();
       const site = `
     <div contenteditable="true" role="textbox">
@@ -1897,7 +1907,7 @@ AX_TEST_F(
       state = {editable: true};
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for textarea html tag.');
 
       // A rich editable via state.
@@ -1906,7 +1916,7 @@ AX_TEST_F(
       state = {editable: true, richlyEditable: true};
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for richly editable state.');
 
       // A rich editable via contenteditable. (aka <div contenteditable>).
@@ -1915,7 +1925,7 @@ AX_TEST_F(
       state = {editable: true};
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for content editable.');
 
       // A rich editable via contenteditable. (aka <div
@@ -1925,7 +1935,7 @@ AX_TEST_F(
       state = {editable: true};
       handler = new TextEditHandler(input);
       assertEquals(
-          'AutomationRichEditableText', handler.editableText_.constructor.name,
+          'RichEditableText', handler.editableText_.constructor.name,
           'Incorrect object for content editable true.');
 
       // Note that it is not possible to have <div
@@ -2044,37 +2054,35 @@ AX_TEST_F(
       await this.focusFirstTextField(root);
 
       // In case LibLouis takes a while to load.
-      if (!ChromeVox.braille.displayManager_.translatorManager_.liblouis_
-               .isLoaded()) {
-        await new Promise(r => {
-          ChromeVox.braille.displayManager_.translatorManager_.liblouis_
-              .onInstanceLoad_ = r;
-        });
+      if (!BrailleTranslatorManager.instance.liblouis_.isLoaded()) {
+        await new Promise(
+            resolve =>
+                BrailleTranslatorManager.instance.liblouis_.onInstanceLoad_ =
+                    resolve);
       }
 
       // Fake an available display.
-      ChromeVox.braille.displayManager_.refreshDisplayState_(
+      BrailleDisplayManager.instance.refreshDisplayState_(
           {available: true, textRowCount: 1, textColumnCount: 40});
 
       // Set braille to use 6-dot braille (which is defaulted to UEB grade 2
       // contracted braille).
-      localStorage['brailleTable'] = 'en-ueb-g2';
+      SettingsManager.set('brailleTable', 'en-ueb-g2');
 
       // Wait for it to be fully refreshed (liblouis loads the new tables, our
       // translators are re-created).
-      await BrailleBackground.instance.getTranslatorManager()
-          .loadTablesForTest();
+      await BrailleTranslatorManager.instance.loadTablesForTest();
 
       // Fake an available display.
-      ChromeVox.braille.displayManager_.refreshDisplayState_(
+      BrailleDisplayManager.instance.refreshDisplayState_(
           {available: true, textRowCount: 1, textColumnCount: 40});
 
       // Set braille to use 6-dot braille (which is defaulted to UEB grade 2
       // contracted braille).
-      localStorage['brailleTable'] = 'en-ueb-g2';
+      SettingsManager.set('brailleTable', 'en-ueb-g2');
       await new Promise(
-          r => BrailleBackground.instance.getTranslatorManager().refresh(
-              localStorage['brailleTable'], undefined, r));
+          resolve => BrailleTranslatorManager.instance.refresh(
+              SettingsManager.getString('brailleTable'), undefined, resolve));
 
       async function waitForBrailleDots(expectedDots) {
         return new Promise(r => {
@@ -2144,39 +2152,36 @@ AX_TEST_F('ChromeVoxEditingTest', 'ContextMenus', async function() {
   await mockFeedback.replay();
 });
 
-// TODO(crbug.com/1352225): Flaky.
-AX_TEST_F(
-    'ChromeVoxEditingTest', 'DISABLED_NativeCharWordCommands',
-    async function() {
-      const mockFeedback = this.createMockFeedback();
-      const site = `
+AX_TEST_F('ChromeVoxEditingTest', 'NativeCharWordCommands', async function() {
+  const mockFeedback = this.createMockFeedback();
+  const site = `
     <p>start</p>
     <div role="textbox" contenteditable>This is a test</div>
   `;
-      const root = await this.runWithLoadedTree(site);
-      await this.focusFirstTextField(root);
+  const root = await this.runWithLoadedTree(site);
+  await this.focusFirstTextField(root);
 
-      const textField = root.find({role: RoleType.TEXT_FIELD});
-      mockFeedback.expectSpeech('Text area')
-          .call(this.press(KeyCode.HOME, {ctrl: true}))
-          .call(this.press(KeyCode.RIGHT))
-          .expectSpeech('h')
-          .call(this.press(KeyCode.RIGHT))
-          .expectSpeech('i')
-          .call(this.press(KeyCode.LEFT))
-          .expectSpeech('h')
+  const textField = root.find({role: RoleType.TEXT_FIELD});
+  mockFeedback.expectSpeech('Text area')
+      .call(this.press(KeyCode.HOME, {ctrl: true}))
+      .call(this.press(KeyCode.RIGHT))
+      .expectSpeech('h')
+      .call(this.press(KeyCode.RIGHT))
+      .expectSpeech('i')
+      .call(this.press(KeyCode.LEFT))
+      .expectSpeech('h')
 
-          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-          .expectSpeech('This')
-          .call(this.press(KeyCode.RIGHT, {ctrl: true}))
-          .expectSpeech('is')
-          .call(this.press(KeyCode.LEFT, {ctrl: true}))
-          .expectSpeech('is')
-          .call(this.press(KeyCode.LEFT, {ctrl: true}))
-          .expectSpeech('This');
+      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+      .expectSpeech(/This\s*/)
+      .call(this.press(KeyCode.RIGHT, {ctrl: true}))
+      .expectSpeech('is')
+      .call(this.press(KeyCode.LEFT, {ctrl: true}))
+      .expectSpeech('is')
+      .call(this.press(KeyCode.LEFT, {ctrl: true}))
+      .expectSpeech(/This\s*/);
 
-      await mockFeedback.replay();
-    });
+  await mockFeedback.replay();
+});
 
 AX_TEST_F('ChromeVoxEditingTest', 'TablesWithEmptyCells', async function() {
   const mockFeedback = this.createMockFeedback();
@@ -2210,9 +2215,8 @@ AX_TEST_F('ChromeVoxEditingTest', 'TablesWithEmptyCells', async function() {
       .call(() => textField.setSelection(0, 1))
       .expectSpeech('A', 'selected')
 
-      // Non-breaking spaces (\u00a0) get preprocessed later by TtsBackground
-      // to ' '. This comes as part of speak line output in
-      // AutomationRichEditableText.
+      // Non-breaking spaces (\u00a0) get preprocessed later by PrimaryTts
+      // to ' '. This comes as part of speak line output in RichEditableText.
       .call(doCmd('nativeNextCharacter'))
       .call(() => textField.setSelection(1, 1))
       .expectSpeech('\u00a0', 'row 1 column 1')
@@ -2362,6 +2366,7 @@ AX_TEST_F(
     });
 
 // Regression test that large text areas produce output.
+// TODO(crbug.com/1503691): re-enable this test once its flakiness is resolved.
 AX_TEST_F('ChromeVoxEditingTest', 'GiantTextAreaPerformance', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = `
@@ -2486,4 +2491,61 @@ like this one.
           'selected');
 
   await mockFeedback.replay();
+});
+
+AX_TEST_F('ChromeVoxEditingTest', 'OnEvent', async function() {
+  const setIntent = {command: IntentCommandType.SET_SELECTION};
+  const clearIntent = {command: IntentCommandType.CLEAR_SELECTION};
+  const otherIntent = {command: 'something else'};
+
+  const root = await this.runWithLoadedTree('<input type=text>');
+  await this.focusFirstTextField(root);
+  const textField = root.find({role: RoleType.TEXT_FIELD});
+
+  const handler = TextEditHandler.createForNode(textField);
+  let receivedIntents;
+  const captureIntents = intents => receivedIntents = intents;
+
+  // If the event target is not focused, onEvent should exit early.
+  handler.editableText_.onUpdate = captureIntents;
+  handler.onEvent({target: {state: {}}});
+  assertUndefined(receivedIntents);
+
+  // If the event target is not the node given to the event handler, onEvent
+  // should exit early.
+  handler.editableText_.onUpdate = captureIntents;
+  handler.onEvent({target: root});
+  assertUndefined(receivedIntents);
+
+  // Check that the intents are set, as expected, and onUpdate is called.
+  textField.state.focused = true;
+  handler.inferredIntents_ = ['b'];
+  handler.editableText_.onUpdate = captureIntents;
+  handler.onEvent({target: textField, intents: [otherIntent]});
+  assertEquals(1, receivedIntents.length);
+  assertEquals(otherIntent, receivedIntents[0]);
+
+  // Check that inferred intents are used if no intents are provided.
+  handler.inferredIntents_ = ['b'];
+  receivedIntents = false;
+  const intents = [];
+  handler.onEvent({target: textField, intents});
+  assertEquals(1, receivedIntents.length);
+  assertEquals('b', receivedIntents[0]);
+
+  // Check that inferred intents override provided intents if event.intents
+  // contains SET_SELECTION.
+  handler.inferredIntents_ = ['b'];
+  receivedIntents = false;
+  handler.onEvent({target: textField, intents: [setIntent, otherIntent]});
+  assertEquals(1, receivedIntents.length);
+  assertEquals('b', receivedIntents[0]);
+
+  // Check that inferred intents override provided intents if event.intents
+  // contains CLEAR_SELECTION.
+  handler.inferredIntents_ = ['b'];
+  receivedIntents = false;
+  handler.onEvent({target: textField, intents: [otherIntent, clearIntent]});
+  assertEquals(1, receivedIntents.length);
+  assertEquals('b', receivedIntents[0]);
 });

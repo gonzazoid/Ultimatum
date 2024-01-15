@@ -2,7 +2,9 @@ Name: Android Open Source Project - App Compat Library
 URL: https://android.googlesource.com/platform/frameworks/support
 Version: unknown
 License: Apache 2.0
+License File: LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
 This is a modified copy of the swipe refresh layout widget (and its two
@@ -28,5 +30,4 @@ SwipeRefreshLayout
   * All ViewCompat and MotionEventCompat dependencies removed.
   * Added OnResetListener interface to notify SwipeRefreshHandler to detach
     this view.
-  * Add a flag to minimze the number of z-order changes, thereby minimizing
-    relayouts of the UI.
+  * Optimization to minimize number of relayouts of the UI.

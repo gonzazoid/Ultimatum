@@ -15,21 +15,19 @@ typedef NS_ENUM(NSInteger, OmniboxIconType) {
   OmniboxIconTypeFavicon
 };
 
-// This protocol represents all the parts necessary to display a composited
-// omnibox icon. Most icons have a background and a main image. If the main
-// image is an icon (not an image from the web), it will be tinted some color.
-// `OmniboxIconView` is the preferred way to consume this protocol and display
-// the icons.
+/// This protocol represents all the parts necessary to display a composited
+/// omnibox icon. Most icons have a background and a main image. If the main
+/// image is an icon (not an image from the web), it will be tinted some color.
+/// `OmniboxIconView` is the preferred way to consume this protocol and display
+/// the icons.
 @protocol OmniboxIcon <NSObject>
 
 @property(nonatomic, assign, readonly) OmniboxIconType iconType;
 @property(nonatomic, strong, readonly) CrURL* imageURL;
 @property(nonatomic, strong, readonly) UIImage* iconImage;
 @property(nonatomic, strong, readonly) UIColor* iconImageTintColor;
-@property(nonatomic, strong, readonly) UIImage* backgroundImage;
 @property(nonatomic, strong, readonly) UIColor* backgroundImageTintColor;
-@property(nonatomic, strong, readonly) UIImage* overlayImage;
-@property(nonatomic, strong, readonly) UIColor* overlayImageTintColor;
+@property(nonatomic, strong, readonly) UIColor* borderColor;
 
 @end
 

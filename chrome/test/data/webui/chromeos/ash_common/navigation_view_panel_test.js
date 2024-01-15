@@ -4,13 +4,13 @@
 
 import {SelectorItem} from 'chrome://resources/ash/common/navigation_selector.js';
 import {NavigationViewPanelElement} from 'chrome://resources/ash/common/navigation_view_panel.js';
-import {assert} from 'chrome://resources/js/assert.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertThrows, assertTrue} from '../../chai_assert.js';
-import {eventToPromise} from '../../test_util.js';
+import {assertEquals, assertFalse, assertThrows, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-export function navigationViewPanelTestSuite() {
+suite('navigationViewPanelTestSuite', () => {
   /** @type {?NavigationViewPanelElement} */
   let viewElement = null;
 
@@ -256,6 +256,54 @@ export function navigationViewPanelTestSuite() {
     assertTrue(drawer.wasCanceled());
   });
 
+  test('CloseDrawerWhenClickingSameItem', async () => {
+    const pageType = 'myPageType';
+    const id1 = 'id1';
+    const id2 = 'id2';
+
+    viewElement.title = 'title';
+
+    await addNavigationSections([
+      viewElement.createSelectorItem('Page 1', pageType, /*icon=*/ '', 'id1'),
+      viewElement.createSelectorItem('Page 2', pageType, /*icon=*/ '', 'id2'),
+    ]);
+
+    // The first element is visible, others hidden.
+    assertTrue(!!viewElement.shadowRoot.querySelector(`#${id1}`));
+    assertFalse(viewElement.shadowRoot.querySelector(`#${id1}`).hidden);
+    assertFalse(!!viewElement.shadowRoot.querySelector(`#${id2}`));
+
+    const drawer = getDrawer();
+    drawer.openDrawer();
+    await eventToPromise('cr-drawer-opened', drawer);
+    assertTrue(drawer.open);
+
+    // Clicking the first entry closes the drawer.
+    const navElements = getNavElements();
+    navElements[0].click();
+    await flushTasks();
+
+    await eventToPromise('close', drawer);
+    assertFalse(drawer.open);
+
+    // The first element is visible, others hidden.
+    assertTrue(!!viewElement.shadowRoot.querySelector(`#${id1}`));
+    assertFalse(viewElement.shadowRoot.querySelector(`#${id1}`).hidden);
+    assertFalse(!!viewElement.shadowRoot.querySelector(`#${id2}`));
+
+    // Re-open and click the first navigation item, expect drawer to close.
+    drawer.openDrawer();
+    await eventToPromise('cr-drawer-opened', drawer);
+    assertTrue(drawer.open);
+
+    const navElements1 = getNavElements();
+    navElements1[0].click();
+    await flushTasks();
+
+    await eventToPromise('close', drawer);
+    assertFalse(drawer.open);
+  });
+
   test('removeSelectedPage', async () => {
     await addNavigationSections([
       viewElement.createSelectorItem(
@@ -279,4 +327,40 @@ export function navigationViewPanelTestSuite() {
         () => viewElement.removeSelectorById('dummy1'),
         'Removing the last selector is not supported.');
   });
-}
+
+  test('selectPageById', async () => {
+    await addNavigationSections([
+      viewElement.createSelectorItem(
+          /*name=*/ 'Page 1',
+          /*pageIs=*/ 'dummy-page1',
+          /*icon=*/ '',
+          /*id=*/ 'dummy1'),
+      viewElement.createSelectorItem(
+          /*name=*/ 'Page 2',
+          /*pageIs=*/ 'dummy-page2',
+          /*icon=*/ '',
+          /*id=*/ 'dummy2'),
+      viewElement.createSelectorItem(
+          /*name=*/ 'Page 3',
+          /*pageIs=*/ 'dummy-page3',
+          /*icon=*/ '',
+          /*id=*/ 'dummy3'),
+    ]);
+
+    // The first page should be selected by default.
+    assertEquals('dummy1', viewElement.selectedItem.id);
+
+    // Select a different page id and verify that the correct page is selected.
+    viewElement.selectPageById('dummy2');
+    assertEquals('dummy2', viewElement.selectedItem.id);
+
+    // Select a different page id and verify that the correct page is selected.
+    viewElement.selectPageById('dummy3');
+    assertEquals('dummy3', viewElement.selectedItem.id);
+
+    // Select a non-existent page ID and verify that the selected page did
+    // not change.
+    viewElement.selectPageById('does-not-exist');
+    assertEquals('dummy3', viewElement.selectedItem.id);
+  });
+});

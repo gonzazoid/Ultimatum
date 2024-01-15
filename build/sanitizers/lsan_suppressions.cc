@@ -23,6 +23,7 @@ char kLSanDefaultSuppressions[] =
 
     // False positives in libfontconfig. http://crbug.com/39050
     "leak:libfontconfig\n"
+    "leak:libthird_party_fontconfig\n"
     // eglibc-2.19/string/strdup.c creates false positive leak errors because of
     // the same reason as crbug.com/39050. The leak error stack trace, when
     // unwind on malloc, includes a call to libfontconfig. But the default stack
@@ -30,14 +31,16 @@ char kLSanDefaultSuppressions[] =
     // suppression works. http://crbug.com/605286
     "leak:__strdup\n"
 
-    // Leaks in Nvidia's GL and Vulkan drivers.
+    // Leaks in GL and Vulkan drivers and system libraries on Linux NVIDIA
     "leak:libGL.so\n"
     "leak:libGLX_nvidia.so\n"
     "leak:libnvidia-cbl.so\n"
     "leak:libnvidia-fatbinaryloader.so\n"
     "leak:libnvidia-glcore.so\n"
     "leak:libnvidia-rtcore.so\n"
+    "leak:nvidia0\n"
     "leak:nvidiactl\n"
+    "leak:libdbus-1.so\n"
 
     // XRandR has several one time leaks.
     "leak:libxrandr\n"
@@ -61,15 +64,15 @@ char kLSanDefaultSuppressions[] =
     // Suppress leaks from unknown third party modules. http://anglebug.com/6937
     "leak:<unknown module>\n"
 
+    // Suppress leaks from temporary files. http://crbug.com/1433299
+    "leak:(deleted)\n"
+
     // ================ Leaks in Chromium code ================
     // PLEASE DO NOT ADD SUPPRESSIONS FOR NEW LEAKS.
     // Instead, commits that introduce memory leaks should be reverted.
     // Suppressing the leak is acceptable in some cases when reverting is
     // impossible, i.e. when enabling leak detection for the first time for a
     // test target with pre-existing leaks.
-
-    // https://crbug.com/755670
-    "leak:third_party/yasm/\n"
 
     // v8 leaks caused by weak ref not call
     "leak:blink::DOMWrapperWorld::Create\n"
@@ -92,7 +95,7 @@ char kLSanDefaultSuppressions[] =
     // Suppress leak in SurfaceDrawContext. crbug.com/1265033
     "leak:skgpu::v1::SurfaceDrawContext::drawGlyphRunList\n"
     // Suppress leak in BluetoothServerSocket. crbug.com/1278970
-    "leak:location::nearby::chrome::BluetoothServerSocket::"
+    "leak:nearby::chrome::BluetoothServerSocket::"
     "BluetoothServerSocket\n"
     // Suppress leak in NearbyConnectionBrokerImpl. crbug.com/1279578
     "leak:ash::secure_channel::NearbyConnectionBrokerImpl\n"
@@ -101,6 +104,14 @@ char kLSanDefaultSuppressions[] =
     "NearbyEndpointFinderImpl\n"
     // Suppress leak in DelayedCallbackGroup test. crbug.com/1279563
     "leak:DelayedCallbackGroup_TimeoutAndRun_Test\n"
+#endif
+#if BUILDFLAG(IS_MAC)
+    // These are caused by the system, but not yet clear if they are false
+    // positives or bugs in the Mac LSAN runtime. Suppress while investigating.
+    // TODO(https://crbug.com/1320449): Remove these if/when fixed in macOS
+    // or the runtime.
+    "leak:_ensureAuxServiceAwareOfHostApp\n"
+    "leak:cssmErrorString\n"
 #endif
 
     // PLEASE READ ABOVE BEFORE ADDING NEW SUPPRESSIONS.

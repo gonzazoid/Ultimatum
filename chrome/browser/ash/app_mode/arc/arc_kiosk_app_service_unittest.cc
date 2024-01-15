@@ -10,26 +10,27 @@
 #include "ash/components/arc/test/fake_arc_session.h"
 #include "ash/test/ash_test_helper.h"
 #include "ash/test/test_window_builder.h"
-#include "base/run_loop.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_manager.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_bridge.h"
 #include "chrome/browser/ash/ownership/fake_owner_settings_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
+
+using base::test::TestFuture;
 
 namespace {
 
@@ -41,58 +42,45 @@ const char kAppWindowAppId[] = "org.chromium.arc.0";
 
 }  // namespace
 
-class FakeController : public KioskAppLauncher::Delegate {
+class FakeController : public KioskAppLauncher::NetworkDelegate,
+                       public KioskAppLauncher::Observer {
  public:
   explicit FakeController(ArcKioskAppService* service) : service_(service) {
-    service_->SetDelegate(this);
+    service_->SetNetworkDelegate(this);
+    service_->AddObserver(this);
   }
 
-  ~FakeController() override { service_->SetDelegate(nullptr); }
-
-  void Reset() {
-    window_created_ = false;
-    app_prepared_ = false;
+  ~FakeController() override {
+    service_->SetNetworkDelegate(nullptr);
+    service_->RemoveObserver(this);
   }
 
   // KioskAppLauncher::Delegate:
   bool IsNetworkReady() const override { return true; }
-  bool IsShowingNetworkConfigScreen() const override { return false; }
-  bool ShouldSkipAppInstallation() const override { return false; }
 
-  void OnAppWindowCreated() override {
-    window_created_ = true;
-    if (waiter_)
-      waiter_->Quit();
+  void OnAppWindowCreated(const std::optional<std::string>& app_name) override {
+    window_created_signal_.SetValue();
   }
 
-  void OnAppPrepared() override {
-    app_prepared_ = true;
-    if (waiter_)
-      waiter_->Quit();
-  }
+  void OnAppPrepared() override { app_prepared_signal_.SetValue(); }
 
   void WaitUntilWindowCreated() {
-    if (window_created_)
-      return;
-    waiter_ = std::make_unique<base::RunLoop>();
-    waiter_->Run();
+    EXPECT_TRUE(window_created_signal_.Wait());
+    window_created_signal_.Clear();
   }
 
   void WaitForAppToBePrepared() {
-    if (app_prepared_)
-      return;
-    waiter_ = std::make_unique<base::RunLoop>();
-    waiter_->Run();
+    EXPECT_TRUE(app_prepared_signal_.Wait());
+    app_prepared_signal_.Clear();
   }
 
   void InitializeNetwork() override {}
 
  private:
-  std::unique_ptr<base::RunLoop> waiter_;
-  ArcKioskAppService* service_;
+  TestFuture<void> window_created_signal_;
+  TestFuture<void> app_prepared_signal_;
 
-  bool window_created_ = false;
-  bool app_prepared_ = false;
+  raw_ptr<ArcKioskAppService> service_;
 };
 
 class ArcKioskAppServiceTest : public testing::Test {
@@ -102,14 +90,14 @@ class ArcKioskAppServiceTest : public testing::Test {
 
   void SetUp() override {
     ash_test_helper_.SetUp();
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
+    wm_helper_ = std::make_unique<exo::WMHelper>();
 
     profile_ = std::make_unique<TestingProfile>();
     profile_->set_profile_name(kAppEmail);
     arc_app_test_.set_persist_service_manager(true);
     arc_app_test_.SetUp(profile_.get());
     app_info_ = arc::mojom::AppInfo::New(kAppName, kAppPackageName,
-                                         kAppClassName, true /* sticky */);
+                                         kAppClassName, /*sticky=*/true);
     arc_policy_bridge_ =
         arc::ArcPolicyBridge::GetForBrowserContextForTesting(profile_.get());
     app_manager_ = std::make_unique<ArcKioskAppManager>();
@@ -140,7 +128,6 @@ class ArcKioskAppServiceTest : public testing::Test {
     package->last_backup_android_id = 1;
     package->last_backup_time = 1;
     package->sync = false;
-    package->system = false;
     return package;
   }
 
@@ -157,7 +144,7 @@ class ArcKioskAppServiceTest : public testing::Test {
     EXPECT_EQ(launch_requests_, app_instance()->launch_requests().size());
     EXPECT_TRUE(
         app_instance()->launch_requests().back()->IsForApp(*app_info()));
-    controller.Reset();
+
     app_instance()->SendTaskCreated(0, *app_info(), std::string());
   }
 
@@ -175,7 +162,7 @@ class ArcKioskAppServiceTest : public testing::Test {
   // Number of times app tried to be launched.
   size_t launch_requests_ = 0;
 
-  ash::AshTestHelper ash_test_helper_;
+  AshTestHelper ash_test_helper_;
 
   content::BrowserTaskEnvironment task_environment;
   ArcAppTest arc_app_test_;
@@ -187,7 +174,7 @@ class ArcKioskAppServiceTest : public testing::Test {
   std::unique_ptr<ArcKioskAppManager> app_manager_;
   std::unique_ptr<exo::WMHelper> wm_helper_;
 
-  arc::ArcPolicyBridge* arc_policy_bridge_;
+  raw_ptr<arc::ArcPolicyBridge, DanglingUntriaged> arc_policy_bridge_;
 };
 
 TEST_F(ArcKioskAppServiceTest, LaunchConditions) {
@@ -262,7 +249,7 @@ TEST_F(ArcKioskAppServiceTest, AppLaunches) {
   other_window->Init(ui::LAYER_SOLID_COLOR);
   other_window.reset();
 
-  ash::TestWindowBuilder window_builder;
+  TestWindowBuilder window_builder;
   std::unique_ptr<aura::Window> app_window = window_builder.Build();
   exo::SetShellApplicationId(app_window.get(), kAppWindowAppId);
   NotifyWindowCreated(app_window.get());

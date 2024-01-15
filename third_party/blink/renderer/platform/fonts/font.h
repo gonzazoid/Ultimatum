@@ -53,12 +53,12 @@ class PaintFlags;
 
 namespace blink {
 
-struct CharacterRange;
 class FontSelector;
+class NGShapeCache;
 class ShapeCache;
 class TextRun;
+struct TextFragmentPaintInfo;
 struct TextRunPaintInfo;
-struct NGTextFragmentPaintInfo;
 
 class PLATFORM_EXPORT Font {
   DISALLOW_NEW();
@@ -67,10 +67,13 @@ class PLATFORM_EXPORT Font {
   Font();
   explicit Font(const FontDescription&);
   Font(const FontDescription&, FontSelector*);
-  ~Font();
 
-  Font(const Font&);
-  Font& operator=(const Font&);
+  Font(const Font&) = default;
+  Font(Font&&) = default;
+  Font& operator=(const Font&) = default;
+  Font& operator=(Font&&) = default;
+
+  void Trace(Visitor* visitor) const { visitor->Trace(font_fallback_list_); }
 
   bool operator==(const Font& other) const;
   bool operator!=(const Font& other) const { return !(*this == other); }
@@ -89,20 +92,17 @@ class PLATFORM_EXPORT Font {
   void DrawText(cc::PaintCanvas*,
                 const TextRunPaintInfo&,
                 const gfx::PointF&,
-                float device_scale_factor,
                 const cc::PaintFlags&,
                 DrawType = DrawType::kGlyphsOnly) const;
   void DrawText(cc::PaintCanvas*,
                 const TextRunPaintInfo&,
                 const gfx::PointF&,
-                float device_scale_factor,
                 cc::NodeId node_id,
                 const cc::PaintFlags&,
                 DrawType = DrawType::kGlyphsOnly) const;
   void DrawText(cc::PaintCanvas*,
-                const NGTextFragmentPaintInfo&,
+                const TextFragmentPaintInfo&,
                 const gfx::PointF&,
-                float device_scale_factor,
                 cc::NodeId node_id,
                 const cc::PaintFlags&,
                 DrawType = DrawType::kGlyphsOnly) const;
@@ -110,23 +110,20 @@ class PLATFORM_EXPORT Font {
                     const TextRunPaintInfo&,
                     const gfx::PointF&,
                     CustomFontNotReadyAction,
-                    float device_scale_factor,
                     const cc::PaintFlags&,
                     DrawType = DrawType::kGlyphsOnly) const;
   void DrawEmphasisMarks(cc::PaintCanvas*,
                          const TextRunPaintInfo&,
                          const AtomicString& mark,
                          const gfx::PointF&,
-                         float device_scale_factor,
                          const cc::PaintFlags&) const;
   void DrawEmphasisMarks(cc::PaintCanvas*,
-                         const NGTextFragmentPaintInfo&,
+                         const TextFragmentPaintInfo&,
                          const AtomicString& mark,
                          const gfx::PointF&,
-                         float device_scale_factor,
                          const cc::PaintFlags&) const;
 
-  gfx::RectF TextInkBounds(const NGTextFragmentPaintInfo&) const;
+  gfx::RectF TextInkBounds(const TextFragmentPaintInfo&) const;
 
   struct TextIntercept {
     float begin_, end_;
@@ -139,12 +136,10 @@ class PLATFORM_EXPORT Font {
   // a line crossing through the text, parallel to the baseline.
   // TODO(drott): crbug.com/655154 Fix this for upright in vertical.
   void GetTextIntercepts(const TextRunPaintInfo&,
-                         float device_scale_factor,
                          const cc::PaintFlags&,
                          const std::tuple<float, float>& bounds,
                          Vector<TextIntercept>&) const;
-  void GetTextIntercepts(const NGTextFragmentPaintInfo&,
-                         float device_scale_factor,
+  void GetTextIntercepts(const TextFragmentPaintInfo&,
                          const cc::PaintFlags&,
                          const std::tuple<float, float>& bounds,
                          Vector<TextIntercept>&) const;
@@ -152,9 +147,7 @@ class PLATFORM_EXPORT Font {
   // Glyph bounds will be the minimum rect containing all glyph strokes, in
   // coordinates using (<text run x position>, <baseline position>) as the
   // origin.
-  float Width(const TextRun&,
-              HashSet<const SimpleFontData*>* fallback_fonts = nullptr,
-              gfx::RectF* glyph_bounds = nullptr) const;
+  float Width(const TextRun&, gfx::RectF* glyph_bounds = nullptr) const;
 
   int OffsetForPosition(const TextRun&,
                         float position,
@@ -165,19 +158,11 @@ class PLATFORM_EXPORT Font {
                                   float height,
                                   int from = 0,
                                   int to = -1) const;
-  CharacterRange GetCharacterRange(const TextRun&,
-                                   unsigned from,
-                                   unsigned to) const;
-  Vector<CharacterRange> IndividualCharacterRanges(const TextRun&) const;
 
   // Returns a vector of same size as TextRun.length() with advances measured
   // in pixels from the left bounding box of the full TextRun to the left bound
   // of the glyph rendered by each character. Values should always be positive.
   Vector<double> IndividualCharacterAdvances(const TextRun&) const;
-
-  void ExpandRangeToIncludePartialGlyphs(const TextRun&,
-                                         int* from,
-                                         int* to) const;
 
   // Metrics that we query the FontFallbackList for.
   float SpaceWidth() const {
@@ -204,6 +189,10 @@ class PLATFORM_EXPORT Font {
   // when, for whatever reason, the last resort font cannot be loaded.
   const SimpleFontData* PrimaryFont() const;
 
+  // Access the NG shape cache associated with this particular font object.
+  // Should *not* be retained across layout calls as it may become invalid.
+  NGShapeCache& GetNGShapeCache() const;
+
   // Access the shape cache associated with this particular font object.
   // Should *not* be retained across layout calls as it may become invalid.
   ShapeCache* GetShapeCache() const;
@@ -215,6 +204,12 @@ class PLATFORM_EXPORT Font {
 
   void SetCanShapeWordByWordForTesting(bool b) {
     EnsureFontFallbackList()->SetCanShapeWordByWordForTesting(b);
+  }
+
+  // Causes PrimaryFont to return nullptr, which is useful for simulating
+  // a situation where the "last resort font" did not load.
+  void NullifyPrimaryFontForTesting() {
+    EnsureFontFallbackList()->NullifyPrimarySimpleFontDataForTesting();
   }
 
   void ReportNotDefGlyph() const;
@@ -246,15 +241,19 @@ class PLATFORM_EXPORT Font {
     return EnsureFontFallbackList()->ShouldSkipDrawing();
   }
 
+  bool HasCustomFont() const {
+    if (!font_fallback_list_)
+      return false;
+    return EnsureFontFallbackList()->HasCustomFont();
+  }
+
  private:
   // TODO(xiaochengh): The function not only initializes null FontFallbackList,
   // but also syncs invalid FontFallbackList. Rename it for better readability.
   FontFallbackList* EnsureFontFallbackList() const;
-  void RevalidateFontFallbackList() const;
-  void ReleaseFontFallbackListRef() const;
 
   FontDescription font_description_;
-  mutable scoped_refptr<FontFallbackList> font_fallback_list_;
+  mutable Member<FontFallbackList> font_fallback_list_;
 };
 
 inline const SimpleFontData* Font::PrimaryFont() const {

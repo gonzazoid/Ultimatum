@@ -4,6 +4,9 @@
 
 #include "device/fido/cable/v2_handshake.h"
 
+#include <string_view>
+
+#include "base/containers/contains.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "components/cbor/reader.h"
@@ -27,16 +30,17 @@ TEST(CableV2Encoding, TunnelServerURLs) {
   // Tunnel ID zero should map to Google's tunnel server.
   const tunnelserver::KnownDomainID kGoogleDomain(0);
   const GURL url = tunnelserver::GetNewTunnelURL(kGoogleDomain, tunnel_id);
-  EXPECT_TRUE(url.spec().find("//cable.ua5v.com/") != std::string::npos) << url;
+
+  EXPECT_TRUE(base::Contains(url.spec(), "//cable.ua5v.com/")) << url;
 
   // The hash function shouldn't change across releases, so test a hashed
   // domain.
   const tunnelserver::KnownDomainID kHashedDomain(266);
   const GURL hashed_url =
       tunnelserver::GetNewTunnelURL(kHashedDomain, tunnel_id);
-  EXPECT_TRUE(hashed_url.spec().find("//cable.wufkweyy3uaxb.com/") !=
-              std::string::npos)
-      << url;
+
+  EXPECT_TRUE(base::Contains(hashed_url.spec(), "//cable.wufkweyy3uaxb.com/"))
+      << hashed_url;
 }
 
 TEST(CableV2Encoding, EIDToFromComponents) {
@@ -81,7 +85,7 @@ TEST(CableV2Encoding, EIDEncrypt) {
 TEST(CableV2Encoding, QRs) {
   std::array<uint8_t, kQRKeySize> qr_key;
   crypto::RandBytes(qr_key);
-  std::string url = qr::Encode(qr_key, CableRequestType::kMakeCredential);
+  std::string url = qr::Encode(qr_key, FidoRequestType::kMakeCredential);
   const absl::optional<qr::Components> decoded = qr::Parse(url);
   ASSERT_TRUE(decoded.has_value()) << url;
   static_assert(EXTENT(qr_key) >= EXTENT(decoded->secret), "");
@@ -96,7 +100,7 @@ TEST(CableV2Encoding, QRs) {
   // Chromium always sets this flag.
   EXPECT_TRUE(decoded->supports_linking.value_or(false));
 
-  EXPECT_EQ(decoded->request_type, CableRequestType::kMakeCredential);
+  EXPECT_EQ(decoded->request_type, FidoRequestType::kMakeCredential);
 
   url[0] ^= 4;
   EXPECT_FALSE(qr::Parse(url));
@@ -116,7 +120,7 @@ TEST(CableV2Encoding, KnownQRs) {
     bool is_valid;
     int64_t num_known_domains;
     absl::optional<bool> supports_linking;
-    CableRequestType request_type;
+    FidoRequestType request_type;
   } kTests[] = {
       {
           // Basic, but valid, QR.
@@ -127,7 +131,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ absl::nullopt,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
       {
           // QR with an invalid compressed point.
@@ -158,7 +162,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 4567,
           /* supports_linking= */ absl::nullopt,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
       {
           // Incorrect structure.
@@ -179,7 +183,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ true,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
       {
           // Explicitly does not support linking.
@@ -191,7 +195,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ false,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
       {
           // Incorrect structure.
@@ -212,7 +216,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ absl::nullopt,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
       {
           // Other request type.
@@ -224,7 +228,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ absl::nullopt,
-          /* request_type= */ CableRequestType::kMakeCredential,
+          /* request_type= */ FidoRequestType::kMakeCredential,
       },
       {
           // Unknown request type.
@@ -236,7 +240,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ absl::nullopt,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
       {
           // Incorrect structure.
@@ -257,7 +261,7 @@ TEST(CableV2Encoding, KnownQRs) {
           /* is_valid= */ true,
           /* num_known_domains= */ 0,
           /* supports_linking= */ absl::nullopt,
-          /* request_type= */ CableRequestType::kGetAssertion,
+          /* request_type= */ FidoRequestType::kGetAssertion,
       },
   };
 
@@ -286,17 +290,12 @@ TEST(CableV2Encoding, KnownQRs) {
 
 TEST(CableV2Encoding, RequestTypeToString) {
   for (const auto type :
-       {CableRequestType::kMakeCredential, CableRequestType::kGetAssertion}) {
+       {FidoRequestType::kMakeCredential, FidoRequestType::kGetAssertion}) {
     EXPECT_EQ(type, RequestTypeFromString(RequestTypeToString(type)));
   }
 
-  // kDiscoverableMakeCredential doesn't get encoded in the string format so
-  // will look the same as kMakeCredential.
-  EXPECT_EQ(RequestTypeToString(CableRequestType::kMakeCredential),
-            RequestTypeToString(CableRequestType::kDiscoverableMakeCredential));
-
-  EXPECT_EQ(CableRequestType::kGetAssertion, RequestTypeFromString("nonsense"));
-  EXPECT_EQ(CableRequestType::kGetAssertion, RequestTypeFromString(""));
+  EXPECT_EQ(FidoRequestType::kGetAssertion, RequestTypeFromString("nonsense"));
+  EXPECT_EQ(FidoRequestType::kGetAssertion, RequestTypeFromString(""));
 }
 
 TEST(CableV2Encoding, PaddedCBOR) {
@@ -389,8 +388,8 @@ TEST(CableV2Encoding, Digits) {
     absl::optional<std::vector<uint8_t>> test_data_again =
         qr::DigitsToBytes(digits);
     ASSERT_TRUE(test_data_again.has_value());
-    ASSERT_EQ(test_data_again->size(), i);
-    ASSERT_EQ(0, memcmp(test_data_again->data(), test_data, i));
+    ASSERT_EQ(test_data_again.value(),
+              std::vector<uint8_t>(test_data, test_data + i));
   }
 
   // |DigitsToBytes| should reject non-digit inputs.
@@ -407,7 +406,7 @@ TEST(CableV2Encoding, Digits) {
   memset(digits, '0', sizeof(digits));
   for (size_t i = 0; i < sizeof(digits); i++) {
     absl::optional<std::vector<uint8_t>> bytes =
-        qr::DigitsToBytes(base::StringPiece(digits, i));
+        qr::DigitsToBytes(std::string_view(digits, i));
     if (!bytes.has_value()) {
       continue;
     }
@@ -646,43 +645,6 @@ TEST_F(CableV2HandshakeTest, KNHandshake) {
         *initiator_result->first));
     EXPECT_EQ(initiator_result->second, responder_result->second);
   }
-}
-
-TEST_F(CableV2HandshakeTest, ConstructionTransition) {
-  std::array<uint8_t, 32> key1, key2;
-  std::fill(key1.begin(), key1.end(), 1);
-  std::fill(key2.begin(), key2.end(), 2);
-
-  Crypter a(key1, key2);
-  Crypter b(key2, key1);
-
-  std::vector<uint8_t> message, ciphertext, plaintext;
-  message.resize(100);
-  std::fill(message.begin(), message.end(), 42);
-
-  // Encrypt a message using the new construction.
-  a.GetNewConstructionFlagForTesting() = true;
-  ciphertext = message;
-  ASSERT_TRUE(a.Encrypt(&ciphertext));
-
-  // The new construction should be automatically detected so this should work
-  // and should cause the flag to be set.
-  EXPECT_FALSE(b.GetNewConstructionFlagForTesting());
-  ASSERT_TRUE(b.Decrypt(ciphertext, &plaintext));
-  ASSERT_TRUE(plaintext == message);
-  EXPECT_TRUE(b.GetNewConstructionFlagForTesting());
-
-  // Sending messages still works.
-  ciphertext = message;
-  ASSERT_TRUE(a.Encrypt(&ciphertext));
-  ASSERT_TRUE(b.Decrypt(ciphertext, &plaintext));
-  ASSERT_TRUE(plaintext == message);
-
-  // But old-construction messages will no longer be accepted.
-  ciphertext = message;
-  a.GetNewConstructionFlagForTesting() = false;
-  ASSERT_TRUE(a.Encrypt(&ciphertext));
-  ASSERT_FALSE(b.Decrypt(ciphertext, &plaintext));
 }
 
 }  // namespace

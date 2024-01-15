@@ -6,7 +6,7 @@
 #define ASH_WM_SESSION_STATE_ANIMATOR_H_
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 
 namespace ash {
@@ -143,6 +143,8 @@ class ASH_EXPORT SessionStateAnimator {
     // NOTE: This should NOT be accessed after OnAnimationAborted has been
     // called.
     virtual void OnAnimationAborted();
+
+    bool sequence_ended() const { return sequence_ended_; }
 
    private:
     // Destroys this and calls the callback if the contained animations

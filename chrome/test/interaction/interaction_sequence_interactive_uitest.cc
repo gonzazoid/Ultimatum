@@ -4,7 +4,7 @@
 
 #include <string.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "build/chromeos_buildflags.h"
@@ -48,7 +48,7 @@ IN_PROC_BROWSER_TEST_F(InteractionSequenceUITest, OpenMainMenuAndViewHelpItem) {
   // the BrowserView hierarcny.
   views::View* const button_view =
       views::ElementTrackerViews::GetInstance()->GetFirstMatchingView(
-          kAppMenuButtonElementId, context);
+          kToolbarAppMenuButtonElementId, context);
   BrowserAppMenuButton* const app_menu_button =
       static_cast<BrowserAppMenuButton*>(button_view);
   DCHECK_EQ(std::string("BrowserAppMenuButton"),
@@ -65,7 +65,7 @@ IN_PROC_BROWSER_TEST_F(InteractionSequenceUITest, OpenMainMenuAndViewHelpItem) {
           .AddStep(
               views::InteractionSequenceViews::WithInitialView(app_menu_button))
           .AddStep(ui::InteractionSequence::StepBuilder()
-                       .SetElementID(kAppMenuButtonElementId)
+                       .SetElementID(kToolbarAppMenuButtonElementId)
                        .SetType(ui::InteractionSequence::StepType::kActivated)
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()

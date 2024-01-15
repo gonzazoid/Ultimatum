@@ -10,14 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_context.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_service.h"
@@ -110,7 +109,7 @@ struct PostSyncFileCallback {
   PostSyncFileCallback(SyncStatusCode status, const storage::FileSystemURL& url)
       : status_(status), url_(url) {}
   void operator()(SyncFileCallback callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), status_, url_));
   }
 
@@ -122,8 +121,8 @@ struct PostSyncFileCallback {
 struct PostOnceClosureFunctor {
   PostOnceClosureFunctor() = default;
   void operator()(base::OnceClosure callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
   }
 };
 
@@ -221,7 +220,7 @@ class SyncFileSystemServiceTest : public testing::Test {
         .WillOnce(WithArg<1>([&](SyncStatusCallback callback) {
           mock_remote_service()->NotifyRemoteServiceStateUpdated(
               state_to_notify, "Test event.");
-          base::ThreadTaskRunnerHandle::Get()->PostTask(
+          base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
               FROM_HERE, base::BindOnce(std::move(callback), status_to_return));
         }));
 
@@ -268,7 +267,8 @@ class SyncFileSystemServiceTest : public testing::Test {
   std::unique_ptr<CannedSyncableFileSystem> file_system_;
 
   // Their ownerships are transferred to SyncFileSystemService.
-  raw_ptr<StrictMock<MockRemoteFileSyncService>> remote_service_;
+  raw_ptr<StrictMock<MockRemoteFileSyncService>, DanglingUntriaged>
+      remote_service_;
   StrictMock<MockLocalChangeProcessor> local_change_processor_;
 
   std::unique_ptr<SyncFileSystemService> sync_service_;
@@ -357,7 +357,7 @@ TEST_F(SyncFileSystemServiceTest, DISABLED_SimpleLocalSyncFlow) {
   EXPECT_CALL(*mock_local_change_processor(),
               ApplyLocalChange(change, _, _, kFile, _))
       .WillOnce(WithArg<4>([](SyncStatusCallback callback) {
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(std::move(callback), SYNC_STATUS_OK));
       }));
   EXPECT_CALL(*mock_remote_service(), ProcessRemoteChange(_))

@@ -18,14 +18,15 @@ WallpaperInfo::WallpaperInfo() {
 }
 
 WallpaperInfo::WallpaperInfo(
-    const OnlineWallpaperParams& online_wallpaper_params)
-    : location(online_wallpaper_params.url.spec()),
+    const OnlineWallpaperParams& online_wallpaper_params,
+    const OnlineWallpaperVariant& target_variant)
+    : location(target_variant.raw_url.spec()),
       layout(online_wallpaper_params.layout),
       type(online_wallpaper_params.daily_refresh_enabled
                ? WallpaperType::kDaily
                : WallpaperType::kOnline),
       date(base::Time::Now()),
-      asset_id(online_wallpaper_params.asset_id),
+      asset_id(target_variant.asset_id),
       collection_id(online_wallpaper_params.collection_id),
       unit_id(online_wallpaper_params.unit_id),
       variants(online_wallpaper_params.variants) {}
@@ -60,8 +61,8 @@ WallpaperInfo& WallpaperInfo::operator=(const WallpaperInfo& other) = default;
 WallpaperInfo::WallpaperInfo(WallpaperInfo&& other) = default;
 WallpaperInfo& WallpaperInfo::operator=(WallpaperInfo&& other) = default;
 
-bool WallpaperInfo::operator==(const WallpaperInfo& other) const {
-  // |asset_id| and |location| are skipped on purpose in favor of |unit_id| as
+bool WallpaperInfo::MatchesSelection(const WallpaperInfo& other) const {
+  // |location| are skipped on purpose in favor of |unit_id| as
   // online wallpapers can vary across devices due to their color mode. Other
   // wallpaper types still require location to be equal.
   switch (type) {
@@ -75,22 +76,46 @@ bool WallpaperInfo::operator==(const WallpaperInfo& other) const {
       return location == other.location && layout == other.layout &&
              collection_id == other.collection_id;
     case WallpaperType::kCustomized:
+      // |location| is skipped for customized wallpaper as it includes files id
+      // which is different between devices even it refers to the same file.
+      // Comparing |user_file_path| that contains the absolute path should be
+      // enough.
       return type == other.type && layout == other.layout &&
-             location == other.location &&
              user_file_path == other.user_file_path;
+    case WallpaperType::kSeaPen:
     case WallpaperType::kDefault:
     case WallpaperType::kPolicy:
     case WallpaperType::kThirdParty:
     case WallpaperType::kDevice:
     case WallpaperType::kOneShot:
+    case WallpaperType::kOobe:
     case WallpaperType::kCount:
       return type == other.type && layout == other.layout &&
              location == other.location;
   }
 }
 
-bool WallpaperInfo::operator!=(const WallpaperInfo& other) const {
-  return !(*this == other);
+bool WallpaperInfo::MatchesAsset(const WallpaperInfo& other) const {
+  if (!MatchesSelection(other))
+    return false;
+
+  switch (type) {
+    case WallpaperType::kOnline:
+    case WallpaperType::kDaily:
+      return location == other.location;
+    case WallpaperType::kOnceGooglePhotos:
+    case WallpaperType::kDailyGooglePhotos:
+    case WallpaperType::kCustomized:
+    case WallpaperType::kDefault:
+    case WallpaperType::kPolicy:
+    case WallpaperType::kThirdParty:
+    case WallpaperType::kDevice:
+    case WallpaperType::kOneShot:
+    case WallpaperType::kOobe:
+    case WallpaperType::kSeaPen:
+    case WallpaperType::kCount:
+      return true;
+  }
 }
 
 WallpaperInfo::~WallpaperInfo() = default;

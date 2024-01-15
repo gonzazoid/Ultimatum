@@ -63,10 +63,6 @@ void FakeRemoteFrame::SetPageFocus(bool is_focused) {}
 
 void FakeRemoteFrame::RenderFallbackContent() {}
 
-void FakeRemoteFrame::RenderFallbackContentWithResourceTiming(
-    blink::mojom::ResourceTimingInfoPtr,
-    const std::string& server_timing_value) {}
-
 void FakeRemoteFrame::AddResourceTimingFromChild(
     blink::mojom::ResourceTimingInfoPtr timing) {}
 
@@ -82,7 +78,7 @@ void FakeRemoteFrame::IntrinsicSizingInfoOfChildChanged(
     blink::mojom::IntrinsicSizingInfoPtr sizing_info) {}
 
 void FakeRemoteFrame::UpdateOpener(
-    const absl::optional<blink::FrameToken>& opener_frame_token) {}
+    const std::optional<blink::FrameToken>& opener_frame_token) {}
 
 void FakeRemoteFrame::DetachAndDispose() {}
 
@@ -100,11 +96,15 @@ void FakeRemoteFrame::ChildProcessGone() {}
 
 void FakeRemoteFrame::CreateRemoteChild(
     const blink::RemoteFrameToken& token,
-    const absl::optional<blink::FrameToken>& opener_frame_token,
+    const std::optional<blink::FrameToken>& opener_frame_token,
     blink::mojom::TreeScopeType tree_scope_type,
     blink::mojom::FrameReplicationStatePtr replication_state,
+    blink::mojom::FrameOwnerPropertiesPtr owner_properties,
+    bool is_loading,
     const base::UnguessableToken& devtools_frame_token,
     blink::mojom::RemoteFrameInterfacesFromBrowserPtr remote_frame_interfaces) {
 }
 
+void FakeRemoteFrame::CreateRemoteChildren(
+    std::vector<blink::mojom::CreateRemoteChildParamsPtr> params) {}
 }  // namespace content

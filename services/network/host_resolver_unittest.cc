@@ -43,15 +43,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/scheme_host_port.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "base/android/radio_utils.h"
-#include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "net/android/radio_activity_tracker.h"
-#include "net/base/features.h"
-#include "services/network/radio_monitor_android.h"
-#endif
-
 namespace network {
 namespace {
 
@@ -524,8 +515,9 @@ TEST_F(HostResolverTest, GetEndpointResultsWithMetadata) {
   expected_endpoint_results[0].metadata = expected_with_https_endpoint_metadata;
 
   EXPECT_EQ(net::OK, without_https_client.result_error());
-  EXPECT_THAT(without_https_client.endpoint_results_with_metadata(),
-              absl::nullopt);
+  EXPECT_THAT(
+      without_https_client.endpoint_results_with_metadata(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
 
   EXPECT_EQ(net::OK, with_https_client.result_error());
   EXPECT_THAT(with_https_client.endpoint_results_with_metadata(),
@@ -927,7 +919,9 @@ TEST_F(HostResolverTest, Failure_Sync) {
   EXPECT_EQ(net::ERR_NAME_NOT_RESOLVED,
             response_client.top_level_result_error());
   EXPECT_EQ(net::ERR_NAME_NOT_RESOLVED, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
 }
 
@@ -960,7 +954,9 @@ TEST_F(HostResolverTest, Failure_Async) {
   run_loop.Run();
 
   EXPECT_EQ(net::ERR_NAME_NOT_RESOLVED, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_TRUE(control_handle_closed);
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
 }
@@ -968,7 +964,8 @@ TEST_F(HostResolverTest, Failure_Async) {
 TEST_F(HostResolverTest, NetworkAnonymizationKey) {
   const net::SchemefulSite kSite =
       net::SchemefulSite(GURL("https://foo.test/"));
-  const net::NetworkAnonymizationKey kNetworkIsolationKey(kSite, kSite);
+  const auto kNetworkAnonymizationKey =
+      net::NetworkAnonymizationKey::CreateSameSite(kSite);
 
   auto inner_resolver = std::make_unique<net::MockHostResolver>();
   inner_resolver->rules()->AddRule("nik.test", "1.2.3.4");
@@ -986,7 +983,7 @@ TEST_F(HostResolverTest, NetworkAnonymizationKey) {
 
   resolver.ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
                            net::HostPortPair("nik.test", 160)),
-                       kNetworkIsolationKey, std::move(optional_parameters),
+                       kNetworkAnonymizationKey, std::move(optional_parameters),
                        std::move(pending_response_client));
   run_loop.Run();
 
@@ -994,7 +991,7 @@ TEST_F(HostResolverTest, NetworkAnonymizationKey) {
   EXPECT_THAT(response_client.result_addresses().value().endpoints(),
               testing::ElementsAre(CreateExpectedEndPoint("1.2.3.4", 160)));
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
-  EXPECT_EQ(kNetworkIsolationKey,
+  EXPECT_EQ(kNetworkAnonymizationKey,
             inner_resolver->last_request_network_anonymization_key());
 }
 
@@ -1120,7 +1117,9 @@ TEST_F(HostResolverTest, Cancellation) {
   // On cancellation, should receive an ERR_FAILED result, and the internal
   // resolver request should have been cancelled.
   EXPECT_EQ(net::ERR_ABORTED, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_EQ(1, inner_resolver->num_cancellations());
   EXPECT_TRUE(control_handle_closed);
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
@@ -1209,7 +1208,9 @@ TEST_F(HostResolverTest, DestroyResolver) {
   // On context destruction, should receive an ERR_FAILED result, and the
   // internal resolver request should have been cancelled.
   EXPECT_EQ(net::ERR_FAILED, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_EQ(1, inner_resolver->num_cancellations());
   EXPECT_TRUE(control_handle_closed);
 }
@@ -1376,7 +1377,9 @@ TEST_F(HostResolverTest, CloseBinding) {
 
   // Request should be cancelled.
   EXPECT_EQ(net::ERR_FAILED, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_TRUE(control_handle_closed);
   EXPECT_EQ(1, inner_resolver->num_cancellations());
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
@@ -1460,7 +1463,9 @@ TEST_F(HostResolverTest, IsSpeculative) {
   run_loop.Run();
 
   EXPECT_EQ(net::OK, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
 }
 
@@ -1510,7 +1515,9 @@ TEST_F(HostResolverTest, TextResults) {
   run_loop.Run();
 
   EXPECT_EQ(net::OK, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_THAT(response_client.result_text(),
               testing::Optional(testing::ElementsAreArray(kTextRecords)));
   EXPECT_FALSE(response_client.result_hosts());
@@ -1553,7 +1560,9 @@ TEST_F(HostResolverTest, HostResults) {
   run_loop.Run();
 
   EXPECT_EQ(net::OK, response_client.result_error());
-  EXPECT_FALSE(response_client.result_addresses());
+  EXPECT_THAT(
+      response_client.result_addresses(),
+      testing::AnyOf(absl::nullopt, testing::Optional(testing::IsEmpty())));
   EXPECT_FALSE(response_client.result_text());
   EXPECT_THAT(response_client.result_hosts(),
               testing::Optional(testing::UnorderedElementsAre(
@@ -1595,6 +1604,35 @@ TEST_F(HostResolverTest, RespectsDisablingAdditionalQueryTypes) {
   // No queries made, so result is `ERR_DNS_CACHE_MISS`.
   EXPECT_THAT(response_client.result_error(),
               net::test::IsError(net::ERR_DNS_CACHE_MISS));
+  EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
+}
+
+TEST_F(HostResolverTest, CanonicalizesInputHost) {
+  auto inner_resolver = std::make_unique<net::MockHostResolver>();
+  inner_resolver->set_synchronous_mode(true);
+  inner_resolver->rules()->AddRule("name.test", "1.2.3.4");
+
+  HostResolver resolver(inner_resolver.get(), net::NetLog::Get());
+
+  base::RunLoop run_loop;
+  mojo::Remote<mojom::ResolveHostHandle> control_handle;
+  mojom::ResolveHostParametersPtr optional_parameters =
+      mojom::ResolveHostParameters::New();
+  optional_parameters->control_handle =
+      control_handle.BindNewPipeAndPassReceiver();
+  mojo::PendingRemote<mojom::ResolveHostClient> pending_response_client;
+  TestResolveHostClient response_client(&pending_response_client, &run_loop);
+
+  resolver.ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
+                           net::HostPortPair("NaMe.test", 165)),
+                       net::NetworkAnonymizationKey(),
+                       std::move(optional_parameters),
+                       std::move(pending_response_client));
+  run_loop.Run();
+
+  EXPECT_EQ(net::OK, response_client.top_level_result_error());
+  EXPECT_THAT(response_client.result_addresses().value().endpoints(),
+              testing::ElementsAre(CreateExpectedEndPoint("1.2.3.4", 165)));
   EXPECT_EQ(0u, resolver.GetNumOutstandingRequestsForTesting());
 }
 
@@ -1744,61 +1782,6 @@ TEST_F(HostResolverTest, MdnsListener_UnhandledResult) {
   EXPECT_THAT(response_client.hostname_results(), testing::IsEmpty());
 }
 #endif  // BUILDFLAG(ENABLE_MDNS)
-
-#if BUILDFLAG(IS_ANDROID)
-
-class HostResolverRecordRadioWakeupTest : public HostResolverTest {
- public:
-  HostResolverRecordRadioWakeupTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        net::features::kRecordRadioWakeupTrigger);
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-TEST_F(HostResolverRecordRadioWakeupTest, RecordPreconnect) {
-  base::HistogramTester histograms;
-
-  net::android::RadioActivityTracker::GetInstance()
-      .OverrideRadioActivityForTesting(
-          base::android::RadioDataActivity::kDormant);
-  net::android::RadioActivityTracker::GetInstance().OverrideRadioTypeForTesting(
-      base::android::RadioConnectionType::kCell);
-
-  auto inner_resolver = std::make_unique<net::MockHostResolver>();
-  inner_resolver->set_synchronous_mode(false);
-  inner_resolver->rules()->AddRule("example.com", "1.2.3.4");
-
-  HostResolver resolver(inner_resolver.get(), net::NetLog::Get());
-
-  base::RunLoop run_loop;
-  mojo::Remote<mojom::ResolveHostHandle> control_handle;
-  mojom::ResolveHostParametersPtr optional_parameters =
-      mojom::ResolveHostParameters::New();
-  optional_parameters->control_handle =
-      control_handle.BindNewPipeAndPassReceiver();
-  optional_parameters->purpose =
-      mojom::ResolveHostParameters::Purpose::kPreconnect;
-  mojo::PendingRemote<mojom::ResolveHostClient> pending_response_client;
-  TestResolveHostClient response_client(&pending_response_client, &run_loop);
-
-  resolver.ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
-                           net::HostPortPair("example.com", 160)),
-                       net::NetworkAnonymizationKey(),
-                       std::move(optional_parameters),
-                       std::move(pending_response_client));
-
-  run_loop.Run();
-
-  EXPECT_EQ(net::OK, response_client.result_error());
-  histograms.ExpectUniqueSample(
-      kUmaNamePossibleWakeupTriggerResolveHost,
-      mojom::ResolveHostParameters::Purpose::kPreconnect, 1);
-}
-
-#endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace
 }  // namespace network

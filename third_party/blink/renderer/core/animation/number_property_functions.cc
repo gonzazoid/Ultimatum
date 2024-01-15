@@ -42,11 +42,6 @@ absl::optional<double> NumberPropertyFunctions::GetNumber(
       return style.StrokeOpacity();
     case CSSPropertyID::kWidows:
       return style.Widows();
-
-    case CSSPropertyID::kFontSizeAdjust:
-      if (!style.HasFontSizeAdjust())
-        return absl::optional<double>();
-      return style.FontSizeAdjust();
     case CSSPropertyID::kColumnCount:
       if (style.HasAutoColumnCount())
         return absl::optional<double>();
@@ -100,11 +95,10 @@ double NumberPropertyFunctions::ClampNumber(const CSSProperty& property,
 
     case CSSPropertyID::kFillOpacity:
     case CSSPropertyID::kOpacity:
-      return ClampTo<float>(value, 0, nextafterf(1, 0));
+      return ClampTo<float>(value, 0, 1);
 
     case CSSPropertyID::kFlexGrow:
     case CSSPropertyID::kFlexShrink:
-    case CSSPropertyID::kFontSizeAdjust:
     case CSSPropertyID::kLineHeight:
     case CSSPropertyID::kTabSize:
     case CSSPropertyID::kTextSizeAdjust:

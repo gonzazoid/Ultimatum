@@ -6,16 +6,14 @@
 
 #include <utility>
 
-#include "ash/components/phonehub/camera_roll_download_manager.h"
-#include "ash/components/phonehub/proto/phonehub_api.pb.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -29,6 +27,8 @@
 #include "base/time/time.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/camera_roll_download_manager.h"
+#include "chromeos/ash/components/phonehub/proto/phonehub_api.pb.h"
 #include "chromeos/ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -167,8 +167,8 @@ void CameraRollDownloadManagerImpl::OnPayloadFilesCreated(
   }
 
   const std::string& holding_space_item_id =
-      holding_space_keyed_service_->AddPhoneHubCameraRollItem(
-          file_path,
+      holding_space_keyed_service_->AddItemOfType(
+          HoldingSpaceItem::Type::kPhoneHubCameraRoll, file_path,
           ash::HoldingSpaceProgress(/*current_bytes=*/0,
                                     /*total_bytes=*/file_size_bytes));
   if (holding_space_item_id.empty()) {

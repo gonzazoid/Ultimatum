@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "chrome/browser/apps/app_service/app_icon/icon_key_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/apps/app_service/launch_result_type.h"
 #include "chrome/browser/apps/app_service/publishers/app_publisher.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
@@ -20,12 +20,6 @@
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/menu.h"
 #include "components/services/app_service/public/cpp/permission.h"
-#include "components/services/app_service/public/cpp/publisher_base.h"
-#include "components/services/app_service/public/mojom/app_service.mojom.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "mojo/public/cpp/bindings/remote_set.h"
 
 class Profile;
 
@@ -38,12 +32,7 @@ struct AppLaunchParams;
 // An app publisher (in the App Service sense) of Plugin VM apps.
 //
 // See components/services/app_service/README.md.
-//
-// TODO(crbug.com/1253250):
-// 1. Remove the parent class apps::PublisherBase.
-// 2. Remove all apps::mojom related code.
-class PluginVmApps : public apps::PublisherBase,
-                     public AppPublisher,
+class PluginVmApps : public AppPublisher,
                      public guest_os::GuestOsRegistryService::Observer {
  public:
   explicit PluginVmApps(AppServiceProxy* proxy);
@@ -58,12 +47,10 @@ class PluginVmApps : public apps::PublisherBase,
   void Initialize();
 
   // apps::AppPublisher overrides.
-  void LoadIcon(const std::string& app_id,
-                const IconKey& icon_key,
-                IconType icon_type,
-                int32_t size_hint_in_dip,
-                bool allow_placeholder_icon,
-                apps::LoadIconCallback callback) override;
+  void GetCompressedIconData(const std::string& app_id,
+                             int32_t size_in_dip,
+                             ui::ResourceScaleFactor scale_factor,
+                             LoadIconCallback callback) override;
   void Launch(const std::string& app_id,
               int32_t event_flags,
               LaunchSource launch_source,
@@ -87,24 +74,6 @@ class PluginVmApps : public apps::PublisherBase,
                     int64_t display_id,
                     base::OnceCallback<void(MenuItems)> callback) override;
 
-  // apps::PublisherBase overrides.
-  void Connect(mojo::PendingRemote<apps::mojom::Subscriber> subscriber_remote,
-               apps::mojom::ConnectOptionsPtr opts) override;
-  void Launch(const std::string& app_id,
-              int32_t event_flags,
-              apps::mojom::LaunchSource launch_source,
-              apps::mojom::WindowInfoPtr window_info) override;
-  void LaunchAppWithIntent(const std::string& app_id,
-                           int32_t event_flags,
-                           apps::mojom::IntentPtr intent,
-                           apps::mojom::LaunchSource launch_source,
-                           apps::mojom::WindowInfoPtr window_info,
-                           LaunchAppWithIntentCallback callback) override;
-  void GetMenuModel(const std::string& app_id,
-                    apps::mojom::MenuType menu_type,
-                    int64_t display_id,
-                    GetMenuModelCallback callback) override;
-
   // GuestOsRegistryService::Observer overrides.
   void OnRegistryUpdated(
       guest_os::GuestOsRegistryService* registry_service,
@@ -117,24 +86,17 @@ class PluginVmApps : public apps::PublisherBase,
       const guest_os::GuestOsRegistryService::Registration& registration,
       bool generate_new_icon_key);
 
-  apps::mojom::AppPtr Convert(
-      const guest_os::GuestOsRegistryService::Registration& registration,
-      bool new_icon_key);
-  void OnPluginVmAllowedChanged(bool is_allowed);
-  void OnPluginVmConfiguredChanged();
+  void OnPluginVmAvailabilityChanged(bool is_allowed, bool is_configured);
   void OnPermissionChanged();
 
-  mojo::RemoteSet<apps::mojom::Subscriber> subscribers_;
-
-  Profile* const profile_;
-  guest_os::GuestOsRegistryService* registry_ = nullptr;
-
-  apps_util::IncrementingIconKeyFactory icon_key_factory_;
+  const raw_ptr<Profile> profile_;
+  raw_ptr<guest_os::GuestOsRegistryService> registry_ = nullptr;
 
   // Whether the Plugin VM app is allowed by policy.
   bool is_allowed_ = false;
 
-  std::unique_ptr<plugin_vm::PluginVmPolicySubscription> policy_subscription_;
+  std::unique_ptr<plugin_vm::PluginVmAvailabilitySubscription>
+      availability_subscription_;
   PrefChangeRegistrar pref_registrar_;
 };
 

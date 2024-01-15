@@ -9,13 +9,12 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/speech/audio_buffer.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/media/media_internals.h"
-#include "content/browser/speech/audio_buffer.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -32,6 +31,7 @@
 
 using media::AudioBus;
 using media::AudioConverter;
+using media::AudioGlitchInfo;
 using media::AudioParameters;
 using media::ChannelLayout;
 
@@ -60,7 +60,9 @@ class SpeechRecognizerImpl::OnDataConverter
 
  private:
   // media::AudioConverter::InputCallback implementation.
-  double ProvideInput(AudioBus* dest, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* dest,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   // Handles resampling, buffering, and channel mixing between input and output
   // parameters.
@@ -164,7 +166,8 @@ scoped_refptr<AudioChunk> SpeechRecognizerImpl::OnDataConverter::Convert(
 
 double SpeechRecognizerImpl::OnDataConverter::ProvideInput(
     AudioBus* dest,
-    uint32_t frames_delayed) {
+    uint32_t frames_delayed,
+    const AudioGlitchInfo& glitch_info) {
   // Read from the input bus to feed the converter.
   input_bus_->CopyTo(dest);
   // Indicate that the recorded audio has in fact been used by the converter.
@@ -540,7 +543,7 @@ void SpeechRecognizerImpl::ProcessAudioPipeline(const AudioChunk& raw_audio) {
 }
 
 void SpeechRecognizerImpl::OnDeviceInfo(
-    const absl::optional<media::AudioParameters>& params) {
+    const std::optional<media::AudioParameters>& params) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   device_params_ = params.value_or(AudioParameters());
   DVLOG(1) << "Device parameters: " << device_params_.AsHumanReadableString();
@@ -575,10 +578,13 @@ SpeechRecognizerImpl::StartRecording(const FSMEventArgs&) {
   int chunk_duration_ms = recognition_engine_->GetDesiredAudioChunkDurationMs();
 
   if (!device_params_.IsValid()) {
-    DLOG(ERROR) << "Audio input device not found";
-    return Abort(blink::mojom::SpeechRecognitionError(
-        blink::mojom::SpeechRecognitionErrorCode::kAudioCapture,
-        blink::mojom::SpeechAudioErrorDetails::kNoMic));
+    DLOG(WARNING) << "Audio input device not found, but one should exist -- "
+                     "using fake audio input parameters.";
+
+    // It's okay to try with fake parameters since we've already been given
+    // permission from SpeechRecognitionManagerImpl. If no device exists, this
+    // will just result in an OnCaptureError().
+    device_params_ = media::AudioParameters::UnavailableDeviceParams();
   }
 
   // Audio converter shall provide audio based on these parameters as output.
@@ -854,14 +860,14 @@ void SpeechRecognizerImpl::UpdateSignalAndNoiseLevels(const float& rms,
   // Perhaps it might be quite expensive on mobile.
   float level = (rms - kAudioMeterMinDb) /
       (kAudioMeterDbRange / kAudioMeterRangeMaxUnclipped);
-  level = base::clamp(level, 0.0f, kAudioMeterRangeMaxUnclipped);
+  level = std::clamp(level, 0.0f, kAudioMeterRangeMaxUnclipped);
   const float smoothing_factor = (level > audio_level_) ? kUpSmoothingFactor :
                                                           kDownSmoothingFactor;
   audio_level_ += (level - audio_level_) * smoothing_factor;
 
   float noise_level = (endpointer_.NoiseLevelDb() - kAudioMeterMinDb) /
       (kAudioMeterDbRange / kAudioMeterRangeMaxUnclipped);
-  noise_level = base::clamp(noise_level, 0.0f, kAudioMeterRangeMaxUnclipped);
+  noise_level = std::clamp(noise_level, 0.0f, kAudioMeterRangeMaxUnclipped);
 
   listener()->OnAudioLevelsChange(
       session_id(), clip_detected ? 1.0f : audio_level_, noise_level);
@@ -887,7 +893,7 @@ void SpeechRecognizerImpl::CreateAudioCapturerSource() {
       std::move(stream_factory), device_id_,
       audio::DeadStreamDetection::kEnabled,
       MediaInternals::GetInstance()->CreateMojoAudioLog(
-          media::AudioLogFactory::AUDIO_INPUT_CONTROLLER,
+          media::AudioLogFactory::AudioComponent::kAudioInputController,
           0 /* component_id */));
 }
 

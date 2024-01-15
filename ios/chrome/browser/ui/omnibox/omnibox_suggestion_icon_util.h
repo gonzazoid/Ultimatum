@@ -7,21 +7,21 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/shared/ui/symbols/buildflags.h"
+
 // All available icons for autocomplete suggestions in the popup.
 enum class OmniboxSuggestionIconType {
-  kBookmark = 0,
-  kCalculator,
+  kCalculator = 0,
   kDefaultFavicon,
-  kHistory,
   kSearch,
   kSearchHistory,
-  kConversation,
+  kConversion,
   kDictionary,
   kStock,
   kSunrise,
-  kLocalTime,
   kWhenIs,
   kTranslation,
+  kSearchTrend,
   // The FALLBACK_ANSWER icon is used for all answers that don't have special
   // icons above.
   kFallbackAnswer,
@@ -33,5 +33,10 @@ NSString* GetOmniboxSuggestionIconTypeAssetName(OmniboxSuggestionIconType icon);
 
 // Returns the asset with "always template" rendering mode.
 UIImage* GetOmniboxSuggestionIcon(OmniboxSuggestionIconType icon);
+
+#if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
+// Returns the branded Google icon.
+UIImage* GetBrandedGoogleIconForOmnibox();
+#endif  // BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
 
 #endif  // IOS_CHROME_BROWSER_UI_OMNIBOX_OMNIBOX_SUGGESTION_ICON_UTIL_H_

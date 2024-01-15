@@ -6,10 +6,6 @@
 
 #import "ios/web_view/shell/shell_view_controller.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @implementation ShellAppDelegate
 
 @synthesize window = _window;
@@ -54,12 +50,12 @@
 }
 
 - (BOOL)application:(UIApplication*)application
-    shouldSaveApplicationState:(NSCoder*)coder {
+    shouldSaveSecureApplicationState:(NSCoder*)coder {
   return YES;
 }
 
 - (BOOL)application:(UIApplication*)application
-    shouldRestoreApplicationState:(NSCoder*)coder {
+    shouldRestoreSecureApplicationState:(NSCoder*)coder {
   // TODO(crbug.com/710329): Make this value configurable in the settings.
   return YES;
 }

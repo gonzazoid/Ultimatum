@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "components/favicon/core/test/mock_favicon_service.h"
 #include "components/favicon_base/favicon_callback.h"
@@ -16,6 +17,7 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "url/gurl.h"
 
 using ::testing::_;
@@ -28,10 +30,8 @@ CreateTestBitmapResult(GURL url, int size, SkColor color = SK_ColorRED) {
 
   // Create bitmap and fill with |color|.
   scoped_refptr<base::RefCountedBytes> data(new base::RefCountedBytes());
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(size, size);
-  bitmap.eraseColor(color);
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &data->data());
+  gfx::PNGCodec::EncodeBGRASkBitmap(gfx::test::CreateBitmap(size, color), false,
+                                    &data->data());
 
   result.bitmap_data = data;
   result.pixel_size = gfx::Size(size, size);
@@ -158,7 +158,7 @@ TEST_F(FaviconHelperTest, GetComposedFaviconImageOrderMatchesInput) {
                    favicon_base::FaviconRawBitmapCallback callback,
                    base::CancelableTaskTracker* tracker) {
         tracker->PostTask(
-            base::ThreadTaskRunnerHandle::Get().get(), FROM_HERE,
+            base::SingleThreadTaskRunner::GetCurrentDefault().get(), FROM_HERE,
             base::BindOnce(
                 [](favicon_base::FaviconRawBitmapCallback callback, GURL url,
                    int size) {

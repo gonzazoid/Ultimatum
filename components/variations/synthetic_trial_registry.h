@@ -18,6 +18,14 @@ namespace metrics {
 class MetricsServiceAccessor;
 }  // namespace metrics
 
+namespace content {
+class SyntheticTrialSyncer;
+}  // namespace content
+
+namespace tpcd::experiment {
+class ExperimentManagerImplBrowserTest;
+}  // namespace tpcd::experiment
+
 namespace variations {
 
 struct ActiveGroupId;
@@ -43,10 +51,10 @@ class COMPONENT_EXPORT(VARIATIONS) SyntheticTrialRegistry {
   ~SyntheticTrialRegistry();
 
   // Adds an observer to be notified when the synthetic trials list changes.
-  void AddSyntheticTrialObserver(SyntheticTrialObserver* observer);
+  void AddObserver(SyntheticTrialObserver* observer);
 
   // Removes an existing observer of synthetic trials list changes.
-  void RemoveSyntheticTrialObserver(SyntheticTrialObserver* observer);
+  void RemoveObserver(SyntheticTrialObserver* observer);
 
   // Specifies the mode of RegisterExternalExperiments() operation.
   enum OverrideMode {
@@ -82,11 +90,14 @@ class COMPONENT_EXPORT(VARIATIONS) SyntheticTrialRegistry {
   friend FieldTrialsProvider;
   friend FieldTrialsProviderTest;
   friend SyntheticTrialRegistryTest;
+  friend ::tpcd::experiment::ExperimentManagerImplBrowserTest;
+  friend content::SyntheticTrialSyncer;
   FRIEND_TEST_ALL_PREFIXES(SyntheticTrialRegistryTest, RegisterSyntheticTrial);
   FRIEND_TEST_ALL_PREFIXES(SyntheticTrialRegistryTest,
                            GetSyntheticFieldTrialsOlderThanSuffix);
   FRIEND_TEST_ALL_PREFIXES(SyntheticTrialRegistryTest,
                            GetSyntheticFieldTrialActiveGroups);
+  FRIEND_TEST_ALL_PREFIXES(SyntheticTrialRegistryTest, NotifyObserver);
   FRIEND_TEST_ALL_PREFIXES(VariationsCrashKeysTest, BasicFunctionality);
 
   // Registers a field trial name and group to be used to annotate UMA and UKM
@@ -126,8 +137,16 @@ class COMPONENT_EXPORT(VARIATIONS) SyntheticTrialRegistry {
       std::vector<ActiveGroupId>* synthetic_trials,
       base::StringPiece suffix = "") const;
 
+  // SyntheticTrialSyncer needs to know all current synthetic trial
+  // groups after launching new child processes.
+  const std::vector<SyntheticTrialGroup>& GetSyntheticTrialGroups() const {
+    return synthetic_trial_groups_;
+  }
+
   // Notifies observers on a synthetic trial list change.
-  void NotifySyntheticTrialObservers();
+  void NotifySyntheticTrialObservers(
+      const std::vector<SyntheticTrialGroup>& trials_updated,
+      const std::vector<SyntheticTrialGroup>& trials_removed);
 
   // Whether the allowlist is enabled. Some configurations, like WebLayer
   // do not use the allowlist.

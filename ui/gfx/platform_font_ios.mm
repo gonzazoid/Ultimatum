@@ -8,7 +8,8 @@
 
 #include <cmath>
 
-#import "base/mac/foundation_util.h"
+#include "base/apple/bridging.h"
+#import "base/apple/foundation_util.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -19,28 +20,55 @@
 
 namespace gfx {
 
+#if BUILDFLAG(USE_BLINK)
+
+namespace {
+
+std::string GetFamilyNameFromTypeface(sk_sp<SkTypeface> typeface) {
+  SkString family;
+  typeface->getFamilyName(&family);
+  return family.c_str();
+}
+
+}  // namespace
+
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 // PlatformFontIOS, public:
 
 PlatformFontIOS::PlatformFontIOS() {
-  font_size_ = [UIFont systemFontSize];
+  font_size_ = UIFont.systemFontSize;
   style_ = Font::NORMAL;
   weight_ = Font::Weight::NORMAL;
   UIFont* system_font = [UIFont systemFontOfSize:font_size_];
-  font_name_ = base::SysNSStringToUTF8([system_font fontName]);
+  font_name_ = base::SysNSStringToUTF8(system_font.fontName);
   CalculateMetrics();
 }
 
-PlatformFontIOS::PlatformFontIOS(NativeFont native_font) {
-  std::string font_name = base::SysNSStringToUTF8([native_font fontName]);
-  InitWithNameSizeAndStyle(font_name, [native_font pointSize],
-                           Font::NORMAL, Font::Weight::NORMAL);
+PlatformFontIOS::PlatformFontIOS(CTFontRef ct_font) {
+  UIFont* font = base::apple::CFToNSPtrCast(ct_font);
+  std::string font_name = base::SysNSStringToUTF8(font.fontName);
+  InitWithNameSizeAndStyle(font_name, font.pointSize, Font::NORMAL,
+                           Font::Weight::NORMAL);
 }
 
 PlatformFontIOS::PlatformFontIOS(const std::string& font_name, int font_size) {
   InitWithNameSizeAndStyle(font_name, font_size, Font::NORMAL,
                            Font::Weight::NORMAL);
 }
+
+#if BUILDFLAG(USE_BLINK)
+PlatformFontIOS::PlatformFontIOS(
+    sk_sp<SkTypeface> typeface,
+    int font_size_pixels,
+    const absl::optional<FontRenderParams>& params) {
+  InitWithNameSizeAndStyle(GetFamilyNameFromTypeface(typeface),
+                           font_size_pixels,
+                           (typeface->isItalic() ? Font::ITALIC : Font::NORMAL),
+                           FontWeightFromInt(typeface->fontStyle().weight()));
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // PlatformFontIOS, PlatformFont implementation:
@@ -81,7 +109,8 @@ const std::string& PlatformFontIOS::GetFontName() const {
 }
 
 std::string PlatformFontIOS::GetActualFontName() const {
-  return base::SysNSStringToUTF8([GetNativeFont() familyName]);
+  UIFont* font = base::apple::CFToNSPtrCast(GetCTFont());
+  return base::SysNSStringToUTF8(font.familyName);
 }
 
 int PlatformFontIOS::GetFontSize() const {
@@ -89,18 +118,39 @@ int PlatformFontIOS::GetFontSize() const {
 }
 
 const FontRenderParams& PlatformFontIOS::GetFontRenderParams() {
-  NOTIMPLEMENTED();
-  static FontRenderParams params;
-  return params;
+  return render_params_;
 }
 
-NativeFont PlatformFontIOS::GetNativeFont() const {
-  return [UIFont fontWithName:base::SysUTF8ToNSString(font_name_)
-                         size:font_size_];
+CTFontRef PlatformFontIOS::GetCTFont() const {
+  UIFont* font = [UIFont fontWithName:base::SysUTF8ToNSString(font_name_)
+                                 size:font_size_];
+
+  UIFontDescriptor* descriptor = [font fontDescriptor];
+
+  uint32_t traits = 0;
+  if (weight_ >= Font::Weight::BOLD) {
+    traits |= UIFontDescriptorTraitBold;
+  }
+  if (style_ == Font::ITALIC) {
+    traits |= UIFontDescriptorTraitItalic;
+  }
+  descriptor = [descriptor fontDescriptorWithSymbolicTraits:traits];
+
+  // 0.0 size means that the original size of the font specified in the
+  // descriptor should be kept.
+  UIFont* font_with_traits = [UIFont fontWithDescriptor:descriptor size:0.0];
+
+  // UIFont's fontWithDescriptor:size: method can return nil if it cannot find a
+  // font that matches the given descriptor.
+  if (font_with_traits) {
+    return base::apple::NSToCFPtrCast(font_with_traits);
+  } else {
+    return base::apple::NSToCFPtrCast(font);
+  }
 }
 
 sk_sp<SkTypeface> PlatformFontIOS::GetNativeSkTypeface() const {
-  return SkMakeTypefaceFromCTFont(base::mac::NSToCFCast(GetNativeFont()));
+  return SkMakeTypefaceFromCTFont(GetCTFont());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -125,11 +175,18 @@ void PlatformFontIOS::InitWithNameSizeAndStyle(const std::string& font_name,
 }
 
 void PlatformFontIOS::CalculateMetrics() {
-  UIFont* font = GetNativeFont();
-  height_ = font.lineHeight;
-  ascent_ = font.ascender;
-  cap_height_ = font.capHeight;
+  UIFont* font = base::apple::CFToNSPtrCast(GetCTFont());
+  height_ = ceil(font.lineHeight);
+  ascent_ = ceil(font.ascender);
+  cap_height_ = ceil(font.capHeight);
   average_width_ = [@"x" cr_sizeWithFont:font].width;
+
+  FontRenderParamsQuery query;
+  query.families.push_back(font_name_);
+  query.pixel_size = font_size_;
+  query.style = style_;
+  query.weight = weight_;
+  render_params_ = gfx::GetFontRenderParams(query, nullptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -141,8 +198,8 @@ PlatformFont* PlatformFont::CreateDefault() {
 }
 
 // static
-PlatformFont* PlatformFont::CreateFromNativeFont(NativeFont native_font) {
-  return new PlatformFontIOS(native_font);
+PlatformFont* PlatformFont::CreateFromCTFont(CTFontRef ct_font) {
+  return new PlatformFontIOS(ct_font);
 }
 
 // static
@@ -150,5 +207,17 @@ PlatformFont* PlatformFont::CreateFromNameAndSize(const std::string& font_name,
                                                   int font_size) {
   return new PlatformFontIOS(font_name, font_size);
 }
+
+#if BUILDFLAG(USE_BLINK)
+
+// static
+PlatformFont* PlatformFont::CreateFromSkTypeface(
+    sk_sp<SkTypeface> typeface,
+    int font_size_pixels,
+    const absl::optional<FontRenderParams>& params) {
+  return new PlatformFontIOS(typeface, font_size_pixels, params);
+}
+
+#endif
 
 }  // namespace gfx

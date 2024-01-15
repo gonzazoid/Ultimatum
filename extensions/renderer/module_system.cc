@@ -4,14 +4,15 @@
 
 #include "extensions/renderer/module_system.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
 #include "content/public/renderer/render_frame.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/renderer/console.h"
 #include "extensions/renderer/safe_builtins.h"
 #include "extensions/renderer/script_context.h"
@@ -198,7 +199,7 @@ ModuleSystem::ModuleSystem(ScriptContext* context, const SourceMap* source_map)
   }
 
   if (context_->GetRenderFrame() &&
-      context_->context_type() == Feature::BLESSED_EXTENSION_CONTEXT &&
+      context_->context_type() == mojom::ContextType::kPrivilegedExtension &&
       !context_->IsForServiceWorker() && ContextNeedsMojoBindings(context_)) {
     blink::WebV8Features::EnableMojoJS(context->v8_context(), true);
   }
@@ -225,17 +226,23 @@ void ModuleSystem::Invalidate() {
   // TODO(1276144): remove checks once investigation finished.
   CHECK(!has_been_invalidated_);
   has_been_invalidated_ = true;
+
+  v8::Isolate* isolate = GetIsolate();
   // Clear the module system properties from the global context. It's polite,
   // and we use this as a signal in lazy handlers that we no longer exist.
   {
-    v8::HandleScope scope(GetIsolate());
-    v8::Local<v8::Object> global = context()->v8_context()->Global();
-    // TODO(1276144): remove checks once investigation finished.
-    v8::Local<v8::Value> dummy_value;
-    CHECK(GetPrivate(global, kModulesField, &dummy_value));
-    DeletePrivate(global, kModulesField);
-    CHECK(GetPrivate(global, kModuleSystem, &dummy_value));
-    DeletePrivate(global, kModuleSystem);
+    // Note: It isn't safe to access v8::Private if IsExecutionTerminating
+    // returns true. It crashes if we do so: http://crbug.com/1276144.
+    if (!isolate->IsExecutionTerminating()) {
+      v8::HandleScope scope(GetIsolate());
+      v8::Local<v8::Object> global = context()->v8_context()->Global();
+      // TODO(1276144): remove checks once investigation finished.
+      v8::Local<v8::Value> dummy_value;
+      CHECK(GetPrivate(global, kModulesField, &dummy_value));
+      DeletePrivate(global, kModulesField);
+      CHECK(GetPrivate(global, kModuleSystem, &dummy_value));
+      DeletePrivate(global, kModuleSystem);
+    }
   }
 
   // Invalidate all active and clobbered NativeHandlers we own.
@@ -326,10 +333,9 @@ void ModuleSystem::CallModuleMethodSafe(const std::string& module_name,
                        blink::WebScriptExecutionCallback());
 }
 
-void ModuleSystem::CallModuleMethodSafe(
-    const std::string& module_name,
-    const std::string& method_name,
-    std::vector<v8::Local<v8::Value>>* args) {
+void ModuleSystem::CallModuleMethodSafe(const std::string& module_name,
+                                        const std::string& method_name,
+                                        v8::LocalVector<v8::Value>* args) {
   CallModuleMethodSafe(module_name, method_name, args->size(), args->data(),
                        blink::WebScriptExecutionCallback());
 }

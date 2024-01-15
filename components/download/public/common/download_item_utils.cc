@@ -5,7 +5,6 @@
 #include "components/download/public/common/download_item_utils.h"
 
 #include "chromeos/crosapi/mojom/download_controller.mojom.h"
-#include "components/download/public/common/download_item.h"
 
 namespace download {
 namespace download_item_utils {
@@ -47,6 +46,9 @@ crosapi::mojom::DownloadDangerType ConvertToMojoDownloadDangerType(
     case DownloadDangerType::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING:
       return crosapi::mojom::DownloadDangerType::
           kDownloadDangerTypeAsyncScanning;
+    case DownloadDangerType::DOWNLOAD_DANGER_TYPE_ASYNC_LOCAL_PASSWORD_SCANNING:
+      return crosapi::mojom::DownloadDangerType::
+          kDownloadDangerTypeAsyncLocalPasswordScanning;
     case DownloadDangerType::DOWNLOAD_DANGER_TYPE_BLOCKED_PASSWORD_PROTECTED:
       return crosapi::mojom::DownloadDangerType::
           kDownloadDangerTypeBlockedPasswordProtected;
@@ -74,45 +76,34 @@ crosapi::mojom::DownloadDangerType ConvertToMojoDownloadDangerType(
     case DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_ACCOUNT_COMPROMISE:
       return crosapi::mojom::DownloadDangerType::
           kDownloadDangerTypeDangerousAccountCompromise;
+    case DownloadDangerType::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_FAILED:
+      return crosapi::mojom::DownloadDangerType::
+          kDownloadDangerTypeDeepScannedFailed;
+    case DownloadDangerType::
+        DOWNLOAD_DANGER_TYPE_PROMPT_FOR_LOCAL_PASSWORD_SCANNING:
+      return crosapi::mojom::DownloadDangerType::
+          kDownloadDangerTypePromptForLocalPasswordScanning;
     case DownloadDangerType::DOWNLOAD_DANGER_TYPE_MAX:
       NOTREACHED();
       return crosapi::mojom::DownloadDangerType::kDownloadDangerTypeInvalid;
   }
 }
 
-crosapi::mojom::DownloadMixedContentStatus
-ConvertToMojoDownloadMixedContentStatus(
-    DownloadItem::MixedContentStatus value) {
+crosapi::mojom::InsecureDownloadStatus ConvertToMojoInsecureDownloadStatus(
+    DownloadItem::InsecureDownloadStatus value) {
   switch (value) {
-    case DownloadItem::MixedContentStatus::UNKNOWN:
-      return crosapi::mojom::DownloadMixedContentStatus::kUnknown;
-    case DownloadItem::MixedContentStatus::SAFE:
-      return crosapi::mojom::DownloadMixedContentStatus::kSafe;
-    case DownloadItem::MixedContentStatus::VALIDATED:
-      return crosapi::mojom::DownloadMixedContentStatus::kValidated;
-    case DownloadItem::MixedContentStatus::WARN:
-      return crosapi::mojom::DownloadMixedContentStatus::kWarn;
-    case DownloadItem::MixedContentStatus::BLOCK:
-      return crosapi::mojom::DownloadMixedContentStatus::kBlock;
-    case DownloadItem::MixedContentStatus::SILENT_BLOCK:
-      return crosapi::mojom::DownloadMixedContentStatus::kSilentBlock;
-  }
-}
-
-crosapi::mojom::DownloadState ConvertToMojoDownloadState(
-    DownloadItem::DownloadState value) {
-  switch (value) {
-    case DownloadItem::IN_PROGRESS:
-      return crosapi::mojom::DownloadState::kInProgress;
-    case DownloadItem::COMPLETE:
-      return crosapi::mojom::DownloadState::kComplete;
-    case DownloadItem::CANCELLED:
-      return crosapi::mojom::DownloadState::kCancelled;
-    case DownloadItem::INTERRUPTED:
-      return crosapi::mojom::DownloadState::kInterrupted;
-    case DownloadItem::MAX_DOWNLOAD_STATE:
-      NOTREACHED();
-      return crosapi::mojom::DownloadState::kUnknown;
+    case DownloadItem::InsecureDownloadStatus::UNKNOWN:
+      return crosapi::mojom::InsecureDownloadStatus::kUnknown;
+    case DownloadItem::InsecureDownloadStatus::SAFE:
+      return crosapi::mojom::InsecureDownloadStatus::kSafe;
+    case DownloadItem::InsecureDownloadStatus::VALIDATED:
+      return crosapi::mojom::InsecureDownloadStatus::kValidated;
+    case DownloadItem::InsecureDownloadStatus::WARN:
+      return crosapi::mojom::InsecureDownloadStatus::kWarn;
+    case DownloadItem::InsecureDownloadStatus::BLOCK:
+      return crosapi::mojom::InsecureDownloadStatus::kBlock;
+    case DownloadItem::InsecureDownloadStatus::SILENT_BLOCK:
+      return crosapi::mojom::InsecureDownloadStatus::kSilentBlock;
   }
 }
 
@@ -138,13 +129,29 @@ crosapi::mojom::DownloadItemPtr ConvertToMojoDownloadItem(
   download->start_time = item->GetStartTime();
   download->is_dangerous = item->IsDangerous();
   download->has_is_dangerous = true;
-  download->is_mixed_content = item->IsMixedContent();
-  download->has_is_mixed_content = true;
+  download->is_insecure = item->IsInsecure();
+  download->has_is_insecure = true;
   download->danger_type =
       ConvertToMojoDownloadDangerType(item->GetDangerType());
-  download->mixed_content_status =
-      ConvertToMojoDownloadMixedContentStatus(item->GetMixedContentStatus());
+  download->insecure_download_status =
+      ConvertToMojoInsecureDownloadStatus(item->GetInsecureDownloadStatus());
   return download;
+}
+
+crosapi::mojom::DownloadState ConvertToMojoDownloadState(
+    DownloadItem::DownloadState state) {
+  switch (state) {
+    case DownloadItem::IN_PROGRESS:
+      return crosapi::mojom::DownloadState::kInProgress;
+    case DownloadItem::COMPLETE:
+      return crosapi::mojom::DownloadState::kComplete;
+    case DownloadItem::CANCELLED:
+      return crosapi::mojom::DownloadState::kCancelled;
+    case DownloadItem::INTERRUPTED:
+      return crosapi::mojom::DownloadState::kInterrupted;
+    case DownloadItem::MAX_DOWNLOAD_STATE:
+      NOTREACHED_NORETURN();
+  }
 }
 
 }  // namespace download_item_utils

@@ -11,6 +11,7 @@
 
 #include "base/check_op.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
 #include "mojo/public/cpp/bindings/message.h"
 
@@ -19,7 +20,7 @@ namespace internal {
 
 // Sentinel value used to denote an invalid index and thus a null fragment. Note
 // that we choose a sentinel value over something more explicit like
-// absl::optional because this is used heavily in generated code, so code size
+// std::optional because this is used heavily in generated code, so code size
 // is particularly relevant.
 constexpr size_t kInvalidFragmentIndex = std::numeric_limits<size_t>::max();
 
@@ -86,7 +87,9 @@ class MessageFragment {
   }
 
  private:
-  Message& message_;
+  // Exclude from `raw_ref` rewriter - increases Android binary size by
+  // ~350K.
+  RAW_PTR_EXCLUSION Message& message_;
   size_t index_ = kInvalidFragmentIndex;
 };
 
@@ -158,7 +161,9 @@ class MessageFragment<Array_Data<T>> {
   }
 
  private:
-  Message& message_;
+  // Exclude from `raw_ref` rewriter - increases Android binary size by
+  // ~350K.
+  RAW_PTR_EXCLUSION Message& message_;
   size_t index_ = kInvalidFragmentIndex;
 };
 

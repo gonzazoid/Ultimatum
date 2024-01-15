@@ -4,15 +4,17 @@
 
 #include "components/reporting/util/file.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/strings/strcat.h"
+#include "base/types/expected.h"
 
 namespace reporting {
 
@@ -34,6 +36,17 @@ bool DeleteFilesWarnIfFailed(
       files_to_delete.push_back(std::move(full_name));
     }
   }
+
+  // Starting from deeper paths so that directories are always emptied first if
+  // the files there are to be deleted. This can be done by deleting the file
+  // with the longest full paths first.
+  std::sort(files_to_delete.begin(), files_to_delete.end(),
+            [](const base::FilePath& fp0, const base::FilePath& fp1) {
+              // Use size of the file path string is sufficient. Semantically it
+              // is better to use the number of components in a file path
+              // (GetComponents().size()), but this is more efficient.
+              return fp0.value().size() > fp1.value().size();
+            });
   bool success = true;
   for (const auto& file_to_delete : files_to_delete) {
     if (!DeleteFileWarnIfFailed(file_to_delete)) {
@@ -43,20 +56,26 @@ bool DeleteFilesWarnIfFailed(
   return success;
 }
 
+bool DeleteFilesWarnIfFailed(
+    base::FileEnumerator&& dir_enum,
+    base::RepeatingCallback<bool(const base::FilePath&)> pred) {
+  return DeleteFilesWarnIfFailed(dir_enum, pred);
+}
+
 StatusOr<std::string> MaybeReadFile(const base::FilePath& file_path,
                                     int64_t offset) {
   base::File file(file_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
   if (!file.IsValid()) {
-    return Status(error::NOT_FOUND,
-                  base::StrCat({"Could not open health data file ",
-                                file_path.MaybeAsASCII()}));
+    return base::unexpected(Status(
+        error::NOT_FOUND, base::StrCat({"Could not open health data file ",
+                                        file_path.MaybeAsASCII()})));
   }
 
   base::File::Info file_info;
   if (!file.GetInfo(&file_info) || file_info.size - offset < 0) {
-    return Status(error::DATA_LOSS,
-                  base::StrCat({"Failed to read data file info ",
-                                file_path.MaybeAsASCII()}));
+    return base::unexpected(
+        Status(error::DATA_LOSS, base::StrCat({"Failed to read data file info ",
+                                               file_path.MaybeAsASCII()})));
   }
 
   std::string result;
@@ -64,15 +83,16 @@ StatusOr<std::string> MaybeReadFile(const base::FilePath& file_path,
   const int read_result =
       file.Read(offset, result.data(), file_info.size - offset);
   if (read_result != file_info.size - offset) {
-    return Status(error::DATA_LOSS, base::StrCat({"Failed to read data file ",
-                                                  file_path.MaybeAsASCII()}));
+    return base::unexpected(Status(
+        error::DATA_LOSS,
+        base::StrCat({"Failed to read data file ", file_path.MaybeAsASCII()})));
   }
 
   return result;
 }
 
 Status AppendLine(const base::FilePath& file_path,
-                  const base::StringPiece& data) {
+                  const std::string_view& data) {
   base::File file(file_path,
                   base::File::FLAG_OPEN_ALWAYS | base::File::FLAG_APPEND);
   if (!file.IsValid()) {
@@ -95,10 +115,10 @@ Status AppendLine(const base::FilePath& file_path,
 StatusOr<uint32_t> RemoveAndTruncateLine(const base::FilePath& file_path,
                                          uint32_t pos) {
   StatusOr<std::string> status_or = MaybeReadFile(file_path, pos);
-  if (!status_or.ok()) {
-    return status_or.status();
+  if (!status_or.has_value()) {
+    return base::unexpected(std::move(status_or).error());
   }
-  std::string content = status_or.ValueOrDie();
+  std::string content = status_or.value();
   uint32_t offset = 0;
   // Search for next new line after pos.
   while (offset < content.length()) {
@@ -116,13 +136,13 @@ StatusOr<uint32_t> RemoveAndTruncateLine(const base::FilePath& file_path,
 
   Status status = MaybeWriteFile(file_path, content);
   if (!status.ok()) {
-    return status;
+    return base::unexpected(std::move(status));
   }
   return pos + offset;
 }
 
 Status MaybeWriteFile(const base::FilePath& file_path,
-                      const base::StringPiece& data) {
+                      const std::string_view& data) {
   base::File file(file_path,
                   base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
   if (!file.IsValid()) {

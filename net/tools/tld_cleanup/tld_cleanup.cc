@@ -67,14 +67,14 @@ int main(int argc, const char* argv[]) {
   base::i18n::InitializeICU();
 
   base::FilePath input_file;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &input_file);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &input_file);
   input_file = input_file.Append(FILE_PATH_LITERAL("net"))
                          .Append(FILE_PATH_LITERAL("base"))
                          .Append(FILE_PATH_LITERAL(
                              "registry_controlled_domains"))
                          .Append(FILE_PATH_LITERAL("effective_tld_names.dat"));
   base::FilePath output_file;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &output_file);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &output_file);
   output_file = output_file.Append(FILE_PATH_LITERAL("net"))
                            .Append(FILE_PATH_LITERAL("base"))
                            .Append(FILE_PATH_LITERAL(
@@ -83,12 +83,12 @@ int main(int argc, const char* argv[]) {
                                "effective_tld_names.gperf"));
   net::tld_cleanup::NormalizeResult result =
       net::tld_cleanup::NormalizeFile(input_file, output_file);
-  if (result != net::tld_cleanup::kSuccess) {
+  if (result != net::tld_cleanup::NormalizeResult::kSuccess) {
     fprintf(stderr,
             "Errors or warnings processing file.  See log in tld_cleanup.log.");
   }
 
-  if (result == net::tld_cleanup::kError)
+  if (result == net::tld_cleanup::NormalizeResult::kError)
     return 1;
   return 0;
 }

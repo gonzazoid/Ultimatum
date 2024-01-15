@@ -11,10 +11,6 @@
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 namespace {
 const char kRawResponseHeaders[] = "HTTP/1.1 200 OK\0"
@@ -109,7 +105,6 @@ TEST_F(NavigationContextImplTest, Setters) {
   EXPECT_FALSE(context->IsRendererInitiated());
   EXPECT_NE(response_headers_.get(), context->GetResponseHeaders());
   EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
-  EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
   EXPECT_FALSE(context->GetMimeType());
   EXPECT_FALSE(context->GetItem());
 
@@ -123,7 +118,6 @@ TEST_F(NavigationContextImplTest, Setters) {
   EXPECT_FALSE(context->GetError());
   EXPECT_FALSE(context->IsRendererInitiated());
   EXPECT_NE(response_headers_.get(), context->GetResponseHeaders());
-  EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
   EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
   EXPECT_FALSE(context->GetMimeType());
   EXPECT_FALSE(context->GetItem());
@@ -139,7 +133,6 @@ TEST_F(NavigationContextImplTest, Setters) {
   EXPECT_FALSE(context->IsRendererInitiated());
   EXPECT_NE(response_headers_.get(), context->GetResponseHeaders());
   EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
-  EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
   EXPECT_FALSE(context->GetMimeType());
   EXPECT_FALSE(context->GetItem());
 
@@ -153,7 +146,6 @@ TEST_F(NavigationContextImplTest, Setters) {
   EXPECT_FALSE(context->GetError());
   EXPECT_FALSE(context->IsRendererInitiated());
   EXPECT_NE(response_headers_.get(), context->GetResponseHeaders());
-  EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
   EXPECT_EQ(WKNavigationTypeOther, context->GetWKNavigationType());
   EXPECT_FALSE(context->GetMimeType());
   EXPECT_FALSE(context->GetItem());

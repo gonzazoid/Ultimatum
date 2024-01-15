@@ -10,11 +10,13 @@
 #include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
 #include "ash/public/cpp/test/mock_projector_client.h"
 #include "ash/webui/projector_app/test/mock_app_client.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/speech/speech_recognition_recognizer_client_impl.h"
 #include "chrome/test/base/chrome_ash_test_base.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -41,12 +43,25 @@ class MockSodaInstaller : public speech::SodaInstaller {
   MockSodaInstaller& operator=(const MockSodaInstaller&) = delete;
   ~MockSodaInstaller() override = default;
 
-  MOCK_CONST_METHOD0(GetSodaBinaryPath, base::FilePath());
-  MOCK_CONST_METHOD1(GetLanguagePath, base::FilePath(const std::string&));
-  MOCK_METHOD2(InstallLanguage, void(const std::string&, PrefService*));
-  MOCK_CONST_METHOD0(GetAvailableLanguages, std::vector<std::string>());
-  MOCK_METHOD1(InstallSoda, void(PrefService*));
-  MOCK_METHOD1(UninstallSoda, void(PrefService*));
+  MOCK_METHOD(base::FilePath, GetSodaBinaryPath, (), (const, override));
+  MOCK_METHOD(base::FilePath,
+              GetLanguagePath,
+              (const std::string&),
+              (const, override));
+  MOCK_METHOD(void,
+              InstallLanguage,
+              (const std::string&, PrefService*),
+              (override));
+  MOCK_METHOD(void,
+              UninstallLanguage,
+              (const std::string&, PrefService*),
+              (override));
+  MOCK_METHOD(std::vector<std::string>,
+              GetAvailableLanguages,
+              (),
+              (const, override));
+  MOCK_METHOD(void, InstallSoda, (PrefService*), (override));
+  MOCK_METHOD(void, UninstallSoda, (PrefService*), (override));
 };
 
 const char kEnglishLocale[] = "en-US";
@@ -58,11 +73,9 @@ class ProjectorSodaInstallationControllerTest : public ChromeAshTestBase {
  public:
   ProjectorSodaInstallationControllerTest() {
     scoped_feature_list_.InitWithFeatures(
-        {
-            features::kOnDeviceSpeechRecognition,
-            features::kProjector,
-        },
-        {});
+        {features::kOnDeviceSpeechRecognition},
+        {features::kInternalServerSideSpeechRecognition,
+         features::kForceEnableServerSideSpeechRecognitionForDev});
   }
   ProjectorSodaInstallationControllerTest(
       const ProjectorSodaInstallationControllerTest&) = delete;
@@ -83,6 +96,18 @@ class ProjectorSodaInstallationControllerTest : public ChromeAshTestBase {
             testing::Return(std::vector<std::string>({kEnglishLocale})));
 
     mock_client_ = std::make_unique<MockProjectorClient>();
+
+    ON_CALL(*mock_client_, GetSpeechRecognitionAvailability)
+        .WillByDefault(
+            testing::Invoke([&]() -> ash::SpeechRecognitionAvailability {
+              SpeechRecognitionAvailability availability;
+              availability.on_device_availability =
+                  SpeechRecognitionRecognizerClientImpl::
+                      GetOnDeviceSpeechRecognitionAvailability(
+                          g_browser_process->GetApplicationLocale());
+              return availability;
+            }));
+
     projector_controller().SetClient(mock_client_.get());
     mock_app_client_ = std::make_unique<MockAppClient>();
 
@@ -117,7 +142,7 @@ class ProjectorSodaInstallationControllerTest : public ChromeAshTestBase {
   speech::LanguageCode fr_fr() { return speech::LanguageCode::kFrFr; }
 
  private:
-  Profile* testing_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> testing_profile_ = nullptr;
 
   TestingProfileManager testing_profile_manager_{
       TestingBrowserProcess::GetGlobal()};
@@ -219,7 +244,8 @@ TEST_F(ProjectorSodaInstallationControllerTest,
       .WillByDefault(testing::Return(true));
   EXPECT_CALL(projector_client(),
               OnNewScreencastPreconditionChanged(NewScreencastPrecondition(
-                  NewScreencastPreconditionState::kEnabled, {})));
+                  NewScreencastPreconditionState::kEnabled,
+                  {NewScreencastPreconditionReason::kEnabledBySoda})));
 
   speech::SodaInstaller::GetInstance()->NotifySodaInstalledForTesting();
   speech::SodaInstaller::GetInstance()->NotifySodaInstalledForTesting(en_us());

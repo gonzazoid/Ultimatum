@@ -47,9 +47,9 @@ class VIEWS_EXPORT SliderListener {
 // Slider operates in interval [0,1] by default, but can also switch between a
 // predefined set of values, see SetAllowedValues method below.
 class VIEWS_EXPORT Slider : public View, public gfx::AnimationDelegate {
- public:
-  METADATA_HEADER(Slider);
+  METADATA_HEADER(Slider, View)
 
+ public:
   explicit Slider(SliderListener* listener = nullptr);
   Slider(const Slider&) = delete;
   Slider& operator=(const Slider&) = delete;
@@ -147,7 +147,7 @@ class VIEWS_EXPORT Slider : public View, public gfx::AnimationDelegate {
   virtual SkColor GetTroughColor() const;
   int GetSliderExtraPadding() const;
 
-  raw_ptr<SliderListener> listener_;
+  raw_ptr<SliderListener, AcrossTasksDanglingUntriaged> listener_;
 
   std::unique_ptr<gfx::SlideAnimation> move_animation_;
 

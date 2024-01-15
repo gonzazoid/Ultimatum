@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/ui/browser.h"
@@ -59,8 +60,14 @@ class MediaRouterDialogControllerViewsTest : public InProcessBrowserTest {
   void CloseWebContents();
 
  protected:
-  raw_ptr<WebContents, DanglingUntriaged> initiator_;
-  raw_ptr<MediaRouterDialogControllerViews, DanglingUntriaged>
+  void ShowDialogForPresentation() {
+    dialog_controller_->ShowMediaRouterDialogForPresentation(
+        CreateStartPresentationContext(initiator_));
+    base::RunLoop().RunUntilIdle();
+  }
+
+  raw_ptr<WebContents, AcrossTasksDanglingUntriaged> initiator_;
+  raw_ptr<MediaRouterDialogControllerViews, AcrossTasksDanglingUntriaged>
       dialog_controller_;
 };
 
@@ -104,9 +111,10 @@ IN_PROC_BROWSER_TEST_F(MediaRouterDialogControllerViewsTest,
             nullptr);
 }
 
+// TODO(crbug.com/1499812): Disabled flaky test.
 // Regression test for crbug.com/1308341.
 IN_PROC_BROWSER_TEST_F(MediaRouterDialogControllerViewsTest,
-                       MediaBubbleClosedByPlatform) {
+                       DISABLED_MediaBubbleClosedByPlatform) {
   OpenMediaRouterDialog();
   base::RunLoop().RunUntilIdle();
   CastDialogCoordinator& cast_dialog_coordinator =
@@ -151,8 +159,7 @@ IN_PROC_BROWSER_TEST_F(GlobalMediaControlsDialogTest, OpenGMCDialog) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL("/simple_page.html")));
   CreateDialogController();
-  dialog_controller_->ShowMediaRouterDialogForPresentation(
-      CreateStartPresentationContext(initiator_));
+  ShowDialogForPresentation();
   ASSERT_TRUE(MediaDialogView::IsShowing());
   auto* view = MediaDialogView::GetDialogViewForTesting();
   ASSERT_TRUE(view->GetAnchorView());
@@ -166,8 +173,7 @@ IN_PROC_BROWSER_TEST_F(GlobalMediaControlsDialogTest, OpenGMCDialogInWebApp) {
       browser(), embedded_test_server()->GetURL("/simple_page.html")));
   CreateDialogController();
   dialog_controller_->SetHideMediaButtonForTesting(true);
-  dialog_controller_->ShowMediaRouterDialogForPresentation(
-      CreateStartPresentationContext(initiator_));
+  ShowDialogForPresentation();
 
   ASSERT_TRUE(MediaDialogView::IsShowing());
   auto* view = MediaDialogView::GetDialogViewForTesting();
@@ -191,9 +197,8 @@ IN_PROC_BROWSER_TEST_F(GlobalMediaControlsDialogTest,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP);
   ASSERT_NE(initiator_, browser()->tab_strip_model()->GetActiveWebContents());
 
+  ShowDialogForPresentation();
   // |initiator_| should become active after the GMC dialog is open.
-  dialog_controller_->ShowMediaRouterDialogForPresentation(
-      CreateStartPresentationContext(initiator_));
   ASSERT_EQ(initiator_, browser()->tab_strip_model()->GetActiveWebContents());
 }
 

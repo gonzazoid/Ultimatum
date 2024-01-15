@@ -24,20 +24,21 @@ class UkmDataManagerImpl : public UkmDataManager {
   UkmDataManagerImpl();
   ~UkmDataManagerImpl() override;
 
-  UkmDataManagerImpl(UkmDataManagerImpl&) = delete;
-  UkmDataManagerImpl& operator=(UkmDataManagerImpl&) = delete;
+  UkmDataManagerImpl(const UkmDataManagerImpl&) = delete;
+  UkmDataManagerImpl& operator=(const UkmDataManagerImpl&) = delete;
 
   void InitializeForTesting(std::unique_ptr<UkmDatabase> ukm_database,
                             UkmObserver* ukm_observer);
 
   // UkmDataManager implementation:
-  void Initialize(const base::FilePath& database_path,
-                  UkmObserver* ukm_observer) override;
+  void Initialize(const base::FilePath& database_path, bool in_memory) override;
+  void StartObservation(UkmObserver* ukm_observer) override;
   bool IsUkmEngineEnabled() override;
   void StartObservingUkm(const UkmConfig& config) override;
   void PauseOrResumeObservation(bool pause) override;
   UrlSignalHandler* GetOrCreateUrlHandler() override;
   UkmDatabase* GetUkmDatabase() override;
+  bool HasUkmDatabase() override;
   void OnEntryAdded(ukm::mojom::UkmEntryPtr entry) override;
   void OnUkmSourceUpdated(ukm::SourceId source_id,
                           const std::vector<GURL>& urls) override;
@@ -46,8 +47,7 @@ class UkmDataManagerImpl : public UkmDataManager {
 
  private:
   // Helper method for initializing this object.
-  void InitiailizeImpl(std::unique_ptr<UkmDatabase> ukm_database,
-                       UkmObserver* ukm_observer);
+  void InitiailizeImpl(std::unique_ptr<UkmDatabase> ukm_database);
 
   void RunCleanupTask();
 

@@ -8,9 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc.h"
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/shared_memory_mapper.h"
 #include "gin/converter.h"
 #include "gin/gin_export.h"
@@ -30,7 +29,8 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
  private:
   friend class V8Initializer;
 
-  void* AllocateInternal(size_t length, unsigned int flags);
+  template <partition_alloc::AllocFlags flags>
+  void* AllocateInternal(size_t length);
 
   // Initialize the PartitionAlloc partition from which instances of this class
   // allocate memory. This is called after initializing V8 since, when enabled,
@@ -42,7 +42,7 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
   // inside of it. For that, PA's ConfigurablePool is created inside the V8
   // sandbox during initialization of V8, and this partition is then placed
   // inside the configurable pool during InitializePartition().
-  static partition_alloc::ThreadSafePartitionRoot* partition_;
+  static partition_alloc::PartitionRoot* partition_;
 };
 
 class GIN_EXPORT ArrayBuffer {

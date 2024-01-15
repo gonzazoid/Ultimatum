@@ -36,7 +36,6 @@
 <translation id="2599300881200251572">ही सेवा Chrome रिमोट डेस्कटॉप क्लायंटकडील येणारी कनेक्शन सक्षम करते.</translation>
 <translation id="2647232381348739934">Chromoting सेवा</translation>
 <translation id="2676780859508944670">कार्यरत आहे...</translation>
-<translation id="2692522824157224199">कॉपीराइट २०२२ Google LLC. सर्व हक्क राखीव.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">प्रमाणीकृत करताना समस्या आली, कृपया पुन्हा लॉगिन करा.</translation>
 <translation id="2803375539583399270">पिन एंटर करा</translation>
@@ -73,7 +72,6 @@
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> URL Forwarder</translation>
 <translation id="4277736576214464567">ॲक्सेस कोड अवैध आहे. कृपया पुन्हा प्रयत्न करा.</translation>
 <translation id="4281844954008187215">सेवा अटी</translation>
-<translation id="4372650392690220936">कॉपीराइट २०२२ Chromium लेखक. सर्व हक्क राखीव.</translation>
 <translation id="4405930547258349619">कोअर लायब्ररी</translation>
 <translation id="443560535555262820">अ‍ॅक्सेसिबिलिटी प्राधान्ये उघडा</translation>
 <translation id="4450893287417543264">पुन्हा दाखवू नका</translation>
@@ -110,7 +108,7 @@
 <translation id="5750083143895808682"><ph name="EMAIL_ADDRESS" /> म्हणून साइन इन केले.</translation>
 <translation id="579702532610384533">रीकनेक्ट करा</translation>
 <translation id="5810269635982033450">स्क्रीन ट्रॅकपॅडसारखी काम करत आहे</translation>
-<translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> ने तुमची स्क्रीन पाहण्यासाठी आणि तुमचा कीबोर्ड व माउस नियंत्रित करण्यासाठी ॲक्सेसची विनंती केली आहे. तुम्हाला ही विनंती अपेक्षित नसल्यास, ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'' दाबा. अन्यथा तयार असाल तेव्हा, कनेक्शनची अनुमती देण्यासाठी ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'' निवडा.</translation>
+<translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> ने तुमची स्क्रीन पाहण्यासाठी आणि तुमचा कीबोर्ड व माउस नियंत्रित करण्यासाठी ॲक्सेसची विनंती केली आहे. तुम्हाला ही विनंती अपेक्षित नसल्यास, ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'' प्रेस करा. अन्यथा तयार असाल तेव्हा, कनेक्शनची अनुमती देण्यासाठी ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'' निवडा.</translation>
 <translation id="5823658491130719298">तुम्हाला दुरून ॲक्सेस करायच्या असलेल्या काँप्युटरवर, Chrome उघडा आणि <ph name="INSTALLATION_LINK" /> वर जा</translation>
 <translation id="5841343754884244200">डिस्प्ले पर्याय</translation>
 <translation id="6033507038939587647">कीबोर्ड पर्याय</translation>
@@ -154,6 +152,7 @@
 <translation id="7693372326588366043">होस्टची सूची रिफ्रेश करा</translation>
 <translation id="7714222945760997814">याची तक्रार करा</translation>
 <translation id="7868137160098754906">कृपया रिमोट कॉंप्युटरचा तुमचा पिन एंटर करा.</translation>
+<translation id="7881455334687220899">कॉपीराइट २०२४ Chromium लेखक. सर्व हक्क राखीव.</translation>
 <translation id="7895403300744144251">रिमोट कॉंप्युटरवरील सुरक्षितता धोरणे तुमच्या खात्यामधील कनेक्शनना अनुमती देत नाहीत.</translation>
 <translation id="7936528439960309876">उजवीकडे डॉक करा</translation>
 <translation id="7970576581263377361">ऑथेंटिकेशन अयशस्वी. कृपया Chromium वर पुन्हा साइन इन करा.</translation>
@@ -185,6 +184,7 @@
 <translation id="8747048596626351634">सेशन क्रॅश झाले किंवा सुरू होऊ शकले नाही. रिमोट काँप्युटरवर ~/.chrome-remote-desktop-session असल्यास, ते डेस्‍कटॉप वातावरण किंवा विंडो व्यवस्थापक यांसारखी दीर्घकाळ चालणारी अग्रभाग प्रक्रिया सुरू करते याची खात्री करा.</translation>
 <translation id="8804164990146287819">गोपनीयता धोरण</translation>
 <translation id="8906511416443321782">ऑडिओ कॅप्चर करण्यासाठी आणि Chrome रिमोट डेस्कटॉप क्लायंटवर तो स्ट्रीम करण्यासाठी मायक्रोफोनचा अ‍ॅक्सेस आवश्यक आहे.</translation>
+<translation id="9042277333359847053">कॉपीराइट २०२४ Google LLC. सर्व हक्क राखीव.</translation>
 <translation id="9111855907838866522">तुम्ही तुमच्या रिमोट डिव्हाइसशी कनेक्ट केले आहे. मेनू उघडण्यासाठी, कृपया चार बोटांनी स्क्रीनवर टॅप करा.</translation>
 <translation id="9126115402994542723">या डिव्हाइसवरून या होस्टशी कनेक्ट करताना पुन्हा पिन साठी विचारू नका.</translation>
 <translation id="916856682307586697">डीफॉल्ट XSession लाँच करा</translation>

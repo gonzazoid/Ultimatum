@@ -6,6 +6,12 @@
 #define UI_PLATFORM_WINDOW_EXTENSIONS_WAYLAND_EXTENSION_H_
 
 #include "base/component_export.h"
+#include "build/chromeos_buildflags.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
+
+namespace gfx {
+class RoundedCornersF;
+}  // namespace gfx
 
 namespace ui {
 
@@ -15,6 +21,11 @@ enum class WaylandWindowSnapDirection {
   kNone,
   kPrimary,
   kSecondary,
+};
+
+enum class WaylandFloatStartLocation {
+  kBottomRight,
+  kBottomLeft,
 };
 
 enum class WaylandOrientationLockType {
@@ -30,19 +41,36 @@ enum class WaylandOrientationLockType {
 
 class COMPONENT_EXPORT(PLATFORM_WINDOW) WaylandExtension {
  public:
-  // Starts a window dragging session for the owning platform window, if
-  // it is not running yet. Under Wayland, window dragging is backed by a
-  // platform drag-and-drop session. `allow_system_drag` indicates whether it is
-  // allowed to use a regular drag-and-drop session if the compositor does not
-  // support the extended drag protocol needed to implement all window dragging
-  // features.
-  virtual void StartWindowDraggingSessionIfNeeded(bool allow_system_drag) = 0;
+  // Starts a window dragging session from the owning platform window triggered
+  // by `event_source` (kMouse or kTouch) if it is not running yet. Under
+  // Wayland, window dragging is backed by a platform drag-and-drop session.
+  // |allow_system_drag| indicates whether it is allowed to use a regular
+  // drag-and-drop session if the compositor does not support the extended-drag
+  // protocol needed to implement all window dragging features.
+  virtual void StartWindowDraggingSessionIfNeeded(
+      ui::mojom::DragEventSource event_source,
+      bool allow_system_drag) = 0;
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
   // Signals the underneath platform that browser is entering (or exiting)
   // 'immersive fullscreen mode'.
   // Under lacros, it controls for instance interaction with the system shelf
   // widget, when browser goes in fullscreen.
   virtual void SetImmersiveFullscreenStatus(bool status) = 0;
+
+  // Sets the top inset (header) height which is reserved or occupied by the top
+  // window frame.
+  virtual void SetTopInset(int height) = 0;
+
+  // Gets the radius of each corner of the browser window in dps. The radii is
+  // specified by the platform.
+  virtual gfx::RoundedCornersF GetWindowCornersRadii() = 0;
+
+  // Signals the underlying platform to round the browser window's drop shadow.
+  // The radius of each corner of the shadow is specified in dps.
+  virtual void SetShadowCornersRadii(const gfx::RoundedCornersF& radii) = 0;
+
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   // Signals the underneath platform to shows a preview for the given window
   // snap direction. `allow_haptic_feedback` indicates if it should send haptic
@@ -52,8 +80,10 @@ class COMPONENT_EXPORT(PLATFORM_WINDOW) WaylandExtension {
 
   // Requests the underneath platform to snap the window in the given direction,
   // if not WaylandWindowSnapDirection::kNone, otherwise cancels the window
-  // snapping.
-  virtual void CommitSnap(WaylandWindowSnapDirection snap) = 0;
+  // snapping. `snap_ratio` indicates the width of the work area to snap to in
+  // landscape mode, or height in portrait mode.
+  virtual void CommitSnap(WaylandWindowSnapDirection snap,
+                          float snap_ratio) = 0;
 
   // Signals the underneath platform whether the current tab of the browser
   // window can go back. The underneath platform might react, for example,
@@ -77,7 +107,9 @@ class COMPONENT_EXPORT(PLATFORM_WINDOW) WaylandExtension {
 
   // Signals the underneath platform to float the browser window on top other
   // windows.
-  virtual void SetFloat(bool value) = 0;
+  virtual void SetFloatToLocation(
+      WaylandFloatStartLocation float_start_location) = 0;
+  virtual void UnSetFloat() = 0;
 
  protected:
   virtual ~WaylandExtension();

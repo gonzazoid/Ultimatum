@@ -26,10 +26,36 @@ class BookmarksPageHandler : public side_panel::mojom::BookmarksPageHandler {
   ~BookmarksPageHandler() override;
 
   // side_panel::mojom::BookmarksPageHandler:
+  void BookmarkCurrentTabInFolder(int64_t folder_id) override;
+  void ExecuteOpenInNewTabCommand(
+      const std::vector<int64_t>& node_ids,
+      side_panel::mojom::ActionSource source) override;
+  void ExecuteOpenInNewWindowCommand(
+      const std::vector<int64_t>& node_ids,
+      side_panel::mojom::ActionSource source) override;
+  void ExecuteOpenInIncognitoWindowCommand(
+      const std::vector<int64_t>& node_ids,
+      side_panel::mojom::ActionSource source) override;
+  void ExecuteOpenInNewTabGroupCommand(
+      const std::vector<int64_t>& node_ids,
+      side_panel::mojom::ActionSource source) override;
+  void ExecuteAddToBookmarksBarCommand(
+      int64_t node_id,
+      side_panel::mojom::ActionSource source) override;
+  void ExecuteRemoveFromBookmarksBarCommand(
+      int64_t node_id,
+      side_panel::mojom::ActionSource source) override;
+  void ExecuteDeleteCommand(const std::vector<int64_t>& node_ids,
+                            side_panel::mojom::ActionSource source) override;
+  void ExecuteContextMenuCommand(const std::vector<int64_t>& node_ids,
+                                 side_panel::mojom::ActionSource source,
+                                 int command_id);
   void OpenBookmark(int64_t node_id,
                     int32_t parent_folder_depth,
                     ui::mojom::ClickModifiersPtr click_modifiers,
                     side_panel::mojom::ActionSource source) override;
+  void SetSortOrder(side_panel::mojom::SortOrder sort_order) override;
+  void SetViewType(side_panel::mojom::ViewType view_type) override;
   void ShowContextMenu(const std::string& id,
                        const gfx::Point& point,
                        side_panel::mojom::ActionSource source) override;

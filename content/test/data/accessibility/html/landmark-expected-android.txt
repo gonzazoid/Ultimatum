@@ -10,7 +10,7 @@ android.webkit.WebView focusable focused scrollable
 ++android.view.View role_description='banner' name='This is an ARIA banner landmark.'
 ++android.view.View role_description='complementary' name='This is an ARIA complementary landmark.'
 ++android.view.View role_description='content information' name='This is an ARIA contentinfo landmark.'
-++android.view.View name='This is an ARIA form landmark.'
+++android.view.View name='Named form'
 ++android.view.View role_description='main' name='This is an ARIA main landmark.'
 ++android.view.View role_description='navigation' name='This is an ARIA navigation landmark.'
 ++android.view.View role_description='search' name='This is an ARIA search landmark.'
@@ -22,16 +22,6 @@ android.webkit.WebView focusable focused scrollable
 ++++android.view.View name='This should NOT have banner role.'
 ++android.view.View
 ++++android.view.View name='This should NOT have banner role.'
-++android.view.View role_description='blockquote'
-++++android.view.View name='This should NOT have banner role.'
-++android.view.View
-++++android.view.View role_description='disclosure triangle' clickable focusable name='Details'
-++android.view.View
-++++android.view.View name='This should NOT have banner role.'
-++android.view.View role_description='graphic'
-++++android.view.View name='This should NOT have banner role.'
-++android.view.View
-++++android.view.View name='This should NOT have banner role.'
 ++android.view.View role_description='main'
 ++++android.view.View name='This should NOT have banner role.'
 ++android.view.View role_description='article'
@@ -42,15 +32,6 @@ android.webkit.WebView focusable focused scrollable
 ++++android.view.View name='This should NOT have banner role.'
 ++android.view.View
 ++++android.view.View name='This should NOT have banner role.'
-++android.view.View role_description='blockquote'
-++++android.view.View name='This should NOT have banner role.'
-++android.view.View
-++++android.view.View role_description='disclosure triangle' clickable focusable name='Details'
-++android.view.View
-++++android.view.View name='This should NOT have banner role.'
-++android.view.View role_description='graphic'
-++++android.view.View name='This should NOT have banner role.'
-++android.view.View name='This should NOT have banner role.'
 ++android.view.View role_description='main'
 ++++android.view.View name='This should NOT have banner role.'
 ++android.view.View role_description='article'
@@ -61,15 +42,6 @@ android.webkit.WebView focusable focused scrollable
 ++++android.view.View name='This should NOT have footer role.'
 ++android.view.View
 ++++android.view.View name='This should NOT have footer role.'
-++android.view.View role_description='blockquote'
-++++android.view.View name='This should NOT have footer role.'
-++android.view.View
-++++android.view.View role_description='disclosure triangle' clickable focusable name='Details'
-++android.view.View
-++++android.view.View name='This should NOT have footer role.'
-++android.view.View role_description='graphic'
-++++android.view.View name='This should NOT have footer role.'
-++android.view.View name='This should NOT have footer role.'
 ++android.view.View role_description='main'
 ++++android.view.View name='This should NOT have footer role.'
 ++android.view.View role_description='article'
@@ -80,15 +52,33 @@ android.webkit.WebView focusable focused scrollable
 ++++android.view.View name='This should NOT have footer role.'
 ++android.view.View
 ++++android.view.View name='This should NOT have footer role.'
-++android.view.View role_description='blockquote'
-++++android.view.View name='This should NOT have footer role.'
-++android.view.View
-++++android.view.View role_description='disclosure triangle' clickable focusable name='Details'
-++android.view.View
-++++android.view.View name='This should NOT have footer role.'
-++android.view.View role_description='graphic'
-++++android.view.View name='This should NOT have footer role.'
-++android.view.View
-++++android.view.View name='This should NOT have footer role.'
 ++android.view.View role_description='main'
 ++++android.view.View name='This should NOT have footer role.'
+++android.view.View role_description='article'
+++++android.widget.TextView name='This should NOT complementary role.'
+++android.view.View role_description='complementary'
+++++android.widget.TextView name='This should NOT have complementary role.'
+++android.view.View role_description='navigation'
+++++android.widget.TextView name='This should NOT have complementary role.'
+++android.view.View
+++++android.widget.TextView name='This should NOT have complementary role.'
+++android.view.View role_description='main'
+++++android.view.View role_description='complementary' name='This should have complementary role.'
+++android.view.View role_description='article'
+++++android.widget.TextView name='This should NOT complementary role.'
+++android.view.View role_description='complementary'
+++++android.widget.TextView name='This should NOT have complementary role.'
+++android.view.View role_description='navigation'
+++++android.widget.TextView name='This should NOT have complementary role.'
+++android.view.View
+++++android.widget.TextView name='This should NOT have complementary role.'
+++android.view.View role_description='main'
+++++android.view.View role_description='complementary' name='This should have complementary role.'
+++android.view.View role_description='article'
+++++android.view.View role_description='complementary' name='This should have complementary role.'
+++android.view.View role_description='complementary'
+++++android.view.View role_description='complementary' name='This should have complementary role.'
+++android.view.View role_description='navigation'
+++++android.view.View role_description='complementary' name='This should have complementary role.'
+++android.view.View
+++++android.view.View role_description='complementary' name='This should have complementary role.'

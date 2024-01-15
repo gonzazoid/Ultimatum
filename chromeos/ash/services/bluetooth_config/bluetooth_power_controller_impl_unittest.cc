@@ -5,6 +5,7 @@
 #include "chromeos/ash/services/bluetooth_config/bluetooth_power_controller_impl.h"
 
 #include "ash/constants/ash_pref_names.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/services/bluetooth_config/fake_adapter_state_controller.h"
 #include "components/session_manager/core/session_manager.h"
@@ -63,7 +64,7 @@ class BluetoothPowerControllerImplTest : public testing::Test {
     } else {
       user = fake_user_manager_->AddUser(account_id);
     }
-    fake_user_manager_->set_is_current_user_new(is_new_profile);
+    fake_user_manager_->SetIsCurrentUserNew(is_new_profile);
 
     // Create a session in SessionManager. This will also login the user in
     // UserManager.
@@ -109,7 +110,7 @@ class BluetoothPowerControllerImplTest : public testing::Test {
  private:
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<session_manager::SessionManager> session_manager_;
-  user_manager::FakeUserManager* fake_user_manager_;
+  raw_ptr<user_manager::FakeUserManager, DanglingUntriaged> fake_user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 
   sync_preferences::TestingPrefServiceSyncable active_user_prefs_;

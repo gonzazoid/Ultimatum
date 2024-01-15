@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 namespace jingle_xmpp {
 class XmlElement;
@@ -85,6 +85,10 @@ class Authenticator {
     // The client is not authorized to connect to this device based on their
     // current location due to a policy defined by the third party auth service.
     LOCATION_AUTHZ_POLICY_CHECK_FAILED,
+
+    // The remote user is not authorized to access this machine. This is a
+    // generic authz error and is not related to third-party auth.
+    UNAUTHORIZED_ACCOUNT,
   };
 
   // Callback used for layered Authenticator implementations, particularly
@@ -99,7 +103,8 @@ class Authenticator {
   static bool IsAuthenticatorMessage(const jingle_xmpp::XmlElement* message);
 
   // Creates an empty Authenticator message, owned by the caller.
-  static std::unique_ptr<jingle_xmpp::XmlElement> CreateEmptyAuthenticatorMessage();
+  static std::unique_ptr<jingle_xmpp::XmlElement>
+  CreateEmptyAuthenticatorMessage();
 
   // Finds Authenticator message among child elements of |message|, or
   // returns nullptr otherwise.

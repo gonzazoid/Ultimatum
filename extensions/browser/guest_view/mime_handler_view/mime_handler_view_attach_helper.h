@@ -7,11 +7,9 @@
 
 #include <stdint.h>
 
-#include <map>
 #include <string>
 
-#include "base/callback_helpers.h"
-#include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/render_process_host_observer.h"
@@ -37,26 +35,33 @@ class MimeHandlerViewAttachHelper : content::RenderProcessHostObserver {
   // Returns the unique helper for process identified with |render_process_id|.
   static MimeHandlerViewAttachHelper* Get(int render_process_id);
 
-  // Called on IO thread to give this class a chance to override the response
-  // body for frame-based MimeHandlerView. |payload| will be populated with a
-  // template HTML page which appends a child frame to the frame associated
-  // with |navigating_frame_tree_node_id|. Then, an observer of the associated
-  // WebContents will observe the newly created RenderFrameHosts. As soon the
+  // Creates and returns a template HTML page containing an embed for a MIME
+  // handler. The MIME handler is expected to use this embed to load the MIME
+  // extension. `internal_id` is assigned to the embed.
+  static std::string CreateTemplateMimeHandlerPage(
+      const GURL& resource_url,
+      const std::string& mime_type,
+      const std::string& internal_id);
+
+  // Called on IO thread to override the response body for frame-based
+  // MimeHandlerView. The resulting payload will be populated with a template
+  // HTML page which appends a child frame to the frame associated with
+  // |navigating_frame_tree_node_id|. Then, an observer of the associated
+  // WebContents will observe the newly created RenderFrameHosts. As soon as the
   // expected RFH (i.e., the one added by the HTML string) is found, the
   // renderer is notified to start the MimHandlerView creation process. The
   // mentioned child frame will be used to attach the GuestView's WebContents to
   // the outer WebContents (WebContents associated with
-  // |navigating_frame_tree_node_id|). When this method returns true, the
-  // corresponding resource load will be halted until |resume| is invoked. This
-  // provides an opportunity for UI thread initializations.
-  static bool OverrideBodyForInterceptedResponse(
+  // |navigating_frame_tree_node_id|). The corresponding resource load will be
+  // halted until |resume| is invoked. This provides an opportunity for UI
+  // thread initializations.
+  static std::string OverrideBodyForInterceptedResponse(
       int32_t navigating_frame_tree_node_id,
       const GURL& resource_url,
       const std::string& mime_type,
       const std::string& stream_id,
-      std::string* payload,
-      uint32_t* data_pipe_size,
-      base::OnceClosure resume_load = base::DoNothing());
+      const std::string& internal_id,
+      base::OnceClosure resume_load);
 
   MimeHandlerViewAttachHelper(const MimeHandlerViewAttachHelper&) = delete;
   MimeHandlerViewAttachHelper& operator=(const MimeHandlerViewAttachHelper&) =
@@ -89,13 +94,14 @@ class MimeHandlerViewAttachHelper : content::RenderProcessHostObserver {
 
  private:
   // Called after the content layer finishes preparing a frame for attaching to
-  // the embedder WebContents. If |plugin_rfh| is nullptr then attaching is not
-  // possible and the guest should be destroyed; otherwise it is safe to proceed
-  // to attaching the WebContentses.
-  void ResumeAttachOrDestroy(std::unique_ptr<MimeHandlerViewGuest> guest_view,
-                             int32_t element_instance_id,
-                             bool is_full_page_plugin,
-                             content::RenderFrameHost* plugin_rfh);
+  // the embedder WebContents. If |plugin_render_frame_host| is nullptr then
+  // attaching is not possible and the guest should be destroyed; otherwise it
+  // is safe to proceed to attaching the WebContentses.
+  void ResumeAttachOrDestroy(
+      std::unique_ptr<MimeHandlerViewGuest> guest_view,
+      int32_t element_instance_id,
+      bool is_full_page_plugin,
+      content::RenderFrameHost* plugin_render_frame_host);
 
   // Called on UI thread to start observing the frame associated with
   // |frame_tree_node_id| and have the renderer create a

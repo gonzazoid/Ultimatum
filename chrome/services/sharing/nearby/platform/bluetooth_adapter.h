@@ -9,16 +9,18 @@
 
 #include "device/bluetooth/public/mojom/adapter.mojom.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
+#include "third_party/nearby/src/internal/platform/implementation/ble_v2.h"
 #include "third_party/nearby/src/internal/platform/implementation/bluetooth_adapter.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
-// Concrete BluetoothAdapter implementation.
+// Concrete BluetoothAdapter implementation and BleV2Peripheral implementation.
 // api::BluetoothAdapter is a synchronous interface, so this implementation
 // consumes the synchronous signatures of bluetooth::mojom::Adapter methods.
-class BluetoothAdapter : public api::BluetoothAdapter {
+// BluetoothAdapter represents a local BleV2Peripheral.
+class BluetoothAdapter : public api::BluetoothAdapter,
+                         public api::ble_v2::BlePeripheral {
  public:
   explicit BluetoothAdapter(
       const mojo::SharedRemote<bluetooth::mojom::Adapter>& adapter);
@@ -37,12 +39,15 @@ class BluetoothAdapter : public api::BluetoothAdapter {
   bool SetName(absl::string_view name) override;
   std::string GetMacAddress() const override;
 
+  // api::ble_v2::BlePeripheral:
+  std::string GetAddress() const override;
+  UniqueId GetUniqueId() const override;
+
  private:
   const mojo::SharedRemote<bluetooth::mojom::Adapter> adapter_;
 };
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_BLUETOOTH_ADAPTER_H_

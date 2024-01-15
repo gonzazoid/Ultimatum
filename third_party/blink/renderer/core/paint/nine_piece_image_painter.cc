@@ -12,7 +12,7 @@
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style/nine_piece_image.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/graphics/scoped_interpolation_quality.h"
+#include "third_party/blink/renderer/platform/graphics/scoped_image_rendering_settings.h"
 #include "ui/gfx/geometry/outsets.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -90,15 +90,14 @@ void PaintPieces(GraphicsContext& context,
                  const ComputedStyle& style,
                  const Document& document,
                  const NinePieceImage& nine_piece_image,
-                 Image* image,
+                 Image& image,
                  const gfx::SizeF& unzoomed_image_size,
                  PhysicalBoxSides sides_to_include) {
   const RespectImageOrientationEnum respect_orientation =
-      style.RespectImageOrientation() ? kRespectImageOrientation
-                                      : kDoNotRespectImageOrientation;
+      style.ImageOrientation();
   // |image_size| is in the image's native resolution and |slice_scale| defines
   // the effective size of a CSS pixel in the image.
-  const gfx::SizeF image_size = image->SizeAsFloat(respect_orientation);
+  const gfx::SizeF image_size = image.SizeAsFloat(respect_orientation);
   // Compute the scale factor to apply to the slice values by relating the
   // zoomed size to the "unzoomed" (CSS pixel) size. For raster images this
   // should match any DPR scale while for generated images it should match the
@@ -120,8 +119,8 @@ void PaintPieces(GraphicsContext& context,
   // TODO(penglin):  We need to make a single classification for the entire grid
   auto image_auto_dark_mode = ImageAutoDarkMode::Disabled();
 
-  ScopedInterpolationQuality interpolation_quality_scope(
-      context, style.GetInterpolationQuality());
+  ScopedImageRenderingSettings image_rendering_settings_scope(
+      context, style.GetInterpolationQuality(), style.GetDynamicRangeLimit());
   for (NinePiece piece = kMinPiece; piece < kMaxPiece; ++piece) {
     NinePieceImageGrid::NinePieceDrawInfo draw_info =
         grid.GetNinePieceDrawInfo(piece);
@@ -134,9 +133,9 @@ void PaintPieces(GraphicsContext& context,
       // in the rotated space in order to position and size the background. Undo
       // the src rect rotation if necessary.
       gfx::RectF src_rect = draw_info.source;
-      if (respect_orientation && !image->HasDefaultOrientation()) {
+      if (respect_orientation && !image.HasDefaultOrientation()) {
         src_rect =
-            image->CorrectSrcRectForImageOrientation(image_size, src_rect);
+            image.CorrectSrcRectForImageOrientation(image_size, src_rect);
       }
       // Since there is no way for the developer to specify decode behavior,
       // use kSync by default.
@@ -157,12 +156,6 @@ void PaintPieces(GraphicsContext& context,
         draw_info.source.height() * draw_info.tile_scale.y());
     if (!h_tile || !v_tile)
       continue;
-
-    // TODO(cavalcantii): see crbug.com/662507.
-    absl::optional<ScopedInterpolationQuality> interpolation_quality_override;
-    if (draw_info.tile_rule.horizontal == kRoundImageRule ||
-        draw_info.tile_rule.vertical == kRoundImageRule)
-      interpolation_quality_override.emplace(context, kInterpolationMedium);
 
     ImageTilingInfo tiling_info;
     tiling_info.image_rect = draw_info.source;
@@ -219,8 +212,7 @@ bool NinePieceImagePainter::Paint(GraphicsContext& graphics_context,
   // image with either "native" size (raster images) or size scaled by effective
   // zoom.
   const RespectImageOrientationEnum respect_orientation =
-      style.RespectImageOrientation() ? kRespectImageOrientation
-                                      : kDoNotRespectImageOrientation;
+      style.ImageOrientation();
   const gfx::SizeF default_object_size(border_image_rect.size);
   gfx::SizeF image_size = style_image->ImageSize(
       style.EffectiveZoom(), default_object_size, respect_orientation);
@@ -241,8 +233,7 @@ bool NinePieceImagePainter::Paint(GraphicsContext& graphics_context,
       inspector_paint_image_event::Data, node, *style_image,
       gfx::RectF(image->Rect()), gfx::RectF(border_image_rect));
   PaintPieces(graphics_context, border_image_rect, style, document,
-              nine_piece_image, image.get(), unzoomed_image_size,
-              sides_to_include);
+              nine_piece_image, *image, unzoomed_image_size, sides_to_include);
   return true;
 }
 

@@ -66,9 +66,6 @@ class StatusBubbleViews : public StatusBubble {
   // Gets the width that a bubble should be for a given string
   int GetWidthForURL(const std::u16string& url_string);
 
-  // Notifies the bubble's popup that browser's theme is changed.
-  void OnThemeChanged();
-
   // Overridden from StatusBubble:
   void SetStatus(const std::u16string& status) override;
   void SetURL(const GURL& url) override;
@@ -153,7 +150,7 @@ class StatusBubbleViews : public StatusBubble {
   // going outside the bounds of the hosting widget.
   std::unique_ptr<views::Widget> popup_;
 
-  raw_ptr<views::View, DanglingUntriaged> base_view_;
+  raw_ptr<views::View, AcrossTasksDanglingUntriaged> base_view_;
   raw_ptr<StatusView, DanglingUntriaged> view_ = nullptr;
 
   // Manages the expansion of a status bubble to fit a long URL.
@@ -167,8 +164,8 @@ class StatusBubbleViews : public StatusBubble {
   bool is_expanded_ = false;
 
   // Used for posting tasks. This is typically
-  // base::ThreadTaskRunnerHandle::Get(), but may be set to something else for
-  // tests.
+  // base::SingleThreadTaskRunner::GetCurrentDefault(), but may be set to
+  // something else for tests.
   raw_ptr<base::SequencedTaskRunner> task_runner_;
 
   // Times expansion of status bubble when URL is too long for standard width.

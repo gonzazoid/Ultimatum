@@ -10,9 +10,10 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/printing/zeroconf_printer_detector.h"
 #include "chrome/browser/local_discovery/service_discovery_device_lister.h"
 
@@ -53,7 +54,7 @@ class FuzzDeviceLister : public local_discovery::ServiceDiscoveryDeviceLister {
   void SetDelegate(
       local_discovery::ServiceDiscoveryDeviceLister::Delegate* delegate) {
     delegate_ = delegate;
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FuzzDeviceLister::CallDelegate,
                                   base::Unretained(this)));
   }
@@ -75,7 +76,7 @@ class FuzzDeviceLister : public local_discovery::ServiceDiscoveryDeviceLister {
     calls_.pop_back();
     switch (call.call_type) {
       case CallToDelegate::kOnDeviceChanged:
-        base::SequencedTaskRunnerHandle::Get()->PostTask(
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE,
             base::BindOnce(&local_discovery::ServiceDiscoveryDeviceLister::
                                Delegate::OnDeviceChanged,
@@ -83,7 +84,7 @@ class FuzzDeviceLister : public local_discovery::ServiceDiscoveryDeviceLister {
                            call.added, call.description));
         break;
       case CallToDelegate::kOnDeviceRemoved:
-        base::SequencedTaskRunnerHandle::Get()->PostTask(
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE,
             base::BindOnce(&local_discovery::ServiceDiscoveryDeviceLister::
                                Delegate::OnDeviceRemoved,
@@ -91,19 +92,20 @@ class FuzzDeviceLister : public local_discovery::ServiceDiscoveryDeviceLister {
                            call.description.service_name));
         break;
       case CallToDelegate::kOnDeviceCacheFlushed:
-        base::SequencedTaskRunnerHandle::Get()->PostTask(
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE,
             base::BindOnce(&local_discovery::ServiceDiscoveryDeviceLister::
                                Delegate::OnDeviceCacheFlushed,
                            base::Unretained(delegate_), service_type_));
         break;
     }
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FuzzDeviceLister::CallDelegate,
                                   base::Unretained(this)));
   }
 
-  local_discovery::ServiceDiscoveryDeviceLister::Delegate* delegate_ = nullptr;
+  raw_ptr<local_discovery::ServiceDiscoveryDeviceLister::Delegate> delegate_ =
+      nullptr;
   std::string service_type_;
   std::vector<CallToDelegate> calls_;
 };
@@ -182,7 +184,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   CreateLister(ash::ZeroconfPrinterDetector::kIppsEverywhereServiceName, calls,
                &listers);
   // Creating an object of ZeroconfPrinterDetector to fuzz.
-  auto detector = ash::ZeroconfPrinterDetector::CreateForTesting(&listers);
+  auto detector = ash::ZeroconfPrinterDetector::CreateForTesting(
+      &listers, /*ipp_reject_list=*/{});
   for (auto& lf : listers) {
     static_cast<FuzzDeviceLister*>(lf.second.get())
         ->SetDelegate(detector.get());

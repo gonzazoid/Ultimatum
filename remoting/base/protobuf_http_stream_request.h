@@ -5,8 +5,10 @@
 #ifndef REMOTING_BASE_PROTOBUF_HTTP_STREAM_REQUEST_H_
 #define REMOTING_BASE_PROTOBUF_HTTP_STREAM_REQUEST_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include <string_view>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "remoting/base/protobuf_http_request_base.h"
@@ -76,7 +78,7 @@ class ProtobufHttpStreamRequest final
   base::TimeDelta GetRequestTimeoutDuration() const override;
 
   // network::SimpleURLLoaderStreamConsumer implementations.
-  void OnDataReceived(base::StringPiece string_piece,
+  void OnDataReceived(std::string_view string_view,
                       base::OnceClosure resume) override;
   void OnComplete(bool success) override;
   void OnRetry(base::OnceClosure start_retry) override;

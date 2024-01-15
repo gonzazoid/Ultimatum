@@ -17,6 +17,8 @@
 #include "content/public/browser/render_frame_host.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
 #include "device/vr/public/mojom/vr_service.mojom-forward.h"
+#include "device/vr/public/mojom/xr_device.mojom-forward.h"
+#include "device/vr/public/mojom/xr_session.mojom-forward.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -80,10 +82,14 @@ class BrowserXRRuntimeImpl : public content::BrowserXRRuntime,
     return presenting_service_;
   }
 
+  bool HasPendingImmersiveSessionRequest() {
+    return has_pending_immersive_session_request_;
+  }
+
   device::mojom::XRDeviceId GetId() const { return id_; }
 
 #if BUILDFLAG(IS_WIN)
-  absl::optional<CHROME_LUID> GetLuid() const;
+  std::optional<CHROME_LUID> GetLuid() const;
 #endif
 
   // BrowserXRRuntime
@@ -93,6 +99,8 @@ class BrowserXRRuntimeImpl : public content::BrowserXRRuntime,
   // Called to allow the runtime to conduct any cleanup it needs to do before it
   // is removed.
   void BeforeRuntimeRemoved();
+
+  std::vector<device::mojom::XRSessionFeature> GetSupportedFeatures();
 
  private:
   // device::XRRuntimeEventListener
@@ -127,6 +135,7 @@ class BrowserXRRuntimeImpl : public content::BrowserXRRuntime,
   std::unique_ptr<content::XrInstallHelper> install_helper_;
   std::unique_ptr<content::BrowserXRRuntime::Observer> runtime_observer_;
   base::OnceCallback<void(bool)> install_finished_callback_;
+  bool has_pending_immersive_session_request_ = false;
 
   base::WeakPtrFactory<BrowserXRRuntimeImpl> weak_ptr_factory_{this};
 };

@@ -32,13 +32,11 @@ class ServiceWorkerPageLoadMetricsObserverTest
   void SimulateTimingWithoutPaint() {
     page_load_metrics::mojom::PageLoadTiming timing;
     page_load_metrics::InitPageLoadTimingForTest(&timing);
-    timing.navigation_start = base::Time::FromDoubleT(1);
+    timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
     tester()->SimulateTimingUpdate(timing);
   }
 
   void AssertNoServiceWorkerHistogramsLogged() {
-    tester()->histogram_tester().ExpectTotalCount(
-        internal::kHistogramServiceWorkerFirstInputDelay, 0);
     tester()->histogram_tester().ExpectTotalCount(
         internal::kHistogramServiceWorkerFirstPaint, 0);
     tester()->histogram_tester().ExpectTotalCount(
@@ -113,7 +111,7 @@ class ServiceWorkerPageLoadMetricsObserverTest
   void InitializeTestPageLoadTiming(
       page_load_metrics::mojom::PageLoadTiming* timing) {
     page_load_metrics::InitPageLoadTimingForTest(timing);
-    timing->navigation_start = base::Time::FromDoubleT(1);
+    timing->navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
     timing->interactive_timing->first_input_delay = base::Milliseconds(50);
     timing->interactive_timing->first_input_timestamp = base::Milliseconds(712);
     timing->parse_timing->parse_start = base::Milliseconds(100);
@@ -173,12 +171,6 @@ TEST_F(ServiceWorkerPageLoadMetricsObserverTest, WithServiceWorker) {
   tester()->SimulateTimingAndMetadataUpdate(timing, metadata);
 
   tester()->NavigateToUntrackedUrl();
-
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramServiceWorkerFirstInputDelay, 1);
-  tester()->histogram_tester().ExpectBucketCount(
-      internal::kHistogramServiceWorkerFirstInputDelay,
-      timing.interactive_timing->first_input_delay.value().InMilliseconds(), 1);
 
   tester()->histogram_tester().ExpectTotalCount(
       internal::kHistogramServiceWorkerFirstPaint, 1);
@@ -243,7 +235,7 @@ TEST_F(ServiceWorkerPageLoadMetricsObserverTest, WithServiceWorker) {
   const auto& entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_ServiceWorkerControlled::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* entry : entries) {
+  for (const ukm::mojom::UkmEntry* entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(
         entry, GURL(kDefaultTestUrl));
   }
@@ -288,15 +280,13 @@ TEST_F(ServiceWorkerPageLoadMetricsObserverTest, WithServiceWorkerBackground) {
       internal::kHistogramServiceWorkerLoad, 0);
   tester()->histogram_tester().ExpectTotalCount(
       internal::kHistogramServiceWorkerLargestContentfulPaint, 0);
-  // TODO(crbug.com/686590): The following expectation fails on Win7 Tests
-  // (dbg)(1) builder, so is disabled for the time being.
-  // tester()->histogram_tester().ExpectTotalCount(
-  //     internal::kBackgroundHistogramServiceWorkerParseStart, 1);
+  tester()->histogram_tester().ExpectTotalCount(
+      internal::kBackgroundHistogramServiceWorkerParseStart, 1);
 
   const auto& entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_ServiceWorkerControlled::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* entry : entries) {
+  for (const ukm::mojom::UkmEntry* entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(
         entry, GURL(kDefaultTestUrl));
   }

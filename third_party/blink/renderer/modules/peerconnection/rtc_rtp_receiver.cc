@@ -6,10 +6,12 @@
 
 #include "base/numerics/safe_conversions.h"
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_token_builder.h"
+#include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_insertable_streams.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_rtcp_parameters.h"
@@ -22,6 +24,7 @@
 #include "third_party/blink/renderer/core/streams/writable_stream.h"
 #include "third_party/blink/renderer/modules/peerconnection/identifiability_metrics.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.h"
+#include "third_party/blink/renderer/modules/peerconnection/peer_connection_features.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_dtls_transport.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_receiver_sink_optimizer.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_receiver_source_optimizer.h"
@@ -48,36 +51,55 @@ RTCRtpReceiver::RTCRtpReceiver(RTCPeerConnection* pc,
                                std::unique_ptr<RTCRtpReceiverPlatform> receiver,
                                MediaStreamTrack* track,
                                MediaStreamVector streams,
-                               bool encoded_insertable_streams)
+                               bool require_encoded_insertable_streams,
+                               scoped_refptr<base::SequencedTaskRunner>
+                                   encoded_transform_shortcircuit_runner)
     : ExecutionContextLifecycleObserver(pc->GetExecutionContext()),
       pc_(pc),
       receiver_(std::move(receiver)),
       track_(track),
       streams_(std::move(streams)),
-      encoded_insertable_streams_(encoded_insertable_streams) {
+      encoded_audio_transformer_(
+          receiver_->GetEncodedAudioStreamTransformer()
+              ? receiver_->GetEncodedAudioStreamTransformer()->GetBroker()
+              : nullptr),
+      encoded_video_transformer_(
+          receiver_->GetEncodedVideoStreamTransformer()
+              ? receiver_->GetEncodedVideoStreamTransformer()->GetBroker()
+              : nullptr) {
   DCHECK(pc_);
   DCHECK(receiver_);
   DCHECK(track_);
-  if (encoded_insertable_streams_ && kind() == MediaKind::kAudio) {
-    encoded_audio_transformer_ =
-        receiver_->GetEncodedAudioStreamTransformer()->GetBroker();
+  if (encoded_audio_transformer_) {
     RegisterEncodedAudioStreamCallback();
   }
-  if (encoded_insertable_streams_ && kind() == MediaKind::kVideo) {
-    encoded_video_transformer_ =
-        receiver_->GetEncodedVideoStreamTransformer()->GetBroker();
+  if (encoded_video_transformer_) {
     RegisterEncodedVideoStreamCallback();
+  }
+
+  if (!require_encoded_insertable_streams &&
+      (encoded_audio_transformer_ || encoded_video_transformer_)) {
+    // We're not requiring JS to create encoded streams itself, so schedule a
+    // task to shortcircuit the encoded transform if JS doesn't synchronously
+    // create them - implementing
+    // https://www.w3.org/TR/2023/WD-webrtc-encoded-transform-20231012/#stream-creation
+    // step 12.
+
+    encoded_transform_shortcircuit_runner->PostTask(
+        FROM_HERE,
+        WTF::BindOnce(&RTCRtpReceiver::MaybeShortCircuitEncodedStreams,
+                      WrapPersistent(this)));
   }
 }
 
 MediaStreamTrack* RTCRtpReceiver::track() const {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  return track_;
+  return track_.Get();
 }
 
 RTCDtlsTransport* RTCRtpReceiver::transport() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  return transport_;
+  return transport_.Get();
 }
 
 RTCDtlsTransport* RTCRtpReceiver::rtcpTransport() {
@@ -123,8 +145,7 @@ ScriptPromise RTCRtpReceiver::getStats(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
   receiver_->GetStats(WTF::BindOnce(WebRTCStatsReportCallbackResolver,
-                                    WrapPersistent(resolver)),
-                      GetExposedGroupIds(script_state));
+                                    WrapPersistent(resolver)));
   return promise;
 }
 
@@ -132,6 +153,13 @@ RTCInsertableStreams* RTCRtpReceiver::createEncodedStreams(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  LogMessage(base::StringPrintf("%s({transform_shortcircuited_=%s})", __func__,
+                                transform_shortcircuited_ ? "true" : "false"));
+  if (transform_shortcircuited_) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "Too late to create encoded streams");
+    return nullptr;
+  }
   if (kind() == MediaKind::kAudio)
     return createEncodedAudioStreams(script_state, exception_state);
   DCHECK_EQ(kind(), MediaKind::kVideo);
@@ -142,7 +170,13 @@ RTCInsertableStreams* RTCRtpReceiver::createEncodedAudioStreams(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!encoded_insertable_streams_) {
+  if (!encoded_audio_transformer_) {
+    // Should only happen if the killswitch
+    // kWebRtcEncodedTransformsPerStreamCreation is disabled and we go back to
+    // the old behaviour.
+    // TODO(crbug.com/1502781): Remove when cleaning up the feature.
+    DCHECK(!base::FeatureList::IsEnabled(
+        kWebRtcEncodedTransformsPerStreamCreation));
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Encoded audio streams not requested at PC initialization");
@@ -155,14 +189,20 @@ RTCInsertableStreams* RTCRtpReceiver::createEncodedAudioStreams(
   }
 
   InitializeEncodedAudioStreams(script_state);
-  return encoded_audio_streams_;
+  return encoded_audio_streams_.Get();
 }
 
 RTCInsertableStreams* RTCRtpReceiver::createEncodedVideoStreams(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!encoded_insertable_streams_) {
+  if (!encoded_video_transformer_) {
+    // Should only happen if the killswitch
+    // kWebRtcEncodedTransformsPerStreamCreation is disabled and we go back to
+    // the old behaviour.
+    // TODO(crbug.com/1502781): Remove when cleaning up the feature.
+    DCHECK(!base::FeatureList::IsEnabled(
+        kWebRtcEncodedTransformsPerStreamCreation));
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "Encoded video streams not requested at PC initialization");
@@ -175,7 +215,7 @@ RTCInsertableStreams* RTCRtpReceiver::createEncodedVideoStreams(
   }
 
   InitializeEncodedVideoStreams(script_state);
-  return encoded_video_streams_;
+  return encoded_video_streams_.Get();
 }
 
 RTCRtpReceiverPlatform* RTCRtpReceiver::platform_receiver() {
@@ -356,6 +396,8 @@ void RTCRtpReceiver::RegisterEncodedAudioStreamCallback() {
 }
 
 void RTCRtpReceiver::UnregisterEncodedAudioStreamCallback() {
+  // Threadsafe as this might be called from the realm to which a stream has
+  // been transferred.
   encoded_audio_transformer_->ResetTransformerCallback();
 }
 
@@ -393,7 +435,6 @@ void RTCRtpReceiver::SetAudioUnderlyingSink(
 void RTCRtpReceiver::InitializeEncodedAudioStreams(ScriptState* script_state) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!encoded_audio_streams_);
-  DCHECK(encoded_insertable_streams_);
 
   encoded_audio_streams_ = RTCInsertableStreams::Create();
 
@@ -407,8 +448,7 @@ void RTCRtpReceiver::InitializeEncodedAudioStreams(ScriptState* script_state) {
             script_state,
             WTF::CrossThreadBindOnce(
                 &RTCRtpReceiver::UnregisterEncodedAudioStreamCallback,
-                WrapCrossThreadWeakPersistent(this)),
-            /*is_receiver=*/true);
+                WrapCrossThreadWeakPersistent(this)));
 
     auto set_underlying_source =
         WTF::CrossThreadBindRepeating(&RTCRtpReceiver::SetAudioUnderlyingSource,
@@ -436,8 +476,7 @@ void RTCRtpReceiver::InitializeEncodedAudioStreams(ScriptState* script_state) {
     // Set up writable.
     audio_to_decoder_underlying_sink_ =
         MakeGarbageCollected<RTCEncodedAudioUnderlyingSink>(
-            script_state, encoded_audio_transformer_,
-            webrtc::TransformableFrameInterface::Direction::kReceiver);
+            script_state, encoded_audio_transformer_);
 
     auto set_underlying_sink =
         WTF::CrossThreadBindOnce(&RTCRtpReceiver::SetAudioUnderlyingSink,
@@ -456,7 +495,8 @@ void RTCRtpReceiver::InitializeEncodedAudioStreams(ScriptState* script_state) {
 }
 
 void RTCRtpReceiver::OnAudioFrameFromDepacketizer(
-    std::unique_ptr<webrtc::TransformableFrameInterface> encoded_audio_frame) {
+    std::unique_ptr<webrtc::TransformableAudioFrameInterface>
+        encoded_audio_frame) {
   base::AutoLock locker(audio_underlying_source_lock_);
   if (audio_from_depacketizer_underlying_source_) {
     audio_from_depacketizer_underlying_source_->OnFrameFromSource(
@@ -472,6 +512,8 @@ void RTCRtpReceiver::RegisterEncodedVideoStreamCallback() {
 }
 
 void RTCRtpReceiver::UnregisterEncodedVideoStreamCallback() {
+  // Threadsafe as this might be called from the realm to which a stream has
+  // been transferred.
   encoded_video_transformer_->ResetTransformerCallback();
 }
 
@@ -506,10 +548,23 @@ void RTCRtpReceiver::SetVideoUnderlyingSink(
   video_to_decoder_underlying_sink_ = new_underlying_sink;
 }
 
+void RTCRtpReceiver::MaybeShortCircuitEncodedStreams() {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (encoded_video_transformer_ && !encoded_video_streams_) {
+    transform_shortcircuited_ = true;
+    LogMessage("Starting short circuiting of video transform");
+    encoded_video_transformer_->StartShortCircuiting();
+  }
+  if (encoded_audio_transformer_ && !encoded_audio_streams_) {
+    transform_shortcircuited_ = true;
+    LogMessage("Starting short circuiting of audio transform");
+    encoded_audio_transformer_->StartShortCircuiting();
+  }
+}
+
 void RTCRtpReceiver::InitializeEncodedVideoStreams(ScriptState* script_state) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!encoded_video_streams_);
-  DCHECK(encoded_insertable_streams_);
 
   encoded_video_streams_ = RTCInsertableStreams::Create();
 
@@ -551,8 +606,7 @@ void RTCRtpReceiver::InitializeEncodedVideoStreams(ScriptState* script_state) {
     // Set up writable.
     video_to_decoder_underlying_sink_ =
         MakeGarbageCollected<RTCEncodedVideoUnderlyingSink>(
-            script_state, encoded_video_transformer_,
-            webrtc::TransformableFrameInterface::Direction::kReceiver);
+            script_state, encoded_video_transformer_);
 
     auto set_underlying_sink =
         WTF::CrossThreadBindOnce(&RTCRtpReceiver::SetVideoUnderlyingSink,
@@ -578,6 +632,12 @@ void RTCRtpReceiver::OnVideoFrameFromDepacketizer(
     video_from_depacketizer_underlying_source_->OnFrameFromSource(
         std::move(encoded_video_frame));
   }
+}
+
+void RTCRtpReceiver::LogMessage(const std::string& message) {
+  blink::WebRtcLogMessage(
+      base::StringPrintf("RtpRcvr::%s [this=0x%" PRIXPTR "]", message.c_str(),
+                         reinterpret_cast<uintptr_t>(this)));
 }
 
 }  // namespace blink

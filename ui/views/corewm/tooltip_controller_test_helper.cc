@@ -4,27 +4,45 @@
 
 #include "ui/views/corewm/tooltip_controller_test_helper.h"
 
+#include "base/time/time.h"
 #include "ui/aura/window.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/wm/public/activation_change_observer.h"
+#include "ui/wm/public/tooltip_client.h"
+#include "ui/wm/public/tooltip_observer.h"
 
-namespace views {
-namespace corewm {
-namespace test {
+namespace views::corewm::test {
 
 TooltipControllerTestHelper::TooltipControllerTestHelper(
-    TooltipController* controller)
-    : controller_(controller) {
-  controller_->state_manager_->SetTooltipShowDelayedForTesting(false);
+    aura::Window* root_window)
+    : root_window_(root_window),
+      controller_(
+          static_cast<TooltipController*>(wm::GetTooltipClient(root_window))) {
+  CHECK(root_window_);
+  root_window_->AddObserver(this);
+  SkipTooltipShowDelay(true);
 }
 
-TooltipControllerTestHelper::~TooltipControllerTestHelper() = default;
+TooltipControllerTestHelper::~TooltipControllerTestHelper() {
+  if (root_window_) {
+    root_window_->RemoveObserver(this);
+  }
+}
+
+bool TooltipControllerTestHelper::UseServerSideTooltip() {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  return true;
+#else
+  return false;
+#endif
+}
 
 const std::u16string& TooltipControllerTestHelper::GetTooltipText() {
-  return controller_->state_manager_->tooltip_text();
+  return state_manager()->tooltip_text();
 }
 
-const aura::Window* TooltipControllerTestHelper::GetTooltipParentWindow() {
-  return controller_->state_manager_->tooltip_parent_window();
+aura::Window* TooltipControllerTestHelper::GetTooltipParentWindow() {
+  return state_manager()->tooltip_parent_window_;
 }
 
 const aura::Window* TooltipControllerTestHelper::GetObservedWindow() {
@@ -32,7 +50,11 @@ const aura::Window* TooltipControllerTestHelper::GetObservedWindow() {
 }
 
 const gfx::Point& TooltipControllerTestHelper::GetTooltipPosition() {
-  return controller_->state_manager_->position_;
+  return state_manager()->position_;
+}
+
+base::TimeDelta TooltipControllerTestHelper::GetShowTooltipDelay() {
+  return controller_->GetShowTooltipDelay();
 }
 
 void TooltipControllerTestHelper::HideAndReset() {
@@ -44,21 +66,32 @@ void TooltipControllerTestHelper::UpdateIfRequired(TooltipTrigger trigger) {
 }
 
 void TooltipControllerTestHelper::FireHideTooltipTimer() {
-  controller_->state_manager_->HideAndReset();
+  state_manager()->HideAndReset();
 }
 
-bool TooltipControllerTestHelper::IsHideTooltipTimerRunning() {
-  return controller_->state_manager_->IsWillHideTooltipTimerRunningForTesting();
+void TooltipControllerTestHelper::AddObserver(wm::TooltipObserver* observer) {
+  controller_->AddObserver(observer);
+}
+
+void TooltipControllerTestHelper::RemoveObserver(
+    wm::TooltipObserver* observer) {
+  controller_->RemoveObserver(observer);
+}
+
+bool TooltipControllerTestHelper::IsWillShowTooltipTimerRunning() {
+  return state_manager()->IsWillShowTooltipTimerRunningForTesting();
+}
+
+bool TooltipControllerTestHelper::IsWillHideTooltipTimerRunning() {
+  return state_manager()->IsWillHideTooltipTimerRunningForTesting();
 }
 
 bool TooltipControllerTestHelper::IsTooltipVisible() {
-  return controller_->state_manager_->IsVisible();
+  return state_manager()->IsVisible();
 }
 
-void TooltipControllerTestHelper::SetTooltipShowDelayEnable(
-    bool tooltip_show_delay) {
-  controller_->state_manager_->SetTooltipShowDelayedForTesting(
-      tooltip_show_delay);
+void TooltipControllerTestHelper::SkipTooltipShowDelay(bool enable) {
+  controller_->skip_show_delay_for_testing_ = enable;
 }
 
 void TooltipControllerTestHelper::MockWindowActivated(aura::Window* window,
@@ -70,6 +103,24 @@ void TooltipControllerTestHelper::MockWindowActivated(aura::Window* window,
       gained_active, lost_active);
 }
 
+void TooltipControllerTestHelper::OnWindowPropertyChanged(aura::Window* window,
+                                                          const void* key,
+                                                          intptr_t old) {
+  if (window != root_window_ || key != wm::kRootWindowTooltipClientKey) {
+    return;
+  }
+
+  controller_ = static_cast<TooltipController*>(wm::GetTooltipClient(window));
+}
+
+void TooltipControllerTestHelper::OnWindowDestroyed(aura::Window* window) {
+  if (window != root_window_) {
+    return;
+  }
+
+  root_window_ = nullptr;
+}
+
 TooltipTestView::TooltipTestView() = default;
 
 TooltipTestView::~TooltipTestView() = default;
@@ -78,6 +129,7 @@ std::u16string TooltipTestView::GetTooltipText(const gfx::Point& p) const {
   return tooltip_text_;
 }
 
-}  // namespace test
-}  // namespace corewm
-}  // namespace views
+BEGIN_METADATA(TooltipTestView)
+END_METADATA
+
+}  // namespace views::corewm::test

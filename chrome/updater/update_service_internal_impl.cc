@@ -7,14 +7,14 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/service_proxy_factory.h"
 #include "chrome/updater/update_service_impl.h"
 #include "chrome/updater/updater_scope.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/util.h"
 
 namespace updater {
 
@@ -34,15 +34,10 @@ void UpdateServiceInternalImpl::Run(base::OnceClosure callback) {
       std::move(callback), service));
 }
 
-void UpdateServiceInternalImpl::InitializeUpdateService(
-    base::OnceClosure callback) {
+void UpdateServiceInternalImpl::Hello(base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   VLOG(1) << __func__;
   std::move(callback).Run();
-}
-
-void UpdateServiceInternalImpl::Uninitialize() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 UpdateServiceInternalImpl::~UpdateServiceInternalImpl() {

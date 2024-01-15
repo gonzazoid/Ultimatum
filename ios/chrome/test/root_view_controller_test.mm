@@ -4,11 +4,7 @@
 
 #import "ios/chrome/test/root_view_controller_test.h"
 
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 
 // Sets the current key window's rootViewController and saves a pointer to
 // the original VC to allow restoring it at the end of the test.

@@ -8,9 +8,9 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
@@ -120,13 +120,14 @@ TEST_F(GpuServiceTest, LoseAllContexts) {
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service()->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
       gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
       /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
       /*shutdown_event=*/nullptr);
   gpu_service_remote.FlushForTesting();
 
-  gpu_service()->MaybeExitOnContextLost();
+  gpu_service()->MaybeExitOnContextLost(
+      /*synthetic_loss=*/false, gpu::error::ContextLostReason::kUnknown);
   EXPECT_TRUE(gpu_service()->IsExiting());
 }
 
@@ -138,7 +139,7 @@ TEST_F(GpuServiceTest, VisibilityCallbackCalled) {
   mojo::PendingRemote<mojom::GpuHost> gpu_host_proxy;
   std::ignore = gpu_host_proxy.InitWithNewPipeAndPassReceiver();
   gpu_service()->InitializeWithHost(
-      std::move(gpu_host_proxy), gpu::GpuProcessActivityFlags(),
+      std::move(gpu_host_proxy), gpu::GpuProcessShmCount(),
       gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size()),
       /*sync_point_manager=*/nullptr, /*shared_image_manager=*/nullptr,
       /*shutdown_event=*/nullptr);

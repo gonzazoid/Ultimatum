@@ -8,17 +8,20 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "ash/constants/ash_features.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
+#include "chrome/browser/ash/os_feedback/chrome_os_feedback_delegate.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/common/chrome_switches.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
@@ -32,6 +35,7 @@ namespace system_logs {
 
 namespace {
 
+constexpr char kEmpty[] = "<empty>";
 constexpr char kNotAvailable[] = "<not available>";
 constexpr char kRoutesKeyName[] = "routes";
 constexpr char kRoutesv6KeyName[] = "routes6";
@@ -69,6 +73,29 @@ constexpr std::array<const char*, 2> kExcludeList = {
 // is ~7M and that majority of log files are under 1M, we set a per-file limit
 // of 1MiB.
 const int64_t kMaxLogSize = 1024 * 1024;
+
+std::vector<debugd::FeedbackLogType> GetLogTypesForUser(
+    const user_manager::User* user) {
+  // The default list of log types that we request from debugd.
+  std::vector<debugd::FeedbackLogType> included_log_types = {
+      debugd::FeedbackLogType::ARC_BUG_REPORT,
+      debugd::FeedbackLogType::CONNECTIVITY_REPORT,
+      debugd::FeedbackLogType::VERBOSE_COMMAND_LOGS,
+      debugd::FeedbackLogType::COMMAND_LOGS,
+      debugd::FeedbackLogType::FEEDBACK_LOGS,
+      debugd::FeedbackLogType::BLUETOOTH_BQR,
+      debugd::FeedbackLogType::LSB_RELEASE_INFO,
+      debugd::FeedbackLogType::PERF_DATA,
+      debugd::FeedbackLogType::OS_RELEASE_INFO,
+      debugd::FeedbackLogType::VAR_LOG_FILES};
+  if (user && ash::ChromeOsFeedbackDelegate::IsWifiDebugLogsAllowed(
+                  user->GetProfilePrefs())) {
+    // Include WIFI_FIRMWARE_DUMPS since it is allowed for the user.
+    included_log_types.push_back(debugd::FeedbackLogType::WIFI_FIRMWARE_DUMPS);
+  }
+
+  return included_log_types;
+}
 
 }  // namespace
 
@@ -159,13 +186,15 @@ void DebugDaemonLogSource::Fetch(SysLogsSourceCallback callback) {
   if (scrub_) {
     const user_manager::User* user =
         user_manager::UserManager::Get()->GetActiveUser();
-    client->GetFeedbackLogsV2(
+    const auto account_identifier =
         cryptohome::CreateAccountIdentifierFromAccountId(
-            user ? user->GetAccountId() : EmptyAccountId()),
-        // Send `requested_logs` as empty to request all logs.
-        /*requested_logs=*/{},
+            user ? user->GetAccountId() : EmptyAccountId());
+
+    client->GetFeedbackLogs(
+        account_identifier, GetLogTypesForUser(user),
         base::BindOnce(&DebugDaemonLogSource::OnGetLogs,
                        weak_ptr_factory_.GetWeakPtr(), start_time));
+
   } else {
     client->GetAllLogs(base::BindOnce(&DebugDaemonLogSource::OnGetLogs,
                                       weak_ptr_factory_.GetWeakPtr(),
@@ -176,7 +205,7 @@ void DebugDaemonLogSource::Fetch(SysLogsSourceCallback callback) {
 
 void DebugDaemonLogSource::OnGetRoutes(
     bool is_ipv6,
-    absl::optional<std::vector<std::string>> routes) {
+    std::optional<std::vector<std::string>> routes) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   std::string key = is_ipv6 ? kRoutesv6KeyName : kRoutesKeyName;
   (*response_)[key] = routes.has_value()
@@ -186,7 +215,7 @@ void DebugDaemonLogSource::OnGetRoutes(
 }
 
 void DebugDaemonLogSource::OnGetOneLog(std::string key,
-                                       absl::optional<std::string> status) {
+                                       std::optional<std::string> status) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   (*response_)[std::move(key)] = std::move(status).value_or(kNotAvailable);
@@ -208,13 +237,36 @@ void DebugDaemonLogSource::OnGetLogs(const base::TimeTicks get_start_time,
         "Feedback.ChromeOSApp.Duration.GetBigFeedbackLogs",
         base::TimeTicks::Now() - get_start_time);
   }
+  int empty_log_count = 0;
+  int not_available_log_count = 0;
+  int other_log_count = 0;
+
   // We ignore 'succeeded' for this callback - we want to display as much of the
   // debug info as we can even if we failed partway through parsing, and if we
   // couldn't fetch any of it, none of the fields will even appear.
   for (const auto& log : logs) {
-    if (base::Contains(kExcludeList, log.first))
+    if (base::Contains(kExcludeList, log.first)) {
       continue;
+    }
     response_->insert(log);
+    if (log.second == kEmpty) {
+      ++empty_log_count;
+    } else if (log.second == kNotAvailable) {
+      ++not_available_log_count;
+    } else {
+      ++other_log_count;
+    }
+  }
+  if (scrub_) {
+    // Record stats for the logs received from debugd.
+    // As of today, the total logs are about 211.
+    base::UmaHistogramCounts1000(
+        "Feedback.ChromeOSApp.GetBigFeedbackLogs.EmptyCount", empty_log_count);
+    base::UmaHistogramCounts1000(
+        "Feedback.ChromeOSApp.GetBigFeedbackLogs.NotAvailableCount",
+        not_available_log_count);
+    base::UmaHistogramCounts1000(
+        "Feedback.ChromeOSApp.GetBigFeedbackLogs.OtherCount", other_log_count);
   }
   RequestCompleted();
 }
@@ -226,9 +278,10 @@ void DebugDaemonLogSource::GetLoggedInUsersLogFiles() {
   std::vector<base::FilePath> profile_dirs;
   const user_manager::UserList& users =
       user_manager::UserManager::Get()->GetLoggedInUsers();
-  for (const auto* user : users) {
-    if (user->username_hash().empty())
+  for (const user_manager::User* user : users) {
+    if (user->username_hash().empty()) {
       continue;
+    }
 
     profile_dirs.emplace_back(
         ash::ProfileHelper::GetProfilePathByUserIdHash(user->username_hash()));
@@ -245,8 +298,9 @@ void DebugDaemonLogSource::GetLoggedInUsersLogFiles() {
 
 void DebugDaemonLogSource::MergeUserLogFilesResponse(
     std::unique_ptr<SystemLogsResponse> response) {
-  for (auto& pair : *response)
+  for (auto& pair : *response) {
     response_->emplace(pair.first, std::move(pair.second));
+  }
 
   auto response_to_return = std::make_unique<SystemLogsResponse>();
   std::swap(response_to_return, response_);
@@ -259,8 +313,9 @@ void DebugDaemonLogSource::RequestCompleted() {
   DCHECK(!callback_.is_null());
 
   --num_pending_requests_;
-  if (num_pending_requests_ > 0)
+  if (num_pending_requests_ > 0) {
     return;
+  }
 
   // When all other logs are collected, fetch the user logs, because any errors
   // fetching the other logs is reported in the user logs.

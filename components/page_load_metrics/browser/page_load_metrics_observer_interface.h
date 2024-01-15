@@ -17,11 +17,14 @@
 #include "net/base/net_errors.h"
 #include "net/cookies/canonical_cookie.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
-#include "third_party/blink/public/common/mobile_metrics/mobile_friendliness.h"
 #include "third_party/blink/public/common/use_counter/use_counter_feature.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
 
 #include "url/gurl.h"
+
+namespace blink {
+struct JavaScriptFrameworkDetectionResult;
+}  // namespace blink
 
 namespace content {
 class NavigationHandle;
@@ -216,12 +219,15 @@ class PageLoadMetricsObserverInterface {
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) = 0;
 
-  // For prerendered pages, OnPrerenderStart is called instead of OnStart. The
-  // default implementation returns STOP_OBSERVING, so that observers that are
-  // not aware of prerender will not see prerendered page loads.
-  // TODO(crbug.com/1190112): Prerender support is still in progress. Observers
-  // may not receive some signals.
+  // For prerendered pages, OnPrerenderStart is called instead of OnStart.
   virtual ObservePolicy OnPrerenderStart(
+      content::NavigationHandle* navigation_handle,
+      const GURL& currently_committed_url) = 0;
+
+  // For primary pages in the preview mode, OnPreviewStart is called instead of
+  // OnStart. The default implementation in PageLoadMetricsObserver returns
+  // STOP_OBSERVING. See b:291867362 to track the project progress.
+  virtual ObservePolicy OnPreviewStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) = 0;
 
@@ -334,10 +340,7 @@ class PageLoadMetricsObserverInterface {
 
   // The callback is invoked when a soft navigation is detected.
   // See https://bit.ly/soft-navigation for more details.
-  virtual void OnSoftNavigationCountUpdated() = 0;
-
-  virtual void OnMobileFriendlinessUpdate(
-      const blink::MobileFriendliness& mobile_friendliness) = 0;
+  virtual void OnSoftNavigationUpdated(const mojom::SoftNavigationMetrics&) = 0;
 
   // OnInputTimingUpdate is triggered when an updated InputTiming is available
   // at the subframe level. This method may be called multiple times over the
@@ -348,7 +351,14 @@ class PageLoadMetricsObserverInterface {
 
   // OnPageInputTimingUpdate is triggered when an updated InputTiming is
   // available at the page level.
-  virtual void OnPageInputTimingUpdate(uint64_t num_input_events) = 0;
+  virtual void OnPageInputTimingUpdate(uint64_t num_interactions) = 0;
+
+  // OnPageRenderDataChanged is triggered when an updated PageRenderData is
+  // available at the page level. This method may be called multiple times over
+  // the course of the page load.
+  virtual void OnPageRenderDataUpdate(
+      const mojom::FrameRenderDataUpdate& render_data,
+      bool is_main_frame) = 0;
 
   // OnRenderDataUpdate is triggered when an updated PageRenderData is available
   // at the subframe level. This method may be called multiple times over the
@@ -412,6 +422,10 @@ class PageLoadMetricsObserverInterface {
   virtual void OnLoadingBehaviorObserved(content::RenderFrameHost* rfh,
                                          int behavior_flags) = 0;
 
+  virtual void OnJavaScriptFrameworksObserved(
+      content::RenderFrameHost* rfh,
+      const blink::JavaScriptFrameworkDetectionResult&) = 0;
+
   // Invoked when new use counter features are observed across all frames.
   virtual void OnFeaturesUsageObserved(
       content::RenderFrameHost* rfh,
@@ -457,6 +471,11 @@ class PageLoadMetricsObserverInterface {
   // the viewport dimensions themselves changed. Only invoked on the main frame.
   virtual void OnMainFrameViewportRectChanged(
       const gfx::Rect& main_frame_viewport_rect) = 0;
+
+  // Called when an image ad rectangle changed. An empty `image_ad_rect` is used
+  // to signal the removal of the rectangle. Only invoked on the main frame.
+  virtual void OnMainFrameImageAdRectsChanged(
+      const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) = 0;
 
   // Invoked when the UMA metrics subsystem is persisting metrics as the
   // application goes into the background, on platforms where the browser
@@ -531,16 +550,21 @@ class PageLoadMetricsObserverInterface {
   virtual void OnSubFrameDeleted(int frame_tree_node_id) = 0;
 
   // Called when a cookie is read for a resource request or by document.cookie.
-  virtual void OnCookiesRead(const GURL& url,
-                             const GURL& first_party_url,
-                             const net::CookieList& cookie_list,
-                             bool blocked_by_policy) = 0;
+  virtual void OnCookiesRead(
+      const GURL& url,
+      const GURL& first_party_url,
+      bool blocked_by_policy,
+      bool is_ad_tagged,
+      const net::CookieSettingOverrides& cookie_setting_overrides) = 0;
 
   // Called when a cookie is set by a header or via document.cookie.
-  virtual void OnCookieChange(const GURL& url,
-                              const GURL& first_party_url,
-                              const net::CanonicalCookie& cookie,
-                              bool blocked_by_policy) = 0;
+  virtual void OnCookieChange(
+      const GURL& url,
+      const GURL& first_party_url,
+      const net::CanonicalCookie& cookie,
+      bool blocked_by_policy,
+      bool is_ad_tagged,
+      const net::CookieSettingOverrides& cookie_setting_overrides) = 0;
 
   // Called when a storage access attempt by the origin |url| to |storage_type|
   // is checked by the content settings manager. |blocked_by_policy| is false
@@ -553,14 +577,13 @@ class PageLoadMetricsObserverInterface {
   // Called when prefetch is likely to occur in this page load.
   virtual void OnPrefetchLikely() = 0;
 
-  // Called when the page tracked was just activated after being loaded inside a
-  // portal.
-  virtual void DidActivatePortal(base::TimeTicks activation_time) = 0;
-
   // Called when the page tracked was just activated after being prerendered.
   // |navigation_handle| is for the activation navigation.
   virtual void DidActivatePrerenderedPage(
       content::NavigationHandle* navigation_handle) = 0;
+
+  // Called when the previewed page is activated for the tab promotion.
+  virtual void DidActivatePreviewedPage(base::TimeTicks activation_time) = 0;
 
   // Called when V8 per-frame memory usage updates are available. Each
   // MemoryUpdate consists of a GlobalRenderFrameHostId and a nonzero int64_t

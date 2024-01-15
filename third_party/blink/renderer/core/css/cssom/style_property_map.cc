@@ -81,6 +81,20 @@ const CSSValue* StyleValueToCSSValue(
       }
       break;
     }
+    case CSSPropertyID::kClipPath: {
+      // level 1 only accepts single keywords
+      const auto* value = style_value.ToCSSValue();
+      // only 'none' is stored as an identifier, the other keywords are
+      // wrapped in a list.
+      auto* identifier_value = DynamicTo<CSSIdentifierValue>(value);
+      if (identifier_value && !value->IsCSSWideKeyword() &&
+          identifier_value->GetValueID() != CSSValueID::kNone) {
+        CSSValueList* list = CSSValueList::CreateSpaceSeparated();
+        list->Append(*style_value.ToCSSValue());
+        return list;
+      }
+      break;
+    }
     case CSSPropertyID::kContain:
     case CSSPropertyID::kContainerType: {
       // level 1 only accepts single values, which are stored internally
@@ -213,8 +227,9 @@ const CSSValue* CoerceStyleValueOrString(
       const auto& values = StyleValueFactory::FromString(
           property.PropertyID(), custom_property_name, value->GetAsString(),
           MakeGarbageCollected<CSSParserContext>(execution_context));
-      if (values.size() != 1U)
+      if (values.size() != 1U) {
         return nullptr;
+      }
       return StyleValueToCSSValue(property, custom_property_name, *values[0],
                                   execution_context);
     }
@@ -232,24 +247,29 @@ const CSSValue* CoerceStyleValuesOrStrings(
   DCHECK(property.IsRepeated());
   DCHECK_EQ(property.IDEquals(CSSPropertyID::kVariable),
             !custom_property_name.IsNull());
-  if (values.empty())
+  if (values.empty()) {
     return nullptr;
+  }
 
   CSSStyleValueVector style_values =
       StyleValueFactory::CoerceStyleValuesOrStrings(
           property, custom_property_name, values, execution_context);
 
-  if (style_values.empty())
+  if (style_values.empty()) {
     return nullptr;
+  }
 
   CSSValueList* result = CssValueListForPropertyID(property.PropertyID());
   for (const auto& style_value : style_values) {
     const CSSValue* css_value = StyleValueToCSSValue(
         property, custom_property_name, *style_value, execution_context);
-    if (!css_value)
+    if (!css_value) {
       return nullptr;
-    if (css_value->IsCSSWideKeyword() || css_value->IsVariableReferenceValue())
+    }
+    if (css_value->IsCSSWideKeyword() ||
+        css_value->IsVariableReferenceValue()) {
       return style_values.size() == 1U ? css_value : nullptr;
+    }
     result->Append(*css_value);
   }
 
@@ -328,10 +348,11 @@ void StylePropertyMap::set(
     return;
   }
 
-  if (property_id == CSSPropertyID::kVariable)
+  if (property_id == CSSPropertyID::kVariable) {
     SetCustomProperty(custom_property_name, *result);
-  else
+  } else {
     SetProperty(property_id, *result);
+  }
 }
 
 void StylePropertyMap::append(
@@ -339,8 +360,9 @@ void StylePropertyMap::append(
     const String& property_name,
     const HeapVector<Member<V8UnionCSSStyleValueOrString>>& values,
     ExceptionState& exception_state) {
-  if (values.empty())
+  if (values.empty()) {
     return;
+  }
 
   const CSSPropertyID property_id =
       CssPropertyID(execution_context, property_name);
@@ -365,6 +387,25 @@ void StylePropertyMap::append(
 
   CSSValueList* current_value = nullptr;
   if (const CSSValue* css_value = GetProperty(property_id)) {
+    if (css_value->IsVariableReferenceValue() ||
+        css_value->IsPendingSubstitutionValue()) {
+      // https://drafts.css-houdini.org/css-typed-om/#dom-stylepropertymap-append
+      // 8. If props[property] contains a var() reference, throw a TypeError.
+      exception_state.ThrowTypeError(
+          "Cannot append to a list containing a variable reference");
+      return;
+    }
+    if (!css_value->IsValueList()) {
+      // The standard doesn't seem to cover this explicitly
+      // (https://github.com/w3c/css-houdini-drafts/issues/823),
+      // but the only really reasonable solution seems to be
+      // to throw a TypeError.
+      //
+      // This covers e.g. system-wide CSS keywords, like inherit.
+      exception_state.ThrowTypeError(
+          "Cannot append to something that is not a list");
+      return;
+    }
     current_value = To<CSSValueList>(css_value)->Copy();
   } else {
     current_value = CssValueListForPropertyID(property_id);

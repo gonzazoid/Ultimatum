@@ -9,6 +9,8 @@
 #include <limits>
 #include <utility>
 
+#include "base/feature_list.h"
+#include "base/features.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
@@ -17,7 +19,9 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/default_clock.h"
 #include "build/build_config.h"
 #include "components/sessions/core/session_constants.h"
 #include "components/sessions/core/session_service_commands.h"
@@ -43,6 +47,13 @@ constexpr int32_t kFileSignature = 0x53534E53;
 
 // Length (in bytes) of the nonce (used when encrypting).
 constexpr int kNonceLength = 12;
+
+// Kill switch for the change to stop calling `File::Flush()` when appending
+// commands to a file. This can be removed if the change rolls out without
+// causing issues.
+BASE_FEATURE(kFlushAfterAppending,
+             "SessionStorageFlushAfterAppendingCommands",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // The file header is the first bytes written to the file,
 // and is used to identify the file as one written by us.
@@ -172,6 +183,9 @@ class SessionFileReader {
   // The file.
   std::unique_ptr<base::File> file_;
 
+  // The number of bytes successfully read from `file_`.
+  int bytes_read_ = 0;
+
   // Position in buffer_ of the data.
   size_t buffer_position_ = 0;
 
@@ -200,6 +214,12 @@ CommandStorageBackend::ReadCommandsResult SessionFileReader::Read() {
     if (result.command->id() != kInitialStateMarkerCommandId)
       commands_result.commands.push_back(std::move(result.command));
   }
+
+  LOG_IF(ERROR, result.error_reading)
+      << "Commands successfully read before error: "
+      << commands_result.commands.size()
+      << ", bytes successfully read from file before error: " << bytes_read_;
+
   // `error_reading` is only set if `command` is null.
   commands_result.error_reading = result.error_reading;
   return commands_result;
@@ -213,10 +233,23 @@ bool SessionFileReader::ReadHeader() {
   if (!file_->IsValid())
     return false;
   FileHeader header;
-  const int read_count =
+  CHECK_EQ(0, bytes_read_);
+  bytes_read_ =
       file_->ReadAtCurrentPos(reinterpret_cast<char*>(&header), sizeof(header));
-  if (read_count != sizeof(header) || header.signature != kFileSignature)
+  if (bytes_read_ < 0) {
+    VLOG(1) << "SessionFileReader::ReadHeader, failed to read header. "
+               "Attempted to read "
+            << sizeof(header)
+            << " bytes into buffer but encountered file read error: "
+            << base::File::ErrorToString(base::File::GetLastFileError());
+  }
+  if (bytes_read_ != sizeof(header) || header.signature != kFileSignature) {
+    VLOG(1) << "SessionFileReader::ReadHeader, failed to read header. "
+               "Attempted to read "
+            << sizeof(header) << " bytes into buffer but got " << bytes_read_
+            << " bytes instead.";
     return false;
+  }
   version_ = header.version;
   const bool encrypt = aead_.get() != nullptr;
   return (encrypt && (version_ == kEncryptedFileVersion ||
@@ -338,15 +371,21 @@ bool SessionFileReader::FillBuffer() {
   }
   buffer_position_ = 0;
   DCHECK(buffer_position_ + available_count_ < buffer_.size());
-  int to_read = static_cast<int>(buffer_.size() - available_count_);
-  int read_count =
+  const int to_read = static_cast<int>(buffer_.size() - available_count_);
+  const int read_count =
       file_->ReadAtCurrentPos(&(buffer_[available_count_]), to_read);
   if (read_count < 0) {
-    // TODO(sky): communicate/log an error here.
+    VLOG(1) << "SessionFileReader::FillBuffer, failed to read header. "
+               "Attempted to read "
+            << to_read << " bytes into buffer but encountered file read error: "
+            << base::File::ErrorToString(base::File::GetLastFileError())
+            << "\nRead " << bytes_read_
+            << " bytes successfully from file before error.";
     return false;
   }
   if (read_count == 0)
     return false;
+  bytes_read_ += read_count;
   available_count_ += read_count;
   return true;
 }
@@ -422,6 +461,9 @@ CommandStorageBackend::ReadCommandsResult::~ReadCommandsResult() = default;
 // CommandStorageBackend
 // -------------------------------------------------------------
 
+CommandStorageBackend::OpenFile::OpenFile() = default;
+CommandStorageBackend::OpenFile::~OpenFile() = default;
+
 // static
 const int CommandStorageBackend::kFileReadBufferSize = 1024;
 
@@ -433,12 +475,14 @@ CommandStorageBackend::CommandStorageBackend(
     scoped_refptr<base::SequencedTaskRunner> owning_task_runner,
     const base::FilePath& path,
     SessionType type,
-    const std::vector<uint8_t>& decryption_key)
+    const std::vector<uint8_t>& decryption_key,
+    base::Clock* clock)
     : RefCountedDeleteOnSequence(owning_task_runner),
       type_(type),
       supplied_path_(path),
       initial_decryption_key_(decryption_key),
-      callback_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      callback_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
+      clock_(clock ? clock : base::DefaultClock::GetInstance()) {
   // This is invoked on the main thread, don't do file access here.
 }
 
@@ -464,8 +508,9 @@ void CommandStorageBackend::AppendCommands(
   // initial state has been supplied. To do otherwise would mean the file never
   // contains the marker, and would not be considered
   // valid. This includes first time through.
-  if (!truncate && (!file_ || !file_->IsValid()))
+  if (!truncate && !open_file_) {
     return;
+  }
 
   if (truncate) {
     CloseFile();
@@ -484,30 +529,39 @@ void CommandStorageBackend::AppendCommands(
     DCHECK(crypto_key.empty());
   }
 
-  // Make sure and check |file_|, if opening the file failed |file_| will be
-  // null.
-  if (truncate || !file_ || !file_->IsValid())
+  // Make sure and check `open_file_`, if opening the file failed `open_file_`
+  // will be null.
+  if (truncate || !open_file_) {
     TruncateOrOpenFile();
+  }
 
-  // Check |file_| again as TruncateOrOpenFile() may fail.
-  if (file_ && file_->IsValid() &&
-      !AppendCommandsToFile(file_.get(), commands)) {
+  // Check `open_file_` again as TruncateOrOpenFile() may fail.
+  if (open_file_ && !AppendCommandsToFile(open_file_->file.get(), commands)) {
     CloseFile();
   }
 
-  if (truncate && file_ && file_->IsValid()) {
-    did_write_marker_ = true;
-    if (last_file_with_valid_marker_) {
-      DCHECK_NE(*last_file_with_valid_marker_, current_path_);
-      base::DeleteFile(*last_file_with_valid_marker_);
-      last_file_with_valid_marker_.reset();
+  if (truncate && open_file_) {
+    // When `truncate` is true, a new file should be created, which means
+    // `did_write_marker` should be false.
+    DCHECK(!open_file_->did_write_marker);
+    open_file_->did_write_marker = true;
+    if (second_to_last_path_with_valid_marker_) {
+      // `last_or_current_path_with_valid_marker_` is only set after a
+      // truncation, which signals a new path should be used and that the two
+      // paths should not be equal (TruncateOrOpenFile() assigns a new path
+      // every time it's called).
+      CHECK_NE(*second_to_last_path_with_valid_marker_, open_file_->path);
+      base::DeleteFile(*second_to_last_path_with_valid_marker_);
     }
-    last_file_with_valid_marker_ = current_path_;
+    second_to_last_path_with_valid_marker_ =
+        std::move(last_or_current_path_with_valid_marker_);
+    last_or_current_path_with_valid_marker_ = open_file_->path;
   }
 
-  // If `file_` is null, there was an error in writing.
-  if (!file_ && error_callback)
+  // If `open_file_` is null, there was an error in writing.
+  if (!open_file_ && error_callback) {
     callback_task_runner_->PostTask(FROM_HERE, std::move(error_callback));
+  }
 }
 
 // static
@@ -542,15 +596,22 @@ CommandStorageBackend::ReadCommandsResult
 CommandStorageBackend::ReadLastSessionCommands() {
   InitIfNecessary();
 
-  if (last_session_info_)
+  if (last_session_info_) {
+    VLOG(1) << "CommandStorageBackend::ReadLastSessionCommands, reading "
+               "commands from: "
+            << last_session_info_->path;
     return ReadCommandsFromFile(last_session_info_->path,
                                 initial_decryption_key_);
+  }
   return {};
 }
 
 void CommandStorageBackend::DeleteLastSession() {
   InitIfNecessary();
   if (last_session_info_) {
+    VLOG(1)
+        << "CommandStorageBackend::DeleteLastSession, deleting session file: "
+        << last_session_info_->path;
     base::DeleteFile(last_session_info_->path);
     last_session_info_.reset();
   }
@@ -566,15 +627,16 @@ void CommandStorageBackend::MoveCurrentSessionToLastSession() {
 
   // Move current session to last.
   absl::optional<SessionInfo> new_last_session_info;
-  if (last_file_with_valid_marker_) {
+  if (last_or_current_path_with_valid_marker_) {
     new_last_session_info =
-        SessionInfo{*last_file_with_valid_marker_, timestamp_};
-    last_file_with_valid_marker_.reset();
+        SessionInfo{*last_or_current_path_with_valid_marker_, timestamp_};
+    last_or_current_path_with_valid_marker_.reset();
   }
   last_session_info_ = new_last_session_info;
+  VLOG(1) << "CommandStorageBackend::MoveCurrentSessionToLastSession, moved "
+             "current session to: "
+          << (last_session_info_ ? last_session_info_->path : base::FilePath());
 
-  // This ensures TruncateOrOpenFile() opens the file.
-  current_path_.clear();
   TruncateOrOpenFile();
 }
 
@@ -600,7 +662,9 @@ bool CommandStorageBackend::AppendCommandsToFile(
     }
     commands_written_++;
   }
-  file->Flush();
+  if (base::FeatureList::IsEnabled(kFlushAfterAppending)) {
+    file->Flush();
+  }
   return true;
 }
 
@@ -638,22 +702,27 @@ CommandStorageBackend::ReadCommandsFromFile(
 }
 
 void CommandStorageBackend::CloseFile() {
-  file_.reset();
+  if (!open_file_) {
+    return;
+  }
+
+  // Close the file first, so that if we delete the file we won't have it open
+  // for writing (which may cause deletion to fail).
+  open_file_->file.reset();
 
   // If a marker wasn't written, no need to keep the current file.
-  if (!did_write_marker_ && !current_path_.empty())
-    base::DeleteFile(current_path_);
+  if (!open_file_->did_write_marker) {
+    base::DeleteFile(open_file_->path);
+  }
+
+  open_file_.reset();
 }
 
 void CommandStorageBackend::TruncateOrOpenFile() {
   DCHECK(inited_);
   CloseFile();
-  DCHECK(!file_);
-  base::Time new_timestamp = base::Time::Now();
-  // Ensure we don't reuse the current file (this is extremely unlikely to
-  // ever be true).
-  if (new_timestamp == timestamp_)
-    new_timestamp += base::Microseconds(1);
+  DCHECK(!open_file_);
+  base::Time new_timestamp = clock_->Now();
   if (last_session_info_) {
     // Ensure that the last session's timestamp is before the current file's.
     // This might not be true if the system clock has changed.
@@ -661,11 +730,20 @@ void CommandStorageBackend::TruncateOrOpenFile() {
       new_timestamp = last_session_info_->timestamp + base::Microseconds(1);
     }
   }
+  // Ensure we don't reuse the timestamp, and that it's always increasing. If
+  // we didn't do this, and the clock time goes backwards, we could potentially
+  // reuse a filepath, resulting in writing on top of an existing file.
+  if (new_timestamp <= timestamp_) {
+    new_timestamp = timestamp_ + base::Microseconds(1);
+  }
   timestamp_ = new_timestamp;
-  current_path_ = FilePathFromTime(type_, supplied_path_, timestamp_);
-  file_ = OpenAndWriteHeader(current_path_);
+  std::unique_ptr<OpenFile> open_file = std::make_unique<OpenFile>();
+  open_file->path = FilePathFromTime(type_, supplied_path_, timestamp_);
+  open_file->file = OpenAndWriteHeader(open_file->path);
+  if (open_file->file) {
+    open_file_ = std::move(open_file);
+  }
   commands_written_ = 0;
-  did_write_marker_ = false;
 }
 
 std::unique_ptr<base::File> CommandStorageBackend::OpenAndWriteHeader(
@@ -768,8 +846,8 @@ bool CommandStorageBackend::AppendEncryptedCommandToFile(
 absl::optional<CommandStorageBackend::SessionInfo>
 CommandStorageBackend::FindLastSessionFile() const {
   // Determine the session with the most recent timestamp. This is called
-  // at startup, before `current_path_` is set, so no need to check it.
-  DCHECK(current_path_.empty());
+  // at startup, before a file has been opened for writing.
+  DCHECK(!open_file_);
   for (const SessionInfo& session : GetSessionFilesSortedByReverseTimestamp()) {
     if (CanUseFileForLastSession(session.path))
       return session;
@@ -787,8 +865,8 @@ CommandStorageBackend::FindLastSessionFile() const {
 
 void CommandStorageBackend::DeleteLastSessionFiles() const {
   // Delete session files whose paths do not match the last session path. This
-  // at startup, before `current_path_` is set, so no need to check it.
-  DCHECK(current_path_.empty());
+  // is called at startup, before a file has been opened for writing.
+  DCHECK(!open_file_);
   for (const SessionInfo& session : GetSessionFilesSortedByReverseTimestamp()) {
     if (!last_session_info_ || session.path != last_session_info_->path)
       base::DeleteFile(session.path);

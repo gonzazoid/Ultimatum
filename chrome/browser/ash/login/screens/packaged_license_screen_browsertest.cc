@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/login/screens/packaged_license_screen.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/screen_manager.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
@@ -14,7 +14,7 @@
 #include "chrome/browser/ash/policy/enrollment/enrollment_config.h"
 #include "chrome/browser/ash/policy/server_backed_state/server_backed_device_state.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/webui/chromeos/login/packaged_license_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/packaged_license_screen_handler.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -105,7 +105,7 @@ IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, DontEnroll) {
   EXPECT_THAT(
       histogram_tester_.GetAllSamples("OOBE.StepShownStatus.Packaged-license"),
       ElementsAre(base::Bucket(
-          static_cast<int>(WizardController::ScreenShownStatus::kShown), 1)));
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kShown), 1)));
 }
 
 IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, Enroll) {
@@ -126,7 +126,7 @@ IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, Enroll) {
   EXPECT_THAT(
       histogram_tester_.GetAllSamples("OOBE.StepShownStatus.Packaged-license"),
       ElementsAre(base::Bucket(
-          static_cast<int>(WizardController::ScreenShownStatus::kShown), 1)));
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kShown), 1)));
 }
 
 IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, NoLicense) {
@@ -144,7 +144,8 @@ IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, NoLicense) {
   EXPECT_THAT(
       histogram_tester_.GetAllSamples("OOBE.StepShownStatus.Packaged-license"),
       ElementsAre(base::Bucket(
-          static_cast<int>(WizardController::ScreenShownStatus::kSkipped), 1)));
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kSkipped),
+          1)));
 }
 
 }  // namespace ash

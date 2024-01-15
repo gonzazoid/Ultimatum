@@ -31,6 +31,37 @@ class UnsentLogStoreMetrics;
 // Maintains a list of unsent logs that are written and restored from disk.
 class UnsentLogStore : public LogStore {
  public:
+  // Configurable capacities for unsent log store.
+  //
+  // When saving logs to disk, stores either the first |min_log_count| logs, or
+  // at least |min_queue_size_bytes| bytes of logs. If |this| contains more than
+  // |min_log_count| logs AND a total bytes larger than |min_queue_size_bytes|,
+  // older logs will be dropped for newer logs.
+  //
+  // Either |min_queue_size_bytes| or |min_log_count| must be greater than 0.
+  //
+  // Individual logs greater than |max_log_size_bytes| will not be written to
+  // disk. If |max_log_size_bytes| is zero, logs of any size will be written to
+  // disk.
+  struct UnsentLogStoreLimits {
+    // Minimum number of unsent logs persisted before older logs are trimmed.
+    //
+    // log_count >= |min_log_count| AND total_queue_bytes >=
+    // |min_queue_size_bytes| for logs to be dropped. See comments for
+    // UnsentLogStoreLimits for more details.
+    size_t min_log_count = 0;
+
+    // Minimum bytes that the queue can hold before older logs are trimmed.
+    //
+    // Number of logs >= |min_log_count| AND total_queue_size >=
+    // |min_queue_size_bytes| for logs to be dropped. See comments for
+    // UnsentLogStoreLimits for more details.
+    size_t min_queue_size_bytes = 0;
+
+    // Logs greater than this size will not be written to disk.
+    size_t max_log_size_bytes = 0;
+  };
+
   // Constructs an UnsentLogStore that stores data in |local_state| under the
   // preference |log_data_pref_name|.
   // Calling code is responsible for ensuring that the lifetime of |local_state|
@@ -39,12 +70,6 @@ class UnsentLogStore : public LogStore {
   // The optional |metadata_pref_name| is the preference that is used to store
   // the unsent logs info while the unset logs are persisted. That info will be
   // recorded as UMA metrics in next browser startup.
-  //
-  // When saving logs to disk, stores either the first |min_log_count| logs, or
-  // at least |min_log_bytes| bytes of logs, whichever is greater.
-  //
-  // If the optional |max_log_size| parameter is non-zero, all logs larger than
-  // that limit will be skipped when writing to disk.
   //
   // |signing_key| is used to produce an HMAC-SHA256 signature of the logged
   // data, which will be uploaded with the log and used to validate data
@@ -56,9 +81,7 @@ class UnsentLogStore : public LogStore {
                  PrefService* local_state,
                  const char* log_data_pref_name,
                  const char* metadata_pref_name,
-                 size_t min_log_count,
-                 size_t min_log_bytes,
-                 size_t max_log_size,
+                 UnsentLogStoreLimits log_store_limits,
                  const std::string& signing_key,
                  MetricsLogsEventManager* logs_event_manager);
 
@@ -69,7 +92,10 @@ class UnsentLogStore : public LogStore {
 
   struct LogInfo {
     LogInfo();
-    LogInfo(const LogInfo& other);
+
+    LogInfo(const LogInfo&) = delete;
+    LogInfo& operator=(const LogInfo&) = delete;
+
     ~LogInfo();
 
     // Initializes the members based on uncompressed |log_data|,
@@ -79,10 +105,16 @@ class UnsentLogStore : public LogStore {
     // will be compressed and stored in |compressed_log_data|. |log_timestamp|
     // is stored as is. |log_metadata| is any optional metadata that will be
     // attached to the log.
-    // |metrics| is the parent's metrics_ object, and should not be held.
-    void Init(UnsentLogStoreMetrics* metrics,
-              const std::string& log_data,
+    // TODO(crbug/1052796): Make this a ctor instead.
+    void Init(const std::string& log_data,
               const std::string& log_timestamp,
+              const std::string& signing_key,
+              const LogMetadata& log_metadata);
+
+    // Same as above, but the |timestamp| field will be filled with the current
+    // time.
+    // TODO(crbug/1052796): Make this a ctor instead.
+    void Init(const std::string& log_data,
               const std::string& signing_key,
               const LogMetadata& log_metadata);
 
@@ -112,15 +144,30 @@ class UnsentLogStore : public LogStore {
   const std::string& staged_log_hash() const override;
   const std::string& staged_log_signature() const override;
   absl::optional<uint64_t> staged_log_user_id() const override;
+  const LogMetadata staged_log_metadata() const override;
   void StageNextLog() override;
-  void DiscardStagedLog() override;
+  void DiscardStagedLog(base::StringPiece reason = "") override;
   void MarkStagedLogAsSent() override;
   void TrimAndPersistUnsentLogs(bool overwrite_in_memory_store) override;
   void LoadPersistedUnsentLogs() override;
 
-  // Adds a UMA log to the list. |log_metadata| refers to metadata associated
-  // with the log.
-  void StoreLog(const std::string& log_data, const LogMetadata& log_metadata);
+  // Adds a log to the list. |log_metadata| refers to metadata associated with
+  // the log. Before being stored, the data will be compressed, and a hash and
+  // signature will be computed.
+  // TODO(crbug/1052796): Remove this function, and use StoreLogInfo()
+  // everywhere instead.
+  void StoreLog(const std::string& log_data,
+                const LogMetadata& log_metadata,
+                MetricsLogsEventManager::CreateReason reason);
+
+  // Adds a log to the list, represented by a LogInfo object. This is useful
+  // if the LogInfo instance needs to be created outside the main thread
+  // (since creating a LogInfo from log data requires heavy work). Note that we
+  // also pass the size of the log data before being compressed. This is simply
+  // for calculating and emitting some metrics, and is otherwise unused.
+  void StoreLogInfo(std::unique_ptr<LogInfo> log_info,
+                    size_t uncompressed_log_size,
+                    MetricsLogsEventManager::CreateReason reason);
 
   // Gets log data at the given index in the list.
   const std::string& GetLogAtIndex(size_t index);
@@ -142,6 +189,9 @@ class UnsentLogStore : public LogStore {
 
   // The number of elements currently stored.
   size_t size() const { return list_.size(); }
+
+  // The signing key used to compute the signature for a log.
+  const std::string& signing_key() const { return signing_key_; }
 
   // Returns |logs_event_manager_|.
   MetricsLogsEventManager* GetLogsEventManagerForTesting() const {
@@ -170,8 +220,10 @@ class UnsentLogStore : public LogStore {
   void RecordMetaDataMetrics();
 
   // Wrapper functions for the notify functions of |logs_event_manager_|.
-  void NotifyLogCreated(LogInfo& info);
-  void NotifyLogsCreated(base::span<std::unique_ptr<LogInfo>> logs);
+  void NotifyLogCreated(const LogInfo& info,
+                        MetricsLogsEventManager::CreateReason reason);
+  void NotifyLogsCreated(base::span<std::unique_ptr<LogInfo>> logs,
+                         MetricsLogsEventManager::CreateReason reason);
   void NotifyLogEvent(MetricsLogsEventManager::LogEvent event,
                       base::StringPiece log_hash,
                       base::StringPiece message = "");
@@ -194,14 +246,7 @@ class UnsentLogStore : public LogStore {
   // nullptr if the metadata isn't desired.
   const char* metadata_pref_name_;
 
-  // We will keep at least this |min_log_count_| logs or |min_log_bytes_| bytes
-  // of logs, whichever is greater, when trimming logs.  These apply after
-  // skipping logs greater than |max_log_size_|.
-  const size_t min_log_count_;
-  const size_t min_log_bytes_;
-
-  // Logs greater than this size will not be written to disk.
-  const size_t max_log_size_;
+  const UnsentLogStoreLimits log_store_limits_;
 
   // Used to create a signature of log data, in order to verify reported data is
   // authentic.

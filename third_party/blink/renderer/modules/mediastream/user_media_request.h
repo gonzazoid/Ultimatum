@@ -36,44 +36,43 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/mediastream/capture_controller.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 
 namespace blink {
 
 class LocalDOMWindow;
-class MediaErrorState;
 class MediaStreamConstraints;
 class ScriptWrappable;
 class TransferredMediaStreamTrack;
 class UserMediaClient;
 
-enum class UserMediaRequestType { kUserMedia, kDisplayMedia, kDisplayMediaSet };
+enum class UserMediaRequestType { kUserMedia, kDisplayMedia, kAllScreensMedia };
+
+enum class UserMediaRequestResult {
+  kOk = 0,
+  kTimedOut = 1,
+  kSecurityError = 2,
+  kInvalidConstraints = 3,
+  kOverConstrainedError = 4,
+  kContextDestroyed = 5,
+  kNotAllowedError = 6,
+  kNotFoundError = 7,
+  kAbortError = 8,
+  kNotReadableError = 9,
+  kNotSupportedError = 10,
+  kInsecureContext = 11,
+  kInvalidStateError = 12,
+  kMaxValue = kInvalidStateError
+};
 
 class MODULES_EXPORT UserMediaRequest final
     : public GarbageCollected<UserMediaRequest>,
       public ExecutionContextLifecycleObserver {
  public:
-  enum class Error {
-    kNotSupported,
-    kSecurityError,
-    kPermissionDenied,
-    kPermissionDismissed,
-    kInvalidState,
-    kDevicesNotFound,
-    kTabCapture,
-    kScreenCapture,
-    kCapture,
-    kTrackStart,
-    kFailedDueToShutdown,
-    kKillSwitchOn,
-    kSystemPermissionDenied,
-    kDeviceInUse
-  };
-
   class Callbacks : public GarbageCollected<Callbacks> {
    public:
     virtual ~Callbacks() = default;
@@ -81,7 +80,9 @@ class MODULES_EXPORT UserMediaRequest final
     virtual void OnSuccess(const MediaStreamVector&,
                            CaptureController* capture_controller) = 0;
     virtual void OnError(ScriptWrappable* callback_this_value,
-                         const V8MediaStreamError* error) = 0;
+                         const V8MediaStreamError* error,
+                         CaptureController* capture_controller,
+                         UserMediaRequestResult result) = 0;
 
     virtual void Trace(Visitor*) const {}
 
@@ -96,7 +97,7 @@ class MODULES_EXPORT UserMediaRequest final
                                   UserMediaRequestType media_type,
                                   const MediaStreamConstraints* options,
                                   Callbacks*,
-                                  MediaErrorState&,
+                                  ExceptionState&,
                                   IdentifiableSurface surface);
   static UserMediaRequest* CreateForTesting(const MediaConstraints& audio,
                                             const MediaConstraints& video);
@@ -121,7 +122,8 @@ class MODULES_EXPORT UserMediaRequest final
   void OnMediaStreamInitialized(MediaStream* stream);
   void OnMediaStreamsInitialized(MediaStreamVector streams);
   void FailConstraint(const String& constraint_name, const String& message);
-  void Fail(Error name, const String& message);
+  void Fail(mojom::blink::MediaStreamRequestResult error,
+            const String& message);
 
   UserMediaRequestType MediaRequestType() const;
   bool Audio() const;
@@ -160,12 +162,14 @@ class MODULES_EXPORT UserMediaRequest final
 
   void set_exclude_system_audio(bool value) { exclude_system_audio_ = value; }
   bool exclude_system_audio() const { return exclude_system_audio_; }
+
   void set_exclude_self_browser_surface(bool value) {
     exclude_self_browser_surface_ = value;
   }
   bool exclude_self_browser_surface() const {
     return exclude_self_browser_surface_;
   }
+
   void set_preferred_display_surface(
       mojom::blink::PreferredDisplaySurface value) {
     preferred_display_surface_ = value;
@@ -173,11 +177,26 @@ class MODULES_EXPORT UserMediaRequest final
   mojom::blink::PreferredDisplaySurface preferred_display_surface() const {
     return preferred_display_surface_;
   }
+
   void set_dynamic_surface_switching_requested(bool value) {
     dynamic_surface_switching_requested_ = value;
   }
   bool dynamic_surface_switching_requested() const {
     return dynamic_surface_switching_requested_;
+  }
+
+  void set_exclude_monitor_type_surfaces(bool value) {
+    exclude_monitor_type_surfaces_ = value;
+  }
+  bool exclude_monitor_type_surfaces() const {
+    return exclude_monitor_type_surfaces_;
+  }
+
+  void set_suppress_local_audio_playback(bool value) {
+    suppress_local_audio_playback_ = value;
+  }
+  bool suppress_local_audio_playback() const {
+    return suppress_local_audio_playback_;
   }
 
   bool auto_select_all_screens() const { return auto_select_all_screens_; }
@@ -219,6 +238,8 @@ class MODULES_EXPORT UserMediaRequest final
   mojom::blink::PreferredDisplaySurface preferred_display_surface_ =
       mojom::blink::PreferredDisplaySurface::NO_PREFERENCE;
   bool dynamic_surface_switching_requested_ = true;
+  bool exclude_monitor_type_surfaces_ = false;
+  bool suppress_local_audio_playback_ = false;
   const bool auto_select_all_screens_ = false;
   bool should_disable_hardware_noise_suppression_;
   bool has_transient_user_activation_ = false;

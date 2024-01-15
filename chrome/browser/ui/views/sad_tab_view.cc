@@ -6,12 +6,11 @@
 
 #include <string>
 
-#include "base/metrics/histogram_macros.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/views/bulleted_label_list_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -23,6 +22,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
+#include "ui/compositor/layer.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/native_theme/common_theme.h"
@@ -37,6 +37,10 @@
 #include "ui/views/layout/flex_layout_view.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace {
 
@@ -454,9 +458,11 @@ std::u16string ErrorToString(int error_code) {
       break;
     default:
       // Render small error values as integers, and larger values as hex.
-      error_string = base::StringPrintf(
-          (error_code >= 0 && error_code < 65536) ? "%lu" : "0x%08lX",
-          static_cast<unsigned long>(error_code));
+      error_string =
+          (error_code >= 0 && error_code < 65536)
+              ? base::NumberToString(error_code)
+              : base::StringPrintf("0x%08lX",
+                                   static_cast<unsigned long>(error_code));
   }
 
   return base::UTF8ToUTF16(error_string);
@@ -549,23 +555,15 @@ SadTabView::SadTabView(content::WebContents* web_contents, SadTabKind kind)
   auto* actions_container =
       container->AddChildView(std::make_unique<views::FlexLayoutView>());
   actions_container->SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
-  // Do not show the help link in the kiosk session to prevent escape from a
-  // kiosk app.
-  if (!profiles::IsKioskSession()) {
-    auto* help_link =
-        actions_container->AddChildView(std::make_unique<views::Link>(
-            l10n_util::GetStringUTF16(GetHelpLinkTitle())));
-    help_link->SetCallback(base::BindRepeating(
-        &SadTab::PerformAction, base::Unretained(this), Action::HELP_LINK));
-    help_link->SetProperty(views::kTableVertAlignKey,
-                           views::LayoutAlignment::kCenter);
-  }
+
+  EnableHelpLink(actions_container);
+
   action_button_ =
       actions_container->AddChildView(std::make_unique<views::MdTextButton>(
           base::BindRepeating(&SadTabView::PerformAction,
                               base::Unretained(this), Action::BUTTON),
           l10n_util::GetStringUTF16(GetButtonTitle())));
-  action_button_->SetProminent(true);
+  action_button_->SetStyle(ui::ButtonStyle::kProminent);
   action_button_->SetProperty(
       views::kFlexBehaviorKey,
       views::FlexSpecification(views::LayoutOrientation::kHorizontal,
@@ -576,8 +574,14 @@ SadTabView::SadTabView(content::WebContents* web_contents, SadTabKind kind)
   // Needed to ensure this View is drawn even if a sibling (such as dev tools)
   // has a z-order.
   SetPaintToLayer();
-
   AttachToWebView();
+
+  if (owner_) {
+    // If the `owner_` ContentsWebView has a rounded background, the sad tab
+    // should also have matching rounded corners as well.
+    SetBackgroundRadii(
+        static_cast<ContentsWebView*>(owner_)->background_radii());
+  }
 
   // Make the accessibility role of this view an alert dialog, and
   // put focus on the action button. This causes screen readers to
@@ -600,6 +604,20 @@ void SadTabView::ReinstallInWebView() {
   AttachToWebView();
 }
 
+gfx::RoundedCornersF SadTabView::GetBackgroundRadii() const {
+  CHECK(layer());
+  return layer()->rounded_corner_radii();
+}
+
+void SadTabView::SetBackgroundRadii(const gfx::RoundedCornersF& radii) {
+  // Since SadTabView paints onto its own layer and it is leaf layer, we can
+  // round the background by applying rounded corners to the layer without
+  // clipping any other browser content.
+  CHECK(layer());
+  layer()->SetRoundedCornerRadius(radii);
+  layer()->SetIsFastRoundedCorner(/*enable=*/true);
+}
+
 void SadTabView::OnPaint(gfx::Canvas* canvas) {
   if (!painted_) {
     RecordFirstPaint();
@@ -613,7 +631,7 @@ void SadTabView::RemovedFromWidget() {
 }
 
 void SadTabView::AttachToWebView() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
   // This can be null during prefetch.
   if (!browser)
     return;
@@ -630,6 +648,23 @@ void SadTabView::AttachToWebView() {
     owner_ = web_view;
     owner_->SetCrashedOverlayView(this);
   }
+}
+
+void SadTabView::EnableHelpLink(views::FlexLayoutView* actions_container) {
+#if BUILDFLAG(IS_CHROMEOS)
+  // Do not show the help link in the kiosk session to prevent escape from a
+  // kiosk app.
+  if (chromeos::IsKioskSession()) {
+    return;
+  }
+#endif
+  auto* help_link =
+      actions_container->AddChildView(std::make_unique<views::Link>(
+          l10n_util::GetStringUTF16(GetHelpLinkTitle())));
+  help_link->SetCallback(base::BindRepeating(
+      &SadTab::PerformAction, base::Unretained(this), Action::HELP_LINK));
+  help_link->SetProperty(views::kTableVertAlignKey,
+                         views::LayoutAlignment::kCenter);
 }
 
 void SadTabView::OnBoundsChanged(const gfx::Rect& previous_bounds) {
@@ -649,5 +684,5 @@ SadTab* SadTab::Create(content::WebContents* web_contents, SadTabKind kind) {
   return new SadTabView(web_contents, kind);
 }
 
-BEGIN_METADATA(SadTabView, views::View)
+BEGIN_METADATA(SadTabView)
 END_METADATA

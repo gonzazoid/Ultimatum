@@ -6,9 +6,9 @@
 #define CHROME_BROWSER_MEDIA_ROUTER_MEDIA_ROUTER_FEATURE_H_
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -26,12 +26,7 @@ bool MediaRouterEnabled(content::BrowserContext* context);
 // process.
 void ClearMediaRouterStoredPrefsForTesting();
 
-#if BUILDFLAG(IS_ANDROID)
-// If enabled, the sink discovery on Caf MRP is run asynchronously when the main
-// thread is idle.
-BASE_DECLARE_FEATURE(kCafMRPDeferredDiscovery);
-#else
-
+#if !BUILDFLAG(IS_ANDROID)
 // Enables the media router. Can be disabled in tests unrelated to
 // Media Router where it interferes. Can also be useful to disable for local
 // development on Mac because DIAL local discovery opens a local port
@@ -50,8 +45,26 @@ BASE_DECLARE_FEATURE(kGlobalMediaControlsCastStartStop);
 // Presentation API. If disabled, only the allowlisted sites can do so.
 BASE_DECLARE_FEATURE(kAllowAllSitesToInitiateMirroring);
 
-// If enabled, users can request Media Remoting without fullscreen-in-tab.
-BASE_DECLARE_FEATURE(kMediaRemotingWithoutFullscreen);
+// If enabled, The browser allows discovery of the DIAL support cast device.
+// It sends a discovery SSDP message every 120 seconds.
+BASE_DECLARE_FEATURE(kDialMediaRouteProvider);
+
+// If enabled, sinks that do not support presentation or remote playback, will
+// fall back to audio tab mirroring when casting from the Global Media Controls.
+BASE_DECLARE_FEATURE(kFallbackToAudioTabMirroring);
+
+// If enabled, mirroring sessions use the playout delay specified by
+// `kCastMirroringPlayoutDelayMs`.
+BASE_DECLARE_FEATURE(kCastMirroringPlayoutDelay);
+
+// When enabled, Cast virtual connections are removed without explicitly sending
+// a close connection request to the receiver when the sender webpage navigates
+// away.
+// TODO(crbug.com/1508704): Remove the flag when confident that the default-
+// enabled feature is not causing a regression.
+BASE_DECLARE_FEATURE(kCastSilentlyRemoveVcOnNavigation);
+
+extern const base::FeatureParam<int> kCastMirroringPlayoutDelayMs;
 
 // Registers |kMediaRouterCastAllowAllIPs| with local state pref |registry|.
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
@@ -76,6 +89,9 @@ bool DialMediaRouteProviderEnabled();
 // Media Router is enabled for |context|.
 bool GlobalMediaControlsCastStartStopEnabled(content::BrowserContext* context);
 
+// Returns the optional value to use for mirroring playout delay from the
+// relevant command line flag or feature, if any are set.
+absl::optional<base::TimeDelta> GetCastMirroringPlayoutDelay();
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace media_router

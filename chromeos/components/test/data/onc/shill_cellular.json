@@ -4,9 +4,8 @@
   "Cellular.AllowRoaming": true,
   "Cellular.APN": {
     "apn": "test-apn",
-    "authentication": "chap",
+    "authentication": "",
     "username": "test-username",
     "password": "test-password"
-  },
-  "StaticIPConfig": {}
+  }
 }

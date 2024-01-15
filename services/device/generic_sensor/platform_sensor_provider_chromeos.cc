@@ -8,13 +8,13 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/components/sensors/sensor_util.h"
 #include "services/device/generic_sensor/platform_sensor_chromeos.h"
 
@@ -237,7 +237,7 @@ void PlatformSensorProviderChromeOS::OnSensorHalClientFailure(
   ResetSensorService();
   sensor_hal_client_.reset();
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&PlatformSensorProviderChromeOS::RegisterSensorClient,
                      weak_ptr_factory_.GetWeakPtr()),

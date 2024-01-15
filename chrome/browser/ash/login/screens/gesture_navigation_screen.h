@@ -8,19 +8,19 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/ash/login/gesture_navigation_screen_handler.h"
 
 namespace ash {
+
+class GestureNavigationScreenView;
 
 // The OOBE screen dedicated to gesture navigation education.
 class GestureNavigationScreen : public BaseScreen {
  public:
-  enum class Result { NEXT, NOT_APPLICABLE };
+  enum class Result { NEXT, SKIP, NOT_APPLICABLE };
 
   static std::string GetResultString(Result result);
 
@@ -71,11 +71,5 @@ class GestureNavigationScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::GestureNavigationScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_GESTURE_NAVIGATION_SCREEN_H_

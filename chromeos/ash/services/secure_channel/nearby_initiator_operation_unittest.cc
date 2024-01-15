@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "chromeos/ash/services/secure_channel/device_id_pair.h"
@@ -88,7 +88,7 @@ class SecureChannelNearbyInitiatorOperationTest : public testing::Test {
   DeviceIdPair device_id_pair_;
 
   std::unique_ptr<AuthenticatedChannel> channel_from_callback_;
-  absl::optional<NearbyInitiatorFailureType> failure_type_from_callback_;
+  std::optional<NearbyInitiatorFailureType> failure_type_from_callback_;
 
   std::unique_ptr<ConnectToDeviceOperation<NearbyInitiatorFailureType>>
       operation_;

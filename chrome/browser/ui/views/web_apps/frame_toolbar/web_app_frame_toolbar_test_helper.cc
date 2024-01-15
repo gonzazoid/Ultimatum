@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_frame_toolbar_test_helper.h"
 
+#include <string_view>
+
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/notreached.h"
@@ -13,13 +15,15 @@
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_frame_toolbar_view.h"
+#include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_origin_text.h"
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_toolbar_button_container.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/permissions/permission_request_manager.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
@@ -30,22 +34,23 @@
 #include "url/gurl.h"
 
 WebAppFrameToolbarTestHelper::WebAppFrameToolbarTestHelper() {
-  WebAppToolbarButtonContainer::DisableAnimationForTesting();
+  WebAppToolbarButtonContainer::DisableAnimationForTesting(true);
 }
 
 WebAppFrameToolbarTestHelper::~WebAppFrameToolbarTestHelper() = default;
 
-web_app::AppId WebAppFrameToolbarTestHelper::InstallAndLaunchWebApp(
+webapps::AppId WebAppFrameToolbarTestHelper::InstallAndLaunchWebApp(
     Browser* browser,
     const GURL& start_url) {
-  auto web_app_info = std::make_unique<WebAppInstallInfo>();
+  auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
   web_app_info->start_url = start_url;
   web_app_info->scope = start_url.GetWithoutFilename();
   web_app_info->title = u"A minimal-ui app";
   web_app_info->display_mode = web_app::DisplayMode::kMinimalUi;
-  web_app_info->user_display_mode = web_app::UserDisplayMode::kStandalone;
+  web_app_info->user_display_mode =
+      web_app::mojom::UserDisplayMode::kStandalone;
 
-  web_app::AppId app_id =
+  webapps::AppId app_id =
       web_app::test::InstallWebApp(browser->profile(), std::move(web_app_info));
   content::TestNavigationObserver navigation_observer(start_url);
   navigation_observer.StartWatchingNewWebContents();
@@ -58,17 +63,17 @@ web_app::AppId WebAppFrameToolbarTestHelper::InstallAndLaunchWebApp(
   frame_view_ = static_cast<BrowserNonClientFrameView*>(frame_view);
   root_view_ = browser_view_->GetWidget()->GetRootView();
 
-  web_app_frame_toolbar_ = frame_view_->web_app_frame_toolbar_for_testing();
+  web_app_frame_toolbar_ = browser_view_->web_app_frame_toolbar_for_testing();
   DCHECK(web_app_frame_toolbar_);
   DCHECK(web_app_frame_toolbar_->GetVisible());
   return app_id;
 }
 
-web_app::AppId WebAppFrameToolbarTestHelper::InstallAndLaunchCustomWebApp(
+webapps::AppId WebAppFrameToolbarTestHelper::InstallAndLaunchCustomWebApp(
     Browser* browser,
-    std::unique_ptr<WebAppInstallInfo> web_app_info,
+    std::unique_ptr<web_app::WebAppInstallInfo> web_app_info,
     const GURL& start_url) {
-  web_app::AppId app_id =
+  webapps::AppId app_id =
       web_app::test::InstallWebApp(browser->profile(), std::move(web_app_info));
   content::TestNavigationObserver navigation_observer(start_url);
   navigation_observer.StartWatchingNewWebContents();
@@ -81,7 +86,7 @@ web_app::AppId WebAppFrameToolbarTestHelper::InstallAndLaunchCustomWebApp(
   frame_view_ = static_cast<BrowserNonClientFrameView*>(frame_view);
   root_view_ = browser_view_->GetWidget()->GetRootView();
 
-  web_app_frame_toolbar_ = frame_view_->web_app_frame_toolbar_for_testing();
+  web_app_frame_toolbar_ = browser_view_->web_app_frame_toolbar_for_testing();
   DCHECK(web_app_frame_toolbar_);
   DCHECK(web_app_frame_toolbar_->GetVisible());
   return app_id;
@@ -91,120 +96,85 @@ GURL WebAppFrameToolbarTestHelper::
     LoadWindowControlsOverlayTestPageWithDataAndGetURL(
         net::test_server::EmbeddedTestServer* embedded_test_server,
         base::ScopedTempDir* temp_dir) {
-  constexpr char kTestHTML[] =
-      "<!DOCTYPE html>"
-      "<style>"
-      "  body {"
-      "    background: blue;"
-      "  }"
-      "  @media (display-mode: window-controls-overlay) {"
-      "    body {"
-      "      background: red;"
-      "    }"
-      "  }"
-      "  #draggable {"
-      "     app-region: drag;"
-      "     position: absolute;"
-      "     top: 100px;"
-      "     left: 100px;"
-      "     height: 10px;"
-      "     width: 10px;"
-      "  }"
-      "  #non-draggable {"
-      "     app-region: no-drag;"
-      "     position: relative;"
-      "     top: 5px;"
-      "     left: 5px;"
-      "     height: 2px;"
-      "     width: 2px;"
-      "  }"
-      "  #target {"
-      "     padding-left: env(titlebar-area-x);"
-      "     padding-right: env(titlebar-area-width);"
-      "     padding-top: env(titlebar-area-y);"
-      "     padding-bottom: env(titlebar-area-height);"
-      "  }"
-      "</style>"
-      "<div id=\"draggable\">"
-      "  <div id=\"non-draggable\"></div>"
-      "</div>"
-      "<div id=\"target\"></div>";
+  return LoadTestPageWithDataAndGetURL(embedded_test_server, temp_dir, R"(
+    <!DOCTYPE html>
+    <style>
+    body {
+      background: blue;
+    }
+    @media (display-mode: window-controls-overlay) {
+      body {
+        background: red;
+      }
+    }
+    #draggable {
+      app-region: drag;
+      position: absolute;
+      top: 100px;
+      left: 100px;
+      height: 10px;
+      width: 10px;
+    }
+    #non-draggable {
+      app-region: no-drag;
+      position: relative;
+      top: 5px;
+      left: 5px;
+      height: 2px;
+      width: 2px;
+    }
+    #target {
+      padding-left: env(titlebar-area-x);
+      padding-right: env(titlebar-area-width);
+      padding-top: env(titlebar-area-y);
+      padding-bottom: env(titlebar-area-height);
+    }
+    </style>
+    <div id='draggable'>
+      <div id='non-draggable'></div>
+    </div>
+    <div id='target'></div>
+    )");
+}
 
-  return LoadTestPageWithDataAndGetURL(embedded_test_server, temp_dir,
-                                       kTestHTML);
+GURL WebAppFrameToolbarTestHelper::
+    LoadWholeAppIsDraggableTestPageWithDataAndGetURL(
+        net::test_server::EmbeddedTestServer* embedded_test_server,
+        base::ScopedTempDir* temp_dir) {
+  return LoadTestPageWithDataAndGetURL(embedded_test_server, temp_dir, R"(
+    <!DOCTYPE html>
+    <style>
+      div {
+        app-region: drag;
+        width: 100%;
+        height: 100%;
+        padding: 0px;
+        margin: 0px;
+        position: absolute;
+      }
+      body {
+        padding: 0px;
+        margin: 0px;
+      }
+    </style>
+    <div>Hello draggable world</div>
+  )");
 }
 
 GURL WebAppFrameToolbarTestHelper::LoadTestPageWithDataAndGetURL(
     net::test_server::EmbeddedTestServer* embedded_test_server,
     base::ScopedTempDir* temp_dir,
-    const char kTestHTML[]) {
+    base::StringPiece test_html) {
   // Write kTestHTML to a temporary file that can be later reached at
   // http://127.0.0.1/test_file_*.html.
   static int s_test_file_number = 1;
   base::FilePath file_path = temp_dir->GetPath().AppendASCII(
       base::StringPrintf("test_file_%d.html", s_test_file_number++));
   base::ScopedAllowBlockingForTesting allow_temp_file_writing;
-  base::WriteFile(file_path, kTestHTML);
+  base::WriteFile(file_path, test_html);
   GURL url =
       embedded_test_server->GetURL("/" + file_path.BaseName().AsUTF8Unsafe());
   return url;
-}
-
-GURL WebAppFrameToolbarTestHelper::LoadBorderlessTestPageWithDataAndGetURL(
-    net::test_server::EmbeddedTestServer* embedded_test_server,
-    base::ScopedTempDir* temp_dir) {
-  constexpr char kTestHTML[] =
-      "<!DOCTYPE html>"
-      "<style>"
-      "  body {"
-      "    background: blue;"
-      "  }"
-      "  @media (display-mode: borderless) {"
-      "    body {"
-      "      background: red;"
-      "    }"
-      "  }"
-      "  #draggable {"
-      "     app-region: drag;"
-      "     position: absolute;"
-      "     top: 100px;"
-      "     left: 100px;"
-      "     height: 10px;"
-      "     width: 10px;"
-      "  }"
-      "  #non-draggable {"
-      "     app-region: no-drag;"
-      "     position: relative;"
-      "     top: 5px;"
-      "     left: 5px;"
-      "     height: 2px;"
-      "     width: 2px;"
-      "  }"
-      "  #target {"
-      "     width: 100%;"
-      "     height: 33px;"
-      "  }"
-      "</style>"
-      "<script>"
-      "window.onload = function() {"
-      "  document.title = 'Borderless';"
-      "};"
-      "const mql = window.matchMedia('(display-mode: borderless)');"
-      "mql.addEventListener('change', event => {"
-      "  if (event.matches) {"
-      "    document.title = 'match-media-borderless';"
-      "  } else {"
-      "    document.title = 'Borderless';"  // The same title as set onload.
-      "  }"
-      "});"
-      "</script>"
-      "<div id=\"draggable\">"
-      "  <div id=\"non-draggable\"></div>"
-      "</div>"
-      "<div id=\"target\"></div>";
-
-  return LoadTestPageWithDataAndGetURL(embedded_test_server, temp_dir,
-                                       kTestHTML);
 }
 
 base::Value::List WebAppFrameToolbarTestHelper::GetXYWidthHeightListValue(
@@ -227,16 +197,16 @@ gfx::Rect WebAppFrameToolbarTestHelper::GetXYWidthHeightRect(
 
 void WebAppFrameToolbarTestHelper::SetupGeometryChangeCallback(
     content::WebContents* web_contents) {
-  EXPECT_TRUE(
-      ExecJs(web_contents->GetPrimaryMainFrame(),
-             "var geometrychangeCount = 0;"
-             "document.title = 'beforegeometrychange';"
-             "navigator.windowControlsOverlay.ongeometrychange = (e) => {"
-             "  geometrychangeCount++;"
-             "  overlay_rect_from_event = e.titlebarAreaRect;"
-             "  overlay_visible_from_event = e.visible;"
-             "  document.title = 'ongeometrychange';"
-             "}"));
+  EXPECT_TRUE(ExecJs(web_contents->GetPrimaryMainFrame(), R"(
+    var geometrychangeCount = 0;
+    document.title = 'beforegeometrychange';
+    navigator.windowControlsOverlay.ongeometrychange = (e) => {
+      geometrychangeCount++;
+      overlay_rect_from_event = e.titlebarAreaRect;
+      overlay_visible_from_event = e.visible;
+      document.title = 'ongeometrychange';
+    }
+  )"));
 }
 
 // TODO(https://crbug.com/1277860): Flaky.
@@ -283,8 +253,8 @@ void WebAppFrameToolbarTestHelper::TestDraggableRegions() {
   // invoked.
   std::string kHistoryReplaceState =
       "history.replaceState({ test: 'test' }, null);";
-  EXPECT_TRUE(ExecuteScript(browser_view()->GetActiveWebContents(),
-                            kHistoryReplaceState));
+  EXPECT_TRUE(
+      ExecJs(browser_view()->GetActiveWebContents(), kHistoryReplaceState));
   EXPECT_FALSE(browser_view()->ShouldDescendIntoChildForEventHandling(
       browser_view()->GetWidget()->GetNativeView(), draggable_point));
 
@@ -295,4 +265,46 @@ void WebAppFrameToolbarTestHelper::TestDraggableRegions() {
   EXPECT_NE(frame_view->NonClientHitTest(draggable_point), HTCAPTION);
   EXPECT_TRUE(browser_view()->ShouldDescendIntoChildForEventHandling(
       browser_view()->GetWidget()->GetNativeView(), draggable_point));
+}
+
+BrowserView* WebAppFrameToolbarTestHelper::OpenPopup(
+    const std::string& window_open_script) {
+  content::ExecuteScriptAsync(browser_view_->GetActiveWebContents(),
+                              window_open_script);
+  Browser* popup = ui_test_utils::WaitForBrowserToOpen();
+  EXPECT_NE(app_browser_, popup);
+  EXPECT_TRUE(popup);
+
+  BrowserView* popup_browser_view =
+      BrowserView::GetBrowserViewForBrowser(popup);
+  EXPECT_TRUE(content::WaitForRenderFrameReady(
+      popup_browser_view->GetActiveWebContents()->GetPrimaryMainFrame()));
+
+  return popup_browser_view;
+}
+
+void WebAppFrameToolbarTestHelper::GrantWindowManagementPermission(
+    content::WebContents* web_contents) {
+  permissions::PermissionRequestManager::FromWebContents(web_contents)
+      ->set_auto_response_for_test(
+          permissions::PermissionRequestManager::ACCEPT_ALL);
+  ASSERT_TRUE(ExecJs(web_contents, "window.getScreenDetails();"));
+  content::WaitForLoadStop(web_contents);
+
+  constexpr std::string_view permission_query_script = R"(
+      navigator.permissions.query({
+        name: 'window-management'
+      }).then(res => res.state)
+    )";
+  ASSERT_EQ("granted", EvalJs(web_contents, permission_query_script));
+}
+
+void WebAppFrameToolbarTestHelper::GrantWindowManagementPermission() {
+  return GrantWindowManagementPermission(
+      browser_view()->GetActiveWebContents());
+}
+
+WebAppOriginText* WebAppFrameToolbarTestHelper::origin_text_view() {
+  return static_cast<WebAppOriginText*>(
+      web_app_frame_toolbar()->GetViewByID(VIEW_ID_WEB_APP_ORIGIN_TEXT));
 }

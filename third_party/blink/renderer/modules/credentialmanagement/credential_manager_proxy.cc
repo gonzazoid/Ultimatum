@@ -17,8 +17,7 @@ CredentialManagerProxy::CredentialManagerProxy(LocalDOMWindow& window)
       credential_manager_(window.GetExecutionContext()),
       webotp_service_(window.GetExecutionContext()),
       payment_credential_(window.GetExecutionContext()),
-      federated_auth_request_(window.GetExecutionContext()),
-      fedcm_logout_request_(window.GetExecutionContext()) {}
+      federated_auth_request_(window.GetExecutionContext()) {}
 
 CredentialManagerProxy::~CredentialManagerProxy() = default;
 
@@ -93,32 +92,38 @@ CredentialManagerProxy::FederatedAuthRequest() {
   return federated_auth_request_.get();
 }
 
-mojom::blink::FederatedAuthRequest*
-CredentialManagerProxy::FedCmLogoutRpsRequest() {
-  BindRemoteForFedCm(
-      fedcm_logout_request_,
-      WTF::BindOnce(&CredentialManagerProxy::OnFedCmLogoutConnectionError,
-                    WrapWeakPersistent(this)));
-  return fedcm_logout_request_.get();
-}
-
 void CredentialManagerProxy::OnFederatedAuthRequestConnectionError() {
   federated_auth_request_.reset();
   // TODO(crbug.com/1275769): Cache the resolver and resolve the promise with an
   // appropriate error message.
 }
 
-void CredentialManagerProxy::OnFedCmLogoutConnectionError() {
-  fedcm_logout_request_.reset();
-  // TODO(crbug.com/1275769): Cache the resolver and resolve the promise with an
-  // appropriate error message.
-}
-
+// TODO(crbug.com/1372275): Replace From(ScriptState*) with
+// From(ExecutionContext*)
 // static
 CredentialManagerProxy* CredentialManagerProxy::From(
     ScriptState* script_state) {
   DCHECK(script_state->ContextIsValid());
   LocalDOMWindow& window = *LocalDOMWindow::From(script_state);
+  return From(&window);
+}
+
+CredentialManagerProxy* CredentialManagerProxy::From(LocalDOMWindow* window) {
+  auto* supplement =
+      Supplement<LocalDOMWindow>::From<CredentialManagerProxy>(*window);
+  if (!supplement) {
+    supplement = MakeGarbageCollected<CredentialManagerProxy>(*window);
+    ProvideTo(*window, supplement);
+  }
+  return supplement;
+}
+
+// static
+CredentialManagerProxy* CredentialManagerProxy::From(
+    ExecutionContext* execution_context) {
+  // Since the FedCM API cannot be used by workers, the execution context is
+  // always a window.
+  LocalDOMWindow& window = *To<LocalDOMWindow>(execution_context);
   auto* supplement =
       Supplement<LocalDOMWindow>::From<CredentialManagerProxy>(window);
   if (!supplement) {
@@ -134,7 +139,6 @@ void CredentialManagerProxy::Trace(Visitor* visitor) const {
   visitor->Trace(webotp_service_);
   visitor->Trace(payment_credential_);
   visitor->Trace(federated_auth_request_);
-  visitor->Trace(fedcm_logout_request_);
   Supplement<LocalDOMWindow>::Trace(visitor);
 }
 

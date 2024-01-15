@@ -27,6 +27,7 @@
 #include <limits>
 
 #include "third_party/blink/public/platform/web_content_settings_client.h"
+#include "third_party/blink/renderer/core/css/css_color.h"
 #include "third_party/blink/renderer/core/dom/events/native_event_listener.h"
 #include "third_party/blink/renderer/core/dom/raw_data_document_parser.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -137,11 +138,16 @@ void ImageDocumentParser::AppendBytes(const char* data, size_t length) {
 
   LocalFrame* frame = GetDocument()->GetFrame();
   Settings* settings = frame->GetSettings();
-  bool allow_image = !settings || settings->GetImagesEnabled();
-  if (auto* client = frame->GetContentSettingsClient())
-    allow_image = client->AllowImage(allow_image, GetDocument()->Url());
-  if (!allow_image)
+  bool allow_image_renderer = !settings || settings->GetImagesEnabled();
+  bool allow_image_content_setting = frame->GetContentSettings()->allow_image;
+  bool allow_image = allow_image_renderer && allow_image_content_setting;
+  if (!allow_image) {
+    auto* client = frame->GetContentSettingsClient();
+    if (client) {
+      client->DidNotAllowImage();
+    }
     return;
+  }
 
   if (!image_resource_) {
     ResourceRequest request(GetDocument()->Url());
@@ -197,7 +203,7 @@ void ImageDocumentParser::Finish() {
 // --------
 
 ImageDocument::ImageDocument(const DocumentInit& initializer)
-    : HTMLDocument(initializer, kImageDocumentClass),
+    : HTMLDocument(initializer, {DocumentClass::kImage}),
       div_element_(nullptr),
       image_element_(nullptr),
       image_size_is_known_(false),
@@ -219,8 +225,7 @@ gfx::Size ImageDocument::ImageSize() const {
   DCHECK(image_element_);
   DCHECK(image_element_->CachedImage());
   return image_element_->CachedImage()->IntrinsicSize(
-      LayoutObject::ShouldRespectImageOrientation(
-          image_element_->GetLayoutObject()));
+      LayoutObject::GetImageOrientation(image_element_->GetLayoutObject()));
 }
 
 void ImageDocument::CreateDocumentStructure(
@@ -237,28 +242,39 @@ void ImageDocument::CreateDocumentStructure(
   auto* head = MakeGarbageCollected<HTMLHeadElement>(*this);
   auto* meta =
       MakeGarbageCollected<HTMLMetaElement>(*this, CreateElementFlags());
-  meta->setAttribute(html_names::kNameAttr, "viewport");
+  meta->setAttribute(html_names::kNameAttr, AtomicString("viewport"));
   meta->setAttribute(html_names::kContentAttr,
-                     "width=device-width, minimum-scale=0.1");
+                     AtomicString("width=device-width, minimum-scale=0.1"));
   head->AppendChild(meta);
 
   auto* body = MakeGarbageCollected<HTMLBodyElement>(*this);
 
+  body->SetInlineStyleProperty(CSSPropertyID::kMargin, 0.0,
+                               CSSPrimitiveValue::UnitType::kPixels);
+  body->SetInlineStyleProperty(CSSPropertyID::kHeight, 100.0,
+                               CSSPrimitiveValue::UnitType::kPercentage);
   if (ShouldShrinkToFit()) {
     // Display the image prominently centered in the frame.
-    body->setAttribute(html_names::kStyleAttr,
-                       "margin: 0px; background: #0e0e0e; height: 100%");
+    body->SetInlineStyleProperty(
+        CSSPropertyID::kBackgroundColor,
+        *cssvalue::CSSColor::Create(Color::FromRGB(14, 14, 14)));
 
     // See w3c example on how to center an element:
     // https://www.w3.org/Style/Examples/007/center.en.html
     div_element_ = MakeGarbageCollected<HTMLDivElement>(*this);
-    div_element_->setAttribute(html_names::kStyleAttr,
-                               "display: flex;"
-                               "flex-direction: column;"
-                               "align-items: flex-start;"
-                               "min-width: min-content;"
-                               "height: 100%;"
-                               "width: 100%;");
+    div_element_->SetInlineStyleProperty(CSSPropertyID::kDisplay,
+                                         CSSValueID::kFlex);
+    div_element_->SetInlineStyleProperty(CSSPropertyID::kFlexDirection,
+                                         CSSValueID::kColumn);
+    div_element_->SetInlineStyleProperty(CSSPropertyID::kAlignItems,
+                                         CSSValueID::kFlexStart);
+    div_element_->SetInlineStyleProperty(CSSPropertyID::kMinWidth,
+                                         CSSValueID::kMinContent);
+    div_element_->SetInlineStyleProperty(
+        CSSPropertyID::kHeight, 100.0,
+        CSSPrimitiveValue::UnitType::kPercentage);
+    div_element_->SetInlineStyleProperty(
+        CSSPropertyID::kWidth, 100.0, CSSPrimitiveValue::UnitType::kPercentage);
     HTMLSlotElement* slot = MakeGarbageCollected<HTMLSlotElement>(*this);
     div_element_->AppendChild(slot);
 
@@ -268,8 +284,6 @@ void ImageDocument::CreateDocumentStructure(
     // https://html.spec.whatwg.org/C/#read-media
     ShadowRoot& shadow_root = body->EnsureUserAgentShadowRoot();
     shadow_root.AppendChild(div_element_);
-  } else {
-    body->setAttribute(html_names::kStyleAttr, "margin: 0px; height: 100%");
   }
 
   WillInsertBody();

@@ -5,10 +5,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "content/browser/code_cache/generated_code_cache.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -34,24 +35,15 @@ scoped_refptr<base::SequencedTaskRunner>
 GeneratedCodeCacheContext::GetTaskRunner(
     scoped_refptr<GeneratedCodeCacheContext> context) {
   if (!context)
-    return base::SequencedTaskRunnerHandle::Get();
+    return base::SequencedTaskRunner::GetCurrentDefault();
   return context->task_runner_;
 }
 
 GeneratedCodeCacheContext::GeneratedCodeCacheContext() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DETACH_FROM_SEQUENCE(sequence_checker_);
-  if (base::FeatureList::IsEnabled(
-          features::kNavigationThreadingOptimizations)) {
-    if (base::FeatureList::IsEnabled(features::kThreadingOptimizationsOnIO)) {
-      task_runner_ = GetIOThreadTaskRunner({});
-    } else {
-      task_runner_ = base::ThreadPool::CreateSingleThreadTaskRunner(
-          {base::TaskPriority::USER_BLOCKING});
-    }
-  } else {
-    task_runner_ = GetUIThreadTaskRunner({});
-  }
+  task_runner_ = base::ThreadPool::CreateSingleThreadTaskRunner(
+      {base::TaskPriority::USER_BLOCKING});
 }
 
 void GeneratedCodeCacheContext::Initialize(const base::FilePath& path,
@@ -96,6 +88,8 @@ void GeneratedCodeCacheContext::InitializeOnThread(const base::FilePath& path,
             path.AppendASCII("webui_js"), max_bytes_webui_js,
             GeneratedCodeCache::CodeCacheType::kWebUIJavaScript),
         base::OnTaskRunnerDeleter(task_runner_)};
+
+    UMA_HISTOGRAM_BOOLEAN("WebUICodeCache.FeatureEnabled", true);
   }
 
   generated_js_code_cache_ = {

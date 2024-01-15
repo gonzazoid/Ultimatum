@@ -40,6 +40,8 @@
 //   kInstallModes.
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 #include "chrome/install_static/google_chrome_install_modes.h"
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+#include "chrome/install_static/google_chrome_for_testing_install_modes.h"
 #else
 #include "chrome/install_static/chromium_install_modes.h"
 #endif

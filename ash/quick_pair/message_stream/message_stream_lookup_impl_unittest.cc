@@ -6,11 +6,13 @@
 
 #include <memory>
 
+#include "ash/quick_pair/common/fake_bluetooth_adapter.h"
 #include "ash/quick_pair/common/logging.h"
 #include "ash/quick_pair/message_stream/fake_bluetooth_socket.h"
 #include "ash/quick_pair/message_stream/message_stream.h"
 #include "ash/quick_pair/message_stream/message_stream_lookup.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -29,6 +31,11 @@ const char kSocketNotListeningString[] = "Socket is not listening.";
 
 constexpr char kTestDeviceAddress[] = "11:12:13:14:15:16";
 
+// Attempt retry `n` after cooldown period |message_retry_cooldowns[n-1]|.
+const std::vector<base::TimeDelta> create_message_stream_retry_cooldowns_{
+    base::Seconds(2), base::Seconds(4), base::Seconds(8), base::Seconds(16),
+    base::Seconds(32)};
+
 const device::BluetoothUUID kMessageStreamUuid(
     "df21fe2c-2515-4fdb-8886-f12c4d67927c");
 
@@ -45,52 +52,10 @@ const char kMessageStreamConnectToServiceTime[] =
 namespace ash {
 namespace quick_pair {
 
-class MessageStreamFakeBluetoothAdapter
-    : public testing::NiceMock<device::MockBluetoothAdapter> {
- public:
-  device::BluetoothDevice* GetDevice(const std::string& address) override {
-    for (const auto& it : mock_devices_) {
-      if (it->GetAddress() == address)
-        return it.get();
-    }
-    return nullptr;
-  }
-
-  void NotifyDeviceConnectedStateChanged(device::BluetoothDevice* device,
-                                         bool is_now_connected) {
-    for (auto& observer : observers_)
-      observer.DeviceConnectedStateChanged(this, device, is_now_connected);
-  }
-
-  void NotifyDeviceRemoved(device::BluetoothDevice* device) {
-    for (auto& observer : observers_)
-      observer.DeviceRemoved(this, device);
-  }
-
-  void NotifyDeviceAdded(device::BluetoothDevice* device) {
-    for (auto& observer : observers_)
-      observer.DeviceAdded(this, device);
-  }
-
-  void NotifyDevicePairedChanged(device::BluetoothDevice* device,
-                                 bool new_paired_status) {
-    for (auto& observer : observers_)
-      observer.DevicePairedChanged(this, device, new_paired_status);
-  }
-
-  void NotifyDeviceChanged(device::BluetoothDevice* device) {
-    for (auto& observer : observers_)
-      observer.DeviceChanged(this, device);
-  }
-
- private:
-  ~MessageStreamFakeBluetoothAdapter() override = default;
-};
-
 class MessageStreamFakeBluetoothDevice
     : public testing::NiceMock<device::MockBluetoothDevice> {
  public:
-  MessageStreamFakeBluetoothDevice(MessageStreamFakeBluetoothAdapter* adapter)
+  MessageStreamFakeBluetoothDevice(FakeBluetoothAdapter* adapter)
       : testing::NiceMock<device::MockBluetoothDevice>(adapter,
                                                        /*bluetooth_class=*/0u,
                                                        /*name=*/"Test Device",
@@ -121,6 +86,8 @@ class MessageStreamFakeBluetoothDevice
     error_message_ = error_message;
   }
 
+  void SetConnectToServiceSuccess() { error_ = false; }
+
   int connect_to_service_count() { return connect_to_service_count_; }
 
   void DontInvokeCallback() { dont_invoke_callback_ = true; }
@@ -136,7 +103,7 @@ class MessageStreamFakeBluetoothDevice
   bool dont_invoke_callback_ = false;
   bool error_ = false;
   std::string error_message_;
-  MessageStreamFakeBluetoothAdapter* fake_adapter_;
+  raw_ptr<FakeBluetoothAdapter> fake_adapter_;
   scoped_refptr<FakeBluetoothSocket> fake_socket_ =
       base::MakeRefCounted<FakeBluetoothSocket>();
 };
@@ -145,7 +112,7 @@ class MessageStreamLookupImplTest : public testing::Test,
                                     public MessageStreamLookup::Observer {
  public:
   void SetUp() override {
-    adapter_ = base::MakeRefCounted<MessageStreamFakeBluetoothAdapter>();
+    adapter_ = base::MakeRefCounted<FakeBluetoothAdapter>();
     std::unique_ptr<MessageStreamFakeBluetoothDevice> device =
         std::make_unique<MessageStreamFakeBluetoothDevice>(adapter_.get());
 
@@ -189,6 +156,8 @@ class MessageStreamLookupImplTest : public testing::Test,
     device_->SetConnectToServiceError(error_message);
   }
 
+  void SetConnectToServiceSuccess() { device_->SetConnectToServiceSuccess(); }
+
   MessageStream* GetMessageStream() {
     return message_stream_lookup_->GetMessageStream(kTestDeviceAddress);
   }
@@ -198,14 +167,45 @@ class MessageStreamLookupImplTest : public testing::Test,
     message_stream_ = message_stream;
   }
 
+  // Fast forwards in time between each attempt to create a message stream to
+  // test that the retries did in fact fail. Assumes that |device_| has been
+  // added to |adapter_| and that a service error has been set (probably via
+  // SetConnectToServiceError).
+  void UnsuccessfulAttemptCreateMessageStream(
+      size_t num_unsuccessful_attempts) {
+    if (!num_unsuccessful_attempts)
+      return;
+
+    if (num_unsuccessful_attempts > 5) {
+      LOG(WARNING)
+          << __func__
+          << ": the maximum message stream attempts before failure is 5. "
+          << std::to_string(num_unsuccessful_attempts)
+          << " were requested. 5 will be tested for failure.";
+      num_unsuccessful_attempts = 5;
+    }
+
+    base::RunLoop();
+    EXPECT_EQ(GetMessageStream(), nullptr);
+
+    for (size_t curr_attempts = 1; curr_attempts < num_unsuccessful_attempts;
+         curr_attempts++) {
+      base::RunLoop();
+      EXPECT_EQ(GetMessageStream(), nullptr);
+      task_environment_.FastForwardBy(
+          create_message_stream_retry_cooldowns_[curr_attempts - 1]);
+    }
+  }
+
   base::HistogramTester& histogram_tester() { return histogram_tester_; }
 
  protected:
-  base::test::SingleThreadTaskEnvironment task_enviornment_;
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   base::HistogramTester histogram_tester_;
-  MessageStream* message_stream_ = nullptr;
-  scoped_refptr<MessageStreamFakeBluetoothAdapter> adapter_;
-  MessageStreamFakeBluetoothDevice* device_;
+  raw_ptr<MessageStream, DanglingUntriaged> message_stream_ = nullptr;
+  scoped_refptr<FakeBluetoothAdapter> adapter_;
+  raw_ptr<MessageStreamFakeBluetoothDevice, DanglingUntriaged> device_;
   std::unique_ptr<MessageStreamLookup> message_stream_lookup_;
 };
 
@@ -569,6 +569,55 @@ TEST_F(MessageStreamLookupImplTest, InFlightConnections) {
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(device_->connect_to_service_count(), 1);
+}
+
+// There is a maximum of 5 retry attempts to establish a connection upon failing
+// to do so. This tests all possible number of retries followed by a successful
+// connection.
+TEST_F(MessageStreamLookupImplTest,
+       ConnectFailInitial_ConnectSuccessOnRetries) {
+  device_->AddUUID(kMessageStreamUuid);
+  for (size_t num_unsuccessful_attempts = 1; num_unsuccessful_attempts < 5;
+       num_unsuccessful_attempts++) {
+    SetConnectToServiceError(kMessageStreamConnectToServiceError);
+    DeviceAdded();
+    UnsuccessfulAttemptCreateMessageStream(num_unsuccessful_attempts);
+    SetConnectToServiceSuccess();
+    task_environment_.FastForwardBy(base::Seconds(33));
+    base::RunLoop().RunUntilIdle();
+    EXPECT_NE(GetMessageStream(), nullptr);
+    DeviceRemoved();
+  }
+}
+
+// There is a maximum of 5 retry attempts to establish a connection upon failing
+// to do so. This tests a connection failure after failing all 6 attempts.
+TEST_F(MessageStreamLookupImplTest,
+       ConnectFailInitial_ConnectFailOnFiveRetries) {
+  device_->AddUUID(kMessageStreamUuid);
+  SetConnectToServiceError(kMessageStreamConnectToServiceError);
+  DeviceAdded();
+  UnsuccessfulAttemptCreateMessageStream(/*num_unsuccessful_attempts=*/5);
+  task_environment_.FastForwardBy(base::Seconds(33));
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(GetMessageStream(), nullptr);
+}
+
+TEST_F(MessageStreamLookupImplTest,
+       ConnectFailInitial_NoCrashIfDeviceLostBetweenRetries) {
+  device_->AddUUID(kMessageStreamUuid);
+  SetConnectToServiceError(kMessageStreamConnectToServiceError);
+  DeviceAdded();
+
+  // Simulate the device being removed from adapter immediately following
+  // pairing.
+  adapter_->RemoveMockDevice(kTestDeviceAddress);
+
+  // Expect the retries to not crash.
+  UnsuccessfulAttemptCreateMessageStream(/*num_unsuccessful_attempts=*/5);
+  task_environment_.FastForwardBy(base::Seconds(33));
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(GetMessageStream(), nullptr);
 }
 
 }  // namespace quick_pair

@@ -16,14 +16,15 @@
 #include "ash/components/arc/mojom/video_encode_accelerator.mojom.h"
 #include "ash/components/arc/mojom/video_protected_buffer_allocator.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "chromeos/components/cdm_factory_daemon/cdm_factory_daemon_proxy_ash.h"
 #include "chromeos/components/cdm_factory_daemon/mojom/browser_cdm_factory.mojom.h"
@@ -153,7 +154,7 @@ class VideoAcceleratorFactoryService : public mojom::VideoAcceleratorFactory {
     // blocklist. Note: base::Unretained(this) is safe because *|this| should
     // never die. See the CHECK() in the destructor.
     const scoped_refptr<base::SingleThreadTaskRunner>& task_runner =
-        base::ThreadTaskRunnerHandle::Get();
+        base::SingleThreadTaskRunner::GetCurrentDefault();
     CHECK(task_runner);
     auto gpu_feature_checker = content::GpuFeatureChecker::Create(
         gpu::GpuFeatureType::GPU_FEATURE_TYPE_ACCELERATED_VIDEO_DECODE,
@@ -318,6 +319,11 @@ void GpuArcVideoServiceHost::OnBootstrapVideoAcceleratorFactory(
       video_accelerator_factory_.get(),
       mojo::PendingReceiver<mojom::VideoAcceleratorFactory>(
           std::move(server_pipe)));
+}
+
+// static
+void GpuArcVideoKeyedService::EnsureFactoryBuilt() {
+  GpuArcVideoKeyedServiceFactory::GetInstance();
 }
 
 }  // namespace arc

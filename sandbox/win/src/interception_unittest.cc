@@ -13,10 +13,10 @@
 #include <stddef.h>
 
 #include <algorithm>
+#include <bit>
 #include <memory>
 #include <set>
 
-#include "base/bits.h"
 #include "sandbox/win/src/interception_internal.h"
 #include "sandbox/win/src/interceptors.h"
 #include "sandbox/win/src/target_process.h"
@@ -50,16 +50,16 @@ void WalkBuffer(void* buffer,
   ASSERT_GT(size, sizeof(SharedMemory));
   DllPatchInfo* dll = &memory->dll_list[0];
 
-  for (int i = 0; i < memory->num_intercepted_dlls; i++) {
+  for (size_t i = 0; i < memory->num_intercepted_dlls; i++) {
     ASSERT_NE(0u, wcslen(dll->dll_name));
     ASSERT_EQ(0u, dll->record_bytes % sizeof(size_t));
     ASSERT_EQ(0u, dll->offset_to_functions % sizeof(size_t));
-    ASSERT_NE(0, dll->num_functions);
+    ASSERT_NE(0u, dll->num_functions);
 
     FunctionInfo* function = reinterpret_cast<FunctionInfo*>(
         reinterpret_cast<char*>(dll) + dll->offset_to_functions);
 
-    for (int j = 0; j < dll->num_functions; j++) {
+    for (size_t j = 0; j < dll->num_functions; j++) {
       ASSERT_EQ(0u, function->record_bytes % sizeof(size_t));
 
       char* name = function->function;
@@ -96,10 +96,9 @@ TEST(InterceptionManagerTest, GetGranularAlignedRandomOffset) {
   // sizeof(DllInterceptionData).
   const size_t kThunkBytes = 544;
 
-  // ciel(log2(544)) = 10.
+  // log2_ceiling(544) = 10.
   // Alignment must be 2^10 = 1024.
-  const size_t kAlignmentBits = base::bits::Log2Ceiling(kThunkBytes);
-  const size_t kAlignment = static_cast<size_t>(1) << kAlignmentBits;
+  const size_t kAlignment = std::bit_ceil(kThunkBytes);
 
   const size_t kAllocGranularity = 65536;
 

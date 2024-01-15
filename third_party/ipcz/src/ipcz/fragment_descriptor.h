@@ -23,9 +23,6 @@ struct IPCZ_ALIGN(8) FragmentDescriptor {
   // fragments.
   constexpr FragmentDescriptor() = default;
 
-  FragmentDescriptor(const FragmentDescriptor&);
-  FragmentDescriptor& operator=(const FragmentDescriptor&);
-
   // Constructs a descriptor for a span of memory `size` bytes long, starting
   // at byte `offset` within the buffer identified by `buffer_id` within some
   // BufferPool.
@@ -39,7 +36,6 @@ struct IPCZ_ALIGN(8) FragmentDescriptor {
   BufferId buffer_id() const { return buffer_id_; }
   uint32_t offset() const { return offset_; }
   uint32_t size() const { return size_; }
-  uint32_t end() const { return offset_ + size_; }
 
  private:
   // Identifies the shared memory buffer in which the memory resides. This ID is
@@ -53,6 +49,8 @@ struct IPCZ_ALIGN(8) FragmentDescriptor {
   // The size of this fragment in bytes.
   uint32_t size_ = 0;
 };
+static_assert(std::is_trivially_copyable_v<FragmentDescriptor>,
+              "FragmentDescriptor must be trivially copyable");
 
 }  // namespace ipcz
 

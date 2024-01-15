@@ -11,7 +11,6 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/sync_ui_util.h"
 #include "chrome/common/extensions/api/settings_private.h"
-#include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
@@ -21,17 +20,8 @@ namespace {
 
 // Returns whether the user can use the leak detection feature.
 bool IsUserAllowedToUseLeakDetection(Profile* profile) {
-  if (profile->IsGuestSession())
-    return false;
-
-  auto* identity_manager =
-      IdentityManagerFactory::GetForProfileIfExists(profile);
-  if (!identity_manager)
-    return false;
-
-  return identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSignin) ||
-         base::FeatureList::IsEnabled(
-             password_manager::features::kLeakDetectionUnauthenticated);
+  return !profile->IsGuestSession() &&
+         IdentityManagerFactory::GetForProfileIfExists(profile);
 }
 
 // Returns whether the effective value of the Safe Browsing preferences for
@@ -100,27 +90,26 @@ GeneratedPasswordLeakDetectionPref::SetPref(const base::Value* value) {
   return extensions::settings_private::SetPrefResult::SUCCESS;
 }
 
-std::unique_ptr<settings_api::PrefObject>
-GeneratedPasswordLeakDetectionPref::GetPrefObject() const {
+settings_api::PrefObject GeneratedPasswordLeakDetectionPref::GetPrefObject()
+    const {
   auto* backing_preference = profile_->GetPrefs()->FindPreference(
       password_manager::prefs::kPasswordLeakDetectionEnabled);
 
-  auto pref_object = std::make_unique<settings_api::PrefObject>();
-  pref_object->key = kGeneratedPasswordLeakDetectionPref;
-  pref_object->type = settings_api::PREF_TYPE_BOOLEAN;
-  pref_object->value = base::Value(backing_preference->GetValue()->GetBool() &&
-                                   IsUserAllowedToUseLeakDetection(profile_));
-  pref_object->user_control_disabled =
+  settings_api::PrefObject pref_object;
+  pref_object.key = kGeneratedPasswordLeakDetectionPref;
+  pref_object.type = settings_api::PrefType::kBoolean;
+  pref_object.value = base::Value(backing_preference->GetValue()->GetBool() &&
+                                  IsUserAllowedToUseLeakDetection(profile_));
+  pref_object.user_control_disabled =
       !IsSafeBrowsingStandard(profile_) ||
       !IsUserAllowedToUseLeakDetection(profile_);
   if (!backing_preference->IsUserModifiable()) {
-    pref_object->enforcement = settings_api::Enforcement::ENFORCEMENT_ENFORCED;
+    pref_object.enforcement = settings_api::Enforcement::kEnforced;
     extensions::settings_private::GeneratedPref::ApplyControlledByFromPref(
-        pref_object.get(), backing_preference);
+        &pref_object, backing_preference);
   } else if (backing_preference->GetRecommendedValue()) {
-    pref_object->enforcement =
-        settings_api::Enforcement::ENFORCEMENT_RECOMMENDED;
-    pref_object->recommended_value =
+    pref_object.enforcement = settings_api::Enforcement::kRecommended;
+    pref_object.recommended_value =
         base::Value(backing_preference->GetRecommendedValue()->GetBool());
   }
 

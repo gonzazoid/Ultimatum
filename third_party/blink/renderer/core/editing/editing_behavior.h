@@ -23,10 +23,13 @@
 
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
+
 class KeyboardEvent;
+enum class WritingMode : uint8_t;
 
 class CORE_EXPORT EditingBehavior {
   STACK_ALLOCATED();
@@ -39,11 +42,13 @@ class CORE_EXPORT EditingBehavior {
   // can control it here.
 
   // When extending a selection beyond the top or bottom boundary of an editable
-  // area, maintain the horizontal position on Windows and Android but extend it
-  // to the boundary of the editable content on Mac and Linux.
+  // area, maintain the horizontal position on Windows, Android and ChromeOS but
+  // extend it to the boundary of the editable content on Mac and Linux.
   bool ShouldMoveCaretToHorizontalBoundaryWhenPastTopOrBottom() const {
     return type_ != mojom::blink::EditingBehavior::kEditingWindowsBehavior &&
-           type_ != mojom::blink::EditingBehavior::kEditingAndroidBehavior;
+           type_ != mojom::blink::EditingBehavior::kEditingAndroidBehavior &&
+           !(type_ == mojom::blink::EditingBehavior::kEditingChromeOSBehavior &&
+             RuntimeEnabledFeatures::TouchTextEditingRedesignEnabled());
   }
 
   bool ShouldSelectReplacement() const {
@@ -117,6 +122,13 @@ class CORE_EXPORT EditingBehavior {
     return type_ == mojom::blink::EditingBehavior::kEditingMacBehavior;
   }
 
+  // On ChromeOS, tapping the caret should toggle showing/hiding the touch
+  // selection quick menu.
+  bool ShouldToggleMenuWhenCaretTapped() const {
+    return type_ == mojom::blink::EditingBehavior::kEditingChromeOSBehavior &&
+           RuntimeEnabledFeatures::TouchTextEditingRedesignEnabled();
+  }
+
   // Support for global selections, used on platforms like the X Window
   // System that treat selection as a type of clipboard.
   bool SupportsGlobalSelection() const {
@@ -126,7 +138,8 @@ class CORE_EXPORT EditingBehavior {
 
   // Convert a KeyboardEvent to a command name like "Copy", "Undo" and so on.
   // If nothing, return empty string.
-  const char* InterpretKeyEvent(const KeyboardEvent&) const;
+  const char* InterpretKeyEvent(const KeyboardEvent&,
+                                WritingMode writing_mode) const;
 
   bool ShouldInsertCharacter(const KeyboardEvent&) const;
 

@@ -10,14 +10,15 @@
 #include "ash/components/arc/mojom/tracing.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/no_destructor.h"
 #include "base/posix/unix_domain_socket.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_config.h"
 #include "base/trace_event/trace_event.h"
@@ -102,7 +103,7 @@ class ArcTracingDataSource
   friend class base::NoDestructor<ArcTracingDataSource>;
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   using DataSourceProxy =
-      tracing::PerfettoTracedProcess::DataSourceProxy<CastDataSource>;
+      tracing::PerfettoTracedProcess::DataSourceProxy<ArcTracingDataSource>;
   using SystemTraceWriter =
       tracing::SystemTraceWriter<std::string, DataSourceProxy>;
 #else
@@ -117,7 +118,7 @@ class ArcTracingDataSource
     tracing::PerfettoTracedProcess::Get()->AddDataSource(this);
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
     perfetto::DataSourceDescriptor dsd;
-    dsd.set_name(mojom::kArcTraceDataSourceName);
+    dsd.set_name(tracing::mojom::kArcTraceDataSourceName);
     DataSourceProxy::Register(dsd, this);
 #endif
   }
@@ -272,7 +273,7 @@ class ArcTracingDataSource
   base::OnceClosure stop_complete_callback_;
   // Parent class's |producer_| member is only valid on the perfetto sequence,
   // we need to track it ourselves for access from the UI thread.
-  tracing::PerfettoProducer* producer_on_ui_thread_ = nullptr;
+  raw_ptr<tracing::PerfettoProducer> producer_on_ui_thread_ = nullptr;
   perfetto::DataSourceConfig data_source_config_;
   std::unique_ptr<SystemTraceWriter> trace_writer_;
 };
@@ -432,5 +433,9 @@ void ArcTracingBridge::ArcTracingAgent::GetCategories(
   bridge_->GetCategories(category_set);
 }
 
+// static
+void ArcTracingBridge::EnsureFactoryBuilt() {
+  ArcTracingBridgeFactory::GetInstance();
+}
 
 }  // namespace arc

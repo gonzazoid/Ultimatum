@@ -16,6 +16,7 @@
 #include "third_party/blink/public/web/modules/mediastream/encoded_video_frame.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_sink.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
+#include "third_party/blink/renderer/modules/mediastream/image_capture_device_settings.h"
 #include "third_party/blink/renderer/modules/mediastream/video_track_adapter_settings.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_track_platform.h"
@@ -23,8 +24,6 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
-
-class MediaStreamVideoTrackSignalObserver;
 
 // MediaStreamVideoTrack is a video-specific representation of a
 // MediaStreamTrackPlatform. It is owned by a MediaStreamComponent
@@ -49,9 +48,7 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
       const absl::optional<bool>& noise_reduction,
       bool is_screencast,
       const absl::optional<double>& min_frame_rate,
-      const absl::optional<double>& pan,
-      const absl::optional<double>& tilt,
-      const absl::optional<double>& zoom,
+      const ImageCaptureDeviceSettings* image_capture_device_settings,
       bool pan_tilt_zoom_allowed,
       MediaStreamVideoSource::ConstraintsOnceCallback callback,
       bool enabled);
@@ -69,9 +66,7 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
       const absl::optional<bool>& noise_reduction,
       bool is_screen_cast,
       const absl::optional<double>& min_frame_rate,
-      const absl::optional<double>& pan,
-      const absl::optional<double>& tilt,
-      const absl::optional<double>& zoom,
+      const ImageCaptureDeviceSettings* image_capture_device_settings,
       bool pan_tilt_zoom_allowed,
       MediaStreamVideoSource::ConstraintsOnceCallback callback,
       bool enabled);
@@ -81,26 +76,32 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
 
   ~MediaStreamVideoTrack() override;
 
-  // MediaStreamTrack overrides.
+  std::unique_ptr<MediaStreamTrackPlatform> CreateFromComponent(
+      const MediaStreamComponent* component,
+      const String& id) override;
+
+  // MediaStreamTrackPlatform overrides.
   void SetEnabled(bool enabled) override;
   void SetContentHint(
       WebMediaStreamTrack::ContentHintType content_hint) override;
   void StopAndNotify(base::OnceClosure callback) override;
   void GetSettings(MediaStreamTrackPlatform::Settings& settings) const override;
+  MediaStreamTrackPlatform::VideoFrameStats GetVideoFrameStats() const override;
   MediaStreamTrackPlatform::CaptureHandle GetCaptureHandle() override;
-  void AddCropVersionCallback(uint32_t crop_version,
-                              base::OnceClosure callback) override;
-  void RemoveCropVersionCallback(uint32_t crop_version) override;
+  void AddSubCaptureTargetVersionCallback(uint32_t sub_capture_target_version,
+                                          base::OnceClosure callback) override;
+  void RemoveSubCaptureTargetVersionCallback(
+      uint32_t sub_capture_target_version) override;
 
   // Add |sink| to receive state changes on the main render thread and video
-  // frames in the |callback| method on the IO-thread.
+  // frames in the |callback| method on the video task runner.
   // |callback| will be reset on the render thread.
   void AddSink(WebMediaStreamSink* sink,
                const VideoCaptureDeliverFrameCB& callback,
                MediaStreamVideoSink::IsSecure is_secure,
                MediaStreamVideoSink::UsesAlpha uses_alpha) override;
   // Sets |sink|'s dropped frame notification callback which will receive calls
-  // on the IO thread. |callback| will be reset on the render thread.
+  // on the video task runner. |callback| will be reset on the render thread.
   // Note: the method needs to be called after a sink has been added.
   void SetSinkNotifyFrameDroppedCallback(
       WebMediaStreamSink* sink,
@@ -110,9 +111,9 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
   // Returns the number of currently connected sinks.
   size_t CountSinks() const;
 
-  // Adds |callback| for encoded frame output on the IO thread. The function
-  // will cause generation of a keyframe from the source.
-  // Encoded sinks are not secure.
+  // Adds |callback| for encoded frame output on the video task runner. The
+  // function will cause generation of a keyframe from the source. Encoded sinks
+  // are not secure.
   void AddEncodedSink(WebMediaStreamSink* sink, EncodedVideoFrameCB callback);
 
   // Removes encoded callbacks associated with |sink|.
@@ -130,23 +131,23 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
   const absl::optional<double>& min_frame_rate() const {
     return min_frame_rate_;
   }
-  const absl::optional<double>& max_frame_rate() const {
-    return max_frame_rate_;
+  absl::optional<double> max_frame_rate() const {
+    return adapter_settings_.max_frame_rate();
   }
   const VideoTrackAdapterSettings& adapter_settings() const {
     return adapter_settings_;
   }
-  const absl::optional<double>& pan() const { return pan_; }
-  const absl::optional<double>& tilt() const { return tilt_; }
-  const absl::optional<double>& zoom() const { return zoom_; }
+  const absl::optional<ImageCaptureDeviceSettings>&
+  image_capture_device_settings() const {
+    return image_capture_device_settings_;
+  }
   bool pan_tilt_zoom_allowed() const { return pan_tilt_zoom_allowed_; }
 
   // Setting information about the track size.
   // Called from MediaStreamVideoSource at track initialization.
-  void SetTargetSizeAndFrameRate(int width, int height, double frame_rate) {
+  void SetTargetSize(int width, int height) {
     width_ = width;
     height_ = height;
-    frame_rate_ = frame_rate;
   }
 
   // Setting information about the track size.
@@ -179,10 +180,9 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
 
   MediaStreamVideoSource* source() const { return source_.get(); }
 
-  void OnFrameDropped(media::VideoCaptureFrameDropReason reason);
-
-  MediaStreamVideoTrackSignalObserver* SignalObserver();
-  void SetSignalObserver(MediaStreamVideoTrackSignalObserver* observer);
+  // Sink dropping frames affects logging and UMAs, but not the MediaStreamTrack
+  // Statistics API since such frames were delivered to the sink before drop.
+  void OnSinkDroppedFrame(media::VideoCaptureFrameDropReason reason);
 
   bool IsRefreshFrameTimerRunningForTesting() {
     return refresh_timer_.IsRunning();
@@ -195,6 +195,22 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
   MediaStreamTrackPlatform::StreamType Type() const override {
     return MediaStreamTrackPlatform::StreamType::kVideo;
   }
+
+  bool UsingAlpha();
+
+  // After this many frame drops of the same reason, we skip logging
+  // Media.VideoCapture.Track.FrameDrop UMAs.
+  static constexpr int kMaxConsecutiveFrameDropForSameReasonCount = 10;
+
+  // After this many frame drops of the same reason, we suppress
+  // EmitLogMessage(), which is wired to MediaStreamVideoSource::OnLog() and
+  // ultimately WebRTC logging in the browser process.
+  static constexpr int kMaxEmittedLogsForDroppedFramesBeforeSuppressing = 3;
+  // Suppressed logs for dropped frames will still be emitted this often.
+  static constexpr int kFrequencyForSuppressedLogs = 100;
+
+  void SetEmitLogMessageForTesting(
+      base::RepeatingCallback<void(const std::string&)> emit_log_message);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(MediaStreamRemoteVideoSourceTest, StartTrack);
@@ -218,7 +234,7 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
   Vector<WebMediaStreamSink*> encoded_sinks_;
 
   // |FrameDeliverer| is an internal helper object used for delivering video
-  // frames on the IO-thread using callbacks to all registered tracks.
+  // frames on the video task runner using callbacks to all registered tracks.
   class FrameDeliverer;
   scoped_refptr<FrameDeliverer> frame_deliverer_;
 
@@ -226,10 +242,7 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
   absl::optional<bool> noise_reduction_;
   bool is_screencast_;
   absl::optional<double> min_frame_rate_;
-  absl::optional<double> max_frame_rate_;
-  absl::optional<double> pan_;
-  absl::optional<double> tilt_;
-  absl::optional<double> zoom_;
+  absl::optional<ImageCaptureDeviceSettings> image_capture_device_settings_;
   bool pan_tilt_zoom_allowed_ = false;
 
   // Weak ref to the source this tracks is connected to.
@@ -240,16 +253,14 @@ class MODULES_EXPORT MediaStreamVideoTrack : public MediaStreamTrackPlatform {
 
   // This is used for tracking if no connected video use alpha.
   HashSet<WebMediaStreamSink*> alpha_using_sinks_;
+  HashSet<WebMediaStreamSink*> alpha_discarding_sinks_;
 
   // Remembering our desired video size and frame rate.
   int width_ = 0;
   int height_ = 0;
-  double frame_rate_ = 0.0;
   absl::optional<double> computed_frame_rate_;
   media::VideoCaptureFormat computed_source_format_;
   base::RepeatingTimer refresh_timer_;
-
-  WeakPersistent<MediaStreamVideoTrackSignalObserver> signal_observer_;
 
   base::WeakPtrFactory<MediaStreamVideoTrack> weak_factory_{this};
 };

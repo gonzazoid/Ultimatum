@@ -2,37 +2,33 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
 import 'chrome://new-tab-page/lazy_load.js';
 
 import {CartHandlerRemote} from 'chrome://new-tab-page/chrome_cart.mojom-webui.js';
-import {ChromeCartProxy, CustomizeModulesElement, ModuleDescriptor, ModuleRegistry} from 'chrome://new-tab-page/lazy_load.js';
+import {ChromeCartProxy, CustomizeModulesElement} from 'chrome://new-tab-page/lazy_load.js';
 import {$$, NewTabPageProxy} from 'chrome://new-tab-page/new_tab_page.js';
-import {PageCallbackRouter, PageHandlerRemote, PageInterface} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {ModuleIdName, PageCallbackRouter, PageHandlerRemote, PageRemote} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
 
-import {fakeMetricsPrivate, MetricsTracker} from './metrics_test_support.js';
 import {assertNotStyle, assertStyle, installMock} from './test_support.js';
 
 suite('NewTabPageCustomizeModulesTest', () => {
-  let handler: TestBrowserProxy;
-  let callbackRouterRemote: PageHandlerRemote&PageInterface;
-  let moduleRegistry: TestBrowserProxy;
+  let handler: TestMock<PageHandlerRemote>;
+  let callbackRouterRemote: PageRemote;
   let metrics: MetricsTracker;
-  let cartHandler: TestBrowserProxy;
+  let cartHandler: TestMock<CartHandlerRemote>;
 
   async function createCustomizeModules(
       allDisabled: boolean,
       modules: Array<{id: string, name: string, disabled: boolean}>):
       Promise<CustomizeModulesElement> {
-    moduleRegistry.setResultFor(
-        'getDescriptors',
-        modules.map(
-            ({id, name}) =>
-                new ModuleDescriptor(id, name, () => Promise.resolve(null))));
+    handler.setResultFor('getModulesIdNames', Promise.resolve({
+      data: modules.map(({id, name}) => ({id, name} as ModuleIdName)),
+    }));
     const customizeModules = document.createElement('ntp-customize-modules');
     document.body.appendChild(customizeModules);
     assertStyle(customizeModules.$.container, 'display', 'none');
@@ -52,7 +48,6 @@ suite('NewTabPageCustomizeModulesTest', () => {
             NewTabPageProxy.setInstance(mock, new PageCallbackRouter()));
     callbackRouterRemote = NewTabPageProxy.getInstance()
                                .callbackRouter.$.bindNewPipeAndPassRemote();
-    moduleRegistry = installMock(ModuleRegistry);
     metrics = fakeMetricsPrivate();
     loadTimeData.overrideValues({modulesVisibleManagedByPolicy: false});
     cartHandler = installMock(CartHandlerRemote, ChromeCartProxy.setHandler);
@@ -202,7 +197,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
             '.toggle-name');
     const subToggleRows =
         customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
-            '.discount-toggle-row');
+            '.toggle-option-row');
 
     // Assert.
     assertEquals(3, toggleNames.length);
@@ -226,7 +221,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
       {id: 'chrome_cart', name: 'foo name', disabled: false},
     ]);
     const subToggleRows =
-        customizeModules.shadowRoot!.querySelectorAll('.discount-toggle-row');
+        customizeModules.shadowRoot!.querySelectorAll('.toggle-option-row');
 
     // Act.
     subToggleRows[0]!.querySelector('cr-toggle')!.click();
@@ -252,7 +247,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
     const toggleNames =
         customizeModules.shadowRoot!.querySelectorAll('.toggle-name');
     const subToggleRows =
-        customizeModules.shadowRoot!.querySelectorAll('.discount-toggle-row');
+        customizeModules.shadowRoot!.querySelectorAll('.toggle-option-row');
 
     // Assert.
     assertEquals(3, toggleNames.length);
@@ -299,7 +294,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
       {id: 'chrome_cart', name: 'foo name', disabled: false},
     ]);
     const subToggleRows =
-        customizeModules.shadowRoot!.querySelectorAll('.discount-toggle-row');
+        customizeModules.shadowRoot!.querySelectorAll('.toggle-option-row');
 
     assertEquals(0, metrics.count('NewTabPage.Carts.DisableDiscount'));
 
@@ -322,7 +317,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
       {id: 'chrome_cart', name: 'foo name', disabled: false},
     ]);
     const subToggleRows =
-        customizeModules.shadowRoot!.querySelectorAll('.discount-toggle-row');
+        customizeModules.shadowRoot!.querySelectorAll('.toggle-option-row');
 
     assertEquals(0, metrics.count('NewTabPage.Carts.DisableDiscount'));
 
@@ -345,7 +340,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
       {id: 'chrome_cart', name: 'foo name', disabled: false},
     ]);
     const subToggleRows =
-        customizeModules.shadowRoot!.querySelectorAll('.discount-toggle-row');
+        customizeModules.shadowRoot!.querySelectorAll('.toggle-option-row');
 
     // Assert.
     assertEquals(1, subToggleRows.length);
@@ -361,7 +356,7 @@ suite('NewTabPageCustomizeModulesTest', () => {
       {id: 'chrome_cart', name: 'foo name', disabled: false},
     ]);
     const subToggleRows =
-        customizeModules.shadowRoot!.querySelectorAll('.discount-toggle-row');
+        customizeModules.shadowRoot!.querySelectorAll('.toggle-option-row');
 
     // Assert.
     assertEquals(0, subToggleRows.length);
@@ -372,5 +367,259 @@ suite('NewTabPageCustomizeModulesTest', () => {
       {id: 'foo', name: 'foo name', disabled: false},
     ]);
     assertNotStyle(customizeModules.$.container, 'display', 'none');
+  });
+
+  suite('History Cluster', () => {
+    [true, false].forEach(visible => {
+      test(`cart option ${(visible ? '' : 'not ')} visible`, async () => {
+        // Arrange.
+        cartHandler.setResultFor(
+            'getDiscountToggleVisible',
+            Promise.resolve({toggleVisible: false}));
+        cartHandler.setResultFor(
+            'getDiscountEnabled', Promise.resolve({enabled: false}));
+        cartHandler.setResultFor(
+            'getCartFeatureEnabled', Promise.resolve({enabled: true}));
+        loadTimeData.overrideValues({'showCartInQuestModuleSetting': visible});
+        const customizeModules = await createCustomizeModules(false, [
+          {id: 'history_clusters', name: 'History Cluster', disabled: false},
+        ]);
+        const toggleRows =
+            customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.toggle-row');
+        const toggleNames =
+            customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.toggle-name');
+        const subToggleRows =
+            customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.toggle-option-row');
+
+        // Assert.
+        assertEquals(1, toggleRows.length);
+        assertEquals(visible ? 2 : 1, toggleNames.length);
+        assertEquals(visible ? 1 : 0, subToggleRows.length);
+        assertEquals('History Cluster', toggleNames[0]!.innerText);
+        assertEquals(
+            !!customizeModules.shadowRoot!.querySelector('#cartOption'),
+            visible);
+        if (visible) {
+          assertEquals(
+              loadTimeData.getString('modulesCartSentence'),
+              toggleNames[1]!.innerText);
+          assertTrue(subToggleRows[0]!.querySelector('cr-toggle')!.checked);
+        }
+      });
+    });
+
+    test(`cart toggle sets cart status`, async () => {
+      // Arrange.
+      cartHandler.setResultFor(
+          'getDiscountToggleVisible', Promise.resolve({toggleVisible: false}));
+      cartHandler.setResultFor(
+          'getDiscountEnabled', Promise.resolve({enabled: false}));
+      cartHandler.setResultFor(
+          'getCartFeatureEnabled', Promise.resolve({enabled: true}));
+      loadTimeData.overrideValues({'showCartInQuestModuleSetting': true});
+      const customizeModules = await createCustomizeModules(
+          false,
+          [{id: 'history_clusters', name: 'History Cluster', disabled: false}]);
+
+      // Act.
+      const cartOption =
+          customizeModules.shadowRoot!.querySelector('#cartOption')!;
+      cartOption!.querySelector('cr-toggle')!.click();
+      customizeModules.apply();
+
+      // Assert.
+      assertEquals(1, handler.getCallCount('setModuleDisabled'));
+      assertDeepEquals(
+          'chrome_cart', handler.getArgs('setModuleDisabled')[0][0]);
+      assertDeepEquals(true, handler.getArgs('setModuleDisabled')[0][1]);
+    });
+
+    [true, false].forEach(visible => {
+      test(`discount option ${(visible ? '' : 'not ')} visible`, async () => {
+        // Arrange.
+        cartHandler.setResultFor(
+            'getDiscountToggleVisible',
+            Promise.resolve({toggleVisible: visible}));
+        cartHandler.setResultFor(
+            'getDiscountEnabled', Promise.resolve({enabled: true}));
+        cartHandler.setResultFor(
+            'getCartFeatureEnabled', Promise.resolve({enabled: true}));
+        loadTimeData.overrideValues({'showCartInQuestModuleSetting': true});
+        const customizeModules = await createCustomizeModules(false, [
+          {id: 'history_clusters', name: 'History Cluster', disabled: false},
+        ]);
+        const toggleRows =
+            customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.toggle-row');
+        const toggleNames =
+            customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.toggle-name');
+        const subToggleRows =
+            customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.toggle-option-row');
+
+        // Assert.
+        assertEquals(1, toggleRows.length);
+        assertEquals(visible ? 3 : 2, toggleNames.length);
+        assertEquals(visible ? 2 : 1, subToggleRows.length);
+        assertEquals('History Cluster', toggleNames[0]!.innerText);
+        assertEquals(
+            loadTimeData.getString('modulesCartSentence'),
+            toggleNames[1]!.innerText);
+        assertEquals(
+            !!customizeModules.shadowRoot!.querySelector('#cartOption'), true);
+        assertEquals(
+            !!customizeModules.shadowRoot!.querySelector('#discountOption'),
+            visible);
+        if (visible) {
+          assertEquals(
+              loadTimeData.getString('modulesCartDiscountConsentAccept'),
+              toggleNames[2]!.innerText);
+          assertTrue(subToggleRows[1]!.querySelector('cr-toggle')!.checked);
+        }
+      });
+    });
+
+    test(`discount toggle sets discount status`, async () => {
+      // Arrange.
+      cartHandler.setResultFor(
+          'getDiscountToggleVisible', Promise.resolve({toggleVisible: true}));
+      cartHandler.setResultFor(
+          'getDiscountEnabled', Promise.resolve({enabled: true}));
+      cartHandler.setResultFor(
+          'getCartFeatureEnabled', Promise.resolve({enabled: true}));
+      loadTimeData.overrideValues({'showCartInQuestModuleSetting': true});
+      const customizeModules = await createCustomizeModules(
+          false,
+          [{id: 'history_clusters', name: 'History Cluster', disabled: false}]);
+
+      // Act.
+      const discountOption =
+          customizeModules.shadowRoot!.querySelector('#discountOption')!;
+      discountOption!.querySelector('cr-toggle')!.click();
+      customizeModules.apply();
+
+      // Assert.
+      assertEquals(1, cartHandler.getCallCount('setDiscountEnabled'));
+      assertDeepEquals(false, cartHandler.getArgs('setDiscountEnabled')[0]);
+    });
+
+    test(`toggle off cart hides discount toggle`, async () => {
+      // Arrange.
+      cartHandler.setResultFor(
+          'getDiscountToggleVisible', Promise.resolve({toggleVisible: true}));
+      cartHandler.setResultFor(
+          'getDiscountEnabled', Promise.resolve({enabled: true}));
+      cartHandler.setResultFor(
+          'getCartFeatureEnabled', Promise.resolve({enabled: true}));
+      loadTimeData.overrideValues({'showCartInQuestModuleSetting': true});
+      const customizeModules = await createCustomizeModules(false, [
+        {id: 'history_clusters', name: 'History Cluster', disabled: false},
+        {id: 'bar', name: 'bar name', disabled: true},
+      ]);
+      const toggleRows =
+          customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+              '.toggle-row');
+      const toggleNames =
+          customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+              '.toggle-name');
+      const subToggleRows =
+          customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+              '.toggle-option-row');
+      const cartOption =
+          customizeModules.shadowRoot!.querySelector('#cartOption')!;
+      const discountOption =
+          customizeModules.shadowRoot!.querySelector('#discountOption')!;
+
+      // Assert.
+      assertEquals(2, toggleRows.length);
+      assertTrue(toggleRows[0]!.querySelector('cr-toggle')!.checked);
+      assertFalse(toggleRows[1]!.querySelector('cr-toggle')!.checked);
+      assertEquals(4, toggleNames.length);
+      assertEquals('History Cluster', toggleNames[0]!.innerText);
+      assertEquals(
+          loadTimeData.getString('modulesCartSentence'),
+          toggleNames[1]!.innerText);
+      assertEquals(
+          loadTimeData.getString('modulesCartDiscountConsentAccept'),
+          toggleNames[2]!.innerText);
+      assertEquals('bar name', toggleNames[3]!.innerText);
+      assertEquals(2, subToggleRows.length);
+      assertTrue(subToggleRows[0]!.querySelector('cr-toggle')!.checked);
+      assertTrue(subToggleRows[1]!.querySelector('cr-toggle')!.checked);
+      assertTrue(isVisible(cartOption));
+      assertTrue(isVisible(discountOption));
+
+      // Act.
+      cartOption!.querySelector('cr-toggle')!.click();
+      customizeModules.$.toggleRepeat.render();
+
+      // Assert.
+      assertFalse(subToggleRows[0]!.querySelector('cr-toggle')!.checked);
+      assertFalse(isVisible(discountOption));
+      assertTrue(isVisible(cartOption));
+    });
+
+    test(
+        `toggle off history module hides both cart and discount toggles`,
+        async () => {
+          // Arrange.
+          cartHandler.setResultFor(
+              'getDiscountToggleVisible',
+              Promise.resolve({toggleVisible: true}));
+          cartHandler.setResultFor(
+              'getDiscountEnabled', Promise.resolve({enabled: true}));
+          cartHandler.setResultFor(
+              'getCartFeatureEnabled', Promise.resolve({enabled: true}));
+          loadTimeData.overrideValues({'showCartInQuestModuleSetting': true});
+          const customizeModules = await createCustomizeModules(false, [
+            {id: 'history_clusters', name: 'History Cluster', disabled: false},
+            {id: 'bar', name: 'bar name', disabled: true},
+          ]);
+          const toggleRows =
+              customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                  '.toggle-row');
+          const toggleNames =
+              customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                  '.toggle-name');
+          const subToggleRows =
+              customizeModules.shadowRoot!.querySelectorAll<HTMLElement>(
+                  '.toggle-option-row');
+          const cartOption =
+              customizeModules.shadowRoot!.querySelector('#cartOption')!;
+          const discountOption =
+              customizeModules.shadowRoot!.querySelector('#discountOption')!;
+
+          // Assert.
+          assertEquals(2, toggleRows.length);
+          assertTrue(toggleRows[0]!.querySelector('cr-toggle')!.checked);
+          assertFalse(toggleRows[1]!.querySelector('cr-toggle')!.checked);
+          assertEquals(4, toggleNames.length);
+          assertEquals('History Cluster', toggleNames[0]!.innerText);
+          assertEquals(
+              loadTimeData.getString('modulesCartSentence'),
+              toggleNames[1]!.innerText);
+          assertEquals(
+              loadTimeData.getString('modulesCartDiscountConsentAccept'),
+              toggleNames[2]!.innerText);
+          assertEquals('bar name', toggleNames[3]!.innerText);
+          assertEquals(2, subToggleRows.length);
+          assertTrue(subToggleRows[0]!.querySelector('cr-toggle')!.checked);
+          assertTrue(subToggleRows[1]!.querySelector('cr-toggle')!.checked);
+          assertTrue(isVisible(cartOption));
+          assertTrue(isVisible(discountOption));
+
+          // Act.
+          toggleRows[0]!.querySelector('cr-toggle')!.click();
+          customizeModules.$.toggleRepeat.render();
+
+          // Assert.
+          assertFalse(toggleRows[0]!.querySelector('cr-toggle')!.checked);
+          assertFalse(isVisible(discountOption));
+          assertFalse(isVisible(cartOption));
+        });
   });
 });

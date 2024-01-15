@@ -6,9 +6,12 @@
 
 #include <memory>
 
+#include "ash/root_window_controller.h"
+#include "ash/shell.h"
+#include "ash/system/status_area_widget.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_widget_builder.h"
-#include "base/run_loop.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -56,46 +59,24 @@ class AppListBubbleEventFilterTest : public AshTestBase,
 
   std::unique_ptr<views::Widget> widget_;
   std::unique_ptr<views::Widget> view_holder_widget_;
-  views::View* view_ = nullptr;
+  raw_ptr<views::View> view_ = nullptr;
 };
 
 INSTANTIATE_TEST_SUITE_P(MouseOrTouch,
                          AppListBubbleEventFilterTest,
                          testing::Bool());
 
-TEST_P(AppListBubbleEventFilterTest, ClickOutsideWidgetRunsCallback) {
+TEST_P(AppListBubbleEventFilterTest, ClickOnStatusAreaDoesNotRunCallback) {
   int callback_count = 0;
   auto callback = base::BindLambdaForTesting([&]() { ++callback_count; });
   AppListBubbleEventFilter filter(widget_.get(), view_, callback);
 
-  // Click outside the widget.
-  gfx::Point point_outside_widget = widget_->GetWindowBoundsInScreen().origin();
-  point_outside_widget.Offset(-1, -1);
-  ClickOrTapAt(point_outside_widget);
+  // Click on the status area widget should not trigger the callback.
+  auto* status_area =
+      Shell::Get()->GetPrimaryRootWindowController()->GetStatusAreaWidget();
+  ClickOrTapAt(status_area->GetWindowBoundsInScreen().CenterPoint());
 
-  EXPECT_EQ(callback_count, 1);
-}
-
-TEST_P(AppListBubbleEventFilterTest, ClickInsideWidgetDoesNotRunCallback) {
-  bool callback_ran = false;
-  auto callback = base::BindLambdaForTesting([&]() { callback_ran = true; });
-  AppListBubbleEventFilter filter(widget_.get(), view_, callback);
-
-  // Click inside the widget.
-  ClickOrTapAt(widget_->GetWindowBoundsInScreen().CenterPoint());
-
-  EXPECT_FALSE(callback_ran);
-}
-
-TEST_P(AppListBubbleEventFilterTest, ClickInsideViewDoesNotRunCallback) {
-  bool callback_ran = false;
-  auto callback = base::BindLambdaForTesting([&]() { callback_ran = true; });
-  AppListBubbleEventFilter filter(widget_.get(), view_, callback);
-
-  // Click inside the view.
-  ClickOrTapAt(view_->GetBoundsInScreen().CenterPoint());
-
-  EXPECT_FALSE(callback_ran);
+  EXPECT_EQ(callback_count, 0);
 }
 
 }  // namespace

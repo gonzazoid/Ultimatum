@@ -292,7 +292,7 @@ class MediaEngagementContentsObserverTest
     auto ukm_entries = test_ukm_recorder_.GetEntriesByName(Entry::kEntryName);
     ASSERT_NE(0u, ukm_entries.size());
 
-    auto* ukm_entry = ukm_entries.back();
+    auto* ukm_entry = ukm_entries.back().get();
     test_ukm_recorder_.ExpectEntrySourceHasUrl(ukm_entry, origin.GetURL());
     EXPECT_EQ(playbacks_total, *test_ukm_recorder_.GetEntryMetric(
                                    ukm_entry, Entry::kPlaybacks_TotalName));
@@ -350,32 +350,6 @@ class MediaEngagementContentsObserverTest
     contents_observer_->UpdatePlayerTimer(player_id);
   }
 
-  void ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason reason,
-      int count) {
-    histogram_tester_.ExpectBucketCount(
-        MediaEngagementContentsObserver::
-            kHistogramSignificantNotAddedFirstTimeName,
-        static_cast<int>(reason), count);
-  }
-
-  void ExpectNotAddedAfterFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason reason,
-      int count) {
-    histogram_tester_.ExpectBucketCount(
-        MediaEngagementContentsObserver::
-            kHistogramSignificantNotAddedAfterFirstTimeName,
-        static_cast<int>(reason), count);
-  }
-
-  void ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason reason,
-      int count) {
-    histogram_tester_.ExpectBucketCount(
-        MediaEngagementContentsObserver::kHistogramSignificantRemovedName,
-        static_cast<int>(reason), count);
-  }
-
   void ExpectPlaybackTime(int id, base::TimeDelta expected_time) {
     content::MediaPlayerId player_id(content::GlobalRenderFrameHostId(), id);
     EXPECT_EQ(expected_time, contents_observer_->GetPlayerState(player_id)
@@ -409,7 +383,8 @@ class MediaEngagementContentsObserverTest
 
  private:
   // contents_observer_ auto-destroys when WebContents is destroyed.
-  raw_ptr<MediaEngagementContentsObserver> contents_observer_;
+  raw_ptr<MediaEngagementContentsObserver, DanglingUntriaged>
+      contents_observer_;
 
   std::unique_ptr<MediaEngagementService> service_;
 
@@ -549,119 +524,6 @@ TEST_F(MediaEngagementContentsObserverTest, AreConditionsMet_AudioOnly) {
 
   EXPECT_TRUE(AreConditionsMet());
   EXPECT_FALSE(AreAudioContextConditionsMet());
-}
-
-TEST_F(MediaEngagementContentsObserverTest, RecordInsignificantReason) {
-  // Play the media.
-  SimulateAudioVideoPlaybackStarted(0);
-  SimulateResizeEvent(0, gfx::Size(1, 1));
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::
-          kFrameSizeTooSmall,
-      1);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 1);
-
-  // Resize the frame to full size.
-  SimulateResizeEventSignificantSize(0);
-
-  // Resize the frame size.
-  SimulateResizeEvent(0, gfx::Size(1, 1));
-  SimulateResizeEventSignificantSize(0);
-  ExpectRemovedBucketCount(MediaEngagementContentsObserver::
-                               InsignificantPlaybackReason::kFrameSizeTooSmall,
-                           1);
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 1);
-
-  // Pause the player.
-  ExpectRemovedBucketCount(MediaEngagementContentsObserver::
-                               InsignificantPlaybackReason::kMediaPaused,
-                           0);
-  SimulatePlaybackStopped(0);
-  ExpectRemovedBucketCount(MediaEngagementContentsObserver::
-                               InsignificantPlaybackReason::kMediaPaused,
-                           1);
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 2);
-  SimulateAudioVideoPlaybackStarted(0);
-
-  // Mute the player.
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kAudioMuted,
-      0);
-  SimulateMutedStateChange(0, true);
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kAudioMuted,
-      1);
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 3);
-
-  // Start a video only player.
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::
-          kNoAudioTrack,
-      0);
-  SimulatePlaybackStarted(2, false, true);
-  SimulateResizeEventSignificantSize(2);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::
-          kNoAudioTrack,
-      1);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 2);
-
-  // Make sure we only record not added when we have the full state.
-  SimulateAudioVideoPlaybackStarted(3);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 2);
-  SimulateResizeEvent(3, gfx::Size(1, 1));
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 3);
-
-  // Make sure we only record removed when we have the full state.
-  SimulateAudioVideoPlaybackStarted(4);
-  SimulateMutedStateChange(4, true);
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 3);
-  SimulateResizeEventSignificantSize(4);
-  SimulateMutedStateChange(4, false);
-  SimulateMutedStateChange(4, true);
-  ExpectRemovedBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 4);
-}
-
-TEST_F(MediaEngagementContentsObserverTest,
-       RecordInsignificantReason_NotAdded_AfterFirstTime) {
-  SimulatePlaybackStarted(0, false, true);
-  SimulateMutedStateChange(0, true);
-  SimulateResizeEventSignificantSize(0);
-
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::
-          kNoAudioTrack,
-      1);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kAudioMuted,
-      1);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 1);
-
-  SimulateMutedStateChange(0, false);
-
-  ExpectNotAddedAfterFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::
-          kNoAudioTrack,
-      1);
-  ExpectNotAddedAfterFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 1);
-
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::
-          kNoAudioTrack,
-      1);
-  ExpectNotAddedFirstTimeBucketCount(
-      MediaEngagementContentsObserver::InsignificantPlaybackReason::kCount, 1);
 }
 
 TEST_F(MediaEngagementContentsObserverTest,
@@ -861,75 +723,6 @@ TEST_F(MediaEngagementContentsObserverTest,
   EXPECT_FALSE(GetSignificantActivePlayersCount());
   EXPECT_FALSE(GetStoredPlayerStatesCount());
   EXPECT_FALSE(IsTimerRunning());
-}
-
-TEST_F(MediaEngagementContentsObserverTest, RecordScoreOnPlayback) {
-  url::Origin origin1 = url::Origin::Create(GURL("https://www.google.com"));
-  url::Origin origin2 = url::Origin::Create(GURL("https://www.google.co.uk"));
-  url::Origin origin3 = url::Origin::Create(GURL("https://www.example.com"));
-
-  SetScores(origin1, 24, 20);
-  SetScores(origin2, 24, 12);
-  SetScores(origin3, 8, 4);
-  base::HistogramTester tester;
-  tester.ExpectTotalCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 0);
-
-  Navigate(origin1.GetURL());
-  SimulateAudioVideoPlaybackStarted(0);
-  tester.ExpectBucketCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 83, 1);
-
-  Navigate(origin2.GetURL());
-  SimulateAudioVideoPlaybackStarted(0);
-  SimulateAudioVideoPlaybackStarted(1);
-  SimulateMutedStateChange(0, false);
-  tester.ExpectBucketCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 50, 2);
-
-  Navigate(origin3.GetURL());
-  SimulateAudioVideoPlaybackStarted(0);
-  tester.ExpectBucketCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 20, 1);
-  tester.ExpectTotalCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 4);
-
-  SimulateMutedStateChange(1, false);
-  tester.ExpectTotalCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 4);
-
-  SimulateAudioVideoPlaybackStarted(1);
-  tester.ExpectTotalCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 5);
-}
-
-TEST_F(MediaEngagementContentsObserverTest, DoNotRecordScoreOnPlayback_Muted) {
-  url::Origin origin = url::Origin::Create(GURL("https://www.google.com"));
-  SetScores(origin, 24, 20);
-
-  base::HistogramTester tester;
-  Navigate(origin.GetURL());
-  content::WebContentsObserver::MediaPlayerInfo player_info(true, true);
-  SimulatePlaybackStarted(player_info, 0, true);
-  tester.ExpectTotalCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 0);
-
-  SimulateMutedStateChange(0, false);
-  tester.ExpectBucketCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 83, 1);
-}
-
-TEST_F(MediaEngagementContentsObserverTest,
-       DoNotRecordScoreOnPlayback_NoAudioTrack) {
-  url::Origin origin = url::Origin::Create(GURL("https://www.google.com"));
-  SetScores(origin, 6, 5);
-
-  base::HistogramTester tester;
-  Navigate(origin.GetURL());
-  content::WebContentsObserver::MediaPlayerInfo player_info(true, false);
-  SimulatePlaybackStarted(player_info, 0, false);
-  tester.ExpectTotalCount(
-      MediaEngagementContentsObserver::kHistogramScoreAtPlaybackName, 0);
 }
 
 TEST_F(MediaEngagementContentsObserverTest,
@@ -1369,17 +1162,10 @@ TEST_F(MediaEngagementContentsObserverTest, PlayerStateIsCleanedUp) {
 class MediaEngagementContentsObserverPrerenderTest
     : public MediaEngagementContentsObserverTest {
  public:
-  MediaEngagementContentsObserverPrerenderTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {blink::features::kPrerender2},
-        // Disable the memory requirement of Prerender2 so the test can run on
-        // any bot.
-        {blink::features::kPrerender2MemoryControls});
-  }
-  ~MediaEngagementContentsObserverPrerenderTest() override = default;
+  MediaEngagementContentsObserverPrerenderTest() = default;
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  content::test::ScopedPrerenderFeatureList prerender_feature_list_;
 };
 
 TEST_F(MediaEngagementContentsObserverPrerenderTest,

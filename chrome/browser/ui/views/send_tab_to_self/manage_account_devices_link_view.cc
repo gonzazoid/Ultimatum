@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_controller.h"
@@ -72,9 +72,10 @@ std::unique_ptr<views::View> BuildManageAccountDevicesLinkView(
       gfx::ImageSkiaOperations::CreateMaskedImage(square_avatar, circle_mask);
   auto* avatar_view =
       container->AddChildView(std::make_unique<views::ImageView>());
-  avatar_view->SetImage(gfx::ImageSkiaOperations::CreateResizedImage(
-      round_avatar, skia::ImageOperations::RESIZE_BEST,
-      gfx::Size(kAccountAvatarSize, kAccountAvatarSize)));
+  avatar_view->SetImage(ui::ImageModel::FromImageSkia(
+      gfx::ImageSkiaOperations::CreateResizedImage(
+          round_avatar, skia::ImageOperations::RESIZE_BEST,
+          gfx::Size(kAccountAvatarSize, kAccountAvatarSize))));
 
   auto* link_view =
       container->AddChildView(std::make_unique<views::StyledLabel>());

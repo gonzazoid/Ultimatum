@@ -9,6 +9,7 @@
 #include "build/branding_buildflags.h"
 
 namespace ash {
+
 namespace {
 
 const char kExtensionIMEPrefix[] = "_ext_ime_";
@@ -172,6 +173,20 @@ bool IsExperimentalMultilingual(const std::string& input_method_id) {
       {kComponentExtensionIMEPrefix, kXkbExtensionId, "experimental_"});
   return base::StartsWith(input_method_id, prefix,
                           base::CompareCase::SENSITIVE);
+#else
+  return false;
+#endif
+}
+
+bool IsCros1pKorean(const std::string& input_method_id) {
+  // TODO(crbug.com/1162211): Input method IDs are tuples of extension type,
+  // extension ID, and extension-local input method ID. However, currently
+  // they're just concats of the three constituent pieces of info, hence StrCat
+  // here. Replace StrCat once they're no longer unstructured string concats.
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  return input_method_id == base::StrCat({kComponentExtensionIMEPrefix,
+                                          kXkbExtensionId, "ko-t-i0-und"});
 #else
   return false;
 #endif

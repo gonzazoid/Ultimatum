@@ -20,17 +20,21 @@
 #include "media/base/decoder_buffer.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/media_log.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
 namespace {
 
-struct MediaFoundationSubsampleEntry {
-  MediaFoundationSubsampleEntry(SubsampleEntry entry)
-      : clear_bytes(entry.clear_bytes), cipher_bytes(entry.cypher_bytes) {}
-  MediaFoundationSubsampleEntry() = default;
-  DWORD clear_bytes = 0;
-  DWORD cipher_bytes = 0;
+struct PendingInputBuffer {
+  PendingInputBuffer(DemuxerStream::Status status,
+                     scoped_refptr<media::DecoderBuffer> buffer);
+  explicit PendingInputBuffer(DemuxerStream::Status status);
+  PendingInputBuffer(const PendingInputBuffer& other);
+  ~PendingInputBuffer();
+
+  DemuxerStream::Status status;
+  scoped_refptr<media::DecoderBuffer> buffer;
 };
 
 }  // namespace
@@ -90,6 +94,9 @@ class MediaFoundationStreamWrapper
   void ProcessRequestsIfPossible();
   void OnDemuxerStreamRead(DemuxerStream::Status status,
                            scoped_refptr<DecoderBuffer> buffer);
+  // Receive the data from MojoDemuxerStreamAdapter.
+  void OnDemuxerStreamReadBuffers(DemuxerStream::Status status,
+                                  DemuxerStream::DecoderBufferVector buffers);
 
   // IMFMediaStream implementation - it is in general running in MF threadpool
   // thread.
@@ -114,8 +121,6 @@ class MediaFoundationStreamWrapper
 
  protected:
   HRESULT GenerateStreamDescriptor();
-  HRESULT GenerateSampleFromDecoderBuffer(DecoderBuffer* buffer,
-                                          IMFSample** sample_out);
   HRESULT ServiceSampleRequest(IUnknown* token, DecoderBuffer* buffer)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
   // Returns true when a sample request has been serviced.
@@ -123,6 +128,8 @@ class MediaFoundationStreamWrapper
   virtual HRESULT GetMediaType(IMFMediaType** media_type_out) = 0;
 
   void ReportEncryptionType(const scoped_refptr<DecoderBuffer>& buffer);
+
+  void SetLastStartPosition(const PROPVARIANT* start_position);
 
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   enum class State {
@@ -154,6 +161,10 @@ class MediaFoundationStreamWrapper
 
   int stream_id_;
 
+  bool has_clear_lead_ = false;
+
+  bool switched_clear_to_encrypted_ = false;
+
   // |mf_media_event_queue_| is safe to be called on any thread.
   Microsoft::WRL::ComPtr<IMFMediaEventQueue> mf_media_event_queue_;
   Microsoft::WRL::ComPtr<IMFStreamDescriptor> mf_stream_descriptor_;
@@ -168,8 +179,27 @@ class MediaFoundationStreamWrapper
   // If true, there is a pending a read completion from Chromium media stack.
   bool pending_stream_read_ = false;
 
+  // Maintain the buffer obtained by batch read. We push buffer into
+  // |buffer_queue_| by OnDemuxerStreamReadBuffers(), pop buffer by
+  // ProcessRequestsIfPossible(), these two operations are both on media stack
+  // thread. SetFlush() can be invoked by media stack thread or MF threadpool
+  // thread, it clears the buffer in |buffer_queue_|. So |buffer_queue_| needs
+  // to be guardedby the lock.
+  std::deque<PendingInputBuffer> buffer_queue_ GUARDED_BY(lock_);
+
+  // |batch_read_count_| represents how many buffers we try to get by a IPC
+  // call. The actual returned buffer count could be less according to
+  // DemuxerStream::Read() API.
+  uint32_t batch_read_count_ = 1;
+
   bool stream_ended_ = false;
   GUID last_key_id_ = GUID_NULL;
+
+  static constexpr MFTIME kInvalidTime = -1;
+  // The starting position in 100-nanosecond units, relative to the start of
+  // the presentation. Set from MediaFoundationSourceWrapper::Start, and used
+  // to send Stream ticks in ServicePostFlushSampleRequest.
+  MFTIME last_start_time_ GUARDED_BY(lock_) = kInvalidTime;
 
   // Save media::DecoderBuffer from OnDemuxerStreamRead call when we are in
   // progress of a flush operation.

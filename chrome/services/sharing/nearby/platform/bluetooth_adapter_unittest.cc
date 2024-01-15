@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -15,7 +16,6 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -43,7 +43,7 @@ class BluetoothAdapterTest : public testing::Test {
   }
 
  protected:
-  bluetooth::FakeAdapter* fake_adapter_;
+  raw_ptr<bluetooth::FakeAdapter> fake_adapter_;
   std::unique_ptr<BluetoothAdapter> bluetooth_adapter_;
 
  private:
@@ -124,10 +124,13 @@ TEST_F(BluetoothAdapterTest, TestSetName) {
   EXPECT_EQ(name, fake_adapter_->name_);
 }
 
-TEST_F(BluetoothAdapterTest, TestGetAddress) {
+TEST_F(BluetoothAdapterTest, TestGetMacAddress) {
   EXPECT_EQ(fake_adapter_->address_, bluetooth_adapter_->GetMacAddress());
+}
+
+TEST_F(BluetoothAdapterTest, TestGetAddress) {
+  EXPECT_EQ(fake_adapter_->address_, bluetooth_adapter_->GetAddress());
 }
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

@@ -7,17 +7,19 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/shill_device_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
@@ -54,11 +56,14 @@ class MockDelegate : public NetworkConnect::Delegate {
   MOCK_METHOD1(ShowEnrollNetwork, bool(const std::string& network_id));
   MOCK_METHOD1(ShowMobileSetupDialog, void(const std::string& network_id));
   MOCK_METHOD1(ShowCarrierAccountDetail, void(const std::string& network_id));
-  MOCK_METHOD1(ShowPortalSignin, void(const std::string& network_id));
+  MOCK_METHOD2(ShowPortalSignin,
+               void(const std::string& network_id,
+                    NetworkConnect::Source source));
   MOCK_METHOD2(ShowNetworkConnectError,
                void(const std::string& error_name,
                     const std::string& network_id));
   MOCK_METHOD1(ShowMobileActivationError, void(const std::string& network_id));
+  MOCK_METHOD0(ShowCarrierUnlockNotification, void());
 };
 
 class FakeTetherDelegate : public NetworkConnectionHandler::TetherDelegate {
@@ -204,8 +209,8 @@ class NetworkConnectTest : public testing::Test {
   std::unique_ptr<FakeTetherDelegate> fake_tether_delegate_;
   base::test::SingleThreadTaskEnvironment task_environment_;
   NetworkHandlerTestHelper network_handler_test_helper_;
-  ShillDeviceClient::TestInterface* device_test_;
-  ShillServiceClient::TestInterface* service_test_;
+  raw_ptr<ShillDeviceClient::TestInterface> device_test_;
+  raw_ptr<ShillServiceClient::TestInterface> service_test_;
 };
 
 TEST_F(NetworkConnectTest, ConnectToNetworkId_NoConfiguration) {
@@ -228,7 +233,7 @@ TEST_F(NetworkConnectTest, ConfigureAndConnectToNetwork_NoConfiguration) {
               ShowNetworkConnectError(NetworkConnectionHandler::kErrorNotFound,
                                       "bad guid"));
 
-  base::Value properties(base::Value::Type::DICTIONARY);
+  base::Value::Dict properties;
   NetworkConnect::Get()->ConfigureNetworkIdAndConnect("bad guid", properties,
                                                       true);
 }
@@ -239,7 +244,7 @@ TEST_F(NetworkConnectTest,
               ShowNetworkConnectError(
                   NetworkConnectionHandler::kErrorConfigureFailed, kWiFi1Guid));
 
-  base::Value properties(base::Value::Type::DICTIONARY);
+  base::Value::Dict properties;
   NetworkConnect::Get()->ConfigureNetworkIdAndConnect(kWiFi1Guid, properties,
                                                       false);
 }
@@ -300,6 +305,13 @@ TEST_F(NetworkConnectTest, ActivateCellular) {
   NetworkConnect::Get()->ConnectToNetworkId(kCellular1Guid);
 }
 
+TEST_F(NetworkConnectTest, CarrierUnlock) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kCellularCarrierLock);
+  EXPECT_CALL(*mock_delegate_, ShowCarrierUnlockNotification());
+  NetworkConnect::Get()->ShowCarrierUnlockNotification();
+}
+
 TEST_F(NetworkConnectTest, ActivateCellular_Error) {
   EXPECT_CALL(*mock_delegate_, ShowMobileActivationError(kCellular1Guid));
 
@@ -328,13 +340,14 @@ TEST_F(NetworkConnectTest, ConnectToCellularNetwork_OutOfCredits) {
 }
 
 TEST_F(NetworkConnectTest, ShowPortalSignin) {
-  EXPECT_CALL(*mock_delegate_, ShowPortalSignin(kWiFi1Guid));
+  EXPECT_CALL(*mock_delegate_, ShowPortalSignin(kWiFi1Guid, _));
 
   service_test_->SetServiceProperty(kWiFi1ServicePath, shill::kStateProperty,
                                     base::Value(shill::kStateRedirectFound));
   base::RunLoop().RunUntilIdle();
 
-  NetworkConnect::Get()->ShowPortalSignin(kWiFi1Guid);
+  NetworkConnect::Get()->ShowPortalSignin(kWiFi1Guid,
+                                          NetworkConnect::Source::kSettings);
   base::RunLoop().RunUntilIdle();
 }
 
@@ -344,6 +357,21 @@ TEST_F(NetworkConnectTest, ConnectToCellularNetwork_SimLocked) {
   service_test_->SetServiceProperty(kCellular1ServicePath,
                                     shill::kErrorProperty,
                                     base::Value(shill::kErrorSimLocked));
+  service_test_->SetErrorForNextConnectionAttempt(shill::kErrorConnectFailed);
+
+  NetworkConnect::Get()->ConnectToNetworkId(kCellular1Guid);
+  base::RunLoop().RunUntilIdle();
+}
+
+TEST_F(NetworkConnectTest, ConnectToCellularNetwork_SimCarrierLocked) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kCellularCarrierLock);
+
+  EXPECT_CALL(*mock_delegate_, ShowNetworkSettings(kCellular1Guid)).Times(0);
+
+  service_test_->SetServiceProperty(kCellular1ServicePath,
+                                    shill::kErrorProperty,
+                                    base::Value(shill::kErrorSimCarrierLocked));
   service_test_->SetErrorForNextConnectionAttempt(shill::kErrorConnectFailed);
 
   NetworkConnect::Get()->ConnectToNetworkId(kCellular1Guid);

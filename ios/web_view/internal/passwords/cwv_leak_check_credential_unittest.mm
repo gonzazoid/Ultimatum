@@ -11,10 +11,6 @@
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using password_manager::LeakCheckCredential;
 
 namespace ios_web_view {
@@ -36,7 +32,7 @@ class CWVLeakCheckCredentialTest : public PlatformTest {
     password_form.signon_realm = "http://www.example.com/";
     password_form.scheme = password_manager::PasswordForm::Scheme::kHtml;
     password_form.blocked_by_user = false;
-    password_form.encrypted_password = base::UTF16ToUTF8(password);
+    password_form.keychain_identifier = base::UTF16ToUTF8(password);
 
     return [[CWVPassword alloc] initWithPasswordForm:password_form];
   }

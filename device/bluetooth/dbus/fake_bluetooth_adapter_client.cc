@@ -8,12 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "dbus/bus.h"
 #include "device/bluetooth/bluez/bluetooth_service_record_bluez.h"
@@ -348,8 +347,9 @@ void FakeBluetoothAdapterClient::SetSecondUUIDs(
   second_properties_->uuids.ReplaceValue(uuids);
 }
 
-void FakeBluetoothAdapterClient::SetDiscoverableTimeout(uint32_t timeout) {
-  properties_->discoverable_timeout.ReplaceValue(timeout);
+void FakeBluetoothAdapterClient::SetDiscoverableTimeout(
+    base::TimeDelta timeout) {
+  properties_->discoverable_timeout.ReplaceValue(timeout.InSeconds());
 }
 
 void FakeBluetoothAdapterClient::OnPropertyChanged(
@@ -371,7 +371,7 @@ void FakeBluetoothAdapterClient::OnPropertyChanged(
 }
 
 void FakeBluetoothAdapterClient::PostDelayedTask(base::OnceClosure callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, std::move(callback),
       base::Milliseconds(simulation_interval_ms_));
 }

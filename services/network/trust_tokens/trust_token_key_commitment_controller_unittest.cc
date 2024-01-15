@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "net/base/load_flags.h"
@@ -43,7 +43,7 @@ class FixedKeyCommitmentParser
     : public TrustTokenKeyCommitmentController::Parser {
  public:
   mojom::TrustTokenKeyCommitmentResultPtr Parse(
-      base::StringPiece response_body) override {
+      std::string_view response_body) override {
     return DeterministicallyReturnedValue();
   }
   static mojom::TrustTokenKeyCommitmentResultPtr
@@ -57,7 +57,7 @@ class FixedKeyCommitmentParser
 class FailingKeyCommitmentParser
     : public TrustTokenKeyCommitmentController::Parser {
   mojom::TrustTokenKeyCommitmentResultPtr Parse(
-      base::StringPiece response_body) override {
+      std::string_view response_body) override {
     return nullptr;
   }
 };

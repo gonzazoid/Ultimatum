@@ -1,8 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/test/test_browser_ui.h"
@@ -25,7 +26,8 @@ const char kTestURL[] = "about:blank";
 class PriceTrackingIconViewBrowserTest : public UiBrowserTest {
  public:
   PriceTrackingIconViewBrowserTest() {
-    test_features_.InitAndEnableFeature(commerce::kShoppingList);
+    test_features_.InitWithFeatures({commerce::kShoppingList},
+                                    {commerce::kPriceInsights});
   }
 
   // UiBrowserTest:
@@ -34,11 +36,10 @@ class PriceTrackingIconViewBrowserTest : public UiBrowserTest {
     if (name == "forced_show_tracking_price") {
       SimulateServerPriceTrackState(true);
       icon_view->ForceVisibleForTesting(/*is_tracking_price=*/true);
-    } else if (name == "forced_show_track_price") {
+    } else {
+      CHECK_EQ(name, "forced_show_track_price");
       SimulateServerPriceTrackState(false);
       icon_view->ForceVisibleForTesting(/*is_tracking_price=*/false);
-    } else {
-      NOTREACHED();
     }
   }
 

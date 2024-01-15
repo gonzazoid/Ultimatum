@@ -6,7 +6,7 @@
 
 #include "base/values.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_fatal_error_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/signin_fatal_error_screen_handler.h"
 
 namespace ash {
 namespace {
@@ -37,7 +37,7 @@ void SignInFatalErrorScreen::SetCustomError(const std::string& error_text,
                                             const std::string& keyboard_hint,
                                             const std::string& details,
                                             const std::string& help_link_text) {
-  error_state_ = Error::CUSTOM;
+  error_state_ = Error::kCustom;
   extra_error_info_ = base::Value::Dict();
   DCHECK(!error_text.empty());
   extra_error_info_.Set("errorText", error_text);

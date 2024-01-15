@@ -4,7 +4,7 @@
 
 #include "third_party/blink/renderer/core/exported/web_form_element_observer_impl.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/public/web/web_form_control_element.h"
 #include "third_party/blink/public/web/web_form_element.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_mutation_observer_init.h"
@@ -80,10 +80,9 @@ void WebFormElementObserverImpl::ObserverCallback::Deliver(
         Disconnect();
         return;
       }
-    } else {
+    } else if (auto* element = DynamicTo<Element>(record->target())) {
       // Either "style" or "class" was modified. Check the computed style.
-      auto* style =
-          MakeGarbageCollected<CSSComputedStyleDeclaration>(record->target());
+      auto* style = MakeGarbageCollected<CSSComputedStyleDeclaration>(element);
       if (style->GetPropertyValue(CSSPropertyID::kDisplay) == "none") {
         std::move(callback_).Run();
         Disconnect();

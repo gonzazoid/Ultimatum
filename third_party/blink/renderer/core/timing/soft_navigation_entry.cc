@@ -11,12 +11,12 @@ namespace blink {
 
 SoftNavigationEntry::SoftNavigationEntry(AtomicString name,
                                          double start_time,
-                                         uint32_t navigation_id)
-    : PerformanceEntry(name, start_time, start_time, navigation_id) {}
+                                         DOMWindow* source)
+    : PerformanceEntry(name, start_time, start_time, source) {}
 
 SoftNavigationEntry::~SoftNavigationEntry() = default;
 
-AtomicString SoftNavigationEntry::entryType() const {
+const AtomicString& SoftNavigationEntry::entryType() const {
   return performance_entry_names::kSoftNavigation;
 }
 

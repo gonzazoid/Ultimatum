@@ -6,15 +6,15 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chromecast/base/cast_sys_info_util.h"
 #include "chromecast/base/chromecast_switches.h"
@@ -28,6 +28,7 @@
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/metrics_state_manager.h"
 #include "components/metrics/net/net_metrics_log_uploader.h"
+#include "components/metrics/persistent_synthetic_trial_observer.h"
 #include "components/metrics/url_constants.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
@@ -124,7 +125,8 @@ CastMetricsServiceClient::LoadClientInfo() {
     // instead of just being FDR'ed.
     if (!pref_service_->GetString(kMetricsOldClientID).empty()) {
       // Force old client id to be regenerated. See b/9487011.
-      client_info->client_id = base::GenerateGUID();
+      client_info->client_id =
+          base::Uuid::GenerateRandomV4().AsLowercaseString();
       pref_service_->SetBoolean(prefs::kMetricsIsNewClientID, true);
       return client_info;
     }
@@ -132,7 +134,8 @@ CastMetricsServiceClient::LoadClientInfo() {
   }
 
   // Use "forced" client ID if available.
-  if (!force_client_id_.empty() && base::IsValidGUID(force_client_id_)) {
+  if (!force_client_id_.empty() &&
+      base::Uuid::ParseCaseInsensitive(force_client_id_).is_valid()) {
     client_info->client_id = force_client_id_;
     return client_info;
   }
@@ -267,20 +270,50 @@ bool CastMetricsServiceClient::IsConsentGiven() const {
   return pref_service_->GetBoolean(prefs::kOptInStats);
 }
 
-void CastMetricsServiceClient::EnableMetricsService(bool enabled) {
+bool CastMetricsServiceClient::IsReportingEnabled() const {
+  // Recording metrics is controlled by the opt-in stats preference
+  // (`IsConsentGiven()`), but reporting them to Google is controlled by
+  // ToS being accepted.
+  return pref_service_->GetBoolean(prefs::kTosAccepted) &&
+         ::metrics::EnabledStateProvider::IsReportingEnabled();
+}
+
+void CastMetricsServiceClient::UpdateMetricsServiceState() {
   if (!task_runner_->BelongsToCurrentThread()) {
     task_runner_->PostTask(
         FROM_HERE,
-        base::BindOnce(&CastMetricsServiceClient::EnableMetricsService,
-                       base::Unretained(this), enabled));
+        base::BindOnce(&CastMetricsServiceClient::UpdateMetricsServiceState,
+                       base::Unretained(this)));
     return;
   }
 
-  if (enabled) {
+  if (IsConsentGiven()) {
     metrics_service_->Start();
+    if (!IsReportingEnabled()) {
+      // Metrics are only reported after ToS have been accepted. If usage
+      // reporting is enabled, but ToS is not accepted, we can record metrics
+      // but must not report/upload them.
+      //
+      // `MetricsServiceImpl::Start()` will start recording and reporting.
+      // We must call `DisableReporting()` which will update the internal
+      // state machine of the reporting service and stop the upload scheduler
+      // from running.
+      metrics_service_->DisableReporting();
+    }
   } else {
     metrics_service_->Stop();
   }
+}
+
+void CastMetricsServiceClient::DisableMetricsService() {
+  if (!task_runner_->BelongsToCurrentThread()) {
+    task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&CastMetricsServiceClient::DisableMetricsService,
+                       base::Unretained(this)));
+    return;
+  }
+  metrics_service_->Stop();
 }
 
 CastMetricsServiceClient::CastMetricsServiceClient(
@@ -290,7 +323,7 @@ CastMetricsServiceClient::CastMetricsServiceClient(
     : delegate_(delegate),
       pref_service_(pref_service),
       client_info_loaded_(false),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       url_loader_factory_(url_loader_factory),
       cast_sys_info_(CreateSysInfo()) {}
 
@@ -315,8 +348,7 @@ void CastMetricsServiceClient::InitializeMetricsService() {
       // Pass an empty file path since Chromecast does not use the Variations
       // framework.
       /*user_data_dir=*/base::FilePath(),
-      ::metrics::StartupVisibility::kUnknown,
-      ::metrics::EntropyProviderType::kDefault,
+      ::metrics::StartupVisibility::kUnknown, ::metrics::EntropyParams{},
       base::BindRepeating(&CastMetricsServiceClient::StoreClientInfo,
                           base::Unretained(this)),
       base::BindRepeating(&CastMetricsServiceClient::LoadClientInfo,
@@ -335,6 +367,7 @@ void CastMetricsServiceClient::InitializeMetricsService() {
   synthetic_trial_registry_ =
       std::make_unique<variations::SyntheticTrialRegistry>(
           IsExternalExperimentAllowlistEnabled());
+  synthetic_trial_observation_.Observe(synthetic_trial_registry_.get());
 
   metrics_service_.reset(new ::metrics::MetricsService(
       metrics_state_manager_.get(), this, pref_service_));
@@ -362,8 +395,7 @@ void CastMetricsServiceClient::StartMetricsService() {
   metrics_state_manager_->LogHasSessionShutdownCleanly(false);
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-  if (IsReportingEnabled())
-    metrics_service_->Start();
+  UpdateMetricsServiceState();
 }
 
 void CastMetricsServiceClient::Finalize() {

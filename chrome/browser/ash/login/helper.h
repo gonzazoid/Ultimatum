@@ -24,14 +24,18 @@ class Size;
 
 namespace content {
 class StoragePartition;
-}
+}  // namespace content
 
 namespace network {
 namespace mojom {
 class NetworkContext;
-}
+}  // namespace mojom
 class SharedURLLoaderFactory;
-}
+}  // namespace network
+
+namespace policy {
+class DeviceLocalAccountPolicyBroker;
+}  // namespace policy
 
 namespace ash {
 
@@ -122,14 +126,14 @@ void SaveSyncPasswordDataToProfile(const UserContext& user_context,
 base::TimeDelta TimeToOnlineSignIn(base::Time last_online_signin,
                                    base::TimeDelta offline_signin_limit);
 
+// Checks whether full management disclosure is needed for the public/managed
+// session login screen UI. Full disclosure is needed if the session is
+// managed and any risky extensions or network certificates are forced
+// through the policies.
+bool IsFullManagementDisclosureNeeded(
+    policy::DeviceLocalAccountPolicyBroker* broker);
+
 }  // namespace login
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace login {
-using ::ash::login::NetworkStateHelper;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_HELPER_H_

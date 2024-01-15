@@ -61,6 +61,14 @@ class RenderFrameHostAndroid : public base::SupportsUserData::Data {
   void NotifyUserActivation(JNIEnv* env,
                             const base::android::JavaParamRef<jobject>&);
 
+  void NotifyWebAuthnAssertionRequestSucceeded(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>&);
+
+  jboolean IsCloseWatcherActive(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>&) const;
+
   jboolean SignalCloseWatcherIfActive(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>&) const;
@@ -82,23 +90,34 @@ class RenderFrameHostAndroid : public base::SupportsUserData::Data {
   jboolean IsProcessBlocked(JNIEnv* env,
                             const base::android::JavaParamRef<jobject>&) const;
 
-  base::android::ScopedJavaLocalRef<jobject>
-  PerformGetAssertionWebAuthSecurityChecks(
+  void PerformGetAssertionWebAuthSecurityChecks(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>&,
       const base::android::JavaParamRef<jstring>&,
       const base::android::JavaParamRef<jobject>&,
-      jboolean is_payment_credential_get_assertion) const;
+      jboolean is_payment_credential_get_assertion,
+      const base::android::JavaParamRef<jobject>& callback) const;
 
-  jint PerformMakeCredentialWebAuthSecurityChecks(
+  void PerformMakeCredentialWebAuthSecurityChecks(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>&,
       const base::android::JavaParamRef<jstring>&,
       const base::android::JavaParamRef<jobject>&,
-      jboolean is_payment_credential_creation) const;
+      jboolean is_payment_credential_creation,
+      const base::android::JavaParamRef<jobject>& callback) const;
 
   jint GetLifecycleState(JNIEnv* env,
                          const base::android::JavaParamRef<jobject>&) const;
+
+  void InsertVisualStateCallback(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& jcallback);
+
+  void ExecuteJavaScriptInIsolatedWorld(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jstring>& jstring,
+      jint jworldId,
+      const base::android::JavaParamRef<jobject>& jcallback);
 
   RenderFrameHostImpl* render_frame_host() const { return render_frame_host_; }
 

@@ -9,6 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
@@ -20,6 +21,7 @@ namespace ash {
 // addresses of the default network and available network technologies.
 class ASH_EXPORT NetworkInfoBubble : public views::BubbleDialogDelegateView {
  public:
+  METADATA_HEADER(NetworkInfoBubble);
   // This class declares the interface that should be implemented by any class
   // that intends to instantiate NetworkInfoBubble.
   class Delegate {
@@ -58,6 +60,9 @@ class ASH_EXPORT NetworkInfoBubble : public views::BubbleDialogDelegateView {
   // comprised of the IP addresses, if available, as well as the mac addresses
   // for the ethernet, WiFi, and cellular devices.
   std::u16string ComputeInfoText();
+
+  // The container for info labels.
+  raw_ptr<views::View> label_container_ = nullptr;
 
   base::WeakPtr<Delegate> delegate_;
 };

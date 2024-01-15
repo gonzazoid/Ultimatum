@@ -5,51 +5,40 @@
 #ifndef CHROME_BROWSER_ASH_APP_MODE_KIOSK_APP_TYPES_H_
 #define CHROME_BROWSER_ASH_APP_MODE_KIOSK_APP_TYPES_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "components/account_id/account_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
-// Type of different kiosk apps to be launched.
+// Supported types of Kiosk apps.
 enum class KioskAppType { kArcApp, kChromeApp, kWebApp };
 
-// Universal identifier for all kiosk apps.
+// Universal identifier for Kiosk apps.
 class KioskAppId {
  public:
-  KioskAppType type;
-  absl::optional<std::string> app_id;
-  absl::optional<AccountId> account_id;
-
-  KioskAppId();
-  ~KioskAppId();
-  KioskAppId(const KioskAppId&);
-
-  static KioskAppId ForChromeApp(const std::string& app_id);
+  static KioskAppId ForChromeApp(std::string_view chrome_app_id,
+                                 const AccountId& account_id);
   static KioskAppId ForWebApp(const AccountId& account_id);
   static KioskAppId ForArcApp(const AccountId& account_id);
 
-  // Use this method when we are unsure which type of kiosk app this AccountId
-  // belongs to.
-  static bool FromAccountId(const AccountId& account_id,
-                            KioskAppId* kiosk_app_id);
+  KioskAppId();
+  KioskAppId(const KioskAppId&);
+  ~KioskAppId();
+
+  KioskAppType type;
+  std::optional<std::string> app_id;
+  AccountId account_id;
 
  private:
-  KioskAppId(KioskAppType type, const std::string& app_id);
+  KioskAppId(std::string_view chrome_app_id, const AccountId& account_id);
   KioskAppId(KioskAppType type, const AccountId& account_id);
 };
 
-// Overload << operator to allow logging of KioskAppId.
 std::ostream& operator<<(std::ostream& stream, const KioskAppId& app_id);
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the //chrome/browser/chromeos
-// source code migration is finished.
-namespace chromeos {
-using ::ash::KioskAppId;
-using ::ash::KioskAppType;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_KIOSK_APP_TYPES_H_

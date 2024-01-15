@@ -15,14 +15,18 @@
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/favicon/core/fallback_url_util.h"
 #include "components/favicon/core/favicon_service.h"
+#include "components/password_manager/content/common/web_ui_constants.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_analysis.h"
+#include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
+#include "ui/gfx/favicon_size.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
@@ -58,6 +62,14 @@ SkColor ComputeBackgroundColorForUrl(const GURL& icon_url) {
   base::SHA1HashBytes(reinterpret_cast<const unsigned char*>(origin.c_str()),
                       origin.size(), hash);
   return SkColorSetRGB(hash[0], hash[1], hash[2]);
+}
+
+// Gets the appropriate light or dark rasterized default favicon.
+gfx::Image GetDefaultFaviconForColorScheme(bool is_dark) {
+  const int resource_id =
+      is_dark ? IDR_DEFAULT_FAVICON_DARK : IDR_DEFAULT_FAVICON;
+  return ui::ResourceBundle::GetSharedInstance().GetNativeImageNamed(
+      resource_id);
 }
 
 }  // namespace
@@ -99,7 +111,7 @@ gfx::Image TabFaviconFromWebContents(content::WebContents* contents) {
 
   favicon::FaviconDriver* favicon_driver =
       favicon::ContentFaviconDriver::FromWebContents(contents);
-  // TODO(crbug.com/3041580): Investigate why some WebContents do not have
+  // TODO(crbug.com/1231506): Investigate why some WebContents do not have
   // an attached ContentFaviconDriver.
   if (!favicon_driver) {
     return gfx::Image();
@@ -131,9 +143,19 @@ gfx::Image GetDefaultFavicon() {
       ui::NativeTheme::GetInstanceForNativeUi();
   is_dark = native_theme && native_theme->ShouldUseDarkColors();
 #endif
-  int resource_id = is_dark ? IDR_DEFAULT_FAVICON_DARK : IDR_DEFAULT_FAVICON;
-  return ui::ResourceBundle::GetSharedInstance().GetNativeImageNamed(
-      resource_id);
+  return GetDefaultFaviconForColorScheme(is_dark);
+}
+
+ui::ImageModel GetDefaultFaviconModel(ui::ColorId bg_color) {
+  return ui::ImageModel::FromImageGenerator(
+      base::BindRepeating(
+          [](ui::ColorId bg_color, const ui::ColorProvider* provider) {
+            return *GetDefaultFaviconForColorScheme(
+                        color_utils::IsDark(provider->GetColor(bg_color)))
+                        .ToImageSkia();
+          },
+          bg_color),
+      gfx::Size(gfx::kFaviconSize, gfx::kFaviconSize));
 }
 
 void SaveFaviconEvenIfInIncognito(content::WebContents* contents) {
@@ -167,16 +189,23 @@ void SaveFaviconEvenIfInIncognito(content::WebContents* contents) {
                                favicon_status.image);
 }
 
+bool ShouldThemifyFavicon(GURL url) {
+  if (!url.SchemeIs(content::kChromeUIScheme)) {
+    return false;
+  }
+  return url.host_piece() != chrome::kChromeUIAppLauncherPageHost &&
+         url.host_piece() != chrome::kChromeUIHelpHost &&
+         url.host_piece() != chrome::kChromeUIVersionHost &&
+         url.host_piece() != chrome::kChromeUINetExportHost &&
+         url.host_piece() != chrome::kChromeUINewTabHost &&
+         url.host_piece() != password_manager::kChromeUIPasswordManagerHost;
+}
+
 bool ShouldThemifyFaviconForEntry(content::NavigationEntry* entry) {
   const GURL& virtual_url = entry->GetVirtualURL();
   const GURL& actual_url = entry->GetURL();
 
-  if (virtual_url.SchemeIs(content::kChromeUIScheme) &&
-      virtual_url.host_piece() != chrome::kChromeUIAppLauncherPageHost &&
-      virtual_url.host_piece() != chrome::kChromeUIHelpHost &&
-      virtual_url.host_piece() != chrome::kChromeUIVersionHost &&
-      virtual_url.host_piece() != chrome::kChromeUINetExportHost &&
-      virtual_url.host_piece() != chrome::kChromeUINewTabHost) {
+  if (ShouldThemifyFavicon(virtual_url)) {
     return true;
   }
 
@@ -185,15 +214,6 @@ bool ShouldThemifyFaviconForEntry(content::NavigationEntry* entry) {
     return actual_url.host_piece() == chrome::kChromeUINewTabPageHost ||
            actual_url.host_piece() == chrome::kChromeUINewTabHost;
   }
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Themify menu favicon for CrOS Terminal home page.
-  if (!base::FeatureList::IsEnabled(
-          chromeos::features::kTerminalMultiProfile) &&
-      actual_url.SchemeIs(content::kChromeUIUntrustedScheme)) {
-    return actual_url.host_piece() == chrome::kChromeUIUntrustedTerminalHost;
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   return false;
 }
@@ -222,6 +242,15 @@ gfx::ImageSkia ThemeFavicon(const gfx::ImageSkia& source,
              ? gfx::ImageSkiaOperations::CreateColorMask(source,
                                                          alternate_color)
              : source;
+}
+
+gfx::ImageSkia ThemeMonochromeFavicon(const gfx::ImageSkia& source,
+                                      SkColor background) {
+  return (color_utils::GetContrastRatio(gfx::kGoogleGrey900, background) >
+          color_utils::GetContrastRatio(SK_ColorWHITE, background))
+             ? gfx::ImageSkiaOperations::CreateColorMask(source,
+                                                         gfx::kGoogleGrey900)
+             : gfx::ImageSkiaOperations::CreateColorMask(source, SK_ColorWHITE);
 }
 
 }  // namespace favicon

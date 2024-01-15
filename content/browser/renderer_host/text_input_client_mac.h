@@ -5,9 +5,8 @@
 #ifndef CONTENT_BROWSER_RENDERER_HOST_TEXT_INPUT_CLIENT_MAC_H_
 #define CONTENT_BROWSER_RENDERER_HOST_TEXT_INPUT_CLIENT_MAC_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/mac/scoped_block.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
@@ -28,7 +27,7 @@ class Range;
 namespace content {
 class RenderWidgetHost;
 
-// This class helps with the Mac OS X dictionary popup. For the design overview,
+// This class helps with the macOS dictionary popup. For the design overview,
 // look at this document:
 //   http://dev.chromium.org/developers/design-documents/system-dictionary-pop-up-architecture
 //
@@ -117,11 +116,6 @@ class CONTENT_EXPORT TextInputClientMac {
   // condition.
   void AfterRequest() UNLOCK_FUNCTION(lock_);
 
-  base::TimeDelta wait_timeout_for_tests() const { return wait_timeout_; }
-  void set_wait_timeout_for_tests(base::TimeDelta wait_timeout) {
-    wait_timeout_ = wait_timeout;
-  }
-
   uint32_t character_index_;
   gfx::Rect first_rect_;
 
@@ -129,9 +123,7 @@ class CONTENT_EXPORT TextInputClientMac {
   base::ConditionVariable condition_;
   // The amount of time that the browser process will wait for a response from
   // the renderer.
-  // TODO(rsesek): Using the histogram data, find the best upper-bound for this
-  // value.
-  base::TimeDelta wait_timeout_ = base::Milliseconds(1500);
+  base::TimeDelta wait_timeout_;
 };
 
 }  // namespace content

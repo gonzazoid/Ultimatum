@@ -10,12 +10,13 @@
 
 #include "ash/constants/ash_paths.h"
 #include "ash/constants/ash_switches.h"
+#include "ash/public/cpp/wallpaper/wallpaper_controller.h"
 #include "ash/public/cpp/wallpaper/wallpaper_controller_observer.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/weak_ptr.h"
 #include "base/numerics/safe_conversions.h"
@@ -25,7 +26,6 @@
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
@@ -34,9 +34,9 @@
 #include "chrome/browser/ash/policy/external_data/cloud_external_data_manager_base_test_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/ash/wallpaper_controller_client_impl.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 #include "chrome/common/chrome_paths.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
@@ -121,8 +121,8 @@ SkColor ComputeAverageColor(const SkBitmap& bitmap) {
 
 // Initialize system salt to calculate wallpaper file names.
 void SetSystemSalt() {
-  chromeos::SystemSaltGetter::Get()->SetRawSaltForTesting(
-      chromeos::SystemSaltGetter::RawSalt({1, 2, 3, 4, 5, 6, 7, 8}));
+  SystemSaltGetter::Get()->SetRawSaltForTesting(
+      SystemSaltGetter::RawSalt({1, 2, 3, 4, 5, 6, 7, 8}));
 }
 
 }  // namespace
@@ -191,7 +191,7 @@ class WallpaperPolicyTest : public LoginManagerTest,
 
   void SetUpOnMainThread() override {
     LoginManagerTest::SetUpOnMainThread();
-    WallpaperControllerClientImpl::Get()->AddObserver(this);
+    ash::WallpaperController::Get()->AddObserver(this);
 
     // Set up policy signing.
     user_policy_builders_[0] =
@@ -201,14 +201,14 @@ class WallpaperPolicyTest : public LoginManagerTest,
   }
 
   void TearDownOnMainThread() override {
-    WallpaperControllerClientImpl::Get()->RemoveObserver(this);
+    ash::WallpaperController::Get()->RemoveObserver(this);
     LoginManagerTest::TearDownOnMainThread();
   }
 
   // Obtain wallpaper image and return its average ARGB color.
   SkColor GetAverageWallpaperColor() {
     average_color_.reset();
-    auto image = WallpaperControllerClientImpl::Get()->GetWallpaperImage();
+    auto image = ash::WallpaperController::Get()->GetWallpaperImage();
     const gfx::ImageSkiaRep& representation = image.GetRepresentation(1.0f);
     if (representation.is_null()) {
       ADD_FAILURE() << "No image representation.";
@@ -221,8 +221,9 @@ class WallpaperPolicyTest : public LoginManagerTest,
   // WallpaperControllerObserver:
   void OnWallpaperChanged() override {
     ++wallpaper_change_count_;
-    if (run_loop_)
+    if (run_loop_) {
       run_loop_->Quit();
+    }
   }
 
   // Runs the loop until wallpaper has changed to the expected color.
@@ -241,7 +242,7 @@ class WallpaperPolicyTest : public LoginManagerTest,
       ADD_FAILURE();
     }
     std::string policy;
-    base::JSONWriter::Write(*policy::test::ConstructExternalDataReference(
+    base::JSONWriter::Write(policy::test::ConstructExternalDataReference(
                                 embedded_test_server()
                                     ->GetURL(std::string("/") + relative_path)
                                     .spec(),
@@ -309,7 +310,7 @@ class WallpaperPolicyTest : public LoginManagerTest,
 
  private:
   // The average ARGB color of the current wallpaper.
-  absl::optional<SkColor> average_color_;
+  std::optional<SkColor> average_color_;
 
   base::WeakPtrFactory<WallpaperPolicyTest> weak_ptr_factory_{this};
 };

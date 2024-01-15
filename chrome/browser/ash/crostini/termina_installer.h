@@ -5,13 +5,14 @@
 #ifndef CHROME_BROWSER_ASH_CROSTINI_TERMINA_INSTALLER_H_
 #define CHROME_BROWSER_ASH_CROSTINI_TERMINA_INSTALLER_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/types/expected.h"
+#include "chrome/browser/ash/guest_os/guest_os_dlc_helper.h"
 
 namespace crostini {
 
@@ -47,14 +48,7 @@ class TerminaInstaller {
   // Ensure that termina is installed. This will also attempt to remove any
   // other instances of termina that may be installed, but will not block on or
   // check the result of this.
-  //
-  // |is_initial_install| should be set to true when this is called from the
-  // crostini installer, and false otherwise. In the future this may allow us
-  // to force the DLC to be installed even on tethered connections during the
-  // install, as in this case we can expect the user already knows we will
-  // download things.
-  void Install(base::OnceCallback<void(InstallResult)> callback,
-               bool is_initial_install);
+  void Install(base::OnceCallback<void(InstallResult)> callback);
 
   // Remove termina entirely. This will also attempt to remove any
   // other instances of termina that may be installed.
@@ -65,7 +59,7 @@ class TerminaInstaller {
   base::FilePath GetInstallLocation();
 
   // Get the id of the installed DLC, or nullopt if DLC is not being used.
-  absl::optional<std::string> GetDlcId();
+  std::optional<std::string> GetDlcId();
 
   // Attempt to cancel a pending install. The DLC service does not support
   // this, but we have some retry logic that can be aborted. The result
@@ -75,13 +69,8 @@ class TerminaInstaller {
   void CancelInstall();
 
  private:
-  void InstallDlc(base::OnceCallback<void(InstallResult)> callback,
-                  bool is_initial_install);
   void OnInstallDlc(base::OnceCallback<void(InstallResult)> callback,
-                    bool is_initial_install,
-                    const ash::DlcserviceClient::InstallResult& result);
-  void RetryInstallDlc(base::OnceCallback<void(InstallResult)> callback,
-                       bool is_initial_install);
+                    guest_os::GuestOsDlcInstallation::Result result);
 
   void RemoveComponentIfPresent(base::OnceCallback<void()> callback,
                                 UninstallResult* result);
@@ -92,10 +81,15 @@ class TerminaInstaller {
   void OnUninstallFinished(base::OnceCallback<void(bool)> callback,
                            std::vector<UninstallResult> partial_results);
 
-  absl::optional<base::FilePath> termina_location_{absl::nullopt};
-  absl::optional<std::string> dlc_id_{};
+  std::optional<base::FilePath> termina_location_{std::nullopt};
+  std::optional<std::string> dlc_id_{};
 
-  bool is_cancelled_ = false;
+  // Crostini will potentially enqueue multiple installations.
+  //
+  // TODO(b/277835995): This is probably not intended, this allows you to cancel
+  //                    a concurrent installation. Consider changing to enforce
+  //                    single installations.
+  std::vector<std::unique_ptr<guest_os::GuestOsDlcInstallation>> installations_;
 
   base::WeakPtrFactory<TerminaInstaller> weak_ptr_factory_{this};
 };

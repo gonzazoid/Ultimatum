@@ -76,7 +76,7 @@ export interface LanguageHelper {
    * Sets the prospective UI language to the chosen language. This won't affect
    * the actual UI language until a restart.
    */
-  setProspectiveUILanguage(languageCode: string): void;
+  setProspectiveUiLanguage(languageCode: string): void;
 
   /**
    * True if the prospective UI language has been changed.
@@ -110,11 +110,6 @@ export interface LanguageHelper {
   enableLanguage(languageCode: string): void;
 
   disableLanguage(languageCode: string): void;
-
-  /**
-   * Returns true iff provided languageState is the only blocked language.
-   */
-  isOnlyTranslateBlockedLanguage(languageState: LanguageState): boolean;
 
   /**
    * Returns true iff provided languageState can be disabled.

@@ -123,7 +123,7 @@ def get_or_generate_key(generation_arguments, path):
   # If the file doesn't already exist, generate a new key using the generation
   # parameters.
   if not os.path.isfile(path):
-    key_contents = subprocess.check_output(generation_arguments)
+    key_contents = subprocess.check_output(generation_arguments, text=True)
 
     # Prepend the generation parameters to the key file.
     write_string_to_file(generation_arguments_str + '\n' + key_contents,
@@ -566,6 +566,10 @@ def create_self_signed_root_certificate(name):
 
 def create_intermediate_certificate(name, issuer):
   return Certificate(name, TYPE_CA, issuer)
+
+
+def create_self_signed_end_entity_certificate(name):
+  return Certificate(name, TYPE_END_ENTITY, None)
 
 
 def create_end_entity_certificate(name, issuer):

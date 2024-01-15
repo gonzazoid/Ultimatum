@@ -121,10 +121,6 @@ class WebRtcTestBase : public InProcessBrowserTest {
   std::string ExecuteJavascript(const std::string& javascript,
                                 content::WebContents* tab_contents) const;
 
-  // TODO(https://crbug.com/1004239): Remove this function as soon as browser
-  // tests stop relying on the legacy getStats() API.
-  void ChangeToLegacyGetStats(content::WebContents* tab) const;
-
   // Sets up a peer connection in the tab and adds the current local stream
   // (which you can prepare by calling one of the GetUserMedia* methods above).
   // Optionally, |certificate_keygen_algorithm| is JavaScript for an
@@ -209,9 +205,6 @@ class WebRtcTestBase : public InProcessBrowserTest {
   std::string GetStreamSize(content::WebContents* tab_contents,
                             const std::string& video_element) const;
 
-  // Returns true if we're on Windows 8 or higher.
-  bool OnWin8OrHigher() const;
-
   void OpenDatabase(content::WebContents* tab) const;
   void CloseDatabase(content::WebContents* tab) const;
   void DeleteDatabase(content::WebContents* tab) const;
@@ -219,15 +212,9 @@ class WebRtcTestBase : public InProcessBrowserTest {
   void GenerateAndCloneCertificate(content::WebContents* tab,
                                    const std::string& keygen_algorithm) const;
 
-  void VerifyStatsGeneratedCallback(content::WebContents* tab) const;
-  double MeasureGetStatsCallbackPerformance(content::WebContents* tab) const;
-  std::vector<std::string> VerifyStatsGeneratedPromise(
-      content::WebContents* tab) const;
   scoped_refptr<content::TestStatsReportDictionary> GetStatsReportDictionary(
       content::WebContents* tab) const;
   double MeasureGetStatsPerformance(content::WebContents* tab) const;
-  std::vector<std::string> GetMandatoryStatsTypes(
-      content::WebContents* tab) const;
 
   // Change the default audio/video codec in the offer SDP.
   void SetDefaultAudioCodec(content::WebContents* tab,

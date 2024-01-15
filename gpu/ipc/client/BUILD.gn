@@ -20,17 +20,17 @@ source_set("ipc_client_sources") {
     "command_buffer_proxy_impl.h",
     "gpu_channel_host.cc",
     "gpu_channel_host.h",
+    "gpu_channel_observer.h",
     "image_decode_accelerator_proxy.cc",
     "image_decode_accelerator_proxy.h",
     "shared_image_interface_proxy.cc",
     "shared_image_interface_proxy.h",
   ]
-  configs += [
-    "//gpu:gpu_implementation",
-  ]
+  configs += [ "//gpu:gpu_implementation" ]
   deps = [
     "//base",
     "//cc/paint",
+    "//components/viz/common:shared_image_format",
     "//gpu/command_buffer/client:client_sources",
     "//gpu/command_buffer/common:common_sources",
     "//gpu/config:config_sources",

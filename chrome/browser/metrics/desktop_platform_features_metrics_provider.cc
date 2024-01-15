@@ -11,9 +11,9 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/reading_list/reading_list_model_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
-#include "chrome/browser/ui/read_later/reading_list_model_factory.h"
 #include "components/reading_list/core/reading_list_model.h"
 #include "ui/native_theme/native_theme.h"
 
@@ -27,14 +27,6 @@ enum class DarkModeStatus {
   kDark = 2,
   kMaxValue = kDark,
 };
-
-bool AnyBrowserWindowHasName() {
-  for (auto* browser : *BrowserList::GetInstance()) {
-    if (!browser->user_title().empty())
-      return true;
-  }
-  return false;
-}
 
 }  // namespace
 
@@ -59,13 +51,8 @@ void DesktopPlatformFeaturesMetricsProvider::ProvideCurrentSessionData(
   for (Profile* profile : profiles) {
     ReadingListModel* model =
         ReadingListModelFactory::GetForBrowserContext(profile);
-    if (model && model->loaded()) {
-      UMA_HISTOGRAM_COUNTS_1000("ReadingList.Unread.Count.OnUMAUpload",
-                                model->unread_size());
-      UMA_HISTOGRAM_COUNTS_1000("ReadingList.Read.Count.OnUMAUpload",
-                                model->size() - model->unread_size());
+    if (model) {
+      model->RecordCountMetricsOnUMAUpload();
     }
   }
-
-  UMA_HISTOGRAM_BOOLEAN("Browser.AnyWindowHasName", AnyBrowserWindowHasName());
 }

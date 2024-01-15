@@ -71,10 +71,14 @@ class SVGGeometryElement : public SVGGraphicsElement {
   void GeometryAttributeChanged();
   void GeometryPresentationAttributeChanged(const QualifiedName&);
 
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+
  private:
   bool IsSVGGeometryElement() const final { return true; }
   virtual float ComputePathLength() const;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
   Member<SVGAnimatedNumber> path_length_;
 };

@@ -6,6 +6,7 @@
 #define CHROME_SERVICES_SHARING_NEARBY_NEARBY_SHARED_REMOTES_H_
 
 #include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_presence_credential_storage.mojom.h"
 #include "chromeos/ash/services/nearby/public/mojom/sharing.mojom.h"
 #include "chromeos/ash/services/nearby/public/mojom/tcp_socket_factory.mojom.h"
 #include "chromeos/ash/services/nearby/public/mojom/webrtc.mojom.h"
@@ -15,7 +16,7 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "services/network/public/mojom/p2p.mojom.h"
 
-namespace location::nearby {
+namespace nearby {
 
 // Container for the SharedRemote objects required by Nearby Connections and
 // Nearby Presence.
@@ -39,8 +40,11 @@ struct NearbySharedRemotes {
       cros_network_config;
   mojo::SharedRemote<sharing::mojom::FirewallHoleFactory> firewall_hole_factory;
   mojo::SharedRemote<sharing::mojom::TcpSocketFactory> tcp_socket_factory;
+  mojo::SharedRemote<
+      ash::nearby::presence::mojom::NearbyPresenceCredentialStorage>
+      nearby_presence_credential_storage;
 };
 
-}  // namespace location::nearby
+}  // namespace nearby
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_NEARBY_SHARED_REMOTES_H_

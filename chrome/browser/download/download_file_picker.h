@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_DOWNLOAD_DOWNLOAD_FILE_PICKER_H_
 #define CHROME_BROWSER_DOWNLOAD_DOWNLOAD_FILE_PICKER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/download/download_confirmation_result.h"
 #include "components/download/public/common/download_item.h"
@@ -45,17 +45,12 @@ class DownloadFilePicker : public ui::SelectFileDialog::Listener,
                      ConfirmationCallback callback);
   ~DownloadFilePicker() override;
 
-  // Gets restricted sources for selected files according to DataLeakPravention
-  // policy.
+  // Runs |file_selected_callback_| with |virtual_path| and then deletes this
+  // object.
   void OnFileSelected(const base::FilePath& virtual_path);
 
-  // Called when `is_allowed` is obtained.
-  // Runs |file_selected_callback_| with |path| and then deletes this
-  // object.
-  void CompleteFileSelection(const base::FilePath& path, bool is_allowed);
-
   // SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* params) override;
   void FileSelectionCanceled(void* params) override;

@@ -4,20 +4,33 @@
 
 #include "ash/webui/eche_app_ui/eche_signaler.h"
 
-#include "ash/webui/eche_app_ui/mojom/eche_app.mojom.h"
+#include "ash/constants/ash_features.h"
+#include "ash/root_window_controller.h"
+#include "ash/shell.h"
+#include "ash/system/eche/eche_tray.h"
+#include "ash/webui/eche_app_ui/apps_launch_info_provider.h"
+#include "ash/webui/eche_app_ui/mojom/eche_app.mojom-shared.h"
 #include "ash/webui/eche_app_ui/proto/exo_messages.pb.h"
+#include "ash/webui/eche_app_ui/system_info_provider.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/values.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "crypto/sha2.h"
 
 namespace ash {
 
 namespace {
 
 using ConnectionStatus = secure_channel::ConnectionManager::Status;
-using eche_app::mojom::ConnectionFailReason;
 
 // From google3: typescript/webrtc/webrtc_peer_connection.ts
 constexpr base::TimeDelta kSignalingTimeoutDuration = base::Milliseconds(10000);
+
+EcheTray* GetEcheTray() {
+  return Shell::GetPrimaryRootWindowController()
+      ->GetStatusAreaWidget()
+      ->eche_tray();
+}
 
 }  // namespace
 
@@ -25,12 +38,19 @@ namespace eche_app {
 
 EcheSignaler::EcheSignaler(
     EcheConnector* eche_connector,
-    secure_channel::ConnectionManager* connection_manager)
-    : eche_connector_(eche_connector), connection_manager_(connection_manager) {
+    secure_channel::ConnectionManager* connection_manager,
+    AppsLaunchInfoProvider* apps_launch_info_provider,
+    EcheConnectionStatusHandler* eche_connection_status_handler)
+    : eche_connector_(eche_connector),
+      apps_launch_info_provider_(apps_launch_info_provider),
+      eche_connection_status_handler_(eche_connection_status_handler),
+      connection_manager_(connection_manager) {
   connection_manager_->AddObserver(this);
+  eche_connection_status_handler_->AddObserver(this);
 }
 
 EcheSignaler::~EcheSignaler() {
+  eche_connection_status_handler_->RemoveObserver(this);
   connection_manager_->RemoveObserver(this);
   signaling_timeout_timer_.reset();
 }
@@ -58,7 +78,13 @@ void EcheSignaler::SetSignalingMessageObserver(
   observer_.reset();
   observer_.Bind(std::move(observer));
   signaling_timeout_timer_.reset();
-  probably_connection_failed_reason_ = ConnectionFailReason::kUnknown;
+  probably_connection_failed_reason_ = EcheTray::ConnectionFailReason::kUnknown;
+}
+
+void EcheSignaler::SetSystemInfoProvider(
+    SystemInfoProvider* system_info_provider) {
+  PA_LOG(INFO) << "echeapi EcheSignaler SetSystemInfoProvider";
+  system_info_provider_ = system_info_provider;
 }
 
 void EcheSignaler::TearDownSignaling() {
@@ -69,7 +95,7 @@ void EcheSignaler::TearDownSignaling() {
   *message.mutable_action() = std::move(action);
   eche_connector_->SendMessage(message);
   signaling_timeout_timer_.reset();
-  probably_connection_failed_reason_ = ConnectionFailReason::kUnknown;
+  probably_connection_failed_reason_ = EcheTray::ConnectionFailReason::kUnknown;
 }
 
 void EcheSignaler::Bind(
@@ -89,12 +115,19 @@ void EcheSignaler::OnMessageReceived(const std::string& payload) {
     PA_LOG(INFO) << "echeapi EcheSignaler OnMessageReceived has request";
     signal = message.request().data();
     probably_connection_failed_reason_ =
-        ConnectionFailReason::SignalingHasLateRequest;
+        EcheTray::ConnectionFailReason::kSignalingHasLateRequest;
   } else if (message.has_response()) {
     PA_LOG(INFO) << "echeapi EcheSignaler OnMessageReceived has response";
     signal = message.response().data();
-    probably_connection_failed_reason_ =
-        ConnectionFailReason::SignalingHasLateResponse;
+
+    if (base::FeatureList::IsEnabled(
+            features::kEcheSWACheckAndroidNetworkInfo)) {
+      ProcessAndroidNetworkInfo(message);
+    } else {
+      probably_connection_failed_reason_ =
+          EcheTray::ConnectionFailReason::kSignalingHasLateResponse;
+    }
+
   } else {
     PA_LOG(INFO) << "echeapi EcheSignaler OnMessageReceived return";
     return;
@@ -104,20 +137,113 @@ void EcheSignaler::OnMessageReceived(const std::string& payload) {
   observer_->OnReceivedSignalingMessage(encoded_signal);
 }
 
+void EcheSignaler::ProcessAndroidNetworkInfo(const proto::ExoMessage& message) {
+  if (!message.response().has_network_info()) {
+    probably_connection_failed_reason_ =
+        EcheTray::ConnectionFailReason::kSignalingHasLateResponse;
+    return;
+  }
+
+  system_info_provider_->FetchWifiNetworkSsidHash();
+
+  const proto::NetworkInfo& network_info = message.response().network_info();
+
+  bool remote_on_cellular = network_info.mobile_network();
+  bool is_different_network = false;
+
+  if (!remote_on_cellular) {
+    std::string local_hashed_ssid = system_info_provider_->GetHashedWiFiSsid();
+    std::string remote_hashed_ssid = network_info.ssid();
+
+    if (local_hashed_ssid.compare(remote_hashed_ssid) == 0) {
+      probably_connection_failed_reason_ =
+          EcheTray::ConnectionFailReason::kSignalingHasLateResponse;
+    } else {
+      is_different_network = true;
+      probably_connection_failed_reason_ =
+          EcheTray::ConnectionFailReason::kConnectionFailSsidDifferent;
+    }
+  } else {
+    probably_connection_failed_reason_ =
+        EcheTray::ConnectionFailReason::kConnectionFailRemoteDeviceOnCellular;
+  }
+
+  system_info_provider_->SetAndroidDeviceNetworkInfoChanged(
+      is_different_network, remote_on_cellular);
+}
+
+void EcheSignaler::OnConnectionClosed() {
+  // When a background connection is closed, reset the timer so no data will be
+  // recoreded into ConnectionFail bucket.
+  signaling_timeout_timer_.reset();
+}
+
 void EcheSignaler::RecordSignalingTimeout() {
   if (connection_manager_->GetStatus() == ConnectionStatus::kDisconnected) {
     probably_connection_failed_reason_ =
-        ConnectionFailReason::kSecurityChannelDisconnected;
+        EcheTray::ConnectionFailReason::kSecurityChannelDisconnected;
   } else if (probably_connection_failed_reason_ ==
-             ConnectionFailReason::kUnknown) {
+             EcheTray::ConnectionFailReason::kUnknown) {
     probably_connection_failed_reason_ =
-        ConnectionFailReason::kSignalingNotTriggered;
+        EcheTray::ConnectionFailReason::kSignalingNotTriggered;
   }
 
   PA_LOG(INFO) << "echeapi EcheSignaler timeout: "
                << probably_connection_failed_reason_;
-  base::UmaHistogramEnumeration("Eche.StreamEvent.ConnectionFail",
-                                probably_connection_failed_reason_);
+  if (!features::IsEcheNetworkConnectionStateEnabled()) {
+    base::UmaHistogramEnumeration("Eche.StreamEvent.ConnectionFail",
+                                  probably_connection_failed_reason_);
+    return;
+  }
+
+  EcheTray* eche_tray = GetEcheTray();
+  if (eche_tray && eche_tray->IsBackgroundConnectionAttemptInProgress()) {
+    base::UmaHistogramEnumeration("Eche.NetworkCheck.FailureReason",
+                                  probably_connection_failed_reason_);
+  } else if (apps_launch_info_provider_->GetConnectionStatusFromLastAttempt() ==
+                 mojom::ConnectionStatus::kConnectionStatusFailed &&
+             apps_launch_info_provider_->entry_point() ==
+                 mojom::AppStreamLaunchEntryPoint::NOTIFICATION) {
+    base::UmaHistogramEnumeration(
+        "Eche.StreamEvent.FromNotification.PreviousNetworkCheckFailed."
+        "ConnectionFail",
+        probably_connection_failed_reason_);
+  } else {
+    base::UmaHistogramEnumeration("Eche.StreamEvent.ConnectionFail",
+                                  probably_connection_failed_reason_);
+  }
+}
+
+std::ostream& operator<<(
+    std::ostream& stream,
+    EcheTray::ConnectionFailReason connection_fail_reason) {
+  switch (connection_fail_reason) {
+    case EcheTray::ConnectionFailReason::kUnknown:
+      stream << "[Unknown]";
+      break;
+    case EcheTray::ConnectionFailReason::kSignalingNotTriggered:
+      stream << "[Signaling Not Triggered]";
+      break;
+    case EcheTray::ConnectionFailReason::kSignalingHasLateResponse:
+      stream << "[Signaling Has Late Response]";
+      break;
+    case EcheTray::ConnectionFailReason::kSignalingHasLateRequest:
+      stream << "[Signaling Has Late Request]";
+      break;
+    case EcheTray::ConnectionFailReason::kSecurityChannelDisconnected:
+      stream << "[Security Channel Disconnected]";
+      break;
+    case EcheTray::ConnectionFailReason::kConnectionFailInTabletMode:
+      stream << "[Connection Fail In Tablet Mode]";
+      break;
+    case EcheTray::ConnectionFailReason::kConnectionFailSsidDifferent:
+      stream << "[Connection Fail Different Network]";
+      break;
+    case EcheTray::ConnectionFailReason::kConnectionFailRemoteDeviceOnCellular:
+      stream << "[Connection Fail Remote Device On Cellular]";
+      break;
+  }
+  return stream;
 }
 
 }  // namespace eche_app

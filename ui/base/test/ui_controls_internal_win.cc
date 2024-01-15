@@ -10,14 +10,14 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/win_util.h"
 #include "ui/base/win/event_creation_utils.h"
 #include "ui/display/win/screen_win.h"
@@ -26,6 +26,10 @@
 #include "ui/gfx/geometry/point.h"
 
 namespace {
+
+bool IsKeyEvent(WPARAM message_type) {
+  return message_type == WM_KEYDOWN || message_type == WM_KEYUP;
+}
 
 // InputDispatcher ------------------------------------------------------------
 
@@ -40,10 +44,11 @@ class InputDispatcher {
   static void CreateForMouseEvent(base::OnceClosure callback,
                                   WPARAM message_type);
 
-  // Special case of CreateForMessage() for WM_KEYUP (can await multiple events
-  // when modifiers are involved).
-  static void CreateForKeyUp(base::OnceClosure callback,
-                             int num_keyups_awaited);
+  // Constructs an InputDispatcher that will invoke `callback` after
+  // `num_key_events_awaited` events of type `wait_for` have been received.
+  static void CreateForKeyEvent(base::OnceClosure callback,
+                                ui_controls::KeyEventType wait_for,
+                                int num_key_events_awaited);
 
   // Special case of CreateForMessage() for WM_MOUSEMOVE. Upon receipt, an error
   // message is logged if the destination of the move is not |screen_point|.
@@ -62,11 +67,11 @@ class InputDispatcher {
                   WPARAM message_waiting_for,
                   UINT system_queue_flag);
 
-  // WM_KEYUP
+  // WM_KEYDOWN or WM_KEYUP
   InputDispatcher(base::OnceClosure callback,
                   WPARAM message_waiting_for,
                   UINT system_queue_flag,
-                  int num_keyups_awaited);
+                  int num_key_events_awaited);
 
   // WM_MOUSEMOVE
   InputDispatcher(base::OnceClosure callback,
@@ -115,20 +120,23 @@ class InputDispatcher {
   // The callback to run when the desired message is received.
   base::OnceClosure callback_;
 
-  // The message on which the instance is waiting -- unused for WM_KEYUP
-  // messages.
+  // The message on which the instance is waiting.
   const WPARAM message_waiting_for_;
 
   // The system queue flag (ref. ::GetQueueStatus) which the awaited event is
   // reflected in.
   const UINT system_queue_flag_;
 
-  // The number of WM_KEYUP messages to receive before dispatching |callback_|.
-  // Only relevant when |message_waiting_for_| is WM_KEYUP.
-  int num_keyups_awaited_ = 0;
+  // The number of messages to receive before dispatching `callback_`. Only
+  // relevant when `message_waiting_for_` is WM_KEYDOWN or WM_KEYUP.
+  int num_key_events_awaited_ = 0;
 
   // The desired mouse position for a mouse move event.
   const gfx::Point expected_mouse_location_;
+
+  // Whether all desired messages were observed, but MatchingMessageProcessed()
+  // is flushing remaining messages of type `system_queue_flag_`.
+  bool flushing_messages_ = false;
 
   base::WeakPtrFactory<InputDispatcher> weak_factory_{this};
 };
@@ -152,11 +160,16 @@ void InputDispatcher::CreateForMouseEvent(base::OnceClosure callback,
 }
 
 // static
-void InputDispatcher::CreateForKeyUp(base::OnceClosure callback,
-                                     int num_keyups_awaited) {
+void InputDispatcher::CreateForKeyEvent(base::OnceClosure callback,
+                                        ui_controls::KeyEventType wait_for,
+                                        int num_key_events_awaited) {
+  CHECK(wait_for == ui_controls::KeyEventType::kKeyPress ||
+        wait_for == ui_controls::KeyEventType::kKeyRelease);
   // Owns self.
-  new InputDispatcher(std::move(callback), WM_KEYUP, QS_KEY,
-                      num_keyups_awaited);
+  new InputDispatcher(
+      std::move(callback),
+      wait_for == ui_controls::KeyEventType::kKeyPress ? WM_KEYDOWN : WM_KEYUP,
+      QS_KEY, num_key_events_awaited);
 }
 
 // static
@@ -179,12 +192,12 @@ InputDispatcher::InputDispatcher(base::OnceClosure callback,
 InputDispatcher::InputDispatcher(base::OnceClosure callback,
                                  WPARAM message_waiting_for,
                                  UINT system_queue_flag,
-                                 int num_keyups_awaited)
+                                 int num_key_events_awaited)
     : callback_(std::move(callback)),
       message_waiting_for_(message_waiting_for),
       system_queue_flag_(system_queue_flag),
-      num_keyups_awaited_(num_keyups_awaited) {
-  DCHECK_EQ(message_waiting_for_, static_cast<WPARAM>(WM_KEYUP));
+      num_key_events_awaited_(num_key_events_awaited) {
+  CHECK(IsKeyEvent(message_waiting_for_));
   InstallHook();
 }
 
@@ -196,7 +209,7 @@ InputDispatcher::InputDispatcher(base::OnceClosure callback,
       message_waiting_for_(message_waiting_for),
       system_queue_flag_(system_queue_flag),
       expected_mouse_location_(screen_point) {
-  DCHECK_EQ(message_waiting_for_, static_cast<WPARAM>(WM_MOUSEMOVE));
+  CHECK_EQ(message_waiting_for_, static_cast<WPARAM>(WM_MOUSEMOVE));
   InstallHook();
 }
 
@@ -216,7 +229,7 @@ void InputDispatcher::InstallHook() {
 
   int hook_type;
   HOOKPROC hook_function;
-  if (message_waiting_for_ == WM_KEYUP) {
+  if (IsKeyEvent(message_waiting_for_)) {
     hook_type = WH_KEYBOARD;
     hook_function = &KeyHook;
   } else {
@@ -226,7 +239,7 @@ void InputDispatcher::InstallHook() {
     if (message_waiting_for_ == WM_MOUSEMOVE) {
       // Things don't go well with move events sometimes. Bail out if it takes
       // too long.
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&InputDispatcher::OnTimeout,
                          weak_factory_.GetWeakPtr()),
@@ -256,12 +269,16 @@ LRESULT CALLBACK InputDispatcher::MouseHook(int n_code,
 LRESULT CALLBACK InputDispatcher::KeyHook(int n_code,
                                           WPARAM w_param,
                                           LPARAM l_param) {
-  if ((n_code == HC_ACTION) && (HIWORD(l_param) & KF_UP)) {
-    DCHECK(current_dispatcher_);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE,
-        base::BindOnce(&InputDispatcher::MatchingMessageProcessed,
-                       current_dispatcher_->weak_factory_.GetWeakPtr(), false));
+  if (n_code == HC_ACTION) {
+    const WPARAM type = (HIWORD(l_param) & KF_UP) ? WM_KEYUP : WM_KEYDOWN;
+    CHECK(current_dispatcher_);
+    if (type == current_dispatcher_->message_waiting_for_) {
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE,
+          base::BindOnce(&InputDispatcher::MatchingMessageProcessed,
+                         current_dispatcher_->weak_factory_.GetWeakPtr(),
+                         false));
+    }
   }
   return CallNextHookEx(next_hook_, n_code, w_param, l_param);
 }
@@ -287,7 +304,7 @@ void InputDispatcher::DispatchedMessage(
           << expected_mouse_location_.y()
           << "); check the math in SendMouseMoveImpl.";
     }
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&InputDispatcher::MatchingMessageProcessed,
                        weak_factory_.GetWeakPtr(), definitively_done));
@@ -301,7 +318,7 @@ void InputDispatcher::DispatchedMessage(
                  << "This may result in different event processing behavior. "
                  << "If you need a single click try moving the mouse between "
                  << "down events.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&InputDispatcher::MatchingMessageProcessed,
                                   weak_factory_.GetWeakPtr(), false));
   }
@@ -310,29 +327,36 @@ void InputDispatcher::DispatchedMessage(
 void InputDispatcher::MatchingMessageProcessed(bool definitively_done) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  if (message_waiting_for_ == WM_KEYUP && --num_keyups_awaited_ > 0)
+  // Guard against re-entrancy.
+  if (flushing_messages_)
     return;
+
+  if (IsKeyEvent(message_waiting_for_)) {
+    --num_key_events_awaited_;
+    if (num_key_events_awaited_ != 0) {
+      return;
+    }
+  }
 
   // Unless specified otherwise by |definitively_done| : resume on the last
   // event of its type only (instead of the first one) to prevent flakes when
   // InputDispatcher is created while there are preexisting matching events
   // remaining in the queue. Emit a warning to help diagnose flakes should the
   // queue somehow never become empty of such events.
-  if (HIWORD(::GetQueueStatus(system_queue_flag_)) && !definitively_done) {
-    LOG(WARNING)
-        << "Skipping message notification per remaining events in the queue "
-           "(will try again shortly) : "
-        << system_queue_flag_;
+  if (!definitively_done) {
+    while (HIWORD(::GetQueueStatus(system_queue_flag_))) {
+      LOG(WARNING) << "Got all expected messages, but the queue still contains "
+                      "messages of type "
+                   << system_queue_flag_
+                   << ". Pumping messages until it's no longer the case.";
 
-    // Check back on the next loop instead of relying on the remaining event
-    // being caught by our hooks (all events don't seem to reliably make it
-    // there).
-    if (message_waiting_for_ == WM_KEYUP)
-      ++num_keyups_awaited_;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(&InputDispatcher::MatchingMessageProcessed,
-                                  weak_factory_.GetWeakPtr(), false));
-    return;
+      // RunLoop::Run() calls MessagePumpForUI::ProcessNextWindowsMessage(),
+      // which should remove at least one message from the queue.
+      flushing_messages_ = true;
+      auto weak_ptr = weak_factory_.GetWeakPtr();
+      base::RunLoop().RunUntilIdle();
+      DCHECK(weak_ptr);
+    }
   }
 
   // Delete |this| before running the callback to allow callers to chain input
@@ -427,17 +451,18 @@ void AppendMouseInput(DWORD flags, std::vector<INPUT>* input) {
 
 // Append an INPUT array with optional accelerator keys that may be pressed
 // with a keyboard or mouse event. This array will be sent by SendInput.
-void AppendAcceleratorInputs(bool control,
-                             bool shift,
-                             bool alt,
+void AppendAcceleratorInputs(int accelerator_state,
                              bool key_up,
                              std::vector<INPUT>* input) {
-  if (control)
+  if (accelerator_state & ui_controls::kControl) {
     AppendKeyboardInput(ui::VKEY_CONTROL, key_up, input);
-  if (alt)
+  }
+  if (accelerator_state & ui_controls::kAlt) {
     AppendKeyboardInput(ui::VKEY_LMENU, key_up, input);
-  if (shift)
+  }
+  if (accelerator_state & ui_controls::kShift) {
     AppendKeyboardInput(ui::VKEY_SHIFT, key_up, input);
+  }
 }
 
 }  // namespace
@@ -445,12 +470,11 @@ void AppendAcceleratorInputs(bool control,
 namespace ui_controls {
 namespace internal {
 
-bool SendKeyPressImpl(HWND window,
-                      ui::KeyboardCode key,
-                      bool control,
-                      bool shift,
-                      bool alt,
-                      base::OnceClosure task) {
+bool SendKeyPressReleaseImpl(HWND window,
+                             ui::KeyboardCode key,
+                             int accelerator_state,
+                             KeyEventType wait_for,
+                             base::OnceClosure task) {
   // SendInput only works as we expect it if one of our windows is the
   // foreground window already.
   HWND target_window = (::GetActiveWindow() &&
@@ -471,16 +495,16 @@ bool SendKeyPressImpl(HWND window,
     ::SendMessage(popup_menu, WM_KEYUP, w_param, l_param);
 
     if (task)
-      InputDispatcher::CreateForKeyUp(std::move(task), 1);
+      InputDispatcher::CreateForKeyEvent(std::move(task), wait_for, 1);
     return true;
   }
 
   std::vector<INPUT> input;
-  AppendAcceleratorInputs(control, shift, alt, false, &input);
+  AppendAcceleratorInputs(accelerator_state, false, &input);
   AppendKeyboardInput(key, false, &input);
 
   AppendKeyboardInput(key, true, &input);
-  AppendAcceleratorInputs(control, shift, alt, true, &input);
+  AppendAcceleratorInputs(accelerator_state, true, &input);
 
   if (input.size() > std::numeric_limits<UINT>::max())
     return false;
@@ -491,7 +515,8 @@ bool SendKeyPressImpl(HWND window,
   }
 
   if (task)
-    InputDispatcher::CreateForKeyUp(std::move(task), input.size() / 2);
+    InputDispatcher::CreateForKeyEvent(std::move(task), wait_for,
+                                       input.size() / 2);
   return true;
 }
 
@@ -504,7 +529,8 @@ bool SendMouseMoveImpl(int screen_x, int screen_y, base::OnceClosure task) {
   ::GetCursorPos(&current_pos);
   if (screen_point.x() == current_pos.x && screen_point.y() == current_pos.y) {
     if (task)
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(task));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(task));
     return true;
   }
 
@@ -523,8 +549,8 @@ bool SendMouseEventsImpl(MouseButton type,
                          int button_state,
                          base::OnceClosure task,
                          int accelerator_state) {
-  DWORD down_flags = MOUSEEVENTF_ABSOLUTE;
-  DWORD up_flags = MOUSEEVENTF_ABSOLUTE;
+  DWORD down_flags = 0;
+  DWORD up_flags = 0;
   UINT last_event;
 
   switch (type) {
@@ -553,17 +579,13 @@ bool SendMouseEventsImpl(MouseButton type,
 
   std::vector<INPUT> input;
   if (button_state & DOWN) {
-    AppendAcceleratorInputs(accelerator_state & kControl,
-                            accelerator_state & kShift,
-                            accelerator_state & kAlt, false, &input);
+    AppendAcceleratorInputs(accelerator_state, false, &input);
     AppendMouseInput(down_flags, &input);
   }
 
   if (button_state & UP) {
     AppendMouseInput(up_flags, &input);
-    AppendAcceleratorInputs(accelerator_state & kControl,
-                            accelerator_state & kShift,
-                            accelerator_state & kAlt, true, &input);
+    AppendAcceleratorInputs(accelerator_state, true, &input);
   }
 
   if (input.size() > std::numeric_limits<UINT>::max())
@@ -627,7 +649,7 @@ bool SendTouchEventsImpl(int action, int num, int x, int y) {
     return false;
 
   // Injecting the touch move on screen
-  if (action & MOVE) {
+  if (action & kTouchMove) {
     for (int i = 0; i < num; i++) {
       POINTER_TOUCH_INFO& contact = pointer_touch_info[i];
       contact.pointerInfo.ptPixelLocation.y = y + 10;
@@ -640,7 +662,7 @@ bool SendTouchEventsImpl(int action, int num, int x, int y) {
   }
 
   // Injecting the touch up on screen
-  if (action & RELEASE) {
+  if (action & kTouchRelease) {
     for (int i = 0; i < num; i++) {
       POINTER_TOUCH_INFO& contact = pointer_touch_info[i];
       contact.pointerInfo.ptPixelLocation.y = y + 10;

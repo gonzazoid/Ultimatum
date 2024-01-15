@@ -7,16 +7,20 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "components/autofill/core/common/autofill_features.h"
-#include "components/password_manager/core/browser/password_bubble_experiment.h"
+#include "components/password_manager/core/browser/password_sync_util.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "content/public/browser/web_contents.h"
 
 namespace password_manager {
-AccountInfo GetAccountInfoForPasswordInfobars(Profile* profile,
-                                              bool is_syncing) {
+
+AccountInfo GetAccountInfoForPasswordMessages(Profile* profile) {
   DCHECK(profile);
-  if (!is_syncing) {
+
+  // TODO(crbug.com/1466445): Migrate away from `ConsentLevel::kSync` on
+  // Android.
+  if (!sync_util::IsSyncFeatureEnabledIncludingPasswords(
+          SyncServiceFactory::GetForProfile(profile))) {
     return AccountInfo();
   }
   signin::IdentityManager* identity_manager =
@@ -26,18 +30,17 @@ AccountInfo GetAccountInfoForPasswordInfobars(Profile* profile,
   return identity_manager->FindExtendedAccountInfoByAccountId(account_id);
 }
 
-AccountInfo GetAccountInfoForPasswordMessages(Profile* profile) {
-  DCHECK(profile);
-
-  if (!password_bubble_experiment::HasChosenToSyncPasswords(
-          SyncServiceFactory::GetForProfile(profile))) {
-    return AccountInfo();
+std::string GetDisplayableAccountName(content::WebContents* web_contents) {
+  Profile* profile =
+      Profile::FromBrowserContext(web_contents->GetBrowserContext());
+  std::optional<AccountInfo> account_info =
+      password_manager::GetAccountInfoForPasswordMessages(profile);
+  if (!account_info.has_value()) {
+    return "";
   }
-  signin::IdentityManager* identity_manager =
-      IdentityManagerFactory::GetForProfile(profile);
-  CoreAccountId account_id =
-      identity_manager->GetPrimaryAccountId(signin::ConsentLevel::kSync);
-  return identity_manager->FindExtendedAccountInfoByAccountId(account_id);
+  return account_info->CanHaveEmailAddressDisplayed()
+             ? account_info.value().email
+             : account_info.value().full_name;
 }
 
 }  // namespace password_manager

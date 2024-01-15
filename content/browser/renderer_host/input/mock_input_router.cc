@@ -4,7 +4,8 @@
 
 #include "content/browser/renderer_host/input/mock_input_router.h"
 
-#include "content/browser/renderer_host/input/input_router_client.h"
+#include "base/task/sequenced_task_runner.h"
+#include "content/common/input/input_router_client.h"
 
 namespace content {
 
@@ -37,11 +38,11 @@ bool MockInputRouter::HasPendingEvents() const {
   return false;
 }
 
-absl::optional<cc::TouchAction> MockInputRouter::AllowedTouchAction() {
+std::optional<cc::TouchAction> MockInputRouter::AllowedTouchAction() {
   return cc::TouchAction::kAuto;
 }
 
-absl::optional<cc::TouchAction> MockInputRouter::ActiveTouchAction() {
+std::optional<cc::TouchAction> MockInputRouter::ActiveTouchAction() {
   return cc::TouchAction::kAuto;
 }
 

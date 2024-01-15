@@ -7,10 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 
 // This file contains simple C++ types. Simple isn't a precise term, but as a
 // guideline enums and PoD structs are simple while structs/classes with methods
@@ -165,6 +165,7 @@ enum class ContainerVersion {
   STRETCH,
   BUSTER,
   BULLSEYE,
+  BOOKWORM,
 };
 
 struct VmInfo {
@@ -283,7 +284,8 @@ enum class ContainerOsVersion {
   kDebianOther = 3,
   kOtherOs = 4,
   kDebianBullseye = 5,
-  kMaxValue = kDebianBullseye,
+  kDebianBookworm = 6,
+  kMaxValue = kDebianBookworm,
 };
 
 #endif  // CHROME_BROWSER_ASH_CROSTINI_CROSTINI_SIMPLE_TYPES_H_

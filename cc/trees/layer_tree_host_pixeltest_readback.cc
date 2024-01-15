@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "cc/layers/solid_color_layer.h"
 #include "cc/layers/texture_layer.h"
@@ -16,6 +16,7 @@
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/test/buildflags.h"
 #include "components/viz/test/paths.h"
+#include "gpu/command_buffer/client/raster_interface.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 
@@ -53,9 +54,7 @@ class LayerTreeHostReadbackPixelTest
     : public LayerTreePixelTest,
       public testing::WithParamInterface<ReadbackTestConfig> {
  protected:
-  LayerTreeHostReadbackPixelTest()
-      : LayerTreePixelTest(renderer_type()),
-        insert_copy_request_after_frame_count_(0) {}
+  LayerTreeHostReadbackPixelTest() : LayerTreePixelTest(renderer_type()) {}
 
   viz::RendererType renderer_type() const { return GetParam().renderer_type; }
 
@@ -86,6 +85,19 @@ class LayerTreeHostReadbackPixelTest
     return request;
   }
 
+  std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
+      const viz::RendererSettings& renderer_settings,
+      double refresh_rate,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> worker_context_provider)
+      override {
+    auto frame_sink = LayerTreePixelTest::CreateLayerTreeFrameSink(
+        renderer_settings, refresh_rate, std::move(compositor_context_provider),
+        std::move(worker_context_provider));
+    context_provider_ = frame_sink->worker_context_provider();
+    return frame_sink;
+  }
+
   void BeginTest() override {
     if (insert_copy_request_after_frame_count_ == 0) {
       Layer* const target = readback_target_ ? readback_target_.get()
@@ -93,6 +105,11 @@ class LayerTreeHostReadbackPixelTest
       target->RequestCopyOfOutput(CreateCopyOutputRequest());
     }
     PostSetNeedsCommitToMainThread();
+  }
+
+  void CleanupBeforeDestroy() override {
+    // Avoid extending the lifetime of the context.
+    context_provider_.reset();
   }
 
   void DidCommitAndDrawFrame() override {
@@ -114,6 +131,30 @@ class LayerTreeHostReadbackPixelTest
     EndTest();
   }
 
+  SkBitmap CopyMailboxToBitmap(const gfx::Size& size,
+                               const gpu::Mailbox& mailbox,
+                               const gpu::SyncToken& sync_token,
+                               const gfx::ColorSpace& color_space) {
+    DCHECK(context_provider_);
+    viz::RasterContextProvider::ScopedRasterContextLock lock(
+        context_provider_.get());
+    auto* ri = context_provider_->RasterInterface();
+
+    if (sync_token.HasData()) {
+      ri->WaitSyncTokenCHROMIUM(sync_token.GetConstData());
+    }
+
+    SkBitmap bitmap;
+    bitmap.allocPixels(SkImageInfo::MakeN32Premul(
+        size.width(), size.height(), color_space.ToSkColorSpace()));
+
+    ri->ReadbackImagePixels(mailbox, bitmap.info(), bitmap.rowBytes(), 0, 0,
+                            /*plane_index=*/0, bitmap.getPixels());
+    EXPECT_EQ(ri->GetError(), static_cast<unsigned>(GL_NO_ERROR));
+
+    return bitmap;
+  }
+
   void ReadbackResultAsTexture(std::unique_ptr<viz::CopyOutputResult> result) {
     EXPECT_TRUE(task_runner_provider()->IsMainThread());
     ASSERT_FALSE(result->IsEmpty());
@@ -121,9 +162,10 @@ class LayerTreeHostReadbackPixelTest
     ASSERT_EQ(result->destination(),
               viz::CopyOutputResult::Destination::kNativeTextures);
 
-    gpu::Mailbox mailbox = result->GetTextureResult()->planes[0].mailbox;
+    gpu::Mailbox mailbox =
+        result->GetTextureResult()->mailbox_holders[0].mailbox;
     gpu::SyncToken sync_token =
-        result->GetTextureResult()->planes[0].sync_token;
+        result->GetTextureResult()->mailbox_holders[0].sync_token;
     gfx::ColorSpace color_space = result->GetTextureResult()->color_space;
     EXPECT_EQ(result->GetTextureResult()->color_space, output_color_space_);
 
@@ -141,7 +183,8 @@ class LayerTreeHostReadbackPixelTest
 
   gfx::Rect copy_subrect_;
   gfx::ColorSpace output_color_space_ = gfx::ColorSpace::CreateSRGB();
-  int insert_copy_request_after_frame_count_;
+  int insert_copy_request_after_frame_count_ = 0;
+  scoped_refptr<viz::RasterContextProvider> context_provider_;
 };
 
 TEST_P(LayerTreeHostReadbackPixelTest, ReadbackRootLayer) {
@@ -448,9 +491,14 @@ ReadbackTestConfig const kTestConfigs[] = {
     ReadbackTestConfig{viz::RendererType::kSkiaVk, TestReadBackType::kBitmap},
     ReadbackTestConfig{viz::RendererType::kSkiaVk, TestReadBackType::kTexture},
 #endif  // BUILDFLAG(ENABLE_VULKAN_BACKEND_TESTS)
-#if BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
-    ReadbackTestConfig{viz::RendererType::kSkiaDawn, TestReadBackType::kBitmap},
-#endif  // BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
+#if BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
+    ReadbackTestConfig{viz::RendererType::kSkiaGraphiteDawn,
+                       TestReadBackType::kBitmap},
+#if BUILDFLAG(IS_IOS)
+    ReadbackTestConfig{viz::RendererType::kSkiaGraphiteMetal,
+                       TestReadBackType::kBitmap},
+#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
 };
 
 INSTANTIATE_TEST_SUITE_P(All,
@@ -554,7 +602,7 @@ class LayerTreeHostReadbackColorSpacePixelTest
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     std::unique_ptr<TestLayerTreeFrameSink> frame_sink =
@@ -562,6 +610,7 @@ class LayerTreeHostReadbackColorSpacePixelTest
             renderer_settings, refresh_rate, compositor_context_provider,
             worker_context_provider);
     frame_sink->SetDisplayColorSpace(output_color_space_);
+    context_provider_ = frame_sink->worker_context_provider();
     return frame_sink;
   }
 

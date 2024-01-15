@@ -4,12 +4,11 @@
 
 #include "components/thin_webview/internal/compositor_view_impl.h"
 
-#include <android/native_window_jni.h>
-
 #include <memory>
 
 #include "base/android/jni_android.h"
-#include "cc/layers/solid_color_layer.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/solid_color_layer.h"
 #include "components/thin_webview/internal/jni_headers/CompositorViewImpl_jni.h"
 #include "content/public/browser/android/compositor.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -52,7 +51,7 @@ CompositorViewImpl::CompositorViewImpl(JNIEnv* env,
                                        ui::WindowAndroid* window_android,
                                        int64_t java_background_color)
     : obj_(env, obj),
-      root_layer_(cc::SolidColorLayer::Create()),
+      root_layer_(cc::slim::SolidColorLayer::Create()),
       current_surface_format_(kPixelFormatUnknown) {
   compositor_.reset(content::Compositor::Create(this, window_android));
   root_layer_->SetIsDrawable(true);
@@ -112,8 +111,8 @@ void CompositorViewImpl::SetNeedsComposite(
   compositor_->SetNeedsComposite();
 }
 
-void CompositorViewImpl::SetRootLayer(scoped_refptr<cc::Layer> layer) {
-  const cc::LayerList& children = root_layer_->children();
+void CompositorViewImpl::SetRootLayer(scoped_refptr<cc::slim::Layer> layer) {
+  const auto& children = root_layer_->children();
   DCHECK(children.size() <= 1);
   if (!children.empty() && children[0]->id() == layer->id())
     return;

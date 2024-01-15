@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/views_export.h"
@@ -22,11 +23,10 @@ struct VIEWS_EXPORT ChildLayout {
   // Note that comparison ignores available size; as two layouts with the same
   // geometry are the same even if the available size is different.
   bool operator==(const ChildLayout& other) const;
-  bool operator!=(const ChildLayout& other) const { return !(*this == other); }
 
   std::string ToString() const;
 
-  View* child_view = nullptr;
+  raw_ptr<View> child_view = nullptr;
   bool visible = false;
   gfx::Rect bounds;
   SizeBounds available_size;
@@ -43,10 +43,7 @@ struct VIEWS_EXPORT ProposedLayout {
   ProposedLayout& operator=(const ProposedLayout& other);
   ProposedLayout& operator=(ProposedLayout&& other);
 
-  bool operator==(const ProposedLayout& other) const;
-  bool operator!=(const ProposedLayout& other) const {
-    return !(*this == other);
-  }
+  bool operator==(const ProposedLayout& other) const = default;
 
   std::string ToString() const;
 

@@ -7,12 +7,17 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
+
+namespace views {
+class Widget;
+}  // namespace views
 
 namespace crostini {
 
@@ -120,14 +125,13 @@ class AnsibleManagementService : public KeyedService,
   void ApplyAnsiblePlaybook(const guest_os::GuestId& container_id);
   void OnApplyAnsiblePlaybook(
       const guest_os::GuestId& container_id,
-      absl::optional<vm_tools::cicerone::ApplyAnsiblePlaybookResponse>
-          response);
+      std::optional<vm_tools::cicerone::ApplyAnsiblePlaybookResponse> response);
 
   // Helper function that runs relevant callback and notifies observers.
   void OnConfigurationFinished(const guest_os::GuestId& container_id,
                                bool success);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   base::ObserverList<Observer> observers_;
   std::map<guest_os::GuestId, std::unique_ptr<AnsibleConfiguration>>
       configuration_tasks_;

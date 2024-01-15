@@ -5,13 +5,10 @@
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_BROWSER_APP_LAUNCHER_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_BROWSER_APP_LAUNCHER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
-#include "chrome/browser/ui/web_applications/web_app_launch_manager.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -19,14 +16,10 @@ namespace content {
 class WebContents;
 }
 
-namespace web_app {
-class WebAppLaunchManager;
-}  // namespace web_app
-
 namespace apps {
 
 // BrowserAppLauncher receives app launch requests and forwards them to
-// extensions or WebAppLaunchManager, based on the app type.
+// extensions or LaunchWebAppCommand, based on the app type.
 //
 // TODO(crbug.com/1061843): Remove BrowserAppLauncher and merge the interfaces
 // to AppServiceProxy when publishers(ExtensionApps and WebApps) can run on
@@ -45,15 +38,20 @@ class BrowserAppLauncher {
   // This interface is deprecated, please use
   // AppServiceProxy::LaunchAppWithParams() in the future.
   // TODO(crbug.com/1244506): Remove this interface in non-chrome OS platform.
-  content::WebContents* LaunchAppWithParams(AppLaunchParams params);
+  void LaunchAppWithParams(
+      AppLaunchParams params,
+      base::OnceCallback<void(content::WebContents*)> callback);
 #endif  // !BUILDFLAG(IS_CHROMEOS)
 
   // Launches an app for the given `app_id` in a way specified by `params`. This
   // interface should only be used in testing code where reqired a sync launch
   // for browser apps. Please try to use AppServiceProxy::LaunchAppWithParams()
-  // interface where possible. This interface is deprecated in the production
-  // code, using this interface might cause behaviour difference between the
-  // production code and testing code.
+  // interface where possible.
+  // Note: This code will block until the launch occurs.
+  //
+  // Deprecated. Prefer `LaunchAppWithParams()` or `LaunchAppWithIntent`.
+  // This interface is deprecated in production code, as using it might cause
+  // behaviour difference between the production code and test code.
   // TODO(crbug.com/1289100): Remove this interface if all usages are removed.
   content::WebContents* LaunchAppWithParamsForTesting(AppLaunchParams params);
 
@@ -69,7 +67,6 @@ class BrowserAppLauncher {
 
  private:
   const raw_ptr<Profile> profile_;
-  web_app::WebAppLaunchManager web_app_launch_manager_;
 };
 
 }  // namespace apps

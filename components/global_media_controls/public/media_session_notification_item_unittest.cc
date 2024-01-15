@@ -8,8 +8,12 @@
 #include <utility>
 
 #include "base/test/mock_callback.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/unguessable_token.h"
+#include "components/global_media_controls/public/test/mock_media_session_notification_item_delegate.h"
 #include "components/media_message_center/mock_media_notification_view.h"
+#include "media/base/media_switches.h"
 #include "services/media_session/public/cpp/test/test_media_controller.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -22,24 +26,6 @@ using testing::NiceMock;
 namespace global_media_controls {
 
 namespace {
-
-class MockMediaSessionNotificationItemDelegate
-    : public MediaSessionNotificationItem::Delegate {
- public:
-  MockMediaSessionNotificationItemDelegate() = default;
-  MockMediaSessionNotificationItemDelegate(
-      const MockMediaSessionNotificationItemDelegate&) = delete;
-  MockMediaSessionNotificationItemDelegate& operator=(
-      const MockMediaSessionNotificationItemDelegate&) = delete;
-  ~MockMediaSessionNotificationItemDelegate() override = default;
-
-  MOCK_METHOD(void, ActivateItem, (const std::string&));
-  MOCK_METHOD(void, HideItem, (const std::string&));
-  MOCK_METHOD(void, RemoveItem, (const std::string&));
-  MOCK_METHOD(void,
-              LogMediaSessionActionButtonPressed,
-              (const std::string&, MediaSessionAction));
-};
 
 const char kRequestId[] = "requestid";
 
@@ -58,7 +44,7 @@ class MediaSessionNotificationItemTest : public testing::Test {
     auto session_info = media_session::mojom::MediaSessionInfo::New();
     session_info->is_controllable = true;
     item_ = std::make_unique<MediaSessionNotificationItem>(
-        &delegate_, kRequestId, std::string(),
+        &delegate_, kRequestId, std::string(), source_id_,
         controller_.CreateMediaControllerRemote(), std::move(session_info));
     item_->SetView(&view_);
   }
@@ -67,11 +53,15 @@ class MediaSessionNotificationItemTest : public testing::Test {
     return view_;
   }
 
-  MockMediaSessionNotificationItemDelegate& delegate() { return delegate_; }
+  test::MockMediaSessionNotificationItemDelegate& delegate() {
+    return delegate_;
+  }
 
   media_session::test::TestMediaController& controller() { return controller_; }
 
   MediaSessionNotificationItem& item() { return *item_; }
+
+  base::UnguessableToken source_id() { return source_id_; }
 
   void AdvanceClockMilliseconds(int milliseconds) {
     task_environment_.FastForwardBy(base::Milliseconds(milliseconds));
@@ -79,9 +69,10 @@ class MediaSessionNotificationItemTest : public testing::Test {
 
  private:
   NiceMock<media_message_center::test::MockMediaNotificationView> view_;
-  NiceMock<MockMediaSessionNotificationItemDelegate> delegate_;
+  NiceMock<test::MockMediaSessionNotificationItemDelegate> delegate_;
   media_session::test::TestMediaController controller_;
   std::unique_ptr<MediaSessionNotificationItem> item_;
+  base::UnguessableToken source_id_{base::UnguessableToken::Create()};
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
@@ -224,7 +215,7 @@ TEST_F(MediaSessionNotificationItemTest, UnfreezingDoesntMissUpdates) {
   testing::Mock::VerifyAndClearExpectations(&view());
 }
 
-TEST_F(MediaSessionNotificationItemTest, UnfreezingWaitsForArtwork_Timeout) {
+TEST_F(MediaSessionNotificationItemTest, SemiUnfreezesWithoutArtwork_Timeout) {
   item().MediaSessionActionsChanged(
       {MediaSessionAction::kPlay, MediaSessionAction::kPause});
 
@@ -268,27 +259,27 @@ TEST_F(MediaSessionNotificationItemTest, UnfreezingWaitsForArtwork_Timeout) {
   // The item should still be frozen, and the view should contain the old data.
   EXPECT_TRUE(item().frozen());
 
-  // Update the metadata.
+  // Update the metadata. This should unfreeze everything except the artwork.
+  EXPECT_CALL(unfrozen_callback, Run);
+  EXPECT_CALL(view(), UpdateWithMediaSessionInfo(_));
+  EXPECT_CALL(view(), UpdateWithMediaMetadata(_));
+  EXPECT_CALL(view(), UpdateWithMediaArtwork(_)).Times(0);
   media_session::MediaMetadata metadata;
   metadata.title = u"title2";
   metadata.artist = u"artist2";
   item().MediaSessionMetadataChanged(metadata);
 
-  // The item should still be frozen, and waiting for a new image.
-  EXPECT_TRUE(item().frozen());
+  // The item should no longer be frozen, but will be waiting for a new image.
+  EXPECT_FALSE(item().frozen());
   testing::Mock::VerifyAndClearExpectations(&unfrozen_callback);
   testing::Mock::VerifyAndClearExpectations(&view());
 
-  // Once the freeze timer fires, the item should unfreeze even if there's no
-  // artwork.
-  EXPECT_CALL(unfrozen_callback, Run);
-  EXPECT_CALL(view(), UpdateWithMediaSessionInfo(_));
-  EXPECT_CALL(view(), UpdateWithMediaMetadata(_));
-  EXPECT_CALL(view(), UpdateWithMediaArtwork(_));
+  // Once the freeze timer fires, the artwork should unfreeze even if there's no
+  // artwork. Since we've received no artwork, the artwork should be null.
+  EXPECT_CALL(view(), UpdateWithMediaArtwork(_))
+      .WillOnce(testing::Invoke(
+          [](const gfx::ImageSkia& image) { EXPECT_TRUE(image.isNull()); }));
   AdvanceClockMilliseconds(2600);
-
-  EXPECT_FALSE(item().frozen());
-  testing::Mock::VerifyAndClearExpectations(&unfrozen_callback);
   testing::Mock::VerifyAndClearExpectations(&view());
 }
 
@@ -355,7 +346,7 @@ TEST_F(MediaSessionNotificationItemTest, UnfreezingWaitsForActions) {
 }
 
 TEST_F(MediaSessionNotificationItemTest,
-       UnfreezingWaitsForArtwork_ReceiveArtwork) {
+       SemiUnfreezesWithoutArtwork_ReceiveArtwork) {
   item().MediaSessionActionsChanged(
       {MediaSessionAction::kPlay, MediaSessionAction::kPause});
 
@@ -399,31 +390,155 @@ TEST_F(MediaSessionNotificationItemTest,
   // The item should still be frozen, and the view should contain the old data.
   EXPECT_TRUE(item().frozen());
 
-  // Update the metadata.
+  // Update the metadata. This should unfreeze everything except the artwork.
+  EXPECT_CALL(unfrozen_callback, Run);
+  EXPECT_CALL(view(), UpdateWithMediaSessionInfo(_));
+  EXPECT_CALL(view(), UpdateWithMediaMetadata(_));
+  EXPECT_CALL(view(), UpdateWithMediaArtwork(_)).Times(0);
   media_session::MediaMetadata metadata;
   metadata.title = u"title2";
   metadata.artist = u"artist2";
   item().MediaSessionMetadataChanged(metadata);
 
-  // The item should still be frozen, and waiting for a new image.
-  EXPECT_TRUE(item().frozen());
+  // The item should no longer be frozen, but will be waiting for a new image.
+  EXPECT_FALSE(item().frozen());
   testing::Mock::VerifyAndClearExpectations(&unfrozen_callback);
   testing::Mock::VerifyAndClearExpectations(&view());
 
-  // Once we receive artwork, the item should unfreeze.
-  EXPECT_CALL(unfrozen_callback, Run);
-  EXPECT_CALL(view(), UpdateWithMediaSessionInfo(_));
-  EXPECT_CALL(view(), UpdateWithMediaMetadata(_));
+  // Once we receive artwork, the artwork should unfreeze.
   EXPECT_CALL(view(), UpdateWithMediaArtwork(_));
   SkBitmap new_image;
   new_image.allocN32Pixels(10, 10);
   new_image.eraseColor(SK_ColorYELLOW);
   item().MediaControllerImageChanged(
       media_session::mojom::MediaSessionImageType::kArtwork, new_image);
-
-  EXPECT_FALSE(item().frozen());
-  testing::Mock::VerifyAndClearExpectations(&unfrozen_callback);
   testing::Mock::VerifyAndClearExpectations(&view());
+}
+
+TEST_F(MediaSessionNotificationItemTest, RequestMediaRemoting) {
+  EXPECT_EQ(0, controller().request_media_remoting_count());
+
+  item().RequestMediaRemoting();
+  item().FlushForTesting();
+
+  EXPECT_EQ(1, controller().request_media_remoting_count());
+}
+
+TEST_F(MediaSessionNotificationItemTest, GetMediaSessionActions) {
+  item().MediaSessionActionsChanged(
+      {MediaSessionAction::kPlay, MediaSessionAction::kPause,
+       MediaSessionAction::kEnterPictureInPicture});
+  EXPECT_TRUE(item().GetMediaSessionActions().contains(
+      MediaSessionAction::kEnterPictureInPicture));
+
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kMediaRemotingWithoutFullscreen);
+
+  auto session_info = media_session::mojom::MediaSessionInfo::New();
+  auto remote_playback_metadata =
+      media_session::mojom::RemotePlaybackMetadata::New(
+          "video_codec", "audio_codec", false, true, "device_friendly_name",
+          false);
+  session_info->remote_playback_metadata = std::move(remote_playback_metadata);
+  item().MediaSessionInfoChanged(std::move(session_info));
+  EXPECT_FALSE(item().GetMediaSessionActions().contains(
+      MediaSessionAction::kEnterPictureInPicture));
+}
+
+TEST_F(MediaSessionNotificationItemTest, GetSessionMetadata) {
+  media_session::MediaMetadata metadata;
+  metadata.source_title = u"source_title";
+  item().MediaSessionMetadataChanged(metadata);
+  EXPECT_EQ(u"source_title", item().GetSessionMetadata().source_title);
+
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kMediaRemotingWithoutFullscreen);
+
+  auto session_info = media_session::mojom::MediaSessionInfo::New();
+  auto remote_playback_metadata =
+      media_session::mojom::RemotePlaybackMetadata::New(
+          "video_codec", "audio_codec", false, true, "device_friendly_name",
+          false);
+  session_info->remote_playback_metadata = std::move(remote_playback_metadata);
+  item().MediaSessionInfoChanged(std::move(session_info));
+  item().UpdateDeviceName("device_friendly_name");
+
+  EXPECT_EQ(u"source_title \xB7 device_friendly_name",
+            item().GetSessionMetadata().source_title);
+}
+
+TEST_F(MediaSessionNotificationItemTest, GetRemotePlaybackMetadata) {
+  auto session_info = media_session::mojom::MediaSessionInfo::New();
+  item().MediaSessionInfoChanged(session_info.Clone());
+  EXPECT_TRUE(item().GetRemotePlaybackMetadata().is_null());
+
+  // Remote Playback disabled.
+  session_info->remote_playback_metadata =
+      media_session::mojom::RemotePlaybackMetadata::New(
+          "video_codec", "audio_codec", /* remote_playback_disabled */ true,
+          /* remote_playback_started */ true, "device_friendly_name",
+          /* is_encrypted_media */ false);
+  item().MediaSessionInfoChanged(session_info.Clone());
+  EXPECT_TRUE(item().GetRemotePlaybackMetadata().is_null());
+
+  // Encrypted media.
+  session_info->remote_playback_metadata =
+      media_session::mojom::RemotePlaybackMetadata::New(
+          "video_codec", "audio_codec", /* remote_playback_disabled */ false,
+          /* remote_playback_started */ true, "device_friendly_name",
+          /* is_encrypted_media */ true);
+  item().MediaSessionInfoChanged(session_info.Clone());
+  EXPECT_TRUE(item().GetRemotePlaybackMetadata().is_null());
+
+  // All criteria are met.
+  session_info->remote_playback_metadata =
+      media_session::mojom::RemotePlaybackMetadata::New(
+          "video_codec", "audio_codec", /* remote_playback_disabled */ false,
+          /* remote_playback_started */ true, "device_friendly_name",
+          /* is_encrypted_media */ false);
+  item().MediaSessionInfoChanged(session_info.Clone());
+  EXPECT_FALSE(item().GetRemotePlaybackMetadata().is_null());
+
+  // Content's duration is too short.
+  item().MediaSessionPositionChanged(media_session::MediaPosition(
+      /*playback_rate=*/1, /*duration=*/base::Seconds(10),
+      /*position=*/base::Seconds(1), /*end_of_media=*/false));
+  EXPECT_TRUE(item().GetRemotePlaybackMetadata().is_null());
+}
+
+TEST_F(MediaSessionNotificationItemTest, GetSourceId) {
+  EXPECT_EQ(source_id(), *item().GetSourceId());
+}
+
+TEST_F(MediaSessionNotificationItemTest, ShouldShowNotification) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(media::kMediaRemotingWithoutFullscreen);
+
+  media_session::MediaMetadata metadata;
+  metadata.title = u"title";
+  item().MediaSessionMetadataChanged(metadata);
+
+  // Hide uncontrollable sessions.
+  auto session_info = media_session::mojom::MediaSessionInfo::New();
+  item().MediaSessionInfoChanged(mojo::Clone(session_info));
+  EXPECT_FALSE(item().ShouldShowNotification());
+  session_info->is_controllable = true;
+  item().MediaSessionInfoChanged(mojo::Clone(session_info));
+  EXPECT_TRUE(item().ShouldShowNotification());
+
+  // Hide sessions with Cast presentation.
+  session_info->has_presentation = true;
+  item().MediaSessionInfoChanged(mojo::Clone(session_info));
+  EXPECT_FALSE(item().ShouldShowNotification());
+
+  // Show sessions with Remote Playback presentation.
+  session_info->remote_playback_metadata =
+      media_session::mojom::RemotePlaybackMetadata::New(
+          "video_codec", "audio_codec", /* remote_playback_disabled */ false,
+          /* remote_playback_started */ true, "device_friendly_name",
+          /* is_encrypted_media */ false);
+  item().MediaSessionInfoChanged(mojo::Clone(session_info));
+  EXPECT_TRUE(item().ShouldShowNotification());
 }
 
 }  // namespace global_media_controls

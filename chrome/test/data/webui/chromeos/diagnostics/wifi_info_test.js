@@ -3,23 +3,23 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/wifi_info.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {getSignalStrength} from 'chrome://diagnostics/diagnostics_utils.js';
 import {fakeDisconnectedWifiNetwork, fakeWifiNetwork, fakeWiFiStateProperties} from 'chrome://diagnostics/fake_data.js';
 import {Network, SecurityType, WiFiStateProperties} from 'chrome://diagnostics/network_health_provider.mojom-webui.js';
 import {WifiInfoElement} from 'chrome://diagnostics/wifi_info.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
 
 import {assertDataPointHasExpectedHeaderAndValue, assertTextContains, getDataPointValue} from './diagnostics_test_utils.js';
 
-export function wifiInfoTestSuite() {
+suite('wifiInfoTestSuite', function() {
   /** @type {?WifiInfoElement} */
   let wifiInfoElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -200,4 +200,4 @@ export function wifiInfoTestSuite() {
       assertEquals(getDataPointValue(wifiInfoElement, '#signalStrength'), '');
     });
   });
-}
+});

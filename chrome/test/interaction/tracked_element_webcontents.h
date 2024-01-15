@@ -25,6 +25,10 @@ class TrackedElementWebContents : public ui::TrackedElement {
 
   DECLARE_FRAMEWORK_SPECIFIC_METADATA()
 
+  // TrackedElement:
+  gfx::Rect GetScreenBounds() const override;
+  std::string ToString() const override;
+
   WebContentsInteractionTestUtil* owner() { return owner_; }
 
  private:
@@ -32,7 +36,7 @@ class TrackedElementWebContents : public ui::TrackedElement {
 
   void Init();
 
-  const base::raw_ptr<WebContentsInteractionTestUtil> owner_;
+  const raw_ptr<WebContentsInteractionTestUtil> owner_;
 };
 
 #endif  // CHROME_TEST_INTERACTION_TRACKED_ELEMENT_WEBCONTENTS_H_

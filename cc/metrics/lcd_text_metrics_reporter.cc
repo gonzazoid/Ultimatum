@@ -4,9 +4,12 @@
 
 #include "cc/metrics/lcd_text_metrics_reporter.h"
 
+#include "base/functional/function_ref.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/trace_event/trace_event.h"
 #include "cc/base/histograms.h"
 #include "cc/layers/picture_layer_impl.h"
 #include "cc/paint/display_item_list.h"
@@ -24,13 +27,40 @@ constexpr unsigned kMinimumFrameInterval = 500;
 // content/renderer/render_widget.cc.
 constexpr float kHighDPIDeviceScaleFactorThreshold = 1.5f;
 constexpr char kMetricNameLCDTextKPixelsHighDPI[] =
-    "Compositing.Renderer.LCDTextDisallowedReasonKPixels.HighDPI";
+    "Compositing.Renderer.LCDTextDisallowedReasonKPixels2.HighDPI";
 constexpr char kMetricNameLCDTextKPixelsLowDPI[] =
-    "Compositing.Renderer.LCDTextDisallowedReasonKPixels.LowDPI";
+    "Compositing.Renderer.LCDTextDisallowedReasonKPixels2.LowDPI";
 constexpr char kMetricNameLCDTextLayersHighDPI[] =
-    "Compositing.Renderer.LCDTextDisallowedReasonLayers.HighDPI";
+    "Compositing.Renderer.LCDTextDisallowedReasonLayers2.HighDPI";
 constexpr char kMetricNameLCDTextLayersLowDPI[] =
-    "Compositing.Renderer.LCDTextDisallowedReasonLayers.LowDPI";
+    "Compositing.Renderer.LCDTextDisallowedReasonLayers2.LowDPI";
+
+void Report(const LayerTreeImpl* layer_tree,
+            base::FunctionRef<void(int64_t text_pixels,
+                                   LCDTextDisallowedReason)> report_layer) {
+  for (const PictureLayerImpl* layer : layer_tree->picture_layers()) {
+    if (!layer->draws_content() || !layer->GetRasterSource()) {
+      continue;
+    }
+    const scoped_refptr<DisplayItemList>& display_item_list =
+        layer->GetRasterSource()->GetDisplayItemList();
+    if (!display_item_list) {
+      continue;
+    }
+
+    int64_t text_pixels = base::checked_cast<int64_t>(
+        display_item_list->AreaOfDrawText(layer->visible_layer_rect()));
+    if (!text_pixels) {
+      continue;
+    }
+
+    DCHECK_GT(text_pixels, 0);
+    report_layer(text_pixels, layer->lcd_text_disallowed_reason());
+  }
+}
+
+constexpr char const* kTraceCategory =
+    TRACE_DISABLED_BY_DEFAULT("cc.debug.lcd_text");
 
 }  // anonymous namespace
 
@@ -53,8 +83,20 @@ void LCDTextMetricsReporter::NotifySubmitFrame(
     const viz::BeginFrameArgs& args) {
   current_frame_time_ = args.frame_time;
   frame_count_since_last_report_++;
-  if (last_report_frame_time_.is_null())
+  if (last_report_frame_time_.is_null()) {
     last_report_frame_time_ = current_frame_time_;
+  }
+
+  bool trace_enabled;
+  TRACE_EVENT_CATEGORY_GROUP_ENABLED(kTraceCategory, &trace_enabled);
+  if (trace_enabled) {
+    Report(layer_tree_host_impl_->active_tree(),
+           [](int64_t text_pixels, LCDTextDisallowedReason reason) {
+             TRACE_COUNTER2(kTraceCategory,
+                            LCDTextDisallowedReasonToString(reason),
+                            "text_pixels", text_pixels, "layers", 1);
+           });
+  }
 }
 
 void LCDTextMetricsReporter::NotifyPauseFrameProduction() {
@@ -73,31 +115,18 @@ void LCDTextMetricsReporter::NotifyPauseFrameProduction() {
           : layer_tree_host_impl_->active_tree()->device_scale_factor();
   bool is_high_dpi = device_scale_factor >= kHighDPIDeviceScaleFactorThreshold;
 
-  for (const auto* layer :
-       layer_tree_host_impl_->active_tree()->picture_layers()) {
-    if (!layer->draws_content() || !layer->GetRasterSource())
-      continue;
-    const scoped_refptr<DisplayItemList>& display_item_list =
-        layer->GetRasterSource()->GetDisplayItemList();
-    if (!display_item_list)
-      continue;
-
-    int text_pixels = static_cast<int>(
-        display_item_list->AreaOfDrawText(layer->visible_layer_rect()));
-    if (!text_pixels)
-      continue;
-
-    auto reason = layer->lcd_text_disallowed_reason();
-    if (is_high_dpi) {
-      UMA_HISTOGRAM_SCALED_ENUMERATION(kMetricNameLCDTextKPixelsHighDPI, reason,
-                                       text_pixels, 1000);
-      UMA_HISTOGRAM_ENUMERATION(kMetricNameLCDTextLayersHighDPI, reason);
-    } else {
-      UMA_HISTOGRAM_SCALED_ENUMERATION(kMetricNameLCDTextKPixelsLowDPI, reason,
-                                       text_pixels, 1000);
-      UMA_HISTOGRAM_ENUMERATION(kMetricNameLCDTextLayersLowDPI, reason);
-    }
-  }
+  Report(layer_tree_host_impl_->active_tree(),
+         [is_high_dpi](int64_t text_pixels, LCDTextDisallowedReason reason) {
+           if (is_high_dpi) {
+             UMA_HISTOGRAM_SCALED_ENUMERATION(kMetricNameLCDTextKPixelsHighDPI,
+                                              reason, text_pixels, 1000);
+             UMA_HISTOGRAM_ENUMERATION(kMetricNameLCDTextLayersHighDPI, reason);
+           } else {
+             UMA_HISTOGRAM_SCALED_ENUMERATION(kMetricNameLCDTextKPixelsLowDPI,
+                                              reason, text_pixels, 1000);
+             UMA_HISTOGRAM_ENUMERATION(kMetricNameLCDTextLayersLowDPI, reason);
+           }
+         });
 }
 
 }  // namespace cc

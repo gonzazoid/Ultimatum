@@ -65,9 +65,8 @@ extern const char kGoogleApiKey[];
 // Used to tell the WebEngine executable to run the ContextProvider service.
 extern const char kContextProvider[];
 
-// Used to tell the WebEngine executable that it is being run via a .cm
-// manifest.
-extern const char kEnableCfv2[];
+// Equivalent to Chrome's --proxy-bypass-list switch.
+extern const char kProxyBypassList[];
 
 }  // namespace switches
 

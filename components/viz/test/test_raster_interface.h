@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/viz/test/test_context_support.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/common/capabilities.h"
@@ -40,7 +40,6 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
   // Capability setters below here.
   void set_gpu_rasterization(bool gpu_rasterization) {
     caps_.gpu_rasterization = gpu_rasterization;
-    caps_.supports_oop_raster = gpu_rasterization;
   }
   void set_msaa_is_slow(bool msaa_is_slow) {
     caps_.msaa_is_slow = msaa_is_slow;
@@ -48,9 +47,11 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
   void set_avoid_stencil_buffers(bool avoid_stencil_buffers) {
     caps_.avoid_stencil_buffers = avoid_stencil_buffers;
   }
-  void set_multisample_compatibility(bool multisample_compatibility) {
-    caps_.multisample_compatibility = multisample_compatibility;
+  void set_max_texture_size(int max_texture_size) {
+    caps_.max_texture_size = max_texture_size;
   }
+  void set_supports_gpu_memory_buffer_format(gfx::BufferFormat format,
+                                             bool support);
 
   // gpu::raster::RasterInterface implementation.
   void Finish() override;
@@ -68,26 +69,31 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
   void GetQueryObjectui64vEXT(GLuint id,
                               GLenum pname,
                               GLuint64* params) override;
-  void CopySubTexture(const gpu::Mailbox& source_mailbox,
-                      const gpu::Mailbox& dest_mailbox,
-                      GLenum dest_target,
-                      GLint xoffset,
-                      GLint yoffset,
-                      GLint x,
-                      GLint y,
-                      GLsizei width,
-                      GLsizei height,
-                      GLboolean unpack_flip_y,
-                      GLboolean unpack_premultiply_alpha) override {}
+  void CopySharedImage(const gpu::Mailbox& source_mailbox,
+                       const gpu::Mailbox& dest_mailbox,
+                       GLenum dest_target,
+                       GLint xoffset,
+                       GLint yoffset,
+                       GLint x,
+                       GLint y,
+                       GLsizei width,
+                       GLsizei height,
+                       GLboolean unpack_flip_y,
+                       GLboolean unpack_premultiply_alpha) override {}
   void WritePixels(const gpu::Mailbox& dest_mailbox,
                    int dst_x_offset,
                    int dst_y_offset,
+                   int dst_plane_index,
                    GLenum texture_target,
-                   GLuint row_bytes,
-                   const SkImageInfo& src_info,
-                   const void* src_pixels) override {}
+                   const SkPixmap& src_sk_pixmap) override {}
+  void WritePixelsYUV(const gpu::Mailbox& dest_mailbox,
+                      const SkYUVAPixmaps& src_yuv_pixmap) override {}
   void ConvertYUVAMailboxesToRGB(
       const gpu::Mailbox& dest_mailbox,
+      GLint src_x,
+      GLint src_y,
+      GLsizei width,
+      GLsizei height,
       SkYUVColorSpace planes_yuv_color_space,
       const SkColorSpace* planes_rgb_color_space,
       SkYUVAInfo::PlaneConfig plane_config,
@@ -106,6 +112,7 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
                            GLboolean can_use_lcd_text,
                            GLboolean visible,
                            const gfx::ColorSpace& color_space,
+                           float hdr_headroom,
                            const GLbyte* mailbox) override {}
   void RasterCHROMIUM(const cc::DisplayItemList* list,
                       cc::ImageProvider* provider,
@@ -115,8 +122,7 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
                       const gfx::Vector2dF& post_translate,
                       const gfx::Vector2dF& post_scale,
                       bool requires_clear,
-                      size_t* max_op_size_hint,
-                      bool preserve_recording = true) override {}
+                      size_t* max_op_size_hint) override {}
   void EndRasterCHROMIUM() override {}
   gpu::SyncToken ScheduleImageDecode(base::span<const uint8_t> encoded_data,
                                      const gfx::Size& output_size,
@@ -127,6 +133,8 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
       const gpu::Mailbox& source_mailbox,
       GLenum source_target,
       GrSurfaceOrigin source_origin,
+      const gfx::Size& source_size,
+      const gfx::Point& source_starting_point,
       const SkImageInfo& dst_info,
       GLuint dst_row_bytes,
       unsigned char* out,
@@ -151,8 +159,11 @@ class TestRasterInterface : public gpu::raster::RasterInterface {
                            GLuint dst_row_bytes,
                            int src_x,
                            int src_y,
+                           int plane_index,
                            void* dst_pixels) override {}
   GLuint CreateAndConsumeForGpuRaster(const gpu::Mailbox& mailbox) override;
+  GLuint CreateAndConsumeForGpuRaster(
+      const scoped_refptr<gpu::ClientSharedImage>& shared_image) override;
   void DeleteGpuRasterTexture(GLuint texture) override;
   void BeginGpuRaster() override;
   void EndGpuRaster() override;

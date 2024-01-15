@@ -88,24 +88,18 @@ TEST_F(RealTimePolicyEngineTest, TestCanPerformFullURLLookup_EnabledUserOptin) {
 
 TEST_F(RealTimePolicyEngineTest,
        TestCanPerformFullURLLookup_EnhancedProtection) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kEnhancedProtection);
   pref_service_.SetBoolean(prefs::kSafeBrowsingEnhanced, true);
   ASSERT_TRUE(CanPerformFullURLLookup(/* is_off_the_record */ false));
 }
 
 TEST_F(RealTimePolicyEngineTest,
        TestCanPerformFullURLLookup_DisabledEnhancedProtection) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(kEnhancedProtection);
-  pref_service_.SetBoolean(prefs::kSafeBrowsingEnhanced, true);
+  pref_service_.SetBoolean(prefs::kSafeBrowsingEnhanced, false);
   ASSERT_FALSE(CanPerformFullURLLookup(/* is_off_the_record */ false));
 }
 
 TEST_F(RealTimePolicyEngineTest,
        TestCanPerformFullURLLookup_RTLookupForEpEnabled_WithTokenDisabled) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kEnhancedProtection);
   pref_service_.SetBoolean(prefs::kSafeBrowsingEnhanced, true);
   EXPECT_TRUE(CanPerformFullURLLookup(/* is_off_the_record */ false));
   EXPECT_TRUE(CanPerformFullURLLookupWithToken(
@@ -140,8 +134,6 @@ TEST_F(
 TEST_F(
     RealTimePolicyEngineTest,
     TestCanPerformFullURLLookupWithToken_ClientControlledWithEnhancedProtection) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(kEnhancedProtection);
   // Enhanced protection is disabled: token fetches should be disallowed whether
   // or not they are configured in the client.
   EXPECT_FALSE(CanPerformFullURLLookupWithToken(
@@ -209,7 +201,7 @@ TEST_F(
         static_cast<network::mojom::RequestDestination>(i);
     bool enabled =
         RealTimePolicyEngine::CanPerformFullURLLookupForRequestDestination(
-            request_destination, /*can_rt_check_subresource_url=*/false);
+            request_destination, /*can_urt_check_subresource_url=*/false);
     switch (request_destination) {
       case network::mojom::RequestDestination::kDocument:
         EXPECT_TRUE(enabled);
@@ -231,7 +223,7 @@ TEST_F(
         static_cast<network::mojom::RequestDestination>(i);
     bool enabled =
         RealTimePolicyEngine::CanPerformFullURLLookupForRequestDestination(
-            request_destination, /*can_rt_check_subresource_url=*/true);
+            request_destination, /*can_urt_check_subresource_url=*/true);
     switch (request_destination) {
       case network::mojom::RequestDestination::kDocument:
       case network::mojom::RequestDestination::kIframe:

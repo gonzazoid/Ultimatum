@@ -8,9 +8,9 @@
 
 #include "components/arc/grit/input_overlay_resources.h"
 
-namespace arc {
+namespace arc::input_overlay {
 
-absl::optional<int> GetInputOverlayResourceId(const std::string& package_name) {
+std::optional<int> GetInputOverlayResourceId(const std::string& package_name) {
   std::map<std::string, int> resource_id_map = {
       {"org.chromium.arc.testapp.inputoverlay",
        IDR_IO_ORG_CHROMIUM_ARC_TESTAPP_INPUTOVERLAY},
@@ -50,11 +50,15 @@ absl::optional<int> GetInputOverlayResourceId(const std::string& package_name) {
       {"com.gamehivecorp.taptitans2", IDR_IO_COM_GAMEHIVECORP_TAPTITANS2},
       {"com.oddrok.powerhover", IDR_IO_COM_ODDROK_POWERHOVER},
       {"com.robtopx.geometryjumplite", IDR_IO_COM_ROBTOPX_GEOMETRYJUMPLITE},
+      {"com.robtopx.geometrydashworld", IDR_IO_COM_ROBTOPX_GEOMETRYDASHWORLD},
+      {"com.robtopx.geometrydashmeltdown", IDR_IO_COM_ROBTOPX_GEOMETRYDASHMELTDOWN},
+      {"com.robtopx.geometrydashsubzero", IDR_IO_COM_ROBTOPX_GEOMETRYDASHSUBZERO},
+      {"com.kitkagames.fallbuddies", IDR_IO_COM_KITKAGAMES_FALLBUDDIES},
   };
 
   auto it = resource_id_map.find(package_name);
-  return (it != resource_id_map.end()) ? absl::optional<int>(it->second)
-                                       : absl::optional<int>();
+  return (it != resource_id_map.end()) ? std::optional<int>(it->second)
+                                       : std::optional<int>();
 }
 
-}  // namespace arc
+}  // namespace arc::input_overlay

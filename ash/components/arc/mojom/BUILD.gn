@@ -9,7 +9,6 @@ assert(is_chromeos_ash)
 
 mojom("mojom") {
   sources = [
-    "accessibility_helper.mojom",
     "adbd.mojom",
     "anr.mojom",
     "app.mojom",
@@ -22,7 +21,7 @@ mojom("mojom") {
     "bluetooth.mojom",
     "boot_phase_monitor.mojom",
     "camera.mojom",
-    "cert_store.mojom",
+    "chrome_feature_flags.mojom",
     "clipboard.mojom",
     "compatibility_mode.mojom",
     "crash_collector.mojom",
@@ -37,8 +36,8 @@ mojom("mojom") {
     "intent_helper.mojom",
     "keyboard_shortcut.mojom",
     "keymaster.mojom",
+    "keymint.mojom",
     "kiosk.mojom",
-    "lock_screen.mojom",
     "media_session.mojom",
     "memory.mojom",
     "metrics.mojom",
@@ -46,7 +45,6 @@ mojom("mojom") {
     "nearby_share.mojom",
     "net.mojom",
     "obb_mounter.mojom",
-    "payment_app.mojom",
     "pip.mojom",
     "policy.mojom",
     "power.mojom",
@@ -55,13 +53,11 @@ mojom("mojom") {
     "privacy_items.mojom",
     "process.mojom",
     "property.mojom",
-    "rotation_lock.mojom",
     "scale_factor.mojom",
     "screen_capture.mojom",
-    "sensor.mojom",
-    "sensor_service.mojom",
     "sharesheet.mojom",
     "storage_manager.mojom",
+    "system_state.mojom",
     "system_ui.mojom",
     "timer.mojom",
     "tracing.mojom",
@@ -78,6 +74,7 @@ mojom("mojom") {
     "//ash/components/arc/mojom:media",
     "//ash/components/arc/mojom:notifications",
     "//ash/components/arc/mojom:oemcrypto",
+    "//chromeos/components/payments/mojom",
     "//chromeos/components/sensors/mojom:mojom",
     "//components/digital_goods/mojom",
     "//components/payments/mojom:mojom",
@@ -85,6 +82,7 @@ mojom("mojom") {
     "//mojo/public/mojom/base",
     "//printing/mojom",
     "//sandbox/policy/mojom",
+    "//services/accessibility/android/public/mojom",
     "//services/device/public/mojom:usb",
     "//services/media_session/public/mojom",
     "//services/resource_coordinator/public/mojom",
@@ -240,7 +238,7 @@ mojom("mojom") {
         },
         {
           mojom = "arc.mojom.MountEvent"
-          cpp = "::chromeos::disks::DiskMountManager::MountEvent"
+          cpp = "::ash::disks::DiskMountManager::MountEvent"
         },
       ]
       traits_headers = [
@@ -295,15 +293,15 @@ mojom("media") {
       types = [
         {
           mojom = "arc.mojom.ColorPlaneLayout"
-          cpp = "media::ColorPlaneLayout"
+          cpp = "::media::ColorPlaneLayout"
         },
         {
           mojom = "arc.mojom.Size"
-          cpp = "gfx::Size"
+          cpp = "::gfx::Size"
         },
         {
           mojom = "arc.mojom.VideoCodecProfile"
-          cpp = "media::VideoCodecProfile"
+          cpp = "::media::VideoCodecProfile"
         },
 
         {
@@ -311,22 +309,22 @@ mojom("media") {
 
           # media::VideoFrameLayout doesn't have default constructor, so we
           # cannot convert directly.
-          cpp = "std::unique_ptr<media::VideoFrameLayout>"
+          cpp = "::std::unique_ptr<::media::VideoFrameLayout>"
           move_only = true
           nullable_is_same_type = true
         },
         {
           mojom = "arc.mojom.VideoFramePlane"
-          cpp = "arc::VideoFramePlane"
+          cpp = "::arc::VideoFramePlane"
           move_only = true
         },
         {
           mojom = "arc.mojom.VideoPixelFormat"
-          cpp = "media::VideoPixelFormat"
+          cpp = "::media::VideoPixelFormat"
         },
         {
           mojom = "arc.mojom.DecoderStatus"
-          cpp = "media::DecoderStatus"
+          cpp = "::media::DecoderStatus"
         },
       ]
       traits_headers = [ "video_accelerator_mojom_traits.h" ]
@@ -342,10 +340,6 @@ mojom("media") {
         {
           mojom = "arc.mojom.VideoFrameStorageType"
           cpp = "::media::VideoEncodeAccelerator::Config::StorageType"
-        },
-        {
-          mojom = "arc.mojom.VideoEncodeAccelerator.Error"
-          cpp = "::media::VideoEncodeAccelerator::Error"
         },
         {
           mojom = "arc.mojom.VideoEncodeProfile"
@@ -373,6 +367,11 @@ mojom("media") {
 mojom("camera_intent") {
   sources = [ "camera_intent.mojom" ]
   webui_module_path = "/ash/components/arc/mojom"
+
+  # Since this is a dependency of the very large target above that is still
+  # generating legacy JS bindings/closure targets, generate legacy bindings
+  # here as well.
+  generate_legacy_js_bindings = true
 }
 
 mojom("notifications") {
@@ -413,6 +412,7 @@ mojom("protected_buffer_manager") {
 source_set("unit_tests") {
   testonly = true
   sources = [
+    "//ash/components/arc/intent_helper/intent_filter_mojom_traits_unittest.cc",
     "ime_mojom_traits_unittest.cc",
     "video_accelerator_mojom_traits_unittest.cc",
     "video_encode_accelerator_mojom_traits_unittest.cc",
@@ -420,6 +420,7 @@ source_set("unit_tests") {
 
   deps = [
     ":mojom",
+    "//components/arc",
     "//media",
     "//mojo/public/cpp/test_support:test_utils",
     "//testing/gtest",

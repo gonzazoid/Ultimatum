@@ -5,7 +5,6 @@
 #ifndef UI_NATIVE_THEME_NATIVE_THEME_MAC_H_
 #define UI_NATIVE_THEME_NATIVE_THEME_MAC_H_
 
-#include "base/mac/scoped_nsobject.h"
 #include "base/no_destructor.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/native_theme/native_theme_aura.h"
@@ -96,7 +95,8 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
   friend class base::NoDestructor<NativeThemeMac>;
   static NativeThemeMac* instance();
 
-  NativeThemeMac(bool configure_web_instance, bool should_only_use_dark_colors);
+  NativeThemeMac(bool should_only_use_dark_colors,
+                 NativeTheme* theme_to_update = nullptr);
   ~NativeThemeMac() override;
 
  private:
@@ -104,7 +104,8 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
   // high contrast.
   void PaintSelectedMenuItem(cc::PaintCanvas* canvas,
                              const ColorProvider* color_provider,
-                             const gfx::Rect& rect) const;
+                             const gfx::Rect& rect,
+                             const MenuItemExtraParams& extra_params) const;
 
   void PaintScrollBarTrackGradient(cc::PaintCanvas* canvas,
                                    const gfx::Rect& rect,
@@ -124,10 +125,9 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
 
   void InitializeDarkModeStateAndObserver();
 
-  void ConfigureWebInstance() override;
-
   enum ScrollbarPart {
     kThumb,
+    kTrack,
     kTrackInnerBorder,
     kTrackOuterBorder,
   };
@@ -148,14 +148,8 @@ class NATIVE_THEME_EXPORT NativeThemeMac : public NativeThemeBase {
     return scale_from_dip * (is_overlay ? 2.0f : 3.0f);
   }
 
-  base::scoped_nsobject<NativeThemeEffectiveAppearanceObserver>
-      appearance_observer_;
-  id high_contrast_notification_token_;
-
-  // Used to notify the web native theme of changes to dark mode and high
-  // contrast.
-  std::unique_ptr<NativeTheme::ColorSchemeNativeThemeObserver>
-      color_scheme_observer_;
+  NativeThemeEffectiveAppearanceObserver* __strong appearance_observer_;
+  id __strong display_accessibility_notification_token_;
 };
 
 // Mac implementation of native theme support for web controls.

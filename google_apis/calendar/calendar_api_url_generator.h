@@ -7,9 +7,9 @@
 
 #include <string>
 
+#include <optional>
 #include "base/time/time.h"
 #include "google_apis/gaia/gaia_urls.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace google_apis {
@@ -40,11 +40,16 @@ class CalendarApiUrlGenerator {
   GURL GetCalendarEventListUrl(const base::Time& start_time,
                                const base::Time& end_time,
                                bool single_events,
-                               absl::optional<int> max_attendees,
-                               absl::optional<int> max_results) const;
+                               std::optional<int> max_attendees,
+                               std::optional<int> max_results) const;
 
   // Returns a URL to fetch a map of calendar color id to color code.
   GURL GetCalendarColorListUrl() const;
+
+  // Returns a URL to fetch a list of calendars.
+  // max_results   Maximum number of calendars returned on one result page.
+  //               Optional.
+  GURL GetCalendarListUrl(std::optional<int> max_results) const;
 
   // The base url can be set here. It defaults to the production base url.
   void SetBaseUrlForTesting(const std::string& url) { base_url_ = GURL(url); }

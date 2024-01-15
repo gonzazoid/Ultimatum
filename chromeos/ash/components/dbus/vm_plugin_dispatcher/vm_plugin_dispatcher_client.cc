@@ -7,12 +7,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/dbus/vm_plugin_dispatcher/fake_vm_plugin_dispatcher_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -122,8 +123,8 @@ class VmPluginDispatcherClientImpl : public VmPluginDispatcherClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode protobuf for " << method_name;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
       return;
     }
 
@@ -138,14 +139,14 @@ class VmPluginDispatcherClientImpl : public VmPluginDispatcherClient {
   void OnDBusProtoResponse(chromeos::DBusMethodCallback<ResponseProto> callback,
                            dbus::Response* dbus_response) {
     if (!dbus_response) {
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     ResponseProto reponse_proto;
     dbus::MessageReader reader(dbus_response);
     if (!reader.PopArrayOfBytesAsProto(&reponse_proto)) {
       LOG(ERROR) << "Failed to parse proto from DBus Response.";
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(std::move(reponse_proto));
@@ -191,7 +192,7 @@ class VmPluginDispatcherClientImpl : public VmPluginDispatcherClient {
       LOG(ERROR) << "Failed to connect to signal: " << signal_name;
   }
 
-  dbus::ObjectProxy* vm_plugin_dispatcher_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> vm_plugin_dispatcher_proxy_ = nullptr;
 
   base::ObserverList<Observer> observer_list_;
 

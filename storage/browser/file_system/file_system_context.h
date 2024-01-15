@@ -12,9 +12,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -22,13 +24,13 @@
 #include "base/threading/sequence_bound.h"
 #include "base/types/pass_key.h"
 #include "build/build_config.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/quota_client.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "storage/browser/file_system/file_system_request_info.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "storage/browser/file_system/open_file_system_mode.h"
-#include "storage/browser/file_system/sandbox_file_system_backend_delegate.h"
 #include "storage/browser/file_system/task_runner_bound_observer_list.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-shared.h"
@@ -45,15 +47,14 @@ namespace blink {
 class StorageKey;
 }  // namespace blink
 
-namespace leveleb {
+namespace leveldb {
 class Env;
-}  // namespace leveleb
+}  // namespace leveldb
 
 namespace storage {
 
 class AsyncFileUtil;
 class CopyOrMoveFileValidatorFactory;
-class ExternalFileSystemBackend;
 class ExternalMountPoints;
 class FileStreamReader;
 class FileStreamWriter;
@@ -70,7 +71,11 @@ class QuotaClientCallbackWrapper;
 class QuotaManagerProxy;
 class QuotaReservation;
 class SandboxFileSystemBackend;
+class SandboxFileSystemBackendDelegate;
 class SpecialStoragePolicy;
+class WatcherManager;
+
+enum class OperationType;
 
 struct BucketInfo;
 struct FileSystemInfo;
@@ -150,7 +155,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
       const FileSystemOptions& options,
       base::PassKey<FileSystemContext>);
 
-  bool DeleteDataForStorageKeyOnFileTaskRunner(
+  // Called by CookiesTreeModel, to be removed in crbug.com/1304449.
+  void DeleteDataForStorageKeyOnFileTaskRunner(
       const blink::StorageKey& storage_key);
 
   // Creates a new QuotaReservation for the given `storage_key` and `type`.
@@ -206,11 +212,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
   // Returns all registered filesystem types.
   std::vector<FileSystemType> GetFileSystemTypes() const;
 
-  // Returns a FileSystemBackend instance for external filesystem
-  // type, which is used only by chromeos for now.  This is equivalent to
-  // calling GetFileSystemBackend(kFileSystemTypeExternal).
-  ExternalFileSystemBackend* external_backend() const;
-
   // Used for OpenFileSystem.
   using OpenFileSystemCallback =
       base::OnceCallback<void(const FileSystemURL& root_url,
@@ -240,7 +241,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
   // Provide a non-null BucketLocator to override the default storage bucket
   // for the root URL (which will be propagated to child URLs).
   void OpenFileSystem(const blink::StorageKey& storage_key,
-                      const absl::optional<storage::BucketLocator>& bucket,
+                      const std::optional<storage::BucketLocator>& bucket,
                       FileSystemType type,
                       OpenFileSystemMode mode,
                       OpenFileSystemCallback callback);
@@ -280,7 +281,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
       const FileSystemURL& url,
       int64_t offset,
       int64_t max_bytes_to_read,
-      const base::Time& expected_modification_time);
+      const base::Time& expected_modification_time,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access = base::NullCallback());
 
   // Creates new FileStreamWriter instance to write into a file pointed by
   // `url` from `offset`.
@@ -337,7 +340,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
 
   void ResolveURLOnOpenFileSystemForTesting(
       const blink::StorageKey& storage_key,
-      const absl::optional<storage::BucketLocator>& bucket,
+      const std::optional<storage::BucketLocator>& bucket,
       FileSystemType type,
       OpenFileSystemMode mode,
       OpenFileSystemCallback callback) {
@@ -374,6 +377,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
   //
   // Called by FileSystemOperationRunner.
   std::unique_ptr<FileSystemOperation> CreateFileSystemOperation(
+      OperationType type,
       const FileSystemURL& url,
       base::File::Error* error_code);
 
@@ -395,7 +399,11 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
                                       const GURL& filesystem_root,
                                       const std::string& filesystem_name,
                                       base::File::Error error);
-
+  void OnGetBucketForDeleteFileSystem(FileSystemType type,
+                                      StatusCallback callback,
+                                      QuotaErrorOr<BucketInfo> result);
+  void OnGetBucketForStorageKeyDeletion(std::vector<FileSystemType> type,
+                                        QuotaErrorOr<BucketInfo> result);
   // OnGetOrCreateBucket is the callback for calling
   // QuotaManagerProxy::GetOrCreateDefault.
   void OnGetOrCreateBucket(const blink::StorageKey& storage_key,
@@ -409,7 +417,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
   // `bucket` will be populated if the non-default storage bucket was used.
   void ResolveURLOnOpenFileSystem(
       const blink::StorageKey& storage_key,
-      const absl::optional<storage::BucketLocator>& bucket,
+      const std::optional<storage::BucketLocator>& bucket,
       FileSystemType type,
       OpenFileSystemMode mode,
       OpenFileSystemCallback callback);
@@ -459,7 +467,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemContext
 
   // MountPoints used to crack FileSystemURLs. The MountPoints are ordered
   // in order they should try to crack a FileSystemURL.
-  std::vector<MountPoints*> url_crackers_;
+  std::vector<raw_ptr<MountPoints, VectorExperimental>> url_crackers_;
 
   // The base path of the storage partition for this context.
   const base::FilePath partition_path_;

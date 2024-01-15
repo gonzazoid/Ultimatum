@@ -4,6 +4,7 @@
 
 if (is_android) {
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 static_library("multi_process") {
@@ -33,8 +34,13 @@ if (is_android) {
   # shim to function correctly.
   android_library("heap_profiling_java_test_support") {
     testonly = true
+
+    srcjar_deps = [ ":jni_headers" ]
     sources = [ "javatests/src/org/chromium/components/heap_profiling/multi_process/HeapProfilingTestShim.java" ]
-    deps = [ "//build/android:build_java" ]
+    deps = [
+      "//build/android:build_java",
+      "//third_party/jni_zero:jni_zero_java",
+    ]
   }
 }
 
@@ -48,6 +54,7 @@ source_set("test_support") {
   deps = [
     ":multi_process",
     "//base",
+    "//base:partition_alloc_test_support",
     "//base/test:test_support",
     "//components/services/heap_profiling/public/cpp",
     "//content/public/browser",

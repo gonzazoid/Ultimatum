@@ -5,21 +5,19 @@
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_coordinator.h"
 
 #import "base/check_op.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/sync/model/enterprise_utils.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/enterprise/enterprise_utils.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_mediator.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_view_controller.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_view_controller_delegate.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface UnifiedConsentCoordinator () <IdentityChooserCoordinatorDelegate,
                                          UnifiedConsentMediatorDelegate,
@@ -65,13 +63,17 @@
 }
 
 - (void)start {
+  [super start];
   [self.unifiedConsentMediator start];
 }
 
 - (void)stop {
   [self.identityChooserCoordinator stop];
+  self.identityChooserCoordinator = nil;
   [self.unifiedConsentMediator disconnect];
   self.unifiedConsentMediator = nil;
+  self.unifiedConsentViewController = nil;
+  [super stop];
 }
 
 - (void)scrollToBottom {
@@ -106,8 +108,9 @@
 
 - (BOOL)hasManagedSyncDataType {
   ChromeBrowserState* browserState = self.browser->GetBrowserState();
-  PrefService* prefService = browserState->GetPrefs();
-  return HasManagedSyncDataType(prefService);
+  syncer::SyncService* syncService =
+      SyncServiceFactory::GetForBrowserState(browserState);
+  return HasManagedSyncDataType(syncService);
 }
 
 - (BOOL)hasAccountRestrictions {

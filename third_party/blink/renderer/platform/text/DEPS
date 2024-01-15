@@ -6,7 +6,7 @@ include_rules = [
     "+third_party/blink/renderer/platform/text",
 
     # Dependencies.
-    "+base/i18n/rtl.h",
+    "+base/apple",
     "+base/mac",
     "+third_party/blink/renderer/platform/text/date_components.h",
     "+third_party/blink/renderer/platform/heap",

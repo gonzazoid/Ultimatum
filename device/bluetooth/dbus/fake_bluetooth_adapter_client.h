@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
@@ -97,7 +97,7 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothAdapterClient
   void SetSecondUUIDs(const std::vector<std::string>& uuids);
 
   // Set discoverable timeout
-  void SetDiscoverableTimeout(uint32_t timeout);
+  void SetDiscoverableTimeout(base::TimeDelta timeout);
 
   // Object path, name and addresses of the adapters we emulate.
   static const char kAdapterPath[];

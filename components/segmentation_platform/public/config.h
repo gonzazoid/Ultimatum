@@ -36,10 +36,6 @@ struct Config {
   // The name used for the segmentation key in UMA filters.
   std::string segmentation_uma_name;
 
-  // The trigger event type that triggers segment selection. If trigger is
-  // non-none, |on_demand_execution| must be true.
-  TriggerType trigger = TriggerType::kNone;
-
   // Time to live for a segment selection. Segment selection can't be changed
   // before this duration.
   base::TimeDelta segment_selection_ttl;
@@ -55,7 +51,7 @@ struct Config {
   struct SegmentMetadata {
     explicit SegmentMetadata(const std::string& uma_name);
     SegmentMetadata(const std::string& uma_name,
-                    std::unique_ptr<ModelProvider> default_provider);
+                    std::unique_ptr<DefaultModelProvider> default_provider);
     SegmentMetadata(SegmentMetadata&&);
 
     ~SegmentMetadata();
@@ -67,14 +63,14 @@ struct Config {
 
     // The default model or score used when server provided model is
     // unavailable.
-    std::unique_ptr<ModelProvider> default_provider;
+    std::unique_ptr<DefaultModelProvider> default_provider;
   };
   base::flat_map<proto::SegmentId, std::unique_ptr<SegmentMetadata>> segments;
 
-  // The selection only supports returning results from on-demand model
-  // executions instead of returning result from previous sessions. The
-  // selection TTLs are ignored in this config.
-  bool on_demand_execution = false;
+  // The service will run models in the background and keep results ready for
+  // use at all times. The TTL settings in the model metadata should be used to
+  // specify how often to refresh results.
+  bool auto_execute_and_cache = false;
 
   // List of custom  inputs provided for running the segments. The delegate will
   // be invoked for input based on the model metadata's input processing config.
@@ -88,7 +84,7 @@ struct Config {
   // Helper methods to add segments to `segments`:
   void AddSegmentId(proto::SegmentId segment_id);
   void AddSegmentId(proto::SegmentId segment_id,
-                    std::unique_ptr<ModelProvider> default_provider);
+                    std::unique_ptr<DefaultModelProvider> default_provider);
 
   // Returns the filter name that will be shown in the metrics for this
   // segmentation config.
@@ -96,6 +92,10 @@ struct Config {
 
   // Returns the segment name for the `segment` used by the metrics.
   std::string GetSegmentUmaName(proto::SegmentId segment) const;
+
+  // Whether the segment is a boolean model.
+  // TODO(haileywang): update config_parser to include this field.
+  bool is_boolean_segment = false;
 };
 
 }  // namespace segmentation_platform

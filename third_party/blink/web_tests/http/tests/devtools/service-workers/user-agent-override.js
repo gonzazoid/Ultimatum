@@ -2,13 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that User-Agent override works for requests from Service Workers.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
     // Note: every test that uses a storage API must manually clean-up state from previous tests.
   await ApplicationTestRunner.resetState();
 
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('resources');
 
   function waitForTarget() {
@@ -17,19 +21,19 @@
         targetAdded: function(target) {
           if (target.type() === SDK.Target.Type.ServiceWorker) {
             resolve();
-            SDK.targetManager.unobserveTargets(sniffer);
+            SDK.TargetManager.TargetManager.instance().unobserveTargets(sniffer);
           }
         },
 
         targetRemoved: function(e) {}
       };
-      SDK.targetManager.observeTargets(sniffer);
+      SDK.TargetManager.TargetManager.instance().observeTargets(sniffer);
     });
   }
 
   function waitForConsoleMessage(regex) {
     return new Promise(function(resolve) {
-      SDK.consoleModel.addEventListener(SDK.ConsoleModel.Events.MessageAdded, sniff);
+      SDK.TargetManager.TargetManager.instance().addModelListener(SDK.ConsoleModel.ConsoleModel, SDK.ConsoleModel.Events.MessageAdded, sniff);
 
       function sniff(e) {
         if (e.data && regex.test(e.data.messageText)) {
@@ -46,7 +50,7 @@
   var originalUserAgent = navigator.userAgent;
 
   TestRunner.addResult('Enable emulation and set User-Agent override');
-  SDK.multitargetNetworkManager.setUserAgentOverride(userAgentString);
+  SDK.NetworkManager.MultitargetNetworkManager.instance().setUserAgentOverride(userAgentString);
 
   await ApplicationTestRunner.registerServiceWorker(scriptURL, scope);
   await waitForTarget();
@@ -55,7 +59,7 @@
 
   TestRunner.addResult('Overriden user agent: ' + msg.messageText);
   TestRunner.addResult('Disable emulation');
-  SDK.multitargetNetworkManager.setUserAgentOverride('');
+  SDK.NetworkManager.MultitargetNetworkManager.instance().setUserAgentOverride('');
 
   await ApplicationTestRunner.unregisterServiceWorker(scope);
   await ApplicationTestRunner.registerServiceWorker(scriptURL + '?2', scope);

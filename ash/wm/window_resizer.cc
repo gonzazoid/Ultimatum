@@ -6,9 +6,8 @@
 
 #include "ash/public/cpp/presentation_time_recorder.h"
 #include "ash/wm/window_positioning_utils.h"
-#include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/time/time.h"
@@ -283,6 +282,28 @@ void WindowResizer::SetBoundsDuringResize(const gfx::Rect& bounds) {
 
   if (recorder_)
     recorder_->RequestNext();
+}
+
+void WindowResizer::SetTransformDuringResize(const gfx::Transform& transform) {
+  aura::Window* window = GetTarget();
+  DCHECK(window);
+
+  const gfx::Transform original_transform = window->transform();
+
+  // Prepare to record presentation time (e.g. tracking Configure).
+  if (recorder_) {
+    recorder_->PrepareToRecord();
+  }
+
+  window->SetTransform(transform);
+
+  if (window->transform() == original_transform) {
+    return;
+  }
+
+  if (recorder_) {
+    recorder_->RequestNext();
+  }
 }
 
 void WindowResizer::SetPresentationTimeRecorder(

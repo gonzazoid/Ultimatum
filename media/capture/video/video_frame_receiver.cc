@@ -4,9 +4,11 @@
 
 #include "media/capture/video/video_frame_receiver.h"
 
-#include "media/base/bind_to_current_loop.h"
+#include "base/task/bind_post_task.h"
 
 namespace media {
+
+ReadyFrameInBuffer::ReadyFrameInBuffer() = default;
 
 ReadyFrameInBuffer::ReadyFrameInBuffer(
     int buffer_id,
@@ -37,7 +39,7 @@ ReadyFrameInBuffer& ReadyFrameInBuffer::operator=(ReadyFrameInBuffer&& other) {
 
 ScopedFrameDoneHelper::ScopedFrameDoneHelper(base::OnceClosure done_callback)
     : base::ScopedClosureRunner(
-          media::BindToCurrentLoop(std::move(done_callback))) {}
+          base::BindPostTaskToCurrentDefault(std::move(done_callback))) {}
 
 ScopedFrameDoneHelper::~ScopedFrameDoneHelper() = default;
 

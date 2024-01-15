@@ -7,19 +7,16 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service_factory.h"
-#include "chrome/browser/profiles/profile.h"
 #include "components/policy/core/common/cloud/dm_auth.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "google_apis/gaia/gaia_urls.h"
@@ -152,7 +149,7 @@ void DeviceAccountInitializer::OnClientError(CloudPolicyClient* client) {
     return;
   DCHECK_EQ(client_, client);
   handling_request_ = false;
-  delegate_->OnDeviceAccountClientError(client->status());
+  delegate_->OnDeviceAccountClientError(client->last_dm_status());
 }
 
 }  // namespace policy

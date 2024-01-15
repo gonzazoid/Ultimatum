@@ -4,7 +4,13 @@
 
 #include "components/translate/content/browser/partial_translate_manager.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
+
+namespace {
+const char kTranslatePartialTranslationHttpResponseCode[] =
+    "Translate.PartialTranslation.HttpResponseCode";
+}  // namespace
 
 PartialTranslateRequest::PartialTranslateRequest() = default;
 PartialTranslateRequest::PartialTranslateRequest(
@@ -24,7 +30,7 @@ PartialTranslateManager::~PartialTranslateManager() = default;
 
 void PartialTranslateManager::StartPartialTranslate(
     content::WebContents* web_contents,
-    PartialTranslateRequest request,
+    const PartialTranslateRequest& request,
     PartialTranslateCallback callback) {
   // Invalidate any ongoing request.
   weak_ptr_factory_.InvalidateWeakPtrs();
@@ -58,6 +64,7 @@ std::unique_ptr<ContextualSearchContext> PartialTranslateManager::MakeContext(
   context->SetTranslationLanguages(request.source_language.value_or(""),
                                    request.target_language,
                                    /*fluent_languages=*/"");
+  context->SetApplyLangHint(request.apply_lang_hint);
 
   return context;
 }
@@ -65,6 +72,9 @@ std::unique_ptr<ContextualSearchContext> PartialTranslateManager::MakeContext(
 PartialTranslateResponse PartialTranslateManager::MakeResponse(
     const ResolvedSearchTerm& resolved_search_term) const {
   PartialTranslateResponse response;
+
+  base::UmaHistogramSparse(kTranslatePartialTranslationHttpResponseCode,
+                           resolved_search_term.response_code);
 
   if (resolved_search_term.response_code != 200) {
     response.status = PartialTranslateStatus::kError;

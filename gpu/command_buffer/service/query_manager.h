@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "base/atomicops.h"
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "gpu/command_buffer/common/buffer.h"
@@ -199,6 +199,9 @@ class GPU_GLES2_EXPORT QueryManager {
 
   // Removes a query info for the given query.
   void RemoveQuery(GLuint client_id);
+
+  // Removes a query info for all pending queries.
+  void RemoveAllQueries();
 
   // Returns false if any query is pointing to invalid shared memory.
   void BeginQuery(Query* query);

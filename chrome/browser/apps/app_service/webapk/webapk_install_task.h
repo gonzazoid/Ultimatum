@@ -6,19 +6,20 @@
 #define CHROME_BROWSER_APPS_APP_SERVICE_WEBAPK_WEBAPK_INSTALL_TASK_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/components/arc/arc_features_parser.h"
 #include "ash/components/arc/mojom/webapk.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/apps/app_service/webapk/webapk_metrics.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chromeos/crosapi/mojom/web_app_service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -60,11 +61,11 @@ class WebApkInstallTask {
   void OnWebApkInfoLoaded(std::unique_ptr<webapk::WebApk> webapk,
                           arc::mojom::WebApkInfoPtr result);
   void OnArcFeaturesLoaded(std::unique_ptr<webapk::WebApk> webapk,
-                           absl::optional<arc::ArcFeatures> arc_features);
+                           std::optional<arc::ArcFeatures> arc_features);
   void OnLoadedIcon(std::unique_ptr<webapk::WebApk> webapk,
-                    IconPurpose purpose,
+                    web_app::IconPurpose purpose,
                     std::vector<uint8_t> data);
-  void OnProtoSerialized(absl::optional<std::string> serialized_proto);
+  void OnProtoSerialized(std::optional<std::string> serialized_proto);
   void OnUrlLoaderComplete(std::unique_ptr<std::string> response_body);
   void OnInstallComplete(const std::string& package_name,
                          arc::mojom::WebApkInstallResult result);
@@ -77,15 +78,15 @@ class WebApkInstallTask {
   // further work should be done after calling this method.
   void DeliverResult(WebApkInstallStatus status);
 
-  Profile* const profile_;
-  web_app::WebAppProvider* const web_app_provider_;
+  const raw_ptr<Profile> profile_;
+  const raw_ptr<web_app::WebAppProvider> web_app_provider_;
 
   arc::mojom::WebApkInfoPtr web_apk_info_;
   const std::string app_id_;
 
   // If we are updating an existing WebAPK, contains the package name of the
   // existing WebAPK. Empty if this is an installation for a new WebAPK.
-  absl::optional<std::string> package_name_to_update_;
+  std::optional<std::string> package_name_to_update_;
 
   // Timeout for a response to arrive from the WebAPK minter.
   base::TimeDelta minter_timeout_;

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -48,8 +48,7 @@ ChromeRenderViewHostTestHarness::CreateTestingProfile(
   builder.SetIsMainProfile(is_main_profile);
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
-  for (auto& pair : GetTestingFactories())
-    builder.AddTestingFactory(pair.first, pair.second);
+  builder.AddTestingFactories(GetTestingFactories());
 
   return builder.Build();
 }

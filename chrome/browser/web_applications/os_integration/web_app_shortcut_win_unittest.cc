@@ -17,7 +17,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_path_override.h"
 #include "base/win/shortcut.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut.h"
 #include "chrome/browser/web_applications/test/web_app_test.h"
 #include "chrome/common/chrome_switches.h"
@@ -107,8 +106,6 @@ TEST_F(WebAppShortcutWinTest, GetShortcutPaths) {
       ShellUtil::SHORTCUT_LOCATION_DESKTOP,
       ShellUtil::SHORTCUT_LOCATION_START_MENU_CHROME_APPS_DIR,
       ShellUtil::SHORTCUT_LOCATION_STARTUP};
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    expected_locations.push_back(ShellUtil::SHORTCUT_LOCATION_QUICK_LAUNCH);
 
   base::FilePath expected_result;
   for (const auto& location : expected_locations) {
@@ -252,12 +249,13 @@ TEST_F(WebAppShortcutWinTest, UpdatePlatformShortcuts) {
   new_shortcut_info.title = u"new title";
   new_shortcut_info.profile_path = profile_path;
   new_shortcut_info.profile_name = base::WideToUTF8(profile_name);
-  new_shortcut_info.extension_id = kWebAppId;
+  new_shortcut_info.app_id = kWebAppId;
 
   // Set the favicon to be the same as the original icon.
   new_shortcut_info.favicon = std::move(image_family);
 
   UpdatePlatformShortcuts(shortcut_dir, base::WideToUTF16(shortcut_name),
+                          /*user_specified_locations=*/absl::nullopt,
                           new_shortcut_info);
   // The shortcut with the old title should be deleted from the shortcut
   // dir, the taskbar dir, and the implicit apps subdir.
@@ -311,12 +309,13 @@ TEST_F(WebAppShortcutWinTest, UpdatePlatformShortcutsAppIdentityChange) {
   new_shortcut_info.title = u"new title";
   new_shortcut_info.profile_path = profile_path;
   new_shortcut_info.profile_name = base::WideToUTF8(profile_name);
-  new_shortcut_info.extension_id = kWebAppId;
+  new_shortcut_info.app_id = kWebAppId;
   gfx::ImageFamily new_image_family;
   new_image_family.Add(gfx::Image(CreateDefaultApplicationIcon(32)));
   new_shortcut_info.favicon = std::move(new_image_family);
 
   UpdatePlatformShortcuts(shortcut_dir, base::WideToUTF16(shortcut_name),
+                          /*user_specified_locations=*/absl::nullopt,
                           new_shortcut_info);
 
   // The shortcut with the old title should have been deleted.

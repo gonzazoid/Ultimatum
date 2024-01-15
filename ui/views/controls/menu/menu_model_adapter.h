@@ -6,8 +6,10 @@
 #define UI_VIEWS_CONTROLS_MENU_MENU_MODEL_ADAPTER_H_
 
 #include <map>
+#include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/base/models/menu_model_delegate.h"
 #include "ui/views/controls/menu/menu_delegate.h"
@@ -28,9 +30,9 @@ class VIEWS_EXPORT MenuModelAdapter : public MenuDelegate,
   // it exists for the lifetime of the adapter. |this| will become the new
   // MenuModelDelegate of |menu_model| so that subsequent changes to it get
   // reflected in the created MenuItemView.
-  explicit MenuModelAdapter(ui::MenuModel* menu_model);
-  MenuModelAdapter(ui::MenuModel* menu_model,
-                   base::RepeatingClosure on_menu_closed_callback);
+  explicit MenuModelAdapter(
+      ui::MenuModel* menu_model,
+      base::RepeatingClosure on_menu_closed_callback = base::NullCallback());
 
   MenuModelAdapter(const MenuModelAdapter&) = delete;
   MenuModelAdapter& operator=(const MenuModelAdapter&) = delete;
@@ -41,9 +43,11 @@ class VIEWS_EXPORT MenuModelAdapter : public MenuDelegate,
   // (including submenus).
   virtual void BuildMenu(MenuItemView* menu);
 
-  // Convenience for creating and populating a menu. The caller owns the
+  // Creates, populates and returns a menu. Note that a raw pointer it kept
+  // internally to be able to update the `MenuItemView` as response to calls to
+  // `MenuModelDelegate::OnMenuStructureChanged()`.
   // returned MenuItemView.
-  MenuItemView* CreateMenu();
+  std::unique_ptr<MenuItemView> CreateMenu();
 
   void set_triggerable_event_flags(int triggerable_event_flags) {
     triggerable_event_flags_ = triggerable_event_flags;
@@ -101,9 +105,9 @@ class VIEWS_EXPORT MenuModelAdapter : public MenuDelegate,
   // passed to the constructor.
   raw_ptr<ui::MenuModel, DanglingUntriaged> menu_model_;
 
-  // Pointer to the MenuItemView created and updated by |this|, but not owned by
-  // |this|.
-  raw_ptr<MenuItemView, DanglingUntriaged> menu_;
+  // Pointer to the `MenuItemView` created and updated by `this`, but not owned
+  // by `this`.
+  raw_ptr<MenuItemView, DanglingUntriaged> menu_ = nullptr;
 
   // Mouse event flags which can trigger menu actions.
   int triggerable_event_flags_;

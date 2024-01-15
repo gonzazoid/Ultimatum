@@ -3,22 +3,19 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {HatsBrowserProxyImpl, LifetimeBrowserProxyImpl, MetricsBrowserProxyImpl, OpenWindowProxyImpl, PasswordCheckReferrer, PasswordManagerImpl, Router, routes, SafetyCheckBrowserProxy, SafetyCheckBrowserProxyImpl, SafetyCheckCallbackConstants, SafetyCheckChromeCleanerStatus, SafetyCheckExtensionsStatus, SafetyCheckIconStatus, SafetyCheckInteractions, SafetyCheckParentStatus, SafetyCheckPasswordsStatus, SafetyCheckSafeBrowsingStatus, SafetyCheckUpdatesStatus, SettingsSafetyCheckChildElement, SettingsSafetyCheckExtensionsChildElement, SettingsSafetyCheckPageElement, SettingsSafetyCheckPasswordsChildElement, SettingsSafetyCheckSafeBrowsingChildElement ,SettingsSafetyCheckUpdatesChildElement, TrustSafetyInteraction} from 'chrome://settings/settings.js';
+import {SafetyCheckExtensionsElement, SafetyCheckExtensionsBrowserProxyImpl, HatsBrowserProxyImpl, LifetimeBrowserProxyImpl, MetricsBrowserProxyImpl, OpenWindowProxyImpl, PasswordCheckReferrer, PasswordManagerImpl, Router, routes, SafetyCheckBrowserProxy, PasswordManagerPage, SafetyCheckBrowserProxyImpl, SafetyCheckCallbackConstants, SafetyCheckExtensionsStatus, SafetyCheckIconStatus, SafetyCheckInteractions, SafetyCheckParentStatus, SafetyCheckPasswordsStatus, SafetyCheckSafeBrowsingStatus, SafetyCheckUpdatesStatus, SettingsSafetyCheckChildElement, SettingsSafetyCheckExtensionsChildElement, SettingsSafetyCheckPageElement, SettingsSafetyCheckPasswordsChildElement, SettingsSafetyCheckSafeBrowsingChildElement ,SettingsSafetyCheckUpdatesChildElement, TrustSafetyInteraction} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {isVisible} from 'chrome://webui-test/test_util.js';
-import {SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
+import {TestOpenWindowProxy} from 'chrome://webui-test/test_open_window_proxy.js';
 
+import {TestExtensionBrowserProxy} from './test_extensions_browser_proxy.js';
 import {TestHatsBrowserProxy} from './test_hats_browser_proxy.js';
 import {TestLifetimeBrowserProxy} from './test_lifetime_browser_proxy.js';
 import {TestMetricsBrowserProxy} from './test_metrics_browser_proxy.js';
-import {TestOpenWindowProxy} from './test_open_window_proxy.js';
 import {TestPasswordManagerProxy} from './test_password_manager_proxy.js';
 import {assertSafetyCheckChild} from './safety_check_test_utils.js';
-import {TestSiteSettingsPrefsBrowserProxy} from './test_site_settings_prefs_browser_proxy.js';
 
 // clang-format on
 
@@ -81,19 +78,6 @@ function fireSafetyCheckExtensionsEvent(state: SafetyCheckExtensionsStatus) {
     displayString: testDisplayString,
   };
   webUIListenerCallback(SafetyCheckCallbackConstants.EXTENSIONS_CHANGED, event);
-}
-
-/**
- * Fire a safety check Chrome cleaner event.
- */
-function fireSafetyCheckChromeCleanerEvent(
-    state: SafetyCheckChromeCleanerStatus) {
-  const event = {
-    newState: state,
-    displayString: testDisplayString,
-  };
-  webUIListenerCallback(
-      SafetyCheckCallbackConstants.CHROME_CLEANER_CHANGED, event);
 }
 
 class TestSafetyCheckBrowserProxy extends TestBrowserProxy implements
@@ -172,7 +156,6 @@ suite('SafetyCheckPageUiTests', function() {
     fireSafetyCheckPasswordsEvent(SafetyCheckPasswordsStatus.CHECKING);
     fireSafetyCheckSafeBrowsingEvent(SafetyCheckSafeBrowsingStatus.CHECKING);
     fireSafetyCheckExtensionsEvent(SafetyCheckExtensionsStatus.CHECKING);
-    fireSafetyCheckChromeCleanerEvent(SafetyCheckChromeCleanerStatus.CHECKING);
     fireSafetyCheckParentEvent(SafetyCheckParentStatus.CHECKING);
 
     flush();
@@ -189,7 +172,6 @@ suite('SafetyCheckPageUiTests', function() {
         SafetyCheckSafeBrowsingStatus.ENABLED_STANDARD);
     fireSafetyCheckExtensionsEvent(
         SafetyCheckExtensionsStatus.NO_BLOCKLISTED_EXTENSIONS);
-    fireSafetyCheckChromeCleanerEvent(SafetyCheckChromeCleanerStatus.INFECTED);
     fireSafetyCheckParentEvent(SafetyCheckParentStatus.AFTER);
 
     flush();
@@ -487,15 +469,31 @@ suite('SafetyCheckUpdatesChildUiTests', function() {
       sublabel: testDisplayString,
     });
   });
+
+  test('updateToRollbackVersionDisallowedUiTest', () => {
+    fireSafetyCheckUpdatesEvent(
+        SafetyCheckUpdatesStatus.UPDATE_TO_ROLLBACK_VERSION_DISALLOWED);
+    flush();
+    assertSafetyCheckChild({
+      page,
+      iconStatus: SafetyCheckIconStatus.INFO,
+      label: 'Updates',
+      sublabel: testDisplayString,
+    });
+  });
 });
 
 suite('SafetyCheckPasswordsChildUiTests', function() {
   let metricsBrowserProxy: TestMetricsBrowserProxy;
+  let passwordManager: TestPasswordManagerProxy;
   let page: SettingsSafetyCheckPasswordsChildElement;
 
   setup(function() {
     metricsBrowserProxy = new TestMetricsBrowserProxy();
     MetricsBrowserProxyImpl.setInstance(metricsBrowserProxy);
+
+    passwordManager = new TestPasswordManagerProxy();
+    PasswordManagerImpl.setInstance(passwordManager);
 
     document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('settings-safety-check-passwords-child');
@@ -542,9 +540,9 @@ suite('SafetyCheckPasswordsChildUiTests', function() {
     assertEquals(
         'Settings.SafetyCheck.ManagePasswordsThroughCaretNavigation',
         await metricsBrowserProxy.whenCalled('recordAction'));
-    // Ensure the correct Settings page is shown.
-    assertEquals(
-        routes.CHECK_PASSWORDS, Router.getInstance().getCurrentRoute());
+    // Ensure the Password Check page is shown.
+    const param = await passwordManager.whenCalled('showPasswordManager');
+    assertEquals(PasswordManagerPage.CHECKUP, param);
   });
 
   test('passwordCompromisedUiTest', async function() {
@@ -575,9 +573,9 @@ suite('SafetyCheckPasswordsChildUiTests', function() {
     assertEquals(
         'Settings.SafetyCheck.ManagePasswords',
         await metricsBrowserProxy.whenCalled('recordAction'));
-    // Ensure the correct Settings page is shown.
-    assertEquals(
-        routes.CHECK_PASSWORDS, Router.getInstance().getCurrentRoute());
+    // Ensure the Password Check page is shown.
+    const param = await passwordManager.whenCalled('showPasswordManager');
+    assertEquals(PasswordManagerPage.CHECKUP, param);
 
     // Ensure correct referrer sent to password check.
     const referrer =
@@ -609,9 +607,9 @@ suite('SafetyCheckPasswordsChildUiTests', function() {
     assertEquals(
         'Settings.SafetyCheck.ManageWeakPasswords',
         await metricsBrowserProxy.whenCalled('recordAction'));
-    // Ensure the correct Settings page is shown.
-    assertEquals(
-        routes.CHECK_PASSWORDS, Router.getInstance().getCurrentRoute());
+    // Ensure the Password Check page is shown.
+    const param = await passwordManager.whenCalled('showPasswordManager');
+    assertEquals(PasswordManagerPage.CHECKUP, param);
   });
 
   test('passwordInfoStatesUiTest', function() {
@@ -794,6 +792,34 @@ suite('SafetyCheckSafeBrowsingChildUiTests', function() {
   });
 });
 
+suite('SafetyCheckExtensionsUiTests', function() {
+  let page: SafetyCheckExtensionsElement;
+  let browserProxy: TestExtensionBrowserProxy;
+  let openWindowProxy: TestOpenWindowProxy;
+
+  setup(function() {
+    browserProxy = new TestExtensionBrowserProxy();
+    SafetyCheckExtensionsBrowserProxyImpl.setInstance(browserProxy);
+    openWindowProxy = new TestOpenWindowProxy();
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    OpenWindowProxyImpl.setInstance(openWindowProxy);
+    page = document.createElement('safety-check-extensions');
+    document.body.appendChild(page);
+    flush();
+  });
+
+  test('extensionsReviewUiTest', async function() {
+    // Make sure that clicking the Safety Check Review button navigates
+    // the user to the extensions page.
+    const safetyCheck = page.$.safetyCheckChild.shadowRoot!;
+    assertTrue(!!safetyCheck);
+    safetyCheck.querySelector<HTMLElement>('#button')!.click();
+    const url = await openWindowProxy.whenCalled('openUrl');
+    assertEquals('chrome://extensions', url);
+  });
+});
+
+
 suite('SafetyCheckExtensionsChildUiTests', function() {
   let metricsBrowserProxy: TestMetricsBrowserProxy;
   let openWindowProxy: TestOpenWindowProxy;
@@ -831,7 +857,7 @@ suite('SafetyCheckExtensionsChildUiTests', function() {
         await metricsBrowserProxy.whenCalled('recordAction'));
     // Ensure the browser proxy call is done.
     assertEquals(
-        'chrome://extensions', await openWindowProxy.whenCalled('openURL'));
+        'chrome://extensions', await openWindowProxy.whenCalled('openUrl'));
   }
 
   test('extensionsCheckingUiTest', function() {
@@ -882,7 +908,7 @@ suite('SafetyCheckExtensionsChildUiTests', function() {
         'Settings.SafetyCheck.ReviewExtensionsThroughCaretNavigation',
         await metricsBrowserProxy.whenCalled('recordAction'));
     // Ensure the browser proxy call is done.
-    const url = await openWindowProxy.whenCalled('openURL');
+    const url = await openWindowProxy.whenCalled('openUrl');
     assertEquals('chrome://extensions', url);
   });
 
@@ -903,7 +929,7 @@ suite('SafetyCheckExtensionsChildUiTests', function() {
         .querySelector<SettingsSafetyCheckChildElement>(
             '#safetyCheckChild')!.click();
     // Ensure the browser proxy call is done.
-    const url = await openWindowProxy.whenCalled('openURL');
+    const url = await openWindowProxy.whenCalled('openUrl');
     assertEquals('chrome://extensions', url);
   });
 
@@ -952,100 +978,5 @@ suite('SafetyCheckExtensionsChildUiTests', function() {
       managedIcon: true,
       rowClickable: true,
     });
-  });
-});
-
-suite('SafetyCheckPagePermissionModulesTest', function() {
-  let page: SettingsSafetyCheckPageElement;
-  let browserProxy: TestSiteSettingsPrefsBrowserProxy;
-  const notificationElementName =
-      'settings-safety-check-notification-permissions';
-  const unusedSiteElementName = 'settings-safety-check-unused-site-permissions';
-
-  setup(function() {
-    browserProxy = new TestSiteSettingsPrefsBrowserProxy();
-    SiteSettingsPrefsBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = window.trustedTypes!.emptyHTML;
-  });
-
-  function createPage() {
-    page = document.createElement('settings-safety-check-page');
-    document.body.appendChild(page);
-    flush();
-  }
-
-  teardown(function() {
-    page.remove();
-  });
-
-  test('notificationPermissionModuleVisible', async () => {
-    const mockData = [
-      {
-        origin: 'www.example1.com',
-        notificationInfoString: 'About 4 notifications a day',
-      },
-    ];
-    browserProxy.setNotificationPermissionReview(mockData);
-
-    loadTimeData.overrideValues(
-        {safetyCheckNotificationPermissionsEnabled: true});
-    createPage();
-    webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', mockData);
-    flush();
-    assertTrue(
-        isVisible(page.shadowRoot!.querySelector(notificationElementName)));
-
-    webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', []);
-    flush();
-
-    assertFalse(
-        isVisible(page.shadowRoot!.querySelector(notificationElementName)));
-  });
-
-  test('notificationPermissionModuleFeatureDisabled', () => {
-    loadTimeData.overrideValues(
-        {safetyCheckNotificationPermissionsEnabled: false});
-    createPage();
-    assertFalse(
-        isVisible(page.shadowRoot!.querySelector(notificationElementName)));
-  });
-
-  test('notificationPermissionModuleEmptyList', () => {
-    browserProxy.setNotificationPermissionReview([]);
-
-    loadTimeData.overrideValues(
-        {safetyCheckNotificationPermissionsEnabled: true});
-    createPage();
-    assertFalse(
-        isVisible(page.shadowRoot!.querySelector(notificationElementName)));
-
-    const mockData = [{
-      origin: 'www.example1.com',
-      notificationInfoString: 'About 4 notifications a day',
-    }];
-    webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', mockData);
-    flush();
-
-    assertTrue(
-        isVisible(page.shadowRoot!.querySelector(notificationElementName)));
-  });
-
-  test('unusedSitePermissionsModuleVisible', () => {
-    loadTimeData.overrideValues(
-        {safetyCheckUnusedSitePermissionsEnabled: true});
-    createPage();
-    assertTrue(
-        isVisible(page.shadowRoot!.querySelector(unusedSiteElementName)));
-  });
-
-  test('unusedSitePermissionsModuleNotVisible', () => {
-    loadTimeData.overrideValues(
-        {safetyCheckUnusedSitePermissionsEnabled: false});
-    createPage();
-    assertFalse(
-        isVisible(page.shadowRoot!.querySelector(unusedSiteElementName)));
   });
 });

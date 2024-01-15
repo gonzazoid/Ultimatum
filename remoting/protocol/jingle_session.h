@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_checker.h"
@@ -65,7 +64,8 @@ class JingleSession : public Session {
   void AcceptIncomingConnection(const JingleMessage& initiate_message);
 
   // Callback for Transport interface to send transport-info messages.
-  void SendTransportInfo(std::unique_ptr<jingle_xmpp::XmlElement> transport_info);
+  void SendTransportInfo(
+      std::unique_ptr<jingle_xmpp::XmlElement> transport_info);
 
   // Sends |message| to the peer. The session is closed if the send fails or no
   // response is received within a reasonable time. All other responses are
@@ -180,7 +180,7 @@ class JingleSession : public Session {
   std::vector<PendingMessage> pending_transport_info_;
 
   // The SessionPlugins attached to this session.
-  std::vector<SessionPlugin*> plugins_;
+  std::vector<raw_ptr<SessionPlugin, VectorExperimental>> plugins_;
 
   THREAD_CHECKER(thread_checker_);
 

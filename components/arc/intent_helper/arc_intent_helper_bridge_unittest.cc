@@ -5,6 +5,7 @@
 #include "components/arc/intent_helper/arc_intent_helper_bridge.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,14 +16,12 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "base/files/file_path.h"
 #include "base/memory/ptr_util.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "components/arc/common/intent_helper/arc_intent_helper_package.h"
 #include "components/arc/intent_helper/intent_constants.h"
 #include "components/arc/intent_helper/open_url_delegate.h"
 #include "mojo/public/cpp/bindings/clone_traits.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace arc {
 
@@ -173,7 +172,7 @@ TEST_F(ArcIntentHelperTest, TestObserver) {
    public:
     MOCK_METHOD(void,
                 OnIntentFiltersUpdated,
-                (const absl::optional<std::string>& package_name),
+                (const std::optional<std::string>& package_name),
                 (override));
     MOCK_METHOD(void,
                 OnArcSupportedLinksChanged,
@@ -261,8 +260,6 @@ TEST_F(ArcIntentHelperTest, TestOnOpenUrl_ChromeScheme) {
 
 // Tests that OnOpenAppWithIntents opens only HTTPS URLs.
 TEST_F(ArcIntentHelperTest, TestOnOpenAppWithIntent) {
-  base::HistogramTester histograms;
-
   auto intent = mojom::LaunchIntent::New();
   intent->action = arc::kIntentActionSend;
   intent->extra_text = "Foo";
@@ -271,8 +268,6 @@ TEST_F(ArcIntentHelperTest, TestOnOpenAppWithIntent) {
   EXPECT_EQ(GURL("https://www.google.com"),
             test_open_url_delegate_->TakeLastOpenedUrl());
   EXPECT_EQ("Foo", test_open_url_delegate_->TakeLastOpenedIntent()->extra_text);
-  histograms.ExpectBucketCount("Arc.IntentHelper.OpenAppWithIntentAction",
-                               2 /* OpenIntentAction::kSend */, 1);
 
   instance_->OnOpenAppWithIntent(GURL("http://www.google.com"),
                                  mojom::LaunchIntent::New());

@@ -7,7 +7,8 @@
 namespace viz {
 
 bool SurfaceObserver::OnSurfaceDamaged(const SurfaceId& surface_id,
-                                       const BeginFrameAck& ack) {
+                                       const BeginFrameAck& ack,
+                                       HandleInteraction handle_interaction) {
   return false;
 }
 

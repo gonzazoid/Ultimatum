@@ -12,9 +12,13 @@
 #include <setupapi.h>
 #include <winioctl.h>
 
+#include <algorithm>
+#include <array>
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -103,6 +107,59 @@ absl::optional<BATTERY_INFORMATION> GetBatteryInformation(HANDLE battery,
   if (!success)
     return absl::nullopt;
   return battery_information;
+}
+
+// Returns the granularity of the battery discharge.
+absl::optional<uint32_t> GetBatteryBatteryDischargeGranularity(
+    HANDLE battery,
+    ULONG battery_tag,
+    ULONG current_capacity,
+    ULONG designed_capacity) {
+  BATTERY_QUERY_INFORMATION query_information = {};
+  query_information.BatteryTag = battery_tag;
+  query_information.InformationLevel = BatteryGranularityInformation;
+
+  // The battery discharge granularity can change as the level of the battery
+  // gets closer to zero. The documentation for `BatteryGranularityInformation`
+  // says that a maximum of 4 scales is possible. Each scale contains the
+  // granularity (in mWh) and the capacity (in mWh) at which the scale takes
+  // effect.
+  // https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-battery_reporting_scale
+  std::array<BATTERY_REPORTING_SCALE, 4> battery_reporting_scales;
+
+  DWORD bytes_returned = 0;
+  BOOL success = ::DeviceIoControl(
+      battery, IOCTL_BATTERY_QUERY_INFORMATION, &query_information,
+      sizeof(query_information), &battery_reporting_scales,
+      sizeof(battery_reporting_scales), &bytes_returned, nullptr);
+  if (!success)
+    return absl::nullopt;
+
+  ptrdiff_t nb_elements = base::checked_cast<ptrdiff_t>(
+      bytes_returned / sizeof(BATTERY_REPORTING_SCALE));
+  if (!nb_elements)
+    return absl::nullopt;
+
+  // The granularities are ordered from the highest capacity to the lowest
+  // capacity, or from the most coarse granularity to the most precise
+  // granularity, according to the documentation.
+  // Just in case, the documentation is not trusted for |max_granularity|. All
+  // the values are still compared to find the most coarse granularity.
+  DWORD max_granularity =
+      std::max_element(std::begin(battery_reporting_scales),
+                       std::begin(battery_reporting_scales) + nb_elements,
+                       [](const auto& lhs, const auto& rhs) {
+                         return lhs.Granularity < rhs.Granularity;
+                       })
+          ->Granularity;
+
+  // Check if the API can be trusted, which would simplify the implementation of
+  // this function.
+  UMA_HISTOGRAM_BOOLEAN(
+      "Power.BatteryDischargeGranularityIsOrdered",
+      max_granularity == battery_reporting_scales[0].Granularity);
+
+  return max_granularity;
 }
 
 // Returns BATTERY_STATUS structure containing battery state, given battery
@@ -226,6 +283,11 @@ BatteryLevelProviderWin::GetBatteryStateImpl() {
       return absl::nullopt;
     }
 
+    absl::optional<uint32_t> battery_discharge_granularity =
+        GetBatteryBatteryDischargeGranularity(
+            battery.Get(), *battery_tag, battery_status->Capacity,
+            battery_information->DesignedCapacity);
+
     battery_details_list.push_back(BatteryDetails(
         {.is_external_power_connected =
              !!(battery_status->PowerState & BATTERY_POWER_ON_LINE),
@@ -234,7 +296,8 @@ BatteryLevelProviderWin::GetBatteryStateImpl() {
          .charge_unit =
              ((battery_information->Capabilities & BATTERY_CAPACITY_RELATIVE)
                   ? BatteryLevelUnit::kRelative
-                  : BatteryLevelUnit::kMWh)}));
+                  : BatteryLevelUnit::kMWh),
+         .battery_discharge_granularity = battery_discharge_granularity}));
   }
 
   return MakeBatteryState(battery_details_list);

@@ -5,30 +5,33 @@
 #ifndef EXTENSIONS_BROWSER_API_VIRTUAL_KEYBOARD_PRIVATE_VIRTUAL_KEYBOARD_DELEGATE_H_
 #define EXTENSIONS_BROWSER_API_VIRTUAL_KEYBOARD_PRIVATE_VIRTUAL_KEYBOARD_DELEGATE_H_
 
+#include <optional>
 #include <set>
 #include <string>
-
-#include "base/callback.h"
+#include <vector>
+#include "base/functional/callback.h"
 #include "base/values.h"
-#include "content/public/browser/browser_thread.h"
 #include "extensions/common/api/virtual_keyboard.h"
 #include "extensions/common/api/virtual_keyboard_private.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
+
+namespace ash {
+class ClipboardHistoryItem;
+}  // namespace ash
 
 namespace extensions {
 
 class VirtualKeyboardDelegate {
  public:
-  virtual ~VirtualKeyboardDelegate() {}
+  virtual ~VirtualKeyboardDelegate() = default;
 
   using OnKeyboardSettingsCallback =
-      base::OnceCallback<void(absl::optional<base::Value::Dict> settings)>;
+      base::OnceCallback<void(std::optional<base::Value::Dict> settings)>;
 
   using OnSetModeCallback = base::OnceCallback<void(bool success)>;
 
   using OnGetClipboardHistoryCallback =
-      base::OnceCallback<void(base::Value history)>;
+      base::OnceCallback<void(std::vector<ash::ClipboardHistoryItem> history)>;
 
   using OnRestrictFeaturesCallback = base::OnceCallback<void(
       api::virtual_keyboard::FeatureRestrictions update)>;
@@ -86,7 +89,7 @@ class VirtualKeyboardDelegate {
 
   // Sets virtual keyboard window mode.
   virtual bool SetVirtualKeyboardMode(
-      int mode_enum,
+      api::virtual_keyboard_private::KeyboardMode mode_enum,
       gfx::Rect target_bounds,
       OnSetModeCallback on_set_mode_callback) = 0;
 
@@ -96,7 +99,8 @@ class VirtualKeyboardDelegate {
       const api::virtual_keyboard_private::Bounds& bounds) = 0;
 
   // Sets requested virtual keyboard state.
-  virtual bool SetRequestedKeyboardState(int state_enum) = 0;
+  virtual bool SetRequestedKeyboardState(
+      api::virtual_keyboard_private::KeyboardState state) = 0;
 
   // Sets the area on the screen that is occluded by the keyboard.
   virtual bool SetOccludedBounds(const std::vector<gfx::Rect>& bounds) = 0;
@@ -112,11 +116,8 @@ class VirtualKeyboardDelegate {
   virtual bool SetWindowBoundsInScreen(const gfx::Rect& bounds_in_screen) = 0;
 
   // Calls the |get_history_callback| function and passes a value containing the
-  // current cipboard history items. Only clipboard items which have an id in
-  // the |item_ids_filter| are included. If the filter is empty then all
-  // clipboard items are included.
+  // current cipboard history items.
   virtual void GetClipboardHistory(
-      const std::set<std::string>& item_ids_filter,
       OnGetClipboardHistoryCallback get_history_callback) = 0;
 
   // Paste a clipboard item from the clipboard history. Returns whether the

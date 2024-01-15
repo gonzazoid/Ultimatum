@@ -7,15 +7,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "net/cert/cert_status_flags.h"
 #include "net/cert/cert_verify_result.h"
@@ -53,7 +53,7 @@ class MockCertVerifier::MockRequest : public CertVerifier::Request {
   }
 
   void ReturnResultLater(int rv, const CertVerifyResult& result) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&MockRequest::ReturnResult,
                                   weak_factory_.GetWeakPtr(), rv, result));
   }
@@ -107,6 +107,14 @@ int MockCertVerifier::Verify(const RequestParams& params,
   return ERR_IO_PENDING;
 }
 
+void MockCertVerifier::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void MockCertVerifier::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
 void MockCertVerifier::AddResultForCert(scoped_refptr<X509Certificate> cert,
                                         const CertVerifyResult& verify_result,
                                         int rv) {
@@ -125,6 +133,12 @@ void MockCertVerifier::ClearRules() {
   rules_.clear();
 }
 
+void MockCertVerifier::SimulateOnCertVerifierChanged() {
+  for (Observer& observer : observers_) {
+    observer.OnCertVerifierChanged();
+  }
+}
+
 int MockCertVerifier::VerifyImpl(const RequestParams& params,
                                  CertVerifyResult* verify_result) {
   for (const Rule& rule : rules_) {
@@ -141,6 +155,30 @@ int MockCertVerifier::VerifyImpl(const RequestParams& params,
   verify_result->verified_cert = params.certificate();
   verify_result->cert_status = MapNetErrorToCertStatus(default_result_);
   return default_result_;
+}
+
+ParamRecordingMockCertVerifier::ParamRecordingMockCertVerifier() = default;
+ParamRecordingMockCertVerifier::~ParamRecordingMockCertVerifier() = default;
+
+int ParamRecordingMockCertVerifier::Verify(const RequestParams& params,
+                                           CertVerifyResult* verify_result,
+                                           CompletionOnceCallback callback,
+                                           std::unique_ptr<Request>* out_req,
+                                           const NetLogWithSource& net_log) {
+  params_.push_back(params);
+  return MockCertVerifier::Verify(params, verify_result, std::move(callback),
+                                  out_req, net_log);
+}
+
+CertVerifierObserverCounter::CertVerifierObserverCounter(
+    CertVerifier* verifier) {
+  obs_.Observe(verifier);
+}
+
+CertVerifierObserverCounter::~CertVerifierObserverCounter() = default;
+
+void CertVerifierObserverCounter::OnCertVerifierChanged() {
+  change_count_++;
 }
 
 }  // namespace net

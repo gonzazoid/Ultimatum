@@ -4,13 +4,15 @@
 
 #include "content/browser/bluetooth/web_bluetooth_service_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "content/browser/bluetooth/bluetooth_adapter_factory_wrapper.h"
+#include "content/browser/bluetooth/web_bluetooth_service_impl.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/public/browser/bluetooth_delegate.h"
 #include "content/public/common/content_client.h"
@@ -18,6 +20,7 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/prerender_test_util.h"
@@ -165,12 +168,11 @@ class TestBluetoothDelegate : public BluetoothDelegate {
     return std::move(prompt);
   }
 
-  void ShowDevicePairPrompt(
-      content::RenderFrameHost* frame,
-      const std::u16string& device_identifier,
-      PairPromptCallback callback,
-      PairingKind pairing_kind,
-      const absl::optional<std::u16string>& pin) override {
+  void ShowDevicePairPrompt(content::RenderFrameHost* frame,
+                            const std::u16string& device_identifier,
+                            PairPromptCallback callback,
+                            PairingKind pairing_kind,
+                            const std::optional<std::u16string>& pin) override {
     NOTREACHED();
   }
 
@@ -250,12 +252,14 @@ class TestBluetoothDelegate : public BluetoothDelegate {
 
  private:
   std::string device_to_select_;
-  FakeBluetoothScanningPrompt* prompt_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeBluetoothScanningPrompt* prompt_ = nullptr;
   base::OnceClosure quit_on_scanning_prompt_;
   bool showed_bluetooth_scanning_prompt_ = false;
 };
 
-class TestContentBrowserClient : public ContentBrowserClient {
+class TestContentBrowserClient : public ContentBrowserTestContentBrowserClient {
  public:
   TestContentBrowserClient() = default;
   ~TestContentBrowserClient() override = default;
@@ -304,7 +308,7 @@ class WebBluetoothServiceImplBrowserTest : public ContentBrowserTest {
   ~WebBluetoothServiceImplBrowserTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     ContentBrowserTest::SetUp();
   }
 
@@ -313,7 +317,7 @@ class WebBluetoothServiceImplBrowserTest : public ContentBrowserTest {
                     embedded_test_server()->StartAndReturnHandle());
 
     // Hook up the test bluetooth delegate.
-    old_browser_client_ = SetBrowserClientForTesting(&browser_client_);
+    browser_client_ = std::make_unique<TestContentBrowserClient>();
     SetFakeBlueboothAdapter();
   }
 
@@ -347,24 +351,23 @@ class WebBluetoothServiceImplBrowserTest : public ContentBrowserTest {
   }
 
   void SetDeviceToSelect(const std::string& device_address) {
-    browser_client_.bluetooth_delegate()->SetDeviceToSelect(device_address);
+    browser_client_->bluetooth_delegate()->SetDeviceToSelect(device_address);
   }
 
   bool CheckedAllowWebBluetooth() {
-    return browser_client_.checked_allow_web_bluetooth();
+    return browser_client_->checked_allow_web_bluetooth();
   }
 
-  void BlockGloballyDisabled() { browser_client_.block_globally_disabled(); }
+  void BlockGloballyDisabled() { browser_client_->block_globally_disabled(); }
 
   WebBluetoothServiceImpl* GetWebBluetoothServiceForTesting(
       RenderFrameHost* render_frame_host) {
-    return static_cast<RenderFrameHostImpl*>(render_frame_host)
-        ->GetWebBluetoothServiceForTesting();
+    return WebBluetoothServiceImpl::GetForCurrentDocument(render_frame_host);
   }
 
   WebContents* GetWebContents() { return shell()->web_contents(); }
   TestBluetoothDelegate* GetBluetoothDelegate() {
-    return browser_client_.bluetooth_delegate();
+    return browser_client_->bluetooth_delegate();
   }
 
   test::PrerenderTestHelper* prerender_helper() { return &prerender_helper_; }
@@ -374,8 +377,7 @@ class WebBluetoothServiceImplBrowserTest : public ContentBrowserTest {
   test::PrerenderTestHelper prerender_helper_;
   net::test_server::EmbeddedTestServerHandle test_server_handle_;
   scoped_refptr<FakeBluetoothAdapter> adapter_;
-  TestContentBrowserClient browser_client_;
-  raw_ptr<ContentBrowserClient> old_browser_client_ = nullptr;
+  std::unique_ptr<TestContentBrowserClient> browser_client_;
 };
 
 // Tests that the scanning prompt is not shown in the prerendering. It also

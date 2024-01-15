@@ -6,7 +6,9 @@
 
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/animation/tween.h"
@@ -42,8 +44,9 @@ void GhostImageView::Init(const gfx::Rect& drop_target_bounds,
 }
 
 void GhostImageView::FadeOut() {
-  if (is_hiding_)
+  if (is_hiding_) {
     return;
+  }
   is_hiding_ = true;
   DoAnimation(true /* fade out */);
 }
@@ -75,10 +78,14 @@ void GhostImageView::DoAnimation(bool hide) {
 void GhostImageView::OnPaint(gfx::Canvas* canvas) {
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
-  flags.setColor(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-                     ? gfx::kGoogleGrey200
-                     : gfx::kGoogleGrey900);
-  flags.setAlpha(kGhostColorOpacity);
+  if (chromeos::features::IsJellyEnabled()) {
+    GetColorProvider()->GetColor(cros_tokens::kCrosSysOutline);
+  } else {
+    flags.setColor(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+                       ? gfx::kGoogleGrey200
+                       : gfx::kGoogleGrey900);
+  }
+  flags.setAlphaf(kGhostColorOpacity / 255.0f);
   flags.setStyle(cc::PaintFlags::kStroke_Style);
   flags.setStrokeWidth(kGhostCircleStrokeWidth);
   gfx::Rect bounds = GetContentsBounds();
@@ -91,7 +98,7 @@ void GhostImageView::OnImplicitAnimationsCompleted() {
   delete this;
 }
 
-BEGIN_METADATA(GhostImageView, views::View)
+BEGIN_METADATA(GhostImageView)
 END_METADATA
 
 }  // namespace ash

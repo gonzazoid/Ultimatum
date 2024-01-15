@@ -11,7 +11,6 @@
 namespace blink {
 
 class ExceptionState;
-class HTMLCanvasElement;
 class GPUTextureDescriptor;
 class GPUTextureView;
 class GPUTextureViewDescriptor;
@@ -27,10 +26,6 @@ class GPUTexture : public DawnObject<WGPUTexture> {
                             ExceptionState& exception_state);
   static GPUTexture* CreateError(GPUDevice* device,
                                  const WGPUTextureDescriptor* desc);
-  static GPUTexture* FromCanvas(GPUDevice* device,
-                                HTMLCanvasElement* canvas,
-                                WGPUTextureUsage usage,
-                                ExceptionState& exception_state);
 
   GPUTexture(GPUDevice* device, WGPUTexture texture);
   GPUTexture(GPUDevice* device,
@@ -58,9 +53,15 @@ class GPUTexture : public DawnObject<WGPUTexture> {
 
   WGPUTextureDimension Dimension() { return dimension_; }
   WGPUTextureFormat Format() { return format_; }
-  WGPUTextureUsage Usage() { return usage_; }
+  WGPUTextureUsageFlags Usage() { return usage_; }
+  bool Destroyed() { return destroyed_; }
 
   void DissociateMailbox();
+
+  // Sets a callback which is called if destroy is called manually, before the
+  // WebGPU handle is actually destroyed.
+  void SetBeforeDestroyCallback(base::OnceClosure);
+  void ClearBeforeDestroyCallback();
 
  private:
   void setLabelImpl(const String& value) override {
@@ -70,8 +71,10 @@ class GPUTexture : public DawnObject<WGPUTexture> {
 
   WGPUTextureDimension dimension_;
   WGPUTextureFormat format_;
-  WGPUTextureUsage usage_;
+  WGPUTextureUsageFlags usage_;
   scoped_refptr<WebGPUMailboxTexture> mailbox_texture_;
+  bool destroyed_ = false;
+  base::OnceClosure destroy_callback_;
 };
 
 }  // namespace blink

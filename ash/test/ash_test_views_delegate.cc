@@ -5,7 +5,9 @@
 #include "ash/test/ash_test_views_delegate.h"
 
 #include "ash/accelerators/accelerator_controller_impl.h"
+#include "ash/capture_mode/capture_mode_test_util.h"
 #include "ash/shell.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ui/frame/frame_utils.h"
 
 namespace ash {
@@ -38,13 +40,20 @@ views::TestViewsDelegate::ProcessMenuAcceleratorResult
 AshTestViewsDelegate::ProcessAcceleratorWhileMenuShowing(
     const ui::Accelerator& accelerator) {
   if (ash::AcceleratorController::Get()->OnMenuAccelerator(accelerator)) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(ProcessAcceleratorNow, accelerator));
     return views::ViewsDelegate::ProcessMenuAcceleratorResult::CLOSE_MENU;
   }
 
   ProcessAcceleratorNow(accelerator);
   return views::ViewsDelegate::ProcessMenuAcceleratorResult::LEAVE_MENU_OPEN;
+}
+
+bool AshTestViewsDelegate::ShouldCloseMenuIfMouseCaptureLost() const {
+  // This is the same behaviour as `ChromeViewsDelegate`.
+  auto* capture_mode_test_delegate = GetTestDelegate();
+  CHECK(capture_mode_test_delegate);
+  return !capture_mode_test_delegate->is_session_active();
 }
 
 }  // namespace ash

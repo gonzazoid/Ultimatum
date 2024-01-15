@@ -36,7 +36,7 @@ bool MediaRemotingDialogCoordinatorViews::Show(
 
   Hide();  // Close the previous dialog if it is still showing.
 
-  Browser* const browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* const browser = chrome::FindBrowserWithTab(web_contents_);
   if (!browser) {
     std::move(permission_callback).Run(false);
     return false;
@@ -126,7 +126,7 @@ void MediaRemotingDialogView::ReportPermission(bool allowed) {
   std::move(permission_callback_).Run(allowed);
 }
 
-BEGIN_METADATA(MediaRemotingDialogView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(MediaRemotingDialogView)
 END_METADATA
 
 }  // namespace media_router

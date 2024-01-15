@@ -37,7 +37,7 @@ AlternativeStateNameMap::StateName AlternativeStateNameMap::NormalizeStateName(
 }
 
 // static
-absl::optional<AlternativeStateNameMap::CanonicalStateName>
+std::optional<AlternativeStateNameMap::CanonicalStateName>
 AlternativeStateNameMap::GetCanonicalStateName(
     const std::string& country_code,
     const std::u16string& state_name) {
@@ -48,12 +48,11 @@ AlternativeStateNameMap::GetCanonicalStateName(
 
 AlternativeStateNameMap::AlternativeStateNameMap() = default;
 
-absl::optional<AlternativeStateNameMap::CanonicalStateName>
+std::optional<AlternativeStateNameMap::CanonicalStateName>
 AlternativeStateNameMap::GetCanonicalStateName(
     const CountryCode& country_code,
     const StateName& state_name,
     bool is_state_name_normalized) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(alternative_state_name_map_sequence_checker_);
   // Example:
   //  Entries in |localized_state_names_map_| are:
   //    ("DE", "Bavaria") -> {
@@ -73,33 +72,33 @@ AlternativeStateNameMap::GetCanonicalStateName(
   if (!is_state_name_normalized)
     normalized_state_name = NormalizeStateName(state_name);
 
+  base::AutoLock lock(lock_);
   auto it = localized_state_names_reverse_lookup_map_.find(
       {country_code, normalized_state_name});
   if (it != localized_state_names_reverse_lookup_map_.end())
     return it->second;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<StateEntry> AlternativeStateNameMap::GetEntry(
+std::optional<StateEntry> AlternativeStateNameMap::GetEntry(
     const CountryCode& country_code,
     const StateName& state_string_from_profile) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(alternative_state_name_map_sequence_checker_);
-
   StateName normalized_state_string_from_profile =
       NormalizeStateName(state_string_from_profile);
-  absl::optional<CanonicalStateName> canonical_state_name =
+  std::optional<CanonicalStateName> canonical_state_name =
       GetCanonicalStateName(country_code, normalized_state_string_from_profile,
                             /*is_state_name_normalized=*/true);
 
   if (canonical_state_name) {
+    base::AutoLock lock(lock_);
     auto it = localized_state_names_map_.find(
         {country_code, canonical_state_name.value()});
     if (it != localized_state_names_map_.end())
       return it->second;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void AlternativeStateNameMap::AddEntry(
@@ -108,8 +107,6 @@ void AlternativeStateNameMap::AddEntry(
     const StateEntry& state_entry,
     const std::vector<StateName>& normalized_alternative_state_names,
     const CanonicalStateName& normalized_canonical_state_name) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(alternative_state_name_map_sequence_checker_);
-
   // Example:
   // AddEntry("DE", "Bavaria", {
   //                              "canonical_name": "Bayern",
@@ -126,12 +123,15 @@ void AlternativeStateNameMap::AddEntry(
   //    ("DE", "Bayern") -> "Bayern"
   //    ("DE", "BY") -> "Bayern"
   //    ("DE", "Bavaria") -> "Bayern"
-  if (localized_state_names_map_.size() == kMaxMapSize ||
-      GetCanonicalStateName(country_code, normalized_state_value_from_profile,
+  if (GetCanonicalStateName(country_code, normalized_state_value_from_profile,
                             /*is_state_name_normalized=*/true)) {
     return;
   }
 
+  base::AutoLock lock(lock_);
+  if (localized_state_names_map_.size() == kMaxMapSize) {
+    return;
+  }
   localized_state_names_map_[{country_code, normalized_canonical_state_name}] =
       state_entry;
   for (const auto& alternative_name : normalized_alternative_state_names) {
@@ -141,12 +141,12 @@ void AlternativeStateNameMap::AddEntry(
 }
 
 bool AlternativeStateNameMap::IsLocalisedStateNamesMapEmpty() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(alternative_state_name_map_sequence_checker_);
+  base::AutoLock lock(lock_);
   return localized_state_names_map_.empty();
 }
 
 void AlternativeStateNameMap::ClearAlternativeStateNameMap() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(alternative_state_name_map_sequence_checker_);
+  base::AutoLock lock(lock_);
   localized_state_names_map_.clear();
   localized_state_names_reverse_lookup_map_.clear();
 }

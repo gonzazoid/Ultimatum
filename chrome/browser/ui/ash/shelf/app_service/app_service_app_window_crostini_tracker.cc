@@ -16,10 +16,10 @@
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
 #include "chrome/browser/ash/crostini/crostini_force_close_watcher.h"
-#include "chrome/browser/ash/crostini/crostini_shelf_utils.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
+#include "chrome/browser/ash/guest_os/guest_os_shelf_utils.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -110,7 +110,7 @@ void AppServiceAppWindowCrostiniTracker::OnWindowVisibilityChanged(
       ash::ProfileHelper::Get()->GetProfileByAccountId(primary_account_id);
 
   // Windows without an application id set will get filtered out here.
-  const std::string& crostini_shelf_app_id = crostini::GetCrostiniShelfAppId(
+  const std::string& crostini_shelf_app_id = guest_os::GetGuestOsShelfAppId(
       primary_account_profile, exo::GetShellApplicationId(window),
       exo::GetShellStartupId(window));
   if (crostini_shelf_app_id.empty())
@@ -125,7 +125,7 @@ void AppServiceAppWindowCrostiniTracker::OnWindowVisibilityChanged(
   // app's name, but this may be null in the case of apps with no associated
   // launcher entry (i.e. no .desktop file), in which case the app's name is
   // unknown.
-  absl::optional<guest_os::GuestOsRegistryService::Registration> registration =
+  std::optional<guest_os::GuestOsRegistryService::Registration> registration =
       registry_service->GetRegistration(shelf_app_id);
   RegisterCrostiniWindowForForceClose(
       window, registration.has_value() ? registration->Name() : "");
@@ -142,7 +142,7 @@ void AppServiceAppWindowCrostiniTracker::OnWindowVisibilityChanged(
   // respective apps take at most another few seconds to start.
   // Work is ongoing to make this occur as infrequently as possible.
   // See https://crbug.com/854911.
-  if (crostini::IsUnmatchedCrostiniShelfAppId(shelf_app_id)) {
+  if (guest_os::IsUnregisteredCrostiniShelfAppId(shelf_app_id)) {
     ChromeShelfController::instance()
         ->GetShelfSpinnerController()
         ->CloseCrostiniSpinners();
@@ -220,7 +220,7 @@ std::string AppServiceAppWindowCrostiniTracker::GetShelfAppId(
   Profile* primary_account_profile =
       ash::ProfileHelper::Get()->GetProfileByAccountId(
           user_manager::UserManager::Get()->GetPrimaryUser()->GetAccountId());
-  std::string shelf_app_id = crostini::GetCrostiniShelfAppId(
+  std::string shelf_app_id = guest_os::GetGuestOsShelfAppId(
       primary_account_profile, exo::GetShellApplicationId(window),
       exo::GetShellStartupId(window));
 
@@ -241,8 +241,6 @@ std::string AppServiceAppWindowCrostiniTracker::GetShelfAppId(
 void AppServiceAppWindowCrostiniTracker::RegisterCrostiniWindowForForceClose(
     aura::Window* window,
     const std::string& app_name) {
-  if (!base::FeatureList::IsEnabled(features::kCrostiniForceClose))
-    return;
   exo::ShellSurfaceBase* surface = exo::GetShellSurfaceBaseForWindow(window);
   if (!surface)
     return;

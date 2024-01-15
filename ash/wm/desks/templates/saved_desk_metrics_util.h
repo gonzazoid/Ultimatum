@@ -5,6 +5,7 @@
 #ifndef ASH_WM_DESKS_TEMPLATES_SAVED_DESK_METRICS_UTIL_H_
 #define ASH_WM_DESKS_TEMPLATES_SAVED_DESK_METRICS_UTIL_H_
 
+#include "ash/ash_export.h"
 #include "ash/public/cpp/desk_template.h"
 #include "base/time/time.h"
 #include "components/desks_storage/core/desk_model.h"
@@ -55,10 +56,28 @@ constexpr char kTimeBetweenSaveAndRecallHistogramName[] =
 constexpr char kSaveAndRecallUnsupportedAppDialogShowHistogramName[] =
     "Ash.DeskTemplate.SaveAndRecallUnsupportedAppDialogShow";
 
+// Histogram names for Floating Workspace.
+constexpr char kLaunchFloatingWorkspaceHistogramName[] =
+    "Ash.DeskTemplate.LaunchFloatingWorkspace";
+constexpr char kFloatingWorkspaceWindowCountHistogramName[] =
+    "Ash.DeskTemplate.FloatingWorkspaceWindowCount";
+constexpr char kFloatingWorkspaceTabCountHistogramName[] =
+    "Ash.DeskTemplate.FloatingWorkspaceTabCount";
+constexpr char kFloatingWorkspaceWindowAndTabCountHistogramName[] =
+    "Ash.DeskTemplate.FloatingWorkspaceWindowAndTabCount";
+
+// Histogram names for admin templates.
+constexpr char kAdminTemplateWindowCountHistogramName[] =
+    "Ash.DeskTemplate.AdminTemplateWindowCount";
+constexpr char kAdminTemplateTabCountHistogramName[] =
+    "Ash.DeskTemplate.AdminTemplateTabCount";
+constexpr char kLaunchAdminTemplateHistogramName[] =
+    "Ash.DeskTamplate.LaunchAdminTemplate";
+
 // Wrappers calls base::uma with correct histogram name.
 void RecordLoadSavedDeskLibraryHistogram();
 void RecordDeleteSavedDeskHistogram(DeskTemplateType type);
-void RecordLaunchSavedDeskHistogram(DeskTemplateType type);
+ASH_EXPORT void RecordLaunchSavedDeskHistogram(DeskTemplateType type);
 void RecordNewSavedDeskHistogram(DeskTemplateType type);
 void RecordReplaceSavedDeskHistogram(DeskTemplateType type);
 void RecordAddOrUpdateTemplateStatusHistogram(
@@ -66,9 +85,13 @@ void RecordAddOrUpdateTemplateStatusHistogram(
 void RecordUserSavedDeskCountHistogram(DeskTemplateType type,
                                        size_t entry_count,
                                        size_t max_entry_count);
-void RecordWindowAndTabCountHistogram(const DeskTemplate& desk_template);
+ASH_EXPORT void RecordWindowAndTabCountHistogram(
+    const DeskTemplate& desk_template);
 void RecordUnsupportedAppDialogShowHistogram(DeskTemplateType type);
 void RecordTimeBetweenSaveAndRecall(base::TimeDelta duration);
+void RecordAdminTemplateWindowAndTabCountHistogram(
+    const DeskTemplate& desk_template);
+void RecordLaunchAdminTemplateHistogram();
 
 }  // namespace ash
 

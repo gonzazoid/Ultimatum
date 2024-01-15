@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
@@ -37,7 +37,7 @@ void PaintPreviewBaseService::CapturePaintPreview(CaptureParams capture_params,
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   content::WebContents* web_contents = capture_params.web_contents;
   content::RenderFrameHost* render_frame_host =
-      capture_params.render_frame_host ? capture_params.render_frame_host
+      capture_params.render_frame_host ? capture_params.render_frame_host.get()
                                        : web_contents->GetPrimaryMainFrame();
   if (policy_ && !policy_->SupportedForContents(web_contents)) {
     std::move(callback).Run(CaptureStatus::kContentUnsupported, {});
@@ -56,8 +56,7 @@ void PaintPreviewBaseService::CapturePaintPreview(CaptureParams capture_params,
     params.root_dir = *capture_params.root_dir;
   }
   params.inner.clip_rect = capture_params.clip_rect;
-  params.inner.is_main_frame =
-      (render_frame_host == web_contents->GetPrimaryMainFrame());
+  params.inner.is_main_frame = render_frame_host->IsInPrimaryMainFrame();
   params.inner.capture_links = capture_params.capture_links;
   params.inner.max_capture_size = capture_params.max_per_capture_size;
   params.inner.max_decoded_image_size_bytes =

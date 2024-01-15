@@ -5,13 +5,11 @@
 #ifndef SERVICES_PREFERENCES_TRACKED_DICTIONARY_HASH_STORE_CONTENTS_H_
 #define SERVICES_PREFERENCES_TRACKED_DICTIONARY_HASH_STORE_CONTENTS_H_
 
-#include "base/memory/raw_ptr.h"
-#include "services/preferences/tracked/hash_store_contents.h"
+#include <string_view>
 
-namespace base {
-class DictionaryValue;
-class Value;
-}  // namespace base
+#include "base/memory/raw_ref.h"
+#include "base/values.h"
+#include "services/preferences/tracked/hash_store_contents.h"
 
 namespace user_prefs {
 class PrefRegistrySyncable;
@@ -25,7 +23,7 @@ class DictionaryHashStoreContents : public HashStoreContents {
  public:
   // Constructs a DictionaryHashStoreContents that reads from and writes to
   // |storage|.
-  explicit DictionaryHashStoreContents(base::DictionaryValue* storage);
+  explicit DictionaryHashStoreContents(base::Value::Dict& storage);
 
   DictionaryHashStoreContents(const DictionaryHashStoreContents&) = delete;
   DictionaryHashStoreContents& operator=(const DictionaryHashStoreContents&) =
@@ -37,7 +35,7 @@ class DictionaryHashStoreContents : public HashStoreContents {
   // HashStoreContents implementation
   bool IsCopyable() const override;
   std::unique_ptr<HashStoreContents> MakeCopy() const override;
-  base::StringPiece GetUMASuffix() const override;
+  std::string_view GetUMASuffix() const override;
   void Reset() override;
   bool GetMac(const std::string& path, std::string* out_value) override;
   bool GetSplitMacs(const std::string& path,
@@ -49,16 +47,16 @@ class DictionaryHashStoreContents : public HashStoreContents {
   void ImportEntry(const std::string& path,
                    const base::Value* in_value) override;
   bool RemoveEntry(const std::string& path) override;
-  const base::DictionaryValue* GetContents() const override;
+  const base::Value::Dict* GetContents() const override;
   std::string GetSuperMac() const override;
   void SetSuperMac(const std::string& super_mac) override;
 
  private:
-  raw_ptr<base::DictionaryValue> storage_;
+  const raw_ref<base::Value::Dict> storage_;
 
   // Helper function to get a mutable version of the macs from |storage_|,
   // creating it if needed and |create_if_null| is true.
-  base::DictionaryValue* GetMutableContents(bool create_if_null);
+  base::Value::Dict* GetMutableContents(bool create_if_null);
 };
 
 #endif  // SERVICES_PREFERENCES_TRACKED_DICTIONARY_HASH_STORE_CONTENTS_H_

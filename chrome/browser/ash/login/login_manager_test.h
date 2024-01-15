@@ -38,9 +38,12 @@ class LoginManagerTest : public MixinBasedInProcessBrowserTest {
   void RegisterUser(const AccountId& account_id);
 
   static const char kPassword[];
+  static const char kLocalPassword[];
   UserContext CreateUserContext(const AccountId& account_id,
                                 const std::string& password);
 
+  UserContext CreateUserContextWithLocalPassword(const AccountId& account_id,
+                                                 const std::string& password);
   // Set expected credentials for next login attempt.
   void SetExpectedCredentials(const UserContext& user_context);
 
@@ -57,8 +60,20 @@ class LoginManagerTest : public MixinBasedInProcessBrowserTest {
   // Log in user with `user_id`. User should be registered using RegisterUser().
   void LoginUser(const AccountId& account_id);
 
+  // Log in user with local password.
+  void LoginUserWithLocalPassword(const AccountId& account_id);
+
   // Add user with `user_id` to session.
   void AddUser(const AccountId& user_id);
+
+  // TODO(b/260718534): Fully switch from StubAuthenticator to
+  // FakeUserDataAuthClient.
+  void LoginUserWithDbusClient(const AccountId& account_id,
+                               const std::string& password);
+  void AddUserWithDbusClient(const AccountId& account_id,
+                             const std::string& password);
+  void SetExpectedCredentialsWithDbusClient(const AccountId& account_id,
+                                            const std::string& password);
 
   void set_should_launch_browser(bool launch) {
     should_launch_browser_ = launch;
@@ -71,10 +86,5 @@ class LoginManagerTest : public MixinBasedInProcessBrowserTest {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove once the migration is finished.
-namespace chromeos {
-using ::ash::LoginManagerTest;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_LOGIN_MANAGER_TEST_H_

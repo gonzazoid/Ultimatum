@@ -3,15 +3,20 @@
 // found in the LICENSE file.
 
 #include "ash/webui/eche_app_ui/eche_tray_stream_status_observer.h"
+#include <memory>
 
-#include "ash/components/phonehub/fake_phone_hub_manager.h"
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/ash_web_view.h"
 #include "ash/system/eche/eche_tray.h"
 #include "ash/system/status_area_widget_test_helper.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_ash_web_view_factory.h"
+#include "ash/webui/eche_app_ui/apps_launch_info_provider.h"
+#include "ash/webui/eche_app_ui/eche_connection_status_handler.h"
 #include "ash/webui/eche_app_ui/eche_stream_status_change_handler.h"
 #include "ash/webui/eche_app_ui/fake_feature_status_provider.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chromeos/ash/components/test/ash_test_suite.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -21,6 +26,7 @@ namespace ash {
 namespace eche_app {
 
 namespace {
+
 bool is_web_content_unloaded_ = false;
 
 void GracefulCloseFunction() {
@@ -32,6 +38,9 @@ void ResetUnloadWebContent() {
 }
 
 void GracefulGoBackFunction() {}
+
+void BubbleShownFunction(AshWebView* view) {}
+
 }  // namespace
 
 class EcheTrayStreamStatusObserverTest : public AshTestBase {
@@ -57,16 +66,22 @@ class EcheTrayStreamStatusObserverTest : public AshTestBase {
     AshTestBase::SetUp();
     eche_tray_ =
         ash::StatusAreaWidgetTestHelper::GetStatusAreaWidget()->eche_tray();
-
+    connection_status_handler_ =
+        std::make_unique<EcheConnectionStatusHandler>();
+    apps_launch_info_provider_ = std::make_unique<AppsLaunchInfoProvider>(
+        connection_status_handler_.get());
     stream_status_change_handler_ =
-        std::make_unique<EcheStreamStatusChangeHandler>();
+        std::make_unique<EcheStreamStatusChangeHandler>(
+            apps_launch_info_provider_.get(), connection_status_handler_.get());
     observer_ = std::make_unique<EcheTrayStreamStatusObserver>(
         stream_status_change_handler_.get(), &fake_feature_status_provider_);
   }
 
   void TearDown() override {
     observer_.reset();
+    apps_launch_info_provider_.reset();
     stream_status_change_handler_.reset();
+    connection_status_handler_.reset();
     AshTestBase::TearDown();
   }
 
@@ -84,7 +99,9 @@ class EcheTrayStreamStatusObserverTest : public AshTestBase {
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
-  EcheTray* eche_tray_ = nullptr;
+  raw_ptr<EcheTray, DanglingUntriaged> eche_tray_ = nullptr;
+  std::unique_ptr<EcheConnectionStatusHandler> connection_status_handler_;
+  std::unique_ptr<AppsLaunchInfoProvider> apps_launch_info_provider_;
   std::unique_ptr<EcheStreamStatusChangeHandler> stream_status_change_handler_;
   std::unique_ptr<EcheTrayStreamStatusObserver> observer_;
   FakeFeatureStatusProvider fake_feature_status_provider_;
@@ -94,9 +111,12 @@ class EcheTrayStreamStatusObserverTest : public AshTestBase {
 };
 
 TEST_F(EcheTrayStreamStatusObserverTest, LaunchBubble) {
-  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1",
+  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1", u"your phone",
+               eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+               eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST,
                base::BindOnce(&GracefulCloseFunction),
-               base::BindRepeating(&GracefulGoBackFunction));
+               base::BindRepeating(&GracefulGoBackFunction),
+               base::BindRepeating(&BubbleShownFunction));
 
   // Wait for Eche Tray to load Eche Web to complete.
   base::RunLoop().RunUntilIdle();
@@ -112,9 +132,12 @@ TEST_F(EcheTrayStreamStatusObserverTest, OnStartStreaming) {
   // The bubble should not be created if LaunchBubble be called before.
   EXPECT_FALSE(eche_tray()->get_bubble_wrapper_for_test());
 
-  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1",
+  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1", u"your phone",
+               eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+               eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST,
                base::BindOnce(&GracefulCloseFunction),
-               base::BindRepeating(&GracefulGoBackFunction));
+               base::BindRepeating(&GracefulGoBackFunction),
+               base::BindRepeating(&BubbleShownFunction));
 
   // Wait for Eche Tray to load Eche Web to complete.
   base::RunLoop().RunUntilIdle();
@@ -132,9 +155,12 @@ TEST_F(EcheTrayStreamStatusObserverTest, OnStartStreaming) {
 }
 
 TEST_F(EcheTrayStreamStatusObserverTest, OnStreamStatusChanged) {
-  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1",
+  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1", u"your phone",
+               eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+               eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST,
                base::BindOnce(&GracefulCloseFunction),
-               base::BindRepeating(&GracefulGoBackFunction));
+               base::BindRepeating(&GracefulGoBackFunction),
+               base::BindRepeating(&BubbleShownFunction));
   OnStreamStatusChanged(mojom::StreamStatus::kStreamStatusStarted);
 
   // Wait for Eche Tray to load Eche Web to complete.
@@ -154,9 +180,12 @@ TEST_F(EcheTrayStreamStatusObserverTest,
        StartGracefulCloseWhenFeatureStatusToIneligible) {
   ResetUnloadWebContent();
   SetStatus(FeatureStatus::kConnecting);
-  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1",
+  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1", u"your phone",
+               eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+               eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST,
                base::BindOnce(&GracefulCloseFunction),
-               base::BindRepeating(&GracefulGoBackFunction));
+               base::BindRepeating(&GracefulGoBackFunction),
+               base::BindRepeating(&BubbleShownFunction));
   OnStreamStatusChanged(mojom::StreamStatus::kStreamStatusStarted);
 
   // Wait for Eche Tray to load Eche Web to complete.
@@ -177,9 +206,12 @@ TEST_F(EcheTrayStreamStatusObserverTest,
        StartGracefulCloseWhenFeatureDependent) {
   ResetUnloadWebContent();
   SetStatus(FeatureStatus::kConnecting);
-  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1",
+  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1", u"your phone",
+               eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+               eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST,
                base::BindOnce(&GracefulCloseFunction),
-               base::BindRepeating(&GracefulGoBackFunction));
+               base::BindRepeating(&GracefulGoBackFunction),
+               base::BindRepeating(&BubbleShownFunction));
   OnStreamStatusChanged(mojom::StreamStatus::kStreamStatusStarted);
 
   // Wait for Eche Tray to load Eche Web to complete.
@@ -200,9 +232,12 @@ TEST_F(EcheTrayStreamStatusObserverTest,
        StartGracefulCloseWhenFeatureDisabled) {
   ResetUnloadWebContent();
   SetStatus(FeatureStatus::kConnecting);
-  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1",
+  LaunchBubble(GURL("http://google.com"), gfx::Image(), u"app 1", u"your phone",
+               eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+               eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST,
                base::BindOnce(&GracefulCloseFunction),
-               base::BindRepeating(&GracefulGoBackFunction));
+               base::BindRepeating(&GracefulGoBackFunction),
+               base::BindRepeating(&BubbleShownFunction));
   OnStreamStatusChanged(mojom::StreamStatus::kStreamStatusStarted);
 
   // Wait for Eche Tray to load Eche Web to complete.

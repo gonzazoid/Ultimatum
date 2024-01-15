@@ -6,8 +6,9 @@
 
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "ios/web/public/js_messaging/content_world.h"
 #import "ios/web/public/js_messaging/script_message.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frame.h"
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/test/fakes/fake_web_client.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
@@ -15,12 +16,8 @@
 #import "ios/web/test/fakes/fake_java_script_feature.h"
 #import "testing/gtest_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
+using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 
 namespace web {
@@ -31,7 +28,7 @@ class JavaScriptFeatureManagerPageContentWorldIntTest
  protected:
   JavaScriptFeatureManagerPageContentWorldIntTest()
       : WebTestWithWebState(std::make_unique<web::FakeWebClient>()),
-        feature_(JavaScriptFeature::ContentWorld::kPageContentWorld) {}
+        feature_(ContentWorld::kPageContentWorld) {}
 
   void SetUp() override {
     WebTestWithWebState::SetUp();
@@ -55,10 +52,12 @@ TEST_F(JavaScriptFeatureManagerPageContentWorldIntTest,
   ASSERT_FALSE(feature()->last_received_web_state());
   ASSERT_FALSE(feature()->last_received_message());
 
-  std::vector<base::Value> parameters;
-  parameters.push_back(
-      base::Value(kFakeJavaScriptFeaturePostMessageReplyValue));
-  feature()->ReplyWithPostMessage(GetMainFrame(web_state()), parameters);
+  WebFrame* frame =
+      feature()->GetWebFramesManager(web_state())->GetMainWebFrame();
+
+  auto parameters =
+      base::Value::List().Append(kFakeJavaScriptFeaturePostMessageReplyValue);
+  feature()->ReplyWithPostMessage(frame, parameters);
 
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
     return feature()->last_received_web_state();
@@ -82,13 +81,13 @@ TEST_F(JavaScriptFeatureManagerPageContentWorldIntTest,
 
   __block std::set<WebFrame*> web_frames;
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForPageLoadTimeout, ^{
-    web_frames = web_state()->GetWebFramesManager()->GetAllWebFrames();
+    web_frames = web_state()->GetPageWorldWebFramesManager()->GetAllWebFrames();
     return web_frames.size() == 2;
   }));
 
   WebFrame* child_frame = nullptr;
   for (WebFrame* frame : web_frames) {
-    if (frame != GetMainFrame(web_state())) {
+    if (!frame->IsMainFrame()) {
       child_frame = frame;
       break;
     }
@@ -96,9 +95,8 @@ TEST_F(JavaScriptFeatureManagerPageContentWorldIntTest,
 
   ASSERT_TRUE(child_frame);
 
-  std::vector<base::Value> parameters;
-  parameters.push_back(
-      base::Value(kFakeJavaScriptFeaturePostMessageReplyValue));
+  auto parameters =
+      base::Value::List().Append(kFakeJavaScriptFeaturePostMessageReplyValue);
   feature()->ReplyWithPostMessage(child_frame, parameters);
 
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
@@ -120,7 +118,7 @@ class JavaScriptFeatureManagerAnyContentWorldIntTest
  protected:
   JavaScriptFeatureManagerAnyContentWorldIntTest()
       : WebTestWithWebState(std::make_unique<web::FakeWebClient>()),
-        feature_(JavaScriptFeature::ContentWorld::kAnyContentWorld) {}
+        feature_(ContentWorld::kIsolatedWorld) {}
 
   void SetUp() override {
     WebTestWithWebState::SetUp();
@@ -142,10 +140,12 @@ TEST_F(JavaScriptFeatureManagerAnyContentWorldIntTest,
   ASSERT_FALSE(feature()->last_received_web_state());
   ASSERT_FALSE(feature()->last_received_message());
 
-  std::vector<base::Value> parameters;
-  parameters.push_back(
-      base::Value(kFakeJavaScriptFeaturePostMessageReplyValue));
-  feature()->ReplyWithPostMessage(GetMainFrame(web_state()), parameters);
+  WebFrame* frame =
+      feature()->GetWebFramesManager(web_state())->GetMainWebFrame();
+
+  auto parameters =
+      base::Value::List().Append(kFakeJavaScriptFeaturePostMessageReplyValue);
+  feature()->ReplyWithPostMessage(frame, parameters);
 
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
     return feature()->last_received_web_state();
@@ -169,13 +169,13 @@ TEST_F(JavaScriptFeatureManagerAnyContentWorldIntTest,
 
   __block std::set<WebFrame*> web_frames;
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForPageLoadTimeout, ^{
-    web_frames = web_state()->GetWebFramesManager()->GetAllWebFrames();
+    web_frames = web_state()->GetPageWorldWebFramesManager()->GetAllWebFrames();
     return web_frames.size() == 2;
   }));
 
   WebFrame* child_frame = nullptr;
   for (WebFrame* frame : web_frames) {
-    if (frame != GetMainFrame(web_state())) {
+    if (!frame->IsMainFrame()) {
       child_frame = frame;
       break;
     }
@@ -183,9 +183,8 @@ TEST_F(JavaScriptFeatureManagerAnyContentWorldIntTest,
 
   ASSERT_TRUE(child_frame);
 
-  std::vector<base::Value> parameters;
-  parameters.push_back(
-      base::Value(kFakeJavaScriptFeaturePostMessageReplyValue));
+  auto parameters =
+      base::Value::List().Append(kFakeJavaScriptFeaturePostMessageReplyValue);
   feature()->ReplyWithPostMessage(child_frame, parameters);
 
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {

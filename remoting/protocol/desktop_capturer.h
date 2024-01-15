@@ -5,7 +5,7 @@
 #ifndef REMOTING_PROTOCOL_DESKTOP_CAPTURER_H_
 #define REMOTING_PROTOCOL_DESKTOP_CAPTURER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_metadata.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor.h"
@@ -25,6 +25,10 @@ class DesktopCapturer : public webrtc::DesktopCapturer {
 
   // Change the position of the composed mouse cursor.
   virtual void SetMouseCursorPosition(const webrtc::DesktopVector& position) {}
+
+  // Whether capturer can notify the callback interface of the available frames
+  // immediately.
+  virtual bool SupportsFrameCallbacks();
 
 #if defined(WEBRTC_USE_GIO)
   virtual void GetMetadataAsync(

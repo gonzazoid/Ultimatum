@@ -69,6 +69,12 @@ enum VideoFacingMode {
 };
 
 [Stable, Extensible]
+enum CameraAvailability {
+  [Default] kAvailable,
+  kUnavailableExclusivelyUsedByOtherApplication,
+};
+
+[Stable, Extensible]
 enum VideoCaptureApi {
   LINUX_V4L2_SINGLE_PLANE,
   WIN_MEDIA_FOUNDATION,
@@ -87,8 +93,8 @@ enum VideoCaptureApi {
 
 [Stable, Extensible]
 enum VideoCaptureTransportType {
-  // For MACOSX_AVFOUNDATION Api, identifies devices that are built-in or USB.
-  MACOSX_USB_OR_BUILT_IN,
+// For AVFoundation Api, identify devices that are built-in or USB.
+  APPLE_USB_OR_BUILT_IN,
   OTHER_TRANSPORT
 };
 
@@ -246,6 +252,19 @@ enum VideoCaptureError {
   [MinVersion=4] kScreenCaptureKitFailedStopCapture,
   [MinVersion=4] kScreenCaptureKitStreamError,
   [MinVersion=4] kScreenCaptureKitFailedToFindSCDisplay,
+  [MinVersion=5] kVideoCaptureControllerInvalid,
+  [MinVersion=5] kVideoCaptureDeviceFactoryChromeOSCreateDeviceFailed,
+  [MinVersion=5] kVideoCaptureControllerUnsupportedPixelFormat,
+  [MinVersion=5] kVideoCaptureDeviceAlreadyReleased,
+  [MinVersion=5] kVideoCaptureSystemDeviceIdNotFound,
+  [MinVersion=5] kVideoCaptureDeviceFactoryWinUnknownError,
+  [MinVersion=5] kWinMediaFoundationDeviceInitializationFailed,
+  [MinVersion=5] kWinMediaFoundationSourceCreationFailed,
+  [MinVersion=5] kWinDirectShowDeviceFilterCreationFailed,
+  [MinVersion=5] kWinDirectShowDeviceInitializationFailed,
+  [MinVersion=6] kVideoCaptureDeviceFactorySecondCreateDenied,
+  [MinVersion=7] kScreenCaptureKitResetStreamError,
+  [MinVersion=8] kWinMediaFoundationCameraBusy,
 };
 
 [Stable, Extensible]
@@ -271,12 +290,14 @@ enum VideoCaptureFrameDropReason {
   kVideoTrackAdapterHasNoResolutionAdapters,
   kResolutionAdapterFrameIsNotValid,
   kResolutionAdapterWrappingFrameForCroppingFailed,
-  kResolutionAdapterTimestampTooCloseToPrevious,
+  kResolutionAdapterTimestampTooCloseToPrevious_DEPRECATED,
   kResolutionAdapterFrameRateIsHigherThanRequested,
   kResolutionAdapterHasNoCallbacks,
   kVideoTrackFrameDelivererNotEnabledReplacingWithBlackFrame,
   kRendererSinkFrameDelivererIsNotStarted,
-  [MinVersion=1] kCropVersionNotCurrent
+  [MinVersion=1] kCropVersionNotCurrent_DEPRECATED,
+  [MinVersion=5] kGpuMemoryBufferMapFailed,
+  [MinVersion=12] kSubCaptureTargetVersionNotCurrent,
 };
 
 [Stable]
@@ -293,6 +314,10 @@ struct VideoCaptureParams {
   ResolutionChangePolicy resolution_change_policy;
   PowerLineFrequency power_line_frequency;
   bool enable_face_detection;
+
+  // TODO(https://crbug.com/1412589): remove this once HiDPI is enabled for
+  // all video capture sessions.
+  [MinVersion=1] bool is_high_dpi_enabled;
 };
 
 [Stable, RenamedFrom="media.mojom.VideoFrameFeedback"]
@@ -313,15 +338,13 @@ struct VideoCaptureFeedback {
   // int::max used to signal no limit.
   int32 max_pixels;
 
-  // Reports that the consumer needs a cpu readable frame.
-  // TODO(https://crbug.com/1191986): When |kWebRtcUseModernFrameAdapter| is
-  // shipped to 100%, |require_mapped_frame| can be removed in favor of checking
-  // if |mapped_sizes| is non-empty.
+  // Set by the consumer to request a CPU readable frame.  Currently, only
+  // supported for NV12 frames obtained from the Windows Media Foundation
+  // camera capturer.
   bool require_mapped_frame;
 
-  // Reports which sizes the video frame got mapped by the consumer for CPU
-  // access. Only reported when |kWebRtcUseModernFrameAdapter| is enabled.
-  [MinVersion=1] array<gfx.mojom.Size>? mapped_sizes;
+  // DEPRECATED - DO NOT USE.  Only kept for backwards compatibility.
+  [MinVersion=1] array<gfx.mojom.Size>? DEPRECATED_mapped_sizes;
 
   // The frame that this feedback is associated with. Some consumers do not
   // break down their analysis on a per-frame basis; while some may expect to
@@ -362,6 +385,7 @@ struct VideoCaptureDeviceDescriptor {
   VideoCaptureApi capture_api;
   VideoCaptureControlSupport control_support;
   VideoCaptureTransportType transport_type;
+  [MinVersion=1] CameraAvailability? availability;
 };
 
 // Bundles a VideoCaptureDeviceDescriptor with corresponding supported
@@ -372,13 +396,25 @@ struct VideoCaptureDeviceInfo {
   array<VideoCaptureFormat> supported_formats;
 };
 
-// The result of an attempt by the client to start/stop cropping.
+enum SubCaptureTargetType {
+  kCropTarget,
+  kRestrictionTarget
+};
+
+// The result of an attempt by the client to start/stop cropping,
+// restricting or otherwise applying a sub-capture target.
 // TODO(crbug.com/1264849): Remove kNotImplemented.
-enum CropRequestResult {
+enum ApplySubCaptureTargetResult {
   kSuccess,
   kErrorGeneric,
   kUnsupportedCaptureDevice,
   kNotImplemented,
-  kNonIncreasingCropVersion,
-  kInvalidCropTarget,
+  kNonIncreasingVersion,
+  kInvalidTarget,
+};
+
+enum DeviceEnumerationResult {
+  kSuccess,
+  kUnknownError,
+  kErrorCaptureServiceCrash
 };

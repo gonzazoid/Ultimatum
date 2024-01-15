@@ -24,6 +24,8 @@
 
 namespace caspian {
 
+constexpr char kStringLiteralName[] = "string literal";
+
 enum class ArtifactType : char {
   kSymbol = '\0',
   kDirectory = 'D',
@@ -35,6 +37,7 @@ enum class ArtifactType : char {
 enum class SectionId : char {
   // kNone is unused except for default-initializing in containers
   kNone = '\0',
+  kArsc = 'a',
   kBss = 'b',
   kData = 'd',
   kDataRelRo = 'R',
@@ -103,6 +106,7 @@ class BaseSymbol {
   virtual std::string_view ContainerName() const = 0;
   virtual const char* ObjectPath() const = 0;
   virtual const char* SourcePath() const = 0;
+  virtual const char* GroupingPath() const = 0;
   virtual const char* SectionName() const = 0;
   virtual const char* Component() const = 0;
   virtual std::string* Disassembly() const = 0;
@@ -155,7 +159,8 @@ class BaseSymbol {
 
   bool IsStringLiteral() const {
     std::string_view full_name = FullName();
-    return !full_name.empty() && full_name[0] == '"';
+    return !full_name.empty() &&
+           (full_name[0] == '"' || full_name == kStringLiteralName);
   }
 
   bool IsGeneratedSource() const {
@@ -193,6 +198,7 @@ class Symbol : public BaseSymbol {
   std::string_view ContainerName() const override;
   const char* ObjectPath() const override;
   const char* SourcePath() const override;
+  const char* GroupingPath() const override;
   const char* SectionName() const override;
   const char* Component() const override;
   std::string* Disassembly() const override;
@@ -236,6 +242,7 @@ class DeltaSymbol : public BaseSymbol {
  public:
   DeltaSymbol(const Symbol* before, const Symbol* after);
   ~DeltaSymbol() override;
+
   int32_t Size() const override;
   int32_t Padding() const override;
   int32_t Address() const override;
@@ -251,6 +258,7 @@ class DeltaSymbol : public BaseSymbol {
   std::string_view ContainerName() const override;
   const char* ObjectPath() const override;
   const char* SourcePath() const override;
+  const char* GroupingPath() const override;
   const char* SectionName() const override;
   const char* Component() const override;
   std::string* Disassembly() const override;
@@ -304,7 +312,10 @@ struct SizeInfo : BaseSizeInfo {
 };
 
 struct DeltaSizeInfo : BaseSizeInfo {
-  DeltaSizeInfo(const SizeInfo* before, const SizeInfo* after);
+  DeltaSizeInfo(const SizeInfo* before_in,
+                const SizeInfo* after_in,
+                const std::vector<std::string>* removed_sources_in,
+                const std::vector<std::string>* added_sources_in);
   ~DeltaSizeInfo() override;
   DeltaSizeInfo(const DeltaSizeInfo&);
   DeltaSizeInfo& operator=(const DeltaSizeInfo&);
@@ -321,6 +332,8 @@ struct DeltaSizeInfo : BaseSizeInfo {
 
   const SizeInfo* before = nullptr;
   const SizeInfo* after = nullptr;
+  const std::vector<std::string>* removed_sources;
+  const std::vector<std::string>* added_sources;
   std::vector<DeltaSymbol> delta_symbols;
   // Symbols created during diffing, e.g. aggregated padding symbols.
   std::deque<Symbol> owned_symbols;
@@ -361,19 +374,29 @@ struct NodeStats {
   DiffStatus GetGlobalDiffStatus() const;
 
   std::map<SectionId, Stat> child_stats;
+  DiffStatus imposed_diff_status = DiffStatus::kUnchanged;
 };
 
+class TreeNodeFactory;
+
 struct TreeNode {
-  TreeNode();
+ private:
+  TreeNode(ArtifactType artifact_type_in, int32_t id_in);
+  friend TreeNodeFactory;
+
+ public:
   ~TreeNode();
 
   using CompareFunc =
       std::function<bool(const TreeNode* const& l, const TreeNode* const& r)>;
+
   void WriteIntoJson(const JsonWriteOptions& opts,
                      CompareFunc compare_func,
                      int depth,
                      Json::Value* out);
 
+  const ArtifactType artifact_type;
+  const int32_t id;
   GroupedPath id_path;
   const char* src_path = nullptr;
   const char* component = nullptr;
@@ -385,11 +408,22 @@ struct TreeNode {
   NodeStats node_stats;
   int32_t short_name_index = 0;
 
-  ArtifactType artifact_type = ArtifactType::kSymbol;
-
   std::vector<TreeNode*> children;
   TreeNode* parent = nullptr;
   const BaseSymbol* symbol = nullptr;
+};
+
+class TreeNodeFactory {
+ public:
+  TreeNodeFactory();
+  ~TreeNodeFactory();
+  TreeNodeFactory(const TreeNodeFactory&) = delete;
+  TreeNodeFactory& operator=(const TreeNodeFactory&) = delete;
+
+  TreeNode* Make(ArtifactType artifact_type);
+
+ private:
+  int32_t next_id = 0;
 };
 
 }  // namespace caspian

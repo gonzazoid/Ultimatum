@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_AUTOFILL_SAVE_UPDATE_ADDRESS_PROFILE_ICON_VIEW_H_
 
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 class CommandUpdater;
 
@@ -15,6 +16,8 @@ class SaveUpdateAddressProfileIconController;
 
 // The location bar icon to show the Save Address Profile bubble.
 class SaveUpdateAddressProfileIconView : public PageActionIconView {
+  METADATA_HEADER(SaveUpdateAddressProfileIconView, PageActionIconView)
+
  public:
   SaveUpdateAddressProfileIconView(
       CommandUpdater* command_updater,

@@ -15,25 +15,7 @@
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/types/event_type.h"
 
-namespace arc {
-namespace input_overlay {
-
-// About Json strings.
-constexpr char kMouseAction[] = "mouse_action";
-constexpr char kPrimaryClick[] = "primary_click";
-constexpr char kSecondaryClick[] = "secondary_click";
-constexpr char kHoverMove[] = "hover_move";
-constexpr char kPrimaryDragMove[] = "primary_drag_move";
-constexpr char kSecondaryDragMove[] = "secondary_drag_move";
-
-// Total key size for ActionMoveKey.
-constexpr size_t kActionMoveKeysSize = 4;
-// Gets the event flags for the modifier domcode. Return ui::DomCode::NONE if
-// |code| is not modifier DomCode.
-int ModifierDomCodeToEventFlag(ui::DomCode code);
-bool IsSameDomCode(ui::DomCode a, ui::DomCode b);
-// Convert mouse action strings to enum values.
-MouseAction ConvertToMouseActionEnum(const std::string& mouse_action);
+namespace arc::input_overlay {
 
 // InputElement creates input elements bound for each action.
 // TODO(cuicuiruan): It only supports ActionTap and ActionMove now. Supports
@@ -63,12 +45,14 @@ class InputElement {
 
   // Return true if there is key overlapped or the mouse action is overlapped.
   bool IsOverlapped(const InputElement& input_element) const;
-  // Set key in the |keys_| list at the |index| to |code|.
+  // Returns true if no input is bound.
+  bool IsUnbound() const;
+  // Set key in the `keys_` list at the `index` to `code`.
   void SetKey(size_t index, ui::DomCode code);
-  // Set keys to |keys|.
+  // Set keys to `keys`.
   void SetKeys(std::vector<ui::DomCode>& keys);
-  // If it is keyboard-binded input and there is |key| binded, return the index
-  // of the |key|. Otherwise, return -1;
+  // If it is keyboard-binded input and there is `key` binded, return the index
+  // of the `key`. Otherwise, return -1;
   int GetIndexOfKey(ui::DomCode key) const;
   std::unique_ptr<InputElementProto> ConvertToProto();
 
@@ -86,15 +70,18 @@ class InputElement {
   bool operator!=(const InputElement& other) const;
 
  private:
+  // Returns true if the `input_source` is set as one of the `input_sources_`.
+  bool IsInputSourceSet(InputSource input_source) const;
+
   // Input source for this input element, could be keyboard or mouse or both.
   int input_sources_ = InputSource::IS_NONE;
 
   // For key binding.
   std::vector<ui::DomCode> keys_;
-  // |is_modifier_key_| == true is especially for modifier keys (Only Ctrl,
-  // Shift and Alt are supported for now) because EventRewriterChromeOS handles
+  // `is_modifier_key_` == true is especially for modifier keys (Only Ctrl,
+  // Shift and Alt are supported for now) because EventRewriterAsh handles
   // specially on modifier key released event by skipping the following event
-  // rewriters on key released event. If |is_modifier_key_| == true, touch
+  // rewriters on key released event. If `is_modifier_key_` == true, touch
   // release event is sent right after touch pressed event for original key
   // pressed event and original modifier key pressed event is also sent as it
   // is. This is only suitable for some UI buttons which don't require keeping
@@ -116,7 +103,6 @@ class InputElement {
   int mouse_flags_ = 0;
 };
 
-}  // namespace input_overlay
-}  // namespace arc
+}  // namespace arc::input_overlay
 
 #endif  // CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_ACTIONS_INPUT_ELEMENT_H_

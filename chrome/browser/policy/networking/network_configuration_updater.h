@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
@@ -23,6 +24,11 @@
 namespace policy {
 
 class PolicyMap;
+
+// Disables the backwards-compatibility workaround which adds IP address and
+// name servers as "Recommended" to ethernet policies which don't specify
+// anything as "Recommended".
+BASE_DECLARE_FEATURE(kDisablePolicyEthernetRecommendedWorkaround);
 
 // Implements the common part of tracking the OpenNetworkConfiguration device
 // and user policy. Implements the handling of server and authority certificates
@@ -78,8 +84,9 @@ class NetworkConfigurationUpdater : public ash::PolicyCertificateProvider,
   // Parses the incoming policy, applies server and authority certificates.
   // Calls the specialized methods from subclasses to handle client certificates
   // and network configs.
-  virtual void ApplyNetworkPolicy(base::Value::List network_configs_onc,
-                                  base::Value::Dict global_network_config) = 0;
+  virtual void ApplyNetworkPolicy(
+      const base::Value::List& network_configs_onc,
+      const base::Value::Dict& global_network_config) = 0;
 
   // Parses the current value of the ONC policy. Clears |network_configs|,
   // |global_network_config| and |certificates| and fills them with the
@@ -104,23 +111,6 @@ class NetworkConfigurationUpdater : public ash::PolicyCertificateProvider,
 
   // Apply the observed policy, i.e. both networks and certificates.
   void ApplyPolicy();
-
-  // Marks IP Address config fields as "Recommended" for Ethernet network
-  // configs without authentication. The reason is that Chrome OS used to treat
-  // Ethernet networks without authentication as unmanaged, so users were able
-  // to edit the IP address even if there was a policy for Ethernet. This
-  // behavior should be preserved for now to not break existing use cases.
-  // TODO(https://crbug.com/931412): Remove this when the server sets
-  // "Recommended".
-  void MarkFieldsAsRecommendedForBackwardsCompatibility(
-      base::Value::List& network_configs_onc);
-
-  // Sets the "Recommended" list of recommended field names in |onc_value|,
-  // which must be a dictionary, to |recommended_field_names|. If a
-  // "Recommended" list already existed in |onc_value|, it's replaced.
-  void SetRecommended(
-      base::Value* onc_value,
-      std::initializer_list<base::StringPiece> recommended_field_names);
 
   std::string LogHeader() const;
 

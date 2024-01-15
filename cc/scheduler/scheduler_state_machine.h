@@ -485,6 +485,7 @@ class CC_EXPORT SchedulerStateMachine {
   bool main_thread_missed_last_deadline_ = false;
   bool defer_begin_main_frame_ = false;
   bool pause_rendering_ = false;
+  bool waiting_for_activation_after_rendering_resumed_ = false;
   bool video_needs_begin_frames_ = false;
   bool last_commit_had_no_updates_ = false;
   bool active_tree_is_ready_to_draw_ = true;
@@ -517,6 +518,10 @@ class CC_EXPORT SchedulerStateMachine {
 
   // Number of consecutive BeginMainFrames that were aborted without updates.
   int aborted_begin_main_frame_count_ = 0;
+
+  bool draw_aborted_for_paused_begin_frame_ = false;
+
+  unsigned consecutive_cant_draw_count_ = 0u;
 };
 
 }  // namespace cc

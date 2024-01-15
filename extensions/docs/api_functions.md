@@ -117,7 +117,7 @@ GizmoFrobulateFunction::~ GizmoFrobulateFunction() = default;
 
 ExtensionFunction::ResponseAction GizmoFrobulateFunction::Run() {
   // We can create a typed struct of the arguments from the generated code.
-  std::unique_ptr<api::gizmo::Frobulate::Params> params(
+  absl::optional<api::gizmo::Frobulate::Params> params(
       api::gizmo::Frobulate::Params::Create(args()));
 
   // EXTENSION_FUNCTION_VALIDATE() is used to assert things that should only
@@ -146,7 +146,7 @@ ExtensionFunction::ResponseAction GizmoFrobulateFunction::Run() {
   // even though the function finished synchronously in C++, the extension still
   // sees this as an asynchronous function, because the IPC between the
   // renderer and the browser is asynchronous.
-  return RespondNow(OneArgument(base::Value(std::move(frobulate_result))));
+  return RespondNow(WithArguments(std::move(frobulate_result)));
 }
 ```
 
@@ -156,7 +156,7 @@ implement.
 
 ```
 ExtensionFunction::ResponseAction GizmoFrobulateFunction::Run() {
-  std::unique_ptr<api::gizmo::Frobulate::Params> params(
+  absl::optional<api::gizmo::Frobulate::Params> params(
       api::gizmo::Frobulate::Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -180,7 +180,7 @@ ExtensionFunction::ResponseAction GizmoFrobulateFunction::Run() {
 }
 
 void GizmoFrobulateFunction::OnFrobulated(const std::string& frobulate_result) {
-  Respond(OneArgument(base::Value(frobulate_result)));
+  Respond(WithArguments(frobulate_result));
 }
 ```
 

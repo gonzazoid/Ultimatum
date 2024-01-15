@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
@@ -21,6 +22,7 @@
 #include "third_party/blink/renderer/platform/loader/testing/bytes_consumer_test_reader.h"
 #include "third_party/blink/renderer/platform/loader/testing/replaying_bytes_consumer.h"
 #include "third_party/blink/renderer/platform/scheduler/test/fake_task_runner.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -93,7 +95,7 @@ class FetchDataLoaderTest : public testing::Test {
       completion_notifier_->SignalError(BytesConsumer::Error());
     }
 
-    BytesConsumer* GetDestination() { return destination_; }
+    BytesConsumer* GetDestination() { return destination_.Get(); }
 
     void Trace(Visitor* visitor) const override {
       visitor->Trace(destination_);
@@ -106,6 +108,7 @@ class FetchDataLoaderTest : public testing::Test {
     Member<BytesConsumer> destination_;
     Member<DataPipeBytesConsumer::CompletionNotifier> completion_notifier_;
   };
+  test::TaskEnvironment task_environment_;
 };
 
 class FetchDataLoaderBlobTest : public FetchDataLoaderTest {

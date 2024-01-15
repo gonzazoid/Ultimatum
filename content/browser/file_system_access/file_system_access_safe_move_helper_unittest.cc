@@ -8,24 +8,28 @@
 #include <string>
 #include <utility>
 
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/guid.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
+#include "content/browser/file_system_access/features.h"
 #include "content/browser/file_system_access/file_system_access_safe_move_helper.h"
-#include "content/browser/file_system_access/file_system_access_write_lock_manager.h"
 #include "content/browser/file_system_access/fixed_file_system_access_permission_grant.h"
 #include "content/browser/file_system_access/mock_file_system_access_permission_context.h"
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/file_system_operation.h"
+#include "storage/browser/file_system/file_system_url.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/test/async_file_test_helper.h"
 #include "storage/browser/test/test_file_system_backend.h"
 #include "storage/browser/test/test_file_system_context.h"
+#include "storage/common/file_system/file_system_types.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_error.mojom.h"
@@ -75,13 +79,15 @@ class TestFileSystemBackend : public storage::TestFileSystemBackend {
       : storage::TestFileSystemBackend(task_runner, base_path) {}
 
   std::unique_ptr<storage::FileSystemOperation> CreateFileSystemOperation(
+      storage::OperationType type,
       const storage::FileSystemURL& url,
       storage::FileSystemContext* context,
       base::File::Error* error_code) const override {
-    if (operation_created_callback_)
+    if (operation_created_callback_) {
       std::move(operation_created_callback_).Run(url);
+    }
     return storage::TestFileSystemBackend::CreateFileSystemOperation(
-        url, context, error_code);
+        type, url, context, error_code);
   }
 
   void SetOperationCreatedCallback(
@@ -114,14 +120,15 @@ class FileSystemAccessSafeMoveHelperTest : public testing::Test {
     std::vector<std::unique_ptr<storage::FileSystemBackend>>
         additional_providers;
     additional_providers.push_back(std::make_unique<TestFileSystemBackend>(
-        base::ThreadTaskRunnerHandle::Get().get(), dir_.GetPath()));
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+        dir_.GetPath()));
     test_file_system_backend_ =
         static_cast<TestFileSystemBackend*>(additional_providers[0].get());
 
     file_system_context_ =
         storage::CreateFileSystemContextWithAdditionalProvidersForTesting(
-            base::ThreadTaskRunnerHandle::Get(),
-            base::ThreadTaskRunnerHandle::Get(),
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
             /*quota_manager_proxy=*/nullptr, std::move(additional_providers),
             dir_.GetPath());
 
@@ -152,20 +159,7 @@ class FileSystemAccessSafeMoveHelperTest : public testing::Test {
           quarantine_receivers_.Add(&quarantine_, std::move(receiver));
         });
 
-    ASSERT_TRUE(manager_->TakeWriteLock(
-        test_dest_url_,
-        FileSystemAccessWriteLockManager::WriteLockType::kShared));
-
-    helper_ = std::make_unique<FileSystemAccessSafeMoveHelper>(
-        manager_->AsWeakPtr(),
-        FileSystemAccessManagerImpl::BindingContext(kTestStorageKey, kTestURL,
-                                                    kFrameId),
-        test_source_url_, test_dest_url_,
-        storage::FileSystemOperation::CopyOrMoveOptionSet(
-            storage::FileSystemOperation::CopyOrMoveOption::
-                kPreserveDestinationPermissions),
-        quarantine_callback_,
-        /*has_transient_user_activation=*/false);
+    InitializeHelperWithUrls(test_source_url_, test_dest_url_);
   }
 
   void TearDown() override {
@@ -173,6 +167,20 @@ class FileSystemAccessSafeMoveHelperTest : public testing::Test {
 
     task_environment_.RunUntilIdle();
     EXPECT_TRUE(dir_.Delete());
+  }
+
+  void InitializeHelperWithUrls(const storage::FileSystemURL& source_url,
+                                const storage::FileSystemURL& dest_url) {
+    helper_ = std::make_unique<FileSystemAccessSafeMoveHelper>(
+        manager_->AsWeakPtr(),
+        FileSystemAccessManagerImpl::BindingContext(kTestStorageKey, kTestURL,
+                                                    kFrameId),
+        source_url, dest_url,
+        storage::FileSystemOperation::CopyOrMoveOptionSet(
+            {storage::FileSystemOperation::CopyOrMoveOption::
+                 kPreserveDestinationPermissions}),
+        quarantine_callback_,
+        /*has_transient_user_activation=*/false);
   }
 
  protected:
@@ -186,9 +194,9 @@ class FileSystemAccessSafeMoveHelperTest : public testing::Test {
 
   base::ScopedTempDir dir_;
   scoped_refptr<storage::FileSystemContext> file_system_context_;
-  raw_ptr<TestFileSystemBackend> test_file_system_backend_;
+  raw_ptr<TestFileSystemBackend> test_file_system_backend_ = nullptr;
   scoped_refptr<ChromeBlobStorageContext> chrome_blob_context_;
-  raw_ptr<storage::BlobStorageContext> blob_context_;
+  raw_ptr<storage::BlobStorageContext> blob_context_ = nullptr;
   scoped_refptr<FileSystemAccessManagerImpl> manager_;
 
   FileSystemURL test_dest_url_;
@@ -335,6 +343,160 @@ TEST_F(FileSystemAccessSafeMoveHelperTest, SecurityCheckFailed) {
       file_system_context_.get(), test_dest_url_, 3));
 }
 
+TEST_F(FileSystemAccessSafeMoveHelperTest, SandboxedToSandboxed) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeTemporary,
+      base::FilePath::FromASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeTemporary,
+      base::FilePath::FromASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_FALSE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_FALSE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, SandboxedToLocal) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeTemporary,
+      base::FilePath::FromASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, SandboxedToExternal) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeTemporary,
+      base::FilePath::FromASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeExternal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToLocalSameExtension) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_FALSE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToLocalDifferentExtension) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest.md"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToLocalCompoundExtension) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("file.txt.crswap"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("file.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToLocalNoExtension) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToLocalNoExtensionSource) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToLocalNoExtensionDest) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToExternal) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeExternal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_TRUE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_TRUE(helper_->RequireQuarantineForTesting());
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperTest, LocalToSandboxed) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeTemporary,
+      base::FilePath::FromASCII("dest.txt"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  EXPECT_FALSE(helper_->RequireAfterWriteChecksForTesting());
+  EXPECT_FALSE(helper_->RequireQuarantineForTesting());
+}
+
 class FileSystemAccessSafeMoveHelperAfterWriteChecksTest
     : public FileSystemAccessSafeMoveHelperTest {
  public:
@@ -403,6 +565,69 @@ TEST_F(FileSystemAccessSafeMoveHelperAfterWriteChecksTest, Block) {
   EXPECT_FALSE(storage::AsyncFileTestHelper::FileExists(
       file_system_context_.get(), test_dest_url_,
       storage::AsyncFileTestHelper::kDontCheckSize));
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperAfterWriteChecksTest,
+       LocalNoExtensionChange) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  EXPECT_TRUE(base::WriteFile(source_url.path(), "abc"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  // The extension has not changed, so after-write checks are not run.
+
+  helper_->Start(base::BindLambdaForTesting(
+      [&](blink::mojom::FileSystemAccessErrorPtr result) {
+        EXPECT_EQ(result->status, FileSystemAccessStatus::kOk);
+      }));
+  task_environment_.RunUntilIdle();
+
+  EXPECT_FALSE(storage::AsyncFileTestHelper::FileExists(
+      file_system_context_.get(), source_url,
+      storage::AsyncFileTestHelper::kDontCheckSize));
+  EXPECT_TRUE(storage::AsyncFileTestHelper::FileExists(
+      file_system_context_.get(), dest_url, 3));
+}
+
+TEST_F(FileSystemAccessSafeMoveHelperAfterWriteChecksTest,
+       LocalNoExtensionChangeSecurityCheckFailed) {
+  auto source_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("source.txt"));
+  auto dest_url = file_system_context_->CreateCrackedFileSystemURL(
+      kTestStorageKey, storage::kFileSystemTypeLocal,
+      dir_.GetPath().AppendASCII("dest.txt"));
+
+  EXPECT_TRUE(base::WriteFile(source_url.path(), "abc"));
+
+  InitializeHelperWithUrls(source_url, dest_url);
+
+  // The extension has not changed, so after-write checks are not run.
+
+  // Still, an error should be reported if security checks fail.
+  quarantine_.MakeSecurityCheckFail();
+
+  base::RunLoop loop;
+  helper_->Start(base::BindLambdaForTesting(
+      [&](blink::mojom::FileSystemAccessErrorPtr result) {
+        EXPECT_EQ(result->status, FileSystemAccessStatus::kOperationAborted);
+        loop.Quit();
+      }));
+  loop.Run();
+
+  // Even though the file failed quarantine, it's already been moved. There's
+  // not much we can do other than return an error.
+  EXPECT_FALSE(storage::AsyncFileTestHelper::FileExists(
+      file_system_context_.get(), source_url,
+      storage::AsyncFileTestHelper::kDontCheckSize));
+  EXPECT_TRUE(storage::AsyncFileTestHelper::FileExists(
+      file_system_context_.get(), dest_url, 3));
 }
 
 }  // namespace content

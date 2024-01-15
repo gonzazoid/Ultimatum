@@ -8,8 +8,6 @@
 #include <memory>
 
 #include "base/component_export.h"
-#include "base/mac/scoped_nsobject.h"
-#include "base/memory/ref_counted.h"
 #import "ui/base/clipboard/clipboard_util_mac.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
 #include "ui/base/dragdrop/os_exchange_data_provider.h"
@@ -39,8 +37,9 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderMac
   CreateProviderWrappingPasteboard(NSPasteboard* pasteboard);
 
   // Overridden from OSExchangeDataProvider:
-  void MarkOriginatedFromRenderer() override;
-  bool DidOriginateFromRenderer() const override;
+  void MarkRendererTaintedFromOrigin(const url::Origin& origin) override;
+  bool IsRendererTainted() const override;
+  absl::optional<url::Origin> GetRendererTaintedOrigin() const override;
   void MarkAsFromPrivileged() override;
   bool IsFromPrivileged() const override;
   void SetString(const std::u16string& data) override;
@@ -53,7 +52,6 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderMac
   bool GetURLAndTitle(FilenameToURLPolicy policy,
                       GURL* url,
                       std::u16string* title) const override;
-  bool GetFilename(base::FilePath* path) const override;
   bool GetFilenames(std::vector<FileInfo>* filenames) const override;
   bool GetPickledData(const ClipboardFormatType& format,
                       base::Pickle* data) const override;
@@ -74,9 +72,8 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderMac
   // Gets the underlying pasteboard.
   virtual NSPasteboard* GetPasteboard() const = 0;
 
-  // Returns an NSDraggingItem useful for initiating a drag. (Currently
-  // OSExchangeDataProviderMac can only have one item.)
-  NSDraggingItem* GetDraggingItem() const;
+  // Returns NSDraggingItems for initiating a drag.
+  NSArray<NSDraggingItem*>* GetDraggingItems() const;
 
   // Returns an array of pasteboard types that can be supported by
   // OSExchangeData.

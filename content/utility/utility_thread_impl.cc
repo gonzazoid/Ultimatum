@@ -5,19 +5,21 @@
 #include "content/utility/utility_thread_impl.h"
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/debug/crash_logging.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/process/current_process.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_log.h"
 #include "build/build_config.h"
 #include "content/child/child_process.h"
@@ -29,7 +31,10 @@
 #include "mojo/public/cpp/bindings/binder_map.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/service_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "content/child/sandboxed_process_thread_type_handler.h"
+#endif
 
 namespace content {
 
@@ -56,9 +61,10 @@ class ServiceBinderImpl {
     base::debug::SetCrashKeyString(service_name_crash_key, service_name);
 
     // Traces should also indicate the service name.
-    auto* trace_log = base::trace_event::TraceLog::GetInstance();
-    if (trace_log->IsProcessNameEmpty())
-      trace_log->set_process_name("Service: " + service_name);
+    if (base::CurrentProcess::GetInstance().IsProcessNameEmpty()) {
+      base::CurrentProcess::GetInstance().SetProcessType(
+          GetCurrentProcessType(service_name));
+    }
 
     // Ensure the ServiceFactory is (lazily) initialized.
     if (!io_thread_services_) {
@@ -82,16 +88,16 @@ class ServiceBinderImpl {
 
     termination_callback =
         base::BindOnce(base::IgnoreResult(&base::SequencedTaskRunner::PostTask),
-                       base::ThreadTaskRunnerHandle::Get(), FROM_HERE,
-                       std::move(termination_callback));
+                       base::SingleThreadTaskRunner::GetCurrentDefault(),
+                       FROM_HERE, std::move(termination_callback));
     main_thread_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&ServiceBinderImpl::TryRunMainThreadService,
                        std::move(*receiver), std::move(termination_callback)));
   }
 
-  static absl::optional<ServiceBinderImpl>& GetInstanceStorage() {
-    static base::NoDestructor<absl::optional<ServiceBinderImpl>> storage;
+  static std::optional<ServiceBinderImpl>& GetInstanceStorage() {
+    static base::NoDestructor<std::optional<ServiceBinderImpl>> storage;
     return *storage;
   }
 
@@ -143,7 +149,7 @@ ChildThreadImpl::Options::ServiceBinder GetServiceBinder() {
   // NOTE: This may already be initialized from a previous call if we're in
   // single-process mode.
   if (!storage)
-    storage.emplace(base::ThreadTaskRunnerHandle::Get());
+    storage.emplace(base::SingleThreadTaskRunner::GetCurrentDefault());
   return base::BindRepeating(&ServiceBinderImpl::BindServiceInterface,
                              base::Unretained(&storage.value()));
 }
@@ -246,6 +252,10 @@ void UtilityThreadImpl::Init() {
 
   GetContentClient()->utility()->UtilityThreadStarted();
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  SandboxedProcessThreadTypeHandler::NotifyMainChildThreadCreated();
+#endif
+
   // NOTE: Do not add new interfaces directly within this method. Instead,
   // modify the definition of |ExposeUtilityInterfacesToBrowser()| to ensure
   // security review coverage.
@@ -261,6 +271,74 @@ void UtilityThreadImpl::RunServiceDeprecated(
     mojo::ScopedMessagePipeHandle service_pipe) {
   DCHECK(service_factory_);
   service_factory_->RunService(service_name, std::move(service_pipe));
+}
+
+constexpr ServiceCurrentProcessType kCurrentProcessTypes[] = {
+    {"network.mojom.NetworkService",
+     CurrentProcessType::PROCESS_SERVICE_NETWORK},
+    {"tracing.mojom.TracingService",
+     CurrentProcessType::PROCESS_SERVICE_TRACING},
+    {"storage.mojom.StorageService",
+     CurrentProcessType::PROCESS_SERVICE_STORAGE},
+    {"audio.mojom.AudioService", CurrentProcessType::PROCESS_SERVICE_AUDIO},
+    {"data_decoder.mojom.DataDecoderService",
+     CurrentProcessType::PROCESS_SERVICE_DATA_DECODER},
+    {"chrome.mojom.UtilWin", CurrentProcessType::PROCESS_SERVICE_UTIL_WIN},
+    {"proxy_resolver.mojom.ProxyResolverFactory",
+     CurrentProcessType::PROCESS_SERVICE_PROXY_RESOLVER},
+    {"media.mojom.CdmServiceBroker", CurrentProcessType::PROCESS_SERVICE_CDM},
+    {"media.mojom.MediaFoundationServiceBroker",
+     CurrentProcessType::PROCESS_SERVICE_MEDIA_FOUNDATION},
+    {"video_capture.mojom.VideoCaptureService",
+     CurrentProcessType::PROCESS_SERVICE_VIDEO_CAPTURE},
+    {"unzip.mojom.Unzipper", CurrentProcessType::PROCESS_SERVICE_UNZIPPER},
+    {"mirroring.mojom.MirroringService",
+     CurrentProcessType::PROCESS_SERVICE_MIRRORING},
+    {"patch.mojom.FilePatcher",
+     CurrentProcessType::PROCESS_SERVICE_FILEPATCHER},
+    {"chromeos.tts.mojom.TtsService", CurrentProcessType::PROCESS_SERVICE_TTS},
+    {"printing.mojom.PrintingService",
+     CurrentProcessType::PROCESS_SERVICE_PRINTING},
+    {"quarantine.mojom.Quarantine",
+     CurrentProcessType::PROCESS_SERVICE_QUARANTINE},
+    {"ash.local_search_service.mojom.LocalSearchService",
+     CurrentProcessType::PROCESS_SERVICE_CROS_LOCALSEARCH},
+    {"ash.assistant.mojom.AssistantAudioDecoderFactory",
+     CurrentProcessType::PROCESS_SERVICE_CROS_ASSISTANT_AUDIO_DECODER},
+    {"chrome.mojom.FileUtilService",
+     CurrentProcessType::PROCESS_SERVICE_FILEUTIL},
+    {"printing.mojom.PrintCompositor",
+     CurrentProcessType::PROCESS_SERVICE_PRINTCOMPOSITOR},
+    {"paint_preview.mojom.PaintPreviewCompositorCollection",
+     CurrentProcessType::PROCESS_SERVICE_PAINTPREVIEW},
+    {"media.mojom.SpeechRecognitionService",
+     CurrentProcessType::PROCESS_SERVICE_SPEECHRECOGNITION},
+    {"device.mojom.XRDeviceService",
+     CurrentProcessType::PROCESS_SERVICE_XRDEVICE},
+    {"chrome.mojom.UtilReadIcon", CurrentProcessType::PROCESS_SERVICE_READICON},
+    {"language_detection.mojom.LanguageDetectionService",
+     CurrentProcessType::PROCESS_SERVICE_LANGUAGEDETECTION},
+    {"sharing.mojom.Sharing", CurrentProcessType::PROCESS_SERVICE_SHARING},
+    {"chrome.mojom.MediaParserFactory",
+     CurrentProcessType::PROCESS_SERVICE_MEDIAPARSER},
+    {"qrcode_generator.mojom.QRCodeGeneratorService",
+     CurrentProcessType::PROCESS_SERVICE_QRCODEGENERATOR},
+    {"chrome.mojom.ProfileImport",
+     CurrentProcessType::PROCESS_SERVICE_PROFILEIMPORT},
+    {"ash.ime.mojom.ImeService", CurrentProcessType::PROCESS_SERVICE_IME},
+    {"recording.mojom.RecordingService",
+     CurrentProcessType::PROCESS_SERVICE_RECORDING},
+    {"shape_detection.mojom.ShapeDetectionService",
+     CurrentProcessType::PROCESS_SERVICE_SHAPEDETECTION},
+};
+
+CurrentProcessType GetCurrentProcessType(const std::string& name) {
+  for (auto kCurrentProcessType : kCurrentProcessTypes) {
+    if (name == kCurrentProcessType.name) {
+      return kCurrentProcessType.type;
+    }
+  }
+  return CurrentProcessType::PROCESS_UTILITY;
 }
 
 }  // namespace content

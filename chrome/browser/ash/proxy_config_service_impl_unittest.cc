@@ -522,16 +522,18 @@ TEST_F(ProxyConfigServiceImplTest, SharedEthernetAndUserPolicy) {
   SetUpSharedEthernet();
   SetUpProxyConfigService(&profile_prefs_);
 
-  base::Value ethernet_policy =
+  absl::optional<base::Value::Dict> ethernet_policy =
       chromeos::onc::ReadDictionaryFromJson(kEthernetPolicy);
+  ASSERT_TRUE(ethernet_policy.has_value());
 
-  std::unique_ptr<base::ListValue> network_configs(new base::ListValue);
-  network_configs->Append(std::move(ethernet_policy));
+  base::Value::List network_configs;
+  network_configs.Append(std::move(*ethernet_policy));
 
   profile_prefs_.SetUserPref(::proxy_config::prefs::kUseSharedProxies,
                              std::make_unique<base::Value>(false));
-  profile_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                                std::move(network_configs));
+  profile_prefs_.SetManagedPref(
+      ::onc::prefs::kOpenNetworkConfiguration,
+      std::make_unique<base::Value>(std::move(network_configs)));
 
   net::ProxyConfigWithAnnotation actual_config;
   SyncGetLatestProxyConfig(&actual_config);

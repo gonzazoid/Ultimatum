@@ -6,12 +6,14 @@ var verbose = 0;
 
 // Aliexpress uses 'US $12.34' format in the price.
 // Macy's uses "$12.34 to 56.78" format.
-var priceCleanupPrefix = 'sale|with offer|only|our price|now|starting at';
+var priceCleanupPrefix = 'total price|sale price|price|sale|' +
+    'with offer|only|our price|now|starting at';
 var priceCleanupPostfix = '(/(each|set))';
 var priceRegexTemplate = '((reg|regular|orig|from|' + priceCleanupPrefix +
     ')\\s+)?' +
     '(\\d+\\s*/\\s*)?(US(D)?\\s*)?' +
-    '\\$[\\d.,]+(\\s+(to|-|–)\\s+(\\$)?[\\d.,]+)?' + priceCleanupPostfix + '?';
+    '\\$\\s*[\\d.,]+(\\s+(to|-|–)\\s+(\\$)?[\\d.,]+)?' +
+    priceCleanupPostfix + '?';
 var priceRegexFull = new RegExp('^' + priceRegexTemplate + '( ea)?$', 'i');
 var priceRegex = new RegExp(priceRegexTemplate, 'i');
 var priceCleanupRegex = new RegExp(
@@ -111,6 +113,24 @@ function multipleImagesSupported() {
 }
 
 function extractImage(item) {
+  const hostname = new URL(document.baseURI).hostname;
+  // Some merchant sites have product images as background of a div element.
+  // Below logic handles them separately.
+  if (hostname.endsWith("americastire.com")
+    || hostname.endsWith("discounttire.com")) {
+    const image = item.querySelector(".product-image__image-block");
+    if (image == null) {
+      return null;
+    }
+    return extractImageUrl(image);
+  }
+  if (hostname.endsWith("discounttiredirect.com")) {
+    const image = item.querySelector(".cart-item__product-image");
+    if (image == null) {
+      return null;
+    }
+    return extractImageUrl(image);
+  }
   // Sometimes an item contains small icons, which need to be filtered out.
   // TODO: two pass getLargeImages() is probably too slow.
   let images = getLargeImages(item, 40);
@@ -144,12 +164,15 @@ function extractImageUrl(image) {
   if (lazyUrl != null)
     return lazyUrl;
 
-  // Special handling for Google store.
-  if (image.className === "bg-img") {
+  // Special handling for Google store, America's Tire and Discount
+  // Tire Direct.
+  if (image.className === "bg-img"
+    || image.className.includes("product-image__image-block")
+    || image.className.includes("cart-item__product-image")) {
     if (image.style.backgroundImage == undefined) {
       return null;
     }
-    const matches = image.style.backgroundImage.match('\"(.*)\"');
+    const matches = image.style.backgroundImage.match('[\"\'](.*)[\"\']');
     if (matches === null) {
       return null;
     } else {
@@ -198,12 +221,15 @@ function getAbsoluteUrlOfSrcSet(image) {
 }
 
 function extractUrl(item) {
-  // Some sites doesn't use <a> tag or explicitly state href. E.g. samsclub.com
-  // triggers JS to initiate navigation instead of <a>, and ae.com shows side
-  // panel after clicking on each item instead of directing to product page.
-  if (document.URL.includes("samsclub.com")
-      || document.URL.includes("ae.com")
-      || document.URL.includes("kiehls.com")) {
+  // Some sites doesn't use <a> tag or explicitly state href. E.g. ae.com
+  // shows side panel after clicking on each item instead of directing to
+  // product page, and some sites might trigger JS to initiate navigation
+  // instead of <a>.
+  if (document.URL.includes("ae.com")
+      || document.URL.includes("kiehls.com")
+      || document.URL.includes("discounttiredirect.com")
+      || document.URL.includes("shutterfly.com")
+      || document.URL.includes("bkstr.com")) {
     return "";
   }
   let anchors;
@@ -489,9 +515,10 @@ function choosePrice(priceArray) {
 }
 
 function extractPrice(item) {
+  const hostname = new URL(document.baseURI).hostname;
   // shein.com shows price by one element per digit and it's challenging
   // to decide based on textContent.
-  if (document.URL.includes("shein.com")) {
+  if (hostname.endsWith("shein.com")) {
     return "";
   }
   // Etsy mobile
@@ -508,9 +535,17 @@ function extractPrice(item) {
   // Generic heuristic to search for price elements.
   let captured_prices = [];
   for (const price of item.querySelectorAll(
-    'span, b, p, div, h3, td, li, em, strong')) {
+    'span, b, p, div, h3, td, li, em, strong, ins')) {
     let candidate = price.innerText.trim();
-    if (document.URL.includes("thecompanystore.com")) {
+    if (hostname.endsWith("urbanoutfitters.com") ||
+        hostname.endsWith("freepeople.com")) {
+      priceParts = candidate.split("\n");
+      if (priceParts.length >= 2){
+        candidate = priceParts[1];
+      }
+    } else if (hostname.endsWith("thecompanystore.com") ||
+        hostname.endsWith("childrensplace.com") ||
+        hostname.endsWith("chewy.com")) {
       candidate = candidate.split("\n")[0];
     }
     if (!candidate.match(priceRegexFull))
@@ -688,7 +723,8 @@ function isCartItem(item) {
       && !document.URL.includes("orientaltrading.com")
       && matchPattern(item, addToCartTextRegex, true)) return false;
   if ((document.URL.includes("ashleyfurniture.com")
-      || document.URL.includes("gnc.com"))
+      || document.URL.includes("gnc.com")
+      || document.URL.includes("bathandbodyworks.com"))
       && matchPattern(item, minicartHTMLRegex, false)) return false;
   if (document.URL.includes("ashleyfurniture.com")
       && matchPattern(item, cartItemQtyRegex, true) === null)
@@ -699,7 +735,15 @@ function isCartItem(item) {
 }
 
 function extractOneItem(item, extracted_items, processed, output,
-  savedForLaterSection) {
+  savedForLaterSection, skipFiltering) {
+  if (skipFiltering) {
+    const extraction = extractItem(item);
+    if (extraction != null) {
+      output.set(item, extraction);
+      extracted_items.push(item);
+    }
+    return;
+  }
   if (verbose > 1) {
     console.log('trying', item);
   }
@@ -931,13 +975,19 @@ async function extractAllItems(root) {
       return false;
     }
   }
-
-  if (document.URL.includes("samsclub.com")) {
-    items = root.querySelectorAll(".sc-cart-item-shipping");
-  } else if (document.URL.includes("kiehls.com")
+  let skipFiltering = true;
+  if (document.URL.includes("kiehls.com")
     || document.URL.includes("laroche-posay.us")) {
     items = root.querySelectorAll(".c-product-table__row");
+  } else if (document.URL.includes("americastire.com")
+    || document.URL.includes("discounttire.com")) {
+    items = root.querySelectorAll("[role=\"listitem\"]");
+  } else if (document.URL.includes("discounttiredirect.com")) {
+    items = root.querySelectorAll(".cart-item");
+  } else if (document.URL.includes("shutterfly.com")){
+    items = root.querySelectorAll(".cartitem");
   } else {
+    skipFiltering = false;
     // Generic pattern
     const candidates = new Set();
     items = root.querySelectorAll('a');
@@ -992,7 +1042,7 @@ async function extractAllItems(root) {
   let early_abort = false;
   for (const item of items) {
     extractOneItem(item, extracted_items, processed, outputMap,
-      savedForLaterSection);
+      savedForLaterSection, skipFiltering);
     // Checking for every item is too slow.
     if (i++ % 10 == 0) {
       await sleeper.maybeSleep();

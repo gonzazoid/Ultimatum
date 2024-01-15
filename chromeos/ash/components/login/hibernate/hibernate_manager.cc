@@ -4,77 +4,114 @@
 
 #include "chromeos/ash/components/login/hibernate/hibernate_manager.h"
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/no_destructor.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_util.h"
+#include "base/task/thread_pool.h"
 #include "chromeos/ash/components/cryptohome/userdataauth_util.h"
-
-#if BUILDFLAG(ENABLE_HIBERNATE)
-#include "chromeos/ash/components/dbus/hiberman/hiberman_client.h"  // nogncheck
-#endif
+#include "chromeos/ash/components/dbus/hiberman/hiberman_client.h"
 
 namespace ash {
 
 namespace {
+constexpr const char kFeatureNotEnabled[] = "hibernate feature not enabled";
+constexpr const char kHibermanNotReady[] = "hiberman was not ready";
+constexpr const char kSystemMissingDevSnapshot[] =
+    "system is missing /dev/snapshot";
 
-HibernateManager* g_instance = nullptr;
+constexpr const char kDevSnapshotPath[] = "/dev/snapshot";
+constexpr const char kHibermanBinaryPath[] = "/usr/sbin/hiberman";
+
+constexpr const char kEnableSuspendToDiskInternalName[] =
+    "enable-suspend-to-disk";
+
+// Returns true if a /dev/snapshot node exists. We can't hibernate without one
+// so no need to proceed if not.
+bool HasSnapshotDevice() {
+  static bool hasSnapshotDev = []() -> bool {
+    return base::PathExists(base::FilePath(kDevSnapshotPath));
+  }();
+  return hasSnapshotDev;
+}
+
+// Returns true if the system has a hiberman binary.
+bool HasHibermanBinary() {
+  static bool hasHibermanBinary = []() -> bool {
+    return base::PathExists(base::FilePath(kHibermanBinaryPath));
+  }();
+  return hasHibermanBinary;
+}
+
+bool g_platform_support_test_complete = false;
 
 }  // namespace
 
-HibernateManager::HibernateManager() {
-  DCHECK(!g_instance);
-  g_instance = this;
+HibernateManager::HibernateManager() = default;
+
+HibernateManager::~HibernateManager() = default;
+
+HibernateManager* HibernateManager::Get() {
+  static base::NoDestructor<HibernateManager> hibernate;
+  return hibernate.get();
 }
 
-HibernateManager::~HibernateManager() {
-  g_instance = nullptr;
+void HibernateManager::InitializePlatformSupport() {
+  HasSnapshotDevice();
+  HasHibermanBinary();
+  g_platform_support_test_complete = true;
 }
 
 // static
-HibernateManager* HibernateManager::Get() {
-  return g_instance;
+bool HibernateManager::IsHibernateSupported() {
+  return ash::HasHibermanBinary();
 }
 
-base::WeakPtr<HibernateManager> HibernateManager::AsWeakPtr() {
-  return weak_factory_.GetWeakPtr();
+void HibernateManager::SetAuthInfo(const std::string& account_id,
+                                   const std::string& auth_session_id) {
+  account_id_ = account_id;
+  auth_session_id_ = auth_session_id;
 }
 
-void HibernateManager::PrepareHibernateAndMaybeResumeAuthOp(
-    std::unique_ptr<UserContext> user_context,
-    AuthOperationCallback callback) {
-  PrepareHibernateAndMaybeResume(
-      std::move(user_context),
-      base::BindOnce(&HibernateManager::ResumeFromHibernateAuthOpCallback,
-                     weak_factory_.GetWeakPtr(), std::move(callback)));
-}
+void HibernateManager::MaybeResume(const std::set<std::string>& user_prefs) {
+  if (auth_session_id_.empty()) {
+    return;
+  }
 
-#if BUILDFLAG(ENABLE_HIBERNATE)
-void HibernateManager::PrepareHibernateAndMaybeResume(
-    std::unique_ptr<UserContext> user_context,
-    HibernateResumeCallback callback) {
-  // In a successful resume case, this function never returns, as execution
-  // continues in the resumed hibernation image.
-  HibermanClient::Get()->ResumeFromHibernateAS(
-      user_context->GetAuthSessionId(),
-      base::BindOnce(std::move(callback), std::move(user_context)));
-}
+  auto* client = HibermanClient::Get();
+  bool aborted = false;
 
-#else  // !ENABLE_HIBERNATE
+  bool enabled = client->IsEnabled();
 
-void HibernateManager::PrepareHibernateAndMaybeResume(
-    std::unique_ptr<UserContext> user_context,
-    HibernateResumeCallback callback) {
-  // If resume from hibernate is not enabled, just immediately turn around and
-  // call the callback.
-  std::move(callback).Run(std::move(user_context), true);
-}
+  for (const auto& flag : user_prefs) {
+    if (base::StartsWith(
+            flag, base::StrCat({kEnableSuspendToDiskInternalName, "@"}))) {
+      enabled = !base::EndsWith(flag, "@0");
+    }
+  }
 
-#endif
+  if (!client) {
+    aborted = true;
+  } else if (!client->IsAlive() || !g_platform_support_test_complete) {
+    aborted = true;
+    client->AbortResumeHibernate(kHibermanNotReady);
+  } else if (!enabled) {
+    aborted = true;
+    client->AbortResumeHibernate(kFeatureNotEnabled);
+  } else if (!HasSnapshotDevice()) {
+    aborted = true;
+    client->AbortResumeHibernate(kSystemMissingDevSnapshot);
+  }
 
-void HibernateManager::ResumeFromHibernateAuthOpCallback(
-    AuthOperationCallback callback,
-    std::unique_ptr<UserContext> user_context,
-    bool resume_call_successful) {
-  std::move(callback).Run(std::move(user_context), absl::nullopt);
+  if (!aborted) {
+    client->ResumeFromHibernate(account_id_, auth_session_id_);
+  }
+
+  account_id_.clear();
+  auth_session_id_.clear();
 }
 
 }  // namespace ash

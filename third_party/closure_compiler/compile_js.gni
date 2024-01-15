@@ -2,13 +2,16 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/chromeos/ui_mode.gni")
 import("//third_party/closure_compiler/closure_args.gni")
 
-declare_args() {
-  # Enable closure type-checking for Chrome's web technology-based UI. This
-  # enables the webui_closure_compile target which does a no-op without this
-  # flag enabled. Requires Java.
-  enable_js_type_check = is_chromeos || is_linux || is_android
+if (is_chromeos_ash) {
+  declare_args() {
+    # Enable closure type-checking for Chrome's web technology-based UI. This
+    # enables the webui_closure_compile target which does a no-op without this
+    # flag enabled. Requires Java.
+    enable_js_type_check = is_chromeos_ash
+  }
 }
 
 script_path = "//third_party/closure_compiler"
@@ -182,7 +185,6 @@ template("js_binary") {
                              "outputs",
                              "sources",
                              "testonly",
-                             "uses_legacy_modules",
                            ])
     args = [
       "--compiler",
@@ -248,15 +250,9 @@ template("js_binary") {
       closure_flags = default_closure_args
     }
 
-    uses_legacy_modules = defined(uses_legacy_modules) && uses_legacy_modules
-    if (!uses_legacy_modules) {
-      closure_flags += js_modules_args
-    } else {
-      closure_flags += legacy_modules_args
-    }
+    closure_flags += js_modules_args
 
     is_polymer3 = defined(is_polymer3) && is_polymer3
-    assert(!is_polymer3 || !uses_legacy_modules)
     if (is_polymer3) {
       closure_flags += polymer3_args
     }
@@ -293,24 +289,26 @@ template("js_binary") {
   }
 }
 
-# Defines a target that compiles a group of js_library targets.
-template("js_type_check") {
-  if (enable_js_type_check) {
-    js_binary(target_name) {
-      sources = []
-      checks_only = true
-      forward_variables_from(invoker,
-                             [
-                               "closure_flags",
-                               "deps",
-                               "is_polymer3",
-                               "testonly",
-                               "uses_legacy_modules",
-                             ])
-    }
-  } else {
-    not_needed(invoker, "*")
-    group(target_name) {
+# js_type_check is only supported on ChromeOS Ash.
+if (is_chromeos_ash) {
+  # Defines a target that compiles a group of js_library targets.
+  template("js_type_check") {
+    if (enable_js_type_check) {
+      js_binary(target_name) {
+        sources = []
+        checks_only = true
+        forward_variables_from(invoker,
+                               [
+                                 "closure_flags",
+                                 "deps",
+                                 "is_polymer3",
+                                 "testonly",
+                               ])
+      }
+    } else {
+      not_needed(invoker, "*")
+      group(target_name) {
+      }
     }
   }
 }

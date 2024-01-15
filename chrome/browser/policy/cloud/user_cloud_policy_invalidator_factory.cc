@@ -20,17 +20,27 @@ namespace policy {
 // static
 UserCloudPolicyInvalidatorFactory*
     UserCloudPolicyInvalidatorFactory::GetInstance() {
-  return base::Singleton<UserCloudPolicyInvalidatorFactory>::get();
+  static base::NoDestructor<UserCloudPolicyInvalidatorFactory> instance;
+  return instance.get();
 }
 
 UserCloudPolicyInvalidatorFactory::UserCloudPolicyInvalidatorFactory()
-    : ProfileKeyedServiceFactory("UserCloudPolicyInvalidator") {
+    : ProfileKeyedServiceFactory(
+          "UserCloudPolicyInvalidator",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(invalidation::ProfileInvalidationProviderFactory::GetInstance());
 }
 
-UserCloudPolicyInvalidatorFactory::~UserCloudPolicyInvalidatorFactory() {}
+UserCloudPolicyInvalidatorFactory::~UserCloudPolicyInvalidatorFactory() =
+    default;
 
-KeyedService* UserCloudPolicyInvalidatorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+UserCloudPolicyInvalidatorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -41,7 +51,7 @@ KeyedService* UserCloudPolicyInvalidatorFactory::BuildServiceInstanceFor(
   if (!policy_manager)
     return nullptr;
 
-  return new UserCloudPolicyInvalidator(profile, policy_manager);
+  return std::make_unique<UserCloudPolicyInvalidator>(profile, policy_manager);
 }
 
 bool UserCloudPolicyInvalidatorFactory::

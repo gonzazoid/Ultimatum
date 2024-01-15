@@ -33,12 +33,11 @@ const char kLogUnsentCountKey[] = "unsent_samples_count";
 const char kLogSentCountKey[] = "sent_samples_count";
 const char kLogPersistedSizeInKbKey[] = "unsent_persisted_size_in_kb";
 const char kLogUserIdKey[] = "user_id";
+const char kLogSourceType[] = "type";
 
 std::string EncodeToBase64(const std::string& to_convert) {
   DCHECK(to_convert.data());
-  std::string base64_result;
-  base::Base64Encode(to_convert, &base64_result);
-  return base64_result;
+  return base::Base64Encode(to_convert);
 }
 
 std::string DecodeFromBase64(const std::string& to_convert) {
@@ -68,17 +67,20 @@ class LogsPrefWriter {
   void WriteLogEntry(UnsentLogStore::LogInfo* log) {
     DCHECK(!finished_);
 
-    base::Value dict_value{base::Value::Type::DICTIONARY};
-    dict_value.SetStringKey(kLogHashKey, EncodeToBase64(log->hash));
-    dict_value.SetStringKey(kLogSignatureKey, EncodeToBase64(log->signature));
-    dict_value.SetStringKey(kLogDataKey,
-                            EncodeToBase64(log->compressed_log_data));
-    dict_value.SetStringKey(kLogTimestampKey, log->timestamp);
-
+    base::Value::Dict dict_value;
+    dict_value.Set(kLogHashKey, EncodeToBase64(log->hash));
+    dict_value.Set(kLogSignatureKey, EncodeToBase64(log->signature));
+    dict_value.Set(kLogDataKey, EncodeToBase64(log->compressed_log_data));
+    dict_value.Set(kLogTimestampKey, log->timestamp);
+    if (log->log_metadata.log_source_type.has_value()) {
+      dict_value.Set(
+          kLogSourceType,
+          static_cast<int>(log->log_metadata.log_source_type.value()));
+    }
     auto user_id = log->log_metadata.user_id;
     if (user_id.has_value()) {
-      dict_value.SetStringKey(
-          kLogUserIdKey, EncodeToBase64(base::NumberToString(user_id.value())));
+      dict_value.Set(kLogUserIdKey,
+                     EncodeToBase64(base::NumberToString(user_id.value())));
     }
     list_value_->Append(std::move(dict_value));
 
@@ -137,12 +139,9 @@ bool GetString(const base::Value::Dict& dict,
 }  // namespace
 
 UnsentLogStore::LogInfo::LogInfo() = default;
-UnsentLogStore::LogInfo::LogInfo(const UnsentLogStore::LogInfo& other) =
-    default;
 UnsentLogStore::LogInfo::~LogInfo() = default;
 
-void UnsentLogStore::LogInfo::Init(UnsentLogStoreMetrics* metrics,
-                                   const std::string& log_data,
+void UnsentLogStore::LogInfo::Init(const std::string& log_data,
                                    const std::string& log_timestamp,
                                    const std::string& signing_key,
                                    const LogMetadata& optional_log_metadata) {
@@ -152,8 +151,6 @@ void UnsentLogStore::LogInfo::Init(UnsentLogStoreMetrics* metrics,
     NOTREACHED();
     return;
   }
-
-  metrics->RecordCompressionRatio(compressed_log_data.size(), log_data.size());
 
   hash = base::SHA1HashString(log_data);
 
@@ -165,31 +162,35 @@ void UnsentLogStore::LogInfo::Init(UnsentLogStoreMetrics* metrics,
   this->log_metadata = optional_log_metadata;
 }
 
+void UnsentLogStore::LogInfo::Init(const std::string& log_data,
+                                   const std::string& signing_key,
+                                   const LogMetadata& optional_log_metadata) {
+  Init(log_data, base::NumberToString(base::Time::Now().ToTimeT()), signing_key,
+       optional_log_metadata);
+}
+
 UnsentLogStore::UnsentLogStore(std::unique_ptr<UnsentLogStoreMetrics> metrics,
                                PrefService* local_state,
                                const char* log_data_pref_name,
                                const char* metadata_pref_name,
-                               size_t min_log_count,
-                               size_t min_log_bytes,
-                               size_t max_log_size,
+                               UnsentLogStoreLimits log_store_limits,
                                const std::string& signing_key,
                                MetricsLogsEventManager* logs_event_manager)
     : metrics_(std::move(metrics)),
       local_state_(local_state),
       log_data_pref_name_(log_data_pref_name),
       metadata_pref_name_(metadata_pref_name),
-      min_log_count_(min_log_count),
-      min_log_bytes_(min_log_bytes),
-      max_log_size_(max_log_size != 0 ? max_log_size : static_cast<size_t>(-1)),
+      log_store_limits_(log_store_limits),
       signing_key_(signing_key),
       logs_event_manager_(logs_event_manager),
       staged_log_index_(-1) {
   DCHECK(local_state_);
   // One of the limit arguments must be non-zero.
-  DCHECK(min_log_count_ > 0 || min_log_bytes_ > 0);
+  DCHECK(log_store_limits_.min_log_count > 0 ||
+         log_store_limits_.min_queue_size_bytes > 0);
 }
 
-UnsentLogStore::~UnsentLogStore() {}
+UnsentLogStore::~UnsentLogStore() = default;
 
 bool UnsentLogStore::has_unsent_logs() const {
   return !!size();
@@ -230,6 +231,11 @@ absl::optional<uint64_t> UnsentLogStore::staged_log_user_id() const {
   return list_[staged_log_index_]->log_metadata.user_id;
 }
 
+const LogMetadata UnsentLogStore::staged_log_metadata() const {
+  DCHECK(has_staged_log());
+  return std::move(list_[staged_log_index_]->log_metadata);
+}
+
 // static
 bool UnsentLogStore::ComputeHMACForLog(const std::string& log_data,
                                        const std::string& signing_key,
@@ -253,11 +259,11 @@ void UnsentLogStore::StageNextLog() {
   DCHECK(has_staged_log());
 }
 
-void UnsentLogStore::DiscardStagedLog() {
+void UnsentLogStore::DiscardStagedLog(base::StringPiece reason) {
   DCHECK(has_staged_log());
   DCHECK_LT(static_cast<size_t>(staged_log_index_), list_.size());
   NotifyLogEvent(MetricsLogsEventManager::LogEvent::kLogDiscarded,
-                 list_[staged_log_index_]->hash);
+                 list_[staged_log_index_]->hash, reason);
   list_.erase(list_.begin() + staged_log_index_);
   staged_log_index_ = -1;
 }
@@ -290,8 +296,8 @@ void UnsentLogStore::TrimAndPersistUnsentLogs(bool overwrite_in_memory_store) {
   for (int i = list_.size() - 1; i >= 0; --i) {
     size_t log_size = list_[i]->compressed_log_data.length();
     // Hit the caps, we can stop moving the logs.
-    if (bytes_used >= min_log_bytes_ &&
-        writer.unsent_logs_count() >= min_log_count_) {
+    if (bytes_used >= log_store_limits_.min_queue_size_bytes &&
+        writer.unsent_logs_count() >= log_store_limits_.min_log_count) {
       // The rest of the logs (including the current one) are trimmed.
       if (overwrite_in_memory_store) {
         NotifyLogsEvent(base::span<std::unique_ptr<LogInfo>>(
@@ -300,8 +306,9 @@ void UnsentLogStore::TrimAndPersistUnsentLogs(bool overwrite_in_memory_store) {
       }
       break;
     }
-    // Omit overly large individual logs.
-    if (log_size > max_log_size_) {
+    // Omit overly large individual logs if the value is non-zero.
+    if (log_store_limits_.max_log_size_bytes != 0 &&
+        log_size > log_store_limits_.max_log_size_bytes) {
       metrics_->RecordDroppedLogSize(log_size);
       if (overwrite_in_memory_store) {
         NotifyLogEvent(MetricsLogsEventManager::LogEvent::kLogTrimmed,
@@ -359,13 +366,22 @@ void UnsentLogStore::LoadPersistedUnsentLogs() {
 }
 
 void UnsentLogStore::StoreLog(const std::string& log_data,
-                              const LogMetadata& log_metadata) {
-  LogInfo info;
-  info.Init(metrics_.get(), log_data,
-            base::NumberToString(base::Time::Now().ToTimeT()), signing_key_,
-            log_metadata);
-  list_.emplace_back(std::make_unique<LogInfo>(info));
-  NotifyLogCreated(info);
+                              const LogMetadata& log_metadata,
+                              MetricsLogsEventManager::CreateReason reason) {
+  std::unique_ptr<LogInfo> info = std::make_unique<LogInfo>();
+  info->Init(log_data, signing_key_, log_metadata);
+  StoreLogInfo(std::move(info), log_data.size(), reason);
+}
+
+void UnsentLogStore::StoreLogInfo(
+    std::unique_ptr<LogInfo> log_info,
+    size_t uncompressed_log_size,
+    MetricsLogsEventManager::CreateReason reason) {
+  DCHECK(log_info);
+  metrics_->RecordCompressionRatio(log_info->compressed_log_data.size(),
+                                   uncompressed_log_size);
+  NotifyLogCreated(*log_info, reason);
+  list_.emplace_back(std::move(log_info));
 }
 
 const std::string& UnsentLogStore::GetLogAtIndex(size_t index) {
@@ -388,15 +404,18 @@ std::string UnsentLogStore::ReplaceLogAtIndex(size_t index,
   std::string old_hash;
   old_hash.swap(list_[index]->hash);
 
-  // TODO(rkaplow): Would be a bit simpler if we had a method that would
-  // just return a pointer to the logInfo so we could combine the next 3 lines.
-  LogInfo info;
-  info.Init(metrics_.get(), new_log_data, old_timestamp, signing_key_,
-            log_metadata);
+  std::unique_ptr<LogInfo> info = std::make_unique<LogInfo>();
+  info->Init(new_log_data, old_timestamp, signing_key_, log_metadata);
+  // Note that both the compression ratio of the new log and the log that is
+  // being replaced are recorded.
+  metrics_->RecordCompressionRatio(info->compressed_log_data.size(),
+                                   new_log_data.size());
 
-  list_[index] = std::make_unique<LogInfo>(info);
+  // TODO(crbug/1363747): Pass a message to make it clear that the new log is
+  // replacing the old log.
   NotifyLogEvent(MetricsLogsEventManager::LogEvent::kLogDiscarded, old_hash);
-  NotifyLogCreated(info);
+  NotifyLogCreated(*info, MetricsLogsEventManager::CreateReason::kUnknown);
+  list_[index] = std::move(info);
   return old_log_data;
 }
 
@@ -437,11 +456,11 @@ void UnsentLogStore::ReadLogsFromPrefList(const base::Value::List& list_value) {
 
   for (size_t i = 0; i < log_count; ++i) {
     const base::Value::Dict* dict = list_value[i].GetIfDict();
-    LogInfo info;
-    if (!dict || !GetString(*dict, kLogDataKey, info.compressed_log_data) ||
-        !GetString(*dict, kLogHashKey, info.hash) ||
-        !GetString(*dict, kLogTimestampKey, info.timestamp) ||
-        !GetString(*dict, kLogSignatureKey, info.signature)) {
+    std::unique_ptr<LogInfo> info = std::make_unique<LogInfo>();
+    if (!dict || !GetString(*dict, kLogDataKey, info->compressed_log_data) ||
+        !GetString(*dict, kLogHashKey, info->hash) ||
+        !GetString(*dict, kLogTimestampKey, info->timestamp) ||
+        !GetString(*dict, kLogSignatureKey, info->signature)) {
       // Something is wrong, so we don't try to get any persisted logs.
       list_.clear();
       metrics_->RecordLogReadStatus(
@@ -449,10 +468,16 @@ void UnsentLogStore::ReadLogsFromPrefList(const base::Value::List& list_value) {
       return;
     }
 
-    info.compressed_log_data = DecodeFromBase64(info.compressed_log_data);
-    info.hash = DecodeFromBase64(info.hash);
-    info.signature = DecodeFromBase64(info.signature);
+    info->compressed_log_data = DecodeFromBase64(info->compressed_log_data);
+    info->hash = DecodeFromBase64(info->hash);
+    info->signature = DecodeFromBase64(info->signature);
     // timestamp doesn't need to be decoded.
+
+    absl::optional<int> log_source_type = dict->FindInt(kLogSourceType);
+    if (log_source_type.has_value()) {
+      info->log_metadata.log_source_type =
+          static_cast<UkmLogSourceType>(log_source_type.value());
+    }
 
     // Extract user id of the log if it exists.
     const std::string* user_id_str = dict->FindString(kLogUserIdKey);
@@ -461,16 +486,17 @@ void UnsentLogStore::ReadLogsFromPrefList(const base::Value::List& list_value) {
 
       // Only initialize the metadata if conversion was successful.
       if (base::StringToUint64(DecodeFromBase64(*user_id_str), &user_id))
-        info.log_metadata.user_id = user_id;
+        info->log_metadata.user_id = user_id;
     }
 
-    list_[i] = std::make_unique<LogInfo>(info);
+    list_[i] = std::move(info);
   }
 
   // Only notify log observers after loading all logs from pref instead of
   // notifying as logs are loaded. This is because we may return early and end
   // up not loading any logs.
-  NotifyLogsCreated(list_);
+  NotifyLogsCreated(
+      list_, MetricsLogsEventManager::CreateReason::kLoadFromPreviousSession);
 
   metrics_->RecordLogReadStatus(UnsentLogStoreMetrics::RECALL_SUCCESS);
 }
@@ -509,20 +535,23 @@ void UnsentLogStore::RecordMetaDataMetrics() {
   }
 }
 
-void UnsentLogStore::NotifyLogCreated(LogInfo& info) {
+void UnsentLogStore::NotifyLogCreated(
+    const LogInfo& info,
+    MetricsLogsEventManager::CreateReason reason) {
   if (!logs_event_manager_)
     return;
   logs_event_manager_->NotifyLogCreated(info.hash, info.compressed_log_data,
-                                        info.timestamp);
+                                        info.timestamp, reason);
 }
 
 void UnsentLogStore::NotifyLogsCreated(
-    base::span<std::unique_ptr<LogInfo>> logs) {
+    base::span<std::unique_ptr<LogInfo>> logs,
+    MetricsLogsEventManager::CreateReason reason) {
   if (!logs_event_manager_)
     return;
   for (const std::unique_ptr<LogInfo>& info : logs) {
     logs_event_manager_->NotifyLogCreated(info->hash, info->compressed_log_data,
-                                          info->timestamp);
+                                          info->timestamp, reason);
   }
 }
 

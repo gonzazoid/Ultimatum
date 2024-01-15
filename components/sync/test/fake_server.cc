@@ -17,6 +17,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/test_file_util.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -34,40 +35,19 @@ using syncer::ModelTypeSet;
 
 namespace fake_server {
 
+FakeServer::FakeServer(const base::FilePath& loopback_server_dir) {
+  CHECK(!loopback_server_dir.empty());
+  // Needed by syncer::LoopbackServer.
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  loopback_server_ = std::make_unique<syncer::LoopbackServer>(
+      loopback_server_dir.AppendASCII("profile.pb"));
+  loopback_server_->set_observer_for_tests(this);
+}
+
 FakeServer::FakeServer()
-    : commit_error_type_(sync_pb::SyncEnums::SUCCESS),
-      error_type_(sync_pb::SyncEnums::SUCCESS),
-      alternate_triggered_errors_(false),
-      request_counter_(0),
-      disallow_sending_encryption_keys_(false) {
-  base::ScopedAllowBlockingForTesting allow_blocking;
-  loopback_server_storage_ = std::make_unique<base::ScopedTempDir>();
-  if (!loopback_server_storage_->CreateUniqueTempDir()) {
-    NOTREACHED() << "Creating temp dir failed.";
-  }
-  loopback_server_ = std::make_unique<syncer::LoopbackServer>(
-      loopback_server_storage_->GetPath().AppendASCII("profile.pb"));
-  loopback_server_->set_observer_for_tests(this);
-}
+    : FakeServer(base::CreateUniqueTempDirectoryScopedToTest()) {}
 
-FakeServer::FakeServer(const base::FilePath& user_data_dir)
-    : commit_error_type_(sync_pb::SyncEnums::SUCCESS),
-      error_type_(sync_pb::SyncEnums::SUCCESS),
-      alternate_triggered_errors_(false),
-      request_counter_(0),
-      disallow_sending_encryption_keys_(false) {
-  base::ScopedAllowBlockingForTesting allow_blocking;
-  base::FilePath loopback_server_path =
-      user_data_dir.AppendASCII("FakeSyncServer");
-  loopback_server_ = std::make_unique<syncer::LoopbackServer>(
-      loopback_server_path.AppendASCII("profile.pb"));
-  loopback_server_->set_observer_for_tests(this);
-}
-
-FakeServer::~FakeServer() {
-  base::ScopedAllowBlockingForTesting allow_blocking;
-  loopback_server_storage_.reset();
-}
+FakeServer::~FakeServer() = default;
 
 namespace {
 
@@ -365,10 +345,13 @@ void FakeServer::OverrideResponseType(
   loopback_server_->OverrideResponseType(std::move(response_type_override));
 }
 
-std::unique_ptr<base::DictionaryValue>
-FakeServer::GetEntitiesAsDictionaryValue() {
+void FakeServer::FlushToDisk() {
+  loopback_server_->FlushToDisk();
+}
+
+base::Value::Dict FakeServer::GetEntitiesAsDictForTesting() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  return loopback_server_->GetEntitiesAsDictionaryValue();
+  return loopback_server_->GetEntitiesAsDictForTesting();
 }
 
 std::vector<sync_pb::SyncEntity> FakeServer::GetSyncEntitiesByModelType(
@@ -415,8 +398,7 @@ void FakeServer::InjectEntity(std::unique_ptr<LoopbackServerEntity> entity) {
   loopback_server_->SaveEntity(std::move(entity));
 
   // Notify observers so invalidations are mimic-ed.
-  OnCommit(/*committer_invalidator_client_id=*/std::string(),
-           /*committed_model_types=*/{model_type});
+  OnCommit(/*committed_model_types=*/{model_type});
 }
 
 base::Time FakeServer::SetWalletData(
@@ -433,7 +415,7 @@ base::Time FakeServer::SetWalletData(
   const int64_t version = (now - base::Time::UnixEpoch()).InMilliseconds();
 
   for (sync_pb::SyncEntity& entity : wallet_entities_) {
-    DCHECK(!entity.has_client_defined_unique_tag())
+    DCHECK(!entity.has_client_tag_hash())
         << "The sync server doesn not provide a client tag for wallet entries.";
     DCHECK(!entity.id_string().empty()) << "server id required!";
 
@@ -442,8 +424,7 @@ base::Time FakeServer::SetWalletData(
     entity.set_version(version);
   }
 
-  OnCommit(/*committer_invalidator_client_id=*/std::string(),
-           /*committed_model_types=*/{syncer::AUTOFILL_WALLET_DATA});
+  OnCommit(/*committed_model_types=*/{syncer::AUTOFILL_WALLET_DATA});
 
   return now;
 }
@@ -462,7 +443,7 @@ base::Time FakeServer::SetOfferData(
   const int64_t version = (now - base::Time::UnixEpoch()).InMilliseconds();
 
   for (sync_pb::SyncEntity& entity : offer_entities_) {
-    DCHECK(!entity.has_client_defined_unique_tag())
+    DCHECK(!entity.has_client_tag_hash())
         << "The sync server doesn not provide a client tag for offer entries.";
     DCHECK(!entity.id_string().empty()) << "server id required!";
 
@@ -471,8 +452,7 @@ base::Time FakeServer::SetOfferData(
     entity.set_version(version);
   }
 
-  OnCommit(/*committer_id=*/std::string(),
-           /*committed_model_types=*/{syncer::AUTOFILL_WALLET_OFFER});
+  OnCommit(/*committed_model_types=*/{syncer::AUTOFILL_WALLET_OFFER});
 
   return now;
 }
@@ -487,13 +467,16 @@ bool FakeServer::ModifyEntitySpecifics(
     const std::string& id,
     const sync_pb::EntitySpecifics& updated_specifics) {
   OnWillCommit();
-  if (!loopback_server_->ModifyEntitySpecifics(id, updated_specifics)) {
-    return false;
+
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    if (!loopback_server_->ModifyEntitySpecifics(id, updated_specifics)) {
+      return false;
+    }
   }
 
   // Notify observers so invalidations are mimic-ed.
   OnCommit(
-      /*committer_invalidator_client_id=*/std::string(),
       /*committed_model_types=*/{GetModelTypeFromSpecifics(updated_specifics)});
 
   return true;
@@ -504,14 +487,16 @@ bool FakeServer::ModifyBookmarkEntity(
     const std::string& parent_id,
     const sync_pb::EntitySpecifics& updated_specifics) {
   OnWillCommit();
-  if (!loopback_server_->ModifyBookmarkEntity(id, parent_id,
-                                              updated_specifics)) {
-    return false;
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    if (!loopback_server_->ModifyBookmarkEntity(id, parent_id,
+                                                updated_specifics)) {
+      return false;
+    }
   }
 
   // Notify observers so invalidations are mimic-ed.
-  OnCommit(/*committer_invalidator_client_id=*/std::string(),
-           /*committed_model_types=*/{syncer::BOOKMARKS});
+  OnCommit(/*committed_model_types=*/{syncer::BOOKMARKS});
 
   return true;
 }
@@ -526,8 +511,7 @@ void FakeServer::ClearServerData() {
   }
 
   // Notify observers so invalidations are mimic-ed.
-  OnCommit(/*committer_invalidator_client_id=*/std::string(),
-           /*committed_model_types=*/{syncer::NIGORI});
+  OnCommit(/*committed_model_types=*/{syncer::NIGORI});
 }
 
 void FakeServer::DeleteAllEntitiesForModelType(ModelType model_type) {
@@ -568,7 +552,7 @@ void FakeServer::TriggerError(const sync_pb::SyncEnums_ErrorType& error_type) {
   error_type_ = error_type;
 }
 
-void FakeServer::TriggerActionableError(
+void FakeServer::TriggerActionableProtocolError(
     const sync_pb::SyncEnums_ErrorType& error_type,
     const std::string& description,
     const std::string& url,
@@ -584,7 +568,7 @@ void FakeServer::TriggerActionableError(
   triggered_actionable_error_.reset(error);
 }
 
-void FakeServer::ClearActionableError() {
+void FakeServer::ClearActionableProtocolError() {
   triggered_actionable_error_.reset();
 }
 
@@ -635,10 +619,9 @@ void FakeServer::RemoveObserver(Observer* observer) {
   observers_.RemoveObserver(observer);
 }
 
-void FakeServer::OnCommit(const std::string& committer_invalidator_client_id,
-                          syncer::ModelTypeSet committed_model_types) {
+void FakeServer::OnCommit(syncer::ModelTypeSet committed_model_types) {
   for (Observer& observer : observers_)
-    observer.OnCommit(committer_invalidator_client_id, committed_model_types);
+    observer.OnCommit(committed_model_types);
 }
 
 void FakeServer::OnHistoryCommit(const std::string& url) {
@@ -684,6 +667,13 @@ void FakeServer::LogForTestFailure(const base::Location& location,
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kDisableFakeServerFailureOutput)) {
     return;
+  }
+  if (gtest_scoped_traces_.empty()) {
+    gtest_scoped_traces_.push_back(std::make_unique<testing::ScopedTrace>(
+        location.file_name(), location.line_number(),
+        base::StringPrintf(
+            "Add --%s to hide verbose logs from the fake server.",
+            switches::kDisableFakeServerFailureOutput)));
   }
   gtest_scoped_traces_.push_back(std::make_unique<testing::ScopedTrace>(
       location.file_name(), location.line_number(),

@@ -23,11 +23,35 @@ class CrossThreadStyleValue;
 class ExecutionContext;
 class LayoutObject;
 
+// For use in Get(Un)VisitedProperty(), although you could probably
+// use them yourself if you wanted to; contains a mapping from each
+// CSSPropertyID to its visited/unvisited counterpart, or kInvalid
+// if none exists. They use small integer types (even though they
+// actually contain CSSPropertyIDs) because they can be quite hot
+// in the cache, e.g., during cascade expansion.
+extern CORE_EXPORT const uint8_t kPropertyVisitedIDs[];
+extern CORE_EXPORT const uint16_t kPropertyUnvisitedIDs[];
+
 class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
  public:
   using Flags = uint64_t;
 
-  static const CSSProperty& Get(CSSPropertyID);
+  static const CSSProperty& Get(CSSPropertyID id) {
+    // Instead of using To<> here (which calls GetFlags()), we have
+    // a bounds check on the property ID.
+    //
+    // This is pretty much the same speed overall (as measured by the
+    // style perftest, June 2023), but should be a stronger security
+    // bound; it is unlikely that an attacker can corrupt an object
+    // in the read-only kProperties[] array but _not_ make it return
+    // the flags they want (which is what the To<> downcast checks),
+    // but it seems very likely that a bug could cause them to control
+    // the id to go out-of-bounds and hit an attacked-controlled vtable
+    // at some wild memory location.
+    SECURITY_CHECK(id > CSSPropertyID::kInvalid && id <= kLastCSSProperty);
+    DCHECK(IsA<CSSProperty>(GetPropertyInternal(id)));
+    return UnsafeTo<CSSProperty>(*GetPropertyInternal(id));
+  }
 
   static bool IsShorthand(const CSSPropertyName&);
   static bool IsRepeated(const CSSPropertyName&);
@@ -61,6 +85,7 @@ class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
     return flags_ & kSupportsIncrementalStyle;
   }
   bool IsIdempotent() const { return flags_ & kIdempotent; }
+  bool AcceptsNumericLiteral() const { return flags_ & kAcceptsNumericLiteral; }
   bool IsValidForFirstLetter() const { return flags_ & kValidForFirstLetter; }
   bool IsValidForFirstLine() const { return flags_ & kValidForFirstLine; }
   bool IsValidForCue() const { return flags_ & kValidForCue; }
@@ -80,7 +105,6 @@ class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
   bool IsBackground() const { return flags_ & kBackground; }
   bool IsBorder() const { return flags_ & kBorder; }
   bool IsBorderRadius() const { return flags_ & kBorderRadius; }
-  bool TakesTreeScopedValue() const { return flags_ & kTreeScopedValue; }
   bool IsInLogicalPropertyGroup() const {
     return flags_ & kInLogicalPropertyGroup;
   }
@@ -110,16 +134,45 @@ class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
       const ComputedStyle& computed_style,
       const LayoutObject* layout_object,
       bool allow_visited_style) const;
-  virtual const CSSProperty& ResolveDirectionAwareProperty(TextDirection,
-                                                           WritingMode) const {
+
+  const CSSProperty& ResolveDirectionAwareProperty(
+      TextDirection direction,
+      WritingMode writing_mode) const {
+    if (!IsInLogicalPropertyGroup()) {
+      // Avoid the potentially expensive virtual function call.
+      return *this;
+    } else {
+      return ResolveDirectionAwarePropertyInternal(direction, writing_mode);
+    }
+  }
+
+  virtual const CSSProperty& ResolveDirectionAwarePropertyInternal(
+      TextDirection,
+      WritingMode) const {
     return *this;
   }
   virtual bool IsInSameLogicalPropertyGroupWithDifferentMappingLogic(
       CSSPropertyID) const {
     return false;
   }
-  virtual const CSSProperty* GetVisitedProperty() const { return nullptr; }
-  virtual const CSSProperty* GetUnvisitedProperty() const { return nullptr; }
+  const CSSProperty* GetVisitedProperty() const {
+    CSSPropertyID visited_id = static_cast<CSSPropertyID>(
+        kPropertyVisitedIDs[static_cast<unsigned>(property_id_)]);
+    if (visited_id == CSSPropertyID::kInvalid) {
+      return nullptr;
+    } else {
+      return To<CSSProperty>(GetPropertyInternal(visited_id));
+    }
+  }
+  const CSSProperty* GetUnvisitedProperty() const {
+    CSSPropertyID unvisited_id = static_cast<CSSPropertyID>(
+        kPropertyUnvisitedIDs[static_cast<unsigned>(property_id_)]);
+    if (unvisited_id == CSSPropertyID::kInvalid) {
+      return nullptr;
+    } else {
+      return To<CSSProperty>(GetPropertyInternal(unvisited_id));
+    }
+  }
 
   virtual const CSSProperty* SurrogateFor(TextDirection, WritingMode) const {
     return nullptr;
@@ -128,7 +181,7 @@ class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
   static void FilterWebExposedCSSPropertiesIntoVector(
       const ExecutionContext*,
       const CSSPropertyID*,
-      size_t length,
+      wtf_size_t length,
       Vector<const CSSProperty*>&);
 
   enum Flag : Flags {
@@ -164,41 +217,41 @@ class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
     kBackground = 1 << 15,
     kBorder = 1 << 16,
     kBorderRadius = 1 << 17,
-    // Set if the property values are tree-scoped references.
-    kTreeScopedValue = 1 << 18,
     // Similar to the list at
     // https://drafts.csswg.org/css-pseudo-4/#highlight-styling, with some
     // differences for compatibility reasons.
-    kValidForHighlightLegacy = 1 << 19,
+    kValidForHighlightLegacy = 1 << 18,
     // https://drafts.csswg.org/css-logical/#logical-property-group
-    kInLogicalPropertyGroup = 1 << 20,
+    kInLogicalPropertyGroup = 1 << 19,
     // https://drafts.csswg.org/css-pseudo-4/#first-line-styling
-    kValidForFirstLine = 1 << 21,
+    kValidForFirstLine = 1 << 20,
     // The property participates in paired cascade, such that when encountered
     // in highlight styles, we make all other highlight color properties default
     // to initial, rather than the UA default.
     // https://drafts.csswg.org/css-pseudo-4/#highlight-cascade
-    kHighlightColors = 1 << 22,
-    kVisitedHighlightColors = 1 << 23,
+    kHighlightColors = 1 << 21,
+    kVisitedHighlightColors = 1 << 22,
     // See supports_incremental_style in css_properties.json5.
-    kSupportsIncrementalStyle = 1 << 24,
+    kSupportsIncrementalStyle = 1 << 23,
     // See idempotent in css_properties.json5.
-    kIdempotent = 1 << 25,
+    kIdempotent = 1 << 24,
     // Set if the css property can apply to the experiemental canvas
     // formatted text API to render multiline text in canvas.
     // https://github.com/WICG/canvas-formatted-text
-    kValidForFormattedText = 1 << 26,
-    kValidForFormattedTextRun = 1 << 27,
+    kValidForFormattedText = 1 << 25,
+    kValidForFormattedTextRun = 1 << 26,
     // See overlapping in css_properties.json5.
-    kOverlapping = 1 << 28,
+    kOverlapping = 1 << 27,
     // See legacy_overlapping in css_properties.json5.
-    kLegacyOverlapping = 1 << 29,
+    kLegacyOverlapping = 1 << 28,
     // See valid_for_keyframes in css_properties.json5
-    kValidForKeyframe = 1 << 30,
+    kValidForKeyframe = 1 << 29,
     // See valid_for_position_fallback in css_properties.json5
-    kValidForPositionFallback = 1ull << 31,
+    kValidForPositionFallback = 1 << 30,
     // https://drafts.csswg.org/css-pseudo-4/#highlight-styling
-    kValidForHighlight = 1ull << 32,
+    kValidForHighlight = 1ull << 31,
+    // See accepts_numeric_literal in css_properties.json5.
+    kAcceptsNumericLiteral = 1ull << 32,
   };
 
   constexpr CSSProperty(CSSPropertyID property_id,
@@ -208,17 +261,25 @@ class CORE_EXPORT CSSProperty : public CSSUnresolvedProperty {
         repetition_separator_(repetition_separator),
         flags_(flags) {}
 
+  enum class ValueMode {
+    kNormal,
+    // https://drafts.csswg.org/css-variables/#animation-tainted
+    kAnimated,
+  };
+
  private:
-  uint16_t property_id_;
-  char repetition_separator_;
-  Flags flags_;
+  static constexpr size_t kPropertyIdBits = 16;
+  uint64_t property_id_ : kPropertyIdBits;  // NOLINT(runtime/bitfields)
+  uint64_t repetition_separator_ : 8;       // NOLINT(runtime/bitfields)
+  uint64_t flags_ : 40;                     // NOLINT(runtime/bitfields)
 
   // Make sure we have room for all valid CSSPropertyIDs.
-  // (Using a smaller type here reduces CSSProperty size from 24 to 16
+  // (Using bit fields here reduces CSSProperty size from 24 to 16
   // bytes, and we have many of them that are frequently accessed
   // during style application.)
-  static_assert(sizeof(property_id_) * 8 >= kCSSPropertyIDBitLength);
+  static_assert(kPropertyIdBits >= kCSSPropertyIDBitLength);
 };
+static_assert(sizeof(CSSProperty) <= 16);
 
 template <>
 struct DowncastTraits<CSSProperty> {

@@ -9,6 +9,7 @@ import("//build/config/features.gni")
 import("//build/timestamp.gni")
 import("//build/toolchain/toolchain.gni")
 import("//components/policy/resources/policy_templates.gni")
+import("//components/policy/tools/generate_policy_source.gni")
 import("//third_party/libprotobuf-mutator/fuzzable_proto_library.gni")
 import("//third_party/protobuf/proto_library.gni")
 import("//tools/grit/grit_args.gni")
@@ -25,7 +26,6 @@ gen_policy_templates_win = is_win
 gen_policy_templates_linux = is_linux || is_chromeos
 gen_policy_templates_android = is_android
 gen_policy_templates_mac = is_mac
-gen_policy_templates_chromeos = is_chromeos_ash
 gen_policy_templates_ios = is_ios
 
 # The zip file is grabbed from the Windows build right now.
@@ -35,7 +35,6 @@ gen_policy_templates_zip = is_win
 if (gen_policy_templates_zip) {
   gen_policy_templates_common = true
   gen_policy_templates_win = true
-  gen_policy_templates_chromeos = true
 }
 
 if (is_mac) {
@@ -72,119 +71,20 @@ config("component_implementation") {
 # and compiled.
 cloud_policy_proto_path = "$target_gen_dir/proto/cloud_policy.proto"
 
-# This file is used by chrome/browser/privacy/traffic_annotation.proto as it
-# needs a version without LITE_RUNTIME optimization.
-cloud_policy_full_runtime_proto_path =
-    "$target_gen_dir/proto/cloud_policy_full_runtime.proto"
-
-# This protobuf contains the common definitions of the shared messages
-# between user and device policies
-policy_common_definitions_proto_abspath =
-    "//components/policy/proto/policy_common_definitions.proto"
-
-# This file is used by chrome/browser/privacy/traffic_annotation.proto as it
-# needs a version without LITE_RUNTIME optimization.
-policy_common_definitions_full_runtime_proto_path =
-    "$target_gen_dir/proto/policy_common_definitions_full_runtime.proto"
-
 # This is the "full" protobuf, which defines one protobuf message per
 # policy. It is also the format currently used by the server.
 chrome_settings_proto_path = "$target_gen_dir/proto/chrome_settings.proto"
 
-# This file is used by chrome/browser/privacy/traffic_annotation.proto as it
-# needs a version without LITE_RUNTIME optimization.
-chrome_settings_full_runtime_proto_path =
-    "$target_gen_dir/proto/chrome_settings_full_runtime.proto"
-
 constants_header_path = "$target_gen_dir/policy_constants.h"
 constants_source_path = "$target_gen_dir/policy_constants.cc"
-app_restrictions_path = "$target_gen_dir/app_restrictions.xml"
 risk_tag_header_path = "$target_gen_dir/risk_tag.h"
 
 policy_templates_deps_file = "$policy_templates_base_dir/policy_templates.d"
 policy_templates_generated_json_path =
     "$policy_templates_base_dir/policy_templates.json"
 
-action("policy_code_generate") {
-  script = "tools/generate_policy_source.py"
-  chrome_version_abspath = "//chrome/VERSION"
-  chrome_version_path = rebase_path(chrome_version_abspath, root_build_dir)
-
-  deps = [ ":generate_policy_templates" ]
-  inputs = [
-    chrome_version_abspath,
-    policy_templates_generated_json_path,
-  ]
-  outputs = [
-    constants_header_path,
-    constants_source_path,
-    chrome_settings_proto_path,
-    cloud_policy_proto_path,
-    app_restrictions_path,
-    risk_tag_header_path,
-  ]
-
-  if (target_os != "android") {
-    outputs -= [ app_restrictions_path ]
-  }
-
-  args = [
-    # Input information
-    "--chrome-version-file=" + chrome_version_path,
-    "--policy-templates-file=" +
-        rebase_path(policy_templates_generated_json_path, root_build_dir),
-    "--target-platform=" + target_os,
-
-    # Output files to be generated
-    "--policy-constants-header=" +
-        rebase_path(constants_header_path, root_build_dir),
-    "--policy-constants-source=" +
-        rebase_path(constants_source_path, root_build_dir),
-    "--chrome-settings-protobuf=" +
-        rebase_path(chrome_settings_proto_path, root_build_dir),
-    "--cloud-policy-protobuf=" +
-        rebase_path(cloud_policy_proto_path, root_build_dir),
-    "--app-restrictions-definition=" +
-        rebase_path(app_restrictions_path, root_build_dir),
-    "--risk-tag-header=" + rebase_path(risk_tag_header_path, root_build_dir),
-  ]
-}
-
-action("full_runtime_code_generate") {
-  script = "tools/generate_policy_source.py"
-  chrome_version_abspath = "//chrome/VERSION"
-  chrome_version_path = rebase_path(chrome_version_abspath, root_build_dir)
-
-  deps = [ ":generate_policy_templates" ]
-  inputs = [
-    chrome_version_abspath,
-    policy_templates_generated_json_path,
-  ]
-  outputs = [
-    cloud_policy_full_runtime_proto_path,
-    chrome_settings_full_runtime_proto_path,
-    policy_common_definitions_full_runtime_proto_path,
-  ]
-
-  args = [
-    # Input information
-    "--chrome-version-file=" + chrome_version_path,
-    "--target-platform=" + target_os,
-    "--policy-templates-file=" +
-        rebase_path(policy_templates_generated_json_path, root_build_dir),
-    "--target-platform=" + target_os,
-
-    # Output files to be generated
-    "--cloud-policy-full-runtime-protobuf=" +
-        rebase_path(cloud_policy_full_runtime_proto_path, root_build_dir),
-    "--chrome-settings-full-runtime-protobuf=" +
-        rebase_path(chrome_settings_full_runtime_proto_path, root_build_dir),
-    "--policy-common-definitions-protobuf=" +
-        rebase_path(policy_common_definitions_proto_abspath, root_build_dir),
-    "--policy-common-definitions-full-runtime-protobuf=" +
-        rebase_path(policy_common_definitions_full_runtime_proto_path,
-                    root_build_dir),
-  ]
+generate_policy_source("policy_code_generate") {
+  chunking = true
 }
 
 policy_templates_grd_file = "resources/policy_templates.build.grd"
@@ -301,27 +201,6 @@ action("policy_templates") {
       ]
     }
   }
-  if (gen_policy_templates_chromeos) {
-    outputs += policy_templates_chromeos_outputs
-    args += [
-      "--chromeos_adml",
-      rebase_path(policy_templates_chromeos_adml_path, root_build_dir),
-      "--chromeos_admx",
-      rebase_path(policy_templates_chromeos_admx_path, root_build_dir),
-    ]
-    if (is_chrome_branded) {
-      # Create google.admx and google.adml files that define a common 'Google'
-      # category used for Chrome, Chrome OS and possibly external tools, see
-      # crbug.com/665400.
-      outputs += policy_templates_chromeos_google_outputs
-      args += [
-        "--google_adml",
-        rebase_path(policy_templates_chromeos_google_adml_path, root_build_dir),
-        "--google_admx",
-        rebase_path(policy_templates_chromeos_google_admx_path, root_build_dir),
-      ]
-    }
-  }
   if (gen_policy_templates_ios) {
     outputs += policy_templates_ios_outputs
     args += [
@@ -385,7 +264,6 @@ static_library("generated") {
   defines = [ "POLICY_COMPONENT_IMPLEMENTATION" ]
   public_deps = [
     ":cloud_policy_proto_generated_compile",
-    ":full_runtime_code_generate",
     ":policy_code_generate",
     "//base",
     "//components/policy/core/common:common_constants",
@@ -401,7 +279,7 @@ if (gen_policy_templates_android && is_android) {
   _generated_resources_dir = "$root_gen_dir/chrome/app/policy/android"
 
   copy("app_restrictions_resources_copy") {
-    sources = [ app_restrictions_path ]
+    sources = [ "$target_gen_dir/app_restrictions.xml" ]
     outputs = [ "$_generated_resources_dir/xml-v21/app_restrictions.xml" ]
     deps = [
       ":policy_code_generate",
@@ -467,7 +345,7 @@ if (gen_policy_templates_zip) {
     output_zip_file = "$root_out_dir/policy_templates.zip"
     script = "tools/make_policy_zip.py"
     inputs = [ version_path ] + policy_templates_win_outputs +
-             policy_templates_chromeos_outputs + policy_templates_common_outputs
+             policy_templates_common_outputs
     outputs = [ output_zip_file ]
     args = [
       "--output",
@@ -492,23 +370,14 @@ if (gen_policy_templates_zip) {
       rebase_path(policy_templates_win_adml_path, root_build_dir),
       "--add",
       rebase_path(policy_templates_win_admx_path, root_build_dir),
-      "--add",
-      rebase_path(policy_templates_chromeos_adml_path, root_build_dir),
-      "--add",
-      rebase_path(policy_templates_chromeos_admx_path, root_build_dir),
     ]
     if (is_chrome_branded) {
       inputs += policy_templates_win_google_outputs
-      inputs += policy_templates_chromeos_google_outputs
       args += [
         "--add",
         rebase_path(policy_templates_win_google_adml_path, root_build_dir),
         "--add",
         rebase_path(policy_templates_win_google_admx_path, root_build_dir),
-        "--add",
-        rebase_path(policy_templates_chromeos_google_adml_path, root_build_dir),
-        "--add",
-        rebase_path(policy_templates_chromeos_google_admx_path, root_build_dir),
       ]
     }
     deps = [

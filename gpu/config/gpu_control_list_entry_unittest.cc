@@ -231,13 +231,15 @@ TEST_F(GpuControlListEntryTest, GlRendererCaseInsensitive) {
 TEST_F(GpuControlListEntryTest, GlExtensionsEndWith) {
   const Entry& entry = GetEntry(kGpuControlListEntryTest_GlExtensionsEndWith);
   GPUInfo gpu_info;
-  gpu_info.gl_extensions = "GL_SGIS_generate_mipmap "
-                           "GL_SGIX_shadow "
-                           "GL_SUN_slice_accum";
+  gpu_info.gl_extensions =
+      "GL_SGIS_generate_mipmap "
+      "GL_SGIX_shadow "
+      "GL_SUN_slice_accum";
   EXPECT_TRUE(entry.Contains(kOsMacosx, "10.9", gpu_info));
-  gpu_info.gl_extensions = "GL_SGIS_generate_mipmap "
-                           "GL_SUN_slice_accum "
-                           "GL_SGIX_shadow";
+  gpu_info.gl_extensions =
+      "GL_SGIS_generate_mipmap "
+      "GL_SUN_slice_accum "
+      "GL_SGIX_shadow";
   EXPECT_FALSE(entry.Contains(kOsMacosx, "10.9", gpu_info));
 }
 
@@ -669,7 +671,6 @@ TEST_F(GpuControlListEntryTest, DirectRendering) {
   // Indirect rendering does not match.
   gpu_info.direct_rendering_version = "1";
   EXPECT_FALSE(entry.Contains(kOsLinux, "7.0", gpu_info));
-
   gpu_info.direct_rendering_version = "2";
   EXPECT_TRUE(entry.Contains(kOsLinux, "7.0", gpu_info));
   gpu_info.direct_rendering_version = "2.3";
@@ -1152,6 +1153,19 @@ TEST_F(GpuControlListEntryTest, IntelDriverVersionEntry) {
   EXPECT_FALSE(entry.Contains(kOsWin, "", gpu_info));
   gpu_info.gpu.driver_version = "25.20.100.7000";
   EXPECT_TRUE(entry.Contains(kOsWin, "", gpu_info));
+}
+
+TEST_F(GpuControlListEntryTest, NativeAngleRenderer) {
+  const Entry& entry = GetEntry(kGpuControlListEntryTest_NativeAngleRenderer);
+  GPUInfo gpu_info;
+  gpu_info.gl_renderer =
+      "ANGLE (Samsung Electronics Co. Ltd., "
+      "ANGLE (Samsung Xclipse 920) on Vulkan 1.1.179, "
+      "OpenGL ES 3.2 ANGLE git hash: 41a335098084)";
+  EXPECT_TRUE(entry.Contains(kOsAndroid, "4.4.2", gpu_info));
+
+  gpu_info.gl_renderer = "ANGLE (Samsung Xclipse 920) on Vulkan 1.1.179";
+  EXPECT_TRUE(entry.Contains(kOsAndroid, "4.4.2", gpu_info));
 }
 
 #if BUILDFLAG(IS_WIN)

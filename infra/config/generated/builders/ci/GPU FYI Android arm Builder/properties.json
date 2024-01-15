@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/GPU FYI Android arm Builder/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -31,35 +34,6 @@
                 "project": "chromium"
               },
               "run_tests_serially": true
-            }
-          },
-          {
-            "builder_id": {
-              "bucket": "ci",
-              "builder": "Android FYI Release (Nexus 5)",
-              "project": "chromium"
-            },
-            "builder_spec": {
-              "builder_group": "chromium.gpu.fyi",
-              "execution_mode": "TEST",
-              "legacy_android_config": {
-                "config": "main_builder_rel_mb"
-              },
-              "legacy_chromium_config": {
-                "config": "android",
-                "target_platform": "android"
-              },
-              "legacy_gclient_config": {
-                "apply_configs": [
-                  "android"
-                ],
-                "config": "chromium"
-              },
-              "parent": {
-                "bucket": "ci",
-                "builder": "GPU FYI Android arm Builder",
-                "project": "chromium"
-              }
             }
           },
           {
@@ -146,7 +120,8 @@
                 "bucket": "ci",
                 "builder": "GPU FYI Android arm Builder",
                 "project": "chromium"
-              }
+              },
+              "run_tests_serially": true
             }
           },
           {
@@ -175,7 +150,8 @@
                 "bucket": "ci",
                 "builder": "GPU FYI Android arm Builder",
                 "project": "chromium"
-              }
+              },
+              "run_tests_serially": true
             }
           },
           {
@@ -219,11 +195,6 @@
         },
         {
           "bucket": "ci",
-          "builder": "Android FYI Release (Nexus 5)",
-          "project": "chromium"
-        },
-        {
-          "bucket": "ci",
           "builder": "Android FYI Release (Pixel 2)",
           "project": "chromium"
         },
@@ -245,10 +216,6 @@
       ],
       "mirroring_builder_group_and_names": [
         {
-          "builder": "gpu-fyi-try-android-l-nexus-5-32",
-          "group": "tryserver.chromium.android"
-        },
-        {
           "builder": "gpu-fyi-try-android-nvidia-shield-tv",
           "group": "tryserver.chromium.android"
         },
@@ -266,7 +233,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

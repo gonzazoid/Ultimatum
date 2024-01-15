@@ -14,9 +14,6 @@
 @property(nonatomic, strong, readonly)
     NSArray<NSNumber*>* badgeTypesForOverflowMenu;
 
-// Action when a Reading List badge is tapped.
-- (void)addToReadingListBadgeButtonTapped:(id)sender;
-
 // Action when a Passwords badge is tapped.
 - (void)passwordsBadgeButtonTapped:(id)sender;
 
@@ -34,6 +31,9 @@
 
 // Action when the overflow badge is tapped.
 - (void)overflowBadgeButtonTapped:(id)sender;
+
+// Action when the parcel tracking badge is tapped.
+- (void)parcelTrackingBadgeButtonTapped:(id)sender;
 
 // Show the infobar modal for the respective `badgeType` when the new overflow
 // menu is tapped.

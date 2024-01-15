@@ -5,10 +5,14 @@
 #include "components/keyed_service/core/dependency_manager.h"
 
 #include <ostream>
+#include <string>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/supports_user_data.h"
 #include "components/keyed_service/core/keyed_service_base_factory.h"
@@ -40,6 +44,23 @@ void DependencyManager::AddComponent(KeyedServiceBaseFactory* component) {
          "for all factories in a method called "
          "Ensure.*KeyedServiceFactoriesBuilt().";
 #endif  // DCHECK_IS_ON()
+
+  if (disallow_factory_registration_) {
+    SCOPED_CRASH_KEY_STRING32("KeyedServiceFactories", "factory_name",
+                              component->name());
+    base::debug::DumpWithoutCrashing();
+
+    DCHECK(false)
+        << "Trying to register KeyedService Factory: `" << component->name()
+        << "` after the call to the main registration function `"
+        << registration_function_name_error_message_
+        << "`. Please add a "
+           "call your factory `KeyedServiceFactory::GetInstance()` in the "
+           "previous method or to the appropriate "
+           "`EnsureBrowserContextKeyedServiceFactoriesBuilt()` function to "
+           "properly register your factory.";
+  }
+
   dependency_graph_.AddNode(component);
 }
 
@@ -54,12 +75,12 @@ void DependencyManager::AddEdge(KeyedServiceBaseFactory* depended,
 
 void DependencyManager::RegisterPrefsForServices(
     user_prefs::PrefRegistrySyncable* pref_registry) {
-  std::vector<DependencyNode*> construction_order;
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>> construction_order;
   if (!dependency_graph_.GetConstructionOrder(&construction_order)) {
     NOTREACHED();
   }
 
-  for (auto* dependency_node : construction_order) {
+  for (DependencyNode* dependency_node : construction_order) {
     KeyedServiceBaseFactory* factory =
         static_cast<KeyedServiceBaseFactory*>(dependency_node);
     factory->RegisterPrefs(pref_registry);
@@ -73,7 +94,7 @@ void DependencyManager::CreateContextServices(void* context,
 #endif
   MarkContextLive(context);
 
-  std::vector<DependencyNode*> construction_order;
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>> construction_order;
   if (!dependency_graph_.GetConstructionOrder(&construction_order)) {
     NOTREACHED();
   }
@@ -82,7 +103,7 @@ void DependencyManager::CreateContextServices(void* context,
   DumpContextDependencies(context);
 #endif
 
-  for (auto* dependency_node : construction_order) {
+  for (DependencyNode* dependency_node : construction_order) {
     KeyedServiceBaseFactory* factory =
         static_cast<KeyedServiceBaseFactory*>(dependency_node);
     if (is_testing_context && factory->ServiceIsNULLWhileTesting() &&
@@ -95,7 +116,8 @@ void DependencyManager::CreateContextServices(void* context,
 }
 
 void DependencyManager::DestroyContextServices(void* context) {
-  std::vector<DependencyNode*> destruction_order = GetDestructionOrder();
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>> destruction_order =
+      GetDestructionOrder();
 
 #ifndef NDEBUG
   DumpContextDependencies(context);
@@ -120,9 +142,9 @@ void DependencyManager::PerformInterlockedTwoPhaseShutdown(
     void* context1,
     DependencyManager* dependency_manager2,
     void* context2) {
-  std::vector<DependencyNode*> destruction_order1 =
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>> destruction_order1 =
       dependency_manager1->GetDestructionOrder();
-  std::vector<DependencyNode*> destruction_order2 =
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>> destruction_order2 =
       dependency_manager2->GetDestructionOrder();
 
 #ifndef NDEBUG
@@ -140,8 +162,9 @@ void DependencyManager::PerformInterlockedTwoPhaseShutdown(
   DestroyFactoriesInOrder(context2, destruction_order2);
 }
 
-std::vector<DependencyNode*> DependencyManager::GetDestructionOrder() {
-  std::vector<DependencyNode*> destruction_order;
+std::vector<raw_ptr<DependencyNode, VectorExperimental>>
+DependencyManager::GetDestructionOrder() {
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>> destruction_order;
   if (!dependency_graph_.GetDestructionOrder(&destruction_order))
     NOTREACHED();
   return destruction_order;
@@ -149,8 +172,8 @@ std::vector<DependencyNode*> DependencyManager::GetDestructionOrder() {
 
 void DependencyManager::ShutdownFactoriesInOrder(
     void* context,
-    std::vector<DependencyNode*>& order) {
-  for (auto* dependency_node : order) {
+    std::vector<raw_ptr<DependencyNode, VectorExperimental>>& order) {
+  for (DependencyNode* dependency_node : order) {
     KeyedServiceBaseFactory* factory =
         static_cast<KeyedServiceBaseFactory*>(dependency_node);
     factory->ContextShutdown(context);
@@ -159,8 +182,8 @@ void DependencyManager::ShutdownFactoriesInOrder(
 
 void DependencyManager::DestroyFactoriesInOrder(
     void* context,
-    std::vector<DependencyNode*>& order) {
-  for (auto* dependency_node : order) {
+    std::vector<raw_ptr<DependencyNode, VectorExperimental>>& order) {
+  for (DependencyNode* dependency_node : order) {
     KeyedServiceBaseFactory* factory =
         static_cast<KeyedServiceBaseFactory*>(dependency_node);
     factory->ContextDestroyed(context);
@@ -200,10 +223,17 @@ void DependencyManager::DumpDependenciesAsGraphviz(
   DCHECK(!dot_file.empty());
   std::string contents = dependency_graph_.DumpAsGraphviz(
       top_level_name, base::BindRepeating(&KeyedServiceBaseFactoryGetNodeName));
-  base::WriteFile(dot_file, contents.c_str(), contents.size());
+  base::WriteFile(dot_file, contents);
 }
 #endif  // NDEBUG
 
 DependencyGraph& DependencyManager::GetDependencyGraphForTesting() {
   return dependency_graph_;
+}
+
+void DependencyManager::DisallowKeyedServiceFactoryRegistration(
+    const std::string& registration_function_name_error_message) {
+  disallow_factory_registration_ = true;
+  registration_function_name_error_message_ =
+      registration_function_name_error_message;
 }

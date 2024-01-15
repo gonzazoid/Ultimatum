@@ -5,9 +5,9 @@
 #ifndef CONTENT_BROWSER_NETWORK_TRUST_TOKEN_BROWSERTEST_H_
 #define CONTENT_BROWSER_NETWORK_TRUST_TOKEN_BROWSERTEST_H_
 
+#include "base/memory/raw_ref.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
-#include "content/public/common/trust_tokens.mojom.h"
 #include "content/public/test/content_browser_test.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/network/test/trust_token_request_handler.h"
@@ -32,7 +32,8 @@ using network::test::TrustTokenRequestHandler;
 // diamond inheriting from ContentBrowserTest directly, needs to do so
 // virtually. Otherwise DevtoolsTrustTokenBrowsertest would contain multiple
 // copies of ContentBrowserTest's members.
-class TrustTokenBrowsertest : virtual public ContentBrowserTest {
+class TrustTokenBrowsertest : virtual public ContentBrowserTest,
+                              public WebContentsObserver {
  public:
   TrustTokenBrowsertest();
 
@@ -44,6 +45,12 @@ class TrustTokenBrowsertest : virtual public ContentBrowserTest {
   // data is correctly structured and that the provided Sec-Signature header's
   // verification key was previously bound to a successful token redemption.
   void SetUpOnMainThread() override;
+
+  void OnTrustTokensAccessed(RenderFrameHost* render_frame_host,
+                             const TrustTokenAccessDetails& details) override;
+
+  void OnTrustTokensAccessed(NavigationHandle* navigation_handle,
+                             const TrustTokenAccessDetails& details) override;
 
  protected:
   // Provides the network service key commitments from the internal
@@ -65,39 +72,10 @@ class TrustTokenBrowsertest : virtual public ContentBrowserTest {
   TrustTokenRequestHandler request_handler_;
 
   net::EmbeddedTestServer server_{net::EmbeddedTestServer::TYPE_HTTPS};
+
+  // Number of accesses reported by the Trust Token observer.
+  int access_count_ = 0;
 };
-
-#if BUILDFLAG(IS_ANDROID)
-// HandlerWrappingLocalTrustTokenFulfiller serves two purposes:
-//
-// 1. Its lifetime scopes an override to content::GetGlobalJavaInterfaces()'s
-// interface provider, forwarding requests to bind a
-// content::mojom::LocalTrustTokenFulfiller to this object;
-//
-// 2. It forwards the requests it receives to the TrustTokenRequestHandler
-// passed to its constructor (this will likely be
-// TrustTokenBrowsertest::request_handler_). This arrangement means that the
-// calls to FulfillTrustTokenIssuance receive well-formed issuance responses
-// signed using the request handler's issuance keys.
-class HandlerWrappingLocalTrustTokenFulfiller final
-    : public content::mojom::LocalTrustTokenFulfiller {
- public:
-  HandlerWrappingLocalTrustTokenFulfiller(TrustTokenRequestHandler& handler);
-  ~HandlerWrappingLocalTrustTokenFulfiller() override;
-
-  void FulfillTrustTokenIssuance(
-      network::mojom::FulfillTrustTokenIssuanceRequestPtr request,
-      FulfillTrustTokenIssuanceCallback callback) override;
-
- private:
-  void Bind(mojo::ScopedMessagePipeHandle handle);
-
-  TrustTokenRequestHandler& handler_;
-  service_manager::InterfaceProvider::TestApi interface_overrider_{
-      content::GetGlobalJavaInterfaces()};
-  mojo::Receiver<content::mojom::LocalTrustTokenFulfiller> receiver_{this};
-};
-#endif
 
 }  // namespace content
 

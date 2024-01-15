@@ -11,6 +11,7 @@
 #include "base/files/file_path.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/strings/string_util.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -38,12 +39,12 @@ std::vector<TestIdentifier> GetCompiledInTests() {
   testing::UnitTest* const unit_test = testing::UnitTest::GetInstance();
 
   std::vector<TestIdentifier> tests;
-  for (int i = 0; i < unit_test->total_test_case_count(); ++i) {
-    const testing::TestCase* test_case = unit_test->GetTestCase(i);
-    for (int j = 0; j < test_case->total_test_count(); ++j) {
-      const testing::TestInfo* test_info = test_case->GetTestInfo(j);
+  for (int i = 0; i < unit_test->total_test_suite_count(); ++i) {
+    const testing::TestSuite* test_suite = unit_test->GetTestSuite(i);
+    for (int j = 0; j < test_suite->total_test_count(); ++j) {
+      const testing::TestInfo* test_info = test_suite->GetTestInfo(j);
       TestIdentifier test_data;
-      test_data.test_case_name = test_case->name();
+      test_data.test_case_name = test_suite->name();
       test_data.test_name = test_info->name();
       test_data.file = test_info->file();
       test_data.line = test_info->line();
@@ -66,8 +67,7 @@ bool WriteCompiledInTestsToFile(const FilePath& path) {
     storage.Append(std::move(test_info));
   }
 
-  JSONFileValueSerializer serializer(path);
-  return serializer.Serialize(storage);
+  return base::test::WriteJsonFile(path, storage).has_value();
 }
 
 bool ReadTestNamesFromFile(const FilePath& path,

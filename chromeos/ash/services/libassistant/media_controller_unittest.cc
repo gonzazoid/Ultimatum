@@ -4,12 +4,15 @@
 
 #include "chromeos/ash/services/libassistant/media_controller.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/services/libassistant/grpc/utils/media_status_utils.h"
 #include "chromeos/ash/services/libassistant/public/mojom/media_controller.mojom.h"
 #include "chromeos/ash/services/libassistant/test_support/fake_assistant_client.h"
 #include "chromeos/ash/services/libassistant/test_support/libassistant_service_tester.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
 #include "chromeos/assistant/internal/util_headers.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -104,7 +107,7 @@ class MediaManagerMock : public assistant_client::MediaManager {
   }
 
  private:
-  Listener* listener_ = nullptr;
+  raw_ptr<Listener> listener_ = nullptr;
 };
 
 }  // namespace
@@ -120,9 +123,6 @@ class AssistantMediaControllerTest : public testing::Test {
   void SetUp() override {
     service_tester_.Start();
     service_tester_.assistant_manager().SetMediaManager(&media_manager_);
-    service_tester_.assistant_manager()
-        .device_state_listener()
-        ->OnStartFinished();
     media_controller_->OnAssistantClientRunning(&assistant_client());
   }
 
@@ -137,11 +137,24 @@ class AssistantMediaControllerTest : public testing::Test {
     return *media_controller_;
   }
 
+  void SendPlaybackState(const assistant_client::MediaStatus& input) {
+    ::assistant::api::OnDeviceStateEventRequest request;
+    auto* status = request.mutable_event()
+                       ->mutable_on_state_changed()
+                       ->mutable_new_state()
+                       ->mutable_media_status();
+    ConvertMediaStatusToV2FromV1(input, status);
+    media_controller().SendGrpcMessageForTesting(request);
+  }
+
   void CallFallbackMediaHandler(const std::string& action,
                                 const std::string& action_proto) {
-    auto handler =
-        service_tester_.assistant_manager_internal().media_action_fallback();
-    handler(action, action_proto);
+    ::assistant::api::OnMediaActionFallbackEventRequest request;
+    auto* media_action =
+        request.mutable_event()->mutable_on_media_action_event();
+    media_action->set_action_name(action);
+    media_action->set_action_args(action_proto);
+    media_controller().SendGrpcMessageForTesting(request);
   }
 
   void FlushMojomPipes() {
@@ -246,7 +259,7 @@ TEST_F(AssistantMediaControllerTest, ShouldSendPlaybackStateChangeToDelegate) {
   input.metadata.album = "album";
   input.metadata.artist = "artist";
   input.metadata.title = "title";
-  libassistant_media_manager().listener().OnPlaybackStateChange(input);
+  SendPlaybackState(input);
   FlushMojomPipes();
 
   ASSERT_FALSE(actual.is_null());
@@ -273,7 +286,7 @@ TEST_F(AssistantMediaControllerTest, ShouldSendPlaybackStateToDelegate) {
 
     assistant_client::MediaStatus input;
     input.playback_state = pair.second;
-    libassistant_media_manager().listener().OnPlaybackStateChange(input);
+    SendPlaybackState(input);
     FlushMojomPipes();
 
     ASSERT_FALSE(actual.is_null());
@@ -321,7 +334,7 @@ TEST_F(AssistantMediaControllerTest, ShouldSupportPlayAndroidMedia) {
   android_app_info->set_app_version(111);
   media_item->set_uri("http://the/uri");
 
-  absl::optional<AndroidAppInfo> actual;
+  std::optional<AndroidAppInfo> actual;
   EXPECT_CALL(delegate(), PlayAndroidMedia)
       .WillOnce([&](const AndroidAppInfo& a) { actual = a; });
 

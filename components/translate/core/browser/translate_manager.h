@@ -10,9 +10,9 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -122,9 +122,6 @@ class TranslateManager {
   // Starts the translation process for the page in the |page_lang| language.
   void InitiateTranslation(const std::string& page_lang);
 
-  // Maybe initiates translation when Autofill Assistant has finished.
-  void OnAutofillAssistantFinished();
-
   // Show the translation UI with the target language enforced to |target_lang|.
   // If |auto_translate| is true the page gets translated to the target
   // language.
@@ -141,6 +138,11 @@ class TranslateManager {
   // Logging should only be performed when this method is called to show the
   // Full Page Translate menu item.
   bool CanManuallyTranslate(bool menuLogging = false);
+
+  // Whether or not partial translation is supported for the current target
+  // language. Partial translate supports a subset of translation languages,
+  // but shares a target language with full page translation.
+  bool CanPartiallyTranslateTargetLanguage();
 
   bool IsMimeTypeSupported(const std::string& mime_type);
 
@@ -204,12 +206,6 @@ class TranslateManager {
   // blink's hrefTranslate attribute existence relies on the result.
   // See https://github.com/dtapuska/html-translate
   static bool IsAvailable(const TranslatePrefs* prefs);
-
-  // Check whether there is specified target, the source and the target are both
-  // supported, and the source and target don't match.
-  static bool IsTranslatableLanguagePair(
-      const std::string& page_language_code,
-      const std::string& target_language_code);
 
   // Returns true if the MATCHES_PREVIOUS_LANGUAGE decision should be overridden
   // and logs the event appropriately.
@@ -363,11 +359,6 @@ class TranslateManager {
   LanguageState language_state_;
 
   std::unique_ptr<metrics::TranslateEventProto> translate_event_;
-
-  // Language code of current page. Code is stored when translation is disabled
-  // by Autofill Assistant. This code is later used to translate page when
-  // Autofill Assistant finishes run.
-  std::string page_language_code_;
 
   base::WeakPtrFactory<TranslateManager> weak_method_factory_{this};
 

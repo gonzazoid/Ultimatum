@@ -16,7 +16,7 @@
 #include "chrome/common/chrome_version.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/bundle_locations.h"
+#include "base/apple/bundle_locations.h"
 #endif
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -44,22 +44,21 @@ void AddCdmHostFilePaths(
 
 #if BUILDFLAG(IS_WIN)
 
+  // Find where kBrowserProcessExecutableName is installed. Signature file is
+  // in the assets directory. FILE_EXE may not be kBrowserProcessExecutableName,
+  // e.g. browser_tests.exe, which is fine since we don't verify those
+  // signatures in tests.
+  base::FilePath dir_exe;
+  CHECK(base::PathService::Get(base::DIR_EXE, &dir_exe));
+  base::FilePath chrome_exe =
+      dir_exe.Append(chrome::kBrowserProcessExecutableName);
+
   // Signature files and kBrowserResourcesDll are typically in a
   // separate versioned directory, but may be the same directory as
   // kBrowserProcessExecutableName (e.g. for a local build of Chrome).
   // DIR_ASSETS sorts this out for us.
   base::FilePath chrome_assets_dir;
   CHECK(base::PathService::Get(base::DIR_ASSETS, &chrome_assets_dir));
-
-  // Find where kBrowserProcessExecutableName is installed. Signature file is
-  // in the assets directory.
-  base::FilePath chrome_exe;
-  CHECK(base::PathService::Get(base::FILE_EXE, &chrome_exe));
-  DCHECK(base::FilePath::CompareEqualIgnoreCase(
-      chrome::kBrowserProcessExecutableName, chrome_exe.BaseName().value()))
-      << "Filename returned by FILE_EXE '" << chrome_exe.BaseName().value()
-      << "' does not match kBrowserProcessExecutableName '"
-      << chrome::kBrowserProcessExecutableName << "'.";
   const auto chrome_exe_sig = GetSigFilePath(
       chrome_assets_dir.Append(chrome::kBrowserProcessExecutableName));
   DVLOG(2) << __func__ << ":" << chrome_exe.value() << ", signature file "
@@ -76,7 +75,7 @@ void AddCdmHostFilePaths(
 
 #elif BUILDFLAG(IS_MAC)
 
-  base::FilePath framework_dir = base::mac::FrameworkBundlePath();
+  base::FilePath framework_dir = base::apple::FrameworkBundlePath();
   base::FilePath chrome_framework_path =
       framework_dir.Append(chrome::kFrameworkExecutableName);
   // The signature file lives inside

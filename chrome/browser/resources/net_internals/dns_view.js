@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter} from 'chrome://resources/js/cr.m.js';
 import {$} from 'chrome://resources/js/util.js';
 
 import {BrowserBridge} from './browser_bridge.js';
 import {addNode} from './util.js';
 import {DivView} from './view.js';
+
+/** @type {?DnsView} */
+let instance = null;
 
 /**
  * This view displays information on the host resolver:
@@ -45,22 +47,16 @@ export class DnsView extends DivView {
           div.textContent =
               `Resolved IP addresses of "${hostname}": ${resolvedAddresses}.`;
           div.style.fontWeight = 'bold';
-          if (result.endpoint_results_with_metadata.length > 0) {
-            result.endpoint_results_with_metadata.map(
-                (endpoint_result_with_metadata) => {
-                  const ipEndpoints = JSON.stringify(
-                      endpoint_result_with_metadata.ip_endpoints);
-                  const supportedProtocolAlpns =
-                      JSON.stringify(endpoint_result_with_metadata.metadata
-                                         .supported_protocol_alpns);
-                  const div = addNode(span, 'div');
-                  div.textContent = 'Supported protocol alpns of ' +
-                      `"${ipEndpoints}": ${supportedProtocolAlpns}.`;
-                  div.style.fontWeight = 'bold';
-                });
+          if (result.alternative_endpoints.length > 0) {
+            result.alternative_endpoints.forEach((endpoint) => {
+              const json = JSON.stringify(endpoint);
+              const div = addNode(span, 'div');
+              div.textContent = `Alternative endpoint: ${json}.`;
+              div.style.fontWeight = 'bold';
+            });
           } else {
             const div = addNode(span, 'div');
-            div.textContent = `No data on which protocols are supported.`;
+            div.textContent = `No alternative endpoints.`;
             div.style.fontWeight = 'bold';
           }
         })
@@ -74,6 +70,10 @@ export class DnsView extends DivView {
 
     this.dnsLookUpInput_.value = '';
     event.preventDefault();
+  }
+
+  static getInstance() {
+    return instance || (instance = new DnsView());
   }
 }
 
@@ -89,5 +89,3 @@ DnsView.DNS_LOOKUP_INPUT_ID = 'dns-view-dns-lookup-input';
 DnsView.DNS_LOOKUP_OUTPUT_ID = 'dns-view-dns-lookup-output';
 DnsView.DNS_LOOKUP_SUBMIT_ID = 'dns-view-dns-lookup-submit';
 DnsView.CLEAR_CACHE_BUTTON_ID = 'dns-view-clear-cache';
-
-addSingletonGetter(DnsView);

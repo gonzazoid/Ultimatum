@@ -6,10 +6,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "media/learning/common/learning_task_controller.h"
 #include "media/learning/impl/learning_session_impl.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,8 +20,10 @@ namespace learning {
 class LearningSessionImplTest : public testing::Test {
  public:
   class FakeLearningTaskController;
-  using ControllerVector = std::vector<FakeLearningTaskController*>;
-  using TaskRunnerVector = std::vector<base::SequencedTaskRunner*>;
+  using ControllerVector =
+      std::vector<raw_ptr<FakeLearningTaskController, VectorExperimental>>;
+  using TaskRunnerVector =
+      std::vector<raw_ptr<base::SequencedTaskRunner, VectorExperimental>>;
 
   class FakeLearningTaskController : public LearningTaskController {
    public:
@@ -71,10 +73,7 @@ class LearningSessionImplTest : public testing::Test {
       updated_id_ = id;
     }
 
-    const LearningTask& GetLearningTask() override {
-      NOTREACHED();
-      return LearningTask::Empty();
-    }
+    const LearningTask& GetLearningTask() override { NOTREACHED_NORETURN(); }
 
     void PredictDistribution(const FeatureVector& features,
                              PredictionCB callback) override {
@@ -112,7 +111,7 @@ class LearningSessionImplTest : public testing::Test {
   };
 
   LearningSessionImplTest() {
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
     session_ = std::make_unique<LearningSessionImpl>(task_runner_);
     session_->SetTaskControllerFactoryCBForTesting(base::BindRepeating(
         [](ControllerVector* controllers, TaskRunnerVector* task_runners,

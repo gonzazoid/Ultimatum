@@ -5,10 +5,10 @@
 /** @fileoverview Test suite for wallpaper-fullscreen component.  */
 
 import 'chrome://personalization/strings.m.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
 
-import {CurrentWallpaper, DailyRefreshType, DisplayableImage, WallpaperFullscreen, WallpaperLayout, WallpaperObserver, WallpaperType} from 'chrome://personalization/js/personalization_app.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {CurrentWallpaper, DailyRefreshType, DisplayableImage, GooglePhotosPhoto, OnlineImageType, WallpaperFullscreenElement, WallpaperImage, WallpaperLayout, WallpaperObserver, WallpaperType} from 'chrome://personalization/js/personalization_app.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
@@ -16,15 +16,16 @@ import {baseSetup, initElement} from './personalization_app_test_utils.js';
 import {TestPersonalizationStore} from './test_personalization_store.js';
 import {TestWallpaperProvider} from './test_wallpaper_interface_provider.js';
 
-suite('WallpaperFullscreenTest', function() {
-  let wallpaperFullscreenElement: WallpaperFullscreen|null = null;
+suite('WallpaperFullscreenElementTest', function() {
+  let wallpaperFullscreenElement: WallpaperFullscreenElement|null = null;
   let wallpaperProvider: TestWallpaperProvider;
   let personalizationStore: TestPersonalizationStore;
 
   const currentSelectedCustomImage: CurrentWallpaper = {
-    attribution: ['Custom image'],
-    layout: WallpaperLayout.kCenter,
+    descriptionContent: '',
+    descriptionTitle: '',
     key: 'testing',
+    layout: WallpaperLayout.kCenter,
     type: WallpaperType.kCustomized,
   };
 
@@ -36,7 +37,6 @@ suite('WallpaperFullscreenTest', function() {
     wallpaperProvider = mocks.wallpaperProvider;
     wallpaperProvider.isInTabletModeResponse = true;
     personalizationStore = mocks.personalizationStore;
-    loadTimeData.overrideValues({fullScreenPreviewEnabled: true});
   });
 
   teardown(async () => {
@@ -77,7 +77,7 @@ suite('WallpaperFullscreenTest', function() {
   }
 
   test('toggles element visibility on full screen change', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise, exitFullscreenPromise} =
         mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
@@ -104,7 +104,7 @@ suite('WallpaperFullscreenTest', function() {
   });
 
   test('sets default layout option on when entering preview', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise, exitFullscreenPromise} =
         mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
@@ -131,12 +131,13 @@ suite('WallpaperFullscreenTest', function() {
   });
 
   test('sets fullscreen class on body when entering fullscreen', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    const fullscreenClassName = 'fullscreen-preview';
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise, exitFullscreenPromise} =
         mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
 
-    assertEquals('', document.body.className);
+    assertFalse(document.body.classList.contains(fullscreenClassName));
 
     personalizationStore.data.wallpaper.fullscreen = true;
     personalizationStore.data.wallpaper.currentSelected =
@@ -145,17 +146,17 @@ suite('WallpaperFullscreenTest', function() {
 
     await requestFullscreenPromise;
 
-    assertEquals('fullscreen-preview', document.body.className);
+    assertTrue(document.body.classList.contains(fullscreenClassName));
 
     wallpaperFullscreenElement.exitFullscreen();
 
     await exitFullscreenPromise;
 
-    assertEquals('', document.body.className);
+    assertFalse(document.body.classList.contains(fullscreenClassName));
   });
 
   test('exits full screen on exit button click', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise, exitFullscreenPromise} =
         mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
@@ -174,14 +175,36 @@ suite('WallpaperFullscreenTest', function() {
     await exitFullscreenPromise;
   });
 
-  [{pendingSelectedImage: pendingSelectedCustomImage, shouldShow: true},
-   {pendingSelectedImage: /*Online:*/ {assetId: 0n}, shouldShow: false},
-   {pendingSelectedImage: /*Google Photos:*/ {id: 'test_id'}, shouldShow: true}]
+  [{
+    pendingSelectedImage: pendingSelectedCustomImage,
+    shouldShow: true,
+  },
+   {
+     pendingSelectedImage: {
+       url: {url: ''},
+       attribution: [],
+       assetId: 0n,
+       unitId: 0n,
+       type: OnlineImageType.kUnknown,
+     } as WallpaperImage,
+     shouldShow: false,
+   },
+   {
+     pendingSelectedImage: {
+       id: 'test_id',
+       name: 'asdf',
+       date: stringToMojoString16('February'),
+       url: {url: ''},
+     } as GooglePhotosPhoto,
+     shouldShow: true,
+   },
+  ]
       .forEach(
           testCase => test(
               'shows layout options for custom and Google Photos images',
               async () => {
-                wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+                wallpaperFullscreenElement =
+                    initElement(WallpaperFullscreenElement);
                 await waitAfterNextRender(wallpaperFullscreenElement);
 
                 assertEquals(
@@ -234,7 +257,7 @@ suite('WallpaperFullscreenTest', function() {
               }));
 
   test('clicking layout option selects image with new layout', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise} = mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
 
@@ -272,7 +295,7 @@ suite('WallpaperFullscreenTest', function() {
   });
 
   test('aria pressed set for chosen layout option', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise} = mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
 
@@ -306,13 +329,13 @@ suite('WallpaperFullscreenTest', function() {
   });
 
   test('clicking set as wallpaper confirms wallpaper', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
 
     personalizationStore.data.wallpaper.fullscreen = true;
     personalizationStore.data.wallpaper.currentSelected = {
-      ...personalizationStore.data.wallpaper.currentSelected,
+      ...wallpaperProvider.currentWallpaper,
       type: WallpaperType.kDaily,
     };
     personalizationStore.data.wallpaper.dailyRefresh = {
@@ -320,7 +343,7 @@ suite('WallpaperFullscreenTest', function() {
       type: DailyRefreshType.BACKDROP,
     };
     personalizationStore.data.wallpaper.pendingSelected =
-        wallpaperProvider.images![1];
+        wallpaperProvider.images![1]!;
     personalizationStore.notifyObservers();
 
     await waitAfterNextRender(wallpaperFullscreenElement);
@@ -334,7 +357,7 @@ suite('WallpaperFullscreenTest', function() {
   });
 
   test('sets aria label on cr-button', async () => {
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);
 
@@ -348,7 +371,7 @@ suite('WallpaperFullscreenTest', function() {
 
   test('exits fullscreen on popstate', async () => {
     WallpaperObserver.initWallpaperObserverIfNeeded();
-    wallpaperFullscreenElement = initElement(WallpaperFullscreen);
+    wallpaperFullscreenElement = initElement(WallpaperFullscreenElement);
     const {requestFullscreenPromise, exitFullscreenPromise} =
         mockFullscreenApis();
     await waitAfterNextRender(wallpaperFullscreenElement);

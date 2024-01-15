@@ -7,13 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/pickle.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
@@ -115,8 +116,7 @@ bool WritePickleFile(BackendFileOperations* file_operations,
   if (!file.IsValid())
     return false;
 
-  int bytes_written =
-      file.Write(0, static_cast<const char*>(pickle->data()), pickle->size());
+  int bytes_written = file.Write(0, pickle->data_as_char(), pickle->size());
   if (bytes_written != base::checked_cast<int>(pickle->size())) {
     file_operations->DeleteFile(
         file_name,
@@ -142,7 +142,7 @@ void ProcessEntryFile(BackendFileOperations* file_operations,
   const std::string file_name(base_name.begin(), base_name.end());
 
   // Cleanup any left over doomed entries.
-  if (base::StartsWith(file_name, "todelete_", base::CompareCase::SENSITIVE)) {
+  if (file_name.starts_with("todelete_")) {
     file_operations->DeleteFile(file_path);
     return;
   }

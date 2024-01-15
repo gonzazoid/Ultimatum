@@ -4,13 +4,9 @@
 
 package org.chromium.chrome.browser.browser_controls;
 
-/**
- * An interface for retrieving and monitoring browser controls state.
- */
+/** An interface for retrieving and monitoring browser controls state. */
 public interface BrowserControlsStateProvider {
-    /**
-     * An observer to be notified of browser controls changes
-     */
+    /** An observer to be notified of browser controls changes */
     interface Observer {
         /**
          * Called whenever the controls' offset changes.
@@ -27,24 +23,22 @@ public interface BrowserControlsStateProvider {
          * to {@link #getBottomControlsMinHeight()}.
          * @param needsAnimate Whether the caller is driving an animation with further updates.
          */
-        default void onControlsOffsetChanged(int topOffset, int topControlsMinHeightOffset,
-                int bottomOffset, int bottomControlsMinHeightOffset, boolean needsAnimate) {}
+        default void onControlsOffsetChanged(
+                int topOffset,
+                int topControlsMinHeightOffset,
+                int bottomOffset,
+                int bottomControlsMinHeightOffset,
+                boolean needsAnimate) {}
 
-        /**
-         * Called when the height of the bottom controls are changed.
-         */
+        /** Called when the height of the bottom controls are changed. */
         default void onBottomControlsHeightChanged(
                 int bottomControlsHeight, int bottomControlsMinHeight) {}
 
-        /**
-         * Called when the height of the top controls are changed.
-         */
+        /** Called when the height of the top controls are changed. */
         default void onTopControlsHeightChanged(int topControlsHeight, int topControlsMinHeight) {}
 
-        /**
-         * Called whenever the controls' Android View visibility changes.
-         */
-        default void onAndroidVisibilityChanged(int visibility) {}
+        /** Called when the visibility of the controls container changes. */
+        default void onAndroidControlsVisibilityChanged(int visibility) {}
     }
 
     /**
@@ -125,4 +119,7 @@ public interface BrowserControlsStateProvider {
      * @return The visible offset of the content from the top of the screen.
      */
     float getTopVisibleContentOffset();
+
+    /** Returns the View visibility of the controls container. */
+    int getAndroidControlsVisibility();
 }

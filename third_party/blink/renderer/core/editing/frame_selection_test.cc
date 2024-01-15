@@ -6,6 +6,8 @@
 
 #include <memory>
 #include "base/memory/scoped_refptr.h"
+#include "base/test/scoped_feature_list.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/web/web_range.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -31,11 +33,12 @@
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
-#include "third_party/blink/renderer/platform/graphics/paint/paint_controller.h"
 #include "third_party/blink/renderer/platform/testing/fake_display_item_client.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 namespace blink {
+
+using testing::IsNull;
 
 class FrameSelectionTest : public EditingTestBase {
  public:
@@ -56,9 +59,6 @@ class FrameSelectionTest : public EditingTestBase {
   }
 
   Text* AppendTextNode(const String& data);
-  unsigned LayoutCount() const {
-    return GetDummyPageHolder().GetFrameView().LayoutCountForTesting();
-  }
 
   PositionWithAffinity CaretPosition() const {
     return Selection().frame_caret_->CaretPosition();
@@ -131,14 +131,14 @@ bool FrameSelectionTest::SelectSentenceAroundCaret() {
 
 TEST_F(FrameSelectionTest, FirstEphemeralRangeOf) {
   SetBodyContent("<div id=sample>0123456789</div>abc");
-  Element* const sample = GetDocument().getElementById("sample");
+  Element* const sample = GetDocument().getElementById(AtomicString("sample"));
   Node* const text = sample->firstChild();
   Selection().SetSelection(SelectionInDOMTree::Builder()
                                .SetBaseAndExtent(EphemeralRange(
                                    Position(text, 3), Position(text, 6)))
                                .Build(),
                            SetSelectionOptions());
-  sample->setAttribute(html_names::kStyleAttr, "display:none");
+  sample->setAttribute(html_names::kStyleAttr, AtomicString("display:none"));
   // Move |VisibleSelection| before "abc".
   UpdateAllLifecyclePhasesForTest();
   const EphemeralRange& range =
@@ -156,44 +156,6 @@ TEST_F(FrameSelectionTest, SetValidSelection) {
           .SetBaseAndExtent(Position(text, 0), Position(text, 5))
           .Build());
   EXPECT_FALSE(Selection().ComputeVisibleSelectionInDOMTree().IsNone());
-}
-
-TEST_F(FrameSelectionTest, PaintCaretShouldNotLayout) {
-  Text* text = AppendTextNode("Hello, World!");
-  UpdateAllLifecyclePhasesForTest();
-
-  GetDocument().body()->setContentEditable("true", ASSERT_NO_EXCEPTION);
-  GetDocument().body()->Focus();
-  EXPECT_TRUE(GetDocument().body()->IsFocused());
-
-  Selection().SetCaretEnabled(true);
-  Selection().SetSelectionAndEndTyping(
-      SelectionInDOMTree::Builder().Collapse(Position(text, 0)).Build());
-  UpdateAllLifecyclePhasesForTest();
-  EXPECT_TRUE(Selection().ComputeVisibleSelectionInDOMTree().IsCaret());
-  EXPECT_TRUE(Selection().ShouldPaintCaret(
-      *To<LayoutBlock>(GetDocument().body()->GetLayoutObject())));
-
-  unsigned start_count = LayoutCount();
-  {
-    // To force layout in next updateLayout calling, widen view.
-    LocalFrameView& frame_view = GetDummyPageHolder().GetFrameView();
-    gfx::Rect frame_rect = frame_view.FrameRect();
-    frame_rect.set_width(frame_rect.width() + 1);
-    frame_rect.set_height(frame_rect.height() + 1);
-    GetDummyPageHolder().GetFrameView().SetFrameRect(frame_rect);
-  }
-  auto paint_controller =
-      std::make_unique<PaintController>(PaintController::kTransient);
-  {
-    GraphicsContext context(*paint_controller);
-    paint_controller->UpdateCurrentPaintChunkProperties(
-        root_paint_chunk_id_, *root_paint_property_client_,
-        PropertyTreeState::Root());
-    Selection().PaintCaret(context, PhysicalOffset());
-  }
-  paint_controller->CommitNewDisplayItems();
-  EXPECT_EQ(start_count, LayoutCount());
 }
 
 #define EXPECT_EQ_SELECTED_TEXT(text) \
@@ -261,6 +223,18 @@ TEST_F(FrameSelectionTest, SelectAroundCaret_Word) {
   ResetAndPlaceCaret(text, strlen("This is a sentence."));
   EXPECT_FALSE(SelectWordAroundCaret());
   EXPECT_EQ_SELECTED_TEXT("");
+
+  // Beginning of a symbol: Some emojis |😀 🍀.
+  text = AppendTextNode(String::FromUTF8("Some emojis 😀 🍀."));
+  UpdateAllLifecyclePhasesForTest();
+  ResetAndPlaceCaret(text, String::FromUTF8("Some emojis ").length());
+  EXPECT_TRUE(SelectWordAroundCaret());
+  EXPECT_EQ_SELECTED_TEXT(" 😀");
+
+  // End of a symbol: Some emojis 😀| 🍀.
+  ResetAndPlaceCaret(text, String::FromUTF8("Some emojis 😀").length());
+  EXPECT_TRUE(SelectWordAroundCaret());
+  EXPECT_EQ_SELECTED_TEXT("😀");
 }
 
 TEST_F(FrameSelectionTest, SelectAroundCaret_Sentence) {
@@ -452,6 +426,18 @@ TEST_F(FrameSelectionTest, GetSelectionRangeAroundCaret_Word) {
   ResetAndPlaceCaret(text, strlen("A word."));
   range = Selection().GetWordSelectionRangeAroundCaret();
   EXPECT_EQ("", PlainText(range));
+
+  // Beginning of a symbol: Some emojis |😀 🍀.
+  text = AppendTextNode(String::FromUTF8("Some emojis 😀 🍀."));
+  UpdateAllLifecyclePhasesForTest();
+  ResetAndPlaceCaret(text, String::FromUTF8("Some emojis ").length());
+  range = Selection().GetWordSelectionRangeAroundCaret();
+  EXPECT_EQ(String::FromUTF8(" 😀"), PlainText(range));
+
+  // End of a symbol: Some emojis 😀| 🍀.
+  ResetAndPlaceCaret(text, String::FromUTF8("Some emojis 😀").length());
+  range = Selection().GetWordSelectionRangeAroundCaret();
+  EXPECT_EQ(String::FromUTF8("😀"), PlainText(range));
 }
 
 TEST_F(FrameSelectionTest, GetSelectionRangeAroundCaret_Sentence) {
@@ -521,7 +507,7 @@ TEST_F(FrameSelectionTest, GetSelectionRangeAroundCaret_Sentence) {
 TEST_F(FrameSelectionTest, ModifyExtendWithFlatTree) {
   SetBodyContent("<span id=host></span>one");
   SetShadowContent("two<slot></slot>", "host");
-  Element* host = GetDocument().getElementById("host");
+  Element* host = GetDocument().getElementById(AtomicString("host"));
   Node* const two = FlatTreeTraversal::FirstChild(*host);
   // Select "two" for selection in DOM tree
   // Select "twoone" for selection in Flat tree
@@ -543,7 +529,7 @@ TEST_F(FrameSelectionTest, ModifyExtendWithFlatTree) {
 
 TEST_F(FrameSelectionTest, ModifyWithUserTriggered) {
   SetBodyContent("<div id=sample>abc</div>");
-  Element* sample = GetDocument().getElementById("sample");
+  Element* sample = GetDocument().getElementById(AtomicString("sample"));
   const Position end_of_text(sample->firstChild(), 3);
   Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder().Collapse(end_of_text).Build());
@@ -596,7 +582,7 @@ TEST_F(FrameSelectionTest, MoveRangeSelectionTest) {
 
 TEST_F(FrameSelectionTest, MoveRangeSelectionNoLiveness) {
   SetBodyContent("<span id=sample>xyz</span>");
-  Element* const sample = GetDocument().getElementById("sample");
+  Element* const sample = GetDocument().getElementById(AtomicString("sample"));
   // Select as: <span id=sample>^xyz|</span>
   MoveRangeSelectionInternal(Position(sample->firstChild(), 1),
                              Position(sample->firstChild(), 1),
@@ -617,7 +603,7 @@ TEST_F(FrameSelectionTest, MoveRangeSelectionNoLiveness) {
 // For http://crbug.com/695317
 TEST_F(FrameSelectionTest, SelectAllWithInputElement) {
   SetBodyContent("<input>123");
-  Element* const input = GetDocument().QuerySelector("input");
+  Element* const input = GetDocument().QuerySelector(AtomicString("input"));
   Node* const last_child = GetDocument().body()->lastChild();
   Selection().SelectAll();
   const SelectionInDOMTree& result_in_dom_tree =
@@ -649,7 +635,7 @@ TEST_F(FrameSelectionTest, SelectAllWithUnselectableRoot) {
 
 TEST_F(FrameSelectionTest, SelectAllPreservesHandle) {
   SetBodyContent("<div id=sample>abc</div>");
-  Element* sample = GetDocument().getElementById("sample");
+  Element* sample = GetDocument().getElementById(AtomicString("sample"));
   const Position end_of_text(sample->firstChild(), 3);
   Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder().Collapse(end_of_text).Build());
@@ -677,7 +663,7 @@ TEST_F(FrameSelectionTest, SelectAllPreservesHandle) {
 
 TEST_F(FrameSelectionTest, BoldCommandPreservesHandle) {
   SetBodyContent("<div id=sample contenteditable>abc</div>");
-  Element* sample = GetDocument().getElementById("sample");
+  Element* sample = GetDocument().getElementById(AtomicString("sample"));
   const Position end_of_text(sample->firstChild(), 3);
   Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder().Collapse(end_of_text).Build());
@@ -747,7 +733,7 @@ TEST_F(FrameSelectionTest, SelectionOnRangeHidesHandles) {
 TEST_F(FrameSelectionTest, SelectInvalidPositionInFlatTreeDoesntCrash) {
   SetBodyContent("foo<option><select></select></option>");
   Element* body = GetDocument().body();
-  Element* select = GetDocument().QuerySelector("select");
+  Element* select = GetDocument().QuerySelector(AtomicString("select"));
   Node* foo = body->firstChild();
   Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder()
@@ -772,7 +758,7 @@ TEST_F(FrameSelectionTest, CaretInShadowTree) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = shadow_root->getElementById("ce");
+  Element* const ce = shadow_root->getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -790,7 +776,7 @@ TEST_F(FrameSelectionTest, CaretInTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const field = GetDocument().getElementById("field");
+  Element* const field = GetDocument().getElementById(AtomicString("field"));
   field->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -832,7 +818,7 @@ TEST_F(FrameSelectionTest, RangeInTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const field = GetDocument().getElementById("field");
+  Element* const field = GetDocument().getElementById(AtomicString("field"));
   field->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -858,13 +844,13 @@ TEST_F(FrameSelectionTest, FocusingLinkHidesCaretInTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const field = GetDocument().getElementById("field");
+  Element* const field = GetDocument().getElementById(AtomicString("field"));
   field->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const alink = GetDocument().getElementById("alink");
+  Element* const alink = GetDocument().getElementById(AtomicString("alink"));
   alink->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -880,7 +866,7 @@ TEST_F(FrameSelectionTest, FocusingLinkHidesRangeInTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const field = GetDocument().getElementById("field");
+  Element* const field = GetDocument().getElementById(AtomicString("field"));
   field->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -891,7 +877,7 @@ TEST_F(FrameSelectionTest, FocusingLinkHidesRangeInTextControl) {
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const alink = GetDocument().getElementById("alink");
+  Element* const alink = GetDocument().getElementById(AtomicString("alink"));
   alink->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -906,7 +892,8 @@ TEST_F(FrameSelectionTest, FocusingButtonHidesRangeInReadOnlyTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const textarea = GetDocument().QuerySelector("textarea");
+  Element* const textarea =
+      GetDocument().QuerySelector(AtomicString("textarea"));
   textarea->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
 
@@ -915,7 +902,7 @@ TEST_F(FrameSelectionTest, FocusingButtonHidesRangeInReadOnlyTextControl) {
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const submit = GetDocument().QuerySelector("input");
+  Element* const submit = GetDocument().QuerySelector(AtomicString("input"));
   submit->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -930,7 +917,8 @@ TEST_F(FrameSelectionTest, FocusingButtonHidesRangeInDisabledTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const textarea = GetDocument().QuerySelector("textarea");
+  Element* const textarea =
+      GetDocument().QuerySelector(AtomicString("textarea"));
   textarea->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsNone());
 
@@ -951,7 +939,7 @@ TEST_F(FrameSelectionTest, FocusingButtonHidesRangeInDisabledTextControl) {
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const submit = GetDocument().QuerySelector("input");
+  Element* const submit = GetDocument().QuerySelector(AtomicString("input"));
   submit->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -968,7 +956,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentHidesCaretInTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const field = GetDocument().getElementById("field");
+  Element* const field = GetDocument().getElementById(AtomicString("field"));
   field->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -976,7 +964,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentHidesCaretInTextControl) {
 
   // Here the selection belongs to <input>'s shadow tree and that tree has a
   // non-editable parent that is focused.
-  Element* const parent = GetDocument().getElementById("parent");
+  Element* const parent = GetDocument().getElementById(AtomicString("parent"));
   parent->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -999,7 +987,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentHidesRangeInTextControl) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const field = GetDocument().getElementById("field");
+  Element* const field = GetDocument().getElementById(AtomicString("field"));
   field->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1012,7 +1000,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentHidesRangeInTextControl) {
 
   // Here the selection belongs to <input>'s shadow tree and that tree has a
   // non-editable parent that is focused.
-  Element* const parent = GetDocument().getElementById("parent");
+  Element* const parent = GetDocument().getElementById(AtomicString("parent"));
   parent->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -1031,7 +1019,7 @@ TEST_F(FrameSelectionTest, CaretInEditableDiv) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = GetDocument().getElementById("ce");
+  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1049,7 +1037,7 @@ TEST_F(FrameSelectionTest, RangeInEditableDiv) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = GetDocument().getElementById("ce");
+  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1071,7 +1059,7 @@ TEST_F(FrameSelectionTest, RangeInEditableDivInShadowTree) {
   ShadowRoot* shadow_root =
       SetShadowContent("<div id='ce' contenteditable>foo</div>", "host");
 
-  Element* const ce = shadow_root->getElementById("ce");
+  Element* const ce = shadow_root->getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1096,13 +1084,13 @@ TEST_F(FrameSelectionTest, FocusingLinkHidesCaretInContentEditable) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = GetDocument().getElementById("ce");
+  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const alink = GetDocument().getElementById("alink");
+  Element* const alink = GetDocument().getElementById(AtomicString("alink"));
   alink->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -1117,7 +1105,7 @@ TEST_F(FrameSelectionTest, FocusingLinkKeepsRangeInContentEditable) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = GetDocument().getElementById("ce");
+  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1128,7 +1116,7 @@ TEST_F(FrameSelectionTest, FocusingLinkKeepsRangeInContentEditable) {
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const alink = GetDocument().getElementById("alink");
+  Element* const alink = GetDocument().getElementById(AtomicString("alink"));
   alink->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -1145,12 +1133,12 @@ TEST_F(FrameSelectionTest, FocusingEditableParentKeepsEditableCaret) {
   EXPECT_TRUE(Selection().IsHidden());
 
   // TODO(editing-dev): Blink should be able to focus the inner <div>.
-  //  Element* const ce = GetDocument().getElementById("ce");
+  //  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   //  ce->Focus();
   //  EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   //  EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const parent = GetDocument().getElementById("parent");
+  Element* const parent = GetDocument().getElementById(AtomicString("parent"));
   parent->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1174,7 +1162,7 @@ TEST_F(FrameSelectionTest, FocusingEditableParentKeepsEditableRange) {
   EXPECT_TRUE(Selection().IsHidden());
 
   // TODO(editing-dev): Blink should be able to focus the inner <div>.
-  //  Element* const ce = GetDocument().getElementById("ce");
+  //  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   //  ce->Focus();
   //  EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   //  EXPECT_FALSE(Selection().IsHidden());
@@ -1183,7 +1171,7 @@ TEST_F(FrameSelectionTest, FocusingEditableParentKeepsEditableRange) {
   //  EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   //  EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const parent = GetDocument().getElementById("parent");
+  Element* const parent = GetDocument().getElementById(AtomicString("parent"));
   parent->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1211,7 +1199,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentHidesEditableCaret) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = GetDocument().getElementById("ce");
+  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1219,7 +1207,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentHidesEditableCaret) {
 
   // Here the selection belongs to <div>'s shadow tree and that tree has a
   // non-editable parent that is focused.
-  Element* const parent = GetDocument().getElementById("parent");
+  Element* const parent = GetDocument().getElementById(AtomicString("parent"));
   parent->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -1241,7 +1229,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentKeepsEditableRange) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const ce = GetDocument().getElementById("ce");
+  Element* const ce = GetDocument().getElementById(AtomicString("ce"));
   ce->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsCaret());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1254,7 +1242,7 @@ TEST_F(FrameSelectionTest, FocusingNonEditableParentKeepsEditableRange) {
 
   // Here the selection belongs to <div>'s shadow tree and that tree has a
   // non-editable parent that is focused.
-  Element* const parent = GetDocument().getElementById("parent");
+  Element* const parent = GetDocument().getElementById(AtomicString("parent"));
   parent->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -1286,8 +1274,8 @@ TEST_F(FrameSelectionTest, RangeContainsFocus) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const start = GetDocument().getElementById("start");
-  Element* const end = GetDocument().getElementById("end");
+  Element* const start = GetDocument().getElementById(AtomicString("start"));
+  Element* const end = GetDocument().getElementById(AtomicString("end"));
   Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder()
           .SetBaseAndExtent(Position(start, 0), Position(end, 1))
@@ -1296,7 +1284,7 @@ TEST_F(FrameSelectionTest, RangeContainsFocus) {
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const alink = GetDocument().getElementById("alink");
+  Element* const alink = GetDocument().getElementById(AtomicString("alink"));
   alink->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_TRUE(Selection().SelectionHasFocus());
@@ -1327,8 +1315,8 @@ TEST_F(FrameSelectionTest, RangeOutsideFocus) {
   EXPECT_FALSE(Selection().SelectionHasFocus());
   EXPECT_TRUE(Selection().IsHidden());
 
-  Element* const start = GetDocument().getElementById("start");
-  Element* const end = GetDocument().getElementById("end");
+  Element* const start = GetDocument().getElementById(AtomicString("start"));
+  Element* const end = GetDocument().getElementById(AtomicString("end"));
   Selection().SetSelectionAndEndTyping(
       SelectionInDOMTree::Builder()
           .SetBaseAndExtent(Position(start, 0), Position(end, 1))
@@ -1337,7 +1325,7 @@ TEST_F(FrameSelectionTest, RangeOutsideFocus) {
   EXPECT_TRUE(Selection().SelectionHasFocus());
   EXPECT_FALSE(Selection().IsHidden());
 
-  Element* const alink = GetDocument().getElementById("alink");
+  Element* const alink = GetDocument().getElementById(AtomicString("alink"));
   alink->Focus();
   EXPECT_TRUE(Selection().GetSelectionInDOMTree().IsRange());
   EXPECT_FALSE(Selection().SelectionHasFocus());
@@ -1349,7 +1337,7 @@ TEST_F(FrameSelectionTest, InconsistentVisibleSelectionNoCrash) {
   SetBodyContent("foo<div id=host><span id=anchor>bar</span></div>baz");
   SetShadowContent("shadow", "host");
 
-  Element* anchor = GetDocument().getElementById("anchor");
+  Element* anchor = GetDocument().getElementById(AtomicString("anchor"));
 
   // |start| and |end| are valid Positions in DOM tree, but do not participate
   // in flat tree. They should be canonicalized to null VisiblePositions, but
@@ -1463,6 +1451,46 @@ TEST_F(FrameSelectionTest, PositionDisconnectedInFlatTree) {
                     GetVisibleSelectionInFlatTree().AsSelection()));
     }
   }
+}
+
+TEST_F(FrameSelectionTest, PaintCaretRecordsSelectionWithNoSelectionHandles) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      blink::features::kHiddenSelectionBounds);
+
+  Text* text = AppendTextNode("Hello, World!");
+  UpdateAllLifecyclePhasesForTest();
+
+  GetDocument().body()->setContentEditable("true", ASSERT_NO_EXCEPTION);
+  GetDocument().body()->Focus();
+  EXPECT_TRUE(GetDocument().body()->IsFocused());
+
+  Selection().SetCaretEnabled(true);
+  Selection().SetSelectionAndEndTyping(
+      SelectionInDOMTree::Builder().Collapse(Position(text, 0)).Build());
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_TRUE(Selection().ComputeVisibleSelectionInDOMTree().IsCaret());
+  EXPECT_TRUE(Selection().ShouldPaintCaret(
+      *To<LayoutBlock>(GetDocument().body()->GetLayoutObject())));
+
+  auto paint_controller =
+      std::make_unique<PaintController>(PaintController::kTransient);
+  {
+    GraphicsContext context(*paint_controller);
+    paint_controller->UpdateCurrentPaintChunkProperties(
+        root_paint_chunk_id_, *root_paint_property_client_,
+        PropertyTreeState::Root());
+    Selection().PaintCaret(context, PhysicalOffset());
+  }
+  paint_controller->CommitNewDisplayItems();
+
+  const PaintChunk& chunk = paint_controller->PaintChunks()[0];
+  EXPECT_THAT(chunk.layer_selection_data, Not(IsNull()));
+  LayerSelectionData selection_data = *chunk.layer_selection_data;
+  EXPECT_TRUE(selection_data.start.has_value());
+  EXPECT_EQ(gfx::SelectionBound::HIDDEN, selection_data.start->type);
+  EXPECT_TRUE(selection_data.end.has_value());
+  EXPECT_EQ(gfx::SelectionBound::HIDDEN, selection_data.end->type);
 }
 
 }  // namespace blink

@@ -7,8 +7,9 @@
 #include <utility>
 
 #include "base/values.h"
-#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/webui/certificates_handler.h"
+#include "chromeos/components/mgs/managed_guest_session_utils.h"
+#include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/policy_bundle.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
@@ -56,19 +57,19 @@ RestrictedMGSPolicyProvider::~RestrictedMGSPolicyProvider() = default;
 // static
 std::unique_ptr<RestrictedMGSPolicyProvider>
 RestrictedMGSPolicyProvider::Create() {
-  if (!profiles::IsPublicSession())
+  if (!chromeos::IsManagedGuestSession()) {
     return nullptr;
+  }
   std::unique_ptr<RestrictedMGSPolicyProvider> provider(
       new RestrictedMGSPolicyProvider());
   return provider;
 }
 
-void RestrictedMGSPolicyProvider::RefreshPolicies() {}
+void RestrictedMGSPolicyProvider::RefreshPolicies(PolicyFetchReason reason) {}
 
 void RestrictedMGSPolicyProvider::UpdatePolicyBundle() {
-  PolicyBundle bundle;
   weak_factory_.InvalidateWeakPtrs();
-  bundle.CopyFrom(policies());
+  PolicyBundle bundle = policies().Clone();
 
   PolicyMap& chrome_policy =
       bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));

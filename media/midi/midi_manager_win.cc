@@ -18,10 +18,10 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
@@ -30,7 +30,6 @@
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "base/win/windows_version.h"
 #include "media/midi/message_util.h"
 #include "media/midi/midi_manager_winrt.h"
 #include "media/midi/midi_service.h"
@@ -712,7 +711,7 @@ MidiManagerWin::MidiManagerWin(MidiService* service)
   CHECK_EQ(kInvalidInstanceId, g_active_instance_id);
 
   // Obtains the task runner for the current thread that hosts this instnace.
-  thread_runner_ = base::ThreadTaskRunnerHandle::Get();
+  thread_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 MidiManagerWin::~MidiManagerWin() {
@@ -893,8 +892,7 @@ void MidiManagerWin::SendOnTaskRunner(MidiManagerClient* client,
 }
 
 MidiManager* MidiManager::Create(MidiService* service) {
-  if (base::FeatureList::IsEnabled(features::kMidiManagerWinrt) &&
-      base::win::GetVersion() >= base::win::Version::WIN10) {
+  if (base::FeatureList::IsEnabled(features::kMidiManagerWinrt)) {
     return new MidiManagerWinrt(service);
   }
   return new MidiManagerWin(service);

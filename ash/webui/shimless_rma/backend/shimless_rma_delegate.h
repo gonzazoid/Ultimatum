@@ -5,8 +5,20 @@
 #ifndef ASH_WEBUI_SHIMLESS_RMA_BACKEND_SHIMLESS_RMA_DELEGATE_H_
 #define ASH_WEBUI_SHIMLESS_RMA_BACKEND_SHIMLESS_RMA_DELEGATE_H_
 
-namespace ash {
-namespace shimless_rma {
+#include <optional>
+#include <string>
+
+#include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/types/expected.h"
+#include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
+
+namespace content {
+class BrowserContext;
+}
+
+namespace ash::shimless_rma {
 
 // A delegate which exposes browser functionality from //chrome to the Shimless
 // RMA UI.
@@ -23,9 +35,52 @@ class ShimlessRmaDelegate {
   // Sets the AccessibilityManager profile to the active profile to enable
   // accessibility features.
   virtual void RefreshAccessibilityManagerProfile() = 0;
+
+  // Returns a string encoded QR code image of `url`.
+  virtual void GenerateQrCode(
+      const std::string& url,
+      base::OnceCallback<void(const std::string& qr_code_image)> callback) = 0;
+
+  // Prepare the browser context to show the 3p diagnostics app. A 3p
+  // diagnostics app consists of a ChromeOS system extension and a isolated web
+  // app (IWA).
+  // This configures the browser context, installs the extension (crx file) and
+  // the IWA (swbn file) from the specific path. The callback returns a result
+  // object or an error message. This method is also responsible to check if the
+  // extension and the IWA are allowed by the system.
+  struct PrepareDiagnosticsAppBrowserContextResult {
+    PrepareDiagnosticsAppBrowserContextResult(
+        const raw_ptr<content::BrowserContext>& context,
+        const std::string& extension_id,
+        const web_package::SignedWebBundleId& iwa_id,
+        const std::string& name,
+        const std::optional<std::string>& permission_message);
+    PrepareDiagnosticsAppBrowserContextResult(
+        const PrepareDiagnosticsAppBrowserContextResult&);
+    PrepareDiagnosticsAppBrowserContextResult& operator=(
+        const PrepareDiagnosticsAppBrowserContextResult&);
+    ~PrepareDiagnosticsAppBrowserContextResult();
+
+    raw_ptr<content::BrowserContext> context;
+    std::string extension_id;
+    web_package::SignedWebBundleId iwa_id;
+    std::string name;
+    // Permission message to show. This is a multi-line string. Is omitted if no
+    // permission is required.
+    std::optional<std::string> permission_message;
+  };
+  using PrepareDiagnosticsAppBrowserContextCallback = base::OnceCallback<void(
+      base::expected<PrepareDiagnosticsAppBrowserContextResult, std::string>)>;
+  virtual void PrepareDiagnosticsAppBrowserContext(
+      const base::FilePath& crx_path,
+      const base::FilePath& swbn_path,
+      PrepareDiagnosticsAppBrowserContextCallback callback) = 0;
+
+  // Check if `manufacturer` provides any chromeos system extension.
+  virtual bool IsChromeOSSystemExtensionProvider(
+      const std::string& manufacturer) = 0;
 };
 
-}  // namespace shimless_rma
-}  // namespace ash
+}  // namespace ash::shimless_rma
 
 #endif  // ASH_WEBUI_SHIMLESS_RMA_BACKEND_SHIMLESS_RMA_DELEGATE_H_

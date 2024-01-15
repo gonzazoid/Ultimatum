@@ -1,7 +1,10 @@
 // Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/metrics/field_trial_params.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -9,14 +12,15 @@
 #include "chrome/browser/predictors/loading_predictor.h"
 #include "chrome/browser/predictors/loading_predictor_factory.h"
 #include "chrome/browser/predictors/preconnect_manager.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
 #include "chrome/browser/preloading/chrome_preloading.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/browser/subresource_filter/subresource_filter_browser_test_harness.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/browser/preloading.h"
+#include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/preloading_test_util.h"
@@ -40,13 +44,22 @@ class AnchorElementPreloaderBrowserTest
   static constexpr char kOrigin1[] = "https://www.origin1.com/";
   static constexpr char kOrigin2[] = "https://www.origin2.com/";
 
-  virtual void SetFeatures() {
-    feature_list_.InitAndEnableFeature(
-        blink::features::kAnchorElementInteraction);
+  virtual base::FieldTrialParams GetAnchorElementInteractionFieldTrialParams() {
+    return {};
+  }
+
+  virtual base::FieldTrialParams GetNavigationPredictorFieldTrialParams() {
+    return {};
   }
 
   void SetUp() override {
-    SetFeatures();
+    feature_list_.InitWithFeaturesAndParameters(
+        {{blink::features::kNavigationPredictor,
+          GetNavigationPredictorFieldTrialParams()},
+         {blink::features::kAnchorElementInteraction,
+          GetAnchorElementInteractionFieldTrialParams()},
+         {blink::features::kSpeculationRulesPointerDownHeuristics, {}}},
+        {blink::features::kSpeculationRulesPointerHoverHeuristics});
     https_server_ = std::make_unique<net::EmbeddedTestServer>(
         net::EmbeddedTestServer::TYPE_HTTPS);
     https_server_->ServeFilesFromSourceDirectory("chrome/test/data/preload");
@@ -70,8 +83,8 @@ class AnchorElementPreloaderBrowserTest
     test_ukm_recorder_ = std::make_unique<ukm::TestAutoSetUkmRecorder>();
     ukm_entry_builder_ =
         std::make_unique<content::test::PreloadingAttemptUkmEntryBuilder>(
-            ToPreloadingPredictor(
-                ChromePreloadingPredictor::kPointerDownOnAnchor));
+            chrome_preloading_predictor::kPointerDownOnAnchor);
+    test_timer_ = std::make_unique<base::ScopedMockElapsedTimersForTest>();
     ASSERT_TRUE(loading_predictor);
     loading_predictor->preconnect_manager()->SetObserverForTesting(this);
   }
@@ -101,7 +114,7 @@ class AnchorElementPreloaderBrowserTest
 
   void GiveItSomeTime(const base::TimeDelta& t) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), t);
     run_loop.Run();
   }
@@ -151,6 +164,9 @@ class AnchorElementPreloaderBrowserTest
   std::unique_ptr<base::HistogramTester> histogram_tester_;
   std::unique_ptr<content::test::PreloadingAttemptUkmEntryBuilder>
       ukm_entry_builder_;
+  std::unique_ptr<base::ScopedMockElapsedTimersForTest> test_timer_;
+  // Disable sampling of UKM preloading logs.
+  content::test::PreloadingConfigOverride preloading_config_override_;
 };
 
 IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderBrowserTest, OneAnchor) {
@@ -223,7 +239,13 @@ IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderBrowserTest, OneAnchorInaccurate) {
                                                          expected_entry);
 }
 
-IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderBrowserTest, Duplicates) {
+// TODO(crbug.com/1413564): Flaky on Win10
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_Duplicates DISABLED_Duplicates
+#else
+#define MAYBE_Duplicates Duplicates
+#endif
+IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderBrowserTest, MAYBE_Duplicates) {
   const GURL& url = GetTestURL("/many_anchors.html");
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
@@ -362,10 +384,9 @@ IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderBrowserTest,
 class AnchorElementPreloaderHoldbackBrowserTest
     : public AnchorElementPreloaderBrowserTest {
  public:
-  void SetFeatures() override {
-    feature_list_.InitAndEnableFeatureWithParameters(
-        blink::features::kAnchorElementInteraction,
-        {{"preconnect_holdback", "true"}});
+  base::FieldTrialParams GetAnchorElementInteractionFieldTrialParams()
+      override {
+    return {{"preconnect_holdback", "true"}};
   }
 };
 
@@ -414,15 +435,15 @@ IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderHoldbackBrowserTest,
 class AnchorElementPreloaderLimitedBrowserTest
     : public AnchorElementPreloaderBrowserTest {
  public:
-  void SetFeatures() override {
-    feature_list_.InitAndEnableFeatureWithParameters(
-        blink::features::kAnchorElementInteraction,
-        {{"max_preloading_attempts", "1"}});
+  base::FieldTrialParams GetAnchorElementInteractionFieldTrialParams()
+      override {
+    return {{"max_preloading_attempts", "1"}};
   }
 };
 
+// TODO(crbug.com/1383953): Re-enable this test
 IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderLimitedBrowserTest,
-                       LimitExceeded) {
+                       DISABLED_LimitExceeded) {
   const GURL& url = GetTestURL("/many_anchors.html");
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
@@ -465,4 +486,51 @@ IN_PROC_BROWSER_TEST_F(AnchorElementPreloaderLimitedBrowserTest,
       << content::test::ActualVsExpectedUkmEntriesToString(ukm_entries,
                                                            expected_entries);
 }
+
+class AnchorElementSetIsNavigationInDomainBrowserTest
+    : public AnchorElementPreloaderBrowserTest {
+ public:
+  base::FieldTrialParams GetNavigationPredictorFieldTrialParams() override {
+    return {{"random_anchor_sampling_period", "1"}};
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(AnchorElementSetIsNavigationInDomainBrowserTest,
+                       TestPointerDownOnAnchor) {
+  base::HistogramTester histogram_tester;
+  GURL url = GetTestURL("/one_anchor.html");
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+  // Add a new link and trigger a mouse down event.
+  EXPECT_TRUE(content::ExecJs(web_contents(),
+                              R"(
+    let a = document.createElement("a");
+    a.id = "link";
+    a.href = "https://www.example.com";
+    a.innerHTML = '<div style="width:100vw;height:100vh;">Example<div>';
+    document.body.appendChild(a);
+    )"));
+  base::RunLoop().RunUntilIdle();
+  content::InputEventAckWaiter waiter(
+      web_contents()->GetPrimaryMainFrame()->GetRenderWidgetHost(),
+      blink::WebInputEvent::Type::kMouseDown);
+  SimulateMouseEvent(web_contents(), blink::WebInputEvent::Type::kMouseDown,
+                     blink::WebPointerProperties::Button::kLeft,
+                     gfx::Point(150, 150));
+  waiter.Wait();
+  // Add another link and click on it.
+  EXPECT_TRUE(content::ExecJs(web_contents(),
+                              R"(
+    let google = document.createElement("a");
+    google.id = "link";
+    google.href = "https://www.google.com";
+    google.innerHTML = "google";
+    document.body.appendChild(google);
+    google.click();
+    )"));
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectBucketCount(
+      "Preloading.Predictor.PointerDownOnAnchor.Recall",
+      /*content::PredictorConfusionMatrix::kFalseNegative*/ 3, 1);
+}
+
 }  // namespace

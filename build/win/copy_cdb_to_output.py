@@ -1,9 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from __future__ import print_function
 
 import glob
 import hashlib
@@ -101,17 +100,6 @@ def _CopyCDBToOutput(output_dir, target_arch):
   _CopyImpl('uext.dll', dst_winext_dir, src_winext_dir)
   _CopyImpl('exts.dll', dst_winxp_dir, src_winxp_dir)
   _CopyImpl('ntsdexts.dll', dst_winxp_dir, src_winxp_dir)
-  if src_arch in ['x64', 'x86']:
-    # Copy all UCRT files from the debuggers directory, for compatibility with
-    # the Windows 10 18362 SDK (one UCRT file) and later versions (two UCRT
-    # files). The new file is api-ms-win-downlevel-kernel32-l2-1-0.dll and
-    # should be added to the copy_cdb_to_output outputs when we require a newer
-    # SDK.
-    for file in glob.glob(os.path.join(src_dir, 'api-ms-win*.dll')):
-      _CopyImpl(os.path.split(file)[1], output_dir, src_dir)
-    _CopyImpl('ucrtbase.dll', output_dir, src_crt_dir)
-  for dll_path in glob.glob(os.path.join(src_crt_dir, 'api-ms-win-*.dll')):
-    _CopyImpl(os.path.split(dll_path)[1], output_dir, src_crt_dir)
   return 0
 
 

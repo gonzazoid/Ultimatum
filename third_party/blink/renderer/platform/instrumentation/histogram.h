@@ -6,6 +6,8 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_INSTRUMENTATION_HISTOGRAM_H_
 
 #include <stdint.h>
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/default_tick_clock.h"
@@ -36,7 +38,7 @@ class PLATFORM_EXPORT CustomCountHistogram {
  protected:
   explicit CustomCountHistogram(base::HistogramBase*);
 
-  base::HistogramBase* histogram_;
+  raw_ptr<base::HistogramBase, ExperimentalRenderer> histogram_;
 };
 
 template <typename Derived>
@@ -50,17 +52,17 @@ class ScopedUsHistogramTimerBase {
 
   ScopedUsHistogramTimerBase(CustomCountHistogram& counter,
                              const base::TickClock* clock)
-      : clock_(*clock), start_time_(clock_.NowTicks()), counter_(counter) {}
+      : clock_(*clock), start_time_(clock_->NowTicks()), counter_(counter) {}
 
   ~ScopedUsHistogramTimerBase() {
     if (Derived::ShouldRecord())
-      counter_.CountMicroseconds(clock_.NowTicks() - start_time_);
+      counter_->CountMicroseconds(clock_->NowTicks() - start_time_);
   }
 
  private:
-  const base::TickClock& clock_;
+  const raw_ref<const base::TickClock, ExperimentalRenderer> clock_;
   base::TimeTicks start_time_;
-  CustomCountHistogram& counter_;
+  const raw_ref<CustomCountHistogram, ExperimentalRenderer> counter_;
 };
 
 class ScopedUsHistogramTimer
@@ -77,9 +79,17 @@ class ScopedHighResUsHistogramTimer
   static bool ShouldRecord() { return base::TimeTicks::IsHighResolution(); }
 };
 
+static constexpr base::HistogramBase::Sample kTimeBasedHistogramMinSample = 1;
+static constexpr base::HistogramBase::Sample kTimeBasedHistogramMaxSample =
+    static_cast<base::Histogram::Sample>(base::Seconds(10).InMicroseconds());
+static constexpr int32_t kTimeBasedHistogramBucketCount = 50;
+
 #define SCOPED_BLINK_UMA_HISTOGRAM_TIMER_IMPL(name, allow_cross_thread)  \
-  DEFINE_STATIC_LOCAL_IMPL(CustomCountHistogram, scoped_us_counter,      \
-                           (name, 0, 10000000, 50), allow_cross_thread); \
+  DEFINE_STATIC_LOCAL_IMPL(                                              \
+      CustomCountHistogram, scoped_us_counter,                           \
+      (name, kTimeBasedHistogramMinSample, kTimeBasedHistogramMaxSample, \
+       kTimeBasedHistogramBucketCount),                                  \
+      allow_cross_thread);                                               \
   ScopedUsHistogramTimer timer(scoped_us_counter);
 
 #define SCOPED_BLINK_UMA_HISTOGRAM_TIMER_HIGHRES_IMPL(name,               \

@@ -4,12 +4,14 @@
 
 #include "chromeos/ash/services/secure_channel/secure_channel_initializer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/services/secure_channel/secure_channel_impl.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "device/bluetooth/dbus/bluez_dbus_manager.h"
+#include "device/bluetooth/floss/floss_dbus_manager.h"
+#include "device/bluetooth/floss/floss_features.h"
 
 namespace ash::secure_channel {
 
@@ -55,8 +57,15 @@ SecureChannelInitializer::ConnectionRequestArgs::~ConnectionRequestArgs() =
 
 SecureChannelInitializer::SecureChannelInitializer(
     scoped_refptr<base::TaskRunner> task_runner) {
+  bool is_initialized = false;
+  if (floss::features::IsFlossEnabled()) {
+    is_initialized = floss::FlossDBusManager::IsInitialized();
+  } else {
+    is_initialized = bluez::BluezDBusManager::IsInitialized();
+  }
+
   // May not be initialized in tests.
-  if (!bluez::BluezDBusManager::IsInitialized())
+  if (!is_initialized)
     return;
 
   PA_LOG(VERBOSE) << "SecureChannelInitializer::SecureChannelInitializer(): "
@@ -117,7 +126,7 @@ void SecureChannelInitializer::InitiateConnectionToDevice(
 }
 void SecureChannelInitializer::GetLastSeenTimestamp(
     const std::string& remote_device_id,
-    base::OnceCallback<void(absl::optional<base::Time>)> callback) {
+    base::OnceCallback<void(std::optional<base::Time>)> callback) {
   if (secure_channel_impl_) {
     secure_channel_impl_->GetLastSeenTimestamp(remote_device_id,
                                                std::move(callback));

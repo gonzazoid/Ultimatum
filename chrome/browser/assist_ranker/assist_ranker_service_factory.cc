@@ -15,7 +15,8 @@ namespace assist_ranker {
 
 // static
 AssistRankerServiceFactory* AssistRankerServiceFactory::GetInstance() {
-  return base::Singleton<AssistRankerServiceFactory>::get();
+  static base::NoDestructor<AssistRankerServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -28,13 +29,19 @@ AssistRankerService* AssistRankerServiceFactory::GetForBrowserContext(
 AssistRankerServiceFactory::AssistRankerServiceFactory()
     : ProfileKeyedServiceFactory(
           "AssistRankerService",
-          ProfileSelections::BuildRedirectedInIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
-AssistRankerServiceFactory::~AssistRankerServiceFactory() {}
+AssistRankerServiceFactory::~AssistRankerServiceFactory() = default;
 
-KeyedService* AssistRankerServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AssistRankerServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new AssistRankerServiceImpl(
+  return std::make_unique<AssistRankerServiceImpl>(
       browser_context->GetPath(),
       g_browser_process->system_network_context_manager()
           ->GetSharedURLLoaderFactory());

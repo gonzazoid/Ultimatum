@@ -4,29 +4,19 @@
 
 #include "content/browser/renderer_host/input/touch_selection_controller_client_manager_android.h"
 
-#include "components/viz/common/hit_test/aggregated_hit_test_region.h"
-#include "components/viz/common/surfaces/frame_sink_id.h"
-#include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/renderer_host/render_widget_host_view_android.h"
 
 namespace content {
 
 TouchSelectionControllerClientManagerAndroid::
     TouchSelectionControllerClientManagerAndroid(
-        RenderWidgetHostViewAndroid* rwhv,
-        viz::HostFrameSinkManager* host_frame_sink_manager)
-    : rwhv_(rwhv),
-      host_frame_sink_manager_(host_frame_sink_manager),
-      active_client_(rwhv) {
+        RenderWidgetHostViewAndroid* rwhv)
+    : rwhv_(rwhv), active_client_(rwhv) {
   DCHECK(rwhv_);
-  DCHECK(host_frame_sink_manager_);
 }
 
 TouchSelectionControllerClientManagerAndroid::
     ~TouchSelectionControllerClientManagerAndroid() {
-  if (active_client_ != rwhv_)
-    host_frame_sink_manager_->RemoveHitTestRegionObserver(this);
-
   for (auto& observer : observers_)
     observer.OnManagerWillDestroy(this);
 }
@@ -36,27 +26,31 @@ void TouchSelectionControllerClientManagerAndroid::DidStopFlinging() {
   // TODO(wjmaclean): determine what, if anything, needs to happen here.
 }
 
+void TouchSelectionControllerClientManagerAndroid::OnSwipeToMoveCursorBegin() {}
+
+void TouchSelectionControllerClientManagerAndroid::OnSwipeToMoveCursorEnd() {}
+
+void TouchSelectionControllerClientManagerAndroid::OnClientHitTestRegionUpdated(
+    ui::TouchSelectionControllerClient* client) {
+  if (client != active_client_ || !GetTouchSelectionController() ||
+      GetTouchSelectionController()->active_status() ==
+          ui::TouchSelectionController::INACTIVE) {
+    return;
+  }
+
+  active_client_->DidScroll();
+}
+
 void TouchSelectionControllerClientManagerAndroid::UpdateClientSelectionBounds(
     const gfx::SelectionBound& start,
     const gfx::SelectionBound& end,
     ui::TouchSelectionControllerClient* client,
     ui::TouchSelectionMenuClient* menu_client) {
-  if (client != active_client_ &&
-      (start.type() == gfx::SelectionBound::EMPTY || !start.visible()) &&
-      (end.type() == gfx::SelectionBound::EMPTY || !end.visible()) &&
-      (manager_selection_start_.type() != gfx::SelectionBound::EMPTY ||
-       manager_selection_end_.type() != gfx::SelectionBound::EMPTY)) {
+  if (client != active_client_ && (!start.HasHandle() || !start.visible()) &&
+      (!end.HasHandle() || !end.visible()) &&
+      (manager_selection_start_.HasHandle() ||
+       manager_selection_end_.HasHandle())) {
     return;
-  }
-
-  // Since the observer method does very little processing, and early-outs when
-  // not displaying handles, we don't bother un-installing it when an OOPIF
-  // client is not currently displaying handles.
-  if (client != active_client_) {
-    if (active_client_ == rwhv_)  // We are switching to an OOPIF client.
-      host_frame_sink_manager_->AddHitTestRegionObserver(this);
-    else if (client == rwhv_)  // We are switching to a non-OOPIF client.
-      host_frame_sink_manager_->RemoveHitTestRegionObserver(this);
   }
 
   active_client_ = client;
@@ -75,8 +69,6 @@ void TouchSelectionControllerClientManagerAndroid::UpdateClientSelectionBounds(
 void TouchSelectionControllerClientManagerAndroid::InvalidateClient(
     ui::TouchSelectionControllerClient* client) {
   if (active_client_ == client) {
-    if (active_client_ != rwhv_)
-      host_frame_sink_manager_->RemoveHitTestRegionObserver(this);
     active_client_ = rwhv_;
   }
 }
@@ -150,21 +142,6 @@ void TouchSelectionControllerClientManagerAndroid::DidScroll() {
 void TouchSelectionControllerClientManagerAndroid::
     ShowTouchSelectionContextMenu(const gfx::Point& location) {
   active_client_->ShowTouchSelectionContextMenu(location);
-}
-
-void TouchSelectionControllerClientManagerAndroid::
-    OnAggregatedHitTestRegionListUpdated(
-        const viz::FrameSinkId& frame_sink_id,
-        const std::vector<viz::AggregatedHitTestRegion>& hit_test_data) {
-  DCHECK(active_client_ != rwhv_);
-
-  if (!GetTouchSelectionController() ||
-      GetTouchSelectionController()->active_status() ==
-          ui::TouchSelectionController::INACTIVE) {
-    return;
-  }
-
-  active_client_->DidScroll();
 }
 
 }  // namespace content

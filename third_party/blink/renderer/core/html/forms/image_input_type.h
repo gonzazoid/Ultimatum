@@ -41,18 +41,17 @@ namespace blink {
 class ImageInputType final : public BaseButtonInputType {
  public:
   explicit ImageInputType(HTMLInputElement&);
-  void CustomStyleForLayoutObject(ComputedStyle& style) override;
+  const ComputedStyle* CustomStyleForLayoutObject(
+      const ComputedStyle* original_style) const override;
 
  private:
   void CountUsage() override;
-  const AtomicString& FormControlType() const override;
   bool IsFormDataAppendable() const override;
   void AppendToFormData(FormData&) const override;
   String ResultForDialogSubmit() const override;
   bool SupportsValidation() const override;
   ControlPart AutoAppearance() const override;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                   LegacyLayout) const override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) const override;
   void HandleDOMActivateEvent(Event&) override;
   void AltAttributeChanged() override;
   void SrcAttributeChanged() override;
@@ -61,11 +60,11 @@ class ImageInputType final : public BaseButtonInputType {
   bool ShouldRespectAlignAttribute() override;
   bool CanBeSuccessfulSubmitButton() override;
   bool IsEnumeratable() override;
+  bool IsAutoDirectionalityFormAssociated() const override;
   bool ShouldRespectHeightAndWidthAttributes() override;
   unsigned Height() const override;
   unsigned Width() const override;
   bool HasLegalLinkAttribute(const QualifiedName&) const override;
-  const QualifiedName& SubResourceAttributeName() const override;
   void EnsureFallbackContent() override;
   void EnsurePrimaryContent() override;
   void CreateShadowSubtree() override;

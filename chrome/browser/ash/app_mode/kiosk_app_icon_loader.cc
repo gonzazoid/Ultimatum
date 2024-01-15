@@ -6,9 +6,9 @@
 
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
@@ -40,7 +40,7 @@ class IconImageRequest : public ImageDecoder::ImageRequest {
     LOG(ERROR) << "Failed to decode icon image.";
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(std::move(result_callback_),
-                                  absl::optional<gfx::ImageSkia>()));
+                                  std::optional<gfx::ImageSkia>()));
     delete this;
   }
 
@@ -60,7 +60,7 @@ void LoadOnBlockingPool(
     LOG(ERROR) << "Failed to read icon file.";
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(std::move(result_callback),
-                                  absl::optional<gfx::ImageSkia>()));
+                                  std::optional<gfx::ImageSkia>()));
     return;
   }
 
@@ -70,8 +70,8 @@ void LoadOnBlockingPool(
   ImageDecoder::Start(image_request, std::move(data));
 }
 
-KioskAppIconLoader::KioskAppIconLoader(Delegate* delegate)
-    : delegate_(delegate) {}
+KioskAppIconLoader::KioskAppIconLoader(ResultCallback callback)
+    : callback_(std::move(callback)) {}
 
 KioskAppIconLoader::~KioskAppIconLoader() = default;
 
@@ -88,14 +88,10 @@ void KioskAppIconLoader::Start(const base::FilePath& icon_path) {
 }
 
 void KioskAppIconLoader::OnImageDecodingFinished(
-    absl::optional<gfx::ImageSkia> result) {
+    std::optional<gfx::ImageSkia> result) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  if (result.has_value()) {
-    delegate_->OnIconLoadSuccess(result.value());
-  } else {
-    delegate_->OnIconLoadFailure();
-  }
+  std::move(callback_).Run(result);
 }
 
 }  // namespace ash

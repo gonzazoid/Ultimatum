@@ -27,8 +27,10 @@
 
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/functional/function_ref.h"
 #include "base/memory/ptr_util.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/encoding_tables.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_concatenate.h"
@@ -36,6 +38,24 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace WTF {
+
+class TextCodecCJK::Decoder {
+ public:
+  virtual ~Decoder() = default;
+  virtual String Decode(const uint8_t* bytes,
+                        wtf_size_t length,
+                        bool flush,
+                        bool stop_on_error,
+                        bool& saw_error);
+
+ protected:
+  enum class SawError { kNo, kYes };
+  virtual SawError ParseByte(uint8_t byte, StringBuilder& result) = 0;
+  virtual void Finalize(bool flush, StringBuilder& result) {}
+
+  uint8_t lead_ = 0x00;
+  absl::optional<uint8_t> prepended_byte_;
+};
 
 namespace {
 
@@ -393,6 +413,98 @@ uint32_t Gb18030RangesPointer(UChar32 code_point) {
   return pointer_offset + code_point - offset;
 }
 
+// https://unicode-org.atlassian.net/browse/ICU-22357
+// TODO(yyanagisawa): rename function names in comment
+// The 2-byte values are handled correctly by values from gb18030()
+// but these need to be exceptions from gb18030Ranges().
+static std::optional<uint32_t> Gb18030_2022Encode(UChar32 codePoint) {
+  switch (codePoint) {
+    case 0xE81E:
+      return 0x82359037;
+    case 0xE826:
+      return 0x82359038;
+    case 0xE82B:
+      return 0x82359039;
+    case 0xE82C:
+      return 0x82359130;
+    case 0xE832:
+      return 0x82359131;
+    case 0xE843:
+      return 0x82359132;
+    case 0xE854:
+      return 0x82359133;
+    case 0xE864:
+      return 0x82359134;
+    case 0xE78D:
+      return 0x84318236;
+    case 0xE78F:
+      return 0x84318237;
+    case 0xE78E:
+      return 0x84318238;
+    case 0xE790:
+      return 0x84318239;
+    case 0xE791:
+      return 0x84318330;
+    case 0xE792:
+      return 0x84318331;
+    case 0xE793:
+      return 0x84318332;
+    case 0xE794:
+      return 0x84318333;
+    case 0xE795:
+      return 0x84318334;
+    case 0xE796:
+      return 0x84318335;
+  }
+  return std::nullopt;
+}
+static std::optional<UChar32> Gb18030_2022Decode(uint8_t first,
+                                                 uint8_t second,
+                                                 uint8_t third,
+                                                 uint8_t fourth) {
+  switch (static_cast<uint32_t>(first) << 24 |
+          static_cast<uint32_t>(second) << 16 |
+          static_cast<uint32_t>(third) << 8 | fourth) {
+    case 0x82359037:
+      return 0xE81E;
+    case 0x82359038:
+      return 0xE826;
+    case 0x82359039:
+      return 0xE82B;
+    case 0x82359130:
+      return 0xE82C;
+    case 0x82359131:
+      return 0xE832;
+    case 0x82359132:
+      return 0xE843;
+    case 0x82359133:
+      return 0xE854;
+    case 0x82359134:
+      return 0xE864;
+    case 0x84318236:
+      return 0xE78D;
+    case 0x84318237:
+      return 0xE78F;
+    case 0x84318238:
+      return 0xE78E;
+    case 0x84318239:
+      return 0xE790;
+    case 0x84318330:
+      return 0xE791;
+    case 0x84318331:
+      return 0xE792;
+    case 0x84318332:
+      return 0xE793;
+    case 0x84318333:
+      return 0xE794;
+    case 0x84318334:
+      return 0xE795;
+    case 0x84318335:
+      return 0xE796;
+  }
+  return std::nullopt;
+}
+
 // https://encoding.spec.whatwg.org/#gb18030-encoder
 enum class IsGbk : bool { kNo, kYes };
 Vector<uint8_t> EncodeGbShared(StringView string,
@@ -400,6 +512,8 @@ Vector<uint8_t> EncodeGbShared(StringView string,
                                IsGbk is_gbk) {
   Vector<uint8_t> result;
   result.ReserveInitialCapacity(string.length());
+  const bool gb18030_2022_enabled =
+      base::FeatureList::IsEnabled(blink::features::kGb18030_2022Enabled);
 
   for (UChar32 code_point : string) {
     if (IsASCII(code_point)) {
@@ -410,9 +524,19 @@ Vector<uint8_t> EncodeGbShared(StringView string,
       AppendUnencodableReplacement(code_point, handling, result);
       continue;
     }
-    if (is_gbk == IsGbk::kYes && code_point == 0x20AC) {
-      result.push_back(0x80);
-      continue;
+    if (is_gbk == IsGbk::kYes) {
+      if (code_point == 0x20AC) {
+        result.push_back(0x80);
+        continue;
+      }
+    } else if (gb18030_2022_enabled) {
+      if (auto encoded = Gb18030_2022Encode(code_point)) {
+        result.push_back(*encoded >> 24);
+        result.push_back(*encoded >> 16);
+        result.push_back(*encoded >> 8);
+        result.push_back(*encoded);
+        continue;
+      }
     }
     auto pointer_range =
         FindInSortedPairs(EnsureGb18030EncodeIndexForEncode(), code_point);
@@ -452,34 +576,403 @@ Vector<uint8_t> EncodeGbk(StringView string, UnencodableHandling handling) {
   return EncodeGbShared(string, handling, IsGbk::kYes);
 }
 
-class Gb18030Decoder {
+// https://encoding.spec.whatwg.org/#euc-jp-decoder
+class EucJpDecoder : public TextCodecCJK::Decoder {
  public:
-  Gb18030Decoder(bool& saw_error, absl::optional<uint8_t>& prepended_byte)
-      : saw_error_(saw_error), prepended_byte_(prepended_byte) {}
+  EucJpDecoder() = default;
 
-  using SawError = TextCodecCJK::SawError;
+ protected:
+  SawError ParseByte(uint8_t byte, StringBuilder& result) override {
+    if (uint8_t lead = std::exchange(lead_, 0x00)) {
+      if (lead == 0x8E && byte >= 0xA1 && byte <= 0xDF) {
+        result.Append(0xFF61 - 0xA1 + byte);
+        return SawError::kNo;
+      }
+      if (lead == 0x8F && byte >= 0xA1 && byte <= 0xFE) {
+        jis0212_ = true;
+        lead_ = byte;
+        return SawError::kNo;
+      }
+      if (lead >= 0xA1 && lead <= 0xFE && byte >= 0xA1 && byte <= 0xFE) {
+        uint16_t pointer = (lead - 0xA1) * 94 + byte - 0xA1;
+        if (auto code_point = std::exchange(jis0212_, false)
+                                  ? FindCodePointJis0212(pointer)
+                                  : FindCodePointInJis0208(pointer)) {
+          result.Append(*code_point);
+          return SawError::kNo;
+        }
+      }
+      if (IsASCII(byte))
+        prepended_byte_ = byte;
+      return SawError::kYes;
+    }
+    if (IsASCII(byte)) {
+      result.Append(static_cast<char>(byte));
+      return SawError::kNo;
+    }
+    if (byte == 0x8E || byte == 0x8F || (byte >= 0xA1 && byte <= 0xFE)) {
+      lead_ = byte;
+      return SawError::kNo;
+    }
+    return SawError::kYes;
+  }
 
-  SawError ParseByte(uint8_t byte, StringBuilder& result) {
-    if (gb18030_third_) {
-      if (byte < 0x30 || byte > 0x39) {
-        saw_error_ = true;
+ private:
+  bool jis0212_ = false;
+};
+
+// https://encoding.spec.whatwg.org/#iso-2022-jp-decoder
+class Iso2022JpDecoder : public TextCodecCJK::Decoder {
+ public:
+  Iso2022JpDecoder() = default;
+
+  String Decode(const uint8_t* bytes,
+                wtf_size_t length,
+                bool flush,
+                bool stop_on_error,
+                bool& saw_error) override {
+    StringBuilder result;
+    result.ReserveCapacity(length);
+
+    if (prepended_byte_ &&
+        ParseByte(*std::exchange(prepended_byte_, absl::nullopt), result) ==
+            SawError::kYes) {
+      saw_error = true;
+      result.Append(kReplacementCharacter);
+      if (stop_on_error) {
+        lead_ = 0x00;
+        return result.ToString();
+      }
+    }
+    if (second_prepended_byte_ &&
+        ParseByte(*std::exchange(second_prepended_byte_, absl::nullopt),
+                  result) == SawError::kYes &&
+        stop_on_error) {
+      saw_error = true;
+      result.Append(kReplacementCharacter);
+      if (stop_on_error) {
+        lead_ = 0x00;
+        return result.ToString();
+      }
+    }
+    for (size_t i = 0; i < length; ++i) {
+      if (ParseByte(bytes[i], result) == SawError::kYes) {
+        saw_error = true;
         result.Append(kReplacementCharacter);
-        gb18030_first_ = 0x00;
-        uint8_t second = std::exchange(gb18030_second_, 0x00);
-        uint8_t third = std::exchange(gb18030_third_, 0x00);
+        if (stop_on_error) {
+          lead_ = 0x00;
+          return result.ToString();
+        }
+      }
+      if (prepended_byte_ &&
+          ParseByte(*std::exchange(prepended_byte_, absl::nullopt), result) ==
+              SawError::kYes) {
+        saw_error = true;
+        result.Append(kReplacementCharacter);
+        if (stop_on_error) {
+          lead_ = 0x00;
+          return result.ToString();
+        }
+      }
+      if (second_prepended_byte_ &&
+          ParseByte(*std::exchange(second_prepended_byte_, absl::nullopt),
+                    result) == SawError::kYes &&
+          stop_on_error) {
+        saw_error = true;
+        result.Append(kReplacementCharacter);
+        if (stop_on_error) {
+          lead_ = 0x00;
+          return result.ToString();
+        }
+      }
+    }
+
+    if (flush) {
+      switch (decoder_state_) {
+        case State::kAscii:
+        case State::kRoman:
+        case State::kKatakana:
+        case State::kLeadByte:
+          break;
+        case State::kTrailByte:
+          decoder_state_ = State::kLeadByte;
+          [[fallthrough]];
+        case State::kEscapeStart:
+          saw_error = true;
+          result.Append(kReplacementCharacter);
+          break;
+        case State::kEscape:
+          saw_error = true;
+          result.Append(kReplacementCharacter);
+          if (lead_) {
+            DCHECK(IsASCII(lead_));
+            result.Append(std::exchange(lead_, 0x00));
+          }
+          break;
+      }
+    }
+
+    return result.ToString();
+  }
+
+ protected:
+  SawError ParseByte(uint8_t byte, StringBuilder& result) override {
+    switch (decoder_state_) {
+      case State::kAscii:
+        if (byte == 0x1B) {
+          decoder_state_ = State::kEscapeStart;
+          break;
+        }
+        if (byte <= 0x7F && byte != 0x0E && byte != 0x0F && byte != 0x1B) {
+          output_ = false;
+          result.Append(byte);
+          break;
+        }
+        output_ = false;
+        return SawError::kYes;
+      case State::kRoman:
+        if (byte == 0x1B) {
+          decoder_state_ = State::kEscapeStart;
+          break;
+        }
+        if (byte == 0x5C) {
+          output_ = false;
+          result.Append(static_cast<UChar>(kYenSignCharacter));
+          break;
+        }
+        if (byte == 0x7E) {
+          output_ = false;
+          result.Append(static_cast<UChar>(kOverlineCharacter));
+          break;
+        }
+        if (byte <= 0x7F && byte != 0x0E && byte != 0x0F && byte != 0x1B &&
+            byte != 0x5C && byte != 0x7E) {
+          output_ = false;
+          result.Append(byte);
+          break;
+        }
+        output_ = false;
+        return SawError::kYes;
+      case State::kKatakana:
+        if (byte == 0x1B) {
+          decoder_state_ = State::kEscapeStart;
+          break;
+        }
+        if (byte >= 0x21 && byte <= 0x5F) {
+          output_ = false;
+          result.Append(static_cast<UChar>(0xFF61 - 0x21 + byte));
+          break;
+        }
+        output_ = false;
+        return SawError::kYes;
+      case State::kLeadByte:
+        if (byte == 0x1B) {
+          decoder_state_ = State::kEscapeStart;
+          break;
+        }
+        if (byte >= 0x21 && byte <= 0x7E) {
+          output_ = false;
+          lead_ = byte;
+          decoder_state_ = State::kTrailByte;
+          break;
+        }
+        output_ = false;
+        return SawError::kYes;
+      case State::kTrailByte:
+        if (byte == 0x1B) {
+          decoder_state_ = State::kEscapeStart;
+          return SawError::kYes;
+        }
+        decoder_state_ = State::kLeadByte;
+        if (byte >= 0x21 && byte <= 0x7E) {
+          uint16_t pointer = (lead_ - 0x21) * 94 + byte - 0x21;
+          if (auto code_point = FindCodePointInJis0208(pointer)) {
+            result.Append(*code_point);
+            break;
+          }
+          return SawError::kYes;
+        }
+        return SawError::kYes;
+      case State::kEscapeStart:
+        if (byte == 0x24 || byte == 0x28) {
+          lead_ = byte;
+          decoder_state_ = State::kEscape;
+          break;
+        }
+        prepended_byte_ = byte;
+        output_ = false;
+        decoder_state_ = decoder_output_state_;
+        return SawError::kYes;
+      case State::kEscape: {
+        uint8_t lead = std::exchange(lead_, 0x00);
+        absl::optional<State> state;
+        if (lead == 0x28) {
+          if (byte == 0x42)
+            state = State::kAscii;
+          else if (byte == 0x4A)
+            state = State::kRoman;
+          else if (byte == 0x49)
+            state = State::kKatakana;
+        } else if (lead == 0x24 && (byte == 0x40 || byte == 0x42)) {
+          state = State::kLeadByte;
+        }
+        if (state) {
+          decoder_state_ = *state;
+          decoder_output_state_ = *state;
+          if (std::exchange(output_, true))
+            return SawError::kYes;
+          break;
+        }
+        prepended_byte_ = lead;
+        second_prepended_byte_ = byte;
+        output_ = false;
+        decoder_state_ = decoder_output_state_;
+        return SawError::kYes;
+      }
+    }
+    return SawError::kNo;
+  }
+
+ private:
+  enum class State {
+    kAscii,
+    kRoman,
+    kKatakana,
+    kLeadByte,
+    kTrailByte,
+    kEscapeStart,
+    kEscape
+  };
+  State decoder_state_ = State::kAscii;
+  State decoder_output_state_ = State::kAscii;
+  bool output_ = false;
+  absl::optional<uint8_t> second_prepended_byte_;
+};
+
+// https://encoding.spec.whatwg.org/#shift_jis-decoder
+class ShiftJisDecoder : public TextCodecCJK::Decoder {
+ public:
+  ShiftJisDecoder() = default;
+
+ protected:
+  SawError ParseByte(uint8_t byte, StringBuilder& result) override {
+    if (uint8_t lead = std::exchange(lead_, 0x00)) {
+      uint8_t offset = byte < 0x7F ? 0x40 : 0x41;
+      uint8_t lead_offset = lead < 0xA0 ? 0x81 : 0xC1;
+      if ((byte >= 0x40 && byte <= 0x7E) || (byte >= 0x80 && byte <= 0xFC)) {
+        uint16_t pointer = (lead - lead_offset) * 188 + byte - offset;
+        if (pointer >= 8836 && pointer <= 10715) {
+          result.Append(static_cast<UChar>(0xE000 - 8836 + pointer));
+          return SawError::kNo;
+        }
+        if (auto code_point = FindCodePointInJis0208(pointer)) {
+          result.Append(*code_point);
+          return SawError::kNo;
+        }
+      }
+      if (IsASCII(byte))
+        prepended_byte_ = byte;
+      return SawError::kYes;
+    }
+    if (IsASCII(byte) || byte == 0x80) {
+      result.Append(byte);
+      return SawError::kNo;
+    }
+    if (byte >= 0xA1 && byte <= 0xDF) {
+      result.Append(static_cast<UChar>(0xFF61 - 0xA1 + byte));
+      return SawError::kNo;
+    }
+    if ((byte >= 0x81 && byte <= 0x9F) || (byte >= 0xE0 && byte <= 0xFC)) {
+      lead_ = byte;
+      return SawError::kNo;
+    }
+    return SawError::kYes;
+  }
+};
+
+// https://encoding.spec.whatwg.org/#euc-kr-decoder
+class EucKrDecoder : public TextCodecCJK::Decoder {
+ public:
+  EucKrDecoder() = default;
+
+ protected:
+  SawError ParseByte(uint8_t byte, StringBuilder& result) override {
+    if (uint8_t lead = std::exchange(lead_, 0x00)) {
+      if (byte >= 0x41 && byte <= 0xFE) {
+        if (auto code_point =
+                FindFirstInSortedPairs(EnsureEucKrEncodeIndexForDecode(),
+                                       (lead - 0x81) * 190 + byte - 0x41)) {
+          result.Append(*code_point);
+          return SawError::kNo;
+        }
+      }
+      if (IsASCII(byte))
+        prepended_byte_ = byte;
+      return SawError::kYes;
+    }
+    if (IsASCII(byte)) {
+      result.Append(byte);
+      return SawError::kNo;
+    }
+    if (byte >= 0x81 && byte <= 0xFE) {
+      lead_ = byte;
+      return SawError::kNo;
+    }
+    return SawError::kYes;
+  }
+};
+
+// https://encoding.spec.whatwg.org/#gb18030-decoder
+// https://encoding.spec.whatwg.org/#gbk-decoder
+// Note that the same decoder is used for GB18030 and GBK.
+class Gb18030Decoder : public TextCodecCJK::Decoder {
+ public:
+  Gb18030Decoder() {
+    gb18030_2022_enabled_ =
+        base::FeatureList::IsEnabled(blink::features::kGb18030_2022Enabled);
+  }
+
+  String Decode(const uint8_t* bytes,
+                wtf_size_t length,
+                bool flush,
+                bool stop_on_error,
+                bool& saw_error) override {
+    saw_error_ = &saw_error;
+    String result = TextCodecCJK::Decoder::Decode(bytes, length, flush,
+                                                  stop_on_error, saw_error);
+    // Ensures that `saw_error_` won't be used for the next run.
+    saw_error_ = nullptr;
+    return result;
+  }
+
+  SawError ParseByte(uint8_t byte, StringBuilder& result) override {
+    DCHECK(saw_error_);
+    if (third_) {
+      if (byte < 0x30 || byte > 0x39) {
+        *saw_error_ = true;
+        result.Append(kReplacementCharacter);
+        first_ = 0x00;
+        uint8_t second = std::exchange(second_, 0x00);
+        uint8_t third = std::exchange(third_, 0x00);
         if (ParseByte(second, result) == SawError::kYes) {
-          saw_error_ = true;
+          *saw_error_ = true;
           result.Append(kReplacementCharacter);
         }
         if (ParseByte(third, result) == SawError::kYes) {
-          saw_error_ = true;
+          *saw_error_ = true;
           result.Append(kReplacementCharacter);
         }
         return ParseByte(byte, result);
       }
-      uint8_t first = std::exchange(gb18030_first_, 0x00);
-      uint8_t second = std::exchange(gb18030_second_, 0x00);
-      uint8_t third = std::exchange(gb18030_third_, 0x00);
+      uint8_t first = std::exchange(first_, 0x00);
+      uint8_t second = std::exchange(second_, 0x00);
+      uint8_t third = std::exchange(third_, 0x00);
+      if (gb18030_2022_enabled_) {
+        if (auto codePoint = Gb18030_2022Decode(first, second, third, byte)) {
+          result.Append(*codePoint);
+          return SawError::kNo;
+        }
+      }
       if (auto code_point = IndexGb18030RangesCodePoint(
               ((first - 0x81) * 10 * 126 * 10) + ((second - 0x30) * 10 * 126) +
               ((third - 0x81) * 10) + byte - 0x30)) {
@@ -488,27 +981,26 @@ class Gb18030Decoder {
       }
       return SawError::kYes;
     }
-    if (gb18030_second_) {
+    if (second_) {
       if (byte >= 0x81 && byte <= 0xFE) {
-        gb18030_third_ = byte;
+        third_ = byte;
         return SawError::kNo;
       }
-      saw_error_ = true;
+      *saw_error_ = true;
       result.Append(kReplacementCharacter);
-      gb18030_first_ = 0x00;
-      if (ParseByte(std::exchange(gb18030_second_, 0x00), result) ==
-          SawError::kYes) {
-        saw_error_ = true;
+      first_ = 0x00;
+      if (ParseByte(std::exchange(second_, 0x00), result) == SawError::kYes) {
+        *saw_error_ = true;
         result.Append(kReplacementCharacter);
       }
       return ParseByte(byte, result);
     }
-    if (gb18030_first_) {
+    if (first_) {
       if (byte >= 0x30 && byte <= 0x39) {
-        gb18030_second_ = byte;
+        second_ = byte;
         return SawError::kNo;
       }
-      uint8_t lead = std::exchange(gb18030_first_, 0x00);
+      uint8_t lead = std::exchange(first_, 0x00);
       uint8_t offset = byte < 0x7F ? 0x40 : 0x41;
       if ((byte >= 0x40 && byte <= 0x7E) || (byte >= 0x80 && byte <= 0xFE)) {
         size_t pointer = (lead - 0x81) * 190 + byte - offset;
@@ -530,28 +1022,35 @@ class Gb18030Decoder {
       return SawError::kNo;
     }
     if (byte >= 0x81 && byte <= 0xFE) {
-      gb18030_first_ = byte;
+      first_ = byte;
       return SawError::kNo;
     }
     return SawError::kYes;
   }
 
-  void Finalize(bool flush, StringBuilder& result) {
-    if (flush && (gb18030_first_ || gb18030_second_ || gb18030_third_)) {
-      gb18030_first_ = 0x00;
-      gb18030_second_ = 0x00;
-      gb18030_third_ = 0x00;
-      saw_error_ = true;
+  void Finalize(bool flush, StringBuilder& result) override {
+    DCHECK(saw_error_);
+    if (flush && (first_ || second_ || third_)) {
+      first_ = 0x00;
+      second_ = 0x00;
+      third_ = 0x00;
+      *saw_error_ = true;
       result.Append(kReplacementCharacter);
     }
   }
 
  private:
-  uint8_t gb18030_first_ = 0x00;
-  uint8_t gb18030_second_ = 0x00;
-  uint8_t gb18030_third_ = 0x00;
-  bool& saw_error_;
-  absl::optional<uint8_t>& prepended_byte_;
+  uint8_t first_ = 0x00;
+  uint8_t second_ = 0x00;
+  uint8_t third_ = 0x00;
+
+  // To share a reference to `saw_error` with `TextCodecCJK::Decoder::Decode`
+  // we should keep a pointer to `saw_error`, and use it in `ParseByte` and
+  // `Finalize`. Since `saw_error` is given as `TextCodecCJK::Decode` argument,
+  // I do not think it is safe to keep the reference after
+  // `TextCodecCJK::Decode` finishes.
+  bool* saw_error_;
+  bool gb18030_2022_enabled_ = false;
 };
 
 }  // namespace
@@ -610,6 +1109,9 @@ std::unique_ptr<TextCodec> TextCodecCJK::Create(const TextEncoding& encoding,
                                                 const void*) {
   const char* name = encoding.GetName();
 
+  // To keep the `TextCodecCJK` constructor private, we intend to `new`
+  // it and use `base::WrapUnique`. Note that we cannot use `std::make_unique`
+  // for a private constructor.
   if (!strcmp(name, kCanonicalNameEucJp)) {
     return base::WrapUnique(new TextCodecCJK(Encoding::kEucJp));
   }
@@ -632,19 +1134,16 @@ std::unique_ptr<TextCodec> TextCodecCJK::Create(const TextEncoding& encoding,
   return nullptr;
 }
 
-String TextCodecCJK::DecodeCommon(
-    const uint8_t* bytes,
-    wtf_size_t length,
-    bool flush,
-    bool stop_on_error,
-    bool& saw_error,
-    const DecodeCallback& byte_parser,
-    absl::optional<DecodeFinalizeCallback> finalize) {
+String TextCodecCJK::Decoder::Decode(const uint8_t* bytes,
+                                     wtf_size_t length,
+                                     bool flush,
+                                     bool stop_on_error,
+                                     bool& saw_error) {
   StringBuilder result;
   result.ReserveCapacity(length);
 
   if (prepended_byte_ &&
-      byte_parser.Run(*std::exchange(prepended_byte_, absl::nullopt), result) ==
+      ParseByte(*std::exchange(prepended_byte_, absl::nullopt), result) ==
           SawError::kYes) {
     saw_error = true;
     result.Append(kReplacementCharacter);
@@ -654,7 +1153,7 @@ String TextCodecCJK::DecodeCommon(
     }
   }
   for (size_t i = 0; i < length; ++i) {
-    if (byte_parser.Run(bytes[i], result) == SawError::kYes) {
+    if (ParseByte(bytes[i], result) == SawError::kYes) {
       saw_error = true;
       result.Append(kReplacementCharacter);
       if (stop_on_error) {
@@ -663,8 +1162,8 @@ String TextCodecCJK::DecodeCommon(
       }
     }
     if (prepended_byte_ &&
-        byte_parser.Run(*std::exchange(prepended_byte_, absl::nullopt),
-                        result) == SawError::kYes) {
+        ParseByte(*std::exchange(prepended_byte_, absl::nullopt), result) ==
+            SawError::kYes) {
       saw_error = true;
       result.Append(kReplacementCharacter);
       if (stop_on_error) {
@@ -680,379 +1179,8 @@ String TextCodecCJK::DecodeCommon(
     result.Append(kReplacementCharacter);
   }
 
-  if (finalize) {
-    finalize->Run(flush, result);
-  }
-
+  Finalize(flush, result);
   return result.ToString();
-}
-
-// https://encoding.spec.whatwg.org/#euc-jp-decoder
-TextCodecCJK::SawError TextCodecCJK::DecodeEucJpInternal(
-    uint8_t byte,
-    StringBuilder& result) {
-  if (uint8_t lead = std::exchange(lead_, 0x00)) {
-    if (lead == 0x8E && byte >= 0xA1 && byte <= 0xDF) {
-      result.Append(0xFF61 - 0xA1 + byte);
-      return SawError::kNo;
-    }
-    if (lead == 0x8F && byte >= 0xA1 && byte <= 0xFE) {
-      jis0212_ = true;
-      lead_ = byte;
-      return SawError::kNo;
-    }
-    if (lead >= 0xA1 && lead <= 0xFE && byte >= 0xA1 && byte <= 0xFE) {
-      uint16_t pointer = (lead - 0xA1) * 94 + byte - 0xA1;
-      if (auto code_point = std::exchange(jis0212_, false)
-                                ? FindCodePointJis0212(pointer)
-                                : FindCodePointInJis0208(pointer)) {
-        result.Append(*code_point);
-        return SawError::kNo;
-      }
-    }
-    if (IsASCII(byte))
-      prepended_byte_ = byte;
-    return SawError::kYes;
-  }
-  if (IsASCII(byte)) {
-    result.Append(static_cast<char>(byte));
-    return SawError::kNo;
-  }
-  if (byte == 0x8E || byte == 0x8F || (byte >= 0xA1 && byte <= 0xFE)) {
-    lead_ = byte;
-    return SawError::kNo;
-  }
-  return SawError::kYes;
-}
-
-String TextCodecCJK::DecodeEucJp(const uint8_t* bytes,
-                                 wtf_size_t length,
-                                 bool flush,
-                                 bool stop_on_error,
-                                 bool& saw_error) {
-  return DecodeCommon(bytes, length, flush, stop_on_error, saw_error,
-                      WTF::BindRepeating(&TextCodecCJK::DecodeEucJpInternal,
-                                         WTF::Unretained(this)),
-                      absl::nullopt);
-}
-
-// https://encoding.spec.whatwg.org/#iso-2022-jp-decoder
-String TextCodecCJK::DecodeIso2022Jp(const uint8_t* bytes,
-                                     wtf_size_t length,
-                                     bool flush,
-                                     bool stop_on_error,
-                                     bool& saw_error) {
-  auto byte_parser = [&](uint8_t byte, StringBuilder& result) {
-    switch (iso2022_jp_decoder_state_) {
-      case Iso2022JpDecoderState::kAscii:
-        if (byte == 0x1B) {
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kEscapeStart;
-          break;
-        }
-        if (byte <= 0x7F && byte != 0x0E && byte != 0x0F && byte != 0x1B) {
-          iso2022_jp_output_ = false;
-          result.Append(byte);
-          break;
-        }
-        iso2022_jp_output_ = false;
-        return SawError::kYes;
-      case Iso2022JpDecoderState::kRoman:
-        if (byte == 0x1B) {
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kEscapeStart;
-          break;
-        }
-        if (byte == 0x5C) {
-          iso2022_jp_output_ = false;
-          result.Append(static_cast<UChar>(kYenSignCharacter));
-          break;
-        }
-        if (byte == 0x7E) {
-          iso2022_jp_output_ = false;
-          result.Append(static_cast<UChar>(kOverlineCharacter));
-          break;
-        }
-        if (byte <= 0x7F && byte != 0x0E && byte != 0x0F && byte != 0x1B &&
-            byte != 0x5C && byte != 0x7E) {
-          iso2022_jp_output_ = false;
-          result.Append(byte);
-          break;
-        }
-        iso2022_jp_output_ = false;
-        return SawError::kYes;
-      case Iso2022JpDecoderState::kKatakana:
-        if (byte == 0x1B) {
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kEscapeStart;
-          break;
-        }
-        if (byte >= 0x21 && byte <= 0x5F) {
-          iso2022_jp_output_ = false;
-          result.Append(static_cast<UChar>(0xFF61 - 0x21 + byte));
-          break;
-        }
-        iso2022_jp_output_ = false;
-        return SawError::kYes;
-      case Iso2022JpDecoderState::kLeadByte:
-        if (byte == 0x1B) {
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kEscapeStart;
-          break;
-        }
-        if (byte >= 0x21 && byte <= 0x7E) {
-          iso2022_jp_output_ = false;
-          lead_ = byte;
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kTrailByte;
-          break;
-        }
-        iso2022_jp_output_ = false;
-        return SawError::kYes;
-      case Iso2022JpDecoderState::kTrailByte:
-        if (byte == 0x1B) {
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kEscapeStart;
-          return SawError::kYes;
-        }
-        iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kLeadByte;
-        if (byte >= 0x21 && byte <= 0x7E) {
-          uint16_t pointer = (lead_ - 0x21) * 94 + byte - 0x21;
-          if (auto code_point = FindCodePointInJis0208(pointer)) {
-            result.Append(*code_point);
-            break;
-          }
-          return SawError::kYes;
-        }
-        return SawError::kYes;
-      case Iso2022JpDecoderState::kEscapeStart:
-        if (byte == 0x24 || byte == 0x28) {
-          lead_ = byte;
-          iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kEscape;
-          break;
-        }
-        prepended_byte_ = byte;
-        iso2022_jp_output_ = false;
-        iso2022_jp_decoder_state_ = iso2022_jp_decoder_output_state_;
-        return SawError::kYes;
-      case Iso2022JpDecoderState::kEscape: {
-        uint8_t lead = std::exchange(lead_, 0x00);
-        absl::optional<Iso2022JpDecoderState> state;
-        if (lead == 0x28) {
-          if (byte == 0x42)
-            state = Iso2022JpDecoderState::kAscii;
-          else if (byte == 0x4A)
-            state = Iso2022JpDecoderState::kRoman;
-          else if (byte == 0x49)
-            state = Iso2022JpDecoderState::kKatakana;
-        } else if (lead == 0x24 && (byte == 0x40 || byte == 0x42)) {
-          state = Iso2022JpDecoderState::kLeadByte;
-        }
-        if (state) {
-          iso2022_jp_decoder_state_ = *state;
-          iso2022_jp_decoder_output_state_ = *state;
-          if (std::exchange(iso2022_jp_output_, true))
-            return SawError::kYes;
-          break;
-        }
-        prepended_byte_ = lead;
-        iso2022_jp_second_prepended_byte_ = byte;
-        iso2022_jp_output_ = false;
-        iso2022_jp_decoder_state_ = iso2022_jp_decoder_output_state_;
-        return SawError::kYes;
-      }
-    }
-    return SawError::kNo;
-  };
-
-  StringBuilder result;
-  result.ReserveCapacity(length);
-
-  if (prepended_byte_ &&
-      byte_parser(*std::exchange(prepended_byte_, absl::nullopt), result) ==
-          SawError::kYes) {
-    saw_error = true;
-    result.Append(kReplacementCharacter);
-    if (stop_on_error) {
-      lead_ = 0x00;
-      return result.ToString();
-    }
-  }
-  if (iso2022_jp_second_prepended_byte_ &&
-      byte_parser(
-          *std::exchange(iso2022_jp_second_prepended_byte_, absl::nullopt),
-          result) == SawError::kYes &&
-      stop_on_error) {
-    saw_error = true;
-    result.Append(kReplacementCharacter);
-    if (stop_on_error) {
-      lead_ = 0x00;
-      return result.ToString();
-    }
-  }
-  for (size_t i = 0; i < length; ++i) {
-    if (byte_parser(bytes[i], result) == SawError::kYes) {
-      saw_error = true;
-      result.Append(kReplacementCharacter);
-      if (stop_on_error) {
-        lead_ = 0x00;
-        return result.ToString();
-      }
-    }
-    if (prepended_byte_ &&
-        byte_parser(*std::exchange(prepended_byte_, absl::nullopt), result) ==
-            SawError::kYes) {
-      saw_error = true;
-      result.Append(kReplacementCharacter);
-      if (stop_on_error) {
-        lead_ = 0x00;
-        return result.ToString();
-      }
-    }
-    if (iso2022_jp_second_prepended_byte_ &&
-        byte_parser(
-            *std::exchange(iso2022_jp_second_prepended_byte_, absl::nullopt),
-            result) == SawError::kYes &&
-        stop_on_error) {
-      saw_error = true;
-      result.Append(kReplacementCharacter);
-      if (stop_on_error) {
-        lead_ = 0x00;
-        return result.ToString();
-      }
-    }
-  }
-
-  if (flush) {
-    switch (iso2022_jp_decoder_state_) {
-      case Iso2022JpDecoderState::kAscii:
-      case Iso2022JpDecoderState::kRoman:
-      case Iso2022JpDecoderState::kKatakana:
-      case Iso2022JpDecoderState::kLeadByte:
-        break;
-      case Iso2022JpDecoderState::kTrailByte:
-        iso2022_jp_decoder_state_ = Iso2022JpDecoderState::kLeadByte;
-        [[fallthrough]];
-      case Iso2022JpDecoderState::kEscapeStart:
-        saw_error = true;
-        result.Append(kReplacementCharacter);
-        break;
-      case Iso2022JpDecoderState::kEscape:
-        saw_error = true;
-        result.Append(kReplacementCharacter);
-        if (lead_) {
-          DCHECK(IsASCII(lead_));
-          result.Append(std::exchange(lead_, 0x00));
-        }
-        break;
-    }
-  }
-
-  return result.ToString();
-}
-
-// https://encoding.spec.whatwg.org/#shift_jis-decoder
-TextCodecCJK::SawError TextCodecCJK::DecodeShiftJisInternal(
-    uint8_t byte,
-    StringBuilder& result) {
-  if (uint8_t lead = std::exchange(lead_, 0x00)) {
-    uint8_t offset = byte < 0x7F ? 0x40 : 0x41;
-    uint8_t lead_offset = lead < 0xA0 ? 0x81 : 0xC1;
-    if ((byte >= 0x40 && byte <= 0x7E) || (byte >= 0x80 && byte <= 0xFC)) {
-      uint16_t pointer = (lead - lead_offset) * 188 + byte - offset;
-      if (pointer >= 8836 && pointer <= 10715) {
-        result.Append(static_cast<UChar>(0xE000 - 8836 + pointer));
-        return SawError::kNo;
-      }
-      if (auto code_point = FindCodePointInJis0208(pointer)) {
-        result.Append(*code_point);
-        return SawError::kNo;
-      }
-    }
-    if (IsASCII(byte))
-      prepended_byte_ = byte;
-    return SawError::kYes;
-  }
-  if (IsASCII(byte) || byte == 0x80) {
-    result.Append(byte);
-    return SawError::kNo;
-  }
-  if (byte >= 0xA1 && byte <= 0xDF) {
-    result.Append(static_cast<UChar>(0xFF61 - 0xA1 + byte));
-    return SawError::kNo;
-  }
-  if ((byte >= 0x81 && byte <= 0x9F) || (byte >= 0xE0 && byte <= 0xFC)) {
-    lead_ = byte;
-    return SawError::kNo;
-  }
-  return SawError::kYes;
-}
-String TextCodecCJK::DecodeShiftJis(const uint8_t* bytes,
-                                    wtf_size_t length,
-                                    bool flush,
-                                    bool stop_on_error,
-                                    bool& saw_error) {
-  return DecodeCommon(bytes, length, flush, stop_on_error, saw_error,
-                      WTF::BindRepeating(&TextCodecCJK::DecodeShiftJisInternal,
-                                         WTF::Unretained(this)),
-                      absl::nullopt);
-}
-
-// https://encoding.spec.whatwg.org/#euc-kr-decoder
-TextCodecCJK::SawError TextCodecCJK::DecodeEucKrInternal(
-    uint8_t byte,
-    StringBuilder& result) {
-  if (uint8_t lead = std::exchange(lead_, 0x00)) {
-    if (byte >= 0x41 && byte <= 0xFE) {
-      if (auto code_point =
-              FindFirstInSortedPairs(EnsureEucKrEncodeIndexForDecode(),
-                                     (lead - 0x81) * 190 + byte - 0x41)) {
-        result.Append(*code_point);
-        return SawError::kNo;
-      }
-    }
-    if (IsASCII(byte))
-      prepended_byte_ = byte;
-    return SawError::kYes;
-  }
-  if (IsASCII(byte)) {
-    result.Append(byte);
-    return SawError::kNo;
-  }
-  if (byte >= 0x81 && byte <= 0xFE) {
-    lead_ = byte;
-    return SawError::kNo;
-  }
-  return SawError::kYes;
-}
-
-String TextCodecCJK::DecodeEucKr(const uint8_t* bytes,
-                                 wtf_size_t length,
-                                 bool flush,
-                                 bool stop_on_error,
-                                 bool& saw_error) {
-  return DecodeCommon(bytes, length, flush, stop_on_error, saw_error,
-                      WTF::BindRepeating(&TextCodecCJK::DecodeEucKrInternal,
-                                         WTF::Unretained(this)),
-                      absl::nullopt);
-}
-
-// https://encoding.spec.whatwg.org/#gb18030-decoder
-String TextCodecCJK::DecodeGb18030(const uint8_t* bytes,
-                                   wtf_size_t length,
-                                   bool flush,
-                                   bool stop_on_error,
-                                   bool& saw_error) {
-  Gb18030Decoder decoder(saw_error, prepended_byte_);
-  auto result = DecodeCommon(
-      bytes, length, flush, stop_on_error, saw_error,
-      WTF::BindRepeating(&Gb18030Decoder::ParseByte, WTF::Unretained(&decoder)),
-      WTF::BindRepeating(&Gb18030Decoder::Finalize, WTF::Unretained(&decoder)));
-
-  return result;
-}
-
-// https://encoding.spec.whatwg.org/#gbk-decoder
-String TextCodecCJK::DecodeGbk(const uint8_t* bytes,
-                               wtf_size_t length,
-                               bool flush,
-                               bool stop_on_error,
-                               bool& saw_error) {
-  return DecodeGb18030(bytes, length, flush, stop_on_error, saw_error);
 }
 
 String TextCodecCJK::Decode(const char* charBytes,
@@ -1062,22 +1190,29 @@ String TextCodecCJK::Decode(const char* charBytes,
                             bool& saw_error) {
   auto* bytes = reinterpret_cast<const uint8_t*>(charBytes);
   bool flush = flush_behavior != FlushBehavior::kDoNotFlush;
-  switch (encoding_) {
-    case Encoding::kEucJp:
-      return DecodeEucJp(bytes, length, flush, stop_on_error, saw_error);
-    case Encoding::kShiftJis:
-      return DecodeShiftJis(bytes, length, flush, stop_on_error, saw_error);
-    case Encoding::kIso2022Jp:
-      return DecodeIso2022Jp(bytes, length, flush, stop_on_error, saw_error);
-    case Encoding::kEucKr:
-      return DecodeEucKr(bytes, length, flush, stop_on_error, saw_error);
-    case Encoding::kGbk:
-      return DecodeGbk(bytes, length, flush, stop_on_error, saw_error);
-    case Encoding::kGb18030:
-      return DecodeGb18030(bytes, length, flush, stop_on_error, saw_error);
+  if (!decoder_) {
+    switch (encoding_) {
+      case Encoding::kEucJp:
+        decoder_ = std::make_unique<EucJpDecoder>();
+        break;
+      case Encoding::kShiftJis:
+        decoder_ = std::make_unique<ShiftJisDecoder>();
+        break;
+      case Encoding::kIso2022Jp:
+        decoder_ = std::make_unique<Iso2022JpDecoder>();
+        break;
+      case Encoding::kEucKr:
+        decoder_ = std::make_unique<EucKrDecoder>();
+        break;
+      // GBK and GB18030 use the same decoder.
+      case Encoding::kGbk:
+        ABSL_FALLTHROUGH_INTENDED;
+      case Encoding::kGb18030:
+        decoder_ = std::make_unique<Gb18030Decoder>();
+        break;
+    }
   }
-  NOTREACHED();
-  return {};
+  return decoder_->Decode(bytes, length, flush, stop_on_error, saw_error);
 }
 
 Vector<uint8_t> TextCodecCJK::EncodeCommon(StringView string,

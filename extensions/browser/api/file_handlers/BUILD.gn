@@ -22,12 +22,14 @@ source_set("file_handlers") {
     sources += [ "non_native_file_system_delegate.h" ]
   }
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base:base",
     "//build:chromeos_buildflags",
+    "//components/file_access",
     "//content/public/browser",
     "//content/public/common",
-    "//extensions/browser/api",
     "//extensions/common",
     "//extensions/common/api",
     "//net",

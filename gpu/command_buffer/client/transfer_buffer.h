@@ -239,10 +239,15 @@ class GPU_EXPORT ScopedTransferBufferPtr {
   void Shrink(unsigned int new_size);
 
  private:
-  void* buffer_;
+  raw_ptr<void> buffer_;
   unsigned int size_;
-  CommandBufferHelper* helper_;
-  TransferBufferInterface* transfer_buffer_;
+
+  // Found dangling on `linux-rel` in
+  // `gpu_tests.trace_integration_test.TraceIntegrationTest.
+  // WebGPUCachingTraceTest_ComputePipelineMainThread`.
+  raw_ptr<CommandBufferHelper, DanglingUntriaged> helper_;
+
+  raw_ptr<TransferBufferInterface, DanglingUntriaged> transfer_buffer_;
 };
 
 template <typename T>

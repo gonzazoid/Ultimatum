@@ -8,12 +8,14 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
 #include "chrome/browser/feature_guide/notifications/feature_type.h"
 #include "chrome/browser/notifications/scheduler/public/notification_scheduler_client.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/segmentation_platform/public/features.h"
 
 namespace notifications {
 class NotificationSchedulerClient;
@@ -25,9 +27,6 @@ namespace features {
 
 // Main feature flag for the feature notification guide feature.
 BASE_DECLARE_FEATURE(kFeatureNotificationGuide);
-
-// Feature flag used for running the segmentation model for low engaged users.
-BASE_DECLARE_FEATURE(kSegmentationModelLowEngagedUsers);
 
 // Feature flag to determine whether to skip check for the low engaged users.
 BASE_DECLARE_FEATURE(kSkipCheckForLowEngagedUsers);
@@ -77,7 +76,7 @@ class FeatureNotificationGuideService : public KeyedService,
     virtual ~Delegate();
 
    private:
-    FeatureNotificationGuideService* service_{nullptr};
+    raw_ptr<FeatureNotificationGuideService> service_{nullptr};
   };
 
   using NotificationDataCallback = base::OnceCallback<void(

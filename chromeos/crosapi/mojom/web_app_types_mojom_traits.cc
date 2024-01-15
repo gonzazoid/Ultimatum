@@ -71,6 +71,15 @@ crosapi::mojom::WebAppInstallResultCode EnumTraits<
           kAppNotInRegistrarAfterCommit;
     case webapps::InstallResultCode::kHaltedBySyncUninstall:
       return crosapi::mojom::WebAppInstallResultCode::kHaltedBySyncUninstall;
+    case webapps::InstallResultCode::kInstallURLInvalid:
+      return crosapi::mojom::WebAppInstallResultCode::kInstallURLInvalid;
+    case webapps::InstallResultCode::kIconDownloadingFailed:
+      return crosapi::mojom::WebAppInstallResultCode::kIconDownloadingFailed;
+    case webapps::InstallResultCode::kCancelledDueToMainFrameNavigation:
+      return crosapi::mojom::WebAppInstallResultCode::
+          kCancelledDueToMainFrameNavigation;
+    case webapps::InstallResultCode::kNoValidIconsInManifest:
+      return crosapi::mojom::WebAppInstallResultCode::kNoValidIconsInManifest;
   };
 }
 
@@ -157,6 +166,19 @@ bool EnumTraits<crosapi::mojom::WebAppInstallResultCode,
     case crosapi::mojom::WebAppInstallResultCode::kHaltedBySyncUninstall:
       *output = webapps::InstallResultCode::kHaltedBySyncUninstall;
       return true;
+    case crosapi::mojom::WebAppInstallResultCode::kInstallURLInvalid:
+      *output = webapps::InstallResultCode::kInstallURLInvalid;
+      return true;
+    case crosapi::mojom::WebAppInstallResultCode::kIconDownloadingFailed:
+      *output = webapps::InstallResultCode::kIconDownloadingFailed;
+      return true;
+    case crosapi::mojom::WebAppInstallResultCode::
+        kCancelledDueToMainFrameNavigation:
+      *output = webapps::InstallResultCode::kCancelledDueToMainFrameNavigation;
+      return true;
+    case crosapi::mojom::WebAppInstallResultCode::kNoValidIconsInManifest:
+      *output = webapps::InstallResultCode::kNoValidIconsInManifest;
+      return true;
   };
 
   NOTREACHED();
@@ -175,6 +197,8 @@ crosapi::mojom::WebAppUninstallResultCode EnumTraits<
       return crosapi::mojom::WebAppUninstallResultCode::kCancelled;
     case webapps::UninstallResultCode::kError:
       return crosapi::mojom::WebAppUninstallResultCode::kError;
+    case webapps::UninstallResultCode::kShutdown:
+      return crosapi::mojom::WebAppUninstallResultCode::kShutdown;
   };
 }
 
@@ -194,6 +218,9 @@ bool EnumTraits<crosapi::mojom::WebAppUninstallResultCode,
       return true;
     case crosapi::mojom::WebAppUninstallResultCode::kError:
       *output = webapps::UninstallResultCode::kError;
+      return true;
+    case crosapi::mojom::WebAppUninstallResultCode::kShutdown:
+      *output = webapps::UninstallResultCode::kShutdown;
       return true;
   };
 

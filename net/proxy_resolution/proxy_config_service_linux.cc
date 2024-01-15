@@ -13,11 +13,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -41,6 +41,8 @@
 #endif  // defined(USE_GIO)
 
 namespace net {
+
+class ScopedAllowBlockingForSettingGetter : public base::ScopedAllowBlocking {};
 
 namespace {
 
@@ -119,7 +121,7 @@ ProxyConfigServiceLinux::Delegate::~Delegate() = default;
 bool ProxyConfigServiceLinux::Delegate::GetProxyFromEnvVarForScheme(
     base::StringPiece variable,
     ProxyServer::Scheme scheme,
-    ProxyServer* result_server) {
+    ProxyChain* result_chain) {
   std::string env_value;
   if (!env_var_getter_->GetVar(variable, &env_value))
     return false;
@@ -128,10 +130,11 @@ bool ProxyConfigServiceLinux::Delegate::GetProxyFromEnvVarForScheme(
     return false;
 
   env_value = FixupProxyHostScheme(scheme, env_value);
-  ProxyServer proxy_server =
-      ProxyUriToProxyServer(env_value, ProxyServer::SCHEME_HTTP);
-  if (proxy_server.is_valid() && !proxy_server.is_direct()) {
-    *result_server = proxy_server;
+  ProxyChain proxy_chain =
+      ProxyUriToProxyChain(env_value, ProxyServer::SCHEME_HTTP);
+  if (proxy_chain.IsValid() &&
+      (proxy_chain.is_direct() || proxy_chain.is_single_proxy())) {
+    *result_chain = proxy_chain;
     return true;
   }
   LOG(ERROR) << "Failed to parse environment variable " << variable;
@@ -140,9 +143,9 @@ bool ProxyConfigServiceLinux::Delegate::GetProxyFromEnvVarForScheme(
 
 bool ProxyConfigServiceLinux::Delegate::GetProxyFromEnvVar(
     base::StringPiece variable,
-    ProxyServer* result_server) {
+    ProxyChain* result_chain) {
   return GetProxyFromEnvVarForScheme(variable, ProxyServer::SCHEME_HTTP,
-                                     result_server);
+                                     result_chain);
 }
 
 absl::optional<ProxyConfigWithAnnotation>
@@ -166,25 +169,25 @@ ProxyConfigServiceLinux::Delegate::GetConfigFromEnv() {
         config, NetworkTrafficAnnotationTag(traffic_annotation_));
   }
   // "all_proxy" is a shortcut to avoid defining {http,https,ftp}_proxy.
-  ProxyServer proxy_server;
-  if (GetProxyFromEnvVar("all_proxy", &proxy_server)) {
+  ProxyChain proxy_chain;
+  if (GetProxyFromEnvVar("all_proxy", &proxy_chain)) {
     config.proxy_rules().type = ProxyConfig::ProxyRules::Type::PROXY_LIST;
-    config.proxy_rules().single_proxies.SetSingleProxyServer(proxy_server);
+    config.proxy_rules().single_proxies.SetSingleProxyChain(proxy_chain);
   } else {
-    bool have_http = GetProxyFromEnvVar("http_proxy", &proxy_server);
+    bool have_http = GetProxyFromEnvVar("http_proxy", &proxy_chain);
     if (have_http)
-      config.proxy_rules().proxies_for_http.SetSingleProxyServer(proxy_server);
+      config.proxy_rules().proxies_for_http.SetSingleProxyChain(proxy_chain);
     // It would be tempting to let http_proxy apply for all protocols
     // if https_proxy and ftp_proxy are not defined. Googling turns up
     // several documents that mention only http_proxy. But then the
     // user really might not want to proxy https. And it doesn't seem
     // like other apps do this. So we will refrain.
-    bool have_https = GetProxyFromEnvVar("https_proxy", &proxy_server);
+    bool have_https = GetProxyFromEnvVar("https_proxy", &proxy_chain);
     if (have_https)
-      config.proxy_rules().proxies_for_https.SetSingleProxyServer(proxy_server);
-    bool have_ftp = GetProxyFromEnvVar("ftp_proxy", &proxy_server);
+      config.proxy_rules().proxies_for_https.SetSingleProxyChain(proxy_chain);
+    bool have_ftp = GetProxyFromEnvVar("ftp_proxy", &proxy_chain);
     if (have_ftp)
-      config.proxy_rules().proxies_for_ftp.SetSingleProxyServer(proxy_server);
+      config.proxy_rules().proxies_for_ftp.SetSingleProxyChain(proxy_chain);
     if (have_http || have_https || have_ftp) {
       // mustn't change type unless some rules are actually set.
       config.proxy_rules().type =
@@ -200,9 +203,9 @@ ProxyConfigServiceLinux::Delegate::GetConfigFromEnv() {
     if (env_var_getter_->GetVar("SOCKS_VERSION", &env_version)
         && env_version == "4")
       scheme = ProxyServer::SCHEME_SOCKS4;
-    if (GetProxyFromEnvVarForScheme("SOCKS_SERVER", scheme, &proxy_server)) {
+    if (GetProxyFromEnvVarForScheme("SOCKS_SERVER", scheme, &proxy_chain)) {
       config.proxy_rules().type = ProxyConfig::ProxyRules::Type::PROXY_LIST;
-      config.proxy_rules().single_proxies.SetSingleProxyServer(proxy_server);
+      config.proxy_rules().single_proxies.SetSingleProxyChain(proxy_chain);
     }
   }
   // Look for the proxy bypass list.
@@ -260,7 +263,7 @@ class SettingGetterImplGSettings
         ShutDown();
       } else {
         LOG(WARNING) << "~SettingGetterImplGSettings: leaking gsettings client";
-        client_ = nullptr;
+        client_.ExtractAsDangling();
       }
     }
     DCHECK(!client_);
@@ -296,11 +299,11 @@ class SettingGetterImplGSettings
     if (client_) {
       DCHECK(task_runner_->RunsTasksInCurrentSequence());
       // This also disables gsettings notifications.
-      g_object_unref(socks_client_);
-      g_object_unref(ftp_client_);
-      g_object_unref(https_client_);
-      g_object_unref(http_client_);
-      g_object_unref(client_);
+      g_object_unref(socks_client_.ExtractAsDangling());
+      g_object_unref(ftp_client_.ExtractAsDangling());
+      g_object_unref(https_client_.ExtractAsDangling());
+      g_object_unref(http_client_.ExtractAsDangling());
+      g_object_unref(client_.ExtractAsDangling());
       // We only need to null client_ because it's the only one that we check.
       client_ = nullptr;
       task_runner_ = nullptr;
@@ -520,7 +523,7 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
       : debounce_timer_(std::make_unique<base::OneShotTimer>()),
         env_var_getter_(env_var_getter) {
     // This has to be called on the UI thread (http://crbug.com/69057).
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    ScopedAllowBlockingForSettingGetter allow_blocking;
 
     // Derive the location(s) of the kde config dir from the environment.
     std::string home;
@@ -533,13 +536,12 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
       if (!env_var_getter->GetVar(base::env_vars::kHome, &home))
         // User has no $HOME? Give up. Later we'll report the failure.
         return;
-      if (base::nix::GetDesktopEnvironment(env_var_getter) ==
-          base::nix::DESKTOP_ENVIRONMENT_KDE3) {
+      auto desktop = base::nix::GetDesktopEnvironment(env_var_getter);
+      if (desktop == base::nix::DESKTOP_ENVIRONMENT_KDE3) {
         // KDE3 always uses .kde for its configuration.
         base::FilePath kde_path = base::FilePath(home).Append(".kde");
         kde_config_dirs_.emplace_back(KDEHomeToConfigPath(kde_path));
-      } else if (base::nix::GetDesktopEnvironment(env_var_getter) ==
-                 base::nix::DESKTOP_ENVIRONMENT_KDE4) {
+      } else if (desktop == base::nix::DESKTOP_ENVIRONMENT_KDE4) {
         // Some distributions patch KDE4 to use .kde4 instead of .kde, so that
         // both can be installed side-by-side. Sadly they don't all do this, and
         // they don't always do this: some distributions have started switching
@@ -571,7 +573,8 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
         } else {
           kde_config_dirs_.emplace_back(KDEHomeToConfigPath(kde3_path));
         }
-      } else {
+      } else if (desktop == base::nix::DESKTOP_ENVIRONMENT_KDE5 ||
+                 desktop == base::nix::DESKTOP_ENVIRONMENT_KDE6) {
         // KDE 5 migrated to ~/.config for storing kioslaverc.
         kde_config_dirs_.emplace_back(base::FilePath(home).Append(".config"));
 
@@ -611,7 +614,7 @@ class SettingGetterImplKDE : public ProxyConfigServiceLinux::SettingGetter {
   bool Init(const scoped_refptr<base::SingleThreadTaskRunner>& glib_task_runner)
       override {
     // This has to be called on the UI thread (http://crbug.com/69057).
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    ScopedAllowBlockingForSettingGetter allow_blocking;
     DCHECK_LT(inotify_fd_, 0);
     inotify_fd_ = inotify_init();
     if (inotify_fd_ < 0) {
@@ -1054,8 +1057,9 @@ bool ProxyConfigServiceLinux::Delegate::GetProxyFromSettings(
   // gsettings settings do not appear to distinguish between SOCKS version. We
   // default to version 5. For more information on this policy decision, see:
   // http://code.google.com/p/chromium/issues/detail?id=55912#c2
-  ProxyServer::Scheme scheme = (host_key == SettingGetter::PROXY_SOCKS_HOST) ?
-      ProxyServer::SCHEME_SOCKS5 : ProxyServer::SCHEME_HTTP;
+  ProxyServer::Scheme scheme = host_key == SettingGetter::PROXY_SOCKS_HOST
+                                   ? ProxyServer::SCHEME_SOCKS5
+                                   : ProxyServer::SCHEME_HTTP;
   host = FixupProxyHostScheme(scheme, host);
   ProxyServer proxy_server =
       ProxyUriToProxyServer(host, ProxyServer::SCHEME_HTTP);
@@ -1246,6 +1250,7 @@ ProxyConfigServiceLinux::Delegate::Delegate(
     case base::nix::DESKTOP_ENVIRONMENT_KDE3:
     case base::nix::DESKTOP_ENVIRONMENT_KDE4:
     case base::nix::DESKTOP_ENVIRONMENT_KDE5:
+    case base::nix::DESKTOP_ENVIRONMENT_KDE6:
       setting_getter_ =
           std::make_unique<SettingGetterImplKDE>(env_var_getter_.get());
       break;

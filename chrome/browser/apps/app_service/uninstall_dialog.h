@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/services/app_service/public/cpp/app_types.h"
@@ -16,11 +16,14 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/widget/widget.h"
 
-class NativeWindowTracker;
 class Profile;
 
 namespace gfx {
 class ImageSkia;
+}
+
+namespace views {
+class NativeWindowTracker;
 }
 
 namespace apps {
@@ -29,6 +32,9 @@ class UninstallDialog;
 }  // namespace apps
 
 namespace apps {
+
+using OnUninstallForTestingCallback = base::OnceCallback<void(bool)>;
+using OnDialogCreatedCallback = base::OnceCallback<void(views::Widget*)>;
 
 // Currently, app uninstallation on Chrome OS invokes a specific dialog per app
 // type, Chrome Apps / PWAs, ARC apps and Crostini. There are 3 separate views
@@ -68,7 +74,7 @@ class UninstallDialog {
     UninstallDialog* uninstall_dialog() const { return uninstall_dialog_; }
 
    private:
-    raw_ptr<UninstallDialog> uninstall_dialog_;
+    raw_ptr<UninstallDialog, AcrossTasksDanglingUntriaged> uninstall_dialog_;
   };
 
   // Called when the dialog closes after the user has made a decision about
@@ -82,8 +88,6 @@ class UninstallDialog {
                               bool report_rebuse,
                               UninstallDialog* uninstall_dialog)>;
 
-  using OnUninstallForTestingCallback = base::OnceCallback<void(bool)>;
-
   UninstallDialog(Profile* profile,
                   apps::AppType app_type,
                   const std::string& app_id,
@@ -96,7 +100,14 @@ class UninstallDialog {
 
   // Loads the app icon to show the icon in the uninstall dialog before creating
   // the dialog view.
-  void PrepareToShow(IconKey icon_key, apps::IconLoader* icon_loader);
+  void PrepareToShow(IconKey icon_key,
+                     apps::IconLoader* icon_loader,
+                     int32_t icon_size);
+
+  // Closes this dialog if it is open. If the dialog is not open yet because
+  // icons are still loading, immediately runs `uninstall_callback_` so that
+  // `this` can be deleted.
+  void CloseDialog();
 
   views::Widget* GetWidget();
 
@@ -120,10 +131,10 @@ class UninstallDialog {
 
   OnUninstallForTestingCallback uninstall_dialog_created_callback_;
 
-  raw_ptr<views::Widget> widget_ = nullptr;
+  raw_ptr<views::Widget, AcrossTasksDanglingUntriaged> widget_ = nullptr;
 
   // Tracks whether |parent_window_| got destroyed.
-  std::unique_ptr<NativeWindowTracker> parent_window_tracker_;
+  std::unique_ptr<views::NativeWindowTracker> parent_window_tracker_;
 
   base::WeakPtrFactory<UninstallDialog> weak_ptr_factory_{this};
 };

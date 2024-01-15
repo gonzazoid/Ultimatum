@@ -5,7 +5,7 @@
 package org.chromium.chrome.browser.init;
 
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -35,15 +35,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Tests for {@link AsyncInitTaskRunner}
- */
+/** Tests for {@link AsyncInitTaskRunner} */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowAsyncTask.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowAsyncTask.class})
 @LooperMode(LooperMode.Mode.LEGACY)
 public class AsyncInitTaskRunnerTest {
-    private static final int THREAD_WAIT_TIME_MS = 1000;
-
     private LibraryLoader mLoader;
     private AsyncInitTaskRunner mRunner;
     private CountDownLatch mLatch;
@@ -60,20 +58,24 @@ public class AsyncInitTaskRunnerTest {
         PostTask.setPrenativeThreadPoolExecutorForTesting(new RoboExecutorService());
 
         mLatch = new CountDownLatch(1);
-        mRunner = spy(new AsyncInitTaskRunner() {
-            @Override
-            protected void onSuccess() {
-                mLatch.countDown();
-            }
-            @Override
-            protected void onFailure(Exception failureCause) {
-                mLatch.countDown();
-            }
-            @Override
-            protected Executor getTaskPerThreadExecutor() {
-                return new RoboExecutorService();
-            }
-        });
+        mRunner =
+                spy(
+                        new AsyncInitTaskRunner() {
+                            @Override
+                            protected void onSuccess() {
+                                mLatch.countDown();
+                            }
+
+                            @Override
+                            protected void onFailure(Exception failureCause) {
+                                mLatch.countDown();
+                            }
+
+                            @Override
+                            protected Executor getTaskPerThreadExecutor() {
+                                return new RoboExecutorService();
+                            }
+                        });
         // Allow test to run on all builds
         when(mRunner.shouldFetchVariationsSeedDuringFirstRun()).thenReturn(true);
         doNothing().when(mRunner).prefetchLibrary();

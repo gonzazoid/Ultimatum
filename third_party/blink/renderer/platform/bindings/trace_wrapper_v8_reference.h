@@ -44,8 +44,12 @@ struct VectorTraits<blink::TraceWrapperV8Reference<T>>
   // copied, and moved.
   static constexpr bool kCanInitializeWithMemset = true;
   static constexpr bool kCanClearUnusedSlotsWithMemset = true;
-  static constexpr bool kCanCopyWithMemcpy = true;
-  static constexpr bool kCanMoveWithMemcpy = true;
+  // v8::TracedReference assumes that references uniquely point to an internal
+  // node.
+  static constexpr bool kCanCopyWithMemcpy = false;
+  // TODO(chromium:1322114): Temporarily disable move with memcpy to evaluate
+  // impact on crashers. Move should always be followed by a clear (non-dtor).
+  static constexpr bool kCanMoveWithMemcpy = false;
 
   // TraceWrapperV8Reference supports concurrent tracing.
   static constexpr bool kCanTraceConcurrently = true;

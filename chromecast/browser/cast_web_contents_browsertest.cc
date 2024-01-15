@@ -8,20 +8,19 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
 #include "chromecast/browser/cast_browser_context.h"
@@ -85,7 +84,7 @@ base::FilePath GetTestDataPath() {
 
 base::FilePath GetTestDataFilePath(const std::string& name) {
   base::FilePath file_path;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path));
   return file_path.Append(GetTestDataPath()).AppendASCII(name);
 }
 
@@ -176,8 +175,8 @@ class TestMessageReceiver : public blink::WebMessagePort::MessageReceiver {
   ~TestMessageReceiver() override = default;
 
   void WaitForNextIncomingMessage(
-      base::OnceCallback<
-          void(std::string, absl::optional<blink::WebMessagePort>)> callback) {
+      base::OnceCallback<void(std::string,
+                              std::optional<blink::WebMessagePort>)> callback) {
     DCHECK(message_received_callback_.is_null())
         << "Only one waiting event is allowed.";
     message_received_callback_ = std::move(callback);
@@ -195,12 +194,12 @@ class TestMessageReceiver : public blink::WebMessagePort::MessageReceiver {
       return false;
     }
 
-    absl::optional<blink::WebMessagePort> incoming_port = absl::nullopt;
+    std::optional<blink::WebMessagePort> incoming_port = std::nullopt;
     // Only one MessagePort should be sent to here.
     if (!message.ports.empty()) {
       DCHECK(message.ports.size() == 1)
           << "Only one control port can be provided";
-      incoming_port = absl::make_optional<blink::WebMessagePort>(
+      incoming_port = std::make_optional<blink::WebMessagePort>(
           std::move(message.ports[0]));
     }
 
@@ -217,7 +216,7 @@ class TestMessageReceiver : public blink::WebMessagePort::MessageReceiver {
   }
 
   base::OnceCallback<void(std::string,
-                          absl::optional<blink::WebMessagePort> incoming_port)>
+                          std::optional<blink::WebMessagePort> incoming_port)>
       message_received_callback_;
 
   base::OnceCallback<void()> on_pipe_error_callback_;
@@ -801,7 +800,7 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, PostMessagePassMessagePort) {
 
   TestMessageReceiver message_receiver;
   platform_port.SetReceiver(&message_receiver,
-                            base::ThreadTaskRunnerHandle::Get());
+                            base::SingleThreadTaskRunner::GetCurrentDefault());
 
   // Make sure we could send a MessagePort (ScopedMessagePipeHandle) to the
   // page.
@@ -810,7 +809,7 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, PostMessagePassMessagePort) {
     auto quit_closure = run_loop.QuitClosure();
     auto received_message_callback = base::BindOnce(
         [](base::OnceClosure loop_quit_closure, std::string port_msg,
-           absl::optional<blink::WebMessagePort> incoming_port) {
+           std::optional<blink::WebMessagePort> incoming_port) {
           EXPECT_EQ("got_port", port_msg);
           std::move(loop_quit_closure).Run();
         },
@@ -831,7 +830,7 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest, PostMessagePassMessagePort) {
     auto quit_closure = run_loop.QuitClosure();
     auto received_message_callback = base::BindOnce(
         [](base::OnceClosure loop_quit_closure, std::string port_msg,
-           absl::optional<blink::WebMessagePort> incoming_port) {
+           std::optional<blink::WebMessagePort> incoming_port) {
           EXPECT_EQ("ack ping", port_msg);
           std::move(loop_quit_closure).Run();
         },
@@ -868,7 +867,7 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest,
   // Bind platform side port
   TestMessageReceiver message_receiver;
   platform_port.SetReceiver(&message_receiver,
-                            base::ThreadTaskRunnerHandle::Get());
+                            base::SingleThreadTaskRunner::GetCurrentDefault());
 
   // Make sure we could post a MessagePort (ScopedMessagePipeHandle) to
   // the page.
@@ -877,7 +876,7 @@ IN_PROC_BROWSER_TEST_F(CastWebContentsBrowserTest,
     auto quit_closure = run_loop.QuitClosure();
     auto received_message_callback = base::BindOnce(
         [](base::OnceClosure loop_quit_closure, std::string port_msg,
-           absl::optional<blink::WebMessagePort> incoming_port) {
+           std::optional<blink::WebMessagePort> incoming_port) {
           EXPECT_EQ("got_port", port_msg);
           std::move(loop_quit_closure).Run();
         },

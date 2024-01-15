@@ -20,8 +20,6 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.url.GURL;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Locale;
 
@@ -36,13 +34,13 @@ class ScreenshotShareSheetMediator {
     private final Context mContext;
     private final Runnable mSaveRunnable;
     private final Runnable mCloseDialogRunnable;
-    private final Callback<Runnable> mInstallCallback;
     private final ChromeOptionShareCallback mChromeOptionShareCallback;
     private final WindowAndroid mWindowAndroid;
     private final String mShareUrl;
 
     /**
      * The ScreenshotShareSheetMediator constructor.
+     *
      * @param context The context to use.
      * @param propertyModel The property model to use to communicate with views.
      * @param closeDialogRunnable The action to take to close the dialog.
@@ -50,13 +48,15 @@ class ScreenshotShareSheetMediator {
      * @param windowAndroid The {@link WindowAndroid} that originated this screenshot.
      * @param shareUrl The URL associated with the screenshot.
      * @param chromeOptionShareCallback The callback to share a screenshot via the share sheet.
-     * @param installCallback The action to take when install is called, will call runnable on
-     *         success.
      */
-    ScreenshotShareSheetMediator(Context context, PropertyModel propertyModel,
-            Runnable closeDialogRunnable, Runnable saveRunnable, WindowAndroid windowAndroid,
-            String shareUrl, ChromeOptionShareCallback chromeOptionShareCallback,
-            Callback<Runnable> installCallback) {
+    ScreenshotShareSheetMediator(
+            Context context,
+            PropertyModel propertyModel,
+            Runnable closeDialogRunnable,
+            Runnable saveRunnable,
+            WindowAndroid windowAndroid,
+            String shareUrl,
+            ChromeOptionShareCallback chromeOptionShareCallback) {
         mCloseDialogRunnable = closeDialogRunnable;
         mSaveRunnable = saveRunnable;
         mContext = context;
@@ -64,9 +64,11 @@ class ScreenshotShareSheetMediator {
         mWindowAndroid = windowAndroid;
         mShareUrl = shareUrl;
         mChromeOptionShareCallback = chromeOptionShareCallback;
-        mInstallCallback = installCallback;
-        mModel.set(ScreenshotShareSheetViewProperties.NO_ARG_OPERATION_LISTENER,
-                operation -> { performNoArgOperation(operation); });
+        mModel.set(
+                ScreenshotShareSheetViewProperties.NO_ARG_OPERATION_LISTENER,
+                operation -> {
+                    performNoArgOperation(operation);
+                });
     }
 
     /**
@@ -88,39 +90,38 @@ class ScreenshotShareSheetMediator {
             ScreenshotShareSheetMetrics.logScreenshotAction(
                     ScreenshotShareSheetMetrics.ScreenshotShareSheetAction.DELETE);
             mCloseDialogRunnable.run();
-        } else if (NoArgOperation.INSTALL == operation) {
-            ScreenshotShareSheetMetrics.logScreenshotAction(
-                    ScreenshotShareSheetMetrics.ScreenshotShareSheetAction.EDIT);
-            mInstallCallback.onResult(mCloseDialogRunnable);
         }
     }
 
-    /**
-     * Sends the current image to the share target.
-     */
+    /** Sends the current image to the share target. */
     private void share() {
         Bitmap bitmap = mModel.get(ScreenshotShareSheetViewProperties.SCREENSHOT_BITMAP);
 
-        String isoDate = new SimpleDateFormat(sIsoDateFormat, Locale.getDefault())
-                                 .format(new Date(System.currentTimeMillis()));
+        String isoDate =
+                new SimpleDateFormat(sIsoDateFormat, Locale.getDefault())
+                        .format(new Date(System.currentTimeMillis()));
         String title = mContext.getString(R.string.screenshot_title_for_share, isoDate);
-        Callback<Uri> callback = (bitmapUri) -> {
-            ShareParams params =
-                    new ShareParams.Builder(mWindowAndroid, title, /*url=*/"")
-                            .setFileUris(new ArrayList<>(Collections.singletonList(bitmapUri)))
-                            .setFileContentType(mWindowAndroid.getApplicationContext()
-                                                        .getContentResolver()
-                                                        .getType(bitmapUri))
-                            .build();
+        Callback<Uri> callback =
+                (bitmapUri) -> {
+                    ShareParams params =
+                            new ShareParams.Builder(mWindowAndroid, title, /* url= */ "")
+                                    .setSingleImageUri(bitmapUri)
+                                    .setFileContentType(
+                                            mWindowAndroid
+                                                    .getApplicationContext()
+                                                    .getContentResolver()
+                                                    .getType(bitmapUri))
+                                    .build();
 
-            mChromeOptionShareCallback.showThirdPartyShareSheet(params,
-                    new ChromeShareExtras.Builder()
-                            .setContentUrl(new GURL(mShareUrl))
-                            .setDetailedContentType(
-                                    ChromeShareExtras.DetailedContentType.SCREENSHOT)
-                            .build(),
-                    System.currentTimeMillis());
-        };
+                    mChromeOptionShareCallback.showThirdPartyShareSheet(
+                            params,
+                            new ChromeShareExtras.Builder()
+                                    .setContentUrl(new GURL(mShareUrl))
+                                    .setDetailedContentType(
+                                            ChromeShareExtras.DetailedContentType.SCREENSHOT)
+                                    .build(),
+                            System.currentTimeMillis());
+                };
 
         generateTemporaryUriFromBitmap(title, bitmap, callback);
         mCloseDialogRunnable.run();

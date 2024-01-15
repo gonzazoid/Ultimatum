@@ -5,149 +5,126 @@
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_INTEROP_PARSER_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_INTEROP_PARSER_H_
 
-#include <stddef.h>
-#include <stdint.h>
-
-#include <memory>
-#include <ostream>
+#include <iosfwd>
+#include <optional>
 #include <string>
+#include <vector>
 
-#include "base/callback_forward.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/time/time.h"
+#include "base/types/expected.h"
 #include "base/values.h"
-#include "content/browser/attribution_reporting/attribution_parser_test_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/attribution_reporting/source_type.mojom-forward.h"
+#include "components/attribution_reporting/suitable_origin.h"
+#include "content/browser/attribution_reporting/attribution_config.h"
+#include "content/browser/attribution_reporting/attribution_reporting.mojom-forward.h"
+#include "url/gurl.h"
 
 namespace content {
 
-struct AttributionConfig;
+struct AttributionSimulationEvent {
+  attribution_reporting::SuitableOrigin reporting_origin;
+  attribution_reporting::SuitableOrigin context_origin;
+  // If null, the event represents a trigger. Otherwise, represents a source.
+  std::optional<attribution_reporting::mojom::SourceType> source_type;
+  base::Value registration;
+  base::Time time;
+  bool debug_permission = false;
 
-// Parser for the interop test.
-// See //content/test/data/attribution_reporting/simulator/README.md and
-// //content/test/data/attribution_reporting/interop/README.md for the input
-// and output JSON schema.
-class AttributionInteropParser {
- public:
-  explicit AttributionInteropParser(std::ostream& stream);
-  ~AttributionInteropParser();
+  AttributionSimulationEvent(
+      attribution_reporting::SuitableOrigin reporting_origin,
+      attribution_reporting::SuitableOrigin context_origin);
 
-  AttributionInteropParser(const AttributionInteropParser&) = delete;
-  AttributionInteropParser(AttributionInteropParser&&) = delete;
+  ~AttributionSimulationEvent();
 
-  AttributionInteropParser& operator=(const AttributionInteropParser&) = delete;
-  AttributionInteropParser& operator=(AttributionInteropParser&&) = delete;
+  AttributionSimulationEvent(const AttributionSimulationEvent&) = delete;
+  AttributionSimulationEvent& operator=(const AttributionSimulationEvent&) =
+      delete;
 
-  // Converts interop test input to simulator input format. The error state from
-  // the previous parsing will be reset.
-  absl::optional<base::Value> SimulatorInputFromInteropInput(
-      base::Value::Dict& input);
-
-  // Converts simulator output to interop test output format. The error state
-  // from the previous parsing will be reset.
-  absl::optional<base::Value> InteropOutputFromSimulatorOutput(
-      base::Value output);
-
-  // Parses the configuration. The error state from the previous parsing will be
-  // reset.
-  bool ParseConfig(const base::Value& value,
-                   AttributionConfig& config,
-                   bool required,
-                   base::StringPiece key = "");
-
- private:
-  bool has_error() const;
-
-  [[nodiscard]] std::unique_ptr<AttributionParserErrorManager::ScopedContext>
-  PushContext(AttributionParserErrorManager::Context context);
-
-  AttributionParserErrorManager::ErrorWriter Error();
-
-  void MoveDictValues(base::Value::Dict& in, base::Value::Dict& out);
-
-  void MoveValue(base::Value::Dict& in,
-                 base::StringPiece in_key,
-                 base::Value::Dict& out,
-                 absl::optional<base::StringPiece> out_key_opt = absl::nullopt);
-
-  bool EnsureDictionary(const base::Value* value);
-
-  absl::optional<std::string> ExtractString(base::Value::Dict& dict,
-                                            base::StringPiece key);
-
-  void ParseList(base::Value* values,
-                 base::RepeatingCallback<void(base::Value)> callback,
-                 size_t expected_size = 0);
-
-  // Returns `attribution_src_url` in the request if exists.
-  absl::optional<std::string> ParseRequest(base::Value::Dict& in,
-                                           base::Value::Dict& out);
-
-  void ParseResponse(base::Value::Dict& in,
-                     base::Value::Dict& out,
-                     const std::string& attribution_src_url);
-
-  base::Value::List ParseEvents(base::Value::Dict& dict, base::StringPiece key);
-
-  base::Value::List ParseEventLevelReports(base::Value::Dict& output);
-
-  base::Value::List ParseAggregatableReports(base::Value::Dict& output);
-
-  // Returns true if `key` is present in `dict` and the integer is parsed
-  // successfully.
-  template <typename T>
-  bool ParseInteger(const base::Value::Dict& dict,
-                    base::StringPiece key,
-                    T& result,
-                    bool (*convert_func)(base::StringPiece, T*),
-                    bool required,
-                    bool allow_zero) {
-    auto context = PushContext(key);
-
-    const base::Value* value = dict.Find(key);
-    if (value) {
-      const std::string* s = value->GetIfString();
-      if (s && convert_func(*s, &result) &&
-          (result > 0 || (result == 0 && allow_zero))) {
-        return true;
-      }
-    } else if (!required) {
-      return false;
-    }
-
-    if (allow_zero) {
-      *Error() << "must be a non-negative integer formatted as base-10 string";
-    } else {
-      *Error() << "must be a positive integer formatted as base-10 string";
-    }
-
-    return false;
-  }
-
-  bool ParseInt(const base::Value::Dict& dict,
-                base::StringPiece key,
-                int& result,
-                bool required,
-                bool allow_zero = false);
-
-  bool ParseUint64(const base::Value::Dict& dict,
-                   base::StringPiece key,
-                   uint64_t& result,
-                   bool required,
-                   bool allow_zero = false);
-
-  bool ParseInt64(const base::Value::Dict& dict,
-                  base::StringPiece key,
-                  int64_t& result,
-                  bool required,
-                  bool allow_zero = false);
-
-  void ParseRandomizedResponseRate(const base::Value::Dict& dict,
-                                   base::StringPiece key,
-                                   double& result,
-                                   bool required);
-
-  AttributionParserErrorManager error_manager_;
+  AttributionSimulationEvent(AttributionSimulationEvent&&);
+  AttributionSimulationEvent& operator=(AttributionSimulationEvent&&);
 };
+
+using AttributionSimulationEvents = std::vector<AttributionSimulationEvent>;
+
+// See //content/test/data/attribution_reporting/interop/README.md for the
+// schema.
+
+base::expected<AttributionSimulationEvents, std::string>
+ParseAttributionInteropInput(base::Value::Dict input, base::Time offset_time);
+
+struct AttributionInteropConfig {
+  AttributionConfig attribution_config;
+  double max_event_level_epsilon = 0;
+
+  friend bool operator==(const AttributionInteropConfig&,
+                         const AttributionInteropConfig&) = default;
+};
+
+base::expected<AttributionInteropConfig, std::string>
+ParseAttributionInteropConfig(const base::Value::Dict&);
+
+// Returns a non-empty string on failure.
+[[nodiscard]] std::string MergeAttributionInteropConfig(
+    const base::Value::Dict&,
+    AttributionInteropConfig&);
+
+struct AttributionInteropOutput {
+  struct Report {
+    base::Time time;
+    GURL url;
+    base::Value payload;
+
+    Report();
+    Report(base::Time time, GURL url, base::Value payload);
+
+    // These are necessary because `base::Value` is not copyable.
+    Report(const Report&);
+    Report& operator=(const Report&);
+
+    base::Value::Dict ToJson() const;
+
+    // TODO(apaseltiner): The payload comparison here is too brittle. Reports
+    // can be logically equivalent without having exactly the same JSON
+    // structure.
+    friend bool operator==(const Report&, const Report&) = default;
+  };
+
+  struct UnparsableRegistration {
+    base::Time time;
+    attribution_reporting::mojom::RegistrationType type;
+
+    base::Value::Dict ToJson() const;
+
+    friend bool operator==(const UnparsableRegistration&,
+                           const UnparsableRegistration&) = default;
+  };
+
+  std::vector<Report> reports;
+  std::vector<UnparsableRegistration> unparsable_registrations;
+
+  AttributionInteropOutput();
+  ~AttributionInteropOutput();
+
+  AttributionInteropOutput(const AttributionInteropOutput&) = delete;
+  AttributionInteropOutput& operator=(const AttributionInteropOutput&) = delete;
+
+  AttributionInteropOutput(AttributionInteropOutput&&);
+  AttributionInteropOutput& operator=(AttributionInteropOutput&&);
+
+  base::Value::Dict ToJson() const;
+
+  static base::expected<AttributionInteropOutput, std::string> Parse(
+      base::Value::Dict);
+};
+
+std::ostream& operator<<(std::ostream&,
+                         const AttributionInteropOutput::Report&);
+
+std::ostream& operator<<(
+    std::ostream&,
+    const AttributionInteropOutput::UnparsableRegistration&);
+
+std::ostream& operator<<(std::ostream&, const AttributionInteropOutput&);
 
 }  // namespace content
 

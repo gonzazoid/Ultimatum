@@ -4,7 +4,8 @@
 
 package org.chromium.chrome.browser.ntp;
 
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 import static org.chromium.chrome.browser.ntp.FeedPositionUtils.FEED_USER_SEGMENT_KEY;
 
@@ -18,9 +19,11 @@ import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
+import org.chromium.base.Callback;
 import org.chromium.base.FeatureList;
 import org.chromium.base.FeatureList.TestValues;
 import org.chromium.base.test.BaseRobolectricTestRunner;
@@ -28,36 +31,45 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.segmentation_platform.SegmentationPlatformServiceFactory;
 import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.components.segmentation_platform.SegmentSelectionResult;
+import org.chromium.components.segmentation_platform.ClassificationResult;
 import org.chromium.components.segmentation_platform.SegmentationPlatformService;
-import org.chromium.components.segmentation_platform.proto.SegmentationProto.SegmentId;
+import org.chromium.components.segmentation_platform.prediction_status.PredictionStatus;
 
 /** Unit tests for {@link FeedPositionUtils} class. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class FeedPositionUtilUnitTest {
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
     private final TestValues mTestValues = new TestValues();
 
-    @Mock
-    Profile mProfile;
-    @Mock
-    SegmentationPlatformService mSegmentationPlatformService;
+    @Mock Profile mProfile;
+    @Mock SegmentationPlatformService mSegmentationPlatformService;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         Profile.setLastUsedProfileForTesting(mProfile);
         SegmentationPlatformServiceFactory.setForTests(mSegmentationPlatformService);
-        when(mSegmentationPlatformService.getCachedSegmentResult(FEED_USER_SEGMENT_KEY))
-                .thenReturn(new SegmentSelectionResult(false, null));
+        setClassificationResult(new ClassificationResult(PredictionStatus.NOT_READY, null));
     }
 
     @After
     public void tearDown() {
         FeatureList.setTestValues(null);
+    }
+
+    private void setClassificationResult(ClassificationResult classificationResult) {
+        Mockito.doAnswer(
+                        invocation -> {
+                            Callback<ClassificationResult> callback = invocation.getArgument(3);
+                            callback.onResult(classificationResult);
+                            return null;
+                        })
+                .when(mSegmentationPlatformService)
+                .getClassificationResult(eq(FEED_USER_SEGMENT_KEY), any(), any(), any());
+
+        FeedPositionUtils.cacheSegmentationResult();
     }
 
     @Test
@@ -69,9 +81,8 @@ public class FeedPositionUtilUnitTest {
         setFeedPositionFlags(FeedPositionUtils.PUSH_DOWN_FEED_SMALL, "active");
         Assert.assertFalse(FeedPositionUtils.isFeedPushDownSmallEnabled());
 
-        when(mSegmentationPlatformService.getCachedSegmentResult(FEED_USER_SEGMENT_KEY))
-                .thenReturn(new SegmentSelectionResult(
-                        true, SegmentId.OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER));
+        setClassificationResult(
+                new ClassificationResult(PredictionStatus.SUCCEEDED, new String[] {"FeedUser"}));
         Assert.assertTrue(FeedPositionUtils.isFeedPushDownSmallEnabled());
     }
 
@@ -84,9 +95,8 @@ public class FeedPositionUtilUnitTest {
         setFeedPositionFlags(FeedPositionUtils.PUSH_DOWN_FEED_SMALL, "active");
         Assert.assertFalse(FeedPositionUtils.isFeedPushDownLargeEnabled());
 
-        when(mSegmentationPlatformService.getCachedSegmentResult(FEED_USER_SEGMENT_KEY))
-                .thenReturn(new SegmentSelectionResult(
-                        true, SegmentId.OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER));
+        setClassificationResult(
+                new ClassificationResult(PredictionStatus.SUCCEEDED, new String[] {"FeedUser"}));
         Assert.assertTrue(FeedPositionUtils.isFeedPushDownLargeEnabled());
     }
 
@@ -99,14 +109,12 @@ public class FeedPositionUtilUnitTest {
         setFeedPositionFlags(FeedPositionUtils.PULL_UP_FEED, "non-active");
         Assert.assertFalse(FeedPositionUtils.isFeedPullUpEnabled());
 
-        when(mSegmentationPlatformService.getCachedSegmentResult(FEED_USER_SEGMENT_KEY))
-                .thenReturn(new SegmentSelectionResult(
-                        true, SegmentId.OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER));
+        setClassificationResult(
+                new ClassificationResult(PredictionStatus.SUCCEEDED, new String[] {"FeedUser"}));
         Assert.assertFalse(FeedPositionUtils.isFeedPullUpEnabled());
 
-        when(mSegmentationPlatformService.getCachedSegmentResult(FEED_USER_SEGMENT_KEY))
-                .thenReturn(
-                        new SegmentSelectionResult(true, SegmentId.OPTIMIZATION_TARGET_UNKNOWN));
+        setClassificationResult(
+                new ClassificationResult(PredictionStatus.SUCCEEDED, new String[] {"Other"}));
         Assert.assertTrue(FeedPositionUtils.isFeedPullUpEnabled());
     }
 
@@ -114,11 +122,14 @@ public class FeedPositionUtilUnitTest {
             String feedPositionVariation, String targetFeedOrNonFeedUsersValue) {
         mTestValues.addFieldTrialParamOverride(
                 ChromeFeatureList.FEED_POSITION_ANDROID, feedPositionVariation, "true");
-        mTestValues.addFieldTrialParamOverride(ChromeFeatureList.FEED_POSITION_ANDROID,
-                FeedPositionUtils.FEED_ACTIVE_TARGETING, targetFeedOrNonFeedUsersValue);
+        mTestValues.addFieldTrialParamOverride(
+                ChromeFeatureList.FEED_POSITION_ANDROID,
+                FeedPositionUtils.FEED_ACTIVE_TARGETING,
+                targetFeedOrNonFeedUsersValue);
         FeatureList.setTestValues(mTestValues);
 
-        Assert.assertEquals(targetFeedOrNonFeedUsersValue,
+        Assert.assertEquals(
+                targetFeedOrNonFeedUsersValue,
                 FeedPositionUtils.getTargetFeedOrNonFeedUsersParam());
     }
 }

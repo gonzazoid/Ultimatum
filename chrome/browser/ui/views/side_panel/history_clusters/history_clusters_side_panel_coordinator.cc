@@ -4,11 +4,13 @@
 
 #include "chrome/browser/ui/views/side_panel/history_clusters/history_clusters_side_panel_coordinator.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/history_clusters/history_clusters_metrics_logger.h"
+#include "chrome/browser/history_clusters/history_clusters_service_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -18,26 +20,64 @@
 #include "chrome/browser/ui/views/side_panel/side_panel_web_ui_view.h"
 #include "chrome/browser/ui/webui/side_panel/history_clusters/history_clusters_side_panel_ui.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/history_clusters/core/features.h"
+#include "components/history_clusters/core/history_clusters_prefs.h"
+#include "components/history_clusters/core/history_clusters_service.h"
 #include "components/history_clusters/core/url_constants.h"
 #include "components/omnibox/browser/actions/history_clusters_action.h"
+#include "components/prefs/pref_change_registrar.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/ui_base_features.h"
+
+using SidePanelWebUIViewT_HistoryClustersSidePanelUI =
+    SidePanelWebUIViewT<HistoryClustersSidePanelUI>;
+BEGIN_TEMPLATE_METADATA(SidePanelWebUIViewT_HistoryClustersSidePanelUI,
+                        SidePanelWebUIViewT)
+END_METADATA
 
 HistoryClustersSidePanelCoordinator::HistoryClustersSidePanelCoordinator(
     Browser* browser)
-    : BrowserUserData<HistoryClustersSidePanelCoordinator>(*browser) {}
+    : BrowserUserData<HistoryClustersSidePanelCoordinator>(*browser) {
+  pref_change_registrar_.Init(browser->profile()->GetPrefs());
+  base::RepeatingClosure callback(base::BindRepeating(
+      &HistoryClustersSidePanelCoordinator::OnHistoryClustersPreferenceChanged,
+      base::Unretained(this)));
+  pref_change_registrar_.Add(history_clusters::prefs::kVisible, callback);
+}
 
 HistoryClustersSidePanelCoordinator::~HistoryClustersSidePanelCoordinator() =
     default;
 
+// static
+bool HistoryClustersSidePanelCoordinator::IsSupported(Profile* profile) {
+  auto* history_clusters_service =
+      HistoryClustersServiceFactory::GetForBrowserContext(profile);
+  return base::FeatureList::IsEnabled(history_clusters::kSidePanelJourneys) &&
+         history_clusters_service &&
+         history_clusters_service->IsJourneysEnabledAndVisible() &&
+         !profile->IsIncognitoProfile() && !profile->IsGuestSession();
+}
+
 void HistoryClustersSidePanelCoordinator::CreateAndRegisterEntry(
     SidePanelRegistry* global_registry) {
+  const bool rename_journeys =
+      base::FeatureList::IsEnabled(history_clusters::kRenameJourneys);
   global_registry->Register(std::make_unique<SidePanelEntry>(
       SidePanelEntry::Id::kHistoryClusters,
-      l10n_util::GetStringUTF16(IDS_HISTORY_CLUSTERS_JOURNEYS_TAB_LABEL),
-      ui::ImageModel::FromVectorIcon(kJourneysIcon, ui::kColorIcon,
-                                     /*icon_size=*/16),
+      l10n_util::GetStringUTF16(rename_journeys
+                                    ? IDS_HISTORY_TITLE
+                                    : IDS_HISTORY_CLUSTERS_JOURNEYS_TAB_LABEL),
+      ui::ImageModel::FromVectorIcon(
+          rename_journeys ? (features::IsChromeRefresh2023()
+                                 ? vector_icons::kHistoryChromeRefreshIcon
+                                 : kHistoryIcon)
+                          : kJourneysIcon,
+          ui::kColorIcon,
+          /*icon_size=*/16),
       base::BindRepeating(
           &HistoryClustersSidePanelCoordinator::CreateHistoryClustersWebView,
           base::Unretained(this)),
@@ -89,10 +129,25 @@ HistoryClustersSidePanelCoordinator::CreateHistoryClustersWebView() {
   return std::move(side_panel_ui);
 }
 
+void HistoryClustersSidePanelCoordinator::OnHistoryClustersPreferenceChanged() {
+  auto* browser = &GetBrowser();
+  auto* global_registry =
+      SidePanelCoordinator::GetGlobalSidePanelRegistry(browser);
+  if (IsSupported(browser->profile())) {
+    HistoryClustersSidePanelCoordinator::GetOrCreateForBrowser(browser)
+        ->CreateAndRegisterEntry(global_registry);
+  } else {
+    global_registry->Deregister(
+        SidePanelEntry::Key(SidePanelEntry::Id::kHistoryClusters));
+  }
+}
+
 bool HistoryClustersSidePanelCoordinator::Show(const std::string& query) {
-  auto* browser_view = BrowserView::GetBrowserViewForBrowser(&GetBrowser());
-  if (!browser_view)
+  SidePanelUI* side_panel_ui =
+      SidePanelUI::GetSidePanelUIForBrowser(&GetBrowser());
+  if (!side_panel_ui) {
     return false;
+  }
 
   if (history_clusters_ui_) {
     history_clusters_ui_->SetQuery(query);
@@ -102,9 +157,7 @@ bool HistoryClustersSidePanelCoordinator::Show(const std::string& query) {
     initial_query_ = query;
   }
 
-  if (auto* side_panel_coordinator = browser_view->side_panel_coordinator()) {
-    side_panel_coordinator->Show(SidePanelEntry::Id::kHistoryClusters);
-  }
+  side_panel_ui->Show(SidePanelEntry::Id::kHistoryClusters);
 
   return true;
 }
@@ -114,8 +167,8 @@ GURL HistoryClustersSidePanelCoordinator::GetOpenInNewTabURL() const {
   if (history_clusters_ui_)
     query = history_clusters_ui_->GetLastQueryIssued();
 
-  return query.empty() ? GURL(history_clusters::kChromeUIHistoryClustersURL)
+  return query.empty() ? GURL(history_clusters::GetChromeUIHistoryClustersURL())
                        : history_clusters::GetFullJourneysUrlForQuery(query);
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(HistoryClustersSidePanelCoordinator);
+BROWSER_USER_DATA_KEY_IMPL(HistoryClustersSidePanelCoordinator);

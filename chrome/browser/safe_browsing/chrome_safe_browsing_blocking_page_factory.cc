@@ -5,6 +5,10 @@
 #include "chrome/browser/safe_browsing/chrome_safe_browsing_blocking_page_factory.h"
 
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/connectors/interstitials/enterprise_block_controller_client.h"
+#include "chrome/browser/enterprise/connectors/interstitials/enterprise_block_page.h"
+#include "chrome/browser/enterprise/connectors/interstitials/enterprise_warn_controller_client.h"
+#include "chrome/browser/enterprise/connectors/interstitials/enterprise_warn_page.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/interstitials/chrome_settings_page_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -16,6 +20,11 @@
 #include "components/security_interstitials/content/content_metrics_helper.h"
 #include "components/security_interstitials/content/security_interstitial_controller_client.h"
 #include "content/public/browser/web_contents.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
+#endif
 
 namespace safe_browsing {
 
@@ -37,8 +46,7 @@ ChromeSafeBrowsingBlockingPageFactory::CreateSafeBrowsingPage(
   PrefService* prefs = profile->GetPrefs();
   bool is_extended_reporting_opt_in_allowed =
       IsExtendedReportingOptInAllowed(*prefs);
-  bool is_proceed_anyway_disabled =
-      prefs->GetBoolean(prefs::kSafeBrowsingProceedAnywayDisabled);
+  bool is_proceed_anyway_disabled = IsSafeBrowsingProceedAnywayDisabled(*prefs);
 
   // Determine if any prefs need to be updated prior to showing the security
   // interstitial. This must happen before querying IsScout to populate the
@@ -46,7 +54,7 @@ ChromeSafeBrowsingBlockingPageFactory::CreateSafeBrowsingPage(
   safe_browsing::UpdatePrefsBeforeSecurityInterstitial(prefs);
 
   security_interstitials::BaseSafeBrowsingErrorUI::SBErrorDisplayOptions
-      display_options(BaseBlockingPage::IsMainPageLoadBlocked(unsafe_resources),
+      display_options(BaseBlockingPage::IsMainPageLoadPending(unsafe_resources),
                       is_extended_reporting_opt_in_allowed,
                       web_contents->GetBrowserContext()->IsOffTheRecord(),
                       IsExtendedReportingEnabled(*prefs),
@@ -62,6 +70,15 @@ ChromeSafeBrowsingBlockingPageFactory::CreateSafeBrowsingPage(
       g_browser_process->safe_browsing_service()
           ? g_browser_process->safe_browsing_service()->trigger_manager()
           : nullptr;
+#if !BUILDFLAG(IS_ANDROID)
+  TrustSafetySentimentService* trust_safety_sentiment_service =
+      TrustSafetySentimentServiceFactory::GetForProfile(profile);
+#endif
+  bool is_safe_browsing_surveys_enabled = IsSafeBrowsingSurveysEnabled(*prefs);
+  // Use base::Unretained since blocking pages are owned by
+  // SecurityInterstitialTabHelper, which is associated with a WebContents, and
+  // do not outlive the trust and safety service, which lives throughout the
+  // browser context.
   return new SafeBrowsingBlockingPage(
       ui_manager, web_contents, main_frame_url, unsafe_resources,
       CreateControllerClient(web_contents, unsafe_resources, ui_manager),
@@ -71,8 +88,46 @@ ChromeSafeBrowsingBlockingPageFactory::CreateSafeBrowsingPage(
       SafeBrowsingNavigationObserverManagerFactory::GetForBrowserContext(
           web_contents->GetBrowserContext()),
       SafeBrowsingMetricsCollectorFactory::GetForProfile(profile),
-      trigger_manager);
+      trigger_manager, is_proceed_anyway_disabled,
+      is_safe_browsing_surveys_enabled,
+#if !BUILDFLAG(IS_ANDROID)
+      trust_safety_sentiment_service == nullptr ||
+              !is_safe_browsing_surveys_enabled
+          ? base::NullCallback()
+          : base::BindOnce(&TrustSafetySentimentService::
+                               InteractedWithSafeBrowsingInterstitial,
+                           base::Unretained(trust_safety_sentiment_service)),
+#else
+      base::NullCallback(),
+#endif
+      /*url_loader_for_testing=*/nullptr);
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+security_interstitials::SecurityInterstitialPage*
+ChromeSafeBrowsingBlockingPageFactory::CreateEnterpriseWarnPage(
+    BaseUIManager* ui_manager,
+    content::WebContents* web_contents,
+    const GURL& main_frame_url,
+    const SafeBrowsingBlockingPage::UnsafeResourceList& unsafe_resources) {
+  return new EnterpriseWarnPage(
+      ui_manager, web_contents, main_frame_url, unsafe_resources,
+      std::make_unique<EnterpriseWarnControllerClient>(web_contents,
+                                                       main_frame_url));
+}
+
+security_interstitials::SecurityInterstitialPage*
+ChromeSafeBrowsingBlockingPageFactory::CreateEnterpriseBlockPage(
+    BaseUIManager* ui_manager,
+    content::WebContents* web_contents,
+    const GURL& main_frame_url,
+    const SafeBrowsingBlockingPage::UnsafeResourceList& unsafe_resources) {
+  return new EnterpriseBlockPage(
+      web_contents, main_frame_url,
+      std::make_unique<EnterpriseBlockControllerClient>(web_contents,
+                                                        main_frame_url));
+}
+#endif
 
 ChromeSafeBrowsingBlockingPageFactory::ChromeSafeBrowsingBlockingPageFactory() =
     default;

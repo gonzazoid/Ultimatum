@@ -10,14 +10,15 @@
 #include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/video_accelerator/arc_video_accelerator_util.h"
 #include "ash/components/arc/video_accelerator/protected_buffer_manager.h"
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "media/base/media_log.h"
 #include "media/base/video_frame.h"
@@ -86,7 +87,7 @@ media::VideoDecodeAccelerator::Config CreateVdaConfig(
     bool uses_vd) {
   media::VideoDecodeAccelerator::Config vda_config(profile);
   vda_config.output_mode =
-      media::VideoDecodeAccelerator::Config::OutputMode::IMPORT;
+      media::VideoDecodeAccelerator::Config::OutputMode::kImport;
   vda_config.is_deferred_initialization_allowed = uses_vd;
   return vda_config;
 }
@@ -398,9 +399,12 @@ void GpuArcVideoDecodeAccelerator::InitializeTask(
       CreateVdaConfig(profile_, use_vd);
   if (use_vd) {
     VLOGF(2) << "Using VideoDecoder-backed VdVideoDecodeAccelerator.";
+    // Decoded video frames are sent "quickly" (i.e. without much buffering)
+    // to SurfaceFlinger, so we consider it a |low_delay| pipeline.
     vda_ = media::VdVideoDecodeAccelerator::Create(
         base::BindRepeating(&media::VideoDecoderPipeline::Create), this,
-        vda_config, base::SequencedTaskRunnerHandle::Get());
+        vda_config, true /* low_delay */,
+        base::SequencedTaskRunner::GetCurrentDefault());
   } else {
     VLOGF(2) << "Using original VDA";
     auto vda_factory = media::GpuVideoDecodeAcceleratorFactory::Create(
@@ -422,7 +426,7 @@ void GpuArcVideoDecodeAccelerator::InitializeTask(
       "Media.GpuArcVideoDecodeAccelerator.InstanceCount.Initialized",
       initialized_instance_count_, /*exclusive_max=*/50);
 
-  secure_mode_ = absl::nullopt;
+  secure_mode_ = std::nullopt;
   error_state_ = false;
   pending_requests_ = {};
   pending_flush_callbacks_ = {};
@@ -450,9 +454,16 @@ void GpuArcVideoDecodeAccelerator::OnInitializeDone(
   if (result != mojom::VideoDecodeAccelerator::Result::SUCCESS)
     error_state_ = true;
 
-  // Report initialization status to UMA.
-  UMA_HISTOGRAM_ENUMERATION(
-      "Media.GpuArcVideoDecodeAccelerator.InitializeResult", result);
+  // Report initialization status to UMAs.
+  if (result == mojom::VideoDecodeAccelerator::Result::SUCCESS) {
+    UMA_HISTOGRAM_ENUMERATION(
+        "Media.GpuArcVideoDecodeAccelerator.InitializeSucceeded", profile_,
+        media::VIDEO_CODEC_PROFILE_MAX + 1);
+  } else {
+    UMA_HISTOGRAM_ENUMERATION(
+        "Media.GpuArcVideoDecodeAccelerator.InitializeFailed", profile_,
+        media::VIDEO_CODEC_PROFILE_MAX + 1);
+  }
   std::move(pending_init_callback_).Run(result);
   RunPendingRequests();
 }
@@ -550,7 +561,7 @@ void GpuArcVideoDecodeAccelerator::ContinueDecode(
       // Note: we PostTask() in order to keep the right order of input buffers
       // and to avoid having to reason about the re-entrancy of Decode() and/or
       // ContinueDecode().
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&GpuArcVideoDecodeAccelerator::
                              ResumeDecodingAfterFirstSecureBuffer,

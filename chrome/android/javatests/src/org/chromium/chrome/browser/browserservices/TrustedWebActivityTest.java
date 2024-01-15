@@ -16,7 +16,6 @@ import static org.chromium.chrome.browser.browserservices.TrustedWebActivityTest
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
-import android.os.Build;
 
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.browser.customtabs.TrustedWebUtils;
@@ -38,20 +37,18 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
-import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.cc.input.BrowserControlsState;
 import org.chromium.chrome.browser.app.metrics.LaunchCauseMetrics;
 import org.chromium.chrome.browser.customtabs.CustomTabActivity;
 import org.chromium.chrome.browser.customtabs.CustomTabActivityTestRule;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabBrowserControlsConstraintsHelper;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.util.ChromeTabUtils;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.chrome.test.util.browser.ThemeTestUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.common.ContentSwitches;
@@ -63,20 +60,22 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Instrumentation tests for launching
- * {@link org.chromium.chrome.browser.customtabs.CustomTabActivity} in Trusted Web Activity Mode.
+ * Instrumentation tests for launching {@link
+ * org.chromium.chrome.browser.customtabs.CustomTabActivity} in Trusted Web Activity Mode.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
+@DoNotBatch(reason = "https://crbug.com/1454648")
 public class TrustedWebActivityTest {
     // TODO(peconn): Add test for navigating away from the trusted origin.
     public CustomTabActivityTestRule mCustomTabActivityTestRule = new CustomTabActivityTestRule();
     public EmbeddedTestServerRule mEmbeddedTestServerRule = new EmbeddedTestServerRule();
 
     @Rule
-    public RuleChain mRuleChain = RuleChain.emptyRuleChain()
-                                          .around(mCustomTabActivityTestRule)
-                                          .around(mEmbeddedTestServerRule);
+    public RuleChain mRuleChain =
+            RuleChain.emptyRuleChain()
+                    .around(mCustomTabActivityTestRule)
+                    .around(mEmbeddedTestServerRule);
 
     private static final String TEST_PAGE = "/chrome/test/data/android/google.html";
     private static final String PACKAGE_NAME =
@@ -95,16 +94,19 @@ public class TrustedWebActivityTest {
         // Map non-localhost-URLs to localhost. Navigations to non-localhost URLs will throw a
         // certificate error.
         Uri mapToUri = Uri.parse(mEmbeddedTestServerRule.getServer().getURL("/"));
-        CommandLine.getInstance().appendSwitchWithValue(
-                ContentSwitches.HOST_RESOLVER_RULES, "MAP * " + mapToUri.getAuthority());
+        CommandLine.getInstance()
+                .appendSwitchWithValue(
+                        ContentSwitches.HOST_RESOLVER_RULES, "MAP * " + mapToUri.getAuthority());
     }
 
     private void assertLaunchCauseMetrics(boolean launchedTWA) {
-        assertEquals(launchedTWA ? 1 : 0,
+        assertEquals(
+                launchedTWA ? 1 : 0,
                 RecordHistogram.getHistogramValueCountForTesting(
                         LaunchCauseMetrics.LAUNCH_CAUSE_HISTOGRAM,
                         LaunchCauseMetrics.LaunchCause.TWA));
-        assertEquals(launchedTWA ? 0 : 1,
+        assertEquals(
+                launchedTWA ? 0 : 1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         LaunchCauseMetrics.LAUNCH_CAUSE_HISTOGRAM,
                         LaunchCauseMetrics.LaunchCause.CUSTOM_TAB));
@@ -133,7 +135,6 @@ public class TrustedWebActivityTest {
 
     @Test
     @MediumTest
-    @DisableFeatures(ChromeFeatureList.TRUSTED_WEB_ACTIVITY_QUALITY_ENFORCEMENT_FORCED)
     public void leavesTwa_VerificationFailure() throws TimeoutException {
         Intent intent = createTrustedWebActivityIntent(mTestPage);
         createSession(intent, PACKAGE_NAME);
@@ -151,12 +152,13 @@ public class TrustedWebActivityTest {
     @Test
     @MediumTest
     @Feature({"StatusBar"})
-    @MinAndroidSdkLevel(Build.VERSION_CODES.LOLLIPOP_MR1)
     @Restriction({UiRestriction.RESTRICTION_TYPE_PHONE})
     // Customizing status bar color is disallowed for tablets.
     public void testStatusBarColorHasPageThemeColor() throws ExecutionException, TimeoutException {
-        final String pageWithThemeColor = mEmbeddedTestServerRule.getServer().getURL(
-                "/chrome/test/data/android/theme_color_test.html");
+        final String pageWithThemeColor =
+                mEmbeddedTestServerRule
+                        .getServer()
+                        .getURL("/chrome/test/data/android/theme_color_test.html");
 
         Intent intent = createTrustedWebActivityIntent(pageWithThemeColor);
         intent.putExtra(CustomTabsIntent.EXTRA_TOOLBAR_COLOR, Color.GREEN);
@@ -173,11 +175,12 @@ public class TrustedWebActivityTest {
     @Test
     @MediumTest
     @Feature({"StatusBar"})
-    @MinAndroidSdkLevel(Build.VERSION_CODES.LOLLIPOP_MR1)
     @Restriction({UiRestriction.RESTRICTION_TYPE_PHONE})
     public void testStatusBarColorNoPageThemeColor() throws ExecutionException, TimeoutException {
-        final String pageWithThemeColor = mEmbeddedTestServerRule.getServer().getURL(
-                "/chrome/test/data/android/theme_color_test.html");
+        final String pageWithThemeColor =
+                mEmbeddedTestServerRule
+                        .getServer()
+                        .getURL("/chrome/test/data/android/theme_color_test.html");
         final String pageWithoutThemeColor =
                 mEmbeddedTestServerRule.getServer().getURL("/chrome/test/data/android/about.html");
 
@@ -192,24 +195,24 @@ public class TrustedWebActivityTest {
 
         mCustomTabActivityTestRule.loadUrl(pageWithoutThemeColor);
         // Use longer-than-default timeout to give page time to finish loading.
-        ThemeTestUtils.waitForThemeColor(activity, Color.GREEN, 10000 /* timeoutMs */);
+        ThemeTestUtils.waitForThemeColor(activity, Color.GREEN, /* timeoutMs= */ 10000);
         ThemeTestUtils.assertStatusBarColor(activity, Color.GREEN);
     }
 
     /**
      * Test that if the page has a certificate error, that the system default color is used
-     * (regardless of whether the page provided a theme-color or a toolbar color was specified
-     * in the intent).
+     * (regardless of whether the page provided a theme-color or a toolbar color was specified in
+     * the intent).
      */
     @Test
     @MediumTest
     @Feature({"StatusBar"})
-    @MinAndroidSdkLevel(Build.VERSION_CODES.LOLLIPOP_MR1)
     @Restriction({UiRestriction.RESTRICTION_TYPE_PHONE})
-    @DisabledTest(message = "https://crbug.com/1112720")
     public void testStatusBarColorCertificateError() throws ExecutionException, TimeoutException {
-        final String pageWithThemeColor = mEmbeddedTestServerRule.getServer().getURL(
-                "/chrome/test/data/android/theme_color_test.html");
+        final String pageWithThemeColor =
+                mEmbeddedTestServerRule
+                        .getServer()
+                        .getURL("/chrome/test/data/android/theme_color_test.html");
         final String pageWithThemeColorCertError =
                 "https://certificateerror.com/chrome/test/data/android/theme_color_test2.html";
 
@@ -226,12 +229,12 @@ public class TrustedWebActivityTest {
         spoofVerification(PACKAGE_NAME, pageWithThemeColorCertError);
         ChromeTabUtils.loadUrlOnUiThread(activity.getActivityTab(), pageWithThemeColorCertError);
 
-        int defaultColor = TestThreadUtils.runOnUiThreadBlocking(
-                () -> ThemeTestUtils.getDefaultThemeColor(activity.getActivityTab()));
-        int expectedColor =
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? defaultColor : Color.BLACK;
+        int defaultColor =
+                TestThreadUtils.runOnUiThreadBlocking(
+                        () -> ThemeTestUtils.getDefaultThemeColor(activity.getActivityTab()));
+        int expectedColor = defaultColor;
         // Use longer-than-default timeout to give page time to finish loading.
-        ThemeTestUtils.waitForThemeColor(activity, defaultColor, 10000 /* timeoutMs */);
+        ThemeTestUtils.waitForThemeColor(activity, defaultColor, /* timeoutMs= */ 10000);
         ThemeTestUtils.assertStatusBarColor(activity, expectedColor);
     }
 
@@ -243,8 +246,8 @@ public class TrustedWebActivityTest {
     }
 
     /**
-     * Test that trusted web activities show the toolbar when the page has a certificate error
-     * (and origin verification succeeds).
+     * Test that trusted web activities show the toolbar when the page has a certificate error (and
+     * origin verification succeeds).
      */
     @Test
     @MediumTest
@@ -265,21 +268,25 @@ public class TrustedWebActivityTest {
         spoofVerification(PACKAGE_NAME, pageWithCertError);
         ChromeTabUtils.loadUrlOnUiThread(tab, pageWithCertError);
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(
-                    getBrowserControlConstraints(tab), Matchers.is(BrowserControlsState.SHOWN));
-        }, 10000, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            getBrowserControlConstraints(tab),
+                            Matchers.is(BrowserControlsState.SHOWN));
+                },
+                10000,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
     }
 
     public void addTrustedOriginToIntent(Intent intent, String trustedOrigin) {
         ArrayList<String> additionalTrustedOrigins = new ArrayList<>();
         additionalTrustedOrigins.add(trustedOrigin);
-        intent.putExtra(TrustedWebActivityIntentBuilder.EXTRA_ADDITIONAL_TRUSTED_ORIGINS,
+        intent.putExtra(
+                TrustedWebActivityIntentBuilder.EXTRA_ADDITIONAL_TRUSTED_ORIGINS,
                 additionalTrustedOrigins);
     }
 
-    @BrowserControlsState
-    private int getBrowserControlConstraints(Tab tab) {
+    private @BrowserControlsState int getBrowserControlConstraints(Tab tab) {
         return TestThreadUtils.runOnUiThreadBlockingNoException(
                 () -> TabBrowserControlsConstraintsHelper.getConstraints(tab));
     }

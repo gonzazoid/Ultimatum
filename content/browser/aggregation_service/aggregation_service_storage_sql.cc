@@ -7,16 +7,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/sequence_checker.h"
@@ -32,11 +34,10 @@
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "sql/database.h"
 #include "sql/meta_table.h"
+#include "sql/sqlite_result_code.h"
 #include "sql/statement.h"
 #include "sql/statement_id.h"
 #include "sql/transaction.h"
-#include "third_party/abseil-cpp/absl/numeric/int128.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -128,10 +129,9 @@ bool UpgradeAggregationServiceStorageSqlSchema(sql::Database& db,
   if (!db.Execute(kReportingOriginIndexSql))
     return false;
 
-  meta_table.SetVersionNumber(
-      AggregationServiceStorageSql::kCurrentVersionNumber);
-
-  return transaction.Commit();
+  return meta_table.SetVersionNumber(
+             AggregationServiceStorageSql::kCurrentVersionNumber) &&
+         transaction.Commit();
 }
 
 void RecordInitializationStatus(
@@ -154,9 +154,7 @@ AggregationServiceStorageSql::AggregationServiceStorageSql(
       clock_(*clock),
       max_stored_requests_per_reporting_origin_(
           max_stored_requests_per_reporting_origin),
-      db_(sql::DatabaseOptions{.exclusive_locking = true,
-                               .page_size = 4096,
-                               .cache_size = 32}) {
+      db_(sql::DatabaseOptions{.page_size = 4096, .cache_size = 32}) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   DCHECK(clock);
 
@@ -186,7 +184,7 @@ std::vector<PublicKey> AggregationServiceStorageSql::GetPublicKeys(
   sql::Statement get_url_id_statement(
       db_.GetCachedStatement(SQL_FROM_HERE, kGetUrlIdSql));
   get_url_id_statement.BindString(0, url.spec());
-  get_url_id_statement.BindTime(1, clock_.Now());
+  get_url_id_statement.BindTime(1, clock_->Now());
   if (!get_url_id_statement.Step())
     return {};
 
@@ -529,7 +527,7 @@ void AggregationServiceStorageSql::StoreRequest(
       db_.GetCachedStatement(SQL_FROM_HERE, kStoreRequestSql));
 
   store_request_statement.BindTime(0, shared_info.scheduled_report_time);
-  store_request_statement.BindTime(1, clock_.Now());
+  store_request_statement.BindTime(1, clock_->Now());
   store_request_statement.BindString(2, serialized_reporting_origin);
 
   std::vector<uint8_t> serialized_request = request.Serialize();
@@ -567,18 +565,17 @@ bool AggregationServiceStorageSql::DeleteRequestImpl(RequestId request_id) {
   return delete_request_statement.Run();
 }
 
-absl::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfter(
+std::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfter(
     base::Time strictly_after_time) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
-    return absl::nullopt;
+    return std::nullopt;
 
   return NextReportTimeAfterImpl(strictly_after_time);
 }
 
-absl::optional<base::Time>
-AggregationServiceStorageSql::NextReportTimeAfterImpl(
+std::optional<base::Time> AggregationServiceStorageSql::NextReportTimeAfterImpl(
     base::Time strictly_after_time) {
   static constexpr char kGetRequestsSql[] =
       "SELECT MIN(report_time) FROM report_requests WHERE report_time>?";
@@ -592,18 +589,23 @@ AggregationServiceStorageSql::NextReportTimeAfterImpl(
       get_requests_statement.GetColumnType(0) != sql::ColumnType::kNull) {
     return get_requests_statement.ColumnTime(0);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::vector<AggregationServiceStorage::RequestAndId>
 AggregationServiceStorageSql::GetRequestsReportingOnOrBefore(
     base::Time not_after_time,
-    absl::optional<int> limit) {
+    std::optional<int> limit) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!limit.has_value() || limit.value() > 0);
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
     return {};
+
+  sql::Transaction transaction(&db_);
+  if (!transaction.Begin()) {
+    return {};
+  }
 
   static constexpr char kGetRequestsSql[] =
       "SELECT request_id,report_time,request_proto FROM report_requests "
@@ -616,25 +618,51 @@ AggregationServiceStorageSql::GetRequestsReportingOnOrBefore(
   // See https://www.sqlite.org/lang_select.html.
   get_requests_statement.BindInt(1, limit.value_or(-1));
 
-  // Partial results are not returned in case of any error.
   // TODO(crbug.com/1340046): Limit the total number of results that can be
   // returned in one query.
   std::vector<AggregationServiceStorage::RequestAndId> result;
+  std::vector<AggregationServiceStorage::RequestId> failures;
   while (get_requests_statement.Step()) {
-    absl::optional<AggregatableReportRequest> parsed_request =
+    AggregationServiceStorage::RequestId request_id{
+        get_requests_statement.ColumnInt64(0)};
+    std::optional<AggregatableReportRequest> parsed_request =
         AggregatableReportRequest::Deserialize(
             get_requests_statement.ColumnBlob(2));
-    if (!parsed_request)
-      return {};
+    if (!parsed_request) {
+      failures.push_back(request_id);
+      continue;
+    }
+
+    // Exclude internals page requests
+    if (!not_after_time.is_max()) {
+      base::UmaHistogramCustomTimes(
+          "PrivacySandbox.AggregationService.Storage.Sql."
+          "RequestDelayFromUpdatedReportTime",
+          not_after_time - get_requests_statement.ColumnTime(1),
+          /*min=*/base::Seconds(1),
+          /*max=*/base::Days(24),
+          /*buckets=*/50);
+    }
 
     result.push_back(AggregationServiceStorage::RequestAndId{
-        .request = std::move(parsed_request.value()),
-        .id = AggregationServiceStorage::RequestId(
-            get_requests_statement.ColumnInt64(0))});
+        .request = std::move(parsed_request.value()), .id = request_id});
   }
 
   if (!get_requests_statement.Succeeded())
     return {};
+
+  // In case of deserialization failures, remove the request from storage. This
+  // could occur if the coordinator chosen is no longer on the allowlist. It is
+  // also possible in case of database corruption.
+  for (AggregationServiceStorage::RequestId request_id : failures) {
+    if (!DeleteRequestImpl(request_id)) {
+      return {};
+    }
+  }
+
+  if (!transaction.Commit()) {
+    return {};
+  }
 
   return result;
 }
@@ -659,7 +687,7 @@ AggregationServiceStorageSql::GetRequests(
     statement.BindInt64(0, *id);
     if (!statement.Step())
       continue;
-    absl::optional<AggregatableReportRequest> parsed_request =
+    std::optional<AggregatableReportRequest> parsed_request =
         AggregatableReportRequest::Deserialize(statement.ColumnBlob(1));
     if (!parsed_request)
       continue;
@@ -671,7 +699,7 @@ AggregationServiceStorageSql::GetRequests(
   return result;
 }
 
-absl::optional<base::Time>
+std::optional<base::Time>
 AggregationServiceStorageSql::AdjustOfflineReportTimes(
     base::Time now,
     base::TimeDelta min_delay,
@@ -683,7 +711,7 @@ AggregationServiceStorageSql::AdjustOfflineReportTimes(
   DCHECK_LE(min_delay, max_delay);
 
   if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent))
-    return absl::nullopt;
+    return std::nullopt;
 
   // Set the report time for all reports that should have been sent before `now`
   // to `now` + a random number of microseconds between `min_delay` and
@@ -706,6 +734,31 @@ AggregationServiceStorageSql::AdjustOfflineReportTimes(
   statement.Run();
 
   return NextReportTimeAfterImpl(base::Time::Min());
+}
+
+std::set<url::Origin>
+AggregationServiceStorageSql::GetReportRequestReportingOrigins() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!EnsureDatabaseOpen(DbCreationPolicy::kFailIfAbsent)) {
+    return {};
+  }
+
+  std::set<url::Origin> origins;
+  static constexpr char kSelectRequestReportingOrigins[] =
+      "SELECT reporting_origin FROM report_requests";
+  sql::Statement statement(
+      db_.GetCachedStatement(SQL_FROM_HERE, kSelectRequestReportingOrigins));
+
+  while (statement.Step()) {
+    url::Origin reporting_origin =
+        url::Origin::Create(GURL(statement.ColumnString(0)));
+    if (reporting_origin.opaque()) {
+      continue;
+    }
+    origins.insert(std::move(reporting_origin));
+  }
+
+  return origins;
 }
 
 void AggregationServiceStorageSql::ClearDataBetween(
@@ -762,7 +815,8 @@ void AggregationServiceStorageSql::ClearRequestsStoredBetween(
   while (select_requests_to_delete_statement.Step()) {
     url::Origin reporting_origin = url::Origin::Create(
         GURL(select_requests_to_delete_statement.ColumnString(1)));
-    if (filter.is_null() || filter.Run(blink::StorageKey(reporting_origin))) {
+    if (filter.is_null() ||
+        filter.Run(blink::StorageKey::CreateFirstParty(reporting_origin))) {
       if (!DeleteRequestImpl(
               RequestId(select_requests_to_delete_statement.ColumnInt64(0)))) {
         return;
@@ -971,6 +1025,11 @@ void AggregationServiceStorageSql::DatabaseErrorCallback(int extended_error,
 
   // Consider the database closed to avoid further errors.
   db_init_status_ = DbStatus::kClosed;
+
+  // Note that this histogram will not be recorded when errors are fatal.
+  base::UmaHistogramEnumeration(
+      "PrivacySandbox.AggregationService.Storage.Sql.Error",
+      sql::ToSqliteLoggedResultCode(extended_error));
 }
 
 }  // namespace content

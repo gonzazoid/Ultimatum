@@ -241,13 +241,6 @@ i18n.input.chrome.inputview.Controller = function(keyset, languageCode,
   /** @private {!SoundController} */
   this.soundController_ = new SoundController(false);
 
-  /**
-   * Whether or not the candidates were last set by gesture typing.
-   *
-   * @private {boolean}
-   */
-  this.candidatesSetByGestureTyping_ = false;
-
   /** @private {!i18n.input.chrome.inputview.KeyboardContainer} */
   this.container_ = new i18n.input.chrome.inputview.KeyboardContainer(
       this.adapter_, this.soundController_);
@@ -1033,28 +1026,6 @@ Controller.prototype.executeCommand_ = function(command, opt_arg) {
 
 
 /**
- * Returns the gesture typing event type for a given candidate ID.
- *
- * @param {number} candidateID The candidate ID to convert.
- * @return {?i18n.input.chrome.Statistics.GestureTypingEvent} The gesture
- *     typing event type for the given candidate. Null if the candidate was not
- *     found.
- * @private
- */
-Controller.prototype.getGestureEventTypeForCandidateID_ =
-    function(candidateID) {
-  if (candidateID == 0) {
-    return Statistics.GestureTypingEvent.REPLACED_0;
-  } else if (candidateID == 1) {
-    return Statistics.GestureTypingEvent.REPLACED_1;
-  } else if (candidateID >= 2) {
-    return Statistics.GestureTypingEvent.REPLACED_2;
-  }
-  return null;
-};
-
-
-/**
  * Handles the pointer action.
  *
  * @param {!i18n.input.chrome.inputview.elements.Element} view The view.
@@ -1089,12 +1060,6 @@ Controller.prototype.handlePointerAction_ = function(view, e) {
       }
       return;
     }
-  }
-
-  // Listen for DOUBLE_CLICK as well to capture secondary taps on the spacebar.
-  if (e.type == EventType.POINTER_UP || e.type == EventType.DOUBLE_CLICK) {
-    this.recordStatsForClosing_(
-        'InputMethod.VirtualKeyboard.TapCount', 1, 4095, 4096);
   }
 
   if (e.type == EventType.SWIPE) {
@@ -1150,16 +1115,6 @@ Controller.prototype.handlePointerAction_ = function(view, e) {
       if (e.type == EventType.POINTER_UP) {
         if (view.candidateType == CandidateType.CANDIDATE) {
           this.adapter_.selectCandidate(view.candidate);
-          if (this.candidatesSetByGestureTyping_) {
-            var type = this.getGestureEventTypeForCandidateID_(
-                view.candidate[Name.CANDIDATE_ID]);
-            if (type) {
-              this.statistics_.recordEnum(
-                  Statistics.GESTURE_TYPING_METRIC_NAME,
-                  type,
-                  Statistics.GestureTypingEvent.MAX);
-            }
-          }
         } else if (view.candidateType == CandidateType.NUMBER) {
           this.adapter_.sendKeyDownAndUpEvent(
               view.candidate[Name.CANDIDATE], '');
@@ -1802,11 +1757,7 @@ Controller.prototype.backspaceDown_ = function() {
     this.adapter_.sendKeyDownEvent('\u0008', KeyCodes.BACKSPACE);
   }
   this.recordStatsForClosing_(
-      'InputMethod.VirtualKeyboard.BackspaceCount', 1, 4095, 4096);
-  this.statistics_.recordEnum('InputMethod.VirtualKeyboard.BackspaceOnLayout',
-      this.statistics_.getLayoutType(this.currentKeyset_,
-          this.adapter_.isA11yMode),
-      Statistics.LayoutTypes.MAX);
+    'InputMethod.VirtualKeyboard.BackspaceCount', 1, 4095, 4096);
 };
 
 
@@ -2028,7 +1979,6 @@ Controller.prototype.showCandidates_ = function(source, candidates,
         SHRINK_CANDIDATES, false);
     this.container_.currentKeysetView.setVisible(true);
   }
-  this.candidatesSetByGestureTyping_ = !!opt_fromGestures;
 };
 
 

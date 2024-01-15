@@ -10,6 +10,7 @@
 
 #include "base/strings/string_piece.h"
 #include "content/common/content_export.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -45,13 +46,18 @@ class CONTENT_EXPORT WebUIConfig {
   // on/off, the WebUI is enabled in incognito, etc. Defaults to true.
   virtual bool IsWebUIEnabled(BrowserContext* browser_context);
 
-  // Returns a WebUIController for the WebUI.
+  // Returns whether the WebUI should be used for the given |url|. Not all
+  // WebUIs should be created for all requests to their host. Defaults to true.
+  virtual bool ShouldHandleURL(const GURL& url);
+
+  // Returns a WebUIController for WebUI and GURL.
   //
   // URLDataSource is usually created in the constructor of WebUIController. The
   // URLDataSource should be the same as the one registered in
   // `RegisterURLDataSource()` or resources will fail to load.
   virtual std::unique_ptr<WebUIController> CreateWebUIController(
-      WebUI* web_ui) = 0;
+      WebUI* web_ui,
+      const GURL& url) = 0;
 
   // This is called when registering or updating a Service Worker.
   //
@@ -75,7 +81,8 @@ class CONTENT_EXPORT DefaultWebUIConfig : public WebUIConfig {
   ~DefaultWebUIConfig() override = default;
 
   std::unique_ptr<WebUIController> CreateWebUIController(
-      WebUI* web_ui) override {
+      WebUI* web_ui,
+      const GURL& url) override {
     return std::make_unique<T>(web_ui);
   }
 };

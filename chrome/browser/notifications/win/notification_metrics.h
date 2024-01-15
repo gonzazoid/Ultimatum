@@ -41,7 +41,9 @@ enum class CloseStatus {
   kSuccess = 0,
   kGetToastHistoryFailed = 1,
   kRemovingToastFailed = 2,
-  kMaxValue = kRemovingToastFailed,
+  kEmptyAumi = 3,
+  kNotificationNotFound = 4,
+  kMaxValue = kNotificationNotFound,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -137,16 +139,8 @@ enum class SetReadyCallbackStatus {
   kSuccess = 0,
   kShortcutMisconfiguration = 1 << 0,
   kComServerMisconfiguration = 1 << 1,
-  kComNotInitialized = 1 << 2,
-  kMaxValue = kComNotInitialized,
-};
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class OnDismissedStatus {
-  kSuccess = 0,
-  kGetDismissalReasonFailed = 1,
-  kMaxValue = kGetDismissalReasonFailed,
+  kComNotInitializedObsolete = 1 << 2,  // No longer possible w/ Win10+ only.
+  kMaxValue = kComNotInitializedObsolete,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -172,7 +166,6 @@ void LogGetSettingStatusStartup(GetSettingStatus status);
 void LogHandleEventStatus(HandleEventStatus status);
 void LogActivationStatus(ActivationStatus status);
 void LogSetReadyCallbackStatus(SetReadyCallbackStatus status);
-void LogOnDismissedStatus(OnDismissedStatus status);
 void LogOnFailedStatus(OnFailedStatus status);
 
 }  // namespace notifications_uma

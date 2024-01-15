@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/android-bfcache-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -14,16 +17,12 @@
               "builder_group": "chromium.android",
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_android_config": {
-                "config": "x64_builder"
+                "config": "x86_builder_mb"
               },
               "legacy_chromium_config": {
-                "apply_configs": [
-                  "download_vr_test_apks",
-                  "mb"
-                ],
                 "build_config": "Release",
                 "config": "android",
-                "target_bits": 64,
+                "target_bits": 32,
                 "target_platform": "android"
               },
               "legacy_gclient_config": {
@@ -54,7 +53,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -64,5 +64,8 @@
     ]
   },
   "builder_group": "chromium.android",
-  "recipe": "chromium"
+  "recipe": "chromium",
+  "sheriff_rotations": [
+    "android"
+  ]
 }

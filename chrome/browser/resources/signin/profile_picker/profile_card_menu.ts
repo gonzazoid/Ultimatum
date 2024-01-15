@@ -13,18 +13,20 @@ import './profile_picker_shared.css.js';
 
 import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+// clang-format off
 // <if expr="chromeos_lacros">
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {afterNextRender} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 // </if>
 
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// <if expr="chromeos_lacros">
-import {afterNextRender} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+// clang-format on
 
-// </if>
+
 
 import {ManageProfilesBrowserProxy, ManageProfilesBrowserProxyImpl, ProfileState} from './manage_profiles_browser_proxy.js';
 import {getTemplate} from './profile_card_menu.html.js';
@@ -113,7 +115,9 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
         type: String,
         // <if expr="chromeos_lacros">
         value() {
-          return loadTimeData.getString('removeWarningProfileLacros');
+          return sanitizeInnerHtml(
+              loadTimeData.getString('removeWarningProfileLacros'),
+              {attrs: ['is']});
         },
         // </if>
         // <if expr="not chromeos_lacros">
@@ -149,11 +153,11 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profiles-list-changed', () => this.handleProfilesUpdated_());
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profile-removed', this.handleProfileRemoved_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profile-statistics-received',
         this.handleProfileStatsReceived_.bind(this));
   }
@@ -241,7 +245,6 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
         return this.i18n('removeWarningAutofill');
       default:
         assertNotReached();
-        return '';
     }
   }
 
@@ -260,6 +263,7 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
 
   private onRemoveCancelClicked_() {
     this.$.removeConfirmationDialog.cancel();
+    this.manageProfilesBrowserProxy_.closeProfileStatistics();
   }
 
   // <if expr="chromeos_lacros">

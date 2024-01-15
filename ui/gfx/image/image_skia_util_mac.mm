@@ -12,9 +12,9 @@
 #include <memory>
 
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_nsobject.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 
@@ -26,8 +26,8 @@ NSImageRep* GetNSImageRepWithPixelSize(NSImage* image,
   float smallest_diff = std::numeric_limits<float>::max();
   NSImageRep* closest_match = nil;
   for (NSImageRep* image_rep in image.representations) {
-    float diff = std::abs(desired_size.width - [image_rep pixelsWide]) +
-        std::abs(desired_size.height - [image_rep pixelsHigh]);
+    float diff = std::abs(desired_size.width - image_rep.pixelsWide) +
+                 std::abs(desired_size.height - image_rep.pixelsHigh);
     if (diff < smallest_diff) {
       smallest_diff = diff;
       closest_match = image_rep;
@@ -59,18 +59,18 @@ gfx::ImageSkia ImageSkiaFromResizedNSImage(NSImage* image,
   if (IsNSImageEmpty(image))
     return gfx::ImageSkia();
 
-  std::vector<float> supported_scales = ImageSkia::GetSupportedScales();
-
   gfx::ImageSkia image_skia;
-  for (float scale : supported_scales) {
+  const std::vector<ui::ResourceScaleFactor>& supported_scales =
+      ui::GetSupportedResourceScaleFactors();
+  for (const auto resource_scale : supported_scales) {
+    const float scale = ui::GetScaleForResourceScaleFactor(resource_scale);
     NSSize desired_size_for_scale =
         NSMakeSize(desired_size.width * scale, desired_size.height * scale);
     NSImageRep* ns_image_rep = GetNSImageRepWithPixelSize(image,
         desired_size_for_scale);
 
-    SkBitmap bitmap(skia::NSImageRepToSkBitmapWithColorSpace(
-        ns_image_rep, desired_size_for_scale, false,
-        base::mac::GetSRGBColorSpace()));
+    SkBitmap bitmap(skia::NSImageRepToSkBitmap(ns_image_rep,
+                                               desired_size_for_scale, false));
     if (bitmap.isNull())
       continue;
 
@@ -80,25 +80,18 @@ gfx::ImageSkia ImageSkiaFromResizedNSImage(NSImage* image,
 }
 
 NSImage* NSImageFromImageSkia(const gfx::ImageSkia& image_skia) {
-  return NSImageFromImageSkiaWithColorSpace(image_skia,
-                                            base::mac::GetSRGBColorSpace());
-}
-
-NSImage* NSImageFromImageSkiaWithColorSpace(const gfx::ImageSkia& image_skia,
-                                            CGColorSpaceRef color_space) {
   if (image_skia.isNull())
     return nil;
 
-  base::scoped_nsobject<NSImage> image([[NSImage alloc] init]);
+  NSImage* image = [[NSImage alloc] init];
   image_skia.EnsureRepsForSupportedScales();
   std::vector<gfx::ImageSkiaRep> image_reps = image_skia.image_reps();
   for (const auto& rep : image_reps) {
-    [image addRepresentation:skia::SkBitmapToNSBitmapImageRepWithColorSpace(
-                                 rep.GetBitmap(), color_space)];
+    [image addRepresentation:skia::SkBitmapToNSBitmapImageRep(rep.GetBitmap())];
   }
 
-  [image setSize:NSMakeSize(image_skia.width(), image_skia.height())];
-  return [image.release() autorelease];
+  image.size = NSMakeSize(image_skia.width(), image_skia.height());
+  return image;
 }
 
 }  // namespace gfx

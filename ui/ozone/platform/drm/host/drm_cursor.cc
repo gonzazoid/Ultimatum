@@ -9,6 +9,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -39,7 +40,7 @@ class NullProxy : public DrmCursorProxy {
 
   void CursorSet(gfx::AcceleratedWidget window,
                  const std::vector<SkBitmap>& bitmaps,
-                 const gfx::Point& point,
+                 const absl::optional<gfx::Point>& point,
                  base::TimeDelta frame_delay) override {}
   void Move(gfx::AcceleratedWidget window, const gfx::Point& point) override {}
   void InitializeOnEvdevIfNecessary() override {}
@@ -48,7 +49,7 @@ class NullProxy : public DrmCursorProxy {
 }  // namespace
 
 DrmCursor::DrmCursor(DrmWindowHostManager* window_manager)
-    : ui_thread_(base::ThreadTaskRunnerHandle::Get()),
+    : ui_thread_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       window_(gfx::kNullAcceleratedWidget),
       window_manager_(window_manager),
       proxy_(new NullProxy()) {
@@ -287,7 +288,7 @@ void DrmCursor::SendCursorShowLocked() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
 }
 
 void DrmCursor::SendCursorHideLocked() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
-  CursorSetLockTested(window_, std::vector<SkBitmap>(), gfx::Point(),
+  CursorSetLockTested(window_, std::vector<SkBitmap>(), absl::nullopt,
                       base::TimeDelta());
 }
 
@@ -301,7 +302,7 @@ void DrmCursor::SendCursorMoveLocked() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
 // Lock-testing helpers.
 void DrmCursor::CursorSetLockTested(gfx::AcceleratedWidget window,
                                     const std::vector<SkBitmap>& bitmaps,
-                                    const gfx::Point& point,
+                                    const absl::optional<gfx::Point>& point,
                                     base::TimeDelta frame_delay) {
   lock_.AssertAcquired();
   proxy_->CursorSet(window, bitmaps, point, frame_delay);

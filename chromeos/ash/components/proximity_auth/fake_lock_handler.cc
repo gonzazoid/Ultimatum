@@ -13,12 +13,6 @@ FakeLockHandler::~FakeLockHandler() {}
 void FakeLockHandler::ShowBannerMessage(const std::u16string& message,
                                         bool is_warning) {}
 
-void FakeLockHandler::ShowUserPodCustomIcon(
-    const AccountId& account_id,
-    const ScreenlockBridge::UserPodCustomIconInfo& icon_info) {}
-
-void FakeLockHandler::HideUserPodCustomIcon(const AccountId& account_id) {}
-
 void FakeLockHandler::SetSmartLockState(const AccountId& account_id,
                                         ash::SmartLockState state) {
   smart_lock_state_ = state;
@@ -49,10 +43,6 @@ FakeLockHandler::ScreenType FakeLockHandler::GetScreenType() const {
 void FakeLockHandler::Unlock(const AccountId& account_id) {
   unlock_called_++;
 }
-
-void FakeLockHandler::AttemptEasySignin(const AccountId& account_id,
-                                        const std::string& secret,
-                                        const std::string& key_label) {}
 
 void FakeLockHandler::ClearSmartLockState() {
   smart_lock_state_.reset();

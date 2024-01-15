@@ -5,9 +5,10 @@
 import './data_point.js';
 import './diagnostics_shared.css.js';
 
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getSignalStrength} from './diagnostics_utils.js';
@@ -26,27 +27,27 @@ const WifiInfoElementBase = I18nMixin(PolymerElement);
 
 
 export class WifiInfoElement extends WifiInfoElementBase {
-  static get is() {
+  static get is(): string {
     return 'wifi-info';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       /** @type {!Network} */
       network: {
         type: Object,
       },
 
-      security_: {
+      security: {
         type: String,
-        computed: 'computeSecurity_(network.typeProperties.wifi.security)',
+        computed: 'computeSecurity(network.typeProperties.wifi.security)',
       },
 
-      signalStrength_: {
+      signalStrength: {
         type: String,
         computed:
             'computeSignalStrength(network.typeProperties.wifi.signalStrength)',
@@ -56,8 +57,8 @@ export class WifiInfoElement extends WifiInfoElementBase {
   }
 
   network: Network;
-  protected security_: string;
-  protected signalStrength_: string;
+  protected security: string;
+  protected signalStrength: string;
 
   /**
    * Builds channel text based frequency conversion. If value of frequency is
@@ -67,7 +68,7 @@ export class WifiInfoElement extends WifiInfoElementBase {
    * for display.
    * @param frequency Given in MHz.
    */
-  protected getChannelDescription_(frequency: number): string {
+  protected getChannelDescription(frequency: number): string {
     if (!frequency || frequency === 0) {
       return '';
     }
@@ -76,7 +77,7 @@ export class WifiInfoElement extends WifiInfoElementBase {
     return `${channel || '?'} (${ghz} GHz)`;
   }
 
-  protected computeSecurity_(): string {
+  protected computeSecurity(): string {
     if (!this.network.typeProperties) {
       return '';
     }

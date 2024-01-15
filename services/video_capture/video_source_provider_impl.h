@@ -12,6 +12,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "services/video_capture/device_factory.h"
+#include "services/video_capture/devices_changed_notifier.h"
 #include "services/video_capture/public/mojom/video_source_provider.mojom.h"
 
 namespace video_capture {
@@ -48,6 +49,8 @@ class VideoSourceProviderImpl : public mojom::VideoSourceProvider {
   void RegisterVirtualDevicesChangedObserver(
       mojo::PendingRemote<mojom::DevicesChangedObserver> observer,
       bool raise_event_if_virtual_devices_already_present) override;
+  void RegisterDevicesChangedObserver(
+      mojo::PendingRemote<mojom::DevicesChangedObserver> observer) override;
   void Close(CloseCallback callback) override;
 
  private:
@@ -55,12 +58,13 @@ class VideoSourceProviderImpl : public mojom::VideoSourceProvider {
   void OnClientDisconnectedOrClosed();
   void OnVideoSourceLastClientDisconnected(const std::string& device_id);
 
-  const raw_ptr<DeviceFactory> device_factory_;
+  const raw_ptr<DeviceFactory, DanglingUntriaged> device_factory_;
   base::RepeatingClosure on_last_client_disconnected_cb_;
   int client_count_ = 0;
   int closed_but_not_yet_disconnected_client_count_ = 0;
   mojo::ReceiverSet<mojom::VideoSourceProvider> receivers_;
   std::map<std::string, std::unique_ptr<VideoSourceImpl>> sources_;
+  absl::optional<DevicesChangedNotifier> devices_changed_notifier_;
 };
 
 }  // namespace video_capture

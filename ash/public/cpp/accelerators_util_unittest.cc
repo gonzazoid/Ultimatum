@@ -7,7 +7,11 @@
 #include <memory>
 #include <string>
 
+#include "ash/public/cpp/accelerator_keycode_lookup_cache.h"
+#include "ash/shell.h"
+#include "ash/test/ash_test_base.h"
 #include "base/strings/utf_string_conversions.h"
+#include "ui/base/ime/ash/mock_input_method_manager.h"
 #include "ui/events/keycodes/dom/dom_codes_array.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
@@ -18,7 +22,9 @@
 
 namespace ash {
 
-class AcceleratorsUtilTest : public testing::Test {
+using KeyCodeLookupEntry = AcceleratorKeycodeLookupCache::KeyCodeLookupEntry;
+
+class AcceleratorsUtilTest : public AshTestBase {
  public:
   AcceleratorsUtilTest() {
     layout_engine_ = std::make_unique<ui::StubKeyboardLayoutEngine>();
@@ -35,7 +41,17 @@ class AcceleratorsUtilTest : public testing::Test {
 
 TEST_F(AcceleratorsUtilTest, BasicDomCode) {
   const std::u16string expected = u"a";
+
+  absl::optional<KeyCodeLookupEntry> found_entry =
+      AcceleratorKeycodeLookupCache::Get()->Find(ui::KeyboardCode::VKEY_A,
+                                                 /*remap_positional_key=*/true);
+  EXPECT_FALSE(found_entry.has_value());
   EXPECT_EQ(expected, KeycodeToKeyString(ui::KeyboardCode::VKEY_A));
+  // Expect the cache to be populated.
+  found_entry = AcceleratorKeycodeLookupCache::Get()->Find(
+      ui::KeyboardCode::VKEY_A, /*remap_positional_key=*/true);
+  EXPECT_TRUE(found_entry.has_value());
+  EXPECT_EQ(expected, found_entry->key_display);
 }
 
 TEST_F(AcceleratorsUtilTest, PositionalKeyCode) {
@@ -64,7 +80,23 @@ TEST_F(AcceleratorsUtilTest, PositionalKeyCode) {
 
 TEST_F(AcceleratorsUtilTest, NonAlphanumericKey) {
   const std::u16string expected = u"Meta";
+  absl::optional<AcceleratorKeycodeLookupCache::KeyCodeLookupEntry>
+      found_entry = AcceleratorKeycodeLookupCache::Get()->Find(
+          ui::KeyboardCode::VKEY_COMMAND, /*remap_positional_key=*/true);
+  EXPECT_FALSE(found_entry.has_value());
   EXPECT_EQ(expected, KeycodeToKeyString(ui::KeyboardCode::VKEY_COMMAND));
+
+  found_entry = AcceleratorKeycodeLookupCache::Get()->Find(
+      ui::KeyboardCode::VKEY_COMMAND, /*remap_positional_key=*/true);
+  EXPECT_TRUE(found_entry.has_value());
+  EXPECT_EQ(expected, found_entry->key_display);
+}
+
+TEST_F(AcceleratorsUtilTest, UnidentifiedKey) {
+  EXPECT_EQ(u"Key 10", GetKeyDisplay(ui::KeyboardCode::VKEY_BACKTAB));
+  EXPECT_EQ(u"Key 231", GetKeyDisplay(ui::KeyboardCode::VKEY_PACKET));
+  EXPECT_EQ(u"Key 240", GetKeyDisplay(ui::KeyboardCode::VKEY_OEM_ATTN));
+  EXPECT_EQ(u"Key 241", GetKeyDisplay(ui::KeyboardCode::VKEY_OEM_FINISH));
 }
 
 }  // namespace ash

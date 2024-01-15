@@ -115,7 +115,7 @@ ConsistencyCookieManager::CreateConsistencyCookie(const std::string& value) {
       /*path=*/"/", /*creation=*/now, /*expiration=*/expiry,
       /*last_access=*/now, /*secure=*/true, /*httponly=*/false,
       net::CookieSameSite::STRICT_MODE, net::COOKIE_PRIORITY_DEFAULT,
-      /*same_party=*/false, /*partition_key=*/absl::nullopt);
+      /*partition_key=*/absl::nullopt);
 }
 
 // static
@@ -179,9 +179,9 @@ void ConsistencyCookieManager::OnStateChanged(
   // If a `ScopedAccountUpdate` was created while the reconcilor was inactive,
   // it was ignored and creation was not forced. Force the creation when the
   // reconcilor becomes active.
-  bool force_creation =
-      scoped_update_count_ > 0 &&
-      account_reconcilor_state_ == signin_metrics::ACCOUNT_RECONCILOR_INACTIVE;
+  bool force_creation = scoped_update_count_ > 0 &&
+                        account_reconcilor_state_ ==
+                            signin_metrics::AccountReconcilorState::kInactive;
   account_reconcilor_state_ = state;
   UpdateCookieIfNeeded(force_creation);
 }
@@ -189,8 +189,10 @@ void ConsistencyCookieManager::OnStateChanged(
 absl::optional<ConsistencyCookieManager::CookieValue>
 ConsistencyCookieManager::CalculateCookieValue() const {
   // Only update the cookie when the reconcilor is active.
-  if (account_reconcilor_state_ == signin_metrics::ACCOUNT_RECONCILOR_INACTIVE)
+  if (account_reconcilor_state_ ==
+      signin_metrics::AccountReconcilorState::kInactive) {
     return absl::nullopt;
+  }
 
   // If there is a live `ScopedAccountUpdate`, return `kStateUpdating`.
   DCHECK_GE(scoped_update_count_, 0);
@@ -199,14 +201,14 @@ ConsistencyCookieManager::CalculateCookieValue() const {
 
   // Otherwise compute the cookie based on the reconcilor state.
   switch (account_reconcilor_state_) {
-    case signin_metrics::ACCOUNT_RECONCILOR_OK:
+    case signin_metrics::AccountReconcilorState::kOk:
       return CookieValue::kConsistent;
-    case signin_metrics::ACCOUNT_RECONCILOR_RUNNING:
-    case signin_metrics::ACCOUNT_RECONCILOR_SCHEDULED:
+    case signin_metrics::AccountReconcilorState::kRunning:
+    case signin_metrics::AccountReconcilorState::kScheduled:
       return CookieValue::kUpdating;
-    case signin_metrics::ACCOUNT_RECONCILOR_ERROR:
+    case signin_metrics::AccountReconcilorState::kError:
       return CookieValue::kInconsistent;
-    case signin_metrics::ACCOUNT_RECONCILOR_INACTIVE:
+    case signin_metrics::AccountReconcilorState::kInactive:
       // This case is already handled at the top of the function.
       NOTREACHED();
       return absl::nullopt;
@@ -224,8 +226,10 @@ void ConsistencyCookieManager::UpdateCookieIfNeeded(bool force_creation) {
     // Cancel any ongoing operation and set the cookie immediately.
     pending_cookie_update_ = absl::nullopt;
     SetCookieValue(signin_client_->GetCookieManager(), cookie_value_.value());
-    for (auto* extra_manager : extra_cookie_managers_)
+    for (network::mojom::CookieManager* extra_manager :
+         extra_cookie_managers_) {
       SetCookieValue(extra_manager, cookie_value_.value());
+    }
     return;
   }
 
@@ -284,8 +288,9 @@ void ConsistencyCookieManager::UpdateCookieIfExists(
   }
   cookie_value_ = target_value;
   SetCookieValue(signin_client_->GetCookieManager(), target_value);
-  for (auto* extra_manager : extra_cookie_managers_)
+  for (network::mojom::CookieManager* extra_manager : extra_cookie_managers_) {
     SetCookieValue(extra_manager, target_value);
+  }
 }
 
 }  // namespace signin

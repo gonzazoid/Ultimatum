@@ -56,7 +56,7 @@ MockCertProvisioningWorker::MockCertProvisioningWorker() {
   // Makes MockCertProvisioningWorker return empty key by default. Because the
   // return type is a reference, the object must exist to be able to return a
   // default value.
-  static const std::string default_public_key;
+  static const std::vector<uint8_t> default_public_key;
   ON_CALL(*this, GetPublicKey).WillByDefault(ReturnRef(default_public_key));
 }
 
@@ -76,7 +76,14 @@ void MockCertProvisioningWorker::SetExpectations(
   EXPECT_CALL(*this, IsWaiting).WillRepeatedly(Return(is_waiting));
   EXPECT_CALL(*this, GetCertProfile).WillRepeatedly(ReturnRef(cert_profile_));
   EXPECT_CALL(*this, GetFailureMessage)
-      .WillRepeatedly(ReturnRef(failure_message_));
+      .WillRepeatedly(Return(failure_message_));
+}
+
+void MockCertProvisioningWorker::ResetExpected() {
+  testing::InSequence seq;
+  EXPECT_CALL(*this, IsWorkerMarkedForReset).WillOnce(Return(false));
+  EXPECT_CALL(*this, MarkWorkerForReset);
+  EXPECT_CALL(*this, IsWorkerMarkedForReset).WillRepeatedly(Return(true));
 }
 
 }  // namespace cert_provisioning

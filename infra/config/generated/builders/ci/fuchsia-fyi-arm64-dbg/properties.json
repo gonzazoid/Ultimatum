@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/fuchsia-fyi-arm64-dbg/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -30,9 +33,7 @@
                 ],
                 "config": "chromium"
               },
-              "legacy_test_results_config": {
-                "config": "staging_server"
-              }
+              "run_tests_serially": true
             }
           }
         ]
@@ -55,7 +56,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 250,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

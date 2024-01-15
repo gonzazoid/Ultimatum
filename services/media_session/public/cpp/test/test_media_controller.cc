@@ -266,12 +266,24 @@ void TestMediaController::SeekTo(base::TimeDelta seek_time) {
   ++seek_to_count_;
 }
 
+void TestMediaController::SkipAd() {
+  ++skip_ad_count_;
+}
+
 void TestMediaController::EnterPictureInPicture() {
   // TODO(crbug.com/1040263): Implement EnterPictureInPicture.
 }
 
 void TestMediaController::ExitPictureInPicture() {
   // TODO(crbug.com/1040263): Implement ExitPictureInPicture.
+}
+
+void TestMediaController::Raise() {
+  ++raise_count_;
+}
+
+void TestMediaController::RequestMediaRemoting() {
+  ++request_media_remoting_count_;
 }
 
 void TestMediaController::SimulateMediaSessionInfoChanged(
@@ -284,6 +296,18 @@ void TestMediaController::SimulateMediaSessionActionsChanged(
     const std::vector<mojom::MediaSessionAction>& actions) {
   for (auto& observer : observers_)
     observer->MediaSessionActionsChanged(actions);
+}
+
+void TestMediaController::SimulateMediaSessionChanged(
+    base::UnguessableToken token) {
+  for (auto& observer : observers_)
+    observer->MediaSessionChanged(token);
+}
+
+void TestMediaController::SimulateMediaSessionMetadataChanged(
+    const media_session::MediaMetadata& meta_data) {
+  for (auto& observer : observers_)
+    observer->MediaSessionMetadataChanged(meta_data);
 }
 
 void TestMediaController::Flush() {

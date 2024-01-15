@@ -17,10 +17,13 @@
 #include "ui/views/accessible_pane_view.h"
 #include "ui/views/view_targeter_delegate.h"
 
+namespace {
+class WebAppNonClientFrameViewAshTest;
+}
+
 namespace views {
 class View;
 class ViewTargeterDelegate;
-class Widget;
 }  // namespace views
 
 class BrowserView;
@@ -33,9 +36,10 @@ class WebAppToolbarButtonContainer;
 class WebAppFrameToolbarView : public views::AccessiblePaneView,
                                public ToolbarButtonProvider,
                                public views::ViewTargeterDelegate {
+  METADATA_HEADER(WebAppFrameToolbarView, views::AccessiblePaneView)
+
  public:
-  METADATA_HEADER(WebAppFrameToolbarView);
-  WebAppFrameToolbarView(views::Widget* widget, BrowserView* browser_view);
+  explicit WebAppFrameToolbarView(BrowserView* browser_view);
   WebAppFrameToolbarView(const WebAppFrameToolbarView&) = delete;
   WebAppFrameToolbarView& operator=(const WebAppFrameToolbarView&) = delete;
   ~WebAppFrameToolbarView() override;
@@ -56,11 +60,12 @@ class WebAppFrameToolbarView : public views::AccessiblePaneView,
                                         int trailing_x,
                                         int y,
                                         int available_height);
+  gfx::Rect LayoutInContainer(gfx::Rect available_space);
 
   // Sets own bounds within the available_space.
   void LayoutForWindowControlsOverlay(gfx::Rect available_space);
 
-  absl::optional<SkColor> active_color_for_testing() const {
+  std::optional<SkColor> active_color_for_testing() const {
     return active_foreground_color_;
   }
 
@@ -104,13 +109,13 @@ class WebAppFrameToolbarView : public views::AccessiblePaneView,
   void OnThemeChanged() override;
 
  private:
-  friend class WebAppNonClientFrameViewAshTest;
   friend class ImmersiveModeControllerChromeosWebAppBrowserTest;
   friend class WebAppAshInteractiveUITest;
+  friend class WebAppNonClientFrameViewAshTest;
 
   views::View* GetContentSettingContainerForTesting();
 
-  const std::vector<ContentSettingImageView*>&
+  const std::vector<raw_ptr<ContentSettingImageView, VectorExperimental>>&
   GetContentSettingViewsForTesting() const;
 
   void UpdateCachedColors();
@@ -125,10 +130,10 @@ class WebAppFrameToolbarView : public views::AccessiblePaneView,
 
   // Button and text colors.
   bool paint_as_active_ = true;
-  absl::optional<SkColor> active_background_color_;
-  absl::optional<SkColor> active_foreground_color_;
-  absl::optional<SkColor> inactive_background_color_;
-  absl::optional<SkColor> inactive_foreground_color_;
+  std::optional<SkColor> active_background_color_;
+  std::optional<SkColor> active_foreground_color_;
+  std::optional<SkColor> inactive_background_color_;
+  std::optional<SkColor> inactive_foreground_color_;
 
   // All remaining members are owned by the views hierarchy.
 

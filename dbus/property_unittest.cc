@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -156,11 +156,11 @@ class PropertyTest : public testing::Test {
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
-  absl::optional<base::ScopedDisallowBlocking> disallow_blocking_;
+  std::optional<base::ScopedDisallowBlocking> disallow_blocking_;
   std::unique_ptr<base::RunLoop> run_loop_;
   std::unique_ptr<base::Thread> dbus_thread_;
   scoped_refptr<Bus> bus_;
-  raw_ptr<ObjectProxy> object_proxy_;
+  raw_ptr<ObjectProxy, AcrossTasksDanglingUntriaged> object_proxy_;
   std::unique_ptr<Properties> properties_;
   std::unique_ptr<TestService> test_service_;
   // Properties updated.
@@ -379,7 +379,7 @@ TEST(PropertyTestStatic, ReadWriteNetAddressArray) {
   for (uint16_t i = 0; i < 5; ++i) {
     variant_array_writer.OpenStruct(&struct_entry_writer);
     ip_bytes[4] = 0x30 + i;
-    struct_entry_writer.AppendArrayOfBytes(ip_bytes, std::size(ip_bytes));
+    struct_entry_writer.AppendArrayOfBytes(ip_bytes);
     struct_entry_writer.AppendUint16(i);
     variant_array_writer.CloseContainer(&struct_entry_writer);
   }
@@ -442,7 +442,7 @@ TEST(PropertyTestStatic, ReadWriteStringToByteVectorMapVariantWrapped) {
 
     MessageWriter value_varient_writer(nullptr);
     entry_writer.OpenVariant("ay", &value_varient_writer);
-    value_varient_writer.AppendArrayOfBytes(values[i].data(), values[i].size());
+    value_varient_writer.AppendArrayOfBytes(values[i]);
     entry_writer.CloseContainer(&value_varient_writer);
 
     dict_writer.CloseContainer(&entry_writer);
@@ -476,7 +476,7 @@ TEST(PropertyTestStatic, ReadWriteStringToByteVectorMap) {
     dict_writer.OpenDictEntry(&entry_writer);
 
     entry_writer.AppendString(keys[i]);
-    entry_writer.AppendArrayOfBytes(values[i].data(), values[i].size());
+    entry_writer.AppendArrayOfBytes(values[i]);
 
     dict_writer.CloseContainer(&entry_writer);
   }
@@ -530,7 +530,7 @@ TEST(PropertyTestStatic, ReadWriteUInt16ToByteVectorMapVariantWrapped) {
 
     MessageWriter value_varient_writer(nullptr);
     entry_writer.OpenVariant("ay", &value_varient_writer);
-    value_varient_writer.AppendArrayOfBytes(values[i].data(), values[i].size());
+    value_varient_writer.AppendArrayOfBytes(values[i]);
     entry_writer.CloseContainer(&value_varient_writer);
 
     dict_writer.CloseContainer(&entry_writer);
@@ -564,7 +564,7 @@ TEST(PropertyTestStatic, ReadWriteUInt16ToByteVectorMap) {
     dict_writer.OpenDictEntry(&entry_writer);
 
     entry_writer.AppendUint16(keys[i]);
-    entry_writer.AppendArrayOfBytes(values[i].data(), values[i].size());
+    entry_writer.AppendArrayOfBytes(values[i]);
 
     dict_writer.CloseContainer(&entry_writer);
   }

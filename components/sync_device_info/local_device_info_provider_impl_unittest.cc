@@ -54,7 +54,7 @@ class MockDeviceInfoSyncClient : public DeviceInfoSyncClient {
               GetLocalSharingInfo,
               (),
               (const override));
-  MOCK_METHOD(absl::optional<DeviceInfo::PhoneAsASecurityKeyInfo>,
+  MOCK_METHOD(DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo,
               GetPhoneAsASecurityKeyInfo,
               (),
               (const override));
@@ -255,7 +255,7 @@ TEST_F(LocalDeviceInfoProviderImplTest, ShouldPopulateInterestedDataTypes) {
   ASSERT_THAT(provider_->GetLocalDeviceInfo(), NotNull());
   EXPECT_TRUE(provider_->GetLocalDeviceInfo()->interested_data_types().Empty());
 
-  const ModelTypeSet kTypes = ModelTypeSet(BOOKMARKS);
+  const ModelTypeSet kTypes = {BOOKMARKS};
   EXPECT_CALL(device_info_sync_client_, GetInterestedDataTypes())
       .WillRepeatedly(Return(kTypes));
 
@@ -264,11 +264,11 @@ TEST_F(LocalDeviceInfoProviderImplTest, ShouldPopulateInterestedDataTypes) {
 
 TEST_F(LocalDeviceInfoProviderImplTest, ShouldKeepStoredInvalidationFields) {
   const std::string kFCMRegistrationToken = "fcm_token";
-  const ModelTypeSet kInterestedDataTypes(BOOKMARKS);
+  const ModelTypeSet kInterestedDataTypes = {BOOKMARKS};
 
   DeviceInfo::PhoneAsASecurityKeyInfo paask_info =
       SamplePhoneAsASecurityKeyInfo();
-  auto device_info_restored_from_store = std::make_unique<DeviceInfo>(
+  const DeviceInfo device_info_restored_from_store(
       kLocalDeviceGuid, "name", "chrome_version", "user_agent",
       sync_pb::SyncEnums_DeviceType_TYPE_LINUX, DeviceInfo::OsType::kLinux,
       DeviceInfo::FormFactor::kDesktop, "device_id", "manufacturer", "model",
@@ -283,25 +283,32 @@ TEST_F(LocalDeviceInfoProviderImplTest, ShouldKeepStoredInvalidationFields) {
   provider_->Initialize(kLocalDeviceGuid, kLocalDeviceClientName,
                         kLocalDeviceManufacturerName, kLocalDeviceModelName,
                         kLocalFullHardwareClass,
-                        std::move(device_info_restored_from_store));
+                        &device_info_restored_from_store);
 
   EXPECT_CALL(device_info_sync_client_, GetFCMRegistrationToken())
-      .WillOnce(Return(absl::nullopt));
+      .WillRepeatedly(Return(absl::nullopt));
   EXPECT_CALL(device_info_sync_client_, GetInterestedDataTypes())
-      .WillOnce(Return(absl::nullopt));
+      .WillRepeatedly(Return(absl::nullopt));
   EXPECT_CALL(device_info_sync_client_, GetPhoneAsASecurityKeyInfo())
-      .WillOnce(Return(absl::nullopt));
+      .WillOnce(Return(DeviceInfo::PhoneAsASecurityKeyInfo::NotReady()));
 
   const DeviceInfo* local_device_info = provider_->GetLocalDeviceInfo();
   EXPECT_EQ(local_device_info->interested_data_types(), kInterestedDataTypes);
   EXPECT_EQ(local_device_info->fcm_registration_token(), kFCMRegistrationToken);
   EXPECT_TRUE(
       local_device_info->paask_info()->NonRotatingFieldsEqual(paask_info));
+
+  // `GetPhoneAsASecurityKeyInfo` can erase the field too.
+  EXPECT_CALL(device_info_sync_client_, GetPhoneAsASecurityKeyInfo())
+      .WillOnce(Return(DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport()));
+
+  const DeviceInfo* local_device_info2 = provider_->GetLocalDeviceInfo();
+  EXPECT_FALSE(local_device_info2->paask_info().has_value());
 }
 
 TEST_F(LocalDeviceInfoProviderImplTest, PhoneAsASecurityKeyInfo) {
   ON_CALL(device_info_sync_client_, GetPhoneAsASecurityKeyInfo())
-      .WillByDefault(Return(absl::nullopt));
+      .WillByDefault(Return(DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport()));
 
   InitializeProvider();
 

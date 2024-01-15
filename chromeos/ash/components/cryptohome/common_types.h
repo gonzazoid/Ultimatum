@@ -23,10 +23,22 @@ using RawPin = base::StrongAlias<class RawPinTag, std::string>;
 // The salt we use for PINs.
 using PinSalt = base::StrongAlias<class PinSaltTag, std::string>;
 
+// The password as the user would enter it. Not salted or hashed.
+using RawPassword = base::StrongAlias<class RawPasswordTag, std::string>;
+
 // Type that denotes version of software component (Chrome or ChromeOS)
 // that was used to set up a factor.
 using ComponentVersion =
     base::StrongAlias<class ComponentVersionTag, std::string>;
+
+// The salt we use for passwords.
+using SystemSalt = base::StrongAlias<class SystemSaltTag, std::string>;
+
+// Type that maps to the cryptohome::KnowledgeFactorHashAlgorithm proto enum.
+enum class KnowledgeFactorHashAlgorithmWrapper {
+  kSha256TopHalf,
+  kPbkdf2Aes2561234,
+};
 
 }  // namespace cryptohome
 

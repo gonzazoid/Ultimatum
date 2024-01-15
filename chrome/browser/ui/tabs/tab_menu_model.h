@@ -25,6 +25,8 @@ class TabMenuModelDelegate;
 //   ExistingWindowSubMenuModel
 class TabMenuModel : public ui::SimpleMenuModel {
  public:
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAddANoteTabMenuItem);
+
   TabMenuModel(ui::SimpleMenuModel::Delegate* delegate,
                TabMenuModelDelegate* tab_menu_model_delegate,
                TabStripModel* tab_strip,
@@ -37,6 +39,7 @@ class TabMenuModel : public ui::SimpleMenuModel {
 
  private:
   void Build(TabStripModel* tab_strip, int index);
+  void BuildForWebApp(TabStripModel* tab_strip, int index);
 
   std::unique_ptr<ui::SimpleMenuModel> add_to_existing_group_submenu_;
   std::unique_ptr<ui::SimpleMenuModel> add_to_existing_window_submenu_;

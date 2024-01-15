@@ -54,14 +54,10 @@ PageContentAnnotationJob::~PageContentAnnotationJob() {
 }
 
 void PageContentAnnotationJob::FillWithNullOutputs() {
-  for (size_t i = 0; i < CountOfRemainingNonNullInputs(); i++) {
+  size_t remaining = CountOfRemainingNonNullInputs();
+  for (size_t i = 0; i < remaining; i++) {
     std::string input = *GetNextInput();
     switch (type()) {
-      case AnnotationType::kPageTopics:
-        PostNewResult(
-            BatchAnnotationResult::CreatePageTopicsResult(input, absl::nullopt),
-            i);
-        break;
       case AnnotationType::kPageEntities:
         PostNewResult(BatchAnnotationResult::CreatePageEntitiesResult(
                           input, absl::nullopt),
@@ -69,6 +65,11 @@ void PageContentAnnotationJob::FillWithNullOutputs() {
         break;
       case AnnotationType::kContentVisibility:
         PostNewResult(BatchAnnotationResult::CreateContentVisibilityResult(
+                          input, absl::nullopt),
+                      i);
+        break;
+      case AnnotationType::kTextEmbedding:
+        PostNewResult(BatchAnnotationResult::CreateTextEmbeddingResult(
                           input, absl::nullopt),
                       i);
         break;
@@ -116,14 +117,15 @@ void PageContentAnnotationJob::PostNewResult(
 
 bool PageContentAnnotationJob::HadAnySuccess() const {
   for (const BatchAnnotationResult& result : results_) {
-    if (result.type() == AnnotationType::kPageTopics && result.topics()) {
-      return true;
-    }
     if (result.type() == AnnotationType::kPageEntities && result.entities()) {
       return true;
     }
     if (result.type() == AnnotationType::kContentVisibility &&
         result.visibility_score()) {
+      return true;
+    }
+    if (result.type() == AnnotationType::kTextEmbedding &&
+        result.embeddings()) {
       return true;
     }
   }

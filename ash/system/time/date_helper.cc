@@ -9,7 +9,9 @@
 #include "ash/system/model/clock_model.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/time/calendar_utils.h"
+#include "base/containers/contains.h"
 #include "base/i18n/unicodestring.h"
+#include "base/memory/ptr_util.h"
 #include "base/time/time.h"
 #include "third_party/icu/source/common/unicode/dtintrv.h"
 #include "third_party/icu/source/i18n/unicode/dtitvfmt.h"
@@ -30,7 +32,7 @@ const std::vector<std::u16string> kDefaultWeekTitle = {u"S", u"M", u"T", u"W",
                                                        u"T", u"F", u"S"};
 
 UDate TimeToUDate(const base::Time& time) {
-  return static_cast<UDate>(time.ToDoubleT() *
+  return static_cast<UDate>(time.InSecondsFSinceUnixEpoch() *
                             base::Time::kMillisecondsPerSecond);
 }
 
@@ -40,22 +42,30 @@ icu::UnicodeString getHoursPattern(const icu::UnicodeString& unicode_pattern) {
   std::string pattern;
   unicode_pattern.toUTF8String(pattern);
 
-  if (pattern.find("hh") != std::string::npos)
+  if (base::Contains(pattern, "hh")) {
     return icu::UnicodeString("hh");
-  if (pattern.find("h") != std::string::npos)
+  }
+  if (base::Contains(pattern, "h")) {
     return icu::UnicodeString("h");
-  if (pattern.find("HH") != std::string::npos)
+  }
+  if (base::Contains(pattern, "HH")) {
     return icu::UnicodeString("HH");
-  if (pattern.find("H") != std::string::npos)
+  }
+  if (base::Contains(pattern, "H")) {
     return icu::UnicodeString("H");
-  if (pattern.find("KK") != std::string::npos)
+  }
+  if (base::Contains(pattern, "KK")) {
     return icu::UnicodeString("KK");
-  if (pattern.find("K") != std::string::npos)
+  }
+  if (base::Contains(pattern, "K")) {
     return icu::UnicodeString("K");
-  if (pattern.find("kk") != std::string::npos)
+  }
+  if (base::Contains(pattern, "kk")) {
     return icu::UnicodeString("kk");
-  if (pattern.find("k") != std::string::npos)
+  }
+  if (base::Contains(pattern, "k")) {
     return icu::UnicodeString("k");
+  }
 
   NOTREACHED() << "Hours pattern not found.";
   return icu::UnicodeString("HH");
@@ -105,7 +115,7 @@ DateHelper::CreateDateIntervalFormatter(const char* pattern) {
   icu::DateIntervalFormat* formatter =
       icu::DateIntervalFormat::createInstance(pattern, status);
   DCHECK(U_SUCCESS(status));
-  return absl::WrapUnique(formatter);
+  return base::WrapUnique(formatter);
 }
 
 icu::SimpleDateFormat DateHelper::CreateHoursFormatter(const char* pattern) {
@@ -158,23 +168,27 @@ base::TimeDelta DateHelper::GetTimeDifference(base::Time date) const {
   // Calculates the time difference adjust by the possible daylight savings
   // offset. If the status of any step fails, returns the default time
   // difference without considering daylight savings.
-  if (!gregorian_calendar_)
+  if (!gregorian_calendar_) {
     return raw_time_diff;
+  }
 
   UDate current_date = TimeToUDate(date);
   UErrorCode status = U_ZERO_ERROR;
   gregorian_calendar_->setTime(current_date, status);
-  if (U_FAILURE(status))
+  if (U_FAILURE(status)) {
     return raw_time_diff;
+  }
 
   status = U_ZERO_ERROR;
   UBool day_light = gregorian_calendar_->inDaylightTime(status);
-  if (U_FAILURE(status))
+  if (U_FAILURE(status)) {
     return raw_time_diff;
+  }
 
   int gmt_offset = time_zone.getRawOffset();
-  if (day_light)
+  if (day_light) {
     gmt_offset += time_zone.getDSTSavings();
+  }
 
   return base::Minutes(gmt_offset / kMillisecondsPerMinute);
 }
@@ -197,7 +211,10 @@ DateHelper::DateHelper()
       twenty_four_hour_clock_formatter_(CreateSimpleDateFormatter("HH:mm")),
       day_of_week_formatter_(CreateSimpleDateFormatter("ee")),
       week_title_formatter_(CreateSimpleDateFormatter("EEEEE")),
-      year_formatter_(CreateSimpleDateFormatter("YYYY")),
+      // Note: "yyyy" represents a four-digit calendar year (e.g. "2023"),
+      // while "YYYY" represents a so called 'week year' (which might be "2022"
+      // if the first day is on the last week of 2022).
+      year_formatter_(CreateSimpleDateFormatter("yyyy")),
       twelve_hour_clock_hours_formatter_(CreateHoursFormatter("h:mm a")),
       twenty_four_hour_clock_hours_formatter_(CreateHoursFormatter("HH:mm")),
       minutes_formatter_(CreateSimpleDateFormatterWithoutBestPattern("mm")),
@@ -220,8 +237,9 @@ DateHelper::DateHelper()
 }
 
 DateHelper::~DateHelper() {
-  if (Shell::HasInstance())
+  if (Shell::HasInstance()) {
     Shell::Get()->locale_update_controller()->RemoveObserver(this);
+  }
 }
 
 void DateHelper::ResetFormatters() {
@@ -236,7 +254,7 @@ void DateHelper::ResetFormatters() {
   twenty_four_hour_clock_formatter_ = CreateSimpleDateFormatter("HH:mm");
   day_of_week_formatter_ = CreateSimpleDateFormatter("ee");
   week_title_formatter_ = CreateSimpleDateFormatter("EEEEE");
-  year_formatter_ = CreateSimpleDateFormatter("YYYY");
+  year_formatter_ = CreateSimpleDateFormatter("yyyy");
   twelve_hour_clock_hours_formatter_ = CreateHoursFormatter("h:mm a");
   twenty_four_hour_clock_hours_formatter_ = CreateHoursFormatter("HH:mm");
   minutes_formatter_ = CreateSimpleDateFormatterWithoutBestPattern("mm");
@@ -307,6 +325,7 @@ void DateHelper::TimezoneChanged(const icu::TimeZone& timezone) {
 }
 
 void DateHelper::OnLocaleChanged() {
+  ResetFormatters();
   CalculateLocalWeekTitles();
 }
 

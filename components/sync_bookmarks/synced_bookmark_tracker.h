@@ -13,6 +13,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/protocol/model_type_state.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -22,17 +23,13 @@ class BookmarkModelMetadata;
 class EntitySpecifics;
 }  // namespace sync_pb
 
-namespace base {
-class GUID;
-}  // namespace base
-
 namespace bookmarks {
-class BookmarkModel;
 class BookmarkNode;
 }  // namespace bookmarks
 
 namespace sync_bookmarks {
 
+class BookmarkModelView;
 class SyncedBookmarkTrackerEntity;
 
 // This class is responsible for keeping the mapping between bookmark nodes in
@@ -41,8 +38,8 @@ class SyncedBookmarkTrackerEntity;
 // until commit confirmation is received.
 class SyncedBookmarkTracker {
  public:
-  // Returns a client tag hash given a bookmark GUID.
-  static syncer::ClientTagHash GetClientTagHashFromGUID(const base::GUID& guid);
+  // Returns a client tag hash given a bookmark UUID.
+  static syncer::ClientTagHash GetClientTagHashFromUuid(const base::Uuid& uuid);
 
   // Creates an empty instance with no entities. Never returns null.
   static std::unique_ptr<SyncedBookmarkTracker> CreateEmpty(
@@ -54,7 +51,7 @@ class SyncedBookmarkTracker {
   // null.
   static std::unique_ptr<SyncedBookmarkTracker>
   CreateFromBookmarkModelAndMetadata(
-      const bookmarks::BookmarkModel* model,
+      const BookmarkModelView* model,
       sync_pb::BookmarkModelMetadata model_metadata);
 
   SyncedBookmarkTracker(const SyncedBookmarkTracker&) = delete;
@@ -75,8 +72,8 @@ class SyncedBookmarkTracker {
       const syncer::ClientTagHash& client_tag_hash) const;
 
   // Convenience function, similar to GetEntityForClientTagHash().
-  const SyncedBookmarkTrackerEntity* GetEntityForGUID(
-      const base::GUID& guid) const;
+  const SyncedBookmarkTrackerEntity* GetEntityForUuid(
+      const base::Uuid& uuid) const;
 
   // Returns null if no entity is found.
   const SyncedBookmarkTrackerEntity* GetEntityForBookmarkNode(
@@ -186,10 +183,9 @@ class SyncedBookmarkTracker {
   // Clears the specifics hash for |entity|, useful for testing.
   void ClearSpecificsHashForTest(const SyncedBookmarkTrackerEntity* entity);
 
-  // Checks whther all nodes in |bookmark_model| that *should* be tracked as per
-  // CanSyncNode() are tracked.
-  void CheckAllNodesTracked(
-      const bookmarks::BookmarkModel* bookmark_model) const;
+  // Checks whether all nodes in |bookmark_model| that *should* be tracked as
+  // per IsNodeSyncable() are tracked.
+  void CheckAllNodesTracked(const BookmarkModelView* bookmark_model) const;
 
   // This method is used to mark all entities except permanent nodes as
   // unsynced. This will cause reuploading of all bookmarks. The reupload
@@ -227,7 +223,7 @@ class SyncedBookmarkTracker {
     DUPLICATED_SERVER_ID = 6,
     UNKNOWN_BOOKMARK_ID = 7,
     UNTRACKED_BOOKMARK = 8,
-    BOOKMARK_GUID_MISMATCH = 9,
+    BOOKMARK_UUID_MISMATCH = 9,
     DUPLICATED_CLIENT_TAG_HASH = 10,
     TRACKED_MANAGED_NODE = 11,
     MISSING_CLIENT_TAG_HASH = 12,
@@ -247,7 +243,7 @@ class SyncedBookmarkTracker {
   // |model_metadata|. Validates the integrity of |*model| and |model_metadata|
   // and returns an enum representing any inconsistency.
   CorruptionReason InitEntitiesFromModelAndMetadata(
-      const bookmarks::BookmarkModel* model,
+      const BookmarkModelView* model,
       sync_pb::BookmarkModelMetadata model_metadata);
 
   // Conceptually, find a tracked entity that matches |entity| and returns a
@@ -290,7 +286,8 @@ class SyncedBookmarkTracker {
   // server in the same order as stored in the list. The same order should also
   // be maintained across browser restarts (i.e. across calls to the ctor() and
   // BuildBookmarkModelMetadata().
-  std::vector<SyncedBookmarkTrackerEntity*> ordered_local_tombstones_;
+  std::vector<raw_ptr<SyncedBookmarkTrackerEntity, VectorExperimental>>
+      ordered_local_tombstones_;
 
   // The model metadata (progress marker, initial sync done, etc).
   sync_pb::ModelTypeState model_type_state_;

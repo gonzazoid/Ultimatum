@@ -37,16 +37,17 @@ namespace test {
 std::unique_ptr<webrtc::DesktopFrame> LoadDesktopFrameFromPng(
     const char* name) {
   base::FilePath file_path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path);
   file_path = file_path.AppendASCII("remoting");
   file_path = file_path.AppendASCII("test");
   file_path = file_path.AppendASCII("data");
   file_path = file_path.AppendASCII(name);
 
   std::string file_content;
-  if (!base::ReadFileToString(file_path, &file_content))
+  if (!base::ReadFileToString(file_path, &file_content)) {
     LOG(FATAL) << "Failed to read " << file_path.MaybeAsASCII()
                << ". Please run remoting/test/data/download.sh";
+  }
   SkBitmap bitmap;
   gfx::PNGCodec::Decode(reinterpret_cast<const uint8_t*>(file_content.data()),
                         file_content.size(), &bitmap);

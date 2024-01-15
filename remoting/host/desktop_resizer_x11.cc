@@ -4,15 +4,20 @@
 
 #include "remoting/host/desktop_resizer_x11.h"
 
+#include <gio/gio.h>
+
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/system/sys_info.h"
 #include "base/types/cxx23_to_underlying.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/desktop_display_layout_util.h"
@@ -61,6 +66,7 @@ namespace {
 
 constexpr auto kInvalidMode = static_cast<x11::RandR::Mode>(0);
 constexpr auto kDisabledCrtc = static_cast<x11::RandR::Crtc>(0);
+constexpr base::TimeDelta kGnomeWaitTime = base::Seconds(1);
 
 int PixelsToMillimeters(int pixels, int dpi) {
   DCHECK(dpi != 0);
@@ -71,6 +77,44 @@ int PixelsToMillimeters(int pixels, int dpi) {
   // kMillimetersPerInch converts to mm. Multiplication is done first to
   // avoid integer division.
   return static_cast<int>(kMillimetersPerInch * pixels / dpi);
+}
+
+// Returns a physical size in mm that will work well with GNOME's
+// automatic scale-selection algorithm.
+webrtc::DesktopSize CalculateSizeInMmForGnome(
+    const remoting::ScreenResolution& resolution) {
+  int width_mm = PixelsToMillimeters(resolution.dimensions().width(),
+                                     resolution.dpi().x());
+  int height_mm = PixelsToMillimeters(resolution.dimensions().height(),
+                                      resolution.dpi().y());
+
+  // GNOME will, by default, choose an automatic scaling-factor based on the
+  // monitor's physical size (mm) and resolution (pixels). Some versions of
+  // GNOME have a problem when the computed DPI is close to 192. GNOME
+  // calculates the DPI using:
+  // dpi = size_pixels / (size_mm / 25.4)
+  // This is the reverse of PixelsToMillimeters() which should result in
+  // the same values as resolution.dpi() except for any floating-point
+  // truncation errors. GNOME will choose 2x scaling only if both the width and
+  // height DPIs are strictly greater than 192. The problem is that a user might
+  // connect from a 192dpi device and then GNOME's choice of scaling is randomly
+  // subject to rounding errors. If the calculation worked out at exactly
+  // 192dpi, the inequality test would fail and GNOME would choose 1x scaling.
+  // To address this, width_mm/height_mm are decreased slightly (increasing the
+  // calculated DPI) to favor 2x over 1x scaling for 192dpi devices.
+  width_mm--;
+  height_mm--;
+
+  // GNOME treats some pairs of width/height values as untrustworthy and will
+  // always choose 1x scaling for them. These values come from
+  // meta_monitor_has_aspect_as_size() in
+  // https://gitlab.gnome.org/GNOME/mutter/-/blob/main/src/backends/meta-monitor-manager.c
+  constexpr std::pair<int, int> kBadSizes[] = {
+      {16, 9}, {16, 10}, {160, 90}, {160, 100}, {1600, 900}, {1600, 1000}};
+  if (base::Contains(kBadSizes, std::pair(width_mm, height_mm))) {
+    width_mm--;
+  }
+  return {width_mm, height_mm};
 }
 
 // TODO(jamiewalch): Use the correct DPI for the mode: http://crbug.com/172405.
@@ -86,6 +130,15 @@ std::string GetModeNameForOutput(x11::RandR::Output output) {
   return "CRD_" + base::NumberToString(base::to_underlying(output));
 }
 
+uint32_t GetDotClockForModeInfo() {
+  static int proc_num = base::SysInfo::NumberOfProcessors();
+  // Keep the proc_num logic in sync with linux_me2me_host.py
+  if (proc_num > 16) {
+    return 120 * 1e6;
+  }
+  return 60 * 1e6;
+}
+
 }  // namespace
 
 namespace remoting {
@@ -96,8 +149,9 @@ ScreenResources::~ScreenResources() = default;
 
 bool ScreenResources::Refresh(x11::RandR* randr, x11::Window window) {
   resources_ = nullptr;
-  if (auto response = randr->GetScreenResourcesCurrent({window}).Sync())
+  if (auto response = randr->GetScreenResourcesCurrent({window}).Sync()) {
     resources_ = std::move(response.reply);
+  }
   return resources_ != nullptr;
 }
 
@@ -107,8 +161,9 @@ x11::RandR::Mode ScreenResources::GetIdForMode(const std::string& name) {
   for (const auto& mode_info : resources_->modes) {
     std::string mode_name(names, mode_info.name_len);
     names += mode_info.name_len;
-    if (name == mode_name)
+    if (name == mode_name) {
       return static_cast<x11::RandR::Mode>(mode_info.id);
+    }
   }
   return kInvalidMode;
 }
@@ -124,13 +179,13 @@ DesktopResizerX11::DesktopResizerX11()
       root_(screen_->root),
       is_virtual_session_(IsVirtualSession(connection_)) {
   has_randr_ = randr_->present();
-  if (!has_randr_)
+  if (!has_randr_) {
     return;
-  // Let the server know the client version so it sends us data consistent with
-  // xcbproto's definitions.  We don't care about the returned server version,
-  // so no need to sync.
-  randr_->QueryVersion({x11::RandR::major_version, x11::RandR::minor_version});
+  }
   randr_->SelectInput({root_, x11::RandR::NotifyMask::ScreenChange});
+
+  gnome_display_config_.Init();
+  registry_ = TakeGObject(g_settings_new("org.gnome.desktop.interface"));
 }
 
 DesktopResizerX11::~DesktopResizerX11() = default;
@@ -139,8 +194,9 @@ ScreenResolution DesktopResizerX11::GetCurrentResolution(
     webrtc::ScreenId screen_id) {
   // Process pending events so that the connection setup data is updated
   // with the correct display metrics.
-  if (has_randr_)
+  if (has_randr_) {
     connection_->DispatchAll();
+  }
 
   // RANDR does not allow fetching information on a particular monitor. So
   // fetch all of them and try to find the requested monitor.
@@ -170,38 +226,40 @@ std::list<ScreenResolution> DesktopResizerX11::GetSupportedResolutions(
     const ScreenResolution& preferred,
     webrtc::ScreenId screen_id) {
   std::list<ScreenResolution> result;
-  if (!has_randr_ || !is_virtual_session_)
+  if (!has_randr_ || !is_virtual_session_) {
     return result;
+  }
 
   // Clamp the specified size to something valid for the X server.
   if (auto response = randr_->GetScreenSizeRange({root_}).Sync()) {
     int width =
-        base::clamp(static_cast<uint16_t>(preferred.dimensions().width()),
-                    response->min_width, response->max_width);
+        std::clamp(static_cast<uint16_t>(preferred.dimensions().width()),
+                   response->min_width, response->max_width);
     int height =
-        base::clamp(static_cast<uint16_t>(preferred.dimensions().height()),
-                    response->min_height, response->max_height);
+        std::clamp(static_cast<uint16_t>(preferred.dimensions().height()),
+                   response->min_height, response->max_height);
     // Additionally impose a minimum size of 640x480, since anything smaller
     // doesn't seem very useful.
-    ScreenResolution actual(
+    result.emplace_back(
         webrtc::DesktopSize(std::max(640, width), std::max(480, height)),
-        webrtc::DesktopVector(kDefaultDPI, kDefaultDPI));
-    result.push_back(actual);
+        preferred.dpi());
   }
   return result;
 }
 
 void DesktopResizerX11::SetResolution(const ScreenResolution& resolution,
                                       webrtc::ScreenId screen_id) {
-  if (!has_randr_ || !is_virtual_session_)
+  if (!has_randr_ || !is_virtual_session_) {
     return;
+  }
 
   // Grab the X server while we're changing the display resolution. This ensures
   // that the display configuration doesn't change under our feet.
   ScopedXGrabServer grabber(connection_);
 
-  if (!resources_.Refresh(randr_, root_))
+  if (!resources_.Refresh(randr_, root_)) {
     return;
+  }
 
   // RANDR does not allow fetching information on a particular monitor. So
   // fetch all of them and try to find the requested monitor.
@@ -248,15 +306,17 @@ void DesktopResizerX11::RestoreResolution(const ScreenResolution& original,
 }
 
 void DesktopResizerX11::SetVideoLayout(const protocol::VideoLayout& layout) {
-  if (!has_randr_ || !is_virtual_session_)
+  if (!has_randr_ || !is_virtual_session_) {
     return;
+  }
 
   // Grab the X server while we're changing the display resolution. This ensures
   // that the display configuration doesn't change under our feet.
   ScopedXGrabServer grabber(connection_);
 
-  if (!resources_.Refresh(randr_, root_))
+  if (!resources_.Refresh(randr_, root_)) {
     return;
+  }
 
   auto reply = randr_->GetMonitors({root_}).Sync();
   if (!reply) {
@@ -381,8 +441,9 @@ void DesktopResizerX11::SetResolutionForOutput(
   // that we have to detach the output from the mode in order to delete the
   // mode and re-create it with the new resolution. The output may also need to
   // be detached from all modes in order to reduce the root window size.
-  HOST_LOG << "Changing desktop size to " << resolution.dimensions().width()
-           << "x" << resolution.dimensions().height();
+  HOST_LOG << "Resizing RANDR Output " << base::to_underlying(output) << " to "
+           << resolution.dimensions().width() << "x"
+           << resolution.dimensions().height();
 
   X11CrtcResizer resizer(resources_.get(), connection_);
 
@@ -414,6 +475,23 @@ void DesktopResizerX11::SetResolutionForOutput(
   // Update |active_crtcs_| with new sizes and offsets.
   resizer.UpdateActiveCrtcs(crtc, mode, resolution.dimensions());
   UpdateRootWindow(resizer);
+
+  webrtc::DesktopSize size_mm = CalculateSizeInMmForGnome(resolution);
+  int width_mm = size_mm.width();
+  int height_mm = size_mm.height();
+  HOST_LOG << "Setting physical size in mm: " << width_mm << "x" << height_mm;
+  SetOutputPhysicalSizeInMM(connection_, output, width_mm, height_mm);
+
+  // Check to see if GNOME is using automatic-scaling. If the value is non-zero,
+  // the user prefers a particular scaling, so don't adjust the
+  // text-scaling-factor here.
+  if (g_settings_get_uint(registry_.get(), "scaling-factor") == 0U) {
+    // Start the timer to update the text-scaling-factor. Any previously
+    // started timer will be cancelled.
+    requested_dpi_ = resolution.dpi().x();
+    gnome_delay_timer_.Start(FROM_HERE, kGnomeWaitTime, this,
+                             &DesktopResizerX11::RequestGnomeDisplayConfig);
+  }
 }
 
 x11::RandR::Mode DesktopResizerX11::UpdateMode(x11::RandR::Output output,
@@ -430,9 +508,9 @@ x11::RandR::Mode DesktopResizerX11::UpdateMode(x11::RandR::Output output,
   x11::RandR::ModeInfo mode;
   mode.width = width;
   mode.height = height;
-  mode.dot_clock = 60;
-  mode.htotal = 1;
-  mode.vtotal = 1;
+  mode.dot_clock = GetDotClockForModeInfo();
+  mode.htotal = 1000;
+  mode.vtotal = 1000;
   mode.name_len = mode_name.size();
   if (auto reply =
           randr_->CreateMode({root_, mode, mode_name.c_str()}).Sync()) {
@@ -500,9 +578,42 @@ DesktopResizerX11::OutputInfoList DesktopResizerX11::GetDisabledOutputs() {
   return disabled_outputs;
 }
 
-// static
-std::unique_ptr<DesktopResizer> DesktopResizer::Create() {
-  return std::make_unique<DesktopResizerX11>();
+void DesktopResizerX11::RequestGnomeDisplayConfig() {
+  // Unretained() is safe because `this` owns gnome_display_config_ which
+  // cancels callbacks on destruction.
+  gnome_display_config_.GetMonitorsConfig(
+      base::BindOnce(&DesktopResizerX11::OnGnomeDisplayConfigReceived,
+                     base::Unretained(this)));
+}
+
+void DesktopResizerX11::OnGnomeDisplayConfigReceived(
+    GnomeDisplayConfig config) {
+  if (config.monitors.size() != 1) {
+    HOST_LOG << "Not setting text-scale-factor for multiple monitors.";
+    return;
+  }
+
+  const auto& monitor = config.monitors.cbegin()->second;
+  if (monitor.scale == 0) {
+    // This should never happen - avoid division by 0.
+    return;
+  }
+
+  // The GNOME scaling, multiplied by the GNOME text-scaling-factor, will be the
+  // rendered scaling of text. This should be the client's requested DPI divided
+  // by kDefaultDPI.
+  double text_scaling_factor =
+      static_cast<double>(requested_dpi_) / kDefaultDPI / monitor.scale;
+  HOST_LOG << "Target DPI = " << requested_dpi_
+           << ", GNOME scale = " << monitor.scale
+           << ", calculated text-scaling = " << text_scaling_factor;
+
+  if (!g_settings_set_double(registry_.get(), "text-scaling-factor",
+                             text_scaling_factor)) {
+    // Just log a warning - failure is expected if the value falls outside the
+    // interval [0.5, 3.0].
+    LOG(WARNING) << "Failed to set text-scaling-factor.";
+  }
 }
 
 }  // namespace remoting

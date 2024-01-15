@@ -8,13 +8,13 @@
 
 #include <numeric>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/path_service.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -70,14 +70,6 @@ gfx::Image LoadTestPNG(const base::FilePath::CharType* path) {
       reinterpret_cast<const unsigned char*>(png_data.data()), png_data.size());
 }
 
-// Matcher used to verify that pixel values are near their expected value on
-// older versions of Mac OS where non-opaque pixels don't always load with their
-// correct pixel values.
-testing::Matcher<uint8_t> ValueIsNear(uint8_t target) {
-  return testing::AllOf(testing::Le(target),
-                        testing::Ge(target < 20 ? 0 : target - 20));
-}
-
 }  // namespace
 
 TEST(IcnsEncoderTest, RoundTrip) {
@@ -111,18 +103,19 @@ TEST(IcnsEncoderTest, RoundTrip) {
   EXPECT_TRUE(encoder.WriteToFile(icon_path));
 
   // Now use Image I/O methods to load the .icns file back in.
-  base::ScopedCFTypeRef<CFDictionaryRef> empty_dict(
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> empty_dict(
       CFDictionaryCreate(nullptr, nullptr, nullptr, 0, nullptr, nullptr));
-  base::ScopedCFTypeRef<CFURLRef> url = base::mac::FilePathToCFURL(icon_path);
-  base::ScopedCFTypeRef<CGImageSourceRef> source(
-      CGImageSourceCreateWithURL(url, nullptr));
+  base::apple::ScopedCFTypeRef<CFURLRef> url =
+      base::apple::FilePathToCFURL(icon_path);
+  base::apple::ScopedCFTypeRef<CGImageSourceRef> source(
+      CGImageSourceCreateWithURL(url.get(), nullptr));
 
   // And make sure we got back the same images that were written to the file.
-  EXPECT_EQ(3u, CGImageSourceGetCount(source));
-  for (size_t i = 0; i < CGImageSourceGetCount(source); ++i) {
-    base::ScopedCFTypeRef<CGImageRef> cg_image(
-        CGImageSourceCreateImageAtIndex(source, i, empty_dict));
-    SkBitmap bitmap = skia::CGImageToSkBitmap(cg_image);
+  EXPECT_EQ(3u, CGImageSourceGetCount(source.get()));
+  for (size_t i = 0; i < CGImageSourceGetCount(source.get()); ++i) {
+    base::apple::ScopedCFTypeRef<CGImageRef> cg_image(
+        CGImageSourceCreateImageAtIndex(source.get(), i, empty_dict.get()));
+    SkBitmap bitmap = skia::CGImageToSkBitmap(cg_image.get());
     EXPECT_EQ(bitmap.width(), bitmap.height());
     EXPECT_TRUE(bitmap.width() == 32 || bitmap.width() == 48 ||
                 bitmap.width() == 128)
@@ -139,19 +132,9 @@ TEST(IcnsEncoderTest, RoundTrip) {
         SkColor expected_c = reference.getColor(x, y);
         uint8_t alpha = SkColorGetA(expected_c);
         expected_a.push_back(testing::Eq(alpha));
-        // Mac OS older than 10.14 slightly messes up pixel values of pixels
-        // that aren't fully opaque nor fully transparent. So in that case
-        // don't test for equality, but rather check if they are somewhere in
-        // the ballpark.
-        if (!base::mac::IsOS10_13() || alpha == 0xff || alpha == 0) {
-          expected_r.push_back(testing::Eq(SkColorGetR(expected_c)));
-          expected_g.push_back(testing::Eq(SkColorGetG(expected_c)));
-          expected_b.push_back(testing::Eq(SkColorGetB(expected_c)));
-        } else {
-          expected_r.push_back(ValueIsNear(SkColorGetR(expected_c)));
-          expected_g.push_back(ValueIsNear(SkColorGetG(expected_c)));
-          expected_b.push_back(ValueIsNear(SkColorGetB(expected_c)));
-        }
+        expected_r.push_back(testing::Eq(SkColorGetR(expected_c)));
+        expected_g.push_back(testing::Eq(SkColorGetG(expected_c)));
+        expected_b.push_back(testing::Eq(SkColorGetB(expected_c)));
 
         SkColor bitmap_c = bitmap.getColor(x, y);
         bitmap_a.push_back(SkColorGetA(bitmap_c));

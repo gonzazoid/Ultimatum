@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "cc/trees/layer_tree_host_client.h"
 #include "cc/trees/paint_holding_reason.h"
@@ -45,7 +45,7 @@ class LayerTreeViewDelegate {
       bool defer_status,
       cc::PaintHoldingReason reason,
       absl::optional<cc::PaintHoldingCommitTrigger> trigger) = 0;
-  virtual void OnPauseRenderingChanged(bool) = 0;
+  virtual void OnCommitRequested() = 0;
 
   // Notifies that the layer tree host has completed a call to
   // RequestMainFrameUpdate in response to a BeginMainFrame.
@@ -117,6 +117,13 @@ class LayerTreeViewDelegate {
   // Used in web tests without threaded compositing, to indicate that a new
   // commit needs to be scheduled. Has no effect in any other mode.
   virtual void ScheduleAnimationForWebTests() = 0;
+
+  // Creates a RenderFrameMetadataObserver to track frame production in the
+  // compositor. Generally this is supplied with the LayerTreeFrameSink. This
+  // API is used if the compositor attaches to a new delegate, which requires a
+  // new observer bound to the new delegate.
+  virtual std::unique_ptr<cc::RenderFrameMetadataObserver>
+  CreateRenderFrameObserver() = 0;
 
  protected:
   virtual ~LayerTreeViewDelegate() {}

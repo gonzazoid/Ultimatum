@@ -5,12 +5,14 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_METRICS_CONNECTION_INFO_METRICS_LOGGER_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_METRICS_CONNECTION_INFO_METRICS_LOGGER_H_
 
+#include <optional>
+
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -42,7 +44,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ConnectionInfoMetricsLogger
     // will be non-empty.
     virtual void OnConnectionResult(
         const std::string& guid,
-        const absl::optional<std::string>& shill_error) = 0;
+        const std::optional<std::string>& shill_error) = 0;
   };
 
   ConnectionInfoMetricsLogger();
@@ -77,7 +79,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ConnectionInfoMetricsLogger
       kDisconnecting = 3,
     };
 
-    explicit ConnectionInfo(const NetworkState* network);
+    explicit ConnectionInfo(const NetworkState* network,
+                            bool is_user_initiated);
     ~ConnectionInfo();
 
     bool operator==(const ConnectionInfo& other) const;
@@ -85,11 +88,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ConnectionInfoMetricsLogger
     Status status;
     std::string guid;
     std::string shill_error;
+    bool is_user_initiated;
   };
 
   // NetworkStateHandlerObserver::
+  void ConnectToNetworkRequested(const std::string& service_path) override;
   void NetworkListChanged() override;
   void NetworkConnectionStateChanged(const NetworkState* network) override;
+  void OnShuttingDown() override;
 
   // NetworkConnectionObserver::
   void ConnectSucceeded(const std::string& service_path) override;
@@ -97,19 +103,20 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ConnectionInfoMetricsLogger
                      const std::string& error_name) override;
 
   void UpdateConnectionInfo(const NetworkState* network);
-  void ConnectionAttemptFinished(
-      const absl::optional<ConnectionInfo>& prev_info,
-      const ConnectionInfo& curr_info) const;
+  void ConnectionAttemptFinished(const std::optional<ConnectionInfo>& prev_info,
+                                 const ConnectionInfo& curr_info) const;
   void AttemptLogConnectionStateResult(
-      const absl::optional<ConnectionInfo>& prev_info,
+      const std::optional<ConnectionInfo>& prev_info,
       const ConnectionInfo& curr_info) const;
-  absl::optional<ConnectionInfo> GetCachedInfo(const std::string& guid) const;
+  std::optional<ConnectionInfo> GetCachedInfo(const std::string& guid) const;
   void NotifyConnectionResult(
       const std::string& guid,
-      const absl::optional<std::string>& shill_error) const;
+      const std::optional<std::string>& shill_error) const;
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  NetworkConnectionHandler* network_connection_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  raw_ptr<NetworkConnectionHandler> network_connection_handler_ = nullptr;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
 
   // Stores connection information for all networks.
   base::flat_map<std::string, ConnectionInfo> guid_to_connection_info_;

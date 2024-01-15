@@ -4,18 +4,15 @@
 
 #include "content/browser/accessibility/browser_accessibility_state_impl_android.h"
 
-#include "base/android/jni_android.h"
-#include "base/android/jni_string.h"
-#include "base/containers/contains.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
-#include "content/browser/web_contents/web_contents_impl.h"
-#include "content/public/android/content_jni_headers/BrowserAccessibilityState_jni.h"
-#include "content/public/browser/browser_thread.h"
-#include "ui/gfx/animation/animation.h"
+#include <memory>
 
-using base::android::AttachCurrentThread;
-using base::android::ScopedJavaLocalRef;
+#include "base/containers/contains.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
+#include "content/browser/web_contents/web_contents_impl.h"
+#include "content/public/browser/browser_thread.h"
+#include "ui/accessibility/android/accessibility_state.h"
+#include "ui/gfx/animation/animation.h"
 
 namespace content {
 
@@ -213,25 +210,25 @@ enum {
 // These macros are used by RecordAccessibilityServiceStatsHistogram(), below.
 #define EVENT_TYPE_HISTOGRAM(event_type_mask, event_type, histogram) \
   if (event_type_mask & ACCESSIBILITYEVENT_TYPE_##event_type)        \
-  UMA_HISTOGRAM_ENUMERATION(histogram, UMA_EVENT_##event_type,       \
-                            UMA_ACCESSIBILITYSERVICEINFO_MAX)
-#define FLAGS_HISTOGRAM(flags_mask, flag, histogram)     \
-  if (flags_mask & ACCESSIBILITYSERVICEINFO_FLAG_##flag) \
-  UMA_HISTOGRAM_ENUMERATION(histogram, UMA_FLAG_##flag,  \
-                            UMA_ACCESSIBILITYSERVICEINFO_MAX)
+  base::UmaHistogramEnumeration(histogram, UMA_EVENT_##event_type,   \
+                                UMA_ACCESSIBILITYSERVICEINFO_MAX)
+#define FLAGS_HISTOGRAM(flags_mask, flag, histogram)        \
+  if (flags_mask & ACCESSIBILITYSERVICEINFO_FLAG_##flag)    \
+  base::UmaHistogramEnumeration(histogram, UMA_FLAG_##flag, \
+                                UMA_ACCESSIBILITYSERVICEINFO_MAX)
 #define FEEDBACK_TYPE_HISTOGRAM(feedback_type_mask, feedback_type, histogram) \
   if (feedback_type_mask & ACCESSIBILITYSERVICEINFO_FEEDBACK_##feedback_type) \
-  UMA_HISTOGRAM_ENUMERATION(histogram, UMA_FEEDBACK_##feedback_type,          \
-                            UMA_ACCESSIBILITYSERVICEINFO_MAX)
-#define CAPABILITY_TYPE_HISTOGRAM(capability_type_mask, capability_type, \
-                                  histogram)                             \
-  if (capability_type_mask &                                             \
-      ACCESSIBILITYSERVICEINFO_CAPABILITY_##capability_type)             \
-  UMA_HISTOGRAM_ENUMERATION(histogram, UMA_CAPABILITY_##capability_type, \
-                            UMA_ACCESSIBILITYSERVICEINFO_MAX)
-#define SERVICE_TYPE_HISTOGRAM(service_type, histogram) \
-  UMA_HISTOGRAM_ENUMERATION(histogram, service_type,    \
-                            UMA_ACCESSIBILITYSERVICEINFO_MAX);
+  base::UmaHistogramEnumeration(histogram, UMA_FEEDBACK_##feedback_type,      \
+                                UMA_ACCESSIBILITYSERVICEINFO_MAX)
+#define CAPABILITY_TYPE_HISTOGRAM(capability_type_mask, capability_type,     \
+                                  histogram)                                 \
+  if (capability_type_mask &                                                 \
+      ACCESSIBILITYSERVICEINFO_CAPABILITY_##capability_type)                 \
+  base::UmaHistogramEnumeration(histogram, UMA_CAPABILITY_##capability_type, \
+                                UMA_ACCESSIBILITYSERVICEINFO_MAX)
+#define SERVICE_TYPE_HISTOGRAM(service_type, histogram)  \
+  base::UmaHistogramEnumeration(histogram, service_type, \
+                                UMA_ACCESSIBILITYSERVICEINFO_MAX);
 
 // This macro simplifies the recording of the aggregate accessibility
 // information in the CollectAccessibilityServiceStats() method, below.
@@ -253,40 +250,35 @@ enum {
 }  // namespace
 
 BrowserAccessibilityStateImplAndroid::BrowserAccessibilityStateImplAndroid() {
-  // Setup the listeners for accessibility state changes, so we can
-  // inform the renderer about changes.
-  JNIEnv* env = AttachCurrentThread();
-  Java_BrowserAccessibilityState_registerObservers(env);
+  ui::AccessibilityState::RegisterAccessibilityStateDelegate(this);
 }
 
-void BrowserAccessibilityStateImplAndroid::CollectAccessibilityServiceStats() {
-  JNIEnv* env = AttachCurrentThread();
+BrowserAccessibilityStateImplAndroid::~BrowserAccessibilityStateImplAndroid() {
+  ui::AccessibilityState::UnregisterAccessibilityStateDelegate(this);
+}
+
+void BrowserAccessibilityStateImplAndroid::
+    RecordAccessibilityServiceInfoHistograms() {
   int event_type_mask =
-      Java_BrowserAccessibilityState_getAccessibilityServiceEventTypeMask(env);
-
+      ui::AccessibilityState::GetAccessibilityServiceEventTypeMask();
   int feedback_type_mask =
-      Java_BrowserAccessibilityState_getAccessibilityServiceFeedbackTypeMask(
-          env);
+      ui::AccessibilityState::GetAccessibilityServiceFeedbackTypeMask();
 
-  int flags_mask =
-      Java_BrowserAccessibilityState_getAccessibilityServiceFlagsMask(env);
+  int flags_mask = ui::AccessibilityState::GetAccessibilityServiceFlagsMask();
 
   int capabilities_mask =
-      Java_BrowserAccessibilityState_getAccessibilityServiceCapabilitiesMask(
-          env);
+      ui::AccessibilityState::GetAccessibilityServiceCapabilitiesMask();
 
-  auto service_ids =
-      Java_BrowserAccessibilityState_getAccessibilityServiceIds(env);
+  std::vector<std::string> service_ids =
+      ui::AccessibilityState::GetAccessibilityServiceIds();
 
-  jsize len = env->GetArrayLength(service_ids.obj());
+  int len = service_ids.size();
   bool has_assistive_tech = false;
   bool has_password_manager = false;
   bool has_unknown = false;
 
-  for (jsize i = 0; i < len; ++i) {
-    auto* id = env->GetObjectArrayElement(service_ids.obj(), i);
-    std::string service_id =
-        base::android::ConvertJavaStringToUTF8(env, static_cast<jstring>(id));
+  for (int i = 0; i < len; ++i) {
+    std::string service_id = service_ids[i];
     std::string service_package = service_id.erase(service_id.find("/"));
     uint32_t service_hash = base::PersistentHash(service_package);
 
@@ -403,6 +395,41 @@ void BrowserAccessibilityStateImplAndroid::
   CAPABILITY_TYPE_HISTOGRAM(capabilities_mask, CAN_TAKE_SCREENSHOT, histogram);
 }
 
+void BrowserAccessibilityStateImplAndroid::OnAnimatorDurationScaleChanged() {
+  // We need to call into gfx::Animation and WebContentsImpl on the UI thread,
+  // so ensure that we setup the notification on the correct thread.
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  gfx::Animation::UpdatePrefersReducedMotion();
+  for (content::WebContentsImpl* wc :
+       content::WebContentsImpl::GetAllWebContents()) {
+    wc->OnWebPreferencesChanged();
+  }
+}
+
+void BrowserAccessibilityStateImplAndroid::OnDisplayInversionEnabledChanged(
+    bool enabled) {
+  // We need to call into GetInstanceForWeb on the UI thread,
+  // so ensure that we setup the notification on the correct thread.
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  ui::NativeTheme* native_theme = ui::NativeTheme::GetInstanceForWeb();
+  native_theme->set_inverted_colors(enabled);
+  native_theme->NotifyOnNativeThemeUpdated();
+}
+
+void BrowserAccessibilityStateImplAndroid::OnContrastLevelChanged(
+    bool highContrastEnabled) {
+  // We need to call into GetInstanceForWeb on the UI thread,
+  // so ensure that we setup the notification on the correct thread.
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  ui::NativeTheme* native_theme = ui::NativeTheme::GetInstanceForWeb();
+  native_theme->SetPreferredContrast(
+      highContrastEnabled ? ui::NativeTheme::PreferredContrast::kMore
+                          : ui::NativeTheme::PreferredContrast::kNoPreference);
+  native_theme->set_prefers_reduced_transparency(highContrastEnabled);
+  native_theme->NotifyOnNativeThemeUpdated();
+}
+
 void BrowserAccessibilityStateImplAndroid::UpdateHistogramsOnOtherThread() {
   BrowserAccessibilityStateImpl::UpdateHistogramsOnOtherThread();
 
@@ -431,42 +458,21 @@ void BrowserAccessibilityStateImplAndroid::SetImageLabelsModeForProfile(
     BrowserContext* profile) {
   std::vector<WebContentsImpl*> web_contents_vector =
       WebContentsImpl::GetAllWebContents();
-  for (size_t i = 0; i < web_contents_vector.size(); ++i) {
-    if (web_contents_vector[i]->GetBrowserContext() != profile)
+  for (auto*& web_contents : web_contents_vector) {
+    if (web_contents->GetBrowserContext() != profile) {
       continue;
+    }
 
-    ui::AXMode ax_mode = web_contents_vector[i]->GetAccessibilityMode();
+    ui::AXMode ax_mode = web_contents->GetAccessibilityMode();
     ax_mode.set_mode(ui::AXMode::kLabelImages, enabled);
-    web_contents_vector[i]->SetAccessibilityMode(ax_mode);
+    web_contents->SetAccessibilityMode(ax_mode);
   }
 }
 
-bool BrowserAccessibilityStateImplAndroid::HasSpokenFeedbackServicePresent() {
-  JNIEnv* env = AttachCurrentThread();
-  return Java_BrowserAccessibilityState_hasSpokenFeedbackServicePresent(env);
-}
-
 // static
-void JNI_BrowserAccessibilityState_OnAnimatorDurationScaleChanged(JNIEnv* env) {
-  // We need to call into gfx::Animation and WebContentsImpl on the UI thread,
-  // so ensure that we setup the notification on the correct thread.
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-
-  gfx::Animation::UpdatePrefersReducedMotion();
-  for (WebContentsImpl* wc : WebContentsImpl::GetAllWebContents()) {
-    wc->OnWebPreferencesChanged();
-  }
-}
-
-//
-// BrowserAccessibilityStateImpl::GetInstance implementation that constructs
-// this class instead of the base class.
-//
-
-// static
-BrowserAccessibilityStateImpl* BrowserAccessibilityStateImpl::GetInstance() {
-  static base::NoDestructor<BrowserAccessibilityStateImplAndroid> instance;
-  return &*instance;
+std::unique_ptr<BrowserAccessibilityStateImpl>
+BrowserAccessibilityStateImpl::Create() {
+  return std::make_unique<BrowserAccessibilityStateImplAndroid>();
 }
 
 }  // namespace content

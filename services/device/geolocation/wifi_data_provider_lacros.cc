@@ -4,13 +4,15 @@
 
 #include "services/device/geolocation/wifi_data_provider_lacros.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "services/device/geolocation/wifi_data_provider_handle.h"
 #include "services/device/geolocation/wifi_polling_policy.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 
 namespace device {
 
@@ -33,13 +35,12 @@ void PopulateWifiData(
     const std::vector<crosapi::mojom::AccessPointDataPtr>& access_points,
     WifiData& wifi_data) {
   for (const auto& access_point : access_points) {
-    AccessPointData ap_data;
-    ap_data.mac_address = access_point->mac_address;
+    mojom::AccessPointData ap_data;
+    ap_data.mac_address = base::UTF16ToUTF8(access_point->mac_address);
     ap_data.radio_signal_strength = access_point->radio_signal_strength;
     ap_data.channel = access_point->channel;
     ap_data.signal_to_noise = access_point->signal_to_noise;
-    ap_data.ssid = access_point->ssid;
-    wifi_data.access_point_data.insert(std::move(ap_data));
+    wifi_data.access_point_data.insert(ap_data);
   }
 }
 
@@ -50,8 +51,8 @@ bool IsGeolocationServiceAvailable() {
   if (!chromeos::LacrosService::Get())
     return false;
   const int crosapiVersion =
-      chromeos::LacrosService::Get()->GetInterfaceVersion(
-          crosapi::mojom::Crosapi::Uuid_);
+      chromeos::LacrosService::Get()
+          ->GetInterfaceVersion<crosapi::mojom::Crosapi>();
   const int minRequiredVersion = static_cast<int>(
       crosapi::mojom::Crosapi::kBindGeolocationServiceMinVersion);
   return crosapiVersion >= minRequiredVersion;

@@ -5,12 +5,14 @@
 #include "chrome/browser/chromeos/reporting/device_reporting_settings_lacros.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ptr_util.h"
+#include "base/notreached.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chromeos/crosapi/mojom/device_settings_service.mojom.h"
@@ -19,7 +21,7 @@
 namespace reporting {
 namespace {
 
-bool IsSupportedPolicy(base::StringPiece policy_name) {
+bool IsSupportedPolicy(std::string_view policy_name) {
   return policy_name == ::policy::key::kReportDeviceNetworkStatus ||
          policy_name == ::policy::key::kReportUploadFrequency ||
          policy_name ==
@@ -87,9 +89,9 @@ DeviceReportingSettingsLacros::AddSettingsObserver(
     const std::string& policy_name,
     base::RepeatingClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!policy_name.empty());
-  DCHECK(callback);
-  DCHECK(IsSupportedPolicy(policy_name))
+  CHECK(!policy_name.empty());
+  CHECK(callback);
+  CHECK(IsSupportedPolicy(policy_name))
       << "Unsupported device reporting setting in Lacros";
 
   // Get the callback registry associated with the policy.
@@ -127,6 +129,11 @@ bool DeviceReportingSettingsLacros::GetBoolean(const std::string& policy_name,
   return false;
 }
 
+bool DeviceReportingSettingsLacros::GetReportingEnabled(const std::string& path,
+                                                        bool* out_value) const {
+  return GetBoolean(path, out_value);
+}
+
 bool DeviceReportingSettingsLacros::GetInteger(const std::string& policy_name,
                                                int* out_value) const {
   crosapi::mojom::DeviceSettings* const device_settings =
@@ -149,6 +156,16 @@ bool DeviceReportingSettingsLacros::GetInteger(const std::string& policy_name,
   }
 
   // Cannot retrieve device reporting setting for the given policy via cros api.
+  return false;
+}
+
+bool DeviceReportingSettingsLacros::GetList(
+    const std::string& policy_name,
+    const base::Value::List** out_value) const {
+  CHECK(out_value);
+
+  // No use cases for this yet.
+  NOTIMPLEMENTED();
   return false;
 }
 

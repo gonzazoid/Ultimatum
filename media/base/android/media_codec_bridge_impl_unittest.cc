@@ -137,9 +137,9 @@ void DecodeMediaFrame(MediaCodecBridge* media_codec,
   base::TimeDelta new_timestamp;
   for (int i = 0; i < 10; ++i) {
     int input_buf_index = -1;
-    MediaCodecStatus status =
+    MediaCodecResult result =
         media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
-    ASSERT_EQ(MEDIA_CODEC_OK, status);
+    ASSERT_TRUE(result.is_ok());
 
     media_codec->QueueInputBuffer(input_buf_index, data, data_size,
                                   input_presentation_timestamp);
@@ -148,11 +148,11 @@ void DecodeMediaFrame(MediaCodecBridge* media_codec,
     size_t size = 0;
     bool eos = false;
     int output_buf_index = -1;
-    status = media_codec->DequeueOutputBuffer(
+    result = media_codec->DequeueOutputBuffer(
         InfiniteTimeOut(), &output_buf_index, &unused_offset, &size,
         &new_timestamp, &eos, nullptr);
 
-    if (status == MEDIA_CODEC_OK && output_buf_index > 0) {
+    if (result.is_ok() && output_buf_index > 0) {
       media_codec->ReleaseOutputBuffer(output_buf_index, false);
     }
     // Output time stamp should not be smaller than old timestamp.
@@ -217,50 +217,65 @@ void H264Validate(const uint8_t* frame, size_t size) {
 
 void EncodeMediaFrame(MediaCodecBridge* media_codec,
                       const uint8_t* src_data,
-                      const size_t src_size,
                       const int width,
                       const int height,
                       const base::TimeDelta input_timestamp) {
   int input_buf_index = -1;
-  MediaCodecStatus status =
+  MediaCodecResult result =
       media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
-  ASSERT_EQ(MEDIA_CODEC_OK, status);
+  ASSERT_TRUE(result.is_ok());
 
   uint8_t* buffer = nullptr;
   size_t capacity = 0;
-  status = media_codec->GetInputBuffer(input_buf_index, &buffer, &capacity);
-  ASSERT_EQ(MEDIA_CODEC_OK, status);
+  result = media_codec->GetInputBuffer(input_buf_index, &buffer, &capacity);
+  ASSERT_TRUE(result.is_ok());
+
+  int stride, yplane_height;
+  gfx::Size encoded_size;
+  result = media_codec->GetInputFormat(&stride, &yplane_height, &encoded_size);
+  ASSERT_TRUE(result.is_ok());
+
+  const gfx::Size uv_plane_size = VideoFrame::PlaneSizeInSamples(
+      PIXEL_FORMAT_NV12, VideoFrame::kUVPlane, encoded_size);
+  const size_t src_size =
+      // size of Y-plane plus padding till UV-plane
+      stride * yplane_height +
+      // size of all UV-plane lines but the last one
+      (uv_plane_size.height() - 1) * stride +
+      // size of the very last line in UV-plane (it's not padded to full stride)
+      uv_plane_size.width() * 2;
+  ASSERT_LE(src_size, capacity);
 
   // Convert to NV12 because H264 encoder is created with color format
   // COLOR_FormatYUV420SemiPlanar, both in main code path and unittest here.
   bool converted =
       !libyuv::I420ToNV12(src_data, width, src_data + width * height, width / 2,
                           src_data + width * height * 5 / 4, width / 2, buffer,
-                          width, buffer + width * height, width, width, height);
-  ASSERT_TRUE(converted == true);
+                          stride, buffer + stride * yplane_height, stride,
+                          encoded_size.width(), encoded_size.height());
+  ASSERT_TRUE(converted);
 
-  status = media_codec->QueueInputBuffer(input_buf_index, nullptr, src_size,
+  result = media_codec->QueueInputBuffer(input_buf_index, nullptr, src_size,
                                          input_timestamp);
-  ASSERT_EQ(MEDIA_CODEC_OK, status);
+  ASSERT_TRUE(result.is_ok());
 
   int32_t buf_index = -1;
   size_t offset = 0;
   size_t output_size;
   bool key_frame = false;
-
   do {
-    status = media_codec->DequeueOutputBuffer(InfiniteTimeOut(), &buf_index,
+    result = media_codec->DequeueOutputBuffer(InfiniteTimeOut(), &buf_index,
                                               &offset, &output_size, nullptr,
                                               nullptr, &key_frame);
-    EXPECT_NE(status, MEDIA_CODEC_ERROR);
+    EXPECT_NE(result.code(), MediaCodecResult::Codes::kError);
   } while (buf_index < 0);
-  ASSERT_TRUE(status == MEDIA_CODEC_OK && buf_index >= 0);
+  ASSERT_TRUE(result.is_ok() && buf_index >= 0);
 
   std::unique_ptr<uint8_t[]> output_data =
       std::make_unique<uint8_t[]>(output_size);
-  status = media_codec->CopyFromOutputBuffer(buf_index, offset,
+  result = media_codec->CopyFromOutputBuffer(buf_index, offset,
                                              output_data.get(), output_size);
-  ASSERT_EQ(MEDIA_CODEC_OK, status);
+  ASSERT_TRUE(result.is_ok());
 
   H264Validate(output_data.get(), output_size);
 
@@ -295,20 +310,20 @@ TEST(MediaCodecBridgeTest, DoNormal) {
   ASSERT_THAT(media_codec, NotNull());
 
   int input_buf_index = -1;
-  MediaCodecStatus status =
+  MediaCodecResult result =
       media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
-  ASSERT_EQ(MEDIA_CODEC_OK, status);
+  ASSERT_TRUE(result.is_ok());
   ASSERT_GE(input_buf_index, 0);
 
   int64_t input_pts = kPresentationTimeBase;
   media_codec->QueueInputBuffer(input_buf_index, test_mp3, sizeof(test_mp3),
                                 base::Microseconds(++input_pts));
 
-  status = media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
+  result = media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
   media_codec->QueueInputBuffer(input_buf_index, test_mp3, sizeof(test_mp3),
                                 base::Microseconds(++input_pts));
 
-  status = media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
+  result = media_codec->DequeueInputBuffer(InfiniteTimeOut(), &input_buf_index);
   media_codec->QueueEOS(input_buf_index);
 
   input_pts = kPresentationTimeBase;
@@ -319,17 +334,17 @@ TEST(MediaCodecBridgeTest, DoNormal) {
     size_t size = 0;
     base::TimeDelta timestamp;
     int output_buf_index = -1;
-    status = media_codec->DequeueOutputBuffer(InfiniteTimeOut(),
+    result = media_codec->DequeueOutputBuffer(InfiniteTimeOut(),
                                               &output_buf_index, &unused_offset,
                                               &size, &timestamp, &eos, nullptr);
-    switch (status) {
-      case MEDIA_CODEC_TRY_AGAIN_LATER:
+    switch (result.code()) {
+      case MediaCodecResult::Codes::kTryAgainLater:
         FAIL();
 
-      case MEDIA_CODEC_OUTPUT_FORMAT_CHANGED:
+      case MediaCodecResult::Codes::kOutputFormatChanged:
         continue;
 
-      case MEDIA_CODEC_OUTPUT_BUFFERS_CHANGED:
+      case MediaCodecResult::Codes::kOutputBuffersChanged:
         continue;
 
       default:
@@ -478,8 +493,8 @@ TEST(MediaCodecBridgeTest, H264VideoEncodeAndValidate) {
   for (int frame = 0; frame < num_frames && frame < 3; frame++) {
     input_timestamp +=
         base::Microseconds(base::Time::kMicrosecondsPerSecond / frame_rate);
-    EncodeMediaFrame(media_codec.get(), frame_data.get(), frame_size, width,
-                     height, input_timestamp);
+    EncodeMediaFrame(media_codec.get(), frame_data.get(), width, height,
+                     input_timestamp);
   }
 
   // Reuest key frame and encode 3 more frames. The second key frame should
@@ -488,8 +503,8 @@ TEST(MediaCodecBridgeTest, H264VideoEncodeAndValidate) {
   for (int frame = 0; frame < num_frames && frame < 3; frame++) {
     input_timestamp +=
         base::Microseconds(base::Time::kMicrosecondsPerSecond / frame_rate);
-    EncodeMediaFrame(media_codec.get(), frame_data.get(), frame_size, width,
-                     height, input_timestamp);
+    EncodeMediaFrame(media_codec.get(), frame_data.get(), width, height,
+                     input_timestamp);
   }
 }
 

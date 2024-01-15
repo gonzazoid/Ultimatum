@@ -5,7 +5,7 @@
 /** @fileoverview Runs the Polymer Nearby Share WebUI tests. */
 
 // Polymer BrowserTest fixture.
-GEN_INCLUDE(['//chrome/test/data/webui/polymer_browser_test_base.js']);
+GEN_INCLUDE(['//chrome/test/data/webui/chromeos/polymer_browser_test_base.js']);
 
 GEN('#include "chrome/browser/nearby_sharing/common/nearby_share_features.h"');
 GEN('#include "content/public/test/browser_test.h"');
@@ -38,8 +38,7 @@ function registerTest(testName, module, caseName) {
   this[className] = class extends NearbyBrowserTest {
     /** @override */
     get browsePreload() {
-      return `chrome://nearby/test_loader.html?module=nearby_share/${
-          module}&host=test`;
+      return `chrome://nearby/test_loader.html?module=nearby_share/${module}`;
     }
   };
 

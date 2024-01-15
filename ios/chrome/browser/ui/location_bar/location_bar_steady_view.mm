@@ -7,21 +7,17 @@
 #import "base/check.h"
 #import "base/check_op.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/ui/elements/extended_touch_target_button.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "ios/chrome/browser/shared/ui/elements/extended_touch_target_button.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/dynamic_type_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_collection_utils.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_constants.h"
-#import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/browser/ui/util/dynamic_type_util.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -40,6 +36,8 @@ const CGFloat kVoiceSearchButtonTrailingSpacing = -7;
 const CGFloat kbadgeViewAnimationDuration = 0.2;
 // Location label vertical offset.
 const CGFloat kLocationLabelVerticalOffset = -1;
+// The margin from the leading side when not centered.
+const CGFloat kLeadingMargin = 20;
 }  // namespace
 
 @interface LocationBarSteadyView ()
@@ -96,12 +94,8 @@ const CGFloat kLocationLabelVerticalOffset = -1;
       [[LocationBarSteadyViewColorScheme alloc] init];
 
   scheme.fontColor = [UIColor colorNamed:kTextPrimaryColor];
-  scheme.placeholderColor = [UIColor colorNamed:kTextfieldPlaceholderColor];
-  if (UseSymbols()) {
-    scheme.trailingButtonColor = [UIColor colorNamed:kGrey600Color];
-  } else {
-    scheme.trailingButtonColor = [UIColor colorNamed:kGrey500Color];
-  }
+  scheme.placeholderColor = content_suggestions::SearchHintLabelColor();
+  scheme.trailingButtonColor = [UIColor colorNamed:kGrey600Color];
 
   return scheme;
 }
@@ -147,7 +141,9 @@ const CGFloat kLocationLabelVerticalOffset = -1;
 
 #pragma mark - LocationBarSteadyView
 
-@implementation LocationBarSteadyView
+@implementation LocationBarSteadyView {
+  NSLayoutConstraint* _xConstraint;
+}
 
 - (instancetype)init {
   self = [super initWithFrame:CGRectZero];
@@ -221,9 +217,9 @@ const CGFloat kLocationLabelVerticalOffset = -1;
     AddSameConstraints(self, _locationButton);
 
     // Make the label gravitate towards the center of the view.
-    NSLayoutConstraint* centerX = [_locationContainerView.centerXAnchor
+    _xConstraint = [_locationContainerView.centerXAnchor
         constraintEqualToAnchor:self.centerXAnchor];
-    centerX.priority = UILayoutPriorityDefaultHigh;
+    _xConstraint.priority = UILayoutPriorityDefaultHigh;
 
     _locationContainerViewLeadingAnchorConstraint =
         [_locationContainerView.leadingAnchor
@@ -253,7 +249,7 @@ const CGFloat kLocationLabelVerticalOffset = -1;
       [_trailingButton.widthAnchor constraintEqualToConstant:kButtonSize],
       [_trailingButton.heightAnchor constraintEqualToConstant:kButtonSize],
       _trailingButtonTrailingAnchorConstraint,
-      centerX,
+      _xConstraint,
       _locationContainerViewLeadingAnchorConstraint,
     ]];
   }
@@ -427,6 +423,20 @@ const CGFloat kLocationLabelVerticalOffset = -1;
 - (void)enableTrailingButton:(BOOL)enabled {
   self.trailingButton.enabled = enabled;
   [self updateAccessibility];
+}
+
+- (void)setCentered:(BOOL)centered {
+  _xConstraint.active = NO;
+  if (centered) {
+    _xConstraint = [_locationContainerView.centerXAnchor
+        constraintEqualToAnchor:self.centerXAnchor];
+  } else {
+    _xConstraint = [_locationContainerView.leadingAnchor
+        constraintEqualToAnchor:self.leadingAnchor
+                       constant:kLeadingMargin];
+  }
+  _xConstraint.priority = UILayoutPriorityDefaultHigh;
+  _xConstraint.active = YES;
 }
 
 #pragma mark - UIResponder

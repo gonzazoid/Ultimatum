@@ -7,6 +7,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/skia/include/core/SkPath.h"
 
 namespace blink {
@@ -14,17 +15,21 @@ namespace blink {
 using OutlinePainterTest = RenderingTest;
 
 TEST_F(OutlinePainterTest, FocusRingOutset) {
-  auto initial_style = ComputedStyle::CreateInitialStyleSingleton();
+  const auto* initial_style = ComputedStyle::CreateInitialStyleSingleton();
   ComputedStyleBuilder builder(*initial_style);
   builder.SetOutlineStyle(EBorderStyle::kSolid);
   builder.SetOutlineStyleIsAuto(true);
-  auto style = builder.TakeStyle();
+  const auto* style = builder.TakeStyle();
   LayoutObject::OutlineInfo info =
       LayoutObject::OutlineInfo::GetFromStyle(*style);
   EXPECT_EQ(2, OutlinePainter::OutlineOutsetExtent(*style, info));
-  style->SetEffectiveZoom(4.75);
+  builder = ComputedStyleBuilder(*style);
+  builder.SetEffectiveZoom(4.75);
+  style = builder.TakeStyle();
   EXPECT_EQ(10, OutlinePainter::OutlineOutsetExtent(*style, info));
-  style->SetEffectiveZoom(10);
+  builder = ComputedStyleBuilder(*style);
+  builder.SetEffectiveZoom(10);
+  style = builder.TakeStyle();
   EXPECT_EQ(20, OutlinePainter::OutlineOutsetExtent(*style, info));
 }
 
@@ -36,7 +41,7 @@ TEST_F(OutlinePainterTest, HugeOutlineWidthOffset) {
   )HTML");
   LayoutObject::OutlineInfo info;
   GetLayoutObjectByElementId("target")->OutlineRects(
-      &info, PhysicalOffset(), NGOutlineType::kDontIncludeBlockVisualOverflow);
+      &info, PhysicalOffset(), OutlineType::kDontIncludeBlockInkOverflow);
   const auto& style = GetLayoutObjectByElementId("target")->StyleRef();
   EXPECT_TRUE(style.HasOutline());
   EXPECT_EQ(LayoutUnit::Max().ToInt() * 2,
@@ -67,7 +72,7 @@ TEST_F(OutlinePainterTest, IterateCollapsedPath) {
   path.close();
   // Collapsed contour should not cause crash and should be ignored.
   OutlinePainter::IterateRightAnglePathForTesting(
-      path, base::BindRepeating(
+      path, WTF::BindRepeating(
                 [](const Vector<OutlinePainter::Line>&) { NOTREACHED(); }));
 }
 

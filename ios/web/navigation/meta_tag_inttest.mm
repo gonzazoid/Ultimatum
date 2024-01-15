@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/strings/stringprintf.h"
 #import "ios/testing/embedded_test_server_handlers.h"
 #import "ios/web/public/test/navigation_test_util.h"
@@ -14,10 +14,6 @@
 #import "net/test/embedded_test_server/request_handler_util.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 

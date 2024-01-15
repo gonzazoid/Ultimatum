@@ -9,21 +9,22 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "cc/trees/layer_tree_frame_sink.h"
 #include "cc/trees/managed_memory_policy.h"
-#include "components/power_scheduler/power_mode_voter.h"
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/frame_timing_details_map.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "components/viz/common/quads/compositor_frame_metadata.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/service/display/display_client.h"
@@ -42,10 +43,10 @@ class SkCanvas;
 namespace viz {
 class BeginFrameSource;
 class CompositorFrameSinkSupport;
-class ContextProvider;
 class Display;
 class FrameSinkManagerImpl;
 class ParentLocalSurfaceIdAllocator;
+class RasterContextProvider;
 }  // namespace viz
 
 namespace blink {
@@ -82,7 +83,7 @@ class SynchronousLayerTreeFrameSink
       public viz::ExternalBeginFrameSourceClient {
  public:
   SynchronousLayerTreeFrameSink(
-      scoped_refptr<viz::ContextProvider> context_provider,
+      scoped_refptr<viz::RasterContextProvider> context_provider,
       scoped_refptr<cc::RasterContextProviderWrapper>
           worker_context_provider_wrapper,
       scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
@@ -115,13 +116,16 @@ class SynchronousLayerTreeFrameSink
   // viz::mojom::CompositorFrameSinkClient implementation.
   void DidReceiveCompositorFrameAck(
       Vector<viz::ReturnedResource> resources) override;
-  void OnBeginFrame(const viz::BeginFrameArgs& args,
-                    const HashMap<uint32_t, viz::FrameTimingDetails>&
-                        timing_details) override;
+  void OnBeginFrame(
+      const viz::BeginFrameArgs& args,
+      const HashMap<uint32_t, viz::FrameTimingDetails>& timing_details,
+      bool frame_ack,
+      Vector<viz::ReturnedResource> resources) override;
   void ReclaimResources(Vector<viz::ReturnedResource> resources) override;
   void OnBeginFramePausedChanged(bool paused) override;
   void OnCompositorFrameTransitionDirectiveProcessed(
       uint32_t sequence_id) override {}
+  void OnSurfaceEvicted(const viz::LocalSurfaceId& local_surface_id) override {}
 
   // viz::ExternalBeginFrameSourceClient overrides.
   void OnNeedsBeginFrames(bool needs_begin_frames) override;
@@ -155,10 +159,12 @@ class SynchronousLayerTreeFrameSink
   void DeliverMessages();
 
   const uint32_t layer_tree_frame_sink_id_;
-  SynchronousCompositorRegistry* const registry_;  // Not owned.
+  const raw_ptr<SynchronousCompositorRegistry, ExperimentalRenderer>
+      registry_;  // Not owned.
 
   // Not owned.
-  SynchronousLayerTreeFrameSinkClient* sync_client_ = nullptr;
+  raw_ptr<SynchronousLayerTreeFrameSinkClient, ExperimentalRenderer>
+      sync_client_ = nullptr;
 
   // Used to allocate bitmaps in the software Display.
   // TODO(crbug.com/692814): The Display never sends its resources out of
@@ -190,6 +196,8 @@ class SynchronousLayerTreeFrameSink
     void DisplayDidReceiveCALayerParams(
         const gfx::CALayerParams& ca_layer_params) override {}
     void DisplayDidCompleteSwapWithSize(const gfx::Size& pixel_size) override {}
+    void DisplayAddChildWindowToBrowser(
+        gpu::SurfaceHandle child_window) override {}
     void SetWideColorEnabled(bool enabled) override {}
     void SetPreferredFrameInterval(base::TimeDelta interval) override {}
     base::TimeDelta GetPreferredFrameIntervalForFrameSinkId(
@@ -209,6 +217,8 @@ class SynchronousLayerTreeFrameSink
   gfx::Size child_size_;
   gfx::Size display_size_;
   float device_scale_factor_ = 0;
+  float root_device_scale_factor_ = 0;
+  viz::FrameTokenGenerator root_next_frame_token_;
   std::unique_ptr<viz::mojom::CompositorFrameSinkClient>
       software_frame_sink_client_;
   // Uses frame_sink_manager_.
@@ -219,7 +229,8 @@ class SynchronousLayerTreeFrameSink
   // Uses frame_sink_manager_.
   std::unique_ptr<viz::Display> display_;
   // Owned by |display_|.
-  SoftwareOutputSurface* software_output_surface_ = nullptr;
+  raw_ptr<SoftwareOutputSurface, ExperimentalRenderer>
+      software_output_surface_ = nullptr;
   std::unique_ptr<viz::BeginFrameSource> synthetic_begin_frame_source_;
   std::unique_ptr<viz::ExternalBeginFrameSource> external_begin_frame_source_;
 
@@ -232,13 +243,6 @@ class SynchronousLayerTreeFrameSink
   bool begin_frames_paused_ = false;
   bool needs_begin_frames_ = false;
   const bool use_zero_copy_sw_draw_;
-
-  // Marks the beginning of the period between BeginFrame() and
-  // SubmitCompositorFrame(). Used for detecting no-op animations when this time
-  // period exceeds a given timeout.
-  base::TimeTicks nop_animation_timeout_start_;
-
-  power_scheduler::FrameProductionPowerModeVoter power_mode_voter_;
 };
 
 }  // namespace blink

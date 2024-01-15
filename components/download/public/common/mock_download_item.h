@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "components/download/public/common/download_danger_type.h"
@@ -45,7 +45,7 @@ class MockDownloadItem : public DownloadItem {
 
   MOCK_METHOD0(UpdateObservers, void());
   MOCK_METHOD0(ValidateDangerousDownload, void());
-  MOCK_METHOD0(ValidateMixedContentDownload, void());
+  MOCK_METHOD0(ValidateInsecureDownload, void());
   MOCK_METHOD2(StealDangerousDownload, void(bool, AcquireFileCallback));
   MOCK_METHOD0(Pause, void());
   MOCK_METHOD1(Resume, void(bool));
@@ -64,7 +64,6 @@ class MockDownloadItem : public DownloadItem {
   MOCK_CONST_METHOD0(IsDone, bool());
   MOCK_CONST_METHOD0(GetBytesWasted, int64_t());
   MOCK_CONST_METHOD0(GetAutoResumeCount, int32_t());
-  MOCK_CONST_METHOD0(IsOffTheRecord, bool());
   MOCK_CONST_METHOD0(GetURL, const GURL&());
   MOCK_CONST_METHOD0(GetUrlChain, const std::vector<GURL>&());
   MOCK_CONST_METHOD0(GetOriginalUrl, const GURL&());
@@ -101,15 +100,13 @@ class MockDownloadItem : public DownloadItem {
   }
   MOCK_METHOD1(DeleteFile_, void(base::OnceCallback<void(bool)>& cb));
   MOCK_METHOD0(GetDownloadFile, DownloadFile*());
-  MOCK_METHOD0(GetRenameHandler, DownloadItemRenameHandler*());
-  MOCK_METHOD(const DownloadItemRerouteInfo&,
-              GetRerouteInfo,
-              (),
-              (const override));
+#if BUILDFLAG(IS_ANDROID)
+  MOCK_METHOD0(IsFromExternalApp, bool());
+#endif  // BUILDFLAG(IS_ANDROID)
   MOCK_CONST_METHOD0(IsDangerous, bool());
-  MOCK_CONST_METHOD0(IsMixedContent, bool());
+  MOCK_CONST_METHOD0(IsInsecure, bool());
   MOCK_CONST_METHOD0(GetDangerType, DownloadDangerType());
-  MOCK_CONST_METHOD0(GetMixedContentStatus, MixedContentStatus());
+  MOCK_CONST_METHOD0(GetInsecureDownloadStatus, InsecureDownloadStatus());
   MOCK_CONST_METHOD1(TimeRemaining, bool(base::TimeDelta*));
   MOCK_CONST_METHOD0(CurrentSpeed, int64_t());
   MOCK_CONST_METHOD0(PercentComplete, int());
@@ -143,14 +140,14 @@ class MockDownloadItem : public DownloadItem {
   MOCK_METHOD1(SetOpened, void(bool));
   MOCK_METHOD1(SetLastAccessTime, void(base::Time));
   MOCK_METHOD1(SetDisplayName, void(const base::FilePath&));
-  MOCK_METHOD1(SetMixedContentStatus, void(MixedContentStatus));
+  MOCK_METHOD1(SetInsecureDownloadStatus, void(InsecureDownloadStatus));
   MOCK_CONST_METHOD1(DebugString, std::string(bool));
   MOCK_METHOD1(SimulateErrorForTesting, void(DownloadInterruptReason));
   MOCK_METHOD2(Rename, void(const base::FilePath&, RenameDownloadCallback));
   MOCK_METHOD1(OnAsyncScanningCompleted, void(DownloadDangerType));
 
  private:
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer> observers_;
 };
 
 }  // namespace download

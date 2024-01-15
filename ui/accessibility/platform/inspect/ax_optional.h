@@ -7,9 +7,9 @@
 
 #include <string>
 
+#include "base/component_export.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
-#include "ui/accessibility/ax_export.h"
 
 // Used for template specialization.
 template <typename T>
@@ -24,7 +24,7 @@ namespace ui {
 // Implements stateful value_s. Similar to absl::optional, but multi-state
 // allowing nullable value_s.
 template <typename ValueType>
-class AX_EXPORT AXOptional final {
+class COMPONENT_EXPORT(AX_PLATFORM) AXOptional final {
  public:
   static constexpr AXOptional Unsupported() { return AXOptional(kUnsupported); }
   static constexpr AXOptional Error(const char* error_text = nullptr) {
@@ -44,8 +44,10 @@ class AX_EXPORT AXOptional final {
                       other_value_ != nullptr ? kValue : kNotApplicable);
   }
 
-  explicit constexpr AXOptional(ValueType value_)
+  explicit constexpr AXOptional(const ValueType& value_)
       : value_(value_), state_(kValue) {}
+  explicit constexpr AXOptional(ValueType&& value_)
+      : value_(std::forward<ValueType>(value_)), state_(kValue) {}
 
   bool constexpr IsUnsupported() const { return state_ == kUnsupported; }
   bool constexpr IsNotApplicable() const { return state_ == kNotApplicable; }
@@ -63,8 +65,9 @@ class AX_EXPORT AXOptional final {
     return true;
   }
 
-  bool constexpr HasValue() { return state_ == kValue; }
+  bool constexpr HasValue() const { return state_ == kValue; }
   constexpr const ValueType& operator*() const { return value_; }
+  constexpr const ValueType* operator->() const { return &value_; }
 
   bool HasStateText() const { return !state_text_.empty(); }
   std::string StateText() const { return state_text_; }

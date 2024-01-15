@@ -9,18 +9,33 @@
 
 class PrefRegistrySimple;
 
-namespace ash {
+namespace ash::floating_workspace_util {
 
-namespace floating_workspace_util {
+// The restore from error notification button index.
+enum class FloatingWorkspaceVersion {
+  // Default value, indicates no version was enabled.
+  kNoVersionEnabled = 0,
+
+  // Version 1.
+  kFloatingWorkspaceV1Enabled = 1,
+
+  // Version 2.
+  kFloatingWorkspaceV2Enabled = 2,
+};
 
 ASH_EXPORT void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
 // Returns true if floating workspace is enabled. Note this should
 // only be called after primary user profile is loaded and policy
 // has initialized.
-ASH_EXPORT bool IsFloatingWorkspaceEnabled();
+ASH_EXPORT bool IsFloatingWorkspaceV1Enabled();
+ASH_EXPORT bool IsFloatingWorkspaceV2Enabled();
 
-}  // namespace floating_workspace_util
-}  // namespace ash
+bool IsInternetConnected();
+
+bool IsSafeMode();
+
+bool ShouldHandleRestartRestore();
+}  // namespace ash::floating_workspace_util
 
 #endif  // CHROME_BROWSER_ASH_FLOATING_WORKSPACE_FLOATING_WORKSPACE_UTIL_H_

@@ -39,7 +39,7 @@ class Transform;
 
 namespace ui {
 class Compositor;
-enum class DomCode;
+enum class DomCode : uint32_t;
 class EventSink;
 class InputMethod;
 class ViewProp;
@@ -68,6 +68,8 @@ class AURA_EXPORT WindowTreeHost : public ui::ImeKeyEventDispatcher,
                                    public display::DisplayObserver,
                                    public ui::CompositorObserver {
  public:
+  static const char kWindowTreeHostUsesParent[];
+
   // VideoCaptureLock ensures state necessary for capturing video remains in
   // effect. For example, this may force keeping the compositor visible when
   // it normally would not be.
@@ -299,8 +301,6 @@ class AURA_EXPORT WindowTreeHost : public ui::ImeKeyEventDispatcher,
   // See VideoCaptureLock for details. This may return null.
   std::unique_ptr<VideoCaptureLock> CreateVideoCaptureLock();
 
-  bool holding_pointer_moves() const { return holding_pointer_moves_; }
-
 #if BUILDFLAG(IS_WIN)
   // Returns whether a host's window is on the current workspace or not,
   // absl::nullopt if the state is not known.
@@ -450,7 +450,7 @@ class AURA_EXPORT WindowTreeHost : public ui::ImeKeyEventDispatcher,
   // valid during its deletion. (Window's dtor notifies observers that may
   // attempt to reach back up to access this object which will be valid until
   // the end of the dtor).
-  raw_ptr<Window, DanglingUntriaged> window_;  // Owning.
+  raw_ptr<Window, AcrossTasksDanglingUntriaged> window_;  // Owning.
 
   // Keeps track of the occlusion state of the host, and used to send
   // notifications to observers when it changes.

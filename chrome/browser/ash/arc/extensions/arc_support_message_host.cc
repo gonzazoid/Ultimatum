@@ -9,7 +9,6 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/arc/arc_support_host.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 
@@ -77,7 +76,7 @@ void ArcSupportMessageHost::OnMessage(const std::string& message_string) {
   // which on Chrome OS runs in the browser process.
   // Therefore this use of JSONReader does not violate
   // https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/rule-of-2.md.
-  absl::optional<base::Value> message = base::JSONReader::Read(message_string);
+  std::optional<base::Value> message = base::JSONReader::Read(message_string);
   if (!message || !message->is_dict()) {
     NOTREACHED();
     return;
@@ -88,7 +87,7 @@ void ArcSupportMessageHost::OnMessage(const std::string& message_string) {
 
 scoped_refptr<base::SingleThreadTaskRunner> ArcSupportMessageHost::task_runner()
     const {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 }  // namespace arc

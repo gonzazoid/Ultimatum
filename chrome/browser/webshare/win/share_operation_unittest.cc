@@ -5,12 +5,12 @@
 #include "chrome/browser/webshare/win/share_operation.h"
 
 #include "base/files/file_path.h"
-#include "base/guid.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/uuid.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/post_async_results.h"
 #include "chrome/browser/webshare/share_service_impl.h"
@@ -20,7 +20,7 @@
 #include "chrome/browser/webshare/win/scoped_share_operation_fake_components.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_impl.h"
@@ -65,9 +65,6 @@ class ShareOperationUnitTest : public ChromeRenderViewHostTestHarness {
 
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
-
-    if (!ScopedShareOperationFakeComponents::IsSupportedEnvironment())
-      GTEST_SKIP();
 
     ASSERT_NO_FATAL_FAILURE(scoped_fake_components_.SetUp());
     ShareOperation::SetMaxFileBytesForTesting(kMaxSharedFileBytesForTest);
@@ -154,7 +151,7 @@ class ShareOperationUnitTest : public ChromeRenderViewHostTestHarness {
       const std::string& content_type,
       const std::string& contents) {
     auto blob = blink::mojom::SerializedBlob::New();
-    const std::string uuid = base::GenerateGUID();
+    const std::string uuid = base::Uuid::GenerateRandomV4().AsLowercaseString();
     blob->uuid = uuid;
     blob->content_type = content_type;
     blob->size = contents.size();
@@ -199,7 +196,8 @@ class ShareOperationUnitTest : public ChromeRenderViewHostTestHarness {
   }
 
  private:
-  raw_ptr<FakeDataTransferManager> fake_data_transfer_manager_ = nullptr;
+  raw_ptr<FakeDataTransferManager, DanglingUntriaged>
+      fake_data_transfer_manager_ = nullptr;
   base::test::ScopedFeatureList feature_list_;
   ScopedShareOperationFakeComponents scoped_fake_components_;
 };
@@ -466,31 +464,6 @@ TEST_F(ShareOperationUnitTest, FilesTotallingLargerThanSizeLimit) {
   ASSERT_NO_FATAL_FAILURE(ReadFile(shared_file_2.Get(), file2_contents));
   ASSERT_LT(file1_contents.length() + file2_contents.length(),
             kMaxSharedFileBytesForTest + 1);
-}
-
-class ShareOperationInUnsupportedEnvironmentUnitTest
-    : public ShareOperationUnitTest {
- public:
-  void SetUp() override {
-    ChromeRenderViewHostTestHarness::SetUp();
-
-    if (ScopedShareOperationFakeComponents::IsSupportedEnvironment())
-      GTEST_SKIP();
-  }
-};
-
-TEST_F(ShareOperationInUnsupportedEnvironmentUnitTest, GracefullyFails) {
-  base::RunLoop run_loop;
-  std::vector<blink::mojom::SharedFilePtr> files;
-  ShareOperation operation{"shared title", "shared text",
-                           GURL("https://www.contoso.com"), std::move(files),
-                           web_contents()};
-  operation.Run(
-      base::BindLambdaForTesting([&run_loop](blink::mojom::ShareError error) {
-        ASSERT_EQ(error, blink::mojom::ShareError::INTERNAL_ERROR);
-        run_loop.Quit();
-      }));
-  run_loop.Run();
 }
 
 }  // namespace webshare

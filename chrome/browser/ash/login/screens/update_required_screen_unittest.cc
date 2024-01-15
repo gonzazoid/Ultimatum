@@ -5,10 +5,12 @@
 #include "chrome/browser/ash/login/screens/update_required_screen.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_switches.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "chrome/browser/ash/login/screens/mock_error_screen.h"
 #include "chrome/browser/ash/login/startup_utils.h"
@@ -27,13 +29,10 @@
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after migrated to ash::
-using ::chromeos::FakeUpdateRequiredScreenHandler;
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::Return;
@@ -55,10 +54,6 @@ class UpdateRequiredScreenUnitTest : public testing::Test {
 
   // testing::Test:
   void SetUp() override {
-    // Configure the browser to use Hands-Off Enrollment.
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kEnterpriseEnableZeroTouchEnrollment, "hands-off");
-
     // Initialize objects needed by `UpdateRequiredScreen`.
     wizard_context_ = std::make_unique<WizardContext>();
     fake_view_ = std::make_unique<FakeUpdateRequiredScreenHandler>();
@@ -109,9 +104,10 @@ class UpdateRequiredScreenUnitTest : public testing::Test {
   std::unique_ptr<MockErrorScreen> mock_error_screen_;
   std::unique_ptr<WizardContext> wizard_context_;
   // Will be deleted in `network_portal_detector::Shutdown()`.
-  MockNetworkPortalDetector* mock_network_portal_detector_;
+  raw_ptr<MockNetworkPortalDetector, DanglingUntriaged>
+      mock_network_portal_detector_;
   // Will be deleted in `DBusThreadManager::Shutdown()`.
-  FakeUpdateEngineClient* fake_update_engine_client_;
+  raw_ptr<FakeUpdateEngineClient, DanglingUntriaged> fake_update_engine_client_;
   // Initializes NetworkHandler and required DBus clients.
   std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
 
@@ -134,8 +130,9 @@ TEST_F(UpdateRequiredScreenUnitTest, HandlesNoUpdate) {
   update_required_screen_->Show(wizard_context_.get());
   EXPECT_EQ(fake_view_->ui_state(),
             UpdateRequiredView::UPDATE_REQUIRED_MESSAGE);
-  update_required_screen_->HandleUserActionDeprecated(
-      kUserActionUpdateButtonClicked);
+  base::Value::List args;
+  args.Append(kUserActionUpdateButtonClicked);
+  update_required_screen_->HandleUserAction(args);
 
   // Verify that the DUT checks for an update.
   EXPECT_EQ(fake_update_engine_client_->request_update_check_call_count(), 1);
@@ -152,8 +149,9 @@ TEST_F(UpdateRequiredScreenUnitTest, HandlesUpdateExists) {
   update_required_screen_->Show(wizard_context_.get());
   EXPECT_EQ(fake_view_->ui_state(),
             UpdateRequiredView::UPDATE_REQUIRED_MESSAGE);
-  update_required_screen_->HandleUserActionDeprecated(
-      kUserActionUpdateButtonClicked);
+  base::Value::List args;
+  args.Append(kUserActionUpdateButtonClicked);
+  update_required_screen_->HandleUserAction(args);
 
   // Verify that the DUT checks for an update.
   EXPECT_EQ(fake_update_engine_client_->request_update_check_call_count(), 1);
@@ -181,8 +179,11 @@ TEST_F(UpdateRequiredScreenUnitTest, HandlesCellularPermissionNeeded) {
   update_required_screen_->Show(wizard_context_.get());
   EXPECT_EQ(fake_view_->ui_state(),
             UpdateRequiredView::UPDATE_REQUIRED_MESSAGE);
-  update_required_screen_->HandleUserActionDeprecated(
-      kUserActionUpdateButtonClicked);
+  {
+    base::Value::List args;
+    args.Append(kUserActionUpdateButtonClicked);
+    update_required_screen_->HandleUserAction(args);
+  }
 
   // Verify that the DUT checks for an update.
   EXPECT_EQ(fake_update_engine_client_->request_update_check_call_count(), 1);
@@ -193,8 +194,11 @@ TEST_F(UpdateRequiredScreenUnitTest, HandlesCellularPermissionNeeded) {
 
   SetUpdateEngineStatus(update_engine::Operation::NEED_PERMISSION_TO_UPDATE);
 
-  update_required_screen_->HandleUserActionDeprecated(
-      kUserActionAcceptUpdateOverCellular);
+  {
+    base::Value::List args;
+    args.Append(kUserActionAcceptUpdateOverCellular);
+    update_required_screen_->HandleUserAction(args);
+  }
 
   EXPECT_GE(
       fake_update_engine_client_->update_over_cellular_permission_count() +

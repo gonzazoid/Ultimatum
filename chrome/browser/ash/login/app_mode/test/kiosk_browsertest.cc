@@ -5,16 +5,18 @@
 #include <memory>
 #include <vector>
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/speech_monitor.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/browser/ash/login/app_mode/test/kiosk_base_test.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
+#include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/ownership/fake_owner_settings_service.h"
@@ -22,9 +24,11 @@
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/speech/extension_api/tts_engine_extension_api.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_info_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/kiosk_autolaunch_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/kiosk_enable_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -41,7 +45,7 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, KioskEnableCancel) {
   wizard_controller->SkipPostLoginScreensForTesting();
 
   // Check Kiosk mode status.
-  EXPECT_EQ(KioskAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
+  EXPECT_EQ(KioskChromeAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
             GetConsumerKioskModeStatus());
 
   // Wait for the login UI to come up and switch to the kiosk_enable screen.
@@ -58,7 +62,7 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, KioskEnableCancel) {
   OobeScreenWaiter(GetFirstSigninScreen()).Wait();
 
   // Check that the status still says configurable.
-  EXPECT_EQ(KioskAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
+  EXPECT_EQ(KioskChromeAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
             GetConsumerKioskModeStatus());
 }
 
@@ -69,7 +73,7 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, KioskEnableConfirmed) {
   wizard_controller->SkipPostLoginScreensForTesting();
 
   // Check Kiosk mode status.
-  EXPECT_EQ(KioskAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
+  EXPECT_EQ(KioskChromeAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
             GetConsumerKioskModeStatus());
 
   // Wait for the login UI to come up and switch to the kiosk_enable screen.
@@ -88,7 +92,7 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, KioskEnableConfirmed) {
                     ".state_ == 'success'")
       ->Wait();
 
-  EXPECT_EQ(KioskAppManager::ConsumerKioskAutoLaunchStatus::kEnabled,
+  EXPECT_EQ(KioskChromeAppManager::ConsumerKioskAutoLaunchStatus::kEnabled,
             GetConsumerKioskModeStatus());
 }
 
@@ -98,7 +102,7 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, KioskEnableAfter2ndSigninScreen) {
   wizard_controller->SkipPostLoginScreensForTesting();
 
   // Check Kiosk mode status.
-  EXPECT_EQ(KioskAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
+  EXPECT_EQ(KioskChromeAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable,
             GetConsumerKioskModeStatus());
 
   // Wait for the login UI to come up and switch to the kiosk_enable screen.
@@ -111,9 +115,19 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, KioskEnableAfter2ndSigninScreen) {
   OobeScreenWaiter(KioskEnableScreenView::kScreenId).Wait();
   test::OobeJS().TapOnPath({"kiosk-enable", "close"});
 
-  // Navigate to gaia sign in screen.
+  // Navigate to gaia info screen.
   OobeScreenWaiter(UserCreationView::kScreenId).Wait();
+  test::OobeJS().TapOnPath({"user-creation", "selfButton"});
   test::OobeJS().TapOnPath({"user-creation", "nextButton"});
+
+  ash::test::WaitForConsumerUpdateScreen();
+  ash::test::ExitConsumerUpdateScreenNoUpdate();
+
+  if (features::IsOobeGaiaInfoScreenEnabled()) {
+    // Navigate to gaia sign in screen.
+    OobeScreenWaiter(GaiaInfoScreenView::kScreenId).Wait();
+    test::OobeJS().TapOnPath({"gaia-info", "nextButton"});
+  }
 
   // Wait for signin screen to appear again.
   OobeScreenWaiter(GaiaView::kScreenId).Wait();
@@ -143,17 +157,19 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, MAYBE_DoNotLaunchWhenUntrusted) {
 
   // Check that the attempt to start a kiosk app fails with an error.
   EXPECT_TRUE(LaunchApp(test_app_id()));
-  bool ignored = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      GetLoginUI()->GetWebContents(),
-      "if (cr.ui.Oobe.getInstance().errorMessageWasShownForTesting_) {"
-      "  window.domAutomationController.send(true);"
-      "} else {"
-      "  cr.ui.Oobe.showSignInError = function(message, link, helpId) {"
-      "    window.domAutomationController.send(true);"
-      "  };"
-      "}",
-      &ignored));
+  EXPECT_EQ(
+      true,
+      content::ExecJs(
+          GetLoginUI()->GetWebContents(),
+          "new Promise(resolve => {"
+          "  if (cr.ui.Oobe.getInstance().errorMessageWasShownForTesting_) {"
+          "    resolve(true);"
+          "  } else {"
+          "    cr.ui.Oobe.showSignInError = function(message, link, helpId) {"
+          "      resolve(true);"
+          "    };"
+          "  }"
+          "});"));
 }
 
 // TODO(crbug.com/1149893): Migrate to KioskDeviceOwnedTest.
@@ -166,9 +182,9 @@ IN_PROC_BROWSER_TEST_F(KioskBaseTest, DISABLED_SpokenFeedback) {
   AccessibilityManager::Get()->EnableSpokenFeedback(true);
   StartAppLaunchFromLoginScreen(
       NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE);
-  WaitForAppLaunchWithOptions(false /* check launch data */,
-                              false /* terminate app */,
-                              true /* keep app open */);
+  WaitForAppLaunchWithOptions(/*check launch data=*/false,
+                              /*terminate app=*/false,
+                              /*keep app open=*/true);
   sm.ExpectSpeech("ChromeVox spoken feedback is ready");
   sm.Call([]() {
     // Navigate to the next object (should move to the heading and speak
@@ -225,7 +241,8 @@ class KioskAutoLaunchViewsTest : public OobeBaseTest,
     // Add a new device local account and set its id for auto login.
     std::vector<policy::DeviceLocalAccount> accounts;
     accounts.emplace_back(policy::DeviceLocalAccount::TYPE_KIOSK_APP,
-                          kTestEnterpriseAccountId, kTestEnterpriseKioskApp,
+                          policy::DeviceLocalAccount::EphemeralMode::kUnset,
+                          kTestEnterpriseAccountId, kTestEnterpriseKioskAppId,
                           "");
     policy::SetDeviceLocalAccounts(owner_settings_service_.get(), accounts);
     scoped_testing_cros_settings_.device_settings()->SetString(
@@ -236,12 +253,12 @@ class KioskAutoLaunchViewsTest : public OobeBaseTest,
   void SetUpLocalState() override {
     // Simulate auto login request from the previous session.
     PrefService* prefs = g_browser_process->local_state();
-    ScopedDictPrefUpdate dict_update(prefs,
-                                     KioskAppManager::kKioskDictionaryName);
-    // The AutoLoginState is taken from KioskAppManager::AutoLoginState.
+    ScopedDictPrefUpdate dict_update(
+        prefs, KioskChromeAppManager::kKioskDictionaryName);
+    // The AutoLoginState is taken from KioskChromeAppManager::AutoLoginState.
     dict_update->Set(
-        KioskAppManager::kKeyAutoLoginState,
-        static_cast<int>(KioskAppManager::AutoLoginState::kRequested));
+        KioskChromeAppManager::kKeyAutoLoginState,
+        static_cast<int>(KioskChromeAppManager::AutoLoginState::kRequested));
   }
 
   void TearDownOnMainThread() override {
@@ -251,7 +268,7 @@ class KioskAutoLaunchViewsTest : public OobeBaseTest,
 
  protected:
   std::unique_ptr<FakeOwnerSettingsService> owner_settings_service_;
-  chromeos::ScopedTestingCrosSettings scoped_testing_cros_settings_;
+  ScopedTestingCrosSettings scoped_testing_cros_settings_;
   LocalStateMixin local_state_mixin_{&mixin_host_, this};
   LoginManagerMixin login_manager_mixin_{&mixin_host_};
   DeviceStateMixin device_state_{

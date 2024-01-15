@@ -4,17 +4,21 @@
 
 #include "ash/webui/eche_app_ui/eche_notification_click_handler.h"
 
+#include <memory>
+#include <optional>
 #include <string>
 
-#include "ash/components/phonehub/fake_phone_hub_manager.h"
 #include "ash/constants/ash_features.h"
+#include "ash/webui/eche_app_ui/apps_launch_info_provider.h"
+#include "ash/webui/eche_app_ui/eche_connection_status_handler.h"
 #include "ash/webui/eche_app_ui/fake_feature_status_provider.h"
 #include "ash/webui/eche_app_ui/fake_launch_app_helper.h"
 #include "ash/webui/eche_app_ui/launch_app_helper.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/ash/components/phonehub/fake_phone_hub_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/image/image.h"
 
@@ -49,27 +53,36 @@ class EcheNotificationClickHandlerTest : public testing::Test {
         base::BindRepeating(
             &EcheNotificationClickHandlerTest::FakeCloseNotificationFunction,
             base::Unretained(this)));
+    connection_status_handler_ =
+        std::make_unique<eche_app::EcheConnectionStatusHandler>();
+    apps_launch_info_provider_ = std::make_unique<AppsLaunchInfoProvider>(
+        connection_status_handler_.get());
     handler_ = std::make_unique<EcheNotificationClickHandler>(
         &fake_phone_hub_manager_, &fake_feature_status_provider_,
-        launch_app_helper_.get());
+        launch_app_helper_.get(), apps_launch_info_provider_.get());
   }
 
   void TearDown() override {
+    apps_launch_info_provider_.reset();
+    connection_status_handler_.reset();
     launch_app_helper_.reset();
     handler_.reset();
   }
 
-  void FakeLaunchEcheAppFunction(const absl::optional<int64_t>& notification_id,
-                                 const std::string& package_name,
-                                 const std::u16string& visible_name,
-                                 const absl::optional<int64_t>& user_id,
-                                 const gfx::Image& icon) {
+  void FakeLaunchEcheAppFunction(
+      const std::optional<int64_t>& notification_id,
+      const std::string& package_name,
+      const std::u16string& visible_name,
+      const std::optional<int64_t>& user_id,
+      const gfx::Image& icon,
+      const std::u16string& phone_name,
+      AppsLaunchInfoProvider* apps_launch_info_provider) {
     num_app_launch_++;
   }
 
   void FakeLaunchNotificationFunction(
-      const absl::optional<std::u16string>& title,
-      const absl::optional<std::u16string>& message,
+      const std::optional<std::u16string>& title,
+      const std::optional<std::u16string>& message,
       std::unique_ptr<LaunchAppHelper::NotificationInfo> info) {
     num_notifications_shown_++;
   }
@@ -114,6 +127,9 @@ class EcheNotificationClickHandlerTest : public testing::Test {
   base::test::ScopedFeatureList scoped_feature_list_;
   FakeFeatureStatusProvider fake_feature_status_provider_;
   std::unique_ptr<FakeLaunchAppHelper> launch_app_helper_;
+  std::unique_ptr<eche_app::EcheConnectionStatusHandler>
+      connection_status_handler_;
+  std::unique_ptr<AppsLaunchInfoProvider> apps_launch_info_provider_;
   size_t num_notifications_shown_ = 0;
   size_t num_app_launch_ = 0;
 };
@@ -149,10 +165,12 @@ TEST_F(EcheNotificationClickHandlerTest, HandleNotificationClick) {
   const char16_t app_name[] = u"Test App";
   const char package_name[] = "com.google.testapp";
   const int64_t user_id = 0;
+  base::HistogramTester histogram_tester;
   phonehub::Notification::AppMetadata app_meta_data =
       phonehub::Notification::AppMetadata(app_name, package_name,
-                                          /*icon=*/gfx::Image(),
-                                          /*icon_color=*/absl::nullopt,
+                                          /*color_icon=*/gfx::Image(),
+                                          /*monochrome_icon_mask=*/gfx::Image(),
+                                          /*icon_color=*/std::nullopt,
                                           /*icon_is_monochrome=*/true, user_id);
   HandleNotificationClick(notification_id, app_meta_data);
   EXPECT_EQ(num_app_launch(), 1u);
@@ -164,6 +182,9 @@ TEST_F(EcheNotificationClickHandlerTest, HandleNotificationClick) {
   HandleNotificationClick(notification_id, app_meta_data);
   EXPECT_EQ(num_app_launch(), 0u);
   EXPECT_EQ(num_notifications_shown(), 1u);
+  histogram_tester.ExpectUniqueSample(
+      "Eche.AppStream.LaunchAttempt",
+      mojom::AppStreamLaunchEntryPoint::NOTIFICATION, 1);
 }
 
 }  // namespace eche_app

@@ -4,6 +4,7 @@
 
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 static_library("internal") {
   sources = [
@@ -15,7 +16,7 @@ static_library("internal") {
 
   deps = [
     ":jni_headers",
-    "//cc",
+    "//cc/slim",
     "//skia",
   ]
 
@@ -29,6 +30,7 @@ static_library("internal") {
 }
 
 android_library("internal_java") {
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/components/thinwebview/internal/CompositorViewImpl.java",
     "java/src/org/chromium/components/thinwebview/internal/ThinWebViewImpl.java",
@@ -36,15 +38,14 @@ android_library("internal_java") {
 
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/embedder_support/android:web_contents_delegate_java",
     "//components/thin_webview:java",
     "//content/public/android:content_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 }
 
 generate_jni("jni_headers") {

@@ -16,6 +16,7 @@ namespace history_clusters {
 namespace {
 
 using ::testing::UnorderedElementsAre;
+using LabelSource = history::Cluster::LabelSource;
 
 class LabelClusterFinalizerTest : public ::testing::Test {
  public:
@@ -29,6 +30,9 @@ class LabelClusterFinalizerTest : public ::testing::Test {
     optimization_guide::EntityMetadata label_md;
     label_md.human_readable_name = "chosenlabel";
     entity_metadata_map_["baz"] = label_md;
+    optimization_guide::EntityMetadata github_md;
+    label_md.human_readable_name = "githublabel";
+    entity_metadata_map_["github"] = label_md;
 
     cluster_finalizer_ =
         std::make_unique<LabelClusterFinalizer>(&entity_metadata_map_);
@@ -71,7 +75,6 @@ TEST_F(LabelClusterFinalizerTest, ClusterWithNoSearchTerms) {
   {
     // With only search term labelling active, there should be no label.
     Config config;
-    config.should_label_clusters = true;
     config.labels_from_hostnames = false;
     config.labels_from_entities = false;
     SetConfigForTesting(config);
@@ -81,6 +84,7 @@ TEST_F(LabelClusterFinalizerTest, ClusterWithNoSearchTerms) {
     FinalizeCluster(cluster);
     EXPECT_EQ(cluster.raw_label, absl::nullopt);
     EXPECT_EQ(cluster.label, absl::nullopt);
+    EXPECT_EQ(cluster.label_source, LabelSource::kUnknown);
   }
 
   {
@@ -88,7 +92,6 @@ TEST_F(LabelClusterFinalizerTest, ClusterWithNoSearchTerms) {
     // prefer the entity because if we prefer hostnames, every cluster will have
     // a hostname label, and no entity labels will ever get surfaced.
     Config config;
-    config.should_label_clusters = true;
     config.labels_from_hostnames = true;
     config.labels_from_entities = true;
     SetConfigForTesting(config);
@@ -98,12 +101,12 @@ TEST_F(LabelClusterFinalizerTest, ClusterWithNoSearchTerms) {
     FinalizeCluster(cluster);
     EXPECT_EQ(cluster.raw_label, u"chosenlabel");
     EXPECT_EQ(cluster.label, u"chosenlabel");
+    EXPECT_EQ(cluster.label_source, LabelSource::kContentDerivedEntity);
   }
 
   {
     // With hostname labelling active only, we should use the hostname.
     Config config;
-    config.should_label_clusters = true;
     config.labels_from_hostnames = true;
     config.labels_from_entities = false;
     SetConfigForTesting(config);
@@ -113,12 +116,12 @@ TEST_F(LabelClusterFinalizerTest, ClusterWithNoSearchTerms) {
     FinalizeCluster(cluster);
     EXPECT_EQ(cluster.raw_label, u"baz.com");
     EXPECT_EQ(cluster.label, u"baz.com and more");
+    EXPECT_EQ(cluster.label_source, LabelSource::kHostname);
   }
 
   {
     // With entity labelling active only, we should use the entity name.
     Config config;
-    config.should_label_clusters = true;
     config.labels_from_hostnames = false;
     config.labels_from_entities = true;
     SetConfigForTesting(config);
@@ -128,6 +131,7 @@ TEST_F(LabelClusterFinalizerTest, ClusterWithNoSearchTerms) {
     FinalizeCluster(cluster);
     EXPECT_EQ(cluster.raw_label, u"chosenlabel");
     EXPECT_EQ(cluster.label, u"chosenlabel");
+    EXPECT_EQ(cluster.label_source, LabelSource::kContentDerivedEntity);
   }
 }
 
@@ -135,9 +139,9 @@ TEST_F(LabelClusterFinalizerTest, TakesHighestScoringSearchTermIfAvailable) {
   // Verify that search terms take precedence even if labels from entities are
   // enabled.
   Config config;
-  config.should_label_clusters = true;
   config.labels_from_hostnames = true;
   config.labels_from_entities = true;
+  config.labels_from_search_visit_entities = false;
   SetConfigForTesting(config);
 
   history::ClusterVisit visit =
@@ -165,6 +169,47 @@ TEST_F(LabelClusterFinalizerTest, TakesHighestScoringSearchTermIfAvailable) {
   FinalizeCluster(cluster);
   EXPECT_THAT(cluster.raw_label, u"searchtermlabel");
   EXPECT_THAT(cluster.label, u"“searchtermlabel”");
+  EXPECT_EQ(cluster.label_source, LabelSource::kSearch);
+}
+
+TEST_F(LabelClusterFinalizerTest,
+       TakesHighestCountSearchTermIfMultipleSearchVisits) {
+  // Verify that search terms take precedence even if labels from entities are
+  // enabled.
+  Config config;
+  config.labels_from_hostnames = true;
+  config.labels_from_entities = true;
+  config.labels_from_search_visit_entities = true;
+  SetConfigForTesting(config);
+
+  history::ClusterVisit visit =
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          2, GURL("https://nosearchtermsbuthighscorevisit.com/")));
+  visit.engagement_score = 0.9;
+  visit.annotated_visit.content_annotations.model_annotations.entities = {
+      {"github", 100}, {"onlyinnoisyvisit", 99}};
+
+  history::ClusterVisit visit2 =
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          1, GURL("https://lowerscoringsearchterm.com/")));
+  visit2.score = 0.6;
+  visit2.annotated_visit.content_annotations.search_terms = u"lowscore";
+  visit2.annotated_visit.content_annotations.model_annotations.entities = {
+      {"github", 80}, {"commonsearch", 99}};
+
+  history::ClusterVisit visit3 = testing::CreateClusterVisit(
+      testing::CreateDefaultAnnotatedVisit(2, GURL("https://baz.com/")));
+  visit3.score = 0.8;
+  visit3.annotated_visit.content_annotations.model_annotations.entities = {
+      {"github", 80}, {"other", 100}};
+  visit3.annotated_visit.content_annotations.search_terms = u"searchtermlabel";
+
+  history::Cluster cluster;
+  cluster.visits = {visit, visit2, visit3};
+  FinalizeCluster(cluster);
+  EXPECT_THAT(cluster.raw_label, u"githublabel");
+  EXPECT_THAT(cluster.label, u"“githublabel”");
+  EXPECT_EQ(cluster.label_source, LabelSource::kSearch);
 }
 
 }  // namespace

@@ -7,7 +7,7 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "remoting/base/compound_buffer.h"
@@ -24,8 +24,8 @@ namespace {
 class FakeNamedMessagePipeHandler final : public NamedMessagePipeHandler {
  public:
   FakeNamedMessagePipeHandler(const std::string& name,
-                         std::unique_ptr<MessagePipe> pipe,
-                         const std::string& expected_data)
+                              std::unique_ptr<MessagePipe> pipe,
+                              const std::string& expected_data)
       : NamedMessagePipeHandler(name, std::move(pipe)),
         expected_data_(expected_data) {
     handlers_[name] = this;
@@ -95,7 +95,7 @@ void FakeNamedMessagePipeHandler::Send(
 
 // static
 std::map<std::string, FakeNamedMessagePipeHandler*>
-FakeNamedMessagePipeHandler::handlers_;
+    FakeNamedMessagePipeHandler::handlers_;
 
 void TestDataChannelManagerFullMatch(bool asynchronous) {
   base::test::SingleThreadTaskEnvironment task_environment;

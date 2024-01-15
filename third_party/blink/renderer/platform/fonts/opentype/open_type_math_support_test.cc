@@ -16,17 +16,10 @@ namespace blink {
 
 class OpenTypeMathSupportTest : public FontTestBase {
  protected:
-  void SetUp() override {
-    font_description.SetComputedSize(10.0);
-    font = Font(font_description);
-  }
-
-  void TearDown() override {}
-
   Font CreateMathFont(const String& name, float size = 1000) {
     FontDescription::VariantLigatures ligatures;
     return blink::test::CreateTestFont(
-        "MathTestFont",
+        AtomicString("MathTestFont"),
         blink::test::BlinkWebTestsFontsTestDataPath(String("math/") + name),
         size, &ligatures);
   }
@@ -43,9 +36,6 @@ class OpenTypeMathSupportTest : public FontTestBase {
     return OpenTypeMathSupport::MathConstant(
         math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), constant);
   }
-
-  FontDescription font_description;
-  Font font;
 };
 
 TEST_F(OpenTypeMathSupportTest, HasMathData) {
@@ -438,6 +428,15 @@ TEST_F(OpenTypeMathSupportTest, MathItalicCorrection) {
     EXPECT_EQ(parts.size(), 3u);
     EXPECT_FLOAT_EQ(italic_correction, 5000);
   }
+}
+
+TEST_F(OpenTypeMathSupportTest, MathItalicCorrectionNullOpt) {
+  // Font without a MATH table.
+  Font math_text = CreateMathFont("math-text.woff");
+  Glyph glyph = math_text.PrimaryFont()->GlyphForCharacter('A');
+  EXPECT_TRUE(glyph);
+  EXPECT_FALSE(OpenTypeMathSupport::MathItalicCorrection(
+      math_text.PrimaryFont()->PlatformData().GetHarfBuzzFace(), glyph));
 }
 
 }  // namespace blink

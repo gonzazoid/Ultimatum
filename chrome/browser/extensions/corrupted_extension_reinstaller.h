@@ -7,7 +7,7 @@
 
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -124,7 +124,7 @@ class CorruptedExtensionReinstaller {
   base::TimeDelta GetNextFireDelay();
   void ScheduleNextReinstallAttempt();
 
-  const raw_ptr<content::BrowserContext> context_ = nullptr;
+  const raw_ptr<content::BrowserContext, DanglingUntriaged> context_ = nullptr;
 
   // A set of extension ids that are being reinstalled due to corruption, mapped
   // to the time we detected the corruption.

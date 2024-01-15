@@ -12,10 +12,11 @@
 
 #include <atomic>
 
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/page_size.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/rand_util.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
@@ -75,8 +76,8 @@ class ScopedMemory {
   }
 
   void* Release() {
-    void* ptr = nullptr;
-    std::swap(ptr_, ptr);
+    void* ptr = ptr_;
+    ptr_ = nullptr;
     return ptr;
   }
 
@@ -93,7 +94,10 @@ class ScopedMemory {
   void* get() { return ptr_; }
 
  private:
-  void* ptr_ = nullptr;
+  // This field is not a raw_ptr<> because it always points to a mmap'd
+  // region of memory outside of the PA heap. Thus, there would be overhead
+  // involved with using a raw_ptr<> but no safety gains.
+  RAW_PTR_EXCLUSION void* ptr_ = nullptr;
   size_t len_ = 0;
 };
 

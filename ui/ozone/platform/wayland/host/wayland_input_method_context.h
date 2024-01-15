@@ -14,6 +14,7 @@
 #include "base/strings/string_piece.h"
 #include "ui/base/ime/character_composer.h"
 #include "ui/base/ime/linux/linux_input_method_context.h"
+#include "ui/base/ime/surrounding_text_tracker.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/base/ime/virtual_keyboard_controller.h"
 #include "ui/gfx/range/range.h"
@@ -44,25 +45,23 @@ class WaylandInputMethodContext : public LinuxInputMethodContext,
   void Init(bool initialize_for_testing = false);
 
   // LinuxInputMethodContext overrides:
-  bool DispatchKeyEvent(const ui::KeyEvent& key_event) override;
+  bool DispatchKeyEvent(const KeyEvent& key_event) override;
   // Returns true if this event comes from extended_keyboard::peek_key.
   // See also WaylandEventSource::OnKeyboardKeyEvent about how the flag is set.
-  bool IsPeekKeyEvent(const ui::KeyEvent& key_event) override;
+  bool IsPeekKeyEvent(const KeyEvent& key_event) override;
   void SetCursorLocation(const gfx::Rect& rect) override;
-  void SetSurroundingText(const std::u16string& text,
-                          const gfx::Range& selection_range) override;
-  void SetContentType(TextInputType type,
-                      TextInputMode mode,
-                      uint32_t flags,
-                      bool should_do_learning) override;
+  void SetSurroundingText(
+      const std::u16string& text,
+      const gfx::Range& text_range,
+      const gfx::Range& selection_range,
+      const absl::optional<GrammarFragment>& fragment,
+      const absl::optional<AutocorrectInfo>& autocorrect) override;
   void WillUpdateFocus(TextInputClient* old_client,
                        TextInputClient* new_client) override;
   void UpdateFocus(bool has_client,
                    TextInputType old_type,
-                   TextInputType new_type) override;
-  void SetGrammarFragmentAtCursor(const GrammarFragment& fragment) override;
-  void SetAutocorrectInfo(const gfx::Range& autocorrect_range,
-                          const gfx::Rect& autocorrect_bounds) override;
+                   const TextInputClientAttributes& new_client_attributes,
+                   TextInputClient::FocusReason reason) override;
   void Reset() override;
   VirtualKeyboardController* GetVirtualKeyboardController() override;
 
@@ -83,7 +82,10 @@ class WaylandInputMethodContext : public LinuxInputMethodContext,
   void OnCommitString(base::StringPiece text) override;
   void OnCursorPosition(int32_t index, int32_t anchor) override;
   void OnDeleteSurroundingText(int32_t index, uint32_t length) override;
-  void OnKeysym(uint32_t keysym, uint32_t state, uint32_t modifiers) override;
+  void OnKeysym(uint32_t keysym,
+                uint32_t state,
+                uint32_t modifiers,
+                uint32_t time) override;
   void OnSetPreeditRegion(int32_t index,
                           uint32_t length,
                           const std::vector<SpanStyle>& spans) override;
@@ -92,18 +94,26 @@ class WaylandInputMethodContext : public LinuxInputMethodContext,
   void OnSetAutocorrectRange(const gfx::Range& range) override;
   void OnSetVirtualKeyboardOccludedBounds(
       const gfx::Rect& screen_bounds) override;
+  void OnConfirmPreedit(bool keep_selection) override;
   void OnInputPanelState(uint32_t state) override;
   void OnModifiersMap(std::vector<std::string> modifiers_map) override;
+  void OnInsertImage(const GURL& src) override;
+
+  const SurroundingTextTracker::State& predicted_state_for_testing() const {
+    return surrounding_text_tracker_.predicted_state();
+  }
 
  private:
-  void Focus(bool skip_virtual_keyboard_update);
+  void Focus(bool skip_virtual_keyboard_update,
+             TextInputClient::FocusReason reason);
   void Blur(bool skip_virtual_keyboard_update);
   void UpdatePreeditText(const std::u16string& preedit_text);
   // If |skip_virtual_keyboard_update| is true, no virtual keyboard show/hide
   // requests will be sent. This is used to prevent flickering the virtual
   // keyboard when it would be immediately reshown anyway, e.g. when changing
   // focus from one text input to another.
-  void MaybeUpdateActivated(bool skip_virtual_keyboard_update);
+  void MaybeUpdateActivated(bool skip_virtual_keyboard_update,
+                            TextInputClient::FocusReason reason);
 
   const raw_ptr<WaylandConnection>
       connection_;  // TODO(jani) Handle this better
@@ -123,17 +133,23 @@ class WaylandInputMethodContext : public LinuxInputMethodContext,
   // compositor.
   bool activated_ = false;
 
+  // Cache of current TextInputClient's attributes.
+  TextInputClientAttributes attributes_;
+
   // An object to compose a character from a sequence of key presses
   // including dead key etc.
   CharacterComposer character_composer_;
 
   // Stores the parameters required for OnDeleteSurroundingText.
-  // The index moved by SetSurroundingText. This is byte-offset in UTF8 form.
+  // The index moved by SetSurroundingText due to the maximum length of wayland
+  // messages limitation. It is specified as 4000 bytes in the protocol spec of
+  // text-input-unstable-v3.
+  // This is byte-offset in UTF8 form.
   size_t surrounding_text_offset_ = 0;
-  // The string in SetSurroundingText.
-  std::string surrounding_text_;
-  // The selection range in UTF-8 offsets in the |surrounding_text_|.
-  gfx::Range selection_range_utf8_ = gfx::Range::InvalidRange();
+
+  // Tracks the surrounding text. Surrounding text and its selection is NOT
+  // trimmed by the wayland message size limitation in SurroundingTextTracker.
+  SurroundingTextTracker surrounding_text_tracker_;
 
   // Whether the next CommitString should be treated as part of a
   // ConfirmCompositionText operation which keeps the current selection. This

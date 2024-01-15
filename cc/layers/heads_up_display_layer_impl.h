@@ -19,6 +19,7 @@
 #include "cc/resources/resource_pool.h"
 #include "cc/trees/debug_rect_history.h"
 #include "cc/trees/layer_tree_impl.h"
+#include "cc/trees/raster_capabilities.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 
 class SkTypeface;
@@ -58,7 +59,7 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
   void UpdateHudTexture(DrawMode draw_mode,
                         LayerTreeFrameSink* frame_sink,
                         viz::ClientResourceProvider* resource_provider,
-                        bool gpu_raster,
+                        const RasterCapabilities& raster_caps,
                         const viz::CompositorRenderPassList& list);
 
   void ReleaseResources() override;
@@ -174,7 +175,11 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
 
   ResourcePool::InUsePoolResource in_flight_resource_;
   std::unique_ptr<ResourcePool> pool_;
-  raw_ptr<viz::DrawQuad> current_quad_ = nullptr;
+  // A reference to the DrawQuad that will be replaced by a quad containing the
+  // HUD's contents. The actual quad can't be created until UpdateHudTexture()
+  // which happens during draw, so we hold this reference to it when
+  // constructing the placeholder between these two steps in the draw process.
+  raw_ptr<viz::DrawQuad> placeholder_quad_ = nullptr;
   // Used for software raster when it will be uploaded to a texture.
   sk_sp<SkSurface> staging_surface_;
 
@@ -186,7 +191,7 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
 
   uint32_t throughput_value_ = 0.0f;
   // Obtained from the current BeginFrameArgs.
-  absl::optional<base::TimeDelta> frame_interval_;
+  std::optional<base::TimeDelta> frame_interval_;
   MemoryHistory::Entry memory_entry_;
   int paint_rects_fade_step_ = 0;
   int layout_shift_rects_fade_step_ = 0;

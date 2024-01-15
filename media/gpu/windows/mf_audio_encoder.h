@@ -9,9 +9,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "media/base/audio_encoder.h"
@@ -52,11 +52,6 @@ class AudioParameters;
 // number of samples have been provided. This resets when `Flush()` is called.
 class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
  public:
-  // Loads the necessary DLLs for the correct version of Windows. Will return
-  // false on Windows N SKUs. Subsequent calls to `Initialize()` will return
-  // errors if this fails.
-  static bool PreSandboxInitialization();
-
   explicit MFAudioEncoder(scoped_refptr<base::SequencedTaskRunner> task_runner);
   MFAudioEncoder(const MFAudioEncoder&) = delete;
   MFAudioEncoder& operator=(const MFAudioEncoder&) = delete;
@@ -186,6 +181,7 @@ class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
   int input_buffer_alignment_;
   int output_buffer_alignment_;
   bool initialized_ = false;
+  std::vector<uint8_t> codec_desc_;
 
   // We can't produce output until at least `kMinSamplesForOutput` have been
   // provided. Until then, `output_cb_` will not be run.

@@ -22,7 +22,6 @@
 #include "base/files/file_util.h"
 #include "base/scoped_native_library.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/registry.h"
 #include "base/win/win_util.h"
@@ -30,6 +29,7 @@
 #include "chrome/credential_provider/gaiacp/gcp_utils.h"
 #include "chrome/credential_provider/gaiacp/logging.h"
 #include "chrome/credential_provider/gaiacp/reg_utils.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 namespace credential_provider {
 
@@ -99,13 +99,13 @@ HRESULT OSUserManager::GenerateRandomPassword(wchar_t* password, int length) {
   // is for this machine in order to create one that adheres correctly.  For
   // now will generate a random password that fits typical strong password
   // policies on windows.
-  const wchar_t kValidPasswordChars[] =
-      L"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-      L"abcdefghijklmnopqrstuvwxyz"
-      L"`1234567890-="
-      L"~!@#$%^&*()_+"
-      L"[]\\;',./"
-      L"{}|:\"<>?";
+  const unsigned char kValidPasswordChars[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz"
+      "`1234567890-="
+      "~!@#$%^&*()_+"
+      "[]\\;',./"
+      "{}|:\"<>?";
 
   if (length < kMinPasswordLength)
     return E_INVALIDARG;
@@ -141,20 +141,25 @@ HRESULT OSUserManager::GenerateRandomPassword(wchar_t* password, int length) {
         return hr;
       }
 
-      wchar_t c = kValidPasswordChars[r % (std::size(kValidPasswordChars) - 1)];
+      unsigned char c =
+          kValidPasswordChars[r % (std::size(kValidPasswordChars) - 1)];
       *p++ = c;
       ++cur_length;
       --remaining_length;
 
       // Check if we have all the requirements for a strong password.
-      if (isupper(c))
+      if (absl::ascii_isupper(c)) {
         has_upper = 1;
-      if (islower(c))
+      }
+      if (absl::ascii_islower(c)) {
         has_lower = 1;
-      if (isdigit(c))
+      }
+      if (absl::ascii_isdigit(c)) {
         has_digit = 1;
-      if (ispunct(c))
+      }
+      if (absl::ascii_ispunct(c)) {
         has_punct = 1;
+      }
 
       if (IS_PASSWORD_STRONG_ENOUGH())
         break;
@@ -373,14 +378,11 @@ HRESULT OSUserManager::ChangeUserPassword(const wchar_t* domain,
     flags_changed = true;
   }
 
-  std::wstring password_domain = base::StringPrintf(L"%ls", domain);
-
-  NET_API_STATUS changepassword_nsts = ::NetUserChangePassword(
-      password_domain.c_str(), username, old_password, new_password);
+  NET_API_STATUS changepassword_nsts =
+      ::NetUserChangePassword(domain, username, old_password, new_password);
   if (changepassword_nsts != NERR_Success) {
     LOGFN(ERROR) << "Unable to change password for '" << username
-                 << "' domain '" << password_domain
-                 << "' nsts=" << changepassword_nsts;
+                 << "' domain '" << domain << "' nsts=" << changepassword_nsts;
   }
 
   if (flags_changed) {
@@ -610,8 +612,10 @@ HRESULT OSUserManager::FindUserBySID(const wchar_t* sid,
     wcscpy_s(domain, domain_size, local_domain_buffer);
   }
 
-  LOGFN(VERBOSE) << "username=" << std::wstring(username)
-                 << " domain=" << std::wstring(domain);
+  std::wstring username_str = (username == nullptr) ? L"" : username;
+  std::wstring domain_str = (domain == nullptr) ? L"" : domain;
+  LOGFN(VERBOSE) << "username=" << username_str << " domain=" << domain_str;
+
   ::LocalFree(psid);
   return hr;
 }

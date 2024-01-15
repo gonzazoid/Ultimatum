@@ -219,7 +219,7 @@ GPUInfo::GPUInfo()
     : optimus(false),
       amd_switchable(false),
       gl_reset_notification_strategy(0),
-      software_rendering(false),
+      gl_implementation_parts(gl::kGLImplementationNone),
       sandboxed(false),
       in_process_gpu(true),
       passthrough_cmd_decoder(false),
@@ -306,7 +306,8 @@ void GPUInfo::EnumerateFields(Enumerator* enumerator) const {
     std::string max_msaa_samples;
     std::string machine_model_name;
     std::string machine_model_version;
-    std::string gl_version_string;
+    std::string display_type;
+    std::string gl_version;
     std::string gl_vendor;
     std::string gl_renderer;
     std::string gl_extensions;
@@ -314,14 +315,15 @@ void GPUInfo::EnumerateFields(Enumerator* enumerator) const {
     std::string gl_ws_version;
     std::string gl_ws_extensions;
     uint32_t gl_reset_notification_strategy;
-    bool software_rendering;
+    gl::GLImplementationParts gl_implementation_parts;
     std::string direct_rendering_version;
     bool sandboxed;
     bool in_process_gpu;
     bool passthrough_cmd_decoder;
-    bool is_asan;
-    uint32_t target_cpu_bits;
     bool can_support_threaded_texture_mailbox;
+    bool is_asan;
+    bool is_clang_coverage;
+    uint32_t target_cpu_bits;
 #if BUILDFLAG(IS_MAC)
     uint32_t macos_specific_texture_target;
 #endif  // BUILDFLAG(IS_MAC)
@@ -347,7 +349,7 @@ void GPUInfo::EnumerateFields(Enumerator* enumerator) const {
     uint32_t visibility_callback_call_count;
 
 #if BUILDFLAG(ENABLE_VULKAN)
-    absl::optional<VulkanInfo> vulkan_info;
+    std::optional<VulkanInfo> vulkan_info;
 #endif
   };
 
@@ -372,6 +374,7 @@ void GPUInfo::EnumerateFields(Enumerator* enumerator) const {
   enumerator->AddString("pixelShaderVersion", pixel_shader_version);
   enumerator->AddString("vertexShaderVersion", vertex_shader_version);
   enumerator->AddString("maxMsaaSamples", max_msaa_samples);
+  enumerator->AddString("displayType", display_type);
   enumerator->AddString("glVersion", gl_version);
   enumerator->AddString("glVendor", gl_vendor);
   enumerator->AddString("glRenderer", gl_renderer);
@@ -379,16 +382,16 @@ void GPUInfo::EnumerateFields(Enumerator* enumerator) const {
   enumerator->AddString("glWsVendor", gl_ws_vendor);
   enumerator->AddString("glWsVersion", gl_ws_version);
   enumerator->AddString("glWsExtensions", gl_ws_extensions);
-  enumerator->AddInt(
-      "glResetNotificationStrategy",
-      static_cast<int>(gl_reset_notification_strategy));
-  // TODO(kbr): add performance_stats.
-  enumerator->AddBool("softwareRendering", software_rendering);
+  enumerator->AddInt("glResetNotificationStrategy",
+                     static_cast<int>(gl_reset_notification_strategy));
+  enumerator->AddString("glImplementationParts",
+                        gl_implementation_parts.ToString());
   enumerator->AddString("directRenderingVersion", direct_rendering_version);
   enumerator->AddBool("sandboxed", sandboxed);
   enumerator->AddBool("inProcessGpu", in_process_gpu);
   enumerator->AddBool("passthroughCmdDecoder", passthrough_cmd_decoder);
   enumerator->AddBool("isAsan", is_asan);
+  enumerator->AddBool("isClangCoverage", is_clang_coverage);
   enumerator->AddInt("targetCpuBits", static_cast<int>(target_cpu_bits));
   enumerator->AddBool("canSupportThreadedTextureMailbox",
                       can_support_threaded_texture_mailbox);

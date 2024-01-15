@@ -9,73 +9,71 @@
 
 #import "base/ios/block_types.h"
 
-#import "ios/chrome/browser/ui/authentication/signin_presenter.h"
-#import "ios/chrome/browser/ui/browser_view/key_commands_provider.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
+#import "base/memory/weak_ptr.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/browser_commands.h"
+#import "ios/chrome/browser/ui/browser_view/tab_consumer.h"
 #import "ios/chrome/browser/ui/find_bar/find_bar_coordinator.h"
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_consumer.h"
+#import "ios/chrome/browser/ui/lens/lens_coordinator.h"
 #import "ios/chrome/browser/ui/ntp/logo_animation_controller.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_focus_delegate.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_presenter.h"
-#import "ios/chrome/browser/ui/page_info/requirements/page_info_presentation.h"
-#import "ios/chrome/browser/ui/settings/sync/utils/sync_presenter.h"
-#import "ios/chrome/browser/ui/thumb_strip/thumb_strip_supporting.h"
-#import "ios/chrome/browser/ui/toolbar/toolbar_coordinator_delegate.h"
-#import "ios/chrome/browser/web/web_navigation_ntp_delegate.h"
-#import "ios/chrome/browser/web/web_state_container_view_provider.h"
+#import "ios/chrome/browser/ui/toolbar/public/toolbar_height_delegate.h"
+#import "ios/chrome/browser/web/model/web_state_container_view_provider.h"
 
-class Browser;
-@class BookmarkInteractionController;
+@protocol ApplicationCommands;
+@class BookmarksCoordinator;
 @class BrowserContainerViewController;
 @class BubblePresenter;
-@class CommandDispatcher;
-@protocol CRWResponderInputView;
-@class DefaultBrowserPromoNonModalScheduler;
 @protocol DefaultPromoNonModalPresentationDelegate;
-// TODO(crbug.com/1331229): Remove all use of the download manager coordinator
-// from BVC
-@class DownloadManagerCoordinator;
+@protocol FindInPageCommands;
 class FullscreenController;
 @protocol HelpCommands;
 @class KeyCommandsProvider;
 @class NewTabPageCoordinator;
-@class LensCoordinator;
+@protocol OmniboxCommands;
+class PagePlaceholderBrowserAgent;
 @protocol PopupMenuCommands;
 @class PopupMenuCoordinator;
-// TODO(crbug.com/1328039): Remove all use of the prerender service from BVC
-@protocol PopupMenuUIUpdating;
-class PrerenderService;
-@class PrimaryToolbarCoordinator;
-@class SecondaryToolbarCoordinator;
-@class SideSwipeController;
-@protocol SnackbarCommands;
+@class SafeAreaProvider;
+@class SideSwipeMediator;
 @class TabStripCoordinator;
 @class TabStripLegacyCoordinator;
+class TabUsageRecorderBrowserAgent;
 @protocol TextZoomCommands;
 @class ToolbarAccessoryPresenter;
+@class ToolbarCoordinator;
 @protocol IncognitoReauthCommands;
+@class LayoutGuideCenter;
+@protocol LoadQueryCommands;
+class UrlLoadingBrowserAgent;
+@protocol VoiceSearchController;
 
-// TODO(crbug.com/1328039): Remove all use of the prerender service from BVC
-// TODO(crbug.com/1331229): Remove all use of the download manager coordinator
-// from BVC
 typedef struct {
-  PrerenderService* prerenderService;
   BubblePresenter* bubblePresenter;
   ToolbarAccessoryPresenter* toolbarAccessoryPresenter;
   PopupMenuCoordinator* popupMenuCoordinator;
-  DownloadManagerCoordinator* downloadManagerCoordinator;
   NewTabPageCoordinator* ntpCoordinator;
-  LensCoordinator* lensCoordinator;
-  PrimaryToolbarCoordinator* primaryToolbarCoordinator;
-  SecondaryToolbarCoordinator* secondaryToolbarCoordinator;
+  ToolbarCoordinator* toolbarCoordinator;
   TabStripCoordinator* tabStripCoordinator;
   TabStripLegacyCoordinator* legacyTabStripCoordinator;
-  SideSwipeController* sideSwipeController;
-  BookmarkInteractionController* bookmarkInteractionController;
+  SideSwipeMediator* sideSwipeMediator;
+  BookmarksCoordinator* bookmarksCoordinator;
   FullscreenController* fullscreenController;
   id<TextZoomCommands> textZoomHandler;
   id<HelpCommands> helpHandler;
   id<PopupMenuCommands> popupMenuCommandsHandler;
-  id<SnackbarCommands> snackbarCommandsHandler;
+  id<ApplicationCommands> applicationCommandsHandler;
+  id<FindInPageCommands> findInPageCommandsHandler;
+  LayoutGuideCenter* layoutGuideCenter;
+  BOOL isOffTheRecord;
+  PagePlaceholderBrowserAgent* pagePlaceholderBrowserAgent;
+  UrlLoadingBrowserAgent* urlLoadingBrowserAgent;
+  id<VoiceSearchController> voiceSearchController;
+  TabUsageRecorderBrowserAgent* tabUsageRecorderBrowserAgent;
+  base::WeakPtr<WebStateList> webStateList;
+  SafeAreaProvider* safeAreaProvider;
 } BrowserViewControllerDependencies;
 
 // The top-level view controller for the browser UI. Manages other controllers
@@ -83,27 +81,26 @@ typedef struct {
 @interface BrowserViewController
     : UIViewController <FindBarPresentationDelegate,
                         IncognitoReauthConsumer,
+                        LensPresentationDelegate,
                         LogoAnimationControllerOwnerOwner,
+                        TabConsumer,
+                        OmniboxFocusDelegate,
                         OmniboxPopupPresenterDelegate,
-                        ThumbStripSupporting,
-                        ToolbarCoordinatorDelegate,
+                        ToolbarHeightDelegate,
                         WebStateContainerViewProvider,
                         BrowserCommands>
 
 // Initializes a new BVC.
-// `browser` is the browser whose tabs this BVC will display.
 // `browserContainerViewController` is the container object this BVC will exist
 // inside.
-// `dispatcher` is the dispatcher instance this BVC will use.
-// TODO(crbug.com/992582): Remove references to model objects -- including
-//   `browser` and `dispatcher` -- from this class.
-- (instancetype)initWithBrowser:(Browser*)browser
-    browserContainerViewController:
+// TODO(crbug.com/992582): Remove references to model objects from this class.
+- (instancetype)
+    initWithBrowserContainerViewController:
         (BrowserContainerViewController*)browserContainerViewController
-                        dispatcher:(CommandDispatcher*)dispatcher
-               keyCommandsProvider:(KeyCommandsProvider*)keyCommandsProvider
-                      dependencies:
-                          (BrowserViewControllerDependencies)dependencies
+                       keyCommandsProvider:
+                           (KeyCommandsProvider*)keyCommandsProvider
+                              dependencies:(BrowserViewControllerDependencies)
+                                               dependencies
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)initWithNibName:(NSString*)nibNameOrNil
@@ -111,16 +108,11 @@ typedef struct {
 
 - (instancetype)initWithCoder:(NSCoder*)aDecoder NS_UNAVAILABLE;
 
-// Command dispatcher.
-@property(nonatomic, weak) CommandDispatcher* commandDispatcher;
-
 // Handler for reauth commands.
 @property(nonatomic, weak) id<IncognitoReauthCommands> reauthHandler;
 
-// TODO(crbug.com/1329104): Move voice search controller/coordinator to
-// BrowserCoordinator, remove this as a public property. Returns whether or not
-// text to speech is playing.
-@property(nonatomic, assign, readonly, getter=isPlayingTTS) BOOL playingTTS;
+// Whether web usage is enabled for the WebStates in `self.browser`.
+@property(nonatomic) BOOL webUsageEnabled;
 
 // The container used for infobar banner overlays.
 @property(nonatomic, strong)
@@ -130,20 +122,18 @@ typedef struct {
 @property(nonatomic, strong)
     UIViewController* infobarModalOverlayContainerViewController;
 
-// Scheduler for the non-modal default browser promo.
-// TODO(crbug.com/1204120): The BVC should not need this model-level object.
-@property(nonatomic, weak)
-    DefaultBrowserPromoNonModalScheduler* nonModalPromoScheduler;
-
 // Presentation delegate for the non-modal default browser promo.
 @property(nonatomic, weak) id<DefaultPromoNonModalPresentationDelegate>
     nonModalPromoPresentationDelegate;
 
+// Command handler for load query commands.
+@property(nonatomic, weak) id<LoadQueryCommands> loadQueryCommandsHandler;
+
+// Command handler for omnibox commands.
+@property(nonatomic, weak) id<OmniboxCommands> omniboxCommandsHandler;
+
 // Whether the receiver is currently the primary BVC.
 - (void)setPrimary:(BOOL)primary;
-
-// Called when the user explicitly opens the tab switcher.
-- (void)userEnteredTabSwitcher;
 
 // Opens a new tab as if originating from `originPoint` and `focusOmnibox`.
 - (void)openNewTabFromOriginPoint:(CGPoint)originPoint
@@ -155,15 +145,13 @@ typedef struct {
 // with.
 - (void)appendTabAddedCompletion:(ProceduralBlock)tabAddedCompletion;
 
-// Informs the BVC that a new foreground tab is about to be opened. This is
-// intended to be called before setWebUsageSuspended:NO in cases where a new tab
-// is about to appear in order to allow the BVC to avoid doing unnecessary work
-// related to showing the previously selected tab.
-// TODO(crbug.com/1329109): Move this to a browser agent or web event mediator.
-- (void)expectNewForegroundTab;
-
 // Shows the voice search UI.
 - (void)startVoiceSearch;
+
+// Displays or refreshes the current tab.
+// TODO:(crbug.com/1385847): Remove this when BVC is refactored to not know
+// about model layer objects such as webstates.
+- (void)displayCurrentTab;
 
 @end
 

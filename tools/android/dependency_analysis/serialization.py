@@ -4,14 +4,21 @@
 """Helper module for the de/serialization of graphs to/from files."""
 
 import json
-from typing import Dict, Tuple
+import pathlib
+import sys
+from typing import Dict, Tuple, Union
 
 import class_dependency
 import class_json_consts
-import git_utils
 import graph
 import json_consts
 import package_dependency
+import target_dependency
+
+_TOOLS_ANDROID_PATH = pathlib.Path(__file__).resolve().parents[1]
+if str(_TOOLS_ANDROID_PATH) not in sys.path:
+    sys.path.append(str(_TOOLS_ANDROID_PATH))
+from python_utils import git_metadata_utils
 
 
 def create_json_obj_from_node(node: graph.Node) -> Dict:
@@ -23,7 +30,7 @@ def create_json_obj_from_node(node: graph.Node) -> Dict:
         'meta': { see Node.get_node_metadata },
     }
     """
-    json_obj = {
+    json_obj: Dict[str, Union[str, dict]] = {
         json_consts.NAME: node.name,
     }
     node_meta = node.get_node_metadata()
@@ -93,24 +100,26 @@ def create_class_graph_from_json_obj(
     return class_graph
 
 
-def create_build_metadata() -> Dict:
-    """Creates metadata about the build the graph was extracted from.
-    """
+def create_build_metadata(src_path: pathlib.Path) -> Dict:
+    """Creates metadata about the build the graph was extracted from."""
     return {
-        json_consts.COMMIT_HASH: git_utils.get_last_commit_hash(),
+        json_consts.COMMIT_HASH:
+        git_metadata_utils.get_head_commit_hash(src_path),
         json_consts.COMMIT_CR_POSITION:
-        git_utils.get_last_commit_cr_position(),
-        json_consts.COMMIT_TIME: git_utils.get_last_commit_time(),
+        git_metadata_utils.get_head_commit_cr_position(src_path),
+        json_consts.COMMIT_TIME:
+        git_metadata_utils.get_head_commit_time(src_path),
     }
 
 
-def dump_class_and_package_graphs_to_file(
+def dump_class_and_package_and_target_graphs_to_file(
         class_graph: class_dependency.JavaClassDependencyGraph,
         package_graph: package_dependency.JavaPackageDependencyGraph,
-        filename: str):
-    """Dumps a JSON representation of the class + package graph to a file.
+        target_graph: target_dependency.JavaTargetDependencyGraph,
+        filename: str, src_path: pathlib.Path):
+    """Dumps a JSON representation of the class/package/target graph to a file.
 
-    We dump both graphs together because the package graph in-memory holds
+    We dump the graphs together because the package graph in-memory holds
     references to class nodes (for storing class edges comprising
     a package edge), and hence the class graph is needed to recreate the
     package graph. Since our use cases always want the package graph over the
@@ -120,12 +129,14 @@ def dump_class_and_package_graphs_to_file(
     {
         'class_graph': { see JavaClassDependencyGraph.to_json },
         'package_graph': { see JavaPackageDependencyGraph.to_json },
+        'target_graph': { see JavaTargetDependencyGraph.to_json },
     }
     """
     json_obj = {
         json_consts.CLASS_GRAPH: create_json_obj_from_graph(class_graph),
         json_consts.PACKAGE_GRAPH: create_json_obj_from_graph(package_graph),
-        json_consts.BUILD_METADATA: create_build_metadata(),
+        json_consts.TARGET_GRAPH: create_json_obj_from_graph(target_graph),
+        json_consts.BUILD_METADATA: create_build_metadata(src_path),
     }
     with open(filename, 'w') as json_file:
         json.dump(json_obj, json_file, separators=(',', ':'))

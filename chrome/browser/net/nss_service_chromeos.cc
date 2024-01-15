@@ -7,11 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/callback_list.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
@@ -100,7 +100,7 @@ void GetTPMInfoForUserOnUIThread(const AccountId& account_id,
   std::unique_ptr<ash::TPMTokenInfoGetter> scoped_token_info_getter =
       ash::TPMTokenInfoGetter::CreateForUserToken(
           account_id, ash::CryptohomePkcs11Client::Get(),
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   ash::TPMTokenInfoGetter* token_info_getter = scoped_token_info_getter.get();
 
   // Bind |token_info_getter| to the callback to ensure it does not go away
@@ -146,12 +146,13 @@ void StartNSSInitOnIOThread(const AccountId& account_id,
       &StartTPMSlotInitializationOnIOThread, account_id, username_hash));
 }
 
-void NotifyCertsChangedInAshOnUIThread() {
+void NotifyCertsChangedInAshOnUIThread(
+    crosapi::mojom::CertDatabaseChangeType change_type) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   crosapi::CrosapiManager::Get()
       ->crosapi_ash()
       ->cert_database_ash()
-      ->NotifyCertsChangedInAsh();
+      ->NotifyCertsChangedInAsh(change_type);
 }
 
 }  // namespace
@@ -205,9 +206,18 @@ class NssService::NSSCertDatabaseChromeOSManager
   }
 
   // net::NSSCertDatabase::Observer
-  void OnCertDBChanged() override {
+  void OnTrustStoreChanged() override {
     content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&NotifyCertsChangedInAshOnUIThread));
+        FROM_HERE,
+        base::BindOnce(&NotifyCertsChangedInAshOnUIThread,
+                       crosapi::mojom::CertDatabaseChangeType::kTrustStore));
+  }
+  void OnClientCertStoreChanged() override {
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &NotifyCertsChangedInAshOnUIThread,
+            crosapi::mojom::CertDatabaseChangeType::kClientCertStore));
   }
 
  private:

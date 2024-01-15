@@ -13,8 +13,12 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "build/build_config.h"
+#include "media/audio/audio_features.h"
 #include "media/base/audio_codecs.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_codecs.h"
+#include "net/base/url_util.h"
 #include "third_party/blink/public/platform/modules/remoteplayback/remote_playback_source.h"
 #include "url/gurl.h"
 
@@ -33,6 +37,8 @@ constexpr base::StringPiece kDesktopMediaUrnPrefix =
 constexpr base::StringPiece kDesktopMediaUrnAudioParam = "?with_audio=true";
 constexpr base::StringPiece kUnchosenDesktopMediaUrn =
     "urn:x-org.chromium.media:source:desktop";
+constexpr base::StringPiece kUnchosenDesktopWithAudioMediaUrn =
+    "urn:x-org.chromium.media:source:desktop:?with_audio=true";
 
 // List of non-http(s) schemes that are allowed in a Presentation URL.
 constexpr std::array<const char* const, 5> kAllowedSchemes{
@@ -45,6 +51,19 @@ bool IsSchemeAllowed(const GURL& url) {
          base::ranges::any_of(
              kAllowedSchemes,
              [&url](const char* const scheme) { return url.SchemeIs(scheme); });
+}
+
+bool IsSystemAudioCaptureSupported() {
+  if (!media::IsSystemLoopbackCaptureSupported()) {
+    return false;
+  }
+#if BUILDFLAG(IS_MAC)
+  return base::FeatureList::IsEnabled(media::kMacLoopbackAudioForCast);
+#elif BUILDFLAG(IS_LINUX)
+  return base::FeatureList::IsEnabled(media::kPulseaudioLoopbackForCast);
+#else
+  return true;
+#endif  // BUILDFLAG(IS_MAC)
 }
 
 }  // namespace
@@ -105,18 +124,16 @@ MediaSource MediaSource::ForRemotePlayback(int tab_id,
                                            media::VideoCodec video_codec,
                                            media::AudioCodec audio_codec) {
   return MediaSource(
-      base::StringPrintf(blink::kRemotePlaybackDesktopUrlFormat, tab_id,
+      base::StringPrintf(blink::kRemotePlaybackDesktopUrlFormat,
                          media::GetCodecName(video_codec).c_str(),
-                         media::GetCodecName(audio_codec).c_str()));
+                         media::GetCodecName(audio_codec).c_str(), tab_id));
 }
 
 // static
-MediaSource MediaSource::ForDesktop(
-    const std::string& registered_desktop_stream_id,
-    bool with_audio) {
-  DCHECK(!registered_desktop_stream_id.empty());
-  std::string id =
-      std::string(kDesktopMediaUrnPrefix) + registered_desktop_stream_id;
+MediaSource MediaSource::ForDesktop(const std::string& desktop_media_id,
+                                    bool with_audio) {
+  DCHECK(!desktop_media_id.empty());
+  std::string id = std::string(kDesktopMediaUrnPrefix) + desktop_media_id;
   if (with_audio) {
     id += std::string(kDesktopMediaUrnAudioParam);
   }
@@ -125,15 +142,20 @@ MediaSource MediaSource::ForDesktop(
 
 // static
 MediaSource MediaSource::ForUnchosenDesktop() {
-  return MediaSource(std::string(kUnchosenDesktopMediaUrn));
+  return IsSystemAudioCaptureSupported() &&
+                 base::FeatureList::IsEnabled(
+                     media::kCastLoopbackAudioToAudioReceivers)
+             ? MediaSource(std::string(kUnchosenDesktopWithAudioMediaUrn))
+             : MediaSource(std::string(kUnchosenDesktopMediaUrn));
 }
 
 bool MediaSource::IsTabMirroringSource() const {
-  return id() == kAnyTabMediaUrn || TabId() > 0;
+  return id() == kAnyTabMediaUrn || TabId().has_value();
 }
 
 bool MediaSource::IsDesktopMirroringSource() const {
   return id() == kUnchosenDesktopMediaUrn ||
+         id() == kUnchosenDesktopWithAudioMediaUrn ||
          base::StartsWith(id(), kDesktopMediaUrnPrefix,
                           base::CompareCase::SENSITIVE);
 }
@@ -147,9 +169,28 @@ bool MediaSource::IsRemotePlaybackSource() const {
   return url_.SchemeIs(kRemotePlaybackPresentationUrlScheme);
 }
 
-int MediaSource::TabId() const {
-  int tab_id = -1;
-  sscanf(id_.c_str(), kTabMediaUrnFormat, &tab_id);
+absl::optional<int> MediaSource::TabId() const {
+  int tab_id;
+  if (sscanf(id_.c_str(), kTabMediaUrnFormat, &tab_id) != 1) {
+    return absl::nullopt;
+  }
+  return tab_id;
+}
+
+absl::optional<int> MediaSource::TabIdFromRemotePlaybackSource() const {
+  if (!IsRemotePlaybackSource()) {
+    return absl::nullopt;
+  }
+
+  std::string tab_id_str;
+  if (!net::GetValueForKeyInQuery(url(), "tab_id", &tab_id_str)) {
+    return absl::nullopt;
+  }
+
+  int tab_id;
+  if (!base::StringToInt(tab_id_str, &tab_id)) {
+    return absl::nullopt;
+  }
   return tab_id;
 }
 
@@ -184,14 +225,29 @@ std::string MediaSource::AppNameFromDialSource() const {
 
 std::string MediaSource::TruncateForLogging(size_t max_length) const {
   const std::string origin = url_.DeprecatedGetOriginAsURL().spec();
-  if (!origin.empty())
+  if (!origin.empty()) {
     return origin.substr(0, max_length);
-  // TODO(takumif): Keep the query string by redacting PII. The query string may
-  // contain info useful for debugging such as the required capabilities.
+  }
+  // TODO(takumif): Keep the query string by redacting PII. The query string
+  // may contain info useful for debugging such as the required capabilities.
   const size_t query_start_index = id_.find("?");
   const size_t length =
       query_start_index == std::string::npos ? max_length : query_start_index;
   return id_.substr(0, length);
+}
+
+void MediaSource::AppendTabIdToRemotePlaybackUrlQuery(int tab_id) {
+  if (url_.is_empty()) {
+    return;
+  }
+
+  GURL::Replacements replacements;
+  std::string tab_id_query = base::StringPrintf("tab_id=%d", tab_id);
+  std::string new_query =
+      (url_.has_query() ? url_.query() + "&" : "") + tab_id_query;
+  replacements.SetQueryStr(new_query);
+  url_ = url_.ReplaceComponents(replacements);
+  id_ = url_.spec();
 }
 
 }  // namespace media_router

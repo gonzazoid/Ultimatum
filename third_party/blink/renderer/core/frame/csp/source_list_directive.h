@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FRAME_CSP_SOURCE_LIST_DIRECTIVE_H_
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/frame/csp/csp_source.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -15,7 +16,7 @@ namespace blink {
 class KURL;
 
 CORE_EXPORT
-bool CSPSourceListAllows(
+CSPCheckResult CSPSourceListAllows(
     const network::mojom::blink::CSPSourceList& source_list,
     const network::mojom::blink::CSPSource& self_source,
     const KURL&,
@@ -47,6 +48,7 @@ bool CSPSourceListIsHashOrNoncePresent(
 CORE_EXPORT
 bool CSPSourceListAllowAllInline(
     network::mojom::blink::CSPDirectiveName directive_type,
+    ContentSecurityPolicy::InlineType inline_type,
     const network::mojom::blink::CSPSourceList& source_list);
 
 CORE_EXPORT

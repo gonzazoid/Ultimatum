@@ -8,11 +8,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/time/time.h"
 #include "remoting/base/constants.h"
 #include "remoting/proto/control.pb.h"
@@ -80,24 +79,6 @@ void VideoFramePump::Pause(bool pause) {
   capture_scheduler_.Pause(pause);
 }
 
-void VideoFramePump::SetLosslessEncode(bool want_lossless) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-  encode_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&VideoEncoder::SetLosslessEncode,
-                     base::Unretained(encoder_.get()), want_lossless));
-}
-
-void VideoFramePump::SetLosslessColor(bool want_lossless) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-  encode_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&VideoEncoder::SetLosslessColor,
-                     base::Unretained(encoder_.get()), want_lossless));
-}
-
 void VideoFramePump::SetObserver(Observer* observer) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   observer_ = observer;
@@ -121,6 +102,8 @@ void VideoFramePump::SetMouseCursorPosition(
   capturer_->SetMouseCursorPosition(position);
 }
 
+void VideoFramePump::SetTargetFramerate(int framerate) {}
+
 void VideoFramePump::OnCaptureResult(
     webrtc::DesktopCapturer::Result result,
     std::unique_ptr<webrtc::DesktopFrame> frame) {
@@ -137,16 +120,17 @@ void VideoFramePump::OnCaptureResult(
     if (!frame_size_.equals(frame->size()) || !frame_dpi_.equals(dpi)) {
       frame_size_ = frame->size();
       frame_dpi_ = dpi;
-      if (observer_)
+      if (observer_) {
         observer_->OnVideoSizeChanged(this, frame_size_, frame_dpi_);
+      }
     }
   }
 
   // Even when |frame| is nullptr we still need to post it to the encode thread
   // to make sure frames are freed in the same order they are received and
   // that we don't start capturing frame n+2 before frame n is freed.
-  base::PostTaskAndReplyWithResult(
-      encode_task_runner_.get(), FROM_HERE,
+  encode_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&VideoFramePump::EncodeFrame, encoder_.get(),
                      std::move(frame), std::move(captured_frame_timestamps_)),
       base::BindOnce(&VideoFramePump::OnFrameEncoded,
@@ -176,16 +160,19 @@ VideoFramePump::EncodeFrame(VideoEncoder* encoder,
 
   std::unique_ptr<VideoPacket> packet;
   // If |frame| is non-NULL then let the encoder process it.
-  if (frame)
+  if (frame) {
     packet = encoder->Encode(*frame);
+  }
 
   // If |frame| is NULL, or the encoder returned nothing, return an empty
   // packet.
-  if (!packet)
+  if (!packet) {
     packet = std::make_unique<VideoPacket>();
+  }
 
-  if (frame)
+  if (frame) {
     packet->set_capture_time_ms(frame->capture_time_ms());
+  }
 
   timestamps->encode_ended_time = base::TimeTicks::Now();
   packet->set_encode_time_ms(

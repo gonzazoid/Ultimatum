@@ -8,13 +8,13 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "net/base/schemeful_site.h"
 #include "net/cert/mock_cert_verifier.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/proxy_resolution/configured_proxy_resolution_service.h"
 #include "net/quic/crypto/proof_source_chromium.h"
+#include "net/quic/quic_context.h"
 #include "net/test/test_data_directory.h"
 #include "net/test/test_with_task_environment.h"
 #include "net/third_party/quiche/src/quiche/quic/test_tools/crypto_test_utils.h"
@@ -99,7 +99,7 @@ class DedicatedWebTransportHttp3Test : public TestWithTaskEnvironment {
     quic::QuicEnableVersion(quic::ParsedQuicVersion::RFCv1());
     origin_ = url::Origin::Create(GURL{"https://example.org"});
     anonymization_key_ =
-        NetworkAnonymizationKey(SchemefulSite(origin_), SchemefulSite(origin_));
+        NetworkAnonymizationKey::CreateSameSite(SchemefulSite(origin_));
 
     URLRequestContextBuilder builder;
     builder.set_proxy_resolution_service(
@@ -158,7 +158,7 @@ class DedicatedWebTransportHttp3Test : public TestWithTaskEnvironment {
     server_ = std::make_unique<QuicSimpleServer>(
         std::move(proof_source), quic::QuicConfig(),
         quic::QuicCryptoServerConfig::ConfigOptions(),
-        quic::AllSupportedVersions(), &backend_);
+        AllSupportedQuicVersions(), &backend_);
     ASSERT_TRUE(server_->CreateUDPSocketAndListen(
         quic::QuicSocketAddress(quic::QuicIpAddress::Any6(), /*port=*/0)));
     port_ = server_->server_address().port();

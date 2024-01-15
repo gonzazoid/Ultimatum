@@ -13,7 +13,6 @@
 #include "base/logging.h"
 #include "base/memory/page_size.h"
 #include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/memory_dump_request_args.h"
@@ -219,6 +218,13 @@ void CommandBufferService::Flush(int32_t put_offset,
   }
 
   handler->BeginDecoding();
+
+  // BeginDecoding can cause context loss due to resuming shared image access.
+  if (state_.error != error::kNoError) {
+    handler->EndDecoding();
+    return;
+  }
+
   int end = put_offset_ < state_.get_offset ? num_entries_ : put_offset_;
   while (put_offset_ != state_.get_offset) {
     int num_entries = end - state_.get_offset;
@@ -261,11 +267,11 @@ void CommandBufferService::SetGetBuffer(int32_t transfer_buffer_id) {
   ++state_.set_get_buffer_count;
 
   // If the buffer is invalid we handle it gracefully.
-  // This means ring_buffer_ can be nullptr.
-  ring_buffer_ = GetTransferBuffer(transfer_buffer_id);
-  if (ring_buffer_) {
-    uint32_t size = ring_buffer_->size();
-    volatile void* memory = ring_buffer_->memory();
+  // This means `transfer_buffer` can be nullptr.
+  auto transfer_buffer = GetTransferBuffer(transfer_buffer_id);
+  if (transfer_buffer) {
+    uint32_t size = transfer_buffer->size();
+    volatile void* memory = transfer_buffer->memory();
     // check proper alignments.
     DCHECK_EQ(
         0u, (reinterpret_cast<intptr_t>(memory)) % alignof(CommandBufferEntry));
@@ -277,7 +283,7 @@ void CommandBufferService::SetGetBuffer(int32_t transfer_buffer_id) {
     num_entries_ = 0;
     buffer_ = nullptr;
   }
-
+  ring_buffer_ = std::move(transfer_buffer);
   UpdateState();
 }
 
@@ -303,12 +309,15 @@ void CommandBufferService::SetReleaseCount(uint64_t release_count) {
   UpdateState();
 }
 
-scoped_refptr<Buffer> CommandBufferService::CreateTransferBuffer(uint32_t size,
-                                                                 int32_t* id) {
+scoped_refptr<Buffer> CommandBufferService::CreateTransferBuffer(
+    uint32_t size,
+    int32_t* id,
+    uint32_t alignment) {
   *id = GetNextBufferId();
-  auto result = CreateTransferBufferWithId(size, *id);
-  if (!result)
+  auto result = CreateTransferBufferWithId(size, *id, alignment);
+  if (!result) {
     *id = -1;
+  }
   return result;
 }
 
@@ -329,8 +338,9 @@ bool CommandBufferService::RegisterTransferBuffer(
 
 scoped_refptr<Buffer> CommandBufferService::CreateTransferBufferWithId(
     uint32_t size,
-    int32_t id) {
-  scoped_refptr<Buffer> buffer = MakeMemoryBuffer(size);
+    int32_t id,
+    uint32_t alignment) {
+  scoped_refptr<Buffer> buffer = MakeMemoryBuffer(size, alignment);
   if (!RegisterTransferBuffer(id, buffer)) {
     SetParseError(gpu::error::kOutOfBounds);
     return nullptr;

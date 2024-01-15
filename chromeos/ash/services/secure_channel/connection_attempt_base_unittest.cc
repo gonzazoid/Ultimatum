@@ -7,7 +7,8 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "chromeos/ash/services/secure_channel/ble_initiator_failure_type.h"
@@ -75,8 +76,9 @@ class TestConnectionAttempt
     return fake_operation;
   }
 
-  FakeConnectToDeviceOperation<BleInitiatorFailureType>* fake_operation_ =
-      nullptr;
+  raw_ptr<FakeConnectToDeviceOperation<BleInitiatorFailureType>,
+          DanglingUntriaged>
+      fake_operation_ = nullptr;
 };
 
 }  // namespace
@@ -424,7 +426,7 @@ TEST_F(SecureChannelConnectionAttemptBaseTest,
   EXPECT_EQ(2u, extracted_client_data.size());
 
   // The extracted client data may not be returned in the same order that as the
-  // associated requests were added to |conenction_attempt_|, since
+  // associated requests were added to |connection_attempt_|, since
   // ConnectionAttemptBase internally utilizes a std::unordered_map. Sort the
   // data before making verifications to ensure correctness.
   std::sort(extracted_client_data.begin(), extracted_client_data.end(),

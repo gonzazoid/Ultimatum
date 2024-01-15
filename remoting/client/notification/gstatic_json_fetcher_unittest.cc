@@ -8,10 +8,11 @@
 #include <string>
 
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/url_request_error_job.h"
@@ -36,20 +37,17 @@ MATCHER(NoJsonData, "") {
 }
 
 MATCHER(IsJsonData1, "") {
-  if (!arg || !arg->is_dict()) {
+  if (!arg) {
     return false;
   }
-  const base::Value* a = arg->FindKey("a");
-  return a && a->is_int() && a->GetInt() == 1;
+  return *arg == base::test::ParseJson(R"({"a":1})");
 }
 
 MATCHER(IsJsonData2, "") {
-  if (!arg || !arg->is_list()) {
+  if (!arg) {
     return false;
   }
-  auto list = arg->GetListDeprecated();
-  return list.size() == 1 && list[0].is_string() &&
-         list[0].GetString() == "123";
+  return *arg == base::test::ParseJson(R"(["123"])");
 }
 
 class TestURLRequestInterceptor : public net::URLRequestInterceptor {
@@ -107,7 +105,8 @@ class GstaticJsonFetcherTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::IO};
-  GstaticJsonFetcher fetcher_{base::ThreadTaskRunnerHandle::Get()};
+  GstaticJsonFetcher fetcher_{
+      base::SingleThreadTaskRunner::GetCurrentDefault()};
 };
 
 TEST_F(GstaticJsonFetcherTest, FetchJsonFileSuccess) {

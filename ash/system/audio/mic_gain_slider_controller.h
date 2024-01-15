@@ -7,7 +7,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/unified_slider_view.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/timer/timer.h"
 
 namespace ash {
 
@@ -30,7 +31,7 @@ class ASH_EXPORT MicGainSliderController : public UnifiedSliderListener {
       MapDeviceSliderCallback* test_slider_device_callback);
 
   // UnifiedSliderListener:
-  views::View* CreateView() override;
+  std::unique_ptr<UnifiedSliderView> CreateView() override;
   QsSliderCatalogName GetCatalogName() override;
   void SliderValueChanged(views::Slider* sender,
                           float value,
@@ -38,6 +39,14 @@ class ASH_EXPORT MicGainSliderController : public UnifiedSliderListener {
                           views::SliderChangeReason reason) override;
 
   void SliderButtonPressed();
+
+ private:
+  // Records when the user changes the gain via slider to metrics.
+  void RecordGainChanged();
+
+  // Timer used to prevent the input gain from recording each time the user
+  // moves the slider while setting the desired volume.
+  base::DelayTimer input_gain_metric_delay_timer_;
 };
 
 }  // namespace ash

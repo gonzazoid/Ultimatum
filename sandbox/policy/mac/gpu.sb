@@ -4,17 +4,12 @@
 
 ; --- The contents of common.sb implicitly included here. ---
 
-(deny default (with partial-symbolication))
-(debug deny)
-
 ; Allow cf prefs to work.
 (allow user-preference-read)
 
 (allow-cvms-blobs)
 
 (allow ipc-posix-shm)
-
-(define disable-metal-shader-cache "DISABLE_METAL_SHADER_CACHE")
 
 ; Allow communication between the GPU process and the UI server.
 (allow mach-lookup
@@ -38,11 +33,25 @@
   (global-name "com.apple.system.opendirectoryd.membership") ; https://crbug.com/1126350#c5
   (global-name "com.apple.tsm.uiserver")
   (global-name "com.apple.windowserver.active")
+  ; Needed for VideoToolbox usage - https://crbug.com/767037
+  (xpc-service-name "com.apple.coremedia.videodecoder")
+  (xpc-service-name "com.apple.coremedia.videoencoder")
+  (xpc-service-name-regex #"\.apple-extension-service$")
 )
 
 ; Needed for metal decoding - https://crbug.com/957217
 (if (>= os-version 1014)
   (allow mach-lookup (xpc-service-name "com.apple.MTLCompilerService"))
+)
+
+; Allow access to the Apple Neural Engine for the Shape Detection API.
+; https://crbug.com/1382442
+(if (>= os-version 1300)
+  (begin
+    (allow mach-lookup (global-name "com.apple.appleneuralengine"))
+    (allow iokit-open
+      (iokit-user-client-class "H11ANEInDirectPathClient"))
+  )
 )
 
 ; Needed for VideoToolbox H.264 SW and VP9 decoding - https://crbug.com/1113936
@@ -82,15 +91,6 @@
 
 (allow ipc-posix-shm-read-data
   (ipc-posix-name "apple.shm.notification_center"))
-
-
-; Needed for VideoToolbox usage - https://crbug.com/767037
-(if (>= os-version 1013)
-  (allow mach-lookup
-    (xpc-service-name "com.apple.coremedia.videodecoder")
-    (xpc-service-name "com.apple.coremedia.videoencoder")
-    (xpc-service-name-regex #"\.apple-extension-service$")
-))
 
 (allow sysctl-read
   (sysctl-name "hw.busfrequency_max")
@@ -140,10 +140,5 @@
       (syscall-number SYS_write_nocancel)
 )))
 
-; crbug.com/1159113
-(if (param-true? disable-metal-shader-cache)
-  (let ((metal-cache-dir (subpath (string-append (param darwin-user-cache-dir)
-                                                 "/com.apple.metal"))))
-    (deny file-read* metal-cache-dir)
-    (deny file-write* metal-cache-dir))
-)
+(if (not (maybe-disable-metal-shader-cache))
+  (maybe-allow-metal-shader-cache-access))

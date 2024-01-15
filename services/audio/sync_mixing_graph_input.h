@@ -32,7 +32,8 @@ class SyncMixingGraphInput final : public MixingGraph::Input {
 
   // media::AudioConverter::InputCallback.
   double ProvideInput(media::AudioBus* audio_bus,
-                      uint32_t frames_delayed) final;
+                      uint32_t frames_delayed,
+                      const media::AudioGlitchInfo& glitch_info) final;
 
   const media::AudioParameters& GetParams() const final;
 
@@ -51,7 +52,7 @@ class SyncMixingGraphInput final : public MixingGraph::Input {
   void Render(int fifo_frame_delay, media::AudioBus* audio_bus);
 
   // Pointer to the mixing graph to which the input belongs.
-  const raw_ptr<MixingGraph> graph_;
+  const raw_ptr<MixingGraph, FlakyDanglingUntriaged> graph_;
 
   // Channel layout, sample rate and number of frames of the input.
   const media::AudioParameters params_;
@@ -66,6 +67,10 @@ class SyncMixingGraphInput final : public MixingGraph::Input {
   // Handles buffering when there is a mismatch in number of frames between the
   // input and the output of the mixing graph. Created on-demand.
   std::unique_ptr<media::AudioPullFifo> fifo_;
+
+  // Accumulates glitch info in ProvideInput() and passes it on to
+  // |source_callback_| in Render().
+  media::AudioGlitchInfo::Accumulator glitch_info_accumulator_;
 
   // Used for calculating the playback delay.
   int converter_render_frame_delay_ = 0;

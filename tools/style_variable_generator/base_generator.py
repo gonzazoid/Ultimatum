@@ -45,18 +45,19 @@ class BaseGenerator:
         # If specified, only generates the given mode.
         self.generate_single_mode = None
 
-        # If true, resolves all blend() colors to the RGBA values at
-        # compile time.
-        self.resolve_blended_colors = True
-
         # A dictionary of options used to alter generator function. See
         # ./README.md for each generators list of options.
         self.generator_options = {}
 
 
+    # If true, will attempt to resolve all blend() colors to the RGBA values at
+    # compile time. Note that json5 files can specify "preblend" to override
+    # this setting for specific files.
+    def DefaultPreblend(self):
+        return True
+
     def GetInputFiles(self):
         return sorted(self.in_file_to_context.keys())
-
 
     def AddJSONFilesToModel(self, paths):
         '''Adds one or more JSON files to the model.
@@ -68,8 +69,7 @@ class BaseGenerator:
             except ValueError as err:
                 raise ValueError(f'Could not add {path}') from err
 
-        self.model.PostProcess(
-            resolve_blended_colors=self.resolve_blended_colors)
+        self.model.PostProcess(default_preblend=self.DefaultPreblend())
 
     def AddJSONToModel(self, json_string, in_file=None):
         '''Adds a |json_string| with variable definitions to the model.
@@ -94,10 +94,16 @@ class BaseGenerator:
         for name, value in data.get('opacities', {}).items():
             self.model.Add(VariableType.OPACITY, name, value, context)
 
+        for name, value in data.get('legacy_mappings', {}).items():
+            self.model.Add(VariableType.LEGACY_MAPPING, name, value, context)
+
         typography = data.get('typography')
         if typography:
             for name, value in typography['font_families'].items():
                 self.model.Add(VariableType.FONT_FAMILY, name, value, context)
+
+            for name, value in typography['font_faces'].items():
+                self.model.Add(VariableType.FONT_FACE, name, value, context)
 
             for name, value_obj in typography['typefaces'].items():
                 self.model.Add(VariableType.TYPEFACE, name, value_obj, context)

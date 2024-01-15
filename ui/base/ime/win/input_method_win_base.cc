@@ -6,12 +6,15 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <cwctype>
+
+#include <memory>
+#include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/strings/string_util.h"
 #include "base/win/windows_version.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/base/ime/win/on_screen_keyboard_display_manager_input_pane.h"
@@ -37,11 +40,10 @@ std::unique_ptr<VirtualKeyboardController> CreateKeyboardController(
       base::win::GetVersion() >= base::win::Version::WIN10_RS4) {
     return std::make_unique<OnScreenKeyboardDisplayManagerInputPane>(
         attached_window_handle);
-  } else if (base::win::GetVersion() >= base::win::Version::WIN8) {
+  } else {
     return std::make_unique<OnScreenKeyboardDisplayManagerTabTip>(
         attached_window_handle);
   }
-  return nullptr;
 }
 
 // Checks if a given primary language ID is a RTL language.
@@ -228,9 +230,9 @@ ui::EventDispatchDetails InputMethodWinBase::DispatchKeyEvent(
   }
 
   // If only 1 WM_CHAR per the key event, set it as the character of it.
-  if (char_msgs.size() == 1 &&
-      !std::iswcntrl(static_cast<wint_t>(char_msgs[0].wParam)))
+  if (char_msgs.size() == 1 && !base::IsAsciiControl(char_msgs[0].wParam)) {
     event->set_character(static_cast<char16_t>(char_msgs[0].wParam));
+  }
 
   return ProcessUnhandledKeyEvent(event, &char_msgs);
 }

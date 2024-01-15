@@ -26,6 +26,8 @@
 #include "ash/constants/ash_features.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chromeos/ash/components/standalone_browser/migrator_util.h"
+#include "chromeos/ash/components/standalone_browser/standalone_browser_features.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
@@ -37,8 +39,9 @@ namespace {
 class MockAppMenuIconControllerDelegate
     : public AppMenuIconController::Delegate {
  public:
-  MOCK_METHOD1(UpdateTypeAndSeverity,
-               void(AppMenuIconController::TypeAndSeverity type_and_severity));
+  MOCK_METHOD(void,
+              UpdateTypeAndSeverity,
+              (AppMenuIconController::TypeAndSeverity type_and_severity));
   MOCK_CONST_METHOD1(GetDefaultColorForSeverity,
                      SkColor(AppMenuIconController::Severity severity));
 };
@@ -98,7 +101,7 @@ class AppMenuIconControllerTest : public ::testing::TestWithParam<int> {
   void SetUp() override {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::make_unique<user_manager::FakeUserManager>());
+        std::make_unique<user_manager::FakeUserManager>(&local_state_));
     auto* user_manager = static_cast<user_manager::FakeUserManager*>(
         user_manager::UserManager::Get());
     const auto account_id = AccountId::FromUserEmail("test@test");
@@ -107,7 +110,8 @@ class AppMenuIconControllerTest : public ::testing::TestWithParam<int> {
                                /*browser_restart=*/false,
                                /*is_child=*/false);
     crosapi::browser_util::RegisterLocalStatePrefs(local_state_.registry());
-    user_manager->set_local_state(&local_state_);
+    ash::standalone_browser::migrator_util::RegisterLocalStatePrefs(
+        local_state_.registry());
 #endif
   }
 
@@ -157,8 +161,12 @@ class AppMenuIconControllerTest : public ::testing::TestWithParam<int> {
 // and severity when an upgrade is detected.
 TEST_P(AppMenuIconControllerTest, UpgradeNotification) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  auto set_lacros_enabled =
-      crosapi::browser_util::SetLacrosEnabledForTest(true);
+  // Forcibly enable Lacros Profile migration, so that IDC_LACROS_DATA_MIGRATION
+  // becomes visible. Note that profile migration is only enabled if Lacros is
+  // the only browser.
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      {ash::standalone_browser::features::kLacrosOnly}, {});
 #endif
 
   ::testing::StrictMock<MockAppMenuIconControllerDelegate> mock_delegate;

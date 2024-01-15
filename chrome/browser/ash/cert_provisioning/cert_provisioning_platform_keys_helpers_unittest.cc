@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
@@ -18,7 +18,7 @@
 #include "chrome/browser/ash/platform_keys/mock_platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/cert/x509_certificate.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -152,7 +152,7 @@ TEST_F(CertProvisioningCertIteratorTest, CertificateWithError) {
 
   certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/"id1");
   certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/"id2");
-  certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/absl::nullopt,
+  certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/std::nullopt,
                               kErrorStatus);
   certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/"id3");
   certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/"id4");
@@ -252,7 +252,7 @@ TEST_F(CertProvisioningCertGetter, ManyCertificatesWithoutId) {
   const CertScope kCertScope = CertScope::kDevice;
   size_t cert_count = 4;
   for (size_t i = 0; i < cert_count; ++i) {
-    certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/absl::nullopt);
+    certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/std::nullopt);
   }
 
   GetterCallbackObserver callback_observer;
@@ -270,7 +270,7 @@ TEST_F(CertProvisioningCertGetter, CertificatesWithAndWithoutIds) {
 
   size_t cert_without_id_count = 4;
   for (size_t i = 0; i < cert_without_id_count; ++i) {
-    certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/absl::nullopt);
+    certificate_helper_.AddCert(kCertScope, /*cert_profile_id=*/std::nullopt);
   }
 
   std::vector<std::string> ids{"cert_profile_id_0", "cert_profile_id_1",

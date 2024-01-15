@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/run_loop.h"
@@ -351,7 +351,7 @@ class SSLErrorHandlerNameMismatchTest
   TestingPrefServiceSimple pref_service_;
   std::unique_ptr<captive_portal::CaptivePortalService> captive_portal_service_;
   std::unique_ptr<TestSSLErrorHandler> error_handler_;
-  raw_ptr<TestSSLErrorHandlerDelegate> delegate_;
+  raw_ptr<TestSSLErrorHandlerDelegate, DanglingUntriaged> delegate_;
 };
 
 // A class to test name mismatch errors, where the certificate lacks a
@@ -596,7 +596,7 @@ class SSLErrorAssistantProtoTest : public content::RenderViewHostTestHarness {
   TestingPrefServiceSimple pref_service_;
   std::unique_ptr<captive_portal::CaptivePortalService> captive_portal_service_;
   std::unique_ptr<TestSSLErrorHandler> error_handler_;
-  raw_ptr<TestSSLErrorHandlerDelegate> delegate_;
+  raw_ptr<TestSSLErrorHandlerDelegate, DanglingUntriaged> delegate_;
 };
 
 class SSLErrorAssistantProtoCaptivePortalEnabledTest
@@ -665,8 +665,7 @@ class SSLErrorHandlerDateInvalidTest
 
     field_trial_test()->SetFeatureParams(
         false, 0.0,
-        network_time::NetworkTimeTracker::FETCHES_IN_BACKGROUND_ONLY,
-        network_time::NetworkTimeTracker::ClockDriftSamples::NO_SAMPLES);
+        network_time::NetworkTimeTracker::FETCHES_IN_BACKGROUND_ONLY);
   }
 
   SSLErrorHandlerDateInvalidTest(const SSLErrorHandlerDateInvalidTest&) =
@@ -760,11 +759,11 @@ class SSLErrorHandlerDateInvalidTest
 
   net::SSLInfo ssl_info_;
   std::unique_ptr<TestSSLErrorHandler> error_handler_;
-  raw_ptr<TestSSLErrorHandlerDelegate> delegate_;
+  raw_ptr<TestSSLErrorHandlerDelegate, DanglingUntriaged> delegate_;
 
   std::unique_ptr<network_time::FieldTrialTest> field_trial_test_;
-  raw_ptr<base::SimpleTestClock> clock_;
-  raw_ptr<base::SimpleTestTickClock> tick_clock_;
+  raw_ptr<base::SimpleTestClock, DanglingUntriaged> clock_;
+  raw_ptr<base::SimpleTestTickClock, DanglingUntriaged> tick_clock_;
   TestingPrefServiceSimple pref_service_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
   std::unique_ptr<network_time::NetworkTimeTracker> tracker_;
@@ -1158,8 +1157,7 @@ TEST_F(SSLErrorHandlerDateInvalidTest, MAYBE_TimeQueryStarted) {
   EXPECT_TRUE(test_server()->Start());
   tracker()->SetTimeServerURLForTesting(test_server()->GetURL("/"));
   field_trial_test()->SetFeatureParams(
-      true, 0.0, network_time::NetworkTimeTracker::FETCHES_ON_DEMAND_ONLY,
-      network_time::NetworkTimeTracker::ClockDriftSamples::NO_SAMPLES);
+      true, 0.0, network_time::NetworkTimeTracker::FETCHES_ON_DEMAND_ONLY);
   error_handler()->StartHandlingError();
 
   EXPECT_TRUE(error_handler()->IsTimerRunningForTesting());
@@ -1220,8 +1218,7 @@ TEST_F(SSLErrorHandlerDateInvalidTest, MAYBE_TimeQueryHangs) {
   EXPECT_TRUE(test_server()->Start());
   tracker()->SetTimeServerURLForTesting(test_server()->GetURL("/"));
   field_trial_test()->SetFeatureParams(
-      true, 0.0, network_time::NetworkTimeTracker::FETCHES_ON_DEMAND_ONLY,
-      network_time::NetworkTimeTracker::ClockDriftSamples::NO_SAMPLES);
+      true, 0.0, network_time::NetworkTimeTracker::FETCHES_ON_DEMAND_ONLY);
   error_handler()->StartHandlingError();
   EXPECT_TRUE(error_handler()->IsTimerRunningForTesting());
   wait_for_time_query_loop.Run();

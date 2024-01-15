@@ -22,7 +22,6 @@ namespace extensions {
 namespace {
 
 using ::base::test::RunOnceCallback;
-using ::device::mojom::UsbOpenDeviceError;
 using ::testing::_;
 
 constexpr char kManifest[] =
@@ -84,9 +83,11 @@ class ChromeUsbApiTest : public ExtensionBrowserTest {
             kPolicySetting, extension->url().spec().c_str())));
   }
 
-  device::FakeUsbDeviceManager fake_usb_manager_;
-  scoped_refptr<device::FakeUsbDeviceInfo> fake_device_;
+  // `mock_device_`, `fake_device_`, and `fake_usb_manager_` must be declared in
+  // this order to avoid dangling pointers.
   device::MockUsbMojoDevice mock_device_;
+  scoped_refptr<device::FakeUsbDeviceInfo> fake_device_;
+  device::FakeUsbDeviceManager fake_usb_manager_;
 };
 
 IN_PROC_BROWSER_TEST_F(ChromeUsbApiTest, GetDevicesByPolicy) {
@@ -178,7 +179,9 @@ IN_PROC_BROWSER_TEST_F(ChromeUsbApiTest, FindDevicesByPolicy) {
   const Extension* extension = LoadExtension(dir.UnpackedPath());
 
   EXPECT_CALL(mock_device_, Open)
-      .WillOnce(RunOnceCallback<0>(UsbOpenDeviceError::OK));
+      .WillOnce(
+          RunOnceCallback<0>(device::mojom::UsbOpenDeviceResult::NewSuccess(
+              device::mojom::UsbOpenDeviceSuccess::OK)));
 
   // Run the test.
   SetUpPolicy(extension);

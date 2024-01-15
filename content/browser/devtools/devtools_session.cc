@@ -7,9 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/debug/stack_trace.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/devtools/devtools_manager.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
@@ -196,7 +197,8 @@ void DevToolsSession::AttachToAgent(blink::mojom::DevToolsAgent* agent,
       receiver_.BindNewEndpointAndPassRemote(),
       session_.BindNewEndpointAndPassReceiver(),
       io_session_.BindNewPipeAndPassReceiver(), session_state_cookie_.Clone(),
-      client_->UsesBinaryProtocol(), client_->IsTrusted(), session_id_);
+      client_->UsesBinaryProtocol(), client_->IsTrusted(), session_id_,
+      IsWaitingForDebuggerOnStart());
   session_.set_disconnect_handler(base::BindOnce(
       &DevToolsSession::MojoConnectionDestroyed, base::Unretained(this)));
 
@@ -335,9 +337,18 @@ void DevToolsSession::DispatchProtocolMessage(
 void DevToolsSession::DispatchProtocolMessageInternal(
     crdtp::Dispatchable dispatchable,
     base::span<const uint8_t> message) {
-  if (!runtime_resume_.is_null() &&
-      crdtp::SpanEquals(crdtp::SpanFrom(kResumeMethod), dispatchable.Method()))
-    std::move(runtime_resume_).Run();
+  if ((browser_only_ || runtime_resume_) &&
+      crdtp::SpanEquals(crdtp::SpanFrom(kResumeMethod),
+                        dispatchable.Method())) {
+    if (runtime_resume_) {
+      std::move(runtime_resume_).Run();
+    }
+    if (browser_only_) {
+      DispatchProtocolMessageToClient(
+          crdtp::CreateResponse(dispatchable.CallId(), nullptr)->Serialize());
+      return;
+    }
+  }
 
   DevToolsManagerDelegate* delegate =
       DevToolsManager::GetInstance()->delegate();
@@ -378,7 +389,7 @@ void DevToolsSession::FallThrough(int call_id,
   // In browser-only mode, we should've handled everything in dispatcher.
   DCHECK(!browser_only_);
 
-  if (waiting_for_response_.find(call_id) != waiting_for_response_.end()) {
+  if (base::Contains(waiting_for_response_, call_id)) {
     DispatchProtocolMessageToClient(
         crdtp::CreateErrorResponse(call_id,
                                    crdtp::DispatchResponse::InvalidRequest(
@@ -593,16 +604,21 @@ DevToolsSession* DevToolsSession::AttachChildSession(
     const std::string& session_id,
     DevToolsAgentHostImpl* agent_host,
     DevToolsAgentHostClient* client,
-    Mode mode) {
+    Mode mode,
+    base::OnceClosure resume_callback) {
   DCHECK(!agent_host->SessionByClient(client));
   DCHECK(!root_session_);
   std::unique_ptr<DevToolsSession> session(
       new DevToolsSession(client, session_id, this, mode));
+  session->SetRuntimeResumeCallback(std::move(resume_callback));
   DevToolsSession* session_ptr = session.get();
   // If attach did not succeed, |session| is already destroyed.
   if (!agent_host->AttachInternal(std::move(session)))
     return nullptr;
   child_sessions_[session_id] = session_ptr;
+  for (auto& observer : child_observers_) {
+    observer.SessionAttached(*session_ptr);
+  }
   return session_ptr;
 }
 
@@ -611,7 +627,18 @@ void DevToolsSession::DetachChildSession(const std::string& session_id) {
 }
 
 bool DevToolsSession::HasChildSession(const std::string& session_id) {
-  return child_sessions_.find(session_id) != child_sessions_.end();
+  return base::Contains(child_sessions_, session_id);
+}
+
+void DevToolsSession::AddObserver(ChildObserver* obs) {
+  child_observers_.AddObserver(obs);
+  for (auto& entry : child_sessions_) {
+    obs->SessionAttached(*entry.second);
+  }
+}
+
+void DevToolsSession::RemoveObserver(ChildObserver* obs) {
+  child_observers_.RemoveObserver(obs);
 }
 
 }  // namespace content

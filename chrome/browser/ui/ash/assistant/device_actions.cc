@@ -13,17 +13,17 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/bluetooth_config_service.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/arc/intent.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/arc/intent.h"
 #include "chromeos/ash/components/network/network_event_log.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "components/prefs/pref_service.h"
@@ -31,8 +31,8 @@
 #include "ui/display/types/display_constants.h"
 
 using ::ash::NetworkHandler;
-using ::ash::NetworkStateHandler;
 using ::ash::NetworkTypePattern;
+using ::ash::TechnologyStateController;
 using ::ash::assistant::AndroidAppInfo;
 using ::ash::assistant::AppStatus;
 
@@ -44,20 +44,20 @@ constexpr char kPackage[] = "package";
 constexpr char kLaunchFlags[] = "launchFlags";
 constexpr char kEndSuffix[] = "end";
 
-absl::optional<std::string> GetActivity(const std::string& package_name) {
+std::optional<std::string> GetActivity(const std::string& package_name) {
   auto* prefs = ArcAppListPrefs::Get(ProfileManager::GetActiveUserProfile());
   if (!prefs) {
     LOG(ERROR) << "ArcAppListPrefs is not available.";
-    return absl::nullopt;
+    return std::nullopt;
   }
   std::string app_id = prefs->GetAppIdByPackageName(package_name);
 
   if (!app_id.empty()) {
     std::unique_ptr<ArcAppListPrefs::AppInfo> app_info = prefs->GetApp(app_id);
-    return absl::optional<std::string>(app_info->activity);
+    return std::optional<std::string>(app_info->activity);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string GetLaunchIntent(const AndroidAppInfo& app_info) {
@@ -118,7 +118,7 @@ DeviceActions::~DeviceActions() = default;
 
 void DeviceActions::SetWifiEnabled(bool enabled) {
   NET_LOG(USER) << __func__ << ":" << enabled;
-  NetworkHandler::Get()->network_state_handler()->SetTechnologyEnabled(
+  NetworkHandler::Get()->technology_state_controller()->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), enabled,
       ash::network_handler::ErrorCallback());
 }
@@ -129,7 +129,7 @@ void DeviceActions::SetBluetoothEnabled(bool enabled) {
 
 void HandleScreenBrightnessCallback(
     DeviceActions::GetScreenBrightnessLevelCallback callback,
-    absl::optional<double> level) {
+    std::optional<double> level) {
   if (level.has_value()) {
     std::move(callback).Run(true, level.value() / 100.0);
   } else {
@@ -232,11 +232,11 @@ void DeviceActions::RemoveAppListEventSubscriber(
   app_list_subscribers_.RemoveObserver(subscriber);
 }
 
-absl::optional<std::string> DeviceActions::GetAndroidAppLaunchIntent(
+std::optional<std::string> DeviceActions::GetAndroidAppLaunchIntent(
     const AndroidAppInfo& app_info) {
   auto status = delegate_->GetAndroidAppStatus(app_info.package_name);
   if (status != AppStatus::kAvailable)
-    return absl::nullopt;
+    return std::nullopt;
 
   return GetLaunchIntent(std::move(app_info));
 }

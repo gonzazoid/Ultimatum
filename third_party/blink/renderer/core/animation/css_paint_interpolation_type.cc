@@ -61,6 +61,22 @@ InterpolationValue CSSPaintInterpolationType::MaybeConvertInitial(
       CSSColorInterpolationType::CreateInterpolableColor(initial_color));
 }
 
+PairwiseInterpolationValue CSSPaintInterpolationType::MaybeMergeSingles(
+    InterpolationValue&& start,
+    InterpolationValue&& end) const {
+  DCHECK(!start.non_interpolable_value);
+  DCHECK(!end.non_interpolable_value);
+
+  // Confirm that both colors are in the same colorspace and adjust if
+  // necessary.
+  auto& start_color = To<InterpolableColor>(*start.interpolable_value);
+  auto& end_color = To<InterpolableColor>(*end.interpolable_value);
+  InterpolableColor::SetupColorInterpolationSpaces(start_color, end_color);
+
+  return PairwiseInterpolationValue(std::move(start.interpolable_value),
+                                    std::move(end.interpolable_value), nullptr);
+}
+
 class InheritedPaintChecker
     : public CSSInterpolationType::CSSConversionChecker {
  public:
@@ -104,11 +120,11 @@ InterpolationValue CSSPaintInterpolationType::MaybeConvertValue(
     const CSSValue& value,
     const StyleResolverState*,
     ConversionCheckers&) const {
-  std::unique_ptr<InterpolableValue> interpolable_color =
+  InterpolableValue* interpolable_color =
       CSSColorInterpolationType::MaybeCreateInterpolableColor(value);
   if (!interpolable_color)
     return nullptr;
-  return InterpolationValue(std::move(interpolable_color));
+  return InterpolationValue(interpolable_color);
 }
 
 InterpolationValue

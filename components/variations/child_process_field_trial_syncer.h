@@ -5,19 +5,23 @@
 #ifndef COMPONENTS_VARIATIONS_CHILD_PROCESS_FIELD_TRIAL_SYNCER_H_
 #define COMPONENTS_VARIATIONS_CHILD_PROCESS_FIELD_TRIAL_SYNCER_H_
 
+#include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/metrics/field_trial.h"
-#include "base/threading/thread_local.h"
 
 namespace variations {
 
-// Syncs the "activated" state of field trials between browser and child
-// processes. Specifically, when a field trial is activated in the browser, it
-// also activates it in the child process and when a field trial is activated in
-// the child process, it notifies the browser process to activate it.
+// Provides functionality for child processes to sync the "activated" state of
+// field trials between the child and browser. Specifically, when a field trial
+// is activated in the browser, it also activates it in the child process and
+// when a field trial is activated in the child process, it notifies the browser
+// process to activate it.
+//
+// It also updates crash keys in the child process corresponding to the field
+// trial state.
 class COMPONENT_EXPORT(VARIATIONS) ChildProcessFieldTrialSyncer
     : public base::FieldTrialList::Observer {
  public:
@@ -34,6 +38,11 @@ class COMPONENT_EXPORT(VARIATIONS) ChildProcessFieldTrialSyncer
   // activated concurrently with unregistering it as an observer of
   // FieldTrialList (see FieldTrialList::RemoveObserver).
   static ChildProcessFieldTrialSyncer* CreateInstance(
+      FieldTrialActivatedCallback activated_callback);
+
+  // Testing variant which allows specifying a set of initially active trials.
+  static ChildProcessFieldTrialSyncer* CreateInstanceForTesting(
+      const std::set<std::string>& initially_active_trials,
       FieldTrialActivatedCallback activated_callback);
 
   ChildProcessFieldTrialSyncer(const ChildProcessFieldTrialSyncer&) = delete;
@@ -54,16 +63,13 @@ class COMPONENT_EXPORT(VARIATIONS) ChildProcessFieldTrialSyncer
   ~ChildProcessFieldTrialSyncer() override;
 
   // Initializes field trial state change observation and invokes |callback_|
-  // for any field trials that might have already been activated.
-  void Init();
+  // for any field trials that might have already been activated according to
+  // `initially_active_trials`.
+  void Init(const std::set<std::string>& initially_active_trials);
 
   // base::FieldTrialList::Observer:
-  void OnFieldTrialGroupFinalized(const std::string& trial_name,
+  void OnFieldTrialGroupFinalized(const base::FieldTrial& trial,
                                   const std::string& group_name) override;
-
-  // Whether SetFieldTrialGroupFromBrowser() is being called on the current
-  // thread.
-  base::ThreadLocalBoolean in_set_field_trial_group_from_browser_;
 
   // Callback to invoke when a field trial is activated.
   const FieldTrialActivatedCallback activated_callback_;

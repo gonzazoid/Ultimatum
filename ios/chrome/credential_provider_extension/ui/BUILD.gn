@@ -23,8 +23,10 @@ source_set("ui") {
     "credential_list_ui_handler.h",
     "credential_list_view_controller.h",
     "credential_list_view_controller.mm",
+    "credential_response_handler.h",
     "empty_credentials_view_controller.h",
     "empty_credentials_view_controller.mm",
+    "new_password_coordinator+Testing.h",
     "new_password_coordinator.h",
     "new_password_coordinator.mm",
     "new_password_footer_view.h",
@@ -36,6 +38,10 @@ source_set("ui") {
     "new_password_ui_handler.h",
     "new_password_view_controller.h",
     "new_password_view_controller.mm",
+    "password_note_cell.h",
+    "password_note_cell.mm",
+    "password_note_footer_view.h",
+    "password_note_footer_view.mm",
     "stale_credentials_view_controller.h",
     "stale_credentials_view_controller.mm",
     "ui_util.h",
@@ -45,7 +51,8 @@ source_set("ui") {
     ":feature_flags",
     ":utils",
     "//base",
-    "//components/password_manager/core/browser:password_generator",
+    "//components/password_manager/core/browser/generation:core",
+    "//components/password_manager/core/common:constants",
     "//ios/chrome/common:constants",
     "//ios/chrome/common/app_group",
     "//ios/chrome/common/app_group:client",
@@ -60,6 +67,7 @@ source_set("ui") {
     "//ios/chrome/common/ui/promo_style",
     "//ios/chrome/common/ui/resources:default_world_favicon",
     "//ios/chrome/common/ui/table_view",
+    "//ios/chrome/common/ui/table_view:cells_constants",
     "//ios/chrome/common/ui/util",
     "//ios/chrome/credential_provider_extension:metrics_util",
     "//ios/chrome/credential_provider_extension:password_spec_fetcher_buildflags",
@@ -72,8 +80,8 @@ source_set("ui") {
     "UIKit.framework",
     "AuthenticationServices.framework",
     "MobileCoreServices.framework",
+    "UniformTypeIdentifiers.framework",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("feature_flags") {
@@ -86,7 +94,6 @@ source_set("feature_flags") {
     "//ios/chrome/common/credential_provider",
   ]
   frameworks = [ "Foundation.framework" ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("utils") {
@@ -102,12 +109,14 @@ source_set("utils") {
     "UIKit.framework",
     "QuartzCore.framework",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("unit_tests") {
   testonly = true
-  sources = [ "new_password_mediator_unittest.mm" ]
+  sources = [
+    "new_password_coordinator_unittest.mm",
+    "new_password_mediator_unittest.mm",
+  ]
   deps = [
     ":ui",
     "//base",
@@ -117,5 +126,4 @@ source_set("unit_tests") {
     "//ios/chrome/credential_provider_extension:password_util",
     "//testing/gtest",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

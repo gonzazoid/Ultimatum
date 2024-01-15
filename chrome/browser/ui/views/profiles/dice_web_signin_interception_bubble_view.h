@@ -7,10 +7,11 @@
 
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/signin/dice_web_signin_interceptor.h"
 #include "content/public/browser/web_contents_delegate.h"
@@ -29,8 +30,10 @@ class Profile;
 class DiceWebSigninInterceptionBubbleView
     : public views::BubbleDialogDelegateView,
       content::WebContentsDelegate {
+  METADATA_HEADER(DiceWebSigninInterceptionBubbleView,
+                  views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(DiceWebSigninInterceptionBubbleView);
   DiceWebSigninInterceptionBubbleView(
       const DiceWebSigninInterceptionBubbleView& other) = delete;
   DiceWebSigninInterceptionBubbleView& operator=(
@@ -40,18 +43,16 @@ class DiceWebSigninInterceptionBubbleView
   // Warning: the bubble is closed when the handle is destroyed ; it is the
   // responsibility of the caller to keep the handle alive until the bubble
   // should be closed.
-  [[nodiscard]] static std::unique_ptr<
-      ScopedDiceWebSigninInterceptionBubbleHandle>
-  CreateBubble(Browser* browser,
-               views::View* anchor_view,
-               const DiceWebSigninInterceptor::Delegate::BubbleParameters&
-                   bubble_parameters,
-               base::OnceCallback<void(SigninInterceptionResult)> callback);
+  [[nodiscard]] static std::unique_ptr<ScopedWebSigninInterceptionBubbleHandle>
+  CreateBubble(
+      Browser* browser,
+      views::View* anchor_view,
+      const WebSigninInterceptor::Delegate::BubbleParameters& bubble_parameters,
+      base::OnceCallback<void(SigninInterceptionResult)> callback);
 
   // Record metrics about the result of the signin interception.
   static void RecordInterceptionResult(
-      const DiceWebSigninInterceptor::Delegate::BubbleParameters&
-          bubble_parameters,
+      const WebSigninInterceptor::Delegate::BubbleParameters& bubble_parameters,
       Profile* profile,
       SigninInterceptionResult result);
 
@@ -78,14 +79,18 @@ class DiceWebSigninInterceptionBubbleView
                            BubbleAcceptedGuestMode);
   FRIEND_TEST_ALL_PREFIXES(DiceWebSigninInterceptionBubbleBrowserTest,
                            ProfileKeepAlive);
-  FRIEND_TEST_ALL_PREFIXES(DiceWebSigninInterceptionBubbleV2BrowserTest,
+  FRIEND_TEST_ALL_PREFIXES(DiceWebSigninInterceptionBubbleBrowserTest,
                            OpenLearnMoreLinkInNewTab);
+  FRIEND_TEST_ALL_PREFIXES(DiceWebSigninInterceptionBubbleBrowserTest,
+                           ChromeSigninAccepted);
+  FRIEND_TEST_ALL_PREFIXES(DiceWebSigninInterceptionBubbleBrowserTest,
+                           ChromeSigninDeclined);
   FRIEND_TEST_ALL_PREFIXES(ProfileBubbleInteractiveUiTest,
                            InterceptionBubbleFocus);
 
   // Closes the bubble when `ScopedHandle` is destroyed. Does nothing if the
   // bubble has been already closed.
-  class ScopedHandle : public ScopedDiceWebSigninInterceptionBubbleHandle {
+  class ScopedHandle : public ScopedWebSigninInterceptionBubbleHandle {
    public:
     explicit ScopedHandle(
         base::WeakPtr<DiceWebSigninInterceptionBubbleView> bubble);
@@ -94,6 +99,10 @@ class DiceWebSigninInterceptionBubbleView
     ScopedHandle& operator=(const ScopedHandle&) = delete;
     ScopedHandle(const ScopedHandle&) = delete;
 
+    DiceWebSigninInterceptionBubbleView* GetBubbleViewForTesting() {
+      return bubble_.get();
+    }
+
    private:
     base::WeakPtr<DiceWebSigninInterceptionBubbleView> bubble_;
   };
@@ -101,20 +110,23 @@ class DiceWebSigninInterceptionBubbleView
   DiceWebSigninInterceptionBubbleView(
       Browser* browser,
       views::View* anchor_view,
-      const DiceWebSigninInterceptor::Delegate::BubbleParameters&
-          bubble_parameters,
+      const WebSigninInterceptor::Delegate::BubbleParameters& bubble_parameters,
       base::OnceCallback<void(SigninInterceptionResult)> callback);
 
   // Gets a handle on the bubble. Warning: the bubble is closed when the handle
   // is destroyed ; it is the responsibility of the caller to keep the handle
   // alive until the bubble should be closed.
-  std::unique_ptr<ScopedDiceWebSigninInterceptionBubbleHandle> GetHandle();
+  std::unique_ptr<ScopedWebSigninInterceptionBubbleHandle> GetHandle();
 
   // This bubble has no native buttons. The user accepts or cancels or selects
   // Guest profile through this method, which is called by the inner web UI.
   void OnWebUIUserChoice(SigninInterceptionUserChoice user_choice);
 
   content::WebContents* GetBubbleWebContentsForTesting();
+
+  // Callback to set the final height of the bubble based on its content, after
+  // the page is loaded and the height is sent by DiceWebSigninInterceptHandler.
+  void SetHeightAndShowWidget(int height);
 
   // This bubble can outlive the Browser, in particular on Mac (see
   // https://crbug.com/1302729). Retain the profile to prevent use-after-free.
@@ -123,9 +135,11 @@ class DiceWebSigninInterceptionBubbleView
   base::WeakPtr<Browser> browser_;
   raw_ptr<Profile> profile_;
   bool accepted_ = false;
-  DiceWebSigninInterceptor::Delegate::BubbleParameters bubble_parameters_;
+  WebSigninInterceptor::Delegate::BubbleParameters bubble_parameters_;
   base::OnceCallback<void(SigninInterceptionResult)> callback_;
   raw_ptr<views::WebView> web_view_;
+
+  base::TimeTicks chrome_signin_bubble_shown_time_;
 
   // Last member in the class: pointers are invalidated before other fields.
   base::WeakPtrFactory<DiceWebSigninInterceptionBubbleView> weak_factory_{this};

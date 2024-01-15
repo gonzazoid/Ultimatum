@@ -6,16 +6,12 @@
 
 #include <tuple>
 
-#include "base/dcheck_is_on.h"
-#include "base/logging.h"
-#include "base/run_loop.h"
-#include "base/synchronization/waitable_event.h"
-#include "base/task/thread_pool.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
+#include "base/test/scoped_run_loop_timeout.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest-spi.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -30,9 +26,7 @@ constexpr int kOtherValue = 10;
 struct MoveOnlyValue {
  public:
   MoveOnlyValue() = default;
-  MoveOnlyValue(int data) : data(data) {}
-  MoveOnlyValue(const MoveOnlyValue&) = delete;
-  auto& operator=(const MoveOnlyValue&) = delete;
+  explicit MoveOnlyValue(int data) : data(data) {}
   MoveOnlyValue(MoveOnlyValue&&) = default;
   MoveOnlyValue& operator=(MoveOnlyValue&&) = default;
   ~MoveOnlyValue() = default;
@@ -51,31 +45,36 @@ class TestFutureTest : public ::testing::Test {
 
   template <typename Lambda>
   void RunLater(Lambda lambda) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindLambdaForTesting(lambda));
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, BindLambdaForTesting(lambda));
   }
 
-  void RunLater(base::OnceClosure callable) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callable));
+  void RunLater(OnceClosure callable) {
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                          std::move(callable));
   }
 
-  void PostDelayedTask(base::OnceClosure callable, base::TimeDelta delay) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  void RunLater(RepeatingClosure callable) {
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                          std::move(callable));
+  }
+
+  void PostDelayedTask(OnceClosure callable, base::TimeDelta delay) {
+    SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, std::move(callable), delay);
   }
 
  private:
-  base::test::SingleThreadTaskEnvironment environment_{
-      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  SingleThreadTaskEnvironment environment_{
+      TaskEnvironment::TimeSource::MOCK_TIME};
 };
 
 TEST_F(TestFutureTest, WaitShouldBlockUntilValueArrives) {
   const int expected_value = 42;
   TestFuture<int> future;
 
-  PostDelayedTask(base::BindOnce(future.GetCallback(), expected_value),
-                  base::Milliseconds(1));
+  PostDelayedTask(BindOnce(future.GetCallback(), expected_value),
+                  Milliseconds(1));
 
   std::ignore = future.Wait();
 
@@ -85,23 +84,22 @@ TEST_F(TestFutureTest, WaitShouldBlockUntilValueArrives) {
 TEST_F(TestFutureTest, WaitShouldReturnTrueWhenValueArrives) {
   TestFuture<int> future;
 
-  PostDelayedTask(base::BindOnce(future.GetCallback(), kAnyValue),
-                  base::Milliseconds(1));
+  PostDelayedTask(BindOnce(future.GetCallback(), kAnyValue), Milliseconds(1));
 
   bool success = future.Wait();
   EXPECT_TRUE(success);
 }
 
 TEST_F(TestFutureTest, WaitShouldReturnFalseIfTimeoutHappens) {
-  base::test::ScopedRunLoopTimeout timeout(FROM_HERE, base::Milliseconds(1));
+  ScopedRunLoopTimeout timeout(FROM_HERE, Milliseconds(1));
 
-  // |ScopedRunLoopTimeout| will automatically fail the test when a timeout
+  // `ScopedRunLoopTimeout` will automatically fail the test when a timeout
   // happens, so we use EXPECT_FATAL_FAILURE to handle this failure.
   // EXPECT_FATAL_FAILURE only works on static objects.
   static bool success;
   static TestFuture<AnyType> future;
 
-  EXPECT_FATAL_FAILURE({ success = future.Wait(); }, "timed out");
+  EXPECT_NONFATAL_FAILURE({ success = future.Wait(); }, "timed out");
 
   EXPECT_FALSE(success);
 }
@@ -110,39 +108,39 @@ TEST_F(TestFutureTest, GetShouldBlockUntilValueArrives) {
   const int expected_value = 42;
   TestFuture<int> future;
 
-  PostDelayedTask(base::BindOnce(future.GetCallback(), expected_value),
-                  base::Milliseconds(1));
+  PostDelayedTask(BindOnce(future.GetCallback(), expected_value),
+                  Milliseconds(1));
 
   int actual_value = future.Get();
 
   EXPECT_EQ(expected_value, actual_value);
 }
 
-TEST_F(TestFutureTest, GetShouldDcheckIfTimeoutHappens) {
-  base::test::ScopedRunLoopTimeout timeout(FROM_HERE, base::Milliseconds(1));
+TEST_F(TestFutureTest, GetShouldCheckIfTimeoutHappens) {
+  ScopedRunLoopTimeout timeout(FROM_HERE, Milliseconds(1));
 
   TestFuture<AnyType> future;
 
-  EXPECT_DCHECK_DEATH_WITH((void)future.Get(), "timed out");
+  EXPECT_CHECK_DEATH_WITH(std::ignore = future.Get(), "timed out");
 }
 
 TEST_F(TestFutureTest, TakeShouldWorkWithMoveOnlyValue) {
   const int expected_data = 99;
   TestFuture<MoveOnlyValue> future;
 
-  RunLater(base::BindOnce(future.GetCallback(), MoveOnlyValue(expected_data)));
+  RunLater(BindOnce(future.GetCallback(), MoveOnlyValue(expected_data)));
 
   MoveOnlyValue actual_value = future.Take();
 
   EXPECT_EQ(expected_data, actual_value.data);
 }
 
-TEST_F(TestFutureTest, TakeShouldDcheckIfTimeoutHappens) {
-  base::test::ScopedRunLoopTimeout timeout(FROM_HERE, base::Milliseconds(1));
+TEST_F(TestFutureTest, TakeShouldCheckIfTimeoutHappens) {
+  ScopedRunLoopTimeout timeout(FROM_HERE, Milliseconds(1));
 
   TestFuture<AnyType> future;
 
-  EXPECT_DCHECK_DEATH_WITH((void)future.Take(), "timed out");
+  EXPECT_CHECK_DEATH_WITH(std::ignore = future.Take(), "timed out");
 }
 
 TEST_F(TestFutureTest, IsReadyShouldBeTrueWhenValueIsSet) {
@@ -155,16 +153,61 @@ TEST_F(TestFutureTest, IsReadyShouldBeTrueWhenValueIsSet) {
   EXPECT_TRUE(future.IsReady());
 }
 
-TEST_F(TestFutureTest, ShouldOnlyAllowSetValueToBeCalledOnce) {
+TEST_F(TestFutureTest, ClearShouldRemoveStoredValue) {
   TestFuture<AnyType> future;
 
   future.SetValue(kAnyValue);
 
-  EXPECT_DCHECK_DEATH_WITH(future.SetValue(kOtherValue),
-                           "The value of a TestFuture can only be set once.");
+  future.Clear();
+
+  EXPECT_FALSE(future.IsReady());
 }
 
-TEST_F(TestFutureTest, ShouldUnblockWhenSetValueIsInvoked) {
+TEST_F(TestFutureTest, ShouldNotAllowOverwritingStoredValue) {
+  TestFuture<AnyType> future;
+
+  future.SetValue(kAnyValue);
+
+  EXPECT_NONFATAL_FAILURE(future.SetValue(kOtherValue), "Received new value");
+}
+
+TEST_F(TestFutureTest, ShouldAllowReuseIfPreviousValueIsFirstConsumed) {
+  TestFuture<std::string> future;
+
+  RunLater([&]() { future.SetValue("first value"); });
+  EXPECT_EQ(future.Take(), "first value");
+
+  ASSERT_FALSE(future.IsReady());
+
+  RunLater([&]() { future.SetValue("second value"); });
+  EXPECT_EQ(future.Take(), "second value");
+}
+
+TEST_F(TestFutureTest, ShouldAllowReusingCallback) {
+  TestFuture<std::string> future;
+
+  RepeatingCallback<void(std::string)> callback = future.GetRepeatingCallback();
+
+  RunLater(BindOnce(callback, "first value"));
+  EXPECT_EQ(future.Take(), "first value");
+
+  RunLater(BindOnce(callback, "second value"));
+  EXPECT_EQ(future.Take(), "second value");
+}
+
+TEST_F(TestFutureTest, WaitShouldWorkAfterTake) {
+  TestFuture<std::string> future;
+
+  future.SetValue("first value");
+  std::ignore = future.Take();
+
+  RunLater([&]() { future.SetValue("second value"); });
+
+  EXPECT_TRUE(future.Wait());
+  EXPECT_EQ(future.Get(), "second value");
+}
+
+TEST_F(TestFutureTest, ShouldSignalWhenSetValueIsInvoked) {
   const int expected_value = 111;
   TestFuture<int> future;
 
@@ -179,9 +222,8 @@ TEST_F(TestFutureTest, ShouldAllowReferenceArgumentsForCallback) {
   const int expected_value = 222;
   TestFuture<int> future;
 
-  base::OnceCallback<void(const int&)> callback =
-      future.GetCallback<const int&>();
-  RunLater(base::BindOnce(std::move(callback), expected_value));
+  OnceCallback<void(const int&)> callback = future.GetCallback<const int&>();
+  RunLater(BindOnce(std::move(callback), expected_value));
 
   int actual_value = future.Get();
 
@@ -189,7 +231,7 @@ TEST_F(TestFutureTest, ShouldAllowReferenceArgumentsForCallback) {
 }
 
 TEST_F(TestFutureTest, ShouldAllowInvokingCallbackAfterFutureIsDestroyed) {
-  base::OnceCallback<void(int)> callback;
+  OnceCallback<void(int)> callback;
 
   {
     TestFuture<int> future;
@@ -205,8 +247,8 @@ TEST_F(TestFutureTest, ShouldReturnTupleValue) {
 
   TestFuture<int, std::string> future;
 
-  RunLater(base::BindOnce(future.GetCallback(), expected_int_value,
-                          expected_string_value));
+  RunLater(BindOnce(future.GetCallback(), expected_int_value,
+                    expected_string_value));
 
   const std::tuple<int, std::string>& actual = future.Get();
 
@@ -214,19 +256,34 @@ TEST_F(TestFutureTest, ShouldReturnTupleValue) {
   EXPECT_EQ(expected_string_value, std::get<1>(actual));
 }
 
-TEST_F(TestFutureTest, ShouldAllowAccessingTupleValueThroughGetMethod) {
+TEST_F(TestFutureTest, ShouldAllowAccessingTupleValueUsingGetWithIndex) {
   const int expected_int_value = 5;
   const std::string expected_string_value = "value";
 
   TestFuture<int, std::string> future;
 
-  RunLater(base::BindOnce(future.GetCallback(), expected_int_value,
-                          expected_string_value));
+  RunLater(BindOnce(future.GetCallback(), expected_int_value,
+                    expected_string_value));
 
   std::ignore = future.Get();
 
   EXPECT_EQ(expected_int_value, future.Get<0>());
   EXPECT_EQ(expected_string_value, future.Get<1>());
+}
+
+TEST_F(TestFutureTest, ShouldAllowAccessingTupleValueUsingGetWithType) {
+  const int expected_int_value = 5;
+  const std::string expected_string_value = "value";
+
+  TestFuture<int, std::string> future;
+
+  RunLater(BindOnce(future.GetCallback(), expected_int_value,
+                    expected_string_value));
+
+  std::ignore = future.Get();
+
+  EXPECT_EQ(expected_int_value, future.Get<int>());
+  EXPECT_EQ(expected_string_value, future.Get<std::string>());
 }
 
 TEST_F(TestFutureTest, ShouldAllowReferenceArgumentsForMultiArgumentCallback) {
@@ -235,10 +292,10 @@ TEST_F(TestFutureTest, ShouldAllowReferenceArgumentsForMultiArgumentCallback) {
 
   TestFuture<int, std::string> future;
 
-  base::OnceCallback<void(int, const std::string&)> callback =
+  OnceCallback<void(int, const std::string&)> callback =
       future.GetCallback<int, const std::string&>();
-  RunLater(base::BindOnce(std::move(callback), expected_int_value,
-                          expected_string_value));
+  RunLater(
+      BindOnce(std::move(callback), expected_int_value, expected_string_value));
 
   std::tuple<int, std::string> actual = future.Get();
 
@@ -266,7 +323,7 @@ TEST_F(TestFutureTest, ShouldSupportCvRefType) {
   std::string expected_value = "value";
   TestFuture<const std::string&> future;
 
-  base::OnceCallback<void(const std::string&)> callback = future.GetCallback();
+  OnceCallback<void(const std::string&)> callback = future.GetCallback();
   std::move(callback).Run(expected_value);
 
   // both get and take should compile, and take should return the decayed value.
@@ -283,7 +340,7 @@ TEST_F(TestFutureTest, ShouldSupportMultipleCvRefTypes) {
   const long expected_third_value = 10;
   TestFuture<const int, std::string&, const long&> future;
 
-  base::OnceCallback<void(const int, std::string&, const long&)> callback =
+  OnceCallback<void(const int, std::string&, const long&)> callback =
       future.GetCallback();
   std::move(callback).Run(expected_first_value, expected_second_value,
                           expected_third_value);
@@ -303,6 +360,112 @@ TEST_F(TestFutureTest, ShouldSupportMultipleCvRefTypes) {
   EXPECT_EQ(expected_first_value, std::get<0>(take_result));
   EXPECT_EQ(expected_second_value, std::get<1>(take_result));
   EXPECT_EQ(expected_third_value, std::get<2>(take_result));
+}
+
+TEST_F(TestFutureTest, ShouldAllowReuseIfPreviousTupleValueIsFirstConsumed) {
+  TestFuture<std::string, int> future;
+
+  future.SetValue("first value", 1);
+  std::ignore = future.Take();
+
+  ASSERT_FALSE(future.IsReady());
+
+  future.SetValue("second value", 2);
+  EXPECT_EQ(future.Take(), std::make_tuple("second value", 2));
+}
+
+TEST_F(TestFutureTest, ShouldPrintCurrentValueIfItIsOverwritten) {
+  using UnprintableValue = MoveOnlyValue;
+
+  TestFuture<const char*, int, UnprintableValue> future;
+
+  future.SetValue("first-value", 1111, UnprintableValue());
+
+  EXPECT_NONFATAL_FAILURE(
+      future.SetValue("second-value", 2222, UnprintableValue()),
+      "old value <first-value, 1111, [4-byte object at 0x");
+}
+
+TEST_F(TestFutureTest, ShouldPrintNewValueIfItOverwritesOldValue) {
+  using UnprintableValue = MoveOnlyValue;
+
+  TestFuture<const char*, int, UnprintableValue> future;
+
+  future.SetValue("first-value", 1111, UnprintableValue());
+
+  EXPECT_NONFATAL_FAILURE(
+      future.SetValue("second-value", 2222, UnprintableValue()),
+      "new value <second-value, 2222, [4-byte object at 0x");
+}
+
+using TestFutureWithoutValuesTest = TestFutureTest;
+
+TEST_F(TestFutureWithoutValuesTest, IsReadyShouldBeTrueWhenSetValueIsInvoked) {
+  TestFuture<void> future;
+
+  EXPECT_FALSE(future.IsReady());
+
+  future.SetValue();
+
+  EXPECT_TRUE(future.IsReady());
+}
+
+TEST_F(TestFutureWithoutValuesTest, WaitShouldUnblockWhenSetValueIsInvoked) {
+  TestFuture<void> future;
+
+  RunLater([&future]() { future.SetValue(); });
+
+  ASSERT_FALSE(future.IsReady());
+  std::ignore = future.Wait();
+  EXPECT_TRUE(future.IsReady());
+}
+
+TEST_F(TestFutureWithoutValuesTest, WaitShouldUnblockWhenCallbackIsInvoked) {
+  TestFuture<void> future;
+
+  RunLater(future.GetCallback());
+
+  ASSERT_FALSE(future.IsReady());
+  std::ignore = future.Wait();
+  EXPECT_TRUE(future.IsReady());
+}
+
+TEST_F(TestFutureWithoutValuesTest, WaitAndClearShouldAllowFutureReusing) {
+  TestFuture<void> future;
+
+  RunLater(future.GetCallback());
+  EXPECT_TRUE(future.WaitAndClear());
+
+  ASSERT_FALSE(future.IsReady());
+
+  RunLater(future.GetCallback());
+  EXPECT_TRUE(future.Wait());
+}
+
+TEST_F(TestFutureWithoutValuesTest, GetShouldUnblockWhenCallbackIsInvoked) {
+  TestFuture<void> future;
+
+  RunLater(future.GetCallback());
+
+  ASSERT_FALSE(future.IsReady());
+  future.Get();
+  EXPECT_TRUE(future.IsReady());
+}
+
+TEST(TestFutureWithoutSingleThreadTaskEnvironment,
+     CanCreateTestFutureBeforeTaskEnvironment) {
+  TestFuture<AnyType> future;
+
+  // If we come here the test passes, since it means we can create a
+  // `TestFuture` without having a `TaskEnvironment`.
+}
+
+TEST(TestFutureWithoutSingleThreadTaskEnvironment,
+     WaitShouldDcheckWithoutTaskEnvironment) {
+  TestFuture<AnyType> future;
+
+  EXPECT_CHECK_DEATH_WITH((void)future.Wait(),
+                          "requires a single-threaded context");
 }
 
 }  // namespace base::test

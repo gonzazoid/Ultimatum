@@ -4,12 +4,13 @@
 
 #include "device/fido/mac/credential_store.h"
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <Foundation/Foundation.h>
 #include <Security/Security.h>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/mac_logging.h"
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "device/base/features.h"
@@ -29,7 +30,7 @@ extern "C" {
 // are stored. This test needs it because it tries to erase all credentials
 // belonging to the (test-only) keychain access group, and the corresponding
 // filter label (kSecAttrAccessGroup) appears to be ineffective *unless*
-// kSecAttrNoLegacy is `@YES`.
+// kSecAttrNoLegacy is `kCFBooleanTrue`.
 extern const CFStringRef kSecAttrNoLegacy;
 }
 
@@ -37,8 +38,7 @@ namespace device {
 
 using test::TestCallbackReceiver;
 
-namespace fido {
-namespace mac {
+namespace fido::mac {
 namespace {
 
 constexpr char kKeychainAccessGroup[] =
@@ -52,31 +52,33 @@ const std::vector<uint8_t> kUserId = {10, 11, 12, 13, 14, 15};
 // Returns a query to use with Keychain instance methods that returns all
 // credentials in the non-legacy keychain that are tagged with the keychain
 // access group used in this test.
-base::ScopedCFTypeRef<CFMutableDictionaryRef> BaseQuery() {
-  base::ScopedCFTypeRef<CFMutableDictionaryRef> query(CFDictionaryCreateMutable(
-      kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks,
-      &kCFTypeDictionaryValueCallBacks));
-  CFDictionarySetValue(query, kSecClass, kSecClassKey);
-  base::ScopedCFTypeRef<CFStringRef> access_group_ref(
+base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> BaseQuery() {
+  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> query(
+      CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
+                                &kCFTypeDictionaryKeyCallBacks,
+                                &kCFTypeDictionaryValueCallBacks));
+  CFDictionarySetValue(query.get(), kSecClass, kSecClassKey);
+  base::apple::ScopedCFTypeRef<CFStringRef> access_group_ref(
       base::SysUTF8ToCFStringRef(kKeychainAccessGroup));
-  CFDictionarySetValue(query, kSecAttrAccessGroup, access_group_ref);
-  CFDictionarySetValue(query, kSecAttrNoLegacy, @YES);
-  CFDictionarySetValue(query, kSecReturnAttributes, @YES);
-  CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitAll);
+  CFDictionarySetValue(query.get(), kSecAttrAccessGroup,
+                       access_group_ref.get());
+  CFDictionarySetValue(query.get(), kSecAttrNoLegacy, kCFBooleanTrue);
+  CFDictionarySetValue(query.get(), kSecReturnAttributes, kCFBooleanTrue);
+  CFDictionarySetValue(query.get(), kSecMatchLimit, kSecMatchLimitAll);
   return query;
 }
 
 // Returns all WebAuthn credentials stored in the keychain, regardless of which
 // profile they are associated with. May return a null reference if an error
 // occurred.
-base::ScopedCFTypeRef<CFArrayRef> QueryAllCredentials() {
-  base::ScopedCFTypeRef<CFArrayRef> items;
+base::apple::ScopedCFTypeRef<CFArrayRef> QueryAllCredentials() {
+  base::apple::ScopedCFTypeRef<CFArrayRef> items;
   OSStatus status = Keychain::GetInstance().ItemCopyMatching(
-      BaseQuery(), reinterpret_cast<CFTypeRef*>(items.InitializeInto()));
+      BaseQuery().get(), reinterpret_cast<CFTypeRef*>(items.InitializeInto()));
   if (status == errSecItemNotFound) {
     // The API returns null, but we should return an empty array instead to
     // distinguish from real errors.
-    items = base::ScopedCFTypeRef<CFArrayRef>(
+    items = base::apple::ScopedCFTypeRef<CFArrayRef>(
         CFArrayCreate(nullptr, nullptr, 0, nullptr));
   } else if (status != errSecSuccess) {
     OSSTATUS_DLOG(ERROR, status);
@@ -87,12 +89,12 @@ base::ScopedCFTypeRef<CFArrayRef> QueryAllCredentials() {
 // Returns the number of WebAuthn credentials in the keychain (for all
 // profiles), or -1 if an error occurs.
 ssize_t KeychainItemCount() {
-  base::ScopedCFTypeRef<CFArrayRef> items = QueryAllCredentials();
-  return items ? CFArrayGetCount(items) : -1;
+  base::apple::ScopedCFTypeRef<CFArrayRef> items = QueryAllCredentials();
+  return items ? CFArrayGetCount(items.get()) : -1;
 }
 
 bool ResetKeychain() {
-  OSStatus status = Keychain::GetInstance().ItemDelete(BaseQuery());
+  OSStatus status = Keychain::GetInstance().ItemDelete(BaseQuery().get());
   if (status != errSecSuccess && status != errSecItemNotFound) {
     OSSTATUS_DLOG(ERROR, status);
     return false;
@@ -200,6 +202,7 @@ TEST_F(BrowsingDataDeletionTest, DISABLED_Count) {
 }
 
 }  // namespace
-}  // namespace mac
-}  // namespace fido
+
+}  // namespace fido::mac
+
 }  // namespace device

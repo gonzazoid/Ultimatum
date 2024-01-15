@@ -8,8 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "components/bookmarks/browser/base_bookmark_model_observer.h"
 #include "components/bookmarks/browser/bookmark_client.h"
 #include "components/bookmarks/browser/bookmark_node.h"
@@ -47,14 +48,8 @@ class ManagedBookmarkService : public KeyedService,
   // Returns true if the |node| can have its title updated.
   bool CanSetPermanentNodeTitle(const BookmarkNode* node);
 
-  // Returns true if |node| should sync.
-  bool CanSyncNode(const BookmarkNode* node);
-
-  // Returns true if |node| can be edited by the user.
-  // TODO(joaodasilva): the model should check this more aggressively, and
-  // should give the client a means to temporarily disable those checks.
-  // http://crbug.com/49598
-  bool CanBeEditedByUser(const BookmarkNode* node);
+  // Returns true if |node| is a descendant of the managed node.
+  bool IsNodeManaged(const BookmarkNode* node);
 
   // Top-level managed bookmarks folder, defined by an enterprise policy; may be
   // null.
@@ -82,6 +77,10 @@ class ManagedBookmarkService : public KeyedService,
   // Pointer to the BookmarkModel; may be null. Only valid between the calls to
   // BookmarkModelCreated() and to BookmarkModelBeingDestroyed().
   raw_ptr<BookmarkModel> bookmark_model_;
+
+  // Observation for the bookmark_model_
+  base::ScopedObservation<BookmarkModel, BaseBookmarkModelObserver>
+      bookmark_model_observation_{this};
 
   // Managed bookmarks are defined by an enterprise policy. The lifetime of the
   // BookmarkPermanentNode is controlled by BookmarkModel.

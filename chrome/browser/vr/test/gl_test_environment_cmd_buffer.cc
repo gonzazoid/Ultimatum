@@ -5,7 +5,6 @@
 #include "chrome/browser/vr/test/gl_test_environment.h"
 
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "gpu/command_buffer/client/gles2_implementation.h"
 #include "gpu/command_buffer/client/gles2_lib.h"
 #include "gpu/command_buffer/client/shared_memory_limits.h"
@@ -55,21 +54,12 @@ namespace vr {
 
 GlTestEnvironment::GlTestEnvironment(const gfx::Size frame_buffer_size) {
   gpu::ContextCreationAttribs attributes;
-  attributes.alpha_size = 8;
-  attributes.depth_size = 24;
-  attributes.red_size = 8;
-  attributes.green_size = 8;
-  attributes.blue_size = 8;
-  attributes.stencil_size = 8;
-  attributes.samples = 4;
-  attributes.sample_buffers = 1;
   attributes.bind_generates_resource = false;
 
   context_ = std::make_unique<gpu::GLInProcessContext>();
   auto result =
       context_->Initialize(gpu::GetTestGpuThreadHolder()->GetTaskExecutor(),
-                           attributes, gpu::SharedMemoryLimits(),
-                           /*image_factory=*/nullptr);
+                           attributes, gpu::SharedMemoryLimits());
   DCHECK_EQ(result, gpu::ContextResult::kSuccess);
   gles2::SetGLContext(context_->GetImplementation());
 

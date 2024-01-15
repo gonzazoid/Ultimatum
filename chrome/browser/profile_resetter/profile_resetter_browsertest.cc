@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/profile_resetter/profile_resetter_test_base.h"
 #include "chrome/browser/profiles/profile.h"
@@ -105,8 +105,7 @@ void RemoveCookieTester::AddCookie(const std::string& host,
   auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
       name, value, host, "/", base::Time(), base::Time(), base::Time(),
       base::Time(), /*secure=*/true, /*httponly=*/false,
-      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_MEDIUM,
-      /*same_party=*/false);
+      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_MEDIUM);
   cookie_manager_->SetCanonicalCookie(
       *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
       options,

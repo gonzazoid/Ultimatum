@@ -15,13 +15,13 @@ AXWebArea
 ++++++AXTextField AXTitle='Email:'
 ++++AXGroup
 ++++++AXStaticText AXValue='File: '
-++++++AXButton AXTitle='File:'
-++++++++AXButton AXTitle='Choose File'
+++++++AXButton AXTitle='File:: No file chosen'
 ++++AXGroup
 ++++++AXStaticText AXValue='Image: '
 ++++++AXButton AXTitle='Image:'
 ++++++++AXImage
 ++++++++AXStaticText AXValue='Submit'
+++++AXStaticText AXValue=' '
 ++++AXGroup
 ++++++AXStaticText AXValue='Number: '
 ++++++AXIncrementor AXTitle='Number:'

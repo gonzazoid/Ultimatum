@@ -35,18 +35,32 @@ enum ChromeTextContext {
   // Text of the number of tabs in the tab counter used in tablet mode.
   CONTEXT_TAB_COUNTER,
 
-  // Text in the location bar entry, and primary text in the omnibox dropdown.
+  // Text used in the following UI contexts:
+  //   - Omnibox query row text entry
+  //   - Location icon view in the Omnibox
+  //   - Omnibox pedals / action chips (omnibox_suggestion_button_row_view.cc)
+  //
+  // This context is also used in the following UI components, but likely has
+  // little to no effect in terms of typography (font size, weight, etc.):
+  //   - Custom tab bar used by PWAs (custom_tab_bar_view.cc)
+  //   - Picture-in-Picture view (picture_in_picture_browser_frame_view.cc)
   CONTEXT_OMNIBOX_PRIMARY,
 
-  // Text that goes inside location bar decorations such as the keyword hint.
-  CONTEXT_OMNIBOX_DECORATION,
+  // Primary text in the omnibox dropdown.
+  CONTEXT_OMNIBOX_POPUP,
 
-  // Text in omnibox answer results that is slightly smaller than primary font.
+  // Text in the suggestions section header in the omnibox dropdown.
+  CONTEXT_OMNIBOX_SECTION_HEADER,
+
+  // Text used in the following UI contexts:
+  //   - Omnibox answer results
+  //   - Two-line entity suggestions (description)
+  //
+  // This context is also used in the following UI components, but likely has
+  // little to no effect in terms of typography (font size, font weight, etc.):
+  //   - Additional text view in the Omnibox
+  //   - Error messages in password manager (manage_passwords_details_view.cc)
   CONTEXT_OMNIBOX_DEEMPHASIZED,
-
-  // Text for titles, body text and buttons that appear in dialogs attempting to
-  // mimic the native Windows 10 look and feel.
-  CONTEXT_WINDOWS10_NATIVE,
 
   // ToolbarButton label
   CONTEXT_TOOLBAR_BUTTON,
@@ -62,9 +76,6 @@ enum ChromeTextContext {
 
   // Body text label in the IPH bubble. Usually 14pt.
   CONTEXT_IPH_BUBBLE_BODY,
-
-  // Button label in the IPH bubble. Usually 13pt.
-  CONTEXT_IPH_BUBBLE_BUTTON,
 
   // Title label in the browser side panel. Usually 13pt.
   CONTEXT_SIDE_PANEL_TITLE,
@@ -96,11 +107,6 @@ enum ChromeTextStyle {
 // |available_height|.
 int GetFontSizeDeltaBoundedByAvailableHeight(int available_height,
                                              int desired_font_size);
-
-// Takes a desired font size and returns the size delta to request from
-// ui::ResourceBundle that will result in exactly that font size, canceling
-// out any font size changes made to account for locale or user settings.
-int GetFontSizeDeltaIgnoringUserOrLocaleSettings(int desired_font_size);
 
 // Sets the |details| for text that should not be affected by the Harmony spec.
 void ApplyCommonFontStyles(int context,

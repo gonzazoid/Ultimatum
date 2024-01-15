@@ -14,8 +14,7 @@
 
 namespace blink {
 
-class StyleResolverState;
-class InterpolationType;
+class InterpolationEnvironment;
 
 // See the documentation of Interpolation for general information about this
 // class hierarchy.
@@ -61,25 +60,34 @@ class CORE_EXPORT TransitionInterpolation : public Interpolation {
     // speculation here to try and broaden our understanding.
     // TODO(crbug.com/826627): Revert once bug is fixed.
     CHECK(start_);
-    CHECK(merge_);
-    cached_interpolable_value_ = merge_.start_interpolable_value->Clone();
+    if (merge_) {
+      CHECK(merge_);
+      cached_interpolable_value_ = merge_.start_interpolable_value->Clone();
+    }
     DCHECK_EQ(compositor_start_ && compositor_end_,
-              property_.GetCSSProperty().IsCompositableProperty());
+
+              property_.GetCSSProperty().IsCompositableProperty() &&
+                  CompositorAnimations::CompositedPropertyRequiresSnapshot(
+                      property_));
   }
 
-  void Apply(StyleResolverState&) const;
+  void Apply(InterpolationEnvironment&) const;
 
   bool IsTransitionInterpolation() const final { return true; }
 
   const PropertyHandle& GetProperty() const final { return property_; }
 
-  std::unique_ptr<TypedInterpolationValue> GetInterpolatedValue() const;
+  TypedInterpolationValue* GetInterpolatedValue() const;
 
   void Interpolate(int iteration, double fraction) final;
 
   void Trace(Visitor* visitor) const override {
+    visitor->Trace(start_);
+    visitor->Trace(end_);
+    visitor->Trace(merge_);
     visitor->Trace(compositor_start_);
     visitor->Trace(compositor_end_);
+    visitor->Trace(cached_interpolable_value_);
     Interpolation::Trace(visitor);
   }
 
@@ -97,7 +105,7 @@ class CORE_EXPORT TransitionInterpolation : public Interpolation {
 
   mutable absl::optional<double> cached_fraction_;
   mutable int cached_iteration_ = 0;
-  mutable std::unique_ptr<InterpolableValue> cached_interpolable_value_;
+  mutable Member<InterpolableValue> cached_interpolable_value_;
 };
 
 template <>

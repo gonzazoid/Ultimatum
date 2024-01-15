@@ -32,20 +32,8 @@ source_set("updater_executable") {
     "updater.rc",
   ]
 
-  # `updater.rc` does not process `#if BUILDFLAG(GOOGLE_CHROME_BRANDING)`
-  # correctly sometimes, especially seen with the `win10_chromium_x64_rel_ng`
-  # build bot. Explicitly defining `CHROME_BRANDED_TLB` is being done here as a
-  # workaround.
-  if (is_chrome_branded) {
-    defines = [ "CHROME_BRANDED_TLB=1" ]
-  } else {
-    defines = [ "CHROME_BRANDED_TLB=0" ]
-  }
-
   deps = [
-    "//build:branding_buildflags",
     "//chrome/updater:base",
-    "//chrome/updater/app/server/win:updater_legacy_idl_idl",
     "//chrome/updater/win/ui/resources",
   ]
 
@@ -73,25 +61,34 @@ executable("updater_test") {
 
 copy("signing") {
   sources = [
-    "$root_out_dir/certificate_tag.exe",
+    "$root_out_dir/tag.exe",
     "//chrome/tools/build/win/resedit.py",
     "//third_party/lzma_sdk/bin/win64/7zr.exe",
+    "signing/enterprise_standalone_installer.wxs.xml",
+    "signing/msi_from_standalone.py",
     "signing/sign.py",
   ]
 
-  deps = [ "//chrome/updater/tools:certificate_tag" ]
+  deps = [ "//chrome/updater/tools:tag" ]
 
   outputs = [ "$root_out_dir/UpdaterSigning/{{source_file_part}}" ]
 }
 
 artifact_zip("updater_zip") {
   output = "$root_build_dir/updater.zip"
-  inputs = [
-             "$root_build_dir/UpdaterSetup.exe",
-             "$root_build_dir/UpdaterSetup_test.exe",
-           ] + get_target_outputs(":signing")
+  inputs =
+      [
+        "$root_build_dir/UpdaterSetup.exe",
+        "$root_build_dir/UpdaterSetup_test.exe",
+        "$root_build_dir/qualification_app.exe",
+        "$root_gen_dir/chrome/updater/app/server/win/updater_idl.h",
+        "$root_gen_dir/chrome/updater/app/server/win/updater_internal_idl.h",
+      ] + get_target_outputs(":signing")
   deps = [
     ":signing",
+    "//chrome/updater/app/server/win:updater_idl_idl",
+    "//chrome/updater/app/server/win:updater_internal_idl_idl",
+    "//chrome/updater/test/qualification_app",
     "//chrome/updater/win/installer",
     "//chrome/updater/win/installer:installer_test",
   ]
@@ -133,31 +130,4 @@ process_version_rc_template("version_resources_test") {
     "-e",
     "PRODUCT_FULLNAME=\"$_product_fullname\"",
   ]
-}
-
-source_set("tag_extractor") {
-  public = [ "tag_extractor.h" ]
-
-  sources = [
-    "tag_extractor.cc",
-    "tag_extractor_impl.h",
-  ]
-
-  friend = [
-    "//chrome/updater:updater_test_sources",
-    ":updater_fuzzer",
-  ]
-
-  # In the future, we want to rely on the base numerics headers and
-  # PeImageReader directly, but right now that isn't possible due to the
-  # visibility of the lib, so we depend on the entire base temporarily.
-  deps = [ "//base" ]
-}
-
-fuzzer_test("updater_fuzzer") {
-  sources = [ "tag_extractor_fuzzer.cc" ]
-
-  deps = [ ":tag_extractor" ]
-
-  seed_corpus = "../test/data/tag_extractor_corpus/"
 }

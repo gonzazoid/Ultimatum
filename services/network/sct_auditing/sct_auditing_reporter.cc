@@ -5,10 +5,9 @@
 #include "services/network/sct_auditing/sct_auditing_reporter.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_functions.h"
@@ -16,6 +15,7 @@
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
@@ -23,7 +23,6 @@
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/network_context.h"
-#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/network_service.mojom.h"
@@ -188,14 +187,15 @@ SCTAuditingReporter::SCTHashdanceMetadata::operator=(SCTHashdanceMetadata&&) =
     default;
 
 base::Value SCTAuditingReporter::SCTHashdanceMetadata::ToValue() const {
-  base::Value::Dict dict;
-  dict.Set(kLeafHashKey,
-           base::Base64Encode(base::as_bytes(base::make_span(leaf_hash))));
-  dict.Set(kIssuedKey, base::TimeToValue(issued));
-  dict.Set(kLogIdKey,
-           base::Base64Encode(base::as_bytes(base::make_span(log_id))));
-  dict.Set(kLogMMDKey, base::TimeDeltaToValue(log_mmd));
-  dict.Set(kCertificateExpiry, base::TimeToValue(certificate_expiry));
+  auto dict =
+      base::Value::Dict()
+          .Set(kLeafHashKey,
+               base::Base64Encode(base::as_bytes(base::make_span(leaf_hash))))
+          .Set(kIssuedKey, base::TimeToValue(issued))
+          .Set(kLogIdKey,
+               base::Base64Encode(base::as_bytes(base::make_span(log_id))))
+          .Set(kLogMMDKey, base::TimeDeltaToValue(log_mmd))
+          .Set(kCertificateExpiry, base::TimeToValue(certificate_expiry));
   return base::Value(std::move(dict));
 }
 
@@ -293,8 +293,10 @@ void SCTAuditingReporter::OnCheckReportAllowedStatusComplete(bool allowed) {
 
   // Calculate an estimated minimum delay after which the log is expected to
   // have been ingested by the server.
-  base::TimeDelta random_delay = base::Seconds(base::RandInt(
-      0, configuration_->log_max_ingestion_random_delay.InSeconds()));
+  const auto max_delay = configuration_->log_max_ingestion_random_delay;
+  const base::TimeDelta random_delay = max_delay.is_positive()
+                                           ? base::RandTimeDeltaUpTo(max_delay)
+                                           : base::TimeDelta();
   base::TimeDelta delay = sct_hashdance_metadata_->issued +
                           sct_hashdance_metadata_->log_mmd +
                           configuration_->log_expected_ingestion_delay +
@@ -307,14 +309,13 @@ void SCTAuditingReporter::OnCheckReportAllowedStatusComplete(bool allowed) {
 
 void SCTAuditingReporter::ScheduleRequestWithBackoff(base::OnceClosure request,
                                                      base::TimeDelta delay) {
-  if (base::FeatureList::IsEnabled(features::kSCTAuditingRetryReports) &&
-      backoff_entry_->ShouldRejectRequest()) {
+  if (backoff_entry_->ShouldRejectRequest()) {
     delay = std::max(backoff_entry_->GetTimeUntilRelease(), delay);
   }
   if (delay.is_positive()) {
     // TODO(crbug.com/1199827): Investigate if explicit task traits should be
     // used for these tasks (e.g., BEST_EFFORT and SKIP_ON_SHUTDOWN).
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, std::move(request), delay);
     return;
   }
@@ -574,32 +575,24 @@ void SCTAuditingReporter::OnSendReportComplete(
   // Notify the Cache that this Reporter is done. This will delete |this|,
   // so do not add code after this point.
   std::move(done_callback_).Run(reporter_key_);
-  return;
 }
 
 void SCTAuditingReporter::MaybeRetryRequest() {
-  if (base::FeatureList::IsEnabled(features::kSCTAuditingRetryReports)) {
-    if (backoff_entry_->failure_count() >= max_retries_) {
-      // Retry limit reached.
-      ReportSCTAuditingCompletionStatusMetrics(
-          CompletionStatus::kRetriesExhausted);
+  if (backoff_entry_->failure_count() >= max_retries_) {
+    // Retry limit reached.
+    ReportSCTAuditingCompletionStatusMetrics(
+        CompletionStatus::kRetriesExhausted);
 
-      // Notify the Cache that this Reporter is done. This will delete |this|,
-      // so do not add code after this point.
-      std::move(done_callback_).Run(reporter_key_);
-      return;
-    }
-    // Schedule a retry and alert the SCTAuditingHandler to trigger a write so
-    // it can persist the updated backoff entry.
-    backoff_entry_->InformOfRequest(false);
-    update_callback_.Run();
-    Start();
+    // Notify the Cache that this Reporter is done. This will delete |this|,
+    // so do not add code after this point.
+    std::move(done_callback_).Run(reporter_key_);
     return;
   }
-  // Notify the Cache that this Reporter is done. This will delete |this|,
-  // so do not add code after this point.
-  std::move(done_callback_).Run(reporter_key_);
-  return;
+  // Schedule a retry and alert the SCTAuditingHandler to trigger a write so
+  // it can persist the updated backoff entry.
+  backoff_entry_->InformOfRequest(false);
+  update_callback_.Run();
+  Start();
 }
 
 }  // namespace network

@@ -5,10 +5,11 @@
 #include <tuple>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -58,10 +59,10 @@ class FakeContentTranslateDriver
   void RegisterPage(
       mojo::PendingRemote<translate::mojom::TranslateAgent> translate_agent,
       const translate::LanguageDetectionDetails& details,
-      bool page_level_translation_critiera_met) override {
+      bool page_level_translation_criteria_met) override {
     called_new_page_ = true;
     details_ = details;
-    page_level_translation_critiera_met_ = page_level_translation_critiera_met;
+    page_level_translation_criteria_met_ = page_level_translation_criteria_met;
   }
   void GetLanguageDetectionModel(
       GetLanguageDetectionModelCallback callback) override {}
@@ -69,11 +70,11 @@ class FakeContentTranslateDriver
   void ResetNewPageValues() {
     called_new_page_ = false;
     details_ = absl::nullopt;
-    page_level_translation_critiera_met_ = false;
+    page_level_translation_criteria_met_ = false;
   }
 
   bool called_new_page_ = false;
-  bool page_level_translation_critiera_met_ = false;
+  bool page_level_translation_criteria_met_ = false;
   absl::optional<translate::LanguageDetectionDetails> details_;
 
  private:
@@ -91,7 +92,7 @@ base::File LoadModelFile(const base::FilePath& model_file_path) {
 
 base::FilePath model_file_path() {
   base::FilePath source_root_dir;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root_dir);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_root_dir);
   return source_root_dir.AppendASCII("components")
       .AppendASCII("test")
       .AppendASCII("data")
@@ -210,7 +211,7 @@ class TranslateAgentBrowserTest : public ChromeRenderViewTest {
     ChromeRenderViewTest::TearDown();
   }
 
-  TestTranslateAgent* translate_agent_;
+  raw_ptr<TestTranslateAgent, DanglingUntriaged> translate_agent_;
   FakeContentTranslateDriver fake_translate_driver_;
   base::test::ScopedFeatureList scoped_feature_list_;
 };
@@ -446,7 +447,7 @@ TEST_F(TranslateAgentBrowserTest, TranslatablePage) {
 
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(fake_translate_driver_.called_new_page_);
-  EXPECT_TRUE(fake_translate_driver_.page_level_translation_critiera_met_)
+  EXPECT_TRUE(fake_translate_driver_.page_level_translation_criteria_met_)
       << "Page should be translatable.";
   fake_translate_driver_.ResetNewPageValues();
 
@@ -457,7 +458,7 @@ TEST_F(TranslateAgentBrowserTest, TranslatablePage) {
 
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(fake_translate_driver_.called_new_page_);
-  EXPECT_FALSE(fake_translate_driver_.page_level_translation_critiera_met_)
+  EXPECT_FALSE(fake_translate_driver_.page_level_translation_criteria_met_)
       << "Page should not be translatable.";
   fake_translate_driver_.ResetNewPageValues();
 
@@ -468,7 +469,7 @@ TEST_F(TranslateAgentBrowserTest, TranslatablePage) {
 
   base::RunLoop().RunUntilIdle();
   ASSERT_TRUE(fake_translate_driver_.called_new_page_);
-  EXPECT_FALSE(fake_translate_driver_.page_level_translation_critiera_met_)
+  EXPECT_FALSE(fake_translate_driver_.page_level_translation_criteria_met_)
       << "Page should not be translatable.";
 }
 
@@ -575,7 +576,7 @@ TEST_F(TranslateAgentBrowserTest, UnsupportedTranslateSchemes) {
 
   base::RunLoop().RunUntilIdle();
   ASSERT_FALSE(fake_translate_driver_.called_new_page_);
-  EXPECT_FALSE(fake_translate_driver_.page_level_translation_critiera_met_);
+  EXPECT_FALSE(fake_translate_driver_.page_level_translation_criteria_met_);
 
   LoadHTMLWithUrlOverride(
       "<html><body>A random page with random content.</body></html>",
@@ -583,7 +584,7 @@ TEST_F(TranslateAgentBrowserTest, UnsupportedTranslateSchemes) {
 
   base::RunLoop().RunUntilIdle();
   ASSERT_FALSE(fake_translate_driver_.called_new_page_);
-  EXPECT_FALSE(fake_translate_driver_.page_level_translation_critiera_met_);
+  EXPECT_FALSE(fake_translate_driver_.page_level_translation_criteria_met_);
 
   LoadHTMLWithUrlOverride(
       "<html><body>A random page with random content.</body></html>",
@@ -591,5 +592,5 @@ TEST_F(TranslateAgentBrowserTest, UnsupportedTranslateSchemes) {
 
   base::RunLoop().RunUntilIdle();
   ASSERT_FALSE(fake_translate_driver_.called_new_page_);
-  EXPECT_FALSE(fake_translate_driver_.page_level_translation_critiera_met_);
+  EXPECT_FALSE(fake_translate_driver_.page_level_translation_criteria_met_);
 }

@@ -4,6 +4,10 @@
 
 #include "chrome/browser/ash/login/reporting/login_logout_reporter_test_delegate.h"
 
+#include <string_view>
+
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/simple_test_clock.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
@@ -42,10 +46,7 @@ class LoginLogoutTestHelper {
     chromeos::PowerManagerClient::InitializeFake();
     session_termination_manager_ =
         std::make_unique<SessionTerminationManager>();
-    auto user_manager = std::make_unique<FakeChromeUserManager>();
-    user_manager_ = user_manager.get();
-    user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(user_manager));
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
   }
 
   void Shutdown() { chromeos::PowerManagerClient::Shutdown(); }
@@ -54,16 +55,15 @@ class LoginLogoutTestHelper {
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName(user->GetAccountId().GetUserEmail());
     auto profile = profile_builder.Build();
-    ProfileHelper::Get()->SetProfileToUserMappingForTesting(user);
     ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
                                                             profile.get());
-    user_manager_->LoginUser(user->GetAccountId(), true);
+    fake_user_manager_->LoginUser(user->GetAccountId(), true);
     return profile;
   }
 
   std::unique_ptr<TestingProfile> CreateRegularUserProfile() {
     AccountId account_id = AccountId::FromUserEmail(user_email);
-    auto* const user = user_manager_->AddUser(account_id);
+    auto* const user = fake_user_manager_->AddUser(account_id);
     return CreateProfile(user);
   }
 
@@ -71,12 +71,12 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "managed_guest", policy::DeviceLocalAccount::TYPE_PUBLIC_SESSION));
-    auto* const user = user_manager_->AddPublicAccountUser(account_id);
+    auto* const user = fake_user_manager_->AddPublicAccountUser(account_id);
     return CreateProfile(user);
   }
 
   std::unique_ptr<TestingProfile> CreateGuestProfile() {
-    auto* const user = user_manager_->AddGuestUser();
+    auto* const user = fake_user_manager_->AddGuestUser();
     return CreateProfile(user);
   }
 
@@ -84,7 +84,7 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "kiosk", policy::DeviceLocalAccount::TYPE_KIOSK_APP));
-    auto* const user = user_manager_->AddKioskAppUser(account_id);
+    auto* const user = fake_user_manager_->AddKioskAppUser(account_id);
     return CreateProfile(user);
   }
 
@@ -92,7 +92,7 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "arc_kiosk", policy::DeviceLocalAccount::TYPE_ARC_KIOSK_APP));
-    auto* const user = user_manager_->AddArcKioskAppUser(account_id);
+    auto* const user = fake_user_manager_->AddArcKioskAppUser(account_id);
     return CreateProfile(user);
   }
 
@@ -100,7 +100,7 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "webkiosk", policy::DeviceLocalAccount::TYPE_WEB_KIOSK_APP));
-    auto* const user = user_manager_->AddWebKioskAppUser(account_id);
+    auto* const user = fake_user_manager_->AddWebKioskAppUser(account_id);
     return CreateProfile(user);
   }
 
@@ -134,18 +134,19 @@ class LoginLogoutTestHelper {
     auto mock_queue = std::unique_ptr<::reporting::MockReportQueue,
                                       base::OnTaskRunnerDeleter>(
         new ::reporting::MockReportQueue(),
-        base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+        base::OnTaskRunnerDeleter(
+            base::SequencedTaskRunner::GetCurrentDefault()));
 
     ON_CALL(*mock_queue, AddRecord(_, ::reporting::Priority::SECURITY, _))
-        .WillByDefault([this, status](
-                           base::StringPiece record_string,
+        .WillByDefault(
+            [this, status](std::string_view record_string,
                            ::reporting::Priority event_priority,
                            ::reporting::ReportQueue::EnqueueCallback cb) {
-          ++report_count_;
-          EXPECT_TRUE(record_.ParseFromArray(record_string.data(),
-                                             record_string.size()));
-          std::move(cb).Run(status);
-        });
+              ++report_count_;
+              EXPECT_TRUE(record_.ParseFromArray(record_string.data(),
+                                                 record_string.size()));
+              std::move(cb).Run(status);
+            });
 
     auto reporter_helper =
         std::make_unique<::reporting::UserEventReporterHelperTesting>(
@@ -159,8 +160,8 @@ class LoginLogoutTestHelper {
   int GetReportCount() { return report_count_; }
 
  private:
-  FakeChromeUserManager* user_manager_;
-  std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<SessionTerminationManager> session_termination_manager_;
 

@@ -13,26 +13,23 @@
 #include "base/process/process.h"
 #include "chrome/test/chromedriver/chrome/chrome_impl.h"
 #include "chrome/test/chromedriver/chrome/scoped_temp_dir_with_retry.h"
-#include "chrome/test/chromedriver/net/sync_websocket_factory.h"
 
 namespace base {
 class TimeDelta;
 }
 
 class DevToolsClient;
-class DevToolsHttpClient;
 class Status;
 class WebView;
-struct DeviceMetrics;
 
 class ChromeDesktopImpl : public ChromeImpl {
  public:
-  ChromeDesktopImpl(std::unique_ptr<DevToolsHttpClient> http_client,
+  ChromeDesktopImpl(BrowserInfo browser_info,
+                    std::set<WebViewInfo::Type> window_types,
                     std::unique_ptr<DevToolsClient> websocket_client,
                     std::vector<std::unique_ptr<DevToolsEventListener>>
                         devtools_event_listeners,
-                    std::unique_ptr<DeviceMetrics> device_metrics,
-                    SyncWebSocketFactory socket_factory,
+                    absl::optional<MobileDevice> mobile_device,
                     std::string page_load_strategy,
                     base::Process process,
                     const base::CommandLine& command,

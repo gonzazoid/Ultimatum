@@ -9,12 +9,10 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api/dns/dns_api.h"
 #include "extensions/browser/api_test_utils.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/shell/test/shell_apitest.h"
@@ -63,7 +61,7 @@ IN_PROC_BROWSER_TEST_F(DnsApiTest, DnsResolveIPLiteral) {
   resolve_function->set_extension(empty_extension.get());
   resolve_function->set_has_callback(true);
 
-  std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
+  std::optional<base::Value> result(RunFunctionAndReturnSingleResult(
       resolve_function.get(), "[\"127.0.0.1\"]", browser_context()));
   const base::Value::Dict& dict = result->GetDict();
 
@@ -85,7 +83,7 @@ IN_PROC_BROWSER_TEST_F(DnsApiTest, DnsResolveHostname) {
   resolve_function->set_has_callback(true);
 
   std::string function_arguments = base::StringPrintf(R"(["%s"])", kHostname);
-  std::unique_ptr<base::Value> result(RunFunctionAndReturnSingleResult(
+  std::optional<base::Value> result(RunFunctionAndReturnSingleResult(
       resolve_function.get(), function_arguments, browser_context()));
   const base::Value::Dict& dict = result->GetDict();
 
@@ -106,7 +104,8 @@ IN_PROC_BROWSER_TEST_F(DnsApiTest, DnsResolveHostname) {
   // Cache only lookup.
   params->source = net::HostResolverSource::LOCAL_ONLY;
   net::SchemefulSite site = net::SchemefulSite(extension->url());
-  net::NetworkAnonymizationKey network_anonymization_key(site, site);
+  auto network_anonymization_key =
+      net::NetworkAnonymizationKey::CreateSameSite(site);
   network::DnsLookupResult result1 =
       network::BlockingDnsLookup(network_context, host_port_pair,
                                  std::move(params), network_anonymization_key);

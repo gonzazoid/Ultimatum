@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/extensions/api/bookmark_manager_private/bookmark_manager_private_api.h"
 #include "chrome/browser/profiles/profile.h"
@@ -28,6 +29,11 @@ class BookmarkManagerPrivateApiBrowsertest : public InProcessBrowserTest {
     model_ = WaitForBookmarkModel();
   }
 
+  void TearDownOnMainThread() override {
+    model_ = nullptr;
+    InProcessBrowserTest::TearDownOnMainThread();
+  }
+
   BookmarkModel* model() { return model_; }
 
  private:
@@ -38,7 +44,7 @@ class BookmarkManagerPrivateApiBrowsertest : public InProcessBrowserTest {
     return model;
   }
 
-  BookmarkModel* model_;
+  raw_ptr<BookmarkModel> model_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(BookmarkManagerPrivateApiBrowsertest,

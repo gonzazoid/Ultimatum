@@ -79,10 +79,12 @@ std::string GetContentType(const base::FilePath& path) {
 }
 
 bool ShouldHandle(const HttpRequest& request, const std::string& path_prefix) {
+  if (request.method == METHOD_CONNECT) {
+    return false;
+  }
+
   GURL url = request.GetURL();
-  return url.path() == path_prefix ||
-         base::StartsWith(url.path(), path_prefix + "/",
-                          base::CompareCase::SENSITIVE);
+  return url.path() == path_prefix || url.path().starts_with(path_prefix + "/");
 }
 
 std::unique_ptr<HttpResponse> HandlePrefixedRequest(
@@ -111,10 +113,8 @@ std::string GetFilePathWithReplacements(
   for (const auto& replacement : text_to_replace) {
     const std::string& old_text = replacement.first;
     const std::string& new_text = replacement.second;
-    std::string base64_old;
-    std::string base64_new;
-    base::Base64Encode(old_text, &base64_old);
-    base::Base64Encode(new_text, &base64_new);
+    std::string base64_old = base::Base64Encode(old_text);
+    std::string base64_new = base::Base64Encode(new_text);
     if (new_file_path == original_file_path)
       new_file_path += "?";
     else
@@ -155,14 +155,17 @@ std::unique_ptr<HttpResponse> HandleFileRequest(
   // TODO(svaldez): Figure out why thread is I/O restricted in the first place.
   base::ScopedAllowBlockingForTesting allow_blocking;
 
+  if (request.method == METHOD_CONNECT) {
+    return nullptr;
+  }
+
   // A proxy request will have an absolute path. Simulate the proxy by stripping
   // the scheme, host, and port.
   GURL request_url = request.GetURL();
   std::string relative_path(request_url.path());
 
-  std::string post_prefix("/post/");
-  if (base::StartsWith(relative_path, post_prefix,
-                       base::CompareCase::SENSITIVE)) {
+  std::string_view post_prefix("/post/");
+  if (relative_path.starts_with(post_prefix)) {
     if (request.method != METHOD_POST)
       return nullptr;
     relative_path = relative_path.substr(post_prefix.size() - 1);
@@ -194,7 +197,7 @@ std::unique_ptr<HttpResponse> HandleFileRequest(
   }
 
   // Trim the first byte ('/').
-  DCHECK(base::StartsWith(relative_path, "/", base::CompareCase::SENSITIVE));
+  DCHECK(relative_path.starts_with("/"));
   std::string request_path = relative_path.substr(1);
   base::FilePath file_path(server_root.AppendASCII(request_path));
   std::string file_contents;

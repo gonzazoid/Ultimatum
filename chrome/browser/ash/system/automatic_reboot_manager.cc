@@ -15,21 +15,22 @@
 #include <utility>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
@@ -48,7 +49,10 @@ namespace system {
 
 namespace {
 
-const int kMinRebootUptimeMs = 60 * 60 * 1000;     // 1 hour.
+constexpr base::TimeDelta kMinRebootUptime = base::Hours(1);  // 1 hour.
+constexpr char kMinRebootUptimeMsSwitch[] =
+    "min-reboot-uptime-ms";  // Switch to override |kMinRebootUptime| for
+                             // testing
 const int kLoginManagerIdleTimeoutMs = 60 * 1000;  // 60 seconds.
 const int kGracePeriodMs = 24 * 60 * 60 * 1000;    // 24 hours.
 const int kOneKilobyte = 1 << 10;                  // 1 kB in bytes.
@@ -127,8 +131,8 @@ struct SystemEventTimes {
 
   SystemEventTimes() = default;
 
-  absl::optional<base::TimeTicks> boot_time;
-  absl::optional<base::TimeTicks> update_reboot_needed_time;
+  std::optional<base::TimeTicks> boot_time;
+  std::optional<base::TimeTicks> update_reboot_needed_time;
 };
 
 SystemEventTimes GetSystemEventTimes() {
@@ -214,7 +218,7 @@ void AutomaticRebootManager::SuspendDone(base::TimeDelta sleep_duration) {
   // is a user session, there is an additional check in the Reboot method below.
   // We post a delayed task to ensure that we run any due grace timers and
   // update |reboot_requested_| flag before we try to reboot.
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&AutomaticRebootManager::MaybeReboot,
                      base::Unretained(this), true),
@@ -338,12 +342,27 @@ void AutomaticRebootManager::Reschedule() {
 
   // Safeguard against reboot loops: Ensure that the uptime after which a reboot
   // is actually requested and the grace period begins is never less than
-  // |kMinRebootUptimeMs|.
+  // |kMinRebootUptime| or the value passed in |kMinRebootUptimeMsSwitch|.
+  base::TimeDelta minRebootUptime = kMinRebootUptime;
+
+  if (auto* command_line = base::CommandLine::ForCurrentProcess();
+      command_line && command_line->HasSwitch(kMinRebootUptimeMsSwitch)) {
+    int parsed_value = 0;
+    std::string switch_value =
+        command_line->GetSwitchValueASCII(kMinRebootUptimeMsSwitch);
+
+    if (base::StringToInt(switch_value, &parsed_value)) {
+      minRebootUptime = base::Milliseconds(parsed_value);
+    } else {
+      LOG(WARNING) << "Failed to parse kMinRebootUptimeMsSwitch's value "
+                   << switch_value;
+    }
+  }
+
   const base::TimeTicks now = tick_clock_->NowTicks();
   const base::Time wall_clock_now = clock_->Now();
   const base::TimeTicks grace_start_time =
-      std::max(reboot_request_time,
-               *boot_time_ + base::Milliseconds(kMinRebootUptimeMs));
+      std::max(reboot_request_time, *boot_time_ + minRebootUptime);
 
   // Set up a timer for the start of the grace period. If the grace period
   // started in the past, the timer is still used with its delay set to zero.

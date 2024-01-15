@@ -4,17 +4,19 @@
 
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/https_latency_sampler.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/net/network_health/network_health_manager.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace reporting {
+
 namespace {
 
 namespace network_diagnostics_mojom = ::chromeos::network_diagnostics::mojom;
@@ -69,26 +71,10 @@ void ConvertMojomRoutineResultToTelemetry(
   }
 }
 
-bool IsDeviceOnline() {
-  ::ash::NetworkStateHandler::NetworkStateList network_state_list;
-  ::ash::NetworkHandler::Get()->network_state_handler()->GetNetworkListByType(
-      ::ash::NetworkTypePattern::Default(),
-      /*configured_only=*/true,
-      /*visible_only=*/false,
-      /*limit=*/0,  // no limit to number of results
-      &network_state_list);
-  for (const auto* network : network_state_list) {
-    if (network->IsOnline()) {
-      return true;
-    }
-  }
-  return false;
-}
 }  // namespace
 
 void HttpsLatencySampler::Delegate::BindDiagnosticsReceiver(
-    mojo::PendingReceiver<
-        ::chromeos::network_diagnostics::mojom::NetworkDiagnosticsRoutines>
+    mojo::PendingReceiver<network_diagnostics_mojom::NetworkDiagnosticsRoutines>
         receiver) {
   ash::network_health::NetworkHealthManager::GetInstance()
       ->BindDiagnosticsReceiver(std::move(receiver));
@@ -104,11 +90,15 @@ HttpsLatencySampler::~HttpsLatencySampler() {
 }
 
 void HttpsLatencySampler::MaybeCollect(OptionalMetricCallback callback) {
-  CHECK(base::SequencedTaskRunnerHandle::IsSet());
+  CHECK(base::SequencedTaskRunner::HasCurrentDefault());
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!IsDeviceOnline()) {
-    std::move(callback).Run(absl::nullopt);
+  const ash::NetworkState* const network_state =
+      ash::NetworkHandler::Get()
+          ->network_state_handler()
+          ->ConnectedNetworkByType(ash::NetworkTypePattern::Default());
+  if (!network_state || !network_state->IsOnline()) {
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -124,14 +114,14 @@ void HttpsLatencySampler::MaybeCollect(OptionalMetricCallback callback) {
   auto routine_callback =
       base::BindOnce(&HttpsLatencySampler::OnHttpsLatencyRoutineCompleted,
                      weak_ptr_factory_.GetWeakPtr());
-  network_diagnostics_service_->RunHttpsLatency(base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(), std::move(routine_callback)));
+  network_diagnostics_service_->RunHttpsLatency(
+      base::BindPostTaskToCurrentDefault(std::move(routine_callback)));
 
   is_routine_running_ = true;
 }
 
 void HttpsLatencySampler::OnHttpsLatencyRoutineCompleted(
-    ::chromeos::network_diagnostics::mojom::RoutineResultPtr routine_result) {
+    network_diagnostics_mojom::RoutineResultPtr routine_result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   is_routine_running_ = false;
@@ -146,38 +136,5 @@ void HttpsLatencySampler::OnHttpsLatencyRoutineCompleted(
     std::move(metric_callbacks_.front()).Run(metric_data);
     metric_callbacks_.pop();
   }
-}
-
-absl::optional<MetricEventType> HttpsLatencyEventDetector::DetectEvent(
-    const MetricData& previous_metric_data,
-    const MetricData& current_metric_data) {
-  const auto& previous_https_latency_data =
-      previous_metric_data.telemetry_data()
-          .networks_telemetry()
-          .https_latency_data();
-  const auto& current_https_latency_data = current_metric_data.telemetry_data()
-                                               .networks_telemetry()
-                                               .https_latency_data();
-
-  if (current_https_latency_data.has_problem() &&
-      (current_https_latency_data.problem() ==
-           HttpsLatencyProblem::FAILED_HTTPS_REQUESTS ||
-       current_https_latency_data.problem() ==
-           HttpsLatencyProblem::FAILED_DNS_RESOLUTIONS) &&
-      !IsDeviceOnline()) {
-    return absl::nullopt;
-  }
-
-  if ((!previous_https_latency_data.has_verdict() &&
-       current_https_latency_data.verdict() == RoutineVerdict::PROBLEM) ||
-      (previous_https_latency_data.has_verdict() &&
-       current_https_latency_data.verdict() !=
-           previous_https_latency_data.verdict()) ||
-      current_https_latency_data.problem() !=
-          previous_https_latency_data.problem()) {
-    return MetricEventType::NETWORK_HTTPS_LATENCY_CHANGE;
-  }
-
-  return absl::nullopt;
 }
 }  // namespace reporting

@@ -47,6 +47,8 @@ extern const char kAccountsPrefDeviceLocalAccountsKeyWebKioskTitle[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kAccountsPrefDeviceLocalAccountsKeyWebKioskIconUrl[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kAccountsPrefDeviceLocalAccountsKeyEphemeralMode[];
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kAccountsPrefDeviceLocalAccountAutoLoginId[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kAccountsPrefDeviceLocalAccountAutoLoginDelay[];
@@ -93,6 +95,11 @@ extern const char kReleaseLtsTag[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kDeviceChannelDowngradeBehavior[];
 
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceSystemAecEnabled[];
+
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceReportRuntimeCounters[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kReportDeviceVersionInfo[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
@@ -156,6 +163,8 @@ extern const char kReportDeviceLoginLogout[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kReportCRDSessions[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceReportRuntimeCountersCheckingRateMs[];
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kReportDeviceNetworkTelemetryCollectionRateMs[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kReportDeviceNetworkTelemetryEventCheckingRateMs[];
@@ -163,6 +172,13 @@ COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kReportDeviceAudioStatusCheckingRateMs[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kReportDeviceSignalStrengthEventDrivenTelemetry[];
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceReportNetworkEvents[];
+
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceActivityHeartbeatCollectionRateMs[];
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceActivityHeartbeatEnabled[];
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kHeartbeatEnabled[];
@@ -195,8 +211,6 @@ extern const char kKioskDisableBailoutShortcut[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kVariationsRestrictParameter[];
 
-COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
-extern const char kDeviceAttestationEnabled[];
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kAttestationForContentProtectionEnabled[];
 
@@ -309,9 +323,6 @@ COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kPluginVmAllowed[];
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
-extern const char kBorealisAllowedForDevice[];
-
-COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kDeviceRebootOnUserSignout[];
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
@@ -376,6 +387,15 @@ extern const char kDeviceEncryptedReportingPipelineEnabled[];
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
 extern const char kDeviceReportXDREvents[];
+
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDevicePrintingClientNameTemplate[];
+
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceHindiInscriptLayoutEnabled[];
+
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_SETTINGS)
+extern const char kDeviceDlcPredownloadList[];
 
 }  // namespace ash
 

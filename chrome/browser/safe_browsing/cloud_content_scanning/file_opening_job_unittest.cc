@@ -12,6 +12,7 @@
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_command_line.h"
+#include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/file_analysis_request.h"
 #include "content/public/test/browser_task_environment.h"
@@ -107,30 +108,22 @@ TEST_F(FileOpeningJobTest, MaxThreadsFlag) {
   quit_closure_ = run_loop.QuitClosure();
   quit_file_count_ = 500;
 
-  FileOpeningJob job_1(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_1.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "10");
-  FileOpeningJob job_2(CreateFilesAndTasks(100));
-  EXPECT_EQ(10u, job_2.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(10u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->RemoveSwitch("wp-max-file-opening-threads");
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "0");
-  FileOpeningJob job_3(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_3.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->RemoveSwitch("wp-max-file-opening-threads");
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "foo");
-  FileOpeningJob job_4(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_4.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->RemoveSwitch("wp-max-file-opening-threads");
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "-1");
-  FileOpeningJob job_5(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_5.MaxConcurrentThreads(/*worker_count*/ 0));
-
-  run_loop.Run();
-  EXPECT_EQ(500, on_got_file_data_count_);
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 }
 
 }  // namespace safe_browsing

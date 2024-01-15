@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "remoting/protocol/channel_multiplexer.h"
 #include "remoting/protocol/pseudotcp_channel_factory.h"
@@ -55,8 +55,9 @@ void IceTransport::Start(
 bool IceTransport::ProcessTransportInfo(
     jingle_xmpp::XmlElement* transport_info_xml) {
   IceTransportInfo transport_info;
-  if (!transport_info.ParseXml(transport_info_xml))
+  if (!transport_info.ParseXml(transport_info_xml)) {
     return false;
+  }
 
   for (auto it = transport_info.ice_credentials.begin();
        it != transport_info.ice_credentials.end(); ++it) {
@@ -160,8 +161,9 @@ void IceTransport::OnChannelCandidate(IceTransportChannel* channel,
 
 void IceTransport::OnChannelRouteChange(IceTransportChannel* channel,
                                         const TransportRoute& route) {
-  if (event_handler_)
+  if (event_handler_) {
     event_handler_->OnIceTransportRouteChange(channel->name(), route);
+  }
 }
 
 void IceTransport::OnChannelFailed(IceTransportChannel* channel) {

@@ -37,6 +37,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/content_security_policy.mojom-blink-forward.h"
@@ -103,8 +104,6 @@ class CORE_EXPORT WebSharedWorkerImpl final : public WebSharedWorker {
       WebSecurityOrigin constructor_origin,
       bool is_constructor_secure_context,
       const WebString& user_agent,
-      const WebString& full_user_agent,
-      const WebString& reduced_user_agent,
       const blink::UserAgentMetadata& ua_metadata,
       const WebVector<WebContentSecurityPolicy>& content_security_policies,
       const WebFetchClientSettingsObject& outside_fetch_client_settings_object,

@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -95,7 +95,7 @@ class TestingConsentProviderDelegate
   }
 
   // Use raw_ptr since |state| is owned by owner.
-  base::raw_ptr<TestDelegateState> state_;
+  raw_ptr<TestDelegateState> state_;
 };
 
 // Rewrites result of a consent request from |result| to |log|.
@@ -117,19 +117,20 @@ class FileSystemApiConsentProviderTest : public testing::Test {
     user_manager_ = new ash::FakeChromeUserManager;
     scoped_user_manager_enabler_ =
         std::make_unique<user_manager::ScopedUserManager>(
-            base::WrapUnique(user_manager_));
+            base::WrapUnique(user_manager_.get()));
   }
 
   void TearDown() override {
     scoped_user_manager_enabler_.reset();
     user_manager_ = nullptr;
-    testing_pref_service_.reset();
     TestingBrowserProcess::GetGlobal()->SetLocalState(nullptr);
+    testing_pref_service_.reset();
   }
 
  protected:
   std::unique_ptr<TestingPrefServiceSimple> testing_pref_service_;
-  ash::FakeChromeUserManager* user_manager_;  // Owned by the scope enabler.
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged>
+      user_manager_;  // Owned by the scope enabler.
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_enabler_;
   content::BrowserTaskEnvironment task_environment_;
 };

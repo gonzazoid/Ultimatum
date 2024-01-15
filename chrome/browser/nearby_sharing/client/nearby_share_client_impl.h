@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/nearby_sharing/client/nearby_share_api_call_flow.h"
 #include "chrome/browser/nearby_sharing/client/nearby_share_client.h"
-#include "chrome/browser/nearby_sharing/common/nearby_share_http_result.h"
+#include "chromeos/ash/components/nearby/common/client/nearby_api_call_flow.h"
+#include "chromeos/ash/components/nearby/common/client/nearby_http_result.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
@@ -33,14 +34,15 @@ class GoogleServiceAuthError;
 class NearbyShareHttpNotifier;
 
 // An implementation of NearbyShareClient that fetches access tokens for the
-// primary account and makes HTTP calls using NearbyShareApiCallFlow. Callbacks
-// are guaranteed to not be invoked after NearbyShareClientImpl is destroyed.
+// primary account and makes HTTP calls using ash::nearby::NearbyApiCallFlow.
+// Callbacks are guaranteed to not be invoked after NearbyShareClientImpl is
+// destroyed.
 class NearbyShareClientImpl : public NearbyShareClient {
  public:
   // Creates the client using |url_loader_factory| to make the HTTP request
   // through |api_call_flow|.
   NearbyShareClientImpl(
-      std::unique_ptr<NearbyShareApiCallFlow> api_call_flow,
+      std::unique_ptr<ash::nearby::NearbyApiCallFlow> api_call_flow,
       signin::IdentityManager* identity_manager,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       NearbyShareHttpNotifier* notifier);
@@ -50,15 +52,15 @@ class NearbyShareClientImpl : public NearbyShareClient {
   NearbyShareClientImpl& operator=(NearbyShareClientImpl&) = delete;
 
   // NearbyShareClient:
-  void UpdateDevice(const nearbyshare::proto::UpdateDeviceRequest& request,
+  void UpdateDevice(const nearby::sharing::proto::UpdateDeviceRequest& request,
                     UpdateDeviceCallback&& callback,
                     ErrorCallback&& error_callback) override;
   void ListContactPeople(
-      const nearbyshare::proto::ListContactPeopleRequest& request,
+      const nearby::sharing::proto::ListContactPeopleRequest& request,
       ListContactPeopleCallback&& callback,
       ErrorCallback&& error_callback) override;
   void ListPublicCertificates(
-      const nearbyshare::proto::ListPublicCertificatesRequest& request,
+      const nearby::sharing::proto::ListPublicCertificatesRequest& request,
       ListPublicCertificatesCallback&& callback,
       ErrorCallback&& error_callback) override;
   std::string GetAccessTokenUsed() override;
@@ -87,7 +89,7 @@ class NearbyShareClientImpl : public NearbyShareClient {
       const GURL& request_url,
       RequestType request_type,
       const absl::optional<std::string>& serialized_request,
-      const absl::optional<NearbyShareApiCallFlow::QueryParameters>&
+      const absl::optional<ash::nearby::NearbyApiCallFlow::QueryParameters>&
           request_as_query_parameters,
       base::OnceCallback<void(const ResponseProto&)>&& response_callback,
       ErrorCallback&& error_callback,
@@ -99,33 +101,33 @@ class NearbyShareClientImpl : public NearbyShareClient {
   void OnAccessTokenFetched(
       RequestType request_type,
       const absl::optional<std::string>& serialized_request,
-      const absl::optional<NearbyShareApiCallFlow::QueryParameters>&
+      const absl::optional<ash::nearby::NearbyApiCallFlow::QueryParameters>&
           request_as_query_parameters,
       base::OnceCallback<void(const ResponseProto&)>&& response_callback,
       GoogleServiceAuthError error,
       signin::AccessTokenInfo access_token_info);
 
-  // Called when NearbyShareApiCallFlow completes successfully to deserialize
-  // and return the result.
+  // Called when ash::nearby::NearbyApiCallFlow completes successfully to
+  // deserialize and return the result.
   template <class ResponseProto>
   void OnFlowSuccess(
       base::OnceCallback<void(const ResponseProto&)>&& result_callback,
       const std::string& serialized_response);
 
   // Called when the current API call fails at any step.
-  void OnApiCallFailed(NearbyShareHttpError error);
+  void OnApiCallFailed(ash::nearby::NearbyHttpError error);
 
   // Constructs and executes the actual HTTP request.
-  std::unique_ptr<NearbyShareApiCallFlow> api_call_flow_;
+  std::unique_ptr<ash::nearby::NearbyApiCallFlow> api_call_flow_;
 
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager> identity_manager_;
 
   // Fetches the access token authorizing the API calls.
   std::unique_ptr<signin::PrimaryAccountAccessTokenFetcher>
       access_token_fetcher_;
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  NearbyShareHttpNotifier* notifier_ = nullptr;
+  raw_ptr<NearbyShareHttpNotifier> notifier_ = nullptr;
 
   // True if an API call has been started. Remains true even after the API call
   // completes.
@@ -163,9 +165,9 @@ class NearbyShareClientFactoryImpl : public NearbyShareClientFactory {
   std::unique_ptr<NearbyShareClient> CreateInstance() override;
 
  private:
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager, DanglingUntriaged> identity_manager_;
   const scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  NearbyShareHttpNotifier* notifier_;
+  raw_ptr<NearbyShareHttpNotifier> notifier_;
 };
 
 #endif  // CHROME_BROWSER_NEARBY_SHARING_CLIENT_NEARBY_SHARE_CLIENT_IMPL_H_

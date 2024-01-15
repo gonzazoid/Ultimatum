@@ -5,6 +5,7 @@
 #include "ash/display/root_window_transformers.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/accessibility/magnifier/fullscreen_magnifier_controller.h"
 #include "ash/display/display_util.h"
@@ -15,8 +16,8 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/cursor_manager_test_api.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_tracker.h"
@@ -109,7 +110,7 @@ class TestEventHandler : public ui::EventHandler {
 
  private:
   gfx::Point mouse_location_;
-  aura::Window* target_root_;
+  raw_ptr<aura::Window> target_root_;
 
   float touch_radius_x_;
   float touch_radius_y_;
@@ -428,7 +429,7 @@ TEST_F(RootWindowTransformersTest, LetterBoxPillarBox) {
   MirrorWindowTestApi test_api;
   // Letter boxed
   UpdateDisplay("400x200,500x400");
-  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, std::nullopt);
   std::unique_ptr<RootWindowTransformer> transformer(
       CreateCurrentRootWindowTransformerForMirroring());
   // Y margin must be margin is (400 - 500/400 * 200) / 2 = 75
@@ -444,7 +445,7 @@ TEST_F(RootWindowTransformersTest, LetterBoxPillarBox) {
 TEST_F(RootWindowTransformersTest, MirrorWithRotation) {
   MirrorWindowTestApi test_api;
   UpdateDisplay("400x200,500x400");
-  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, std::nullopt);
 
   for (auto rotation :
        {display::Display::ROTATE_0, display::Display::ROTATE_90,

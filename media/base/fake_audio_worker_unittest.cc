@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
@@ -240,6 +240,7 @@ const base::TickClock* FakeAudioWorkerMockTaskTest::global_clock_ = nullptr;
 
 // This test is disabled because when late we skip reading to maintain
 // compatibility for input and output streams.
+// This test is designed to be manually executed.
 TEST_F(FakeAudioWorkerMockTaskTest, DISABLED_LateCallbackProducesCallback) {
   task_runner_->RunUntilIdle();
   EXPECT_THAT(callbacks_, SizeIs(1));

@@ -8,12 +8,16 @@
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "base/guid.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/uuid.h"
 #include "components/desks_storage/core/desk_model.h"
 #include "components/desks_storage/core/desk_model_observer.h"
-#include "ui/aura/window.h"
+
+namespace aura {
+class Window;
+}  // namespace aura
 
 namespace ash {
 
@@ -34,8 +38,6 @@ class ASH_EXPORT SavedDeskPresenter : desks_storage::DeskModelObserver {
   SavedDeskPresenter& operator=(const SavedDeskPresenter&) = delete;
   ~SavedDeskPresenter() override;
 
-  bool should_show_templates_ui() { return should_show_templates_ui_; }
-
   // Retrieve the current and max count for a given saved desk type. Note that
   // these are snapshots of the model state, which may not match the current UI
   // state.
@@ -46,24 +48,24 @@ class ASH_EXPORT SavedDeskPresenter : desks_storage::DeskModelObserver {
   // identified by `uuid`. Returns nullptr if not found.
   ash::DeskTemplate* FindOtherEntryWithName(const std::u16string& name,
                                             ash::DeskTemplateType type,
-                                            const base::GUID& uuid) const;
+                                            const base::Uuid& uuid) const;
 
-  // Update the buttons of the desks templates UI and the visibility of the
-  // templates grid. The grid contents are not updated. Updates
-  // `should_show_templates_ui_`.
-  void UpdateDesksTemplatesUI();
+  // Update UI for saved desk library. More specifically, it updates the
+  // visibility of the library button, save desk button, and the saved desk
+  // grid. The grid contents are not updated.
+  void UpdateUIForSavedDeskLibrary();
 
-  // Calls the DeskModel to get all the template entries, with a callback to
+  // Calls the DeskModel to get all the saved desk entries, with a callback to
   // `OnGetAllEntries`. `saved_desk_name` is used for the name overwrite nudge
   // for duplicate desk names.
-  void GetAllEntries(const base::GUID& item_to_focus,
+  void GetAllEntries(const base::Uuid& item_to_focus,
                      const std::u16string& saved_desk_name,
                      aura::Window* const root_window);
 
   // Calls the DeskModel to delete the saved desk with the provided `uuid`. Will
   // record histogram if `record_for_type` is specified.
-  void DeleteEntry(const base::GUID& uuid,
-                   absl::optional<DeskTemplateType> record_for_type);
+  void DeleteEntry(const base::Uuid& uuid,
+                   std::optional<DeskTemplateType> record_for_type);
 
   // Launches `saved_desk` into a new desk.
   void LaunchSavedDesk(std::unique_ptr<DeskTemplate> saved_desk,
@@ -73,20 +75,21 @@ class ASH_EXPORT SavedDeskPresenter : desks_storage::DeskModelObserver {
   // callback to `OnAddOrUpdateEntry`. If there are unsupported apps on the
   // active desk, a dialog will open up and we may or may not save the desk
   // asynchronously based on the user's decision.
-  void MaybeSaveActiveDeskAsTemplate(DeskTemplateType template_type,
-                                     aura::Window* root_window_to_show);
+  void MaybeSaveActiveDeskAsSavedDesk(DeskTemplateType template_type,
+                                      aura::Window* root_window_to_show);
 
-  // Saves or updates the `desk_template` to the model.
-  void SaveOrUpdateDeskTemplate(bool is_update,
-                                aura::Window* const root_window,
-                                std::unique_ptr<DeskTemplate> desk_template);
+  // Saves or updates the `saved_desk` to the model.
+  void SaveOrUpdateSavedDesk(bool is_update,
+                             aura::Window* const root_window,
+                             std::unique_ptr<DeskTemplate> saved_desk);
 
   // desks_storage::DeskModelObserver:
   void DeskModelLoaded() override {}
   void OnDeskModelDestroying() override;
   void EntriesAddedOrUpdatedRemotely(
-      const std::vector<const DeskTemplate*>& new_entries) override;
-  void EntriesRemovedRemotely(const std::vector<base::GUID>& uuids) override;
+      const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>&
+          new_entries) override;
+  void EntriesRemovedRemotely(const std::vector<base::Uuid>& uuids) override;
 
  private:
   friend class SavedDeskPresenterTestApi;
@@ -98,23 +101,25 @@ class ASH_EXPORT SavedDeskPresenter : desks_storage::DeskModelObserver {
 
   // Callback after deleting an entry. Will then call `RemoveUIEntries` to
   // update the UI by removing the deleted saved desk.
-  void OnDeleteEntry(const base::GUID& uuid,
-                     absl::optional<DeskTemplateType> record_for_type,
+  void OnDeleteEntry(const base::Uuid& uuid,
+                     std::optional<DeskTemplateType> record_for_type,
                      desks_storage::DeskModel::DeleteEntryStatus status);
 
   // Callback after adding or updating an entry. Will then call
-  // `AddOrUpdateUIEntries` to update the UI by adding or updating the template.
+  // `AddOrUpdateUIEntries` to update the UI by adding or updating the saved
+  // desk.
   void OnAddOrUpdateEntry(
       bool was_update,
       aura::Window* const root_window,
-      std::unique_ptr<DeskTemplate> desk_template,
       const std::u16string& saved_desk_name,
-      desks_storage::DeskModel::AddOrUpdateEntryStatus status);
+      desks_storage::DeskModel::AddOrUpdateEntryStatus status,
+      std::unique_ptr<DeskTemplate> saved_desk);
 
   // Helper functions for updating the UI.
   void AddOrUpdateUIEntries(
-      const std::vector<const DeskTemplate*>& new_entries);
-  void RemoveUIEntries(const std::vector<base::GUID>& uuids);
+      const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>&
+          new_entries);
+  void RemoveUIEntries(const std::vector<base::Uuid>& uuids);
 
   // Returns a copy of a duplicated name to be stored.  This function works by
   // taking the name to be duplicated and adding a "(1)" to it. If the name
@@ -129,15 +134,11 @@ class ASH_EXPORT SavedDeskPresenter : desks_storage::DeskModelObserver {
   static void FireWindowWatcherTimerForTesting();
 
   // Pointer to the session which owns `this`.
-  OverviewSession* const overview_session_;
+  const raw_ptr<OverviewSession> overview_session_;
 
   base::ScopedObservation<desks_storage::DeskModel,
                           desks_storage::DeskModelObserver>
       desk_model_observation_{this};
-
-  // If the user has at least one template entry, the desk templates ui should
-  // be shown. Otherwise, it should be invisible.
-  bool should_show_templates_ui_ = false;
 
   // Test closure that runs after the UI has been updated async after a call to
   // the model.

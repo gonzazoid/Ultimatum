@@ -4,8 +4,9 @@
 
 #include "ui/base/ime/win/on_screen_keyboard_display_manager_input_pane.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/com_init_util.h"
@@ -89,10 +90,6 @@ class OnScreenKeyboardDisplayManagerInputPane::VirtualKeyboardInputPane
     DCHECK(!main_task_runner_->BelongsToCurrentThread());
     if (input_pane2_)
       return true;
-    if (!base::win::ResolveCoreWinRTDelayload() ||
-        !base::win::ScopedHString::ResolveCoreWinRTStringDelayload()) {
-      return false;
-    }
 
     base::win::AssertComApartmentType(base::win::ComApartmentType::STA);
 
@@ -209,7 +206,7 @@ class OnScreenKeyboardDisplayManagerInputPane::VirtualKeyboardInputPane
 OnScreenKeyboardDisplayManagerInputPane::
     OnScreenKeyboardDisplayManagerInputPane(HWND hwnd)
     : hwnd_(hwnd),
-      main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       background_task_runner_(
           base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})),
       virtual_keyboard_input_pane_(

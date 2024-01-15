@@ -5,13 +5,13 @@
 #include "content/browser/preloading/prerender/prerender_commit_deferring_condition.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/preloading/prerender/prerender_host.h"
-#include "content/browser/preloading/prerender/prerender_host_registry.h"
+#include "content/browser/preloading/prerender/prerender_metrics.h"
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/public/browser/render_frame_host.h"
-#include "third_party/blink/public/common/features.h"
 
 namespace content {
 
@@ -23,7 +23,7 @@ FrameTreeNode* GetRootPrerenderFrameTreeNode(int prerender_frame_tree_node_id) {
   FrameTreeNode* prerender_frame_tree_node =
       FrameTreeNode::GloballyFindByID(prerender_frame_tree_node_id);
   return prerender_frame_tree_node
-             ? prerender_frame_tree_node->frame_tree()->root()
+             ? prerender_frame_tree_node->frame_tree().root()
              : nullptr;
 }
 
@@ -34,7 +34,7 @@ std::unique_ptr<CommitDeferringCondition>
 PrerenderCommitDeferringCondition::MaybeCreate(
     NavigationRequest& navigation_request,
     NavigationType navigation_type,
-    absl::optional<int> candidate_prerender_frame_tree_node_id) {
+    std::optional<int> candidate_prerender_frame_tree_node_id) {
   // Don't create if this navigation is not for prerender page activation.
   if (navigation_type != NavigationType::kPrerenderedPageActivation)
     return nullptr;
@@ -53,8 +53,8 @@ PrerenderCommitDeferringCondition::PrerenderCommitDeferringCondition(
       WebContentsObserver(navigation_request.GetWebContents()),
       candidate_prerender_frame_tree_node_id_(
           candidate_prerender_frame_tree_node_id) {
-  DCHECK_NE(candidate_prerender_frame_tree_node_id_,
-            RenderFrameHost::kNoFrameTreeNodeId);
+  CHECK_NE(candidate_prerender_frame_tree_node_id_,
+           RenderFrameHost::kNoFrameTreeNodeId);
 }
 
 CommitDeferringCondition::Result
@@ -70,8 +70,16 @@ PrerenderCommitDeferringCondition::WillCommitNavigation(
 
   // If there is no ongoing main frame navigation in prerender frame tree, the
   // prerender activation is allowed to continue.
-  if (!prerender_frame_tree_node->HasNavigation())
+  if (!prerender_frame_tree_node->HasNavigation()) {
+    // Record the defer waiting time for PrerenderCommitDeferringCondition as no
+    // delay.
+    PrerenderHost& prerender_host =
+        PrerenderHost::GetFromFrameTreeNode(*prerender_frame_tree_node);
+    RecordPrerenderActivationCommitDeferTime(
+        base::TimeDelta(), prerender_host.trigger_type(),
+        prerender_host.embedder_histogram_suffix());
     return Result::kProceed;
+  }
 
   // Defer the prerender activation until the ongoing prerender main frame
   // navigation commits.
@@ -98,24 +106,23 @@ void PrerenderCommitDeferringCondition::DidFinishNavigation(
     return;
   }
 
-  // Since the prerender navigation finished, and
-  // PrerenderNavigationThrottle disallows another navigation after the
-  // initial commit, there should not be another navigation starting.
-  //
-  // The old navigation might not yet have cleaned up yet, so try that
-  // first.
-  prerender_frame_tree_node->render_manager()->MaybeCleanUpNavigation(
-      NavigationDiscardReason::kCancelled);
-  DCHECK(!prerender_frame_tree_node->HasNavigation());
-
-  if (done_closure_) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(done_closure_));
+  // PrerenderNavigationThrottle allows navigations after the initial commit so
+  // the callback should be called after all ongoing navigations are completed.
+  if (done_closure_ && !prerender_frame_tree_node->HasNavigation()) {
+    // It's possible that another navigation happens after posting a task to
+    // resume the activation because PrerenderNavigationThrottle allows the main
+    // frame navigation in a prerendered page. In that case, prerendering is
+    // cancelled and the activation falls back to network.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(done_closure_));
 
     // Record the defer waiting time for PrerenderCommitDeferringCondition.
     base::TimeDelta delta = base::TimeTicks::Now() - defer_start_time_;
-    base::UmaHistogramTimes("Navigation.Prerender.ActivationCommitDeferTime",
-                            delta);
+    PrerenderHost& prerender_host =
+        PrerenderHost::GetFromFrameTreeNode(*prerender_frame_tree_node);
+    RecordPrerenderActivationCommitDeferTime(
+        delta, prerender_host.trigger_type(),
+        prerender_host.embedder_histogram_suffix());
   }
 }
 

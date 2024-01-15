@@ -6,11 +6,12 @@
 
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gin/arguments.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
-#include "third_party/blink/public/web/blink.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "v8/include/v8.h"
 
@@ -20,7 +21,7 @@ gin::WrapperInfo GCController::kWrapperInfo = {gin::kEmbedderNativeGin};
 
 // static
 void GCController::Install(blink::WebLocalFrame* frame) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = frame->MainWorldScriptContext();
   if (context.IsEmpty())
@@ -87,12 +88,12 @@ void GCController::AsyncCollectAll(const gin::Arguments& args) {
 
 void GCController::AsyncCollectAllWithEmptyStack(
     v8::UniquePersistent<v8::Function> callback) {
-  v8::Isolate* const isolate = blink::MainThreadIsolate();
+  v8::Isolate* const isolate = frame_->GetAgentGroupScheduler()->Isolate();
 
   for (int i = 0; i < kNumberOfGCsForFullCollection; i++) {
     isolate->RequestGarbageCollectionForTesting(
         v8::Isolate::kFullGarbageCollection,
-        v8::EmbedderHeapTracer::EmbedderStackState::kNoHeapPointers);
+        cppgc::EmbedderStackState::kNoHeapPointers);
   }
 
   v8::HandleScope scope(isolate);

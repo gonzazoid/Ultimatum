@@ -22,8 +22,6 @@ AppType EnumTraits<AppType, apps::AppType>::ToMojom(apps::AppType input) {
       return AppType::kChromeApp;
     case apps::AppType::kWeb:
       return AppType::kWeb;
-    case apps::AppType::kMacOs:
-      return AppType::kMacOs;
     case apps::AppType::kPluginVm:
       return AppType::kPluginVm;
     case apps::AppType::kStandaloneBrowser:
@@ -40,6 +38,8 @@ AppType EnumTraits<AppType, apps::AppType>::ToMojom(apps::AppType input) {
       return AppType::kExtension;
     case apps::AppType::kStandaloneBrowserExtension:
       return AppType::kStandaloneBrowserExtension;
+    case apps::AppType::kBruschetta:
+      return AppType::kBruschetta;
   }
 }
 
@@ -63,9 +63,6 @@ bool EnumTraits<AppType, apps::AppType>::FromMojom(AppType input,
       return true;
     case AppType::kWeb:
       *output = apps::AppType::kWeb;
-      return true;
-    case AppType::kMacOs:
-      *output = apps::AppType::kMacOs;
       return true;
     case AppType::kPluginVm:
       *output = apps::AppType::kPluginVm;
@@ -91,6 +88,9 @@ bool EnumTraits<AppType, apps::AppType>::FromMojom(AppType input,
     case AppType::kStandaloneBrowserExtension:
       *output = apps::AppType::kStandaloneBrowserExtension;
       return true;
+    case AppType::kBruschetta:
+      *output = apps::AppType::kBruschetta;
+      return true;
   }
 }
 
@@ -101,12 +101,17 @@ bool StructTraits<PermissionDataView, apps::PermissionPtr>::Read(
   if (!data.ReadPermissionType(&permission_type))
     return false;
 
-  apps::PermissionValuePtr value;
+  apps::Permission::PermissionValue value;
   if (!data.ReadValue(&value))
     return false;
 
+  absl::optional<std::string> details;
+  if (!data.ReadDetails(&details)) {
+    return false;
+  }
+
   *out = std::make_unique<apps::Permission>(permission_type, std::move(value),
-                                            data.is_managed());
+                                            data.is_managed(), details);
   return true;
 }
 
@@ -195,30 +200,29 @@ bool EnumTraits<TriState, apps::TriState>::FromMojom(TriState input,
 }
 
 PermissionValueDataView::Tag
-UnionTraits<PermissionValueDataView, apps::PermissionValuePtr>::GetTag(
-    const apps::PermissionValuePtr& r) {
-  if (absl::holds_alternative<bool>(r->value)) {
+UnionTraits<PermissionValueDataView, apps::Permission::PermissionValue>::GetTag(
+    const apps::Permission::PermissionValue& r) {
+  if (absl::holds_alternative<bool>(r)) {
     return PermissionValueDataView::Tag::kBoolValue;
-  } else if (absl::holds_alternative<apps::TriState>(r->value)) {
+  } else if (absl::holds_alternative<apps::TriState>(r)) {
     return PermissionValueDataView::Tag::kTristateValue;
   }
   NOTREACHED();
   return PermissionValueDataView::Tag::kBoolValue;
 }
 
-bool UnionTraits<PermissionValueDataView, apps::PermissionValuePtr>::Read(
-    PermissionValueDataView data,
-    apps::PermissionValuePtr* out) {
+bool UnionTraits<PermissionValueDataView, apps::Permission::PermissionValue>::
+    Read(PermissionValueDataView data, apps::Permission::PermissionValue* out) {
   switch (data.tag()) {
     case PermissionValueDataView::Tag::kBoolValue: {
-      *out = std::make_unique<apps::PermissionValue>(data.bool_value());
+      *out = data.bool_value();
       return true;
     }
     case PermissionValueDataView::Tag::kTristateValue: {
       apps::TriState tristate_value;
       if (!data.ReadTristateValue(&tristate_value))
         return false;
-      *out = std::make_unique<apps::PermissionValue>(tristate_value);
+      *out = tristate_value;
       return true;
     }
   }

@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -72,6 +72,10 @@ class PictureBufferManager
   // |planes|: Number of image planes (textures) in the picture.
   // |texture_size|: Size of textures to create.
   // |texture_target|: Type of textures to create.
+  // |mode|: Whether to allocate GL textures. The returned PictureBuffers will
+  // have non-empty client_texture_ids() and service_texture_ids() iff
+  // `kAllocateTextures` is passed. Note: Allocating GL textures is not
+  // supported on Apple platforms.
   //
   // Must be called on the GPU thread.
   //

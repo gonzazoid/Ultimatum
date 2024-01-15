@@ -3,34 +3,14 @@
 // found in the LICENSE file.
 
 import {Destination, DestinationOrigin, PrintPreviewDestinationDropdownCrosElement} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.js';
 import {keyDownOn, move} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 import {getGoogleDriveDestination, getSaveAsPdfDestination} from './print_preview_test_utils.js';
 
-const destination_dropdown_cros_test = {
-  suiteName: 'PrintPreviewDestinationDropdownCrosTest',
-  TestNames: {
-    CorrectListItems: 'correct list items',
-    ClickCloses: 'click closes dropdown',
-    HighlightedAfterUpDown: 'highlighted after keyboard press up and down',
-    DestinationChangeAfterUpDown:
-        'destination changes after keyboard press up and down',
-    EnterOpensCloses: 'enter opens and closes dropdown',
-    HighlightedFollowsMouse: 'highlighted follows mouse',
-    Disabled: 'disabled',
-    HighlightedWhenOpened: 'highlighted when opened',
-  },
-};
-
-Object.assign(
-    window, {destination_dropdown_cros_test: destination_dropdown_cros_test});
-
-suite(destination_dropdown_cros_test.suiteName, function() {
+suite('DestinationDropdownCrosTest', function() {
   let dropdown: PrintPreviewDestinationDropdownCrosElement;
 
   function setItemList(items: Destination[]) {
@@ -94,8 +74,7 @@ suite(destination_dropdown_cros_test.suiteName, function() {
   });
 
   test(
-      assert(destination_dropdown_cros_test.TestNames.CorrectListItems),
-      function() {
+      'CorrectListItems', function() {
         setItemList([
           createDestination('One', DestinationOrigin.CROS),
           createDestination('Two', DestinationOrigin.CROS),
@@ -109,61 +88,55 @@ suite(destination_dropdown_cros_test.suiteName, function() {
         assertEquals('Three', itemList[2]!.textContent!.trim());
       });
 
-  test(
-      assert(destination_dropdown_cros_test.TestNames.ClickCloses), function() {
-        const destinationOne = createDestination('One', DestinationOrigin.CROS);
-        setItemList([destinationOne]);
-        dropdown.value = destinationOne;
-        const ironDropdown =
-            dropdown.shadowRoot!.querySelector('iron-dropdown')!;
+  test('ClickCloses', function() {
+    const destinationOne = createDestination('One', DestinationOrigin.CROS);
+    setItemList([destinationOne]);
+    dropdown.value = destinationOne;
+    const ironDropdown = dropdown.shadowRoot!.querySelector('iron-dropdown')!;
 
-        clickDropdownFocus();
-        assertTrue(ironDropdown.opened);
+    clickDropdownFocus();
+    assertTrue(ironDropdown.opened);
 
-        getList()[0]!.click();
-        assertFalse(ironDropdown.opened);
+    getList()[0]!.click();
+    assertFalse(ironDropdown.opened);
 
-        clickDropdownFocus();
-        assertTrue(ironDropdown.opened);
+    clickDropdownFocus();
+    assertTrue(ironDropdown.opened);
 
-        // Clicking outside the dropdown will cause it to lose focus and close.
-        // This will verify on-blur closes the dropdown.
-        clickOutsideDropdown();
-        assertFalse(ironDropdown.opened);
-      });
+    // Clicking outside the dropdown will cause it to lose focus and close.
+    // This will verify on-blur closes the dropdown.
+    clickOutsideDropdown();
+    assertFalse(ironDropdown.opened);
+  });
 
-  test(
-      assert(destination_dropdown_cros_test.TestNames.HighlightedAfterUpDown),
-      function() {
-        const destinationOne = createDestination('One', DestinationOrigin.CROS);
-        setItemList([destinationOne]);
-        dropdown.value = destinationOne;
-        clickDropdown();
+  test('HighlightedAfterUpDown', function() {
+    const destinationOne = createDestination('One', DestinationOrigin.CROS);
+    setItemList([destinationOne]);
+    dropdown.value = destinationOne;
+    clickDropdown();
 
-        assertEquals('One', getHighlightedElementText());
-        down();
-        assertEquals('Save as PDF', getHighlightedElementText());
-        down();
-        assertEquals('Save to Google Drive', getHighlightedElementText());
-        down();
-        assertEquals('See more…', getHighlightedElementText());
-        down();
-        assertEquals('See more…', getHighlightedElementText());
+    assertEquals('One', getHighlightedElementText());
+    down();
+    assertEquals('Save as PDF', getHighlightedElementText());
+    down();
+    assertEquals('Save to Google Drive', getHighlightedElementText());
+    down();
+    assertEquals('See more…', getHighlightedElementText());
+    down();
+    assertEquals('See more…', getHighlightedElementText());
 
-        up();
-        assertEquals('Save to Google Drive', getHighlightedElementText());
-        up();
-        assertEquals('Save as PDF', getHighlightedElementText());
-        up();
-        assertEquals('One', getHighlightedElementText());
-        up();
-        assertEquals('One', getHighlightedElementText());
-      });
+    up();
+    assertEquals('Save to Google Drive', getHighlightedElementText());
+    up();
+    assertEquals('Save as PDF', getHighlightedElementText());
+    up();
+    assertEquals('One', getHighlightedElementText());
+    up();
+    assertEquals('One', getHighlightedElementText());
+  });
 
   test(
-      assert(destination_dropdown_cros_test.TestNames
-                 .DestinationChangeAfterUpDown),
-      function() {
+      'DestinationChangeAfterUpDown', function() {
         const destinationOne = createDestination('One', DestinationOrigin.CROS);
         const pdfDestination = getSaveAsPdfDestination();
         setItemList([destinationOne]);
@@ -179,7 +152,7 @@ suite(destination_dropdown_cros_test.suiteName, function() {
 
         // Key press does not directly update |value| so it is expected for the
         // |value| to not change here in this test.
-        assert(dropdown.value === pdfDestination);
+        assertEquals(dropdown.value, pdfDestination);
 
         // Verify a down press sends the Save to Google Drive destination as the
         // next value selected.
@@ -191,25 +164,20 @@ suite(destination_dropdown_cros_test.suiteName, function() {
         });
       });
 
-  test(
-      assert(destination_dropdown_cros_test.TestNames.EnterOpensCloses),
-      function() {
-        const destinationOne = createDestination('One', DestinationOrigin.CROS);
-        setItemList([destinationOne]);
-        dropdown.value = destinationOne;
+  test('EnterOpensCloses', function() {
+    const destinationOne = createDestination('One', DestinationOrigin.CROS);
+    setItemList([destinationOne]);
+    dropdown.value = destinationOne;
 
-        assertFalse(
-            dropdown.shadowRoot!.querySelector('iron-dropdown')!.opened);
-        enter();
-        assertTrue(dropdown.shadowRoot!.querySelector('iron-dropdown')!.opened);
-        enter();
-        assertFalse(
-            dropdown.shadowRoot!.querySelector('iron-dropdown')!.opened);
-      });
+    assertFalse(dropdown.shadowRoot!.querySelector('iron-dropdown')!.opened);
+    enter();
+    assertTrue(dropdown.shadowRoot!.querySelector('iron-dropdown')!.opened);
+    enter();
+    assertFalse(dropdown.shadowRoot!.querySelector('iron-dropdown')!.opened);
+  });
 
   test(
-      assert(destination_dropdown_cros_test.TestNames.HighlightedFollowsMouse),
-      function() {
+      'HighlightedFollowsMouse', function() {
         const destinationOne = createDestination('One', DestinationOrigin.CROS);
         setItemList([
           destinationOne,
@@ -234,7 +202,7 @@ suite(destination_dropdown_cros_test.suiteName, function() {
         assertEquals('One', getHighlightedElementText());
       });
 
-  test(assert(destination_dropdown_cros_test.TestNames.Disabled), function() {
+  test('Disabled', function() {
     const destinationOne = createDestination('One', DestinationOrigin.CROS);
     setItemList([destinationOne]);
     dropdown.value = destinationOne;
@@ -251,8 +219,7 @@ suite(destination_dropdown_cros_test.suiteName, function() {
   });
 
   test(
-      assert(destination_dropdown_cros_test.TestNames.HighlightedWhenOpened),
-      function() {
+      'HighlightedWhenOpened', function() {
         const destinationTwo = createDestination('Two', DestinationOrigin.CROS);
         const destinationThree =
             createDestination('Three', DestinationOrigin.CROS);

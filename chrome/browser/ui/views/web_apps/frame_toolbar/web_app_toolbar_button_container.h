@@ -14,13 +14,12 @@
 #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_container.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
+#include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
 #include "chrome/browser/ui/web_applications/web_app_menu_model.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/view.h"
-#include "ui/views/widget/widget.h"
-#include "ui/views/widget/widget_observer.h"
 
 class WebAppContentSettingsContainer;
 class BrowserView;
@@ -30,17 +29,17 @@ class WebAppMenuButton;
 class WebAppOriginText;
 class WindowControlsOverlayToggleButton;
 class SystemAppAccessibleName;
+class ExtensionsToolbarCoordinator;
 
 class WebAppToolbarButtonContainer : public views::View,
                                      public IconLabelBubbleView::Delegate,
                                      public ContentSettingImageView::Delegate,
                                      public ImmersiveModeController::Observer,
                                      public PageActionIconView::Delegate,
-                                     public PageActionIconContainer,
-                                     public views::WidgetObserver {
- public:
-  METADATA_HEADER(WebAppToolbarButtonContainer);
+                                     public PageActionIconContainer {
+  METADATA_HEADER(WebAppToolbarButtonContainer, views::View)
 
+ public:
   // Timing parameters for the origin fade animation.
   // These control how long it takes for the origin text and menu button
   // highlight to fade in, pause then fade out.
@@ -54,8 +53,7 @@ class WebAppToolbarButtonContainer : public views::View,
   // The total duration of the origin fade animation.
   static base::TimeDelta OriginTotalDuration();
 
-  WebAppToolbarButtonContainer(views::Widget* widget,
-                               BrowserView* browser_view,
+  WebAppToolbarButtonContainer(BrowserView* browser_view,
                                ToolbarButtonProvider* toolbar_button_provider);
   ~WebAppToolbarButtonContainer() override;
 
@@ -89,7 +87,9 @@ class WebAppToolbarButtonContainer : public views::View,
     return window_controls_overlay_toggle_button_;
   }
 
-  static void DisableAnimationForTesting();
+  AvatarToolbarButton* avatar_button() { return avatar_button_; }
+
+  static void DisableAnimationForTesting(bool disable);
 
  private:
   friend class ImmersiveModeControllerChromeosWebAppBrowserTest;
@@ -126,8 +126,6 @@ class WebAppToolbarButtonContainer : public views::View,
   content::WebContents* GetContentSettingWebContents() override;
   ContentSettingBubbleModelDelegate* GetContentSettingBubbleModelDelegate()
       override;
-  void OnContentSettingImageBubbleShown(
-      ContentSettingImageModel::ImageType type) const override;
 
   // ImmersiveModeController::Observer:
   void OnImmersiveRevealStarted() override;
@@ -137,9 +135,6 @@ class WebAppToolbarButtonContainer : public views::View,
 
   // views::View:
   void AddedToWidget() override;
-
-  base::ScopedObservation<views::Widget, views::WidgetObserver>
-      scoped_widget_observation_{this};
 
   // Timers for synchronising their respective parts of the titlebar animation.
   base::OneShotTimer animation_start_delay_;
@@ -155,6 +150,9 @@ class WebAppToolbarButtonContainer : public views::View,
   std::unique_ptr<PageActionIconController> page_action_icon_controller_;
   int page_action_insertion_point_ = 0;
 
+  std::unique_ptr<ExtensionsToolbarCoordinator>
+      extensions_toolbar_coordinator_ = nullptr;
+
   // All remaining members are owned by the views hierarchy.
   raw_ptr<WebAppOriginText> web_app_origin_text_ = nullptr;
   raw_ptr<WindowControlsOverlayToggleButton>
@@ -164,6 +162,7 @@ class WebAppToolbarButtonContainer : public views::View,
   raw_ptr<WebAppMenuButton> web_app_menu_button_ = nullptr;
   raw_ptr<SystemAppAccessibleName> system_app_accessible_name_ = nullptr;
   raw_ptr<DownloadToolbarButtonView> download_button_ = nullptr;
+  raw_ptr<AvatarToolbarButton> avatar_button_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEB_APPS_FRAME_TOOLBAR_WEB_APP_TOOLBAR_BUTTON_CONTAINER_H_

@@ -28,7 +28,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkMetadataObserver
   // Called after a network configuration and associated metadata has been
   // updated.
   virtual void OnNetworkUpdate(const std::string& guid,
-                               const base::Value* set_properties);
+                               const base::Value::Dict* set_properties);
 
  protected:
   NetworkMetadataObserver();
@@ -36,10 +36,5 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkMetadataObserver
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::NetworkMetadataObserver;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_METADATA_OBSERVER_H_

@@ -8,14 +8,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
 #include "base/files/file_path.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "base/win/scoped_bstr.h"
@@ -167,18 +169,33 @@ std::string AXTreeFormatterWin::EvaluateScript(
     const AXTreeSelector& selector,
     const ui::AXInspectScenario& scenario) const {
   Microsoft::WRL::ComPtr<IAccessible> root = FindAccessibleRoot(selector);
-  if (!root) {
-    return "error no accessibility tree found";
-  };
-  const std::vector<ui::AXScriptInstruction>& instructions =
-      scenario.script_instructions;
-  size_t end_index = instructions.size();
+  return EvaluateScript(root, scenario.script_instructions, 0 /* start_index */,
+                        scenario.script_instructions.size());
+}
 
-  base::Value scripts(base::Value::Type::LIST);
+std::string AXTreeFormatterWin::EvaluateScript(
+    AXPlatformNodeDelegate* root,
+    const std::vector<AXScriptInstruction>& instructions,
+    size_t start_index,
+    size_t end_index) const {
+  DCHECK(root);
+  return EvaluateScript(root->GetNativeViewAccessible(), instructions,
+                        start_index, end_index);
+}
+
+std::string AXTreeFormatterWin::EvaluateScript(
+    Microsoft::WRL::ComPtr<IAccessible> root,
+    const std::vector<AXScriptInstruction>& instructions,
+    size_t start_index,
+    size_t end_index) const {
+  if (!root)
+    return "error no accessibility tree found";
+
+  base::Value::List scripts;
   ui::AXTreeIndexerWin indexer(root);
-  std::map<std::string, ui::Target> storage;
+  std::map<std::string, AXTargetWin> storage;
   ui::AXCallStatementInvokerWin invoker(&indexer, &storage);
-  for (size_t index = 0; index < end_index; index++) {
+  for (size_t index = start_index; index < end_index; index++) {
     if (instructions[index].IsComment()) {
       scripts.Append(instructions[index].AsComment());
       continue;
@@ -197,7 +214,7 @@ std::string AXTreeFormatterWin::EvaluateScript(
   }
 
   std::string contents;
-  for (const base::Value& script : scripts.GetList()) {
+  for (const base::Value& script : scripts) {
     std::string line;
     WriteAttribute(true, script.GetString(), &line);
     contents += line + "\n";
@@ -302,6 +319,36 @@ const char* const ALL_ATTRIBUTES[] = {
     "inner_html",
     "ia2_table_cell_column_index",
     "ia2_table_cell_row_index",
+    // IAccessibleRelation constants.
+    // https://accessibility.linuxfoundation.org/a11yspecs/ia2/docs/html/group__grp_relations.html
+    // Omitted label/description relations as we can already test those with
+    // `IAccessible2::get_accName()` and `IAccessible2::get_accDescription()`.
+    "containingApplication",
+    "containingDocument",
+    "containingTabPane",
+    "containingWindow",
+    "controlledBy",
+    "controllerFor",
+    // Note that the `details-roles:` attribute found in IA2 aria-details tests
+    // isn't necessarily duplicative of `IA2_RELATION_DETAILS` (the `details`
+    // string below). The former does additional processing, see
+    // `AXPlatformNodeBase::ComputeDetailsRoles()`.
+    "details",
+    "detailsFor",
+    "embeddedBy",
+    "embeds",
+    "error",
+    "errorFor",
+    "flowsFrom",
+    "flowsTo",
+    "memberOf",
+    "nextTabbable",
+    "nodeChildOf",
+    "nodeParentOf",
+    "parentWindowOf",
+    "popupFor",
+    "previousTabbable",
+    "subwindowOf",
 };
 
 void AXTreeFormatterWin::AddProperties(
@@ -314,6 +361,7 @@ void AXTreeFormatterWin::AddProperties(
   if (AddIA2Properties(node, dict)) {
     AddIA2ActionProperties(node, dict);
     AddIA2HypertextProperties(node, dict);
+    AddIA2RelationProperties(node, dict);
     AddIA2TableProperties(node, dict);
     AddIA2TableCellProperties(node, dict);
     AddIA2TextProperties(node, dict);
@@ -430,7 +478,7 @@ void AXTreeFormatterWin::AddSimpleDOMNodeProperties(
     return;
 
   base::win::ScopedBstr bstr;
-  if (SUCCEEDED(simple_dom_node->get_innerHTML(bstr.Receive()))) {
+  if (S_OK == simple_dom_node->get_innerHTML(bstr.Receive())) {
     dict->Set("inner_html", base::WideToUTF8(bstr.Get()));
   }
   bstr.Reset();
@@ -574,12 +622,11 @@ void AXTreeFormatterWin::AddIA2HypertextProperties(
         DCHECK(SUCCEEDED(hr));
       }
 
-      std::wstring child_index_str(L"<obj");
-      if (child_index >= 0) {
-        base::StringAppendF(&child_index_str, L"%d>", child_index);
-      } else {
-        base::StringAppendF(&child_index_str, L">");
-      }
+      std::wstring child_index_str =
+          (child_index >= 0)
+              ? base::StrCat(
+                    {L"<obj", base::NumberToWString(child_index), L">"})
+              : std::wstring(L"<obj>");
       base::ReplaceFirstSubstringAfterOffset(
           &ia2_hypertext, hypertext_index, embedded_character, child_index_str);
       ++character_index;
@@ -590,6 +637,70 @@ void AXTreeFormatterWin::AddIA2HypertextProperties(
   DCHECK_EQ(number_of_embeds, 0);
 
   dict->Set("ia2_hypertext", base::WideToUTF16(ia2_hypertext));
+}
+
+void AXTreeFormatterWin::AddIA2RelationProperties(
+    const Microsoft::WRL::ComPtr<IAccessible> node,
+    base::Value::Dict* dict) const {
+  Microsoft::WRL::ComPtr<IAccessible2> ia2;
+  if (S_OK != IA2QueryInterface<IAccessible2>(node.Get(), &ia2)) {
+    return;
+  }
+
+  LONG n_relations;
+  if (!SUCCEEDED(ia2->get_nRelations(&n_relations)) || n_relations <= 0) {
+    // If we don't have n_relations, we certainly won't get any
+    // more information.
+    return;
+  }
+
+  LONG ignored;
+  IAccessibleRelation** relations = new IAccessibleRelation*[n_relations]();
+  // We need to do an if check here because failure is possible if the relation
+  // points to nodes that are hidden, even if n_relations > 0.
+  if (SUCCEEDED(ia2->get_relations(n_relations, relations, &ignored))) {
+    for (int i = 0; i < n_relations; i++) {
+      AddIA2RelationProperty(relations[i], dict);
+    }
+  }
+  delete[] relations;
+}
+
+void AXTreeFormatterWin::AddIA2RelationProperty(
+    const Microsoft::WRL::ComPtr<IAccessibleRelation> relation,
+    base::Value::Dict* dict) const {
+  // Since we already verified a relation exists and points to some
+  // non-hidden node, all of these checks should work.
+  LONG n_targets;
+  relation->get_nTargets(&n_targets);
+  DCHECK(n_targets != NULL);
+  DCHECK(n_targets > 0);
+
+  base::win::ScopedBstr name;
+  relation->get_relationType(name.Receive());
+  DCHECK(name.Get() != NULL);
+
+  LONG ignored;
+  IUnknown** targets = new IUnknown*[n_targets]();
+  HRESULT hr = relation->get_targets(n_targets, targets, &ignored);
+  DCHECK(SUCCEEDED(hr));
+  std::string targetsString;
+  for (int i = 0; i < n_targets; i++) {
+    Microsoft::WRL::ComPtr<IAccessible2> ia2;
+    if (S_OK != IA2QueryInterface<IAccessible2>(targets[i], &ia2)) {
+      continue;
+    }
+    LONG role = 0;
+    if (SUCCEEDED(ia2->role(&role))) {
+      if (targetsString.size() > 0) {
+        targetsString.append(",");
+      }
+      targetsString.append(base::WideToUTF8(IAccessible2RoleToString(role)));
+    }
+  }
+  delete[] targets;
+
+  dict->Set(base::WideToUTF8(name.Get()), targetsString);
 }
 
 void AXTreeFormatterWin::AddIA2TableProperties(
@@ -789,7 +900,7 @@ std::string AXTreeFormatterWin::ProcessTreeForOutput(
         }
         break;
       }
-      case base::Value::Type::DICTIONARY: {
+      case base::Value::Type::DICT: {
         // Currently all dictionary values are coordinates.
         // Revisit this if that changes.
         const base::Value::Dict& dict_value = value->GetDict();
@@ -805,10 +916,9 @@ std::string AXTreeFormatterWin::ProcessTreeForOutput(
         break;
       }
       default:
-        WriteAttribute(false,
-                       base::StringPrintf("%s=%s", attribute_name,
-                                          AXFormatValue(*value).c_str()),
-                       &line);
+        WriteAttribute(
+            false, base::StrCat({attribute_name, "=", AXFormatValue(*value)}),
+            &line);
         break;
     }
   }

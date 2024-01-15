@@ -5,6 +5,7 @@
 package org.chromium.chrome.browser.suggestions.tile;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.util.AttributeSet;
@@ -18,13 +19,12 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.MathUtils;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ntp.FeedPositionUtils;
 import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 
-/**
- * A layout that arranges tiles in a grid.
- */
-public class MostVisitedTilesGridLayout extends FrameLayout {
+/** A layout that arranges tiles in a grid. */
+public class MostVisitedTilesGridLayout extends FrameLayout implements MostVisitedTilesLayout {
     private final int mMinHorizontalSpacing;
     private final int mMaxHorizontalSpacing;
     private final int mMaxWidth;
@@ -33,6 +33,11 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
     private int mMaxRows;
     private int mMaxColumns;
     private boolean mSearchProviderHasLogo = true;
+    private boolean mIsNtpAsHomeSurfaceOnTablet;
+    private final int mMvtContainer2SidesMarginTablet;
+    private final int mTileViewLandscapeEdgePaddingTablet;
+    private final int mTileViewPortraitEdgePaddingTablet;
+    private boolean mIsSurfacePolishEnabled;
 
     /**
      * Constructor for inflating from XML.
@@ -44,28 +49,39 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
         super(context, attrs);
 
         Resources res = getResources();
+        mIsSurfacePolishEnabled = ChromeFeatureList.sSurfacePolish.isEnabled();
         mVerticalSpacing =
                 getResources().getDimensionPixelOffset(getGridMVTVerticalSpacingResourcesId());
         TypedArray styledAttrs =
                 context.obtainStyledAttributes(attrs, R.styleable.MostVisitedTilesGridLayout);
-        mMinHorizontalSpacing = styledAttrs.getDimensionPixelOffset(
-                R.styleable.MostVisitedTilesGridLayout_minHorizontalSpacing,
-                res.getDimensionPixelOffset(R.dimen.tile_grid_layout_min_horizontal_spacing));
+        mMinHorizontalSpacing =
+                styledAttrs.getDimensionPixelOffset(
+                        R.styleable.MostVisitedTilesGridLayout_minHorizontalSpacing,
+                        res.getDimensionPixelOffset(
+                                R.dimen.tile_grid_layout_min_horizontal_spacing));
         styledAttrs.recycle();
         mMaxHorizontalSpacing = Integer.MAX_VALUE;
         mMaxWidth = Integer.MAX_VALUE;
+
+        mMvtContainer2SidesMarginTablet =
+                getResources().getDimensionPixelOffset(R.dimen.ntp_search_box_start_margin) * 2
+                        + getResources().getDimensionPixelOffset(R.dimen.tile_grid_layout_bleed);
+        mTileViewLandscapeEdgePaddingTablet =
+                getResources()
+                        .getDimensionPixelOffset(
+                                R.dimen.tile_grid_layout_landscape_edge_margin_tablet);
+        mTileViewPortraitEdgePaddingTablet =
+                getResources()
+                        .getDimensionPixelOffset(
+                                R.dimen.tile_grid_layout_portrait_edge_margin_tablet);
     }
 
-    /**
-     * Sets the maximum number of rows to display. Any items that don't fit will be hidden.
-     */
+    /** Sets the maximum number of rows to display. Any items that don't fit will be hidden. */
     public void setMaxRows(int rows) {
         mMaxRows = rows;
     }
 
-    /**
-     * Sets the maximum number of columns to display. Any items that don't fit will be hidden.
-     */
+    /** Sets the maximum number of columns to display. Any items that don't fit will be hidden. */
     public void setMaxColumns(int columns) {
         mMaxColumns = columns;
     }
@@ -73,6 +89,9 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int totalWidth = Math.min(MeasureSpec.getSize(widthMeasureSpec), mMaxWidth);
+        if (mIsNtpAsHomeSurfaceOnTablet) {
+            totalWidth = totalWidth - mMvtContainer2SidesMarginTablet;
+        }
         int childCount = getChildCount();
         if (childCount == 0) {
             setMeasuredDimension(totalWidth, resolveSize(0, heightMeasureSpec));
@@ -90,14 +109,16 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
         // Determine the number of columns that will fit.
         int childHeight = getChildAt(0).getMeasuredHeight();
         int childWidth = getChildAt(0).getMeasuredWidth();
-        int numColumns = MathUtils.clamp(
-                (totalWidth + mMinHorizontalSpacing) / (childWidth + mMinHorizontalSpacing), 1,
-                mMaxColumns);
+        int numColumns =
+                MathUtils.clamp(
+                        (totalWidth + mMinHorizontalSpacing) / (childWidth + mMinHorizontalSpacing),
+                        1,
+                        mMaxColumns);
 
         // Determine how much padding to use between and around the tiles.
         int gridWidthMinusColumns = Math.max(0, totalWidth - numColumns * childWidth);
         Pair<Integer, Integer> gridProperties =
-                computeHorizontalDimensions(true, gridWidthMinusColumns, numColumns);
+                computeHorizontalDimensions(gridWidthMinusColumns, numColumns);
         int gridStart = gridProperties.first;
         int horizontalSpacing = gridProperties.second;
 
@@ -127,32 +148,41 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
             getChildAt(i).setVisibility(View.GONE);
         }
 
-        int totalHeight = paddingTop + getPaddingBottom() + numRows * childHeight
-                + (numRows - 1) * mVerticalSpacing;
+        int totalHeight =
+                paddingTop
+                        + getPaddingBottom()
+                        + numRows * childHeight
+                        + (numRows - 1) * mVerticalSpacing;
 
         setMeasuredDimension(totalWidth, resolveSize(totalHeight, heightMeasureSpec));
     }
 
     /**
-     * @param spreadTiles Whether to spread the tiles with the same space between and around them.
      * @param availableWidth The space available to spread between and around the tiles.
      * @param numColumns The number of columns to be organised.
      * @return The [gridStart, horizontalSpacing] pair of dimensions.
      */
     @VisibleForTesting
-    Pair<Integer, Integer> computeHorizontalDimensions(
-            boolean spreadTiles, int availableWidth, int numColumns) {
+    Pair<Integer, Integer> computeHorizontalDimensions(int availableWidth, int numColumns) {
         int gridStart;
         float horizontalSpacing;
-        if (spreadTiles) {
+        if (mIsNtpAsHomeSurfaceOnTablet) {
+            gridStart =
+                    getResources().getConfiguration().orientation
+                                    == Configuration.ORIENTATION_LANDSCAPE
+                            ? mTileViewLandscapeEdgePaddingTablet
+                            : mTileViewPortraitEdgePaddingTablet;
+            horizontalSpacing =
+                    (float) (availableWidth - gridStart * 2) / Math.max(1, numColumns - 1);
+        } else {
             // Identically sized spacers are added both between and around the tiles.
             int spacerCount = numColumns + 1;
             horizontalSpacing = (float) availableWidth / spacerCount;
             gridStart = Math.round(horizontalSpacing);
-            if (horizontalSpacing < mMinHorizontalSpacing) {
-                return computeHorizontalDimensions(false, availableWidth, numColumns);
-            }
-        } else {
+        }
+
+        if (horizontalSpacing < mMinHorizontalSpacing
+                || horizontalSpacing > mMaxHorizontalSpacing) {
             // Ensure column spacing isn't greater than mMaxHorizontalSpacing.
             long gridSidePadding = availableWidth - (long) mMaxHorizontalSpacing * (numColumns - 1);
             if (gridSidePadding > 0) {
@@ -163,15 +193,31 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
                 gridStart = 0;
             }
         }
-
-        assert horizontalSpacing >= mMinHorizontalSpacing;
-        assert horizontalSpacing <= mMaxHorizontalSpacing;
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+        String logMessage =
+                "|horizontalSpacing| = "
+                        + horizontalSpacing
+                        + " |numColumns| = "
+                        + numColumns
+                        + " |availableWidth| = "
+                        + availableWidth
+                        + " |screenWidth| = "
+                        + screenWidth
+                        + " |screenHeight| = "
+                        + screenHeight
+                        + ".";
+        assert horizontalSpacing >= mMinHorizontalSpacing
+                : "Horizontal spacing shouldn't be smaller than minimal horizontal spacing: "
+                        + logMessage;
+        assert horizontalSpacing <= mMaxHorizontalSpacing
+                : "Horizontal spacing shouldn't be larger than maximal horizontal spacing: "
+                        + logMessage;
 
         return Pair.create(gridStart, Math.round(horizontalSpacing));
     }
 
-    @Nullable
-    public SuggestionsTileView findTileViewForTesting(SiteSuggestion suggestion) {
+    public @Nullable SuggestionsTileView findTileViewForTesting(SiteSuggestion suggestion) {
         int childCount = getChildCount();
         for (int i = 0; i < childCount; i++) {
             SuggestionsTileView tileView = (SuggestionsTileView) getChildAt(i);
@@ -189,10 +235,25 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
                 getResources().getDimensionPixelOffset(getGridMVTVerticalSpacingResourcesId());
     }
 
+    @Override
+    public void setIsNtpAsHomeSurfaceOnTablet(boolean isNtpAsHomeSurfaceOnTablet) {
+        mIsNtpAsHomeSurfaceOnTablet = isNtpAsHomeSurfaceOnTablet;
+    }
+
+    public int getMinHorizontalSpacingForTesting() {
+        return mMinHorizontalSpacing;
+    }
+
+    public int getMaxHorizontalSpacingForTesting() {
+        return mMaxHorizontalSpacing;
+    }
+
     // TODO(crbug.com/1329288): Remove this method when the Feed position experiment is cleaned up.
     private int getGridMVTVerticalSpacingResourcesId() {
         if (!LibraryLoader.getInstance().isInitialized() || !mSearchProviderHasLogo) {
-            return R.dimen.tile_grid_layout_vertical_spacing;
+            return mIsSurfacePolishEnabled
+                    ? R.dimen.tile_grid_layout_vertical_spacing_polish
+                    : R.dimen.tile_grid_layout_vertical_spacing;
         }
 
         if (FeedPositionUtils.isFeedPushDownLargeEnabled()) {
@@ -203,6 +264,8 @@ public class MostVisitedTilesGridLayout extends FrameLayout {
             return R.dimen.tile_grid_layout_vertical_spacing_push_down_small;
         }
 
-        return R.dimen.tile_grid_layout_vertical_spacing;
+        return mIsSurfacePolishEnabled
+                ? R.dimen.tile_grid_layout_vertical_spacing_polish
+                : R.dimen.tile_grid_layout_vertical_spacing;
     }
 }

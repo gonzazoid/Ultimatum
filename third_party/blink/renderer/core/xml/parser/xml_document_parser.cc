@@ -29,17 +29,13 @@
 #include <libxml/parser.h>
 #include <libxml/parserInternals.h>
 #include <libxml/xmlversion.h>
-
-#include "base/numerics/safe_conversions.h"
-#if defined(LIBXML_CATALOG_ENABLED)
-#include <libxml/catalog.h>
-#endif
 #include <libxslt/xslt.h>
 
+#include <algorithm>
 #include <memory>
 
 #include "base/auto_reset.h"
-#include "base/cxx17_backports.h"
+#include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/cdata_section.h"
 #include "third_party/blink/renderer/core/dom/comment.h"
@@ -48,12 +44,16 @@
 #include "third_party/blink/renderer/core/dom/document_parser_timing.h"
 #include "third_party/blink/renderer/core/dom/document_type.h"
 #include "third_party/blink/renderer/core/dom/processing_instruction.h"
+#include "third_party/blink/renderer/core/dom/throw_on_dynamic_markup_insertion_count_incrementer.h"
 #include "third_party/blink/renderer/core/dom/transform_source.h"
 #include "third_party/blink/renderer/core/dom/xml_document.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/core/html/custom/ce_reactions_scope.h"
 #include "third_party/blink/renderer/core/html/html_html_element.h"
 #include "third_party/blink/renderer/core/html/html_template_element.h"
+#include "third_party/blink/renderer/core/html/parser/html_construction_site.h"
 #include "third_party/blink/renderer/core/html/parser/html_entity_parser.h"
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder.h"
 #include "third_party/blink/renderer/core/html_names.h"
@@ -80,8 +80,8 @@
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/utf8.h"
-#include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace blink {
 
@@ -496,14 +496,21 @@ bool XMLDocumentParser::ParseDocumentFragment(
 }
 
 static int g_global_descriptor = 0;
-static base::PlatformThreadId g_libxml_loader_thread = 0;
 
 static int MatchFunc(const char*) {
-  // Only match loads initiated due to uses of libxml2 from within
-  // XMLDocumentParser to avoid interfering with client applications that also
-  // use libxml2. http://bugs.webkit.org/show_bug.cgi?id=17353
-  return XMLDocumentParserScope::current_document_ &&
-         CurrentThread() == g_libxml_loader_thread;
+  // Any use of libxml in the renderer process must:
+  //
+  // - have a XMLDocumentParserScope on the stack so the various callbacks know
+  //   which blink::Document they are interacting with.
+  // - only occur on the main thread, since the current document is not stored
+  //   in a TLS variable.
+  //
+  // These conditionals are enforced by a CHECK() rather than being used to
+  // calculate the return value since this allows XML parsing to fail safe in
+  // case these preconditions are violated.
+  CHECK(XMLDocumentParserScope::current_document_ && IsMainThread());
+  // Tell libxml to always use Blink's set of input callbacks.
+  return 1;
 }
 
 static inline void SetAttributes(
@@ -520,10 +527,6 @@ static void SwitchEncoding(xmlParserCtxtPtr ctxt, bool is_8bit) {
   if ((ctxt->errNo != XML_ERR_OK) && (ctxt->disableSAX == 1))
     return;
 
-  // Hack around libxml2's lack of encoding overide support by manually
-  // resetting the encoding to UTF-16 before every chunk. Otherwise libxml
-  // will detect <?xml version="1.0" encoding="<encoding name>"?> blocks and
-  // switch encodings, causing the parse to fail.
   if (is_8bit) {
     xmlSwitchEncoding(ctxt, XML_CHAR_ENCODING_8859_1);
     return;
@@ -538,6 +541,7 @@ static void SwitchEncoding(xmlParserCtxtPtr ctxt, bool is_8bit) {
 
 static void ParseChunk(xmlParserCtxtPtr ctxt, const String& chunk) {
   bool is_8bit = chunk.Is8Bit();
+  // Reset the encoding for each chunk to reflect if it is Latin-1 or UTF-16.
   SwitchEncoding(ctxt, is_8bit);
   if (is_8bit)
     xmlParseChunk(ctxt, reinterpret_cast<const char*>(chunk.Characters8()),
@@ -613,7 +617,7 @@ static bool ShouldAllowExternalLoad(const KURL& url) {
 static void* OpenFunc(const char* uri) {
   Document* document = XMLDocumentParserScope::current_document_;
   DCHECK(document);
-  DCHECK_EQ(CurrentThread(), g_libxml_loader_thread);
+  CHECK(IsMainThread());
 
   KURL url(NullURL(), uri);
 
@@ -687,13 +691,9 @@ static void InitializeLibXMLIfNecessary() {
   if (did_init)
     return;
 
-#if defined(LIBXML_CATALOG_ENABLED)
-  xmlCatalogSetDefaults(XML_CATA_ALLOW_NONE);
-#endif
   xmlInitParser();
   xmlRegisterInputCallbacks(MatchFunc, OpenFunc, ReadFunc, CloseFunc);
   xmlRegisterOutputCallbacks(MatchFunc, OpenFunc, WriteFunc, CloseFunc);
-  g_libxml_loader_thread = CurrentThread();
   did_init = true;
 }
 
@@ -904,12 +904,12 @@ static inline void HandleNamespaceAttributes(
       namespace_q_name =
           WTF::g_xmlns_with_colon + ToAtomicString(namespaces[i].prefix);
 
-    QualifiedName parsed_name = g_any_name;
-    if (!Element::ParseAttributeName(parsed_name, xmlns_names::kNamespaceURI,
-                                     namespace_q_name, exception_state))
+    absl::optional<QualifiedName> parsed_name = Element::ParseAttributeName(
+        xmlns_names::kNamespaceURI, namespace_q_name, exception_state);
+    if (!parsed_name) {
       return;
-
-    prefixed_attributes.push_back(Attribute(parsed_name, namespace_uri));
+    }
+    prefixed_attributes.push_back(Attribute(*parsed_name, namespace_uri));
   }
 }
 
@@ -957,12 +957,12 @@ static inline void HandleElementAttributes(
             ? ToAtomicString(attributes[i].localname)
             : attr_prefix + ":" + ToString(attributes[i].localname);
 
-    QualifiedName parsed_name = g_any_name;
-    if (!Element::ParseAttributeName(parsed_name, attr_uri, attr_q_name,
-                                     exception_state))
+    absl::optional<QualifiedName> parsed_name =
+        Element::ParseAttributeName(attr_uri, attr_q_name, exception_state);
+    if (!parsed_name) {
       return;
-
-    prefixed_attributes.push_back(Attribute(parsed_name, attr_value));
+    }
+    prefixed_attributes.push_back(Attribute(*parsed_name, attr_value));
   }
 }
 
@@ -1026,6 +1026,25 @@ void XMLDocumentParser::StartElementNs(const AtomicString& local_name,
   QualifiedName q_name(prefix, local_name, adjusted_uri);
   if (!prefix.empty() && adjusted_uri.empty())
     q_name = QualifiedName(g_null_atom, prefix + ":" + local_name, g_null_atom);
+
+  // If we are constructing a custom element, then we must run extra steps as
+  // described in the HTML spec below. This is similar to the steps in
+  // HTMLConstructionSite::CreateElement.
+  // https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token
+  // https://html.spec.whatwg.org/multipage/xhtml.html#parsing-xhtml-documents
+  absl::optional<CEReactionsScope> reactions;
+  absl::optional<ThrowOnDynamicMarkupInsertionCountIncrementer>
+      throw_on_dynamic_markup_insertions;
+  if (RuntimeEnabledFeatures::RunMicrotaskBeforeXmlCustomElementEnabled() &&
+      !parsing_fragment_) {
+    if (auto* definition = HTMLConstructionSite::LookUpCustomElementDefinition(
+            *document_, q_name, is)) {
+      throw_on_dynamic_markup_insertions.emplace(document_);
+      document_->GetAgent().event_loop()->PerformMicrotaskCheckpoint();
+      reactions.emplace();
+    }
+  }
+
   Element* new_element = current_node_->GetDocument().CreateElement(
       q_name,
       parsing_fragment_ ? CreateElementFlags::ByFragmentParser(document_)
@@ -1244,10 +1263,20 @@ void XMLDocumentParser::CdataBlock(const String& text) {
   // If the most recent child is already a CDATA node *AND* this is the first
   // parse event emitted from the current input chunk, we append this text to
   // the existing node. Otherwise we append a new CDATA node.
+  // TODO(https://crbug.com/36431): Unfortunately, when a CDATA straddles
+  // multiple input chunks, libxml starts to emit CDATA nodes in 300 byte
+  // chunks. The MergeAdjacentCDataSections REF is an attempt to keep these
+  // within a single node. However, this will also merge actual adjacent CDATA
+  // sections into a single node, e.g.: `<![CDATA[foo]]><![CDATA[bar]]>` will
+  // now produce one node. The REF is added to easily reverse in case this
+  // isn't web compatible. Otherwise, we can remove `is_start_of_new_chunk_`
+  // and this REF.
   CDATASection* cdata_tail =
       current_node_ ? DynamicTo<CDATASection>(current_node_->lastChild())
                     : nullptr;
-  if (cdata_tail && is_start_of_new_chunk) {
+  if (cdata_tail &&
+      (RuntimeEnabledFeatures::XMLParserMergeAdjacentCDataSectionsEnabled() ||
+       is_start_of_new_chunk)) {
     cdata_tail->ParserAppendData(text);
   } else {
     current_node_->ParserAppendChild(
@@ -1500,6 +1529,11 @@ static xmlEntityPtr GetEntityHandler(void* closure, const xmlChar* name) {
 static void StartDocumentHandler(void* closure) {
   xmlParserCtxt* ctxt = static_cast<xmlParserCtxt*>(closure);
   XMLDocumentParser* parser = GetParser(closure);
+  // Reset the encoding back to match that of the current data block (Latin-1 /
+  // UTF-16), since libxml may switch encoding based on the XML declaration -
+  // which it has now seen - causing the parse to fail. We could use the
+  // XML_PARSE_IGNORE_ENC option to avoid this, but we're relying on populating
+  // the 'xmlEncoding' property with the value it yields.
   SwitchEncoding(ctxt, parser->IsCurrentlyParsing8BitChunk());
   parser->StartDocument(ToString(ctxt->version), ToString(ctxt->encoding),
                         ctxt->standalone);
@@ -1624,7 +1658,7 @@ xmlDocPtr XmlDocPtrForString(Document* document,
   XMLDocumentParserScope scope(document, ErrorFunc, nullptr);
   XMLParserInput input(source);
   return xmlReadMemory(input.Data(), input.size(), url.Latin1().c_str(),
-                       input.Encoding(), XSLT_PARSE_OPTIONS);
+                       input.Encoding(), XSLT_PARSE_OPTIONS | XML_PARSE_HUGE);
 }
 
 OrdinalNumber XMLDocumentParser::LineNumber() const {

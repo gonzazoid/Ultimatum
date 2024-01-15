@@ -7,6 +7,8 @@
 #include "ash/login/ui/login_expanded_public_account_view.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
@@ -28,6 +30,8 @@ constexpr int kLabelMaximumWidth =
     kDialogWidthDp - kBulletContainerSizeDp - 2 * kDialogContentMarginDp;
 
 class BulletView : public views::View {
+  METADATA_HEADER(BulletView, views::View)
+
  public:
   explicit BulletView(SkColor color, int radius)
       : color_(color), radius_(radius) {}
@@ -54,6 +58,9 @@ class BulletView : public views::View {
   SkColor color_;
   int radius_;
 };
+
+BEGIN_METADATA(BulletView)
+END_METADATA
 
 }  // namespace
 
@@ -106,8 +113,9 @@ PublicAccountMonitoringInfoDialog::PublicAccountMonitoringInfoDialog(
 }
 
 PublicAccountMonitoringInfoDialog::~PublicAccountMonitoringInfoDialog() {
-  if (controller_)
+  if (controller_) {
     controller_->OnLearnMoreDialogClosed();
+  }
 }
 
 bool PublicAccountMonitoringInfoDialog::IsVisible() {
@@ -115,8 +123,9 @@ bool PublicAccountMonitoringInfoDialog::IsVisible() {
 }
 
 void PublicAccountMonitoringInfoDialog::Show() {
-  if (GetWidget())
+  if (GetWidget()) {
     GetWidget()->Show();
+  }
 }
 
 void PublicAccountMonitoringInfoDialog::AddedToWidget() {
@@ -133,5 +142,8 @@ void PublicAccountMonitoringInfoDialog::AddedToWidget() {
 gfx::Size PublicAccountMonitoringInfoDialog::CalculatePreferredSize() const {
   return {kDialogWidthDp, GetHeightForWidth(kDialogWidthDp)};
 }
+
+BEGIN_METADATA(PublicAccountMonitoringInfoDialog)
+END_METADATA
 
 }  // namespace ash

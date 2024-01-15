@@ -1,5 +1,5 @@
-specific_include_rules = {
-  "tab_view\.mm": [
-    "+third_party/google_toolbox_for_mac/src/iPhone/GTMFadeTruncatingLabel.h",
-  ],
-}
+include_rules = [
+  "+ios/chrome/browser/ui/bubble",
+  "+ios/chrome/browser/ui/fullscreen",
+  "+ios/chrome/browser/ui/tab_switcher",
+]

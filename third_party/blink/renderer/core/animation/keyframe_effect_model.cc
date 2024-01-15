@@ -37,22 +37,30 @@
 #include "third_party/blink/renderer/core/animation/compositor_animations.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_property_equality.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/css/property_registry.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
 PropertyHandleSet KeyframeEffectModelBase::Properties() const {
   PropertyHandleSet result;
   for (const auto& keyframe : keyframes_) {
-    for (const auto& property : keyframe->Properties())
+    if (!keyframe->HasComputedOffset()) {
+      // Keyframe is not reachable. This case occurs when we have a timeline
+      // offset in the keyframe but are not using a view timeline and thus the
+      // offset cannot be resolved.
+      continue;
+    }
+    for (const auto& property : keyframe->Properties()) {
       result.insert(property);
+    }
   }
   return result;
 }
@@ -62,6 +70,7 @@ void KeyframeEffectModelBase::SetFrames(HeapVector<K>& keyframes) {
   // TODO(samli): Should also notify/invalidate the animation
   keyframes_.clear();
   keyframes_.AppendVector(keyframes);
+  IndexKeyframesAndResolveComputedOffsets();
   ClearCachedData();
 }
 
@@ -108,6 +117,20 @@ const CSSProperty** CompositableProperties() {
   return kCompositableProperties;
 }
 
+enum class OffsetType {
+  // Specified percentage offsets, e.g.
+  // elem.animate([{offset: 0, ...}, {offset: "50%", ...}], {});
+  kSpecified,
+
+  // Specified offset calculations, e.g.
+  // elem.animate([{offset: "calc(10px)", ...}, {offset: "exit 50%", ...}], {});
+  kTimeline,
+
+  // Programmatic keyframes with missing offsets, e.g.
+  // elem.animate([{... /* no offset */}, {... /* no offset */}], {});
+  kComputed
+};
+
 }  // namespace
 
 bool KeyframeEffectModelBase::SnapshotNeutralCompositorKeyframes(
@@ -139,7 +162,7 @@ bool KeyframeEffectModelBase::SnapshotAllCompositorKeyframesIfNecessary(
 
   bool has_neutral_compositable_keyframe = false;
   auto should_snapshot_property = [](const PropertyHandle& property) {
-    return true;
+    return CompositorAnimations::CompositedPropertyRequiresSnapshot(property);
   };
   auto should_snapshot_keyframe =
       [&has_neutral_compositable_keyframe](
@@ -233,42 +256,92 @@ Vector<double> KeyframeEffectModelBase::GetComputedOffsets(
   // To avoid having to create two vectors when converting from the nullable
   // offsets to the non-nullable computed offsets, we keep the convention in
   // this function that std::numeric_limits::quiet_NaN() represents null.
-  double last_offset = 0;
+  double last_offset = -std::numeric_limits<double>::max();
   Vector<double> result;
+  Vector<OffsetType> offset_types;
   result.reserve(keyframes.size());
+  offset_types.reserve(keyframes.size());
 
   for (const auto& keyframe : keyframes) {
     absl::optional<double> offset = keyframe->Offset();
-    if (offset) {
-      DCHECK_GE(offset.value(), 0);
-      DCHECK_LE(offset.value(), 1);
+    if (offset && !keyframe->GetTimelineOffset()) {
       DCHECK_GE(offset.value(), last_offset);
       last_offset = offset.value();
     }
-    result.push_back(offset.value_or(std::numeric_limits<double>::quiet_NaN()));
+    result.push_back(offset.value_or(Keyframe::kNullComputedOffset));
+
+    // A timeline offset must always have a valid range within the context of
+    // a keyframe model. Otherwise, it is converted to a specified offset during
+    // construction of the model.
+    DCHECK(!keyframe->GetTimelineOffset() ||
+           keyframe->GetTimelineOffset()->name !=
+               TimelineOffset::NamedRange::kNone);
+
+    OffsetType type = keyframe->GetTimelineOffset()
+                          ? OffsetType::kTimeline
+                          : (offset.has_value() ? OffsetType::kSpecified
+                                                : OffsetType::kComputed);
+    offset_types.push_back(type);
   }
 
-  if (result.empty())
+  if (result.empty()) {
     return result;
-
-  if (std::isnan(result.back()))
-    result.back() = 1;
-
-  if (result.size() > 1 && std::isnan(result[0])) {
-    result.front() = 0;
   }
 
+  // Ensure we have an offset at the upper bound of the range.
+  for (int i = result.size() - 1; i >= 0; --i) {
+    if (offset_types[i] == OffsetType::kSpecified) {
+      break;
+    }
+    if (offset_types[i] == OffsetType::kComputed) {
+      result[i] = 1;
+      break;
+    }
+  }
+
+  // Ensure we have an offset at the lower bound of the range.
   wtf_size_t last_index = 0;
-  last_offset = result.front();
-  for (wtf_size_t i = 1; i < result.size(); ++i) {
+  for (wtf_size_t i = 0; i < result.size(); ++i) {
+    if (offset_types[i] == OffsetType::kSpecified) {
+      last_offset = result[i];
+      last_index = i;
+      break;
+    }
+    if (offset_types[i] == OffsetType::kComputed && result[i] != 1) {
+      last_offset = 0;
+      last_index = i;
+      result[i] = 0;
+      break;
+    }
+  }
+
+  if (last_offset < 0) {
+    // All offsets are timeline offsets.
+    return result;
+  }
+
+  wtf_size_t skipped_since_last_index = 0;
+  for (wtf_size_t i = last_index + 1; i < result.size(); ++i) {
     double offset = result[i];
-    if (!std::isnan(offset)) {
+    // Keyframes with timeline offsets do not participate in the evaluation of
+    // computed offsets.
+    bool skipKeyframe = keyframes[i]->GetTimelineOffset().has_value();
+    if (skipKeyframe) {
+      skipped_since_last_index++;
+    } else if (!std::isnan(offset)) {
+      wtf_size_t skipped_during_fill = 0;
       for (wtf_size_t j = 1; j < i - last_index; ++j) {
+        if (keyframes[last_index + j]->GetTimelineOffset().has_value()) {
+          skipped_during_fill++;
+          continue;
+        }
         result[last_index + j] =
-            last_offset + (offset - last_offset) * j / (i - last_index);
+            last_offset + (offset - last_offset) * (j - skipped_during_fill) /
+                              (i - last_index - skipped_since_last_index);
       }
       last_index = i;
       last_offset = offset;
+      skipped_since_last_index = 0;
     }
   }
 
@@ -313,19 +386,23 @@ void KeyframeEffectModelBase::Trace(Visitor* visitor) const {
 }
 
 void KeyframeEffectModelBase::EnsureKeyframeGroups() const {
-  if (keyframe_groups_)
+  if (keyframe_groups_) {
     return;
+  }
 
   keyframe_groups_ = MakeGarbageCollected<KeyframeGroupMap>();
   scoped_refptr<TimingFunction> zero_offset_easing = default_keyframe_easing_;
-  Vector<double> computed_offsets = GetComputedOffsets(keyframes_);
-  DCHECK_EQ(computed_offsets.size(), keyframes_.size());
   for (wtf_size_t i = 0; i < keyframes_.size(); i++) {
-    double computed_offset = computed_offsets[i];
     const auto& keyframe = keyframes_[i];
+    double computed_offset = keyframe->ComputedOffset().value();
 
-    if (computed_offset == 0)
+    if (computed_offset == 0) {
       zero_offset_easing = &keyframe->Easing();
+    }
+
+    if (!std::isfinite(computed_offset)) {
+      continue;
+    }
 
     for (const PropertyHandle& property : keyframe->Properties()) {
       Member<PropertySpecificKeyframeGroup>& group =
@@ -382,7 +459,6 @@ void KeyframeEffectModelBase::EnsureInterpolationEffectPopulated() const {
 
       if (i == 0) {
         apply_from = -std::numeric_limits<double>::infinity();
-        DCHECK_EQ(start_offset, 0.0);
         if (end_offset == 0.0) {
           DCHECK_NE(keyframes[end_index + 1]->Offset(), 0.0);
           end_index = start_index;
@@ -390,7 +466,6 @@ void KeyframeEffectModelBase::EnsureInterpolationEffectPopulated() const {
       }
       if (i == keyframes.size() - 2) {
         apply_to = std::numeric_limits<double>::infinity();
-        DCHECK_EQ(end_offset, 1.0);
         if (start_offset == 1.0) {
           DCHECK_NE(keyframes[start_index - 1]->Offset(), 1.0);
           start_index = end_index;
@@ -409,11 +484,50 @@ void KeyframeEffectModelBase::EnsureInterpolationEffectPopulated() const {
   interpolation_effect_->SetPopulated();
 }
 
+void KeyframeEffectModelBase::IndexKeyframesAndResolveComputedOffsets() {
+  Vector<double> computed_offsets = GetComputedOffsets(keyframes_);
+  // Snapshot the indices so that we can recover the original ordering.
+  for (wtf_size_t i = 0; i < keyframes_.size(); i++) {
+    keyframes_[i]->SetIndex(i);
+    keyframes_[i]->SetComputedOffset(computed_offsets[i]);
+  }
+}
+
+bool KeyframeEffectModelBase::ResolveTimelineOffsets(
+    const TimelineRange& timeline_range,
+    double range_start,
+    double range_end) {
+  if (timeline_range == last_timeline_range_ &&
+      last_range_start_ == range_start && last_range_end_ == range_end) {
+    return false;
+  }
+
+  bool needs_update = false;
+  for (const auto& keyframe : keyframes_) {
+    needs_update |=
+        keyframe->ResolveTimelineOffset(timeline_range, range_start, range_end);
+  }
+  if (needs_update) {
+    std::stable_sort(keyframes_.begin(), keyframes_.end(), &Keyframe::LessThan);
+    ClearCachedData();
+  }
+
+  last_timeline_range_ = timeline_range;
+  last_range_start_ = range_start;
+  last_range_end_ = range_end;
+
+  return needs_update;
+}
+
 void KeyframeEffectModelBase::ClearCachedData() {
   keyframe_groups_ = nullptr;
   interpolation_effect_->Clear();
   last_fraction_ = std::numeric_limits<double>::quiet_NaN();
   needs_compositor_keyframes_snapshot_ = true;
+
+  last_timeline_range_ = absl::nullopt;
+  last_range_start_ = absl::nullopt;
+  last_range_end_ = absl::nullopt;
 }
 
 bool KeyframeEffectModelBase::IsReplaceOnly() const {
@@ -437,7 +551,7 @@ void KeyframeEffectModelBase::PropertySpecificKeyframeGroup::AppendKeyframe(
 void KeyframeEffectModelBase::PropertySpecificKeyframeGroup::
     RemoveRedundantKeyframes() {
   // As an optimization, removes interior keyframes that have the same offset
-  // as both their neighbours, as they will never be used by sample().
+  // as both their neighbors, as they will never be used by sample().
   // Note that synthetic keyframes must be added before this method is
   // called.
   DCHECK_GE(keyframes_.size(), 2U);
@@ -461,12 +575,12 @@ bool KeyframeEffectModelBase::PropertySpecificKeyframeGroup::
 
   bool added_synthetic_keyframe = false;
 
-  if (keyframes_.front()->Offset() != 0.0) {
+  if (keyframes_.front()->Offset() > 0.0) {
     keyframes_.insert(0, keyframes_.front()->NeutralKeyframe(
                              0, std::move(zero_offset_easing)));
     added_synthetic_keyframe = true;
   }
-  if (keyframes_.back()->Offset() != 1.0) {
+  if (keyframes_.back()->Offset() < 1.0) {
     AppendKeyframe(keyframes_.back()->NeutralKeyframe(1, nullptr));
     added_synthetic_keyframe = true;
   }

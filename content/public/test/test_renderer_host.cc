@@ -8,8 +8,8 @@
 
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/compositor/test/test_image_transport_factory.h"
 #include "content/browser/gpu/gpu_data_manager_impl.h"
@@ -30,6 +30,7 @@
 #include "content/public/test/test_browser_context.h"
 #include "content/test/content_browser_consistency_checker.h"
 #include "content/test/test_navigation_url_loader_factory.h"
+#include "content/test/test_page_factory.h"
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_render_frame_host_factory.h"
 #include "content/test/test_render_view_host.h"
@@ -78,11 +79,6 @@ bool RenderFrameHostTester::TestOnMessageReceived(RenderFrameHost* rfh,
 // static
 void RenderFrameHostTester::CommitPendingLoad(
     NavigationController* controller) {
-  // This function is currently used by BrowserWithTestWindowTest. It would be
-  // ideal to instead make the users of that class create TestWebContents
-  // (rather than WebContentsImpl directly). It is not trivial to make
-  // that change, so for now we have this extra function for
-  // non-TestWebContents.
   auto navigation = NavigationSimulator::CreateFromPending(*controller);
   navigation->Commit();
 }
@@ -120,6 +116,7 @@ RenderViewHostTestEnabler::RenderViewHostTestEnabler(
     NavigationURLLoaderFactoryType url_loader_factory_type)
     : rph_factory_(new MockRenderProcessHostFactory()),
       asgh_factory_(new MockAgentSchedulingGroupHostFactory()),
+      page_factory_(new TestPageFactory()),
       rvh_factory_(new TestRenderViewHostFactory(rph_factory_.get(),
                                                  asgh_factory_.get())),
       rfh_factory_(new TestRenderFrameHostFactory()),
@@ -145,8 +142,9 @@ RenderViewHostTestEnabler::RenderViewHostTestEnabler(
   display::Screen::SetScreenInstance(screen_.get());
 #endif
 #if BUILDFLAG(IS_MAC)
-  if (base::ThreadTaskRunnerHandle::IsSet())
-    ui::WindowResizeHelperMac::Get()->Init(base::ThreadTaskRunnerHandle::Get());
+  if (base::SingleThreadTaskRunner::HasCurrentDefault())
+    ui::WindowResizeHelperMac::Get()->Init(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 #endif  // BUILDFLAG(IS_MAC)
 }
 
@@ -174,7 +172,7 @@ NavigationController& RenderViewHostTestHarness::controller() {
   return web_contents()->GetController();
 }
 
-WebContents* RenderViewHostTestHarness::web_contents() {
+WebContents* RenderViewHostTestHarness::web_contents() const {
   return contents_.get();
 }
 
@@ -221,10 +219,18 @@ RenderViewHostTestHarness::CreateTestWebContents() {
   return TestWebContents::Create(GetBrowserContext(), std::move(instance));
 }
 void RenderViewHostTestHarness::FocusWebContentsOnMainFrame() {
+  FocusWebContentsOnFrame(web_contents()->GetPrimaryMainFrame());
+}
+
+void RenderViewHostTestHarness::FocusWebContentsOnFrame(
+    content::RenderFrameHost* rfh) {
   TestWebContents* contents = static_cast<TestWebContents*>(web_contents());
-  auto* root = contents->GetPrimaryFrameTree().root();
+  FrameTreeNode* node =
+      contents->GetPrimaryFrameTree().FindByID(rfh->GetFrameTreeNodeId());
+  CHECK(node);
+  CHECK_EQ(node->current_frame_host(), rfh);
   contents->GetPrimaryFrameTree().SetFocusedFrame(
-      root, root->current_frame_host()->GetSiteInstance()->group());
+      node, node->current_frame_host()->GetSiteInstance()->group());
 }
 
 void RenderViewHostTestHarness::NavigateAndCommit(

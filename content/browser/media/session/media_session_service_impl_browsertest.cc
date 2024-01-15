@@ -8,7 +8,6 @@
 
 #include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
-#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "content/browser/media/session/media_session_impl.h"
 #include "content/browser/media/session/media_session_player_observer.h"
@@ -20,7 +19,6 @@
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
 #include "media/base/media_content_type.h"
-#include "media/base/media_switches.h"
 #include "services/media_session/public/cpp/test/mock_media_session.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -59,14 +57,14 @@ class MockMediaSessionPlayerObserver : public MediaSessionPlayerObserver {
   void OnSetVolumeMultiplier(int player_id, double volume_multiplier) override {
   }
   void OnEnterPictureInPicture(int player_id) override {}
-  void OnExitPictureInPicture(int player_id) override {}
   void OnSetAudioSinkId(int player_id,
                         const std::string& raw_device_id) override {}
   void OnSetMute(int player_id, bool mute) override {}
+  void OnRequestMediaRemoting(int player_id) override {}
 
-  absl::optional<media_session::MediaPosition> GetPosition(
+  std::optional<media_session::MediaPosition> GetPosition(
       int player_id) const override {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   bool IsPictureInPictureAvailable(int player_id) const override {
@@ -83,7 +81,7 @@ class MockMediaSessionPlayerObserver : public MediaSessionPlayerObserver {
   }
 
   media::MediaContentType GetMediaContentType() const override {
-    return media::MediaContentType::Persistent;
+    return media::MediaContentType::kPersistent;
   }
 
   RenderFrameHost* render_frame_host() const override {
@@ -170,19 +168,32 @@ class MediaSessionServiceImplBrowserTest : public ContentBrowserTest {
     observer.WaitForExpectedActions(expected_actions);
   }
 
+  void ExecuteScriptToSetUpWebRTCMediaSessionSync() {
+    ASSERT_TRUE(ExecJs(shell(), kSetUpWebRTCMediaSessionScript));
+    media_session::test::MockMediaSessionMojoObserver observer(*GetSession());
+
+    std::set<media_session::mojom::MediaSessionAction> expected_actions;
+    expected_actions.insert(media_session::mojom::MediaSessionAction::kPlay);
+    expected_actions.insert(media_session::mojom::MediaSessionAction::kPause);
+    expected_actions.insert(media_session::mojom::MediaSessionAction::kStop);
+    expected_actions.insert(media_session::mojom::MediaSessionAction::kSeekTo);
+    expected_actions.insert(media_session::mojom::MediaSessionAction::kScrubTo);
+    expected_actions.insert(
+        media_session::mojom::MediaSessionAction::kToggleMicrophone);
+    expected_actions.insert(
+        media_session::mojom::MediaSessionAction::kToggleCamera);
+    expected_actions.insert(media_session::mojom::MediaSessionAction::kHangUp);
+
+    observer.WaitForExpectedActions(expected_actions);
+  }
+
  private:
   std::unique_ptr<MockMediaSessionPlayerObserver> player_;
 };
 
-#if defined(LEAK_SANITIZER)
-// TODO(crbug.com/850870) Plug the leaks.
-#define MAYBE_CrashMessageOnUnload DISABLED_CrashMessageOnUnload
-#else
-#define MAYBE_CrashMessageOnUnload CrashMessageOnUnload
-#endif
 // Two windows from the same BrowserContext.
 IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
-                       MAYBE_CrashMessageOnUnload) {
+                       CrashMessageOnUnload) {
   EXPECT_TRUE(
       NavigateToURL(shell(), GetTestUrl("media/session", "embedder.html")));
   // Navigate to a chrome:// URL to avoid render process re-use.
@@ -196,11 +207,7 @@ IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
 // observers to wait for the message to be processed on the MediaSessionObserver
 // side.
 
-#if defined(LEAK_SANITIZER)
-// TODO(crbug.com/850870) Plug the leaks.
-#define MAYBE_ResetServiceWhenNavigatingAway \
-  DISABLED_ResetServiceWhenNavigatingAway
-#elif BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || \
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || \
     BUILDFLAG(IS_ANDROID)
 // crbug.com/927234.
 #define MAYBE_ResetServiceWhenNavigatingAway \
@@ -224,23 +231,13 @@ IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
   // actions are reset.
   NavigateToURLAndWaitForFinish(shell(), GetTestUrl(".", "title2.html"));
 
-  EXPECT_EQ(blink::mojom::MediaSessionPlaybackState::NONE,
-            GetService()->playback_state());
-  EXPECT_FALSE(GetService()->metadata());
-  EXPECT_EQ(0u, GetService()->actions().size());
+  // The service should be destroyed.
+  EXPECT_EQ(GetService(), nullptr);
 }
 
-#if defined(LEAK_SANITIZER)
-// TODO(crbug.com/850870) Plug the leaks.
-#define MAYBE_DontResetServiceForSameDocumentNavigation \
-  DISABLED_DontResetServiceForSameDocumentNavigation
-#else
 // crbug.com/927234.
-#define MAYBE_DontResetServiceForSameDocumentNavigation \
-  DISABLED_DontResetServiceForSameDocumentNavigation
-#endif
 IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
-                       MAYBE_DontResetServiceForSameDocumentNavigation) {
+                       DISABLED_DontResetServiceForSameDocumentNavigation) {
   EXPECT_TRUE(NavigateToURL(shell(), GetTestUrl(".", "title1.html")));
   EnsurePlayer();
 
@@ -258,40 +255,7 @@ IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
   EXPECT_EQ(1u, GetService()->actions().size());
 }
 
-// Browser tests with the MediaSessionWebRTC feature enabled.
-// TODO(steimel): Merge with above tests when the feature is enabled by default.
-class MediaSessionServiceImplWebRTCBrowserTest
-    : public MediaSessionServiceImplBrowserTest {
- protected:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    MediaSessionServiceImplBrowserTest::SetUpCommandLine(command_line);
-    feature_list_.InitAndEnableFeature(media::kMediaSessionWebRTC);
-  }
-
-  void ExecuteScriptToSetUpWebRTCMediaSessionSync() {
-    ASSERT_TRUE(ExecJs(shell(), kSetUpWebRTCMediaSessionScript));
-    media_session::test::MockMediaSessionMojoObserver observer(*GetSession());
-
-    std::set<media_session::mojom::MediaSessionAction> expected_actions;
-    expected_actions.insert(media_session::mojom::MediaSessionAction::kPlay);
-    expected_actions.insert(media_session::mojom::MediaSessionAction::kPause);
-    expected_actions.insert(media_session::mojom::MediaSessionAction::kStop);
-    expected_actions.insert(media_session::mojom::MediaSessionAction::kSeekTo);
-    expected_actions.insert(media_session::mojom::MediaSessionAction::kScrubTo);
-    expected_actions.insert(
-        media_session::mojom::MediaSessionAction::kToggleMicrophone);
-    expected_actions.insert(
-        media_session::mojom::MediaSessionAction::kToggleCamera);
-    expected_actions.insert(media_session::mojom::MediaSessionAction::kHangUp);
-
-    observer.WaitForExpectedActions(expected_actions);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplWebRTCBrowserTest,
+IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
                        MicrophoneAndCameraStatesInitiallyUnknown) {
   EXPECT_TRUE(NavigateToURL(shell(), GetTestUrl(".", "title1.html")));
   EnsurePlayer();
@@ -304,7 +268,7 @@ IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplWebRTCBrowserTest,
   observer.WaitForCameraState(media_session::mojom::CameraState::kUnknown);
 }
 
-IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplWebRTCBrowserTest,
+IN_PROC_BROWSER_TEST_F(MediaSessionServiceImplBrowserTest,
                        MicrophoneAndCameraStatesCanBeSet) {
   EXPECT_TRUE(NavigateToURL(shell(), GetTestUrl(".", "title1.html")));
   EnsurePlayer();

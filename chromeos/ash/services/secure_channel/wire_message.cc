@@ -62,7 +62,7 @@ const char* const kV3Features[] = {
 
 std::unique_ptr<WireMessage> DeserializeJsonMessageBody(
     const std::string& serialized_message_body) {
-  absl::optional<base::Value> body_value =
+  std::optional<base::Value> body_value =
       base::JSONReader::Read(serialized_message_body);
   if (!body_value || !body_value->is_dict()) {
     PA_LOG(WARNING) << "Unable to parse message as JSON.";
@@ -192,14 +192,14 @@ std::string WireMessage::Serialize() const {
     }
 
     // Create JSON body containing feature and payload.
-    base::DictionaryValue body;
+    base::Value::Dict body;
 
     std::string base64_payload;
     base::Base64UrlEncode(payload_,
                           base::Base64UrlEncodePolicy::INCLUDE_PADDING,
                           &base64_payload);
-    body.SetString(kPayloadKey, base64_payload);
-    body.SetString(kFeatureKey, feature_);
+    body.Set(kPayloadKey, base64_payload);
+    body.Set(kFeatureKey, feature_);
 
     if (!base::JSONWriter::Write(body, &json_body)) {
       PA_LOG(ERROR) << "Failed to convert WireMessage body to JSON: " << body;

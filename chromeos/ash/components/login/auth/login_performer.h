@@ -6,22 +6,22 @@
 #define CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_LOGIN_PERFORMER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "chromeos/ash/components/login/auth/auth_events_recorder.h"
 #include "chromeos/ash/components/login/auth/auth_status_consumer.h"
 #include "chromeos/ash/components/login/auth/authenticator.h"
-#include "chromeos/ash/components/login/auth/extended_authenticator.h"
-#include "chromeos/ash/components/login/auth/metrics_recorder.h"
+#include "chromeos/ash/components/login/auth/public/auth_callbacks.h"
 #include "chromeos/ash/components/login/auth/public/auth_failure.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/user_manager/user_type.h"
 #include "google_apis/gaia/google_service_auth_error.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class AccountId;
 
@@ -56,10 +56,12 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
     ~Delegate() override {}
     virtual void AllowlistCheckFailed(const std::string& email) = 0;
     virtual void PolicyLoadFailed() = 0;
+    // Sends AuthSuccess metrics to LoginUnlockThroughputRecorder if needed.
+    virtual void ReportOnAuthSuccessMetrics() {}
   };
 
   explicit LoginPerformer(Delegate* delegate,
-                          MetricsRecorder* metrics_recorder);
+                          AuthEventsRecorder* metrics_recorder);
 
   LoginPerformer(const LoginPerformer&) = delete;
   LoginPerformer& operator=(const LoginPerformer&) = delete;
@@ -87,13 +89,19 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
   // Performs a login into the Web kiosk mode account with |web_app_account_id|.
   void LoginAsWebKioskAccount(const AccountId& web_app_account_id);
 
+  // Performs final stages of the login for user already authenticated via
+  // `AuthSession`.
+  void LoginAuthenticated(std::unique_ptr<UserContext> user_context);
+
   // AuthStatusConsumer implementation:
   void OnAuthFailure(const AuthFailure& error) override;
   void OnAuthSuccess(const UserContext& user_context) override;
   void OnOffTheRecordAuthSuccess() override;
-  void OnPasswordChangeDetected(const UserContext& user_context) override;
-  void OnOldEncryptionDetected(const UserContext& user_context,
+  void OnOnlinePasswordUnusable(std::unique_ptr<UserContext>, bool) override;
+  void OnOldEncryptionDetected(std::unique_ptr<UserContext>,
                                bool has_incomplete_migration) override;
+  void OnLocalAuthenticationRequired(
+      std::unique_ptr<UserContext> user_context) override;
 
   // Migrates cryptohome using |old_password| specified.
   void RecoverEncryptedData(const std::string& old_password);
@@ -109,15 +117,6 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
   // True if password change has been detected.
   bool password_changed() { return password_changed_; }
 
-  // Number of times we've been called with OnPasswordChangeDetected().
-  // If user enters incorrect old password, same LoginPerformer instance will
-  // be called so callback count makes it possible to distinguish initial
-  // "password changed detected" event from further attempts to enter old
-  // password for cryptohome migration (when > 1).
-  int password_changed_callback_count() {
-    return password_changed_callback_count_;
-  }
-
   void set_delegate(Delegate* delegate) { delegate_ = delegate; }
 
   AuthorizationMode auth_mode() const { return auth_mode_; }
@@ -126,11 +125,14 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
   // contain additional information whether this user is explicitly listed or
   // not (may be relevant for external-based sign-in). |user_type| will be used
   // to check if the user is allowed because of the user type, pass
-  // absl::nullopt if user type is not known.
+  // std::nullopt if user type is not known.
   virtual bool IsUserAllowlisted(
       const AccountId& account_id,
       bool* wildcard_match,
-      const absl::optional<user_manager::UserType>& user_type) = 0;
+      const std::optional<user_manager::UserType>& user_type) = 0;
+
+  virtual void LoadAndApplyEarlyPrefs(std::unique_ptr<UserContext> context,
+                                      AuthOperationCallback callback) = 0;
 
  protected:
   // Platform-dependant methods to be implemented by concrete class.
@@ -149,9 +151,6 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
                                        base::OnceClosure success_callback,
                                        base::OnceClosure failure_callback) = 0;
 
-  // Set up sign-in flow for Easy Unlock.
-  virtual void SetupEasyUnlockUserFlow(const AccountId& account_id) = 0;
-
   // Run policy check for |account_id|. If something is wrong, delegate's
   // PolicyLoadFailed is called.
   virtual bool CheckPolicyForUser(const AccountId& account_id) = 0;
@@ -166,7 +165,7 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
   void set_authenticator(scoped_refptr<Authenticator> authenticator);
 
   // Notifications receiver.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
  private:
   // Starts login completion of externally authenticated user.
@@ -187,16 +186,23 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
   void NotifyAuthFailure(const AuthFailure& error);
   void NotifyAuthSuccess(const UserContext& user_context);
   void NotifyOffTheRecordAuthSuccess();
-  void NotifyPasswordChangeDetected(const UserContext& user_context);
-  void NotifyOldEncryptionDetected(const UserContext& user_context,
+  void NotifyOnlinePasswordUnusable(std::unique_ptr<UserContext> user_context,
+                                    bool online_password_mismatch);
+  void NotifyOldEncryptionDetected(std::unique_ptr<UserContext> user_context,
                                    bool has_incomplete_migration);
+  void NotifyLocalAuthenticationRequired(
+      std::unique_ptr<UserContext> user_context);
   void NotifyAllowlistCheckFailure();
+
+  // Callback passed to `LoadAndApplyEarlyPrefs`.
+  void OnEarlyPrefsApplied(std::unique_ptr<UserContext> context,
+                           std::optional<AuthenticationError> error);
 
   // Used for logging in.
   scoped_refptr<Authenticator> authenticator_;
 
   // Used for metric reporting.
-  const raw_ptr<MetricsRecorder> metrics_recorder_;
+  const raw_ptr<AuthEventsRecorder> auth_events_recorder_;
 
   // Represents last login failure that was encountered when communicating to
   // sign-in server. AuthFailure.LoginFailureNone() by default.
@@ -208,7 +214,6 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) LoginPerformer
   // True if password change has been detected.
   // Once correct password is entered homedir migration is executed.
   bool password_changed_ = false;
-  int password_changed_callback_count_ = 0;
 
   // Authorization mode type.
   AuthorizationMode auth_mode_ = AuthorizationMode::kInternal;

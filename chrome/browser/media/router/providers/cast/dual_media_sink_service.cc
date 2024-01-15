@@ -4,7 +4,7 @@
 
 #include "chrome/browser/media/router/providers/cast/dual_media_sink_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/default_tick_clock.h"
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service.h"
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
@@ -48,14 +48,14 @@ base::CallbackListSubscription DualMediaSinkService::AddSinksDiscoveredCallback(
   return sinks_discovered_callbacks_.Add(callback);
 }
 
-void DualMediaSinkService::OnUserGesture() {
+void DualMediaSinkService::DiscoverSinksNow() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // TODO(imcheng): Move this call into CastMediaRouteProvider.
   if (cast_media_sink_service_)
-    cast_media_sink_service_->OnUserGesture();
+    cast_media_sink_service_->DiscoverSinksNow();
 
   if (dial_media_sink_service_)
-    dial_media_sink_service_->OnUserGesture();
+    dial_media_sink_service_->DiscoverSinksNow();
 }
 
 #if BUILDFLAG(IS_WIN)

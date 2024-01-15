@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/trace_event/trace_event.h"
 #include "components/services/font/public/cpp/font_service_thread.h"
 #include "pdf/buildflags.h"
+#include "third_party/skia/include/core/SkFontMgr.h"
 
 namespace font_service {
 
@@ -28,7 +29,7 @@ bool FontLoader::matchFamilyName(const char family_name[],
                                  SkString* out_family_name,
                                  SkFontStyle* out_style) {
   TRACE_EVENT1("fonts", "FontServiceThread::MatchFamilyName", "family_name",
-               TRACE_STR_COPY(family_name));
+               TRACE_STR_COPY(family_name ? family_name : "<unspecified>"));
   return thread_->MatchFamilyName(family_name, requested, out_font_identifier,
                                   out_family_name, out_style);
 }
@@ -62,9 +63,10 @@ SkStreamAsset* FontLoader::openStream(const FontIdentity& identity) {
   }
 }
 
-sk_sp<SkTypeface> FontLoader::makeTypeface(const FontIdentity& identity) {
+sk_sp<SkTypeface> FontLoader::makeTypeface(const FontIdentity& identity,
+                                           sk_sp<SkFontMgr> mgr) {
   TRACE_EVENT0("fonts", "FontServiceThread::makeTypeface");
-  return SkFontConfigInterface::makeTypeface(identity);
+  return SkFontConfigInterface::makeTypeface(identity, mgr);
 }
 
 // Additional cross-thread accessible methods.

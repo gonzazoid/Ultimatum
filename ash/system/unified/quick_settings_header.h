@@ -6,13 +6,17 @@
 #define ASH_SYSTEM_UNIFIED_QUICK_SETTINGS_HEADER_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/view.h"
+
+namespace views {
+class Label;
+}  // namespace views
 
 namespace ash {
 
 class ChannelIndicatorQuickSettingsView;
-class EnterpriseManagedView;
-class SupervisedUserView;
+class EolNoticeQuickSettingsView;
 class UnifiedSystemTrayController;
 
 // The header view shown at the top of the `QuickSettingsView`. Contains an
@@ -35,16 +39,31 @@ class ASH_EXPORT QuickSettingsHeader : public views::View {
     return channel_view_;
   }
 
+  EolNoticeQuickSettingsView* eol_notice_for_test() { return eol_notice_; }
+
+  views::View* GetManagedButtonForTest();
+  views::View* GetSupervisedButtonForTest();
+  views::Label* GetManagedButtonLabelForTest();
+  views::Label* GetSupervisedButtonLabelForTest();
+
  private:
+  // A view that shows whether the device is enterprise managed or not. It
+  // updates by observing `EnterpriseDomainModel`.
+  class EnterpriseManagedView;
+
+  // A base class of the views showing device management state.
+  class ManagedStateView;
+
   // Updates visibility for this view. When it has no children it sets itself
   // invisible so it does not consume any space. Also updates the size of the
   // child views based on whether one or two columns are visible.
   void UpdateVisibilityAndLayout();
 
   // Owned by views hierarchy.
-  EnterpriseManagedView* enterprise_managed_view_ = nullptr;
-  SupervisedUserView* supervised_view_ = nullptr;
-  ChannelIndicatorQuickSettingsView* channel_view_ = nullptr;
+  raw_ptr<EnterpriseManagedView> enterprise_managed_view_ = nullptr;
+  raw_ptr<ManagedStateView> supervised_view_ = nullptr;
+  raw_ptr<ChannelIndicatorQuickSettingsView> channel_view_ = nullptr;
+  raw_ptr<EolNoticeQuickSettingsView> eol_notice_ = nullptr;
 };
 
 }  // namespace ash

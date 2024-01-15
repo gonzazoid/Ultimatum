@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_DELETE_ENTRY_H_
 #define CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_DELETE_ENTRY_H_
 
-#include <memory>
-
 #include "base/files/file.h"
 #include "chrome/browser/ash/file_system_provider/operations/operation.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
@@ -17,19 +15,13 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace extensions {
-class EventRouter;
-}  // namespace extensions
-
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
 // Deletes an entry. If |recursive| is passed and the entry is a directory, then
 // all contents of it (recursively) will be deleted too. Created per request.
 class DeleteEntry : public Operation {
  public:
-  DeleteEntry(extensions::EventRouter* event_router,
+  DeleteEntry(RequestDispatcher* dispatcher,
               const ProvidedFileSystemInfo& file_system_info,
               const base::FilePath& entry_path,
               bool recursive,
@@ -43,10 +35,10 @@ class DeleteEntry : public Operation {
   // Operation overrides.
   bool Execute(int request_id) override;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override;
 
  private:
@@ -55,8 +47,6 @@ class DeleteEntry : public Operation {
   storage::AsyncFileUtil::StatusCallback callback_;
 };
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_DELETE_ENTRY_H_

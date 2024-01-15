@@ -10,6 +10,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
@@ -78,8 +79,10 @@ class LayerTreeTest : public testing::Test, public TestHooks {
         return "Skia GL";
       case viz::RendererType::kSkiaVk:
         return "Skia Vulkan";
-      case viz::RendererType::kSkiaDawn:
-        return "Skia Dawn";
+      case viz::RendererType::kSkiaGraphiteDawn:
+        return "Skia Graphite Dawn";
+      case viz::RendererType::kSkiaGraphiteMetal:
+        return "Skia Graphite Metal";
       case viz::RendererType::kSoftware:
         return "Software";
     }
@@ -189,13 +192,14 @@ class LayerTreeTest : public testing::Test, public TestHooks {
   virtual void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_context_provider);
-  // Override this and call the base class to change what viz::ContextProviders
-  // will be used (such as for pixel tests). Or override it and create your own
-  // TestLayerTreeFrameSink to control how it is created.
+  // Override this and call the base class to change what
+  // viz::RasterContextProviders will be used (such as for pixel tests). Or
+  // override it and create your own TestLayerTreeFrameSink to control how it is
+  // created.
   virtual std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider);
   std::unique_ptr<viz::DisplayCompositorMemoryAndTaskController>
   CreateDisplayControllerOnThread() override;
@@ -220,12 +224,9 @@ class LayerTreeTest : public testing::Test, public TestHooks {
   bool use_skia_vulkan() const {
     return renderer_type_ == viz::RendererType::kSkiaVk;
   }
-  bool use_d3d12() const {
-#if BUILDFLAG(IS_WIN)
-    return renderer_type_ == viz::RendererType::kSkiaDawn;
-#else
-    return false;
-#endif
+  bool use_skia_graphite() const {
+    return renderer_type_ == viz::RendererType::kSkiaGraphiteDawn ||
+           renderer_type_ == viz::RendererType::kSkiaGraphiteMetal;
   }
 
   const viz::RendererType renderer_type_;
@@ -309,15 +310,10 @@ class LayerTreeTest : public testing::Test, public TestHooks {
 // a specific test name. eg.
 // // TODO(crbug.com/abcd): Disabled for some reasons stated here.
 // // SINGLE_AND_MULTI_THREAD_TEST_F(SomeRandomTest)
-#define SINGLE_THREAD_TEST_F(TEST_FIXTURE_NAME)                                \
-  TEST_F(TEST_FIXTURE_NAME, RunSingleThread_DelegatingRenderer) {              \
-    RunTest(CompositorMode::SINGLE_THREADED);                                  \
-  }                                                                            \
-  TEST_F(TEST_FIXTURE_NAME, RunSingleThread_DelegatingRendererUnifiedScroll) { \
-    base::test::ScopedFeatureList scoped_feature_list;                         \
-    scoped_feature_list.InitAndEnableFeature(features::kScrollUnification);    \
-    RunTest(CompositorMode::SINGLE_THREADED);                                  \
-  }                                                                            \
+#define SINGLE_THREAD_TEST_F(TEST_FIXTURE_NAME)                   \
+  TEST_F(TEST_FIXTURE_NAME, RunSingleThread_DelegatingRenderer) { \
+    RunTest(CompositorMode::SINGLE_THREADED);                     \
+  }                                                               \
   class SingleThreadDelegatingImplNeedsSemicolon##TEST_FIXTURE_NAME {}
 
 // Do not change this macro to disable a test, it will disable half of
@@ -325,15 +321,10 @@ class LayerTreeTest : public testing::Test, public TestHooks {
 // a specific test name. eg.
 // // TODO(crbug.com/abcd): Disabled for some reasons stated here.
 // // SINGLE_AND_MULTI_THREAD_TEST_F(SomeRandomTest)
-#define MULTI_THREAD_TEST_F(TEST_FIXTURE_NAME)                                \
-  TEST_F(TEST_FIXTURE_NAME, RunMultiThread_DelegatingRenderer) {              \
-    RunTest(CompositorMode::THREADED);                                        \
-  }                                                                           \
-  TEST_F(TEST_FIXTURE_NAME, RunMultiThread_DelegatingRendererUnifiedScroll) { \
-    base::test::ScopedFeatureList scoped_feature_list;                        \
-    scoped_feature_list.InitAndEnableFeature(features::kScrollUnification);   \
-    RunTest(CompositorMode::THREADED);                                        \
-  }                                                                           \
+#define MULTI_THREAD_TEST_F(TEST_FIXTURE_NAME)                   \
+  TEST_F(TEST_FIXTURE_NAME, RunMultiThread_DelegatingRenderer) { \
+    RunTest(CompositorMode::THREADED);                           \
+  }                                                              \
   class MultiThreadDelegatingImplNeedsSemicolon##TEST_FIXTURE_NAME {}
 
 // Do not change this macro to disable a test, it will disable half of

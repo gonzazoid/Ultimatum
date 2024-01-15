@@ -13,7 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_package_notification.h"
@@ -86,6 +87,8 @@ class CrostiniPackageService : public KeyedService,
   void QueueUninstallApplication(const std::string& app_id);
 
   CrostiniManager::RestartId GetRestartIdForTesting();
+
+  static void EnsureFactoryBuilt();
 
  private:
   // The user can request new operations while a different operation is in
@@ -172,7 +175,7 @@ class CrostiniPackageService : public KeyedService,
 
   std::string GetUniqueNotificationId();
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // The notifications in the RUNNING state for each container.
   std::map<guest_os::GuestId, std::unique_ptr<CrostiniPackageNotification>>

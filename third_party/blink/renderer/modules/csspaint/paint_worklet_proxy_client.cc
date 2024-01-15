@@ -67,7 +67,7 @@ PaintWorkletProxyClient::PaintWorkletProxyClient(
       worklet_id_(worklet_id),
       state_(RunState::kUninitialized),
       main_thread_runner_(std::move(main_thread_runner)),
-      paint_worklet_(paint_worklet) {
+      paint_worklet_(MakeCrossThreadWeakHandle<PaintWorklet>(paint_worklet)) {
   DCHECK(IsMainThread());
 }
 
@@ -144,7 +144,8 @@ void PaintWorkletProxyClient::RegisterCSSPaintDefinition(
         *main_thread_runner_, FROM_HERE,
         CrossThreadBindOnce(
             &PaintWorklet::RegisterMainThreadDocumentPaintDefinition,
-            paint_worklet_, name, definition->NativeInvalidationProperties(),
+            MakeUnwrappingCrossThreadWeakHandle(paint_worklet_), name,
+            definition->NativeInvalidationProperties(),
             std::move(passed_custom_properties),
             definition->InputArgumentTypes(),
             definition->GetPaintRenderingContext2DSettings()->alpha()));
@@ -173,7 +174,7 @@ void PaintWorkletProxyClient::Trace(Visitor* visitor) const {
   PaintWorkletPainter::Trace(visitor);
 }
 
-sk_sp<PaintRecord> PaintWorkletProxyClient::Paint(
+PaintRecord PaintWorkletProxyClient::Paint(
     const CompositorPaintWorkletInput* compositor_input,
     const CompositorPaintWorkletJob::AnimatedPropertyValues&
         animated_property_values) {
@@ -187,7 +188,7 @@ sk_sp<PaintRecord> PaintWorkletProxyClient::Paint(
   }
   // TODO: Can this happen? We don't register till all are here.
   if (global_scopes_.empty())
-    return sk_make_sp<PaintRecord>();
+    return PaintRecord();
 
   // PaintWorklets are stateless by spec. There are two ways script might try to
   // inject state:

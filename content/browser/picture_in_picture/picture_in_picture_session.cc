@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/picture_in_picture/picture_in_picture_service_impl.h"
 #include "content/browser/picture_in_picture/video_picture_in_picture_window_controller_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -107,6 +107,12 @@ void PictureInPictureSession::StopInternal(StopCallback callback) {
 }
 
 void PictureInPictureSession::OnConnectionError() {
+  // There is possibility that OnConnectionError arrives between StopInternal()
+  // is called and |this| is deleted. As a result, DCHECK in StopInternal()
+  // will fail.
+  if (is_stopping_)
+    return;
+
   // StopInternal() will self destruct which will close the bindings.
   StopInternal(base::NullCallback());
 }

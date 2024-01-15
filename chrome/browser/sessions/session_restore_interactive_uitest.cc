@@ -15,12 +15,14 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/startup/startup_tab.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/sessions/content/content_test_helper.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/test/browser_test.h"
+#include "ui/views/widget/widget_interactive_uitest_utils.h"
 
 class SessionRestoreInteractiveTest : public InProcessBrowserTest {
  public:
@@ -62,8 +64,7 @@ class SessionRestoreInteractiveTest : public InProcessBrowserTest {
     // Create a new window, which should trigger session restore.
     chrome::NewEmptyWindow(profile);
 
-    Browser* new_browser =
-        chrome::FindBrowserWithWebContents(tab_waiter.Wait());
+    Browser* new_browser = chrome::FindBrowserWithTab(tab_waiter.Wait());
 
     restore_observer.Wait();
     WaitForTabsToLoad(new_browser);
@@ -147,6 +148,9 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest, MAYBE_FocusOnLaunch) {
   ASSERT_EQ(url1_,
             new_browser->tab_strip_model()->GetActiveWebContents()->GetURL());
 
+  ui_test_utils::BrowserActivationWaiter waiter(new_browser);
+  waiter.WaitForActivation();
+
   // Ensure window has initial focus on launch.
   EXPECT_TRUE(new_browser->tab_strip_model()
                   ->GetActiveWebContents()
@@ -167,7 +171,12 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest, MAYBE_FocusOnLaunch) {
 IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest,
                        MAYBE_RestoreMinimizedWindow) {
   // Minimize the window.
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&ui::BaseWindow::IsMinimized,
+                          base::Unretained(browser()->window())),
+      true);
   browser()->window()->Minimize();
+  EXPECT_TRUE(minimize_waiter.Wait());
 
   // Restart and session restore the tabs.
   Browser* restored = QuitBrowserAndRestore(browser());
@@ -197,7 +206,12 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreInteractiveTest,
   CreateBrowser(browser()->profile());
 
   // Minimize the first browser window.
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&ui::BaseWindow::IsMinimized,
+                          base::Unretained(browser()->window())),
+      true);
   browser()->window()->Minimize();
+  EXPECT_TRUE(minimize_waiter.Wait());
 
   EXPECT_EQ(2u, BrowserList::GetInstance()->size());
 

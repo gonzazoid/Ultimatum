@@ -4,14 +4,16 @@
 
 #include <list>
 
-#include "base/barrier_closure.h"
 #include "base/functional/callback.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
+#include "base/threading/platform_thread.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/network_service_util.h"
+#include "content/public/common/content_client.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/shell/browser/shell.h"
@@ -26,11 +28,11 @@
 #include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/resolve_error_info.h"
 #include "net/dns/public/secure_dns_policy.h"
+#include "sandbox/policy/features.h"
 #include "services/network/public/cpp/features.h"
-#include "services/network/public/cpp/resolve_host_client_base.h"
-#include "services/network/public/mojom/host_resolver.mojom.h"
-#include "services/network/public/mojom/network_context.mojom.h"
+#include "services/network/public/cpp/simple_host_resolver.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "testing/perf/perf_result_reporter.h"
 
 namespace content {
 
@@ -44,63 +46,17 @@ const char kHostname2[] = "hostname2";
 const char kIpAddress2[] = "127.0.0.3";
 const char kFailHostname[] = "failhostname";
 
+using ResolveHostFuture = base::test::TestFuture<
+    int,
+    const net::ResolveErrorInfo&,
+    const std::optional<net::AddressList>&,
+    const std::optional<net::HostResolverEndpointResults>&>;
+
 }  // namespace
-
-class MockResolveHostClient : public network::ResolveHostClientBase {
- public:
-  MockResolveHostClient(
-      mojo::PendingReceiver<network::mojom::ResolveHostClient> receiver,
-      base::OnceClosure callback)
-      : receiver_(this, std::move(receiver)), callback_(std::move(callback)) {
-    receiver_.set_disconnect_handler(
-        base::BindOnce(&MockResolveHostClient::ResolveHostClientDisconnected,
-                       base::Unretained(this)));
-  }
-
-  // network::mojom::ResolveHostClient:
-  void OnComplete(int result,
-                  const net::ResolveErrorInfo& resolve_error_info,
-                  const absl::optional<net::AddressList>& resolved_addresses,
-                  const absl::optional<net::HostResolverEndpointResults>&
-                      endpoint_results_with_metadata) override {
-    result_ = result;
-    resolve_error_info_ = resolve_error_info;
-    resolved_addresses_ = resolved_addresses;
-    endpoint_results_with_metadata_ = endpoint_results_with_metadata;
-    std::move(callback_).Run();
-  }
-
-  void ResolveHostClientDisconnected() {
-    if (callback_) {
-      ADD_FAILURE() << "Unexpected disconnection of ResolveHostClient";
-    }
-  }
-
-  int result() { return result_; }
-  const net::ResolveErrorInfo resolve_error_info() {
-    return resolve_error_info_;
-  }
-  const absl::optional<net::AddressList>& resolved_addresses() const {
-    return resolved_addresses_;
-  }
-
- private:
-  int result_;
-  net::ResolveErrorInfo resolve_error_info_;
-  absl::optional<net::AddressList> resolved_addresses_;
-  absl::optional<net::HostResolverEndpointResults>
-      endpoint_results_with_metadata_;
-
-  mojo::Receiver<network::mojom::ResolveHostClient> receiver_;
-  base::OnceClosure callback_;
-};
 
 class SystemDnsResolverBrowserTest : public content::ContentBrowserTest {
  public:
-  SystemDnsResolverBrowserTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        network::features::kOutOfProcessSystemDnsResolution);
-  }
+  SystemDnsResolverBrowserTest() = default;
 
   void SetUpOnMainThread() override {
     ContentBrowserTest::SetUpOnMainThread();
@@ -110,17 +66,24 @@ class SystemDnsResolverBrowserTest : public content::ContentBrowserTest {
     host_resolver()->AddSimulatedFailure(kFailHostname, 0);
     host_resolver()->AddRule(net::GetHostName(), "127.0.0.1");
 
-    shell()
-        ->web_contents()
-        ->GetBrowserContext()
-        ->GetDefaultStoragePartition()
-        ->GetNetworkContext()
-        ->CreateHostResolver(absl::nullopt,
-                             host_resolver_.BindNewPipeAndPassReceiver());
+    resolver_ =
+        network::SimpleHostResolver::Create(shell()
+                                                ->web_contents()
+                                                ->GetBrowserContext()
+                                                ->GetDefaultStoragePartition()
+                                                ->GetNetworkContext());
   }
 
-  MockResolveHostClient* ResolveHostname(std::string hostname,
-                                         base::OnceClosure cb) {
+  void TearDownOnMainThread() override {
+    // Has to be torn down before its network context (which is a raw_ptr).
+    resolver_.reset();
+
+    ContentBrowserTest::TearDownOnMainThread();
+  }
+
+  void ResolveHostname(
+      std::string hostname,
+      network::SimpleHostResolver::ResolveHostCallback callback) {
     network::mojom::ResolveHostParametersPtr parameters =
         network::mojom::ResolveHostParameters::New();
     parameters->initial_priority = net::RequestPriority::HIGHEST;
@@ -131,70 +94,65 @@ class SystemDnsResolverBrowserTest : public content::ContentBrowserTest {
     parameters->secure_dns_policy = network::mojom::SecureDnsPolicy::DISABLE;
 
     mojo::PendingReceiver<network::mojom::ResolveHostClient> receiver;
-    host_resolver_->ResolveHost(
-        network::mojom::HostResolverHost::NewHostPortPair(
-            net::HostPortPair(hostname, kHttpPort)),
-        net::NetworkAnonymizationKey::CreateTransient(), std::move(parameters),
-        receiver.InitWithNewPipeAndPassRemote());
-    return &client_list_.emplace_back(std::move(receiver), std::move(cb));
+    resolver_->ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
+                               net::HostPortPair(hostname, kHttpPort)),
+                           net::NetworkAnonymizationKey::CreateTransient(),
+                           std::move(parameters), std::move(callback));
   }
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
 
-  std::list<MockResolveHostClient> client_list_;
-
-  mojo::Remote<network::mojom::HostResolver> host_resolver_;
+  std::unique_ptr<network::SimpleHostResolver> resolver_;
 };
 
 IN_PROC_BROWSER_TEST_F(SystemDnsResolverBrowserTest,
                        NetworkServiceResolvesOneHostname) {
-  base::RunLoop run_loop;
-  MockResolveHostClient* client1 =
-      ResolveHostname(kHostname1, run_loop.QuitClosure());
-  run_loop.Run();
+  ResolveHostFuture future;
+  ResolveHostname(kHostname1, future.GetCallback());
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  // If system DNS resolution runs in the browser process, check here that the
-  // resolver received the correct number of resolves.
-  EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kHostname1), 1u);
-#endif
+  const auto& addr_list1 = future.Get<std::optional<net::AddressList>>();
 
-  const absl::optional<net::AddressList>& addr_list1 =
-      client1->resolved_addresses();
+  if (GetContentClientForTesting()
+          ->browser()
+          ->ShouldRunOutOfProcessSystemDnsResolution()) {
+    // If system DNS resolution runs in the browser process, check here that the
+    // resolver received the correct number of resolves.
+    EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kHostname1), 1u);
+  }
+
   ASSERT_TRUE(addr_list1);
   net::IPAddress address1;
   EXPECT_TRUE(address1.AssignFromIPLiteral(kIpAddress1));
-  EXPECT_EQ((*addr_list1)[0],
+  EXPECT_EQ(addr_list1->front(),
             net::IPEndPoint(net::IPAddress(address1), kHttpPort));
 }
 
 IN_PROC_BROWSER_TEST_F(SystemDnsResolverBrowserTest,
                        NetworkServiceResolvesTwoHostnames) {
-  base::RunLoop run_loop;
-  base::RepeatingClosure barrier =
-      base::BarrierClosure(2, run_loop.QuitClosure());
-  MockResolveHostClient* client1 = ResolveHostname(kHostname1, barrier);
-  MockResolveHostClient* client2 = ResolveHostname(kHostname2, barrier);
-  run_loop.Run();
+  ResolveHostFuture future1;
+  ResolveHostname(kHostname1, future1.GetCallback());
+  ResolveHostFuture future2;
+  ResolveHostname(kHostname2, future2.GetCallback());
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  // If system DNS resolution runs in the browser process, check here that the
-  // resolver received the correct number of resolves.
-  EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kHostname1), 1u);
-  EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kHostname2), 1u);
-#endif
+  const auto& addr_list1 = future1.Get<std::optional<net::AddressList>>();
+  const auto& addr_list2 = future2.Get<std::optional<net::AddressList>>();
 
-  const absl::optional<net::AddressList>& addr_list1 =
-      client1->resolved_addresses();
+  if (GetContentClientForTesting()
+          ->browser()
+          ->ShouldRunOutOfProcessSystemDnsResolution()) {
+    // If system DNS resolution runs in the browser process, check here that the
+    // resolver received the correct number of resolves.
+    EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kHostname1), 1u);
+    EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kHostname2), 1u);
+  }
+
   ASSERT_TRUE(addr_list1);
   net::IPAddress address1;
   EXPECT_TRUE(address1.AssignFromIPLiteral(kIpAddress1));
   EXPECT_EQ((*addr_list1)[0],
             net::IPEndPoint(net::IPAddress(address1), kHttpPort));
 
-  const absl::optional<net::AddressList>& addr_list2 =
-      client2->resolved_addresses();
   ASSERT_TRUE(addr_list2);
   net::IPAddress address2;
   EXPECT_TRUE(address2.AssignFromIPLiteral(kIpAddress2));
@@ -204,38 +162,31 @@ IN_PROC_BROWSER_TEST_F(SystemDnsResolverBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(SystemDnsResolverBrowserTest,
                        NetworkServiceFailsResolvingBadHostname) {
-  base::RunLoop run_loop;
-  MockResolveHostClient* client =
-      ResolveHostname(kFailHostname, run_loop.QuitClosure());
-  run_loop.Run();
+  ResolveHostFuture future;
+  ResolveHostname(kFailHostname, future.GetCallback());
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  // If system DNS resolution runs in the browser process, check here that the
-  // resolver received the correct number of resolves.
-  EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kFailHostname), 1u);
-#endif
+  auto [result, resolve_error_info, resolved_addresses, endpoints] =
+      future.Take();
 
-  const net::ResolveErrorInfo& resolve_error_info =
-      client->resolve_error_info();
+  if (GetContentClientForTesting()
+          ->browser()
+          ->ShouldRunOutOfProcessSystemDnsResolution()) {
+    // If system DNS resolution runs in the browser process, check here that
+    // the resolver received the correct number of resolves.
+    EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(kFailHostname), 1u);
+  }
+
   EXPECT_EQ(resolve_error_info.error, net::ERR_NAME_NOT_RESOLVED);
-  EXPECT_EQ(client->result(), net::ERR_NAME_NOT_RESOLVED);
+  EXPECT_EQ(result, net::ERR_NAME_NOT_RESOLVED);
 }
 
 // Check if the system's own host name resolves, which is a slightly different
 // code path from normal resolution.
 IN_PROC_BROWSER_TEST_F(SystemDnsResolverBrowserTest,
                        NetworkServiceResolvesOwnHostname) {
-  base::RunLoop run_loop;
-  net::AddressList addr_list;
-  int os_error, net_error;
-  auto cb = base::BindLambdaForTesting(
-      [&](const net::AddressList& addr_list_result, int os_error_result,
-          int net_error_result) {
-        addr_list = addr_list_result;
-        os_error = os_error_result;
-        net_error = net_error_result;
-        run_loop.Quit();
-      });
+  base::test::TestFuture<const net::AddressList&, /*os_error_result=*/int,
+                         /*net_error_result=*/int>
+      future;
 
   // Systems with an in-process network service (e.g. some Android) will not
   // have a network_service_test().
@@ -243,23 +194,133 @@ IN_PROC_BROWSER_TEST_F(SystemDnsResolverBrowserTest,
   if (IsInProcessNetworkService()) {
     system_task = net::HostResolverSystemTask::CreateForOwnHostname(
         net::AddressFamily::ADDRESS_FAMILY_UNSPECIFIED, 0);
-    system_task->Start(std::move(cb));
+    system_task->Start(future.GetCallback());
   } else {
-    network_service_test()->ResolveOwnHostnameWithSystemDns(std::move(cb));
+    network_service_test()->ResolveOwnHostnameWithSystemDns(
+        future.GetCallback());
   }
 
-  run_loop.Run();
+  auto [addr_list, os_error_result, net_error_result] = future.Take();
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  // If system DNS resolution runs in the browser process, check here that the
-  // resolver received the correct number of resolves.
-  EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(net::GetHostName()), 1u);
-#endif
+  if (GetContentClientForTesting()
+          ->browser()
+          ->ShouldRunOutOfProcessSystemDnsResolution()) {
+    // If system DNS resolution runs in the browser process, check here that the
+    // resolver received the correct number of resolves.
+    EXPECT_EQ(host_resolver()->NumResolvesForHostPattern(net::GetHostName()),
+              1u);
+  }
 
   ASSERT_EQ(addr_list.size(), 1u);
   net::IPAddress address;
   EXPECT_TRUE(address.AssignFromIPLiteral("127.0.0.1"));
   EXPECT_EQ(addr_list[0].address(), address);
+}
+
+class SystemDnsResolverPerfTest : public content::ContentBrowserTest {
+ public:
+  SystemDnsResolverPerfTest() {
+    SetAllowNetworkAccessToHostResolutions();
+  }
+
+  void SetUpOnMainThread() override {
+    ContentBrowserTest::SetUpOnMainThread();
+
+    resolver_ =
+        network::SimpleHostResolver::Create(shell()
+                                                ->web_contents()
+                                                ->GetBrowserContext()
+                                                ->GetDefaultStoragePartition()
+                                                ->GetNetworkContext());
+  }
+
+  void TearDownOnMainThread() override {
+    // Has to be torn down before its network context (which is a raw_ptr).
+    resolver_.reset();
+
+    ContentBrowserTest::TearDownOnMainThread();
+  }
+
+  void ResolveAHost(network::SimpleHostResolver::ResolveHostCallback callback) {
+    network::mojom::ResolveHostParametersPtr parameters =
+        network::mojom::ResolveHostParameters::New();
+    parameters->initial_priority = net::RequestPriority::HIGHEST;
+    // Use the SYSTEM resolver, and don't allow the cache or attempt DoH.
+    parameters->source = net::HostResolverSource::SYSTEM;
+    parameters->cache_usage =
+        network::mojom::ResolveHostParameters::CacheUsage::DISALLOWED;
+    parameters->secure_dns_policy = network::mojom::SecureDnsPolicy::DISABLE;
+
+    mojo::PendingReceiver<network::mojom::ResolveHostClient> receiver;
+    resolver_->ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
+                               net::HostPortPair("google.com", kHttpPort)),
+                           net::NetworkAnonymizationKey::CreateTransient(),
+                           std::move(parameters), std::move(callback));
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+
+  std::unique_ptr<network::SimpleHostResolver> resolver_;
+};
+
+namespace {
+constexpr char kMetricPrefixSystemDnsResolver[] = "SystemDnsResolver.";
+constexpr char kMetricTimePerSystemDnsResolution[] = "time_per_resolution";
+
+const size_t kNumResolutions = 5000;
+std::atomic<bool> g_finished = false;
+
+void PostAnotherTask() {
+  base::PlatformThread::Sleep(base::Seconds(1));
+  if (!g_finished) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&PostAnotherTask));
+  }
+}
+
+perf_test::PerfResultReporter SetUpReporter(const std::string& story_name) {
+  perf_test::PerfResultReporter reporter(kMetricPrefixSystemDnsResolver,
+                                         story_name);
+  reporter.RegisterImportantMetric(kMetricTimePerSystemDnsResolution, "ms");
+  return reporter;
+}
+}  // namespace
+
+// This benchmark just sends a bunch SYSTEM dns requests to the network service.
+// If out-of-process system DNS resolution is enabled, it will send those
+// requests back to the browser. So this benchmark adds some mild UI thread
+// contention.
+// TODO(crbug.com/1312224, crbug.com/1320192): this can probably be removed when
+// out-of-process system DNS resolution fully launches.
+IN_PROC_BROWSER_TEST_F(SystemDnsResolverPerfTest, MANUAL_ResolveManyHostnames) {
+  std::vector<ResolveHostFuture> futures(kNumResolutions);
+  std::vector<std::optional<net::AddressList>> results(kNumResolutions);
+
+  // Simulate UI thread busyness:
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&PostAnotherTask));
+  base::TimeTicks start = base::TimeTicks::Now();
+  for (ResolveHostFuture& future : futures) {
+    ResolveAHost(future.GetCallback());
+  }
+  for (size_t i = 0; i < kNumResolutions; i++) {
+    results[i] = futures[i].Get<std::optional<net::AddressList>>();
+  }
+  base::TimeDelta duration = base::TimeTicks::Now() - start;
+
+  auto reporter = SetUpReporter("SystemDnsResolution");
+  reporter.AddResult(
+      kMetricTimePerSystemDnsResolution,
+      duration.InMilliseconds() / static_cast<double>(kNumResolutions));
+
+  // Verify there are results.
+  for (const std::optional<net::AddressList>& result : results) {
+    ASSERT_TRUE(result);
+    ASSERT_GT(result->size(), 0u);
+  }
+
+  g_finished = true;
 }
 
 }  // namespace content

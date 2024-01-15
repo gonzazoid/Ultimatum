@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager_observer.h"
@@ -26,6 +27,8 @@ namespace ash {
 namespace system {
 class AutomaticRebootManager;
 }
+
+extern const char kKioskPrimaryAppInSessionUpdateHistogram[];
 
 // This class enforces automatic restart on app and Chrome updates in app mode.
 class KioskAppUpdateService : public KeyedService,
@@ -64,20 +67,21 @@ class KioskAppUpdateService : public KeyedService,
   // KioskAppManagerObserver overrides:
   void OnKioskAppCacheUpdated(const std::string& app_id) override;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   std::string app_id_;
 
   // After we detect an upgrade we start a one-short timer to force restart.
   base::OneShotTimer restart_timer_;
 
-  system::AutomaticRebootManager* automatic_reboot_manager_;  // Not owned.
+  raw_ptr<system::AutomaticRebootManager>
+      automatic_reboot_manager_;  // Not owned.
 };
 
 // Singleton that owns all KioskAppUpdateServices and associates them with
 // profiles.
 class KioskAppUpdateServiceFactory : public ProfileKeyedServiceFactory {
  public:
-  // Returns the KioskAppUpdateService for |profile|, creating it if it is not
+  // Returns the KioskAppUpdateService for `profile`, creating it if it is not
   // yet created.
   static KioskAppUpdateService* GetForProfile(Profile* profile);
 
@@ -91,7 +95,7 @@ class KioskAppUpdateServiceFactory : public ProfileKeyedServiceFactory {
   ~KioskAppUpdateServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
 };
 

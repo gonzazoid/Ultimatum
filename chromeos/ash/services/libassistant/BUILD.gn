@@ -84,6 +84,7 @@ source_set("sandbox_hook") {
     ":constants",
     ":loader",
     "//base",
+    "//chromeos/ash/services/assistant/public/cpp",
     "//chromeos/assistant/internal:internal",
     "//sandbox/linux:sandbox_services",
     "//sandbox/policy",
@@ -145,7 +146,10 @@ source_set("internal") {
     "util.h",
   ]
 
-  public_deps = [ "//chromeos/assistant/internal/proto:assistant" ]
+  public_deps = [
+    "//chromeos/assistant/internal/proto:assistant",
+    "//chromeos/services/network_config/public/cpp",
+  ]
 
   deps = [
     ":audio",
@@ -168,7 +172,6 @@ source_set("internal") {
     "//chromeos/assistant/internal:support",
     "//chromeos/assistant/internal/proto:assistant",
     "//chromeos/dbus/power",
-    "//chromeos/services/network_config/public/cpp",
     "//chromeos/strings:strings_grit",
     "//chromeos/version:version",
     "//services/network/public/cpp",
@@ -250,7 +253,9 @@ source_set("test_support") {
     ":internal",
     ":libassistant",
     "//base/test:test_support",
+    "//chromeos/ash/services/assistant/public/cpp",
     "//chromeos/ash/services/libassistant/grpc:assistant_client",
+    "//chromeos/ash/services/libassistant/grpc:grpc_service",
     "//chromeos/ash/services/libassistant/public/mojom",
     "//chromeos/assistant/internal:test_support",
     "//chromeos/assistant/internal/proto:assistant",

@@ -5,9 +5,10 @@
 #ifndef MEDIA_MOJO_CLIENTS_WIN_MEDIA_FOUNDATION_RENDERER_CLIENT_H_
 #define MEDIA_MOJO_CLIENTS_WIN_MEDIA_FOUNDATION_RENDERER_CLIENT_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
@@ -90,6 +91,7 @@ class MediaFoundationRendererClient
       const std::vector<DemuxerStream*>& enabled_tracks,
       base::OnceClosure change_completed_cb) override;
   void OnExternalVideoFrameRequest() override;
+  RendererType GetRendererType() override;
 
   // RendererClient implementation.
   void OnError(PipelineStatus status) override;
@@ -114,15 +116,16 @@ class MediaFoundationRendererClient
   base::TimeDelta GetPreferredRenderInterval() override;
 
   // media::mojom::MediaFoundationRendererClientExtension
+  void InitializeFramePool(
+      mojom::FramePoolInitializationParametersPtr pool_info) override;
   void OnFrameAvailable(const base::UnguessableToken& frame_token,
                         const gfx::Size& size,
                         base::TimeDelta timestamp) override;
-  void InitializeFramePool(
-      mojom::FramePoolInitializationParametersPtr pool_info) override;
 
   bool IsFrameServerMode() const;
 
  private:
+  void OnConnectionError();
   void OnRemoteRendererInitialized(PipelineStatus status);
   void OnOutputRectChange(gfx::Rect output_rect);
   void OnSetOutputRectDone(const gfx::Size& output_size, bool success);
@@ -133,12 +136,17 @@ class MediaFoundationRendererClient
   void OnDCOMPSurfaceHandleSet(bool success);
   void OnVideoFrameCreated(scoped_refptr<VideoFrame> video_frame,
                            const gpu::Mailbox& mailbox);
+  void OnFramePoolVideoFrameCreated(const base::UnguessableToken& token,
+                                    scoped_refptr<VideoFrame> video_frame,
+                                    const gpu::Mailbox& mailbox);
   void OnCdmAttached(bool success);
-  void OnConnectionError();
   void SignalMediaPlayingStateChange(bool is_playing);
-  void ObserveMailboxForOverlayState(const gpu::Mailbox& mailbox);
+  std::unique_ptr<OverlayStateObserverSubscription>
+  ObserveMailboxForOverlayState(const gpu::Mailbox& mailbox);
   void OnOverlayStateChanged(const gpu::Mailbox& mailbox, bool promoted);
   void UpdateRenderMode();
+  void OnPaintComplete(const base::UnguessableToken& token);
+  void LogRenderingStrategy();
 
   // This class is constructed on the main thread. Hence we store
   // PendingRemotes so we can bind the Remotes on the media task
@@ -148,14 +156,12 @@ class MediaFoundationRendererClient
   std::unique_ptr<MojoRenderer> mojo_renderer_;
   mojo::PendingRemote<RendererExtension> pending_renderer_extension_;
   std::unique_ptr<DCOMPTextureWrapper> dcomp_texture_wrapper_;
-  // The 'observer_subscription_' is used to manage the lifetime of our current
-  // observed mailbox, when a mailbox associated with a new video frame of
-  // interest is available the existing observer_subscription_ is freed
-  // allowing the underlying content::OverlayStateObserver object to be cleaned
-  // up.
-  std::unique_ptr<OverlayStateObserverSubscription> observer_subscription_;
   ObserveOverlayStateCB observe_overlay_state_cb_;
-  raw_ptr<VideoRendererSink> sink_ = nullptr;
+
+  // Found dangling on `win-rel` in
+  // `virtual/media-foundation-for-clear-dcomp/external/wpt/media-source/
+  // dedicated-worker/mediasource-worker-detach-element.html`
+  raw_ptr<VideoRendererSink, DanglingUntriaged> sink_ = nullptr;
 
   mojo::Remote<RendererExtension> renderer_extension_;
 
@@ -170,8 +176,14 @@ class MediaFoundationRendererClient
   bool has_frame_read_back_signal_ = false;
   bool promoted_to_overlay_signal_ = false;
   scoped_refptr<VideoFrame> dcomp_video_frame_;
+  // The `dcomp_frame_observer_subscription_` is used to manage the lifetime of
+  // the mailbox associated with `dcomp_video_frame_`, when a mailbox for a new
+  // dcomp video frame of interest is available the existing
+  // `observer_subscription_` is freed allowing the underlying
+  // `content::OverlayStateObserver` object to be cleaned up.
+  std::unique_ptr<OverlayStateObserverSubscription>
+      dcomp_frame_observer_subscription_;
   scoped_refptr<VideoFrame> next_video_frame_;
-  gpu::Mailbox mailbox_;
 
   // Rendering mode the Media Engine will use.
   MediaFoundationRenderingMode rendering_mode_ =
@@ -187,14 +199,14 @@ class MediaFoundationRendererClient
   raw_ptr<CdmContext> cdm_context_ = nullptr;
   CdmAttachedCB cdm_attached_cb_;
 
-  void OnPaintComplete(const base::UnguessableToken& token);
-
   // The MF CDM process does not have access to the mailboxes but it creates the
   // textures. Therefore the MediaFoundationRenderer and the
   // MediaFoundationRendererClient need to have a mechanism, provided by the MF
   // CDM process, to identify which texture is ready to be sent to the video
   // sink.
-  base::flat_map<base::UnguessableToken, scoped_refptr<VideoFrame>>
+  base::flat_map<base::UnguessableToken,
+                 std::pair<scoped_refptr<VideoFrame>,
+                           std::unique_ptr<OverlayStateObserverSubscription>>>
       video_frame_pool_;
   // Used to receive calls from the MF_CMD LPAC Utility Process.
   mojo::PendingReceiver<ClientExtension> pending_client_extension_receiver_;

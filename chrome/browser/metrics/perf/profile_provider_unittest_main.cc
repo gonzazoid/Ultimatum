@@ -6,13 +6,15 @@
 
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/test_suite.h"
@@ -141,10 +143,10 @@ class ProfileProviderRealCollectionTest : public testing::Test {
 
   void SetUp() override {
     ash::DBusThreadManager::Initialize();
-    // ProfileProvider requires chromeos::LoginState and
+    // ProfileProvider requires ash::LoginState and
     // chromeos::PowerManagerClient to be initialized.
     chromeos::PowerManagerClient::InitializeFake();
-    chromeos::LoginState::Initialize();
+    ash::LoginState::Initialize();
 
     // The constructor of ProfileProvider uses g_browser_process thus requiring
     // it to be not null, so initialize it here.
@@ -156,7 +158,7 @@ class ProfileProviderRealCollectionTest : public testing::Test {
         "PerfCommand::default::0", "50 -- record -a -e cycles -c 1000003"));
     field_trial_params.insert(std::make_pair(
         "PerfCommand::default::1", "50 -- record -a -e cycles -g -c 4000037"));
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         "ChromeOSWideProfilingCollection", "group_name", field_trial_params));
     field_trial_ = base::FieldTrialList::CreateFieldTrial(
         "ChromeOSWideProfilingCollection", "group_name");
@@ -169,9 +171,9 @@ class ProfileProviderRealCollectionTest : public testing::Test {
 
     // Set user state as logged in. This activates periodic collection, but
     // other triggers like SUSPEND_DONE take precedence.
-    chromeos::LoginState::Get()->SetLoggedInState(
-        chromeos::LoginState::LOGGED_IN_ACTIVE,
-        chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+    ash::LoginState::Get()->SetLoggedInState(
+        ash::LoginState::LOGGED_IN_ACTIVE,
+        ash::LoginState::LOGGED_IN_USER_REGULAR);
 
     // Finishes Init() on the dedicated sequence.
     task_environment_.RunUntilIdle();
@@ -183,8 +185,9 @@ class ProfileProviderRealCollectionTest : public testing::Test {
     StopSpinningCPU();
 
     profile_provider_.reset();
+    aura_env_.reset();
     TestingBrowserProcess::DeleteInstance();
-    chromeos::LoginState::Shutdown();
+    ash::LoginState::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
     ash::DBusThreadManager::Shutdown();
     variations::testing::ClearAllVariationParams();

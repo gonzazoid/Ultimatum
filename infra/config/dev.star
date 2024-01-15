@@ -9,7 +9,7 @@
 load("//lib/branches.star", "branches")
 
 lucicfg.check_version(
-    min = "1.32.1",
+    min = "1.40.0",
     message = "Update depot_tools",
 )
 
@@ -20,13 +20,16 @@ lucicfg.enable_experiment("crbug.com/1182002")
 lucicfg.config(
     config_dir = "generated",
     tracked_files = [
-        "luci/chops-weetbix-dev.cfg",
+        "builders-dev/*/*/*",
+        "builders-dev/gn_args_locations.json",
         "luci/cr-buildbucket-dev.cfg",
         "luci/luci-analysis-dev.cfg",
+        "luci/luci-bisection-dev.cfg",
         "luci/luci-logdog-dev.cfg",
         "luci/luci-milo-dev.cfg",
         "luci/luci-scheduler-dev.cfg",
         "luci/realms-dev.cfg",
+        "luci/testhaus-staging.cfg",
     ],
     fail_on_warnings = True,
 )
@@ -37,11 +40,16 @@ lucicfg.emit(
     data = io.read_file("luci-analysis-dev.cfg"),
 )
 
-# TODO(b/243488110): Delete when Weetbix renaming to
-# LUCI Analysis complete.
+# Just copy LUCI Bisection config to generated outputs.
 lucicfg.emit(
-    dest = "luci/chops-weetbix-dev.cfg",
-    data = io.read_file("chops-weetbix-dev.cfg"),
+    dest = "luci/luci-bisection-dev.cfg",
+    data = io.read_file("luci-bisection-dev.cfg"),
+)
+
+# Just copy Testhaus config to generated outputs.
+lucicfg.emit(
+    dest = "luci/testhaus-staging.cfg",
+    data = io.read_file("testhaus-staging.cfg"),
 )
 
 branches.exec("//dev/dev.star")

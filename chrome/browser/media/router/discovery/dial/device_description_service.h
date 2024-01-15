@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -84,6 +84,12 @@ class DeviceDescriptionService {
       const DialDeviceData& device_data,
       const DialDeviceDescriptionData& description_data);
 
+  // Overridden by unit tests.
+  virtual std::unique_ptr<DeviceDescriptionFetcher> CreateFetcher(
+      const DialDeviceData& device_data,
+      base::OnceCallback<void(const DialDeviceDescriptionData&)> success_cb,
+      base::OnceCallback<void(const std::string&)> error_cb);
+
  private:
   friend class DeviceDescriptionServiceTest;
   friend class TestDeviceDescriptionService;
@@ -132,7 +138,7 @@ class DeviceDescriptionService {
   void OnParsedDeviceDescription(
       const DialDeviceData& device_data,
       const ParsedDialDeviceDescription& device_description,
-      SafeDialDeviceDescriptionParser::ParsingError parsing_error);
+      SafeDialDeviceDescriptionParser::ParsingResult parsing_result);
 
   // Remove expired cache entries from |description_map_|.
   void CleanUpCacheEntries();

@@ -73,6 +73,11 @@ class SystemSnapshotIOSIntermediateDump final : public SystemSnapshot {
                 int* daylight_offset_seconds,
                 std::string* standard_name,
                 std::string* daylight_name) const override;
+  uint64_t AddressMask() const override;
+
+  //! \brief Returns the number of nanoseconds between Crashpad initialization
+  //!     and snapshot generation.
+  uint64_t CrashpadUptime() const;
 
  private:
   std::string os_version_build_;
@@ -91,6 +96,8 @@ class SystemSnapshotIOSIntermediateDump final : public SystemSnapshot {
   int daylight_offset_seconds_;
   std::string standard_name_;
   std::string daylight_name_;
+  uint64_t address_mask_;
+  uint64_t crashpad_uptime_ns_;
   InitializationStateDcheck initialized_;
 };
 

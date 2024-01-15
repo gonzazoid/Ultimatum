@@ -11,7 +11,7 @@ import {ConnectionStateType, NetworkType} from 'chrome://resources/mojo/chromeos
 import {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assertEquals, assertTrue} from '../../../chai_assert.js';
+import {assertEquals, assertTrue} from '../../../chromeos/chai_assert.js';
 import {FakeNetworkConfig} from '../../../chromeos/fake_network_config_mojom.js';
 
 suite('TrafficCountersTest', function() {
@@ -55,15 +55,51 @@ suite('TrafficCountersTest', function() {
    */
   function generateTrafficCounters(rxBytes, txBytes) {
     return [
-      {'source': 'Unknown', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'Chrome', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'User', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'Arc', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'Crosvm', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'Pluginvm', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'Update Engine', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'Vpn', 'rxBytes': rxBytes, 'txBytes': txBytes},
-      {'source': 'System', 'rxBytes': rxBytes, 'txBytes': txBytes},
+      {
+        'source': 'Unknown',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'Chrome',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'User',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'Arc',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'Crosvm',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'Pluginvm',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'Update Engine',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'Vpn',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
+      {
+        'source': 'System',
+        'rxBytes': rxBytes,
+        'txBytes': txBytes,
+      },
     ];
   }
 
@@ -144,10 +180,19 @@ suite('TrafficCountersTest', function() {
         expectedTime[1].substring(indexExpected);
   }
 
+  /**
+   * Disable type check here to work around FakeNetworkConfig type issues.
+   * @suppress {checkTypes}
+   * @param {!FakeNetworkConfig} networkConfig
+   */
+  function setMojoServiceRemote(networkConfig) {
+    MojoInterfaceProviderImpl.getInstance().setMojoServiceRemoteForTest(
+        networkConfig);
+  }
+
   setup(function() {
     networkConfigRemote = new FakeNetworkConfig();
-    MojoInterfaceProviderImpl.getInstance().remote_ = networkConfigRemote;
-
+    setMojoServiceRemote(networkConfigRemote);
 
     trafficCounters = /** @type {!TrafficCountersElement} */ (
         document.createElement('traffic-counters'));

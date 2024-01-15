@@ -5,11 +5,10 @@
 #ifndef CHROMECAST_MEDIA_CMA_BACKEND_CAST_AUDIO_JSON_H_
 #define CHROMECAST_MEDIA_CMA_BACKEND_CAST_AUDIO_JSON_H_
 
-#include <memory>
-
-#include "base/callback.h"
+#include <optional>
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/sequence_bound.h"
 #include "base/values.h"
@@ -31,7 +30,7 @@ class CastAudioJson {
 class CastAudioJsonProvider {
  public:
   using TuningChangedCallback =
-      base::RepeatingCallback<void(std::unique_ptr<base::Value> contents)>;
+      base::RepeatingCallback<void(std::optional<base::Value::Dict> contents)>;
 
   virtual ~CastAudioJsonProvider() = default;
 
@@ -41,7 +40,7 @@ class CastAudioJsonProvider {
   // at CastAudioJson::GetReadOnlyFilePath() will be returned.
   // This function will run on the thread on which it is called, and may
   // perform blocking I/O.
-  virtual std::unique_ptr<base::Value> GetCastAudioConfig() = 0;
+  virtual std::optional<base::Value::Dict> GetCastAudioConfig() = 0;
 
   // |callback| will be called when a new cast_audio config is available.
   // |callback| will always be called from the same thread, but not necessarily
@@ -72,7 +71,7 @@ class CastAudioJsonProviderImpl : public CastAudioJsonProvider {
   };
 
   // CastAudioJsonProvider implementation:
-  std::unique_ptr<base::Value> GetCastAudioConfig() override;
+  std::optional<base::Value::Dict> GetCastAudioConfig() override;
   void SetTuningChangedCallback(TuningChangedCallback callback) override;
 
   base::SequenceBound<FileWatcher> cast_audio_watcher_;

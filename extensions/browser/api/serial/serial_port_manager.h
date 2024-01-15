@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "content/public/browser/browser_thread.h"
@@ -65,7 +65,7 @@ class SerialPortManager : public BrowserContextKeyedAPI {
   static void OverrideBinderForTesting(Binder binder);
 
  private:
-  typedef ApiResourceManager<SerialConnection>::ApiResourceData ConnectionData;
+  using ConnectionData = ApiResourceManager<SerialConnection>::ApiResourceData;
   friend class BrowserContextKeyedAPIFactory<SerialPortManager>;
 
   // BrowserContextKeyedAPI implementation.

@@ -7,13 +7,17 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "build/build_config.h"
 #include "device/fido/fido_discovery_factory.h"
 #include "device/fido/fido_transport_protocol.h"
 
 namespace device {
+
+class WinWebAuthnApi;
+
 namespace test {
 
 // Fake FIDO discovery simulating the behavior of the production
@@ -105,6 +109,9 @@ class FakeFidoDiscoveryFactory : public device::FidoDiscoveryFactory {
   // FidoDeviceDiscovery::Create. Returns a raw pointer to the fake so that
   // tests can set it up according to taste.
   //
+  // ForgeNextPlatformDiscovery() will queue discoveries if called multiple
+  // times.
+  //
   // It is an error not to call the relevant method prior to a call to
   // FidoDeviceDiscovery::Create with the respective transport.
   FakeFidoDiscovery* ForgeNextHidDiscovery(StartMode mode = StartMode::kManual);
@@ -114,15 +121,26 @@ class FakeFidoDiscoveryFactory : public device::FidoDiscoveryFactory {
   FakeFidoDiscovery* ForgeNextPlatformDiscovery(
       StartMode mode = StartMode::kManual);
 
+  // set_discover_win_webauthn_api_authenticator controls whether the
+  // WebWebAuthnApi authenticator will be discovered. Create a
+  // `WinWebAuthnApi::ScopedOverride` before settings to true.
+  void set_discover_win_webauthn_api_authenticator(bool on);
+
   // device::FidoDiscoveryFactory:
   std::vector<std::unique_ptr<FidoDiscoveryBase>> Create(
       FidoTransportProtocol transport) override;
+
+#if BUILDFLAG(IS_WIN)
+  std::unique_ptr<device::FidoDiscoveryBase>
+  MaybeCreateWinWebAuthnApiDiscovery() override;
+#endif
 
  private:
   std::unique_ptr<FakeFidoDiscovery> next_hid_discovery_;
   std::unique_ptr<FakeFidoDiscovery> next_nfc_discovery_;
   std::unique_ptr<FakeFidoDiscovery> next_cable_discovery_;
-  std::unique_ptr<FakeFidoDiscovery> next_platform_discovery_;
+  std::vector<std::unique_ptr<FidoDiscoveryBase>> next_platform_discovery_list_;
+  bool discover_win_webauthn_api_authenticator_ = false;
 };
 
 }  // namespace test

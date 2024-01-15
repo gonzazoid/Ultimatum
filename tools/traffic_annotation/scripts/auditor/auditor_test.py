@@ -32,7 +32,13 @@ class AuditorTest(unittest.TestCase):
 
     path_filters = [
         (TEST_DATA_DIR /
-         "test_sample_annotations.cc").relative_to(SRC_DIR).as_posix()
+         "test_sample_annotations.cc").relative_to(SRC_DIR).as_posix(),
+        (TEST_DATA_DIR /
+         "missing_new_field_sample_data/test_new_field_safelisted.cc"
+         ).relative_to(SRC_DIR).as_posix(),
+        (TEST_DATA_DIR /
+         "missing_new_field_sample_data/sample_new_field_not_safelisted.cc"
+         ).relative_to(SRC_DIR).as_posix()
     ]
     self.auditor_ui = AuditorUI(build_path,
                                 path_filters,
@@ -117,9 +123,12 @@ class AuditorTest(unittest.TestCase):
 
     relevant_files = [
         "tools/traffic_annotation/scripts/test_data/"
-        "objective_cpp.mm",
-        "tools/traffic_annotation/scripts/test_data/"
+        "objective_cpp.mm", "tools/traffic_annotation/scripts/test_data/"
         "test_sample_annotations.cc",
+        "tools/traffic_annotation/scripts/test_data/"
+        "missing_new_field_sample_data/test_new_field_safelisted.cc",
+        "tools/traffic_annotation/scripts/test_data/"
+        "missing_new_field_sample_data/sample_new_field_not_safelisted.cc"
     ]
     self.assertCountEqual([Path(f) for f in relevant_files], filter.git_files)
 
@@ -166,7 +175,7 @@ class AuditorTest(unittest.TestCase):
 
     # Files defining missing annotation functions in net/ are exception of
     # 'missing' type.
-    self.assertTrue(
+    self.assertFalse(
         auditor._is_safe_listed(Path("net/url_request/url_fetcher.cc"),
                                 ExceptionType.MISSING))
     self.assertTrue(
@@ -198,6 +207,8 @@ class AuditorTest(unittest.TestCase):
         ("bad_syntax_annotation2.txt", ErrorType.SYNTAX, None),
         ("bad_syntax_annotation3.txt", ErrorType.SYNTAX, None),
         ("bad_syntax_annotation4.txt", ErrorType.SYNTAX, None),
+        ("bad_syntax_annotation5.txt", ErrorType.SYNTAX, None),
+        ("bad_syntax_annotation6.txt", ErrorType.SYNTAX, None),
         # "fatal" means a Python exception gets raised.
         ("fatal_annotation1.txt", "fatal", None),
         ("fatal_annotation2.txt", "fatal", None),
@@ -415,6 +426,8 @@ class AuditorTest(unittest.TestCase):
       annotation.unique_id = "foobar_policy_fetcher{}".format(test_no)
       test_description = ""
       expect_error = True
+      logger.info(
+          "test_check_complete_annotations test number {}".format(test_no))
       if test_no == 0:
         test_description = "All fields OK."
         expect_error = False
@@ -461,33 +474,58 @@ class AuditorTest(unittest.TestCase):
       elif test_no == 11:
         test_description = "Missing policy::setting."
         annotation.proto.policy.setting = ""
-        break
+        expect_error = False
       elif test_no == 12:
         test_description = \
-            "Missing policy::chrome_policy and " \
+            "Missing chrome policy and " \
             "policy::policy_exception_justification."
-        annotation.proto.policy.chrome_policy = ""
+        annotation.proto.policy.ClearField("chrome_policy")
+        annotation.proto.policy.ClearField("chrome_device_policy")
         annotation.proto.policy.policy_exception_justification = ""
       elif test_no == 13:
         test_description = \
-            "Missing policy::chrome_policy and existing " \
+            "Missing chrome policy and existing " \
             "policy::policy_exception_justification."
-        annotation.proto.policy.chrome_policy = ""
+        annotation.proto.policy.ClearField("chrome_policy")
+        annotation.proto.policy.ClearField("chrome_device_policy")
         annotation.proto.policy.policy_exception_justification = "Because!"
         expect_error = False
       elif test_no == 14:
         test_description = \
-            "Existing policy::chrome_policy and no " \
+            "Existing chrome policy and no " \
             "policy::policy_exception_justification."
         self.assertTrue(annotation.proto.policy.chrome_policy)
         annotation.proto.policy.policy_exception_justification = ""
         expect_error = False
       elif test_no == 15:
         test_description = \
-            "Existing policy::chrome_policy and existing" \
+            "Existing chrome policy and existing " \
             "policy::policy_exception_justification."
         self.assertTrue(annotation.proto.policy.chrome_policy)
         annotation.proto.policy.policy_exception_justification = "Because!"
+      elif test_no == 16:
+        test_description = "Missing semantics::internal::contacts"
+        annotation.proto.semantics.internal.Clear()
+      elif test_no == 17:
+        test_description = "Missing semantics::internal::contacts::email"
+        annotation.proto.semantics.internal.ClearField("contacts")
+      elif test_no == 18:
+        test_description = "Missing semantics::internal::user_data::type"
+        annotation.proto.semantics.user_data.Clear()
+      elif test_no == 19:
+        test_description = "Empty value semantics::internal::user_data::type"
+        annotation.proto.semantics.user_data.ClearField("type")
+      elif test_no == 20:
+        test_description = "Invalid format semantics::last_reviewed"
+        annotation.proto.semantics.last_reviewed = "23-12-2023"
+      elif test_no == 21:
+        test_description = \
+            "Existing chrome policy (device policy only) and " \
+            "missing policy::policy_exception_justification."
+        self.assertTrue(annotation.proto.policy.chrome_device_policy)
+        annotation.proto.policy.ClearField("chrome_policy")
+        annotation.proto.policy.policy_exception_justification = ""
+        expect_error = False
       else:
         # Done checking individual test cases.
         break
@@ -543,7 +581,8 @@ class AuditorTest(unittest.TestCase):
     other = self.create_annotation_sample()
 
     instance.proto.semantics.Clear()
-    instance.proto.policy.Clear()
+    instance.proto.policy.ClearField('chrome_policy')
+    other.proto.policy.ClearField('chrome_device_policy')
 
     instance.type = Annotation.Type.PARTIAL
     other.type = Annotation.Type.COMPLETING
@@ -560,9 +599,15 @@ class AuditorTest(unittest.TestCase):
     other.type = Annotation.Type.BRANCHED_COMPLETING
     other.second_id = "SomeID"
     instance.second_id = "SomeID"
+    self.assertEqual(len(instance.proto.policy.chrome_policy), 0)
+    self.assertEqual(len(instance.proto.policy.chrome_device_policy), 1)
+    self.assertEqual(len(other.proto.policy.chrome_policy), 1)
+    self.assertEqual(len(other.proto.policy.chrome_device_policy), 0)
     combination, errors = instance.create_complete_annotation(other)
     self.assertEqual([], errors)
     self.assertEqual(combination.unique_id_hash_code, other.unique_id_hash_code)
+    self.assertEqual(len(combination.proto.policy.chrome_policy), 1)
+    self.assertEqual(len(combination.proto.policy.chrome_device_policy), 1)
 
     # Inconsistent field.
     Destination = traffic_annotation.TrafficSemantics.Destination
@@ -675,8 +720,11 @@ class AuditorTest(unittest.TestCase):
     """|self.sample_annotations| should include all those inside
     test_data/test_sample_annotations.cc"""
     expected = [
-        "ok_annotation", "syntax_error_annotation",
-        "incomplete_error_annotation"
+        "ok_annotation", "ok_annotation_only_owner", "syntax_error_annotation",
+        "incomplete_error_annotation", "invalid_assignment_annotation",
+        "partially_populated_safe_listed", "missing_all_new_field_safe_listed",
+        "ok_new_fields_safe_listed", "missing_new_fields_not_safe_listed",
+        "missing_email_not_safe_listed", "invalid_userdata_not_safe_listed"
     ]
     self.assertCountEqual(expected, self.sample_annotations.keys())
 
@@ -720,12 +768,97 @@ class AuditorTest(unittest.TestCase):
     self.assertEqual(ErrorType.INCOMPLETE_ANNOTATION, result.type)
 
     expected_missing_fields = [
-        "sender", "chrome_policy", "cookies_store",
+        "sender", "chrome_policy", "chrome_device_policy", "cookies_store",
         "policy_exception_justification"
     ]
     missing_fields = str(result).split("missing fields:",
                                        1)[1].lstrip().split(", ")
     self.assertCountEqual(expected_missing_fields, missing_fields)
+
+  def test_invalid_date_format_errors(self) -> None:
+    self.auditor.parse_extractor_output(
+        [self.sample_annotations["invalid_assignment_annotation"]])
+
+    self.assertTrue(self.auditor.extracted_annotations)
+    errors = self.auditor.run_all_checks([], True, Exporter.GROUPING_XML_PATH)
+    self.assertTrue(errors)
+    result = errors[0]
+    self.assertEqual(ErrorType.INVALID_DATE_FORMAT, result.type)
+
+  def test_missing_new_fields_errors(self) -> None:
+    """Annotation is Missing new fields, related class is not in safe_list.txt.
+    Annotation check returns MISSING_NEW_FIELDS error."""
+    self.auditor.parse_extractor_output(
+        [self.sample_annotations["missing_new_fields_not_safe_listed"]])
+    expected_error_msg = [
+        'last_reviewed', 'internal::contacts', 'user_data::type'
+    ]
+
+    self.assertTrue(self.auditor.extracted_annotations)
+    errors = self.auditor.run_all_checks([], True, Exporter.GROUPING_XML_PATH)
+    self.assertTrue(errors)
+    self.assertEqual(ErrorType.MISSING_NEW_FIELDS, errors[0].type)
+    for text in expected_error_msg:
+      self.assertTrue(errors[0].message.find(text) >= 0)
+
+  def test_missing_email_error(self) -> None:
+    """Annotation is Missing email value, related class is not in safe_list.txt.
+    Annotation check returns MISSING_NEW_FIELDS error."""
+    self.auditor.parse_extractor_output(
+        [self.sample_annotations["missing_email_not_safe_listed"]])
+    self.assertTrue(self.auditor.extracted_annotations)
+    errors = self.auditor.run_all_checks([], True, Exporter.GROUPING_XML_PATH)
+    self.assertTrue(errors)
+    self.assertEqual(ErrorType.MISSING_NEW_FIELDS, errors[0].type)
+    self.assertTrue(errors[0].message.find(
+        'internal::contacts::email or internal::contacts::owners') >= 0)
+
+  def test_user_data_unspecified(self) -> None:
+    """Annotation user_data::type contains UNSPECIFIED value. Annotation Check
+    returns INVALID_USER_DATA_TYPE error."""
+    self.auditor.parse_extractor_output(
+        [self.sample_annotations["invalid_userdata_not_safe_listed"]])
+    self.assertTrue(self.auditor.extracted_annotations)
+    errors = self.auditor.run_all_checks([], True, Exporter.GROUPING_XML_PATH)
+    self.assertTrue(errors)
+    self.assertEqual(ErrorType.INVALID_USER_DATA_TYPE, errors[0].type)
+
+  def test_missing_new_fields_safe_listed_file(self) -> None:
+    """Check annotation without new fields, related class is
+    in safe_list.txt. Annotation Check does not return
+    an new fields related error. """
+
+    ## use real safe_list.txt
+    auditor = Auditor(get_current_platform())
+    auditor.parse_extractor_output(
+        [self.sample_annotations["missing_all_new_field_safe_listed"]])
+    self.assertTrue(auditor.extracted_annotations)
+    errors = auditor.run_all_checks([], False, Exporter.GROUPING_XML_PATH)
+    self.assertFalse(errors)
+
+  def test_partially_populated_safe_listed_file(self) -> None:
+    """Check annotation with last_reviewed but missing email fields,
+    related class is in safe_list.txt. Check returns MISSING_NEW_FIELDS
+    annotation error."""
+    auditor = Auditor(get_current_platform())
+    auditor.parse_extractor_output(
+        [self.sample_annotations["partially_populated_safe_listed"]])
+    self.assertTrue(auditor.extracted_annotations)
+    errors = auditor.run_all_checks([], True, Exporter.GROUPING_XML_PATH)
+    self.assertTrue(errors)
+    for error in errors:
+      self.assertEqual(ErrorType.MISSING_NEW_FIELDS, error.type)
+
+  def test_ok_new_fields_safe_listed_file(self) -> None:
+    """Annotation is complete with all new fields but still present in
+    safe_list.txt. Check returns error to REMOVE_FROM_SAFE_LIST."""
+    auditor = Auditor(get_current_platform())
+    auditor.parse_extractor_output(
+        [self.sample_annotations["ok_new_fields_safe_listed"]])
+    self.assertTrue(auditor.extracted_annotations)
+    errors = auditor.run_all_checks([], True, Exporter.GROUPING_XML_PATH)
+    self.assertTrue(errors)
+    self.assertEqual(ErrorType.REMOVE_FROM_SAFE_LIST, errors[0].type)
 
   def test_get_current_platform(self) -> None:
     host_platform = platform.system().lower()
@@ -754,9 +887,21 @@ class AuditorTest(unittest.TestCase):
     expected_contents = """Unique ID\tLast Update\tSender\tDescription\tTrigger\tData\tDestination\tCookies Allowed\tCookies Store\tSetting\tChrome Policy\tComments\tSource File
 supervised_user_refresh_token_fetcher\t\tSupervised Users\tFetches an OAuth2 refresh token scoped down to the Supervised User Sync scope and tied to the given Supervised User ID, identifying the Supervised User Profile to be created.\tCalled when creating a new Supervised User profile in Chromium to fetch OAuth credentials for using Sync with the new profile.\t"The request is authenticated with an OAuth2 access token identifying the Google account and contains the following information:
 * The Supervised User ID, a randomly generated 64-bit identifier for the profile.
-* The device name, to identify the refresh token in account management."\tGoogle\tNo\t\tUsers can disable this feature by toggling 'Let anyone add a person to Chrome' in Chromium settings, under People.\tSupervisedUserCreationEnabled: false\t\thttps://cs.chromium.org/chromium/src/?l=0
+* The device name, to identify the refresh token in account management."\tGoogle\tNo\t\tUsers can disable this feature by toggling 'Let anyone add a person to Chrome' in Chromium settings, under People.\tSupervisedUserCreationEnabled: false, external_policy: ""\t\thttps://cs.chromium.org/chromium/src/?l=0
 """
     self.assertEqual(expected_contents, tsv_contents)
+
+  def test_result_ok_only_owner(self) -> None:
+    """Annotation is complete with all new fields, and uses an owners file
+    instead of email for contact info. Check returns no errors related to
+    contact email or other new fields."""
+    self.auditor.parse_extractor_output(
+        [self.sample_annotations["ok_annotation_only_owner"]])
+    errors = self.auditor.run_all_checks([], False, Exporter.GROUPING_XML_PATH)
+
+    # Assert that correct annotation has been extracted and is OK (no errors).
+    self.assertTrue(self.auditor.extracted_annotations)
+    self.assertFalse(errors)
 
 
 if __name__ == "__main__":

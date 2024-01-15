@@ -10,8 +10,12 @@ pybind_extension(
     srcs = [
         "metadata_version.cc",
     ],
+    enable_stub_generation = True,
     features = ["-use_header_modules"],
     module_name = "_pywrap_metadata_version",
+    pytype_srcs = [
+        "_pywrap_metadata_version.pyi",
+    ],
     deps = [
         "//tensorflow_lite_support/metadata/cc:metadata_version",
         "@org_tensorflow//tensorflow/lite/c:common",

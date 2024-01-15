@@ -2,9 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Console from 'devtools/panels/console/console.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
-  TestRunner.addResult(`Tests editing Symbol properties.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
+  // This await is necessary for evaluateInPagePromise to produce accurate line numbers.
+  await TestRunner.addResult(`Tests editing Symbol properties.\n`);
   await TestRunner.evaluateInPagePromise(`
       var object1 = { foo: 1 };
       var symbol1 = Symbol("a");
@@ -22,7 +28,7 @@
 
   async function dumpAndClearConsoleMessages() {
     await ConsoleTestRunner.dumpConsoleMessages();
-    Console.ConsoleView.clearConsole();
+    Console.ConsoleView.ConsoleView.clearConsole();
   }
 
   TestRunner.runTestSuite([
@@ -33,7 +39,7 @@
         var result = await TestRunner.RuntimeAgent.evaluate('object1');
         obj1 = TestRunner.runtimeModel.createRemoteObject(result);
         result = await TestRunner.RuntimeAgent.evaluate('symbol1');
-        name = SDK.RemoteObject.toCallArgument(TestRunner.runtimeModel.createRemoteObject(result));
+        name = SDK.RemoteObject.RemoteObject.toCallArgument(TestRunner.runtimeModel.createRemoteObject(result));
         await dumpAndClearConsoleMessages();
         next();
       }

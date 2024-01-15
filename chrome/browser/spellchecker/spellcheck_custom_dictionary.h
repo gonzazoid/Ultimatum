@@ -26,7 +26,6 @@ class Location;
 }
 
 namespace syncer {
-class SyncErrorFactory;
 class SyncChangeProcessor;
 }
 
@@ -39,8 +38,8 @@ class SyncChangeProcessor;
 //   foo
 //   checksum_v1 = ec3df4034567e59e119fcf87f2d9bad4
 //
-class SpellcheckCustomDictionary : public SpellcheckDictionary,
-                                   public syncer::SyncableService {
+class SpellcheckCustomDictionary final : public SpellcheckDictionary,
+                                         public syncer::SyncableService {
  public:
   // A change to the dictionary.
   class Change {
@@ -173,13 +172,13 @@ class SpellcheckCustomDictionary : public SpellcheckDictionary,
   absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
       syncer::ModelType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> sync_error_handler) override;
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
   void StopSyncing(syncer::ModelType type) override;
   syncer::SyncDataList GetAllSyncDataForTesting(syncer::ModelType type) const;
   absl::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
+  base::WeakPtr<SyncableService> AsWeakPtr() override;
 
  private:
   friend class DictionarySyncIntegrationTestHelper;
@@ -238,9 +237,6 @@ class SpellcheckCustomDictionary : public SpellcheckDictionary,
 
   // Used to send local changes to the sync infrastructure.
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
-
-  // Used to send sync-related errors to the sync infrastructure.
-  std::unique_ptr<syncer::SyncErrorFactory> sync_error_handler_;
 
   // True if the dictionary has been loaded. Otherwise false.
   bool is_loaded_;

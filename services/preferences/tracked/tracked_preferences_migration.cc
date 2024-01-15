@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram.h"
 #include "base/values.h"
@@ -52,7 +52,7 @@ class TrackedPreferencesMigrator
       PrefFilterID id,
       InterceptablePrefFilter::FinalizeFilterOnLoadCallback
           finalize_filter_on_load,
-      std::unique_ptr<base::DictionaryValue> prefs);
+      base::Value::Dict prefs);
 
  private:
   friend class base::RefCounted<TrackedPreferencesMigrator>;
@@ -83,8 +83,8 @@ class TrackedPreferencesMigrator
   std::unique_ptr<PrefHashStore> unprotected_pref_hash_store_;
   std::unique_ptr<PrefHashStore> protected_pref_hash_store_;
 
-  std::unique_ptr<base::DictionaryValue> unprotected_prefs_;
-  std::unique_ptr<base::DictionaryValue> protected_prefs_;
+  std::unique_ptr<base::Value::Dict> unprotected_prefs_;
+  std::unique_ptr<base::Value::Dict> protected_prefs_;
 };
 
 // Invokes |store_cleaner| for every |keys_to_clean|.
@@ -121,7 +121,7 @@ void ScheduleSourcePrefStoreCleanup(
 // the configuration/implementation in |origin_pref_hash_store|.
 void CleanupMigratedHashes(const PrefNameSet& migrated_pref_names,
                            PrefHashStore* origin_pref_hash_store,
-                           base::DictionaryValue* origin_pref_store) {
+                           base::Value::Dict& origin_pref_store) {
   DictionaryHashStoreContents dictionary_contents(origin_pref_store);
   std::unique_ptr<PrefHashStoreTransaction> transaction(
       origin_pref_hash_store->BeginTransaction(&dictionary_contents));
@@ -136,12 +136,12 @@ void CleanupMigratedHashes(const PrefNameSet& migrated_pref_names,
 // true if any old duplicates remain in |old_store| and sets |new_store_altered|
 // to true if any value was copied to |new_store|.
 void MigratePrefsFromOldToNewStore(const PrefNameSet& pref_names,
-                                   base::DictionaryValue* old_store,
-                                   base::DictionaryValue* new_store,
+                                   base::Value::Dict& old_store,
+                                   base::Value::Dict& new_store,
                                    PrefHashStore* new_hash_store,
                                    bool* old_store_needs_cleanup,
                                    bool* new_store_altered) {
-  const base::DictionaryValue* old_hash_store_contents =
+  const base::Value::Dict* old_hash_store_contents =
       DictionaryHashStoreContents(old_store).GetContents();
   DictionaryHashStoreContents dictionary_contents(new_store);
   std::unique_ptr<PrefHashStoreTransaction> new_hash_store_transaction(
@@ -158,18 +158,18 @@ void MigratePrefsFromOldToNewStore(const PrefNameSet& pref_names,
     // If we migrate the value we will also attempt to migrate the hash.
     bool migrated_value = false;
     if (const base::Value* value_in_old_store =
-            old_store->FindPath(pref_name)) {
+            old_store.FindByDottedPath(pref_name)) {
       // Whether this value ends up being copied below or was left behind by a
       // previous incomplete migration, it should be cleaned up.
       *old_store_needs_cleanup = true;
 
-      if (!new_store->FindPath(pref_name)) {
+      if (!new_store.FindByDottedPath(pref_name)) {
         // Copy the value from |old_store| to |new_store| rather than moving it
         // to avoid data loss should |old_store| be flushed to disk without
         // |new_store| having equivalently been successfully flushed to disk
         // (e.g., on crash or in cases where |new_store| is read-only following
         // a read error on startup).
-        new_store->SetPath(pref_name, value_in_old_store->Clone());
+        new_store.SetByDottedPath(pref_name, value_in_old_store->Clone());
         migrated_value = true;
         *new_store_altered = true;
       }
@@ -178,7 +178,7 @@ void MigratePrefsFromOldToNewStore(const PrefNameSet& pref_names,
     if (destination_hash_missing || migrated_value) {
       const base::Value* old_hash = nullptr;
       if (old_hash_store_contents)
-        old_hash = old_hash_store_contents->FindPath(pref_name);
+        old_hash = old_hash_store_contents->FindByDottedPath(pref_name);
       if (old_hash) {
         new_hash_store_transaction->ImportHash(pref_name, old_hash);
         *new_store_altered = true;
@@ -188,7 +188,7 @@ void MigratePrefsFromOldToNewStore(const PrefNameSet& pref_names,
         // value in order to provide the same no-op behaviour as if the pref was
         // added to the wrong file when there was already a value for
         // |pref_name| in |new_store|.
-        new_store->RemovePath(pref_name);
+        new_store.RemoveByDottedPath(pref_name);
         *new_store_altered = true;
       }
     }
@@ -227,15 +227,16 @@ void TrackedPreferencesMigrator::InterceptFilterOnLoad(
     PrefFilterID id,
     InterceptablePrefFilter::FinalizeFilterOnLoadCallback
         finalize_filter_on_load,
-    std::unique_ptr<base::DictionaryValue> prefs) {
+    base::Value::Dict prefs) {
+  auto prefs_migration = std::make_unique<base::Value::Dict>(std::move(prefs));
   switch (id) {
     case UNPROTECTED_PREF_FILTER:
       finalize_unprotected_filter_on_load_ = std::move(finalize_filter_on_load);
-      unprotected_prefs_ = std::move(prefs);
+      unprotected_prefs_ = std::move(prefs_migration);
       break;
     case PROTECTED_PREF_FILTER:
       finalize_protected_filter_on_load_ = std::move(finalize_filter_on_load);
-      protected_prefs_ = std::move(prefs);
+      protected_prefs_ = std::move(prefs_migration);
       break;
   }
 
@@ -250,13 +251,13 @@ void TrackedPreferencesMigrator::MigrateIfReady() {
   bool protected_prefs_need_cleanup = false;
   bool unprotected_prefs_altered = false;
   MigratePrefsFromOldToNewStore(
-      unprotected_pref_names_, protected_prefs_.get(), unprotected_prefs_.get(),
+      unprotected_pref_names_, *protected_prefs_, *unprotected_prefs_,
       unprotected_pref_hash_store_.get(), &protected_prefs_need_cleanup,
       &unprotected_prefs_altered);
   bool unprotected_prefs_need_cleanup = false;
   bool protected_prefs_altered = false;
   MigratePrefsFromOldToNewStore(
-      protected_pref_names_, unprotected_prefs_.get(), protected_prefs_.get(),
+      protected_pref_names_, *unprotected_prefs_, *protected_prefs_,
       protected_pref_hash_store_.get(), &unprotected_prefs_need_cleanup,
       &protected_prefs_altered);
 
@@ -268,18 +269,21 @@ void TrackedPreferencesMigrator::MigrateIfReady() {
     // stores, and doing so in a subsequent launch is easier than within the
     // same process.
     CleanupMigratedHashes(unprotected_pref_names_,
-                          protected_pref_hash_store_.get(),
-                          protected_prefs_.get());
+                          protected_pref_hash_store_.get(), *protected_prefs_);
     CleanupMigratedHashes(protected_pref_names_,
                           unprotected_pref_hash_store_.get(),
-                          unprotected_prefs_.get());
+                          *unprotected_prefs_);
   }
 
   // Hand the processed prefs back to their respective filters.
+  std::unique_ptr<base::Value::Dict> unprotected_prefs =
+      std::move(unprotected_prefs_);
   std::move(finalize_unprotected_filter_on_load_)
-      .Run(std::move(unprotected_prefs_), unprotected_prefs_altered);
+      .Run(std::move(*unprotected_prefs), unprotected_prefs_altered);
+  std::unique_ptr<base::Value::Dict> protected_prefs =
+      std::move(protected_prefs_);
   std::move(finalize_protected_filter_on_load_)
-      .Run(std::move(protected_prefs_), protected_prefs_altered);
+      .Run(std::move(*protected_prefs), protected_prefs_altered);
 
   if (unprotected_prefs_need_cleanup) {
     // Schedule a cleanup of the |protected_pref_names_| from the unprotected

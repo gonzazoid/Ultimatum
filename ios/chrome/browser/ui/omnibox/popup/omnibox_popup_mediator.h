@@ -10,29 +10,35 @@
 #include <memory>
 
 #import "components/history/core/browser/top_sites.h"
-#include "components/omnibox/browser/autocomplete_result.h"
+#import "components/omnibox/browser/autocomplete_result.h"
+#import "ios/chrome/browser/ui/omnibox/popup/autocomplete_controller_observer_bridge.h"
 #import "ios/chrome/browser/ui/omnibox/popup/autocomplete_result_consumer.h"
-#import "ios/chrome/browser/ui/omnibox/popup/carousel_item_menu_provider.h"
+#import "ios/chrome/browser/ui/omnibox/popup/carousel/carousel_item_menu_provider.h"
 #import "ios/chrome/browser/ui/omnibox/popup/favicon_retriever.h"
 #import "ios/chrome/browser/ui/omnibox/popup/image_retriever.h"
+#import "ios/chrome/browser/ui/omnibox/popup/popup_debug_info_consumer.h"
+#import "ios/chrome/browser/ui/omnibox/popup/remote_suggestions_service_observer_bridge.h"
 #import "ui/base/window_open_disposition.h"
 
 @protocol ApplicationCommands;
-@protocol BrowserCommands;
 @class BrowserActionFactory;
 @class CarouselItem;
 @protocol CarouselItemConsumer;
-@class DefaultBrowserPromoNonModalScheduler;
 class FaviconLoader;
 @class OmniboxPedalAnnotator;
+@class OmniboxPopupMediator;
 @class OmniboxPopupPresenter;
-@class PopupModel;
+@class SceneState;
 @protocol SnackbarCommands;
-class WebStateList;
+class AutocompleteController;
 
 namespace image_fetcher {
 class ImageDataFetcher;
-}  // namespace
+}  // namespace image_fetcher
+
+namespace feature_engagement {
+class Tracker;
+}  // namespace feature_engagement
 
 class OmniboxPopupMediatorDelegate {
  public:
@@ -45,16 +51,27 @@ class OmniboxPopupMediatorDelegate {
   virtual void OnScroll() = 0;
 };
 
-// Provider that returns protocols and services that are instantiated after
-// OmniboxPopupCoordinator.
+/// Provider that returns protocols and services that are instantiated after
+/// OmniboxPopupCoordinator.
 @protocol OmniboxPopupMediatorProtocolProvider
 
-// Returns the TopSites object to add/remove blocked URLs.
+/// Returns the TopSites object to add/remove blocked URLs.
 - (scoped_refptr<history::TopSites>)topSites;
 
-// Returns command handler for SnackbarCommands;
+/// Returns command handler for SnackbarCommands;
 - (id<SnackbarCommands>)snackbarCommandsHandler;
 
+@end
+
+/// Delegate for share purposes, such as sharing URLs from the popup.
+@protocol OmniboxPopupMediatorSharingDelegate
+
+/// Called by `popupMediator` to share `URL` with `title`, originating from
+/// `originView`.
+- (void)popupMediator:(OmniboxPopupMediator*)mediator
+             shareURL:(GURL)URL
+                title:(NSString*)title
+           originView:(UIView*)originView;
 @end
 
 @interface OmniboxPopupMediator : NSObject <AutocompleteResultConsumerDelegate,
@@ -65,51 +82,64 @@ class OmniboxPopupMediatorDelegate {
 
 @property(nonatomic, readonly, assign) FaviconLoader* faviconLoader;
 
-// Whether the mediator has results to show.
+/// Whether the mediator has results to show.
 @property(nonatomic, assign) BOOL hasResults;
 
-// Sets the semantic content attribute of the popup content.
+/// Sets the semantic content attribute of the popup content.
 - (void)setSemanticContentAttribute:
     (UISemanticContentAttribute)semanticContentAttribute;
 
-@property(nonatomic, weak) id<BrowserCommands> dispatcher;
 @property(nonatomic, weak) id<AutocompleteResultConsumer> consumer;
-// Scheduler to notify about events happening in this popup.
-@property(nonatomic, weak) DefaultBrowserPromoNonModalScheduler* promoScheduler;
+/// Consumer for debug info.
+@property(nonatomic, weak) id<PopupDebugInfoConsumer,
+                              RemoteSuggestionsServiceObserver,
+                              AutocompleteControllerObserver>
+    debugInfoConsumer;
+@property(nonatomic, weak) id<ApplicationCommands> applicationCommandsHandler;
+/// Browser scene state to notify about events happening in this popup.
+@property(nonatomic, weak) SceneState* sceneState;
 @property(nonatomic, assign, getter=isIncognito) BOOL incognito;
-// Whether the popup is open.
+/// Whether the popup is open.
 @property(nonatomic, assign, getter=isOpen) BOOL open;
-// Presenter for the popup, handling the positioning and the presentation
-// animations.
+/// Presenter for the popup, handling the positioning and the presentation
+/// animations.
 @property(nonatomic, strong) OmniboxPopupPresenter* presenter;
-// The web state list this mediator is handling.
-@property(nonatomic, assign) WebStateList* webStateList;
-// Whether the default search engine is Google impacts which icon is used in
-// some cases
+/// Whether the default search engine is Google impacts which icon is used in
+/// some cases
 @property(nonatomic, assign) BOOL defaultSearchEngineIsGoogle;
-// The model for this mediator, if one exists.
-@property(nonatomic, weak) PopupModel* model;
-// The annotator to create pedals for ths mediator.
+/// The annotator to create pedals for ths mediator.
 @property(nonatomic) OmniboxPedalAnnotator* pedalAnnotator;
+/// Flag that marks that incognito actions are available. Those can be disabled
+/// by an enterprise policy.
+@property(nonatomic, assign) BOOL allowIncognitoActions;
 
+/// Delegate for sharing popup content.
+@property(nonatomic, weak) id<OmniboxPopupMediatorSharingDelegate>
+    sharingDelegate;
 @property(nonatomic, weak) id<OmniboxPopupMediatorProtocolProvider>
     protocolProvider;
 @property(nonatomic, strong) BrowserActionFactory* mostVisitedActionFactory;
 @property(nonatomic, weak) id<CarouselItemConsumer> carouselItemConsumer;
+/// Pref service from the original browser state, used to retrieve preferred
+/// omnibox position.
+@property(nonatomic, assign) PrefService* originalPrefService;
 
-// Designated initializer. Takes ownership of `imageFetcher`.
-- (instancetype)initWithFetcher:
-                    (std::unique_ptr<image_fetcher::ImageDataFetcher>)
-                        imageFetcher
-                  faviconLoader:(FaviconLoader*)faviconLoader
-                       delegate:(OmniboxPopupMediatorDelegate*)delegate;
+/// Designated initializer. Takes ownership of `imageFetcher`.
+- (instancetype)
+             initWithFetcher:
+                 (std::unique_ptr<image_fetcher::ImageDataFetcher>)imageFetcher
+               faviconLoader:(FaviconLoader*)faviconLoader
+      autocompleteController:(AutocompleteController*)autocompleteController
+    remoteSuggestionsService:(RemoteSuggestionsService*)remoteSuggestionsService
+                    delegate:(OmniboxPopupMediatorDelegate*)delegate
+                     tracker:(feature_engagement::Tracker*)tracker;
 
 - (void)updateMatches:(const AutocompleteResult&)result;
 
-// Sets the text alignment of the popup content.
+/// Sets the text alignment of the popup content.
 - (void)setTextAlignment:(NSTextAlignment)alignment;
 
-// Updates the popup with the `results`.
+/// Updates the popup with the `results`.
 - (void)updateWithResults:(const AutocompleteResult&)results;
 
 @end

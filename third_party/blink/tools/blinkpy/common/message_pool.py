@@ -25,9 +25,8 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Module for handling messages and concurrency for run_we_tests.py
-and run_blinkpy_tests.py. This module follows the design for
-multiprocessing.Pool and concurrency.futures.ProcessPoolExecutor, with the
+"""Module for handling messages and concurrency. This module follows the design
+for multiprocessing.Pool and concurrency.futures.ProcessPoolExecutor, with the
 following differences:
 
 * Tasks are executed in stateful subprocesses via objects that implement the
@@ -39,13 +38,15 @@ If you don't need these features, use multiprocessing.Pool or concurrency.future
 instead.
 """
 
+import contextlib
 import logging
 import multiprocessing
+import pickle
+import queue
 import six
 import sys
 import traceback
-
-from six.moves import cPickle, range, queue as Queue
+from typing import Any, Callable, Optional, Protocol
 
 from blinkpy.common.host import Host
 from blinkpy.common.system import stack_utils
@@ -53,8 +54,50 @@ from blinkpy.common.system import stack_utils
 _log = logging.getLogger(__name__)
 
 
-def get(caller, worker_factory, num_workers, host=None):
-    """Returns an object that exposes a run() method that takes a list of test shards and runs them in parallel."""
+class MessageHandler(Protocol):
+    def handle(self, name: str, source: str, *args: Any) -> None:
+        """Handle a message sent from the other end of a message queue.
+
+        Arguments:
+            name: An implementer-defined message name.
+            source: The name of the caller.
+            args: Any additional data associated with this message. The
+                semantics are implementer-defined and may depend on `name`.
+        """
+
+
+class Worker(MessageHandler):
+    """State maintained between tasks.
+
+    Note: This object must be pickleable because it is instantiated in the
+        parent process.
+    """
+
+    def start(self) -> None:
+        """Initialize this object when the worker process starts (optional).
+
+        Runs in the worker process.
+        """
+
+    def stop(self) -> None:
+        """Clean up this object when the worker process exits (optional).
+
+        Either the manager or worker process may call `stop()`, so resources
+        created in `start()` instead of the constructor may not be available.
+        You can use this to detect which process `stop()` is running in.
+        """
+
+
+def get(caller: MessageHandler,
+        worker_factory: Callable[['_WorkerProcess'], Worker],
+        num_workers: int,
+        host: Optional[Host] = None):
+    """Make a message pool object.
+
+    Returns:
+        A pool object that exposes a `run()` method that takes a list of
+        pickleable data and distributes them to workers to process.
+    """
     return _MessagePool(caller, worker_factory, num_workers, host)
 
 
@@ -69,8 +112,8 @@ class _MessagePool(object):
         self._name = 'manager'
         self._running_inline = (self._num_workers == 1)
         if self._running_inline:
-            self._messages_to_worker = Queue.Queue()
-            self._messages_to_manager = Queue.Queue()
+            self._messages_to_worker = queue.Queue()
+            self._messages_to_manager = queue.Queue()
         else:
             self._messages_to_worker = multiprocessing.Queue()
             self._messages_to_manager = multiprocessing.Queue()
@@ -112,16 +155,17 @@ class _MessagePool(object):
             host = self._host
 
         for worker_number in range(self._num_workers):
-            worker = _Worker(host, self._messages_to_manager,
-                             self._messages_to_worker, self._worker_factory,
-                             worker_number, self._running_inline,
-                             self if self._running_inline else None,
-                             self._worker_log_level())
+            worker = _WorkerProcess(host, self._messages_to_manager,
+                                    self._messages_to_worker,
+                                    self._worker_factory, worker_number,
+                                    self._running_inline,
+                                    self if self._running_inline else None,
+                                    self._worker_log_level())
             self._workers.append(worker)
             worker.start()
 
     def _worker_log_level(self):
-        log_level = logging.NOTSET
+        log_level = logging.root.level
         for handler in logging.root.handlers:
             if handler.level != logging.NOTSET:
                 if log_level == logging.NOTSET:
@@ -145,8 +189,10 @@ class _MessagePool(object):
         for worker in self._workers:
             if worker.is_alive():
                 worker.terminate()
-                worker.join()
-        self._workers = []
+        # Flush any remaining results or logs. There may be some stragglers
+        # remaining if this pool context encountered an exception.
+        with contextlib.suppress(Exception):
+            self._loop(block=False)
         if not self._running_inline:
             # FIXME: This is a hack to get multiprocessing to not log tracebacks during shutdown :(.
             multiprocessing.util._exiting = True
@@ -156,6 +202,11 @@ class _MessagePool(object):
             if self._messages_to_manager:
                 self._messages_to_manager.close()
                 self._messages_to_manager = None
+        for worker in self._workers:
+            if worker.is_alive():
+                worker.kill()
+                worker.join(1)
+        self._workers.clear()
 
     def _log_messages(self, messages):
         for message in messages:
@@ -172,9 +223,9 @@ class _MessagePool(object):
 
     def _can_pickle(self, host):
         try:
-            cPickle.dumps(host)
+            pickle.dumps(host)
             return True
-        except TypeError:
+        except Exception:
             return False
 
     def _loop(self, block):
@@ -191,7 +242,7 @@ class _MessagePool(object):
                 method = getattr(self, '_handle_' + message.name)
                 assert method, 'bad message %s' % repr(message)
                 method(message.src, *message.args)
-        except Queue.Empty:
+        except queue.Empty:
             pass
 
 
@@ -212,14 +263,16 @@ class _Message(object):
             self.src, self.name, self.args, self.from_user, self.logs)
 
 
-class _Worker(multiprocessing.Process):
+class _WorkerProcess(multiprocessing.Process):
     def __init__(self, host, messages_to_manager, messages_to_worker,
                  worker_factory, worker_number, running_inline, manager,
                  log_level):
-        super(_Worker, self).__init__()
+        super().__init__()
         self.host = host
         self.worker_number = worker_number
         self.name = 'worker/%d' % worker_number
+        # Log messages are batched for the lifetime of each task. This prevents
+        # output from different tasks from being interleaved.
         self.log_messages = []
         self.log_level = log_level
         self._running = False
@@ -237,18 +290,27 @@ class _Worker(multiprocessing.Process):
             if hasattr(self._worker, 'stop'):
                 self._worker.stop()
             self._worker = None
+        # Sending `SIGTERM` is safe because the child process inherits the
+        # managing process's handler, which simply re-raises `KeyboardInterrupt`
+        # in the main thread (i.e., `_WorkerProcess.run()`).
         if self.is_alive():
-            super(_Worker, self).terminate()
+            super().terminate()
 
     def _close(self):
         if self._log_handler and self._logger:
             self._logger.removeHandler(self._log_handler)
         self._log_handler = None
         self._logger = None
+        # Need to give the queue's I/O thread time to put the 'done' message
+        # into the underlying OS pipe. Without this, the message pool (manager)
+        # may hang forever. See also: crrev.com/c/3723551.
+        if not isinstance(self._messages_to_manager, queue.Queue):
+            self._messages_to_manager.close()
+            self._messages_to_manager.join_thread()
 
     def start(self):
         if not self._running_inline:
-            super(_Worker, self).start()
+            super().start()
 
     def run(self):
         if not self.host:
@@ -274,7 +336,7 @@ class _Worker(multiprocessing.Process):
                     break
 
             _log.debug('%s exiting', self.name)
-        except Queue.Empty:
+        except queue.Empty:
             assert False, '%s: ran out of messages in worker queue.' % self.name
         except KeyboardInterrupt:
             self._raise(sys.exc_info())
@@ -340,7 +402,7 @@ class _Worker(multiprocessing.Process):
 
 class _WorkerLogHandler(logging.Handler):
     def __init__(self, worker):
-        logging.Handler.__init__(self)
+        super().__init__()
         self._worker = worker
         self.setLevel(worker.log_level)
 

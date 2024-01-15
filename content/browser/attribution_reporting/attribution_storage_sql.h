@@ -8,34 +8,35 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
+#include "base/containers/enum_set.h"
 #include "base/files/file_path.h"
-#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
+#include "base/time/time.h"
+#include "base/types/expected.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
 #include "content/browser/attribution_reporting/attribution_storage.h"
 #include "content/browser/attribution_reporting/attribution_trigger.h"
 #include "content/browser/attribution_reporting/rate_limit_table.h"
 #include "content/browser/attribution_reporting/stored_source.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/attribution_data_model.h"
 #include "content/public/browser/storage_partition.h"
-
-namespace base {
-class GUID;
-}  // namespace base
+#include "sql/database.h"
 
 namespace sql {
-class Database;
 class Statement;
 class StatementID;
 }  // namespace sql
 
 namespace content {
 
-class AggregatableHistogramContribution;
 class AttributionStorageDelegate;
+class StorableSource;
 struct AttributionInfo;
 
 enum class RateLimitResult : int;
@@ -45,13 +46,19 @@ enum class RateLimitResult : int;
 // destroyed on the same sequence. The sequence must outlive |this|.
 class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
  public:
-  // Exposed for testing.
-  static const int kCurrentVersionNumber;
-  static const int kCompatibleVersionNumber;
-  static const int kDeprecatedVersionNumber;
+  // Version number of the database.
+  static constexpr int kCurrentVersionNumber = 57;
 
-  [[nodiscard]] static bool DeleteStorageForTesting(
-      const base::FilePath& user_data_directory);
+  // Earliest version which can use a `kCurrentVersionNumber` database
+  // without failing.
+  static constexpr int kCompatibleVersionNumber = 57;
+
+  // Latest version of the database that cannot be upgraded to
+  // `kCurrentVersionNumber` without razing the database.
+  static constexpr int kDeprecatedVersionNumber = 51;
+
+  static_assert(kCompatibleVersionNumber <= kCurrentVersionNumber);
+  static_assert(kDeprecatedVersionNumber < kCompatibleVersionNumber);
 
   // If `user_data_directory` is empty, the DB is created in memory and no data
   // is persisted to disk.
@@ -77,8 +84,57 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
     kFailedToInitializeSchema = 4,
     kMaxValue = kFailedToInitializeSchema,
   };
+  enum class ReportCorruptionStatus {
+    // Tracks total number of corrupted reports for analysis purposes.
+    kAnyFieldCorrupted = 0,
+    kInvalidFailedSendAttempts = 1,
+    kInvalidExternalReportID = 2,
+    kInvalidContextOrigin = 3,
+    kInvalidReportingOrigin = 4,
+    kInvalidReportType = 5,
+    kReportingOriginMismatch = 6,
+    // Obsolete: kMetadataAsStringFailed = 7,
+    kSourceDataMissingEventLevel = 8,
+    kSourceDataMissingAggregatable = 9,
+    kSourceDataFoundNullAggregatable = 10,
+    kInvalidMetadata = 11,
+    kSourceNotFound = 12,
+    kSourceInvalidSourceOrigin = 13,
+    kSourceInvalidReportingOrigin = 14,
+    kSourceInvalidSourceType = 15,
+    kSourceInvalidAttributionLogic = 16,
+    kSourceInvalidNumConversions = 17,
+    kSourceInvalidNumAggregatableReports = 18,
+    kSourceInvalidAggregationKeys = 19,
+    kSourceInvalidFilterData = 20,
+    kSourceInvalidActiveState = 21,
+    kSourceInvalidReadOnlySourceData = 22,
+    kSourceInvalidEventReportWindows = 23,
+    kSourceInvalidMaxEventLevelReports = 24,
+    kSourceInvalidEventLevelEpsilon = 25,
+    kSourceDestinationSitesQueryFailed = 26,
+    kSourceInvalidDestinationSites = 27,
+    kStoredSourceConstructionFailed = 28,
+    kMaxValue = kStoredSourceConstructionFailed,
+  };
+
+  struct DeletionCounts {
+    int sources = 0;
+    int reports = 0;
+  };
+
+  // Deletes corrupt sources/reports if `deletion_counts` is not `nullptr`.
+  void VerifyReports(DeletionCounts* deletion_counts);
 
  private:
+  using ReportCorruptionStatusSet =
+      base::EnumSet<ReportCorruptionStatus,
+                    ReportCorruptionStatus::kAnyFieldCorrupted,
+                    ReportCorruptionStatus::kMaxValue>;
+
+  struct ReportCorruptionStatusSetAndIds;
+  struct StoredSourceData;
+
   enum class DbStatus {
     // The database has never been created, i.e. there is no database file at
     // all.
@@ -99,27 +155,32 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
   };
 
   // AttributionStorage:
-  StoreSourceResult StoreSource(const StorableSource& source) override;
+  StoreSourceResult StoreSource(const StorableSource& source,
+                                bool debug_cookie_set) override;
   CreateReportResult MaybeCreateAndStoreReport(
       const AttributionTrigger& trigger) override;
   std::vector<AttributionReport> GetAttributionReports(
       base::Time max_report_time,
-      int limit = -1,
-      AttributionReport::Types report_types = {
-          AttributionReport::Type::kEventLevel,
-          AttributionReport::Type::kAggregatableAttribution}) override;
-  absl::optional<base::Time> GetNextReportTime(base::Time time) override;
+      int limit = -1) override;
+  std::optional<base::Time> GetNextReportTime(base::Time time) override;
   std::vector<AttributionReport> GetReports(
       const std::vector<AttributionReport::Id>& ids) override;
   std::vector<StoredSource> GetActiveSources(int limit = -1) override;
+  std::set<AttributionDataModel::DataKey> GetAllDataKeys() override;
+  void DeleteByDataKey(const AttributionDataModel::DataKey& datakey) override;
   bool DeleteReport(AttributionReport::Id report_id) override;
   bool UpdateReportForSendFailure(AttributionReport::Id report_id,
                                   base::Time new_report_time) override;
-  absl::optional<base::Time> AdjustOfflineReportTimes() override;
+  std::optional<base::Time> AdjustOfflineReportTimes() override;
   void ClearData(base::Time delete_begin,
                  base::Time delete_end,
                  StoragePartition::StorageKeyMatcherFunction filter,
                  bool delete_rate_limit_data) override;
+  void SetDelegate(std::unique_ptr<AttributionStorageDelegate>) override;
+
+  [[nodiscard]] StoreSourceResult CheckDestinationRateLimit(
+      const StorableSource& source,
+      base::Time source_time);
 
   void ClearAllDataAllTime(bool delete_rate_limit_data)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
@@ -139,14 +200,12 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
   [[nodiscard]] bool DeleteExpiredSources()
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  // Deletes the report with `report_id` without checking the the DB
-  // initialization status or the number of deleted rows. Returns false on
-  // failure.
-  [[nodiscard]] bool DeleteReportInternal(
-      AttributionReport::EventLevelData::Id report_id)
+  bool HasCapacityForStoringSource(const std::string& serialized_origin,
+                                   base::Time now)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  bool HasCapacityForStoringSource(const std::string& serialized_origin)
+  // Returns the number of sources in storage.
+  std::optional<int64_t> NumberOfSources()
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   enum class ReportAlreadyStoredStatus {
@@ -155,9 +214,11 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
     kError,
   };
 
+  void RecordSourcesPerSourceOrigin() VALID_CONTEXT_REQUIRED(sequence_checker_);
+
   ReportAlreadyStoredStatus ReportAlreadyStored(
       StoredSource::Id source_id,
-      absl::optional<uint64_t> dedup_key,
+      std::optional<uint64_t> dedup_key,
       AttributionReport::Type report_type)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
@@ -183,16 +244,13 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
       const AttributionReport& report,
       int num_conversions,
       int64_t conversion_priority,
-      absl::optional<AttributionReport>& replaced_report)
+      std::optional<AttributionReport>& replaced_report)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<AttributionReport> GetReport(
-      AttributionReport::EventLevelData::Id report_id)
+  std::optional<AttributionReport> GetReport(AttributionReport::Id report_id)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<std::vector<uint64_t>> ReadDedupKeys(
-      StoredSource::Id source_id,
-      AttributionReport::Type report_type)
+  [[nodiscard]] bool ReadDedupKeys(StoredSource&)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   bool StoreDedupKey(StoredSource::Id source_id,
@@ -200,30 +258,27 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
                      AttributionReport::Type report_type)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  [[nodiscard]] RateLimitResult
-  HasCapacityForUniqueDestinationLimitForPendingSource(
-      const StorableSource& source) VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  [[nodiscard]] absl::optional<AttributionReport::EventLevelData::Id>
-  StoreEventLevelReport(StoredSource::Id source_id,
-                        uint64_t trigger_data,
-                        base::Time trigger_time,
-                        base::Time report_time,
-                        int64_t priority,
-                        const base::GUID& external_report_id,
-                        absl::optional<uint64_t> trigger_debug_key)
+  base::expected<AttributionReport, ReportCorruptionStatusSetAndIds>
+  ReadReportFromStatement(sql::Statement&)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<AttributionReport> ReadReportFromStatement(sql::Statement&)
+  base::expected<StoredSourceData, ReportCorruptionStatusSetAndIds>
+  ReadSourceFromStatement(sql::Statement&)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  std::vector<AttributionReport> GetEventLevelReportsInternal(
-      base::Time max_report_time,
-      int limit) VALID_CONTEXT_REQUIRED(sequence_checker_);
+  std::optional<StoredSourceData> ReadSourceToAttribute(
+      StoredSource::Id source_id) VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<base::Time> GetNextReportTime(sql::StatementID id,
-                                               const char* sql,
-                                               base::Time time)
+  std::vector<AttributionReport> GetReportsInternal(base::Time max_report_time,
+                                                    int limit)
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  [[nodiscard]] bool DeleteReportInternal(AttributionReport::Id)
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  std::optional<base::Time> GetNextReportTime(sql::StatementID id,
+                                              const char* sql,
+                                              base::Time time)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   [[nodiscard]] bool AdjustOfflineReportTimes(sql::StatementID id,
@@ -233,37 +288,32 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
                                               base::Time now)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<base::Time> GetNextEventLevelReportTime(base::Time time)
-      VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  absl::optional<base::Time> AdjustOfflineEventLevelReportTimes(
-      base::TimeDelta min_delay,
-      base::TimeDelta max_delay,
-      base::Time now) VALID_CONTEXT_REQUIRED(sequence_checker_);
-
   // Returns whether the database execution was successful.
   // `source_id_to_attribute` and `source_ids_to_delete` would be populated if
   // matching sources were found.
   bool FindMatchingSourceForTrigger(
       const AttributionTrigger& trigger,
-      absl::optional<StoredSource::Id>& source_id_to_attribute,
+      base::Time trigger_time,
+      std::optional<StoredSource::Id>& source_id_to_attribute,
       std::vector<StoredSource::Id>& source_ids_to_delete,
       std::vector<StoredSource::Id>& source_ids_to_deactivate)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   AttributionTrigger::EventLevelResult MaybeCreateEventLevelReport(
       const AttributionInfo& attribution_info,
+      const StoredSource&,
       const AttributionTrigger& trigger,
-      bool top_level_filters_match,
-      absl::optional<AttributionReport>& report,
-      absl::optional<uint64_t>& dedup_key)
+      std::optional<AttributionReport>& report,
+      std::optional<uint64_t>& dedup_key,
+      std::optional<int>& max_event_level_reports_per_destination)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   AttributionTrigger::EventLevelResult MaybeStoreEventLevelReport(
       AttributionReport& report,
-      absl::optional<uint64_t> dedup_key,
+      std::optional<uint64_t> dedup_key,
       int num_conversions,
-      absl::optional<AttributionReport>& replaced_report)
+      std::optional<AttributionReport>& replaced_report,
+      std::optional<AttributionReport>& dropped_report)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   // Initializes the database if necessary, and returns whether the database is
@@ -281,47 +331,32 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
 
   void DatabaseErrorCallback(int extended_error, sql::Statement* stmt);
 
-  // Aggregate Attribution:
-
-  // Deletes all aggregatable attribution data in storage for storage keys
-  // matching `filter`, between `delete_begin` and `delete_end` time. More
+  // Deletes all event-level and aggregatable reports in storage for storage
+  // keys matching `filter`, between `delete_begin` and `delete_end` time. More
   // specifically, this:
-  // 1. Deletes all sources within the time range. If any aggregatable
-  //    attribution is attributed to this source it is also deleted.
-  // 2. Deletes all aggregatable attributions within the time range. All sources
-  //    attributed to the aggregatable attribution are also deleted.
+  // 1. Deletes all sources within the time range. If any report is attributed
+  // to this source it is also deleted.
+  // 2. Deletes all reports within the time range. All sources these reports
+  // attributed to are also deleted.
   //
   // All sources to be deleted are updated in `source_ids_to_delete`.
-  // Returns number of aggregatable attributions deleted, or -1 for failure.
-  [[nodiscard]] int ClearAggregatableAttributionsForOriginsInRange(
+  // Returns false on failure.
+  [[nodiscard]] bool ClearReportsForOriginsInRange(
       base::Time delete_begin,
       base::Time delete_end,
       StoragePartition::StorageKeyMatcherFunction filter,
-      std::vector<StoredSource::Id>& source_ids_to_delete)
+      std::vector<StoredSource::Id>& source_ids_to_delete,
+      int& num_event_reports_deleted,
+      int& num_aggregatable_reports_deleted)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  [[nodiscard]] int ClearAggregatableAttributionsForSourceIds(
-      const std::vector<StoredSource::Id>& source_ids)
+  [[nodiscard]] bool ClearReportsForSourceIds(
+      const std::vector<StoredSource::Id>& source_ids,
+      int& num_event_reports_deleted,
+      int& num_aggregatable_reports_deleted)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  std::vector<AttributionReport> GetAggregatableAttributionReportsInternal(
-      base::Time max_report_time,
-      int limit) VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  std::vector<AggregatableHistogramContribution> GetAggregatableContributions(
-      AttributionReport::AggregatableAttributionData::Id aggregation_id)
-      VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  // Deletes the report with `report_id` without checking the the DB
-  // initialization status or the number of deleted rows. Returns false on
-  // failure.
-  [[nodiscard]] bool DeleteReportInternal(
-      AttributionReport::AggregatableAttributionData::Id report_id)
-      VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  [[nodiscard]] bool DeleteAggregatableContributions(
-      AttributionReport::AggregatableAttributionData::Id aggregation_id)
-      VALID_CONTEXT_REQUIRED(sequence_checker_);
+  // Aggregate Attribution:
 
   // Checks if the given aggregatable attribution is allowed according to the
   // L1 budget policy specified by the delegate.
@@ -338,37 +373,48 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
       int64_t additional_budget_consumed)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<base::Time> GetNextAggregatableAttributionReportTime(
-      base::Time time) VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  absl::optional<base::Time> AdjustOfflineAggregatableAttributionReportTimes(
-      base::TimeDelta min_delay,
-      base::TimeDelta max_delay,
-      base::Time now) VALID_CONTEXT_REQUIRED(sequence_checker_);
-
   AttributionTrigger::AggregatableResult
   MaybeCreateAggregatableAttributionReport(
       const AttributionInfo& attribution_info,
+      const StoredSource&,
       const AttributionTrigger& trigger,
-      bool top_level_filters_match,
-      absl::optional<AttributionReport>& report)
+      std::optional<AttributionReport>& report,
+      std::optional<uint64_t>& dedup_key,
+      std::optional<int>& max_aggregatable_reports_per_destination)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
+  // Stores the data associated with the aggregatable report, e.g. budget
+  // consumed and dedup keys. The report itself will be stored in
+  // `GenerateNullAggregatableReportsAndStoreReports()`.
   AttributionTrigger::AggregatableResult
-  MaybeStoreAggregatableAttributionReport(AttributionReport& report,
-                                          int64_t aggregatable_budget_consumed,
-                                          absl::optional<uint64_t> dedup_key)
+  MaybeStoreAggregatableAttributionReportData(
+      AttributionReport& report,
+      int64_t aggregatable_budget_consumed,
+      int num_aggregatable_reports,
+      std::optional<uint64_t> dedup_key,
+      std::optional<int>& max_aggregatable_reports_per_source)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  [[nodiscard]] bool StoreAggregatableAttributionReport(
-      AttributionReport& report) VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  absl::optional<AttributionReport>
-  ReadAggregatableAttributionReportFromStatement(sql::Statement&)
+  [[nodiscard]] bool StoreAttributionReport(AttributionReport& report)
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
-  absl::optional<AttributionReport> GetReport(
-      AttributionReport::AggregatableAttributionData::Id report_id)
+  // Generates null aggregatable reports for the given trigger, assigns
+  // verification data to null aggregatable reports and the real aggregatable
+  // report if created, and stores all those reports.
+  [[nodiscard]] bool GenerateNullAggregatableReportsAndStoreReports(
+      const AttributionTrigger&,
+      const AttributionInfo&,
+      std::optional<AttributionReport>& new_aggregatable_report,
+      std::optional<base::Time>& min_null_aggregatable_report_time)
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  // Randomly assigns trigger verification data to the given reports.
+  void AssignTriggerVerificationData(std::vector<AttributionReport>&,
+                                     const AttributionTrigger&)
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  base::Time GetAggregatableReportTime(const AttributionTrigger&,
+                                       base::Time trigger_time) const
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   // If set, database errors will not crash the client when run in debug mode.
@@ -380,16 +426,13 @@ class CONTENT_EXPORT AttributionStorageSql : public AttributionStorage {
   // at for lazy initialization, and used as a signal for if the database is
   // closed. This is initialized in the first call to LazyInit() to avoid doing
   // additional work in the constructor, see https://crbug.com/1121307.
-  absl::optional<DbStatus> db_init_status_
-      GUARDED_BY_CONTEXT(sequence_checker_);
+  std::optional<DbStatus> db_init_status_ GUARDED_BY_CONTEXT(sequence_checker_);
 
-  // May be null if the database:
-  //  - could not be opened
-  //  - table/index initialization failed
-  std::unique_ptr<sql::Database> db_ GUARDED_BY_CONTEXT(sequence_checker_);
+  sql::Database db_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   std::unique_ptr<AttributionStorageDelegate> delegate_
       GUARDED_BY_CONTEXT(sequence_checker_);
+
   // Table which stores timestamps of sent reports, and checks if new reports
   // can be created given API rate limits. The underlying table is created in
   // |db_|, but only accessed within |RateLimitTable|.

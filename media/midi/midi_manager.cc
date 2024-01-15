@@ -4,11 +4,10 @@
 
 #include "media/midi/midi_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 
@@ -80,7 +79,7 @@ MidiManager::~MidiManager() {
       static_cast<Sample>(SendReceiveUsage::MAX) + 1);
 }
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_WIN) && \
+#if !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_WIN) && \
     !(defined(USE_ALSA) && defined(USE_UDEV)) && !BUILDFLAG(IS_ANDROID)
 MidiManager* MidiManager::Create(MidiService* service) {
   ReportUsage(Usage::CREATED_ON_UNSUPPORTED_PLATFORMS);
@@ -96,12 +95,8 @@ void MidiManager::StartSession(MidiManagerClient* client) {
   {
     base::AutoLock auto_lock(lock_);
 
-    if (clients_.find(client) != clients_.end() ||
-        pending_clients_.find(client) != pending_clients_.end()) {
-      // Should not happen. But just in case the renderer is compromised.
-      NOTREACHED();
-      return;
-    }
+    CHECK(clients_.find(client) == clients_.end());
+    CHECK(pending_clients_.find(client) == pending_clients_.end());
 
     if (initialization_state_ == InitializationState::COMPLETED) {
       // Platform dependent initialization was already finished for previously
@@ -130,7 +125,8 @@ void MidiManager::StartSession(MidiManagerClient* client) {
       // Set fields protected by |lock_| here and call StartInitialization()
       // later.
       needs_initialization = true;
-      session_thread_runner_ = base::ThreadTaskRunnerHandle::Get();
+      session_thread_runner_ =
+          base::SingleThreadTaskRunner::GetCurrentDefault();
       initialization_state_ = InitializationState::STARTED;
     }
 

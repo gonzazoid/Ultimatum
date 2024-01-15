@@ -7,9 +7,9 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "device/fido/cable/v2_handshake.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -38,15 +38,25 @@ class COMPONENT_EXPORT(DEVICE_FIDO) WebSocketAdapter
     GONE,
   };
 
-  using TunnelReadyCallback = base::OnceCallback<
-      void(Result, absl::optional<std::array<uint8_t, kRoutingIdSize>>)>;
+  // ConnectSignalSupport indicates whether the connection will send a connect
+  // signal. This is a single zero byte, sent by the tunnel server when the peer
+  // connects. This only occurs for "contact" connections.
+  enum class ConnectSignalSupport {
+    NO,
+    YES,
+  };
+
+  using TunnelReadyCallback = base::OnceCallback<void(
+      Result,
+      absl::optional<std::array<uint8_t, kRoutingIdSize>>,
+      ConnectSignalSupport)>;
   using TunnelDataCallback =
       base::RepeatingCallback<void(absl::optional<base::span<const uint8_t>>)>;
   WebSocketAdapter(
       // on_tunnel_ready is called once with a boolean that indicates whether
       // the WebSocket successfully connected and an optional routing ID.
       TunnelReadyCallback on_tunnel_ready,
-      // on_tunnel_ready is called repeatedly, after successful connection, with
+      // on_tunnel_data is called repeatedly, after successful connection, with
       // the contents of WebSocket messages. Framing is preserved so a single
       // message written by the server will result in a single callback.
       TunnelDataCallback on_tunnel_data);

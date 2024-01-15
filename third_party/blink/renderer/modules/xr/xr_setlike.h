@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_XR_XR_SETLIKE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_XR_XR_SETLIKE_H_
 
+#include "base/containers/contains.h"
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
@@ -15,8 +16,8 @@ namespace blink {
 // The consumer of the class needs only to implement the |elements()| method -
 // everything else should be provided by this class. For examples, see
 // `XRPlaneSet` and `XRAnchorSet`.
-template <typename ElementType>
-class XRSetlike : public SetlikeIterable<Member<ElementType>, ElementType> {
+template <typename InterfaceType, typename ElementType>
+class XRSetlike : public ValueSyncIterable<InterfaceType> {
  public:
   unsigned size() const { return elements().size(); }
 
@@ -26,7 +27,7 @@ class XRSetlike : public SetlikeIterable<Member<ElementType>, ElementType> {
                      ExceptionState& exception_state) const {
     DCHECK(element);
     auto all_elements = elements();
-    return all_elements.find(element) != all_elements.end();
+    return base::Contains(all_elements, element);
   }
 
  protected:
@@ -34,8 +35,7 @@ class XRSetlike : public SetlikeIterable<Member<ElementType>, ElementType> {
 
  private:
   class IterationSource final
-      : public SetlikeIterable<Member<ElementType>,
-                               ElementType>::IterationSource {
+      : public ValueSyncIterable<InterfaceType>::IterationSource {
    public:
     explicit IterationSource(const HeapHashSet<Member<ElementType>>& elements)
         : index_(0) {
@@ -45,15 +45,14 @@ class XRSetlike : public SetlikeIterable<Member<ElementType>, ElementType> {
       }
     }
 
-    bool Next(ScriptState* script_state,
-              Member<ElementType>& key,
-              Member<ElementType>& value,
-              ExceptionState& exception_state) override {
+    bool FetchNextItem(ScriptState* script_state,
+                       ElementType*& value,
+                       ExceptionState& exception_state) override {
       if (index_ >= elements_.size()) {
         return false;
       }
 
-      key = value = elements_[index_];
+      value = elements_[index_];
       ++index_;
 
       return true;
@@ -61,8 +60,7 @@ class XRSetlike : public SetlikeIterable<Member<ElementType>, ElementType> {
 
     void Trace(Visitor* visitor) const override {
       visitor->Trace(elements_);
-      SetlikeIterable<Member<ElementType>, ElementType>::IterationSource::Trace(
-          visitor);
+      ValueSyncIterable<InterfaceType>::IterationSource::Trace(visitor);
     }
 
    private:
@@ -72,8 +70,8 @@ class XRSetlike : public SetlikeIterable<Member<ElementType>, ElementType> {
   };
 
   // Starts iteration over XRSetlike.
-  // Needed for SetlikeIterable to work properly.
-  XRSetlike::IterationSource* StartIteration(
+  // Needed for ValueSyncIterable to work properly.
+  XRSetlike::IterationSource* CreateIterationSource(
       ScriptState* script_state,
       ExceptionState& exception_state) override {
     return MakeGarbageCollected<XRSetlike::IterationSource>(elements());

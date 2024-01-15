@@ -6,7 +6,7 @@
 
 /**
  * @fileoverview
- * Constants used by both the UI and Web Worker scripts.
+ * Types, constants and basic utils shared by UI and Web Worker scripts.
  */
 
 /**
@@ -17,6 +17,7 @@
  *     indicate this is a leaf node. Null values are placeholders to indicate
  *     children that haven't been loaded in yet.
  * @property {?TreeNode} parent - Parent tree node, null if this is a root node.
+ * @property {string} id - Unique identifier of a node.
  * @property {string} idPath - Full path to this node.
  * @property {string} objPath - Path to the object file containing this symbol.
  * @property {string} srcPath - Path to the source containing this symbol.
@@ -76,6 +77,11 @@
  */
 
 /**
+ * @typedef {Object} QueryAncestryResults
+ * @property {!Array<number>} ancestorIds
+ */
+
+/**
  * Nested key-value pairs that stores metadata of .size or .sizediff files.
  * @typedef {Object} MetadataType
  * @property {Object|undefined} before_size_file - Metadata of the "before"
@@ -92,6 +98,20 @@
  * @property {?MetadataType} metadata
  */
 
+/**
+ * @typedef {Object} BuildOptions
+ * @property {string} loadUrl
+ * @property {string} beforeUrl
+ * @property {boolean} methodCountMode
+ * @property {string} groupBy
+ * @property {string} includeRegex
+ * @property {string} excludeRegex
+ * @property {string} includeSections
+ * @property {number} minSymbolSize
+ * @property {number} flagToFilter
+ * @property {boolean} nonOverhead
+ * @property {boolean} disassemblyMode
+ */
 
 /**
  * @typedef {Object} BuildTreeResults
@@ -101,85 +121,25 @@
  */
 
 /**
- * @enum {number} Abberivated keys used by FileEntry fields in the JSON data
- *     file.
+ * Throws error if |cond| is falsey.
+ * @param {boolean} cond The condition to check.
+ * @param {string=} msg Message on assert failure.
  */
-const _FLAGS = {
-  ANONYMOUS:        1 << 0,
-  STARTUP:          1 << 1,
-  UNLIKELY:         1 << 2,
-  REL:              1 << 3,
-  REL_LOCAL:        1 << 4,
-  GENERATED_SOURCE: 1 << 5,
-  CLONE:            1 << 6,
-  HOT:              1 << 7,
-  COVERAGE:         1 << 8,
-  UNCOMPRESSED:     1 << 9,
-};
+function assert(cond, msg = 'Assert fail.') {
+  if (!cond)
+    throw new Error(msg);
+}
 
 /**
- * @enum {number} Various byte units and the corresponding amount of bytes that
- *     one unit represents.
+ * Throws error if |obj| is null or undefined; returns |obj| otherwise.
+ * @param {?Object} obj The (non-primitive) object to check.
+ * @param {string=} msg Message on assert failure.
+ * @return {!Object}
  */
-const _BYTE_UNITS = {
-  GiB: 1024 ** 3,
-  MiB: 1024 ** 2,
-  KiB: 1024 ** 1,
-  B:   1024 ** 0,
-};
-
-/** @enum {number} All possible states for a delta symbol. */
-const _DIFF_STATUSES = {
-  UNCHANGED: 0,
-  CHANGED:   1,
-  ADDED:     2,
-  REMOVED:   3,
-};
-
-/**
- * @enum {string} Special types used by artifacts, such as folders and files.
- */
-const _ARTIFACT_TYPES = {
-  DIRECTORY:  'D',
-  GROUP:      'G',
-  FILE:       'F',
-  JAVA_CLASS: 'J',
-};
-const _ARTIFACT_TYPE_SET = new Set(Object.values(_ARTIFACT_TYPES));
-
-/** @type {string} Type for a dex method symbol. */
-const _DEX_METHOD_SYMBOL_TYPE = 'm';
-
-/** @type {string} Type for an 'other' symbol. */
-const _OTHER_SYMBOL_TYPE = 'o';
-
-/**
- * @type {Set} Set of all known symbol types. Artifact types are not included.
- */
-const _SYMBOL_TYPE_SET =
-    new Set(/** @type {Iterable<string>} */ ('bdrtRxmopP'));
-
-/** @type {string} Key where type is stored in the query string state. */
-const _TYPE_STATE_KEY = 'type';
-
-/** @type {Array<string> | string} */
-const _LOCALE = /** @type {Array<string>} */ (navigator.languages) ||
-    navigator.language;
-
-/**
- * Iterates over each type in the query string. Types can be expressed as
- * repeats of the same key in the query string ("type=b&type=p") or as a long
- * string with multiple characters ("type=bp").
- * @generator
- * @param {Array<string>} typesList All values associated with the "type" key
- *     in the query string.
- */
-function* types(typesList) {
-  for (const typeOrTypes of typesList) {
-    for (const typeChar of typeOrTypes) {
-      yield typeChar;
-    }
-  }
+function assertNotNull(obj, msg = 'Assert fail: Object is null.') {
+  if (obj == null)  // Using == to also include undefined.
+    throw new Error(msg);
+  return obj;
 }
 
 /**
@@ -197,54 +157,4 @@ function debounce(func, wait) {
     timeoutId = setTimeout(() => func(...args), wait);
   }
   return /** @type {*} */ (debounced);
-}
-
-/**
- * Returns shortName for a tree node.
- * @param {TreeNode} treeNode
- * @return {string}
- */
-function shortName(treeNode) {
-  return treeNode.idPath.slice(treeNode.shortNameIndex);
-}
-
-/**
- * Returns whether a symbol has a certain bit flag.
- * @param {_FLAGS} flag Bit flag from `_FLAGS`.
- * @param {TreeNode} symbolNode
- * @return {boolean}
- */
-function hasFlag(flag, symbolNode) {
-  return (symbolNode.flags & flag) === flag;
-}
-
-/**
- * Returns a formatted number with grouping, taking an optional range for number
- * of digits after the decimal point (default 0, i.e., assume integer).
- * @param {number} num
- * @param {number=} lo
- * @param {number=} hi
- * @return {string}
- */
-function formatNumber(num, lo = 0, hi = 0) {
-  return num.toLocaleString(_LOCALE, {
-    useGrouping: true,
-    minimumFractionDigits: lo,
-    maximumFractionDigits: hi
-  });
-}
-
-/**
- * Same as formatNumber(), but returns percentage instead.
- * @param {number} num
- * @param {number=} lo
- * @param {number=} hi
- * @return {string}
- */
-function formatPercent(num, lo = 0, hi = 0) {
-  return num.toLocaleString(_LOCALE, {
-    style: 'percent',
-    minimumFractionDigits: lo,
-    maximumFractionDigits: hi,
-  });
 }

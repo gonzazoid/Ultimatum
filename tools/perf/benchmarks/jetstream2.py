@@ -27,18 +27,72 @@ import page_sets
 from benchmarks import press
 
 
-@benchmark.Info(emails=['hablich@chromium.org', 'tcwang@chromium.org'],
-                component='Blink>JavaScript',
-                documentation_url='https://browserbench.org/JetStream/in-depth.html')
-
-class Jetstream2(press._PressBenchmark): # pylint: disable=protected-access
+class _JetStream2Base(press._PressBenchmark):  # pylint: disable=protected-access
   """JetStream2, a combination of JavaScript and Web Assembly benchmarks.
 
-  Run all the Jetstream 2 benchmarks by default.
+  Run all the JetStream 2 benchmarks by default.
   """
+  @classmethod
+  def AddBenchmarkCommandLineArgs(cls, parser):
+    parser.add_option('--test-list',
+                      type="string",
+                      help="Only run specific tests, separated by commas.")
+
+
+@benchmark.Info(
+    emails=['vahl@chromium.org', 'cbruni@chromium.org'],
+    component='Blink>JavaScript',
+    documentation_url='https://browserbench.org/JetStream2.0/in-depth.html')
+class JetStream20(_JetStream2Base):
+  """JetStream 2.0"""
+  @classmethod
+  def Name(cls):
+    return 'UNSCHEDULED_jetstream20'
+
+  def CreateStorySet(self, options):
+    return page_sets.JetStream20StorySet(options.test_list)
+
+
+@benchmark.Info(
+    emails=['vahl@chromium.org', 'cbruni@chromium.org'],
+    component='Blink>JavaScript',
+    documentation_url='https://browserbench.org/JetStream2.1/in-depth.html')
+class JetStream21(_JetStream2Base):
+  """JetStream 2.1"""
+  @classmethod
+  def Name(cls):
+    return 'UNSCHEDULED_jetstream21'
+
+  def CreateStorySet(self, options):
+    return page_sets.JetStream21StorySet(options.test_list)
+
+
+@benchmark.Info(
+    emails=['vahl@chromium.org', 'cbruni@chromium.org'],
+    component='Blink>JavaScript',
+    documentation_url='https://browserbench.org/JetStream2.0/in-depth.html')
+class JetStream2(_JetStream2Base):
+  """Latest JetStream2 """
   @classmethod
   def Name(cls):
     return 'jetstream2'
 
   def CreateStorySet(self, options):
-    return page_sets.Jetstream2StorySet()
+    return page_sets.JetStream2StorySet(options.test_list)
+
+
+@benchmark.Info(
+    emails=['omerkatz@chromium.org'],
+    component='Blink>JavaScript>GarbageCollection',
+    documentation_url='https://browserbench.org/JetStream2.0/in-depth.html')
+class JetStream2NoMinorMS(JetStream2):
+  """Latest JetStream2 without the MinorMS flag.
+
+  Shows the performance with Scavenger young generation GC in V8.
+  """
+  @classmethod
+  def Name(cls):
+    return 'jetstream2-nominorms'
+
+  def SetExtraBrowserOptions(self, options):
+    options.AppendExtraBrowserArgs('--js-flags=--no-minor-ms')

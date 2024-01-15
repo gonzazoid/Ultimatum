@@ -9,15 +9,16 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
+#include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "components/sessions/core/command_storage_manager.h"
@@ -81,10 +82,11 @@ class CommandStorageBackendTest : public testing::Test {
   }
 
   scoped_refptr<CommandStorageBackend> CreateBackend(
-      const std::vector<uint8_t>& decryption_key = {}) {
+      const std::vector<uint8_t>& decryption_key = {},
+      base::Clock* clock = nullptr) {
     return MakeRefCounted<CommandStorageBackend>(
         task_environment_.GetMainThreadTaskRunner(), file_path_,
-        CommandStorageManager::SessionType::kOther, decryption_key);
+        CommandStorageManager::SessionType::kOther, decryption_key, clock);
   }
 
   scoped_refptr<CommandStorageBackend> CreateBackendWithRestoreType() {
@@ -587,7 +589,7 @@ TEST_F(CommandStorageBackendTest,
       base::FilePath(kSessionsDirectory)
           .Append(FILE_PATH_LITERAL("Session_13235178308836991")));
   ASSERT_TRUE(base::CreateDirectory(prev_path.DirName()));
-  ASSERT_EQ(0, base::WriteFile(prev_path, "", 0));
+  ASSERT_TRUE(base::WriteFile(prev_path, ""));
 
   scoped_refptr<CommandStorageBackend> backend = CreateBackendWithRestoreType();
   auto last_session_info = GetLastSessionInfo(backend.get());
@@ -607,9 +609,9 @@ TEST_F(CommandStorageBackendTest,
       sessions_dir.Append(FILE_PATH_LITERAL("Session_13235178308548874"));
   const auto old_path_2 = sessions_dir.Append(FILE_PATH_LITERAL("Session_0"));
   ASSERT_TRUE(base::CreateDirectory(prev_path.DirName()));
-  ASSERT_EQ(0, base::WriteFile(prev_path, "", 0));
-  ASSERT_EQ(0, base::WriteFile(old_path_1, "", 0));
-  ASSERT_EQ(0, base::WriteFile(old_path_2, "", 0));
+  ASSERT_TRUE(base::WriteFile(prev_path, ""));
+  ASSERT_TRUE(base::WriteFile(old_path_1, ""));
+  ASSERT_TRUE(base::WriteFile(old_path_2, ""));
 
   scoped_refptr<CommandStorageBackend> backend = CreateBackendWithRestoreType();
   auto last_session_info = GetLastSessionInfo(backend.get());
@@ -624,7 +626,7 @@ TEST_F(CommandStorageBackendTest,
       restore_path().Append(base::FilePath(kSessionsDirectory)
                                 .Append(FILE_PATH_LITERAL("Session_invalid")));
   ASSERT_TRUE(base::CreateDirectory(prev_path.DirName()));
-  ASSERT_EQ(0, base::WriteFile(prev_path, "", 0));
+  ASSERT_TRUE(base::WriteFile(prev_path, ""));
 
   scoped_refptr<CommandStorageBackend> backend = CreateBackendWithRestoreType();
   auto last_session_info = GetLastSessionInfo(backend.get());
@@ -639,7 +641,7 @@ TEST_F(CommandStorageBackendTest,
   const auto last_session =
       sessions_dir.Append(FILE_PATH_LITERAL("Session_13235178308548874"));
   ASSERT_TRUE(base::CreateDirectory(last_session.DirName()));
-  ASSERT_EQ(0, base::WriteFile(last_session, "", 0));
+  ASSERT_TRUE(base::WriteFile(last_session, ""));
 
   scoped_refptr<CommandStorageBackend> backend = CreateBackendWithRestoreType();
   char buffer[1];
@@ -652,16 +654,16 @@ TEST_F(CommandStorageBackendTest, GetSessionFiles) {
   EXPECT_TRUE(CommandStorageBackend::GetSessionFilePaths(
                   file_path(), CommandStorageManager::kOther)
                   .empty());
-  ASSERT_EQ(0, base::WriteFile(file_path(), "", 0));
+  ASSERT_TRUE(base::WriteFile(file_path(), ""));
   // Not a valid name, as doesn't contain timestamp separator.
-  ASSERT_EQ(0, base::WriteFile(file_path().DirName().AppendASCII("Session 123"),
-                               "", 0));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Session 123"), ""));
   // Valid name.
-  ASSERT_EQ(0, base::WriteFile(file_path().DirName().AppendASCII("Session_124"),
-                               "", 0));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Session_124"), ""));
   // Valid name, but should not be returned as beginning doesn't match.
-  ASSERT_EQ(
-      0, base::WriteFile(file_path().DirName().AppendASCII("Foo_125"), "", 0));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Foo_125"), ""));
   auto paths = CommandStorageBackend::GetSessionFilePaths(
       file_path(), CommandStorageManager::kOther);
   ASSERT_EQ(1u, paths.size());
@@ -674,14 +676,14 @@ TEST_F(CommandStorageBackendTest, TimestampSeparatorIsAscii) {
 }
 
 TEST_F(CommandStorageBackendTest, GetSessionFilesAreSortedByReverseTimestamp) {
-  ASSERT_EQ(0, base::WriteFile(file_path().DirName().AppendASCII("Session_130"),
-                               "", 0));
-  ASSERT_EQ(0, base::WriteFile(file_path().DirName().AppendASCII("Session_120"),
-                               "", 0));
-  ASSERT_EQ(0, base::WriteFile(file_path().DirName().AppendASCII("Session_125"),
-                               "", 0));
-  ASSERT_EQ(0, base::WriteFile(file_path().DirName().AppendASCII("Session_128"),
-                               "", 0));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Session_130"), ""));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Session_120"), ""));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Session_125"), ""));
+  ASSERT_TRUE(
+      base::WriteFile(file_path().DirName().AppendASCII("Session_128"), ""));
   auto paths = GetSessionFilePathsSortedByReverseTimestamp();
   ASSERT_EQ(4u, paths.size());
   EXPECT_EQ("Session_130", paths[0].BaseName().MaybeAsASCII());
@@ -713,7 +715,8 @@ TEST_F(CommandStorageBackendTest, UseMarkerWithoutValidMarker) {
 // incompatible manner.
 TEST_F(CommandStorageBackendTest, ReadPreviouslyWrittenData) {
   base::FilePath test_data_path;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_path));
+  ASSERT_TRUE(
+      base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_path));
   test_data_path = test_data_path.AppendASCII("components")
                        .AppendASCII("test")
                        .AppendASCII("data")
@@ -756,13 +759,27 @@ TEST_F(CommandStorageBackendTest, NewFileOnTruncate) {
   backend->AppendCommands(std::move(commands), false, base::DoNothing());
   EXPECT_EQ(path1, backend->current_path());
 
-  // Path should change on truncate, and `path1` should be removed.
+  // Path should change on truncate, and `path1` should not be removed.
   commands.clear();
   commands.push_back(CreateCommandFromData(data));
   backend->AppendCommands(std::move(commands), true, base::DoNothing());
-  EXPECT_TRUE(!backend->current_path().empty());
-  EXPECT_NE(path1, backend->current_path());
+  const base::FilePath path2 = backend->current_path();
+  EXPECT_TRUE(!path2.empty());
+  EXPECT_NE(path1, path2);
+  EXPECT_TRUE(base::PathExists(path1));
+  EXPECT_TRUE(base::PathExists(path2));
+
+  // Repeat. This time `path1` should be removed.
+  commands.clear();
+  commands.push_back(CreateCommandFromData(data));
+  backend->AppendCommands(std::move(commands), true, base::DoNothing());
+  const base::FilePath path3 = backend->current_path();
+  EXPECT_TRUE(!path3.empty());
+  EXPECT_NE(path1, path3);
+  EXPECT_NE(path2, path3);
   EXPECT_FALSE(base::PathExists(path1));
+  EXPECT_TRUE(base::PathExists(path2));
+  EXPECT_TRUE(base::PathExists(path3));
 }
 
 TEST_F(CommandStorageBackendTest, AppendCommandsCallbackRunOnError) {
@@ -780,19 +797,17 @@ TEST_F(CommandStorageBackendTest, RestoresFileWithMarkerAfterFailure) {
   SessionCommands commands;
   commands.push_back(CreateCommandFromData(data));
   backend->AppendCommands(std::move(commands), true, base::DoNothing());
-  const base::FilePath path1 = backend->current_path();
-  EXPECT_FALSE(path1.empty());
+  EXPECT_TRUE(backend->IsFileOpen());
 
   // Make appending fail, which should close the file.
   backend->ForceAppendCommandsToFailForTesting();
   backend->AppendCommands({}, false, base::DoNothing());
+  EXPECT_FALSE(backend->IsFileOpen());
 
-  // Append again, with another fail. Should attempt to reopen file.
+  // Append again, with another fail. Should attempt to reopen file and file.
   backend->ForceAppendCommandsToFailForTesting();
   backend->AppendCommands({}, true, base::DoNothing());
-  const base::FilePath path2 = backend->current_path();
-  EXPECT_FALSE(path2.empty());
-  EXPECT_NE(path1, path2);
+  EXPECT_FALSE(backend->IsFileOpen());
 
   // Reopen and read last session. Should get `data` and marker.
   backend = nullptr;
@@ -801,6 +816,37 @@ TEST_F(CommandStorageBackendTest, RestoresFileWithMarkerAfterFailure) {
   commands = backend->ReadLastSessionCommands().commands;
   ASSERT_EQ(1u, commands.size());
   AssertCommandEqualsData(data, commands[0].get());
+}
+
+TEST_F(CommandStorageBackendTest, PathTimeIncreases) {
+  base::SimpleTestClock test_clock;
+  test_clock.SetNow(base::Time::Now());
+  scoped_refptr<CommandStorageBackend> backend = CreateBackend({}, &test_clock);
+  // Write `data` and a marker.
+  struct TestData data = {11, "X"};
+  SessionCommands commands;
+  commands.push_back(CreateCommandFromData(data));
+  backend->AppendCommands(std::move(commands), true, base::DoNothing());
+  const base::FilePath path1 = backend->current_path();
+  EXPECT_FALSE(path1.empty());
+  base::Time path1_time;
+  EXPECT_TRUE(CommandStorageBackend::TimestampFromPath(path1, path1_time));
+
+  test_clock.Advance(base::Seconds(-1));
+  SessionCommands commands2;
+  commands2.push_back(CreateCommandFromData(data));
+  backend->AppendCommands(std::move(commands2), true, base::DoNothing());
+  const base::FilePath path2 = backend->current_path();
+  EXPECT_FALSE(path2.empty());
+  EXPECT_NE(path1, path2);
+  base::Time path2_time;
+  EXPECT_TRUE(CommandStorageBackend::TimestampFromPath(path2, path2_time));
+  // Even though the current time is before the previous time, the timestamp
+  // of the file should increase.
+  EXPECT_GT(path2_time, path1_time);
+  // Backend needs to be destroyed before test_clock so we don't end up with
+  // dangling reference.
+  backend.reset();
 }
 
 }  // namespace sessions

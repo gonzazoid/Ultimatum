@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "base/atomicops.h"
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
@@ -31,12 +31,28 @@ namespace tracing {
 class COMPONENT_EXPORT(TRACING_CPP) PosixSystemProducer
     : public SystemProducer {
  public:
+  // State is usually a one directional flow from top to bottom (and then
+  // looping from kDisconnecting to kDisconnected) with a couple
+  // exceptions.
+  //
+  // When a local trace gets started system tracing gets out of the way by
+  // unregistering all of its data sources this means that kConnected and
+  // kUnregistered can go back and forth. This is due to the fact Chrome's
+  // tracing infrastructure doesn't support conncurent tracing sessions and we
+  // deem system traces of lower importance.
+  //
+  // This results in a loop of kUnregistered <-> kConnected states.
+  //
+  // In addition disconnection can occur at any point (besides the kDisconnected
+  // state) which will always move the state into kDisconnecting at which point
+  // we start the cycle over again.
   enum class State {
     kDisconnected = 0,
     kConnecting = 1,
     // Connected but all data sources unregistered.
     kUnregistered = 2,
     kConnected = 3,
+    kDisconnecting = 4,
   };
   PosixSystemProducer(const char* socket,
                       base::tracing::PerfettoTaskRunner* task_runner);
@@ -88,7 +104,8 @@ class COMPONENT_EXPORT(TRACING_CPP) PosixSystemProducer
   void StopDataSource(perfetto::DataSourceInstanceID) override;
   void Flush(perfetto::FlushRequestID,
              const perfetto::DataSourceInstanceID* data_source_ids,
-             size_t num_data_sources) override;
+             size_t num_data_sources,
+             perfetto::FlushFlags) override;
   void ClearIncrementalState(
       const perfetto::DataSourceInstanceID* data_source_ids,
       size_t num_data_sources) override;
@@ -116,6 +133,13 @@ class COMPONENT_EXPORT(TRACING_CPP) PosixSystemProducer
   // If any OnDisconnect callbacks are stored, this will invoke them and delete
   // references to them must be called on the proper sequence.
   void InvokeStoredOnDisconnectCallbacks();
+  // When disconnecting from the service perform required cleanup and then call
+  // DelayedReconnect (see below). |previous_state| informs what state the
+  // current |GetService()| is currently at, this is for example because it is
+  // only safe to remove the system service if it was never connected before,
+  // because in that case no one will be holding onto a trace writer (threads
+  // can flush at any moment even to disconnected services).
+  void FinishDisconnectingAndThenDelayedReconnect(State previous_state);
   // After a certain amount of backoff time we will attempt to Connect() or if
   // Chrome is already tracing we will wait awhile and attempt to Connect()
   // later.

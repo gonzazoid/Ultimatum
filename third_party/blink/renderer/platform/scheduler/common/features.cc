@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/scheduler/common/features.h"
 
 #include "base/command_line.h"
+#include "components/miracle_parameter/common/public/miracle_parameter.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/switches.h"
 
@@ -72,13 +73,20 @@ base::TimeDelta GetIntensiveWakeUpThrottlingGracePeriod(bool loading) {
           features::kIntensiveWakeUpThrottling_GracePeriodSeconds_Name,
           kIntensiveWakeUpThrottling_GracePeriodSeconds_Default};
 
+  // Controls the grace period for loaded pages.
+  static const base::FeatureParam<int>
+      kIntensiveWakeUpThrottling_GracePeriodSeconds_Loaded{
+          &features::kQuickIntensiveWakeUpThrottlingAfterLoading,
+          "grace_period_seconds_loaded",
+          kIntensiveWakeUpThrottling_GracePeriodSecondsLoaded_Default};
+
   int seconds = kIntensiveWakeUpThrottling_GracePeriodSeconds_Default;
   if (GetIntensiveWakeUpThrottlingPolicyOverride() ==
       PolicyOverride::kNoOverride) {
     seconds = kIntensiveWakeUpThrottling_GracePeriodSeconds.Get();
     if (!loading && base::FeatureList::IsEnabled(
                         features::kQuickIntensiveWakeUpThrottlingAfterLoading))
-      seconds = kIntensiveWakeUpThrottling_GracePeriodSeconds_Loaded;
+      seconds = kIntensiveWakeUpThrottling_GracePeriodSeconds_Loaded.Get();
   }
   return base::Seconds(seconds);
 }
@@ -92,6 +100,19 @@ base::TimeDelta GetForegroundTimersThrottledWakeUpInterval() {
           kForegroundTimersThrottling_WakeUpIntervalMillis_Default};
   return base::Milliseconds(
       kForegroundTimersThrottledWakeUpIntervalMills.Get());
+}
+
+// TODO(crbug.com/1475915): convert this param value to TimeDelta instead of int
+// after the experiment.
+MIRACLE_PARAMETER_FOR_INT(
+    GetLoadingPhaseBufferTimeAfterFirstMeaningfulPaintMillis,
+    features::kLoadingPhaseBufferTimeAfterFirstMeaningfulPaint,
+    "LoadingPhaseBufferTimeAfterFirstMeaningfulPaintMillis",
+    0)
+
+base::TimeDelta GetLoadingPhaseBufferTimeAfterFirstMeaningfulPaint() {
+  return base::Milliseconds(
+      GetLoadingPhaseBufferTimeAfterFirstMeaningfulPaintMillis());
 }
 
 BASE_FEATURE(kThreadedScrollPreventRenderingStarvation,

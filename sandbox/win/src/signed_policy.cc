@@ -4,6 +4,7 @@
 
 #include "sandbox/win/src/signed_policy.h"
 
+#include <ntstatus.h>
 #include <stdint.h>
 
 #include <string>
@@ -18,24 +19,17 @@
 namespace sandbox {
 
 bool SignedPolicy::GenerateRules(const wchar_t* name,
-                                 Semantics semantics,
                                  LowLevelPolicy* policy) {
-  // Only support one semantic.
-  if (Semantics::kSignedAllowLoad != semantics) {
-    return false;
-  }
-
   base::FilePath file_path(name);
-  std::wstring nt_path_name;
-  if (!GetNtPathFromWin32Path(file_path.DirName().value().c_str(),
-                              &nt_path_name))
+  auto nt_path_name = GetNtPathFromWin32Path(file_path.DirName().value());
+  if (!nt_path_name)
     return false;
-  base::FilePath nt_path(nt_path_name);
+
+  base::FilePath nt_path(nt_path_name.value());
   std::wstring nt_filename = nt_path.Append(file_path.BaseName()).value();
   // Create a rule to ASK_BROKER if name matches.
   PolicyRule signed_policy(ASK_BROKER);
-  if (!signed_policy.AddStringMatch(IF, NameBased::NAME, nt_filename.c_str(),
-                                    CASE_INSENSITIVE)) {
+  if (!signed_policy.AddStringMatch(IF, NameBased::NAME, nt_filename.c_str())) {
     return false;
   }
   if (!policy->AddRule(IpcTag::NTCREATESECTION, &signed_policy)) {
@@ -60,7 +54,7 @@ NTSTATUS SignedPolicy::CreateSectionAction(
       &local_section_handle,
       SECTION_QUERY | SECTION_MAP_WRITE | SECTION_MAP_READ |
           SECTION_MAP_EXECUTE,
-      nullptr, 0, PAGE_EXECUTE, SEC_IMAGE, local_file_handle.Get());
+      nullptr, 0, PAGE_EXECUTE, SEC_IMAGE, local_file_handle.get());
   if (!local_section_handle)
     return status;
 

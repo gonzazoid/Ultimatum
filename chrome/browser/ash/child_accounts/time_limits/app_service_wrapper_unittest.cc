@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/child_accounts/time_limits/app_service_wrapper.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -16,6 +17,8 @@
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -23,13 +26,14 @@
 #include "base/test/scoped_command_line.h"
 #include "base/values.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_test_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_install_finalizer.h"
@@ -45,7 +49,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 using web_app::GenerateAppId;
@@ -136,7 +139,7 @@ class AppServiceWrapperTest : public ::testing::Test {
 
   void SimulateAppInstalled(const AppId& app_id,
                             const std::string& app_name,
-                            absl::optional<std::string> url = absl::nullopt) {
+                            std::optional<std::string> url = std::nullopt) {
     if (app_id.app_type() == apps::AppType::kArc) {
       const std::string& package_name = app_id.app_id();
       arc_test_.AddPackage(CreateArcAppPackage(package_name)->Clone());
@@ -148,8 +151,8 @@ class AppServiceWrapperTest : public ::testing::Test {
     }
 
     if (app_id.app_type() == apps::AppType::kChromeApp) {
-      scoped_refptr<extensions::Extension> ext = CreateExtension(
-          app_id.app_id(), app_name, url.value(), false /*is_bookmark_app*/);
+      scoped_refptr<extensions::Extension> ext =
+          CreateExtension(app_id.app_id(), app_name, url.value());
       extension_service_->AddExtension(ext.get());
       task_environment_.RunUntilIdle();
       return;
@@ -157,18 +160,10 @@ class AppServiceWrapperTest : public ::testing::Test {
 
     if (app_id.app_type() == apps::AppType::kWeb) {
       DCHECK(url.has_value());
-      const web_app::AppId installed_app_id = web_app::test::InstallDummyWebApp(
+      const webapps::AppId installed_app_id = web_app::test::InstallDummyWebApp(
           &profile_, app_name, GURL(url.value()),
           webapps::WebappInstallSource::EXTERNAL_DEFAULT);
       EXPECT_EQ(installed_app_id, app_id.app_id());
-      task_environment_.RunUntilIdle();
-      return;
-    }
-
-    if (app_id.app_type() == apps::AppType::kWeb) {
-      scoped_refptr<extensions::Extension> web_app = CreateExtension(
-          app_id.app_id(), app_name, url.value(), true /*is_bookmark_app*/);
-      extension_service_->AddExtension(web_app.get());
       task_environment_.RunUntilIdle();
       return;
     }
@@ -184,16 +179,13 @@ class AppServiceWrapperTest : public ::testing::Test {
 
     if (app_id.app_type() == apps::AppType::kWeb) {
       base::RunLoop run_loop;
-      WebAppProvider::GetForTest(&profile_)
-          ->install_finalizer()
-          .UninstallExternalWebApp(
-              app_id.app_id(), web_app::WebAppManagement::kDefault,
-              webapps::WebappUninstallSource::kExternalPreinstalled,
-              base::BindLambdaForTesting(
-                  [&](webapps::UninstallResultCode code) {
-                    EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
-                    run_loop.Quit();
-                  }));
+      WebAppProvider::GetForTest(&profile_)->scheduler().RemoveInstallSource(
+          app_id.app_id(), web_app::WebAppManagement::kDefault,
+          webapps::WebappUninstallSource::kExternalPreinstalled,
+          base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
+            EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
+            run_loop.Quit();
+          }));
       run_loop.Run();
       task_environment_.RunUntilIdle();
       return;
@@ -222,8 +214,8 @@ class AppServiceWrapperTest : public ::testing::Test {
     }
 
     if (app_id.app_type() == apps::AppType::kWeb) {
-      WebAppProvider::GetForTest(&profile_)->sync_bridge().SetAppIsDisabled(
-          app_id.app_id(), disabled);
+      WebAppProvider::GetForTest(&profile_)->scheduler().SetAppIsDisabled(
+          app_id.app_id(), disabled, base::DoNothing());
       task_environment_.RunUntilIdle();
       return;
     }
@@ -250,7 +242,7 @@ class AppServiceWrapperTest : public ::testing::Test {
   apps::AppServiceTest app_service_test_;
   ArcAppTest arc_test_;
 
-  extensions::ExtensionService* extension_service_ = nullptr;
+  raw_ptr<extensions::ExtensionService> extension_service_ = nullptr;
 
   AppServiceWrapper tested_wrapper_{&profile_};
   MockListener test_listener_;
@@ -274,7 +266,7 @@ TEST_F(AppServiceWrapperTest, GetInstalledApps) {
   // extensions (with exception of Chrome) now.
   const AppId app2(
       apps::AppType::kChromeApp,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kExtensionAppUrl)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kExtensionAppUrl)));
 
   EXPECT_CALL(test_listener(), OnAppInstalled(app2)).Times(1);
   SimulateAppInstalled(app2, kExtensionNameA, kExtensionAppUrl);
@@ -282,7 +274,7 @@ TEST_F(AppServiceWrapperTest, GetInstalledApps) {
   // Add web app.
   const AppId app3(
       apps::AppType::kWeb,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kWebAppUrl1)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kWebAppUrl1)));
   EXPECT_CALL(test_listener(), OnAppInstalled(app3)).Times(1);
   SimulateAppInstalled(app3, kWebAppName1, kWebAppUrl1);
 
@@ -305,14 +297,14 @@ TEST_F(AppServiceWrapperTest, GetAppName) {
 
   const AppId app2(
       apps::AppType::kChromeApp,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kExtensionAppUrl)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kExtensionAppUrl)));
 
   EXPECT_CALL(test_listener(), OnAppInstalled(app2)).Times(1);
   SimulateAppInstalled(app2, kExtensionNameA, kExtensionAppUrl);
 
   const AppId app3(
       apps::AppType::kWeb,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kWebAppUrl1)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kWebAppUrl1)));
   EXPECT_CALL(test_listener(), OnAppInstalled(app3)).Times(1);
   SimulateAppInstalled(app3, kWebAppName1, kWebAppUrl1);
 
@@ -361,7 +353,7 @@ TEST_F(AppServiceWrapperTest, WebAppInstallation) {
   // Install first web app.
   const AppId app1(
       apps::AppType::kWeb,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kWebAppUrl1)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kWebAppUrl1)));
   EXPECT_CALL(test_listener(), OnAppInstalled(app1)).Times(1);
   SimulateAppInstalled(app1, kWebAppName1, kWebAppUrl1);
 
@@ -372,7 +364,7 @@ TEST_F(AppServiceWrapperTest, WebAppInstallation) {
   // Install second web app.
   const AppId app2(
       apps::AppType::kWeb,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kWebAppUrl2)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kWebAppUrl2)));
   EXPECT_CALL(test_listener(), OnAppInstalled(app2)).Times(1);
   SimulateAppInstalled(app2, kWebAppName2, kWebAppUrl2);
 
@@ -408,7 +400,7 @@ TEST_F(AppServiceWrapperTest, WebAppDisabled) {
   // Install web app.
   const AppId app(
       apps::AppType::kWeb,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kWebAppUrl1)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kWebAppUrl1)));
   EXPECT_CALL(test_listener(), OnAppInstalled(app)).Times(1);
   SimulateAppInstalled(app, kWebAppName1, kWebAppUrl1);
 
@@ -429,7 +421,7 @@ TEST_F(AppServiceWrapperTest, IgnoreOtherExtensions) {
 
   const AppId app1(
       apps::AppType::kChromeApp,
-      GenerateAppId(/*manifest_id=*/absl::nullopt, GURL(kExtensionAppUrl)));
+      GenerateAppId(/*manifest_id=*/std::nullopt, GURL(kExtensionAppUrl)));
   EXPECT_CALL(test_listener(), OnAppInstalled(app1)).Times(1);
   SimulateAppInstalled(app1, kExtensionNameA, kExtensionAppUrl);
 

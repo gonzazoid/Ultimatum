@@ -6,17 +6,14 @@
 
 #import <string>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/memory/ref_counted_memory.h"
 #import "base/strings/string_util.h"
 #import "base/strings/utf_string_conversions.h"
 #import "ios/web/public/web_client.h"
 #import "ui/base/webui/jstemplate_builder.h"
+#import "ui/base/webui/resource_path.h"
 #import "ui/base/webui/web_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -128,6 +125,13 @@ void WebUIIOSDataSourceImpl::AddResourcePath(const std::string& path,
   path_to_idr_map_[path] = resource_id;
 }
 
+void WebUIIOSDataSourceImpl::AddResourcePaths(
+    base::span<const webui::ResourcePath> paths) {
+  for (const auto& path : paths) {
+    AddResourcePath(path.path, path.id);
+  }
+}
+
 void WebUIIOSDataSourceImpl::SetDefaultResource(int resource_id) {
   default_resource_ = resource_id;
 }
@@ -200,7 +204,8 @@ void WebUIIOSDataSourceImpl::SendLocalizedStringsAsJSON(
     bool from_js_module) {
   std::string template_data;
   webui::AppendJsonJS(localized_strings_, &template_data, from_js_module);
-  std::move(callback).Run(base::RefCountedString::TakeString(&template_data));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(template_data)));
 }
 
 int WebUIIOSDataSourceImpl::PathToIdrOrDefault(const std::string& path) const {

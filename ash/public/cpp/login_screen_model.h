@@ -18,11 +18,17 @@ enum class FingerprintState;
 enum class SmartLockState;
 enum class OobeDialogState;
 struct AuthDisabledData;
-struct EasyUnlockIconInfo;
 struct InputMethodItem;
 struct LocaleItem;
 struct LoginUserInfo;
 struct UserAvatar;
+
+// The current authentication stage. Used to get more verbose logging.
+enum class AuthenticationStage {
+  kIdle,
+  kDoAuthenticate,
+  kUserCallback,
+};
 
 // Provides Chrome access to Ash's login UI. See additional docs for
 // ash::LoginDataDispatcher.
@@ -36,13 +42,6 @@ class ASH_PUBLIC_EXPORT LoginScreenModel {
   // |account_id|:   The account id of the user in the user pod.
   // |is_enabled|:   True if pin unlock is enabled.
   virtual void SetPinEnabledForUser(const AccountId& user, bool enabled) = 0;
-
-  // TODO(https://crbug.com/1233614): Delete this method in favor of
-  // SetSmartLockState once the Smart Lock UI revamp is enabled. Requests to
-  // show the custom icon in the user pod. |account_id|:  The account id of the
-  // user in the user pod. |icon_info|:   Information regarding the icon.
-  virtual void ShowEasyUnlockIcon(const AccountId& account_id,
-                                  const EasyUnlockIconInfo& icon_info) = 0;
 
   // Update the status of the challenge-response authentication against a
   // security token for the given user.
@@ -94,6 +93,11 @@ class ASH_PUBLIC_EXPORT LoginScreenModel {
   virtual void DisableAuthForUser(
       const AccountId& account_id,
       const AuthDisabledData& auth_disabled_data) = 0;
+
+  // Called when authentication stage changed.
+  // |auth_stage|: The new authentication stage
+  virtual void AuthenticationStageChange(
+      const AuthenticationStage auth_state) = 0;
 
   virtual void SetTpmLockedState(const AccountId& user,
                                  bool is_locked,
@@ -166,6 +170,8 @@ class ASH_PUBLIC_EXPORT LoginScreenModel {
  protected:
   virtual ~LoginScreenModel();
 };
+
+std::ostream& operator<<(std::ostream&, AuthenticationStage);
 
 }  // namespace ash
 

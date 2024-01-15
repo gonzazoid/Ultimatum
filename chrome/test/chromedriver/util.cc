@@ -14,6 +14,7 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/format_macros.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -30,8 +31,6 @@
 #include "chrome/test/chromedriver/key_converter.h"
 #include "chrome/test/chromedriver/session.h"
 #include "third_party/zlib/google/zip.h"
-
-const char kWindowHandlePrefix[] = "CDwindow-";
 
 std::string GenerateId() {
   uint64_t msb = base::RandUint64();
@@ -106,9 +105,9 @@ Status UnzipArchive(const base::FilePath& unzip_dir,
     return Status(kUnknownError, "unable to create temp dir");
 
   base::FilePath archive = dir.GetPath().AppendASCII("temp.zip");
-  int length = bytes.length();
-  if (base::WriteFile(archive, bytes.c_str(), length) != length)
+  if (!base::WriteFile(archive, bytes)) {
     return Status(kUnknownError, "could not write file to temp dir");
+  }
 
   if (!zip::Unzip(archive, unzip_dir))
     return Status(kUnknownError, "could not unzip archive");
@@ -489,8 +488,10 @@ bool GetOptionalInt(const base::Value::Dict& dict,
   }
   // See if we have a double that contains an int value.
   absl::optional<double> maybe_decimal = dict.FindDoubleByDottedPath(path);
-  if (!maybe_decimal.has_value())
+  if (!maybe_decimal.has_value() ||
+      !base::IsValueInRangeForNumericType<int>(maybe_decimal.value())) {
     return false;
+  }
 
   int i = static_cast<int>(maybe_decimal.value());
   if (i == maybe_decimal.value()) {
@@ -614,18 +615,4 @@ bool SetSafeInt(base::Value::Dict& dict,
     return dict.SetByDottedPath(path, int_value);
   else
     return dict.SetByDottedPath(path, static_cast<double>(in_value_64));
-}
-
-std::string WebViewIdToWindowHandle(const std::string& web_view_id) {
-  return kWindowHandlePrefix + web_view_id;
-}
-
-bool WindowHandleToWebViewId(const std::string& window_handle,
-                             std::string* web_view_id) {
-  if (!base::StartsWith(window_handle, kWindowHandlePrefix,
-                        base::CompareCase::SENSITIVE)) {
-    return false;
-  }
-  *web_view_id = window_handle.substr(sizeof(kWindowHandlePrefix) - 1);
-  return true;
 }

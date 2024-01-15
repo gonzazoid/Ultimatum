@@ -20,7 +20,6 @@ the full revision, e.g. 9A235.
 
 import argparse
 import os
-import pkg_resources
 import platform
 import plistlib
 import shutil
@@ -34,17 +33,21 @@ def LoadPList(path):
     return plistlib.load(f)
 
 
-# This contains binaries from Xcode 13.4.1 13F100, along with the macOS 12 SDK
-# (12.3 21E226). To build these packages, see comments in
+# This contains binaries from Xcode 15.0 15A240d along with the macOS 14.0 SDK
+# (14.0 23A334). To build these packages, see comments in
 # build/xcode_binaries.yaml
+# To update the version numbers, open Xcode's "About Xcode" for the first number
+# and run `xcrun --show-sdk-build-version` for the second.
+# To update the _TAG, use the output of the `cipd create` command mentioned in
+# xcode_binaries.yaml.
+
 MAC_BINARIES_LABEL = 'infra_internal/ios/xcode/xcode_binaries/mac-amd64'
-MAC_BINARIES_TAG = 'OzUNvLYw4Z-9XcbsXRKaDWo3rbJtcD1B7BbGPqEQ8a0C'
+MAC_BINARIES_TAG = 'dC_BLs9U850OLk8m4V7yxysPhP-ixJ2b5c7hVm8B7tIC'
 
 # The toolchain will not be downloaded if the minimum OS version is not met. 19
-# is the Darwin major version number for macOS 10.15. Xcode 13.3 13E113 only
-# claims support for running on macOS 12.0 and newer, but some bots are still
-# running older OS versions. 10.15.4, the macOS minimum through Xcode 12.4,
-# still seems to work.
+# is the major version number for macOS 10.15. Xcode 15.0 only runs on macOS
+# 13.5 and newer, but some bots are still running older OS versions. macOS
+# 10.15.4, the OS minimum through Xcode 12.4, still seems to work.
 MAC_MINIMUM_OS_VERSION = [19, 4]
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -152,8 +155,8 @@ def InstallXcodeBinaries():
     current_license_plist = LoadPList(current_license_path)
     xcode_version = current_license_plist.get(
         'IDEXcodeVersionForAgreedToGMLicense')
-    if (xcode_version is not None and pkg_resources.parse_version(xcode_version)
-        >= pkg_resources.parse_version(cipd_xcode_version)):
+    if (xcode_version is not None
+        and xcode_version.split('.') >= cipd_xcode_version.split('.')):
       should_overwrite_license = False
 
   if not should_overwrite_license:

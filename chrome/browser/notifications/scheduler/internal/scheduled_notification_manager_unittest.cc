@@ -7,13 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
+#include "base/uuid.h"
 #include "chrome/browser/notifications/scheduler/internal/collection_store.h"
 #include "chrome/browser/notifications/scheduler/internal/icon_store.h"
 #include "chrome/browser/notifications/scheduler/internal/notification_entry.h"
@@ -37,7 +37,8 @@ const char kSmallIconUuid[] = "test_small_icon_uuid";
 const char kLargeIconUuid[] = "test_large_icon_uuid";
 
 NotificationEntry CreateNotificationEntry(SchedulerClientType type) {
-  NotificationEntry entry(type, base::GenerateGUID());
+  NotificationEntry entry(type,
+                          base::Uuid::GenerateRandomV4().AsLowercaseString());
   entry.schedule_params.deliver_time_start = base::Time::Now() + base::Days(1);
   entry.schedule_params.deliver_time_end = base::Time::Now() + base::Days(2);
   return entry;
@@ -210,8 +211,8 @@ class ScheduledNotificationManagerTest : public testing::Test {
 
  private:
   base::test::TaskEnvironment task_environment_;
-  raw_ptr<MockNotificationStore> notification_store_;
-  raw_ptr<MockIconStore> icon_store_;
+  raw_ptr<MockNotificationStore, DanglingUntriaged> notification_store_;
+  raw_ptr<MockIconStore, DanglingUntriaged> icon_store_;
   std::vector<SchedulerClientType> clients_;
   std::unique_ptr<ScheduledNotificationManager> manager_;
   SchedulerConfig config_;

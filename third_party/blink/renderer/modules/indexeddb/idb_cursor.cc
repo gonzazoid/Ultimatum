@@ -29,7 +29,7 @@
 #include <memory>
 #include <utility>
 
-#include "third_party/blink/renderer/bindings/modules/v8/to_v8_for_modules.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_binding_for_modules.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_idb_request.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_idbcursor_idbindex_idbobjectstore.h"
@@ -40,13 +40,13 @@
 #include "third_party/blink/renderer/modules/indexeddb/idb_database.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_object_store.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_transaction.h"
-#include "third_party/blink/renderer/modules/indexeddb/web_idb_database.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -87,7 +87,9 @@ v8::Local<v8::Object> IDBCursor::AssociateWithWrapper(
   if (!wrapper.IsEmpty()) {
     static const V8PrivateProperty::SymbolKey kPrivatePropertyRequest;
     V8PrivateProperty::GetSymbol(isolate, kPrivatePropertyRequest)
-        .Set(wrapper, ToV8(request_.Get(), wrapper, isolate));
+        .Set(wrapper,
+             ToV8Traits<IDBRequest>::ToV8(isolate, request_.Get(), wrapper)
+                 .ToLocalChecked());
   }
   return wrapper;
 }
@@ -132,7 +134,8 @@ IDBRequest* IDBCursor::update(ScriptState* script_state,
 
 void IDBCursor::advance(unsigned count, ExceptionState& exception_state) {
   TRACE_EVENT0("IndexedDB", "IDBCursor::advanceRequestSetup");
-  IDBRequest::AsyncTraceState metrics("IDBCursor::advance");
+  IDBRequest::AsyncTraceState metrics(
+      IDBRequest::TypeForMetrics::kCursorAdvance);
   if (!count) {
     exception_state.ThrowTypeError(
         "A count argument with value 0 (zero) was supplied, must be greater "
@@ -159,14 +162,15 @@ void IDBCursor::advance(unsigned count, ExceptionState& exception_state) {
   request_->SetPendingCursor(this);
   request_->AssignNewMetrics(std::move(metrics));
   got_value_ = false;
-  backend_->Advance(count, request_->CreateWebCallbacks());
+  backend_->Advance(count, request_);
 }
 
 void IDBCursor::Continue(ScriptState* script_state,
                          const ScriptValue& key_value,
                          ExceptionState& exception_state) {
   TRACE_EVENT0("IndexedDB", "IDBCursor::continueRequestSetup");
-  IDBRequest::AsyncTraceState metrics("IDBCursor::continue");
+  IDBRequest::AsyncTraceState metrics(
+      IDBRequest::TypeForMetrics::kCursorContinue);
 
   if (!transaction_->IsActive()) {
     exception_state.ThrowDOMException(
@@ -205,7 +209,8 @@ void IDBCursor::continuePrimaryKey(ScriptState* script_state,
                                    const ScriptValue& primary_key_value,
                                    ExceptionState& exception_state) {
   TRACE_EVENT0("IndexedDB", "IDBCursor::continuePrimaryKeyRequestSetup");
-  IDBRequest::AsyncTraceState metrics("IDBCursor::continuePrimaryKey");
+  IDBRequest::AsyncTraceState metrics(
+      IDBRequest::TypeForMetrics::kCursorContinuePrimaryKey);
 
   if (!transaction_->IsActive()) {
     exception_state.ThrowDOMException(
@@ -317,14 +322,14 @@ void IDBCursor::Continue(std::unique_ptr<IDBKey> key,
   request_->SetPendingCursor(this);
   request_->AssignNewMetrics(std::move(metrics));
   got_value_ = false;
-  backend_->CursorContinue(key.get(), primary_key.get(),
-                           request_->CreateWebCallbacks());
+  backend_->CursorContinue(key.get(), primary_key.get(), request_);
 }
 
 IDBRequest* IDBCursor::Delete(ScriptState* script_state,
                               ExceptionState& exception_state) {
   TRACE_EVENT0("IndexedDB", "IDBCursor::deleteRequestSetup");
-  IDBRequest::AsyncTraceState metrics("IDBCursor::delete");
+  IDBRequest::AsyncTraceState metrics(
+      IDBRequest::TypeForMetrics::kCursorDelete);
   if (!transaction_->IsActive()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kTransactionInactiveError,
@@ -352,7 +357,7 @@ IDBRequest* IDBCursor::Delete(ScriptState* script_state,
                                       IDBDatabase::kIsKeyCursorErrorMessage);
     return nullptr;
   }
-  if (!transaction_->BackendDB()) {
+  if (!transaction_->db()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       IDBDatabase::kDatabaseClosedErrorMessage);
     return nullptr;
@@ -360,9 +365,9 @@ IDBRequest* IDBCursor::Delete(ScriptState* script_state,
 
   IDBRequest* request = IDBRequest::Create(
       script_state, this, transaction_.Get(), std::move(metrics));
-  transaction_->BackendDB()->Delete(
+  transaction_->db()->Delete(
       transaction_->Id(), EffectiveObjectStore()->Id(), IdbPrimaryKey(),
-      request->CreateWebCallbacks().release());
+      WTF::BindOnce(&IDBRequest::OnDelete, WrapPersistent(request)));
   return request;
 }
 
@@ -379,7 +384,7 @@ void IDBCursor::Close() {
 
 ScriptValue IDBCursor::key(ScriptState* script_state) {
   key_dirty_ = false;
-  return ScriptValue::From(script_state, key_.get());
+  return ScriptValue(script_state->GetIsolate(), key_->ToV8(script_state));
 }
 
 ScriptValue IDBCursor::primaryKey(ScriptState* script_state) {
@@ -396,7 +401,8 @@ ScriptValue IDBCursor::primaryKey(ScriptState* script_state) {
 
     primary_key = value_->Value()->PrimaryKey();
   }
-  return ScriptValue::From(script_state, primary_key);
+  return ScriptValue(script_state->GetIsolate(),
+                     primary_key->ToV8(script_state));
 }
 
 ScriptValue IDBCursor::value(ScriptState* script_state) {
@@ -419,12 +425,11 @@ ScriptValue IDBCursor::value(ScriptState* script_state) {
   }
 
   value_dirty_ = false;
-  ScriptValue script_value = ScriptValue::From(script_state, value);
-  return script_value;
+  return ScriptValue(script_state->GetIsolate(), value->ToV8(script_state));
 }
 
 const IDBCursor::Source* IDBCursor::source() const {
-  return source_;
+  return source_.Get();
 }
 
 void IDBCursor::SetValueReady(std::unique_ptr<IDBKey> key,

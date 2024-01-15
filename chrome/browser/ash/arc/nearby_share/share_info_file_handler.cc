@@ -8,22 +8,23 @@
 #include <string>
 
 #include "ash/components/arc/arc_util.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/numerics/checked_math.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_url_util.h"
 #include "chrome/browser/ash/arc/nearby_share/arc_nearby_share_uma.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
+#include "chrome/browser/ash/fileapi/external_file_url_util.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/isolated_context.h"
@@ -72,8 +73,7 @@ file_manager::util::FileSystemURLAndHandle GetFileSystemURLAndHandle(
     const storage::FileSystemContext& context,
     const GURL& url) {
   // Obtain the absolute path in the file system.
-  const base::FilePath virtual_path =
-      chromeos::ExternalFileURLToVirtualPath(url);
+  const base::FilePath virtual_path = ash::ExternalFileURLToVirtualPath(url);
   DCHECK(!virtual_path.empty());
   // Obtain the file system URL.
   return file_manager::util::CreateIsolatedURLFromVirtualPath(
@@ -159,7 +159,7 @@ void ShareInfoFileHandler::StartPreparingFiles(
   file_sharing_started_ = true;
 
   if (!g_browser_process) {
-    LOG(ERROR) << "Unexpected null g_browser_process";
+    LOG(ERROR) << "Unexpected null g_browser_process.";
     UpdateNearbyShareDataHandlingFail(DataHandlingResult::kNullGBrowserProcess);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_OPERATION);
     return;
@@ -182,7 +182,8 @@ void ShareInfoFileHandler::StartPreparingFiles(
     return;
   }
 
-  VLOG(1) << "Creating unique directory for share and converting URLs to files";
+  VLOG(1)
+      << "Creating unique directory for share and converting URLs to files.";
   task_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(&ShareInfoFileHandler::CreateShareDirectory, this),
@@ -313,7 +314,7 @@ void ShareInfoFileHandler::OnFileDescriptorCreated(
   }
 
   // Check if the obtained path providing external file URL or not.
-  if (!chromeos::IsExternalFileURLType(isolated_file_system.url.type())) {
+  if (!ash::IsExternalFileURLType(isolated_file_system.url.type())) {
     LOG(ERROR) << "FileSystemURL is not of external file type.";
     UpdateNearbyShareDataHandlingFail(DataHandlingResult::kNotExternalFileType);
     NotifyFileSharingCompleted(base::File::FILE_ERROR_INVALID_URL);
@@ -403,7 +404,7 @@ void ShareInfoFileHandler::OnFileStreamReadCompleted(
         base::TimeTicks::Now() - file_streaming_started_;
     UpdateNearbyShareFileStreamCompleteTime(file_streaming_duration);
 
-    DVLOG(1) << "OnFileStreamReadCompleted: Completed streaming all files";
+    DVLOG(1) << "OnFileStreamReadCompleted: Completed streaming all files.";
     NotifyFileSharingCompleted(base::File::FILE_OK);
   }
 }

@@ -10,6 +10,7 @@
 #include "base/memory/weak_ptr.h"
 #include "ui/events/event_dispatcher.h"
 #include "ui/events/events_export.h"
+#include "ui/events/platform_event.h"
 
 namespace ui {
 
@@ -123,6 +124,11 @@ class EVENTS_EXPORT EventRewriter {
   virtual EventDispatchDetails RewriteEvent(const Event& event,
                                             const Continuation continuation);
 
+  // Tells if this rewriter supports processing located events with location !=
+  // root_location as well as honors event target when rewriting an event.
+  // TODO(crbug.com/1459680): Remove once all rewriters honor event target.
+  virtual bool SupportsNonRootLocation() const;
+
   // Potentially rewrites (replaces) an event, or requests it be discarded.
   // or discards an event. If the rewriter wants to rewrite an event, and
   // dispatch another event once the rewritten event is dispatched, it should
@@ -164,6 +170,16 @@ class EVENTS_EXPORT EventRewriter {
   // TODO(kpschoedel): Replace with SendEvent(continuation, event).
   EventDispatchDetails SendEventToEventSource(EventSource* source,
                                               Event* event) const;
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Explicitly sets the `Event::native_event_` field bypassing any checks if
+  // the `PlatformEvent` should be copied from one event to another. The
+  // lifetime of `native_event` must be guaranteed to be longer than `event`. In
+  // the context of event rewriting, this is almost always the case.
+  void SetNativeEvent(Event& event, const PlatformEvent& native_event);
+#endif
+
+  void SetEventTarget(Event& event, EventTarget* target);
 };
 
 }  // namespace ui

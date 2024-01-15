@@ -29,6 +29,7 @@
 #include "third_party/blink/renderer/core/svg/svg_uri_reference.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_client.h"
+#include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 
 namespace blink {
 
@@ -59,7 +60,6 @@ class SVGUseElement final : public SVGGraphicsElement,
   void BuildPendingResource() override;
   String title() const override;
 
-  void DispatchPendingEvent();
   Path ToClipPath() const;
 
   void Trace(Visitor*) const override;
@@ -80,13 +80,11 @@ class SVGUseElement final : public SVGGraphicsElement,
 
   void SvgAttributeChanged(const SvgAttributeChangedParams&) override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
   void ScheduleShadowTreeRecreation();
   void CancelShadowTreeRecreation();
-  bool HaveLoadedRequiredResources() override {
-    return !IsStructurallyExternal() || have_fired_load_event_;
-  }
+  bool HaveLoadedRequiredResources() override;
   bool ShadowTreeRebuildPending() const;
 
   bool SelfHasRelativeLengths() const override;
@@ -105,9 +103,16 @@ class SVGUseElement final : public SVGGraphicsElement,
   bool HasCycleUseReferencing(const ContainerNode& target_instance,
                               const SVGElement& new_target) const;
 
+  void QueueOrDispatchPendingEvent(const AtomicString&);
   void NotifyFinished(Resource*) override;
   String DebugName() const override;
   void UpdateTargetReference();
+
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+  void CollectExtraStyleForPresentationAttribute(
+      MutableCSSPropertyValueSet* style) override;
 
   Member<SVGResourceDocumentContent> document_content_;
 
@@ -116,9 +121,9 @@ class SVGUseElement final : public SVGGraphicsElement,
   Member<SVGAnimatedLength> width_;
   Member<SVGAnimatedLength> height_;
 
+  TaskHandle pending_event_;
   KURL element_url_;
   bool element_url_is_local_;
-  bool have_fired_load_event_;
   bool needs_shadow_tree_recreation_;
   Member<IdTargetObserver> target_id_observer_;
 

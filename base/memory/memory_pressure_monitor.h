@@ -6,7 +6,7 @@
 #define BASE_MEMORY_MEMORY_PRESSURE_MONITOR_H_
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/time/time.h"
 
@@ -37,10 +37,6 @@ class BASE_EXPORT MemoryPressureMonitor {
 
   // Returns the currently observed memory pressure.
   virtual MemoryPressureLevel GetCurrentPressureLevel() const = 0;
-
-  // Sets a notification callback. The default callback invokes
-  // base::MemoryPressureListener::NotifyMemoryPressure.
-  virtual void SetDispatchCallback(const DispatchCallback& callback) = 0;
 
  protected:
   MemoryPressureMonitor();

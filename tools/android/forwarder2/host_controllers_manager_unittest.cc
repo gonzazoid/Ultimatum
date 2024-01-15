@@ -6,9 +6,9 @@
 
 #include <cstdio>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/stringprintf.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -25,8 +25,7 @@ base::FilePath CreateScript(const std::string script_contents) {
   base::FilePath script_file;
   base::ScopedFILE script_file_handle =
       base::CreateAndOpenTemporaryStream(&script_file);
-  base::WriteFile(script_file, script_contents.c_str(),
-                  script_contents.length());
+  base::WriteFile(script_file, script_contents);
   script_file_handle.reset();
   base::SetPosixFilePermissions(script_file,
                                 base::FILE_PERMISSION_READ_BY_USER |

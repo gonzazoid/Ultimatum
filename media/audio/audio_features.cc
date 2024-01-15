@@ -6,6 +6,11 @@
 
 #include "base/feature_list.h"
 #include "build/build_config.h"
+#include "media/media_buildflags.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/mac_util.h"
+#endif
 
 namespace features {
 
@@ -21,48 +26,12 @@ BASE_FEATURE(kDumpOnAudioServiceHang,
 BASE_FEATURE(kUseAAudioDriver,
              "UseAAudioDriver",
              base::FEATURE_ENABLED_BY_DEFAULT);
-#endif
 
-#if BUILDFLAG(IS_CHROMEOS)
-BASE_FEATURE(kCrOSSystemAEC,
-             "CrOSSystemAECWithBoardTuningsAllowed",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSSystemAECDeactivatedGroups,
-             "CrOSSystemAECDeactivatedGroups",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSEnforceSystemAecNsAgc,
-             "CrOSEnforceSystemAecNsAgc",
+// Enables loading and using AAudio instead of OpenSLES on compatible devices,
+// for audio input streams.
+BASE_FEATURE(kUseAAudioInput,
+             "UseAAudioInput",
              base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSEnforceSystemAecNs,
-             "CrOSEnforceSystemAecNs",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSEnforceSystemAecAgc,
-             "CrOSEnforceSystemAecAgc",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSEnforceSystemAec,
-             "CrOSEnforceSystemAec",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kCrOSDspBasedAecDeactivatedGroups,
-             "CrOSDspBasedAecDeactivatedGroups",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSDspBasedNsDeactivatedGroups,
-             "CrOSDspBasedNsDeactivatedGroups",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSDspBasedAgcDeactivatedGroups,
-             "CrOSDspBasedAgcDeactivatedGroups",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kCrOSDspBasedAecAllowed,
-             "CrOSDspBasedAecAllowed",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSDspBasedNsAllowed,
-             "CrOSDspBasedNsAllowed",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCrOSDspBasedAgcAllowed,
-             "CrOSDspBasedAgcAllowed",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -71,3 +40,20 @@ BASE_FEATURE(kAllowIAudioClient3,
              base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 }  // namespace features
+
+namespace media {
+
+bool IsSystemLoopbackCaptureSupported() {
+#if BUILDFLAG(IS_WIN) || defined(USE_CRAS)
+  return true;
+#elif BUILDFLAG(IS_MAC)
+  // Only supported on macOS 13.0+.
+  return base::mac::MacOSVersion() >= 13'00'00;
+#elif BUILDFLAG(IS_LINUX) && defined(USE_PULSEAUDIO)
+  return true;
+#else
+  return false;
+#endif  // BUILDFLAG(IS_WIN) || defined(USE_CRAS)
+}
+
+}  // namespace media

@@ -4,6 +4,7 @@
 
 #include "base/command_line.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_command_line.h"
 #include "chrome/browser/extensions/activity_log/activity_log.h"
 #include "chrome/browser/extensions/activity_log/activity_log_task_runner.h"
@@ -26,7 +27,7 @@ class ActivityLogEnabledTest : public ChromeRenderViewHostTestHarness {
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
     SetActivityLogTaskRunnerForTesting(
-        base::ThreadTaskRunnerHandle::Get().get());
+        base::SingleThreadTaskRunner::GetCurrentDefault().get());
   }
 
   void TearDown() override {
@@ -128,11 +129,10 @@ TEST_F(ActivityLogEnabledTest, WatchdogSwitch) {
 
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Watchdog Extension ")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .SetID(kExtensionID)
           .Build();
   extension_service1->AddExtension(extension.get());
@@ -188,11 +188,10 @@ TEST_F(ActivityLogEnabledTest, WatchdogSwitch) {
 
   scoped_refptr<const Extension> extension2 =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Watchdog Extension ")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .SetID("fpofdchlamddhnajleknffcbmnjfahpg")
           .Build();
   extension_service1->AddExtension(extension.get());
@@ -235,11 +234,10 @@ TEST_F(ActivityLogEnabledTest, AppAndCommandLine) {
   // Enable the extension.
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Watchdog Extension ")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .SetID(kExtensionID)
           .Build();
   extension_service->AddExtension(extension.get());
@@ -291,11 +289,10 @@ TEST_F(ActivityLogEnabledTest, IncorrectPrefsRecovery) {
   // Testing adding an extension maintains pref and active correctness.
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Watchdog Extension ")
                            .Set("version", "1.0.0")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .SetID(kExtensionID)
           .Build();
   extension_service->AddExtension(extension.get());

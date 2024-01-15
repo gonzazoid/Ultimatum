@@ -19,6 +19,9 @@ class XRLightProbe;
 class XRSession;
 class XRView;
 class XRWebGLDepthInformation;
+class XRProjectionLayer;
+class XRProjectionLayerInit;
+class XRWebGLSubImage;
 
 class XRWebGLBinding final : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
@@ -31,7 +34,17 @@ class XRWebGLBinding final : public ScriptWrappable {
                                 const V8XRWebGLRenderingContext* context,
                                 ExceptionState& exception_state);
 
-  XRSession* session() const { return session_; }
+  double nativeProjectionScaleFactor() const;
+  bool usesDepthValues() const;
+
+  XRProjectionLayer* createProjectionLayer(const XRProjectionLayerInit* init,
+                                           ExceptionState& exception_state);
+
+  XRWebGLSubImage* getViewSubImage(XRProjectionLayer* layer,
+                                   XRView* view,
+                                   ExceptionState& exception_state);
+
+  XRSession* session() const { return session_.Get(); }
 
   WebGLTexture* getReflectionCubeMap(XRLightProbe*, ExceptionState&);
 

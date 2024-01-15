@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "chrome/browser/ui/browser_user_data.h"
+#include "components/prefs/pref_change_registrar.h"
 
 class Browser;
 class HistoryClustersSidePanelUI;
@@ -23,11 +24,12 @@ class HistoryClustersSidePanelCoordinator
     : public BrowserUserData<HistoryClustersSidePanelCoordinator> {
  public:
   explicit HistoryClustersSidePanelCoordinator(Browser* browser);
-  HistoryClustersSidePanelCoordinator(
-      const HistoryClustersSidePanelCoordinator&) = delete;
-  HistoryClustersSidePanelCoordinator& operator=(
-      const HistoryClustersSidePanelCoordinator&) = delete;
   ~HistoryClustersSidePanelCoordinator() override;
+
+  // Returns whether HistoryClustersSidePanelCoordinator is supported for
+  // `profile`. If this returns false, it should not be registered with the side
+  // panel registry.
+  static bool IsSupported(Profile* profile);
 
   void CreateAndRegisterEntry(SidePanelRegistry* global_registry);
 
@@ -39,6 +41,10 @@ class HistoryClustersSidePanelCoordinator
   // a new tab.
   GURL GetOpenInNewTabURL() const;
 
+  // Toggles the registration of the Journeys in the side panel based on
+  // Journeys preferences
+  void OnHistoryClustersPreferenceChanged();
+
  private:
   friend class BrowserUserData<HistoryClustersSidePanelCoordinator>;
 
@@ -49,6 +55,8 @@ class HistoryClustersSidePanelCoordinator
 
   // Used to store the initial query for the next-created WebUI instance.
   std::string initial_query_;
+
+  PrefChangeRegistrar pref_change_registrar_;
 
   BROWSER_USER_DATA_KEY_DECL();
 };

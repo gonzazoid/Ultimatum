@@ -5,25 +5,26 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_SIGNIN_DICE_WEB_SIGNIN_INTERCEPT_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_DICE_WEB_SIGNIN_INTERCEPT_HANDLER_H_
 
-#include "content/public/browser/web_ui_message_handler.h"
-
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/signin/dice_web_signin_interceptor.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "content/public/browser/web_ui_message_handler.h"
 
 // WebUI message handler for the Dice web signin intercept bubble.
 class DiceWebSigninInterceptHandler : public content::WebUIMessageHandler,
                                       public signin::IdentityManager::Observer {
  public:
   DiceWebSigninInterceptHandler(
-      const DiceWebSigninInterceptor::Delegate::BubbleParameters&
-          bubble_parameters,
-      base::OnceCallback<void(SigninInterceptionUserChoice)> callback);
+      const WebSigninInterceptor::Delegate::BubbleParameters& bubble_parameters,
+      base::OnceCallback<void(int)> show_widget_with_height_callback,
+      base::OnceCallback<void(SigninInterceptionUserChoice)>
+          completion_callback);
   ~DiceWebSigninInterceptHandler() override;
 
   DiceWebSigninInterceptHandler(const DiceWebSigninInterceptHandler&) = delete;
@@ -48,12 +49,14 @@ class DiceWebSigninInterceptHandler : public content::WebUIMessageHandler,
 
   void HandleAccept(const base::Value::List& args);
   void HandleCancel(const base::Value::List& args);
-  void HandleGuest(const base::Value::List& args);
   void HandlePageLoaded(const base::Value::List& args);
+  void HandleInitializedWithHeight(const base::Value::List& args);
+  void HandleChromeSigninPageLoaded(const base::Value::List& args);
 
   // Gets the values sent to javascript.
-  base::Value::Dict GetAccountInfoValue(const AccountInfo& info);
   base::Value::Dict GetInterceptionParametersValue();
+  // Get the values for ChromeSignin bubble sent to javascript.
+  base::Value::Dict GetInterceptionChromeSigninParametersValue();
 
   // The dialog string is different when the device is managed. This function
   // returns whether the version for managed devices should be used.
@@ -67,12 +70,15 @@ class DiceWebSigninInterceptHandler : public content::WebUIMessageHandler,
   std::string GetManagedDisclaimerText();
   bool GetShouldUseV2Design();
 
+  void UpdateExtendedAccountsInfo();
+
   base::ScopedObservation<signin::IdentityManager,
                           signin::IdentityManager::Observer>
       identity_observation_{this};
-  DiceWebSigninInterceptor::Delegate::BubbleParameters bubble_parameters_;
+  WebSigninInterceptor::Delegate::BubbleParameters bubble_parameters_;
 
-  base::OnceCallback<void(SigninInterceptionUserChoice)> callback_;
+  base::OnceCallback<void(int)> show_widget_with_height_callback_;
+  base::OnceCallback<void(SigninInterceptionUserChoice)> completion_callback_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SIGNIN_DICE_WEB_SIGNIN_INTERCEPT_HANDLER_H_

@@ -7,16 +7,21 @@
 
 #import <AppKit/AppKit.h>
 
+#include <vector>
+
 #include "base/component_export.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/memory/ref_counted.h"
 #include "ui/base/clipboard/clipboard_buffer.h"
+#include "ui/base/clipboard/file_info.h"
+
+@interface URLAndTitle : NSObject
+
+@property(readonly) NSString* URL;
+@property(readonly) NSString* title;
+
+@end
 
 namespace ui {
-
-// A publicly-used UTI for the name of a URL. It really should be in a system
-// header but isn't.
-COMPONENT_EXPORT(UI_BASE_CLIPBOARD) extern NSString* const kUTTypeURLName;
 
 class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) UniquePasteboard
     : public base::RefCounted<UniquePasteboard> {
@@ -28,55 +33,50 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) UniquePasteboard
  private:
   friend class base::RefCounted<UniquePasteboard>;
   ~UniquePasteboard();
-  base::scoped_nsobject<NSPasteboard> pasteboard_;
+  __strong NSPasteboard* pasteboard_;
 };
 
-class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardUtil {
- public:
-  // Returns an NSPasteboardItem that represents the given |url|.
-  // |url| must not be nil.
-  // If |title| is nil, |url| is used in its place.
-  static base::scoped_nsobject<NSPasteboardItem> PasteboardItemFromUrl(
-      NSString* url,
-      NSString* title);
+namespace clipboard_util {
 
-  // Returns an NSPasteboardItem that represents the given |urls| and |titles|.
-  static base::scoped_nsobject<NSPasteboardItem> PasteboardItemFromUrls(
-      NSArray* urls,
-      NSArray* titles);
+// Returns an array of NSPasteboardItems that represent the given `urls` and
+// `titles`.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+NSArray<NSPasteboardItem*>* PasteboardItemsFromUrls(NSArray<NSString*>* urls,
+                                                    NSArray<NSString*>* titles);
 
-  // Returns an NSPasteboardItem that represents the given string.
-  // |string| must not be nil.
-  static base::scoped_nsobject<NSPasteboardItem> PasteboardItemFromString(
-      NSString* string);
+// For each pasteboard type in `item` that is not in `pboard`, add the type
+// and its associated data.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+void AddDataToPasteboard(NSPasteboard* pboard, NSPasteboardItem* item);
 
-  // Returns the title or url associated with a NSPasteboard which contains an
-  // url NSPasteboardItem.
-  static NSString* GetTitleFromPasteboardURL(NSPasteboard* pboard);
-  static NSString* GetURLFromPasteboardURL(NSPasteboard* pboard);
+// For a given pasteboard, reads and extracts the URLs to be found on it. If
+// `include_files` is set, then any file references on the pasteboard will be
+// returned as file URLs. Returns an array of URLAndTitle objects each holding
+// a URL and title pair read from the pasteboard. If no URLs were successfully
+// read, the array will be empty.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+NSArray<URLAndTitle*>* URLsAndTitlesFromPasteboard(NSPasteboard* pboard,
+                                                   bool include_files);
 
-  // Returns the UTI of a pasteboard type.
-  static NSString* UTIForPasteboardType(NSString* type);
-  static NSString* UTIForWebURLsAndTitles();
+// For a given pasteboard, extracts the files found on it.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+std::vector<FileInfo> FilesFromPasteboard(NSPasteboard* pboard);
 
-  // For each pasteboard type in |item| that is not in |pboard|, add the type
-  // and its associated data.
-  static void AddDataToPasteboard(NSPasteboard* pboard, NSPasteboardItem* item);
+// Writes files to a given pasteboard.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+void WriteFilesToPasteboard(NSPasteboard* pboard,
+                            const std::vector<FileInfo>& files);
 
-  // Returns whether the operation was successful. On success, the two arrays
-  // are guaranteed to be equal length, and are populated with strings of |urls|
-  // and |titles|.
-  static bool URLsAndTitlesFromPasteboard(NSPasteboard* pboard,
-                                          NSArray** urls,
-                                          NSArray** titles);
+// Gets the NSPasteboard specified from the clipboard buffer.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+NSPasteboard* PasteboardFromBuffer(ClipboardBuffer buffer);
 
-  // Gets the NSPasteboard specified from the clipboard buffer.
-  static NSPasteboard* PasteboardFromBuffer(ClipboardBuffer buffer);
+// If there is RTF data on the pasteboard, returns an HTML version of it.
+// Otherwise returns nil.
+COMPONENT_EXPORT(UI_BASE_CLIPBOARD)
+NSString* GetHTMLFromRTFOnPasteboard(NSPasteboard* pboard);
 
-  // If there is RTF data on the pasteboard, returns an HTML version of it.
-  // Otherwise returns nil.
-  static NSString* GetHTMLFromRTFOnPasteboard(NSPasteboard* pboard);
-};
+}  // namespace clipboard_util
 
 }  // namespace ui
 

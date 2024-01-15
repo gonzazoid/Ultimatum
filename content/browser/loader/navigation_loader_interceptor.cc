@@ -8,24 +8,20 @@
 
 namespace content {
 
-absl::optional<SubresourceLoaderParams>
+std::optional<SubresourceLoaderParams>
 NavigationLoaderInterceptor::MaybeCreateSubresourceLoaderParams() {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool NavigationLoaderInterceptor::MaybeCreateLoaderForResponse(
+    const network::URLLoaderCompletionStatus& status,
     const network::ResourceRequest& request,
     network::mojom::URLResponseHeadPtr* response,
     mojo::ScopedDataPipeConsumerHandle* response_body,
     mojo::PendingRemote<network::mojom::URLLoader>* loader,
     mojo::PendingReceiver<network::mojom::URLLoaderClient>* client_receiver,
     blink::ThrottlingURLLoader* url_loader,
-    bool* skip_other_interceptors,
-    bool* will_return_unsafe_redirect) {
-  return false;
-}
-
-bool NavigationLoaderInterceptor::ShouldBypassRedirectChecks() {
+    bool* skip_other_interceptors) {
   return false;
 }
 

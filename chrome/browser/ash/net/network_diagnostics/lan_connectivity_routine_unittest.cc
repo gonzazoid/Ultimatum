@@ -5,7 +5,7 @@
 #include "chrome/browser/ash/net/network_diagnostics/lan_connectivity_routine.h"
 
 #include "base/memory/weak_ptr.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -13,7 +13,6 @@
 namespace ash {
 namespace network_diagnostics {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 class LanConnectivityRoutineTest : public ::testing::Test {
@@ -95,7 +94,7 @@ TEST_F(LanConnectivityRoutineTest, TestConnectedLan) {
 }
 
 TEST_F(LanConnectivityRoutineTest, TestDisconnectedLan) {
-  SetUpWiFi(shill::kStateOffline);
+  SetUpWiFi(shill::kStateIdle);
   lan_connectivity_routine()->RunRoutine(
       base::BindOnce(&LanConnectivityRoutineTest::CompareVerdict, weak_ptr(),
                      mojom::RoutineVerdict::kProblem));

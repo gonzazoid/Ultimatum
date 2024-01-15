@@ -7,6 +7,7 @@
 
 #include "base/strings/string_util_win.h"
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/win/scoped_handle.h"
 #include "sandbox/win/src/handle_closer_agent.h"
 #include "sandbox/win/src/nt_internals.h"
@@ -33,12 +34,12 @@ HANDLE GetMarkerFile(const wchar_t* extension) {
   base::win::ScopedHandle module(
       ::CreateFile(path_buffer, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr,
                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
-  CHECK(module.IsValid());
+  CHECK(module.is_valid());
   FILETIME timestamp;
-  CHECK(::GetFileTime(module.Get(), &timestamp, nullptr, nullptr));
-  marker_path +=
-      base::StringPrintf(L"%08x%08x%08x", ::GetFileSize(module.Get(), nullptr),
-                         timestamp.dwLowDateTime, timestamp.dwHighDateTime);
+  CHECK(::GetFileTime(module.get(), &timestamp, nullptr, nullptr));
+  marker_path += base::ASCIIToWide(base::StringPrintf(
+      "%08lx%08lx%08lx", ::GetFileSize(module.get(), nullptr),
+      timestamp.dwLowDateTime, timestamp.dwHighDateTime));
   marker_path += extension;
 
   // Make the file delete-on-close so cleanup is automatic.
@@ -81,16 +82,16 @@ SBOX_TESTS_COMMAND int CheckForFileHandles(int argc, wchar_t** argv) {
       const size_t kHandleOffset = 4;  // Handles are always a multiple of 4.
       HANDLE handle = nullptr;
       int invalid_count = 0;
-      std::wstring handle_name;
 
       if (!::GetProcessHandleCount(::GetCurrentProcess(), &handle_count))
         return SBOX_TEST_FAILED_TO_RUN_TEST;
 
       while (handle_count && invalid_count < kInvalidHandleThreshold) {
         reinterpret_cast<size_t&>(handle) += kHandleOffset;
-        if (GetPathFromHandle(handle, &handle_name)) {
+        auto handle_name = GetPathFromHandle(handle);
+        if (handle_name) {
           for (int i = 1; i < argc; ++i) {
-            if (handle_name == argv[i])
+            if (handle_name.value() == argv[i])
               return should_find ? SBOX_TEST_SUCCEEDED : SBOX_TEST_FAILED;
           }
           --handle_count;
@@ -127,9 +128,9 @@ SBOX_TESTS_COMMAND int CheckForEventHandles(int argc, wchar_t** argv) {
 
     case AFTER_REVERT:
       for (HANDLE handle : to_check) {
-        std::wstring type_name;
-        CHECK(GetTypeNameFromHandle(handle, &type_name));
-        CHECK(base::EqualsCaseInsensitiveASCII(type_name, L"Event"));
+        auto type_name = GetTypeNameFromHandle(handle);
+        CHECK(type_name);
+        CHECK(base::EqualsCaseInsensitiveASCII(type_name.value(), L"Event"));
 
         // Should not be able to wait.
         CHECK_EQ(WaitForSingleObject(handle, INFINITE), WAIT_FAILED);
@@ -153,12 +154,12 @@ TEST(HandleCloserTest, CheckForMarkerFiles) {
 
   std::wstring command = std::wstring(L"CheckForFileHandles Y");
   for (const wchar_t* kExtension : kFileExtensions) {
-    std::wstring handle_name;
     base::win::ScopedHandle marker(GetMarkerFile(kExtension));
-    CHECK(marker.IsValid());
-    CHECK(GetPathFromHandle(marker.Get(), &handle_name));
+    CHECK(marker.is_valid());
+    auto handle_name = GetPathFromHandle(marker.get());
+    CHECK(handle_name);
     command += (L" ");
-    command += handle_name;
+    command += handle_name.value();
   }
 
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(command.c_str()))
@@ -173,15 +174,15 @@ TEST(HandleCloserTest, CloseMarkerFiles) {
 
   std::wstring command = std::wstring(L"CheckForFileHandles N");
   for (const wchar_t* kExtension : kFileExtensions) {
-    std::wstring handle_name;
     base::win::ScopedHandle marker(GetMarkerFile(kExtension));
-    CHECK(marker.IsValid());
-    CHECK(GetPathFromHandle(marker.Get(), &handle_name));
+    CHECK(marker.is_valid());
+    auto handle_name = GetPathFromHandle(marker.get());
+    CHECK(handle_name);
     CHECK_EQ(policy->GetConfig()->AddKernelObjectToClose(L"File",
-                                                         handle_name.c_str()),
+                                                         handle_name->c_str()),
              SBOX_ALL_OK);
     command += (L" ");
-    command += handle_name;
+    command += handle_name.value();
   }
 
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(command.c_str()))
@@ -195,12 +196,12 @@ TEST(HandleCloserTest, CheckStuffedHandle) {
   sandbox::TargetPolicy* policy = runner.GetPolicy();
 
   for (const wchar_t* kExtension : kFileExtensions) {
-    std::wstring handle_name;
     base::win::ScopedHandle marker(GetMarkerFile(kExtension));
-    CHECK(marker.IsValid());
-    CHECK(GetPathFromHandle(marker.Get(), &handle_name));
+    CHECK(marker.is_valid());
+    auto handle_name = GetPathFromHandle(marker.get());
+    CHECK(handle_name);
     CHECK_EQ(policy->GetConfig()->AddKernelObjectToClose(L"File",
-                                                         handle_name.c_str()),
+                                                         handle_name->c_str()),
              SBOX_ALL_OK);
   }
 

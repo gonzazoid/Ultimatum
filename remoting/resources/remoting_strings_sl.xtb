@@ -34,7 +34,6 @@
 <translation id="2599300881200251572">Ta storitev omogoča dohodne povezave iz odjemalcev za Oddaljeno namizje za Chrome.</translation>
 <translation id="2647232381348739934">Storitev Oddaljeno povezovanje s Chromom</translation>
 <translation id="2676780859508944670">Obdelava …</translation>
-<translation id="2692522824157224199">Copyright 2022 Google LLC. Vse pravice pridržane.</translation>
 <translation id="2699970397166997657">Oddaljeno povezovanje s Chromom</translation>
 <translation id="2758123043070977469">Pri preverjanju pristnosti je prišlo do napake. Prijavite se znova.</translation>
 <translation id="2803375539583399270">Vnesite kodo PIN</translation>
@@ -71,7 +70,6 @@
 <translation id="4257751272692708833">Aplikacija za posredovanje URL-jev storitve <ph name="PRODUCT_NAME" /></translation>
 <translation id="4277736576214464567">Koda za dostop je neveljavna. Poskusite znova.</translation>
 <translation id="4281844954008187215">Pogoji storitve</translation>
-<translation id="4372650392690220936">Copyright 2022 Ustvarjalci Chromiuma. Vse pravice pridržane.</translation>
 <translation id="4405930547258349619">Knjižnica jedra</translation>
 <translation id="443560535555262820">Odpri nastavitve dostopnosti</translation>
 <translation id="4450893287417543264">Tega ne prikaži več</translation>
@@ -141,6 +139,7 @@
 <translation id="7693372326588366043">Osveži seznam gostiteljev</translation>
 <translation id="7714222945760997814">Prijavite to</translation>
 <translation id="7868137160098754906">Vnesite PIN za oddaljeni računalnik.</translation>
+<translation id="7881455334687220899">Copyright 2024 Ustvarjalci Chromiuma. Vse pravice pridržane.</translation>
 <translation id="7895403300744144251">Varnostni pravilniki na oddaljenem računalniku ne dovoljujejo povezav iz vašega računa.</translation>
 <translation id="7936528439960309876">Zasidranje desno</translation>
 <translation id="7970576581263377361">Preverjanje pristnosti ni uspelo. Še enkrat se prijavite v Chromium.</translation>
@@ -170,6 +169,7 @@
 <translation id="8747048596626351634">Seja se je zrušila ali je ni bilo mogoče začeti. Če je v oddaljenem računalniku seja ~/.chrome-remote-desktop-session, poskrbite, da je v njej zagnan dolgotrajen proces v ospredju, kot je okolje namizja ali upravitelj oken.</translation>
 <translation id="8804164990146287819">Pravilnik o zasebnosti</translation>
 <translation id="8906511416443321782">Za zajem zvoka in njegovega pretočnega predvajanja v odjemalcu Oddaljenega namizja Chrome je potreben dostop do mikrofona.</translation>
+<translation id="9042277333359847053">Copyright 2024 Google LLC. Vse pravice pridržane.</translation>
 <translation id="9111855907838866522">Imate vzpostavljeno povezavo z oddaljeno napravo. Če želite odpreti meni, se dotaknite zaslona s štirimi prsti.</translation>
 <translation id="9126115402994542723">Pri povezovanju s tem gostiteljem iz tega računalnika ne zahtevaj več kode PIN.</translation>
 <translation id="916856682307586697">Zagon privzete seje XSession</translation>

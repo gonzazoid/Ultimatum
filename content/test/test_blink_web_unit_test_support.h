@@ -8,10 +8,10 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "cc/test/test_task_graph_runner.h"
 #include "content/child/blink_platform_impl.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 
 namespace blink {
 namespace scheduler {
@@ -38,7 +38,8 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
   };
 
   explicit TestBlinkWebUnitTestSupport(
-      SchedulerType scheduler_type = SchedulerType::kMockScheduler);
+      SchedulerType scheduler_type,
+      std::string additional_v8_flags = std::string());
 
   TestBlinkWebUnitTestSupport(const TestBlinkWebUnitTestSupport&) = delete;
   TestBlinkWebUnitTestSupport& operator=(const TestBlinkWebUnitTestSupport&) =
@@ -47,8 +48,6 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
   ~TestBlinkWebUnitTestSupport() override;
 
   blink::WebString UserAgent() override;
-  blink::WebString FullUserAgent() override;
-  blink::WebString ReducedUserAgent() override;
   blink::WebString QueryLocalizedString(int resource_id) override;
   blink::WebString QueryLocalizedString(int resource_id,
                                         const blink::WebString& value) override;

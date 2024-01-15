@@ -6,10 +6,10 @@
 
 #import <WebKit/WebKit.h>
 
-#include "base/bind.h"
+#import "base/apple/foundation_util.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#import "base/mac/foundation_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
@@ -32,10 +32,6 @@
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "net/cookies/canonical_cookie.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -187,7 +183,7 @@ void AccountConsistencyService::AccountConsistencyHandler::ShouldAllowResponse(
     web::WebStatePolicyDecider::ResponseInfo response_info,
     web::WebStatePolicyDecider::PolicyDecisionCallback callback) {
   NSHTTPURLResponse* http_response =
-      base::mac::ObjCCast<NSHTTPURLResponse>(response);
+      base::apple::ObjCCast<NSHTTPURLResponse>(response);
   if (!http_response) {
     std::move(callback).Run(PolicyDecision::Allow());
     return;
@@ -373,6 +369,11 @@ void AccountConsistencyService::TriggerGaiaCookieChangeIfDeleted(
       std::move(cookies_restored_callback));
 
   for (const auto& cookie : cookie_list) {
+    // There may be other cookies besides `kGaiaSigninCookieName` that are
+    // required. However these cookies are not specified by the server, and thus
+    // Chrome cannot monitor them. We assume here that ITP will remove all the
+    // cookies fom the domain at once, and so it is sufficient to monitor only
+    // one cookie.
     if (cookie.cookie.Name() == GaiaConstants::kGaiaSigninCookieName) {
       LogIOSGaiaCookiesState(
           GaiaCookieStateOnSignedInNavigation::kGaiaCookiePresentOnNavigation);
@@ -489,7 +490,7 @@ void AccountConsistencyService::SetChromeConnectedCookieWithUrl(
           /*last_access_time=*/base::Time(),
           /*secure=*/true,
           /*httponly=*/false, net::CookieSameSite::LAX_MODE,
-          net::COOKIE_PRIORITY_DEFAULT, /*same_party=*/false,
+          net::COOKIE_PRIORITY_DEFAULT,
           /*partition_key=*/absl::nullopt);
   net::CookieOptions options;
   options.set_include_httponly();

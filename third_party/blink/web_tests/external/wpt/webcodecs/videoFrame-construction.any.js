@@ -18,12 +18,12 @@ test(t => {
 
 test(t => {
   let image = makeImageBitmap(32, 16);
-  let frame = new VideoFrame(image, {timestamp: 10});
+  let frame = new VideoFrame(image, {timestamp: 10, duration: 15});
   frame.close();
 
   assert_equals(frame.format, null, 'format')
-  assert_equals(frame.timestamp, null, 'timestamp');
-  assert_equals(frame.duration, null, 'duration');
+  assert_equals(frame.timestamp, 10, 'timestamp');
+  assert_equals(frame.duration, 15, 'duration');
   assert_equals(frame.codedWidth, 0, 'codedWidth');
   assert_equals(frame.codedHeight, 0, 'codedHeight');
   assert_equals(frame.visibleRect, null, 'visibleRect');
@@ -33,6 +33,7 @@ test(t => {
   assert_equals(frame.colorSpace.transfer, null, 'colorSpace.transfer');
   assert_equals(frame.colorSpace.matrix, null, 'colorSpace.matrix');
   assert_equals(frame.colorSpace.fullRange, null, 'colorSpace.fullRange');
+  assert_true(isFrameClosed(frame));
 
   assert_throws_dom('InvalidStateError', () => frame.clone());
 }, 'Test closed VideoFrame.');
@@ -92,6 +93,34 @@ test(t => {
     let frame = new VideoFrame(video, {timestamp: 10});
   })
 }, 'Test constructing w/ unusable image argument throws: HAVE_NOTHING <video>.');
+
+promise_test(async t => {
+  // Test only valid for Window contexts.
+  if (!('document' in self))
+    return;
+
+  let video = document.createElement('video');
+  video.src = 'vp9.mp4';
+  video.autoplay = true;
+  video.controls = false;
+  video.muted = false;
+  document.body.appendChild(video);
+
+  const loadVideo = new Promise((resolve) => {
+    if (video.requestVideoFrameCallback) {
+      video.requestVideoFrameCallback(resolve);
+      return;
+    }
+    video.onloadeddata = () => resolve();
+  });
+  await loadVideo;
+
+  let frame = new VideoFrame(video, {timestamp: 10});
+  assert_equals(frame.codedWidth, 320, 'codedWidth');
+  assert_equals(frame.codedHeight, 240, 'codedHeight');
+  assert_equals(frame.timestamp, 10, 'timestamp');
+  frame.close();
+}, 'Test we can construct a VideoFrame from a <video>.');
 
 test(t => {
   let canvas = new OffscreenCanvas(0, 0);
@@ -375,16 +404,8 @@ test(t => {
       'invalid coded height');
   assert_throws_js(
       TypeError,
-      () => constructFrame({timestamp: 1234, codedWidth: 4, codedHeight: 1}),
-      'odd coded height');
-  assert_throws_js(
-      TypeError,
       () => constructFrame({timestamp: 1234, codedWidth: 0, codedHeight: 4}),
       'invalid coded width');
-  assert_throws_js(
-      TypeError,
-      () => constructFrame({timestamp: 1234, codedWidth: 3, codedHeight: 2}),
-      'odd coded width');
   assert_throws_js(
       TypeError, () => constructFrame({
                    timestamp: 1234,
@@ -488,11 +509,11 @@ test(t => {
     1, 2,                    // v
   ]);
   let frame = new VideoFrame(data, vfInit);
-  assert_true(frame.colorSpace.primaries == null, 'color primaries');
-  assert_true(frame.colorSpace.transfer == null, 'color transfer');
-  assert_true(frame.colorSpace.matrix == null, 'color matrix');
-  assert_true(frame.colorSpace.fullRange == null, 'color range');
-}, 'Test planar constructed I420 VideoFrame with null colorSpace values');
+  assert_true(frame.colorSpace.primaries !== undefined, 'color primaries');
+  assert_true(frame.colorSpace.transfer !== undefined, 'color transfer');
+  assert_true(frame.colorSpace.matrix !== undefined, 'color matrix');
+  assert_true(frame.colorSpace.fullRange !== undefined, 'color range');
+}, 'Test planar can construct I420 VideoFrame with null colorSpace values');
 
 test(t => {
   let fmt = 'I420A';

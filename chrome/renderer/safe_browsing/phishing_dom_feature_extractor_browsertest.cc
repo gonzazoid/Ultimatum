@@ -5,10 +5,11 @@
 #include "components/safe_browsing/content/renderer/phishing_classifier/phishing_dom_feature_extractor.h"
 
 #include <memory>
+#include <string_view>
 #include <unordered_map>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/escape.h"
 #include "base/time/time.h"
@@ -132,7 +133,7 @@ class TestChromeContentRendererClient : public ChromeContentRendererClient {
   ~TestChromeContentRendererClient() override {}
   // Since visited_link_reader_ in ChromeContentRenderClient never get
   // initiated, overrides VisitedLinkedHash() function to prevent crashing.
-  uint64_t VisitedLinkHash(const char* canonical_url, size_t length) override {
+  uint64_t VisitedLinkHash(std::string_view canonical_url) override {
     return 0;
   }
 };
@@ -140,12 +141,12 @@ class TestChromeContentRendererClient : public ChromeContentRendererClient {
 class PhishingDOMFeatureExtractorTest : public ChromeRenderViewTest {
  public:
   PhishingDOMFeatureExtractorTest()
-      : success_(false), message_loop_(new content::MessageLoopRunner) {}
+      : success_(false), run_loop_(std::make_unique<base::RunLoop>()) {}
 
   bool GetSuccess() { return success_; }
   void ResetTest() {
     success_ = false;
-    message_loop_ = new content::MessageLoopRunner;
+    run_loop_ = std::make_unique<base::RunLoop>();
     extractor_->Reset();
   }
 
@@ -161,7 +162,7 @@ class PhishingDOMFeatureExtractorTest : public ChromeRenderViewTest {
         GetMainFrame()->GetDocument(), features,
         base::BindOnce(&PhishingDOMFeatureExtractorTest::AnotherExtractionDone,
                        weak_factory_.GetWeakPtr()));
-    message_loop_->Run();
+    run_loop_->Run();
   }
 
   void ExtractFeatures(const std::string& document_domain,
@@ -174,7 +175,7 @@ class PhishingDOMFeatureExtractorTest : public ChromeRenderViewTest {
         GetMainFrame()->GetDocument(), features,
         base::BindOnce(&PhishingDOMFeatureExtractorTest::AnotherExtractionDone,
                        weak_factory_.GetWeakPtr()));
-    message_loop_->Run();
+    run_loop_->Run();
   }
 
   // Helper for the SubframeRemoval test that posts a message to remove
@@ -209,7 +210,7 @@ class PhishingDOMFeatureExtractorTest : public ChromeRenderViewTest {
 
   void AnotherExtractionDone(bool success) {
     success_ = success;
-    message_loop_->QuitClosure().Run();
+    run_loop_->QuitClosure().Run();
   }
 
   // Does the actual work of removing the iframe "frame1" from the document.
@@ -222,7 +223,7 @@ class PhishingDOMFeatureExtractorTest : public ChromeRenderViewTest {
 
   bool success_;
   std::unique_ptr<TestPhishingDOMFeatureExtractor> extractor_;
-  scoped_refptr<content::MessageLoopRunner> message_loop_;
+  std::unique_ptr<base::RunLoop> run_loop_;
   base::WeakPtrFactory<PhishingDOMFeatureExtractorTest> weak_factory_{this};
 };
 
@@ -461,8 +462,6 @@ TEST_F(PhishingDOMFeatureExtractorTest, Continuation) {
       .WillOnce(Return(now + base::Milliseconds(12)))
       // Time check at the start of the second chunk of work.
       .WillOnce(Return(now + base::Milliseconds(22)))
-      // Time check after resuming iteration for the second chunk.
-      .WillOnce(Return(now + base::Milliseconds(24)))
       // Time check after the next 10 elements.
       .WillOnce(Return(now + base::Milliseconds(30)))
       // Time check after the next 10 elements.  This will trigger another
@@ -470,12 +469,8 @@ TEST_F(PhishingDOMFeatureExtractorTest, Continuation) {
       .WillOnce(Return(now + base::Milliseconds(36)))
       // Time check at the start of the third chunk of work.
       .WillOnce(Return(now + base::Milliseconds(46)))
-      // Time check after resuming iteration for the third chunk.
-      .WillOnce(Return(now + base::Milliseconds(48)))
       // Time check after the last 10 elements.
-      .WillOnce(Return(now + base::Milliseconds(54)))
-      // A final time check for the histograms.
-      .WillOnce(Return(now + base::Milliseconds(56)));
+      .WillOnce(Return(now + base::Milliseconds(54)));
   extractor_->SetTickClockForTesting(&tick_clock);
 
   FeatureMap expected_features;
@@ -505,12 +500,8 @@ TEST_F(PhishingDOMFeatureExtractorTest, Continuation) {
       .WillOnce(Return(now + base::Milliseconds(300)))
       // Time check at the start of the second chunk of work.
       .WillOnce(Return(now + base::Milliseconds(350)))
-      // Time check after resuming iteration for the second chunk.
-      .WillOnce(Return(now + base::Milliseconds(360)))
       // Time check after the next 10 elements.  This is over the limit.
-      .WillOnce(Return(now + base::Milliseconds(600)))
-      // A final time check for the histograms.
-      .WillOnce(Return(now + base::Milliseconds(620)));
+      .WillOnce(Return(now + base::Milliseconds(600)));
 
   features.Clear();
   ResetTest();
@@ -538,16 +529,12 @@ TEST_F(PhishingDOMFeatureExtractorTest, SubframeRemoval) {
       .WillOnce(Return(now))
       // Time check after the first 10 elements.  Enough time has passed
       // to stop extraction.  Schedule the iframe removal to happen as soon as
-      // the feature extractor returns control to the message loop.
+      // the feature extractor returns control to the run loop.
       .WillOnce(DoAll(
           Invoke(this, &PhishingDOMFeatureExtractorTest::ScheduleRemoveIframe),
           Return(now + base::Milliseconds(21))))
       // Time check at the start of the second chunk of work.
-      .WillOnce(Return(now + base::Milliseconds(25)))
-      // Time check after resuming iteration for the second chunk.
-      .WillOnce(Return(now + base::Milliseconds(27)))
-      // A final time check for the histograms.
-      .WillOnce(Return(now + base::Milliseconds(33)));
+      .WillOnce(Return(now + base::Milliseconds(25)));
   extractor_->SetTickClockForTesting(&tick_clock);
 
   FeatureMap expected_features;

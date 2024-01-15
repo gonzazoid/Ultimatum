@@ -8,8 +8,10 @@
 #include <string>
 
 #include "base/environment.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
+#include "components/mirroring/service/mirroring_features.h"
 #include "media/base/audio_parameters.h"
 
 using media::ResolutionChangePolicy;
@@ -27,7 +29,7 @@ namespace {
 constexpr base::TimeDelta kDefaultPlayoutDelay = base::Milliseconds(400);
 
 constexpr int kAudioTimebase = 48000;
-constexpr int kVidoTimebase = 90000;
+constexpr int kVideoTimebase = 90000;
 constexpr int kAudioChannels = 2;
 constexpr int kAudioFramerate = 100;  // 100 FPS for 10ms packets.
 constexpr int kMinVideoBitrate = 300000;
@@ -93,7 +95,9 @@ FrameSenderConfig MirrorSettings::GetDefaultAudioConfig(
   config.min_playout_delay = playout_delay;
   config.max_playout_delay = playout_delay;
   config.rtp_payload_type = payload_type;
-  config.rtp_timebase = kAudioTimebase;
+  config.rtp_timebase = (payload_type == RtpPayloadType::REMOTE_AUDIO)
+                            ? media::cast::kRemotingRtpTimebase
+                            : kAudioTimebase;
   config.channels = kAudioChannels;
   config.min_bitrate = config.max_bitrate = config.start_bitrate =
       kAudioBitrate;
@@ -113,7 +117,9 @@ FrameSenderConfig MirrorSettings::GetDefaultVideoConfig(
   config.min_playout_delay = playout_delay;
   config.max_playout_delay = playout_delay;
   config.rtp_payload_type = payload_type;
-  config.rtp_timebase = kVidoTimebase;
+  config.rtp_timebase = (payload_type == RtpPayloadType::REMOTE_VIDEO)
+                            ? media::cast::kRemotingRtpTimebase
+                            : kVideoTimebase;
   config.channels = 1;
   config.min_bitrate = kMinVideoBitrate;
   config.max_bitrate = kMaxVideoBitrate;
@@ -145,6 +151,9 @@ media::VideoCaptureParams MirrorSettings::GetVideoCaptureParams() {
   } else {
     params.resolution_change_policy = ResolutionChangePolicy::ANY_WITHIN_LIMIT;
   }
+  params.is_high_dpi_enabled =
+      base::FeatureList::IsEnabled(features::kCastEnableStreamingWithHiDPI);
+
   DCHECK(params.IsValid());
   return params;
 }

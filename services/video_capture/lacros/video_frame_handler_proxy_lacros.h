@@ -7,8 +7,9 @@
 
 #include <string>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "chromeos/crosapi/mojom/video_capture.mojom.h"
+#include "media/capture/video/video_frame_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -26,7 +27,9 @@ class VideoFrameHandlerProxyLacros : public crosapi::mojom::VideoFrameHandler {
  public:
   VideoFrameHandlerProxyLacros(
       mojo::PendingReceiver<crosapi::mojom::VideoFrameHandler> proxy_receiver,
-      mojo::PendingRemote<mojom::VideoFrameHandler> handler_remote);
+      absl::optional<mojo::PendingRemote<mojom::VideoFrameHandler>>
+          handler_remote,
+      base::WeakPtr<media::VideoFrameReceiver> handler_remote_in_process);
   VideoFrameHandlerProxyLacros(const VideoFrameHandlerProxyLacros&) = delete;
   VideoFrameHandlerProxyLacros& operator=(const VideoFrameHandlerProxyLacros&) =
       delete;
@@ -42,14 +45,20 @@ class VideoFrameHandlerProxyLacros : public crosapi::mojom::VideoFrameHandler {
   class VideoFrameAccessHandlerProxy;
 
   // crosapi::mojom::VideoFrameHandler implementation.
+  void OnCaptureConfigurationChanged() override;
   void OnNewBuffer(int buffer_id,
                    crosapi::mojom::VideoBufferHandlePtr buffer_handle) override;
-  void OnFrameReadyInBuffer(crosapi::mojom::ReadyFrameInBufferPtr buffer,
-                            std::vector<crosapi::mojom::ReadyFrameInBufferPtr>
-                                scaled_buffers) override;
+  void DEPRECATED_OnFrameReadyInBuffer(
+      crosapi::mojom::ReadyFrameInBufferPtr buffer,
+      std::vector<crosapi::mojom::ReadyFrameInBufferPtr> scaled_buffers)
+      override;
+  void OnFrameReadyInBuffer(
+      crosapi::mojom::ReadyFrameInBufferPtr buffer) override;
   void OnBufferRetired(int buffer_id) override;
   void OnFrameDropped(media::VideoCaptureFrameDropReason reason) override;
-  void OnNewCropVersion(uint32_t crop_version) override;
+  void DEPRECATED_OnNewCropVersion(uint32_t crop_version) override;
+  void OnNewSubCaptureTargetVersion(
+      uint32_t sub_capture_target_version) override;
   void OnFrameWithEmptyRegionCapture() override;
   void OnStarted() override;
   void OnStartedUsingGpuDecode() override;
@@ -57,6 +66,8 @@ class VideoFrameHandlerProxyLacros : public crosapi::mojom::VideoFrameHandler {
 
   mojo::Receiver<crosapi::mojom::VideoFrameHandler> receiver_{this};
   mojo::Remote<mojom::VideoFrameHandler> handler_;
+  // Used when this device is started in process.
+  base::WeakPtr<media::VideoFrameReceiver> handler_in_process_;
   scoped_refptr<AccessPermissionProxyMap> access_permission_proxy_map_;
 };
 

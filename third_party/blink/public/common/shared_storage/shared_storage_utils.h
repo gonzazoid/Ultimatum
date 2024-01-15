@@ -7,21 +7,10 @@
 
 #include <cstdlib>
 
+#include "base/strings/string_piece.h"
 #include "third_party/blink/public/common/common_export.h"
 
 namespace blink {
-
-// Allows the `OnVoidOperationFinished()` callbacks in both the shared storage
-// worklet and the shared storage window to pass a parameter identifying the
-// calling operation, for the purpose of recording timing information to the
-// correct histogram. Also used for logging any error in the case of `run()`.
-enum class SharedStorageVoidOperation {
-  kRun = 0,
-  kSet = 1,
-  kAppend = 2,
-  kDelete = 3,
-  kClear = 4,
-};
 
 // Whether or not the worklet ever entered keep-alive, and if so, the reason the
 // keep-alive was terminated. Recorded to UMA; always add new values to the end
@@ -64,6 +53,17 @@ BLINK_COMMON_EXPORT bool IsValidSharedStorageValueStringLength(size_t length);
 // Logs histograms of the calling method and error type for worklet errors.
 BLINK_COMMON_EXPORT void LogSharedStorageWorkletError(
     SharedStorageWorkletErrorType error_type);
+
+// Whether `privateAggregation` should be exposed to `SharedStorageWorklet`
+// scope.
+BLINK_COMMON_EXPORT bool ShouldDefinePrivateAggregationInSharedStorage();
+
+// Whether the `context_id` is valid UTF-8 and has a valid length.
+BLINK_COMMON_EXPORT bool IsValidPrivateAggregationContextId(
+    base::StringPiece context_id);
+
+// Maximum allowed length of the context_id string.
+constexpr int kPrivateAggregationApiContextIdMaxLength = 64;
 
 }  // namespace blink
 

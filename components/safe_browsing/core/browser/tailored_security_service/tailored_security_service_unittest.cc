@@ -6,14 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
@@ -27,7 +26,8 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using ::testing::Return;
+using ::testing::IsEmpty;
+using ::testing::Not;
 
 namespace safe_browsing {
 
@@ -40,14 +40,17 @@ const char kQueryTailoredSecurityServiceUrl[] =
 // TestRequest instead of a normal request.
 class TestingTailoredSecurityService : public TailoredSecurityService {
  public:
-  explicit TestingTailoredSecurityService(
+  TestingTailoredSecurityService(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      PrefService* prefs)
-      // NOTE: Simply pass null object for IdentityManager.
+      PrefService* prefs,
+      syncer::SyncService* sync_service)
+      // NOTE: Simply pass null object for IdentityManager and SyncService.
       // TailoredSecurityService's only usage of this object is to fetch access
       // tokens via RequestImpl, and TestingTailoredSecurityService deliberately
       // replaces this flow with TestRequest.
-      : TailoredSecurityService(nullptr, prefs),
+      : TailoredSecurityService(/*identity_manager=*/nullptr,
+                                /*sync_service=*/sync_service,
+                                prefs),
         url_loader_factory_(url_loader_factory) {}
   ~TestingTailoredSecurityService() override = default;
 
@@ -58,7 +61,7 @@ class TestingTailoredSecurityService : public TailoredSecurityService {
 
   // This is sorta an override but override and static don't mix.
   // This function just calls TailoredSecurityService::ReadResponse.
-  static base::Value ReadResponse(Request* request);
+  static base::Value::Dict ReadResponse(Request* request);
 
   const std::string& GetExpectedPostData(
       TailoredSecurityService::Request* request);
@@ -102,9 +105,6 @@ class TestingTailoredSecurityService : public TailoredSecurityService {
  protected:
   void MaybeNotifySyncUser(bool is_enabled,
                            base::Time previous_update) override;
-
-  // Mock subclass overrides.
-  MOCK_METHOD1(ShowSyncNotification, void(bool));
 
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
       override {
@@ -171,7 +171,7 @@ class TestRequest : public TailoredSecurityService::Request {
 
   void Start() override {
     is_pending_ = true;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&TestRequest::MimicReturnFromFetch,
                                   base::Unretained(this)));
   }
@@ -209,7 +209,8 @@ TestingTailoredSecurityService::CreateRequest(
   return request;
 }
 
-base::Value TestingTailoredSecurityService::ReadResponse(Request* request) {
+base::Value::Dict TestingTailoredSecurityService::ReadResponse(
+    Request* request) {
   return TailoredSecurityService::ReadResponse(request);
 }
 
@@ -279,16 +280,24 @@ class TailoredSecurityServiceTest : public testing::Test {
     prefs_.registry()->RegisterBooleanPref(prefs::kSafeBrowsingEnabled, true);
     prefs_.registry()->RegisterBooleanPref(
         prefs::kEnhancedProtectionEnabledViaTailoredSecurity, false);
+    prefs_.registry()->RegisterIntegerPref(
+        prefs::kTailoredSecuritySyncFlowLastUserInteractionState,
+        TailoredSecurityRetryState::UNSET);
+    prefs_.registry()->RegisterIntegerPref(
+        prefs::kTailoredSecuritySyncFlowRetryState,
+        TailoredSecurityRetryState::UNSET);
+    prefs_.registry()->RegisterTimePref(
+        prefs::kTailoredSecuritySyncFlowLastRunTime, base::Time());
 
     tailored_security_service_ =
         std::make_unique<TestingTailoredSecurityService>(
-            test_shared_loader_factory_, &prefs_);
+            test_shared_loader_factory_, &prefs_, /*sync_service=*/nullptr);
   }
 
   void TearDown() override {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
     run_loop.Run();
   }
 
@@ -300,14 +309,21 @@ class TailoredSecurityServiceTest : public testing::Test {
 
   PrefService* prefs() { return &prefs_; }
 
+  scoped_refptr<network::SharedURLLoaderFactory> URLLoaderFactory() {
+    return test_shared_loader_factory_;
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+
  private:
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::SingleThreadTaskEnvironment::TimeSource::MOCK_TIME};
   network::TestURLLoaderFactory test_url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> test_shared_loader_factory_;
   TestingPrefServiceSimple prefs_;
   std::unique_ptr<TestingTailoredSecurityService> tailored_security_service_;
   std::vector<bool> notify_sync_calls_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(TailoredSecurityServiceTest, GetTailoredSecurityServiceEnabled) {
@@ -317,7 +333,7 @@ TEST_F(TailoredSecurityServiceTest, GetTailoredSecurityServiceEnabled) {
   tailored_security_service()->StartRequest(base::BindOnce(
       &TestingTailoredSecurityService::GetTailoredSecurityServiceCallback,
       base::Unretained(tailored_security_service())));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &TestingTailoredSecurityService::EnsureNoPendingRequestsRemain,
@@ -337,7 +353,7 @@ TEST_F(TailoredSecurityServiceTest,
           &TestingTailoredSecurityService::SetTailoredSecurityServiceCallback,
           base::Unretained(tailored_security_service())),
       TRAFFIC_ANNOTATION_FOR_TESTS);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &TestingTailoredSecurityService::EnsureNoPendingRequestsRemain,
@@ -356,7 +372,7 @@ TEST_F(TailoredSecurityServiceTest, SetTailoredSecurityBitForTestingFalse) {
           &TestingTailoredSecurityService::SetTailoredSecurityServiceCallback,
           base::Unretained(tailored_security_service())),
       TRAFFIC_ANNOTATION_FOR_TESTS);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &TestingTailoredSecurityService::EnsureNoPendingRequestsRemain,
@@ -383,7 +399,7 @@ TEST_F(TailoredSecurityServiceTest, MultipleRequests) {
                      base::Unretained(tailored_security_service())));
 
   // Check that both requests are no longer pending.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &TestingTailoredSecurityService::EnsureNoPendingRequestsRemain,
@@ -400,10 +416,9 @@ TEST_F(TailoredSecurityServiceTest, VerifyReadResponse) {
                       "  \"history_recording_enabled\": true\n"
                       "}"));
   // ReadResponse deletes the request
-  base::Value response_value =
+  base::Value::Dict response_value =
       TestingTailoredSecurityService::ReadResponse(request.get());
-  EXPECT_TRUE(
-      response_value.FindBoolKey("history_recording_enabled").value_or(false));
+  EXPECT_TRUE(response_value.FindBool("history_recording_enabled").value());
   // Test that properly formatted response with good response code returns false
   // as expected.
   std::unique_ptr<TailoredSecurityService::Request> request2(new TestRequest(
@@ -412,12 +427,11 @@ TEST_F(TailoredSecurityServiceTest, VerifyReadResponse) {
       "  \"history_recording_enabled\": false\n"
       "}"));
   // ReadResponse deletes the request
-  base::Value response_value2 =
+  base::Value::Dict response_value2 =
       TestingTailoredSecurityService::ReadResponse(request2.get());
-  EXPECT_FALSE(
-      response_value2.FindBoolKey("history_recording_enabled").value_or(false));
+  EXPECT_FALSE(response_value2.FindBool("history_recording_enabled").value());
 
-  // Test that a bad response code returns false.
+  // Test that a bad response code returns an empty dictionary.
   std::unique_ptr<TailoredSecurityService::Request> request3(
       new TestRequest(GURL(kQueryTailoredSecurityServiceUrl), base::DoNothing(),
                       net::HTTP_UNAUTHORIZED,
@@ -425,11 +439,11 @@ TEST_F(TailoredSecurityServiceTest, VerifyReadResponse) {
                       "  \"history_recording_enabled\": true\n"
                       "}"));
   // ReadResponse deletes the request
-  base::Value response_value3 =
+  base::Value::Dict response_value3 =
       TestingTailoredSecurityService::ReadResponse(request3.get());
-  EXPECT_TRUE(response_value3.is_none());
+  EXPECT_THAT(response_value3, IsEmpty());
 
-  // Test that improperly formatted response returns false.
+  // Test that improperly formatted response returns an empty dictionary.
   // Note: we expect to see a warning when running this test similar to
   //   "Non-JSON response received from history server".
   // This test tests how that situation is handled.
@@ -439,21 +453,25 @@ TEST_F(TailoredSecurityServiceTest, VerifyReadResponse) {
       "  \"history_recording_enabled\": not true\n"
       "}"));
   // ReadResponse deletes the request
-  base::Value response_value4 =
+  base::Value::Dict response_value4 =
       TestingTailoredSecurityService::ReadResponse(request4.get());
-  EXPECT_TRUE(response_value4.is_none());
+  EXPECT_THAT(response_value4, IsEmpty());
 
-  // Test that improperly formatted response (different key) returns false.
+  // Test that reading a response that doesn't contain the
+  // `history_recording_enabled` key, will not contain that key. This way
+  // callers of ReadResponse can distinguish between not present and false and
+  // can handle those situations appropriately.
   std::unique_ptr<TailoredSecurityService::Request> request5(new TestRequest(
       GURL(kQueryTailoredSecurityServiceUrl), base::DoNothing(), net::HTTP_OK,
       "{\n"
       "  \"history_recording\": true\n"
       "}"));
   // ReadResponse deletes the request
-  base::Value response_value5 =
+  base::Value::Dict response_value5 =
       TestingTailoredSecurityService::ReadResponse(request5.get());
+  EXPECT_THAT(response_value5, Not(IsEmpty()));
   EXPECT_FALSE(
-      response_value2.FindBoolKey("history_recording_enabled").value_or(false));
+      response_value5.FindBool("history_recording_enabled").has_value());
 }
 
 TEST_F(TailoredSecurityServiceTest, TestShutdown) {
@@ -506,6 +524,96 @@ TEST_F(TailoredSecurityServiceTest, NotifiesSyncForDisabled) {
   run_loop.Run();
   EXPECT_TRUE(tailored_security_service()->notify_sync_user_called());
   EXPECT_FALSE(tailored_security_service()->notify_sync_user_called_enabled());
+}
+
+TEST_F(TailoredSecurityServiceTest,
+       RetryEnabledTimestampUpdateCallbackSetsStateToRetryNeeded) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeatures(
+      {safe_browsing::kTailoredSecurityRetryForSyncUsers}, {});
+  {
+    tailored_security_service()->SetExpectedURL(
+        GURL(kQueryTailoredSecurityServiceUrl));
+    tailored_security_service()->SetExpectedTailoredSecurityServiceValue(true);
+
+    EXPECT_NE(prefs()->GetInteger(prefs::kTailoredSecuritySyncFlowRetryState),
+              TailoredSecurityRetryState::RETRY_NEEDED);
+
+    tailored_security_service()->TailoredSecurityTimestampUpdateCallback();
+
+    EXPECT_EQ(prefs()->GetInteger(prefs::kTailoredSecuritySyncFlowRetryState),
+              TailoredSecurityRetryState::RETRY_NEEDED);
+  }
+}
+
+TEST_F(TailoredSecurityServiceTest, RetryDisabledStateRemainsUnset) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeatures(
+      {}, {safe_browsing::kTailoredSecurityRetryForSyncUsers});
+  {
+    tailored_security_service()->SetExpectedURL(
+        GURL(kQueryTailoredSecurityServiceUrl));
+    tailored_security_service()->SetExpectedTailoredSecurityServiceValue(true);
+
+    EXPECT_EQ(prefs()->GetInteger(prefs::kTailoredSecuritySyncFlowRetryState),
+              TailoredSecurityRetryState::UNSET);
+
+    tailored_security_service()->TailoredSecurityTimestampUpdateCallback();
+
+    EXPECT_EQ(prefs()->GetInteger(prefs::kTailoredSecuritySyncFlowRetryState),
+              TailoredSecurityRetryState::UNSET);
+  }
+}
+
+TEST_F(TailoredSecurityServiceTest,
+       RetryEnabledTimestampUpdateCallbackRecordsStartTime) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeatures(
+      {safe_browsing::kTailoredSecurityRetryForSyncUsers}, {});
+  {
+    tailored_security_service()->SetExpectedURL(
+        GURL(kQueryTailoredSecurityServiceUrl));
+    tailored_security_service()->SetExpectedTailoredSecurityServiceValue(true);
+
+    EXPECT_NE(prefs()->GetTime(prefs::kTailoredSecuritySyncFlowLastRunTime),
+              base::Time::Now());
+
+    tailored_security_service()->TailoredSecurityTimestampUpdateCallback();
+
+    EXPECT_EQ(prefs()->GetTime(prefs::kTailoredSecuritySyncFlowLastRunTime),
+              base::Time::Now());
+  }
+}
+
+TEST_F(TailoredSecurityServiceTest,
+       RetryDisabledTimestampUpdateCallbackDoesNotRecordStartTime) {
+  scoped_feature_list_.Reset();
+  scoped_feature_list_.InitWithFeatures(
+      {}, {safe_browsing::kTailoredSecurityRetryForSyncUsers});
+  {
+    tailored_security_service()->SetExpectedURL(
+        GURL(kQueryTailoredSecurityServiceUrl));
+    tailored_security_service()->SetExpectedTailoredSecurityServiceValue(true);
+
+    EXPECT_EQ(prefs()->GetTime(prefs::kTailoredSecuritySyncFlowLastRunTime),
+              base::Time());
+
+    tailored_security_service()->TailoredSecurityTimestampUpdateCallback();
+
+    EXPECT_EQ(prefs()->GetTime(prefs::kTailoredSecuritySyncFlowLastRunTime),
+              base::Time());
+  }
+}
+
+TEST_F(TailoredSecurityServiceTest,
+       HistorySyncEnabledForUserReturnsFalseWhenSyncServiceIsNull) {
+  // One production case where the sync service is not provided to the
+  // TailoredSecurityService is on creation for a Guest profile.
+  auto tailored_security_service =
+      std::make_unique<TestingTailoredSecurityService>(
+          URLLoaderFactory(), prefs(),
+          /*sync_service=*/nullptr);
+  EXPECT_FALSE(tailored_security_service->HistorySyncEnabledForUser());
 }
 
 }  // namespace safe_browsing

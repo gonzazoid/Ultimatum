@@ -6,9 +6,9 @@
 
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/arc/pip/arc_pip_bridge.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/app_window_base.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
@@ -64,13 +64,17 @@ void AppServiceAppWindowShelfItemController::ItemSelected(
     return;
   }
 
-  if (task_ids_.empty()) {
-    NOTREACHED();
-    std::move(callback).Run(ash::SHELF_ACTION_NONE, {});
+  if (!task_ids_.empty()) {
+    arc::SetTaskActive(*task_ids_.begin());
+    std::move(callback).Run(ash::SHELF_ACTION_NEW_WINDOW_CREATED, {});
     return;
   }
-  arc::SetTaskActive(*task_ids_.begin());
-  std::move(callback).Run(ash::SHELF_ACTION_NEW_WINDOW_CREATED, {});
+
+  if (session_ids_.empty()) {
+    NOTREACHED();
+  }
+
+  std::move(callback).Run(ash::SHELF_ACTION_NONE, {});
 }
 
 ash::ShelfItemDelegate::AppMenuItems
@@ -84,7 +88,7 @@ AppServiceAppWindowShelfItemController::GetAppMenuItems(
 
   // The window could be teleported from the inactive user's profile to the
   // current active user, so search all profiles.
-  for (auto* profile : controller_->GetProfileList()) {
+  for (Profile* profile : controller_->GetProfileList()) {
     extensions::AppWindowRegistry* const app_window_registry =
         extensions::AppWindowRegistry::Get(profile);
     DCHECK(app_window_registry);
@@ -143,7 +147,7 @@ void AppServiceAppWindowShelfItemController::OnWindowTitleChanged(
   //
   // The window could be teleported from the inactive user's profile to the
   // current active user, so search all profiles.
-  for (auto* profile : controller_->GetProfileList()) {
+  for (Profile* profile : controller_->GetProfileList()) {
     extensions::AppWindowRegistry* const app_window_registry =
         extensions::AppWindowRegistry::Get(profile);
     DCHECK(app_window_registry);

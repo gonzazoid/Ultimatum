@@ -13,18 +13,18 @@
 
 namespace net {
 
+class CRLSet;
+
 // Performs certificate path construction and validation using iOS's
 // Security.framework.
 class CertVerifyProcIOS : public CertVerifyProc {
  public:
-  CertVerifyProcIOS();
+  explicit CertVerifyProcIOS(scoped_refptr<CRLSet> crl_set);
 
   // Maps a CFError result from SecTrustEvaluateWithError to CertStatus flags.
   // This should only be called if the SecTrustEvaluateWithError return value
   // indicated that the certificate is not trusted.
   static CertStatus GetCertFailureStatusFromError(CFErrorRef error);
-
-  bool SupportsAdditionalTrustAnchors() const override;
 
  protected:
   ~CertVerifyProcIOS() override;
@@ -42,8 +42,6 @@ class CertVerifyProcIOS : public CertVerifyProc {
                      const std::string& ocsp_response,
                      const std::string& sct_list,
                      int flags,
-                     CRLSet* crl_set,
-                     const CertificateList& additional_trust_anchors,
                      CertVerifyResult* verify_result,
                      const NetLogWithSource& net_log) override;
 };

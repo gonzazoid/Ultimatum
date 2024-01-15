@@ -14,6 +14,80 @@
         Abort Animation
       </message>
 
+      <!-- actions example -->
+      <message translateable="false" name="IDS_ASSIGN_ACTION_TO_CONTROL">
+        Assign
+      </message>
+
+      <message translateable="false" name="IDS_CREATE_CONTROL">
+        Create
+      </message>
+
+      <message translateable="false" name="IDS_CONTROLS">
+        Controls
+      </message>
+
+      <message translateable="false" name="IDS_AVAILABLE_CONTROLS">
+        Available controls
+      </message>
+
+      <message translateable="false" name="IDS_AVAILABLE_ACTIONS">
+        Available actions
+      </message>
+
+      <message translateable="false" name="IDS_ACTION_CHECKED">
+        Action checked
+      </message>
+
+      <message translateable="false" name="IDS_ACTION_VISIBLE">
+        Action visible
+      </message>
+
+      <message translateable="false" name="IDS_ACTION_ENABLED">
+        Action enabled
+      </message>
+
+      <message translateable="false" name="IDS_ACTION_TEXT">
+        Action text
+      </message>
+
+      <message translateable="false" name="IDS_ACTION_TOOLTIP_TEXT">
+        Action tooltip text
+      </message>
+
+      <message translateable="false" name="IDS_ACTIONS_TRIGGER_INFO">
+        Actions trigger info
+      </message>
+
+      <!-- badge example -->
+      <message translateable="false" name="IDS_BADGE_SELECT_LABEL">
+        Badge
+      </message>
+
+      <message translateable="false" name="IDS_BADGE_MENU_ITEM_1">
+        Cut
+      </message>
+
+      <message translateable="false" name="IDS_BADGE_MENU_ITEM_2">
+        Copy
+      </message>
+
+      <message translateable="false" name="IDS_BADGE_MENU_ITEM_3">
+        Magic Command
+      </message>
+
+      <message translateable="false" name="IDS_BADGE_MENU_BUTTON">
+        Show a Menu
+      </message>
+
+      <message translateable="false" name="IDS_BADGE_LINK_TEXT">
+        Fancy Feature
+      </message>
+
+      <message translateable="false" name="IDS_BADGE_BADGE_TEXT">
+        Try this out!
+      </message>
+
       <!-- button example -->
       <message translateable="false" name="IDS_BUTTON_IMAGE_BUTTON_AX_LABEL">
         Close Button
@@ -56,6 +130,20 @@
       </message>
       <message translateable="false" name="IDS_COMBOBOX_NAME_2">
         Combo Box 2
+      </message>
+
+      <!-- designer example -->
+      <message translateable="false" name="IDS_DESIGNER_COMBOBOX_NAME">
+        Combo Box
+      </message>
+      <message translateable="false" name="IDS_DESIGNER_TEXTFIELD_NAME">
+        Textfield
+      </message>
+      <message translateable="false" name="IDS_DESIGNER_TOGGLEBUTTON_NAME">
+        ToggleButton
+      </message>
+      <message translateable="false" name="IDS_DESIGNER_IMAGEBUTTON_NAME">
+        ImageButton
       </message>
 
       <!-- dialog example -->
@@ -381,6 +469,9 @@
       <message translateable="false" name="IDS_TEXTFIELD_READ_ONLY_PLACEHOLDER">
         read only
       </message>
+      <message translateable="false" name="IDS_TEXTFIELD_INVALID_PLACEHOLDER">
+        invalid
+      </message>
       <message translateable="false" name="IDS_TEXTFIELD_NAME_LABEL">
         Name:
       </message>
@@ -396,6 +487,7 @@
       <message translateable="false" name="IDS_TEXTFIELD_INVALID_LABEL">
         Invalid:
       </message>
+
       <message translateable="false" name="IDS_TEXTFIELD_RTL_LABEL">
         RTL:
       </message>
@@ -438,6 +530,9 @@
       </message>
       <message translateable="false" name="IDS_TOGGLE_BUTTON_NAME_2">
         Toggle Button 2
+      </message>
+      <message translateable="false" name="IDS_TOGGLE_BUTTON_NAME_3">
+        Toggle Button 3
       </message>
 
       <!-- tree view example -->
@@ -487,9 +582,20 @@
         Edit
       </message>
 
+      <!-- typography example -->
+      <message translateable="false" name="IDS_TYPOGRAPHY_SELECT_LABEL">
+        Typography
+      </message>
+      <message translateable="false" name="IDS_TYPOGRAPHY_HEADLINE_PLACEHOLDER_TEXT">
+        The quick brown fox jumps over the lazy dog
+      </message>
+      <message translateable="false" name="IDS_TYPOGRAPHY_BODY_PLACEHOLDER_TEXT">
+        The quick brown fox jumps over the lazy dog&#10;Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+      </message>
+
       <!-- vector example -->
       <message translateable="false" name="IDS_VECTOR_FILE_SELECT_LABEL">
-        Enter a file to read
+        Enter a file or folder to read
       </message>
       <message translateable="false" name="IDS_VECTOR_RENDER_LABEL">
         Render

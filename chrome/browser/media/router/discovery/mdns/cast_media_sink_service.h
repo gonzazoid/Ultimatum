@@ -11,7 +11,6 @@
 #include "base/feature_list.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
@@ -49,11 +48,7 @@ class CastMediaSinkService : public DnsSdRegistry::DnsSdObserver {
   virtual void Start(const OnSinksDiscoveredCallback& sinks_discovered_cb,
                      MediaSinkServiceBase* dial_media_sink_service);
 
-  // Initiates discovery immediately in response to a user gesture
-  // (i.e., opening the Media Router dialog).
-  // TODO(imcheng): Rename to ManuallyInitiateDiscovery() or similar.
-  // Marked virtual for tests.
-  virtual void OnUserGesture();
+  virtual void DiscoverSinksNow();
 
   // Marked virtual for tests.
   virtual std::unique_ptr<CastMediaSinkServiceImpl, base::OnTaskRunnerDeleter>

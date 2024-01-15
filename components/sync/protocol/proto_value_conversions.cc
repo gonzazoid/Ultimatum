@@ -12,6 +12,7 @@
 #include "base/base64.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/sync/base/unique_position.h"
 #include "components/sync/protocol/app_list_specifics.pb.h"
@@ -32,6 +33,7 @@
 #include "components/sync/protocol/nigori_specifics.pb.h"
 #include "components/sync/protocol/os_preference_specifics.pb.h"
 #include "components/sync/protocol/os_priority_preference_specifics.pb.h"
+#include "components/sync/protocol/password_sharing_invitation_specifics.pb.h"
 #include "components/sync/protocol/password_specifics.pb.h"
 #include "components/sync/protocol/preference_specifics.pb.h"
 #include "components/sync/protocol/printer_specifics.pb.h"
@@ -51,6 +53,7 @@
 #include "components/sync/protocol/typed_url_specifics.pb.h"
 #include "components/sync/protocol/user_consent_specifics.pb.h"
 #include "components/sync/protocol/user_event_specifics.pb.h"
+#include "components/sync/protocol/web_apk_specifics.pb.h"
 #include "components/sync/protocol/web_app_specifics.pb.h"
 #include "components/sync/protocol/webauthn_credential_specifics.pb.h"
 #include "components/sync/protocol/workspace_desk_specifics.pb.h"
@@ -140,6 +143,28 @@ class ToValueVisitor {
                 base::Base64Encode(base::as_bytes(base::make_span(field))));
   }
 
+  template <class P>
+  void VisitBytes(
+      const P& parent_proto,
+      const char* field_name,
+      const google::protobuf::RepeatedPtrField<std::string>& repeated_field) {
+    if (!repeated_field.empty()) {
+      base::Value::List list;
+      for (const auto& field : repeated_field) {
+        list.Append(base::Base64Encode(base::as_bytes(base::make_span(field))));
+      }
+      value_->Set(field_name, std::move(list));
+    }
+  }
+
+  template <class P>
+  void VisitSecret(const P& parent_proto,
+                   const char* field_name,
+                   const std::string& field) {
+    value_->Set(field_name,
+                base::StringPrintf("<%zu-byte secret>", field.size()));
+  }
+
   template <class P, class E>
   void VisitEnum(const P& parent_proto, const char* field_name, E field) {
     value_->Set(field_name, ProtoEnumToString(field));
@@ -225,6 +250,8 @@ class ToValueVisitor {
   // AutofillWalletSpecifics
   base::Value ToValue(const sync_pb::AutofillWalletSpecifics& proto) const {
     base::Value::Dict dict = ToValueDictImpl(proto);
+    // TODO(crbug.com/1406388): consider whether the VISIT_SECRET macro in
+    // proto_visitors.h could replace this.
     if (proto.type() != sync_pb::AutofillWalletSpecifics::POSTAL_ADDRESS) {
       dict.Remove("address");
     }
@@ -237,6 +264,9 @@ class ToValueVisitor {
     if (proto.type() !=
         sync_pb::AutofillWalletSpecifics::CREDIT_CARD_CLOUD_TOKEN_DATA) {
       dict.Remove("cloud_token_data");
+    }
+    if (proto.type() != sync_pb::AutofillWalletSpecifics::PAYMENT_INSTRUMENT) {
+      dict.Remove("payment_instrument");
     }
     return base::Value(std::move(dict));
   }
@@ -284,7 +314,7 @@ class ToValueVisitor {
   }
 
   const ProtoValueConversionOptions options_;
-  raw_ptr<base::Value::Dict> value_;
+  const raw_ptr<base::Value::Dict> value_;
 };
 
 }  // namespace
@@ -307,11 +337,14 @@ IMPLEMENT_PROTO_TO_VALUE(ArcPackageSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(AutofillOfferSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(AutofillProfileSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(AutofillSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(AutofillWalletCredentialSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(AutofillWalletSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(AutofillWalletUsageSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(BankAccountDetails)
 IMPLEMENT_PROTO_TO_VALUE(BookmarkSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(ClientConfigParams)
 IMPLEMENT_PROTO_TO_VALUE(ContactInfoSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(CrossUserSharingPublicKey)
 IMPLEMENT_PROTO_TO_VALUE(DebugEventInfo)
 IMPLEMENT_PROTO_TO_VALUE(DebugInfo)
 IMPLEMENT_PROTO_TO_VALUE(DeviceInfoSpecifics)
@@ -324,16 +357,20 @@ IMPLEMENT_PROTO_TO_VALUE(ExtensionSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(GlobalIdDirective)
 IMPLEMENT_PROTO_TO_VALUE(HistoryDeleteDirectiveSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(HistorySpecifics)
+IMPLEMENT_PROTO_TO_VALUE(IncomingPasswordSharingInvitationSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(LinkedAppIconInfo)
 IMPLEMENT_PROTO_TO_VALUE(ManagedUserSettingSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(NavigationRedirect)
 IMPLEMENT_PROTO_TO_VALUE(NigoriSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(OsPreferenceSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(OsPriorityPreferenceSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(OutgoingPasswordSharingInvitationSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PasswordSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PasswordSpecificsData)
 IMPLEMENT_PROTO_TO_VALUE(PasswordSpecificsData_Notes)
 IMPLEMENT_PROTO_TO_VALUE(PasswordSpecificsData_Notes_Note)
+IMPLEMENT_PROTO_TO_VALUE(PowerBookmarkSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(PaymentInstrument)
 IMPLEMENT_PROTO_TO_VALUE(PaymentsCustomerData)
 IMPLEMENT_PROTO_TO_VALUE(PreferenceSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(PrinterPPDReference)
@@ -363,7 +400,9 @@ IMPLEMENT_PROTO_TO_VALUE(WalletCreditCardCloudTokenData)
 IMPLEMENT_PROTO_TO_VALUE(WalletMaskedCreditCard)
 IMPLEMENT_PROTO_TO_VALUE(WalletMetadataSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(WalletPostalAddress)
+IMPLEMENT_PROTO_TO_VALUE(WebApkSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(WebAppSpecifics)
+IMPLEMENT_PROTO_TO_VALUE(WebauthnCredentialSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(WifiConfigurationSpecifics)
 IMPLEMENT_PROTO_TO_VALUE(WorkspaceDeskSpecifics)
 

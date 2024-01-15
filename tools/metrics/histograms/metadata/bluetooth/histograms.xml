@@ -52,18 +52,8 @@ chromium-metrics-reviews@google.com.
   <variant name=".SystemTray"/>
 </variants>
 
-<histogram name="Bluetooth.Availability.v2" enum="BluetoothAvailability"
-    expires_after="2022-12-31">
-  <owner>kenrb@chromium.org</owner>
-  <owner>martinkr@google.com</owner>
-  <summary>
-    Determines the availability and capabilities of the Bluetooth driver. This
-    metric is logged on startup.
-  </summary>
-</histogram>
-
 <histogram name="Bluetooth.BlueZ.DBus.{MethodName}.Latency" units="ms"
-    expires_after="2022-06-05">
+    expires_after="2024-05-05">
   <owner>jonmann@chromium.org</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>Tracks the latency of the BlueZ {MethodName} DBus method.</summary>
@@ -71,7 +61,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.BlueZ.DBus.{MethodName}.Result" enum="DBusResult"
-    expires_after="2022-06-05">
+    expires_after="2024-07-07">
   <owner>jonmann@chromium.org</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>Tracks the result for BlueZ {MethodName} DBus method calls.</summary>
@@ -79,7 +69,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.DeviceConnected.{ConnectionType}"
-    enum="BluetoothDeviceType" expires_after="2023-06-01">
+    enum="BluetoothDeviceType" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -95,7 +85,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.DeviceDisconnect"
-    enum="BluetoothDeviceType" expires_after="2023-06-21">
+    enum="BluetoothDeviceType" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>Emitted each time a Bluetooth device is disconnected.</summary>
@@ -103,7 +93,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.DeviceSelectionDuration{DeviceSelectionUISurfaces}"
-    units="ms" expires_after="2023-06-01">
+    units="ms" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -118,7 +108,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.DeviceSelectionDuration{DeviceSelectionUISurfaces}.NotPaired{BluetoothTransportTypes}"
-    units="ms" expires_after="2023-06-01">
+    units="ms" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -132,7 +122,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.DeviceSelectionDuration{DeviceSelectionUISurfaces}{BluetoothPairedStates}"
-    units="ms" expires_after="2023-06-01">
+    units="ms" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -146,9 +136,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.AccountKey.Failure.{FastPairPairingProtocol}"
-    enum="FastPairAccountKeyFailure" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairAccountKeyFailure" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Breaks down why a account key write attempt to a device failed (see
@@ -164,22 +155,24 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.AccountKey.Write.GattErrorReason"
-    enum="BluetoothDeviceConnectErrorCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BluetoothDeviceConnectErrorCode" expires_after="2024-01-14">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Breaks down why a written attempt to the account-key Gatt characteristic of
-    a device failed if it was a result of a Gatt error. Emitted following a
+    Breaks down why a written attempt to the account-key GATT characteristic of
+    a device failed if it was a result of a GATT error. Emitted following a
     OnWriteRequest error in the FastPairGattServiceClient.
   </summary>
 </histogram>
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.AccountKey.Write.Result.{FastPairPairingProtocol}"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records success or failure of writing an account key to a device. Emitted on
@@ -196,9 +189,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.AccountKey.Write.Result.{FastPairPairingProtocol}.{FastPairTrackedModelID}"
-    enum="BooleanSuccess" expires_after="2023-02-26">
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
   <owner>dclasson@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records success or failure of writing an account key to a device, split per
@@ -213,6 +207,9 @@ chromium-metrics-reviews@google.com.
         summary="subsequent pairing protocol"/>
   </token>
   <token key="FastPairTrackedModelID">
+    <variant name="BoatRockerz255Pro"/>
+    <variant name="BoseQuietComfort35II"/>
+    <variant name="BoseQuietComfort35II_1"/>
     <variant name="JBLLIVE300TWS"/>
     <variant name="JBLLIVE300TWS_1"/>
     <variant name="JBLLIVE300TWS_2"/>
@@ -244,8 +241,15 @@ chromium-metrics-reviews@google.com.
     <variant name="JBLTUNE225TWS_3"/>
     <variant name="JBLTUNE225TWS_4"/>
     <variant name="JBLTUNE225TWS_5"/>
+    <variant name="JBLTUNE230NCTWS_1"/>
+    <variant name="JBLTUNE230NCTWS_2"/>
+    <variant name="JBLTUNE230NCTWS_3"/>
+    <variant name="JBLTUNE230NCTWS_4"/>
     <variant name="NothingEar1"/>
     <variant name="NothingEar1_2"/>
+    <variant name="OnePlusBuds"/>
+    <variant name="OnePlusBuds_1"/>
+    <variant name="OnePlusBuds_2"/>
     <variant name="OnePlusBudsZ"/>
     <variant name="OnePlusBudsZ_1"/>
     <variant name="OnePlusBudsZ_2"/>
@@ -265,6 +269,10 @@ chromium-metrics-reviews@google.com.
     <variant name="RealMeBudsAirPro"/>
     <variant name="RealMeBudsAirPro_1"/>
     <variant name="RealMeBudsAirPro_2"/>
+    <variant name="RealMeBudsQ2TWS"/>
+    <variant name="RealMeTechLifeBudsT100"/>
+    <variant name="RealMeTechLifeBudsT100_1"/>
+    <variant name="RealMeTechLifeBudsT100_2"/>
     <variant name="SonyWF1000XM3"/>
     <variant name="SonyWF1000XM3_1"/>
     <variant name="SonyWF1000XM3_2"/>
@@ -275,6 +283,12 @@ chromium-metrics-reviews@google.com.
     <variant name="SonyWF1000XM3_7"/>
     <variant name="SonyWH1000XM3"/>
     <variant name="SonyWH1000XM3_1"/>
+    <variant name="SRSXB13"/>
+    <variant name="SRSXB13_1"/>
+    <variant name="SRSXB13_2"/>
+    <variant name="SRSXB13_3"/>
+    <variant name="SRSXB13_4"/>
+    <variant name="SRSXB13_5"/>
     <variant name="SRSXB23"/>
     <variant name="SRSXB23_1"/>
     <variant name="SRSXB23_2"/>
@@ -288,12 +302,13 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.AccountKey.Write.TotalTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records the total time it takes to write the account key gatt characteristic
+    Records the total time it takes to write the account key GATT characteristic
     of a device. Time is calculated as the difference between when the write to
     characteristic occurs and when the OnAccountKeyWrite event is fired in the
     GattServiceClient during the pairing protocol. Emitted when the
@@ -303,9 +318,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.ConfirmPasskey.Latency" units="ms"
-    expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes after being asked to confirm a passkey from
@@ -315,9 +331,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.ConnectDevice.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of connecting to the device after a
@@ -329,9 +346,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.CreateScanFilter.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of creating a BLE scan filter, which we use
@@ -342,9 +360,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.DeviceMetadataFetcher.Get.HttpResponseError"
-    enum="HttpResponseCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="HttpResponseCode" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the HTTP response error code from a failed HTTP GET request. Emitted
@@ -354,9 +373,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.DeviceMetadataFetcher.Get.NetError"
-    enum="NetErrorCodes" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="NetErrorCodes" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the network error code from a failed HTTP GET request. Emitted when
@@ -365,9 +385,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.DeviceMetadataFetcher.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of fetching device metadata from the
@@ -376,9 +397,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Discovered.Version"
-    enum="FastPairVersion" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairVersion" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the FastPair version of the discovered device. Emitted when showing
@@ -388,9 +410,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.EngagementFunnel.Steps.{FastPairPairingProtocol}"
-    enum="FastPairEngagementFlowEvent" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairEngagementFlowEvent" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records each step in the Fast Pair flow. Emitted when the discovery UI is
@@ -406,10 +429,52 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="Bluetooth.ChromeOS.FastPair.EngagementFunnel.Steps.{FastPairPairingProtocol}.{FastPairTrackedModelID}"
-    enum="FastPairEngagementFlowEvent" expires_after="2023-02-26">
+    name="Bluetooth.ChromeOS.FastPair.EngagementFunnel.Steps.{FastPairPairingProtocol}.{FastPairDeviceType}.{FastPairNotificationType}"
+    enum="FastPairEngagementFlowEvent" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
   <owner>dclasson@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
+  <owner>chromeos-cross-device-eng@google.com</owner>
+  <summary>
+    Records each step in the Fast Pair flow, split per protocol, per device
+    type, and per notification type of the device from its metadata. Emitted
+    when the discovery UI is shown, the discovery UI is dismissed, pairing
+    progress begins, pairing fails, pairing succeeded, the error UI is
+    dismissed, and/or when the setting button on the error UI is pressed.
+    TODO(b/262923607): Remove once structured metrics for Fast Pair are
+    implemented.
+  </summary>
+  <token key="FastPairPairingProtocol">
+    <variant name="InitialPairingProtocol" summary="initial pairing protocol"/>
+    <variant name="SubsequentPairingProtocol"
+        summary="subsequent pairing protocol"/>
+  </token>
+  <token key="FastPairDeviceType">
+    <variant name="HeadphonesDeviceType" summary="Device Type: Headphones"/>
+    <variant name="InputDeviceDeviceType" summary="Device Type: Input Device"/>
+    <variant name="SpeakerDeviceType" summary="Device Type: Speaker"/>
+    <variant name="TrueWirelessHeadphonesDeviceType"
+        summary="Device Type: True Wireless Headphones"/>
+    <variant name="UnspecifiedDeviceType" summary="Device Type: Unspecified"/>
+  </token>
+  <token key="FastPairNotificationType">
+    <variant name="FastPairNotificationType"
+        summary="Notification Type: Fast Pair. Notification launches the fast
+                 pair intent."/>
+    <variant name="FastPairOneNotificationType"
+        summary="Notification Type: Fast Pair One. Notification launches the
+                 fast pair intent, but doesn't include an anti-spoofing key."/>
+    <variant name="UnspecifiedNotificationType"
+        summary="Notification Type: Unspecified"/>
+  </token>
+</histogram>
+
+<histogram
+    name="Bluetooth.ChromeOS.FastPair.EngagementFunnel.Steps.{FastPairPairingProtocol}.{FastPairTrackedModelID}"
+    enum="FastPairEngagementFlowEvent" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records each step in the Fast Pair flow, split per protocol and per Model
@@ -423,6 +488,9 @@ chromium-metrics-reviews@google.com.
         summary="subsequent pairing protocol"/>
   </token>
   <token key="FastPairTrackedModelID">
+    <variant name="BoatRockerz255Pro"/>
+    <variant name="BoseQuietComfort35II"/>
+    <variant name="BoseQuietComfort35II_1"/>
     <variant name="JBLLIVE300TWS"/>
     <variant name="JBLLIVE300TWS_1"/>
     <variant name="JBLLIVE300TWS_2"/>
@@ -454,8 +522,15 @@ chromium-metrics-reviews@google.com.
     <variant name="JBLTUNE225TWS_3"/>
     <variant name="JBLTUNE225TWS_4"/>
     <variant name="JBLTUNE225TWS_5"/>
+    <variant name="JBLTUNE230NCTWS_1"/>
+    <variant name="JBLTUNE230NCTWS_2"/>
+    <variant name="JBLTUNE230NCTWS_3"/>
+    <variant name="JBLTUNE230NCTWS_4"/>
     <variant name="NothingEar1"/>
     <variant name="NothingEar1_2"/>
+    <variant name="OnePlusBuds"/>
+    <variant name="OnePlusBuds_1"/>
+    <variant name="OnePlusBuds_2"/>
     <variant name="OnePlusBudsZ"/>
     <variant name="OnePlusBudsZ_1"/>
     <variant name="OnePlusBudsZ_2"/>
@@ -475,6 +550,10 @@ chromium-metrics-reviews@google.com.
     <variant name="RealMeBudsAirPro"/>
     <variant name="RealMeBudsAirPro_1"/>
     <variant name="RealMeBudsAirPro_2"/>
+    <variant name="RealMeBudsQ2TWS"/>
+    <variant name="RealMeTechLifeBudsT100"/>
+    <variant name="RealMeTechLifeBudsT100_1"/>
+    <variant name="RealMeTechLifeBudsT100_2"/>
     <variant name="SonyWF1000XM3"/>
     <variant name="SonyWF1000XM3_1"/>
     <variant name="SonyWF1000XM3_2"/>
@@ -485,6 +564,12 @@ chromium-metrics-reviews@google.com.
     <variant name="SonyWF1000XM3_7"/>
     <variant name="SonyWH1000XM3"/>
     <variant name="SonyWH1000XM3_1"/>
+    <variant name="SRSXB13"/>
+    <variant name="SRSXB13_1"/>
+    <variant name="SRSXB13_2"/>
+    <variant name="SRSXB13_3"/>
+    <variant name="SRSXB13_4"/>
+    <variant name="SRSXB13_5"/>
     <variant name="SRSXB23"/>
     <variant name="SRSXB23_1"/>
     <variant name="SRSXB23_2"/>
@@ -499,9 +584,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.FastPairDataEncryptor.CreateResult"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records success or failure of creating the FastPairDataEncryptor during the
@@ -514,9 +600,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.FastPairDataEncryptor.CreateTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes for a successful async creation of a
@@ -534,9 +621,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.FastPairRepository.Cache.Result"
-    enum="Boolean" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="Boolean" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records whether or not device metadata we retrieve is in the cache in the
@@ -547,9 +635,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.FootprintsFetcher.Delete.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of a Delete request in the FootprintsFetcher.
@@ -560,9 +649,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.FootprintsFetcher.Get.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of a Get request in the FootprintsFetcher. A
@@ -573,9 +663,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.FootprintsFetcher.Post.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of a Post request in the FootprintsFetcher. A
@@ -587,9 +678,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.FootprintsFetcher.{Method}.HttpResponseError"
-    enum="HttpResponseCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="HttpResponseCode" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the HTTP response error from a failed HTTP call to the Footprints
@@ -605,9 +697,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.FootprintsFetcher.{Method}.NetError"
-    enum="NetErrorCodes" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="NetErrorCodes" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the network error code from a failed HTTP call to the Footprints
@@ -621,34 +714,77 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Bluetooth.ChromeOS.FastPair.GattConnection.ErrorReason"
-    enum="BluetoothDeviceConnectErrorCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+<histogram name="Bluetooth.ChromeOS.FastPair.GattConnection.AttemptCount"
+    units="count" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records the Connect error code from a failure to create a Gatt connection
+    Records the number of attempts needed for a successful GATT connection.
+    Currently the highest allowed attempt number is 3. Emitted following a
+    successful GATT connection. No metric is emitted on failure.
+  </summary>
+</histogram>
+
+<histogram
+    name="Bluetooth.ChromeOS.FastPair.GattConnection.EffectiveSuccessRate"
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
+  <owner>chromeos-cross-device-eng@google.com</owner>
+  <summary>
+    Records the effective success rate of creating a GATT connection during the
+    Fast Pair pairing protocol. Emitted following the attempted creation of the
+    GATT connection and all retries during the key based pairing exchange.
+  </summary>
+</histogram>
+
+<histogram name="Bluetooth.ChromeOS.FastPair.GattConnection.ErrorReason"
+    enum="BluetoothDeviceConnectErrorCode" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
+  <owner>chromeos-cross-device-eng@google.com</owner>
+  <summary>
+    Records the Connect error code from a failure to create a GATT connection
     during the Fast Pair pairing protocol. Emitted following the attempted
-    creation of the Gatt service client during the key based pairing exchange.
+    creation of the GATT service client during the key based pairing exchange.
   </summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.GattConnection.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records success or failure of creating a Gatt connection during the Fast
-    Pair pairing protocol. Emitted following the attempted creation of the Gatt
+    Records success or failure of creating a GATT connection during the Fast
+    Pair pairing protocol. Emitted following the attempted creation of the GATT
     service client during the key based pairing exchange.
   </summary>
 </histogram>
 
+<histogram name="Bluetooth.ChromeOS.FastPair.GattConnection.RetryFailureReason"
+    enum="FastPairPairFailure" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
+  <owner>chromeos-cross-device-eng@google.com</owner>
+  <summary>
+    Records the Fast Pair failure reason behind a GATT connection retry. Emitted
+    before we attempt to retry GATT connection. No metric is emitted on success,
+    or when it is the first time we attempt a GATT connection.
+  </summary>
+</histogram>
+
 <histogram name="Bluetooth.ChromeOS.FastPair.Handshake.FailureReason"
-    enum="FastPairHandshakeFailureReason" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairHandshakeFailureReason" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records reason behind the failure of the big picture Fast Pair Handshake
@@ -658,13 +794,14 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Handshake.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of the big picture Fast Pair Handshake with a
-    device. Possible failures include : creating a Gatt connection, creating the
+    device. Possible failures include: creating a GATT connection, creating the
     data encryptor, writing to the device, parsing the response bytes from the
     device. Success is considered when we receive a valid response from the
     device. Emitted when the Handshake reaches a terminal point.
@@ -673,9 +810,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.Handshake.Steps.{FastPairPairingProtocol}"
-    enum="FastPairHandshakeSteps" expires_after="2023-02-26">
+    enum="FastPairHandshakeSteps" expires_after="2024-06-30">
   <owner>jackshira@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records each step in the Fast Pair Handshake flow: emitted when we start the
@@ -696,9 +834,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.KeyBasedPairing.DecryptResult"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of decrypting the response from the key based
@@ -708,9 +847,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.KeyBasedPairing.DecryptTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes to decrypt a successful response from the
@@ -721,12 +861,13 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.KeyBasedPairing.NotifyTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records the total time it takes to be notified of the Key-based pairing Gatt
+    Records the total time it takes to be notified of the Key-based pairing GATT
     characteristic of the device changing during the handshake. The time is
     calculated as the difference between when the WriteRequest is sent to the
     device, and when we are notified of a response. If the write request attempt
@@ -736,24 +877,26 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.KeyBasedPairing.Write.GattErrorReason"
-    enum="BluetoothGattServiceGattErrorCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BluetoothGattServiceGattErrorCode" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Breaks down why a written attempt to the Key-based pairing Gatt
-    characteristic of a device failed if it was a result of a Gatt error.
+    Breaks down why a written attempt to the Key-based pairing GATT
+    characteristic of a device failed if it was a result of a GATT error.
     Emitted following a OnWriteRequest error in the FastPairGattServiceClient.
   </summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.KeyBasedPairing.Write.PairFailure"
-    enum="FastPairPairFailure" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairPairFailure" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Breaks down why a written attempt to the Key-based pairing Gatt
+    Breaks down why a written attempt to the Key-based pairing GATT
     characteristic of a device failed (see
     'Bluetooth.ChromeOS.FastPair.WriteKeyBasedPairing.Result'). Emitted on the
     OnWriteResponse event in the Fast Pair handshake.
@@ -761,21 +904,23 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.KeyBasedPairing.Write.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records success or failure of writing to the key-based pairing Gatt
+    Records success or failure of writing to the key-based pairing GATT
     characteristic of the device during the handshake. Emitted following the
     writing request in FastPairHandshake.
   </summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.KeyGenerationResult"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records success or failure of key pair generation during the Fast Pair
@@ -786,9 +931,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.MessageStream.ConnectToService.ErrorReason"
-    enum="BluetoothSocketErrorReason" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BluetoothSocketErrorReason" expires_after="2024-01-14">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the error reason that caused the failure of creating a RFCOMM
@@ -800,9 +946,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.MessageStream.ConnectToService.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-05-19">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of attempted to create an RFCOMM channel to
@@ -813,9 +960,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.MessageStream.ConnectToService.TotalConnectTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes to create a successful RFCOMM channel
@@ -825,9 +973,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.MessageStream.Receive.ErrorReason"
-    enum="BluetoothConnectToServiceError" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BluetoothConnectToServiceError" expires_after="2024-01-14">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the error reason that caused the failure of receiving data from a
@@ -838,9 +987,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.MessageStream.Receive.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-14">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of receiving data from a socket in the Fast
@@ -851,9 +1001,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.NavigateToSettings.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of navigating to Bluetooth settings from the
@@ -863,9 +1014,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.PairDevice.ErrorReason"
-    enum="BluetoothDeviceConnectErrorCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BluetoothDeviceConnectErrorCode" expires_after="2024-04-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the reason for failure to connect to the device after a successful
@@ -877,9 +1029,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.PairDevice.Result"
-    enum="BooleanSuccess" expires_after="2023-03-12">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-04-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of connecting to the device after a
@@ -891,9 +1044,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.PairFailure.{FastPairPairingProtocol}"
-    enum="FastPairPairFailure" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairPairFailure" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Breaks down why a pairing attempt to a device failed (see
@@ -911,9 +1065,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.Pairing.Result.{FastPairPairingProtocol}"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records success or failure of a pairing attempt (initiated in the UI) to a
@@ -931,9 +1086,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.PairingMethod"
-    enum="FastPairPairingMethod" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairPairingMethod" expires_after="2024-05-19">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the count of eligible users who pair devices without Fast Pair and
@@ -946,9 +1102,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.PairRetry.Count" units="count"
-    expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the count of the number of retry attempts needed for a successful
@@ -959,9 +1116,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Passkey.Decrypt.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of decrypting the response from the passkey
@@ -971,9 +1129,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Passkey.Decrypt.Time" units="ms"
-    expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes to decrypt a successful response from the
@@ -983,12 +1142,13 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Passkey.NotifyTime" units="ms"
-    expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records the total time it takes to be notified of the Passkey Gatt
+    Records the total time it takes to be notified of the Passkey GATT
     characteristic of the device changing during the pairing protocol. The time
     is calculated as the difference between when the WritePasskey is sent to the
     device, and when we are notified of a response. If the write passkey attempt
@@ -997,45 +1157,49 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Passkey.Write.GattErrorReason"
-    enum="GattErrorCode" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="GattErrorCode" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Breaks down why a written attempt to the Passkey Gatt characteristic of a
-    device failed if it was a result of a Gatt error. Emitted following a
+    Breaks down why a written attempt to the Passkey GATT characteristic of a
+    device failed if it was a result of a GATT error. Emitted following a
     OnPasskeyRequest error in the FastPairGattServiceClient.
   </summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Passkey.Write.PairFailure"
-    enum="FastPairPairFailure" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairPairFailure" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Breaks down why a written attempt to the Passkey Gatt characteristic of a
+    Breaks down why a written attempt to the Passkey GATT characteristic of a
     device failed (see 'Bluetooth.ChromeOS.FastPair.Passkey.Result'). Emitted on
     the OnWritePasskey event in the FastPairPairer.
   </summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Passkey.Write.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
-    Records success or failure of writing to the Passkey Gatt characteristic of
+    Records success or failure of writing to the Passkey GATT characteristic of
     the device during the pairing protocol. Emitted following the passkey
     request in the FastPairPairer.
   </summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.RequestPasskey.Latency" units="ms"
-    expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes after connecting to the device following the
@@ -1048,9 +1212,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.RetroactiveEngagementFunnel.Steps"
-    enum="FastPairRetroactiveEngagementFlowEvent" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairRetroactiveEngagementFlowEvent" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records each step in the Fast Pair flow for the retroactive pairing
@@ -1062,10 +1227,47 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="Bluetooth.ChromeOS.FastPair.RetroactiveEngagementFunnel.Steps.{FastPairTrackedModelID}"
-    enum="FastPairRetroactiveEngagementFlowEvent" expires_after="2023-02-26">
+    name="Bluetooth.ChromeOS.FastPair.RetroactiveEngagementFunnel.Steps.{FastPairDeviceType}.{FastPairNotificationType}"
+    enum="FastPairRetroactiveEngagementFlowEvent" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
   <owner>dclasson@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
+  <owner>chromeos-cross-device-eng@google.com</owner>
+  <summary>
+    Records each step in the Fast Pair flow for the retroactive pairing
+    scenario, per device type and per notification type from its metadata.
+    Emitted when the associate account UI is shown, the associate account UI is
+    dismissed, the save to account button is pressed on the associate account
+    UI, and when the learn more button is pressed on the associate account UI.
+    TODO(b/262923607): Remove once structured metrics for Fast Pair are
+    implemented.
+  </summary>
+  <token key="FastPairDeviceType">
+    <variant name="HeadphonesDeviceType" summary="Device Type: Headphones"/>
+    <variant name="InputDeviceDeviceType" summary="Device Type: Input Device"/>
+    <variant name="SpeakerDeviceType" summary="Device Type: Speaker"/>
+    <variant name="TrueWirelessHeadphonesDeviceType"
+        summary="Device Type: True Wireless Headphones"/>
+    <variant name="UnspecifiedDeviceType" summary="Device Type: Unspecified"/>
+  </token>
+  <token key="FastPairNotificationType">
+    <variant name="FastPairNotificationType"
+        summary="Notification Type: Fast Pair. Notification launches the fast
+                 pair intent."/>
+    <variant name="FastPairOneNotificationType"
+        summary="Notification Type: Fast Pair One. Notification launches the
+                 fast pair intent, but doesn't include an anti-spoofing key."/>
+    <variant name="UnspecifiedNotificationType"
+        summary="Notification Type: Unspecified"/>
+  </token>
+</histogram>
+
+<histogram
+    name="Bluetooth.ChromeOS.FastPair.RetroactiveEngagementFunnel.Steps.{FastPairTrackedModelID}"
+    enum="FastPairRetroactiveEngagementFlowEvent" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records each step in the Retroactive Pair flow, split per Model ID. Emitted
@@ -1074,6 +1276,9 @@ chromium-metrics-reviews@google.com.
     UI, and when the learn more button is pressed on the associate account UI.
   </summary>
   <token key="FastPairTrackedModelID">
+    <variant name="BoatRockerz255Pro"/>
+    <variant name="BoseQuietComfort35II"/>
+    <variant name="BoseQuietComfort35II_1"/>
     <variant name="JBLLIVE300TWS"/>
     <variant name="JBLLIVE300TWS_1"/>
     <variant name="JBLLIVE300TWS_2"/>
@@ -1105,8 +1310,15 @@ chromium-metrics-reviews@google.com.
     <variant name="JBLTUNE225TWS_3"/>
     <variant name="JBLTUNE225TWS_4"/>
     <variant name="JBLTUNE225TWS_5"/>
+    <variant name="JBLTUNE230NCTWS_1"/>
+    <variant name="JBLTUNE230NCTWS_2"/>
+    <variant name="JBLTUNE230NCTWS_3"/>
+    <variant name="JBLTUNE230NCTWS_4"/>
     <variant name="NothingEar1"/>
     <variant name="NothingEar1_2"/>
+    <variant name="OnePlusBuds"/>
+    <variant name="OnePlusBuds_1"/>
+    <variant name="OnePlusBuds_2"/>
     <variant name="OnePlusBudsZ"/>
     <variant name="OnePlusBudsZ_1"/>
     <variant name="OnePlusBudsZ_2"/>
@@ -1126,6 +1338,10 @@ chromium-metrics-reviews@google.com.
     <variant name="RealMeBudsAirPro"/>
     <variant name="RealMeBudsAirPro_1"/>
     <variant name="RealMeBudsAirPro_2"/>
+    <variant name="RealMeBudsQ2TWS"/>
+    <variant name="RealMeTechLifeBudsT100"/>
+    <variant name="RealMeTechLifeBudsT100_1"/>
+    <variant name="RealMeTechLifeBudsT100_2"/>
     <variant name="SonyWF1000XM3"/>
     <variant name="SonyWF1000XM3_1"/>
     <variant name="SonyWF1000XM3_2"/>
@@ -1136,6 +1352,12 @@ chromium-metrics-reviews@google.com.
     <variant name="SonyWF1000XM3_7"/>
     <variant name="SonyWH1000XM3"/>
     <variant name="SonyWH1000XM3_1"/>
+    <variant name="SRSXB13"/>
+    <variant name="SRSXB13_1"/>
+    <variant name="SRSXB13_2"/>
+    <variant name="SRSXB13_3"/>
+    <variant name="SRSXB13_4"/>
+    <variant name="SRSXB13_5"/>
     <variant name="SRSXB23"/>
     <variant name="SRSXB23_1"/>
     <variant name="SRSXB23_2"/>
@@ -1149,9 +1371,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.RetroactivePairing.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-05-19">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of retroactive pairings. This metric is
@@ -1161,8 +1384,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.SavedDevices.DeviceCount"
-    units="devices" expires_after="2023-02-26">
-  <owner>julietlevesque@google.com</owner>
+    units="devices" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the number of Fast Pair devices saved to a user's account. Emitted
@@ -1173,8 +1398,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.SavedDevices.GetSavedDevices.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of fetching a user's list of Saved Devices
@@ -1185,8 +1412,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.SavedDevices.Remove.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of removing a Fast Pair device from the
@@ -1197,8 +1426,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.SavedDevices.TotalUxLoadTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the time necessary to load the Saved Devices Bluetooth Settings
@@ -1215,8 +1446,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.SavedDevices.UiEvent"
-    enum="FastPairSavedDevicesUiEvent" expires_after="2023-02-26">
-  <owner>julietlevesque@google.com</owner>
+    enum="FastPairSavedDevicesUiEvent" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records events that happen in the Fast Pair Saved Devices Settings UI, e.g.
@@ -1227,8 +1460,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.FastPair.SavedDevices.UpdateOptInStatus.Result.{FastPairPairingProtocol}"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-01-28">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of updating a user's opt-in status to
@@ -1254,9 +1489,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.Scanner.StartSession.Result"
-    enum="BooleanSuccess" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    enum="BooleanSuccess" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the success or failure of starting a BluetoothLowEnergy scan session
@@ -1266,9 +1502,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.FastPair.TotalGattConnectionTime"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-06-02">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the total time it takes to create a successful GATT connection to
@@ -1280,36 +1517,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="Bluetooth.ChromeOS.FastPair.TotalUxPairTime.{FastPairPairingProtocol}"
-    units="ms" expires_after="2023-02-26">
-  <obsolete>
-    Deprecated April 2022. Use
-    Bluetooth.ChromeOS.FastPair.TotalUxPairTime.{FastPairPairingProtocol}2
-    instead.
-  </obsolete>
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
-  <owner>chromeos-cross-device-eng@google.com</owner>
-  <summary>
-    Records the time necessary to reach a terminal Fast Pair pair state, either
-    success or failure, after pairing begins to a device, from the user's
-    perspective. Time is calculated as the difference between when the user
-    selects to pair a device via Fast Pair, and when it reaches a pair failure
-    or pair succeeded state. The metric is emitted after a final pairing state
-    has been reached.
-  </summary>
-  <token key="FastPairPairingProtocol">
-    <variant name="InitialPairingProtocol" summary="initial pairing protocol"/>
-    <variant name="SubsequentPairingProtocol"
-        summary="subsequent pairing protocol"/>
-  </token>
-</histogram>
-
-<histogram
     name="Bluetooth.ChromeOS.FastPair.TotalUxPairTime.{FastPairPairingProtocol}2"
-    units="ms" expires_after="2023-02-26">
-  <owner>shanefitz@google.com</owner>
-  <owner>julietlevesque@google.com</owner>
+    units="ms" expires_after="2024-06-30">
+  <owner>jackshira@google.com</owner>
+  <owner>dclasson@google.com</owner>
+  <owner>brandosocarras@google.com</owner>
   <owner>chromeos-cross-device-eng@google.com</owner>
   <summary>
     Records the time necessary to reach a terminal Fast Pair pair state, either
@@ -1327,7 +1539,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.Forget.Result" enum="ForgetResult"
-    expires_after="2023-06-21">
+    expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>Emitted each time a device forget attempt completes.</summary>
@@ -1335,7 +1547,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.Pairing.Duration.Failure{BluetoothTransportTypes}"
-    units="ms" expires_after="2023-06-21">
+    units="ms" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1351,7 +1563,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.Pairing.Duration.Success{BluetoothTransportTypes}"
-    units="ms" expires_after="2023-06-21">
+    units="ms" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1367,7 +1579,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.Pairing.Result.FailureReason{BluetoothTransportTypes}"
-    enum="BluetoothConnectionFailureReason" expires_after="2023-06-01">
+    enum="BluetoothConnectionFailureReason" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1383,8 +1595,28 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
+<histogram
+    name="Bluetooth.ChromeOS.Pairing.Result.FilteredFailureReason{BluetoothTransportTypes}"
+    enum="BluetoothConnectionFailureReason" expires_after="2024-03-01">
+  <owner>khorimoto@chromium.org</owner>
+  <owner>cros-connectivity@google.com</owner>
+  <summary>
+    Breaks down why a pairing attempt to a peripheral failed (see
+    'Bluetooth.ChromeOS.Pairing.Result'). Emits the result of pairing attempts
+    that have explicitly failed, filtering out results where the device was not
+    paired due to non-error reasons e.g. the user cancelled the pairing attempt.
+
+    Suffixed by Bluetooth transport type. View the base histogram to see results
+    for all transport types aggregated together, and suffixed histograms for the
+    results of just that particular transport type. {BluetoothTransportTypes}
+  </summary>
+  <token key="BluetoothTransportTypes" variants="BluetoothTransportTypes">
+    <variant name=""/>
+  </token>
+</histogram>
+
 <histogram name="Bluetooth.ChromeOS.Pairing.Result{BluetoothTransportTypes}"
-    enum="BooleanSuccess" expires_after="2023-06-01">
+    enum="BooleanSuccess" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1402,7 +1634,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.Pairing.TransportType"
-    enum="BluetoothTransportType" expires_after="2023-06-21">
+    enum="BluetoothTransportType" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1413,7 +1645,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.PoweredState" enum="BooleanEnabled"
-    expires_after="2023-06-21">
+    expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1424,7 +1656,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.PoweredState.{Operation}.Result"
-    enum="BooleanSuccess" expires_after="2023-06-21">
+    enum="BooleanSuccess" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>Record emitted when an {Operation}.</summary>
@@ -1436,14 +1668,14 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.SetNickname.Result"
-    enum="SetNicknameResult" expires_after="2023-06-21">
+    enum="SetNicknameResult" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>Emitted each time a nickname change attempt completes.</summary>
 </histogram>
 
 <histogram name="Bluetooth.ChromeOS.UiSurfaceDisplayed"
-    enum="BluetoothUiSurface" expires_after="2023-06-21">
+    enum="BluetoothUiSurface" expires_after="2024-05-12">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>Metric emmitted each time a UI surface is shown.</summary>
@@ -1451,7 +1683,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.UserInitiatedDisconnect.Result{BluetoothTransportTypes}"
-    enum="DisconnectResult" expires_after="2023-06-21">
+    enum="DisconnectResult" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1465,7 +1697,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Duration.Failure{BluetoothTransportTypes}"
-    units="ms" expires_after="2023-06-21">
+    units="ms" expires_after="2024-03-01">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1479,7 +1711,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Duration.Success{BluetoothTransportTypes}"
-    units="ms" expires_after="2023-06-19">
+    units="ms" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1493,7 +1725,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Result.FailureReason{UserInitiatedReconnectionUISurfaces}"
-    enum="BluetoothConnectionFailureReason" expires_after="2023-06-21">
+    enum="BluetoothConnectionFailureReason" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1512,7 +1744,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Result{UserInitiatedReconnectionUISurfaces}"
-    enum="BooleanSuccess" expires_after="2023-06-21">
+    enum="BooleanSuccess" expires_after="2024-07-07">
   <owner>khorimoto@chromium.org</owner>
   <owner>cros-connectivity@google.com</owner>
   <summary>
@@ -1532,7 +1764,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.ConnectedDeviceCount" units="devices"
-    expires_after="2023-02-26">
+    expires_after="2024-05-19">
   <owner>adlr@chromium.org</owner>
   <summary>
     Counts the number of simulataneously connected Bluetooth devices. Used to
@@ -1553,7 +1785,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="Bluetooth.Linux.ConnectToService.Bonded.FailureReason"
     enum="BluetoothDeviceConnectToServiceFailureReason"
-    expires_after="2023-02-23">
+    expires_after="2024-06-01">
   <owner>hansenmichael@google.com</owner>
   <owner>nearby-share-chromeos-eng@google.com</owner>
   <summary>
@@ -1565,7 +1797,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="Bluetooth.Linux.ConnectToService.FailureReason"
     enum="BluetoothDeviceConnectToServiceFailureReason"
-    expires_after="2023-02-23">
+    expires_after="2024-06-01">
   <owner>hansenmichael@google.com</owner>
   <owner>nearby-share-chromeos-eng@google.com</owner>
   <summary>
@@ -1576,7 +1808,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="Bluetooth.Linux.ConnectToServiceInsecurelyResult"
     enum="BluetoothAdapterConnectToServiceInsecurelyResult"
-    expires_after="2023-02-23">
+    expires_after="2024-06-01">
   <owner>hansenmichael@google.com</owner>
   <owner>nearby-share-chromeos-eng@google.com</owner>
   <summary>
@@ -1585,38 +1817,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Bluetooth.MacOS.Errors{WebBluetoothMacOSAPIs}"
-    enum="MacOSBluetoothOperationsResult" expires_after="2021-01-31">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Records how many times each macOS GATT error has occured. The results will
-    be used to determine how commun this errors are and if we need to provide
-    better error messages to the users. {WebBluetoothMacOSAPIs}
-  </summary>
-  <token key="WebBluetoothMacOSAPIs">
-    <variant name=".DidDisconnectPeripheral"
-        summary="Disconnected from peripheral"/>
-    <variant name=".DidDiscoverCharacteristics"
-        summary="Discovered characteristics"/>
-    <variant name=".DidDiscoverDescriptors" summary="Discovered descriptors"/>
-    <variant name=".DidDiscoverPrimaryServices"
-        summary="Discovered primary services"/>
-    <variant name=".DidFailToConnectToPeripheral"
-        summary="Failed to connect to peripheral"/>
-    <variant name=".DidUpdateNotificationState"
-        summary="Updated notification state"/>
-    <variant name=".DidUpdateValue" summary="Updated value for characteristic"/>
-    <variant name=".DidUpdateValueForDescriptor"
-        summary="Updated value for descriptor"/>
-    <variant name=".DidWriteValue" summary="Wrote value for characteristic"/>
-    <variant name=".DidWriteValueForDescriptor"
-        summary="Wrote value value for descriptor"/>
-  </token>
-</histogram>
-
 <histogram name="Bluetooth.Mojo.PendingConnectAtShutdown.DurationWaiting"
-    units="ms" expires_after="2022-04-21">
+    units="ms" expires_after="2024-07-07">
   <owner>jonmann@chromium.org</owner>
   <owner>cros-system-services-networking@google.com</owner>
   <summary>
@@ -1628,7 +1830,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Bluetooth.Mojo.PendingConnectAtShutdown.NumberOfServiceDiscoveriesInProgress"
-    units="count" expires_after="2023-02-19">
+    units="count" expires_after="2024-05-05">
   <owner>jonmann@chromium.org</owner>
   <owner>cros-system-services-networking@google.com</owner>
   <summary>
@@ -1641,17 +1843,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Bluetooth.PairingMethod" enum="BluetoothPairingMethod"
-    expires_after="2020-11-08">
-  <owner>adlr@chromium.org</owner>
-  <summary>
-    Records the method used to pair each Bluetooth Device. Used to direct our
-    testing efforts.
-  </summary>
-</histogram>
-
 <histogram name="Bluetooth.StackName" enum="BluetoothStackName"
-    expires_after="2023-03-16">
+    expires_after="2025-02-11">
   <owner>michaelfsun@google.com</owner>
   <owner>chromeos-bt-kpi@google.com</owner>
   <summary>
@@ -1661,7 +1854,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.Characteristic.ReadValue.Outcome"
-    enum="WebBluetoothGATTOperationOutcome" expires_after="2023-04-25">
+    enum="WebBluetoothGATTOperationOutcome" expires_after="2024-05-26">
   <owner>cmumford@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1673,7 +1866,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.Characteristic.StartNotifications.Outcome"
-    enum="WebBluetoothGATTOperationOutcome" expires_after="2023-04-25">
+    enum="WebBluetoothGATTOperationOutcome" expires_after="2024-07-07">
   <owner>cmumford@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1685,7 +1878,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.Characteristic.WriteValue.Outcome"
-    enum="WebBluetoothGATTOperationOutcome" expires_after="2023-04-25">
+    enum="WebBluetoothGATTOperationOutcome" expires_after="2024-05-19">
   <owner>cmumford@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1696,18 +1889,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Bluetooth.Web.ChooserInteraction" enum="BooleanInvalid"
-    expires_after="2023-04-25">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Counts how many times users interact with a regular chooser vs. an invalid
-    chooser. (A chooser is invalid when it's event handler becomes null.)
-  </summary>
-</histogram>
-
 <histogram name="Bluetooth.Web.ConnectGATT.Outcome"
-    enum="WebBluetoothConnectGATTOutcome" expires_after="2023-04-25">
+    enum="WebBluetoothConnectGATTOutcome" expires_after="2024-05-19">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1717,28 +1900,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Bluetooth.Web.ConnectGATT.TimeFailed" units="ms"
-    expires_after="2021-01-31">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Records how long it takes for a connection attempt to fail. Use to let
-    developers know how to better wait for and handle connection errors.
-  </summary>
-</histogram>
-
-<histogram name="Bluetooth.Web.ConnectGATT.TimeSuccess" units="ms"
-    expires_after="2021-01-31">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Records how long it takes for a device to successfully connect. Use to let
-    developers know how long it should take to connect to a BLE device.
-  </summary>
-</histogram>
-
 <histogram name="Bluetooth.Web.GetCharacteristic.Characteristic"
-    enum="GATTCharacteristicHash" expires_after="2023-04-25">
+    enum="GATTCharacteristicHash" expires_after="2024-11-12">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1749,7 +1912,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.GetCharacteristics.Characteristic"
-    enum="GATTCharacteristicHash" expires_after="2023-04-25">
+    enum="GATTCharacteristicHash" expires_after="2024-11-12">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1759,19 +1922,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Bluetooth.Web.GetPrimaryService.Outcome"
-    enum="WebBluetoothGetPrimaryServiceOutcome" expires_after="2021-01-31">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Records the result of a GATTServer.getPrimaryService() call. Used to
-    understand what errors developers are getting so we can target efforts
-    toward the most common ones.
-  </summary>
-</histogram>
-
 <histogram name="Bluetooth.Web.GetPrimaryService.Services"
-    enum="GATTServiceHash" expires_after="2023-04-25">
+    enum="GATTServiceHash" expires_after="2024-11-12">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1781,19 +1933,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Bluetooth.Web.GetPrimaryServices.Outcome"
-    enum="WebBluetoothGetPrimaryServiceOutcome" expires_after="2021-01-31">
-  <owner>reillyg@chromium.org</owner>
-  <owner>deviceapi-team@google.com</owner>
-  <summary>
-    Records the result of a GATTServer.getPrimaryServices() call. Used to
-    understand what errors developers are getting so we can target efforts
-    toward the most common ones.
-  </summary>
-</histogram>
-
 <histogram name="Bluetooth.Web.GetPrimaryServices.Services"
-    enum="GATTServiceHash" expires_after="2023-04-25">
+    enum="GATTServiceHash" expires_after="2024-11-12">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1804,7 +1945,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.RequestDevice.RSSISignalStrength" units="dBm"
-    expires_after="2023-04-25">
+    expires_after="2024-06-30">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1817,7 +1958,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.RequestDevice.RSSISignalStrengthLevel"
-    enum="WebBluetoothRSSISignalStrengthLevel" expires_after="2023-04-25">
+    enum="WebBluetoothRSSISignalStrengthLevel" expires_after="2024-04-25">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -1827,7 +1968,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bluetooth.Web.RequestDevice.UnionOfServices.Services"
-    enum="GATTServiceHash" expires_after="2023-04-25">
+    enum="GATTServiceHash" expires_after="2024-11-12">
   <owner>reillyg@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>

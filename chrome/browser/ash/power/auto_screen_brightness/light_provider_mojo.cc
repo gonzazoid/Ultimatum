@@ -7,9 +7,9 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/components/sensors/ash/sensor_hal_dispatcher.h"
 
@@ -72,7 +72,7 @@ void LightProviderMojo::SetUpChannel(
       base::BindOnce(&LightProviderMojo::OnNewDevicesObserverDisconnect,
                      weak_ptr_factory_.GetWeakPtr()));
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&LightProviderMojo::OnNewDevicesTimeout,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -147,7 +147,7 @@ void LightProviderMojo::OnSensorHalClientFailure() {
   ResetSensorService();
   sensor_hal_client_.reset();
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&LightProviderMojo::RegisterSensorClient,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -228,7 +228,7 @@ void LightProviderMojo::RegisterLightWithId(int32_t id) {
 
 void LightProviderMojo::GetNameLocationCallback(
     int32_t id,
-    const std::vector<absl::optional<std::string>>& values) {
+    const std::vector<std::optional<std::string>>& values) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_NE(light_device_id_.value_or(-1), id);
 

@@ -11,16 +11,14 @@
 
 #include "ipcz/driver_transport.h"
 #include "ipcz/ipcz.h"
-#include "ipcz/link_side.h"
 #include "ipcz/node.h"
 #include "ipcz/node_messages.h"
-#include "third_party/abseil-cpp/absl/types/span.h"
 #include "util/ref_counted.h"
 
 namespace ipcz {
 
 class NodeLink;
-class Portal;
+class Router;
 
 // A NodeConnector activates and temporarily attaches itself to a
 // DriverTransport to listen for and transmit introductory messages between two
@@ -46,20 +44,24 @@ class NodeConnector : public msg::NodeMessageListener {
   static IpczResult ConnectNode(Ref<Node> node,
                                 Ref<DriverTransport> transport,
                                 IpczConnectNodeFlags flags,
-                                const std::vector<Ref<Portal>>& initial_portals,
+                                const std::vector<Ref<Router>>& initial_routers,
                                 ConnectCallback callback = nullptr);
 
   // Handles a request on `node` (which must be a broker) to accept a new
   // non-broker node referral from `referrer`, referring a new non-broker node
   // on the remote end of `transport_to_referred_node`. This performs a
   // handshake with the referred node before introducing it and the referrer to
-  // each other.
+  // each other. `link_memory` and `client_link_memory` must be valid and will
+  // be passed respectively to the referred node (for its link to the broker)
+  // and the referring node (for its link to the referred node).
   static bool HandleNonBrokerReferral(
       Ref<Node> node,
       uint64_t referral_id,
       uint32_t num_initial_portals,
       Ref<NodeLink> referrer,
-      Ref<DriverTransport> transport_to_referred_node);
+      Ref<DriverTransport> transport_to_referred_node,
+      DriverMemoryWithMapping link_memory,
+      DriverMemoryWithMapping client_link_memory);
 
   virtual bool Connect() = 0;
 
@@ -67,11 +69,11 @@ class NodeConnector : public msg::NodeMessageListener {
   NodeConnector(Ref<Node> node,
                 Ref<DriverTransport> transport,
                 IpczConnectNodeFlags flags,
-                std::vector<Ref<Portal>> waiting_portals,
+                std::vector<Ref<Router>> waiting_routers,
                 ConnectCallback callback);
   ~NodeConnector() override;
 
-  size_t num_portals() const { return waiting_portals_.size(); }
+  size_t num_portals() const { return waiting_routers_.size(); }
 
   // Invoked once by the implementation when it has completed its handshake.
   // Destroys `this`.
@@ -86,14 +88,14 @@ class NodeConnector : public msg::NodeMessageListener {
   const Ref<Node> node_;
   const Ref<DriverTransport> transport_;
   const IpczConnectNodeFlags flags_;
-  const std::vector<Ref<Portal>> waiting_portals_;
+  const std::vector<Ref<Router>> waiting_routers_;
 
   // NodeMessageListener overrides:
   void OnTransportError() override;
 
  private:
   bool ActivateTransport();
-  void EstablishWaitingPortals(Ref<NodeLink> to_link, size_t max_valid_portals);
+  void EstablishWaitingRouters(Ref<NodeLink> to_link, size_t max_valid_portals);
 
   const ConnectCallback callback_;
 };

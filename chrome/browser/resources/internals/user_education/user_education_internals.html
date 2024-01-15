@@ -1,23 +1,126 @@
-<h1>User Education Testing</h1>
-<div>
-  <h2>Start a tutorial</h2>
-  <ul>
-    <template is="dom-repeat" items="[[tutorials_]]">
-      <li>
-        <button id="[[item]]" on-click="startTutorial_">[[item]]</button>
-      </li>
-    </template>
-  </ul>
-  <h2>Show an IPH</h2>
-  <ul>
-    <template is="dom-repeat" id="promos" items="[[featurePromos_]]">
-      <li>
-        <h3>[[item.displayTitle]]</h3>
-        <h4>[[item.displayDescription]]</h4>
-        <button id="[[item.displayTitle]]" on-click="showFeaturePromo_">
-          [[item.displayTitle]]
-        </button>
-      </li>
-    </template>
-  </ul>
+<style include="cr-hidden-style cr-shared-style">
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  --main-column-max-width: 680px;
+  --side-bar-width: 200px;
+}
+
+cr-toolbar {
+  min-height: 56px;
+
+  --cr-toolbar-center-basis: var(--main-column-max-width);
+}
+
+cr-toolbar:not([narrow]) {
+  --cr-toolbar-left-spacer-width: var(--side-bar-width);
+}
+
+user-education-internals-card.highlighted {
+  background-color: var(--cr-iph-anchor-highlight-color);
+}
+
+h2 {
+  padding-inline: var(--cr-section-padding);
+}
+
+#cr-container-shadow-top {
+  /* Needs to be higher than #container's z-index to appear above
+    * scrollbars. */
+  z-index: 2;
+}
+
+#container {
+  align-items: flex-start;
+  color: var(--cr-primary-text-color);
+  display: flex;
+  flex: 1;
+  overflow: auto;
+}
+
+#left,
+#main,
+#right {
+  flex: 1;
+}
+
+#sidebar {
+  width: var(--side-bar-width);
+}
+
+#main {
+  display: flex;
+  flex-basis: var(--main-column-max-width);
+  justify-content: center;
+  position: relative;
+}
+
+#content {
+  padding-inline: var(--cr-section-padding);
+  width: var(--main-column-max-width);
+}
+
+/* Width is left + --cr-section-padding + main. */
+@media (max-width: 920px) {
+  #main {
+    flex: 1;
+    min-width: auto;
+  }
+
+  #content {
+    flex-basis: var(--main-column-max-width);
+    padding-inline: var(--cr-section-indent-padding);
+    width: auto;
+  }
+}
+
+</style>
+<cr-toolbar id="toolbar" page-name="IPH Tester"
+    clear-label="Clear Search"
+    search-prompt="Search IPH and Tutorials"
+    autofocus
+    on-search-changed="onSearchChanged_"
+    role="banner"
+    narrow="{{narrow_}}"
+    narrow-threshold="920"></cr-toolbar>
+<div id="container">
+  <div id="left" hidden$="[[narrow_]]">
+    <div id="sidebar"></div>
+  </div>
+  <div id="main">
+    <cr-toast id="errorMessageToast" duration="5000">
+      <iron-icon id="errorMessageIcon" class="error-outline"
+                 icon="cr:error-outline">
+      </iron-icon>
+      <span id="errorMessage">[[featurePromoErrorMessage_]]</span>
+    </cr-toast>
+    <div id="content">
+      <!-- Use hidden instead of dom-repeat to filter items because:
+          - Updates automatically with filter property.
+          - Doesn't delete the node, so doesn't mess with WebUI IPH demo.
+      -->
+      <h2>Tutorials</h2>
+      <template id="tutorials" is="dom-repeat" items="[[tutorials_]]">
+        <user-education-internals-card
+            id="[[item.internalName]]"
+            hidden$="[[!promoFilter_(item, filter)]]"
+            promo="[[item]]"
+            on-promo-launch="startTutorial_">
+        </user-education-internals-card>
+      </template>
+      <h2>Feature Promos</h2>
+      <template is="dom-repeat" id="promos" items="[[featurePromos_]]">
+        <user-education-internals-card
+            id="[[item.internalName]]"
+            hidden$="[[!promoFilter_(item, filter)]]"
+            promo="[[item]]"
+            on-promo-launch="showFeaturePromo_"
+            on-clear-promo-data="clearPromoData_">
+        </user-education-internals-card>
+      </template>
+    </div>
+  </div>
+  <div id="right" hidden$="[[narrow_]]"></div>
 </div>

@@ -9,12 +9,16 @@
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
+#include "net/base/ip_address.h"
 #include "services/network/public/cpp/cors/cors_error_status.h"
 #include "services/network/public/cpp/private_network_access_check_result.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
 #include "services/network/public/mojom/ip_address_space.mojom-forward.h"
 #include "services/network/public/mojom/network_context.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/origin.h"
+
+class GURL;
 
 namespace net {
 
@@ -39,12 +43,12 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrivateNetworkAccessChecker {
  public:
   // `resource_request` and `url_load_options` correspond to `URLLoader`
   // constructor arguments.
-  // `factory_params` should point to the parameters used by the factory that
-  // built the owner `URLLoader`. Must not be nullptr and must outlive this
-  // instance.
+  // `factory_client_security_state` should point to the client security
+  // state object coming from the factory that built the owner `URLLoader`. It
+  // can be nullptr when the factory doesn't use a client security state.
   PrivateNetworkAccessChecker(
       const ResourceRequest& resource_request,
-      const mojom::URLLoaderFactoryParams* factory_params,
+      const mojom::ClientSecurityState* factory_client_security_state,
       int32_t url_load_options);
 
   // Instances of this class are neither copyable nor movable.
@@ -78,14 +82,24 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrivateNetworkAccessChecker {
     return target_address_space_;
   }
 
-  // Clears state from all checks this instance has performed.
+  // Clears state from all checks this instance has performed, and sets the
+  // request URL to `new_url`.
   //
   // This instance will behave as if newly constructed once more. In addition,
-  // resets this instance's target IP address space to `kUnknown.
+  // resets this instance's target IP address space to `kUnknown`.
   //
   // This should be called upon following a redirect or after a cache result
   // blocked without preflight because we'll try fetching from the network.
-  void Reset();
+  void ResetForRedirect(const GURL& new_url);
+
+  // Clears state from all checks this instance has performed.
+  //
+  // This instance will behave as if newly constructed once more. In addition,
+  // resets this instance's target IP address space to `kUnknown`.
+  //
+  // This should be called after a cache result was blocked without preflight,
+  // because we'll try fetching from the network again.
+  void ResetForRetry();
 
   // Returns the client security state that applies to the current request.
   // May return nullptr.
@@ -102,6 +116,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrivateNetworkAccessChecker {
   // Returns `kUnknown` if `client_security_state()` is nullptr.
   mojom::IPAddressSpace ClientAddressSpace() const;
 
+  static bool NeedPermission(const GURL& url,
+                             bool is_web_secure_context,
+                             mojom::IPAddressSpace target_address_space);
+
  private:
   // Returns whether this instance has a client security state containing a
   // policy set to `kPreflightWarn`.
@@ -110,6 +128,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrivateNetworkAccessChecker {
   // Helper for `Check()`.
   PrivateNetworkAccessCheckResult CheckInternal(
       mojom::IPAddressSpace resource_address_space);
+
+  // Sets the current request URL (it may change after redirects).
+  void SetRequestUrl(const GURL& url);
 
   // The client security state copied from the request's trusted params.
   // May be nullptr.
@@ -125,9 +146,21 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrivateNetworkAccessChecker {
   // of other considerations. Set based on URL load options.
   const bool should_block_local_request_;
 
-  // True iff |Check()| was called multiple times in between resets and the IP
-  // address space of the transport was not the same each time.
-  bool has_connected_to_mismatched_address_spaces_ = false;
+  // Whether the request URL's scheme is `http:`.
+  bool is_request_url_scheme_http_ = false;
+
+  // If the request URL's host is a private IP literal, then this stores the
+  // IP. Nullopt otherwise.
+  //
+  // For example:
+  //
+  // - request url = `http://192.168.1.1`   -> `192.168.1.1`
+  // - request url = `http://[fe80::]:1234` -> `fe80::`
+  // - request url = `https://10.0.0.1`     -> `10.0.0.1`
+  // - request url = `http://localhost`     -> nullptr
+  //
+  // Used to compute metrics for https://crbug.com/1381471.
+  absl::optional<net::IPAddress> request_url_private_ip_;
 
   // The target IP address space set on the request. Ignored if `kUnknown`.
   //
@@ -144,6 +177,12 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrivateNetworkAccessChecker {
   //
   // Set by `Check()`, reset by `ResetForRedirect()`.
   absl::optional<mojom::IPAddressSpace> response_address_space_;
+
+  // The request initiator origin.
+  absl::optional<url::Origin> request_initiator_;
+
+  // The request is from/to a potentially trustworthy and same origin.
+  bool is_potentially_trustworthy_same_origin_;
 };
 
 }  // namespace network

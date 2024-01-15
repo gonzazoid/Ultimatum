@@ -12,9 +12,30 @@
 // In the future, this interface may be extended when WebNN is implemented so
 // a dictionary may be insufficient.
 
+typedef record<DOMString, ArrayBufferView> MLNamedArrayBufferViews;
+
+dictionary MLComputeResult {
+  MLNamedArrayBufferViews inputs;
+  MLNamedArrayBufferViews outputs;
+};
+
 [
   RuntimeEnabled=MachineLearningCommon,
   SecureContext,
-  Exposed=Window
+  Exposed=(Window, DedicatedWorker)
 ] interface MLContext {
+  [
+    RuntimeEnabled=MachineLearningNeuralNetwork,
+    CallWith=ScriptState,
+    RaisesException,
+    Exposed=Window
+  ] Promise<MLComputeResult> compute(
+      MLGraph graph, MLNamedArrayBufferViews inputs, MLNamedArrayBufferViews outputs);
+
+  [
+    RuntimeEnabled=MachineLearningNeuralNetwork,
+    RaisesException,
+    Exposed=DedicatedWorker
+  ] void computeSync(
+      MLGraph graph, MLNamedArrayBufferViews inputs, MLNamedArrayBufferViews outputs);
 };

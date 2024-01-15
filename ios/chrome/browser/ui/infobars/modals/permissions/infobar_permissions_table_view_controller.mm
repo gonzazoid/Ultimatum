@@ -4,31 +4,28 @@
 
 #import "ios/chrome/browser/ui/infobars/modals/permissions/infobar_permissions_table_view_controller.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/notreached.h"
-#import "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
+#import "ios/chrome/browser/infobars/model/infobar_metrics_recorder.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
+#import "ios/chrome/browser/ui/infobars/modals/infobar_modal_delegate.h"
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_modal_presentation_handler.h"
 #import "ios/chrome/browser/ui/permissions/permission_info.h"
 #import "ios/chrome/browser/ui/permissions/permission_metrics_util.h"
 #import "ios/chrome/browser/ui/permissions/permissions_constants.h"
 #import "ios/chrome/browser/ui/permissions/permissions_delegate.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_image_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/permissions/permissions.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 typedef NS_ENUM(NSInteger, SectionIdentifier) {
   SectionIdentifierContent = kSectionIdentifierEnumZero,
@@ -51,8 +48,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
 // The permissions description.
 @property(nonatomic, copy) NSString* permissionsDescription;
 
-// The list of permissions info used to create switches.
-@property(nonatomic, copy) NSArray<PermissionInfo*>* permissionsInfo;
+// The list of permissions used to create switches. The first NSNumber
+// represents the `web::Permission` int value and the second its associated
+// `web::PermissionState`.
+@property(nonatomic, copy) NSDictionary<NSNumber*, NSNumber*>* permissionsInfo;
 
 @end
 
@@ -110,8 +109,13 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [self.tableViewModel addItem:[self permissionsDescriptionItem]
        toSectionWithIdentifier:SectionIdentifierContent];
 
-  for (id permission in self.permissionsInfo) {
-    [self updateSwitchForPermission:permission tableViewLoaded:NO];
+  for (NSNumber* key in self.permissionsInfo.allKeys) {
+    PermissionInfo* permissionInfo = [[PermissionInfo alloc] init];
+    permissionInfo.permission = (web::Permission)key.unsignedIntValue;
+    permissionInfo.state =
+        (web::PermissionState)self.permissionsInfo[key].unsignedIntValue;
+
+    [self updateSwitchForPermission:permissionInfo tableViewLoaded:NO];
   }
 }
 
@@ -127,7 +131,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     case ItemTypePermissionsCamera:
     case ItemTypePermissionsMicrophone: {
       TableViewSwitchCell* switchCell =
-          base::mac::ObjCCastStrict<TableViewSwitchCell>(cell);
+          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
       switchCell.switchView.tag = itemType;
       [switchCell.switchView addTarget:self
                                 action:@selector(permissionSwitchToggled:)
@@ -147,8 +151,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
   _permissionsDescription = permissionsDescription;
 }
 
-- (void)setPermissionsInfo:(NSArray<PermissionInfo*>*)permissionsInfo {
-  _permissionsInfo = permissionsInfo;
+- (void)setPermissionsInfo:
+    (NSDictionary<NSNumber*, NSNumber*>*)permissionsInfo {
+  _permissionsInfo = [permissionsInfo copy];
 }
 
 - (void)permissionStateChanged:(PermissionInfo*)permissionInfo {
@@ -167,7 +172,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [[NSMutableAttributedString alloc]
           initWithAttributedString:PutBoldPartInString(
                                        self.permissionsDescription,
-                                       kTableViewSublabelFontStyle)];
+                                       UIFontTextStyleFootnote)];
 
   NSDictionary* attrs = @{
     NSForegroundColorAttributeName : [UIColor colorNamed:kTextSecondaryColor]
@@ -244,10 +249,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [self.presentationHandler resizeInfobarModal];
     } else {
       TableViewSwitchItem* currentItem =
-          base::mac::ObjCCastStrict<TableViewSwitchItem>(
+          base::apple::ObjCCastStrict<TableViewSwitchItem>(
               [self.tableViewModel itemAtIndexPath:index]);
       TableViewSwitchCell* currentCell =
-          base::mac::ObjCCastStrict<TableViewSwitchCell>(
+          base::apple::ObjCCastStrict<TableViewSwitchCell>(
               [self.tableView cellForRowAtIndexPath:index]);
       currentItem.on = state == web::PermissionStateAllowed;
       // Reload the switch cell if its value is outdated.

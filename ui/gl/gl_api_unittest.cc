@@ -19,6 +19,11 @@ namespace gl {
 
 class GLApiTest : public testing::Test {
  public:
+  static GLFunctionPointerType GL_BINDING_CALL
+  FakeGLGetProcAddress(const char* proc) {
+    return reinterpret_cast<GLFunctionPointerType>(0x1);
+  }
+
   void SetUp() override {
     fake_extension_string_ = "";
     fake_version_string_ = "";
@@ -29,15 +34,8 @@ class GLApiTest : public testing::Test {
         static_cast<GLGetProcAddressProc>(&FakeGLGetProcAddress));
   }
 
-  static GLFunctionPointerType GL_BINDING_CALL
-  FakeGLGetProcAddress(const char* proc) {
-    return reinterpret_cast<GLFunctionPointerType>(0x1);
-  }
-
   void TearDown() override {
-    api_.reset(nullptr);
-    driver_.reset(nullptr);
-
+    TerminateAPI();
     SetGLImplementation(kGLImplementationNone);
     fake_extension_string_ = "";
     fake_version_string_ = "";
@@ -70,14 +68,19 @@ class GLApiTest : public testing::Test {
     api_->set_version(std::move(version));
   }
 
+  void TerminateAPI() {
+    api_.reset();
+    driver_.reset();
+  }
+
   void SetFakeExtensionString(const char* fake_string) {
-    SetGLImplementation(kGLImplementationDesktopGL);
+    SetGLImplementation(kGLImplementationEGLANGLE);
     fake_extension_string_ = fake_string;
     fake_version_string_ = "2.1";
   }
 
   void SetFakeExtensionStrings(const char** fake_strings, uint32_t count) {
-    SetGLImplementation(kGLImplementationDesktopGL);
+    SetGLImplementation(kGLImplementationEGLANGLE);
     num_fake_extension_strings_ = count;
     fake_extension_strings_ = fake_strings;
     fake_version_string_ = "3.0";
@@ -140,6 +143,7 @@ TEST_F(GLApiTest, DisabledExtensionStringTest) {
   SetFakeExtensionString(kFakeExtensions);
   InitializeAPI(nullptr);
   EXPECT_STREQ(kFakeExtensions, GetExtensions());
+  TerminateAPI();
 
   InitializeAPI(kFakeDisabledExtensions);
   EXPECT_STREQ(kFilteredExtensions, GetExtensions());
@@ -154,6 +158,7 @@ TEST_F(GLApiTest, DisabledExtensionBitTest) {
   SetFakeExtensionStrings(kFakeExtensions, std::size(kFakeExtensions));
   InitializeAPI(nullptr);
   EXPECT_TRUE(driver_->ext.b_GL_ARB_timer_query);
+  TerminateAPI();
 
   InitializeAPI(kFakeDisabledExtensions);
   EXPECT_FALSE(driver_->ext.b_GL_ARB_timer_query);
@@ -174,11 +179,11 @@ TEST_F(GLApiTest, DisabledExtensionStringIndexTest) {
 
   SetFakeExtensionStrings(kFakeExtensions, std::size(kFakeExtensions));
   InitializeAPI(nullptr);
-
   EXPECT_EQ(std::size(kFakeExtensions), GetNumExtensions());
   for (uint32_t i = 0; i < std::size(kFakeExtensions); ++i) {
     EXPECT_STREQ(kFakeExtensions[i], GetExtensioni(i));
   }
+  TerminateAPI();
 
   InitializeAPI(kFakeDisabledExtensions);
   EXPECT_EQ(std::size(kFilteredExtensions), GetNumExtensions());

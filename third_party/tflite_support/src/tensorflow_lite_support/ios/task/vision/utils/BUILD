@@ -13,12 +13,7 @@ objc_library(
     ],
     features = ["-layering_check"],
     module_name = "GMLImageUtils",
-    sdk_frameworks = [
-        "CoreGraphics",
-        "CoreVideo",
-        "Accelerate",
-        "CoreMedia",
-    ],
+    # tflite_support:oss-insert sdk_frameworks = ["CoreGraphics", "CoreVideo", "Accelerate", "CoreMedia"],
     deps = [
         "//tensorflow_lite_support/c/task/vision/core:frame_buffer",
         "//tensorflow_lite_support/ios:TFLCommonUtils",

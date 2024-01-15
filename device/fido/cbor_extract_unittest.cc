@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #include "device/fido/cbor_extract.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/ranges/algorithm.h"
 #include "components/cbor/values.h"
@@ -168,7 +168,9 @@ TEST(CBORExtract, Basic) {
 
 TEST(CBORExtract, MissingRequired) {
   struct Dummy {
-    const int64_t* value;
+    // This field is not a raw_ptr<> because ELEMENT() treats the raw_ptr<T> as
+    // a void*.
+    RAW_PTR_EXCLUSION const int64_t* value;
   };
 
   static constexpr cbor_extract::StepOrByte<Dummy> kSteps[] = {
@@ -184,7 +186,9 @@ TEST(CBORExtract, MissingRequired) {
 
 TEST(CBORExtract, WrongType) {
   struct Dummy {
-    const int64_t* value;
+    // This field is not a raw_ptr<> because ELEMENT() treats the raw_ptr<T> as
+    // a void*.
+    RAW_PTR_EXCLUSION const int64_t* value;
   };
 
   static constexpr cbor_extract::StepOrByte<Dummy> kSteps[] = {
@@ -202,7 +206,9 @@ TEST(CBORExtract, WrongType) {
 
 TEST(CBORExtract, RequiredInOptionalMap) {
   struct Dummy {
-    const int64_t* value;
+    // This field is not a raw_ptr<> because ELEMENT() treats the raw_ptr<T> as
+    // a void*.
+    RAW_PTR_EXCLUSION const int64_t* value;
   };
 
   static constexpr cbor_extract::StepOrByte<Dummy> kSteps[] = {

@@ -10,7 +10,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
 #include "pdf/document_layout.h"
@@ -123,6 +123,10 @@ void PreviewModeClient::SubmitForm(const std::string& url,
 std::unique_ptr<UrlLoader> PreviewModeClient::CreateUrlLoader() {
   NOTREACHED();
   return nullptr;
+}
+
+v8::Isolate* PreviewModeClient::GetIsolate() {
+  NOTREACHED_NORETURN();
 }
 
 std::vector<PDFEngine::Client::SearchStringResult>

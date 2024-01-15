@@ -4,14 +4,13 @@
 
 package org.chromium.chrome.browser.customtabs;
 
-import static org.junit.Assert.assertTrue;
-
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
-import android.support.test.InstrumentationRegistry;
 import android.view.View;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -23,12 +22,10 @@ import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.incognito.IncognitoDataTestUtils;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
-import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.R;
 import org.chromium.net.test.EmbeddedTestServerRule;
 import org.chromium.ui.test.util.RenderTestRule;
 
@@ -37,17 +34,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Instrumentation Render tests for default {@link CustomTabActivity} UI.
- */
+/** Instrumentation Render tests for default {@link CustomTabActivity} UI. */
 @RunWith(ParameterizedRunner.class)
 @ParameterAnnotations.UseRunnerDelegate(ChromeJUnit4RunnerDelegate.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@Features.EnableFeatures({ChromeFeatureList.CCT_INCOGNITO})
 public class IncognitoCustomTabActivityRenderTest {
     @ParameterAnnotations.ClassParameter
     private static final List<ParameterSet> sClassParameter =
-            Arrays.asList(new ParameterSet().name("HTTPS").value(true),
+            Arrays.asList(
+                    new ParameterSet().name("HTTPS").value(true),
                     new ParameterSet().name("HTTP").value(false));
 
     private static final String TEST_PAGE = "/chrome/test/data/android/google.html";
@@ -66,6 +61,7 @@ public class IncognitoCustomTabActivityRenderTest {
     @Rule
     public final RenderTestRule mRenderTestRule =
             RenderTestRule.Builder.withPublicCorpus()
+                    .setRevision(2)
                     .setBugComponent(RenderTestRule.Component.UI_BROWSER_MOBILE_CUSTOM_TABS)
                     .build();
 
@@ -75,9 +71,7 @@ public class IncognitoCustomTabActivityRenderTest {
         mEmbeddedTestServerRule.setServerPort(PORT_NO);
         prepareCCTIntent();
 
-        // Ensuring native is initialized before we access the CCT_INCOGNITO feature flag.
         IncognitoDataTestUtils.fireAndWaitForCctWarmup();
-        assertTrue(ChromeFeatureList.isEnabled(ChromeFeatureList.CCT_INCOGNITO));
     }
 
     public IncognitoCustomTabActivityRenderTest(boolean runWithHttps) {
@@ -86,8 +80,9 @@ public class IncognitoCustomTabActivityRenderTest {
 
     private void prepareCCTIntent() {
         String url = mEmbeddedTestServerRule.getServer().getURL(TEST_PAGE);
-        mIntent = CustomTabsIntentTestUtils.createMinimalIncognitoCustomTabIntent(
-                InstrumentationRegistry.getContext(), url);
+        mIntent =
+                CustomTabsIntentTestUtils.createMinimalIncognitoCustomTabIntent(
+                        ApplicationProvider.getApplicationContext(), url);
     }
 
     private void startActivity(String renderTestId, int mScreenOrientation) throws IOException {
@@ -113,7 +108,8 @@ public class IncognitoCustomTabActivityRenderTest {
     @MediumTest
     @Feature("RenderTest")
     public void testCCTToolbarInLandscapeMode() throws IOException {
-        startActivity("default_incognito_cct_toolbar_in_landscape_with_https_" + mRunWithHttps,
+        startActivity(
+                "default_incognito_cct_toolbar_in_landscape_with_https_" + mRunWithHttps,
                 ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 }

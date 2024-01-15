@@ -4,12 +4,13 @@
 
 #include "chrome/browser/favicon/large_icon_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/image_fetcher/image_decoder_impl.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/favicon/content/large_icon_service_getter.h"
 #include "components/favicon/core/favicon_service.h"
 #include "components/favicon/core/large_icon_service_impl.h"
 #include "components/image_fetcher/core/image_decoder.h"
@@ -19,6 +20,11 @@
 #include "ui/gfx/favicon_size.h"
 
 namespace {
+
+favicon::LargeIconService* GetLargeIconService(
+    content::BrowserContext* context) {
+  return LargeIconServiceFactory::GetInstance()->GetForBrowserContext(context);
+}
 
 #if BUILDFLAG(IS_ANDROID)
 // Seems like on Android `1 dip == 1 px`. The value of `kDipForServerRequests`
@@ -45,26 +51,34 @@ favicon::LargeIconService* LargeIconServiceFactory::GetForBrowserContext(
 
 // static
 LargeIconServiceFactory* LargeIconServiceFactory::GetInstance() {
-  return base::Singleton<LargeIconServiceFactory>::get();
+  static base::NoDestructor<LargeIconServiceFactory> instance;
+  return instance.get();
 }
 
 LargeIconServiceFactory::LargeIconServiceFactory()
     : ProfileKeyedServiceFactory(
           "LargeIconService",
-          ProfileSelections::BuildRedirectedInIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(FaviconServiceFactory::GetInstance());
+  favicon::SetLargeIconServiceGetter(base::BindRepeating(&GetLargeIconService));
 }
 
-LargeIconServiceFactory::~LargeIconServiceFactory() {}
+LargeIconServiceFactory::~LargeIconServiceFactory() = default;
 
-KeyedService* LargeIconServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+LargeIconServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   favicon::FaviconService* favicon_service =
       FaviconServiceFactory::GetForProfile(profile,
                                            ServiceAccessType::EXPLICIT_ACCESS);
 
-  return new favicon::LargeIconServiceImpl(
+  return std::make_unique<favicon::LargeIconServiceImpl>(
       favicon_service,
       std::make_unique<image_fetcher::ImageFetcherImpl>(
           std::make_unique<ImageDecoderImpl>(),

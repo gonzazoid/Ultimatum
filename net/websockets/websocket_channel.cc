@@ -6,29 +6,31 @@
 
 #include <limits.h>  // for INT_MAX
 #include <stddef.h>
+#include <string.h>
 
+#include <algorithm>
+#include <iterator>
+#include <ostream>
 #include <utility>
 #include <vector>
 
 #include "base/big_endian.h"
-#include "base/bind.h"
-#include "base/containers/circular_deque.h"
+#include "base/check.h"
+#include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "net/base/auth.h"
+#include "base/values.h"
 #include "net/base/io_buffer.h"
-#include "net/base/ip_endpoint.h"
-#include "net/http/http_request_headers.h"
+#include "net/base/net_errors.h"
 #include "net/http/http_response_headers.h"
-#include "net/http/http_util.h"
+#include "net/log/net_log_event_type.h"
 #include "net/log/net_log_with_source.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/websockets/websocket_errors.h"
@@ -37,9 +39,11 @@
 #include "net/websockets/websocket_handshake_request_info.h"
 #include "net/websockets/websocket_handshake_response_info.h"
 #include "net/websockets/websocket_stream.h"
-#include "url/origin.h"
 
 namespace net {
+class AuthChallengeInfo;
+class AuthCredentials;
+class SSLInfo;
 
 namespace {
 
@@ -124,24 +128,30 @@ void GetFrameTypeForOpcode(WebSocketFrameHeader::OpCode opcode,
   return;
 }
 
-base::Value NetLogFailParam(uint16_t code,
-                            base::StringPiece reason,
-                            base::StringPiece message) {
+base::Value::Dict NetLogFailParam(uint16_t code,
+                                  base::StringPiece reason,
+                                  base::StringPiece message) {
   base::Value::Dict dict;
   dict.Set("code", code);
   dict.Set("reason", reason);
   dict.Set("internal_reason", message);
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 class DependentIOBuffer : public WrappedIOBuffer {
  public:
-  DependentIOBuffer(scoped_refptr<IOBuffer> buffer, size_t offset)
-      : WrappedIOBuffer(buffer->data() + offset), buffer_(std::move(buffer)) {}
+  DependentIOBuffer(scoped_refptr<IOBufferWithSize> buffer, size_t offset)
+      : WrappedIOBuffer(buffer->span().subspan(offset)),
+        buffer_(std::move(buffer)) {}
 
  private:
-  ~DependentIOBuffer() override = default;
-  scoped_refptr<IOBuffer> buffer_;
+  ~DependentIOBuffer() override {
+    // Prevent `data_` from dangling should this destructor remove the
+    // last reference to `buffer_`.
+    data_ = nullptr;
+  }
+
+  scoped_refptr<IOBufferWithSize> buffer_;
 };
 
 }  // namespace
@@ -237,7 +247,7 @@ class WebSocketChannel::ConnectDelegate
   // danger of this pointer being stale, because deleting the WebSocketChannel
   // cancels the connect process, deleting this object and preventing its
   // callbacks from being called.
-  const raw_ptr<WebSocketChannel> creator_;
+  const raw_ptr<WebSocketChannel, DanglingUntriaged> creator_;
 };
 
 WebSocketChannel::WebSocketChannel(
@@ -264,12 +274,14 @@ void WebSocketChannel::SendAddChannelRequest(
     const std::vector<std::string>& requested_subprotocols,
     const url::Origin& origin,
     const SiteForCookies& site_for_cookies,
+    bool has_storage_access,
     const IsolationInfo& isolation_info,
     const HttpRequestHeaders& additional_headers,
     NetworkTrafficAnnotationTag traffic_annotation) {
   SendAddChannelRequestWithSuppliedCallback(
       socket_url, requested_subprotocols, origin, site_for_cookies,
-      isolation_info, additional_headers, traffic_annotation,
+      has_storage_access, isolation_info, additional_headers,
+      traffic_annotation,
       base::BindOnce(&WebSocketStream::CreateAndConnectStream));
 }
 
@@ -312,8 +324,8 @@ WebSocketChannel::ChannelState WebSocketChannel::SendFrame(
   if (op_code == WebSocketFrameHeader::kOpCodeText ||
       (op_code == WebSocketFrameHeader::kOpCodeContinuation &&
        sending_text_message_)) {
-    StreamingUtf8Validator::State state =
-        outgoing_utf8_validator_.AddBytes(buffer->data(), buffer_size);
+    StreamingUtf8Validator::State state = outgoing_utf8_validator_.AddBytes(
+        base::make_span(buffer->bytes(), buffer_size));
     if (state == StreamingUtf8Validator::INVALID ||
         (state == StreamingUtf8Validator::VALID_MIDPOINT && fin)) {
       // TODO(ricea): Kill renderer.
@@ -393,14 +405,15 @@ void WebSocketChannel::SendAddChannelRequestForTesting(
     const std::vector<std::string>& requested_subprotocols,
     const url::Origin& origin,
     const SiteForCookies& site_for_cookies,
+    bool has_storage_access,
     const IsolationInfo& isolation_info,
     const HttpRequestHeaders& additional_headers,
     NetworkTrafficAnnotationTag traffic_annotation,
     WebSocketStreamRequestCreationCallback callback) {
   SendAddChannelRequestWithSuppliedCallback(
       socket_url, requested_subprotocols, origin, site_for_cookies,
-      isolation_info, additional_headers, traffic_annotation,
-      std::move(callback));
+      has_storage_access, isolation_info, additional_headers,
+      traffic_annotation, std::move(callback));
 }
 
 void WebSocketChannel::SetClosingHandshakeTimeoutForTesting(
@@ -418,6 +431,7 @@ void WebSocketChannel::SendAddChannelRequestWithSuppliedCallback(
     const std::vector<std::string>& requested_subprotocols,
     const url::Origin& origin,
     const SiteForCookies& site_for_cookies,
+    bool has_storage_access,
     const IsolationInfo& isolation_info,
     const HttpRequestHeaders& additional_headers,
     NetworkTrafficAnnotationTag traffic_annotation,
@@ -435,8 +449,9 @@ void WebSocketChannel::SendAddChannelRequestWithSuppliedCallback(
   auto connect_delegate = std::make_unique<ConnectDelegate>(this);
   stream_request_ = std::move(callback).Run(
       socket_url_, requested_subprotocols, origin, site_for_cookies,
-      isolation_info, additional_headers, url_request_context_.get(),
-      NetLogWithSource(), traffic_annotation, std::move(connect_delegate));
+      has_storage_access, isolation_info, additional_headers,
+      url_request_context_.get(), NetLogWithSource(), traffic_annotation,
+      std::move(connect_delegate));
   SetState(CONNECTING);
 }
 
@@ -679,7 +694,8 @@ ChannelState WebSocketChannel::HandleFrame(
   // Respond to the frame appropriately to its type.
   return HandleFrameByState(
       opcode, frame->header.final,
-      base::make_span(frame->payload, frame->header.payload_length));
+      base::make_span(frame->payload, base::checked_cast<size_t>(
+                                          frame->header.payload_length)));
 }
 
 ChannelState WebSocketChannel::HandleFrameByState(
@@ -708,8 +724,8 @@ ChannelState WebSocketChannel::HandleFrameByState(
     case WebSocketFrameHeader::kOpCodePing:
       DVLOG(1) << "Got Ping of size " << payload.size();
       if (state_ == CONNECTED) {
-        auto buffer = base::MakeRefCounted<IOBuffer>(payload.size());
-        memcpy(buffer->data(), payload.data(), payload.size());
+        auto buffer = base::MakeRefCounted<IOBufferWithSize>(payload.size());
+        base::ranges::copy(payload, buffer->data());
         return SendFrameInternal(true, WebSocketFrameHeader::kOpCodePong,
                                  std::move(buffer), payload.size());
       }
@@ -784,8 +800,8 @@ ChannelState WebSocketChannel::HandleDataFrame(
        receiving_text_message_)) {
     // This call is not redundant when size == 0 because it tells us what
     // the current state is.
-    StreamingUtf8Validator::State state = incoming_utf8_validator_.AddBytes(
-        payload.data(), static_cast<size_t>(payload.size()));
+    StreamingUtf8Validator::State state =
+        incoming_utf8_validator_.AddBytes(base::as_byte_span(payload));
     if (state == StreamingUtf8Validator::INVALID ||
         (state == StreamingUtf8Validator::VALID_MIDPOINT && final)) {
       FailChannel("Could not decode a text frame as UTF-8.",
@@ -928,10 +944,10 @@ ChannelState WebSocketChannel::SendClose(uint16_t code,
     // Special case: translate kWebSocketErrorNoStatusReceived into a Close
     // frame with no payload.
     DCHECK(reason.empty());
-    body = base::MakeRefCounted<IOBuffer>(0);
+    body = base::MakeRefCounted<IOBufferWithSize>();
   } else {
     const size_t payload_length = kWebSocketCloseCodeLength + reason.length();
-    body = base::MakeRefCounted<IOBuffer>(payload_length);
+    body = base::MakeRefCounted<IOBufferWithSize>(payload_length);
     size = payload_length;
     base::WriteBigEndian(body->data(), code);
     static_assert(sizeof(code) == kWebSocketCloseCodeLength,

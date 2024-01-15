@@ -4,24 +4,21 @@
 
 #import "ios/web_view/internal/passwords/web_view_account_password_store_factory.h"
 
-#include <memory>
-#include <utility>
+#import <memory>
+#import <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/no_destructor.h"
-#include "components/keyed_service/ios/browser_state_dependency_manager.h"
-#include "components/password_manager/core/browser/login_database.h"
-#include "components/password_manager/core/browser/password_manager_constants.h"
-#include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/password_store_built_in_backend.h"
-#include "components/password_manager/core/browser/password_store_factory_util.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "components/prefs/pref_service.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback_helpers.h"
+#import "base/no_destructor.h"
+#import "components/keyed_service/ios/browser_state_dependency_manager.h"
+#import "components/password_manager/core/browser/password_manager_constants.h"
+#import "components/password_manager/core/browser/password_manager_util.h"
+#import "components/password_manager/core/browser/password_store/login_database.h"
+#import "components/password_manager/core/browser/password_store/password_store.h"
+#import "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
+#import "components/password_manager/core/browser/password_store_factory_util.h"
+#import "components/prefs/pref_service.h"
 
 namespace ios_web_view {
 
@@ -30,11 +27,6 @@ scoped_refptr<password_manager::PasswordStoreInterface>
 WebViewAccountPasswordStoreFactory::GetForBrowserState(
     WebViewBrowserState* browser_state,
     ServiceAccessType access_type) {
-  if (!base::FeatureList::IsEnabled(
-          password_manager::features::kEnablePasswordsAccountStorage)) {
-    return nullptr;
-  }
-
   // |browser_state| always gets redirected to a the recording version in
   // |GetBrowserStateToUse|.
   if (access_type == ServiceAccessType::IMPLICIT_ACCESS &&
@@ -64,9 +56,6 @@ WebViewAccountPasswordStoreFactory::~WebViewAccountPasswordStoreFactory() {}
 scoped_refptr<RefcountedKeyedService>
 WebViewAccountPasswordStoreFactory::BuildServiceInstanceFor(
     web::BrowserState* context) const {
-  DCHECK(base::FeatureList::IsEnabled(
-      password_manager::features::kEnablePasswordsAccountStorage));
-
   WebViewBrowserState* browser_state =
       WebViewBrowserState::FromBrowserState(context);
 
@@ -77,7 +66,9 @@ WebViewAccountPasswordStoreFactory::BuildServiceInstanceFor(
   scoped_refptr<password_manager::PasswordStore> ps =
       new password_manager::PasswordStore(
           std::make_unique<password_manager::PasswordStoreBuiltInBackend>(
-              std::move(login_db)));
+              std::move(login_db),
+              syncer::WipeModelUponSyncDisabledBehavior::kAlways));
+
   ps->Init(browser_state->GetPrefs(), /*affiliated_match_helper=*/nullptr);
 
   return ps;

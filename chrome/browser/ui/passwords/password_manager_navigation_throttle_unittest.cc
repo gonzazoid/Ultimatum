@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 #include "chrome/browser/ui/passwords/password_manager_navigation_throttle.h"
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "components/password_manager/core/browser/password_manager_constants.h"
@@ -13,7 +15,6 @@
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_renderer_host.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
@@ -26,7 +27,7 @@ struct NavigationThrottleOptions {
   GURL url;
   raw_ptr<content::RenderFrameHost> rfh = nullptr;
   ui::PageTransition page_transition = ui::PAGE_TRANSITION_FROM_API;
-  absl::optional<url::Origin> initiator_origin;
+  std::optional<url::Origin> initiator_origin;
 };
 
 }  // namespace
@@ -57,15 +58,25 @@ class PasswordManagerNavigationThrottleTest
  private:
   variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
-  raw_ptr<content::RenderFrameHost> subframe_ = nullptr;
+  raw_ptr<content::RenderFrameHost, DanglingUntriaged> subframe_ = nullptr;
 };
 
-TEST_F(PasswordManagerNavigationThrottleTest, CreatesNavigationThrottle) {
+TEST_F(PasswordManagerNavigationThrottleTest,
+       CreatesNavigationThrottle_HelpSite) {
   EXPECT_TRUE(CreateNavigationThrottle({
       .url = GURL(password_manager::kManageMyPasswordsURL),
       .page_transition = ui::PAGE_TRANSITION_LINK,
       .initiator_origin =
           url::Origin::Create(GURL(password_manager::kReferrerURL)),
+  }));
+}
+
+TEST_F(PasswordManagerNavigationThrottleTest, CreatesNavigationThrottle_PGC) {
+  EXPECT_TRUE(CreateNavigationThrottle({
+      .url = GURL(password_manager::kManageMyPasswordsURL),
+      .page_transition = ui::PAGE_TRANSITION_LINK,
+      .initiator_origin =
+          url::Origin::Create(GURL(password_manager::kManageMyPasswordsURL)),
   }));
 }
 
@@ -79,7 +90,7 @@ TEST_F(PasswordManagerNavigationThrottleTest,
 }
 
 TEST_F(PasswordManagerNavigationThrottleTest,
-       DoesntCreateNavigationThrottleWhenURLDoesntMatch) {
+       DoesntCreateNavigationThrottleWhenURLDoesntMatch_HelpSite) {
   EXPECT_FALSE(CreateNavigationThrottle({
       .url = GURL("https://passwords.google.com/help"),
       .page_transition = ui::PAGE_TRANSITION_LINK,
@@ -89,7 +100,17 @@ TEST_F(PasswordManagerNavigationThrottleTest,
 }
 
 TEST_F(PasswordManagerNavigationThrottleTest,
-       DoesntCreateNavigationThrottleWhenNotLinkTransition) {
+       DoesntCreateNavigationThrottleWhenURLDoesntMatch_PGC) {
+  EXPECT_FALSE(CreateNavigationThrottle({
+      .url = GURL("https://passwords.google.com/help"),
+      .page_transition = ui::PAGE_TRANSITION_LINK,
+      .initiator_origin =
+          url::Origin::Create(GURL(password_manager::kManageMyPasswordsURL)),
+  }));
+}
+
+TEST_F(PasswordManagerNavigationThrottleTest,
+       DoesntCreateNavigationThrottleWhenNotLinkTransition_HelpSite) {
   EXPECT_FALSE(CreateNavigationThrottle({
       .url = GURL(password_manager::kManageMyPasswordsURL),
       .page_transition = ui::PAGE_TRANSITION_AUTO_BOOKMARK,
@@ -99,11 +120,11 @@ TEST_F(PasswordManagerNavigationThrottleTest,
 }
 
 TEST_F(PasswordManagerNavigationThrottleTest,
-       CreatesNavigationThrottleForTestingWebsite) {
-  EXPECT_TRUE(CreateNavigationThrottle({
+       DoesntCreateNavigationThrottleWhenNotLinkTransition_PGC) {
+  EXPECT_FALSE(CreateNavigationThrottle({
       .url = GURL(password_manager::kManageMyPasswordsURL),
-      .page_transition = ui::PAGE_TRANSITION_LINK,
+      .page_transition = ui::PAGE_TRANSITION_AUTO_BOOKMARK,
       .initiator_origin =
-          url::Origin::Create(GURL(password_manager::kTestingReferrerURL)),
+          url::Origin::Create(GURL(password_manager::kManageMyPasswordsURL)),
   }));
 }

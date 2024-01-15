@@ -5,11 +5,14 @@
 #include "ash/shelf/shelf_tooltip_bubble.h"
 
 #include "ash/constants/ash_features.h"
-#include "ash/style/ash_color_provider.h"
-#include "ash/system/tray/tray_constants.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/style/style_util.h"
 #include "ash/wm/collision_detection/collision_detection_utils.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/aura/window.h"
+#include "ui/color/color_id.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/corewm/tooltip_view_aura.h"
 #include "ui/views/layout/fill_layout.h"
 
 namespace ash {
@@ -28,42 +31,63 @@ constexpr int kTooltipLeftRightMargin = 8;
 
 }  // namespace
 
-ShelfTooltipBubble::ShelfTooltipBubble(views::View* anchor,
-                                       ShelfAlignment alignment,
-                                       const std::u16string& text)
-    : ShelfBubble(anchor, alignment) {
-  set_margins(
-      gfx::Insets::VH(kTooltipTopBottomMargin, kTooltipLeftRightMargin));
+ShelfTooltipBubble::ShelfTooltipBubble(
+    views::View* anchor,
+    ShelfAlignment alignment,
+    const std::u16string& text,
+    std::optional<views::BubbleBorder::Arrow> arrow_position)
+    : ShelfBubble(anchor, alignment, /*for_tooltip=*/true, arrow_position) {
   set_close_on_deactivate(false);
   SetCanActivate(false);
   set_accept_events(false);
   set_shadow(views::BubbleBorder::NO_SHADOW);
   SetLayoutManager(std::make_unique<views::FillLayout>());
-  views::Label* label = new views::Label(text);
-  label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  const auto* color_provider = AshColorProvider::Get();
-  const bool is_dark_light_mode_enabled = features::IsDarkLightModeEnabled();
-  const SkColor tooltip_background = color_provider->GetBaseLayerColor(
-      is_dark_light_mode_enabled
-          ? AshColorProvider::BaseLayerType::kInvertedTransparent80
-          : AshColorProvider::BaseLayerType::kTransparent80);
-  const SkColor tooltip_text = color_provider->GetContentLayerColor(
-      is_dark_light_mode_enabled
-          ? AshColorProvider::ContentLayerType::kInvertedTextColorPrimary
-          : AshColorProvider::ContentLayerType::kTextColorPrimary);
 
-  set_color(tooltip_background);
-  label->SetEnabledColor(tooltip_text);
-  label->SetBackgroundColor(tooltip_background);
-  AddChildView(label);
+  if (chromeos::features::IsJellyrollEnabled()) {
+    set_margins(gfx::Insets(0));
+    auto* tooltip_view = AddChildView(StyleUtil::CreateAshStyleTooltipView());
+    tooltip_view->SetText(text);
+  } else {
+    set_margins(
+        gfx::Insets::VH(kTooltipTopBottomMargin, kTooltipLeftRightMargin));
+    auto label = std::make_unique<views::Label>(text);
+    label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+
+    // Initialize color ids
+    label->SetEnabledColorId(kColorAshShelfTooltipForegroundColor);
+    label->SetBackgroundColorId(kColorAshShelfTooltipBackgroundColor);
+    AddChildView(std::move(label));
+  }
 
   CreateBubble();
+
   CollisionDetectionUtils::IgnoreWindowForCollisionDetection(
       GetWidget()->GetNativeWindow());
 }
 
+void ShelfTooltipBubble::OnThemeChanged() {
+  ShelfBubble::OnThemeChanged();
+
+  if (chromeos::features::IsJellyrollEnabled()) {
+    return;
+  }
+
+  const auto* color_provider = GetColorProvider();
+
+  // TODO(b/261653838): Update this function to use color id instead.
+  set_color(color_provider->GetColor(kColorAshShelfTooltipBackgroundColor));
+
+  // Updates the background color in the bubble frame view.
+  GetBubbleFrameView()->SetBackgroundColor(color());
+}
+
 gfx::Size ShelfTooltipBubble::CalculatePreferredSize() const {
   const gfx::Size size = BubbleDialogDelegateView::CalculatePreferredSize();
+
+  if (chromeos::features::IsJellyrollEnabled()) {
+    return size;
+  }
+
   const int kTooltipMinHeight = kTooltipHeight - 2 * kTooltipTopBottomMargin;
   return gfx::Size(std::min(size.width(), kTooltipMaxWidth),
                    std::max(size.height(), kTooltipMinHeight));

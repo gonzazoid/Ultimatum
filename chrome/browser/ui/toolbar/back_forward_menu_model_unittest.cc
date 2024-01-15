@@ -13,7 +13,6 @@
 #include "build/build_config.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -33,6 +32,7 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/models/image_model.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/image/image_unittest_util.h"
 
 using base::ASCIIToUTF16;
 using content::NavigationSimulator;
@@ -40,30 +40,24 @@ using content::WebContentsTester;
 
 namespace {
 
-// Creates a bitmap of the specified color.
-SkBitmap CreateBitmap(SkColor color) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(16, 16);
-  bitmap.eraseColor(color);
-  return bitmap;
-}
-
 class FaviconDelegate : public ui::MenuModelDelegate {
  public:
-  FaviconDelegate() : was_called_(false) {}
+  explicit FaviconDelegate(base::OnceClosure quit_closure)
+      : was_called_(false), quit_closure_(std::move(quit_closure)) {}
 
   FaviconDelegate(const FaviconDelegate&) = delete;
   FaviconDelegate& operator=(const FaviconDelegate&) = delete;
 
   void OnIconChanged(int command_id) override {
     was_called_ = true;
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    std::move(quit_closure_).Run();
   }
 
   bool was_called() const { return was_called_; }
 
  private:
   bool was_called_;
+  base::OnceClosure quit_closure_;
 };
 
 }  // namespace
@@ -113,12 +107,7 @@ class BackFwdMenuModelTest : public ChromeRenderViewHostTestHarness {
 
 class BackFwdMenuModelIncognitoTest : public ChromeRenderViewHostTestHarness {
  public:
-  BackFwdMenuModelIncognitoTest() {
-    // Enable kUpdateHistoryEntryPointsInIncognito feature flag to change menu
-    // content.
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kUpdateHistoryEntryPointsInIncognito);
-  }
+  BackFwdMenuModelIncognitoTest() = default;
 
   void LoadURLAndUpdateState(const char* url, const std::u16string& title) {
     NavigateAndCommit(GURL(url));
@@ -541,14 +530,15 @@ TEST_F(BackFwdMenuModelTest, FaviconLoadTest) {
   Browser::CreateParams native_params(profile(), true);
   std::unique_ptr<Browser> browser(
       CreateBrowserWithTestWindowForParams(native_params));
-  FaviconDelegate favicon_delegate;
+  base::RunLoop loop;
+  FaviconDelegate favicon_delegate(loop.QuitWhenIdleClosure());
 
   BackForwardMenuModel back_model(browser.get(),
                                   BackForwardMenuModel::ModelType::kBackward);
   back_model.set_test_web_contents(web_contents());
   back_model.SetMenuModelDelegate(&favicon_delegate);
 
-  SkBitmap new_icon_bitmap(CreateBitmap(SK_ColorRED));
+  SkBitmap new_icon_bitmap(gfx::test::CreateBitmap(/*size=*/16, SK_ColorRED));
 
   GURL url1 = GURL("http://www.a.com/1");
   GURL url2 = GURL("http://www.a.com/2");
@@ -573,7 +563,7 @@ TEST_F(BackFwdMenuModelTest, FaviconLoadTest) {
 
   // Make the favicon service run GetFavIconForURL,
   // FaviconDelegate.OnIconChanged will be called.
-  base::RunLoop().Run();
+  loop.Run();
 
   // Verify that the callback executed.
   EXPECT_TRUE(favicon_delegate.was_called());

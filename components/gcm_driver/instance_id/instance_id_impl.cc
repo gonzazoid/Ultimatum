@@ -8,13 +8,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/gcm_driver/gcm_driver.h"
 #include "crypto/random.h"
 
@@ -249,7 +249,7 @@ void InstanceIDImpl::EnsureIDGenerated() {
       &id_);
   std::replace(id_.begin(), id_.end(), '+', '-');
   std::replace(id_.begin(), id_.end(), '/', '_');
-  base::Erase(id_, '=');
+  std::erase(id_, '=');
 
   creation_time_ = base::Time::Now();
 
@@ -269,7 +269,8 @@ void InstanceIDImpl::RunWhenReady(base::OnceClosure task) {
   if (!delayed_task_controller_.CanRunTaskWithoutDelay())
     delayed_task_controller_.AddTask(std::move(task));
   else
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(task));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(task));
 }
 
 }  // namespace instance_id

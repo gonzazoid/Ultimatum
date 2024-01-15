@@ -4,16 +4,22 @@
 
 #include <utility>
 
+#include "base/memory/platform_shared_memory_handle.h"
+#include "base/memory/unsafe_shared_memory_region.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
+#include "skia/ext/skcolorspace_primaries.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/rrect_f.h"
 #include "ui/gfx/geometry/transform.h"
+#include "ui/gfx/hdr_metadata.h"
 #include "ui/gfx/mojom/accelerated_widget_mojom_traits.h"
 #include "ui/gfx/mojom/buffer_types_mojom_traits.h"
+#include "ui/gfx/mojom/hdr_metadata.mojom.h"
+#include "ui/gfx/mojom/hdr_metadata_mojom_traits.h"
 #include "ui/gfx/mojom/presentation_feedback.mojom.h"
 #include "ui/gfx/mojom/presentation_feedback_mojom_traits.h"
 #include "ui/gfx/mojom/traits_test_service.mojom.h"
@@ -29,12 +35,30 @@ namespace gfx {
 namespace {
 
 gfx::AcceleratedWidget CastToAcceleratedWidget(int i) {
-#if defined(USE_OZONE) || BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_APPLE)
   return static_cast<gfx::AcceleratedWidget>(i);
 #else
   return reinterpret_cast<gfx::AcceleratedWidget>(i);
 #endif
 }
+
+// Used by the GpuMemoryBufferHandle test to produce a valid object handle to
+// embed in a NativePixmapPlane object, so that the test isn't sending an
+// invalid FD/vmo object where the mojom requires a valid one.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+base::ScopedFD CreateValidLookingBufferHandle() {
+  return base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
+             base::UnsafeSharedMemoryRegion::Create(1024))
+      .PassPlatformHandle()
+      .fd;
+}
+#elif BUILDFLAG(IS_FUCHSIA)
+zx::vmo CreateValidLookingBufferHandle() {
+  return base::UnsafeSharedMemoryRegion::TakeHandleForSerialization(
+             base::UnsafeSharedMemoryRegion::Create(1024))
+      .PassPlatformHandle();
+}
+#endif
 
 class StructTraitsTest : public testing::Test, public mojom::TraitsTestService {
  public:
@@ -174,7 +198,7 @@ TEST_F(StructTraitsTest, GpuMemoryBufferHandle) {
   base::UnsafeSharedMemoryRegion output_memory = std::move(output.region);
   EXPECT_TRUE(output_memory.Map().IsValid());
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || defined(USE_OZONE)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_OZONE)
   gfx::GpuMemoryBufferHandle handle2;
   const uint64_t kSize = kOffset + kStride;
   handle2.type = gfx::NATIVE_PIXMAP;
@@ -183,10 +207,10 @@ TEST_F(StructTraitsTest, GpuMemoryBufferHandle) {
   handle2.stride = kStride;
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   const uint64_t kModifier = 2;
-  base::ScopedFD buffer_handle;
+  base::ScopedFD buffer_handle = CreateValidLookingBufferHandle();
   handle2.native_pixmap_handle.modifier = kModifier;
 #elif BUILDFLAG(IS_FUCHSIA)
-  zx::vmo buffer_handle;
+  zx::vmo buffer_handle = CreateValidLookingBufferHandle();
   zx::eventpair client_handle, service_handle;
   auto status = zx::eventpair::create(0, &client_handle, &service_handle);
   DCHECK_EQ(status, ZX_OK);
@@ -307,6 +331,34 @@ TEST_F(StructTraitsTest, RRectF) {
   input.SetCornerRadii(RRectF::Corner::kLowerRight, 0, 0);
   input.SetCornerRadii(RRectF::Corner::kLowerLeft, 0, 0);
   remote->EchoRRectF(input, &output);
+  EXPECT_EQ(input, output);
+}
+
+TEST_F(StructTraitsTest, HDRMetadata) {
+  // Test an empty input/output.
+  gfx::HDRMetadata input;
+  gfx::HDRMetadata output;
+  mojo::test::SerializeAndDeserialize<gfx::mojom::HDRMetadata>(input, output);
+  EXPECT_EQ(input, output);
+
+  // Include CTA 861.3.
+  input.cta_861_3.emplace(123, 456);
+  mojo::test::SerializeAndDeserialize<gfx::mojom::HDRMetadata>(input, output);
+  EXPECT_EQ(input, output);
+
+  // Include SMPTE ST 2086.
+  input.smpte_st_2086.emplace(SkNamedPrimariesExt::kRec2020, 789, 123);
+  mojo::test::SerializeAndDeserialize<gfx::mojom::HDRMetadata>(input, output);
+  EXPECT_EQ(input, output);
+
+  // Include SDR white level.
+  input.ndwl.emplace(123.f);
+  mojo::test::SerializeAndDeserialize<gfx::mojom::HDRMetadata>(input, output);
+  EXPECT_EQ(input, output);
+
+  // Include extended range.
+  input.extended_range.emplace(10.f, 4.f);
+  mojo::test::SerializeAndDeserialize<gfx::mojom::HDRMetadata>(input, output);
   EXPECT_EQ(input, output);
 }
 

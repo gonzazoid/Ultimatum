@@ -5,7 +5,10 @@
 #ifndef COMPONENTS_PDF_RENDERER_PDF_AX_ACTION_TARGET_H_
 #define COMPONENTS_PDF_RENDERER_PDF_AX_ACTION_TARGET_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "ui/accessibility/ax_action_target.h"
+#include "ui/accessibility/ax_tree_id.h"
 
 namespace ui {
 class AXNode;
@@ -25,7 +28,7 @@ class PdfAXActionTarget : public ui::AXActionTarget {
   PdfAXActionTarget(const ui::AXNode& plugin_node, PdfAccessibilityTree* tree);
   ~PdfAXActionTarget() override;
 
-  const ui::AXNode& AXNode() const { return target_plugin_node_; }
+  const ui::AXNode& AXNode() const { return *target_plugin_node_; }
 
  protected:
   // AXActionTarget overrides.
@@ -36,7 +39,6 @@ class PdfAXActionTarget : public ui::AXActionTarget {
   gfx::Point MinimumScrollOffset() const override;
   gfx::Point MaximumScrollOffset() const override;
   void SetScrollOffset(const gfx::Point& point) const override;
-  bool SetSelected(bool selected) const override;
   bool SetSelection(const ui::AXActionTarget* anchor_object,
                     int anchor_offset,
                     const ui::AXActionTarget* focus_object,
@@ -52,9 +54,11 @@ class PdfAXActionTarget : public ui::AXActionTarget {
   bool Click() const;
   bool ShowContextMenu() const;
   bool ScrollToGlobalPoint(const gfx::Point& point) const;
+  bool StitchChildTree(const ui::AXTreeID& child_tree_id) const;
 
-  const ui::AXNode& target_plugin_node_;
-  PdfAccessibilityTree* pdf_accessibility_tree_source_;
+  const raw_ref<const ui::AXNode, ExperimentalRenderer> target_plugin_node_;
+  raw_ptr<PdfAccessibilityTree, ExperimentalRenderer>
+      pdf_accessibility_tree_source_;
 };
 
 }  // namespace pdf

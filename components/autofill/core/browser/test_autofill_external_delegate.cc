@@ -13,12 +13,11 @@ namespace autofill {
 
 TestAutofillExternalDelegate::TestAutofillExternalDelegate(
     BrowserAutofillManager* autofill_manager,
-    AutofillDriver* autofill_driver,
     bool call_parent_methods)
-    : AutofillExternalDelegate(autofill_manager, autofill_driver),
+    : AutofillExternalDelegate(autofill_manager),
       call_parent_methods_(call_parent_methods) {}
 
-TestAutofillExternalDelegate::~TestAutofillExternalDelegate() {}
+TestAutofillExternalDelegate::~TestAutofillExternalDelegate() = default;
 
 void TestAutofillExternalDelegate::OnPopupShown() {
   popup_hidden_ = false;
@@ -32,35 +31,34 @@ void TestAutofillExternalDelegate::OnPopupHidden() {
   run_loop_.Quit();
 }
 
-void TestAutofillExternalDelegate::OnQuery(int query_id,
-                                           const FormData& form,
-                                           const FormFieldData& field,
-                                           const gfx::RectF& bounds) {
+void TestAutofillExternalDelegate::OnQuery(
+    const FormData& form,
+    const FormFieldData& field,
+    const gfx::RectF& bounds,
+    AutofillSuggestionTriggerSource trigger_source) {
   on_query_seen_ = true;
   on_suggestions_returned_seen_ = false;
+  trigger_source_ = trigger_source;
 
   // If necessary, call the superclass's OnQuery to set up its other fields
   // properly.
   if (call_parent_methods_)
-    AutofillExternalDelegate::OnQuery(query_id, form, field, bounds);
+    AutofillExternalDelegate::OnQuery(form, field, bounds, trigger_source);
 }
 
 void TestAutofillExternalDelegate::OnSuggestionsReturned(
-    int query_id,
+    FieldGlobalId field_id,
     const std::vector<Suggestion>& suggestions,
-    AutoselectFirstSuggestion autoselect_first_suggestion,
     bool is_all_server_suggestions) {
   on_suggestions_returned_seen_ = true;
-  query_id_ = query_id;
+  field_id_ = field_id;
   suggestions_ = suggestions;
-  autoselect_first_suggestion_ = autoselect_first_suggestion;
   is_all_server_suggestions_ = is_all_server_suggestions;
 
   // If necessary, call the superclass's OnSuggestionsReturned in order to
   // execute logic relating to showing the popup or not.
   if (call_parent_methods_)
-    AutofillExternalDelegate::OnSuggestionsReturned(query_id, suggestions,
-                                                    autoselect_first_suggestion,
+    AutofillExternalDelegate::OnSuggestionsReturned(field_id, suggestions,
                                                     is_all_server_suggestions);
 }
 
@@ -69,11 +67,14 @@ bool TestAutofillExternalDelegate::HasActiveScreenReader() const {
 }
 
 void TestAutofillExternalDelegate::OnAutofillAvailabilityEvent(
-    const mojom::AutofillState state) {
-  if (state == mojom::AutofillState::kAutofillAvailable)
+    mojom::AutofillSuggestionAvailability suggestion_availability) {
+  if (suggestion_availability ==
+      mojom::AutofillSuggestionAvailability::kAutofillAvailable) {
     has_suggestions_available_on_field_focus_ = true;
-  else if (state == mojom::AutofillState::kNoSuggestions)
+  } else if (suggestion_availability ==
+             mojom::AutofillSuggestionAvailability::kNoSuggestions) {
     has_suggestions_available_on_field_focus_ = false;
+  }
 }
 
 void TestAutofillExternalDelegate::WaitForPopupHidden() {
@@ -84,15 +85,14 @@ void TestAutofillExternalDelegate::WaitForPopupHidden() {
 }
 
 void TestAutofillExternalDelegate::CheckSuggestions(
-    int expected_page_id,
-    size_t expected_num_suggestions,
-    const Suggestion expected_suggestions[]) {
+    FieldGlobalId field_id,
+    const std::vector<Suggestion>& expected_suggestions) {
   // Ensure that these results are from the most recent query.
   EXPECT_TRUE(on_suggestions_returned_seen_);
 
-  EXPECT_EQ(expected_page_id, query_id_);
-  ASSERT_LE(expected_num_suggestions, suggestions_.size());
-  for (size_t i = 0; i < expected_num_suggestions; ++i) {
+  EXPECT_EQ(field_id, field_id_);
+  ASSERT_EQ(expected_suggestions.size(), suggestions_.size());
+  for (size_t i = 0; i < suggestions_.size(); ++i) {
     SCOPED_TRACE(base::StringPrintf("i: %" PRIuS, i));
     EXPECT_EQ(expected_suggestions[i].main_text.value,
               suggestions_[i].main_text.value);
@@ -100,23 +100,37 @@ void TestAutofillExternalDelegate::CheckSuggestions(
               suggestions_[i].minor_text.value);
     EXPECT_EQ(expected_suggestions[i].labels, suggestions_[i].labels);
     EXPECT_EQ(expected_suggestions[i].icon, suggestions_[i].icon);
-    EXPECT_EQ(expected_suggestions[i].frontend_id, suggestions_[i].frontend_id);
+    EXPECT_EQ(expected_suggestions[i].popup_item_id,
+              suggestions_[i].popup_item_id);
+    EXPECT_EQ(expected_suggestions[i].is_acceptable,
+              suggestions_[i].is_acceptable);
   }
-  ASSERT_EQ(expected_num_suggestions, suggestions_.size());
 }
 
-void TestAutofillExternalDelegate::CheckNoSuggestions(int expected_page_id) {
-  CheckSuggestions(expected_page_id, 0, nullptr);
+void TestAutofillExternalDelegate::CheckSuggestionsNotReturned(
+    FieldGlobalId field_id) {
+  if (on_suggestions_returned_seen_) {
+    EXPECT_NE(field_id, field_id_);
+  }
+}
+
+void TestAutofillExternalDelegate::CheckNoSuggestions(FieldGlobalId field_id) {
+  CheckSuggestions(field_id, {});
 }
 
 void TestAutofillExternalDelegate::CheckSuggestionCount(
-    int expected_page_id,
+    FieldGlobalId field_id,
     size_t expected_num_suggestions) {
   // Ensure that these results are from the most recent query.
   EXPECT_TRUE(on_suggestions_returned_seen_);
 
-  EXPECT_EQ(expected_page_id, query_id_);
+  EXPECT_EQ(field_id, field_id_);
   ASSERT_EQ(expected_num_suggestions, suggestions_.size());
+}
+
+const std::vector<Suggestion>& TestAutofillExternalDelegate::suggestions()
+    const {
+  return suggestions_;
 }
 
 bool TestAutofillExternalDelegate::on_query_seen() const {
@@ -127,9 +141,9 @@ bool TestAutofillExternalDelegate::on_suggestions_returned_seen() const {
   return on_suggestions_returned_seen_;
 }
 
-AutoselectFirstSuggestion
-TestAutofillExternalDelegate::autoselect_first_suggestion() const {
-  return autoselect_first_suggestion_;
+AutofillSuggestionTriggerSource TestAutofillExternalDelegate::trigger_source()
+    const {
+  return trigger_source_;
 }
 
 bool TestAutofillExternalDelegate::is_all_server_suggestions() const {

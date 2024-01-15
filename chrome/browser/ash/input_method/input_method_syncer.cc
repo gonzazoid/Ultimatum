@@ -4,12 +4,12 @@
 
 #include "chrome/browser/ash/input_method/input_method_syncer.h"
 
-#include <algorithm>
 #include <set>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -40,8 +40,8 @@ void CheckAndResolveInputMethodIDs(
     supported_input_method_ids.insert(descriptor.id());
 
   // Convert engine IDs to input method extension IDs.
-  std::transform(values->begin(), values->end(), values->begin(),
-                 extension_ime_util::GetInputMethodIDByEngineID);
+  base::ranges::transform(values->begin(), values->end(), values->begin(),
+                          extension_ime_util::GetInputMethodIDByEngineID);
 
   // Remove values that aren't found in the set of supported input method IDs.
   auto it = values->begin();
@@ -203,9 +203,8 @@ void InputMethodSyncer::MergeSyncedPrefs() {
   std::vector<std::string> new_token_values;
   new_token_values = base::SplitString(
       preload_engines, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  std::transform(new_token_values.begin(), new_token_values.end(),
-                 new_token_values.begin(),
-                 extension_ime_util::GetComponentIDByInputMethodID);
+  base::ranges::transform(new_token_values, new_token_values.begin(),
+                          extension_ime_util::GetComponentIDByInputMethodID);
   std::string preload_engines_syncable = preload_engines_syncable_.GetValue();
   synced_tokens =
       base::SplitStringPiece(preload_engines_syncable, ",",
@@ -249,22 +248,18 @@ std::string InputMethodSyncer::AddSupportedInputMethodValues(
   if (pref_name == prefs::kLanguagePreloadEngines ||
       pref_name == prefs::kLanguageEnabledImes) {
     InputMethodManager* manager = InputMethodManager::Get();
-    std::unique_ptr<InputMethodDescriptors> supported_descriptors =
-        std::make_unique<InputMethodDescriptors>();
+    InputMethodDescriptors supported_descriptors;
 
     if (pref_name == prefs::kLanguagePreloadEngines) {
       // Add the available component extension IMEs.
       ComponentExtensionIMEManager* component_extension_manager =
           manager->GetComponentExtensionIMEManager();
-      InputMethodDescriptors component_descriptors =
+      supported_descriptors =
           component_extension_manager->GetAllIMEAsInputMethodDescriptor();
-      supported_descriptors->insert(supported_descriptors->end(),
-                                    component_descriptors.begin(),
-                                    component_descriptors.end());
     } else {
-      ime_state_->GetInputMethodExtensions(supported_descriptors.get());
+      ime_state_->GetInputMethodExtensions(&supported_descriptors);
     }
-    CheckAndResolveInputMethodIDs(*supported_descriptors, &new_token_values);
+    CheckAndResolveInputMethodIDs(supported_descriptors, &new_token_values);
   } else if (pref_name != language::prefs::kPreferredLanguages) {
     NOTREACHED() << "Attempting to merge an invalid preference.";
     // kPreferredLanguages is checked in CheckAndResolveLocales().
@@ -291,8 +286,7 @@ void InputMethodSyncer::FinishMerge(const std::string& languages) {
 void InputMethodSyncer::OnPreferenceChanged(const std::string& pref_name) {
   DCHECK(pref_name == language::prefs::kPreferredLanguages ||
          pref_name == prefs::kLanguagePreloadEngines ||
-         pref_name == prefs::kLanguageEnabledImes ||
-         pref_name == prefs::kHindiInscriptLayoutEnabled);
+         pref_name == prefs::kLanguageEnabledImes);
 
   if (merging_ || prefs_->GetBoolean(prefs::kLanguageShouldMergeInputMethods))
     return;
@@ -307,8 +301,8 @@ void InputMethodSyncer::OnPreferenceChanged(const std::string& pref_name) {
   std::vector<std::string> engines =
       base::SplitString(preload_engines_.GetValue(), ",", base::TRIM_WHITESPACE,
                         base::SPLIT_WANT_ALL);
-  std::transform(engines.begin(), engines.end(), engines.begin(),
-                 extension_ime_util::GetComponentIDByInputMethodID);
+  base::ranges::transform(engines, engines.begin(),
+                          extension_ime_util::GetComponentIDByInputMethodID);
   preload_engines_syncable_.SetValue(base::JoinString(engines, ","));
 }
 

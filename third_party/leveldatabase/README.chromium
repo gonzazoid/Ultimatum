@@ -5,10 +5,13 @@ Version: 1.23
 License: New BSD
 License File: src/LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
-Alternative to SQLite used as the backend for IndexedDB and internally by the
-FileSystem API implementation and others.
+Alternative to SQLite.
+
+Prefer using SQLite when feasible. For googlers, please refer to
+go/use-sqlite-in-chrome for more details.
 
 Currently using (not yet released) manifest reuse feature for all platforms
 except Chrome OS.
@@ -27,3 +30,8 @@ Local Additions:
 * leveldb_chrome::NewMemEnv() to create memory Env instances that are tracked to
   know if a database open request is in-memory. These memory Env instances report
   memory usage to memory-infra.
+* leveldb_chrome.cc and env_chromium.cc to use
+  base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled() instead of
+  base::SysUtils::IsLowEndDevice(). Will run an experiment with
+  PartialLowEndMode enabled on Android 4gb and 6gb devices to see how
+  memory performance and cpu performance will change.

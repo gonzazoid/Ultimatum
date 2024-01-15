@@ -8,6 +8,10 @@
       field_id: 2,
     },
   },
+  legacy_mappings: {
+    'cros-legacy-color': '$text_color_primary',
+    'cros-legacy-color-w-opacity': 'rgba($text_color_primary.rgb, .3)',
+  },
   colors: {
     text_color_primary: {
       light: "$google_grey_900",

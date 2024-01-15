@@ -7,7 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/geolocation/geoposition.h"
@@ -131,7 +133,7 @@ class TestTimeZoneAPILoaderFactory : public network::TestURLLoaderFactory {
   std::string response_;
   const size_t require_retries_;
   size_t attempts_ = 0;
-  TimeZoneProvider* provider_;
+  raw_ptr<TimeZoneProvider> provider_;
 };
 
 class TimeZoneReceiver {
@@ -237,14 +239,14 @@ TEST_F(TimeZoneTest, InvalidResponse) {
                                           base::Unretained(&receiver)));
   receiver.WaitUntilRequestDone();
   std::string receiver_timezone = receiver.timezone()->ToStringForDebug();
-  EXPECT_NE(std::string::npos,
-            receiver_timezone.find("dstOffset=0.000000, rawOffset=0.000000, "
-                                   "timeZoneId='', timeZoneName='', "
-                                   "error_message='TimeZone provider at "
-                                   "'https://localhost/' : JSONReader "
-                                   "failed:"));
-  EXPECT_NE(std::string::npos,
-            receiver_timezone.find("status=6 (REQUEST_ERROR)"));
+  EXPECT_TRUE(base::Contains(receiver_timezone,
+                             "dstOffset=0.000000, rawOffset=0.000000, "
+                             "timeZoneId='', timeZoneName='', "
+                             "error_message='TimeZone provider at "
+                             "'https://localhost/' : JSONReader "
+                             "failed:"));
+
+  EXPECT_TRUE(base::Contains(receiver_timezone, "status=6 (REQUEST_ERROR)"));
   EXPECT_FALSE(receiver.server_error());
   EXPECT_GE(url_factory.attempts(), 2U);
   if (url_factory.attempts() > expected_retries + 1) {

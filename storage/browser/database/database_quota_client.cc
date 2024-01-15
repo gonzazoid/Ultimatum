@@ -11,12 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_errors.h"
@@ -56,7 +55,7 @@ void DatabaseQuotaClient::GetBucketUsage(const BucketLocator& bucket,
   }
 
   OriginInfo info;
-  if (db_tracker_.GetOriginInfo(
+  if (db_tracker_->GetOriginInfo(
           GetIdentifierFromOrigin(bucket.storage_key.origin()), &info)) {
     std::move(callback).Run(info.TotalSize());
   } else {
@@ -73,11 +72,11 @@ void DatabaseQuotaClient::GetStorageKeysForType(
 
   std::vector<StorageKey> all_storage_keys;
   std::vector<std::string> origin_identifiers;
-  if (db_tracker_.GetAllOriginIdentifiers(&origin_identifiers)) {
+  if (db_tracker_->GetAllOriginIdentifiers(&origin_identifiers)) {
     all_storage_keys.reserve(origin_identifiers.size());
     for (const auto& identifier : origin_identifiers)
       all_storage_keys.emplace_back(
-          StorageKey(GetOriginFromIdentifier(identifier)));
+          StorageKey::CreateFirstParty(GetOriginFromIdentifier(identifier)));
   }
   std::move(callback).Run(all_storage_keys);
 }
@@ -95,7 +94,7 @@ void DatabaseQuotaClient::DeleteBucketData(const BucketLocator& bucket,
     return;
   }
 
-  db_tracker_.DeleteDataForOrigin(
+  db_tracker_->DeleteDataForOrigin(
       bucket.storage_key.origin(),
       base::BindOnce(
           [](DeleteBucketDataCallback callback, int result) {

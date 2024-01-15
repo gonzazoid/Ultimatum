@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -93,8 +93,10 @@ class LocalStorageHelperTest : public content::ContentBrowserTest {
 // once it finishes fetching the local storage data.
 class StopTestOnCallback {
  public:
-  explicit StopTestOnCallback(LocalStorageHelper* local_storage_helper)
-      : local_storage_helper_(local_storage_helper) {
+  StopTestOnCallback(LocalStorageHelper* local_storage_helper,
+                     base::OnceClosure quit_closure)
+      : local_storage_helper_(local_storage_helper),
+        quit_closure_(std::move(quit_closure)) {
     DCHECK(local_storage_helper_);
   }
 
@@ -117,27 +119,30 @@ class StopTestOnCallback {
     }
     EXPECT_TRUE(origin1_found);
     EXPECT_TRUE(origin2_found);
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    std::move(quit_closure_).Run();
   }
 
  private:
   raw_ptr<LocalStorageHelper> local_storage_helper_;
+  base::OnceClosure quit_closure_;
 };
 
 IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CallbackCompletes) {
+  base::RunLoop loop;
   auto local_storage_helper = base::MakeRefCounted<LocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   CreateLocalStorageDataForTest();
-  StopTestOnCallback stop_test_on_callback(local_storage_helper.get());
+  StopTestOnCallback stop_test_on_callback(local_storage_helper.get(),
+                                           loop.QuitWhenIdleClosure());
   local_storage_helper->StartFetching(base::BindOnce(
       &StopTestOnCallback::Callback, base::Unretained(&stop_test_on_callback)));
   // Blocks until StopTestOnCallback::Callback is notified.
-  content::RunMessageLoop();
+  loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, DeleteSingleOrigin) {
   auto local_storage_helper = base::MakeRefCounted<LocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   CreateLocalStorageDataForTest();
   base::RunLoop delete_run_loop;
   local_storage_helper->DeleteStorageKey(
@@ -180,7 +185,7 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedAddLocalStorage) {
       blink::StorageKey::CreateFromStringForTesting("http://host2:1/");
 
   auto helper = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   helper->Add(storage_key1);
   helper->Add(storage_key2);
 
@@ -202,7 +207,7 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedUnique) {
       blink::StorageKey::CreateFromStringForTesting("http://host1:1/");
 
   auto helper = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   helper->Add(storage_key);
   helper->Add(storage_key);
 
@@ -229,12 +234,12 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedEmptyIgnored) {
 
   // Add all three of our storage keys to our canned local storage helpers.
   auto helper = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   helper->Add(storage_key1);
   helper->Add(storage_key2);
   helper->Add(storage_key3);
   auto helper_auto_ignore = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext(),
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition(),
       /*update_ignored_empty_keys_on_fetch=*/true);
   helper_auto_ignore->Add(storage_key1);
   helper_auto_ignore->Add(storage_key2);

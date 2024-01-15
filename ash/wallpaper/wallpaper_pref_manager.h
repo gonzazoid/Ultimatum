@@ -5,6 +5,7 @@
 #ifndef ASH_WALLPAPER_WALLPAPER_PREF_MANAGER_H_
 #define ASH_WALLPAPER_WALLPAPER_PREF_MANAGER_H_
 
+#include <optional>
 #include <string>
 
 #include "ash/ash_export.h"
@@ -12,9 +13,9 @@
 #include "ash/public/cpp/style/color_mode_observer.h"
 #include "ash/public/cpp/wallpaper/wallpaper_controller.h"
 #include "ash/public/cpp/wallpaper/wallpaper_info.h"
+#include "ash/wallpaper/wallpaper_utils/wallpaper_calculated_colors.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/strings/string_piece.h"
@@ -55,10 +56,7 @@ class WallpaperProfileHelper {
 };
 
 // Manages wallpaper preferences and tracks the currently configured wallpaper.
-class ASH_EXPORT WallpaperPrefManager
-    : public base::SupportsWeakPtr<WallpaperPrefManager>,
-      public ColorModeObserver,
-      public SessionObserver {
+class ASH_EXPORT WallpaperPrefManager : public SessionObserver {
  public:
   // Names of nodes with wallpaper info in |kUserWallpaperInfo| dictionary.
   static const char kNewWallpaperAssetIdNodeName[];
@@ -75,6 +73,15 @@ class ASH_EXPORT WallpaperPrefManager
   // Names of nodes for the online wallpaper variant dictionary.
   static const char kOnlineWallpaperTypeNodeName[];
   static const char kOnlineWallpaperUrlNodeName[];
+
+  // Determines whether the wallpaper info is syncable and should be stored in
+  // synced prefs.
+  static bool ShouldSyncOut(const WallpaperInfo& local_info);
+  // Determines whether the local wallpaper info should by overriden by the
+  // synced prefs.
+  static bool ShouldSyncIn(const WallpaperInfo& synced_info,
+                           const WallpaperInfo& local_info,
+                           const bool is_oobe);
 
   static std::unique_ptr<WallpaperPrefManager> Create(PrefService* local_state);
 
@@ -120,24 +127,31 @@ class ASH_EXPORT WallpaperPrefManager
   // Remove the wallpaper entry for |account_id|.
   virtual void RemoveUserWallpaperInfo(const AccountId& account_id) = 0;
 
-  virtual void CacheProminentColors(const AccountId& account_id,
-                                    const std::vector<SkColor>& colors) = 0;
+  // Returns a WallpaperCalculatedColors for a wallpaper with the corresponding
+  // `location`, if one can be found. The result is synthesized from Prominent
+  // and KMean colors.
+  virtual std::optional<WallpaperCalculatedColors> GetCachedWallpaperColors(
+      base::StringPiece location) const = 0;
 
+  // DEPRECATED: Will be removed soon.
   virtual void RemoveProminentColors(const AccountId& account_id) = 0;
 
-  // Returns the cached prominent colors for a wallpaper with `location` if
-  // present.
-  virtual absl::optional<std::vector<SkColor>> GetCachedProminentColors(
-      const base::StringPiece location) const = 0;
-
-  virtual void CacheKMeanColor(const AccountId& account_id,
+  virtual void CacheKMeanColor(base::StringPiece location,
                                SkColor k_mean_color) = 0;
 
   // Returns the cached KMeans color value for the wallpaper at `location`.
-  virtual absl::optional<SkColor> GetCachedKMeanColor(
+  virtual std::optional<SkColor> GetCachedKMeanColor(
       const base::StringPiece location) const = 0;
 
   virtual void RemoveKMeanColor(const AccountId& account_id) = 0;
+
+  // Cache the prominent color sampled with the 'Celebi' algorithm.
+  virtual void CacheCelebiColor(base::StringPiece location,
+                                SkColor celebi_color) = 0;
+  // Returns the cached celebi color for the wallpaper at `location`.
+  virtual std::optional<SkColor> GetCelebiColor(
+      const base::StringPiece location) const = 0;
+  virtual void RemoveCelebiColor(const AccountId& account_id) = 0;
 
   virtual bool SetDailyGooglePhotosWallpaperIdCache(
       const AccountId& account_id,

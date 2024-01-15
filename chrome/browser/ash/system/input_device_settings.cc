@@ -5,7 +5,7 @@
 #include "chrome/browser/ash/system/input_device_settings.h"
 
 #include "chrome/browser/ash/policy/enrollment/enrollment_requisition_manager.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/prefs/pref_service.h"
 
 namespace ash {
@@ -17,8 +17,7 @@ namespace {
 // |to_set|. This differs from *to_set = other; in so far as nothing is changed
 // if |other| has no value. Returns true if |to_set| was updated.
 template <typename T>
-bool UpdateIfHasValue(const absl::optional<T>& other,
-                      absl::optional<T>* to_set) {
+bool UpdateIfHasValue(const std::optional<T>& other, std::optional<T>* to_set) {
   if (!other.has_value() || other == *to_set)
     return false;
   *to_set = other;
@@ -471,13 +470,10 @@ bool InputDeviceSettings::ForceKeyboardDrivenUINavigation() {
     return true;
   }
 
-  bool keyboard_driven = false;
-  if (chromeos::system::StatisticsProvider::GetInstance()->GetMachineFlag(
-          chromeos::system::kOemKeyboardDrivenOobeKey, &keyboard_driven)) {
-    return keyboard_driven;
-  }
-
-  return false;
+  return StatisticsProvider::FlagValueToBool(
+      StatisticsProvider::GetInstance()->GetMachineFlag(
+          kOemKeyboardDrivenOobeKey),
+      /*default_value=*/false);
 }
 
 }  // namespace system

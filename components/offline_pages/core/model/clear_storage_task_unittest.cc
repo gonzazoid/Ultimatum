@@ -8,10 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
@@ -57,8 +58,9 @@ class TestArchiveManager : public ArchiveManager {
     base::FileEnumerator file_enumerator(temporary_archive_dir_, false,
                                          base::FileEnumerator::FILES);
     int temp_file_count = 0;
-    while (!file_enumerator.Next().empty())
+    while (!file_enumerator.Next().empty()) {
       temp_file_count++;
+    }
     stats.temporary_archives_size = temp_file_count * kTestFileSize;
     std::move(callback).Run(stats);
   }
@@ -106,6 +108,7 @@ class ClearStorageTaskTest : public ModelTaskTestBase {
   int total_cleared_times_;
   ClearStorageResult last_clear_storage_result_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
+  base::WeakPtrFactory<ClearStorageTaskTest> weak_ptr_factory_{this};
 };
 
 ClearStorageTaskTest::ClearStorageTaskTest()
@@ -128,8 +131,9 @@ void ClearStorageTaskTest::Initialize(
   generator()->SetFileSize(kTestFileSize);
 
   // Adding pages based on |page_settings|.
-  for (const auto& setting : page_settings)
+  for (const auto& setting : page_settings) {
     AddPages(setting);
+  }
   archive_manager_ = std::make_unique<TestArchiveManager>(TemporaryDir());
 }
 
@@ -149,8 +153,9 @@ void ClearStorageTaskTest::AddPages(const PageSettings& setting) {
 
   // Make sure no persistent pages are marked as expired.
   const OfflinePageClientPolicy& policy = GetPolicy(setting.name_space);
-  if (policy.lifetime_type == LifetimeType::PERSISTENT)
+  if (policy.lifetime_type == LifetimeType::PERSISTENT) {
     ASSERT_FALSE(setting.expired_page_count);
+  }
 
   generator()->SetCreationTime(clock()->Now());
   generator()->SetNamespace(setting.name_space);
@@ -175,7 +180,7 @@ void ClearStorageTaskTest::RunClearStorageTask(const base::Time& start_time) {
   auto task = std::make_unique<ClearStorageTask>(
       store(), archive_manager(), start_time,
       base::BindOnce(&ClearStorageTaskTest::OnClearStorageDone,
-                     base::AsWeakPtr(this)));
+                     weak_ptr_factory_.GetWeakPtr()));
 
   RunTask(std::move(task));
 }
@@ -194,8 +199,6 @@ TEST_F(ClearStorageTaskTest, ClearPagesLessThanLimit) {
   EXPECT_EQ(ClearStorageResult::SUCCESS, last_clear_storage_result());
   EXPECT_EQ(2LL, store_test_util()->GetPageCount());
   EXPECT_EQ(2UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 5, 2);
 }
 
 TEST_F(ClearStorageTaskTest, ClearPagesMoreFreshPages) {
@@ -212,8 +215,6 @@ TEST_F(ClearStorageTaskTest, ClearPagesMoreFreshPages) {
   EXPECT_EQ(ClearStorageResult::SUCCESS, last_clear_storage_result());
   EXPECT_EQ(130LL, store_test_util()->GetPageCount());
   EXPECT_EQ(130UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 5, 1);
 }
 
 TEST_F(ClearStorageTaskTest, TryClearPersistentPages) {
@@ -230,8 +231,6 @@ TEST_F(ClearStorageTaskTest, TryClearPersistentPages) {
   EXPECT_EQ(20LL, store_test_util()->GetPageCount());
   EXPECT_EQ(0UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
   EXPECT_EQ(20UL, test_utils::GetFileCountInDirectory(PrivateDir()));
-  histogram_tester()->ExpectTotalCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 0);
 }
 
 TEST_F(ClearStorageTaskTest, TryClearPersistentPagesWithStoragePressure) {
@@ -283,8 +282,6 @@ TEST_F(ClearStorageTaskTest, ClearMultipleTimes) {
   EXPECT_EQ(ClearStorageResult::SUCCESS, last_clear_storage_result());
   EXPECT_EQ(90LL, store_test_util()->GetPageCount());
   EXPECT_EQ(50UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 30, 1);
 
   // Advance the clock by the expiration period of bookmark namespace so that
   // all pages left in that namespace should be expired.
@@ -298,11 +295,6 @@ TEST_F(ClearStorageTaskTest, ClearMultipleTimes) {
   EXPECT_EQ(ClearStorageResult::SUCCESS, last_clear_storage_result());
   EXPECT_EQ(70LL, store_test_util()->GetPageCount());
   EXPECT_EQ(30UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectTotalCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 21);
-  histogram_tester()->ExpectBucketCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation",
-      30 + bookmark_policy.expiration_period.InMinutes(), 20);
 
   // Advance the clock by 1 ms, there's no change in pages so the attempt to
   // clear storage should be unnecessary.
@@ -315,8 +307,6 @@ TEST_F(ClearStorageTaskTest, ClearMultipleTimes) {
   EXPECT_EQ(ClearStorageResult::UNNECESSARY, last_clear_storage_result());
   EXPECT_EQ(70LL, store_test_util()->GetPageCount());
   EXPECT_EQ(30UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectTotalCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 21);
 
   // Adding more fresh pages in last_n namespace to make storage usage exceed
   // limit, so even if only 5 minutes passed from last clearing, this will still
@@ -338,16 +328,6 @@ TEST_F(ClearStorageTaskTest, ClearMultipleTimes) {
   EXPECT_EQ(ClearStorageResult::SUCCESS, last_clear_storage_result());
   EXPECT_EQ(107LL, store_test_util()->GetPageCount());
   EXPECT_EQ(67UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectTotalCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 224);
-  // The 30 original ones last_n pages are cleared (and they fall into the same
-  // bucket as the 20 from bookmarks)...
-  histogram_tester()->ExpectBucketCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation",
-      30 + bookmark_policy.expiration_period.InMinutes() + 5, 20 + 30);
-  // ... As well as 133 from this latest round.
-  histogram_tester()->ExpectBucketCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 5, 173);
 
   // Advance the clock by 300 days, in order to expire all temporary pages. Only
   // 67 temporary pages are left from the last clearing.
@@ -360,11 +340,6 @@ TEST_F(ClearStorageTaskTest, ClearMultipleTimes) {
   EXPECT_EQ(ClearStorageResult::SUCCESS, last_clear_storage_result());
   EXPECT_EQ(40LL, store_test_util()->GetPageCount());
   EXPECT_EQ(0UL, test_utils::GetFileCountInDirectory(TemporaryDir()));
-  histogram_tester()->ExpectTotalCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation", 291);
-  histogram_tester()->ExpectBucketCount(
-      "OfflinePages.ClearTemporaryPages.TimeSinceCreation",
-      base::Days(300).InMinutes() + 5, 67);
 }
 
 }  // namespace offline_pages

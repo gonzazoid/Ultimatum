@@ -6,18 +6,17 @@ package org.chromium.mojo;
 
 import androidx.annotation.IntDef;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 import org.junit.rules.ExternalResource;
 
-import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.library_loader.LibraryProcessType;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Base class to test mojo. Setup the environment.
- */
+/** Base class to test mojo. Setup the environment. */
 @JNINamespace("mojo::android")
 public class MojoTestRule extends ExternalResource {
     @IntDef({MojoCore.SKIP_INITIALIZATION, MojoCore.INITIALIZE})
@@ -44,39 +43,58 @@ public class MojoTestRule extends ExternalResource {
     protected void before() {
         LibraryLoader.getInstance().ensureInitialized();
         if (mShouldInitCore && !sIsCoreInitialized) {
-            nativeInitCore();
+            MojoTestRuleJni.get().initCore();
             sIsCoreInitialized = true;
         }
-        nativeInit();
-        mTestEnvironmentPointer = nativeSetupTestEnvironment();
+        MojoTestRuleJni.get().init();
+        mTestEnvironmentPointer = MojoTestRuleJni.get().setupTestEnvironment();
     }
 
     @Override
     protected void after() {
-        nativeTearDownTestEnvironment(mTestEnvironmentPointer);
+        MojoTestRuleJni.get().tearDownTestEnvironment(mTestEnvironmentPointer);
+    }
+
+    /**
+     * Quits the run loop. Unlike the C++ equivalent, may not be called if the run loop is not
+     * running.
+     */
+    public void quitLoop() {
+        MojoTestRuleJni.get().quitLoop(mTestEnvironmentPointer);
     }
 
     /**
      * Runs the run loop for the given time.
+     *
+     * @param timeoutMS How long to run the run loop for before timing out, in milliseconds. A
+     *     negative value will run forever; a value of 0 will run until idle.
      */
     public void runLoop(long timeoutMS) {
-        nativeRunLoop(timeoutMS);
+        MojoTestRuleJni.get().runLoop(mTestEnvironmentPointer, timeoutMS);
     }
 
-    /**
-     * Runs the run loop until no handle or task are immediately available.
-     */
+    /** Runs the run loop forever. Should be used in conjunction with quitRunLoop(). */
+    public void runLoopForever() {
+        runLoop(-1);
+    }
+
+    /** Runs the run loop until no handle or task are immediately available. */
     public void runLoopUntilIdle() {
-        nativeRunLoop(0);
+        runLoop(0);
     }
 
-    private static native void nativeInitCore();
+    @NativeMethods
+    interface Natives {
+        void init();
 
-    private native void nativeInit();
+        long setupTestEnvironment();
 
-    private native long nativeSetupTestEnvironment();
+        void tearDownTestEnvironment(long testEnvironment);
 
-    private native void nativeTearDownTestEnvironment(long testEnvironment);
+        void quitLoop(long testEnvironment);
 
-    private native void nativeRunLoop(long timeoutMS);
+        void runLoop(long testEnvironment, long timeoutMS);
+
+        void initCore();
+    }
 }

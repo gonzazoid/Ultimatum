@@ -7,8 +7,8 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/rsa_key_pair.h"
@@ -34,7 +34,7 @@ void ThirdPartyClientAuthenticator::ProcessTokenMessage(
 
   if (token_url.empty() || token_scope.empty()) {
     LOG(ERROR) << "Third-party authentication protocol error: "
-        "missing token verification URL or scope.";
+                  "missing token verification URL or scope.";
     token_state_ = REJECTED;
     rejection_reason_ = RejectionReason::PROTOCOL_ERROR;
     std::move(resume_callback).Run();

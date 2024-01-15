@@ -54,8 +54,11 @@ def _MergeAPIArgumentParser(*args, **kwargs):
       '--javascript-coverage-dir',
       help='directory for JavaScript coverage data')
   parser.add_argument(
-      '--merged-js-cov-filename', help='filename to uniquely identify merged '
-                                       'json coverage data')
+      '--chromium-src-dir',
+      help='directory for chromium/src checkout')
+  parser.add_argument(
+      '--build-dir',
+      help='directory for the build directory in chromium/src')
   parser.add_argument(
       '--per-cl-coverage',
       action='store_true',
@@ -97,7 +100,8 @@ def main():
 
   failed = False
 
-  if params.javascript_coverage_dir:
+  if params.javascript_coverage_dir and params.chromium_src_dir \
+      and params.build_dir:
     current_dir = os.path.dirname(__file__)
     merge_js_results_script = os.path.join(current_dir, 'merge_js_results.py')
     args = [
@@ -107,8 +111,10 @@ def main():
       params.task_output_dir,
       '--javascript-coverage-dir',
       params.javascript_coverage_dir,
-      '--merged-js-cov-filename',
-      params.merged_js_cov_filename,
+      '--chromium-src-dir',
+      params.chromium_src_dir,
+      '--build-dir',
+      params.build_dir,
     ]
 
     rc = subprocess.call(args)

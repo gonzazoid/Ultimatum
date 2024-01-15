@@ -6,11 +6,12 @@
 
 #include <inttypes.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "media/base/video_frame.h"
 
 namespace media {
 
@@ -38,40 +39,40 @@ BitstreamBufferMetadata::BitstreamBufferMetadata(size_t payload_size_bytes,
       timestamp(timestamp) {}
 BitstreamBufferMetadata::~BitstreamBufferMetadata() = default;
 
+bool BitstreamBufferMetadata::dropped_frame() const {
+  return payload_size_bytes == 0;
+}
+
+bool BitstreamBufferMetadata::end_of_picture() const {
+  if (vp9) {
+    return vp9->end_of_picture;
+  }
+  return true;
+}
+
+absl::optional<uint8_t> BitstreamBufferMetadata::spatial_idx() const {
+  if (vp9) {
+    return vp9->spatial_idx;
+  }
+  return absl::nullopt;
+}
+
 VideoEncodeAccelerator::Config::Config()
-    : input_format(PIXEL_FORMAT_UNKNOWN),
-      output_profile(VIDEO_CODEC_PROFILE_UNKNOWN),
-      bitrate(Bitrate::ConstantBitrate(0u)),
-      content_type(ContentType::kCamera) {}
+    : Config(PIXEL_FORMAT_UNKNOWN,
+             gfx::Size(),
+             VIDEO_CODEC_PROFILE_UNKNOWN,
+             Bitrate::ConstantBitrate(0u)) {}
 
 VideoEncodeAccelerator::Config::Config(const Config& config) = default;
 
-VideoEncodeAccelerator::Config::Config(
-    VideoPixelFormat input_format,
-    const gfx::Size& input_visible_size,
-    VideoCodecProfile output_profile,
-    const Bitrate& bitrate,
-    absl::optional<uint32_t> initial_framerate,
-    absl::optional<uint32_t> gop_length,
-    absl::optional<uint8_t> h264_output_level,
-    bool is_constrained_h264,
-    absl::optional<StorageType> storage_type,
-    ContentType content_type,
-    const std::vector<SpatialLayer>& spatial_layers,
-    InterLayerPredMode inter_layer_pred)
+VideoEncodeAccelerator::Config::Config(VideoPixelFormat input_format,
+                                       const gfx::Size& input_visible_size,
+                                       VideoCodecProfile output_profile,
+                                       const Bitrate& bitrate)
     : input_format(input_format),
       input_visible_size(input_visible_size),
       output_profile(output_profile),
-      bitrate(bitrate),
-      initial_framerate(initial_framerate.value_or(
-          VideoEncodeAccelerator::kDefaultFramerate)),
-      gop_length(gop_length),
-      h264_output_level(h264_output_level),
-      is_constrained_h264(is_constrained_h264),
-      storage_type(storage_type),
-      content_type(content_type),
-      spatial_layers(spatial_layers),
-      inter_layer_pred(inter_layer_pred) {}
+      bitrate(bitrate) {}
 
 VideoEncodeAccelerator::Config::~Config() = default;
 
@@ -98,6 +99,29 @@ std::string VideoEncodeAccelerator::Config::AsHumanReadableString() const {
     str += base::StringPrintf(", is_constrained_h264: %u", is_constrained_h264);
   }
 
+  str += ", required_encoder_type: ";
+  switch (required_encoder_type) {
+    case EncoderType::kHardware:
+      str += "hardware";
+      break;
+    case EncoderType::kSoftware:
+      str += "software";
+      break;
+    case EncoderType::kNoPreference:
+      str += "no-preference";
+      break;
+  }
+
+  str += ", content_type: ";
+  switch (content_type) {
+    case ContentType::kCamera:
+      str += "camera";
+      break;
+    case ContentType::kDisplay:
+      str += "display";
+      break;
+  }
+
   if (spatial_layers.empty())
     return str;
 
@@ -111,20 +135,19 @@ std::string VideoEncodeAccelerator::Config::AsHumanReadableString() const {
         sl.num_of_temporal_layers);
   }
 
+  str += ", InterLayerPredMode::";
   switch (inter_layer_pred) {
-    case Config::InterLayerPredMode::kOff:
-      str += base::StringPrintf(", InterLayerPredMode::kOff");
+    case SVCInterLayerPredMode::kOff:
+      str += "kOff";
       break;
-    case Config::InterLayerPredMode::kOn:
-      str += base::StringPrintf(", InterLayerPredMode::kOn");
+    case SVCInterLayerPredMode::kOn:
+      str += "kOn";
       break;
-    case Config::InterLayerPredMode::kOnKeyPic:
-      str += base::StringPrintf(", InterLayerPredMode::kOnKeyPic");
-      break;
-    default:
-      str += base::StringPrintf(", Unknown InterLayerPredMode");
+    case SVCInterLayerPredMode::kOnKeyPic:
+      str += "kOnKeyPic";
       break;
   }
+
   return str;
 }
 
@@ -167,6 +190,12 @@ VideoEncodeAccelerator::SupportedProfile::SupportedProfile(
 
 VideoEncodeAccelerator::SupportedProfile::~SupportedProfile() = default;
 
+void VideoEncodeAccelerator::Encode(
+    scoped_refptr<VideoFrame> frame,
+    const VideoEncoder::EncodeOptions& options) {
+  Encode(std::move(frame), options.key_frame);
+}
+
 void VideoEncodeAccelerator::Flush(FlushCallback flush_callback) {
   // TODO(owenlin): implements this https://crbug.com/755889.
   NOTIMPLEMENTED();
@@ -189,9 +218,11 @@ bool VideoEncodeAccelerator::IsGpuFrameResizeSupported() {
 
 void VideoEncodeAccelerator::RequestEncodingParametersChange(
     const VideoBitrateAllocation& bitrate_allocation,
-    uint32_t framerate) {
+    uint32_t framerate,
+    const absl::optional<gfx::Size>& size) {
   RequestEncodingParametersChange(
-      Bitrate::ConstantBitrate(bitrate_allocation.GetSumBps()), framerate);
+      Bitrate::ConstantBitrate(bitrate_allocation.GetSumBps()), framerate,
+      size);
 }
 
 bool operator==(const VideoEncodeAccelerator::SupportedProfile& l,
@@ -201,7 +232,8 @@ bool operator==(const VideoEncodeAccelerator::SupportedProfile& l,
          l.max_framerate_numerator == r.max_framerate_numerator &&
          l.max_framerate_denominator == r.max_framerate_denominator &&
          l.rate_control_modes == r.rate_control_modes &&
-         l.scalability_modes == r.scalability_modes;
+         l.scalability_modes == r.scalability_modes &&
+         l.is_software_codec == r.is_software_codec;
 }
 
 bool operator==(const H264Metadata& l, const H264Metadata& r) {
@@ -209,8 +241,7 @@ bool operator==(const H264Metadata& l, const H264Metadata& r) {
 }
 
 bool operator==(const H265Metadata& l, const H265Metadata& r) {
-  return l.temporal_idx == r.temporal_idx && l.spatial_idx == r.spatial_idx &&
-         l.layer_sync == r.layer_sync;
+  return l.temporal_idx == r.temporal_idx;
 }
 
 bool operator==(const Vp8Metadata& l, const Vp8Metadata& r) {
@@ -231,12 +262,7 @@ bool operator==(const Vp9Metadata& l, const Vp9Metadata& r) {
 }
 
 bool operator==(const Av1Metadata& l, const Av1Metadata& r) {
-  return l.inter_pic_predicted == r.inter_pic_predicted &&
-         l.switch_frame == r.switch_frame &&
-         l.end_of_picture == r.end_of_picture &&
-         l.temporal_idx == r.temporal_idx && l.spatial_idx == r.spatial_idx &&
-         l.spatial_layer_resolutions == r.spatial_layer_resolutions &&
-         l.f_diffs == r.f_diffs;
+  return l.temporal_idx == r.temporal_idx;
 }
 
 bool operator==(const BitstreamBufferMetadata& l,

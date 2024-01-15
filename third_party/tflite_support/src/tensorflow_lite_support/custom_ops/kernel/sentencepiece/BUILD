@@ -176,8 +176,8 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        ":sentencepiece_tokenizer_h",
         ":optimized_encoder",
+        ":sentencepiece_tokenizer_h",
     ] + micore_tf_deps(),
     alwayslink = 1,
 )
@@ -190,8 +190,8 @@ cc_binary(
     copts = micore_tf_copts(),
     linkshared = 1,
     deps = [
-        ":sentencepiece_tokenizer_h",
         ":optimized_encoder",
+        ":sentencepiece_tokenizer_h",
     ] + micore_tf_deps(),
 )
 
@@ -203,8 +203,8 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        ":sentencepiece_detokenizer_h",
         ":optimized_decoder",
+        ":sentencepiece_detokenizer_h",
     ] + micore_tf_deps(),
     alwayslink = 1,
 )
@@ -217,8 +217,8 @@ cc_binary(
     copts = micore_tf_copts(),
     linkshared = 1,
     deps = [
-        ":sentencepiece_detokenizer_h",
         ":optimized_decoder",
+        ":sentencepiece_detokenizer_h",
     ] + micore_tf_deps(),
 )
 

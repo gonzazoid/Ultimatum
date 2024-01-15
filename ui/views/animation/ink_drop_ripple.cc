@@ -4,9 +4,9 @@
 
 #include "ui/views/animation/ink_drop_ripple.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "ui/base/ui_base_switches.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
 #include "ui/compositor/layer.h"
@@ -15,7 +15,8 @@ namespace views {
 
 const float InkDropRipple::kHiddenOpacity = 0.f;
 
-InkDropRipple::InkDropRipple() = default;
+InkDropRipple::InkDropRipple(InkDropHost* ink_drop_host)
+    : ink_drop_host_(ink_drop_host) {}
 
 InkDropRipple::~InkDropRipple() = default;
 
@@ -79,6 +80,10 @@ test::InkDropRippleTestApi* InkDropRipple::GetTestApi() {
 
 ui::LayerAnimationObserver* InkDropRipple::GetLayerAnimationObserver() {
   return animation_observer_.get();
+}
+
+InkDropHost* InkDropRipple::GetInkDropHost() const {
+  return ink_drop_host_.get();
 }
 
 void InkDropRipple::AnimationStartedCallback(

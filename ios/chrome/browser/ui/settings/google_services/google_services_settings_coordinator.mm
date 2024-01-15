@@ -4,47 +4,41 @@
 
 #import "ios/chrome/browser/ui/settings/google_services/google_services_settings_coordinator.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "components/google/core/common/google_util.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
 #import "components/strings/grit/components_strings.h"
-#import "components/sync/driver/sync_service_utils.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/sync/sync_service_factory.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
-#import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
+#import "components/sync/service/sync_service.h"
+#import "components/sync/service/sync_user_settings.h"
+#import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
+#import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow.h"
 #import "ios/chrome/browser/ui/authentication/authentication_ui_util.h"
-#import "ios/chrome/browser/ui/authentication/enterprise/enterprise_utils.h"
-#import "ios/chrome/browser/ui/authentication/signout_action_sheet_coordinator.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browsing_data_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/show_signin_command.h"
+#import "ios/chrome/browser/ui/authentication/signout_action_sheet/signout_action_sheet_coordinator.h"
 #import "ios/chrome/browser/ui/settings/google_services/accounts_table_view_controller.h"
 #import "ios/chrome/browser/ui/settings/google_services/google_services_settings_command_handler.h"
 #import "ios/chrome/browser/ui/settings/google_services/google_services_settings_mediator.h"
+#import "ios/chrome/browser/ui/settings/google_services/parcel_tracking_settings_coordinator.h"
 #import "ios/chrome/browser/ui/settings/sync/sync_encryption_passphrase_table_view_controller.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
-#import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using signin_metrics::AccessPoint;
 using signin_metrics::PromoAction;
 
 @interface GoogleServicesSettingsCoordinator () <
@@ -69,14 +63,18 @@ using signin_metrics::PromoAction;
     SignoutActionSheetCoordinator* signoutActionSheetCoordinator;
 @end
 
-@implementation GoogleServicesSettingsCoordinator
+@implementation GoogleServicesSettingsCoordinator {
+  ParcelTrackingSettingsCoordinator* _parcelTrackingSettingsCoordinator;
+}
 
 @synthesize baseNavigationController = _baseNavigationController;
 
 - (instancetype)initWithBaseNavigationController:
                     (UINavigationController*)navigationController
                                          browser:(Browser*)browser {
-  if ([super initWithBaseViewController:navigationController browser:browser]) {
+  self = [super initWithBaseViewController:navigationController
+                                   browser:browser];
+  if (self) {
     _baseNavigationController = navigationController;
   }
   return self;
@@ -87,14 +85,13 @@ using signin_metrics::PromoAction;
       [[GoogleServicesSettingsViewController alloc]
           initWithStyle:ChromeTableViewStyle()];
   viewController.presentationDelegate = self;
-  viewController.forcedSigninEnabled = IsForceSignInEnabled();
+  viewController.forcedSigninEnabled =
+      self.authService->GetServiceStatus() ==
+      AuthenticationService::ServiceStatus::SigninForcedByPolicy;
   self.viewController = viewController;
   self.mediator = [[GoogleServicesSettingsMediator alloc]
       initWithUserPrefService:self.browser->GetBrowserState()->GetPrefs()
-             localPrefService:GetApplicationContext()->GetLocalState()
-        accountManagerService:ChromeAccountManagerServiceFactory::
-                                  GetForBrowserState(
-                                      self.browser->GetBrowserState())];
+             localPrefService:GetApplicationContext()->GetLocalState()];
   self.mediator.consumer = viewController;
   self.mediator.authService = self.authService;
   self.mediator.identityManager = IdentityManagerFactory::GetForBrowserState(
@@ -102,12 +99,29 @@ using signin_metrics::PromoAction;
   self.mediator.commandHandler = self;
   viewController.modelDelegate = self.mediator;
   viewController.serviceDelegate = self.mediator;
-  viewController.dispatcher = static_cast<
-      id<ApplicationCommands, BrowserCommands, BrowsingDataCommands>>(
-      self.browser->GetCommandDispatcher());
+
+  CommandDispatcher* dispatcher = self.browser->GetCommandDispatcher();
+  viewController.applicationHandler =
+      HandlerForProtocol(dispatcher, ApplicationCommands);
+  viewController.browserHandler =
+      HandlerForProtocol(dispatcher, BrowserCommands);
+  viewController.browsingDataHandler =
+      HandlerForProtocol(dispatcher, BrowsingDataCommands);
+  viewController.settingsHandler =
+      HandlerForProtocol(dispatcher, ApplicationSettingsCommands);
+  viewController.snackbarHandler =
+      HandlerForProtocol(dispatcher, SnackbarCommands);
+
   DCHECK(self.baseNavigationController);
   [self.baseNavigationController pushViewController:self.viewController
                                            animated:YES];
+}
+
+- (void)stop {
+  [self.signOutCoordinator stop];
+  _signOutCoordinator = nil;
+  [_parcelTrackingSettingsCoordinator stop];
+  _parcelTrackingSettingsCoordinator = nil;
 }
 
 #pragma mark - Private
@@ -126,7 +140,7 @@ using signin_metrics::PromoAction;
 }
 
 - (GoogleServicesSettingsViewController*)googleServicesSettingsViewController {
-  return base::mac::ObjCCast<GoogleServicesSettingsViewController>(
+  return base::apple::ObjCCast<GoogleServicesSettingsViewController>(
       self.viewController);
 }
 
@@ -140,11 +154,11 @@ using signin_metrics::PromoAction;
 - (void)showSignOutFromTargetRect:(CGRect)targetRect
                        completion:(signin_ui::CompletionCallback)completion {
   DCHECK(completion);
-  SyncSetupService* syncSetupService =
-      SyncSetupServiceFactory::GetForBrowserState(
-          self.browser->GetBrowserState());
+  syncer::SyncService* syncService =
+      SyncServiceFactory::GetForBrowserState(self.browser->GetBrowserState());
   BOOL isSyncConsentGiven =
-      syncSetupService && syncSetupService->IsFirstSetupComplete();
+      syncService &&
+      syncService->GetUserSettings()->IsInitialSyncFeatureSetupComplete();
 
   self.signOutCoordinator = [[ActionSheetCoordinator alloc]
       initWithBaseViewController:self.viewController
@@ -177,6 +191,9 @@ using signin_metrics::PromoAction;
                   }
                   // Provide additional data retention options if the user is
                   // syncing their data.
+                  // TODO(crbug.com/1462552): Simplify once kSync becomes
+                  // unreachable or is deleted from the codebase. See
+                  // ConsentLevel::kSync documentation for details.
                   if (weakSelf.identityManager->HasPrimaryAccount(
                           signin::ConsentLevel::kSync)) {
                     [weakSelf
@@ -198,6 +215,14 @@ using signin_metrics::PromoAction;
   [self.signOutCoordinator start];
 }
 
+- (void)showParcelTrackingSettingsPage {
+  _parcelTrackingSettingsCoordinator =
+      [[ParcelTrackingSettingsCoordinator alloc]
+          initWithBaseNavigationController:_baseNavigationController
+                                   browser:self.browser];
+  [_parcelTrackingSettingsCoordinator start];
+}
+
 // Displays the option to keep or clear data for a syncing user.
 - (void)showDataRetentionOptionsWithTargetRect:(CGRect)targetRect
                                     completion:(signin_ui::CompletionCallback)
@@ -208,7 +233,8 @@ using signin_metrics::PromoAction;
                          browser:self.browser
                             rect:targetRect
                             view:self.viewController.view
-                      withSource:signin_metrics::USER_CLICKED_SIGNOUT_SETTINGS];
+                      withSource:signin_metrics::ProfileSignout::
+                                     kUserClickedSignoutSettings];
   __weak GoogleServicesSettingsCoordinator* weakSelf = self;
   self.signoutActionSheetCoordinator.delegate = self;
   self.signoutActionSheetCoordinator.completion = ^(BOOL success) {
@@ -226,7 +252,7 @@ using signin_metrics::PromoAction;
   [self.googleServicesSettingsViewController preventUserInteraction];
   __weak GoogleServicesSettingsCoordinator* weakSelf = self;
   self.authService->SignOut(
-      signin_metrics::USER_CLICKED_SIGNOUT_SETTINGS,
+      signin_metrics::ProfileSignout::kUserClickedSignoutSettings,
       /*force_clear_browsing_data=*/NO, ^{
         if (!weakSelf) {
           return;

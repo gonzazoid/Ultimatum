@@ -7,9 +7,8 @@
  */
 
 // clang-format off
-import {dedupingMixin, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {assert, assertNotReached} from '../../js/assert_ts.js';
+import {dedupingMixin, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert, assertNotReached} from '//resources/js/assert.js';
 
 interface PaperRippleElement {
   clear(): void;
@@ -49,6 +48,12 @@ export const CrRadioButtonMixin = dedupingMixin(
               observer: 'onFocusableChanged_',
             },
 
+            hideLabelText: {
+              type: Boolean,
+              value: false,
+              reflectToAttribute: true,
+            },
+
             label: {
               type: String,
               value: '',  // Allows hidden$= binding to run without being set.
@@ -73,6 +78,7 @@ export const CrRadioButtonMixin = dedupingMixin(
         checked: boolean;
         disabled: boolean;
         focusable: boolean;
+        hideLabelText: boolean;
         label: string;
         name: string;
         private buttonTabIndex_: number;
@@ -80,7 +86,9 @@ export const CrRadioButtonMixin = dedupingMixin(
         override connectedCallback() {
           super.connectedCallback();
           this.addEventListener('blur', this.hideRipple_.bind(this));
-          this.addEventListener('focus', this.onFocus_.bind(this));
+          if (!document.documentElement.hasAttribute('chrome-refresh-2023')) {
+            this.addEventListener('focus', this.onFocus_.bind(this));
+          }
           this.addEventListener('up', this.hideRipple_.bind(this));
         }
 
@@ -147,6 +155,7 @@ export interface CrRadioButtonMixinInterface {
   checked: boolean;
   disabled: boolean;
   focusable: boolean;
+  hideLabelText: boolean;
   label: string;
   name: string;
 

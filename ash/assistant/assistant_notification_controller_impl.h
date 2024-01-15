@@ -12,6 +12,7 @@
 #include "ash/assistant/model/assistant_notification_model.h"
 #include "ash/assistant/model/assistant_notification_model_observer.h"
 #include "ash/public/cpp/assistant/controller/assistant_notification_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
 #include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom.h"
@@ -68,8 +69,8 @@ class ASH_EXPORT AssistantNotificationControllerImpl
   void OnNotificationAdded(const std::string& id) override {}
   void OnNotificationClicked(
       const std::string& id,
-      const absl::optional<int>& button_index,
-      const absl::optional<std::u16string>& reply) override;
+      const std::optional<int>& button_index,
+      const std::optional<std::u16string>& reply) override;
   void OnNotificationUpdated(const std::string& notification) override {}
   void OnNotificationRemoved(const std::string& notification_id,
                              bool by_user) override;
@@ -79,7 +80,7 @@ class ASH_EXPORT AssistantNotificationControllerImpl
   AssistantNotificationExpiryMonitor expiry_monitor_;
 
   // Owned by AssistantService
-  assistant::Assistant* assistant_ = nullptr;
+  raw_ptr<assistant::Assistant> assistant_ = nullptr;
 
   const message_center::NotifierId notifier_id_;
 

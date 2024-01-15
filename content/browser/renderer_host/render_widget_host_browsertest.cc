@@ -5,22 +5,25 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/test_timeouts.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "content/browser/renderer_host/input/input_router_impl.h"
-#include "content/browser/renderer_host/input/synthetic_smooth_drag_gesture.h"
-#include "content/browser/renderer_host/input/touch_action_filter.h"
+#include "content/browser/permissions/permission_controller_impl.h"
 #include "content/browser/renderer_host/input/touch_emulator.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/content_navigation_policy.h"
+#include "content/common/input/input_router_impl.h"
+#include "content/common/input/synthetic_smooth_drag_gesture.h"
+#include "content/common/input/touch_action_filter.h"
 #include "content/public/browser/render_widget_host_observer.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -43,6 +46,10 @@
 #include "ui/events/base_event_utils.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/latency/latency_info.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "third_party/blink/public/mojom/choosers/popup_menu.mojom-blink.h"
+#endif
 
 namespace content {
 
@@ -70,7 +77,7 @@ class TestRenderWidgetHostObserver : public RenderWidgetHostObserver {
   void Wait() { run_loop_.Run(); }
 
  private:
-  raw_ptr<RenderWidgetHost> widget_host_;
+  raw_ptr<RenderWidgetHost> widget_host_ = nullptr;
   base::RunLoop run_loop_;
 };
 
@@ -143,8 +150,9 @@ class TestInputEventObserver : public RenderWidgetHost::InputEventObserver {
   void OnInputEventAck(blink::mojom::InputEventResultSource source,
                        blink::mojom::InputEventResultState state,
                        const blink::WebInputEvent& event) override {
-    if (blink::WebInputEvent::IsTouchEventType(event.GetType()))
+    if (blink::WebInputEvent::IsTouchEventType(event.GetType())) {
       acked_touch_event_type_ = event.GetType();
+    }
   }
 
   EventTypeVector GetAndResetDispatchedEventTypes() {
@@ -166,10 +174,7 @@ class TestInputEventObserver : public RenderWidgetHost::InputEventObserver {
 class RenderWidgetHostTouchEmulatorBrowserTest : public ContentBrowserTest {
  public:
   RenderWidgetHostTouchEmulatorBrowserTest()
-      : view_(nullptr),
-        host_(nullptr),
-        router_(nullptr),
-        last_simulated_event_time_(ui::EventTimeForNow()),
+      : last_simulated_event_time_(ui::EventTimeForNow()),
         simulated_event_time_delta_(base::Milliseconds(100)) {}
 
   void SetUpOnMainThread() override {
@@ -178,13 +183,6 @@ class RenderWidgetHostTouchEmulatorBrowserTest : public ContentBrowserTest {
     EXPECT_TRUE(NavigateToURL(
         shell(), GURL("data:text/html,<!doctype html>"
                       "<body style='background-color: red;'></body>")));
-
-    view_ = static_cast<RenderWidgetHostViewBase*>(
-        shell()->web_contents()->GetRenderWidgetHostView());
-    host_ = static_cast<RenderWidgetHostImpl*>(view_->GetRenderWidgetHost());
-    router_ = static_cast<WebContentsImpl*>(shell()->web_contents())
-                  ->GetInputEventRouter();
-    ASSERT_TRUE(router_);
   }
 
   base::TimeTicks GetNextSimulatedEventTime() {
@@ -199,10 +197,15 @@ class RenderWidgetHostTouchEmulatorBrowserTest : public ContentBrowserTest {
                                 bool pressed) {
     blink::WebMouseEvent event =
         blink::SyntheticWebMouseEventBuilder::Build(type, x, y, modifiers);
-    if (pressed)
+    if (pressed) {
       event.button = blink::WebMouseEvent::Button::kLeft;
+    }
     event.SetTimeStamp(GetNextSimulatedEventTime());
-    router_->RouteMouseEvent(view_, &event, ui::LatencyInfo());
+    RenderWidgetHostInputEventRouter* router =
+        static_cast<WebContentsImpl*>(shell()->web_contents())
+            ->GetInputEventRouter();
+    ASSERT_TRUE(router);
+    router->RouteMouseEvent(view(), &event, ui::LatencyInfo());
   }
 
   void WaitForAckWith(blink::WebInputEvent::Type type) {
@@ -210,14 +213,16 @@ class RenderWidgetHostTouchEmulatorBrowserTest : public ContentBrowserTest {
     watcher.GetAckStateWaitIfNecessary();
   }
 
-  RenderWidgetHostImpl* host() { return host_; }
-  RenderWidgetHostViewBase* view() { return view_; }
+  RenderWidgetHostImpl* host() {
+    return static_cast<RenderWidgetHostImpl*>(view()->GetRenderWidgetHost());
+  }
+
+  RenderWidgetHostViewBase* view() {
+    return static_cast<RenderWidgetHostViewBase*>(
+        shell()->web_contents()->GetRenderWidgetHostView());
+  }
 
  private:
-  raw_ptr<RenderWidgetHostViewBase, DanglingUntriaged> view_;
-  raw_ptr<RenderWidgetHostImpl, DanglingUntriaged> host_;
-  raw_ptr<RenderWidgetHostInputEventRouter, DanglingUntriaged> router_;
-
   base::TimeTicks last_simulated_event_time_;
   const base::TimeDelta simulated_event_time_delta_;
 };
@@ -516,8 +521,9 @@ class DocumentLoadObserver : WebContentsObserver {
   DocumentLoadObserver& operator=(const DocumentLoadObserver&) = delete;
 
   void Wait() {
-    if (loaded_)
+    if (loaded_) {
       return;
+    }
     run_loop_ = std::make_unique<base::RunLoop>();
     run_loop_->Run();
   }
@@ -525,8 +531,9 @@ class DocumentLoadObserver : WebContentsObserver {
  private:
   void DidFinishLoad(RenderFrameHost* rfh, const GURL& url) override {
     loaded_ |= (url == document_origin_);
-    if (loaded_ && run_loop_)
+    if (loaded_ && run_loop_) {
       run_loop_->Quit();
+    }
   }
 
   bool loaded_ = false;
@@ -570,7 +577,7 @@ namespace {
 // only when there is no better way to synchronize.
 void GiveItSomeTime(base::TimeDelta delta) {
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), delta);
   run_loop.Run();
 }
@@ -644,59 +651,217 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostSitePerProcessTest,
     }
   }
 }
+
 #endif
 
-// Tests that the renderer receives the display::ScreenInfo size overrides
-// while the page is in fullscreen mode. This is a regression test for
-// https://crbug.com/1060795.
-IN_PROC_BROWSER_TEST_F(RenderWidgetHostBrowserTest,
-                       PropagatesFullscreenSizeOverrides) {
-  class FullscreenWaiter : public WebContentsObserver {
-   public:
-    explicit FullscreenWaiter(WebContents* wc) : WebContentsObserver(wc) {}
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
-    void Wait(bool enter) {
-      if (web_contents()->IsFullscreen() != enter) {
-        run_loop_.Run();
-      }
-      EXPECT_EQ(enter, web_contents()->IsFullscreen());
+namespace {
+
+// Intercept PopupWidgetHost::ShowPopup to override the initial bounds
+class ShowPopupInterceptor
+    : public blink::mojom::PopupWidgetHostInterceptorForTesting {
+ public:
+  ShowPopupInterceptor(WebContentsImpl* web_contents,
+                       RenderFrameHostImpl* frame_host,
+                       const gfx::Rect& overriden_bounds)
+      : overriden_bounds_(overriden_bounds),
+        frame_host_(frame_host->GetWeakPtr()) {
+    frame_host_->SetCreateNewPopupCallbackForTesting(base::BindRepeating(
+        &ShowPopupInterceptor::DidCreatePopupWidget, base::Unretained(this)));
+  }
+
+  ShowPopupInterceptor(const ShowPopupInterceptor&) = delete;
+  ShowPopupInterceptor& operator=(const ShowPopupInterceptor&) = delete;
+
+  ~ShowPopupInterceptor() override {
+    if (auto* rwhi = RenderWidgetHostImpl::FromID(process_id_, routing_id_)) {
+      std::ignore =
+          rwhi->popup_widget_host_receiver_for_testing().SwapImplForTesting(
+              rwhi);
     }
 
-   private:
-    void DidToggleFullscreenModeForTab(bool entered,
-                                       bool will_resize) override {
-      run_loop_.Quit();
-    }
+    frame_host_->SetCreateNewPopupCallbackForTesting(base::NullCallback());
+  }
 
-    base::RunLoop run_loop_;
-  };
+  void Wait() { run_loop_.Run(); }
 
-  // Sanity-check: Ensure the Shell and WebContents both agree the browser is
-  // not currently in fullscreen.
+  // blink::mojom::PopupWidgetHostInterceptorForTesting:
+  blink::mojom::PopupWidgetHost* GetForwardingInterface() override {
+    DCHECK_NE(MSG_ROUTING_NONE, routing_id_);
+    return RenderWidgetHostImpl::FromID(process_id_, routing_id_);
+  }
+
+  void ShowPopup(const gfx::Rect& initial_rect,
+                 const gfx::Rect& initial_anchor_rect,
+                 ShowPopupCallback callback) override {
+    GetForwardingInterface()->ShowPopup(overriden_bounds_, initial_anchor_rect,
+                                        std::move(callback));
+    run_loop_.Quit();
+  }
+
+  void DidCreatePopupWidget(RenderWidgetHostImpl* render_widget_host) {
+    process_id_ = render_widget_host->GetProcess()->GetID();
+    routing_id_ = render_widget_host->GetRoutingID();
+    std::ignore = render_widget_host->popup_widget_host_receiver_for_testing()
+                      .SwapImplForTesting(this);
+  }
+
+  int last_routing_id() const { return routing_id_; }
+
+ private:
+  base::RunLoop run_loop_;
+  gfx::Rect overriden_bounds_;
+  int32_t routing_id_ = MSG_ROUTING_NONE;
+  int32_t process_id_ = 0;
+  base::WeakPtr<RenderFrameHostImpl> frame_host_;
+};
+
+#if BUILDFLAG(IS_MAC)
+
+// Intercepts calls to LocalFrameHost::ShowPopupMenu method(), to override
+// initial bounds and hook the `PopupMenuClient`
+class ShowPopupMenuInterceptor
+    : public blink::mojom::LocalFrameHostInterceptorForTesting,
+      public blink::mojom::PopupMenuClient {
+ public:
+  explicit ShowPopupMenuInterceptor(RenderFrameHostImpl* render_frame_host,
+                                    const gfx::Rect& overriden_bounds)
+      : overriden_bounds_(overriden_bounds),
+        render_frame_host_(render_frame_host->GetWeakPtr()),
+        swapped_impl_(
+            render_frame_host_->local_frame_host_receiver_for_testing(),
+            this) {}
+
+  ~ShowPopupMenuInterceptor() override = default;
+
+  LocalFrameHost* GetForwardingInterface() override {
+    return render_frame_host_.get();
+  }
+
+  void Wait() { run_loop_.Run(); }
+
+  void ShowPopupMenu(
+      mojo::PendingRemote<blink::mojom::PopupMenuClient> popup_client,
+      const gfx::Rect& bounds,
+      int32_t item_height,
+      double font_size,
+      int32_t selected_item,
+      std::vector<blink::mojom::MenuItemPtr> menu_items,
+      bool right_aligned,
+      bool allow_multiple_selection) override {
+    CHECK(GetForwardingInterface());
+    GetForwardingInterface()->ShowPopupMenu(
+        receiver_.BindNewPipeAndPassRemote(), overriden_bounds_, item_height,
+        font_size, selected_item, std::move(menu_items), right_aligned,
+        allow_multiple_selection);
+  }
+
+  void DidAcceptIndices(const std::vector<int32_t>& indices) override {
+    receiver_.reset();
+  }
+
+  void DidCancel() override {
+    is_cancelled_ = true;
+    receiver_.reset();
+    run_loop_.Quit();
+  }
+
+  bool is_cancelled() const { return is_cancelled_; }
+
+ private:
+  base::RunLoop run_loop_;
+  bool is_cancelled_{false};
+  gfx::Rect overriden_bounds_;
+  base::WeakPtr<RenderFrameHostImpl> render_frame_host_;
+  mojo::test::ScopedSwapImplForTesting<
+      mojo::AssociatedReceiver<blink::mojom::LocalFrameHost>>
+      swapped_impl_;
+  mojo::Receiver<blink::mojom::PopupMenuClient> receiver_{this};
+};
+#endif  // BUILDFLAG(IS_MAC)
+
+}  // namespace
+
+IN_PROC_BROWSER_TEST_F(RenderWidgetHostSitePerProcessTest,
+                       BrowserClosesPopupIntersectsPermissionPrompt) {
+  GURL main_url(embedded_test_server()->GetURL(
+      "a.com", "/site_isolation/page-with-select.html"));
+  EXPECT_TRUE(NavigateToURL(shell(), main_url));
+
+  auto* contents = static_cast<WebContentsImpl*>(web_contents());
+  FrameTreeNode* root = contents->GetPrimaryFrameTree().root();
+  RenderFrameHostImpl* root_frame_host = root->current_frame_host();
+
+  // TODO(crbug.com/1181150): Crash when we attempt to use a mock prompt here.
+  // After the ticket is fixed, remove the shortcut of getting bounds and use
+  // the `MockPermissionPromptFactory` instead.
+  // Create a popup widget and wait for the RenderWidgetHost to be shown.
+  gfx::Rect permission_exclusion_area_bounds(100, 100, 100, 100);
+  static_cast<PermissionControllerImpl*>(
+      root_frame_host->GetBrowserContext()->GetPermissionController())
+      ->set_exclusion_area_bounds_for_tests(permission_exclusion_area_bounds);
+#if BUILDFLAG(IS_MAC)
+  ShowPopupMenuInterceptor show_popup_menu_interceptor(
+      root_frame_host, permission_exclusion_area_bounds -
+                           contents->GetContainerBounds().OffsetFromOrigin());
+#else
+  ShowPopupInterceptor show_popup_interceptor(contents, root_frame_host,
+                                              permission_exclusion_area_bounds);
+#endif  // BUILDFLAG(IS_MAC)
+
+  NativeWebKeyboardEvent event(
+      blink::WebKeyboardEvent::Type::kChar, blink::WebInputEvent::kNoModifiers,
+      blink::WebInputEvent::GetStaticTimeStampForTests());
+  event.text[0] = ' ';
+  EXPECT_TRUE(ExecJs(root_frame_host, "focusSelectMenu();"));
+  root_frame_host->GetRenderWidgetHost()->ForwardKeyboardEvent(event);
+
+#if BUILDFLAG(IS_MAC)
+  show_popup_menu_interceptor.Wait();
+  ASSERT_TRUE(show_popup_menu_interceptor.is_cancelled());
+#else
+  show_popup_interceptor.Wait();
+  ASSERT_FALSE(
+      RenderWidgetHost::FromID(root_frame_host->GetProcess()->GetID(),
+                               show_popup_interceptor.last_routing_id()));
+#endif  // BUILDFLAG(IS_MAC)
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+
+// Tests that `window.screen` dimensions match the display, not the viewport,
+// while the frame is fullscreen. See crbug.com/1367416
+IN_PROC_BROWSER_TEST_F(RenderWidgetHostBrowserTest, FullscreenSize) {
+  // Check initial dimensions before entering fullscreen.
   ASSERT_FALSE(shell()->IsFullscreenForTabOrPending(web_contents()));
   ASSERT_FALSE(web_contents()->IsFullscreen());
-
-  // While not fullscreened, expect the screen size to not be overridden.
-  display::ScreenInfo screen_info = host()->GetScreenInfo();
   WaitForVisualPropertiesAck();
-  EXPECT_EQ(screen_info.rect.size().ToString(),
+  EXPECT_EQ(host()->GetScreenInfo().rect.size().ToString(),
             EvalJs(web_contents(), "`${screen.width}x${screen.height}`"));
 
-  // Enter fullscreen mode. The Content Shell does not resize the view to fill
-  // the entire screen, and so the page will see the view's size as the screen
-  // size. This confirms the ScreenInfo override logic is working.
-  ASSERT_TRUE(ExecJs(web_contents(), "document.body.requestFullscreen();"));
-  FullscreenWaiter(web_contents()).Wait(true);
-  WaitForVisualPropertiesAck();
-  EXPECT_EQ(view()->GetRequestedRendererSize().ToString(),
+  // Enter fullscreen; Content Shell does not resize the viewport to fill the
+  // screen in fullscreen on some platforms.
+  constexpr char kEnterFullscreenScript[] = R"JS(
+    document.documentElement.requestFullscreen().then(() => {
+        return !!document.fullscreenElement;
+    });
+  )JS";
+  ASSERT_TRUE(EvalJs(web_contents(), kEnterFullscreenScript).ExtractBool());
+
+  // `window.screen` dimensions match the display size.
+  EXPECT_EQ(host()->GetScreenInfo().rect.size().ToString(),
             EvalJs(web_contents(), "`${screen.width}x${screen.height}`"));
 
-  // Exit fullscreen mode, and then the page should see the screen size again.
-  ASSERT_TRUE(ExecJs(web_contents(), "document.exitFullscreen();"));
-  FullscreenWaiter(web_contents()).Wait(false);
-  screen_info = host()->GetScreenInfo();
-  WaitForVisualPropertiesAck();
-  EXPECT_EQ(screen_info.rect.size().ToString(),
+  // Check dimensions again after exiting fullscreen.
+  constexpr char kExitFullscreenScript[] = R"JS(
+    document.exitFullscreen().then(() => {
+        return !document.fullscreenElement;
+    });
+  )JS";
+  ASSERT_TRUE(EvalJs(web_contents(), kExitFullscreenScript).ExtractBool());
+  ASSERT_FALSE(web_contents()->IsFullscreen());
+  EXPECT_EQ(host()->GetScreenInfo().rect.size().ToString(),
             EvalJs(web_contents(), "`${screen.width}x${screen.height}`"));
 }
 
@@ -707,6 +872,92 @@ class RenderWidgetHostFoldableCSSTest : public RenderWidgetHostBrowserTest {
         switches::kEnableExperimentalWebPlatformFeatures);
   }
 };
+
+// Tests that when a video element goes fullscreen and uses the default
+// fullscreen UA stylesheet (in blink/core/css/fullscreen.css) the viewport
+// segments MQs and env variables are correctly working.
+IN_PROC_BROWSER_TEST_F(RenderWidgetHostFoldableCSSTest,
+                       ViewportSegmentsWorksInUAFullscreenCSS) {
+  const char kTestPageURL[] =
+      R"HTML(data:text/html,<!DOCTYPE html>
+      <video id='video'></video>)HTML";
+  EXPECT_TRUE(NavigateToURL(shell(), GURL(kTestPageURL)));
+  // Check initial state before entering fullscreen.
+  ASSERT_FALSE(shell()->IsFullscreenForTabOrPending(web_contents()));
+  ASSERT_FALSE(web_contents()->IsFullscreen());
+  constexpr char kEnterFullscreenScript[] = R"JS(
+    document.querySelector('video').requestFullscreen().then(() => {
+        return !!document.fullscreenElement;
+    });
+  )JS";
+  MockDisplayFeature mock_display_feature(view());
+  // Initial state. This will ensure that no display feature/viewport segments
+  // are coming from the platform.
+  mock_display_feature.SetDisplayFeature(nullptr);
+  host()->SynchronizeVisualProperties();
+  ASSERT_TRUE(EvalJs(web_contents(), kEnterFullscreenScript).ExtractBool());
+
+  // Changing the display feature/viewport segments without leaving fullscreen
+  // should update the video element.
+  const gfx::Size root_view_size = view()->GetVisibleViewportSize();
+  const int kDisplayFeatureLength = 10;
+  int offset = root_view_size.width() / 2 - kDisplayFeatureLength / 2;
+  DisplayFeature emulated_display_feature{
+      DisplayFeature::Orientation::kVertical, offset,
+      /* mask_length */ kDisplayFeatureLength};
+  mock_display_feature.SetDisplayFeature(&emulated_display_feature);
+  host()->SynchronizeVisualProperties();
+  WaitForVisualPropertiesAck();
+  EXPECT_EQ(base::NumberToString(offset) + "px",
+            EvalJs(shell(), "getComputedStyle(video).width").ExtractString());
+  EXPECT_EQ(
+      root_view_size.height(),
+      EvalJs(shell(), "parseInt(getComputedStyle(video).height)").ExtractInt());
+
+  emulated_display_feature.orientation =
+      DisplayFeature::Orientation::kHorizontal;
+  offset = root_view_size.height() / 2 - kDisplayFeatureLength / 2;
+  emulated_display_feature.offset = offset;
+  mock_display_feature.SetDisplayFeature(&emulated_display_feature);
+  host()->SynchronizeVisualProperties();
+  WaitForVisualPropertiesAck();
+  EXPECT_EQ(base::NumberToString(offset) + "px",
+            EvalJs(shell(), "getComputedStyle(video).height").ExtractString());
+  EXPECT_EQ(
+      root_view_size.width(),
+      EvalJs(shell(), "parseInt(getComputedStyle(video).width)").ExtractInt());
+
+  // No display feature/viewport segments are set, the video should go
+  // fullscreen.
+  mock_display_feature.SetDisplayFeature(nullptr);
+  host()->SynchronizeVisualProperties();
+  WaitForVisualPropertiesAck();
+  EXPECT_EQ(
+      root_view_size.height(),
+      EvalJs(shell(), "parseInt(getComputedStyle(video).height)").ExtractInt());
+  EXPECT_EQ(
+      root_view_size.width(),
+      EvalJs(shell(), "parseInt(getComputedStyle(video).width)").ExtractInt());
+
+  constexpr char kExitFullscreenScript[] = R"JS(
+    document.exitFullscreen().then(() => {
+        return !document.fullscreenElement;
+    });
+  )JS";
+  ASSERT_TRUE(EvalJs(web_contents(), kExitFullscreenScript).ExtractBool());
+  ASSERT_FALSE(web_contents()->IsFullscreen());
+
+  // Change the viewport segments/display feature before entering fullscreen.
+  mock_display_feature.SetDisplayFeature(&emulated_display_feature);
+  ASSERT_TRUE(EvalJs(web_contents(), kEnterFullscreenScript).ExtractBool());
+  host()->SynchronizeVisualProperties();
+  WaitForVisualPropertiesAck();
+  EXPECT_EQ(base::NumberToString(offset) + "px",
+            EvalJs(shell(), "getComputedStyle(video).height").ExtractString());
+  EXPECT_EQ(
+      root_view_size.width(),
+      EvalJs(shell(), "parseInt(getComputedStyle(video).width)").ExtractInt());
+}
 
 // Tests that the renderer receives the root widget's window segments and
 // correctly exposes those via CSS.
@@ -882,7 +1133,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostFoldableCSSTest,
       </style>
       <div id='target'></div>)HTML";
 
+  LoadStopObserver load_stop_observer(shell()->web_contents());
   EXPECT_TRUE(NavigateToURL(shell(), GURL(kTestPageURL)));
+  load_stop_observer.Wait();
 
   const gfx::Size root_view_size = view()->GetVisibleViewportSize();
   const int kDisplayFeatureLength = 10;
@@ -890,9 +1143,11 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostFoldableCSSTest,
   DisplayFeature emulated_display_feature{
       DisplayFeature::Orientation::kVertical, offset,
       /* mask_length */ kDisplayFeatureLength};
-  MockDisplayFeature mock_display_feature(view());
-  mock_display_feature.SetDisplayFeature(&emulated_display_feature);
-  host()->SynchronizeVisualProperties();
+  {
+    MockDisplayFeature mock_display_feature(view());
+    mock_display_feature.SetDisplayFeature(&emulated_display_feature);
+    host()->SynchronizeVisualProperties();
+  }
 
   EXPECT_EQ(
       base::NumberToString(emulated_display_feature.offset) + "px",
@@ -900,9 +1155,24 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostFoldableCSSTest,
 
   // Ensure that the environment variables have the correct values in the new
   // document that is created on reloading the page.
-  LoadStopObserver load_stop_observer(shell()->web_contents());
+  LoadStopObserver load_stop_observer2(shell()->web_contents());
+  TestNavigationManager navigation_manager(shell()->web_contents(),
+                                           GURL(kTestPageURL));
   shell()->Reload();
-  load_stop_observer.Wait();
+  EXPECT_TRUE(navigation_manager.WaitForResponse());
+  if (ShouldCreateNewHostForAllFrames()) {
+    // When RenderDocument is enabled, a new RenderWidgetHost will be created
+    // after the reload, so we need to call SynchronizeVisualProperties() again.
+    RenderWidgetHostImpl* target_rwh = static_cast<RenderWidgetHostImpl*>(
+        navigation_manager.GetNavigationHandle()
+            ->GetRenderFrameHost()
+            ->GetRenderWidgetHost());
+    MockDisplayFeature mock_display_feature(target_rwh->GetView());
+    mock_display_feature.SetDisplayFeature(&emulated_display_feature);
+    target_rwh->SynchronizeVisualProperties();
+  }
+  EXPECT_TRUE(navigation_manager.WaitForNavigationFinished());
+  load_stop_observer2.Wait();
 
   EXPECT_EQ(
       base::NumberToString(emulated_display_feature.offset) + "px",
@@ -924,7 +1194,8 @@ class RenderWidgetHostDelegatedInkMetadataTest
 // Confirm that using the |updateInkTrailStartPoint| JS API results in the
 // |request_points_for_delegated_ink_| flag being set on the RWHVB.
 // TODO(crbug.com/1344023). Flaky on Linux.
-#if BUILDFLAG(IS_LINUX)
+// TODO(crbug.com/1479339): Failing on ChromesOS MSan.
+#if BUILDFLAG(IS_LINUX) || (BUILDFLAG(IS_CHROMEOS) && defined(MEMORY_SANITIZER))
 #define MAYBE_FlagGetsSetFromRenderFrameMetadata \
   DISABLED_FlagGetsSetFromRenderFrameMetadata
 #else

@@ -14,12 +14,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "gpu/GLES2/gl2extchromium.h"
 #include "gpu/command_buffer/client/gles2_interface_stub.h"
@@ -97,6 +96,14 @@ class TestGLES2Interface : public gpu::gles2::GLES2InterfaceStub {
   void LoseContextCHROMIUM(GLenum current, GLenum other) override;
   GLenum GetGraphicsResetStatusKHR() override;
 
+  void ReadPixels(GLint x,
+                  GLint y,
+                  GLsizei width,
+                  GLsizei height,
+                  GLenum format,
+                  GLenum type,
+                  void* pixels) override;
+
   // Overridden from gpu::InterfaceBase
   void GenSyncTokenCHROMIUM(GLbyte* sync_token) override;
   void GenUnverifiedSyncTokenCHROMIUM(GLbyte* sync_token) override;
@@ -125,9 +132,7 @@ class TestGLES2Interface : public gpu::gles2::GLES2InterfaceStub {
     return last_waited_sync_token_;
   }
   void set_context_lost(bool context_lost) { context_lost_ = context_lost; }
-  void set_times_bind_texture_succeeds(int times);
 
-  void set_have_extension_egl_image(bool have);
   void set_support_texture_format_bgra8888(bool support);
   void set_support_sync_query(bool support);
   void set_support_texture_half_float_linear(bool support);
@@ -135,12 +140,7 @@ class TestGLES2Interface : public gpu::gles2::GLES2InterfaceStub {
   void set_msaa_is_slow(bool msaa_is_slow);
   void set_gpu_rasterization(bool gpu_rasterization);
   void set_avoid_stencil_buffers(bool avoid_stencil_buffers);
-  void set_support_multisample_compatibility(bool support);
-  void set_support_texture_storage_image(bool support);
-  void set_support_texture_npot(bool support);
-  void set_supports_oop_raster(bool support);
   void set_max_texture_size(int size);
-  void set_supports_shared_image_swap_chain(bool support);
   void set_supports_gpu_memory_buffer_format(gfx::BufferFormat format,
                                              bool support);
   void set_supports_texture_rg(bool support);
@@ -197,7 +197,7 @@ class TestGLES2Interface : public gpu::gles2::GLES2InterfaceStub {
 
   unsigned context_id_;
   gpu::Capabilities test_capabilities_;
-  int times_bind_texture_succeeds_ = -1;
+  gpu::GLCapabilities test_gl_capabilities_;
   int times_end_query_succeeds_ = -1;
   bool context_lost_ = false;
   int times_map_buffer_chromium_succeeds_ = -1;
@@ -210,7 +210,7 @@ class TestGLES2Interface : public gpu::gles2::GLES2InterfaceStub {
   unsigned next_framebuffer_id_ = 1;
   std::unordered_set<unsigned> framebuffer_set_;
   unsigned current_framebuffer_ = 0;
-  std::vector<TestGLES2Interface*> shared_contexts_;
+  std::vector<raw_ptr<TestGLES2Interface, VectorExperimental>> shared_contexts_;
   bool reshape_called_ = false;
   int width_ = 0;
   int height_ = 0;

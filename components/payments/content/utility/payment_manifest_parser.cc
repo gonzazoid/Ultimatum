@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -200,40 +200,35 @@ void ParseIcons(const base::Value::Dict& dict,
     }
 
     PaymentManifestParser::WebAppIcon web_app_icon;
-    const base::Value* icon_src =
-        icon.FindKeyOfType(kWebAppIconSrc, base::Value::Type::STRING);
-    if (!icon_src || icon_src->GetString().empty() ||
-        !base::IsStringUTF8(icon_src->GetString())) {
+    const std::string* icon_src = icon.GetDict().FindString(kWebAppIconSrc);
+    if (!icon_src || icon_src->empty() || !base::IsStringUTF8(*icon_src)) {
       log.Warn(
           base::StringPrintf("Each dictionary in the list \"%s\" should "
                              "contain a non-empty UTF8 string field \"%s\".",
                              kWebAppIcons, kWebAppIconSrc));
       continue;
     }
-    web_app_icon.src = icon_src->GetString();
+    web_app_icon.src = *icon_src;
 
-    const base::Value* icon_sizes =
-        icon.FindKeyOfType(kWebAppIconSizes, base::Value::Type::STRING);
-    if (!icon_sizes || icon_sizes->GetString().empty() ||
-        !base::IsStringUTF8(icon_sizes->GetString())) {
+    const std::string* icon_sizes = icon.GetDict().FindString(kWebAppIconSizes);
+    if (!icon_sizes || icon_sizes->empty() ||
+        !base::IsStringUTF8(*icon_sizes)) {
       log.Warn(
           base::StringPrintf("Each dictionary in the list \"%s\" should "
                              "contain a non-empty UTF8 string field \"%s\".",
                              kWebAppIcons, kWebAppIconSizes));
     } else {
-      web_app_icon.sizes = icon_sizes->GetString();
+      web_app_icon.sizes = *icon_sizes;
     }
 
-    const base::Value* icon_type =
-        icon.FindKeyOfType(kWebAppIconType, base::Value::Type::STRING);
-    if (!icon_type || icon_type->GetString().empty() ||
-        !base::IsStringUTF8(icon_type->GetString())) {
+    const std::string* icon_type = icon.GetDict().FindString(kWebAppIconType);
+    if (!icon_type || icon_type->empty() || !base::IsStringUTF8(*icon_type)) {
       log.Warn(
           base::StringPrintf("Each dictionary in the list \"%s\" should "
                              "contain a non-empty UTF8 string field \"%s\".",
                              kWebAppIcons, kWebAppIconType));
     } else {
-      web_app_icon.type = icon_type->GetString();
+      web_app_icon.type = *icon_type;
     }
 
     icons->emplace_back(web_app_icon);
@@ -379,14 +374,14 @@ void PaymentManifestParser::ParseWebAppInstallationInfo(
 // static
 void PaymentManifestParser::ParsePaymentMethodManifestIntoVectors(
     const GURL& manifest_url,
-    std::unique_ptr<base::Value> value,
+    base::Value value,
     const ErrorLogger& log,
     std::vector<GURL>* web_app_manifest_urls,
     std::vector<url::Origin>* supported_origins) {
   DCHECK(web_app_manifest_urls);
   DCHECK(supported_origins);
 
-  const base::Value::Dict* dict = value->GetIfDict();
+  const base::Value::Dict* dict = value.GetIfDict();
   if (!dict) {
     log.Error("Payment method manifest must be a JSON dictionary.");
     return;
@@ -406,10 +401,10 @@ void PaymentManifestParser::ParsePaymentMethodManifestIntoVectors(
 
 // static
 bool PaymentManifestParser::ParseWebAppManifestIntoVector(
-    std::unique_ptr<base::Value> value,
+    base::Value value,
     const ErrorLogger& log,
     std::vector<WebAppManifestSection>* output) {
-  const base::Value::Dict* dict = value->GetIfDict();
+  const base::Value::Dict* dict = value.GetIfDict();
   if (!dict) {
     log.Error("Web app manifest must be a JSON dictionary.");
     return false;
@@ -528,14 +523,14 @@ bool PaymentManifestParser::ParseWebAppManifestIntoVector(
 
 // static
 bool PaymentManifestParser::ParseWebAppInstallationInfoIntoStructs(
-    std::unique_ptr<base::Value> value,
+    base::Value value,
     const ErrorLogger& log,
     WebAppInstallationInfo* installation_info,
     std::vector<WebAppIcon>* icons) {
   DCHECK(installation_info);
   DCHECK(icons);
 
-  const base::Value::Dict* dict = value->GetIfDict();
+  const base::Value::Dict* dict = value.GetIfDict();
   if (!dict) {
     log.Error("Web app manifest must be a JSON dictionary.");
     return false;
@@ -648,9 +643,9 @@ void PaymentManifestParser::OnPaymentMethodParse(
   std::vector<url::Origin> supported_origins;
 
   if (result.has_value()) {
-    ParsePaymentMethodManifestIntoVectors(
-        manifest_url, base::Value::ToUniquePtrValue(std::move(*result)), *log_,
-        &web_app_manifest_urls, &supported_origins);
+    ParsePaymentMethodManifestIntoVectors(manifest_url, std::move(*result),
+                                          *log_, &web_app_manifest_urls,
+                                          &supported_origins);
   } else {
     log_->Error(result.error());
   }
@@ -667,8 +662,7 @@ void PaymentManifestParser::OnWebAppParse(
 
   std::vector<WebAppManifestSection> manifest;
   if (result.has_value()) {
-    ParseWebAppManifestIntoVector(
-        base::Value::ToUniquePtrValue(std::move(*result)), *log_, &manifest);
+    ParseWebAppManifestIntoVector(std::move(*result), *log_, &manifest);
   } else {
     log_->Error(result.error());
   }
@@ -688,8 +682,7 @@ void PaymentManifestParser::OnWebAppParseInstallationInfo(
     installation_info = std::make_unique<WebAppInstallationInfo>();
     icons = std::make_unique<std::vector<WebAppIcon>>();
     if (!ParseWebAppInstallationInfoIntoStructs(
-            base::Value::ToUniquePtrValue(std::move(*result)), *log_,
-            installation_info.get(), icons.get())) {
+            std::move(*result), *log_, installation_info.get(), icons.get())) {
       installation_info.reset();
       icons.reset();
     }

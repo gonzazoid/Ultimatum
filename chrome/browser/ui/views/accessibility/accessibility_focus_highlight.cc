@@ -4,8 +4,10 @@
 
 #include "chrome/browser/ui/views/accessibility/accessibility_focus_highlight.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "build/build_config.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/common/pref_names.h"
@@ -293,7 +295,7 @@ void AccessibilityFocusHighlight::OnPaintLayer(
     // Decrease alpha as distance remaining decreases.
     int alpha = (original_alpha * remaining * remaining) /
                 (kGradientWidth * kGradientWidth);
-    gradient_flags.setAlpha(alpha);
+    gradient_flags.setAlphaf(alpha / 255.0f);
 
     recorder.canvas()->DrawRoundRect(gradient_bounds, gradient_border_radius,
                                      gradient_flags);
@@ -341,7 +343,7 @@ float AccessibilityFocusHighlight::ComputeOpacity(
     opacity = 1.0f - (time_since_began_fading / fade_out_time_);
   }
 
-  return base::clamp(opacity, 0.0f, 1.0f);
+  return std::clamp(opacity, 0.0f, 1.0f);
 }
 
 void AccessibilityFocusHighlight::OnAnimationStep(base::TimeTicks timestamp) {

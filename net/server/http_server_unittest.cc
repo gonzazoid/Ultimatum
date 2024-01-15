@@ -13,12 +13,11 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
-#include "base/cxx17_backports.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -29,8 +28,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/test/repeating_test_future.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "net/base/address_list.h"
 #include "net/base/io_buffer.h"
@@ -87,8 +85,9 @@ class TestHttpClient {
       TestCompletionCallback callback;
       ReadInternal(&callback);
       int bytes_received = callback.WaitForResult();
-      if (bytes_received <= 0)
+      if (bytes_received <= 0) {
         return false;
+      }
 
       total_bytes_received += bytes_received;
       message->append(read_buffer_->data(), bytes_received);
@@ -97,12 +96,14 @@ class TestHttpClient {
   }
 
   bool ReadResponse(std::string* message) {
-    if (!Read(message, 1))
+    if (!Read(message, 1)) {
       return false;
+    }
     while (!IsCompleteResponse(*message)) {
       std::string chunk;
-      if (!Read(&chunk, 1))
+      if (!Read(&chunk, 1)) {
         return false;
+      }
       message->append(chunk);
     }
     return true;
@@ -127,15 +128,17 @@ class TestHttpClient {
         write_buffer_.get(), write_buffer_->BytesRemaining(),
         base::BindOnce(&TestHttpClient::OnWrite, base::Unretained(this)),
         TRAFFIC_ANNOTATION_FOR_TESTS);
-    if (result != ERR_IO_PENDING)
+    if (result != ERR_IO_PENDING) {
       OnWrite(result);
+    }
   }
 
   void OnWrite(int result) {
     ASSERT_GT(result, 0);
     write_buffer_->DidConsume(result);
-    if (write_buffer_->BytesRemaining())
+    if (write_buffer_->BytesRemaining()) {
       Write();
+    }
   }
 
   void ReadInternal(TestCompletionCallback* callback) {
@@ -143,16 +146,18 @@ class TestHttpClient {
         base::MakeRefCounted<IOBufferWithSize>(kMaxExpectedResponseLength);
     int result = socket_->Read(read_buffer_.get(), kMaxExpectedResponseLength,
                                callback->callback());
-    if (result != ERR_IO_PENDING)
+    if (result != ERR_IO_PENDING) {
       callback->callback().Run(result);
+    }
   }
 
   bool IsCompleteResponse(const std::string& response) {
     // Check end of headers first.
     size_t end_of_headers =
         HttpUtil::LocateEndOfHeaders(response.data(), response.size());
-    if (end_of_headers == std::string::npos)
+    if (end_of_headers == std::string::npos) {
       return false;
+    }
 
     // Return true if response has data equal to or more than content length.
     int64_t body_size = static_cast<int64_t>(response.size()) - end_of_headers;
@@ -204,7 +209,7 @@ class HttpServerTest : public TestWithTaskEnvironment,
 
   void OnHttpRequest(int connection_id,
                      const HttpServerRequestInfo& info) override {
-    received_requests_.AddValue({.info = info, .connection_id = connection_id});
+    received_request_.SetValue({.info = info, .connection_id = connection_id});
   }
 
   void OnWebSocketRequest(int connection_id,
@@ -219,13 +224,14 @@ class HttpServerTest : public TestWithTaskEnvironment,
   void OnClose(int connection_id) override {
     DCHECK(connection_map_.find(connection_id) != connection_map_.end());
     connection_map_[connection_id] = false;
-    if (connection_id == quit_on_close_connection_)
+    if (connection_id == quit_on_close_connection_) {
       std::move(run_loop_quit_func_).Run();
+    }
   }
 
-  ReceivedRequest WaitForRequest() { return received_requests_.Take(); }
+  ReceivedRequest WaitForRequest() { return received_request_.Take(); }
 
-  bool HasRequest() const { return !received_requests_.IsEmpty(); }
+  bool HasRequest() const { return received_request_.IsReady(); }
 
   // Connections should only be created using this method, which waits until
   // both the server and the client have received the connected socket.
@@ -274,7 +280,7 @@ class HttpServerTest : public TestWithTaskEnvironment,
       connection_map_;
 
  private:
-  base::test::RepeatingTestFuture<ReceivedRequest> received_requests_;
+  base::test::TestFuture<ReceivedRequest> received_request_;
   std::unique_ptr<base::RunLoop> quit_on_create_loop_;
   int quit_on_close_connection_ = -1;
 };
@@ -304,13 +310,13 @@ class WebSocketAcceptingTest : public WebSocketTest {
   }
 
   void OnWebSocketMessage(int connection_id, std::string data) override {
-    messages_.AddValue(data);
+    last_message_.SetValue(data);
   }
 
-  std::string GetMessage() { return messages_.Take(); }
+  std::string GetMessage() { return last_message_.Take(); }
 
  private:
-  base::test::RepeatingTestFuture<std::string> messages_;
+  base::test::TestFuture<std::string> last_message_;
 };
 
 std::string EncodeFrame(std::string message,
@@ -344,8 +350,7 @@ TEST_F(HttpServerTest, Request) {
   ASSERT_EQ("/test", request.info.path);
   ASSERT_EQ("", request.info.data);
   ASSERT_EQ(0u, request.info.headers.size());
-  ASSERT_TRUE(base::StartsWith(request.info.peer.ToString(), "127.0.0.1",
-                               base::CompareCase::SENSITIVE));
+  ASSERT_TRUE(request.info.peer.ToString().starts_with("127.0.0.1"));
 }
 
 TEST_F(HttpServerTest, RequestBrokenTermination) {
@@ -893,10 +898,8 @@ TEST_F(HttpServerTest, Send200) {
 
   std::string response;
   ASSERT_TRUE(client.ReadResponse(&response));
-  ASSERT_TRUE(base::StartsWith(response, "HTTP/1.1 200 OK",
-                               base::CompareCase::SENSITIVE));
-  ASSERT_TRUE(
-      base::EndsWith(response, "Response!", base::CompareCase::SENSITIVE));
+  ASSERT_TRUE(response.starts_with("HTTP/1.1 200 OK"));
+  ASSERT_TRUE(response.ends_with("Response!"));
 }
 
 TEST_F(HttpServerTest, SendRaw) {
@@ -972,7 +975,6 @@ class MockStreamSocket : public StreamSocket {
   }
   const NetLogWithSource& NetLog() const override { return net_log_; }
   bool WasEverUsed() const override { return true; }
-  bool WasAlpnNegotiated() const override { return false; }
   NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
   int64_t GetTotalReceivedBytes() const override {
@@ -1070,10 +1072,8 @@ TEST_F(HttpServerTest, MultipleRequestsOnSameConnection) {
                    TRAFFIC_ANNOTATION_FOR_TESTS);
   std::string response1;
   ASSERT_TRUE(client.ReadResponse(&response1));
-  ASSERT_TRUE(base::StartsWith(response1, "HTTP/1.1 200 OK",
-                               base::CompareCase::SENSITIVE));
-  ASSERT_TRUE(base::EndsWith(response1, "Content for /test",
-                             base::CompareCase::SENSITIVE));
+  ASSERT_TRUE(response1.starts_with("HTTP/1.1 200 OK"));
+  ASSERT_TRUE(response1.ends_with("Content for /test"));
 
   client.Send("GET /test2 HTTP/1.1\r\n\r\n");
   auto second_request = WaitForRequest();
@@ -1083,8 +1083,7 @@ TEST_F(HttpServerTest, MultipleRequestsOnSameConnection) {
   server_->Send404(client_connection_id, TRAFFIC_ANNOTATION_FOR_TESTS);
   std::string response2;
   ASSERT_TRUE(client.ReadResponse(&response2));
-  ASSERT_TRUE(base::StartsWith(response2, "HTTP/1.1 404 Not Found",
-                               base::CompareCase::SENSITIVE));
+  ASSERT_TRUE(response2.starts_with("HTTP/1.1 404 Not Found"));
 
   client.Send("GET /test3 HTTP/1.1\r\n\r\n");
   auto third_request = WaitForRequest();
@@ -1095,10 +1094,8 @@ TEST_F(HttpServerTest, MultipleRequestsOnSameConnection) {
                    TRAFFIC_ANNOTATION_FOR_TESTS);
   std::string response3;
   ASSERT_TRUE(client.ReadResponse(&response3));
-  ASSERT_TRUE(base::StartsWith(response3, "HTTP/1.1 200 OK",
-                               base::CompareCase::SENSITIVE));
-  ASSERT_TRUE(base::EndsWith(response3, "Content for /test3",
-                             base::CompareCase::SENSITIVE));
+  ASSERT_TRUE(response3.starts_with("HTTP/1.1 200 OK"));
+  ASSERT_TRUE(response3.ends_with("Content for /test3"));
 }
 
 class CloseOnConnectHttpServerTest : public HttpServerTest {

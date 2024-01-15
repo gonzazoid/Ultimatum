@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "chrome/browser/web_applications/web_app_database_factory.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "components/webapps/common/web_app_id.h"
 
 namespace syncer {
 class ModelTypeStore;
@@ -21,9 +21,6 @@ namespace web_app {
 
 class WebAppProto;
 
-// Requires base::MessageLoop message_loop_ in test fixture. Reason:
-// InMemoryStore needs a SequencedTaskRunner.
-// MessageLoop ctor calls MessageLoop::SetThreadTaskRunnerHandle().
 class FakeWebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
  public:
   FakeWebAppDatabaseFactory();
@@ -39,7 +36,7 @@ class FakeWebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
 
   Registry ReadRegistry();
 
-  std::set<AppId> ReadAllAppIds();
+  std::set<webapps::AppId> ReadAllAppIds();
 
   void WriteProtos(const std::vector<std::unique_ptr<WebAppProto>>& protos);
   void WriteRegistry(const Registry& registry);

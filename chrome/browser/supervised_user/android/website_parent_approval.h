@@ -5,14 +5,22 @@
 #ifndef CHROME_BROWSER_SUPERVISED_USER_ANDROID_WEBSITE_PARENT_APPROVAL_H_
 #define CHROME_BROWSER_SUPERVISED_USER_ANDROID_WEBSITE_PARENT_APPROVAL_H_
 
-#include "base/callback_forward.h"
-#include "chrome/browser/supervised_user/web_approvals_manager.h"
+#include "base/functional/callback_forward.h"
 
 class GURL;
+class Profile;
 
 namespace content {
 class WebContents;
 }  // namespace content
+
+// GENERATED_JAVA_ENUM_PACKAGE: (
+//   org.chromium.chrome.browser.supervised_user.android)
+enum class AndroidLocalWebApprovalFlowOutcome {
+  kApproved = 0,
+  kRejected = 1,
+  kIncomplete = 2
+};
 
 // The glue for Java-side implementation of WebsiteParentApproval.
 class WebsiteParentApproval {
@@ -29,7 +37,8 @@ class WebsiteParentApproval {
   static void RequestLocalApproval(
       content::WebContents* web_contents,
       const GURL& url,
-      base::OnceCallback<void(AndroidLocalWebApprovalFlowOutcome)> callback);
+      base::OnceCallback<void(AndroidLocalWebApprovalFlowOutcome)> callback,
+      Profile& profile);
 
   WebsiteParentApproval() = delete;
 };

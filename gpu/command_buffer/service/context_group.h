@@ -30,7 +30,6 @@ class ProgressReporter;
 
 namespace gpu {
 
-class ImageFactory;
 struct GpuPreferences;
 class MailboxManager;
 class SharedImageManager;
@@ -68,7 +67,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
                FramebufferCompletenessCache* framebuffer_completeness_cache,
                const scoped_refptr<FeatureInfo>& feature_info,
                bool bind_generates_resource,
-               gpu::ImageFactory* image_factory,
                gl::ProgressReporter* progress_reporter,
                const GpuFeatureInfo& gpu_feature_info,
                ServiceDiscardableManager* discardable_manager,
@@ -163,8 +161,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
   FeatureInfo* feature_info() {
     return feature_info_.get();
   }
-
-  gpu::ImageFactory* image_factory() const { return image_factory_; }
 
   const GpuPreferences& gpu_preferences() const {
     return gpu_preferences_;
@@ -308,8 +304,6 @@ class GPU_GLES2_EXPORT ContextGroup : public base::RefCounted<ContextGroup> {
   std::unique_ptr<SamplerManager> sampler_manager_;
 
   scoped_refptr<FeatureInfo> feature_info_;
-
-  raw_ptr<gpu::ImageFactory> image_factory_;
 
   std::vector<base::WeakPtr<DecoderContext>> decoders_;
 

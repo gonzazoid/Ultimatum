@@ -10,8 +10,9 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "media/cast/cast_environment.h"
@@ -118,13 +119,13 @@ class UdpTransportImpl final : public PacketTransport, public UdpTransport {
   const scoped_refptr<base::SingleThreadTaskRunner> io_thread_proxy_;
   const net::IPEndPoint local_addr_;
   net::IPEndPoint remote_addr_;
+  std::unique_ptr<Packet> next_packet_;
+  scoped_refptr<net::WrappedIOBuffer> recv_buf_;
   std::unique_ptr<net::UDPSocket> udp_socket_;
   bool send_pending_;
   bool receive_pending_;
   bool client_connected_;
   net::DiffServCodePoint next_dscp_value_;
-  std::unique_ptr<Packet> next_packet_;
-  scoped_refptr<net::WrappedIOBuffer> recv_buf_;
   net::IPEndPoint recv_addr_;
   PacketReceiverCallbackWithStatus packet_receiver_;
   int32_t send_buffer_size_;

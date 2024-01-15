@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/time.h"
 #include "net/base/load_timing_info.h"
 #include "net/base/net_errors.h"
@@ -298,6 +298,17 @@ void ThrottlingNetworkTransaction::SetEarlyResponseHeadersCallback(
 void ThrottlingNetworkTransaction::SetConnectedCallback(
     const ConnectedCallback& callback) {
   network_transaction_->SetConnectedCallback(callback);
+}
+
+void ThrottlingNetworkTransaction::SetModifyRequestHeadersCallback(
+    base::RepeatingCallback<void(net::HttpRequestHeaders*)> callback) {
+  network_transaction_->SetModifyRequestHeadersCallback(std::move(callback));
+}
+
+void ThrottlingNetworkTransaction::SetIsSharedDictionaryReadAllowedCallback(
+    base::RepeatingCallback<bool()> callback) {
+  // This method should not be called for this class.
+  NOTREACHED_NORETURN();
 }
 
 int ThrottlingNetworkTransaction::ResumeNetworkStart() {

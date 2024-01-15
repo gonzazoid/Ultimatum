@@ -938,7 +938,6 @@
     {
       "name": "LayoutNGBlockFlow DIV id='scroller'",
       "bounds": [150, 150],
-      "contentsOpaqueForText": true,
       "drawsContent": false,
       "transform": 3
     },
@@ -972,7 +971,6 @@
     {
       "name": "LayoutNGBlockFlow DIV id='scroller'",
       "bounds": [4000, 20000],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [40, 10010, 60, 40]
       ],

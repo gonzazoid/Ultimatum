@@ -5,7 +5,10 @@
 #include "content/browser/preloading/prerender/prerender_handle_impl.h"
 
 #include "content/browser/preloading/prerender/prerender_final_status.h"
-#include "content/public/browser/prerender_trigger_type.h"
+#include "content/browser/preloading/prerender/prerender_host.h"
+#include "content/browser/preloading/prerender/prerender_host_registry.h"
+#include "content/public/browser/preloading_trigger_type.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -16,13 +19,13 @@ PrerenderHandleImpl::PrerenderHandleImpl(
     : prerender_host_registry_(std::move(prerender_host_registry)),
       frame_tree_node_id_(frame_tree_node_id),
       prerendering_url_(prerendering_url) {
-  DCHECK(!prerendering_url_.is_empty());
+  CHECK(!prerendering_url_.is_empty());
   // PrerenderHandleImpl is now designed only for embedder triggers. If you use
   // this handle for other triggers, please make sure to update the logging etc.
   auto* prerender_host =
       prerender_host_registry_->FindNonReservedHostById(frame_tree_node_id);
-  DCHECK(prerender_host);
-  DCHECK_EQ(prerender_host->trigger_type(), PrerenderTriggerType::kEmbedder);
+  CHECK(prerender_host);
+  CHECK_EQ(prerender_host->trigger_type(), PreloadingTriggerType::kEmbedder);
 }
 
 PrerenderHandleImpl::~PrerenderHandleImpl() {
@@ -32,7 +35,7 @@ PrerenderHandleImpl::~PrerenderHandleImpl() {
   }
 }
 
-GURL PrerenderHandleImpl::GetInitialPrerenderingUrl() {
+const GURL& PrerenderHandleImpl::GetInitialPrerenderingUrl() const {
   return prerendering_url_;
 }
 
@@ -47,6 +50,9 @@ void PrerenderHandleImpl::SetPreloadingAttemptFailureReason(
   auto* prerender_host =
       prerender_host_registry_->FindNonReservedHostById(frame_tree_node_id_);
   if (!prerender_host) {
+    return;
+  }
+  if (!prerender_host->preloading_attempt()) {
     return;
   }
   prerender_host->preloading_attempt()->SetFailureReason(reason);

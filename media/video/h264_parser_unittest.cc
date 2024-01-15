@@ -115,7 +115,7 @@ TEST(H264ParserTest, StreamFileParsing) {
   int num_parsed_nalus = 0;
   while (true) {
     media::H264SliceHeader shdr;
-    media::H264SEIMessage sei_msg;
+    media::H264SEI sei;
     H264NALU nalu;
     H264Parser::Result res = parser.AdvanceToNextNALU(&nalu);
     if (res == H264Parser::kEOStream) {
@@ -144,7 +144,7 @@ TEST(H264ParserTest, StreamFileParsing) {
         break;
 
       case H264NALU::kSEIMessage:
-        ASSERT_EQ(parser.ParseSEI(&sei_msg), H264Parser::kOk);
+        ASSERT_EQ(parser.ParseSEI(&sei), H264Parser::kOk);
         break;
 
       default:
@@ -274,4 +274,170 @@ TEST(H264ParserTest, GetCurrentSubsamplesSubsampleNotStartingAtNaluBoundary) {
   EXPECT_EQ(0u, nalu_subsamples[0].cypher_bytes);
 }
 
+// Verify recovery point SEI is correctly parsed.
+TEST(H264ParserTest, RecoveryPointSEIParsing) {
+  constexpr uint8_t kStream[] = {
+      // First NALU Start code.
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      // NALU type = 6 (kSEIMessage).
+      0x06,
+      // SEI payload type = 6 (recovery_point).
+      0x06,
+      // SEI payload size = 1.
+      0x01,
+      // SEI payload.
+      0x84,
+      // RBSP trailing bits.
+      0x80,
+      // Second NALU Start code.
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      // NALU type = 6 (kSEIMessage).
+      0x06,
+      // SEI payload type = 1 (pic_timing).
+      0x01,
+      // SEI payload size = 1.
+      0x01,
+      // SEI payload.
+      0x04,
+      // RBSP trailing bits.
+      0x80,
+  };
+
+  H264Parser parser;
+  parser.SetStream(kStream, std::size(kStream));
+
+  H264NALU target_nalu;
+  ASSERT_EQ(H264Parser::kOk, parser.AdvanceToNextNALU(&target_nalu));
+  EXPECT_EQ(target_nalu.nal_unit_type, H264NALU::kSEIMessage);
+
+  // Parse the first SEI.
+  H264SEI recovery_point_sei;
+  EXPECT_EQ(H264Parser::kOk, parser.ParseSEI(&recovery_point_sei));
+
+  // Recovery point present.
+  EXPECT_EQ(recovery_point_sei.msgs.size(), 1u);
+  for (auto& sei_msg : recovery_point_sei.msgs) {
+    EXPECT_EQ(sei_msg.type, H264SEIMessage::kSEIRecoveryPoint);
+    EXPECT_EQ(sei_msg.recovery_point.recovery_frame_cnt, 0);
+    EXPECT_EQ(sei_msg.recovery_point.exact_match_flag, false);
+    EXPECT_EQ(sei_msg.recovery_point.broken_link_flag, false);
+    EXPECT_EQ(sei_msg.recovery_point.changing_slice_group_idc, 0);
+  }
+
+  ASSERT_EQ(H264Parser::kOk, parser.AdvanceToNextNALU(&target_nalu));
+  EXPECT_EQ(target_nalu.nal_unit_type, H264NALU::kSEIMessage);
+
+  // Parse the second SEI.
+  H264SEI pic_timing_sei;
+  EXPECT_EQ(H264Parser::kOk, parser.ParseSEI(&pic_timing_sei));
+
+  // Recovery point not present.
+  EXPECT_EQ(pic_timing_sei.msgs.size(), 0u);
+}
+
+// Verify both MDCV and CLLI message can be correctly parsed in the same SEI
+// NALU.
+TEST(H264ParserTest, RecursiveSEIParsing) {
+  constexpr uint8_t kStream[] = {
+      // Start code.
+      0x00,
+      0x00,
+      0x01,
+      // NALU type = 6 (kSEIMessage).
+      0x06,
+      // SEI payload type = 137 (mastering_display_colour_volume).
+      0x89,
+      // SEI payload size = 24.
+      0x18,
+      // SEI payload.
+      0x33,
+      0xc1,
+      0x86,
+      0xc3,
+      0x1d,
+      0x4c,
+      0x0b,
+      0xb7,
+      0x84,
+      0xd0,
+      0x3e,
+      0x7f,
+      0x3d,
+      0x13,
+      0x40,
+      0x41,
+      0x00,
+      0x98,
+      0x96,
+      0x80,
+      0x00,
+      0x00,
+      // Skipped `0x03`.
+      0x03,
+      0x00,
+      0x32,
+      // SEI payload type = 144 (content_light_level_info).
+      0x90,
+      // SEI payload size = 4.
+      0x04,
+      // SEI payload.
+      0x03,
+      0xe8,
+      0x00,
+      0xc8,
+  };
+
+  H264Parser parser;
+  parser.SetStream(kStream, std::size(kStream));
+
+  H264NALU target_nalu;
+  ASSERT_EQ(H264Parser::kOk, parser.AdvanceToNextNALU(&target_nalu));
+  EXPECT_EQ(target_nalu.nal_unit_type, H264NALU::kSEIMessage);
+
+  // Recursively parse SEI.
+  H264SEI clli_mdcv_sei;
+  EXPECT_EQ(H264Parser::kOk, parser.ParseSEI(&clli_mdcv_sei));
+  EXPECT_EQ(clli_mdcv_sei.msgs.size(), 2u);
+
+  for (auto& sei_msg : clli_mdcv_sei.msgs) {
+    EXPECT_TRUE(sei_msg.type == H264SEIMessage::kSEIContentLightLevelInfo ||
+                sei_msg.type == H264SEIMessage::kSEIMasteringDisplayInfo);
+    switch (sei_msg.type) {
+      case H264SEIMessage::kSEIContentLightLevelInfo:
+        // Content light level info present.
+        EXPECT_EQ(sei_msg.content_light_level_info.max_content_light_level,
+                  1000u);
+        EXPECT_EQ(
+            sei_msg.content_light_level_info.max_picture_average_light_level,
+            200u);
+        break;
+      case H264SEIMessage::kSEIMasteringDisplayInfo:
+        EXPECT_EQ(sei_msg.mastering_display_info.display_primaries[0][0],
+                  13249u);
+        EXPECT_EQ(sei_msg.mastering_display_info.display_primaries[0][1],
+                  34499u);
+        EXPECT_EQ(sei_msg.mastering_display_info.display_primaries[1][0],
+                  7500u);
+        EXPECT_EQ(sei_msg.mastering_display_info.display_primaries[1][1],
+                  2999u);
+        EXPECT_EQ(sei_msg.mastering_display_info.display_primaries[2][0],
+                  34000u);
+        EXPECT_EQ(sei_msg.mastering_display_info.display_primaries[2][1],
+                  15999u);
+        EXPECT_EQ(sei_msg.mastering_display_info.white_points[0], 15635u);
+        EXPECT_EQ(sei_msg.mastering_display_info.white_points[1], 16449u);
+        EXPECT_EQ(sei_msg.mastering_display_info.max_luminance, 10000000u);
+        EXPECT_EQ(sei_msg.mastering_display_info.min_luminance, 50u);
+        break;
+      default:
+        break;
+    }
+  }
+}
 }  // namespace media

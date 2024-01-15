@@ -10,7 +10,7 @@
 // sync with the server-side copy.  Otherwise, the client may not be able to
 // parse the server generated model anymore.  If you want to change this
 // protocol definition or you have questions regarding its format please contact
-// chrome-anti-phishing@googlegroups.com.
+// safebrowsing@chromium.org.
 
 syntax = "proto2";
 
@@ -109,7 +109,9 @@ message ClientSideModel {
 
   optional TfLiteModelMetadata tflite_metadata = 17;
 
-  // next available tag number: 19
+  optional TfLiteModelMetadata img_embedding_metadata = 19;
+
+  // next available tag number: 20
 }
 
 message TfLiteModelMetadata {
@@ -122,6 +124,9 @@ message TfLiteModelMetadata {
 
     // The threshold value
     optional float threshold = 2;
+
+    // The threshold value for ESB users
+    optional float esb_threshold = 3;
   }
 
   // The list of threshold values for each category in the TFLite model. Pages

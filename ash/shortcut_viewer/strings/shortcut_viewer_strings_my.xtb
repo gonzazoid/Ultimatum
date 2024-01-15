@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">လိပ်စာဘားတန်းကို ထင်သာအောင် ပြုလုပ်ရန်</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> သို့မဟုတ် <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">ခြုံကြည့်သည့်မုဒ်</translation>
+<translation id="4275283744500212192">ဝင်းဒိုးအပြင်အဆင် ရွေးချယ်စရာများဖွင့်သည်</translation>
 <translation id="4382340674111381977">ယခင်စာမျက်နှာသို့ ပြန်သွားရန်</translation>
 <translation id="4458670250301149821">အက်ပ်ဇယားကွက်မျဉ်းတွင် အက်ပ်သင်္ကေတကို ဖိုင်တွဲတစ်ခု၏ အတွင်း/အပြင်သို့ ရွှေ့ရန်</translation>
 <translation id="4472417192667361414">စနစ်နှင့် မျက်နှာပြင်ပြသမှု ဆက်တင်များ</translation>
@@ -130,7 +131,7 @@
 <translation id="5757474750054631686">ကီးဘုတ်ကို မှိန်အောင် ပြုလုပ်ရန် (နောက်ခံမီးပါသည့် ကီးဘုတ်များသာ)</translation>
 <translation id="587531134027443617">ယခင်စကားလုံးကို ဖျက်ရန်</translation>
 <translation id="5899919361772749550">'ဆော့ဖ်ဝဲအင်ဂျင်နီယာ ကိရိယာများ' ကွန်ဆိုးလ်ကို ပြရန် သို့မဟုတ် ဝှက်ရန်</translation>
-<translation id="5919628958418675842">ပုဂ္ဂိုလ်ရေးဆိုင်ရာ မျက်နှာပြင်ကို ဖွင့်ရန် သို့မဟုတ် ပိတ်ရန်</translation>
+<translation id="5919628958418675842">အချက်အလက်လုံခြုံမှုဆိုင်ရာ ဖန်သားပြင်ကို ဖွင့်ရန် သို့မဟုတ် ပိတ်ရန်</translation>
 <translation id="5921745308587794300">ဝင်းဒိုးကို လှည့်ပါ</translation>
 <translation id="5926306472221400972">ဖန်သားပြင်အပြည့် ဓာတ်ပုံရိုက်ရန်</translation>
 <translation id="6022924867608035986">ရှာဖွေရန်အကွက်ထဲရှိ စာသားကို ရှင်းလင်းရန်</translation>
@@ -183,7 +184,7 @@
 <translation id="7730490981846175479"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="ALT" /><ph name="SEPARATOR2" /><ph name="L" /> ပြီးနောက် <ph name="SPACE" /> သို့မဟုတ် <ph name="ENTER" /></translation>
 <translation id="7787242579016742662">ဘရောင်ဇာတွင် ဖိုင်ကို ဖွင့်ရန်</translation>
 <translation id="7952165122793773711">တဘ် ၁ မှ ၈ သို့ သွားရန်</translation>
-<translation id="8026334261755873520">ဘရောက်လုပ်ထားသည့် အချက်လက်များ ရှင်းလင်းရန်</translation>
+<translation id="8026334261755873520">ဘရောက်စ်ဒေတာ ရှင်းထုတ်ရန်</translation>
 <translation id="8130528849632411619">စာမျက်နှာ၏ အစသို့ သွားရန်</translation>
 <translation id="8147954207400281792"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="K" /> သို့မဟုတ် <ph name="E" /></translation>
 <translation id="8234414138295101081">မျက်နှာပြင်ကို ၉၀ ဒီဂရီ လှည့်ရန်</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">လင့်ခ်ကို တဘ်ဘားတန်းပေါ်ရှိ နေရာလွတ်သို့ ဖိဆွဲပါ</translation>
 <translation id="8389638407792712197">ဝင်းဒိုးအသစ် ဖွင့်ရန်</translation>
 <translation id="8429696719963529183">F ခလုတ်များ (F1 မှ F12) ကို သုံးရန်</translation>
+<translation id="8539396513118402548">ဖြတ်လမ်းလင့်ခ်စာရင်း</translation>
 <translation id="85690795166292698">လင့်ခ်ကို တဘ်အသစ်တွင် ဖွင့်ရန်</translation>
 <translation id="8609384513243082612">တဘ်အသစ် ဖွင့်ရန်</translation>
 <translation id="8644639153978066712">Files အက်ပ်အတွင်း ဝှက်ထားသည့် ဖိုင်များကို ပြရန်</translation>

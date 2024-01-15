@@ -10,23 +10,27 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/allocator/dispatcher/reentry_guard.h"
 #include "base/check.h"
+#include "base/debug/stack_trace.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/numerics/clamped_math.h"
 #include "base/profiler/module_cache.h"
 #include "base/rand_util.h"
 #include "base/sampling_heap_profiler/sampling_heap_profiler.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/heap_profiling/in_process/heap_profiler_parameters.h"
-#include "components/metrics/call_stack_profile_builder.h"
-#include "components/metrics/call_stack_profile_params.h"
+#include "components/metrics/call_stacks/call_stack_profile_builder.h"
+#include "components/metrics/call_stacks/call_stack_profile_params.h"
 #include "components/services/heap_profiling/public/cpp/merge_samples.h"
 #include "components/version_info/channel.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 
 namespace heap_profiling {
 
@@ -138,6 +142,87 @@ void RecordUmaSnapshotInterval(base::TimeDelta interval,
                                 kMaxHistogramTime, 50);
 }
 
+#if BUILDFLAG(IS_ANDROID)
+// Records metrics about the quality of each stack that is sampled.
+class StackQualityMetricsRecorder {
+ public:
+  StackQualityMetricsRecorder(ProcessType process_type,
+                              base::ModuleCache& module_cache)
+      : process_type_(process_type),
+        chrome_module_(GetCurrentModule(module_cache)) {}
+
+  // Records that a new stack is being processed.
+  void NewStack(size_t stack_size) {
+    stack_size_ = stack_size;
+    num_non_chrome_frames_ = 0;
+  }
+
+  // Records that a frame was found in `module` in the ModuleCache.
+  void AddFrameInModule(const base::ModuleCache::Module* module) {
+    // If the chrome module couldn't be found, record all frames as non-chrome.
+    if (!chrome_module_ || !module ||
+        module->GetBaseAddress() != chrome_module_->GetBaseAddress()) {
+      num_non_chrome_frames_ += 1;
+    }
+  }
+
+  // Records summary metrics through UMA.
+  void RecordUmaMetrics() {
+    // From inspecting reports received on Android, most reports with only 1 to
+    // 3 frames are clearly truncated, suggesting a problem with the unwinder,
+    // or contain a JNI base call that directly allocates. (These are not broken
+    // but don't have anything actionable in them.) Reports with 4 frames are
+    // more likely to be useful but still have a large proportion of truncated
+    // or non-actionable stacks. With 5 or more frames the stacks are more
+    // likely than not to be actionable.
+    constexpr size_t kMinFramesForGoodQuality = 5;
+
+    const bool has_few_frames = stack_size_ < kMinFramesForGoodQuality;
+    base::UmaHistogramBoolean("HeapProfiling.InProcess.AndroidShortStacks",
+                              has_few_frames);
+    base::UmaHistogramBoolean(
+        ProcessHistogramName("HeapProfiling.InProcess.AndroidShortStacks",
+                             process_type_),
+        has_few_frames);
+
+    if (stack_size_ > 0) {
+      const double non_chrome_frame_percent =
+          100.0 * num_non_chrome_frames_ / stack_size_;
+      base::UmaHistogramPercentage(
+          "HeapProfiling.InProcess.AndroidNonChromeFrames",
+          non_chrome_frame_percent);
+      base::UmaHistogramPercentage(
+          ProcessHistogramName("HeapProfiling.InProcess.AndroidNonChromeFrames",
+                               process_type_),
+          non_chrome_frame_percent);
+    }
+  }
+
+ private:
+  static const base::ModuleCache::Module* GetCurrentModule(
+      base::ModuleCache& module_cache) {
+    // Get the address of the current function.
+    const uintptr_t address = reinterpret_cast<const uintptr_t>(
+        &StackQualityMetricsRecorder::GetCurrentModule);
+    return module_cache.GetModuleForAddress(address);
+  }
+
+  ProcessType process_type_;
+  raw_ptr<const base::ModuleCache::Module> chrome_module_;
+  size_t stack_size_ = 0;
+  size_t num_non_chrome_frames_ = 0;
+};
+#else
+// No-op implementation of StackQualityMetricsRecorder.
+class StackQualityMetricsRecorder {
+ public:
+  StackQualityMetricsRecorder(ProcessType, base::ModuleCache&) {}
+  void NewStack(size_t) {}
+  void AddFrameInModule(const base::ModuleCache::Module*) {}
+  void RecordUmaMetrics() {}
+};
+#endif
+
 }  // namespace
 
 HeapProfilerController::SnapshotParams::SnapshotParams(
@@ -175,6 +260,11 @@ HeapProfilerController::HeapProfilerController(version_info::Channel channel,
   // destroyed in tests.
   DCHECK_EQ(g_profiling_enabled, ProfilingEnabled::kNoController);
   g_profiling_enabled = DecideIfCollectionIsEnabled(channel, process_type);
+
+  // Before starting the profiler, record the ReentryGuard's TLS slot to a crash
+  // key to debug reentry into the profiler.
+  // TODO(crbug.com/1411454): Remove this after diagnosing reentry crashes.
+  base::allocator::dispatcher::ReentryGuard::RecordTLSSlotToCrashKey();
 }
 
 HeapProfilerController::~HeapProfilerController() {
@@ -183,7 +273,7 @@ HeapProfilerController::~HeapProfilerController() {
   g_profiling_enabled = ProfilingEnabled::kNoController;
 }
 
-void HeapProfilerController::StartIfEnabled() {
+bool HeapProfilerController::StartIfEnabled() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const bool profiling_enabled =
       g_profiling_enabled == ProfilingEnabled::kEnabled;
@@ -197,7 +287,7 @@ void HeapProfilerController::StartIfEnabled() {
     base::UmaHistogramBoolean(kEnabledHistogramName, profiling_enabled);
   }
   if (!profiling_enabled)
-    return;
+    return false;
   HeapProfilerParameters profiler_params =
       GetHeapProfilerParametersForProcess(process_type_);
   // DecideIfCollectionIsEnabled() should return false if not supported.
@@ -213,6 +303,7 @@ void HeapProfilerController::StartIfEnabled() {
       /*use_random_interval=*/!suppress_randomness_for_testing_, stopped_,
       process_type_, creation_time_);
   ScheduleNextSnapshot(std::move(params));
+  return true;
 }
 
 void HeapProfilerController::SuppressRandomnessForTesting() {
@@ -249,16 +340,27 @@ void HeapProfilerController::RetrieveAndSendSnapshot(
     ProcessType process_type,
     base::TimeDelta time_since_profiler_creation) {
   using Sample = base::SamplingHeapProfiler::Sample;
+
+  // Always log the total sampled memory before returning. If `samples` is empty
+  // this will be logged as 0 MB.
+  base::ClampedNumeric<uint64_t> total_sampled_bytes;
+  absl::Cleanup log_total_sampled_memory = [&total_sampled_bytes,
+                                            &process_type] {
+    constexpr int kBytesPerMB = 1024 * 1024;
+    base::UmaHistogramMemoryLargeMB(
+        ProcessHistogramName("HeapProfiling.InProcess.TotalSampledMemory",
+                             process_type),
+        base::ClampDiv(total_sampled_bytes, kBytesPerMB));
+  };
+
   std::vector<Sample> samples =
       base::SamplingHeapProfiler::Get()->GetSamples(0);
-  constexpr char kSamplesPerSnapshotHistogramName[] =
-      "HeapProfiling.InProcess.SamplesPerSnapshot";
   base::UmaHistogramCounts100000(
       ProcessHistogramName("HeapProfiling.InProcess.SamplesPerSnapshot",
                            process_type),
       samples.size());
   // Also summarize over all process types.
-  base::UmaHistogramCounts100000(kSamplesPerSnapshotHistogramName,
+  base::UmaHistogramCounts100000("HeapProfiling.InProcess.SamplesPerSnapshot",
                                  samples.size());
   if (samples.empty())
     return;
@@ -272,22 +374,31 @@ void HeapProfilerController::RetrieveAndSendSnapshot(
 
   SampleMap merged_samples = MergeSamples(samples);
 
+  StackQualityMetricsRecorder quality_recorder(process_type, module_cache);
   for (auto& pair : merged_samples) {
     const Sample& sample = pair.first;
     const SampleValue& value = pair.second;
 
+    const size_t stack_size = sample.stack.size();
     std::vector<base::Frame> frames;
-    frames.reserve(sample.stack.size());
+    frames.reserve(stack_size);
+
+    quality_recorder.NewStack(stack_size);
     for (const void* frame : sample.stack) {
-      uintptr_t address = reinterpret_cast<uintptr_t>(frame);
+      const uintptr_t address = reinterpret_cast<const uintptr_t>(frame);
       const base::ModuleCache::Module* module =
           module_cache.GetModuleForAddress(address);
+      quality_recorder.AddFrameInModule(module);
       frames.emplace_back(address, module);
     }
+    quality_recorder.RecordUmaMetrics();
+
     // Heap "samples" represent allocation stacks aggregated over time so
     // do not have a meaningful timestamp.
     profile_builder.OnSampleCompleted(std::move(frames), base::TimeTicks(),
                                       value.total, value.count);
+
+    total_sampled_bytes += value.total;
   }
 
   profile_builder.OnProfileCompleted(base::TimeDelta(), base::TimeDelta());

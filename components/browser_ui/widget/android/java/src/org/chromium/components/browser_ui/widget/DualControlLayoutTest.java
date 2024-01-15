@@ -5,7 +5,6 @@
 package org.chromium.components.browser_ui.widget;
 
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.MeasureSpec;
@@ -14,6 +13,7 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Space;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -27,9 +27,7 @@ import org.chromium.base.test.util.Batch;
 import org.chromium.components.browser_ui.widget.DualControlLayout.DualControlLayoutAlignment;
 import org.chromium.components.browser_ui.widget.test.R;
 
-/**
- * Tests for DualControlLayout.
- */
+/** Tests for DualControlLayout. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.UNIT_TESTS)
 public class DualControlLayoutTest {
@@ -261,9 +259,8 @@ public class DualControlLayoutTest {
     }
 
     /**
-     * Runs a test against an inflated DualControlLayout that sets all of its values.
-     * Re-uses the AutofillEditor's buttons XML layout because we have no support for test-only
-     * layout files.
+     * Runs a test against an inflated DualControlLayout that sets all of its values. Re-uses the
+     * AutofillEditor's buttons XML layout because we have no support for test-only layout files.
      */
     @Test
     @SmallTest
@@ -280,12 +277,15 @@ public class DualControlLayoutTest {
         // Inflate a DualControlLayout that has all of the attributes set and confirm they're used
         // correctly.
         FrameLayout containerView = new FrameLayout(mContext);
-        LayoutInflater.from(mContext).inflate(
-                R.layout.dual_control_test_layout, containerView, true);
+        LayoutInflater.from(mContext)
+                .inflate(R.layout.dual_control_test_layout, containerView, true);
         DualControlLayout inflatedLayout = containerView.findViewById(R.id.button_bar);
         Assert.assertEquals(DualControlLayoutAlignment.END, inflatedLayout.getAlignment());
-        Assert.assertEquals("Incorrect stacked margin. Should be 24dp", 24 * dpToPx,
-                inflatedLayout.getStackedMargin(), 0.f);
+        Assert.assertEquals(
+                "Incorrect stacked margin. Should be 24dp",
+                24 * dpToPx,
+                inflatedLayout.getStackedMargin(),
+                0.f);
 
         Button primaryButton = inflatedLayout.findViewById(R.id.button_primary);
         Assert.assertNotNull(primaryButton);

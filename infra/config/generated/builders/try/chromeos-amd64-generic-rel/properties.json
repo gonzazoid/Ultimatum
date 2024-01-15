@@ -1,10 +1,9 @@
 {
-  "$build/chromium_orchestrator": {
-    "compilator": "chromeos-amd64-generic-rel-compilator",
-    "compilator_watcher_git_revision": "7809a690bbd935bcb3b4d922e24cabe168aaabc8"
-  },
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/chromeos-amd64-generic-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -53,6 +52,12 @@
       ]
     }
   },
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "jobs": 150,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
+  },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
     "grouping_keys": [
@@ -61,5 +66,5 @@
     ]
   },
   "builder_group": "tryserver.chromium.chromiumos",
-  "recipe": "chromium/orchestrator"
+  "recipe": "chromium_trybot"
 }

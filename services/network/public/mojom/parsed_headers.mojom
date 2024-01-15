@@ -8,6 +8,7 @@ import "services/network/public/mojom/content_security_policy.mojom";
 import "services/network/public/mojom/cross_origin_embedder_policy.mojom";
 import "services/network/public/mojom/cross_origin_opener_policy.mojom";
 import "services/network/public/mojom/link_header.mojom";
+import "services/network/public/mojom/no_vary_search.mojom";
 import "services/network/public/mojom/supports_loading_mode.mojom";
 import "services/network/public/mojom/timing_allow_origin.mojom";
 import "services/network/public/mojom/variants_header.mojom";
@@ -72,6 +73,12 @@ struct ParsedHeaders {
   // https://tools.ietf.org/html/draft-davidben-http-client-hint-reliability#section-3
   array<WebClientHintsType>? critical_ch;
 
+  // If the client hint headers should be ignored due to a Clear-Site-Data
+  // header this is true so that when re-parsing the headers from cache we know
+  // to keep them cleared. If this field is true but accept_ch or critical_ch
+  // contain values, accept_ch and critical_ch should take precedence.
+  bool client_hints_ignored_due_to_clear_site_data_header;
+
   // The parsed value of the X-Frame-Options header.
   XFrameOptionsValue xfo = XFrameOptionsValue.kNone;
 
@@ -111,4 +118,17 @@ struct ParsedHeaders {
 
   // The parsed value of the Content-Language header.
   array<string>? content_language;
+
+  // The parsed value of the No-Vary-Search header including parse error
+  // indicator. Null if not present or if No-Vary-Search header represents
+  // the default URL search variance.
+  // For more information, see:
+  // https://wicg.github.io/nav-speculation/no-vary-search.html#model
+  NoVarySearchWithParseError? no_vary_search_with_parse_error;
+
+  // The parsed value of the Observe-Browsing-Topics header. See:
+  // https://patcg-individual-drafts.github.io/topics/#the-observe-browsing-topics-http-response-header-header
+  bool observe_browsing_topics;
+
+  // Please update `CheckParsedHeadersEquals` after adding new fields.
 };

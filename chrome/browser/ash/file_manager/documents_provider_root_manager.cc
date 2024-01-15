@@ -14,7 +14,8 @@
 #include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/mojom/bitmap.mojom.h"
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
 #include "chrome/browser/profiles/profile.h"
@@ -42,8 +43,9 @@ constexpr const char* kAuthoritiesToExclude[] = {
 
 bool IsAuthorityToExclude(const std::string& authority) {
   for (const char* authority_to_exclude : kAuthoritiesToExclude) {
-    if (base::EqualsCaseInsensitiveASCII(authority, authority_to_exclude))
+    if (base::EqualsCaseInsensitiveASCII(authority, authority_to_exclude)) {
       return true;
+    }
   }
   return false;
 }
@@ -53,11 +55,8 @@ GURL EncodeIconAsUrl(const SkBitmap& bitmap) {
   // bitmaps without resizing in Chrome side.
   std::vector<unsigned char> output;
   gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &output);
-  std::string encoded;
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(output.data()),
-                        output.size()),
-      &encoded);
+  std::string encoded = base::Base64Encode(base::StringPiece(
+      reinterpret_cast<const char*>(output.data()), output.size()));
   return GURL("data:image/png;base64," + encoded);
 }
 
@@ -72,16 +71,18 @@ class BitmapWrapper {
   bool operator<(const BitmapWrapper& other) const {
     const size_t size1 = bitmap_->computeByteSize();
     const size_t size2 = other.bitmap_->computeByteSize();
-    if (size1 == 0 && size2 == 0)
+    if (size1 == 0 && size2 == 0) {
       return false;
-    if (size1 != size2)
+    }
+    if (size1 != size2) {
       return size1 < size2;
+    }
     return memcmp(bitmap_->getAddr32(0, 0), other.bitmap_->getAddr32(0, 0),
                   size1) < 0;
   }
 
  private:
-  const SkBitmap* const bitmap_;
+  const raw_ptr<const SkBitmap> bitmap_;
 };
 
 }  // namespace
@@ -94,8 +95,9 @@ DocumentsProviderRootManager::DocumentsProviderRootManager(
 DocumentsProviderRootManager::~DocumentsProviderRootManager() {
   arc::ArcFileSystemBridge* bridge =
       arc::ArcFileSystemBridge::GetForBrowserContext(profile_);
-  if (bridge)
+  if (bridge) {
     bridge->RemoveObserver(this);
+  }
 }
 
 void DocumentsProviderRootManager::AddObserver(Observer* observer) {
@@ -112,19 +114,22 @@ void DocumentsProviderRootManager::RemoveObserver(Observer* observer) {
 
 void DocumentsProviderRootManager::SetEnabled(bool enabled) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (enabled == is_enabled_)
+  if (enabled == is_enabled_) {
     return;
+  }
 
   is_enabled_ = enabled;
   arc::ArcFileSystemBridge* bridge =
       arc::ArcFileSystemBridge::GetForBrowserContext(profile_);
   if (enabled) {
-    if (bridge)
+    if (bridge) {
       bridge->AddObserver(this);
+    }
     RequestGetRoots();
   } else {
-    if (bridge)
+    if (bridge) {
       bridge->RemoveObserver(this);
+    }
     ClearRoots();
   }
 }
@@ -172,25 +177,30 @@ void DocumentsProviderRootManager::RequestGetRoots() {
 }
 
 void DocumentsProviderRootManager::OnGetRoots(
-    absl::optional<std::vector<arc::mojom::RootPtr>> maybe_roots) {
-  if (!maybe_roots.has_value())
+    std::optional<std::vector<arc::mojom::RootPtr>> maybe_roots) {
+  if (!maybe_roots.has_value()) {
     return;
+  }
 
   std::vector<RootInfo> roots_info;
   for (const auto& root : maybe_roots.value()) {
-    if (IsAuthorityToExclude(root->authority))
+    if (IsAuthorityToExclude(root->authority)) {
       continue;
+    }
 
     RootInfo root_info;
     root_info.authority = root->authority;
     root_info.title = root->title;
-    if (root->summary.has_value())
+    if (root->summary.has_value()) {
       root_info.summary = root->summary.value();
-    if (root->icon.has_value())
+    }
+    if (root->icon.has_value()) {
       root_info.icon = root->icon.value();
+    }
     root_info.supports_create = root->supports_create;
-    if (root->mime_types.has_value())
+    if (root->mime_types.has_value()) {
       root_info.mime_types = root->mime_types.value();
+    }
 
     // Strip new lines from the Root and Document IDs.
     //

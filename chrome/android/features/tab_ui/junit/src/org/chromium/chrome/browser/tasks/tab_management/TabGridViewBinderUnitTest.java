@@ -4,26 +4,28 @@
 
 package org.chromium.chrome.browser.tasks.tab_management;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Matrix;
+import android.graphics.drawable.Drawable;
 import android.util.Size;
 import android.view.ViewGroup.LayoutParams;
+import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -33,9 +35,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.robolectric.RuntimeEnvironment;
 
 import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.TabFavicon;
+import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider.TabFaviconFetcher;
 import org.chromium.chrome.tab_ui.R;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -46,45 +51,38 @@ import org.chromium.ui.widget.ViewLookupCachingFrameLayout;
 public final class TabGridViewBinderUnitTest {
     private static final int INIT_WIDTH = 100;
     private static final int INIT_HEIGHT = 200;
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
-    @Mock
-    private ViewLookupCachingFrameLayout mViewGroup;
-    @Mock
-    private Context mContext;
-    @Mock
-    private Resources mResources;
-    @Mock
-    private TabListMediator.ThumbnailFetcher mFetcher;
-    @Mock
-    private TabGridThumbnailView mThumbnailView;
-    @Captor
-    private ArgumentCaptor<Callback<Bitmap>> mCallbackCaptor;
-    @Mock
-    private TypedArray mTypedArray;
+    @Rule public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+    @Mock private ViewLookupCachingFrameLayout mViewGroup;
+    @Mock private TabListMediator.ThumbnailFetcher mFetcher;
+    @Mock private TabThumbnailView mThumbnailView;
+    @Mock private ImageView mFaviconView;
+    @Captor private ArgumentCaptor<Callback<Bitmap>> mCallbackCaptor;
+    @Mock private TypedArray mTypedArray;
 
+    @Mock private TabFavicon mTabFavicon;
+    @Mock private Drawable mDrawable;
+
+    private Context mContext;
     private PropertyModel mModel;
     private LayoutParams mLayoutParams;
     private Bitmap mBitmap;
-    private static final int RESOURCE_ID = 123;
-    private static final float RESOURCE_DIMEN = 10;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        mModel = new PropertyModel.Builder(TabProperties.ALL_KEYS_TAB_GRID)
-                         .with(TabProperties.THUMBNAIL_FETCHER, mFetcher)
-                         .with(TabProperties.IS_INCOGNITO, false)
-                         .with(TabProperties.IS_SELECTED, true)
-                         .with(TabProperties.GRID_CARD_SIZE, new Size(INIT_WIDTH, INIT_HEIGHT))
-                         .build();
+        mContext = RuntimeEnvironment.application;
+
+        mModel =
+                new PropertyModel.Builder(TabProperties.ALL_KEYS_TAB_GRID)
+                        .with(TabProperties.THUMBNAIL_FETCHER, mFetcher)
+                        .with(TabProperties.IS_INCOGNITO, false)
+                        .with(TabProperties.IS_SELECTED, true)
+                        .with(TabProperties.GRID_CARD_SIZE, new Size(INIT_WIDTH, INIT_HEIGHT))
+                        .build();
         when(mViewGroup.fastFindViewById(R.id.tab_thumbnail)).thenReturn(mThumbnailView);
+        when(mViewGroup.fastFindViewById(R.id.tab_favicon)).thenReturn(mFaviconView);
+        when(mFaviconView.getContext()).thenReturn(mContext);
         when(mViewGroup.getContext()).thenReturn(mContext);
-        when(mContext.getResources()).thenReturn(mResources);
-        when(mTypedArray.getResourceId(anyInt(), anyInt())).thenReturn(RESOURCE_ID);
-        when(mResources.getDimension(anyInt())).thenReturn(RESOURCE_DIMEN);
-        // Mock tablet.
-        when(mResources.getInteger(org.chromium.ui.R.integer.min_screen_width_bucket)).thenReturn(3);
 
         // mModel, view and bitmap all use the same initial values.
         mLayoutParams = new LayoutParams(INIT_WIDTH, INIT_HEIGHT);
@@ -95,14 +93,30 @@ public final class TabGridViewBinderUnitTest {
         when(mThumbnailView.getLayoutParams()).thenReturn(thumbnailParams);
     }
 
-    @After
-    public void tearDown() {
-        TabUiFeatureUtilities.setTabletGridTabSwitcherPolishEnabledForTesting(null);
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "sw348dp")
+    public void bindClosableTabWithCardWidth_updateNullFetcher() {
+        mModel.set(TabProperties.THUMBNAIL_FETCHER, null);
+        TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.THUMBNAIL_FETCHER);
+        verify(mThumbnailView).updateThumbnailPlaceholder(false, true);
+        verify(mThumbnailView).setImageDrawable(null);
+
+        // Update width.
+        // updatedBitmapWidth = updatedCardWidth - margins = 200 - 40 = 160.
+        // updatedBitmapHeight = INIT_HEIGHT - margins = 200 - 40 - 160.
+        final int updatedCardWidth = 200;
+        mModel.set(TabProperties.GRID_CARD_SIZE, new Size(updatedCardWidth, INIT_HEIGHT));
+        TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.GRID_CARD_SIZE);
+        verify(mViewGroup).setMinimumWidth(updatedCardWidth);
+        verify(mThumbnailView, times(2)).updateThumbnailPlaceholder(false, true);
+        assertThat(mLayoutParams.width, equalTo(updatedCardWidth));
+
+        verify(mThumbnailView, times(2)).setImageDrawable(null);
     }
 
     @Test
+    @org.robolectric.annotation.Config(qualifiers = "sw348dp")
     public void bindClosableTabWithCardWidth_updateCardAndThumbnail() {
-        TabUiFeatureUtilities.setTabletGridTabSwitcherPolishEnabledForTesting(false);
         // Update width.
         // updatedBitmapWidth = updatedCardWidth - margins = 200 - 40 = 160.
         // updatedBitmapHeight = INIT_HEIGHT - margins = 200 - 40 - 160.
@@ -111,23 +125,29 @@ public final class TabGridViewBinderUnitTest {
         TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.GRID_CARD_SIZE);
 
         verify(mViewGroup).setMinimumWidth(updatedCardWidth);
-        verify(mThumbnailView).setColorThumbnailPlaceHolder(false, true);
+        verify(mThumbnailView).updateThumbnailPlaceholder(false, true);
         assertThat(mLayoutParams.width, equalTo(updatedCardWidth));
 
         verify(mFetcher).fetch(mCallbackCaptor.capture(), any(), eq(true));
         mCallbackCaptor.getValue().onResult(mBitmap);
 
-        verify(mThumbnailView).setScaleType(ScaleType.FIT_CENTER);
-        verify(mThumbnailView).setAdjustViewBounds(true);
+        verify(mThumbnailView).setScaleType(ScaleType.MATRIX);
         verify(mThumbnailView).setImageBitmap(mBitmap);
-        verify(mThumbnailView).maybeAdjustThumbnailHeight();
-        verify(mThumbnailView).getLayoutParams();
+        ArgumentCaptor<Matrix> matrixCaptor = ArgumentCaptor.forClass(Matrix.class);
+        verify(mThumbnailView).setImageMatrix(matrixCaptor.capture());
         verifyNoMoreInteractions(mThumbnailView);
+
+        // Verify metrics scale + translate.
+        // Scale = updatedBitmapWidth / INIT_WIDTH = 176 / 100 = 1.76f.
+        float expectedScale = 1.76f;
+        // xTranslate = (updatedBitmapWidth - scaledWidth) /2 = (176 - (100*1.76))/2 = 0.
+        float expectedXTrans = 0.f;
+        assertImageMatrix(matrixCaptor, expectedScale, expectedXTrans);
     }
 
     @Test
+    @org.robolectric.annotation.Config(qualifiers = "sw348dp")
     public void bindClosableTabWithCardWidth_updateCardAndThumbnail_notSelected() {
-        TabUiFeatureUtilities.setTabletGridTabSwitcherPolishEnabledForTesting(false);
         // Update width.
         // updatedBitmapWidth = updatedCardWidth - margins = 200 - 40 = 160.
         // updatedBitmapHeight = INIT_HEIGHT - margins = 200 - 40 - 160.
@@ -137,26 +157,32 @@ public final class TabGridViewBinderUnitTest {
         TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.GRID_CARD_SIZE);
 
         verify(mViewGroup).setMinimumWidth(updatedCardWidth);
-        verify(mThumbnailView).setColorThumbnailPlaceHolder(false, false);
+        verify(mThumbnailView).updateThumbnailPlaceholder(false, false);
         assertThat(mLayoutParams.width, equalTo(updatedCardWidth));
 
         verify(mFetcher).fetch(mCallbackCaptor.capture(), any(), eq(false));
         mCallbackCaptor.getValue().onResult(mBitmap);
 
-        verify(mThumbnailView).setScaleType(ScaleType.FIT_CENTER);
-        verify(mThumbnailView).setAdjustViewBounds(true);
+        verify(mThumbnailView).setScaleType(ScaleType.MATRIX);
         verify(mThumbnailView).setImageBitmap(mBitmap);
-        verify(mThumbnailView).maybeAdjustThumbnailHeight();
-        verify(mThumbnailView).getLayoutParams();
+        ArgumentCaptor<Matrix> matrixCaptor = ArgumentCaptor.forClass(Matrix.class);
+        verify(mThumbnailView).setImageMatrix(matrixCaptor.capture());
         verifyNoMoreInteractions(mThumbnailView);
+
+        // Verify metrics scale + translate.
+        // Scale = updatedBitmapWidth / INIT_WIDTH = 176 / 100 = 1.76f.
+        float expectedScale = 1.76f;
+        // xTranslate = (updatedBitmapWidth - scaledWidth) /2 = (176 - (100*1.76))/2 = 0.
+        float expectedXTrans = 0.f;
+        assertImageMatrix(matrixCaptor, expectedScale, expectedXTrans);
     }
 
     @Test
-    public void bindClosableTabWithCardWidthWithPolishEnabled_updateCardAndThumbnail() {
-        TabUiFeatureUtilities.setTabletGridTabSwitcherPolishEnabledForTesting(true);
+    @org.robolectric.annotation.Config(qualifiers = "sw600dp")
+    public void bindClosableTabWithCardWidthOnTablet_updateCardAndThumbnail() {
         // Update card width.
-        // updatedBitmapWidth = updatedCardWidth - margins = 200 - 40 = 160.
-        // updatedBitmapHeight = INIT_HEIGHT - margins = 200 - 40 - 160.
+        // updatedBitmapWidth = updatedCardWidth - margins = 200 - 24 = 176.
+        // updatedBitmapHeight = INIT_HEIGHT - margins = 200 - 24 - 176.
         final int updatedCardWidth = 200;
         mModel.set(TabProperties.GRID_CARD_SIZE, new Size(updatedCardWidth, INIT_HEIGHT));
 
@@ -165,7 +191,7 @@ public final class TabGridViewBinderUnitTest {
 
         // Verify.
         verify(mViewGroup).setMinimumWidth(updatedCardWidth);
-        verify(mThumbnailView).setColorThumbnailPlaceHolder(false, true);
+        verify(mThumbnailView).updateThumbnailPlaceholder(false, true);
         assertThat(mLayoutParams.width, equalTo(updatedCardWidth));
         verify(mFetcher).fetch(mCallbackCaptor.capture(), any(), eq(true));
 
@@ -174,36 +200,32 @@ public final class TabGridViewBinderUnitTest {
 
         verify(mThumbnailView).setScaleType(ScaleType.MATRIX);
         verify(mThumbnailView).setImageBitmap(mBitmap);
-        verify(mThumbnailView).maybeAdjustThumbnailHeight();
         ArgumentCaptor<Matrix> matrixCaptor = ArgumentCaptor.forClass(Matrix.class);
         verify(mThumbnailView).setImageMatrix(matrixCaptor.capture());
-        verify(mThumbnailView).getLayoutParams();
         verifyNoMoreInteractions(mThumbnailView);
 
         // Verify metrics scale + translate.
-        // Scale = updatedBitmapWidth / INIT_WIDTH = 160 / 100 = 1.6f.
-        float expectedScale = 1.6f;
-        // xTranslate = (updatedBitmapWidth - scaledWidth) /2 = (160 - (100*1.6))/2 = 0.
+        // Scale = updatedBitmapWidth / INIT_WIDTH = 176 / 100 = 1.76f.
+        float expectedScale = 1.76f;
+        // xTranslate = (updatedBitmapWidth - scaledWidth) /2 = (176 - (100*1.76))/2 = 0.
         float expectedXTrans = 0.f;
         assertImageMatrix(matrixCaptor, expectedScale, expectedXTrans);
     }
 
     @Test
-    public void bindClosableTabWithCardHeightWithPolishEnabled_updateCardAndThumbnail() {
-        TabUiFeatureUtilities.setTabletGridTabSwitcherPolishEnabledForTesting(true);
-
+    @org.robolectric.annotation.Config(qualifiers = "sw600dp")
+    public void bindClosableTabWithCardHeightOnTablet_updateCardAndThumbnail() {
         // Update card height = 400.
-        // updatedBitmapWidth = INIT_WIDTH - margins = 100 - 40 = 60.
-        // updatedBitmapHeight = updatedCardHeight - margins = 400 - 40 - 360.
+        // updatedBitmapWidth = INIT_WIDTH - margins = 100 - 24 = 76.
+        // updatedBitmapHeight = updatedCardHeight - margins = 400 - 60 = 340.
         final int updatedCardHeight = 400;
         mModel.set(TabProperties.GRID_CARD_SIZE, new Size(INIT_WIDTH, updatedCardHeight));
-
         // Call.
         TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.GRID_CARD_SIZE);
 
         // Verify.
         verify(mViewGroup).setMinimumHeight(updatedCardHeight);
-        verify(mThumbnailView).setColorThumbnailPlaceHolder(false, true);
+        verify(mThumbnailView).updateThumbnailPlaceholder(false, true);
         assertThat(mLayoutParams.height, equalTo(updatedCardHeight));
         verify(mFetcher).fetch(mCallbackCaptor.capture(), any(), eq(true));
 
@@ -212,18 +234,41 @@ public final class TabGridViewBinderUnitTest {
 
         verify(mThumbnailView).setScaleType(ScaleType.MATRIX);
         verify(mThumbnailView).setImageBitmap(mBitmap);
-        verify(mThumbnailView).maybeAdjustThumbnailHeight();
         ArgumentCaptor<Matrix> matrixCaptor = ArgumentCaptor.forClass(Matrix.class);
         verify(mThumbnailView).setImageMatrix(matrixCaptor.capture());
-        verify(mThumbnailView).getLayoutParams();
         verifyNoMoreInteractions(mThumbnailView);
 
         // Verify metrics scale + translate.
-        // Scale = updatedBitmapHeight / INIT_HEIGHT = 360 / 200 = 1.8f.
-        float expectedScale = 1.8f;
-        // xTranslate = (updatedBitmapWidth - scaledWidth) /2 = (60 - (100*1.8))/2 = -60.
-        float expectedXTrans = -60f;
+        // Scale = updatedBitmapHeight / INIT_HEIGHT = 340 / 200 = 1.7f.
+        float expectedScale = 1.7f;
+        // xTranslate = (updatedBitmapWidth - scaledWidth) /2 = (76 - (100*1.7))/2 = -47.
+        float expectedXTrans = -47f;
         assertImageMatrix(matrixCaptor, expectedScale, expectedXTrans);
+    }
+
+    @Test
+    public void testBindFaviconFetcher() {
+        doReturn(mDrawable).when(mTabFavicon).getSelectedDrawable();
+
+        TabFaviconFetcher fetcher =
+                new TabFaviconFetcher() {
+                    @Override
+                    public void fetch(Callback<TabFavicon> callback) {
+                        callback.onResult(mTabFavicon);
+                    }
+                };
+        mModel.set(TabProperties.FAVICON_FETCHER, fetcher);
+        TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.FAVICON_FETCHER);
+
+        verify(mFaviconView).setImageDrawable(mDrawable);
+    }
+
+    @Test
+    public void testBindNullFaviconFetcher() {
+        mModel.set(TabProperties.FAVICON_FETCHER, null);
+        TabGridViewBinder.bindClosableTab(mModel, mViewGroup, TabProperties.FAVICON_FETCHER);
+
+        verify(mFaviconView).setImageDrawable(null);
     }
 
     private void assertImageMatrix(

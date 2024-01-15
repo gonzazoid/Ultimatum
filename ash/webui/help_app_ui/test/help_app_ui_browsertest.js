@@ -12,6 +12,7 @@
  */
 import {runTestInGuest} from './driver.js';
 
+const HOST_ORIGIN = 'chrome://help-app';
 const GUEST_ORIGIN = 'chrome-untrusted://help-app';
 
 /** @struct */
@@ -24,8 +25,8 @@ const HelpAppUIBrowserTest = {
   runTestInGuest,
 };
 
-// Expose an old-style export for js2gtest.
-window['HelpAppUIBrowserTest_for_js2gtest'] = HelpAppUIBrowserTest;
+// Expose an export for tests run through `isolatedTestRunner`.
+window['HelpAppUiBrowserTest'] = HelpAppUIBrowserTest;
 
 // Tests that chrome://help-app goes somewhere instead of 404ing or crashing.
 HelpAppUIBrowserTest.HasChromeSchemeURL = () => {
@@ -42,17 +43,8 @@ HelpAppUIBrowserTest.HasTitleAndLang = () => {
   assertEquals(document.title, 'Explore');
 };
 
-// Check the body element's background color when the DarkLightMode feature is
-// enabled and dark mode is enabled.
-HelpAppUIBrowserTest.BodyHasCorrectBackgroundColorWithDarkLight = () => {
+// Check the body element's background color when the dark mode is enabled.
+HelpAppUIBrowserTest.BodyHasCorrectBackgroundColorInDarkMode = () => {
   const actualBackgroundColor = getComputedStyle(document.body).backgroundColor;
   assertEquals(actualBackgroundColor, 'rgb(32, 33, 36)');  // Grey 900.
-};
-
-// Check the body element's background color when the DarkLightMode feature is
-// disabled.
-HelpAppUIBrowserTest.BodyHasCorrectBackgroundColorWithoutDarkLight = () => {
-  const actualBackgroundColor = getComputedStyle(document.body).backgroundColor;
-  // The default background-color of <body> is transparent.
-  assertEquals(actualBackgroundColor, 'rgba(0, 0, 0, 0)');
 };

@@ -9,12 +9,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "content/browser/media/audio_stream_monitor.h"
+#include "content/browser/media/media_devices_util.h"
 #include "content/browser/media/media_power_experiment_manager.h"
 #include "content/browser/media/session/media_session_controllers_manager.h"
 #include "content/common/content_export.h"
@@ -30,7 +32,6 @@
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/wake_lock.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "ui/android/view_android.h"
@@ -88,7 +89,7 @@ class CONTENT_EXPORT MediaWebContentsObserver
   bool IsPictureInPictureAllowedForFullscreenVideo() const;
 
   // Gets the MediaPlayerId of the fullscreen video if it exists.
-  const absl::optional<MediaPlayerId>& GetFullscreenVideoMediaPlayerId() const;
+  const std::optional<MediaPlayerId>& GetFullscreenVideoMediaPlayerId() const;
 
   // WebContentsObserver implementation.
   void WebContentsDestroyed() override;
@@ -163,7 +164,7 @@ class CONTENT_EXPORT MediaWebContentsObserver
     ~MediaPlayerHostImpl() override;
 
     // Used to bind receivers via the BrowserInterfaceBroker.
-    void BindMediaPlayerHostReceiver(
+    void AddMediaPlayerHostReceiver(
         mojo::PendingAssociatedReceiver<media::mojom::MediaPlayerHost>
             receiver);
 
@@ -219,8 +220,11 @@ class CONTENT_EXPORT MediaWebContentsObserver
     PlayerInfo* GetPlayerInfo();
     void NotifyAudioStreamMonitorIfNeeded();
 
+    void OnReceivedMediaDeviceSalt(
+        const std::string& hashed_device_id,
+        const content::MediaDeviceSaltAndOrigin& salt_and_origin);
     void OnReceivedTranslatedDeviceId(
-        const absl::optional<std::string>& translated_id);
+        const std::optional<std::string>& translated_id);
 
     const MediaPlayerId media_player_id_;
     const raw_ptr<MediaWebContentsObserver> media_web_contents_observer_;
@@ -310,8 +314,8 @@ class CONTENT_EXPORT MediaWebContentsObserver
   // Tracking variables and associated wake locks for media playback.
   PlayerInfoMap player_info_map_;
   mojo::Remote<device::mojom::WakeLock> audio_wake_lock_;
-  absl::optional<MediaPlayerId> fullscreen_player_;
-  absl::optional<bool> picture_in_picture_allowed_in_fullscreen_;
+  std::optional<MediaPlayerId> fullscreen_player_;
+  std::optional<bool> picture_in_picture_allowed_in_fullscreen_;
   bool has_audio_wake_lock_for_testing_ = false;
 
   std::unique_ptr<MediaSessionControllersManager> session_controllers_manager_;

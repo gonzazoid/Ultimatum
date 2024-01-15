@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WAKE_LOCK_WAKE_LOCK_TEST_UTILS_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WAKE_LOCK_WAKE_LOCK_TEST_UTILS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -114,6 +114,13 @@ class MockPermissionService final : public mojom::blink::PermissionService {
   // mojom::blink::PermissionService implementation
   void HasPermission(mojom::blink::PermissionDescriptorPtr permission,
                      HasPermissionCallback) override;
+  void RegisterPageEmbeddedPermissionControl(
+      Vector<mojom::blink::PermissionDescriptorPtr> permissions,
+      mojo::PendingRemote<mojom::blink::EmbeddedPermissionControlClient> client)
+      override;
+  void RequestPageEmbeddedPermission(
+      mojom::blink::EmbeddedPermissionRequestDescriptorPtr permissions,
+      RequestPageEmbeddedPermissionCallback) override;
   void RequestPermission(mojom::blink::PermissionDescriptorPtr permission,
                          bool user_gesture,
                          RequestPermissionCallback) override;
@@ -127,6 +134,10 @@ class MockPermissionService final : public mojom::blink::PermissionService {
       mojom::blink::PermissionDescriptorPtr permission,
       mojom::blink::PermissionStatus last_known_status,
       mojo::PendingRemote<mojom::blink::PermissionObserver>) override;
+
+  void NotifyEventListener(mojom::blink::PermissionDescriptorPtr permission,
+                           const String& event_type,
+                           bool is_added) override;
 
   void OnConnectionError();
 

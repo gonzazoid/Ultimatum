@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "ash/public/cpp/shell_window_ids.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/ash/ash_util.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/view_type_utils.h"
@@ -43,7 +44,7 @@ class AccessibilityPanel::AccessibilityPanelWebContentsObserver
   }
 
  private:
-  AccessibilityPanel* panel_;
+  raw_ptr<AccessibilityPanel> panel_;
 };
 
 AccessibilityPanel::AccessibilityPanel(content::BrowserContext* browser_context,
@@ -67,7 +68,8 @@ AccessibilityPanel::AccessibilityPanel(content::BrowserContext* browser_context,
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   // Placing the panel in the accessibility panel container allows ash to manage
   // both the window bounds and display work area.
-  ash_util::SetupWidgetInitParamsForContainer(
+  // The AccessibilityPanel is only shown in the primary root window.
+  ash_util::SetupWidgetInitParamsForContainerInPrimary(
       &params, ShellWindowId::kShellWindowId_AccessibilityPanelContainer);
   params.bounds = display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
   params.delegate = this;

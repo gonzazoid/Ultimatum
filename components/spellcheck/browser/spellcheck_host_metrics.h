@@ -44,17 +44,10 @@ class SpellCheckHostMetrics {
   SpellCheckHostMetrics();
   ~SpellCheckHostMetrics();
 
-  // Collects the number of words in the custom dictionary, which is
-  // to be uploaded via UMA.
-  static void RecordCustomWordCountStats(size_t count);
-
   // Collects status of spellchecking enabling state, which is
-  // to be uploaded via UMA
+  // to be uploaded via UMA. Intended to be called only for regular
+  // profiles (not system, guest, incognito, etc.).
   void RecordEnabledStats(bool enabled);
-
-  // Collects a histogram for dictionary corruption rate
-  // to be uploaded via UMA
-  void RecordDictionaryCorruptionStats(bool corrupted);
 
   // Collects status of spellchecking enabling state, which is
   // to be uploaded via UMA
@@ -68,17 +61,19 @@ class SpellCheckHostMetrics {
   // attempt to be uploaded via UMA
   void RecordSuggestionStats(int delta);
 
-  // Records if spelling service is enabled or disabled.
+  // Records if spelling service is enabled or disabled. Intended to be called
+  // only for regular profiles (not system, guest, incognito, etc.).
   void RecordSpellingServiceStats(bool enabled);
 
 #if BUILDFLAG(IS_WIN)
   // Records spell check support for user-added Chrome languages that are not
   // eligible for spell checking (due to the hard-coded spell check locales
   // list).
-  void RecordAcceptLanguageStats(const LocalesSupportInfo& locales_info);
+  static void RecordAcceptLanguageStats(const LocalesSupportInfo& locales_info);
 
   // Records which spell checker can handle which enabled spell check locales.
-  void RecordSpellcheckLanguageStats(const LocalesSupportInfo& locales_info);
+  static void RecordSpellcheckLanguageStats(
+      const LocalesSupportInfo& locales_info);
 #endif  // BUILDFLAG(IS_WIN)
 
  private:

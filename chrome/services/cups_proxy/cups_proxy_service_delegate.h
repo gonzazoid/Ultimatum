@@ -9,8 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -39,7 +40,6 @@ class CupsProxyServiceDelegate {
       const std::string& id) = 0;
   virtual std::vector<std::string> GetRecentlyUsedPrinters() = 0;
   virtual bool IsPrinterInstalled(const chromeos::Printer& printer) = 0;
-  virtual void PrinterInstalled(const chromeos::Printer& printer) = 0;
   virtual scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner() = 0;
 
   // |cb| will be run on this delegate's sequenced context.

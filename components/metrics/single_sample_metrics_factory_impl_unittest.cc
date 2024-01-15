@@ -4,7 +4,7 @@
 
 #include "components/metrics/single_sample_metrics_factory_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/dummy_histogram.h"
 #include "base/run_loop.h"
@@ -42,6 +42,7 @@ class SingleSampleMetricsFactoryImplTest : public testing::Test {
 
   ~SingleSampleMetricsFactoryImplTest() override {
     factory_->DestroyProviderForTesting();
+    factory_ = nullptr;
     if (thread_.IsRunning())
       ShutdownThread();
     base::SingleSampleMetricsFactory::DeleteFactoryForTesting();
@@ -146,7 +147,7 @@ TEST_F(SingleSampleMetricsFactoryImplTest, DefaultSingleSampleMetricWithValue) {
 TEST_F(SingleSampleMetricsFactoryImplTest, MultithreadedMetrics) {
   // Allow EXPECT_DCHECK_DEATH for multiple threads.
   // https://github.com/google/googletest/blob/main/docs/advanced.md#death-tests-and-threads
-  testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 
   base::HistogramTester tester;
   std::unique_ptr<base::SingleSampleMetric> metric =

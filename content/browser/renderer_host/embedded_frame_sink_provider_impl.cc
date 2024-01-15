@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/renderer_host/embedded_frame_sink_impl.h"
 
@@ -38,6 +38,12 @@ void EmbeddedFrameSinkProviderImpl::RegisterEmbeddedFrameSink(
   }
   if (frame_sink_id.client_id() != renderer_client_id_) {
     DLOG(ERROR) << "Invalid client id " << frame_sink_id;
+    return;
+  }
+
+  if (frame_sink_id.sink_id() <=
+      uint32_t{std::numeric_limits<int32_t>::max()}) {
+    receivers_.ReportBadMessage("Sink ID out of range");
     return;
   }
 

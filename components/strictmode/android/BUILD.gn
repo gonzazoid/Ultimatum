@@ -20,14 +20,18 @@ android_library("java") {
 
 android_library("unit_device_javatests") {
   testonly = true
-  sources = [ "javatests/src/org/chromium/components/strictmode/ThreadStrictModeInterceptorTest.java" ]
+  sources = [
+    "javatests/src/org/chromium/components/strictmode/ThreadStrictModeInterceptorTest.java",
+    "javatests/src/org/chromium/components/strictmode/test/disk_write_helper/DiskWriteHelper.java",
+    "javatests/src/org/chromium/components/strictmode/test/disk_write_proxy/DiskWriteProxy.java",
+  ]
   deps = [
     ":java",
     "//base:base_java_test_support",
     "//content/public/test/android:content_java_test_support",
-    "//third_party/android_support_test_runner:runner_java",
     "//third_party/androidx:androidx_appcompat_appcompat_java",
     "//third_party/androidx:androidx_core_core_java",
+    "//third_party/androidx:androidx_test_monitor_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/junit",
   ]

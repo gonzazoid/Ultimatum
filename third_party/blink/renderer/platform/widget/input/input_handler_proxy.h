@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "cc/input/browser_controls_state.h"
 #include "cc/input/input_handler.h"
@@ -14,7 +15,6 @@
 #include "cc/paint/element_id.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/common/input/web_gesture_event.h"
-#include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 
@@ -52,7 +52,6 @@ class CompositorThreadEventQueue;
 class EventWithCallback;
 class InputHandlerProxyClient;
 class ScrollPredictor;
-class MomentumScrollJankTracker;
 class CursorControlHandler;
 
 class SynchronousInputHandler {
@@ -152,8 +151,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
       std::unique_ptr<blink::WebCoalescedInputEvent> event,
       std::unique_ptr<DidOverscrollParams>,
       const blink::WebInputEventAttribution&,
-      std::unique_ptr<cc::EventMetrics> metrics,
-      mojom::blink::ScrollResultDataPtr)>;
+      std::unique_ptr<cc::EventMetrics> metrics)>;
   void HandleInputEventWithLatencyInfo(
       std::unique_ptr<blink::WebCoalescedInputEvent> event,
       std::unique_ptr<cc::EventMetrics> metrics,
@@ -168,7 +166,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
       std::unique_ptr<blink::WebCoalescedInputEvent> event,
       std::unique_ptr<cc::EventMetrics> metrics,
       EventDispositionCallback callback,
-      cc::ElementIdType hit_tests_result);
+      cc::ElementId hit_tests_result);
 
   // Handles creating synthetic gesture events. It is currently used for
   // creating gesture event equivalents for mouse events on a composited
@@ -210,6 +208,8 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // compositor thread has had a chance to update the scroll offset.
   void SetDeferBeginMainFrame(bool defer_begin_main_frame) const;
 
+  void RequestCallbackAfterEventQueueFlushed(base::OnceClosure callback);
+
   // cc::InputHandlerClient implementation.
   void WillShutdown() override;
   void Animate(base::TimeTicks time) override;
@@ -227,6 +227,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
 
   // SnapFlingClient implementation.
   bool GetSnapFlingInfoAndSetAnimatingSnapTarget(
+      const gfx::Vector2dF& current_delta,
       const gfx::Vector2dF& natural_displacement,
       gfx::PointF* initial_offset,
       gfx::PointF* target_offset) const override;
@@ -246,6 +247,9 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
     return currently_active_gesture_device_.value();
   }
 
+  // Immediately dispatches all queued events.
+  void FlushQueuedEventsForTesting();
+
  private:
   friend class test::TestInputHandlerProxy;
   friend class test::InputHandlerProxyTest;
@@ -256,7 +260,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
 
   void DispatchSingleInputEvent(std::unique_ptr<EventWithCallback>,
                                 const base::TimeTicks);
-  void DispatchQueuedInputEvents();
+  void DispatchQueuedInputEvents(bool frame_aligned);
   void UpdateElasticOverscroll();
 
   // Helper functions for handling more complicated input events.
@@ -266,7 +270,8 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   EventDisposition HandleGestureScrollUpdate(
       const blink::WebGestureEvent& event,
       const blink::WebInputEventAttribution& original_attribution,
-      cc::EventMetrics* metrics);
+      cc::EventMetrics* metrics,
+      int64_t trace_id);
   EventDisposition HandleGestureScrollEnd(const blink::WebGestureEvent& event);
   EventDisposition HandleTouchStart(EventWithCallback* event_with_callback);
   EventDisposition HandleTouchMove(EventWithCallback* event_with_callback);
@@ -319,21 +324,21 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
     event_attribution_enabled_ = enabled;
   }
 
-  void RecordMainThreadScrollingReasons(blink::WebGestureDevice device,
-                                        uint32_t reasons_from_scroll_begin,
-                                        bool was_main_thread_hit_tested,
-                                        uint32_t main_thread_repaint_reasons);
+  void RecordScrollBegin(blink::WebGestureDevice device,
+                         uint32_t main_thread_hit_tested_reasons,
+                         uint32_t main_thread_repaint_reasons);
 
-  bool HasQueuedEventsReadyForDispatch();
+  bool HasQueuedEventsReadyForDispatch(bool frame_aligned);
 
-  InputHandlerProxyClient* client_;
+  raw_ptr<InputHandlerProxyClient, ExperimentalRenderer> client_;
 
   // The input handler object is owned by the compositor delegate. The input
   // handler must call WillShutdown() on this class before it is deleted at
   // which point this pointer will be cleared.
-  cc::InputHandler* input_handler_;
+  raw_ptr<cc::InputHandler, ExperimentalRenderer> input_handler_;
 
-  SynchronousInputHandler* synchronous_input_handler_;
+  raw_ptr<SynchronousInputHandler, ExperimentalRenderer>
+      synchronous_input_handler_;
 
   // This should be true when a pinch is in progress. The sequence of events is
   // as follows: GSB GPB GSU GPU ... GPE GSE.
@@ -364,16 +369,13 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // bundled in the event ack, saving an IPC.
   std::unique_ptr<DidOverscrollParams> current_overscroll_params_;
 
-  // Used to cache the scroll result data - e.g. root scroll offset - when a
-  // scroll gesture is handled. This data is then passed back using
-  // |EventDispositionCallback|.
-  mojom::blink::ScrollResultDataPtr current_scroll_result_data_;
-
   std::unique_ptr<CompositorThreadEventQueue> compositor_event_queue_;
 
   // Set only when the compositor input handler is handling a gesture. Tells
   // which source device is currently performing a gesture based scroll.
   absl::optional<blink::WebGestureDevice> currently_active_gesture_device_;
+
+  base::OnceClosure queue_flushed_callback_;
 
   // Tracks whether the first scroll update gesture event has been seen after a
   // scroll begin. This is set/reset when scroll gestures are processed in
@@ -388,7 +390,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // latency component should be added for injected GestureScrollUpdates.
   bool last_injected_gesture_was_begin_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock, ExperimentalRenderer> tick_clock_;
 
   std::unique_ptr<cc::SnapFlingController> snap_fling_controller_;
 
@@ -400,13 +402,14 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   bool skip_touch_filter_discrete_ = false;
   bool skip_touch_filter_all_ = false;
 
-  // This bit is set when the input handler proxy has requested that the client
+  // This is set when the input handler proxy has requested that the client
   // perform a hit test for a scroll begin on the main thread. During that
   // time, scroll updates need to be queued. The reply from the main thread
   // will come by calling ContinueScrollBeginAfterMainThreadHitTest where the
   // queue will be flushed and this bit cleared. Used only in scroll
   // unification.
-  bool hit_testing_scroll_begin_on_main_thread_ = false;
+  uint32_t scroll_begin_main_thread_hit_test_reasons_ =
+      cc::MainThreadScrollingReason::kNotScrollingOnMain;
 
   // This bit can be used to disable event attribution in cases where the
   // hit test information is unnecessary (e.g. tests).
@@ -414,9 +417,6 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
 
   // This tracks whether the user has set prefers reduced motion.
   bool prefers_reduced_motion_ = false;
-
-  // Helpers for the momentum scroll jank UMAs.
-  std::unique_ptr<MomentumScrollJankTracker> momentum_scroll_jank_tracker_;
 
   // Swipe to move cursor feature.
   std::unique_ptr<CursorControlHandler> cursor_control_handler_;

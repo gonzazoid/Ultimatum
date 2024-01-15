@@ -4,8 +4,8 @@
 
 #include "remoting/protocol/v2_authenticator.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "net/base/net_errors.h"
 #include "remoting/base/rsa_key_pair.h"
@@ -44,11 +44,10 @@ class V2AuthenticatorTest : public AuthenticatorTestBase {
  protected:
   void InitAuthenticators(const std::string& client_secret,
                           const std::string& host_secret) {
-    host_ = V2Authenticator::CreateForHost(
-        host_cert_, key_pair_, host_secret,
-        Authenticator::WAITING_MESSAGE);
-    client_ = V2Authenticator::CreateForClient(
-        client_secret, Authenticator::MESSAGE_READY);
+    host_ = V2Authenticator::CreateForHost(host_cert_, key_pair_, host_secret,
+                                           Authenticator::WAITING_MESSAGE);
+    client_ = V2Authenticator::CreateForClient(client_secret,
+                                               Authenticator::MESSAGE_READY);
   }
 };
 

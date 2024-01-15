@@ -7,7 +7,7 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
@@ -152,7 +152,7 @@ class CachedImageFetcherImageMetadataStoreLevelDBTest : public testing::Test {
 
  private:
   std::unique_ptr<base::SimpleTestClock> clock_;
-  raw_ptr<FakeDB<CachedImageMetadataProto>> db_;
+  raw_ptr<FakeDB<CachedImageMetadataProto>, DanglingUntriaged> db_;
   std::map<std::string, CachedImageMetadataProto> db_store_;
   std::unique_ptr<ImageMetadataStoreLevelDB> metadata_store_;
 

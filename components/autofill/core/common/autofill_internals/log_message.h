@@ -16,6 +16,8 @@ class LogBuffer;
 // that name prefixed with a k (e.g. kParsedForms) in code search.
 #define AUTOFILL_LOG_MESSAGE_TEMPLATES(T)                                      \
   T(ParsedForms, "Parsed forms:")                                              \
+  T(SendAutofillQuery, "Sending Autofill Query Request:")                      \
+  T(CachedAutofillQuery, "Retrieved Cached Autofill Query Request:")           \
   T(SendAutofillUpload, "Sending Autofill Upload Request:")                    \
   T(LocalHeuristicRegExMatched, "RegEx of local heuristic matched:")           \
   T(LocalHeuristicDidNotFindEnoughFillableFields,                              \
@@ -59,7 +61,8 @@ class LogBuffer;
   T(JavaScriptChangedAutofilledValue,                                          \
     "JavaScript set value of autofilled "                                      \
     "field: ")                                                                 \
-  T(FastCheckout, "Fast Checkout: ")
+  T(FastCheckout, "Fast Checkout: ")                                           \
+  T(TouchToFill, "Touch To Fill: ")
 
 // Log messages for chrome://autofill-internals.
 

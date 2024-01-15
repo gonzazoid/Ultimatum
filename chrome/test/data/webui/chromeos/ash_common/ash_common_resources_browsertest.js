@@ -5,7 +5,7 @@
 /** @fileoverview Runs the WebUI resources tests. */
 
 // Polymer BrowserTest fixture.
-GEN_INCLUDE(['//chrome/test/data/webui/polymer_browser_test_base.js']);
+GEN_INCLUDE(['//chrome/test/data/webui/chromeos/polymer_browser_test_base.js']);
 
 GEN('#include "content/public/test/browser_test.h"');
 
@@ -25,7 +25,7 @@ var AshCommonResourcesListPropertyUpdateBehaviorTest =
     class extends AshCommonResourcesBrowserTest {
   /** @override */
   get browsePreload() {
-    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/list_property_update_behavior_tests.js';
+    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/list_property_update_behavior_test.js';
   }
 };
 
@@ -62,7 +62,7 @@ var AshCommonResourcesPolicyIndicatorBehaviorTest =
     class extends AshCommonResourcesBrowserTest {
   /** @override */
   get browsePreload() {
-    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/cr_policy_indicator_behavior_tests.js';
+    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/cr_policy_indicator_behavior_test.js';
   }
 };
 
@@ -74,10 +74,49 @@ var AshCommonResourcesScrollableBehaviorTest =
     class extends AshCommonResourcesBrowserTest {
   /** @override */
   get browsePreload() {
-    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/cr_scrollable_behavior_tests.js';
+    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/cr_scrollable_behavior_test.js';
   }
 };
 
 TEST_F('AshCommonResourcesScrollableBehaviorTest', 'All', function() {
+  mocha.run();
+});
+
+var AshCommonResourcesTypescriptUtilsStrictQueryTest =
+    class extends AshCommonResourcesBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://webui-test/test_loader.html?module=chromeos/ash_common/' +
+        'typescript_utils/strict_query_test.js'
+  }
+};
+
+TEST_F('AshCommonResourcesTypescriptUtilsStrictQueryTest', 'All', function() {
+  mocha.run();
+});
+
+var AshCommonResourcesShortcutInputKeyTest =
+    class extends AshCommonResourcesBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://webui-test/test_loader.html?module=' +
+        'chromeos/ash_common/shortcut_input_key_test.js';
+  }
+};
+
+TEST_F('AshCommonResourcesShortcutInputKeyTest', 'All', function() {
+  mocha.run();
+});
+
+var AshCommonResourcesShortcutInputTest =
+    class extends AshCommonResourcesBrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://webui-test/test_loader.html?module=' +
+        'chromeos/ash_common/shortcut_input_test.js';
+  }
+};
+
+TEST_F('AshCommonResourcesShortcutInputTest', 'All', function() {
   mocha.run();
 });

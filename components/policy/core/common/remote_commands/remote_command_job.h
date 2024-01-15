@@ -10,17 +10,28 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "components/policy/policy_export.h"
 #include "components/policy/proto/device_management_backend.pb.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
-// This class manages the execution of a remote command job. It's a base class
-// and actual implementations are expected to inherit from this class.
+// The enum that represents the RemoteCommandJob result.
+enum class ResultType {
+  kSuccess,
+  kFailure,
+  // The remote command job has finished executing with no result to send to
+  // server. This is used for the commands that has delegated the execution to
+  // other components with no callback.
+  kAcked,
+};
+
+// This class manages the execution of a remote command job. It's a base
+// class and actual implementations are expected to inherit from this class.
 class POLICY_EXPORT RemoteCommandJob {
  public:
   using UniqueIDType = int64_t;
@@ -41,7 +52,9 @@ class POLICY_EXPORT RemoteCommandJob {
     SUCCEEDED = 5,        // The job finished running successfully.
     FAILED = 6,           // The job finished running with failure.
     TERMINATED = 7,       // The job was terminated before finishing by itself.
-    STATUS_TYPE_SIZE      // Used by UMA histograms. Shall be the last.
+    ACKED = 8,  // The job finished running with no immediate result to send to
+                // server.
+    STATUS_TYPE_SIZE  // Used by UMA histograms. Shall be the last.
   };
 
   using FinishedCallback = base::OnceClosure;
@@ -98,6 +111,11 @@ class POLICY_EXPORT RemoteCommandJob {
   base::Time execution_started_time() const { return execution_started_time_; }
   Status status() const { return status_; }
 
+  // Returns result of the command job. It'll be `RESUlT_IGNORED` until the
+  // command has finished running.
+  absl::optional<enterprise_management::RemoteCommandResult::ResultType>
+  GetResult() const;
+
   // Returns whether execution of this command is finished.
   bool IsExecutionFinished() const;
 
@@ -106,15 +124,13 @@ class POLICY_EXPORT RemoteCommandJob {
   std::unique_ptr<std::string> GetResultPayload() const;
 
  protected:
-  class ResultPayload {
-   public:
-    virtual ~ResultPayload() {}
-
-    virtual std::unique_ptr<std::string> Serialize() = 0;
-  };
-
+  // Callback invoked by the job's implementation to signal the remote command
+  // has been executed. `result` will indicate that if command execution has
+  // ended with success or failure. The passed-in string will be uploaded to the
+  // server in the `payload` field of the `RemoteCommandResult` message.
   using CallbackWithResult =
-      base::OnceCallback<void(std::unique_ptr<ResultPayload>)>;
+      base::OnceCallback<void(ResultType result,
+                              absl::optional<std::string> payload)>;
 
   RemoteCommandJob();
 
@@ -136,11 +152,9 @@ class POLICY_EXPORT RemoteCommandJob {
   // Subclasses should implement this method for actual command execution logic.
   // Implementations should execute commands asynchronously, possibly on a
   // background thread. Execution should end by invoking either
-  // |succeeded_callback| or |failed_callback| on the thread that this method
-  // was called.
-  // Also see comments regarding Run().
-  virtual void RunImpl(CallbackWithResult succeed_callback,
-                       CallbackWithResult failed_callback) = 0;
+  // |result_callback| on the thread that this method was called with the
+  // execution result. Also see comments regarding Run().
+  virtual void RunImpl(CallbackWithResult result_callback) = 0;
 
   // Subclasses should implement this method for actual command execution
   // termination. Be cautious that tasks might be running on another thread or
@@ -156,8 +170,8 @@ class POLICY_EXPORT RemoteCommandJob {
  private:
   // Posted tasks are expected to call this method.
   void OnCommandExecutionFinishedWithResult(
-      bool succeeded,
-      std::unique_ptr<ResultPayload> result);
+      ResultType result,
+      absl::optional<std::string> result_payload);
 
   Status status_;
 
@@ -170,7 +184,7 @@ class POLICY_EXPORT RemoteCommandJob {
   // Serialized command inside policy data proto with signature.
   enterprise_management::SignedData signed_command_;
 
-  std::unique_ptr<ResultPayload> result_payload_;
+  absl::optional<std::string> result_payload_;
 
   FinishedCallback finished_callback_;
 

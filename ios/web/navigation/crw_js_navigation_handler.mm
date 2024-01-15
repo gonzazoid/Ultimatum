@@ -15,10 +15,6 @@
 #import "ios/web/web_state/web_state_impl.h"
 #import "net/base/mac/url_conversions.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // URLs that are fed into WKWebView as history push/replace get escaped,
@@ -42,7 +38,7 @@ GURL URLEscapedForHistory(const GURL& url) {
   self.changingHistoryState = YES;
 }
 
-- (void)handleNavigationDidPushStateMessage:(base::Value*)message
+- (void)handleNavigationDidPushStateMessage:(base::Value::Dict*)dict
                                    webState:(web::WebStateImpl*)webStateImpl
                              hasUserGesture:(BOOL)hasUserGesture
                        userInteractionState:
@@ -68,8 +64,8 @@ GURL URLEscapedForHistory(const GURL& url) {
     return;
   }
 
-  const std::string* pageURL = message->FindStringKey("pageUrl");
-  const std::string* baseURL = message->FindStringKey("baseUrl");
+  const std::string* pageURL = dict->FindString("pageUrl");
+  const std::string* baseURL = dict->FindString("baseUrl");
   if (!pageURL || !baseURL) {
     DLOG(WARNING) << "JS message parameter not found: pageUrl or baseUrl";
     return;
@@ -94,7 +90,7 @@ GURL URLEscapedForHistory(const GURL& url) {
     // just before the pushState.
     return;
   }
-  const std::string* stateObjectJSON = message->FindStringKey("stateObject");
+  const std::string* stateObjectJSON = dict->FindString("stateObject");
   if (!stateObjectJSON) {
     DLOG(WARNING) << "JS message parameter not found: stateObject";
     return;
@@ -126,7 +122,7 @@ GURL URLEscapedForHistory(const GURL& url) {
                     webState:webStateImpl];
 }
 
-- (void)handleNavigationDidReplaceStateMessage:(base::Value*)message
+- (void)handleNavigationDidReplaceStateMessage:(base::Value::Dict*)dict
                                       webState:(web::WebStateImpl*)webStateImpl
                                 hasUserGesture:(BOOL)hasUserGesture
                           userInteractionState:
@@ -140,8 +136,8 @@ GURL URLEscapedForHistory(const GURL& url) {
   DCHECK(self.changingHistoryState);
   self.changingHistoryState = NO;
 
-  const std::string* pageURL = message->FindStringKey("pageUrl");
-  const std::string* baseURL = message->FindStringKey("baseUrl");
+  const std::string* pageURL = dict->FindString("pageUrl");
+  const std::string* baseURL = dict->FindString("baseUrl");
   if (!pageURL || !baseURL) {
     DLOG(WARNING) << "JS message parameter not found: pageUrl or baseUrl";
     return;
@@ -169,7 +165,7 @@ GURL URLEscapedForHistory(const GURL& url) {
     // new URL is loaded just before the replaceState.
     return;
   }
-  const std::string* stateObjectJSON = message->FindStringKey("stateObject");
+  const std::string* stateObjectJSON = dict->FindString("stateObject");
   if (!stateObjectJSON) {
     DLOG(WARNING) << "JS message parameter not found: stateObject";
     return;

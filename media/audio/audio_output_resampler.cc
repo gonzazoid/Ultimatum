@@ -11,9 +11,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -47,7 +47,7 @@ class OnMoreDataConverter
   // AudioSourceCallback interface.
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks delay_timestamp,
-                 int prior_frames_skipped,
+                 const AudioGlitchInfo& glitch_info,
                  AudioBus* dest) override;
   void OnError(ErrorType type) override;
 
@@ -64,7 +64,9 @@ class OnMoreDataConverter
 
  private:
   // AudioConverter::InputCallback implementation.
-  double ProvideInput(AudioBus* audio_bus, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* audio_bus,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   // Source callback.
   raw_ptr<AudioOutputStream::AudioSourceCallback> source_callback_;
@@ -166,8 +168,7 @@ OpenStreamResult GetSubsequentStreamCreationResultBucket(
       return success ? OpenStreamResult::kFallbackToFakeSuccess
                      : OpenStreamResult::kFallbackToFakeFail;
     default:
-      NOTREACHED();
-      return OpenStreamResult::kFail;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -462,13 +463,13 @@ void OnMoreDataConverter::Stop() {
 
 int OnMoreDataConverter::OnMoreData(base::TimeDelta delay,
                                     base::TimeTicks delay_timestamp,
-                                    int /* prior_frames_skipped */,
+                                    const AudioGlitchInfo& glitch_info,
                                     AudioBus* dest) {
   TRACE_EVENT2("audio", "OnMoreDataConverter::OnMoreData", "input buffer size",
                input_buffer_size_, "output buffer size", output_buffer_size_);
   current_delay_ = delay;
   current_delay_timestamp_ = delay_timestamp;
-  audio_converter_.Convert(dest);
+  audio_converter_.ConvertWithInfo(0, glitch_info, dest);
 
   if (debug_recorder_)
     debug_recorder_->OnData(dest);
@@ -479,13 +480,14 @@ int OnMoreDataConverter::OnMoreData(base::TimeDelta delay,
 }
 
 double OnMoreDataConverter::ProvideInput(AudioBus* dest,
-                                         uint32_t frames_delayed) {
+                                         uint32_t frames_delayed,
+                                         const AudioGlitchInfo& glitch_info) {
   base::TimeDelta new_delay =
       current_delay_ + AudioTimestampHelper::FramesToTime(
                            frames_delayed, input_samples_per_second_);
   // Retrieve data from the original callback.
   const int frames = source_callback_->OnMoreData(
-      new_delay, current_delay_timestamp_, 0, dest);
+      new_delay, current_delay_timestamp_, glitch_info, dest);
 
   // Zero any unfilled frames if anything was filled, otherwise we'll just
   // return a volume of zero and let AudioConverter drop the output.

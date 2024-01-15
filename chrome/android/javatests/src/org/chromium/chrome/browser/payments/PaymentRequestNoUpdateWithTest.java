@@ -7,21 +7,20 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.CreditCard;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
+import org.chromium.chrome.browser.payments.PaymentRequestTestRule.AppPresence;
+import org.chromium.chrome.browser.payments.PaymentRequestTestRule.FactorySpeed;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.ui.modaldialog.ModalDialogProperties;
+import org.chromium.chrome.test.R;
+import org.chromium.components.autofill.AutofillProfile;
 
 import java.util.concurrent.TimeoutException;
 
@@ -32,24 +31,39 @@ import java.util.concurrent.TimeoutException;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-public class PaymentRequestNoUpdateWithTest implements MainActivityStartCallback {
+public class PaymentRequestNoUpdateWithTest {
     @Rule
     public PaymentRequestTestRule mRule =
-            new PaymentRequestTestRule("payment_request_no_update_with_test.html", this);
+            new PaymentRequestTestRule("payment_request_no_update_with_test.html");
 
-    @Override
-    public void onMainActivityStarted() throws TimeoutException {
+    @Before
+    public void setUp() throws TimeoutException {
         AutofillTestHelper helper = new AutofillTestHelper();
-        helper.setProfile(new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main", "California",
-                "Los Angeles", "", "90210", "", "US", "555 123-4567", "lisa@simpson.com", ""));
-        String billingAddressId = helper.setProfile(new AutofillProfile("" /* guid */,
-                "https://www.example.com" /* origin */, "" /* honorific prefix */, "Maggie Simpson",
-                "Acme Inc.", "123 Main", "California", "Los Angeles", "", "90210", "", "Uzbekistan",
-                "555 123-4567", "maggie@simpson.com", ""));
-        helper.setCreditCard(new CreditCard("", "https://example.com", true, true, "Jon Doe",
-                "4111111111111111", "1111", "12", "2050", "visa", R.drawable.visa_card,
-                billingAddressId, "" /* serverId */));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Lisa Simpson")
+                        .setCompanyName("Acme Inc.")
+                        .setStreetAddress("123 Main")
+                        .setRegion("California")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90210")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555 123-4567")
+                        .setEmailAddress("lisa@simpson.com")
+                        .build());
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Maggie Simpson")
+                        .setCompanyName("Acme Inc.")
+                        .setStreetAddress("123 Main")
+                        .setRegion("California")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90210")
+                        .setCountryCode("Uzbekistan")
+                        .setPhoneNumber("555 123-4567")
+                        .setEmailAddress("maggie@simpson.com")
+                        .build());
+        mRule.addPaymentAppFactory(AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
     }
 
     /**
@@ -58,17 +72,14 @@ public class PaymentRequestNoUpdateWithTest implements MainActivityStartCallback
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testNoEventListener() throws Throwable {
-        mRule.triggerUIAndWait("buyWithoutListeners", mRule.getReadyForInput());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithoutListenersWithMethods([{supportedMethods: 'https://bobpay.test'}]);",
+                mRule.getReadyToPay());
         mRule.clickInShippingAddressAndWait(R.id.payments_section, mRule.getReadyForInput());
         mRule.clickOnShippingAddressSuggestionOptionAndWait(1, mRule.getReadyForInput());
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"freeShipping"});
     }
 
@@ -78,36 +89,31 @@ public class PaymentRequestNoUpdateWithTest implements MainActivityStartCallback
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testNoUpdateWith() throws Throwable {
-        mRule.triggerUIAndWait("buyWithoutCallingUpdateWith", mRule.getReadyForInput());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithoutCallingUpdateWithWithMethods([{supportedMethods:"
+                        + " 'https://bobpay.test'}]);",
+                mRule.getReadyToPay());
         mRule.clickInShippingAddressAndWait(R.id.payments_section, mRule.getReadyForInput());
         mRule.clickOnShippingAddressSuggestionOptionAndWait(1, mRule.getReadyForInput());
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"freeShipping"});
     }
 
     /** A merchant that calls updateWith() without using promises will not cause timeouts in UI. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testNoPromises() throws Throwable {
-        mRule.triggerUIAndWait("buyWithoutPromises", mRule.getReadyForInput());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithoutPromisesWithMethods([{supportedMethods: 'https://bobpay.test'}]);",
+                mRule.getReadyToPay());
         Assert.assertEquals("USD $5.00", mRule.getOrderSummaryTotal());
         mRule.clickInShippingAddressAndWait(R.id.payments_section, mRule.getReadyForInput());
         mRule.clickOnShippingAddressSuggestionOptionAndWait(1, mRule.getReadyForInput());
         Assert.assertEquals("USD $10.00", mRule.getOrderSummaryTotal());
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"updatedShipping"});
     }
 }

@@ -25,6 +25,7 @@
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 // Symbol with virtual address of the start of ELF header of the current binary.
 extern char __ehdr_start;
@@ -95,7 +96,12 @@ ModuleData GetMainModuleData() {
     size_t build_id_length =
         base::debug::ReadElfBuildId(&__ehdr_start, true, build_id);
     if (build_id_length) {
-      module_data.path = dl_info.dli_fname;
+      base::FilePath module_data_path = base::FilePath(dl_info.dli_fname);
+      if (module_data_path.IsAbsolute()) {
+        module_data.path = dl_info.dli_fname;
+      } else {
+        module_data.path = base::MakeAbsoluteFilePath(module_data_path).value();
+      }
       module_data.build_id = std::string(build_id, build_id_length);
     }
   }
@@ -211,7 +217,8 @@ uint32_t ReadLinuxProcSmapsFile(FILE* smaps_file,
     line[0] = '\0';
     if (fgets(line, kMaxLineSize, smaps_file) == nullptr || !strlen(line))
       break;
-    if (isxdigit(line[0]) && !isupper(line[0])) {
+    if (absl::ascii_isxdigit(static_cast<unsigned char>(line[0])) &&
+        !absl::ascii_isupper(static_cast<unsigned char>(line[0]))) {
       region = VmRegion();
       counters_parsed_for_current_region = 0;
       should_add_current_region =

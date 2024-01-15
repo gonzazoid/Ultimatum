@@ -7,58 +7,70 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.CreditCard;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
+import org.chromium.chrome.browser.payments.PaymentRequestTestRule.AppPresence;
+import org.chromium.chrome.browser.payments.PaymentRequestTestRule.FactorySpeed;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.ui.modaldialog.ModalDialogProperties;
+import org.chromium.chrome.test.R;
+import org.chromium.components.autofill.AutofillProfile;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * A payment integration test for updateWith().
- */
+/** A payment integration test for updateWith(). */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
+public class PaymentRequestUpdateWithTest {
     @Rule
     public PaymentRequestTestRule mRule =
-            new PaymentRequestTestRule("payment_request_update_with_test.html", this);
+            new PaymentRequestTestRule("payment_request_update_with_test.html");
 
-    @Override
-    public void onMainActivityStarted() throws TimeoutException {
+    @Before
+    public void setUp() throws TimeoutException {
         AutofillTestHelper helper = new AutofillTestHelper();
-        helper.setProfile(new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main", "California",
-                "Los Angeles", "", "90210", "", "US", "555 123-4567", "lisa@simpson.com", ""));
-        String billingAddressId = helper.setProfile(new AutofillProfile("" /* guid */,
-                "https://www.example.com" /* origin */, "" /* honorific prefix */, "Maggie Simpson",
-                "Acme Inc.", "123 Main", "California", "Los Angeles", "", "90210", "", "Uzbekistan",
-                "555 123-4567", "maggie@simpson.com", ""));
-        helper.setCreditCard(new CreditCard("", "https://example.com", true, true, "Jon Doe",
-                "4111111111111111", "1111", "12", "2050", "visa", R.drawable.visa_card,
-                billingAddressId, "" /* serverId */));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Lisa Simpson")
+                        .setCompanyName("Acme Inc.")
+                        .setStreetAddress("123 Main")
+                        .setRegion("California")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90210")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555 123-4567")
+                        .setEmailAddress("lisa@simpson.com")
+                        .build());
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Maggie Simpson")
+                        .setCompanyName("Acme Inc.")
+                        .setStreetAddress("123 Main")
+                        .setRegion("California")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90210")
+                        .setCountryCode("Uzbekistan")
+                        .setPhoneNumber("555 123-4567")
+                        .setEmailAddress("maggie@simpson.com")
+                        .build());
+
+        mRule.addPaymentAppFactory(
+                "https://bobpay.test", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
     }
 
-    /**
-     * A merchant that calls updateWith() with {} will not cause timeouts in UI.
-     */
+    /** A merchant that calls updateWith() with {} will not cause timeouts in UI. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testUpdateWithEmpty() throws Throwable {
-        mRule.triggerUIAndWait("updateWithEmpty", mRule.getReadyToPay());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "updateWithEmpty('https://bobpay.test');", mRule.getReadyToPay());
         mRule.clickInOrderSummaryAndWait(mRule.getReadyToPay());
         Assert.assertEquals("USD $5.00", mRule.getOrderSummaryTotal());
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
@@ -68,21 +80,17 @@ public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
         Assert.assertEquals("$3.00", mRule.getLineItemAmount(1));
         Assert.assertEquals("$0.00", mRule.getLineItemAmount(2));
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"freeShipping"});
     }
 
     /** A merchant that calls updateWith() with total will not cause timeouts in UI. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testUpdateWithTotal() throws Throwable {
-        mRule.triggerUIAndWait("updateWithTotal", mRule.getReadyToPay());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "updateWithTotal('https://bobpay.test');", mRule.getReadyToPay());
         mRule.clickInOrderSummaryAndWait(mRule.getReadyToPay());
         Assert.assertEquals("USD $5.00", mRule.getOrderSummaryTotal());
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
@@ -95,21 +103,17 @@ public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
         Assert.assertEquals("$3.00", mRule.getLineItemAmount(1));
         Assert.assertEquals("$0.00", mRule.getLineItemAmount(2));
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"freeShipping"});
     }
 
     /** A merchant that calls updateWith() with displayItems will not cause timeouts in UI. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testUpdateWithDisplayItems() throws Throwable {
-        mRule.triggerUIAndWait("updateWithDisplayItems", mRule.getReadyToPay());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "updateWithDisplayItems('https://bobpay.test');", mRule.getReadyToPay());
         mRule.clickInOrderSummaryAndWait(mRule.getReadyToPay());
         Assert.assertEquals("USD $5.00", mRule.getOrderSummaryTotal());
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
@@ -122,21 +126,17 @@ public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
         Assert.assertEquals("$3.00", mRule.getLineItemAmount(0));
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(1));
         Assert.assertEquals("$0.00", mRule.getLineItemAmount(2));
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"freeShipping"});
     }
 
     /** A merchant that calls updateWith() with shipping options will not cause timeouts in UI. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testUpdateWithShippingOptions() throws Throwable {
-        mRule.triggerUIAndWait("updateWithShippingOptions", mRule.getReadyToPay());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "updateWithShippingOptions('https://bobpay.test');", mRule.getReadyToPay());
         mRule.clickInOrderSummaryAndWait(mRule.getReadyToPay());
         Assert.assertEquals("USD $5.00", mRule.getOrderSummaryTotal());
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
@@ -149,21 +149,17 @@ public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
         Assert.assertEquals("$3.00", mRule.getLineItemAmount(1));
         Assert.assertEquals("$0.00", mRule.getLineItemAmount(2));
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"updatedShipping"});
     }
 
     /** A merchant that calls updateWith() with modifiers will not cause timeouts in UI. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testUpdateWithModifiers() throws Throwable {
-        mRule.triggerUIAndWait("updateWithModifiers", mRule.getReadyToPay());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "updateWithModifiers('https://bobpay.test');", mRule.getReadyToPay());
         mRule.clickInOrderSummaryAndWait(mRule.getReadyToPay());
         Assert.assertEquals("USD $5.00", mRule.getOrderSummaryTotal());
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
@@ -176,11 +172,7 @@ public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
         Assert.assertEquals("$2.00", mRule.getLineItemAmount(0));
         Assert.assertEquals("$3.00", mRule.getLineItemAmount(1));
         Assert.assertEquals("-$1.00", mRule.getLineItemAmount(2));
-        mRule.clickAndWait(R.id.button_primary, mRule.getReadyForUnmaskInput());
-        mRule.setTextInCardUnmaskDialogAndWait(
-                R.id.card_unmask_input, "123", mRule.getReadyToUnmask());
-        mRule.clickCardUnmaskButtonAndWait(
-                ModalDialogProperties.ButtonType.POSITIVE, mRule.getDismissed());
+        mRule.clickAndWait(R.id.button_primary, mRule.getDismissed());
         mRule.expectResultContains(new String[] {"freeShipping"});
     }
 
@@ -190,10 +182,10 @@ public class PaymentRequestUpdateWithTest implements MainActivityStartCallback {
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testUpdateWithError() throws Throwable {
-        mRule.triggerUIAndWait("updateWithError", mRule.getReadyToPay());
+        mRule.runJavaScriptAndWaitForUIEvent(
+                "updateWithError('https://bobpay.test');", mRule.getReadyToPay());
         mRule.clickInShippingAddressAndWait(R.id.payments_section, mRule.getReadyToPay());
         mRule.clickOnShippingAddressSuggestionOptionAndWait(1, mRule.getReadyForInput());
         CharSequence actualString = mRule.getShippingAddressOptionRowAtIndex(0).getLabelText();

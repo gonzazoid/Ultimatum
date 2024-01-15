@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<meta name=fuzzy content="maxDifference=0-3; totalPixels=0-100">
 <html>
 <body>
 <script>
@@ -6,8 +7,8 @@ if (window.testRunner)
     testRunner.dumpAsText();
 </script>
 <p>No crash means test PASS.</p>
-<input type="text" list="foo" style="-webkit-appearance: slider-vertical">
-<input type="text" list="foo" style="-webkit-appearance: slider-horizontal">
+<input type="text" list="foo" style="writing-mode: vertical-lr">
+<input type="text" list="foo" style="writing-mode: horizontal-tb">
 <datalist id="foo">
     <option>1</option>
 </datalist>

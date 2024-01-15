@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/services/cros_dbus_service.h"
@@ -118,7 +119,7 @@ class ProxyResolutionServiceProvider
 
   scoped_refptr<dbus::ExportedObject> exported_object_;
   scoped_refptr<base::SingleThreadTaskRunner> origin_thread_;
-  network::mojom::NetworkContext* network_context_for_test_ = nullptr;
+  raw_ptr<network::mojom::NetworkContext> network_context_for_test_ = nullptr;
   bool use_network_context_for_test_ = false;
 
   // A transient NetworkAnonymizationKey used for all requests. This prevents
@@ -133,10 +134,5 @@ class ProxyResolutionServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::ProxyResolutionServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_PROXY_RESOLUTION_SERVICE_PROVIDER_H_

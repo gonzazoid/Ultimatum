@@ -4,15 +4,16 @@
 
 #include "chromeos/ash/services/bluetooth_config/in_process_instance.h"
 
+#include <optional>
+
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/services/bluetooth_config/cros_bluetooth_config.h"
 #include "chromeos/ash/services/bluetooth_config/fast_pair_delegate.h"
 #include "chromeos/ash/services/bluetooth_config/initializer_impl.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::bluetooth_config {
 
@@ -32,7 +33,7 @@ PrefService* g_pending_device_prefs = nullptr;
 FastPairDelegate* g_fast_pair_delegate = nullptr;
 
 void OnBluetoothAdapter(
-    absl::optional<mojo::PendingReceiver<mojom::CrosBluetoothConfig>>
+    std::optional<mojo::PendingReceiver<mojom::CrosBluetoothConfig>>
         pending_receiver,
     scoped_refptr<device::BluetoothAdapter> bluetooth_adapter) {
   if (g_is_shut_down)
@@ -62,7 +63,7 @@ void Initialize(FastPairDelegate* delegate) {
   g_fast_pair_delegate = delegate;
 
   device::BluetoothAdapterFactory::Get()->GetAdapter(
-      base::BindOnce(&OnBluetoothAdapter, /*pending_receiver=*/absl::nullopt));
+      base::BindOnce(&OnBluetoothAdapter, /*pending_receiver=*/std::nullopt));
 }
 
 void Shutdown() {
@@ -92,8 +93,6 @@ void SetPrefs(PrefService* logged_in_profile_prefs, PrefService* device_prefs) {
 void BindToInProcessInstance(
     mojo::PendingReceiver<mojom::CrosBluetoothConfig> pending_receiver) {
   BLUETOOTH_LOG(DEBUG) << "Binding to CrosBluetoothConfig";
-  DCHECK_EQ(features::IsFastPairEnabled(),
-            static_cast<bool>(g_fast_pair_delegate));
   device::BluetoothAdapterFactory::Get()->GetAdapter(
       base::BindOnce(&OnBluetoothAdapter, std::move(pending_receiver)));
 }

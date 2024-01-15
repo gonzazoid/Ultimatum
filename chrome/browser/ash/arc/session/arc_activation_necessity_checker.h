@@ -5,7 +5,8 @@
 #ifndef CHROME_BROWSER_ASH_ARC_SESSION_ARC_ACTIVATION_NECESSITY_CHECKER_H_
 #define CHROME_BROWSER_ASH_ARC_SESSION_ARC_ACTIVATION_NECESSITY_CHECKER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 
 class Profile;
 
@@ -31,8 +32,8 @@ class ArcActivationNecessityChecker {
   void Check(CheckCallback callback);
 
  private:
-  Profile* const profile_;
-  AdbSideloadingAvailabilityDelegate* const
+  const raw_ptr<Profile> profile_;
+  const raw_ptr<AdbSideloadingAvailabilityDelegate>
       adb_sideloading_availability_delegate_;  // Owned by ArcSessionManager.
 };
 

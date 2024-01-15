@@ -7,15 +7,13 @@
 #import "ios/web_view/internal/passwords/cwv_leak_check_service_internal.h"
 
 #import "components/password_manager/core/browser/leak_detection/bulk_leak_check.h"
+#import "components/password_manager/core/browser/leak_detection/leak_detection_request_utils.h"
 #import "ios/web_view/public/cwv_leak_check_service_observer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using password_manager::BulkLeakCheckServiceInterface;
 using password_manager::IsLeaked;
 using password_manager::LeakCheckCredential;
+using password_manager::LeakDetectionInitiator;
 
 // Private interface callable by the ObserverBridge.
 @interface CWVLeakCheckService ()
@@ -123,6 +121,7 @@ class ObserverBridge : public BulkLeakCheckServiceInterface::Observer {
   }
 
   _bulkLeakCheckService->CheckUsernamePasswordPairs(
+      LeakDetectionInitiator::kIGABulkSyncedPasswordsCheck,
       std::move(internalCredentials));
 }
 

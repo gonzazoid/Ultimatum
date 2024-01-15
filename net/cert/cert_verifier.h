@@ -9,26 +9,40 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/observer_list_types.h"
 #include "base/strings/string_piece.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/hash_value.h"
 #include "net/base/net_export.h"
 #include "net/cert/cert_net_fetcher.h"
+#include "net/cert/cert_verify_proc.h"
 #include "net/cert/x509_certificate.h"
 
 namespace net {
 
 class CertVerifyResult;
-class CRLSet;
+class CertVerifierWithUpdatableProc;
 class NetLogWithSource;
-class ChromeRootStoreData;
 
 // CertVerifier represents a service for verifying certificates.
 //
 // CertVerifiers can handle multiple requests at a time.
 class NET_EXPORT CertVerifier {
  public:
+  class NET_EXPORT Observer : public base::CheckedObserver {
+   public:
+    // Called when the certificate verifier changes internal configuration.
+    // Observers can use this method to invalidate caches that incorporate
+    // previous trust decisions.
+    //
+    // This method will not be called on `CertVerifier::SetConfig`. It is
+    // assumed that callers will know to clear their caches when calling the
+    // function. https://crbug.com/1427326 tracks migrating `SetConfig` to this
+    // mechanism.
+    virtual void OnCertVerifierChanged() = 0;
+  };
+
   struct NET_EXPORT Config {
     Config();
     Config(const Config&);
@@ -54,24 +68,6 @@ class NET_EXPORT CertVerifier {
     // Disable enforcement of the policies described at
     // https://security.googleblog.com/2017/09/chromes-plan-to-distrust-symantec.html
     bool disable_symantec_enforcement = false;
-
-    // Provides an optional CRLSet structure that can be used to avoid
-    // revocation checks over the network. CRLSets can be used to add
-    // additional certificates to be blocked beyond the internal block list,
-    // whether leaves or intermediates.
-    scoped_refptr<CRLSet> crl_set;
-
-    // Additional trust anchors to consider during path validation. Ordinarily,
-    // implementations of CertVerifier use trust anchors from the configured
-    // system store. This is implementation-specific plumbing for passing
-    // additional anchors through.
-    CertificateList additional_trust_anchors;
-
-    // Additional temporary certs to consider as intermediates during path
-    // validation. Ordinarily, implementations of CertVerifier use intermediate
-    // certs from the configured system store. This is implementation-specific
-    // plumbing for passing additional intermediates through.
-    CertificateList additional_untrusted_authorities;
   };
 
   class Request {
@@ -200,11 +196,18 @@ class NET_EXPORT CertVerifier {
   // explicitly manage.
   virtual void SetConfig(const Config& config) = 0;
 
+  // Add an observer to be notified when the CertVerifier has changed.
+  // RemoveObserver() must be called before |observer| is destroyed.
+  virtual void AddObserver(Observer* observer) = 0;
+
+  // Remove an observer added with AddObserver().
+  virtual void RemoveObserver(Observer* observer) = 0;
+
   // Creates a CertVerifier implementation that verifies certificates using
   // the preferred underlying cryptographic libraries.  |cert_net_fetcher| may
   // not be used, depending on the platform.
-  static std::unique_ptr<CertVerifier> CreateDefaultWithoutCaching(
-      scoped_refptr<CertNetFetcher> cert_net_fetcher);
+  static std::unique_ptr<CertVerifierWithUpdatableProc>
+  CreateDefaultWithoutCaching(scoped_refptr<CertNetFetcher> cert_net_fetcher);
 
   // Wraps the result of |CreateDefaultWithoutCaching| in a CachingCertVerifier
   // and a CoalescingCertVerifier.
@@ -223,10 +226,11 @@ NET_EXPORT bool operator!=(const CertVerifier::Config& lhs,
 // A CertVerifier that can update its CertVerifyProc while it is running.
 class NET_EXPORT CertVerifierWithUpdatableProc : public CertVerifier {
  public:
-  // Update the CertVerifyProc with new ChromeRootStoreData.
-  virtual void UpdateChromeRootStoreData(
+  // Update the CertVerifyProc with a new set of parameters.
+  virtual void UpdateVerifyProcData(
       scoped_refptr<CertNetFetcher> cert_net_fetcher,
-      const ChromeRootStoreData* root_store_data) = 0;
+      const net::CertVerifyProc::ImplParams& impl_params,
+      const net::CertVerifyProc::InstanceParams& instance_params) = 0;
 };
 
 }  // namespace net

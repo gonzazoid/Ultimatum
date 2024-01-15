@@ -8,20 +8,19 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -59,37 +58,6 @@ void FakeDebugDaemonClient::SetKstaledRatio(uint8_t val,
   std::move(callback).Run(true /* success */);
 }
 
-void FakeDebugDaemonClient::SetSwapParameter(
-    const std::string& parameter,
-    int32_t value,
-    chromeos::DBusMethodCallback<std::string> callback) {
-  std::move(callback).Run(std::string());
-}
-
-void FakeDebugDaemonClient::SwapZramEnableWriteback(
-    uint32_t size_mb,
-    chromeos::DBusMethodCallback<std::string> callback) {
-  std::move(callback).Run(std::string());
-}
-
-void FakeDebugDaemonClient::SwapZramSetWritebackLimit(
-    uint32_t limit_pages,
-    chromeos::DBusMethodCallback<std::string> callback) {
-  std::move(callback).Run(std::string());
-}
-
-void FakeDebugDaemonClient::SwapZramMarkIdle(
-    uint32_t age_seconds,
-    chromeos::DBusMethodCallback<std::string> callback) {
-  std::move(callback).Run(std::string());
-}
-
-void FakeDebugDaemonClient::InitiateSwapZramWriteback(
-    debugd::ZramWritebackMode mode,
-    chromeos::DBusMethodCallback<std::string> callback) {
-  std::move(callback).Run(std::string());
-}
-
 std::string FakeDebugDaemonClient::GetTracingAgentName() {
   return kCrOSTracingAgentName;
 }
@@ -101,7 +69,7 @@ std::string FakeDebugDaemonClient::GetTraceEventLabel() {
 void FakeDebugDaemonClient::StartAgentTracing(
     const base::trace_event::TraceConfig& trace_config,
     StartAgentTracingCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), GetTracingAgentName(),
                                 true /* success */));
 }
@@ -127,21 +95,21 @@ void FakeDebugDaemonClient::GetRoutes(
     bool ipv6,
     bool all_tables,
     chromeos::DBusMethodCallback<std::vector<std::string>> callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
-      base::BindOnce(std::move(callback), absl::make_optional(routes_)));
+      base::BindOnce(std::move(callback), std::make_optional(routes_)));
 }
 
 void FakeDebugDaemonClient::GetNetworkStatus(
     chromeos::DBusMethodCallback<std::string> callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
 }
 
 void FakeDebugDaemonClient::GetNetworkInterfaces(
     chromeos::DBusMethodCallback<std::string> callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
 }
 
 void FakeDebugDaemonClient::GetPerfOutput(
@@ -154,13 +122,13 @@ void FakeDebugDaemonClient::StopPerf(
     uint64_t session_id,
     chromeos::VoidDBusMethodCallback callback) {}
 
-void FakeDebugDaemonClient::GetFeedbackLogsV2(
+void FakeDebugDaemonClient::GetFeedbackLogs(
     const cryptohome::AccountIdentifier& id,
     const std::vector<debugd::FeedbackLogType>& requested_logs,
     GetLogsCallback callback) {
   std::map<std::string, std::string> sample;
   sample["Sample Log"] = "Your email address is abc@abc.com";
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), /*succeeded=*/true, sample));
 }
@@ -168,14 +136,14 @@ void FakeDebugDaemonClient::GetFeedbackLogsV2(
 void FakeDebugDaemonClient::BackupArcBugReport(
     const cryptohome::AccountIdentifier& id,
     chromeos::VoidDBusMethodCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeDebugDaemonClient::GetAllLogs(GetLogsCallback callback) {
   std::map<std::string, std::string> sample;
   sample["Sample Log"] = "Your email address is abc@abc.com";
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), false, sample));
 }
 
@@ -183,33 +151,33 @@ void FakeDebugDaemonClient::GetLog(
     const std::string& log_name,
     chromeos::DBusMethodCallback<std::string> callback) {
   std::string result = log_name + ": response from GetLog";
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(result)));
 }
 
 void FakeDebugDaemonClient::TestICMP(const std::string& ip_address,
                                      TestICMPCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
 }
 
 void FakeDebugDaemonClient::TestICMPWithOptions(
     const std::string& ip_address,
     const std::map<std::string, std::string>& options,
     TestICMPCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
 }
 
 void FakeDebugDaemonClient::UploadCrashes(UploadCrashesCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeDebugDaemonClient::EnableDebuggingFeatures(
     const std::string& password,
     EnableDebuggingCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
@@ -217,7 +185,7 @@ void FakeDebugDaemonClient::QueryDebuggingFeatures(
     QueryDevFeaturesCallback callback) {
   bool supported = base::CommandLine::ForCurrentProcess()->HasSwitch(
       chromeos::switches::kSystemDevMode);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           std::move(callback), true,
@@ -228,14 +196,14 @@ void FakeDebugDaemonClient::QueryDebuggingFeatures(
 
 void FakeDebugDaemonClient::RemoveRootfsVerification(
     EnableDebuggingCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeDebugDaemonClient::WaitForServiceToBeAvailable(
     chromeos::WaitForServiceToBeAvailableCallback callback) {
   if (service_is_available_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), true));
   } else {
     pending_wait_for_service_to_be_available_callbacks_.push_back(
@@ -246,7 +214,7 @@ void FakeDebugDaemonClient::WaitForServiceToBeAvailable(
 void FakeDebugDaemonClient::SetOomScoreAdj(
     const std::map<pid_t, int32_t>& pid_to_oom_score_adj,
     SetOomScoreAdjCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true, ""));
 }
 
@@ -268,19 +236,21 @@ void FakeDebugDaemonClient::SetServiceIsAvailable(bool is_available) {
 void FakeDebugDaemonClient::CupsAddManuallyConfiguredPrinter(
     const std::string& name,
     const std::string& uri,
+    const std::string& language,
     const std::string& ppd_contents,
     CupsAddPrinterCallback callback) {
   printers_.insert(name);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), 0));
 }
 
 void FakeDebugDaemonClient::CupsAddAutoConfiguredPrinter(
     const std::string& name,
     const std::string& uri,
+    const std::string& language,
     CupsAddPrinterCallback callback) {
   printers_.insert(name);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), 0));
 }
 
@@ -292,7 +262,7 @@ void FakeDebugDaemonClient::CupsRemovePrinter(
   if (has_printer)
     printers_.erase(name);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), has_printer));
 }
 
@@ -300,7 +270,7 @@ void FakeDebugDaemonClient::CupsRetrievePrinterPpd(
     const std::string& name,
     CupsRetrievePrinterPpdCallback callback,
     base::OnceClosure error_callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), ppd_data_));
 }
 
@@ -313,18 +283,18 @@ void FakeDebugDaemonClient::StartPluginVmDispatcher(
     const std::string& /* owner_id */,
     const std::string& /* lang */,
     PluginVmDispatcherCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeDebugDaemonClient::StopPluginVmDispatcher(
     PluginVmDispatcherCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeDebugDaemonClient::SetRlzPingSent(SetRlzPingSentCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
@@ -333,7 +303,7 @@ void FakeDebugDaemonClient::SetSchedulerConfigurationV2(
     bool lock_policy,
     SetSchedulerConfigurationV2Callback callback) {
   scheduler_configuration_name_ = config_name;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), true, /*num_cores_disabled=*/0));
 }
@@ -342,15 +312,15 @@ void FakeDebugDaemonClient::SetU2fFlags(
     const std::set<std::string>& flags,
     chromeos::VoidDBusMethodCallback callback) {
   u2f_flags_ = flags;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
 void FakeDebugDaemonClient::GetU2fFlags(
     chromeos::DBusMethodCallback<std::set<std::string>> callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
-      base::BindOnce(std::move(callback), absl::make_optional(u2f_flags_)));
+      base::BindOnce(std::move(callback), std::make_optional(u2f_flags_)));
 }
 
 void FakeDebugDaemonClient::AddObserver(Observer* observer) {

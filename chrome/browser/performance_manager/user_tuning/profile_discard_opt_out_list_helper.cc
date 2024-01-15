@@ -4,10 +4,10 @@
 
 #include "chrome/browser/performance_manager/user_tuning/profile_discard_opt_out_list_helper.h"
 
-#include <algorithm>
 #include <vector>
 
 #include "base/feature_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/values.h"
 #include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -59,7 +59,7 @@ class ProfileDiscardOptOutListHelperDelegateImpl
 ProfileDiscardOptOutListHelper::ProfileDiscardOptOutTracker::
     ProfileDiscardOptOutTracker(const std::string& browser_context_id,
                                 PrefService* pref_service,
-                                raw_ptr<Delegate> delegate)
+                                Delegate* delegate)
     : browser_context_id_(browser_context_id), delegate_(delegate) {
   pref_change_registrar_.Init(pref_service);
 
@@ -97,12 +97,12 @@ void ProfileDiscardOptOutListHelper::ProfileDiscardOptOutTracker::
 
   // Merge the two lists so that the PageDiscardingHelper only sees a single
   // list of patterns to exclude from discarding.
-  std::transform(user_value_list.begin(), user_value_list.end(),
-                 std::back_inserter(patterns),
-                 [](const base::Value& val) { return val.GetString(); });
-  std::transform(managed_value_list.begin(), managed_value_list.end(),
-                 std::back_inserter(patterns),
-                 [](const base::Value& val) { return val.GetString(); });
+  base::ranges::transform(
+      user_value_list, std::back_inserter(patterns),
+      [](const auto& user_value) { return user_value.GetString(); });
+  base::ranges::transform(
+      managed_value_list, std::back_inserter(patterns),
+      [](const auto& managed_value) { return managed_value.GetString(); });
 
   delegate_->SetPatterns(browser_context_id_, patterns);
 }

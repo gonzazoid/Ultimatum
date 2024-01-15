@@ -10,6 +10,7 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/ash/wallpaper_handlers/test_wallpaper_fetcher_delegate.h"
 #include "chrome/browser/ui/ash/test_wallpaper_controller.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -59,7 +60,8 @@ class WallpaperControllerClientImplTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_;
   TestWallpaperController controller_;
-  WallpaperControllerClientImpl client_;
+  WallpaperControllerClientImpl client_{
+      std::make_unique<wallpaper_handlers::TestWallpaperFetcherDelegate>()};
 };
 
 TEST_F(WallpaperControllerClientImplTest, Construction) {
@@ -91,13 +93,13 @@ TEST_F(WallpaperControllerClientImplTest, DailyGooglePhotosDoNotRepeat) {
   // matters here).
   auto response =
       ash::personalization_app::mojom::FetchGooglePhotosPhotosResponse::New(
-          std::vector<GooglePhotosPhotoPtr>(), absl::nullopt);
+          std::vector<GooglePhotosPhotoPtr>(), std::nullopt);
   for (int i = 0; i < photos_in_album; i++) {
     response->photos->push_back(
         ash::personalization_app::mojom::GooglePhotosPhoto::New(
-            "id" + base::NumberToString(i), /*dedup_key=*/absl::nullopt,
+            "id" + base::NumberToString(i), /*dedup_key=*/std::nullopt,
             /*name=*/"", /*date=*/u"",
-            /*url=*/GURL(""), /*location=*/absl::nullopt));
+            /*url=*/GURL(""), /*location=*/std::nullopt));
   }
 
   std::deque<std::string> last_ten;

@@ -10,7 +10,7 @@ manage changelists and try jobs associated with them.
 import collections
 import logging
 import re
-from typing import Literal, Mapping, NamedTuple
+from typing import Literal, Mapping, NamedTuple, Set
 
 from blinkpy.common.checkout.git import Git
 from blinkpy.common.net.results_fetcher import filter_latest_builds
@@ -32,7 +32,8 @@ class TryJobStatus(NamedTuple):
     """
     status: Literal['MISSING', 'TRIGGERED', 'SCHEDULED', 'STARTED',
                     'COMPLETED']
-    result: Literal[None, 'FAILURE', 'SUCCESS', 'CANCELED'] = None
+    result: Literal[None, 'FAILURE', 'INFRA_FAILURE', 'SUCCESS',
+                    'CANCELED'] = None
 
     @staticmethod
     def from_bb_status(bb_status: str) -> 'TryJobStatus':
@@ -42,11 +43,7 @@ class TryJobStatus(NamedTuple):
         if bb_status in ('SCHEDULED', 'STARTED'):
             return TryJobStatus(bb_status, None)
         else:
-            # Map result INFRA_FAILURE to FAILURE to avoid introducing a new
-            # result, and it amounts to the same thing anyway.
-            return TryJobStatus(
-                'COMPLETED',
-                'FAILURE' if bb_status == 'INFRA_FAILURE' else bb_status)
+            return TryJobStatus('COMPLETED', bb_status)
 
 
 BuildStatuses = Mapping[Build, TryJobStatus]
@@ -62,7 +59,7 @@ class CLStatus(NamedTuple):
     try_job_results: BuildStatuses
 
 
-class GitCL(object):
+class GitCL:
     def __init__(self,
                  host,
                  auth_refresh_token_json=None,
@@ -94,6 +91,9 @@ class GitCL(object):
         # running on Swarming bots with local git cache.
         return self._host.executive.run_command(
             command, cwd=self._cwd, return_stderr=False, ignore_stderr=True)
+
+    def close(self):
+        self.run(['set-close'])
 
     def trigger_try_jobs(self, builders, bucket=None):
         """Triggers try jobs on the given builders.
@@ -135,7 +135,7 @@ class GitCL(object):
             return output[output.index('number:') + 1]
         return 'None'
 
-    def _get_cl_status(self):
+    def get_cl_status(self) -> str:
         return self.run(['status', '--field=status']).strip()
 
     def _get_latest_patchset(self):
@@ -155,12 +155,11 @@ class GitCL(object):
         """
 
         def finished_try_job_results_or_none():
-            cl_status = self._get_cl_status()
+            cl_status = self.get_cl_status()
             _log.debug('Fetched CL status: %s', cl_status)
             issue_number = self.get_issue_number()
             try_job_results = self.latest_try_jobs(
                 issue_number, cq_only=cq_only)
-            _log.debug('Fetched try results: %s', try_job_results)
             if (cl_status == 'closed' or
                 (try_job_results and self.all_finished(try_job_results))):
                 return CLStatus(
@@ -179,7 +178,7 @@ class GitCL(object):
         """Waits until git cl reports that the current CL is closed."""
 
         def closed_status_or_none():
-            status = self._get_cl_status()
+            status = self.get_cl_status()
             _log.debug('CL status is: %s', status)
             if status == 'closed':
                 self._host.print_('CL is closed.')
@@ -262,6 +261,18 @@ class GitCL(object):
             return None
         latest_builds = filter_latest_builds(try_results.keys())
         return {b: s for b, s in try_results.items() if b in latest_builds}
+
+    @staticmethod
+    def filter_incomplete(build_statuses: BuildStatuses) -> Set[Build]:
+        incomplete_statuses = {
+            TryJobStatus.from_bb_status('INFRA_FAILURE'),
+            TryJobStatus.from_bb_status('CANCELED'),
+        }
+        return {
+            build
+            for build, status in build_statuses.items()
+            if status in incomplete_statuses
+        }
 
     def try_job_results(self,
                         issue_number=None,

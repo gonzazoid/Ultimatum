@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
@@ -61,6 +61,21 @@ struct MEDIA_EXPORT EncodedAudioBuffer {
 // Defines an interface for audio encoders.
 class MEDIA_EXPORT AudioEncoder {
  public:
+  struct MEDIA_EXPORT OpusOptions {
+    base::TimeDelta frame_duration;
+    unsigned int complexity;
+    unsigned int packet_loss_perc;
+    bool use_in_band_fec;
+    bool use_dtx;
+  };
+
+  enum class AacOutputFormat { AAC, ADTS };
+  struct MEDIA_EXPORT AacOptions {
+    AacOutputFormat format;
+  };
+
+  enum class BitrateMode { kVariable, kConstant };
+
   struct MEDIA_EXPORT Options {
     Options();
     Options(const Options&);
@@ -73,6 +88,11 @@ class MEDIA_EXPORT AudioEncoder {
     int channels;
 
     int sample_rate;
+
+    absl::optional<BitrateMode> bitrate_mode;
+
+    absl::optional<OpusOptions> opus;
+    absl::optional<AacOptions> aac;
   };
 
   // A sequence of codec specific bytes, commonly known as extradata.

@@ -8,9 +8,11 @@
 #include <vector>
 
 #include "ash/components/arc/metrics/arc_metrics_constants.h"
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_content_view.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_delegate.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_view.h"
+#include "ash/public/cpp/external_arc/message_center/metadata_utils.h"
 #include "ash/public/cpp/external_arc/message_center/metrics_utils.h"
 #include "ash/public/cpp/message_center/arc_notification_constants.h"
 #include "base/metrics/histogram_macros.h"
@@ -94,12 +96,23 @@ void ArcNotificationItemImpl::OnUpdatedFromAndroid(
   if (data->small_icon)
     rich_data.small_image = gfx::Image::CreateFrom1xBitmap(*data->small_icon);
 
+  if (data->big_picture) {
+    rich_data.image = gfx::Image::CreateFrom1xBitmap(*data->big_picture);
+  }
+
   if (data->accessible_name.has_value()) {
     rich_data.accessible_name =
         base::UTF8ToUTF16(data->accessible_name.value());
   }
 
-  if (manager_->IsOpeningSettingsSupported() && !is_setting_shown) {
+  const bool render_on_chrome =
+      features::IsRenderArcNotificationsByChromeEnabled() &&
+      data->render_on_chrome;
+
+  if (render_on_chrome) {
+    rich_data.settings_button_handler =
+        message_center::SettingsButtonHandler::INLINE;
+  } else if (manager_->IsOpeningSettingsSupported() && !is_setting_shown) {
     rich_data.settings_button_handler =
         message_center::SettingsButtonHandler::DELEGATE;
   } else {
@@ -107,27 +120,39 @@ void ArcNotificationItemImpl::OnUpdatedFromAndroid(
         message_center::SettingsButtonHandler::NONE;
   }
 
-  bool is_snooze_supported =
-      (data->flags && (data->flags->value &
-                       arc::mojom::ArcNotificationFlags::SUPPORT_SNOOZE) != 0);
-  rich_data.should_show_snooze_button =
-      is_snooze_supported && !is_setting_shown;
+  // TODO(b/313723218): Enable snooze on Chrome rendered ARC notifications.
+  rich_data.should_show_snooze_button = false;
 
   message_center::NotifierId notifier_id(
       message_center::NotifierType::ARC_APPLICATION,
       app_id.empty() ? kDefaultArcNotifierId : app_id);
   notifier_id.profile_id = profile_id_.GetUserEmail();
 
-  auto notification = std::make_unique<message_center::Notification>(
-      message_center::NOTIFICATION_TYPE_CUSTOM, notification_id_,
-      base::UTF8ToUTF16(data->title), base::UTF8ToUTF16(data->message),
-      ui::ImageModel(),
-      u"arc",  // display source
-      GURL(),  // empty origin url, for system component
-      notifier_id, rich_data,
+  if (data->group_key) {
+    notifier_id.group_key = data->group_key;
+  }
+
+  const auto notification_type =
+      render_on_chrome
+          ? ((data->indeterminate_progress || data->progress_max != -1)
+                 ? message_center::NOTIFICATION_TYPE_PROGRESS
+                 : message_center::NOTIFICATION_TYPE_SIMPLE)
+          : message_center::NOTIFICATION_TYPE_CUSTOM;
+
+  auto notification = CreateNotificationFromArcNotificationData(
+      notification_type, notification_id_, data.get(), notifier_id, rich_data,
       new ArcNotificationDelegate(weak_ptr_factory_.GetWeakPtr()));
-  notification->set_timestamp(base::Time::FromJavaTime(data->time));
-  notification->set_custom_view_type(kArcNotificationCustomViewType);
+
+  notification->set_timestamp(
+      base::Time::FromMillisecondsSinceUnixEpoch(data->time));
+
+  if (notification_type == message_center::NOTIFICATION_TYPE_CUSTOM) {
+    notification->set_custom_view_type(kArcNotificationCustomViewType);
+  }
+
+  if (notification_type == message_center::NOTIFICATION_TYPE_PROGRESS) {
+    notification->set_progress_status(base::UTF8ToUTF16(data->message));
+  }
 
   if (expand_state_ != ArcNotificationExpandState::FIXED_SIZE &&
       data->expand_state != ArcNotificationExpandState::FIXED_SIZE &&
@@ -203,6 +228,12 @@ void ArcNotificationItemImpl::OpenSnooze() {
   manager_->OpenNotificationSnoozeSettings(notification_key_);
 }
 
+void ArcNotificationItemImpl::ClickButton(const int button_index,
+                                          const std::string& input) {
+  manager_->SendNotificationButtonClickedOnChrome(notification_key_,
+                                                  button_index, input);
+}
+
 void ArcNotificationItemImpl::ToggleExpansion() {
   switch (expand_state_) {
     case ArcNotificationExpandState::EXPANDED:
@@ -217,6 +248,21 @@ void ArcNotificationItemImpl::ToggleExpansion() {
   }
 
   manager_->SendNotificationToggleExpansionOnChrome(notification_key_);
+}
+
+void ArcNotificationItemImpl::SetExpandState(bool expanded) {
+  if (expand_state_ == ArcNotificationExpandState::FIXED_SIZE) {
+    // Fixed size notification does not change state, therefore we do not
+    // need to set corresponding state in ARC through SetExpandState.
+    return;
+  }
+
+  if (expanded && expand_state_ == ArcNotificationExpandState::COLLAPSED) {
+    manager_->SendNotificationToggleExpansionOnChrome(notification_key_);
+  } else if (!expanded &&
+             expand_state_ == ArcNotificationExpandState::EXPANDED) {
+    manager_->SendNotificationToggleExpansionOnChrome(notification_key_);
+  }
 }
 
 void ArcNotificationItemImpl::OnWindowActivated(bool activated) {

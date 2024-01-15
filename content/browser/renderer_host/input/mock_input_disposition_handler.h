@@ -11,10 +11,9 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
-#include "content/browser/renderer_host/input/input_disposition_handler.h"
-#include "content/browser/renderer_host/input/input_router.h"
 #include "content/browser/scheduler/browser_ui_thread_scheduler.h"
-#include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
+#include "content/common/input/input_disposition_handler.h"
+#include "content/common/input/input_router.h"
 
 namespace content {
 
@@ -38,8 +37,7 @@ class MockInputDispositionHandler : public InputDispositionHandler {
   void OnGestureEventAck(
       const GestureEventWithLatencyInfo& event,
       blink::mojom::InputEventResultSource ack_source,
-      blink::mojom::InputEventResultState ack_result,
-      blink::mojom::ScrollResultDataPtr scroll_result_data) override;
+      blink::mojom::InputEventResultState ack_result) override;
 
   size_t GetAndResetAckCount();
 
@@ -89,7 +87,7 @@ class MockInputDispositionHandler : public InputDispositionHandler {
                        blink::mojom::InputEventResultSource ack_source,
                        blink::mojom::InputEventResultState ack_result);
 
-  raw_ptr<InputRouter> input_router_;
+  raw_ptr<InputRouter, DanglingUntriaged> input_router_;
 
   size_t ack_count_;
   blink::WebInputEvent::Type ack_event_type_;

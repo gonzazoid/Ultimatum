@@ -9,8 +9,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents.h"
@@ -43,11 +43,7 @@ namespace {
 class WebViewTestWebContentsObserver : public content::WebContentsObserver {
  public:
   explicit WebViewTestWebContentsObserver(content::WebContents* web_contents)
-      : web_contents_(web_contents),
-        was_shown_(false),
-        shown_count_(0),
-        hidden_count_(0),
-        valid_root_while_shown_(true) {
+      : web_contents_(web_contents) {
     content::WebContentsObserver::Observe(web_contents);
   }
 
@@ -100,11 +96,11 @@ class WebViewTestWebContentsObserver : public content::WebContentsObserver {
 
  private:
   raw_ptr<content::WebContents> web_contents_;
-  bool was_shown_;
-  int32_t shown_count_;
-  int32_t hidden_count_;
+  bool was_shown_ = false;
+  int32_t shown_count_ = 0;
+  int32_t hidden_count_ = 0;
   // Set to true if the view containing the webcontents has a valid root window.
-  bool valid_root_while_shown_;
+  bool valid_root_while_shown_ = true;
 };
 
 // Fakes the fullscreen browser state reported to WebContents and WebView.
@@ -131,11 +127,27 @@ class WebViewTestWebContentsDelegate : public content::WebContentsDelegate {
   bool is_fullscreened_ = false;
 };
 
+void SimulateRendererCrash(content::WebContents* contents, WebView* view) {
+  auto* tester = content::WebContentsTester::For(contents);
+
+  // Normally when a renderer crashes, the WebView will learn about it
+  // automatically via WebContentsObserver. Since this is a test
+  // WebContents, simulate that by calling SetIsCrashed and then
+  // explicitly calling RenderFrameDeleted on the WebView to trigger it
+  // to swap in the crashed overlay view.
+  tester->SetIsCrashed(base::TERMINATION_STATUS_PROCESS_CRASHED, -1);
+  EXPECT_TRUE(contents->IsCrashed());
+  static_cast<content::WebContentsObserver*>(view)->RenderFrameDeleted(
+      contents->GetPrimaryMainFrame());
+}
+
 }  // namespace
 
 // Provides functionality to test a WebView.
 class WebViewUnitTest : public views::test::WidgetTest {
  public:
+  static constexpr int kWebViewID = 123;
+
   WebViewUnitTest()
       : views::test::WidgetTest(std::unique_ptr<base::test::TaskEnvironment>(
             std::make_unique<content::BrowserTaskEnvironment>())) {}
@@ -174,16 +186,18 @@ class WebViewUnitTest : public views::test::WidgetTest {
     top_level_widget_->SetBounds(gfx::Rect(0, 10, 100, 100));
     View* const contents_view =
         top_level_widget_->SetContentsView(std::make_unique<View>());
-    auto web_view = std::make_unique<WebView>(browser_context_.get());
-    web_view->SetBoundsRect(gfx::Rect(contents_view->size()));
-    web_view_ = contents_view->AddChildView(std::move(web_view));
+    auto view = std::make_unique<WebView>(browser_context_.get());
+    view->SetID(kWebViewID);
+    view->SetBoundsRect(gfx::Rect(contents_view->size()));
+    contents_view->AddChildView(std::move(view));
     top_level_widget_->Show();
-    ASSERT_EQ(gfx::Rect(0, 0, 100, 100), web_view_->bounds());
+    ASSERT_EQ(gfx::Rect(0, 0, 100, 100), web_view()->bounds());
   }
 
   void TearDown() override {
     scoped_web_contents_creator_.reset();
-    top_level_widget_->Close();  // Deletes all children and itself.
+    top_level_widget_.ExtractAsDangling()
+        ->Close();  // Deletes all children and itself.
     RunPendingMessages();
 
     browser_context_.reset(nullptr);
@@ -194,9 +208,12 @@ class WebViewUnitTest : public views::test::WidgetTest {
   }
 
  protected:
-  Widget* top_level_widget() const { return top_level_widget_; }
-  WebView* web_view() const { return web_view_; }
-  NativeViewHost* holder() const { return web_view_->holder_; }
+  Widget* top_level_widget() { return top_level_widget_; }
+  WebView* web_view() {
+    return static_cast<WebView*>(
+        top_level_widget()->GetContentsView()->GetViewByID(kWebViewID));
+  }
+  NativeViewHost* holder() { return web_view()->holder_; }
 
   std::unique_ptr<content::WebContents> CreateWebContents() const {
     return content::WebContents::Create(
@@ -205,10 +222,12 @@ class WebViewUnitTest : public views::test::WidgetTest {
 
   std::unique_ptr<content::WebContents> CreateTestWebContents() const {
     return content::WebContentsTester::CreateTestWebContents(
-        browser_context_.get(), /*site_instnace=*/nullptr);
+        browser_context_.get(), /*instance=*/nullptr);
   }
 
-  void SetAXMode(ui::AXMode mode) { web_view()->OnAXModeAdded(mode); }
+  void SetAXModeForView(WebView* view, ui::AXMode mode) {
+    view->OnAXModeAdded(mode);
+  }
 
  private:
   std::unique_ptr<content::RenderViewHostTestEnabler> rvh_enabler_;
@@ -218,7 +237,6 @@ class WebViewUnitTest : public views::test::WidgetTest {
       scoped_web_contents_creator_;
 
   raw_ptr<Widget> top_level_widget_ = nullptr;
-  raw_ptr<WebView> web_view_ = nullptr;
 };
 
 // Tests that attaching and detaching a WebContents to a WebView makes the
@@ -322,18 +340,14 @@ TEST_F(WebViewUnitTest, DetachedWebViewDestructor) {
   // Init WebView with attached NativeView.
   const std::unique_ptr<content::WebContents> web_contents =
       CreateWebContents();
-  std::unique_ptr<WebView> webview(
-      new WebView(web_contents->GetBrowserContext()));
   View* contents_view = top_level_widget()->GetContentsView();
-  contents_view->AddChildView(webview.get());
-  webview->SetWebContents(web_contents.get());
+  auto* web_view = contents_view->AddChildView(
+      std::make_unique<WebView>(web_contents->GetBrowserContext()));
 
   // Remove WebView from views hierarchy. NativeView should be detached
-  // from Widget.
-  contents_view->RemoveChildView(webview.get());
-  // Destroy WebView. NativeView should be detached secondary.
-  // There should be no crash.
-  webview.reset();
+  // from Widget, and the WebView should be subsequently destroyed with no
+  // crash.
+  contents_view->RemoveChildViewT(web_view);
 }
 
 // Test that the specified crashed overlay view is shown when a WebContents
@@ -341,60 +355,21 @@ TEST_F(WebViewUnitTest, DetachedWebViewDestructor) {
 TEST_F(WebViewUnitTest, CrashedOverlayView) {
   const std::unique_ptr<content::WebContents> web_contents =
       CreateTestWebContents();
-  content::WebContentsTester* tester =
-      content::WebContentsTester::For(web_contents.get());
 
-  std::unique_ptr<WebView> web_view(
-      new WebView(web_contents->GetBrowserContext()));
   View* contents_view = top_level_widget()->GetContentsView();
-  contents_view->AddChildView(web_view.get());
+  auto* web_view = contents_view->AddChildView(
+      std::make_unique<WebView>(web_contents->GetBrowserContext()));
   web_view->SetWebContents(web_contents.get());
 
-  View* crashed_overlay_view = new View();
-  web_view->SetCrashedOverlayView(crashed_overlay_view);
-  EXPECT_FALSE(crashed_overlay_view->IsDrawn());
-
-  // Normally when a renderer crashes, the WebView will learn about it
-  // automatically via WebContentsObserver. Since this is a test
-  // WebContents, simulate that by calling SetIsCrashed and then
-  // explicitly calling RenderFrameDeleted on the WebView to trigger it
-  // to swap in the crashed overlay view.
-  tester->SetIsCrashed(base::TERMINATION_STATUS_PROCESS_CRASHED, -1);
-  EXPECT_TRUE(web_contents->IsCrashed());
-  static_cast<content::WebContentsObserver*>(web_view.get())
-      ->RenderFrameDeleted(web_contents->GetPrimaryMainFrame());
-  EXPECT_TRUE(crashed_overlay_view->IsDrawn());
-}
-
-// Test that a crashed overlay view isn't deleted if it's owned by client.
-TEST_F(WebViewUnitTest, CrashedOverlayViewOwnedbyClient) {
-  const std::unique_ptr<content::WebContents> web_contents =
-      CreateTestWebContents();
-  content::WebContentsTester* tester =
-      content::WebContentsTester::For(web_contents.get());
-  std::unique_ptr<WebView> web_view(
-      new WebView(web_contents->GetBrowserContext()));
-  View* contents_view = top_level_widget()->GetContentsView();
-  contents_view->AddChildView(web_view.get());
-  web_view->SetWebContents(web_contents.get());
-
-  View* crashed_overlay_view = new View();
+  auto crashed_overlay_view = std::make_unique<View>();
   crashed_overlay_view->set_owned_by_client();
-  web_view->SetCrashedOverlayView(crashed_overlay_view);
+  web_view->SetCrashedOverlayView(crashed_overlay_view.get());
   EXPECT_FALSE(crashed_overlay_view->IsDrawn());
 
-  // Simulate a renderer crash (see above).
-  tester->SetIsCrashed(base::TERMINATION_STATUS_PROCESS_CRASHED, -1);
-  EXPECT_TRUE(web_contents->IsCrashed());
-  static_cast<content::WebContentsObserver*>(web_view.get())
-      ->RenderFrameDeleted(web_contents->GetPrimaryMainFrame());
+  SimulateRendererCrash(web_contents.get(), web_view);
   EXPECT_TRUE(crashed_overlay_view->IsDrawn());
 
   web_view->SetCrashedOverlayView(nullptr);
-  web_view.reset();
-
-  // This shouldn't crash, we still own this.
-  delete crashed_overlay_view;
 }
 
 // Tests to make sure we can default construct the WebView class and set the
@@ -449,19 +424,24 @@ TEST_F(WebViewUnitTest, ReparentingUpdatesParentAccessible) {
 
 // This tests that we don't crash if WebView doesn't have a Widget or a
 // Webcontents. https://crbug.com/1191999
-TEST_F(WebViewUnitTest, ChangeAXMode) {
+// TODO(crbug.com/1465744): Re-enable this test
+#if BUILDFLAG(IS_LINUX)
+#define MAYBE_ChangeAXMode DISABLED_ChangeAXMode
+#else
+#define MAYBE_ChangeAXMode ChangeAXMode
+#endif
+TEST_F(WebViewUnitTest, MAYBE_ChangeAXMode) {
   // Case 1: WebView has a Widget and no WebContents.
-  SetAXMode(ui::AXMode::kFirstModeFlag);
+  SetAXModeForView(web_view(), ui::AXMode::kFirstModeFlag);
 
   // Case 2: WebView has no Widget and a WebContents.
   View* contents_view = top_level_widget()->GetContentsView();
-  contents_view->RemoveChildView(web_view());
+  // Remove the view but make sure to delete it at the end of the test.
+  auto scoped_view = contents_view->RemoveChildViewT(web_view());
   const std::unique_ptr<content::WebContents> web_contents =
       CreateWebContents();
-  web_view()->SetWebContents(web_contents.get());
-
-  SetAXMode(ui::AXMode::kFirstModeFlag);
-
+  scoped_view->SetWebContents(web_contents.get());
+  SetAXModeForView(scoped_view.get(), ui::AXMode::kFirstModeFlag);
   // No crash.
 }
 

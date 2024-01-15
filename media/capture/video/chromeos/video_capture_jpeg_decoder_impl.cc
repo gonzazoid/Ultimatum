@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/typed_macros.h"
 #include "components/chromeos_camera/mojo_mjpeg_decode_accelerator.h"
 #include "media/base/media_switches.h"
@@ -40,7 +40,6 @@ void VideoCaptureJpegDecoderImpl::Initialize() {
   base::AutoLock lock(lock_);
   if (!IsVideoCaptureAcceleratedJpegDecodingEnabled()) {
     decoder_status_ = FAILED;
-    RecordInitDecodeUMA_Locked();
     return;
   }
 
@@ -141,8 +140,7 @@ void VideoCaptureJpegDecoderImpl::DecodeCapturedData(
         decode_done_cb_,
         ReadyFrameInBuffer(out_buffer.id, out_buffer.frame_feedback_id,
                            std::move(out_buffer.access_permission),
-                           std::move(out_frame_info)),
-        std::vector<ReadyFrameInBuffer>());
+                           std::move(out_frame_info)));
   }
 
   // base::Unretained is safe because |decoder_| is deleted on
@@ -225,18 +223,11 @@ void VideoCaptureJpegDecoderImpl::OnInitializationDone(bool success) {
   }
 
   decoder_status_ = success ? INIT_PASSED : FAILED;
-  RecordInitDecodeUMA_Locked();
 }
 
 bool VideoCaptureJpegDecoderImpl::IsDecoding_Locked() const {
   lock_.AssertAcquired();
   return !decode_done_closure_.is_null();
-}
-
-void VideoCaptureJpegDecoderImpl::RecordInitDecodeUMA_Locked() {
-  lock_.AssertAcquired();
-  UMA_HISTOGRAM_BOOLEAN("Media.VideoCaptureGpuJpegDecoder.InitDecodeSuccess",
-                        decoder_status_ == INIT_PASSED);
 }
 
 }  // namespace media

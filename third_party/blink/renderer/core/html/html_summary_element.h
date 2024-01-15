@@ -35,12 +35,13 @@ class HTMLSummaryElement final : public HTMLElement {
   bool WillRespondToMouseClickEvents() override;
 
  private:
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
   void DefaultEventHandler(Event&) override;
   bool HasActivationBehavior() const override;
   HTMLDetailsElement* DetailsElement() const;
 
-  bool SupportsFocus() const override;
+  bool SupportsFocus(UpdateBehavior update_behavior =
+                         UpdateBehavior::kStyleAndLayout) const override;
   int DefaultTabIndex() const override;
 };
 

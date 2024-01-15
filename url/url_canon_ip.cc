@@ -11,6 +11,7 @@
 
 #include "base/check.h"
 #include "url/url_canon_internal.h"
+#include "url/url_features.h"
 
 namespace url {
 
@@ -44,7 +45,7 @@ CanonHostInfo::Family IPv4ComponentToNumber(const CHAR* spec,
                                             const Component& component,
                                             uint32_t* number) {
   // Empty components are considered non-numeric.
-  if (!component.is_nonempty())
+  if (component.is_empty())
     return CanonHostInfo::NEUTRAL;
 
   // Figure out the base
@@ -133,7 +134,7 @@ CanonHostInfo::Family DoIPv4AddressToNumber(const CHAR* spec,
     --host.len;
 
   // Do nothing if empty.
-  if (!host.is_nonempty())
+  if (host.is_empty())
     return CanonHostInfo::NEUTRAL;
 
   // Read component values.  The first `existing_components` of them are
@@ -302,7 +303,7 @@ bool DoParseIPv6(const CHAR* spec, const Component& host, IPv6Parsed* parsed) {
   // Zero-out the info.
   parsed->reset();
 
-  if (!host.is_nonempty())
+  if (host.is_empty())
     return false;
 
   // The index for start and end of address range (no brackets).
@@ -447,7 +448,7 @@ bool DoIPv6AddressToNumber(const CHAR* spec,
                            unsigned char address[16]) {
   // Make sure the component is bounded by '[' and ']'.
   int end = host.end();
-  if (!host.is_nonempty() || spec[host.begin] != '[' || spec[end - 1] != ']')
+  if (host.is_empty() || spec[host.begin] != '[' || spec[end - 1] != ']')
     return false;
 
   // Exclude the square brackets.
@@ -490,13 +491,22 @@ bool DoIPv6AddressToNumber(const CHAR* spec,
   // it to |address|.
   if (ipv6_parsed.ipv4_component.is_valid()) {
     // Append the 32-bit number to |address|.
-    int ignored_num_ipv4_components;
+    int num_ipv4_components = 0;
+    // IPv4AddressToNumber will remove the trailing dot from the component.
+    bool trailing_dot = ipv6_parsed.ipv4_component.is_nonempty() &&
+                        spec[ipv6_parsed.ipv4_component.end() - 1] == '.';
+    // The URL standard requires the embedded IPv4 address to be concisely
+    // composed of 4 parts and disallows terminal dots.
+    // See https://url.spec.whatwg.org/#concept-ipv6-parser
     if (CanonHostInfo::IPV4 !=
-        IPv4AddressToNumber(spec,
-                            ipv6_parsed.ipv4_component,
-                            &address[cur_index_in_address],
-                            &ignored_num_ipv4_components))
+            IPv4AddressToNumber(spec, ipv6_parsed.ipv4_component,
+                                &address[cur_index_in_address],
+                                &num_ipv4_components)) {
       return false;
+    }
+    if ((num_ipv4_components != 4 || trailing_dot)) {
+      return false;
+    }
   }
 
   return true;
@@ -645,6 +655,22 @@ void CanonicalizeIPAddress(const char16_t* spec,
   if (DoCanonicalizeIPv6Address<char16_t, char16_t>(spec, host, output,
                                                     host_info))
     return;
+}
+
+void CanonicalizeIPv6Address(const char* spec,
+                             const Component& host,
+                             CanonOutput& output,
+                             CanonHostInfo& host_info) {
+  DoCanonicalizeIPv6Address<char, unsigned char>(spec, host, &output,
+                                                 &host_info);
+}
+
+void CanonicalizeIPv6Address(const char16_t* spec,
+                             const Component& host,
+                             CanonOutput& output,
+                             CanonHostInfo& host_info) {
+  DoCanonicalizeIPv6Address<char16_t, char16_t>(spec, host, &output,
+                                                &host_info);
 }
 
 CanonHostInfo::Family IPv4AddressToNumber(const char* spec,

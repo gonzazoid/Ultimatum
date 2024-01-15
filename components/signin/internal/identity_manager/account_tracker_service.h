@@ -9,15 +9,17 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/signin/public/base/signin_metrics.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gaia/gaia_auth_util.h"
@@ -100,13 +102,22 @@ class AccountTrackerService {
   // Seeds the account whose account_id is given by PickAccountIdForAccount()
   // with its corresponding gaia id and email address.  Returns the same
   // value PickAccountIdForAccount() when given the same arguments.
-  CoreAccountId SeedAccountInfo(const std::string& gaia,
-                                const std::string& email);
+  CoreAccountId SeedAccountInfo(
+      const std::string& gaia,
+      const std::string& email,
+      signin_metrics::AccessPoint access_point =
+          signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
 
   // Seeds the account represented by |info|. If the account is already tracked
   // and compatible, the empty fields will be updated with values from |info|.
   // If after the update IsValid() is true, OnAccountUpdated will be fired.
   CoreAccountId SeedAccountInfo(AccountInfo info);
+
+  // Seeds the accounts with |core_account_infos|. The primary account id is
+  // passed to keep it from getting removed.
+  void SeedAccountsInfo(const std::vector<CoreAccountInfo>& core_account_infos,
+                        const absl::optional<CoreAccountId>& primary_account_id,
+                        bool should_remove_stale_accounts);
 
   // Sets whether the account is a Unicorn account.
   void SetIsChildAccount(const CoreAccountId& account_id,
@@ -128,7 +139,7 @@ class AccountTrackerService {
   base::android::ScopedJavaLocalRef<jobject> GetJavaObject();
 
   // Seeds the accounts with |core_account_infos|.
-  void SeedAccountsInfo(
+  void LegacySeedAccountsInfo(
       JNIEnv* env,
       const base::android::JavaParamRef<jobjectArray>& core_account_infos);
 #endif
@@ -167,6 +178,7 @@ class AccountTrackerService {
 
  private:
   friend class AccountFetcherService;
+  friend class AccountTrackerServiceTest;
   friend void signin::SimulateSuccessfulFetchOfAccountInfo(
       signin::IdentityManager*,
       const CoreAccountId&,
@@ -185,7 +197,9 @@ class AccountTrackerService {
   void NotifyAccountUpdated(const AccountInfo& account_info);
   void NotifyAccountRemoved(const AccountInfo& account_info);
 
+  // Start tracking `account_id` (`account_id` must not be empty).
   void StartTrackingAccount(const CoreAccountId& account_id);
+  bool IsTrackingAccount(const CoreAccountId& account_id);
   void StopTrackingAccount(const CoreAccountId& account_id);
 
   // Load the current state of the account info from the preferences file.
@@ -226,6 +240,13 @@ class AccountTrackerService {
   static AccountIdMigrationState GetMigrationState(
       const PrefService* pref_service);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  // Update the child status on the provided account.
+  // This does not notify observers, or persist updates to disk - the caller
+  // is responsible for doing so.
+  // Returns true if the child status was modified, false otherwise.
+  bool UpdateAccountInfoChildStatus(AccountInfo& account_info,
+                                    bool is_child_account);
 
   raw_ptr<PrefService> pref_service_ = nullptr;  // Not owned.
   std::map<CoreAccountId, AccountInfo> accounts_;

@@ -13,10 +13,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/sequence_checker.h"
@@ -28,6 +28,7 @@
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_errors.h"
 #include "net/base/net_export.h"
+#include "net/disk_cache/disk_cache.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/application_status_listener.h"
@@ -222,9 +223,9 @@ class NET_EXPORT_PRIVATE SimpleIndex
   void SetLastUsedTimeForTest(uint64_t entry_hash, const base::Time last_used);
 
 #if BUILDFLAG(IS_ANDROID)
-  void set_app_status_listener(
-      base::android::ApplicationStatusListener* app_status_listener) {
-    app_status_listener_ = app_status_listener;
+  void set_app_status_listener_getter(
+      ApplicationStatusListenerGetter app_status_listener_getter) {
+    app_status_listener_getter_ = app_status_listener_getter;
   }
 #endif
 
@@ -260,8 +261,7 @@ class NET_EXPORT_PRIVATE SimpleIndex
 
   std::unique_ptr<base::android::ApplicationStatusListener>
       owned_app_status_listener_;
-  raw_ptr<base::android::ApplicationStatusListener> app_status_listener_ =
-      nullptr;
+  ApplicationStatusListenerGetter app_status_listener_getter_;
 #endif
 
   scoped_refptr<BackendCleanupTracker> cleanup_tracker_;

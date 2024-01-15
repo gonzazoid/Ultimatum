@@ -5,12 +5,12 @@
 #ifndef CHROME_BROWSER_READING_LIST_ANDROID_READING_LIST_MANAGER_IMPL_H_
 #define CHROME_BROWSER_READING_LIST_ANDROID_READING_LIST_MANAGER_IMPL_H_
 
-#include "base/memory/raw_ptr.h"
-#include "chrome/browser/reading_list/android/reading_list_manager.h"
-
 #include <memory>
 
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
+#include "chrome/browser/reading_list/android/reading_list_manager.h"
 #include "components/reading_list/core/reading_list_model_observer.h"
 
 class ReadingListModel;
@@ -20,10 +20,15 @@ class ReadingListModel;
 // list nodes as children. Only has one level of children.
 // 2. Talk to reading list model, and sync with the in memory bookmark tree.
 // 3. Talk to observers to report model change events.
+// TODO(crbug.com/1510550): Refactor this to be part of the bookmarks dir.
+// - Better renamed to ReadingListAsBookmarkAdapter when moved.
 class ReadingListManagerImpl : public ReadingListManager,
                                public ReadingListModelObserver {
  public:
-  explicit ReadingListManagerImpl(ReadingListModel* reading_list_model);
+  using IdGenerationFunction = base::RepeatingCallback<int64_t(void)>;
+
+  ReadingListManagerImpl(ReadingListModel* reading_list_model,
+                         const IdGenerationFunction& id_gen_func);
   ~ReadingListManagerImpl() override;
 
  private:
@@ -36,6 +41,8 @@ class ReadingListManagerImpl : public ReadingListManager,
                                   const GURL& url) override;
   void ReadingListDidMoveEntry(const ReadingListModel* model,
                                const GURL& url) override;
+  void ReadingListDidUpdateEntry(const ReadingListModel* model,
+                                 const GURL& url) override;
   void ReadingListDidApplyChanges(ReadingListModel* model) override;
   void ReadingListModelBeganBatchUpdates(
       const ReadingListModel* model) override;
@@ -59,6 +66,7 @@ class ReadingListManagerImpl : public ReadingListManager,
   const bookmarks::BookmarkNode* GetRoot() const override;
   size_t size() const override;
   size_t unread_size() const override;
+  void SetTitle(const GURL& url, const std::u16string& title) override;
   void SetReadStatus(const GURL& url, bool read) override;
   bool GetReadStatus(const bookmarks::BookmarkNode* node) override;
   bool IsLoaded() const override;
@@ -79,14 +87,15 @@ class ReadingListManagerImpl : public ReadingListManager,
   // The bookmark root for reading list articles.
   std::unique_ptr<bookmarks::BookmarkNode> root_;
 
-  // Auto increment bookmark id. Will not be persisted and only used in memory.
-  int64_t maximum_id_;
+  // Function to generate an id for reading list nodes.
+  const IdGenerationFunction id_gen_func_;
 
   // Whether the |reading_list_model_| is loaded.
   bool loaded_;
 
   // Whether |reading_list_model_| is in batch update mode.
   bool performing_batch_update_;
+  bool changes_applied_during_batch_;
 
   base::ObserverList<Observer> observers_;
 };

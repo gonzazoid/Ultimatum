@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/strings/string_util.h"
-#include "base/win/windows_version.h"
 #include "build/branding_buildflags.h"
 #include "chrome/browser/win/conflicts/module_database.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -68,7 +67,7 @@ constexpr char kAllowedSameDirectory[] =
 void AppendString(base::StringPiece input, std::string* output) {
   if (!output->empty())
     *output += ", ";
-  output->append(input.data(), input.size());
+  output->append(input);
 }
 
 // Returns a string describing the current module blocking status: loaded or
@@ -221,8 +220,6 @@ std::string GetModuleStatusString(
 enum ThirdPartyFeaturesStatus {
   // The third-party features are not available in non-Google Chrome builds.
   kNonGoogleChromeBuild,
-  // The third-party features are not available on Windows 7.
-  kNotAvailableWin7,
   // The ThirdPartyBlockingEnabled group policy is disabled.
   kPolicyDisabled,
   // Both the IncompatibleApplicationsWarning and the
@@ -243,7 +240,7 @@ enum ThirdPartyFeaturesStatus {
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 ThirdPartyFeaturesStatus GetThirdPartyFeaturesStatus(
-    absl::optional<ThirdPartyConflictsManager::State>
+    std::optional<ThirdPartyConflictsManager::State>
         third_party_conflicts_manager_state) {
   // The ThirdPartyConflictsManager instance exists if we have its state.
   if (third_party_conflicts_manager_state.has_value()) {
@@ -264,10 +261,6 @@ ThirdPartyFeaturesStatus GetThirdPartyFeaturesStatus(
         return kPolicyDisabled;
     }
   }
-
-  // Figure out why the manager instance doesn't exist.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return kNotAvailableWin7;
 
   if (!ModuleDatabase::IsThirdPartyBlockingPolicyEnabled())
     return kPolicyDisabled;
@@ -294,14 +287,9 @@ std::string GetThirdPartyFeaturesStatusString(ThirdPartyFeaturesStatus status) {
     case ThirdPartyFeaturesStatus::kNonGoogleChromeBuild:
       return "The third-party features are not available in non-Google Chrome "
              "builds.";
-    case ThirdPartyFeaturesStatus::kNotAvailableWin7:
-      return "The third-party features are not available on Windows 7.";
     case ThirdPartyFeaturesStatus::kPolicyDisabled:
       return "The ThirdPartyBlockingEnabled group policy is disabled.";
     case ThirdPartyFeaturesStatus::kFeatureDisabled:
-      if (base::win::GetVersion() < base::win::Version::WIN10)
-        return "The ThirdPartyModulesBlocking feature is disabled.";
-
       return "Both the IncompatibleApplicationsWarning and "
              "ThirdPartyModulesBlocking features are disabled.";
     case ThirdPartyFeaturesStatus::kModuleListInvalid:
@@ -309,17 +297,12 @@ std::string GetThirdPartyFeaturesStatusString(ThirdPartyFeaturesStatus status) {
     case ThirdPartyFeaturesStatus::kNoModuleListAvailable:
       return "Disabled - There is no Module List version available.";
     case ThirdPartyFeaturesStatus::kWarningInitialized:
-      DCHECK_GE(base::win::GetVersion(), base::win::Version::WIN10);
       return "The IncompatibleApplicationsWarning feature is enabled, while "
              "the ThirdPartyModulesBlocking feature is disabled.";
     case ThirdPartyFeaturesStatus::kBlockingInitialized:
-      if (base::win::GetVersion() < base::win::Version::WIN10)
-        return "The ThirdPartyModulesBlocking feature is enabled.";
-
       return "The ThirdPartyModulesBlocking feature is enabled, while the "
              "IncompatibleApplicationsWarning feature is disabled.";
     case ThirdPartyFeaturesStatus::kWarningAndBlockingInitialized:
-      DCHECK_GE(base::win::GetVersion(), base::win::Version::WIN10);
       return "Both the IncompatibleApplicationsWarning and "
              "ThirdPartyModulesBlocking features are enabled";
   }
@@ -343,7 +326,7 @@ void OnConflictsDataFetched(
 void OnModuleDataFetched(ConflictsDataFetcher::OnConflictsDataFetchedCallback
                              on_conflicts_data_fetched_callback,
                          base::Value::Dict results,
-                         absl::optional<ThirdPartyConflictsManager::State>
+                         std::optional<ThirdPartyConflictsManager::State>
                              third_party_conflicts_manager_state) {
   OnConflictsDataFetched(
       std::move(on_conflicts_data_fetched_callback), std::move(results),
@@ -422,7 +405,7 @@ void ConflictsDataFetcher::GetListOfModules() {
   module_list_ = base::Value::List();
 
   auto* module_database = ModuleDatabase::GetInstance();
-  module_database->ForceStartInspection();
+  module_database->StartInspection();
   module_database->AddObserver(this);
 }
 
@@ -477,9 +460,9 @@ void ConflictsDataFetcher::OnModuleDatabaseIdle() {
   ModuleDatabase::GetInstance()->RemoveObserver(this);
 
   base::Value::Dict results;
-  results.Set("moduleCount", int(module_list_->size()));
+  results.Set("moduleCount", static_cast<int>(module_list_->size()));
   results.Set("moduleList", std::move(*module_list_));
-  module_list_ = absl::nullopt;
+  module_list_ = std::nullopt;
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   // The state of third-party features must be determined on the UI thread.

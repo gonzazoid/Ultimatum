@@ -12,8 +12,6 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/critical_closure.h"
 #include "base/debug/alias.h"
@@ -21,6 +19,8 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer_cleaner.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -31,7 +31,6 @@
 #include "base/task/task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/scoped_thread_priority.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -59,8 +58,7 @@ void UmaHistogramTimesWithSuffix(const char* histogram_name,
   std::string histogram_full_name(histogram_name);
   if (!histogram_suffix.empty()) {
     histogram_full_name.append(".");
-    histogram_full_name.append(histogram_suffix.data(),
-                               histogram_suffix.length());
+    histogram_full_name.append(histogram_suffix);
   }
   UmaHistogramTimes(histogram_full_name, sample);
 }
@@ -95,8 +93,8 @@ void DeleteTmpFileWithRetry(File tmp_file,
   constexpr TimeDelta kDeleteFileRetryDelay = Milliseconds(250);
 
   if (!DeleteFile(tmp_file_path) && ++attempt < kMaxDeleteAttempts &&
-      SequencedTaskRunnerHandle::IsSet()) {
-    SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      SequencedTaskRunner::HasCurrentDefault()) {
+    SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         BindOnce(&DeleteTmpFileWithRetry, base::File(), tmp_file_path, attempt),
         kDeleteFileRetryDelay);
@@ -123,8 +121,9 @@ void ImportantFileWriter::ProduceAndWriteStringToFileAtomically(
     OnceCallback<void(bool success)> after_write_callback,
     const std::string& histogram_suffix) {
   // Produce the actual data string on the background sequence.
-  std::string data;
-  if (!std::move(data_producer_for_background_sequence).Run(&data)) {
+  absl::optional<std::string> data =
+      std::move(data_producer_for_background_sequence).Run();
+  if (!data) {
     DLOG(WARNING) << "Failed to serialize data to be saved in " << path.value();
     return;
   }
@@ -135,7 +134,7 @@ void ImportantFileWriter::ProduceAndWriteStringToFileAtomically(
   // Calling the impl by way of the private
   // ProduceAndWriteStringToFileAtomically, which originated from an
   // ImportantFileWriter instance, so |from_instance| is true.
-  const bool result = WriteFileAtomicallyImpl(path, data, histogram_suffix,
+  const bool result = WriteFileAtomicallyImpl(path, *data, histogram_suffix,
                                               /*from_instance=*/true);
 
   if (!after_write_callback.is_null())
@@ -303,19 +302,16 @@ bool ImportantFileWriter::HasPendingWrite() const {
   return timer().IsRunning();
 }
 
-void ImportantFileWriter::WriteNow(std::unique_ptr<std::string> data) {
+void ImportantFileWriter::WriteNow(std::string data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!IsValueInRangeForNumericType<int32_t>(data->length())) {
+  if (!IsValueInRangeForNumericType<int32_t>(data.length())) {
     NOTREACHED();
     return;
   }
 
   WriteNowWithBackgroundDataProducer(base::BindOnce(
-      [](std::string data, std::string* output) {
-        *output = std::move(data);
-        return true;
-      },
-      std::move(*data)));
+      [](std::string data) { return absl::make_optional(std::move(data)); },
+      std::move(data)));
 }
 
 void ImportantFileWriter::WriteNowWithBackgroundDataProducer(
@@ -377,27 +373,19 @@ void ImportantFileWriter::DoScheduledWrite() {
   BackgroundDataProducerCallback data_producer_for_background_sequence;
 
   if (absl::holds_alternative<DataSerializer*>(serializer_)) {
-    std::string data;
-
-    // Pre-allocate previously needed memory plus 1kB for potential growth of
-    // data. Reduces the number of memory allocations to grow |data| step by
-    // step from tiny to very large.
-    data.reserve(previous_data_size_ + 1024);
-
-    if (!absl::get<DataSerializer*>(serializer_)->SerializeData(&data)) {
+    absl::optional<std::string> data;
+    data = absl::get<DataSerializer*>(serializer_)->SerializeData();
+    if (!data) {
       DLOG(WARNING) << "Failed to serialize data to be saved in "
                     << path_.value();
       ClearPendingWrite();
       return;
     }
 
-    previous_data_size_ = data.size();
+    previous_data_size_ = data->size();
     data_producer_for_background_sequence = base::BindOnce(
-        [](std::string data, std::string* result) {
-          *result = std::move(data);
-          return true;
-        },
-        std::move(data));
+        [](std::string data) { return absl::make_optional(std::move(data)); },
+        std::move(data).value());
   } else {
     data_producer_for_background_sequence =
         absl::get<BackgroundDataSerializer*>(serializer_)

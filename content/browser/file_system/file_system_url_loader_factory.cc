@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
@@ -19,13 +19,15 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "build/build_config.h"
+#include "components/file_access/scoped_file_access.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/child_process_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -115,7 +117,7 @@ class FileSystemEntryURLLoader
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override {}
+      const std::optional<GURL>& new_url) override {}
   void SetPriority(net::RequestPriority priority,
                    int32_t intra_priority_value) override {}
   void PauseReadingBodyFromNet() override {}
@@ -128,10 +130,35 @@ class FileSystemEntryURLLoader
              mojo::PendingReceiver<network::mojom::URLLoader> loader,
              mojo::PendingRemote<network::mojom::URLLoaderClient> client_remote,
              scoped_refptr<base::SequencedTaskRunner> io_task_runner) {
+    net::Error net_error = net::OK;
+    if (!request.url.is_valid()) {
+      net_error = net::ERR_INVALID_URL;
+    }
+
+    // If the requested URL is not committable in the current process, block the
+    // request.  This prevents one origin from fetching filesystem: resources
+    // belonging to another origin, see https://crbug.com/964245.
+    if (params_.render_process_host_id != ChildProcessHost::kInvalidUniqueID &&
+        !ChildProcessSecurityPolicyImpl::GetInstance()->CanCommitURL(
+            params_.render_process_host_id, request.url)) {
+      DVLOG(1) << "Denied unauthorized request for "
+               << request.url.possibly_invalid_spec();
+      net_error = net::ERR_INVALID_URL;
+    }
+
+    if (request.request_initiator &&
+        file_access::ScopedFileAccessDelegate::HasInstance()) {
+      file_access_ =
+          file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback(
+              file_access::ScopedFileAccessDelegate::Get()
+                  ->CreateFileAccessCallback(
+                      request.request_initiator->GetURL()));
+    }
+
     io_task_runner->PostTask(
-        FROM_HERE,
-        base::BindOnce(&FileSystemEntryURLLoader::StartOnIOThread, AsWeakPtr(),
-                       request, std::move(loader), std::move(client_remote)));
+        FROM_HERE, base::BindOnce(&FileSystemEntryURLLoader::StartOnIOThread,
+                                  AsWeakPtr(), request, net_error,
+                                  std::move(loader), std::move(client_remote)));
   }
 
   void MaybeDeleteSelf() {
@@ -159,10 +186,13 @@ class FileSystemEntryURLLoader
   std::unique_ptr<mojo::DataPipeProducer> data_producer_;
   net::HttpByteRange byte_range_;
   FileSystemURL url_;
+  file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+      file_access_ = base::NullCallback();
 
  private:
   void StartOnIOThread(
       const network::ResourceRequest& request,
+      net::Error net_error,
       mojo::PendingReceiver<network::mojom::URLLoader> loader,
       mojo::PendingRemote<network::mojom::URLLoaderClient> client_remote) {
     receiver_.Bind(std::move(loader));
@@ -171,20 +201,10 @@ class FileSystemEntryURLLoader
 
     client_.Bind(std::move(client_remote));
 
-    if (!request.url.is_valid()) {
-      OnClientComplete(net::ERR_INVALID_URL);
-      return;
-    }
-
-    // If the requested URL is not commitable in the current process, block the
-    // request.  This prevents one origin from fetching filesystem: resources
-    // belonging to another origin, see https://crbug.com/964245.
-    if (params_.render_process_host_id != ChildProcessHost::kInvalidUniqueID &&
-        !ChildProcessSecurityPolicyImpl::GetInstance()->CanCommitURL(
-            params_.render_process_host_id, request.url)) {
-      DVLOG(1) << "Denied unauthorized request for "
-               << request.url.possibly_invalid_spec();
-      OnClientComplete(net::ERR_INVALID_URL);
+    // If checks which were performed on the UI thread failed, don't proceed
+    // any further and error out.
+    if (net_error != net::OK) {
+      OnClientComplete(net_error);
       return;
     }
 
@@ -325,8 +345,8 @@ class FileSystemDirectoryURLLoader : public FileSystemEntryURLLoader {
     DCHECK(entry_url.is_valid());
     params_.file_system_context->operation_runner()->GetMetadata(
         entry_url,
-        FileSystemOperation::GET_METADATA_FIELD_SIZE |
-            FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED,
+        {storage::FileSystemOperation::GetMetadataField::kSize,
+         storage::FileSystemOperation::GetMetadataField::kLastModified},
         base::BindOnce(&FileSystemDirectoryURLLoader::DidGetMetadata,
                        base::AsWeakPtr(this), index));
   }
@@ -375,7 +395,7 @@ class FileSystemDirectoryURLLoader : public FileSystemEntryURLLoader {
     head->headers = CreateHttpResponseHeaders(200);
 
     client_->OnReceiveResponse(std::move(head), std::move(consumer_handle),
-                               absl::nullopt);
+                               std::nullopt);
 
     data_producer_ =
         std::make_unique<mojo::DataPipeProducer>(std::move(producer_handle));
@@ -443,8 +463,8 @@ class FileSystemFileURLLoader : public FileSystemEntryURLLoader {
     }
     params_.file_system_context->operation_runner()->GetMetadata(
         url_,
-        FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-            FileSystemOperation::GET_METADATA_FIELD_SIZE,
+        {storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+         storage::FileSystemOperation::GetMetadataField::kSize},
         base::BindOnce(&FileSystemFileURLLoader::DidGetMetadata,
                        base::AsWeakPtr(this)));
   }
@@ -489,8 +509,8 @@ class FileSystemFileURLLoader : public FileSystemEntryURLLoader {
 
     DCHECK(!reader_.get());
     reader_ = params_.file_system_context->CreateFileStreamReader(
-        url_, byte_range_.first_byte_position(), remaining_bytes_,
-        base::Time());
+        url_, byte_range_.first_byte_position(), remaining_bytes_, base::Time(),
+        std::move(file_access_));
 
     MojoCreateDataPipeOptions options;
     options.struct_size = sizeof(MojoCreateDataPipeOptions);
@@ -516,7 +536,7 @@ class FileSystemFileURLLoader : public FileSystemEntryURLLoader {
 
     size_t bytes_to_read = std::min(
         static_cast<int64_t>(kDefaultFileSystemUrlPipeSize), remaining_bytes_);
-    file_data_ = base::MakeRefCounted<net::IOBuffer>(bytes_to_read);
+    file_data_ = base::MakeRefCounted<net::IOBufferWithSize>(bytes_to_read);
     ReadMoreFileData();
   }
 
@@ -526,7 +546,7 @@ class FileSystemFileURLLoader : public FileSystemEntryURLLoader {
         // This was an empty file; make sure to call OnReceiveResponse
         // regardless.
         client_->OnReceiveResponse(std::move(head_),
-                                   std::move(consumer_handle_), absl::nullopt);
+                                   std::move(consumer_handle_), std::nullopt);
       }
       OnFileWritten(net::OK);
       return;
@@ -570,7 +590,7 @@ class FileSystemFileURLLoader : public FileSystemEntryURLLoader {
       }
 
       client_->OnReceiveResponse(std::move(head_), std::move(consumer_handle_),
-                                 absl::nullopt);
+                                 std::nullopt);
     }
     remaining_bytes_ -= result;
     DCHECK_GE(remaining_bytes_, 0);

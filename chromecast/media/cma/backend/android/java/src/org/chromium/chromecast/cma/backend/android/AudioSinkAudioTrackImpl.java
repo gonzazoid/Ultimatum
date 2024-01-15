@@ -14,12 +14,12 @@ import android.util.Pair;
 import android.util.SparseIntArray;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.RequiresApi;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chromecast.media.AudioContentType;
 
 import java.lang.annotation.Retention;
@@ -51,32 +51,31 @@ import java.util.Queue;
  *
  */
 @JNINamespace("chromecast::media")
-@RequiresApi(Build.VERSION_CODES.N)
 class AudioSinkAudioTrackImpl {
     private static final String TAG = "AATrack";
     private static final int DEBUG_LEVEL = 0;
 
     // Mapping from Android's stream_type to Cast's AudioContentType (used for callback).
-    private static final SparseIntArray CAST_TYPE_TO_ANDROID_USAGE_TYPE_MAP = new SparseIntArray(
-            4) {
-        {
-            append(AudioContentType.MEDIA, AudioAttributes.USAGE_MEDIA);
-            append(AudioContentType.ALARM, AudioAttributes.USAGE_ALARM);
-            append(AudioContentType.COMMUNICATION, AudioAttributes.USAGE_ASSISTANCE_SONIFICATION);
-            append(AudioContentType.OTHER, AudioAttributes.USAGE_VOICE_COMMUNICATION);
-        }
-    };
+    private static final SparseIntArray CAST_TYPE_TO_ANDROID_USAGE_TYPE_MAP;
+    static {
+        var array = new SparseIntArray(4);
+        array.append(AudioContentType.MEDIA, AudioAttributes.USAGE_MEDIA);
+        array.append(AudioContentType.ALARM, AudioAttributes.USAGE_ALARM);
+        array.append(AudioContentType.COMMUNICATION, AudioAttributes.USAGE_ASSISTANCE_SONIFICATION);
+        array.append(AudioContentType.OTHER, AudioAttributes.USAGE_VOICE_COMMUNICATION);
+        CAST_TYPE_TO_ANDROID_USAGE_TYPE_MAP = array;
+    }
 
-    private static final SparseIntArray CAST_TYPE_TO_ANDROID_CONTENT_TYPE_MAP = new SparseIntArray(
-            4) {
-        {
-            append(AudioContentType.MEDIA, AudioAttributes.CONTENT_TYPE_MUSIC);
-            // Note: ALARM uses the same as COMMUNICATON.
-            append(AudioContentType.ALARM, AudioAttributes.CONTENT_TYPE_SONIFICATION);
-            append(AudioContentType.COMMUNICATION, AudioAttributes.CONTENT_TYPE_SONIFICATION);
-            append(AudioContentType.OTHER, AudioAttributes.CONTENT_TYPE_SPEECH);
-        }
-    };
+    private static final SparseIntArray CAST_TYPE_TO_ANDROID_CONTENT_TYPE_MAP;
+    static {
+        var array = new SparseIntArray(4);
+        array.append(AudioContentType.MEDIA, AudioAttributes.CONTENT_TYPE_MUSIC);
+        // Note: ALARM uses the same as COMMUNICATON.
+        array.append(AudioContentType.ALARM, AudioAttributes.CONTENT_TYPE_SONIFICATION);
+        array.append(AudioContentType.COMMUNICATION, AudioAttributes.CONTENT_TYPE_SONIFICATION);
+        array.append(AudioContentType.OTHER, AudioAttributes.CONTENT_TYPE_SPEECH);
+        CAST_TYPE_TO_ANDROID_CONTENT_TYPE_MAP = array;
+    }
 
     // Hardcoded AudioTrack config parameters.
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_FLOAT;
@@ -252,8 +251,14 @@ class AudioSinkAudioTrackImpl {
     private static AudioSinkAudioTrackImpl create(long nativeAudioSinkAudioTrackImpl,
             @AudioContentType int castContentType, int channelCount, int sampleRateInHz,
             int bytesPerBuffer, int sessionId, boolean isApkAudio, boolean useHwAvSync) {
-        return new AudioSinkAudioTrackImpl(nativeAudioSinkAudioTrackImpl, castContentType,
-                channelCount, sampleRateInHz, bytesPerBuffer, sessionId, isApkAudio, useHwAvSync);
+        try {
+            return new AudioSinkAudioTrackImpl(nativeAudioSinkAudioTrackImpl, castContentType,
+                    channelCount, sampleRateInHz, bytesPerBuffer, sessionId, isApkAudio,
+                    useHwAvSync);
+        } catch (UnsupportedOperationException e) {
+            Log.e(TAG, "Failed to create audio sink track");
+            return null;
+        }
     }
 
     private AudioSinkAudioTrackImpl(long nativeAudioSinkAudioTrackImpl,
@@ -396,9 +401,13 @@ class AudioSinkAudioTrackImpl {
     @CalledByNative
     private void setVolume(float volume) {
         Log.i(mTag, "Setting volume to " + volume);
-        int ret = mAudioTrack.setVolume(volume);
-        if (ret != AudioTrack.SUCCESS) {
-            Log.e(mTag, "Cannot set volume: ret=" + ret);
+        try {
+            int ret = mAudioTrack.setVolume(volume);
+            if (ret != AudioTrack.SUCCESS) {
+                Log.e(mTag, "Cannot set volume: ret=" + ret);
+            }
+        } catch (IllegalArgumentException e) {
+            Log.e(mTag, "Cannot set volume", e);
         }
     }
 
@@ -466,11 +475,7 @@ class AudioSinkAudioTrackImpl {
     }
 
     int getUnderrunCount() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            return mAudioTrack.getUnderrunCount();
-        }
-        // Using pre-N API.
-        return 0;
+        return mAudioTrack.getUnderrunCount();
     }
 
     /**
@@ -624,15 +629,6 @@ class AudioSinkAudioTrackImpl {
             // Timestamp is resynced because of resuming, reuse the last valid stable rendering
             // delay before pausing.
             if (mRenderingDelayBuffer.getLong(8) != NO_TIMESTAMP) {
-                mRenderingDelayBuffer.putLong(8, nowUsecs);
-                return;
-            }
-            if (mUseHwAvSync) {
-                // Hw av sync stream uses the timestamp in the audio buffer instead
-                // of the reported rendering delay to do synchronization. Therefore
-                // it is safe to report zero rendering delay when it is not
-                // available.
-                mRenderingDelayBuffer.putLong(0, 0);
                 mRenderingDelayBuffer.putLong(8, nowUsecs);
                 return;
             }

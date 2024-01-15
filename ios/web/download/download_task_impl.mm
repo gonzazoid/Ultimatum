@@ -8,22 +8,17 @@
 
 #import <limits>
 
-#import "base/bind.h"
 #import "base/files/file.h"
 #import "base/files/file_util.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/task/bind_post_task.h"
 #import "base/task/sequenced_task_runner.h"
-#import "base/threading/sequenced_task_runner_handle.h"
 #import "ios/web/download/download_result.h"
 #import "ios/web/public/download/download_task_observer.h"
 #import "ios/web/public/web_state.h"
 #import "net/base/filename_util.h"
 #import "net/base/net_errors.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace download {
@@ -128,8 +123,7 @@ DownloadTaskImpl::DownloadTaskImpl(
   DCHECK(web_state_);
   DCHECK(task_runner_);
 
-  base::RepeatingClosure closure = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
+  base::RepeatingClosure closure = base::BindPostTaskToCurrentDefault(
       base::BindRepeating(&DownloadTaskImpl::OnAppWillResignActive,
                           weak_factory_.GetWeakPtr()));
 

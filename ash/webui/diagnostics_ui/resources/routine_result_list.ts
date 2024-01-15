@@ -6,7 +6,8 @@ import './diagnostics_card.js';
 import './diagnostics_shared.css.js';
 import './routine_result_entry.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {RoutineGroup} from './routine_group.js';
@@ -29,17 +30,17 @@ type ResultsType = RoutineGroup[]|ResultStatusItem[];
  */
 
 export class RoutineResultListElement extends PolymerElement {
-  static get is() {
+  static get is(): string {
     return 'routine-result-list';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
-      results_: {
+      results: {
         type: Array,
         value: () => [],
       },
@@ -74,7 +75,7 @@ export class RoutineResultListElement extends PolymerElement {
   hideVerticalLines: boolean;
   usingRoutineGroups: boolean;
   ignoreRoutineStatusUpdates: boolean;
-  private results_: ResultsType;
+  private results: ResultsType;
 
   /**
    * Resets the list and creates a new list with all routines in the unstarted
@@ -87,10 +88,10 @@ export class RoutineResultListElement extends PolymerElement {
       return;
     }
     if (this.usingRoutineGroups && isRoutineGroupArray(routines)) {
-      this.set('results_', routines);
+      this.set('results', routines);
     } else {
       assert(isRoutineTypeArray(routines));
-      this.addRoutines_(routines);
+      this.addRoutines(routines);
     }
   }
 
@@ -98,25 +99,25 @@ export class RoutineResultListElement extends PolymerElement {
    * Removes all the routines from the list.
    */
   clearRoutines(): void {
-    this.splice('results_', 0, this.results_.length);
+    this.splice('results', 0, this.results.length);
   }
 
   /**
    * Creates a list of unstarted routines.
    */
-  private addRoutines_(routines: RoutineType[]): void {
+  private addRoutines(routines: RoutineType[]): void {
     for (const routine of routines) {
-      this.push('results_', new ResultStatusItem(routine));
+      this.push('results', new ResultStatusItem(routine));
     }
   }
 
   /**
-   * Updates the routine's status in the results_ list.
+   * Updates the routine's status in the results list.
    */
-  private updateRoutineStatus_(
+  private updateRoutineStatus(
       index: number, status: RoutineGroup|ResultStatusItem): void {
-    assert(index < this.results_.length);
-    this.splice('results_', index, 1, status);
+    assert(index < this.results.length);
+    this.splice('results', index, 1, status);
   }
 
   /**
@@ -127,51 +128,51 @@ export class RoutineResultListElement extends PolymerElement {
     if (this.ignoreRoutineStatusUpdates) {
       return;
     }
-    assert(this.results_.length > 0);
-    this.results_.forEach(
+    assert(this.results.length > 0);
+    this.results.forEach(
         (result: RoutineGroup|ResultStatusItem, idx: number) => {
           if (result instanceof RoutineGroup &&
               result.routines.includes(status.routine)) {
             result.setStatus(status);
             const shouldUpdateRoutineUI = result.hasBlockingFailure();
             this.hideVerticalLines = shouldUpdateRoutineUI;
-            this.updateRoutineStatus_(idx, result.clone());
+            this.updateRoutineStatus(idx, result.clone());
             // Whether we should skip the remaining routines (true when a
             // blocking routine fails) or not.
             if (shouldUpdateRoutineUI) {
               this.ignoreRoutineStatusUpdates = true;
-              this.updateRoutineUIAfterFailure();
+              this.updateRoutineUiAfterFailure();
             }
             return;
           }
           if (result instanceof ResultStatusItem) {
             if (status.routine === result.routine) {
-              this.updateRoutineStatus_(idx, status);
+              this.updateRoutineStatus(idx, status);
               return;
             }
           }
         });
   }
 
-  protected shouldHideVerticalLines_({value}: {
+  protected shouldHideVerticalLines({value}: {
     value: RoutineGroup|ResultStatusItem,
   }): boolean {
     return this.hideVerticalLines ||
-        value === this.results_[this.results_.length - 1];
+        value === this.results[this.results.length - 1];
   }
 
   /**
    * When a test in a routine group fails, we stop sending status updates to the
    * UI and display 'SKIPPED' for the remaining routine groups.
    */
-  updateRoutineUIAfterFailure(): void {
+  updateRoutineUiAfterFailure(): void {
     assert(this.usingRoutineGroups);
-    this.results_.forEach(
+    this.results.forEach(
         (routineGroup: RoutineGroup|ResultStatusItem, i: number) => {
           assert(routineGroup instanceof RoutineGroup);
           if (routineGroup.progress === ExecutionProgress.NOT_STARTED) {
             routineGroup.progress = ExecutionProgress.SKIPPED;
-            this.updateRoutineStatus_(i, routineGroup.clone());
+            this.updateRoutineStatus(i, routineGroup.clone());
           }
         });
   }

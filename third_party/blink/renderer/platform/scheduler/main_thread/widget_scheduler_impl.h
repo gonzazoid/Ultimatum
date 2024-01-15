@@ -7,7 +7,9 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/widget_scheduler.h"
 
@@ -53,8 +55,10 @@ class PLATFORM_EXPORT WidgetSchedulerImpl : public WidgetScheduler {
   std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>
       input_task_queue_enabled_voter_;
 
-  MainThreadSchedulerImpl* const main_thread_scheduler_;
-  RenderWidgetSignals* const render_widget_signals_;
+  const raw_ptr<MainThreadSchedulerImpl, ExperimentalRenderer>
+      main_thread_scheduler_;
+  const raw_ptr<RenderWidgetSignals, ExperimentalRenderer>
+      render_widget_signals_;
   bool hidden_ = false;
   bool has_touch_handler_ = false;
 };

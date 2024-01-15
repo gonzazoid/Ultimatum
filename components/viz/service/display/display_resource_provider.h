@@ -28,7 +28,6 @@
 #include "components/viz/service/display/resource_fence.h"
 #include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/common/sync_token.h"
-#include "third_party/khronos/GLES2/gl2.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -88,16 +87,16 @@ class VIZ_SERVICE_EXPORT DisplayResourceProvider
   const gfx::Size GetResourceBackedSize(ResourceId id);
 
   bool IsResourceSoftwareBacked(ResourceId id);
-  // Return the format of the underlying buffer that can be used for scanout.
+  // Return the BufferFormat of the underlying buffer that can be used for
+  // scanout.
   gfx::BufferFormat GetBufferFormat(ResourceId id);
-  ResourceFormat GetResourceFormat(ResourceId id);
-  // Returns the color space that the resource needs to be interpreted in by the
-  // operating system.
-  const gfx::ColorSpace& GetOverlayColorSpace(ResourceId id);
-  // Returns the color space that samples of this resource in a shader will be
-  // in.
-  gfx::ColorSpace GetSamplerColorSpace(ResourceId id);
-  const absl::optional<gfx::HDRMetadata>& GetHDRMetadata(ResourceId id);
+  // Return the SharedImageFormat of the underlying buffer that can be used for
+  // scanout.
+  SharedImageFormat GetSharedImageFormat(ResourceId id);
+  // Returns the color space of the resource.
+  const gfx::ColorSpace& GetColorSpace(ResourceId id);
+
+  const gfx::HDRMetadata& GetHDRMetadata(ResourceId id);
 
   // Indicates if this resource may be used for a hardware overlay plane.
   bool IsOverlayCandidate(ResourceId id);

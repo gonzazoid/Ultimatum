@@ -6,7 +6,7 @@
 
 #include <sstream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -204,10 +204,11 @@ std::string BatchingMediaLog::MediaEventToMessageString(
       }
       return "";
     }
-    default:
-      NOTREACHED();
-      return "";
+    case media::MediaLogRecord::Type::kMediaPropertyChange:
+    case media::MediaLogRecord::Type::kMediaEventTriggered:
+      NOTREACHED_NORETURN();
   }
+  NOTREACHED_NORETURN();
 }
 
 void BatchingMediaLog::SendQueuedMediaEvents() {

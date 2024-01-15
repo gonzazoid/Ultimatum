@@ -27,6 +27,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SELECTION_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SELECTION_CONTROLLER_H_
 
+#include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
@@ -52,9 +53,10 @@ class CORE_EXPORT SelectionController final
   void Trace(Visitor*) const override;
 
   bool HandleMousePressEvent(const MouseEventWithHitTestResults&);
-  void HandleMouseDraggedEvent(const MouseEventWithHitTestResults&,
-                               const gfx::Point&,
-                               const PhysicalOffset&);
+  WebInputEventResult HandleMouseDraggedEvent(
+      const MouseEventWithHitTestResults&,
+      const gfx::Point&,
+      const PhysicalOffset&);
   bool HandleMouseReleaseEvent(const MouseEventWithHitTestResults&,
                                const PhysicalOffset&);
   bool HandlePasteGlobalSelection(const WebMouseEvent&);
@@ -63,7 +65,6 @@ class CORE_EXPORT SelectionController final
 
   void UpdateSelectionForMouseDrag(const PhysicalOffset&,
                                    const PhysicalOffset&);
-  void UpdateSelectionForMouseDrag(const HitTestResult&, const PhysicalOffset&);
   template <typename MouseEventObject>
   void UpdateSelectionForContextMenuEvent(const MouseEventObject* mouse_event,
                                           const HitTestResult& hit_test_result,
@@ -90,6 +91,9 @@ class CORE_EXPORT SelectionController final
   };
 
   Document& GetDocument() const;
+
+  WebInputEventResult UpdateSelectionForMouseDrag(const HitTestResult&,
+                                                  const PhysicalOffset&);
 
   // Returns |true| if a word was selected.
   bool SelectClosestWordFromHitTestResult(const HitTestResult&,
@@ -129,6 +133,8 @@ class CORE_EXPORT SelectionController final
   bool HandleDoubleClick(const MouseEventWithHitTestResults&);
   bool HandleTripleClick(const MouseEventWithHitTestResults&);
 
+  void HandleTapOnCaret(const MouseEventWithHitTestResults&,
+                        const SelectionInFlatTree&);
   bool HandleTapInsideSelection(const MouseEventWithHitTestResults&,
                                 const SelectionInFlatTree&);
 
@@ -136,6 +142,7 @@ class CORE_EXPORT SelectionController final
   // Used to store base before the adjustment at bidi boundary
   PositionInFlatTreeWithAffinity original_base_in_flat_tree_;
   bool mouse_down_may_start_select_;
+  bool mouse_down_was_single_click_on_caret_ = false;
   bool mouse_down_was_single_click_in_selection_;
   bool mouse_down_allows_multi_click_;
   enum class SelectionState {
@@ -152,7 +159,6 @@ CORE_EXPORT SelectionInFlatTree
 AdjustSelectionWithTrailingWhitespace(const SelectionInFlatTree&);
 CORE_EXPORT SelectionInFlatTree
 AdjustSelectionByUserSelect(Node*, const SelectionInFlatTree&);
-
 }  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_SELECTION_CONTROLLER_H_

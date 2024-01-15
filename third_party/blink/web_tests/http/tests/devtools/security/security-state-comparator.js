@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SecurityTestRunner} from 'security_test_runner';
+
+import * as Security from 'devtools/panels/security/security.js';
+
 (async function() {
   TestRunner.addResult(`Tests that SecurityStateComparator correctly compares the severity of security states.\n`);
-  await TestRunner.loadTestModule('security_test_runner');
   await TestRunner.showPanel('security');
 
   var ordering = [
@@ -17,7 +21,7 @@
 
   for (var i = 0; i < ordering.length; i++) {
     TestRunner.assertEquals(
-        Security.SecurityModel.SecurityStateComparator(ordering[i], ordering[i]), 0,
+        Security.SecurityModel.SecurityModel.SecurityStateComparator(ordering[i], ordering[i]), 0,
         'Security state comparison failed when checking that "' + ordering[i] + '" == "' + ordering[i] + '"');
   }
 
@@ -27,17 +31,17 @@
     for (j = 0; j < i; j++) {
       TestRunner.addResult(
           'Sign of SecurityStateComparator("' + ordering[i] + '","' + ordering[j] + '"): ' +
-          Math.sign(Security.SecurityModel.SecurityStateComparator(ordering[i], ordering[j])) + ' (expected: 1)');
+          Math.sign(Security.SecurityModel.SecurityModel.SecurityStateComparator(ordering[i], ordering[j])) + ' (expected: 1)');
     }
 
     TestRunner.addResult(
         'Sign of SecurityStateComparator("' + ordering[i] + '","' + ordering[j] + '"): ' +
-        Math.sign(Security.SecurityModel.SecurityStateComparator(ordering[i], ordering[j])) + ' (expected: 0)');
+        Math.sign(Security.SecurityModel.SecurityModel.SecurityStateComparator(ordering[i], ordering[j])) + ' (expected: 0)');
 
     for (j = i + 1; j < ordering.length; j++) {
       TestRunner.addResult(
           'Sign of SecurityStateComparator("' + ordering[i] + '","' + ordering[j] + '"): ' +
-          Math.sign(Security.SecurityModel.SecurityStateComparator(ordering[i], ordering[j])) + ' (expected: -1)');
+          Math.sign(Security.SecurityModel.SecurityModel.SecurityStateComparator(ordering[i], ordering[j])) + ' (expected: -1)');
     }
   }
 

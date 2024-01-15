@@ -19,25 +19,32 @@
 
 namespace gl {
 
-class GLDisplayEGL;
+// Initialize direct composition with the given d3d11 device.
+GL_EXPORT void InitializeDirectComposition(
+    Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device);
 
-GL_EXPORT void InitializeDirectComposition(GLDisplayEGL* display);
 GL_EXPORT void ShutdownDirectComposition();
 
 // Retrieves the global direct composition device. InitializeDirectComposition
 // must be called on GPU process startup before the device is retrieved, and
 // ShutdownDirectComposition must be called at process shutdown.
-GL_EXPORT IDCompositionDevice2* GetDirectCompositionDevice();
+GL_EXPORT IDCompositionDevice3* GetDirectCompositionDevice();
+
+// Retrieves the global d3d11 device used by direct composition.
+// InitializeDirectComposition must be called on GPU process startup before the
+// device is retrieved, and ShutdownDirectComposition must be called at process
+// shutdown.
+GL_EXPORT ID3D11Device* GetDirectCompositionD3D11Device();
 
 // Returns true if direct composition is supported.  We prefer to use direct
 // composition even without hardware overlays, because it allows us to bypass
 // blitting by DWM to the window redirection surface by using a flip mode swap
-// chain.  Overridden with --disable-direct-composition.
+// chain.  Overridden with --disable_direct_composition=1.
 GL_EXPORT bool DirectCompositionSupported();
 
 // Returns true if video overlays are supported and should be used. Overridden
 // with --enable-direct-composition-video-overlays and
-// --disable-direct-composition-video-overlays. This function is thread safe.
+// --disable_direct_composition_video_overlays=1. This function is thread safe.
 GL_EXPORT bool DirectCompositionOverlaysSupported();
 
 // Returns true if hardware overlays are supported. This function is thread
@@ -48,18 +55,17 @@ GL_EXPORT bool DirectCompositionHardwareOverlaysSupported();
 // process' lifetime.
 GL_EXPORT void DisableDirectCompositionOverlays();
 
-// Similar to the above but disables software overlay support.
-GL_EXPORT void DisableDirectCompositionSoftwareOverlays();
-
 // Returns true if zero copy decode swap chain is supported.
 GL_EXPORT bool DirectCompositionDecodeSwapChainSupported();
-GL_EXPORT void DisableDirectCompositionDecodeSwapChain();
 
 // Returns true if scaled hardware overlays are supported.
 GL_EXPORT bool DirectCompositionScaledOverlaysSupported();
 
 // Returns preferred overlay format set when detecting overlay support.
 GL_EXPORT DXGI_FORMAT GetDirectCompositionSDROverlayFormat();
+
+// Returns true if video processor support handling the given format.
+GL_EXPORT bool CheckVideoProcessorFormatSupport(DXGI_FORMAT format);
 
 // Returns overlay support flags for the given format.
 // Caller should check for DXGI_OVERLAY_SUPPORT_FLAG_DIRECT and
@@ -73,8 +79,17 @@ GL_EXPORT bool DXGISwapChainTearingSupported();
 // Returns true if tearing should be used for dcomp root and video swap chains.
 GL_EXPORT bool DirectCompositionSwapChainTearingEnabled();
 
+// Returns true if waitable swap chain should be used to reduce display latency.
+GL_EXPORT bool DXGIWaitableSwapChainEnabled();
+
+// Returns the value passed to SetMaximumFrameLatency for waitable swap chains.
+GL_EXPORT UINT GetDXGIWaitableSwapChainMaxQueuedFrames();
+
 // Returns true if there is an HDR capable display connected.
 GL_EXPORT bool DirectCompositionSystemHDREnabled();
+
+// Returns true if the window is displayed on an HDR capable display.
+GL_EXPORT bool DirectCompositionMonitorHDREnabled(HWND window);
 
 // Returns the collected DXGI information.
 GL_EXPORT gfx::mojom::DXGIInfoPtr GetDirectCompositionHDRMonitorDXGIInfo();
@@ -84,6 +99,14 @@ GL_EXPORT gfx::mojom::DXGIInfoPtr GetDirectCompositionHDRMonitorDXGIInfo();
 GL_EXPORT void SetDirectCompositionSwapChainFailed();
 
 struct DirectCompositionOverlayWorkarounds {
+  // Whether software video overlays i.e. swap chains used without hardware
+  // overlay/MPO support are used or not.
+  bool disable_sw_video_overlays = false;
+
+  // Whether decode swap chains i.e. zero copy swap chains created from video
+  // decoder textures are used or not.
+  bool disable_decode_swap_chain = false;
+
   // On Intel GPUs where YUV overlays are supported, BGRA8 overlays are
   // supported as well but IDXGIOutput3::CheckOverlaySupport() returns
   // unsupported. So allow manually enabling BGRA8 overlay support.

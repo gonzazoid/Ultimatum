@@ -8,10 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/app/app.h"
+#include "chrome/updater/lock.h"
 #include "chrome/updater/splash_screen.h"
 
 namespace base {
@@ -58,9 +60,12 @@ class AppInstall : public App {
   ~AppInstall() override;
 
   // Overrides for App.
-  void Initialize() override;
-  void Uninitialize() override;
+  [[nodiscard]] int Initialize() override;
   void FirstTaskRun() override;
+
+  // Initializes or reinitializes `update_service_`. Reinitialization can be
+  // used to pick up a possible change to the active updater.
+  void CreateUpdateServiceProxy();
 
   // Called after the version of the active updater has been retrieved.
   void GetVersionDone(const base::Version& version);
@@ -68,8 +73,6 @@ class AppInstall : public App {
   void InstallCandidateDone(bool valid_version, int result);
 
   void WakeCandidate();
-
-  void WakeCandidateDone();
 
   void FetchPolicies();
 
@@ -81,6 +84,9 @@ class AppInstall : public App {
 
   // Bound to the main sequence.
   SEQUENCE_CHECKER(sequence_checker_);
+
+  // Inter-process lock taken by AppInstall, AppUninstall, and AppUpdate.
+  std::unique_ptr<ScopedLock> setup_lock_;
 
   // The `app_id_` is parsed from the tag, if the the tag is present, or from
   // the command line argument --app-id.

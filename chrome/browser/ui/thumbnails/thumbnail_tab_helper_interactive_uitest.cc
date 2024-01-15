@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/resource_coordinator/session_restore_policy.h"
+#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
+#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_source.h"
 #include "chrome/browser/sessions/tab_loader_tester.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -18,7 +22,6 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/test/browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_SESSION_SERVICE)
@@ -32,7 +35,7 @@ class ThumbnailWaiter {
   ThumbnailWaiter() = default;
   ~ThumbnailWaiter() = default;
 
-  absl::optional<gfx::ImageSkia> WaitForThumbnail(ThumbnailImage* thumbnail) {
+  std::optional<gfx::ImageSkia> WaitForThumbnail(ThumbnailImage* thumbnail) {
     std::unique_ptr<ThumbnailImage::Subscription> subscription =
         thumbnail->Subscribe();
     subscription->SetUncompressedImageCallback(base::BindRepeating(
@@ -50,7 +53,7 @@ class ThumbnailWaiter {
 
  private:
   base::RunLoop run_loop_;
-  absl::optional<gfx::ImageSkia> image_;
+  std::optional<gfx::ImageSkia> image_;
 };
 
 }  // anonymous namespace
@@ -124,7 +127,8 @@ class ThumbnailTabHelperInteractiveTest : public InProcessBrowserTest {
   }
 
   void WaitForAndVerifyThumbnail(Browser* browser, int tab_index) {
-    auto* const web_contents = browser->tab_strip_model()->GetWebContentsAt(1);
+    auto* const web_contents =
+        browser->tab_strip_model()->GetWebContentsAt(tab_index);
     auto* const thumbnail_tab_helper =
         ThumbnailTabHelper::FromWebContents(web_contents);
     auto thumbnail = thumbnail_tab_helper->thumbnail();
@@ -132,7 +136,7 @@ class ThumbnailTabHelperInteractiveTest : public InProcessBrowserTest {
         << " tab at index " << tab_index << " already has data.";
 
     ThumbnailWaiter waiter;
-    const absl::optional<gfx::ImageSkia> data =
+    const std::optional<gfx::ImageSkia> data =
         waiter.WaitForThumbnail(thumbnail.get());
     EXPECT_TRUE(thumbnail->has_data())
         << " tab at index " << tab_index << " thumbnail has no data.";
@@ -151,14 +155,13 @@ class ThumbnailTabHelperInteractiveTest : public InProcessBrowserTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-#if BUILDFLAG(IS_MAC) || defined(THREAD_SANITIZER) || \
+#if BUILDFLAG(IS_CHROMEOS) || defined(THREAD_SANITIZER) || \
     defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER)
-// TODO(crbug.com/1288117, crbug.com/1336124): Flakes on macOS and various
-// MSAN/TSAN/ASAN builders.
+// TODO(crbug.com/1399402) flakes on ChromeOS and MSAN/TSAN/ASAN builders.
 #define MAYBE_TabLoadTriggersScreenshot DISABLED_TabLoadTriggersScreenshot
 #else
 #define MAYBE_TabLoadTriggersScreenshot TabLoadTriggersScreenshot
-#endif  // BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 IN_PROC_BROWSER_TEST_F(ThumbnailTabHelperInteractiveTest,
                        MAYBE_TabLoadTriggersScreenshot) {
@@ -170,16 +173,51 @@ IN_PROC_BROWSER_TEST_F(ThumbnailTabHelperInteractiveTest,
   WaitForAndVerifyThumbnail(browser(), 1);
 }
 
+// TODO(crbug.com/1399402) flakes on ChromeOS and MSAN/TSAN/ASAN builders.
+#if BUILDFLAG(IS_CHROMEOS) || defined(MEMORY_SANITIZER)
+#define MAYBE_TabDiscardPreservesScreenshot \
+  DISABLED_TabDiscardPreservesScreenshot
+#else
+#define MAYBE_TabDiscardPreservesScreenshot TabDiscardPreservesScreenshot
+#endif  // BUILDFLAG(IS_CHROMEOS)
+IN_PROC_BROWSER_TEST_F(ThumbnailTabHelperInteractiveTest,
+                       MAYBE_TabDiscardPreservesScreenshot) {
+  ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url2_, WindowOpenDisposition::NEW_BACKGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_TAB);
+
+  DCHECK_EQ(2, browser()->tab_strip_model()->count());
+  WaitForAndVerifyThumbnail(browser(), 1);
+
+  content::WebContents* web_contents_to_discard =
+      browser()->tab_strip_model()->GetWebContentsAt(1);
+  resource_coordinator::TabLifecycleUnitSource::GetTabLifecycleUnitExternal(
+      web_contents_to_discard)
+      ->DiscardTab(mojom::LifecycleUnitDiscardReason::URGENT);
+
+  content::WebContents* new_web_contents =
+      browser()->tab_strip_model()->GetWebContentsAt(1);
+  EXPECT_NE(web_contents_to_discard, new_web_contents);
+  EXPECT_TRUE(new_web_contents->WasDiscarded());
+
+  auto* const thumbnail_tab_helper =
+      ThumbnailTabHelper::FromWebContents(new_web_contents);
+  EXPECT_TRUE(thumbnail_tab_helper);
+  auto thumbnail = thumbnail_tab_helper->thumbnail();
+  EXPECT_TRUE(thumbnail->has_data());
+}
+
 // TabLoader (used here) is available only when browser is built
 // with ENABLE_SESSION_SERVICE.
 #if BUILDFLAG(ENABLE_SESSION_SERVICE)
 
 // On browser restore, some tabs may not be loaded. Requesting a
 // thumbnail for one of these tabs should trigger load and capture.
-// TODO(crbug.com/1294473, crbug.com/1294473): Flaky on Mac and various
-// sanitizer builds.
-#if BUILDFLAG(IS_MAC) || defined(THREAD_SANITIZER) || \
-    defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER)
+// TODO(crbug.com/1399402): Flaky on Mac, ChromeOS,
+// and various sanitizer builds.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS) ||             \
+    defined(THREAD_SANITIZER) || defined(ADDRESS_SANITIZER) || \
+    defined(MEMORY_SANITIZER)
 #define MAYBE_CapturesRestoredTabWhenRequested \
   DISABLED_CapturesRestoredTabWhenRequested
 #else

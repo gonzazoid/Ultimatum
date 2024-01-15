@@ -26,9 +26,9 @@ import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_butto
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrFingerprintProgressArcElement} from 'chrome://resources/cr_elements/cr_fingerprint/cr_fingerprint_progress_arc.js';
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -131,11 +131,11 @@ export class SettingsSecurityKeysBioEnrollDialogElement extends
   override connectedCallback() {
     super.connectedCallback();
     this.$.dialog.showModal();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'security-keys-bio-enroll-error',
         (error: string, requiresPINChange = false) =>
             this.onError_(error, requiresPINChange));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'security-keys-bio-enroll-status',
         (response: SampleResponse) => this.onEnrollmentSample_(response));
     this.browserProxy_.startBioEnroll().then(([minPinLength]) => {
@@ -159,11 +159,11 @@ export class SettingsSecurityKeysBioEnrollDialogElement extends
     this.dialogPage_ = BioEnrollDialogPage.ERROR;
   }
 
-  private submitPIN_() {
+  private submitPin_() {
     // Disable the confirm button to prevent concurrent submissions.
     this.confirmButtonDisabled_ = true;
 
-    this.$.pin.trySubmit(pin => this.browserProxy_.providePIN(pin))
+    this.$.pin.trySubmit(pin => this.browserProxy_.providePin(pin))
         .then(
             () => {
               this.browserProxy_.getSensorInfo().then(sensorInfo => {
@@ -319,7 +319,7 @@ export class SettingsSecurityKeysBioEnrollDialogElement extends
   private confirmButtonClick_() {
     switch (this.dialogPage_) {
       case BioEnrollDialogPage.PIN_PROMPT:
-        this.submitPIN_();
+        this.submitPin_();
         break;
       case BioEnrollDialogPage.ENROLL:
         assert(!!this.recentEnrollmentId_.length);

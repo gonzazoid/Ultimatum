@@ -15,11 +15,11 @@ NS_ASSUME_NONNULL_BEGIN
 @class CWVAutofillController;
 @class CWVBackForwardList;
 @class CWVBackForwardListItem;
+@class CWVFindInPageController;
 @class CWVScriptCommand;
 @class CWVTranslationController;
 @class CWVWebViewConfiguration;
 @protocol CWVNavigationDelegate;
-@protocol CWVScriptCommandHandler;
 @protocol CWVUIDelegate;
 @class CWVSSLStatus;
 
@@ -121,6 +121,10 @@ CWV_EXPORT
 // The web view's autofill controller.
 @property(nonatomic, readonly) CWVAutofillController* autofillController;
 
+// The web view's find in page controller.
+@property(nonatomic, readonly)
+    CWVFindInPageController* findInPageController API_AVAILABLE(ios(16.0));
+
 // An equivalent of
 // https://developer.apple.com/documentation/webkit/wkwebview/1414977-backforwardlist
 @property(nonatomic, readonly, nonnull) CWVBackForwardList* backForwardList;
@@ -130,6 +134,10 @@ CWV_EXPORT
 // This class property setting should only be changed BEFORE any
 // CWVWebViewConfiguration instance is initialized.
 @property(nonatomic, class) BOOL chromeContextMenuEnabled;
+
+// Whether or not to enable debugging by Safari Web Inspector.
+// Defaults to NO.
+@property(nonatomic, class) BOOL webInspectorEnabled;
 
 // Set this to customize the underlying WKWebView's inputAccessoryView. Setting
 // to nil means to use the WKWebView's default inputAccessoryView instead.
@@ -218,38 +226,6 @@ CWV_EXPORT
 // Unlike WKWebView, this method supports HTTPBody.
 - (void)loadRequest:(NSURLRequest*)request;
 
-// Evaluates a JavaScript string.
-// The completion handler is invoked when script evaluation completes.
-//
-// Note that |javaScriptString| is wrapped with:
-//   if (<implementation defined>) { ... }
-// before evaluation, which causes some tricky side effect when you use |let| or
-// |const| in the script.
-//
-//   1. Variables defined with |let| or |const| at the top level of the script
-//      do NOT become a global variable. i.e., It is accessible neither from
-//      scripts in the page nor another call to
-//      -evaluateJavaScript:completionHandler:. Variables defined with |var|
-//      DOES become a global variable.
-//
-//   2. Variables defined with |let| or |const| at the top level are not
-//      accessible from top level functions, even in the same script. Variable
-//      defined with |var| doesn't have this issue either. e.g., evaluation of
-//      this script causes an error:
-//
-//        let a =  3;
-//        function f() {
-//          console.log(a);  // ReferenceError: Can't find variable: a
-//        }
-//        f();
-//
-// To workaround the issue, you can use |var| instead, or an explicit reference
-// to window.xxx. This is because |let| and |const| are scoped by braces while
-// |var| isn't, and due to tricky behavior of WebKit in non-strict mode.
-// DEPRECATED. Use `evaluateJavaScript:completion:` instead.
-- (void)evaluateJavaScript:(NSString*)javaScriptString
-         completionHandler:(void (^)(id, NSError*))completionHandler;
-
 // Evaluates a JavaScript string in the main frame of the page content world.
 // `completion` is invoked with the result of evaluating the script and a
 // boolean representing success (`YES`) or failure (`NO`) of the evaluation.
@@ -261,30 +237,10 @@ CWV_EXPORT
 - (void)evaluateJavaScript:(NSString*)javaScriptString
                 completion:(void (^)(id result, NSError* error))completion;
 
-// Registers a handler that will be called when a command matching
-// |commandPrefix| is received.
-//
-// Web pages can send a command by executing JavaScript like this:
-//   __gCrWeb.message.invokeOnHost(
-//       {'command': 'test.command1', 'key1':'value1', 'key2': 42});
-// And receive it by:
-//   [webView addScriptCommandHandler:handler commandPrefix:@"test"];
-//
-// Make sure to call -removeScriptCommandHandlerForCommandPrefix: with the same
-// prefix before deallocating a CWVWebView instance. Otherwise it causes an
-// assertion failure.
-//
-// This provides a similar functionarity to -[WKUserContentController
-// addScriptMessageHandler:name:].
-// DEPRECATED: Use `addMessageHandler:forCommand:` instead.
-- (void)addScriptCommandHandler:(id<CWVScriptCommandHandler>)handler
-                  commandPrefix:(NSString*)commandPrefix;
-
-// Removes the handler associated with |commandPrefix|.
-// DEPRECATED: Use `removeMessageHandlerForCommand:` instead.
-- (void)removeScriptCommandHandlerForCommandPrefix:(NSString*)commandPrefix;
-
-// Adds a message handler for messages sent from JavaScript.
+// DEPRECATED: Use `CWVUserContentController addMessageHandler:forCommand:`
+// instead.
+// Adds a message handler for messages sent from JavaScript from *any*
+// CWVWebView.
 // `handler` will be called each time a message is sent with the corresponding
 // value of `command`. To send messages from JavaScript, use the WebKit
 // message handler `CWVWebViewMessage` and provide values for the `command` and
@@ -304,6 +260,8 @@ CWV_EXPORT
 - (void)addMessageHandler:(void (^)(NSDictionary* payload))handler
                forCommand:(NSString*)command;
 
+// DEPRECATED: Use `CWVUserContentController removeMessageHandlerForCommand:`
+// instead.
 // Removes the message handler associated with `command` previously added with
 // `addMessageHandler:forCommand:`.
 - (void)removeMessageHandlerForCommand:(NSString*)command;

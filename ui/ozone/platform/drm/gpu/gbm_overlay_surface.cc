@@ -8,8 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_plane.h"
 #include "ui/ozone/platform/drm/gpu/drm_window_proxy.h"
@@ -21,16 +21,16 @@ namespace ui {
 GbmOverlaySurface::GbmOverlaySurface(std::unique_ptr<DrmWindowProxy> window)
     : window_(std::move(window)) {}
 
-GbmOverlaySurface::~GbmOverlaySurface() {}
+GbmOverlaySurface::~GbmOverlaySurface() = default;
 
-GbmOverlaySurface::Frame::Frame() {}
+GbmOverlaySurface::Frame::Frame() = default;
 
 GbmOverlaySurface::Frame::Frame(GbmOverlaySurface::Frame&& frame) = default;
 
 GbmOverlaySurface::Frame& GbmOverlaySurface::Frame::operator=(
     GbmOverlaySurface::Frame&& frame) = default;
 
-GbmOverlaySurface::Frame::~Frame() {}
+GbmOverlaySurface::Frame::~Frame() = default;
 
 void GbmOverlaySurface::SubmitFrame(std::vector<OverlayPlane> overlay_planes,
                                     SubmissionCallback submission_callback,
@@ -40,9 +40,9 @@ void GbmOverlaySurface::SubmitFrame(std::vector<OverlayPlane> overlay_planes,
   Frame unsubmitted_frame;
   unsubmitted_frame.overlay_planes.reserve(overlay_planes.size());
   for (auto& plane : overlay_planes) {
-    unsubmitted_frame.overlay_planes.push_back(ui::DrmOverlayPlane(
+    unsubmitted_frame.overlay_planes.emplace_back(
         static_cast<GbmPixmap*>(plane.pixmap.get())->framebuffer(),
-        plane.overlay_plane_data, std::move(plane.gpu_fence)));
+        plane.overlay_plane_data, std::move(plane.gpu_fence));
   }
   unsubmitted_frame.submission_callback = std::move(submission_callback);
   unsubmitted_frame.presentation_callback = std::move(presentation_callback);

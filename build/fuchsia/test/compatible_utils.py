@@ -3,21 +3,26 @@
 # found in the LICENSE file.
 """Functions used in both v1 and v2 scripts."""
 
+import json
 import os
-import re
-import subprocess
+import platform
+import stat
 
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Tuple
 
-
-# File indicating version of an image downloaded to the host
-_BUILD_ARGS = "buildargs.gn"
 
 _FILTER_DIR = 'testing/buildbot/filters'
+_SSH_KEYS = os.path.expanduser('~/.ssh/fuchsia_authorized_keys')
 
 
 class VersionNotFoundError(Exception):
     """Thrown when version info cannot be retrieved from device."""
+
+
+def get_ssh_keys() -> str:
+    """Returns path of Fuchsia ssh keys."""
+
+    return _SSH_KEYS
 
 
 def running_unattended() -> bool:
@@ -26,21 +31,29 @@ def running_unattended() -> bool:
     When running unattended, confirmation prompts and the like are suppressed.
     """
 
-    # Chromium tests only for the presence of the variable, so match that here.
-    return 'CHROME_HEADLESS' in os.environ
+    # TODO(crbug/1401387): Change to mixin based approach.
+    return 'SWARMING_SERVER' in os.environ
 
 
-def pave(image_dir: str, target_id: Optional[str])\
-        -> subprocess.CompletedProcess:
-    """"Pave a device using the pave script inside |image_dir|."""
+def get_host_arch() -> str:
+    """Retrieve CPU architecture of the host machine. """
+    host_arch = platform.machine()
+    # platform.machine() returns AMD64 on 64-bit Windows.
+    if host_arch in ['x86_64', 'AMD64']:
+        return 'x64'
+    if host_arch in ['aarch64', 'arm64']:
+        return 'arm64'
+    raise NotImplementedError('Unsupported host architecture: %s' % host_arch)
 
-    pave_command = [
-        os.path.join(image_dir, 'pave.sh'), '--authorized-keys',
-        os.path.expanduser('~/.ssh/fuchsia_authorized_keys'), '-1'
-    ]
-    if target_id:
-        pave_command.extend(['-n', target_id])
-    return subprocess.run(pave_command, check=True, text=True, timeout=300)
+
+def add_exec_to_file(file: str) -> None:
+    """Add execution bits to a file.
+
+    Args:
+        file: path to the file.
+    """
+    file_stat = os.stat(file)
+    os.chmod(file, file_stat.st_mode | stat.S_IXUSR)
 
 
 def parse_host_port(host_port_pair: str) -> Tuple[str, int]:
@@ -70,11 +83,35 @@ def get_ssh_prefix(host_port_pair: str) -> List[str]:
     """Get the prefix of a barebone ssh command."""
 
     ssh_addr, ssh_port = parse_host_port(host_port_pair)
-    return [
-        'ssh', '-F',
-        os.path.expanduser('~/.fuchsia/sshconfig'), ssh_addr, '-p',
-        str(ssh_port)
-    ]
+    sshconfig = os.path.join(os.path.dirname(__file__), 'sshconfig')
+    return ['ssh', '-F', sshconfig, ssh_addr, '-p', str(ssh_port)]
+
+
+def install_symbols(package_paths: Iterable[str],
+                    fuchsia_out_dir: str) -> None:
+    """Installs debug symbols for a package into the GDB-standard symbol
+    directory located in fuchsia_out_dir."""
+
+    symbol_root = os.path.join(fuchsia_out_dir, '.build-id')
+    for path in package_paths:
+        package_dir = os.path.dirname(path)
+        ids_txt_path = os.path.join(package_dir, 'ids.txt')
+        with open(ids_txt_path, 'r') as f:
+            for entry in f:
+                build_id, binary_relpath = entry.strip().split(' ')
+                binary_abspath = os.path.abspath(
+                    os.path.join(package_dir, binary_relpath))
+                symbol_dir = os.path.join(symbol_root, build_id[:2])
+                symbol_file = os.path.join(symbol_dir, build_id[2:] + '.debug')
+                if not os.path.exists(symbol_dir):
+                    os.makedirs(symbol_dir)
+
+                if os.path.islink(symbol_file) or os.path.exists(symbol_file):
+                    # Clobber the existing entry to ensure that the symlink's
+                    # target is up to date.
+                    os.unlink(symbol_file)
+                os.symlink(os.path.relpath(binary_abspath, symbol_dir),
+                           symbol_file)
 
 
 # TODO(crbug.com/1279803): Until one can send files to the device when running
@@ -88,32 +125,16 @@ def map_filter_file_to_package_file(filter_file: str) -> str:
     return '/pkg/' + filter_file[filter_file.index(_FILTER_DIR):]
 
 
+# TODO(crbug.com/1496426): Rename to get_product_version.
 def get_sdk_hash(system_image_dir: str) -> Tuple[str, str]:
     """Read version of hash in pre-installed package directory.
     Returns:
         Tuple of (product, version) of image to be installed.
-    Raises:
-        VersionNotFoundError: if contents of buildargs.gn cannot be found or the
-        version number cannot be extracted.
     """
 
-    # TODO(crbug.com/1261961): Stop processing buildargs.gn directly.
-    with open(os.path.join(system_image_dir, _BUILD_ARGS)) as f:
-        contents = f.readlines()
-    if not contents:
-        raise VersionNotFoundError('Could not retrieve %s' % _BUILD_ARGS)
-    version_key = 'build_info_version'
-    product_key = 'build_info_product'
-    info_keys = [product_key, version_key]
-    version_info = {}
-    for line in contents:
-        for key in info_keys:
-            match = re.match(r'%s = "(.*)"' % key, line)
-            if match:
-                version_info[key] = match.group(1)
-    if not (version_key in version_info and product_key in version_info):
-        raise VersionNotFoundError(
-            'Could not extract version info from %s. Contents: %s' %
-            (_BUILD_ARGS, contents))
-
-    return (version_info[product_key], version_info[version_key])
+    with open(os.path.join(system_image_dir,
+                           'product_bundle.json')) as product:
+        # The product_name in the json file does not match the name of the image
+        # flashed to the device.
+        return (os.path.basename(os.path.normpath(system_image_dir)),
+                json.load(product)['product_version'])

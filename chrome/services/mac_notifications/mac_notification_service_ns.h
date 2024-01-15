@@ -5,11 +5,16 @@
 #ifndef CHROME_SERVICES_MAC_NOTIFICATIONS_MAC_NOTIFICATION_SERVICE_NS_H_
 #define CHROME_SERVICES_MAC_NOTIFICATIONS_MAC_NOTIFICATION_SERVICE_NS_H_
 
-#include "base/mac/scoped_nsobject.h"
 #include "chrome/services/mac_notifications/public/mojom/mac_notifications.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+
+// This class implements the Chromium interface to a deprecated API. It is in
+// the process of being replaced, and warnings about its deprecation are not
+// helpful. https://crbug.com/1127306
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 @class AlertNSNotificationCenterDelegate;
 @class NSUserNotificationCenter;
@@ -32,18 +37,22 @@ class MacNotificationServiceNS : public mojom::MacNotificationService {
   void DisplayNotification(mojom::NotificationPtr notification) override;
   void GetDisplayedNotifications(
       mojom::ProfileIdentifierPtr profile,
+      const absl::optional<GURL>& origin,
       GetDisplayedNotificationsCallback callback) override;
   void CloseNotification(mojom::NotificationIdentifierPtr identifier) override;
   void CloseNotificationsForProfile(
       mojom::ProfileIdentifierPtr profile) override;
   void CloseAllNotifications() override;
+  void OkayToTerminateService(OkayToTerminateServiceCallback callback) override;
 
  private:
   mojo::Receiver<mojom::MacNotificationService> binding_;
-  base::scoped_nsobject<AlertNSNotificationCenterDelegate> delegate_;
-  base::scoped_nsobject<NSUserNotificationCenter> notification_center_;
+  AlertNSNotificationCenterDelegate* __strong delegate_;
+  NSUserNotificationCenter* __strong notification_center_;
 };
 
 }  // namespace mac_notifications
+
+#pragma clang diagnostic pop
 
 #endif  // CHROME_SERVICES_MAC_NOTIFICATIONS_MAC_NOTIFICATION_SERVICE_NS_H_

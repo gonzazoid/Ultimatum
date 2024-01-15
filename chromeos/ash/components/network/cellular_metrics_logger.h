@@ -5,25 +5,28 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_METRICS_LOGGER_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_METRICS_LOGGER_H_
 
+#include <optional>
+
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/timer/timer.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
 class CellularESimProfileHandler;
 class CellularMetricsLoggerTest;
 class ESimFeatureUsageMetrics;
+class EnterpriseESimFeatureUsageMetrics;
 class NetworkConnectionHandler;
 class NetworkState;
 
@@ -61,8 +64,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
   static const char kUnmanagedSimPinUnlockSuccessHistogram[];
   static const char kUnrestrictedSimPinUnblockSuccessHistogram[];
   static const char kUnrestrictedSimPinUnlockSuccessHistogram[];
-  static const char kSimPinLockPolicyChangePinSuccessHistogram[];
-  static const char kSimPinLockPolicyRequirePinSuccessHistogram[];
+  static const char kChangePinSuccessSimPinLockPolicyHistogram[];
+  static const char kRequirePinSuccessSimPinLockPolicyHistogram[];
 
   // Histograms associated with user initiated connection success.
   static const char kESimUserInitiatedConnectionResultHistogram[];
@@ -107,14 +110,15 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
     kPinLocked = 0,
     kPukLocked = 1,
     kUnlocked = 2,
-    kMaxValue = kUnlocked
+    kCarrierLocked = 3,
+    kMaxValue = kCarrierLocked
   };
 
   // Records the result of pin operations performed.
   static void RecordSimPinOperationResult(
       const SimPinOperation& pin_operation,
       const bool allow_cellular_sim_lock,
-      const absl::optional<std::string>& shill_error_name = absl::nullopt);
+      const std::optional<std::string>& shill_error_name = std::nullopt);
 
   // Records the SIM lock notification event.
   static void RecordSimLockNotificationEvent(
@@ -192,15 +196,15 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
                    bool is_connecting);
     ~ConnectionInfo();
     const std::string network_guid;
-    absl::optional<bool> is_connected;
+    std::optional<bool> is_connected;
     bool is_connecting = false;
     // Tracks whether a disconnect was requested from chrome on a network that
     // was previously in the connecting state. This field is set back to false
     // when shill connection failures are checked in
     // NetworkConnectionStateChanged().
     bool disconnect_requested = false;
-    absl::optional<base::TimeTicks> last_disconnect_request_time;
-    absl::optional<base::TimeTicks> last_connect_start_time;
+    std::optional<base::TimeTicks> last_disconnect_request_time;
+    std::optional<base::TimeTicks> last_connect_start_time;
   };
 
   // Usage type for cellular network. These values are persisted to logs.
@@ -225,7 +229,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
     kMaxValue = kUnknown
   };
 
-  // Profile status for ESim cellular network.
+  // Profile status for eSIM cellular network.
   // These values are persisted to logs. Entries should not be renumbered
   // and numeric values should never be reused.
   enum class ESimProfileStatus {
@@ -261,7 +265,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
     kErrorPinRequired = 7,
     kErrorTimeout = 8,
     kErrorUnknown = 9,
-    kMaxValue = kErrorUnknown,
+    kErrorWrongState = 10,
+    kMaxValue = kErrorWrongState,
   };
 
   // This enum is used to track the connection results from
@@ -281,7 +286,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
     kCellularInhibitFailure = 7,
     kESimProfileIssue = 8,
     kCellularOutOfCredits = 9,
-    kSimLocked = 10,
+    kSimPinPukLocked = 10,
     kConnectFailed = 11,
     kNotConnected = 12,
     kActivateFailed = 13,
@@ -289,7 +294,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
     kErrorCellularDeviceBusy = 15,
     kErrorConnectTimeout = 16,
     kConnectableCellularTimeout = 17,
-    kMaxValue = kConnectableCellularTimeout,
+    kSimCarrierLocked = 18,
+    kMaxValue = kSimCarrierLocked,
   };
 
   // Result of state changes to a cellular network triggered by any connection
@@ -313,9 +319,10 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
     kTooManySTAs = 13,
     kBadPassphrase = 14,
     kBadWepKey = 15,
-    kErrorSimLocked = 16,
+    kErrorSimPinPukLocked = 16,
     kErrorNotRegistered = 17,
-    kMaxValue = kErrorNotRegistered,
+    kErrorSimCarrierLocked = 18,
+    kMaxValue = kErrorSimCarrierLocked,
   };
 
   // Convert shill error name string to SimPinOperationResult enum.
@@ -371,7 +378,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
   // if |is_psim_activation_state_logged_| is false.
   void CheckForPSimActivationStateMetric();
 
-  // Tracks the activation state of ESim cellular networks if available and
+  // Tracks the activation state of eSIM cellular networks if available and
   // if |is_esim_profile_status_logged_| is false.
   void CheckForESimProfileStatusMetric();
 
@@ -387,46 +394,47 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
   // networks are available on the device if |is_service_count_logged_| is true.
   void CheckForCellularServiceCountMetric();
 
-  // Handles ESim Standard Feature Usage Logging metrics when the cellular usage
-  // changes for an ESim network.
+  // Handles eSIM Standard Feature Usage Logging metrics when the cellular usage
+  // changes for an eSIM network.
   void HandleESimFeatureUsageChange(CellularUsage last_esim_cellular_usage,
-                                    CellularUsage current_usage);
+                                    CellularUsage current_usage,
+                                    bool is_managed_by_policy);
 
   // Returns the ConnectionInfo for given |cellular_network_guid|.
   ConnectionInfo* GetConnectionInfoForCellularNetwork(
       const std::string& cellular_network_guid);
 
   // Tracks the last cellular network usage state.
-  absl::optional<CellularUsage> last_cellular_usage_;
+  std::optional<CellularUsage> last_cellular_usage_;
 
   // Tracks the last PSim cellular network usage state.
-  absl::optional<CellularUsage> last_psim_cellular_usage_;
+  std::optional<CellularUsage> last_psim_cellular_usage_;
 
   // Tracks the last time the PSim network's cellular usage changed.
-  absl::optional<base::ElapsedTimer> psim_usage_elapsed_timer_;
+  std::optional<base::ElapsedTimer> psim_usage_elapsed_timer_;
 
-  // Tracks the last ESim cellular network usage state.
-  absl::optional<CellularUsage> last_esim_cellular_usage_;
+  // Tracks the last eSIM cellular network usage state.
+  std::optional<CellularUsage> last_esim_cellular_usage_;
 
-  // Tracks the last time ESim network's cellular usage is managed or not.
+  // Tracks the last time eSIM network's cellular usage is managed or not.
   bool last_managed_by_policy_ = false;
 
-  // Tracks the last time the ESim network's cellular usage changed.
-  absl::optional<base::ElapsedTimer> esim_usage_elapsed_timer_;
+  // Tracks the last time the eSIM network's cellular usage changed.
+  std::optional<base::ElapsedTimer> esim_usage_elapsed_timer_;
 
   // Tracks whether cellular device is available or not.
   bool is_cellular_available_ = false;
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
   base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
-  ManagedNetworkConfigurationHandler* managed_network_configuration_handler_ =
-      nullptr;
+  raw_ptr<ManagedNetworkConfigurationHandler>
+      managed_network_configuration_handler_ = nullptr;
 
-  NetworkConnectionHandler* network_connection_handler_ = nullptr;
+  raw_ptr<NetworkConnectionHandler> network_connection_handler_ = nullptr;
 
-  CellularESimProfileHandler* cellular_esim_profile_handler_ = nullptr;
+  raw_ptr<CellularESimProfileHandler> cellular_esim_profile_handler_ = nullptr;
 
   // A timer to wait for cellular initialization. This is useful
   // to avoid tracking intermediate states when cellular network is
@@ -440,7 +448,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
   // session.
   bool is_psim_activation_state_logged_ = false;
 
-  // Tracks whether the ESim profile status is already logged for this
+  // Tracks whether the eSIM profile status is already logged for this
   // session.
   bool is_esim_profile_status_logged_ = false;
 
@@ -453,8 +461,13 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularMetricsLogger
 
   bool initialized_ = false;
 
-  // Tracks ESim feature usage for the Standard Feature Usage Logging Framework.
+  // Tracks eSIM feature usage for the Standard Feature Usage Logging Framework.
   std::unique_ptr<ESimFeatureUsageMetrics> esim_feature_usage_metrics_;
+
+  // Tracks enterprise eSIM feature usage for the Standard Feature Usage Logging
+  // Framework.
+  std::unique_ptr<EnterpriseESimFeatureUsageMetrics>
+      enterprise_esim_feature_usage_metrics_;
 };
 
 }  // namespace ash

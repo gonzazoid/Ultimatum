@@ -5,6 +5,7 @@
 import("//build/config/linux/gtk/gtk.gni")
 import("//build/config/ozone.gni")
 import("//build/config/ui.gni")
+import("//testing/libfuzzer/fuzzer_test.gni")
 
 assert(ozone_platform_x11)
 
@@ -16,8 +17,6 @@ component("x") {
     "selection_requestor.h",
     "selection_utils.cc",
     "selection_utils.h",
-    "visual_picker_glx.cc",
-    "visual_picker_glx.h",
     "x11_clipboard_helper.cc",
     "x11_clipboard_helper.h",
     "x11_cursor.cc",
@@ -36,8 +35,6 @@ component("x") {
     "x11_global_shortcut_listener.h",
     "x11_idle_query.cc",
     "x11_idle_query.h",
-    "x11_keyboard_hook.cc",
-    "x11_keyboard_hook.h",
     "x11_move_loop.h",
     "x11_move_loop_delegate.h",
     "x11_pointer_grab.cc",
@@ -60,6 +57,8 @@ component("x") {
     "x11_xrandr_interval_only_vsync_provider.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   defines = [ "IS_UI_BASE_X_IMPL" ]
 
   public_deps = [
@@ -70,6 +69,7 @@ component("x") {
     "//base",
     "//base:i18n",
     "//build:chromeos_buildflags",
+    "//components/device_event_log",
     "//net",
     "//skia",
     "//ui/base:data_exchange",
@@ -121,7 +121,10 @@ source_set("gl") {
     "x11_gl_egl_utility.h",
   ]
 
-  configs += [ "//third_party/khronos:khronos_headers" ]
+  configs += [
+    "//build/config/compiler:wexit_time_destructors",
+    "//third_party/khronos:khronos_headers",
+  ]
   deps = [
     ":x",
     "//base",
@@ -157,6 +160,7 @@ source_set("unittests") {
     "selection_requestor_unittest.cc",
     "x11_cursor_factory_unittest.cc",
     "x11_cursor_loader_unittest.cc",
+    "x11_display_util_unittest.cc",
   ]
   deps = [
     ":x",
@@ -168,5 +172,13 @@ source_set("unittests") {
     "//ui/base/cursor/mojom:cursor_type_shared",
     "//ui/gfx/geometry",
     "//ui/gfx/x",
+  ]
+}
+
+fuzzer_test("ui_x11_cursor_loader_fuzzer") {
+  sources = [ "x11_cursor_loader_fuzzer.cc" ]
+  deps = [
+    ":x",
+    "//base",
   ]
 }

@@ -5,15 +5,11 @@
 #import "ios/chrome/browser/ui/settings/cells/copied_to_chrome_item.h"
 
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -31,7 +27,7 @@ TEST_F(CopiedToChromeItemTest, InitializeCell) {
               copiedToChromeCell.textLabel.text);
 
   NSString* buttonText =
-      l10n_util::GetNSString(IDS_AUTOFILL_CLEAR_LOCAL_COPY_BUTTON);
+      l10n_util::GetNSString(IDS_AUTOFILL_REMOVE_LOCAL_COPY_BUTTON);
   EXPECT_NSEQ(buttonText,
               [copiedToChromeCell.button titleForState:UIControlStateNormal]);
 }

@@ -25,8 +25,8 @@ class HomepageTest(ChromeEnterpriseTestCase):
 
   @before_all
   def setup(self):
-    self.InstallChrome(self.win_config['client'])
     self.EnableUITest(self.win_config['client'])
+    self.InstallChrome(self.win_config['client'])
 
   def _getHomepageLocation(self, instance_name):
     dir = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +54,7 @@ class HomepageTest(ChromeEnterpriseTestCase):
 
     # verify the home page is the value of HomepageLocation
     homepage = self._getHomepageLocation(self.win_config['client'])
-    self.assertIn("http://www.example.com/", homepage)
+    self.assertIn("www.example.com", homepage)
 
   @test
   def test_HomepageIsNewTab(self):

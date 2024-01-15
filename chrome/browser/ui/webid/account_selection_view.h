@@ -7,10 +7,12 @@
 
 #include <memory>
 #include "base/memory/raw_ptr.h"
+#include "content/public/browser/identity_request_account.h"
 #include "content/public/browser/identity_request_dialog_controller.h"
 #include "ui/gfx/native_widget_types.h"
 
 using Account = content::IdentityRequestAccount;
+using TokenError = content::IdentityCredentialTokenError;
 
 // This class represents the interface used for communicating between the
 // identity dialog controller with the Android frontend.
@@ -27,6 +29,8 @@ class AccountSelectionView {
     virtual void OnDismiss(
         content::IdentityRequestDialogController::DismissReason
             dismiss_reason) = 0;
+    virtual void OnLoginToIdP(const GURL& idp_login_url) = 0;
+    virtual void OnMoreDetails() = 0;
     // The web page view containing the focused field.
     virtual gfx::NativeView GetNativeView() = 0;
     // The WebContents for the page.
@@ -49,25 +53,45 @@ class AccountSelectionView {
   virtual ~AccountSelectionView() = default;
 
   // Instructs the view to show the provided accounts to the user.
-  // `rp_for_display` is the relying party URL to display in the prompt. All
-  // IDP-specific information, including user accounts, is stored in
-  // `idps_for_display`. `sign_in_mode` represents whether this is an auto sign
-  // in flow. After user interaction either OnAccountSelected() or OnDismiss()
-  // gets invoked. If `iframe_url_for_display` is not absl::nullopt, it is the
-  // iframe within the relying party that needs to be displayed in the prompt.
+  // `top_frame_for_display` is the relying party's top frame URL and
+  // `iframe_for_display` is the relying party's iframe URL to display in
+  // the prompt. All IDP-specific information, including user accounts, is
+  // stored in `idps_for_display`. `sign_in_mode` represents whether this is an
+  // auto re-authn flow. If it is the auto re-authn flow, `idps_for_display`
+  // will only include the single returning account and its IDP.
+  // `show_auto_reauthn_checkbox` represents whether we should show a checkbox
+  // for users to opt out of auto re-authn. After user interaction either
+  // OnAccountSelected() or OnDismiss() gets invoked.
   virtual void Show(
-      const std::string& rp_for_display,
-      const absl::optional<std::string>& iframe_url_for_display,
+      const std::string& top_frame_for_display,
+      const std::optional<std::string>& iframe_for_display,
       const std::vector<content::IdentityProviderData>& identity_provider_data,
-      Account::SignInMode sign_in_mode) = 0;
+      Account::SignInMode sign_in_mode,
+      bool show_auto_reauthn_checkbox) = 0;
 
   // Shows a failure UI when the accounts fetch is failed such that it is
   // observable by users. This could happen when an IDP claims that the user is
   // signed in but not respond with any user account during browser fetches.
   virtual void ShowFailureDialog(
-      const std::string& rp_for_display,
+      const std::string& top_frame_for_display,
+      const std::optional<std::string>& iframe_for_display,
       const std::string& idp_for_display,
-      const absl::optional<std::string>& iframe_url_for_display) = 0;
+      const blink::mojom::RpContext& rp_context,
+      const content::IdentityProviderMetadata& idp_metadata) = 0;
+
+  virtual void ShowErrorDialog(
+      const std::string& top_frame_for_display,
+      const std::optional<std::string>& iframe_for_display,
+      const std::string& idp_for_display,
+      const blink::mojom::RpContext& rp_context,
+      const content::IdentityProviderMetadata& idp_metadata,
+      const std::optional<TokenError>& error) = 0;
+
+  virtual std::string GetTitle() const = 0;
+  virtual std::optional<std::string> GetSubtitle() const = 0;
+
+  virtual content::WebContents* ShowModalDialog(const GURL& url) = 0;
+  virtual void CloseModalDialog() = 0;
 
  protected:
   raw_ptr<Delegate> delegate_ = nullptr;

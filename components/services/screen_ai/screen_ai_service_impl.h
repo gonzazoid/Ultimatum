@@ -5,143 +5,128 @@
 #ifndef COMPONENTS_SERVICES_SCREEN_AI_SCREEN_AI_SERVICE_IMPL_H_
 #define COMPONENTS_SERVICES_SCREEN_AI_SCREEN_AI_SERVICE_IMPL_H_
 
-#include "base/callback.h"
+#include <string>
+
+#include "base/containers/flat_map.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
-#include "base/scoped_native_library.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
+#include "components/services/screen_ai/public/mojom/screen_ai_factory.mojom.h"
 #include "components/services/screen_ai/public/mojom/screen_ai_service.mojom.h"
+#include "components/services/screen_ai/screen_ai_library_wrapper.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
+
+namespace ukm {
+class UkmRecorder;
+}
 
 namespace screen_ai {
 
-using AnnotationCallback = base::OnceCallback<void(const ui::AXTreeID&)>;
-using ContentExtractionCallback =
-    base::OnceCallback<void(const std::vector<int32_t>&)>;
-
-// Defines and keeps pointers to ScreenAI library functions.
-class LibraryFunctions {
- public:
-  LibraryFunctions() = default;
-  LibraryFunctions(const LibraryFunctions&) = delete;
-  LibraryFunctions& operator=(const LibraryFunctions&) = delete;
-  ~LibraryFunctions() = default;
-
-  void LoadFunctions(base::ScopedNativeLibrary& library);
-
-#if !BUILDFLAG(IS_WIN)
-  // Initializes the pipeline for layout extraction and OCR.
-  // |models_folder| is a null terminated string pointing to the
-  // folder that includes model files for layout extraction and OCR.
-  // TODO(http://crbug.com/1278249): Replace |models_folder| with file
-  // handle(s).
-  typedef bool (*InitVisualAnnotations)(const char* /*models_folder*/);
-  InitVisualAnnotations init_visual_annotation_ = nullptr;
-
-  // Sends the given bitmap to ScreenAI pipeline and returns visual
-  // annotations. The annotations will be returned as a serialized
-  // VisualAnnotation proto. `serialized_visual_annotation` will be allocated
-  // for the output and the ownership of the buffer will be passed to the
-  // caller function.
-  typedef bool (*Annotate)(const SkBitmap& /*bitmap*/,
-                           char*& /*serialized_visual_annotation*/,
-                           uint32_t& /*serialized_visual_annotation_length*/);
-  Annotate annotate_ = nullptr;
-#endif
-
-  // Initializes the pipeline for main content extraction.
-  // |model_config| and |model_tflite| pass content of the required files to
-  // initialize Screen2x engine.
-  typedef bool (*InitMainContentExtraction)(const char* model_config,
-                                            uint32_t model_config_length,
-                                            const char* model_tflite,
-                                            uint32_t model_tflite_length);
-  InitMainContentExtraction init_main_content_extraction_ = nullptr;
-
-  // Passes the given accessibility tree proto to Screen2x pipeline and
-  // returns the main content ids. The input is in form of a serialized
-  // ViewHierarchy proto. `content_node_ids` will be allocated for the outputs
-  // and the ownership of the array will be passed to the caller function.
-  typedef bool (*ExtractMainContent)(
-      const char* /*serialized_view_hierarchy*/,
-      uint32_t /*serialized_view_hierarchy_length*/,
-      int32_t*& /*&content_node_ids*/,
-      uint32_t& /*content_node_ids_length*/);
-  ExtractMainContent extract_main_content_ = nullptr;
-
-  // Enables the debug mode which stores all i/o protos in the temp folder.
-  typedef void (*EnableDebugMode)();
-  EnableDebugMode enable_debug_mode_ = nullptr;
-
-  // Gets the library version number.
-  typedef void (*GetLibraryVersion)(char*& version_string);
-  GetLibraryVersion get_library_version_ = nullptr;
-};
+class PreloadedModelData;
 
 // Uses a local machine intelligence library to augment the accessibility
 // tree. Functionalities include extracting layout and running OCR on passed
 // snapshots and extracting the main content of a page.
 // See more in: google3/chrome/chromeos/accessibility/machine_intelligence/
 // chrome_screen_ai/README.md
-class ScreenAIService : public mojom::ScreenAIService,
+class ScreenAIService : public mojom::ScreenAIServiceFactory,
+                        public mojom::OCRService,
+                        public mojom::MainContentExtractionService,
                         public mojom::ScreenAIAnnotator,
                         public mojom::Screen2xMainContentExtractor {
  public:
   explicit ScreenAIService(
-      mojo::PendingReceiver<mojom::ScreenAIService> receiver);
+      mojo::PendingReceiver<mojom::ScreenAIServiceFactory> receiver);
   ScreenAIService(const ScreenAIService&) = delete;
   ScreenAIService& operator=(const ScreenAIService&) = delete;
   ~ScreenAIService() override;
 
+  static void RecordMetrics(ukm::SourceId ukm_source_id,
+                            ukm::UkmRecorder* ukm_recorder,
+                            base::TimeDelta elapsed_time,
+                            bool success);
+
  private:
-  base::ScopedNativeLibrary library_;
-  LibraryFunctions library_functions_;
+  std::unique_ptr<ScreenAILibraryWrapper> library_;
+
+  void LoadLibrary(const base::FilePath& library_path);
 
   // mojom::ScreenAIAnnotator:
-  void Annotate(const SkBitmap& image,
-                const ui::AXTreeID& parent_tree_id,
-                AnnotationCallback callback) override;
+  void ExtractSemanticLayout(const SkBitmap& image,
+                             const ui::AXTreeID& parent_tree_id,
+                             ExtractSemanticLayoutCallback callback) override;
+
+  // mojom::ScreenAIAnnotator:
+  void PerformOcrAndReturnAXTreeUpdate(
+      const SkBitmap& image,
+      PerformOcrAndReturnAXTreeUpdateCallback callback) override;
+
+  // mojom::ScreenAIAnnotator:
+  void PerformOcrAndReturnAnnotation(
+      const SkBitmap& image,
+      PerformOcrAndReturnAnnotationCallback callback) override;
 
   // mojom::Screen2xMainContentExtractor:
   void ExtractMainContent(const ui::AXTreeUpdate& snapshot,
-                          ContentExtractionCallback callback) override;
+                          ukm::SourceId ukm_source_id,
+                          ExtractMainContentCallback callback) override;
 
-  // mojom::ScreenAIService:
-  void LoadLibrary(base::File model_config,
-                   base::File model_tflite,
-                   const base::FilePath& library_path) override;
+  // mojom::ScreenAIServiceFactory:
+  void InitializeMainContentExtraction(
+      const base::FilePath& library_path,
+      base::flat_map<base::FilePath, base::File> model_files,
+      mojo::PendingReceiver<mojom::MainContentExtractionService>
+          main_content_extractor_service_receiver,
+      InitializeMainContentExtractionCallback callback) override;
 
-  // mojom::ScreenAIService:
+  // mojom::ScreenAIServiceFactory:
+  void InitializeOCR(
+      const base::FilePath& library_path,
+      base::flat_map<base::FilePath, base::File> model_files,
+      mojo::PendingReceiver<mojom::OCRService> ocr_service_receiver,
+      InitializeOCRCallback callback) override;
+
+  // mojom::OCRService:
   void BindAnnotator(
       mojo::PendingReceiver<mojom::ScreenAIAnnotator> annotator) override;
 
-  // mojom::ScreenAIService:
+  // mojom::OCRService:
   void BindAnnotatorClient(mojo::PendingRemote<mojom::ScreenAIAnnotatorClient>
                                annotator_client) override;
 
-  // mojom::ScreenAIService:
+  // mojom::MainContentExtractionService:
   void BindMainContentExtractor(
       mojo::PendingReceiver<mojom::Screen2xMainContentExtractor>
           main_content_extractor) override;
 
-  // Library function calls are isloated to have specific compiler directives.
-  bool CallInitVisualAnnotationsFunction(const base::FilePath& models_folder);
-  bool CallInitMainContentExtractionFunction(base::File& model_config_file,
-                                             base::File& model_tflite_file);
-  void CallEnableDebugMode();
-  bool CallLibraryAnnotateFunction(const SkBitmap& image,
-                                   char*& annotation_proto,
-                                   uint32_t& annotation_proto_length);
-  bool CallLibraryExtractMainContentFunction(
-      const char* serialized_snapshot,
-      const uint32_t serialized_snapshot_length,
-      int32_t*& node_ids,
-      uint32_t& nodes_count);
+  void InitializeMainContentExtractionInternal(
+      mojo::PendingReceiver<mojom::MainContentExtractionService>
+          main_content_extractor_service_receiver,
+      InitializeMainContentExtractionCallback callback,
+      std::unique_ptr<PreloadedModelData> model_data);
 
-  mojo::Receiver<mojom::ScreenAIService> receiver_;
+  void InitializeOCRInternal(
+      mojo::PendingReceiver<mojom::OCRService> ocr_service_receiver,
+      InitializeOCRCallback callback,
+      std::unique_ptr<PreloadedModelData> model_data);
+
+  // Wrapper to call `PerformOcr` library function and record metrics.
+  absl::optional<chrome_screen_ai::VisualAnnotation> PerformOcrAndRecordMetrics(
+      const SkBitmap& image,
+      bool a11y_tree_request);
+
+  mojo::Receiver<mojom::ScreenAIServiceFactory> factory_receiver_;
+  mojo::Receiver<mojom::OCRService> ocr_receiver_;
+  mojo::Receiver<mojom::MainContentExtractionService>
+      main_content_extraction_receiver_;
 
   // The set of receivers used to receive messages from annotators.
   mojo::ReceiverSet<mojom::ScreenAIAnnotator> screen_ai_annotators_;
@@ -153,6 +138,8 @@ class ScreenAIService : public mojom::ScreenAIService,
   // extractors.
   mojo::ReceiverSet<mojom::Screen2xMainContentExtractor>
       screen_2x_main_content_extractors_;
+
+  base::WeakPtrFactory<ScreenAIService> weak_ptr_factory_{this};
 };
 
 }  // namespace screen_ai

@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/chromebox_for_meetings/logger/cfm_logger_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/chromebox_for_meetings/logger/reporting_pipeline.h"
 #include "chromeos/ash/components/chromebox_for_meetings/features.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/cfm_hotline_client.h"
@@ -15,7 +15,8 @@ namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 // Implementation of the CfmLoggerService which uses the Chrome Encrypted

@@ -14,9 +14,6 @@
       "position": [200, 0],
       "bounds": [1, 15],
       "contentsOpaque": true,
-      "invalidations": [
-        [0, 0, 1, 15]
-      ],
       "transform": 1
     }
   ],

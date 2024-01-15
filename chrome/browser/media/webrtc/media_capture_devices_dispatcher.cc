@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
@@ -29,7 +29,6 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/media_capture_devices.h"
-#include "content/public/browser/notification_source.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -115,8 +114,9 @@ void MediaCaptureDevicesDispatcher::RegisterProfilePrefs(
 
 void MediaCaptureDevicesDispatcher::AddObserver(Observer* observer) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!observers_.HasObserver(observer))
+  if (!observers_.HasObserver(observer)) {
     observers_.AddObserver(observer);
+  }
 }
 
 void MediaCaptureDevicesDispatcher::RemoveObserver(Observer* observer) {
@@ -161,7 +161,7 @@ void MediaCaptureDevicesDispatcher::ProcessMediaAccessRequest(
 
 bool MediaCaptureDevicesDispatcher::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   return CheckMediaAccessPermission(render_frame_host, security_origin, type,
@@ -170,7 +170,7 @@ bool MediaCaptureDevicesDispatcher::CheckMediaAccessPermission(
 
 bool MediaCaptureDevicesDispatcher::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type,
     const extensions::Extension* extension) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -187,19 +187,6 @@ bool MediaCaptureDevicesDispatcher::CheckMediaAccessPermission(
 
 void MediaCaptureDevicesDispatcher::DisableDeviceEnumerationForTesting() {
   is_device_enumeration_disabled_ = true;
-}
-
-std::string MediaCaptureDevicesDispatcher::GetDefaultDeviceIDForProfile(
-    Profile* profile,
-    blink::mojom::MediaStreamType type) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  PrefService* prefs = profile->GetPrefs();
-  if (type == blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE)
-    return prefs->GetString(prefs::kDefaultAudioCaptureDevice);
-  else if (type == blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE)
-    return prefs->GetString(prefs::kDefaultVideoCaptureDevice);
-  else
-    return std::string();
 }
 
 const MediaStreamDevices&
@@ -238,7 +225,8 @@ void MediaCaptureDevicesDispatcher::GetDefaultDevicesForBrowserContext(
       devices.audio_device = *device;
     } else {
       const blink::MediaStreamDevices& audio_devices = GetAudioCaptureDevices();
-      devices.audio_device = audio_devices.front();
+      if (!audio_devices.empty())
+        devices.audio_device = audio_devices.front();
     }
   }
 

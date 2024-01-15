@@ -7,15 +7,20 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/ui/views/side_panel/read_anything/read_anything_model.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/combobox_model.h"
 #include "ui/views/controls/combobox/combobox.h"
 
 class ReadAnythingFontCombobox : public views::Combobox {
+  METADATA_HEADER(ReadAnythingFontCombobox, views::Combobox)
+
  public:
   class Delegate {
    public:
     virtual void OnFontChoiceChanged(int new_index) = 0;
-    virtual ui::ComboboxModel* GetFontComboboxModel() = 0;
+    virtual ReadAnythingFontModel* GetFontComboboxModel() = 0;
   };
 
   explicit ReadAnythingFontCombobox(
@@ -24,15 +29,22 @@ class ReadAnythingFontCombobox : public views::Combobox {
   ReadAnythingFontCombobox& operator=(const ReadAnythingFontCombobox&) = delete;
   ~ReadAnythingFontCombobox() override;
 
- private:
-  class MenuModel;
+  void SetDropdownColorIds(ui::ColorId foreground_color,
+                           ui::ColorId background_color,
+                           ui::ColorId selected_color);
 
+  // views::Combobox:
+  gfx::Size GetMinimumSize() const override;
+
+  void SetFocusRingColorId(ui::ColorId focus_ring_color);
+
+ private:
   void FontNameChangedCallback();
 
   // views::View:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
-  raw_ptr<ReadAnythingFontCombobox::Delegate> delegate_;
+  raw_ptr<ReadAnythingFontCombobox::Delegate, DanglingUntriaged> delegate_;
 
   base::WeakPtrFactory<ReadAnythingFontCombobox> weak_pointer_factory_{this};
 };

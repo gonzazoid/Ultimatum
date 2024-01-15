@@ -9,15 +9,17 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/arc/app/arc_app_launch_notifier.h"
 #include "ash/components/arc/metrics/arc_metrics_constants.h"
 #include "ash/components/arc/metrics/arc_metrics_service.h"
 #include "ash/components/arc/mojom/file_system.mojom.h"
 #include "ash/components/arc/mojom/intent_helper.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check_is_test.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
@@ -52,12 +54,13 @@ constexpr char kAppIdSeparator = '/';
 // components/arc/intent_helper/intent_constants.h) to a file task action ID
 // (see chrome/browser/ash/file_manager/file_tasks.h).
 std::string ArcActionToFileTaskActionId(const std::string& action) {
-  if (action == arc::kIntentActionView)
+  if (action == arc::kIntentActionView) {
     return kActionIdView;
-  else if (action == arc::kIntentActionSend)
+  } else if (action == arc::kIntentActionSend) {
     return kActionIdSend;
-  else if (action == arc::kIntentActionSendMultiple)
+  } else if (action == arc::kIntentActionSendMultiple) {
     return kActionIdSendMultiple;
+  }
   NOTREACHED() << "Unhandled ARC action \"" << action << "\"";
   return "";
 }
@@ -66,12 +69,15 @@ std::string ArcActionToFileTaskActionId(const std::string& action) {
 // HandleUrlList has been updated to take a string action rather than an
 // ArcActionType.
 arc::mojom::ActionType FileTaskActionIdToArcActionType(const std::string& id) {
-  if (id == kActionIdView)
+  if (id == kActionIdView) {
     return arc::mojom::ActionType::VIEW;
-  if (id == kActionIdSend)
+  }
+  if (id == kActionIdSend) {
     return arc::mojom::ActionType::SEND;
-  if (id == kActionIdSendMultiple)
+  }
+  if (id == kActionIdSendMultiple) {
     return arc::mojom::ActionType::SEND_MULTIPLE;
+  }
   NOTREACHED() << "Unhandled file task action ID \"" << id << "\"";
   return arc::mojom::ActionType::VIEW;
 }
@@ -144,8 +150,9 @@ void OnArcHandlerList(Profile* profile,
   std::vector<arc::mojom::IntentHandlerInfoPtr> handlers_filtered =
       arc::ArcIntentHelperBridge::FilterOutIntentHelper(std::move(handlers));
   std::vector<arc::ArcIntentHelperBridge::ActivityName> activity_names;
-  for (const arc::mojom::IntentHandlerInfoPtr& handler : handlers_filtered)
+  for (const arc::mojom::IntentHandlerInfoPtr& handler : handlers_filtered) {
     activity_names.emplace_back(handler->package_name, handler->activity_name);
+  }
 
   intent_helper_bridge->GetActivityIcons(
       activity_names,
@@ -163,8 +170,9 @@ void OnArcIconLoaded(
 
   for (const arc::mojom::IntentHandlerInfoPtr& handler : handlers) {
     std::string action(arc::kIntentActionView);
-    if (handler->action.has_value())
+    if (handler->action.has_value()) {
       action = *handler->action;
+    }
     std::string name(handler->name);
     if (action == arc::kIntentActionSend ||
         action == arc::kIntentActionSendMultiple) {
@@ -258,7 +266,7 @@ void ExecuteArcTaskAfterContentUrlsResolved(
   for (const GURL& content_url : content_urls) {
     if (!content_url.is_valid()) {
       std::move(done).Run(
-          extensions::api::file_manager_private::TASK_RESULT_FAILED,
+          extensions::api::file_manager_private::TaskResult::kFailed,
           "Invalid url: " + content_url.possibly_invalid_spec());
       return;
     }
@@ -267,7 +275,7 @@ void ExecuteArcTaskAfterContentUrlsResolved(
   // File manager in secondary profile cannot access ARC.
   if (!ash::ProfileHelper::IsPrimaryProfile(profile)) {
     std::move(done).Run(
-        extensions::api::file_manager_private::TASK_RESULT_FAILED,
+        extensions::api::file_manager_private::TaskResult::kFailed,
         "Not primary profile");
     return;
   }
@@ -276,7 +284,7 @@ void ExecuteArcTaskAfterContentUrlsResolved(
   if (!arc_service_manager) {
     LOG(ERROR) << "Failed to get ArcServiceManager";
     std::move(done).Run(
-        extensions::api::file_manager_private::TASK_RESULT_FAILED,
+        extensions::api::file_manager_private::TaskResult::kFailed,
         "No ArcServiceManager");
     return;
   }
@@ -286,9 +294,16 @@ void ExecuteArcTaskAfterContentUrlsResolved(
       DEPRECATED_OpenUrlsWithPermission);
   if (!arc_file_system) {
     std::move(done).Run(
-        extensions::api::file_manager_private::TASK_RESULT_FAILED,
+        extensions::api::file_manager_private::TaskResult::kFailed,
         "OpenUrlsWithPermission is not supported");
     return;
+  }
+
+  auto* notifier = arc::ArcAppLaunchNotifier::GetForBrowserContext(profile);
+  if (notifier) {
+    notifier->NotifyArcAppLaunchRequest(task.app_id);
+  } else {
+    CHECK_IS_TEST();
   }
 
   arc::mojom::OpenUrlsRequestPtr request =
@@ -298,7 +313,7 @@ void ExecuteArcTaskAfterContentUrlsResolved(
   // TODO(benwells): return the correct code here, depending on how the app
   // will be opened in multiprofile.
   std::move(done).Run(
-      extensions::api::file_manager_private::TASK_RESULT_MESSAGE_SENT, "");
+      extensions::api::file_manager_private::TaskResult::kMessageSent, "");
 
   arc::ArcMetricsService::RecordArcUserInteraction(
       profile, arc::UserInteractionType::APP_STARTED_FROM_FILE_MANAGER);

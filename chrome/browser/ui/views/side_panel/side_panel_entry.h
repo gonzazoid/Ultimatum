@@ -7,14 +7,16 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
+#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
+#include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
 #include "extensions/common/extension_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/models/image_model.h"
 #include "ui/views/view.h"
 
@@ -24,50 +26,12 @@ class SidePanelEntryObserver;
 // a SidePanelRegistry (either a per-tab or a per-window registry).
 class SidePanelEntry final {
  public:
-  // Note this order matches that of the combobox options in the side panel.
-  // If adding a new Id here, you must also update id_to_histogram_name_map
-  // in side_panel_util.cc and SidePanelEntry in browser/histograms.xml.
-  enum class Id {
-    // Global Entries
-    kReadingList,
-    kBookmarks,
-    kHistoryClusters,
-    kReadAnything,
-    kUserNote,
-    kFeed,
-    kWebView,
-    // Contextual Entries
-    kSideSearch,
-    kLens,
-    kAssistant,
-    kAboutThisSite,
-    kCustomizeChrome,
-    // Extensions (nothing more should be added below here)
-    kExtension
-  };
+  using Id = SidePanelEntryId;
+  using Key = SidePanelEntryKey;
 
-  // Container for entry identification related information.
-  class Key {
-   public:
-    explicit Key(Id id);
-    Key(Id id, extensions::ExtensionId extension_id);
-    Key(const Key& other);
-    ~Key();
-
-    Key& operator=(const Key& other);
-    bool operator==(const Key& other) const;
-    bool operator<(const Key& other) const;
-
-    Id id() const { return id_; }
-    absl::optional<extensions::ExtensionId> extension_id() const {
-      return extension_id_;
-    }
-
-   private:
-    Id id_;
-    absl::optional<extensions::ExtensionId> extension_id_ = absl::nullopt;
-  };
-
+  // If adding a callback to provide a URL to the 'Open in New Tab' button, you
+  // must also add a relevant entry in actions.xml because a user action is
+  // logged on button click.
   SidePanelEntry(Id id,
                  std::u16string name,
                  ui::ImageModel icon,
@@ -116,6 +80,10 @@ class SidePanelEntry final {
   // open new tab button URL.
   bool SupportsNewTabButton();
 
+  // Resets the `entry_show_triggered_timestamp_` so we don't track metrics
+  // incorrectly.
+  void ResetLoadTimestamp();
+
   base::WeakPtr<SidePanelEntry> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
@@ -131,6 +99,9 @@ class SidePanelEntry final {
 
   // If this returns an empty GURL, the 'Open in New Tab' button is hidden.
   base::RepeatingCallback<GURL()> open_in_new_tab_url_callback_;
+
+  // Timestamp of when the side panel was triggered to be shown.
+  base::TimeTicks entry_show_triggered_timestamp_;
 
   base::TimeTicks entry_shown_timestamp_;
 

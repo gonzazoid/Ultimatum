@@ -12,8 +12,8 @@ import android.net.Proxy;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -32,9 +32,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Tests for {@link ProxyChangeListener}.
- */
+/** Tests for {@link ProxyChangeListener}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class ProxyChangeListenerTest {
     FakeContext mAppContext;
@@ -60,24 +58,33 @@ public class ProxyChangeListenerTest {
                 mReceiver.onReceive(FakeContext.this, broadcast);
             }
         }
+
         private List<RegisteredReceiver> mReceivers = new ArrayList<>();
 
         FakeContext() {
-            super(InstrumentationRegistry.getInstrumentation()
+            super(
+                    InstrumentationRegistry.getInstrumentation()
                             .getTargetContext()
                             .getApplicationContext());
         }
 
         @Override
-        public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter,
-                String broadcastPermission, Handler scheduler) {
+        public Intent registerReceiver(
+                BroadcastReceiver receiver,
+                IntentFilter filter,
+                String broadcastPermission,
+                Handler scheduler) {
             mReceivers.add(new RegisteredReceiver(receiver, filter));
             return null;
         }
 
         @Override
-        public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter,
-                String broadcastPermission, Handler scheduler, int flags) {
+        public Intent registerReceiver(
+                BroadcastReceiver receiver,
+                IntentFilter filter,
+                String broadcastPermission,
+                Handler scheduler,
+                int flags) {
             mReceivers.add(new RegisteredReceiver(receiver, filter));
             return null;
         }
@@ -122,47 +129,60 @@ public class ProxyChangeListenerTest {
                 mDelegate = Mockito.mock(ProxyChangeListener.Delegate.class));
         mListener.start(0);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Mockito.verify(mAppContext)
-                    .registerReceiver(Mockito.anyObject(),
-                            Mockito.argThat(
-                                    (IntentFilter filter)
-                                            -> filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
-                            ArgumentMatchers.isNull(), ArgumentMatchers.isNull(),
-                            ArgumentMatchers.eq(ContextUtils.RECEIVER_NOT_EXPORTED));
-        } else {
-            Mockito.verify(mAppContext)
-                    .registerReceiver(Mockito.anyObject(),
-                            Mockito.argThat(
-                                    (IntentFilter filter)
-                                            -> filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
-                            ArgumentMatchers.isNull(), ArgumentMatchers.isNull());
-        }
+        // These are looking for a call to register*NonExported*BroadcastReceiver to register a
+        // dummy ProxyReceiver, which matches no intents. (If registered, it is registered first.)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Mockito.verify(mAppContext)
-                        .registerReceiver(Mockito.anyObject(),
+                        .registerReceiver(
+                                Mockito.any(),
                                 Mockito.argThat(
-                                        (IntentFilter filter)
-                                                -> !filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
-                                ArgumentMatchers.isNull(), ArgumentMatchers.isNull(),
+                                        (IntentFilter filter) ->
+                                                !filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
+                                ArgumentMatchers.isNull(),
+                                ArgumentMatchers.isNull(),
                                 ArgumentMatchers.eq(ContextUtils.RECEIVER_NOT_EXPORTED));
             } else {
                 Mockito.verify(mAppContext)
-                        .registerReceiver(Mockito.anyObject(),
+                        .registerReceiver(
+                                Mockito.any(),
                                 Mockito.argThat(
-                                        (IntentFilter filter)
-                                                -> !filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
-                                ArgumentMatchers.isNull(), ArgumentMatchers.isNull());
+                                        (IntentFilter filter) ->
+                                                !filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
+                                ArgumentMatchers.isNull(),
+                                ArgumentMatchers.isNull());
             }
+        }
+        // These are looking for the main call to register*Protected*BroadcastReceiver.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Mockito.verify(mAppContext)
+                    .registerReceiver(
+                            Mockito.any(),
+                            Mockito.argThat(
+                                    (IntentFilter filter) ->
+                                            filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
+                            ArgumentMatchers.isNull(),
+                            ArgumentMatchers.isNull(),
+                            ArgumentMatchers.eq(0));
+        } else {
+            Mockito.verify(mAppContext)
+                    .registerReceiver(
+                            Mockito.any(),
+                            Mockito.argThat(
+                                    (IntentFilter filter) ->
+                                            filter.matchAction(Proxy.PROXY_CHANGE_ACTION)),
+                            ArgumentMatchers.isNull(),
+                            ArgumentMatchers.isNull());
         }
     }
 
     @After
     public void tearDown() {
         mListener.stop();
-        Assert.assertEquals("All receivers should have been unregistered",
-                mAppContext.getReceivers().size(), 0);
+        Assert.assertEquals(
+                "All receivers should have been unregistered",
+                mAppContext.getReceivers().size(),
+                0);
     }
 
     @Test

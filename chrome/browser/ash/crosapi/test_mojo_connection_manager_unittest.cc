@@ -9,13 +9,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/process/launch.h"
 #include "base/run_loop.h"
@@ -35,11 +35,11 @@
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "chromeos/crosapi/cpp/crosapi_constants.h"
 #include "chromeos/crosapi/mojom/crosapi.mojom.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "chromeos/startup/startup_switches.h"
-#include "chromeos/system/fake_statistics_provider.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
@@ -67,6 +67,10 @@ class TestBrowserService : public crosapi::mojom::BrowserService {
   void REMOVED_2(crosapi::mojom::BrowserInitParamsPtr) override {
     NOTIMPLEMENTED();
   }
+  void REMOVED_7(bool should_trigger_session_restore,
+                 base::OnceClosure callback) override {
+    NOTIMPLEMENTED();
+  }
   void REMOVED_16(
       base::flat_map<policy::PolicyNamespace, std::vector<uint8_t>>) override {
     NOTIMPLEMENTED();
@@ -75,6 +79,7 @@ class TestBrowserService : public crosapi::mojom::BrowserService {
   void NewWindow(bool incognito,
                  bool should_trigger_session_restore,
                  int64_t target_display_id,
+                 std::optional<uint64_t> profile_id,
                  NewWindowCallback callback) override {}
   void NewWindowForDetachingTab(
       const std::u16string& tab_id,
@@ -85,16 +90,16 @@ class TestBrowserService : public crosapi::mojom::BrowserService {
                            NewFullscreenWindowCallback callback) override {}
   void NewGuestWindow(int64_t target_display_id,
                       NewGuestWindowCallback callback) override {}
-  void NewTab(bool should_trigger_session_restore,
-              NewTabCallback callback) override {}
-  void NewTabWithoutParameter(
-      NewTabWithoutParameterCallback callback) override {}
-  void Launch(int64_t target_display_id, LaunchCallback callback) override {}
+  void NewTab(NewTabCallback callback) override {}
+  void Launch(int64_t target_display_id,
+              std::optional<uint64_t> profile_id,
+              LaunchCallback callback) override {}
   void OpenUrl(const GURL& url,
                crosapi::mojom::OpenUrlParamsPtr params,
                OpenUrlCallback callback) override {}
   void RestoreTab(RestoreTabCallback callback) override {}
-  void HandleTabScrubbing(float x_offset) override {}
+  void HandleTabScrubbing(float x_offset, bool is_fling_scroll_event) override {
+  }
   void GetFeedbackData(GetFeedbackDataCallback callback) override {}
   void GetHistograms(GetHistogramsCallback callback) override {}
   void GetActiveTabUrl(GetActiveTabUrlCallback callback) override {}
@@ -102,6 +107,7 @@ class TestBrowserService : public crosapi::mojom::BrowserService {
   void NotifyPolicyFetchAttempt() override {}
   void UpdateKeepAlive(bool enabled) override {}
   void OpenForFullRestore(bool skip_crash_restore) override {}
+  void OpenProfileManager() override {}
   void UpdateComponentPolicy(
       base::flat_map<policy::PolicyNamespace, base::Value> policy) override {}
 
@@ -177,8 +183,8 @@ using TestMojoConnectionManagerTest = testing::Test;
 
 TEST_F(TestMojoConnectionManagerTest, ConnectMultipleClients) {
   // Set fake statistics provider which is needed by crosapi_util.
-  chromeos::system::FakeStatisticsProvider statistics_provider_;
-  chromeos::system::StatisticsProvider::SetTestProvider(&statistics_provider_);
+  ash::system::FakeStatisticsProvider statistics_provider_;
+  ash::system::StatisticsProvider::SetTestProvider(&statistics_provider_);
 
   // Create temp dir before task environment, just in case lingering tasks need
   // to access it.
@@ -194,9 +200,9 @@ TEST_F(TestMojoConnectionManagerTest, ConnectMultipleClients) {
   content::BrowserTaskEnvironment task_environment{
       base::test::TaskEnvironment::MainThreadType::IO};
 
-  chromeos::LoginState::Initialize();
+  ash::LoginState::Initialize();
   base::ScopedClosureRunner login_state_teardown(
-      base::BindOnce(&chromeos::LoginState::Shutdown));
+      base::BindOnce(&ash::LoginState::Shutdown));
 
   // Constructing CrosapiManager requires ProfileManager.
   // Also, constructing BrowserInitParams requires local state prefs.

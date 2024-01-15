@@ -4,8 +4,8 @@
 
 #include "components/feed/core/v2/tasks/clear_stream_task.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 
 #include "components/feed/core/v2/feed_store.h"
@@ -20,14 +20,14 @@ ClearStreamTask::ClearStreamTask(FeedStream* stream,
 ClearStreamTask::~ClearStreamTask() = default;
 
 void ClearStreamTask::Run() {
-  stream_.GetStore().ClearStreamData(
+  stream_->GetStore().ClearStreamData(
       stream_type_,
       base::BindOnce(&ClearStreamTask::StoreClearComplete, GetWeakPtr()));
 }
 
 void ClearStreamTask::StoreClearComplete(bool ok) {
   DLOG_IF(ERROR, !ok) << "FeedStore::ClearStream failed";
-  stream_.FinishClearStream(stream_type_);
+  stream_->FinishClearStream(stream_type_);
   TaskComplete();
 }
 

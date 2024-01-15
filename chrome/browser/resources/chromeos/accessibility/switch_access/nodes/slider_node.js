@@ -4,12 +4,13 @@
 
 import {EventGenerator} from '../../common/event_generator.js';
 import {KeyCode} from '../../common/key_code.js';
-import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
+import {ActionResponse} from '../switch_access_constants.js';
 
 import {BasicNode} from './basic_node.js';
 import {SAChildNode, SARootNode} from './switch_access_node.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
 /** This class handles interactions with sliders. */
 export class SliderNode extends BasicNode {
@@ -34,12 +35,12 @@ export class SliderNode extends BasicNode {
     // the automation API. We handle this case by simulating left/right arrow
     // presses.
     if (this.isCustomSlider_) {
-      if (action === SwitchAccessMenuAction.INCREMENT) {
+      if (action === MenuAction.INCREMENT) {
         EventGenerator.sendKeyPress(KeyCode.RIGHT);
-        return SAConstants.ActionResponse.REMAIN_OPEN;
-      } else if (action === SwitchAccessMenuAction.DECREMENT) {
+        return ActionResponse.REMAIN_OPEN;
+      } else if (action === MenuAction.DECREMENT) {
         EventGenerator.sendKeyPress(KeyCode.LEFT);
-        return SAConstants.ActionResponse.REMAIN_OPEN;
+        return ActionResponse.REMAIN_OPEN;
       }
     }
 

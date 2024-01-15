@@ -65,6 +65,13 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) CdmFactoryDaemonProxyAsh
   void GetAndroidHwKeyData(const std::vector<uint8_t>& key_id,
                            const std::vector<uint8_t>& hw_identifier,
                            GetAndroidHwKeyDataCallback callback) override;
+  void AllocateSecureBuffer(uint32_t size,
+                            AllocateSecureBufferCallback callback) override;
+  void ParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ParseEncryptedSliceHeaderCallback callback) override;
 
  private:
   void EstablishDaemonConnection(base::OnceClosure callback);
@@ -74,6 +81,13 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) CdmFactoryDaemonProxyAsh
   void ProxyGetAndroidHwKeyData(const std::vector<uint8_t>& key_id,
                                 const std::vector<uint8_t>& hw_identifier,
                                 GetAndroidHwKeyDataCallback callback);
+  void ProxyAllocateSecureBuffer(uint32_t size,
+                                 AllocateSecureBufferCallback callback);
+  void ProxyParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ParseEncryptedSliceHeaderCallback callback);
   void SendDBusRequest(base::ScopedFD fd, base::OnceClosure callback);
   void OnBootstrapMojoConnection(base::OnceClosure callback, bool result);
   void CompleteOemCryptoConnection(

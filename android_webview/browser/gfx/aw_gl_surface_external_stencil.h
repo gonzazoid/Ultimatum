@@ -7,6 +7,7 @@
 
 #include "android_webview/browser/gfx/aw_gl_surface.h"
 
+// Lifetime: WebView
 namespace android_webview {
 class AwGLSurfaceExternalStencil : public AwGLSurface {
  public:
@@ -19,11 +20,12 @@ class AwGLSurfaceExternalStencil : public AwGLSurface {
   unsigned int GetBackingFramebufferObject() override;
   gfx::SwapResult SwapBuffers(
       PresentationCallback callbackaw_gl_surface_external_stencil,
-      gl::FrameData data) override;
+      gfx::FrameData data) override;
   void RecalculateClipAndTransform(gfx::Size* viewport,
                                    gfx::Rect* clip_rect,
                                    gfx::Transform* transform) override;
   bool IsDrawingToFBO() override;
+  void DestroyExternalStencilFramebuffer() override;
 
  protected:
   ~AwGLSurfaceExternalStencil() override;

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,7 +9,7 @@
 import json
 import optparse
 import os
-import pipes
+import shlex
 import subprocess
 import sys
 
@@ -32,7 +32,7 @@ def main():
     if not options.output_json:
       parser.error('Requires --output-json option.')
 
-    envsetup_cmd = ' '.join(map(pipes.quote, args))
+    envsetup_cmd = ' '.join(map(shlex.quote, args))
     full_cmd = [
         'bash', '-c',
         '. %s > /dev/null; %s -d' % (envsetup_cmd, os.path.abspath(__file__))

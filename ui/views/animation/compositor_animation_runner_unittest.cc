@@ -13,8 +13,7 @@
 #include "ui/views/buildflags.h"
 #include "ui/views/test/widget_test.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 namespace {
 constexpr base::TimeDelta kDuration = base::Milliseconds(100);
 }
@@ -67,7 +66,9 @@ class TestAnimationDelegateViews : public AnimationDelegateViews {
 
 }  // namespace
 
-// Tests that ui::ThroughputTracker will report for gfx::Animation.
+#if BUILDFLAG(IS_CHROMEOS)
+// Tests that ui::ThroughputTracker will report for gfx::Animation. Only
+// supported on ChromeOS.
 TEST_F(CompositorAnimationRunnerTest, ThroughputTracker) {
   WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
   widget->Show();
@@ -134,6 +135,7 @@ TEST_F(CompositorAnimationRunnerTest, ThroughputTracker) {
   EXPECT_EQ(1, report_count);
   EXPECT_EQ(1, report_count2);
 }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // No DesktopAura on ChromeOS.
 // Each widget on MACOSX has its own ui::Compositor.
@@ -197,5 +199,4 @@ TEST_F(CompositorAnimationRunnerDesktopTest, SwitchCompositor) {
 }
 #endif
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

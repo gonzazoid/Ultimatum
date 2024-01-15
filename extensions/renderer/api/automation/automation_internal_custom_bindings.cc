@@ -13,12 +13,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
+#include "content/public/renderer/worker_thread.h"
 #include "extensions/common/api/automation.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_messages.h"
@@ -26,6 +27,7 @@
 #include "extensions/common/manifest_handlers/automation.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/renderer/api/automation/automation_api_converters.h"
+#include "extensions/renderer/ipc_message_sender.h"
 #include "extensions/renderer/native_extension_bindings_system.h"
 #include "extensions/renderer/object_backed_native_handler.h"
 #include "extensions/renderer/script_context.h"
@@ -42,59 +44,6 @@
 #include "ui/base/l10n/l10n_util.h"
 
 namespace extensions {
-
-class AutomationMessageFilter : public IPC::MessageFilter {
- public:
-  AutomationMessageFilter(
-      AutomationInternalCustomBindings* owner,
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner)
-      : owner_(owner), removed_(false), task_runner_(std::move(task_runner)) {
-    DCHECK(owner);
-    content::RenderThread::Get()->AddFilter(this);
-  }
-
-  AutomationMessageFilter(const AutomationMessageFilter&) = delete;
-  AutomationMessageFilter& operator=(const AutomationMessageFilter&) = delete;
-
-  void Detach() {
-    owner_ = nullptr;
-    Remove();
-  }
-
-  // IPC::MessageFilter
-  bool OnMessageReceived(const IPC::Message& message) override {
-    task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(
-            &AutomationMessageFilter::OnMessageReceivedOnRenderThread, this,
-            message));
-
-    // Always return false in case there are multiple
-    // AutomationInternalCustomBindings instances attached to the same thread.
-    return false;
-  }
-
-  void OnFilterRemoved() override { removed_ = true; }
-
- private:
-  void OnMessageReceivedOnRenderThread(const IPC::Message& message) {
-    if (owner_)
-      owner_->OnMessageReceived(message);
-  }
-
-  ~AutomationMessageFilter() override { Remove(); }
-
-  void Remove() {
-    if (!removed_) {
-      removed_ = true;
-      content::RenderThread::Get()->RemoveFilter(this);
-    }
-  }
-
-  AutomationInternalCustomBindings* owner_;
-  bool removed_;
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
-};
 
 AutomationInternalCustomBindings::AutomationInternalCustomBindings(
     ScriptContext* context,
@@ -115,28 +64,22 @@ AutomationInternalCustomBindings::AutomationInternalCustomBindings(
   }
 }
 
-AutomationInternalCustomBindings::~AutomationInternalCustomBindings() {}
-
-void AutomationInternalCustomBindings::OnMessageReceived(
-    const IPC::Message& message) {
-  IPC_BEGIN_MESSAGE_MAP(AutomationInternalCustomBindings, message)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_AccessibilityEventBundle,
-                        HandleAccessibilityEvents)
-    IPC_MESSAGE_HANDLER(ExtensionMsg_AccessibilityLocationChange,
-                        HandleAccessibilityLocationChange)
-  IPC_END_MESSAGE_MAP()
-}
+AutomationInternalCustomBindings::~AutomationInternalCustomBindings() = default;
 
 void AutomationInternalCustomBindings::AddRoutes() {
   automation_v8_bindings_->AddV8Routes();
+
+  // Extensions specific routes.
+  ObjectBackedNativeHandler::RouteHandlerFunction(
+      "IsInteractPermitted", "automation",
+      base::BindRepeating(
+          &AutomationInternalCustomBindings::IsInteractPermitted,
+          base::Unretained(this)));
 }
 
 void AutomationInternalCustomBindings::Invalidate() {
   ObjectBackedNativeHandler::Invalidate();
-
-  if (message_filter_)
-    message_filter_->Detach();
-
+  receiver_.reset();
   AutomationTreeManagerOwner::Invalidate();
 }
 
@@ -146,48 +89,32 @@ AutomationInternalCustomBindings::GetAutomationV8Bindings() const {
   return automation_v8_bindings_.get();
 }
 
-bool AutomationInternalCustomBindings::IsInteractPermitted() const {
+void AutomationInternalCustomBindings::IsInteractPermitted(
+    const v8::FunctionCallbackInfo<v8::Value>& args) const {
   const Extension* extension = context()->extension();
   CHECK(extension);
   const AutomationInfo* automation_info = AutomationInfo::Get(extension);
   CHECK(automation_info);
-  return automation_info->interact;
+  args.GetReturnValue().Set(automation_info->interact);
 }
 
 void AutomationInternalCustomBindings::StartCachingAccessibilityTrees() {
   if (should_ignore_context_)
     return;
 
-  if (!message_filter_) {
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-        context()->web_frame()->GetTaskRunner(
-            blink::TaskType::kInternalDefault);
-    message_filter_ = base::MakeRefCounted<AutomationMessageFilter>(
-        this, std::move(task_runner));
+  if (!receiver_.is_bound()) {
+    bindings_system_->GetIPCMessageSender()->SendBindAutomationIPC(
+        context(), receiver_.BindNewEndpointAndPassRemote());
   }
 }
 
 void AutomationInternalCustomBindings::StopCachingAccessibilityTrees() {
-  message_filter_->Detach();
-  message_filter_.reset();
+  receiver_.reset();
 }
 
 //
 // Handle accessibility events from the browser process.
 //
-
-void AutomationInternalCustomBindings::HandleAccessibilityEvents(
-    const ExtensionMsg_AccessibilityEventBundleParams& event_bundle,
-    bool is_active_profile) {
-  OnAccessibilityEvents(event_bundle.tree_id, event_bundle.events,
-                        event_bundle.updates, event_bundle.mouse_location,
-                        is_active_profile);
-}
-
-void AutomationInternalCustomBindings::HandleAccessibilityLocationChange(
-    const ExtensionMsg_AccessibilityLocationChangeParams& params) {
-  OnAccessibilityLocationChange(params.tree_id, params.id, params.new_location);
-}
 
 void AutomationInternalCustomBindings::ThrowInvalidArgumentsException(
     bool is_fatal) const {
@@ -212,16 +139,11 @@ v8::Local<v8::Context> AutomationInternalCustomBindings::GetContext() const {
 
 void AutomationInternalCustomBindings::RouteHandlerFunction(
     const std::string& name,
-    AutomationV8Router::HandlerFunction handler_function) {
-  ObjectBackedNativeHandler::RouteHandlerFunction(name, handler_function);
-}
-
-void AutomationInternalCustomBindings::RouteHandlerFunction(
-    const std::string& name,
-    const std::string& api_name,
-    AutomationV8Router::HandlerFunction handler_function) {
-  ObjectBackedNativeHandler::RouteHandlerFunction(name, api_name,
-                                                  handler_function);
+    scoped_refptr<ui::V8HandlerFunctionWrapper> handler_function_wrapper) {
+  ObjectBackedNativeHandler::RouteHandlerFunction(
+      name, "automation",
+      base::BindRepeating(&ui::V8HandlerFunctionWrapper::RunV8,
+                          handler_function_wrapper));
 }
 
 ui::TreeChangeObserverFilter
@@ -237,11 +159,11 @@ std::string AutomationInternalCustomBindings::GetMarkerTypeString(
 }
 
 std::string AutomationInternalCustomBindings::GetFocusedStateString() const {
-  return api::automation::ToString(api::automation::STATE_TYPE_FOCUSED);
+  return api::automation::ToString(api::automation::StateType::kFocused);
 }
 
 std::string AutomationInternalCustomBindings::GetOffscreenStateString() const {
-  return api::automation::ToString(api::automation::STATE_TYPE_OFFSCREEN);
+  return api::automation::ToString(api::automation::StateType::kOffscreen);
 }
 
 void AutomationInternalCustomBindings::DispatchEvent(
@@ -249,19 +171,6 @@ void AutomationInternalCustomBindings::DispatchEvent(
     const base::Value::List& event_args) const {
   bindings_system_->DispatchEventInContext(event_name, event_args, nullptr,
                                            context());
-
-  if (notify_event_for_testing_.is_null() ||
-      event_name != "automationInternal.onAccessibilityEvent") {
-    return;
-  }
-  // Find the event type within the event_params for the test.
-  const base::Value::Dict* dict = event_args[0].GetIfDict();
-  DCHECK(dict);
-  const std::string* event_type_string = dict->FindString("eventType");
-  DCHECK(event_type_string);
-  api::automation::EventType event_type =
-      api::automation::ParseEventType(*event_type_string);
-  notify_event_for_testing_.Run(event_type);
 }
 
 std::string
@@ -313,13 +222,22 @@ std::string AutomationInternalCustomBindings::GetEventTypeString(
 }
 
 void AutomationInternalCustomBindings::NotifyTreeEventListenersChanged() {
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      context()->web_frame()->GetTaskRunner(blink::TaskType::kInternalDefault);
-  task_runner->PostTask(
-      FROM_HERE,
+  // This task is posted because we need to wait for any pending mutations
+  // to be processed before sending the event.
+  auto callback =
       base::BindOnce(&AutomationInternalCustomBindings::
                          MaybeSendOnAllAutomationEventListenersRemoved,
-                     weak_ptr_factory_.GetWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr());
+
+  if (context()->IsForServiceWorker()) {
+    content::WorkerThread::PostTask(content::WorkerThread::GetCurrentId(),
+                                    std::move(callback));
+  } else {
+    context()
+        ->web_frame()
+        ->GetTaskRunner(blink::TaskType::kInternalDefault)
+        ->PostTask(FROM_HERE, std::move(callback));
+  }
 }
 
 }  // namespace extensions

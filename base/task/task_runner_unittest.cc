@@ -2,16 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/task/task_runner_util.h"
+#include "base/task/task_runner.h"
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace base {
@@ -96,7 +96,7 @@ TEST_F(TaskRunnerTest, PostTaskAndReplyWithResult) {
   int result = 0;
 
   test::SingleThreadTaskEnvironment task_environment;
-  ThreadTaskRunnerHandle::Get()->PostTaskAndReplyWithResult(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReplyWithResult(
       FROM_HERE, BindOnce(&ReturnFourtyTwo), BindOnce(&StoreValue, &result));
 
   RunLoop().RunUntilIdle();
@@ -108,7 +108,7 @@ TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultRepeatingCallbacks) {
   int result = 0;
 
   test::SingleThreadTaskEnvironment task_environment;
-  ThreadTaskRunnerHandle::Get()->PostTaskAndReplyWithResult(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReplyWithResult(
       FROM_HERE, BindRepeating(&ReturnFourtyTwo),
       BindRepeating(&StoreValue, &result));
 
@@ -121,7 +121,7 @@ TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultImplicitConvert) {
   double result = 0;
 
   test::SingleThreadTaskEnvironment task_environment;
-  ThreadTaskRunnerHandle::Get()->PostTaskAndReplyWithResult(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReplyWithResult(
       FROM_HERE, BindOnce(&ReturnFourtyTwo),
       BindOnce(&StoreDoubleValue, &result));
 
@@ -132,7 +132,7 @@ TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultImplicitConvert) {
 
 TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultPassed) {
   test::SingleThreadTaskEnvironment task_environment;
-  ThreadTaskRunnerHandle::Get()->PostTaskAndReplyWithResult(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReplyWithResult(
       FROM_HERE, BindOnce(&CreateFoo), BindOnce(&ExpectFoo));
 
   RunLoop().RunUntilIdle();
@@ -143,7 +143,7 @@ TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultPassed) {
 
 TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultPassedFreeProc) {
   test::SingleThreadTaskEnvironment task_environment;
-  ThreadTaskRunnerHandle::Get()->PostTaskAndReplyWithResult(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReplyWithResult(
       FROM_HERE, BindOnce(&CreateScopedFoo), BindOnce(&ExpectScopedFoo));
 
   RunLoop().RunUntilIdle();
@@ -158,7 +158,7 @@ TEST_F(TaskRunnerTest, PostTaskAndReplyWithResultWithoutDefaultConstructor) {
   test::SingleThreadTaskEnvironment task_environment;
   int actual = 0;
 
-  ThreadTaskRunnerHandle::Get()->PostTaskAndReplyWithResult(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReplyWithResult(
       FROM_HERE, BindOnce(&CreateFooWithoutDefaultConstructor, kSomeVal),
       BindOnce(&SaveFooWithoutDefaultConstructor, &actual));
 

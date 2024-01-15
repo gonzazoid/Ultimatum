@@ -12,7 +12,7 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/dom_storage_context.h"
@@ -23,7 +23,7 @@ class StorageKey;
 }  // namespace blink
 
 namespace content {
-class BrowserContext;
+class StoragePartition;
 }  // namespace content
 
 namespace browsing_data {
@@ -35,7 +35,7 @@ class LocalStorageHelper : public base::RefCounted<LocalStorageHelper> {
   using FetchCallback =
       base::OnceCallback<void(const std::list<content::StorageUsageInfo>&)>;
 
-  explicit LocalStorageHelper(content::BrowserContext* context);
+  explicit LocalStorageHelper(content::StoragePartition* storage_partition);
 
   LocalStorageHelper(const LocalStorageHelper&) = delete;
   LocalStorageHelper& operator=(const LocalStorageHelper&) = delete;
@@ -54,7 +54,7 @@ class LocalStorageHelper : public base::RefCounted<LocalStorageHelper> {
   friend class base::RefCounted<LocalStorageHelper>;
   virtual ~LocalStorageHelper();
 
-  raw_ptr<content::DOMStorageContext, DanglingUntriaged>
+  raw_ptr<content::DOMStorageContext>
       dom_storage_context_;  // Owned by the context
 };
 
@@ -68,7 +68,7 @@ class LocalStorageHelper : public base::RefCounted<LocalStorageHelper> {
 class CannedLocalStorageHelper : public LocalStorageHelper {
  public:
   explicit CannedLocalStorageHelper(
-      content::BrowserContext* context,
+      content::StoragePartition* storage_partition,
       bool update_ignored_empty_keys_on_fetch = false);
 
   CannedLocalStorageHelper(const CannedLocalStorageHelper&) = delete;

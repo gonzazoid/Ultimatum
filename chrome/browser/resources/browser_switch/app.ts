@@ -8,7 +8,7 @@ import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './strings.m.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './app.html.js';
@@ -123,13 +123,15 @@ class BrowserSwitchAppElement extends BrowserSwitchAppElementBase {
     return this.i18n('openingTitle', getAltBrowserName());
   }
 
-  private computeDescription_(): string {
+  private computeDescription_(): TrustedHTML {
     if (this.error_) {
-      return this.i18n(
-          this.error_, getUrlHostname(this.url_), getAltBrowserName());
+      return this.i18nAdvanced(this.error_, {
+        substitutions: [getUrlHostname(this.url_), getAltBrowserName()],
+      });
     }
-    return this.i18n(
-        'description', getUrlHostname(this.url_), getAltBrowserName());
+    return this.i18nAdvanced('description', {
+      substitutions: [getUrlHostname(this.url_), getAltBrowserName()],
+    });
   }
 }
 

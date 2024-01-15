@@ -8,10 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/timer/timer.h"
 #include "components/user_education/common/tutorial.h"
 #include "components/user_education/common/tutorial_identifier.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -26,6 +27,10 @@ class HelpBubble;
 class HelpBubbleFactoryRegistry;
 class TutorialRegistry;
 
+namespace internal {
+class TutorialStepBuilder;
+}
+
 // A profile based service which provides the current running tutorial. A
 // TutorialService should be constructed by a factory which fills in the correct
 // tutorials based on the platform the tutorial targets.
@@ -39,16 +44,22 @@ class TutorialService {
   using AbortedCallback = base::OnceClosure;
 
   // Returns true if there is a currently running tutorial.
-  bool IsRunningTutorial() const;
+  // If `id` is specified, specifically returns whether *that* tutorial is
+  // running.
+  virtual bool IsRunningTutorial(
+      absl::optional<TutorialIdentifier> id = absl::nullopt) const;
+
+  // Cancels the tutorial `id` if it is running; or any tutorial if `id` is
+  // not specified. Returns whether a tutorial was canceled.
+  bool CancelTutorialIfRunning(
+      absl::optional<TutorialIdentifier> id = absl::nullopt);
 
   // Sets the current help bubble stored by the service.
   void SetCurrentBubble(std::unique_ptr<HelpBubble> bubble, bool is_last_step);
 
-  // Hides the current help bubble currently being shown by the service.
-  void HideCurrentBubbleIfShowing();
-
   // Starts the tutorial by looking for the id in the Tutorial Registry.
-  virtual bool StartTutorial(
+  // Any existing tutorial is canceled.
+  virtual void StartTutorial(
       TutorialIdentifier id,
       ui::ElementContext context,
       CompletedCallback completed_callback = base::DoNothing(),
@@ -57,10 +68,6 @@ class TutorialService {
   void LogIPHLinkClicked(TutorialIdentifier id, bool iph_link_was_clicked);
   virtual void LogStartedFromWhatsNewPage(TutorialIdentifier id,
                                           bool iph_link_was_clicked);
-
-  // Uses the stored tutorial creation params to restart a tutorial. Replaces
-  // the current_tutorial with a newly generated tutorial.
-  bool RestartTutorial();
 
   // Accessors for registries.
   TutorialRegistry* tutorial_registry() { return tutorial_registry_; }
@@ -73,25 +80,38 @@ class TutorialService {
     return currently_displayed_bubble_.get();
   }
 
-  // Calls the abort code for the running tutorial.
-  void AbortTutorial(absl::optional<int> abort_step);
-
+ protected:
   // Returns application-specific strings.
   virtual std::u16string GetBodyIconAltText(bool is_last_step) const = 0;
 
  private:
   friend class Tutorial;
+  friend class internal::TutorialStepBuilder;
   friend TutorialInteractiveUitest;
+
+  // Uses the stored tutorial creation params to restart a tutorial. Replaces
+  // the current_tutorial with a newly generated tutorial.
+  bool RestartTutorial();
+
+  // Calls the abort code for the running tutorial.
+  void AbortTutorial(absl::optional<int> abort_step);
+
+  // Hides the current help bubble currently being shown by the service.
+  void HideCurrentBubbleIfShowing();
 
   // Struct used to reconstruct a tutorial from the params initially used to
   // create it.
   struct TutorialCreationParams {
-    TutorialCreationParams(TutorialDescription* description,
+    TutorialCreationParams(const TutorialDescription* description,
                            ui::ElementContext context);
 
-    raw_ptr<TutorialDescription> description_;
+    raw_ptr<const TutorialDescription, DanglingUntriaged> description_;
     ui::ElementContext context_;
   };
+
+  // Called when a non-final bubble is closed. Used to trigger the broken
+  // tutorial timeout.
+  void OnNonFinalBubbleClosed(HelpBubble* bubble);
 
   // Calls the completion code for the running tutorial.
   // TODO (dpenning): allow for registering a callback that performs any
@@ -101,8 +121,9 @@ class TutorialService {
   // Reset all of the running tutorial member variables.
   void ResetRunningTutorial();
 
-  // Tracks when the user toggles focus to a help bubble via the keyboard.
-  void OnFocusToggledForAccessibility(HelpBubble* bubble);
+  // Called when there has been no bubble visible for enough time that the
+  // current tutorial should probably be aborted.
+  void OnBrokenTutorial();
 
   // Creation params for the last started tutorial. Used to restart the
   // tutorial after it has been completed.
@@ -112,6 +133,9 @@ class TutorialService {
   // tutorial is not required to have it's interaction sequence started to
   // be stored in the service.
   std::unique_ptr<Tutorial> running_tutorial_;
+
+  // Set to the ID of the current or most recent tutorial to run.
+  TutorialIdentifier most_recent_tutorial_id_;
 
   // Was restarted denotes that the current running tutorial was restarted,
   // and when logging that the tutorial aborts, instead should log as completed.
@@ -128,16 +152,19 @@ class TutorialService {
   std::unique_ptr<HelpBubble> currently_displayed_bubble_;
 
   // Listens for when the final bubble in a Tutorial is closed.
-  base::CallbackListSubscription final_bubble_closed_subscription_;
+  base::CallbackListSubscription bubble_closed_subscription_;
+
+  // Whether the currently-displayed bubble is the final one.
+  bool is_final_bubble_ = false;
+
+  // Used to check for broken tutorials - when no bubble is visible for an
+  // unexpected period of time.
+  base::OneShotTimer broken_tutorial_timer_;
 
   // Pointers to the registries used for constructing and showing tutorials and
   // help bubbles.
   const raw_ptr<TutorialRegistry> tutorial_registry_;
   const raw_ptr<HelpBubbleFactoryRegistry> help_bubble_factory_registry_;
-
-  // Number of times focus was toggled during the current tutorial.
-  int toggle_focus_count_ = 0;
-  base::CallbackListSubscription toggle_focus_subscription_;
 
   // status bit to denote that the tutorial service is in the process of
   // restarting a tutorial. This prevents calling the abort callbacks.

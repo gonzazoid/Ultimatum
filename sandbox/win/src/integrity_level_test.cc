@@ -6,15 +6,14 @@
 
 #include <atlsecurity.h>
 
+#include <optional>
 #include "base/process/process_info.h"
 #include "base/win/access_token.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/sandbox.h"
 #include "sandbox/win/src/sandbox_factory.h"
 #include "sandbox/win/src/sandbox_policy.h"
 #include "sandbox/win/tests/common/controller.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sandbox {
 
@@ -31,7 +30,7 @@ SBOX_TESTS_COMMAND int CheckLowIntegrityLevel(int argc, wchar_t** argv) {
 }
 
 SBOX_TESTS_COMMAND int CheckIntegrityLevel(int argc, wchar_t** argv) {
-  absl::optional<base::win::AccessToken> token =
+  std::optional<base::win::AccessToken> token =
       base::win::AccessToken::FromEffective();
   if (!token)
     return SBOX_TEST_FAILED;

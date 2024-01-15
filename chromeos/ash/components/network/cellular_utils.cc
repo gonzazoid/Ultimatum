@@ -12,27 +12,46 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_euicc_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_profile_client.h"
 #include "chromeos/ash/components/network/cellular_esim_profile.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_profile.h"
+#include "chromeos/ash/components/network/network_profile_handler.h"
+#include "crypto/sha2.h"
 
 namespace ash {
 
-namespace {
+namespace cellular_utils {
 
+const char kSmdsGsma[] = "1$lpa.ds.gsma.com$";
+const char kSmdsStork[] = "1$prod.smds.rsp.goog$";
+const char kSmdsAndroidProduction[] = "1$lpa.live.esimdiscovery.com$";
+const char kSmdsAndroidStaging[] = "1$lpa.live.esimdiscovery.dev$";
+
+}  // namespace cellular_utils
+
+namespace {
 const char kNonShillCellularNetworkPathPrefix[] = "/non-shill-cellular/";
+
+std::string GetLogSafeEid(const std::string& eid) {
+  const SystemSaltGetter::RawSalt* salt = SystemSaltGetter::Get()->GetRawSalt();
+  if (!salt) {
+    return std::string();
+  }
+  return crypto::SHA256HashString(
+      eid + SystemSaltGetter::ConvertRawSaltToHexString(*salt));
+}
+
+}  // namespace
 
 base::flat_set<dbus::ObjectPath> GetProfilePathsFromEuicc(
     HermesEuiccClient::Properties* euicc_properties) {
   base::flat_set<dbus::ObjectPath> profile_paths;
 
-  for (const dbus::ObjectPath& path :
-       euicc_properties->installed_carrier_profiles().value()) {
-    profile_paths.insert(path);
-  }
-  for (const dbus::ObjectPath& path :
-       euicc_properties->pending_carrier_profiles().value()) {
+  for (const dbus::ObjectPath& path : euicc_properties->profiles().value()) {
     profile_paths.insert(path);
   }
 
@@ -83,17 +102,23 @@ std::vector<CellularESimProfile> GenerateProfilesFromEuicc(
 
 const base::flat_map<int32_t, std::string> GetESimSlotToEidMap() {
   base::flat_map<int32_t, std::string> esim_slot_to_eid;
-  for (auto& euicc_path : HermesManagerClient::Get()->GetAvailableEuiccs()) {
+  const std::vector<dbus::ObjectPath>& available_euiccs =
+      HermesManagerClient::Get()->GetAvailableEuiccs();
+  VLOG(1) << "GetESimSlotToEidMap(): Num available EUICCs: "
+          << available_euiccs.size();
+  for (auto& euicc_path : available_euiccs) {
     HermesEuiccClient::Properties* properties =
         HermesEuiccClient::Get()->GetProperties(euicc_path);
     int32_t slot_id = properties->physical_slot().value();
     std::string eid = properties->eid().value();
     esim_slot_to_eid.emplace(slot_id, eid);
+    VLOG(1) << "EUICC: " << euicc_path.value() << ", slot id: " << slot_id
+            << ", eid: " << GetLogSafeEid(eid);
   }
   return esim_slot_to_eid;
 }
 
-}  // namespace
+namespace cellular_utils {
 
 std::vector<CellularESimProfile> GenerateProfilesFromHermes() {
   std::vector<CellularESimProfile> profiles;
@@ -114,8 +139,12 @@ const DeviceState::CellularSIMSlotInfos GetSimSlotInfosWithUpdatedEid(
       GetESimSlotToEidMap();
 
   DeviceState::CellularSIMSlotInfos sim_slot_infos = device->GetSimSlotInfos();
+  VLOG(1) << "GetSimSlotInfosWithUpdatedEid(): Num SIM slot infos: "
+          << sim_slot_infos.size();
   for (auto& sim_slot_info : sim_slot_infos) {
     const std::string shill_provided_eid = sim_slot_info.eid;
+    VLOG(1) << "SIM slot id: " << sim_slot_info.slot_id
+            << ", Shill provided eid: " << GetLogSafeEid(shill_provided_eid);
 
     // If there is no associated |slot_id| in the map, the SIM slot info refers
     // to a pSIM, and the Hermes provided data is irrelevant.
@@ -149,18 +178,25 @@ std::string GenerateStubCellularServicePath(const std::string& iccid) {
   return base::StrCat({kNonShillCellularNetworkPathPrefix, iccid});
 }
 
+const NetworkProfile* GetCellularProfile(
+    const NetworkProfileHandler* network_profile_handler) {
+  DCHECK(network_profile_handler);
+  return network_profile_handler->GetProfileForUserhash(
+      /*userhash=*/std::string());
+}
+
 bool IsStubCellularServicePath(const std::string& service_path) {
   return base::StartsWith(service_path, kNonShillCellularNetworkPathPrefix);
 }
 
-absl::optional<dbus::ObjectPath> GetCurrentEuiccPath() {
+std::optional<dbus::ObjectPath> GetCurrentEuiccPath() {
   // Always use the first Euicc if Hermes only exposes one Euicc.
   // If useSecondEuicc flag is set and there are two Euicc available,
   // use the second available Euicc.
   const std::vector<dbus::ObjectPath>& euicc_paths =
       HermesManagerClient::Get()->GetAvailableEuiccs();
   if (euicc_paths.empty())
-    return absl::nullopt;
+    return std::nullopt;
 
   if (euicc_paths.size() == 1)
     return euicc_paths[0];
@@ -170,4 +206,22 @@ absl::optional<dbus::ObjectPath> GetCurrentEuiccPath() {
   return use_second_euicc ? euicc_paths[1] : euicc_paths[0];
 }
 
+std::vector<std::string> GetSmdsActivationCodes() {
+  std::vector<std::string> activation_codes;
+  if (features::ShouldUseStorkSmds()) {
+    activation_codes.push_back(kSmdsStork);
+  }
+  if (features::ShouldUseAndroidStagingSmds()) {
+    activation_codes.push_back(kSmdsAndroidStaging);
+  }
+  if (activation_codes.empty()) {
+    if (features::IsSmdsSupportEnabled()) {
+      activation_codes.push_back(kSmdsAndroidProduction);
+    }
+    activation_codes.push_back(kSmdsGsma);
+  }
+  return activation_codes;
+}
+
+}  // namespace cellular_utils
 }  // namespace ash

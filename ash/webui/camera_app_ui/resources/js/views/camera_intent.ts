@@ -55,17 +55,18 @@ export class CameraIntent extends Camera {
             const buf = await blob.arrayBuffer();
             await this.intent.appendData(new Uint8Array(buf));
           },
-          startSaveVideo: async (outputVideoRotation) => {
-            return VideoSaver.createForIntent(intent, outputVideoRotation);
-          },
-          finishSaveVideo: async (video) => {
-            this.videoResultFile = await video.endWrite();
+          saveVideo: (file) => {
+            this.videoResultFile = file;
           },
           saveGif: () => {
             assertNotReached();
           },
         },
         cameraManager, perfLogger);
+  }
+
+  override createVideoSaver(): Promise<VideoSaver> {
+    return VideoSaver.createForIntent(this.intent, this.outputVideoRotation);
   }
 
   private reviewIntentResult(metricArgs: MetricArgs): Promise<void> {
@@ -76,6 +77,7 @@ export class CameraIntent extends Camera {
           new review.Option(
               {
                 label: I18nString.CONFIRM_REVIEW_BUTTON,
+                icon: 'camera_intent_result_confirm.svg',
                 templateId: 'review-intent-button-template',
                 primary: true,
               },
@@ -83,11 +85,13 @@ export class CameraIntent extends Camera {
           new review.Option(
               {
                 label: I18nString.CANCEL_REVIEW_BUTTON,
+                icon: 'camera_intent_result_cancel.svg',
                 templateId: 'review-intent-button-template',
               },
               {exitValue: false}),
         ],
-      }));
+      })) ??
+          false;
       metrics.sendCaptureEvent({
         facing: this.getFacing(),
         ...metricArgs,
@@ -127,9 +131,10 @@ export class CameraIntent extends Camera {
   override async onVideoCaptureDone(videoResult: VideoResult): Promise<void> {
     await super.onVideoCaptureDone(videoResult);
     assert(this.videoResultFile !== null);
-    await this.review.setReviewVideo(this.videoResultFile);
+    const cleanup = await this.review.setReviewVideo(this.videoResultFile);
     await this.reviewIntentResult(
         {resolution: videoResult.resolution, duration: videoResult.duration});
+    cleanup();
     ChromeHelper.getInstance().maybeTriggerSurvey();
   }
 }

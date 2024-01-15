@@ -9,8 +9,12 @@
 #include "gpu/command_buffer/service/shared_image/raw_draw_image_backing.h"
 
 namespace gpu {
+constexpr uint32_t kSupportedUsage =
+    SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_RASTER |
+    SHARED_IMAGE_USAGE_OOP_RASTERIZATION | SHARED_IMAGE_USAGE_RAW_DRAW;
 
-RawDrawImageBackingFactory::RawDrawImageBackingFactory() = default;
+RawDrawImageBackingFactory::RawDrawImageBackingFactory()
+    : SharedImageBackingFactory(kSupportedUsage) {}
 
 RawDrawImageBackingFactory::~RawDrawImageBackingFactory() = default;
 
@@ -24,6 +28,7 @@ RawDrawImageBackingFactory::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     bool is_thread_safe) {
   DCHECK(is_thread_safe);
   auto texture = std::make_unique<RawDrawImageBacking>(
@@ -40,6 +45,7 @@ RawDrawImageBackingFactory::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     base::span<const uint8_t> data) {
   NOTREACHED() << "Not supported";
   return nullptr;
@@ -48,16 +54,29 @@ RawDrawImageBackingFactory::CreateSharedImage(
 std::unique_ptr<SharedImageBacking>
 RawDrawImageBackingFactory::CreateSharedImage(
     const Mailbox& mailbox,
-    int client_id,
-    gfx::GpuMemoryBufferHandle handle,
-    gfx::BufferFormat buffer_format,
-    gfx::BufferPlane plane,
-    SurfaceHandle surface_handle,
+    viz::SharedImageFormat format,
     const gfx::Size& size,
     const gfx::ColorSpace& color_space,
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
-    uint32_t usage) {
+    uint32_t usage,
+    std::string debug_label,
+    gfx::GpuMemoryBufferHandle handle) {
+  NOTREACHED_NORETURN();
+}
+
+std::unique_ptr<SharedImageBacking>
+RawDrawImageBackingFactory::CreateSharedImage(
+    const Mailbox& mailbox,
+    gfx::GpuMemoryBufferHandle handle,
+    gfx::BufferFormat buffer_format,
+    gfx::BufferPlane plane,
+    const gfx::Size& size,
+    const gfx::ColorSpace& color_space,
+    GrSurfaceOrigin surface_origin,
+    SkAlphaType alpha_type,
+    uint32_t usage,
+    std::string debug_label) {
   NOTREACHED() << "Not supported";
   return nullptr;
 }
@@ -65,13 +84,7 @@ RawDrawImageBackingFactory::CreateSharedImage(
 bool RawDrawImageBackingFactory::CanUseRawDrawImageBacking(
     uint32_t usage,
     GrContextType gr_context_type) const {
-  // Ignore for mipmap usage.
-  usage &= ~SHARED_IMAGE_USAGE_MIPMAP;
-
-  auto kRawDrawImageBackingUsage =
-      SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_RASTER |
-      SHARED_IMAGE_USAGE_OOP_RASTERIZATION | SHARED_IMAGE_USAGE_RAW_DRAW;
-  return usage == kRawDrawImageBackingUsage;
+  return usage == kSupportedUsage;
 }
 
 bool RawDrawImageBackingFactory::IsSupported(
@@ -82,6 +95,9 @@ bool RawDrawImageBackingFactory::IsSupported(
     gfx::GpuMemoryBufferType gmb_type,
     GrContextType gr_context_type,
     base::span<const uint8_t> pixel_data) {
+  if (format.is_multi_plane()) {
+    return false;
+  }
   if (!CanUseRawDrawImageBacking(usage, gr_context_type)) {
     return false;
   }

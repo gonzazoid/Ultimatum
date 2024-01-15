@@ -611,6 +611,32 @@
       "options_page": "hmm_options.html?code=xkb:gb:extd:eng"
     },
     {
+      "name": "__MSG_keyboard_english_india__",
+      "id": "xkb:in::eng",
+      "indicator": "IN",
+      "language": [
+        "en",
+        "en-IN"
+      ],
+      "layouts": [
+        "in(eng)"
+      ],
+      "options_page": "hmm_options.html?code=xkb:in::eng"
+    },
+    {
+      "name": "__MSG_keyboard_english_pakistan__",
+      "id": "xkb:pk::eng",
+      "indicator": "PK",
+      "language": [
+        "en",
+        "en-PK"
+      ],
+      "layouts": [
+        "us"
+      ],
+      "options_page": "hmm_options.html?code=xkb:pk::eng"
+    },
+    {
       "name": "__MSG_keyboard_english_south_africa__",
       "id": "xkb:za:gb:eng",
       "indicator": "ZA",
@@ -1405,7 +1431,8 @@
       ],
       "layouts": [
         "us"
-      ]
+      ],
+      "options_page": "LEGACY-required-otherwise-options-does-not-load.html"
     },
     {
       "name": "__MSG_keyboard_vietnamese_viqr__",
@@ -1425,7 +1452,8 @@
       ],
       "layouts": [
         "us"
-      ]
+      ],
+      "options_page": "LEGACY-required-otherwise-options-does-not-load.html"
     },
     {
       "name": "__MSG_keyboard_arabic__",
@@ -1699,5 +1727,5 @@
     }
   ],
   "manifest_version": 2,
-  "content_security_policy": "script-src 'self' 'wasm-eval'; object-src 'self'"
+  "content_security_policy": "script-src 'self' 'wasm-eval'; object-src 'self'; style-src 'unsafe-inline' chrome://theme"
 }

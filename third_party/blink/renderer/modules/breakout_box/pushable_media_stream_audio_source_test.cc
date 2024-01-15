@@ -4,9 +4,10 @@
 
 #include "third_party/blink/renderer/modules/breakout_box/pushable_media_stream_audio_source.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "media/base/bind_to_current_loop.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
@@ -16,6 +17,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -41,18 +43,21 @@ class FakeMediaStreamAudioSink : public WebMediaStreamAudioSink {
 
   void SetDataTimeExpectation(base::TimeTicks time,
                               media::AudioBus* expected_data,
+                              bool expect_data_on_audio_task_runner,
                               base::OnceClosure on_data) {
     DCHECK(!on_data_);
 
     expected_time_ = time;
     expected_data_ = expected_data;
+    expect_data_on_audio_task_runner_ = expect_data_on_audio_task_runner;
 
     on_data_ = std::move(on_data);
   }
 
   void OnData(const media::AudioBus& data, base::TimeTicks time) override {
     // Make sure the source delivered audio data on the right thread.
-    EXPECT_TRUE(audio_task_runner_->BelongsToCurrentThread());
+    EXPECT_EQ(audio_task_runner_->BelongsToCurrentThread(),
+              expect_data_on_audio_task_runner_);
 
     EXPECT_EQ(time, expected_time_);
     EXPECT_EQ(data.channels(), expected_channels_);
@@ -89,12 +94,17 @@ class FakeMediaStreamAudioSink : public WebMediaStreamAudioSink {
 
   void OnSetFormat(const media::AudioParameters& params) override {
     // Make sure the source changed parameters data on the right thread.
-    EXPECT_TRUE(audio_task_runner_->BelongsToCurrentThread());
+    if (expect_data_on_audio_task_runner_) {
+      EXPECT_TRUE(audio_task_runner_->BelongsToCurrentThread());
+    } else {
+      EXPECT_TRUE(main_task_runner_->BelongsToCurrentThread());
+    }
 
-    // Also make sure that the audio thread is different from the main
-    // thread (it would be a test error if it wasn't, as it would be
-    // impossible for the check above to fail).
-    ASSERT_TRUE(!main_task_runner_->BelongsToCurrentThread());
+    // Make sure that the audio thread is different from the main thread (it
+    // would be a test error if it wasn't, as it would be impossible for the
+    // check above to fail).
+    ASSERT_NE(audio_task_runner_->BelongsToCurrentThread(),
+              main_task_runner_->BelongsToCurrentThread());
 
     // This should only be called once per format change.
     EXPECT_FALSE(did_receive_format_change_);
@@ -114,7 +124,8 @@ class FakeMediaStreamAudioSink : public WebMediaStreamAudioSink {
   int expected_channels_ = 0;
   int expected_frames_ = 0;
   int expected_sample_rate_ = 0;
-  media::AudioBus* expected_data_ = nullptr;
+  bool expect_data_on_audio_task_runner_ = true;
+  raw_ptr<media::AudioBus, DanglingUntriaged> expected_data_ = nullptr;
   base::TimeTicks expected_time_;
 
   bool did_receive_format_change_ = false;
@@ -127,7 +138,8 @@ class FakeMediaStreamAudioSink : public WebMediaStreamAudioSink {
 
 }  // namespace
 
-class PushableMediaStreamAudioSourceTest : public testing::Test {
+class PushableMediaStreamAudioSourceTest
+    : public ::testing::TestWithParam<bool> {
  public:
   PushableMediaStreamAudioSourceTest() {
     // Use the IO thread for testing purposes. This is stricter than an audio
@@ -139,6 +151,9 @@ class PushableMediaStreamAudioSourceTest : public testing::Test {
         std::make_unique<PushableMediaStreamAudioSource>(main_task_runner_,
                                                          audio_task_runner_);
     pushable_audio_source_ = pushable_audio_source.get();
+    broker_ = pushable_audio_source->GetBroker();
+    broker_->SetShouldDeliverAudioOnAudioTaskRunner(
+        ShouldDeliverAudioOnAudioTaskRunner());
     stream_source_ = MakeGarbageCollected<MediaStreamSource>(
         "dummy_source_id", MediaStreamSource::kTypeAudio, "dummy_source_name",
         false /* remote */, std::move(pushable_audio_source));
@@ -188,16 +203,20 @@ class PushableMediaStreamAudioSourceTest : public testing::Test {
     }
 
     base::RunLoop run_loop;
-    fake_sink->SetDataTimeExpectation(base::TimeTicks() + buffer->timestamp(),
-                                      expected_data, run_loop.QuitClosure());
-
-    pushable_audio_source_->PushAudioData(std::move(buffer));
+    fake_sink->SetDataTimeExpectation(
+        base::TimeTicks() + buffer->timestamp(), expected_data,
+        ShouldDeliverAudioOnAudioTaskRunner(), run_loop.QuitClosure());
+    broker_->PushAudioData(std::move(buffer));
     run_loop.Run();
 
     EXPECT_EQ(fake_sink->did_receive_format_change(), expect_format_change);
   }
 
+  bool ShouldDeliverAudioOnAudioTaskRunner() const { return GetParam(); }
+
  protected:
+  test::TaskEnvironment task_environment_;
+
   ScopedTestingPlatformSupport<IOTaskRunnerTestingPlatformSupport> platform_;
 
   Persistent<MediaStreamSource> stream_source_;
@@ -206,10 +225,12 @@ class PushableMediaStreamAudioSourceTest : public testing::Test {
   scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> audio_task_runner_;
 
-  PushableMediaStreamAudioSource* pushable_audio_source_;
+  raw_ptr<PushableMediaStreamAudioSource, DanglingUntriaged>
+      pushable_audio_source_;
+  scoped_refptr<PushableMediaStreamAudioSource::Broker> broker_;
 };
 
-TEST_F(PushableMediaStreamAudioSourceTest, ConnectAndStop) {
+TEST_P(PushableMediaStreamAudioSourceTest, ConnectAndStop) {
   EXPECT_EQ(MediaStreamSource::kReadyStateLive,
             stream_source_->GetReadyState());
   EXPECT_FALSE(pushable_audio_source_->IsRunning());
@@ -226,7 +247,7 @@ TEST_F(PushableMediaStreamAudioSourceTest, ConnectAndStop) {
   EXPECT_FALSE(pushable_audio_source_->IsRunning());
 }
 
-TEST_F(PushableMediaStreamAudioSourceTest, FramesPropagateToSink) {
+TEST_P(PushableMediaStreamAudioSourceTest, FramesPropagateToSink) {
   EXPECT_TRUE(ConnectSourceToTrack());
   FakeMediaStreamAudioSink fake_sink(main_task_runner_, audio_task_runner_);
 
@@ -254,7 +275,7 @@ TEST_F(PushableMediaStreamAudioSourceTest, FramesPropagateToSink) {
       &fake_sink, WebMediaStreamTrack(stream_component_.Get()));
 }
 
-TEST_F(PushableMediaStreamAudioSourceTest, ConvertsFormatInternally) {
+TEST_P(PushableMediaStreamAudioSourceTest, ConvertsFormatInternally) {
   EXPECT_TRUE(ConnectSourceToTrack());
   FakeMediaStreamAudioSink fake_sink(main_task_runner_, audio_task_runner_);
 
@@ -315,5 +336,11 @@ TEST_F(PushableMediaStreamAudioSourceTest, ConvertsFormatInternally) {
   WebMediaStreamAudioSink::RemoveFromAudioTrack(
       &fake_sink, WebMediaStreamTrack(stream_component_.Get()));
 }
+
+// Tests with audio delivered on a dedicated audio task (GetParam() == true) and
+// using the calling task (GetParam() == false).
+INSTANTIATE_TEST_SUITE_P(/*no prefix*/,
+                         PushableMediaStreamAudioSourceTest,
+                         ::testing::Bool());
 
 }  // namespace blink

@@ -43,7 +43,8 @@ Sensor::Sensor(ExecutionContext* execution_context,
                ExceptionState& exception_state,
                device::mojom::blink::SensorType type,
                const Vector<mojom::blink::PermissionsPolicyFeature>& features)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : ActiveScriptWrappable<Sensor>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       frequency_(0.0),
       type_(type),
       state_(SensorState::kIdle),
@@ -143,7 +144,7 @@ void Sensor::Trace(Visitor* visitor) const {
   visitor->Trace(sensor_proxy_);
   ActiveScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
 }
 
 bool Sensor::HasPendingActivity() const {
@@ -187,6 +188,8 @@ void Sensor::InitSensorProxyIfNeeded() {
 void Sensor::ContextDestroyed() {
   if (!IsIdleOrErrored())
     Deactivate();
+
+  state_ = SensorState::kIdle;
 
   if (sensor_proxy_)
     sensor_proxy_->Detach();

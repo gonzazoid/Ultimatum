@@ -7,8 +7,8 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -17,7 +17,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
@@ -30,7 +29,6 @@
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/url_constants.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -49,10 +47,6 @@ namespace {
 
 const char kChromeURLContentSecurityPolicyHeaderName[] =
     "Content-Security-Policy";
-const char kChromeURLContentSecurityPolicyReportOnlyHeaderName[] =
-    "Content-Security-Policy-Report-Only";
-const char kChromeURLContentSecurityPolicyReportOnlyHeaderValue[] =
-    "require-trusted-types-for 'script'";
 
 const char kChromeURLCrossOriginOpenerPolicyName[] =
     "Cross-Origin-Opener-Policy";
@@ -71,16 +65,47 @@ bool SchemeIsInSchemes(const std::string& scheme,
   return base::Contains(schemes, scheme);
 }
 
+bool g_disallow_webui_scheme_caching_for_testing = false;
+
+std::vector<std::string> GetWebUISchemesSlow() {
+  std::vector<std::string> schemes;
+  schemes.emplace_back(kChromeUIScheme);
+  schemes.emplace_back(kChromeUIUntrustedScheme);
+  GetContentClient()->browser()->GetAdditionalWebUISchemes(&schemes);
+  return schemes;
+}
+
+std::vector<std::string> GetWebUISchemesCached() {
+  // It's OK to cache this in a static because the class implementing
+  // GetAdditionalWebUISchemes() won't change while the application is
+  // running, and because those methods always add the same items.
+  //
+  // However, be careful using this with unit tests which use
+  // GetAdditionalWebUISchemes() to change the list of WebUI schemes, since
+  // this caching may persist across tests. For those, this caching should be
+  // disabled via SetDisallowWebUISchemeCachingForTesting().
+  static base::NoDestructor<std::vector<std::string>> webui_schemes(
+      GetWebUISchemesSlow());
+
+  return *webui_schemes;
+}
+
 }  // namespace
 
 URLDataManagerBackend::URLDataManagerBackend() : next_request_id_(0) {
-  // Add a shared data source for chrome://resources.
-  AddDataSource(
-      static_cast<WebUIDataSourceImpl*>(CreateSharedResourcesDataSource()));
+  {
+    // Add a shared data source for chrome://resources.
+    auto* source = new WebUIDataSourceImpl(kChromeUIResourcesHost);
+    PopulateSharedResourcesDataSource(source);
+    AddDataSource(source);  // Takes ownership.
+  }
 
-  // Add a shared data source for chrome-untrusted://resources.
-  AddDataSource(static_cast<WebUIDataSourceImpl*>(
-      CreateUntrustedSharedResourcesDataSource()));
+  {
+    // Add a shared data source for chrome-untrusted://resources.
+    auto* source = new WebUIDataSourceImpl(kChromeUIUntrustedResourcesURL);
+    PopulateSharedResourcesDataSource(source);
+    AddDataSource(source);  // Takes ownership.
+  }
 }
 
 URLDataManagerBackend::~URLDataManagerBackend() = default;
@@ -203,11 +228,6 @@ scoped_refptr<net::HttpResponseHeaders> URLDataManagerBackend::GetHeaders(
                        kChromeURLXFrameOptionsHeaderValue);
   }
 
-  if (base::FeatureList::IsEnabled(features::kWebUIReportOnlyTrustedTypes)) {
-    headers->SetHeader(kChromeURLContentSecurityPolicyReportOnlyHeaderName,
-                       kChromeURLContentSecurityPolicyReportOnlyHeaderValue);
-  }
-
   if (!source->AllowCaching())
     headers->SetHeader("Cache-Control", "no-cache");
 
@@ -273,18 +293,16 @@ bool URLDataManagerBackend::IsValidNetworkErrorCode(int error_code) {
 }
 
 std::vector<std::string> URLDataManagerBackend::GetWebUISchemes() {
-  // It's OK to cache this in a static because the class implementing
-  // GetAdditionalWebUISchemes() won't change while the application is
-  // running, and because those methods always add the same items.
-  static base::NoDestructor<std::vector<std::string>> webui_schemes([]() {
-    std::vector<std::string> schemes;
-    schemes.emplace_back(kChromeUIScheme);
-    schemes.emplace_back(kChromeUIUntrustedScheme);
-    GetContentClient()->browser()->GetAdditionalWebUISchemes(&schemes);
-    return schemes;
-  }());
+  if (g_disallow_webui_scheme_caching_for_testing) {
+    return GetWebUISchemesSlow();
+  }
 
-  return *webui_schemes;
+  return GetWebUISchemesCached();
+}
+
+void URLDataManagerBackend::SetDisallowWebUISchemeCachingForTesting(
+    bool disallow_caching) {
+  g_disallow_webui_scheme_caching_for_testing = disallow_caching;
 }
 
 }  // namespace content

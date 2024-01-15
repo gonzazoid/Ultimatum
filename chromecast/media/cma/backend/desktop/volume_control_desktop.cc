@@ -9,10 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/no_destructor.h"
@@ -73,7 +72,7 @@ class VolumeControlInternal {
       return;
     }
 
-    level = base::clamp(level, 0.0f, 1.0f);
+    level = std::clamp(level, 0.0f, 1.0f);
     thread_.task_runner()->PostTask(
         FROM_HERE, base::BindOnce(&VolumeControlInternal::SetVolumeOnThread,
                                   base::Unretained(this), source, type, level));
@@ -206,13 +205,13 @@ void VolumeControl::SetOutputLimit(AudioContentType type, float limit) {}
 
 // static
 float VolumeControl::VolumeToDbFS(float volume) {
-  volume = base::clamp(volume, 0.0f, 1.0f);
+  volume = std::clamp(volume, 0.0f, 1.0f);
   return kMinVolumeDbfs + volume * (kMaxVolumeDbfs - kMinVolumeDbfs);
 }
 
 // static
 float VolumeControl::DbFSToVolume(float db) {
-  db = base::clamp(db, kMinVolumeDbfs, kMaxVolumeDbfs);
+  db = std::clamp(db, kMinVolumeDbfs, kMaxVolumeDbfs);
   return (db - kMinVolumeDbfs) / (kMaxVolumeDbfs - kMinVolumeDbfs);
 }
 

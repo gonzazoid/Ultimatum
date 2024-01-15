@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "net/base/net_errors.h"
 #include "net/socket/socket_descriptor.h"
@@ -27,15 +27,31 @@ TCPServerSocket::TCPServerSocket(std::unique_ptr<TCPSocket> socket)
     : socket_(std::move(socket)) {}
 
 int TCPServerSocket::AdoptSocket(SocketDescriptor socket) {
+  adopted_opened_socket_ = true;
   return socket_->AdoptUnconnectedSocket(socket);
 }
 
 TCPServerSocket::~TCPServerSocket() = default;
 
-int TCPServerSocket::Listen(const IPEndPoint& address, int backlog) {
-  int result = socket_->Open(address.GetFamily());
-  if (result != OK)
-    return result;
+int TCPServerSocket::Listen(const IPEndPoint& address,
+                            int backlog,
+                            absl::optional<bool> ipv6_only) {
+  int result = OK;
+  if (!adopted_opened_socket_) {
+    result = socket_->Open(address.GetFamily());
+    if (result != OK) {
+      return result;
+    }
+  }
+
+  if (ipv6_only.has_value()) {
+    CHECK_EQ(address.address(), net::IPAddress::IPv6AllZeros());
+    result = socket_->SetIPv6Only(*ipv6_only);
+    if (result != OK) {
+      socket_->Close();
+      return result;
+    }
+  }
 
   result = socket_->SetDefaultOptionsForServer();
   if (result != OK) {

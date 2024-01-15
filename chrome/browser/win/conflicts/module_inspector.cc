@@ -6,11 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/win/conflicts/module_info_util.h"
 #include "chrome/browser/win/util_win_service.h"
@@ -66,7 +65,7 @@ constexpr base::TimeDelta ModuleInspector::kFlushInspectionResultsTimerTimeout;
 ModuleInspector::ModuleInspector(
     const OnModuleInspectedCallback& on_module_inspected_callback)
     : on_module_inspected_callback_(on_module_inspected_callback),
-      is_after_startup_(false),
+      is_started_(false),
       util_win_factory_callback_(
           base::BindRepeating(&LaunchUtilWinServiceInstance)),
       path_mapping_(GetPathMapping()),
@@ -82,15 +81,28 @@ ModuleInspector::ModuleInspector(
               base::Unretained(this))),
       has_new_inspection_results_(false),
       connection_error_retry_count_(kConnectionErrorRetryCount),
-      is_waiting_on_util_win_service_(false) {
-  // Use BEST_EFFORT as those will only run after startup is finished.
-  content::BrowserThread::PostBestEffortTask(
-      FROM_HERE, base::SequencedTaskRunnerHandle::Get(),
-      base::BindOnce(&ModuleInspector::OnStartupFinished,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
+      is_waiting_on_util_win_service_(false) {}
 
 ModuleInspector::~ModuleInspector() = default;
+
+void ModuleInspector::StartInspection() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // This function can be invoked multiple times.
+  if (is_started_) {
+    return;
+  }
+
+  is_started_ = true;
+
+  // Read the inspection cache now that it is needed.
+  cache_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&ReadInspectionResultsCacheOnBackgroundSequence,
+                     GetInspectionResultsCachePath()),
+      base::BindOnce(&ModuleInspector::OnInspectionResultsCacheRead,
+                     weak_ptr_factory_.GetWeakPtr()));
+}
 
 void ModuleInspector::AddModule(const ModuleInfoKey& module_key) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -103,12 +115,6 @@ void ModuleInspector::AddModule(const ModuleInfoKey& module_key) {
   // inspection must be started.
   if (inspection_results_cache_read_ && was_queue_empty)
     StartInspectingModule();
-}
-
-void ModuleInspector::ForceStartInspection() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // Assume startup is finished to immediately begin inspecting modules.
-  OnStartupFinished();
 }
 
 bool ModuleInspector::IsIdle() {
@@ -146,28 +152,10 @@ void ModuleInspector::EnsureUtilWinServiceBound() {
                      base::Unretained(this)));
 }
 
-void ModuleInspector::OnStartupFinished() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  // This function will be invoked twice if ForceStartInspection() is called.
-  if (is_after_startup_)
-    return;
-
-  is_after_startup_ = true;
-
-  // Read the inspection cache now that it won't affect startup.
-  base::PostTaskAndReplyWithResult(
-      cache_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ReadInspectionResultsCacheOnBackgroundSequence,
-                     GetInspectionResultsCachePath()),
-      base::BindOnce(&ModuleInspector::OnInspectionResultsCacheRead,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
-
 void ModuleInspector::OnInspectionResultsCacheRead(
     InspectionResultsCache inspection_results_cache) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(is_after_startup_);
+  DCHECK(is_started_);
   DCHECK(!inspection_results_cache_read_);
 
   inspection_results_cache_read_ = true;
@@ -209,7 +197,7 @@ void ModuleInspector::StartInspectingModule() {
       GetInspectionResultFromCache(module_key, &inspection_results_cache_);
   if (inspection_result) {
     // Send asynchronously or this might cause a stack overflow.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&ModuleInspector::OnInspectionFinished,
                                   weak_ptr_factory_.GetWeakPtr(), module_key,
                                   std::move(*inspection_result)));

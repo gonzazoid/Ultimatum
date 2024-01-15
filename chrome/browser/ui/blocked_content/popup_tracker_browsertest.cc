@@ -48,12 +48,6 @@
 #endif
 
 namespace {
-const char kPopupFirstDocumentEngagement[] =
-    "ContentSettings.Popups.FirstDocumentEngagementTime2";
-const char kPopupEngagement[] = "ContentSettings.Popups.EngagementTime";
-const char kPopupGestureClose[] =
-    "ContentSettings.Popups.EngagementTime.GestureClose";
-
 const char kUkmEngagementTime[] = "EngagementTime";
 const char kUkmUserInitiatedClose[] = "UserInitiatedClose";
 const char kUkmTrusted[] = "Trusted";
@@ -70,8 +64,8 @@ using UkmEntry = ukm::builders::Popup_Closed;
 
 class PopupTrackerBrowserTest : public InProcessBrowserTest {
  public:
-  PopupTrackerBrowserTest() {}
-  ~PopupTrackerBrowserTest() override {}
+  PopupTrackerBrowserTest() = default;
+  ~PopupTrackerBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
     ASSERT_TRUE(embedded_test_server()->Start());
@@ -93,7 +87,7 @@ class PopupTrackerBrowserTest : public InProcessBrowserTest {
     const auto& entries =
         test_ukm_recorder_->GetEntriesByName(UkmEntry::kEntryName);
     EXPECT_EQ(1u, entries.size());
-    const auto* entry = entries[0];
+    const auto* entry = entries[0].get();
     test_ukm_recorder_->ExpectEntrySourceHasUrl(entry, expected_url);
     EXPECT_TRUE(test_ukm_recorder_->EntryHasMetric(entry, kUkmEngagementTime));
     return entry;
@@ -109,10 +103,6 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest, NoPopup_NoTracker) {
   EXPECT_FALSE(blocked_content::PopupTracker::FromWebContents(
       browser()->tab_strip_model()->GetActiveWebContents()));
 
-  tester.ExpectTotalCount(kPopupFirstDocumentEngagement, 0);
-  tester.ExpectTotalCount(kPopupEngagement, 0);
-  tester.ExpectTotalCount(kPopupGestureClose, 0);
-
   EXPECT_EQ(0u, GetNumPopupUkmEntries());
 }
 
@@ -125,9 +115,9 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest,
   content::TestNavigationObserver navigation_observer(nullptr, 1);
   navigation_observer.StartWatchingNewWebContents();
 
-  EXPECT_TRUE(content::ExecuteScript(
-      browser()->tab_strip_model()->GetActiveWebContents(),
-      "window.open('/title1.html')"));
+  EXPECT_TRUE(
+      content::ExecJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                      "window.open('/title1.html')"));
   navigation_observer.Wait();
 
   EXPECT_EQ(2, browser()->tab_strip_model()->count());
@@ -141,10 +131,6 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest,
   browser()->tab_strip_model()->CloseWebContentsAt(
       active_index, TabCloseTypes::CLOSE_USER_GESTURE);
   destroyed_watcher.Wait();
-
-  tester.ExpectTotalCount(kPopupFirstDocumentEngagement, 1);
-  tester.ExpectTotalCount(kPopupEngagement, 1);
-  tester.ExpectTotalCount(kPopupGestureClose, 1);
 
   auto* entry = ExpectAndGetEntry(first_url);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmUserInitiatedClose, 1u);
@@ -165,9 +151,9 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest,
   content::TestNavigationObserver navigation_observer(nullptr, 1);
   navigation_observer.StartWatchingNewWebContents();
 
-  EXPECT_TRUE(content::ExecuteScript(
-      browser()->tab_strip_model()->GetActiveWebContents(),
-      "window.open('/title1.html')"));
+  EXPECT_TRUE(
+      content::ExecJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                      "window.open('/title1.html')"));
   navigation_observer.Wait();
 
   EXPECT_EQ(2, browser()->tab_strip_model()->count());
@@ -187,10 +173,6 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest,
   browser()->tab_strip_model()->CloseWebContentsAt(
       active_index, TabCloseTypes::CLOSE_USER_GESTURE);
   destroyed_watcher.Wait();
-
-  tester.ExpectTotalCount(kPopupFirstDocumentEngagement, 1);
-  tester.ExpectTotalCount(kPopupEngagement, 1);
-  tester.ExpectTotalCount(kPopupGestureClose, 1);
 
   auto* entry = ExpectAndGetEntry(first_url);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmUserInitiatedClose, 1u);
@@ -237,9 +219,6 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest, DISABLED_ControlClick_HasTracker
       Profile::FromBrowserContext(new_contents->GetBrowserContext()));
   destroyed_watcher.Wait();
 
-  tester.ExpectTotalCount(kPopupFirstDocumentEngagement, 1);
-  tester.ExpectTotalCount(kPopupEngagement, 1);
-
   auto* entry = ExpectAndGetEntry(url);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmUserInitiatedClose, 0u);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmTrusted, 1u);
@@ -279,9 +258,6 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest, DISABLED_ShiftClick_HasTracker) 
       Profile::FromBrowserContext(new_contents->GetBrowserContext()));
   destroyed_watcher.Wait();
 
-  tester.ExpectTotalCount(kPopupFirstDocumentEngagement, 1);
-  tester.ExpectTotalCount(kPopupEngagement, 1);
-
   auto* entry = ExpectAndGetEntry(url);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmUserInitiatedClose, 0u);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmTrusted, 1u);
@@ -320,9 +296,6 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerBrowserTest, AllowlistedPopup_HasTracker) {
       browser()->tab_strip_model()->GetActiveWebContents());
   browser()->tab_strip_model()->CloseAllTabs();
   destroyed_watcher.Wait();
-
-  tester.ExpectTotalCount(kPopupFirstDocumentEngagement, 1);
-  tester.ExpectTotalCount(kPopupEngagement, 1);
 
   auto* entry = ExpectAndGetEntry(url);
   test_ukm_recorder_->ExpectEntryMetric(entry, kUkmUserInitiatedClose, 0u);
@@ -515,7 +488,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingPopupTrackerBrowserTest,
   auto entries = test_ukm_recorder_->GetEntriesByName(
       ukm::builders::Popup_Closed::kEntryName);
   EXPECT_EQ(2u, entries.size());
-  for (auto* entry : entries) {
+  for (const ukm::mojom::UkmEntry* entry : entries) {
     test_ukm_recorder_->ExpectEntryMetric(
         entry, kUkmSafeBrowsingStatus,
         static_cast<int>(
@@ -760,7 +733,7 @@ IN_PROC_BROWSER_TEST_F(PopupTrackerPrerenderBrowserTest,
 
   // Load a prerender url in the popup window.
   const GURL prerender_url = embedded_test_server()->GetURL("/empty.html");
-  EXPECT_TRUE(content::ExecuteScript(
+  EXPECT_TRUE(content::ExecJs(
       browser()->tab_strip_model()->GetActiveWebContents(),
       "window.open('/popup_blocker/popup-simple-prerender.html')"));
   prerender_helper()->WaitForPrerenderLoadCompletion(prerender_url);

@@ -27,6 +27,7 @@ const char kParamOAuthToken[] = "oauth_token";
 const char kParamPlatform[] = "platform";
 const char kParamRequest[] = "request";
 const char kParamRetry[] = "retry";
+const char kParamProfileID[] = "profileid";
 
 // Policy constants used in authorization header.
 const char kAuthHeader[] = "Authorization";
@@ -96,6 +97,12 @@ const char kChromeMachineLevelUserCloudPolicyIOSType[] =
 const char kChromeMachineLevelExtensionCloudPolicyType[] =
     "google/chrome/machine-level-extension";
 const char kChromeRemoteCommandPolicyType[] = "google/chromeos/remotecommand";
+
+const char kChromeAshUserRemoteCommandType[] = "google/ash/user/remotecommand";
+const char kChromeDeviceRemoteCommandType[] = "google/ash/device/remotecommand";
+const char kChromeBrowserRemoteCommandType[] =
+    "google/chrome/browser/remotecommand";
+const char kChromeUserRemoteCommandType[] = "google/chrome/user/remotecommand";
 
 const char kChromeMachineLevelUserCloudPolicyTypeBase64[] =
     "Z29vZ2xlL2Nocm9tZS9tYWNoaW5lLWxldmVsLXVzZXI=";

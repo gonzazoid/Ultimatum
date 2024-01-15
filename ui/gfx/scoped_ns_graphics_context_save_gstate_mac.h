@@ -5,13 +5,9 @@
 #ifndef UI_GFX_SCOPED_NS_GRAPHICS_CONTEXT_SAVE_GSTATE_MAC_H_
 #define UI_GFX_SCOPED_NS_GRAPHICS_CONTEXT_SAVE_GSTATE_MAC_H_
 
-#include "ui/gfx/gfx_export.h"
+#include <memory>
 
-#if defined(__OBJC__)
-@class NSGraphicsContext;
-#else
-class NSGraphicsContext;
-#endif
+#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 
@@ -28,7 +24,8 @@ class GFX_EXPORT ScopedNSGraphicsContextSaveGState {
   ~ScopedNSGraphicsContextSaveGState();
 
  private:
-  NSGraphicsContext* context_;  // weak
+  struct ObjCStorage;
+  std::unique_ptr<ObjCStorage> objc_storage_;
 };
 
 }  // namespace gfx

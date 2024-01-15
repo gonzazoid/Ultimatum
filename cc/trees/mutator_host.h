@@ -120,7 +120,7 @@ class MutatorHost {
       const gfx::PointF& current_offset,
       base::TimeDelta delayed_by,
       base::TimeDelta animation_start_offset) = 0;
-  virtual bool ImplOnlyScrollAnimationUpdateTarget(
+  virtual std::optional<gfx::PointF> ImplOnlyScrollAnimationUpdateTarget(
       const gfx::Vector2dF& scroll_delta,
       const gfx::PointF& max_scroll_offset,
       base::TimeTicks frame_monotonic_time,
@@ -141,7 +141,9 @@ class MutatorHost {
   virtual bool HasCanvasInvalidation() const = 0;
   virtual bool HasJSAnimation() const = 0;
   virtual bool HasSmilAnimation() const = 0;
-  virtual bool HasSharedElementTransition() const = 0;
+  virtual bool HasViewTransition() const = 0;
+  virtual bool HasScrollLinkedAnimation(ElementId for_scroller) const = 0;
+  virtual bool IsAutoScrolling() const = 0;
 
   // Iterates through all animations and returns the minimum tick interval.
   // Returns 0 if there is a continuous animation which should be ticked

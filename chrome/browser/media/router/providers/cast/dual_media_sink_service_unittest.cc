@@ -4,7 +4,7 @@
 
 #include "chrome/browser/media/router/providers/cast/dual_media_sink_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/media/router/test/provider_test_helpers.h"
@@ -63,18 +63,20 @@ class DualMediaSinkServiceTest : public testing::Test {
                     const std::vector<MediaSinkInternal>& sinks));
 
  protected:
+  // Must outlive the raw_ptrs below.
+  std::unique_ptr<DualMediaSinkService> dual_media_sink_service_;
+
   raw_ptr<MockCastMediaSinkService> cast_media_sink_service_ = nullptr;
   raw_ptr<MockDialMediaSinkService> dial_media_sink_service_ = nullptr;
   raw_ptr<MockCastAppDiscoveryService> cast_app_discovery_service_ = nullptr;
-  std::unique_ptr<DualMediaSinkService> dual_media_sink_service_;
 
  private:
   content::BrowserTaskEnvironment task_environment;
 };
 
-TEST_F(DualMediaSinkServiceTest, OnUserGesture) {
-  EXPECT_CALL(*cast_media_sink_service_, OnUserGesture());
-  dual_media_sink_service_->OnUserGesture();
+TEST_F(DualMediaSinkServiceTest, DiscoverSinksNow) {
+  EXPECT_CALL(*cast_media_sink_service_, DiscoverSinksNow());
+  dual_media_sink_service_->DiscoverSinksNow();
 }
 
 TEST_F(DualMediaSinkServiceTest, AddSinksDiscoveredCallback) {

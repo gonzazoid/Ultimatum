@@ -13,11 +13,6 @@
 #include "base/ranges/algorithm.h"
 #include "base/stl_util.h"
 
-namespace base {
-template <typename TagType, typename UnderlyingType>
-class StrongAlias;
-}  // namespace base
-
 static_assert(std::is_same<RepresentativeSurface,
                            SurfaceSetWithValuation::key_type>::value,
               "");
@@ -37,7 +32,7 @@ bool SurfaceSetWithValuation::TryAdd(RepresentativeSurface surface,
   if (it != surfaces_.end())
     return true;
 
-  double new_cost = cost_ + valuation_.IncrementalCost(surfaces_, surface);
+  double new_cost = cost_ + valuation_->IncrementalCost(surfaces_, surface);
   if (new_cost > budget)
     return false;
 
@@ -49,7 +44,7 @@ bool SurfaceSetWithValuation::TryAdd(RepresentativeSurface surface,
 
 bool SurfaceSetWithValuation::TryAdd(blink::IdentifiableSurface surface,
                                      PrivacyBudgetCost budget) {
-  return TryAdd(valuation_.equivalence().GetRepresentative(surface), budget);
+  return TryAdd(valuation_->equivalence().GetRepresentative(surface), budget);
 }
 
 void SurfaceSetWithValuation::AssignWithBudget(
@@ -68,7 +63,7 @@ void SurfaceSetWithValuation::AssignWithBudget(
 
   auto new_beginning = container.begin();
   for (; new_beginning != container.end() && cost_ > budget;
-       cost_ -= valuation_.Cost(*new_beginning), ++new_beginning) {
+       cost_ -= valuation_->Cost(*new_beginning), ++new_beginning) {
   }
 
   surfaces_ = container_type(new_beginning, container.end());
@@ -77,7 +72,7 @@ void SurfaceSetWithValuation::AssignWithBudget(
 void SurfaceSetWithValuation::Assign(
     RepresentativeSurfaceSet&& incoming_container) {
   surfaces_ = std::move(incoming_container);
-  cost_ = valuation_.Cost(surfaces_);
+  cost_ = valuation_->Cost(surfaces_);
 }
 
 void SurfaceSetWithValuation::Clear() {

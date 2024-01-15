@@ -10,17 +10,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -208,7 +206,9 @@ class BackgroundModeManagerTest : public testing::Test {
         std::make_unique<base::CommandLine>(base::CommandLine::NO_PROGRAM);
 
     auto policy_service = std::make_unique<policy::PolicyServiceImpl>(
-        std::vector<policy::ConfigurationPolicyProvider*>{&policy_provider_});
+        std::vector<
+            raw_ptr<policy::ConfigurationPolicyProvider, VectorExperimental>>{
+            &policy_provider_});
     profile_manager_ = CreateTestingProfileManager();
     profile_ = profile_manager_->CreateTestingProfile(
         "p1", nullptr, u"p1", 0, TestingProfile::TestingFactories(),
@@ -294,7 +294,7 @@ class BackgroundModeManagerWithExtensionsTest : public testing::Test {
 
   std::unique_ptr<TestingProfileManager> profile_manager_;
   // Test profile used by all tests - this is owned by profile_manager_.
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 
  private:
   // Required for extension service.

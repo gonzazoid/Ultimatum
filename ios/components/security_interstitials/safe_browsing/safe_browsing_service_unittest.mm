@@ -48,10 +48,6 @@
 #import "services/network/public/cpp/simple_url_loader.h"
 #import "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 const char kSafePage[] = "https://example.test/safe.html";
@@ -78,14 +74,23 @@ class TestUrlCheckerClient {
 
   bool url_is_unsafe() const { return url_is_unsafe_; }
 
+  safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check()
+      const {
+    return performed_check_;
+  }
+
   void CheckUrl(const GURL& url) {
     result_pending_ = true;
     url_checker_ = safe_browsing_service_->CreateUrlChecker(
         network::mojom::RequestDestination::kDocument, &web_state_,
         safe_browsing_client_);
-    web::GetIOThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&TestUrlCheckerClient::CheckUrlOnIOThread,
-                                  base::Unretained(this), url));
+    if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+      CheckUrlOnSBThread(url);
+    } else {
+      web::GetIOThreadTaskRunner({})->PostTask(
+          FROM_HERE, base::BindOnce(&TestUrlCheckerClient::CheckUrlOnSBThread,
+                                    base::Unretained(this), url));
+    }
   }
 
   void CheckSubFrameUrl(const GURL& url) {
@@ -93,9 +98,13 @@ class TestUrlCheckerClient {
     url_checker_ = safe_browsing_service_->CreateUrlChecker(
         network::mojom::RequestDestination::kIframe, &web_state_,
         safe_browsing_client_);
-    web::GetIOThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&TestUrlCheckerClient::CheckUrlOnIOThread,
-                                  base::Unretained(this), url));
+    if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+      CheckUrlOnSBThread(url);
+    } else {
+      web::GetIOThreadTaskRunner({})->PostTask(
+          FROM_HERE, base::BindOnce(&TestUrlCheckerClient::CheckUrlOnSBThread,
+                                    base::Unretained(this), url));
+    }
   }
 
   bool result_pending() const { return result_pending_; }
@@ -107,7 +116,7 @@ class TestUrlCheckerClient {
   }
 
  private:
-  void CheckUrlOnIOThread(const GURL& url) {
+  void CheckUrlOnSBThread(const GURL& url) {
     url_checker_->CheckUrl(
         url, "GET",
         base::BindOnce(&TestUrlCheckerClient::OnCheckUrlResult,
@@ -119,8 +128,9 @@ class TestUrlCheckerClient {
           slow_check_notifier,
       bool proceed,
       bool showed_interstitial,
-      bool did_perform_real_time_check,
-      bool did_check_allowlist) {
+      bool has_post_commit_interstitial_skipped,
+      safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+          performed_check) {
     if (slow_check_notifier) {
       *slow_check_notifier =
           base::BindOnce(&TestUrlCheckerClient::OnCheckUrlResult,
@@ -129,6 +139,7 @@ class TestUrlCheckerClient {
     }
     url_is_unsafe_ = !proceed;
     result_pending_ = false;
+    performed_check_ = performed_check;
     url_checker_.reset();
   }
 
@@ -136,6 +147,8 @@ class TestUrlCheckerClient {
 
   bool result_pending_ = false;
   bool url_is_unsafe_ = false;
+  safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check_ =
+      safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck::kUnknown;
   SafeBrowsingService* safe_browsing_service_;
   web::FakeWebState web_state_;
   std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl> url_checker_;
@@ -195,18 +208,26 @@ class SafeBrowsingServiceTest : public PlatformTest {
   }
 
   void MarkUrlAsMalware(const GURL& bad_url) {
-    web::GetIOThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&SafeBrowsingServiceTest::MarkUrlAsMalwareOnIOThread,
-                       base::Unretained(this), bad_url));
+    if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+      MarkUrlAsMalwareOnSBThread(bad_url);
+    } else {
+      web::GetIOThreadTaskRunner({})->PostTask(
+          FROM_HERE,
+          base::BindOnce(&SafeBrowsingServiceTest::MarkUrlAsMalwareOnSBThread,
+                         base::Unretained(this), bad_url));
+    }
   }
 
   // Adds the given `safe_url` to the allowlist used by real-time checks.
   void MarkUrlAsRealTimeSafe(const GURL& safe_url) {
-    web::GetIOThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&SafeBrowsingServiceTest::MarkUrlAsSafeOnIOThread,
-                       base::Unretained(this), safe_url));
+    if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+      MarkUrlAsSafeOnSBThread(safe_url);
+    } else {
+      web::GetIOThreadTaskRunner({})->PostTask(
+          FROM_HERE,
+          base::BindOnce(&SafeBrowsingServiceTest::MarkUrlAsSafeOnSBThread,
+                         base::Unretained(this), safe_url));
+    }
   }
 
   // Caches the given `bad_url` as unsafe in the VerdictCacheManager used by
@@ -223,19 +244,28 @@ class SafeBrowsingServiceTest : public PlatformTest {
     threat_info->set_cache_expression_using_match_type(bad_url.host() + "/");
     threat_info->set_cache_expression_match_type(
         safe_browsing::RTLookupResponse::ThreatInfo::COVERING_MATCH);
-    verdict_cache_manager_->CacheRealTimeUrlVerdict(bad_url, response,
+    verdict_cache_manager_->CacheRealTimeUrlVerdict(response,
                                                     base::Time::Now());
   }
 
  protected:
+  void SetUpVerdict(GURL url, bool is_unsafe) {
+    verdict_cache_manager_->CacheArtificialHashRealTimeLookupVerdict(url.spec(),
+                                                                     is_unsafe);
+  }
+
   web::WebTaskEnvironment task_environment_;
   scoped_refptr<SafeBrowsingService> safe_browsing_service_;
   std::unique_ptr<web::FakeBrowserState> browser_state_;
   std::unique_ptr<sync_preferences::TestingPrefServiceSyncable> pref_service_;
   FakeSafeBrowsingClient safe_browsing_client_;
+  safe_browsing::hash_realtime_utils::GoogleChromeBrandingPretenderForTesting
+      apply_branding_;
+  base::test::ScopedFeatureList scoped_feature_list_;
+  web::FakeWebState web_state_;
 
  private:
-  void MarkUrlAsMalwareOnIOThread(const GURL& bad_url) {
+  void MarkUrlAsMalwareOnSBThread(const GURL& bad_url) {
     safe_browsing::FullHashInfo full_hash_info =
         safe_browsing::GetFullHashInfoWithMetadata(
             bad_url, safe_browsing::GetUrlMalwareId(),
@@ -245,7 +275,7 @@ class SafeBrowsingServiceTest : public PlatformTest {
     v4_get_hash_factory_->AddToFullHashCache(full_hash_info);
   }
 
-  void MarkUrlAsSafeOnIOThread(const GURL& bad_url) {
+  void MarkUrlAsSafeOnSBThread(const GURL& bad_url) {
     safe_browsing::FullHashInfo full_hash_info =
         safe_browsing::GetFullHashInfoWithMetadata(
             bad_url, safe_browsing::GetUrlMalwareId(),
@@ -276,7 +306,8 @@ class SafeBrowsingServiceTest : public PlatformTest {
         base::BindRepeating([](bool) { return false; }),
         /*is_off_the_record=*/false,
         /*variations_service=*/nullptr,
-        /*referrer_chain_provider=*/nullptr);
+        /*referrer_chain_provider=*/nullptr,
+        /*webui_delegate=*/nullptr);
     safe_browsing_client_.set_real_time_url_lookup_service(
         lookup_service_.get());
   }
@@ -301,8 +332,10 @@ TEST_F(SafeBrowsingServiceTest, SafeAndUnsafePages) {
                               browser_state_.get(), &safe_browsing_client_);
   GURL safe_url = GURL(kSafePage);
   client.CheckUrl(safe_url);
-  EXPECT_TRUE(client.result_pending());
-  client.WaitForResult();
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    EXPECT_TRUE(client.result_pending());
+    client.WaitForResult();
+  }
   EXPECT_FALSE(client.result_pending());
   EXPECT_FALSE(client.url_is_unsafe());
 
@@ -317,8 +350,10 @@ TEST_F(SafeBrowsingServiceTest, SafeAndUnsafePages) {
   // Disable Safe Browsing, and ensure that unsafe URLs are no longer flagged.
   pref_service_->SetBoolean(prefs::kSafeBrowsingEnabled, false);
   client.CheckUrl(unsafe_url);
-  EXPECT_TRUE(client.result_pending());
-  client.WaitForResult();
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    EXPECT_TRUE(client.result_pending());
+    client.WaitForResult();
+  }
   EXPECT_FALSE(client.result_pending());
   EXPECT_FALSE(client.url_is_unsafe());
 }
@@ -361,17 +396,16 @@ TEST_F(SafeBrowsingServiceTest, RealTimeSafeAndUnsafePages) {
   pref_service_->SetBoolean(
       unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, false);
   client.CheckUrl(unsafe_url);
-  EXPECT_TRUE(client.result_pending());
-  client.WaitForResult();
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    EXPECT_TRUE(client.result_pending());
+    client.WaitForResult();
+  }
   EXPECT_FALSE(client.result_pending());
   EXPECT_FALSE(client.url_is_unsafe());
 }
 
 TEST_F(SafeBrowsingServiceTest,
        RealTimeSafeAndUnsafePagesWithEnhancedProtection) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(safe_browsing::kEnhancedProtection);
-
   TestUrlCheckerClient client(safe_browsing_service_.get(),
                               browser_state_.get(), &safe_browsing_client_);
 
@@ -418,14 +452,18 @@ TEST_F(SafeBrowsingServiceTest,
   // flagged.
   pref_service_->SetBoolean(prefs::kSafeBrowsingEnhanced, false);
   client.CheckUrl(unsafe_url);
-  EXPECT_TRUE(client.result_pending());
-  client.WaitForResult();
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    EXPECT_TRUE(client.result_pending());
+    client.WaitForResult();
+  }
   EXPECT_FALSE(client.result_pending());
   EXPECT_FALSE(client.url_is_unsafe());
 
   client.CheckSubFrameUrl(unsafe_url);
-  EXPECT_TRUE(client.result_pending());
-  client.WaitForResult();
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    EXPECT_TRUE(client.result_pending());
+    client.WaitForResult();
+  }
   EXPECT_FALSE(client.result_pending());
   EXPECT_FALSE(client.url_is_unsafe());
 }
@@ -563,6 +601,63 @@ TEST_F(SafeBrowsingServiceTest, NonEmptyUserAgent) {
         run_loop.Quit();
       }));
   run_loop.Run();
+}
+
+// Verifies that Safe Browsing hash prefix metrics are correctly recorded and
+// the performed check is correct when the hash prefix feature is enabled.
+TEST_F(SafeBrowsingServiceTest, HashPrefixEnabled) {
+  scoped_feature_list_.InitAndEnableFeature(
+      safe_browsing::kHashPrefixRealTimeLookups);
+  TestUrlCheckerClient client(safe_browsing_service_.get(),
+                              browser_state_.get(), &safe_browsing_client_);
+  pref_service_->SetBoolean(prefs::kSafeBrowsingEnabled, true);
+
+  base::HistogramTester histogram_tester;
+  GURL url = GURL(kMalwarePage);
+  SetUpVerdict(url, /*is_unsafe=*/true);
+  client.CheckUrl(url);
+
+  EXPECT_TRUE(client.result_pending());
+  client.WaitForResult();
+  EXPECT_FALSE(client.result_pending());
+  EXPECT_EQ(safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck::
+                kHashRealTimeCheck,
+            client.performed_check());
+  histogram_tester.ExpectBucketCount(
+      "SafeBrowsing.HPRT.Ineligible.IneligibleForSessionOrLocation",
+      /*sample=*/false,
+      /*expected_bucket_count=*/1);
+
+  task_environment_.RunUntilIdle();
+}
+
+// Verifies that Safe Browsing hash prefix metrics are correctly recorded and
+// the performed check is correct when the hash prefix feature is disabled.
+TEST_F(SafeBrowsingServiceTest, HashPrefixDisabled) {
+  scoped_feature_list_.InitAndDisableFeature(
+      safe_browsing::kHashPrefixRealTimeLookups);
+  TestUrlCheckerClient client(safe_browsing_service_.get(),
+                              browser_state_.get(), &safe_browsing_client_);
+
+  pref_service_->SetBoolean(prefs::kSafeBrowsingEnabled, true);
+
+  base::HistogramTester histogram_tester;
+  GURL url = GURL(kMalwarePage);
+  SetUpVerdict(url, /*is_unsafe=*/true);
+  client.CheckUrl(url);
+
+  EXPECT_TRUE(client.result_pending());
+  client.WaitForResult();
+  EXPECT_FALSE(client.result_pending());
+  EXPECT_EQ(safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck::
+                kHashDatabaseCheck,
+            client.performed_check());
+  histogram_tester.ExpectBucketCount(
+      "SafeBrowsing.HPRT.Ineligible.IneligibleForSessionOrLocation",
+      /*sample=*/true,
+      /*expected_bucket_count=*/1);
+
+  task_environment_.RunUntilIdle();
 }
 
 using SafeBrowsingServiceInitializationTest = PlatformTest;

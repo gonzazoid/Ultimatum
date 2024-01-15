@@ -128,11 +128,13 @@ Color TextLinkColors::ColorFromCSSValue(const CSSValue& value,
                                         Color current_color,
                                         mojom::blink::ColorScheme color_scheme,
                                         bool for_visited_link) const {
-  if (auto* color_value = DynamicTo<cssvalue::CSSColor>(value))
-    return color_value->Value();
+  if (auto* color_value = DynamicTo<cssvalue::CSSColor>(value)) {
+    Color result_color = color_value->Value();
+    result_color.ResolveNonFiniteValues();
+    return result_color;
+  }
 
   if (auto* color_mix_value = DynamicTo<cssvalue::CSSColorMixValue>(value)) {
-    // TODO(crbug.com/1362022): This is not correct for CurrentColor
     Color c1 = ColorFromCSSValue(color_mix_value->Color1(), current_color,
                                  color_scheme, for_visited_link);
     Color c2 = ColorFromCSSValue(color_mix_value->Color2(), current_color,

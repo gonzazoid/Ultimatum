@@ -8,28 +8,70 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/schedule_enums.h"
 #include "ash/system/scheduled_feature/scheduled_feature.h"
+#include "base/metrics/histogram_functions.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
+#include "chrome/browser/ash/login/wizard_context.h"
+#include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/theme_selection_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/theme_selection_screen_handler.h"
 #include "components/prefs/pref_service.h"
 #include "ui/native_theme/native_theme.h"
 
 namespace ash {
 
 namespace {
+
 constexpr const char kUserActionNext[] = "next";
 constexpr const char kUserActionSelect[] = "select";
+constexpr const char kUserActionReturn[] = "return";
 
-std::string GetSelectedTheme(Profile* profile) {
+ThemeSelectionScreen::SelectedTheme GetSelectedTheme(Profile* profile) {
   if (profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType) ==
       static_cast<int>(ScheduleType::kSunsetToSunrise)) {
-    return ThemeSelectionScreenView::kAutoMode;
+    return ThemeSelectionScreen::SelectedTheme::kAuto;
   }
 
   if (profile->GetPrefs()->GetBoolean(prefs::kDarkModeEnabled)) {
-    return ThemeSelectionScreenView::kDarkMode;
+    return ThemeSelectionScreen::SelectedTheme::kDark;
   }
-  return ThemeSelectionScreenView::kLightMode;
+  return ThemeSelectionScreen::SelectedTheme::kLight;
+}
+
+std::string GetSelectedThemeString(Profile* profile) {
+  ThemeSelectionScreen::SelectedTheme theme = GetSelectedTheme(profile);
+  switch (theme) {
+    case ThemeSelectionScreen::SelectedTheme::kAuto:
+      return ThemeSelectionScreenView::kAutoMode;
+    case ThemeSelectionScreen::SelectedTheme::kDark:
+      return ThemeSelectionScreenView::kDarkMode;
+    case ThemeSelectionScreen::SelectedTheme::kLight:
+      return ThemeSelectionScreenView::kLightMode;
+  }
+}
+
+void RecordSelectedTheme(Profile* profile,
+                         ThemeSelectionScreen::SelectedTheme initial_theme) {
+  base::UmaHistogramEnumeration("OOBE.ThemeSelectionScreen.SelectedTheme",
+                                GetSelectedTheme(profile));
+  base::UmaHistogramBoolean("OOBE.CHOOBE.SettingChanged.Theme-selection",
+                            GetSelectedTheme(profile) != initial_theme);
+}
+
+bool ShouldShowChoobeReturnButton(ChoobeFlowController* controller) {
+  if (!features::IsOobeChoobeEnabled() || !controller) {
+    return false;
+  }
+  return controller->ShouldShowReturnButton(
+      ThemeSelectionScreenView::kScreenId);
+}
+
+void ReportScreenCompletedToChoobe(ChoobeFlowController* controller) {
+  if (!features::IsOobeChoobeEnabled() || !controller) {
+    return;
+  }
+  controller->OnScreenCompleted(
+      *ProfileManager::GetActiveUserProfile()->GetPrefs(),
+      ThemeSelectionScreenView::kScreenId);
 }
 
 }  // namespace
@@ -54,6 +96,19 @@ ThemeSelectionScreen::ThemeSelectionScreen(
 
 ThemeSelectionScreen::~ThemeSelectionScreen() = default;
 
+std::string ThemeSelectionScreen::RetrieveChoobeSubtitle() {
+  Profile* profile = ProfileManager::GetActiveUserProfile();
+  ThemeSelectionScreen::SelectedTheme theme = GetSelectedTheme(profile);
+  switch (theme) {
+    case ThemeSelectionScreen::SelectedTheme::kAuto:
+      return "autoThemeLabel";
+    case ThemeSelectionScreen::SelectedTheme::kDark:
+      return "darkThemeLabel";
+    case ThemeSelectionScreen::SelectedTheme::kLight:
+      return "lightThemeLabel";
+  }
+}
+
 bool ThemeSelectionScreen::ShouldBeSkipped(const WizardContext& context) const {
   if (context.skip_post_login_screens_for_tests)
     return true;
@@ -61,10 +116,17 @@ bool ThemeSelectionScreen::ShouldBeSkipped(const WizardContext& context) const {
   const PrefService::Preference* pref =
       ProfileManager::GetActiveUserProfile()->GetPrefs()->FindPreference(
           prefs::kDarkModeScheduleType);
-  if (pref->IsManaged() || pref->IsRecommended() ||
-      !chromeos::features::IsOobeThemeSelectionEnabled() ||
-      !features::IsDarkLightModeEnabled()) {
+  if (pref->IsManaged() || pref->IsRecommended()) {
     return true;
+  }
+
+  if (features::IsOobeChoobeEnabled()) {
+    auto* choobe_controller =
+        WizardController::default_controller()->choobe_flow_controller();
+    if (choobe_controller && choobe_controller->ShouldScreenBeSkipped(
+                                 ThemeSelectionScreenView::kScreenId)) {
+      return true;
+    }
   }
 
   return false;
@@ -81,8 +143,17 @@ bool ThemeSelectionScreen::MaybeSkip(WizardContext& context) {
 void ThemeSelectionScreen::ShowImpl() {
   if (!view_)
     return;
-  Profile* profile = ProfileManager::GetActiveUserProfile();
-  view_->Show(GetSelectedTheme(profile));
+
+  initial_theme_ = GetSelectedTheme(ProfileManager::GetActiveUserProfile());
+
+  base::Value::Dict data;
+  data.Set("selectedTheme",
+           GetSelectedThemeString(ProfileManager::GetActiveUserProfile()));
+  data.Set(
+      "shouldShowReturn",
+      ShouldShowChoobeReturnButton(
+          WizardController::default_controller()->choobe_flow_controller()));
+  view_->Show(std::move(data));
 }
 
 void ThemeSelectionScreen::HideImpl() {}
@@ -90,10 +161,6 @@ void ThemeSelectionScreen::HideImpl() {}
 void ThemeSelectionScreen::OnUserAction(const base::Value::List& args) {
   Profile* profile = ProfileManager::GetActiveUserProfile();
   const std::string& action_id = args[0].GetString();
-
-  // Set the nudge shown count to 0 once the user goes through the Dark / Light
-  // setup to avoiding triggering Dark / Light nudge after OOBE.
-  profile->GetPrefs()->SetInteger(prefs::kDarkLightModeNudgeLeftToShowCount, 0);
 
   if (action_id == kUserActionSelect) {
     const SelectedTheme selected_theme =
@@ -110,10 +177,37 @@ void ThemeSelectionScreen::OnUserAction(const base::Value::List& args) {
                                       selected_theme == SelectedTheme::kDark);
     }
   } else if (action_id == kUserActionNext) {
+    RecordSelectedTheme(profile, initial_theme_);
+    ReportScreenCompletedToChoobe(
+        WizardController::default_controller()->choobe_flow_controller());
     exit_callback_.Run(Result::kProceed);
+  } else if (action_id == kUserActionReturn) {
+    context()->return_to_choobe_screen = true;
+    RecordSelectedTheme(profile, initial_theme_);
+    ReportScreenCompletedToChoobe(
+        WizardController::default_controller()->choobe_flow_controller());
+    exit_callback_.Run(Result::kProceed);
+    return;
   } else {
     BaseScreen::OnUserAction(args);
   }
+}
+
+ScreenSummary ThemeSelectionScreen::GetScreenSummary() {
+  ScreenSummary summary;
+  summary.screen_id = ThemeSelectionScreenView::kScreenId;
+  summary.icon_id = "oobe-40:theme-choobe";
+  summary.title_id = "choobeThemeSelectionTitle";
+  summary.is_revisitable = true;
+  summary.is_synced = false;
+
+  if (WizardController::default_controller()
+          ->choobe_flow_controller()
+          ->IsScreenCompleted(ThemeSelectionScreenView::kScreenId)) {
+    summary.subtitle_resource = RetrieveChoobeSubtitle();
+  }
+
+  return summary;
 }
 
 }  // namespace ash

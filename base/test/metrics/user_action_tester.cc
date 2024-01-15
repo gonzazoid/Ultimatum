@@ -4,8 +4,8 @@
 
 #include "base/test/metrics/user_action_tester.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/test_simple_task_runner.h"
 
 namespace base {
@@ -22,12 +22,12 @@ UserActionTester::~UserActionTester() {
   base::RemoveActionCallback(action_callback_);
 }
 
-int UserActionTester::GetActionCount(const std::string& user_action) const {
+int UserActionTester::GetActionCount(base::StringPiece user_action) const {
   return times_map_.count(user_action);
 }
 
 std::vector<TimeTicks> UserActionTester::GetActionTimes(
-    const std::string& user_action) const {
+    base::StringPiece user_action) const {
   std::vector<TimeTicks> result;
   auto range = times_map_.equal_range(user_action);
   for (auto it = range.first; it != range.second; it++) {

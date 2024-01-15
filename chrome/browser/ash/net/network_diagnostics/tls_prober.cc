@@ -4,14 +4,13 @@
 
 #include "chrome/browser/ash/net/network_diagnostics/tls_prober.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_util.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -21,15 +20,14 @@
 #include "net/base/host_port_pair.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/cpp/resolve_host_client_base.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/network/public/cpp/simple_host_resolver.h"
 
-namespace ash {
-namespace network_diagnostics {
+namespace ash::network_diagnostics {
 
 namespace {
 
 net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag() {
-  return net::DefineNetworkTrafficAnnotation("network_diagnostics_routines",
+  return net::DefineNetworkTrafficAnnotation("network_diagnostics_tls",
                                              R"(
       semantics {
         sender: "NetworkDiagnosticsRoutines"
@@ -46,6 +44,8 @@ net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag() {
       }
       policy {
         cookies_allowed: NO
+        policy_exception_justification:
+            "Not implemented. Does not contain user identifier."
       }
   )");
 }
@@ -57,7 +57,7 @@ TlsProber::TlsProber(NetworkContextGetter network_context_getter,
                      bool negotiate_tls,
                      TlsProbeCompleteCallback callback)
     : network_context_getter_(std::move(network_context_getter)),
-      host_port_pair_(host_port_pair),
+      host_port_pair_(std::move(host_port_pair)),
       negotiate_tls_(negotiate_tls),
       callback_(std::move(callback)) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -68,10 +68,22 @@ TlsProber::TlsProber(NetworkContextGetter network_context_getter,
       network_context_getter_.Run();
   DCHECK(network_context);
 
-  host_resolver_ = std::make_unique<HostResolver>(
-      host_port_pair, network_context,
+  host_resolver_ = network::SimpleHostResolver::Create(network_context);
+
+  network::mojom::ResolveHostParametersPtr parameters =
+      network::mojom::ResolveHostParameters::New();
+  parameters->dns_query_type = net::DnsQueryType::A;
+  parameters->source = net::HostResolverSource::DNS;
+  parameters->cache_usage =
+      network::mojom::ResolveHostParameters::CacheUsage::DISALLOWED;
+
+  // Unretained(this) is safe here because the callback is invoked directly by
+  // |host_resolver_| which is owned by |this|.
+  host_resolver_->ResolveHost(
+      network::mojom::HostResolverHost::NewHostPortPair(host_port_pair_),
+      net::NetworkAnonymizationKey::CreateTransient(), std::move(parameters),
       base::BindOnce(&TlsProber::OnHostResolutionComplete,
-                     weak_factory_.GetWeakPtr()));
+                     base::Unretained(this)));
 }
 
 TlsProber::TlsProber()
@@ -80,17 +92,19 @@ TlsProber::TlsProber()
 TlsProber::~TlsProber() = default;
 
 void TlsProber::OnHostResolutionComplete(
-    HostResolver::ResolutionResult& resolution_result) {
+    int result,
+    const net::ResolveErrorInfo&,
+    const std::optional<net::AddressList>& resolved_addresses,
+    const std::optional<net::HostResolverEndpointResults>&) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   host_resolver_.reset();
-  bool success = resolution_result.result == net::OK &&
-                 !resolution_result.resolved_addresses->empty() &&
-                 resolution_result.resolved_addresses.has_value();
-  if (!success) {
-    OnDone(resolution_result.result, ProbeExitEnum::kDnsFailure);
+  if (result != net::OK) {
+    CHECK(!resolved_addresses);
+    OnDone(result, ProbeExitEnum::kDnsFailure);
     return;
   }
+  CHECK(resolved_addresses);
 
   network::mojom::NetworkContext::CreateTCPConnectedSocketCallback
       completion_callback = base::BindOnce(&TlsProber::OnConnectComplete,
@@ -103,12 +117,11 @@ void TlsProber::OnHostResolutionComplete(
 
   network::mojom::NetworkContext* network_context =
       network_context_getter_.Run();
-  DCHECK(network_context);
+  CHECK(network_context);
 
   network_context->CreateTCPConnectedSocket(
-      /*local_addr=*/absl::nullopt,
-      resolution_result.resolved_addresses.value(),
-      /*options=*/nullptr,
+      /*local_addr=*/std::nullopt, resolved_addresses.value(),
+      /*tcp_connected_socket_options=*/nullptr,
       net::MutableNetworkTrafficAnnotationTag(GetTrafficAnnotationTag()),
       std::move(pending_receiver), /*observer=*/mojo::NullRemote(),
       std::move(completion_callback));
@@ -116,8 +129,8 @@ void TlsProber::OnHostResolutionComplete(
 
 void TlsProber::OnConnectComplete(
     int result,
-    const absl::optional<net::IPEndPoint>& local_addr,
-    const absl::optional<net::IPEndPoint>& peer_addr,
+    const std::optional<net::IPEndPoint>& local_addr,
+    const std::optional<net::IPEndPoint>& peer_addr,
     mojo::ScopedDataPipeConsumerHandle receive_stream,
     mojo::ScopedDataPipeProducerHandle send_stream) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -155,7 +168,7 @@ void TlsProber::OnConnectComplete(
 void TlsProber::OnTlsUpgrade(int result,
                              mojo::ScopedDataPipeConsumerHandle receive_stream,
                              mojo::ScopedDataPipeProducerHandle send_stream,
-                             const absl::optional<net::SSLInfo>& ssl_info) {
+                             const std::optional<net::SSLInfo>& ssl_info) {
   // |send_stream| and |receive_stream|, created on the TLS connection, fall out
   // of scope when this method completes.
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -184,5 +197,4 @@ void TlsProber::OnDone(int result, ProbeExitEnum probe_exit_enum) {
   std::move(callback_).Run(result, probe_exit_enum);
 }
 
-}  // namespace network_diagnostics
-}  // namespace ash
+}  // namespace ash::network_diagnostics

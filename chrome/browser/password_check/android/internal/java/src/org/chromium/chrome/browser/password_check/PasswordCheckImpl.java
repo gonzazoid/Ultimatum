@@ -10,13 +10,10 @@ import android.os.Bundle;
 
 import org.chromium.base.ObserverList;
 import org.chromium.chrome.browser.password_check.PasswordCheckBridge.PasswordCheckObserver;
-import org.chromium.chrome.browser.password_manager.PasswordChangeSuccessTrackerBridge;
 import org.chromium.chrome.browser.password_manager.PasswordCheckReferrer;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 
-/**
- * This class is responsible for managing the saved passwords check for signed-in users.
- */
+/** This class is responsible for managing the saved passwords check for signed-in users. */
 class PasswordCheckImpl implements PasswordCheck, PasswordCheckObserver {
     private final PasswordCheckBridge mPasswordCheckBridge;
     private final ObserverList<Observer> mObserverList;
@@ -41,11 +38,6 @@ class PasswordCheckImpl implements PasswordCheck, PasswordCheckObserver {
                 PasswordCheckFragmentView.PASSWORD_CHECK_REFERRER, passwordCheckReferrer);
         mSettingsLauncher.launchSettingsActivity(
                 context, PasswordCheckFragmentView.class, fragmentArgs);
-        // Scripts are fetched before opening safety check, so there is no need to fetch them again
-        // here.
-        if (passwordCheckReferrer != PasswordCheckReferrer.SAFETY_CHECK) {
-            mPasswordCheckBridge.refreshScripts();
-        }
     }
 
     @Override
@@ -156,27 +148,5 @@ class PasswordCheckImpl implements PasswordCheck, PasswordCheckObserver {
     @Override
     public void stopCheck() {
         mPasswordCheckBridge.stopCheck();
-    }
-
-    @Override
-    public boolean areScriptsRefreshed() {
-        return mPasswordCheckBridge.areScriptsRefreshed();
-    }
-
-    @Override
-    public void fetchScripts() {
-        mPasswordCheckBridge.refreshScripts();
-    }
-
-    @Override
-    public void onAutomatedPasswordChangeStarted(CompromisedCredential credential) {
-        PasswordChangeSuccessTrackerBridge.onAutomatedPasswordChangeStarted(
-                credential.getAssociatedUrl(), credential.getUsername());
-    }
-
-    @Override
-    public void onManualPasswordChangeStarted(CompromisedCredential credential) {
-        PasswordChangeSuccessTrackerBridge.onManualPasswordChangeStarted(
-                credential.getAssociatedUrl(), credential.getUsername());
     }
 }

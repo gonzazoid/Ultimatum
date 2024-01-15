@@ -7,8 +7,9 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/services/secure_channel/ble_listener_failure_type.h"
 #include "chromeos/ash/services/secure_channel/connect_to_device_operation.h"
 #include "chromeos/ash/services/secure_channel/connect_to_device_operation_base.h"
@@ -34,7 +35,7 @@ class BleListenerOperation
         const DeviceIdPair& device_id_pair,
         ConnectionPriority connection_priority,
         scoped_refptr<base::TaskRunner> task_runner =
-            base::ThreadTaskRunnerHandle::Get());
+            base::SingleThreadTaskRunner::GetCurrentDefault());
     static void SetFactoryForTesting(Factory* test_factory);
 
    protected:
@@ -81,7 +82,7 @@ class BleListenerOperation
       std::unique_ptr<AuthenticatedChannel> authenticated_channel);
   void OnConnectionFailure(BleListenerFailureType failure_type);
 
-  BleConnectionManager* ble_connection_manager_;
+  raw_ptr<BleConnectionManager> ble_connection_manager_;
 
   bool is_attempt_active_ = false;
   base::WeakPtrFactory<BleListenerOperation> weak_ptr_factory_{this};

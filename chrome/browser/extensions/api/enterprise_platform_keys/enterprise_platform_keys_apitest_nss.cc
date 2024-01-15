@@ -8,13 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/test/gtest_tags.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
@@ -26,6 +26,7 @@
 #include "chrome/browser/net/nss_service_factory.h"
 #include "chrome/browser/policy/extension_force_install_mixin.h"
 #include "chrome/common/chrome_paths.h"
+#include "chromeos/ash/components/chaps_util/test_util.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -189,9 +190,9 @@ void ImportPrivateKeyPKCS8ToSlot(const unsigned char* pkcs8_der,
 
 // Builds the tests configuration dictionary and serializes it.
 std::string BuildCustomArg(bool user_session_test, bool system_token_enabled) {
-  base::Value custom_arg_value(base::Value::Type::DICTIONARY);
-  custom_arg_value.SetBoolKey(kIsUserSessionTestConfig, user_session_test);
-  custom_arg_value.SetBoolKey(kSystemTokenEnabledConfig, system_token_enabled);
+  base::Value::Dict custom_arg_value;
+  custom_arg_value.Set(kIsUserSessionTestConfig, user_session_test);
+  custom_arg_value.Set(kSystemTokenEnabledConfig, system_token_enabled);
 
   std::string custom_arg;
   if (!base::JSONWriter::Write(custom_arg_value, &custom_arg)) {
@@ -218,22 +219,12 @@ struct Params {
 
 class EnterprisePlatformKeysTest
     : public PlatformKeysTestBase,
-      public ::testing::WithParamInterface<std::tuple<Params, bool>> {
+      public ::testing::WithParamInterface<Params> {
  public:
   EnterprisePlatformKeysTest()
-      : PlatformKeysTestBase(std::get<0>(GetParam()).system_token_status_,
-                             std::get<0>(GetParam()).enrollment_status_,
-                             std::get<0>(GetParam()).user_status_) {
-    // TODO(b/239422391): This test is run with the feature
-    // kUseAuthFactors enabled and disabled because of a
-    // transitive dependency of AffiliationTestHelper on that feature. Remove
-    // the parameter when kUseAuthFactors is removed.
-    if (std::get<1>(GetParam())) {
-      feature_list_.InitAndEnableFeature(ash::features::kUseAuthFactors);
-    } else {
-      feature_list_.InitAndDisableFeature(ash::features::kUseAuthFactors);
-    }
-  }
+      : PlatformKeysTestBase(GetParam().system_token_status_,
+                             GetParam().enrollment_status_,
+                             GetParam().user_status_) {}
 
   EnterprisePlatformKeysTest(const EnterprisePlatformKeysTest&) = delete;
   EnterprisePlatformKeysTest& operator=(const EnterprisePlatformKeysTest&) =
@@ -254,21 +245,16 @@ class EnterprisePlatformKeysTest
         profile(), mock_policy_provider());
   }
 
-  void DidGetCertDatabase(base::OnceClosure done_callback,
-                          net::NSSCertDatabase* cert_db) {
-    // In order to use a prepared certificate, import a private key to the
-    // user's token for which the Javscript test will import the certificate.
-    ImportPrivateKeyPKCS8ToSlot(privateKeyPkcs8User,
-                                std::size(privateKeyPkcs8User),
-                                cert_db->GetPrivateSlot().get());
-    std::move(done_callback).Run();
-  }
-
  protected:
   bool IsSystemTokenEnabled() const {
     return system_token_status() == SystemTokenStatus::EXISTS &&
            enrollment_status() == EnrollmentStatus::ENROLLED &&
            user_status() == UserStatus::MANAGED_AFFILIATED_DOMAIN;
+  }
+
+  void AddScreenplayTag() {
+    base::AddTagToTestResult("feature_id",
+                             "screenplay-f9cdeb9c-d567-4d70-a2dc-9ee4203175e6");
   }
 
   ExtensionForceInstallMixin extension_force_install_mixin_{&mixin_host_};
@@ -286,25 +272,27 @@ class EnterprisePlatformKeysTest
   // Allows tests to generate software-backed keys by configuring fake ChapsUtil
   // instances to be created in its constructor (and undoing the change in its
   // destructor).
-  ash::platform_keys::test_util::ScopedChapsUtilOverride
-      scoped_chaps_util_override_;
-  base::test::ScopedFeatureList feature_list_;
+  chromeos::ScopedChapsUtilOverride scoped_chaps_util_override_;
 };
 
 }  // namespace
 
 IN_PROC_BROWSER_TEST_P(EnterprisePlatformKeysTest, PRE_Basic) {
+  AddScreenplayTag();
   RunPreTest();
 }
 
 IN_PROC_BROWSER_TEST_P(EnterprisePlatformKeysTest, Basic) {
+  AddScreenplayTag();
   {
-    base::RunLoop loop;
+    base::test::TestFuture<net::NSSCertDatabase*> get_db_future;
     NssServiceFactory::GetForContext(profile())
-        ->UnsafelyGetNSSCertDatabaseForTesting(
-            base::BindOnce(&EnterprisePlatformKeysTest::DidGetCertDatabase,
-                           base::Unretained(this), loop.QuitClosure()));
-    loop.Run();
+        ->UnsafelyGetNSSCertDatabaseForTesting(get_db_future.GetCallback());
+    // In order to use a prepared certificate, import a private key to the
+    // user's token for which the Javscript test will import the certificate.
+    ImportPrivateKeyPKCS8ToSlot(privateKeyPkcs8User,
+                                std::size(privateKeyPkcs8User),
+                                get_db_future.Get()->GetPrivateSlot().get());
   }
 
   SetCustomArg(BuildCustomArg(/*user_session_test=*/true,
@@ -314,9 +302,8 @@ IN_PROC_BROWSER_TEST_P(EnterprisePlatformKeysTest, Basic) {
 
   extensions::ExtensionId extension_id;
   ASSERT_TRUE(extension_force_install_mixin_.ForceInstallFromSourceDir(
-      GetExtensionDirName(std::get<0>(GetParam()).context_type_),
-      GetExtensionPemFileName(), ExtensionForceInstallMixin::WaitMode::kLoad,
-      &extension_id));
+      GetExtensionDirName(GetParam().context_type_), GetExtensionPemFileName(),
+      ExtensionForceInstallMixin::WaitMode::kLoad, &extension_id));
   ASSERT_EQ(kExtensionId, extension_id);
 
   ASSERT_TRUE(catcher.GetNextResult());
@@ -325,48 +312,44 @@ IN_PROC_BROWSER_TEST_P(EnterprisePlatformKeysTest, Basic) {
 INSTANTIATE_TEST_SUITE_P(
     PersistentBackground_CheckSystemTokenAvailability,
     EnterprisePlatformKeysTest,
-    ::testing::Combine(
-        ::testing::Values(
-            Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
-                   PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
-                   ContextType::kPersistentBackground),
-            Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
-                   PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
-                   ContextType::kPersistentBackground),
-            Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
-                   PlatformKeysTestBase::EnrollmentStatus::NOT_ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
-                   ContextType::kPersistentBackground),
-            Params(PlatformKeysTestBase::SystemTokenStatus::DOES_NOT_EXIST,
-                   PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
-                   ContextType::kPersistentBackground)),
-        ::testing::Bool()));
+    ::testing::Values(
+        Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
+               PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
+               ContextType::kPersistentBackground),
+        Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
+               PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
+               ContextType::kPersistentBackground),
+        Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
+               PlatformKeysTestBase::EnrollmentStatus::NOT_ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
+               ContextType::kPersistentBackground),
+        Params(PlatformKeysTestBase::SystemTokenStatus::DOES_NOT_EXIST,
+               PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
+               ContextType::kPersistentBackground)));
 
 INSTANTIATE_TEST_SUITE_P(
     ServiceWorker_CheckSystemTokenAvailability,
     EnterprisePlatformKeysTest,
-    ::testing::Combine(
-        ::testing::Values(
-            Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
-                   PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
-                   ContextType::kServiceWorker),
-            Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
-                   PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
-                   ContextType::kServiceWorker),
-            Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
-                   PlatformKeysTestBase::EnrollmentStatus::NOT_ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
-                   ContextType::kServiceWorker),
-            Params(PlatformKeysTestBase::SystemTokenStatus::DOES_NOT_EXIST,
-                   PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
-                   PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
-                   ContextType::kServiceWorker)),
-        ::testing::Bool()));
+    ::testing::Values(
+        Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
+               PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
+               ContextType::kServiceWorker),
+        Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
+               PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
+               ContextType::kServiceWorker),
+        Params(PlatformKeysTestBase::SystemTokenStatus::EXISTS,
+               PlatformKeysTestBase::EnrollmentStatus::NOT_ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_OTHER_DOMAIN,
+               ContextType::kServiceWorker),
+        Params(PlatformKeysTestBase::SystemTokenStatus::DOES_NOT_EXIST,
+               PlatformKeysTestBase::EnrollmentStatus::ENROLLED,
+               PlatformKeysTestBase::UserStatus::MANAGED_AFFILIATED_DOMAIN,
+               ContextType::kServiceWorker)));
 
 class EnterprisePlatformKeysIsRestrictedTest
     : public ExtensionApiTest,
@@ -426,6 +409,11 @@ class EnterprisePlatformKeysLoginScreenTest
     return &extension_force_install_mixin_;
   }
 
+  void AddScreenplayTag() {
+    base::AddTagToTestResult("feature_id",
+                             "screenplay-f9cdeb9c-d567-4d70-a2dc-9ee4203175e6");
+  }
+
  private:
   void SetUp() override {
     ash::platform_keys::PlatformKeysServiceFactory::GetInstance()
@@ -458,15 +446,14 @@ class EnterprisePlatformKeysLoginScreenTest
   // Allows tests to generate software-backed keys by configuring fake ChapsUtil
   // instances to be created in its constructor (and undoing the change in its
   // destructor).
-  ash::platform_keys::test_util::ScopedChapsUtilOverride
-      scoped_chaps_util_override_;
+  chromeos::ScopedChapsUtilOverride scoped_chaps_util_override_;
 };
 
 IN_PROC_BROWSER_TEST_P(EnterprisePlatformKeysLoginScreenTest, Basic) {
-  base::DictionaryValue config;
-  config.SetStringKey("customArg",
-                      BuildCustomArg(/*user_session_test=*/false,
-                                     /*system_token_enabled=*/true));
+  AddScreenplayTag();
+  base::Value::Dict config;
+  config.Set("customArg", BuildCustomArg(/*user_session_test=*/false,
+                                         /*system_token_enabled=*/true));
   extensions::TestGetConfigFunction::set_test_config_state(&config);
 
   extensions::ResultCatcher catcher;

@@ -7,14 +7,14 @@
 #include <stddef.h>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/rand_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_util.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/c/ppb_media_stream_video_track.h"
@@ -167,7 +167,7 @@ namespace content {
 class PepperMediaStreamVideoTrackHost::FrameDeliverer
     : public base::RefCountedThreadSafe<FrameDeliverer> {
  public:
-  FrameDeliverer(scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+  FrameDeliverer(scoped_refptr<base::SequencedTaskRunner> video_task_runner,
                  const blink::VideoCaptureDeliverFrameCB& new_frame_callback);
 
   FrameDeliverer(const FrameDeliverer&) = delete;
@@ -181,14 +181,14 @@ class PepperMediaStreamVideoTrackHost::FrameDeliverer
 
   void DeliverFrameOnIO(scoped_refptr<media::VideoFrame> frame);
 
-  scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> video_task_runner_;
   blink::VideoCaptureDeliverFrameCB new_frame_callback_;
 };
 
 PepperMediaStreamVideoTrackHost::FrameDeliverer::FrameDeliverer(
-    scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+    scoped_refptr<base::SequencedTaskRunner> video_task_runner,
     const blink::VideoCaptureDeliverFrameCB& new_frame_callback)
-    : io_task_runner_(io_task_runner),
+    : video_task_runner_(video_task_runner),
       new_frame_callback_(new_frame_callback) {}
 
 PepperMediaStreamVideoTrackHost::FrameDeliverer::~FrameDeliverer() {
@@ -196,17 +196,17 @@ PepperMediaStreamVideoTrackHost::FrameDeliverer::~FrameDeliverer() {
 
 void PepperMediaStreamVideoTrackHost::FrameDeliverer::DeliverVideoFrame(
     scoped_refptr<media::VideoFrame> frame) {
-  io_task_runner_->PostTask(
+  video_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&FrameDeliverer::DeliverFrameOnIO, this,
                                 std::move(frame)));
 }
 
 void PepperMediaStreamVideoTrackHost::FrameDeliverer::DeliverFrameOnIO(
     scoped_refptr<media::VideoFrame> frame) {
-  DCHECK(io_task_runner_->BelongsToCurrentThread());
+  DCHECK(video_task_runner_->RunsTasksInCurrentSequence());
   // The time when this frame is generated is unknown so give a null value to
   // |estimated_capture_time|.
-  new_frame_callback_.Run(std::move(frame), {}, base::TimeTicks());
+  new_frame_callback_.Run(std::move(frame), base::TimeTicks());
 }
 
 PepperMediaStreamVideoTrackHost::PepperMediaStreamVideoTrackHost(
@@ -342,7 +342,6 @@ int32_t PepperMediaStreamVideoTrackHost::SendFrameToTrack(int32_t index) {
 
 void PepperMediaStreamVideoTrackHost::OnVideoFrame(
     scoped_refptr<VideoFrame> video_frame,
-    std::vector<scoped_refptr<media::VideoFrame>> scaled_video_frames,
     base::TimeTicks estimated_capture_time) {
   DCHECK(video_frame);
   // TODO(penghuang): Check |frame->end_of_stream()| and close the track.
@@ -421,7 +420,8 @@ class PepperMediaStreamVideoTrackHost::VideoSource final
     : public blink::MediaStreamVideoSource {
  public:
   explicit VideoSource(base::WeakPtr<PepperMediaStreamVideoTrackHost> host)
-      : blink::MediaStreamVideoSource(base::ThreadTaskRunnerHandle::Get()),
+      : blink::MediaStreamVideoSource(
+            base::SingleThreadTaskRunner::GetCurrentDefault()),
         host_(std::move(host)) {}
 
   VideoSource(const VideoSource&) = delete;
@@ -432,10 +432,12 @@ class PepperMediaStreamVideoTrackHost::VideoSource final
   void StartSourceImpl(
       blink::VideoCaptureDeliverFrameCB frame_callback,
       blink::EncodedVideoFrameCB encoded_frame_callback,
-      blink::VideoCaptureCropVersionCB crop_version_callback) final {
+      blink::VideoCaptureSubCaptureTargetVersionCB
+          sub_capture_target_version_callback,
+      blink::VideoCaptureNotifyFrameDroppedCB frame_dropped_callback) final {
     if (host_) {
       host_->frame_deliverer_ =
-          new FrameDeliverer(io_task_runner(), std::move(frame_callback));
+          new FrameDeliverer(video_task_runner(), std::move(frame_callback));
     }
   }
 
@@ -449,14 +451,13 @@ class PepperMediaStreamVideoTrackHost::VideoSource final
   }
 
  private:
-  absl::optional<media::VideoCaptureFormat> GetCurrentFormat() const override {
+  std::optional<media::VideoCaptureFormat> GetCurrentFormat() const override {
     if (host_) {
-      return absl::optional<media::VideoCaptureFormat>(
-          media::VideoCaptureFormat(
-              host_->plugin_frame_size_, kDefaultOutputFrameRate,
-              ToPixelFormat(host_->plugin_frame_format_)));
+      return std::optional<media::VideoCaptureFormat>(media::VideoCaptureFormat(
+          host_->plugin_frame_size_, kDefaultOutputFrameRate,
+          ToPixelFormat(host_->plugin_frame_format_)));
     }
-    return absl::optional<media::VideoCaptureFormat>();
+    return std::optional<media::VideoCaptureFormat>();
   }
 
   const base::WeakPtr<PepperMediaStreamVideoTrackHost> host_;
@@ -468,7 +469,7 @@ void PepperMediaStreamVideoTrackHost::DidConnectPendingHostToResource() {
     return;
   blink::MediaStreamVideoSink::ConnectToTrack(
       track_,
-      media::BindToCurrentLoop(
+      base::BindPostTaskToCurrentDefault(
           base::BindRepeating(&PepperMediaStreamVideoTrackHost::OnVideoFrame,
                               weak_factory_.GetWeakPtr())),
       MediaStreamVideoSink::IsSecure::kNo,
@@ -527,8 +528,7 @@ int32_t PepperMediaStreamVideoTrackHost::OnHostMsgConfigure(
 }
 
 void PepperMediaStreamVideoTrackHost::InitBlinkTrack() {
-  std::string source_id;
-  base::Base64Encode(base::RandBytesAsString(64), &source_id);
+  std::string source_id = base::Base64Encode(base::RandBytesAsVector(64));
   blink::WebMediaStreamSource webkit_source;
   auto source = std::make_unique<VideoSource>(weak_factory_.GetWeakPtr());
   blink::MediaStreamVideoSource* const source_ptr = source.get();

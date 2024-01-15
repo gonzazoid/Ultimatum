@@ -8,28 +8,24 @@
 
 #include <deque>
 
-#include "base/callback_helpers.h"
+#include "base/apple/foundation_util.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/download_params.h"
 #include "components/download/public/background_service/features.h"
 #include "net/base/mac/url_conversions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 bool g_ignore_localhost_ssl_error_for_testing = false;
@@ -179,7 +175,7 @@ class DownloadTaskInfo {
   // service's target directory. This must happen immediately on the current
   // thread or iOS may delete the file.
   const base::FilePath tempPath =
-      base::mac::NSStringToFilePath([location path]);
+      base::apple::NSStringToFilePath([location path]);
   if (!base::Move(tempPath, it->second->download_path_)) {
     LOG(ERROR) << "Failed to move file from:" << tempPath
                << ", to:" << it->second->download_path_;
@@ -356,7 +352,8 @@ class BackgroundDownloadTaskHelperImpl : public BackgroundDownloadTaskHelper {
           FROM_HERE,
           {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
           base::BindOnce(&CreateNSURLSession,
-                         base::ThreadTaskRunnerHandle::Get(), std::move(cb)));
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(cb)));
       return;
     }
 

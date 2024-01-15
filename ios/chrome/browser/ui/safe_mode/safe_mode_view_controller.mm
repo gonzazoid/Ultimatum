@@ -7,20 +7,17 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/crash_report/crash_helper.h"
-#import "ios/chrome/browser/safe_mode/safe_mode_crashing_modules_config.h"
-#import "ios/chrome/browser/safe_mode/safe_mode_util.h"
-#import "ios/chrome/browser/ui/fancy_ui/primary_action_button.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/crash_report/model/crash_helper.h"
+#import "ios/chrome/browser/safe_mode/model/safe_mode_crashing_modules_config.h"
+#import "ios/chrome/browser/safe_mode/model/safe_mode_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/crash_report/crash_helper.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/common/ui/util/button_util.h"
+#import "ios/chrome/common/ui/util/sdk_forward_declares.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/gfx/ios/NSString+CrStringDrawing.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kVerticalSpacing = 20;
@@ -41,9 +38,8 @@ const NSTimeInterval kUploadTotalTime = 5;
 - (void)startUploadProgress;
 // Updates progress bar for crash report upload.
 - (void)pumpUploadProgress;
-// Called when user taps on "Resume Chrome" button. Restores the default
-// Breakpad configuration and notifies the delegate to attempt to start the
-// browser.
+// Called when user taps on "Resume Chrome" button. Notifies the delegate to
+// attempt to start the browser.
 - (void)startBrowserFromSafeMode;
 @end
 
@@ -210,23 +206,23 @@ const NSTimeInterval kUploadTotalTime = 5;
   [self centerView:description afterView:awSnap];
   [_innerView addSubview:description];
 
-  _startButton = CreatePrimaryActionButton();
+  _startButton = PrimaryActionButton(YES);
   NSString* startText =
       NSLocalizedString(@"IDS_IOS_SAFE_MODE_RELOAD_CHROME", @"");
-  [_startButton setTitle:startText forState:UIControlStateNormal];
-  [_startButton titleLabel].textAlignment = NSTextAlignmentCenter;
-  [_startButton titleLabel].lineBreakMode = NSLineBreakByWordWrapping;
+  SetConfigurationTitle(_startButton, startText);
+
+  UIButtonConfiguration* buttonConfiguration = _startButton.configuration;
+  buttonConfiguration.titleAlignment =
+      UIButtonConfigurationTitleAlignmentCenter;
+  buttonConfiguration.titleLineBreakMode = NSLineBreakByWordWrapping;
+  _startButton.configuration = buttonConfiguration;
+
   frame = [_startButton frame];
   frame.size.width =
       (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET)
           ? kIPadWidth
           : kIPhoneWidth;
-  maxSize = CGSizeMake(frame.size.width, 999999.0f);
-  const CGFloat kButtonBuffer = kVerticalSpacing / 2;
-  CGSize startTextBoundingSize =
-      [startText cr_boundingSizeWithSize:maxSize
-                                    font:[_startButton titleLabel].font];
-  frame.size.height = startTextBoundingSize.height + kButtonBuffer;
+  frame.size.height = _startButton.intrinsicContentSize.height;
   [_startButton setFrame:frame];
   [_startButton addTarget:self
                    action:@selector(startBrowserFromSafeMode)
@@ -297,9 +293,9 @@ const NSTimeInterval kUploadTotalTime = 5;
   NSTimeInterval elapsed =
       [[NSDate date] timeIntervalSinceDate:_uploadStartTime];
   // Theoretically we could stop early when the value returned by
-  // breakpad::GetCrashReportCount() changes, but this is simpler. If we decide
-  // to look for a change in crash report count, then we also probably want to
-  // replace the UIProgressView with a UIActivityIndicatorView.
+  // crash_helper::GetCrashReportCount() changes, but this is simpler. If we
+  // decide to look for a change in crash report count, then we also probably
+  // want to replace the UIProgressView with a UIActivityIndicatorView.
   if (elapsed <= kUploadTotalTime) {
     [_uploadProgress setProgress:elapsed / kUploadTotalTime animated:YES];
   } else {
@@ -315,7 +311,6 @@ const NSTimeInterval kUploadTotalTime = 5;
 }
 
 - (void)startBrowserFromSafeMode {
-  crash_helper::RestoreDefaultConfiguration();
   [_delegate startBrowserFromSafeMode];
 }
 

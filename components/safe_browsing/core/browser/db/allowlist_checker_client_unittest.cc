@@ -5,11 +5,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/db/test_database_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -29,8 +31,8 @@ class MockSafeBrowsingDatabaseManager : public TestSafeBrowsingDatabaseManager {
  public:
   MockSafeBrowsingDatabaseManager()
       : TestSafeBrowsingDatabaseManager(
-            base::SequencedTaskRunnerHandle::Get(),
-            base::SequencedTaskRunnerHandle::Get()) {}
+            base::SequencedTaskRunner::GetCurrentDefault(),
+            base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   MockSafeBrowsingDatabaseManager(const MockSafeBrowsingDatabaseManager&) =
       delete;
@@ -40,9 +42,6 @@ class MockSafeBrowsingDatabaseManager : public TestSafeBrowsingDatabaseManager {
   MOCK_METHOD1(CancelCheck, void(SafeBrowsingDatabaseManager::Client*));
 
   MOCK_METHOD2(CheckCsdAllowlistUrl,
-               AsyncMatch(const GURL&, SafeBrowsingDatabaseManager::Client*));
-
-  MOCK_METHOD2(CheckUrlForHighConfidenceAllowlist,
                AsyncMatch(const GURL&, SafeBrowsingDatabaseManager::Client*));
 
  protected:
@@ -75,24 +74,33 @@ class AllowlistCheckerClientTest : public testing::Test {
 };
 
 TEST_F(AllowlistCheckerClientTest, TestCsdListMatch) {
+  base::HistogramTester histogram_tester;
   EXPECT_CALL(*database_manager_, CheckCsdAllowlistUrl(target_url_, _))
       .WillOnce(Return(AsyncMatch::MATCH));
   MockBoolCallback callback;
   EXPECT_CALL(callback, Run(true /* did_match_allowlist */));
   AllowlistCheckerClient::StartCheckCsdAllowlist(database_manager_, target_url_,
                                                  callback.Get());
+  histogram_tester.ExpectUniqueSample(
+      "SafeBrowsing.ClientSidePhishingDetection.AllowlistMatchResult",
+      /*sample=*/AsyncMatch::MATCH, /*expected_bucket_count=*/1);
 }
 
 TEST_F(AllowlistCheckerClientTest, TestCsdListNoMatch) {
+  base::HistogramTester histogram_tester;
   EXPECT_CALL(*database_manager_, CheckCsdAllowlistUrl(target_url_, _))
       .WillOnce(Return(AsyncMatch::NO_MATCH));
   MockBoolCallback callback;
   EXPECT_CALL(callback, Run(false /* did_match_allowlist */));
   AllowlistCheckerClient::StartCheckCsdAllowlist(database_manager_, target_url_,
                                                  callback.Get());
+  histogram_tester.ExpectUniqueSample(
+      "SafeBrowsing.ClientSidePhishingDetection.AllowlistMatchResult",
+      /*sample=*/AsyncMatch::NO_MATCH, /*expected_bucket_count=*/1);
 }
 
 TEST_F(AllowlistCheckerClientTest, TestCsdListAsyncNoMatch) {
+  base::HistogramTester histogram_tester;
   SafeBrowsingDatabaseManager::Client* client;
   EXPECT_CALL(*database_manager_, CheckCsdAllowlistUrl(target_url_, _))
       .WillOnce(DoAll(SaveArg<1>(&client), Return(AsyncMatch::ASYNC)));
@@ -100,6 +108,9 @@ TEST_F(AllowlistCheckerClientTest, TestCsdListAsyncNoMatch) {
   MockBoolCallback callback;
   AllowlistCheckerClient::StartCheckCsdAllowlist(database_manager_, target_url_,
                                                  callback.Get());
+  histogram_tester.ExpectUniqueSample(
+      "SafeBrowsing.ClientSidePhishingDetection.AllowlistMatchResult",
+      /*sample=*/AsyncMatch::ASYNC, /*expected_bucket_count=*/1);
   // Callback should not be called yet.
 
   EXPECT_CALL(callback, Run(false /* did_match_allowlist */));
@@ -108,6 +119,7 @@ TEST_F(AllowlistCheckerClientTest, TestCsdListAsyncNoMatch) {
 }
 
 TEST_F(AllowlistCheckerClientTest, TestCsdListAsyncTimeout) {
+  base::HistogramTester histogram_tester;
   SafeBrowsingDatabaseManager::Client* client;
   EXPECT_CALL(*database_manager_, CheckCsdAllowlistUrl(target_url_, _))
       .WillOnce(DoAll(SaveArg<1>(&client), Return(AsyncMatch::ASYNC)));
@@ -116,6 +128,9 @@ TEST_F(AllowlistCheckerClientTest, TestCsdListAsyncTimeout) {
   MockBoolCallback callback;
   AllowlistCheckerClient::StartCheckCsdAllowlist(database_manager_, target_url_,
                                                  callback.Get());
+  histogram_tester.ExpectUniqueSample(
+      "SafeBrowsing.ClientSidePhishingDetection.AllowlistMatchResult",
+      /*sample=*/AsyncMatch::ASYNC, /*expected_bucket_count=*/1);
   task_environment_.FastForwardBy(base::Seconds(1));
   // No callback yet.
 

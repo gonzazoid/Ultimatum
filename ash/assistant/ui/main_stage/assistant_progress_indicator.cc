@@ -9,8 +9,9 @@
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/util/animation_util.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/layer_animator.h"
@@ -117,8 +118,9 @@ void AssistantProgressIndicator::VisibilityChanged(views::View* starting_from,
 
   if (!is_drawn_) {
     // Stop all animations.
-    for (auto* child : children())
+    for (views::View* child : children()) {
       child->layer()->GetAnimator()->StopAnimating();
+    }
     return;
   }
 
@@ -139,7 +141,7 @@ void AssistantProgressIndicator::VisibilityChanged(views::View* starting_from,
     return;
 
   base::TimeDelta start_offset;
-  for (auto* child : children()) {
+  for (views::View* child : children()) {
     if (!start_offset.is_zero()) {
       // Schedule the animations to start after an offset.
       child->layer()->GetAnimator()->SchedulePauseForProperties(
@@ -186,5 +188,8 @@ void AssistantProgressIndicator::InitLayout() {
     AddChildView(std::move(dot_view));
   }
 }
+
+BEGIN_METADATA(AssistantProgressIndicator)
+END_METADATA
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-<style include="iron-positioning">
+<style include="iron-positioning cros-color-overrides">
   :host ::slotted([slot='page-body']) {
     color: var(--cr-primary-text-color);
     height: 292px;
@@ -14,9 +14,14 @@
                                            var(--cros-second-tone-opacity));
   }
 
+  :host-context(body.jelly-enabled) paper-progress {
+    --paper-progress-active-color: var(--cros-color-primary);
+    --paper-progress-container-color: var(--cros-highlight-color);
+  }
+
   #buttonBar {
     align-self: flex-end;
-    margin-top: 16px;
+    margin-top: 30px;
   }
 
   #container {
@@ -72,4 +77,3 @@
     </template>
   </div>
 </div>
-

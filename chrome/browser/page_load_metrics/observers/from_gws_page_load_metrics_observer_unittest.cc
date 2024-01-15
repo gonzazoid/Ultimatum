@@ -41,7 +41,7 @@ class FromGWSPageLoadMetricsObserverTest
   void SimulateTimingWithoutPaint() {
     page_load_metrics::mojom::PageLoadTiming timing;
     page_load_metrics::InitPageLoadTimingForTest(&timing);
-    timing.navigation_start = base::Time::FromDoubleT(1);
+    timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
     tester()->SimulateTimingUpdate(timing);
   }
 
@@ -49,7 +49,7 @@ class FromGWSPageLoadMetricsObserverTest
     page_load_metrics::mojom::PageLoadTiming timing;
     page_load_metrics::InitPageLoadTimingForTest(&timing);
     timing.parse_timing->parse_start = base::Milliseconds(0);
-    timing.navigation_start = base::Time::FromDoubleT(1);
+    timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
     timing.paint_timing->first_paint = base::Milliseconds(0);
     PopulateRequiredTimingFields(&timing);
     tester()->SimulateTimingUpdate(timing);
@@ -67,7 +67,8 @@ class FromGWSPageLoadMetricsObserverTest
   }
 
  protected:
-  raw_ptr<FromGWSPageLoadMetricsObserver> observer_ = nullptr;
+  raw_ptr<FromGWSPageLoadMetricsObserver, DanglingUntriaged> observer_ =
+      nullptr;
 };
 
 class FromGWSPageLoadMetricsLoggerTest : public testing::Test {};
@@ -81,7 +82,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, NoMetrics) {
 TEST_F(FromGWSPageLoadMetricsObserverTest, NoPreviousCommittedUrl) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL(kExampleUrl));
@@ -105,7 +106,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, NoPreviousCommittedUrl) {
 TEST_F(FromGWSPageLoadMetricsObserverTest, NonSearchPreviousCommittedUrl) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("http://www.other.com"));
@@ -131,7 +132,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
        GoogleNonSearchPreviousCommittedUrl1) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://www.google.com/"));
@@ -157,7 +158,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
        GoogleNonSearchPreviousCommittedUrl2) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   // Navigation from /search, but missing a query string, so can't have been a
@@ -184,7 +185,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
 TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl1) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(10);
   timing.paint_timing->first_paint = base::Milliseconds(20);
   timing.paint_timing->first_contentful_paint = base::Milliseconds(40);
@@ -203,8 +204,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl1) {
   NavigateAndCommit(GURL(kExampleUrl));
 
   tester()->SimulateTimingUpdate(timing);
-  page_load_metrics::mojom::FrameRenderDataUpdate render_data(1.0, 1.0, 0, 0, 0,
-                                                              0, {});
+  page_load_metrics::mojom::FrameRenderDataUpdate render_data(1.0, 1.0, {});
   tester()->SimulateRenderDataUpdate(render_data);
   render_data.layout_shift_delta = 1.5;
   render_data.layout_shift_delta_before_input_or_scroll = 0.0;
@@ -257,15 +257,6 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl1) {
       timing.paint_timing->first_image_paint.value().InMilliseconds(), 1);
 
   tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramFromGWSParseDuration, 1);
-  tester()->histogram_tester().ExpectBucketCount(
-      internal::kHistogramFromGWSParseDuration,
-      (timing.parse_timing->parse_stop.value() -
-       timing.parse_timing->parse_start.value())
-          .InMilliseconds(),
-      1);
-
-  tester()->histogram_tester().ExpectTotalCount(
       internal::kHistogramFromGWSDomContentLoaded, 1);
   tester()->histogram_tester().ExpectBucketCount(
       internal::kHistogramFromGWSDomContentLoaded,
@@ -298,7 +289,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl1) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -308,7 +299,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl2) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
   timing.parse_timing->parse_start = base::Milliseconds(1);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://www.google.com/#q=test"));
@@ -327,7 +318,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl2) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -337,7 +328,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl3) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
   timing.parse_timing->parse_start = base::Milliseconds(1);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://www.google.com/webhp#q=test"));
@@ -356,7 +347,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl3) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -366,7 +357,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl4) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
   timing.parse_timing->parse_start = base::Milliseconds(1);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://www.google.co.uk/search#q=test"));
@@ -385,7 +376,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchPreviousCommittedUrl4) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -396,7 +387,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, GoogleSearchModeLogged) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
   timing.parse_timing->parse_start = base::Milliseconds(1);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL(kGoogleSearchResultsVideoUrl));
@@ -415,7 +406,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, GoogleSearchModeLogged) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntryMetric(
         entry, ukm::builders::PageLoad_FromGoogleSearch::kGoogleSearchModeName,
         static_cast<int64_t>(google_util::GoogleSearchMode::kVideos));
@@ -427,12 +418,12 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, GoogleSearchModeLogged) {
 TEST_F(FromGWSPageLoadMetricsObserverTest, SearchToNonSearchToOtherPage) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(2);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   timing2.paint_timing->first_image_paint = base::Milliseconds(100);
   PopulateRequiredTimingFields(&timing);
   PopulateRequiredTimingFields(&timing2);
@@ -454,7 +445,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchToNonSearchToOtherPage) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -463,12 +454,12 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchToNonSearchToOtherPage) {
 TEST_F(FromGWSPageLoadMetricsObserverTest, SearchToNonSearchToSearch) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(2);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   timing2.paint_timing->first_image_paint = base::Milliseconds(100);
   PopulateRequiredTimingFields(&timing);
   PopulateRequiredTimingFields(&timing2);
@@ -490,7 +481,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, SearchToNonSearchToSearch) {
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -500,17 +491,17 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
        SearchToNonSearchToSearchToNonSearch) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(2);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   timing2.parse_timing->parse_start = base::Milliseconds(100);
   timing2.paint_timing->first_image_paint = base::Milliseconds(100);
   page_load_metrics::mojom::PageLoadTiming timing3;
   page_load_metrics::InitPageLoadTimingForTest(&timing3);
-  timing3.navigation_start = base::Time::FromDoubleT(3);
+  timing3.navigation_start = base::Time::FromSecondsSinceUnixEpoch(3);
   timing3.parse_timing->parse_start = base::Milliseconds(1000);
   timing3.paint_timing->first_image_paint = base::Milliseconds(1000);
   PopulateRequiredTimingFields(&timing);
@@ -539,7 +530,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(2u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -549,16 +540,16 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
        SearchToNonSearchToSearchToNonSearchBackgrounded) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(2);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   timing2.paint_timing->first_image_paint = base::Milliseconds(100);
   page_load_metrics::mojom::PageLoadTiming timing3;
   page_load_metrics::InitPageLoadTimingForTest(&timing3);
-  timing3.navigation_start = base::Time::FromDoubleT(3);
+  timing3.navigation_start = base::Time::FromSecondsSinceUnixEpoch(3);
   timing3.paint_timing->first_image_paint = base::Milliseconds(1000);
   PopulateRequiredTimingFields(&timing);
   PopulateRequiredTimingFields(&timing2);
@@ -584,7 +575,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(2u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -594,7 +585,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
        SearchRedirectorPreviousCommittedUrl) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
@@ -615,7 +606,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* const entry : entries) {
+  for (const ukm::mojom::UkmEntry* const entry : entries) {
     tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                           GURL(kExampleUrl));
   }
@@ -625,7 +616,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
        NonSearchRedirectorPreviousCommittedUrl) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://www.google.com/webhp?q=test"));
@@ -655,14 +646,13 @@ TEST_F(FromGWSPageLoadMetricsObserverTest,
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
   timing.parse_timing->parse_start = base::Microseconds(1);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_image_paint = base::Microseconds(1);
   PopulateRequiredTimingFields(&timing);
 
   NavigateAndCommit(GURL("https://www.google.com/search#q=test"));
   NavigateAndCommit(GURL(kExampleUrl));
-  page_load_metrics::mojom::FrameRenderDataUpdate render_data(1.0, 1.0, 0, 0, 0,
-                                                              0, {});
+  page_load_metrics::mojom::FrameRenderDataUpdate render_data(1.0, 1.0, {});
   tester()->SimulateRenderDataUpdate(render_data);
 
   web_contents()->WasHidden();
@@ -858,7 +848,7 @@ TEST_F(FromGWSPageLoadMetricsObserverTest, NoAbortNewNavigationAfterPaint) {
   NavigateAndCommit(GURL(kGoogleSearchResultsUrl));
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->first_paint = base::Microseconds(1);
   PopulateRequiredTimingFields(&timing);
   NavigateAndCommit(GURL("https://example.test"));
@@ -991,7 +981,7 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
        NonSearchPreviousCommittedUrl) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
@@ -1034,7 +1024,7 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
        RecordsRegularAndSidePanelSpecificMetrics) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(10);
   timing.paint_timing->first_paint = base::Milliseconds(20);
   timing.paint_timing->first_contentful_paint = base::Milliseconds(40);
@@ -1058,8 +1048,7 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
   NavigateAndCommit(GURL(kExampleUrl2));
   tester()->SimulateTimingUpdate(timing);
 
-  page_load_metrics::mojom::FrameRenderDataUpdate render_data(1.0, 1.0, 0, 0, 0,
-                                                              0, {});
+  page_load_metrics::mojom::FrameRenderDataUpdate render_data(1.0, 1.0, {});
   tester()->SimulateRenderDataUpdate(render_data);
   render_data.layout_shift_delta = 1.5;
   render_data.layout_shift_delta_before_input_or_scroll = 0.0;
@@ -1121,7 +1110,7 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  const auto* entry = entries[0];
+  const auto* entry = entries[0].get();
   tester()->test_ukm_recorder().ExpectEntrySourceHasUrl(entry,
                                                         GURL(kExampleUrl2));
 }
@@ -1132,7 +1121,7 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
        GoogleSearchModeLogged) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
@@ -1163,7 +1152,7 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
   auto entries = tester()->test_ukm_recorder().GetEntriesByName(
       ukm::builders::PageLoad_FromGoogleSearch::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* const entry = entries[0];
+  auto* const entry = entries[0].get();
   tester()->test_ukm_recorder().ExpectEntryMetric(
       entry, ukm::builders::PageLoad_FromGoogleSearch::kGoogleSearchModeName,
       static_cast<int64_t>(google_util::GoogleSearchMode::kVideos));
@@ -1176,14 +1165,14 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
        SidePanelNavigationBackgrounded) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
 
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(2);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   timing2.parse_timing->parse_start = base::Milliseconds(100);
   timing2.paint_timing->first_image_paint = base::Milliseconds(100);
   PopulateRequiredTimingFields(&timing2);
@@ -1234,14 +1223,14 @@ TEST_F(FromGWSPageLoadMetricsObserverWithSidePanelTest,
        DoesNotRecordNonGWSAndNonLinkInitiatedNavigations) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(1);
   timing.paint_timing->first_image_paint = base::Milliseconds(1);
   PopulateRequiredTimingFields(&timing);
 
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(2);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   timing2.parse_timing->parse_start = base::Milliseconds(100);
   timing2.paint_timing->first_image_paint = base::Milliseconds(100);
   PopulateRequiredTimingFields(&timing2);

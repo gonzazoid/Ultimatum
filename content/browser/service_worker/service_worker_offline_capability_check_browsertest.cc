@@ -2,19 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <optional>
+
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_fetch_dispatcher.h"
 #include "content/browser/service_worker/service_worker_version.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
@@ -22,7 +24,6 @@
 #include "content/shell/browser/shell.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
@@ -63,7 +64,7 @@ class FetchEventTestHelper {
     for (const FetchEventDispatchParamAndExpectedResult&
              param_and_expected_result : test_inputs) {
       fetch_event_dispatches_.push_back(
-          FetchEventDispatch{param_and_expected_result, absl::nullopt});
+          FetchEventDispatch{param_and_expected_result, std::nullopt});
     }
   }
 
@@ -97,7 +98,7 @@ class FetchEventTestHelper {
  private:
   struct FetchEventDispatch {
     FetchEventDispatchParamAndExpectedResult param_and_expected_result;
-    absl::optional<FetchResult> fetch_result;
+    std::optional<FetchResult> fetch_result;
     std::unique_ptr<ServiceWorkerFetchDispatcher> fetch_dispatcher;
   };
 
@@ -140,8 +141,9 @@ class FetchEventTestHelper {
     fetch_event_dispatch->fetch_dispatcher =
         std::make_unique<ServiceWorkerFetchDispatcher>(
             std::move(request), network::mojom::RequestDestination::kDocument,
-            base::GenerateGUID() /* client_id */, std::move(version),
-            base::DoNothing() /* prepare callback */, std::move(fetch_callback),
+            base::Uuid::GenerateRandomV4().AsLowercaseString() /* client_id */,
+            std::move(version), base::DoNothing() /* prepare callback */,
+            std::move(fetch_callback),
             fetch_event_dispatch->param_and_expected_result.param
                 .is_offline_capability_check);
     fetch_event_dispatch->fetch_dispatcher->Run();
@@ -182,7 +184,8 @@ class ServiceWorkerOfflineCapabilityCheckBrowserTest
     DCHECK(!version_);
     base::RunLoop run_loop;
     GURL url = embedded_test_server()->GetURL("/service_worker/");
-    blink::StorageKey key = blink::StorageKey(url::Origin::Create(url));
+    const blink::StorageKey key =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(url));
     wrapper()->context()->registry()->FindRegistrationForScope(
         embedded_test_server()->GetURL("/service_worker/"), key,
         base::BindOnce(&ServiceWorkerOfflineCapabilityCheckBrowserTest::
@@ -221,10 +224,10 @@ class ServiceWorkerOfflineCapabilityCheckBrowserTest
 
   OfflineCapability CheckOfflineCapability(const std::string& path) {
     base::RunLoop fetch_run_loop;
-    absl::optional<OfflineCapability> out_offline_capability;
+    std::optional<OfflineCapability> out_offline_capability;
     GURL url = embedded_test_server()->GetURL(path);
     wrapper()->CheckOfflineCapability(
-        url, blink::StorageKey(url::Origin::Create(url)),
+        url, blink::StorageKey::CreateFirstParty(url::Origin::Create(url)),
         base::BindLambdaForTesting(
             [&out_offline_capability, &fetch_run_loop](
                 OfflineCapability offline_capability, int64_t registration_id) {

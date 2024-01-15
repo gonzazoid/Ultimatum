@@ -6,10 +6,10 @@
 
 #include <windows.h>
 
-#include "base/strings/utf_string_conversions.h"
-#include "base/win/windows_version.h"
-#include "sandbox/win/src/nt_internals.h"
+#include <string>
+
 #include "sandbox/win/src/process_mitigations_win32k_policy.h"
+#include "sandbox/win/src/sandbox_policy.h"
 #include "sandbox/win/tests/common/controller.h"
 #include "sandbox/win/tests/integration_tests/integration_tests_common.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -24,9 +24,6 @@ namespace sandbox {
 // the target process causes the launch to fail in process initialization.
 // The test process itself links against user32/gdi32.
 TEST(ProcessMitigationsWin32kTest, CheckWin8LockDownFailure) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   std::wstring test_policy_command = L"CheckPolicy ";
   test_policy_command += std::to_wstring(TESTPOLICY_WIN32K);
 
@@ -44,9 +41,6 @@ TEST(ProcessMitigationsWin32kTest, CheckWin8LockDownFailure) {
 // The test process itself links against user32/gdi32.
 
 TEST(ProcessMitigationsWin32kTest, CheckWin8LockDownSuccess) {
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   std::wstring test_policy_command = L"CheckPolicy ";
   test_policy_command += std::to_wstring(TESTPOLICY_WIN32K);
 
@@ -54,9 +48,7 @@ TEST(ProcessMitigationsWin32kTest, CheckWin8LockDownSuccess) {
   sandbox::TargetConfig* config = runner.GetPolicy()->GetConfig();
   EXPECT_EQ(config->SetProcessMitigations(MITIGATION_WIN32K_DISABLE),
             SBOX_ALL_OK);
-  EXPECT_EQ(config->AddRule(sandbox::SubSystem::kWin32kLockdown,
-                            sandbox::Semantics::kFakeGdiInit, nullptr),
-            sandbox::SBOX_ALL_OK);
+  EXPECT_EQ(config->SetFakeGdiInit(), sandbox::SBOX_ALL_OK);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(test_policy_command.c_str()));
 }
 

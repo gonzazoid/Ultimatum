@@ -7,7 +7,17 @@
 
 #include <memory>
 
+#include "components/segmentation_platform/internal/data_collection/training_data_cache.h"
+#include "components/segmentation_platform/internal/database/cached_result_provider.h"
+#include "components/segmentation_platform/internal/database/storage_service.h"
 #include "components/segmentation_platform/internal/signals/histogram_signal_handler.h"
+#include "components/segmentation_platform/internal/signals/user_action_signal_handler.h"
+#include "components/segmentation_platform/public/input_context.h"
+#include "components/segmentation_platform/public/model_provider.h"
+#include "components/segmentation_platform/public/proto/model_metadata.pb.h"
+#include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
+#include "components/segmentation_platform/public/segmentation_platform_service.h"
+#include "components/segmentation_platform/public/trigger.h"
 
 class PrefService;
 
@@ -16,29 +26,43 @@ class Clock;
 }  // namespace base
 
 namespace segmentation_platform {
+using DecisionType = proto::TrainingOutputs::TriggerConfig::DecisionType;
 
 namespace processing {
 class FeatureListQueryProcessor;
 }
 
-struct Config;
 class HistogramSignalHandler;
-class SegmentInfoDatabase;
-class SignalStorageConfig;
 
 // Collect training data and report as Ukm message. Live on main thread.
 // TODO(ssid): Make a new class that owns the training data collector and
 // model execution collector.
 class TrainingDataCollector {
  public:
+  using SuccessCallback = SegmentationPlatformService::SuccessCallback;
+  // Name and sample of the uma output metric to be collected as training data.
   static std::unique_ptr<TrainingDataCollector> Create(
-      SegmentInfoDatabase* segment_info_database,
+      const PlatformOptions& platform_options,
       processing::FeatureListQueryProcessor* processor,
       HistogramSignalHandler* histogram_signal_handler,
-      SignalStorageConfig* signal_storage_config,
-      std::vector<std::unique_ptr<Config>>* configs,
+      UserActionSignalHandler* user_action_signal_handler,
+      StorageService* storage_service,
       PrefService* profile_prefs,
-      base::Clock* clock);
+      base::Clock* clock,
+      CachedResultProvider* cached_result_provider);
+
+  // Parameters used for reporting immediate output collections.
+  struct ImmediateCollectionParam {
+    // Optional name used for debugging.
+    std::string output_metric_name;
+    // Hash of the output metric name given by
+    // |base::HashMetricName(name)| function.
+    uint64_t output_metric_hash;
+    // Value of the output metric.
+    // TODO(haileywang): Make this a vector and append all the values to the
+    // output.
+    float output_value;
+  };
 
   // Called when model metadata is updated. May result in training data
   // collection behavior change.
@@ -53,6 +77,25 @@ class TrainingDataCollector {
   // collection.
   virtual void ReportCollectedContinuousTrainingData() = 0;
 
+  // Called to collect and store training input data. The data will only be
+  // uploaded once |OnObservationTrigger| is triggered. |TrainingRequestId| can
+  // be used to trigger observation for a specific set of training data. If
+  // `decision_result_update_trigger` is true, then collect data only when
+  // exact_prediction_time is set for the config.
+  virtual TrainingRequestId OnDecisionTime(
+      proto::SegmentId id,
+      scoped_refptr<InputContext> input_context,
+      DecisionType type,
+      absl::optional<ModelProvider::Request> inputs,
+      bool decision_result_update_trigger = false) = 0;
+
+  // Called by Segmentation Platform when manually triggering data collection on
+  // the client.
+  virtual void CollectTrainingData(SegmentId segment_id,
+                                   TrainingRequestId request_id,
+                                   const TrainingLabels& param,
+                                   SuccessCallback callback) = 0;
+
   virtual ~TrainingDataCollector();
 
   // Disallow copy/assign.
@@ -65,4 +108,4 @@ class TrainingDataCollector {
 
 }  // namespace segmentation_platform
 
-#endif  // COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_DATABASE_DATABASE_MAINTENANCE_IMPL_H_
+#endif  // COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_DATA_COLLECTION_TRAINING_DATA_COLLECTOR_H_

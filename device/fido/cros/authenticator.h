@@ -76,21 +76,16 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ChromeOSAuthenticator
   void GetAssertion(CtapGetAssertionRequest request,
                     CtapGetAssertionOptions options,
                     GetAssertionCallback callback) override;
-  void GetNextAssertion(GetAssertionCallback callback) override {}
-  void GetCredentialInformationForRequest(
+  void GetPlatformCredentialInfoForRequest(
       const CtapGetAssertionRequest& request,
-      GetCredentialInformationForRequestCallback callback) override;
+      const CtapGetAssertionOptions& options,
+      GetPlatformCredentialInfoForRequestCallback callback) override;
   void Cancel() override;
-  Type GetType() const override;
+  AuthenticatorType GetType() const override;
   std::string GetId() const override;
-  const absl::optional<AuthenticatorSupportedOptions>& Options() const override;
+  const AuthenticatorSupportedOptions& Options() const override;
 
   absl::optional<FidoTransportProtocol> AuthenticatorTransport() const override;
-
-  bool IsInPairingMode() const override;
-  bool IsPaired() const override;
-  bool RequiresBlePairingPin() const override;
-  bool SupportsEnterpriseAttestation() const override;
 
   void GetTouch(base::OnceClosure callback) override {}
   base::WeakPtr<FidoAuthenticator> GetWeakPtr() override;
@@ -105,7 +100,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ChromeOSAuthenticator
   // of `InitializeAuthenticator`.
   void OnIsPowerButtonModeEnabled(base::OnceClosure callback, bool enabled);
   void OnHasCredentialInformationForRequest(
-      GetCredentialInformationForRequestCallback callback,
+      GetPlatformCredentialInfoForRequestCallback callback,
       absl::optional<u2f::HasCredentialsResponse> response);
   void OnMakeCredentialResponse(
       CtapMakeCredentialRequest request,

@@ -6,12 +6,13 @@
 #include <string>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
@@ -22,7 +23,6 @@
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/startup_utils.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
@@ -33,6 +33,7 @@
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/ash/policy/login/login_policy_test_base.h"
 #include "chrome/browser/ash/policy/login/signin_profile_extensions_policy_test_base.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/nss_service.h"
@@ -41,11 +42,9 @@
 #include "chrome/browser/policy/networking/user_network_configuration_updater_factory.h"
 #include "chrome/browser/policy/profile_policy_connector_builder.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chromeos/ash/components/network/network_cert_loader.h"
@@ -137,8 +136,8 @@ class WebTrustedCertsChangedObserver
   base::RunLoop run_loop_;
 };
 
-// Allows waiting until the |CertDatabase| notifies its observers that it has
-// changd.
+// Allows waiting until the |CertDatabase| notifies its observers that a client
+// cert change has occurred.
 class CertDatabaseChangedObserver : public net::CertDatabase::Observer {
  public:
   CertDatabaseChangedObserver() {}
@@ -147,7 +146,7 @@ class CertDatabaseChangedObserver : public net::CertDatabase::Observer {
   CertDatabaseChangedObserver& operator=(const CertDatabaseChangedObserver&) =
       delete;
 
-  void OnCertDBChanged() override { run_loop_.Quit(); }
+  void OnClientCertStoreChanged() override { run_loop_.Quit(); }
 
   void Wait() { run_loop_.Run(); }
 
@@ -307,8 +306,9 @@ int VerifyTestServerCert(
 bool HasSubjectCommonName(CERTCertificate* cert_handle,
                           const std::string& subject_common_name) {
   char* nss_text = CERT_GetCommonName(&cert_handle->subject);
-  if (!nss_text)
+  if (!nss_text) {
     return false;
+  }
 
   const bool result = subject_common_name == nss_text;
   PORT_Free(nss_text);
@@ -612,7 +612,7 @@ class PolicyProvidedCertsForSigninExtensionTest
           test_certs_path.AppendASCII(kRootCaCert), &x509_contents));
     }
 
-    base::Value onc_dict = BuildONCForExtensionScopedCertificate(
+    base::Value::Dict onc_dict = BuildONCForExtensionScopedCertificate(
         x509_contents, kSigninScreenExtension1);
     ASSERT_TRUE(base::JSONWriter::Write(
         onc_dict, device_policy()
@@ -662,41 +662,38 @@ class PolicyProvidedCertsForSigninExtensionTest
         extension_id, signin_profile_, /*can_create=*/false);
   }
 
-  Profile* signin_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> signin_profile_ = nullptr;
   scoped_refptr<net::X509Certificate> server_cert_;
 
  private:
   // Builds an ONC policy value that specifies exactly one certificate described
   // by |x509_contents| with Web trust to be used for |extension_id|.
-  base::Value BuildONCForExtensionScopedCertificate(
+  base::Value::Dict BuildONCForExtensionScopedCertificate(
       const std::string& x509_contents,
       const std::string& extension_id) {
-    base::Value onc_cert_scope(base::Value::Type::DICTIONARY);
-    onc_cert_scope.SetKey(onc::scope::kType,
-                          base::Value(onc::scope::kExtension));
-    onc_cert_scope.SetKey(onc::scope::kId, base::Value(extension_id));
+    auto onc_cert_scope = base::Value::Dict()
+                              .Set(onc::scope::kType, onc::scope::kExtension)
+                              .Set(onc::scope::kId, extension_id);
 
-    base::Value onc_cert_trust_bits(base::Value::Type::LIST);
-    onc_cert_trust_bits.Append(base::Value(onc::certificate::kWeb));
+    auto onc_cert_trust_bits =
+        base::Value::List().Append(onc::certificate::kWeb);
 
-    base::Value onc_certificate(base::Value::Type::DICTIONARY);
-    onc_certificate.SetKey(onc::certificate::kGUID, base::Value("guid"));
-    onc_certificate.SetKey(onc::certificate::kType,
-                           base::Value(onc::certificate::kAuthority));
-    onc_certificate.SetKey(onc::certificate::kX509, base::Value(x509_contents));
-    onc_certificate.SetKey(onc::certificate::kScope, std::move(onc_cert_scope));
-    onc_certificate.SetKey(onc::certificate::kTrustBits,
-                           std::move(onc_cert_trust_bits));
+    auto onc_certificate =
+        base::Value::Dict()
+            .Set(onc::certificate::kGUID, base::Value("guid"))
+            .Set(onc::certificate::kType, onc::certificate::kAuthority)
+            .Set(onc::certificate::kX509, x509_contents)
+            .Set(onc::certificate::kScope, std::move(onc_cert_scope))
+            .Set(onc::certificate::kTrustBits, std::move(onc_cert_trust_bits));
 
-    base::Value onc_certificates(base::Value::Type::LIST);
-    onc_certificates.Append(std::move(onc_certificate));
+    auto onc_certificates =
+        base::Value::List().Append(std::move(onc_certificate));
 
-    base::Value onc_dict(base::Value::Type::DICTIONARY);
-    onc_dict.SetKey(onc::toplevel_config::kCertificates,
-                    std::move(onc_certificates));
-    onc_dict.SetKey(
-        onc::toplevel_config::kType,
-        base::Value(onc::toplevel_config::kUnencryptedConfiguration));
+    auto onc_dict = base::Value::Dict()
+                        .Set(onc::toplevel_config::kCertificates,
+                             std::move(onc_certificates))
+                        .Set(onc::toplevel_config::kType,
+                             onc::toplevel_config::kUnencryptedConfiguration);
 
     return onc_dict;
   }

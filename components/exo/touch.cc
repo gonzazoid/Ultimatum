@@ -40,11 +40,17 @@ gfx::PointF EventLocationInWindow(ui::TouchEvent* event, aura::Window* window) {
 
 Touch::Touch(TouchDelegate* delegate, Seat* seat)
     : delegate_(delegate), seat_(seat) {
-  WMHelper::GetInstance()->AddPreTargetHandler(this);
+  ash::Shell::Get()->AddShellObserver(this);
+  for (aura::Window* root : ash::Shell::GetAllRootWindows()) {
+    root->AddPreTargetHandler(this);
+  }
 }
 
 Touch::~Touch() {
-  WMHelper::GetInstance()->RemovePreTargetHandler(this);
+  ash::Shell::Get()->RemoveShellObserver(this);
+  for (aura::Window* root : ash::Shell::GetAllRootWindows()) {
+    root->RemovePreTargetHandler(this);
+  }
   delegate_->OnTouchDestroying(this);
   if (HasStylusDelegate())
     stylus_delegate_->OnTouchDestroying(this);
@@ -63,13 +69,23 @@ bool Touch::HasStylusDelegate() const {
 // ui::EventHandler overrides:
 
 void Touch::OnTouchEvent(ui::TouchEvent* event) {
-  if (seat_->was_shutdown() || event->handled())
+  if (seat_->was_shutdown() || event->handled()) {
     return;
+  }
+
+  // TODO(1371493): Investigate if we need to do something similar to the filter
+  // in `Pointer::OnMouseEvent` when dragging. (not sending touch events during
+  // drag)
 
   bool send_details = false;
 
+  auto event_type = event->type();
+  if ((event->flags() & ui::EF_RESERVED_FOR_GESTURE) != 0) {
+    event_type = ui::ET_TOUCH_CANCELLED;
+  }
+
   const int touch_pointer_id = event->pointer_details().id;
-  switch (event->type()) {
+  switch (event_type) {
     case ui::ET_TOUCH_PRESSED: {
       // Early out if event doesn't contain a valid target for touch device.
       // TODO(b/147848270): Verify GetEffectiveTargetForEvent gets the correct
@@ -148,7 +164,6 @@ void Touch::OnTouchEvent(ui::TouchEvent* event) {
     } break;
     case ui::ET_TOUCH_CANCELLED: {
       TRACE_EXO_INPUT_EVENT(event);
-
       // Cancel the full set of touch sequences as soon as one is canceled.
       CancelAllTouches();
       delegate_->OnTouchCancel();
@@ -193,6 +208,15 @@ void Touch::OnSurfaceDestroying(Surface* surface) {
   // when this surface dies.
   CancelAllTouches();
   delegate_->OnTouchCancel();
+}
+
+// ash::ShellObserver:
+void Touch::OnRootWindowAdded(aura::Window* root_window) {
+  root_window->AddPreTargetHandler(this);
+}
+
+void Touch::OnRootWindowWillShutdown(aura::Window* root_window) {
+  root_window->RemovePreTargetHandler(this);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

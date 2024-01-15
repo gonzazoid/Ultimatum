@@ -7,8 +7,9 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/webdata/common/web_data_request_manager.h"
 #include "components/webdata/common/web_database.h"
 #include "components/webdata/common/web_database_table.h"
@@ -17,7 +18,7 @@
 WebDatabaseBackend::WebDatabaseBackend(
     const base::FilePath& path,
     std::unique_ptr<Delegate> delegate,
-    const scoped_refptr<base::SingleThreadTaskRunner>& db_thread)
+    const scoped_refptr<base::SequencedTaskRunner>& db_thread)
     : base::RefCountedDeleteOnSequence<WebDatabaseBackend>(db_thread),
       db_path_(path),
       delegate_(std::move(delegate)) {}
@@ -117,7 +118,7 @@ void WebDatabaseBackend::DatabaseErrorCallback(int error,
     diagnostics_ = db_->GetDiagnosticInfo(error, statement);
     diagnostics_ += sql::GetCorruptFileDiagnosticsInfo(db_path_);
 
-    db_->GetSQLConnection()->RazeAndClose();
+    db_->GetSQLConnection()->RazeAndPoison();
   }
 }
 

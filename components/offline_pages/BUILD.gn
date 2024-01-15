@@ -10,7 +10,7 @@ if (is_android) {
   import("//build/config/android/rules.gni")
 }
 
-if (!is_ios) {
+if (use_blink) {
   test("offline_pages_unittests") {
     deps = [
       ":unit_tests",
@@ -42,9 +42,11 @@ if (!is_ios) {
       "//components/offline_pages/core:unit_tests",
       "//components/offline_pages/core/background:unit_tests",
       "//components/offline_pages/core/downloads:unit_tests",
-      "//components/offline_pages/core/prefetch:unit_tests",
       "//components/offline_pages/core/request_header:unit_tests",
       "//components/offline_pages/task:unit_tests",
     ]
+    if (is_ios) {
+      deps += [ "//components/test:offline_pages_test_bundle_data" ]
+    }
   }
 }

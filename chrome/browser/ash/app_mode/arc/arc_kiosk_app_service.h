@@ -6,15 +6,16 @@
 #define CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_SERVICE_H_
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_icon.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_launcher.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launcher.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager_observer.h"
 #include "chrome/browser/ash/arc/kiosk/arc_kiosk_bridge.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_bridge.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_icon.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
@@ -45,6 +46,11 @@ class ArcKioskAppService : public KeyedService,
  public:
   static ArcKioskAppService* Create(Profile* profile);
   static ArcKioskAppService* Get(content::BrowserContext* context);
+
+  ArcKioskAppService(const ArcKioskAppService&) = delete;
+  ArcKioskAppService& operator=(const ArcKioskAppService&) = delete;
+
+  void SetNetworkDelegate(NetworkDelegate* network_delegate);
 
   // KeyedService overrides
   void Shutdown() override;
@@ -83,18 +89,17 @@ class ArcKioskAppService : public KeyedService,
   void OnComplianceReportReceived(
       const base::Value* compliance_report) override;
 
-  // KioskAppLauncher:
+  // `KioskAppLauncher`:
+  void AddObserver(KioskAppLauncher::Observer* observer) override;
+  void RemoveObserver(KioskAppLauncher::Observer* observer) override;
   void Initialize() override;
   void ContinueWithNetworkReady() override;
-  void RestartLauncher() override;
   void LaunchApp() override;
 
   ArcKioskAppLauncher* GetLauncherForTesting() { return app_launcher_.get(); }
 
  private:
   explicit ArcKioskAppService(Profile* profile);
-  ArcKioskAppService(const ArcKioskAppService&) = delete;
-  ArcKioskAppService& operator=(const ArcKioskAppService&) = delete;
   ~ArcKioskAppService() override;
 
   std::string GetAppId();
@@ -105,14 +110,16 @@ class ArcKioskAppService : public KeyedService,
   // Triggered when app is closed to reset launcher.
   void ResetAppLauncher();
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   bool maintenance_session_running_ = false;
   base::OneShotTimer maintenance_timeout_timer_;
-  ArcKioskAppManager* app_manager_;
+  raw_ptr<ArcKioskAppManager> app_manager_;
   std::string app_id_;
   std::unique_ptr<ArcAppListPrefs::AppInfo> app_info_;
   std::unique_ptr<ArcAppIcon> app_icon_;
   int32_t task_id_ = -1;
+  KioskAppLauncher::ObserverList observers_;
+
   // This contains the list of apps that must be installed for the device to be
   // policy-compliant according to the policy report. Even if an app has already
   // finished installing, it could still remain in this list for some time.
@@ -126,11 +133,5 @@ class ArcKioskAppService : public KeyedService,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the //chrome/browser/chromeos
-// source code migration is finished.
-namespace chromeos {
-using ::ash::ArcKioskAppService;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_SERVICE_H_

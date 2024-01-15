@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -116,7 +116,7 @@ bool PromptForScanningModalDialog::ShouldShowCloseButton() const {
   return false;
 }
 
-BEGIN_METADATA(PromptForScanningModalDialog, views::DialogDelegateView)
+BEGIN_METADATA(PromptForScanningModalDialog)
 END_METADATA
 
 }  // namespace safe_browsing

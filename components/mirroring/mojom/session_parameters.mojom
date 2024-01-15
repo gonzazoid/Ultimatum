@@ -28,6 +28,9 @@ struct SessionParameters {
   // TODO(crbug.com/1015467): Receivers should report capabilities.
   string receiver_model_name;
 
+  // Used to display on the UI surface. e.g. "Living Room TV".
+  string receiver_friendly_name;
+
   // Used to route Cast messages (like OFFER and GET_CAPABILITIES) between this
   // mirroring session and the Cast receiver over the Cast V2 (TLS) socket
   // between Chrome and the receiver.
@@ -43,5 +46,20 @@ struct SessionParameters {
   // video senders. Omission of this parameter instructs the session to use
   // the default configured value.
   mojo_base.mojom.TimeDelta? target_playout_delay;
-};
 
+  // Used to inform Session that it should initialize the MediaRemoter without
+  // querying the receiver device for its capabilities.
+  bool is_remote_playback;
+
+  // If true, all video frames sent will be letterboxed/pillarboxed to fit the
+  // aspect ratio of the negotiated resolution.  This is to allow letterboxing
+  // to be selectively applied to receivers that have outstanding bugs with
+  // rendering variable aspect ratio frames.
+  //
+  // TODO(crbug.com/1363512): Remove support for sender side letterboxing.
+  bool force_letterboxing;
+
+  // If this is set to true, the Mirroring Service will fetch, analyze, and
+  // store information on the quality of the session using RTCP logs.
+  bool enable_rtcp_reporting;
+};

@@ -13,8 +13,6 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "base/task/task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -29,8 +27,8 @@
 #include "components/sync/engine/net/http_post_provider_factory.h"
 #include "components/sync/engine/sync_credentials.h"
 #include "components/sync/engine/sync_encryption_handler.h"
+#include "components/sync/engine/sync_protocol_error.h"
 #include "components/sync/engine/sync_status.h"
-#include "components/sync/protocol/sync_protocol_error.h"
 #include "url/gurl.h"
 
 namespace syncer {
@@ -60,7 +58,7 @@ class SyncManager {
     // changed.
     virtual void OnConnectionStatusChange(ConnectionStatus status) = 0;
 
-    virtual void OnActionableError(
+    virtual void OnActionableProtocolError(
         const SyncProtocolError& sync_protocol_error) = 0;
 
     virtual void OnMigrationRequested(ModelTypeSet types) = 0;
@@ -83,7 +81,7 @@ class SyncManager {
 
     // Whether the local backend provided by the LoopbackServer should be used
     // and the location of the local sync backend storage.
-    bool enable_local_sync_backend;
+    bool enable_local_sync_backend = false;
     base::FilePath local_sync_backend_folder;
 
     // Used to communicate with the sync server.
@@ -92,21 +90,18 @@ class SyncManager {
     std::unique_ptr<SyncEncryptionHandler::Observer> encryption_observer_proxy;
 
     // Must outlive SyncManager.
-    raw_ptr<ExtensionsActivity> extensions_activity;
-
-    // Unqiuely identifies this client to the invalidation notification server.
-    std::string invalidator_client_id;
+    raw_ptr<ExtensionsActivity> extensions_activity = nullptr;
 
     std::unique_ptr<EngineComponentsFactory> engine_components_factory;
 
     // Must outlive SyncManager.
-    raw_ptr<SyncEncryptionHandler> encryption_handler;
+    raw_ptr<SyncEncryptionHandler> encryption_handler = nullptr;
 
     // Carries shutdown requests across threads and will be used to cut short
     // any network I/O and tell the syncer to exit early.
     //
     // Must outlive SyncManager.
-    raw_ptr<CancelationSignal> cancelation_signal;
+    raw_ptr<CancelationSignal> cancelation_signal = nullptr;
 
     // Define the polling interval. Must not be zero.
     base::TimeDelta poll_interval;
@@ -115,6 +110,8 @@ class SyncManager {
     std::string cache_guid;
     std::string birthday;
     std::string bag_of_chips;
+
+    bool sync_poll_immediately_on_every_startup = false;
   };
 
   // The state of sync the feature. If the user turned on sync explicitly, it
@@ -199,6 +196,9 @@ class SyncManager {
   // Requires that the SyncManager be initialized.
   virtual std::string bag_of_chips() = 0;
 
+  // Returns types that have local changes yet to be synced to the server.
+  virtual ModelTypeSet GetTypesWithUnsyncedData() = 0;
+
   // Returns whether there are remaining unsynced items.
   virtual bool HasUnsyncedItemsForTest() = 0;
 
@@ -216,9 +216,6 @@ class SyncManager {
   // chrome account. See ClientConfigParams proto message for more info.
   // Note: this does not trigger a sync cycle. It just updates the sync context.
   virtual void OnCookieJarChanged(bool account_mismatch) = 0;
-
-  // Updates invalidation client id.
-  virtual void UpdateInvalidationClientId(const std::string& client_id) = 0;
 
   // Updates the invalidation information from known active devices.
   virtual void UpdateActiveDevicesInvalidationInfo(

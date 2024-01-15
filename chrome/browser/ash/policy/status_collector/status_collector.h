@@ -6,29 +6,28 @@
 #define CHROME_BROWSER_ASH_POLICY_STATUS_COLLECTOR_STATUS_COLLECTOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "components/policy/proto/device_management_backend.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class Profile;
 
 namespace ash {
 class CrosSettings;
-}  // namespace ash
-
-namespace chromeos {
 namespace system {
 class StatisticsProvider;
 }  // namespace system
-}  // namespace chromeos
+}  // namespace ash
 
 namespace policy {
 
@@ -83,10 +82,10 @@ class StatusCollector {
 
   // Simplifies filling the boot mode for any of the relevant status report
   // requests.
-  static absl::optional<std::string> GetBootMode(
-      chromeos::system::StatisticsProvider* statistics_provider);
+  static std::optional<std::string> GetBootMode(
+      ash::system::StatisticsProvider* statistics_provider);
 
-  StatusCollector(chromeos::system::StatisticsProvider* provider,
+  StatusCollector(ash::system::StatisticsProvider* provider,
                   ash::CrosSettings* cros_settings,
                   base::Clock* clock = base::DefaultClock::GetInstance());
   virtual ~StatusCollector();
@@ -128,9 +127,9 @@ class StatusCollector {
   // activity time that is slightly in the future.
   base::TimeDelta max_stored_future_activity_interval_;
 
-  chromeos::system::StatisticsProvider* const statistics_provider_;
+  const raw_ptr<ash::system::StatisticsProvider> statistics_provider_;
 
-  ash::CrosSettings* const cros_settings_;
+  const raw_ptr<ash::CrosSettings> cros_settings_;
 
   // Cached values of the reporting settings.
   bool report_version_info_ = false;
@@ -140,7 +139,7 @@ class StatusCollector {
   base::CallbackListSubscription version_info_subscription_;
   base::CallbackListSubscription boot_mode_subscription_;
 
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   // Task runner in the creation thread where responses are sent to.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;

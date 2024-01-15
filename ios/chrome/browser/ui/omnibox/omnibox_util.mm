@@ -6,13 +6,11 @@
 
 #import "base/notreached.h"
 #import "base/strings/utf_string_conversions.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
+#import "components/safe_browsing/core/common/features.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 #import "ios/chrome/grit/ios_theme_resources.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -24,11 +22,7 @@ const CGFloat kSymbolLocationBarPointSize = 10;
 #pragma mark - Suggestion icons.
 
 OmniboxSuggestionIconType GetOmniboxSuggestionIconTypeForAutocompleteMatchType(
-    AutocompleteMatchType::Type type,
-    bool is_starred) {
-  if (is_starred)
-    return OmniboxSuggestionIconType::kBookmark;
-
+    AutocompleteMatchType::Type type) {
   // TODO(crbug.com/1122669): Handle trending zero-prefix suggestions by
   // checking the match subtype similar to AutocompleteMatch::GetVectorIcon().
 
@@ -44,7 +38,7 @@ OmniboxSuggestionIconType GetOmniboxSuggestionIconTypeForAutocompleteMatchType(
     case AutocompleteMatchType::NAVSUGGEST:
     case AutocompleteMatchType::NAVSUGGEST_PERSONALIZED:
     case AutocompleteMatchType::OPEN_TAB:
-    case AutocompleteMatchType::PEDAL_DEPRECATED:
+    case AutocompleteMatchType::PEDAL:
     case AutocompleteMatchType::PHYSICAL_WEB_DEPRECATED:
     case AutocompleteMatchType::PHYSICAL_WEB_OVERFLOW_DEPRECATED:
     case AutocompleteMatchType::STARTER_PACK:
@@ -72,16 +66,17 @@ OmniboxSuggestionIconType GetOmniboxSuggestionIconTypeForAutocompleteMatchType(
     case AutocompleteMatchType::NULL_RESULT_MESSAGE:
     case AutocompleteMatchType::NUM_TYPES:
     case AutocompleteMatchType::TILE_SUGGESTION:
+    case AutocompleteMatchType::TILE_MOST_VISITED_SITE:
+    case AutocompleteMatchType::TILE_REPEATABLE_QUERY:
       NOTREACHED();
       return OmniboxSuggestionIconType::kDefaultFavicon;
   }
 }
 
 UIImage* GetOmniboxSuggestionIconForAutocompleteMatchType(
-    AutocompleteMatchType::Type type,
-    bool is_starred) {
+    AutocompleteMatchType::Type type) {
   OmniboxSuggestionIconType iconType =
-      GetOmniboxSuggestionIconTypeForAutocompleteMatchType(type, is_starred);
+      GetOmniboxSuggestionIconTypeForAutocompleteMatchType(type);
   return GetOmniboxSuggestionIcon(iconType);
 }
 
@@ -89,14 +84,17 @@ UIImage* GetOmniboxSuggestionIconForAutocompleteMatchType(
 
 // Returns the asset with "always template" rendering mode.
 UIImage* GetLocationBarSecurityIcon(LocationBarSecurityIconType iconType) {
-  if (UseSymbols()) {
-    return DefaultSymbolTemplateWithPointSize(
-        GetLocationBarSecuritySymbolName(iconType),
-        kSymbolLocationBarPointSize);
+  NSString* name = GetLocationBarSecuritySymbolName(iconType);
+  if (!name) {
+    return nil;
   }
-  NSString* imageName = GetLocationBarSecurityIconTypeAssetName(iconType);
-  return [[UIImage imageNamed:imageName]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+
+  if (iconType == DANGEROUS) {
+    return CustomSymbolTemplateWithPointSize(name, kSymbolLocationBarPointSize);
+  } else {
+    return DefaultSymbolTemplateWithPointSize(name,
+                                              kSymbolLocationBarPointSize);
+  }
 }
 
 // Converts the `security_level` to an appropriate security icon type.
@@ -106,11 +104,20 @@ LocationBarSecurityIconType GetLocationBarSecurityIconTypeForSecurityState(
     case security_state::NONE:
       return INFO;
     case security_state::DANGEROUS:
+      if (base::FeatureList::IsEnabled(
+              safe_browsing::kRedInterstitialFacelift)) {
+        return DANGEROUS;
+      }
+      return NOT_SECURE_WARNING;
     case security_state::WARNING:
       return NOT_SECURE_WARNING;
     case security_state::SECURE:
+      return base::FeatureList::IsEnabled(kOmniboxLockIconEnabled) ? SECURE
+                                                                   : NONE;
     case security_state::SECURE_WITH_POLICY_INSTALLED_CERT:
-      return SECURE;
+      NOTREACHED()
+          << "SECURE_WITH_POLICY_INSTALLED_CERT is used only on ChromeOS";
+      return NONE;
     case security_state::SECURITY_LEVEL_COUNT:
       NOTREACHED();
       return LOCATION_BAR_SECURITY_ICON_TYPE_COUNT;
@@ -124,4 +131,9 @@ UIImage* GetLocationBarSecurityIconForSecurityState(
   LocationBarSecurityIconType iconType =
       GetLocationBarSecurityIconTypeForSecurityState(security_level);
   return GetLocationBarSecurityIcon(iconType);
+}
+
+UIImage* GetLocationBarOfflineIcon() {
+  return DefaultSymbolTemplateWithPointSize(kDownloadPromptFillSymbol,
+                                            kSymbolLocationBarPointSize);
 }

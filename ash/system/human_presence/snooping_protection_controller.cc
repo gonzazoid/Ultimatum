@@ -5,6 +5,7 @@
 #include "ash/system/human_presence/snooping_protection_controller.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/session/session_observer.h"
@@ -12,8 +13,8 @@
 #include "ash/shell.h"
 #include "ash/system/human_presence/human_presence_metrics.h"
 #include "ash/system/human_presence/snooping_protection_notification_blocker.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -26,7 +27,6 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/message_center/message_center.h"
 
 namespace ash {
@@ -42,6 +42,9 @@ SnoopingProtectionController::SnoopingProtectionController()
   // When the controller is initialized, we are never in an active user session
   // and we never have any user preferences active. Hence, our default state
   // values are correct.
+
+  // Finish initializing `notification_blocker_`.
+  notification_blocker_->Init();
 
   // Session controller is instantiated before us in the shell.
   SessionControllerImpl* session_controller =
@@ -251,7 +254,7 @@ void SnoopingProtectionController::ReconfigureService(State* new_state) {
   if (want_configured) {
     // Configure the snooping started/stopped signals that the service will
     // emit.
-    const absl::optional<hps::FeatureConfig> config =
+    const std::optional<hps::FeatureConfig> config =
         hps::GetEnableSnoopingProtectionConfig();
     if (!config.has_value()) {
       LOG(ERROR) << "SnoopingProtectionController: couldn't parse HpsNotify "
@@ -305,7 +308,7 @@ void SnoopingProtectionController::StartServiceObservation(
 // during startup the service reports an UNKNOWN state, so there's a risk of
 // logging a spurious window of absence.
 void SnoopingProtectionController::UpdateServiceState(
-    absl::optional<hps::HpsResultProto> response) {
+    std::optional<hps::HpsResultProto> response) {
   LOG_IF(WARNING, !response.has_value())
       << "Polling the presence daemon failed";
 

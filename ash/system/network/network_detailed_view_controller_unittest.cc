@@ -21,7 +21,7 @@
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/services/bluetooth_config/fake_adapter_state_controller.h"
 #include "chromeos/ash/services/bluetooth_config/scoped_bluetooth_config_test_helper.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace ash {
@@ -61,6 +61,7 @@ constexpr char kNetworkConnectionDetails[] =
 
 const std::string kNetworkTechnologyWiFi = "WiFi";
 const std::string kNetworkTechnologyMobile = "Mobile";
+const std::string kNetworkTechnologyCellular = "Cellular";
 
 class NetworkConnectTestDelegate : public NetworkConnect::Delegate {
  public:
@@ -78,8 +79,10 @@ class NetworkConnectTestDelegate : public NetworkConnect::Delegate {
     return false;
   }
   void ShowMobileSetupDialog(const std::string& network_id) override {}
+  void ShowCarrierUnlockNotification() override {}
   void ShowCarrierAccountDetail(const std::string& network_id) override {}
-  void ShowPortalSignin(const std::string& network_id) override {
+  void ShowPortalSignin(const std::string& network_id,
+                        NetworkConnect::Source source) override {
     portal_signin_guid_ = network_id;
   }
   void ShowNetworkConnectError(const std::string& error_name,
@@ -100,8 +103,8 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     // Initialize CrosNetworkConfigTestHelper here, so we can initialize
     // a unique network handler and also use NetworkConnectTestDelegate to
     // initialize NetworkConnect.
-    network_config_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    network_config_helper_ =
+        std::make_unique<network_config::CrosNetworkConfigTestHelper>();
 
     NetworkHandler::Initialize();
     base::RunLoop().RunUntilIdle();
@@ -109,8 +112,6 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     network_connect_delegate_ = std::make_unique<NetworkConnectTestDelegate>();
     NetworkConnect::Initialize(network_connect_delegate_.get());
     AshTestBase::SetUp();
-
-    feature_list_.InitAndEnableFeature(features::kQuickSettingsNetworkRevamp);
 
     network_detailed_view_controller_ =
         std::make_unique<NetworkDetailedViewController>(
@@ -248,7 +249,6 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
   const std::string& portal_signin_guid() const {
     return network_connect_delegate_->portal_signin_guid();
   }
-  base::test::ScopedFeatureList feature_list_;
 
  private:
   NetworkStateHandler* network_state_handler() {
@@ -263,7 +263,7 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     return ash_test_helper()->bluetooth_config_test_helper();
   }
 
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<network_config::CrosNetworkConfigTestHelper>
       network_config_helper_;
   std::unique_ptr<NetworkConnectTestDelegate> network_connect_delegate_;
   std::unique_ptr<NetworkDetailedViewController>
@@ -384,6 +384,68 @@ TEST_F(NetworkDetailedViewControllerTest, CellularNetworkListItemSelected) {
   CheckRowClickedActionHistogramBuckets(
       NetworkRowClickedAction::kOpenSimUnlockDialog,
       /*count=*/1u, /*total_count=*/2u);
+}
+
+TEST_F(NetworkDetailedViewControllerTest,
+       CarrierLockedNetworkListItemSelected) {
+  base::UserActionTester user_action_tester;
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kCellularCarrierLock);
+
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectionDetails));
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectConfigured));
+  EXPECT_EQ(0, GetSystemTrayClient()->show_network_settings_count());
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenNetworkSettingsPage,
+      /*count=*/0u, /*total_count=*/0u);
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenSimUnlockDialog,
+      /*count=*/0u, /*total_count=*/0u);
+
+  NetworkStatePropertiesPtr cellular_network =
+      CreateStandaloneNetworkProperties(kCellular, NetworkType::kCellular,
+                                        ConnectionStateType::kConnected);
+
+  // When cellular network is carrier locked, verify that SIM unlock
+  // settings page is NOT displayed. Device will be unlocked only through
+  // carrier lock manager.
+  cellular_network->type_state->get_cellular()->sim_locked = true;
+  cellular_network->type_state->get_cellular()->sim_lock_type = "network-pin";
+  SelectNetworkListItem(cellular_network);
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+}
+
+TEST_F(NetworkDetailedViewControllerTest,
+       CarrierLockedNetworkListItemSelectedFeatureDisabled) {
+  base::UserActionTester user_action_tester;
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(features::kCellularCarrierLock);
+
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectionDetails));
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectConfigured));
+  EXPECT_EQ(0, GetSystemTrayClient()->show_network_settings_count());
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenNetworkSettingsPage,
+      /*count=*/0u, /*total_count=*/0u);
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenSimUnlockDialog,
+      /*count=*/0u, /*total_count=*/0u);
+
+  NetworkStatePropertiesPtr cellular_network =
+      CreateStandaloneNetworkProperties(kCellular, NetworkType::kCellular,
+                                        ConnectionStateType::kConnected);
+
+  // With feature flag disabled verify that When cellular
+  // network is carrier locked SIM unlock
+  // settings page is displayed.
+  cellular_network->type_state->get_cellular()->sim_locked = true;
+  cellular_network->type_state->get_cellular()->sim_lock_type = "network-pin";
+  SelectNetworkListItem(cellular_network);
+  EXPECT_EQ(1, GetSystemTrayClient()->show_sim_unlock_settings_count());
 }
 
 TEST_F(NetworkDetailedViewControllerTest, WifiNetworkListItemSelected) {
@@ -527,6 +589,9 @@ TEST_F(NetworkDetailedViewControllerTest, WifiStateChange) {
 }
 
 TEST_F(NetworkDetailedViewControllerTest, MobileToggleClicked) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(features::kInstantHotspotRebrand);
+
   AddCellularDevice();
 
   CheckNetworkTypeToggledHistogramBuckets(
@@ -608,14 +673,72 @@ TEST_F(NetworkDetailedViewControllerTest, MobileToggleClicked) {
             GetTechnologyState(NetworkTypePattern::Tether()));
 }
 
+TEST_F(NetworkDetailedViewControllerTest, MobileToggleDoesntAffectTether) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kInstantHotspotRebrand);
+
+  AddCellularDevice();
+  AddTetherDevice();
+
+  CheckNetworkTypeToggledHistogramBuckets(
+      /*network_type=*/kNetworkTechnologyCellular,
+      /*new_state=*/false, /*count=*/0u,
+      /*total_count=*/0u);
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+
+  // Toggle should only control Cellular device, not Tether device.
+  ToggleMobileState(/*new_state=*/false);
+  CheckNetworkTypeToggledHistogramBuckets(
+      /*network_type=*/kNetworkTechnologyCellular,
+      /*new_state=*/false, /*count=*/1u,
+      /*total_count=*/1u);
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+}
+
+TEST_F(NetworkDetailedViewControllerTest, MobileToggleDoesntAffectBluetooth) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kInstantHotspotRebrand);
+
+  AddCellularDevice();
+  AddTetherDevice();
+
+  // When Tether is uninitialized and Bluetooth is disabled, toggling Mobile on
+  // should NOT enable Bluetooth with the Instant Hotspot Rebrand flag enabled.
+  SetTetherTechnologyState(
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED);
+  SetBluetoothAdapterState(BluetoothSystemState::kDisabled);
+
+  ToggleMobileState(/*new_state=*/true);
+  EXPECT_EQ(BluetoothSystemState::kDisabled, GetBluetoothAdapterState());
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+  CheckNetworkTypeToggledHistogramBuckets(
+      /*network_type=*/kNetworkTechnologyCellular,
+      /*new_state=*/true, /*count=*/1u,
+      /*total_count=*/1u);
+
+  // Simulate Bluetooth adapter being enabled. Note that when testing Bluetooth
+  // will be set to kEnabling and needs to be manually changed to kEnabled using
+  // adapter state. Disabling cellular will NOT change the Bluetooth or Tether
+  // state to available.
+  SetTetherTechnologyState(
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED);
+  SetBluetoothAdapterState(BluetoothSystemState::kEnabled);
+
+  ToggleMobileState(/*new_state=*/false);
+  EXPECT_EQ(BluetoothSystemState::kEnabled, GetBluetoothAdapterState());
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+}
+
 TEST_F(NetworkDetailedViewControllerTest,
        PortalNetworkListItemSelectedWithFlagEnabled) {
-  feature_list_.Reset();
-  feature_list_.InitWithFeatures(
-      /*enabled_features=*/{features::kCaptivePortalUI2022,
-                            features::kQuickSettingsNetworkRevamp},
-      /*disabled_features=*/{});
-
   AddWifiService(shill::kStateRedirectFound);
 
   NetworkStatePropertiesPtr wifi_network = CreateStandaloneNetworkProperties(

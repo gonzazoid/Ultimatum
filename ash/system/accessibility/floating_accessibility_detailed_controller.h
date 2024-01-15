@@ -8,6 +8,7 @@
 #include "ash/ash_export.h"
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ash/system/tray/tray_bubble_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/wm/public/activation_change_observer.h"
 
@@ -52,17 +53,18 @@ class ASH_EXPORT FloatingAccessibilityDetailedController
       views::Button::PressedCallback callback) override;
   // TrayBubbleView::Delegate:
   void BubbleViewDestroyed() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
   // ::wm::ActivationChangeObserver:
   void OnWindowActivated(ActivationReason reason,
                          aura::Window* gained_active,
                          aura::Window* lost_active) override;
 
-  DetailedBubbleView* bubble_view_ = nullptr;
-  views::Widget* bubble_widget_ = nullptr;
-  AccessibilityDetailedView* detailed_view_ = nullptr;
+  raw_ptr<DetailedBubbleView> bubble_view_ = nullptr;
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
+  raw_ptr<AccessibilityDetailedView> detailed_view_ = nullptr;
 
-  Delegate* const delegate_;  // Owns us.
+  const raw_ptr<Delegate> delegate_;  // Owns us.
 };
 
 }  // namespace ash

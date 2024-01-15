@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(`Tests that CSSPropertyPrompt properly builds suggestions.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <style>
@@ -19,7 +23,7 @@
 
   await ElementsTestRunner.selectNodeAndWaitForStylesPromise('inner');
   const treeElement = ElementsTestRunner.getMatchedStylePropertyTreeItem('color');
-  const valuePrompt = new Elements.StylesSidebarPane.CSSPropertyPrompt(treeElement, false /* isEditingName */);
+  const valuePrompt = new ElementsModule.StylesSidebarPane.CSSPropertyPrompt(treeElement, false /* isEditingName */);
   const results = await valuePrompt.buildPropertyCompletions('var(', '--', true /* true */)
   for (const result of results) {
     TestRunner.addResult(result.title)

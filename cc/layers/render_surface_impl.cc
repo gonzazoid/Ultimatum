@@ -19,7 +19,6 @@
 #include "cc/trees/layer_tree_impl.h"
 #include "cc/trees/occlusion.h"
 #include "cc/trees/transform_node.h"
-#include "components/viz/common/display/de_jelly.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
 #include "components/viz/common/quads/compositor_render_pass_draw_quad.h"
 #include "components/viz/common/quads/content_draw_quad_base.h"
@@ -35,18 +34,11 @@
 namespace cc {
 
 RenderSurfaceImpl::RenderSurfaceImpl(LayerTreeImpl* layer_tree_impl,
-                                     uint64_t stable_id)
+                                     ElementId id)
     : layer_tree_impl_(layer_tree_impl),
-      stable_id_(stable_id),
-      effect_tree_index_(kInvalidPropertyNodeId),
-      num_contributors_(0),
-      has_contributing_layer_that_escapes_clip_(false),
-      surface_property_changed_(false),
-      ancestor_property_changed_(false),
-      contributes_to_drawn_surface_(false),
-      is_render_surface_list_member_(false),
-      intersects_damage_under_(true),
-      nearest_occlusion_immune_ancestor_(nullptr) {
+      id_(id),
+      effect_tree_index_(kInvalidPropertyNodeId) {
+  DCHECK(id);
   damage_tracker_ = DamageTracker::Create();
 }
 
@@ -72,10 +64,7 @@ const RenderSurfaceImpl* RenderSurfaceImpl::render_target() const {
     return this;
 }
 
-RenderSurfaceImpl::DrawProperties::DrawProperties() {
-  draw_opacity = 1.f;
-  is_clipped = false;
-}
+RenderSurfaceImpl::DrawProperties::DrawProperties() = default;
 
 RenderSurfaceImpl::DrawProperties::~DrawProperties() = default;
 
@@ -92,8 +81,7 @@ gfx::RectF RenderSurfaceImpl::DrawableContentRect() const {
   }
   gfx::RectF drawable_content_rect = MathUtil::MapClippedRect(
       draw_transform(), gfx::RectF(surface_content_rect));
-  if (!filters.IsEmpty() && is_clipped()) {
-    // Filter could move pixels around, but still need to be clipped.
+  if (is_clipped()) {
     drawable_content_rect.Intersect(gfx::RectF(clip_rect()));
   }
 
@@ -147,7 +135,7 @@ const FilterOperations& RenderSurfaceImpl::BackdropFilters() const {
   return OwningEffectNode()->backdrop_filters;
 }
 
-absl::optional<gfx::RRectF> RenderSurfaceImpl::BackdropFilterBounds() const {
+std::optional<gfx::RRectF> RenderSurfaceImpl::BackdropFilterBounds() const {
   return OwningEffectNode()->backdrop_filter_bounds;
 }
 
@@ -174,7 +162,7 @@ bool RenderSurfaceImpl::ShouldCacheRenderSurface() const {
 bool RenderSurfaceImpl::CopyOfOutputRequired() const {
   return HasCopyRequest() || ShouldCacheRenderSurface() ||
          SubtreeCaptureId().is_valid() ||
-         OwningEffectNode()->shared_element_resource_id.IsValid();
+         OwningEffectNode()->view_transition_element_resource_id.IsValid();
 }
 
 int RenderSurfaceImpl::TransformTreeIndex() const {
@@ -194,9 +182,14 @@ const EffectNode* RenderSurfaceImpl::OwningEffectNode() const {
       EffectTreeIndex());
 }
 
-const DocumentTransitionSharedElementId&
-RenderSurfaceImpl::GetDocumentTransitionSharedElementId() const {
-  return OwningEffectNode()->document_transition_shared_element_id;
+EffectNode* RenderSurfaceImpl::OwningEffectNodeMutableForTest() const {
+  return layer_tree_impl_->property_trees()->effect_tree_mutable().Node(
+      EffectTreeIndex());
+}
+
+const ViewTransitionElementId& RenderSurfaceImpl::GetViewTransitionElementId()
+    const {
+  return OwningEffectNode()->view_transition_shared_element_id;
 }
 
 void RenderSurfaceImpl::SetClipRect(const gfx::Rect& clip_rect) {
@@ -231,8 +224,9 @@ gfx::Rect RenderSurfaceImpl::CalculateExpandedClipForFilters(
 }
 
 gfx::Rect RenderSurfaceImpl::CalculateClippedAccumulatedContentRect() {
-  if (CopyOfOutputRequired() || !is_clipped())
+  if (!ShouldClip() || !is_clipped()) {
     return accumulated_content_rect();
+  }
 
   if (accumulated_content_rect().IsEmpty())
     return gfx::Rect();
@@ -240,7 +234,7 @@ gfx::Rect RenderSurfaceImpl::CalculateClippedAccumulatedContentRect() {
   // Calculate projection from the target surface rect to local
   // space. Non-invertible draw transforms means no able to bring clipped rect
   // in target space back to local space, early out without clip.
-  gfx::Transform target_to_surface(gfx::Transform::kSkipInitialization);
+  gfx::Transform target_to_surface;
   if (!draw_transform().GetInverse(&target_to_surface))
     return accumulated_content_rect();
 
@@ -260,10 +254,6 @@ gfx::Rect RenderSurfaceImpl::CalculateClippedAccumulatedContentRect() {
         CalculateExpandedClipForFilters(target_to_surface);
   } else {
     clipped_accumulated_rect_in_target_space = clip_rect();
-  }
-  if (layer_tree_impl_->settings().allow_de_jelly_effect) {
-    clipped_accumulated_rect_in_target_space.Inset(
-        gfx::Insets::VH(-viz::MaxDeJellyHeight(), 0));
   }
   clipped_accumulated_rect_in_target_space.Intersect(
       accumulated_rect_in_target_space);
@@ -288,6 +278,15 @@ void RenderSurfaceImpl::CalculateContentRectFromAccumulatedContentRect(
   // Surface's content rect is the clipped accumulated content rect. By default
   // use accumulated content rect, and then try to clip it.
   gfx::Rect surface_content_rect = CalculateClippedAccumulatedContentRect();
+
+  // Render passes induced for elements participating in a ViewTransition
+  // shouldn't be larger than max texture size.
+#if DCHECK_IS_ON()
+  if (OwningEffectNode()->view_transition_element_resource_id.IsValid()) {
+    DCHECK_LE(surface_content_rect.width(), max_texture_size);
+    DCHECK_LE(surface_content_rect.height(), max_texture_size);
+  }
+#endif
 
   // The RenderSurfaceImpl backing texture cannot exceed the maximum supported
   // texture size.
@@ -337,7 +336,7 @@ void RenderSurfaceImpl::AccumulateContentRectFromContributingRenderSurface(
   // If this surface is a shared element id then it is being used to generate an
   // independent snapshot and won't contribute to its target surface.
   if (contributing_surface->OwningEffectNode()
-          ->shared_element_resource_id.IsValid())
+          ->view_transition_element_resource_id.IsValid())
     return;
 
   // The content rect of contributing surface is in its own space. Instead, we
@@ -348,23 +347,16 @@ void RenderSurfaceImpl::AccumulateContentRectFromContributingRenderSurface(
 }
 
 bool RenderSurfaceImpl::SurfacePropertyChanged() const {
-  // Surface property changes are tracked as follows:
-  //
-  // - surface_property_changed_ is flagged when the clip_rect or content_rect
-  //   change. As of now, these are the only two properties that can be affected
-  //   by descendant layers.
-  //
-  // - all other property changes come from the surface's property tree nodes
-  //   (or some ancestor node that propagates its change to one of these nodes).
-  //
-  return surface_property_changed_ || AncestorPropertyChanged();
-}
-
-bool RenderSurfaceImpl::SurfacePropertyChangedOnlyFromDescendant() const {
-  return surface_property_changed_ && !AncestorPropertyChanged();
+  // |surface_property_changed_| is flagged when the clip_rect or content_rect
+  // change. As of now, these are the only two properties that can be affected
+  // by descendant layers.
+  return surface_property_changed_;
 }
 
 bool RenderSurfaceImpl::AncestorPropertyChanged() const {
+  // All property changes come from the surface's property tree nodes.
+  // (or some ancestor node that propagates its change to one of these nodes).
+  //
   const PropertyTrees* property_trees = layer_tree_impl_->property_trees();
   return ancestor_property_changed_ || property_trees->full_tree_damaged() ||
          property_trees->transform_tree()
@@ -425,8 +417,8 @@ RenderSurfaceImpl::CreateRenderPass() {
   pass->cache_render_pass = ShouldCacheRenderSurface();
   pass->has_damage_from_contributing_content =
       HasDamageFromeContributingContent();
-  pass->shared_element_resource_id =
-      OwningEffectNode()->shared_element_resource_id;
+  pass->view_transition_element_resource_id =
+      OwningEffectNode()->view_transition_element_resource_id;
   return pass;
 }
 
@@ -438,10 +430,10 @@ void RenderSurfaceImpl::AppendQuads(DrawMode draw_mode,
   if (unoccluded_content_rect.IsEmpty())
     return;
 
-  // If this render surface has a valid |shared_element_resource_id| then its
-  // being used to produce live content. Its content will be drawn to its
-  // actual position in the Viz process.
-  if (OwningEffectNode()->shared_element_resource_id.IsValid())
+  // If this render surface has a valid |view_transition_element_resource_id|
+  // then its being used to produce live content. Its content will be drawn to
+  // its actual position in the Viz process.
+  if (OwningEffectNode()->view_transition_element_resource_id.IsValid())
     return;
 
   const PropertyTrees* property_trees = layer_tree_impl_->property_trees();
@@ -451,14 +443,14 @@ void RenderSurfaceImpl::AppendQuads(DrawMode draw_mode,
   bool contents_opaque = false;
   viz::SharedQuadState* shared_quad_state =
       render_pass->CreateAndAppendSharedQuadState();
-  absl::optional<gfx::Rect> clip_rect;
+  std::optional<gfx::Rect> clip_rect;
   if (draw_properties_.is_clipped) {
     clip_rect = draw_properties_.clip_rect;
   }
-  shared_quad_state->SetAll(draw_transform(), content_rect(), content_rect(),
-                            mask_filter_info(), clip_rect, contents_opaque,
-                            draw_properties_.draw_opacity, BlendMode(),
-                            sorting_context_id);
+  shared_quad_state->SetAll(
+      draw_transform(), content_rect(), content_rect(), mask_filter_info(),
+      clip_rect, contents_opaque, draw_properties_.draw_opacity, BlendMode(),
+      sorting_context_id, /*layer_id=*/0u, is_fast_rounded_corner());
 
   if (layer_tree_impl_->debug_state().show_debug_borders.test(
           DebugBorderType::RENDERPASS)) {
@@ -515,6 +507,11 @@ void RenderSurfaceImpl::AppendQuads(DrawMode draw_mode,
       mask_texture_size, surface_contents_scale, gfx::PointF(), tex_coord_rect,
       !layer_tree_impl_->settings().enable_edge_anti_aliasing,
       OwningEffectNode()->backdrop_filter_quality, intersects_damage_under_);
+}
+
+bool RenderSurfaceImpl::ShouldClip() const {
+  return !HasCopyRequest() && !ShouldCacheRenderSurface() &&
+         !OwningEffectNode()->view_transition_element_resource_id.IsValid();
 }
 
 }  // namespace cc

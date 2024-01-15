@@ -5,11 +5,13 @@
 #import "ios/chrome/browser/ui/app_store_rating/app_store_rating_display_handler.h"
 
 #import "base/check.h"
+#import "components/feature_engagement/public/feature_constants.h"
+#import "components/prefs/pref_service.h"
 #import "ios/chrome/browser/promos_manager/constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/promos_manager/impression_limit.h"
+#import "ios/chrome/browser/promos_manager/promo_config.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 
 @implementation AppStoreRatingDisplayHandler
 
@@ -17,13 +19,19 @@
 
 - (void)handleDisplay {
   DCHECK(self.handler);
-  [self.handler requestAppStoreReview];
+  if (GetApplicationContext()->GetLocalState()->GetBoolean(
+          prefs::kAppStoreRatingPolicyEnabled)) {
+    [self.handler requestAppStoreReview];
+  }
 }
 
 #pragma mark - PromoProtocol
 
-- (promos_manager::Promo)identifier {
-  return promos_manager::Promo::AppStoreRating;
+- (PromoConfig)config {
+  return PromoConfig(promos_manager::Promo::AppStoreRating,
+                     &feature_engagement::kIPHiOSPromoAppStoreFeature,
+                     @[ [[ImpressionLimit alloc] initWithLimit:1
+                                                    forNumDays:365] ]);
 }
 
 @end

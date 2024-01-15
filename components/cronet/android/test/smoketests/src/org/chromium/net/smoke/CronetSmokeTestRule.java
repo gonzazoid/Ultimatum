@@ -4,10 +4,12 @@
 
 package org.chromium.net.smoke;
 
-import android.content.Context;
-import android.support.test.InstrumentationRegistry;
+import static com.google.common.truth.Truth.assertThat;
 
-import org.junit.Assert;
+import static org.chromium.net.truth.UrlResponseInfoSubject.assertThat;
+
+import androidx.test.core.app.ApplicationProvider;
+
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
@@ -16,19 +18,11 @@ import org.chromium.net.CronetEngine;
 import org.chromium.net.ExperimentalCronetEngine;
 import org.chromium.net.UrlResponseInfo;
 
-/**
- * Base test class. This class should not import any classes from the org.chromium.base package.
- */
-public class CronetSmokeTestRule implements TestRule {
-    /**
-     * The key in the string resource file that specifies {@link TestSupport} that should
-     * be instantiated.
-     */
-    private static final String SUPPORT_IMPL_RES_KEY = "TestSupportImplClass";
-
+/** Base test class. This class should not import any classes from the org.chromium.base package. */
+public abstract class CronetSmokeTestRule implements TestRule {
     public ExperimentalCronetEngine.Builder mCronetEngineBuilder;
     public CronetEngine mCronetEngine;
-    public TestSupport mTestSupport;
+    private TestSupport mTestSupport = initTestSupport();
 
     @Override
     public Statement apply(final Statement base, Description desc) {
@@ -56,7 +50,7 @@ public class CronetSmokeTestRule implements TestRule {
 
     private void ruleSetUp() throws Exception {
         mCronetEngineBuilder =
-                new ExperimentalCronetEngine.Builder(InstrumentationRegistry.getTargetContext());
+                new ExperimentalCronetEngine.Builder(ApplicationProvider.getApplicationContext());
         initTestSupport();
     }
 
@@ -76,44 +70,30 @@ public class CronetSmokeTestRule implements TestRule {
             throw new RuntimeException(
                     "The request failed with an error", callback.getFailureError());
         }
-        Assert.assertEquals(SmokeTestRequestCallback.State.Succeeded, callback.getFinalState());
+        assertThat(callback.getFinalState()).isEqualTo(SmokeTestRequestCallback.State.Succeeded);
 
         // Check the response info
         UrlResponseInfo responseInfo = callback.getResponseInfo();
-        Assert.assertNotNull(responseInfo);
-        Assert.assertFalse(responseInfo.wasCached());
-        Assert.assertEquals(url, responseInfo.getUrl());
-        Assert.assertEquals(
-                url, responseInfo.getUrlChain().get(responseInfo.getUrlChain().size() - 1));
-        Assert.assertEquals(200, responseInfo.getHttpStatusCode());
-        Assert.assertTrue(responseInfo.toString().length() > 0);
+        assertThat(responseInfo).isNotNull();
+        assertThat(responseInfo).wasNotCached();
+        assertThat(responseInfo).hasUrlThat().isEqualTo(url);
+        assertThat(responseInfo.getUrlChain().get(responseInfo.getUrlChain().size() - 1))
+                .isEqualTo(url);
+        assertThat(responseInfo).hasHttpStatusCodeThat().isEqualTo(200);
+        assertThat(responseInfo.toString()).isNotEmpty();
     }
 
     static void assertJavaEngine(CronetEngine engine) {
-        Assert.assertNotNull(engine);
-        Assert.assertEquals("org.chromium.net.impl.JavaCronetEngine", engine.getClass().getName());
+        assertThat(engine).isNotNull();
+        assertThat(engine.getClass().getName()).isEqualTo("org.chromium.net.impl.JavaCronetEngine");
     }
 
     static void assertNativeEngine(CronetEngine engine) {
-        Assert.assertNotNull(engine);
-        Assert.assertEquals(
-                "org.chromium.net.impl.CronetUrlRequestContext", engine.getClass().getName());
+        assertThat(engine).isNotNull();
+        assertThat(engine.getClass().getName())
+                .isEqualTo("org.chromium.net.impl.CronetUrlRequestContext");
     }
 
-    /**
-     * Instantiates a concrete implementation of {@link TestSupport} interface.
-     * The name of the implementation class is determined dynamically by reading
-     * the value of |TestSupportImplClass| from the Android string resource file.
-     *
-     * @throws Exception if the class cannot be instantiated.
-     */
-    @SuppressWarnings("DiscouragedApi")
-    private void initTestSupport() throws Exception {
-        Context ctx = InstrumentationRegistry.getTargetContext();
-        String packageName = ctx.getPackageName();
-        int resId = ctx.getResources().getIdentifier(SUPPORT_IMPL_RES_KEY, "string", packageName);
-        String className = ctx.getResources().getString(resId);
-        Class<? extends TestSupport> cl = Class.forName(className).asSubclass(TestSupport.class);
-        mTestSupport = cl.newInstance();
-    }
+    /** Instantiates a concrete implementation of {@link TestSupport} interface. */
+    protected abstract TestSupport initTestSupport();
 }

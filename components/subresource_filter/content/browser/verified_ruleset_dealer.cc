@@ -6,15 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/subresource_filter/core/common/indexed_ruleset.h"
 #include "components/subresource_filter/core/common/memory_mapped_ruleset.h"
@@ -35,7 +33,8 @@ RulesetFilePtr VerifiedRulesetDealer::OpenAndSetRulesetFile(
   RulesetFilePtr file(
       new base::File(file_path, base::File::FLAG_OPEN | base::File::FLAG_READ |
                                     base::File::FLAG_WIN_SHARE_DELETE),
-      base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+      base::OnTaskRunnerDeleter(
+          base::SequencedTaskRunner::GetCurrentDefault()));
   TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("loading"),
                "VerifiedRulesetDealer::OpenAndSetRulesetFile", "file_valid",
                file->IsValid());
@@ -71,8 +70,6 @@ scoped_refptr<const MemoryMappedRuleset> VerifiedRulesetDealer::GetRuleset() {
       } else {
         status_ = RulesetVerificationStatus::kInvalidFile;
       }
-      UMA_HISTOGRAM_ENUMERATION("SubresourceFilter.RulesetVerificationStatus",
-                                status_);
       return ruleset;
     }
     case RulesetVerificationStatus::kIntact: {
@@ -96,7 +93,12 @@ VerifiedRulesetDealer::Handle::Handle(
       dealer_(new VerifiedRulesetDealer,
               base::OnTaskRunnerDeleter(std::move(task_runner))) {}
 
-VerifiedRulesetDealer::Handle::~Handle() = default;
+VerifiedRulesetDealer::Handle::~Handle() {
+  // The `base::SequencedTaskRunner` that `task_runner_` points to is owned by
+  // `dealer_`. Make sure to clear it before `dealer_` is destroyed to avoid
+  // holding a dangling pointer.
+  task_runner_ = nullptr;
+}
 
 void VerifiedRulesetDealer::Handle::GetDealerAsync(
     base::OnceCallback<void(VerifiedRulesetDealer*)> callback) {
@@ -118,8 +120,8 @@ void VerifiedRulesetDealer::Handle::TryOpenAndSetRulesetFile(
   // |base::Unretained| is safe here because the |OpenAndSetRulesetFile| task
   // will be posted before a task to delete the pointer upon destruction of
   // |this| Handler.
-  base::PostTaskAndReplyWithResult(
-      task_runner_, FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&VerifiedRulesetDealer::OpenAndSetRulesetFile,
                      base::Unretained(dealer_.get()), expected_checksum, path),
       std::move(callback));

@@ -43,13 +43,15 @@ const Path& StylePath::GetPath() const {
   if (!path_) {
     path_ = std::make_unique<Path>();
     BuildPathFromByteStream(*byte_stream_, *path_);
+    path_->SetWindRule(wind_rule_);
   }
   return *path_;
 }
 
 float StylePath::length() const {
-  if (std::isnan(path_length_))
+  if (std::isnan(path_length_)) {
     path_length_ = GetPath().length();
+  }
   return path_length_;
 }
 
@@ -67,7 +69,9 @@ bool StylePath::IsEqualAssumingSameType(const BasicShape& o) const {
   return wind_rule_ == other.wind_rule_ && *byte_stream_ == *other.byte_stream_;
 }
 
-void StylePath::GetPath(Path& path, const gfx::RectF& offset_rect, float zoom) {
+void StylePath::GetPath(Path& path,
+                        const gfx::RectF& offset_rect,
+                        float zoom) const {
   path = GetPath();
   path.Transform(AffineTransform::Translation(offset_rect.x(), offset_rect.y())
                      .Scale(zoom));

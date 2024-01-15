@@ -4,14 +4,14 @@
 
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
 
-#include "ash/constants/ash_features.h"
+#include <optional>
+
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/app_restore/full_restore_prefs.h"
 #include "chrome/browser/ash/app_restore/full_restore_service_factory.h"
@@ -38,18 +38,15 @@
 #include "components/sync/base/model_type.h"
 #include "components/sync/model/sync_change.h"
 #include "components/sync/model/sync_data.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/preference_specifics.pb.h"
 #include "components/sync/test/fake_sync_change_processor.h"
-#include "components/sync/test/sync_error_factory_mock.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/public/cpp/notification.h"
 
@@ -100,8 +97,7 @@ bool CanPerformRestore(const AccountId& account_id) {
 
 class FullRestoreServiceTest : public testing::Test {
  public:
-  FullRestoreServiceTest()
-      : user_manager_enabler_(std::make_unique<FakeChromeUserManager>()) {}
+  FullRestoreServiceTest() = default;
 
   ~FullRestoreServiceTest() override = default;
 
@@ -109,6 +105,7 @@ class FullRestoreServiceTest : public testing::Test {
   FullRestoreServiceTest& operator=(const FullRestoreServiceTest&) = delete;
 
   void SetUp() override {
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
     EXPECT_TRUE(temp_dir_.CreateUniqueTempDir());
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName("user.test@gmail.com");
@@ -119,7 +116,7 @@ class FullRestoreServiceTest : public testing::Test {
     account_id_ =
         AccountId::FromUserEmailGaiaId("usertest@gmail.com", "1234567890");
     const auto* user = GetFakeUserManager()->AddUser(account_id_);
-    GetFakeUserManager()->LoginUser(account_id_);
+    fake_user_manager_->LoginUser(account_id_);
     ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
                                                             profile_.get());
 
@@ -133,8 +130,7 @@ class FullRestoreServiceTest : public testing::Test {
   void TearDown() override { profile_.reset(); }
 
   FakeChromeUserManager* GetFakeUserManager() const {
-    return static_cast<FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
+    return fake_user_manager_.Get();
   }
 
   void CreateFullRestoreServiceForTesting() {
@@ -154,14 +150,14 @@ class FullRestoreServiceTest : public testing::Test {
   }
 
   bool HasNotificationFor(const std::string& notification_id) {
-    absl::optional<message_center::Notification> message_center_notification =
+    std::optional<message_center::Notification> message_center_notification =
         display_service()->GetNotification(notification_id);
     return message_center_notification.has_value();
   }
 
   void VerifyRestoreNotificationTitle(const std::string& notification_id,
                                       bool is_reboot_notification) {
-    absl::optional<message_center::Notification> message_center_notification =
+    std::optional<message_center::Notification> message_center_notification =
         display_service()->GetNotification(notification_id);
     ASSERT_TRUE(message_center_notification.has_value());
     const std::u16string& title = message_center_notification.value().title();
@@ -195,13 +191,13 @@ class FullRestoreServiceTest : public testing::Test {
                      RestoreNotificationButtonIndex action_index) {
     display_service()->SimulateClick(
         NotificationHandler::Type::TRANSIENT, notification_id,
-        static_cast<int>(action_index), absl::nullopt);
+        static_cast<int>(action_index), std::nullopt);
   }
 
   // Simulates the initial sync of preferences.
   void SyncPreferences(
       SessionStartupPref::PrefValue restore_on_startup_value,
-      absl::optional<RestoreOption> maybe_restore_apps_and_pages_value) {
+      std::optional<RestoreOption> maybe_restore_apps_and_pages_value) {
     syncer::SyncDataList sync_data_list;
     sync_data_list.push_back(
         CreateRestoreOnStartupPrefSyncData(restore_on_startup_value));
@@ -212,8 +208,7 @@ class FullRestoreServiceTest : public testing::Test {
     if (!maybe_restore_apps_and_pages_value.has_value()) {
       sync_service->MergeDataAndStartSyncing(
           syncer::PREFERENCES, sync_data_list,
-          std::make_unique<syncer::FakeSyncChangeProcessor>(),
-          std::make_unique<syncer::SyncErrorFactoryMock>());
+          std::make_unique<syncer::FakeSyncChangeProcessor>());
 
       // OS_PREFERENCES sync should be started separately.
       syncer::SyncableService* os_sync_service =
@@ -221,8 +216,7 @@ class FullRestoreServiceTest : public testing::Test {
               syncer::OS_PREFERENCES);
       os_sync_service->MergeDataAndStartSyncing(
           syncer::OS_PREFERENCES, syncer::SyncDataList(),
-          std::make_unique<syncer::FakeSyncChangeProcessor>(),
-          std::make_unique<syncer::SyncErrorFactoryMock>());
+          std::make_unique<syncer::FakeSyncChangeProcessor>());
       return;
     }
 
@@ -234,13 +228,11 @@ class FullRestoreServiceTest : public testing::Test {
             syncer::OS_PREFERENCES);
     os_sync_service->MergeDataAndStartSyncing(
         syncer::OS_PREFERENCES, os_sync_data_list,
-        std::make_unique<syncer::FakeSyncChangeProcessor>(),
-        std::make_unique<syncer::SyncErrorFactoryMock>());
+        std::make_unique<syncer::FakeSyncChangeProcessor>());
 
     sync_service->MergeDataAndStartSyncing(
         syncer::PREFERENCES, sync_data_list,
-        std::make_unique<syncer::FakeSyncChangeProcessor>(),
-        std::make_unique<syncer::SyncErrorFactoryMock>());
+        std::make_unique<syncer::FakeSyncChangeProcessor>());
   }
 
   void ProcessSyncChanges(
@@ -281,9 +273,10 @@ class FullRestoreServiceTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
 
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<TestingProfile> profile_;
   base::ScopedTempDir temp_dir_;
-  user_manager::ScopedUserManager user_manager_enabler_;
   AccountId account_id_;
 
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
@@ -447,7 +440,7 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile, ExsitingUserReImage) {
 // For a brand new user, if sync off, set 'Ask Every Time' as the default value,
 // and don't show notifications, don't restore.
 TEST_F(FullRestoreServiceTest, NewUserSyncOff) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
   CreateFullRestoreServiceForTesting();
 
   EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
@@ -462,7 +455,7 @@ TEST_F(FullRestoreServiceTest, NewUserSyncOff) {
 // you left off', after sync, set 'Always' as the default value, and don't show
 // notifications, don't restore.
 TEST_F(FullRestoreServiceTest, NewUserSyncChromeRestoreSetting) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
   CreateFullRestoreServiceForTesting();
 
   EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
@@ -472,7 +465,7 @@ TEST_F(FullRestoreServiceTest, NewUserSyncChromeRestoreSetting) {
   EXPECT_TRUE(CanPerformRestore(account_id()));
 
   // Set the Chrome restore setting to simulate sync for the first time.
-  SyncPreferences(SessionStartupPref::kPrefValueLast, absl::nullopt);
+  SyncPreferences(SessionStartupPref::kPrefValueLast, std::nullopt);
   content::RunAllTasksUntilIdle();
 
   EXPECT_EQ(RestoreOption::kAlways, GetRestoreOption());
@@ -494,7 +487,7 @@ TEST_F(FullRestoreServiceTest, NewUserSyncChromeRestoreSetting) {
 // sync, set 'Ask every time' as the default value, and don't show
 // notifications, don't restore.
 TEST_F(FullRestoreServiceTest, NewUserSyncChromeNotRestoreSetting) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
   CreateFullRestoreServiceForTesting();
 
   EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
@@ -504,7 +497,7 @@ TEST_F(FullRestoreServiceTest, NewUserSyncChromeNotRestoreSetting) {
   EXPECT_TRUE(CanPerformRestore(account_id()));
 
   // Set the Chrome restore setting to simulate sync for the first time.
-  SyncPreferences(SessionStartupPref::kPrefValueNewTab, absl::nullopt);
+  SyncPreferences(SessionStartupPref::kPrefValueNewTab, std::nullopt);
   content::RunAllTasksUntilIdle();
 
   EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
@@ -525,7 +518,7 @@ TEST_F(FullRestoreServiceTest, NewUserSyncChromeNotRestoreSetting) {
 // For a new Chrome OS user, keep the ChromeOS restore setting from sync, and
 // don't show notifications, don't restore.
 TEST_F(FullRestoreServiceTest, ReImage) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
   CreateFullRestoreServiceForTesting();
 
   EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
@@ -604,23 +597,6 @@ TEST_F(FullRestoreServiceTestHavingFullRestoreFile, AskEveryTimeAndRestore) {
   VerifyNotification(false, false);
 
   FullRestoreService::MaybeCloseNotification(profile());
-}
-
-// If the OS restore setting is 'Ask every time' and glanceables are enabled,
-// the notification is not shown.
-TEST_F(FullRestoreServiceTestHavingFullRestoreFile,
-       AskEveryTimeWithGlanceables) {
-  base::test::ScopedFeatureList feature_list(features::kGlanceables);
-
-  profile()->GetPrefs()->SetInteger(
-      kRestoreAppsAndPagesPrefName,
-      static_cast<int>(RestoreOption::kAskEveryTime));
-  CreateFullRestoreServiceForTesting();
-
-  EXPECT_EQ(RestoreOption::kAskEveryTime, GetRestoreOption());
-
-  VerifyNotification(/*has_crash_notification=*/false,
-                     /*has_restore_notification=*/false);
 }
 
 // If the OS restore setting is 'Ask every time', after reboot, show the restore
@@ -818,7 +794,7 @@ class FullRestoreServiceMultipleUsersTest
   }
 
   bool HasNotificationForProfile2(const std::string& notification_id) {
-    absl::optional<message_center::Notification> message_center_notification =
+    std::optional<message_center::Notification> message_center_notification =
         display_service2()->GetNotification(notification_id);
     return message_center_notification.has_value();
   }
@@ -840,7 +816,7 @@ class FullRestoreServiceMultipleUsersTest
                                 RestoreNotificationButtonIndex action_index) {
     display_service2()->SimulateClick(
         NotificationHandler::Type::TRANSIENT, notification_id,
-        static_cast<int>(action_index), absl::nullopt);
+        static_cast<int>(action_index), std::nullopt);
   }
 
   NotificationDisplayServiceTester* display_service2() const {

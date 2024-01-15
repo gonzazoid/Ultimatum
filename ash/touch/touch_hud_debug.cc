@@ -10,10 +10,13 @@
 
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/aura/window_event_dispatcher.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display.h"
 #include "ui/display/manager/display_manager.h"
@@ -169,6 +172,8 @@ class TouchLog {
 
 // TouchHudCanvas draws touch traces in |FULLSCREEN| and |REDUCED_SCALE| modes.
 class TouchHudCanvas : public views::View {
+  METADATA_HEADER(TouchHudCanvas, views::View)
+
  public:
   explicit TouchHudCanvas(const TouchLog& touch_log)
       : touch_log_(touch_log), scale_(1) {
@@ -195,8 +200,8 @@ class TouchHudCanvas : public views::View {
   int scale() const { return scale_; }
 
   void TouchPointAdded(int touch_id) {
-    int trace_index = touch_log_.GetTraceIndex(touch_id);
-    const TouchTrace& trace = touch_log_.traces()[trace_index];
+    int trace_index = touch_log_->GetTraceIndex(touch_id);
+    const TouchTrace& trace = touch_log_->traces()[trace_index];
     const TouchPointLog& point = trace.log().back();
     if (point.type == ui::ET_TOUCH_PRESSED)
       StartedTrace(trace_index);
@@ -218,7 +223,7 @@ class TouchHudCanvas : public views::View {
   }
 
   void AddedPointToTrace(int trace_index) {
-    const TouchTrace& trace = touch_log_.traces()[trace_index];
+    const TouchTrace& trace = touch_log_->traces()[trace_index];
     const TouchPointLog& point = trace.log().back();
     const gfx::Point& location = point.location;
     SkScalar x = SkIntToScalar(location.x());
@@ -243,12 +248,15 @@ class TouchHudCanvas : public views::View {
 
   cc::PaintFlags flags_;
 
-  const TouchLog& touch_log_;
+  const raw_ref<const TouchLog, DanglingUntriaged> touch_log_;
   SkPath paths_[kMaxPaths];
   SkColor colors_[kMaxPaths];
 
   int scale_;
 };
+
+BEGIN_METADATA(TouchHudCanvas)
+END_METADATA
 
 TouchHudDebug::TouchHudDebug(aura::Window* initial_root)
     : TouchObserverHud(initial_root, "TouchHudDebug"),
@@ -261,7 +269,7 @@ TouchHudDebug::TouchHudDebug(aura::Window* initial_root)
 
   views::View* content = widget()->GetContentsView();
 
-  content->AddChildView(canvas_);
+  content->AddChildView(canvas_.get());
 
   const gfx::Size& display_size = display.size();
   canvas_->SetSize(display_size);
@@ -284,7 +292,7 @@ TouchHudDebug::TouchHudDebug(aura::Window* initial_root)
   label_container_->SetY(display_size.height() / kReducedScale);
   label_container_->SetSize(label_container_->GetPreferredSize());
   label_container_->SetVisible(false);
-  content->AddChildView(label_container_);
+  content->AddChildView(label_container_.get());
 }
 
 TouchHudDebug::~TouchHudDebug() = default;

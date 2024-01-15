@@ -7,10 +7,10 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/ranges/algorithm.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace arc {
 
@@ -54,10 +54,6 @@ FakeIntentHelperInstance::~FakeIntentHelperInstance() {}
 
 void FakeIntentHelperInstance::AddPreferredPackage(
     const std::string& package_name) {}
-
-void FakeIntentHelperInstance::AddPreferredApp(const std::string& package_name,
-                                               IntentFilter intent_filter,
-                                               mojom::IntentInfoPtr intent) {}
 
 void FakeIntentHelperInstance::SetVerifiedLinks(
     const std::vector<std::string>& package_names,
@@ -108,7 +104,7 @@ void FakeIntentHelperInstance::RequestIntentHandlerList(
     }
   }
   // Post the reply to run asynchronously to match the real implementation.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(handlers)));
 }
 
@@ -117,7 +113,7 @@ void FakeIntentHelperInstance::RequestUrlHandlerList(
     RequestUrlHandlerListCallback callback) {
   std::vector<mojom::IntentHandlerInfoPtr> handlers;
   // Post the reply to run asynchronously to match the real implementation.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(handlers)));
 }
 
@@ -154,5 +150,15 @@ FakeIntentHelperInstance::GetBroadcastsForAction(
 }
 
 void FakeIntentHelperInstance::RequestDomainVerificationStatusUpdate() {}
+
+void FakeIntentHelperInstance::SetCaptionStyle(
+    arc::mojom::CaptionStylePtr caption_style) {
+  caption_style_ = std::move(caption_style);
+}
+
+void FakeIntentHelperInstance::EnableAccessibilityFeatures(
+    arc::mojom::AccessibilityFeaturesPtr accessibility_features) {
+  accessibility_features_ = std::move(accessibility_features);
+}
 
 }  // namespace arc

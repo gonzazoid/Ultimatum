@@ -6,9 +6,11 @@
 #define BASE_TYPES_OPTIONAL_REF_H_
 
 #include <memory>
+#include <optional>
 #include <type_traits>
 
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/base/attributes.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -94,13 +96,14 @@ class optional_ref {
   // Note: when constructing from a const reference, `optional_ref`'s template
   // argument must be const-qualified as well.
   // Note 2: avoiding direct use of `T` prevents implicit conversions.
-  template <typename U,
-            typename = std::enable_if_t<std::is_const_v<T> && IsCompatibleV<U>>>
+  template <typename U>
+    requires(std::is_const_v<T> && IsCompatibleV<U>)
   // NOLINTNEXTLINE(google-explicit-constructor)
   constexpr optional_ref(
       const absl::optional<U>& o ABSL_ATTRIBUTE_LIFETIME_BOUND)
       : ptr_(o ? &*o : nullptr) {}
-  template <typename U, typename = std::enable_if_t<IsCompatibleV<U>>>
+  template <typename U>
+    requires(IsCompatibleV<U>)
   // NOLINTNEXTLINE(google-explicit-constructor)
   constexpr optional_ref(absl::optional<U>& o ABSL_ATTRIBUTE_LIFETIME_BOUND)
       : ptr_(o ? &*o : nullptr) {}
@@ -111,7 +114,8 @@ class optional_ref {
   // Note: when constructing from a const pointer, `optional_ref`'s template
   // argument must be const-qualified as well.
   // Note 2: avoiding direct use of `T` prevents implicit conversions.
-  template <typename U, typename = std::enable_if_t<IsCompatibleV<U>>>
+  template <typename U>
+    requires(IsCompatibleV<U>)
   // NOLINTNEXTLINE(google-explicit-constructor)
   constexpr optional_ref(U* p ABSL_ATTRIBUTE_LIFETIME_BOUND) : ptr_(p) {}
 
@@ -121,11 +125,13 @@ class optional_ref {
   // Note: when constructing from a const reference, `optional_ref`'s template
   // argument must be const-qualified as well.
   // Note 2: avoiding direct use of `T` prevents implicit conversions.
-  template <typename U, typename = std::enable_if_t<IsCompatibleV<const U>>>
+  template <typename U>
+    requires(IsCompatibleV<const U>)
   // NOLINTNEXTLINE(google-explicit-constructor)
   constexpr optional_ref(const U& r ABSL_ATTRIBUTE_LIFETIME_BOUND)
       : ptr_(std::addressof(r)) {}
-  template <typename U, typename = std::enable_if_t<IsCompatibleV<U>>>
+  template <typename U>
+    requires(IsCompatibleV<U>)
   // NOLINTNEXTLINE(google-explicit-constructor)
   constexpr optional_ref(U& r ABSL_ATTRIBUTE_LIFETIME_BOUND)
       : ptr_(std::addressof(r)) {}
@@ -137,10 +143,10 @@ class optional_ref {
 
   // Constructs a `optional_ref<const T>` from a `optional_ref<T>`. Conversions
   // in the reverse direction are disallowed.
-  template <typename U = T, typename = std::enable_if_t<std::is_const_v<U>>>
   // NOLINTNEXTLINE(google-explicit-constructor)
-  constexpr optional_ref(optional_ref<std::remove_const_t<U>> rhs)
-      : ptr_(rhs.as_ptr()) {}
+  template <typename U = std::remove_const<T>>
+    requires(std::is_const_v<T>)
+  constexpr optional_ref(optional_ref<U> rhs) : ptr_(rhs.as_ptr()) {}
 
   // Copy construction is allowed to make it possible to pass `optional_ref`s to
   // another call. However, assignment is disallowed, as it makes it easy to
@@ -176,14 +182,14 @@ class optional_ref {
   // Convenience method for turning a non-owning `optional_ref` into an owning
   // `absl::optional`. Incurs a copy; useful when saving an `optional_ref`
   // function parameter as a field, et cetera.
-  template <typename U = std::decay_t<T>,
-            typename = std::enable_if_t<std::is_constructible_v<U, T>>>
+  template <typename U = std::decay_t<T>>
+    requires(std::constructible_from<U, T>)
   constexpr absl::optional<U> CopyAsOptional() const {
     return ptr_ ? absl::optional<U>(*ptr_) : absl::nullopt;
   }
 
  private:
-  T* const ptr_ = nullptr;
+  raw_ptr<T> const ptr_ = nullptr;
 };
 
 template <typename T>
@@ -198,6 +204,16 @@ optional_ref(absl::optional<T>&) -> optional_ref<T>;
 
 template <typename T>
 optional_ref(T*) -> optional_ref<T>;
+
+template <typename T>
+constexpr bool operator==(std::nullopt_t, optional_ref<T> x) {
+  return !x.has_value();
+}
+
+template <typename T>
+constexpr bool operator==(optional_ref<T> x, std::nullopt_t) {
+  return !x.has_value();
+}
 
 }  // namespace base
 

@@ -10,6 +10,7 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/crash/content/browser/error_reporting/javascript_error_report.h"  // nogncheck
 #include "components/crash/content/browser/error_reporting/js_error_report_processor.h"  // nogncheck
@@ -101,8 +102,8 @@ class WebUIMainFrameObserverTest : public RenderViewHostTestHarness {
     SetContents(TestWebContents::Create(browser_context(), site_instance_));
     // Since we just created the web_contents() pointer with
     // TestWebContents::Create, the static_casts are safe.
-    web_ui_ = std::make_unique<WebUIImpl>(
-        static_cast<TestWebContents*>(web_contents()),
+    web_ui_ = std::make_unique<WebUIImpl>(web_contents());
+    web_ui_->SetRenderFrameHost(
         static_cast<TestWebContents*>(web_contents())->GetPrimaryMainFrame());
     web_ui_->SetController(
         std::make_unique<MockWebUIController>(web_ui_.get()));
@@ -148,7 +149,7 @@ class WebUIMainFrameObserverTest : public RenderViewHostTestHarness {
       const std::u16string& message,
       int32_t line_no,
       const std::u16string& source_id,
-      const absl::optional<std::u16string>& stack_trace) {
+      const std::optional<std::u16string>& stack_trace) {
     web_ui_->GetWebUIMainFrameObserverForTest()->OnDidAddMessageToConsole(
         source_frame, log_level, message, line_no, source_id, stack_trace);
   }
@@ -182,7 +183,7 @@ constexpr char16_t WebUIMainFrameObserverTest::kStackTrace16[];
 
 TEST_F(WebUIMainFrameObserverTest, ErrorReported) {
   NavigateToPage();
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kError,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
   task_environment()->RunUntilIdle();
@@ -205,23 +206,23 @@ TEST_F(WebUIMainFrameObserverTest, ErrorReported) {
 
 TEST_F(WebUIMainFrameObserverTest, NoStackTrace) {
   NavigateToPage();
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kError,
-                               kMessage16, 5, kSourceURL16, absl::nullopt);
+                               kMessage16, 5, kSourceURL16, std::nullopt);
   task_environment()->RunUntilIdle();
   EXPECT_EQ(processor_->error_report_count(), 1);
-  EXPECT_EQ(processor_->last_error_report().stack_trace, absl::nullopt);
+  EXPECT_EQ(processor_->last_error_report().stack_trace, std::nullopt);
 }
 
 TEST_F(WebUIMainFrameObserverTest, NonErrorsIgnored) {
   NavigateToPage();
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kWarning,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kInfo,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kVerbose,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
   task_environment()->RunUntilIdle();
@@ -231,7 +232,7 @@ TEST_F(WebUIMainFrameObserverTest, NonErrorsIgnored) {
 TEST_F(WebUIMainFrameObserverTest, NoProcessorDoesntCrash) {
   NavigateToPage();
   FakeJsErrorReportProcessor::SetDefault(nullptr);
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kError,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
   task_environment()->RunUntilIdle();
@@ -239,7 +240,7 @@ TEST_F(WebUIMainFrameObserverTest, NoProcessorDoesntCrash) {
 
 TEST_F(WebUIMainFrameObserverTest, NotSentIfInvalidURL) {
   NavigateToPage();
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kError,
                                kMessage16, 5, u"invalid URL", kStackTrace16);
   task_environment()->RunUntilIdle();
@@ -250,7 +251,7 @@ TEST_F(WebUIMainFrameObserverTest, NotSentIfDisabledForPage) {
   static_cast<MockWebUIController*>(web_ui_->GetController())
       ->enable_javascript_error_reporting(false);
   NavigateToPage();
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kError,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
   task_environment()->RunUntilIdle();
@@ -289,7 +290,7 @@ TEST_F(WebUIMainFrameObserverTest, URLPathIsPreservedOtherPartsRemoved) {
 
   for (const URLTest& test : kTests) {
     int previous_count = processor_->error_report_count();
-    CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+    CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                  blink::mojom::ConsoleMessageLevel::kError,
                                  kMessage16, 5, test.input, kStackTrace16);
     task_environment()->RunUntilIdle();
@@ -305,7 +306,7 @@ TEST_F(WebUIMainFrameObserverTest, PageURLAlsoRedacted) {
       "chrome://bookmarks/add?q=chromium#code";
   NavigationSimulator::NavigateAndCommitFromBrowser(
       web_contents(), GURL(kPageWithQueryAndFragment));
-  CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+  CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                blink::mojom::ConsoleMessageLevel::kError,
                                kMessage16, 5, kSourceURL16, kStackTrace16);
   task_environment()->RunUntilIdle();
@@ -335,7 +336,7 @@ TEST_F(WebUIMainFrameObserverTest, ErrorsNotReportedForNonChromeURLs) {
   };
 
   for (const auto* url : kNonChromeSourceURLs) {
-    CallOnDidAddMessageToConsole(web_ui_->frame_host(),
+    CallOnDidAddMessageToConsole(web_ui_->GetRenderFrameHost(),
                                  blink::mojom::ConsoleMessageLevel::kError,
                                  kMessage16, 5, url, kStackTrace16);
     task_environment()->RunUntilIdle();

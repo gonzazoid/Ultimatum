@@ -30,13 +30,11 @@
 
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc.h"
 #include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_flags.h"
-#include "third_party/blink/renderer/platform/geometry/layout_rect.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/effects/SkCornerPathEffect.h"
@@ -253,32 +251,22 @@ SkMatrix AffineTransformToSkMatrix(const AffineTransform& source) {
   return result;
 }
 
-SkMatrix TransformationMatrixToSkMatrix(const TransformationMatrix& source) {
-  // SkMatrix is 3x3, TransformationMatrix is 4x4, this function encodes
-  // assuming that a 2D-transformation with perspective is what's desired,
-  // throwing out the z-dimension values. i.e.:
-
-  //                  INPUT                               OUTPUT
-  // | scale_x skew_xy skew_xz trans_x |     | scale_x skew_x  trans_x |
-  // | skew_yx scale_y skew_yz trans_y | --> | skew_y  scale_y trans_y |
-  // | skew_xz skew_zy scale_z trans_z |     | persp_x persp_y persp_w |
-  // | persp_x persp_y persp_z persp_w |
-
-  SkMatrix result;
-
-  result.setScaleX(WebCoreDoubleToSkScalar(source.rc(0, 0)));
-  result.setSkewX(WebCoreDoubleToSkScalar(source.rc(0, 1)));
-  result.setTranslateX(WebCoreDoubleToSkScalar(source.rc(0, 3)));
-
-  result.setScaleY(WebCoreDoubleToSkScalar(source.rc(1, 1)));
-  result.setSkewY(WebCoreDoubleToSkScalar(source.rc(1, 0)));
-  result.setTranslateY(WebCoreDoubleToSkScalar(source.rc(1, 3)));
-
-  result.setPerspX(source.rc(3, 0));
-  result.setPerspY(source.rc(3, 1));
-  result.set(SkMatrix::kMPersp2, source.rc(3, 3));
-
-  return result;
+SkM44 AffineTransformToSkM44(const AffineTransform& source) {
+  //   INPUT           OUTPUT
+  // | a c e |       | a c 0 e |
+  // | b d f | ----> | b d 0 f |
+  //                 | 0 0 1 0 |
+  //                 | 0 0 0 1 |
+  SkScalar a = WebCoreDoubleToSkScalar(source.A());
+  SkScalar b = WebCoreDoubleToSkScalar(source.B());
+  SkScalar c = WebCoreDoubleToSkScalar(source.C());
+  SkScalar d = WebCoreDoubleToSkScalar(source.D());
+  SkScalar e = WebCoreDoubleToSkScalar(source.E());
+  SkScalar f = WebCoreDoubleToSkScalar(source.F());
+  return SkM44(a, c, 0, e,   // row 0
+               b, d, 0, f,   // row 1
+               0, 0, 1, 0,   // row 2
+               0, 0, 0, 1);  // row 3
 }
 
 bool NearlyIntegral(float value) {
@@ -402,12 +390,6 @@ bool ApproximatelyEqualSkColorSpaces(sk_sp<SkColorSpace> src_color_space,
   return skcms_ApproximatelyEqualProfiles(&src_profile, &dst_profile);
 }
 
-SkRect LayoutRectToSkRect(const blink::LayoutRect& rect) {
-  return SkRect::MakeXYWH(SkFloatToScalar(rect.X()), SkFloatToScalar(rect.Y()),
-                          SkFloatToScalar(rect.Width()),
-                          SkFloatToScalar(rect.Height()));
-}
-
 static cc::PaintFlags PaintFlagsForFocusRing(SkColor color, float width) {
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
@@ -438,10 +420,10 @@ void DrawPlatformFocusRing(const SkPath& path,
 }
 
 sk_sp<SkData> TryAllocateSkData(size_t size) {
-  void* buffer = WTF::Partitions::BufferPartition()->AllocWithFlags(
-      partition_alloc::AllocFlags::kReturnNull |
-          partition_alloc::AllocFlags::kZeroFill,
-      size, "SkData");
+  void* buffer =
+      WTF::Partitions::BufferPartition()
+          ->AllocInline<partition_alloc::AllocFlags::kReturnNull |
+                        partition_alloc::AllocFlags::kZeroFill>(size, "SkData");
   if (!buffer)
     return nullptr;
   return SkData::MakeWithProc(

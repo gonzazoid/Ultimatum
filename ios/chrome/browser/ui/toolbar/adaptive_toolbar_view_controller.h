@@ -7,18 +7,18 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/ntp/new_tab_page_controller_delegate.h"
+#import "ios/chrome/browser/ui/fullscreen/fullscreen_ui_element.h"
 #import "ios/chrome/browser/ui/popup_menu/public/popup_menu_ui_updating.h"
-#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_type.h"
+#import "ios/chrome/browser/ui/toolbar/public/toolbar_type.h"
 #import "ios/chrome/browser/ui/toolbar/toolbar_consumer.h"
 
 @protocol AdaptiveToolbarMenusProvider;
 @class AdaptiveToolbarViewController;
+@protocol AdaptiveToolbarViewControllerDelegate;
 @protocol BrowserCommands;
 @class LayoutGuideCenter;
 @protocol OmniboxCommands;
 @protocol PopupMenuCommands;
-@protocol PopupMenuLongPressDelegate;
 @class ToolbarButton;
 @class ToolbarButtonFactory;
 
@@ -30,28 +30,36 @@
 // dismissed on such events. For example, the tools menu is closed upon
 // rotation.
 @interface AdaptiveToolbarViewController
-    : UIViewController <PopupMenuUIUpdating, ToolbarConsumer>
+    : UIViewController <FullscreenUIElement,
+                        PopupMenuUIUpdating,
+                        ToolbarConsumer>
 
 // Button factory.
 @property(nonatomic, strong) ToolbarButtonFactory* buttonFactory;
 // Layout Guide Center.
 @property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;
+// View controller for the location bar containing the omnibox. Nil when the
+// toolbar doesn't have the omnibox.
+@property(nonatomic, weak) UIViewController* locationBarViewController;
 // Omnibox commands handler for the ViewController.
 @property(nonatomic, weak) id<OmniboxCommands> omniboxCommandsHandler;
 // Popup menu commands handler for the ViewController.
 @property(nonatomic, weak) id<PopupMenuCommands> popupMenuCommandsHandler;
-// Delegate for the long press gesture recognizer triggering popup menu.
-@property(nonatomic, weak) id<PopupMenuLongPressDelegate> longPressDelegate;
 
 // Provider for the context menus.
 @property(nonatomic, weak) id<AdaptiveToolbarMenusProvider> menuProvider;
+// Delegate for events in `AdaptiveToolbarViewController`.
+@property(nonatomic, weak) id<AdaptiveToolbarViewControllerDelegate>
+    adaptiveDelegate;
 
 // Returns the tools menu button.
 - (ToolbarButton*)toolsMenuButton;
 
+// Whether the toolbar has the omnibox.
+- (BOOL)hasOmnibox;
 // Updates the view so a snapshot can be taken. It needs to be adapted,
-// depending on if it is a snapshot displayed `onNTP` or not.
-- (void)updateForSideSwipeSnapshotOnNTP:(BOOL)onNTP;
+// depending on if it is a snapshot displayed `onNonIncognitoNTP` or not.
+- (void)updateForSideSwipeSnapshot:(BOOL)onNonIncognitoNTP;
 // Resets the view after taking a snapshot for a side swipe.
 - (void)resetAfterSideSwipeSnapshot;
 // Sets the toolbar location bar alpha and vertical offset based on `progress`.
@@ -59,6 +67,12 @@
 // Triggers the slide-in animation for the toolbar with direction determined
 // from `fromBelow`.
 - (void)triggerToolbarSlideInAnimationFromBelow:(BOOL)fromBelow;
+// Set the IPH highlighted state of the tab grid button.
+- (void)setTabGridButtonIPHHighlighted:(BOOL)iphHighlighted;
+// Set the IPH highlighted state of the new tab button.
+- (void)setNewTabButtonIPHHighlighted:(BOOL)iphHighlighted;
+// Shows the animation when transitioning to a prerendered page.
+- (void)showPrerenderingAnimation;
 
 @end
 

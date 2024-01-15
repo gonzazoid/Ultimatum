@@ -5,7 +5,7 @@
 // Preferences API test for extension controlled prefs where the underlying
 // feature lives in ash. These tests make use of the crosapi to set the value
 // in ash. Thus, they run as lacros_chrome_browsertests.
-// Run with lacros_chrome_browsertests_run_in_series \
+// Run with lacros_chrome_browsertests \
 //     --gtest_filter=ExtensionPreferenceLacrosBrowserTest.Lacros
 // Based on the "standard" extension test.
 
@@ -16,13 +16,19 @@ var preferencesToTest = [
   {
     root: chrome.accessibilityFeatures,
     preferences: {
-      autoclick: false,
+      spokenFeedback: false,
     }
   },
   {
     root: chrome.privacy.websites,
     preferences: {
       protectedContentEnabled: true,
+    }
+  },
+  {
+    root: chrome.proxy,
+    preferences: {
+      settings: {mode: 'system'},
     }
   }
 ];
@@ -56,12 +62,17 @@ function prefGetter(prefName, defaultValue) {
   this[prefName].get({}, expectDefault(prefName, defaultValue));
 }
 
-// Tests setting the preference value (to the inverse of the default, so that
-// it should be controlled by this extension).
+// Tests setting the preference value. For boolean prefs, it sets the new to the
+// inverse of the default, so that it should be controlled by this extension.
 function prefSetter(prefName, defaultValue) {
-  this[prefName].set({value: !defaultValue},
-                     chrome.test.callbackPass(function() {
-    this[prefName].get({}, expectControlled(prefName, !defaultValue));
+  let newValue;
+  if (prefName == 'settings') {
+    newValue = {mode: 'direct'};
+  } else {
+    newValue = !defaultValue;
+  }
+  this[prefName].set({value: newValue}, chrome.test.callbackPass(function() {
+    this[prefName].get({}, expectControlled(prefName, newValue));
   }.bind(this)));
 }
 

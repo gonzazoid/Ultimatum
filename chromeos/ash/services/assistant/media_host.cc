@@ -4,6 +4,7 @@
 
 #include "chromeos/ash/services/assistant/media_host.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ash/services/assistant/media_session/assistant_media_session.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
@@ -53,19 +54,19 @@ class MediaHost::ChromeosMediaStateObserver
     UpdateMediaState();
   }
   void MediaSessionMetadataChanged(
-      const absl::optional<media_session::MediaMetadata>& metadata) override {
+      const std::optional<media_session::MediaMetadata>& metadata) override {
     media_metadata_ = std::move(metadata);
     UpdateMediaState();
   }
   void MediaSessionActionsChanged(
       const std::vector<MediaSessionAction>& action) override {}
   void MediaSessionChanged(
-      const absl::optional<base::UnguessableToken>& request_id) override {
+      const std::optional<base::UnguessableToken>& request_id) override {
     if (request_id.has_value())
       media_session_audio_focus_id_ = std::move(request_id.value());
   }
   void MediaSessionPositionChanged(
-      const absl::optional<media_session::MediaPosition>& position) override {}
+      const std::optional<media_session::MediaPosition>& position) override {}
 
   void UpdateMediaState() {
     if (media_session_info_ptr_) {
@@ -115,14 +116,14 @@ class MediaHost::ChromeosMediaStateObserver
                               std::move(media_state));
   }
 
-  MediaHost* const parent_;
+  const raw_ptr<MediaHost> parent_;
   mojo::Receiver<media_session::mojom::MediaControllerObserver> receiver_{this};
 
   // Info associated to the active media session.
   MediaSessionInfoPtr media_session_info_ptr_;
   // The metadata for the active media session. It can be null to be reset,
   // e.g. the media that was being played has been stopped.
-  absl::optional<media_session::MediaMetadata> media_metadata_ = absl::nullopt;
+  std::optional<media_session::MediaMetadata> media_metadata_ = std::nullopt;
 
   base::UnguessableToken media_session_audio_focus_id_ =
       base::UnguessableToken::Null();
@@ -196,7 +197,7 @@ class MediaHost::LibassistantMediaDelegate
     return *parent_->chromeos_media_controller_;
   }
 
-  MediaHost* const parent_;
+  const raw_ptr<MediaHost> parent_;
   mojo::Receiver<MediaDelegate> receiver_;
 };
 
@@ -224,7 +225,6 @@ MediaHost::~MediaHost() = default;
 void MediaHost::Initialize(
     libassistant::mojom::MediaController* libassistant_controller,
     mojo::PendingReceiver<libassistant::mojom::MediaDelegate> media_delegate) {
-  // Initialize can only be called once.
   DCHECK(!libassistant_media_controller_);
 
   libassistant_media_controller_ = libassistant_controller;
@@ -233,15 +233,22 @@ void MediaHost::Initialize(
 }
 
 void MediaHost::Stop() {
+  libassistant_media_controller_ = nullptr;
   StopObservingMediaController();
 }
 
 void MediaHost::ResumeInternalMediaPlayer() {
-  libassistant_media_controller().ResumeInternalMediaPlayer();
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->ResumeInternalMediaPlayer();
 }
 
 void MediaHost::PauseInternalMediaPlayer() {
-  libassistant_media_controller().PauseInternalMediaPlayer();
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->PauseInternalMediaPlayer();
 }
 
 void MediaHost::SetRelatedInfoEnabled(bool enable) {
@@ -251,13 +258,6 @@ void MediaHost::SetRelatedInfoEnabled(bool enable) {
     StopObservingMediaController();
     ResetMediaState();
   }
-}
-
-libassistant::mojom::MediaController&
-MediaHost::libassistant_media_controller() {
-  // Initialize must be called first.
-  DCHECK(libassistant_media_controller_);
-  return *libassistant_media_controller_;
 }
 
 void MediaHost::UpdateMediaState(
@@ -271,12 +271,18 @@ void MediaHost::UpdateMediaState(
     return;
   }
 
-  libassistant_media_controller().SetExternalPlaybackState(
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->SetExternalPlaybackState(
       std::move(media_state));
 }
 
 void MediaHost::ResetMediaState() {
-  libassistant_media_controller().SetExternalPlaybackState(
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->SetExternalPlaybackState(
       libassistant::mojom::MediaState::New());
 }
 

@@ -28,11 +28,7 @@ SystemWebAppDelegate::SystemWebAppDelegate(
       internal_name_(internal_name),
       install_url_(install_url),
       profile_(profile),
-      origin_trials_map_(origin_trials_map) {
-  DCHECK(!(ShouldShowNewWindowMenuOption() && ShouldReuseExistingWindow()))
-      << "App can't show 'new window' menu option and be a single window at "
-         "the same time.";
-}
+      origin_trials_map_(origin_trials_map) {}
 
 SystemWebAppDelegate::~SystemWebAppDelegate() = default;
 
@@ -43,10 +39,6 @@ std::vector<std::string> SystemWebAppDelegate::GetAppIdsToUninstallAndReplace()
 
 gfx::Size SystemWebAppDelegate::GetMinimumWindowSize() const {
   return gfx::Size();
-}
-
-bool SystemWebAppDelegate::ShouldReuseExistingWindow() const {
-  return true;
 }
 
 bool SystemWebAppDelegate::ShouldShowNewWindowMenuOption() const {
@@ -66,7 +58,7 @@ bool SystemWebAppDelegate::ShouldShowInLauncher() const {
   return true;
 }
 
-bool SystemWebAppDelegate::ShouldShowInSearch() const {
+bool SystemWebAppDelegate::ShouldShowInSearchAndShelf() const {
   return true;
 }
 
@@ -79,6 +71,10 @@ bool SystemWebAppDelegate::ShouldAllowResize() const {
 }
 
 bool SystemWebAppDelegate::ShouldAllowMaximize() const {
+  return true;
+}
+
+bool SystemWebAppDelegate::ShouldAllowFullscreen() const {
   return true;
 }
 
@@ -98,9 +94,9 @@ bool SystemWebAppDelegate::ShouldHandleFileOpenIntents() const {
   return ShouldShowInLauncher();
 }
 
-absl::optional<SystemWebAppBackgroundTaskInfo>
+std::optional<SystemWebAppBackgroundTaskInfo>
 SystemWebAppDelegate::GetTimerInfo() const {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool SystemWebAppDelegate::IsAppEnabled() const {

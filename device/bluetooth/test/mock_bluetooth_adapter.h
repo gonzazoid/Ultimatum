@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "device/bluetooth/bluetooth_adapter.h"
@@ -78,6 +78,10 @@ class MockBluetoothAdapter : public BluetoothAdapter {
                void(bool discoverable,
                     base::OnceClosure callback,
                     ErrorCallback error_callback));
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  MOCK_CONST_METHOD0(GetDiscoverableTimeout, base::TimeDelta());
+#endif
+
   MOCK_CONST_METHOD0(IsDiscovering, bool());
   MOCK_METHOD2(
       StartScanWithFilter_,

@@ -7,8 +7,11 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/webid/account_selection_view.h"
+#include "content/public/browser/web_contents.h"
+
+using TokenError = content::IdentityCredentialTokenError;
 
 // This class provides an implementation of the AccountSelectionView interface
 // and communicates via JNI with its AccountSelectionBridge Java counterpart.
@@ -20,14 +23,27 @@ class AccountSelectionViewAndroid : public AccountSelectionView {
 
   // AccountSelectionView:
   void Show(
-      const std::string& rp_for_display,
-      const absl::optional<std::string>& iframe_url_for_display,
+      const std::string& top_frame_for_display,
+      const std::optional<std::string>& iframe_for_display,
       const std::vector<content::IdentityProviderData>& identity_provider_data,
-      Account::SignInMode sign_in_mode) override;
+      Account::SignInMode sign_in_mode,
+      bool show_auto_reauthn_checkbox) override;
   void ShowFailureDialog(
-      const std::string& rp_for_display,
+      const std::string& top_frame_for_display,
+      const std::optional<std::string>& iframe_for_display,
       const std::string& idp_for_display,
-      const absl::optional<std::string>& iframe_url_for_display) override;
+      const blink::mojom::RpContext& rp_context,
+      const content::IdentityProviderMetadata& idp_metadata) override;
+  void ShowErrorDialog(const std::string& top_frame_for_display,
+                       const std::optional<std::string>& iframe_for_display,
+                       const std::string& idp_for_display,
+                       const blink::mojom::RpContext& rp_context,
+                       const content::IdentityProviderMetadata& idp_metadata,
+                       const std::optional<TokenError>& error) override;
+  std::string GetTitle() const override;
+  std::optional<std::string> GetSubtitle() const override;
+  content::WebContents* ShowModalDialog(const GURL& url) override;
+  void CloseModalDialog() override;
 
   void OnAccountSelected(
       JNIEnv* env,
@@ -36,13 +52,14 @@ class AccountSelectionViewAndroid : public AccountSelectionView {
       const base::android::JavaParamRef<jobject>& account_picture_url,
       bool is_sign_in);
   void OnDismiss(JNIEnv* env, jint dismiss_reason);
-  void OnAutoSignInCancelled(JNIEnv* env);
+  void OnLoginToIdP(JNIEnv* env,
+                    const base::android::JavaParamRef<jobject>& idp_login_url);
+  void OnMoreDetails(JNIEnv* env);
 
  private:
   // Returns either true if the java counterpart of this bridge is initialized
-  // successfully or false if the creation failed. This method will recreate the
-  // java object whenever Show() is called.
-  bool RecreateJavaObject();
+  // successfully or false if the creation failed.
+  bool MaybeCreateJavaObject();
 
   base::android::ScopedJavaGlobalRef<jobject> java_object_internal_;
 };

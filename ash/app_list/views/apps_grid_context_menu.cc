@@ -4,15 +4,18 @@
 
 #include "ash/app_list/views/apps_grid_context_menu.h"
 
+#include <memory>
+#include <utility>
+
 #include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/model/app_list_model.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_model_delegate.h"
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/controls/menu/menu_runner.h"
 
@@ -50,16 +53,15 @@ void AppsGridContextMenu::ShowContextMenuForViewImpl(
     views::View* source,
     const gfx::Point& point,
     ui::MenuSourceType source_type) {
-  if (!features::IsLauncherAppSortEnabled())
-    return;
-
   // Build the menu model and save it to `context_menu_model_`.
   BuildMenuModel();
   menu_model_adapter_ = std::make_unique<views::MenuModelAdapter>(
       context_menu_model_.get(),
       base::BindRepeating(&AppsGridContextMenu::OnMenuClosed,
                           base::Unretained(this)));
-  root_menu_item_view_ = menu_model_adapter_->CreateMenu();
+  std::unique_ptr<views::MenuItemView> root_menu_item_view =
+      menu_model_adapter_->CreateMenu();
+  root_menu_item_view_ = root_menu_item_view.get();
 
   int run_types = views::MenuRunner::USE_ASH_SYS_UI_LAYOUT |
                   views::MenuRunner::CONTEXT_MENU |
@@ -67,8 +69,8 @@ void AppsGridContextMenu::ShowContextMenuForViewImpl(
   if (source_type == ui::MENU_SOURCE_TOUCH && owner_touch_dragging_)
     run_types |= views::MenuRunner::SEND_GESTURE_EVENTS_TO_OWNER;
 
-  menu_runner_ =
-      std::make_unique<views::MenuRunner>(root_menu_item_view_, run_types);
+  menu_runner_ = std::make_unique<views::MenuRunner>(
+      std::move(root_menu_item_view), run_types);
   menu_runner_->RunMenuAt(
       source->GetWidget(), nullptr, gfx::Rect(point, gfx::Size()),
       views::MenuAnchorPosition::kBubbleBottomRight, source_type);
@@ -79,14 +81,6 @@ void AppsGridContextMenu::BuildMenuModel() {
 
   context_menu_model_->AddTitle(l10n_util::GetStringUTF16(
       IDS_ASH_LAUNCHER_APPS_GRID_CONTEXT_MENU_REORDER_TITLE));
-  // Add an empty icon to the title for it to be aligned with the other menu
-  // item elements. See crbug/1117650.
-  context_menu_model_->SetIcon(
-      0, ui::ImageModel::FromImageGenerator(
-             base::BindRepeating([](const ui::ColorProvider* color_provider) {
-               return gfx::ImageSkia();
-             }),
-             gfx::Size(kAppContextMenuIconSize, kAppContextMenuIconSize)));
   context_menu_model_->AddItemWithIcon(
       REORDER_BY_NAME_ALPHABETICAL,
       l10n_util::GetStringUTF16(
@@ -104,9 +98,9 @@ void AppsGridContextMenu::BuildMenuModel() {
 }
 
 void AppsGridContextMenu::OnMenuClosed() {
+  root_menu_item_view_ = nullptr;
   menu_runner_.reset();
   context_menu_model_.reset();
-  root_menu_item_view_ = nullptr;
   menu_model_adapter_.reset();
 }
 

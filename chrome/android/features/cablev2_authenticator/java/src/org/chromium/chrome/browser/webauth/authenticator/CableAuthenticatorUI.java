@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.webauth.authenticator;
 import android.Manifest.permission;
 import android.app.Activity;
 import android.app.KeyguardManager;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.content.Intent;
@@ -17,6 +18,7 @@ import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Pair;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -27,30 +29,37 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.RequiresApi;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.fragment.app.Fragment;
 import androidx.vectordrawable.graphics.drawable.Animatable2Compat;
 import androidx.vectordrawable.graphics.drawable.AnimatedVectorDrawableCompat;
 
 import org.chromium.base.BuildInfo;
+import org.chromium.base.Callback;
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
+import org.chromium.components.webauthn.FidoIntentSender;
+import org.chromium.device.DeviceFeatureList;
+import org.chromium.device.DeviceFeatureMap;
 import org.chromium.ui.permissions.ActivityAndroidPermissionDelegate;
 import org.chromium.ui.permissions.AndroidPermissionDelegate;
 import org.chromium.ui.widget.Toast;
 
 import java.lang.ref.WeakReference;
 
-/**
- * A fragment that provides a UI for various caBLE v2 actions.
- */
-public class CableAuthenticatorUI extends Fragment implements OnClickListener {
+/** A fragment that provides a UI for various caBLE v2 actions. */
+public class CableAuthenticatorUI extends Fragment implements OnClickListener, FidoIntentSender {
     private static final String TAG = "CableAuthenticatorUI";
 
     // ENABLE_BLUETOOTH_REQUEST_CODE is a random int used to identify responses
     // to a request to enable Bluetooth. (Request codes can only be 16-bit.)
     private static final int ENABLE_BLUETOOTH_REQUEST_CODE = 64907;
+
+    // PLAY_SERVICES_REQUEST_CODE is a random int used to identify responses
+    // to a request to Play Services. (Request codes can only be 16-bit.)
+    private static final int PLAY_SERVICES_REQUEST_CODE = 13466;
 
     // BLE_SCREEN_DELAY_SECS is the number of seconds that the screen for BLE
     // enabling will show before the request to actually enable BLE (which
@@ -70,8 +79,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
             "org.chromium.chrome.modules.cablev2_authenticator.Registration";
     private static final String SECRET_EXTRA =
             "org.chromium.chrome.modules.cablev2_authenticator.Secret";
-    private static final String METRICS_EXTRA =
-            "org.chromium.chrome.modules.cablev2_authenticator.MetricsEnabled";
     private static final String SERVER_LINK_EXTRA =
             "org.chromium.chrome.browser.webauth.authenticator.ServerLink";
     private static final String QR_EXTRA = "org.chromium.chrome.browser.webauth.authenticator.QR";
@@ -90,9 +97,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
     // These entries duplicate some of the enum values from
     // `CableV2MobileEvent`. The C++ enum is the source of truth for these
     // values.
-    private static final int EVENT_BLUETOOTH_ADVERTISE_PERMISSION_REQUESTED = 23;
-    private static final int EVENT_BLUETOOTH_ADVERTISE_PERMISSION_GRANTED = 24;
-    private static final int EVENT_BLUETOOTH_ADVERTISE_PERMISSION_REJECTED = 25;
 
     private enum Mode {
         QR, // QR code scanned by external app.
@@ -100,6 +104,7 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
         USB, // Triggered by connecting via USB.
         SERVER_LINK, // Triggered by GMSCore forwarding from GAIA.
     }
+
     private Mode mMode;
 
     // State enumerates the different states of the UI. Apart from transitions to `ERROR`, changes
@@ -122,6 +127,7 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
         RUNNING_BLE,
         ERROR,
     }
+
     private State mState;
 
     // mErrorCode contains a value of the authenticator::Platform::Error
@@ -147,6 +153,9 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
     // mActivityStarted is set to true by `onResume`. Some event transitions are suppressed until
     // this flag has been set.
     private boolean mActivityStarted;
+    // mFidoCallback holds the callback from `Fido2CredentialRequest` while a
+    // request to Play Services is outstanding.
+    private Callback<Pair<Integer, Intent>> mFidoCallback;
 
     // These are top-level views that can fill this activity.
     private View mErrorView;
@@ -167,9 +176,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // This code should not be reachable on older Android versions.
-        assert Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
-
         super.onCreate(savedInstanceState);
         final Context context = getContext();
 
@@ -210,12 +216,22 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
         final long networkContext = arguments.getLong(NETWORK_CONTEXT_EXTRA);
         final long registration = arguments.getLong(REGISTRATION_EXTRA);
         final byte[] secret = arguments.getByteArray(SECRET_EXTRA);
-        final boolean metricsEnabled = arguments.getBoolean(METRICS_EXTRA);
 
-        mPermissionDelegate = new ActivityAndroidPermissionDelegate(
-                new WeakReference<Activity>((Activity) context));
-        mAuthenticator = new CableAuthenticator(getContext(), this, networkContext, registration,
-                secret, mMode == Mode.FCM, accessory, serverLink, fcmEvent, qrURI, metricsEnabled);
+        mPermissionDelegate =
+                new ActivityAndroidPermissionDelegate(
+                        new WeakReference<Activity>((Activity) context));
+        mAuthenticator =
+                new CableAuthenticator(
+                        getContext(),
+                        this,
+                        networkContext,
+                        registration,
+                        secret,
+                        mMode == Mode.FCM,
+                        accessory,
+                        serverLink,
+                        fcmEvent,
+                        qrURI);
 
         mState = State.START;
         onEvent(Event.NONE);
@@ -247,8 +263,16 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                 case QR_CONFIRM:
                     if (event == Event.QR_ALLOW_BUTTON_CLICKED) {
                         ViewGroup top = (ViewGroup) getView();
-                        mAuthenticator.setQRLinking(
-                                ((CheckBox) top.findViewById(R.id.qr_link)).isChecked());
+                        boolean link = ((CheckBox) top.findViewById(R.id.qr_link)).isChecked();
+                        if (link
+                                && !DeviceFeatureMap.isEnabled(
+                                        DeviceFeatureList
+                                                .WEBAUTHN_HYBRID_LINK_WITHOUT_NOTIFICATIONS)) {
+                            link =
+                                    NotificationManagerCompat.from(getContext())
+                                            .areNotificationsEnabled();
+                        }
+                        mAuthenticator.setQRLinking(link);
                         mState = State.CHECK_SCREENLOCK;
                         break;
                     } else if (event == Event.QR_DENY_BUTTON_CLICKED) {
@@ -308,9 +332,12 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                     }
 
                     mState = State.ENABLE_BLUETOOTH_WAITING;
-                    PostTask.postDelayedTask(UiThreadTaskTraits.DEFAULT, () -> {
-                        onEvent(Event.TIMEOUT_COMPLETE);
-                    }, BLE_SCREEN_DELAY_SECS * 1000);
+                    PostTask.postDelayedTask(
+                            TaskTraits.UI_DEFAULT,
+                            () -> {
+                                onEvent(Event.TIMEOUT_COMPLETE);
+                            },
+                            BLE_SCREEN_DELAY_SECS * 1000);
                     break;
 
                 case ENABLE_BLUETOOTH_WAITING:
@@ -336,7 +363,8 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
 
                 case REQUEST_BLUETOOTH_ENABLE:
                     mState = State.ENABLE_BLUETOOTH_PENDING;
-                    startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+                    startActivityForResult(
+                            new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
                             ENABLE_BLUETOOTH_REQUEST_CODE);
                     break;
 
@@ -357,8 +385,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                             && requestBluetoothPermissions()) {
                         mState = State.BLUETOOTH_ADVERTISE_PERMISSION_REQUESTED;
-                        mAuthenticator.maybeRecordEvent(
-                                EVENT_BLUETOOTH_ADVERTISE_PERMISSION_REQUESTED);
                         return;
                     }
 
@@ -369,7 +395,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                     if (event != Event.PERMISSIONS_GRANTED) {
                         return;
                     }
-                    mAuthenticator.maybeRecordEvent(EVENT_BLUETOOTH_ADVERTISE_PERMISSION_GRANTED);
                     mState = State.BLUETOOTH_READY;
                     break;
 
@@ -383,7 +408,8 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                     return;
 
                 case ERROR:
-                    if (event == Event.RESUMED && mErrorCode == ERROR_NO_BLUETOOTH_PERMISSION
+                    if (event == Event.RESUMED
+                            && mErrorCode == ERROR_NO_BLUETOOTH_PERMISSION
                             && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                             && haveBluetoothPermissions()) {
                         // The user navigated away and came back, but now we have the needed
@@ -409,9 +435,7 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
         }
     }
 
-    /**
-     * Returns the {@link View} that should be showing, given {@link mState}.
-     */
+    /** Returns the {@link View} that should be showing, given {@link mState}. */
     private View getUiForState() {
         switch (mState) {
             case QR_CONFIRM:
@@ -440,9 +464,7 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
         }
     }
 
-    /**
-     * Updates the UI based on the value of {@link mState}.
-     */
+    /** Updates the UI based on the value of {@link mState}. */
     private void updateUiForState() {
         if (!mViewsCreated) {
             // If {@link onCreateView} hasn't been called yet then there is no
@@ -466,18 +488,20 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
         View v = inflater.inflate(R.layout.cablev2_spinner, container, false);
         mStatusText = v.findViewById(R.id.status_text);
 
-        final AnimatedVectorDrawableCompat anim = AnimatedVectorDrawableCompat.create(
-                getContext(), R.drawable.circle_loader_animation);
+        final AnimatedVectorDrawableCompat anim =
+                AnimatedVectorDrawableCompat.create(
+                        getContext(), R.drawable.circle_loader_animation);
         // There is no way to make an animation loop. Instead it must be
         // manually started each time it completes.
-        anim.registerAnimationCallback(new Animatable2Compat.AnimationCallback() {
-            @Override
-            public void onAnimationEnd(Drawable drawable) {
-                if (drawable != null) {
-                    anim.start();
-                }
-            }
-        });
+        anim.registerAnimationCallback(
+                new Animatable2Compat.AnimationCallback() {
+                    @Override
+                    public void onAnimationEnd(Drawable drawable) {
+                        if (drawable != null) {
+                            anim.start();
+                        }
+                    }
+                });
         ((ImageView) v.findViewById(R.id.spinner)).setImageDrawable(anim);
         anim.start();
 
@@ -529,9 +553,9 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
     @RequiresApi(31)
     private boolean haveBluetoothPermissions() {
         return getContext().checkSelfPermission(permission.BLUETOOTH_CONNECT)
-                == PackageManager.PERMISSION_GRANTED
+                        == PackageManager.PERMISSION_GRANTED
                 && getContext().checkSelfPermission(permission.BLUETOOTH_ADVERTISE)
-                == PackageManager.PERMISSION_GRANTED;
+                        == PackageManager.PERMISSION_GRANTED;
     }
 
     /**
@@ -570,8 +594,9 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                 intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_SET_NEW_PASSWORD);
             } else if (mState == State.ERROR && mErrorCode == ERROR_NO_BLUETOOTH_PERMISSION) {
                 intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                intent.setData(android.net.Uri.fromParts(
-                        "package", BuildInfo.getInstance().packageName, null));
+                intent.setData(
+                        android.net.Uri.fromParts(
+                                "package", BuildInfo.getInstance().packageName, null));
             } else {
                 // Should never be reached. Button should not be shown unless
                 // the error is known.
@@ -630,9 +655,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
             return;
         }
 
-        if (mState == State.BLUETOOTH_ADVERTISE_PERMISSION_REQUESTED) {
-            mAuthenticator.maybeRecordEvent(EVENT_BLUETOOTH_ADVERTISE_PERMISSION_REJECTED);
-        }
         mState = State.ERROR;
         mErrorCode = ERROR_NO_BLUETOOTH_PERMISSION;
         updateUiForState();
@@ -668,48 +690,73 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
             return;
         }
 
-        if (requestCode != ENABLE_BLUETOOTH_REQUEST_CODE) {
+        if (requestCode == PLAY_SERVICES_REQUEST_CODE) {
+            mFidoCallback.onResult(new Pair(resultCode, data));
+        } else if (requestCode == ENABLE_BLUETOOTH_REQUEST_CODE) {
+            if (resultCode != Activity.RESULT_OK) {
+                getActivity().finish();
+                return;
+            }
+            onEvent(Event.BLE_ENABLED);
+        } else {
             mAuthenticator.onActivityResult(requestCode, resultCode, data);
-            return;
         }
+    }
 
-        if (resultCode != Activity.RESULT_OK) {
-            getActivity().finish();
-            return;
+    @Override
+    public boolean showIntent(PendingIntent intent, Callback<Pair<Integer, Intent>> callback) {
+        mFidoCallback = callback;
+        try {
+            startIntentSenderForResult(
+                    intent.getIntentSender(),
+                    PLAY_SERVICES_REQUEST_CODE,
+                    null, // fillInIntent,
+                    0, // flagsMask,
+                    0, // flagsValue,
+                    0, // extraFlags,
+                    Bundle.EMPTY);
+        } catch (android.content.IntentSender.SendIntentException e) {
+            Log.e(TAG, "SendIntentException", e);
+            return false;
         }
-
-        onEvent(Event.BLE_ENABLED);
+        return true;
     }
 
     void onAuthenticatorConnected() {}
 
     void onAuthenticatorResult(CableAuthenticator.Result result) {
-        getActivity().runOnUiThread(() -> {
-            int id = -1;
-            switch (result) {
-                case REGISTER_OK:
-                    id = R.string.cablev2_registration_succeeded;
-                    break;
-                case REGISTER_ERROR:
-                    id = R.string.cablev2_registration_failed;
-                    break;
-                case SIGN_OK:
-                    id = R.string.cablev2_sign_in_succeeded;
-                    break;
-                case SIGN_ERROR:
-                case OTHER:
-                    id = R.string.cablev2_sign_in_failed;
-                    break;
-            }
-            Toast.makeText(getActivity(), getResources().getString(id), Toast.LENGTH_SHORT).show();
+        getActivity()
+                .runOnUiThread(
+                        () -> {
+                            int id = -1;
+                            switch (result) {
+                                case REGISTER_OK:
+                                    id = R.string.cablev2_registration_succeeded;
+                                    break;
+                                case REGISTER_ERROR:
+                                    id = R.string.cablev2_registration_failed;
+                                    break;
+                                case SIGN_OK:
+                                    id = R.string.cablev2_sign_in_succeeded;
+                                    break;
+                                case SIGN_ERROR:
+                                case OTHER:
+                                    id = R.string.cablev2_sign_in_failed;
+                                    break;
+                            }
+                            Toast.makeText(
+                                            getActivity(),
+                                            getResources().getString(id),
+                                            Toast.LENGTH_SHORT)
+                                    .show();
 
-            // Finish the Activity unless we're connected via USB. In that case
-            // we continue to show a message advising the user to disconnect
-            // the cable because the USB connection is in AOA mode.
-            if (mMode != Mode.USB) {
-                getActivity().finish();
-            }
-        });
+                            // Finish the Activity unless we're connected via USB. In that case
+                            // we continue to show a message advising the user to disconnect
+                            // the cable because the USB connection is in AOA mode.
+                            if (mMode != Mode.USB) {
+                                getActivity().finish();
+                            }
+                        });
     }
 
     /**
@@ -753,8 +800,9 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                 break;
 
             case ERROR_NO_BLUETOOTH_PERMISSION:
-                desc = getResources().getString(
-                        R.string.cablev2_error_ble_permission, packageLabel);
+                desc =
+                        getResources()
+                                .getString(R.string.cablev2_error_ble_permission, packageLabel);
                 settingsButtonVisible = true;
                 break;
 

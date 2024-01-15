@@ -9,7 +9,8 @@ import("//components/optimization_guide/features.gni")
 
 static_library("browser") {
   sources = [
-    "optimization_guide_decider.h",
+    "in_memory_text_embedding_manager.cc",
+    "in_memory_text_embedding_manager.h",
     "page_content_annotations_service.cc",
     "page_content_annotations_service.h",
     "page_content_annotations_validator.cc",
@@ -39,17 +40,20 @@ static_library("browser") {
     "//components/history/core/browser",
     "//components/keyed_service/core",
     "//components/no_state_prefetch/browser",
+    "//components/omnibox/browser",
     "//components/optimization_guide:machine_learning_tflite_buildflags",
     "//components/optimization_guide:optimization_guide_buildflags",
     "//components/optimization_guide/content/mojom:mojo_interfaces",
     "//components/optimization_guide/core",
     "//components/optimization_guide/core:entities",
     "//components/optimization_guide/proto:optimization_guide_proto",
+    "//components/search",
     "//components/search_engines",
     "//content/public/browser",
     "//services/metrics/public/cpp:metrics_cpp",
     "//services/metrics/public/cpp:ukm_builders",
     "//services/network/public/cpp",
+    "//third_party/omnibox_proto",
   ]
   if (build_with_tflite_lib) {
     public_deps += [
@@ -60,18 +64,21 @@ static_library("browser") {
       "//third_party/tflite_support:tflite_support_proto",
     ]
   }
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 static_library("test_support") {
   testonly = true
   sources = [
-    "test_optimization_guide_decider.cc",
-    "test_optimization_guide_decider.h",
+    "test_page_content_annotations_service.cc",
+    "test_page_content_annotations_service.h",
     "test_page_content_annotator.cc",
     "test_page_content_annotator.h",
   ]
   deps = [
     ":browser",
+    "//components/history/core/test",
+    "//components/optimization_guide/core:test_support",
     "//content/public/browser",
     "//testing/gtest",
   ]
@@ -80,6 +87,8 @@ static_library("test_support") {
 source_set("unit_tests") {
   testonly = true
   sources = [
+    "in_memory_text_embedding_manager_unittest.cc",
+    "page_content_annotations_service_unittest.cc",
     "page_content_annotations_validator_unittest.cc",
     "page_content_annotations_web_contents_observer_unittest.cc",
     "page_text_dump_result_unittest.cc",
@@ -93,8 +102,12 @@ source_set("unit_tests") {
   deps = [
     ":browser",
     ":test_support",
+    "//components/history/core/test",
+    "//components/omnibox/browser:test_support",
     "//components/optimization_guide/core:test_support",
+    "//components/prefs:test_support",
     "//components/search_engines",
+    "//components/ukm:test_support",
     "//content/test:test_support",
     "//testing/gmock",
     "//testing/gtest",

@@ -6,6 +6,8 @@
 #define ASH_SHELF_SHELF_BUTTON_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 
 namespace ash {
@@ -14,6 +16,8 @@ class ShelfButtonDelegate;
 
 // Button used for items on the shelf.
 class ASH_EXPORT ShelfButton : public views::Button {
+  METADATA_HEADER(ShelfButton, views::Button)
+
  public:
   ShelfButton(Shelf* shelf, ShelfButtonDelegate* shelf_button_delegate);
 
@@ -24,7 +28,6 @@ class ASH_EXPORT ShelfButton : public views::Button {
 
   // views::Button:
   void OnThemeChanged() override;
-  const char* GetClassName() const override;
   gfx::Rect GetAnchorBoundsInScreen() const override;
   void AboutToRequestFocusFromTabTraversal(bool reverse) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
@@ -40,10 +43,10 @@ class ASH_EXPORT ShelfButton : public views::Button {
 
  private:
   // The shelf instance that this button belongs to. Unowned.
-  Shelf* const shelf_;
+  const raw_ptr<Shelf> shelf_;
 
   // A class to which this button delegates handling some of its events.
-  ShelfButtonDelegate* const shelf_button_delegate_;
+  const raw_ptr<ShelfButtonDelegate> shelf_button_delegate_;
 };
 
 }  // namespace ash

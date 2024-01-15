@@ -40,19 +40,11 @@ class CertProvisioningSchedulerUserServiceFactory
   // BrowserStateKeyedServiceFactory implementation.
   bool ServiceIsCreatedWithBrowserContext() const override;
   // BrowserStateKeyedServiceFactory implementation.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
 }  // namespace cert_provisioning
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace cert_provisioning {
-using ::ash::cert_provisioning::CertProvisioningSchedulerUserServiceFactory;
-}  // namespace cert_provisioning
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CERT_PROVISIONING_CERT_PROVISIONING_SCHEDULER_USER_SERVICE_H_

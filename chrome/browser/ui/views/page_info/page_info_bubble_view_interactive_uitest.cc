@@ -97,7 +97,7 @@ class WebContentsFocusTracker : public FocusTracker,
 
  private:
   static bool IsWebContentsFocused(content::WebContents* web_contents) {
-    Browser* const browser = chrome::FindBrowserWithWebContents(web_contents);
+    Browser* const browser = chrome::FindBrowserWithTab(web_contents);
     if (!browser)
       return false;
     if (browser->tab_strip_model()->GetActiveWebContents() != web_contents)
@@ -152,6 +152,7 @@ class PageInfoBubbleViewInteractiveUiTest : public InProcessBrowserTest {
                               PageInfoBubbleView::GetPageInfoBubbleForTesting())
                               ->presenter_for_testing();
     presenter->OnSitePermissionChanged(permission.type, permission.setting,
+                                       permission.requesting_origin,
                                        permission.is_one_time);
   }
 };

@@ -7,8 +7,8 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/path_service.h"
@@ -17,10 +17,12 @@
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/bind.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "net/base/elements_upload_data_stream.h"
 #include "net/base/test_completion_callback.h"
+#include "net/base/upload_bytes_element_reader.h"
 #include "net/http/http_response_headers.h"
 #include "net/log/net_log_source.h"
 #include "net/socket/client_socket_factory.h"
@@ -49,7 +51,7 @@ class TestConnectionListener
     : public net::test_server::EmbeddedTestServerConnectionListener {
  public:
   TestConnectionListener()
-      : task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
   TestConnectionListener(const TestConnectionListener&) = delete;
   TestConnectionListener& operator=(const TestConnectionListener&) = delete;
@@ -239,7 +241,7 @@ TEST_P(EmbeddedTestServerTest, RegisterRequestHandler) {
 
 TEST_P(EmbeddedTestServerTest, ServeFilesFromDirectory) {
   base::FilePath src_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
   server_->ServeFilesFromDirectory(
       src_dir.AppendASCII("net").AppendASCII("data"));
   ASSERT_TRUE(server_->Start());
@@ -268,7 +270,7 @@ TEST_P(EmbeddedTestServerTest, MockHeadersWithoutCRLF) {
     return;
 
   base::FilePath src_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
   server_->ServeFilesFromDirectory(
       src_dir.AppendASCII("net").AppendASCII("data").AppendASCII(
           "embedded_test_server"));
@@ -459,7 +461,7 @@ class CancelRequestDelegate : public TestDelegate {
 
   void OnResponseStarted(URLRequest* request, int net_error) override {
     TestDelegate::OnResponseStarted(request, net_error);
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop_.QuitClosure(), base::Seconds(1));
   }
 
@@ -485,7 +487,7 @@ class InfiniteResponse : public BasicHttpResponse {
  private:
   void SendInfinite(base::WeakPtr<HttpResponseDelegate> delegate) {
     delegate->SendContents("echo", base::DoNothing());
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&InfiniteResponse::SendInfinite,
                                   weak_ptr_factory_.GetWeakPtr(), delegate));
   }
@@ -622,6 +624,35 @@ TEST_P(EmbeddedTestServerTest, AcceptCHFrameDifferentOrigins) {
   }
 }
 
+TEST_P(EmbeddedTestServerTest, LargePost) {
+  // HTTP/2's default flow-control window is 65K. Send a larger request body
+  // than that to verify the server correctly updates flow control.
+  std::string large_post_body(100 * 1024, 'a');
+  server_->RegisterRequestMonitor(
+      base::BindLambdaForTesting([=](const HttpRequest& request) {
+        EXPECT_EQ(request.method, METHOD_POST);
+        EXPECT_TRUE(request.has_content);
+        EXPECT_EQ(large_post_body, request.content);
+      }));
+
+  server_->SetSSLConfig(net::EmbeddedTestServer::CERT_OK);
+  ASSERT_TRUE(server_->Start());
+
+  auto reader = std::make_unique<UploadBytesElementReader>(
+      large_post_body.data(), large_post_body.size());
+  auto stream = ElementsUploadDataStream::CreateWithReader(std::move(reader),
+                                                           /*identifier=*/0);
+
+  TestDelegate delegate;
+  std::unique_ptr<URLRequest> request(
+      context_->CreateRequest(server_->GetURL("/test"), DEFAULT_PRIORITY,
+                              &delegate, TRAFFIC_ANNOTATION_FOR_TESTS));
+  request->set_method("POST");
+  request->set_upload(std::move(stream));
+  request->Start();
+  delegate.RunUntilComplete();
+}
+
 INSTANTIATE_TEST_SUITE_P(EmbeddedTestServerTestInstantiation,
                          EmbeddedTestServerTest,
                          testing::ValuesIn(EmbeddedTestServerConfigs()));
@@ -663,7 +694,7 @@ class EmbeddedTestServerThreadingTestDelegate
     // Create the test server instance.
     EmbeddedTestServer server(type_, protocol_);
     base::FilePath src_dir;
-    ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir));
+    ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
     ASSERT_TRUE(server.Start());
 
     // Make a request and wait for the reply.

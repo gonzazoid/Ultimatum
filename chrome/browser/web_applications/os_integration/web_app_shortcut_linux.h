@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace base {
@@ -74,8 +75,10 @@ ShortcutLocations GetExistingShortcutLocations(
     const base::FilePath& profile_path,
     const std::string& extension_id);
 
-void UpdateDesktopShortcuts(base::Environment* env,
-                            const ShortcutInfo& shortcut_info);
+bool UpdateDesktopShortcuts(
+    base::Environment* env,
+    const ShortcutInfo& shortcut_info,
+    absl::optional<ShortcutLocations> user_specified_locations);
 
 // Delete any desktop shortcuts on desktop or in the application menu that have
 // been added for the extension with |extension_id| in |profile_path|. Returns

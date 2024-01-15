@@ -4,27 +4,24 @@
 
 #import "ios/web_view/internal/sync/web_view_gcm_profile_service_factory.h"
 
-#include "base/bind.h"
-#include "base/memory/ptr_util.h"
-#include "base/memory/ref_counted.h"
-#include "base/no_destructor.h"
-#include "base/task/sequenced_task_runner.h"
-#include "base/task/thread_pool.h"
-#include "components/gcm_driver/gcm_client_factory.h"
-#include "components/gcm_driver/gcm_profile_service.h"
-#include "components/keyed_service/ios/browser_state_dependency_manager.h"
-#include "ios/web/public/thread/web_task_traits.h"
-#include "ios/web/public/thread/web_thread.h"
-#include "ios/web_view/internal/app/application_context.h"
-#include "ios/web_view/internal/signin/web_view_identity_manager_factory.h"
-#include "ios/web_view/internal/web_view_browser_state.h"
-#include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "services/network/public/mojom/proxy_resolving_socket.mojom.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/functional/bind.h"
+#import "base/memory/ptr_util.h"
+#import "base/memory/ref_counted.h"
+#import "base/no_destructor.h"
+#import "base/task/sequenced_task_runner.h"
+#import "base/task/thread_pool.h"
+#import "components/gcm_driver/gcm_client_factory.h"
+#import "components/gcm_driver/gcm_profile_service.h"
+#import "components/keyed_service/ios/browser_state_dependency_manager.h"
+#import "components/version_info/channel.h"
+#import "ios/web/public/thread/web_task_traits.h"
+#import "ios/web/public/thread/web_thread.h"
+#import "ios/web_view/internal/app/application_context.h"
+#import "ios/web_view/internal/signin/web_view_identity_manager_factory.h"
+#import "ios/web_view/internal/web_view_browser_state.h"
+#import "mojo/public/cpp/bindings/pending_receiver.h"
+#import "services/network/public/cpp/shared_url_loader_factory.h"
+#import "services/network/public/mojom/proxy_resolving_socket.mojom.h"
 
 namespace ios_web_view {
 

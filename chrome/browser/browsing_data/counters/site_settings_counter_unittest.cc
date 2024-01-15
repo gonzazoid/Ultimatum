@@ -8,13 +8,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_clock.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
+#include "chrome/browser/performance_manager/public/user_tuning/user_performance_tuning_manager.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
@@ -103,9 +104,8 @@ class SiteSettingsCounterTest : public testing::Test {
   void ClearNotificationsChannels() {
     // Because notification channel settings aren't tied to the profile, they
     // will persist across tests. We need to make sure they're reset here.
-    ContentSettingsForOneType settings;
-    map_->GetSettingsForOneType(ContentSettingsType ::NOTIFICATIONS, &settings);
-    for (auto& setting : settings) {
+    for (auto& setting :
+         map_->GetSettingsForOneType(ContentSettingsType::NOTIFICATIONS)) {
       if (!setting.primary_pattern.MatchesAllHosts() ||
           !setting.secondary_pattern.MatchesAllHosts()) {
         map_->SetContentSettingCustomScope(
@@ -182,10 +182,9 @@ TEST_F(SiteSettingsCounterTest, OnlyCountContentSettings) {
   map()->SetContentSettingDefaultScope(
       GURL("http://www.google.com"), GURL("http://www.google.com"),
       ContentSettingsType::POPUPS, CONTENT_SETTING_ALLOW);
-  map()->SetWebsiteSettingDefaultScope(
-      GURL("http://maps.google.com"), GURL(),
-      ContentSettingsType::SITE_ENGAGEMENT,
-      base::Value(base::Value::Type::DICTIONARY));
+  map()->SetWebsiteSettingDefaultScope(GURL("http://maps.google.com"), GURL(),
+                                       ContentSettingsType::SITE_ENGAGEMENT,
+                                       base::Value(base::Value::Type::DICT));
 
   counter()->Restart();
   EXPECT_EQ(1, GetResult());
@@ -193,10 +192,10 @@ TEST_F(SiteSettingsCounterTest, OnlyCountContentSettings) {
 
 // Tests that the counter counts WebUSB settings
 TEST_F(SiteSettingsCounterTest, CountWebUsbSettings) {
-  map()->SetWebsiteSettingDefaultScope(
-      GURL("http://www.google.com"), GURL("http://www.google.com"),
-      ContentSettingsType::USB_CHOOSER_DATA,
-      base::Value(base::Value::Type::DICTIONARY));
+  map()->SetWebsiteSettingDefaultScope(GURL("http://www.google.com"),
+                                       GURL("http://www.google.com"),
+                                       ContentSettingsType::USB_CHOOSER_DATA,
+                                       base::Value(base::Value::Type::DICT));
 
   counter()->Restart();
   EXPECT_EQ(1, GetResult());
@@ -304,6 +303,18 @@ TEST_F(SiteSettingsCounterTest, TranslatedSitesCounting) {
   translate_prefs->AddSiteToNeverPromptList("maps.google.com");
 
   SetDeletionPeriodPref(browsing_data::TimePeriod::ALL_TIME);
+  EXPECT_EQ(2, GetResult());
+}
+
+TEST_F(SiteSettingsCounterTest, DiscardingExceptionsCounting) {
+  base::Value::List exclusion_list;
+  exclusion_list.Append("www.google.com");
+  exclusion_list.Append("drive.google.com");
+  profile()->GetPrefs()->SetList(
+      performance_manager::user_tuning::prefs::kTabDiscardingExceptions,
+      std::move(exclusion_list));
+
+  counter()->Restart();
   EXPECT_EQ(2, GetResult());
 }
 

@@ -9,7 +9,10 @@
 #include <unordered_map>
 #include <utility>
 
+#include "base/barrier_closure.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "dbus/bus.h"
 #include "dbus/exported_object.h"
@@ -20,10 +23,17 @@ namespace {
 
 template <typename T>
 using MethodDelegate =
-    std::function<void(dbus::MethodCall*,
-                       base::WeakPtr<T>,
-                       dbus::ExportedObject::ResponseSender)>;
+    base::RepeatingCallback<void(dbus::MethodCall*,
+                                 base::WeakPtr<T>,
+                                 dbus::ExportedObject::ResponseSender)>;
 
+// A wrapper that runs the barrier closure |callback|.
+void OnMethodExported(base::RepeatingClosure callback,
+                      const std::string& interface,
+                      const std::string& method,
+                      bool success) {
+  callback.Run();
+}
 }
 
 // Private class helper.
@@ -110,17 +120,20 @@ class CallbackForwarder {
   }
 
  public:
-  // Returns a lambda with captured |func| that parses D-Bus parameters and
-  // forwards it to |func|.
+  // Returns a RepeatingCallback with captured |func| that parses D-Bus
+  // parameters and forwards it to |func|.
   //
-  // Being a lambda has the benefit that the lambda invoker does not need to
+  // Being a RepeatingCallback has the benefit that the invoker does not need to
   // know the signature of |func| at compile time.
   static MethodDelegate<T> CreateForwarder(void (T::*func)(Args...)) {
-    return [func](dbus::MethodCall* method_call, base::WeakPtr<T> callback,
-                  dbus::ExportedObject::ResponseSender response_sender) {
-      Forward(method_call, base::BindOnce(func, callback),
-              std::move(response_sender));
-    };
+    return base::BindRepeating(
+        [](void (T::*func)(Args...), dbus::MethodCall* method_call,
+           base::WeakPtr<T> target,
+           dbus::ExportedObject::ResponseSender response_sender) {
+          Forward(method_call, base::BindOnce(func, target),
+                  std::move(response_sender));
+        },
+        func);
   }
 };
 
@@ -176,7 +189,8 @@ class ExportedCallbackManager {
   //
   // |exported_callback| weak pointer has to be valid at time of invocation.
   bool ExportCallback(const dbus::ObjectPath& callback_path,
-                      base::WeakPtr<T> exported_callback) {
+                      base::WeakPtr<T> exported_callback,
+                      base::OnceCallback<void()> on_exported_callback) {
     CHECK(exported_callback) << "Callback ptr is not valid";
     CHECK(bus_) << "Called without Init";
 
@@ -197,6 +211,9 @@ class ExportedCallbackManager {
       return false;
     }
 
+    auto export_complete =
+        base::BarrierClosure(methods_.size(), std::move(on_exported_callback));
+
     // Catch all registered methods with OnMethodCall and it will handle the
     // forwarding to the callback.
     for (auto const& [name, method] : methods_) {
@@ -206,7 +223,7 @@ class ExportedCallbackManager {
           base::BindRepeating(&ExportedCallbackManager::OnMethodCall,
                               weak_ptr_factory_.GetWeakPtr(), name, method,
                               exported_callback),
-          base::DoNothing());
+          base::BindOnce(&OnMethodExported, export_complete));
     }
 
     return true;
@@ -242,7 +259,7 @@ class ExportedCallbackManager {
     DCHECK(method_name == method_call->GetMember())
         << "Method name from D-Bus does not match with the registered name";
 
-    delegate(method_call, exported_callback, std::move(response_sender));
+    delegate.Run(method_call, exported_callback, std::move(response_sender));
   }
 
   scoped_refptr<dbus::Bus> bus_;

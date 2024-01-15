@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/protocol/fake_authenticator.h"
 #include "remoting/protocol/session_plugin.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
@@ -87,7 +87,7 @@ void FakeSession::Close(ErrorCode error) {
     if (signaling_delay_.is_zero()) {
       peer->Close(error);
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE, base::BindOnce(&FakeSession::Close, peer, error),
           signaling_delay_);
     }
@@ -96,13 +96,14 @@ void FakeSession::Close(ErrorCode error) {
 
 void FakeSession::SendTransportInfo(
     std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
-  if (!peer_)
+  if (!peer_) {
     return;
+  }
 
   if (signaling_delay_.is_zero()) {
     peer_->ProcessTransportInfo(std::move(transport_info));
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FakeSession::ProcessTransportInfo, peer_,
                        std::move(transport_info)),
@@ -127,8 +128,9 @@ void FakeSession::AddPlugin(SessionPlugin* plugin) {
   }
 }
 
-void FakeSession::SetAttachment(size_t round,
-                                std::unique_ptr<jingle_xmpp::XmlElement> attachment) {
+void FakeSession::SetAttachment(
+    size_t round,
+    std::unique_ptr<jingle_xmpp::XmlElement> attachment) {
   while (attachments_.size() <= round) {
     attachments_.emplace_back();
   }

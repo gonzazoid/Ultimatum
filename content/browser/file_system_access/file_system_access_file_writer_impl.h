@@ -45,7 +45,8 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
       const BindingContext& context,
       const storage::FileSystemURL& url,
       const storage::FileSystemURL& swap_url,
-      scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+      scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
+      scoped_refptr<FileSystemAccessLockManager::LockHandle> swap_lock,
       const SharedHandleState& handle_state,
       mojo::PendingReceiver<blink::mojom::FileSystemAccessFileWriter> receiver,
       bool has_transient_user_activation,
@@ -114,8 +115,11 @@ class CONTENT_EXPORT FileSystemAccessFileWriterImpl
   // most filesystems, this move operation is atomic.
   storage::FileSystemURL swap_url_ GUARDED_BY_CONTEXT(sequence_checker_);
 
-  // Shared write lock on the file. It is released on destruction.
-  scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock_
+  // Lock on the target file. It is released on destruction.
+  scoped_refptr<FileSystemAccessLockManager::LockHandle> lock_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+  // Exclusive lock on the swap file. It is released on destruction.
+  scoped_refptr<FileSystemAccessLockManager::LockHandle> swap_lock_
       GUARDED_BY_CONTEXT(sequence_checker_);
 
   CloseCallback close_callback_ GUARDED_BY_CONTEXT(sequence_checker_);

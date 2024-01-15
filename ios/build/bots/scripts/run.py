@@ -21,11 +21,14 @@ import argparse
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import traceback
 
 import constants
+import iossim_util
+import mac_util
 import shard_util
 import test_runner
 import test_runner_errors
@@ -56,60 +59,15 @@ class Runner():
     self.args = argparse.Namespace()
     self.test_args = []
     self.should_move_xcode_runtime_to_cache = True
+    # Xcode might be corruped, so this the flag to decide
+    # whether we should clear it from cache
+    self.should_delete_xcode_cache = False
 
     if args:
       self.parse_args(args)
 
-  def install_xcode(self):
-    """Installs the requested Xcode build version.
-
-    Returns:
-      (bool, bool)
-        First bool: True if installation was successful. False otherwise.
-        Second bool: True if Xcode is legacy package. False if it's new.
-    """
-    try:
-      if not self.args.mac_toolchain_cmd:
-        raise test_runner.MacToolchainNotFoundError(self.args.mac_toolchain_cmd)
-      # Guard against incorrect install paths. On swarming, this path
-      # should be a requested named cache, and it must exist.
-      if not os.path.exists(self.args.xcode_path):
-        raise test_runner.XcodePathNotFoundError(self.args.xcode_path)
-
-      runtime_cache_folder = None
-      # Runner script only utilizes runtime cache when it's a simulator task.
-      if self.args.version:
-        runtime_cache_folder = xcode.construct_runtime_cache_folder(
-            self.args.runtime_cache_prefix, self.args.version)
-        if not os.path.exists(runtime_cache_folder):
-          # Depending on infra project, runtime named cache might not be
-          # deployed. Create the dir if it doesn't exist since xcode_util
-          # assumes it exists.
-          # TODO(crbug.com/1191260): Raise error instead of creating dirs after
-          # runtime named cache is deployed everywhere.
-          os.makedirs(runtime_cache_folder)
-      # xcode.install() installs the Xcode & iOS runtime, and returns a bool
-      # indicating if the Xcode version in CIPD is a legacy Xcode package (which
-      # includes iOS runtimes).
-      is_legacy_xcode = xcode.install(
-          self.args.mac_toolchain_cmd,
-          self.args.xcode_build_version,
-          self.args.xcode_path,
-          runtime_cache_folder=runtime_cache_folder,
-          ios_version=self.args.version)
-      xcode.select(self.args.xcode_path)
-    except subprocess.CalledProcessError as e:
-      # Flush buffers to ensure correct output ordering.
-      sys.stdout.flush()
-      sys.stderr.write('Xcode build version %s failed to install: %s\n' %
-                       (self.args.xcode_build_version, e))
-      sys.stderr.flush()
-      return (False, False)
-    else:
-      return (True, is_legacy_xcode)
-
   def use_xcodebuild_runner(self, args):
-    return args.xcode_parallelization or args.xcodebuild_device_runner
+    return args.xcodebuild_sim_runner or args.xcodebuild_device_runner
 
   def resolve_test_cases(self):
     """Forms |self.args.test_cases| considering swarming shard and cmd inputs.
@@ -180,7 +138,9 @@ class Runner():
 
     # This logic is run by default before the otool command is invoked such that
     # otool has the correct Xcode selected for command line dev tools.
-    install_success, is_legacy_xcode = self.install_xcode()
+    install_success, is_legacy_xcode = xcode.install_xcode(
+        self.args.mac_toolchain_cmd, self.args.xcode_build_version,
+        self.args.xcode_path, self.args.runtime_cache_prefix, self.args.version)
     if not install_success:
       raise test_runner.XcodeVersionNotFoundError(self.args.xcode_build_version)
 
@@ -196,7 +156,7 @@ class Runner():
     try:
       self.resolve_test_cases()
 
-      if self.args.xcode_parallelization:
+      if self.args.xcodebuild_sim_runner:
         tr = xcodebuild_runner.SimulatorParallelTestRunner(
             self.args.app,
             self.args.host_app,
@@ -208,12 +168,14 @@ class Runner():
             release=self.args.release,
             repeat_count=self.args.repeat,
             retries=self.args.retries,
-            shards=self.args.shards,
+            clones=self.args.clones,
             test_cases=self.args.test_cases,
             test_args=self.test_args,
             use_clang_coverage=self.args.use_clang_coverage,
             env_vars=env_vars,
-            video_plugin_option=self.args.record_video)
+            video_plugin_option=self.args.record_video,
+            output_disabled_tests=self.args.output_disabled_tests,
+        )
       elif self.args.variations_seed_path != 'NO_PATH':
         tr = variations_runner.VariationsSimulatorParallelTestRunner(
             self.args.app,
@@ -241,7 +203,7 @@ class Runner():
             env_vars=env_vars,
             readline_timeout=self.args.readline_timeout,
             retries=self.args.retries,
-            shards=self.args.shards,
+            clones=self.args.clones,
             test_args=self.test_args,
             test_cases=self.args.test_cases,
             xctest=self.args.xctest,
@@ -257,12 +219,13 @@ class Runner():
             readline_timeout=self.args.readline_timeout,
             repeat_count=self.args.repeat,
             retries=self.args.retries,
-            shards=self.args.shards,
+            clones=self.args.clones,
             test_args=self.test_args,
             test_cases=self.args.test_cases,
             use_clang_coverage=self.args.use_clang_coverage,
             wpr_tools_path=self.args.wpr_tools_path,
             xctest=self.args.xctest,
+            output_disabled_tests=self.args.output_disabled_tests,
         )
       elif self.args.xcodebuild_device_runner and self.args.xctest:
         tr = xcodebuild_runner.DeviceXcodeTestRunner(
@@ -275,7 +238,10 @@ class Runner():
             retries=self.args.retries,
             test_cases=self.args.test_cases,
             test_args=self.test_args,
-            env_vars=env_vars)
+            env_vars=env_vars,
+            record_video_option=self.args.record_video,
+            output_disabled_tests=self.args.output_disabled_tests,
+        )
       else:
         tr = test_runner.DeviceTestRunner(
             self.args.app,
@@ -288,6 +254,7 @@ class Runner():
             test_args=self.test_args,
             test_cases=self.args.test_cases,
             xctest=self.args.xctest,
+            output_disabled_tests=self.args.output_disabled_tests,
         )
 
       logging.info("Using test runner %s" % type(tr).__name__)
@@ -306,13 +273,17 @@ class Runner():
       # Swarming infra marks device status unavailable for any device related
       # issue using this return code.
       return 3
-    except test_runner.SimulatorNotFoundError as e:
+    except (test_runner.SimulatorNotFoundError,
+            test_runner.HostIsDownError) as e:
       # This means there's probably some issue in simulator runtime so we don't
       # want to cache it anymore (when it's in new Xcode format).
       self.should_move_xcode_runtime_to_cache = False
       sys.stderr.write(traceback.format_exc())
       summary['step_text'] = '%s%s' % (e.__class__.__name__,
                                        ': %s' % e.args[0] if e.args else '')
+      return 2
+    except test_runner.MIGServerDiedError as e:
+      self.should_delete_xcode_cache = True
       return 2
     except test_runner.TestRunnerError as e:
       sys.stderr.write(traceback.format_exc())
@@ -361,6 +332,9 @@ class Runner():
         else:
           xcode.remove_runtimes(self.args.xcode_path)
 
+      if self.should_delete_xcode_cache:
+        shutil.rmtree(self.args.xcode_path)
+
       test_runner.defaults_delete('com.apple.CoreSimulator',
                                   'FramebufferServerRendererPolicy')
 
@@ -373,12 +347,6 @@ class Runner():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '-x',
-        '--xcode-parallelization',
-        help='Run tests using xcodebuild\'s parallelization.',
-        action='store_true',
-    )
-    parser.add_argument(
         '-a',
         '--app',
         help='Compiled .app to run for EG1, Compiled -Runner.app for EG2',
@@ -390,6 +358,14 @@ class Runner():
         help='Xcode build version to install.',
         required=True,
         metavar='build_id',
+    )
+    parser.add_argument(
+        '-c',
+        '--clones',
+        help='Number of iOS simulator clones to split test cases across',
+        metavar='n',
+        type=int,
+        default=1,
     )
     parser.add_argument(
         '-e',
@@ -510,13 +486,6 @@ class Runner():
         default='Runtime-ios-',
     )
     parser.add_argument(
-        '-s',
-        '--shards',
-        help='Number of shards to split test cases.',
-        metavar='n',
-        type=int,
-    )
-    parser.add_argument(
         '-t',
         '--test-cases',
         action='append',
@@ -574,6 +543,11 @@ class Runner():
         action='store_true',
     )
     parser.add_argument(
+        '--xcodebuild-sim-runner',
+        help='Run tests using xcodebuild\'s on iOS simulators',
+        action='store_true',
+    )
+    parser.add_argument(
         '--xctest',
         action='store_true',
         help='Whether or not the given app should be run as an XCTest.',
@@ -593,6 +567,11 @@ class Runner():
         ),
         metavar='record-video',
     )
+    parser.add_argument(
+        '--output-disabled-tests',
+        action='store_true',
+        help='Whether or not disabled test should be included in test output.',
+    )
 
     def load_from_json(args):
       """Loads and sets arguments from args_json.
@@ -605,12 +584,12 @@ class Runner():
       args.env_var.extend(args_json.get('env_var', []))
       args.restart = args_json.get('restart', args.restart)
       args.xctest = args_json.get('xctest', args.xctest)
-      args.xcode_parallelization = args_json.get('xcode_parallelization',
-                                                 args.xcode_parallelization)
+      args.xcodebuild_sim_runner = args_json.get('xcodebuild_sim_runner',
+                                                 args.xcodebuild_sim_runner)
       args.xcodebuild_device_runner = (
           args_json.get('xcodebuild_device_runner',
                         args.xcodebuild_device_runner))
-      args.shards = args_json.get('shards', args.shards)
+      args.clones = args_json.get('clones', args.clones)
       test_args.extend(args_json.get('test_args', []))
 
     def validate(args):
@@ -625,13 +604,12 @@ class Runner():
           parser.error('must specify all or none of '
                        '-i/--iossim, -p/--platform, -v/--version')
 
-      if args.xcode_parallelization and not (args.platform and args.version):
-        parser.error('--xcode-parallelization also requires '
+      if args.xcodebuild_sim_runner and not (args.platform and args.version):
+        parser.error('--xcodebuild-sim-runner also requires '
                      'both -p/--platform and -v/--version')
 
-      if (not args.xcode_parallelization) and args.record_video:
-        parser.error('--record-video is only supported on EG tests '
-                     'running on simulators')
+      if not self.use_xcodebuild_runner(args) and args.record_video:
+        parser.error('--record-video is only supported on EG tests')
 
       # Do not retry when repeat
       if args.repeat and args.repeat > 1:

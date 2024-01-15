@@ -9,11 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/host/file_transfer/fake_file_operations.h"
@@ -52,14 +51,16 @@ std::unique_ptr<remoting::CompoundBuffer> DataToBuffer(
 // base::queue doesn't provide operator==.
 template <typename T>
 bool QueuesEqual(const base::queue<T>& a, const base::queue<T>& b) {
-  if (a.size() != b.size())
+  if (a.size() != b.size()) {
     return false;
+  }
 
   auto a_copy = a;
   auto b_copy = b;
   while (!a_copy.empty()) {
-    if (a_copy.front() != b_copy.front())
+    if (a_copy.front() != b_copy.front()) {
       return false;
+    }
     a_copy.pop();
     b_copy.pop();
   }
@@ -349,7 +350,7 @@ TEST_F(FileTransferMessageHandlerTest, ReadsFile) {
 
   test_io.input_file = FakeFileOperations::InputFile(
       base::FilePath::FromASCII(kTestFilename),
-      ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree), absl::nullopt);
+      ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree), std::nullopt);
 
   // This will delete itself when fake_pipe_->ClosePipe() is called.
   new FileTransferMessageHandler(kTestDatachannelName, fake_pipe_->Wrap(),

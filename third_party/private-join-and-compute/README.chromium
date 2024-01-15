@@ -7,6 +7,7 @@ Revision: 375be83109e10b32441483dbd0f1ac493488d197
 License: Apache 2.0
 License File: src/LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
 The package contains a communicative cipher. It's used to communicate with the leak detection Google server.
@@ -18,3 +19,4 @@ dependencies.diff - removes all the dependencies on Abseil and other libraries r
 compilation.diff - fixes compilation/static analyzers in Chrome.
 fix_nulls.diff - makes the presubmit happy by replacing NULL with nullptr.
 Use-absil-statusor.diff - removes existing status/statusor library's version, and uses absl::status and absl::statusor as source of truth.
+private_key_inverse.diff - makes private key inverse use Fermat's Little Theorem instead of ModInverseBlinded

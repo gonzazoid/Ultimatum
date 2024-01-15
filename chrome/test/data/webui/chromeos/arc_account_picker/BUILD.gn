@@ -10,6 +10,9 @@ js_type_check("closure_compile") {
                     "browser_resolver_prefix_replacements=\"chrome://chrome-signin/arc_account_picker/=" + rebase_path(
                             "//chrome/browser/resources/chromeos/arc_account_picker/",
                             root_build_dir) + "\"",
+                    "browser_resolver_prefix_replacements=\"chrome://webui-test/chromeos/=" + rebase_path(
+                            "//chrome/test/data/webui/chromeos/",
+                            root_build_dir) + "\"",
                     "js_module_root=" + rebase_path("//chrome/test/data/webui/",
                                                     root_build_dir),
                     "js_module_root=./gen/chrome/test/data/webui/",
@@ -22,18 +25,18 @@ js_type_check("closure_compile") {
 
 js_library("arc_account_picker_test") {
   deps = [
-    "../..:chai_assert",
+    "..:chai_assert",
+    "//ash/webui/common/resources:assert",
+    "//ash/webui/common/resources:event_target",
     "//chrome/browser/resources/chromeos/arc_account_picker:arc_account_picker_app",
     "//chrome/browser/resources/chromeos/arc_account_picker:arc_account_picker_browser_proxy",
-    "//ui/webui/resources/js:assert",
-    "//ui/webui/resources/js/cr:event_target",
   ]
   externs_list = [ "$externs_path/mocha-2.5.js" ]
 }
 
 js_library("test_util") {
   deps = [
-    "../..:test_browser_proxy",
+    "..:test_browser_proxy",
     "//chrome/browser/resources/chromeos/arc_account_picker:arc_account_picker_browser_proxy",
   ]
 }

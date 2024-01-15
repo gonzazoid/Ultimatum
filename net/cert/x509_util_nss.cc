@@ -18,11 +18,12 @@
 #include <secport.h>
 #include <string.h>
 
-#include "base/compiler_specific.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "crypto/nss_util.h"
 #include "crypto/scoped_nss_types.h"
+#include "net/cert/x509_util.h"
+#include "net/third_party/mozilla_security_manager/nsNSSCertificateDB.h"
 #include "third_party/boringssl/src/include/openssl/pool.h"
 
 namespace net::x509_util {
@@ -71,7 +72,7 @@ std::string GetUniqueNicknameForSlot(const std::string& nickname,
   while (SEC_CertNicknameConflict(temp_nickname.c_str(),
                                   const_cast<SECItem*>(subject),
                                   CERT_GetDefaultCertDB())) {
-    base::SStringPrintf(&new_name, "%s #%d", nickname.c_str(), index++);
+    new_name = base::StringPrintf("%s #%d", nickname.c_str(), index++);
     temp_nickname = token_name + new_name;
   }
 
@@ -143,24 +144,30 @@ bool IsSameCertificate(CERTCertificate* a, CERTCertificate* b) {
 }
 
 bool IsSameCertificate(CERTCertificate* a, const X509Certificate* b) {
-  return a->derCert.len == CRYPTO_BUFFER_len(b->cert_buffer()) &&
-         memcmp(a->derCert.data, CRYPTO_BUFFER_data(b->cert_buffer()),
-                a->derCert.len) == 0;
+  return IsSameCertificate(a, b->cert_buffer());
 }
 bool IsSameCertificate(const X509Certificate* a, CERTCertificate* b) {
+  return IsSameCertificate(b, a->cert_buffer());
+}
+
+bool IsSameCertificate(CERTCertificate* a, const CRYPTO_BUFFER* b) {
+  return a->derCert.len == CRYPTO_BUFFER_len(b) &&
+         memcmp(a->derCert.data, CRYPTO_BUFFER_data(b), a->derCert.len) == 0;
+}
+bool IsSameCertificate(const CRYPTO_BUFFER* a, CERTCertificate* b) {
   return IsSameCertificate(b, a);
 }
 
-ScopedCERTCertificate CreateCERTCertificateFromBytes(const uint8_t* data,
-                                                     size_t length) {
+ScopedCERTCertificate CreateCERTCertificateFromBytes(
+    base::span<const uint8_t> data) {
   crypto::EnsureNSSInit();
 
   if (!NSS_IsInitialized())
     return nullptr;
 
   SECItem der_cert;
-  der_cert.data = const_cast<uint8_t*>(data);
-  der_cert.len = base::checked_cast<unsigned>(length);
+  der_cert.data = const_cast<uint8_t*>(data.data());
+  der_cert.len = base::checked_cast<unsigned>(data.size());
   der_cert.type = siDERCertBuffer;
 
   // Parse into a certificate structure.
@@ -171,8 +178,9 @@ ScopedCERTCertificate CreateCERTCertificateFromBytes(const uint8_t* data,
 
 ScopedCERTCertificate CreateCERTCertificateFromX509Certificate(
     const X509Certificate* cert) {
-  return CreateCERTCertificateFromBytes(CRYPTO_BUFFER_data(cert->cert_buffer()),
-                                        CRYPTO_BUFFER_len(cert->cert_buffer()));
+  return CreateCERTCertificateFromBytes(
+      base::make_span(CRYPTO_BUFFER_data(cert->cert_buffer()),
+                      CRYPTO_BUFFER_len(cert->cert_buffer())));
 }
 
 ScopedCERTCertificateList CreateCERTCertificateListFromX509Certificate(
@@ -192,9 +200,9 @@ ScopedCERTCertificateList CreateCERTCertificateListFromX509Certificate(
     return {};
   nss_chain.push_back(std::move(nss_cert));
   for (const auto& intermediate : cert->intermediate_buffers()) {
-    ScopedCERTCertificate nss_intermediate =
-        CreateCERTCertificateFromBytes(CRYPTO_BUFFER_data(intermediate.get()),
-                                       CRYPTO_BUFFER_len(intermediate.get()));
+    ScopedCERTCertificate nss_intermediate = CreateCERTCertificateFromBytes(
+        base::make_span(CRYPTO_BUFFER_data(intermediate.get()),
+                        CRYPTO_BUFFER_len(intermediate.get())));
     if (!nss_intermediate) {
       if (invalid_intermediate_behavior == InvalidIntermediateBehavior::kFail)
         return {};
@@ -246,30 +254,24 @@ scoped_refptr<X509Certificate> CreateX509CertificateFromCERTCertificate(
     CERTCertificate* nss_cert,
     const std::vector<CERTCertificate*>& nss_chain,
     X509Certificate::UnsafeCreateOptions options) {
-  if (!nss_cert || !nss_cert->derCert.len)
+  if (!nss_cert || !nss_cert->derCert.len) {
     return nullptr;
-  bssl::UniquePtr<CRYPTO_BUFFER> cert_handle(
-      X509Certificate::CreateCertBufferFromBytes(
-          base::make_span(nss_cert->derCert.data, nss_cert->derCert.len)));
-  if (!cert_handle)
-    return nullptr;
+  }
+  bssl::UniquePtr<CRYPTO_BUFFER> cert_handle(x509_util::CreateCryptoBuffer(
+      base::make_span(nss_cert->derCert.data, nss_cert->derCert.len)));
 
   std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> intermediates;
   intermediates.reserve(nss_chain.size());
   for (const CERTCertificate* nss_intermediate : nss_chain) {
-    if (!nss_intermediate || !nss_intermediate->derCert.len)
+    if (!nss_intermediate || !nss_intermediate->derCert.len) {
       return nullptr;
-    bssl::UniquePtr<CRYPTO_BUFFER> intermediate_cert_handle(
-        X509Certificate::CreateCertBufferFromBytes(base::make_span(
-            nss_intermediate->derCert.data, nss_intermediate->derCert.len)));
-    if (!intermediate_cert_handle)
-      return nullptr;
-    intermediates.push_back(std::move(intermediate_cert_handle));
+    }
+    intermediates.push_back(x509_util::CreateCryptoBuffer(base::make_span(
+        nss_intermediate->derCert.data, nss_intermediate->derCert.len)));
   }
-  scoped_refptr<X509Certificate> result(
-      X509Certificate::CreateFromBufferUnsafeOptions(
-          std::move(cert_handle), std::move(intermediates), options));
-  return result;
+
+  return X509Certificate::CreateFromBufferUnsafeOptions(
+      std::move(cert_handle), std::move(intermediates), options);
 }
 
 scoped_refptr<X509Certificate> CreateX509CertificateFromCERTCertificate(
@@ -439,19 +441,8 @@ SHA256HashValue CalculateFingerprint256(CERTCertificate* cert) {
   return sha256;
 }
 
-DISABLE_CFI_DLSYM
-SECStatus GetCertIsPerm(const CERTCertificate* cert, PRBool* isperm) {
-  // TODO(https://crbug.com/1365414): When the minimum NSS version is raised to
-  // 3.31 or higher, replace this with calling CERT_GetCertIsPerm directly.
-  using GetCertIsPermFunction = SECStatus (*)(const CERTCertificate*, PRBool*);
-  static GetCertIsPermFunction get_cert_is_perm =
-      reinterpret_cast<GetCertIsPermFunction>(
-          dlsym(RTLD_DEFAULT, "CERT_GetCertIsPerm"));
-  if (get_cert_is_perm) {
-    return get_cert_is_perm(cert, isperm);
-  }
-  *isperm = cert->isperm;
-  return SECSuccess;
+int ImportUserCert(CERTCertificate* cert) {
+  return mozilla_security_manager::ImportUserCert(cert);
 }
 
 }  // namespace net::x509_util

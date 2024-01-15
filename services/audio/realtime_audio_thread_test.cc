@@ -6,8 +6,8 @@
 
 #include <cstring>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "media/audio/simple_sources.h"
@@ -37,7 +37,6 @@ TEST_F(RealtimeAudioThreadTest, StartStop) {
   RealtimeAudioThread thread("TestThread", kPeriod);
 
   base::Thread::Options options;
-  options.timer_slack = base::TIMER_SLACK_NONE;
   options.thread_type = base::ThreadType::kRealtimeAudio;
   EXPECT_TRUE(thread.StartWithOptions(std::move(options)));
 
@@ -50,7 +49,6 @@ TEST_F(RealtimeAudioThreadTest, StartDestroy) {
   RealtimeAudioThread thread("TestThread", kPeriod);
 
   base::Thread::Options options;
-  options.timer_slack = base::TIMER_SLACK_NONE;
   options.thread_type = base::ThreadType::kRealtimeAudio;
   EXPECT_TRUE(thread.StartWithOptions(std::move(options)));
 

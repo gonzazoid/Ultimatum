@@ -11,10 +11,11 @@
 #include <sys/sysctl.h>
 #include <sys/types.h>
 
+#include "base/apple/scoped_mach_port.h"
 #include "base/check_op.h"
-#include "base/mac/scoped_mach_port.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/posix/sysctl.h"
 #include "base/process/process_metrics.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -23,31 +24,14 @@
 
 namespace base {
 
-namespace {
-
-// Queries sysctlbyname() for the given key and returns the value from the
-// system or the empty string on failure.
-std::string GetSysctlValue(const char* key_name) {
-  char value[256];
-  size_t len = std::size(value);
-  if (sysctlbyname(key_name, &value, &len, nullptr, 0) == 0) {
-    DCHECK_GE(len, 1u);
-    DCHECK_EQ('\0', value[len - 1]);
-    return std::string(value, len - 1);
-  }
-  return std::string();
-}
-
-}  // namespace
-
 // static
 std::string SysInfo::OperatingSystemName() {
   static dispatch_once_t get_system_name_once;
   static std::string* system_name;
   dispatch_once(&get_system_name_once, ^{
     @autoreleasepool {
-      system_name = new std::string(
-          SysNSStringToUTF8([[UIDevice currentDevice] systemName]));
+      system_name =
+          new std::string(SysNSStringToUTF8(UIDevice.currentDevice.systemName));
     }
   });
   // Examples of returned value: 'iPhone OS' on iPad 5.1.1
@@ -62,7 +46,7 @@ std::string SysInfo::OperatingSystemVersion() {
   dispatch_once(&get_system_version_once, ^{
     @autoreleasepool {
       system_version = new std::string(
-          SysNSStringToUTF8([[UIDevice currentDevice] systemVersion]));
+          SysNSStringToUTF8(UIDevice.currentDevice.systemVersion));
     }
   });
   return *system_version;
@@ -73,7 +57,7 @@ void SysInfo::OperatingSystemVersionNumbers(int32_t* major_version,
                                             int32_t* minor_version,
                                             int32_t* bugfix_version) {
   NSOperatingSystemVersion version =
-      [[NSProcessInfo processInfo] operatingSystemVersion];
+      NSProcessInfo.processInfo.operatingSystemVersion;
   *major_version = saturated_cast<int32_t>(version.majorVersion);
   *minor_version = saturated_cast<int32_t>(version.minorVersion);
   *bugfix_version = saturated_cast<int32_t>(version.patchVersion);
@@ -96,21 +80,16 @@ std::string SysInfo::OperatingSystemArchitecture() {
 
 // static
 std::string SysInfo::GetIOSBuildNumber() {
-  int mib[2] = {CTL_KERN, KERN_OSVERSION};
-  unsigned int namelen = sizeof(mib) / sizeof(mib[0]);
-  size_t buffer_size = 0;
-  sysctl(mib, namelen, nullptr, &buffer_size, nullptr, 0);
-  char build_number[buffer_size];
-  int result = sysctl(mib, namelen, build_number, &buffer_size, nullptr, 0);
-  DCHECK(result == 0);
-  return build_number;
+  absl::optional<std::string> build_number =
+      StringSysctl({CTL_KERN, KERN_OSVERSION});
+  return build_number.value();
 }
 
 // static
 uint64_t SysInfo::AmountOfPhysicalMemoryImpl() {
   struct host_basic_info hostinfo;
   mach_msg_type_number_t count = HOST_BASIC_INFO_COUNT;
-  base::mac::ScopedMachSendRight host(mach_host_self());
+  base::apple::ScopedMachSendRight host(mach_host_self());
   int result = host_info(host.get(), HOST_BASIC_INFO,
                          reinterpret_cast<host_info_t>(&hostinfo), &count);
   if (result != KERN_SUCCESS) {
@@ -133,7 +112,7 @@ uint64_t SysInfo::AmountOfAvailablePhysicalMemoryImpl() {
 
 // static
 std::string SysInfo::CPUModelName() {
-  return GetSysctlValue("machdep.cpu.brand_string");
+  return StringSysctlByName("machdep.cpu.brand_string").value_or(std::string{});
 }
 
 // static
@@ -143,7 +122,7 @@ std::string SysInfo::HardwareModelName() {
   // match the expected format, so supply a fake string here.
   const char* model = getenv("SIMULATOR_MODEL_IDENTIFIER");
   if (model == nullptr) {
-    switch ([[UIDevice currentDevice] userInterfaceIdiom]) {
+    switch (UIDevice.currentDevice.userInterfaceIdiom) {
       case UIUserInterfaceIdiomPhone:
         model = "iPhone";
         break;
@@ -159,7 +138,7 @@ std::string SysInfo::HardwareModelName() {
 #else
   // Note: This uses "hw.machine" instead of "hw.model" like the Mac code,
   // because "hw.model" doesn't always return the right string on some devices.
-  return GetSysctlValue("hw.machine");
+  return StringSysctl({CTL_HW, HW_MACHINE}).value_or(std::string{});
 #endif
 }
 

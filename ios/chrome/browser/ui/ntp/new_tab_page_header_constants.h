@@ -17,12 +17,9 @@ extern const CGFloat kFakeLocationBarTopConstraint;
 
 extern const CGFloat kScrolledToTopOmniboxBottomMargin;
 
-extern const CGFloat kHintLabelSidePadding;
+extern const CGFloat kCenteredHintLabelSidePadding;
 
 extern const CGFloat kHintLabelHeightMargin;
-
-// The margin added to the fake omnibox to have at the right position.
-extern const CGFloat kMaxTopMarginDiff;
 
 // The margin to add to the fake omnibox to have it correctly positioned when
 // the NTP is scrolled to the top.

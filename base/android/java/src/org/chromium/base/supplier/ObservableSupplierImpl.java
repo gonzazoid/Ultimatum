@@ -10,6 +10,9 @@ import androidx.annotation.Nullable;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ObserverList;
+import org.chromium.base.ResettersForTesting;
+
+import java.util.Objects;
 
 /**
  * Concrete implementation of {@link ObservableSupplier} to be used by classes owning the
@@ -33,6 +36,12 @@ public class ObservableSupplierImpl<E> implements ObservableSupplier<E> {
     private E mObject;
     private final ObserverList<Callback<E>> mObservers = new ObserverList<>();
 
+    public ObservableSupplierImpl() {}
+
+    public ObservableSupplierImpl(E initialValue) {
+        mObject = initialValue;
+    }
+
     @Override
     public E addObserver(Callback<E> obs) {
         checkThread();
@@ -40,10 +49,11 @@ public class ObservableSupplierImpl<E> implements ObservableSupplier<E> {
 
         if (mObject != null) {
             final E currentObject = mObject;
-            mHandler.post(() -> {
-                if (mObject != currentObject || !mObservers.hasObserver(obs)) return;
-                obs.onResult(mObject);
-            });
+            mHandler.post(
+                    () -> {
+                        if (mObject != currentObject || !mObservers.hasObserver(obs)) return;
+                        obs.onResult(mObject);
+                    });
         }
 
         return mObject;
@@ -57,12 +67,16 @@ public class ObservableSupplierImpl<E> implements ObservableSupplier<E> {
 
     /**
      * Set the object supplied by this supplier. This will notify registered callbacks that the
-     * dependency is available.
+     * dependency is available if the object changes. Object equality is used when deciding if the
+     * object has changed, not reference equality.
+     *
      * @param object The object to supply.
      */
     public void set(E object) {
         checkThread();
-        if (object == mObject) return;
+        if (Objects.equals(object, mObject)) {
+            return;
+        }
 
         mObject = object;
 
@@ -77,15 +91,19 @@ public class ObservableSupplierImpl<E> implements ObservableSupplier<E> {
         return mObject;
     }
 
+    /** Returns if there are any observers currently. */
+    public boolean hasObservers() {
+        return !mObservers.isEmpty();
+    }
+
     private void checkThread() {
-        assert sIgnoreThreadChecksForTesting
-                || mThread
-                        == Thread.currentThread()
-            : "ObservableSupplierImpl must only be used on a single Thread.";
+        assert sIgnoreThreadChecksForTesting || mThread == Thread.currentThread()
+                : "ObservableSupplierImpl must only be used on a single Thread.";
     }
 
     /** Used to allow developers to access supplier values on the instrumentation thread. */
     public static void setIgnoreThreadChecksForTesting(boolean ignoreThreadChecks) {
         sIgnoreThreadChecksForTesting = ignoreThreadChecks;
+        ResettersForTesting.register(() -> sIgnoreThreadChecksForTesting = false);
     }
 }

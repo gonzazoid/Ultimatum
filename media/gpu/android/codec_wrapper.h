@@ -11,10 +11,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/android/media_codec_bridge.h"
 #include "media/base/decoder_buffer.h"
+#include "media/base/status.h"
 #include "media/gpu/android/codec_surface_bundle.h"
 #include "media/gpu/android/device_info.h"
 #include "media/gpu/media_gpu_export.h"
@@ -45,6 +47,12 @@ class MEDIA_GPU_EXPORT CodecOutputBuffer {
   // The size of the image.
   gfx::Size size() const { return size_; }
 
+  // Returns true if a coded size guess based on `size_` is available.
+  bool CanGuessCodedSize() const;
+
+  // Attempts to guess the coded size. `CanGuessCodedSize` must be true.
+  gfx::Size GuessCodedSize() const;
+
   // Sets a callback that will be called when we're released to the surface.
   // Will not be called if we're dropped.
   void set_render_cb(base::OnceClosure render_cb) {
@@ -69,12 +77,14 @@ class MEDIA_GPU_EXPORT CodecOutputBuffer {
   CodecOutputBuffer(scoped_refptr<CodecWrapperImpl> codec,
                     int64_t id,
                     const gfx::Size& size,
-                    const gfx::ColorSpace& color_space);
+                    const gfx::ColorSpace& color_space,
+                    absl::optional<gfx::Size> coded_size_alignment);
 
   // For testing, since CodecWrapperImpl isn't available.  Uses nullptr.
   CodecOutputBuffer(int64_t id,
                     const gfx::Size& size,
-                    const gfx::ColorSpace& color_space);
+                    const gfx::ColorSpace& color_space,
+                    absl::optional<gfx::Size> coded_size_alignment);
 
   scoped_refptr<CodecWrapperImpl> codec_;
   int64_t id_;
@@ -82,6 +92,9 @@ class MEDIA_GPU_EXPORT CodecOutputBuffer {
   gfx::Size size_;
   base::OnceClosure render_cb_;
   gfx::ColorSpace color_space_;
+
+  // The alignment to use for width, height when guessing coded size.
+  const absl::optional<gfx::Size> coded_size_alignment_;
 };
 
 // This wraps a MediaCodecBridge and provides higher level features and tracks
@@ -104,11 +117,19 @@ class MEDIA_GPU_EXPORT CodecWrapper {
   // on |release_task_runner|, posting if needed.  This does not change where
   // we release them with rendering; that has to be done inline.  This helps
   // us avoid a common case of hanging up the GPU main thread.
+  //
+  // `coded_size_alignment` describes how to translate a CodecOutputBuffer's
+  // visible size into its coded size. It's used to improve coded size guesses
+  // when rendering the output buffer early isn't allowed. During guessing, the
+  // output's visible size will be aligned-up by the values specified. E.g., a
+  // size of 1,1 applies no alignment while a size of 64,1 would round up the
+  // visible width to the nearest multiple of 64.
   using OutputReleasedCB = base::RepeatingCallback<void(bool)>;
   CodecWrapper(CodecSurfacePair codec_surface_pair,
                OutputReleasedCB output_buffer_release_cb,
                scoped_refptr<base::SequencedTaskRunner> release_task_runner,
-               const gfx::Size& initial_expected_size);
+               const gfx::Size& initial_expected_size,
+               absl::optional<gfx::Size> coded_size_alignment);
 
   CodecWrapper(const CodecWrapper&) = delete;
   CodecWrapper& operator=(const CodecWrapper&) = delete;
@@ -146,21 +167,31 @@ class MEDIA_GPU_EXPORT CodecWrapper {
   scoped_refptr<CodecSurfaceBundle> SurfaceBundle();
 
   // Queues |buffer| if the codec has an available input buffer.
-  enum class QueueStatus { kOk, kError, kTryAgainLater, kNoKey };
+  struct QueueStatusTraits {
+    enum class Codes { kOk, kError, kTryAgainLater, kNoKey };
+    static constexpr StatusGroupType Group() { return "QueueStatus"; }
+  };
+  using QueueStatus = TypedStatus<QueueStatusTraits>;
   QueueStatus QueueInputBuffer(const DecoderBuffer& buffer);
 
   // Like MediaCodecBridge::DequeueOutputBuffer() but it outputs a
   // CodecOutputBuffer instead of an index. |*codec_buffer| must be null.
-  // If this returns MEDIA_CODEC_OK then either |*end_of_stream| will be set to
-  // true or |*codec_buffer| will be non-null. The EOS buffer is returned to the
-  // codec immediately. Unlike MediaCodecBridge, this does not return
-  // MEDIA_CODEC_OUTPUT_BUFFERS_CHANGED or MEDIA_CODEC_OUTPUT_FORMAT_CHANGED. It
-  // tries to dequeue another buffer instead.
-  enum class DequeueStatus { kOk, kError, kTryAgainLater };
+  // If this returns kOk then either |*end_of_stream| will be set to true or
+  // |*codec_buffer| will be non-null. The EOS buffer is returned to the codec
+  // immediately. Unlike MediaCodecBridge, this does not return
+  // kOutputBuffersChanged or kOutputFormatChanged.
+  // It tries to dequeue another buffer instead.
+  struct DequeueStatusTraits {
+    enum class Codes : StatusCodeType { kOk, kError, kTryAgainLater };
+    static constexpr StatusGroupType Group() { return "DequeueStatus"; }
+  };
+  using DequeueStatus = TypedStatus<DequeueStatusTraits>;
   DequeueStatus DequeueOutputBuffer(
       base::TimeDelta* presentation_time,
       bool* end_of_stream,
       std::unique_ptr<CodecOutputBuffer>* codec_buffer);
+
+  size_t GetUnreleasedOutputBufferCount() const;
 
  private:
   scoped_refptr<CodecWrapperImpl> impl_;

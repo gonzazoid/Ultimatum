@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -36,6 +36,12 @@ class MESSAGE_CENTER_PUBLIC_EXPORT NotificationObserver {
 
   // Called when the user attempts to disable the notification.
   virtual void DisableNotification() {}
+
+  // Called when the notification expand state changed.
+  virtual void ExpandStateChanged(bool expanded) {}
+
+  // Called when the notification snooze button is clicked.
+  virtual void SnoozeButtonClicked() {}
 };
 
 // Ref counted version of NotificationObserver, required to satisfy
@@ -43,6 +49,9 @@ class MESSAGE_CENTER_PUBLIC_EXPORT NotificationObserver {
 class MESSAGE_CENTER_PUBLIC_EXPORT NotificationDelegate
     : public NotificationObserver,
       public base::RefCountedThreadSafe<NotificationDelegate> {
+ public:
+  virtual NotificationDelegate* GetDelegateForParentCopy();
+
  protected:
   virtual ~NotificationDelegate() = default;
 
@@ -69,6 +78,9 @@ class MESSAGE_CENTER_PUBLIC_EXPORT ThunkNotificationDelegate
              const absl::optional<std::u16string>& reply) override;
   void SettingsClick() override;
   void DisableNotification() override;
+  void ExpandStateChanged(bool expanded) override;
+  void SnoozeButtonClicked() override;
+  NotificationDelegate* GetDelegateForParentCopy() override;
 
  protected:
   ~ThunkNotificationDelegate() override;

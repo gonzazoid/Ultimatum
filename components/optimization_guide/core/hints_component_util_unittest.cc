@@ -37,9 +37,7 @@ class HintsComponentUtilTest : public testing::Test {
                          const proto::Configuration& config) {
     std::string serialized_config;
     ASSERT_TRUE(config.SerializeToString(&serialized_config));
-    ASSERT_EQ(static_cast<int32_t>(serialized_config.length()),
-              base::WriteFile(filePath, serialized_config.data(),
-                              serialized_config.length()));
+    ASSERT_TRUE(base::WriteFile(filePath, serialized_config));
   }
 
   base::FilePath temp_dir() const { return temp_dir_.GetPath(); }
@@ -86,7 +84,7 @@ TEST_F(HintsComponentUtilTest, ProcessHintsComponentInvalidFile) {
 
 TEST_F(HintsComponentUtilTest, ProcessHintsComponentNotAConfigInFile) {
   const base::FilePath filePath = temp_dir().Append(kFileName);
-  ASSERT_EQ(static_cast<int32_t>(3), base::WriteFile(filePath, "boo", 3));
+  ASSERT_TRUE(base::WriteFile(filePath, "boo"));
 
   ProcessHintsComponentResult result;
   std::unique_ptr<proto::Configuration> config = ProcessHintsComponent(
@@ -172,6 +170,36 @@ TEST_F(HintsComponentUtilTest, ProcessOptimizationFilter) {
   EXPECT_EQ(status, OptimizationFilterStatus::kCreatedServerFilter);
   ASSERT_TRUE(optimization_filter);
   EXPECT_TRUE(optimization_filter->Matches(GURL("https://m.host.com")));
+}
+
+TEST_F(HintsComponentUtilTest, ProcessOptimizationFilterWithHashedInput) {
+  int num_hash_functions = 7;
+  int num_bits = 1234;
+
+  proto::OptimizationFilter optimization_filter_proto;
+  optimization_filter_proto.set_bloom_filter_format(
+      proto::BLOOM_FILTER_FORMAT_SHA256);
+  BloomFilter bloom_filter(num_hash_functions, num_bits);
+  // google.com
+  bloom_filter.Add(
+      "D4C9D9027326271A89CE51FCAF328ED673F17BE33469FF979E8AB8DD501E664F");
+  proto::BloomFilter* bloom_filter_proto =
+      optimization_filter_proto.mutable_bloom_filter();
+  bloom_filter_proto->set_num_hash_functions(num_hash_functions);
+  bloom_filter_proto->set_num_bits(num_bits);
+  std::string blocklist_data(
+      reinterpret_cast<const char*>(&bloom_filter.bytes()[0]),
+      bloom_filter.bytes().size());
+  bloom_filter_proto->set_data(blocklist_data);
+
+  OptimizationFilterStatus status;
+  std::unique_ptr<OptimizationFilter> optimization_filter =
+      ProcessOptimizationFilter(optimization_filter_proto, &status);
+
+  EXPECT_EQ(status, OptimizationFilterStatus::kCreatedServerFilter);
+  ASSERT_TRUE(optimization_filter);
+  EXPECT_FALSE(optimization_filter->Matches(GURL("https://m.host.com")));
+  EXPECT_TRUE(optimization_filter->Matches(GURL("https://google.com")));
 }
 
 TEST_F(HintsComponentUtilTest, ProcessOptimizationFilterWithBadNumBits) {

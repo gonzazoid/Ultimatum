@@ -9,14 +9,15 @@
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
+#include "chrome/browser/ash/login/test/user_auth_config.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/lifetime/application_lifetime_chromeos.h"
 #include "chrome/browser/lifetime/termination_notification.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "chromeos/ash/components/login/auth/stub_authenticator_builder.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
@@ -109,7 +110,7 @@ class DeviceFamilyLinkAllowedPolicyTest : public LoginManagerTest {
       AccountId::FromUserEmailGaiaId(kRegularUser, kRegularGaiaID)};
   const LoginManagerMixin::TestUserInfo family_link_user_{
       AccountId::FromUserEmailGaiaId(kFamilyLinkUser, kFamilyLinkGaiaID),
-      user_manager::USER_TYPE_CHILD};
+      test::kDefaultAuthSetup, user_manager::USER_TYPE_CHILD};
 
   policy::DevicePolicyCrosTestHelper policy_helper_;
   DeviceStateMixin device_state_{

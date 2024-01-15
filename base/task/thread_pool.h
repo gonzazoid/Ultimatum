@@ -9,9 +9,9 @@
 #include <utility>
 
 #include "base/base_export.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/post_task_and_reply_with_result_internal.h"
@@ -100,8 +100,8 @@ class BASE_EXPORT ThreadPool {
   // to use OnceCallback and remove the CallbackType template.
   template <template <typename> class CallbackType,
             typename TaskReturnType,
-            typename ReplyArgType,
-            typename = EnableIfIsBaseCallback<CallbackType>>
+            typename ReplyArgType>
+    requires(IsBaseCallback<CallbackType<void()>>)
   static bool PostTaskAndReplyWithResult(
       const Location& from_here,
       CallbackType<TaskReturnType()> task,
@@ -131,7 +131,7 @@ class BASE_EXPORT ThreadPool {
   // execution context (i.e. same sequence or thread and same TaskTraits if
   // applicable) when |task| completes. Returns false if the task definitely
   // won't run because of current shutdown state. Can only be called when
-  // SequencedTaskRunnerHandle::IsSet().
+  // SequencedTaskRunner::HasCurrentDefault().
   static bool PostTaskAndReply(const Location& from_here,
                                const TaskTraits& traits,
                                OnceClosure task,
@@ -141,7 +141,7 @@ class BASE_EXPORT ThreadPool {
   // of |task| as argument on the caller's execution context (i.e. same sequence
   // or thread and same TaskTraits if applicable) when |task| completes. Returns
   // false if the task definitely won't run because of current shutdown state.
-  // Can only be called when SequencedTaskRunnerHandle::IsSet().
+  // Can only be called when SequencedTaskRunner::HasCurrentDefault().
   //
   // Though RepeatingCallback is convertible to OnceCallback, we need a
   // CallbackType template since we can not use template deduction and object
@@ -150,8 +150,8 @@ class BASE_EXPORT ThreadPool {
   // to use OnceCallback and remove the CallbackType template.
   template <template <typename> class CallbackType,
             typename TaskReturnType,
-            typename ReplyArgType,
-            typename = EnableIfIsBaseCallback<CallbackType>>
+            typename ReplyArgType>
+    requires(IsBaseCallback<CallbackType<void()>>)
   static bool PostTaskAndReplyWithResult(
       const Location& from_here,
       const TaskTraits& traits,

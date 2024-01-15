@@ -6,17 +6,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/plugins/chrome_plugin_service_filter.h"
 #include "chrome/browser/plugins/plugin_prefs.h"
@@ -60,7 +59,7 @@ void PluginsLoadedCallback(
 
 void CheckPdfPluginForRenderFrame(content::RenderFrameHost* frame) {
   static const base::FilePath kPdfInternalPluginPath(
-      ChromeContentClient::kPDFPluginPath);
+      ChromeContentClient::kPDFInternalPluginPath);
 
   content::WebPluginInfo pdf_internal_plugin_info;
   ASSERT_TRUE(content::PluginService::GetInstance()->GetPluginInfoByPath(
@@ -139,15 +138,22 @@ class PrintPreviewDialogControllerBrowserTest : public InProcessBrowserTest {
 
   std::unique_ptr<printing::TestPrintPreviewDialogClonedObserver>
       cloned_tab_observer_;
-  raw_ptr<printing::TestPrintViewManagerForRequestPreview, DanglingUntriaged>
+  raw_ptr<printing::TestPrintViewManagerForRequestPreview,
+          AcrossTasksDanglingUntriaged>
       test_print_view_manager_;
-  raw_ptr<WebContents, DanglingUntriaged> initiator_ = nullptr;
+  raw_ptr<WebContents, AcrossTasksDanglingUntriaged> initiator_ = nullptr;
 };
 
 // Test to verify that when a initiator navigates, we can create a new preview
 // dialog for the new tab contents.
+// TODO(crbug.com/1403898): Test is flaky on Mac
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_NavigateFromInitiatorTab DISABLED_NavigateFromInitiatorTab
+#else
+#define MAYBE_NavigateFromInitiatorTab NavigateFromInitiatorTab
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       NavigateFromInitiatorTab) {
+                       MAYBE_NavigateFromInitiatorTab) {
   // Print for the first time.
   PrintPreview();
 
@@ -181,8 +187,14 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
 
 // Test to verify that after reloading the initiator, it creates a new print
 // preview dialog.
+// TODO(crbug.com/1403898): Test is flaky on Mac
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_ReloadInitiatorTab DISABLED_ReloadInitiatorTab
+#else
+#define MAYBE_ReloadInitiatorTab ReloadInitiatorTab
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       ReloadInitiatorTab) {
+                       MAYBE_ReloadInitiatorTab) {
   // Print for the first time.
   PrintPreview();
 
@@ -219,8 +231,14 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
 
 // Test to verify that after print preview works even when the PDF plugin is
 // disabled for webpages.
+// TODO(crbug.com/1401532): Flaky on Mac12 Test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_PdfPluginDisabled DISABLED_PdfPluginDisabled
+#else
+#define MAYBE_PdfPluginDisabled PdfPluginDisabled
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       PdfPluginDisabled) {
+                       MAYBE_PdfPluginDisabled) {
   // Make sure plugins are loaded.
   {
     base::RunLoop run_loop;
@@ -231,8 +249,7 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
   // Get the PDF plugin info.
   content::WebPluginInfo pdf_external_plugin_info;
   ASSERT_TRUE(content::PluginService::GetInstance()->GetPluginInfoByPath(
-      base::FilePath(FILE_PATH_LITERAL(
-          "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/")),
+      base::FilePath(ChromeContentClient::kPDFExtensionPluginPath),
       &pdf_external_plugin_info));
 
   // Disable the PDF plugin.
@@ -257,7 +274,7 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
   int frame_count;
   do {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Seconds(1));
     run_loop.Run();
 
@@ -281,14 +298,21 @@ std::u16string GetExpectedPrefix() {
                                     std::u16string());
 }
 
-const std::vector<task_manager::WebContentsTag*>& GetTrackedTags() {
+const std::vector<raw_ptr<task_manager::WebContentsTag, VectorExperimental>>&
+GetTrackedTags() {
   return task_manager::WebContentsTagsManager::GetInstance()->tracked_tags();
 }
 
 }  // namespace
 
+// TODO(crbug.com/1385142): Flaky on macos12 builds.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_TaskManagementTest DISABLED_TaskManagementTest
+#else
+#define MAYBE_TaskManagementTest TaskManagementTest
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       TaskManagementTest) {
+                       MAYBE_TaskManagementTest) {
   // This test starts with two tabs open.
   EXPECT_EQ(2U, GetTrackedTags().size());
 

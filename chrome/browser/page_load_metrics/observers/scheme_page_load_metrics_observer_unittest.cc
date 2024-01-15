@@ -26,7 +26,7 @@ class SchemePageLoadMetricsObserverTest
   void InitializeTestPageLoadTiming(
       page_load_metrics::mojom::PageLoadTiming* timing) {
     page_load_metrics::InitPageLoadTimingForTest(timing);
-    timing->navigation_start = base::Time::FromDoubleT(1);
+    timing->navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
     timing->parse_timing->parse_start = base::Milliseconds(100);
     timing->paint_timing->first_paint = base::Milliseconds(200);
     timing->paint_timing->first_contentful_paint = base::Milliseconds(300);
@@ -99,9 +99,6 @@ class SchemePageLoadMetricsObserverTest
 
     std::string fcp_histogram_name(
         prefix + ".PaintTiming.NavigationToFirstContentfulPaint");
-    std::string fcp_understat_histogram_name(prefix + ".PaintTiming.UnderStat");
-    std::string fcp_understat_new_nav_histogram_name(
-        fcp_understat_histogram_name + ".UserInitiated.NewNavigation");
 
     tester()->histogram_tester().ExpectTotalCount(
         prefix + ".ParseTiming.NavigationToParseStart", 1);
@@ -114,58 +111,19 @@ class SchemePageLoadMetricsObserverTest
     tester()->histogram_tester().ExpectTotalCount(
         prefix + ".Experimental.PaintTiming.NavigationToFirstMeaningfulPaint",
         1);
-
-    tester()->histogram_tester().ExpectBucketCount(fcp_understat_histogram_name,
-                                                   0, 1);
-    if (new_navigation) {
-      tester()->histogram_tester().ExpectBucketCount(
-          fcp_understat_new_nav_histogram_name, 0, 1);
-    } else {
-      tester()->histogram_tester().ExpectTotalCount(
-          fcp_understat_new_nav_histogram_name, 0);
-    }
-
-    // Must remain synchronized with the array of the same name in
-    // scheme_page_load_metrics_observer.cc.
-    static constexpr const int kUnderStatRecordingIntervalsSeconds[] = {1, 2, 5,
-                                                                        8, 10};
-
-    base::TimeDelta recorded_fcp_value =
-        base::Milliseconds(GetRecordedMetricValue(fcp_histogram_name));
-
-    for (size_t index = 0;
-         index < std::size(kUnderStatRecordingIntervalsSeconds); ++index) {
-      base::TimeDelta threshold(
-          base::Seconds(kUnderStatRecordingIntervalsSeconds[index]));
-      if (recorded_fcp_value <= threshold) {
-        tester()->histogram_tester().ExpectBucketCount(
-            fcp_understat_histogram_name, index + 1, 1);
-        if (new_navigation) {
-          tester()->histogram_tester().ExpectBucketCount(
-              fcp_understat_new_nav_histogram_name, index + 1, 1);
-        }
-      }
-    }
-
-    // Overflow bucket should be empty. This also ensures that
-    // kUnderStatRecordingIntervalsSeconds above is synchronized with the array
-    // of the same name in scheme_page_load_metrics_observer.cc.
-    tester()->histogram_tester().ExpectBucketCount(
-        fcp_understat_histogram_name,
-        std::size(kUnderStatRecordingIntervalsSeconds) + 1, 0);
   }
 
-  raw_ptr<SchemePageLoadMetricsObserver> observer_;
+  raw_ptr<SchemePageLoadMetricsObserver, DanglingUntriaged> observer_;
 };
 
 TEST_F(SchemePageLoadMetricsObserverTest, HTTPNavigation) {
   SimulateNavigation(url::kHttpScheme);
-  CheckHistograms(5, url::kHttpScheme);
+  CheckHistograms(4, url::kHttpScheme);
 }
 
 TEST_F(SchemePageLoadMetricsObserverTest, HTTPSNavigation) {
   SimulateNavigation(url::kHttpsScheme);
-  CheckHistograms(5, url::kHttpsScheme);
+  CheckHistograms(4, url::kHttpsScheme);
 }
 
 // Make sure no metrics are recorded for an unobserved scheme.
@@ -176,10 +134,10 @@ TEST_F(SchemePageLoadMetricsObserverTest, WebUINavigation) {
 
 TEST_F(SchemePageLoadMetricsObserverTest, HTTPForwardBackNavigation) {
   SimulateNavigation(url::kHttpScheme, ui::PAGE_TRANSITION_FORWARD_BACK);
-  CheckHistograms(5, url::kHttpScheme, false /* new_navigation */);
+  CheckHistograms(4, url::kHttpScheme, false /* new_navigation */);
 }
 
 TEST_F(SchemePageLoadMetricsObserverTest, HTTPSReloadNavigation) {
   SimulateNavigation(url::kHttpsScheme, ui::PAGE_TRANSITION_RELOAD);
-  CheckHistograms(5, url::kHttpsScheme, false /* new_navigation */);
+  CheckHistograms(4, url::kHttpsScheme, false /* new_navigation */);
 }

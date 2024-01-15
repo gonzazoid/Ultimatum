@@ -10,17 +10,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/media/webrtc/webrtc_rtp_dump_writer.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -58,7 +57,7 @@ class FakeDumpWriter : public WebRtcRtpDumpWriter {
     else if (type == RTP_DUMP_OUTGOING)
       incoming_success = false;
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(finished_callback),
                                   incoming_success, outgoing_success));
   }
@@ -98,8 +97,10 @@ class WebRtcRtpDumpHandlerTest : public testing::Test {
     *incoming_dump = dir.AppendASCII("recv");
     *outgoing_dump = dir.AppendASCII("send");
     const char dummy[] = "dummy";
-    EXPECT_GT(base::WriteFile(*incoming_dump, dummy, std::size(dummy)), 0);
-    EXPECT_GT(base::WriteFile(*outgoing_dump, dummy, std::size(dummy)), 0);
+    EXPECT_TRUE(base::WriteFile(*incoming_dump,
+                                base::StringPiece(dummy, std::size(dummy))));
+    EXPECT_TRUE(base::WriteFile(*outgoing_dump,
+                                base::StringPiece(dummy, std::size(dummy))));
   }
 
   void FlushTaskRunners() {

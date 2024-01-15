@@ -25,11 +25,9 @@
 #include "chrome/common/buildflags.h"
 #include "components/keyed_service/core/simple_factory_key.h"
 #include "components/prefs/pref_change_registrar.h"
-#include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/host_zoom_map.h"
 #include "extensions/buildflags/buildflags.h"
 
-class MediaDeviceIDSalt;
 class PrefService;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -54,6 +52,7 @@ namespace policy {
 class AsyncPolicyProvider;
 class ConfigurationPolicyProvider;
 class ProfilePolicyConnector;
+class ProfileCloudPolicyManager;
 }  // namespace policy
 
 namespace sync_preferences {
@@ -94,18 +93,17 @@ class ProfileImpl : public Profile {
   content::BackgroundSyncController* GetBackgroundSyncController() override;
   content::ReduceAcceptLanguageControllerDelegate*
   GetReduceAcceptLanguageControllerDelegate() override;
-  std::string GetMediaDeviceIDSalt() override;
-  download::InProgressDownloadManager* RetriveInProgressDownloadManager()
-      override;
+  std::unique_ptr<download::InProgressDownloadManager>
+  RetrieveInProgressDownloadManager() override;
   content::FileSystemAccessPermissionContext*
   GetFileSystemAccessPermissionContext() override;
   content::ContentIndexProvider* GetContentIndexProvider() override;
   content::FederatedIdentityApiPermissionContextDelegate*
   GetFederatedIdentityApiPermissionContext() override;
-  content::FederatedIdentityActiveSessionPermissionContextDelegate*
-  GetFederatedIdentityActiveSessionPermissionContext() override;
-  content::FederatedIdentitySharingPermissionContextDelegate*
-  GetFederatedIdentitySharingPermissionContext() override;
+  content::FederatedIdentityAutoReauthnPermissionContextDelegate*
+  GetFederatedIdentityAutoReauthnPermissionContext() override;
+  content::FederatedIdentityPermissionContextDelegate*
+  GetFederatedIdentityPermissionContext() override;
   content::KAnonymityServiceDelegate* GetKAnonymityServiceDelegate() override;
   content::OriginTrialsControllerDelegate* GetOriginTrialsControllerDelegate()
       override;
@@ -142,10 +140,9 @@ class ProfileImpl : public Profile {
   policy::SchemaRegistryService* GetPolicySchemaRegistryService() override;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   policy::UserCloudPolicyManagerAsh* GetUserCloudPolicyManagerAsh() override;
-  policy::ActiveDirectoryPolicyManager* GetActiveDirectoryPolicyManager()
-      override;
 #else
   policy::UserCloudPolicyManager* GetUserCloudPolicyManager() override;
+  policy::ProfileCloudPolicyManager* GetProfileCloudPolicyManager() override;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   policy::ProfilePolicyConnector* GetProfilePolicyConnector() override;
   const policy::ProfilePolicyConnector* GetProfilePolicyConnector()
@@ -253,7 +250,6 @@ class ProfileImpl : public Profile {
   //   which can be:
   //     - |user_cloud_policy_manager_|;
   //     - |user_cloud_policy_manager_ash_|;
-  //     - or |active_directory_policy_manager_|.
   // - configuration_policy_provider() depends on |schema_registry_service_|
 
   std::unique_ptr<policy::SchemaRegistryService> schema_registry_service_;
@@ -263,10 +259,10 @@ class ProfileImpl : public Profile {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::unique_ptr<policy::UserCloudPolicyManagerAsh>
       user_cloud_policy_manager_ash_;
-  std::unique_ptr<policy::ActiveDirectoryPolicyManager>
-      active_directory_policy_manager_;
 #else
   std::unique_ptr<policy::UserCloudPolicyManager> user_cloud_policy_manager_;
+  std::unique_ptr<policy::ProfileCloudPolicyManager>
+      profile_cloud_policy_manager_;
 #endif
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   std::unique_ptr<policy::AsyncPolicyProvider> user_policy_provider_;
@@ -305,11 +301,6 @@ class ProfileImpl : public Profile {
 
   std::unique_ptr<ash::LocaleChangeGuard> locale_change_guard_;
 #endif
-
-  // TODO(mmenke):  This should be removed from the Profile, and use a
-  // BrowserContextKeyedService instead.
-  // See https://crbug.com/713733
-  scoped_refptr<MediaDeviceIDSalt> media_device_id_salt_;
 
   // STOP!!!! DO NOT ADD ANY MORE ITEMS HERE!!!!
   //

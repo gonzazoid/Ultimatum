@@ -11,12 +11,11 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-/**
- * Default implementation of HttpURLConnectionFactory.
- */
+/** Default implementation of HttpURLConnectionFactory. */
 public class HttpURLConnectionFactoryImpl implements HttpURLConnectionFactory {
     private static final NetworkTrafficAnnotationTag TRAFFIC_ANNOTATION =
-            NetworkTrafficAnnotationTag.createComplete("minidump_uploader_android",
+            NetworkTrafficAnnotationTag.createComplete(
+                    "minidump_uploader_android",
                     "semantics {"
                             + "  sender: 'Minidump Uploader (Android)'"
                             + "  description: 'Uploads crash reports to Google servers. This data '"
@@ -28,7 +27,7 @@ public class HttpURLConnectionFactoryImpl implements HttpURLConnectionFactory {
                             + "}"
                             + "policy {"
                             + "  cookies_allowed: NO"
-                            + "  setting: 'Settings > Google Services > Help improve Chrome\'s '"
+                            + "  setting: 'Settings > Google Services > Help improve Chrome\\'s '"
                             + "           'features and performance.'"
                             + "  policy_exception_justification:"
                             + "      'MetricsReportingEnabled is only implemented on desktop and '"
@@ -38,8 +37,8 @@ public class HttpURLConnectionFactoryImpl implements HttpURLConnectionFactory {
     @Override
     public HttpURLConnection createHttpURLConnection(String url) {
         try {
-            return (HttpURLConnection) ChromiumNetworkAdapter.openConnection(
-                    new URL(url), TRAFFIC_ANNOTATION);
+            return (HttpURLConnection)
+                    ChromiumNetworkAdapter.openConnection(new URL(url), TRAFFIC_ANNOTATION);
         } catch (IOException e) {
             return null;
         }

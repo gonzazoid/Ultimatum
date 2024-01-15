@@ -97,14 +97,42 @@ enum class ProjectorCreationFlowError {
 // These enum values represent potential error that occurs at policy value
 // change handling and log to UMA. Entries should not be renumbered and numeric
 // values should never be reused. Please keep in sync with
-// "ProjectorPolicyChangeHandlingError" in
+// "OnDeviceToServerSpeechRecognitionFallbackReason" in
 // src/tools/metrics/histograms/enums.xml.
-enum class ProjectorPolicyChangeHandlingError {
-  kSwaManager = 0,
-  kWebAppProvider = 1,
-  kWebAppProviderOnRegistryReady = 2,
-  kSyncBridge = 3,
-  kMaxValue = kSyncBridge
+// This enum is the smiliar to the `OnDeviceRecognitionAvailability` because
+// all fallback reasons are related to on device recognition is not supported.
+enum class OnDeviceToServerSpeechRecognitionFallbackReason : int {
+  // Device does not support SODA (Speech on Device API)
+  kSodaNotAvailable = 0,
+  // User's language is not supported by SODA.
+  kUserLanguageNotAvailableForSoda = 1,
+  // SODA binary is not yet installed.
+  kSodaNotInstalled = 2,
+  // SODA binary and language packs are downloading.
+  kSodaInstalling = 3,
+  // SODA installation failed.
+  kSodaInstallationErrorUnspecified = 4,
+  // SODA installation error needs reboot
+  kSodaInstallationErrorNeedsReboot = 5,
+  // Server based speech recognition is enforced by flag for dev purpose.
+  kEnforcedByFlag = 6,
+
+  kMaxValue = kEnforcedByFlag,
+};
+
+// Enum class to record metric for speech recognition status.
+// This enum should never be reused as it is being logged into UMA.
+enum class SpeechRecognitionEndState {
+  // Speech recognition successfully stopped.
+  kSpeechRecognitionSuccessfullyStopped = 0,
+  // Speech recognition encountered error while recording was taking place.
+  kSpeechRecognitionEnounteredError = 1,
+  // Speech recognition encountered error while attempting to stop.
+  kSpeechRecognitionEncounteredErrorWhileStopping = 2,
+  // Speech recognition has been forced stopped.
+  kSpeechRecognitionForcedStopped = 3,
+
+  kMaxValue = kSpeechRecognitionForcedStopped,
 };
 
 // Records the buttons the user presses on the Projector toolbar.
@@ -129,10 +157,11 @@ void RecordPendingScreencastBatchIOTaskDuration(const base::TimeDelta duration);
 // Records the interval between the UI changes of pending screencasts.
 void RecordPendingScreencastChangeInterval(const base::TimeDelta interval);
 
-// Records potential error occurs at policy change.
-// TODO(b/240497023): remove this once confirmed the nullptr should never
-// occurs and the nullptr check is converted to DCEHCK.
-void RecordPolicyChangeHandlingError(ProjectorPolicyChangeHandlingError error);
+void RecordOnDeviceToServerSpeechRecognitionFallbackReason(
+    OnDeviceToServerSpeechRecognitionFallbackReason reason);
+
+void RecordSpeechRecognitionEndState(SpeechRecognitionEndState state,
+                                     bool is_on_device);
 
 }  // namespace ash
 

@@ -29,9 +29,11 @@
 #include <memory>
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/css/css_font_palette_values_rule.h"
 #include "third_party/blink/renderer/core/css/css_property_source_data.h"
 #include "third_party/blink/renderer/core/css/css_scope_rule.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
+#include "third_party/blink/renderer/core/inspector/inspector_diff.h"
 #include "third_party/blink/renderer/core/inspector/protocol/css.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
@@ -40,9 +42,11 @@
 
 namespace blink {
 
+class CSSTryRule;
 class CSSKeyframeRule;
 class CSSMediaRule;
 class CSSContainerRule;
+class CSSPropertyRule;
 class CSSStyleDeclaration;
 class CSSStyleRule;
 class CSSStyleSheet;
@@ -67,7 +71,8 @@ class InspectorStyle final : public GarbageCollected<InspectorStyle> {
   InspectorStyleSheetBase* InspectorStyleSheet() {
     return parent_style_sheet_.Get();
   }
-  std::unique_ptr<protocol::CSS::CSSStyle> BuildObjectForStyle();
+  std::unique_ptr<protocol::CSS::CSSStyle> BuildObjectForStyle(
+      Element* element = nullptr);
   bool StyleText(String* result);
   bool TextForRange(const SourceRange&, String* result);
 
@@ -75,7 +80,11 @@ class InspectorStyle final : public GarbageCollected<InspectorStyle> {
 
  private:
   void PopulateAllProperties(Vector<CSSPropertySourceData>& result);
-  std::unique_ptr<protocol::CSS::CSSStyle> StyleWithProperties();
+  bool CheckRegisteredPropertySyntaxWithVarSubstitution(
+      Element* element,
+      const CSSPropertySourceData& property) const;
+  std::unique_ptr<protocol::CSS::CSSStyle> StyleWithProperties(
+      Element* element);
   String ShorthandValue(const String& shorthand_property);
   std::unique_ptr<protocol::Array<protocol::CSS::CSSProperty>>
   LonghandProperties(const CSSPropertySourceData& property_entry);
@@ -105,7 +114,8 @@ class InspectorStyleSheetBase
   virtual const Document* GetDocument() = 0;
 
   std::unique_ptr<protocol::CSS::CSSStyle> BuildObjectForStyle(
-      CSSStyleDeclaration*);
+      CSSStyleDeclaration*,
+      Element* element);
   std::unique_ptr<protocol::CSS::SourceRange> BuildSourceRangeObject(
       const SourceRange&);
   bool LineNumberAndColumnToOffset(unsigned line_number,
@@ -114,7 +124,7 @@ class InspectorStyleSheetBase
   virtual bool IsInlineStyle() = 0;
 
  protected:
-  explicit InspectorStyleSheetBase(Listener*);
+  explicit InspectorStyleSheetBase(Listener*, String id);
 
   Listener* GetListener() { return listener_; }
   void OnStyleSheetTextChanged();
@@ -144,6 +154,7 @@ class InspectorStyleSheet : public InspectorStyleSheetBase {
 
   String FinalURL();
   bool SetText(const String&, ExceptionState&) override;
+  void CSSOMStyleSheetTextReplaced(const String&);
   bool GetText(String* result) override;
   void MarkForSync() { marked_for_sync_ = true; }
   void SyncTextIfNeeded();
@@ -158,6 +169,11 @@ class InspectorStyleSheet : public InspectorStyleSheetBase {
                                   SourceRange* new_range,
                                   String* old_text,
                                   ExceptionState&);
+  CSSPropertyRule* SetPropertyName(const SourceRange&,
+                                   const String& text,
+                                   SourceRange* new_range,
+                                   String* old_text,
+                                   ExceptionState&);
   CSSRule* SetStyleText(const SourceRange&,
                         const String& text,
                         SourceRange* new_range,
@@ -194,11 +210,18 @@ class InspectorStyleSheet : public InspectorStyleSheetBase {
   std::unique_ptr<protocol::CSS::CSSStyleSheetHeader>
   BuildObjectForStyleSheetInfo();
   std::unique_ptr<protocol::CSS::CSSRule> BuildObjectForRuleWithoutAncestorData(
-      CSSStyleRule*);
+      CSSStyleRule*,
+      Element* element);
   std::unique_ptr<protocol::CSS::RuleUsage> BuildObjectForRuleUsage(CSSRule*,
                                                                     bool);
+  std::unique_ptr<protocol::CSS::CSSTryRule> BuildObjectForTryRule(CSSTryRule*);
+  std::unique_ptr<protocol::CSS::CSSFontPaletteValuesRule>
+  BuildObjectForFontPaletteValuesRule(CSSFontPaletteValuesRule*);
+  std::unique_ptr<protocol::CSS::CSSPropertyRule> BuildObjectForPropertyRule(
+      CSSPropertyRule*);
   std::unique_ptr<protocol::CSS::CSSKeyframeRule> BuildObjectForKeyframeRule(
-      CSSKeyframeRule*);
+      CSSKeyframeRule*,
+      Element*);
   std::unique_ptr<protocol::CSS::SelectorList> BuildObjectForSelectorList(
       CSSStyleRule*);
 
@@ -234,14 +257,14 @@ class InspectorStyleSheet : public InspectorStyleSheetBase {
   String SourceURL();
   void RemapSourceDataToCSSOMIfNecessary();
   void MapSourceDataToCSSOM();
-  bool ResourceStyleSheetText(String* result);
+  bool ResourceStyleSheetText(String* result, bool* loadingFailed);
   bool InlineStyleSheetText(String* result);
   bool InspectorStyleSheetText(String* result);
   String CollectStyleSheetRules();
   bool CSSOMStyleSheetText(String* result);
-  std::unique_ptr<protocol::Array<protocol::CSS::Value>> SelectorsFromSource(
-      CSSRuleSourceData*,
-      const String&);
+  std::unique_ptr<protocol::Array<protocol::CSS::Value>>
+  SelectorsFromSource(CSSRuleSourceData*, const String&, CSSStyleRule*);
+  Vector<const CSSSelector*> SelectorsFromRule(CSSStyleRule* rule);
   String Url();
   bool HasSourceURL();
   bool StartsAtZero();
@@ -268,14 +291,10 @@ class InspectorStyleSheet : public InspectorStyleSheetBase {
   String text_;
   CSSRuleVector cssom_flat_rules_;
   CSSRuleVector parsed_flat_rules_;
-  typedef HashMap<unsigned,
-                  unsigned,
-                  WTF::IntHash<unsigned>,
-                  WTF::UnsignedWithZeroKeyHashTraits<unsigned>>
-      IndexMap;
-  IndexMap rule_to_source_data_;
-  IndexMap source_data_to_rule_;
+  InspectorIndexMap rule_to_source_data_;
+  InspectorIndexMap source_data_to_rule_;
   String source_url_;
+  absl::optional<bool> request_failed_to_load_;
   // True means that CSSOM rules are to be synced with the original source text.
   bool marked_for_sync_;
 };

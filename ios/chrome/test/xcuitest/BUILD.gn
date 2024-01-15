@@ -17,26 +17,31 @@ ios_xcuitest_test("ios_chrome_device_check_xcuitests_module") {
   xcode_test_application_name = "ios_chrome_xcuitests"
   deps = [ ":device_check_xcuitests" ]
   data_deps = [ ":ios_chrome_xcuitests" ]
+
+  # Those frameworks are force-linked via //base/test:test_support, so
+  # ensure the framework bundles are packaged in the test runner and
+  # not the test module.
+  runner_only_bundle_deps = [ "//base/test:test_trace_processor+bundle" ]
 }
 
 # This target is only used in routinely device checks.
 source_set("device_check_xcuitests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [ "device_check_xctest.mm" ]
   deps = [
     "//base/test:test_support",
     "//ios/chrome/browser/ui/content_suggestions:content_suggestions_constant",
+    "//ios/testing:system_alert_handler",
   ]
   frameworks = [ "UIKit.framework" ]
 }
 
 source_set("hooks") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [ "xcuitests_hook.mm" ]
-  deps = [ "//ios/chrome/app:tests_hook" ]
+  deps = [
+    "//components/signin/internal/identity_manager",
+    "//ios/chrome/app:tests_hook",
+  ]
 }

@@ -8,6 +8,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.Activity;
 import android.content.Intent;
+import android.os.Bundle;
 
 import androidx.annotation.AnyThread;
 import androidx.annotation.MainThread;
@@ -21,13 +22,9 @@ import org.chromium.components.signin.base.CoreAccountInfo;
 
 import java.util.List;
 
-/**
- * Interface for {@link AccountManagerFacadeImpl}.
- */
+/** Interface for {@link AccountManagerFacadeImpl}. */
 public interface AccountManagerFacade {
-    /**
-     * Listener for whether the account is a child one.
-     */
+    /** Listener for whether the account is a child one. */
     interface ChildAccountStatusListener {
         /**
          * The method is called when the status of the account (whether it is a child one) is ready.
@@ -56,19 +53,6 @@ public interface AccountManagerFacade {
     void removeObserver(AccountsChangeObserver observer);
 
     /**
-     * Retrieves accounts on device after filtering them through account restriction patterns.
-     * The {@link Promise} will be fulfilled once the accounts cache will be populated.
-     * If an error occurs while getting account list, the returned {@link Promise} will wrap an
-     * empty array.
-     *
-     * Since a different {@link Promise} will be returned every time the accounts get updated,
-     * this makes the {@link Promise} a bad candidate for end users to cache locally unless
-     * the end users are awaiting the current list of accounts only.
-     */
-    @MainThread
-    Promise<List<Account>> getAccounts();
-
-    /**
      * Retrieves corresponding {@link CoreAccountInfo}s for filtered accounts.
      * The {@link Promise} will be fulfilled once the accounts cache is populated and gaia ids are
      * fetched. If an error occurs while getting account list, the returned {@link Promise} will
@@ -81,21 +65,20 @@ public interface AccountManagerFacade {
     @MainThread
     Promise<List<CoreAccountInfo>> getCoreAccountInfos();
 
-    /**
-     * @return Whether or not there is an account authenticator for Google accounts.
-     */
+    /** @return Whether or not there is an account authenticator for Google accounts. */
     @AnyThread
     boolean hasGoogleAccountAuthenticator();
 
     /**
      * Synchronously gets an OAuth2 access token. May return a cached version, use
      * {@link #invalidateAccessToken} to invalidate a token in the cache.
-     * @param account The {@link Account} for which the token is requested.
+     * @param coreAccountInfo The {@link CoreAccountInfo} for which the token is requested.
      * @param scope OAuth2 scope for which the requested token should be valid.
      * @return The OAuth2 access token as an AccessTokenData with a string and an expiration time.
      */
     @WorkerThread
-    AccessTokenData getAccessToken(Account account, String scope) throws AuthException;
+    AccessTokenData getAccessToken(CoreAccountInfo coreAccountInfo, String scope)
+            throws AuthException;
 
     /**
      * Removes an OAuth2 access token from the cache with retries asynchronously.
@@ -107,6 +90,7 @@ public interface AccountManagerFacade {
 
     /**
      * Checks the child account status of the given account.
+     * TODO(crbug.com/1462264): Replace Account with CoreAccountId.
      *
      * @param account The account to check the child account status.
      * @param listener The listener is called when the status of the account
@@ -152,4 +136,16 @@ public interface AccountManagerFacade {
     @WorkerThread
     @Nullable
     String getAccountGaiaId(String accountEmail);
+
+    /**
+     * Asks the user to confirm their knowledge of the password to the given account.
+     *
+     * @param account The {@link Account} to confirm the credentials for.
+     * @param activity The {@link Activity} context to use for launching a new authenticator-defined
+     *                 sub-Activity to prompt the user to confirm the account's password.
+     * @param callback The callback to indicate whether the user successfully confirmed their
+     *                 knowledge of the account's credentials.
+     */
+    @AnyThread
+    void confirmCredentials(Account account, Activity activity, Callback<Bundle> callback);
 }

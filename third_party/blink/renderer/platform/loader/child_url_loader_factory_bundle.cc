@@ -12,10 +12,12 @@
 #include "base/check.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/load_flags.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom-shared.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -93,6 +95,9 @@ class URLLoaderRelay : public network::mojom::URLLoaderClient,
   }
 
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override {
+    network::RecordOnTransferSizeUpdatedUMA(
+        network::OnTransferSizeUpdatedFrom::kURLLoaderRelay);
+
     client_sink_->OnTransferSizeUpdated(transfer_size_diff);
   }
 
@@ -140,15 +145,23 @@ ChildPendingURLLoaderFactoryBundle::ChildPendingURLLoaderFactoryBundle(
     SchemeMap pending_scheme_specific_factories,
     OriginMap pending_isolated_world_factories,
     mojo::PendingRemote<network::mojom::URLLoaderFactory>
-        pending_prefetch_loader_factory,
+        pending_subresource_proxying_loader_factory,
+    mojo::PendingRemote<network::mojom::URLLoaderFactory>
+        pending_keep_alive_loader_factory,
+    mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+        pending_fetch_later_loader_factory,
     bool bypass_redirect_checks)
     : PendingURLLoaderFactoryBundle(
           std::move(pending_default_factory),
           std::move(pending_scheme_specific_factories),
           std::move(pending_isolated_world_factories),
           bypass_redirect_checks),
-      pending_prefetch_loader_factory_(
-          std::move(pending_prefetch_loader_factory)) {}
+      pending_subresource_proxying_loader_factory_(
+          std::move(pending_subresource_proxying_loader_factory)),
+      pending_keep_alive_loader_factory_(
+          std::move(pending_keep_alive_loader_factory)),
+      pending_fetch_later_loader_factory_(
+          std::move(pending_fetch_later_loader_factory)) {}
 
 ChildPendingURLLoaderFactoryBundle::~ChildPendingURLLoaderFactoryBundle() =
     default;
@@ -161,8 +174,12 @@ ChildPendingURLLoaderFactoryBundle::CreateFactory() {
       std::move(pending_scheme_specific_factories_);
   other->pending_isolated_world_factories_ =
       std::move(pending_isolated_world_factories_);
-  other->pending_prefetch_loader_factory_ =
-      std::move(pending_prefetch_loader_factory_);
+  other->pending_subresource_proxying_loader_factory_ =
+      std::move(pending_subresource_proxying_loader_factory_);
+  other->pending_keep_alive_loader_factory_ =
+      std::move(pending_keep_alive_loader_factory_);
+  other->pending_fetch_later_loader_factory_ =
+      std::move(pending_fetch_later_loader_factory_);
   other->bypass_redirect_checks_ = bypass_redirect_checks_;
 
   return base::MakeRefCounted<ChildURLLoaderFactoryBundle>(std::move(other));
@@ -207,20 +224,54 @@ void ChildURLLoaderFactoryBundle::CreateLoaderAndStart(
     return;
   }
 
-  // Use |prefetch_loader_factory_| for prefetch requests to send the requests
-  // to the PrefetchURLLoaderService in the browser process and triger the
-  // special prefetch handling.
+  // Prefetch is disjoint with browsing_topics, ad_auction_headers, and
+  // keepalive.
+  // TODO(https://crbug.com/1441113): keepalive is disjoint with browsing_topics
+  // and ad_auction_headers in our implementation, but the fetch API does not
+  // enforce this, so `subresource_proxying_loader_factory_` (that handles
+  // browsing_topics and ad_auction_headers) wins and keepalive is ignored.
+  // Either allow them simultaneously or make them mutually exclusive in the
+  // fetch API.
+  const bool request_is_prefetch = request.load_flags & net::LOAD_PREFETCH;
+  CHECK(!(request_is_prefetch && request.browsing_topics));
+  CHECK(!(request_is_prefetch && request.ad_auction_headers));
+  CHECK(!(request_is_prefetch && request.keepalive));
+
+  // Use |subresource_proxying_loader_factory_| for prefetch, browsing_topics,
+  // and ad_auction_headers requests to send the requests to
+  // `SubresourceProxyingURLLoaderService` in the browser process and trigger
+  // the special handling.
   // TODO(horo): Move this routing logic to network service, when we will have
   // the special prefetch handling in network service.
-  if ((request.load_flags & net::LOAD_PREFETCH) && prefetch_loader_factory_) {
-    // This is no-state prefetch (see
+  if ((request_is_prefetch || request.browsing_topics ||
+       request.ad_auction_headers) &&
+      subresource_proxying_loader_factory_) {
+    // For prefetch, this is no-state prefetch (see
     // WebURLRequest::GetLoadFlagsForWebUrlRequest).
-    prefetch_loader_factory_->CreateLoaderAndStart(
+    subresource_proxying_loader_factory_->CreateLoaderAndStart(
         std::move(loader), request_id, options, request, std::move(client),
         traffic_annotation);
     return;
   }
 
+  // Use |keep_alive_loader_factory_| to send the keepalive requests to the
+  // KeepAliveURLLoaderService in the browser process and trigger the special
+  // keepalive request handling.
+  // |keep_alive_loader_factory_| only presents when
+  // features::kKeepAliveInBrowserMigration is true.
+  if (request.keepalive && keep_alive_loader_factory_ &&
+      base::FeatureList::IsEnabled(features::kKeepAliveInBrowserMigration) &&
+      (request.attribution_reporting_eligibility ==
+           network::mojom::AttributionReportingEligibility::kUnset ||
+       base::FeatureList::IsEnabled(
+           features::kAttributionReportingInBrowserMigration))) {
+    keep_alive_loader_factory_->CreateLoaderAndStart(
+        std::move(loader), request_id, options, request, std::move(client),
+        traffic_annotation);
+    return;
+  }
+
+  // Default request handling.
   URLLoaderFactoryBundle::CreateLoaderAndStart(
       std::move(loader), request_id, options, request, std::move(client),
       traffic_annotation);
@@ -236,10 +287,25 @@ ChildURLLoaderFactoryBundle::Clone() {
   }
 
   mojo::PendingRemote<network::mojom::URLLoaderFactory>
-      pending_prefetch_loader_factory;
-  if (prefetch_loader_factory_) {
-    prefetch_loader_factory_->Clone(
-        pending_prefetch_loader_factory.InitWithNewPipeAndPassReceiver());
+      pending_subresource_proxying_loader_factory;
+  if (subresource_proxying_loader_factory_) {
+    subresource_proxying_loader_factory_->Clone(
+        pending_subresource_proxying_loader_factory
+            .InitWithNewPipeAndPassReceiver());
+  }
+
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+      pending_keep_alive_loader_factory;
+  if (keep_alive_loader_factory_) {
+    keep_alive_loader_factory_->Clone(
+        pending_keep_alive_loader_factory.InitWithNewPipeAndPassReceiver());
+  }
+  mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+      pending_fetch_later_loader_factory;
+  if (fetch_later_loader_factory_) {
+    fetch_later_loader_factory_->Clone(
+        pending_fetch_later_loader_factory
+            .InitWithNewEndpointAndPassReceiver());
   }
 
   // Currently there is no need to override subresources from workers,
@@ -249,7 +315,9 @@ ChildURLLoaderFactoryBundle::Clone() {
       std::move(default_factory_pending_remote),
       CloneRemoteMapToPendingRemoteMap(scheme_specific_factories_),
       CloneRemoteMapToPendingRemoteMap(isolated_world_factories_),
-      std::move(pending_prefetch_loader_factory), bypass_redirect_checks_);
+      std::move(pending_subresource_proxying_loader_factory),
+      std::move(pending_keep_alive_loader_factory),
+      std::move(pending_fetch_later_loader_factory), bypass_redirect_checks_);
 }
 
 std::unique_ptr<ChildPendingURLLoaderFactoryBundle>
@@ -259,25 +327,47 @@ ChildURLLoaderFactoryBundle::PassInterface() {
     pending_default_factory = default_factory_.Unbind();
 
   mojo::PendingRemote<network::mojom::URLLoaderFactory>
-      pending_prefetch_loader_factory;
-  if (prefetch_loader_factory_) {
-    pending_prefetch_loader_factory = prefetch_loader_factory_.Unbind();
+      pending_subresource_proxying_loader_factory;
+  if (subresource_proxying_loader_factory_) {
+    pending_subresource_proxying_loader_factory =
+        subresource_proxying_loader_factory_.Unbind();
+  }
+
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+      pending_keep_alive_loader_factory;
+  if (keep_alive_loader_factory_) {
+    pending_keep_alive_loader_factory = keep_alive_loader_factory_.Unbind();
+  }
+  mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+      pending_fetch_later_loader_factory;
+  if (fetch_later_loader_factory_) {
+    pending_fetch_later_loader_factory = fetch_later_loader_factory_.Unbind();
   }
 
   return std::make_unique<ChildPendingURLLoaderFactoryBundle>(
       std::move(pending_default_factory),
       BoundRemoteMapToPendingRemoteMap(std::move(scheme_specific_factories_)),
       BoundRemoteMapToPendingRemoteMap(std::move(isolated_world_factories_)),
-      std::move(pending_prefetch_loader_factory), bypass_redirect_checks_);
+      std::move(pending_subresource_proxying_loader_factory),
+      std::move(pending_keep_alive_loader_factory),
+      std::move(pending_fetch_later_loader_factory), bypass_redirect_checks_);
 }
 
 void ChildURLLoaderFactoryBundle::Update(
-    std::unique_ptr<ChildPendingURLLoaderFactoryBundle> info) {
-  if (info->pending_prefetch_loader_factory()) {
-    prefetch_loader_factory_.Bind(
-        std::move(info->pending_prefetch_loader_factory()));
+    std::unique_ptr<ChildPendingURLLoaderFactoryBundle> pending_factories) {
+  if (pending_factories->pending_subresource_proxying_loader_factory()) {
+    subresource_proxying_loader_factory_.Bind(std::move(
+        pending_factories->pending_subresource_proxying_loader_factory()));
   }
-  URLLoaderFactoryBundle::Update(std::move(info));
+  if (pending_factories->pending_keep_alive_loader_factory()) {
+    keep_alive_loader_factory_.Bind(
+        std::move(pending_factories->pending_keep_alive_loader_factory()));
+  }
+  if (pending_factories->pending_fetch_later_loader_factory()) {
+    fetch_later_loader_factory_.Bind(
+        std::move(pending_factories->pending_fetch_later_loader_factory()));
+  }
+  URLLoaderFactoryBundle::Update(std::move(pending_factories));
 }
 
 void ChildURLLoaderFactoryBundle::UpdateSubresourceOverrides(
@@ -287,10 +377,34 @@ void ChildURLLoaderFactoryBundle::UpdateSubresourceOverrides(
     subresource_overrides_[element->url] = std::move(element);
 }
 
-void ChildURLLoaderFactoryBundle::SetPrefetchLoaderFactory(
+void ChildURLLoaderFactoryBundle::SetSubresourceProxyingLoaderFactory(
     mojo::PendingRemote<network::mojom::URLLoaderFactory>
-        prefetch_loader_factory) {
-  prefetch_loader_factory_.Bind(std::move(prefetch_loader_factory));
+        subresource_proxying_loader_factory) {
+  subresource_proxying_loader_factory_.Bind(
+      std::move(subresource_proxying_loader_factory));
+}
+
+void ChildURLLoaderFactoryBundle::SetKeepAliveLoaderFactory(
+    mojo::PendingRemote<network::mojom::URLLoaderFactory>
+        keep_alive_loader_factory) {
+  keep_alive_loader_factory_.Bind(std::move(keep_alive_loader_factory));
+}
+
+void ChildURLLoaderFactoryBundle::SetFetchLaterLoaderFactory(
+    mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+        fetch_later_loader_factory) {
+  fetch_later_loader_factory_.Bind(std::move(fetch_later_loader_factory));
+}
+
+void ChildURLLoaderFactoryBundle::CreateFetchLaterLoader(
+    blink::CrossVariantMojoAssociatedReceiver<
+        mojom::FetchLaterLoaderInterfaceBase> loader,
+    int32_t request_id,
+    uint32_t options,
+    const network::ResourceRequest& request,
+    const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+  fetch_later_loader_factory_->CreateLoader(
+      std::move(loader), request_id, options, request, traffic_annotation);
 }
 
 bool ChildURLLoaderFactoryBundle::IsHostChildURLLoaderFactoryBundle() const {

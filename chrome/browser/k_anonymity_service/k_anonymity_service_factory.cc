@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/k_anonymity_service/k_anonymity_service_factory.h"
+#include <cstddef>
 
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
@@ -15,13 +16,17 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/k_anonymity_service_delegate.h"
+#include "k_anonymity_service_client.h"
 
 namespace {
 ProfileSelections BuildKAnonymityServiceProfileSelections() {
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   if (!base::FeatureList::IsEnabled(features::kKAnonymityService))
     return ProfileSelections::BuildNoProfilesSelected();
-  return ProfileSelections::BuildForRegularAndIncognito();
+  return ProfileSelections::Builder()
+      .WithRegular(ProfileSelection::kOwnInstance)
+      .WithGuest(ProfileSelection::kOwnInstance)
+      .Build();
 #else
   return ProfileSelections::BuildNoProfilesSelected();
 #endif
@@ -52,7 +57,9 @@ KAnonymityServiceFactory::KAnonymityServiceFactory()
 KAnonymityServiceFactory::~KAnonymityServiceFactory() = default;
 
 // BrowserContextKeyedServiceFactory:
-KeyedService* KAnonymityServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+KAnonymityServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new KAnonymityServiceClient(Profile::FromBrowserContext(context));
+  return std::make_unique<KAnonymityServiceClient>(
+      Profile::FromBrowserContext(context));
 }

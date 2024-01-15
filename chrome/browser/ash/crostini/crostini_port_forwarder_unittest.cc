@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/crostini/crostini_port_forwarder.h"
 
-#include "base/run_loop.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
 #include "chrome/test/base/testing_profile.h"
@@ -12,6 +12,7 @@
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/dbus/permission_broker/fake_permission_broker_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -36,6 +37,9 @@ class CrostiniPortForwarderTest : public testing::Test {
             guest_os::GuestId(kCrostiniDefaultVmType, "other", "other")),
         inactive_container_id_(
             guest_os::GuestId(kCrostiniDefaultVmType, "inactive", "inactive")) {
+    network_handler_helper_ = std::make_unique<ash::NetworkHandlerTestHelper>();
+    network_handler_helper_->AddDefaultProfiles();
+    network_handler_helper_->ResetDevicesAndServices();
   }
 
   CrostiniPortForwarderTest(const CrostiniPortForwarderTest&) = delete;
@@ -82,6 +86,10 @@ class CrostiniPortForwarderTest : public testing::Test {
                 OnActivePortsChanged,
                 (const base::Value::List& activePorts),
                 (override));
+    MOCK_METHOD(void,
+                OnActiveNetworkChanged,
+                (const base::Value& interface, const base::Value& ipAddress),
+                (override));
   };
 
   Profile* profile() { return profile_.get(); }
@@ -120,7 +128,7 @@ class CrostiniPortForwarderTest : public testing::Test {
   void MakePortPreferenceExpectation(CrostiniPortForwarder::PortRuleKey key,
                                      bool exists,
                                      std::string label) {
-    absl::optional<base::Value> pref =
+    std::optional<base::Value> pref =
         crostini_port_forwarder_->ReadPortPreferenceForTesting(key);
     EXPECT_EQ(exists, pref.has_value());
     if (!exists) {
@@ -149,47 +157,35 @@ class CrostiniPortForwarderTest : public testing::Test {
   }
 
   bool AddPortFromKey(CrostiniPortForwarder::PortRuleKey port) {
-    bool success = false;
-    base::RunLoop run_loop;
-    crostini_port_forwarder_->AddPort(
-        port.container_id, port.port_number, port.protocol_type, "",
-        base::BindOnce(&TestingCallback, base::Unretained(&success),
-                       run_loop.QuitClosure()));
-    run_loop.Run();
-    return success;
+    base::test::TestFuture<bool> result_future;
+    crostini_port_forwarder_->AddPort(port.container_id, port.port_number,
+                                      port.protocol_type, "",
+                                      result_future.GetCallback());
+    return result_future.Get();
   }
 
   bool ActivatePortFromKey(CrostiniPortForwarder::PortRuleKey port) {
-    bool success = false;
-    base::RunLoop run_loop;
-    crostini_port_forwarder_->ActivatePort(
-        port.container_id, port.port_number, port.protocol_type,
-        base::BindOnce(&TestingCallback, base::Unretained(&success),
-                       run_loop.QuitClosure()));
-    run_loop.Run();
-    return success;
+    base::test::TestFuture<bool> result_future;
+    crostini_port_forwarder_->ActivatePort(port.container_id, port.port_number,
+                                           port.protocol_type,
+                                           result_future.GetCallback());
+    return result_future.Get();
   }
 
   bool RemovePortFromKey(CrostiniPortForwarder::PortRuleKey port) {
-    bool success = false;
-    base::RunLoop run_loop;
-    crostini_port_forwarder_->RemovePort(
-        port.container_id, port.port_number, port.protocol_type,
-        base::BindOnce(&TestingCallback, base::Unretained(&success),
-                       run_loop.QuitClosure()));
-    run_loop.Run();
-    return success;
+    base::test::TestFuture<bool> result_future;
+    crostini_port_forwarder_->RemovePort(port.container_id, port.port_number,
+                                         port.protocol_type,
+                                         result_future.GetCallback());
+    return result_future.Get();
   }
 
   bool DeactivatePortFromKey(CrostiniPortForwarder::PortRuleKey port) {
-    bool success = false;
-    base::RunLoop run_loop;
+    base::test::TestFuture<bool> result_future;
     crostini_port_forwarder_->DeactivatePort(
         port.container_id, port.port_number, port.protocol_type,
-        base::BindOnce(&TestingCallback, base::Unretained(&success),
-                       run_loop.QuitClosure()));
-    run_loop.Run();
-    return success;
+        result_future.GetCallback());
+    return result_future.Get();
   }
 
   guest_os::GuestId default_container_id_;
@@ -198,6 +194,7 @@ class CrostiniPortForwarderTest : public testing::Test {
 
   testing::NiceMock<MockPortObserver> mock_observer_;
 
+  std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_helper_;
   std::unique_ptr<CrostiniTestHelper> test_helper_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<CrostiniPortForwarder> crostini_port_forwarder_;
@@ -539,6 +536,7 @@ TEST_F(CrostiniPortForwarderTest, ActiveNetworksChanged) {
       GetPortKey(5001, Protocol::UDP, default_container_id_)};
   const char eth_interface[] = "eth0";
   EXPECT_CALL(mock_observer_, OnActivePortsChanged).Times(ports_to_add.size());
+  EXPECT_CALL(mock_observer_, OnActiveNetworkChanged).Times(2);
 
   // Add ports
   for (CrostiniPortForwarder::PortRuleKey& port : ports_to_add) {
@@ -560,7 +558,7 @@ TEST_F(CrostiniPortForwarderTest, ActiveNetworksChanged) {
   // required as ports are already being forwarded on kDefaultInterfaceToForward
   // by default.
   crostini_port_forwarder_->ActiveNetworksChanged(
-      crostini::kDefaultInterfaceToForward);
+      crostini::kDefaultInterfaceToForward, "127.0.0.1");
   for (CrostiniPortForwarder::PortRuleKey& port : ports_to_add) {
     MakePortPreferenceExpectation(port, /*exists=*/true,
                                   /*label=*/"");
@@ -573,7 +571,7 @@ TEST_F(CrostiniPortForwarderTest, ActiveNetworksChanged) {
   }
 
   // Request to update interface to "", invalid request, no change required.
-  crostini_port_forwarder_->ActiveNetworksChanged("");
+  crostini_port_forwarder_->ActiveNetworksChanged("", "");
   for (CrostiniPortForwarder::PortRuleKey& port : ports_to_add) {
     MakePortPreferenceExpectation(port, /*exists=*/true,
                                   /*label=*/"");
@@ -588,7 +586,26 @@ TEST_F(CrostiniPortForwarderTest, ActiveNetworksChanged) {
   // Request to update interface to eth_interface, ports are updated to use
   // the eth_interface and no longer use what they were using before
   // (kDefaultInterfaceToForward).
-  crostini_port_forwarder_->ActiveNetworksChanged(eth_interface);
+  crostini_port_forwarder_->ActiveNetworksChanged(eth_interface, "10.1.1.1");
+  for (CrostiniPortForwarder::PortRuleKey& port : ports_to_add) {
+    MakePortPreferenceExpectation(port, /*exists=*/true,
+                                  /*label=*/"");
+    // Deactivating forwarding on the previous interface is handled in Chromeos
+    // and by the lifelines used to track port rules. Until the port is released
+    // in Chromeos, both interfaces will be used.
+    MakePermissionBrokerPortForwardingExpectation(
+        /*port_number=*/port.port_number, /*protocol=*/port.protocol_type,
+        /*exists=*/true, /*interface=*/crostini::kDefaultInterfaceToForward);
+    MakePermissionBrokerPortForwardingExpectation(
+        /*port_number=*/port.port_number, /*protocol=*/port.protocol_type,
+        /*exists=*/true, /*interface=*/eth_interface);
+  }
+
+  // Request to update interface to kDefaultInterfaceToForward with an IPv6
+  // address. Needs a new interface because this is only called when interfaces
+  // changes.
+  crostini_port_forwarder_->ActiveNetworksChanged(kDefaultInterfaceToForward,
+                                                  "2001:db8:0:1");
   for (CrostiniPortForwarder::PortRuleKey& port : ports_to_add) {
     MakePortPreferenceExpectation(port, /*exists=*/true,
                                   /*label=*/"");

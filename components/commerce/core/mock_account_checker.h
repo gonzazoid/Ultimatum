@@ -6,32 +6,33 @@
 #define COMPONENTS_COMMERCE_CORE_MOCK_ACCOUNT_CHECKER_H_
 
 #include "components/commerce/core/account_checker.h"
+#include "testing/gmock/include/gmock/gmock.h"
 
 namespace commerce {
 
 // Used to mock user account status in tests.
 class MockAccountChecker : public AccountChecker {
  public:
+  // Construct an AccountChecker with the fewest restrictions by default.
   MockAccountChecker();
   MockAccountChecker(const MockAccountChecker&) = delete;
   ~MockAccountChecker() override;
 
-  bool IsSignedIn() override;
+  MOCK_METHOD(bool, IsSignedIn, (), (override));
 
-  bool IsAnonymizedUrlDataCollectionEnabled() override;
+  MOCK_METHOD(bool, IsSyncingBookmarks, (), (override));
 
-  bool IsWebAndAppActivityEnabled() override;
+  MOCK_METHOD(bool, IsAnonymizedUrlDataCollectionEnabled, (), (override));
+
+  MOCK_METHOD(bool, IsSubjectToParentalControls, (), (override));
 
   void SetSignedIn(bool signed_in);
 
+  void SetSyncingBookmarks(bool syncing);
+
   void SetAnonymizedUrlDataCollectionEnabled(bool enabled);
 
-  void SetWebAndAppActivityEnabled(bool enabled);
-
- private:
-  bool signed_in_;
-  bool anonymized_url_data_collection_enabled_;
-  bool web_and_app_activity_enabled_;
+  void SetIsSubjectToParentalControls(bool subject_to_parental_controls);
 };
 
 }  // namespace commerce

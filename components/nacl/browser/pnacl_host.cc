@@ -7,11 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/debug/leak_annotations.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_math.h"
@@ -191,10 +191,12 @@ void PnaclHost::DoCreateTemporaryFile(base::FilePath temp_dir,
   if (!rv) {
     PLOG(ERROR) << "Temp file creation failed.";
   } else {
-    file.Initialize(
-        file_path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_READ |
-                       base::File::FLAG_WRITE | base::File::FLAG_WIN_TEMPORARY |
-                       base::File::FLAG_DELETE_ON_CLOSE);
+    uint32_t flags = base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_READ |
+                     base::File::FLAG_WRITE | base::File::FLAG_WIN_TEMPORARY |
+                     base::File::FLAG_DELETE_ON_CLOSE;
+    // This temporary file is being passed to an untrusted process.
+    flags = base::File::AddFlagsForPassingToUntrustedProcess(flags);
+    file.Initialize(file_path, flags);
 
     if (!file.IsValid())
       PLOG(ERROR) << "Temp file open failed: " << file.error_details();
@@ -404,7 +406,7 @@ scoped_refptr<net::DrainableIOBuffer> PnaclHost::CopyFileToBuffer(
   }
 
   buffer = base::MakeRefCounted<net::DrainableIOBuffer>(
-      base::MakeRefCounted<net::IOBuffer>(
+      base::MakeRefCounted<net::IOBufferWithSize>(
           base::checked_cast<size_t>(file_size)),
       base::checked_cast<size_t>(file_size));
   if (file->Read(0, buffer->data(), buffer->size()) != file_size) {

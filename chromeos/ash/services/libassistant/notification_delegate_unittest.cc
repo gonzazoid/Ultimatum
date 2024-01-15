@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ref.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
 #include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "chromeos/ash/services/libassistant/test_support/libassistant_service_tester.h"
 #include "chromeos/assistant/internal/action/cros_action_module.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash::libassistant {
@@ -63,10 +64,11 @@ class CrosActionModuleHelper {
  private:
   const std::vector<chromeos::assistant::action::AssistantActionObserver*>&
   action_observers() {
-    return action_module_.GetActionObserversForTesting();
+    return action_module_->GetActionObserversForTesting();
   }
 
-  const chromeos::assistant::action::CrosActionModule& action_module_;
+  const raw_ref<const chromeos::assistant::action::CrosActionModule>
+      action_module_;
 };
 
 }  // namespace
@@ -84,22 +86,29 @@ class NotificationDelegateTest : public ::testing::Test {
     service_tester_.Start();
     action_module_helper_ = std::make_unique<CrosActionModuleHelper>(
         static_cast<chromeos::assistant::action::CrosActionModule*>(
-            service_tester_.assistant_manager_internal().action_module()));
+            service_tester_.service()
+                .conversation_controller()
+                .action_module()));
 
     service_tester_.service()
         .conversation_controller()
         .OnAssistantClientRunning(&service_tester_.assistant_client());
   }
 
-  assistant_client::AssistantManagerDelegate& assistant_manager_delegate() {
-    return *service_tester_.assistant_manager_internal()
-                .assistant_manager_delegate();
-  }
-
   NotificationDelegateMock& delegate_mock() { return delegate_mock_; }
 
   CrosActionModuleHelper& action_module_helper() {
     return *action_module_helper_.get();
+  }
+
+  void OnNotificationRemoved(const std::string& grouping_id) {
+    ::assistant::api::OnDeviceStateEventRequest request;
+    auto* notification_removed =
+        request.mutable_event()->mutable_on_notification_removed();
+    notification_removed->set_grouping_id(grouping_id);
+
+    service_tester_.service().conversation_controller().OnGrpcMessageForTesting(
+        std::move(request));
   }
 
  private:
@@ -135,7 +144,7 @@ TEST_F(NotificationDelegateTest, ShouldInvokeAddOrUpdateNotification) {
             EXPECT_EQ("grouping_key", output_notification.grouping_key);
             EXPECT_EQ("obfuscated_gaia_id",
                       output_notification.obfuscated_gaia_id);
-            EXPECT_EQ(base::Time::FromJavaTime(100),
+            EXPECT_EQ(base::Time::FromMillisecondsSinceUnixEpoch(100),
                       output_notification.expiry_time);
             EXPECT_EQ(true, output_notification.from_server);
           }));
@@ -149,7 +158,7 @@ TEST_F(NotificationDelegateTest, ShouldInvokeRemoveAllNotifications) {
 
   // Pass in empty |grouping_key| should trigger all notifications being
   // removed.
-  assistant_manager_delegate().OnNotificationRemoved(/*grouping_key=*/"");
+  OnNotificationRemoved(/*grouping_key=*/"");
   delegate_mock().FlushForTesting();
 }
 
@@ -160,7 +169,7 @@ TEST_F(NotificationDelegateTest, ShouldInvokeRemoveNotificationByGroupingKey) {
 
   // Pass in non-empty |grouping_key| will trigger specific group of
   // notifications being removed.
-  assistant_manager_delegate().OnNotificationRemoved(grouping_id);
+  OnNotificationRemoved(grouping_id);
   delegate_mock().FlushForTesting();
 }
 

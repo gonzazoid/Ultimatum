@@ -303,18 +303,22 @@ is running within. It has the following members:
  *   `platform`: The operating system family that the client is running within
      (e.g. "win", "mac", "linux", "ios", "android"), or "" if unknown. The
      operating system family name should be transmitted in a canonical form.
-     Lowercase with minimal formatting is recommended. Default: "". Known
-     values:
-     *   "android": Android.
-     *   "chromeos": Chrome OS.
-     *   "chromiumos": Chromium OS.
+     Formatting varies across implementations. Default: "". Known values:
+     *   "android" or "Android": Android.
+     *   "chromeos" or "ChromeOS" or "Chrome OS": Chrome OS.
+     *   "chromiumos" or "ChromiumOS" or "Chromium OS": Chromium OS.
      *   "dragonfly": DragonFly BSD.
-     *   "freebsd": FreeBSD.
-     *   "ios": Apple iOS.
-     *   "linux": Linux and its derivatives, except as mentioned below.
-     *   "mac": Apple macOS (formerly Mac OS X) and its derivatives.
-     *   "openbsd": OpenBSD.
-     *   "win": Microsoft Windows and its derivatives.
+     *   "freebsd" or "FreeBSD": FreeBSD.
+     *   "Fuchsia": Fuchsia.
+     *   "ios" or "iOS": Apple iOS.
+     *   "linux" or "Linux": Linux and its derivatives, except as mentioned
+         below.
+     *   "mac" or "Mac OS X": Apple macOS and its derivatives.
+     *   "openbsd" or "OpenBSD": OpenBSD.
+     *   "Solaris": Solaris.
+     *   "win" or "Windows": Microsoft Windows and its derivatives.
+     *   "Unknown": Sent by some clients instead of "" when the platform is not
+         recognized.
  *   `version`: The version number of the operating system, or "" if unknown.
      Default: "".
  *   `sp`: The service pack level of the operating system, or "" if unknown or
@@ -554,15 +558,40 @@ that the application requires to install. It has the following members:
  *   `platform`: The operating system family that the application requires
      (e.g. "win", "mac", "linux", "ios", "android"), or "" if not applicable.
  *   `arch`: Expected host processor architecture that the app is compatible
-     with. `arch` can be a single entry, or multiple entries separated with `,`.
+     with, or "" if not applicable.
+
+     `arch` can be a single entry, or multiple entries separated with `,`.
      Entries prefixed with a `-` (negative entries) indicate non-compatible
-     hosts. Examples:
+     hosts. Non-prefixed entries indicate compatible guests.
+
+     An application is compatible with the current architecture if:
+     * `arch` is empty, or
+     * none of the negative entries within `arch` match the current host
+       architecture exactly, and there are no non-negative entries, or
+     * one of the non-negative entries within `arch` matches the current
+       architecture, or is compatible with the current architecture (i.e., it is
+       a compatible guest for the current host). The latter is determined by
+       `::IsWow64GuestMachineSupported()` on Windows.
+       * If `::IsWow64GuestMachineSupported()` is not available, returns `true`
+         if `arch` is x86.
+
+     Examples:
      * `arch` == "x86".
      * `arch` == "x64".
      * `arch` == "x86,x64,-arm64": installation will fail if the underlying host
        is arm64.
  *   `min_os_version`: The minimum required version of the operating system, or
      "" if not applicable.
+
+     The `min_os_version` is in the format `major.minor.build.patch` for
+     Windows. The `major`, `minor` and `build` are the values returned by the
+     `::GetVersionEx` API. The `patch` is the `UBR` value under the registry
+     path `HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion`.
+
+     The `build` and the `patch` components may be omitted if all that is needed
+     is a minimum `major.minor` version. For example, `6.0` will match all OS
+     versions that are at or above that version, regardless of `build` and
+     `patch` numbers.
 
 #### `app` Objects (Update Check Response)
 An app object represents a per-application acknowledgement of the request. If an
@@ -595,6 +624,10 @@ in the response. It has the following members:
      *   "error-invalidAppId": The server is not aware of this application with
          this ID and furthermore the application ID was not in a format the
          server expected.
+     *   "error-osnotsupported": The server finds that the OS does not meet the
+         application requirements.
+     *   "error-hwnotsupported": The server finds that the computer does not
+         meet the hardware requirements of the application.
 
 #### `data` Objects (Update Check Response)
 Each data object in the response represents an answer to a data request from the
@@ -868,13 +901,14 @@ For `type == 3` events:
 
 For `type == 14` events:
  *   `download_time_ms`: The time elapsed between the start of the download and
-     the end of the download, in milliseconds. -1 if unavailable or irrelevant.
+     the end of the download, in milliseconds. -1 if unavailable.
      Default: -1.
  *   `downloaded_bytes`: The number of bytes successfully received from the
      download server. Default: 0.
  *   `downloader`: A string identifying the download algorithm / stack. Known
      values:
      *   "" (empty string): Unknown downloader.
+     *   "nsurlsession_background": MacOS background NSURLSession.
      *   "bits": Microsoft BITS.
      *   "direct": The Chromium network stack.
  *   `expected_bytes`: The number of bytes expected to be downloaded. Default:

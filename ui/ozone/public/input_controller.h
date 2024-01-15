@@ -10,10 +10,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/ozone/public/mojom/gesture_properties_service.mojom.h"
 
 namespace base {
@@ -28,7 +29,7 @@ enum class HapticTouchpadEffectStrength;
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 
 // Platform-specific interface for controlling input devices.
 //
@@ -43,6 +44,7 @@ class COMPONENT_EXPORT(OZONE_BASE) InputController {
   using GetTouchEventLogReply =
       base::OnceCallback<void(const std::vector<base::FilePath>&)>;
   using GetStylusSwitchStateReply = base::OnceCallback<void(ui::StylusState)>;
+  using DescribeForLogReply = base::OnceCallback<void(const std::string&)>;
 
   InputController() {}
 
@@ -73,37 +75,59 @@ class COMPONENT_EXPORT(OZONE_BASE) InputController {
   virtual std::vector<uint64_t> GetKeyboardKeyBits(int id) = 0;
 
   // Touchpad settings.
-  virtual void SetTouchpadSensitivity(int value) = 0;
-  virtual void SetTouchpadScrollSensitivity(int value) = 0;
-  virtual void SetTapToClick(bool enabled) = 0;
+  // If `nullopt` is passed instead of a `device_id`, settings will be applied
+  // to all touchpads instead of per-device.
   virtual void SetThreeFingerClick(bool enabled) = 0;
-  virtual void SetTapDragging(bool enabled) = 0;
-  virtual void SetNaturalScroll(bool enabled) = 0;
-  virtual void SetTouchpadAcceleration(bool enabled) = 0;
-  virtual void SetTouchpadScrollAcceleration(bool enabled) = 0;
-  virtual void SetTouchpadHapticFeedback(bool enabled) = 0;
-  virtual void SetTouchpadHapticClickSensitivity(int value) = 0;
+  virtual void SetTouchpadSensitivity(absl::optional<int> device_id,
+                                      int value) = 0;
+  virtual void SetTouchpadScrollSensitivity(absl::optional<int> device_id,
+                                            int value) = 0;
+  virtual void SetTapToClick(absl::optional<int> device_id, bool enabled) = 0;
+  virtual void SetTapDragging(absl::optional<int> device_id, bool enabled) = 0;
+  virtual void SetNaturalScroll(absl::optional<int> device_id,
+                                bool enabled) = 0;
+  virtual void SetTouchpadAcceleration(absl::optional<int> device_id,
+                                       bool enabled) = 0;
+  virtual void SetTouchpadScrollAcceleration(absl::optional<int> device_id,
+                                             bool enabled) = 0;
+  virtual void SetTouchpadHapticFeedback(absl::optional<int> device_id,
+                                         bool enabled) = 0;
+  virtual void SetTouchpadHapticClickSensitivity(absl::optional<int> device_id,
+                                                 int value) = 0;
 
   // Mouse settings.
-  virtual void SetMouseSensitivity(int value) = 0;
-  virtual void SetMouseScrollSensitivity(int value) = 0;
+  // If `nullopt` is passed instead of a `device_id`, settings will be applied
+  // to all mice instead of per-device.
+  virtual void SetMouseSensitivity(absl::optional<int> device_id,
+                                   int value) = 0;
+  virtual void SetMouseScrollSensitivity(absl::optional<int> device_id,
+                                         int value) = 0;
 
   // Sets the primary button for the mouse. Passing true sets the right button
   // as primary, while false (the default) sets the left as primary.
-  virtual void SetPrimaryButtonRight(bool right) = 0;
-  virtual void SetMouseReverseScroll(bool enabled) = 0;
-  virtual void SetMouseAcceleration(bool enabled) = 0;
+  virtual void SetPrimaryButtonRight(absl::optional<int> device_id,
+                                     bool right) = 0;
+  virtual void SetMouseReverseScroll(absl::optional<int> device_id,
+                                     bool enabled) = 0;
+  virtual void SetMouseAcceleration(absl::optional<int> device_id,
+                                    bool enabled) = 0;
+  virtual void SetMouseScrollAcceleration(absl::optional<int> device_id,
+                                          bool enabled) = 0;
   virtual void SuspendMouseAcceleration() = 0;
   virtual void EndMouseAccelerationSuspension() = 0;
-  virtual void SetMouseScrollAcceleration(bool enabled) = 0;
 
   // Pointing stick settings.
-  virtual void SetPointingStickSensitivity(int value) = 0;
+  // If `nullopt` is passed instead of a `device_id`, settings will be applied
+  // to all pointing sticks instead of per-device.
+  virtual void SetPointingStickSensitivity(absl::optional<int> device_id,
+                                           int value) = 0;
 
   // Sets the primary button for the pointing stick. Passing true sets the right
   // button as primary, while false (the default) sets the left as primary.
-  virtual void SetPointingStickPrimaryButtonRight(bool right) = 0;
-  virtual void SetPointingStickAcceleration(bool enabled) = 0;
+  virtual void SetPointingStickPrimaryButtonRight(absl::optional<int> device_id,
+                                                  bool right) = 0;
+  virtual void SetPointingStickAcceleration(absl::optional<int> device_id,
+                                            bool enabled) = 0;
 
   // Gamepad settings.
   virtual void SetGamepadKeyBitsMapping(
@@ -116,6 +140,9 @@ class COMPONENT_EXPORT(OZONE_BASE) InputController {
                                 GetTouchEventLogReply reply) = 0;
   // Touchscreen log settings.
   virtual void SetTouchEventLoggingEnabled(bool enabled) = 0;
+
+  // Describe internal state for system log.
+  virtual void DescribeForLog(DescribeForLogReply) const = 0;
 
   // Temporarily enable/disable Tap-to-click. Used to enhance the user
   // experience in some use cases (e.g., typing, watching video).
@@ -156,6 +183,8 @@ class COMPONENT_EXPORT(OZONE_BASE) InputController {
   virtual void GetGesturePropertiesService(
       mojo::PendingReceiver<ui::ozone::mojom::GesturePropertiesService>
           receiver) = 0;
+
+  virtual bool AreAnyKeysPressed() = 0;
 };
 
 // Create an input controller that does nothing.

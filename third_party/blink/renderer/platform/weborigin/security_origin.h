@@ -36,19 +36,14 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/hash_traits.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
 #include "url/origin.h"
 
-namespace mojo {
-struct UrlOriginAdapter;
-}  // namespace mojo
-
 namespace blink {
 
 class KURL;
-struct SecurityOriginHash;
-class SecurityOriginTest;
 
 // An identifier which defines the source of content (e.g. a document) and
 // restricts what other objects it is permitted to access (based on their
@@ -242,7 +237,6 @@ class PLATFORM_EXPORT SecurityOrigin : public RefCounted<SecurityOrigin> {
   bool CanAccessCacheStorage() const { return !IsOpaque(); }
   bool CanAccessLocks() const { return !IsOpaque(); }
   bool CanAccessSessionStorage() const { return !IsOpaque(); }
-  bool CanAccessStorageFoundation() const { return !IsOpaque(); }
   bool CanAccessStorageBuckets() const { return !IsOpaque(); }
 
   // The local SecurityOrigin is the most privileged SecurityOrigin.
@@ -386,11 +380,18 @@ class PLATFORM_EXPORT SecurityOrigin : public RefCounted<SecurityOrigin> {
   // Returns true if this security origin is serialized to "null".
   bool SerializesAsNull() const;
 
+  // Whether document.open was called in between two different windows, causing
+  // the SecurityOrigin to be shared by both. This is only used to record
+  // metrics.
+  // To be removed after shipping DocumentOpenSandboxInheritanceRemoval feature.
+  void set_aliased_by_document_open() { aliased_by_document_open_ = true; }
+  bool aliased_by_document_open() const { return aliased_by_document_open_; }
+
  private:
   // Various serialisation and test routines that need direct nonce access.
-  friend mojo::UrlOriginAdapter;
-  friend SecurityOriginHash;
-  friend SecurityOriginTest;
+  friend struct mojo::UrlOriginAdapter;
+  friend struct WTF::HashTraits<scoped_refptr<const SecurityOrigin>>;
+  friend class SecurityOriginTest;
 
   // For calling GetNonceForSerialization().
   friend class BlobURLOpaqueOriginNonceMap;
@@ -448,6 +449,7 @@ class PLATFORM_EXPORT SecurityOrigin : public RefCounted<SecurityOrigin> {
   bool block_local_access_from_local_origin_ = false;
   bool is_opaque_origin_potentially_trustworthy_ = false;
   bool cross_agent_cluster_access_ = false;
+  bool aliased_by_document_open_ = false;
 
   // A security origin can have an empty |agent_cluster_id_|. It occurs in the
   // cases where a security origin hasn't been assigned to a document yet.
@@ -459,5 +461,61 @@ class PLATFORM_EXPORT SecurityOrigin : public RefCounted<SecurityOrigin> {
 };
 
 }  // namespace blink
+
+namespace WTF {
+
+// The default HashTraits of SecurityOrigin implements the "same origin"
+// equality relation between two origins. As such it ignores the domain that
+// might or might not be set on the origin. If you need "same origin-domain"
+// equality you'll need to define a custom hash traits type using a different
+// hash function.
+template <>
+struct HashTraits<scoped_refptr<const blink::SecurityOrigin>>
+    : GenericHashTraits<scoped_refptr<const blink::SecurityOrigin>> {
+  static unsigned GetHash(const blink::SecurityOrigin* origin) {
+    const base::UnguessableToken* nonce = origin->GetNonceForSerialization();
+    size_t nonce_hash = nonce ? base::UnguessableTokenHash()(*nonce) : 0;
+
+    unsigned hash_codes[] = {
+      origin->Protocol().Impl() ? origin->Protocol().Impl()->GetHash() : 0,
+      origin->Host().Impl() ? origin->Host().Impl()->GetHash() : 0,
+      origin->Port(),
+#if ARCH_CPU_32_BITS
+      nonce_hash,
+#elif ARCH_CPU_64_BITS
+      static_cast<unsigned>(nonce_hash),
+      static_cast<unsigned>(nonce_hash >> 32),
+#else
+#error "Unknown bits"
+#endif
+    };
+    return StringHasher::HashMemory<sizeof(hash_codes)>(hash_codes);
+  }
+  static unsigned GetHash(
+      const scoped_refptr<const blink::SecurityOrigin>& origin) {
+    return GetHash(origin.get());
+  }
+
+  static bool Equal(const blink::SecurityOrigin* a,
+                    const blink::SecurityOrigin* b) {
+    return a->IsSameOriginWith(b);
+  }
+  static bool Equal(const blink::SecurityOrigin* a,
+                    const scoped_refptr<const blink::SecurityOrigin>& b) {
+    return Equal(a, b.get());
+  }
+  static bool Equal(const scoped_refptr<const blink::SecurityOrigin>& a,
+                    const blink::SecurityOrigin* b) {
+    return Equal(a.get(), b);
+  }
+  static bool Equal(const scoped_refptr<const blink::SecurityOrigin>& a,
+                    const scoped_refptr<const blink::SecurityOrigin>& b) {
+    return Equal(a.get(), b.get());
+  }
+
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
+};
+
+}  // namespace WTF
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WEBORIGIN_SECURITY_ORIGIN_H_

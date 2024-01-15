@@ -13,7 +13,7 @@
 namespace ash {
 namespace quick_pair {
 
-struct Device;
+class Device;
 
 class MockUIBroker : public UIBroker {
  public:
@@ -26,13 +26,16 @@ class MockUIBroker : public UIBroker {
   MOCK_METHOD(void, ShowPairing, (scoped_refptr<Device>), (override));
   MOCK_METHOD(void, ShowPairingFailed, (scoped_refptr<Device>), (override));
   MOCK_METHOD(void, ShowAssociateAccount, (scoped_refptr<Device>), (override));
-  MOCK_METHOD(void, ShowCompanionApp, (scoped_refptr<Device>), (override));
-  MOCK_METHOD(void, RemoveNotifications, (bool), (override));
   MOCK_METHOD(void,
-              RemoveDeviceFromAlreadyShownDiscoveryNotificationCache,
+              ShowInstallCompanionApp,
               (scoped_refptr<Device>),
               (override));
-  MOCK_METHOD(void, StartDeviceLostTimer, (scoped_refptr<Device>), (override));
+  MOCK_METHOD(void,
+              ShowLaunchCompanionApp,
+              (scoped_refptr<Device>),
+              (override));
+  MOCK_METHOD(void, RemoveNotifications, (), (override));
+  MOCK_METHOD(void, ExtendNotification, (), (override));
 
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;

@@ -7,16 +7,16 @@
 #include <stddef.h>
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/notreached.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversion_utils.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/third_party/icu/icu_utf.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
 #include "ui/shell_dialogs/select_file_policy.h"
@@ -50,6 +50,12 @@ void TruncateStringToSize(base::FilePath::StringType* string, size_t size) {
 
 namespace ui {
 
+void SelectFileDialog::Listener::MultiFilesSelected(
+    const std::vector<SelectedFileInfo>& files,
+    void* params) {
+  NOTREACHED_NORETURN();
+}
+
 SelectFileDialog::FileTypeInfo::FileTypeInfo() = default;
 
 SelectFileDialog::FileTypeInfo::FileTypeInfo(const FileTypeInfo& other) =
@@ -57,32 +63,11 @@ SelectFileDialog::FileTypeInfo::FileTypeInfo(const FileTypeInfo& other) =
 
 SelectFileDialog::FileTypeInfo::~FileTypeInfo() = default;
 
-void SelectFileDialog::Listener::FileSelectedWithExtraInfo(
-    const ui::SelectedFileInfo& file,
-    int index,
-    void* params) {
-  // Most of the dialogs need actual local path, so default to it.
-  // If local path is empty, use file_path instead.
-  FileSelected(file.local_path.empty() ? file.file_path : file.local_path,
-               index, params);
-}
-
-void SelectFileDialog::Listener::MultiFilesSelectedWithExtraInfo(
-    const std::vector<ui::SelectedFileInfo>& files,
-    void* params) {
-  std::vector<base::FilePath> file_paths;
-  for (const ui::SelectedFileInfo& file : files) {
-    file_paths.push_back(file.local_path.empty() ? file.file_path
-                                                 : file.local_path);
-  }
-
-  MultiFilesSelected(file_paths, params);
-}
-
 // static
-void SelectFileDialog::SetFactory(ui::SelectFileDialogFactory* factory) {
+void SelectFileDialog::SetFactory(
+    std::unique_ptr<ui::SelectFileDialogFactory> factory) {
   delete dialog_factory_;
-  dialog_factory_ = factory;
+  dialog_factory_ = factory.release();
 }
 
 // static
@@ -135,7 +120,7 @@ void SelectFileDialog::SelectFile(
     // Inform the listener that no file was selected.
     // Post a task rather than calling FileSelectionCanceled directly to ensure
     // that the listener is called asynchronously.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&SelectFileDialog::CancelFileSelection, this, params));
     return;

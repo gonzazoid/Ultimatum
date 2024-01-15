@@ -7,6 +7,7 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
+#include "base/test/icu_test_util.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/icu/source/common/unicode/uclean.h"
@@ -22,15 +23,23 @@ const char kTzDataDirPath[] = "/pkg/base/test/data/tzdata/icu/44/le";
 
 // File path to the text file containing the expected ICU library revision, for
 // example "2019c".
+// TODO(crbug.com/1360077): Remove once tzdata is fully migrated away from
+// config-data. I.e. all released Chromium versions in Fuchsia support it.
 const char kRevisionFilePath[] = "/config/data/tzdata/revision.txt";
+// Same as above, except the modern version.
+const char kTZDataRevisionFilePath[] = "/config/tzdata/icu/revision.txt";
 
 }  // namespace
 
 class TimeZoneDataTest : public testing::Test {
  protected:
-  void SetUp() override { ResetIcu(); }
+  void TearDown() override {
+    ResetIcu();
 
-  void TearDown() override { ResetIcu(); }
+    // ICU must be set back up in case e.g. a log statement that formats times
+    // uses it.
+    test::InitializeICUForTesting();
+  }
 
   // Needed to enable loading of ICU config files that are different from what
   // is available in Chromium.  Both icu_util and ICU library keep internal
@@ -58,17 +67,27 @@ class TimeZoneDataTest : public testing::Test {
 // that this test is not skipped. In Chromium build bot setup, this file may
 // not be present, in which case we skip running this test.
 TEST_F(TimeZoneDataTest, CompareSystemRevisionWithExpected) {
-  if (!base::PathExists(base::FilePath(kRevisionFilePath))) {
-    LOG(INFO) << "Skipped test because tzdata config is not present";
-    return;
+  std::string revision_file_path;
+  if (base::PathExists(base::FilePath(kTZDataRevisionFilePath))) {
+    revision_file_path = kTZDataRevisionFilePath;
+  } else if (base::PathExists(base::FilePath(kRevisionFilePath))) {
+    // Legacy path.
+    revision_file_path = kRevisionFilePath;
+  }
+
+  if (revision_file_path.empty()) {
+    FAIL() << "No revision file found";
   }
 
   // ResetIcu() ensures that time zone data is loaded from the default location.
+  // This is done after the GTEST_SKIP() call above, since that may output a
+  // timestamp that requires ICU to be set up.
+  ResetIcu();
 
   ASSERT_TRUE(InitializeICU());
   std::string expected;
-  ASSERT_TRUE(
-      base::ReadFileToString(base::FilePath(kRevisionFilePath), &expected));
+  EXPECT_TRUE(
+      base::ReadFileToString(base::FilePath(revision_file_path), &expected));
   std::string actual;
   GetActualRevision(&actual);
   EXPECT_EQ(expected, actual);
@@ -82,9 +101,10 @@ TEST_F(TimeZoneDataTest, CompareSystemRevisionWithExpected) {
 // ICU library versions.
 TEST_F(TimeZoneDataTest, TestLoadingTimeZoneDataFromKnownConfigs) {
   ASSERT_TRUE(base::DirectoryExists(base::FilePath(kTzDataDirPath)));
+  ResetIcu();
   SetIcuTimeZoneDataDirForTesting(kTzDataDirPath);
 
-  EXPECT_TRUE(InitializeICU());
+  ASSERT_TRUE(InitializeICU());
   std::string actual;
   GetActualRevision(&actual);
   EXPECT_EQ("2019a", actual) << "If ICU no longer supports this tzdata "
@@ -92,9 +112,10 @@ TEST_F(TimeZoneDataTest, TestLoadingTimeZoneDataFromKnownConfigs) {
 }
 
 TEST_F(TimeZoneDataTest, DoesNotCrashWithInvalidPath) {
+  ResetIcu();
   SetIcuTimeZoneDataDirForTesting("/some/nonexistent/path");
 
-  EXPECT_TRUE(InitializeICU());
+  ASSERT_TRUE(InitializeICU());
   std::string actual;
   GetActualRevision(&actual);
   EXPECT_TRUE(

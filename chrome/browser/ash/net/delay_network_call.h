@@ -7,7 +7,7 @@
 #ifndef CHROME_BROWSER_ASH_NET_DELAY_NETWORK_CALL_H_
 #define CHROME_BROWSER_ASH_NET_DELAY_NETWORK_CALL_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 namespace base {
 class TimeDelta;
@@ -15,11 +15,17 @@ class TimeDelta;
 
 namespace ash {
 
-// Default delay to be used as an argument to DelayNetworkCall().
-extern const unsigned kDefaultNetworkRetryDelayMS;
+// Returns `true` if network calls will be delayed by `DelayNetworkCall()`.
+bool AreNetworkCallsDelayed();
 
 // Delay callback until the network is connected or while on a captive portal.
-void DelayNetworkCall(base::TimeDelta retry, base::OnceClosure callback);
+// Also see `AreNetworkCallsDelayed()`.
+void DelayNetworkCall(base::OnceClosure callback);
+
+// Same as above `DelayNetworkCall()` except it allows a custom `retry_delay` to
+// be passed.
+void DelayNetworkCallWithCustomDelay(base::OnceClosure callback,
+                                     base::TimeDelta retry_delay);
 
 }  // namespace ash
 

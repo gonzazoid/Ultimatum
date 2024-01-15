@@ -10,14 +10,14 @@
 #include "ui/gl/gl_context.h"
 
 namespace gpu {
-// This is a wrapper class for SkiaImageRepresentation to be used in GL
+// This is a wrapper class for SkiaGaneshImageRepresentation to be used in GL
 // mode. For most of the SharedImageBackings, GLTextureImageRepresentation
-// and SkiaImageRepresentation implementations do the same work which
+// and SkiaGaneshImageRepresentation implementations do the same work which
 // results in duplicate code. Hence instead of implementing
-// SkiaImageRepresentation, this wrapper can be directly used or
+// SkiaGaneshImageRepresentation, this wrapper can be directly used or
 // implemented by the backings.
 class GPU_GLES2_EXPORT SkiaGLImageRepresentation
-    : public SkiaImageRepresentation {
+    : public SkiaGaneshImageRepresentation {
  public:
   static std::unique_ptr<SkiaGLImageRepresentation> Create(
       std::unique_ptr<GLTextureImageRepresentationBase> gl_representation,
@@ -34,35 +34,38 @@ class GPU_GLES2_EXPORT SkiaGLImageRepresentation
       const gfx::Rect& update_rect,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
-  std::vector<sk_sp<SkPromiseImageTexture>> BeginWriteAccess(
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginWriteAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
   void EndWriteAccess() override;
-  std::vector<sk_sp<SkPromiseImageTexture>> BeginReadAccess(
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginReadAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
   void EndReadAccess() override;
 
   bool SupportsMultipleConcurrentReadAccess() override;
 
- private:
+ protected:
   SkiaGLImageRepresentation(
       std::unique_ptr<GLTextureImageRepresentationBase> gl_representation,
-      sk_sp<SkPromiseImageTexture> promise_texture,
+      std::vector<sk_sp<GrPromiseImageTexture>> promise_textures,
       scoped_refptr<SharedContextState> context_state,
       SharedImageManager* manager,
       SharedImageBacking* backing,
       MemoryTypeTracker* tracker);
 
+  void ClearCachedSurfaces();
+
+ private:
   void CheckContext();
 
   std::unique_ptr<GLTextureImageRepresentationBase> gl_representation_;
-  sk_sp<SkPromiseImageTexture> promise_texture_;
+  std::vector<sk_sp<GrPromiseImageTexture>> promise_textures_;
   scoped_refptr<SharedContextState> context_state_;
-  sk_sp<SkSurface> surface_;
+  std::vector<sk_sp<SkSurface>> surfaces_;
   RepresentationAccessMode mode_ = RepresentationAccessMode::kNone;
 #if DCHECK_IS_ON()
   raw_ptr<gl::GLContext> context_;

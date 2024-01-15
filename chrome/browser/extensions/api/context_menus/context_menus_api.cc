@@ -32,9 +32,9 @@ namespace extensions {
 ExtensionFunction::ResponseAction ContextMenusCreateFunction::Run() {
   MenuItem::Id id(browser_context()->IsOffTheRecord(),
                   MenuItem::ExtensionKey(extension_id()));
-  std::unique_ptr<api::context_menus::Create::Params> params(
-      api::context_menus::Create::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::context_menus::Create::Params> params =
+      api::context_menus::Create::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (params->create_properties.id) {
     id.string_uid = *params->create_properties.id;
@@ -47,7 +47,7 @@ ExtensionFunction::ResponseAction ContextMenusCreateFunction::Run() {
     EXTENSION_FUNCTION_VALIDATE(args()[0].is_dict());
 
     const base::Value& properties = args()[0];
-    absl::optional<int> result = properties.FindIntKey(
+    absl::optional<int> result = properties.GetDict().FindInt(
         extensions::context_menus_api_helpers::kGeneratedIdKey);
     EXTENSION_FUNCTION_VALIDATE(result);
     id.uid = *result;
@@ -65,10 +65,10 @@ ExtensionFunction::ResponseAction ContextMenusCreateFunction::Run() {
 ExtensionFunction::ResponseAction ContextMenusUpdateFunction::Run() {
   MenuItem::Id item_id(browser_context()->IsOffTheRecord(),
                        MenuItem::ExtensionKey(extension_id()));
-  std::unique_ptr<api::context_menus::Update::Params> params(
-      api::context_menus::Update::Params::Create(args()));
+  absl::optional<api::context_menus::Update::Params> params =
+      api::context_menus::Update::Params::Create(args());
 
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
   if (params->id.as_string)
     item_id.string_uid = *params->id.as_string;
   else if (params->id.as_integer)
@@ -86,9 +86,9 @@ ExtensionFunction::ResponseAction ContextMenusUpdateFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction ContextMenusRemoveFunction::Run() {
-  std::unique_ptr<api::context_menus::Remove::Params> params(
-      api::context_menus::Remove::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::context_menus::Remove::Params> params =
+      api::context_menus::Remove::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   MenuManager* manager = MenuManager::Get(browser_context());
 

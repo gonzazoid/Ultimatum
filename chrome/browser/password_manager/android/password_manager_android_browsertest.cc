@@ -21,18 +21,11 @@ namespace {
 
 autofill::PasswordFormFillData GetTestFillData() {
   autofill::PasswordFormFillData fill_data;
-  autofill::FormFieldData username_field;
-  username_field.name = u"username_field";
-  fill_data.username_field = username_field;
-  autofill::FormFieldData password_field;
-  password_field.name = u"password_field";
-  password_field.form_control_type = "password";
-  fill_data.password_field = password_field;
   // Renderer IDs should match real elements' IDs. They cannot be retrieved in a
   // content::BrowserTestBase, so they are guessed based on the fact the
   // username and password fields are the first two elements on the page.
-  fill_data.username_field.unique_renderer_id = autofill::FieldRendererId(1);
-  fill_data.password_field.unique_renderer_id = autofill::FieldRendererId(2);
+  fill_data.username_element_renderer_id = autofill::FieldRendererId(1);
+  fill_data.password_element_renderer_id = autofill::FieldRendererId(2);
   return fill_data;
 }
 
@@ -66,15 +59,16 @@ class PasswordManagerAndroidBrowserTest
     PasswordsNavigationObserver observer(GetActiveWebContents());
     EXPECT_TRUE(content::NavigateToURL(GetActiveWebContents(),
                                        https_server_.GetURL(file_path)));
-    observer.Wait();
+    ASSERT_TRUE(observer.Wait());
   }
 
  private:
   net::EmbeddedTestServer https_server_;
 };
 
+// Disabled due to flakiness, see crbug.com/1464593.
 IN_PROC_BROWSER_TEST_P(PasswordManagerAndroidBrowserTest,
-                       TriggerFormSubmission) {
+                       DISABLED_TriggerFormSubmission) {
   base::HistogramTester uma_recorder;
   bool has_form_tag = GetParam();
   NavigateToFile(has_form_tag ? "/password/simple_password.html"
@@ -99,9 +93,9 @@ IN_PROC_BROWSER_TEST_P(PasswordManagerAndroidBrowserTest,
   driver->SetPasswordFillData(fill_data);
 
   // A user taps the username field.
-  ASSERT_TRUE(content::ExecuteScript(
-      GetActiveWebContents(),
-      "document.getElementById('username_field').focus();"));
+  ASSERT_TRUE(
+      content::ExecJs(GetActiveWebContents(),
+                      "document.getElementById('username_field').focus();"));
 
   // A user accepts a credential in TouchToFill. That fills in the credential
   // and submits it.
@@ -110,7 +104,7 @@ IN_PROC_BROWSER_TEST_P(PasswordManagerAndroidBrowserTest,
   driver->FillSuggestion(u"username", u"password");
   driver->TriggerFormSubmission();
 
-  observer.Wait();
+  ASSERT_TRUE(observer.Wait());
 
   uma_recorder.ExpectTotalCount(
       "PasswordManager.TouchToFill.TimeToSuccessfulLogin", 1);

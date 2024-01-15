@@ -6,13 +6,16 @@
 
 #include <utility>
 
+#include "android_webview/browser/aw_browser_context.h"
 #include "android_webview/browser/aw_contents.h"
 #include "android_webview/browser/aw_contents_io_thread_client.h"
 #include "android_webview/browser/aw_javascript_dialog_manager.h"
+#include "android_webview/browser/aw_permission_manager.h"
 #include "android_webview/browser/find_helper.h"
 #include "android_webview/browser/permission/media_access_permission_request.h"
 #include "android_webview/browser/permission/permission_request_handler.h"
 #include "android_webview/browser_jni_headers/AwWebContentsDelegate_jni.h"
+#include "android_webview/common/aw_features.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
@@ -23,9 +26,9 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/navigation_interception/intercept_navigation_delegate.h"
 #include "content/public/browser/file_select_listener.h"
+#include "content/public/browser/permission_controller_delegate.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -33,6 +36,7 @@
 #include "content/public/browser/web_contents.h"
 #include "net/base/filename_util.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 
 using base::android::AttachCurrentThread;
@@ -181,8 +185,8 @@ void AwWebContentsDelegate::AddNewContents(
     // window, so we're done with the WebContents now. We use
     // DeleteSoon as WebContentsImpl may call methods on |new_contents|
     // after this method returns.
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                    std::move(new_contents));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
+        FROM_HERE, std::move(new_contents));
   }
 
   if (was_blocked) {
@@ -263,9 +267,44 @@ void AwWebContentsDelegate::RequestMediaAccessPermission(
         nullptr);
     return;
   }
+  AwSettings* aw_settings = AwSettings::FromWebContents(web_contents);
+  bool allow_file_access_from_file_urls =
+      aw_settings->GetAllowFileAccessFromFileURLs();
   aw_contents->GetPermissionRequestHandler()->SendRequest(
-      std::make_unique<MediaAccessPermissionRequest>(request,
-                                                     std::move(callback)));
+      std::make_unique<MediaAccessPermissionRequest>(
+          request, std::move(callback),
+          *AwBrowserContext::FromWebContents(web_contents)
+               ->GetPermissionControllerDelegate(),
+          allow_file_access_from_file_urls));
+}
+
+bool AwWebContentsDelegate::CheckMediaAccessPermission(
+    content::RenderFrameHost* render_frame_host,
+    const url::Origin& security_origin,
+    blink::mojom::MediaStreamType type) {
+  if (!base::FeatureList::IsEnabled(features::kWebViewEnumerateDevicesCache)) {
+    return false;
+  }
+  WebContents* web_contents =
+      WebContents::FromRenderFrameHost(render_frame_host);
+  if (!web_contents) {
+    return false;
+  }
+  AwSettings* aw_settings = AwSettings::FromWebContents(web_contents);
+  if (!aw_settings->GetAllowFileAccessFromFileURLs() &&
+      security_origin.scheme() == url::kFileScheme) {
+    return false;
+  }
+  AwPermissionManager* pm = AwBrowserContext::FromWebContents(web_contents)
+                                ->GetPermissionControllerDelegate();
+  switch (type) {
+    case blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE:
+      return pm->ShouldShowEnumerateDevicesAudioLabels(security_origin);
+    case blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE:
+      return pm->ShouldShowEnumerateDevicesVideoLabels(security_origin);
+    default:
+      return false;
+  }
 }
 
 void AwWebContentsDelegate::EnterFullscreenModeForTab(

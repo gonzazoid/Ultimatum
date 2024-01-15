@@ -104,15 +104,6 @@ class PLATFORM_EXPORT ScriptWrappable
   ScriptWrappable& operator=(const ScriptWrappable&) = delete;
   ~ScriptWrappable() override = default;
 
-  // The following methods may override lifetime of ScriptWrappable objects when
-  // needed. In particular if `HasPendingActivity()` returns true *and* the
-  // child type also inherits from `ActiveScriptWrappable`, the objects will not
-  // be reclaimed by the GC, even if they are otherwise unreachable.
-  //
-  // Note: These methods are queried during garbage collection and *must not*
-  // allocate any new objects.
-  virtual bool HasPendingActivity() const { return false; }
-
   const char* NameInHeapSnapshot() const override;
 
   virtual void Trace(Visitor*) const;
@@ -165,7 +156,13 @@ class PLATFORM_EXPORT ScriptWrappable
   // This method must be overridden by DEFINE_WRAPPERTYPEINFO macro.
   virtual const WrapperTypeInfo* GetWrapperTypeInfo() const = 0;
 
-  // Creates and returns a new wrapper object.
+  // Returns a wrapper object, creating it if needed.
+  v8::MaybeLocal<v8::Value> ToV8(ScriptState*);
+  v8::MaybeLocal<v8::Value> ToV8(v8::Isolate*,
+                                 v8::Local<v8::Object> creation_context_object);
+
+  // Creates and returns a new wrapper object. This DCHECKs that a wrapper does
+  // not exist yet. Use ToV8() if a wrapper might already exist.
   virtual v8::MaybeLocal<v8::Value> Wrap(ScriptState*);
 
   // Associates the instance with the given |wrapper| if this instance is not
@@ -190,9 +187,13 @@ class PLATFORM_EXPORT ScriptWrappable
       wrapper = MainWorldWrapper(isolate);
       return false;
     }
-    main_world_wrapper_.Reset(isolate, wrapper);
+    if (wrapper_type_info->SupportsDroppingWrapper()) {
+      main_world_wrapper_.Reset(
+          isolate, wrapper, TraceWrapperV8Reference<v8::Object>::IsDroppable{});
+    } else {
+      main_world_wrapper_.Reset(isolate, wrapper);
+    }
     DCHECK(ContainsWrapper());
-    wrapper_type_info->ConfigureWrapper(&main_world_wrapper_);
     return true;
   }
 
@@ -201,23 +202,27 @@ class PLATFORM_EXPORT ScriptWrappable
   }
 
   bool SetReturnValue(v8::ReturnValue<v8::Value> return_value) {
-    return_value.Set(main_world_wrapper_);
-    return ContainsWrapper();
+    const bool contains_wrapper = ContainsWrapper();
+    if (contains_wrapper) {
+      return_value.SetNonEmpty(main_world_wrapper_);
+    }
+    return contains_wrapper;
   }
 
-  bool ContainsWrapper() const { return !main_world_wrapper_.IsEmpty(); }
 
  protected:
   ScriptWrappable() = default;
 
  private:
+  bool ContainsWrapper() const { return !main_world_wrapper_.IsEmpty(); }
+
   v8::Local<v8::Object> MainWorldWrapper(v8::Isolate* isolate) const {
     return main_world_wrapper_.Get(isolate);
   }
 
   // Clear the main world wrapper if it is set to |handle|.
-  bool UnsetMainWorldWrapperIfSet(
-      const v8::TracedReference<v8::Object>& handle);
+  template <typename HandleType>
+  inline bool ClearMainWorldWrapperIfEqualTo(const HandleType& handle);
 
   static_assert(
       std::is_trivially_destructible<
@@ -230,11 +235,10 @@ class PLATFORM_EXPORT ScriptWrappable
   // world wrapper.
   friend class DOMDataStore;
   friend class DOMWrapperWorld;
-  friend class HeapSnaphotWrapperVisitor;
 };
 
-inline bool ScriptWrappable::UnsetMainWorldWrapperIfSet(
-    const v8::TracedReference<v8::Object>& handle) {
+template <typename HandleType>
+bool ScriptWrappable::ClearMainWorldWrapperIfEqualTo(const HandleType& handle) {
   if (main_world_wrapper_ == handle) {
     main_world_wrapper_.Reset();
     return true;

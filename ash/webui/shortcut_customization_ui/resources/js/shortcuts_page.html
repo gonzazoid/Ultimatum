@@ -1,15 +1,24 @@
-<style include="shortcut-customization-shared">
+<style include="shortcut-customization-shared cr-shared-style">
+  :host-context(body.jelly-enabled) #container {
+    background-color: var(--cros-sys-app_base);
+    border-radius: 16px 16px 0 0;
+  }
+
   #container {
-    width: var(--container-max-width-nav);
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    width: 100%;
   }
 
   #container accelerator-subsection:not(:first-child)::part(container) {
-    margin-top: 40px;
+    margin-top: 20px;
   }
 </style>
 
 <div id="container">
-  <template id="subsections" is="dom-repeat" items="[[subcategories_]]">
+  <template id="subsections" is="dom-repeat" items="[[subcategories]]">
     <accelerator-subsection category="[[initialData.category]]"
         subcategory="[[item]]">
     </accelerator-subsection>

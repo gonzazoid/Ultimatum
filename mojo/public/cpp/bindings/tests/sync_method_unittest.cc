@@ -2,13 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <tuple>
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/sequence_token.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -18,6 +20,10 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
+#include "mojo/public/cpp/bindings/lib/message_fragment.h"
+#include "mojo/public/cpp/bindings/lib/send_message_helper.h"
+#include "mojo/public/cpp/bindings/lib/serialization_util.h"
+#include "mojo/public/cpp/bindings/message.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -27,9 +33,17 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "mojo/public/cpp/bindings/tests/bindings_test_base.h"
+#include "mojo/public/cpp/bindings/tests/sync_method_unittest.test-mojom-shared-message-ids.h"
 #include "mojo/public/cpp/bindings/tests/sync_method_unittest.test-mojom.h"
 #include "mojo/public/interfaces/bindings/tests/test_sync_methods.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+// This needs to be included last, since it forward declares a bunch of classes
+// but depends on those definitions to be included by headers that sort
+// lexicographically after.
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "mojo/public/cpp/bindings/tests/sync_method_unittest.test-mojom-params-data.h"
 
 namespace mojo {
 namespace test {
@@ -413,7 +427,7 @@ class SequencedTaskRunnerTestBase {
       std::unique_ptr<SequencedTaskRunnerTestBase> test);
 
   void Init(base::OnceClosure quit_closure) {
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
     quit_closure_ = std::move(quit_closure);
   }
 
@@ -1341,7 +1355,7 @@ class PingerImpl : public mojom::Pinger, public mojom::SimplePinger {
         base::BarrierClosure(3, wait_to_reply.QuitClosure());
     pong_sender_.AsyncCall(&PongSender::SendPong).WithArgs(barrier);
     same_pipe_pong_sender_.AsyncCall(&PongSender::SendPong).WithArgs(barrier);
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, barrier, base::Milliseconds(10));
     wait_to_reply.Run();
   }
@@ -1702,6 +1716,237 @@ TEST_P(DisableSyncInterruptTest, SharedRemoteNoInterruptWhenDisabled) {
 
 INSTANTIATE_MOJO_BINDINGS_TEST_SUITE_P(SyncInterruptTest);
 INSTANTIATE_MOJO_BINDINGS_TEST_SUITE_P(DisableSyncInterruptTest);
+
+class OneSyncImpl;
+
+class NoSyncImpl : public mojom::NoSync {
+ public:
+  explicit NoSyncImpl(PendingReceiver<mojom::NoSync> receiver)
+      : receiver_(this, std::move(receiver)) {}
+
+  explicit NoSyncImpl(
+      PendingAssociatedReceiver<mojom::NoSync> associated_receiver)
+      : associated_receiver_(this, std::move(associated_receiver)) {}
+
+  // mojom::NoSync implementation:
+  void Method(MethodCallback callback) override;
+  void BindNoSync(PendingAssociatedReceiver<mojom::NoSync> receiver) override;
+  void BindOneSync(PendingAssociatedReceiver<mojom::OneSync> receiver) override;
+
+ private:
+  Receiver<mojom::NoSync> receiver_{this};
+  AssociatedReceiver<mojom::NoSync> associated_receiver_{this};
+
+  std::unique_ptr<NoSyncImpl> associated_no_sync_;
+  std::unique_ptr<OneSyncImpl> associated_one_sync_;
+};
+
+class OneSyncImpl : public mojom::OneSync {
+ public:
+  explicit OneSyncImpl(PendingReceiver<mojom::OneSync> receiver)
+      : receiver_(this, std::move(receiver)) {}
+
+  explicit OneSyncImpl(
+      PendingAssociatedReceiver<mojom::OneSync> associated_receiver)
+      : associated_receiver_(this, std::move(associated_receiver)) {}
+
+  // mojom::OneSync implementation:
+  void Method(MethodCallback callback) override;
+  void SyncMethod(SyncMethodCallback callback) override;
+  void BindNoSync(PendingAssociatedReceiver<mojom::NoSync> receiver) override;
+  void BindOneSync(PendingAssociatedReceiver<mojom::OneSync> receiver) override;
+
+ private:
+  Receiver<mojom::OneSync> receiver_{this};
+  AssociatedReceiver<mojom::OneSync> associated_receiver_{this};
+
+  std::unique_ptr<NoSyncImpl> associated_no_sync_;
+  std::unique_ptr<OneSyncImpl> associated_one_sync_;
+};
+
+void NoSyncImpl::Method(MethodCallback callback) {
+  EXPECT_TRUE(false);
+  std::move(callback).Run();
+}
+
+void NoSyncImpl::BindNoSync(PendingAssociatedReceiver<mojom::NoSync> receiver) {
+  associated_no_sync_ = std::make_unique<NoSyncImpl>(std::move(receiver));
+}
+
+void NoSyncImpl::BindOneSync(
+    PendingAssociatedReceiver<mojom::OneSync> receiver) {
+  associated_one_sync_ = std::make_unique<OneSyncImpl>(std::move(receiver));
+}
+
+void OneSyncImpl::Method(MethodCallback callback) {
+  EXPECT_TRUE(false);
+  std::move(callback).Run();
+}
+
+void OneSyncImpl::SyncMethod(MethodCallback callback) {
+  std::move(callback).Run();
+}
+
+void OneSyncImpl::BindNoSync(
+    PendingAssociatedReceiver<mojom::NoSync> receiver) {
+  associated_no_sync_ = std::make_unique<NoSyncImpl>(std::move(receiver));
+}
+
+void OneSyncImpl::BindOneSync(
+    PendingAssociatedReceiver<mojom::OneSync> receiver) {
+  associated_one_sync_ = std::make_unique<OneSyncImpl>(std::move(receiver));
+}
+
+class NoResponseExpectedResponder : public MessageReceiver {
+ public:
+  explicit NoResponseExpectedResponder() = default;
+
+  // MessageReceiver implementation:
+  bool Accept(Message* message) override {
+    EXPECT_TRUE(false);
+    return true;
+  }
+};
+
+class SyncFlagValidationTest : public ::testing::TestWithParam<uint32_t> {
+ protected:
+  Message MakeNoSyncMethodMessage() {
+    const uint32_t flags =
+        // Always set the sync flag, as that's the primary point of the test.
+        Message::kFlagIsSync |
+        // InterfaceEndpointClient requires this flag if sending a message with
+        // a responder.
+        Message::kFlagExpectsResponse | GetParam();
+    Message message(mojom::internal::kNoSync_Method_Name, flags, 0, 0, nullptr);
+    ::mojo::internal::MessageFragment<
+        mojom::internal::NoSync_Method_Params_Data>
+        params(message);
+    params.Allocate();
+    return message;
+  }
+
+  Message MakeOneSyncMethodMessage() {
+    const uint32_t flags =
+        // Always set the sync flag, as that's the primary point of the test.
+        Message::kFlagIsSync |
+        // InterfaceEndpointClient requires this flag if sending a message with
+        // a responder.
+        Message::kFlagExpectsResponse | GetParam();
+    Message message(mojom::internal::kOneSync_Method_Name, flags, 0, 0,
+                    nullptr);
+    ::mojo::internal::MessageFragment<
+        mojom::internal::NoSync_Method_Params_Data>
+        params(message);
+    params.Allocate();
+    return message;
+  }
+
+  void FlushPostedTasks() {
+    base::RunLoop run_loop;
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
+    run_loop.Run();
+  }
+
+ private:
+  base::test::SingleThreadTaskEnvironment task_environment;
+};
+
+TEST_P(SyncFlagValidationTest, NonSync) {
+  Remote<mojom::NoSync> remote;
+  NoSyncImpl impl(remote.BindNewPipeAndPassReceiver());
+
+  Message message = MakeNoSyncMethodMessage();
+  auto responder = std::make_unique<NoResponseExpectedResponder>();
+  ASSERT_TRUE(remote.internal_state()->endpoint_client_for_test());
+  ::mojo::internal::SendMojoMessage(
+      *remote.internal_state()->endpoint_client_for_test(), message,
+      std::move(responder));
+}
+
+TEST_P(SyncFlagValidationTest, OneSync) {
+  Remote<mojom::OneSync> remote;
+  OneSyncImpl impl(remote.BindNewPipeAndPassReceiver());
+
+  Message message = MakeOneSyncMethodMessage();
+  auto responder = std::make_unique<NoResponseExpectedResponder>();
+  ASSERT_TRUE(remote.internal_state()->endpoint_client_for_test());
+  ::mojo::internal::SendMojoMessage(
+      *remote.internal_state()->endpoint_client_for_test(), message,
+      std::move(responder));
+}
+
+TEST_P(SyncFlagValidationTest, NoSyncAssociatedWithNoSync) {
+  Remote<mojom::NoSync> remote;
+  NoSyncImpl impl(remote.BindNewPipeAndPassReceiver());
+
+  AssociatedRemote<mojom::NoSync> associated_remote;
+  remote->BindNoSync(associated_remote.BindNewEndpointAndPassReceiver());
+
+  FlushPostedTasks();
+
+  Message message = MakeNoSyncMethodMessage();
+  auto responder = std::make_unique<NoResponseExpectedResponder>();
+  ASSERT_TRUE(remote.internal_state()->endpoint_client_for_test());
+  ::mojo::internal::SendMojoMessage(
+      *associated_remote.internal_state()->endpoint_client_for_test(), message,
+      std::move(responder));
+}
+
+TEST_P(SyncFlagValidationTest, OneSyncAssociatedWithNoSync) {
+  Remote<mojom::NoSync> remote;
+  NoSyncImpl impl(remote.BindNewPipeAndPassReceiver());
+
+  AssociatedRemote<mojom::OneSync> associated_remote;
+  remote->BindOneSync(associated_remote.BindNewEndpointAndPassReceiver());
+
+  FlushPostedTasks();
+
+  Message message = MakeOneSyncMethodMessage();
+  auto responder = std::make_unique<NoResponseExpectedResponder>();
+  ASSERT_TRUE(remote.internal_state()->endpoint_client_for_test());
+  ::mojo::internal::SendMojoMessage(
+      *associated_remote.internal_state()->endpoint_client_for_test(), message,
+      std::move(responder));
+}
+
+TEST_P(SyncFlagValidationTest, NoSyncAssociatedWithOneSync) {
+  Remote<mojom::OneSync> remote;
+  OneSyncImpl impl(remote.BindNewPipeAndPassReceiver());
+
+  AssociatedRemote<mojom::NoSync> associated_remote;
+  remote->BindNoSync(associated_remote.BindNewEndpointAndPassReceiver());
+
+  FlushPostedTasks();
+
+  Message message = MakeNoSyncMethodMessage();
+  auto responder = std::make_unique<NoResponseExpectedResponder>();
+  ASSERT_TRUE(remote.internal_state()->endpoint_client_for_test());
+  ::mojo::internal::SendMojoMessage(
+      *associated_remote.internal_state()->endpoint_client_for_test(), message,
+      std::move(responder));
+}
+
+TEST_P(SyncFlagValidationTest, OneSyncAssociatedWithOneSync) {
+  Remote<mojom::OneSync> remote;
+  OneSyncImpl impl(remote.BindNewPipeAndPassReceiver());
+
+  AssociatedRemote<mojom::OneSync> associated_remote;
+  remote->BindOneSync(associated_remote.BindNewEndpointAndPassReceiver());
+
+  FlushPostedTasks();
+
+  Message message = MakeOneSyncMethodMessage();
+  auto responder = std::make_unique<NoResponseExpectedResponder>();
+  ASSERT_TRUE(remote.internal_state()->endpoint_client_for_test());
+  ::mojo::internal::SendMojoMessage(
+      *associated_remote.internal_state()->endpoint_client_for_test(), message,
+      std::move(responder));
+}
+
+INSTANTIATE_TEST_SUITE_P(,
+                         SyncFlagValidationTest,
+                         ::testing::Values(0, Message::kFlagIsResponse));
 
 }  // namespace
 }  // namespace sync_method_unittest

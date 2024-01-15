@@ -5,8 +5,8 @@
 #ifndef ASH_WEBUI_PROJECTOR_APP_PROJECTOR_OAUTH_TOKEN_FETCHER_H_
 #define ASH_WEBUI_PROJECTOR_APP_PROJECTOR_OAUTH_TOKEN_FETCHER_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 
@@ -51,10 +51,10 @@ class ProjectorOAuthTokenFetcher {
 
   // Returns the list of accounts, primary and secondary accounts, for the
   // Projector SWA to use.
-  std::vector<AccountInfo> GetAccounts() const;
+  static std::vector<AccountInfo> GetAccounts();
 
   // Returns the CoreAccountInfo for the primary account.
-  CoreAccountInfo GetPrimaryAccountInfo() const;
+  static CoreAccountInfo GetPrimaryAccountInfo();
 
   // If an unexpired access token is present for the email, synchronously
   // executes the callback with the cached OAuth token. Otherwise, creates a
@@ -62,6 +62,9 @@ class ProjectorOAuthTokenFetcher {
   // the callback to be executed when fetching completes.
   void GetAccessTokenFor(const std::string& email,
                          AccessTokenRequestCallback callback);
+
+  // Remove the given token in cache.
+  void InvalidateToken(const std::string& token);
 
   // Returns true if there exists a cached token for account with `email`.
   bool HasCachedTokenForTest(const std::string& email);

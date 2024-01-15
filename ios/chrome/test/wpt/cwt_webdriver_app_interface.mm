@@ -15,24 +15,20 @@
 #import "base/test/ios/wait_util.h"
 #import "base/values.h"
 #import "ios/chrome/app/main_controller.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/chrome/test/app/settings_test_util.h"
 #import "ios/chrome/test/app/tab_test_util.h"
 #import "ios/chrome/test/wpt/cwt_stderr_logger.h"
 #import "ios/testing/nserror_util.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/test/navigation_test_util.h"
 #import "ios/web/public/ui/crw_web_view_proxy.h"
 #import "ios/web/public/web_state.h"
-#import "ui/gfx/geometry/rect_f.h"
-#import "ui/gfx/image/image.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -44,7 +40,8 @@ NSString* GetIdForWebState(web::WebState* web_state) {
 
 WebStateList* GetCurrentWebStateList() {
   return chrome_test_util::GetMainController()
-      .interfaceProvider.currentInterface.browser->GetWebStateList();
+      .browserProviderInterface.currentBrowserProvider.browser
+      ->GetWebStateList();
 }
 
 web::WebState* GetWebStateWithId(NSString* tab_id) {
@@ -94,8 +91,8 @@ void DispatchSyncOnMainThread(void (^block)(void)) {
 }
 
 + (NSError*)loadURL:(NSString*)URL
-               inTab:(NSString*)tabID
-    timeoutInSeconds:(NSTimeInterval)timeout {
+              inTab:(NSString*)tabID
+            timeout:(base::TimeDelta)timeout {
   __block web::WebState* webState = nullptr;
   DispatchSyncOnMainThread(^{
     webState = GetWebStateWithId(tabID);
@@ -191,57 +188,40 @@ void DispatchSyncOnMainThread(void (^block)(void)) {
 
 + (NSString*)executeAsyncJavaScriptFunction:(NSString*)function
                                       inTab:(NSString*)tabID
-                           timeoutInSeconds:(NSTimeInterval)timeout {
-  const std::string kMessageResultKey("result");
-
-  // Use a distinct messageID value for each invocation of this method to
-  // distinguish stale messages (from previous script invocations that timed
-  // out) from a message for the current script.
-  static NSUInteger messageID = 0;
-  std::string command = base::StringPrintf("CWTWebDriver%lu", messageID++);
-
-  // Construct a completion handler that takes a single argument and sends a
-  // message with this argument.
-  std::string scriptCompletionHandler =
-      base::StringPrintf("function(value) {"
-                         "__gCrWeb.message.invokeOnHost({command: "
-                         "'%s.result', %s: value}); }",
-                         command.c_str(), kMessageResultKey.c_str());
-
-  // Construct a script that calls the given `function` with
-  // `scriptCompletionHandler` as an argument.
-  std::string scriptFunctionWithCompletionHandler = base::StringPrintf(
-      "(%s).call(null, %s)", base::SysNSStringToUTF8(function).c_str(),
-      scriptCompletionHandler.c_str());
-
-  __block absl::optional<base::Value> messageValue;
-  const web::WebState::ScriptCommandCallback callback =
-      base::BindRepeating(^(const base::Value& value, const GURL&,
-                            /*interacted*/ bool,
-                            /*sender_frame*/ web::WebFrame*) {
-        const base::Value* result = value.FindKey(kMessageResultKey);
-
-        // `result` will be null when the computed result in JavaScript is
-        // `undefined`. This happens, for example, when injecting a script that
-        // performs some action (like setting the document's title) but doesn't
-        // return any value.
-        if (result)
-          messageValue = result->Clone();
-        else
-          messageValue = base::Value();
-      });
-
+                                    timeout:(base::TimeDelta)timeout {
   __block BOOL webStateFound = NO;
-  __block base::CallbackListSubscription subscription;
+  __block std::optional<base::Value> messageValue;
   DispatchSyncOnMainThread(^{
     web::WebState* webState = GetWebStateWithId(tabID);
     if (!webState)
       return;
+    web::WebFrame* mainFrame =
+        webState->GetPageWorldWebFramesManager()->GetMainWebFrame();
+    if (!mainFrame) {
+      return;
+    }
     webStateFound = YES;
-    subscription = webState->AddScriptCommandCallback(callback, command);
-    web::WebFrame* main_frame = web::GetMainFrame(webState);
-    main_frame->ExecuteJavaScript(
-        base::UTF8ToUTF16(scriptFunctionWithCompletionHandler));
+
+    NSString* script =
+        [NSString stringWithFormat:@"var result;"
+                                   @"(%@).call(null, (r) => { result = r; } );"
+                                   @"result;",
+                                   function];
+
+    mainFrame->ExecuteJavaScript(base::SysNSStringToUTF16(script),
+                                 base::BindOnce(^(const base::Value* result) {
+                                   // `result` will be null when the computed
+                                   // result in JavaScript is `undefined`. This
+                                   // happens, for example, when injecting a
+                                   // script that performs some action (like
+                                   // setting the document's title) but doesn't
+                                   // return any value.
+                                   if (result) {
+                                     messageValue = result->Clone();
+                                   } else {
+                                     messageValue = base::Value();
+                                   }
+                                 }));
   });
 
   if (!webStateFound)
@@ -284,14 +264,14 @@ void DispatchSyncOnMainThread(void (^block)(void)) {
     UIEdgeInsets insets = webState->GetWebViewProxy().contentInset;
     CGRect adjustedBounds = UIEdgeInsetsInsetRect(bounds, insets);
 
-    webState->TakeSnapshot(gfx::RectF(adjustedBounds),
-                           base::BindRepeating(^(const gfx::Image& image) {
-                             snapshot = image.ToUIImage();
+    webState->TakeSnapshot(adjustedBounds,
+                           base::BindRepeating(^(UIImage* image) {
+                             snapshot = image;
                            }));
   });
 
-  const NSTimeInterval kSnapshotTimeoutSeconds = 100;
-  bool success = WaitUntilConditionOrTimeout(kSnapshotTimeoutSeconds, ^bool {
+  constexpr base::TimeDelta kSnapshotTimeout = base::Seconds(100);
+  bool success = WaitUntilConditionOrTimeout(kSnapshotTimeout, ^bool {
     __block BOOL snapshotComplete = NO;
     DispatchSyncOnMainThread(^{
       if (snapshot != nil)

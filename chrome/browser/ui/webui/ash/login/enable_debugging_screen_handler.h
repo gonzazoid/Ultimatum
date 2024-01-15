@@ -5,16 +5,14 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_ENABLE_DEBUGGING_SCREEN_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_ENABLE_DEBUGGING_SCREEN_HANDLER_H_
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 
 class PrefRegistrySimple;
 
-namespace chromeos {
+namespace ash {
 
 // Interface between enable debugging screen and its representation.
-// Note, do not forget to call OnViewDestroyed in the dtor.
 class EnableDebuggingScreenView
     : public base::SupportsWeakPtr<EnableDebuggingScreenView> {
  public:
@@ -22,11 +20,11 @@ class EnableDebuggingScreenView
                                                        "EnableDebuggingScreen"};
 
   enum UIState {
-    UI_STATE_ERROR = -1,
-    UI_STATE_REMOVE_PROTECTION = 1,
-    UI_STATE_SETUP = 2,
-    UI_STATE_WAIT = 3,
-    UI_STATE_DONE = 4,
+    kUIStateError = -1,
+    kUIStateRemoveProtection = 1,
+    kUIStateSetup = 2,
+    kUIStateWait = 3,
+    kUIStateDone = 4,
   };
 
   virtual ~EnableDebuggingScreenView() = default;
@@ -61,13 +59,6 @@ class EnableDebuggingScreenHandler : public EnableDebuggingScreenView,
   static void RegisterPrefs(PrefRegistrySimple* registry);
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::EnableDebuggingScreenHandler;
-using ::chromeos::EnableDebuggingScreenView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_ENABLE_DEBUGGING_SCREEN_HANDLER_H_

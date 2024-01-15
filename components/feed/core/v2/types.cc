@@ -121,6 +121,14 @@ NetworkResponseInfo::NetworkResponseInfo(const NetworkResponseInfo&) = default;
 NetworkResponseInfo& NetworkResponseInfo::operator=(
     const NetworkResponseInfo&) = default;
 
+NetworkResponse::NetworkResponse() = default;
+NetworkResponse::NetworkResponse(const std::string& response_bytes,
+                                 int status_code)
+    : response_bytes(response_bytes), status_code(status_code) {}
+NetworkResponse::~NetworkResponse() = default;
+NetworkResponse::NetworkResponse(const NetworkResponse&) = default;
+NetworkResponse& NetworkResponse::operator=(const NetworkResponse&) = default;
+
 std::string ToString(ContentRevision c) {
   // The 'c/' prefix is used to identify slices as content. Don't change this
   // without updating the Java side.
@@ -170,6 +178,12 @@ base::Value::Dict PersistentMetricsDataToDict(
   dict.Set("day_start", base::TimeToValue(data.current_day_start));
   dict.Set("time_spent_in_feed",
            base::TimeDeltaToValue(data.accumulated_time_spent_in_feed));
+  dict.Set("visit_start", base::TimeToValue(data.visit_start));
+  dict.Set("visit_end", base::TimeToValue(data.visit_end));
+  dict.Set("did_report_good_visit", base::Value(data.did_report_good_visit));
+  dict.Set("time_in_feed_for_good_visit",
+           base::TimeDeltaToValue(data.time_in_feed_for_good_visit));
+  dict.Set("did_scroll_in_visit", base::Value(data.did_scroll_in_visit));
   return dict;
 }
 
@@ -186,6 +200,21 @@ PersistentMetricsData PersistentMetricsDataFromDict(
   if (time_spent_in_feed) {
     result.accumulated_time_spent_in_feed = *time_spent_in_feed;
   }
+
+  result.visit_start =
+      base::ValueToTime(dict.Find("visit_start")).value_or(base::Time());
+  result.visit_end =
+      base::ValueToTime(dict.Find("visit_end")).value_or(base::Time());
+
+  if (const base::Value* value = dict.Find("did_report_good_visit"))
+    result.did_report_good_visit = value->GetIfBool().value_or(false);
+
+  result.time_in_feed_for_good_visit =
+      base::ValueToTimeDelta(dict.Find("time_in_feed_for_good_visit"))
+          .value_or(base::Seconds(0));
+
+  if (const base::Value* value = dict.Find("did_scroll_in_visit"))
+    result.did_scroll_in_visit = value->GetIfBool().value_or(false);
 
   return result;
 }

@@ -5,11 +5,12 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_MANAGEMENT_STEP_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_MANAGEMENT_STEP_CONTROLLER_H_
 
+#include "base/functional/callback.h"
 #include "base/functional/callback_forward.h"
-#include "chrome/browser/ui/views/profiles/profile_management_utils.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/search_engine_choice/search_engine_choice_dialog_service.h"
+#include "chrome/browser/ui/views/profiles/profile_management_types.h"
 #include "components/signin/public/base/signin_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/skia/include/core/SkColor.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
@@ -44,14 +45,16 @@ class ProfileManagementStepController {
   // where it can be completed.
   // `contents` should be the one used to render the Dice sign-in page. The
   // next steps of the flow will continue in that same `WebContents`.
-  // `finish_flow_callback` will be called by the controller to transfer the
-  // flow from the host, exit it and continue in a regular browser window.
+  // `finish_picker_section_callback` will be called by the controller to
+  // request the in-picker flow to be terminated, passing a
+  // `PostHostClearedCallback` that should then be executed to resume the flow
+  // in a regular browser window.
   static std::unique_ptr<ProfileManagementStepController>
   CreateForFinishSamlSignIn(ProfilePickerWebContentsHost* host,
                             Profile* profile,
                             std::unique_ptr<content::WebContents> contents,
-                            absl::optional<SkColor> profile_color,
-                            FinishFlowCallback finish_flow_callback);
+                            base::OnceCallback<void(PostHostClearedCallback)>
+                                finish_picker_section_callback);
 #endif
 
   static std::unique_ptr<ProfileManagementStepController>
@@ -59,19 +62,34 @@ class ProfileManagementStepController {
       ProfilePickerWebContentsHost* host,
       std::unique_ptr<ProfilePickerSignedInFlowController> signed_in_flow);
 
+  static std::unique_ptr<ProfileManagementStepController>
+  CreateForSearchEngineChoice(
+      ProfilePickerWebContentsHost* host,
+      SearchEngineChoiceDialogService* search_engine_choice_dialog_service,
+      content::WebContents* web_contents,
+      SearchEngineChoiceDialogService::EntryPoint entry_point,
+      base::OnceClosure callback);
+
+  // Creates the step that will finish the flow and launch the browser.
+  static std::unique_ptr<ProfileManagementStepController>
+  CreateForFinishFlowAndRunInBrowser(
+      ProfilePickerWebContentsHost* host,
+      base::OnceClosure finish_flow_and_run_in_browser_callback);
+
   explicit ProfileManagementStepController(ProfilePickerWebContentsHost* host);
   virtual ~ProfileManagementStepController();
 
   // Attempts to show the current step in the `host_`.
   // `step_shown_callback` will be executed when the attempt is completed, with
   // `true` if it succeeded.
-  // `reset_state` indicates that the step should reset its internal state
-  // before showing itself.
-  virtual void Show(base::OnceCallback<void(bool success)> step_shown_callback,
+  // `reset_state` indicates that the step should reset its internal state and
+  // appear as freshly created. Callers should pass `true` for newly created
+  // steps.
+  virtual void Show(StepSwitchFinishedCallback step_shown_callback,
                     bool reset_state = false) = 0;
 
   // Frees up unneeded resources. `Show()` will be called if it's needed again.
-  virtual void OnHidden() = 0;
+  virtual void OnHidden() {}
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
   // Method to be called if the user is attempting to reload this step.

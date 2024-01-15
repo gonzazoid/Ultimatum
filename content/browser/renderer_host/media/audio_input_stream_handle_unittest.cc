@@ -7,7 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/run_loop.h"
 #include "base/sync_socket.h"
@@ -54,7 +55,7 @@ class MockRendererAudioInputStreamFactoryClient
           client_receiver,
       media::mojom::ReadOnlyAudioDataPipePtr data_pipe,
       bool initially_muted,
-      const absl::optional<base::UnguessableToken>& stream_id) override {
+      const std::optional<base::UnguessableToken>& stream_id) override {
     EXPECT_TRUE(stream_id.has_value());
     input_stream_.Bind(std::move(input_stream));
     client_receiver_ = std::move(client_receiver);
@@ -134,7 +135,10 @@ class AudioInputStreamHandleTest : public Test {
   mojo::Receiver<blink::mojom::RendererAudioInputStreamFactoryClient>
       client_receiver_;
   StrictMock<MockDeleter> deleter_;
-  media::AudioInputDelegate::EventHandler* event_handler_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION media::AudioInputDelegate::EventHandler* event_handler_ =
+      nullptr;
   std::unique_ptr<AudioInputStreamHandle> handle_;
 
   base::ReadOnlySharedMemoryRegion shared_memory_region_;

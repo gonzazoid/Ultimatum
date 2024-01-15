@@ -4,6 +4,7 @@
 import("//build/config/sanitizers/sanitizers.gni")
 import("//gpu/vulkan/features.gni")
 import("//skia/features.gni")
+import("//ui/gl/features.gni")
 
 import("//cc/cc.gni")
 
@@ -33,16 +34,14 @@ cc_component("cc") {
     "benchmarks/unittest_only_benchmark.h",
     "benchmarks/unittest_only_benchmark_impl.cc",
     "benchmarks/unittest_only_benchmark_impl.h",
-    "document_transition/document_transition_request.cc",
-    "document_transition/document_transition_request.h",
-    "document_transition/document_transition_shared_element_id.cc",
-    "document_transition/document_transition_shared_element_id.h",
     "input/actively_scrolling_type.h",
     "input/browser_controls_offset_manager.cc",
     "input/browser_controls_offset_manager.h",
     "input/browser_controls_offset_manager_client.h",
     "input/browser_controls_state.h",
     "input/compositor_input_interfaces.h",
+    "input/hit_test_opaqueness.cc",
+    "input/hit_test_opaqueness.h",
     "input/input_handler.cc",
     "input/input_handler.h",
     "input/layer_selection_bound.cc",
@@ -81,10 +80,6 @@ cc_component("cc") {
     "layers/content_layer_client.h",
     "layers/deadline_policy.cc",
     "layers/deadline_policy.h",
-    "layers/document_transition_content_layer.cc",
-    "layers/document_transition_content_layer.h",
-    "layers/document_transition_content_layer_impl.cc",
-    "layers/document_transition_content_layer_impl.h",
     "layers/draw_mode.h",
     "layers/draw_properties.cc",
     "layers/draw_properties.h",
@@ -163,6 +158,10 @@ cc_component("cc") {
     "layers/video_layer.h",
     "layers/video_layer_impl.cc",
     "layers/video_layer_impl.h",
+    "layers/view_transition_content_layer.cc",
+    "layers/view_transition_content_layer.h",
+    "layers/view_transition_content_layer_impl.cc",
+    "layers/view_transition_content_layer_impl.h",
     "layers/viewport.cc",
     "layers/viewport.h",
     "metrics/average_lag_tracker.cc",
@@ -199,17 +198,19 @@ cc_component("cc") {
     "metrics/frame_sequence_tracker_collection.h",
     "metrics/frame_sorter.cc",
     "metrics/frame_sorter.h",
-    "metrics/jank_injector.cc",
-    "metrics/jank_injector.h",
     "metrics/jank_metrics.cc",
     "metrics/jank_metrics.h",
     "metrics/latency_ukm_reporter.cc",
     "metrics/latency_ukm_reporter.h",
     "metrics/lcd_text_metrics_reporter.cc",
     "metrics/lcd_text_metrics_reporter.h",
+    "metrics/predictor_jank_tracker.cc",
+    "metrics/predictor_jank_tracker.h",
+    "metrics/scroll_jank_dropped_frame_tracker.cc",
+    "metrics/scroll_jank_dropped_frame_tracker.h",
+    "metrics/scroll_jank_ukm_reporter.cc",
+    "metrics/scroll_jank_ukm_reporter.h",
     "metrics/shared_metrics_buffer.h",
-    "metrics/throughput_ukm_reporter.cc",
-    "metrics/throughput_ukm_reporter.h",
     "metrics/total_frame_counter.cc",
     "metrics/total_frame_counter.h",
     "metrics/ukm_smoothness_data.cc",
@@ -220,6 +221,8 @@ cc_component("cc") {
     "metrics/web_vital_metrics.h",
     "raster/bitmap_raster_buffer_provider.cc",
     "raster/bitmap_raster_buffer_provider.h",
+    "raster/categorized_worker_pool.cc",
+    "raster/categorized_worker_pool.h",
     "raster/gpu_raster_buffer_provider.cc",
     "raster/gpu_raster_buffer_provider.h",
     "raster/lcd_text_disallowed_reason.cc",
@@ -238,8 +241,6 @@ cc_component("cc") {
     "raster/raster_query_queue.h",
     "raster/raster_source.cc",
     "raster/raster_source.h",
-    "raster/scoped_gpu_raster.cc",
-    "raster/scoped_gpu_raster.h",
     "raster/scoped_grcontext_access.h",
     "raster/single_thread_task_graph_runner.cc",
     "raster/single_thread_task_graph_runner.h",
@@ -354,8 +355,6 @@ cc_component("cc") {
     "trees/compositor_mode.h",
     "trees/damage_tracker.cc",
     "trees/damage_tracker.h",
-    "trees/de_jelly_state.cc",
-    "trees/de_jelly_state.h",
     "trees/debug_rect_history.cc",
     "trees/debug_rect_history.h",
     "trees/draw_property_utils.cc",
@@ -370,6 +369,8 @@ cc_component("cc") {
     "trees/latency_info_swap_promise.h",
     "trees/latency_info_swap_promise_monitor.cc",
     "trees/latency_info_swap_promise_monitor.h",
+    "trees/layer_context.h",
+    "trees/layer_context_client.h",
     "trees/layer_tree_frame_sink.cc",
     "trees/layer_tree_frame_sink.h",
     "trees/layer_tree_frame_sink_client.h",
@@ -385,6 +386,8 @@ cc_component("cc") {
     "trees/layer_tree_mutator.h",
     "trees/layer_tree_settings.cc",
     "trees/layer_tree_settings.h",
+    "trees/local_layer_context.cc",
+    "trees/local_layer_context.h",
     "trees/managed_memory_policy.cc",
     "trees/managed_memory_policy.h",
     "trees/mobile_optimized_viewport_util.cc",
@@ -413,6 +416,8 @@ cc_component("cc") {
     "trees/proxy_impl.h",
     "trees/proxy_main.cc",
     "trees/proxy_main.h",
+    "trees/raster_capabilities.cc",
+    "trees/raster_capabilities.h",
     "trees/raster_context_provider_wrapper.cc",
     "trees/raster_context_provider_wrapper.h",
     "trees/render_frame_metadata.cc",
@@ -443,6 +448,10 @@ cc_component("cc") {
     "trees/viewport_layers.cc",
     "trees/viewport_layers.h",
     "trees/viewport_property_ids.h",
+    "view_transition/view_transition_element_id.cc",
+    "view_transition/view_transition_element_id.h",
+    "view_transition/view_transition_request.cc",
+    "view_transition/view_transition_request.h",
   ]
 
   public_deps = [
@@ -455,12 +464,13 @@ cc_component("cc") {
     "//base",
     "//base/third_party/dynamic_annotations",
     "//build:chromeos_buildflags",
-    "//components/power_scheduler",
+    "//components/miracle_parameter/common",
     "//components/viz/client",
     "//device/base/synchronization",
     "//gpu",
     "//gpu/command_buffer/client:gles2_interface",
     "//gpu/command_buffer/client:raster_interface",
+    "//gpu/ipc/client",
     "//gpu/skia_bindings:skia_bindings",
     "//gpu/vulkan:buildflags",
     "//media",  # For VideoLayerImpl.
@@ -565,7 +575,9 @@ cc_test_static_library("test_support") {
     "test/mock_layer_tree_mutator.cc",
     "test/mock_layer_tree_mutator.h",
     "test/mock_occlusion_tracker.h",
+    "test/paint_image_matchers.h",
     "test/paint_op_helper.h",
+    "test/paint_op_matchers.h",
     "test/pixel_comparator.cc",
     "test/pixel_comparator.h",
     "test/pixel_test.cc",
@@ -592,6 +604,7 @@ cc_test_static_library("test_support") {
     "test/solid_color_content_layer_client.h",
     "test/stub_decode_cache.cc",
     "test/stub_decode_cache.h",
+    "test/stub_input_handler_client.h",
     "test/stub_layer_tree_host_client.cc",
     "test/stub_layer_tree_host_client.h",
     "test/stub_layer_tree_host_single_thread_client.cc",
@@ -669,6 +682,24 @@ cc_test_static_library("test_support") {
   if (!is_android) {
     data_deps = [ "//third_party/mesa_headers" ]
   }
+  if (skia_use_dawn) {
+    deps += [
+      "//third_party/dawn/src/dawn:proc",
+      "//third_party/dawn/src/dawn/native",
+    ]
+  }
+}
+
+if (is_ios) {
+  bundle_data("unit_tests_bundle_data") {
+    testonly = true
+    sources = [
+      "//testing/buildbot/filters/ios.cc_unittests.filter",
+      "test/data/lottie/animation_with_2_text_nodes.json",
+    ]
+    outputs = [ "{{bundle_resources_dir}}/" +
+                "{{source_root_relative_dir}}/{{source_file_part}}" ]
+  }
 }
 
 cc_test("cc_unittests") {
@@ -676,7 +707,6 @@ cc_test("cc_unittests") {
 
   sources = [
     "base/delayed_unique_notifier_unittest.cc",
-    "base/float_quad_unittest.cc",
     "base/histograms_unittest.cc",
     "base/index_rect_unittest.cc",
     "base/list_container_unittest.cc",
@@ -690,8 +720,8 @@ cc_test("cc_unittests") {
     "base/unique_notifier_unittest.cc",
     "benchmarks/micro_benchmark_controller_unittest.cc",
     "debug/rendering_stats_unittest.cc",
-    "document_transition/document_transition_request_unittest.cc",
     "input/browser_controls_offset_manager_unittest.cc",
+    "input/hit_test_opaqueness_unittest.cc",
     "input/main_thread_scrolling_reason_unittest.cc",
     "input/scroll_snap_data_unittest.cc",
     "input/scroll_state_unittest.cc",
@@ -742,8 +772,10 @@ cc_test("cc_unittests") {
     "metrics/frame_sequence_metrics_unittest.cc",
     "metrics/frame_sequence_tracker_unittest.cc",
     "metrics/frame_sorter_unittest.cc",
-    "metrics/jank_injector_unittest.cc",
     "metrics/jank_metrics_unittest.cc",
+    "metrics/predictor_jank_tracker_unittest.cc",
+    "metrics/scroll_jank_dropped_frame_tracker_unittest.cc",
+    "metrics/scroll_jank_ukm_reporter_unittest.cc",
     "metrics/total_frame_counter_unittest.cc",
     "metrics/video_playback_roughness_reporter_unittest.cc",
     "mojo_embedder/async_layer_tree_frame_sink_unittest.cc",
@@ -758,16 +790,17 @@ cc_test("cc_unittests") {
     "paint/paint_image_unittest.cc",
     "paint/paint_op_buffer_unittest.cc",
     "paint/paint_op_helper_unittest.cc",
+    "paint/paint_op_writer_reader_unittest.cc",
     "paint/paint_shader_unittest.cc",
     "paint/paint_worklet_input_unittest.cc",
     "paint/scoped_raster_flags_unittest.cc",
     "paint/skia_paint_canvas_unittest.cc",
     "paint/solid_color_analyzer_unittest.cc",
     "paint/transfer_cache_unittest.cc",
+    "raster/categorized_worker_pool_unittest.cc",
     "raster/playback_image_provider_unittest.cc",
     "raster/raster_buffer_provider_unittest.cc",
     "raster/raster_source_unittest.cc",
-    "raster/scoped_gpu_raster_unittest.cc",
     "raster/single_thread_task_graph_runner_unittest.cc",
     "raster/staging_buffer_pool_unittest.cc",
     "raster/synchronous_task_graph_runner_unittest.cc",
@@ -775,6 +808,16 @@ cc_test("cc_unittests") {
     "resources/resource_pool_unittest.cc",
     "scheduler/scheduler_state_machine_unittest.cc",
     "scheduler/scheduler_unittest.cc",
+    "slim/delayer_scheduler_unittest.cc",
+    "slim/slim_layer_tree_compositor_frame_unittest.cc",
+    "slim/slim_layer_tree_unittest.cc",
+    "slim/slim_layer_unittest.cc",
+    "slim/test_frame_sink_impl.cc",
+    "slim/test_frame_sink_impl.h",
+    "slim/test_layer_tree_client.cc",
+    "slim/test_layer_tree_client.h",
+    "slim/test_layer_tree_impl.cc",
+    "slim/test_layer_tree_impl.h",
     "tiles/checker_image_tracker_unittest.cc",
     "tiles/decoded_image_tracker_unittest.cc",
     "tiles/gpu_image_decode_cache_unittest.cc",
@@ -825,6 +868,7 @@ cc_test("cc_unittests") {
     "trees/throttle_decider_unittest.cc",
     "trees/tree_synchronizer_unittest.cc",
     "trees/ukm_manager_unittest.cc",
+    "view_transition/view_transition_request_unittest.cc",
 
     # Animation test files.
     "animation/animation_host_unittest.cc",
@@ -861,7 +905,7 @@ cc_test("cc_unittests") {
     "//build:chromeos_buildflags",
     "//cc/mojo_embedder",
     "//cc/paint",
-    "//components/power_scheduler",
+    "//cc/slim",
     "//components/ukm:test_support",
     "//components/viz/client",
     "//components/viz/common",
@@ -878,6 +922,7 @@ cc_test("cc_unittests") {
     "//media",
     "//mojo/core/embedder",
     "//mojo/public/cpp/bindings",
+    "//skia",
     "//skia:buildflags",
     "//skia:skcms",
     "//testing/gmock",
@@ -891,7 +936,7 @@ cc_test("cc_unittests") {
     "//ui/gl:test_support",
   ]
 
-  data = [ "//components/viz/test/data/" ]
+  data = [ "//components/test/data/viz/" ]
   data_deps = [
     "//testing/buildbot/filters:cc_unittests_filters",
     "//third_party/mesa_headers",
@@ -906,12 +951,15 @@ cc_test("cc_unittests") {
   }
 
   if (is_fuchsia) {
-    # TODO(https://crbug.com/1185811): Investigate removing the requirement for
-    # job_policy_ambient_mark_vmo_exec for the sake of V8's allocator in tests.
+    # TODO(https://crbug.com/1022542): Some of these tests use SwiftShader,
+    # which requires ambient VMEX.
     test_runner_shard = "//build/config/fuchsia/test/elf_test_ambient_exec_runner.shard.test-cml"
 
     additional_manifest_fragments = [
       "//build/config/fuchsia/test/fonts.shard.test-cml",
+
+      # TODO(https://crbug.com/1185811): Investigate removing the requirement
+      # for VmexResource.
       "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml",
       "//third_party/fuchsia-sdk/sdk/pkg/vulkan/client.shard.cml",
     ]
@@ -921,6 +969,13 @@ cc_test("cc_unittests") {
     deps += [
       "//gpu/vulkan:test_support",
       "//gpu/vulkan/init",
+    ]
+  }
+
+  if (is_ios) {
+    public_deps = [
+      ":unit_tests_bundle_data",
+      "//components/test:viz_test_bundle_data",
     ]
   }
 }
@@ -965,6 +1020,7 @@ cc_test("cc_perftests") {
     "//mojo/public/cpp/bindings",
     "//services/viz/public/mojom",
     "//skia",
+    "//skia:test_fonts",
     "//testing/gmock",
     "//testing/gtest",
     "//testing/perf",
@@ -977,7 +1033,7 @@ cc_test("cc_perftests") {
   # This target should not require the Chrome executable to run.
   assert_no_deps = [ "//chrome" ]
 
-  data = [ "//components/viz/test/data/" ]
+  data = [ "//components/test/data/viz/" ]
 
   data_deps = [
     # Needed for isolate script to execute.

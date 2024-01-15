@@ -53,6 +53,7 @@
 #include "third_party/blink/renderer/platform/resolution_units.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
+#include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/skia/include/core/SkPaint.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkPoint.h"
@@ -61,22 +62,18 @@
 
 namespace blink {
 
-std::unique_ptr<HarfBuzzFace> HarfBuzzFace::Create(
-    FontPlatformData* platform_data) {
-  auto harfbuzz_font_data =
-      FontGlobalContext::GetHarfBuzzFontCache().GetOrCreateFontData(
-          platform_data);
-  return base::WrapUnique(new HarfBuzzFace(platform_data, harfbuzz_font_data));
+HarfBuzzFace::HarfBuzzFace(FontPlatformData* platform_data, uint64_t unique_id)
+    : platform_data_(platform_data), unique_id_(unique_id) {
+  HbFontCacheEntry* const cache_entry =
+      FontGlobalContext::GetHarfBuzzFontCache().RefOrNew(unique_id_,
+                                                         platform_data);
+  unscaled_font_ = cache_entry->HbFont();
+  harfbuzz_font_data_ = cache_entry->HbFontData();
 }
 
-HarfBuzzFace::HarfBuzzFace(FontPlatformData* platform_data,
-                           scoped_refptr<HarfBuzzFontData> harfbuzz_font_data)
-    : platform_data_(platform_data),
-      unique_id_(platform_data->UniqueID()),
-      harfbuzz_font_data_(harfbuzz_font_data),
-      unscaled_font_(harfbuzz_font_data->unscaled_font_.get()) {}
-
-HarfBuzzFace::~HarfBuzzFace() = default;
+HarfBuzzFace::~HarfBuzzFace() {
+  FontGlobalContext::GetHarfBuzzFontCache().Remove(unique_id_);
+}
 
 static hb_bool_t HarfBuzzGetGlyph(hb_font_t* hb_font,
                                   void* font_data,
@@ -91,8 +88,41 @@ static hb_bool_t HarfBuzzGetGlyph(hb_font_t* hb_font,
   if (hb_font_data->range_set_ && !hb_font_data->range_set_->Contains(unicode))
     return false;
 
-  return hb_font_get_glyph(hb_font_get_parent(hb_font), unicode,
-                           variation_selector, glyph);
+  // If the system fonts do not have a glyph coverage for line separator
+  // (0x2028) or paragraph separator (0x2029), missing glyph would be displayed
+  // in Chrome instead. If the system font has l-sep and p-sep symbols for the
+  // 0x2028 and 0x2029 codepoints, they will be displayed, see
+  // https://crbug.com/550275. To prevent that, we are replacing line and
+  // paragraph separators with space, as it is said in unicode specification,
+  // compare: https://www.unicode.org/faq/unsup_char.html#2.
+  if (unicode == kLineSeparator || unicode == kParagraphSeparator) {
+    unicode = kSpaceCharacter;
+  }
+
+  hb_bool_t hb_has_glyph = hb_font_get_glyph(
+      hb_font_get_parent(hb_font), unicode, variation_selector, glyph);
+// MacOS CoreText API synthesizes GlyphID for several unicode codepoints,
+// for example, hyphens and separators for some fonts. HarfBuzz does not
+// synthesize such glyphs, and as it's not found from the last resort font, we
+// end up with displaying tofu, see https://crbug.com/1267606 for details.
+// Chrome uses Times as last resort fallback font and in Times the only visible
+// synthesizing characters are hyphen (0x2010) and non-breaking hyphen (0x2011).
+// For performance reasons, we limit this fallback lookup to the specific
+// missing glyphs for hyphens and only to Mac OS, where we're facing this issue.
+#if BUILDFLAG(IS_APPLE)
+  if (!hb_has_glyph) {
+    SkTypeface* typeface = hb_font_data->font_.getTypeface();
+    if (!typeface) {
+      return false;
+    }
+    if (unicode == kHyphenCharacter || unicode == kNonBreakingHyphen) {
+      SkGlyphID sk_glyph_id = typeface->unicharToGlyph(unicode);
+      *glyph = sk_glyph_id;
+      return sk_glyph_id;
+    }
+  }
+#endif
+  return hb_has_glyph;
 }
 
 static hb_bool_t HarfBuzzGetNominalGlyph(hb_font_t* hb_font,
@@ -253,7 +283,7 @@ unsigned HarfBuzzFace::UnitsPerEmFromHeadTable() {
 
 Glyph HarfBuzzFace::HbGlyphForCharacter(UChar32 character) {
   hb_codepoint_t glyph = 0;
-  HarfBuzzGetNominalGlyph(unscaled_font_, harfbuzz_font_data_.get(), character,
+  HarfBuzzGetNominalGlyph(unscaled_font_, harfbuzz_font_data_, character,
                           &glyph, nullptr);
   return glyph;
 }
@@ -271,7 +301,7 @@ class HarfBuzzSkiaFontFuncs final {
     return shared_hb_funcs;
   }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   HarfBuzzSkiaFontFuncs()
       : hb_font_funcs_skia_advances_(
             CreateFontFunctions(kSkiaHorizontalAdvances)),
@@ -327,7 +357,7 @@ class HarfBuzzSkiaFontFuncs final {
  private:
   enum HorizontalAdvanceSource {
     kSkiaHorizontalAdvances,
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
     kHarfBuzzHorizontalAdvances,
 #endif
   };
@@ -360,7 +390,7 @@ class HarfBuzzSkiaFontFuncs final {
   }
 
   hb_font_funcs_t* const hb_font_funcs_skia_advances_;
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   hb_font_funcs_t* const hb_font_funcs_harfbuzz_advances_;
 #endif
 };
@@ -396,7 +426,7 @@ static hb::unique_ptr<hb_face_t> CreateFace(FontPlatformData* platform_data) {
 
   sk_sp<SkTypeface> typeface = sk_ref_sp(platform_data->Typeface());
   CHECK(typeface);
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_APPLE)
   face = HbFaceFromSkTypeface(typeface);
 #endif
 
@@ -410,9 +440,7 @@ static hb::unique_ptr<hb_face_t> CreateFace(FontPlatformData* platform_data) {
   return face;
 }
 
-// TODO(yosin): We should move |CreateHarfBuzzFontData()| to
-// "harfbuzz_font_cache.cc".
-static scoped_refptr<HarfBuzzFontData> CreateHarfBuzzFontData(
+static scoped_refptr<HbFontCacheEntry> CreateHbFontCacheEntry(
     hb_face_t* face,
     SkTypeface* typeface) {
   hb::unique_ptr<hb_font_t> ot_font(hb_font_create(face));
@@ -433,23 +461,24 @@ static scoped_refptr<HarfBuzzFontData> CreateHarfBuzzFontData(
   // Creating a sub font means that non-available functions
   // are found from the parent.
   hb_font_t* const unscaled_font = hb_font_create_sub_font(ot_font.get());
-  scoped_refptr<HarfBuzzFontData> harfbuzz_font_data =
-      HarfBuzzFontData::Create(unscaled_font);
+  scoped_refptr<HbFontCacheEntry> cache_entry =
+      HbFontCacheEntry::Create(unscaled_font);
   hb_font_set_funcs(unscaled_font,
                     HarfBuzzSkiaFontFuncs::Get().GetFunctions(typeface),
-                    harfbuzz_font_data.get(), nullptr);
-  return harfbuzz_font_data;
+                    cache_entry->HbFontData(), nullptr);
+  return cache_entry;
 }
 
-scoped_refptr<HarfBuzzFontData> HarfBuzzFontCache::GetOrCreateFontData(
-    FontPlatformData* platform_data) {
-  const auto& result = font_map_.insert(platform_data->UniqueID(), nullptr);
+HbFontCacheEntry* HarfBuzzFontCache::RefOrNew(uint64_t unique_id,
+                                              FontPlatformData* platform_data) {
+  const auto& result = font_map_.insert(unique_id, nullptr);
   if (result.is_new_entry) {
     hb::unique_ptr<hb_face_t> face = CreateFace(platform_data);
     result.stored_value->value =
-        CreateHarfBuzzFontData(face.get(), platform_data->Typeface());
+        CreateHbFontCacheEntry(face.get(), platform_data->Typeface());
   }
-  return result.stored_value->value;
+  result.stored_value->value->AddRef();
+  return result.stored_value->value.get();
 }
 
 static_assert(
@@ -462,6 +491,15 @@ static_assert(
             sizeof(hb_variation_t),
     "Skia and HarfBuzz Variation parameter types must match in structure and "
     "size.");
+
+const OpenTypeVerticalData& HarfBuzzFace::VerticalData() const {
+  // Ensure `HarfBuzzFontData` and its `OpenTypeVerticalData` is up-to-date,
+  // with `kPrepareForVerticalLayout`, even when this font isn't used for
+  // vertical flow. See `GetScaledFont()`.
+  harfbuzz_font_data_->UpdateFallbackMetricsAndScale(
+      *platform_data_, HarfBuzzFace::kPrepareForVerticalLayout);
+  return *harfbuzz_font_data_->VerticalData();
+}
 
 hb_font_t* HarfBuzzFace::GetScaledFont(scoped_refptr<UnicodeRangeSet> range_set,
                                        VerticalLayoutCallbacks vertical_layout,

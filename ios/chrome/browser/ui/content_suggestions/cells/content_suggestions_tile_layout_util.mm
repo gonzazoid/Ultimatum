@@ -5,12 +5,8 @@
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_tile_layout_util.h"
 
 #import "base/notreached.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/util/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 const int kContentSuggestionsTilesVerticalSpacing = 16;
 const int kContentSuggestionsTilesHorizontalSpacingRegular = 19;
@@ -38,12 +34,13 @@ CGFloat ContentSuggestionsTilesHorizontalSpacing(UITraitCollection* trait_collec
 CGSize MostVisitedCellSize(UIContentSizeCategory category) {
   NSComparisonResult result = UIContentSizeCategoryCompareToCategory(
       category, UIContentSizeCategoryAccessibilityMedium);
+  BOOL isSmallestSize =
+      UIContentSizeCategoryCompareToCategory(
+          category, UIContentSizeCategoryExtraLarge) == NSOrderedAscending;
   switch (result) {
     case NSOrderedAscending:
-      return ([category
-                 isEqualToString:UIContentSizeCategoryExtraExtraExtraLarge])
-                 ? kContentSuggestionsTileViewSizeMedium
-                 : kContentSuggestionsTileViewSizeSmall;
+      return isSmallestSize ? kContentSuggestionsTileViewSizeSmall
+                            : kContentSuggestionsTileViewSizeMedium;
     case NSOrderedSame:
       return kContentSuggestionsTileViewSizeLarge;
     case NSOrderedDescending:

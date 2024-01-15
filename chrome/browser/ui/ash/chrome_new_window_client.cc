@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/chrome_new_window_client.h"
+#include "base/memory/raw_ptr.h"
 
 #include <string>
 #include <utility>
@@ -15,6 +16,7 @@
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/window_properties.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
@@ -22,7 +24,6 @@
 #include "chrome/browser/apps/app_service/intent_util.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/apps/app_service/metrics/app_service_metrics.h"
-#include "chrome/browser/apps/intent_helper/metrics/intent_handling_metrics.h"
 #include "chrome/browser/ash/apps/apk_web_app_service.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
@@ -30,9 +31,9 @@
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/url_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/ash/system_web_apps/apps/calculator_app/calculator_app_utils.h"
+#include "chrome/browser/ash/system_web_apps/apps/camera_app/chrome_camera_app_ui_delegate.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
-#include "chrome/browser/ash/web_applications/calculator_app/calculator_app_utils.h"
-#include "chrome/browser/ash/web_applications/camera_app/chrome_camera_app_ui_delegate.h"
 #include "chrome/browser/chromeos/arc/arc_web_contents_data.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
@@ -56,10 +57,8 @@
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/webui/chrome_web_contents_handler.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/browser/ui/webui/tab_strip/tab_strip_ui_util.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
@@ -69,15 +68,14 @@
 #include "components/arc/intent_helper/arc_intent_helper_bridge.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 #include "components/services/app_service/public/cpp/types_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
 #include "components/url_formatter/url_fixer.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
@@ -222,9 +220,9 @@ class ChromeNewWindowClient::TabRestoreHelper
   }
 
  private:
-  ChromeNewWindowClient* delegate_;
-  Profile* profile_;
-  sessions::TabRestoreService* tab_restore_service_;
+  raw_ptr<ChromeNewWindowClient> delegate_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<sessions::TabRestoreService> tab_restore_service_;
 };
 
 void ChromeNewWindowClient::NewTab() {
@@ -236,8 +234,15 @@ void ChromeNewWindowClient::NewTab() {
 
   // Display a browser, setting the focus to the location bar after it is shown.
   {
-    chrome::ScopedTabbedBrowserDisplayer displayer(
-        ProfileManager::GetActiveUserProfile());
+    Profile* profile = ProfileManager::GetActiveUserProfile();
+    bool is_otr_forced =
+        IncognitoModePrefs::ShouldOpenSubsequentBrowsersInIncognito(
+            *base::CommandLine::ForCurrentProcess(), profile->GetPrefs());
+
+    if (is_otr_forced) {
+      profile = profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
+    }
+    chrome::ScopedTabbedBrowserDisplayer displayer(profile);
     browser = displayer.browser();
     chrome::NewTab(browser);
   }
@@ -264,8 +269,6 @@ void ChromeNewWindowClient::NewWindowForDetachingTab(
     aura::Window* source_window,
     const ui::OSExchangeData& drop_data,
     NewWindowForDetachingTabCallback closure) {
-  DCHECK(ash::features::IsWebUITabStripTabDragIntegrationEnabled());
-
   BrowserView* source_view = BrowserView::GetBrowserViewForNativeWindow(
       source_window->GetToplevelWindow());
   if (!source_view) {
@@ -315,6 +318,8 @@ WindowOpenDisposition ToWindowOpenDisposition(
       return WindowOpenDisposition::NEW_FOREGROUND_TAB;
     case ash::NewWindowDelegate::Disposition::kNewWindow:
       return WindowOpenDisposition::NEW_WINDOW;
+    case ash::NewWindowDelegate::Disposition::kOffTheRecord:
+      return WindowOpenDisposition::OFF_THE_RECORD;
     case ash::NewWindowDelegate::Disposition::kSwitchToTab:
       return WindowOpenDisposition::SWITCH_TO_TAB;
   }
@@ -371,9 +376,6 @@ void ChromeNewWindowClient::OpenUrl(const GURL& url,
     // Add a flag to remember this tab originated in the ARC context.
     tab->SetUserData(&arc::ArcWebContentsData::kArcTransitionFlag,
                      std::make_unique<arc::ArcWebContentsData>(tab));
-
-    apps::IntentHandlingMetrics::RecordOpenBrowserMetrics(
-        apps::IntentHandlingMetrics::AppType::kArc);
   }
 }
 
@@ -382,13 +384,8 @@ void ChromeNewWindowClient::OpenCalculator() {
   apps::AppServiceProxy* proxy =
       apps::AppServiceProxyFactory::GetForProfile(profile);
   DCHECK(proxy);
-  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-    proxy->Launch(ash::calculator_app::GetInstalledCalculatorAppId(profile),
-                  ui::EF_NONE, apps::LaunchSource::kFromKeyboard);
-  } else {
-    proxy->Launch(ash::calculator_app::GetInstalledCalculatorAppId(profile),
-                  ui::EF_NONE, apps::mojom::LaunchSource::kFromKeyboard);
-  }
+  proxy->Launch(ash::calculator_app::GetInstalledCalculatorAppId(profile),
+                ui::EF_NONE, apps::LaunchSource::kFromKeyboard);
 }
 
 void ChromeNewWindowClient::OpenFileManager() {
@@ -409,19 +406,10 @@ void ChromeNewWindowClient::OpenFileManager() {
       return;
     }
 
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      proxy->Launch(
-          update.AppId(),
-          apps::GetEventFlags(WindowOpenDisposition::NEW_FOREGROUND_TAB,
-                              /*prefer_container=*/true),
-          apps::LaunchSource::kFromKeyboard);
-    } else {
-      proxy->Launch(
-          update.AppId(),
-          apps::GetEventFlags(WindowOpenDisposition::NEW_FOREGROUND_TAB,
-                              /*prefer_container=*/true),
-          apps::mojom::LaunchSource::kFromKeyboard);
-    }
+    proxy->Launch(update.AppId(),
+                  apps::GetEventFlags(WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                                      /*prefer_container=*/true),
+                  apps::LaunchSource::kFromKeyboard);
   };
 
   bool result = proxy->AppRegistryCache().ForOneApp(
@@ -452,23 +440,13 @@ void ChromeNewWindowClient::OpenDownloadsFolder() {
       return;
     }
 
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      std::vector<base::FilePath> launch_files;
-      launch_files.push_back(downloads_path);
-      proxy->LaunchAppWithFiles(
-          update.AppId(),
-          apps::GetEventFlags(WindowOpenDisposition::NEW_FOREGROUND_TAB,
-                              /*prefer_container=*/true),
-          apps::LaunchSource::kFromKeyboard, std::move(launch_files));
-    } else {
-      apps::mojom::FilePathsPtr launch_files = apps::mojom::FilePaths::New();
-      launch_files->file_paths.push_back(downloads_path);
-      proxy->LaunchAppWithFiles(
-          update.AppId(),
-          apps::GetEventFlags(WindowOpenDisposition::NEW_FOREGROUND_TAB,
-                              /*prefer_container=*/true),
-          apps::mojom::LaunchSource::kFromKeyboard, std::move(launch_files));
-    }
+    std::vector<base::FilePath> launch_files;
+    launch_files.push_back(downloads_path);
+    proxy->LaunchAppWithFiles(
+        update.AppId(),
+        apps::GetEventFlags(WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                            /*prefer_container=*/true),
+        apps::LaunchSource::kFromKeyboard, std::move(launch_files));
   };
 
   bool result = proxy->AppRegistryCache().ForOneApp(
@@ -478,19 +456,7 @@ void ChromeNewWindowClient::OpenDownloadsFolder() {
 
 void ChromeNewWindowClient::OpenCrosh() {
   Profile* profile = ProfileManager::GetActiveUserProfile();
-  if (base::FeatureList::IsEnabled(chromeos::features::kCroshSWA)) {
-    ash::LaunchSystemWebAppAsync(profile, ash::SystemWebAppType::CROSH);
-  } else {
-    chrome::ScopedTabbedBrowserDisplayer displayer(profile);
-    Browser* browser = displayer.browser();
-    content::WebContents* page = browser->OpenURL(content::OpenURLParams(
-        GURL(chrome::kChromeUIUntrustedCroshURL), content::Referrer(),
-        WindowOpenDisposition::NEW_FOREGROUND_TAB,
-        ui::PAGE_TRANSITION_GENERATED, false));
-    browser->window()->Show();
-    browser->window()->Activate();
-    page->Focus();
-  }
+  ash::LaunchSystemWebAppAsync(profile, ash::SystemWebAppType::CROSH);
 }
 
 void ChromeNewWindowClient::OpenGetHelp() {
@@ -525,7 +491,11 @@ void ChromeNewWindowClient::RestoreTab() {
 }
 
 void ChromeNewWindowClient::ShowKeyboardShortcutViewer() {
-  ash::ToggleKeyboardShortcutViewer();
+  ShowShortcutCustomizationApp();
+}
+
+void ChromeNewWindowClient::ShowShortcutCustomizationApp() {
+  chrome::ShowShortcutCustomizationApp(ProfileManager::GetActiveUserProfile());
 }
 
 void ChromeNewWindowClient::ShowTaskManager() {

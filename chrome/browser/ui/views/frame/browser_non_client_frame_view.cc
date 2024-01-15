@@ -21,7 +21,6 @@
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/tab_strip_region_view.h"
-#include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_frame_toolbar_view.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/grit/theme_resources.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -67,11 +66,6 @@ BrowserNonClientFrameView::~BrowserNonClientFrameView() {
     g_browser_process->profile_manager()->
         GetProfileAttributesStorage().RemoveObserver(this);
   }
-
-  // WebAppFrameToolbarView::ToolbarButtonContainer is an
-  // ImmersiveModeController::Observer, so it must be destroyed before the
-  // BrowserView destroys the ImmersiveModeController.
-  delete web_app_frame_toolbar_;
 }
 
 void BrowserNonClientFrameView::OnBrowserViewInitViewsComplete() {
@@ -110,7 +104,7 @@ bool BrowserNonClientFrameView::HasVisibleBackgroundTabShapes(
   TabStrip* const tab_strip = browser_view_->tabstrip();
 
   const bool active = ShouldPaintAsActive(active_state);
-  const absl::optional<int> bg_id =
+  const std::optional<int> bg_id =
       tab_strip->GetCustomBackgroundId(active_state);
   if (bg_id.has_value()) {
     // If the theme has a custom tab background image, assume tab shapes are
@@ -140,8 +134,10 @@ bool BrowserNonClientFrameView::HasVisibleBackgroundTabShapes(
 
   // Background tab shapes are visible iff the tab color differs from the frame
   // color.
-  return tab_strip->GetTabBackgroundColor(TabActive::kInactive, active_state) !=
-         GetFrameColor(active_state);
+  return TabStyle::Get()->GetTabBackgroundColor(
+             TabStyle::TabSelectionState::kInactive,
+             /*hovered=*/false, ShouldPaintAsActive(active_state),
+             *GetColorProvider()) != GetFrameColor(active_state);
 }
 
 bool BrowserNonClientFrameView::EverHasVisibleBackgroundTabShapes() const {
@@ -169,14 +165,7 @@ SkColor BrowserNonClientFrameView::GetFrameColor(
                                           : ui::kColorFrameInactive);
 }
 
-void BrowserNonClientFrameView::UpdateFrameColor() {
-  // Only web-app windows support dynamic frame colors set by HTML meta tags.
-  if (web_app_frame_toolbar_)
-    web_app_frame_toolbar_->UpdateCaptionColors();
-  SchedulePaint();
-}
-
-absl::optional<int> BrowserNonClientFrameView::GetCustomBackgroundId(
+std::optional<int> BrowserNonClientFrameView::GetCustomBackgroundId(
     BrowserFrameActiveState active_state) const {
   const ui::ThemeProvider* tp = GetThemeProvider();
   const bool incognito = browser_view_->GetIncognito();
@@ -198,31 +187,10 @@ absl::optional<int> BrowserNonClientFrameView::GetCustomBackgroundId(
       tp->HasCustomImage(id) || (!active && tp->HasCustomImage(active_id)) ||
       tp->HasCustomImage(IDR_THEME_FRAME) ||
       (incognito && tp->HasCustomImage(IDR_THEME_FRAME_INCOGNITO));
-  return has_custom_image ? absl::make_optional(id) : absl::nullopt;
+  return has_custom_image ? std::make_optional(id) : std::nullopt;
 }
 
 void BrowserNonClientFrameView::UpdateMinimumSize() {}
-
-void BrowserNonClientFrameView::SetWindowControlsOverlayToggleVisible(
-    bool visible) {
-  DCHECK(browser_view_->AppUsesWindowControlsOverlay());
-  web_app_frame_toolbar_->SetWindowControlsOverlayToggleVisible(visible);
-}
-
-void BrowserNonClientFrameView::UpdateBorderlessModeEnabled() {
-  web_app_frame_toolbar_->UpdateBorderlessModeEnabled();
-}
-
-void BrowserNonClientFrameView::Layout() {
-  // BrowserView updates most UI visibility on layout based on fullscreen
-  // state. However, it doesn't have access to |web_app_frame_toolbar_|. Do
-  // it here. This is necessary since otherwise the visibility of ink drop
-  // layers won't be updated; see crbug.com/964215.
-  if (web_app_frame_toolbar_)
-    web_app_frame_toolbar_->SetVisible(!frame_->IsFullscreen());
-
-  NonClientFrameView::Layout();
-}
 
 void BrowserNonClientFrameView::VisibilityChanged(views::View* starting_from,
                                                   bool is_visible) {
@@ -234,34 +202,27 @@ void BrowserNonClientFrameView::VisibilityChanged(views::View* starting_from,
     OnProfileAvatarChanged(base::FilePath());
 }
 
-int BrowserNonClientFrameView::NonClientHitTest(const gfx::Point& point) {
-  if (!web_app_frame_toolbar_)
-    return HTNOWHERE;
-  int web_app_component =
-      views::GetHitTestComponent(web_app_frame_toolbar_, point);
-  if (web_app_component != HTNOWHERE)
-    return web_app_component;
-
-  return HTNOWHERE;
-}
-
-void BrowserNonClientFrameView::ResetWindowControls() {
-  if (web_app_frame_toolbar_)
-    web_app_frame_toolbar_->UpdateStatusIconsVisibility();
-}
-
 TabSearchBubbleHost* BrowserNonClientFrameView::GetTabSearchBubbleHost() {
   return nullptr;
 }
 
+gfx::Insets BrowserNonClientFrameView::MirroredFrameBorderInsets() const {
+  NOTREACHED_NORETURN();
+}
+
+gfx::Insets BrowserNonClientFrameView::GetInputInsets() const {
+  NOTREACHED_NORETURN();
+}
+
+SkRRect BrowserNonClientFrameView::GetRestoredClipRegion() const {
+  NOTREACHED_NORETURN();
+}
+
+int BrowserNonClientFrameView::GetTranslucentTopAreaHeight() const {
+  return 0;
+}
+
 void BrowserNonClientFrameView::PaintAsActiveChanged() {
-  // The toolbar top separator color (used as the stroke around the tabs and
-  // the new tab button) needs to be recalculated.
-  browser_view_->tab_strip_region_view()->FrameColorsChanged();
-
-  if (web_app_frame_toolbar_)
-    web_app_frame_toolbar_->SetPaintAsActive(ShouldPaintAsActive());
-
   // Changing the activation state may change the visible frame color.
   SchedulePaint();
 }
@@ -297,11 +258,6 @@ gfx::ImageSkia BrowserNonClientFrameView::GetFrameOverlayImage(
   return tp->HasCustomImage(frame_overlay_image_id)
              ? *tp->GetImageSkiaNamed(frame_overlay_image_id)
              : gfx::ImageSkia();
-}
-
-void BrowserNonClientFrameView::ChildPreferredSizeChanged(views::View* child) {
-  if (browser_view()->initialized() && child == web_app_frame_toolbar_)
-    Layout();
 }
 
 void BrowserNonClientFrameView::OnProfileAdded(
@@ -361,5 +317,5 @@ int BrowserNonClientFrameView::GetSystemMenuY() const {
 }
 #endif  // BUILDFLAG(IS_WIN)
 
-BEGIN_METADATA(BrowserNonClientFrameView, views::NonClientFrameView)
+BEGIN_METADATA(BrowserNonClientFrameView)
 END_METADATA

@@ -67,32 +67,15 @@ Database* DOMWindowWebDatabase::openDatabase(
   Database* database = nullptr;
   DatabaseManager& db_manager = DatabaseManager::Manager();
   DatabaseError error = DatabaseError::kNone;
-  if (RuntimeEnabledFeatures::DatabaseEnabled() &&
+  if (RuntimeEnabledFeatures::DatabaseEnabled(window.GetExecutionContext()) &&
       window.GetSecurityOrigin()->CanAccessDatabase()) {
     if (window.GetSecurityOrigin()->IsLocal())
       UseCounter::Count(window, WebFeature::kFileAccessedDatabase);
 
-    if (!base::FeatureList::IsEnabled(blink::features::kWebSQLAccess) &&
-        !base::CommandLine::ForCurrentProcess()->HasSwitch(
-            blink::switches::kWebSQLAccess)) {
-      exception_state.ThrowSecurityError(
-          "Access to the WebDatabase API is denied.");
-      return nullptr;
-    }
-
     if (!window.GetExecutionContext()->IsSecureContext()) {
-      if (base::FeatureList::IsEnabled(
-              blink::features::kWebSQLNonSecureContextAccess) ||
-          base::CommandLine::ForCurrentProcess()->HasSwitch(
-              blink::switches::kWebSQLNonSecureContextEnabled)) {
-        Deprecation::CountDeprecation(
-            &window, WebFeature::kOpenWebDatabaseInsecureContext);
-      } else {
-        UseCounter::Count(window, WebFeature::kOpenWebDatabaseInsecureContext);
-        exception_state.ThrowSecurityError(
-            "Access to the WebDatabase API is denied in non-secure contexts.");
-        return nullptr;
-      }
+      exception_state.ThrowSecurityError(
+          "Access to the WebDatabase API is denied in non-secure contexts.");
+      return nullptr;
     }
 
     if (window.IsCrossSiteSubframeIncludingScheme()) {

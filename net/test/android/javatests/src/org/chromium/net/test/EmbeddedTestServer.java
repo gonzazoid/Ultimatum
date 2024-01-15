@@ -17,7 +17,10 @@ import androidx.annotation.GuardedBy;
 import org.junit.Assert;
 
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
+import org.chromium.base.test.BaseJUnit4ClassRunner.ClassHook;
+import org.chromium.base.test.util.UrlUtils;
 import org.chromium.net.X509Util;
 import org.chromium.net.test.util.CertTestUtil;
 
@@ -33,6 +36,7 @@ import java.io.File;
  * // serve requests...
  * s.getURL("/foo/bar.txt");
  *
+ * // Generally safe to omit as ResettersForTesting will call it.
  * s.stopAndDestroyServer();
  * </pre>
  *
@@ -45,28 +49,33 @@ public class EmbeddedTestServer {
             "org.chromium.net.test.EMBEDDED_TEST_SERVER_SERVICE";
     private static final long SERVICE_CONNECTION_WAIT_INTERVAL_MS = 5000;
 
+    private static boolean sTestRootInitDone;
+
     @GuardedBy("mImplMonitor")
     private IEmbeddedTestServerImpl mImpl;
-    private ServiceConnection mConn = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            synchronized (mImplMonitor) {
-                mImpl = IEmbeddedTestServerImpl.Stub.asInterface(service);
-                mImplMonitor.notify();
-            }
-        }
 
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            synchronized (mImplMonitor) {
-                mImpl = null;
-                mImplMonitor.notify();
-            }
-        }
-    };
+    private ServiceConnection mConn =
+            new ServiceConnection() {
+                @Override
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    synchronized (mImplMonitor) {
+                        mImpl = IEmbeddedTestServerImpl.Stub.asInterface(service);
+                        mImplMonitor.notify();
+                    }
+                }
+
+                @Override
+                public void onServiceDisconnected(ComponentName name) {
+                    synchronized (mImplMonitor) {
+                        mImpl = null;
+                        mImplMonitor.notify();
+                    }
+                }
+            };
 
     private Context mContext;
     private final Object mImplMonitor = new Object();
+    boolean mDisableResetterForTesting;
 
     // Whether the server should use HTTP or HTTPS.
     public enum ServerHTTPSSetting {
@@ -74,9 +83,7 @@ public class EmbeddedTestServer {
         USE_HTTPS,
     }
 
-    /**
-     * Exception class raised on failure in the EmbeddedTestServer.
-     */
+    /** Exception class raised on failure in the EmbeddedTestServer. */
     public static final class EmbeddedTestServerFailure extends Error {
         public EmbeddedTestServerFailure(String errorDesc) {
             super(errorDesc);
@@ -93,27 +100,24 @@ public class EmbeddedTestServer {
      * Notifications are asynchronous and delivered to the UI thread.
      */
     public static class ConnectionListener {
-        private final IConnectionListener mListener = new IConnectionListener.Stub() {
-            @Override
-            public void acceptedSocket(final long socketId) {
-                ThreadUtils.runOnUiThread(new Runnable() {
+        private final IConnectionListener mListener =
+                new IConnectionListener.Stub() {
                     @Override
-                    public void run() {
-                        ConnectionListener.this.acceptedSocket(socketId);
+                    public void acceptedSocket(final long socketId) {
+                        ThreadUtils.runOnUiThread(
+                                () -> {
+                                    ConnectionListener.this.acceptedSocket(socketId);
+                                });
                     }
-                });
-            }
 
-            @Override
-            public void readFromSocket(final long socketId) {
-                ThreadUtils.runOnUiThread(new Runnable() {
                     @Override
-                    public void run() {
-                        ConnectionListener.this.readFromSocket(socketId);
+                    public void readFromSocket(final long socketId) {
+                        ThreadUtils.runOnUiThread(
+                                () -> {
+                                    ConnectionListener.this.readFromSocket(socketId);
+                                });
                     }
-                });
-            }
-        };
+                };
 
         /**
          * A new socket connection has been opened on the server.
@@ -171,6 +175,9 @@ public class EmbeddedTestServer {
             if (!initialized) {
                 throw new EmbeddedTestServerFailure("Failed to initialize native server.");
             }
+            if (!mDisableResetterForTesting) {
+                ResettersForTesting.register(this::stopAndDestroyServer);
+            }
 
             if (httpsSetting == ServerHTTPSSetting.USE_HTTPS) {
                 try {
@@ -217,8 +224,10 @@ public class EmbeddedTestServer {
             }
         } catch (RemoteException e) {
             throw new EmbeddedTestServerFailure(
-                    "Failed to add default handlers and start serving files from " + directoryPath
-                    + ": " + e.toString());
+                    "Failed to add default handlers and start serving files from "
+                            + directoryPath
+                            + ": "
+                            + e.toString());
         }
     }
 
@@ -339,9 +348,11 @@ public class EmbeddedTestServer {
      *  @return The created server.
      */
     public static EmbeddedTestServer createAndStartServerWithPort(Context context, int port) {
-        Assert.assertNotEquals("EmbeddedTestServer should not be created on UiThread, "
-                + "the instantiation will hang forever waiting for tasks to post to UI thread",
-                Looper.getMainLooper(), Looper.myLooper());
+        Assert.assertNotEquals(
+                "EmbeddedTestServer should not be created on UiThread, the instantiation will hang"
+                    + " forever waiting for tasks to post to UI thread",
+                Looper.getMainLooper(),
+                Looper.myLooper());
         EmbeddedTestServer server = new EmbeddedTestServer();
         return initializeAndStartServer(server, context, port);
     }
@@ -357,7 +368,7 @@ public class EmbeddedTestServer {
      */
     public static EmbeddedTestServer createAndStartHTTPSServer(
             Context context, @ServerCertificate int serverCertificate) {
-        return createAndStartHTTPSServerWithPort(context, serverCertificate, 0 /* port */);
+        return createAndStartHTTPSServerWithPort(context, serverCertificate, /* port= */ 0);
     }
 
     /** Create and initialize an HTTPS server with the default handlers and specified port.
@@ -372,10 +383,12 @@ public class EmbeddedTestServer {
      */
     public static EmbeddedTestServer createAndStartHTTPSServerWithPort(
             Context context, @ServerCertificate int serverCertificate, int port) {
-        Assert.assertNotEquals("EmbeddedTestServer should not be created on UiThread, "
+        Assert.assertNotEquals(
+                "EmbeddedTestServer should not be created on UiThread, "
                         + "the instantiation will hang forever waiting for tasks"
                         + " to post to UI thread",
-                Looper.getMainLooper(), Looper.myLooper());
+                Looper.getMainLooper(),
+                Looper.myLooper());
         EmbeddedTestServer server = new EmbeddedTestServer();
         return initializeAndStartHTTPSServer(server, context, serverCertificate, port);
     }
@@ -473,45 +486,29 @@ public class EmbeddedTestServer {
         return absoluteUrls;
     }
 
-    /** Shutdown the server.
-     *
-     *  @return Whether the server was successfully shut down.
-     */
-    public boolean shutdownAndWaitUntilComplete() {
-        try {
-            synchronized (mImplMonitor) {
-                checkServiceLocked();
-                return mImpl.shutdownAndWaitUntilComplete();
-            }
-        } catch (RemoteException e) {
-            throw new EmbeddedTestServerFailure("Failed to shut down.", e);
-        }
-    }
-
-    /** Destroy the native EmbeddedTestServer object. */
-    public void destroy() {
-        try {
-            synchronized (mImplMonitor) {
-                checkServiceLocked();
-                mImpl.destroy();
-                mImpl = null;
-            }
-        } catch (RemoteException e) {
-            throw new EmbeddedTestServerFailure("Failed to destroy native server.", e);
-        } finally {
-            mContext.unbindService(mConn);
-        }
-    }
-
-    /** Stop and destroy the server.
+    /**
+     * Stop and destroy the server.
      *
      *  This handles stopping the server and destroying the native object.
      */
     public void stopAndDestroyServer() {
-        if (!shutdownAndWaitUntilComplete()) {
-            throw new EmbeddedTestServerFailure("Failed to stop server.");
+        synchronized (mImplMonitor) {
+            // ResettersForTesting call can cause this to be called multiple times.
+            if (mImpl == null) {
+                return;
+            }
+            try {
+                if (!mImpl.shutdownAndWaitUntilComplete()) {
+                    throw new EmbeddedTestServerFailure("Failed to stop server.");
+                }
+                mImpl.destroy();
+                mImpl = null;
+            } catch (RemoteException e) {
+                throw new EmbeddedTestServerFailure("Failed to shut down.", e);
+            } finally {
+                mContext.unbindService(mConn);
+            }
         }
-        destroy();
     }
 
     /** Get the path of the PEM file of the root cert. */
@@ -523,6 +520,31 @@ public class EmbeddedTestServer {
             }
         } catch (RemoteException e) {
             throw new EmbeddedTestServerFailure("Failed to get root cert's path", e);
+        }
+    }
+
+    public static ClassHook getPreClassHook() {
+        return (targetContext, testClass) -> EmbeddedTestServer.setUpClass(testClass);
+    }
+
+    public static void setUpClass(Class<?> clazz) {
+        if (sTestRootInitDone) {
+            return;
+        }
+
+        // Always try to add the testing HTTPS root to the cert verifier. We do this here because we
+        // need this to happen before the native code loads the user-added roots, and this is the
+        // safest place to put it.
+        try {
+            // Use the same PEM file as net/test/embedded_test_server/embedded_test_server.cc.
+            String rootCertPemPath =
+                    UrlUtils.getIsolatedTestFilePath("net/data/ssl/certificates/root_ca_cert.pem");
+            byte[] rootCertBytesDer = CertTestUtil.pemToDer(rootCertPemPath);
+            X509Util.setTestRootCertificateForBuiltin(rootCertBytesDer);
+            sTestRootInitDone = true;
+        } catch (Exception e) {
+            throw new EmbeddedTestServer.EmbeddedTestServerFailure(
+                    "Failed to install root certificate.", e);
         }
     }
 }

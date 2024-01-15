@@ -4,8 +4,9 @@
 
 #include "chromeos/ash/services/bluetooth_config/public/cpp/device_image_info.h"
 
+#include <optional>
+
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::bluetooth_config {
 
@@ -36,37 +37,38 @@ DeviceImageInfo& DeviceImageInfo::operator=(const DeviceImageInfo&) = default;
 DeviceImageInfo::~DeviceImageInfo() = default;
 
 // static
-absl::optional<DeviceImageInfo> DeviceImageInfo::FromDictionaryValue(
-    const base::Value& value) {
-  if (!value.is_dict())
-    return absl::nullopt;
+std::optional<DeviceImageInfo> DeviceImageInfo::FromDictionaryValue(
+    const base::Value::Dict& value) {
+  const std::string* default_image = value.FindString(kDefaultImageKey);
+  if (!default_image) {
+    return std::nullopt;
+  }
 
-  const std::string* default_image = value.FindStringKey(kDefaultImageKey);
-  if (!default_image)
-    return absl::nullopt;
+  const std::string* left_bud_image = value.FindString(kLeftBudImageKey);
+  if (!left_bud_image) {
+    return std::nullopt;
+  }
 
-  const std::string* left_bud_image = value.FindStringKey(kLeftBudImageKey);
-  if (!left_bud_image)
-    return absl::nullopt;
+  const std::string* right_bud_image = value.FindString(kRightBudImageKey);
+  if (!right_bud_image) {
+    return std::nullopt;
+  }
 
-  const std::string* right_bud_image = value.FindStringKey(kRightBudImageKey);
-  if (!right_bud_image)
-    return absl::nullopt;
-
-  const std::string* case_image = value.FindStringKey(kCaseImageKey);
-  if (!case_image)
-    return absl::nullopt;
+  const std::string* case_image = value.FindString(kCaseImageKey);
+  if (!case_image) {
+    return std::nullopt;
+  }
 
   return DeviceImageInfo(*default_image, *left_bud_image, *right_bud_image,
                          *case_image);
 }
 
-base::Value DeviceImageInfo::ToDictionaryValue() const {
-  base::Value dictionary(base::Value::Type::DICTIONARY);
-  dictionary.SetKey(kDefaultImageKey, base::Value(default_image_));
-  dictionary.SetKey(kLeftBudImageKey, base::Value(left_bud_image_));
-  dictionary.SetKey(kRightBudImageKey, base::Value(right_bud_image_));
-  dictionary.SetKey(kCaseImageKey, base::Value(case_image_));
+base::Value::Dict DeviceImageInfo::ToDictionaryValue() const {
+  base::Value::Dict dictionary;
+  dictionary.Set(kDefaultImageKey, default_image_);
+  dictionary.Set(kLeftBudImageKey, left_bud_image_);
+  dictionary.Set(kRightBudImageKey, right_bud_image_);
+  dictionary.Set(kCaseImageKey, case_image_);
   return dictionary;
 }
 

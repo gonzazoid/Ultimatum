@@ -4,20 +4,18 @@
 
 #import "ios/web_view/internal/cwv_download_task_internal.h"
 
-#include "base/bind.h"
+#import "base/apple/foundation_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #import "ios/web/public/download/download_task.h"
 #include "ios/web/public/download/download_task_observer.h"
+#import "ios/web/public/download/download_task_observer_bridge.h"
 #include "ios/web_view/internal/cwv_web_view_internal.h"
 #include "net/base/mac/url_conversions.h"
 #include "net/base/net_errors.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 int64_t const CWVDownloadSizeUnknown = -1;
 
@@ -27,39 +25,19 @@ NSErrorDomain const CWVDownloadErrorDomain =
 NSInteger const CWVDownloadErrorFailed = -100;
 NSInteger const CWVDownloadErrorAborted = -101;
 
-@interface CWVDownloadTask ()
-
-// Called when the download task has started, downloaded a chunk of data or
-// the download has been completed.
-- (void)downloadWasUpdated;
+@interface CWVDownloadTask () <CRWDownloadTaskObserver>
 
 @end
 
-namespace {
-// Bridges C++ observer method calls to Objective-C.
-class DownloadTaskObserverBridge : public web::DownloadTaskObserver {
- public:
-  explicit DownloadTaskObserverBridge(CWVDownloadTask* task) : task_(task) {}
-
-  void OnDownloadUpdated(web::DownloadTask* task) override {
-    [task_ downloadWasUpdated];
-  }
-
- private:
-  __weak CWVDownloadTask* task_ = nil;
-};
-}  // namespace
-
 @implementation CWVDownloadTask {
-  std::unique_ptr<DownloadTaskObserverBridge> _observerBridge;
+  std::unique_ptr<web::DownloadTaskObserverBridge> _observerBridge;
   std::unique_ptr<web::DownloadTask> _internalTask;
 }
 
 @synthesize delegate = _delegate;
 
 - (NSString*)suggestedFileName {
-  return base::SysUTF8ToNSString(
-      _internalTask->GenerateFileName().AsUTF8Unsafe());
+  return base::apple::FilePathToNSString(_internalTask->GenerateFileName());
 }
 
 - (NSString*)MIMEType {
@@ -88,7 +66,7 @@ class DownloadTaskObserverBridge : public web::DownloadTaskObserver {
     (std::unique_ptr<web::DownloadTask>)internalTask {
   self = [super init];
   if (self) {
-    _observerBridge = std::make_unique<DownloadTaskObserverBridge>(self);
+    _observerBridge = std::make_unique<web::DownloadTaskObserverBridge>(self);
     _internalTask = std::move(internalTask);
     _internalTask->AddObserver(_observerBridge.get());
   }
@@ -100,16 +78,17 @@ class DownloadTaskObserverBridge : public web::DownloadTaskObserver {
 }
 
 - (void)startDownloadToLocalFileAtPath:(NSString*)path {
-  _internalTask->Start(base::FilePath(base::SysNSStringToUTF8(path)));
+  _internalTask->Start(base::apple::NSStringToFilePath(path));
 }
 
 - (void)cancel {
   _internalTask->Cancel();
 }
 
-#pragma mark - Private
+#pragma mark - CRWDownloadTaskObserver
 
-- (void)downloadWasUpdated {
+- (void)downloadUpdated:(web::DownloadTask*)task {
+  CHECK_EQ(_internalTask.get(), task);
   switch (_internalTask->GetState()) {
     case web::DownloadTask::State::kInProgress: {
       if ([_delegate
@@ -134,6 +113,8 @@ class DownloadTaskObserverBridge : public web::DownloadTaskObserver {
     }
   }
 }
+
+#pragma mark - Private
 
 - (void)notifyFinishWithErrorCode:(int)errorCode {
   NSError* error = nil;

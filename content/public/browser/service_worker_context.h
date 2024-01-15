@@ -5,24 +5,30 @@
 #ifndef CONTENT_PUBLIC_BROWSER_SERVICE_WORKER_CONTEXT_H_
 #define CONTENT_PUBLIC_BROWSER_SERVICE_WORKER_CONTEXT_H_
 
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_external_request_result.h"
 #include "content/public/browser/service_worker_external_request_timeout_type.h"
 #include "content/public/browser/service_worker_running_info.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/messaging/transferable_message.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom-forward.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration_options.mojom-forward.h"
 
+namespace base {
+class Uuid;
+}
+
 namespace blink {
+class AssociatedInterfaceProvider;
 class StorageKey;
 }  // namespace blink
 
@@ -74,7 +80,7 @@ enum class StartServiceWorkerForNavigationHintResult {
 // context.
 using ServiceWorkerScriptExecutionCallback =
     base::OnceCallback<void(base::Value value,
-                            const absl::optional<std::string>& error)>;
+                            const std::optional<std::string>& error)>;
 
 // Represents the per-StoragePartition service worker data.
 //
@@ -106,6 +112,8 @@ class CONTENT_EXPORT ServiceWorkerContext {
   using StartServiceWorkerForNavigationHintCallback = base::OnceCallback<void(
       StartServiceWorkerForNavigationHintResult result)>;
 
+  using WarmUpServiceWorkerCallback = base::OnceClosure;
+
   using StartWorkerCallback = base::OnceCallback<
       void(int64_t version_id, int process_id, int thread_id)>;
 
@@ -118,6 +126,10 @@ class CONTENT_EXPORT ServiceWorkerContext {
                       const base::Location& from_here,
                       ServiceWorkerContext* service_worker_context,
                       base::OnceClosure task);
+
+  // Returns the delay from navigation to starting an update of a service
+  // worker's script.
+  static base::TimeDelta GetUpdateDelay();
 
   virtual void AddObserver(ServiceWorkerContextObserver* observer) = 0;
   virtual void RemoveObserver(ServiceWorkerContextObserver* observer) = 0;
@@ -147,6 +159,11 @@ class CONTENT_EXPORT ServiceWorkerContext {
   virtual void UnregisterServiceWorker(const GURL& scope,
                                        const blink::StorageKey& key,
                                        ResultCallback callback) = 0;
+  // As above, but clears the service worker registration immediately rather
+  // than waiting if the service worker is active and has controllees.
+  virtual void UnregisterServiceWorkerImmediately(const GURL& scope,
+                                                  const blink::StorageKey& key,
+                                                  ResultCallback callback) = 0;
 
   // Mechanism for embedder to increment/decrement ref count of a service
   // worker.
@@ -159,10 +176,10 @@ class CONTENT_EXPORT ServiceWorkerContext {
   virtual ServiceWorkerExternalRequestResult StartingExternalRequest(
       int64_t service_worker_version_id,
       ServiceWorkerExternalRequestTimeoutType timeout_type,
-      const std::string& request_uuid) = 0;
+      const base::Uuid& request_uuid) = 0;
   virtual ServiceWorkerExternalRequestResult FinishedExternalRequest(
       int64_t service_worker_version_id,
-      const std::string& request_uuid) = 0;
+      const base::Uuid& request_uuid) = 0;
 
   // Returns the pending external request count for the worker with the
   // specified `key`.
@@ -184,8 +201,9 @@ class CONTENT_EXPORT ServiceWorkerContext {
   virtual bool MaybeHasRegistrationForStorageKey(
       const blink::StorageKey& key) = 0;
 
-  // TODO(crbug.com/1199077): Update name when StorageUsageInfo uses StorageKey.
-  virtual void GetAllOriginsInfo(GetUsageInfoCallback callback) = 0;
+  // Used in response to browsing data and quota manager requests to get
+  // the per-StorageKey size and last time used data.
+  virtual void GetAllStorageKeysInfo(GetUsageInfoCallback callback) = 0;
 
   // Deletes all registrations for `key` and clears all service workers
   // belonging to the registrations. All clients controlled by those service
@@ -248,6 +266,15 @@ class CONTENT_EXPORT ServiceWorkerContext {
       const blink::StorageKey& key,
       StartServiceWorkerForNavigationHintCallback callback) = 0;
 
+  // Warms up the service worker for `document_url` and `key`. Called when a
+  // navigation to that URL is predicted to occur soon. Unlike
+  // StartServiceWorkerForNavigationHint, this function doesn't evaluate the
+  // service worker script. Instead, this function prepares renderer process,
+  // mojo connections, loading scripts from disk without evaluating the script.
+  virtual void WarmUpServiceWorker(const GURL& document_url,
+                                   const blink::StorageKey& key,
+                                   WarmUpServiceWorkerCallback callback) = 0;
+
   // Stops all running workers on the given `key`.
   virtual void StopAllServiceWorkersForStorageKey(
       const blink::StorageKey& key) = 0;
@@ -261,6 +288,11 @@ class CONTENT_EXPORT ServiceWorkerContext {
   GetRunningServiceWorkerInfos() = 0;
 
   // Returns true if the ServiceWorkerVersion for `service_worker_version_id` is
+  // live and starting.
+  virtual bool IsLiveStartingServiceWorker(
+      int64_t service_worker_version_id) = 0;
+
+  // Returns true if the ServiceWorkerVersion for `service_worker_version_id` is
   // live and running.
   virtual bool IsLiveRunningServiceWorker(
       int64_t service_worker_version_id) = 0;
@@ -270,6 +302,13 @@ class CONTENT_EXPORT ServiceWorkerContext {
   // interfaces exposed by the Service Worker. CHECKs if
   // `IsLiveRunningServiceWorker()` returns false.
   virtual service_manager::InterfaceProvider& GetRemoteInterfaces(
+      int64_t service_worker_version_id) = 0;
+
+  // Returns the AssociatedInterfaceProvider for the worker specified by
+  // `service_worker_version_id`. The caller can use InterfaceProvider to bind
+  // interfaces exposed by the Service Worker. CHECKs if
+  // `IsLiveRunningServiceWorker()` returns false.
+  virtual blink::AssociatedInterfaceProvider& GetRemoteAssociatedInterfaces(
       int64_t service_worker_version_id) = 0;
 
  protected:

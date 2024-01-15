@@ -12,8 +12,9 @@
 
 class AutoSigninFirstRunDialogView : public views::DialogDelegateView,
                                      public AutoSigninFirstRunPrompt {
+  METADATA_HEADER(AutoSigninFirstRunDialogView, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(AutoSigninFirstRunDialogView);
   AutoSigninFirstRunDialogView(CredentialManagerDialogController* controller,
                                content::WebContents* web_contents);
   AutoSigninFirstRunDialogView(const AutoSigninFirstRunDialogView&) = delete;
@@ -34,8 +35,10 @@ class AutoSigninFirstRunDialogView : public views::DialogDelegateView,
   void InitWindow();
 
   // A weak pointer to the controller.
-  raw_ptr<CredentialManagerDialogController, DanglingUntriaged> controller_;
-  const raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  raw_ptr<CredentialManagerDialogController, AcrossTasksDanglingUntriaged>
+      controller_;
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_PASSWORDS_AUTO_SIGNIN_FIRST_RUN_DIALOG_VIEW_H_

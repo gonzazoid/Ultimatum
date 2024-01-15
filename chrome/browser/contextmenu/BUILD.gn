@@ -5,6 +5,7 @@
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
 import("//chrome/browser/buildflags.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
   sources = [
@@ -17,20 +18,21 @@ android_library("java") {
     "java/src/org/chromium/chrome/browser/contextmenu/ContextMenuPopulatorFactory.java",
   ]
 
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
-  srcjar_deps = [ "//chrome:context_menu_image_format_enum_javagen" ]
+  srcjar_deps = [
+    ":jni_headers",
+    "//chrome:context_menu_image_format_enum_javagen",
+  ]
 
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/browser_ui/share/android:java",
     "//components/embedder_support/android:context_menu_java",
     "//content/public/android:content_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_no_recycler_view_java",
     "//url:gurl_java",
-    "//url:origin_java",
   ]
 }
 

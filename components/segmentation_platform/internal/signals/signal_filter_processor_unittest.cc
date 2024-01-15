@@ -6,20 +6,21 @@
 
 #include "base/metrics/metrics_hashes.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "components/segmentation_platform/internal/database/config_holder.h"
 #include "components/segmentation_platform/internal/database/mock_signal_storage_config.h"
 #include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/internal/database/signal_database.h"
 #include "components/segmentation_platform/internal/database/signal_storage_config.h"
 #include "components/segmentation_platform/internal/database/storage_service.h"
 #include "components/segmentation_platform/internal/database/test_segment_info_database.h"
-#include "components/segmentation_platform/internal/execution/default_model_manager.h"
 #include "components/segmentation_platform/internal/execution/mock_model_provider.h"
 #include "components/segmentation_platform/internal/mock_ukm_data_manager.h"
 #include "components/segmentation_platform/internal/signals/histogram_signal_handler.h"
 #include "components/segmentation_platform/internal/signals/history_service_observer.h"
 #include "components/segmentation_platform/internal/signals/mock_histogram_signal_handler.h"
+#include "components/segmentation_platform/internal/signals/mock_user_action_signal_handler.h"
 #include "components/segmentation_platform/internal/signals/user_action_signal_handler.h"
 #include "components/segmentation_platform/public/proto/aggregation.pb.h"
 #include "components/segmentation_platform/public/proto/types.pb.h"
@@ -44,55 +45,11 @@ constexpr UkmMetricHash TestMetric(uint64_t val) {
 }
 
 }  // namespace
-class MockUserActionSignalHandler : public UserActionSignalHandler {
- public:
-  MockUserActionSignalHandler() : UserActionSignalHandler(nullptr) {}
-  MOCK_METHOD(void, SetRelevantUserActions, (std::set<uint64_t>));
-  MOCK_METHOD(void, EnableMetrics, (bool));
-};
 
 class MockHistoryObserver : public HistoryServiceObserver {
  public:
   MOCK_METHOD1(SetHistoryBasedSegments,
-               void(base::flat_set<proto::SegmentId>&& history_based_segments));
-};
-
-// Noop version. For database calls, just passes the calls to the DB.
-class TestDefaultModelManager : public DefaultModelManager {
- public:
-  TestDefaultModelManager()
-      : DefaultModelManager(nullptr, base::flat_set<SegmentId>()) {}
-  ~TestDefaultModelManager() override = default;
-
-  void GetAllSegmentInfoFromDefaultModel(
-      const base::flat_set<SegmentId>& segment_ids,
-      MultipleSegmentInfoCallback callback) override {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback),
-                                  DefaultModelManager::SegmentInfoList()));
-  }
-
-  void GetAllSegmentInfoFromBothModels(
-      const base::flat_set<SegmentId>& segment_ids,
-      SegmentInfoDatabase* segment_database,
-      MultipleSegmentInfoCallback callback) override {
-    segment_database->GetSegmentInfoForSegments(
-        segment_ids,
-        base::BindOnce(
-            [](DefaultModelManager::MultipleSegmentInfoCallback callback,
-               std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> db_list) {
-              DefaultModelManager::SegmentInfoList list;
-              for (auto& pair : *db_list) {
-                list.push_back(std::make_unique<
-                               DefaultModelManager::SegmentInfoWrapper>());
-                list.back()->segment_source =
-                    DefaultModelManager::SegmentSource::DATABASE;
-                list.back()->segment_info.Swap(&pair.second);
-              }
-              std::move(callback).Run(std::move(list));
-            },
-            std::move(callback)));
-  }
+               void(base::flat_set<proto::SegmentId> history_based_segments));
 };
 
 class SignalFilterProcessorTest : public testing::Test {
@@ -121,7 +78,10 @@ class SignalFilterProcessorTest : public testing::Test {
     storage_service_ = std::make_unique<StorageService>(
         std::move(moved_segment_database), nullptr,
         std::move(moved_signal_config),
-        std::make_unique<TestDefaultModelManager>(), ukm_data_manager_.get());
+        std::make_unique<ModelManagerImpl>(segment_ids, nullptr, nullptr,
+                                           segment_database_,
+                                           base::DoNothing()),
+        nullptr, ukm_data_manager_.get());
 
     signal_filter_processor_ = std::make_unique<SignalFilterProcessor>(
         storage_service_.get(), user_action_signal_handler_.get(),
@@ -131,8 +91,8 @@ class SignalFilterProcessorTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<MockUserActionSignalHandler> user_action_signal_handler_;
   std::unique_ptr<MockHistogramSignalHandler> histogram_signal_handler_;
-  std::unique_ptr<SignalFilterProcessor> signal_filter_processor_;
   std::unique_ptr<MockHistoryObserver> history_observer_;
+  std::unique_ptr<SignalFilterProcessor> signal_filter_processor_;
   std::unique_ptr<MockUkmDataManager> ukm_data_manager_;
   std::unique_ptr<StorageService> storage_service_;
   raw_ptr<test::TestSegmentInfoDatabase> segment_database_;

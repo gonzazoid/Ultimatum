@@ -14,30 +14,8 @@
 namespace policy {
 namespace features {
 
-// Enable force installed Chrome apps policy migration.
-POLICY_EXPORT BASE_DECLARE_FEATURE(kDefaultChromeAppsMigration);
-
-// Enable reporting Login events to the reporting connector when the Password
-// Manager detects that the user logged in to a web page.
-POLICY_EXPORT BASE_DECLARE_FEATURE(kLoginEventReporting);
-
-// Enable reporting password leaks to the reporting connector when the Password
-// Manager's Leak Detector has found some compromised credentials.
-POLICY_EXPORT BASE_DECLARE_FEATURE(kPasswordBreachEventReporting);
-
-// Enable the UserCloudSigninRestrictionPolicyFetcher to get the
-// ManagedAccountsSigninRestriction policy for a dasher account.
-POLICY_EXPORT BASE_DECLARE_FEATURE(
-    kEnableUserCloudSigninRestrictionPolicyFetcher);
-
-// Enable MetricsReportingEnabled policy to alter MetricsReportingState on
-// Android.
-POLICY_EXPORT BASE_DECLARE_FEATURE(
-    kActivateMetricsReportingEnabledPolicyAndroid);
-
-// Causes the DMToken to be deleted (rather than invalidated) when a browser is
-// deleted from CBCM.
-POLICY_EXPORT BASE_DECLARE_FEATURE(kDmTokenDeletion);
+// Enable the policy test page at chrome://policy/test.
+POLICY_EXPORT BASE_DECLARE_FEATURE(kEnablePolicyTestPage);
 
 }  // namespace features
 }  // namespace policy

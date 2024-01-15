@@ -6,6 +6,7 @@
 #define COMPONENTS_MIRRORING_SERVICE_OPENSCREEN_SESSION_HOST_H_
 
 #include "base/component_export.h"
+#include "base/gtest_prod_util.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -14,12 +15,12 @@
 #include "components/mirroring/mojom/session_observer.mojom.h"
 #include "components/mirroring/mojom/session_parameters.mojom.h"
 #include "components/mirroring/service/media_remoter.h"
-#include "components/mirroring/service/message_dispatcher.h"
 #include "components/mirroring/service/mirror_settings.h"
 #include "components/mirroring/service/openscreen_message_port.h"
-#include "components/mirroring/service/openscreen_rpc_dispatcher.h"
-#include "components/mirroring/service/receiver_setup_querier.h"
+#include "components/mirroring/service/openscreen_stats_client.h"
+#include "components/mirroring/service/rpc_dispatcher.h"
 #include "components/mirroring/service/rtp_stream.h"
+#include "components/openscreen_platform/event_trace_logging_platform.h"
 #include "components/openscreen_platform/task_runner.h"
 #include "gpu/config/gpu_info.h"
 #include "media/capture/video/video_capture_feedback.h"
@@ -34,6 +35,10 @@
 
 using openscreen::cast::capture_recommendations::Recommendations;
 
+namespace base {
+class OneShotTimer;
+}
+
 namespace media {
 class AudioInputDevice;
 
@@ -45,8 +50,8 @@ class Gpu;
 
 namespace mirroring {
 
+class RpcDispatcher;
 class VideoCaptureClient;
-class ReceiverSetupQuerier;
 
 // Minimum required bitrate used for calculating bandwidth.
 constexpr int kMinRequiredBitrate = 384 << 10;  // 384 kbps
@@ -123,8 +128,13 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) OpenscreenSessionHost final
   void RequestRemotingStreaming() override;
   void RestartMirroringStreaming() override;
 
+  void SwitchSourceTab();
+
   // Callback by media::cast::VideoSender to set a new target playout delay.
   void SetTargetPlayoutDelay(base::TimeDelta playout_delay);
+
+  base::Value::Dict GetMirroringStats() const;
+  void SetSenderStatsForTest(const openscreen::cast::SenderStats& test_stats);
 
  private:
   friend class OpenscreenSessionHostTest;
@@ -179,7 +189,7 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) OpenscreenSessionHost final
   void ProcessFeedback(const media::VideoCaptureFeedback& feedback);
 
   // Called by OpenscreenFrameSender to determine bitrate.
-  int GetSuggestedVideoBitrate() const;
+  int GetSuggestedVideoBitrate(int min_bitrate, int max_bitrate) const;
 
   // Called periodically to update the `bandwidth_estimate_`.
   void UpdateBandwidthEstimate();
@@ -188,6 +198,15 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) OpenscreenSessionHost final
   void Negotiate();
   void NegotiateMirroring();
   void NegotiateRemoting();
+
+  // Initialize `media_remoter_` and `rpc_dispatcher_`.
+  void InitMediaRemoter(
+      const openscreen::cast::RemotingCapabilities& capabilities);
+
+  // Called 5 seconds after the `media_remoter_` is initialized for Remote
+  // Playabck sessions. It terminates the streaming session if remoting is not
+  // started when it's called.
+  void OnRemotingStartTimeout();
 
   // Called to provide Open Screen with access to this host's network proxy.
   network::mojom::NetworkContext* GetNetworkContext();
@@ -251,9 +270,6 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) OpenscreenSessionHost final
   mojo::Remote<network::mojom::NetworkContext> network_context_;
   bool set_network_context_proxy_ = false;
 
-  // Used to get build and name information from the receiver.
-  std::unique_ptr<ReceiverSetupQuerier> setup_querier_;
-
   // Stored as part of generating an OFFER.
   // NOTE: currently we only support Opus audio, but may provide a variety of
   // video codec configurations.
@@ -283,7 +299,7 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) OpenscreenSessionHost final
 
   // Used as an interface for the media remoter to send RPC messages. Created
   // when a successful capabilities response arrives.
-  std::unique_ptr<OpenscreenRpcDispatcher> rpc_dispatcher_;
+  std::unique_ptr<RpcDispatcher> rpc_dispatcher_;
 
   // Manages remoting content to the Cast Receiver. Created when a successful
   // capabilities response arrives.
@@ -300,11 +316,29 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) OpenscreenSessionHost final
 
   // Used to periodically update the currently used bandwidth estimate.
   base::RepeatingTimer bandwidth_update_timer_;
-  int bandwidth_estimate_ = 0;
+
   // Used to override getting the bandwidth from the session. Setting to a
-  // positive  value causes the session's bandwidth estimation to not be called.
-  int forced_bandwidth_estimate_ = 0;
-  int bandwidth_being_utilized_ = kDefaultBitrate;
+  // positive value causes the session's bandwidth estimation to not be called.
+  int forced_bandwidth_estimate_for_testing_ = 0;
+
+  // The portion of the bandwidth estimate that is currently available for use.
+  // Note that the actual bandwidth will be effectively capped at the sum of the
+  // current video and audio bitrates.
+  int usable_bandwidth_ = kDefaultBitrate;
+
+  // Indicate whether we're in the middle of switching tab sources.
+  bool switching_tab_source_ = false;
+  // This timer is used to stop the session in case Remoting is not started
+  // before timeout. The timer is stopped when Remoting session successfully
+  // starts.
+  base::OneShotTimer remote_playback_start_timer_;
+  // Records the time when the streaming session is started and `media_remoter_`
+  // is initialized.
+  absl::optional<base::Time> remote_playback_start_time_;
+
+  // An optional stats client for fetching quality statistics from an Openscreen
+  // casting session.
+  std::unique_ptr<OpenscreenStatsClient> stats_client_;
 
   // Used in callbacks executed on task runners, such as by RtpStream.
   // TODO(https://crbug.com/1363503): determine if weak pointers can be removed.

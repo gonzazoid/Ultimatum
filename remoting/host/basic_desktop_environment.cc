@@ -7,11 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "remoting/host/action_executor.h"
+#include "remoting/host/active_display_monitor.h"
 #include "remoting/host/audio_capturer.h"
 #include "remoting/host/base/screen_controls.h"
 #include "remoting/host/client_session_control.h"
@@ -30,12 +31,15 @@
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor_monitor.h"
 
+#include "base/logging.h"
+
 #if BUILDFLAG(IS_WIN)
 #include "remoting/host/win/evaluate_d3d.h"
 #endif
 
 #if defined(REMOTING_USE_X11)
 #include "base/threading/watchdog.h"
+#include "remoting/host/linux/wayland_utils.h"
 #include "remoting/host/linux/x11_util.h"
 #endif
 
@@ -58,18 +62,24 @@ constexpr base::TimeDelta kWaitForIgnoreXServerGrabsTimeout = base::Seconds(30);
 // This class crashes the host if the IgnoreXServerGrabs() call takes too long,
 // so that the ME2ME daemon process can respawn the host.
 // See: crbug.com/1130090
-class IgnoreXServerGrabsWatchdog : public base::Watchdog {
+class IgnoreXServerGrabsWatchdog : public base::Watchdog::Delegate {
  public:
   IgnoreXServerGrabsWatchdog()
-      : base::Watchdog(kWaitForIgnoreXServerGrabsTimeout,
-                       "IgnoreXServerGrabs Watchdog",
-                       /* enabled= */ true) {}
+      : watchdog_(kWaitForIgnoreXServerGrabsTimeout,
+                  "IgnoreXServerGrabs Watchdog",
+                  /*enabled=*/true,
+                  this) {}
   ~IgnoreXServerGrabsWatchdog() override = default;
+
+  void Arm() { watchdog_.Arm(); }
 
   void Alarm() override {
     // Crash the host if IgnoreXServerGrabs() takes too long.
     CHECK(false) << "IgnoreXServerGrabs() timed out.";
   }
+
+ private:
+  base::Watchdog watchdog_;
 };
 
 }  // namespace
@@ -146,6 +156,12 @@ BasicDesktopEnvironment::CreateKeyboardLayoutMonitor(
   return KeyboardLayoutMonitor::Create(std::move(callback), input_task_runner_);
 }
 
+std::unique_ptr<ActiveDisplayMonitor>
+BasicDesktopEnvironment::CreateActiveDisplayMonitor(
+    ActiveDisplayMonitor::Callback callback) {
+  return ActiveDisplayMonitor::Create(ui_task_runner_, std::move(callback));
+}
+
 std::unique_ptr<FileOperations>
 BasicDesktopEnvironment::CreateFileOperations() {
   return std::make_unique<LocalFileOperations>(ui_task_runner_);
@@ -192,24 +208,35 @@ BasicDesktopEnvironment::CreateVideoCapturer() {
   // thread on Windows, the cursor shape won't be captured when in GDI mode.
   capture_task_runner = video_capture_task_runner_;
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_LINUX)
-  auto desktop_capturer =
-      std::make_unique<DesktopCapturerProxy>(std::move(capture_task_runner));
 
 #if defined(REMOTING_USE_X11)
-  // Workaround for http://crbug.com/1361502: Run each capturer (and
-  // mouse-cursor-monitor) on a separate X11 Display.
-  auto new_options = webrtc::DesktopCaptureOptions::CreateDefault();
-  mutable_desktop_capture_options()->set_x_display(
-      std::move(new_options.x_display()));
-  desktop_capture_options().x_display()->IgnoreXServerGrabs();
+  if (!IsRunningWayland()) {
+    // Workaround for http://crbug.com/1361502: Run each capturer (and
+    // mouse-cursor-monitor) on a separate X11 Display.
+    auto new_options = webrtc::DesktopCaptureOptions::CreateDefault();
+    mutable_desktop_capture_options()->set_x_display(
+        std::move(new_options.x_display()));
+    desktop_capture_options().x_display()->IgnoreXServerGrabs();
+  }
 #endif  // REMOTING_USE_X11
 
-  desktop_capturer->CreateCapturer(desktop_capture_options());
+  std::unique_ptr<DesktopCapturer> desktop_capturer;
+  if (options_.capture_video_on_dedicated_thread()) {
+    auto desktop_capturer_wrapper = std::make_unique<DesktopCapturerWrapper>();
+    desktop_capturer_wrapper->CreateCapturer(desktop_capture_options());
+    desktop_capturer = std::move(desktop_capturer_wrapper);
+  } else {
+    auto desktop_capturer_proxy =
+        std::make_unique<DesktopCapturerProxy>(std::move(capture_task_runner));
+    desktop_capturer_proxy->CreateCapturer(desktop_capture_options());
+    desktop_capturer = std::move(desktop_capturer_proxy);
+  }
 
 #if BUILDFLAG(IS_APPLE)
   // Mac includes the mouse cursor in the captured image in curtain mode.
-  if (options_.enable_curtaining())
-    return std::move(desktop_capturer);
+  if (options_.enable_curtaining()) {
+    return desktop_capturer;
+  }
 #endif
   return std::make_unique<DesktopAndCursorConditionalComposer>(
       std::move(desktop_capturer));
@@ -230,13 +257,14 @@ BasicDesktopEnvironment::BasicDesktopEnvironment(
       options_(options) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
 #if defined(REMOTING_USE_X11)
-  // TODO(yuweih): The watchdog is just to test the hypothesis.
-  // The IgnoreXServerGrabs() call should probably be moved to whichever
-  // thread that created desktop_capture_options().x_display().
-  IgnoreXServerGrabsWatchdog watchdog;
-  watchdog.Arm();
-  desktop_capture_options().x_display()->IgnoreXServerGrabs();
-  watchdog.Disarm();
+  if (!IsRunningWayland()) {
+    // TODO(yuweih): The watchdog is just to test the hypothesis.
+    // The IgnoreXServerGrabs() call should probably be moved to whichever
+    // thread that created desktop_capture_options().x_display().
+    IgnoreXServerGrabsWatchdog watchdog;
+    watchdog.Arm();
+    desktop_capture_options().x_display()->IgnoreXServerGrabs();
+  }
 #elif BUILDFLAG(IS_WIN)
   options_.desktop_capture_options()->set_allow_directx_capturer(
       IsD3DAvailable());

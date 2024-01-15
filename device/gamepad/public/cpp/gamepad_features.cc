@@ -24,20 +24,22 @@ BASE_FEATURE(kEnableGamepadButtonAxisEvents,
 // Enables the Windows.Gaming.Input data fetcher.
 BASE_FEATURE(kEnableWindowsGamingInputDataFetcher,
              "EnableWindowsGamingInputDataFetcher",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// TODO(https://crbug.com/1011006): When we enable this feature and enable the
-// permission policy of the Gamepad API, remove the fenced frame specific code
-// introduced by crrev.com/c/3403761.
 BASE_FEATURE(kRestrictGamepadAccess,
              "RestrictGamepadAccess",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables gamepad multitouch
+BASE_FEATURE(kEnableGamepadMultitouch,
+             "EnableGamepadMultitouch",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 #if BUILDFLAG(IS_ANDROID)
 // Enables gamepad vibration on Android 12+.
 BASE_FEATURE(kEnableAndroidGamepadVibration,
              "EnableAndroidGamepadVibration",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 #endif  // BUILDFLAG(IS_ANDROID)
 
 bool AreGamepadButtonAxisEventsEnabled() {
@@ -49,6 +51,14 @@ bool AreGamepadButtonAxisEventsEnabled() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line &&
       command_line->HasSwitch(switches::kEnableGamepadButtonAxisEvents)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool IsGamepadMultitouchEnabled() {
+  if (base::FeatureList::IsEnabled(kEnableGamepadMultitouch)) {
     return true;
   }
 

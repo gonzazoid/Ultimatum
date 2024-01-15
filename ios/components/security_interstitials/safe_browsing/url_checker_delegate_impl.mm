@@ -4,6 +4,7 @@
 
 #import "ios/components/security_interstitials/safe_browsing/url_checker_delegate_impl.h"
 
+#import "base/containers/contains.h"
 #import "components/safe_browsing/core/browser/db/database_manager.h"
 #import "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
@@ -13,10 +14,6 @@
 #import "ios/components/security_interstitials/safe_browsing/unsafe_resource_util.h"
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/public/thread/web_thread.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Helper function for managing a blocking page request for `resource`.  For the
@@ -52,7 +49,7 @@ void HandleBlockingPageRequestOnUIThread(
   SafeBrowsingUrlAllowList* allow_list =
       SafeBrowsingUrlAllowList::FromWebState(web_state);
   if (allow_list->AreUnsafeNavigationsAllowed(url, &allowed_threats)) {
-    if (allowed_threats.find(threat_type) != allowed_threats.end()) {
+    if (base::Contains(allowed_threats, threat_type)) {
       RunUnsafeResourceCallback(resource, /*proceed=*/true,
                                 /*showed_interstitial=*/false);
       return;
@@ -119,7 +116,7 @@ bool UrlCheckerDelegateImpl::ShouldSkipRequestCheck(
     const GURL& original_url,
     int frame_tree_node_id,
     int render_process_id,
-    int render_frame_id,
+    base::optional_ref<const base::UnguessableToken> render_frame_token,
     bool originated_from_service_worker) {
   return false;
 }

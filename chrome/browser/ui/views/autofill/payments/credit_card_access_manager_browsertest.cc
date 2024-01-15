@@ -30,10 +30,7 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
   class TestAutofillManager : public BrowserAutofillManager {
    public:
     TestAutofillManager(ContentAutofillDriver* driver, AutofillClient* client)
-        : BrowserAutofillManager(driver,
-                                 client,
-                                 "en-US",
-                                 EnableDownloadManager(false)) {}
+        : BrowserAutofillManager(driver, client, "en-US") {}
 
     testing::AssertionResult WaitForFormsSeen(int min_num_awaited_calls) {
       return forms_seen_waiter_.Wait(min_num_awaited_calls);
@@ -42,7 +39,7 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
    private:
     TestAutofillManagerWaiter forms_seen_waiter_{
         *this,
-        {&AutofillManager::Observer::OnAfterFormsSeen}};
+        {AutofillManagerEvent::kFormsSeen}};
   };
 
   void SetUpOnMainThread() override {
@@ -54,15 +51,10 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
     // Wait for Personal Data Manager to be fully loaded to prevent that
     // spurious notifications deceive the tests.
     WaitForPersonalDataManagerToBeLoaded(browser()->profile());
-
-    autofill_manager_injector_ =
-        std::make_unique<TestAutofillManagerInjector<TestAutofillManager>>(
-            web_contents());
   }
 
   TestAutofillManager* GetAutofillManager() {
-    DCHECK(autofill_manager_injector_);
-    return autofill_manager_injector_->GetForPrimaryMainFrame();
+    return autofill_manager_injector_[web_contents()];
   }
 
   content::WebContents* web_contents() {
@@ -74,11 +66,13 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(GetAutofillManager()->WaitForFormsSeen(1));
   }
 
-  CreditCardAccessManager* GetCreditCardAccessManager() {
+  CreditCardAccessManager& GetCreditCardAccessManager() {
     ContentAutofillDriver* autofill_driver =
         ContentAutofillDriverFactory::FromWebContents(web_contents())
             ->DriverForFrame(web_contents()->GetPrimaryMainFrame());
-    return autofill_driver->autofill_manager()->GetCreditCardAccessManager();
+    return static_cast<BrowserAutofillManager&>(
+               autofill_driver->GetAutofillManager())
+        .GetCreditCardAccessManager();
   }
 
   CreditCard SaveServerCard(std::string card_number) {
@@ -87,15 +81,15 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
                             "12", test::NextYear().c_str(), "1");
     server_card.set_guid("00000000-0000-0000-0000-" +
                          card_number.substr(0, 12));
-    server_card.set_record_type(CreditCard::FULL_SERVER_CARD);
+    server_card.set_record_type(CreditCard::RecordType::kFullServerCard);
     server_card.set_server_id("full_id_" + card_number);
     AddTestServerCreditCard(browser()->profile(), server_card);
     return server_card;
   }
 
  private:
-  std::unique_ptr<TestAutofillManagerInjector<TestAutofillManager>>
-      autofill_manager_injector_;
+  test::AutofillBrowserTestEnvironment autofill_test_environment_;
+  TestAutofillManagerInjector<TestAutofillManager> autofill_manager_injector_;
 };
 
 IN_PROC_BROWSER_TEST_F(CreditCardAccessManagerBrowserTest,
@@ -104,14 +98,14 @@ IN_PROC_BROWSER_TEST_F(CreditCardAccessManagerBrowserTest,
 
   // CreditCardAccessManager is completely recreated on page navigation, so to
   // ensure we're not using stale pointers, always re-fetch it on use.
-  EXPECT_TRUE(GetCreditCardAccessManager()->UnmaskedCardCacheIsEmpty());
-  GetCreditCardAccessManager()->CacheUnmaskedCardInfo(card, u"123");
-  EXPECT_FALSE(GetCreditCardAccessManager()->UnmaskedCardCacheIsEmpty());
+  EXPECT_TRUE(GetCreditCardAccessManager().UnmaskedCardCacheIsEmpty());
+  GetCreditCardAccessManager().CacheUnmaskedCardInfo(card, u"123");
+  EXPECT_FALSE(GetCreditCardAccessManager().UnmaskedCardCacheIsEmpty());
 
   // Cache should reset upon navigation.
   NavigateToAndWaitForForm(
       embedded_test_server()->GetURL("/credit_card_upload_form_cc.html"));
-  EXPECT_TRUE(GetCreditCardAccessManager()->UnmaskedCardCacheIsEmpty());
+  EXPECT_TRUE(GetCreditCardAccessManager().UnmaskedCardCacheIsEmpty());
 }
 
 }  // namespace autofill

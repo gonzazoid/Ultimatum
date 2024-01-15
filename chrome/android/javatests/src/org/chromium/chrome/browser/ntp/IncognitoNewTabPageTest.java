@@ -20,8 +20,6 @@ import static org.hamcrest.Matchers.not;
 import androidx.test.espresso.matcher.ViewMatchers;
 import androidx.test.filters.SmallTest;
 
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.test.util.browser.Features;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -30,24 +28,28 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.chrome.R;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
+import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
+import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.components.content_settings.CookieControlsMode;
 import org.chromium.components.content_settings.PrefNames;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
-/**
- * Integration tests for IncognitoNewTabPage.
- */
+/** Integration tests for IncognitoNewTabPage. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
-@Features.DisableFeatures({ChromeFeatureList.INCOGNITO_NTP_REVAMP})
+@DisableFeatures({
+    ChromeFeatureList.INCOGNITO_NTP_REVAMP,
+    ChromeFeatureList.TRACKING_PROTECTION_3PCD
+})
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class IncognitoNewTabPageTest {
     @ClassRule
@@ -59,23 +61,32 @@ public class IncognitoNewTabPageTest {
             new BlankCTATabInitialStateRule(sActivityTestRule, false);
 
     private void setCookieControlsMode(@CookieControlsMode int mode) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
-            prefService.setInteger(PrefNames.COOKIE_CONTROLS_MODE, mode);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
+                    prefService.setInteger(PrefNames.COOKIE_CONTROLS_MODE, mode);
+                });
     }
 
     private void assertCookieControlsMode(@CookieControlsMode int mode) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Assert.assertEquals(UserPrefs.get(Profile.getLastUsedRegularProfile())
-                                        .getInteger(PrefNames.COOKIE_CONTROLS_MODE),
-                    mode);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertEquals(
+                            UserPrefs.get(Profile.getLastUsedRegularProfile())
+                                    .getInteger(PrefNames.COOKIE_CONTROLS_MODE),
+                            mode);
+                });
     }
 
-    /**
-     * Test cookie controls toggle defaults to on if cookie controls mode is on.
-     */
+    private void enableTrackingProtection() {
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
+                    prefService.setBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED, true);
+                });
+    }
+
+    /** Test cookie controls toggle defaults to on if cookie controls mode is on. */
     @Test
     @SmallTest
     public void testCookieControlsToggleStartsOn() throws Exception {
@@ -89,9 +100,7 @@ public class IncognitoNewTabPageTest {
         onView(withId(R.id.cookie_controls_card_toggle)).check(matches(isChecked()));
     }
 
-    /**
-     * Test cookie controls toggle turns on and off cookie controls mode as expected.
-     */
+    /** Test cookie controls toggle turns on and off cookie controls mode as expected. */
     @Test
     @SmallTest
     public void testCookieControlsToggleChanges() throws Exception {
@@ -113,9 +122,7 @@ public class IncognitoNewTabPageTest {
         assertCookieControlsMode(CookieControlsMode.OFF);
     }
 
-    /**
-     * Test cookie controls disabled if managed by settings.
-     */
+    /** Test cookie controls disabled if managed by settings. */
     @Test
     @SmallTest
     public void testCookieControlsToggleManaged() throws Exception {
@@ -141,5 +148,15 @@ public class IncognitoNewTabPageTest {
         onView(withId(toggle_id)).check(matches(not(isEnabled())));
         setCookieControlsMode(CookieControlsMode.OFF);
         onView(withId(toggle_id)).check(matches(allOf(isNotChecked(), isEnabled())));
+    }
+
+    /** Test the tracking protection layout. */
+    @Test
+    @SmallTest
+    public void testTrackingProtection() throws Exception {
+        enableTrackingProtection();
+        sActivityTestRule.newIncognitoTabFromMenu();
+        onView(withId(R.id.tracking_protection_card))
+                .check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)));
     }
 }

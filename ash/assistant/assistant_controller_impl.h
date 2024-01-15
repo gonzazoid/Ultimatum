@@ -15,7 +15,6 @@
 #include "ash/assistant/assistant_alarm_timer_controller_impl.h"
 #include "ash/assistant/assistant_interaction_controller_impl.h"
 #include "ash/assistant/assistant_notification_controller_impl.h"
-#include "ash/assistant/assistant_screen_context_controller_impl.h"
 #include "ash/assistant/assistant_setup_controller.h"
 #include "ash/assistant/assistant_state_controller.h"
 #include "ash/assistant/assistant_suggestions_controller_impl.h"
@@ -29,7 +28,9 @@
 #include "ash/public/cpp/image_downloader.h"
 #include "ash/public/cpp/style/color_mode_observer.h"
 #include "ash/public/mojom/assistant_volume_control.mojom.h"
+#include "ash/shell_observer.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -55,7 +56,8 @@ class ASH_EXPORT AssistantControllerImpl
       public CrasAudioHandler::AudioObserver,
       public AccessibilityObserver,
       public AssistantInterfaceBinder,
-      public ColorModeObserver {
+      public ColorModeObserver,
+      public ShellObserver {
  public:
   AssistantControllerImpl();
 
@@ -108,16 +110,15 @@ class ASH_EXPORT AssistantControllerImpl
   // ColorModeObserver:
   void OnColorModeChanged(bool dark_mode_enabled) override;
 
+  // ShellObserver:
+  void OnShellDestroying() override;
+
   AssistantAlarmTimerControllerImpl* alarm_timer_controller() {
     return &assistant_alarm_timer_controller_;
   }
 
   AssistantNotificationControllerImpl* notification_controller() {
     return &assistant_notification_controller_;
-  }
-
-  AssistantScreenContextControllerImpl* screen_context_controller() {
-    return &assistant_screen_context_controller_;
   }
 
   AssistantSetupController* setup_controller() {
@@ -157,14 +158,13 @@ class ASH_EXPORT AssistantControllerImpl
 
   // |assistant_| can be nullptr if libassistant creation is not yet completed,
   // i.e. it cannot take a request.
-  assistant::Assistant* assistant_ = nullptr;
+  raw_ptr<assistant::Assistant> assistant_ = nullptr;
 
   // Assistant sub-controllers.
   AssistantAlarmTimerControllerImpl assistant_alarm_timer_controller_{this};
   AssistantInteractionControllerImpl assistant_interaction_controller_{this};
   AssistantNotificationControllerImpl assistant_notification_controller_;
   AssistantStateController assistant_state_controller_;
-  AssistantScreenContextControllerImpl assistant_screen_context_controller_;
   AssistantSetupController assistant_setup_controller_{this};
   AssistantSuggestionsControllerImpl assistant_suggestions_controller_;
   AssistantUiControllerImpl assistant_ui_controller_{this};

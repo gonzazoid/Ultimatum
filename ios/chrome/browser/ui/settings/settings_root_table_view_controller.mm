@@ -4,26 +4,23 @@
 
 #import "ios/chrome/browser/ui/settings/settings_root_table_view_controller.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/notreached.h"
-#import "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/bar_button_activity_indicator.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_cells_constants.h"
 #import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
 #import "ios/chrome/browser/ui/settings/settings_root_table_constants.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Height of the space used by header/footer when none is set. Default is
@@ -48,19 +45,9 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
 // Delete button for the toolbar.
 @property(nonatomic, strong) UIBarButtonItem* deleteButton;
 
-// Add button for the toolbar.
-@property(nonatomic, strong) UIBarButtonItem* addButtonInToolbar;
-
-// Settings button for the toolbar.
-@property(nonatomic, strong) UIBarButtonItem* settingsButtonInToolbar;
-
 // Item displayed before the user interactions are prevented. This is used to
 // store the item while the interaction is prevented.
 @property(nonatomic, strong) UIBarButtonItem* savedBarButtonItem;
-
-// Back button on navigation panel. This is used to store back button while it
-// is replaced with Cancel during editing.
-@property(nonatomic, strong) UIBarButtonItem* backButtonItem;
 
 // Veil preventing interactions with the TableView.
 @property(nonatomic, strong) UIView* veil;
@@ -73,7 +60,11 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
 
 @implementation SettingsRootTableViewController
 
-@synthesize dispatcher = _dispatcher;
+@synthesize applicationHandler = _applicationHandler;
+@synthesize browserHandler = _browserHandler;
+@synthesize browsingDataHandler = _browsingDataHandler;
+@synthesize settingsHandler = _settingsHandler;
+@synthesize snackbarHandler = _snackbarHandler;
 
 #pragma mark - Public
 
@@ -99,6 +90,12 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
         self.tableView.editing ? [self createEditModeCancelButton]
                                : self.backButtonItem;
   }
+
+  // The following two lines cause the table view to refresh the cell heights
+  // with animation without reloading the cells. This is needed for
+  // cells that can be significantly taller in edit mode.
+  [self.tableView beginUpdates];
+  [self.tableView endUpdates];
 }
 
 - (void)updatedToolbarForEditState {
@@ -106,32 +103,30 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
     return;
   }
 
-  // `shouldShowAddButtonInToolbar` and `shouldShowSettingsButtonInToolbar`
-  // should not both be YES at the same time, as they conflict with each other
-  // (both occupy the same space in the toolbar).
-  DCHECK(!(self.shouldShowAddButtonInToolbar &&
-           self.shouldShowSettingsButtonInToolbar));
-
   UIBarButtonItem* flexibleSpace = [[UIBarButtonItem alloc]
       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                            target:nil
                            action:nil];
 
   UIBarButtonItem* toolbarLeftButton = flexibleSpace;
-  if (self.tableView.editing && self.shouldShowDeleteButtonInToolbar) {
+  if (self.customLeftToolbarButton) {
+    toolbarLeftButton = self.customLeftToolbarButton;
+  } else if (self.tableView.editing && self.shouldShowDeleteButtonInToolbar) {
     toolbarLeftButton = self.deleteButton;
-  } else if (self.shouldShowAddButtonInToolbar) {
-    toolbarLeftButton = self.addButtonInToolbar;
-  } else if (self.shouldShowSettingsButtonInToolbar) {
-    toolbarLeftButton = self.settingsButtonInToolbar;
   }
 
-  UIBarButtonItem* editOrDoneButton =
-      self.tableView.editing ? [self createEditModeDoneButtonForToolbar:YES]
-                             : [self createEditButtonForToolbar:YES];
+  UIBarButtonItem* toolbarRightButton = flexibleSpace;
+  if (self.customRightToolbarButton) {
+    toolbarRightButton = self.customRightToolbarButton;
+  } else if (self.tableView.editing) {
+    toolbarRightButton = [self createEditModeDoneButtonForToolbar:YES];
+  } else {
+    toolbarRightButton = [self createEditButtonForToolbar:YES];
+  }
 
-  [self setToolbarItems:@[ toolbarLeftButton, flexibleSpace, editOrDoneButton ]
-               animated:YES];
+  [self
+      setToolbarItems:@[ toolbarLeftButton, flexibleSpace, toolbarRightButton ]
+             animated:YES];
 
   if (self.tableView.editing) {
     self.deleteButton.enabled = NO;
@@ -141,6 +136,15 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
 - (void)reloadData {
   [self loadModel];
   [self.tableView reloadData];
+}
+
+- (void)configureHandlersForRootViewController:
+    (id<SettingsRootViewControlling>)controller {
+  controller.applicationHandler = self.applicationHandler;
+  controller.browserHandler = self.browserHandler;
+  controller.browsingDataHandler = self.browsingDataHandler;
+  controller.settingsHandler = self.settingsHandler;
+  controller.snackbarHandler = self.snackbarHandler;
 }
 
 #pragma mark - Property
@@ -156,32 +160,6 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
     _deleteButton.tintColor = [UIColor colorNamed:kRedColor];
   }
   return _deleteButton;
-}
-
-- (UIBarButtonItem*)addButtonInToolbar {
-  if (!_addButtonInToolbar) {
-    _addButtonInToolbar = [[UIBarButtonItem alloc]
-        initWithTitle:l10n_util::GetNSString(IDS_IOS_SETTINGS_TOOLBAR_ADD)
-                style:UIBarButtonItemStylePlain
-               target:self
-               action:@selector(addButtonCallback)];
-    _addButtonInToolbar.accessibilityIdentifier = kSettingsToolbarAddButtonId;
-  }
-  return _addButtonInToolbar;
-}
-
-- (UIBarButtonItem*)settingsButtonInToolbar {
-  if (!_settingsButtonInToolbar) {
-    _settingsButtonInToolbar = [[UIBarButtonItem alloc]
-        initWithTitle:l10n_util::GetNSString(
-                          IDS_IOS_SETTINGS_TOOLBAR_SETTINGS_SUBMENU)
-                style:UIBarButtonItemStylePlain
-               target:self
-               action:@selector(settingsButtonCallback)];
-    _settingsButtonInToolbar.accessibilityIdentifier =
-        kSettingsToolbarSettingsButtonId;
-  }
-  return _settingsButtonInToolbar;
 }
 
 #pragma mark - UIViewController
@@ -222,14 +200,33 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
 
 - (void)willMoveToParentViewController:(UIViewController*)parent {
   [super willMoveToParentViewController:parent];
+
+  // When the view controller is in editing mode, setEditing might get called
+  // after this, which could show the toolbar based on the requirements of the
+  // view controller that is being popped out of the navigation controller. This
+  // can leave the new top view controller with a toolbar when it doesn't
+  // require one. Disabling editing mode to avoid this. See crbug.com/1404111 as
+  // an example.
+  if (!parent && self.isEditing) {
+    [self setEditing:NO animated:NO];
+  }
+
   [self.navigationController setToolbarHidden:YES animated:YES];
+}
+
+- (void)didMoveToParentViewController:(UIViewController*)parent {
+  [super didMoveToParentViewController:parent];
+  if (!parent && [self respondsToSelector:@selector(settingsWillBeDismissed)]) {
+    [self performSelector:@selector(settingsWillBeDismissed)];
+  }
 }
 
 - (void)setEditing:(BOOL)editing animated:(BOOL)animated {
   [super setEditing:editing animated:animated];
-  if (!editing)
+  if (!editing && self.navigationController.topViewController == self) {
     [self.navigationController setToolbarHidden:self.shouldHideToolbar
                                        animated:YES];
+  }
 }
 
 - (void)viewDidLayoutSubviews {
@@ -275,10 +272,10 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
 
 - (void)view:(TableViewLinkHeaderFooterView*)view didTapLinkURL:(CrURL*)URL {
   // Subclass must have a valid dispatcher assigned.
-  DCHECK(self.dispatcher);
+  DCHECK(self.applicationHandler);
   OpenNewTabCommand* command =
       [OpenNewTabCommand commandWithURLFromChrome:URL.gurl];
-  [self.dispatcher closeSettingsUIAndOpenURL:command];
+  [self.applicationHandler closeSettingsUIAndOpenURL:command];
 }
 
 #pragma mark - Private
@@ -292,7 +289,7 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
     return nil;
   }
   SettingsNavigationController* navigationController =
-      base::mac::ObjCCast<SettingsNavigationController>(
+      base::apple::ObjCCast<SettingsNavigationController>(
           self.navigationController);
   UIBarButtonItem* doneButton = [navigationController doneButton];
   if (_shouldDisableDoneButtonOnEdit) {
@@ -395,6 +392,7 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
                                activityIndicatorDimension)];
   UIBarButtonItem* waitButton =
       [[UIBarButtonItem alloc] initWithCustomView:indicator];
+  waitButton.accessibilityLabel = kSettingsWaitButtonId;
 
   if (displayActivityIndicatorOnTheRight) {
     // If there is a right bar button item, then it is the "Done" button.
@@ -432,12 +430,13 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
   // Removes the veil that prevents user interaction.
   DCHECK(self.veil);
   [UIView animateWithDuration:0.3
-      animations:^{
-        [self.veil removeFromSuperview];
-      }
-      completion:^(BOOL finished) {
-        self.veil = nil;
-      }];
+                   animations:^{
+                     [self.veil removeFromSuperview];
+                   }
+                   completion:nil];
+  // Need to remove `self.veil` to be able immediately, so
+  // `preventUserInteraction` can be called in less than 0.3s after.
+  self.veil = nil;
 
   DCHECK(self.savedBarButtonItem);
   switch (self.savedBarButtonItemPosition) {
@@ -454,16 +453,6 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
   }
   self.savedBarButtonItem = nil;
   self.savedBarButtonItemPosition = kUndefinedBarButtonItemPosition;
-}
-
-- (void)addButtonCallback {
-  // Subclasses should implement.
-  NOTREACHED();
-}
-
-- (void)settingsButtonCallback {
-  // Subclasses should implement.
-  NOTREACHED();
 }
 
 #pragma mark - UIAdaptivePresentationControllerDelegate

@@ -4,10 +4,10 @@
 
 #import "ios/chrome/browser/ui/overlays/overlay_container_view_controller.h"
 
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_presented_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_resizing_presented_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_presented_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_resizing_presented_overlay_request_config.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_impl.h"
 #import "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/overlays/test_modality/test_presented_overlay_coordinator.h"
@@ -17,10 +17,6 @@
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Test fixture for OverlayContainerViewController.
 class OverlayContainerViewControllerTest : public PlatformTest {

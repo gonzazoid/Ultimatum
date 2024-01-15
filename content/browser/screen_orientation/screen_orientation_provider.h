@@ -5,13 +5,15 @@
 #ifndef CONTENT_BROWSER_SCREEN_ORIENTATION_SCREEN_ORIENTATION_PROVIDER_H_
 #define CONTENT_BROWSER_SCREEN_ORIENTATION_SCREEN_ORIENTATION_PROVIDER_H_
 
-#include "base/callback.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_frame_host_receiver_set.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "services/device/public/mojom/screen_orientation.mojom.h"
 #include "services/device/public/mojom/screen_orientation_lock_types.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/display/mojom/screen_orientation.mojom.h"
 
 namespace content {
 
@@ -50,6 +52,9 @@ class CONTENT_EXPORT ScreenOrientationProvider
   // The delegate is not owned by ScreenOrientationProvider.
   static void SetDelegate(ScreenOrientationDelegate* delegate);
   static ScreenOrientationDelegate* GetDelegateForTesting();
+  static bool LockMatchesOrientation(
+      device::mojom::ScreenOrientationLockType lock,
+      display::mojom::ScreenOrientation orientation);
 
   // WebContentsObserver
   void DidToggleFullscreenModeForTab(bool entered_fullscreen,
@@ -79,7 +84,7 @@ class CONTENT_EXPORT ScreenOrientationProvider
 
   // Lock that require orientation changes are not completed until
   // OnOrientationChange.
-  absl::optional<device::mojom::ScreenOrientationLockType>
+  std::optional<device::mojom::ScreenOrientationLockType>
       pending_lock_orientation_;
 
   LockOrientationCallback pending_callback_;

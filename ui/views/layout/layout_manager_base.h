@@ -58,11 +58,18 @@ class VIEWS_EXPORT LayoutManagerBase : public LayoutManager {
                               const View* view) const override;
   void Layout(View* host) final;
 
+  // Returns whether the specified child view can be visible. To be able to be
+  // visible, |child| must be a child of the host view, and must have been
+  // visible when it was added or most recently had SetVisible(true) called on
+  // it by non-layout code.
+  bool CanBeVisible(const View* child) const;
+
  protected:
   LayoutManagerBase();
 
   // LayoutManager:
-  std::vector<View*> GetChildViewsInPaintOrder(const View* host) const override;
+  std::vector<raw_ptr<View, VectorExperimental>> GetChildViewsInPaintOrder(
+      const View* host) const override;
 
   // Direct cache control for subclasses that want to override default caching
   // behavior. Use at your own risk.
@@ -107,12 +114,6 @@ class VIEWS_EXPORT LayoutManagerBase : public LayoutManager {
   // |include_hidden| is set.
   bool IsChildIncludedInLayout(const View* child,
                                bool include_hidden = false) const;
-
-  // Returns whether the specified child view can be visible. To be able to be
-  // visible, |child| must be a child of the host view, and must have been
-  // visible when it was added or most recently had SetVisible(true) called on
-  // it by non-layout code.
-  bool CanBeVisible(const View* child) const;
 
   // Creates a proposed layout for the host view, including bounds and
   // visibility for all children currently included in the layout.
@@ -173,13 +174,13 @@ class VIEWS_EXPORT LayoutManagerBase : public LayoutManager {
   }
 
  private:
+  friend class ManualLayoutUtil;
   friend class LayoutManagerBaseAvailableSizeTest;
 
   // Holds bookkeeping data used to determine inclusion of children in the
   // layout.
   struct ChildInfo {
     bool can_be_visible = true;
-    bool ignored = false;
   };
 
   // LayoutManager:
@@ -232,6 +233,56 @@ class VIEWS_EXPORT LayoutManagerBase : public LayoutManager {
   mutable absl::optional<gfx::Size> cached_height_for_width_;
   mutable absl::optional<gfx::Size> cached_layout_size_;
   mutable ProposedLayout cached_layout_;
+};
+
+// Provides methods for doing additional, manual manipulation of a
+// `LayoutManagerBase` and its managed Views inside its host View's `Layout()`
+// method, ideally before `LayoutManager::Layout()` is invoked.
+//
+// In most cases, the layout manager should do all of the layout. However, in
+// some cases, specific children of the host may be explicitly manipulated; for
+// example, to conditionally show a button which (if visible) should be included
+// in the layout.
+//
+// All of the direct manipulation functions on `LayoutManagerBase` and `View`,
+// such as `View::SetVisible()` and
+// `LayoutManagerBase::SetChildIncludedInLayout()`, cause cascades of layout
+// invalidation up the Views tree, so are not appropriate to be used inside of a
+// `Layout()` method. In the case that manual layout manipulation is required
+// alongside the use of a layout manager, a `ManualLayoutUtil` should be used
+// instead of callin those other methods directly.
+//
+// This class should only be instantiated and used inside the `Layout()` method
+// of a `View` or derived class, before `LayoutManager::Layout()` is invoked.
+class VIEWS_EXPORT ManualLayoutUtil {
+ public:
+  explicit ManualLayoutUtil(LayoutManagerBase* layout_manager);
+  ~ManualLayoutUtil();
+  ManualLayoutUtil(const ManualLayoutUtil&) = delete;
+  void operator=(const ManualLayoutUtil&) = delete;
+
+  // Includes, or exlcudes and hides, `child_view`.
+  //
+  // Example:
+  // ```
+  //  MyView::Layout() {
+  //    // Only include `foo_button_` in the layout if the feature is enabled;
+  //    // otherwise hide it.
+  //    ManualLayoutUtil layout_util(flex_layout_.get());
+  //    layout_util.SetViewHidden(foo_button_, !foo_enabled);
+  //
+  //    // Do the standard Views layout, which invokes the layout manager.
+  //    View::Layout();
+  //  }
+  // ```
+  //
+  // Note that if instead the code had read,
+  // `foo_button_.SetVisible(foo_enabled)`, the current view and every view up
+  // the hierarchy would be invalidated, which could result in a layout loop.
+  void SetViewHidden(View* child_view, bool hidden);
+
+ private:
+  const raw_ptr<LayoutManagerBase> layout_manager_;
 };
 
 }  // namespace views

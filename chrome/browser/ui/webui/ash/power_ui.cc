@@ -11,15 +11,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/ash/power/power_data_collector.h"
-#include "chrome/browser/ash/power/process_data_collector.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
@@ -37,7 +37,6 @@ namespace {
 const char kRequestBatteryChargeDataCallback[] = "requestBatteryChargeData";
 const char kRequestCpuIdleDataCallback[] = "requestCpuIdleData";
 const char kRequestCpuFreqDataCallback[] = "requestCpuFreqData";
-const char kRequestProcessUsageDataCallback[] = "requestProcessUsageData";
 
 class PowerMessageHandler : public content::WebUIMessageHandler {
  public:
@@ -51,7 +50,6 @@ class PowerMessageHandler : public content::WebUIMessageHandler {
   void OnGetBatteryChargeData(const base::Value::List& value);
   void OnGetCpuIdleData(const base::Value::List& value);
   void OnGetCpuFreqData(const base::Value::List& value);
-  void OnGetProcessUsageData(const base::Value::List& value);
   base::Value::List GetJsStateOccupancyData(
       const std::vector<CpuDataCollector::StateOccupancySampleDeque>& data,
       const std::vector<std::string>& state_names);
@@ -77,14 +75,12 @@ void PowerMessageHandler::RegisterMessages() {
       kRequestCpuFreqDataCallback,
       base::BindRepeating(&PowerMessageHandler::OnGetCpuFreqData,
                           base::Unretained(this)));
-  web_ui()->RegisterMessageCallback(
-      kRequestProcessUsageDataCallback,
-      base::BindRepeating(&PowerMessageHandler::OnGetProcessUsageData,
-                          base::Unretained(this)));
 }
 
 void PowerMessageHandler::OnGetBatteryChargeData(
     const base::Value::List& args) {
+  CHECK_EQ(1u, args.size());
+
   AllowJavascript();
 
   const base::circular_deque<PowerDataCollector::PowerSupplySample>&
@@ -96,7 +92,7 @@ void PowerMessageHandler::OnGetBatteryChargeData(
     element.Set("batteryPercent", sample.battery_percent);
     element.Set("batteryDischargeRate", sample.battery_discharge_rate);
     element.Set("externalPower", sample.external_power);
-    element.Set("time", sample.time.ToJsTime());
+    element.Set("time", sample.time.InMillisecondsFSinceUnixEpoch());
 
     js_power_supply_data.Append(std::move(element));
   }
@@ -111,6 +107,8 @@ void PowerMessageHandler::OnGetBatteryChargeData(
 }
 
 void PowerMessageHandler::OnGetCpuIdleData(const base::Value::List& args) {
+  CHECK_EQ(1u, args.size());
+
   AllowJavascript();
 
   const CpuDataCollector& cpu_data_collector =
@@ -133,6 +131,8 @@ void PowerMessageHandler::OnGetCpuIdleData(const base::Value::List& args) {
 }
 
 void PowerMessageHandler::OnGetCpuFreqData(const base::Value::List& args) {
+  CHECK_EQ(1u, args.size());
+
   AllowJavascript();
 
   const CpuDataCollector& cpu_data_collector =
@@ -154,29 +154,6 @@ void PowerMessageHandler::OnGetCpuFreqData(const base::Value::List& args) {
   ResolveJavascriptCallback(callback_id, data);
 }
 
-void PowerMessageHandler::OnGetProcessUsageData(const base::Value::List& args) {
-  AllowJavascript();
-  CHECK_EQ(1U, args.size());
-
-  const base::Value& callback_id = args[0];
-
-  const std::vector<ProcessDataCollector::ProcessUsageData>& process_list =
-      ProcessDataCollector::Get()->GetProcessUsages();
-
-  base::Value::List js_process_usages;
-  for (const auto& process_info : process_list) {
-    base::Value::Dict element;
-    element.Set("pid", process_info.process_data.pid);
-    element.Set("name", process_info.process_data.name);
-    element.Set("cmdline", process_info.process_data.cmdline);
-    element.Set("type", static_cast<int>(process_info.process_data.type));
-    element.Set("powerUsageFraction", process_info.power_usage_fraction);
-    js_process_usages.Append(std::move(element));
-  }
-
-  ResolveJavascriptCallback(callback_id, js_process_usages);
-}
-
 base::Value::List PowerMessageHandler::GetJsSystemResumedData() {
   base::Value::List data;
 
@@ -186,7 +163,7 @@ base::Value::List PowerMessageHandler::GetJsSystemResumedData() {
     const PowerDataCollector::SystemResumedSample& sample = system_resumed[i];
     base::Value::Dict element;
     element.Set("sleepDuration", sample.sleep_duration.InMillisecondsF());
-    element.Set("time", sample.time.ToJsTime());
+    element.Set("time", sample.time.InMillisecondsFSinceUnixEpoch());
 
     data.Append(std::move(element));
   }
@@ -203,7 +180,7 @@ base::Value::List PowerMessageHandler::GetJsStateOccupancyData(
     for (unsigned int i = 0; i < sample_deque.size(); ++i) {
       const CpuDataCollector::StateOccupancySample& sample = sample_deque[i];
       base::Value::Dict js_sample;
-      js_sample.Set("time", sample.time.ToJsTime());
+      js_sample.Set("time", sample.time.InMillisecondsFSinceUnixEpoch());
       js_sample.Set("cpuOnline", sample.cpu_online);
 
       base::Value::Dict state_dict;
@@ -225,8 +202,8 @@ base::Value::List PowerMessageHandler::GetJsStateOccupancyData(
 PowerUI::PowerUI(content::WebUI* web_ui) : content::WebUIController(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<PowerMessageHandler>());
 
-  content::WebUIDataSource* html =
-      content::WebUIDataSource::Create(chrome::kChromeUIPowerHost);
+  content::WebUIDataSource* html = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUIPowerHost);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"titleText", IDS_ABOUT_POWER_TITLE},
@@ -262,9 +239,6 @@ PowerUI::PowerUI(content::WebUI* web_ui) : content::WebUIController(web_ui) {
   html->AddResourcePath("power.css", IDR_ABOUT_POWER_CSS);
   html->AddResourcePath("power.js", IDR_ABOUT_POWER_JS);
   html->SetDefaultResource(IDR_ABOUT_POWER_HTML);
-
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html);
 }
 
 PowerUI::~PowerUI() {

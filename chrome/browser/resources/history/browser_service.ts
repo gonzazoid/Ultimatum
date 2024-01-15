@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+
 import {RESULTS_PER_PAGE} from './constants.js';
-import {ForeignSession, HistoryEntry, HistoryQuery} from './externs.js';
+import type {ForeignSession, HistoryEntry, HistoryQuery} from './externs.js';
 
 export type RemoveVisitsRequest = Array<{
   url: string,
@@ -25,9 +26,9 @@ export interface BrowserService {
   getForeignSessions(): Promise<ForeignSession[]>;
   removeBookmark(url: string): void;
   removeVisits(removalList: RemoveVisitsRequest): Promise<void>;
+  setLastSelectedTab(lasSelectedTab: number): void;
   openForeignSessionAllTabs(sessionTag: string): void;
-  openForeignSessionTab(
-      sessionTag: string, windowId: number, tabId: number, e: MouseEvent): void;
+  openForeignSessionTab(sessionTag: string, tabId: number, e: MouseEvent): void;
   deleteForeignSession(sessionTag: string): void;
   openClearBrowsingData(): void;
   recordHistogram(histogram: string, value: number, max: number): void;
@@ -58,15 +59,17 @@ export class BrowserServiceImpl implements BrowserService {
     return sendWithPromise('removeVisits', removalList);
   }
 
-  openForeignSessionAllTabs(sessionTag: string) {
-    chrome.send('openForeignSession', [sessionTag]);
+  setLastSelectedTab(lastSelectedTab: number) {
+    chrome.send('setLastSelectedTab', [lastSelectedTab]);
   }
 
-  openForeignSessionTab(
-      sessionTag: string, windowId: number, tabId: number, e: MouseEvent) {
-    chrome.send('openForeignSession', [
+  openForeignSessionAllTabs(sessionTag: string) {
+    chrome.send('openForeignSessionAllTabs', [sessionTag]);
+  }
+
+  openForeignSessionTab(sessionTag: string, tabId: number, e: MouseEvent) {
+    chrome.send('openForeignSessionTab', [
       sessionTag,
-      String(windowId),
       String(tabId),
       e.button || 0,
       e.altKey,

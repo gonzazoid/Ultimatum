@@ -40,9 +40,11 @@ export class DescriptorListElement extends ExpandableListElement {
 
   createItem(data) {
     const item = document.createElement('descriptor-list-item');
+    assert(this.deviceAddress_);
+    assert(this.serviceId_);
+    assert(this.characteristicId_);
     item.initialize(
-        data, assert(this.deviceAddress_), assert(this.serviceId_),
-        assert(this.characteristicId_));
+        data, this.deviceAddress_, this.serviceId_, this.characteristicId_);
     return item;
   }
 

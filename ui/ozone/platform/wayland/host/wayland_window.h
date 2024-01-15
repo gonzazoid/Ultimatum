@@ -7,13 +7,15 @@
 
 #include <list>
 #include <memory>
+#include <ostream>
 #include <set>
+#include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/linked_list.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -31,10 +33,17 @@
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_output.h"
 #include "ui/ozone/platform/wayland/host/wayland_surface.h"
+#include "ui/ozone/platform/wayland/host/wayland_zaura_surface.h"
 #include "ui/platform_window/platform_window.h"
 #include "ui/platform_window/platform_window_delegate.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 #include "ui/platform_window/wm/wm_drag_handler.h"
+
+#if BUILDFLAG(IS_LINUX)
+#include "ui/ozone/platform/wayland/host/wayland_async_cursor.h"
+#endif
+
+struct zwp_keyboard_shortcuts_inhibitor_v1;
 
 namespace wl {
 
@@ -51,13 +60,15 @@ class WaylandSubsurface;
 class WaylandWindowDragController;
 class WaylandFrameManager;
 class WaylandPopup;
+class WaylandToplevelWindow;
 
 using WidgetSubsurfaceSet = base::flat_set<std::unique_ptr<WaylandSubsurface>>;
 
 class WaylandWindow : public PlatformWindow,
                       public PlatformEventDispatcher,
                       public WmDragHandler,
-                      public EventTarget {
+                      public EventTarget,
+                      public WaylandZAuraSurface::Delegate {
  public:
   WaylandWindow(const WaylandWindow&) = delete;
   WaylandWindow& operator=(const WaylandWindow&) = delete;
@@ -69,9 +80,7 @@ class WaylandWindow : public PlatformWindow,
   static std::unique_ptr<WaylandWindow> Create(
       PlatformWindowDelegate* delegate,
       WaylandConnection* connection,
-      PlatformWindowInitProperties properties,
-      bool update_visual_size_immediately = false,
-      bool apply_pending_state_on_update_visual_size = false);
+      PlatformWindowInitProperties properties);
 
   void OnWindowLostCapture();
 
@@ -82,6 +91,9 @@ class WaylandWindow : public PlatformWindow,
   // to do so (this is not needed upon window initialization).
   virtual void UpdateWindowScale(bool update_bounds);
 
+  // Propagates the buffer scale of the next commit to exo.
+  virtual void PropagateBufferScale(float new_scale) = 0;
+
   WaylandSurface* root_surface() const { return root_surface_.get(); }
   WaylandSubsurface* primary_subsurface() const {
     return primary_subsurface_.get();
@@ -89,6 +101,7 @@ class WaylandWindow : public PlatformWindow,
   const WidgetSubsurfaceSet& wayland_subsurfaces() const {
     return wayland_subsurfaces_;
   }
+  WaylandZAuraSurface* GetZAuraSurface();
 
   base::LinkedList<WaylandSubsurface>* subsurface_stack_committed() {
     return &subsurface_stack_committed_;
@@ -109,6 +122,7 @@ class WaylandWindow : public PlatformWindow,
   // subsurface_stack_below_.size() >= below.
   bool ArrangeSubsurfaceStack(size_t above, size_t below);
   bool CommitOverlays(uint32_t frame_id,
+                      int64_t seq,
                       std::vector<wl::WaylandOverlayConfig>& overlays);
 
   // Called when the focus changed on this window.
@@ -129,10 +143,12 @@ class WaylandWindow : public PlatformWindow,
   WaylandWindow* child_window() const { return child_window_; }
 
   // Sets the window_scale for this window with respect to a display this window
-  // is located at. Returns true if the scale has changed. This determines how
-  // events can be translated and how pixel size of the surface is treated.
-  bool SetWindowScale(float new_scale);
-  float window_scale() const { return window_scale_; }
+  // is located at. This determines how events can be translated and how pixel
+  // size of the surface is treated. This is called as a result of the window
+  // moving to a new display (output), or if the scale factor of its current
+  // display changes. This is not sent via a configure.
+  void SetWindowScale(float new_scale);
+
   float ui_scale() const { return ui_scale_; }
 
   // Returns the preferred entered output id, if any. The preferred output is
@@ -144,12 +160,6 @@ class WaylandWindow : public PlatformWindow,
 
   // Returns current type of the window.
   PlatformWindowType type() const { return type_; }
-
-  // The pixel size of the surface.
-  gfx::Size size_px() const { return size_px_; }
-
-  // The pixel size of the buffer for the surface.
-  gfx::Size visual_size_px() const { return visual_size_px_; }
 
   bool received_configure_event() const { return received_configure_event_; }
 
@@ -182,7 +192,7 @@ class WaylandWindow : public PlatformWindow,
   void SetCapture() override;
   void ReleaseCapture() override;
   bool HasCapture() const override;
-  void ToggleFullscreen() override;
+  void SetFullscreen(bool fullscreen, int64_t target_display_id) override;
   void Maximize() override;
   void Minimize() override;
   void Restore() override;
@@ -198,7 +208,6 @@ class WaylandWindow : public PlatformWindow,
   gfx::Rect GetRestoredBoundsInDIP() const override;
   bool ShouldWindowContentsBeTransparent() const override;
   void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   void SetDecorationInsets(const gfx::Insets* insets_px) override;
   void SetWindowIcons(const gfx::ImageSkia& window_icon,
                       const gfx::ImageSkia& app_icon) override;
@@ -221,15 +230,32 @@ class WaylandWindow : public PlatformWindow,
   virtual void HandleSurfaceConfigure(uint32_t serial);
 
   struct WindowStates {
+   public:
+    WindowStates();
+    ~WindowStates();
+
     bool is_maximized = false;
     bool is_fullscreen = false;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    bool is_immersive_fullscreen = false;
+    bool is_pinned_fullscreen = false;
+    bool is_trusted_pinned_fullscreen = false;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
     bool is_activated = false;
+    bool is_minimized = false;
     bool is_snapped_primary = false;
     bool is_snapped_secondary = false;
     bool is_floated = false;
+#if BUILDFLAG(IS_LINUX)
     WindowTiledEdges tiled_edges;
+#endif
+
+    // Dumps the values of the states that are part of the standard
+    // xdg_toplevel.state enum into a string;
+    std::string ToString() const;
   };
 
+  // Configure related:
   virtual void HandleToplevelConfigure(int32_t width,
                                        int32_t height,
                                        const WindowStates& window_states);
@@ -239,24 +265,38 @@ class WaylandWindow : public PlatformWindow,
                                            int32_t height,
                                            const WindowStates& window_states);
   virtual void HandlePopupConfigure(const gfx::Rect& bounds);
-  // The final size of the Wayland surface is determined by the buffer size in
-  // px that the Chromium compositor renders at. If the window changes a
-  // display (and scale changes from 1 to 2), the buffers are recreated with
-  // some delays. Thus, applying a visual size using window_scale (which is the
-  // current scale of a wl_output where the window is located at) is wrong, as
-  // it may result in a smaller visual size than needed. For example, buffers'
-  // size in px is 100x100, the buffer scale and window scale is 1. The window
-  // is moved to another display and window scale changes to 2. The window's
-  // bounds also change are multiplied by the scale factor. It takes time until
-  // buffers are recreated for a larger size in px and submitted. However, there
-  // might be an in flight frame that submits buffers with old size. Thus,
-  // applying scale factor immediately will result in a visual size in dip to be
-  // smaller than needed. This results in a bouncing window size in some
-  // scenarios like starting Chrome on a secondary display with larger scale
-  // factor than the primary display's one. Thus, this method gets a scale
-  // factor that helps to determine size of the surface in dip respecting
-  // size that GPU renders at.
-  virtual void UpdateVisualSize(const gfx::Size& size_px);
+
+  // Call when we get a new frame produced from viz with |seq| sequence ID.
+  // This is used to determine which requests have been fulfilled,
+  // and sends the appropriate acks back to the wayland server.
+  virtual void OnSequencePoint(int64_t seq) = 0;
+
+  // Called by shell surfaces to indicate that this window can start submitting
+  // frames. Updating state based on configure is handled separately to this.
+  void OnSurfaceConfigureEvent();
+
+  // Sets the raster scale to be applied on the next configure.
+  void SetPendingRasterScale(float scale) {
+    pending_configure_state_.raster_scale = scale;
+  }
+
+  // See comments on the member variable for an explanation of this.
+  const PlatformWindowDelegate::State& applied_state() const {
+    return applied_state_;
+  }
+
+  // See comments on the member variable for an explanation of this.
+  const PlatformWindowDelegate::State& latched_state() const {
+    return latched_state_;
+  }
+
+  // Tells if the surface has already been configured. This will be true after
+  // the first set of configure event and ack request, meaning that wl_surface
+  // can attach buffers.
+  virtual bool IsSurfaceConfigured() = 0;
+
+  // Sends configure acknowledgement to the wayland server.
+  virtual void AckConfigure(uint32_t serial) = 0;
 
   // Handles close requests.
   virtual void OnCloseRequest();
@@ -271,24 +311,11 @@ class WaylandWindow : public PlatformWindow,
   virtual void OnDragLeave();
   virtual void OnDragSessionClose(ui::mojom::DragOperation operation);
 
-  // Tells if the surface has already been configured.
-  virtual bool IsSurfaceConfigured() = 0;
-
-  // Called by shell surfaces to indicate that this window can start submitting
-  // frames.
-  void OnSurfaceConfigureEvent();
-
   // Sets the window geometry.
-  virtual void SetWindowGeometry(gfx::Rect bounds);
+  virtual void SetWindowGeometry(gfx::Size size_dip);
 
   // Returns the offset of the window geometry within the window surface.
   gfx::Vector2d GetWindowGeometryOffsetInDIP() const;
-
-  // Sends configure acknowledgement to the wayland server.
-  virtual void AckConfigure(uint32_t serial) = 0;
-
-  // Updates the window decorations, if possible at the moment.
-  virtual void UpdateDecorations();
 
   // Returns the effective decoration insets.
   gfx::Insets GetDecorationInsetsInDIP() const;
@@ -312,17 +339,25 @@ class WaylandWindow : public PlatformWindow,
   bool IsOpaqueWindow() const;
 
   // Says if the current window is set as active by the Wayland server. This
-  // only applies to toplevel surfaces (surfaces such as popups, subsurfaces do
-  // not support that).
+  // only applies to toplevel surfaces (surfaces such as popups, subsurfaces
+  // do not support that).
   virtual bool IsActive() const;
 
   // WaylandWindow can be any type of object - WaylandToplevelWindow,
-  // WaylandPopup, WaylandAuxiliaryWindow. This method casts itself to
-  // WaylandPopup, if |this| has type of WaylandPopup.
+  // WaylandPopup. The following methods cast itself to WaylandPopup or
+  // WaylandToplevelWindow, if |this| is of that type.
   virtual WaylandPopup* AsWaylandPopup();
+  virtual WaylandToplevelWindow* AsWaylandToplevelWindow();
 
   // Returns true if the window's bounds is in screen coordinates.
   virtual bool IsScreenCoordinatesEnabled() const;
+
+  // Returns true if this window's configure state supports the minimized state.
+  virtual bool SupportsConfigureMinimizedState() const;
+
+  // Returns true if this window's configure state supports the pinned
+  // fullscreen and trusted pinned states.
+  virtual bool SupportsConfigurePinnedState() const;
 
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner() {
     return ui_task_runner_;
@@ -332,25 +367,17 @@ class WaylandWindow : public PlatformWindow,
     return weak_ptr_factory_.GetWeakPtr();
   }
 
-  // Clears the state of the |frame_manager_| when the GPU channel is destroyed.
+  // Clears the state of the |frame_manager_| when the GPU channel is
+  // destroyed.
   void OnChannelDestroyed();
 
-  // These are never intended to be used except in unit tests.
-  void set_update_visual_size_immediately_for_testing(bool update) {
-    update_visual_size_immediately_for_testing_ = update;
-  }
-
-  void set_apply_pending_state_on_update_visual_size_for_testing(bool apply) {
-    apply_pending_state_on_update_visual_size_for_testing_ = apply;
-  }
+  virtual void DumpState(std::ostream& out) const;
 
 #if DCHECK_IS_ON()
   void disable_null_target_dcheck_for_testing() {
     disable_null_target_dcheck_for_test_ = true;
   }
 #endif
-
-  bool has_pending_configures() const { return !pending_configures_.empty(); }
 
  protected:
   WaylandWindow(PlatformWindowDelegate* delegate,
@@ -359,6 +386,9 @@ class WaylandWindow : public PlatformWindow,
   WaylandConnection* connection() { return connection_; }
   const WaylandConnection* connection() const { return connection_; }
   PlatformWindowDelegate* delegate() { return delegate_; }
+  zaura_surface* aura_surface() {
+    return aura_surface_ ? aura_surface_.get() : nullptr;
+  }
 
   // Update the bounds of the window in DIP. Unlike SetBoundInDIP, it will not
   // send a request to the compositor even if the screen coordinate is enabled.
@@ -369,9 +399,6 @@ class WaylandWindow : public PlatformWindow,
   // Updates mask for this window.
   virtual void UpdateWindowMask() = 0;
 
-  // Processes the pending bounds in dip.
-  void ProcessPendingBoundsDip(uint32_t serial);
-
   // [Deprecated]
   // If the given |bounds_px| violates size constraints set for this window,
   // fixes them so they don't.
@@ -381,21 +408,65 @@ class WaylandWindow : public PlatformWindow,
   // fixes them so they don't.
   gfx::Rect AdjustBoundsToConstraintsDIP(const gfx::Rect& bounds_dip);
 
-  // Processes the size information form visual size update and returns true if
-  // any pending configure is fulfilled.
-  bool ProcessVisualSizeUpdate(const gfx::Size& size_px);
+  const gfx::Rect& restored_bounds_dip() const { return restored_bounds_dip_; }
 
-  // Applies pending bounds.
-  virtual void ApplyPendingBounds();
+  // Configure related:
 
-  gfx::Rect pending_bounds_dip() const { return pending_bounds_dip_; }
-  void set_pending_bounds_dip(const gfx::Rect& rect) {
-    pending_bounds_dip_ = rect;
+  // Processes the currently pending State. This may generate a new in-flight
+  // StateRequest, or apply and ack the request immediately. This should be
+  // called after the server has finished sending a configure request. The
+  // serial number comes from the server and needs to be acked when the changes
+  // from the configure have been applied.
+  void ProcessPendingConfigureState(uint32_t serial);
+
+  // Requests the given state via RequestState, given that this was a server
+  // initiated change (e.g. configure).
+  void RequestStateFromServer(PlatformWindowDelegate::State state,
+                              int64_t serial);
+
+  // Requests the given state via RequestState, given that this was a client
+  // initiated change.
+  void RequestStateFromClient(PlatformWindowDelegate::State state);
+
+  // Requests the given state. If this request originates from a configure from
+  // the server, specify |serial|. If |force| is true, the state will always be
+  // applied, even if requests are being throttled.
+  void RequestState(PlatformWindowDelegate::State state,
+                    int64_t serial,
+                    bool force);
+
+  // Processes the given sequence point number. It will also latch and ack
+  // the latest fulfilled in-flight request if it exists.
+  void ProcessSequencePoint(int64_t viz_seq);
+
+  // Applies the latest in-flight StateRequest, if it exists. In-flight
+  // StateRequests need to wait for a frame generated after we inserted a
+  // sequence point for their changes. If |force| is true, the state will always
+  // be applied, even if requests are being throttled. This is used for client
+  // requested changes (server requested changes may be throttled).
+  void MaybeApplyLatestStateRequest(bool force);
+
+  // Returns the next state that will be applied, or the currently applied state
+  // if there are no later unapplied states. This is used when updating a single
+  // property (e.g. window scale) without wanting to modify the others.
+  PlatformWindowDelegate::State GetLatestRequestedState() const {
+    return in_flight_requests_.empty() ? applied_state_
+                                       : in_flight_requests_.back().state;
   }
-  gfx::Size pending_size_px() const { return pending_size_px_; }
-  void set_pending_size_px(const gfx::Size& size) { pending_size_px_ = size; }
 
-  const gfx::Size& restored_size_dip() const { return restored_size_dip_; }
+  // PendingConfigureState describes the content of a configure sent from the
+  // wayland server.
+  struct PendingConfigureState {
+    absl::optional<gfx::Rect> bounds_dip;
+    absl::optional<gfx::Size> size_px;
+    absl::optional<float> raster_scale;
+  };
+
+  // This holds the requested state for the next configure from the server.
+  // The window may get several configuration events that update the pending
+  // bounds or other state. When the configure is fully received, we may
+  // create a StateRequest for this pending State.
+  PendingConfigureState pending_configure_state_;
 
  private:
   friend class WaylandBufferManagerViewportTest;
@@ -407,6 +478,8 @@ class WaylandWindow : public PlatformWindow,
   FRIEND_TEST_ALL_PREFIXES(WaylandBufferManagerTest, CanSetRoundedCorners);
   FRIEND_TEST_ALL_PREFIXES(WaylandBufferManagerTest,
                            CommitOverlaysNonsensicalBoundsRect);
+  FRIEND_TEST_ALL_PREFIXES(WaylandWindowTest,
+                           ServerInitiatedRestoreFromMinimizedState);
 
   // Initializes the WaylandWindow with supplied properties.
   bool Initialize(PlatformWindowInitProperties properties);
@@ -414,7 +487,8 @@ class WaylandWindow : public PlatformWindow,
   uint32_t DispatchEventToDelegate(const PlatformEvent& native_event);
 
   // Additional initialization of derived classes.
-  virtual bool OnInitialize(PlatformWindowInitProperties properties) = 0;
+  virtual bool OnInitialize(PlatformWindowInitProperties properties,
+                            PlatformWindowDelegate::State* state) = 0;
 
   // WaylandWindowDragController might need to take ownership of the wayland
   // surface whether the window that originated the DND session gets destroyed
@@ -426,6 +500,35 @@ class WaylandWindow : public PlatformWindow,
   std::unique_ptr<WaylandSurface> TakeWaylandSurface();
 
   void UpdateCursorShape(scoped_refptr<BitmapCursor> cursor);
+
+#if BUILDFLAG(IS_LINUX)
+  void OnCursorLoaded(scoped_refptr<WaylandAsyncCursor> cursor,
+                      scoped_refptr<BitmapCursor> bitmap_cursor);
+#endif
+
+  // StateRequest describes a State that we are applying to the window, and the
+  // metadata about that State, such as what serial number to use for ack (if it
+  // came from a configure), or the viz sequence number.
+  struct StateRequest {
+    // State that has been requested.
+    PlatformWindowDelegate::State state;
+
+    // Wayland serial number for acking a configure. This is -1 if there is no
+    // serial number (e.g. from client initiated change).
+    int64_t serial = -1;
+
+    // Viz sequence number at the time of this request. We are looking for a
+    // frame with a number greater than this to latch this request.
+    int64_t viz_seq = -1;
+
+    // Whether this request has been applied.
+    bool applied = false;
+  };
+
+  // Latches the given request. This must be called after the frame
+  // corresponding to the request is received. This acks the request and updates
+  // any window state that should be based on the currently latched state.
+  void LatchStateRequest(const StateRequest& req);
 
   raw_ptr<PlatformWindowDelegate> delegate_;
   raw_ptr<WaylandConnection> connection_;
@@ -455,26 +558,15 @@ class WaylandWindow : public PlatformWindow,
   // the subsurface arrangement are played back by WaylandFrameManager.
   base::LinkedList<WaylandSubsurface> subsurface_stack_committed_;
 
+  wl::Object<zaura_surface> aura_surface_;
+
+#if BUILDFLAG(IS_LINUX)
+  // The current asynchronously loaded cursor (Linux specific).
+  scoped_refptr<WaylandAsyncCursor> async_cursor_;
+#else
   // The current cursor bitmap (immutable).
   scoped_refptr<BitmapCursor> cursor_;
-
-  // Current bounds of the platform window. This is either initialized, or the
-  // requested size by the Wayland compositor. When this is set in SetBounds(),
-  // delegate_->OnBoundsChanged() is called and updates current_surface_size in
-  // Viz. However, it is not guaranteed that the next arriving frame will match
-  // |bounds_dip_|.
-  gfx::Rect bounds_dip_;
-  gfx::Size size_px_;
-
-  // The size presented by the gpu process. This is the visible size of the
-  // window, which can be different from |bounds_dip_| * scale due to renderers
-  // taking time to produce a compositor frame.
-  // The rough flow of size changes:
-  //   Wayland compositor -> xdg_surface.configure()
-  //   -> WaylandWindow::SetBounds() -> IPC -> DisplayPrivate::Resize()
-  //   -> OutputSurface::SwapBuffers() -> WaylandWindow::UpdateVisualSize()
-  //   -> xdg_surface.ack_configure() -> Wayland compositor.
-  gfx::Size visual_size_px_;
+#endif
 
   // Margins between edges of the surface and the window geometry (i.e., the
   // area of the window that is visible to the user as the actual window).  The
@@ -487,8 +579,6 @@ class WaylandWindow : public PlatformWindow,
   // replaces the default value that is equal to the natural device scale.
   // We need it to place and size the menus properly.
   float ui_scale_ = 1.0f;
-  // Current scale factor of the output where the window is located at.
-  float window_scale_ = 1.f;
 
   // Stores current opacity of the window. Set on ::Initialize call.
   ui::PlatformWindowOpacity opacity_;
@@ -499,45 +589,74 @@ class WaylandWindow : public PlatformWindow,
   // Set when the window enters in shutdown process.
   bool shutting_down_ = false;
 
-  // In a non-test environment, a frame update makes a SetBounds() change
-  // visible in |visual_size_px_|, but in some unit tests there will never be
-  // any frame updates. This flag causes UpdateVisualSize() to be invoked during
-  // SetBounds() in unit tests.
-  bool update_visual_size_immediately_for_testing_ = false;
-
-  // In a non-test environment, root_surface_->ApplyPendingBounds() is called to
-  // send Wayland protocol requests, but in some unit tests there will never be
-  // any frame updates. This flag causes root_surface_->ApplyPendingBounds() to
-  // be invoked during UpdateVisualSize() in unit tests.
-  bool apply_pending_state_on_update_visual_size_for_testing_ = false;
-
-  // These bounds attributes below have suffixes that indicate units used.
-  // Wayland operates in DIP but the platform operates in physical pixels so
-  // our WaylandWindow is the link that has to translate the units. See also
-  // comments in the implementation.
-  //
-  // Bounds that will be applied when the window state is finalized. The window
-  // may get several configuration events that update the pending bounds, and
-  // only upon finalizing the state is the latest value stored as the current
-  // bounds via |ApplyPendingBounds|. Measured in DIP because updated in the
-  // handler that receives DIP from Wayland.
-  gfx::Rect pending_bounds_dip_;
-  gfx::Size pending_size_px_;
-
-  // The size of the platform window before it went maximized or fullscreen in
+  // The bounds of the platform window before it went maximized or fullscreen in
   // dip.
-  gfx::Size restored_size_dip_;
+  gfx::Rect restored_bounds_dip_;
 
-  // Pending xdg-shell configures. Once this window is drawn to |bounds_dip|,
-  // ack_configure request with |serial| will be sent to the Wayland compositor.
-  struct PendingConfigure {
-    gfx::Rect bounds_dip;
-    gfx::Size size_px;
-    uint32_t serial;
-    // True if this configure has been passed to the compositor for rendering.
-    bool set = false;
-  };
-  base::circular_deque<PendingConfigure> pending_configures_;
+  // This holds the currently applied state. When in doubt, use this as the
+  // source of truth for this window's state. Whenever applied_state_ is
+  // changed, that change should be applied and a new in-flight request and
+  // sequence point should be created. Note that changes can be applied via
+  // other means than configures from the Wayland server. For example,
+  // PlatformWindow::SetBoundsInDIP can change the bounds without the server
+  // doing anything. This is separated from pending_configure_state_ to support
+  // these two different sources (server and PlatformWindow/etc) of control of
+  // the state.
+  //
+  // Here is an explanation of the State system:
+  //
+  // After applying some state changes (e.g. setting Chrome's bounds), we ask
+  // PlatformWindowDelegate for a sequence ID, which will be used to identify
+  // the correct buffer that has content corresponding to these changes. It is
+  // not sufficient to use the buffer size to identify this frame, because not
+  // all state changes change the buffer size. Usually these state changes are
+  // caused by configures from the wayland server, but not always. The client
+  // (us) can also set state (e.g. client side bounds change), and this needs to
+  // be managed along with changes via configure.
+  //
+  // Once the sequence ID reaches ozone/wayland GPU from viz, it will pass it
+  // over mojo back to WaylandBufferManagerHost where the whole round trip
+  // started. WaylandWindow will match it up with pending configures, which are
+  // now identified by the sequence ID at the original time of that configure.
+  //
+  // Once we have the sequence ID from viz back, we need to make sure the right
+  // configure is acked. Let's explicitly classify all configure related state
+  // into stages:
+  //
+  // Pending (pending_configure_state_): Accumulates configure data passed by
+  // the server.
+  //
+  // Requested (in_flight_requests_): On configure, we request the configure
+  // state to be applied. Not all configure state will be applied, due to
+  // throttling. Also, any client side changes (e.g.
+  // PlatformWindow::SetBoundsInDIP) should go through requested state to make
+  // sure it takes the same code path.
+  //
+  // Applied (applied_state_): A configure state which we have asked the browser
+  // to apply, e.g. by calling delegate()->OnBoundsChanged.
+  //
+  // Latched (latched_state_): When we receive the frame back from ozone/wayland
+  // GPU, we use the viz sequence ID to match it up with a configure. That state
+  // is now "latched".
+  //
+  // State changes go through this flow:
+  // 1. Pending - if via configure
+  // 2. Requested - in a queue to be applied (unless throttled)
+  // 3. Applied - we asked the browser to apply these state changes, waiting for
+  //    the frame to come back
+  // 4. Latched - the frame corresponding to this state came back, we can ack
+  //    the configure if there was one
+  PlatformWindowDelegate::State applied_state_;
+
+  // The current configuration state of the window. This is initially set to
+  // values provided by the client, until we get an actual configure from the
+  // server. See the comments on applied_state_ for further explanation.
+  PlatformWindowDelegate::State latched_state_;
+
+  // In-flight state requests. Once a frame comes from the GPU
+  // process with the appropriate viz sequence number, ack_configure request
+  // with |serial| will be sent to the Wayland compositor if needed.
+  base::circular_deque<StateRequest> in_flight_requests_;
 
   // AcceleratedWidget for this window. This will be unique even over time.
   gfx::AcceleratedWidget accelerated_widget_;
@@ -545,6 +664,11 @@ class WaylandWindow : public PlatformWindow,
   WmDragHandler::DragFinishedCallback drag_finished_callback_;
 
   base::OnceClosure drag_loop_quit_closure_;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  wl::Object<zwp_keyboard_shortcuts_inhibitor_v1>
+      permanent_keyboard_shortcuts_inhibitor_;
+#endif
 
 #if DCHECK_IS_ON()
   bool disable_null_target_dcheck_for_test_ = false;

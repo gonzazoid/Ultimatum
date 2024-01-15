@@ -7,6 +7,7 @@
 
 #include <deque>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
@@ -89,10 +90,6 @@ class BleSynchronizer : public BleSynchronizerBase {
   void ScheduleCommandCompletion();
   void CompleteCurrentCommand();
 
-  void RecordBluetoothAdvertisementRegistrationResult(
-      BluetoothAdvertisementResult result);
-  void RecordBluetoothAdvertisementUnregistrationResult(
-      BluetoothAdvertisementResult result);
   BluetoothAdvertisementResult BluetoothAdvertisementErrorCodeToResult(
       device::BluetoothAdvertisement::ErrorCode error_code);
   void RecordDiscoverySessionStarted(bool success);
@@ -102,7 +99,7 @@ class BleSynchronizer : public BleSynchronizerBase {
 
   std::unique_ptr<Command> current_command_;
   std::unique_ptr<base::OneShotTimer> timer_;
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
   scoped_refptr<base::TaskRunner> task_runner_;
   base::Time last_command_end_timestamp_;
   base::WeakPtrFactory<BleSynchronizer> weak_ptr_factory_{this};

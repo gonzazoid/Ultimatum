@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -110,7 +110,7 @@ class StreamFactory final : public media::mojom::AudioStreamFactory {
 
   void DestroyInputStream(InputStream* stream);
   void DestroyOutputStream(OutputStream* stream);
-  void DestroyMuter(LocalMuter* muter);
+  void DestroyMuter(base::WeakPtr<LocalMuter> muter);
   void DestroyLoopbackStream(LoopbackStream* stream);
 
   SEQUENCE_CHECKER(owning_sequence_);

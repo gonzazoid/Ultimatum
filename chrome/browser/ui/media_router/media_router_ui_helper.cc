@@ -12,7 +12,6 @@
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/mac_util.h"
 #include "ui/base/cocoa/permissions_utils.h"
 #endif
 
@@ -27,7 +26,7 @@ const int kCreateRouteTimeoutSecondsForDesktop = 120;
 const int kCreateRouteTimeoutSecondsForRemotePlayback = 60;
 
 #if BUILDFLAG(IS_MAC)
-absl::optional<bool> g_screen_capture_allowed_for_testing;
+std::optional<bool> g_screen_capture_allowed_for_testing;
 #endif
 
 }  // namespace
@@ -70,8 +69,7 @@ base::TimeDelta GetRouteRequestTimeout(MediaCastMode cast_mode) {
 
 bool RequiresScreenCapturePermission(MediaCastMode cast_mode) {
 #if BUILDFLAG(IS_MAC)
-  return base::mac::IsAtLeastOS10_15() &&
-         cast_mode == MediaCastMode::DESKTOP_MIRROR;
+  return cast_mode == MediaCastMode::DESKTOP_MIRROR;
 #else
   return false;
 #endif

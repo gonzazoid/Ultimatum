@@ -18,12 +18,6 @@ namespace sessions {
 // The previous referrer policy value corresponding to |Never|.
 const int kObsoleteReferrerPolicyNever = 2;
 
-size_t
-SerializedNavigationEntry::ReplacedNavigationEntryData::EstimateMemoryUsage()
-    const {
-  return base::trace_event::EstimateMemoryUsage(first_committed_url);
-}
-
 SerializedNavigationEntry::SerializedNavigationEntry() {
   referrer_policy_ =
       SerializedNavigationDriver::Get()->GetDefaultReferrerPolicy();
@@ -186,8 +180,13 @@ bool SerializedNavigationEntry::ReadFromPickle(base::PickleIterator* iterator) {
       !iterator->ReadString(&encoded_page_state_) ||
       !iterator->ReadInt(&transition_type_int))
     return false;
+
   virtual_url_ = GURL(virtual_url_spec);
-  transition_type_ = ui::PageTransitionFromInt(transition_type_int);
+  // Fall back to PAGE_TRANSITION_LINK in case the entry is either corrupted or
+  // format incompatible due to version skew.
+  transition_type_ = ui::IsValidPageTransitionType(transition_type_int)
+                         ? ui::PageTransitionFromInt(transition_type_int)
+                         : ui::PAGE_TRANSITION_LINK;
 
   // type_mask did not always exist in the written stream. As such, we
   // don't fail if it can't be read.
@@ -286,8 +285,6 @@ size_t SerializedNavigationEntry::EstimateMemoryUsage() const {
          EstimateMemoryUsage(original_request_url_) +
          EstimateMemoryUsage(favicon_url_) +
          EstimateMemoryUsage(redirect_chain_) +
-         EstimateMemoryUsage(
-             replaced_entry_data_.value_or(ReplacedNavigationEntryData())) +
          EstimateMemoryUsage(extended_info_map_);
 }
 

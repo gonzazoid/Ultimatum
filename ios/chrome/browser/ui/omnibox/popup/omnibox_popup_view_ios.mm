@@ -15,53 +15,54 @@
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "components/omnibox/browser/autocomplete_match.h"
+#import "components/omnibox/browser/omnibox_controller.h"
 #import "components/omnibox/browser/omnibox_edit_model.h"
 #import "components/omnibox/browser/omnibox_popup_selection.h"
 #import "components/open_from_clipboard/clipboard_recent_content.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/flags/system_flags.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/ntp/metrics/home_metrics.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_util.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_mediator.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_view_suggestions_delegate.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/omnibox/web_location_bar.h"
 #import "ios/chrome/grit/ios_theme_resources.h"
 #import "ios/web/public/thread/web_thread.h"
 #import "net/url_request/url_request_context_getter.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::UserMetricsAction;
 
 OmniboxPopupViewIOS::OmniboxPopupViewIOS(
-    OmniboxEditModel* edit_model,
+    OmniboxController* controller,
+    WebLocationBar* location_bar,
     OmniboxPopupViewSuggestionsDelegate* delegate)
-    : edit_model_(edit_model), delegate_(delegate) {
+    : OmniboxPopupView(controller),
+      location_bar_(location_bar),
+      delegate_(delegate) {
   DCHECK(delegate);
-  DCHECK(edit_model);
-  edit_model->set_popup_view(this);
+  DCHECK(controller);
+  model()->set_popup_view(this);
 }
 
 OmniboxPopupViewIOS::~OmniboxPopupViewIOS() {
-  edit_model_->set_popup_view(nullptr);
+  model()->set_popup_view(nullptr);
 }
 
 void OmniboxPopupViewIOS::UpdatePopupAppearance() {
-  const AutocompleteResult& result = model()->result();
-
-  [mediator_ updateWithResults:result];
-
-  delegate_->OnResultsChanged(result);
+  [mediator_
+      updateWithResults:controller()->autocomplete_controller()->result()];
 }
 
 bool OmniboxPopupViewIOS::IsOpen() const {
   return [mediator_ hasResults];
 }
 
-OmniboxEditModel* OmniboxPopupViewIOS::model() const {
-  return edit_model_;
+std::u16string OmniboxPopupViewIOS::GetAccessibleButtonTextForResult(
+    size_t line) {
+  return u"";
 }
 
 #pragma mark - OmniboxPopupProvider
@@ -82,7 +83,7 @@ void OmniboxPopupViewIOS::SetSemanticContentAttribute(
 #pragma mark - OmniboxPopupViewControllerDelegate
 
 bool OmniboxPopupViewIOS::IsStarredMatch(const AutocompleteMatch& match) const {
-  return edit_model_->IsStarredMatch(match);
+  return model()->IsStarredMatch(match);
 }
 
 void OmniboxPopupViewIOS::OnMatchSelected(
@@ -90,6 +91,12 @@ void OmniboxPopupViewIOS::OnMatchSelected(
     size_t row,
     WindowOpenDisposition disposition) {
   base::RecordAction(UserMetricsAction("MobileOmniboxUse"));
+  NewTabPageTabHelper* NTPTabHelper =
+      NewTabPageTabHelper::FromWebState(location_bar_->GetWebState());
+  if (NTPTabHelper->IsActive()) {
+    RecordHomeAction(IOSHomeActionType::kOmnibox,
+                     NTPTabHelper->ShouldShowStartSurface());
+  }
 
   // OpenMatch() may close the popup, which will clear the result set and, by
   // extension, `match` and its contents.  So copy the relevant match out to
@@ -100,7 +107,7 @@ void OmniboxPopupViewIOS::OnMatchSelected(
       match.type == AutocompleteMatchType::CLIPBOARD_TEXT) {
     // A search using clipboard link or text is activity that should indicate a
     // user that would be interested in setting Chrome as the default browser.
-    LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeGeneral);
+    LogCopyPasteInOmniboxForDefaultBrowserPromo();
   }
 
   if (match.type == AutocompleteMatchType::CLIPBOARD_URL) {
@@ -129,7 +136,7 @@ void OmniboxPopupViewIOS::OnMatchSelectedForAppending(
 
 void OmniboxPopupViewIOS::OnMatchSelectedForDeletion(
     const AutocompleteMatch& match) {
-  model()->autocomplete_controller()->DeleteMatch(match);
+  controller()->autocomplete_controller()->DeleteMatch(match);
 }
 
 void OmniboxPopupViewIOS::OnScroll() {

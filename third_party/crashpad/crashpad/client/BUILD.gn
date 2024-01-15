@@ -42,6 +42,7 @@ crashpad_static_library("client") {
       "ios_handler/prune_intermediate_dumps_and_crash_reports_thread.cc",
       "ios_handler/prune_intermediate_dumps_and_crash_reports_thread.h",
       "simulate_crash_ios.h",
+      "upload_behavior_ios.h",
     ]
   }
 
@@ -88,6 +89,10 @@ crashpad_static_library("client") {
     cflags = [ "/wd4201" ]  # nonstandard extension used : nameless struct/union
   }
 
+  if (crashpad_is_apple) {
+    deps += [ "../build:apple_enable_arc" ]
+  }
+
   if (crashpad_is_ios) {
     deps += [
       "../handler:common",
@@ -118,13 +123,15 @@ static_library("common") {
     "crash_report_database.h",
     "crashpad_info.cc",
     "crashpad_info.h",
+    "length_delimited_ring_buffer.h",
+    "ring_buffer_annotation.h",
     "settings.cc",
     "settings.h",
     "simple_address_range_bag.h",
     "simple_string_dictionary.h",
   ]
 
-  if (crashpad_is_mac || crashpad_is_ios) {
+  if (crashpad_is_apple) {
     sources += [ "crash_report_database_mac.mm" ]
   }
   if (crashpad_is_win) {
@@ -143,6 +150,21 @@ static_library("common") {
     "../util",
   ]
   deps = [ "../util" ]
+  configs += [ "../build:flock_always_supported_defines" ]
+
+  if (crashpad_is_apple) {
+    deps += [ "../build:apple_enable_arc" ]
+  }
+}
+
+crashpad_executable("ring_buffer_annotation_load_test") {
+  testonly = true
+  sources = [ "ring_buffer_annotation_load_test_main.cc" ]
+  deps = [
+    ":client",
+    "$mini_chromium_source_parent:base",
+    "../tools:tool_support",
+  ]
 }
 
 source_set("client_test") {
@@ -152,7 +174,9 @@ source_set("client_test") {
     "annotation_list_test.cc",
     "annotation_test.cc",
     "crash_report_database_test.cc",
+    "length_delimited_ring_buffer_test.cc",
     "prune_crash_reports_test.cc",
+    "ring_buffer_annotation_test.cc",
     "settings_test.cc",
     "simple_address_range_bag_test.cc",
     "simple_string_dictionary_test.cc",
@@ -192,6 +216,10 @@ source_set("client_test") {
 
   if (!crashpad_is_ios && !crashpad_is_fuchsia) {
     data_deps = [ "../handler:crashpad_handler" ]
+  }
+
+  if (crashpad_is_apple) {
+    deps += [ "../build:apple_enable_arc" ]
   }
 
   if (crashpad_is_win) {

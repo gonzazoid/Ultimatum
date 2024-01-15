@@ -5,6 +5,7 @@
 #include "components/policy/core/common/policy_pref_names.h"
 
 #include "build/build_config.h"
+#include "policy_pref_names.h"
 
 namespace policy {
 namespace policy_prefs {
@@ -25,6 +26,10 @@ const char kEnterpriseMDMManagementMac[] =
 // be enabled.
 const char kScreenTimeEnabled[] = "policy.screen_time";
 #endif
+
+// Enterprise policy controlled value representing whether the user may be shown
+// HaTS surveys.
+const char kFeedbackSurveysEnabled[] = "policy.feedback_surveys_enabled";
 
 // 64-bit serialization of the time last policy usage statistics were collected
 // by UMA_HISTOGRAM_ENUMERATION.
@@ -79,29 +84,18 @@ const char kNativeWindowOcclusionEnabled[] =
 const char kIntensiveWakeUpThrottlingEnabled[] =
     "policy.intensive_wake_up_throttling_enabled";
 
-// Boolean policy preference for force enabling or disabling the
-// SetTimeoutWithoutClamp web feature.
-const char kSetTimeoutWithout1MsClampEnabled[] =
-    "policy.set_timeout_without_1ms_clamp";
-
-// Boolean policy preference for force enabling or disabling the
-// MaxUnthrottledTimeoutNestingLevel web feature.
-const char kUnthrottledNestedTimeoutEnabled[] =
-    "policy.unthrottled_nested_timeout";
-
 #if BUILDFLAG(IS_ANDROID)
 // Boolean policy preference to disable the BackForwardCache feature.
 const char kBackForwardCacheEnabled[] = "policy.back_forward_cache_enabled";
+
+// Boolean policy preference to disable the Read Aloud feature.
+const char kReadAloudEnabled[] = "policy.read_aloud_enabled";
 #endif  // BUILDFLAG(IS_ANDROID)
 
 // Boolean policy preference to disable the User-Agent Client Hints
 // updated GREASE algorithm feature.
 const char kUserAgentClientHintsGREASEUpdateEnabled[] =
     "policy.user_agent_client_hints_grease_update_enabled";
-
-// Boolean policy preference to disable the URL parameter
-// filter.
-const char kUrlParamFilterEnabled[] = "policy.url_param_filter_enabled";
 
 // Boolean policy to allow isolated apps developer mode.
 const char kIsolatedAppsDeveloperModeAllowed[] =
@@ -120,10 +114,54 @@ const char kUserPolicyNotificationWasShown[] =
     "policy.user_policy_notification_was_shown";
 #endif
 
-// A boolean indicating whether the deprecated API Event.path is enabled. It
-// should eventually be disabled and removed.
-// https://chromestatus.com/feature/5726124632965120
-const char kEventPathEnabled[] = "policy.event_path_enabled";
+// Boolean controlling whether SafeSearch is mandatory for Google Web Searches.
+const char kForceGoogleSafeSearch[] = "settings.force_google_safesearch";
 
+// Integer controlling whether Restrict Mode (moderate/strict) is mandatory on
+// YouTube. See |safe_search_api::YouTubeRestrictMode| for possible values.
+const char kForceYouTubeRestrict[] = "settings.force_youtube_restrict";
+
+// A boolean pref set to true if the Chrome Web Store icons should be hidden
+// from the New Tab Page and app launcher.
+const char kHideWebStoreIcon[] = "hide_web_store_icon";
+
+// Enum that specifies whether Incognito mode is:
+// 0 - Enabled. Default behaviour. Default mode is available on demand.
+// 1 - Disabled. User cannot browse pages in Incognito mode.
+// 2 - Forced. All pages/sessions are forced into Incognito.
+const char kIncognitoModeAvailability[] = "incognito.mode_availability";
+
+// A boolean indicating whether the new behavior for beforeunload show cancel
+// dialog is in effect. If true, then
+// 1. If event.preventDefault() is called, prompt cancel dialog.
+// 2. If event.returnValue is the empty string, do not prompt cancel dialog.
+const char kBeforeunloadEventCancelByPreventDefaultEnabled[] =
+    "policy.beforeunload_event_cancel_by_prevent_default_enabled";
+
+// Boolean indicating whether Policy Test Page is Enabled.
+// The value is controlled by the PolicyTestPageEnabled policy.
+// If this is set to True, the page will be accessible.
+const char kPolicyTestPageEnabled[] = "policy_test_page_enabled";
+
+// A boolean pref indicating whether the new the page with "Cache-Control:
+// no-store" header is allowed to be stored in back/forward cache.
+const char kAllowBackForwardCacheForCacheControlNoStorePageEnabled[] =
+    "policy.allow_back_forward_cache_for_cache_control_no_store_page_enabled";
+
+const char kLocalTestPoliciesForNextStartup[] =
+    "local_test_policies_for_next_startup";
+
+// A boolean pref indicating whether to allow deprecation of the "unload"
+// event.
+// If false, the deprecation rollout will be ignored.
+const char kForcePermissionPolicyUnloadDefaultEnabled[] =
+    "policy.force_permission_policy_unload_default_enabled";
+
+#if BUILDFLAG(IS_CHROMEOS)
+// Allows user browser navigation access to the listed host patterns. Only
+// applied when a AlwaysOn VPN is active but not connected.
+const char kAlwaysOnVpnPreConnectUrlAllowlist[] =
+    "policy.alwayson_vpn_pre_connect_url_allowlist";
+#endif
 }  // namespace policy_prefs
 }  // namespace policy

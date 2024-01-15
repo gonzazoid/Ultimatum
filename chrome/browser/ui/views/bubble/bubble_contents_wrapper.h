@@ -11,7 +11,9 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/extensions/chrome_extension_web_contents_observer.h"
 #include "chrome/browser/task_manager/web_contents_tags.h"
+#include "chrome/browser/ui/webui_name_variants.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/common/referrer.h"
@@ -44,13 +46,27 @@ class BubbleContentsWrapper : public content::WebContentsDelegate,
     virtual bool HandleKeyboardEvent(
         content::WebContents* source,
         const content::NativeWebKeyboardEvent& event);
+    virtual bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
+                                   const content::ContextMenuParams& params);
+    virtual void RequestMediaAccessPermission(
+        content::WebContents* web_contents,
+        const content::MediaStreamRequest& request,
+        content::MediaResponseCallback callback) {}
+    virtual content::WebContents* OpenURLFromTab(
+        content::WebContents* source,
+        const content::OpenURLParams& params);
+    virtual void RunFileChooser(
+        content::RenderFrameHost* render_frame_host,
+        scoped_refptr<content::FileSelectListener> listener,
+        const blink::mojom::FileChooserParams& params) {}
   };
 
   BubbleContentsWrapper(const GURL& webui_url,
                         content::BrowserContext* browser_context,
                         int task_manager_string_id,
                         bool webui_resizes_host,
-                        bool esc_closes_ui);
+                        bool esc_closes_ui,
+                        const std::string& webui_name);
   ~BubbleContentsWrapper() override;
 
   // content::WebContentsDelegate:
@@ -64,10 +80,22 @@ class BubbleContentsWrapper : public content::WebContentsDelegate,
       const content::NativeWebKeyboardEvent& event) override;
   bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) override;
+  std::unique_ptr<content::EyeDropper> OpenEyeDropper(
+      content::RenderFrameHost* frame,
+      content::EyeDropperListener* listener) override;
+  void RequestMediaAccessPermission(
+      content::WebContents* web_contents,
+      const content::MediaStreamRequest& request,
+      content::MediaResponseCallback callback) override;
+  content::WebContents* OpenURLFromTab(
+      content::WebContents* source,
+      const content::OpenURLParams& params) override;
+  void RunFileChooser(content::RenderFrameHost* render_frame_host,
+                      scoped_refptr<content::FileSelectListener> listener,
+                      const blink::mojom::FileChooserParams& params) override;
 
   // content::WebContentsObserver:
-  void RenderViewHostChanged(content::RenderViewHost* old_host,
-                             content::RenderViewHost* new_host) override;
+  void PrimaryPageChanged(content::Page& page) override;
   void PrimaryMainFrameRenderProcessGone(
       base::TerminationStatus status) override;
 
@@ -80,6 +108,9 @@ class BubbleContentsWrapper : public content::WebContentsDelegate,
 
   // Reloads the WebContents hosting the WebUI.
   virtual void ReloadWebContents() = 0;
+
+  // Gets weak ptr to prevent UAF.
+  virtual base::WeakPtr<BubbleContentsWrapper> GetWeakPtr() = 0;
 
   base::WeakPtr<BubbleContentsWrapper::Host> GetHost();
   void SetHost(base::WeakPtr<BubbleContentsWrapper::Host> host);
@@ -115,8 +146,12 @@ class BubbleContentsWrapperT : public BubbleContentsWrapper {
                               browser_context,
                               task_manager_string_id,
                               webui_resizes_host,
-                              esc_closes_ui),
-        webui_url_(webui_url) {}
+                              esc_closes_ui,
+                              T::GetWebUIName()),
+        webui_url_(webui_url) {
+    static_assert(
+        views_metrics::IsValidWebUINameVariant("." + T::GetWebUIName()));
+  }
 
   void ReloadWebContents() override {
     web_contents()->GetController().LoadURL(webui_url_, content::Referrer(),
@@ -136,6 +171,10 @@ class BubbleContentsWrapperT : public BubbleContentsWrapper {
     return webui && webui->GetController()
                ? webui->GetController()->template GetAs<T>()
                : nullptr;
+  }
+
+  base::WeakPtr<BubbleContentsWrapper> GetWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
   }
 
  private:

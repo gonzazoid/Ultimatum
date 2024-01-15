@@ -4,17 +4,13 @@
 
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_unsafe_resource_container.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "services/network/public/mojom/fetch_api.mojom.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using security_interstitials::UnsafeResource;
 
@@ -36,7 +32,7 @@ class SafeBrowsingUnsafeResourceContainerTest : public PlatformTest {
     resource.navigation_url = resource.url;
     resource.threat_type = safe_browsing::SB_THREAT_TYPE_URL_PHISHING;
     resource.callback =
-        base::BindRepeating([](bool proceed, bool showed_interstitial) {});
+        base::BindRepeating([](UnsafeResource::UrlCheckResult result) {});
     resource.request_destination =
         is_main_frame ? network::mojom::RequestDestination::kDocument
                       : network::mojom::RequestDestination::kIframe;

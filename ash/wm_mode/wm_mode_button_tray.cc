@@ -13,7 +13,10 @@
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_container.h"
 #include "ash/wm_mode/wm_mode_controller.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/color/color_id.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -33,6 +36,9 @@ WmModeButtonTray::WmModeButtonTray(Shelf* shelf)
     : TrayBackgroundView(shelf, TrayBackgroundViewCatalogName::kWmMode),
       image_view_(tray_container()->AddChildView(
           std::make_unique<views::ImageView>())) {
+  SetCallback(base::BindRepeating(
+      [](const ui::Event& event) { WmModeController::Get()->Toggle(); }));
+
   image_view_->SetTooltipText(GetAccessibleNameForTray());
   image_view_->SetHorizontalAlignment(views::ImageView::Alignment::kCenter);
   image_view_->SetVerticalAlignment(views::ImageView::Alignment::kCenter);
@@ -46,9 +52,15 @@ WmModeButtonTray::~WmModeButtonTray() {
 }
 
 void WmModeButtonTray::UpdateButtonVisuals(bool is_wm_mode_active) {
+  const ui::ColorId color_id =
+      chromeos::features::IsJellyEnabled()
+          ? static_cast<ui::ColorId>(
+                is_wm_mode_active
+                    ? cros_tokens::kCrosSysSystemOnPrimaryContainer
+                    : cros_tokens::kCrosSysOnSurface)
+          : kColorAshIconColorPrimary;
   image_view_->SetImage(ui::ImageModel::FromVectorIcon(
-      is_wm_mode_active ? kWmModeOnIcon : kWmModeOffIcon,
-      GetColorProvider()->GetColor(kColorAshIconColorPrimary)));
+      is_wm_mode_active ? kWmModeOnIcon : kWmModeOffIcon, color_id));
   SetIsActive(is_wm_mode_active);
 }
 
@@ -66,16 +78,6 @@ std::u16string WmModeButtonTray::GetAccessibleNameForTray() {
   return u"WM Mode";
 }
 
-bool WmModeButtonTray::PerformAction(const ui::Event& event) {
-  DCHECK(event.type() == ui::ET_MOUSE_RELEASED ||
-         event.type() == ui::ET_GESTURE_TAP ||
-         event.type() == ui::ET_KEY_PRESSED);
-
-  WmModeController::Get()->Toggle();
-
-  return true;
-}
-
 void WmModeButtonTray::OnSessionStateChanged(
     session_manager::SessionState state) {
   UpdateButtonVisibility();
@@ -84,5 +86,8 @@ void WmModeButtonTray::OnSessionStateChanged(
 void WmModeButtonTray::UpdateButtonVisibility() {
   SetVisiblePreferred(ShouldButtonBeVisible());
 }
+
+BEGIN_METADATA(WmModeButtonTray)
+END_METADATA
 
 }  // namespace ash

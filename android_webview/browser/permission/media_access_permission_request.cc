@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <utility>
 
+#include "android_webview/browser/aw_browser_context.h"
 #include "android_webview/browser/permission/aw_permission_request.h"
+#include "android_webview/common/aw_features.h"
 #include "content/public/browser/media_capture_devices.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
@@ -42,14 +44,25 @@ const MediaStreamDevice* GetDeviceByIdOrFirstAvailable(
 
 MediaAccessPermissionRequest::MediaAccessPermissionRequest(
     const content::MediaStreamRequest& request,
-    content::MediaResponseCallback callback)
-    : request_(request), callback_(std::move(callback)) {}
+    content::MediaResponseCallback callback,
+    AwPermissionManager& permission_manager,
+    bool can_cache_file_url_permissions)
+    : request_(request),
+      callback_(std::move(callback)),
+      permission_manager_(permission_manager),
+      can_cache_file_url_permissions_(can_cache_file_url_permissions) {}
 
 MediaAccessPermissionRequest::~MediaAccessPermissionRequest() {}
 
 void MediaAccessPermissionRequest::NotifyRequestResult(bool allowed) {
   std::unique_ptr<content::MediaStreamUI> ui;
   if (!allowed) {
+    permission_manager_->ClearEnumerateDevicesCachedPermission(
+        request_.url_origin,
+        /* remove_audio */ request_.audio_type ==
+            blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE,
+        /* remove_video */ request_.video_type ==
+            blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE);
     std::move(callback_).Run(
         blink::mojom::StreamDevicesSet(),
         blink::mojom::MediaStreamRequestResult::PERMISSION_DENIED,
@@ -71,6 +84,12 @@ void MediaAccessPermissionRequest::NotifyRequestResult(bool allowed) {
         audio_devices, request_.requested_audio_device_id);
     if (device)
       devices.audio_device = *device;
+    if (base::FeatureList::IsEnabled(features::kWebViewEnumerateDevicesCache) &&
+        (request_.url_origin.scheme() != url::kFileScheme ||
+         can_cache_file_url_permissions_)) {
+      permission_manager_->SetOriginCanReadEnumerateDevicesAudioLabels(
+          request_.url_origin, true);
+    }
   }
 
   if (request_.video_type ==
@@ -83,6 +102,12 @@ void MediaAccessPermissionRequest::NotifyRequestResult(bool allowed) {
         video_devices, request_.requested_video_device_id);
     if (device)
       devices.video_device = *device;
+    if (base::FeatureList::IsEnabled(features::kWebViewEnumerateDevicesCache) &&
+        (request_.url_origin.scheme() != url::kFileScheme ||
+         can_cache_file_url_permissions_)) {
+      permission_manager_->SetOriginCanReadEnumerateDevicesVideoLabels(
+          request_.url_origin, true);
+    }
   }
 
   const bool has_no_hardware =

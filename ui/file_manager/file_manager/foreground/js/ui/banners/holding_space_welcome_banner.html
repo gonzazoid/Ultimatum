@@ -1,6 +1,14 @@
 <style>
   educational-banner {
-    --feature-icon-bg: url(/foreground/images/files/ui/holding_space_welcome_image.svg);
+    --feature-icon-bg: none;
+  }
+
+  educational-banner [slot=illustration] {
+    --holding-space-svg-color-1: var(--cros-sys-illo-color1-2);
+    --holding-space-svg-color-2: var(--cros-sys-illo-color1);
+    --holding-space-svg-color-3: var(--cros-sys-illo-color2);
+    --holding-space-svg-color-4: var(--cros-sys-illo-color5);
+    --holding-space-svg-color-5: var(--cros-sys-illo-color4);
   }
 
   .tablet-mode-enabled {
@@ -22,7 +30,7 @@
     -webkit-mask-position: center;
     -webkit-mask-repeat: no-repeat;
     -webkit-mask-size: 100%;
-    background-color: var(--cros-text-color-primary);
+    background-color: var(--cros-sys-on_surface);
     display: inline-block;
     height: 20px;
     vertical-align: middle;
@@ -30,6 +38,9 @@
   }
 </style>
 <educational-banner>
+  <svg slot="illustration">
+    <use xlink:href="/foreground/images/files/ui/holding_space_welcome_image.svg#holding_space"></use>
+  </svg>
   <span slot="title">$i18n{HOLDING_SPACE_WELCOME_TITLE}</span>
   <span slot="subtitle" class="tablet-mode-disabled">
     $i18n{HOLDING_SPACE_WELCOME_TEXT}

@@ -4,12 +4,15 @@
 
 #include "ash/hud_display/hud_header_view.h"
 
+#include <utility>
+
 #include "ash/hud_display/hud_constants.h"
 #include "ash/hud_display/hud_display.h"
 #include "ash/hud_display/hud_properties.h"
 #include "ash/hud_display/solid_source_background.h"
 #include "ash/hud_display/tab_strip.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
@@ -71,10 +74,11 @@ class SettingsButton : public views::ImageButton {
   METADATA_HEADER(SettingsButton);
 
   explicit SettingsButton(views::Button::PressedCallback callback)
-      : views::ImageButton(callback) {
-    SetImage(views::Button::ButtonState::STATE_NORMAL,
-             gfx::CreateVectorIcon(vector_icons::kSettingsIcon,
-                                   kHUDSettingsIconSize, kHUDDefaultColor));
+      : views::ImageButton(std::move(callback)) {
+    SetImageModel(
+        views::Button::ButtonState::STATE_NORMAL,
+        ui::ImageModel::FromVectorIcon(vector_icons::kSettingsIcon,
+                                       kHUDDefaultColor, kHUDSettingsIconSize));
     SetBorder(views::CreateEmptyBorder(kHUDSettingsIconBorder));
     SetProperty(kHUDClickHandler, HTCLIENT);
 
@@ -125,8 +129,8 @@ class HUDHeaderLayout : public views::LayoutManager {
   gfx::Size GetPreferredSize(const views::View* host) const override;
 
  private:
-  const views::View* data_view_;
-  views::View* padding_;
+  raw_ptr<const views::View> data_view_;
+  raw_ptr<views::View> padding_;
 };
 
 gfx::Size HUDHeaderLayout::GetPreferredSize(const views::View* host) const {
@@ -139,7 +143,7 @@ void HUDHeaderLayout::Layout(views::View* host) {
 
   const gfx::Size preferred_size = data_view_->GetPreferredSize();
 
-  for (auto* child : host->children()) {
+  for (views::View* child : host->children()) {
     if (child != padding_) {
       child->SetPosition({0, 0});
       child->SetSize(preferred_size);

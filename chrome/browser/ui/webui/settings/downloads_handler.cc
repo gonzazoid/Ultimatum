@@ -4,14 +4,11 @@
 
 #include "chrome/browser/ui/webui/settings/downloads_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/download/download_prefs.h"
-#include "chrome/browser/enterprise/connectors/connectors_prefs.h"
-#include "chrome/browser/enterprise/connectors/file_system/service_settings.h"
-#include "chrome/browser/enterprise/connectors/file_system/signin_experience.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/chrome_select_file_policy.h"
 #include "chrome/common/pref_names.h"
@@ -22,13 +19,13 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/file_manager/path_util.h"
 #endif
 
 using base::UserMetricsAction;
-namespace ec = enterprise_connectors;
 
 namespace settings {
 
@@ -60,12 +57,6 @@ void DownloadsHandler::RegisterMessages() {
       base::BindRepeating(&DownloadsHandler::HandleGetDownloadLocationText,
                           base::Unretained(this)));
 #endif
-
-  web_ui()->RegisterMessageCallback(
-      "setDownloadsConnectionAccountLink",
-      base::BindRepeating(
-          &DownloadsHandler::HandleSetDownloadsConnectionAccountLink,
-          base::Unretained(this)));
 }
 
 void DownloadsHandler::OnJavascriptAllowed() {
@@ -74,11 +65,6 @@ void DownloadsHandler::OnJavascriptAllowed() {
       prefs::kDownloadExtensionsToOpen,
       base::BindRepeating(&DownloadsHandler::SendAutoOpenDownloadsToJavascript,
                           base::Unretained(this)));
-  pref_registrar_.Add(
-      enterprise_connectors::kSendDownloadToCloudPref,
-      base::BindRepeating(
-          &DownloadsHandler::SendDownloadsConnectionPolicyToJavascript,
-          base::Unretained(this)));
 }
 
 void DownloadsHandler::OnJavascriptDisallowed() {
@@ -87,7 +73,6 @@ void DownloadsHandler::OnJavascriptDisallowed() {
 
 void DownloadsHandler::HandleInitialize(const base::Value::List& args) {
   AllowJavascript();
-  SendDownloadsConnectionPolicyToJavascript();
   SendAutoOpenDownloadsToJavascript();
 }
 
@@ -126,15 +111,15 @@ void DownloadsHandler::HandleSelectDownloadLocation(
       web_ui()->GetWebContents()->GetTopLevelNativeWindow(), nullptr);
 }
 
-void DownloadsHandler::FileSelected(const base::FilePath& path,
+void DownloadsHandler::FileSelected(const ui::SelectedFileInfo& file,
                                     int index,
                                     void* params) {
   select_folder_dialog_ = nullptr;
 
   base::RecordAction(UserMetricsAction("Options_SetDownloadDirectory"));
   PrefService* pref_service = profile_->GetPrefs();
-  pref_service->SetFilePath(prefs::kDownloadDefaultDirectory, path);
-  pref_service->SetFilePath(prefs::kSaveFileDefaultDirectory, path);
+  pref_service->SetFilePath(prefs::kDownloadDefaultDirectory, file.path());
+  pref_service->SetFilePath(prefs::kSaveFileDefaultDirectory, file.path());
 }
 
 void DownloadsHandler::FileSelectionCanceled(void* params) {
@@ -155,74 +140,5 @@ void DownloadsHandler::HandleGetDownloadLocationText(
           file_manager::util::GetPathDisplayTextForSettings(profile_, path)));
 }
 #endif
-
-using enterprise_connectors::FileSystemSigninDialogDelegate;
-
-bool DownloadsHandler::IsDownloadsConnectionPolicyEnabled() const {
-  return ec::GetFileSystemSettings(profile_).has_value();
-}
-
-void DownloadsHandler::SendDownloadsConnectionPolicyToJavascript() {
-  bool routing_enabled = IsDownloadsConnectionPolicyEnabled();
-  if (routing_enabled) {
-    std::vector<std::string> connection_prefs =
-        ec::GetFileSystemConnectorPrefsForSettingsPage(profile_);
-    for (const std::string& pref : connection_prefs) {
-      if (pref_registrar_.IsObserved(pref))
-        continue;
-      pref_registrar_.Add(
-          pref, base::BindRepeating(
-                    &DownloadsHandler::SendDownloadsConnectionInfoToJavascript,
-                    base::Unretained(this)));
-    }
-    SendDownloadsConnectionInfoToJavascript();
-  }
-
-  FireWebUIListener("downloads-connection-policy-changed",
-                    base::Value(routing_enabled));
-}
-
-void DownloadsHandler::HandleSetDownloadsConnectionAccountLink(
-    const base::Value::List& args) {
-  DCHECK(IsDownloadsConnectionPolicyEnabled());
-  CHECK_EQ(1U, args.size());
-  bool enable_link = args[0].GetBool();
-  ec::SetFileSystemConnectorAccountLinkForSettingsPage(
-      enable_link, profile_,
-      base::BindOnce(&DownloadsHandler::OnDownloadsConnectionAccountLinkSet,
-                     weak_factory_.GetWeakPtr()));
-}
-
-void DownloadsHandler::OnDownloadsConnectionAccountLinkSet(bool success) {
-  if (!success) {
-    DLOG(ERROR) << "Failed to set downloads connection account link";
-  }
-  SendDownloadsConnectionInfoToJavascript();
-}
-
-void DownloadsHandler::SendDownloadsConnectionInfoToJavascript() {
-  absl::optional<ec::FileSystemSettings> settings =
-      ec::GetFileSystemSettings(profile_);
-
-  absl::optional<ec::AccountInfo> info;
-  bool got_linked_account =
-      settings.has_value() && (info = GetFileSystemConnectorLinkedAccountInfo(
-                                   settings.value(), profile_->GetPrefs()))
-                                  .has_value();
-  // Dict to match the fields used in downloads_page.html.
-  base::Value::Dict dict;
-  dict.Set("linked", got_linked_account);
-  if (got_linked_account) {
-    base::Value::Dict account;
-    account.Set("name", info->account_name);
-    account.Set("login", info->account_login);
-    dict.Set("account", std::move(account));
-    base::Value::Dict folder;
-    folder.Set("name", info->folder_name);
-    folder.Set("link", info->folder_link);
-    dict.Set("folder", std::move(folder));
-  }
-  FireWebUIListener("downloads-connection-link-changed", dict);
-}
 
 }  // namespace settings

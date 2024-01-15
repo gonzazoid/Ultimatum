@@ -5,11 +5,11 @@
 package org.chromium.chrome.browser.push_messaging;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
 
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
 
 /**
  * Observes events and changes in the PushMessagingService.
@@ -32,13 +32,10 @@ public class PushMessagingServiceObserver {
      * PushMessagingServiceObserver.
      */
     public interface Listener {
-        /**
-         * Called when a push message has been handled.
-         */
+        /** Called when a push message has been handled. */
         void onMessageHandled();
     }
 
-    @VisibleForTesting
     public static void setListenerForTesting(@Nullable Listener listener) {
         ThreadUtils.assertOnUiThread();
         sListener = listener;

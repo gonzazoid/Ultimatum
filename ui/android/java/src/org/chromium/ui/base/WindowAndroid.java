@@ -24,11 +24,14 @@ import android.view.Surface;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
-import android.view.accessibility.AccessibilityManager;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApiCompatibilityUtils;
@@ -38,11 +41,8 @@ import org.chromium.base.LifetimeAssert;
 import org.chromium.base.Log;
 import org.chromium.base.ObserverList;
 import org.chromium.base.PackageManagerUtils;
-import org.chromium.base.StrictModeContext;
+import org.chromium.base.TraceEvent;
 import org.chromium.base.UnownedUserDataHost;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.compat.ApiHelperForO;
 import org.chromium.base.compat.ApiHelperForOMR1;
 import org.chromium.ui.KeyboardVisibilityDelegate;
@@ -59,9 +59,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
-/**
- * The window base class that has the minimum functionality.
- */
+/** The window base class that has the minimum functionality. */
 @JNINamespace("ui")
 public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidObserver {
     private static final String TAG = "WindowAndroid";
@@ -77,29 +75,6 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
 
     private KeyboardVisibilityDelegate mKeyboardVisibilityDelegate =
             KeyboardVisibilityDelegate.getInstance();
-
-    private class TouchExplorationMonitor {
-        // Listener that tells us when touch exploration is enabled or disabled.
-        private AccessibilityManager.TouchExplorationStateChangeListener mTouchExplorationListener;
-
-        TouchExplorationMonitor() {
-            mTouchExplorationListener =
-                    new AccessibilityManager.TouchExplorationStateChangeListener() {
-                @Override
-                public void onTouchExplorationStateChanged(boolean enabled) {
-                    mIsTouchExplorationEnabled =
-                            mAccessibilityManager.isTouchExplorationEnabled();
-                    refreshWillNotDraw();
-                }
-            };
-            mAccessibilityManager.addTouchExplorationStateChangeListener(mTouchExplorationListener);
-        }
-
-        void destroy() {
-            mAccessibilityManager.removeTouchExplorationStateChangeListener(
-                    mTouchExplorationListener);
-        }
-    }
 
     // Native pointer to the c++ WindowAndroid object.
     private long mNativeWindowAndroid;
@@ -120,18 +95,9 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     private HashSet<Animator> mAnimationsOverContent = new HashSet<>();
     private View mAnimationPlaceholderView;
 
-    // System accessibility service.
-    private final AccessibilityManager mAccessibilityManager;
-
     /** A mechanism for observing and updating the application window's bottom inset. */
-    private ApplicationViewportInsetSupplier mApplicationBottomInsetProvider =
+    private ApplicationViewportInsetSupplier mApplicationBottomInsetSupplier =
             new ApplicationViewportInsetSupplier();
-
-    // Whether touch exploration is enabled.
-    private boolean mIsTouchExplorationEnabled;
-
-    // A class that monitors the touch exploration state.
-    private TouchExplorationMonitor mTouchExplorationMonitor;
 
     private AndroidPermissionDelegate mPermissionDelegate;
 
@@ -150,45 +116,29 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     private boolean mHasFocus = true;
     private OverlayTransformApiHelper mOverlayTransformApiHelper;
 
-    /**
-     * An interface to notify listeners that a context menu is closed.
-     */
+    /** An interface to notify listeners that a context menu is closed. */
     public interface OnCloseContextMenuListener {
-        /**
-         * Called when a context menu has been closed.
-         */
+        /** Called when a context menu has been closed. */
         void onContextMenuClosed();
     }
 
-    /**
-     * An interface to notify listeners of the changes in activity state.
-     */
+    /** An interface to notify listeners of the changes in activity state. */
     public interface ActivityStateObserver {
-        /**
-         * Called when the activity goes into paused state.
-         */
-
+        /** Called when the activity goes into paused state. */
         void onActivityPaused();
-        /**
-         * Called when the activity goes into resumed state.
-         */
+
+        /** Called when the activity goes into resumed state. */
         void onActivityResumed();
 
-        /**
-         * Called when the activity goes into destroyed state.
-         */
+        /** Called when the activity goes into destroyed state. */
         void onActivityDestroyed();
     }
 
     private ObserverList<ActivityStateObserver> mActivityStateObservers = new ObserverList<>();
 
-    /**
-     * An interface to notify listeners of the changes in selection handles state.
-     */
+    /** An interface to notify listeners of the changes in selection handles state. */
     public interface SelectionHandlesObserver {
-        /**
-         * Called when the selection handles state changes.
-         */
+        /** Called when the selection handles state changes. */
         void onSelectionHandlesStateChanged(boolean active);
     }
 
@@ -198,9 +148,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
 
     private final boolean mAllowChangeRefreshRate;
 
-    /**
-     * Gets the view for readback.
-     */
+    /** Gets the view for readback. */
     public View getReadbackView() {
         return null;
     }
@@ -240,19 +188,14 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         mAllowChangeRefreshRate = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !isTv(context);
 
         // Multiple refresh rate support is only available on M+.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) recomputeSupportedRefreshRates();
+        recomputeSupportedRefreshRates();
 
-        // Temporary solution for flaky tests, see https://crbug.com/767624 for context
-        try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
-            mAccessibilityManager =
-                    (AccessibilityManager) ContextUtils.getApplicationContext().getSystemService(
-                            Context.ACCESSIBILITY_SERVICE);
-        }
         // Configuration.isDisplayServerWideColorGamut must be queried from the window's context.
         // Because of crbug.com/756180, many devices report true for isScreenWideColorGamut in
         // 8.0.0, even when they don't actually support wide color gamut.
         // TODO(boliu): Observe configuration changes to update the value of isScreenWideColorGamut.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !Build.VERSION.RELEASE.equals("8.0.0")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !Build.VERSION.RELEASE.equals("8.0.0")
                 && ContextUtils.activityFromContext(context) != null) {
             Configuration configuration = context.getResources().getConfiguration();
             boolean isScreenWideColorGamut = ApiHelperForO.isScreenWideColorGamut(configuration);
@@ -285,20 +228,17 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         mNativeWindowAndroid = 0;
     }
 
-    /**
-     * Set the delegate that will handle android permissions requests.
-     */
+    /** Set the delegate that will handle android permissions requests. */
     public void setAndroidPermissionDelegate(AndroidPermissionDelegate delegate) {
         mPermissionDelegate = delegate;
     }
 
-    /**
-     * Gets the {@link IntentRequestTracker} associated with the WindowAndroid's activity.
-     */
+    /** Gets the {@link IntentRequestTracker} associated with the WindowAndroid's activity. */
     @Nullable
     public final IntentRequestTracker getIntentRequestTracker() {
         if (mIntentRequestTracker == null) {
-            Log.w(TAG,
+            Log.w(
+                    TAG,
                     "Cannot get IntentRequestTracker as the WindowAndroid is neither "
                             + "a ActivityWindowAndroid or a FragmentWindowAndroid.");
         }
@@ -372,8 +312,8 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         return mIntentRequestTracker.showCancelableIntent(intent, callback, errorId);
     }
 
-    public int showCancelableIntent(Callback<Integer> intentTrigger, IntentCallback callback,
-            Integer errorId) {
+    public int showCancelableIntent(
+            Callback<Integer> intentTrigger, IntentCallback callback, Integer errorId) {
         if (mIntentRequestTracker == null) {
             Log.d(TAG, "Can't show intent as context is not an Activity");
             return START_INTENT_FAILURE;
@@ -396,9 +336,10 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     /**
      * Removes a callback from the list of pending intents, so that nothing happens if/when the
      * result for that intent is received.
+     *
      * @param callback The object that should have received the results
      * @return True if the callback was removed, false if it was not found.
-    */
+     */
     public boolean removeIntentCallback(IntentCallback callback) {
         if (mIntentRequestTracker == null) return false;
         return mIntentRequestTracker.removeIntentCallback(callback);
@@ -414,8 +355,11 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     public boolean hasPermission(String permission) {
         if (mPermissionDelegate != null) return mPermissionDelegate.hasPermission(permission);
 
-        return ApiCompatibilityUtils.checkPermission(ContextUtils.getApplicationContext(),
-                       permission, Process.myPid(), Process.myUid())
+        return ApiCompatibilityUtils.checkPermission(
+                        ContextUtils.getApplicationContext(),
+                        permission,
+                        Process.myPid(),
+                        Process.myUid())
                 == PackageManager.PERMISSION_GRANTED;
     }
 
@@ -438,10 +382,13 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
             return mPermissionDelegate.canRequestPermission(permission);
         }
 
-        Log.w(TAG, "Cannot determine the request permission state as the context "
-                + "is not an Activity");
-        assert false : "Failed to determine the request permission state using a WindowAndroid "
-                + "without an Activity";
+        Log.w(
+                TAG,
+                "Cannot determine the request permission state as the context "
+                        + "is not an Activity");
+        assert false
+                : "Failed to determine the request permission state using a WindowAndroid "
+                        + "without an Activity";
         return false;
     }
 
@@ -457,10 +404,13 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
             return mPermissionDelegate.isPermissionRevokedByPolicy(permission);
         }
 
-        Log.w(TAG, "Cannot determine the policy permission state as the context "
-                + "is not an Activity");
-        assert false : "Failed to determine the policy permission state using a WindowAndroid "
-                + "without an Activity";
+        Log.w(
+                TAG,
+                "Cannot determine the policy permission state as the context "
+                        + "is not an Activity");
+        assert false
+                : "Failed to determine the policy permission state using a WindowAndroid "
+                        + "without an Activity";
         return false;
     }
 
@@ -514,9 +464,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         showError(ContextUtils.getApplicationContext().getString(resId));
     }
 
-    /**
-     * Broadcasts the given intent to all interested BroadcastReceivers.
-     */
+    /** Broadcasts the given intent to all interested BroadcastReceivers. */
     public void sendBroadcast(Intent intent) {
         ContextUtils.getApplicationContext().sendBroadcast(intent);
     }
@@ -552,8 +500,8 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
      */
     public void onVisibilityChanged(boolean visible) {
         if (mNativeWindowAndroid == 0) return;
-        WindowAndroidJni.get().onVisibilityChanged(
-                mNativeWindowAndroid, WindowAndroid.this, visible);
+        WindowAndroidJni.get()
+                .onVisibilityChanged(mNativeWindowAndroid, WindowAndroid.this, visible);
     }
 
     /**
@@ -588,17 +536,13 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         }
     }
 
-    /**
-     * Adds a new {@link ActivityStateObserver} instance.
-     */
+    /** Adds a new {@link ActivityStateObserver} instance. */
     public void addActivityStateObserver(ActivityStateObserver observer) {
         assert !mActivityStateObservers.hasObserver(observer);
         mActivityStateObservers.addObserver(observer);
     }
 
-    /**
-     * Removes a new {@link ActivityStateObserver} instance.
-     */
+    /** Removes a new {@link ActivityStateObserver} instance. */
     public void removeActivityStateObserver(ActivityStateObserver observer) {
         assert mActivityStateObservers.hasObserver(observer);
         mActivityStateObservers.removeObserver(observer);
@@ -615,9 +559,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         mSelectionHandlesObservers.removeObserver(observer);
     }
 
-    /**
-     * Removes a new {@link ActivityStateObserver} instance.
-     */
+    /** Removes a new {@link ActivityStateObserver} instance. */
     @CalledByNative
     private void onSelectionHandlesStateChanged(boolean active) {
         mSelectionHandlesActive = active;
@@ -635,9 +577,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         return ActivityState.DESTROYED;
     }
 
-    /**
-     * An interface that intent callback objects have to implement.
-     */
+    /** An interface that intent callback objects have to implement. */
     public interface IntentCallback {
         /**
          * Handles the data returned by the requested intent.
@@ -665,9 +605,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         return null;
     }
 
-    /**
-     * Destroys the c++ WindowAndroid object if one has been created.
-     */
+    /** Destroys the c++ WindowAndroid object if one has been created. */
     @CalledByNative
     public void destroy() {
         LifetimeAssert.setSafeToGc(mLifetimeAssert, true);
@@ -677,10 +615,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         }
 
         mUnownedUserDataHost.destroy();
-
-        if (mTouchExplorationMonitor != null) mTouchExplorationMonitor.destroy();
-
-        mApplicationBottomInsetProvider.destroy();
+        mApplicationBottomInsetSupplier.destroy();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S_V2) {
             if (mOverlayTransformApiHelper != null) {
@@ -698,10 +633,14 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     private long getNativePointer() {
         if (mNativeWindowAndroid == 0) {
             mNativeWindowAndroid =
-                    WindowAndroidJni.get().init(WindowAndroid.this, mDisplayAndroid.getDisplayId(),
-                            getMouseWheelScrollFactor(), getWindowIsWideColorGamut());
-            WindowAndroidJni.get().setVSyncPaused(
-                    mNativeWindowAndroid, WindowAndroid.this, mVSyncPaused);
+                    WindowAndroidJni.get()
+                            .init(
+                                    WindowAndroid.this,
+                                    mDisplayAndroid.getDisplayId(),
+                                    getMouseWheelScrollFactor(),
+                                    getWindowIsWideColorGamut());
+            WindowAndroidJni.get()
+                    .setVSyncPaused(mNativeWindowAndroid, WindowAndroid.this, mVSyncPaused);
         }
         return mNativeWindowAndroid;
     }
@@ -714,8 +653,8 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         TypedValue outValue = new TypedValue();
         Context context = getContext().get();
         if (context != null
-                && context.getTheme().resolveAttribute(
-                           android.R.attr.listPreferredItemHeight, outValue, true)) {
+                && context.getTheme()
+                        .resolveAttribute(android.R.attr.listPreferredItemHeight, outValue, true)) {
             // This is the same attribute used by Android Views to scale wheel
             // event motion into scroll deltas.
             return outValue.getDimension(context.getResources().getDisplayMetrics());
@@ -749,12 +688,6 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
      */
     public void setAnimationPlaceholderView(View view) {
         mAnimationPlaceholderView = view;
-
-        // The accessibility focus ring also gets clipped by the SurfaceView 'hole', so
-        // make sure the animation placeholder view is in place if touch exploration is on.
-        mIsTouchExplorationEnabled = mAccessibilityManager.isTouchExplorationEnabled();
-        refreshWillNotDraw();
-        mTouchExplorationMonitor = new TouchExplorationMonitor();
     }
 
     /**
@@ -766,8 +699,8 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     }
 
     /** @return A mechanism for updating and observing the bottom inset of the browser window. */
-    public ApplicationViewportInsetSupplier getApplicationBottomInsetProvider() {
-        return mApplicationBottomInsetProvider;
+    public ApplicationViewportInsetSupplier getApplicationBottomInsetSupplier() {
+        return mApplicationBottomInsetSupplier;
     }
 
     public void setKeyboardDelegate(KeyboardVisibilityDelegate keyboardDelegate) {
@@ -776,9 +709,7 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         KeyboardVisibilityDelegate.setInstance(keyboardDelegate);
     }
 
-    /**
-     * Adds a listener that will be notified whenever a ContextMenu is closed.
-     */
+    /** Adds a listener that will be notified whenever a ContextMenu is closed. */
     public void addContextMenuCloseListener(OnCloseContextMenuListener listener) {
         mContextMenuCloseListeners.addObserver(listener);
     }
@@ -824,18 +755,23 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         animation.start();
 
         // When the first animation starts, make the placeholder 'draw' itself.
-        refreshWillNotDraw();
+        if (mAnimationPlaceholderView.willNotDraw()) {
+            mAnimationPlaceholderView.setWillNotDraw(false);
+        }
 
         // When the last animation ends, remove the placeholder view,
         // returning to the default optimized state.
-        animation.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                animation.removeListener(this);
-                mAnimationsOverContent.remove(animation);
-                refreshWillNotDraw();
-            }
-        });
+        animation.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        animation.removeListener(this);
+                        mAnimationsOverContent.remove(animation);
+                        if (mAnimationsOverContent.isEmpty()) {
+                            mAnimationPlaceholderView.setWillNotDraw(true);
+                        }
+                    }
+                });
     }
 
     /**
@@ -848,28 +784,13 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         return mContextRef;
     }
 
-    /**
-     * Return the current window token, or null.
-     */
+    /** Return the current window token, or null. */
     public IBinder getWindowToken() {
         Window window = getWindow();
         if (window == null) return null;
         View decorView = window.peekDecorView();
         if (decorView == null) return null;
         return decorView.getWindowToken();
-    }
-
-    /**
-     * Update whether the placeholder is 'drawn' based on whether an animation is running
-     * or touch exploration is enabled - if either of those are true, we call
-     * setWillNotDraw(false) to ensure that the animation is drawn over the SurfaceView,
-     * and otherwise we call setWillNotDraw(true).
-     */
-    private void refreshWillNotDraw() {
-        boolean willNotDraw = !mIsTouchExplorationEnabled && mAnimationsOverContent.isEmpty();
-        if (mAnimationPlaceholderView.willNotDraw() != willNotDraw) {
-            mAnimationPlaceholderView.setWillNotDraw(willNotDraw);
-        }
     }
 
     /**
@@ -896,8 +817,8 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     @Override
     public void onRefreshRateChanged(float refreshRate) {
         if (mNativeWindowAndroid != 0) {
-            WindowAndroidJni.get().onUpdateRefreshRate(
-                    mNativeWindowAndroid, WindowAndroid.this, refreshRate);
+            WindowAndroidJni.get()
+                    .onUpdateRefreshRate(mNativeWindowAndroid, WindowAndroid.this, refreshRate);
         }
     }
 
@@ -913,13 +834,11 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
     }
 
     @Override
-    @RequiresApi(Build.VERSION_CODES.M)
     public void onCurrentModeChanged(Display.Mode currentMode) {
         recomputeSupportedRefreshRates();
     }
 
     @Override
-    @RequiresApi(Build.VERSION_CODES.M)
     public void onDisplayModesChanged(List<Display.Mode> supportedModes) {
         recomputeSupportedRefreshRates();
     }
@@ -936,20 +855,21 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         Window window = getWindow();
         if (window == null) return;
 
-        int colorMode = enabled ? ActivityInfo.COLOR_MODE_WIDE_COLOR_GAMUT
-                                : ActivityInfo.COLOR_MODE_DEFAULT;
+        int colorMode =
+                enabled
+                        ? ActivityInfo.COLOR_MODE_WIDE_COLOR_GAMUT
+                        : ActivityInfo.COLOR_MODE_DEFAULT;
         ApiHelperForO.setColorMode(window, colorMode);
     }
 
-    @SuppressLint("NewApi") // This should only be called if Display.Mode is available.
-    @RequiresApi(Build.VERSION_CODES.M)
     private void recomputeSupportedRefreshRates() {
         Display.Mode currentMode = mDisplayAndroid.getCurrentMode();
-        assert currentMode != null;
-
         List<Display.Mode> supportedModes = mDisplayAndroid.getSupportedModes();
-        assert supportedModes != null;
-        assert supportedModes.size() > 0;
+        // Note: getCurrentMode() and getSupportedModes() can return null in some situations - see
+        // crbug.com/1401514.
+        if (currentMode == null || supportedModes == null || supportedModes.size() == 0) {
+            return;
+        }
 
         List<Display.Mode> supportedRefreshRateModes = new ArrayList<Display.Mode>();
         for (int i = 0; i < supportedModes.size(); ++i) {
@@ -972,8 +892,11 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         if (changed) {
             mSupportedRefreshRateModes = supportedRefreshRateModes;
             if (mNativeWindowAndroid != 0) {
-                WindowAndroidJni.get().onSupportedRefreshRatesUpdated(
-                        mNativeWindowAndroid, WindowAndroid.this, getSupportedRefreshRates());
+                WindowAndroidJni.get()
+                        .onSupportedRefreshRatesUpdated(
+                                mNativeWindowAndroid,
+                                WindowAndroid.this,
+                                getSupportedRefreshRates());
             }
         }
     }
@@ -985,7 +908,6 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
 
     @SuppressLint("NewApi")
     // mSupportedRefreshRateModes should only be set if Display.Mode is available.
-    @RequiresApi(Build.VERSION_CODES.M)
     @CalledByNative
     private float[] getSupportedRefreshRates() {
         if (mSupportedRefreshRateModes == null || !mAllowChangeRefreshRate) return null;
@@ -1019,7 +941,6 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
 
     @SuppressLint("NewApi")
     // mSupportedRefreshRateModes should only be set if Display.Mode is available.
-    @RequiresApi(Build.VERSION_CODES.M)
     private int getPreferredModeId(float preferredRefreshRate) {
         if (preferredRefreshRate == 0) return 0;
 
@@ -1069,11 +990,11 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
                 case Surface.ROTATION_0:
                     return OverlayTransform.NONE;
                 case Surface.ROTATION_90:
-                    return OverlayTransform.ROTATE_90;
+                    return OverlayTransform.ROTATE_CLOCKWISE_90;
                 case Surface.ROTATION_180:
-                    return OverlayTransform.ROTATE_180;
+                    return OverlayTransform.ROTATE_CLOCKWISE_180;
                 case Surface.ROTATION_270:
-                    return OverlayTransform.ROTATE_270;
+                    return OverlayTransform.ROTATE_CLOCKWISE_270;
                 default:
                     return OverlayTransform.NONE;
             }
@@ -1081,18 +1002,40 @@ public class WindowAndroid implements AndroidPermissionDelegate, DisplayAndroidO
         return overlayTransform;
     }
 
+    public void setUnfoldLatencyBeginTime(long beginTimestampMs) {
+        try (TraceEvent e = TraceEvent.scoped("setUnfoldLatencyBeginTime")) {
+            if (mNativeWindowAndroid != 0) {
+                WindowAndroidJni.get()
+                        .sendUnfoldLatencyBeginTimestamp(mNativeWindowAndroid, beginTimestampMs);
+            }
+        }
+    }
+
     @NativeMethods
     interface Natives {
-        long init(WindowAndroid caller, int displayId, float scrollFactor,
+        long init(
+                WindowAndroid caller,
+                int displayId,
+                float scrollFactor,
                 boolean windowIsWideColorGamut);
+
         void onVisibilityChanged(long nativeWindowAndroid, WindowAndroid caller, boolean visible);
+
         void onActivityStopped(long nativeWindowAndroid, WindowAndroid caller);
+
         void onActivityStarted(long nativeWindowAndroid, WindowAndroid caller);
+
         void setVSyncPaused(long nativeWindowAndroid, WindowAndroid caller, boolean paused);
+
         void onUpdateRefreshRate(long nativeWindowAndroid, WindowAndroid caller, float refreshRate);
+
         void destroy(long nativeWindowAndroid, WindowAndroid caller);
+
         void onSupportedRefreshRatesUpdated(
                 long nativeWindowAndroid, WindowAndroid caller, float[] supportedRefreshRates);
+
         void onOverlayTransformUpdated(long nativeWindowAndroid, WindowAndroid caller);
+
+        void sendUnfoldLatencyBeginTimestamp(long nativeWindowAndroid, long beginTimestampMs);
     }
 }

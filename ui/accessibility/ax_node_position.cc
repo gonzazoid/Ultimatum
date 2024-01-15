@@ -17,7 +17,7 @@ namespace ui {
 // character and a word boundary.
 AXEmbeddedObjectBehavior g_ax_embedded_object_behavior =
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(USE_ATK)
-    AXEmbeddedObjectBehavior::kExposeCharacter;
+    AXEmbeddedObjectBehavior::kExposeCharacterForHypertext;
 #else
     AXEmbeddedObjectBehavior::kSuppressCharacter;
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(USE_ATK)
@@ -53,7 +53,6 @@ AXNodePosition::AXPositionInstance AXNodePosition::CreatePosition(
   if (!node.tree())
     return CreateNullPosition();
 
-  AXTreeID tree_id = node.tree()->GetAXTreeID();
   if (IsTextPositionAnchor(node)) {
     // TODO(accessibility) It is a mistake for the to caller try to create a
     // text position with BEFORE_TEXT as the text offset. Correct the callers

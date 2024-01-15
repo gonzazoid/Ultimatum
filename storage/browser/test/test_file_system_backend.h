@@ -10,7 +10,8 @@
 #include <memory>
 
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "storage/browser/file_system/async_file_util_adapter.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/task_runner_bound_observer_list.h"
@@ -51,6 +52,7 @@ class TestFileSystemBackend : public FileSystemBackend {
       FileSystemType type,
       base::File::Error* error_code) override;
   std::unique_ptr<FileSystemOperation> CreateFileSystemOperation(
+      OperationType type,
       const FileSystemURL& url,
       FileSystemContext* context,
       base::File::Error* error_code) const override;
@@ -61,7 +63,9 @@ class TestFileSystemBackend : public FileSystemBackend {
       int64_t offset,
       int64_t max_bytes_to_read,
       const base::Time& expected_modification_time,
-      FileSystemContext* context) const override;
+      FileSystemContext* context,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access) const override;
   std::unique_ptr<FileStreamWriter> CreateFileStreamWriter(
       const FileSystemURL& url,
       int64_t offset,

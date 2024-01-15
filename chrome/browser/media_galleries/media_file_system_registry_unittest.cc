@@ -14,12 +14,12 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
@@ -215,22 +215,6 @@ class MockProfileSharedRenderProcessHostFactory
       content::SiteInstance* site_instance) override;
 
  private:
-  class SharedMockRenderProcessHost : public content::MockRenderProcessHost {
-   public:
-    explicit SharedMockRenderProcessHost(
-        content::BrowserContext* browser_context)
-        : content::MockRenderProcessHost(browser_context) {}
-
-    SharedMockRenderProcessHost(const SharedMockRenderProcessHost&) = delete;
-    SharedMockRenderProcessHost& operator=(const SharedMockRenderProcessHost&) =
-        delete;
-
-    // This test class lies that the process has not been used to allow
-    // testing of process sharing/reuse inherent in the unit tests that depend
-    // on the MockProfileSharedRenderProcessHostFactory.
-    bool HostHasNotBeenUsed() override { return true; }
-  };
-
   mutable std::map<content::BrowserContext*,
                    std::unique_ptr<content::MockRenderProcessHost>>
       rph_map_;
@@ -400,7 +384,8 @@ class MediaFileSystemRegistryTest : public ChromeRenderViewHostTestHarness {
   base::FilePath dcim_dir_;
 
   // MediaFileSystemRegistry owns this.
-  raw_ptr<TestMediaFileSystemContext> test_file_system_context_;
+  raw_ptr<TestMediaFileSystemContext, DanglingUntriaged>
+      test_file_system_context_;
 
   // Needed for extension service & friends to work.
 
@@ -417,7 +402,7 @@ namespace {
 
 bool MediaFileSystemInfoComparator(const MediaFileSystemInfo& a,
                                    const MediaFileSystemInfo& b) {
-  CHECK_NE(a.name, b.name);  // Name must be unique.
+  CHECK(&a == &b || a.name != b.name);  // Name must be unique.
   return a.name < b.name;
 }
 
@@ -449,7 +434,7 @@ MockProfileSharedRenderProcessHostFactory::CreateRenderProcessHost(
   if (existing != rph_map_.end())
     return existing->second.get();
   rph_map_[browser_context] =
-      std::make_unique<SharedMockRenderProcessHost>(browser_context);
+      std::make_unique<content::MockRenderProcessHost>(browser_context);
   return rph_map_[browser_context].get();
 }
 

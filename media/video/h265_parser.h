@@ -21,6 +21,11 @@
 #include "media/video/h264_parser.h"
 #include "media/video/h265_nalu_parser.h"
 
+namespace gfx {
+struct HdrMetadataCta861_3;
+struct HdrMetadataSmpteSt2086;
+}  // namespace gfx
+
 namespace media {
 
 // For explanations of each struct and its members, see H.265 specification
@@ -80,12 +85,15 @@ struct MEDIA_EXPORT H265ScalingListData {
   // are actually used. Also change it in the accelerator delegate if that is
   // done.
   // Syntax elements.
-  int scaling_list_dc_coef_16x16[kNumScalingListMatrices];
-  int scaling_list_dc_coef_32x32[kNumScalingListMatrices];
-  int scaling_list_4x4[kNumScalingListMatrices][kScalingListSizeId0Count];
-  int scaling_list_8x8[kNumScalingListMatrices][kScalingListSizeId1To3Count];
-  int scaling_list_16x16[kNumScalingListMatrices][kScalingListSizeId1To3Count];
-  int scaling_list_32x32[kNumScalingListMatrices][kScalingListSizeId1To3Count];
+  uint8_t scaling_list_dc_coef_16x16[kNumScalingListMatrices];
+  uint8_t scaling_list_dc_coef_32x32[kNumScalingListMatrices];
+  uint8_t scaling_list_4x4[kNumScalingListMatrices][kScalingListSizeId0Count];
+  uint8_t scaling_list_8x8[kNumScalingListMatrices]
+                          [kScalingListSizeId1To3Count];
+  uint8_t scaling_list_16x16[kNumScalingListMatrices]
+                            [kScalingListSizeId1To3Count];
+  uint8_t scaling_list_32x32[kNumScalingListMatrices]
+                            [kScalingListSizeId1To3Count];
 };
 
 struct MEDIA_EXPORT H265StRefPicSet {
@@ -142,7 +150,9 @@ struct MEDIA_EXPORT H265VPS {
   int vps_max_latency_increase_plus1[kMaxSubLayers];
   int vps_max_layer_id;
   int vps_num_layer_sets_minus1;
-  bool vps_timing_info_present_flag;
+
+  // Computed from ScalabilityId
+  int aux_alpha_layer_id;
 
   // skipped the rest
 };
@@ -169,7 +179,7 @@ struct MEDIA_EXPORT H265SPS {
   int log2_max_pic_order_cnt_lsb_minus4;
   int sps_max_dec_pic_buffering_minus1[kMaxSubLayers];
   int sps_max_num_reorder_pics[kMaxSubLayers];
-  int sps_max_latency_increase_plus1[kMaxSubLayers];
+  uint32_t sps_max_latency_increase_plus1[kMaxSubLayers];
   int log2_min_luma_coding_block_size_minus3;
   int log2_diff_max_min_luma_coding_block_size;
   int log2_min_luma_transform_block_size_minus2;
@@ -227,6 +237,7 @@ struct MEDIA_EXPORT H265SPS {
   int pic_size_in_ctbs_y;
   int wp_offset_half_range_y;
   int wp_offset_half_range_c;
+  uint32_t sps_max_latency_pictures[kMaxSubLayers];
 
   // Helpers to compute frequently-used values. They do not verify that the
   // results are in-spec for the given profile or level.
@@ -276,6 +287,7 @@ struct MEDIA_EXPORT H265PPS {
   int row_height_minus1[kMaxNumTileRowHeight];
   bool loop_filter_across_tiles_enabled_flag;
   bool pps_loop_filter_across_slices_enabled_flag;
+  bool deblocking_filter_control_present_flag;
   bool deblocking_filter_override_enabled_flag;
   bool pps_deblocking_filter_disabled_flag;
   int pps_beta_offset_div2;
@@ -402,6 +414,9 @@ struct MEDIA_EXPORT H265SliceHeader {
   // Number of bits st_ref_pic_set takes after removing emulation prevention
   // bytes.
   int st_rps_bits;
+  // Number of bits lt_ref_pic_set takes after removing emulation prevention
+  // bytes.
+  int lt_rps_bits;
 
   bool IsISlice() const;
   bool IsPSlice() const;
@@ -429,6 +444,8 @@ struct MEDIA_EXPORT H265SEIAlphaChannelInfo {
 struct MEDIA_EXPORT H265SEIContentLightLevelInfo {
   uint16_t max_content_light_level;
   uint16_t max_picture_average_light_level;
+
+  gfx::HdrMetadataCta861_3 ToGfx() const;
 };
 
 struct MEDIA_EXPORT H265SEIMasteringDisplayInfo {
@@ -441,6 +458,8 @@ struct MEDIA_EXPORT H265SEIMasteringDisplayInfo {
   uint16_t white_points[2];
   uint32_t max_luminance;
   uint32_t min_luminance;
+
+  gfx::HdrMetadataSmpteSt2086 ToGfx() const;
 };
 
 struct MEDIA_EXPORT H265SEIMessage {
@@ -461,6 +480,13 @@ struct MEDIA_EXPORT H265SEIMessage {
     H265SEIContentLightLevelInfo content_light_level_info;
     H265SEIMasteringDisplayInfo mastering_display_info;
   };
+};
+
+struct MEDIA_EXPORT H265SEI {
+  H265SEI();
+  ~H265SEI();
+
+  std::vector<H265SEIMessage> msgs;
 };
 
 // Class to parse an Annex-B H.265 stream.
@@ -511,20 +537,12 @@ class MEDIA_EXPORT H265Parser : public H265NaluParser {
   Result ParseSliceHeaderForPictureParameterSets(const H265NALU& nalu,
                                                  int* pps_id);
 
-  // Parse a SEI message, returning it in |*sei_msg|, provided and managed
-  // by the caller.
-  Result ParseSEI(H265SEIMessage* sei_msg);
+  // Parse a SEI, returning it in |*sei|, provided and managed by the caller.
+  Result ParseSEI(H265SEI* sei);
 
   static VideoCodecProfile ProfileIDCToVideoCodecProfile(int profile_idc);
 
  private:
-  // Exp-Golomb code parsing as specified in chapter 9.2 of the spec.
-  // Read one unsigned exp-Golomb code from the stream and return in |*val|.
-  Result ReadUE(int* val);
-
-  // Read one signed exp-Golomb code from the stream and return in |*val|.
-  Result ReadSE(int* val);
-
   Result ParseProfileTierLevel(bool profile_present,
                                int max_num_sub_layers_minus1,
                                H265ProfileTierLevel* profile_tier_level);

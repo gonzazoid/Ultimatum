@@ -2,19 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//chrome/test/base/js2gtest.gni")
 import("//third_party/closure_compiler/compile_js.gni")
 import("//tools/polymer/html_to_js.gni")
-import("//tools/polymer/polymer.gni")
-import("../../oobe_auto_imports.gni")
-
-group("polymer3_elements") {
-  public_deps = [
-    ":enterprise_enrollment_module",
-    ":packaged_license_module",
-    ":quick_start_module",
-  ]
-}
+import("//tools/polymer/html_to_wrapper.gni")
+import("../../login.gni")
 
 js_type_check("closure_compile") {
   is_polymer3 = true
@@ -26,16 +17,10 @@ js_type_check("closure_compile") {
         "js_module_root=./gen/chrome/browser/resources/gaia_auth_host",
       ]
   deps = [
-    ":auto_enrollment_check",
-    ":demo_preferences",
-    ":demo_setup",
-    ":enable_debugging",
-    ":enterprise_enrollment.m",
+    ":consumer_update",
+    ":enterprise_enrollment",
     ":hid_detection",
     ":oobe_network",
-    ":packaged_license.m",
-    ":quick_start.m",
-    ":update",
     ":welcome",
     ":welcome_dialog",
   ]
@@ -44,142 +29,62 @@ js_type_check("closure_compile") {
 ###############################
 # Closure compiler libraries below
 
-js_library("auto_enrollment_check") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/auto_enrollment_check.js" ]
+js_library("consumer_update") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/consumer_update.js" ]
   deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("demo_preferences") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/demo_preferences.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_back_button.m",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
+    "../../components:oobe_slide",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:multi_step_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
   extra_deps = [ ":web_components" ]
 }
 
-js_library("demo_setup") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/demo_setup.js" ]
+js_library("enterprise_enrollment") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/enterprise_enrollment.js" ]
   deps = [
-    "../../components:progress_list_item",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_back_button.m",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("enable_debugging") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/enable_debugging.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("enterprise_enrollment.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/enterprise_enrollment.m.js" ]
-  deps = [
-    "../../../keyboard:keyboard_utils.m",
-    "../../components:display_manager_types.m",
+    "../../components:display_manager_types",
     "../../components:gaia_dialog",
-    "../../components:keyboard_utils_for_injection.m",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/buttons:oobe_back_button.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/buttons:oobe_text_button.m",
+    "../../components:keyboard_utils",
+    "../../components:keyboard_utils_oobe",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:multi_step_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "../../components/dialogs:oobe_loading_dialog",
+    "../../components/dialogs:oobe_modal_dialog",
     "../common:offline_ad_login",
-    "//ui/webui/resources/js:cr.m",
+    "//ash/webui/common/resources:cr.m",
   ]
   externs_list =
       [ "//ui/webui/resources/cr_elements/cr_input/cr_input_externs.js" ]
-  extra_deps = [ ":enterprise_enrollment_module" ]
+  extra_deps = [ ":web_components" ]
 }
 
 js_library("hid_detection") {
   sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/hid_detection.js" ]
   deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "../../components/dialogs:oobe_modal_dialog",
     "//third_party/polymer/v3_0/components-chromium/iron-a11y-announcer:iron-a11y-announcer",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
   extra_deps = [ ":web_components" ]
 }
 
-js_library("quick_start.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/quick_start.m.js" ]
-  deps = [
-    "../../components:oobe_types.m",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/dialogs:oobe_loading_dialog.m",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-  extra_deps = [ ":quick_start_module" ]
-}
-
 js_library("oobe_network") {
   sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/oobe_network.js" ]
   deps = [
     "../../components:network_select_login",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-    "//ui/webui/resources/js:assert",
-  ]
-  extra_deps = [ ":web_components" ]
-}
-
-js_library("packaged_license.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/packaged_license.m.js" ]
-  deps = [
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:oobe_dialog_host_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
-  ]
-  extra_deps = [ ":packaged_license_module" ]
-}
-
-js_library("update") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/update.js" ]
-  deps = [
-    "../../components:oobe_slide",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_back_button.m",
-    "../../components/buttons:oobe_next_button",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:oobe_dialog_host_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "//ash/webui/common/resources:assert",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
   extra_deps = [ ":web_components" ]
@@ -189,16 +94,15 @@ js_library("welcome") {
   sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/welcome.js" ]
   deps = [
     ":welcome_dialog",
-    "../..:display_manager.m",
+    "../..:display_manager",
     "../../components:oobe_cr_lottie",
-    "../../components:oobe_select.m",
-    "../../components:oobe_types.m",
-    "../../components/behaviors:login_screen_behavior.m",
-    "../../components/behaviors:multi_step_behavior.m",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_adaptive_dialog.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
+    "../../components:oobe_select",
+    "../../components:oobe_types",
+    "../../components/behaviors:login_screen_behavior",
+    "../../components/behaviors:multi_step_behavior",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_adaptive_dialog",
+    "../../components/dialogs:oobe_modal_dialog",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
   extra_deps = [ ":web_components" ]
@@ -211,55 +115,30 @@ js_library("welcome") {
 js_library("welcome_dialog") {
   sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/screens/oobe/welcome_dialog.js" ]
   deps = [
-    "../../components:long_touch_detector.m",
+    "../../components:long_touch_detector",
     "../../components:oobe_cr_lottie",
-    "../../components/behaviors:oobe_i18n_behavior.m",
-    "../../components/buttons:oobe_icon_button",
-    "../../components/buttons:oobe_text_button.m",
-    "../../components/dialogs:oobe_modal_dialog.m",
+    "../../components:quick_start_entry_point",
+    "../../components/behaviors:oobe_i18n_behavior",
+    "../../components/dialogs:oobe_modal_dialog",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
   extra_deps = [ ":web_components" ]
   externs_list = [ "$externs_path/tts.js" ]
 }
 
-polymer_modulizer("enterprise_enrollment") {
-  js_file = "enterprise_enrollment.js"
-  html_file = "enterprise_enrollment.html"
-  html_type = "dom-module"
-  auto_imports = oobe_auto_imports
-  migrated_imports = oobe_migrated_imports
-  namespace_rewrites = oobe_namespace_rewrites
-}
-
-polymer_modulizer("quick_start") {
-  js_file = "quick_start.js"
-  html_file = "quick_start.html"
-  html_type = "dom-module"
-  auto_imports = oobe_auto_imports
-  migrated_imports = oobe_migrated_imports
-  namespace_rewrites = oobe_namespace_rewrites
-}
-
-polymer_modulizer("packaged_license") {
-  js_file = "packaged_license.js"
-  html_file = "packaged_license.html"
-  html_type = "dom-module"
-  auto_imports = oobe_auto_imports
-  migrated_imports = oobe_migrated_imports
-  namespace_rewrites = oobe_namespace_rewrites
-}
-
-html_to_js("web_components") {
-  js_files = [
-    "auto_enrollment_check.js",
-    "demo_setup.js",
-    "demo_preferences.js",
-    "enable_debugging.js",
-    "hid_detection.js",
-    "oobe_network.js",
-    "update.js",
-    "welcome.js",
-    "welcome_dialog.js",
+group("web_components") {
+  public_deps = [
+    ":copy_js",
+    ":generate_web_component_html_wrapper_files",
   ]
+}
+
+html_to_wrapper("generate_web_component_html_wrapper_files") {
+  in_files = rebase_path(oobe_screens_html_files, "./screens/oobe", ".")
+  use_js = true
+}
+
+copy("copy_js") {
+  sources = rebase_path(oobe_screens_js_files, "./screens/oobe", ".")
+  outputs = [ "$target_gen_dir/{{source_file_part}}" ]
 }

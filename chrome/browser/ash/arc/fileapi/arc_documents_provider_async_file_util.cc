@@ -8,10 +8,10 @@
 #include <vector>
 
 #include "ash/components/arc/arc_util.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_size_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_file_system_url_util.h"
@@ -86,7 +86,7 @@ void OnStatusCallbackOnUIThread(storage::AsyncFileUtil::StatusCallback callback,
 
 void GetFileInfoOnUIThread(
     const storage::FileSystemURL& url,
-    int fields,
+    storage::FileSystemOperation::GetMetadataFieldSet fields,
     ArcDocumentsProviderRoot::GetFileInfoCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
@@ -338,7 +338,7 @@ void ArcDocumentsProviderAsyncFileUtil::CreateDirectory(
 void ArcDocumentsProviderAsyncFileUtil::GetFileInfo(
     std::unique_ptr<storage::FileSystemOperationContext> context,
     const storage::FileSystemURL& url,
-    int fields,
+    GetMetadataFieldSet fields,
     GetFileInfoCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK_EQ(storage::kFileSystemTypeArcDocumentsProvider, url.type());

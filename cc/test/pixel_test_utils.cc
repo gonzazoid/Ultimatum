@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/base64.h"
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -22,9 +23,7 @@ bool WritePNGFile(const SkBitmap& bitmap, const base::FilePath& file_path,
                                         discard_transparency,
                                         &png_data) &&
       base::CreateDirectory(file_path.DirName())) {
-    char* data = reinterpret_cast<char*>(&png_data[0]);
-    int size = static_cast<int>(png_data.size());
-    return base::WriteFile(file_path, data, size) == size;
+    return base::WriteFile(file_path, png_data);
   }
   return false;
 }
@@ -34,7 +33,7 @@ std::string GetPNGDataUrl(const SkBitmap& bitmap) {
   gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &png_data);
   std::string data_url;
   data_url.insert(data_url.end(), png_data.begin(), png_data.end());
-  base::Base64Encode(data_url, &data_url);
+  data_url = base::Base64Encode(data_url);
   data_url.insert(0, "data:image/png;base64,");
 
   return data_url;
@@ -91,6 +90,7 @@ bool MatchesPNGFile(const SkBitmap& gen_bmp,
     LOG(ERROR) << "Cannot read reference image: " << ref_img_path.value();
     return false;
   }
+  LOG(ERROR) << "Using reference image path " << ref_img_path;
 
   return MatchesBitmap(gen_bmp, ref_bmp, comparator);
 }

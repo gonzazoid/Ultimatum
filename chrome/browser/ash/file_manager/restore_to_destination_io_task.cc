@@ -4,14 +4,14 @@
 
 #include "chrome/browser/ash/file_manager/restore_to_destination_io_task.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "chrome/browser/ash/file_manager/io_task_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/ash/file_manager/trash_info_validator.h"
 
 namespace file_manager::io_task {
 
@@ -44,12 +44,12 @@ RestoreToDestinationIOTask::RestoreToDestinationIOTask(
       base_path_(base_path) {
   progress_.state = State::kQueued;
   progress_.type = OperationType::kRestoreToDestination;
-  progress_.destination_folder = std::move(destination_folder);
+  progress_.SetDestinationFolder(std::move(destination_folder), profile);
   progress_.bytes_transferred = 0;
   progress_.total_bytes = 0;
 
   for (const auto& url : file_urls) {
-    progress_.sources.emplace_back(url, absl::nullopt);
+    progress_.sources.emplace_back(url, std::nullopt);
   }
 }
 
@@ -81,7 +81,7 @@ void RestoreToDestinationIOTask::Execute(
 // end up here so avoid accessing `trash_service_` here.
 void RestoreToDestinationIOTask::Complete(State state) {
   progress_.state = state;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(complete_callback_), std::move(progress_)));
 }
@@ -109,19 +109,21 @@ void RestoreToDestinationIOTask::ValidateTrashInfo(size_t idx) {
 
 void RestoreToDestinationIOTask::OnTrashInfoParsed(
     size_t idx,
-    base::FileErrorOr<trash::ParsedTrashInfoData> parsed_data) {
-  if (!parsed_data.has_value()) {
-    progress_.sources[idx].error = parsed_data.error();
+    trash::ParsedTrashInfoDataOrError parsed_data_or_error) {
+  if (!parsed_data_or_error.has_value()) {
+    progress_.sources[idx].error =
+        trash::ValidationErrorToFileError(parsed_data_or_error.error());
     Complete(State::kError);
     return;
   }
 
   destination_file_names_.emplace_back(
-      parsed_data.value().absolute_restore_path.BaseName());
+      parsed_data_or_error.value().absolute_restore_path.BaseName());
   source_urls_.push_back(file_system_context_->CreateCrackedFileSystemURL(
       progress_.sources[idx].url.storage_key(),
       progress_.sources[idx].url.type(),
-      MakeRelativeFromBasePath(parsed_data.value().trashed_file_path)));
+      MakeRelativeFromBasePath(
+          parsed_data_or_error.value().trashed_file_path)));
 
   if (progress_.sources.size() == (idx + 1)) {
     // Make sure to reset the TrashInfoValidator as it is not required anymore.
@@ -132,10 +134,12 @@ void RestoreToDestinationIOTask::OnTrashInfoParsed(
     // parent task is tied to the life of the child task.
     move_io_task_ = std::make_unique<CopyOrMoveIOTask>(
         OperationType::kMove, std::move(source_urls_),
-        std::move(destination_file_names_),
-        std::move(progress_.destination_folder), profile_,
-        file_system_context_);
-
+        std::move(destination_file_names_), progress_.GetDestinationFolder(),
+        profile_, file_system_context_);
+    // Set the same ID so that anything trying to pause/resume/cancel the move
+    // task would pause/resume/cancel `this`, which will pass it on to the move
+    // task.
+    move_io_task_->SetTaskID(progress_.task_id);
     // The existing callbacks need to be intercepted to ensure the IOTask
     // progress that is propagated is sent from the `RestoreToDestinationIOTask`
     // instead of the underlying `CopyOrMoveIOTask`.
@@ -157,9 +161,19 @@ void RestoreToDestinationIOTask::OnTrashInfoParsed(
 void RestoreToDestinationIOTask::OnProgressCallback(
     const ProgressStatus& status) {
   progress_.state = status.state;
+
+  // The underlying CopyOrMoveIOTask can enter state::PAUSED to resolve file
+  // name conflicts. Copy its status.pause_params to our |progress_| to send
+  // those pause_params to the files app UI.
+  progress_.pause_params = {};
+  if (progress_.state == State::kPaused) {
+    progress_.pause_params = status.pause_params;
+  }
+
   progress_.bytes_transferred = status.bytes_transferred;
   progress_.total_bytes = status.total_bytes;
   progress_.remaining_seconds = status.remaining_seconds;
+
   for (size_t i = 0; i < status.outputs.size(); ++i) {
     if (i < progress_.outputs.size() && i < status.outputs.size()) {
       if (progress_.outputs[i].url == status.outputs[i].url &&
@@ -170,6 +184,7 @@ void RestoreToDestinationIOTask::OnProgressCallback(
     progress_.outputs.emplace_back(status.outputs[i].url,
                                    status.outputs[i].error);
   }
+
   progress_callback_.Run(progress_);
 }
 
@@ -195,12 +210,33 @@ base::FilePath RestoreToDestinationIOTask::MakeRelativeFromBasePath(
   return base::FilePath(relative_path);
 }
 
+void RestoreToDestinationIOTask::Pause(PauseParams params) {
+  if (move_io_task_) {
+    // Delegate Pause to the underlying `move_io_task_`.
+    move_io_task_->Pause(std::move(params));
+  }
+}
+
+void RestoreToDestinationIOTask::Resume(ResumeParams params) {
+  if (move_io_task_) {
+    // Delegate Resume to the underlying `move_io_task_`.
+    move_io_task_->Resume(std::move(params));
+  }
+}
+
 void RestoreToDestinationIOTask::Cancel() {
   progress_.state = State::kCancelled;
   if (move_io_task_) {
-    // Delegate Cancel to the underlying `move_io_task_` if it has been started.
+    // Delegate Cancel to the underlying `move_io_task_`.
     move_io_task_->Cancel();
   }
+}
+
+CopyOrMoveIOTask* RestoreToDestinationIOTask::GetMoveTaskForTesting() {
+  if (move_io_task_) {
+    return move_io_task_.get();
+  }
+  return nullptr;
 }
 
 }  // namespace file_manager::io_task

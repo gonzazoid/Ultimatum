@@ -5,9 +5,10 @@
 #ifndef ASH_LOGIN_UI_VIEWS_UTILS_H_
 #define ASH_LOGIN_UI_VIEWS_UTILS_H_
 
+#include <optional>
+
 #include "ash/ash_export.h"
 #include "ash/style/ash_color_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_id.h"
 #include "ui/views/controls/label.h"
@@ -47,7 +48,8 @@ ASH_EXPORT std::unique_ptr<views::View> WrapViewForPreferredSize(
 // Returns true if landscape constants should be used for UI shown in |widget|.
 ASH_EXPORT bool ShouldShowLandscape(const views::Widget* widget);
 
-// Returns true if |view| or any of its descendant views HasFocus.
+// Returns true if |view| or any of its descendant views HasFocus. `view` must
+// be attached to a widget with a focus manager, and it must not be null.
 ASH_EXPORT bool HasFocusInAnyChildView(views::View* view);
 
 // Creates a standard text label for use in the login bubbles.
@@ -88,7 +90,7 @@ ASH_EXPORT gfx::Point CalculateBubblePositionBeforeAfterStrategy(
 // radius will be determined by the view's bounds.
 void ConfigureRectFocusRingCircleInkDrop(views::View* view,
                                          views::FocusRing* focus_ring,
-                                         absl::optional<int> radius);
+                                         std::optional<int> radius);
 
 }  // namespace login_views_utils
 

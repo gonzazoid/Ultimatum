@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/account_id/account_id.h"
 #include "components/account_manager_core/account.h"
@@ -24,7 +25,7 @@ class AccountManager;
 
 namespace ash {
 
-// Listens to changes to chromeos::prefs::kEduCoexistenceToSVersion policy
+// Listens to changes to prefs::kEduCoexistenceToSVersion policy
 // preference and invalidates secondary edu accounts with outdated terms of
 // service version.
 class EduCoexistenceConsentInvalidationController {
@@ -43,7 +44,7 @@ class EduCoexistenceConsentInvalidationController {
   ~EduCoexistenceConsentInvalidationController();
 
   // Accesses the list from AccountManager to update the list of accounts stored
-  // in chromeos::prefs::kEduCoexistenceToSAcceptedVersion.
+  // in prefs::kEduCoexistenceToSAcceptedVersion.
   void Init();
 
  private:
@@ -51,7 +52,7 @@ class EduCoexistenceConsentInvalidationController {
   // been removed as a secondary account.
   // Secondary edu accounts may have already been added to device prior to M88.
   // Therefore, it updates the
-  // chromeos::prefs::kEduCoexistenceToSAcceptedVersion pref to include those
+  // prefs::kEduCoexistenceToSAcceptedVersion pref to include those
   // accounts.
   void UpdateEduAccountsInTermsOfServicePref(
       const std::vector<::account_manager::Account>& accounts);
@@ -62,9 +63,9 @@ class EduCoexistenceConsentInvalidationController {
       const std::vector<std::string>& account_emails_to_invalidate,
       const std::vector<::account_manager::Account>& accounts);
 
-  Profile* const profile_;
-  account_manager::AccountManager* const account_manager_;
-  account_manager::AccountManagerFacade* const account_manager_facade_;
+  const raw_ptr<Profile> profile_;
+  const raw_ptr<account_manager::AccountManager> account_manager_;
+  const raw_ptr<account_manager::AccountManagerFacade> account_manager_facade_;
   const AccountId device_account_id_;
   PrefChangeRegistrar pref_change_registrar_;
   base::WeakPtrFactory<EduCoexistenceConsentInvalidationController>

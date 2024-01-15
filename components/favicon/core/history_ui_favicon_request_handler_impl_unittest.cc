@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -23,6 +23,7 @@
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_unittest_util.h"
 
 namespace favicon {
 namespace {
@@ -32,19 +33,13 @@ using testing::Return;
 
 const base::CancelableTaskTracker::TaskId kTaskId = 1;
 
-SkBitmap CreateTestSkBitmap(int desired_size_in_pixel) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(desired_size_in_pixel, desired_size_in_pixel);
-  bitmap.eraseColor(SK_ColorRED);
-  return bitmap;
-}
-
 favicon_base::FaviconRawBitmapResult CreateTestBitmapResult(
     const GURL& icon_url,
     int desired_size_in_pixel) {
   scoped_refptr<base::RefCountedBytes> data(new base::RefCountedBytes());
-  gfx::PNGCodec::EncodeBGRASkBitmap(CreateTestSkBitmap(desired_size_in_pixel),
-                                    false, &data->data());
+  gfx::PNGCodec::EncodeBGRASkBitmap(
+      gfx::test::CreateBitmap(desired_size_in_pixel, SK_ColorRED), false,
+      &data->data());
   favicon_base::FaviconRawBitmapResult result;
   result.bitmap_data = data;
   result.icon_url = icon_url;
@@ -54,8 +49,7 @@ favicon_base::FaviconRawBitmapResult CreateTestBitmapResult(
 
 favicon_base::FaviconImageResult CreateTestImageResult(const GURL& icon_url) {
   favicon_base::FaviconImageResult result;
-  result.image =
-      gfx::Image::CreateFrom1xBitmap(CreateTestSkBitmap(gfx::kFaviconSize));
+  result.image = gfx::test::CreateImage(gfx::kFaviconSize, SK_ColorRED);
   result.icon_url = icon_url;
   return result;
 }
@@ -180,6 +174,12 @@ class MockLargeIconServiceWithFake : public LargeIconService {
                    int min_source_size_in_pixel,
                    int desired_size_in_pixel,
                    favicon_base::LargeIconImageCallback callback,
+                   base::CancelableTaskTracker* tracker));
+  MOCK_METHOD4(GetLargeIconRawBitmapForPageUrl,
+               base::CancelableTaskTracker::TaskId(
+                   const GURL& page_url,
+                   int min_source_size_in_pixel,
+                   favicon_base::FaviconRawBitmapCallback callback,
                    base::CancelableTaskTracker* tracker));
   MOCK_METHOD5(GetLargeIconRawBitmapOrFallbackStyleForIconUrl,
                base::CancelableTaskTracker::TaskId(

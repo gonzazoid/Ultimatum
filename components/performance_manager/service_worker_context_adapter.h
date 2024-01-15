@@ -20,6 +20,10 @@ namespace blink {
 class StorageKey;
 }  // namespace blink
 
+namespace content {
+class RenderProcessHost;
+}
+
 namespace performance_manager {
 
 // This class adapts an existing ServiceWorkerContext to ensure that the
@@ -58,20 +62,23 @@ class ServiceWorkerContextAdapter
   void UnregisterServiceWorker(const GURL& scope,
                                const blink::StorageKey& key,
                                ResultCallback callback) override;
+  void UnregisterServiceWorkerImmediately(const GURL& scope,
+                                          const blink::StorageKey& key,
+                                          ResultCallback callback) override;
   content::ServiceWorkerExternalRequestResult StartingExternalRequest(
       int64_t service_worker_version_id,
       content::ServiceWorkerExternalRequestTimeoutType timeout_type,
-      const std::string& request_uuid) override;
+      const base::Uuid& request_uuid) override;
   content::ServiceWorkerExternalRequestResult FinishedExternalRequest(
       int64_t service_worker_version_id,
-      const std::string& request_uuid) override;
+      const base::Uuid& request_uuid) override;
   size_t CountExternalRequestsForTest(const blink::StorageKey& key) override;
   bool ExecuteScriptForTest(
       const std::string& script,
       int64_t service_worker_version_id,
       content::ServiceWorkerScriptExecutionCallback callback) override;
   bool MaybeHasRegistrationForStorageKey(const blink::StorageKey& key) override;
-  void GetAllOriginsInfo(GetUsageInfoCallback callback) override;
+  void GetAllStorageKeysInfo(GetUsageInfoCallback callback) override;
   void DeleteForStorageKey(const blink::StorageKey& key,
                            ResultCallback callback) override;
   void CheckHasServiceWorker(const GURL& url,
@@ -94,14 +101,20 @@ class ServiceWorkerContextAdapter
       const GURL& document_url,
       const blink::StorageKey& key,
       StartServiceWorkerForNavigationHintCallback callback) override;
+  void WarmUpServiceWorker(const GURL& document_url,
+                           const blink::StorageKey& key,
+                           WarmUpServiceWorkerCallback callback) override;
   void StopAllServiceWorkersForStorageKey(
       const blink::StorageKey& key) override;
   void StopAllServiceWorkers(base::OnceClosure callback) override;
   const base::flat_map<int64_t /* version_id */,
                        content::ServiceWorkerRunningInfo>&
   GetRunningServiceWorkerInfos() override;
+  bool IsLiveStartingServiceWorker(int64_t service_worker_version_id) override;
   bool IsLiveRunningServiceWorker(int64_t service_worker_version_id) override;
   service_manager::InterfaceProvider& GetRemoteInterfaces(
+      int64_t service_worker_version_id) override;
+  blink::AssociatedInterfaceProvider& GetRemoteAssociatedInterfaces(
       int64_t service_worker_version_id) override;
 
   // content::ServiceWorkerContextObserver:

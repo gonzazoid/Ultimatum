@@ -48,6 +48,8 @@ void SetImplementation(wl_resource* resource,
                                  DestroyUserData<T>);
 }
 
+void SetImplementation(wl_resource* resource, const void* implementation);
+
 // Convert a timestamp to a time value that can be used when interfacing
 // with wayland. Note that we cast a int64_t value to uint32_t which can
 // potentially overflow.
@@ -74,6 +76,11 @@ SecurityDelegate* GetSecurityDelegate(wl_display* display);
 // Returns the associated security_delegate for the display this |client| is
 // connected to.
 SecurityDelegate* GetSecurityDelegate(wl_client* client);
+
+// Returns whether a client has initiated destruction. After destruction begins
+// resources associated with the client start to be freed and there is a risk of
+// UAFs in querying for client resources (see crbug.com/1433187).
+bool IsClientDestroyed(wl_client* client);
 
 }  // namespace wayland
 }  // namespace exo

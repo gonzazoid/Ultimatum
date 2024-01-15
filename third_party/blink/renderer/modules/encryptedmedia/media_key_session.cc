@@ -38,6 +38,7 @@
 #include "third_party/blink/public/platform/web_encrypted_media_key_information.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
+#include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable_creation_key.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -153,11 +154,11 @@ class MediaKeySession::PendingAction final
 
   Type GetType() const { return type_; }
 
-  ContentDecryptionModuleResult* Result() const { return result_; }
+  ContentDecryptionModuleResult* Result() const { return result_.Get(); }
 
   DOMArrayBuffer* Data() const {
     DCHECK(type_ == Type::kGenerateRequest || type_ == Type::kUpdate);
-    return data_;
+    return data_.Get();
   }
 
   media::EmeInitDataType InitDataType() const {
@@ -403,7 +404,8 @@ MediaKeySession::MediaKeySession(ScriptState* script_state,
                                  MediaKeys* media_keys,
                                  WebEncryptedMediaSessionType session_type,
                                  const MediaKeysConfig& config)
-    : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
+    : ActiveScriptWrappable<MediaKeySession>({}),
+      ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
       async_event_queue_(
           MakeGarbageCollected<EventQueue>(GetExecutionContext(),
                                            TaskType::kMediaElementEvent)),
@@ -480,7 +482,7 @@ ScriptPromise MediaKeySession::closed(ScriptState* script_state) {
 }
 
 MediaKeyStatusMap* MediaKeySession::keyStatuses() {
-  return key_statuses_map_;
+  return key_statuses_map_.Get();
 }
 
 ScriptPromise MediaKeySession::generateRequest(
@@ -1122,7 +1124,7 @@ void MediaKeySession::Trace(Visitor* visitor) const {
   visitor->Trace(key_statuses_map_);
   visitor->Trace(closed_promise_);
   visitor->Trace(action_timer_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 

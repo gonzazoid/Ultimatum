@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "net/base/net_errors.h"
 
@@ -24,11 +24,13 @@ const unsigned kTTLSecs = 1800;  // 30 minutes.
 
 CachingCertVerifier::CachingCertVerifier(std::unique_ptr<CertVerifier> verifier)
     : verifier_(std::move(verifier)), cache_(kMaxCacheEntries) {
+  verifier_->AddObserver(this);
   CertDatabase::GetInstance()->AddObserver(this);
 }
 
 CachingCertVerifier::~CachingCertVerifier() {
   CertDatabase::GetInstance()->RemoveObserver(this);
+  verifier_->RemoveObserver(this);
 }
 
 int CachingCertVerifier::Verify(const CertVerifier::RequestParams& params,
@@ -49,6 +51,9 @@ int CachingCertVerifier::Verify(const CertVerifier::RequestParams& params,
   }
 
   base::Time start_time = base::Time::Now();
+  // Unretained is safe here as `verifier_` is owned by `this`. If `this` is
+  // deleted, `verifier_' will also be deleted and guarantees that any
+  // outstanding callbacks won't be called. (See CertVerifier::Verify comments.)
   CompletionOnceCallback caching_callback = base::BindOnce(
       &CachingCertVerifier::OnRequestFinished, base::Unretained(this),
       config_id_, params, start_time, std::move(callback), verify_result);
@@ -66,6 +71,14 @@ void CachingCertVerifier::SetConfig(const CertVerifier::Config& config) {
   verifier_->SetConfig(config);
   config_id_++;
   ClearCache();
+}
+
+void CachingCertVerifier::AddObserver(CertVerifier::Observer* observer) {
+  verifier_->AddObserver(observer);
+}
+
+void CachingCertVerifier::RemoveObserver(CertVerifier::Observer* observer) {
+  verifier_->RemoveObserver(observer);
 }
 
 CachingCertVerifier::CachedResult::CachedResult() = default;
@@ -169,7 +182,12 @@ void CachingCertVerifier::AddResultToCache(
       CacheValidityPeriod(start_time, start_time + base::Seconds(kTTLSecs)));
 }
 
-void CachingCertVerifier::OnCertDBChanged() {
+void CachingCertVerifier::OnCertVerifierChanged() {
+  config_id_++;
+  ClearCache();
+}
+
+void CachingCertVerifier::OnTrustStoreChanged() {
   config_id_++;
   ClearCache();
 }

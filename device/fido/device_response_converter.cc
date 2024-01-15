@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/containers/contains.h"
@@ -33,7 +34,7 @@ namespace {
 
 constexpr size_t kResponseCodeLength = 1;
 
-ProtocolVersion ConvertStringToProtocolVersion(base::StringPiece version) {
+ProtocolVersion ConvertStringToProtocolVersion(std::string_view version) {
   if (version == kCtap2Version || version == kCtap2_1Version)
     return ProtocolVersion::kCtap2;
   if (version == kU2fVersion)
@@ -43,13 +44,42 @@ ProtocolVersion ConvertStringToProtocolVersion(base::StringPiece version) {
 }
 
 absl::optional<Ctap2Version> ConvertStringToCtap2Version(
-    base::StringPiece version) {
+    std::string_view version) {
   if (version == kCtap2Version)
     return Ctap2Version::kCtap2_0;
   if (version == kCtap2_1Version)
     return Ctap2Version::kCtap2_1;
 
   return absl::nullopt;
+}
+
+absl::optional<std::vector<uint8_t>> GetPRFOutputs(
+    const cbor::Value& results_value) {
+  if (!results_value.is_map()) {
+    return absl::nullopt;
+  }
+  const cbor::Value::MapValue& results = results_value.GetMap();
+  auto first = results.find(cbor::Value(kExtensionPRFFirst));
+  if (first == results.end() || !first->second.is_bytestring()) {
+    return absl::nullopt;
+  }
+  std::vector<uint8_t> output = first->second.GetBytestring();
+  if (output.size() != kExtensionPRFOutputSize) {
+    return absl::nullopt;
+  }
+
+  auto second = results.find(cbor::Value(kExtensionPRFSecond));
+  if (second != results.end()) {
+    if (!second->second.is_bytestring()) {
+      return absl::nullopt;
+    }
+    const std::vector<uint8_t>& second_bytes = second->second.GetBytestring();
+    if (second_bytes.size() != kExtensionPRFOutputSize) {
+      return absl::nullopt;
+    }
+    output.insert(output.end(), second_bytes.begin(), second_bytes.end());
+  }
+  return output;
 }
 
 }  // namespace
@@ -112,8 +142,7 @@ ReadCTAPMakeCredentialResponse(FidoTransportProtocol transport_used,
         it->second.GetBytestring().size() != kLargeBlobKeyLength) {
       return absl::nullopt;
     }
-    response.large_blob_key = fido_parsing_utils::Materialize(
-        base::make_span<kLargeBlobKeyLength>(it->second.GetBytestring()));
+    response.large_blob_type = LargeBlobSupportType::kKey;
   }
 
   it = decoded_map.find(CBOR(0x06));
@@ -126,11 +155,42 @@ ReadCTAPMakeCredentialResponse(FidoTransportProtocol transport_used,
       if (!map_it.first.is_string()) {
         return absl::nullopt;
       }
-      if (map_it.first.GetString() == kExtensionDevicePublicKey) {
-        if (!map_it.second.is_bytestring()) {
+      const std::string& extension_name = map_it.first.GetString();
+      if (extension_name == kExtensionPRF) {
+        if (!map_it.second.is_map()) {
           return absl::nullopt;
         }
-        response.device_public_key_signature = map_it.second.GetBytestring();
+        const cbor::Value::MapValue& prf = map_it.second.GetMap();
+        const auto enabled_it = prf.find(cbor::Value(kExtensionPRFEnabled));
+        if (enabled_it != prf.end()) {
+          if (!enabled_it->second.is_bool()) {
+            return absl::nullopt;
+          }
+          response.prf_enabled = enabled_it->second.GetBool();
+        }
+        auto results_it = prf.find(cbor::Value(kExtensionPRFResults));
+        if (results_it != prf.end()) {
+          response.prf_results = GetPRFOutputs(results_it->second);
+          if (!response.prf_results) {
+            return absl::nullopt;
+          }
+        }
+      } else if (extension_name == kExtensionLargeBlob) {
+        if (response.large_blob_type || !map_it.second.is_map()) {
+          // Authenticators cannot support both methods.
+          return absl::nullopt;
+        }
+        const cbor::Value::MapValue& large_blob_ext = map_it.second.GetMap();
+        const auto supported_it = large_blob_ext.find(
+            cbor::Value(device::kExtensionLargeBlobSupported));
+        if (supported_it != large_blob_ext.end()) {
+          if (!supported_it->second.is_bool()) {
+            return absl::nullopt;
+          }
+          if (supported_it->second.GetBool()) {
+            response.large_blob_type = LargeBlobSupportType::kExtension;
+          }
+        }
       }
     }
   }
@@ -160,10 +220,8 @@ absl::optional<AuthenticatorGetAssertionResponse> ReadCTAPGetAssertionResponse(
     return absl::nullopt;
 
   auto signature = it->second.GetBytestring();
-  AuthenticatorGetAssertionResponse response(std::move(*auth_data),
-                                             std::move(signature));
-
-  response.transport_used = transport_used;
+  AuthenticatorGetAssertionResponse response(
+      std::move(*auth_data), std::move(signature), transport_used);
 
   it = response_map.find(CBOR(0x01));
   if (it != response_map.end()) {
@@ -223,11 +281,54 @@ absl::optional<AuthenticatorGetAssertionResponse> ReadCTAPGetAssertionResponse(
       if (!map_it.first.is_string()) {
         return absl::nullopt;
       }
-      if (map_it.first.GetString() == kExtensionDevicePublicKey) {
-        if (!map_it.second.is_bytestring()) {
+      const std::string& extension_name = map_it.first.GetString();
+      if (extension_name == kExtensionPRF) {
+        if (!map_it.second.is_map()) {
           return absl::nullopt;
         }
-        response.device_public_key_signature = map_it.second.GetBytestring();
+        const cbor::Value::MapValue& prf = map_it.second.GetMap();
+        auto results_it = prf.find(cbor::Value(kExtensionPRFResults));
+        if (results_it != prf.end()) {
+          response.hmac_secret = GetPRFOutputs(results_it->second);
+          if (!response.hmac_secret) {
+            return absl::nullopt;
+          }
+        }
+      } else if (extension_name == kExtensionLargeBlob) {
+        if (response.large_blob_key || !map_it.second.is_map()) {
+          // Authenticators cannot support both large blob methods.
+          return absl::nullopt;
+        }
+        const cbor::Value::MapValue& large_blob_ext = map_it.second.GetMap();
+        const auto written_it =
+            large_blob_ext.find(cbor::Value(kExtensionLargeBlobWritten));
+        const bool has_written = written_it != large_blob_ext.end();
+
+        const auto blob_it =
+            large_blob_ext.find(cbor::Value(kExtensionLargeBlobBlob));
+        const bool has_blob = blob_it != large_blob_ext.end();
+
+        const auto original_size_it =
+            large_blob_ext.find(cbor::Value(kExtensionLargeBlobOriginalSize));
+        const bool has_original_size = original_size_it != large_blob_ext.end();
+
+        if ((has_written && !written_it->second.is_bool()) ||
+            (has_blob && !blob_it->second.is_bytestring()) ||
+            (has_original_size && !original_size_it->second.is_unsigned())) {
+          return absl::nullopt;
+        }
+
+        if (has_written && !has_blob && !has_original_size) {
+          response.large_blob_written = written_it->second.GetBool();
+        } else if (!has_written && has_blob && has_original_size) {
+          response.large_blob_extension.emplace(
+              blob_it->second.GetBytestring(),
+              base::checked_cast<size_t>(
+                  original_size_it->second.GetUnsigned()));
+        } else {
+          // No other pattern of members is allowed.
+          return absl::nullopt;
+        }
       }
     }
   }
@@ -272,7 +373,7 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
 
   base::flat_set<ProtocolVersion> protocol_versions;
   base::flat_set<Ctap2Version> ctap2_versions;
-  base::flat_set<base::StringPiece> advertised_protocols;
+  base::flat_set<std::string_view> advertised_protocols;
   for (const auto& version : it->second.GetArray()) {
     if (!version.is_string())
       return absl::nullopt;
@@ -317,6 +418,7 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
       base::make_span<kAaguidLength>(it->second.GetBytestring()));
 
   bool cred_blob_extension_seen = false;
+  bool large_blob_key_extension_seen = false;
   AuthenticatorSupportedOptions options;
   it = response_map.find(CBOR(0x02));
   if (it != response_map.end()) {
@@ -335,6 +437,14 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
         cred_blob_extension_seen = true;
       } else if (extension_str == kExtensionMinPINLength) {
         options.supports_min_pin_length_extension = true;
+      } else if (extension_str == kExtensionHmacSecret) {
+        options.supports_hmac_secret = true;
+      } else if (extension_str == kExtensionPRF) {
+        options.supports_prf = true;
+      } else if (extension_str == kExtensionLargeBlob) {
+        options.large_blob_type = LargeBlobSupportType::kExtension;
+      } else if (extension_str == kExtensionLargeBlobKey) {
+        large_blob_key_extension_seen = true;
       }
       extensions.push_back(extension_str);
     }
@@ -357,7 +467,10 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
       if (!option_map_it->second.is_bool())
         return absl::nullopt;
 
-      options.is_platform_device = option_map_it->second.GetBool();
+      options.is_platform_device =
+          option_map_it->second.GetBool()
+              ? AuthenticatorSupportedOptions::PlatformDevice::kYes
+              : AuthenticatorSupportedOptions::PlatformDevice::kNo;
     }
 
     option_map_it = option_map.find(CBOR(kResidentKeyMapKey));
@@ -483,7 +596,13 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
       if (!option_map_it->second.is_bool() || !options.supports_resident_key) {
         return absl::nullopt;
       }
-      options.supports_large_blobs = option_map_it->second.GetBool();
+      if (option_map_it->second.GetBool() & large_blob_key_extension_seen) {
+        if (options.large_blob_type) {
+          // Authenticators cannot support both.
+          return absl::nullopt;
+        }
+        options.large_blob_type = LargeBlobSupportType::kKey;
+      }
     }
 
     option_map_it = option_map.find(CBOR(kAlwaysUvKey));
@@ -663,13 +782,13 @@ absl::optional<AuthenticatorGetInfoResponse> ReadCTAPGetInfoResponse(
     if (!it->second.is_unsigned()) {
       return absl::nullopt;
     }
-    const uint32_t max_cred_blob_length =
-        base::saturated_cast<uint32_t>(it->second.GetUnsigned());
+    const uint16_t max_cred_blob_length =
+        base::saturated_cast<uint16_t>(it->second.GetUnsigned());
     // CTAP 2.1 requires at least 32 bytes of credBlob to be supported.
     if (max_cred_blob_length < 32) {
       return absl::nullopt;
     }
-    response.max_cred_blob_length = max_cred_blob_length;
+    response.options.max_cred_blob_length = max_cred_blob_length;
   }
 
   it = response_map.find(CBOR(0x14));
@@ -698,8 +817,7 @@ static absl::optional<std::string> FixInvalidUTF8String(
   size_t longest_valid_prefix_len = 0;
 
   for (size_t i = 0; i < utf8_bytes.size(); i++) {
-    state =
-        validator.AddBytes(reinterpret_cast<const char*>(&utf8_bytes[i]), 1);
+    state = validator.AddBytes(utf8_bytes.subspan(i, 1));
     switch (state) {
       case base::StreamingUtf8Validator::VALID_ENDPOINT:
         longest_valid_prefix_len = i + 1;
@@ -772,6 +890,7 @@ static absl::optional<cbor::Value> FixInvalidUTF8Value(
     case cbor::Value::Type::STRING:
     case cbor::Value::Type::TAG:
     case cbor::Value::Type::SIMPLE_VALUE:
+    case cbor::Value::Type::FLOAT_VALUE:
     case cbor::Value::Type::NONE:
       return v.Clone();
 
@@ -844,6 +963,7 @@ static bool ContainsInvalidUTF8(const cbor::Value& v) {
     case cbor::Value::Type::STRING:
     case cbor::Value::Type::TAG:
     case cbor::Value::Type::SIMPLE_VALUE:
+    case cbor::Value::Type::FLOAT_VALUE:
     case cbor::Value::Type::NONE:
       return false;
 

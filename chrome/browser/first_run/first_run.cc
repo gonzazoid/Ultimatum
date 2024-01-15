@@ -4,20 +4,21 @@
 
 #include "chrome/browser/first_run/first_run.h"
 
-#include <algorithm>
 #include <memory>
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/no_destructor.h"
 #include "base/one_shot_event.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -50,6 +51,7 @@
 #include "chrome/installer/util/initial_preferences_constants.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
+#include "components/startup_metric_utils/browser/startup_metric_utils.h"
 #include "content/public/browser/web_contents.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "url/gurl.h"
@@ -66,9 +68,6 @@ namespace {
 // AutoImport. This is used in testing to verify import startup actions that
 // occur before an observer can be registered in the test.
 uint16_t g_auto_import_state = first_run::AUTO_IMPORT_NONE;
-
-// Flags for functions of similar name.
-bool g_should_show_welcome_page = false;
 
 // Indicates whether this is first run. Populated when IsChromeFirstRun
 // is invoked, then used as a cache on subsequent calls.
@@ -188,7 +187,7 @@ void ConvertStringVectorToGURLVector(
     const std::vector<std::string>& src,
     std::vector<GURL>* ret) {
   ret->resize(src.size());
-  std::transform(src.begin(), src.end(), ret->begin(), &UrlFromString);
+  base::ranges::transform(src, ret->begin(), &UrlFromString);
 }
 
 base::FilePath& GetInitialPrefsPathForTesting() {
@@ -201,7 +200,7 @@ base::FilePath& GetInitialPrefsPathForTesting() {
 void ProcessDefaultBrowserPolicy(bool make_chrome_default_for_user) {
   // Only proceed if chrome can be made default unattended. In other cases, this
   // is handled by the first run default browser prompt (on Windows 8+).
-  if (shell_integration::GetDefaultWebClientSetPermission() ==
+  if (shell_integration::GetDefaultBrowserSetPermission() ==
       shell_integration::SET_DEFAULT_UNATTENDED) {
     // The policy has precedence over the user's choice.
     if (g_browser_process->local_state()->IsManagedPreference(
@@ -225,11 +224,25 @@ bool GetFirstRunSentinelFilePath(base::FilePath* path) {
   return true;
 }
 
-// Create the first run sentinel file; returns false on failure.
-bool CreateSentinel() {
+// Create the first run sentinel file; returns the status of the operation.
+startup_metric_utils::FirstRunSentinelCreationResult CreateSentinel() {
   base::FilePath first_run_sentinel;
-  return GetFirstRunSentinelFilePath(&first_run_sentinel) &&
-         base::WriteFile(first_run_sentinel, "");
+  if (!GetFirstRunSentinelFilePath(&first_run_sentinel)) {
+    return startup_metric_utils::FirstRunSentinelCreationResult::
+        kFailedToGetPath;
+  }
+
+  if (base::PathExists(first_run_sentinel)) {
+    return startup_metric_utils::FirstRunSentinelCreationResult::
+        kFilePathExists;
+  }
+
+  if (!base::WriteFile(first_run_sentinel, "")) {
+    return startup_metric_utils::FirstRunSentinelCreationResult::
+        kFileSystemError;
+  }
+
+  return startup_metric_utils::FirstRunSentinelCreationResult::kSuccess;
 }
 
 // Reads the creation time of the first run sentinel file. If the first run
@@ -344,8 +357,11 @@ bool IsMetricsReportingOptIn() {
 }
 
 void CreateSentinelIfNeeded() {
-  if (IsChromeFirstRun())
-    CreateSentinel();
+  if (IsChromeFirstRun()) {
+    auto sentinel_creation_result = CreateSentinel();
+    startup_metric_utils::GetBrowser().RecordFirstRunSentinelCreation(
+        sentinel_creation_result);
+  }
 
   // Causes the first run sentinel creation time to be read and cached, while
   // I/O is still allowed.
@@ -361,16 +377,6 @@ base::Time GetFirstRunSentinelCreationTime() {
 void ResetCachedSentinelDataForTesting() {
   g_cached_sentinel_creation_time = base::Time();
   g_first_run = first_run::internal::FIRST_RUN_UNKNOWN;
-}
-
-void SetShouldShowWelcomePage() {
-  g_should_show_welcome_page = true;
-}
-
-bool ShouldShowWelcomePage() {
-  bool retval = g_should_show_welcome_page;
-  g_should_show_welcome_page = false;
-  return retval;
 }
 
 bool IsOnWelcomePage(content::WebContents* contents) {
@@ -416,7 +422,7 @@ ProcessInitialPreferencesResult ProcessInitialPreferences(
   if (initial_prefs.get()) {
     // Don't show EULA when running in headless mode since this would
     // effectively block the UI because there is no one to accept it.
-    if (!headless::IsChromeNativeHeadless() &&
+    if (!headless::IsHeadlessMode() &&
         !internal::ShowPostInstallEULAIfNeeded(initial_prefs.get())) {
       return EULA_EXIT_NOW;
     }
@@ -430,8 +436,7 @@ ProcessInitialPreferencesResult ProcessInitialPreferences(
 
     if (!chrome_prefs::InitializePrefsFromMasterPrefs(
             profiles::GetDefaultProfileDir(user_data_dir),
-            base::DictionaryValue::From(std::make_unique<base::Value>(
-                std::move(initial_dictionary))))) {
+            std::move(initial_dictionary))) {
       DLOG(ERROR) << "Failed to initialize from initial preferences.";
     }
 
@@ -505,8 +510,6 @@ void DoPostImportTasks(bool make_chrome_default_for_user) {
   // Only set default browser after import as auto import relies on the current
   // default browser to know what to import from.
   ProcessDefaultBrowserPolicy(make_chrome_default_for_user);
-
-  SetShouldShowWelcomePage();
 
   internal::DoPostImportPlatformSpecificTasks();
 }

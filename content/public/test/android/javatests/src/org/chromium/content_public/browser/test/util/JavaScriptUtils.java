@@ -8,16 +8,14 @@ import org.junit.Assert;
 
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer.OnEvaluateJavaScriptResultHelper;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Collection of JavaScript utilities.
- */
+/** Collection of JavaScript utilities. */
 public class JavaScriptUtils {
     private static final long EVALUATION_TIMEOUT_SECONDS = 5L;
 
@@ -36,17 +34,20 @@ public class JavaScriptUtils {
      * Does not depend on ContentView and TestCallbackHelperContainer.
      * Returns the result of its execution in JSON format.
      */
-    public static String executeJavaScriptAndWaitForResult(final WebContents webContents,
-            final String code, final long timeout, final TimeUnit timeoutUnits)
+    public static String executeJavaScriptAndWaitForResult(
+            final WebContents webContents,
+            final String code,
+            final long timeout,
+            final TimeUnit timeoutUnits)
             throws TimeoutException {
         final OnEvaluateJavaScriptResultHelper helper = new OnEvaluateJavaScriptResultHelper();
         // Calling this from the UI thread causes it to time-out: the UI thread being blocked won't
         // have a chance to process the JavaScript eval response).
-        Assert.assertFalse("Executing JavaScript should be done from the test thread, "
-                        + " not the UI thread",
+        Assert.assertFalse(
+                "Executing JavaScript should be done from the test thread, " + " not the UI thread",
                 ThreadUtils.runningOnUiThread());
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT,
-                () -> helper.evaluateJavaScriptForTests(webContents, code));
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT, () -> helper.evaluateJavaScriptForTests(webContents, code));
         helper.waitUntilHasValue(timeout, timeoutUnits);
         Assert.assertTrue("Failed to retrieve JavaScript evaluation results.", helper.hasValue());
         return helper.getJsonResultAndClear();
@@ -70,15 +71,19 @@ public class JavaScriptUtils {
      * Returns the result of its execution in JSON format.
      */
     public static String executeJavaScriptWithUserGestureAndWaitForResult(
-            final WebContents webContents, final String code, final long timeout,
-            final TimeUnit timeoutUnits) throws TimeoutException {
+            final WebContents webContents,
+            final String code,
+            final long timeout,
+            final TimeUnit timeoutUnits)
+            throws TimeoutException {
         final OnEvaluateJavaScriptResultHelper helper = new OnEvaluateJavaScriptResultHelper();
         // Calling this from the UI thread causes it to time-out: the UI thread being blocked won't
         // have a chance to process the JavaScript eval response).
-        Assert.assertFalse("Executing JavaScript should be done from the test thread, "
-                        + " not the UI thread",
+        Assert.assertFalse(
+                "Executing JavaScript should be done from the test thread, " + " not the UI thread",
                 ThreadUtils.runningOnUiThread());
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT,
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
                 () -> helper.evaluateJavaScriptWithUserGestureForTests(webContents, code));
         helper.waitUntilHasValue(timeout, timeoutUnits);
         Assert.assertTrue("Failed to retrieve JavaScript evaluation results.", helper.hasValue());
@@ -111,11 +116,9 @@ public class JavaScriptUtils {
         return controller.waitForResult("No result for `" + code + "`");
     }
 
-    /**
-     * Executes the given snippet of JavaScript code but does not wait for the result.
-     */
+    /** Executes the given snippet of JavaScript code but does not wait for the result. */
     public static void executeJavaScript(final WebContents webContents, final String code) {
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT,
-                () -> webContents.evaluateJavaScriptForTests(code, null));
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT, () -> webContents.evaluateJavaScriptForTests(code, null));
     }
 }

@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/display/types/display_configuration_params.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/types/native_display_delegate.h"
@@ -35,19 +36,25 @@ class DrmDisplayHost : public GpuThreadObserver {
   bool is_dummy() const { return is_dummy_; }
 
   void UpdateDisplaySnapshot(std::unique_ptr<display::DisplaySnapshot> params);
+  void SetHdcpKeyProp(const std::string& key,
+                      display::SetHdcpKeyPropCallback callback);
   void GetHDCPState(display::GetHDCPStateCallback callback);
   void SetHDCPState(display::HDCPState state,
                     display::ContentProtectionMethod protection_method,
                     display::SetHDCPStateCallback callback);
+  void SetColorTemperatureAdjustment(
+      const display::ColorTemperatureAdjustment& cta);
+  void SetColorCalibration(const display::ColorCalibration& calibration);
+  void SetGammaAdjustment(const display::GammaAdjustment& adjustment);
   void SetColorMatrix(const std::vector<float>& color_matrix);
-  void SetGammaCorrection(
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut);
+  void SetGammaCorrection(const display::GammaCurve& degamma,
+                          const display::GammaCurve& gamma);
   void SetPrivacyScreen(bool enabled,
                         display::SetPrivacyScreenCallback callback);
 
   // Called when the IPC from the GPU process arrives to answer the above
   // commands.
+  void OnHdcpKeyPropSetReceived(bool success);
   void OnHDCPStateReceived(bool status,
                            display::HDCPState state,
                            display::ContentProtectionMethod protection_method);
@@ -62,7 +69,7 @@ class DrmDisplayHost : public GpuThreadObserver {
   // Calls all the callbacks with failure.
   void ClearCallbacks();
 
-  GpuThreadAdapter* const sender_;  // Not owned.
+  const raw_ptr<GpuThreadAdapter> sender_;  // Not owned.
 
   std::unique_ptr<display::DisplaySnapshot> snapshot_;
 
@@ -70,6 +77,7 @@ class DrmDisplayHost : public GpuThreadObserver {
   // synchronous and succeed.
   bool is_dummy_;
 
+  display::SetHdcpKeyPropCallback set_hdcp_key_prop_callback_;
   display::GetHDCPStateCallback get_hdcp_callback_;
   display::SetHDCPStateCallback set_hdcp_callback_;
 };

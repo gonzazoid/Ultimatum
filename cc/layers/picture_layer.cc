@@ -117,6 +117,16 @@ void PictureLayer::SetNeedsDisplayRect(const gfx::Rect& layer_rect) {
   Layer::SetNeedsDisplayRect(layer_rect);
 }
 
+bool PictureLayer::RequiresSetNeedsDisplayOnHdrHeadroomChange() const {
+  const auto& display_list = picture_layer_inputs_.display_list;
+  if (display_list &&
+      display_list->discardable_image_map().content_color_usage() ==
+          gfx::ContentColorUsage::kHDR) {
+    return true;
+  }
+  return false;
+}
+
 bool PictureLayer::Update() {
   update_source_frame_number_.Write(*this) =
       layer_tree_host()->SourceFrameNumber();
@@ -163,7 +173,7 @@ bool PictureLayer::Update() {
     picture_layer_inputs_.directly_composited_image_default_raster_scale =
         gfx::Vector2dF();
     picture_layer_inputs_.nearest_neighbor = false;
-    absl::optional<DisplayItemList::DirectlyCompositedImageResult> result =
+    std::optional<DisplayItemList::DirectlyCompositedImageResult> result =
         picture_layer_inputs_.display_list->GetDirectlyCompositedImageResult();
     if (result) {
       // Directly composited images are not guaranteed to fully cover every
@@ -206,7 +216,7 @@ sk_sp<const SkPicture> PictureLayer::GetPicture() const {
 
 void PictureLayer::ClearClient() {
   picture_layer_inputs_.client = nullptr;
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
 }
 
 void PictureLayer::SetNearestNeighbor(bool nearest_neighbor) {

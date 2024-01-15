@@ -5,10 +5,12 @@
 #ifndef CONTENT_RENDERER_ACCESSIBILITY_AX_IMAGE_ANNOTATOR_H_
 #define CONTENT_RENDERER_ACCESSIBILITY_AX_IMAGE_ANNOTATOR_H_
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 #include "content/common/content_export.h"
@@ -17,7 +19,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/image_annotation/public/cpp/image_processor.h"
 #include "services/image_annotation/public/mojom/image_annotation.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 
@@ -45,8 +46,6 @@ class CONTENT_EXPORT AXImageAnnotator : public base::CheckedObserver {
   AXImageAnnotator& operator=(const AXImageAnnotator&) = delete;
 
   ~AXImageAnnotator() override;
-
-  void Destroy();
 
   std::string GetImageAnnotation(blink::WebAXObject& image) const;
   ax::mojom::ImageAnnotationStatus GetImageAnnotationStatus(
@@ -88,7 +87,7 @@ class CONTENT_EXPORT AXImageAnnotator : public base::CheckedObserver {
    private:
     image_annotation::ImageProcessor image_processor_;
     ax::mojom::ImageAnnotationStatus status_;
-    absl::optional<std::string> annotation_;
+    std::optional<std::string> annotation_;
   };
 
   // Retrieves the image data from the renderer.
@@ -105,9 +104,6 @@ class CONTENT_EXPORT AXImageAnnotator : public base::CheckedObserver {
   virtual std::string GenerateImageSourceId(
       const blink::WebAXObject& image) const;
 
-  // Removes the automatic image annotations from all images.
-  void MarkAllImagesDirty();
-
   // Marks a node in the accessibility tree dirty when an image annotation
   // changes. Also marks dirty a link or document that immediately contains
   // an image.
@@ -121,7 +117,8 @@ class CONTENT_EXPORT AXImageAnnotator : public base::CheckedObserver {
   std::string GetDocumentUrl() const;
 
   // Weak, owns us.
-  RenderAccessibilityImpl* const render_accessibility_;
+  const raw_ptr<RenderAccessibilityImpl, ExperimentalRenderer>
+      render_accessibility_;
 
   // A pointer to the automatic image annotation service.
   mojo::Remote<image_annotation::mojom::Annotator> annotator_;

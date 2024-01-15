@@ -8,13 +8,20 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "components/permissions/permission_ui_selector.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
 namespace content {
 class WebContents;
 }
+
+namespace ui {
+class Event;
+}  // namespace ui
 
 namespace permissions {
 enum class PermissionPromptDisposition;
@@ -49,7 +56,8 @@ class PermissionPrompt {
 
     // These pointers should not be stored as the actual request objects may be
     // deleted upon navigation and so on.
-    virtual const std::vector<PermissionRequest*>& Requests() = 0;
+    virtual const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>&
+    Requests() = 0;
 
     // Get the single origin for the current set of requests.
     virtual GURL GetRequestingOrigin() const = 0;
@@ -63,6 +71,18 @@ class PermissionPrompt {
     virtual void Deny() = 0;
     virtual void Dismiss() = 0;
     virtual void Ignore() = 0;
+
+    // Called to explicitly finalize the request, if
+    // |ShouldFinalizeRequestAfterDecided| returns false.
+    virtual void FinalizeCurrentRequests() = 0;
+
+    virtual void OpenHelpCenterLink(const ui::Event& event) = 0;
+
+    // This method preemptively ignores a permission request but does not
+    // finalize a permission prompt. That is needed in case a permission prompt
+    // is a quiet chip. This should be called only if an origin is subscribed to
+    // the `PermissionStatus.onchange` listener.
+    virtual void PreIgnoreQuietPrompt() = 0;
 
     // If |ShouldCurrentRequestUseQuietUI| return true, this will provide a
     // reason as to why the quiet UI needs to be used. Returns `absl::nullopt`
@@ -100,6 +120,14 @@ class PermissionPrompt {
     // Set when the user made any decision for clicking on learn more link.
     virtual void SetLearnMoreClicked() = 0;
 
+    // HaTS surveys may display at an inconvenient time, such as when a chip
+    // shown collapses after a certain timeout. To prevent affecting
+    // usability, this setter sets a callback that is be called when a HaTS
+    // survey is triggered to take appropriate actions.
+    virtual void SetHatsShownCallback(base::OnceCallback<void()> callback) = 0;
+
+    virtual content::WebContents* GetAssociatedWebContents() = 0;
+
     virtual base::WeakPtr<Delegate> GetWeakPtr() = 0;
 
     // Recreate the UI view because the UI flavor needs to change. Returns true
@@ -128,6 +156,14 @@ class PermissionPrompt {
 
   // Get the type of prompt UI shown for metrics.
   virtual PermissionPromptDisposition GetPromptDisposition() const = 0;
+
+  // Get the prompt view bounds in screen coordinates.
+  virtual absl::optional<gfx::Rect> GetViewBoundsInScreen() const = 0;
+
+  // Get whether the permission request is allowed to be finalized as soon a
+  // decision is transmitted. If this returns `false` the delegate should wait
+  // for an explicit |Delegate::FinalizeCurrentRequests()| call to be made.
+  virtual bool ShouldFinalizeRequestAfterDecided() const = 0;
 };
 
 }  // namespace permissions

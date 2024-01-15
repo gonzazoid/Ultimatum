@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_SYNC_BASE_USER_SELECTABLE_TYPE_H_
 #define COMPONENTS_SYNC_BASE_USER_SELECTABLE_TYPE_H_
 
+#include <iosfwd>
 #include <string>
 
 #include "base/containers/enum_set.h"
@@ -34,8 +35,9 @@ enum class UserSelectableType {
   kApps,
   kReadingList,
   kTabs,
-  kWifiConfigurations,
-  kLastType = kWifiConfigurations
+  kSavedTabGroups,
+  kPayments,
+  kLastType = kPayments
 };
 
 using UserSelectableTypeSet = base::EnumSet<UserSelectableType,
@@ -78,6 +80,11 @@ ModelType UserSelectableOsTypeToCanonicalModelType(UserSelectableOsType type);
 absl::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
     const std::string& type);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+// For GTest.
+std::ostream& operator<<(std::ostream& stream, const UserSelectableType& type);
+std::ostream& operator<<(std::ostream& stream,
+                         const UserSelectableTypeSet& types);
 
 }  // namespace syncer
 

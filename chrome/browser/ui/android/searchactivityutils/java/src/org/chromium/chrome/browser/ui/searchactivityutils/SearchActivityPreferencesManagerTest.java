@@ -4,10 +4,10 @@
 
 package org.chromium.chrome.browser.ui.searchactivityutils;
 
-import static org.mockito.Mockito.anyObject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -28,13 +28,14 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import org.chromium.base.Consumer;
 import org.chromium.base.library_loader.LibraryLoader;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.UiThreadTest;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityPreferencesManager.SearchActivityPreferences;
 import org.chromium.components.search_engines.TemplateUrl;
@@ -46,21 +47,19 @@ import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
-/**
- * Tests for {@link SearchActivityPreferencesManager}.
- */
+/** Tests for {@link SearchActivityPreferencesManager}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 public class SearchActivityPreferencesManagerTest {
-    @Mock
-    private TemplateUrlService mTemplateUrlServiceMock;
+    @Mock private TemplateUrlService mTemplateUrlServiceMock;
 
-    @Mock
-    private LibraryLoader mLibraryLoaderMock;
+    @Mock private LibraryLoader mLibraryLoaderMock;
 
-    @Mock
-    private TemplateUrl mTemplateUrlMock;
+    @Mock private TemplateUrl mTemplateUrlMock;
+
+    @Mock private Profile mProfile;
 
     private LoadListener mTemplateUrlServiceLoadListener;
     private TemplateUrlServiceObserver mTemplateUrlServiceObserver;
@@ -71,26 +70,32 @@ public class SearchActivityPreferencesManagerTest {
         NativeLibraryTestUtils.loadNativeLibraryNoBrowserProcess();
         TemplateUrlServiceFactory.setInstanceForTesting(mTemplateUrlServiceMock);
         LibraryLoader.setLibraryLoaderForTesting(mLibraryLoaderMock);
+        Profile.setLastUsedProfileForTesting(mProfile);
 
-        doAnswer(invocation -> {
-            mTemplateUrlServiceLoadListener = (LoadListener) invocation.getArguments()[0];
-            return null;
-        })
+        doAnswer(
+                        invocation -> {
+                            mTemplateUrlServiceLoadListener =
+                                    (LoadListener) invocation.getArguments()[0];
+                            return null;
+                        })
                 .when(mTemplateUrlServiceMock)
-                .registerLoadListener(anyObject());
+                .registerLoadListener(any());
 
-        doAnswer(invocation -> {
-            mTemplateUrlServiceObserver = (TemplateUrlServiceObserver) invocation.getArguments()[0];
-            return null;
-        })
+        doAnswer(
+                        invocation -> {
+                            mTemplateUrlServiceObserver =
+                                    (TemplateUrlServiceObserver) invocation.getArguments()[0];
+                            return null;
+                        })
                 .when(mTemplateUrlServiceMock)
-                .addObserver(anyObject());
+                .addObserver(any());
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            SearchActivityPreferencesManager.resetForTesting();
-            // Reseta any cached values so we consistently start with a predictable state.
-            SearchActivityPreferencesManager.resetCachedValues();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    SearchActivityPreferencesManager.resetForTesting();
+                    // Reseta any cached values so we consistently start with a predictable state.
+                    SearchActivityPreferencesManager.resetCachedValues();
+                });
 
         // Make sure there were no premature attempts to register observers.
         Assert.assertNull(mTemplateUrlServiceLoadListener);
@@ -254,7 +259,7 @@ public class SearchActivityPreferencesManagerTest {
     @SmallTest
     @UiThreadTest
     public void managerTest_preferencesRetentionTest() {
-        final SharedPreferencesManager manager = SharedPreferencesManager.getInstance();
+        final SharedPreferencesManager manager = ChromeSharedPreferences.getInstance();
 
         // Make sure we don't have anything on disk.
         Assert.assertFalse(manager.contains(SEARCH_WIDGET_SEARCH_ENGINE_SHORTNAME));
@@ -276,10 +281,12 @@ public class SearchActivityPreferencesManagerTest {
         CriteriaHelper.pollUiThreadNested(() -> numCalls.get() == 1);
 
         // Note: we provide different default values than stored ones to make sure everything works.
-        Assert.assertEquals("Search Engine",
+        Assert.assertEquals(
+                "Search Engine",
                 manager.readString(
                         SEARCH_WIDGET_SEARCH_ENGINE_SHORTNAME, "Engine Name Doesn't work"));
-        Assert.assertEquals("URL",
+        Assert.assertEquals(
+                "URL",
                 manager.readString(SEARCH_WIDGET_SEARCH_ENGINE_URL, "Engine URL Doesn't work"));
         Assert.assertEquals(
                 false, manager.readBoolean(SEARCH_WIDGET_IS_VOICE_SEARCH_AVAILABLE, true));
@@ -311,8 +318,8 @@ public class SearchActivityPreferencesManagerTest {
         // Signal the Manager that Native Libraries are ready.
         doReturn(true).when(mLibraryLoaderMock).isInitialized();
         SearchActivityPreferencesManager.onNativeLibraryReady();
-        verify(mTemplateUrlServiceMock, times(1)).registerLoadListener(anyObject());
-        verify(mTemplateUrlServiceMock, times(1)).addObserver(anyObject());
+        verify(mTemplateUrlServiceMock, times(1)).registerLoadListener(any());
+        verify(mTemplateUrlServiceMock, times(1)).addObserver(any());
         Assert.assertNotNull(mTemplateUrlServiceLoadListener);
         Assert.assertNotNull(mTemplateUrlServiceObserver);
         reset(mTemplateUrlServiceMock);
@@ -338,10 +345,11 @@ public class SearchActivityPreferencesManagerTest {
         // Install event listener.
         final AtomicInteger numCalls = new AtomicInteger(0);
         final AtomicReference<SearchActivityPreferences> refPrefs = new AtomicReference<>();
-        final Consumer<SearchActivityPreferences> listener = prefs -> {
-            numCalls.incrementAndGet();
-            refPrefs.set(prefs);
-        };
+        final Consumer<SearchActivityPreferences> listener =
+                prefs -> {
+                    numCalls.incrementAndGet();
+                    refPrefs.set(prefs);
+                };
         SearchActivityPreferencesManager.addObserver(listener);
         numCalls.set(0);
 

@@ -19,8 +19,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
@@ -78,6 +78,12 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   enum IncludeDefaults {
     INCLUDE_DEFAULTS,
     EXCLUDE_DEFAULTS,
+  };
+
+  struct COMPONENTS_PREFS_EXPORT PreferenceValueAndStore {
+    std::string name;
+    base::Value value;
+    PrefValueStore::PrefStoreType store;
   };
 
   // A helper class to store all the information associated with a preference.
@@ -274,7 +280,7 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   void SetBoolean(const std::string& path, bool value);
   void SetInteger(const std::string& path, int value);
   void SetDouble(const std::string& path, double value);
-  void SetString(const std::string& path, const std::string& value);
+  void SetString(const std::string& path, base::StringPiece value);
   void SetDict(const std::string& path, base::Value::Dict dict);
   void SetList(const std::string& path, base::Value::List list);
   void SetFilePath(const std::string& path, const base::FilePath& value);
@@ -334,7 +340,11 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   // If INCLUDE_DEFAULTS is requested, preferences set to their default values
   // will be included. Otherwise, these will be omitted from the returned
   // dictionary.
-  base::Value GetPreferenceValues(IncludeDefaults include_defaults) const;
+  base::Value::Dict GetPreferenceValues(IncludeDefaults include_defaults) const;
+
+  // Returns a map of the preference values by their path including prefs that
+  // have their default value.
+  std::vector<PreferenceValueAndStore> GetPreferencesValueAndStore() const;
 
   bool ReadOnly() const;
 
@@ -368,9 +378,6 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   // implemented in chrome/browser/prefs/browser_prefs.cc.
   PrefRegistry* DeprecatedGetPrefRegistry();
 
-  // Clears mutable values.
-  void ClearMutableValues();
-
   // Invoked when the store is deleted from disk. Allows this PrefService
   // to tangentially cleanup data it may have saved outside the store.
   void OnStoreDeletionFromDisk();
@@ -384,7 +391,7 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   //
   // AVOID ADDING THESE. These are low-level observer notifications that are
   // called for every pref change. This can lead to inefficiency, and the lack
-  // of a "registrar" model makes it easy to forget to undregister. It is
+  // of a "registrar" model makes it easy to forget to unregister. It is
   // really designed for integrating other notification systems, not for normal
   // observation.
   void AddPrefObserverAllPrefs(PrefObserver* obs);
@@ -401,6 +408,9 @@ class COMPONENTS_PREFS_EXPORT PrefService {
 #if BUILDFLAG(IS_ANDROID)
   base::android::ScopedJavaLocalRef<jobject> GetJavaObject();
 #endif
+
+  // Returns the WriteablePrefStore::PrefWriteFlags for `pref`.
+  static uint32_t GetWriteFlags(const PrefService::Preference* pref);
 
  protected:
   // The PrefNotifier handles registering and notifying preference observers.
@@ -471,8 +481,8 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   };
 
   // Sends notification of a changed preference. This needs to be called by
-  // a ScopedUserPrefUpdate or ScopedDictionaryPrefUpdate if a DictionaryValue
-  // or ListValue is changed.
+  // a ScopedDictPrefUpdate or ScopedListPrefUpdate if a Value::Dict or
+  // Value::List is changed.
   void ReportUserPrefChanged(const std::string& key);
   void ReportUserPrefChanged(
       const std::string& key,
@@ -495,7 +505,7 @@ class COMPONENTS_PREFS_EXPORT PrefService {
   // This will create a dictionary or list if one does not exist in the user
   // pref store. This method returns NULL only if you're requesting an
   // unregistered pref or a non-dict/non-list pref.
-  // |type| may only be Values::Type::DICTIONARY or Values::Type::LIST and
+  // |type| may only be Values::Type::DICT or Values::Type::LIST and
   // |path| must point to a registered preference of type |type|.
   // Ownership of the returned value remains at the user pref store.
   base::Value* GetMutableUserPref(const std::string& path,

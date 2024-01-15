@@ -9,12 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
-#include "base/strings/abseil_string_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "net/base/http_user_agent_settings.h"
@@ -98,7 +97,7 @@ int BidirectionalStream::Start(const char* url,
   request_info->method = method;
   if (!net::HttpUtil::IsValidHeaderName(request_info->method))
     return -1;
-  request_info->extra_headers.CopyFrom(headers);
+  request_info->extra_headers = headers;
   request_info->end_stream_on_headers = end_of_stream;
   write_end_of_stream_ = end_of_stream;
   PostToNetworkThread(FROM_HERE,
@@ -111,7 +110,8 @@ bool BidirectionalStream::ReadData(char* buffer, int capacity) {
   if (!buffer)
     return false;
   scoped_refptr<net::WrappedIOBuffer> read_buffer =
-      base::MakeRefCounted<net::WrappedIOBuffer>(buffer);
+      base::MakeRefCounted<net::WrappedIOBuffer>(
+          base::make_span(buffer, static_cast<size_t>(capacity)));
 
   PostToNetworkThread(
       FROM_HERE, base::BindOnce(&BidirectionalStream::ReadDataOnNetworkThread,
@@ -126,7 +126,8 @@ bool BidirectionalStream::WriteData(const char* buffer,
     return false;
 
   scoped_refptr<net::WrappedIOBuffer> write_buffer =
-      base::MakeRefCounted<net::WrappedIOBuffer>(buffer);
+      base::MakeRefCounted<net::WrappedIOBuffer>(
+          base::make_span(buffer, static_cast<size_t>(count)));
 
   PostToNetworkThread(
       FROM_HERE,
@@ -185,9 +186,9 @@ void BidirectionalStream::OnHeadersReceived(
   // Get http status code from response headers.
   int http_status_code = 0;
   const auto http_status_header = response_headers.find(":status");
-  if (http_status_header != response_headers.end())
-    base::StringToInt(base::StringViewToStringPiece(http_status_header->second),
-                      &http_status_code);
+  if (http_status_header != response_headers.end()) {
+    base::StringToInt(http_status_header->second, &http_status_code);
+  }
   const char* protocol = "unknown";
   switch (bidi_stream_->GetProtocol()) {
     case net::kProtoHTTP2:

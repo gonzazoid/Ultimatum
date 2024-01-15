@@ -5,24 +5,27 @@
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_SQL_UTILS_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_SQL_UTILS_H_
 
+#include <stdint.h>
+
+#include <optional>
 #include <string>
 
-#include "base/dcheck_is_on.h"
+#include "base/containers/span.h"
+#include "components/attribution_reporting/source_type.mojom-forward.h"
+#include "components/attribution_reporting/trigger_data_matching.mojom-forward.h"
+#include "content/browser/attribution_reporting/attribution_report.h"
+#include "content/common/content_export.h"
 
-// SELECT, UPDATE, and DELETE SQL statements should document the indexes
-// they intend to use by adding `DCHECK_SQL_INDEXED_BY()` after every table
-// name. This makes code review easier, and enlists SQLite's help in ensuring
-// that the index *can* be used to satisfy the query.
-//
-// The INDEXED BY clause causes SQLite to return an error if it cannot satisfy
-// the query using the specified index. Without this, schema and query changes
-// can silently cause an index to be ignored, leading to poor performance in the
-// worst case and unnecessary storage costs in the best.
-#if DCHECK_IS_ON()
-#define DCHECK_SQL_INDEXED_BY(index) " INDEXED BY " index " "
-#else
-#define DCHECK_SQL_INDEXED_BY(index) ""
-#endif
+namespace attribution_reporting {
+class AggregationKeys;
+class EventReportWindows;
+class FilterData;
+class MaxEventLevelReports;
+}  // namespace attribution_reporting
+
+namespace sql {
+class Statement;
+}  // namespace sql
 
 namespace url {
 class Origin;
@@ -30,9 +33,65 @@ class Origin;
 
 namespace content {
 
-std::string SerializeOrigin(const url::Origin& origin);
+namespace proto {
+class AttributionReadOnlySourceData;
+}  // namespace proto
 
 url::Origin DeserializeOrigin(const std::string& origin);
+
+std::optional<attribution_reporting::mojom::SourceType> DeserializeSourceType(
+    int val);
+
+// Exposed for use with earlier DB migrations that only contained a subset of
+// fields.
+void SetReadOnlySourceData(const attribution_reporting::EventReportWindows&,
+                           attribution_reporting::MaxEventLevelReports,
+                           proto::AttributionReadOnlySourceData&);
+
+std::string SerializeReadOnlySourceData(
+    const attribution_reporting::EventReportWindows&,
+    attribution_reporting::MaxEventLevelReports,
+    double randomized_response_rate,
+    attribution_reporting::mojom::TriggerDataMatching,
+    bool debug_cookie_set);
+
+CONTENT_EXPORT std::optional<proto::AttributionReadOnlySourceData>
+DeserializeReadOnlySourceDataAsProto(sql::Statement&, int col);
+
+std::string SerializeFilterData(const attribution_reporting::FilterData&);
+
+std::optional<attribution_reporting::FilterData> DeserializeFilterData(
+    sql::Statement&,
+    int col);
+
+std::optional<attribution_reporting::EventReportWindows>
+DeserializeEventReportWindows(const proto::AttributionReadOnlySourceData&);
+
+std::string SerializeAggregationKeys(
+    const attribution_reporting::AggregationKeys&);
+
+std::optional<attribution_reporting::AggregationKeys>
+DeserializeAggregationKeys(sql::Statement&, int col);
+
+std::string SerializeReportMetadata(const AttributionReport::EventLevelData&);
+
+std::string SerializeReportMetadata(
+    const AttributionReport::AggregatableAttributionData&);
+
+std::string SerializeReportMetadata(
+    const AttributionReport::NullAggregatableData&);
+
+[[nodiscard]] bool DeserializeReportMetadata(base::span<const uint8_t>,
+                                             uint32_t& trigger_data,
+                                             int64_t& priority);
+
+[[nodiscard]] bool DeserializeReportMetadata(
+    base::span<const uint8_t>,
+    AttributionReport::AggregatableAttributionData&);
+
+[[nodiscard]] bool DeserializeReportMetadata(
+    base::span<const uint8_t>,
+    AttributionReport::NullAggregatableData&);
 
 }  // namespace content
 

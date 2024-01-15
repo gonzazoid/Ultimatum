@@ -13,8 +13,9 @@
 
 #include "ash/components/arc/arc_util.h"
 #include "ash/public/cpp/shelf_types.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 
 namespace arc {
 class ArcAppShelfId;
@@ -63,6 +64,12 @@ class AppServiceAppWindowArcTracker : public ArcAppListPrefs::Observer,
 
   // Close all windows for 'app_id'.
   void CloseWindows(const std::string& app_id);
+
+  // Invoked by controller to notify |window| may be replaced from ghost window
+  // to app window.
+  void OnWindowPropertyChanged(aura::Window* window,
+                               const void* key,
+                               intptr_t old);
 
   // ArcAppListPrefs::Observer:
   void OnAppStatesChanged(const std::string& app_id,
@@ -116,7 +123,7 @@ class AppServiceAppWindowArcTracker : public ArcAppListPrefs::Observer,
   // are ARC app windows and have task id or session id.
   void CheckAndAttachControllers();
   void AttachControllerToTask(int taskId);
-  void AttachControllerToSession(int session_id);
+  void AttachControllerToSession(int session_id, const ArcAppWindowInfo& info);
 
   // arc::ArcSessionManagerObserver:
   void OnArcPlayStoreEnabledChanged(bool enabled) override;
@@ -142,12 +149,17 @@ class AppServiceAppWindowArcTracker : public ArcAppListPrefs::Observer,
   // `session_id`.
   void OnSessionDestroyed(int32_t session_id);
 
-  Profile* const observed_profile_;
-  AppServiceAppWindowShelfController* const app_service_controller_;
+  const raw_ptr<Profile> observed_profile_;
+  const raw_ptr<AppServiceAppWindowShelfController> app_service_controller_;
 
   TaskIdToArcAppWindowInfo task_id_to_arc_app_window_info_;
   SessionIdToArcAppWindowInfo session_id_to_arc_app_window_info_;
   ShelfGroupToAppControllerMap app_shelf_group_to_controller_map_;
+
+  // Temporarily map session id to task id, starting from OnTaskCreated called
+  // to exo application id set (until that `arc::GetWindowTaskId` can return
+  // correct task id for window, or it will still be session id).
+  std::map<int, int> session_id_to_task_id_map_;
 
   // ARC app task id could be created after the window initialized.
   // |arc_window_candidates_| is used to record those initialized ARC app

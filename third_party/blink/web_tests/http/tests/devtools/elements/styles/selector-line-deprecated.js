@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as BindingsModule from 'devtools/models/bindings/bindings.js';
+
 (async function() {
   TestRunner.addResult(`Tests that selector line is computed correctly regardless of its start column. Bug 110732.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -28,7 +32,7 @@
   `);
 
   TestRunner.evaluateInPage('addStylesheet()');
-  TestRunner.addSniffer(Bindings.CSSWorkspaceBinding.prototype, 'updateLocations', sourceMappingSniffer, true);
+  TestRunner.addSniffer(BindingsModule.CSSWorkspaceBinding.CSSWorkspaceBinding.prototype, 'updateLocations', sourceMappingSniffer, true);
 
   function sourceMappingSniffer(header) {
     if (header.resourceURL().includes('selector-line-deprecated.css')) {

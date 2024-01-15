@@ -6,52 +6,47 @@
 
 #import <UIKit/UIKit.h>
 
-#import "components/prefs/testing_pref_service.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/authentication_service_fake.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#import "ios/chrome/browser/signin/fake_system_identity.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
+#import "base/functional/callback_helpers.h"
+#import "base/run_loop.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_view_controller.h"
-#import "ios/chrome/browser/unified_consent/unified_consent_service_factory.h"
+#import "ios/chrome/browser/unified_consent/model/unified_consent_service_factory.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
+#import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 #import "third_party/ocmock/ocmock_extensions.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 class UnifiedConsentMediatorTest : public PlatformTest {
  public:
   void SetUp() override {
     PlatformTest::SetUp();
-    identity1_ = [FakeSystemIdentity identityWithEmail:@"foo1@gmail.com"
-                                                gaiaID:@"foo1ID"
-                                                  name:@"Fake Foo 1"];
-    identity2_ = [FakeSystemIdentity identityWithEmail:@"foo2@gmail.com"
-                                                gaiaID:@"foo2ID"
-                                                  name:@"Fake Foo 2"];
-    identity3_ = [FakeSystemIdentity identityWithEmail:@"foo3@gmail.com"
-                                                gaiaID:@"foo3ID"
-                                                  name:@"Fake Foo 3"];
+    identity1_ = [FakeSystemIdentity fakeIdentity1];
+    identity2_ = [FakeSystemIdentity fakeIdentity2];
+    identity3_ = [FakeSystemIdentity fakeIdentity3];
 
     TestChromeBrowserState::Builder builder;
     builder.AddTestingFactory(
         AuthenticationServiceFactory::GetInstance(),
-        base::BindRepeating(
-            &AuthenticationServiceFake::CreateAuthenticationService));
+        AuthenticationServiceFactory::GetDefaultFactory());
     browser_state_ = builder.Build();
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        browser_state_.get(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
     view_controller_ = [[UnifiedConsentViewController alloc]
         initWithPostRestoreSigninPromo:NO];
-    pref_service_ = new TestingPrefServiceSimple();
 
     mediator_delegate_mock_ =
         OCMProtocolMock(@protocol(UnifiedConsentMediatorDelegate));
@@ -70,8 +65,9 @@ class UnifiedConsentMediatorTest : public PlatformTest {
         browser_state_.get());
   }
 
-  ios::FakeChromeIdentityService* GetIdentityService() {
-    return ios::FakeChromeIdentityService::GetInstanceFromChromeProvider();
+  FakeSystemIdentityManager* GetIdentityService() {
+    return FakeSystemIdentityManager::FromSystemIdentityManager(
+        GetApplicationContext()->GetSystemIdentityManager());
   }
 
   void AddIdentities() {
@@ -96,12 +92,11 @@ class UnifiedConsentMediatorTest : public PlatformTest {
   IOSChromeScopedTestingLocalState scoped_testing_local_state_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
 
-  FakeSystemIdentity* identity1_ = nullptr;
-  FakeSystemIdentity* identity2_ = nullptr;
-  FakeSystemIdentity* identity3_ = nullptr;
+  id<SystemIdentity> identity1_ = nil;
+  id<SystemIdentity> identity2_ = nil;
+  id<SystemIdentity> identity3_ = nil;
 
   UnifiedConsentMediator* mediator_ = nullptr;
-  PrefService* pref_service_ = nullptr;
 
   id<UnifiedConsentMediatorDelegate> mediator_delegate_mock_ = nil;
   UnifiedConsentViewController* view_controller_ = nullptr;
@@ -114,7 +109,7 @@ TEST_F(UnifiedConsentMediatorTest,
   CreateMediator();
   [mediator_ start];
 
-  ASSERT_EQ(nil, mediator_.selectedIdentity);
+  ASSERT_NSEQ(nil, mediator_.selectedIdentity);
 }
 
 // Tests that the default identity selected for a signed-out user with accounts
@@ -126,7 +121,7 @@ TEST_F(UnifiedConsentMediatorTest,
 
   [mediator_ start];
 
-  ASSERT_EQ(identity1_, mediator_.selectedIdentity);
+  ASSERT_NSEQ(identity1_, mediator_.selectedIdentity);
 }
 
 // Tests that the default identity becomes the next identity on the device after
@@ -136,10 +131,16 @@ TEST_F(UnifiedConsentMediatorTest, SelectDefaultIdentityAfterForgetIdentity) {
   CreateMediator();
 
   [mediator_ start];
-  ASSERT_EQ(identity1_, mediator_.selectedIdentity);
-  GetIdentityService()->ForgetIdentity(identity1_, nil);
+  ASSERT_NSEQ(identity1_, mediator_.selectedIdentity);
 
-  ASSERT_EQ(identity2_, mediator_.selectedIdentity);
+  {
+    base::RunLoop run_loop;
+    GetIdentityService()->ForgetIdentity(
+        identity1_, base::IgnoreArgs<NSError*>(run_loop.QuitClosure()));
+    run_loop.Run();
+  }
+
+  ASSERT_NSEQ(identity2_, mediator_.selectedIdentity);
 }
 
 // Tests that the default identity selected for a signed-in user is the
@@ -148,10 +149,11 @@ TEST_F(UnifiedConsentMediatorTest, SelectDefaultIdentityForSignedInUser) {
   AddIdentities();
   CreateMediator();
 
-  GetAuthenticationService()->SignIn(identity2_);
+  GetAuthenticationService()->SignIn(
+      identity2_, signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   [mediator_ start];
 
-  ASSERT_EQ(identity2_, mediator_.selectedIdentity);
+  ASSERT_NSEQ(identity2_, mediator_.selectedIdentity);
 }
 
 // Tests that the default identity is the next identity on the device after
@@ -161,13 +163,21 @@ TEST_F(UnifiedConsentMediatorTest,
   AddIdentities();
   CreateMediator();
 
-  GetAuthenticationService()->SignIn(identity3_);
+  GetAuthenticationService()->SignIn(
+      identity3_, signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   [mediator_ start];
-  ASSERT_EQ(identity3_, mediator_.selectedIdentity);
-  GetAuthenticationService()->SignOut(signin_metrics::SIGNOUT_TEST, false, nil);
-  GetIdentityService()->ForgetIdentity(identity3_, nil);
+  ASSERT_NSEQ(identity3_, mediator_.selectedIdentity);
+  GetAuthenticationService()->SignOut(signin_metrics::ProfileSignout::kTest,
+                                      false, nil);
 
-  ASSERT_EQ(identity1_, mediator_.selectedIdentity);
+  {
+    base::RunLoop run_loop;
+    GetIdentityService()->ForgetIdentity(
+        identity3_, base::IgnoreArgs<NSError*>(run_loop.QuitClosure()));
+    run_loop.Run();
+  }
+
+  ASSERT_NSEQ(identity1_, mediator_.selectedIdentity);
 }
 
 // Tests that the selected identity before start is kept.
@@ -178,7 +188,7 @@ TEST_F(UnifiedConsentMediatorTest, SelectIdentity) {
   mediator_.selectedIdentity = identity2_;
   [mediator_ start];
 
-  ASSERT_EQ(identity2_, mediator_.selectedIdentity);
+  ASSERT_NSEQ(identity2_, mediator_.selectedIdentity);
 }
 
 // Tests that `start` will not override the selected identity with a
@@ -188,9 +198,10 @@ TEST_F(UnifiedConsentMediatorTest, DontOverrideIdentityForSignedInUser) {
   AddIdentities();
   CreateMediator();
 
-  GetAuthenticationService()->SignIn(identity1_);
+  GetAuthenticationService()->SignIn(
+      identity1_, signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   mediator_.selectedIdentity = identity2_;
   [mediator_ start];
 
-  ASSERT_EQ(identity2_, mediator_.selectedIdentity);
+  ASSERT_NSEQ(identity2_, mediator_.selectedIdentity);
 }

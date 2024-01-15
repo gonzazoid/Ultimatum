@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/models/image_model.h"
 
@@ -24,7 +24,7 @@ class WebAppRegistrar;
 class WebAppProvider;
 }  // namespace web_app
 
-namespace ash {
+namespace chromeos {
 
 // Class to encapsulate logic to control the browser UI for web Kiosk apps. It
 // displays a fullscreen browser without tab strip and navigation bar. Therefore
@@ -33,7 +33,7 @@ class WebKioskBrowserControllerBase : public web_app::AppBrowserController {
  public:
   WebKioskBrowserControllerBase(web_app::WebAppProvider& provider,
                                 Browser* browser,
-                                web_app::AppId app_id);
+                                webapps::AppId app_id);
   WebKioskBrowserControllerBase(const WebKioskBrowserControllerBase&) = delete;
   WebKioskBrowserControllerBase& operator=(
       const WebKioskBrowserControllerBase&) = delete;
@@ -61,17 +61,13 @@ class WebKioskBrowserControllerBase : public web_app::AppBrowserController {
   void OnTabInserted(content::WebContents* contents) override;
   void OnTabRemoved(content::WebContents* contents) override;
 
-  // Initializes app session and installs Kiosk window handler if not
-  // initialized.
-  virtual void MaybeInitAppSession() = 0;
-
  private:
-  const raw_ref<web_app::WebAppRegistrar> registrar() const;
+  web_app::WebAppRegistrar& registrar() const;
 
   const raw_ref<web_app::WebAppProvider> provider_;
   mutable absl::optional<ui::ImageModel> app_icon_;
 };
 
-}  // namespace ash
+}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_CHROMEOS_APP_MODE_WEB_KIOSK_BROWSER_CONTROLLER_BASE_H_

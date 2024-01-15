@@ -2,18 +2,23 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ConnectionType, KeyEvent, KeyEventType, MechanicalLayout, NumberPadPresence, PhysicalLayout, TopRightKey} from 'chrome://diagnostics/input_data_provider.mojom-webui.js';
+import 'chrome://diagnostics/keyboard_tester.js';
+import 'chrome://diagnostics/strings.m.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
+
+import {ConnectionType, MechanicalLayout, NumberPadPresence, PhysicalLayout, TopRightKey} from 'chrome://diagnostics/input.mojom-webui.js';
+import {KeyEvent, KeyEventType} from 'chrome://diagnostics/input_data_provider.mojom-webui.js';
 import {TopRightKey as DiagramTopRightKey} from 'chrome://resources/ash/common/keyboard_diagram.js';
 import {KeyboardKeyState} from 'chrome://resources/ash/common/keyboard_key.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {MockTimer} from 'chrome://webui-test/mock_timer.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {MockController} from '../../mock_controller.js';
-import {isVisible} from '../../test_util.js';
+import {MockController} from '../mock_controller.m.js';
+import {isVisible} from '../test_util.js';
 
-import {assertElementContainsText} from './diagnostics_test_utils.js';
-
-export function keyboardTesterTestSuite() {
+suite('keyboardTesterTestSuite', function() {
   /** @type {?KeyboardTesterElement} */
   let keyboardTesterElement = null;
 
@@ -34,6 +39,15 @@ export function keyboardTesterTestSuite() {
         document.createElement('keyboard-tester'));
     document.body.appendChild(keyboardTesterElement);
   });
+
+  /**
+   * @param {boolean} isLoggedIn
+   * @return {!Promise}
+   */
+  function setLoggedInState(isLoggedIn) {
+    keyboardTesterElement.isLoggedIn = isLoggedIn;
+    return flushTasks();
+  }
 
   test('topRightKeyCorrections', async () => {
     keyboardTesterElement.keyboard = Object.assign({}, fakeKeyboard, {
@@ -169,32 +183,51 @@ export function keyboardTesterTestSuite() {
   test('focusLossToast', async () => {
     keyboardTesterElement.keyboard = fakeKeyboard;
     await flushTasks();
+    const mockTimer = new MockTimer();
+    mockTimer.install();
+    keyboardTesterElement.keyboard = fakeKeyboard;
 
     keyboardTesterElement.onKeyEventsPaused();
     assertTrue(keyboardTesterElement.$.lostFocusToast.open);
 
     keyboardTesterElement.onKeyEventsResumed();
+    mockTimer.tick(1000);
     assertFalse(keyboardTesterElement.$.lostFocusToast.open);
+    mockTimer.uninstall();
   });
 
   test('closeOnExitShortcut', async () => {
     keyboardTesterElement.keyboard = fakeKeyboard;
     await flushTasks();
 
-    keyboardTesterElement.$.dialog.showModal();
+    keyboardTesterElement.show();
     await flushTasks();
     assertTrue(keyboardTesterElement.isOpen());
 
-    // Keyboard shortcut help text should be visible
-    assertTrue(isVisible(
-        keyboardTesterElement.shadowRoot.querySelector('.shortcut-help-text')));
-    assertElementContainsText(
-        keyboardTesterElement.shadowRoot.querySelector('.shortcut-help-text'),
-        'Press Alt + Esc to close the dialog.');
-
     // Alt + Escape should close the tester
-    keyboardTesterElement.dispatchEvent(
-        new KeyboardEvent('keydown', {key: 'Escape', altKey: true}));
+    const keyDownEvent = eventToPromise('keydown', keyboardTesterElement);
+
+    keyboardTesterElement.dispatchEvent(new KeyboardEvent(
+        'keydown', {bubbles: true, key: 'Escape', altKey: true}));
+    await keyDownEvent;
     assertFalse(keyboardTesterElement.isOpen());
   });
-}
+
+  test('helpLinkIsHiddenWhenNotLoggedIn', async () => {
+    keyboardTesterElement.keyboard = fakeKeyboard;
+    await setLoggedInState(/** isLoggedIn */ false);
+
+    keyboardTesterElement.show();
+    await flushTasks();
+    assertTrue(keyboardTesterElement.isOpen());
+    const helpLink = keyboardTesterElement.shadowRoot.querySelector('#help');
+    assertTrue(!!helpLink);
+    assertFalse(isVisible(helpLink));
+
+    keyboardTesterElement.close();
+    await setLoggedInState(/** isLoggedIn */ true);
+    keyboardTesterElement.show();
+    await flushTasks();
+    assertTrue(isVisible(helpLink));
+  });
+});

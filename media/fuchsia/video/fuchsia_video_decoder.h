@@ -18,7 +18,7 @@
 #include "media/base/video_decoder_config.h"
 #include "media/fuchsia/common/sysmem_buffer_stream.h"
 #include "media/fuchsia/common/sysmem_client.h"
-#include "media/fuchsia/mojom/fuchsia_media_resource_provider.mojom.h"
+#include "media/mojo/mojom/fuchsia_media.mojom.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 
 namespace gfx {
@@ -31,14 +31,18 @@ class RasterContextProvider;
 
 namespace media {
 
+namespace mojom {
+class FuchsiaMediaCodecProvider;
+}  // namespace mojom
+
 class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
                                          public SysmemBufferStream::Sink,
                                          public StreamProcessorHelper::Client {
  public:
   FuchsiaVideoDecoder(
       scoped_refptr<viz::RasterContextProvider> raster_context_provider,
-      const mojo::SharedRemote<media::mojom::FuchsiaMediaResourceProvider>&
-          media_resource_provider,
+      const mojo::SharedRemote<media::mojom::FuchsiaMediaCodecProvider>&
+          media_codec_provider,
       bool allow_overlays);
   ~FuchsiaVideoDecoder() override;
 
@@ -62,6 +66,9 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   bool NeedsBitstreamConversion() const override;
   bool CanReadWithoutStalling() const override;
   int GetMaxDecodeRequests() const override;
+
+  void SetClientNativePixmapFactoryForTests(
+      std::unique_ptr<gfx::ClientNativePixmapFactory> factory);
 
  private:
   class OutputMailbox;
@@ -113,8 +120,9 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   void ReleaseOutputBuffers();
 
   const scoped_refptr<viz::RasterContextProvider> raster_context_provider_;
-  const mojo::SharedRemote<media::mojom::FuchsiaMediaResourceProvider>
-      media_resource_provider_;
+  const mojo::SharedRemote<media::mojom::FuchsiaMediaCodecProvider>
+      media_codec_provider_;
+
   const bool use_overlays_for_video_;
 
   OutputCB output_cb_;
@@ -143,6 +151,9 @@ class MEDIA_EXPORT FuchsiaVideoDecoder : public VideoDecoder,
   std::unique_ptr<SysmemCollectionClient> output_buffer_collection_;
   zx::eventpair output_buffer_collection_handle_;
   std::vector<OutputMailbox*> output_mailboxes_;
+
+  // Set to true when the output buffers are protected.
+  bool protected_output_ = false;
 
   size_t num_used_output_buffers_ = 0;
 

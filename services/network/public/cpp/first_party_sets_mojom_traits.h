@@ -6,15 +6,16 @@
 #define SERVICES_NETWORK_PUBLIC_CPP_FIRST_PARTY_SETS_MOJOM_TRAITS_H_
 
 #include "base/containers/flat_map.h"
+#include "base/version.h"
 #include "mojo/public/cpp/bindings/enum_traits.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "net/base/schemeful_site.h"
 #include "net/first_party_sets/first_party_set_entry.h"
+#include "net/first_party_sets/first_party_set_entry_override.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/first_party_sets/first_party_sets_cache_filter.h"
 #include "net/first_party_sets/first_party_sets_context_config.h"
 #include "net/first_party_sets/global_first_party_sets.h"
-#include "net/first_party_sets/same_party_context.h"
 #include "services/network/public/mojom/first_party_sets.mojom-shared.h"
 
 namespace mojo {
@@ -62,36 +63,8 @@ struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
 
 template <>
 struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
-    EnumTraits<network::mojom::SamePartyCookieContextType,
-               net::SamePartyContext::Type> {
-  static network::mojom::SamePartyCookieContextType ToMojom(
-      net::SamePartyContext::Type context_type);
-
-  static bool FromMojom(network::mojom::SamePartyCookieContextType context_type,
-                        net::SamePartyContext::Type* out);
-};
-
-template <>
-struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
-    StructTraits<network::mojom::SamePartyContextDataView,
-                 net::SamePartyContext> {
-  static net::SamePartyContext::Type context_type(
-      const net::SamePartyContext& s) {
-    return s.context_type();
-  }
-
-  static bool Read(network::mojom::SamePartyContextDataView bundle,
-                   net::SamePartyContext* out);
-};
-
-template <>
-struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
     StructTraits<network::mojom::FirstPartySetMetadataDataView,
                  net::FirstPartySetMetadata> {
-  static net::SamePartyContext context(const net::FirstPartySetMetadata& m) {
-    return m.context();
-  }
-
   static absl::optional<net::FirstPartySetEntry> frame_entry(
       const net::FirstPartySetMetadata& m) {
     return m.frame_entry();
@@ -110,19 +83,29 @@ template <>
 struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
     StructTraits<network::mojom::GlobalFirstPartySetsDataView,
                  net::GlobalFirstPartySets> {
+  static const base::Version& public_sets_version(
+      const net::GlobalFirstPartySets& sets) {
+    return sets.public_sets_version_;
+  }
+
   static const base::flat_map<net::SchemefulSite, net::FirstPartySetEntry>&
   sets(const net::GlobalFirstPartySets& sets) {
-    return sets.entries();
+    return sets.entries_;
   }
 
   static const base::flat_map<net::SchemefulSite, net::SchemefulSite>& aliases(
       const net::GlobalFirstPartySets& sets) {
-    return sets.aliases();
+    return sets.aliases_;
   }
 
   static const net::FirstPartySetsContextConfig& manual_config(
       const net::GlobalFirstPartySets& sets) {
-    return sets.manual_config();
+    return sets.manual_config_;
+  }
+
+  static const base::flat_map<net::SchemefulSite, net::SchemefulSite>&
+  manual_aliases(const net::GlobalFirstPartySets& sets) {
+    return sets.manual_aliases_;
   }
 
   static bool Read(network::mojom::GlobalFirstPartySetsDataView sets,
@@ -131,12 +114,25 @@ struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
 
 template <>
 struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
+    StructTraits<network::mojom::FirstPartySetEntryOverrideDataView,
+                 net::FirstPartySetEntryOverride> {
+  static const absl::optional<net::FirstPartySetEntry>& entry(
+      const net::FirstPartySetEntryOverride& override) {
+    return override.entry_;
+  }
+
+  static bool Read(network::mojom::FirstPartySetEntryOverrideDataView override,
+                   net::FirstPartySetEntryOverride* out);
+};
+
+template <>
+struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
     StructTraits<network::mojom::FirstPartySetsContextConfigDataView,
                  net::FirstPartySetsContextConfig> {
   static const base::flat_map<net::SchemefulSite,
-                              absl::optional<net::FirstPartySetEntry>>&
+                              net::FirstPartySetEntryOverride>&
   customizations(const net::FirstPartySetsContextConfig& config) {
-    return config.customizations();
+    return config.customizations_;
   }
 
   static bool Read(network::mojom::FirstPartySetsContextConfigDataView config,
@@ -149,12 +145,12 @@ struct COMPONENT_EXPORT(FIRST_PARTY_SETS_MOJOM_TRAITS)
                  net::FirstPartySetsCacheFilter> {
   static const base::flat_map<net::SchemefulSite, int64_t>& filter(
       const net::FirstPartySetsCacheFilter& cache_filter) {
-    return cache_filter.filter();
+    return cache_filter.filter_;
   }
 
   static int64_t browser_run_id(
       const net::FirstPartySetsCacheFilter& cache_filter) {
-    return cache_filter.browser_run_id();
+    return cache_filter.browser_run_id_;
   }
 
   static bool Read(

@@ -4,29 +4,25 @@
 
 #import "ios/web_view/internal/cwv_flags_internal.h"
 
-#include <memory>
+#import <memory>
+#import <optional>
 
-#include "base/base_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/command_line.h"
-#include "base/notreached.h"
-#include "base/values.h"
-#include "components/autofill/core/common/autofill_switches.h"
-#include "components/flags_ui/feature_entry.h"
-#include "components/flags_ui/feature_entry_macros.h"
-#include "components/flags_ui/flags_state.h"
-#include "components/flags_ui/flags_storage.h"
-#include "components/flags_ui/flags_ui_switches.h"
-#include "components/flags_ui/pref_service_flags_storage.h"
-#include "components/prefs/pref_service.h"
-#include "components/sync/base/command_line_switches.h"
-#include "ios/web_view/internal/app/application_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/base_switches.h"
+#import "base/command_line.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback_helpers.h"
+#import "base/notreached.h"
+#import "base/values.h"
+#import "components/autofill/core/common/autofill_switches.h"
+#import "components/flags_ui/feature_entry.h"
+#import "components/flags_ui/feature_entry_macros.h"
+#import "components/flags_ui/flags_state.h"
+#import "components/flags_ui/flags_storage.h"
+#import "components/flags_ui/flags_ui_switches.h"
+#import "components/flags_ui/pref_service_flags_storage.h"
+#import "components/prefs/pref_service.h"
+#import "components/sync/base/command_line_switches.h"
+#import "ios/web_view/internal/app/application_context.h"
 
 namespace ios_web_view {
 
@@ -121,29 +117,33 @@ const flags_ui::FeatureEntry kFeatureEntries[] = {
       base::BindRepeating(&ios_web_view::SkipConditionalFeatureEntry));
 
   for (const base::Value& supportedFeature : supportedFeatures) {
-    DCHECK(supportedFeature.is_dict());
+    const base::Value::Dict* supportedFeatureDict =
+        supportedFeature.GetIfDict();
+    DCHECK(supportedFeatureDict);
 
     const std::string* featureName =
-        supportedFeature.FindStringKey("internal_name");
+        supportedFeatureDict->FindString("internal_name");
     DCHECK(featureName);
 
     if (*featureName == ios_web_view::kUseSyncSandboxFlagName) {
-      absl::optional<bool> maybeEnabled =
-          supportedFeature.FindBoolKey("enabled");
+      std::optional<bool> maybeEnabled =
+          supportedFeatureDict->FindBool("enabled");
       DCHECK(maybeEnabled.has_value());
       usesSyncSandbox = *maybeEnabled;
     } else if (*featureName == ios_web_view::kUseWalletSandboxFlagName) {
-      const base::Value* options = supportedFeature.FindListKey("options");
+      const base::Value::List* options =
+          supportedFeatureDict->FindList("options");
       DCHECK(options);
 
-      for (const base::Value& option : options->GetListDeprecated()) {
-        DCHECK(option.is_dict());
+      for (const base::Value& option : *options) {
+        const base::Value::Dict* optionDict = option.GetIfDict();
+        DCHECK(optionDict);
 
-        const std::string* optionName = option.FindStringKey("internal_name");
+        const std::string* optionName = optionDict->FindString("internal_name");
         DCHECK(optionName);
 
         if (*optionName == ios_web_view::kUseWalletSandboxFlagNameEnabled) {
-          absl::optional<bool> maybeSelected = option.FindBoolKey("selected");
+          std::optional<bool> maybeSelected = optionDict->FindBool("selected");
           DCHECK(maybeSelected.has_value());
           usesWalletSandbox = *maybeSelected;
         }

@@ -4,14 +4,18 @@
 
 #include "ash/system/phonehub/camera_roll_thumbnail.h"
 
-#include "ash/components/phonehub/camera_roll_manager.h"
-#include "ash/components/phonehub/user_action_recorder.h"
+#include "ash/constants/ash_features.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/camera_roll_manager.h"
+#include "chromeos/ash/components/phonehub/user_action_recorder.h"
+#include "third_party/skia/include/core/SkRRect.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/controls/highlight_path_generator.h"
 
@@ -63,19 +67,18 @@ CameraRollThumbnail::~CameraRollThumbnail() = default;
 void CameraRollThumbnail::PaintButtonContents(gfx::Canvas* canvas) {
   views::MenuButton::PaintButtonContents(canvas);
 
-  auto* color_provider = AshColorProvider::Get();
-  canvas->DrawColor(color_provider->GetControlsLayerColor(
-      AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive));
+  canvas->DrawColor(
+      GetColorProvider()->GetColor(kColorAshControlBackgroundColorInactive));
 
   canvas->DrawImageInt(image_, 0, 0, image_.width(), image_.height(), 0, 0,
                        kCameraRollThumbnailBorderSize.width(),
                        kCameraRollThumbnailBorderSize.height(), false);
 
   if (video_type_) {
+    auto* color_provider = AshColorProvider::Get();
     cc::PaintFlags flags;
     flags.setAntiAlias(true);
-    flags.setColor(color_provider->GetBaseLayerColor(
-        AshColorProvider::BaseLayerType::kTransparent80));
+    flags.setColor(GetColorProvider()->GetColor(kColorAshShieldAndBase80));
     flags.setStyle(cc::PaintFlags::kFill_Style);
     canvas->DrawCircle(kCameraRollThumbnailVideoCircleOrigin,
                        kCameraRollThumbnailVideoCircleRadius, flags);
@@ -104,6 +107,12 @@ void CameraRollThumbnail::ShowContextMenuForViewImpl(
 }
 
 void CameraRollThumbnail::ButtonPressed() {
+  if (base::TimeTicks::Now() - download_throttle_timestamp_ <
+      features::kPhoneHubCameraRollThrottleInterval.Get()) {
+    return;
+  }
+
+  download_throttle_timestamp_ = base::TimeTicks::Now();
   phone_hub_metrics::LogCameraRollContentClicked(index_, GetMediaType());
   DownloadRequested();
 }

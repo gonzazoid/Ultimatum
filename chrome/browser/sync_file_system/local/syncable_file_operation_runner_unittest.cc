@@ -10,13 +10,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_context.h"
@@ -61,8 +61,8 @@ class SyncableFileOperationRunnerTest : public testing::Test {
             leveldb_chrome::NewMemEnv("SyncableFileOperationRunnerTest")),
         file_system_(GURL("http://example.com"),
                      in_memory_env_.get(),
-                     base::ThreadTaskRunnerHandle::Get().get(),
-                     base::ThreadTaskRunnerHandle::Get().get()),
+                     base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+                     base::SingleThreadTaskRunner::GetCurrentDefault().get()),
         callback_count_(0),
         write_status_(File::FILE_ERROR_FAILED),
         write_bytes_(0),
@@ -77,10 +77,10 @@ class SyncableFileOperationRunnerTest : public testing::Test {
     ASSERT_TRUE(dir_.CreateUniqueTempDir());
 
     file_system_.SetUp();
-    sync_context_ =
-        new LocalFileSyncContext(dir_.GetPath(), in_memory_env_.get(),
-                                 base::ThreadTaskRunnerHandle::Get().get(),
-                                 base::ThreadTaskRunnerHandle::Get().get());
+    sync_context_ = new LocalFileSyncContext(
+        dir_.GetPath(), in_memory_env_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get());
     ASSERT_EQ(
         SYNC_STATUS_OK,
         file_system_.MaybeInitializeFileSystemContext(sync_context_.get()));
@@ -369,9 +369,7 @@ TEST_F(SyncableFileOperationRunnerTest, CopyInForeignFile) {
 
   base::FilePath temp_path;
   ASSERT_TRUE(CreateTempFile(&temp_path));
-  ASSERT_EQ(static_cast<int>(kTestData.size()),
-            base::WriteFile(
-                temp_path, kTestData.data(), kTestData.size()));
+  ASSERT_TRUE(base::WriteFile(temp_path, kTestData));
 
   sync_status()->StartSyncing(URL(kFile));
   ASSERT_FALSE(sync_status()->IsWritable(URL(kFile)));

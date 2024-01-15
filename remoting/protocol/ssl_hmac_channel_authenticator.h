@@ -8,14 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "remoting/protocol/channel_authenticator.h"
 
 namespace net {
 class CertVerifier;
-class CTPolicyEnforcer;
 class DrainableIOBuffer;
 class GrowableIOBuffer;
 class SSLClientContext;
@@ -86,7 +85,6 @@ class SslHmacChannelAuthenticator : public ChannelAuthenticator {
     // Used in the CLIENT mode only.
     std::unique_ptr<net::TransportSecurityState> transport_security_state;
     std::unique_ptr<net::CertVerifier> cert_verifier;
-    std::unique_ptr<net::CTPolicyEnforcer> ct_policy_enforcer;
     std::unique_ptr<net::SSLClientContext> client_context;
   };
 

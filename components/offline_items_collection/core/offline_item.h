@@ -39,6 +39,8 @@ struct ContentId {
 
   bool operator==(const ContentId& content_id) const;
 
+  bool operator!=(const ContentId& content_id) const;
+
   bool operator<(const ContentId& content_id) const;
 };
 
@@ -180,6 +182,9 @@ struct OfflineItem {
 
   // Identifies the item's publisher.
   std::string attribution;
+
+  // The URL of document that is considered the referrer for the original URL.
+  GURL referrer_url;
 
   // In Progress Metadata.
   // ---------------------------------------------------------------------------

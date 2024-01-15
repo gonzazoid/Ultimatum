@@ -13,6 +13,8 @@ import sys
 
 from util import build_utils
 from util import resource_utils
+import action_helpers  # build_utils adds //build to sys.path.
+import zip_helpers
 
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 from pylib.constants import host_paths
@@ -90,12 +92,13 @@ def _ProcessFiles(processor, input_filenames, inputs_base_dir, outputs_zip):
       path_info.AddMapping(relpath, input_filename)
 
     path_info.Write(outputs_zip + '.info')
-    build_utils.ZipDir(outputs_zip, temp_dir)
+    with action_helpers.atomic_output(outputs_zip) as f:
+      zip_helpers.zip_directory(f, temp_dir)
 
 
 def _ParseVariables(variables_arg, error_func):
   variables = {}
-  for v in build_utils.ParseGnList(variables_arg):
+  for v in action_helpers.parse_gn_list(variables_arg):
     if '=' not in v:
       error_func('--variables argument must contain "=": ' + v)
     name, _, value = v.partition('=')
@@ -128,8 +131,8 @@ def main():
                       help='Enable inputs and includes checks.')
   options = parser.parse_args()
 
-  inputs = build_utils.ParseGnList(options.inputs)
-  includes = build_utils.ParseGnList(options.includes)
+  inputs = action_helpers.parse_gn_list(options.inputs)
+  includes = action_helpers.parse_gn_list(options.includes)
 
   if (options.output is None) == (options.outputs_zip is None):
     parser.error('Exactly one of --output and --output-zip must be given')

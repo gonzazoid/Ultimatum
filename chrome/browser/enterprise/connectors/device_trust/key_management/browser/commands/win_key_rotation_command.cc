@@ -13,18 +13,22 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/syslog_logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "base/win/scoped_bstr.h"
 #include "base/win/windows_types.h"
+#include "chrome/browser/enterprise/connectors/device_trust/common/device_trust_constants.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/commands/metrics_utils.h"
 #include "chrome/install_static/install_util.h"
 #include "chrome/installer/util/util_constants.h"
-#include "google_update/google_update_idl.h"
+#include "chrome/updater/app/server/win/updater_legacy_idl.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace enterprise_connectors {
 
@@ -51,27 +55,49 @@ constexpr int kMaxCommandArgs = 9;
 // this code is duped in two places including this one.
 HRESULT RunGoogleUpdateElevatedCommand(const wchar_t* command,
                                        const std::vector<std::string>& args,
-                                       DWORD* return_code) {
+                                       absl::optional<DWORD>* return_code) {
   DCHECK(return_code);
   if (args.size() > kMaxCommandArgs)
     return E_INVALIDARG;
 
-  Microsoft::WRL::ComPtr<IGoogleUpdate3Web> google_update;
-  HRESULT hr = ::CoCreateInstance(CLSID_GoogleUpdate3WebServiceClass, nullptr,
-                                  CLSCTX_ALL, IID_PPV_ARGS(&google_update));
+  Microsoft::WRL::ComPtr<IUnknown> server;
+  HRESULT hr = ::CoCreateInstance(CLSID_GoogleUpdate3WebSystemClass, nullptr,
+                                  CLSCTX_ALL, IID_PPV_ARGS(&server));
   if (FAILED(hr))
     return hr;
 
-  ConfigureProxyBlanket(google_update.Get());
+  ConfigureProxyBlanket(server.Get());
+
+  // Chrome queries for the SxS IIDs first, with a fallback to the legacy IID.
+  // Without this change, marshaling can load the typelib from the wrong hive
+  // (HKCU instead of HKLM, or vice-versa).
+  Microsoft::WRL::ComPtr<IGoogleUpdate3Web> google_update;
+  hr = server.CopyTo(__uuidof(IGoogleUpdate3WebSystem),
+                     IID_PPV_ARGS_Helper(&google_update));
+  if (FAILED(hr)) {
+    hr = server.As(&google_update);
+    if (FAILED(hr)) {
+      return hr;
+    }
+  }
+
   Microsoft::WRL::ComPtr<IDispatch> dispatch;
   hr = google_update->createAppBundleWeb(&dispatch);
   if (FAILED(hr))
     return hr;
 
+  // Chrome queries for the SxS IIDs first, with a fallback to the legacy IID.
+  // Without this change, marshaling can load the typelib from the wrong hive
+  // (HKCU instead of HKLM, or vice-versa).
   Microsoft::WRL::ComPtr<IAppBundleWeb> app_bundle;
-  hr = dispatch.As(&app_bundle);
-  if (FAILED(hr))
-    return hr;
+  hr = dispatch.CopyTo(__uuidof(IAppBundleWebSystem),
+                       IID_PPV_ARGS_Helper(&app_bundle));
+  if (FAILED(hr)) {
+    hr = dispatch.As(&app_bundle);
+    if (FAILED(hr)) {
+      return hr;
+    }
+  }
 
   dispatch.Reset();
   ConfigureProxyBlanket(app_bundle.Get());
@@ -86,22 +112,31 @@ HRESULT RunGoogleUpdateElevatedCommand(const wchar_t* command,
     return hr;
 
   Microsoft::WRL::ComPtr<IAppWeb> app;
-  hr = dispatch.As(&app);
-  if (FAILED(hr))
-    return hr;
+  hr = dispatch.CopyTo(__uuidof(IAppWebSystem), IID_PPV_ARGS_Helper(&app));
+  if (FAILED(hr)) {
+    hr = dispatch.As(&app);
+    if (FAILED(hr)) {
+      return hr;
+    }
+  }
 
   dispatch.Reset();
   ConfigureProxyBlanket(app.Get());
+
   hr = app->get_command(base::win::ScopedBstr(command).Get(), &dispatch);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
     return hr;
-  if (!dispatch)
-    return E_NOTIMPL;
+  }
 
   Microsoft::WRL::ComPtr<IAppCommandWeb> app_command;
-  hr = dispatch.As(&app_command);
-  if (FAILED(hr))
-    return hr;
+  hr = dispatch.CopyTo(__uuidof(IAppCommandWebSystem),
+                       IID_PPV_ARGS_Helper(&app_command));
+  if (FAILED(hr)) {
+    hr = dispatch.As(&app_command);
+    if (FAILED(hr)) {
+      return hr;
+    }
+  }
 
   ConfigureProxyBlanket(app_command.Get());
 
@@ -118,7 +153,7 @@ HRESULT RunGoogleUpdateElevatedCommand(const wchar_t* command,
   // If the call requires the return code of the elevated command, poll until
   // we get it.  Waiting for 10 seconds with a polling frenquency of 1 second
   // are pretty arbitrary choices.
-  base::Time wait_until = base::Time::Now() + base::Seconds(10);
+  base::Time wait_until = base::Time::Now() + timeouts::kProcessWaitTimeout;
   UINT status = COMMAND_STATUS_INIT;
   while (base::Time::Now() < wait_until) {
     hr = app_command->get_status(&status);
@@ -134,7 +169,11 @@ HRESULT RunGoogleUpdateElevatedCommand(const wchar_t* command,
   // command did not terminate in error, tell caller it timed out.
   if (SUCCEEDED(hr)) {
     if (status == COMMAND_STATUS_COMPLETE) {
-      hr = app_command->get_exitCode(return_code);
+      DWORD exit_code = 0;
+      hr = app_command->get_exitCode(&exit_code);
+      if (SUCCEEDED(hr)) {
+        *return_code = exit_code;
+      }
     } else if (status != COMMAND_STATUS_ERROR) {
       hr = E_ABORT;
     }
@@ -145,11 +184,25 @@ HRESULT RunGoogleUpdateElevatedCommand(const wchar_t* command,
 
 }  // namespace
 
-WinKeyRotationCommand::WinKeyRotationCommand() = default;
+WinKeyRotationCommand::WinKeyRotationCommand()
+    : WinKeyRotationCommand(
+          base::BindRepeating(&RunGoogleUpdateElevatedCommand)) {}
 
 WinKeyRotationCommand::WinKeyRotationCommand(
     RunGoogleUpdateElevatedCommandFn run_elevated_command)
-    : run_elevated_command_(run_elevated_command) {}
+    : WinKeyRotationCommand(
+          run_elevated_command,
+          base::ThreadPool::CreateCOMSTATaskRunner(
+              {base::TaskPriority::USER_BLOCKING, base::MayBlock()})) {}
+
+WinKeyRotationCommand::WinKeyRotationCommand(
+    RunGoogleUpdateElevatedCommandFn run_elevated_command,
+    scoped_refptr<base::SingleThreadTaskRunner> com_thread_runner)
+    : com_thread_runner_(com_thread_runner),
+      run_elevated_command_(run_elevated_command) {
+  DCHECK(run_elevated_command_);
+  DCHECK(com_thread_runner_);
+}
 
 WinKeyRotationCommand::~WinKeyRotationCommand() = default;
 
@@ -157,34 +210,33 @@ void WinKeyRotationCommand::Trigger(const KeyRotationCommand::Params& params,
                                     Callback callback) {
   DCHECK(!callback.is_null());
 
-  if (!com_thread_runner_) {
-    com_thread_runner_ = base::ThreadPool::CreateCOMSTATaskRunner(
-        {base::TaskPriority::USER_BLOCKING, base::MayBlock()});
-  }
-
-  RunGoogleUpdateElevatedCommandFn run_elevated_command =
-      run_elevated_command_ ? run_elevated_command_
-                            : &RunGoogleUpdateElevatedCommand;
-
   com_thread_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(
           [](const KeyRotationCommand::Params& params,
              RunGoogleUpdateElevatedCommandFn run_elevated_command,
              bool waiting_enabled) {
+            if (!install_static::IsSystemInstall()) {
+              SYSLOG(ERROR) << "Device trust key rotation failed, browser must "
+                               "be a system install.";
+              LogKeyRotationCommandError(
+                  KeyRotationCommandError::kUserInstallation);
+              return KeyRotationCommand::Status::FAILED_INVALID_INSTALLATION;
+            }
+
             std::string token_base64;
             base::Base64Encode(params.dm_token, &token_base64);
             std::string nonce_base64;
             base::Base64Encode(params.nonce, &nonce_base64);
 
-            DWORD return_code = installer::ROTATE_DTKEY_FAILED;
+            absl::optional<DWORD> return_code;
 
             // Omaha does not support concurrent elevated commands.  If this
             // fails for that reason, wait a little and try again.  Retry count
             // and sleep time are pretty arbitrary choices.
             HRESULT hr = S_OK;
             for (int i = 0; i < 10; ++i) {
-              hr = run_elevated_command(
+              hr = run_elevated_command.Run(
                   installer::kCmdRotateDeviceTrustKey,
                   {token_base64, params.dm_server_url, nonce_base64},
                   &return_code);
@@ -195,24 +247,53 @@ void WinKeyRotationCommand::Trigger(const KeyRotationCommand::Params& params,
                 base::PlatformThread::Sleep(base::Seconds(1));
             }
 
-            KeyRotationCommand::Status status =
-                KeyRotationCommand::Status::FAILED;
-            if (SUCCEEDED(hr) &&
-                return_code == installer::ROTATE_DTKEY_SUCCESS) {
-              status = KeyRotationCommand::Status::SUCCEEDED;
-              SYSLOG(INFO) << "Device trust key rotation successful.";
+            auto status = KeyRotationCommand::Status::FAILED;
+            if (SUCCEEDED(hr) && return_code) {
+              LogKeyRotationExitCode(return_code.value());
+              switch (return_code.value()) {
+                case installer::ROTATE_DTKEY_SUCCESS:
+                  status = KeyRotationCommand::Status::SUCCEEDED;
+                  break;
+                case installer::ROTATE_DTKEY_FAILED_PERMISSIONS:
+                  status =
+                      KeyRotationCommand::Status::FAILED_INVALID_PERMISSIONS;
+                  break;
+                case installer::ROTATE_DTKEY_FAILED_CONFLICT:
+                  status = KeyRotationCommand::Status::FAILED_KEY_CONFLICT;
+                  break;
+                default:
+                  // No-op, status is already marked as failed.
+                  break;
+              }
             } else if (hr == E_ABORT) {
               status = KeyRotationCommand::Status::TIMED_OUT;
               SYSLOG(ERROR) << "Device trust key rotation timed out.";
+              LogKeyRotationCommandError(KeyRotationCommandError::kTimeout);
             } else if (hr == GOOPDATE_E_APP_USING_EXTERNAL_UPDATER) {
               SYSLOG(ERROR) << "Device trust key rotation failed due to Google "
                                "Update concurrency.";
+              LogKeyRotationCommandError(
+                  KeyRotationCommandError::kUpdaterConcurrency);
+            } else if (hr == REGDB_E_CLASSNOTREG) {
+              status = KeyRotationCommand::Status::FAILED_INVALID_INSTALLATION;
+              SYSLOG(ERROR) << "Device trust key rotation failed, updater "
+                               "class not registered.";
+              LogKeyRotationCommandError(
+                  KeyRotationCommandError::kClassNotRegistered);
+            } else if (hr == E_NOINTERFACE) {
+              status = KeyRotationCommand::Status::FAILED_INVALID_INSTALLATION;
+              SYSLOG(ERROR) << "Device trust key rotation failed, updater "
+                               "class does not implement interface";
+              LogKeyRotationCommandError(KeyRotationCommandError::kNoInterface);
             } else {
-              SYSLOG(ERROR) << "Device trust key rotation failed.";
+              SYSLOG(ERROR)
+                  << "Device trust key rotation failed. HRESULT: " << hr;
+              LogKeyRotationCommandError(KeyRotationCommandError::kUnknown);
+              LogUnexpectedHresult(hr);
             }
             return status;
           },
-          params, run_elevated_command, waiting_enabled_),
+          params, run_elevated_command_, waiting_enabled_),
       std::move(callback));
 }
 

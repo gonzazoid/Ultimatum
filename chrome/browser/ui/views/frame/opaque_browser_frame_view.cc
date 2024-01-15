@@ -23,7 +23,6 @@
 #include "chrome/browser/ui/views/tabs/new_tab_button.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
-#include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_frame_toolbar_view.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
@@ -215,20 +214,19 @@ void OpaqueBrowserFrameView::InitViews() {
                      .Build());
   }
 
-  if (controller) {
-    set_web_app_frame_toolbar(AddChildView(
-        std::make_unique<WebAppFrameToolbarView>(frame(), browser_view())));
+  // If this is a web app window, the window title will be part of the
+  // BrowserView and thus we don't need to create another one here.
+  if (!controller) {
+    // The window title appears above the web app frame toolbar (if present),
+    // which surrounds the title with minimal-ui buttons on the left,
+    // and other controls (such as the app menu button) on the right.
+    window_title_ = new views::Label(browser_view()->GetWindowTitle());
+    window_title_->SetVisible(browser_view()->ShouldShowWindowTitle());
+    window_title_->SetSubpixelRenderingEnabled(false);
+    window_title_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+    window_title_->SetID(VIEW_ID_WINDOW_TITLE);
+    AddChildView(window_title_.get());
   }
-
-  // The window title appears above the web app frame toolbar (if present),
-  // which surrounds the title with minimal-ui buttons on the left,
-  // and other controls (such as the app menu button) on the right.
-  window_title_ = new views::Label(browser_view()->GetWindowTitle());
-  window_title_->SetVisible(browser_view()->ShouldShowWindowTitle());
-  window_title_->SetSubpixelRenderingEnabled(false);
-  window_title_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  window_title_->SetID(VIEW_ID_WINDOW_TITLE);
-  AddChildView(window_title_.get());
 
 #if BUILDFLAG(IS_WIN)
   if (browser_view()->AppUsesWindowControlsOverlay())
@@ -244,14 +242,21 @@ gfx::Rect OpaqueBrowserFrameView::GetBoundsForTabStripRegion(
   return layout_->GetBoundsForTabStripRegion(tabstrip_minimum_size, width());
 }
 
-int OpaqueBrowserFrameView::GetTopInset(bool restored) const {
-  return browser_view()->GetTabStripVisible()
-             ? layout_->GetTabStripInsetsTop(restored)
-             : layout_->NonClientTopHeight(restored);
+gfx::Rect OpaqueBrowserFrameView::GetBoundsForWebAppFrameToolbar(
+    const gfx::Size& toolbar_preferred_size) const {
+  return layout_->GetBoundsForWebAppFrameToolbar(toolbar_preferred_size);
 }
 
-int OpaqueBrowserFrameView::GetThemeBackgroundXInset() const {
-  return 0;
+void OpaqueBrowserFrameView::LayoutWebAppWindowTitle(
+    const gfx::Rect& available_space,
+    views::Label& window_title_label) const {
+  layout_->LayoutWebAppWindowTitle(available_space, window_title_label);
+}
+
+int OpaqueBrowserFrameView::GetTopInset(bool restored) const {
+  return browser_view()->ShouldDrawTabStrip()
+             ? layout_->GetTabStripInsetsTop(restored)
+             : layout_->NonClientTopHeight(restored);
 }
 
 void OpaqueBrowserFrameView::UpdateThrobber(bool running) {
@@ -274,7 +279,6 @@ void OpaqueBrowserFrameView::WindowControlsOverlayEnabledChanged() {
   UpdateCaptionButtonToolTipsForWindowControlsOverlay();
 #endif
 
-  web_app_frame_toolbar()->OnWindowControlsOverlayEnabledChanged();
   layout_->SetWindowControlsOverlayEnabled(enabled, this);
   InvalidateLayout();
 }
@@ -284,11 +288,6 @@ gfx::Size OpaqueBrowserFrameView::GetMinimumSize() const {
 }
 
 void OpaqueBrowserFrameView::PaintAsActiveChanged() {
-  UpdateCaptionButtonPlaceholderContainerBackground();
-  BrowserNonClientFrameView::PaintAsActiveChanged();
-}
-
-void OpaqueBrowserFrameView::UpdateFrameColor() {
   UpdateCaptionButtonPlaceholderContainerBackground();
   BrowserNonClientFrameView::PaintAsActiveChanged();
 }
@@ -413,11 +412,11 @@ void OpaqueBrowserFrameView::UpdateWindowIcon() {
 void OpaqueBrowserFrameView::UpdateWindowTitle() {
   if (!frame()->IsFullscreen() && ShouldShowWindowTitle()) {
     Layout();
-    window_title_->SchedulePaint();
+    if (window_title_) {
+      window_title_->SchedulePaint();
+    }
   }
 }
-
-void OpaqueBrowserFrameView::SizeConstraintsChanged() {}
 
 ///////////////////////////////////////////////////////////////////////////////
 // OpaqueBrowserFrameView, views::View overrides:
@@ -517,6 +516,10 @@ bool OpaqueBrowserFrameView::IsTabStripVisible() const {
   return browser_view()->GetTabStripVisible();
 }
 
+bool OpaqueBrowserFrameView::GetBorderlessModeEnabled() const {
+  return browser_view()->IsBorderlessModeEnabled();
+}
+
 bool OpaqueBrowserFrameView::IsToolbarVisible() const {
   return browser_view()->IsToolbarVisible() &&
          !browser_view()->toolbar()->GetPreferredSize().IsEmpty();
@@ -531,13 +534,19 @@ gfx::Size OpaqueBrowserFrameView::GetTabstripMinimumSize() const {
 }
 
 int OpaqueBrowserFrameView::GetTopAreaHeight() const {
-  const int non_client_top_height = layout_->NonClientTopHeight(false);
-  if (!browser_view()->GetTabStripVisible())
-    return non_client_top_height;
-  return std::max(
-      non_client_top_height,
-      GetBoundsForTabStripRegion(GetTabstripMinimumSize()).bottom() -
-          GetLayoutConstant(TABSTRIP_TOOLBAR_OVERLAP));
+  int top_height = layout_->NonClientTopHeight(false);
+  if (browser_view()->ShouldDrawTabStrip()) {
+    top_height =
+        std::max(top_height,
+                 GetBoundsForTabStripRegion(GetTabstripMinimumSize()).bottom() -
+                     GetLayoutConstant(TABSTRIP_TOOLBAR_OVERLAP));
+  }
+    gfx::Rect web_app_toolbar_bounds = GetBoundsForWebAppFrameToolbar(
+        browser_view()->GetWebAppFrameToolbarPreferredSize());
+    if (!web_app_toolbar_bounds.IsEmpty()) {
+      top_height = std::max(top_height, web_app_toolbar_bounds.bottom());
+    }
+  return top_height;
 }
 
 bool OpaqueBrowserFrameView::UseCustomFrame() const {
@@ -572,19 +581,19 @@ void OpaqueBrowserFrameView::UpdateWindowControlsOverlay(
   }
 }
 
-bool OpaqueBrowserFrameView::IsTranslucentWindowOpacitySupported() const {
-  return frame()->IsTranslucentWindowOpacitySupported();
-}
-
 bool OpaqueBrowserFrameView::ShouldDrawRestoredFrameShadow() const {
   return false;
 }
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-ui::WindowTiledEdges OpaqueBrowserFrameView::GetTiledEdges() const {
-  return frame()->tiled_edges();
+#if BUILDFLAG(IS_LINUX)
+bool OpaqueBrowserFrameView::IsTiled() const {
+  return frame()->tiled();
 }
 #endif
+
+int OpaqueBrowserFrameView::WebAppButtonHeight() const {
+  return browser_view()->GetWebAppFrameToolbarPreferredSize().height();
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // OpaqueBrowserFrameView, protected:
@@ -597,18 +606,17 @@ void OpaqueBrowserFrameView::OnPaint(gfx::Canvas* canvas) {
 
   const bool active = ShouldPaintAsActive();
   SkColor frame_color = GetFrameColor(BrowserFrameActiveState::kUseCurrent);
-  window_title_->SetEnabledColor(
-      GetCaptionColor(BrowserFrameActiveState::kUseCurrent));
-  window_title_->SetBackgroundColor(frame_color);
+  if (window_title_) {
+    window_title_->SetEnabledColor(
+        GetCaptionColor(BrowserFrameActiveState::kUseCurrent));
+    window_title_->SetBackgroundColor(frame_color);
+  }
   frame_background_->set_frame_color(frame_color);
   frame_background_->set_use_custom_frame(frame()->UseCustomFrame());
   frame_background_->set_is_active(active);
   frame_background_->set_theme_image(GetFrameImage());
-  const int y_inset =
-      browser_view()->GetTabStripVisible()
-          ? (ThemeProperties::kFrameHeightAboveTabs - GetTopInset(false))
-          : 0;
-  frame_background_->set_theme_image_y_inset(y_inset);
+  frame_background_->set_theme_image_inset(
+      browser_view()->GetThemeOffsetFromBrowserView());
   frame_background_->set_theme_overlay_image(GetFrameOverlayImage());
   frame_background_->set_top_area_height(GetTopAreaHeight());
 
@@ -729,8 +737,7 @@ int OpaqueBrowserFrameView::CalculateCaptionButtonBackgroundXOffset(
     case VIEW_ID_CLOSE_BUTTON:
       return (is_rtl ? 0 : minimize_width + maximize_restore_width);
     default:
-      NOTREACHED();
-      return 0;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -831,7 +838,7 @@ void OpaqueBrowserFrameView::PaintMaximizedFrameBorder(
 }
 
 void OpaqueBrowserFrameView::PaintClientEdge(gfx::Canvas* canvas) const {
-  const bool tabstrip_visible = browser_view()->GetTabStripVisible();
+  const bool tabstrip_visible = browser_view()->ShouldDrawTabStrip();
   const gfx::Rect client_bounds =
       layout_->CalculateClientAreaBounds(width(), height());
 
@@ -884,7 +891,7 @@ void OpaqueBrowserFrameView::
 }
 #endif
 
-BEGIN_METADATA(OpaqueBrowserFrameView, BrowserNonClientFrameView)
+BEGIN_METADATA(OpaqueBrowserFrameView)
 ADD_READONLY_PROPERTY_METADATA(gfx::Rect, IconBounds)
 ADD_READONLY_PROPERTY_METADATA(bool, ShowWindowTitleBar)
 END_METADATA

@@ -4,11 +4,7 @@
 
 #import "ios/chrome/browser/ui/ntp/discover_feed_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 const char kDefaultDiscoverReferrer[] = "https://www.google.com";
 const char kDiscoverReferrerParameter[] = "DiscoverReferrerParameter";
 
-const CGFloat kDiscoverFeedContentWidth = 430;
+const CGFloat kDiscoverFeedContentMaxWidth = 430;

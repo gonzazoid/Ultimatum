@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <set>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -15,6 +16,7 @@
 #include "services/device/public/cpp/test/scoped_geolocation_overrider.h"
 #include "services/device/public/mojom/geolocation.mojom.h"
 #include "services/device/public/mojom/geolocation_context.mojom.h"
+#include "url/origin.h"
 
 namespace device {
 
@@ -24,11 +26,11 @@ namespace device {
 class ScopedGeolocationOverrider::FakeGeolocationContext
     : public mojom::GeolocationContext {
  public:
-  explicit FakeGeolocationContext(mojom::GeopositionPtr position);
+  explicit FakeGeolocationContext(mojom::GeopositionResultPtr result);
   ~FakeGeolocationContext() override;
 
-  void UpdateLocation(mojom::GeopositionPtr position);
-  const mojom::Geoposition* GetGeoposition() const;
+  void UpdateLocation(mojom::GeopositionResultPtr result);
+  const mojom::GeopositionResult* GetGeoposition() const;
 
   void Pause();
   void Resume();
@@ -42,7 +44,9 @@ class ScopedGeolocationOverrider::FakeGeolocationContext
   // mojom::GeolocationContext implementation:
   void BindGeolocation(mojo::PendingReceiver<mojom::Geolocation> receiver,
                        const GURL& requesting_url) override;
-  void SetOverride(mojom::GeopositionPtr geoposition) override;
+  void OnPermissionRevoked(const url::Origin& origin) override;
+
+  void SetOverride(mojom::GeopositionResultPtr result) override;
   void ClearOverride() override;
 
   bool is_paused() const { return is_paused_; }
@@ -51,10 +55,10 @@ class ScopedGeolocationOverrider::FakeGeolocationContext
   }
 
  private:
-  mojom::GeopositionPtr position_;
-  // |override_position_| enables overriding the override set by this class, as
+  mojom::GeopositionResultPtr result_;
+  // |override_result_| enables overriding the override set by this class, as
   // required by the mojom::GeolocationContext interface.
-  mojom::GeopositionPtr override_position_;
+  mojom::GeopositionResultPtr override_result_;
   std::set<std::unique_ptr<FakeGeolocation>, base::UniquePtrComparator> impls_;
   mojo::ReceiverSet<mojom::GeolocationContext> context_receivers_;
   bool is_paused_ = false;
@@ -64,6 +68,7 @@ class ScopedGeolocationOverrider::FakeGeolocationContext
 class ScopedGeolocationOverrider::FakeGeolocation : public mojom::Geolocation {
  public:
   FakeGeolocation(mojo::PendingReceiver<mojom::Geolocation> receiver,
+                  const GURL& requesting_url,
                   FakeGeolocationContext* context);
   ~FakeGeolocation() override;
 
@@ -71,14 +76,17 @@ class ScopedGeolocationOverrider::FakeGeolocation : public mojom::Geolocation {
   void OnResume();
 
   void UpdateLocation();
+  void OnPermissionRevoked();
 
   // mojom::Geolocation implementation:
   void QueryNextPosition(QueryNextPositionCallback callback) override;
   void SetHighAccuracy(bool high_accuracy) override;
+  const GURL& url() { return url_; }
 
  private:
   void RunPositionCallbackIfNeeded();
 
+  const GURL url_;
   raw_ptr<FakeGeolocationContext> context_;
   bool needs_update_ = true;
   QueryNextPositionCallback position_callback_;
@@ -86,7 +94,7 @@ class ScopedGeolocationOverrider::FakeGeolocation : public mojom::Geolocation {
 };
 
 ScopedGeolocationOverrider::ScopedGeolocationOverrider(
-    mojom::GeopositionPtr position) {
+    mojom::GeopositionResultPtr position) {
   OverrideGeolocation(std::move(position));
 }
 
@@ -98,8 +106,8 @@ ScopedGeolocationOverrider::ScopedGeolocationOverrider(double latitude,
   position->altitude = 0.;
   position->accuracy = 0.;
   position->timestamp = base::Time::Now();
-
-  OverrideGeolocation(std::move(position));
+  OverrideGeolocation(
+      mojom::GeopositionResult::NewPosition(std::move(position)));
 }
 
 ScopedGeolocationOverrider::~ScopedGeolocationOverrider() {
@@ -108,17 +116,17 @@ ScopedGeolocationOverrider::~ScopedGeolocationOverrider() {
 }
 
 void ScopedGeolocationOverrider::OverrideGeolocation(
-    mojom::GeopositionPtr position) {
+    mojom::GeopositionResultPtr result) {
   geolocation_context_ =
-      std::make_unique<FakeGeolocationContext>(std::move(position));
+      std::make_unique<FakeGeolocationContext>(std::move(result));
   DeviceService::OverrideGeolocationContextBinderForTesting(
       base::BindRepeating(&FakeGeolocationContext::BindForOverrideService,
                           base::Unretained(geolocation_context_.get())));
 }
 
 void ScopedGeolocationOverrider::UpdateLocation(
-    mojom::GeopositionPtr position) {
-  geolocation_context_->UpdateLocation(std::move(position));
+    mojom::GeopositionResultPtr result) {
+  geolocation_context_->UpdateLocation(std::move(result));
 }
 
 void ScopedGeolocationOverrider::UpdateLocation(double latitude,
@@ -129,8 +137,7 @@ void ScopedGeolocationOverrider::UpdateLocation(double latitude,
   position->altitude = 0.;
   position->accuracy = 0.;
   position->timestamp = base::Time::Now();
-
-  UpdateLocation(std::move(position));
+  UpdateLocation(mojom::GeopositionResult::NewPosition(std::move(position)));
 }
 
 void ScopedGeolocationOverrider::Pause() {
@@ -151,27 +158,18 @@ void ScopedGeolocationOverrider::SetGeolocationCloseCallback(
 }
 
 ScopedGeolocationOverrider::FakeGeolocationContext::FakeGeolocationContext(
-    mojom::GeopositionPtr position)
-    : position_(std::move(position)) {
-  if (position_) {
-    position_->valid = false;
-    if (ValidateGeoposition(*position_))
-      position_->valid = true;
-  }
-}
+    mojom::GeopositionResultPtr result)
+    : result_(std::move(result)) {}
 
 ScopedGeolocationOverrider::FakeGeolocationContext::~FakeGeolocationContext() {}
 
 void ScopedGeolocationOverrider::FakeGeolocationContext::UpdateLocation(
-    mojom::GeopositionPtr position) {
-  position_ = std::move(position);
+    mojom::GeopositionResultPtr result) {
+  result_ = std::move(result);
 
-  if (!position_)
+  if (!result_) {
     return;
-
-  position_->valid = false;
-  if (ValidateGeoposition(*position_))
-    position_->valid = true;
+  }
 
   for (auto& impl : impls_) {
     impl->UpdateLocation();
@@ -189,12 +187,13 @@ void ScopedGeolocationOverrider::FakeGeolocationContext::OnDisconnect(
     close_callback_.Run();
 }
 
-const mojom::Geoposition*
+const mojom::GeopositionResult*
 ScopedGeolocationOverrider::FakeGeolocationContext::GetGeoposition() const {
-  if (override_position_)
-    return override_position_.get();
+  if (override_result_) {
+    return override_result_.get();
+  }
 
-  return position_.get();
+  return result_.get();
 }
 
 void ScopedGeolocationOverrider::FakeGeolocationContext::BindForOverrideService(
@@ -205,18 +204,28 @@ void ScopedGeolocationOverrider::FakeGeolocationContext::BindForOverrideService(
 void ScopedGeolocationOverrider::FakeGeolocationContext::BindGeolocation(
     mojo::PendingReceiver<mojom::Geolocation> receiver,
     const GURL& requesting_origin) {
-  impls_.insert(std::make_unique<FakeGeolocation>(std::move(receiver), this));
+  impls_.insert(std::make_unique<FakeGeolocation>(std::move(receiver),
+                                                  requesting_origin, this));
+}
+
+void ScopedGeolocationOverrider::FakeGeolocationContext::OnPermissionRevoked(
+    const url::Origin& origin) {
+  std::erase_if(impls_, [&origin](const auto& impl) {
+    if (!origin.IsSameOriginWith(impl->url())) {
+      return false;
+    }
+    // Invoke the position callback with kPermissionDenied before removing.
+    impl->OnPermissionRevoked();
+    return true;
+  });
 }
 
 void ScopedGeolocationOverrider::FakeGeolocationContext::SetOverride(
-    mojom::GeopositionPtr geoposition) {
-  override_position_ = std::move(geoposition);
-  if (override_position_.is_null())
+    mojom::GeopositionResultPtr result) {
+  override_result_ = std::move(result);
+  if (override_result_.is_null()) {
     return;
-
-  override_position_->valid = false;
-  if (ValidateGeoposition(*override_position_))
-    override_position_->valid = true;
+  }
 
   for (auto& impl : impls_) {
     impl->UpdateLocation();
@@ -224,7 +233,7 @@ void ScopedGeolocationOverrider::FakeGeolocationContext::SetOverride(
 }
 
 void ScopedGeolocationOverrider::FakeGeolocationContext::ClearOverride() {
-  override_position_.reset();
+  override_result_.reset();
 }
 
 void ScopedGeolocationOverrider::FakeGeolocationContext::Pause() {
@@ -245,8 +254,9 @@ size_t ScopedGeolocationOverrider::FakeGeolocationContext::
 
 ScopedGeolocationOverrider::FakeGeolocation::FakeGeolocation(
     mojo::PendingReceiver<mojom::Geolocation> receiver,
+    const GURL& requesting_url,
     FakeGeolocationContext* context)
-    : context_(context) {
+    : url_(requesting_url), context_(context) {
   receiver_.Bind(std::move(receiver));
   receiver_.set_disconnect_handler(
       base::BindOnce(&ScopedGeolocationOverrider::FakeGeolocation::OnDisconnect,
@@ -273,11 +283,12 @@ void ScopedGeolocationOverrider::FakeGeolocation::
   if (position_callback_.is_null())
     return;
 
-  const mojom::Geoposition* position = context_->GetGeoposition();
-  if (!position)
+  const mojom::GeopositionResult* result = context_->GetGeoposition();
+  if (!result) {
     return;
+  }
 
-  std::move(position_callback_).Run(position->Clone());
+  std::move(position_callback_).Run(result->Clone());
   needs_update_ = false;
 }
 
@@ -286,6 +297,15 @@ void ScopedGeolocationOverrider::FakeGeolocation::UpdateLocation() {
   needs_update_ = true;
 
   RunPositionCallbackIfNeeded();
+}
+
+void ScopedGeolocationOverrider::FakeGeolocation::OnPermissionRevoked() {
+  if (!position_callback_.is_null()) {
+    std::move(position_callback_)
+        .Run(mojom::GeopositionResult::NewError(mojom::GeopositionError::New(
+            mojom::GeopositionErrorCode::kPermissionDenied,
+            /*error_message=*/"", /*error_technical=*/"")));
+  }
 }
 
 void ScopedGeolocationOverrider::FakeGeolocation::QueryNextPosition(

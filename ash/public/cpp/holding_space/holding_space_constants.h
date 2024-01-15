@@ -16,7 +16,6 @@ constexpr float kHoldingSpaceSelectedOverlayOpacity = 0.3f;
 constexpr gfx::Insets kHoldingSpaceChildBubblePadding(16);
 constexpr gfx::Size kHoldingSpaceScreenCaptureSize(104, 80);
 constexpr int kHoldingSpaceBubbleContainerChildSpacing = 8;
-constexpr int kHoldingSpaceBubbleWidth = 360;
 constexpr int kHoldingSpaceChildBubbleChildSpacing = 16;
 constexpr int kHoldingSpaceChipCountPerRow = 2;
 constexpr int kHoldingSpaceChipIconSize = 24;
@@ -46,8 +45,9 @@ enum class HoldingSpaceCommandId {
 
   // In-progress item commands.
   kCancelItem,
-  kResumeItem,
+  kOpenItem,
   kPauseItem,
+  kResumeItem,
 
   // Tray commands.
   kHidePreviews,
@@ -76,7 +76,7 @@ constexpr int kHoldingSpacePinnedFilesSectionPlaceholderGSuiteIconsId = 16;
 constexpr int kHoldingSpacePinnedFilesSectionPlaceholderLabelId = 17;
 constexpr int kHoldingSpaceRecentFilesBubbleId = 18;
 constexpr int kHoldingSpaceRecentFilesPlaceholderId = 19;
-constexpr int kHoldingSpaceScreenCapturePlayIconId = 20;
+constexpr int kHoldingSpaceScreenCaptureOverlayIconId = 20;
 constexpr int kHoldingSpaceSuggestionsChevronIconId = 21;
 constexpr int kHoldingSpaceSuggestionsSectionContainerId = 22;
 constexpr int kHoldingSpaceSuggestionsSectionHeaderId = 23;

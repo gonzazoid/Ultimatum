@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 #include "ui/views/test/capture_tracking_view.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 CaptureTrackingView::CaptureTrackingView() = default;
 
@@ -20,5 +20,7 @@ void CaptureTrackingView::OnMouseCaptureLost() {
   got_capture_lost_ = true;
 }
 
-}  // namespace test
-}  // namespace views
+BEGIN_METADATA(CaptureTrackingView)
+END_METADATA
+
+}  // namespace views::test

@@ -66,7 +66,6 @@ class BrowserDesktopWindowTreeHostWin
   bool GetDwmFrameInsetsInPixels(gfx::Insets* insets) const override;
   void HandleCreate() override;
   void HandleDestroying() override;
-  void HandleFrameChanged() override;
   void HandleWindowScaleFactorChanged(float window_scale_factor) override;
   bool PreHandleMSG(UINT message,
                     WPARAM w_param,
@@ -87,8 +86,6 @@ class BrowserDesktopWindowTreeHostWin
   // Kicks off an asynchronous update of |workspace_|, and notifies
   // WindowTreeHost of its value.
   void UpdateWorkspace();
-
-  bool IsOpaqueHostedAppFrame() const;
 
   void SetWindowIcon(bool badged);
 

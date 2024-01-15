@@ -53,9 +53,12 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   bool ViewportEnabled() const override;
   void SetAccelerated2dCanvasMSAASampleCount(int) override;
   void SetAutoplayPolicy(mojom::blink::AutoplayPolicy) override;
-  void SetPreferCompositingToLCDTextEnabled(bool) override;
+  void SetRequireTransientActivationForGetDisplayMedia(bool) override;
+  void SetRequireTransientActivationForShowFileOrDirectoryPicker(bool) override;
+  void SetLCDTextPreference(LCDTextPreference) override;
   void SetAccessibilityPasswordValuesEnabled(bool) override;
   void SetAllowFileAccessFromFileURLs(bool) override;
+  void SetAccessibilityFontWeightAdjustment(int size) override;
   void SetAllowCustomScrollbarInMainFrame(bool) override;
   void SetAllowGeolocationOnInsecureOrigins(bool) override;
   void SetAllowRunningOfInsecureContent(bool) override;
@@ -68,7 +71,6 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetClobberUserAgentInitialScaleQuirk(bool) override;
   void SetCookieEnabled(bool) override;
   void SetCaretBrowsingEnabled(bool) override;
-  void SetNavigateOnDragDrop(bool) override;
   void SetCursiveFontFamily(const WebString&,
                             UScriptCode = USCRIPT_COMMON) override;
   void SetDNSPrefetchingEnabled(bool) override;
@@ -86,6 +88,8 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetEditingBehavior(mojom::blink::EditingBehavior) override;
   void SetEnableScrollAnimator(bool) override;
   void SetPrefersReducedMotion(bool) override;
+  void SetPrefersReducedTransparency(bool) override;
+  void SetInvertedColors(bool) override;
   void SetWebGL1Enabled(bool) override;
   void SetWebGL2Enabled(bool) override;
   void SetFantasyFontFamily(const WebString&,
@@ -105,7 +109,6 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetIgnoreMainFrameOverflowHiddenQuirk(bool) override;
   void SetImageAnimationPolicy(mojom::blink::ImageAnimationPolicy) override;
   void SetImagesEnabled(bool) override;
-  void SetInlineTextBoxAccessibilityEnabled(bool) override;
   void SetJavaScriptCanAccessClipboard(bool) override;
   void SetJavaScriptEnabled(bool) override;
   void SetHashNetPublicKey(const WebString) override;
@@ -131,6 +134,8 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetPrimaryPointerType(mojom::blink::PointerType) override;
   void SetAvailableHoverTypes(int) override;
   void SetPrimaryHoverType(mojom::blink::HoverType) override;
+  void SetOutputDeviceUpdateAbilityType(
+      mojom::blink::OutputDeviceUpdateAbilityType) override;
   void SetPreferHiddenVolumeControls(bool) override;
   void SetShouldProtectAgainstIpcFlooding(bool) override;
   void SetRenderVSyncNotificationEnabled(bool) override;
@@ -165,6 +170,7 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetTextAreasAreResizable(bool) override;
   void SetTextAutosizingEnabled(bool) override;
   void SetAccessibilityFontScaleFactor(float) override;
+  void SetAccessibilityTextSizeContrastFactor(int) override;
   void SetAccessibilityAlwaysShowFocus(bool) override;
   void SetTextTrackKindUserPreference(TextTrackKindUserPreference) override;
   void SetTextTrackBackgroundColor(const WebString&) override;
@@ -177,11 +183,9 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetTextTrackTextSize(const WebString&) override;
   void SetTextTrackWindowColor(const WebString&) override;
   void SetTextTrackWindowRadius(const WebString&) override;
-  void SetThreadedScrollingEnabled(bool) override;
   void SetTouchDragDropEnabled(bool) override;
   void SetTouchDragEndContextMenu(bool) override;
   void SetBarrelButtonForDragEnabled(bool) override;
-  void SetUseLegacyBackgroundSizeShorthandBehavior(bool) override;
   void SetViewportStyle(mojom::blink::ViewportStyle) override;
   void SetUseWideViewport(bool) override;
   void SetV8CacheOptions(mojom::blink::V8CacheOptions) override;
@@ -208,12 +212,12 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetLazyFrameLoadingDistanceThresholdPx2G(int) override;
   void SetLazyFrameLoadingDistanceThresholdPx3G(int) override;
   void SetLazyFrameLoadingDistanceThresholdPx4G(int) override;
-  void SetLazyImageLoadingDistanceThresholdPxUnknown(int) override;
-  void SetLazyImageLoadingDistanceThresholdPxOffline(int) override;
-  void SetLazyImageLoadingDistanceThresholdPxSlow2G(int) override;
-  void SetLazyImageLoadingDistanceThresholdPx2G(int) override;
-  void SetLazyImageLoadingDistanceThresholdPx3G(int) override;
-  void SetLazyImageLoadingDistanceThresholdPx4G(int) override;
+  void SetLazyLoadingImageMarginPxUnknown(int) override;
+  void SetLazyLoadingImageMarginPxOffline(int) override;
+  void SetLazyLoadingImageMarginPxSlow2G(int) override;
+  void SetLazyLoadingImageMarginPx2G(int) override;
+  void SetLazyLoadingImageMarginPx3G(int) override;
+  void SetLazyLoadingImageMarginPx4G(int) override;
 
   void SetForceDarkModeEnabled(bool) override;
   void SetPreferredColorScheme(mojom::blink::PreferredColorScheme) override;

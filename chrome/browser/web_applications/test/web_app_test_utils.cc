@@ -14,34 +14,36 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/numerics/clamped_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/single_thread_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
-#include "chrome/browser/ui/browser_dialogs.h"
-#include "chrome/browser/web_applications/externally_installed_web_app_prefs.h"
+#include "chrome/browser/ui/web_applications/web_app_dialogs.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_location.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/proto/web_app_os_integration_state.pb.h"
+#include "chrome/browser/web_applications/proto/web_app_proto_package.pb.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_chromeos_data.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
@@ -58,17 +60,21 @@
 #include "components/services/app_service/public/cpp/protocol_handler_info.h"
 #include "components/services/app_service/public/cpp/share_target.h"
 #include "components/services/app_service/public/cpp/url_handler_info.h"
+#include "components/sync/base/time.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/storage_partition.h"
+#include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/manifest/manifest.h"
 #include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/common/permissions_policy/policy_helper_public.h"
+#include "third_party/blink/public/common/safe_url_pattern.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/manifest/capture_links.mojom-shared.h"
+#include "third_party/liburlpattern/pattern.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -87,17 +93,31 @@ namespace {
 
 class RandomHelper {
  public:
-  explicit RandomHelper(const uint32_t seed)
+  explicit RandomHelper(const uint32_t seed, bool non_zero)
       :  // Seed of 0 and 1 generate the same sequence, so skip 0.
         generator_(seed + 1),
-        distribution_(0u, UINT32_MAX) {}
+        distribution_(0u, UINT32_MAX),
+        non_zero_(non_zero) {}
 
-  uint32_t next_uint() { return distribution_(generator_); }
+  uint32_t next_uint() {
+    return std::max(distribution_(generator_),
+                    static_cast<uint32_t>(non_zero_));
+  }
 
   // Return an unsigned int between 0 (inclusive) and bound (exclusive).
-  uint32_t next_uint(uint32_t bound) { return next_uint() % bound; }
+  uint32_t next_uint(uint32_t bound) {
+    return bound <= 1 ? 0
+                      : std::max(next_uint() % bound,
+                                 static_cast<uint32_t>(non_zero_));
+  }
 
-  bool next_bool() { return next_uint() & 1u; }
+  bool next_bool() { return non_zero_ || next_uint() & 1u; }
+
+  base::Time next_time() {
+    return base::Time::UnixEpoch() + base::Milliseconds(next_uint());
+  }
+
+  int64_t next_proto_time() { return syncer::TimeToProtoTime(next_time()); }
 
   template <typename T>
   T next_enum() {
@@ -110,7 +130,13 @@ class RandomHelper {
  private:
   std::default_random_engine generator_;
   std::uniform_int_distribution<uint32_t> distribution_;
+  bool non_zero_;
 };
+
+#define NEXT_PROTO_ENUM(random_helper, T, skip_zero)         \
+  static_cast<T>(static_cast<uint32_t>(skip_zero) +          \
+                 random_helper.next_uint(T##_MAX - T##_MIN - \
+                                         static_cast<uint32_t>(skip_zero)))
 
 apps::FileHandlers CreateRandomFileHandlers(uint32_t suffix) {
   apps::FileHandlers file_handlers;
@@ -196,8 +222,7 @@ blink::ParsedPermissionsPolicy CreateRandomPermissionsPolicy(
       const auto origin =
           url::Origin::Create(GURL("https://app-" + suffix_str + ".com/"));
       permissions_policy[i].allowed_origins.emplace_back(
-          origin,
-          /*has_subdomain_wildcard=*/false);
+          *blink::OriginWithPossibleWildcards::FromOrigin(origin));
     }
   }
   return permissions_policy;
@@ -238,12 +263,30 @@ std::vector<apps::UrlHandlerInfo> CreateRandomUrlHandlers(uint32_t suffix) {
   return url_handlers;
 }
 
+ScopeExtensions CreateRandomScopeExtensions(uint32_t suffix,
+                                            RandomHelper& random) {
+  ScopeExtensions scope_extensions;
+  for (unsigned int i = 0; i < 3; ++i) {
+    std::string suffix_str =
+        base::NumberToString(suffix) + base::NumberToString(i);
+
+    ScopeExtensionInfo scope_extension;
+    scope_extension.origin =
+        url::Origin::Create(GURL("https://app-" + suffix_str + ".com/"));
+    scope_extension.has_origin_wildcard = random.next_bool();
+    scope_extensions.insert(std::move(scope_extension));
+  }
+
+  return scope_extensions;
+}
+
 std::vector<WebAppShortcutsMenuItemInfo> CreateRandomShortcutsMenuItemInfos(
     const GURL& scope,
+    int num,
     RandomHelper& random) {
   const uint32_t suffix = random.next_uint();
   std::vector<WebAppShortcutsMenuItemInfo> shortcuts_menu_item_infos;
-  for (int i = random.next_uint(4) + 1; i >= 0; --i) {
+  for (int i = num - 1; i >= 0; --i) {
     std::string suffix_str =
         base::NumberToString(suffix) + base::NumberToString(i);
     WebAppShortcutsMenuItemInfo shortcut_info;
@@ -287,14 +330,15 @@ std::vector<WebAppShortcutsMenuItemInfo> CreateRandomShortcutsMenuItemInfos(
 }
 
 std::vector<IconSizes> CreateRandomDownloadedShortcutsMenuIconsSizes(
+    int num,
     RandomHelper& random) {
   std::vector<IconSizes> results;
-  for (unsigned int i = 0; i < 3; ++i) {
+  for (int i = 0; i < num; ++i) {
     IconSizes result;
     std::vector<SquareSizePx> shortcuts_menu_icon_sizes_any;
     std::vector<SquareSizePx> shortcuts_menu_icon_sizes_maskable;
     std::vector<SquareSizePx> shortcuts_menu_icon_sizes_monochrome;
-    for (unsigned int j = 0; j < i; ++j) {
+    for (int j = 0; j < i; ++j) {
       shortcuts_menu_icon_sizes_any.push_back(random.next_uint(256) + 1);
       shortcuts_menu_icon_sizes_maskable.push_back(random.next_uint(256) + 1);
       shortcuts_menu_icon_sizes_monochrome.push_back(random.next_uint(256) + 1);
@@ -310,33 +354,226 @@ std::vector<IconSizes> CreateRandomDownloadedShortcutsMenuIconsSizes(
   return results;
 }
 
+std::vector<blink::Manifest::ImageResource> CreateRandomHomeTabIcons(
+    RandomHelper& random) {
+  std::vector<blink::Manifest::ImageResource> icons;
+
+  for (int i = random.next_uint(4) + 1; i >= 0; --i) {
+    blink::Manifest::ImageResource icon;
+
+    int mime_type = random.next_uint(3);
+    switch (mime_type) {
+      case 0:
+        icon.src = GURL("https://example.com/image" + base::NumberToString(i) +
+                        ".png");
+        icon.type = base::UTF8ToUTF16(std::string("image/png"));
+        break;
+      case 1:
+        icon.src = GURL("https://example.com/image" + base::NumberToString(i) +
+                        ".svg");
+        icon.type = base::UTF8ToUTF16(std::string("image/svg+xml"));
+        break;
+      case 2:
+        icon.src = GURL("https://example.com/image" + base::NumberToString(i) +
+                        ".webp");
+        icon.type = base::UTF8ToUTF16(std::string("image/webp"));
+        break;
+    }
+
+    // Icon sizes can be non square
+    std::vector<gfx::Size> sizes;
+    for (int j = random.next_uint(3) + 1; j > 0; --j) {
+      int x = j * random.next_uint(200);
+      int y = j * random.next_uint(200);
+      sizes.emplace_back(x, y);
+    }
+    icon.sizes = std::move(sizes);
+
+    std::vector<blink::mojom::ManifestImageResource_Purpose> purposes = {
+        blink::mojom::ManifestImageResource_Purpose::ANY,
+        blink::mojom::ManifestImageResource_Purpose::MASKABLE,
+        blink::mojom::ManifestImageResource_Purpose::MONOCHROME};
+
+    std::vector<blink::mojom::ManifestImageResource_Purpose> purpose;
+
+    for (int j = random.next_uint(purposes.size()); j >= 0; --j) {
+      unsigned index = random.next_uint(purposes.size());
+      purpose.push_back(purposes[index]);
+      purposes.erase(purposes.begin() + index);
+    }
+    icon.purpose = std::move(purpose);
+    icons.push_back(std::move(icon));
+  }
+  return icons;
+}
+
+std::vector<blink::SafeUrlPattern> CreateRandomScopePatterns(
+    RandomHelper& random) {
+  std::vector<blink::SafeUrlPattern> scope_patterns;
+
+  for (int i = random.next_uint(4) + 1; i >= 0; --i) {
+    blink::SafeUrlPattern url_pattern;
+
+    for (int j = random.next_uint(4) + 1; j >= 0; --j) {
+      liburlpattern::Part part;
+
+      std::vector<liburlpattern::PartType> part_types = {
+          liburlpattern::PartType::kFixed,
+          liburlpattern::PartType::kFullWildcard,
+          liburlpattern::PartType::kSegmentWildcard};
+      std::vector<liburlpattern::Modifier> modifiers = {
+          liburlpattern::Modifier::kZeroOrMore,
+          liburlpattern::Modifier::kOptional,
+          liburlpattern::Modifier::kOneOrMore, liburlpattern::Modifier::kNone};
+      part.type = part_types[random.next_uint(part_types.size())];
+      part.value = "value" + base::NumberToString(j);
+      if (part.type == liburlpattern::PartType::kFullWildcard ||
+          part.type == liburlpattern::PartType::kSegmentWildcard) {
+        part.prefix = "prefix" + base::NumberToString(j);
+        part.name = "name" + base::NumberToString(j);
+        part.suffix = "suffix" + base::NumberToString(j);
+      }
+
+      part.modifier = modifiers[random.next_uint(modifiers.size())];
+
+      url_pattern.pathname.push_back(std::move(part));
+    }
+
+    scope_patterns.push_back(std::move(url_pattern));
+  }
+  return scope_patterns;
+}
+
+proto::WebAppOsIntegrationState GenerateRandomWebAppOsIntegrationState(
+    RandomHelper& random,
+    WebApp& app) {
+  proto::WebAppOsIntegrationState state;
+
+  // Randomly fill shortcuts data.
+  auto* shortcuts = state.mutable_shortcut();
+  shortcuts->set_title(app.untranslated_name());
+  shortcuts->set_description(app.untranslated_description());
+  auto* first_shortcut = shortcuts->add_icon_data_any();
+  first_shortcut->set_icon_size(32);
+  first_shortcut->set_timestamp(random.next_proto_time());
+
+  // Randomly fill protocols_handled.
+  auto* protocols_handled = state.mutable_protocols_handled();
+  int num_protocols = random.next_uint(/*bound=*/3);
+  for (int i = 0; i < num_protocols; i++) {
+    auto* protocol = protocols_handled->add_protocols();
+    protocol->set_protocol(base::StrCat({"web+test", base::NumberToString(i)}));
+    protocol->set_url(
+        base::StrCat({app.start_url().spec(), base::NumberToString(i)}));
+  }
+
+  // Randomly fill run_on_os_login.
+  const proto::RunOnOsLoginMode run_on_os_login_modes[3] = {
+      proto::RunOnOsLoginMode::NOT_RUN, proto::RunOnOsLoginMode::WINDOWED,
+      proto::RunOnOsLoginMode::MINIMIZED};
+  state.mutable_run_on_os_login()->set_run_on_os_login_mode(
+      run_on_os_login_modes[random.next_uint(/*bound=*/3)]);
+
+  // Randomly fill uninstallation registration logic.
+  state.mutable_uninstall_registration()->set_registered_with_os(
+      random.next_bool());
+  state.mutable_uninstall_registration()->set_display_name(
+      app.untranslated_name());
+
+  // Randomly fill shortcuts menu information.
+  auto* shortcut_menus = state.mutable_shortcut_menus();
+  int count_shortcut_menu_items = random.next_uint(/*bound=*/2);
+  for (int i = 0; i < count_shortcut_menu_items; i++) {
+    auto* menu_info = shortcut_menus->add_shortcut_menu_info();
+    menu_info->set_shortcut_name(
+        base::StrCat({"shortcut_name", base::NumberToString(i)}));
+    menu_info->set_shortcut_launch_url(
+        base::StrCat({app.scope().spec(), base::NumberToString(i)}));
+
+    auto* data_any = menu_info->add_icon_data_any();
+    data_any->set_icon_size(16 * random.next_uint(/*bound=*/4));
+    data_any->set_timestamp(random.next_proto_time());
+
+    auto* data_maskable = menu_info->add_icon_data_maskable();
+    data_maskable->set_icon_size(16 * random.next_uint(/*bound=*/4));
+    data_maskable->set_timestamp(random.next_proto_time());
+
+    auto* data_monochrome = menu_info->add_icon_data_monochrome();
+    data_monochrome->set_icon_size(16 * random.next_uint(/*bound=*/4));
+    data_monochrome->set_timestamp(random.next_proto_time());
+  }
+
+  // Randomly fill file handling information.
+  auto* file_handling = state.mutable_file_handling();
+  int count_file_handlers = random.next_uint(/*bound=*/2);
+  for (int i = 0; i < count_file_handlers; i++) {
+    auto* file_handlers = file_handling->add_file_handlers();
+    int count_accepts = random.next_uint(/*bound=*/2);
+    file_handlers->set_action(
+        base::StrCat({"https://file.open/", base::NumberToString(i)}));
+    file_handlers->set_display_name(
+        base::StrCat({"file_type", base::NumberToString(i)}));
+    for (int j = 0; j < count_accepts; j++) {
+      auto* accept = file_handlers->add_accept();
+      accept->set_mimetype(
+          base::StrCat({"application/type", base::NumberToString(i)}));
+      accept->add_file_extensions(
+          base::StrCat({"foo", base::NumberToString(i)}));
+      accept->add_file_extensions(
+          base::StrCat({"bar", base::NumberToString(i)}));
+    }
+  }
+
+  return state;
+}
+
 }  // namespace
+
+std::string GetOsIntegrationSubManagersTestName(
+    const ::testing::TestParamInfo<OsIntegrationSubManagersState>& info) {
+  switch (info.param) {
+    case OsIntegrationSubManagersState::kSaveStateToDB:
+      return "OSIntegrationSubManagers_SaveStateToDB";
+    case OsIntegrationSubManagersState::kSaveStateAndExecute:
+      return "OSIntegrationSubManagers_SaveStateAndExecute";
+    case OsIntegrationSubManagersState::kDisabled:
+      return "OSIntegrationSubManagers_Disabled";
+  }
+}
 
 std::unique_ptr<WebApp> CreateWebApp(const GURL& start_url,
                                      WebAppManagement::Type source_type) {
-  const AppId app_id = GenerateAppId(/*manifest_id=*/absl::nullopt, start_url);
+  const webapps::AppId app_id =
+      GenerateAppId(/*manifest_id=*/absl::nullopt, start_url);
 
   auto web_app = std::make_unique<WebApp>(app_id);
   web_app->SetStartUrl(start_url);
   web_app->AddSource(source_type);
-  web_app->SetUserDisplayMode(UserDisplayMode::kStandalone);
+  web_app->SetUserDisplayMode(mojom::UserDisplayMode::kStandalone);
   web_app->SetName("Name");
+  web_app->SetIsLocallyInstalled(true);
 
   return web_app;
 }
 
-std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
-                                           const uint32_t seed,
-                                           bool allow_system_source) {
-  RandomHelper random(seed);
+std::unique_ptr<WebApp> CreateRandomWebApp(CreateRandomWebAppParams params) {
+  RandomHelper random(params.seed, params.non_zero);
 
-  const std::string seed_str = base::NumberToString(seed);
-  absl::optional<std::string> manifest_id;
-  if (random.next_bool())
-    manifest_id = "manifest_id_" + seed_str;
-  const GURL scope = base_url.Resolve("scope" + seed_str + "/");
+  const std::string seed_str = base::NumberToString(params.seed);
+  absl::optional<std::string> relative_manifest_id;
+  if (random.next_bool()) {
+    std::string path = "manifest_id_" + seed_str;
+    if (random.next_bool()) {
+      path += "?query=test";
+    }
+    if (random.next_bool()) {
+      path += "#fragment";
+    }
+    relative_manifest_id = path;
+  }
+  const GURL scope = params.base_url.Resolve("scope" + seed_str + "/");
   const GURL start_url = scope.Resolve("start" + seed_str);
-  const AppId app_id = GenerateAppId(manifest_id, start_url);
+  const webapps::AppId app_id = GenerateAppId(relative_manifest_id, start_url);
 
   const std::string name = "Name" + seed_str;
   const std::string description = "Description" + seed_str;
@@ -349,7 +586,7 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
   std::vector<WebAppManagement::Type> management_types;
 
   // Generate all possible permutations of field values in a random way:
-  if (allow_system_source && random.next_bool()) {
+  if (params.allow_system_source && random.next_bool()) {
     app->AddSource(WebAppManagement::kSystem);
     management_types.push_back(WebAppManagement::kSystem);
   }
@@ -382,6 +619,18 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
     app->AddSource(WebAppManagement::kCommandLine);
     management_types.push_back(WebAppManagement::kCommandLine);
   }
+  if (random.next_bool()) {
+    app->AddSource(WebAppManagement::kOem);
+    management_types.push_back(WebAppManagement::kOem);
+  }
+  if (random.next_bool()) {
+    app->AddSource(WebAppManagement::kOneDriveIntegration);
+    management_types.push_back(WebAppManagement::kOneDriveIntegration);
+  }
+  if (random.next_bool()) {
+    app->AddSource(WebAppManagement::kApsDefault);
+    management_types.push_back(WebAppManagement::kApsDefault);
+  }
 
   // Must always be at least one source.
   if (!app->HasAnySources()) {
@@ -400,7 +649,10 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
 
   app->SetName(name);
   app->SetDescription(description);
-  app->SetManifestId(manifest_id);
+  if (relative_manifest_id) {
+    app->SetManifestId(
+        GenerateManifestId(relative_manifest_id.value(), start_url));
+  }
   app->SetStartUrl(GURL(start_url));
   app->SetScope(GURL(scope));
   app->SetThemeColor(theme_color);
@@ -410,22 +662,16 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
   app->SetIsLocallyInstalled(random.next_bool());
   app->SetIsFromSyncAndPendingInstallation(random.next_bool());
 
-  const UserDisplayMode user_display_modes[3] = {UserDisplayMode::kBrowser,
-                                                 UserDisplayMode::kStandalone,
-                                                 UserDisplayMode::kTabbed};
+  const mojom::UserDisplayMode user_display_modes[3] = {
+      mojom::UserDisplayMode::kBrowser, mojom::UserDisplayMode::kStandalone,
+      mojom::UserDisplayMode::kTabbed};
   app->SetUserDisplayMode(user_display_modes[random.next_uint(3)]);
 
-  const base::Time last_badging_time =
-      base::Time::UnixEpoch() + base::Milliseconds(random.next_uint());
-  app->SetLastBadgingTime(last_badging_time);
+  app->SetLastBadgingTime(random.next_time());
 
-  const base::Time last_launch_time =
-      base::Time::UnixEpoch() + base::Milliseconds(random.next_uint());
-  app->SetLastLaunchTime(last_launch_time);
+  app->SetLastLaunchTime(random.next_time());
 
-  const base::Time install_time =
-      base::Time::UnixEpoch() + base::Milliseconds(random.next_uint());
-  app->SetInstallTime(install_time);
+  app->SetFirstInstallTime(random.next_time());
 
   const DisplayMode display_modes[4] = {
       DisplayMode::kBrowser, DisplayMode::kMinimalUi, DisplayMode::kStandalone,
@@ -451,8 +697,8 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
   std::vector<apps::IconInfo> manifest_icons(num_icons);
   for (int i = 0; i < num_icons; i++) {
     apps::IconInfo icon;
-    icon.url =
-        base_url.Resolve("/icon" + base::NumberToString(random.next_uint()));
+    icon.url = params.base_url.Resolve(
+        "/icon" + base::NumberToString(random.next_uint()));
     if (random.next_bool())
       icon.square_size_px = size;
 
@@ -481,6 +727,18 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
     app->SetShareTarget(CreateRandomShareTarget(random.next_uint()));
   app->SetProtocolHandlers(CreateRandomProtocolHandlers(random.next_uint()));
   app->SetUrlHandlers(CreateRandomUrlHandlers(random.next_uint()));
+  app->SetScopeExtensions(
+      CreateRandomScopeExtensions(random.next_uint(), random));
+
+  ScopeExtensions validated_scope_extensions;
+  base::ranges::copy_if(app->scope_extensions(),
+                        std::inserter(validated_scope_extensions,
+                                      validated_scope_extensions.begin()),
+                        [&random](const ScopeExtensionInfo& extension) {
+                          return random.next_bool();
+                        });
+  app->SetValidatedScopeExtensions(validated_scope_extensions);
+
   if (random.next_bool()) {
     app->SetLockScreenStartUrl(scope.Resolve(
         "lock_screen_start_url" + base::NumberToString(random.next_uint())));
@@ -499,11 +757,20 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
   }
   app->SetAdditionalSearchTerms(std::move(additional_search_terms));
 
-  app->SetShortcutsMenuItemInfos(
-      CreateRandomShortcutsMenuItemInfos(scope, random));
-  app->SetDownloadedShortcutsMenuIconsSizes(
-      CreateRandomDownloadedShortcutsMenuIconsSizes(random));
-  app->SetManifestUrl(base_url.Resolve("/manifest" + seed_str + ".json"));
+  int num_shortcut_items = static_cast<int>(random.next_uint(4)) + 1;
+  auto item_infos =
+      CreateRandomShortcutsMenuItemInfos(scope, num_shortcut_items, random);
+  auto icons_sizes =
+      CreateRandomDownloadedShortcutsMenuIconsSizes(num_shortcut_items, random);
+  CHECK_EQ(item_infos.size(), icons_sizes.size());
+  for (int i = 0; i < num_shortcut_items; ++i) {
+    item_infos[i].downloaded_icon_sizes = std::move(icons_sizes[i]);
+  }
+  icons_sizes.clear();
+  app->SetShortcutsMenuInfo(std::move(item_infos));
+
+  app->SetManifestUrl(
+      params.base_url.Resolve("/manifest" + seed_str + ".json"));
 
   const int num_allowed_launch_protocols = random.next_uint(8);
   std::vector<std::string> allowed_launch_protocols(
@@ -523,8 +790,6 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
   }
   app->SetDisallowedLaunchProtocols(std::move(disallowed_launch_protocols));
 
-  app->SetStorageIsolated(random.next_bool());
-
   app->SetWindowControlsOverlayEnabled(false);
 
   WebApp::SyncFallbackData sync_fallback_data;
@@ -539,9 +804,7 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
         LaunchHandler{random.next_enum<LaunchHandler::ClientMode>()});
   }
 
-  const base::Time manifest_update_time =
-      base::Time::UnixEpoch() + base::Milliseconds(random.next_uint());
-  app->SetManifestUpdateTime(manifest_update_time);
+  app->SetManifestUpdateTime(random.next_time());
 
   if (random.next_bool())
     app->SetParentAppId(base::NumberToString(random.next_uint()));
@@ -551,16 +814,16 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
 
   uint32_t install_source =
       random.next_uint(static_cast<int>(webapps::WebappInstallSource::COUNT));
-  app->SetInstallSourceForMetrics(
+  app->SetLatestInstallSource(
       static_cast<webapps::WebappInstallSource>(install_source));
 
   if (IsChromeOsDataMandatory()) {
     // Use a separate random generator for CrOS so the result is deterministic
     // across cros and non-cros builds.
-    RandomHelper cros_random(seed);
+    RandomHelper cros_random(params.seed, params.non_zero);
     auto chromeos_data = absl::make_optional<WebAppChromeOsData>();
     chromeos_data->show_in_launcher = cros_random.next_bool();
-    chromeos_data->show_in_search = cros_random.next_bool();
+    chromeos_data->show_in_search_and_shelf = cros_random.next_bool();
     chromeos_data->show_in_management = cros_random.next_bool();
     chromeos_data->is_disabled = cros_random.next_bool();
     chromeos_data->oem_installed = cros_random.next_bool();
@@ -575,13 +838,25 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
     if (type == WebAppManagement::kSync)
       continue;
     base::flat_set<GURL> install_urls;
+    base::flat_set<std::string> additional_policy_ids;
     WebApp::ExternalManagementConfig config;
-    if (random.next_bool())
-      install_urls.emplace(base_url.Resolve("installer1_" + seed_str + "/"));
-    if (random.next_bool())
-      install_urls.emplace(base_url.Resolve("installer2_" + seed_str + "/"));
+    if (random.next_bool()) {
+      install_urls.emplace(
+          params.base_url.Resolve("installer1_" + seed_str + "/"));
+    }
+    if (random.next_bool()) {
+      install_urls.emplace(
+          params.base_url.Resolve("installer2_" + seed_str + "/"));
+    }
+    if (random.next_bool()) {
+      additional_policy_ids.emplace("policy_id_1_" + seed_str);
+    }
+    if (random.next_bool()) {
+      additional_policy_ids.emplace("policy_id_2_" + seed_str);
+    }
     config.is_placeholder = random.next_bool();
-    config.install_urls = install_urls;
+    config.install_urls = std::move(install_urls);
+    config.additional_policy_ids = std::move(additional_policy_ids);
     management_to_external_config.insert_or_assign(type, std::move(config));
   }
 
@@ -592,48 +867,92 @@ std::unique_ptr<WebApp> CreateRandomWebApp(const GURL& base_url,
 
   if (random.next_bool()) {
     blink::Manifest::TabStrip tab_strip;
-    tab_strip.home_tab =
-        random.next_enum<blink::mojom::TabStripMemberVisibility>();
+
     if (random.next_bool()) {
-      blink::Manifest::NewTabButtonParams new_tab_button_params;
+      blink::Manifest::HomeTabParams home_tab_params;
       if (random.next_bool()) {
-        new_tab_button_params.url = scope.Resolve(
-            "new_tab_button_url" + base::NumberToString(random.next_uint()));
+        home_tab_params.icons = CreateRandomHomeTabIcons(random);
       }
-      tab_strip.new_tab_button = new_tab_button_params;
+      if (random.next_bool()) {
+        home_tab_params.scope_patterns = CreateRandomScopePatterns(random);
+      }
+      tab_strip.home_tab = std::move(home_tab_params);
     } else {
-      tab_strip.new_tab_button =
+      tab_strip.home_tab =
           random.next_enum<blink::mojom::TabStripMemberVisibility>();
     }
+
+    blink::Manifest::NewTabButtonParams new_tab_button_params;
+    if (random.next_bool()) {
+      new_tab_button_params.url = scope.Resolve(
+          "new_tab_button_url" + base::NumberToString(random.next_uint()));
+    }
+    tab_strip.new_tab_button = new_tab_button_params;
+
     app->SetTabStrip(std::move(tab_strip));
   }
 
   app->SetAlwaysShowToolbarInFullscreen(random.next_bool());
 
-  if (random.next_bool()) {
-    proto::WebAppOsIntegrationState state;
-    app->SetCurrentOsIntegrationStates(state);
-  }
+  app->SetCurrentOsIntegrationStates(
+      GenerateRandomWebAppOsIntegrationState(random, *app));
 
   if (random.next_bool()) {
-    using IsolationDataContent = decltype(IsolationData::content);
-    constexpr size_t kNumContentTypes =
-        absl::variant_size<IsolationDataContent>::value;
+    constexpr size_t kNumLocationTypes =
+        absl::variant_size<IsolatedWebAppLocation>::value;
     auto path = base::FilePath::FromUTF8Unsafe(seed_str);
-    IsolationDataContent content_types[] = {
-        IsolationData::InstalledBundle{.path = path},
-        IsolationData::DevModeBundle{.path = path},
-        IsolationData::DevModeProxy{
-            .proxy_url = url::Origin::Create(
-                GURL(base::StrCat({"https://proxy-", seed_str, ".com/"})))},
+    IsolatedWebAppLocation location_types[] = {
+        InstalledBundle{.path = path},
+        DevModeBundle{.path = path},
+        DevModeProxy{.proxy_url = url::Origin::Create(GURL(
+                         base::StrCat({"https://proxy-", seed_str, ".com/"})))},
     };
-    static_assert(std::size(content_types) == kNumContentTypes);
+    static_assert(std::size(location_types) == kNumLocationTypes);
 
-    IsolationData isolation_data(
-        content_types[random.next_uint(kNumContentTypes)]);
+    IsolatedWebAppLocation location_type =
+        location_types[random.next_uint(kNumLocationTypes)];
+    base::Version version = base::Version({
+        random.next_uint(),
+        random.next_uint(),
+        random.next_uint(),
+    });
+
+    WebApp::IsolationData isolation_data(location_type, version);
+    if (random.next_bool()) {
+      isolation_data.controlled_frame_partitions.insert("partition_name");
+    }
+    if (random.next_bool()) {
+      base::Version pending_version = base::Version({
+          random.next_uint(),
+          random.next_uint(),
+          random.next_uint(),
+      });
+      WebApp::IsolationData::PendingUpdateInfo pending_update_info(
+          location_type, pending_version);
+      isolation_data.SetPendingUpdateInfo(pending_update_info);
+    }
     app->SetIsolationData(isolation_data);
   }
 
+  app->SetLinkCapturingUserPreference(NEXT_PROTO_ENUM(
+      random, proto::LinkCapturingUserPreference, /*skip_zero=*/false));
+
+  app->SetLatestInstallTime(random.next_time());
+
+  if (random.next_bool()) {
+    GeneratedIconFix generated_icon_fix;
+    generated_icon_fix.set_source(
+        NEXT_PROTO_ENUM(random, GeneratedIconFixSource, /*skip_zero=*/true));
+    generated_icon_fix.set_window_start_time(random.next_proto_time());
+    if (random.next_bool()) {
+      generated_icon_fix.set_last_attempt_time(random.next_proto_time());
+    }
+    generated_icon_fix.set_attempt_count(random.next_uint(100));
+    app->SetGeneratedIconFix(generated_icon_fix);
+  }
+
+  app->SetSupportedLinksOfferIgnoreCount(random.next_uint());
+  app->SetSupportedLinksOfferDismissCount(random.next_uint());
   return app;
 }
 
@@ -641,7 +960,7 @@ void TestAcceptDialogCallback(
     content::WebContents* initiator_web_contents,
     std::unique_ptr<WebAppInstallInfo> web_app_info,
     WebAppInstallationAcceptanceCallback acceptance_callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(acceptance_callback), true /*accept*/,
                                 std::move(web_app_info)));
 }
@@ -650,21 +969,21 @@ void TestDeclineDialogCallback(
     content::WebContents* initiator_web_contents,
     std::unique_ptr<WebAppInstallInfo> web_app_info,
     WebAppInstallationAcceptanceCallback acceptance_callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(acceptance_callback),
                                 false /*accept*/, std::move(web_app_info)));
 }
 
-AppId InstallPwaForCurrentUrl(Browser* browser) {
+webapps::AppId InstallPwaForCurrentUrl(Browser* browser) {
   // Depending on the installability criteria, different dialogs can be used.
-  chrome::SetAutoAcceptWebAppDialogForTesting(true, true);
-  chrome::SetAutoAcceptPWAInstallConfirmationForTesting(true);
-  WebAppTestInstallObserver observer(browser->profile());
+  SetAutoAcceptWebAppDialogForTesting(true, true);
+  SetAutoAcceptPWAInstallConfirmationForTesting(true);
+  WebAppTestInstallWithOsHooksObserver observer(browser->profile());
   observer.BeginListening();
   CHECK(chrome::ExecuteCommand(browser, IDC_INSTALL_PWA));
-  AppId app_id = observer.Wait();
-  chrome::SetAutoAcceptPWAInstallConfirmationForTesting(false);
-  chrome::SetAutoAcceptWebAppDialogForTesting(false, false);
+  webapps::AppId app_id = observer.Wait();
+  SetAutoAcceptPWAInstallConfirmationForTesting(false);
+  SetAutoAcceptWebAppDialogForTesting(false, false);
   return app_id;
 }
 
@@ -675,7 +994,7 @@ void CheckServiceWorkerStatus(const GURL& url,
   content::ServiceWorkerContext* service_worker_context =
       storage_partition->GetServiceWorkerContext();
   service_worker_context->CheckHasServiceWorker(
-      url, blink::StorageKey(url::Origin::Create(url)),
+      url, blink::StorageKey::CreateFirstParty(url::Origin::Create(url)),
       base::BindLambdaForTesting(
           [&run_loop, status](content::ServiceWorkerCapability capability) {
             CHECK_EQ(status, capability);
@@ -694,44 +1013,52 @@ void SetWebAppSettingsListPref(Profile* profile, const base::StringPiece pref) {
 
 void AddInstallUrlData(PrefService* pref_service,
                        WebAppSyncBridge* sync_bridge,
-                       const AppId& app_id,
+                       const webapps::AppId& app_id,
                        const GURL& url,
                        const ExternalInstallSource& source) {
-  ScopedRegistryUpdate update(sync_bridge);
+  ScopedRegistryUpdate update = sync_bridge->BeginUpdate();
   WebApp* app_to_update = update->UpdateApp(app_id);
   DCHECK(app_to_update);
 
   // Adding external app data (source and URL) to web_app DB.
   app_to_update->AddInstallURLToManagementExternalConfigMap(
       ConvertExternalInstallSourceToSource(source), url);
-
-  // Add to legacy external pref storage.
-  // TODO(crbug.com/1339965): Clean up after external pref migration is
-  // complete.
-  ExternallyInstalledWebAppPrefs(pref_service).Insert(url, app_id, source);
 }
 
 void AddInstallUrlAndPlaceholderData(PrefService* pref_service,
                                      WebAppSyncBridge* sync_bridge,
-                                     const AppId& app_id,
+                                     const webapps::AppId& app_id,
                                      const GURL& url,
                                      const ExternalInstallSource& source,
                                      bool is_placeholder) {
-  ScopedRegistryUpdate update(sync_bridge);
-  ExternallyInstalledWebAppPrefs prefs(pref_service);
+  ScopedRegistryUpdate update = sync_bridge->BeginUpdate();
   WebApp* app_to_update = update->UpdateApp(app_id);
   DCHECK(app_to_update);
 
   // Adding install_url, source and placeholder information to the web_app DB.
   app_to_update->AddExternalSourceInformation(
       ConvertExternalInstallSourceToSource(source), url, is_placeholder);
-
-  // Add to legacy external pref storage.
-  // TODO(crbug.com/1339965): Clean up after external pref migration is
-  // complete.
-  prefs.Insert(url, app_id, source);
-  prefs.SetIsPlaceholder(url, is_placeholder);
 }
+
+void SynchronizeOsIntegration(Profile* profile,
+                              const webapps::AppId& app_id,
+                              absl::optional<SynchronizeOsOptions> options) {
+  base::test::TestFuture<void> sync_future;
+  WebAppProvider::GetForTest(profile)->scheduler().SynchronizeOsIntegration(
+      app_id, sync_future.GetCallback(), options);
+  EXPECT_TRUE(sync_future.Wait());
+}
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+ScopedSkipMainProfileCheck::ScopedSkipMainProfileCheck() {
+  EXPECT_FALSE(IsMainProfileCheckSkippedForTesting());
+  SetSkipMainProfileCheckForTesting(/*skip_check=*/true);
+}
+
+ScopedSkipMainProfileCheck::~ScopedSkipMainProfileCheck() {
+  SetSkipMainProfileCheckForTesting(/*skip_check=*/false);
+}
+#endif
 
 }  // namespace test
 }  // namespace web_app

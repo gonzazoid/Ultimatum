@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/borealis/borealis_context_manager.h"
@@ -17,7 +17,6 @@
 #include "chrome/browser/ash/borealis/testing/callback_factory.h"
 #include "chrome/browser/ash/guest_os/dbus_test_helper.h"
 #include "chrome/browser/ash/guest_os/guest_os_stability_monitor.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/test/base/testing_profile.h"
@@ -32,14 +31,14 @@ namespace borealis {
 namespace {
 
 MATCHER(IsSuccessResult, "") {
-  return arg && arg.Value()->vm_name() == "test_vm_name";
+  return arg.has_value() && arg.value()->vm_name() == "test_vm_name";
 }
 
 MATCHER(IsFailureResult, "") {
-  return !arg &&
-         arg.Error().error() ==
+  return !arg.has_value() &&
+         arg.error().error() ==
              borealis::BorealisStartupResult::kStartVmFailed &&
-         arg.Error().description() == "Something went wrong!";
+         arg.error().description() == "Something went wrong!";
 }
 
 class MockTask : public BorealisTask {
@@ -154,9 +153,9 @@ TEST_F(BorealisContextManagerTest, NoTasksImpliesSuccess) {
   EXPECT_CALL(callback_expectation, Call(testing::_))
       .WillOnce(
           testing::Invoke([](BorealisContextManager::ContextOrFailure result) {
-            EXPECT_TRUE(result);
+            EXPECT_TRUE(result.has_value());
             // Even with no tasks, the context will give the VM a name.
-            EXPECT_EQ(result.Value()->vm_name(), "borealis");
+            EXPECT_EQ(result.value()->vm_name(), "borealis");
           }));
   context_manager.StartBorealis(callback_expectation.BindOnce());
   task_environment_.RunUntilIdle();
@@ -280,8 +279,8 @@ TEST_F(BorealisContextManagerTest, ShutDownCancelsRequestsAndTerminatesVm) {
   EXPECT_CALL(callback_expectation, Call(testing::_))
       .WillOnce(
           testing::Invoke([](BorealisContextManager::ContextOrFailure result) {
-            EXPECT_FALSE(result);
-            EXPECT_EQ(result.Error().error(),
+            EXPECT_FALSE(result.has_value());
+            EXPECT_EQ(result.error().error(),
                       BorealisStartupResult::kCancelled);
           }));
 

@@ -9,8 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chrome/services/cups_proxy/cups_proxy_service_delegate.h"
 #include "chrome/services/cups_proxy/public/cpp/ipp_messages.h"
 #include "chrome/services/ipp_parser/public/cpp/ipp_converter.h"
@@ -50,7 +49,7 @@ class IppValidator {
   bool ValidateIppData(const std::vector<uint8_t>& ipp_data);
 
   // Unowned delegate providing necessary Profile dependencies.
-  CupsProxyServiceDelegate* const delegate_;
+  const raw_ptr<CupsProxyServiceDelegate> delegate_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

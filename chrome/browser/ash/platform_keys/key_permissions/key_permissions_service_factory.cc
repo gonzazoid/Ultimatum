@@ -33,19 +33,27 @@ KeyPermissionsServiceFactory* KeyPermissionsServiceFactory::GetInstance() {
 }
 
 KeyPermissionsServiceFactory::KeyPermissionsServiceFactory()
-    : ProfileKeyedServiceFactory("KeyPermissionsService") {
+    : ProfileKeyedServiceFactory(
+          "KeyPermissionsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(PlatformKeysServiceFactory::GetInstance());
   DependsOn(UserPrivateTokenKeyPermissionsManagerServiceFactory::GetInstance());
 }
 
-KeyedService* KeyPermissionsServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+KeyPermissionsServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   if (!profile) {
     return nullptr;
   }
 
-  return new KeyPermissionsServiceImpl(
+  return std::make_unique<KeyPermissionsServiceImpl>(
       ProfileHelper::IsUserProfile(profile),
       profile->GetProfilePolicyConnector()->IsManaged(),
       PlatformKeysServiceFactory::GetForBrowserContext(profile),

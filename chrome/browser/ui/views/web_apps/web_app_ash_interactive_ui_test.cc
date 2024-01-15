@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
@@ -27,11 +28,11 @@ class WebAppAshInteractiveUITest : public web_app::WebAppControllerBrowserTest {
 
   ~WebAppAshInteractiveUITest() override = default;
 
-  // InProcessBrowserTest override:
+  // web_app::WebAppControllerBrowserTest override:
   void SetUpOnMainThread() override {
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_info->start_url = GURL("https://test.org");
-    web_app::AppId app_id = InstallWebApp(std::move(web_app_info));
+    webapps::AppId app_id = InstallWebApp(std::move(web_app_info));
 
     Browser* browser = LaunchWebAppBrowser(app_id);
     browser_view_ = BrowserView::GetBrowserViewForBrowser(browser);
@@ -41,7 +42,7 @@ class WebAppAshInteractiveUITest : public web_app::WebAppControllerBrowserTest {
         static_cast<ImmersiveModeControllerChromeos*>(controller_)
             ->controller())
         .SetupForTest();
-    WebAppToolbarButtonContainer::DisableAnimationForTesting();
+    WebAppToolbarButtonContainer::DisableAnimationForTesting(true);
   }
 
   void CheckWebAppMenuClickable() {
@@ -65,8 +66,8 @@ class WebAppAshInteractiveUITest : public web_app::WebAppControllerBrowserTest {
     EXPECT_FALSE(menu_button->IsMenuShowing());
   }
 
-  BrowserView* browser_view_ = nullptr;
-  ImmersiveModeController* controller_ = nullptr;
+  raw_ptr<BrowserView, DanglingUntriaged> browser_view_ = nullptr;
+  raw_ptr<ImmersiveModeController, DanglingUntriaged> controller_ = nullptr;
 };
 
 // Test that the web app menu button opens a menu on click.

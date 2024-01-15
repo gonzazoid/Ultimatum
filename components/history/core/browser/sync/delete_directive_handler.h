@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/threading/thread_checker.h"
@@ -32,7 +32,7 @@ class HistoryDBTask;
 // DeleteDirectiveHandler sends delete directives created locally to sync
 // engine to propagate to other clients. It also expires local history entries
 // according to given delete directives from server.
-class DeleteDirectiveHandler : public syncer::SyncableService {
+class DeleteDirectiveHandler final : public syncer::SyncableService {
  public:
   // This allows injecting HistoryService::ScheduleDBTask().
   using BackendTaskScheduler =
@@ -72,12 +72,12 @@ class DeleteDirectiveHandler : public syncer::SyncableService {
   absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
       syncer::ModelType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> error_handler) override;
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
   void StopSyncing(syncer::ModelType type) override;
   absl::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
+  base::WeakPtr<SyncableService> AsWeakPtr() override;
 
  private:
   class DeleteDirectiveTask;

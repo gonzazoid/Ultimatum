@@ -45,9 +45,11 @@ Status CallElementCommand(Command command,
                           StubWebView* web_view,
                           const std::string& element_id,
                           const base::Value::Dict& params = {},
+                          bool w3c_compliant = true,
                           std::unique_ptr<base::Value>* value = nullptr) {
   MockChrome* chrome = new MockChrome();
   Session session("id", std::unique_ptr<Chrome>(chrome));
+  session.w3c_compliant = w3c_compliant;
 
   std::unique_ptr<base::Value> local_value;
   return command(&session, web_view, element_id, params,
@@ -69,17 +71,19 @@ class MockResponseWebView : public StubWebView {
                       std::unique_ptr<base::Value>* result) override {
     if (function ==
         webdriver::atoms::asString(webdriver::atoms::GET_LOCATION)) {
-      *result = std::make_unique<base::DictionaryValue>();
-      (*result)->SetIntPath("value.status", 0);
-      (*result)->SetDoublePath("x", 0.0);
-      (*result)->SetDoublePath("y", 128.8);
+      base::Value::Dict dict;
+      dict.SetByDottedPath("value.status", 0);
+      dict.Set("x", 0.0);
+      dict.Set("y", 128.8);
+      *result = std::make_unique<base::Value>(std::move(dict));
     } else if (function ==
                webdriver::atoms::asString(webdriver::atoms::GET_SIZE)) {
       // Do not set result; this should be an error state
       return Status(kStaleElementReference);
     } else {
-      *result = std::make_unique<base::DictionaryValue>();
-      (*result)->SetIntPath("value.status", 0);
+      base::Value::Dict dict;
+      dict.SetByDottedPath("value.status", 0);
+      *result = std::make_unique<base::Value>(std::move(dict));
     }
     return Status(kOk);
   }
@@ -93,6 +97,31 @@ TEST(ElementCommandsTest, ExecuteGetElementRect_SizeError) {
   std::unique_ptr<base::Value> result_value;
   Status status = CallElementCommand(ExecuteGetElementRect, &webview,
                                      "3247f4d1-ce70-49e9-9a99-bdc7591e032f",
-                                     params, &result_value);
+                                     params, true, &result_value);
   ASSERT_EQ(kStaleElementReference, status.code()) << status.message();
+}
+
+TEST(ElementCommandsTest, ExecuteSendKeysToElement_NoValue) {
+  MockResponseWebView webview = MockResponseWebView();
+  base::Value::Dict params;
+  std::unique_ptr<base::Value> result_value;
+  Status status = CallElementCommand(ExecuteSendKeysToElement, &webview,
+                                     "3247f4d1-ce70-49e9-9a99-bdc7591e032f",
+                                     params, false, &result_value);
+  ASSERT_EQ(kInvalidArgument, status.code()) << status.message();
+  ASSERT_NE(status.message().find("'value' must be a list"), std::string::npos)
+      << status.message();
+}
+
+TEST(ElementCommandsTest, ExecuteSendKeysToElement_ValueNotAList) {
+  MockResponseWebView webview = MockResponseWebView();
+  base::Value::Dict params;
+  params.Set("value", "not-a-list");
+  std::unique_ptr<base::Value> result_value;
+  Status status = CallElementCommand(ExecuteSendKeysToElement, &webview,
+                                     "3247f4d1-ce70-49e9-9a99-bdc7591e032f",
+                                     params, false, &result_value);
+  ASSERT_EQ(kInvalidArgument, status.code()) << status.message();
+  ASSERT_NE(status.message().find("'value' must be a list"), std::string::npos)
+      << status.message();
 }

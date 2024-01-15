@@ -4,7 +4,6 @@
 
 package org.chromium.chrome.browser.ui.signin;
 
-import android.accounts.Account;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.text.format.DateUtils;
@@ -18,17 +17,20 @@ import androidx.annotation.StringDef;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.BuildInfo;
 import org.chromium.base.Promise;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.ProfileDataCache;
 import org.chromium.chrome.browser.signin.services.SigninPreferencesManager;
+import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.browser.ui.signin.SyncConsentActivityLauncher.AccessPoint;
 import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
 import org.chromium.components.browser_ui.widget.impression.ImpressionTracker;
@@ -43,6 +45,8 @@ import org.chromium.components.signin.identitymanager.AccountInfoServiceProvider
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
+import org.chromium.components.sync.SyncService;
+import org.chromium.components.sync.UserSelectableType;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -57,28 +61,28 @@ public class SyncPromoController {
     /** Specifies the various states of sync promo. */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-            SyncPromoState.NO_PROMO,
-            SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE,
-            SyncPromoState.PROMO_FOR_SIGNED_IN_STATE,
-            SyncPromoState.PROMO_FOR_SYNC_TURNED_OFF_STATE,
+        SyncPromoState.NO_PROMO,
+        SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE,
+        SyncPromoState.PROMO_FOR_SIGNED_IN_STATE,
+        SyncPromoState.PROMO_FOR_SYNC_TURNED_OFF_STATE,
     })
     public @interface SyncPromoState {
         /** Promo is hidden. */
         int NO_PROMO = 0;
+
         /** Promo is shown when a user is signed out. */
         int PROMO_FOR_SIGNED_OUT_STATE = 1;
+
         /** Promo is shown when a user is signed in without sync consent. */
         int PROMO_FOR_SIGNED_IN_STATE = 2;
+
         /** Promo is shown when a user is signed in with sync consent but has turned off sync. */
         int PROMO_FOR_SYNC_TURNED_OFF_STATE = 3;
     }
-    /**
-     * Receives notifications when user clicks close button in the promo.
-     */
+
+    /** Receives notifications when user clicks close button in the promo. */
     public interface OnDismissListener {
-        /**
-         * Action to be performed when the promo is being dismissed.
-         */
+        /** Action to be performed when the promo is being dismissed. */
         void onDismiss();
     }
 
@@ -99,40 +103,20 @@ public class SyncPromoController {
         String SHOWN = "Shown";
     }
 
-    private @Nullable DisplayableProfileData mProfileData;
-    private @Nullable ImpressionTracker mImpressionTracker;
+    private final Profile mProfile;
     private final @AccessPoint int mAccessPoint;
     private final String mImpressionUserActionName;
     private final @Nullable String mSyncPromoDismissedPreferenceTracker;
     private final @StringRes int mTitleStringId;
     private final @StringRes int mDescriptionStringId;
-    private final @StringRes int mDescriptionStringIdNoAccount;
     private final SyncConsentActivityLauncher mSyncConsentActivityLauncher;
 
-    /**
-     * Determines whether the Sync promo can be shown.
-     * @param accessPoint The access point for which the impression limit is being checked.
-     */
-    public static boolean canShowSyncPromo(@AccessPoint int accessPoint) {
-        switch (accessPoint) {
-            case SigninAccessPoint.BOOKMARK_MANAGER:
-                return canShowBookmarkPromo();
-            case SigninAccessPoint.NTP_CONTENT_SUGGESTIONS:
-                return canShowNTPPromo();
-            case SigninAccessPoint.RECENT_TABS:
-                // There is no impression limit or dismiss button in Recent Tabs promo.
-                return true;
-            case SigninAccessPoint.SETTINGS:
-                return canShowSettingsPromo();
-            default:
-                assert false : "Unexpected value for access point: " + accessPoint;
-                return false;
-        }
-    }
+    private @Nullable DisplayableProfileData mProfileData;
+    private @Nullable ImpressionTracker mImpressionTracker;
 
     private static long getNTPSyncPromoResetAfterMillis() {
         if (ChromeFeatureList.isEnabled(
-                    ChromeFeatureList.SYNC_ANDROID_LIMIT_NTP_PROMO_IMPRESSIONS)) {
+                ChromeFeatureList.SYNC_ANDROID_LIMIT_NTP_PROMO_IMPRESSIONS)) {
             return NTP_SYNC_PROMO_RESET_AFTER_DAY * DateUtils.DAY_IN_MILLIS;
         }
         return StartSurfaceConfiguration.SIGNIN_PROMO_NTP_RESET_AFTER_HOURS.getValue()
@@ -145,111 +129,61 @@ public class SyncPromoController {
      * {@link ChromePreferenceKeys#SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME} and {@link
      * ChromePreferenceKeys#SIGNIN_PROMO_NTP_LAST_SHOWN_TIME} to allow the promo card to show again.
      */
-    public static void resetNTPSyncPromoLimitsIfHiddenForTooLong() {
+    public static void resetNtpSyncPromoLimitsIfHiddenForTooLong() {
         final long currentTime = System.currentTimeMillis();
         final long resetAfterMs = getNTPSyncPromoResetAfterMillis();
-        final long lastShownTime = SharedPreferencesManager.getInstance().readLong(
-                ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME, 0L);
+        final long lastShownTime =
+                ChromeSharedPreferences.getInstance()
+                        .readLong(ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME, 0L);
         if (resetAfterMs <= 0 || lastShownTime <= 0) return;
 
         if (currentTime - lastShownTime >= resetAfterMs) {
-            SharedPreferencesManager.getInstance().writeInt(
-                    getPromoShowCountPreferenceName(SigninAccessPoint.NTP_CONTENT_SUGGESTIONS), 0);
-            SharedPreferencesManager.getInstance().removeKey(
-                    ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME);
-            SharedPreferencesManager.getInstance().removeKey(
-                    ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME);
+            ChromeSharedPreferences.getInstance()
+                    .writeInt(
+                            getPromoShowCountPreferenceName(
+                                    SigninAccessPoint.NTP_CONTENT_SUGGESTIONS),
+                            0);
+            ChromeSharedPreferences.getInstance()
+                    .removeKey(ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME);
+            ChromeSharedPreferences.getInstance()
+                    .removeKey(ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME);
         }
-    }
-
-    private static boolean canShowBookmarkPromo() {
-        boolean isPromoDismissed = SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.SIGNIN_PROMO_BOOKMARKS_DECLINED, false);
-        return SharedPreferencesManager.getInstance().readInt(
-                       getPromoShowCountPreferenceName(SigninAccessPoint.BOOKMARK_MANAGER))
-                < MAX_IMPRESSIONS_BOOKMARKS
-                && !isPromoDismissed;
     }
 
     private static boolean timeElapsedSinceFirstShownExceedsLimit() {
         final long timeSinceFirstShownLimitMs =
                 StartSurfaceConfiguration.SIGNIN_PROMO_NTP_SINCE_FIRST_TIME_SHOWN_LIMIT_HOURS
-                        .getValue()
-                * DateUtils.HOUR_IN_MILLIS;
+                                .getValue()
+                        * DateUtils.HOUR_IN_MILLIS;
         if (timeSinceFirstShownLimitMs <= 0) return false;
 
         final long currentTime = System.currentTimeMillis();
-        final long firstShownTime = SharedPreferencesManager.getInstance().readLong(
-                ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME, 0L);
+        final long firstShownTime =
+                ChromeSharedPreferences.getInstance()
+                        .readLong(ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME, 0L);
         return firstShownTime > 0 && currentTime - firstShownTime >= timeSinceFirstShownLimitMs;
     }
 
     private static int getNTPMaxImpressions() {
         if (ChromeFeatureList.isEnabled(
-                    ChromeFeatureList.SYNC_ANDROID_LIMIT_NTP_PROMO_IMPRESSIONS)) {
+                ChromeFeatureList.SYNC_ANDROID_LIMIT_NTP_PROMO_IMPRESSIONS)) {
             return ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
                     ChromeFeatureList.SYNC_ANDROID_LIMIT_NTP_PROMO_IMPRESSIONS,
-                    SYNC_ANDROID_NTP_PROMO_MAX_IMPRESSIONS, 5);
+                    SYNC_ANDROID_NTP_PROMO_MAX_IMPRESSIONS,
+                    5);
         }
         return StartSurfaceConfiguration.SIGNIN_PROMO_NTP_COUNT_LIMIT.getValue();
     }
 
-    private static boolean canShowNTPPromo() {
-        int promoShowCount = SharedPreferencesManager.getInstance().readInt(
-                getPromoShowCountPreferenceName(SigninAccessPoint.NTP_CONTENT_SUGGESTIONS));
-        if (promoShowCount >= getNTPMaxImpressions()) {
-            return false;
-        }
-
-        if (timeElapsedSinceFirstShownExceedsLimit()) {
-            return false;
-        }
-
-        if (SharedPreferencesManager.getInstance().readBoolean(
-                    ChromePreferenceKeys.SIGNIN_PROMO_NTP_PROMO_DISMISSED, false)) {
-            return false;
-        }
-
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.FORCE_DISABLE_EXTENDED_SYNC_PROMOS)) {
-            return false;
-        }
-        final @Nullable Account visibleAccount = getVisibleAccount();
-        if (visibleAccount == null) {
-            return true;
-        }
-        final Promise<AccountInfo> visibleAccountPromise =
-                AccountInfoServiceProvider.get().getAccountInfoByEmail(visibleAccount.name);
-        return visibleAccountPromise.isFulfilled()
-                && visibleAccountPromise.getResult()
-                           .getAccountCapabilities()
-                           .canOfferExtendedSyncPromos()
-                == Tribool.TRUE;
-    }
-
     private static boolean canShowSettingsPromo() {
-        SharedPreferencesManager preferencesManager = SharedPreferencesManager.getInstance();
-        boolean isPromoDismissed = preferencesManager.readBoolean(
-                ChromePreferenceKeys.SIGNIN_PROMO_SETTINGS_PERSONALIZED_DISMISSED, false);
+        SharedPreferencesManager preferencesManager = ChromeSharedPreferences.getInstance();
+        boolean isPromoDismissed =
+                preferencesManager.readBoolean(
+                        ChromePreferenceKeys.SIGNIN_PROMO_SETTINGS_PERSONALIZED_DISMISSED, false);
         return preferencesManager.readInt(
-                       getPromoShowCountPreferenceName(SigninAccessPoint.SETTINGS))
-                < MAX_IMPRESSIONS_SETTINGS
+                                getPromoShowCountPreferenceName(SigninAccessPoint.SETTINGS))
+                        < MAX_IMPRESSIONS_SETTINGS
                 && !isPromoDismissed;
-    }
-
-    // Find the visible account for sync promos
-    private static @Nullable Account getVisibleAccount() {
-        final IdentityManager identityManager = IdentityServicesProvider.get().getIdentityManager(
-                Profile.getLastUsedRegularProfile());
-        @Nullable
-        Account visibleAccount = CoreAccountInfo.getAndroidAccountFrom(
-                identityManager.getPrimaryAccountInfo(ConsentLevel.SIGNIN));
-        final AccountManagerFacade accountManagerFacade =
-                AccountManagerFacadeProvider.getInstance();
-        if (visibleAccount == null) {
-            visibleAccount =
-                    AccountUtils.getDefaultAccountIfFulfilled(accountManagerFacade.getAccounts());
-        }
-        return visibleAccount;
     }
 
     @VisibleForTesting
@@ -274,11 +208,16 @@ public class SyncPromoController {
 
     /**
      * Creates a new SyncPromoController.
+     *
+     * @param profile The Profile associated with the sync promo.
      * @param accessPoint Specifies the AccessPoint from which the promo is to be shown.
      * @param syncConsentActivityLauncher Launcher of {@link SyncConsentActivity}.
      */
     public SyncPromoController(
-            @AccessPoint int accessPoint, SyncConsentActivityLauncher syncConsentActivityLauncher) {
+            Profile profile,
+            @AccessPoint int accessPoint,
+            SyncConsentActivityLauncher syncConsentActivityLauncher) {
+        mProfile = profile;
         mAccessPoint = accessPoint;
         mSyncConsentActivityLauncher = syncConsentActivityLauncher;
         switch (mAccessPoint) {
@@ -287,79 +226,123 @@ public class SyncPromoController {
                 mSyncPromoDismissedPreferenceTracker =
                         ChromePreferenceKeys.SIGNIN_PROMO_BOOKMARKS_DECLINED;
                 mTitleStringId = R.string.sync_promo_title_bookmarks;
-                if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_TITLE)) {
-                    // TODO(crbug.com/1323197): mDescriptionStringIdNoAccount should be deleted if
-                    // the SYNC_ANDROID_PROMOS_WITH_TITLE flag is enabled by default.
-                    mDescriptionStringId = R.string.sync_promo_description_bookmarks;
-                    mDescriptionStringIdNoAccount = R.string.sync_promo_description_bookmarks;
-                } else {
-                    mDescriptionStringId = R.string.signin_promo_description_bookmarks;
-                    mDescriptionStringIdNoAccount =
-                            R.string.signin_promo_description_bookmarks_no_account;
-                }
+                mDescriptionStringId = R.string.sync_promo_description_bookmarks;
                 break;
             case SigninAccessPoint.NTP_CONTENT_SUGGESTIONS:
                 mImpressionUserActionName = "Signin_Impression_FromNTPContentSuggestions";
                 mSyncPromoDismissedPreferenceTracker =
                         ChromePreferenceKeys.SIGNIN_PROMO_NTP_PROMO_DISMISSED;
-                if (ChromeFeatureList.isEnabled(
-                            ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_ALTERNATIVE_TITLE)) {
-                    mTitleStringId = R.string.sync_promo_alternative_title_ntp_content_suggestions;
-                } else {
-                    mTitleStringId = R.string.sync_promo_title_ntp_content_suggestions;
-                }
-                if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_TITLE)) {
-                    mDescriptionStringId = R.string.sync_promo_description_ntp_content_suggestions;
-                    mDescriptionStringIdNoAccount =
-                            R.string.sync_promo_description_ntp_content_suggestions;
-                } else {
-                    mDescriptionStringId =
-                            R.string.signin_promo_description_ntp_content_suggestions;
-                    mDescriptionStringIdNoAccount =
-                            R.string.signin_promo_description_ntp_content_suggestions_no_account;
-                }
+                mTitleStringId = R.string.sync_promo_title_ntp_content_suggestions;
+                mDescriptionStringId = R.string.sync_promo_description_ntp_content_suggestions;
                 break;
             case SigninAccessPoint.RECENT_TABS:
                 mImpressionUserActionName = "Signin_Impression_FromRecentTabs";
                 mSyncPromoDismissedPreferenceTracker = null;
-                if (ChromeFeatureList.isEnabled(
-                            ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_ALTERNATIVE_TITLE)) {
-                    mTitleStringId = R.string.sync_promo_alternative_title_recent_tabs;
-                } else {
-                    mTitleStringId = R.string.sync_promo_title_recent_tabs;
-                }
-                if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_TITLE)) {
-                    mDescriptionStringId = R.string.sync_promo_description_recent_tabs;
-                    mDescriptionStringIdNoAccount = R.string.sync_promo_description_recent_tabs;
-                } else {
-                    mDescriptionStringId = R.string.signin_promo_description_recent_tabs;
-                    mDescriptionStringIdNoAccount =
-                            R.string.signin_promo_description_recent_tabs_no_account;
-                }
+                mTitleStringId = R.string.sync_promo_title_recent_tabs;
+                mDescriptionStringId = R.string.sync_promo_description_recent_tabs;
                 break;
             case SigninAccessPoint.SETTINGS:
                 mImpressionUserActionName = "Signin_Impression_FromSettings";
                 mSyncPromoDismissedPreferenceTracker =
                         ChromePreferenceKeys.SIGNIN_PROMO_SETTINGS_PERSONALIZED_DISMISSED;
-                if (ChromeFeatureList.isEnabled(
-                            ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_ALTERNATIVE_TITLE)) {
-                    mTitleStringId = R.string.sync_promo_alternative_title_settings;
-                } else {
-                    mTitleStringId = R.string.sync_promo_title_settings;
-                }
-                if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_TITLE)) {
-                    mDescriptionStringId = R.string.sync_promo_description_settings;
-                    mDescriptionStringIdNoAccount = R.string.sync_promo_description_settings;
-                } else {
-                    mDescriptionStringId = R.string.signin_promo_description_settings;
-                    mDescriptionStringIdNoAccount =
-                            R.string.signin_promo_description_settings_no_account;
-                }
+                mTitleStringId = R.string.sync_promo_title_settings;
+                mDescriptionStringId = R.string.sync_promo_description_settings;
                 break;
             default:
                 throw new IllegalArgumentException(
                         "Unexpected value for access point: " + mAccessPoint);
         }
+    }
+
+    /** Determines whether the Sync promo can be shown. */
+    public boolean canShowSyncPromo() {
+        switch (mAccessPoint) {
+            case SigninAccessPoint.BOOKMARK_MANAGER:
+                return canShowBookmarkPromo();
+            case SigninAccessPoint.NTP_CONTENT_SUGGESTIONS:
+                return canShowNTPPromo();
+            case SigninAccessPoint.RECENT_TABS:
+                return canShowRecentTabsPromo();
+            case SigninAccessPoint.SETTINGS:
+                return canShowSettingsPromo();
+            default:
+                assert false : "Unexpected value for access point: " + mAccessPoint;
+                return false;
+        }
+    }
+
+    private boolean canShowNTPPromo() {
+        int promoShowCount =
+                ChromeSharedPreferences.getInstance()
+                        .readInt(
+                                getPromoShowCountPreferenceName(
+                                        SigninAccessPoint.NTP_CONTENT_SUGGESTIONS));
+        if (promoShowCount >= getNTPMaxImpressions()) {
+            return false;
+        }
+
+        if (timeElapsedSinceFirstShownExceedsLimit()) {
+            return false;
+        }
+
+        if (ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.SIGNIN_PROMO_NTP_PROMO_DISMISSED, false)) {
+            return false;
+        }
+
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.FORCE_DISABLE_EXTENDED_SYNC_PROMOS)) {
+            return false;
+        }
+        final @Nullable CoreAccountInfo visibleAccount = getVisibleAccount();
+        if (visibleAccount == null) {
+            return true;
+        }
+        final Promise<AccountInfo> visibleAccountPromise =
+                AccountInfoServiceProvider.get().getAccountInfoByEmail(visibleAccount.getEmail());
+
+        AccountInfo accountInfo =
+                visibleAccountPromise.isFulfilled() ? visibleAccountPromise.getResult() : null;
+        if (accountInfo == null) return false;
+
+        return accountInfo.getAccountCapabilities().canOfferExtendedSyncPromos() == Tribool.TRUE;
+    }
+
+    private boolean canShowBookmarkPromo() {
+        boolean isPromoDismissed =
+                ChromeSharedPreferences.getInstance()
+                        .readBoolean(ChromePreferenceKeys.SIGNIN_PROMO_BOOKMARKS_DECLINED, false);
+        SyncService syncService = SyncServiceFactory.getForProfile(mProfile);
+        boolean isTypeManagedByPolicy =
+                syncService.isTypeManagedByPolicy(UserSelectableType.BOOKMARKS)
+                        && syncService.isTypeManagedByPolicy(UserSelectableType.READING_LIST);
+        return !isTypeManagedByPolicy
+                && ChromeSharedPreferences.getInstance()
+                                .readInt(
+                                        getPromoShowCountPreferenceName(
+                                                SigninAccessPoint.BOOKMARK_MANAGER))
+                        < MAX_IMPRESSIONS_BOOKMARKS
+                && !isPromoDismissed;
+    }
+
+    private boolean canShowRecentTabsPromo() {
+        return !SyncServiceFactory.getForProfile(mProfile)
+                .isTypeManagedByPolicy(UserSelectableType.TABS);
+    }
+
+    // Find the visible account for sync promos
+    private @Nullable CoreAccountInfo getVisibleAccount() {
+        final IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(mProfile);
+        @Nullable
+        CoreAccountInfo visibleAccount = identityManager.getPrimaryAccountInfo(ConsentLevel.SIGNIN);
+        final AccountManagerFacade accountManagerFacade =
+                AccountManagerFacadeProvider.getInstance();
+        if (visibleAccount == null) {
+            visibleAccount =
+                    AccountUtils.getDefaultCoreAccountInfoIfFulfilled(
+                            accountManagerFacade.getCoreAccountInfos());
+        }
+        return visibleAccount;
     }
 
     /**
@@ -368,20 +351,24 @@ public class SyncPromoController {
      * @param view The {@link PersonalizedSigninPromoView} that should be set up.
      * @param listener The {@link SyncPromoController.OnDismissListener} to be set to the view.
      */
-    public void setUpSyncPromoView(ProfileDataCache profileDataCache,
-            PersonalizedSigninPromoView view, SyncPromoController.OnDismissListener listener) {
-        final IdentityManager identityManager = IdentityServicesProvider.get().getIdentityManager(
-                Profile.getLastUsedRegularProfile());
+    public void setUpSyncPromoView(
+            ProfileDataCache profileDataCache,
+            PersonalizedSigninPromoView view,
+            SyncPromoController.OnDismissListener listener) {
+        final IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(mProfile);
         assert !identityManager.hasPrimaryAccount(ConsentLevel.SYNC) : "Sync is already enabled!";
 
-        final @Nullable Account visibleAccount = getVisibleAccount();
+        final @Nullable CoreAccountInfo visibleAccount = getVisibleAccount();
         // Set up the sync promo
         if (visibleAccount == null) {
             setupPromoView(view, /* profileData= */ null, listener);
             return;
         }
         setupPromoView(
-                view, profileDataCache.getProfileDataOrDefault(visibleAccount.name), listener);
+                view,
+                profileDataCache.getProfileDataOrDefault(visibleAccount.getEmail()),
+                listener);
     }
 
     /**
@@ -395,7 +382,8 @@ public class SyncPromoController {
      *         onDismissListener marks that the promo is not dismissible and as a result the close
      *         button is hidden.
      */
-    private void setupPromoView(PersonalizedSigninPromoView view,
+    private void setupPromoView(
+            PersonalizedSigninPromoView view,
             final @Nullable DisplayableProfileData profileData,
             final @Nullable OnDismissListener onDismissListener) {
         if (mImpressionTracker != null) {
@@ -417,21 +405,21 @@ public class SyncPromoController {
             // Recent Tabs promos can't be dismissed.
             assert mAccessPoint != SigninAccessPoint.RECENT_TABS;
             view.getDismissButton().setVisibility(View.VISIBLE);
-            view.getDismissButton().setOnClickListener(promoView -> {
-                assert mSyncPromoDismissedPreferenceTracker != null;
-                SharedPreferencesManager.getInstance().writeBoolean(
-                        mSyncPromoDismissedPreferenceTracker, true);
-                recordShowCountHistogram(UserAction.DISMISSED);
-                onDismissListener.onDismiss();
-            });
+            view.getDismissButton()
+                    .setOnClickListener(
+                            promoView -> {
+                                assert mSyncPromoDismissedPreferenceTracker != null;
+                                ChromeSharedPreferences.getInstance()
+                                        .writeBoolean(mSyncPromoDismissedPreferenceTracker, true);
+                                recordShowCountHistogram(UserAction.DISMISSED);
+                                onDismissListener.onDismiss();
+                            });
         } else {
             view.getDismissButton().setVisibility(View.GONE);
         }
     }
 
-    /**
-     * Should be called when the view is not in use anymore (e.g. it's being recycled).
-     */
+    /** Should be called when the view is not in use anymore (e.g. it's being recycled). */
     public void detach() {
         if (mImpressionTracker != null) {
             mImpressionTracker.setListener(null);
@@ -443,29 +431,33 @@ public class SyncPromoController {
     public void increasePromoShowCount() {
         if (mAccessPoint == SigninAccessPoint.NTP_CONTENT_SUGGESTIONS) {
             final long currentTime = System.currentTimeMillis();
-            final long lastShownTime = SharedPreferencesManager.getInstance().readLong(
-                    ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME, 0L);
-            if (currentTime - lastShownTime < NTP_SYNC_PROMO_INCREASE_SHOW_COUNT_AFTER_MINUTE
+            final long lastShownTime =
+                    ChromeSharedPreferences.getInstance()
+                            .readLong(ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME, 0L);
+            if (currentTime - lastShownTime
+                            < NTP_SYNC_PROMO_INCREASE_SHOW_COUNT_AFTER_MINUTE
                                     * DateUtils.MINUTE_IN_MILLIS
                     && ChromeFeatureList.isEnabled(
                             ChromeFeatureList.SYNC_ANDROID_LIMIT_NTP_PROMO_IMPRESSIONS)) {
                 return;
             }
-            if (SharedPreferencesManager.getInstance().readLong(
-                        ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME)
+            if (ChromeSharedPreferences.getInstance()
+                            .readLong(ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME)
                     == 0) {
-                SharedPreferencesManager.getInstance().writeLong(
-                        ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME, currentTime);
+                ChromeSharedPreferences.getInstance()
+                        .writeLong(
+                                ChromePreferenceKeys.SIGNIN_PROMO_NTP_FIRST_SHOWN_TIME,
+                                currentTime);
             }
-            SharedPreferencesManager.getInstance().writeLong(
-                    ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME, currentTime);
+            ChromeSharedPreferences.getInstance()
+                    .writeLong(ChromePreferenceKeys.SIGNIN_PROMO_NTP_LAST_SHOWN_TIME, currentTime);
         }
         if (mAccessPoint != SigninAccessPoint.RECENT_TABS) {
-            SharedPreferencesManager.getInstance().incrementInt(
-                    getPromoShowCountPreferenceName(mAccessPoint));
+            ChromeSharedPreferences.getInstance()
+                    .incrementInt(getPromoShowCountPreferenceName(mAccessPoint));
         }
-        SharedPreferencesManager.getInstance().incrementInt(
-                ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT);
+        ChromeSharedPreferences.getInstance()
+                .incrementInt(ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT);
         recordShowCountHistogram(UserAction.SHOWN);
     }
 
@@ -476,20 +468,10 @@ public class SyncPromoController {
         view.getImage().setImageResource(R.drawable.chrome_sync_logo);
         setImageSize(context, view, R.dimen.signin_promo_cold_state_image_size);
 
-        view.getIllustration().setVisibility(View.GONE);
+        view.getTitle().setText(mTitleStringId);
+        view.getDescription().setText(mDescriptionStringId);
 
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_TITLE)) {
-            // TODO(crbug.com/1323197): set the title visible by default in the XML.
-            view.getTitle().setVisibility(View.VISIBLE);
-            view.getTitle().setText(mTitleStringId);
-        }
-        view.getDescription().setText(mDescriptionStringIdNoAccount);
-
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_SINGLE_BUTTON)) {
-            view.getPrimaryButton().setText(R.string.sync_promo_continue);
-        } else {
-            view.getPrimaryButton().setText(R.string.sync_promo_turn_on_sync);
-        }
+        view.getPrimaryButton().setText(R.string.sync_promo_turn_on_sync);
         view.getPrimaryButton().setOnClickListener(v -> signinWithNewAccount(context));
 
         view.getSecondaryButton().setVisibility(View.GONE);
@@ -501,35 +483,28 @@ public class SyncPromoController {
         view.getImage().setImageDrawable(accountImage);
         setImageSize(context, view, R.dimen.sync_promo_account_image_size);
 
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_ILLUSTRATION)) {
-            view.getIllustration().setVisibility(View.GONE);
-        }
-
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_TITLE)) {
-            view.getTitle().setVisibility(View.VISIBLE);
-            view.getTitle().setText(mTitleStringId);
-        }
+        view.getTitle().setText(mTitleStringId);
         view.getDescription().setText(mDescriptionStringId);
 
         view.getPrimaryButton().setOnClickListener(v -> signinWithDefaultAccount(context));
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SYNC_ANDROID_PROMOS_WITH_SINGLE_BUTTON)) {
-            view.getPrimaryButton().setText(R.string.sync_promo_continue);
-            view.getSecondaryButton().setVisibility(View.GONE);
-            return;
-        }
         if (IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile())
-                        .hasPrimaryAccount(ConsentLevel.SIGNIN)) {
+                .getIdentityManager(mProfile)
+                .hasPrimaryAccount(ConsentLevel.SIGNIN)) {
             view.getPrimaryButton().setText(R.string.sync_promo_turn_on_sync);
             view.getSecondaryButton().setVisibility(View.GONE);
             return;
         }
-        view.getPrimaryButton().setText(context.getString(
-                R.string.sync_promo_continue_as, mProfileData.getGivenNameOrFullNameOrEmail()));
 
-        view.getSecondaryButton().setText(R.string.signin_promo_choose_another_account);
-        view.getSecondaryButton().setOnClickListener(v -> signinWithNotDefaultAccount(context));
-        view.getSecondaryButton().setVisibility(View.VISIBLE);
+        view.getPrimaryButton().setText(SigninUtils.getContinueAsButtonText(context, mProfileData));
+
+        // Hide secondary button on automotive devices, as they only support one account per device
+        if (BuildInfo.getInstance().isAutomotive) {
+            view.getSecondaryButton().setVisibility(View.GONE);
+        } else {
+            view.getSecondaryButton().setText(R.string.signin_promo_choose_another_account);
+            view.getSecondaryButton().setOnClickListener(v -> signinWithNotDefaultAccount(context));
+            view.getSecondaryButton().setVisibility(View.VISIBLE);
+        }
     }
 
     private void signinWithNewAccount(Context context) {
@@ -570,8 +545,8 @@ public class SyncPromoController {
         }
         RecordHistogram.recordExactLinearHistogram(
                 "Signin.SyncPromo." + actionType + ".Count." + accessPoint,
-                SharedPreferencesManager.getInstance().readInt(
-                        ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT),
+                ChromeSharedPreferences.getInstance()
+                        .readInt(ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT),
                 MAX_TOTAL_PROMO_SHOW_COUNT);
     }
 
@@ -587,13 +562,11 @@ public class SyncPromoController {
         RecordUserAction.record(mImpressionUserActionName);
     }
 
-    @VisibleForTesting
     public static void setPrefSigninPromoDeclinedBookmarksForTests(boolean isDeclined) {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.SIGNIN_PROMO_BOOKMARKS_DECLINED, isDeclined);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.SIGNIN_PROMO_BOOKMARKS_DECLINED, isDeclined);
     }
 
-    @VisibleForTesting
     public static int getMaxImpressionsBookmarksForTests() {
         return MAX_IMPRESSIONS_BOOKMARKS;
     }

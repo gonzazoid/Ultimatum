@@ -4,10 +4,99 @@
 
 #include "components/security_interstitials/core/https_only_mode_metrics.h"
 
-namespace security_interstitials {
-namespace https_only_mode {
+#include "base/metrics/histogram_functions.h"
+
+namespace security_interstitials::https_only_mode {
+
+namespace {
+
+InterstitialReason GetInterstitialReason(
+    const HttpInterstitialState& interstitial_state) {
+  // This should follow the order in
+  // PopulateHttpsOnlyModeStringsForBlockingPage() in
+  // https_only_mode_ui_utils.cc.
+  if (interstitial_state.enabled_by_advanced_protection) {
+    return InterstitialReason::kAdvancedProtection;
+  }
+  if (interstitial_state.enabled_by_engagement_heuristic) {
+    return InterstitialReason::kSiteEngagementHeuristic;
+  }
+  if (interstitial_state.enabled_by_typically_secure_browsing) {
+    return InterstitialReason::kTypicallySecureUserHeuristic;
+  }
+  if (interstitial_state.enabled_by_pref) {
+    return InterstitialReason::kPref;
+  }
+  return InterstitialReason::kUnknown;
+}
+
+}  // namespace
 
 const char kEventHistogram[] = "Security.HttpsFirstMode.NavigationEvent";
+const char kEventHistogramWithEngagementHeuristic[] =
+    "Security.HttpsFirstModeWithEngagementHeuristic.NavigationEvent";
 
+const char kNavigationRequestSecurityLevelHistogram[] =
+    "Security.NavigationRequestSecurityLevel";
+
+const char kSiteEngagementHeuristicStateHistogram[] =
+    "Security.HttpsFirstModeWithEngagementHeuristic.State";
+
+const char kSiteEngagementHeuristicHostCountHistogram[] =
+    "Security.HttpsFirstModeWithEngagementHeuristic.HostCount";
+
+const char kSiteEngagementHeuristicAccumulatedHostCountHistogram[] =
+    "Security.HttpsFirstModeWithEngagementHeuristic.AccumulatedHostCount";
+
+const char kSiteEngagementHeuristicEnforcementDurationHistogram[] =
+    "Security.HttpsFirstModeWithEngagementHeuristic.Duration";
+
+const char kInterstitialReasonHistogram[] =
+    "Security.HttpsFirstMode.InterstitialReason";
+
+// TODO(crbug.com/1394910): Rename these metrics now that they apply to both
+// HTTPS-First Mode and HTTPS Upgrades.
+void RecordHttpsFirstModeNavigation(
+    Event event,
+    const HttpInterstitialState& interstitial_state) {
+  base::UmaHistogramEnumeration(kEventHistogram, event);
+
+  if (!interstitial_state.enabled_by_pref &&
+      interstitial_state.enabled_by_engagement_heuristic) {
+    // Only record the engagement heuristic histogram if HTTPS-First Mode wasn't
+    // enabled by the UI setting.
+    base::UmaHistogramEnumeration(kEventHistogramWithEngagementHeuristic,
+                                  event);
+  }
 }
-}  // namespace security_interstitials
+
+void RecordNavigationRequestSecurityLevel(
+    NavigationRequestSecurityLevel level) {
+  base::UmaHistogramEnumeration(kNavigationRequestSecurityLevelHistogram,
+                                level);
+}
+
+void RecordSiteEngagementHeuristicState(SiteEngagementHeuristicState state) {
+  base::UmaHistogramEnumeration(kSiteEngagementHeuristicStateHistogram, state);
+}
+
+void RecordSiteEngagementHeuristicCurrentHostCounts(size_t current_count,
+                                                    size_t accumulated_count) {
+  base::UmaHistogramCounts1000(kSiteEngagementHeuristicHostCountHistogram,
+                               current_count);
+  base::UmaHistogramCounts1000(
+      kSiteEngagementHeuristicAccumulatedHostCountHistogram, accumulated_count);
+}
+
+void RecordSiteEngagementHeuristicEnforcementDuration(
+    base::TimeDelta enforcement_duration) {
+  base::UmaHistogramTimes(kSiteEngagementHeuristicEnforcementDurationHistogram,
+                          enforcement_duration);
+}
+
+void RecordInterstitialReason(const HttpInterstitialState& interstitial_state) {
+  base::UmaHistogramEnumeration(kInterstitialReasonHistogram,
+                                GetInterstitialReason(interstitial_state));
+}
+
+}  // namespace security_interstitials::https_only_mode

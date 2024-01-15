@@ -8,20 +8,23 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/isolation_context.h"
+#include "content/browser/origin_agent_cluster_isolation_state.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
@@ -67,12 +70,14 @@ class WebDatabaseHostImplTest : public ::testing::Test {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, data_dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get(), special_storage_policy_);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     db_tracker_ = storage::DatabaseTracker::Create(
-        base::FilePath(),
+        data_dir_.GetPath(),
         /*is_incognito=*/false,
         /*special_storage_policy=*/nullptr, quota_manager_proxy_);
     // Raw pointer usage is safe because `host_` stores a reference to the
@@ -136,8 +141,11 @@ class WebDatabaseHostImplTest : public ::testing::Test {
 
   void LockProcessToURL(const GURL& url) {
     ChildProcessSecurityPolicyImpl::GetInstance()->LockProcessForTesting(
-        IsolationContext(BrowsingInstanceId(1), browser_context(),
-                         /*is_guest=*/false, /*is_fenced=*/false),
+        IsolationContext(
+            BrowsingInstanceId(1), browser_context(),
+            /*is_guest=*/false, /*is_fenced=*/false,
+            OriginAgentClusterIsolationState::CreateForDefaultIsolation(
+                &browser_context_)),
         process_id(), url);
   }
 
@@ -190,15 +198,17 @@ TEST_F(WebDatabaseHostImplTest, OpenFileCreatesBucket) {
   run_loop.Run();
 
   // Check default bucket exists for https://example.com.
-  storage::QuotaErrorOr<storage::BucketInfo> result =
+  ASSERT_OK_AND_ASSIGN(
+      storage::BucketInfo result,
       quota_manager_proxy_sync.GetBucket(
           blink::StorageKey::CreateFromStringForTesting(example_url),
-          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary);
-  EXPECT_TRUE(result.ok());
-  EXPECT_EQ(result->name, storage::kDefaultBucketName);
-  EXPECT_EQ(result->storage_key,
+          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary));
+  EXPECT_EQ(result.name, storage::kDefaultBucketName);
+  EXPECT_EQ(result.storage_key,
             blink::StorageKey::CreateFromStringForTesting(example_url));
-  EXPECT_GT(result->id.value(), 0);
+  EXPECT_GT(result.id.value(), 0);
+
+  security_policy->ClearIsolatedOriginsForTesting();
 }
 
 TEST_F(WebDatabaseHostImplTest, GetOrCreateBucketError) {
@@ -230,6 +240,8 @@ TEST_F(WebDatabaseHostImplTest, GetOrCreateBucketError) {
                          }));
       }));
   run_loop.Run();
+
+  security_policy->ClearIsolatedOriginsForTesting();
 }
 
 TEST_F(WebDatabaseHostImplTest, BadMessagesUnauthorized) {
@@ -287,6 +299,8 @@ TEST_F(WebDatabaseHostImplTest, BadMessagesUnauthorized) {
   CheckUnauthorizedOrigin([&]() {
     host()->HandleSqliteError(incorrect_origin, db_name, /*error=*/0);
   });
+
+  security_policy->ClearIsolatedOriginsForTesting();
 }
 
 TEST_F(WebDatabaseHostImplTest, BadMessagesInvalid) {
@@ -327,7 +341,7 @@ TEST_F(WebDatabaseHostImplTest, ProcessShutdown) {
   bool success_callback_was_called = false;
   auto success_callback = base::BindLambdaForTesting(
       [&](base::File) { success_callback_was_called = true; });
-  absl::optional<std::string> error_callback_message;
+  std::optional<std::string> error_callback_message;
 
   mojo::SetDefaultProcessErrorHandler(base::BindLambdaForTesting(
       [&](const std::string& message) { error_callback_message = message; }));
@@ -377,6 +391,7 @@ TEST_F(WebDatabaseHostImplTest, ProcessShutdown) {
   }
 
   mojo::SetDefaultProcessErrorHandler(base::NullCallback());
+  security_policy->ClearIsolatedOriginsForTesting();
 }
 
 }  // namespace

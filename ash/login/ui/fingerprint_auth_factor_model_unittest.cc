@@ -8,6 +8,7 @@
 #include "ash/login/ui/fake_fingerprint_auth_factor_model.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -63,13 +64,18 @@ class FingerprintAuthFactorModelTest : public AshTestBase {
                              base::Unretained(this)));
   }
 
+  void TearDown() override {
+    FingerprintAuthFactorModel::Factory::SetFactoryForTesting(nullptr);
+    AshTestBase::TearDown();
+  }
+
   void OnStateChanged() { on_state_changed_called_ = true; }
 
   std::unique_ptr<FakeFingerprintAuthFactorModelFactory>
       fake_fingerprint_auth_factor_model_factory_;
   std::unique_ptr<FingerprintAuthFactorModel> fingerprint_auth_factor_model_;
   AuthIconView icon_;
-  AuthFactorModel* model_ = nullptr;
+  raw_ptr<AuthFactorModel> model_ = nullptr;
   bool on_state_changed_called_ = false;
 };
 

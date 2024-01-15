@@ -11,9 +11,10 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/sessions/core/command_storage_manager.h"
 #include "components/sessions/core/session_command.h"
@@ -21,6 +22,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
+class Clock;
 class File;
 }
 
@@ -88,7 +90,8 @@ class SESSIONS_EXPORT CommandStorageBackend
       scoped_refptr<base::SequencedTaskRunner> owning_task_runner,
       const base::FilePath& path,
       CommandStorageManager::SessionType type,
-      const std::vector<uint8_t>& decryption_key = {});
+      const std::vector<uint8_t>& decryption_key = {},
+      base::Clock* clock = nullptr);
   CommandStorageBackend(const CommandStorageBackend&) = delete;
   CommandStorageBackend& operator=(const CommandStorageBackend&) = delete;
 
@@ -96,7 +99,11 @@ class SESSIONS_EXPORT CommandStorageBackend
   static bool IsValidFile(const base::FilePath& path);
 
   // Returns the path the files are being written to.
-  const base::FilePath& current_path() const { return current_path_; }
+  const base::FilePath current_path() const {
+    return open_file_ ? open_file_->path : base::FilePath();
+  }
+
+  bool IsFileOpen() const { return open_file_.get() != nullptr; }
 
   base::SequencedTaskRunner* owning_task_runner() {
     return base::RefCountedDeleteOnSequence<
@@ -149,6 +156,16 @@ class SESSIONS_EXPORT CommandStorageBackend
   struct SessionInfo {
     base::FilePath path;
     base::Time timestamp;
+  };
+
+  struct OpenFile {
+    OpenFile();
+    ~OpenFile();
+
+    base::FilePath path;
+    std::unique_ptr<base::File> file;
+    // Set to true once `kInitialStateMarkerCommandId` is written.
+    bool did_write_marker = false;
   };
 
   ~CommandStorageBackend();
@@ -242,11 +259,10 @@ class SESSIONS_EXPORT CommandStorageBackend
   // TaskRunner that the callback is added to.
   scoped_refptr<base::SequencedTaskRunner> callback_task_runner_;
 
-  // Path commands are currently being saved to.
-  base::FilePath current_path_;
+  raw_ptr<base::Clock> clock_;
 
-  // This may be null, created as necessary.
-  std::unique_ptr<base::File> file_;
+  // File and path commands are being written.
+  std::unique_ptr<OpenFile> open_file_;
 
   // Whether DoInit() was called. DoInit() is called on the background task
   // runner.
@@ -258,16 +274,24 @@ class SESSIONS_EXPORT CommandStorageBackend
   // Incremented every time a command is written.
   int commands_written_ = 0;
 
-  // Set to true once `kInitialStateMarkerCommandId` is written.
-  bool did_write_marker_ = false;
-
   // Timestamp when this session was started.
   base::Time timestamp_;
 
   // Data for the last session. If unset, fallback to legacy session data.
   absl::optional<SessionInfo> last_session_info_;
 
-  absl::optional<base::FilePath> last_file_with_valid_marker_;
+  // Paths of the two most recently written files with a valid marker (the
+  // first of which may be the currently open file). When a new file is
+  // successfully opened and the initial set of commands is written,
+  // `last_or_current_path_with_valid_marker_` is set to the path. At this
+  // point the previous file (initial value of
+  // `last_or_current_path_with_valid_marker_`) is no longer needed, and can be
+  // deleted. As there is no guarantee the commands have actually been written
+  // to disk, we keep one additional file around.
+  // `second_to_last_path_with_valid_marker_` maintains the previous valid file
+  // with a marker.
+  absl::optional<base::FilePath> last_or_current_path_with_valid_marker_;
+  absl::optional<base::FilePath> second_to_last_path_with_valid_marker_;
 
   bool force_append_commands_to_fail_for_testing_ = false;
 };

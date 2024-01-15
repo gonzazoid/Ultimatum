@@ -12,7 +12,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/session/session_types.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 
 class AccountId;
@@ -125,6 +125,14 @@ class ASH_PUBLIC_EXPORT SessionController {
 
   // Returns true if the screen is currently locked.
   virtual bool IsScreenLocked() const = 0;
+
+  // Returns true if the device is enterprise managed.
+  virtual bool IsEnterpriseManaged() const = 0;
+
+  // Return the number of users that have previously logged in on the device.
+  // Returns nullopt in the event where we cannot query the number of existing
+  // users, for instance, when `UserManager` is uninitialized.
+  virtual std::optional<int> GetExistingUsersCount() const = 0;
 
  protected:
   SessionController();

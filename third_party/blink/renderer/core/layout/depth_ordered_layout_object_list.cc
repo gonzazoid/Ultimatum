@@ -8,7 +8,7 @@
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
-#include "third_party/blink/renderer/core/layout/ng/legacy_layout_tree_walking.h"
+#include "third_party/blink/renderer/core/layout/legacy_layout_tree_walking.h"
 
 namespace blink {
 
@@ -57,8 +57,7 @@ bool ListModificationAllowedFor(const LayoutObject& object) {
   // We are allowed to insert/remove orthogonal writing mode roots during
   // layout for interleaved style recalcs, but only when these roots are fully
   // managed by LayoutNG.
-  return object.GetDocument().GetStyleEngine().InContainerQueryStyleRecalc() &&
-         IsManagedByLayoutNG(object);
+  return object.GetDocument().GetStyleEngine().InContainerQueryStyleRecalc();
 }
 
 }  // namespace

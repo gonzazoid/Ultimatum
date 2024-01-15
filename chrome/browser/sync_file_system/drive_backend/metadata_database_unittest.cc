@@ -9,13 +9,13 @@
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/values.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_constants.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_test_util.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_util.h"
@@ -1157,26 +1157,28 @@ TEST_P(MetadataDatabaseTest, DumpFiles) {
   EXPECT_EQ(SYNC_STATUS_OK, InitializeMetadataDatabase());
   VerifyTrackedFiles(tracked_files, std::size(tracked_files));
 
-  std::unique_ptr<base::ListValue> files =
+  base::Value::List files =
       metadata_database()->DumpFiles(app_root.tracker.app_id());
-  ASSERT_EQ(2u, files->GetList().size());
+  ASSERT_EQ(2u, files.size());
 
   const std::string* str;
-  const base::Value& folder = files->GetList()[0];
-  ASSERT_TRUE(folder.is_dict());
-  str = folder.FindStringKey("title");
+  const base::Value& folder_val = files[0];
+  ASSERT_TRUE(folder_val.is_dict());
+  const base::Value::Dict& folder = folder_val.GetDict();
+  str = folder.FindString("title");
   EXPECT_TRUE(str && *str == "folder_0");
-  str = folder.FindStringKey("type");
+  str = folder.FindString("type");
   EXPECT_TRUE(str && *str == "folder");
-  EXPECT_TRUE(folder.FindKey("details"));
+  EXPECT_TRUE(folder.contains("details"));
 
-  const base::Value& file = files->GetList()[1];
-  ASSERT_TRUE(file.is_dict());
-  str = file.FindStringKey("title");
+  const base::Value& file_val = files[1];
+  ASSERT_TRUE(file_val.is_dict());
+  const base::Value::Dict& file = file_val.GetDict();
+  str = file.FindString("title");
   EXPECT_TRUE(str && *str == "file_0");
-  str = file.FindStringKey("type");
+  str = file.FindString("type");
   EXPECT_TRUE(str && *str == "file");
-  EXPECT_TRUE(file.FindKey("details"));
+  EXPECT_TRUE(file.contains("details"));
 }
 
 TEST_P(MetadataDatabaseTest, ClearDatabase) {

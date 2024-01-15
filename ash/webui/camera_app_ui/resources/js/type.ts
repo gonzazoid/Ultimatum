@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import {assertExists, assertInstanceof} from './assert.js';
+import {WaitableEvent} from './waitable_event.js';
 
 /**
  * Photo or video resolution.
@@ -50,7 +51,6 @@ export class Resolution {
    * Compares width/height of resolutions, see if they are equal or not.
    *
    * @param resolution Resolution to be compared with.
-   * @return Whether width/height of resolutions are equal.
    */
   equals(resolution: Resolution|null): boolean {
     if (resolution === null) {
@@ -64,7 +64,6 @@ export class Resolution {
    * returns true if the resolution is rotated.
    *
    * @param resolution Resolution to be compared with.
-   * @return Whether width/height of resolutions are equal.
    */
   equalsWithRotation(resolution: Resolution): boolean {
     return (this.width === resolution.width &&
@@ -76,7 +75,6 @@ export class Resolution {
    * Compares aspect ratio of resolutions, see if they are equal or not.
    *
    * @param resolution Resolution to be compared with.
-   * @return Whether aspect ratio of resolutions are equal.
    */
   aspectRatioEquals(resolution: Resolution): boolean {
     return this.aspectRatio === resolution.aspectRatio;
@@ -111,35 +109,31 @@ export enum MimeType {
  */
 export enum Mode {
   PHOTO = 'photo',
-  VIDEO = 'video',
   PORTRAIT = 'portrait',
   SCAN = 'scan',
+  VIDEO = 'video',
 }
 
 /**
  * Camera facings.
  */
 export enum Facing {
-  USER = 'user',
   ENVIRONMENT = 'environment',
   EXTERNAL = 'external',
+  USER = 'user',
   // VIRTUAL_{facing} is for labeling video device for configuring extra stream
   // from corresponding {facing} video device.
-  VIRTUAL_USER = 'virtual_user',
   VIRTUAL_ENV = 'virtual_environment',
   VIRTUAL_EXT = 'virtual_external',
-  UNKNOWN = 'unknown',
+  VIRTUAL_USER = 'virtual_user',
 }
 
 export enum ViewName {
   CAMERA = 'view-camera',
-  CROP_DOCUMENT = 'view-crop-document',
-  DOCUMENT_MODE_DIALOG = 'view-document-mode-dialog',
   DOCUMENT_REVIEW = 'view-document-review',
   EXPERT_SETTINGS = 'view-expert-settings',
   FLASH = 'view-flash',
   LOW_STORAGE_DIALOG = 'view-low-storage-dialog',
-  MESSAGE_DIALOG = 'view-message-dialog',
   OPTION_PANEL = 'view-option-panel',
   PHOTO_ASPECT_RATIO_SETTINGS = 'view-photo-aspect-ratio-settings',
   PHOTO_RESOLUTION_SETTINGS = 'view-photo-resolution-settings',
@@ -152,8 +146,8 @@ export enum ViewName {
 }
 
 export enum VideoType {
-  MP4 = 'mp4',
   GIF = 'gif',
+  MP4 = 'mp4',
 }
 
 export enum PhotoResolutionLevel {
@@ -162,16 +156,20 @@ export enum PhotoResolutionLevel {
   UNKNOWN = 'unknown',
 }
 
+/* eslint-disable cca/string-enum-order */
 export enum VideoResolutionLevel {
-  FULL = 'full',
-  MEDIUM = 'medium',
   FOUR_K = '4K',
   QUAD_HD = 'Quad HD',
   FULL_HD = 'Full HD',
   HD = 'HD',
-  UNKNOWN = 'unknown',
   THREE_SIXTY_P = '360p',
+
+  FULL = 'full',
+  MEDIUM = 'medium',
+
+  UNKNOWN = 'unknown',
 }
+/* eslint-enable cca/string-enum-order */
 
 export enum AspectRatioSet {
   RATIO_4_3 = 1.3333,
@@ -179,12 +177,6 @@ export enum AspectRatioSet {
   RATIO_OTHER = 0.0000,
   RATIO_SQUARE = 1.0000,
 }
-
-export const NON_CROP_ASPECT_RATIO_SETS = [
-  AspectRatioSet.RATIO_4_3,
-  AspectRatioSet.RATIO_16_9,
-  AspectRatioSet.RATIO_OTHER,
-];
 
 export enum Rotation {
   ANGLE_0 = 0,
@@ -240,6 +232,7 @@ export enum PerfEvent {
   PHOTO_TAKING = 'photo-taking',
   PORTRAIT_MODE_CAPTURE_POST_PROCESSING =
       'portrait-mode-capture-post-processing',
+  TIME_LAPSE_CAPTURE_POST_PROCESSING = 'time-lapse-capture-post-processing',
   VIDEO_CAPTURE_POST_PROCESSING = 'video-capture-post-processing',
 }
 
@@ -296,15 +289,8 @@ export function getVideoTrackSettings(videoTrack: MediaStreamTrack):
  * stream is expired.
  */
 export class PreviewVideo {
-  private expired = false;
-
   constructor(
-      readonly video: HTMLVideoElement, readonly onExpired: Promise<void>) {
-    (async () => {
-      await this.onExpired;
-      this.expired = true;
-    })();
-  }
+      readonly video: HTMLVideoElement, readonly onExpired: WaitableEvent) {}
 
   getStream(): MediaStream {
     return assertInstanceof(this.video.srcObject, MediaStream);
@@ -319,7 +305,7 @@ export class PreviewVideo {
   }
 
   isExpired(): boolean {
-    return this.expired;
+    return this.onExpired.isSignaled();
   }
 }
 
@@ -339,6 +325,7 @@ export interface ErrorInfo {
  */
 export enum ErrorType {
   BROKEN_THUMBNAIL = 'broken-thumbnail',
+  CHECK_COVER_FAILURE = 'check-cover-failed',
   DEVICE_INFO_UPDATE_FAILURE = 'device-info-update-failure',
   DEVICE_NOT_EXIST = 'device-not-exist',
   EMPTY_FILE = 'empty-file',
@@ -348,16 +335,20 @@ export enum ErrorType {
   IDLE_DETECTOR_FAILURE = 'idle-detector-failure',
   INVALID_REVIEW_UI_STATE = 'invalid-review-ui-state',
   METADATA_MAPPING_FAILURE = 'metadata-mapping-failure',
+  MULTI_WINDOW_HANDLING_FAILURE = 'multi-window-handling-failure',
   MULTIPLE_STREAMS_FAILURE = 'multiple-streams-failure',
   NO_AVAILABLE_LEVEL = 'no-available-level',
   PERF_METRICS_FAILURE = 'perf-metrics-failure',
   PRELOAD_IMAGE_FAILURE = 'preload-image-failure',
+  RESUME_CAMERA_FAILURE = 'resume-camera-failure',
+  RESUME_PAUSE_FAILURE = 'resume-pause-failure',
   SET_FPS_RANGE_FAILURE = 'set-fps-range-failure',
   START_CAMERA_FAILURE = 'start-camera-failure',
   START_CAPTURE_FAILURE = 'start-capture-failure',
   STOP_CAPTURE_FAILURE = 'stop-capture-failure',
+  SUSPEND_CAMERA_FAILURE = 'suspend-camera-failure',
+  UNCAUGHT_ERROR = 'uncaught-error',
   UNCAUGHT_PROMISE = 'uncaught-promise',
-  UNKNOWN_FACING = 'unknown-facing',
   UNSAFE_INTEGER = 'unsafe-integer',
   UNSUPPORTED_PROTOCOL = 'unsupported-protocol',
 }
@@ -366,8 +357,8 @@ export enum ErrorType {
  * Error level used in ERROR metrics.
  */
 export enum ErrorLevel {
-  WARNING = 'WARNING',
   ERROR = 'ERROR',
+  WARNING = 'WARNING',
 }
 
 /**
@@ -430,6 +421,14 @@ export class EmptyThumbnailError extends Error {
   }
 }
 
+export class LowStorageError extends Error {
+  constructor() {
+    const message = 'Cannot start recording due to low storage.';
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
 /**
  * Throws when the recording is ended with no chunk returned.
  */
@@ -441,10 +440,10 @@ export class NoChunkError extends Error {
 }
 
 /**
- * Throws when the GIF recording is ended with no frame captured.
+ * Throws when the GIF or time lapse recording is ended with no frame captured.
  */
 export class NoFrameError extends Error {
-  constructor(message = 'No frames captured during GIF recording') {
+  constructor(message = 'No frames captured during the recording') {
     super(message);
     this.name = this.constructor.name;
   }
@@ -453,8 +452,18 @@ export class NoFrameError extends Error {
 /**
  * Throws when the portrait mode fails to detect a human face.
  */
-export class PortraitModeProcessError extends Error {
+export class PortraitErrorNoFaceDetected extends Error {
   constructor(message = 'No human face detected in the scene') {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+/**
+ * Throws when the camera is suspended while camera effects are ongoing.
+ */
+export class CameraSuspendError extends Error {
+  constructor(message = 'camera suspended') {
     super(message);
     this.name = this.constructor.name;
   }
@@ -465,15 +474,15 @@ export class PortraitModeProcessError extends Error {
  */
 export enum LocalStorageKey {
   CUSTOM_VIDEO_PARAMETERS = 'customVideoParameters',
-  DOC_MODE_DIALOG_SHOWN = 'isDocModeDialogShown',
-  DOC_MODE_MULTI_PAGE_TOAST_SHOWN = 'isDocModeMultiPageToastShown',
-  DOC_MODE_TOAST_SHOWN = 'isDocModeToastShown',
   ENABLE_FPS_PICKER = 'enableFPSPicker',
   ENABLE_FULL_SIZED_VIDEO_SNAPSHOT = 'enableFullSizedVideoSnapshot',
   ENABLE_MULTISTREAM_RECORDING = 'enableMultistreamRecording',
+  ENABLE_MULTISTREAM_RECORDING_CHROME = 'enableMultistreamRecordingChrome',
   ENABLE_PTZ_FOR_BUILTIN = 'enablePTZForBuiltin',
   EXPERT_MODE = 'expert',
+  GA_ID_REFRESH_TIME = 'gaIdRefreshTime',
   GA_USER_ID = 'google-analytics.analytics.user-id',
+  GA4_CLIENT_ID = 'ga4ClientId',
   MIRRORING_TOGGLES = 'mirroringToggles',
   PREF_DEVICE_PHOTO_ASPECT_RATIO_SET = 'devicePhotoAspectRatioSet',
   PREF_DEVICE_PHOTO_RESOLUTION_EXPERT = 'devicePhotoResolutionExpert',
@@ -482,9 +491,29 @@ export enum LocalStorageKey {
   PREF_DEVICE_VIDEO_RESOLUTION_FPS = 'deviceVideoResolutionFps',
   PREF_DEVICE_VIDEO_RESOLUTION_LEVEL = 'deviceVideoResolutionLevel',
   PRINT_PERFORMANCE_LOGS = 'printPerformanceLogs',
-  PTZ_TOAST_SHOWN = 'isPTZToastShown',
   SAVE_METADATA = 'saveMetadata',
   SHOW_ALL_RESOLUTIONS = 'showAllResolutions',
   SHOW_METADATA = 'showMetadata',
   TOGGLE_MIC = 'toggleMic',
 }
+
+/**
+ * Type of low storage dialog.
+ */
+export enum LowStorageDialogType {
+  AUTO_STOP = 'auto-stop',
+  CANNOT_START = 'cannot-start',
+}
+
+/**
+ * A rectangle representing a crop region with size (width, height) and having
+ * the top-left coordinate at (x, y).
+ */
+export interface CropRegionRect {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+export type Awaitable<T> = PromiseLike<T>|T;

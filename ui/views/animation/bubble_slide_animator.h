@@ -5,8 +5,8 @@
 #ifndef UI_VIEWS_ANIMATION_BUBBLE_SLIDE_ANIMATOR_H_
 #define UI_VIEWS_ANIMATION_BUBBLE_SLIDE_ANIMATOR_H_
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "ui/gfx/animation/linear_animation.h"
@@ -102,7 +102,7 @@ class VIEWS_EXPORT BubbleSlideAnimator : public AnimationDelegateViews,
   // Determines where to animate the bubble to during an animation.
   gfx::Rect CalculateTargetBounds(const View* desired_anchor_view) const;
 
-  const raw_ptr<BubbleDialogDelegateView> bubble_delegate_;
+  const raw_ptr<BubbleDialogDelegateView, DanglingUntriaged> bubble_delegate_;
   base::ScopedObservation<Widget, WidgetObserver> widget_observation_{this};
   gfx::LinearAnimation slide_animation_{this};
 

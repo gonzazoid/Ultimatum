@@ -4,7 +4,7 @@
 
 #include "remoting/protocol/host_control_dispatcher.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "net/socket/stream_socket.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/base/constants.h"
@@ -21,8 +21,7 @@ HostControlDispatcher::HostControlDispatcher()
     : ChannelDispatcherBase(kControlChannelName) {}
 HostControlDispatcher::~HostControlDispatcher() = default;
 
-void HostControlDispatcher::SetCapabilities(
-    const Capabilities& capabilities) {
+void HostControlDispatcher::SetCapabilities(const Capabilities& capabilities) {
   ControlMessage message;
   message.mutable_capabilities()->CopyFrom(capabilities);
   message_pipe()->Send(&message, {});
@@ -52,6 +51,13 @@ void HostControlDispatcher::SetTransportInfo(
     const TransportInfo& transport_info) {
   ControlMessage message;
   message.mutable_transport_info()->CopyFrom(transport_info);
+  message_pipe()->Send(&message, {});
+}
+
+void HostControlDispatcher::SetActiveDisplay(
+    const ActiveDisplay& active_display) {
+  ControlMessage message;
+  message.mutable_active_display_changed()->CopyFrom(active_display);
   message_pipe()->Send(&message, {});
 }
 
@@ -97,16 +103,17 @@ void HostControlDispatcher::OnIncomingMessage(
 
   std::unique_ptr<ControlMessage> message =
       ParseMessage<ControlMessage>(buffer.get());
-  if (!message)
+  if (!message) {
     return;
+  }
 
   // TODO(sergeyu): Move message validation from the message handlers here.
   if (message->has_clipboard_event()) {
     clipboard_stub_->InjectClipboardEvent(message->clipboard_event());
   } else if (message->has_client_resolution()) {
     const ClientResolution& resolution = message->client_resolution();
-    if ((resolution.has_dips_width() && resolution.dips_width() <= 0) ||
-        (resolution.has_dips_height() && resolution.dips_height() <= 0)) {
+    if ((resolution.has_width_pixels() && resolution.width_pixels() <= 0) ||
+        (resolution.has_height_pixels() && resolution.height_pixels() <= 0)) {
       LOG(ERROR) << "Received invalid ClientResolution message.";
       return;
     }

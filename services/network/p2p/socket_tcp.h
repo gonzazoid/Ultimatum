@@ -13,7 +13,7 @@
 #include "base/component_export.h"
 #include "base/containers/queue.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/ip_endpoint.h"
@@ -37,6 +37,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketTcpBase : public P2PSocket {
       mojo::PendingRemote<mojom::P2PSocketClient> client,
       mojo::PendingReceiver<mojom::P2PSocket> socket,
       P2PSocketType type,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
       ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory);
 
   P2PSocketTcpBase(const P2PSocketTcpBase&) = delete;
@@ -56,38 +57,34 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketTcpBase : public P2PSocket {
       const net::NetworkAnonymizationKey& network_anonymization_key) override;
 
   // mojom::P2PSocket implementation:
-  void Send(const std::vector<int8_t>& data,
-            const P2PPacketInfo& packet_info,
-            const net::MutableNetworkTrafficAnnotationTag& traffic_annotation)
-      override;
+  void Send(base::span<const uint8_t> data,
+            const P2PPacketInfo& packet_info) override;
+  void SendBatch(std::vector<mojom::P2PSendPacketPtr> packet_batch) override;
   void SetOption(P2PSocketOption option, int32_t value) override;
 
  protected:
   struct SendBuffer {
     SendBuffer();
-    SendBuffer(int32_t packet_id,
-               scoped_refptr<net::DrainableIOBuffer> buffer,
-               const net::NetworkTrafficAnnotationTag traffic_annotation);
+    SendBuffer(int32_t packet_id, scoped_refptr<net::DrainableIOBuffer> buffer);
     SendBuffer(const SendBuffer& rhs);
     ~SendBuffer();
 
     int32_t rtc_packet_id;
     scoped_refptr<net::DrainableIOBuffer> buffer;
-    net::MutableNetworkTrafficAnnotationTag traffic_annotation;
   };
 
   // Derived classes will provide the implementation.
-  virtual bool ProcessInput(char* input,
-                            int input_len,
+  virtual bool ProcessInput(base::span<const uint8_t> input,
                             size_t* bytes_consumed) = 0;
-  virtual void DoSend(
-      const net::IPEndPoint& to,
-      const std::vector<int8_t>& data,
-      const rtc::PacketOptions& options,
-      const net::NetworkTrafficAnnotationTag traffic_annotation) = 0;
+  virtual void DoSend(const net::IPEndPoint& to,
+                      base::span<const uint8_t> data,
+                      const rtc::PacketOptions& options) = 0;
 
   void WriteOrQueue(SendBuffer& send_buffer);
-  [[nodiscard]] bool OnPacket(std::vector<int8_t> data);
+  [[nodiscard]] bool OnPacket(base::span<const uint8_t> data);
+
+  bool SendPacket(base::span<const uint8_t> data,
+                  const P2PPacketInfo& packet_info);
 
  private:
   friend class P2PSocketTcpTestBase;
@@ -121,6 +118,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketTcpBase : public P2PSocket {
 
   bool connected_ = false;
   const P2PSocketType type_;
+  const net::NetworkTrafficAnnotationTag traffic_annotation_;
   raw_ptr<ProxyResolvingClientSocketFactory> proxy_resolving_socket_factory_;
 };
 
@@ -131,6 +129,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketTcp : public P2PSocketTcpBase {
       mojo::PendingRemote<mojom::P2PSocketClient> client,
       mojo::PendingReceiver<mojom::P2PSocket> socket,
       P2PSocketType type,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
       ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory);
 
   P2PSocketTcp(const P2PSocketTcp&) = delete;
@@ -139,14 +138,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketTcp : public P2PSocketTcpBase {
   ~P2PSocketTcp() override;
 
  protected:
-  bool ProcessInput(char* input,
-                    int input_len,
+  bool ProcessInput(base::span<const uint8_t> input,
                     size_t* bytes_consumed) override;
-  void DoSend(
-      const net::IPEndPoint& to,
-      const std::vector<int8_t>& data,
-      const rtc::PacketOptions& options,
-      const net::NetworkTrafficAnnotationTag traffic_annotation) override;
+  void DoSend(const net::IPEndPoint& to,
+              base::span<const uint8_t> data,
+              const rtc::PacketOptions& options) override;
 };
 
 // P2PSocketStunTcp class provides the framing of STUN messages when used
@@ -161,6 +157,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketStunTcp
       mojo::PendingRemote<mojom::P2PSocketClient> client,
       mojo::PendingReceiver<mojom::P2PSocket> socket,
       P2PSocketType type,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
       ProxyResolvingClientSocketFactory* proxy_resolving_socket_factory);
 
   P2PSocketStunTcp(const P2PSocketStunTcp&) = delete;
@@ -169,17 +166,14 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketStunTcp
   ~P2PSocketStunTcp() override;
 
  protected:
-  bool ProcessInput(char* input,
-                    int input_len,
+  bool ProcessInput(base::span<const uint8_t> input,
                     size_t* bytes_consumed) override;
-  void DoSend(
-      const net::IPEndPoint& to,
-      const std::vector<int8_t>& data,
-      const rtc::PacketOptions& options,
-      const net::NetworkTrafficAnnotationTag traffic_annotation) override;
+  void DoSend(const net::IPEndPoint& to,
+              base::span<const uint8_t> data,
+              const rtc::PacketOptions& options) override;
 
  private:
-  int GetExpectedPacketSize(const uint8_t* data, int len, int* pad_bytes);
+  int GetExpectedPacketSize(base::span<const uint8_t> data, int* pad_bytes);
 };
 
 }  // namespace network

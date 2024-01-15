@@ -76,6 +76,7 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   // internal::NativeWidgetPrivate:
   void InitNativeWidget(Widget::InitParams params) override;
   void OnWidgetInitDone() override;
+  void ReparentNativeViewImpl(gfx::NativeView new_parent) override;
   std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
@@ -139,7 +140,8 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   void SetCanAppearInExistingFullscreenSpaces(
       bool can_appear_in_existing_fullscreen_spaces) override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void FlashFrame(bool flash_frame) override;
   void RunShellDrag(View* view,
                     std::unique_ptr<ui::OSExchangeData> data,
@@ -162,13 +164,13 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   void SetVisibilityAnimationDuration(const base::TimeDelta& duration) override;
   void SetVisibilityAnimationTransition(
       Widget::VisibilityTransition transition) override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   ui::GestureRecognizer* GetGestureRecognizer() override;
   ui::GestureConsumer* GetGestureConsumer() override;
   void OnSizeConstraintsChanged() override;
   void OnNativeViewHierarchyWillChange() override;
   void OnNativeViewHierarchyChanged() override;
   std::string GetName() const override;
+  base::WeakPtr<internal::NativeWidgetPrivate> GetWeakPtr() override;
 
   // aura::WindowDelegate:
   gfx::Size GetMinimumSize() const override;
@@ -231,21 +233,23 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   // aura::TransientWindowObserver:
   void OnTransientParentChanged(aura::Window* new_parent) override;
 
-  void set_delegate_for_testing(internal::NativeWidgetDelegate* delegate) {
-    delegate_ = delegate;
-  }
-
  protected:
   ~NativeWidgetAura() override;
 
-  internal::NativeWidgetDelegate* delegate() { return delegate_; }
+  internal::NativeWidgetDelegate* delegate() { return delegate_.get(); }
 
  private:
   void SetInitialFocus(ui::WindowShowState show_state);
 
-  // TODO(crbug.com/1346381) Change delegate to a WeakPtr after
-  // removing ownership model.
-  raw_ptr<internal::NativeWidgetDelegate> delegate_;
+  // Set the bounds with target 'display_id'. This will place the widget in that
+  // 'display' even if the more than half of bounds are outside of the display.
+  // If the 'display_id' is nullopt or the display does not exist, it will use
+  // the display that matches 'bounds'.
+  void SetBoundsInternal(const gfx::Rect& bounds,
+                         absl::optional<int64_t> display_id);
+
+  base::WeakPtr<internal::NativeWidgetDelegate> delegate_;
+  std::unique_ptr<internal::NativeWidgetDelegate> owned_delegate_;
 
   // WARNING: set to NULL when destroyed. As the Widget is not necessarily
   // destroyed along with |window_| all usage of |window_| should first verify
@@ -253,7 +257,8 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   raw_ptr<aura::Window> window_;
 
   // See class documentation for Widget in widget.h for a note about ownership.
-  Widget::InitParams::Ownership ownership_;
+  Widget::InitParams::Ownership ownership_ =
+      Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET;
 
   ui::Cursor cursor_;
 
@@ -269,9 +274,18 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   // Native widget's handler to receive events before the event target.
   std::unique_ptr<FocusManagerEventHandler> focus_manager_event_handler_;
 
-  // The following factory is used for calls to close the NativeWidgetAura
-  // instance.
-  base::WeakPtrFactory<NativeWidgetAura> close_widget_factory_{this};
+  // The following factory is used to provide references to the NativeWidgetAura
+  // instance. We need a separate factory from the |close_widget_factory_|
+  // because the close widget factory is currently used to ensure that the
+  // CloseNow task is only posted once. We check whether there are any weak
+  // pointers from close_widget_factory_| before posting
+  // the CloseNow task, so we can't have any other weak pointers for this to
+  // work properly. CloseNow can destroy the aura::Window
+  // which will not destroy the NativeWidget if WIDGET_OWNS_NATIVE_WIDGET, and
+  // we need to make sure we do not attempt to destroy the aura::Window twice.
+  // TODO(1346381): The two factories can be combined if the
+  // WIDGET_OWNS_NATIVE_WIDGET is removed.
+  base::WeakPtrFactory<NativeWidgetAura> weak_factory{this};
 };
 
 }  // namespace views

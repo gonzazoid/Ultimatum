@@ -18,7 +18,6 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/stack.h"
 #include "base/feature_list.h"
-#include "base/i18n/break_iterator.h"
 #include "base/i18n/case_conversion.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
@@ -36,12 +35,20 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/omnibox/browser/in_memory_url_index.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/omnibox/browser/tailored_word_break_iterator.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/search_engines/template_url_service.h"
-#include "components/url_formatter/url_formatter.h"
+#include "third_party/metrics_proto/omnibox_event.pb.h"
 
 namespace {
+
+GURL ClearUsernameAndPassword(const GURL& url) {
+  GURL::Replacements r;
+  r.ClearUsername();
+  r.ClearPassword();
+  return url.ReplaceComponents(r);
+}
 
 // Algorithm Functions ---------------------------------------------------------
 
@@ -76,7 +83,7 @@ class UpdateRecentVisitsFromHistoryDBTask : public history::HistoryDBTask {
 
   // The URLIndexPrivateData that gets updated after the historyDB
   // task returns.
-  raw_ptr<URLIndexPrivateData, DanglingUntriaged> private_data_;
+  raw_ptr<URLIndexPrivateData, AcrossTasksDanglingUntriaged> private_data_;
   // The ID of the URL to get visits for and then update.
   history::URLID url_id_;
   // Whether fetching the recent visits for the URL succeeded.
@@ -89,8 +96,7 @@ class UpdateRecentVisitsFromHistoryDBTask : public history::HistoryDBTask {
 UpdateRecentVisitsFromHistoryDBTask::UpdateRecentVisitsFromHistoryDBTask(
     URLIndexPrivateData* private_data,
     history::URLID url_id)
-    : private_data_(private_data), url_id_(url_id), succeeded_(false) {
-}
+    : private_data_(private_data), url_id_(url_id), succeeded_(false) {}
 
 bool UpdateRecentVisitsFromHistoryDBTask::RunOnDBThread(
     history::HistoryBackend* backend,
@@ -107,9 +113,8 @@ void UpdateRecentVisitsFromHistoryDBTask::DoneRunOnMainThread() {
     private_data_->UpdateRecentVisits(url_id_, recent_visits_);
 }
 
-UpdateRecentVisitsFromHistoryDBTask::~UpdateRecentVisitsFromHistoryDBTask() {
-}
-
+UpdateRecentVisitsFromHistoryDBTask::~UpdateRecentVisitsFromHistoryDBTask() =
+    default;
 
 // URLIndexPrivateData ---------------------------------------------------------
 
@@ -124,7 +129,8 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
     const std::string& host_filter,
     size_t max_matches,
     bookmarks::BookmarkModel* bookmark_model,
-    TemplateURLService* template_url_service) {
+    TemplateURLService* template_url_service,
+    OmniboxTriggeredFeatureService* triggered_feature_service) {
   // This list will contain the original search string and any other string
   // transformations.
   String16Vector search_strings;
@@ -171,10 +177,10 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
             base::UnescapeRule::SPACES | base::UnescapeRule::PATH_SEPARATORS |
                 base::UnescapeRule::URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS));
 
-    // Extract individual 'words' (as opposed to 'terms'; see comment in
-    // HistoryIdsToScoredMatches()) from the search string. When the user types
-    // "colspec=ID%20Mstone Release" we get four 'words': "colspec", "id",
-    // "mstone" and "release".
+    // Extract individual 'words' (as opposed to 'terms'; see the declaration
+    // comment in `GetTermsAndWordStartsOffsets()`) from the search string. When
+    // the user types "colspec=ID%20Mstone Release" we get four 'words':
+    // "colspec", "id", "mstone" and "release".
     String16Vector lower_words(
         String16VectorFromString16(lower_unescaped_string, nullptr));
     if (lower_words.empty())
@@ -189,7 +195,7 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
 
     HistoryIdsToScoredMatches(std::move(history_ids), lower_raw_string,
                               host_filter, template_url_service, bookmark_model,
-                              &scored_items);
+                              &scored_items, triggered_feature_service);
   }
   // Select and sort only the top |max_matches| results.
   if (scored_items.size() > max_matches) {
@@ -200,7 +206,16 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
     std::partial_sort(
         scored_items.begin(), scored_items.begin() + first_pass_size,
         scored_items.end(), ScoredHistoryMatch::MatchScoreGreater);
-    scored_items.resize(first_pass_size);
+
+    // When ML scoring w/increased candidates is enabled, all candidates outside
+    // of some light filtering should be passed to the controller to be
+    // re-scored. Do not discard matches by resizing. These will have a zero
+    // relevance score, so it's ok to not sort anything past `first_pass_size`.
+    bool skip_resize =
+        OmniboxFieldTrial::IsMlUrlScoringUnlimitedNumCandidatesEnabled();
+    if (!skip_resize) {
+      scored_items.resize(first_pass_size);
+    }
 
     // Filter unique matches to maximize the use of the `max_matches` capacity.
     // It's possible this'll still end up with duplicates as having unique
@@ -212,8 +227,9 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
       seen_history_ids.insert(scored_item_id);
       return duplicate;
     });
-    if (scored_items.size() > max_matches)
+    if (!skip_resize && scored_items.size() > max_matches) {
       scored_items.resize(max_matches);
+    }
 
   } else {
     std::sort(scored_items.begin(), scored_items.end(),
@@ -236,7 +252,8 @@ ScoredHistoryMatches URLIndexPrivateData::HistoryItemsForTerms(
   return scored_items;
 }
 
-std::vector<std::string> URLIndexPrivateData::HighlyVisitedHosts() const {
+const std::vector<std::string>& URLIndexPrivateData::HighlyVisitedHosts()
+    const {
   return highly_visited_hosts_;
 }
 
@@ -260,6 +277,8 @@ bool URLIndexPrivateData::UpdateURL(
         RowQualifiesAsSignificant(new_row, base::Time()) &&
         IndexRow(nullptr, history_service, new_row, scheme_allowlist, tracker);
   } else if (RowQualifiesAsSignificant(row, base::Time())) {
+    // TODO(manukh): If we decide to launch `kDomainSuggestions`, `host_visits_`
+    //   should be incremented here.
     // This indexed row still qualifies and will be re-indexed.
     // The url won't have changed but the title, visit count, etc.
     // might have changed.
@@ -372,7 +391,7 @@ scoped_refptr<URLIndexPrivateData> URLIndexPrivateData::RebuildFromHistory(
       OmniboxFieldTrial::MaxNumHQPUrlsIndexedAtStartup();
   int num_urls_indexed = 0;
   for (history::URLRow row; history_enum.GetNextURL(&row);) {
-    DCHECK(RowQualifiesAsSignificant(row, base::Time()));
+    CHECK(row.url().is_valid());
     // Do not use >= to account for case of -1 for unlimited urls.
     if (rebuilt_data->IndexRow(history_db, nullptr, row, scheme_allowlist,
                                nullptr) &&
@@ -509,8 +528,7 @@ HistoryIDSet URLIndexPrivateData::HistoryIDsForTerm(
     auto best_prefix(search_term_cache_.end());
     for (auto cache_iter = search_term_cache_.begin();
          cache_iter != search_term_cache_.end(); ++cache_iter) {
-      if (base::StartsWith(term_lower,
-                           base::i18n::ToLower(cache_iter->first),
+      if (base::StartsWith(term_lower, base::i18n::ToLower(cache_iter->first),
                            base::CompareCase::SENSITIVE) &&
           (best_prefix == search_term_cache_.end() ||
            cache_iter->first.length() > best_prefix->first.length()))
@@ -629,19 +647,13 @@ void URLIndexPrivateData::HistoryIdsToScoredMatches(
     const std::string& host_filter,
     const TemplateURLService* template_url_service,
     bookmarks::BookmarkModel* bookmark_model,
-    ScoredHistoryMatches* scored_items) const {
+    ScoredHistoryMatches* scored_items,
+    OmniboxTriggeredFeatureService* triggered_feature_service) const {
   if (history_ids.empty())
     return;
 
-  // Break up the raw search string (complete with escaped URL elements) into
-  // 'terms' (as opposed to 'words'; see comment in HistoryItemsForTerms()).
-  // We only want to break up the search string on 'true' whitespace rather than
-  // escaped whitespace.  For example, when the user types
-  // "colspec=ID%20Mstone Release" we get two 'terms': "colspec=id%20mstone" and
-  // "release".
-  String16Vector lower_raw_terms =
-      base::SplitString(lower_raw_string, base::kWhitespaceUTF16,
-                        base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  auto [lower_raw_terms, lower_terms_to_word_starts_offsets] =
+      GetTermsAndWordStartsOffsets(lower_raw_string);
 
   // Don't score matches when there are no terms to score against.  (It's
   // possible that the word break iterater that extracts words to search for in
@@ -650,12 +662,9 @@ void URLIndexPrivateData::HistoryIdsToScoredMatches(
   // reasonable order to matches when there are no terms (i.e., all the words
   // are some form of whitespace), but this is such a rare edge case that it's
   // not worth the time.
-  if (lower_raw_terms.empty())
+  if (lower_raw_terms.empty()) {
     return;
-
-  WordStarts lower_terms_to_word_starts_offsets;
-  CalculateWordStartsOffsets(lower_raw_terms,
-                             &lower_terms_to_word_starts_offsets);
+  }
 
   // Filter bad matches and other matches we don't want to display.
   base::EraseIf(history_ids, [&](const HistoryID history_id) {
@@ -669,29 +678,45 @@ void URLIndexPrivateData::HistoryIdsToScoredMatches(
   // matches. However, since HQP doesn't dedupe suggestions, this can be
   // problematic when there are multiple duplicate matches. Try counting the
   // unique hosts in the matches instead.
-  static bool count_unique_hosts = base::FeatureList::IsEnabled(
-      omnibox::kHistoryQuickProviderSpecificityScoreCountUniqueHosts);
-  const size_t num_unique_hosts =
-      count_unique_hosts ? base::MakeFlatSet<std::string>(
-                               history_ids, {},
-                               [&](const auto history_id) {
-                                 return history_info_map_.find(history_id)
-                                     ->second.url_row.url()
-                                     .host();
-                               })
-                               .size()
-                         : history_ids.size();
+  size_t num_unique_hosts;
+  std::set<std::string> unique_hosts = {};
+  for (const auto& history_id : history_ids) {
+    DCHECK(history_info_map_.count(history_id));
+    unique_hosts.insert(
+        history_info_map_.find(history_id)->second.url_row.url().host());
+    // `ScoredHistoryMatch` assigns the same specificity to suggestions for
+    // counts 4 or larger.
+    // TODO(manukh) Should share `kMaxUniqueHosts` with `ScoredHistoryMatch`,
+    //  but doing so is complicated as it's derived from parsing the default
+    //  string value for the finch param `kHQPNumMatchesScoresRule`.
+    constexpr size_t kMaxUniqueHosts = 4;
+    if (unique_hosts.size() >= kMaxUniqueHosts)
+      break;
+  }
+  num_unique_hosts = unique_hosts.size();
 
   for (HistoryID history_id : history_ids) {
     auto hist_pos = history_info_map_.find(history_id);
     const history::URLRow& hist_item = hist_pos->second.url_row;
     auto starts_pos = word_starts_map_.find(history_id);
     DCHECK(starts_pos != word_starts_map_.end());
+
+    bool is_highly_visited_host =
+        !host_filter.empty() ||
+        base::ranges::find(HighlyVisitedHosts(), hist_item.url().host()) !=
+            HighlyVisitedHosts().end();
     ScoredHistoryMatch new_scored_match(
         hist_item, hist_pos->second.visits, lower_raw_string, lower_raw_terms,
         lower_terms_to_word_starts_offsets, starts_pos->second,
         bookmark_model && bookmark_model->IsBookmarked(hist_item.url()),
-        num_unique_hosts, now);
+        num_unique_hosts, is_highly_visited_host, now);
+
+    if (new_scored_match.raw_score_before_domain_boosting <
+        new_scored_match.raw_score_after_domain_boosting) {
+      triggered_feature_service->FeatureTriggered(
+          metrics::OmniboxEventProto_Feature_DOMAIN_SUGGESTIONS);
+    }
+
     // Filter new matches that ended up scoring 0. (These are usually matches
     // which didn't match the user's raw terms.)
     if (new_scored_match.raw_score > 0)
@@ -708,8 +733,7 @@ void URLIndexPrivateData::CalculateWordStartsOffsets(
   // starts at offset 1.
   lower_terms_to_word_starts_offsets->resize(lower_terms.size(), 0u);
   for (size_t i = 0; i < lower_terms.size(); ++i) {
-    TailoredWordBreakIterator iter(lower_terms[i],
-                                   base::i18n::BreakIterator::BREAK_WORD);
+    TailoredWordBreakIterator iter(lower_terms[i]);
     // If the iterator doesn't work, assume an offset of 0.
     if (!iter.Init())
       continue;
@@ -737,15 +761,13 @@ bool URLIndexPrivateData::IndexRow(
 
   const history::URLID row_id = row.id();
   // Strip out username and password before saving and indexing.
-  std::u16string url(url_formatter::FormatUrl(
-      gurl, url_formatter::kFormatUrlOmitUsernamePassword,
-      base::UnescapeRule::NONE, nullptr, nullptr, nullptr));
+  const GURL new_url = ClearUsernameAndPassword(gurl);
 
   HistoryID history_id = static_cast<HistoryID>(row_id);
   DCHECK_LT(history_id, std::numeric_limits<HistoryID>::max());
 
   // Add the row for quick lookup in the history info store.
-  history::URLRow new_row(GURL(url), row_id);
+  history::URLRow new_row(new_url, row_id);
   new_row.set_visit_count(row.visit_count());
   new_row.set_typed_count(row.typed_count());
   new_row.set_last_visit(row.last_visit());
@@ -795,12 +817,13 @@ void URLIndexPrivateData::AddRowWordsToIndex(const history::URLRow& row,
   HistoryID history_id = static_cast<HistoryID>(row.id());
   // Split URL into individual, unique words then add in the title words.
   const GURL& gurl(row.url());
+  DCHECK(gurl.is_valid());
   const std::u16string& url = bookmarks::CleanUpUrlForMatching(gurl, nullptr);
-  String16Set url_words = String16SetFromString16(url,
-      word_starts ? &word_starts->url_word_starts_ : nullptr);
+  String16Set url_words = String16SetFromString16(
+      url, word_starts ? &word_starts->url_word_starts_ : nullptr);
   const std::u16string& title = bookmarks::CleanUpTitleForMatching(row.title());
-  String16Set title_words = String16SetFromString16(title,
-      word_starts ? &word_starts->title_word_starts_ : nullptr);
+  String16Set title_words = String16SetFromString16(
+      title, word_starts ? &word_starts->title_word_starts_ : nullptr);
   for (const auto& word :
        base::STLSetUnion<String16Set>(url_words, title_words))
     AddWordToIndex(word, history_id);
@@ -922,11 +945,9 @@ bool URLIndexPrivateData::ShouldExclude(
 URLIndexPrivateData::SearchTermCacheItem::SearchTermCacheItem(
     const WordIDSet& word_id_set,
     const HistoryIDSet& history_id_set)
-    : word_id_set_(word_id_set), history_id_set_(history_id_set), used_(true) {
-}
+    : word_id_set_(word_id_set), history_id_set_(history_id_set), used_(true) {}
 
-URLIndexPrivateData::SearchTermCacheItem::SearchTermCacheItem() : used_(true) {
-}
+URLIndexPrivateData::SearchTermCacheItem::SearchTermCacheItem() : used_(true) {}
 
 URLIndexPrivateData::SearchTermCacheItem::SearchTermCacheItem(
     const SearchTermCacheItem& other) = default;
@@ -936,18 +957,33 @@ size_t URLIndexPrivateData::SearchTermCacheItem::EstimateMemoryUsage() const {
          base::trace_event::EstimateMemoryUsage(history_id_set_);
 }
 
-URLIndexPrivateData::SearchTermCacheItem::~SearchTermCacheItem() {
+// static
+std::pair<String16Vector, WordStarts>
+URLIndexPrivateData::GetTermsAndWordStartsOffsets(
+    const std::u16string& lower_raw_string) {
+  String16Vector lower_raw_terms =
+      base::SplitString(lower_raw_string, base::kWhitespaceUTF16,
+                        base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  if (lower_raw_terms.empty()) {
+    return {{}, {}};
+  }
+
+  WordStarts lower_terms_to_word_starts_offsets;
+  CalculateWordStartsOffsets(lower_raw_terms,
+                             &lower_terms_to_word_starts_offsets);
+  return {lower_raw_terms, lower_terms_to_word_starts_offsets};
 }
+
+URLIndexPrivateData::SearchTermCacheItem::~SearchTermCacheItem() = default;
 
 // URLIndexPrivateData::HistoryItemFactorGreater -------------------------------
 
 URLIndexPrivateData::HistoryItemFactorGreater::HistoryItemFactorGreater(
     const HistoryInfoMap& history_info_map)
-    : history_info_map_(history_info_map) {
-}
+    : history_info_map_(history_info_map) {}
 
-URLIndexPrivateData::HistoryItemFactorGreater::~HistoryItemFactorGreater() {
-}
+URLIndexPrivateData::HistoryItemFactorGreater::~HistoryItemFactorGreater() =
+    default;
 
 bool URLIndexPrivateData::HistoryItemFactorGreater::operator()(
     const HistoryID h1,

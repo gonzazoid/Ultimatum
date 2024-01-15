@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/safe_browsing/core/browser/sync/safe_browsing_primary_account_token_fetcher.h"
@@ -164,16 +164,18 @@ void ExtensionTelemetryUploader::SendRequest(const std::string& access_token) {
 }
 
 void ExtensionTelemetryUploader::OnURLLoaderComplete(
-    std::unique_ptr<std::string> /* response_body */) {
+    std::unique_ptr<std::string> response_body) {
   int response_code = 0;
   if (url_loader_->ResponseInfo() && url_loader_->ResponseInfo()->headers)
     response_code = url_loader_->ResponseInfo()->headers->response_code();
 
-  RetryOrFinish(url_loader_->NetError(), response_code);
+  RetryOrFinish(url_loader_->NetError(), response_code, *response_body.get());
 }
 
-void ExtensionTelemetryUploader::RetryOrFinish(int net_error,
-                                               int response_code) {
+void ExtensionTelemetryUploader::RetryOrFinish(
+    int net_error,
+    int response_code,
+    const std::string& response_data) {
   RecordNetworkResponseCodeOrError(net_error == net::OK ? response_code
                                                         : net_error);
   if (net_error == net::OK && response_code == net::HTTP_OK) {
@@ -182,14 +184,14 @@ void ExtensionTelemetryUploader::RetryOrFinish(int net_error,
     RecordUploadDuration(/*success*/ true,
                          base::TimeTicks::Now() - upload_start_time_);
     // Callback may delete the uploader, so no touching anything after this.
-    std::move(callback_).Run(/*success=*/true);
+    std::move(callback_).Run(/*success=*/true, response_data);
   } else {
     if (response_code < 500 || num_upload_retries_ >= kMaxRetryAttempts) {
       RecordUploadSuccess(/*success*/ false);
       RecordUploadDuration(/*success*/ false,
                            base::TimeTicks::Now() - upload_start_time_);
       // Callback may delete the uploader, so no touching anything after this.
-      std::move(callback_).Run(/*success=*/false);
+      std::move(callback_).Run(/*success=*/false, response_data);
     } else {
       content::GetUIThreadTaskRunner({})->PostDelayedTask(
           FROM_HERE,

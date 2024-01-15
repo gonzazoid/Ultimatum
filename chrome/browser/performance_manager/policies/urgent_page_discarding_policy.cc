@@ -16,21 +16,28 @@
 #include "chrome/browser/lacros/lacros_memory_pressure_evaluator.h"
 #endif
 
-namespace performance_manager {
-namespace policies {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/memory/pressure/system_memory_pressure_evaluator.h"
+#endif
+
+namespace performance_manager::policies {
 
 namespace {
 
+#if BUILDFLAG(IS_CHROMEOS)
+absl::optional<memory_pressure::ReclaimTarget> GetReclaimTarget() {
+  absl::optional<memory_pressure::ReclaimTarget> reclaim_target = absl::nullopt;
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-absl::optional<uint64_t> GetReclaimTargetKB() {
-  absl::optional<uint64_t> reclaim_target_kb = absl::nullopt;
   auto* evaluator = LacrosMemoryPressureEvaluator::Get();
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+  auto* evaluator = ash::memory::SystemMemoryPressureEvaluator::Get();
+#endif
   if (evaluator) {
-    reclaim_target_kb = evaluator->GetCachedReclaimTargetKB();
+    reclaim_target = evaluator->GetCachedReclaimTarget();
   }
-  return reclaim_target_kb;
+  return reclaim_target;
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
 
@@ -53,19 +60,20 @@ void UrgentPageDiscardingPolicy::OnTakenFromGraph(Graph* graph) {
   graph_ = nullptr;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
 void UrgentPageDiscardingPolicy::OnReclaimTarget(
-    absl::optional<uint64_t> reclaim_target_kb) {
-  PageDiscardingHelper::GetFromGraph(graph_)->UrgentlyDiscardMultiplePages(
-      reclaim_target_kb, true,
+    absl::optional<memory_pressure::ReclaimTarget> reclaim_target) {
+  PageDiscardingHelper::GetFromGraph(graph_)->DiscardMultiplePages(
+      reclaim_target, true,
       base::BindOnce(
           [](UrgentPageDiscardingPolicy* policy, bool success_unused) {
             DCHECK(policy->handling_memory_pressure_notification_);
             policy->handling_memory_pressure_notification_ = false;
           },
-          base::Unretained(this)));
+          base::Unretained(this)),
+      PageDiscardingHelper::DiscardReason::URGENT);
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void UrgentPageDiscardingPolicy::OnMemoryPressure(
     base::MemoryPressureListener::MemoryPressureLevel new_level) {
@@ -80,20 +88,26 @@ void UrgentPageDiscardingPolicy::OnMemoryPressure(
     return;
   }
 
+  // Don't discard a page if urgent discarding is disabled. The feature state is
+  // checked here instead of at policy creation time so that only clients that
+  // experience memory pressure are enrolled in the experiment.
+  if (!base::FeatureList::IsEnabled(
+          performance_manager::features::kUrgentPageDiscarding)) {
+    return;
+  }
+
   handling_memory_pressure_notification_ = true;
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
   // Chrome OS memory pressure evaluator provides the memory reclaim target to
   // leave critical memory pressure. When Chrome OS is under heavy memory
   // pressure, discards multiple tabs to meet the memory reclaim target.
-  // TODO(vovoy): Support Ash Chrome. Ash Chrome tab discarding is supported by
-  // TabManagerDelegate to discard tabs and kill ARC++ apps.
   content::GetUIThreadTaskRunner({})->PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(GetReclaimTargetKB),
+      FROM_HERE, base::BindOnce(GetReclaimTarget),
       base::BindOnce(&UrgentPageDiscardingPolicy::OnReclaimTarget,
                      base::Unretained(this)));
 #else
-  PageDiscardingHelper::GetFromGraph(graph_)->UrgentlyDiscardAPage(
+  PageDiscardingHelper::GetFromGraph(graph_)->DiscardAPage(
       base::BindOnce(
           [](UrgentPageDiscardingPolicy* policy, bool success_unused) {
             DCHECK(policy->handling_memory_pressure_notification_);
@@ -102,12 +116,12 @@ void UrgentPageDiscardingPolicy::OnMemoryPressure(
           // |PageDiscardingHelper| and this class are both GraphOwned objects,
           // their lifetime is tied to the Graph's lifetime and both objects
           // will be released sequentially while it's being torn down. This
-          // ensures that the reply callback passed to |UrgentlyDiscardAPage|
+          // ensures that the reply callback passed to |DiscardAPage|
           // won't ever run after the destruction of this class and so it's safe
           // to use Unretained.
-          base::Unretained(this)));
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+          base::Unretained(this)),
+      PageDiscardingHelper::DiscardReason::URGENT);
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
-}  // namespace policies
-}  // namespace performance_manager
+}  // namespace performance_manager::policies

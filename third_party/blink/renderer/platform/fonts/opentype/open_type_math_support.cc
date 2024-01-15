@@ -9,9 +9,10 @@
 #include <hb-ot.h>
 // clang-format on
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/harfbuzz_face.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace {
 // HarfBuzz' hb_position_t is a 16.16 fixed-point value.
@@ -128,8 +129,9 @@ absl::optional<float> OpenTypeMathSupport::MathConstant(
 absl::optional<float> OpenTypeMathSupport::MathItalicCorrection(
     const HarfBuzzFace* harfbuzz_face,
     Glyph glyph) {
-  if (!harfbuzz_face)
+  if (!HasMathData(harfbuzz_face)) {
     return absl::nullopt;
+  }
 
   hb_font_t* const font = harfbuzz_face->GetScaledFont();
 
@@ -192,10 +194,10 @@ OpenTypeMathSupport::GetGlyphVariantRecords(
   DCHECK(harfbuzz_face);
   DCHECK(base_glyph);
 
-  auto getter = base::BindOnce(&hb_ot_math_get_glyph_variants);
+  auto getter = WTF::BindOnce(&hb_ot_math_get_glyph_variants);
   auto converter =
-      base::BindRepeating([](hb_ot_math_glyph_variant_t record)
-                              -> OpenTypeMathStretchData::GlyphVariantRecord {
+      WTF::BindRepeating([](hb_ot_math_glyph_variant_t record)
+                             -> OpenTypeMathStretchData::GlyphVariantRecord {
         return record.glyph;
       });
   return GetHarfBuzzMathRecord(
@@ -213,7 +215,7 @@ OpenTypeMathSupport::GetGlyphPartRecords(
   DCHECK(harfbuzz_face);
   DCHECK(base_glyph);
 
-  auto getter = base::BindOnce(
+  auto getter = WTF::BindOnce(
       [](hb_font_t* font, hb_codepoint_t glyph, hb_direction_t direction,
          unsigned int start_offset, unsigned int* parts_count,
          hb_ot_math_glyph_part_t* parts) {
@@ -223,8 +225,8 @@ OpenTypeMathSupport::GetGlyphPartRecords(
                                              &italic_correction);
       });
   auto converter =
-      base::BindRepeating([](hb_ot_math_glyph_part_t record)
-                              -> OpenTypeMathStretchData::GlyphPartRecord {
+      WTF::BindRepeating([](hb_ot_math_glyph_part_t record)
+                             -> OpenTypeMathStretchData::GlyphPartRecord {
         return {static_cast<Glyph>(record.glyph),
                 HarfBuzzUnitsToFloat(record.start_connector_length),
                 HarfBuzzUnitsToFloat(record.end_connector_length),

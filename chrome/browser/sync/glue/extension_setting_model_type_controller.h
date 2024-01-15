@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_SYNC_GLUE_EXTENSION_SETTING_MODEL_TYPE_CONTROLLER_H_
 #define CHROME_BROWSER_SYNC_GLUE_EXTENSION_SETTING_MODEL_TYPE_CONTROLLER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "components/sync/driver/non_ui_syncable_service_based_model_type_controller.h"
+#include "components/sync/service/non_ui_syncable_service_based_model_type_controller.h"
 
 class Profile;
 
@@ -27,6 +27,7 @@ class ExtensionSettingModelTypeController
       syncer::OnceModelTypeStoreFactory store_factory,
       SyncableServiceProvider syncable_service_provider,
       const base::RepeatingClosure& dump_stack,
+      DelegateMode delegate_mode,
       Profile* profile);
 
   ExtensionSettingModelTypeController(

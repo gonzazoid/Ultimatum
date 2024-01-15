@@ -25,8 +25,7 @@ TooltipManagerMac::TooltipManagerMac(
     remote_cocoa::mojom::NativeWidgetNSWindow* bridge)
     : bridge_(bridge) {}
 
-TooltipManagerMac::~TooltipManagerMac() {
-}
+TooltipManagerMac::~TooltipManagerMac() = default;
 
 int TooltipManagerMac::GetMaxWidth(const gfx::Point& location) const {
   return kTooltipMaxWidthPixels;
@@ -42,6 +41,10 @@ const gfx::FontList& TooltipManagerMac::GetFontList() const {
 
 void TooltipManagerMac::UpdateTooltip() {
   bridge_->UpdateTooltip();
+}
+
+void TooltipManagerMac::UpdateTooltipForFocus(View* view) {
+  // Macs don't use keyboard-triggered tooltips, so this is a no-op.
 }
 
 void TooltipManagerMac::TooltipTextChanged(View* view) {

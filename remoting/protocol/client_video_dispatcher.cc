@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "net/socket/stream_socket.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/base/constants.h"
@@ -21,9 +21,7 @@
 namespace remoting::protocol {
 
 struct ClientVideoDispatcher::PendingFrame {
-  PendingFrame(int frame_id)
-      : frame_id(frame_id),
-        done(false) {}
+  explicit PendingFrame(int frame_id) : frame_id(frame_id), done(false) {}
   int frame_id;
   bool done;
 };
@@ -40,8 +38,9 @@ void ClientVideoDispatcher::OnIncomingMessage(
     std::unique_ptr<CompoundBuffer> message) {
   std::unique_ptr<VideoPacket> video_packet =
       ParseMessage<VideoPacket>(message.get());
-  if (!video_packet)
+  if (!video_packet) {
     return;
+  }
 
   int frame_id = video_packet->frame_id();
 

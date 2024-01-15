@@ -9,6 +9,11 @@ mojom("logger") {
   public_deps = [ "//mojo/public/mojom/base" ]
 }
 
+mojom("debugger") {
+  sources = [ "debugger.mojom" ]
+  public_deps = [ "//mojo/public/mojom/base" ]
+}
+
 mojom("media_controller") {
   sources = [
     "media_controller.mojom",
@@ -30,11 +35,12 @@ mojom("media_router") {
   sources = [ "media_router.mojom" ]
 
   public_deps = [
+    ":debugger",
     ":logger",
     ":media_controller",
     ":media_route_provider_id",
     ":route_request_result_code",
-    "//components/mirroring/mojom:host",
+    "//components/mirroring/mojom:common",
     "//media/mojo/mojom:remoting",
     "//mojo/public/mojom/base",
     "//services/network/public/mojom:mojom_ip_address",
@@ -48,6 +54,7 @@ mojom("media_router") {
     component_deps = [ "//third_party/blink/public/common" ]
   }
 
+  cpp_only = true
   disable_variants = true
 
   cpp_typemaps = [
@@ -83,6 +90,7 @@ mojom("media_router") {
 
       traits_public_deps = [
         "//components/media_router/common",
+        "//components/media_router/common/providers/cast/channel:capability",
         "//net",
       ]
       traits_deps = [
@@ -98,6 +106,7 @@ mojom("media_router_test_interfaces") {
 
   public_deps = [ ":media_router" ]
 
+  cpp_only = true
   disable_variants = true
 }
 
@@ -105,4 +114,5 @@ mojom("route_request_result_code") {
   sources = [ "route_request_result_code.mojom" ]
 
   webui_module_path = "/"
+  generate_legacy_js_bindings = enable_mojom_fuzzer
 }

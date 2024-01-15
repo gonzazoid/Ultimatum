@@ -4,6 +4,7 @@
 
 #include "components/segmentation_platform/internal/signals/signal_handler.h"
 
+#include "base/check_is_test.h"
 #include "components/segmentation_platform/internal/database/storage_service.h"
 #include "components/segmentation_platform/internal/signals/histogram_signal_handler.h"
 #include "components/segmentation_platform/internal/signals/history_service_observer.h"
@@ -20,6 +21,7 @@ void SignalHandler::Initialize(
     StorageService* storage_service,
     history::HistoryService* history_service,
     const base::flat_set<proto::SegmentId>& segment_ids,
+    const std::string& profile_id,
     base::RepeatingClosure models_refresh_callback) {
   user_action_signal_handler_ = std::make_unique<UserActionSignalHandler>(
       storage_service->signal_database());
@@ -28,10 +30,16 @@ void SignalHandler::Initialize(
 
   if (storage_service->ukm_data_manager()->IsUkmEngineEnabled() &&
       history_service) {
-    // If UKM engine is enabled and history service is not available, then we
-    // would write metrics without URLs to the database, which is OK.
-    history_service_observer_ = std::make_unique<HistoryServiceObserver>(
-        history_service, storage_service, models_refresh_callback);
+    // TODO(b/290821132): Remove this check.
+    if (!storage_service->ukm_data_manager()->HasUkmDatabase()) {
+      CHECK_IS_TEST();
+    } else {
+      // If UKM engine is enabled and history service is not available, then we
+      // would write metrics without URLs to the database, which is OK.
+      history_service_observer_ = std::make_unique<HistoryServiceObserver>(
+          history_service, storage_service, profile_id,
+          models_refresh_callback);
+    }
   }
 
   signal_filter_processor_ = std::make_unique<SignalFilterProcessor>(
@@ -41,7 +49,10 @@ void SignalHandler::Initialize(
 }
 
 void SignalHandler::TearDown() {
-  history_service_observer_.reset();
+  if (histogram_signal_handler_) {
+    signal_filter_processor_.reset();
+    history_service_observer_.reset();
+  }
 }
 
 void SignalHandler::EnableMetrics(bool signal_collection_allowed) {

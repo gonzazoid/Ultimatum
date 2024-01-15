@@ -37,6 +37,7 @@ enum class SPCTransactionMode {
   NONE,
   AUTOACCEPT,
   AUTOREJECT,
+  AUTOOPTOUT,
 };
 
 // This class manages the interaction between the renderer (through the
@@ -72,6 +73,7 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
     virtual void OnErrorDisplayed() {}
     virtual void OnNotSupportedError() = 0;
     virtual void OnConnectionTerminated() = 0;
+    virtual void OnPayCalled() = 0;
     virtual void OnAbortCalled() = 0;
     virtual void OnCompleteCalled() {}
 
@@ -79,12 +81,8 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
     virtual ~ObserverForTest() {}
   };
 
-  PaymentRequest(content::RenderFrameHost& render_frame_host,
-                 std::unique_ptr<ContentPaymentRequestDelegate> delegate,
-                 base::WeakPtr<PaymentRequestDisplayManager> display_manager,
-                 mojo::PendingReceiver<mojom::PaymentRequest> receiver,
-                 SPCTransactionMode spc_transaction_mode,
-                 base::WeakPtr<ObserverForTest> observer_for_testing);
+  PaymentRequest(std::unique_ptr<ContentPaymentRequestDelegate> delegate,
+                 mojo::PendingReceiver<mojom::PaymentRequest> receiver);
 
   PaymentRequest(const PaymentRequest&) = delete;
   PaymentRequest& operator=(const PaymentRequest&) = delete;
@@ -96,7 +94,7 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
             std::vector<mojom::PaymentMethodDataPtr> method_data,
             mojom::PaymentDetailsPtr details,
             mojom::PaymentOptionsPtr options) override;
-  void Show(bool wait_for_updated_details) override;
+  void Show(bool wait_for_updated_details, bool had_user_activation) override;
   void Retry(mojom::PaymentValidationErrorsPtr errors) override;
   void UpdateWith(mojom::PaymentDetailsPtr details) override;
   void OnPaymentDetailsNotUpdated() override;
@@ -162,6 +160,10 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
 
   base::WeakPtr<PaymentRequest> GetWeakPtr();
 
+  void set_observer_for_test(base::WeakPtr<ObserverForTest> observer_for_test) {
+    observer_for_testing_ = observer_for_test;
+  }
+
  private:
   // CSPChecker.
   void AllowConnectToSource(
@@ -187,10 +189,10 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
   // contact information whenever needed.
   bool OnlySingleAppCanProvideAllRequiredInformation() const;
 
-  // Returns true if this payment request supports skipping the Payment Sheet.
-  // Typically, this means that exactly one payment app can provide requested
-  // information.
-  bool SatisfiesSkipUIConstraints();
+  // Checks and records via JourneyLogger whether this payment request will skip
+  // showing the Payment Sheet, and returns the result. Typically, this means
+  // that exactly one payment app can provide requested information.
+  bool CheckSatisfiesSkipUIConstraintsAndRecordShownState();
 
   // Only records the abort reason if it's the first completion for this
   // Payment Request. This is necessary since the aborts cascade into one
@@ -285,6 +287,11 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
   // If not empty, use this error message for rejecting
   // PaymentRequest.show().
   std::string reject_show_error_message_;
+
+  // Whether the PaymentRequest.show() was successfully invoked without a user
+  // activation. Used to record the activationless show JourneyLogger event only
+  // if UI was shown.
+  bool is_activationless_show_ = false;
 
   base::WeakPtrFactory<PaymentRequest> weak_ptr_factory_{this};
 };

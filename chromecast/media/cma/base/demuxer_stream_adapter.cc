@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
 #include "chromecast/media/cma/base/balanced_media_task_runner_factory.h"
 #include "chromecast/media/cma/base/decoder_buffer_adapter.h"
 #include "chromecast/media/cma/base/simple_media_task_runner.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/timestamp_constants.h"
@@ -109,16 +109,18 @@ void DemuxerStreamAdapter::ResetMediaTaskRunner() {
 void DemuxerStreamAdapter::RequestBuffer(ReadCB read_cb) {
   DCHECK(thread_checker_.CalledOnValidThread());
   is_pending_demuxer_read_ = true;
-  demuxer_stream_->Read(::media::BindToCurrentLoop(base::BindOnce(
-      &DemuxerStreamAdapter::OnNewBuffer, weak_this_, std::move(read_cb))));
+  demuxer_stream_->Read(1, base::BindPostTaskToCurrentDefault(base::BindOnce(
+                               &DemuxerStreamAdapter::OnNewBuffer, weak_this_,
+                               std::move(read_cb))));
 }
 
 void DemuxerStreamAdapter::OnNewBuffer(
     ReadCB read_cb,
     ::media::DemuxerStream::Status status,
-    scoped_refptr<::media::DecoderBuffer> input) {
+    ::media::DemuxerStream::DecoderBufferVector input_buffers) {
   DCHECK(thread_checker_.CalledOnValidThread());
-
+  DCHECK_LE(input_buffers.size(), 1u)
+      << "RequestBuffer() only reads a single buffer.";
   is_pending_demuxer_read_ = false;
 
   // Just discard the buffer in the flush stage.
@@ -129,12 +131,12 @@ void DemuxerStreamAdapter::OnNewBuffer(
   }
 
   if (status == ::media::DemuxerStream::kAborted) {
-    DCHECK(!input);
+    DCHECK(input_buffers.empty());
     return;
   }
 
   if (status == ::media::DemuxerStream::kConfigChanged) {
-    DCHECK(!input);
+    DCHECK(input_buffers.empty());
     if (demuxer_stream_->type() == ::media::DemuxerStream::VIDEO)
       video_config_ = demuxer_stream_->video_decoder_config();
     if (demuxer_stream_->type() == ::media::DemuxerStream::AUDIO)
@@ -146,6 +148,7 @@ void DemuxerStreamAdapter::OnNewBuffer(
   }
 
   DCHECK_EQ(status, ::media::DemuxerStream::kOk);
+  scoped_refptr<::media::DecoderBuffer> input = std::move(input_buffers[0]);
 
   if (input->end_of_stream()) {
     // This stream has ended, its media time will stop increasing, but there

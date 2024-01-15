@@ -34,4 +34,13 @@ struct WidgetConstants {
       URL(string: "chromewidgetkit://lockscreen-launcher-widget/voicesearch")!
     static let gameUrl = URL(string: "chromewidgetkit://lockscreen-launcher-widget/game")!
   }
+  struct ShortcutsWidget {
+    static let searchUrl =
+      URL(string: "chromewidgetkit://shortcuts-widget/search")!
+    static let open =
+      URL(string: "chromewidgetkit://shortcuts-widget/open")!
+  }
+  struct SearchPasswordsWidget {
+    static let url = URL(string: "chromewidgetkit://search-passwords-widget/search-passwords")!
+  }
 }

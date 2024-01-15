@@ -6,10 +6,6 @@
 
 #import "base/time/time.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 
 // Filenames of the Javascript injected by FakeJavaScriptFeature which creates
@@ -37,6 +33,8 @@ const char kFakeJavaScriptFeaturePostMessageReplyValue[] = "some text";
 // `kFakeJavaScriptFeatureScriptHandlerName`.
 const char kScriptReplyWithPostMessage[] =
     "javaScriptFeatureTest.replyWithPostMessage";
+const char kScriptReplyWithPostMessageCommonJS[] =
+    "javaScriptFeatureTest.replyWithPostMessageCommonHelper";
 
 // The function exposed by the feature JS which returns the count of errors
 // received in the JS error listener.
@@ -45,8 +43,7 @@ const char kGetErrorCount[] = "javaScriptFeatureTest.getErrorCount";
 // Timeout for response of kGetErrorCount.
 const int kGetErrorCountTimeout = 1;
 
-FakeJavaScriptFeature::FakeJavaScriptFeature(
-    JavaScriptFeature::ContentWorld content_world)
+FakeJavaScriptFeature::FakeJavaScriptFeature(ContentWorld content_world)
     : JavaScriptFeature(
           content_world,
           {FeatureScript::CreateWithFilename(
@@ -69,8 +66,15 @@ void FakeJavaScriptFeature::ReplaceDivContents(WebFrame* web_frame) {
 
 void FakeJavaScriptFeature::ReplyWithPostMessage(
     WebFrame* web_frame,
-    const std::vector<base::Value>& parameters) {
+    const base::Value::List& parameters) {
   CallJavaScriptFunction(web_frame, kScriptReplyWithPostMessage, parameters);
+}
+
+void FakeJavaScriptFeature::ReplyWithPostMessageCommonJS(
+    WebFrame* web_frame,
+    const base::Value::List& parameters) {
+  CallJavaScriptFunction(web_frame, kScriptReplyWithPostMessageCommonJS,
+                         parameters);
 }
 
 void FakeJavaScriptFeature::GetErrorCount(
@@ -80,7 +84,7 @@ void FakeJavaScriptFeature::GetErrorCount(
                          base::Seconds(kGetErrorCountTimeout));
 }
 
-absl::optional<std::string> FakeJavaScriptFeature::GetScriptMessageHandlerName()
+std::optional<std::string> FakeJavaScriptFeature::GetScriptMessageHandlerName()
     const {
   return std::string(kFakeJavaScriptFeatureScriptHandlerName);
 }

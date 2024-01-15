@@ -5,10 +5,13 @@
 #ifndef CONTENT_BROWSER_PRELOADING_PRELOADING_ATTEMPT_IMPL_H_
 #define CONTENT_BROWSER_PRELOADING_PRELOADING_ATTEMPT_IMPL_H_
 
+#include <optional>
+
+#include "base/timer/elapsed_timer.h"
 #include "content/public/browser/preloading.h"
 #include "content/public/browser/preloading_data.h"
-
 #include "services/metrics/public/cpp/ukm_source_id.h"
+#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom-shared.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -24,33 +27,74 @@ class CONTENT_EXPORT PreloadingAttemptImpl : public PreloadingAttempt {
   // PreloadingAttempt implementation:
   void SetEligibility(PreloadingEligibility eligibility) override;
   void SetHoldbackStatus(PreloadingHoldbackStatus holdback_status) override;
+  bool ShouldHoldback() override;
   void SetTriggeringOutcome(
       PreloadingTriggeringOutcome triggering_outcome) override;
   void SetFailureReason(PreloadingFailureReason reason) override;
   base::WeakPtr<PreloadingAttempt> GetWeakPtr() override;
 
-  // Records both UKMs Preloading_Attempt and
+  // Records UKMs for both Preloading_Attempt and
   // Preloading_Attempt_PreviousPrimaryPage. Metrics for both these are same.
   // Only difference is that the Preloading_Attempt_PreviousPrimaryPage UKM is
   // associated with the WebContents primary page that triggered the preloading
   // attempt. This is done to easily analyze the impact of the preloading
   // attempt on the primary visible page. Here `navigated_page` represent the
   // ukm::SourceId of the navigated page. If the navigation doesn't happen this
-  // could be invalid.
-  void RecordPreloadingAttemptUKMs(ukm::SourceId navigated_page);
+  // could be invalid. This must be called after the page load ends and we know
+  // if the attempt was accurate.
+  void RecordPreloadingAttemptMetrics(ukm::SourceId navigated_page);
+
+  PreloadingType preloading_type() { return preloading_type_; }
+
+  PreloadingPredictor predictor() { return predictor_type_; }
+
+  ukm::SourceId triggered_primary_page_source_id() {
+    return triggered_primary_page_source_id_;
+  }
 
   // Sets `is_accurate_triggering_` to true if `navigated_url` matches the
-  // predicate URL logic.
+  // predicate URL logic. It also records `time_to_next_navigation_`.
   void SetIsAccurateTriggering(const GURL& navigated_url);
 
-  explicit PreloadingAttemptImpl(
-      PreloadingPredictor predictor,
-      PreloadingType preloading_type,
-      ukm::SourceId triggered_primary_page_source_id,
-      PreloadingURLMatchCallback url_match_predicate);
+  bool IsAccurateTriggering() const { return is_accurate_triggering_; }
+
+  PreloadingAttemptImpl(PreloadingPredictor predictor,
+                        PreloadingType preloading_type,
+                        ukm::SourceId triggered_primary_page_source_id,
+                        PreloadingURLMatchCallback url_match_predicate,
+                        uint32_t sampling_seed);
+
+  // Called by the `PreloadingDataImpl` that owns this attempt, to check the
+  // validity of `predictor_type_`.
+  PreloadingPredictor predictor_type() const { return predictor_type_; }
+
+  PreloadingType preloading_type() const { return preloading_type_; }
+
+  void SetSpeculationEagerness(blink::mojom::SpeculationEagerness eagerness);
+
+  // Describes what type of checks we had to do to identify if the attempt's
+  // URL is or is not under a Service Worker.
+  enum class ServiceWorkerRegisteredCheck {
+    // These values are persisted to logs. Entries should not be renumbered and
+    // numeric values should never be reused.
+
+    // The origin doesn't have any Service Workers registered.
+    kOriginOnly = 0,
+    // The origin has at least one Service Worker registered and we had to
+    // perform a path test to identify if the attempt's URL is under a
+    // registered Service Worker.
+    kPath = 1,
+    kMaxValue = kPath
+  };
+  static constexpr double kServiceWorkerRegisteredCheckDurationBucketSpacing =
+      1.15;
+  void SetServiceWorkerRegisteredCheck(ServiceWorkerRegisteredCheck check);
+  void SetServiceWorkerRegisteredCheckDuration(base::TimeDelta duration);
 
  private:
   friend class test::PreloadingAttemptAccessor;
+
+  void RecordPreloadingAttemptUMA();
 
   // Reason why the preloading attempt failed, this is similar to specific
   // preloading logging reason. Zero as a failure reason signifies no reason is
@@ -85,6 +129,44 @@ class CONTENT_EXPORT PreloadingAttemptImpl : public PreloadingAttempt {
 
   // Set to true if this PreloadingAttempt was used for the next navigation.
   bool is_accurate_triggering_ = false;
+
+  // Records when the preloading attempt began, for computing times.
+  const base::ElapsedTimer elapsed_timer_;
+
+  // The time between the creation of the attempt and the start of the next
+  // navigation, whether accurate or not. The latency is reported as standard
+  // buckets, of 1.15 spacing.
+  std::optional<base::TimeDelta> time_to_next_navigation_;
+
+  // Represents the duration between the attempt creation and its
+  // `triggering_outcome_` becoming `kReady`. The latency is reported as
+  // standard buckets, of 1.15 spacing.
+  std::optional<base::TimeDelta> ready_time_;
+
+  // The random seed used to determine if a preloading attempt should be sampled
+  // in UKM logs. We use a different random seed for each session (that is the
+  // source of randomness for sampling) and then hash that seed with the UKM
+  // source ID so that all attempts for a given source ID use the same random
+  // value to determine sampling. This allows all PreloadingAttempt for a given
+  // (preloading_type, predictor) in a page load to be sampled in or out
+  // together.
+  uint32_t sampling_seed_;
+
+  // Eagerness of this preloading attempt (specified by a speculation rule).
+  // This is only set for attempts that are triggered by speculation rules.
+  std::optional<blink::mojom::SpeculationEagerness> eagerness_ = std::nullopt;
+
+  // Describes the type of check we did for to find out if the attempt's URL
+  // is under a Service Worker's path. The simplest check is: does the URL's
+  // origin have any registered service workers or not, the more complicated
+  // check is: given the URL's origin has service workers registered, is the
+  // URL under one of these Service Workers.
+  // This is only set for prefetch attempts that are triggered by speculation
+  // rules.
+  std::optional<ServiceWorkerRegisteredCheck> service_worker_registered_check_ =
+      std::nullopt;
+  std::optional<base::TimeDelta> service_worker_registered_check_duration_ =
+      std::nullopt;
 
   base::WeakPtrFactory<PreloadingAttemptImpl> weak_factory_{this};
 };

@@ -5,10 +5,12 @@
 #include "chromeos/ash/components/login/auth/stub_authenticator.h"
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
+#include "chromeos/ash/components/cryptohome/constants.h"
 #include "chromeos/ash/components/login/auth/public/auth_failure.h"
 #include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
 
@@ -26,9 +28,10 @@ StubAuthenticator::StubAuthenticator(AuthStatusConsumer* consumer,
                                      const UserContext& expected_user_context)
     : Authenticator(consumer),
       expected_user_context_(expected_user_context),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 void StubAuthenticator::CompleteLogin(
+    bool ephemeral,
     std::unique_ptr<UserContext> user_context) {
   if (expected_user_context_ != *user_context)
     NOTREACHED();
@@ -36,6 +39,7 @@ void StubAuthenticator::CompleteLogin(
 }
 
 void StubAuthenticator::AuthenticateToLogin(
+    bool ephemeral,
     std::unique_ptr<UserContext> user_context) {
   // Don't compare the entire |expected_user_context_| to |user_context| because
   // during non-online re-auth |user_context| does not have a gaia id.
@@ -52,11 +56,6 @@ void StubAuthenticator::AuthenticateToLogin(
         task_runner_->PostTask(
             FROM_HERE, base::BindOnce(&StubAuthenticator::OnAuthFailure, this,
                                       AuthFailure(failure_reason_)));
-        break;
-      case AuthAction::kPasswordChange:
-        task_runner_->PostTask(
-            FROM_HERE,
-            base::BindOnce(&StubAuthenticator::OnPasswordChangeDetected, this));
         break;
       case AuthAction::kOldEncryption:
         if (user_context->IsForcingDircrypto()) {
@@ -82,6 +81,7 @@ void StubAuthenticator::AuthenticateToLogin(
 }
 
 void StubAuthenticator::AuthenticateToUnlock(
+    bool ephemeral,
     std::unique_ptr<UserContext> user_context) {
   if (expected_user_context_.GetAccountId() == user_context->GetAccountId() &&
       (*expected_user_context_.GetKey() == *user_context->GetKey() ||
@@ -94,7 +94,6 @@ void StubAuthenticator::AuthenticateToUnlock(
                                       AuthFailure(failure_reason_)));
         break;
       case AuthAction::kAuthSuccess:
-      case AuthAction::kPasswordChange:
       case AuthAction::kOldEncryption:
         // The distinction between fields other than AuthAction::kAuthFailure
         // only matter for login.
@@ -125,7 +124,8 @@ void StubAuthenticator::LoginAsPublicSession(const UserContext& user_context) {
 }
 
 void StubAuthenticator::LoginAsKioskAccount(
-    const AccountId& /* app_account_id */) {
+    const AccountId& /* app_account_id */,
+    bool /* ephemeral */) {
   UserContext user_context(user_manager::UserType::USER_TYPE_KIOSK_APP,
                            expected_user_context_.GetAccountId());
   user_context.SetIsUsingOAuth(false);
@@ -137,7 +137,8 @@ void StubAuthenticator::LoginAsKioskAccount(
 }
 
 void StubAuthenticator::LoginAsArcKioskAccount(
-    const AccountId& /* app_account_id */) {
+    const AccountId& /* app_account_id */,
+    bool /* ephemeral */) {
   UserContext user_context(user_manager::USER_TYPE_ARC_KIOSK_APP,
                            expected_user_context_.GetAccountId());
   user_context.SetIsUsingOAuth(false);
@@ -149,7 +150,8 @@ void StubAuthenticator::LoginAsArcKioskAccount(
 }
 
 void StubAuthenticator::LoginAsWebKioskAccount(
-    const AccountId& /* app_account_id */) {
+    const AccountId& /* app_account_id */,
+    bool /* ephemeral */) {
   UserContext user_context(user_manager::USER_TYPE_WEB_KIOSK_APP,
                            expected_user_context_.GetAccountId());
   user_context.SetIsUsingOAuth(false);
@@ -175,26 +177,26 @@ void StubAuthenticator::RecoverEncryptedData(
     std::unique_ptr<UserContext> user_context,
     const std::string& old_password) {
   if (old_password_ != old_password) {
-    if (data_recovery_notifier_)
-      data_recovery_notifier_.Run(DataRecoveryStatus::kRecoveryFailed);
     task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&StubAuthenticator::OnPasswordChangeDetected, this));
     return;
   }
 
-  if (data_recovery_notifier_)
-    data_recovery_notifier_.Run(DataRecoveryStatus::kRecovered);
   task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&StubAuthenticator::OnAuthSuccess, this));
 }
 
 void StubAuthenticator::ResyncEncryptedData(
+    bool ephemeral,
     std::unique_ptr<UserContext> user_context) {
-  if (data_recovery_notifier_)
-    data_recovery_notifier_.Run(DataRecoveryStatus::kResynced);
   task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&StubAuthenticator::OnAuthSuccess, this));
+}
+
+void StubAuthenticator::LoginAuthenticated(
+    std::unique_ptr<UserContext> user_context) {
+  consumer_->OnAuthSuccess(*user_context);
 }
 
 void StubAuthenticator::SetExpectedCredentials(
@@ -210,31 +212,32 @@ UserContext StubAuthenticator::ExpectedUserContextWithTransformedKey() const {
       expected_user_context_.GetAccountId().GetUserEmail() + kUserIdHashSuffix);
   user_context.GetKey()->Transform(Key::KEY_TYPE_SALTED_SHA256_TOP_HALF,
                                    "some-salt");
-  if (features::IsUseAuthFactorsEnabled()) {
-    cryptohome::AuthFactorsSet factors;
-    factors.Put(cryptohome::AuthFactorType::kPassword);
-    factors.Put(cryptohome::AuthFactorType::kPin);
-    cryptohome::AuthFactorRef ref(
-        cryptohome::AuthFactorType::kPassword,
-        cryptohome::KeyLabel{kCryptohomeGaiaKeyLabel});
-    cryptohome::AuthFactor password(ref,
-                                    cryptohome::AuthFactorCommonMetadata());
-    user_context.SetAuthFactorsConfiguration(
-        AuthFactorsConfiguration{{password}, factors});
-    user_context.SetAuthSessionId("someauthsessionid");
-  }
+  cryptohome::AuthFactorsSet factors;
+  factors.Put(cryptohome::AuthFactorType::kPassword);
+  factors.Put(cryptohome::AuthFactorType::kPin);
+  factors.Put(cryptohome::AuthFactorType::kRecovery);
+  cryptohome::AuthFactorRef ref(cryptohome::AuthFactorType::kPassword,
+                                cryptohome::KeyLabel{kCryptohomeGaiaKeyLabel});
+  cryptohome::AuthFactor password(ref, cryptohome::AuthFactorCommonMetadata());
+  user_context.SetAuthFactorsConfiguration(
+      AuthFactorsConfiguration{{password}, factors});
+  user_context.SetAuthSessionIds("someauthsessionid", "broadcast");
+  user_context.SetSessionLifetime(base::Time::Now() +
+                                  cryptohome::kAuthsessionInitialLifetime);
   return user_context;
 }
 
 void StubAuthenticator::OnPasswordChangeDetected() {
-  consumer_->OnPasswordChangeDetected(expected_user_context_);
+  consumer_->OnOnlinePasswordUnusable(
+      std::make_unique<UserContext>(expected_user_context_), true);
 }
 
 void StubAuthenticator::OnOldEncryptionDetected() {
   // The user is expected to finish login using transformed key.
   UserContext user_context = ExpectedUserContextWithTransformedKey();
-  consumer_->OnOldEncryptionDetected(user_context,
-                                     has_incomplete_encryption_migration_);
+  consumer_->OnOldEncryptionDetected(
+      std::make_unique<UserContext>(user_context),
+      has_incomplete_encryption_migration_);
 }
 
 }  // namespace ash

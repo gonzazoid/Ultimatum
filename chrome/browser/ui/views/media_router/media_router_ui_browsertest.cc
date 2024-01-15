@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/media/router/media_router_feature.h"
@@ -44,8 +43,8 @@ class MediaRouterUIBrowserTest : public InProcessBrowserTest {
  public:
   MediaRouterUIBrowserTest()
       : issue_(IssueInfo("title notification",
-                         IssueInfo::Action::DISMISS,
-                         IssueInfo::Severity::NOTIFICATION)) {}
+                         IssueInfo::Severity::NOTIFICATION,
+                         "sinkId1")) {}
   ~MediaRouterUIBrowserTest() override {}
 
   void SetUpOnMainThread() override {

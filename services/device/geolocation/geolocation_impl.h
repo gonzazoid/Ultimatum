@@ -9,6 +9,7 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/device/geolocation/geolocation_provider_impl.h"
 #include "services/device/public/mojom/geolocation.mojom.h"
+#include "url/gurl.h"
 
 namespace device {
 
@@ -20,6 +21,7 @@ class GeolocationImpl : public mojom::Geolocation {
  public:
   // |context| must outlive this object.
   GeolocationImpl(mojo::PendingReceiver<mojom::Geolocation> receiver,
+                  const GURL& requesting_url,
                   GeolocationContext* context);
 
   GeolocationImpl(const GeolocationImpl&) = delete;
@@ -35,8 +37,14 @@ class GeolocationImpl : public mojom::Geolocation {
   void ResumeUpdates();
 
   // Enables and disables geolocation override.
-  void SetOverride(const mojom::Geoposition& position);
+  void SetOverride(const mojom::GeopositionResult& result);
   void ClearOverride();
+
+  // Invokes any pending position callback with a permission denied error.
+  // Called by GeolocationContext when permission is lost.
+  void OnPermissionRevoked();
+
+  const GURL& url() { return url_; }
 
  private:
   // mojom::Geolocation:
@@ -45,11 +53,14 @@ class GeolocationImpl : public mojom::Geolocation {
 
   void OnConnectionError();
 
-  void OnLocationUpdate(const mojom::Geoposition& position);
+  void OnLocationUpdate(const mojom::GeopositionResult& result);
   void ReportCurrentPosition();
 
   // The binding between this object and the other end of the pipe.
   mojo::Receiver<mojom::Geolocation> receiver_;
+
+  // The requesting URL.
+  const GURL url_;
 
   // Owns this object.
   raw_ptr<GeolocationContext> context_;
@@ -60,17 +71,15 @@ class GeolocationImpl : public mojom::Geolocation {
   // The callback passed to QueryNextPosition.
   QueryNextPositionCallback position_callback_;
 
-  // Valid if SetOverride() has been called and ClearOverride() has not
-  // subsequently been called.
-  mojom::Geoposition position_override_;
+  // Set if SetOverride() has been called and ClearOverride() has not
+  // subsequently been called, `nullptr` otherwise.
+  mojom::GeopositionResultPtr position_override_;
 
-  mojom::Geoposition current_position_;
+  mojom::GeopositionResultPtr current_result_;
 
   // Whether this instance is currently observing location updates with high
   // accuracy.
   bool high_accuracy_;
-
-  bool has_position_to_report_;
 };
 
 }  // namespace device

@@ -3,9 +3,13 @@
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/auth_factor_config/in_process_instances.h"
+
 #include <utility>
+
 #include "base/no_destructor.h"
 #include "chromeos/ash/services/auth_factor_config/auth_factor_config.h"
+#include "chromeos/ash/services/auth_factor_config/password_factor_editor.h"
+#include "chromeos/ash/services/auth_factor_config/pin_factor_editor.h"
 #include "chromeos/ash/services/auth_factor_config/public/mojom/auth_factor_config.mojom-test-utils.h"
 #include "chromeos/ash/services/auth_factor_config/recovery_factor_editor.h"
 
@@ -13,32 +17,102 @@ namespace ash::auth {
 
 namespace {
 
-// TODO(crbug.com/1327627): We probably want to initialize these later: Not on
-// chrome startup but when a user logs in. Optionally we could delay
-// initialization to first use (static member of a getter) or even create new
-// instances of the services for each webui that consumes them.
-base::NoDestructor<AuthFactorConfig> auth_factor_config;
-base::NoDestructor<RecoveryFactorEditor> recovery_factor_editor(
-    auth_factor_config.get());
+AuthFactorConfig& GetAuthFactorConfigImpl(QuickUnlockStorageDelegate& delegate,
+                                          PrefService* local_state) {
+  static base::NoDestructor<AuthFactorConfig> auth_factor_config{&delegate,
+                                                                 local_state};
+  return *auth_factor_config;
+}
+
+RecoveryFactorEditor& GetRecoveryFactorEditorImpl(
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  // TODO(b/271249180): cleanup remaining QuickUnlockStorageDelegate refs
+  // we don't need it anymore.
+  static base::NoDestructor<RecoveryFactorEditor> recovery_factor_editor(
+      &GetAuthFactorConfigImpl(delegate, local_state));
+  return *recovery_factor_editor;
+}
+
+PinFactorEditor& GetPinFactorEditorImpl(QuickUnlockStorageDelegate& storage,
+                                        PrefService* local_state,
+                                        PinBackendDelegate& pin_backend) {
+  // TODO(b/271249180): cleanup remaining QuickUnlockStorageDelegate refs
+  // we don't need it anymore.
+  static base::NoDestructor<PinFactorEditor> pin_factor_editor(
+      &GetAuthFactorConfigImpl(storage, local_state), &pin_backend);
+  return *pin_factor_editor;
+}
+
+PasswordFactorEditor& GetPasswordFactorEditorImpl(
+    QuickUnlockStorageDelegate& storage,
+    PrefService* local_state) {
+  // TODO(b/271249180): cleanup remaining QuickUnlockStorageDelegate refs
+  // we don't need it anymore.
+  static base::NoDestructor<PasswordFactorEditor> password_factor_editor(
+      &GetAuthFactorConfigImpl(storage, local_state));
+  return *password_factor_editor;
+}
 
 }  // namespace
 
 void BindToAuthFactorConfig(
-    mojo::PendingReceiver<mojom::AuthFactorConfig> receiver) {
-  auth_factor_config->BindReceiver(std::move(receiver));
+    mojo::PendingReceiver<mojom::AuthFactorConfig> receiver,
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  GetAuthFactorConfigImpl(delegate, local_state)
+      .BindReceiver(std::move(receiver));
 }
 
-mojom::AuthFactorConfigAsyncWaiter GetAuthFactorConfigForTesting() {
-  return mojom::AuthFactorConfigAsyncWaiter(auth_factor_config.get());
+mojom::AuthFactorConfig& GetAuthFactorConfig(
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  return GetAuthFactorConfigImpl(delegate, local_state);
+}
+
+// Used to acquire a reference to the implementation of the
+// `mojom::AuthFactorConfig` for injecting callbacks in tests.
+AuthFactorConfig& GetAuthFactorConfigForTesting(  // IN-TEST
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  return GetAuthFactorConfigImpl(delegate, local_state);
 }
 
 void BindToRecoveryFactorEditor(
-    mojo::PendingReceiver<mojom::RecoveryFactorEditor> receiver) {
-  recovery_factor_editor->BindReceiver(std::move(receiver));
+    mojo::PendingReceiver<mojom::RecoveryFactorEditor> receiver,
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  GetRecoveryFactorEditorImpl(delegate, local_state)
+      .BindReceiver(std::move(receiver));
 }
 
-mojom::RecoveryFactorEditorAsyncWaiter GetRecoveryFactorEditorForTesting() {
-  return mojom::RecoveryFactorEditorAsyncWaiter(recovery_factor_editor.get());
+mojom::RecoveryFactorEditor& GetRecoveryFactorEditor(
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  return GetRecoveryFactorEditorImpl(delegate, local_state);
+}
+
+void BindToPinFactorEditor(
+    mojo::PendingReceiver<mojom::PinFactorEditor> receiver,
+    QuickUnlockStorageDelegate& storage,
+    PrefService* local_state,
+    PinBackendDelegate& pin_backend) {
+  GetPinFactorEditorImpl(storage, local_state, pin_backend)
+      .BindReceiver(std::move(receiver));
+}
+
+void BindToPasswordFactorEditor(
+    mojo::PendingReceiver<mojom::PasswordFactorEditor> receiver,
+    QuickUnlockStorageDelegate& storage,
+    PrefService* local_state) {
+  GetPasswordFactorEditorImpl(storage, local_state)
+      .BindReceiver(std::move(receiver));
+}
+
+mojom::PasswordFactorEditor& GetPasswordFactorEditor(
+    QuickUnlockStorageDelegate& delegate,
+    PrefService* local_state) {
+  return GetPasswordFactorEditorImpl(delegate, local_state);
 }
 
 }  // namespace ash::auth

@@ -7,11 +7,17 @@
 #import <memory>
 
 #import "base/strings/sys_string_conversions.h"
+#import "base/task/sequenced_task_runner.h"
+#import "base/task/single_thread_task_runner.h"
 #import "base/test/simple_test_clock.h"
 #import "components/favicon/core/large_icon_service_impl.h"
 #import "components/favicon/core/test/mock_favicon_service.h"
 #import "components/favicon_base/favicon_types.h"
+#import "components/reading_list/core/fake_reading_list_model_storage.h"
 #import "components/reading_list/core/reading_list_model_impl.h"
+#import "components/sync/base/storage_type.h"
+#import "components/sync/model/wipe_model_upon_sync_disabled_behavior.h"
+#import "components/sync/test/test_sync_service.h"
 #import "components/url_formatter/url_formatter.h"
 #import "ios/chrome/browser/favicon/favicon_loader.h"
 #import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
@@ -24,10 +30,6 @@
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using testing::_;
 
@@ -46,34 +48,49 @@ class ReadingListMediatorTest
       public ::testing::WithParamInterface<FaviconServiceType> {
  public:
   ReadingListMediatorTest() {
-    model_ = std::make_unique<ReadingListModelImpl>(nullptr, nullptr, &clock_);
+    auto storage = std::make_unique<FakeReadingListModelStorage>();
+    base::WeakPtr<FakeReadingListModelStorage> storage_ptr =
+        storage->AsWeakPtr();
+    model_ = std::make_unique<ReadingListModelImpl>(
+        std::move(storage), syncer::StorageType::kUnspecified,
+        syncer::WipeModelUponSyncDisabledBehavior::kNever, &clock_);
+    // Complete the initial model load from storage.
+    storage_ptr->TriggerLoadCompletion();
+    sync_service_ = std::make_unique<syncer::TestSyncService>();
+
     EXPECT_CALL(mock_favicon_service_,
                 GetLargestRawFaviconForPageURL(_, _, _, _, _))
         .WillRepeatedly([](auto, auto, auto,
                            favicon_base::FaviconRawBitmapCallback callback,
                            base::CancelableTaskTracker* tracker) {
           return tracker->PostTask(
-              base::ThreadTaskRunnerHandle::Get().get(), FROM_HERE,
+              base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+              FROM_HERE,
               base::BindOnce(std::move(callback),
                              favicon_base::FaviconRawBitmapResult()));
         });
 
     no_title_entry_url_ = GURL("http://chromium.org/unread3");
     // The first 3 have the same update time on purpose.
-    model_->AddEntry(GURL("http://chromium.org/unread1"), "unread1",
-                     reading_list::ADDED_VIA_CURRENT_APP);
-    model_->AddEntry(GURL("http://chromium.org/read1"), "read1",
-                     reading_list::ADDED_VIA_CURRENT_APP);
-    model_->SetReadStatus(GURL("http://chromium.org/read1"), true);
-    model_->AddEntry(GURL("http://chromium.org/unread2"), "unread2",
-                     reading_list::ADDED_VIA_CURRENT_APP);
+    model_->AddOrReplaceEntry(GURL("http://chromium.org/unread1"), "unread1",
+                              reading_list::ADDED_VIA_CURRENT_APP,
+                              /*estimated_read_time=*/base::TimeDelta());
+    model_->AddOrReplaceEntry(GURL("http://chromium.org/read1"), "read1",
+                              reading_list::ADDED_VIA_CURRENT_APP,
+                              /*estimated_read_time=*/base::TimeDelta());
+    model_->SetReadStatusIfExists(GURL("http://chromium.org/read1"), true);
+    model_->AddOrReplaceEntry(GURL("http://chromium.org/unread2"), "unread2",
+                              reading_list::ADDED_VIA_CURRENT_APP,
+                              /*estimated_read_time=*/base::TimeDelta());
     clock_.Advance(base::Milliseconds(10));
-    model_->AddEntry(no_title_entry_url_, "",
-                     reading_list::ADDED_VIA_CURRENT_APP);
+    model_->AddOrReplaceEntry(no_title_entry_url_, "",
+                              reading_list::ADDED_VIA_CURRENT_APP,
+                              /*estimated_read_time=*/base::TimeDelta());
     clock_.Advance(base::Milliseconds(10));
-    model_->AddEntry(GURL("http://chromium.org/read2"), "read2",
-                     reading_list::ADDED_VIA_CURRENT_APP);
-    model_->SetReadStatus(GURL("http://chromium.org/read2"), true);
+    model_->AddOrReplaceEntry(GURL("http://chromium.org/read2"), "read2",
+                              reading_list::ADDED_VIA_CURRENT_APP,
+                              /*estimated_read_time=*/base::TimeDelta());
+    model_->SetReadStatusIfExists(GURL("http://chromium.org/read2"), true);
     large_icon_service_.reset(new favicon::LargeIconServiceImpl(
         &mock_favicon_service_, /*image_fetcher=*/nullptr,
         /*desired_size_in_dip_for_server_requests=*/24,
@@ -84,9 +101,12 @@ class ReadingListMediatorTest
     favicon_loader.reset(new FaviconLoader(large_icon_service_.get()));
     mediator_ = [[ReadingListMediator alloc]
           initWithModel:model_.get()
+            syncService:sync_service_.get()
           faviconLoader:favicon_loader.get()
         listItemFactory:[[ReadingListListItemFactory alloc] init]];
   }
+
+  ~ReadingListMediatorTest() { [mediator_ disconnect]; }
 
   ReadingListMediatorTest(const ReadingListMediatorTest&) = delete;
   ReadingListMediatorTest& operator=(const ReadingListMediatorTest&) = delete;
@@ -94,6 +114,7 @@ class ReadingListMediatorTest
  protected:
   testing::StrictMock<favicon::MockFaviconService> mock_favicon_service_;
   std::unique_ptr<ReadingListModelImpl> model_;
+  std::unique_ptr<syncer::TestSyncService> sync_service_;
   ReadingListMediator* mediator_;
   base::SimpleTestClock clock_;
   GURL no_title_entry_url_;

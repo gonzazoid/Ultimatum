@@ -19,18 +19,17 @@
 #include "ash/app_list/views/app_list_bubble_view.h"
 #include "ash/app_list/views/app_list_folder_view.h"
 #include "ash/app_list/views/app_list_main_view.h"
+#include "ash/app_list/views/app_list_search_view.h"
 #include "ash/app_list/views/app_list_toast_container_view.h"
 #include "ash/app_list/views/app_list_view.h"
 #include "ash/app_list/views/apps_container_view.h"
 #include "ash/app_list/views/contents_view.h"
 #include "ash/app_list/views/continue_section_view.h"
-#include "ash/app_list/views/productivity_launcher_search_view.h"
 #include "ash/app_list/views/search_result_page_dialog_controller.h"
 #include "ash/app_list/views/search_result_page_view.h"
 #include "ash/constants/ash_features.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_util.h"
-#include "base/guid.h"
 #include "base/run_loop.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/animation/tween.h"
@@ -60,8 +59,8 @@ AppListTestHelper::AppListTestHelper() {
   // Use a new app list client for each test
   app_list_client_ = std::make_unique<TestAppListClient>();
   app_list_controller_->SetClient(app_list_client_.get());
-  app_list_controller_->SetActiveModel(/*profile_id=*/1, &model_,
-                                       &search_model_);
+  app_list_controller_->SetActiveModel(
+      /*profile_id=*/1, &model_, &search_model_, &quick_app_access_model_);
   // Disable app list nudge as default.
   DisableAppListNudge(true);
   AppListNudgeController::SetPrivacyNoticeAcceptedForTest(true);
@@ -92,7 +91,7 @@ void AppListTestHelper::WaitForFolderAnimation() {
 }
 
 void AppListTestHelper::ShowAppList() {
-  app_list_controller_->ShowAppList();
+  app_list_controller_->ShowAppList(AppListShowSource::kSearchKey);
 }
 
 void AppListTestHelper::ShowAndRunLoop(uint64_t display_id) {
@@ -105,7 +104,7 @@ void AppListTestHelper::Show(uint64_t display_id) {
 
 void AppListTestHelper::ShowAndRunLoop(uint64_t display_id,
                                        AppListShowSource show_source) {
-  app_list_controller_->Show(display_id, show_source, base::TimeTicks());
+  app_list_controller_->Show(display_id, show_source, base::TimeTicks(), true);
   WaitUntilIdle();
 }
 
@@ -140,7 +139,7 @@ void AppListTestHelper::StartSlideAnimationOnBubbleAppsPage(
 
 void AppListTestHelper::CheckVisibility(bool visible) {
   EXPECT_EQ(visible, app_list_controller_->IsVisible());
-  EXPECT_EQ(visible, app_list_controller_->GetTargetVisibility(absl::nullopt));
+  EXPECT_EQ(visible, app_list_controller_->GetTargetVisibility(std::nullopt));
 }
 
 void AppListTestHelper::CheckState(AppListViewState state) {
@@ -161,7 +160,7 @@ void AppListTestHelper::AddAppItemsWithColorAndName(int num_apps,
     const std::string id(
         test::AppListTestModel::GetItemName(i + num_apps_already_added));
     auto item = std::make_unique<AppListItem>(id);
-    absl::optional<SkColor> solid_color;
+    std::optional<SkColor> solid_color;
     switch (color_type) {
       case IconColorType::kDefaultColor:
         solid_color = icon_color_generator_.default_color();
@@ -177,7 +176,8 @@ void AppListTestHelper::AddAppItemsWithColorAndName(int num_apps,
       // Skip the calculation of the icon color from the generated solid-colored
       // icon to save some time.
       item->SetDefaultIconAndColor(
-          CreateSolidColorTestImage(kIconImageSize, *solid_color), IconColor());
+          CreateSolidColorTestImage(kIconImageSize, *solid_color), IconColor(),
+          /*is_placeholder_icon=*/false);
     }
 
     auto* item_ptr = item.get();
@@ -353,8 +353,7 @@ AppListTestHelper::GetOrderedResultCategories() {
   return AppListModelProvider::Get()->search_model()->ordered_categories();
 }
 
-ProductivityLauncherSearchView*
-AppListTestHelper::GetProductivityLauncherSearchView() {
+AppListSearchView* AppListTestHelper::GetBubbleAppListSearchView() {
   return app_list_controller_->bubble_presenter_for_test()
       ->bubble_view_for_test()
       ->search_page_->search_view();

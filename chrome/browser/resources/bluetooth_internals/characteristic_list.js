@@ -30,7 +30,9 @@ export class CharacteristicListElement extends ExpandableListElement {
 
   createItem(data) {
     const item = document.createElement('characteristic-list-item');
-    item.initialize(data, assert(this.deviceAddress_), assert(this.serviceId_));
+    assert(this.deviceAddress_);
+    assert(this.serviceId_);
+    item.initialize(data, this.deviceAddress_, this.serviceId_);
     return item;
   }
 

@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
@@ -122,7 +122,7 @@ void TestChannel::LogEvent(
   // For TestChannel we always talk JSON.  Make it into a base::Value, to make
   // it easy to look stuff up in it.
   std::string message_str = ToString(message->string());
-  absl::optional<base::Value> val = base::JSONReader::Read(message_str);
+  std::optional<base::Value> val = base::JSONReader::Read(message_str);
   CHECK(val.has_value()) << message_str;
   Event event;
   event.type = type;
@@ -197,8 +197,8 @@ TestChannel* ScopedInspectorSupport::ConnectDebuggerSession(
 
 ScopedInspectorSupport::V8State::V8State() = default;
 ScopedInspectorSupport::V8State::~V8State() {
-  inspector_sessions_.clear();
   output_channels_.clear();
+  inspector_sessions_.clear();
 
   // Delete inspector after `inspector_sessions_`, before `inspector_client`_
   v8_helper_->SetV8InspectorForTesting(

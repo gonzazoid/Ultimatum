@@ -5,14 +5,16 @@
 #ifndef UI_BASE_RESOURCE_DATA_PACK_WITH_RESOURCE_SHARING_LACROS_H_
 #define UI_BASE_RESOURCE_DATA_PACK_WITH_RESOURCE_SHARING_LACROS_H_
 
+#include <map>
+#include <memory>
 #include <vector>
 
+#include "base/component_export.h"
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/resource/data_pack.h"
-#include "ui/base/resource/data_pack_export.h"
 #include "ui/base/resource/resource_handle.h"
 #include "ui/base/resource/resource_scale_factor.h"
 #include "ui/base/resource/scoped_file_writer.h"
@@ -29,7 +31,8 @@ namespace ui {
 // in a fallback file.
 //
 // The mapping file is recreated as necessary.
-class UI_DATA_PACK_EXPORT DataPackWithResourceSharing : public ResourceHandle {
+class COMPONENT_EXPORT(UI_DATA_PACK) DataPackWithResourceSharing
+    : public ResourceHandle {
  public:
   explicit DataPackWithResourceSharing(
       ResourceScaleFactor resource_scale_factor);
@@ -82,8 +85,8 @@ class UI_DATA_PACK_EXPORT DataPackWithResourceSharing : public ResourceHandle {
 
   // ResourceHandle implementation:
   bool HasResource(uint16_t resource_id) const override;
-  bool GetStringPiece(uint16_t resource_id,
-                      base::StringPiece* data) const override;
+  absl::optional<base::StringPiece> GetStringPiece(
+      uint16_t resource_id) const override;
   base::RefCountedStaticMemory* GetStaticMemory(
       uint16_t resource_id) const override;
   TextEncodingType GetTextEncodingType() const override;
@@ -161,7 +164,7 @@ class UI_DATA_PACK_EXPORT DataPackWithResourceSharing : public ResourceHandle {
   // exists in ash resources .pak.
   // Lacros resource id registered in `mapping_table_` as a key should not be
   // included in fallback_data_pack_.
-  raw_ptr<const Mapping> mapping_table_;
+  raw_ptr<const Mapping, AllowPtrArithmetic> mapping_table_;
   size_t mapping_count_ = 0;
 
   // Stores DataPacks of fallback resources and ash resources for each.

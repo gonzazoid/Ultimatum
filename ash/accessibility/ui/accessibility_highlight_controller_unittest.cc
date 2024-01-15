@@ -9,18 +9,18 @@
 #include <cmath>
 #include <memory>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/ui/accessibility_cursor_ring_layer.h"
 #include "ash/accessibility/ui/accessibility_focus_ring_controller_impl.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_window_builder.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/aura/window.h"
-#include "ui/base/ime/dummy_text_input_client.h"
+#include "ui/base/ime/fake_text_input_client.h"
 #include "ui/compositor/compositor_switches.h"
 #include "ui/compositor/layer.h"
 #include "ui/events/base_event_utils.h"
@@ -33,9 +33,9 @@ namespace ash {
 
 namespace {
 
-class MockTextInputClient : public ui::DummyTextInputClient {
+class MockTextInputClient : public ui::FakeTextInputClient {
  public:
-  MockTextInputClient() : ui::DummyTextInputClient(ui::TEXT_INPUT_TYPE_TEXT) {}
+  MockTextInputClient() : ui::FakeTextInputClient(ui::TEXT_INPUT_TYPE_TEXT) {}
 
   MockTextInputClient(const MockTextInputClient&) = delete;
   MockTextInputClient& operator=(const MockTextInputClient&) = delete;
@@ -204,6 +204,11 @@ TEST_F(AccessibilityHighlightControllerTest, CursorWorksOnMultipleDisplays) {
   aura::Window::Windows root_windows = Shell::Get()->GetAllRootWindows();
   ASSERT_EQ(2u, root_windows.size());
 
+  aura::Window* window0_container = Shell::GetContainer(
+      root_windows[0], kShellWindowId_AccessibilityBubbleContainer);
+  aura::Window* window1_container = Shell::GetContainer(
+      root_windows[1], kShellWindowId_AccessibilityBubbleContainer);
+
   AccessibilityHighlightController highlight_controller;
   highlight_controller.HighlightCursor(true);
   gfx::Point location(90, 90);
@@ -216,7 +221,7 @@ TEST_F(AccessibilityHighlightControllerTest, CursorWorksOnMultipleDisplays) {
   AccessibilityFocusRingControllerImpl* focus_ring_controller =
       Shell::Get()->accessibility_focus_ring_controller();
   auto* cursor_layer = focus_ring_controller->cursor_layer_for_testing();
-  EXPECT_EQ(root_windows[0], cursor_layer->root_window());
+  EXPECT_EQ(window0_container, cursor_layer->root_window());
   EXPECT_LT(
       std::abs(cursor_layer->layer()->GetTargetBounds().x() - location.x()),
       50);
@@ -231,7 +236,7 @@ TEST_F(AccessibilityHighlightControllerTest, CursorWorksOnMultipleDisplays) {
   highlight_controller.OnMouseEvent(&event1);
 
   cursor_layer = focus_ring_controller->cursor_layer_for_testing();
-  EXPECT_EQ(root_windows[1], cursor_layer->root_window());
+  EXPECT_EQ(window1_container, cursor_layer->root_window());
   EXPECT_LT(
       std::abs(cursor_layer->layer()->GetTargetBounds().x() - location.x()),
       50);
@@ -306,7 +311,7 @@ TEST_F(AccessibilityHighlightControllerTest, SetCaretBounds) {
   std::unique_ptr<views::Widget> window = CreateTestWidget();
   window->SetBounds(gfx::Rect(5, 5, 300, 300));
 
-  AccessibilityControllerImpl* accessibility_controller =
+  AccessibilityController* accessibility_controller =
       Shell::Get()->accessibility_controller();
   accessibility_controller->caret_highlight().SetEnabled(true);
 

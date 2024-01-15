@@ -14,6 +14,7 @@ mojom("mojom") {
     "input_engine.mojom",
     "input_method.mojom",
     "input_method_host.mojom",
+    "japanese_settings.mojom",
   ]
 
   public_deps = [
@@ -42,6 +43,10 @@ mojom("mojom") {
           cpp = "::ash::ime::AssistiveSuggestion"
         },
         {
+          mojom = "ash.ime.mojom.SuggestionsTextContext"
+          cpp = "::ash::ime::SuggestionsTextContext"
+        },
+        {
           mojom = "ash.ime.mojom.TextRange"
           cpp = "::gfx::Range"
         },
@@ -53,14 +58,36 @@ mojom("mojom") {
           mojom = "ash.ime.mojom.AssistiveWindowType"
           cpp = "::ash::ime::AssistiveWindowType"
         },
+        {
+          mojom = "ash.ime.mojom.AutocorrectSuggestionProvider"
+          cpp = "::ash::ime::AutocorrectSuggestionProvider"
+        },
+        {
+          mojom = "ash.ime.mojom.BucketedHistogram"
+          cpp = "::base::Histogram*"
+          copyable_pass_by_value = true
+          nullable_is_same_type = true
+        },
       ]
 
       traits_headers = [ "mojom_traits.h" ]
       traits_sources = [ "mojom_traits.cc" ]
       traits_public_deps = [
+        "//base",
         "//chromeos/ash/services/ime/public/cpp:structs",
         "//ui/gfx/range",
       ]
     },
+  ]
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = [ "mojom_traits_unittest.cc" ]
+  deps = [
+    ":mojom",
+    "//mojo/public/cpp/test_support:test_utils",
+    "//testing/gmock",
+    "//testing/gtest",
   ]
 }

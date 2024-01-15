@@ -5,7 +5,7 @@
 #include "components/exo/vsync_timing_manager.h"
 
 #include "base/containers/cxx20_erase.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 
 namespace exo {
@@ -38,7 +38,7 @@ void VSyncTimingManager::RemoveObserver(Observer* obs) {
 
 void VSyncTimingManager::OnUpdateVSyncParameters(base::TimeTicks timebase,
                                                  base::TimeDelta interval) {
-  for (auto* observer : observers_) {
+  for (exo::VSyncTimingManager::Observer* observer : observers_) {
     observer->OnUpdateVSyncParameters(timebase, throttled_interval_.is_zero()
                                                     ? interval
                                                     : throttled_interval_);
@@ -85,7 +85,7 @@ void VSyncTimingManager::OnConnectionError() {
   // Try to add a new observer after a short delay. If adding a new observer
   // fails we'll retry again until successful. The delay avoids spamming
   // retries.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&VSyncTimingManager::MaybeInitializeConnection,
                      weak_ptr_factory_.GetWeakPtr()),

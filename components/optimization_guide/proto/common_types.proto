@@ -9,39 +9,9 @@ option java_outer_classname = "CommonTypesProto";
 
 package optimization_guide.proto;
 
-// The possible effective connection type values.
-//
-// The values should match those of //net/nqe/effective_connection_type.h in the
-// Chromium repository.
-enum EffectiveConnectionType {
-  // Effective connection type reported when the network quality is unknown.
-  EFFECTIVE_CONNECTION_TYPE_UNKNOWN = 0;
-
-  // Effective connection type reported when the Internet is unreachable,
-  // either because the device does not have a connection or because the
-  // connection is too slow to be usable.
-  EFFECTIVE_CONNECTION_TYPE_OFFLINE = 1;
-
-  // Effective connection type reported when the network has the quality of a
-  // poor 2G connection.
-  EFFECTIVE_CONNECTION_TYPE_SLOW_2G = 2;
-
-  // Effective connection type reported when the network has the quality of a
-  // faster 2G connection.
-  EFFECTIVE_CONNECTION_TYPE_2G = 3;
-
-  // Effective connection type reported when the network has the quality of a
-  // 3G connection.
-  EFFECTIVE_CONNECTION_TYPE_3G = 4;
-
-  // Effective connection type reported when the network has the quality of a
-  // 4G connection.
-  EFFECTIVE_CONNECTION_TYPE_4G = 5;
-}
-
 // Context in which the items are requested.
 enum RequestContext {
-  reserved 1, 3;
+  reserved 1, 3, 10;
   // Context not specified.
   CONTEXT_UNSPECIFIED = 0;
   // Requesting items on page navigation.
@@ -55,6 +25,16 @@ enum RequestContext {
   // Requesting page load metadata for a user's bookmarks when visiting the
   // bookmarks surface.
   CONTEXT_BOOKMARKS = 7;
+  // Requesting metadata for a user when visiting the Journeys surface.
+  CONTEXT_JOURNEYS = 8;
+  // Requesting metadata for a user when visiting the new tab page.
+  CONTEXT_NEW_TAB_PAGE = 9;
+  // Requesting metadata for a user when visiting the Page Insights feature;
+  // Gaia can be attached to request.
+  CONTEXT_PAGE_INSIGHTS_HUB = 11;
+  // Requesting metadata for a user when visiting the Page Insights feature;
+  // Gaia cannot be attached to request.
+  CONTEXT_NON_PERSONALIZED_PAGE_INSIGHTS_HUB = 12;
 }
 
 message FieldTrial {
@@ -106,14 +86,6 @@ message Any {
   optional bytes value = 2;
 }
 
-// Wrapper message for `string`.
-//
-// The JSON representation for `StringValue` is JSON string.
-message StringValue {
-  // The string value.
-  optional string value = 1;
-}
-
 // Information about the request origin, common to all Cacao requests.
 message OriginInfo {
   // The platform for the user's Chrome.
@@ -122,8 +94,8 @@ message OriginInfo {
 
 // The platform for the user's Chrome on which the request was made.
 enum Platform {
-  // Unknown is used when the user's platform cannot be resolved.
-  PLATFORM_UNKNOWN = 0;
+  // Undefined is used when the user's platform cannot be resolved.
+  PLATFORM_UNDEFINED = 0;
   // Android based platforms.
   PLATFORM_ANDROID = 1;
   // ChromeOS platforms including all architectures.

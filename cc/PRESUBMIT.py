@@ -10,10 +10,11 @@ for more details about the presubmit API built into depot_tools.
 
 import re
 
-USE_PYTHON3 = True
+PRESUBMIT_VERSION = '2.0.0'
+
 CC_SOURCE_FILES=(r'^cc[\\/].*\.(cc|h)$',)
 
-def CheckChangeLintsClean(input_api, output_api):
+def _CheckChangeLintsClean(input_api, output_api):
   allowlist = CC_SOURCE_FILES
   denylist = None
   source_filter = lambda x: input_api.FilterSourceFile(x, allowlist, denylist)
@@ -21,7 +22,7 @@ def CheckChangeLintsClean(input_api, output_api):
   return input_api.canned_checks.CheckChangeLintsClean(
       input_api, output_api, source_filter, lint_filters=[], verbose_level=1)
 
-def CheckAsserts(input_api, output_api, allowlist=CC_SOURCE_FILES,
+def _CheckAsserts(input_api, output_api, allowlist=CC_SOURCE_FILES,
                  denylist=None):
   denylist = tuple(denylist or input_api.DEFAULT_FILES_TO_SKIP)
   source_file_filter = lambda x: input_api.FilterSourceFile(x, allowlist,
@@ -41,7 +42,7 @@ def CheckAsserts(input_api, output_api, allowlist=CC_SOURCE_FILES,
       items=assert_files)]
   return []
 
-def CheckStdAbs(input_api, output_api,
+def _CheckStdAbs(input_api, output_api,
                 allowlist=CC_SOURCE_FILES, denylist=None):
   denylist = tuple(denylist or input_api.DEFAULT_FILES_TO_SKIP)
   source_file_filter = lambda x: input_api.FilterSourceFile(x,
@@ -87,7 +88,7 @@ def CheckStdAbs(input_api, output_api,
         items=missing_std_prefix_files))
   return result
 
-def CheckPassByValue(input_api,
+def _CheckPassByValue(input_api,
                      output_api,
                      allowlist=CC_SOURCE_FILES,
                      denylist=None):
@@ -115,7 +116,7 @@ def CheckPassByValue(input_api,
         (f.LocalPath(), match.group('type'))))
   return local_errors
 
-def CheckTodos(input_api, output_api):
+def _CheckTodos(input_api, output_api):
   errors = []
 
   source_file_filter = lambda x: x
@@ -131,7 +132,7 @@ def CheckTodos(input_api, output_api):
       items=errors)]
   return []
 
-def CheckDoubleAngles(input_api, output_api, allowlist=CC_SOURCE_FILES,
+def _CheckDoubleAngles(input_api, output_api, allowlist=CC_SOURCE_FILES,
                       denylist=None):
   errors = []
 
@@ -147,11 +148,11 @@ def CheckDoubleAngles(input_api, output_api, allowlist=CC_SOURCE_FILES,
     return [output_api.PresubmitError('Use >> instead of > >:', items=errors)]
   return []
 
-def FindUnquotedQuote(contents, pos):
+def _FindUnquotedQuote(contents, pos):
   match = re.search(r"(?<!\\)(?P<quote>\")", contents[pos:])
   return -1 if not match else match.start("quote") + pos
 
-def FindUselessIfdefs(input_api, output_api):
+def _FindUselessIfdefs(input_api, output_api):
   errors = []
   source_file_filter = lambda x: x
   for f in input_api.AffectedSourceFiles(source_file_filter):
@@ -164,7 +165,7 @@ def FindUselessIfdefs(input_api, output_api):
       items=errors)]
   return []
 
-def FindNamespaceInBlock(pos, namespace, contents, allowlist=[]):
+def _FindNamespaceInBlock(pos, namespace, contents, allowlist=[]):
   open_brace = -1
   close_brace = -1
   quote = -1
@@ -174,7 +175,7 @@ def FindNamespaceInBlock(pos, namespace, contents, allowlist=[]):
   while pos < len(contents) and brace_count > 0:
     if open_brace < pos: open_brace = contents.find("{", pos)
     if close_brace < pos: close_brace = contents.find("}", pos)
-    if quote < pos: quote = FindUnquotedQuote(contents, pos)
+    if quote < pos: quote = _FindUnquotedQuote(contents, pos)
     if name < pos: name = contents.find(("%s::" % namespace), pos)
 
     if name < 0:
@@ -207,7 +208,7 @@ def FindNamespaceInBlock(pos, namespace, contents, allowlist=[]):
 
 # Checks for the use of cc:: within the cc namespace, which is usually
 # redundant.
-def CheckNamespace(input_api, output_api):
+def _CheckNamespace(input_api, output_api):
   errors = []
 
   source_file_filter = lambda x: x
@@ -216,7 +217,10 @@ def CheckNamespace(input_api, output_api):
     match = re.search(r'namespace\s*cc\s*{', contents)
     if match:
       allowlist = []
-      if FindNamespaceInBlock(match.end(), 'cc', contents, allowlist=allowlist):
+      if _FindNamespaceInBlock(match.end(),
+                               'cc',
+                               contents,
+                               allowlist=allowlist):
         errors.append(f.LocalPath())
 
   if errors:
@@ -225,7 +229,7 @@ def CheckNamespace(input_api, output_api):
       items=errors)]
   return []
 
-def CheckForUseOfWrongClock(input_api,
+def _CheckForUseOfWrongClock(input_api,
                             output_api,
                             allowlist=CC_SOURCE_FILES,
                             denylist=None):
@@ -280,13 +284,13 @@ def CheckForUseOfWrongClock(input_api,
 
 def CheckChangeOnUpload(input_api, output_api):
   results = []
-  results += CheckAsserts(input_api, output_api)
-  results += CheckStdAbs(input_api, output_api)
-  results += CheckPassByValue(input_api, output_api)
-  results += CheckChangeLintsClean(input_api, output_api)
-  results += CheckTodos(input_api, output_api)
-  results += CheckDoubleAngles(input_api, output_api)
-  results += CheckNamespace(input_api, output_api)
-  results += CheckForUseOfWrongClock(input_api, output_api)
-  results += FindUselessIfdefs(input_api, output_api)
+  results += _CheckAsserts(input_api, output_api)
+  results += _CheckStdAbs(input_api, output_api)
+  results += _CheckPassByValue(input_api, output_api)
+  results += _CheckChangeLintsClean(input_api, output_api)
+  results += _CheckTodos(input_api, output_api)
+  results += _CheckDoubleAngles(input_api, output_api)
+  results += _CheckNamespace(input_api, output_api)
+  results += _CheckForUseOfWrongClock(input_api, output_api)
+  results += _FindUselessIfdefs(input_api, output_api)
   return results

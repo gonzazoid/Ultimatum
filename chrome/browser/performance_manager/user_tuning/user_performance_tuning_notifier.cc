@@ -4,9 +4,17 @@
 
 #include "chrome/browser/performance_manager/user_tuning/user_performance_tuning_notifier.h"
 
+#include <utility>
+#include <vector>
+
+#include "components/performance_manager/public/features.h"
+#include "components/performance_manager/public/graph/page_node.h"
 #include "components/performance_manager/public/graph/process_node.h"
 
 namespace performance_manager::user_tuning {
+
+const int UserPerformanceTuningNotifier::kTabCountThresholdForPromo = 10;
+const int UserPerformanceTuningNotifier::kMemoryPercentThresholdForPromo = 70;
 
 UserPerformanceTuningNotifier::UserPerformanceTuningNotifier(
     std::unique_ptr<Receiver> receiver,
@@ -59,6 +67,21 @@ void UserPerformanceTuningNotifier::OnTypeChanged(const PageNode* page_node,
   }
 }
 
+void UserPerformanceTuningNotifier::OnLoadingStateChanged(
+    const PageNode* page_node,
+    PageNode::LoadingState previous_state) {
+  if (features::kMemoryUsageInHovercardsUpdateTrigger.Get() ==
+          features::MemoryUsageInHovercardsUpdateTrigger::kNavigation &&
+      page_node->GetType() == PageType::kTab &&
+      page_node->GetLoadingState() == PageNode::LoadingState::kLoadedIdle) {
+    auto* metrics_decorator =
+        page_node->GetGraph()
+            ->GetRegisteredObjectAs<
+                performance_manager::ProcessMetricsDecorator>();
+    metrics_decorator->RequestImmediateMetrics();
+  }
+}
+
 void UserPerformanceTuningNotifier::OnProcessMemoryMetricsAvailable(
     const SystemNode* system_node) {
   uint64_t total_rss = 0;
@@ -74,6 +97,17 @@ void UserPerformanceTuningNotifier::OnProcessMemoryMetricsAvailable(
   }
 
   previous_total_rss_ = total_rss;
+
+  ProxyAndPmfKbVector proxies_and_pmf;
+  std::vector<const PageNode*> all_page_nodes = graph_->GetAllPageNodes();
+  proxies_and_pmf.reserve(all_page_nodes.size());
+
+  for (auto* page_node : all_page_nodes) {
+    proxies_and_pmf.emplace_back(page_node->GetContentsProxy(),
+                                 page_node->EstimatePrivateFootprintSize());
+  }
+
+  receiver_->NotifyMemoryMetricsRefreshed(std::move(proxies_and_pmf));
 }
 
 void UserPerformanceTuningNotifier::MaybeAddTabAndNotify(

@@ -80,7 +80,7 @@
 //   void OnEnable() override {
 //     // ... Enable setup manager ...
 //     // OnEnableComplete() may be called asynchronously.
-//     base::ThreadTaskRunnerHandle::Get()->PostTask(
+//     base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
 //         FROM_HERE, base::BindOnce(&SetupManagerImpl::CompleteEnable,
 //                                   base::Unretained(this)));
 //   }
@@ -143,8 +143,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_threadsafe.h"

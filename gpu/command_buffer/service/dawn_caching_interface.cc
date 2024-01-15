@@ -8,7 +8,6 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/trace_event/trace_event.h"
-#include "gpu/command_buffer/service/decoder_client.h"
 #include "gpu/config/gpu_preferences.h"
 #include "net/base/io_buffer.h"
 
@@ -16,8 +15,8 @@ namespace gpu::webgpu {
 
 DawnCachingInterface::DawnCachingInterface(
     scoped_refptr<detail::DawnCachingBackend> backend,
-    DecoderClient* decoder_client)
-    : backend_(std::move(backend)), decoder_client_(decoder_client) {}
+    CacheBlobCallback callback)
+    : backend_(std::move(backend)), cache_blob_callback_(std::move(callback)) {}
 
 DawnCachingInterface::~DawnCachingInterface() = default;
 
@@ -43,10 +42,10 @@ void DawnCachingInterface::StoreData(const void* key,
   backend()->StoreData(key_str, value, value_size);
 
   // Send the cache entry to be stored on the host-side if applicable.
-  if (decoder_client_) {
+  if (cache_blob_callback_) {
     std::string value_str(static_cast<const char*>(value), value_size);
-    decoder_client_->CacheBlob(gpu::GpuDiskCacheType::kDawnWebGPU, key_str,
-                               value_str);
+    cache_blob_callback_.Run(gpu::GpuDiskCacheType::kDawnWebGPU, key_str,
+                             value_str);
   }
 }
 
@@ -62,12 +61,12 @@ DawnCachingInterfaceFactory::~DawnCachingInterfaceFactory() = default;
 std::unique_ptr<DawnCachingInterface>
 DawnCachingInterfaceFactory::CreateInstance(
     const gpu::GpuDiskCacheHandle& handle,
-    DecoderClient* decoder_client) {
+    DawnCachingInterface::CacheBlobCallback callback) {
   DCHECK(gpu::GetHandleType(handle) == gpu::GpuDiskCacheType::kDawnWebGPU);
 
   if (const auto it = backends_.find(handle); it != backends_.end()) {
     return base::WrapUnique(
-        new DawnCachingInterface(it->second, decoder_client));
+        new DawnCachingInterface(it->second, std::move(callback)));
   }
 
   scoped_refptr<detail::DawnCachingBackend> backend = backend_factory_.Run();
@@ -75,7 +74,7 @@ DawnCachingInterfaceFactory::CreateInstance(
     backends_[handle] = backend;
   }
   return base::WrapUnique(
-      new DawnCachingInterface(std::move(backend), decoder_client));
+      new DawnCachingInterface(std::move(backend), std::move(callback)));
 }
 
 std::unique_ptr<DawnCachingInterface>
@@ -166,10 +165,18 @@ void DawnCachingBackend::StoreData(const std::string& key,
     EvictEntry(it->second.get());
   }
 
-  auto entry = std::make_unique<Entry>(key, value, value_size);
+  // If the entry is too large for the cache, we cannot store it so skip. We
+  // avoid creating the entry here early since it would incur unneeded large
+  // copies.
+  size_t entry_size = key.length() + value_size;
+  if (entry_size >= max_size_) {
+    return;
+  }
 
   // Evict least used entries until we have enough room to add the new entry.
-  while (current_size_ + entry->TotalSize() > max_size_) {
+  auto entry = std::make_unique<Entry>(key, value, value_size);
+  DCHECK(entry->TotalSize() == entry_size);
+  while (current_size_ + entry_size > max_size_) {
     EvictEntry(lru_.head()->value());
   }
 

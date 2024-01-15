@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/public/test/test_utils.h"
@@ -45,6 +45,9 @@ class WebContents;
 // Returns the |TextInputState.type| from the TextInputManager owned by
 // |web_contents|.
 ui::TextInputType GetTextInputTypeFromWebContents(WebContents* web_contents);
+
+const ui::mojom::TextInputState* GetTextInputStateFromWebContents(
+    WebContents* web_contents);
 
 // This method returns true if |view| is registered in the TextInputManager that
 // is owned by |web_contents|. If that is the case, the value of |type| will be
@@ -89,6 +92,11 @@ void SendImeSetCompositionTextToWidget(
     const gfx::Range& replacement_range,
     int selection_start,
     int selection_end);
+
+// Triggers the TextInputStateChanged event on the RenderWidget corresponding to
+// |rwh|.
+void SendTextInputStateChangedToWidget(RenderWidgetHost* rwh,
+                                       ui::mojom::TextInputStatePtr state);
 
 // Immediately destroys the RenderWidgetHost corresponding to the local root
 // which is identified by the given process ID and RenderFrameHost routing ID.

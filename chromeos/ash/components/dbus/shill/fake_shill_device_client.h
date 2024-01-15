@@ -40,7 +40,7 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
       ShillPropertyChangedObserver* observer) override;
   void GetProperties(
       const dbus::ObjectPath& device_path,
-      chromeos::DBusMethodCallback<base::Value> callback) override;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) override;
   void SetProperty(const dbus::ObjectPath& device_path,
                    const std::string& name,
                    const base::Value& value,
@@ -88,6 +88,8 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
                  const std::string& name) override;
   void RemoveDevice(const std::string& device_path) override;
   void ClearDevices() override;
+  base::Value* GetDeviceProperty(const std::string& device_path,
+                                 const std::string& name) override;
   void SetDeviceProperty(const std::string& device_path,
                          const std::string& name,
                          const base::Value& value,
@@ -100,7 +102,9 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
       const std::string& error_name) override;
   void SetSimulateInhibitScanning(bool simulate_inhibit_scanning) override;
   void SetPropertyChangeDelay(
-      absl::optional<base::TimeDelta> time_delay) override;
+      std::optional<base::TimeDelta> time_delay) override;
+  void SetErrorForNextSetPropertyAttempt(
+      const std::string& error_name) override;
 
   static const char kSimPuk[];
   static const char kDefaultSimPin[];
@@ -122,7 +126,7 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
   bool SimTryPuk(const std::string& device_path, const std::string& pin);
   void PassStubDeviceProperties(
       const dbus::ObjectPath& device_path,
-      chromeos::DBusMethodCallback<base::Value> callback) const;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) const;
 
   // Posts a task to run a void callback with status code |result|.
   void PostVoidCallback(chromeos::VoidDBusMethodCallback callback, bool result);
@@ -138,13 +142,12 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
 
   void NotifyObserversPropertyChanged(const dbus::ObjectPath& device_path,
                                       const std::string& property);
-  base::Value* GetDeviceProperties(const std::string& device_path);
   PropertyObserverList& GetObserverList(const dbus::ObjectPath& device_path);
 
   void SetScanning(const dbus::ObjectPath& device_path, bool is_scanning);
 
   // Dictionary of <device_name, Dictionary>.
-  base::Value stub_devices_{base::Value::Type::DICTIONARY};
+  base::Value::Dict stub_devices_;
 
   // Observer list for each device.
   std::map<dbus::ObjectPath, std::unique_ptr<PropertyObserverList>>
@@ -166,7 +169,10 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
 
   // When set, causes SetProperty call to return immediately and delay the value
   // change by given amount.
-  absl::optional<base::TimeDelta> property_change_delay_;
+  std::optional<base::TimeDelta> property_change_delay_;
+
+  // If set the next SetProperty call will fail with this error_name.
+  std::optional<std::string> set_property_error_name_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
@@ -174,10 +180,5 @@ class COMPONENT_EXPORT(SHILL_CLIENT) FakeShillDeviceClient
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::FakeShillDeviceClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SHILL_FAKE_SHILL_DEVICE_CLIENT_H_

@@ -9,28 +9,41 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ui/quick_answers/ui/quick_answers_focus_search.h"
+#include "chromeos/components/quick_answers/quick_answers_model.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event_handler.h"
+#include "ui/views/controls/image_view.h"
 #include "ui/views/focus/focus_manager.h"
+#include "ui/views/widget/unique_widget_ptr.h"
 
 namespace views {
 class ImageButton;
+class ImageView;
 class Label;
 class LabelButton;
 class WebView;
 }  // namespace views
 
+namespace chromeos::editor_menu {
+class FocusSearch;
+class PreTargetHandler;
+}  // namespace chromeos::editor_menu
+
 class QuickAnswersUiController;
-class QuickAnswersPreTargetHandler;
 
 namespace quick_answers {
 struct QuickAnswer;
 struct PhoneticsInfo;
-}  // namespace quick_answers
+
+class QuickAnswersPreTargetHandler;
 
 // A bubble style view to show QuickAnswer.
 class QuickAnswersView : public views::View {
  public:
+  METADATA_HEADER(QuickAnswersView);
+
+  static constexpr char kWidgetName[] = "QuickAnswersViewWidget";
+
   QuickAnswersView(const gfx::Rect& anchor_view_bounds,
                    const std::string& title,
                    bool is_internal,
@@ -41,8 +54,15 @@ class QuickAnswersView : public views::View {
 
   ~QuickAnswersView() override;
 
+  static views::UniqueWidgetPtr CreateWidget(
+      const gfx::Rect& anchor_view_bounds,
+      const std::string& title,
+      bool is_internal,
+      base::WeakPtr<QuickAnswersUiController> controller);
+
   // views::View:
-  const char* GetClassName() const override;
+  void RequestFocus() override;
+  bool HasFocus() const override;
   void OnFocus() override;
   void OnThemeChanged() override;
   views::FocusTraversable* GetPaneFocusTraversable() override;
@@ -59,31 +79,40 @@ class QuickAnswersView : public views::View {
 
   void ShowRetryView();
 
+  ui::ImageModel GetIconImageModelForTesting();
+
+  gfx::Rect GetAnchorViewBounds() { return anchor_view_bounds_; }
+
  private:
   void InitLayout();
-  void InitWidget();
   void AddContentView();
   void AddFrameButtons();
+  bool ShouldAddPhoneticsAudioButton(ResultType result_type,
+                                     GURL phonetics_audio,
+                                     bool tts_audio_enabled);
   void AddPhoneticsAudioButton(
       const quick_answers::PhoneticsInfo& phonetics_info,
       View* container);
   void AddAssistantIcon();
   void AddGoogleIcon();
+  void AddDefaultResultTypeIcon();
   int GetBoundsWidth();
-  int GetLabelWidth();
+  int GetLabelWidth(bool is_title);
   void ResetContentView();
   void UpdateBounds();
   void UpdateQuickAnswerResult(const quick_answers::QuickAnswer& quick_answer);
 
-  // QuickAnswersFocusSearch::GetFocusableViewsCallback to poll currently
-  // focusable views.
+  // FocusSearch::GetFocusableViewsCallback to poll currently focusable views.
   std::vector<views::View*> GetFocusableViews();
 
   // Invoked when user clicks the phonetics audio button.
   void OnPhoneticsAudioButtonPressed(
       const quick_answers::PhoneticsInfo& phonetics_info);
 
+  // The relative position to the screen for Ash and to the toplevel window for
+  // Lacros.
   gfx::Rect anchor_view_bounds_;
+
   base::WeakPtr<QuickAnswersUiController> controller_;
   bool has_second_row_answer_ = false;
   std::string title_;
@@ -98,13 +127,17 @@ class QuickAnswersView : public views::View {
   raw_ptr<views::ImageButton> dogfood_feedback_button_ = nullptr;
   raw_ptr<views::ImageButton> settings_button_ = nullptr;
   raw_ptr<views::ImageButton> phonetics_audio_button_ = nullptr;
+  raw_ptr<views::ImageView> result_type_icon_ = nullptr;
 
   // Invisible web view to play phonetics audio for definition results.
   raw_ptr<views::WebView> phonetics_audio_web_view_ = nullptr;
 
-  std::unique_ptr<QuickAnswersPreTargetHandler> quick_answers_view_handler_;
-  std::unique_ptr<QuickAnswersFocusSearch> focus_search_;
+  std::unique_ptr<chromeos::editor_menu::PreTargetHandler>
+      quick_answers_view_handler_;
+  std::unique_ptr<chromeos::editor_menu::FocusSearch> focus_search_;
   base::WeakPtrFactory<QuickAnswersView> weak_factory_{this};
 };
+
+}  // namespace quick_answers
 
 #endif  // CHROME_BROWSER_UI_QUICK_ANSWERS_UI_QUICK_ANSWERS_VIEW_H_

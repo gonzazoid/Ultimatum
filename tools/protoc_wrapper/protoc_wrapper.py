@@ -94,10 +94,6 @@ def main(argv):
                       'codesearch.')
   parser.add_argument("--plugin",
                       help="Relative path to custom generator plugin.")
-  #   TODO(crbug.com/1237958): Remove allow_optional when proto rolls to 3.15.
-  parser.add_argument("--allow-optional",
-                      action='store_true',
-                      help="Enables experimental_allow_proto3_optional.")
   parser.add_argument("--plugin-options",
                       help="Custom generator plugin options.")
   parser.add_argument("--cc-options",
@@ -155,9 +151,6 @@ def main(argv):
     if options.cc_options:
       cc_options_list.append(options.cc_options)
 
-    if options.allow_optional:
-      protoc_cmd += ["--experimental_allow_proto3_optional"]
-
     cc_options = FormatGeneratorOptions(','.join(cc_options_list))
     protoc_cmd += ["--cpp_out", cc_options + cc_out_dir]
     for filename in protos:
@@ -173,7 +166,11 @@ def main(argv):
 
   protoc_cmd += ["--proto_path", proto_dir]
   for path in options.import_dir:
-    protoc_cmd += ["--proto_path", path]
+    # TODO: crbug.com/1477926 - Do not specify unused `--import-dir`s.
+    # On a remote worker, it shows `warning: directory does not exist` when
+    # there are no dependencies under the directory.
+    if os.path.exists(path):
+      protoc_cmd += ["--proto_path", path]
 
   protoc_cmd += [os.path.join(proto_dir, name) for name in protos]
 

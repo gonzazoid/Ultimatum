@@ -22,7 +22,6 @@ arc::mojom::ArcPackageInfoPtr CreateArcAppPackage(
   package->last_backup_android_id = 1;
   package->last_backup_time = 1;
   package->sync = false;
-  package->system = false;
   return package;
 }
 
@@ -39,23 +38,20 @@ arc::mojom::AppInfoPtr CreateArcAppInfo(const std::string& package_name,
 scoped_refptr<extensions::Extension> CreateExtension(
     const std::string& extension_id,
     const std::string& name,
-    const std::string& url,
-    bool is_bookmark_app) {
-  base::Value manifest(base::Value::Type::DICTIONARY);
-  manifest.SetStringPath(extensions::manifest_keys::kName, name);
-  manifest.SetStringPath(extensions::manifest_keys::kVersion, "1");
-  manifest.SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
-  manifest.SetStringPath(extensions::manifest_keys::kLaunchWebURL, url);
+    const std::string& url) {
+  base::Value::Dict manifest;
+  manifest.Set(extensions::manifest_keys::kName, name);
+  manifest.Set(extensions::manifest_keys::kVersion, "1");
+  manifest.Set(extensions::manifest_keys::kManifestVersion, 2);
+  manifest.SetByDottedPath(extensions::manifest_keys::kLaunchWebURL, url);
 
   std::string error;
   extensions::Extension::InitFromValueFlags flags =
-      is_bookmark_app ? extensions::Extension::FROM_BOOKMARK
-                      : extensions::Extension::NO_FLAGS;
+      extensions::Extension::NO_FLAGS;
   scoped_refptr<extensions::Extension> extension =
       extensions::Extension::Create(
           base::FilePath(), extensions::mojom::ManifestLocation::kUnpacked,
-          static_cast<base::DictionaryValue&>(manifest), flags, extension_id,
-          &error);
+          manifest, flags, extension_id, &error);
   return extension;
 }
 

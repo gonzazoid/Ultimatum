@@ -7,11 +7,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/environment.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial.h"
@@ -19,17 +19,22 @@
 #include "base/task/current_thread.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/test_host_resolver.h"
+#include "content/utility/services.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/address_family.h"
 #include "net/base/address_list.h"
+#include "net/base/address_map_linux.h"
 #include "net/base/ip_address.h"
+#include "net/base/network_change_notifier.h"
 #include "net/cert/ev_root_ca_metadata.h"
 #include "net/cert/mock_cert_verifier.h"
 #include "net/disk_cache/disk_cache.h"
@@ -49,10 +54,15 @@
 #include "services/network/network_context.h"
 #include "services/network/network_service.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/cpp/network_service_buildflags.h"
 #include "services/network/public/mojom/network_change_manager.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/network_service_test.mojom.h"
+
+#if BUILDFLAG(IS_CT_SUPPORTED)
 #include "services/network/sct_auditing/sct_auditing_cache.h"
 #include "services/network/sct_auditing/sct_auditing_reporter.h"
+#endif
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/test/android/url_utils.h"
@@ -100,7 +110,8 @@ class SimpleCacheEntry : public network::mojom::SimpleCacheEntry {
         base::MakeRefCounted<base::RefCountedData<WriteDataCallback>>();
     callback_holder->data = std::move(callback);
 
-    auto data_to_pass = base::MakeRefCounted<net::IOBuffer>(data.size());
+    auto data_to_pass =
+        base::MakeRefCounted<net::IOBufferWithSize>(data.size());
     memcpy(data_to_pass->data(), data.data(), data.size());
     int rv = entry_->WriteData(index, offset, data_to_pass.get(), data.size(),
                                base::BindOnce(&SimpleCacheEntry::OnDataWritten,
@@ -126,7 +137,7 @@ class SimpleCacheEntry : public network::mojom::SimpleCacheEntry {
         base::MakeRefCounted<base::RefCountedData<ReadDataCallback>>();
     callback_holder->data = std::move(callback);
 
-    auto buffer = base::MakeRefCounted<net::IOBuffer>(length);
+    auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(length);
     int rv = entry_->ReadData(
         index, offset, buffer.get(), length,
         base::BindOnce(&SimpleCacheEntry::OnDataRead,
@@ -148,7 +159,8 @@ class SimpleCacheEntry : public network::mojom::SimpleCacheEntry {
         base::MakeRefCounted<base::RefCountedData<WriteDataCallback>>();
     callback_holder->data = std::move(callback);
 
-    auto data_to_pass = base::MakeRefCounted<net::IOBuffer>(data.size());
+    auto data_to_pass =
+        base::MakeRefCounted<net::IOBufferWithSize>(data.size());
     memcpy(data_to_pass->data(), data.data(), data.size());
     int rv =
         entry_->WriteSparseData(offset, data_to_pass.get(), data.size(),
@@ -173,7 +185,7 @@ class SimpleCacheEntry : public network::mojom::SimpleCacheEntry {
         base::MakeRefCounted<base::RefCountedData<ReadDataCallback>>();
     callback_holder->data = std::move(callback);
 
-    auto buffer = base::MakeRefCounted<net::IOBuffer>(length);
+    auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(length);
     int rv = entry_->ReadSparseData(
         offset, buffer.get(), length,
         base::BindOnce(&SimpleCacheEntry::OnDataRead,
@@ -518,6 +530,18 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
   void MockCertVerifierSetDefaultResult(
       int32_t default_result,
       MockCertVerifierSetDefaultResultCallback callback) override {
+    // TODO(crbug.com/1377734): Since testing/variations/
+    // fieldtrial_testing_config.json changes the command line flags after
+    // ContentBrowserTest::SetUpCommandLine() and NetworkServiceTest
+    // instantiation, MockCertVerifierSetDefaultResult can be called without
+    // `mock_cert_verifier_` initialization.
+    // Actually since all mock cert verification tests call this function first,
+    // we should remove the set up using the command line flags.
+    if (!mock_cert_verifier_) {
+      mock_cert_verifier_ = std::make_unique<net::MockCertVerifier>();
+      network::NetworkContext::SetCertVerifierForTesting(
+          mock_cert_verifier_.get());
+    }
     mock_cert_verifier_->set_default_result(default_result);
     std::move(callback).Run();
   }
@@ -564,8 +588,7 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
   void ReplaceSystemDnsConfig(
       ReplaceSystemDnsConfigCallback callback) override {
     network::NetworkService::GetNetworkServiceForTesting()
-        ->ReplaceSystemDnsConfigForTesting();
-    std::move(callback).Run();
+        ->ReplaceSystemDnsConfigForTesting(std::move(callback));
   }
 
   void SetTestDohConfig(net::SecureDnsMode secure_dns_mode,
@@ -603,9 +626,11 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
   }
 
   void SetSCTAuditingRetryDelay(
-      absl::optional<base::TimeDelta> delay,
+      std::optional<base::TimeDelta> delay,
       SetSCTAuditingRetryDelayCallback callback) override {
+#if BUILDFLAG(IS_CT_SUPPORTED)
     network::SCTAuditingReporter::SetRetryDelayForTesting(delay);
+#endif
     std::move(callback).Run();
   }
 
@@ -735,6 +760,39 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
     system_task_ptr->Start(std::move(results_cb));
   }
 
+  void SetIPv6ProbeResult(bool success,
+                          SetIPv6ProbeResultCallback callback) override {
+    network::NetworkService::GetNetworkServiceForTesting()
+        ->host_resolver_manager()
+        ->SetLastIPv6ProbeResultForTesting(success);
+    std::move(callback).Run();
+  }
+
+#if BUILDFLAG(IS_LINUX)
+  void GetAddressMapCacheLinux(
+      GetAddressMapCacheLinuxCallback callback) override {
+    const net::AddressMapOwnerLinux* address_map_owner =
+        net::NetworkChangeNotifier::GetAddressMapOwner();
+    std::move(callback).Run(address_map_owner->GetAddressMap(),
+                            address_map_owner->GetOnlineLinks());
+  }
+#endif  // BUILDFLAG(IS_LINUX)
+
+  void AllowsGSSAPILibraryLoad(
+      AllowsGSSAPILibraryLoadCallback callback) override {
+    bool allow_gssapi_library_load;
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+    allow_gssapi_library_load =
+        network::NetworkService::GetNetworkServiceForTesting()
+            ->http_auth_dynamic_network_service_params_for_testing()
+            ->allow_gssapi_library_load;
+#else
+    allow_gssapi_library_load = true;
+#endif
+
+    std::move(callback).Run(allow_gssapi_library_load);
+  }
+
  private:
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
@@ -777,20 +835,35 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
 };
 
 NetworkServiceTestHelper::NetworkServiceTestHelper()
-    : network_service_test_impl_(new NetworkServiceTestImpl) {}
+    : network_service_test_impl_(new NetworkServiceTestImpl) {
+  static bool is_created = false;
+  DCHECK(!is_created) << "NetworkServiceTestHelper shouldn't be created twice.";
+  is_created = true;
+}
 
 NetworkServiceTestHelper::~NetworkServiceTestHelper() = default;
+
+std::unique_ptr<NetworkServiceTestHelper> NetworkServiceTestHelper::Create() {
+  if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          switches::kUtilitySubType) == network::mojom::NetworkService::Name_) {
+    std::unique_ptr<NetworkServiceTestHelper> helper(
+        new NetworkServiceTestHelper());
+    SetNetworkBinderCreationCallbackForTesting(
+        base::BindOnce(&NetworkServiceTestHelper::RegisterNetworkBinders,
+                       base::Unretained(helper.get())));
+    return helper;
+  }
+  return nullptr;
+}
 
 void NetworkServiceTestHelper::RegisterNetworkBinders(
     service_manager::BinderRegistry* registry) {
   registry->AddInterface(base::BindRepeating(
-      &NetworkServiceTestHelper::BindNetworkServiceTestReceiver,
+      [](NetworkServiceTestHelper* helper,
+         mojo::PendingReceiver<network::mojom::NetworkServiceTest> receiver) {
+        helper->network_service_test_impl_->BindReceiver(std::move(receiver));
+      },
       base::Unretained(this)));
-}
-
-void NetworkServiceTestHelper::BindNetworkServiceTestReceiver(
-    mojo::PendingReceiver<network::mojom::NetworkServiceTest> receiver) {
-  network_service_test_impl_->BindReceiver(std::move(receiver));
 }
 
 }  // namespace content

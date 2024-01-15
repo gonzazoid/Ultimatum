@@ -13,6 +13,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
+#include "base/types/optional_ref.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/binary_upload_service.h"
@@ -43,8 +44,8 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
     TRIGGER_UNKNOWN = 0,
 
     // The trigger is the prompt in the download shelf, shown for Advanced
-    // Protection users.
-    TRIGGER_APP_PROMPT = 1,
+    // Protection or Enhanced Protection users.
+    TRIGGER_CONSUMER_PROMPT = 1,
 
     // The trigger is the enterprise policy.
     TRIGGER_POLICY = 2,
@@ -69,9 +70,6 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
    public:
     ~Observer() override = default;
 
-    // Called when the DeepScanningRequest chooses to display a modal dialog.
-    virtual void OnModalShown(DeepScanningRequest* request) {}
-
     // Called when the DeepScanningRequest finishes.
     virtual void OnFinish(DeepScanningRequest* request) {}
   };
@@ -90,7 +88,8 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
                       DownloadCheckResult pre_scan_download_check_result,
                       CheckDownloadRepeatingCallback callback,
                       DownloadProtectionService* download_service,
-                      enterprise_connectors::AnalysisSettings settings);
+                      enterprise_connectors::AnalysisSettings settings,
+                      base::optional_ref<const std::string> password);
 
   // Scan the given `item` that corresponds to a save package, with
   // `save_package_page` mapping every currently on-disk file part of that
@@ -139,6 +138,14 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   void OnScanComplete(const base::FilePath& current_path,
                       BinaryUploadService::Result result,
                       enterprise_connectors::ContentAnalysisResponse response);
+  void OnConsumerScanComplete(
+      const base::FilePath& current_path,
+      BinaryUploadService::Result result,
+      enterprise_connectors::ContentAnalysisResponse response);
+  void OnEnterpriseScanComplete(
+      const base::FilePath& current_path,
+      BinaryUploadService::Result result,
+      enterprise_connectors::ContentAnalysisResponse response);
 
   // Called when a single file scanning request has completed. Calls
   // FinishRequest if it was the last required one.
@@ -254,6 +261,14 @@ class DeepScanningRequest : public download::DownloadItem::Observer {
   // The request tokens of all the requests that make up the user action
   // represented by this ContentAnalysisDelegate instance.
   std::vector<std::string> request_tokens_;
+
+  // Password for the file, if it's an archive.
+  absl::optional<std::string> password_;
+
+  // Reason the scanning took place. Used to populate enterprise requests to
+  // give more context on what user action lead to a scan.
+  enterprise_connectors::ContentAnalysisRequest::Reason reason_ =
+      enterprise_connectors::ContentAnalysisRequest::UNKNOWN;
 
   base::WeakPtrFactory<DeepScanningRequest> weak_ptr_factory_;
 };

@@ -14,6 +14,7 @@ class WebContents;
 }
 
 namespace views {
+class FlexLayoutView;
 class Label;
 class MdTextButton;
 class WebView;
@@ -21,7 +22,11 @@ class WebView;
 
 namespace test {
 class SadTabViewTestApi;
-}
+}  // namespace test
+
+namespace gfx {
+class RoundedCornersF;
+}  // namespace gfx
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -32,15 +37,18 @@ class SadTabViewTestApi;
 //
 ///////////////////////////////////////////////////////////////////////////////
 class SadTabView : public SadTab, public views::View {
- public:
-  METADATA_HEADER(SadTabView);
+  METADATA_HEADER(SadTabView, views::View)
 
+ public:
   SadTabView(content::WebContents* web_contents, SadTabKind kind);
 
   SadTabView(const SadTabView&) = delete;
   SadTabView& operator=(const SadTabView&) = delete;
 
   ~SadTabView() override;
+
+  gfx::RoundedCornersF GetBackgroundRadii() const;
+  void SetBackgroundRadii(const gfx::RoundedCornersF& radii);
 
   // Overridden from SadTab:
   void ReinstallInWebView() override;
@@ -60,9 +68,12 @@ class SadTabView : public SadTab, public views::View {
   // with this object's WebContents.
   void AttachToWebView();
 
+  // Enable help link if needed.
+  void EnableHelpLink(views::FlexLayoutView* actions_container);
+
   bool painted_ = false;
   raw_ptr<views::Label> message_;
-  std::vector<views::Label*> bullet_labels_;
+  std::vector<raw_ptr<views::Label, VectorExperimental>> bullet_labels_;
   raw_ptr<views::MdTextButton> action_button_;
   raw_ptr<views::Label> title_;
   raw_ptr<views::WebView> owner_ = nullptr;

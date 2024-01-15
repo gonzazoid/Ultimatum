@@ -16,6 +16,7 @@
 
 namespace password_manager {
 class PasswordManagerExporter;
+struct PasswordExportInfo;
 }  // namespace password_manager
 
 class Profile;
@@ -25,9 +26,8 @@ class Profile;
 class PasswordManagerPorter : public PasswordManagerPorterInterface,
                               public ui::SelectFileDialog::Listener {
  public:
-  using ExportProgressCallback =
-      base::RepeatingCallback<void(password_manager::ExportProgressStatus,
-                                   const std::string&)>;
+  using ExportProgressCallback = base::RepeatingCallback<void(
+      const password_manager::PasswordExportInfo&)>;
 
   // |profile| for which credentials to be importerd.
   // |presenter| provides the credentials which can be exported.
@@ -43,12 +43,15 @@ class PasswordManagerPorter : public PasswordManagerPorterInterface,
   ~PasswordManagerPorter() override;
 
   // PasswordManagerPorterInterface:
-  bool Export(content::WebContents* web_contents) override;
+  bool Export(base::WeakPtr<content::WebContents> web_contents) override;
   void CancelExport() override;
   password_manager::ExportProgressStatus GetExportProgressStatus() override;
   void Import(content::WebContents* web_contents,
               password_manager::PasswordForm::Store to_store,
               ImportResultsCallback results_callback) override;
+  void ContinueImport(const std::vector<int>& selected_ids,
+                      ImportResultsCallback results_callback) override;
+  void ResetImporter(bool delete_file) override;
 
   // The next export will use |exporter|, instead of creating a new instance.
   void SetExporterForTesting(
@@ -66,12 +69,13 @@ class PasswordManagerPorter : public PasswordManagerPorterInterface,
 
   // Display the file-picker dialogue for either importing or exporting
   // passwords.
-  void PresentFileSelector(content::WebContents* web_contents, Type type);
+  void PresentFileSelector(base::WeakPtr<content::WebContents> web_contents,
+                           Type type);
 
   // Callback from the file selector dialogue when a file has been picked (for
   // either import or export).
   // ui::SelectFileDialog::Listener:
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* params) override;
   void FileSelectionCanceled(void* params) override;
@@ -80,7 +84,9 @@ class PasswordManagerPorter : public PasswordManagerPorterInterface,
 
   void ExportPasswordsToPath(const base::FilePath& path);
 
-  void ImportDone(const password_manager::ImportResults&);
+  void ImportDone();
+
+  void ExportDone();
 
   std::unique_ptr<password_manager::PasswordManagerExporter> exporter_;
   std::unique_ptr<password_manager::PasswordImporter> importer_;

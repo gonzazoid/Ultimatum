@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.infobar;
 
+import static org.chromium.chrome.browser.autofill.AutofillUiUtils.getSpannableStringForLegalMessageLines;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.text.SpannableString;
@@ -12,13 +14,14 @@ import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.TextAppearanceSpan;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeStringConstants;
 import org.chromium.chrome.browser.autofill.AutofillUiUtils;
-import org.chromium.chrome.browser.autofill.LegalMessageLine;
 import org.chromium.components.autofill.VirtualCardEnrollmentLinkType;
+import org.chromium.components.autofill.payments.LegalMessageLine;
 import org.chromium.components.infobars.ConfirmInfoBar;
 import org.chromium.components.infobars.InfoBarControlLayout;
 import org.chromium.components.infobars.InfoBarLayout;
@@ -27,9 +30,7 @@ import org.chromium.ui.text.NoUnderlineClickableSpan;
 
 import java.util.LinkedList;
 
-/**
- * An infobar for virtual card enrollment information.
- */
+/** An infobar for virtual card enrollment information. */
 public class AutofillVirtualCardEnrollmentInfoBar extends ConfirmInfoBar {
     private final long mNativeAutofillVirtualCardEnrollmentInfoBar;
     private Bitmap mIssuerIcon;
@@ -55,8 +56,13 @@ public class AutofillVirtualCardEnrollmentInfoBar extends ConfirmInfoBar {
      * @param buttonOk String to display on the OK button.
      * @param buttonCancel String to display on the Cancel button.
      */
-    private AutofillVirtualCardEnrollmentInfoBar(long nativeAutofillVirtualCardEnrollmentInfoBar,
-            int iconId, Bitmap iconBitmap, String message, String linkText, String buttonOk,
+    private AutofillVirtualCardEnrollmentInfoBar(
+            long nativeAutofillVirtualCardEnrollmentInfoBar,
+            int iconId,
+            Bitmap iconBitmap,
+            String message,
+            String linkText,
+            String buttonOk,
             String buttonCancel) {
         super(0, 0, iconBitmap, message, linkText, buttonOk, buttonCancel);
         mIconDrawableId = iconId;
@@ -79,10 +85,21 @@ public class AutofillVirtualCardEnrollmentInfoBar extends ConfirmInfoBar {
      */
     @CalledByNative
     private static AutofillVirtualCardEnrollmentInfoBar create(
-            long nativeAutofillVirtualCardEnrollmentInfoBar, int iconId, Bitmap iconBitmap,
-            String message, String linkText, String buttonOk, String buttonCancel) {
-        return new AutofillVirtualCardEnrollmentInfoBar(nativeAutofillVirtualCardEnrollmentInfoBar,
-                iconId, iconBitmap, message, linkText, buttonOk, buttonCancel);
+            long nativeAutofillVirtualCardEnrollmentInfoBar,
+            int iconId,
+            Bitmap iconBitmap,
+            String message,
+            String linkText,
+            String buttonOk,
+            String buttonCancel) {
+        return new AutofillVirtualCardEnrollmentInfoBar(
+                nativeAutofillVirtualCardEnrollmentInfoBar,
+                iconId,
+                iconBitmap,
+                message,
+                linkText,
+                buttonOk,
+                buttonCancel);
     }
 
     /**
@@ -155,17 +172,23 @@ public class AutofillVirtualCardEnrollmentInfoBar extends ConfirmInfoBar {
     }
 
     // Add legal message lines with links underlined.
-    private void addLegalMessageLines(Context context, InfoBarControlLayout control,
+    private void addLegalMessageLines(
+            Context context,
+            InfoBarControlLayout control,
             LinkedList<LegalMessageLine> legalMessageLines,
             @VirtualCardEnrollmentLinkType int virtualCardEnrollmentLinkType) {
         SpannableStringBuilder legalMessageLinesText =
-                AutofillUiUtils.getSpannableStringForLegalMessageLines(context, legalMessageLines,
+                getSpannableStringForLegalMessageLines(
+                        context,
+                        legalMessageLines,
                         /* underlineLinks= */ true,
-                        url
-                        -> AutofillVirtualCardEnrollmentInfoBarJni.get().onInfobarLinkClicked(
-                                mNativeAutofillVirtualCardEnrollmentInfoBar,
-                                AutofillVirtualCardEnrollmentInfoBar.this, url,
-                                virtualCardEnrollmentLinkType));
+                        url ->
+                                AutofillVirtualCardEnrollmentInfoBarJni.get()
+                                        .onInfobarLinkClicked(
+                                                mNativeAutofillVirtualCardEnrollmentInfoBar,
+                                                AutofillVirtualCardEnrollmentInfoBar.this,
+                                                url,
+                                                virtualCardEnrollmentLinkType));
         control.addDescription(
                 legalMessageLinesText, R.style.TextAppearance_TextSmall_Secondary_Baseline);
     }
@@ -189,53 +212,79 @@ public class AutofillVirtualCardEnrollmentInfoBar extends ConfirmInfoBar {
         if (!TextUtils.isEmpty(mDescriptionText) && !TextUtils.isEmpty(mLearnMoreLinkText)) {
             SpannableString text = new SpannableString(mDescriptionText);
             int offset = mDescriptionText.length() - mLearnMoreLinkText.length();
-            text.setSpan(new NoUnderlineClickableSpan(layout.getContext(), (unused) -> {
-                AutofillVirtualCardEnrollmentInfoBarJni.get().onInfobarLinkClicked(
-                        mNativeAutofillVirtualCardEnrollmentInfoBar,
-                        AutofillVirtualCardEnrollmentInfoBar.this,
-                        ChromeStringConstants.AUTOFILL_VIRTUAL_CARD_ENROLLMENT_SUPPORT_URL,
-                        VirtualCardEnrollmentLinkType.VIRTUAL_CARD_ENROLLMENT_LEARN_MORE_LINK);
-            }), offset, offset + mLearnMoreLinkText.length(), Spanned.SPAN_INCLUSIVE_EXCLUSIVE);
+            text.setSpan(
+                    new NoUnderlineClickableSpan(
+                            layout.getContext(),
+                            (unused) -> {
+                                AutofillVirtualCardEnrollmentInfoBarJni.get()
+                                        .onInfobarLinkClicked(
+                                                mNativeAutofillVirtualCardEnrollmentInfoBar,
+                                                AutofillVirtualCardEnrollmentInfoBar.this,
+                                                ChromeStringConstants
+                                                        .AUTOFILL_VIRTUAL_CARD_ENROLLMENT_SUPPORT_URL,
+                                                VirtualCardEnrollmentLinkType
+                                                        .VIRTUAL_CARD_ENROLLMENT_LEARN_MORE_LINK);
+                            }),
+                    offset,
+                    offset + mLearnMoreLinkText.length(),
+                    Spanned.SPAN_INCLUSIVE_EXCLUSIVE);
             control.addDescription(text);
         }
 
-        // The card container contains two lines. The first line contains the "Virtual Card" title
-        // and the second line contains the card identifier. The second line has a different text
-        // appearance than the first line and thus requires us to set the span.
-        String cardContainerTitle = layout.getContext().getString(
-                R.string.autofill_virtual_card_enrollment_dialog_card_container_title);
+        // The card container contains two lines. The first line contains the card name and number,
+        // and the second line contains the "Virtual card" label. The second line has a different
+        // text appearance than the first line and thus requires us to set the span.
         SpannableString cardContainerText =
-                new SpannableString(String.format("%s\n%s %s", cardContainerTitle,
-                        layout.getContext().getString(
-                                R.string.autofill_virtual_card_enrollment_infobar_card_prefix),
-                        mCardLabel));
-        int spanOffsetStart = cardContainerTitle.length() + 1;
-        cardContainerText.setSpan(new TextAppearanceSpan(layout.getContext(),
-                                          R.style.TextAppearance_TextSmall_Secondary_Baseline),
-                spanOffsetStart, cardContainerText.length(), Spanned.SPAN_INCLUSIVE_EXCLUSIVE);
+                new SpannableString(
+                        String.format(
+                                "%s\n%s",
+                                mCardLabel,
+                                layout.getContext()
+                                        .getString(
+                                                R.string
+                                                        .autofill_virtual_card_enrollment_dialog_card_container_title)));
+        int spanOffsetStart = mCardLabel.length() + 1;
+        cardContainerText.setSpan(
+                new TextAppearanceSpan(
+                        layout.getContext(), R.style.TextAppearance_TextSmall_Secondary_Baseline),
+                spanOffsetStart,
+                cardContainerText.length(),
+                Spanned.SPAN_INCLUSIVE_EXCLUSIVE);
 
         // Get and resize the issuer icon.
-        Bitmap scaledIssuerIcon = Bitmap.createScaledBitmap(mIssuerIcon,
-                layout.getResources().getDimensionPixelSize(
-                        R.dimen.virtual_card_enrollment_dialog_card_art_width),
-                layout.getResources().getDimensionPixelSize(
-                        R.dimen.virtual_card_enrollment_dialog_card_art_height),
-                true);
+        AutofillUiUtils.CardIconSpecs cardIconSpecs =
+                AutofillUiUtils.CardIconSpecs.create(
+                        layout.getContext(), AutofillUiUtils.CardIconSize.LARGE);
+        Bitmap scaledIssuerIcon =
+                Bitmap.createScaledBitmap(
+                        mIssuerIcon, cardIconSpecs.getWidth(), cardIconSpecs.getHeight(), true);
 
         // Add the issuer icon and the card container text.
-        control.addIcon(scaledIssuerIcon, 0, cardContainerText, null,
+        control.addIcon(
+                scaledIssuerIcon,
+                0,
+                cardContainerText,
+                null,
                 R.dimen.infobar_descriptive_text_size);
 
-        addLegalMessageLines(layout.getContext(), control, mGoogleLegalMessageLines,
+        addLegalMessageLines(
+                layout.getContext(),
+                control,
+                mGoogleLegalMessageLines,
                 VirtualCardEnrollmentLinkType.VIRTUAL_CARD_ENROLLMENT_GOOGLE_PAYMENTS_TOS_LINK);
-        addLegalMessageLines(layout.getContext(), control, mIssuerLegalMessageLines,
+        addLegalMessageLines(
+                layout.getContext(),
+                control,
+                mIssuerLegalMessageLines,
                 VirtualCardEnrollmentLinkType.VIRTUAL_CARD_ENROLLMENT_ISSUER_TOS_LINK);
     }
 
     @NativeMethods
     interface Natives {
-        void onInfobarLinkClicked(long nativeAutofillVirtualCardEnrollmentInfoBar,
-                AutofillVirtualCardEnrollmentInfoBar caller, String url,
+        void onInfobarLinkClicked(
+                long nativeAutofillVirtualCardEnrollmentInfoBar,
+                AutofillVirtualCardEnrollmentInfoBar caller,
+                String url,
                 @VirtualCardEnrollmentLinkType int virtualCardEnrollmentLinkType);
     }
 }

@@ -8,7 +8,9 @@
 #include <wayland-server-core.h>
 
 #include <cstdint>
+#include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
 
@@ -30,9 +32,7 @@ struct ZwpPrimarySelectionOffer final : public TestSelectionOffer::Delegate {
                                               mime_type.c_str());
   }
 
-  void OnDestroying() override { delete this; }
-
-  TestSelectionOffer* offer = nullptr;
+  raw_ptr<TestSelectionOffer> offer = nullptr;
 };
 
 struct ZwpPrimarySelectionDevice final : public TestSelectionDevice::Delegate {
@@ -41,13 +41,13 @@ struct ZwpPrimarySelectionDevice final : public TestSelectionDevice::Delegate {
         &TestSelectionOffer::Receive, &Destroy};
     wl_resource* device_resource = device->resource();
     const int version = wl_resource_get_version(device_resource);
-    auto* delegate = new ZwpPrimarySelectionOffer;
-
+    auto owned_delegate = std::make_unique<ZwpPrimarySelectionOffer>();
+    auto* delegate = owned_delegate.get();
     wl_resource* new_offer_resource =
         CreateResourceWithImpl<TestSelectionOffer>(
             wl_resource_get_client(device->resource()),
             &zwp_primary_selection_offer_v1_interface, version, &kOfferImpl, 0,
-            delegate);
+            std::move(owned_delegate));
     delegate->offer = GetUserDataAs<TestSelectionOffer>(new_offer_resource);
     zwp_primary_selection_device_v1_send_data_offer(device_resource,
                                                     new_offer_resource);
@@ -65,9 +65,7 @@ struct ZwpPrimarySelectionDevice final : public TestSelectionDevice::Delegate {
     NOTIMPLEMENTED();
   }
 
-  void OnDestroying() override { delete this; }
-
-  TestSelectionDevice* device = nullptr;
+  raw_ptr<TestSelectionDevice> device = nullptr;
 };
 
 struct ZwpPrimarySelectionSource : public TestSelectionSource::Delegate {
@@ -90,9 +88,7 @@ struct ZwpPrimarySelectionSource : public TestSelectionSource::Delegate {
     NOTREACHED() << "The interface does not support this method.";
   }
 
-  void OnDestroying() override { delete this; }
-
-  TestSelectionSource* source = nullptr;
+  raw_ptr<TestSelectionSource> source = nullptr;
 };
 
 struct ZwpPrimarySelectionDeviceManager
@@ -105,10 +101,11 @@ struct ZwpPrimarySelectionDeviceManager
     static const struct zwp_primary_selection_device_v1_interface
         kTestSelectionDeviceImpl = {&TestSelectionDevice::SetSelection,
                                     &Destroy};
-    auto* delegate = new ZwpPrimarySelectionDevice;
+    auto owned_delegate = std::make_unique<ZwpPrimarySelectionDevice>();
+    auto* delegate = owned_delegate.get();
     wl_resource* resource = CreateResourceWithImpl<TestSelectionDevice>(
         client, &zwp_primary_selection_device_v1_interface, version_,
-        &kTestSelectionDeviceImpl, id, delegate);
+        &kTestSelectionDeviceImpl, id, std::move(owned_delegate));
     delegate->device = GetUserDataAs<TestSelectionDevice>(resource);
     return delegate->device;
   }
@@ -116,15 +113,14 @@ struct ZwpPrimarySelectionDeviceManager
   TestSelectionSource* CreateSource(wl_client* client, uint32_t id) override {
     static const struct zwp_primary_selection_source_v1_interface
         kTestSelectionSourceImpl = {&TestSelectionSource::Offer, &Destroy};
-    auto* delegate = new ZwpPrimarySelectionSource;
+    auto owned_delegate = std::make_unique<ZwpPrimarySelectionSource>();
+    auto* delegate = owned_delegate.get();
     wl_resource* resource = CreateResourceWithImpl<TestSelectionSource>(
         client, &zwp_primary_selection_source_v1_interface, version_,
-        &kTestSelectionSourceImpl, id, delegate);
+        &kTestSelectionSourceImpl, id, std::move(owned_delegate));
     delegate->source = GetUserDataAs<TestSelectionSource>(resource);
     return delegate->source;
   }
-
-  void OnDestroying() override { delete this; }
 
  private:
   const uint32_t version_;
@@ -132,7 +128,7 @@ struct ZwpPrimarySelectionDeviceManager
 
 }  // namespace
 
-TestSelectionDeviceManager* CreateTestSelectionManagerZwp() {
+std::unique_ptr<TestSelectionDeviceManager> CreateTestSelectionManagerZwp() {
   constexpr uint32_t kVersion = 1;
   static const struct zwp_primary_selection_device_manager_v1_interface
       kTestSelectionManagerImpl = {&TestSelectionDeviceManager::CreateSource,
@@ -142,8 +138,9 @@ TestSelectionDeviceManager* CreateTestSelectionManagerZwp() {
       .interface = &zwp_primary_selection_device_manager_v1_interface,
       .implementation = &kTestSelectionManagerImpl,
       .version = kVersion};
-  return new TestSelectionDeviceManager(
-      interface_info, new ZwpPrimarySelectionDeviceManager(kVersion));
+  return std::make_unique<TestSelectionDeviceManager>(
+      interface_info,
+      std::make_unique<ZwpPrimarySelectionDeviceManager>(kVersion));
 }
 
 }  // namespace wl

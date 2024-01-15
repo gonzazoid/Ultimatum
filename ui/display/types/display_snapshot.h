@@ -44,8 +44,8 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
       bool is_aspect_preserving_scaling,
       bool has_overscan,
       PrivacyScreenState privacy_screen_state,
+      bool has_content_protection_key,
       bool has_color_correction_matrix,
-      bool color_correction_in_linear_space,
       const gfx::ColorSpace& color_space,
       uint32_t bits_per_channel,
       const absl::optional<gfx::HDRStaticMetadata>& hdr_static_metadata,
@@ -58,7 +58,10 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
       const DisplayMode* native_mode,
       int64_t product_code,
       int32_t year_of_manufacture,
-      const gfx::Size& maximum_cursor_size);
+      const gfx::Size& maximum_cursor_size,
+      VariableRefreshRateState variable_refresh_rate_state,
+      const absl::optional<uint16_t>& vsync_rate_min,
+      const DrmFormatsAndModifiers& drm_formats_and_modifiers_);
 
   DisplaySnapshot(const DisplaySnapshot&) = delete;
   DisplaySnapshot& operator=(const DisplaySnapshot&) = delete;
@@ -87,11 +90,11 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
   PrivacyScreenState privacy_screen_state() const {
     return privacy_screen_state_;
   }
+  bool has_content_protection_key() const {
+    return has_content_protection_key_;
+  }
   bool has_color_correction_matrix() const {
     return has_color_correction_matrix_;
-  }
-  bool color_correction_in_linear_space() const {
-    return color_correction_in_linear_space_;
   }
   const gfx::ColorSpace& color_space() const { return color_space_; }
   uint32_t bits_per_channel() const { return bits_per_channel_; }
@@ -109,11 +112,24 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
   int64_t product_code() const { return product_code_; }
   int32_t year_of_manufacture() const { return year_of_manufacture_; }
   const gfx::Size& maximum_cursor_size() const { return maximum_cursor_size_; }
+  VariableRefreshRateState variable_refresh_rate_state() const {
+    return variable_refresh_rate_state_;
+  }
+  void set_variable_refresh_rate_state(
+      VariableRefreshRateState variable_refresh_rate_state) {
+    variable_refresh_rate_state_ = variable_refresh_rate_state;
+  }
+  const absl::optional<uint16_t>& vsync_rate_min() const {
+    return vsync_rate_min_;
+  }
+  const DrmFormatsAndModifiers& GetDRMFormatsAndModifiers() const {
+    return drm_formats_and_modifiers_;
+  }
 
   void add_mode(const DisplayMode* mode) { modes_.push_back(mode->Clone()); }
 
   // Clones display state.
-  std::unique_ptr<DisplaySnapshot> Clone();
+  std::unique_ptr<DisplaySnapshot> Clone() const;
 
   // Returns a textual representation of this display state.
   std::string ToString() const;
@@ -127,6 +143,12 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
   // Adds |connector_index_| to bits 33-48 of |edid_display_id_|. This function
   // is not plumbed via mojom to limit and control usage across processes.
   void AddIndexToDisplayId();
+
+  // Returns whether the display is capable of enabling variable refresh rates.
+  bool IsVrrCapable() const;
+
+  // Returns whether the display has variable refresh rates enabled.
+  bool IsVrrEnabled() const;
 
  private:
   // Display id for this output.
@@ -200,11 +222,10 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
 
   const PrivacyScreenState privacy_screen_state_;
 
+  const bool has_content_protection_key_;
+
   // Whether this display has advanced color correction available.
   const bool has_color_correction_matrix_;
-  // Whether the color correction matrix will be applied in linear color space
-  // instead of gamma compressed one.
-  const bool color_correction_in_linear_space_;
 
   const gfx::ColorSpace color_space_;
   uint32_t bits_per_channel_;
@@ -236,6 +257,15 @@ class DISPLAY_TYPES_EXPORT DisplaySnapshot {
 
   // Maximum supported cursor size on this display.
   const gfx::Size maximum_cursor_size_;
+
+  // Whether VRR is enabled, disabled, or not capable on this display.
+  VariableRefreshRateState variable_refresh_rate_state_;
+  // The minimum supported vsync rate for this display in Hz.
+  const absl::optional<uint16_t> vsync_rate_min_;
+
+  // A list of supported Linux DRM formats and corresponding lists of modifiers
+  // for each one.
+  const DrmFormatsAndModifiers drm_formats_and_modifiers_;
 };
 
 }  // namespace display

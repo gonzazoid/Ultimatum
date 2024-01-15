@@ -8,8 +8,8 @@
 #include <string>
 #include <unordered_set>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
@@ -202,10 +202,15 @@ void HandleElement(
 bool ShouldHandleElement(
     const blink::WebElement& element,
     const std::vector<TagAndAttributesItem>& tag_and_attributes_list) {
+  // Fenced frames are always handled.
+  // TODO(https://crbug.com/1428788): Update this to support getting the URL of
+  // fenced frames loaded with a config.
+  if (element.HasHTMLTagName("fencedframe")) {
+    return true;
+  }
   // Resources with a SRC are always handled.
   // TODO(1298672): Handle portal elements.
   if ((element.HasHTMLTagName("iframe") || element.HasHTMLTagName("frame") ||
-       element.HasHTMLTagName("fencedframe") ||
        element.HasHTMLTagName("embed") || element.HasHTMLTagName("script")) &&
       element.HasAttribute("src")) {
     return true;

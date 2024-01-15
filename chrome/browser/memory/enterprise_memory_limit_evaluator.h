@@ -5,11 +5,11 @@
 #ifndef CHROME_BROWSER_MEMORY_ENTERPRISE_MEMORY_LIMIT_EVALUATOR_H_
 #define CHROME_BROWSER_MEMORY_ENTERPRISE_MEMORY_LIMIT_EVALUATOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/memory_pressure/memory_pressure_voter.h"
 #include "components/performance_manager/public/decorators/process_metrics_decorator.h"
 #include "components/performance_manager/public/graph/graph.h"

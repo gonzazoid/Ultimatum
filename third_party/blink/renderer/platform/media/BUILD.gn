@@ -34,8 +34,6 @@ component("media") {
     "remote_playback_client_wrapper_impl.cc",
     "resource_multi_buffer_data_provider.cc",
     "resource_multi_buffer_data_provider.h",
-    "text_track_impl.cc",
-    "text_track_impl.h",
     "url_index.cc",
     "video_decode_stats_reporter.cc",
     "video_decode_stats_reporter.h",
@@ -47,8 +45,6 @@ component("media") {
     "web_content_decryption_module_session_impl.cc",
     "web_content_decryption_module_session_impl.h",
     "web_encrypted_media_client_impl.cc",
-    "web_inband_text_track_impl.cc",
-    "web_inband_text_track_impl.h",
     "web_media_player_builder.cc",
     "web_media_source_impl.cc",
     "web_media_source_impl.h",
@@ -78,6 +74,7 @@ component("media") {
     "//services/network/public/cpp",
     "//third_party/blink/public/common",
     "//third_party/blink/public/mojom:mojom_platform",
+    "//third_party/blink/renderer/platform:allow_discouraged_type",
   ]
 
   if (media_use_ffmpeg || !is_android) {
@@ -102,6 +99,13 @@ component("media") {
       "//media/learning/mojo/public/cpp",
       "//media/remoting:remoting_constants",
       "//third_party/blink/public/strings:strings_grit",
+    ]
+  }
+
+  if (enable_hls_demuxer) {
+    sources += [
+      "multi_buffer_data_source_factory.cc",
+      "multi_buffer_data_source_factory.h",
     ]
   }
 }

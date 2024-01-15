@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
@@ -18,22 +18,22 @@
 
 namespace {
 
-base::Value NetLogSimpleEntryConstructionParams(
+base::Value::Dict NetLogSimpleEntryConstructionParams(
     const disk_cache::SimpleEntryImpl* entry) {
   base::Value::Dict dict;
   dict.Set("entry_hash",
-           base::StringPrintf("%#016" PRIx64, entry->entry_hash()));
-  return base::Value(std::move(dict));
+           base::StringPrintf("0x%016" PRIx64, entry->entry_hash()));
+  return dict;
 }
 
-base::Value NetLogSimpleEntryCreationParams(
+base::Value::Dict NetLogSimpleEntryCreationParams(
     const disk_cache::SimpleEntryImpl* entry,
     int net_error) {
   base::Value::Dict dict;
   dict.Set("net_error", net_error);
   if (net_error == net::OK)
-    dict.Set("key", entry->key());
-  return base::Value(std::move(dict));
+    dict.Set("key", entry->key().value_or("(nullopt)"));
+  return dict;
 }
 
 }  // namespace

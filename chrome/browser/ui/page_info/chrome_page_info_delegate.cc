@@ -16,22 +16,27 @@
 #include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service_factory.h"
+#include "chrome/browser/privacy_sandbox/tracking_protection_settings_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/chrome_password_protection_service.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ssl/stateful_ssl_host_state_delegate_factory.h"
 #include "chrome/browser/subresource_filter/subresource_filter_profile_context_factory.h"
+#include "chrome/browser/ui/url_identity.h"
 #include "chrome/browser/usb/usb_chooser_context.h"
 #include "chrome/browser/usb/usb_chooser_context_factory.h"
 #include "chrome/browser/vr/vr_tab_helper.h"
+#include "chrome/common/chrome_features.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
+#include "components/content_settings/core/common/pref_names.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/page_info/core/features.h"
 #include "components/permissions/contexts/bluetooth_chooser_context.h"
 #include "components/permissions/object_permission_context_base.h"
 #include "components/permissions/permission_manager.h"
-#include "components/permissions/permission_result.h"
+#include "components/prefs/pref_service.h"
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
 #include "components/subresource_filter/content/browser/subresource_filter_content_settings_manager.h"
 #include "components/subresource_filter/content/browser/subresource_filter_profile_context.h"
@@ -43,14 +48,15 @@
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/webui/settings/ash/app_management/app_management_uma.h"
+#include "chrome/browser/ui/webui/ash/settings/app_management/app_management_uma.h"
 #endif
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/certificate_viewer.h"
 #include "chrome/browser/hid/hid_chooser_context.h"
 #include "chrome/browser/hid/hid_chooser_context_factory.h"
-#include "chrome/browser/reputation/safety_tip_ui_helper.h"
+#include "chrome/browser/lookalikes/safety_tip_ui_helper.h"
+#include "chrome/browser/picture_in_picture/auto_picture_in_picture_tab_helper.h"
 #include "chrome/browser/serial/serial_chooser_context.h"
 #include "chrome/browser/serial/serial_chooser_context_factory.h"
 #include "chrome/browser/ui/browser.h"
@@ -62,11 +68,27 @@
 #include "chrome/browser/ui/tab_dialogs.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/web_app_ui_utils.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_tab_helper.h"
+#include "components/webapps/common/web_app_id.h"
 #include "ui/events/event.h"
 #else
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #endif
+
+namespace {
+
+// Expected URL types for `UrlIdentity::CreateFromUrl()`.
+constexpr UrlIdentity::TypeSet kUrlIdentityAllowedTypes = {
+    UrlIdentity::Type::kDefault, UrlIdentity::Type::kFile,
+    UrlIdentity::Type::kIsolatedWebApp, UrlIdentity::Type::kChromeExtension};
+
+constexpr UrlIdentity::FormatOptions kUrlIdentityOptions{
+    .default_options = {UrlIdentity::DefaultFormatOptions::
+                            kOmitSchemePathAndTrivialSubdomains}};
+
+}  // namespace
 
 ChromePageInfoDelegate::ChromePageInfoDelegate(
     content::WebContents* web_contents)
@@ -155,23 +177,28 @@ std::u16string ChromePageInfoDelegate::GetWarningDetailText() {
 }
 #endif
 
-permissions::PermissionResult ChromePageInfoDelegate::GetPermissionResult(
+content::PermissionResult ChromePageInfoDelegate::GetPermissionResult(
     blink::PermissionType permission,
-    const url::Origin& origin) {
-  content::PermissionResult permission_result =
-      GetProfile()
-          ->GetPermissionController()
-          ->GetPermissionResultForOriginWithoutContext(permission, origin);
-  return permissions::PermissionUtil::ToPermissionResult(permission_result);
+    const url::Origin& origin,
+    const std::optional<url::Origin>& requesting_origin) {
+  auto* controller = GetProfile()->GetPermissionController();
+
+  if (requesting_origin.has_value()) {
+    return controller->GetPermissionResultForOriginWithoutContext(
+        permission, *requesting_origin, origin);
+  } else {
+    return controller->GetPermissionResultForOriginWithoutContext(permission,
+                                                                  origin);
+  }
 }
 
 #if !BUILDFLAG(IS_ANDROID)
 void ChromePageInfoDelegate::FocusWebContents() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   browser->ActivateContents(web_contents_);
 }
 
-absl::optional<std::u16string> ChromePageInfoDelegate::GetFpsOwner(
+std::optional<std::u16string> ChromePageInfoDelegate::GetFpsOwner(
     const GURL& site_url) {
   return PrivacySandboxServiceFactory::GetForProfile(GetProfile())
       ->GetFirstPartySetOwnerForDisplay(site_url);
@@ -199,34 +226,41 @@ ChromePageInfoDelegate::CreateCookieControlsController() {
       CookieSettingsFactory::GetForProfile(profile),
       profile->IsOffTheRecord()
           ? CookieSettingsFactory::GetForProfile(profile->GetOriginalProfile())
-          : nullptr);
+          : nullptr,
+      HostContentSettingsMapFactory::GetForProfile(profile),
+      TrackingProtectionSettingsFactory::GetForProfile(profile));
 }
 
-std::u16string ChromePageInfoDelegate::GetWebAppShortName() {
-  std::u16string web_app_name;
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
-  if (browser && browser->app_controller()->IsWebApp(browser)) {
-    web_app_name = browser->app_controller()->GetAppShortName();
+bool ChromePageInfoDelegate::IsIsolatedWebApp() {
+  CHECK(web_contents_);
+  web_app::WebAppProvider* provider =
+      web_app::WebAppProvider::GetForWebContents(web_contents_);
+  if (!provider) {
+    return false;
   }
-  return web_app_name;
+
+  const webapps::AppId* app_id =
+      web_app::WebAppTabHelper::GetAppId(web_contents_);
+  return app_id && provider->registrar_unsafe().IsIsolated(*app_id);
 }
 
 void ChromePageInfoDelegate::ShowSiteSettings(const GURL& site_url) {
-  if (web_app::HandleAppManagementLinkClickedInPageInfo(web_contents_))
+  if (web_app::HandleAppManagementLinkClickedInPageInfo(web_contents_)) {
     return;
+  }
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   chrome::ShowSiteSettings(browser, site_url);
 }
 
 void ChromePageInfoDelegate::ShowCookiesSettings() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   chrome::ShowSettingsSubPage(browser, chrome::kCookieSettingsSubPage);
 }
 
 void ChromePageInfoDelegate::ShowAllSitesSettingsFilteredByFpsOwner(
     const std::u16string& fps_owner) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   chrome::ShowAllSitesSettingsFilteredByFpsOwner(browser,
                                                  base::UTF16ToUTF8(fps_owner));
 }
@@ -268,18 +302,27 @@ void ChromePageInfoDelegate::OpenContentSettingsExceptions(
 void ChromePageInfoDelegate::OnPageInfoActionOccurred(
     PageInfo::PageInfoAction action) {
   if (sentiment_service_) {
-    if (action == PageInfo::PAGE_INFO_OPENED)
+    if (action == PageInfo::PAGE_INFO_OPENED) {
       sentiment_service_->PageInfoOpened();
-    else
+    } else {
       sentiment_service_->InteractedWithPageInfo();
+    }
   }
 }
 
 void ChromePageInfoDelegate::OnUIClosing() {
-  if (sentiment_service_)
+  if (sentiment_service_) {
     sentiment_service_->PageInfoClosed();
+  }
 }
 #endif
+
+std::u16string ChromePageInfoDelegate::GetSubjectName(const GURL& url) {
+  CHECK(web_contents_);
+  return UrlIdentity::CreateFromUrl(GetProfile(), url, kUrlIdentityAllowedTypes,
+                                    kUrlIdentityOptions)
+      .name;
+}
 
 permissions::PermissionDecisionAutoBlocker*
 ChromePageInfoDelegate::GetPermissionDecisionAutoblocker() {
@@ -305,13 +348,25 @@ bool ChromePageInfoDelegate::IsSubresourceFilterActivated(
   return settings_manager->GetSiteActivationFromMetadata(site_url);
 }
 
+bool ChromePageInfoDelegate::HasAutoPictureInPictureBeenRegistered() {
+#if BUILDFLAG(IS_ANDROID)
+  return false;
+#else
+  auto* auto_pip_tab_helper =
+      AutoPictureInPictureTabHelper::FromWebContents(web_contents_);
+  return auto_pip_tab_helper &&
+         auto_pip_tab_helper->HasAutoPictureInPictureBeenRegistered();
+#endif  // BUILDFLAG(IS_ANDROID)
+}
+
 bool ChromePageInfoDelegate::IsContentDisplayedInVrHeadset() {
   return vr::VrTabHelper::IsContentDisplayedInHeadset(web_contents_);
 }
 
 security_state::SecurityLevel ChromePageInfoDelegate::GetSecurityLevel() {
-  if (security_state_for_tests_set_)
+  if (security_state_for_tests_set_) {
     return security_level_for_tests_;
+  }
 
   // This is a no-op if a SecurityStateTabHelper already exists for
   // |web_contents|.
@@ -324,8 +379,9 @@ security_state::SecurityLevel ChromePageInfoDelegate::GetSecurityLevel() {
 
 security_state::VisibleSecurityState
 ChromePageInfoDelegate::GetVisibleSecurityState() {
-  if (security_state_for_tests_set_)
+  if (security_state_for_tests_set_) {
     return visible_security_state_for_tests_;
+  }
 
   // This is a no-op if a SecurityStateTabHelper already exists for
   // |web_contents|.
@@ -334,6 +390,18 @@ ChromePageInfoDelegate::GetVisibleSecurityState() {
   auto* helper = SecurityStateTabHelper::FromWebContents(web_contents_);
   DCHECK(helper);
   return *helper->GetVisibleSecurityState();
+}
+
+void ChromePageInfoDelegate::OnCookiesPageOpened() {
+  auto* profile = GetProfile();
+  auto cookie_settings = CookieSettingsFactory::GetForProfile(profile);
+  // Don't record the preference if 3PC are allowed by default. Since then
+  // cookie controls are not available in the cookies page.
+  if (!cookie_settings || !cookie_settings->ShouldBlockThirdPartyCookies()) {
+    return;
+  }
+
+  profile->GetPrefs()->SetBoolean(prefs::kInContextCookieControlsOpened, true);
 }
 
 std::unique_ptr<content_settings::PageSpecificContentSettings::Delegate>
@@ -348,6 +416,17 @@ const std::u16string ChromePageInfoDelegate::GetClientApplicationName() {
   return l10n_util::GetStringUTF16(IDS_SHORT_PRODUCT_NAME);
 }
 #endif
+
+bool ChromePageInfoDelegate::IsHttpsFirstModeEnabled() {
+  bool https_first_mode_fully_enabled =
+      GetProfile()->GetPrefs()->GetBoolean(prefs::kHttpsOnlyModeEnabled);
+  bool https_first_mode_enabled_in_incognito =
+      base::FeatureList::IsEnabled(features::kHttpsFirstModeIncognito) &&
+      GetProfile()->GetPrefs()->GetBoolean(prefs::kHttpsFirstModeIncognito);
+  return https_first_mode_fully_enabled ||
+         (GetProfile()->IsIncognitoProfile() &&
+          https_first_mode_enabled_in_incognito);
+}
 
 void ChromePageInfoDelegate::SetSecurityStateForTests(
     security_state::SecurityLevel security_level,

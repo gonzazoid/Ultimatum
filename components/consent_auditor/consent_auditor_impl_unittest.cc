@@ -15,9 +15,6 @@
 #include "base/memory/weak_ptr.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
-#include "base/values.h"
-#include "components/consent_auditor/pref_names.h"
-#include "components/prefs/testing_pref_service.h"
 #include "components/sync/protocol/user_consent_specifics.pb.h"
 #include "components/sync/test/fake_model_type_controller_delegate.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -27,8 +24,6 @@ using ArcPlayTermsOfServiceConsent =
     sync_pb::UserConsentTypes::ArcPlayTermsOfServiceConsent;
 using AssistantActivityControlConsent =
     sync_pb::UserConsentTypes::AssistantActivityControlConsent;
-using AutofillAssistantConsent =
-    sync_pb::UserConsentTypes::AutofillAssistantConsent;
 using SyncConsent = sync_pb::UserConsentTypes::SyncConsent;
 using sync_pb::UserConsentSpecifics;
 using sync_pb::UserConsentTypes;
@@ -38,44 +33,12 @@ namespace consent_auditor {
 
 namespace {
 
-constexpr char kLocalConsentDescriptionKey[] = "description";
-constexpr char kLocalConsentConfirmationKey[] = "confirmation";
-constexpr char kLocalConsentVersionKey[] = "version";
-constexpr char kLocalConsentLocaleKey[] = "locale";
-
-// Fake product version for testing.
-constexpr char kCurrentAppVersion[] = "1.2.3.4";
+// Fake product locate for testing.
 constexpr char kCurrentAppLocale[] = "en-US";
 
 // Fake message ids.
 constexpr std::array<int, 3> kDescriptionMessageIds = {12, 37, 42};
 constexpr int kConfirmationMessageId = 47;
-
-// A helper function to load the |description|, |confirmation|, |version|,
-// and |locale|, in that order, from a record for the |feature| in
-// the |consents| dictionary.
-void LoadEntriesFromLocalConsentRecord(const base::Value::Dict& consents,
-                                       const std::string& feature,
-                                       std::string* description,
-                                       std::string* confirmation,
-                                       std::string* version,
-                                       std::string* locale) {
-  SCOPED_TRACE(::testing::Message() << "|feature| = " << feature);
-
-  const base::Value::Dict* record = consents.FindDict(feature);
-  ASSERT_TRUE(record);
-  SCOPED_TRACE(::testing::Message() << "|record| = " << record);
-
-  *description = *record->FindString(kLocalConsentDescriptionKey);
-  *confirmation = *record->FindString(kLocalConsentConfirmationKey);
-  *version = *record->FindString(kLocalConsentVersionKey);
-  *locale = *record->FindString(kLocalConsentLocaleKey);
-
-  ASSERT_TRUE(description);
-  ASSERT_TRUE(confirmation);
-  ASSERT_TRUE(version);
-  ASSERT_TRUE(locale);
-}
 
 class FakeConsentSyncBridge : public ConsentSyncBridge {
  public:
@@ -115,22 +78,17 @@ class ConsentAuditorImplTest : public testing::Test {
   // Fake account ID for testing.
   const CoreAccountId kAccountId;
 
-  ConsentAuditorImplTest() : kAccountId("testing_account_id") {}
+  ConsentAuditorImplTest()
+      : kAccountId(CoreAccountId::FromGaiaId("testing_account_id")) {}
 
   void SetUp() override {
-    pref_service_ = std::make_unique<TestingPrefServiceSimple>();
-    ConsentAuditorImpl::RegisterProfilePrefs(pref_service_->registry());
     CreateConsentAuditorImpl(std::make_unique<FakeConsentSyncBridge>());
   }
 
-  void CreateConsentAuditorImpl(
-      std::unique_ptr<FakeConsentSyncBridge> bridge,
-      const std::string& app_version = kCurrentAppVersion,
-      const std::string& app_locale = kCurrentAppLocale) {
+  void CreateConsentAuditorImpl(std::unique_ptr<FakeConsentSyncBridge> bridge) {
     consent_sync_bridge_ = bridge.get();
     consent_auditor_ = std::make_unique<ConsentAuditorImpl>(
-        pref_service_.get(), std::move(bridge), app_version, app_locale,
-        clock());
+        std::move(bridge), kCurrentAppLocale, clock());
   }
 
   base::SimpleTestClock* clock() { return &test_clock_; }
@@ -138,79 +96,16 @@ class ConsentAuditorImplTest : public testing::Test {
   FakeConsentSyncBridge* consent_sync_bridge() {
     return consent_sync_bridge_.get();
   }
-  PrefService* pref_service() const { return pref_service_.get(); }
 
  private:
   // Test helpers.
-  std::unique_ptr<TestingPrefServiceSimple> pref_service_;
   base::SimpleTestClock test_clock_;
-  raw_ptr<FakeConsentSyncBridge> consent_sync_bridge_ = nullptr;
+  raw_ptr<FakeConsentSyncBridge, DanglingUntriaged> consent_sync_bridge_ =
+      nullptr;
 
   // Test object to be tested.
   std::unique_ptr<ConsentAuditorImpl> consent_auditor_;
 };
-
-TEST_F(ConsentAuditorImplTest, LocalConsentPrefRepresentation) {
-  // No consents are written at first.
-  EXPECT_FALSE(pref_service()->HasPrefPath(prefs::kLocalConsentsDictionary));
-
-  // Record a consent and check that it appears in the prefs.
-  const std::string kFeature1Description = "This will enable feature 1.";
-  const std::string kFeature1Confirmation = "OK.";
-  consent_auditor()->RecordLocalConsent("feature1", kFeature1Description,
-                                        kFeature1Confirmation);
-  ASSERT_TRUE(pref_service()->HasPrefPath(prefs::kLocalConsentsDictionary));
-  const base::Value::Dict& consents =
-      pref_service()->GetDict(prefs::kLocalConsentsDictionary);
-
-  std::string description, confirmation, version, locale;
-  LoadEntriesFromLocalConsentRecord(consents, "feature1", &description,
-                                    &confirmation, &version, &locale);
-  EXPECT_EQ(kFeature1Description, description);
-  EXPECT_EQ(kFeature1Confirmation, confirmation);
-  EXPECT_EQ(kCurrentAppVersion, version);
-  EXPECT_EQ(kCurrentAppLocale, locale);
-
-  // Do the same for another feature.
-  const std::string kFeature2Description = "Enable feature 2?";
-  const std::string kFeature2Confirmation = "Yes.";
-  consent_auditor()->RecordLocalConsent("feature2", kFeature2Description,
-                                        kFeature2Confirmation);
-  LoadEntriesFromLocalConsentRecord(consents, "feature2", &description,
-                                    &confirmation, &version, &locale);
-  EXPECT_EQ(kFeature2Description, description);
-  EXPECT_EQ(kFeature2Confirmation, confirmation);
-  EXPECT_EQ(kCurrentAppVersion, version);
-  EXPECT_EQ(kCurrentAppLocale, locale);
-
-  // They are two separate records; the latter did not overwrite the former.
-  EXPECT_EQ(2u, consents.size());
-  EXPECT_TRUE(consents.FindDict("feature1"));
-
-  // Overwrite an existing consent, this time use a different product version
-  // and a different locale.
-  const std::string kFeature2NewDescription = "Re-enable feature 2?";
-  const std::string kFeature2NewConfirmation = "Yes again.";
-  const std::string kFeature2NewAppVersion = "5.6.7.8";
-  const std::string kFeature2NewAppLocale = "de";
-
-  // We rebuild consent auditor to emulate restarting Chrome. This is the only
-  // way to change app version or app locale.
-  CreateConsentAuditorImpl(std::make_unique<FakeConsentSyncBridge>(),
-                           kFeature2NewAppVersion, kFeature2NewAppLocale);
-
-  consent_auditor()->RecordLocalConsent("feature2", kFeature2NewDescription,
-                                        kFeature2NewConfirmation);
-  LoadEntriesFromLocalConsentRecord(consents, "feature2", &description,
-                                    &confirmation, &version, &locale);
-  EXPECT_EQ(kFeature2NewDescription, description);
-  EXPECT_EQ(kFeature2NewConfirmation, confirmation);
-  EXPECT_EQ(kFeature2NewAppVersion, version);
-  EXPECT_EQ(kFeature2NewAppLocale, locale);
-
-  // We still have two records.
-  EXPECT_EQ(2u, consents.size());
-}
 
 TEST_F(ConsentAuditorImplTest, RecordGaiaConsentAsUserConsent) {
   base::Time now;
@@ -360,34 +255,6 @@ TEST_F(ConsentAuditorImplTest, RecordAssistantActivityControlConsent) {
             consent.assistant_activity_control_consent().ui_audit_key());
   EXPECT_EQ(AssistantActivityControlConsent::ALL,
             consent.assistant_activity_control_consent().setting_type());
-}
-
-TEST_F(ConsentAuditorImplTest, RecordAutofillAssistantAssistantConsent) {
-  AutofillAssistantConsent assistant_consent;
-  assistant_consent.set_status(UserConsentTypes::GIVEN);
-  assistant_consent.set_confirmation_grd_id(kConfirmationMessageId);
-  for (int id : kDescriptionMessageIds) {
-    assistant_consent.add_description_grd_ids(id);
-  }
-
-  consent_auditor()->RecordAutofillAssistantConsent(kAccountId,
-                                                    assistant_consent);
-
-  const std::vector<UserConsentSpecifics> consents =
-      consent_sync_bridge()->GetRecordedUserConsents();
-  ASSERT_EQ(consents.size(), 1u);
-  const UserConsentSpecifics& consent = consents[0];
-
-  EXPECT_EQ(consent.account_id(), kAccountId.ToString());
-  EXPECT_EQ(consent.locale(), kCurrentAppLocale);
-
-  EXPECT_TRUE(consent.has_autofill_assistant_consent());
-  const AutofillAssistantConsent& actual_consent =
-      consent.autofill_assistant_consent();
-  EXPECT_THAT(actual_consent.description_grd_ids(),
-              ElementsAreArray(kDescriptionMessageIds));
-  EXPECT_EQ(actual_consent.confirmation_grd_id(), kConfirmationMessageId);
-  EXPECT_EQ(actual_consent.status(), UserConsentTypes::GIVEN);
 }
 
 }  // namespace consent_auditor

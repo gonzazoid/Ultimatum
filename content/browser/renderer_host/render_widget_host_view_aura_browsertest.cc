@@ -4,10 +4,10 @@
 
 #include "content/browser/renderer_host/render_widget_host_view_aura.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/devtools/protocol/devtools_protocol_test_support.h"
@@ -27,8 +27,15 @@
 #include "content/shell/common/shell_switches.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "ui/aura/window.h"
+#include "ui/aura/window_tree_host.h"
+#include "ui/display/screen.h"
 #include "ui/events/event_utils.h"
 #include "ui/events/test/event_generator.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "content/browser/renderer_host/legacy_render_widget_host_win.h"
+#endif
 
 namespace content {
 namespace {
@@ -41,7 +48,7 @@ const char kMinimalPageDataURL[] =
 // call stack.
 void GiveItSomeTime() {
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(250));
   run_loop.Run();
 }
@@ -91,7 +98,26 @@ class RenderWidgetHostViewAuraBrowserTest : public ContentBrowserTest {
   bool HasChildPopup() const {
     return GetRenderWidgetHostView()->popup_child_host_view_;
   }
+
+#if BUILDFLAG(IS_WIN)
+  LegacyRenderWidgetHostHWND* GetLegacyRenderWidgetHostHWND() const {
+    return GetRenderWidgetHostView()->legacy_render_widget_host_HWND_;
+  }
+#endif  // BUILDFLAG(IS_WIN)
 };
+
+#if BUILDFLAG(IS_WIN)
+IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest, AuraWindowLookup) {
+  EXPECT_TRUE(NavigateToURL(shell(), GURL("about:blank")));
+  aura::Window* window = GetRenderWidgetHostView()->GetNativeView();
+  ASSERT_TRUE(GetLegacyRenderWidgetHostHWND());
+  HWND hwnd = GetLegacyRenderWidgetHostHWND()->hwnd();
+  EXPECT_TRUE(hwnd);
+  auto* window_tree_host = aura::WindowTreeHost::GetForAcceleratedWidget(hwnd);
+  EXPECT_TRUE(window_tree_host);
+  EXPECT_EQ(window->GetHost(), window_tree_host);
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
@@ -118,8 +144,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
   // Hide the view and evict the frame. This should trigger a copy of the stale
   // frame content.
   GetRenderWidgetHostView()->Hide();
-  static_cast<viz::FrameEvictorClient*>(GetDelegatedFrameHost())
-      ->EvictDelegatedFrame();
+  auto* dfh = GetDelegatedFrameHost();
+  static_cast<viz::FrameEvictorClient*>(dfh)->EvictDelegatedFrame(
+      dfh->GetFrameEvictorForTesting()->CollectSurfaceIdsForEviction());
   EXPECT_EQ(GetDelegatedFrameHost()->frame_eviction_state_,
             DelegatedFrameHost::FrameEvictionState::kPendingEvictionRequests);
 
@@ -158,8 +185,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
   // Hide the view and evict the frame. This should trigger a copy of the stale
   // frame content.
   GetRenderWidgetHostView()->Hide();
-  static_cast<viz::FrameEvictorClient*>(GetDelegatedFrameHost())
-      ->EvictDelegatedFrame();
+  auto* dfh = GetDelegatedFrameHost();
+  static_cast<viz::FrameEvictorClient*>(dfh)->EvictDelegatedFrame(
+      dfh->GetFrameEvictorForTesting()->CollectSurfaceIdsForEviction());
   EXPECT_EQ(GetDelegatedFrameHost()->frame_eviction_state_,
             DelegatedFrameHost::FrameEvictionState::kPendingEvictionRequests);
 
@@ -198,8 +226,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
   // Hide the view and evict the frame. This should not trigger a copy of the
   // stale frame content as the WebContentDelegate returns false.
   GetRenderWidgetHostView()->Hide();
-  static_cast<viz::FrameEvictorClient*>(GetDelegatedFrameHost())
-      ->EvictDelegatedFrame();
+  auto* dfh = GetDelegatedFrameHost();
+  static_cast<viz::FrameEvictorClient*>(dfh)->EvictDelegatedFrame(
+      dfh->GetFrameEvictorForTesting()->CollectSurfaceIdsForEviction());
 
   EXPECT_EQ(GetDelegatedFrameHost()->frame_eviction_state_,
             DelegatedFrameHost::FrameEvictionState::kNotStarted);
@@ -466,20 +495,11 @@ class RenderWidgetHostViewAuraActiveWidgetTest : public ContentBrowserTest {
 
   // Helper function to check |isActivated| for a given frame.
   bool FrameIsActivated(content::RenderFrameHost* rfh) {
-    bool active = false;
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(
-        rfh,
-        "window.domAutomationController.send(window.internals.isActivated())",
-        &active));
-    return active;
+    return EvalJs(rfh, "window.internals.isActivated()").ExtractBool();
   }
 
   bool FrameIsFocused(content::RenderFrameHost* rfh) {
-    bool is_focused = false;
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(
-        rfh, "window.domAutomationController.send(document.hasFocus())",
-        &is_focused));
-    return is_focused;
+    return EvalJs(rfh, "document.hasFocus()").ExtractBool();
   }
 
   RenderViewHost* GetRenderViewHost() const {
@@ -576,17 +596,15 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraActiveWidgetTest,
 
   // Ensure both the main page and the iframe are loaded.
   ASSERT_EQ("OUTER_LOADED",
-            EvalJs(root->current_frame_host(), "notifyWhenLoaded()",
-                   content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+            EvalJs(root->current_frame_host(), "notifyWhenLoaded()"));
   ASSERT_EQ("LOADED", EvalJs(root->current_frame_host(),
                              "document.querySelector(\"iframe\").contentWindow."
-                             "notifyWhenLoaded();",
-                             content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+                             "notifyWhenLoaded();"));
   // TODO(b/204006085): Remove this sleep call and replace with polling.
   GiveItSomeTime();
 
-  absl::optional<gfx::Rect> control_bounds;
-  absl::optional<gfx::Rect> selection_bounds;
+  std::optional<gfx::Rect> control_bounds;
+  std::optional<gfx::Rect> selection_bounds;
   GetRenderWidgetHostView()->GetActiveTextInputControlLayoutBounds(
       &control_bounds, &selection_bounds);
 

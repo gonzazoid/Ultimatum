@@ -85,17 +85,10 @@ TEST_F(AuthenticatorRequestSchedulerFencedFramesTest,
 class AuthenticatorRequestSchedulerPrerenderTest
     : public AuthenticatorRequestSchedulerTest {
  public:
-  AuthenticatorRequestSchedulerPrerenderTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {blink::features::kPrerender2},
-        // Disable the memory requirement of Prerender2 so the test can run on
-        // any bot.
-        {blink::features::kPrerender2MemoryControls});
-  }
-  ~AuthenticatorRequestSchedulerPrerenderTest() override = default;
+  AuthenticatorRequestSchedulerPrerenderTest() = default;
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  content::test::ScopedPrerenderFeatureList prerender_feature_list_;
 };
 
 TEST_F(AuthenticatorRequestSchedulerPrerenderTest,

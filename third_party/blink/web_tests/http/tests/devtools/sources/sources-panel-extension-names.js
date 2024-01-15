@@ -2,13 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as Sources from 'devtools/panels/sources/sources.js';
+import * as UI from 'devtools/ui/legacy/legacy.js';
+
 (async function() {
   TestRunner.addResult(`The test verifies that extension names are resolved properly in navigator view.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
 
-  var contentScriptsNavigatorView = new Sources.ContentScriptsNavigatorView();
-  contentScriptsNavigatorView.show(UI.inspectorView.element);
+  var contentScriptsNavigatorView = new Sources.SourcesNavigator.ContentScriptsNavigatorView();
+  contentScriptsNavigatorView.show(UI.InspectorView.InspectorView.instance().element);
 
   var mockExecutionContext =
       {id: 1234567, isDefault: false, origin: 'chrome-extension://113581321345589144', name: 'FibExtension'};

@@ -23,8 +23,9 @@ namespace payments {
 
 namespace {
 
-const base::Time kSomeDate = base::Time::FromDoubleT(1484505871);
-const base::Time kSomeLaterDate = base::Time::FromDoubleT(1497552271);
+const base::Time kSomeDate = base::Time::FromSecondsSinceUnixEpoch(1484505871);
+const base::Time kSomeLaterDate =
+    base::Time::FromSecondsSinceUnixEpoch(1497552271);
 
 }  // namespace
 
@@ -32,9 +33,11 @@ using PaymentRequestShippingAddressUseStatsTest = PaymentRequestBrowserTestBase;
 
 // Tests that use stats for the shipping address used in a Payment Request are
 // properly updated upon completion.
-IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressUseStatsTest, RecordUse) {
+// Flaky. https://crbug.com/1495539.
+IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressUseStatsTest,
+                       DISABLED_RecordUse) {
   std::string payment_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &payment_method_name);
 
   NavigateTo("/payment_request_free_shipping_test.html");
@@ -77,9 +80,11 @@ using PaymentRequestContactAddressUseStatsTest = PaymentRequestBrowserTestBase;
 
 // Tests that use stats for the contact address used in a Payment Request are
 // properly updated upon completion.
-IN_PROC_BROWSER_TEST_F(PaymentRequestContactAddressUseStatsTest, RecordUse) {
+// Flaky. https://crbug.com/1495539.
+IN_PROC_BROWSER_TEST_F(PaymentRequestContactAddressUseStatsTest,
+                       DISABLED_RecordUse) {
   std::string payment_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &payment_method_name);
 
   NavigateTo("/payment_request_name_test.html");
@@ -122,10 +127,11 @@ using PaymentRequestSameShippingAndContactAddressUseStatsTest =
 
 // Tests that use stats for an address that was used both as a shipping and
 // contact address in a Payment Request are properly updated upon completion.
+// Flaky. https://crbug.com/1495539.
 IN_PROC_BROWSER_TEST_F(PaymentRequestSameShippingAndContactAddressUseStatsTest,
-                       RecordUse) {
+                       DISABLED_RecordUse) {
   std::string payment_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &payment_method_name);
 
   NavigateTo("/payment_request_contact_details_and_free_shipping_test.html");

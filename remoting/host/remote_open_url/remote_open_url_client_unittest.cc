@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/command_line.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -71,8 +71,8 @@ class RemoteOpenUrlClientTest : public testing::Test {
 
   // These raw pointer objects are owned by |client_| so |client_| must outlive
   // the last use of them.
-  raw_ptr<MockRemoteOpenUrlClientDelegate> delegate_;
-  raw_ptr<MockChromotingHostServicesProvider> api_provider_;
+  raw_ptr<MockRemoteOpenUrlClientDelegate, DanglingUntriaged> delegate_;
+  raw_ptr<MockChromotingHostServicesProvider, DanglingUntriaged> api_provider_;
 
   std::unique_ptr<RemoteOpenUrlClient> client_;
   MockChromotingSessionServices mock_api_;

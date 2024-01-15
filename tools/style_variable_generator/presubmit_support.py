@@ -7,6 +7,16 @@ import os
 import subprocess
 import sys
 from style_variable_generator.css_generator import CSSStyleGenerator
+import re
+
+JSON5_EXCLUDES = [
+    # We can't check both the legacy typography set AND the new typography
+    # set since they both declare the same variables causing a duplicate key
+    # error to be thrown from the syle variable generator. As such we drop
+    # presubmit checking for the legacy set to focus on catching issues with the
+    # new token set.
+    "ui/chromeos/styles/cros_typography.json5"
+]
 
 
 def BuildGrepQuery(deleted_names):
@@ -25,11 +35,18 @@ def RunGit(command):
 
 
 def FindDeletedCSSVariables(input_api, output_api, input_file_filter):
-    # TODO(1312192): reenable after fixing presubmit exceptions
-    return []
-    files = input_api.AffectedFiles(
-        file_filter=lambda f: input_api.FilterSourceFile(
-            f, files_to_check=input_file_filter))
+    def IsInputFile(file):
+        file_path = file.LocalPath()
+        if file_path in JSON5_EXCLUDES:
+            return False
+        # Normalise windows file paths to unix format.
+        file_path = "/".join(os.path.split(file_path))
+        return any([
+            re.search(pattern, file_path) != None
+            for pattern in input_file_filter
+        ])
+
+    files = input_api.AffectedFiles(file_filter=IsInputFile)
 
     def get_css_var_names_for_contents(contents_function):
         style_generator = CSSStyleGenerator()

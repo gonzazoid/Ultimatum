@@ -8,10 +8,6 @@
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/text_view_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // Vertical inset for the text content.
@@ -272,6 +268,22 @@ constexpr CGFloat kIconSize = 16;
   }
 }
 
+- (void)viewDidLayoutSubviews {
+  [super viewDidLayoutSubviews];
+  [self updatePreferredContentSize];
+}
+
+#pragma mark - UIPopoverPresentationControllerDelegate
+
+- (void)popoverPresentationController:
+            (UIPopoverPresentationController*)popoverPresentationController
+          willRepositionPopoverToRect:(inout CGRect*)rect
+                               inView:(inout UIView**)view {
+  // Popover moved to a different location, there might be more space available
+  // now so a new layout pass is needed.
+  [self.view setNeedsLayout];
+}
+
 #pragma mark - Private methods
 
 - (void)updateBackgroundColor {
@@ -337,7 +349,9 @@ constexpr CGFloat kIconSize = 16;
       [self.scrollView systemLayoutSizeFittingSize:CGSizeMake(width, 0)
                      withHorizontalFittingPriority:UILayoutPriorityRequired
                            verticalFittingPriority:500];
-  self.preferredContentSize = size;
+  [UIView performWithoutAnimation:^{
+    self.preferredContentSize = size;
+  }];
 }
 
 #pragma mark - UITextViewDelegate

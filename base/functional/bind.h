@@ -15,10 +15,6 @@
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 
-#if BUILDFLAG(IS_APPLE) && !HAS_FEATURE(objc_arc)
-#include "base/mac/scoped_block.h"
-#endif
-
 // -----------------------------------------------------------------------------
 // Usage documentation
 // -----------------------------------------------------------------------------
@@ -59,33 +55,16 @@ namespace base {
 
 // Bind as OnceCallback.
 template <typename Functor, typename... Args>
-inline OnceCallback<internal::MakeUnboundRunType<Functor, Args...>> BindOnce(
-    Functor&& functor,
-    Args&&... args) {
-  static_assert(!internal::IsOnceCallback<std::decay_t<Functor>>() ||
-                    (std::is_rvalue_reference<Functor&&>() &&
-                     !std::is_const<std::remove_reference_t<Functor>>()),
-                "BindOnce requires non-const rvalue for OnceCallback binding."
-                " I.e.: base::BindOnce(std::move(callback)).");
-  static_assert(
-      std::conjunction<
-          internal::AssertBindArgIsNotBasePassed<std::decay_t<Args>>...>::value,
-      "Use std::move() instead of base::Passed() with base::BindOnce()");
-
-  return internal::BindImpl<OnceCallback>(std::forward<Functor>(functor),
-                                          std::forward<Args>(args)...);
+inline auto BindOnce(Functor&& functor, Args&&... args) {
+  return internal::BindHelper<OnceCallback>::Bind(
+      std::forward<Functor>(functor), std::forward<Args>(args)...);
 }
 
 // Bind as RepeatingCallback.
 template <typename Functor, typename... Args>
-inline RepeatingCallback<internal::MakeUnboundRunType<Functor, Args...>>
-BindRepeating(Functor&& functor, Args&&... args) {
-  static_assert(
-      !internal::IsOnceCallback<std::decay_t<Functor>>(),
-      "BindRepeating cannot bind OnceCallback. Use BindOnce with std::move().");
-
-  return internal::BindImpl<RepeatingCallback>(std::forward<Functor>(functor),
-                                               std::forward<Args>(args)...);
+inline auto BindRepeating(Functor&& functor, Args&&... args) {
+  return internal::BindHelper<RepeatingCallback>::Bind(
+      std::forward<Functor>(functor), std::forward<Args>(args)...);
 }
 
 // Overloads to allow nicer compile errors when attempting to pass the address
@@ -107,12 +86,6 @@ BindRepeating(Functor&& functor, Args&&... args) {
 //
 // So these overloads will only be selected as a last resort iff template type
 // deduction fails.
-//
-// These overloads also intentionally do not return `void`, as this prevents
-// clang from emitting spurious errors such as "variable has incomplete type
-// 'void'" when assigning the result of `BindOnce()`/`BindRepeating()` to a
-// variable with type `auto` or `decltype(auto)`.
-struct BindFailedCheckPreviousErrors {};
 BindFailedCheckPreviousErrors BindOnce(...);
 BindFailedCheckPreviousErrors BindRepeating(...);
 
@@ -170,28 +143,32 @@ BindFailedCheckPreviousErrors BindRepeating(...);
 // use-after-free, as `AnotherClass::OnError` might be invoked with a dangling
 // pointer as receiver.
 template <typename T>
-inline internal::UnretainedWrapper<T> Unretained(T* o) {
-  return internal::UnretainedWrapper<T>(o);
+inline auto Unretained(T* o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayNotDangle>(o);
 }
 
-template <typename T, typename I>
-inline internal::UnretainedWrapper<T> Unretained(const raw_ptr<T, I>& o) {
-  return internal::UnretainedWrapper<T>(o);
+template <typename T, RawPtrTraits Traits>
+inline auto Unretained(const raw_ptr<T, Traits>& o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayNotDangle,
+                                     Traits>(o);
 }
 
-template <typename T, typename I>
-inline internal::UnretainedWrapper<T> Unretained(raw_ptr<T, I>&& o) {
-  return internal::UnretainedWrapper<T>(std::move(o));
+template <typename T, RawPtrTraits Traits>
+inline auto Unretained(raw_ptr<T, Traits>&& o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayNotDangle,
+                                     Traits>(std::move(o));
 }
 
-template <typename T, typename I>
-inline auto Unretained(const raw_ref<T, I>& o) {
-  return internal::UnretainedRefWrapper(o);
+template <typename T, RawPtrTraits Traits>
+inline auto Unretained(const raw_ref<T, Traits>& o) {
+  return internal::UnretainedRefWrapper<T, unretained_traits::MayNotDangle,
+                                        Traits>(o);
 }
 
-template <typename T, typename I>
-inline auto Unretained(raw_ref<T, I>&& o) {
-  return internal::UnretainedRefWrapper(std::move(o));
+template <typename T, RawPtrTraits Traits>
+inline auto Unretained(raw_ref<T, Traits>&& o) {
+  return internal::UnretainedRefWrapper<T, unretained_traits::MayNotDangle,
+                                        Traits>(std::move(o));
 }
 
 // Similar to `Unretained()`, but allows dangling pointers, e.g.:
@@ -228,45 +205,71 @@ inline auto Unretained(raw_ref<T, I>&& o) {
 //
 // Strongly prefer `Unretained()`. This is useful in limited situations such as
 // the one above.
+//
+// When using `UnsafeDangling()`, the receiver must be of type MayBeDangling<>.
 template <typename T>
-inline internal::UnretainedWrapper<T, DisableDanglingPtrDetection>
-UnsafeDangling(T* o) {
-  return internal::UnretainedWrapper<T, DisableDanglingPtrDetection>(o);
+inline auto UnsafeDangling(T* o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayDangle>(o);
 }
 
-template <typename T, typename I>
-internal::UnretainedWrapper<T, DisableDanglingPtrDetection> UnsafeDangling(
-    const raw_ptr<T, I>& o) {
-  return internal::UnretainedWrapper<T, DisableDanglingPtrDetection>(o);
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDangling(const raw_ptr<T, Traits>& o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayDangle, Traits>(
+      o);
 }
 
-template <typename T, typename I>
-internal::UnretainedWrapper<T, DisableDanglingPtrDetection> UnsafeDangling(
-    raw_ptr<T, I>&& o) {
-  return internal::UnretainedWrapper<T, DisableDanglingPtrDetection>(
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDangling(raw_ptr<T, Traits>&& o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayDangle, Traits>(
       std::move(o));
+}
+
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDangling(const raw_ref<T, Traits>& o) {
+  return internal::UnretainedRefWrapper<T, unretained_traits::MayDangle,
+                                        Traits>(o);
+}
+
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDangling(raw_ref<T, Traits>&& o) {
+  return internal::UnretainedRefWrapper<T, unretained_traits::MayDangle,
+                                        Traits>(std::move(o));
 }
 
 // Like `UnsafeDangling()`, but used to annotate places that still need to be
 // triaged and either migrated to `Unretained()` and safer ownership patterns
 // (preferred) or `UnsafeDangling()` if the correct pattern to use is the one
 // in the `UnsafeDangling()` example above for example.
+//
+// Unlike `UnsafeDangling()`, the receiver doesn't have to be MayBeDangling<>.
 template <typename T>
-inline internal::UnretainedWrapper<T, DanglingUntriaged>
-UnsafeDanglingUntriaged(T* o) {
-  return internal::UnretainedWrapper<T, DanglingUntriaged>(o);
+inline auto UnsafeDanglingUntriaged(T* o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayDangleUntriaged>(
+      o);
 }
 
-template <typename T, typename I>
-internal::UnretainedWrapper<T, DanglingUntriaged> UnsafeDanglingUntriaged(
-    const raw_ptr<T, I>& o) {
-  return internal::UnretainedWrapper<T, DanglingUntriaged>(o);
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDanglingUntriaged(const raw_ptr<T, Traits>& o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayDangleUntriaged,
+                                     Traits>(o);
 }
 
-template <typename T, typename I>
-internal::UnretainedWrapper<T, DanglingUntriaged> UnsafeDanglingUntriaged(
-    raw_ptr<T, I>&& o) {
-  return internal::UnretainedWrapper<T, DanglingUntriaged>(std::move(o));
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDanglingUntriaged(raw_ptr<T, Traits>&& o) {
+  return internal::UnretainedWrapper<T, unretained_traits::MayDangleUntriaged,
+                                     Traits>(std::move(o));
+}
+
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDanglingUntriaged(const raw_ref<T, Traits>& o) {
+  return internal::UnretainedRefWrapper<
+      T, unretained_traits::MayDangleUntriaged, Traits>(o);
+}
+
+template <typename T, RawPtrTraits Traits>
+auto UnsafeDanglingUntriaged(raw_ref<T, Traits>&& o) {
+  return internal::UnretainedRefWrapper<
+      T, unretained_traits::MayDangleUntriaged, Traits>(std::move(o));
 }
 
 // RetainedRef() accepts a ref counted object and retains a reference to it.
@@ -396,8 +399,10 @@ internal::OwnedRefWrapper<std::decay_t<T>> OwnedRef(T&& t) {
 //
 // Both versions of Passed() prevent T from being an lvalue reference. The first
 // via use of enable_if, and the second takes a T* which will not bind to T&.
-template <typename T,
-          std::enable_if_t<!std::is_lvalue_reference_v<T>>* = nullptr>
+//
+// DEPRECATED - Do not use in new code. See https://crbug.com/1326449
+template <typename T>
+  requires(!std::is_lvalue_reference_v<T>)
 inline internal::PassedWrapper<T> Passed(T&& scoper) {
   return internal::PassedWrapper<T>(std::move(scoper));
 }
@@ -425,26 +430,6 @@ template <typename T>
 inline internal::IgnoreResultHelper<T> IgnoreResult(T data) {
   return internal::IgnoreResultHelper<T>(std::move(data));
 }
-
-#if BUILDFLAG(IS_APPLE) && !HAS_FEATURE(objc_arc)
-
-// RetainBlock() is used to adapt an Objective-C block when Automated Reference
-// Counting (ARC) is disabled. This is unnecessary when ARC is enabled, as the
-// BindOnce and BindRepeating already support blocks then.
-//
-// EXAMPLE OF RetainBlock():
-//
-//   // Wrap the block and bind it to a callback.
-//   OnceCallback<void(int)> cb =
-//       BindOnce(RetainBlock(^(int n) { NSLog(@"%d", n); }));
-//   std::move(cb).Run(1);  // Logs "1".
-template <typename R, typename... Args>
-base::mac::ScopedBlock<R (^)(Args...)> RetainBlock(R (^block)(Args...)) {
-  return base::mac::ScopedBlock<R (^)(Args...)>(block,
-                                                base::scoped_policy::RETAIN);
-}
-
-#endif  // BUILDFLAG(IS_APPLE) && !HAS_FEATURE(objc_arc)
 
 }  // namespace base
 

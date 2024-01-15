@@ -5,6 +5,8 @@
 #include "extensions/browser/api/feedback_private/feedback_service.h"
 
 #include "base/check.h"
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
@@ -13,6 +15,7 @@
 #include "build/build_config.h"
 #include "components/feedback/feedback_data.h"
 #include "components/feedback/feedback_report.h"
+#include "content/public/test/test_utils.h"
 #include "extensions/browser/api/feedback_private/mock_feedback_service.h"
 #include "extensions/browser/api_unittest.h"
 #include "extensions/shell/browser/api/feedback_private/shell_feedback_private_delegate.h"
@@ -34,6 +37,7 @@ namespace {
 const std::string kFakeKey = "fake key";
 const std::string kFakeValue = "fake value";
 const std::string kTabTitleValue = "some sensitive info";
+const std::string kLacrosMemUsageWithTitleKey = "Lacros mem_usage_with_title";
 
 class MockFeedbackUploader : public FeedbackUploader {
  public:
@@ -45,8 +49,15 @@ class MockFeedbackUploader : public FeedbackUploader {
 
   MOCK_METHOD(void,
               QueueReport,
-              (std::unique_ptr<std::string>, bool),
+              (std::unique_ptr<std::string>, bool, int),
               (override));
+
+  base::WeakPtr<FeedbackUploader> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockFeedbackUploader> weak_ptr_factory_{this};
 };
 
 class MockFeedbackPrivateDelegate : public ShellFeedbackPrivateDelegate {
@@ -87,6 +98,20 @@ class MockFeedbackPrivateDelegate : public ShellFeedbackPrivateDelegate {
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 };
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+bool AttachmentExists(const std::string& name,
+                      const scoped_refptr<FeedbackData>& feedback_data) {
+  size_t num_attachments = feedback_data->attachments();
+  for (size_t i = 0; i < num_attachments; i++) {
+    const FeedbackCommon::AttachedFile* file = feedback_data->attachment(i);
+    if (!std::strcmp(name.c_str(), file->name.c_str())) {
+      return true;
+    }
+  }
+  return false;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 }  // namespace
 
 class FeedbackServiceTest : public ApiUnitTest {
@@ -99,10 +124,8 @@ class FeedbackServiceTest : public ApiUnitTest {
     mock_uploader_ = std::make_unique<StrictMock<MockFeedbackUploader>>(
         /*is_off_the_record=*/false, scoped_temp_dir_.GetPath(),
         test_shared_loader_factory_);
-    base::WeakPtr<feedback::FeedbackUploader> wkptr_uploader =
-        base::AsWeakPtr(mock_uploader_.get());
-    feedback_data_ =
-        base::MakeRefCounted<FeedbackData>(std::move(wkptr_uploader), nullptr);
+    feedback_data_ = base::MakeRefCounted<FeedbackData>(
+        mock_uploader_->AsWeakPtr(), nullptr);
   }
 
   ~FeedbackServiceTest() override = default;
@@ -111,11 +134,14 @@ class FeedbackServiceTest : public ApiUnitTest {
     feedback_data_->AddLog(kFakeKey, kFakeValue);
     feedback_data_->AddLog(feedback::FeedbackReport::kMemUsageWithTabTitlesKey,
                            kTabTitleValue);
+    feedback_data_->AddLog(kLacrosMemUsageWithTitleKey, kTabTitleValue);
     const FeedbackParams params{/*is_internal_email=*/false,
                                 /*load_system_info=*/false,
                                 /*send_tab_titles=*/send_tab_titles,
                                 /*send_histograms=*/true,
-                                /*send_bluetooth_logs=*/true};
+                                /*send_bluetooth_logs=*/true,
+                                /*send_wifi_debug_logs=*/false,
+                                /*send_autofill_metadata=*/false};
 
     EXPECT_CALL(*mock_uploader_, QueueReport).Times(1);
     base::MockCallback<SendFeedbackCallback> mock_callback;
@@ -128,11 +154,59 @@ class FeedbackServiceTest : public ApiUnitTest {
 
     auto feedback_service = base::MakeRefCounted<FeedbackService>(
         browser_context(), mock_delegate.get());
-    base::RunLoop run_loop;
-    feedback_service->SendFeedback(params, feedback_data_, mock_callback.Get());
-    base::ThreadPoolInstance::Get()->FlushForTesting();
-    run_loop.RunUntilIdle();
+    RunUntilFeedbackIsSent(feedback_service, params, mock_callback.Get());
     EXPECT_EQ(1u, feedback_data_->sys_info()->count(kFakeKey));
+  }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void TestSendFeedbackConcerningWifiDebugLogs(bool send_wifi_debug_logs) {
+    const FeedbackParams params{/*is_internal_email=*/false,
+                                /*load_system_info=*/true,
+                                /*send_tab_titles=*/false,
+                                /*send_histograms=*/false,
+                                /*send_bluetooth_logs=*/false,
+                                /*send_wifi_debug_logs=*/send_wifi_debug_logs,
+                                /*send_autofill_metadata=*/false};
+
+    // Create a test file in sub directory "wifi".
+    const base::FilePath test_file_dir =
+        scoped_temp_dir_.GetPath().Append("wifi");
+    ASSERT_TRUE(base::CreateDirectory(test_file_dir));
+
+    const base::FilePath test_file =
+        test_file_dir.Append("iwlwifi_firmware_dumps.tar.zst");
+    ASSERT_TRUE(base::WriteFile(test_file, "Test file content"));
+
+    EXPECT_CALL(*mock_uploader_, QueueReport).Times(1);
+    base::MockCallback<SendFeedbackCallback> mock_callback;
+    EXPECT_CALL(mock_callback, Run(true));
+
+    auto mock_delegate = std::make_unique<MockFeedbackPrivateDelegate>();
+    EXPECT_CALL(*mock_delegate, FetchSystemInformation(_, _)).Times(1);
+    EXPECT_CALL(*mock_delegate, FetchExtraLogs(_, _)).Times(1);
+
+    auto feedback_service = base::MakeRefCounted<FeedbackService>(
+        browser_context(), mock_delegate.get());
+    feedback_service->SetLogFilesRootPathForTesting(scoped_temp_dir_.GetPath());
+
+    RunUntilFeedbackIsSent(feedback_service, params, mock_callback.Get());
+    EXPECT_EQ(1u, feedback_data_->sys_info()->count(kFakeKey));
+
+    // Verify the attachment is added if and only if send_wifi_debug_logs is
+    // true.
+    EXPECT_EQ(
+        send_wifi_debug_logs,
+        AttachmentExists("iwlwifi_firmware_dumps.tar.zst", feedback_data_));
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  void RunUntilFeedbackIsSent(scoped_refptr<FeedbackService> feedback_service,
+                              const FeedbackParams& params,
+                              SendFeedbackCallback mock_callback) {
+    feedback_service->RedactThenSendFeedback(params, feedback_data_,
+                                             std::move(mock_callback));
+    base::ThreadPoolInstance::Get()->FlushForTesting();
+    task_environment()->RunUntilIdle();
   }
 
   base::ScopedTempDir scoped_temp_dir_;
@@ -147,7 +221,9 @@ TEST_F(FeedbackServiceTest, SendFeedbackWithoutSysInfo) {
                               /*load_system_info=*/false,
                               /*send_tab_titles=*/true,
                               /*send_histograms=*/true,
-                              /*send_bluetooth_logs=*/true};
+                              /*send_bluetooth_logs=*/true,
+                              /*send_wifi_debug_logs=*/false,
+                              /*send_autofill_metadata=*/false};
 
   EXPECT_CALL(*mock_uploader_, QueueReport).Times(1);
   base::MockCallback<SendFeedbackCallback> mock_callback;
@@ -157,7 +233,7 @@ TEST_F(FeedbackServiceTest, SendFeedbackWithoutSysInfo) {
   auto feedback_service = base::MakeRefCounted<FeedbackService>(
       browser_context(), shell_delegate.get());
 
-  feedback_service->SendFeedback(params, feedback_data_, mock_callback.Get());
+  RunUntilFeedbackIsSent(feedback_service, params, mock_callback.Get());
 }
 
 TEST_F(FeedbackServiceTest, SendFeedbackLoadSysInfo) {
@@ -165,7 +241,9 @@ TEST_F(FeedbackServiceTest, SendFeedbackLoadSysInfo) {
                               /*load_system_info=*/true,
                               /*send_tab_titles=*/true,
                               /*send_histograms=*/true,
-                              /*send_bluetooth_logs=*/true};
+                              /*send_bluetooth_logs=*/true,
+                              /*send_wifi_debug_logs=*/false,
+                              /*send_autofill_metadata=*/false};
 
   EXPECT_CALL(*mock_uploader_, QueueReport).Times(1);
   base::MockCallback<SendFeedbackCallback> mock_callback;
@@ -180,22 +258,54 @@ TEST_F(FeedbackServiceTest, SendFeedbackLoadSysInfo) {
   auto feedback_service = base::MakeRefCounted<FeedbackService>(
       browser_context(), mock_delegate.get());
 
-  feedback_service->SendFeedback(params, feedback_data_, mock_callback.Get());
+  RunUntilFeedbackIsSent(feedback_service, params, mock_callback.Get());
   EXPECT_EQ(1u, feedback_data_->sys_info()->count(kFakeKey));
   EXPECT_EQ(1u, feedback_data_->sys_info()->count(
                     feedback::FeedbackReport::kMemUsageWithTabTitlesKey));
 }
 
-TEST_F(FeedbackServiceTest, SendFeedbackDoNotSendTabTitles) {
+// TODO(crbug.com/1439227): Re-enable this test
+TEST_F(FeedbackServiceTest, DISABLED_SendFeedbackDoNotSendTabTitles) {
   TestSendFeedbackConcerningTabTitles(false);
   EXPECT_EQ(0u, feedback_data_->sys_info()->count(
                     feedback::FeedbackReport::kMemUsageWithTabTitlesKey));
+  EXPECT_EQ(0u, feedback_data_->sys_info()->count(kLacrosMemUsageWithTitleKey));
 }
 
 TEST_F(FeedbackServiceTest, SendFeedbackDoSendTabTitles) {
   TestSendFeedbackConcerningTabTitles(true);
   EXPECT_EQ(1u, feedback_data_->sys_info()->count(
                     feedback::FeedbackReport::kMemUsageWithTabTitlesKey));
+  EXPECT_EQ(1u, feedback_data_->sys_info()->count(kLacrosMemUsageWithTitleKey));
 }
+
+TEST_F(FeedbackServiceTest, SendFeedbackAutofillMetadata) {
+  const FeedbackParams params{/*is_internal_email=*/true,
+                              /*load_system_info=*/false,
+                              /*send_tab_titles=*/false,
+                              /*send_histograms=*/true,
+                              /*send_bluetooth_logs=*/true,
+                              /*send_wifi_debug_logs=*/false,
+                              /*send_autofill_metadata=*/true};
+  feedback_data_->set_autofill_metadata("Autofill Metadata");
+  EXPECT_CALL(*mock_uploader_, QueueReport).Times(1);
+  base::MockCallback<SendFeedbackCallback> mock_callback;
+  EXPECT_CALL(mock_callback, Run(true));
+
+  auto feedback_service =
+      base::MakeRefCounted<FeedbackService>(browser_context(), nullptr);
+
+  RunUntilFeedbackIsSent(feedback_service, params, mock_callback.Get());
+}
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(FeedbackServiceTest, SendFeedbackWithWifiDebugLogs) {
+  TestSendFeedbackConcerningWifiDebugLogs(/*send_wifi_debug_logs=*/true);
+}
+
+TEST_F(FeedbackServiceTest, SendFeedbackWithoutWifiDebugLogs) {
+  TestSendFeedbackConcerningWifiDebugLogs(/*send_wifi_debug_logs=*/false);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace extensions

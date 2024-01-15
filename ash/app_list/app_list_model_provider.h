@@ -7,7 +7,9 @@
 
 #include "ash/app_list/model/app_list_model.h"
 #include "ash/app_list/model/search/search_model.h"
+#include "ash/app_list/quick_app_access_model.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 
 namespace ash {
@@ -52,7 +54,9 @@ class ASH_EXPORT AppListModelProvider {
   // Both `model` and `search_model` can be null, in which case active models
   // will fallback to default models. This should generally only be done during
   // shutdown.
-  void SetActiveModel(AppListModel* model, SearchModel* search_model);
+  void SetActiveModel(AppListModel* model,
+                      SearchModel* search_model,
+                      QuickAppAccessModel* quick_app_access_model);
 
   // Resets active app list and search model to the default one.
   void ClearActiveModel();
@@ -68,15 +72,23 @@ class ASH_EXPORT AppListModelProvider {
   // If an active model has not been set, it returns a default model.
   SearchModel* search_model() { return search_model_; }
 
+  QuickAppAccessModel* quick_app_access_model() {
+    return quick_app_access_model_;
+  }
+
  private:
   // Default, empty models that get returned if the provided models are null.
   // Primarily used for convenience, to avoid need for null checks in code that
   // uses app list model, and search model.
   AppListModel default_model_{nullptr};
   SearchModel default_search_model_;
+  QuickAppAccessModel default_quick_app_access_model_;
 
-  AppListModel* model_ = &default_model_;
-  SearchModel* search_model_ = &default_search_model_;
+  raw_ptr<AppListModel, DanglingUntriaged> model_ = &default_model_;
+  raw_ptr<SearchModel, DanglingUntriaged> search_model_ =
+      &default_search_model_;
+  raw_ptr<QuickAppAccessModel, DanglingUntriaged> quick_app_access_model_ =
+      &default_quick_app_access_model_;
 
   base::ObserverList<Observer> observers_;
 };

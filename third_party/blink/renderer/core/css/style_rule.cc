@@ -25,6 +25,7 @@
 #include "third_party/blink/renderer/core/css/css_container_rule.h"
 #include "third_party/blink/renderer/core/css/css_counter_style_rule.h"
 #include "third_party/blink/renderer/core/css/css_font_face_rule.h"
+#include "third_party/blink/renderer/core/css/css_font_feature_values_rule.h"
 #include "third_party/blink/renderer/core/css/css_font_palette_values_rule.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_import_rule.h"
@@ -37,10 +38,14 @@
 #include "third_party/blink/renderer/core/css/css_position_fallback_rule.h"
 #include "third_party/blink/renderer/core/css/css_property_rule.h"
 #include "third_party/blink/renderer/core/css/css_scope_rule.h"
+#include "third_party/blink/renderer/core/css/css_starting_style_rule.h"
 #include "third_party/blink/renderer/core/css/css_style_rule.h"
+#include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/css/css_supports_rule.h"
 #include "third_party/blink/renderer/core/css/css_try_rule.h"
+#include "third_party/blink/renderer/core/css/css_view_transition_rule.h"
 #include "third_party/blink/renderer/core/css/parser/container_query_parser.h"
+#include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_impl.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_token.h"
@@ -48,10 +53,13 @@
 #include "third_party/blink/renderer/core/css/parser/css_supports_parser.h"
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
 #include "third_party/blink/renderer/core/css/style_rule_counter_style.h"
+#include "third_party/blink/renderer/core/css/style_rule_font_feature_values.h"
 #include "third_party/blink/renderer/core/css/style_rule_font_palette_values.h"
 #include "third_party/blink/renderer/core/css/style_rule_import.h"
 #include "third_party/blink/renderer/core/css/style_rule_keyframe.h"
 #include "third_party/blink/renderer/core/css/style_rule_namespace.h"
+#include "third_party/blink/renderer/core/css/style_rule_view_transition.h"
+#include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
 
 namespace blink {
@@ -93,6 +101,12 @@ void StyleRuleBase::Trace(Visitor* visitor) const {
     case kFontPaletteValues:
       To<StyleRuleFontPaletteValues>(this)->TraceAfterDispatch(visitor);
       return;
+    case kFontFeatureValues:
+      To<StyleRuleFontFeatureValues>(this)->TraceAfterDispatch(visitor);
+      return;
+    case kFontFeature:
+      To<StyleRuleFontFeature>(this)->TraceAfterDispatch(visitor);
+      return;
     case kMedia:
       To<StyleRuleMedia>(this)->TraceAfterDispatch(visitor);
       return;
@@ -132,6 +146,12 @@ void StyleRuleBase::Trace(Visitor* visitor) const {
     case kTry:
       To<StyleRuleTry>(this)->TraceAfterDispatch(visitor);
       return;
+    case kStartingStyle:
+      To<StyleRuleStartingStyle>(this)->TraceAfterDispatch(visitor);
+      return;
+    case kViewTransition:
+      To<StyleRuleViewTransition>(this)->TraceAfterDispatch(visitor);
+      return;
   }
   NOTREACHED();
 }
@@ -155,6 +175,12 @@ void StyleRuleBase::FinalizeGarbageCollectedObject() {
       return;
     case kFontPaletteValues:
       To<StyleRuleFontPaletteValues>(this)->~StyleRuleFontPaletteValues();
+      return;
+    case kFontFeatureValues:
+      To<StyleRuleFontFeatureValues>(this)->~StyleRuleFontFeatureValues();
+      return;
+    case kFontFeature:
+      To<StyleRuleFontFeature>(this)->~StyleRuleFontFeature();
       return;
     case kMedia:
       To<StyleRuleMedia>(this)->~StyleRuleMedia();
@@ -195,6 +221,12 @@ void StyleRuleBase::FinalizeGarbageCollectedObject() {
     case kTry:
       To<StyleRuleTry>(this)->~StyleRuleTry();
       return;
+    case kStartingStyle:
+      To<StyleRuleStartingStyle>(this)->~StyleRuleStartingStyle();
+      return;
+    case kViewTransition:
+      To<StyleRuleViewTransition>(this)->~StyleRuleViewTransition();
+      return;
   }
   NOTREACHED();
 }
@@ -211,6 +243,10 @@ StyleRuleBase* StyleRuleBase::Copy() const {
       return To<StyleRuleFontFace>(this)->Copy();
     case kFontPaletteValues:
       return To<StyleRuleFontPaletteValues>(this)->Copy();
+    case kFontFeatureValues:
+      return To<StyleRuleFontFeatureValues>(this)->Copy();
+    case kFontFeature:
+      return To<StyleRuleFontFeature>(this)->Copy();
     case kMedia:
       return To<StyleRuleMedia>(this)->Copy();
     case kScope:
@@ -239,9 +275,12 @@ StyleRuleBase* StyleRuleBase::Copy() const {
       return To<StyleRuleCounterStyle>(this)->Copy();
     case kPositionFallback:
       return To<StyleRulePositionFallback>(this)->Copy();
+    case kStartingStyle:
+      return To<StyleRuleStartingStyle>(this)->Copy();
+    case kViewTransition:
+      return To<StyleRuleViewTransition>(this)->Copy();
     case kTry:
-      NOTREACHED();
-      return nullptr;
+      return To<StyleRuleTry>(this)->Copy();
   }
   NOTREACHED();
   return nullptr;
@@ -272,6 +311,10 @@ CSSRule* StyleRuleBase::CreateCSSOMWrapper(wtf_size_t position_hint,
     case kFontPaletteValues:
       rule = MakeGarbageCollected<CSSFontPaletteValuesRule>(
           To<StyleRuleFontPaletteValues>(self), parent_sheet);
+      break;
+    case kFontFeatureValues:
+      rule = MakeGarbageCollected<CSSFontFeatureValuesRule>(
+          To<StyleRuleFontFeatureValues>(self), parent_sheet);
       break;
     case kMedia:
       rule = MakeGarbageCollected<CSSMediaRule>(To<StyleRuleMedia>(self),
@@ -317,14 +360,28 @@ CSSRule* StyleRuleBase::CreateCSSOMWrapper(wtf_size_t position_hint,
       rule = MakeGarbageCollected<CSSPositionFallbackRule>(
           To<StyleRulePositionFallback>(self), parent_sheet);
       break;
+    case kStartingStyle:
+      rule = MakeGarbageCollected<CSSStartingStyleRule>(
+          To<StyleRuleStartingStyle>(self), parent_sheet);
+      break;
+    case kViewTransition:
+      rule = MakeGarbageCollected<CSSViewTransitionRule>(
+          To<StyleRuleViewTransition>(self), parent_sheet);
+      break;
     case kTry:
+      // @try rules must be child rules of @position-fallback.
+      CHECK(!parent_sheet);
+      rule = MakeGarbageCollected<CSSTryRule>(To<StyleRuleTry>(self));
+      break;
+    case kFontFeature:
     case kKeyframe:
     case kCharset:
       NOTREACHED();
       return nullptr;
   }
-  if (parent_rule)
+  if (parent_rule) {
     rule->SetParentRule(parent_rule);
+  }
   return rule;
 }
 
@@ -372,11 +429,20 @@ const CSSPropertyValueSet& StyleRule::Properties() const {
 }
 
 StyleRule::StyleRule(const StyleRule& other, size_t flattened_size)
-    : StyleRuleBase(kStyle),
-      properties_(other.Properties().MutableCopy()),
-      child_rules_(other.child_rules_) {
+    : StyleRuleBase(kStyle), properties_(other.Properties().MutableCopy()) {
   for (unsigned i = 0; i < flattened_size; ++i) {
     new (&SelectorArray()[i]) CSSSelector(other.SelectorArray()[i]);
+  }
+  if (other.child_rules_ != nullptr) {
+    // Since we are getting copied, we also need to copy any child rules
+    // so that both old and new can be freely mutated. This also
+    // parses them eagerly (see comment in StyleSheetContents'
+    // copy constructor).
+    child_rules_ = MakeGarbageCollected<HeapVector<Member<StyleRuleBase>>>();
+    child_rules_->ReserveInitialCapacity(other.child_rules_->size());
+    for (const StyleRuleBase* child_rule : *other.child_rules_) {
+      child_rules_->push_back(child_rule->Copy());
+    }
   }
 }
 
@@ -396,8 +462,9 @@ StyleRule::~StyleRule() {
 
 MutableCSSPropertyValueSet& StyleRule::MutableProperties() {
   // Ensure properties_ is initialized.
-  if (!Properties().IsMutable())
+  if (!Properties().IsMutable()) {
     properties_ = properties_->MutableCopy();
+  }
   return *To<MutableCSSPropertyValueSet>(properties_.Get());
 }
 
@@ -428,19 +495,15 @@ void StyleRule::TraceAfterDispatch(blink::Visitor* visitor) const {
 void StyleRuleBase::Reparent(StyleRule* old_parent, StyleRule* new_parent) {
   switch (GetType()) {
     case kStyle:
-      for (CSSSelector* s = DynamicTo<StyleRule>(this)->SelectorArray(); s;
-           s = CSSSelectorList::Next(*s)) {
-        if (s->Match() == CSSSelector::kPseudoClass &&
-            s->GetPseudoType() == CSSSelector::kPseudoParent) {
-          s->Reparent(old_parent, new_parent);
-        }
-      }
+      CSSSelectorList::Reparent(To<StyleRule>(this)->SelectorArray(),
+                                old_parent, new_parent);
       break;
     case kScope:
     case kLayerBlock:
     case kContainer:
     case kMedia:
     case kSupports:
+    case kStartingStyle:
       for (StyleRuleBase* child :
            DynamicTo<StyleRuleGroup>(this)->ChildRules()) {
         child->Reparent(old_parent, new_parent);
@@ -450,6 +513,8 @@ void StyleRuleBase::Reparent(StyleRule* old_parent, StyleRule* new_parent) {
     case kProperty:
     case kFontFace:
     case kFontPaletteValues:
+    case kFontFeatureValues:
+    case kFontFeature:
     case kImport:
     case kKeyframes:
     case kLayerStatement:
@@ -459,6 +524,7 @@ void StyleRuleBase::Reparent(StyleRule* old_parent, StyleRule* new_parent) {
     case kTry:
     case kKeyframe:
     case kCharset:
+    case kViewTransition:
       // Cannot have any child rules.
       break;
   }
@@ -476,8 +542,9 @@ StyleRulePage::StyleRulePage(const StyleRulePage& page_rule)
       selector_list_(page_rule.selector_list_->Copy()) {}
 
 MutableCSSPropertyValueSet& StyleRulePage::MutableProperties() {
-  if (!properties_->IsMutable())
+  if (!properties_->IsMutable()) {
     properties_ = properties_->MutableCopy();
+  }
   return *To<MutableCSSPropertyValueSet>(properties_.Get());
 }
 
@@ -498,8 +565,9 @@ StyleRuleProperty::StyleRuleProperty(const StyleRuleProperty& property_rule)
       properties_(property_rule.properties_->MutableCopy()) {}
 
 MutableCSSPropertyValueSet& StyleRuleProperty::MutableProperties() {
-  if (!properties_->IsMutable())
+  if (!properties_->IsMutable()) {
     properties_ = properties_->MutableCopy();
+  }
   return *To<MutableCSSPropertyValueSet>(properties_.Get());
 }
 
@@ -513,6 +581,17 @@ const CSSValue* StyleRuleProperty::Inherits() const {
 
 const CSSValue* StyleRuleProperty::GetInitialValue() const {
   return properties_->GetPropertyCSSValue(CSSPropertyID::kInitialValue);
+}
+
+bool StyleRuleProperty::SetNameText(const ExecutionContext* execution_context,
+                                    const String& name_text) {
+  DCHECK(!name_text.IsNull());
+  String name = CSSParser::ParseCustomPropertyName(name_text);
+  if (!name)
+    return false;
+
+  name_ = name;
+  return true;
 }
 
 void StyleRuleProperty::TraceAfterDispatch(blink::Visitor* visitor) const {
@@ -529,8 +608,9 @@ StyleRuleFontFace::StyleRuleFontFace(const StyleRuleFontFace& font_face_rule)
       properties_(font_face_rule.properties_->MutableCopy()) {}
 
 MutableCSSPropertyValueSet& StyleRuleFontFace::MutableProperties() {
-  if (!properties_->IsMutable())
+  if (!properties_->IsMutable()) {
     properties_ = properties_->MutableCopy();
+  }
   return *To<MutableCSSPropertyValueSet>(properties_.Get());
 }
 
@@ -554,11 +634,22 @@ void StyleRuleScope::TraceAfterDispatch(blink::Visitor* visitor) const {
 }
 
 void StyleRuleScope::SetPreludeText(const ExecutionContext* execution_context,
-                                    String value) {
+                                    String value,
+                                    CSSNestingType nesting_type,
+                                    StyleRule* parent_rule_for_nesting,
+                                    bool is_within_scope,
+                                    StyleSheetContents* style_sheet) {
   auto* parser_context =
       MakeGarbageCollected<CSSParserContext>(*execution_context);
   Vector<CSSParserToken, 32> tokens = CSSTokenizer(value).TokenizeToEOF();
-  style_scope_ = StyleScope::Parse(tokens, parser_context, nullptr);
+
+  StyleRule* old_parent = style_scope_->RuleForNesting();
+  style_scope_ =
+      StyleScope::Parse(tokens, parser_context, nesting_type,
+                        parent_rule_for_nesting, is_within_scope, style_sheet);
+
+  // Reparent rules within the @scope's body.
+  Reparent(old_parent, style_scope_->RuleForNesting());
 }
 
 StyleRuleGroup::StyleRuleGroup(RuleType type,
@@ -567,15 +658,25 @@ StyleRuleGroup::StyleRuleGroup(RuleType type,
 
 StyleRuleGroup::StyleRuleGroup(const StyleRuleGroup& group_rule)
     : StyleRuleBase(group_rule), child_rules_(group_rule.child_rules_.size()) {
-  for (unsigned i = 0; i < child_rules_.size(); ++i)
+  for (unsigned i = 0; i < child_rules_.size(); ++i) {
     child_rules_[i] = group_rule.child_rules_[i]->Copy();
+  }
 }
 
-void StyleRuleGroup::WrapperInsertRule(unsigned index, StyleRuleBase* rule) {
+void StyleRuleGroup::WrapperInsertRule(CSSStyleSheet* parent_sheet,
+                                       unsigned index,
+                                       StyleRuleBase* rule) {
   child_rules_.insert(index, rule);
+  if (parent_sheet) {
+    parent_sheet->Contents()->NotifyRuleChanged(rule);
+  }
 }
 
-void StyleRuleGroup::WrapperRemoveRule(unsigned index) {
+void StyleRuleGroup::WrapperRemoveRule(CSSStyleSheet* parent_sheet,
+                                       unsigned index) {
+  if (parent_sheet) {
+    parent_sheet->Contents()->NotifyRuleChanged(child_rules_[index]);
+  }
   child_rules_.EraseAt(index);
 }
 
@@ -589,8 +690,9 @@ String StyleRuleBase::LayerNameAsString(
     const StyleRuleBase::LayerName& name_parts) {
   StringBuilder result;
   for (const auto& part : name_parts) {
-    if (result.length())
+    if (result.length()) {
       result.Append(".");
+    }
     result.Append(part);
   }
   return result.ReleaseString();
@@ -625,8 +727,9 @@ void StyleRuleLayerStatement::TraceAfterDispatch(
 
 Vector<String> StyleRuleLayerStatement::GetNamesAsStrings() const {
   Vector<String> result;
-  for (const auto& name : names_)
+  for (const auto& name : names_) {
     result.push_back(LayerNameAsString(name));
+  }
   return result;
 }
 
@@ -708,5 +811,9 @@ void StyleRuleContainer::TraceAfterDispatch(blink::Visitor* visitor) const {
   visitor->Trace(container_query_);
   StyleRuleCondition::TraceAfterDispatch(visitor);
 }
+
+StyleRuleStartingStyle::StyleRuleStartingStyle(
+    HeapVector<Member<StyleRuleBase>> rules)
+    : StyleRuleGroup(kStartingStyle, std::move(rules)) {}
 
 }  // namespace blink

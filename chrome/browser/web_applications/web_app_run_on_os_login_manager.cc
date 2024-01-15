@@ -1,0 +1,117 @@
+// Copyright 2023 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "chrome/browser/web_applications/web_app_run_on_os_login_manager.h"
+
+#include <memory>
+#include <utility>
+#include <vector>
+
+#include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "chrome/browser/apps/app_service/app_launch_params.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/web_applications/locks/all_apps_lock.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
+#include "chrome/browser/web_applications/web_app_utils.h"
+#include "chrome/common/chrome_features.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
+#include "content/public/browser/web_contents.h"
+
+namespace web_app {
+
+namespace {
+bool g_skip_startup_for_testing_ = false;
+}
+
+WebAppRunOnOsLoginManager::WebAppRunOnOsLoginManager(Profile* profile)
+    : profile_(profile) {}
+WebAppRunOnOsLoginManager::~WebAppRunOnOsLoginManager() = default;
+
+void WebAppRunOnOsLoginManager::SetProvider(base::PassKey<WebAppProvider>,
+                                            WebAppProvider& provider) {
+  provider_ = &provider;
+}
+
+void WebAppRunOnOsLoginManager::Start() {
+  if (g_skip_startup_for_testing_) {
+    return;
+  }
+
+  if (!base::FeatureList::IsEnabled(features::kDesktopPWAsRunOnOsLogin)) {
+    return;
+  }
+
+  provider_->scheduler().ScheduleCallback(
+      "WebAppRunOnOsLoginManager::RunAppsOnOsLogin", AllAppsLockDescription(),
+      base::BindOnce(&WebAppRunOnOsLoginManager::RunAppsOnOsLogin,
+                     GetWeakPtr()),
+      /*on_complete=*/base::DoNothing());
+}
+
+void WebAppRunOnOsLoginManager::RunAppsOnOsLogin(
+    AllAppsLock& lock,
+    base::Value::Dict& debug_value) {
+  base::flat_map<webapps::AppId, WebAppUiManager::RoolNotificationBehavior>
+      notification_behaviors;
+
+  for (const webapps::AppId& app_id : lock.registrar().GetAppIds()) {
+    if (!IsRunOnOsLoginModeEnabledForAutostart(
+            lock.registrar().GetAppRunOnOsLoginMode(app_id).value)) {
+      continue;
+    }
+
+    WebAppUiManager::RoolNotificationBehavior behavior{
+        .is_rool_enabled = true,
+        .is_prevent_close_enabled =
+            lock.registrar().IsPreventCloseEnabled(app_id)};
+    notification_behaviors.insert({app_id, std::move(behavior)});
+    debug_value.EnsureList("app_ids")->Append(app_id);
+
+    // In case of already opened/restored apps, we do not launch them again
+    if (lock.ui_manager().GetNumWindowsForApp(app_id) > 0) {
+      continue;
+    }
+
+    // TODO(crbug.com/1091964): Implement Run on OS Login mode selection and
+    // launch app appropriately.
+    // For ROOL on ChromeOS, we only have managed web apps which need to be run
+    // as standalone windows, never as tabs
+    apps::AppLaunchParams params(
+        app_id, apps::LaunchContainer::kLaunchContainerWindow,
+        WindowOpenDisposition::NEW_WINDOW, apps::LaunchSource::kFromOsLogin);
+
+    // Schedule launch here, show notification when the app window pops up.
+    provider_->scheduler().LaunchAppWithCustomParams(std::move(params),
+                                                     base::DoNothing());
+  }
+
+  if (!notification_behaviors.empty()) {
+    provider_->ui_manager().DisplayRunOnOsLoginNotification(
+        notification_behaviors, profile_->GetWeakPtr());
+  }
+}
+
+base::WeakPtr<WebAppRunOnOsLoginManager>
+WebAppRunOnOsLoginManager::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
+// static
+base::AutoReset<bool> WebAppRunOnOsLoginManager::SkipStartupForTesting() {
+  return {&g_skip_startup_for_testing_, true};
+}
+
+void WebAppRunOnOsLoginManager::RunAppsOnOsLoginForTesting() {
+  provider_->scheduler().ScheduleCallback(
+      "WebAppRunOnOsLoginManager::RunAppsOnOsLogin", AllAppsLockDescription(),
+      base::BindOnce(&WebAppRunOnOsLoginManager::RunAppsOnOsLogin,
+                     GetWeakPtr()),
+      /*on_complete=*/base::DoNothing());
+}
+
+}  // namespace web_app

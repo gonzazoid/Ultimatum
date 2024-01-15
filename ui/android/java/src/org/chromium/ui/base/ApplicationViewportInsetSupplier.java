@@ -4,150 +4,217 @@
 
 package org.chromium.ui.base;
 
-import androidx.annotation.VisibleForTesting;
-
 import org.chromium.base.Callback;
 import org.chromium.base.lifetime.Destroyable;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-
-import java.util.HashSet;
-import java.util.Set;
+import org.chromium.ui.mojom.VirtualKeyboardMode;
 
 /**
- * A class responsible for managing multiple users of UI insets affecting
- * the visual viewport.
+ * A class responsible for managing multiple users of UI insets over the application viewport.
  *
- * Insetting the visual viewport overlays web content without resizing its
- * container (meaning it doesn't affect page layout); however, the user can
- * always scroll within the visual viewport to reveal overlaid content and
- * authors can respond to changes in the visual viewport.
+ * <p>UI insets are complicated. The application viewport is provided by CompositorViewHolder but
+ * the browser provides various UI controls which overlay the viewport. How these UI controls
+ * interact with the underlying WebContents varies between controls and can depend on web-APIs.
  *
- * Features needing to know if something is obscuring part of the screen listen
- * to this class via {@link #addObserver(Callback)}. UI that wishes to inset
- * the visual viewport can attach an inset supplier via {@link
- * #addSupplier(ObservableSupplier)}.
+ * <p>For example, browser controls cause the WebContents to resize so that the web page reflows in
+ * response to showing/hiding (although the timing of when this happens is non-straightforward). On
+ * the other hand, the virtual keyboard should resize only the page's visualViewport, without
+ * affecting layout. Chrome provides "keyboard accessories" that appear to the user to be part of
+ * the keyboard but are actually separate UI components. To make matters even more complicated, the
+ * page can change how the virtual keyboard affects the page (to affect page layout).
  *
- * This class supports two kinds of inset suppliers: overlapping and stacking.
+ * <p>This class aims to centralize and encapsulate all these complex interactions so clients don't
+ * have to worry about the details. This class currently handles only the keyboard and keyboard
+ * accessory but there are plans to move browser controls into here as well
+ * (https://crbug.com/1211066).
  *
- * Stacking suppliers are assumed to be presented "stacked", one of top (in the
- * y-axis) of the other. For example, the autofill keyboard accessory and the
- * on-screen keyboard are presented with the accessory appearing directly above
- * the keyboard. In this case, the keyboard inset is added to the accessory
- * inset to compute the total "stacking inset".
+ * <p>Features needing to know if anything is obscuring part of the screen listen to this class via
+ * {@link #addObserver(Callback)} which observes changes to a {@link ViewportInsets} object which
+ * has various inset types clients can use. See that class for more detials about the inset types.
  *
- * Overlapping suppliers assume each supplier is attached to the viewport
- * bottom and don't take each other into account. For example, if a bottom info
- * bar is showing but a contextual search panel slides in from below, obscuring
- * the info bar. In this case, both the info bar and search panel provide their
- * own overlapping inset. The total "overlapping inset" is computed by taking
- * the largest value of all overlap suppliers.
- *
- * The final inset (the one provided to observers) is the largest between the
- * stacking and overlapping insets.
- *
+ * <pre>
  * In general:
- *  - Features that want to modify the inset should pass around the
- *    {@link ApplicationViewportInsetSupplier} object.
- *  - Features only interested in what the current inset is should pass around an
- *    {@link ObservableSupplier<Integer>} object.
+ *  - Features that want to modify the inset should pass around the {@link
+ *    ApplicationViewportInsetSupplier} object.
+ *  - Features only interested in what the current inset is should pass around an {@link
+ *    ObservableSupplier<ViewportInsets>} object.
+ * </pre>
  */
-public class ApplicationViewportInsetSupplier
-        extends ObservableSupplierImpl<Integer> implements Destroyable {
-    /** The lists of inset providers that this class manages. */
-    private final Set<ObservableSupplier<Integer>> mOverlappingInsetSuppliers = new HashSet<>();
-    private final Set<ObservableSupplier<Integer>> mStackingInsetSuppliers = new HashSet<>();
+public class ApplicationViewportInsetSupplier extends ObservableSupplierImpl<ViewportInsets>
+        implements Destroyable {
+    /** Keyboard related suppliers */
+    private ObservableSupplier<Integer> mKeyboardInsetSupplier;
 
-    /** The observer that gets attached to all inset providers. */
-    private final Callback<Integer> mInsetSupplierObserver = (inset) -> computeInset();
+    private ObservableSupplier<Integer> mKeyboardAccessoryInsetSupplier;
+
+    private ObservableSupplier<Integer> mBottomSheetInsetSupplier;
+
+    /** The observer that gets attached to all inset suppliers. */
+    private final Callback<Integer> mInsetSupplierObserver = (unused) -> computeInsets();
+
+    /**
+     * By default, the virtual keyboard overlays content, only resizing the visual viewport.
+     *
+     * Web content has APIs that change how the virtual keyboard interacts with content. This class
+     * needs to know which mode we're in to determine how different kinds of insets are computed.
+     */
+    @VirtualKeyboardMode.EnumType
+    private int mVirtualKeyboardMode = VirtualKeyboardMode.RESIZES_VISUAL;
 
     /** Default constructor. */
     ApplicationViewportInsetSupplier() {
         super();
         // Make sure this is initialized to 0 since "Integer" is an object and would be null
         // otherwise.
-        super.set(0);
+        super.set(new ViewportInsets());
     }
 
-    @VisibleForTesting
     public static ApplicationViewportInsetSupplier createForTests() {
         return new ApplicationViewportInsetSupplier();
+    }
+
+    @Override
+    public void set(ViewportInsets value) {
+        throw new IllegalStateException(
+                "#set(...) should not be called directly on ApplicationViewportInsetSupplier.");
     }
 
     /** Clean up observers and suppliers. */
     @Override
     public void destroy() {
-        for (ObservableSupplier<Integer> os : mOverlappingInsetSuppliers) {
-            os.removeObserver(mInsetSupplierObserver);
-        }
-        for (ObservableSupplier<Integer> os : mStackingInsetSuppliers) {
-            os.removeObserver(mInsetSupplierObserver);
-        }
-
-        mOverlappingInsetSuppliers.clear();
-        mStackingInsetSuppliers.clear();
-    }
-
-    /** Compute the new inset based on the current registered providers. */
-    private void computeInset() {
-        int stackingInset = 0;
-        for (ObservableSupplier<Integer> os : mStackingInsetSuppliers) {
-            // Similarly to the constructor, check that the Integer object isn't null as the
-            // supplier may not yet have supplied the initial value.
-            stackingInset += os.get() == null ? 0 : os.get();
-        }
-
-        int overlappingInset = 0;
-        for (ObservableSupplier<Integer> os : mOverlappingInsetSuppliers) {
-            // Similarly to the constructor, check that the Integer object isn't null as the
-            // supplier may not yet have supplied the initial value.
-            overlappingInset = Math.max(overlappingInset, os.get() == null ? 0 : os.get());
-        }
-
-        super.set(Math.max(stackingInset, overlappingInset));
-    }
-
-    @Override
-    public void set(Integer value) {
-        throw new IllegalStateException(
-                "#set(...) should not be called directly on ApplicationViewportInsetSupplier.");
+        setKeyboardInsetSupplier(null);
+        setKeyboardAccessoryInsetSupplier(null);
     }
 
     /**
-     * Adds a supplier of viewport insets that overlap.
+     * Notifies this object when the VirtualKeyboardMode of the currently active WebContents is
+     * changed.
      *
-     * Of all overlap insets, only the largest is applied to the final inset.
-     *
-     * @param insetSupplier A supplier of bottom insets to be added.
+     * This can happen as a result of a web content API call or swapping a WebContents or Tab.
      */
-    public void addOverlappingSupplier(ObservableSupplier<Integer> insetSupplier) {
-        mOverlappingInsetSuppliers.add(insetSupplier);
-        insetSupplier.addObserver(mInsetSupplierObserver);
+    public void setVirtualKeyboardMode(@VirtualKeyboardMode.EnumType int mode) {
+        if (mVirtualKeyboardMode == mode) return;
+
+        mVirtualKeyboardMode = mode;
+
+        computeInsets();
     }
 
     /**
-     * Adds a supplier of viewport insets that stack.
+     * Sets the inset supplier for the soft keyboard itself.
      *
-     * Stacking insets are added together when applied to the final inset.
-     *
-     * @param insetSupplier A supplier of bottom insets to be added.
+     * Pass null to unset the current supplier.
      */
-    public void addStackingSupplier(ObservableSupplier<Integer> insetSupplier) {
-        mStackingInsetSuppliers.add(insetSupplier);
-        insetSupplier.addObserver(mInsetSupplierObserver);
+    public void setKeyboardInsetSupplier(ObservableSupplier<Integer> insetSupplier) {
+        boolean didRemove = false;
+
+        if (mKeyboardInsetSupplier != null) {
+            mKeyboardInsetSupplier.removeObserver(mInsetSupplierObserver);
+            didRemove = true;
+        }
+
+        mKeyboardInsetSupplier = insetSupplier;
+
+        if (mKeyboardInsetSupplier != null) {
+            mKeyboardInsetSupplier.addObserver(mInsetSupplierObserver);
+        } else if (didRemove) {
+            // If a supplier was removed, removeObserver will not have notified observers (unlike
+            // addObserver) so make sure insets get recomputed in this case.
+            computeInsets();
+        }
     }
 
     /**
-     * Removes a previously added supplier.
+     * Sets the inset supplier for the keyboard accessory.
      *
-     * The given supplier is removed regardless of whether it was overlapping or stacking.
-     *
-     * @param insetSupplier A supplier of bottom insets to be removed.
+     * Pass null to unset the current supplier.
      */
-    public void removeSupplier(ObservableSupplier<Integer> insetSupplier) {
-        mOverlappingInsetSuppliers.remove(insetSupplier);
-        mStackingInsetSuppliers.remove(insetSupplier);
-        insetSupplier.removeObserver(mInsetSupplierObserver);
-        computeInset();
+    public void setKeyboardAccessoryInsetSupplier(ObservableSupplier<Integer> insetSupplier) {
+        boolean didRemove = false;
+        if (mKeyboardAccessoryInsetSupplier != null) {
+            mKeyboardAccessoryInsetSupplier.removeObserver(mInsetSupplierObserver);
+            didRemove = true;
+        }
+
+        mKeyboardAccessoryInsetSupplier = insetSupplier;
+
+        if (mKeyboardAccessoryInsetSupplier != null) {
+            mKeyboardAccessoryInsetSupplier.addObserver(mInsetSupplierObserver);
+        } else if (didRemove) {
+            // If a supplier was removed, removeObserver will not have notified observers (unlike
+            // addObserver) so make sure insets get recomputed in this case.
+            computeInsets();
+        }
+    }
+
+    public void setBottomSheetInsetSupplier(ObservableSupplier<Integer> insetSupplier) {
+        boolean didRemove = false;
+        if (mBottomSheetInsetSupplier != null) {
+            mBottomSheetInsetSupplier.removeObserver(mInsetSupplierObserver);
+            didRemove = true;
+        }
+
+        mBottomSheetInsetSupplier = insetSupplier;
+
+        if (mBottomSheetInsetSupplier != null) {
+            mBottomSheetInsetSupplier.addObserver(mInsetSupplierObserver);
+        } else if (didRemove) {
+            // If a supplier was removed, removeObserver will not have notified observers (unlike
+            // addObserver) so make sure insets get recomputed in this case.
+            computeInsets();
+        }
+    }
+
+    /** Compute the new total inset based on all registered suppliers. */
+    private void computeInsets() {
+        ViewportInsets newValues = new ViewportInsets();
+
+        int keyboardInset = intFromSupplier(mKeyboardInsetSupplier);
+        int accessoryInset = intFromSupplier(mKeyboardAccessoryInsetSupplier);
+        int totalKeyboardInset = keyboardInset + accessoryInset;
+
+        int bottomSheetInset = intFromSupplier(mBottomSheetInsetSupplier);
+        newValues.viewVisibleHeightInset = accessoryInset;
+        newValues.visualViewportBottomInset =
+                mVirtualKeyboardMode == VirtualKeyboardMode.RESIZES_VISUAL ? totalKeyboardInset : 0;
+
+        // If the VirtualKeyboardMode is set to OVERLAYS_CONTENT or RESIZES_VISUAL, the
+        // WebContents size will not match the View size when the keyboard is showing (these
+        // modes mean "keyboard doesn't resize web content"). In that case, *outset* by the shown
+        // keyboard height to keep the WebContents from being resized.
+        boolean vkModeOutsetsWebContentsHeight =
+                mVirtualKeyboardMode == VirtualKeyboardMode.OVERLAYS_CONTENT
+                        || mVirtualKeyboardMode == VirtualKeyboardMode.RESIZES_VISUAL;
+        int webContentsInset = 0;
+        if (vkModeOutsetsWebContentsHeight) {
+            // Avoid insetting by the accessory and outset by the keyboard to counter the View
+            // resize.
+            webContentsInset = -keyboardInset;
+        } else {
+            // The keyboard should cause the WebContents to resize. The keyboard itself is already
+            // accounted for in the View height so just add the accessory.
+            webContentsInset = accessoryInset;
+        }
+        webContentsInset += bottomSheetInset;
+
+        newValues.webContentsHeightInset = webContentsInset;
+
+        super.set(newValues);
+    }
+
+    private int intFromSupplier(ObservableSupplier<Integer> supplier) {
+        if (supplier == null || supplier.get() == null) return 0;
+        return supplier.get();
+    }
+
+    public boolean insetsAffectWebContentsSize() {
+        // TODO(bokan): OVERLAYS_CONTENT is included only to ensure dispatch of the keyboard
+        // geometrychange event. The WebContents doesn't actually change size in OVERLAYS_CONTENT
+        // so we should factor the event dispatch code out of CompositorViewHolder
+        // #updateWebContentsSize and then replace this call.
+        return mVirtualKeyboardMode == VirtualKeyboardMode.RESIZES_CONTENT
+                || mVirtualKeyboardMode == VirtualKeyboardMode.OVERLAYS_CONTENT
+                || mBottomSheetInsetSupplier != null;
     }
 }

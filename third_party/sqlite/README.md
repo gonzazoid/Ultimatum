@@ -41,8 +41,8 @@ SQLite should be upgraded as soon as possible whenever a new version is
 available. This is because new versions often contain security and stability
 improvements, and frequent upgrades allow Chromium to have minimal cherry-pick
 diffs when requesting investigation for SQLite bugs discovered by Chromium
-Fuzzers. New versions may be viewed at https://www.sqlite.org/news.html, and
-bugs for these upgrades may look like [this example](https://crbug.com/1161048).
+Fuzzers. New versions may be viewed [here](https://www.sqlite.org/changes.html),
+and bugs for these upgrades may look like [this example](https://crbug.com/1161048).
 
 Historically, Chromium fuzzers often find issues within 2 weeks after upgrading
 to new SQLite versions. Avoid upgrading SQLite within 1-2 weeks of a Chromium
@@ -55,20 +55,14 @@ SQLite version upgrades tend to be extremely large changes
 to thoroughly review.
 
 **Note** SQLite tags all releases `version-<release number>`, e.g.
-`version-3.33.0`. The Chromium project prefixes all tags/branches with
-"chromium-", e.g.  `chromium-version-3.33.0`.
+`version-3.40.0`. The Chromium project prefixes all tags/branches with
+"chromium-", e.g.  `chromium-version-3.40.0`.
 
 1. Create new release branch
 
-   Use the SQLite git commit hash for the release, found at
-   [sqlite/tags](https://github.com/sqlite/sqlite/tags), when creating
-   a new release branch. For example,
-   "[562fd18b9dc27216191c0a6477bba9b175f7f0d2](https://github.com/sqlite/sqlite/commit/562fd18b9dc27216191c0a6477bba9b175f7f0d2)"
-   corresponds to the 3.31.1 release. The commit is used instead of the tag
-   name because we do not mirror the SQLite tags along with the commits.
-
    Create the branch at
-   [Gerrit/branches](https://chromium-review.googlesource.com/admin/repos/chromium/deps/sqlite,branches).
+   [Gerrit/branches](https://chromium-review.googlesource.com/admin/repos/chromium/deps/sqlite,branches). The branch name should
+   look like `chromium-version-3.40.0` and the initial revision will look something like `refs/tags/upstream/version-3.40.0`.
 
    Note: To create a release branch, you must be listed as a member in the
    [sqlite-owners Gerrit group](https://chromium-review.googlesource.com/admin/groups/3cb0e9e73693fd6377da67b63a28b815ef5c94cc,members)
@@ -78,12 +72,11 @@ to thoroughly review.
     Get the version from the [README.chromium](https://source.chromium.org/chromium/chromium/src/+/main:third_party/sqlite/README.chromium).
 
     ```sh
-    cd //third_party/sqlite/src
+    cd third_party/sqlite/src  # from //chromium/src
     git fetch origin
-    export VERSION=3.33.0
+    export VERSION=3.40.0
     git checkout -b chromium-version-$VERSION \
         --track origin/chromium-version-$VERSION
-    git rebase
     ```
 
 3. Generate and commit the SQLite amalgamations.
@@ -135,8 +128,8 @@ following:
     Get the version from the [README.chromium](https://source.chromium.org/chromium/chromium/src/+/main:third_party/sqlite/README.chromium).
 
     ```sh
-    export VERSION=3.33.0
-    cd //third_party/sqlite/src
+    export VERSION=3.40.0
+    cd third_party/sqlite/src  # from //chromium/src
     git checkout -b chromium-version-$VERSION \
       --track origin/chromium-version-$VERSION
     ```
@@ -148,7 +141,7 @@ following:
     few tasks such as:
 
     * Identifying the correct Git commit hash to use if given the
-      Fossil commit hash.
+      Fossil commit hash. **note this is currently broken and a Git hash must be provided**
     * Automatically calculating Fossil manifest hashes.
     * Skipping conflicted binary files.
     * Generating the amalgamations.
@@ -156,7 +149,7 @@ following:
     Cherry-pick the commit:
 
     ```sh
-    ../scripts/sqlite_cherry_picker.py <full git or fossil commit hash>
+    ../scripts/sqlite_cherry_picker.py <full git commit hash>
     ```
 
     If there is a conflict that the script cannot resolve then, like
@@ -244,7 +237,7 @@ these tests are fixed, it is safe to ignore these tests when running SQLite test
 suites.
 
 ```sh
-cd //third_party/sqlite
+cd third_party/sqlite  # from //chromium/src
 ./scripts/generate_amalgamation.py --testing
 make --directory=src test | tee /tmp/test.log
 ```

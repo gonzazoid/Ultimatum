@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
-#include "base/task/single_thread_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "url/gurl.h"
 
 namespace update_client {
@@ -29,11 +29,11 @@ namespace update_client {
 // When multiple urls and downloaders exists, first all the urls are tried, in
 // the order they are provided in the StartDownload function argument. After
 // that, the download request is routed to the next downloader in the chain.
-// The members of this class expect to be called from the main thread only.
+// The members of this class expect to be called from the main sequence only.
 class CrxDownloader : public base::RefCountedThreadSafe<CrxDownloader> {
  public:
   struct DownloadMetrics {
-    enum Downloader { kNone = 0, kUrlFetcher, kBits };
+    enum Downloader { kNone = 0, kUrlFetcher, kBits, kBackgroundMac };
 
     DownloadMetrics();
 
@@ -42,6 +42,7 @@ class CrxDownloader : public base::RefCountedThreadSafe<CrxDownloader> {
     Downloader downloader;
 
     int error;
+    int extra_code1;
 
     int64_t downloaded_bytes;  // -1 means that the byte count is unknown.
     int64_t total_bytes;
@@ -81,13 +82,14 @@ class CrxDownloader : public base::RefCountedThreadSafe<CrxDownloader> {
   // One instance of CrxDownloader can only be started once, otherwise the
   // behavior is undefined. The callback gets invoked if the download can't
   // be started. |expected_hash| represents the SHA256 cryptographic hash of
-  // the download payload, represented as a hexadecimal string.
-  void StartDownloadFromUrl(const GURL& url,
-                            const std::string& expected_hash,
-                            DownloadCallback download_callback);
-  void StartDownload(const std::vector<GURL>& urls,
-                     const std::string& expected_hash,
-                     DownloadCallback download_callback);
+  // the download payload, represented as a hexadecimal string. Returns a
+  // callback that can be run to cancel the download.
+  base::OnceClosure StartDownloadFromUrl(const GURL& url,
+                                         const std::string& expected_hash,
+                                         DownloadCallback download_callback);
+  base::OnceClosure StartDownload(const std::vector<GURL>& urls,
+                                  const std::string& expected_hash,
+                                  DownloadCallback download_callback);
 
   void set_progress_callback(const ProgressCallback& progress_callback);
 
@@ -115,14 +117,15 @@ class CrxDownloader : public base::RefCountedThreadSafe<CrxDownloader> {
   // Returns the url which is currently being downloaded from.
   GURL url() const;
 
-  scoped_refptr<base::SingleThreadTaskRunner> main_task_runner() const {
+  scoped_refptr<base::SequencedTaskRunner> main_task_runner() const {
     return main_task_runner_;
   }
 
  private:
   friend class base::RefCountedThreadSafe<CrxDownloader>;
 
-  virtual void DoStartDownload(const GURL& url) = 0;
+  // Returns a callback that can be run to cancel the download.
+  virtual base::OnceClosure DoStartDownload(const GURL& url) = 0;
 
   void HandleDownloadError(bool is_handled,
                            const Result& result,
@@ -130,8 +133,8 @@ class CrxDownloader : public base::RefCountedThreadSafe<CrxDownloader> {
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  // Used to post callbacks to the main thread.
-  scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
+  // Used to post callbacks to the main sequence.
+  scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
 
   std::vector<GURL> urls_;
 

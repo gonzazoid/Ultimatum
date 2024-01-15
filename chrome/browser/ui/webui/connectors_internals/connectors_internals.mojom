@@ -26,32 +26,74 @@ enum KeyType {
   EC = 2,
 };
 
+// Represents the possible permanent failures encountered in the key creation
+// flow.
+enum KeyManagerPermanentFailure {
+  UNSPECIFIED = 0,
+  CREATION_UPLOAD_CONFLICT = 1,
+  INSUFFICIENT_PERMISSIONS = 2,
+  OS_RESTRICTION = 3,
+  INVALID_INSTALLATION = 4,
+};
+
+// Wrapper for an optional int32.
+struct Int32Value {
+  // The int32 value.
+  int32 value;
+};
+
+struct LoadedKeyInfo {
+  // Loaded key's trust level (e.g. is it a TPM key or not).
+  KeyTrustLevel trust_level;
+
+  // Key's algorithm (e.g. RSA, EC).
+  KeyType key_type;
+
+  // Base64-encoded SHA-256 hash value for the loaded key's SPKI.
+  string encoded_spki_hash;
+
+  // HTTP response code of the sync key request. Can be unset if the response
+  // has not yet been received.
+  Int32Value? sync_key_response_code;
+};
+
 struct KeyInfo {
   // Whether the key manager has loaded a key successfully.
   KeyManagerInitializedValue is_key_manager_initialized;
 
-  // Loaded key's trust level, will be UNSPECIFIED if
-  // `is_key_manager_initialized` is not KEY_LOADED.
-  KeyTrustLevel trust_level;
+  // Metadata about a key loaded by the key manager. Will only contain a value
+  // if `is_key_manager_initialized` is `KEY_LOADED`.
+  LoadedKeyInfo? loaded_key_info;
 
+  // The permanent failure type, if any.
+  KeyManagerPermanentFailure permanent_failure;
+};
 
-  // Key's algorithm, will be UNKNOWN if `is_key_manager_initialized` is not
-  // KEY_LOADED.
-  KeyType key_type;
+struct ConsentMetadata {
+  // Whether signals can be collected based on the current user
+  // and management context.
+  bool can_collect_signals;
 
-  // URL Base64 encoded SHA-256 hash value for the loaded key's SPKI.
-  string encoded_spki_hash;
+  // Whether the user has given explicit consent.
+  bool consent_received;
 };
 
 struct DeviceTrustState {
   // Whether the connector is enabled or not.
   bool is_enabled;
 
+  // Information around the levels the device trust connector is enabled for.
+  array<string> policy_enabled_levels;
+
   // Information around the state of the device trust signing key.
   KeyInfo key_info;
 
   // Json string of the device signals.
   string signals_json;
+
+  // Metadata around whether user consent is required for the given management
+  // context, or if it was already given.
+  ConsentMetadata? consent_metadata;
 };
 
 // Browser interface for the page. Consists of calls for data and hooks for
@@ -59,4 +101,8 @@ struct DeviceTrustState {
 interface PageHandler {
   // Get state information about the Device Trust connector.
   GetDeviceTrustState() => (DeviceTrustState state);
+
+  // Deletes the Device Trust key stored on the device. Will only work on
+  // developer builds or early release channels.
+  DeleteDeviceTrustKey() => ();
 };

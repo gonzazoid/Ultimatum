@@ -5,17 +5,25 @@
 package org.chromium.ui.widget;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.util.AttributeSet;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageView;
 
+import org.chromium.base.Log;
+
+// TODO(https://crbug.com/1400720): This class has no use now, so we can get rid of it.
 /**
  * A subclass of AppCompatImageView to add workarounds for bugs in Android Framework and Support
  * Library.
  */
 public class ChromeImageView extends AppCompatImageView {
+    private static final String TAG = "CIV";
+
     public ChromeImageView(Context context) {
         super(context);
     }
@@ -29,15 +37,15 @@ public class ChromeImageView extends AppCompatImageView {
     }
 
     @Override
-    protected void drawableStateChanged() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            // Pre-N ImageView doesn't correctly invalidate drawables, see https://crbug.com/894770.
-            Drawable drawable = getDrawable();
-            if (drawable != null && drawable.isStateful()
-                    && drawable.setState(getDrawableState())) {
-                invalidateDrawable(drawable);
+    protected void onDraw(Canvas canvas) {
+        // Add extra method to stack and logging for https://crbug.com/1457791.
+        final @Nullable Drawable drawable = getDrawable();
+        if (drawable != null && drawable instanceof BitmapDrawable) {
+            final @Nullable Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+            if (bitmap != null && bitmap.isRecycled()) {
+                Log.e(TAG, "Trying to draw with recycled BitmapDrawable. Id: " + getId());
             }
         }
-        super.drawableStateChanged();
+        super.onDraw(canvas);
     }
 }

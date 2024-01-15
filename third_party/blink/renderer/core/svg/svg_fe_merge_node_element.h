@@ -41,9 +41,13 @@ class SVGFEMergeNodeElement final : public SVGElement {
  private:
   void SvgAttributeChanged(const SvgAttributeChangedParams&) override;
 
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override {
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override {
     return false;
   }
+
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
 
   Member<SVGAnimatedString> in1_;
 };

@@ -11,7 +11,7 @@
 
 // Class used to store common test data used to validate the functioning of the
 // credential provider sign in dialog. This class stores the expected login
-// complte information that the dialog is supposed to received from the gaia
+// complete information that the dialog is supposed to received from the gaia
 // sign in as well as the expected values for any additional token / info
 // fetches needed to complete the sign in using the credential provider.
 // On a successful sign in result, we expect the final json result to match
@@ -21,62 +21,61 @@ class CredentialProviderSigninDialogTestDataStorage {
  public:
   CredentialProviderSigninDialogTestDataStorage();
 
-  static base::Value MakeSignInResponseValue(
+  static base::Value::Dict MakeSignInResponseValue(
       const std::string& id = std::string(),
       const std::string& password = std::string(),
       const std::string& email = std::string(),
       const std::string& access_token = std::string(),
       const std::string& refresh_token = std::string());
-  base::Value MakeValidSignInResponseValue() const;
+  base::Value::Dict MakeValidSignInResponseValue() const;
 
   void SetSigninPassword(const std::string& password);
 
   std::string GetSuccessId() const {
-    return expected_success_signin_result_.FindKey("id")->GetString();
+    return expected_success_signin_result_.Find("id")->GetString();
   }
   std::string GetSuccessPassword() const {
-    return expected_success_signin_result_.FindKey("password")->GetString();
+    return expected_success_signin_result_.Find("password")->GetString();
   }
   std::string GetSuccessEmail() const {
-    return expected_success_signin_result_.FindKey("email")->GetString();
+    return expected_success_signin_result_.Find("email")->GetString();
   }
   std::string GetSuccessAccessToken() const {
-    return expected_success_signin_result_.FindKey("access_token")->GetString();
+    return expected_success_signin_result_.Find("access_token")->GetString();
   }
   std::string GetSuccessRefreshToken() const {
-    return expected_success_signin_result_.FindKey("refresh_token")
-        ->GetString();
+    return expected_success_signin_result_.Find("refresh_token")->GetString();
   }
   std::string GetSuccessTokenHandle() const {
-    return expected_success_fetch_result_.FindKey("token_handle")->GetString();
+    return expected_success_fetch_result_.Find("token_handle")->GetString();
   }
   std::string GetSuccessMdmIdToken() const {
-    return expected_success_fetch_result_.FindKey("mdm_id_token")->GetString();
+    return expected_success_fetch_result_.Find("mdm_id_token")->GetString();
   }
   std::string GetSuccessMdmAccessToken() const {
-    return expected_success_fetch_result_.FindKey("mdm_access_token")
-        ->GetString();
+    return expected_success_fetch_result_.Find("mdm_access_token")->GetString();
   }
   std::string GetSuccessFullName() const {
-    return expected_success_fetch_result_.FindKey("full_name")->GetString();
+    return expected_success_fetch_result_.Find("full_name")->GetString();
   }
 
-  const base::Value& expected_signin_result() const {
+  const base::Value::Dict& expected_signin_result() const {
     return expected_success_signin_result_;
   }
 
-  const base::Value& expected_success_fetch_result() const {
+  const base::Value::Dict& expected_success_fetch_result() const {
     return expected_success_fetch_result_;
   }
 
-  const base::Value& expected_full_result() const {
+  const base::Value::Dict& expected_full_result() const {
     return expected_success_full_result_;
   }
 
-  bool EqualsSuccessfulSigninResult(const base::Value& result_value) const {
+  bool EqualsSuccessfulSigninResult(
+      const base::Value::Dict& result_value) const {
     return EqualsEncodedValue(expected_signin_result(), result_value);
   }
-  bool EqualsSccessfulFetchResult(const base::Value& result_value) const {
+  bool EqualsSccessfulFetchResult(const base::Value::Dict& result_value) const {
     return EqualsEncodedValue(expected_success_fetch_result(), result_value);
   }
 
@@ -92,21 +91,21 @@ class CredentialProviderSigninDialogTestDataStorage {
   static const char kInvalidEmailForSignin[];
 
  private:
-  bool EqualsEncodedValue(const base::Value& success_value,
-                          const base::Value& result_value) const {
+  bool EqualsEncodedValue(const base::Value::Dict& success_value,
+                          const base::Value::Dict& result_value) const {
     return result_value == success_value;
   }
 
   // An expected successful result from chrome://inline-signin.
-  base::Value expected_success_signin_result_;
+  base::Value::Dict expected_success_signin_result_;
 
   // An expected successful result from oauth2 fetches for user info, token
   // handle, and id token.
-  base::Value expected_success_fetch_result_;
+  base::Value::Dict expected_success_fetch_result_;
 
   // An expected successful full result sent to the credential provider from
   // GLS.
-  base::Value expected_success_full_result_;
+  base::Value::Dict expected_success_full_result_;
 };
 
 #endif  // CHROME_BROWSER_UI_STARTUP_CREDENTIAL_PROVIDER_SIGNIN_DIALOG_WIN_TEST_DATA_H_

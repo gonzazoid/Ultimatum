@@ -72,12 +72,25 @@ interface HelpContentProvider {
 struct FeedbackContext {
   // The e-mail of the user that initiated this feedback.
   string? email;
+  // Whether or not the Wifi debug logs is allowed by user.
+  bool wifi_debug_logs_allowed;
+  // Whether or not this ChromeOS device is linked to a phone
+  // (Google Internal only).
+  bool has_linked_cross_device_phone;
   // Whether or not the signed in email is an internal google account.
   bool is_internal_account;
   // Whether or not the feedback app is opened from Assistant.
   bool from_assistant;
   // Whether or not the assistant debug info is allowed by user.
   bool assistant_debug_info_allowed;
+  // Whether or not the feedback app is opened from OS Settings Search.
+  bool from_settings_search;
+  // Whether or not the feedback app is opened from autofill context menu.
+  bool from_autofill;
+  // Autofill metadata provided by source CrOS application by
+  // setting the autofill_metadata query parameter when opening the CrOS
+  // Feedback app.
+  string? autofill_metadata;
   // The URL of the page that this issue was being experienced on.
   url.mojom.Url?  page_url;
   // Extra diagnostics information provided by source CrOS application by
@@ -137,6 +150,12 @@ struct Report {
   // Whether or not the report has sendBluetoothLogs
   // flag set true by internal google account only.
   bool send_bluetooth_logs;
+  // Whether or not the report has sendWifiDebugLogs
+  // flag set true by internal google account only.
+  bool send_wifi_debug_logs;
+  // Whether or not to send autofill metadata with this report. Set by internal
+  // google account only.
+  bool include_autofill_metadata;
 };
 
 // The first action taken on the confirmation page.
@@ -169,6 +188,8 @@ enum FeedbackAppPreSubmitAction {
   kViewedImage,
   // User viewed the system and app info on share data page.
   kViewedSystemAndAppInfo,
+  // User viewed the autofill metadata info on share data page.
+  kViewedAutofillMetadata,
   // User viewed the metrics on share data page.
   kViewedMetrics
 };
@@ -229,6 +250,9 @@ interface FeedbackServiceProvider {
   // Open system info dialog (which displays the system logs
   // to be sent with the report if the user has opted in).
   OpenSystemInfoDialog();
+  // Open autofill dialog (which displays the autofill logs
+  // to be sent with the report if the user has opted in).
+  OpenAutofillDialog(string autofill_metadata);
   // Record the metrics of users' first action on confirmation page.
   RecordPostSubmitAction(FeedbackAppPostSubmitAction action);
   // Record metrics of users' action before sending the feedback.

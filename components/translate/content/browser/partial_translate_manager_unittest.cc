@@ -4,7 +4,8 @@
 
 #include "components/translate/content/browser/partial_translate_manager.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "components/contextual_search/core/browser/contextual_search_delegate.h"
 #include "components/contextual_search/core/browser/resolved_search_term.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -54,7 +55,7 @@ class PartialTranslateManagerTest : public testing::Test {
 
  protected:
   // Owned by manager_.
-  FakeContextualSearchDelegate* delegate_;
+  raw_ptr<FakeContextualSearchDelegate, DanglingUntriaged> delegate_;
   std::unique_ptr<PartialTranslateManager> manager_;
 };
 
@@ -64,6 +65,7 @@ TEST_F(PartialTranslateManagerTest, CreateContext) {
   request.selection_encoding = "UTF16";
   request.source_language = "en-US";
   request.target_language = "ja-JP";
+  request.apply_lang_hint = true;
 
   manager_->StartPartialTranslate(nullptr, request, base::DoNothing());
 
@@ -73,6 +75,7 @@ TEST_F(PartialTranslateManagerTest, CreateContext) {
   ASSERT_EQ(context.GetSurroundingText(), u"Selected text");
   ASSERT_EQ(context.GetTranslationLanguages().detected_language, "en-US");
   ASSERT_EQ(context.GetTranslationLanguages().target_language, "ja-JP");
+  ASSERT_TRUE(context.GetApplyLangHint());
 }
 
 TEST_F(PartialTranslateManagerTest, CreateResponse) {

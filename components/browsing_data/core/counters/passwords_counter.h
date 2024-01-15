@@ -9,18 +9,17 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/weak_ptr.h"
 #include "components/browsing_data/core/counters/browsing_data_counter.h"
 #include "components/browsing_data/core/counters/sync_tracker.h"
-#include "components/password_manager/core/browser/password_store_consumer.h"
+#include "components/password_manager/core/browser/password_store/password_store_consumer.h"
 
 namespace password_manager {
 class PasswordStoreInterface;
 }
 
 namespace browsing_data {
-namespace {
 class PasswordStoreFetcher;
-}
 class PasswordsCounter : public browsing_data::BrowsingDataCounter {
  public:
   // A subclass of SyncResult that stores the result value, a boolean
@@ -84,6 +83,8 @@ class PasswordsCounter : public browsing_data::BrowsingDataCounter {
   std::unique_ptr<PasswordStoreFetcher> account_store_fetcher_;
   SyncTracker sync_tracker_;
   int remaining_tasks_ = 0;
+
+  base::WeakPtrFactory<PasswordsCounter> weak_ptr_factory_{this};
 };
 
 }  // namespace browsing_data

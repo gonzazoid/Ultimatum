@@ -6,31 +6,31 @@
           [[categoryHeader]]
         </h2>
         <cr-button id="addSite" class="header-aligned-button"
-            hidden$="[[!showAddSiteButton_]]" on-click="onAddSiteTap_">
+            hidden$="[[!showAddSiteButton_]]" on-click="onAddSiteClick_">
           $i18n{add}
         </cr-button>
       </div>
 
       <cr-action-menu role-description="$i18n{menu}">
         <button class="dropdown-item" id="allow"
-            on-click="onAllowTap_" hidden$="[[!showAllowAction_]]">
+            on-click="onAllowClick_" hidden$="[[!showAllowAction_]]">
           $i18n{siteSettingsActionAllow}
         </button>
         <button class="dropdown-item" id="block"
-            on-click="onBlockTap_" hidden$="[[!showBlockAction_]]">
+            on-click="onBlockClick_" hidden$="[[!showBlockAction_]]">
           $i18n{siteSettingsActionBlock}
         </button>
         <button class="dropdown-item" id="sessionOnly"
-            on-click="onSessionOnlyTap_"
+            on-click="onSessionOnlyClick_"
             hidden$="[[!showSessionOnlyActionForSite_(actionMenuSite_)]]">
           $i18n{siteSettingsActionSessionOnly}
         </button>
         <button class="dropdown-item" id="edit"
-            on-click="onEditTap_">
+            on-click="onEditClick_">
           $i18n{edit}
         </button>
         <button class="dropdown-item" id="reset"
-            on-click="onResetTap_">
+            on-click="onResetClick_">
           $i18n{siteSettingsActionReset}
         </button>
       </cr-action-menu>
@@ -51,7 +51,8 @@
                 on-show-action-menu="onShowActionMenu_" tabindex$="[[tabIndex]]"
                 first$="[[!index]]" iron-list-tab-index="[[tabIndex]]"
                 last-focused="{{lastFocused_}}" list-blurred="{{listBlurred_}}"
-                on-show-tooltip="onShowTooltip_" focus-row-index="[[index]]">
+                on-show-tooltip="onShowTooltip_" focus-row-index="[[index]]"
+                cookies-exception-type="[[cookiesExceptionType]]">
             </site-list-entry>
           </template>
         </iron-list>
@@ -69,6 +70,7 @@
     <template is="dom-if" if="[[showAddSiteDialog_]]" restamp>
       <add-site-dialog has-incognito="[[hasIncognito_]]" category="[[category]]"
           content-setting="[[categorySubtype]]"
-          on-close="onAddSiteDialogClosed_">
+          on-close="onAddSiteDialogClosed_"
+          cookies-exception-type="[[cookiesExceptionType]]">
       </add-site-dialog>
     </template>

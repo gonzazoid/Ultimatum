@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation_traits.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
@@ -135,7 +136,7 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
  private:
   friend class CrosUsbDetectorTest;
 
-  // Internal representation of a USB device.
+  // Internal representation of a shareable USB device.
   struct UsbDevice {
     UsbDevice();
     UsbDevice(const UsbDevice&) = delete;
@@ -147,15 +148,11 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
 
     std::u16string label;
 
-    // Whether the device can be shared with guest OSes.
-    bool shareable = false;
     // Name of the guest the device is shared with. Unset if not shared. The
     // device may be shared but not yet attached.
     absl::optional<guest_os::GuestId> shared_guest_id;
     // Non-empty only when device is attached to a VM.
     absl::optional<uint8_t> guest_port;
-    // Interfaces shareable with guest OSes
-    uint32_t allowed_interfaces_mask = 0;
     // For a mass storage device, the mount points for active mounts.
     std::set<std::string> mount_points;
     // An internal flag to suppress observer events as mount_points empties.
@@ -224,7 +221,6 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
   // Devices will be auto-detached if they are attached to another VM.
   void AttachAfterDetach(const guest_os::GuestId& guest_id,
                          const std::string& guid,
-                         uint32_t allowed_interfaces_mask,
                          base::OnceCallback<void(bool success)> callback,
                          bool detach_success);
 
@@ -294,11 +290,8 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
   mojo::AssociatedReceiver<device::mojom::UsbDeviceManagerClient>
       client_receiver_{this};
 
-  std::vector<device::mojom::UsbDeviceFilterPtr> guest_os_classes_blocked_;
   std::vector<device::mojom::UsbDeviceFilterPtr>
       guest_os_classes_without_notif_;
-  device::mojom::UsbDeviceFilterPtr adb_device_filter_;
-  device::mojom::UsbDeviceFilterPtr fastboot_device_filter_;
 
   // GUID -> UsbDevice map for all connected USB devices.
   std::map<std::string, UsbDevice> usb_devices_;
@@ -324,10 +317,21 @@ class CrosUsbDetector : public device::mojom::UsbDeviceManagerClient,
 
 }  // namespace ash
 
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::CrosUsbDetector;
-using ::ash::CrosUsbDeviceObserver;
-}  // namespace chromeos
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::CrosUsbDetector,
+                               ash::CrosUsbDeviceObserver> {
+  static void AddObserver(ash::CrosUsbDetector* source,
+                          ash::CrosUsbDeviceObserver* observer) {
+    source->AddUsbDeviceObserver(observer);
+  }
+  static void RemoveObserver(ash::CrosUsbDetector* source,
+                             ash::CrosUsbDeviceObserver* observer) {
+    source->RemoveUsbDeviceObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROME_BROWSER_ASH_USB_CROS_USB_DETECTOR_H_

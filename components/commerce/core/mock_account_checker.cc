@@ -7,31 +7,33 @@
 namespace commerce {
 
 MockAccountChecker::MockAccountChecker()
-    : AccountChecker(nullptr, nullptr, nullptr) {}
+    : AccountChecker(nullptr, nullptr, nullptr, nullptr) {
+  // Default to an account checker with the fewest restrictions.
+  SetSignedIn(true);
+  SetSyncingBookmarks(true);
+  SetAnonymizedUrlDataCollectionEnabled(true);
+  SetIsSubjectToParentalControls(false);
+}
+
 MockAccountChecker::~MockAccountChecker() = default;
 
-bool MockAccountChecker::IsSignedIn() {
-  return signed_in_;
-}
-
-bool MockAccountChecker::IsAnonymizedUrlDataCollectionEnabled() {
-  return anonymized_url_data_collection_enabled_;
-}
-
-bool MockAccountChecker::IsWebAndAppActivityEnabled() {
-  return web_and_app_activity_enabled_;
-}
-
 void MockAccountChecker::SetSignedIn(bool signed_in) {
-  signed_in_ = signed_in;
+  ON_CALL(*this, IsSignedIn).WillByDefault(testing::Return(signed_in));
+}
+
+void MockAccountChecker::SetSyncingBookmarks(bool syncing) {
+  ON_CALL(*this, IsSyncingBookmarks).WillByDefault(testing::Return(syncing));
 }
 
 void MockAccountChecker::SetAnonymizedUrlDataCollectionEnabled(bool enabled) {
-  anonymized_url_data_collection_enabled_ = enabled;
+  ON_CALL(*this, IsAnonymizedUrlDataCollectionEnabled)
+      .WillByDefault(testing::Return(enabled));
 }
 
-void MockAccountChecker::SetWebAndAppActivityEnabled(bool enabled) {
-  web_and_app_activity_enabled_ = enabled;
+void MockAccountChecker::SetIsSubjectToParentalControls(
+    bool subject_to_parental_controls) {
+  ON_CALL(*this, IsSubjectToParentalControls)
+      .WillByDefault(testing::Return(subject_to_parental_controls));
 }
 
 }  // namespace commerce

@@ -10,9 +10,12 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/containers/flat_set.h"
 #include "device/fido/authenticator_get_assertion_response.h"
 #include "device/fido/authenticator_make_credential_response.h"
+#include "device/fido/ctap_get_assertion_request.h"
 #include "device/fido/fido_constants.h"
+#include "device/fido/fido_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/microsoft_webauthn/webauthn.h"
 
@@ -31,7 +34,7 @@ COMPONENT_EXPORT(DEVICE_FIDO)
 absl::optional<AuthenticatorGetAssertionResponse>
 ToAuthenticatorGetAssertionResponse(
     const WEBAUTHN_ASSERTION& credential_attestation,
-    const std::vector<PublicKeyCredentialDescriptor>& allow_list);
+    const CtapGetAssertionOptions& request_options);
 
 COMPONENT_EXPORT(DEVICE_FIDO)
 uint32_t ToWinUserVerificationRequirement(
@@ -49,6 +52,9 @@ COMPONENT_EXPORT(DEVICE_FIDO)
 std::vector<WEBAUTHN_CREDENTIAL_EX> ToWinCredentialExVector(
     const std::vector<PublicKeyCredentialDescriptor>* credentials);
 
+COMPONENT_EXPORT(DEVICE_FIDO)
+uint32_t ToWinLargeBlobSupport(LargeBlobSupport large_blob_support);
+
 // WinErrorNameToCtapDeviceResponseCode maps a string returned by
 // WebAuthNGetErrorName() to a CtapDeviceResponseCode.
 //
@@ -60,7 +66,7 @@ std::vector<WEBAUTHN_CREDENTIAL_EX> ToWinCredentialExVector(
 // WinCtapDeviceResponseCodeTo{MakeCredential,GetAssertion}Status().
 COMPONENT_EXPORT(DEVICE_FIDO)
 CtapDeviceResponseCode WinErrorNameToCtapDeviceResponseCode(
-    const std::u16string& error_name);
+    std::u16string_view error_name);
 
 // WinCtapDeviceResponseCodeToMakeCredentialStatus returns the
 // MakeCredentialStatus that corresponds to a synthetic CtapDeviceResponseCode
@@ -87,6 +93,14 @@ COMPONENT_EXPORT(DEVICE_FIDO)
 std::vector<DiscoverableCredentialMetadata>
 WinCredentialDetailsListToCredentialMetadata(
     const WEBAUTHN_CREDENTIAL_DETAILS_LIST& credentials);
+
+COMPONENT_EXPORT(DEVICE_FIDO)
+absl::optional<FidoTransportProtocol> FromWinTransportsMask(
+    const DWORD transport);
+
+COMPONENT_EXPORT(DEVICE_FIDO)
+uint32_t ToWinTransportsMask(
+    const base::flat_set<FidoTransportProtocol>& transports);
 
 }  // namespace device
 

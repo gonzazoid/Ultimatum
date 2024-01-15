@@ -1,4 +1,8 @@
 <style include="scanning-shared">
+  :host-context(body.jelly-enabled) #checkboxDiv {
+    font: var(--cros-annotation-1-font);
+  }
+
   scan-settings-section {
     --scan-setting-section-height: 40px;
   }
@@ -26,7 +30,7 @@
 <scan-settings-section>
   <span slot="label"></span>
   <div slot="settings">
-    <div id="checkboxDiv" on-click="onCheckboxClick_">
+    <div id="checkboxDiv" on-click="onCheckboxClick">
       <cr-checkbox class="no-label" checked="{{multiPageScanChecked}}"
           disabled="[[disabled]]"
           aria-description="[[i18n('multiPageCheckboxText')]]">

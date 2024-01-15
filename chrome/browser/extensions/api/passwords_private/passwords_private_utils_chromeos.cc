@@ -4,8 +4,6 @@
 
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_utils_chromeos.h"
 
-#include "components/password_manager/core/browser/password_access_authenticator.h"
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/login/quick_unlock/auth_token.h"
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_factory.h"
@@ -17,26 +15,7 @@
 #include "components/user_manager/user.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/lacros/lacros_service.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
-namespace {
-
-constexpr base::TimeDelta kShowPasswordAuthTokenLifetime =
-    password_manager::PasswordAccessAuthenticator::kAuthValidityPeriod;
-constexpr base::TimeDelta kExportPasswordsAuthTokenLifetime = base::Seconds(5);
-
-}  // namespace
-
 namespace extensions {
-
-base::TimeDelta GetAuthTokenLifetimeForPurpose(
-    password_manager::ReauthPurpose purpose) {
-  return (purpose == password_manager::ReauthPurpose::EXPORT)
-             ? kExportPasswordsAuthTokenLifetime
-             : kShowPasswordAuthTokenLifetime;
-}
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 bool IsOsReauthAllowedAsh(Profile* profile,
@@ -47,7 +26,8 @@ bool IsOsReauthAllowedAsh(Profile* profile,
           ash::ProfileHelper::Get()->GetUserByProfile(profile)->GetAccountId());
   if (user_cannot_manually_enter_password)
     return true;
-
+  // TODO (b/238606050): This code branch does not seem to be used now.
+  //  Clean up the code, or add token as a parameter to this method.
   ash::quick_unlock::QuickUnlockStorage* quick_unlock_storage =
       ash::quick_unlock::QuickUnlockFactory::GetForProfile(profile);
   const ash::quick_unlock::AuthToken* auth_token =
@@ -58,25 +38,5 @@ bool IsOsReauthAllowedAsh(Profile* profile,
   return auth_token->GetAge() <= auth_token_lifetime;
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-void IsOsReauthAllowedLacrosAsync(
-    password_manager::ReauthPurpose purpose,
-    password_manager::PasswordAccessAuthenticator::AuthResultCallback
-        callback) {
-  auto* lacros_service = chromeos::LacrosService::Get();
-  if (lacros_service->IsAvailable<crosapi::mojom::Authentication>()) {
-    // Use crosapi to call IsOsReauthAllowedAsh() in Ash, injecting auth token
-    // lifetime from Lacros (instead using the values defined in Ash) for more
-    // flexibility. Pass |callback| directly since it's compatible.
-    lacros_service->GetRemote<crosapi::mojom::Authentication>()
-        ->IsOsReauthAllowedForActiveUserProfile(
-            GetAuthTokenLifetimeForPurpose(purpose), std::move(callback));
-  } else {
-    // No crosapi: Fallback to pre-crosapi behavior.
-    std::move(callback).Run(true);
-  }
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 }  // namespace extensions

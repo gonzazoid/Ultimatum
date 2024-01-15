@@ -15,22 +15,29 @@ source_set("tailored_security_service") {
     "tailored_security_service_util.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
     "//base:i18n",
-    "//components/keyed_service/core",
-    "//components/prefs:prefs",
     "//components/query_parser",
     "//components/safe_browsing/core/common:common",
     "//components/safe_browsing/core/common:safe_browsing_policy_handler",
     "//components/safe_browsing/core/common:safe_browsing_prefs",
     "//components/signin/public/identity_manager",
+    "//components/sync/base",
+    "//components/sync/service",
     "//components/url_formatter",
     "//components/variations",
     "//google_apis",
-    "//net",
     "//services/network/public/cpp",
     "//services/network/public/mojom",
+  ]
+
+  public_deps = [
+    "//components/keyed_service/core",
+    "//components/prefs",
+    "//net",
     "//url",
   ]
 }
@@ -52,4 +59,7 @@ source_set("unit_tests") {
     "//testing/gtest",
     "//url",
   ]
+  if (is_ios) {
+    deps += [ "//components/test:safe_browsing_test_bundle_data" ]
+  }
 }

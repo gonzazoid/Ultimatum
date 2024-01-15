@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "components/autofill/core/browser/payments/card_unmask_challenge_option.h"
+
 namespace ui {
 class ImageModel;
 }
@@ -17,7 +19,7 @@ namespace autofill {
 struct CardUnmaskChallengeOption;
 
 // Interface that exposes controller functionality to
-// CardUnmaskAuthenticationSelectionDialogView.
+// CardUnmaskAuthenticationSelectionDialog.
 class CardUnmaskAuthenticationSelectionDialogController {
  public:
   CardUnmaskAuthenticationSelectionDialogController() = default;
@@ -36,9 +38,7 @@ class CardUnmaskAuthenticationSelectionDialogController {
   // sent the OTP, and we can move on to the OTP Input Dialog.
   virtual void OnDialogClosed(bool user_closed_dialog, bool server_success) = 0;
 
-  // Event handler function. Invoked when the OK button is clicked.
-  virtual void OnOkButtonClicked(
-      const std::string& selected_challenge_option_id) = 0;
+  virtual void OnOkButtonClicked() = 0;
 
   virtual std::u16string GetWindowTitle() const = 0;
 
@@ -68,6 +68,17 @@ class CardUnmaskAuthenticationSelectionDialogController {
 
   // Return the text shown along with the progress throbber.
   virtual std::u16string GetProgressLabel() const = 0;
+
+  // Sets the currently selected challenge option id based on which
+  // challenge option radio button is selected in the Card Authentication
+  // Selection Dialog View.
+  // TODO(crbug.com/1392939): Refactor this function to
+  // `SetSelectedChallengeOptionForId()`, which should take in a
+  // `selected_challenge_option_id`, and set the currently selected challenge
+  // option in the class based on this id.
+  virtual void SetSelectedChallengeOptionId(
+      const CardUnmaskChallengeOption::ChallengeOptionId&
+          selected_challenge_option_id) = 0;
 };
 
 }  // namespace autofill

@@ -13,12 +13,10 @@ SwitchAccessE2ETest = class extends E2ETestBase {
   testGenCppIncludes() {
     super.testGenCppIncludes();
     GEN(`
-#include "ash/accessibility/accessibility_delegate.h"
-#include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "ash/keyboard/ui/keyboard_util.h"
+#include "ash/accessibility/accessibility_controller.h"
+#include "ash/constants/ash_pref_names.h"
+#include "chrome/browser/ash/accessibility/accessibility_manager.h"
     `);
   }
 
@@ -26,12 +24,31 @@ SwitchAccessE2ETest = class extends E2ETestBase {
   testGenPreamble() {
     super.testGenPreamble();
     GEN(`
+    auto* controller = ash::AccessibilityController::Get();
+    controller->DisableSwitchAccessDisableConfirmationDialogTesting();
+    // Don't show the dialog saying Switch Access was enabled.
+    controller->DisableSwitchAccessEnableNotificationTesting();
+    // Set some Switch Access prefs so that the os://settings page is not
+    // opened (this is done if settings are not configured on first use):
+    auto* manager = ash::AccessibilityManager::Get();
+    manager->SetSwitchAccessKeysForTest(
+        {'1', 'A'}, ash::prefs::kAccessibilitySwitchAccessNextDeviceKeyCodes);
+    manager->SetSwitchAccessKeysForTest(
+        {'2', 'B'},
+        ash::prefs::kAccessibilitySwitchAccessSelectDeviceKeyCodes);
   base::OnceClosure load_cb =
       base::BindOnce(&ash::AccessibilityManager::SetSwitchAccessEnabled,
           base::Unretained(ash::AccessibilityManager::Get()),
           true);
     `);
     super.testGenPreambleCommon('kSwitchAccessExtensionId');
+  }
+
+  /** @override */
+  async setUpDeferred() {
+    await super.setUpDeferred();
+    await importModule('SwitchAccess', '/switch_access/switch_access.js');
+    await SwitchAccess.ready();
   }
 
   /**
@@ -102,16 +119,13 @@ SwitchAccessE2ETest = class extends E2ETestBase {
         resolve(Navigator.byItem.node_);
         return;
       }
-      const original = Navigator.byItem.setNode_.bind(Navigator.byItem);
-      Navigator.byItem.setNode_ = node => {
-        original(node);
+      this.addCallbackPostMethod(Navigator.byItem, 'setNode_', node => {
         lastFocusChangeTime = new Date();
         if (doesMatch(expected)) {
-          Navigator.byItem.setNode_ = original;
           didResolve = true;
           resolve(Navigator.byItem.node_);
         }
-      };
+      }, () => doesMatch(expected));
     });
   }
 };

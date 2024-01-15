@@ -4,7 +4,7 @@
 
 #include "components/password_manager/core/browser/password_store_signin_notifier_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "components/password_manager/core/browser/mock_password_reuse_manager.h"
@@ -78,13 +78,14 @@ TEST_F(PasswordStoreSigninNotifierImplTest, SignOutContentArea) {
       /*email=*/"username2",
       /*refresh_token=*/"refresh_token",
       /*is_under_advanced_protection=*/false,
+      signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN,
       signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   // This call is necessary to ensure that the account removal is fully
   // processed in this testing context.
   identity_test_env()->EnableRemovalOfExtendedAccountInfo();
   identity_manager->GetAccountsMutator()->RemoveAccount(
-      CoreAccountId("secondary_account_id"),
-      signin_metrics::SourceForRefreshTokenOperation::kUserMenu_RemoveAccount);
+      CoreAccountId::FromGaiaId("secondary_account_id"),
+      signin_metrics::SourceForRefreshTokenOperation::kUnknown);
   testing::Mock::VerifyAndClearExpectations(&reuse_manager_);
 
   EXPECT_CALL(reuse_manager_, ClearGaiaPasswordHash("username"));

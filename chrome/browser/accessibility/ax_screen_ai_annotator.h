@@ -10,24 +10,28 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/screen_ai/screen_ai_install_state.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/services/screen_ai/public/cpp/screen_ai_install_state.h"
 #include "components/services/screen_ai/public/mojom/screen_ai_service.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "ui/accessibility/ax_dummy_tree_manager.h"
 #include "ui/accessibility/ax_tree_id.h"
-#include "ui/accessibility/ax_tree_update.h"
-
-class Browser;
 
 namespace content {
 class BrowserContext;
+class WebContents;
 }
 
 namespace gfx {
 class Image;
 }
+
+namespace ui {
+
+struct AXTreeUpdate;
+class AXTreeID;
+
+}  // namespace ui
 
 namespace screen_ai {
 
@@ -42,28 +46,35 @@ class AXScreenAIAnnotator : public KeyedService,
 
   // Takes a screenshot and sends it to `OnScreenshotReceived` through an async
   // call.
-  void AnnotateScreenshot(Browser* browser);
+  void AnnotateScreenshot(content::WebContents* web_contents);
 
   // ScreenAIInstallState::Observer:
-  void ComponentReady() override;
+  void StateChanged(ScreenAIInstallState::State state) override;
 
  private:
   // Binds `screen_ai_annotator_` to the Screen AI service.
   virtual void BindToScreenAIService(content::BrowserContext* browser_context);
 
-  // Receives an screenshot and sends it to ScreenAI library for processing.
+  // Receives a screenshot and passes it to `ExtractSemanticLayout` for
+  // processing.
   // `ax_tree_id` represents the accessibility tree that is associated with the
-  // snapshot at the time of triggering the request.
+  // snapshot at the time of triggering the request. `start_time` represents
+  // the time when the screenshot is requested.
   virtual void OnScreenshotReceived(const ui::AXTreeID& ax_tree_id,
+                                    const base::TimeTicks& start_time,
                                     gfx::Image snapshot);
 
+  void ExtractSemanticLayout(const ui::AXTreeID& ax_tree_id,
+                             const SkBitmap bitmap);
+
   // Informs this instance that the Screen AI Service has finished creating the
-  // visual annotations. `parent_tree_id` is the ID of the accessibility tree
+  // semantic layout. `parent_tree_id` is the ID of the accessibility tree
   // associated with the screenshot that was sent to the Screen AI Service, and
   // `screen_ai_tree_id` is the ID of the accessibility tree that has been
   // created by the Service, containing the visual annotations.
-  void OnAnnotationPerformed(const ui::AXTreeID& parent_tree_id,
-                             const ui::AXTreeID& screen_ai_tree_id);
+  void OnSemanticLayoutExtractionPerformed(
+      const ui::AXTreeID& parent_tree_id,
+      const ui::AXTreeID& screen_ai_tree_id);
 
   // mojom::ScreenAIAnnotatorClient:
   void HandleAXTreeUpdate(const ui::AXTreeUpdate& update) override;
@@ -73,15 +84,14 @@ class AXScreenAIAnnotator : public KeyedService,
 
   // AXScreenAIAnnotator is created by a factory on this browser context and
   // will be destroyed before browser context gets destroyed.
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
 
   mojo::Remote<mojom::ScreenAIAnnotator> screen_ai_annotator_;
   mojo::Receiver<mojom::ScreenAIAnnotatorClient> screen_ai_service_client_;
 
-  // A list of managers for accessibility trees that have been produced by the
-  // Screen AI Service after it has been requested to analyze an image, either
-  // by a browser or by a renderer process.
-  std::vector<ui::AXDummyTreeManager> tree_managers_;
+  // Holds the IDs of all the accessibility trees containing the results of the
+  // Screen AI Service that have been generated in this browser context.
+  std::vector<ui::AXTreeID> tree_ids_;
 
   base::WeakPtrFactory<AXScreenAIAnnotator> weak_ptr_factory_{this};
 };

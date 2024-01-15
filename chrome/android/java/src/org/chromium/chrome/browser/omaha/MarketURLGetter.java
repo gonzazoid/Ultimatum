@@ -6,8 +6,7 @@ package org.chromium.chrome.browser.omaha;
 
 import android.content.SharedPreferences;
 
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 
 /**
@@ -27,14 +26,14 @@ public class MarketURLGetter {
         return instance.getMarketUrlInternal();
     }
 
-    @VisibleForTesting
     static void setInstanceForTests(MarketURLGetter getter) {
         sInstanceForTests = getter;
+        ResettersForTesting.register(() -> sInstanceForTests = null);
     }
 
     private static MarketURLGetter sInstanceForTests;
 
-    protected MarketURLGetter() { }
+    protected MarketURLGetter() {}
 
     /** Returns the Play Store URL that points to Chrome. */
     protected String getMarketUrlInternal() {

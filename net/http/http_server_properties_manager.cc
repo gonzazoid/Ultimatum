@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/tick_clock.h"
@@ -18,6 +18,7 @@
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_address.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/port_util.h"
 #include "net/base/privacy_mode.h"
 #include "net/http/http_server_properties.h"
@@ -152,13 +153,13 @@ std::string QuicServerIdToString(const quic::QuicServerId& server_id) {
          (server_id.privacy_mode_enabled() ? "/private" : "");
 }
 
-// Takes in a base::Value::Dict, and whether NetworkIsolationKeys are enabled
-// for HttpServerProperties, and extracts the NetworkAnonymizationKey stored
-// with the |kNetworkAnonymizationKey| in the dictionary, and writes it to
-// |out_network_anonymization_key|. Returns false if unable to load a
+// Takes in a base::Value::Dict, and whether NetworkAnonymizationKeys are
+// enabled for HttpServerProperties, and extracts the NetworkAnonymizationKey
+// stored with the `kNetworkAnonymizationKey` in the dictionary, and writes it
+// to `out_network_anonymization_key`. Returns false if unable to load a
 // NetworkAnonymizationKey, or the NetworkAnonymizationKey is non-empty, but
-// |use_network_anonymization_key| is false.
-bool GetNetworkIsolationKeyFromDict(
+// `use_network_anonymization_key` is false.
+bool GetNetworkAnonymizationKeyFromDict(
     const base::Value::Dict& dict,
     bool use_network_anonymization_key,
     NetworkAnonymizationKey* out_network_anonymization_key) {
@@ -171,8 +172,8 @@ bool GetNetworkIsolationKeyFromDict(
     return false;
   }
 
-  // Fail if NetworkIsolationKeys are disabled, but the entry has a non-empty
-  // NetworkAnonymizationKey.
+  // Fail if NetworkAnonymizationKeys are disabled, but the entry has a
+  // non-empty NetworkAnonymizationKey.
   if (!use_network_anonymization_key && !network_anonymization_key.IsEmpty())
     return false;
 
@@ -230,9 +231,8 @@ void HttpServerPropertiesManager::ReadPrefs(
   const base::Value::Dict& http_server_properties_dict =
       pref_delegate_->GetServerProperties();
 
-  net_log_.AddEvent(NetLogEventType::HTTP_SERVER_PROPERTIES_UPDATE_CACHE, [&] {
-    return base::Value(http_server_properties_dict.Clone());
-  });
+  net_log_.AddEvent(NetLogEventType::HTTP_SERVER_PROPERTIES_UPDATE_CACHE,
+                    [&] { return http_server_properties_dict.Clone(); });
   absl::optional<int> maybe_version_number =
       http_server_properties_dict.FindInt(kVersionKey);
   if (!maybe_version_number.has_value() ||
@@ -270,8 +270,8 @@ void HttpServerPropertiesManager::ReadPrefs(
       std::make_unique<HttpServerProperties::QuicServerInfoMap>(
           max_server_configs_stored_in_properties_);
 
-  bool use_network_anonymization_key = base::FeatureList::IsEnabled(
-      features::kPartitionHttpServerPropertiesByNetworkIsolationKey);
+  bool use_network_anonymization_key =
+      NetworkAnonymizationKey::IsPartitioningEnabled();
 
   // Iterate `servers_list` (least-recently-used item is in the front) so that
   // entries are inserted into `server_info_map` from oldest to newest.
@@ -316,10 +316,6 @@ void HttpServerPropertiesManager::ReadPrefs(
 
   // Set the properties loaded from prefs on |http_server_properties_impl_|.
 
-  // TODO(mmenke): Rename this once more information is stored in this map.
-  UMA_HISTOGRAM_COUNTS_1M("Net.HttpServerProperties.CountOfServers",
-                          (*server_info_map)->size());
-
   UMA_HISTOGRAM_COUNTS_1000("Net.CountOfQuicServerInfos",
                             (*quic_server_info_map)->size());
 
@@ -346,9 +342,9 @@ void HttpServerPropertiesManager::AddToBrokenAlternativeServices(
   }
 
   NetworkAnonymizationKey network_anonymization_key;
-  if (!GetNetworkIsolationKeyFromDict(broken_alt_svc_entry_dict,
-                                      use_network_anonymization_key,
-                                      &network_anonymization_key)) {
+  if (!GetNetworkAnonymizationKeyFromDict(broken_alt_svc_entry_dict,
+                                          use_network_anonymization_key,
+                                          &network_anonymization_key)) {
     return;
   }
 
@@ -414,9 +410,9 @@ void HttpServerPropertiesManager::AddServerData(
   // Get server's scheme/host/pair.
   const std::string* server_str = server_dict.FindString(kServerKey);
   NetworkAnonymizationKey network_anonymization_key;
-  // Can't load entry if server name missing, or if the network isolation key is
-  // missing or invalid.
-  if (!server_str || !GetNetworkIsolationKeyFromDict(
+  // Can't load entry if server name missing, or if the network anonymization
+  // key is missing or invalid.
+  if (!server_str || !GetNetworkAnonymizationKeyFromDict(
                          server_dict, use_network_anonymization_key,
                          &network_anonymization_key)) {
     return;
@@ -666,9 +662,9 @@ void HttpServerPropertiesManager::AddToQuicServerInfoMap(
     }
 
     NetworkAnonymizationKey network_anonymization_key;
-    if (!GetNetworkIsolationKeyFromDict(*quic_server_info_dict,
-                                        use_network_anonymization_key,
-                                        &network_anonymization_key)) {
+    if (!GetNetworkAnonymizationKeyFromDict(*quic_server_info_dict,
+                                            use_network_anonymization_key,
+                                            &network_anonymization_key)) {
       DVLOG(1) << "Malformed http_server_properties quic server dict: "
                << *quic_server_id_str;
       continue;
@@ -765,9 +761,8 @@ void HttpServerPropertiesManager::WriteToPrefs(
       broken_alternative_service_list, kMaxBrokenAlternativeServicesToPersist,
       recently_broken_alternative_services, http_server_properties_dict);
 
-  net_log_.AddEvent(NetLogEventType::HTTP_SERVER_PROPERTIES_UPDATE_PREFS, [&] {
-    return base::Value(std::move(http_server_properties_dict));
-  });
+  net_log_.AddEvent(NetLogEventType::HTTP_SERVER_PROPERTIES_UPDATE_PREFS,
+                    [&] { return http_server_properties_dict.Clone(); });
 
   pref_delegate_->SetServerProperties(std::move(http_server_properties_dict),
                                       std::move(callback));
@@ -841,7 +836,7 @@ void HttpServerPropertiesManager::SaveQuicServerInfoMapToServerPrefs(
   base::Value::List quic_servers_list;
   for (const auto& [key, server_info] : base::Reversed(quic_server_info_map)) {
     base::Value network_anonymization_key_value;
-    // Don't save entries with ephemeral NIKs.
+    // Don't save entries with ephemeral NAKs.
     if (!key.network_anonymization_key.ToValue(
             &network_anonymization_key_value)) {
       continue;

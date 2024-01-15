@@ -19,11 +19,22 @@ class DefaultSecurityDelegate : public SecurityDelegate {
   ~DefaultSecurityDelegate() override = default;
 
   // SecurityDelegate:
-  std::string GetSecurityContext() const override { return ""; }
   bool CanLockPointer(aura::Window* toplevel) const override {
     // TODO(b/200896773): Move this out from exo's default security delegate
     // define in client's security delegates.
     return ash::IsArcWindow(toplevel) || ash::IsLacrosWindow(toplevel);
+  }
+
+  SetBoundsPolicy CanSetBounds(aura::Window* toplevel) const override {
+    // TODO(b/200896773): Move into LacrosSecurityDelegate when it exists.
+    if (ash::IsLacrosWindow(toplevel)) {
+      return SetBoundsPolicy::DCHECK_IF_DECORATED;
+    } else if (ash::IsArcWindow(toplevel)) {
+      // TODO(b/285252684): Move into ArcSecurityDelegate when it exists.
+      return SetBoundsPolicy::ADJUST_IF_DECORATED;
+    } else {
+      return SetBoundsPolicy::IGNORE;
+    }
   }
 };
 
@@ -48,6 +59,11 @@ bool SecurityDelegate::CanSelfActivate(aura::Window* window) const {
 
 bool SecurityDelegate::CanLockPointer(aura::Window* window) const {
   return false;
+}
+
+SecurityDelegate::SetBoundsPolicy SecurityDelegate::CanSetBounds(
+    aura::Window* window) const {
+  return SecurityDelegate::SetBoundsPolicy::IGNORE;
 }
 
 }  // namespace exo

@@ -5,11 +5,16 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_SCHEDULER_DOM_TASK_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SCHEDULER_DOM_TASK_H_
 
+#include <atomic>
+
 #include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/scheduler/task_attribution_id.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/probe/async_task_context.h"
 #include "third_party/blink/renderer/modules/scheduler/dom_scheduler.h"
+#include "third_party/blink/renderer/modules/scheduler/dom_task_signal.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 
@@ -24,34 +29,41 @@ class DOMTask final : public GarbageCollected<DOMTask> {
  public:
   DOMTask(ScriptPromiseResolver*,
           V8SchedulerPostTaskCallback*,
-          AbortSignal*,
+          AbortSignal* abort_source,
+          DOMTaskSignal* priority_source,
           DOMScheduler::DOMTaskQueue*,
           base::TimeDelta delay);
 
   virtual void Trace(Visitor*) const;
 
  private:
+  static uint64_t NextIdForTracing() {
+    static std::atomic<uint64_t> next_id(0);
+    return next_id.fetch_add(1, std::memory_order_relaxed);
+  }
+
   // Entry point for running this DOMTask's |callback_|.
   void Invoke();
   // Internal step of Invoke that handles invoking the callback, including
   // catching any errors and retrieving the result.
   void InvokeInternal(ScriptState*);
   void OnAbort();
-
-  void RecordTaskStartMetrics();
+  void RemoveAbortAlgorithm();
 
   TaskHandle task_handle_;
   Member<V8SchedulerPostTaskCallback> callback_;
   Member<ScriptPromiseResolver> resolver_;
   probe::AsyncTaskContext async_task_context_;
-  Member<AbortSignal> signal_;
+  Member<AbortSignal> abort_source_;
+  Member<DOMTaskSignal> priority_source_;
   Member<AbortSignal::AlgorithmHandle> abort_handle_;
   // Do not remove. For dynamic priority task queues, |task_queue_| ensures that
   // the associated WebSchedulingTaskQueue stays alive until after this task
   // runs, which is necessary to ensure throttling works correctly.
   Member<DOMScheduler::DOMTaskQueue> task_queue_;
-  const base::TimeTicks queue_time_;
   const base::TimeDelta delay_;
+  const uint64_t task_id_for_tracing_;
+  Member<scheduler::TaskAttributionInfo> parent_task_;
 };
 
 }  // namespace blink

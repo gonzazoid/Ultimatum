@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/platform_util.h"
@@ -67,7 +67,7 @@ GlobalErrorBubbleView::GlobalErrorBubbleView(
   WidgetDelegate::RegisterWindowClosingCallback(base::BindOnce(
       &GlobalErrorWithStandardBubble::BubbleViewDidClose, error_, browser));
 
-  SetDefaultButton(error_->GetDefaultDialogButton());
+  SetDefaultButton(ui::DIALOG_BUTTON_OK);
   SetButtons(!error_->GetBubbleViewCancelButtonLabel().empty()
                  ? (ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL)
                  : ui::DIALOG_BUTTON_OK);
@@ -131,5 +131,5 @@ void GlobalErrorBubbleView::CloseBubbleView() {
   GetWidget()->Close();
 }
 
-BEGIN_METADATA(GlobalErrorBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(GlobalErrorBubbleView)
 END_METADATA

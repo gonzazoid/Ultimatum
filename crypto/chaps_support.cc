@@ -8,7 +8,11 @@
 #include <secmod.h>
 #include <secmodt.h>
 
+#include <string_view>
+
 #include "base/logging.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/stack_allocated.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "crypto/scoped_nss_types.h"
 #include "nss_util_internal.h"
@@ -22,13 +26,18 @@ const char kChapsModuleName[] = "Chaps";
 const char kChapsPath[] = "libchaps.so";
 
 class ScopedChapsLoadFixup {
+  STACK_ALLOCATED();
+
  public:
   ScopedChapsLoadFixup();
   ~ScopedChapsLoadFixup();
 
  private:
 #if defined(COMPONENT_BUILD)
-  void* chaps_handle_;
+  // This field stores a handle and is not a pointer to PA memory.
+  // Also, this class is always stack-allocated and visibility is limited.
+  // Hence no benefit from using raw_ptr<void>.
+  RAW_PTR_EXCLUSION void* chaps_handle_;
 #endif
 };
 
@@ -102,13 +111,13 @@ ScopedPK11Slot GetChapsSlot(SECMODModule* chaps_module, CK_SLOT_ID slot_id) {
   return slot;
 }
 
-bool IsSlotProvidedByChaps(PK11SlotInfo* slot) {
-  if (!slot)
-    return false;
+bool IsChapsModule(SECMODModule* pk11_module) {
+  return pk11_module && std::string_view(pk11_module->commonName) ==
+                            std::string_view(kChapsModuleName);
+}
 
-  SECMODModule* pk11_module = PK11_GetModule(slot);
-  return pk11_module && base::StringPiece(pk11_module->commonName) ==
-                            base::StringPiece(kChapsModuleName);
+bool IsSlotProvidedByChaps(PK11SlotInfo* slot) {
+  return slot && IsChapsModule(PK11_GetModule(slot));
 }
 
 }  // namespace crypto

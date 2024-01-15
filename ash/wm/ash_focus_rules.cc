@@ -13,6 +13,7 @@
 #include "ash/wm/float/float_controller.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/overview/overview_session.h"
 #include "ash/wm/window_restore/window_restore_controller.h"
 #include "ash/wm/window_state.h"
 #include "base/containers/adapters.h"
@@ -95,12 +96,19 @@ bool AshFocusRules::IsWindowConsideredVisibleForActivation(
   if (window_state->IsMinimized())
     return true;
 
-  // Floated windows are hidden if they belong to inactive desks, but they can
-  // always be activated.
-  if (window_state->IsFloated() &&
-      shell->float_controller()->FindDeskOfFloatedWindow(window) !=
-          DesksController::Get()->active_desk()) {
-    return true;
+  if (window_state->IsFloated()) {
+    auto* float_controller = shell->float_controller();
+    // Floated windows are hidden if they belong to inactive desks, but they can
+    // always be activated.
+    if (float_controller->FindDeskOfFloatedWindow(window) !=
+        DesksController::Get()->active_desk()) {
+      return true;
+    }
+
+    // Tucked windows are hidden offscreen, but they can be activated.
+    if (float_controller->IsFloatedWindowTuckedForTablet(window)) {
+      return true;
+    }
   }
 
   if (!window->TargetVisibility())
@@ -172,7 +180,7 @@ aura::Window* AshFocusRules::GetNextActivatableWindow(
   // not yet active, so we need to check for the existence of the overview
   // controller.
   if (overview_controller && overview_controller->InOverviewSession() &&
-      overview_controller->overview_session()->IsTemplatesUiLosingActivation(
+      overview_controller->overview_session()->IsSavedDeskUiLosingActivation(
           ignore)) {
     starting_window =
         overview_controller->overview_session()->GetOverviewFocusWindow();
@@ -181,7 +189,7 @@ aura::Window* AshFocusRules::GetNextActivatableWindow(
   } else {
     MruWindowTracker* mru = Shell::Get()->mru_window_tracker();
     aura::Window::Windows windows = mru->BuildMruWindowList(kActiveDesk);
-    starting_window = windows.empty() ? ignore : windows[0];
+    starting_window = windows.empty() ? ignore : windows[0].get();
   }
   DCHECK(starting_window);
 
@@ -204,10 +212,10 @@ aura::Window* AshFocusRules::GetNextActivatableWindow(
 
   aura::Window* window = nullptr;
   for (int i = starting_container_index; !window && i < container_count; i++)
-    window = GetTopmostWindowToActivateForContainerIndex(i, ignore);
+    window = GetTopmostWindowToActivateForContainerIndex(i, ignore, root);
   if (!window && starting_container_index > 0) {
     for (int i = starting_container_index - 1; !window && i >= 0; i--)
-      window = GetTopmostWindowToActivateForContainerIndex(i, ignore);
+      window = GetTopmostWindowToActivateForContainerIndex(i, ignore, root);
   }
   return window;
 }
@@ -217,16 +225,19 @@ aura::Window* AshFocusRules::GetNextActivatableWindow(
 
 aura::Window* AshFocusRules::GetTopmostWindowToActivateForContainerIndex(
     int index,
-    aura::Window* ignore) const {
+    aura::Window* ignore,
+    aura::Window* priority_root) const {
   const int container_id = activatable_container_ids_[index];
   // Inactive desk containers should be ignored, since windows in them should
   // never be returned as a next activatable window.
   if (IsInactiveDeskContainerId(container_id))
     return nullptr;
   aura::Window* window = nullptr;
-  aura::Window* root = ignore ? ignore->GetRootWindow() : nullptr;
   aura::Window::Windows containers =
-      GetContainersForAllRootWindows(container_id, root);
+      GetContainersForAllRootWindows(container_id, priority_root);
+  // Favor the top-most window (if any) on `priority_root`, since
+  // `GetContainersForAllRootWindows()` will put the container belonging to
+  // `priority_root` first.
   for (aura::Window* container : containers) {
     window = GetTopmostWindowToActivateInContainer(container, ignore);
     if (window)

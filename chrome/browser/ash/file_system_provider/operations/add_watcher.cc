@@ -9,22 +9,19 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
-AddWatcher::AddWatcher(extensions::EventRouter* event_router,
+AddWatcher::AddWatcher(RequestDispatcher* dispatcher,
                        const ProvidedFileSystemInfo& file_system_info,
                        const base::FilePath& entry_path,
                        bool recursive,
                        storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       entry_path_(entry_path),
       recursive_(recursive),
       callback_(std::move(callback)) {}
 
-AddWatcher::~AddWatcher() {
-}
+AddWatcher::~AddWatcher() = default;
 
 bool AddWatcher::Execute(int request_id) {
   using extensions::api::file_system_provider::AddWatcherRequestedOptions;
@@ -44,19 +41,17 @@ bool AddWatcher::Execute(int request_id) {
 }
 
 void AddWatcher::OnSuccess(int /* request_id */,
-                           std::unique_ptr<RequestValue> /* result */,
+                           const RequestValue& /* result */,
                            bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void AddWatcher::OnError(int /* request_id */,
-                         std::unique_ptr<RequestValue> /* result */,
+                         const RequestValue& /* result */,
                          base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

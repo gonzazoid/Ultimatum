@@ -43,9 +43,7 @@ SVGFEImageElement::SVGFEImageElement(Document& document)
       preserve_aspect_ratio_(
           MakeGarbageCollected<SVGAnimatedPreserveAspectRatio>(
               this,
-              svg_names::kPreserveAspectRatioAttr)) {
-  AddToPropertyMap(preserve_aspect_ratio_);
-}
+              svg_names::kPreserveAspectRatioAttr)) {}
 
 SVGFEImageElement::~SVGFEImageElement() = default;
 
@@ -183,6 +181,29 @@ FilterEffect* SVGFEImageElement::Build(SVGFilterBuilder*, Filter* filter) {
 bool SVGFEImageElement::TaintsOrigin() const {
   // We always consider a 'href' that references a local element as tainting.
   return !cached_image_ || !cached_image_->IsAccessAllowed();
+}
+
+SVGAnimatedPropertyBase* SVGFEImageElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kPreserveAspectRatioAttr) {
+    return preserve_aspect_ratio_.Get();
+  } else {
+    SVGAnimatedPropertyBase* ret =
+        SVGURIReference::PropertyFromAttribute(attribute_name);
+    if (ret) {
+      return ret;
+    } else {
+      return SVGFilterPrimitiveStandardAttributes::PropertyFromAttribute(
+          attribute_name);
+    }
+  }
+}
+
+void SVGFEImageElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{preserve_aspect_ratio_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGURIReference::SynchronizeAllSVGAttributes();
+  SVGFilterPrimitiveStandardAttributes::SynchronizeAllSVGAttributes();
 }
 
 }  // namespace blink

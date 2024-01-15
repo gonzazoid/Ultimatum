@@ -65,7 +65,9 @@ class ClientSideDetectionHost : public content::WebContentsObserver {
                                   GURL current_url,
                                   const content::GlobalRenderFrameHostId&
                                       current_outermost_main_frame_id) = 0;
-    virtual raw_ptr<VerdictCacheManager> GetCacheManager() = 0;
+    virtual VerdictCacheManager* GetCacheManager() = 0;
+    // Returns the management status for current profile.
+    virtual ChromeUserPopulation GetUserPopulation() = 0;
   };
 
   // The caller keeps ownership of the tab object and is responsible for
@@ -90,8 +92,7 @@ class ClientSideDetectionHost : public content::WebContentsObserver {
   // From content::WebContentsObserver.  If we navigate away we cancel all
   // pending callbacks that could show an interstitial, and check to see whether
   // we should classify the new URL.
-  void DidFinishNavigation(
-      content::NavigationHandle* navigation_handle) override;
+  void PrimaryPageChanged(content::Page& page) override;
 
  protected:
   explicit ClientSideDetectionHost(
@@ -110,8 +111,6 @@ class ClientSideDetectionHost : public content::WebContentsObserver {
   friend class ClientSideDetectionHostTestBase;
   class ShouldClassifyUrlRequest;
   friend class ShouldClassifyUrlRequest;
-  FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionHostBrowserTest,
-                           VerifyVisualFeatureCollection);
   FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionHostPrerenderBrowserTest,
                            PrerenderShouldNotAffectClientSideDetection);
   FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionHostPrerenderBrowserTest,
@@ -125,6 +124,19 @@ class ClientSideDetectionHost : public content::WebContentsObserver {
   // is the outcome of the renderer classification.
   void PhishingDetectionDone(mojom::PhishingDetectorResult result,
                              const std::string& verdict);
+
+  // |verdict| is an object parsed from the serialized string passed into
+  // |PhishingDetectionDone|.
+  void MaybeSendClientPhishingRequest(
+      std::unique_ptr<ClientPhishingRequest> verdict);
+
+  // |verdict| is an encoded ClientPhishingRequest protocol message, |result| is
+  // the outcome of the renderer image embedding. The verdict is passed into
+  // this function after the renderer classification is finished.
+  void PhishingImageEmbeddingDone(
+      std::unique_ptr<ClientPhishingRequest> verdict,
+      mojom::PhishingImageEmbeddingResult result,
+      const std::string& image_feature_embedding_string);
 
   // Callback that is called when the server ping back is
   // done. Display an interstitial if |is_phishing| is true.
@@ -213,6 +225,10 @@ class ClientSideDetectionHost : public content::WebContentsObserver {
 
   // The remote for the currently active phishing classification.
   mojo::AssociatedRemote<mojom::PhishingDetector> phishing_detector_;
+
+  // The remote for the currently active phishing image embedder.
+  mojo::AssociatedRemote<mojom::PhishingImageEmbedderDetector>
+      phishing_image_embedder_;
 
   base::WeakPtrFactory<ClientSideDetectionHost> weak_factory_{this};
 };

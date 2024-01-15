@@ -79,7 +79,7 @@ void HeadlessWindowTreeHost::SetCapture() {}
 void HeadlessWindowTreeHost::ReleaseCapture() {}
 
 bool HeadlessWindowTreeHost::CaptureSystemKeyEventsImpl(
-    absl::optional<base::flat_set<ui::DomCode>> codes) {
+    std::optional<base::flat_set<ui::DomCode>> codes) {
   return false;
 }
 
@@ -104,7 +104,8 @@ void HeadlessWindowTreeHost::OnCursorVisibilityChangedNative(bool show) {}
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 std::string HeadlessWindowTreeHost::GetUniqueId() const {
-  NOTIMPLEMENTED_LOG_ONCE() << "Headless does not have a unique ID";
+  // Headless does not have a unique ID
+  NOTIMPLEMENTED_LOG_ONCE();
   return std::string();
 }
 #endif

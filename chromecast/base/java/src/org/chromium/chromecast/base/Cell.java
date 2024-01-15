@@ -4,12 +4,11 @@
 
 package org.chromium.chromecast.base;
 
-import org.chromium.base.Function;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * An Observable with exactly one activation at a time, which provides a way to mutate the
@@ -21,7 +20,7 @@ import java.util.Map;
  *
  * @param <T> The type of the activation data.
  */
-public class Cell<T> extends Observable<T> {
+public class Cell<T> implements Observable<T> {
     private final Sequencer mSequencer = new Sequencer();
     private final List<Observer<? super T>> mObservers = new ArrayList<>();
     private final Map<Observer<? super T>, Scope> mScopeMap = new HashMap<>();
@@ -33,7 +32,7 @@ public class Cell<T> extends Observable<T> {
     }
 
     @Override
-    public Subscription subscribe(Observer<? super T> observer) {
+    public Scope subscribe(Observer<? super T> observer) {
         mSequencer.sequence(() -> {
             mObservers.add(observer);
             notifyEnter(observer);

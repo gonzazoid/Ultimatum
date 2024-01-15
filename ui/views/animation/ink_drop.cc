@@ -7,12 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/animation/ink_drop_observer.h"
 
@@ -42,8 +42,9 @@ std::unique_ptr<InkDrop> CreateInkDropImpl(
 
 InkDrop::~InkDrop() = default;
 
-void InkDrop::Install(View* host, std::unique_ptr<InkDropHost> ink_drop) {
-  host->SetProperty(kInkDropKey, std::move(ink_drop));
+InkDropHost* InkDrop::Install(View* host,
+                              std::unique_ptr<InkDropHost> ink_drop) {
+  return host->SetProperty(kInkDropKey, std::move(ink_drop));
 }
 
 void InkDrop::Remove(View* host) {
@@ -57,33 +58,43 @@ const InkDropHost* InkDrop::Get(const View* host) {
 std::unique_ptr<InkDrop> InkDrop::CreateInkDropForSquareRipple(
     InkDropHost* host,
     bool highlight_on_hover,
-    bool highlight_on_focus) {
-  return CreateInkDropImpl(host, InkDropImpl::AutoHighlightMode::HIDE_ON_RIPPLE,
+    bool highlight_on_focus,
+    bool show_highlight_on_ripple) {
+  return CreateInkDropImpl(host,
+                           show_highlight_on_ripple
+                               ? InkDropImpl::AutoHighlightMode::SHOW_ON_RIPPLE
+                               : InkDropImpl::AutoHighlightMode::HIDE_ON_RIPPLE,
                            highlight_on_hover, highlight_on_focus);
 }
 
 void InkDrop::UseInkDropForSquareRipple(InkDropHost* host,
                                         bool highlight_on_hover,
-                                        bool highlight_on_focus) {
-  host->SetCreateInkDropCallback(
-      base::BindRepeating(&InkDrop::CreateInkDropForSquareRipple, host,
-                          highlight_on_hover, highlight_on_focus));
+                                        bool highlight_on_focus,
+                                        bool show_highlight_on_ripple) {
+  host->SetCreateInkDropCallback(base::BindRepeating(
+      &InkDrop::CreateInkDropForSquareRipple, host, highlight_on_hover,
+      highlight_on_focus, show_highlight_on_ripple));
 }
 
 std::unique_ptr<InkDrop> InkDrop::CreateInkDropForFloodFillRipple(
     InkDropHost* host,
     bool highlight_on_hover,
-    bool highlight_on_focus) {
-  return CreateInkDropImpl(host, InkDropImpl::AutoHighlightMode::SHOW_ON_RIPPLE,
+    bool highlight_on_focus,
+    bool show_highlight_on_ripple) {
+  return CreateInkDropImpl(host,
+                           show_highlight_on_ripple
+                               ? InkDropImpl::AutoHighlightMode::SHOW_ON_RIPPLE
+                               : InkDropImpl::AutoHighlightMode::HIDE_ON_RIPPLE,
                            highlight_on_hover, highlight_on_focus);
 }
 
 void InkDrop::UseInkDropForFloodFillRipple(InkDropHost* host,
                                            bool highlight_on_hover,
-                                           bool highlight_on_focus) {
-  host->SetCreateInkDropCallback(
-      base::BindRepeating(&InkDrop::CreateInkDropForFloodFillRipple, host,
-                          highlight_on_hover, highlight_on_focus));
+                                           bool highlight_on_focus,
+                                           bool show_highlight_on_ripple) {
+  host->SetCreateInkDropCallback(base::BindRepeating(
+      &InkDrop::CreateInkDropForFloodFillRipple, host, highlight_on_hover,
+      highlight_on_focus, show_highlight_on_ripple));
 }
 
 std::unique_ptr<InkDrop> InkDrop::CreateInkDropWithoutAutoHighlight(
@@ -129,7 +140,7 @@ InkDropContainerView::InkDropContainerView() {
   SetCanProcessEventsWithinSubtree(false);
 }
 
-BEGIN_METADATA(InkDropContainerView, views::View)
+BEGIN_METADATA(InkDropContainerView)
 END_METADATA
 
 }  // namespace views

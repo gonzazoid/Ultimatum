@@ -16,7 +16,7 @@ preprocess_if_expr("preprocess_ts") {
 ts_library("build") {
   root_dir = "$target_gen_dir/$preprocess_folder"
   in_files = [ "local_state.ts" ]
-  deps = [ "//ui/webui/resources:library" ]
+  deps = [ "//ui/webui/resources/js:build_ts" ]
   extra_deps = [ ":preprocess_ts" ]
 }
 
@@ -25,9 +25,11 @@ source_set("local_state") {
     "local_state_utils.cc",
     "local_state_utils.h",
   ]
+  public_deps = [ "//third_party/abseil-cpp:absl" ]
   deps = [
     "//base",
     "//components/prefs",
+    "//extensions/buildflags",
   ]
 }
 
@@ -38,6 +40,9 @@ source_set("unit_tests") {
   deps = [
     ":local_state",
     "//base",
+    "//components/prefs:prefs",
+    "//components/prefs:test_support",
+    "//extensions/buildflags",
     "//testing/gtest",
   ]
 }

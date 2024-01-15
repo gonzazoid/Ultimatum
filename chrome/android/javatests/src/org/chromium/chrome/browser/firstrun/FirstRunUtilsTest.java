@@ -5,8 +5,8 @@
 package org.chromium.chrome.browser.firstrun;
 
 import android.accounts.AuthenticatorDescription;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -30,9 +30,7 @@ import org.chromium.components.signin.test.util.FakeAccountManagerDelegate;
 import org.chromium.content_public.browser.test.NativeLibraryTestUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
-/**
- * Unit Test for {@link FirstRunUtils}.
- */
+/** Unit Test for {@link FirstRunUtils}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.UNIT_TESTS)
 public class FirstRunUtilsTest {
@@ -49,7 +47,7 @@ public class FirstRunUtilsTest {
         // GetInstrumentation().getTargetContext() cannot be called in
         // constructor due to external dependencies.
         mAccountTestingContext =
-                new AdvancedMockContext(InstrumentationRegistry.getTargetContext());
+                new AdvancedMockContext(ApplicationProvider.getApplicationContext());
     }
 
     @After
@@ -76,10 +74,11 @@ public class FirstRunUtilsTest {
 
     private void setUpAccountManager(String accountType) {
         mAccountManager = new FakeAuthenticationAccountManager(accountType);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            AccountManagerFacadeProvider.setInstanceForTests(
-                    new AccountManagerFacadeImpl(mAccountManager));
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    AccountManagerFacadeProvider.setInstanceForTests(
+                            new AccountManagerFacadeImpl(mAccountManager));
+                });
     }
 
     private void addTestAccount() {
@@ -110,7 +109,9 @@ public class FirstRunUtilsTest {
 
         ContextUtils.initApplicationContextForTests(mAccountTestingContext);
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { Assert.assertFalse(FirstRunUtils.hasGoogleAccounts()); });
+                () -> {
+                    Assert.assertFalse(FirstRunUtils.hasGoogleAccounts());
+                });
         Assert.assertFalse(FirstRunUtils.hasGoogleAccountAuthenticator());
     }
 }

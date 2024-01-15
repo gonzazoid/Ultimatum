@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addEntries, ENTRIES, EntryType, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
+import {addEntries, ENTRIES, EntryType, getCaller, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {navigateWithDirectoryTree, openNewWindow, remoteCall} from './background.js';
+import {openNewWindow, remoteCall} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 
 /**
  * Info for the source or destination of a transfer.
@@ -53,9 +54,8 @@ class TransferInfo {
    * @param{{
          source: !TransferLocationInfo,
          destination: !TransferLocationInfo,
-         expectedDialogText: string,
          isMove: boolean,
-         expectFailure: boolean,
+         proceedOnWarning: boolean,
      }} opts Options for creating TransferInfo.
    */
   constructor(opts) {
@@ -79,10 +79,10 @@ class TransferInfo {
     this.isMove = opts.isMove || false;
 
     /**
-     * Whether the test is expected to fail, i.e. transferring blocked files.
+     * Whether to proceed a potential warning or cancel the transfer.
      * @type {!boolean}
      */
-    this.expectFailure = opts.expectFailure || false;
+    this.proceedOnWarning = opts.proceedOnWarning || false;
   }
 }
 
@@ -122,6 +122,59 @@ const CONNECTOR_ENTRIES_FLAT = [
     mimeType: 'image/jpeg',
     lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
     nameText: 'c_allowed.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+];
+
+/**
+ * Flat connector entry test set that does not include any directories.
+ *
+ * If a file should be blocked, name it "*blocked*".
+ * If a file should be warned, name it "*warned*".
+ * If a file is allowed, name it "*allowed*".
+ */
+const CONNECTOR_ENTRIES_FLAT_WARNED = [
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'a_allowed.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'a_allowed.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'b_blocked.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'b_blocked.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'c_warned.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'c_warned.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'd_allowed.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'd_allowed.jpg',
     sizeText: '886 bytes',
     typeText: 'JPEG image',
   }),
@@ -194,6 +247,119 @@ const CONNECTOR_ENTRIES_DEEP = [
     sizeText: '886 bytes',
     typeText: 'JPEG image',
   }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/C/k_blocked.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'k_blocked.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+];
+
+/**
+ * Test set to test deep scanninng, contains nested directories.
+ *
+ * If a file should be blocked, name it "*blocked*".
+ * If a file is allowed, name it "*allowed*".
+ * If a directory only contains allowed files, name it "*allowed*".
+ */
+const CONNECTOR_ENTRIES_DEEP_WARNED = [
+  new TestEntryInfo({
+    type: EntryType.DIRECTORY,
+    targetPath: 'A',
+    lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
+    nameText: 'A',
+    sizeText: '--',
+    typeText: 'Folder',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.DIRECTORY,
+    targetPath: 'A/B_allowed',
+    lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
+    nameText: 'B_allowed',
+    sizeText: '--',
+    typeText: 'Folder',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.DIRECTORY,
+    targetPath: 'A/C',
+    lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
+    nameText: 'C',
+    sizeText: '--',
+    typeText: 'Folder',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/B_allowed/g_allowed.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'g_allowed.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/B_allowed/h_warned.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'h_warned.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/C/i_blocked.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'i_blocked.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/C/j_allowed.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'j_allowed.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/C/k_blocked.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'k_blocked.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
+
+  new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'A/C/l_warned.jpg',
+    sourceFileName: 'small.jpg',
+    mimeType: 'image/jpeg',
+    lastModifiedTime: 'Jan 18, 2038, 1:02 AM',
+    nameText: 'l_warned.jpg',
+    sizeText: '886 bytes',
+    typeText: 'JPEG image',
+  }),
 ];
 
 /**
@@ -249,13 +415,21 @@ Object.freeze(TRANSFER_LOCATIONS);
 
 // TODO(crbug.com/1361898): Remove these ones proper error details are
 // displayed.
-const COPY_FAIL_MESSAGE =
+const OLD_COPY_FAIL_MESSAGE =
     'Copy operation failed. The file could not be accessed ' +
     'for security reasons.';
-const MOVE_FAIL_DIRECTORY_MESSAGE =
-    `Move failed. The file could not be modified.`;
-const MOVE_FAIL_FILE_MESSAGE = 'Move failed. The file could not be accessed ' +
+const OLD_MOVE_FAIL_DIRECTORY_MESSAGE =
+    `Can't move file. The file could not be modified.`;
+const OLD_MOVE_FAIL_FILE_MESSAGE =
+    `Can't move file. The file could not be accessed ` +
     'for security reasons.';
+
+const NEW_COPY_FAIL_MESSAGE = 'File blocked from copying';
+const NEW_MOVE_FAIL_MESSAGE = `File blocked from moving`;
+const TWO_FILES_COPY_FAIL_MESSAGE = '2 files blocked from copying';
+const TWO_FILES_MOVE_FAIL_MESSAGE = '2 files blocked from moving';
+const SINGLE_FILE_WARN_MESSAGE = 'c_warned.jpg may contain sensitive content';
+const TWO_FILES_WARN_MESSAGE = '2 files may contain sensitive content';
 
 /**
  * Opens a Files app's main window and creates the source and destination
@@ -292,7 +466,7 @@ async function setupForFileTransferConnector(
 function getCurrentEntries(entries, directory) {
   return entries.filter(entry => {
     const parent = entry.targetPath.split('/').slice(0, -1);
-    return parent.length == directory.length &&
+    return parent.length === directory.length &&
         parent.every((value, index) => value === directory[index]);
   });
 }
@@ -317,20 +491,21 @@ async function verifyDirectoryRecursively(
       {ignoreLastModifiedTime: true});
 
   // 2. For each subdirectory: enter subdirectory and call recursion.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
   for (const entry of currentEntries.filter(
            entry => entry.type === EntryType.DIRECTORY)) {
     currentSubDirectory.push(entry.nameText);
-    await navigateWithDirectoryTree(
-        appId, rootDirectory + '/' + currentSubDirectory.join('/'));
+    await directoryTree.navigateToPath(
+        rootDirectory + '/' + currentSubDirectory.join('/'));
     await verifyDirectoryRecursively(
         appId, expectedEntries, rootDirectory, currentSubDirectory);
     currentSubDirectory.pop();
   }
 
   // 3. After the recursion ends, navigate back to the root directory.
-  if (currentSubDirectory.length == 0) {
+  if (currentSubDirectory.length === 0) {
     // Go back to the root directory.
-    await navigateWithDirectoryTree(appId, rootDirectory);
+    await directoryTree.navigateToPath(rootDirectory);
   }
 }
 
@@ -356,15 +531,45 @@ async function showAllPlayFiles(appId) {
 }
 
 /**
+ * Checks that the panel item's primary and secondary buttons have expected type
+ * and text, and then clicks the button defined by selectedButton.
+ * @param {string} appId ID of the Files app window.
+ * @param {string} secondaryButtonCategory Expected secondary button category
+ *     (dismiss or cancel).
+ * @param {string} selectedButton The button to click (primary or secondary).
+ */
+async function verifyPanelButtonsAndClick(
+    appId, secondaryButtonCategory, selectedButton) {
+  const primaryButton = await remoteCall.waitForElement(
+      appId, ['#progress-panel', 'xf-panel-item', 'xf-button#primary-action']);
+  chrome.test.assertEq(
+      'extra-button', primaryButton.attributes['data-category']);
+
+  const secondaryButton = await remoteCall.waitForElement(
+      appId,
+      ['#progress-panel', 'xf-panel-item', 'xf-button#secondary-action']);
+  chrome.test.assertEq(
+      secondaryButtonCategory, secondaryButton.attributes['data-category']);
+
+  await remoteCall.waitAndClickElement(appId, [
+    '#progress-panel',
+    'xf-panel-item',
+    `xf-button#${selectedButton}-action`,
+  ]);
+}
+
+/**
  * Test function to copy from the specified source to the specified destination.
  * @param {!TransferInfo} transferInfo Options for the transfer.
  * @param {!Array<!TestEntryInfo>} entryTestSet The set of file and directory
  *     entries to be used for the test.
  * @param {string} expectedFinalMsg The final message to expect at the progress
  *     center.
+ * @param {string} expectedWarnMsg The warning message to expect at the progress
+ *     center.
  */
 async function transferBetweenVolumes(
-    transferInfo, entryTestSet, expectedFinalMsg) {
+    transferInfo, entryTestSet, expectedFinalMsg, expectedWarnMsg = '') {
   // Setup volumes
   if (transferInfo.source.volumeName === 'usb' ||
       transferInfo.destination.volumeName === 'usb') {
@@ -414,7 +619,8 @@ async function transferBetweenVolumes(
       transferInfo, entryTestSet, [ENTRIES.hello]);
 
   // Select the source folder.
-  await navigateWithDirectoryTree(appId, transferInfo.source.breadcrumbsPath);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(transferInfo.source.breadcrumbsPath);
 
   if (transferInfo.source.volumeName === 'android_files') {
     await showAllPlayFiles(appId);
@@ -441,8 +647,7 @@ async function transferBetweenVolumes(
       'execCommand', appId, [transferCommand]));
 
   // Select the destination folder.
-  await navigateWithDirectoryTree(
-      appId, transferInfo.destination.breadcrumbsPath);
+  await directoryTree.navigateToPath(transferInfo.destination.breadcrumbsPath);
 
   // Wait for the initially expected files to appear in the file list.
   // This is before the actual copy!
@@ -460,7 +665,7 @@ async function transferBetweenVolumes(
     await verifyAfterPasteReportOnly(appId, transferInfo, entryTestSet);
   } else {
     await verifyAfterPasteBlocking(
-        appId, transferInfo, entryTestSet, expectedFinalMsg);
+        appId, transferInfo, entryTestSet, expectedFinalMsg, expectedWarnMsg);
   }
 }
 
@@ -473,35 +678,102 @@ async function transferBetweenVolumes(
  *     entries to be used for the test.
  * @param {string} expectedFinalMsg The final message to expect at the progress
  *     center.
+ * @param {string} expectedWarnMsg The warning message to expect at the progress
+ *     center.
  */
 async function verifyAfterPasteBlocking(
-    appId, transferInfo, entryTestSet, expectedFinalMsg) {
+    appId, transferInfo, entryTestSet, expectedFinalMsg, expectedWarnMsg) {
   // Check that a scanning label is shown.
   const caller = getCaller();
-  await repeatUntil(async () => {
-    const element = await remoteCall.waitForElement(
-        appId, ['#progress-panel', 'xf-panel-item']);
 
-    const actualPrimaryText = element.attributes['primary-text'];
-    const actualSecondaryText = element.attributes['secondary-text'];
-
-    const expectedPrimaryTextPart = transferInfo.isMove ? 'Moving' : 'Copying';
-    const expectedSecondaryText = 'Scanning';
-    if (actualPrimaryText.includes(expectedPrimaryTextPart) &&
-        actualSecondaryText === expectedSecondaryText) {
-      return;
-    }
-
-    return pending(
-        caller,
-        `Expected feedback panel msg: "${expectedPrimaryTextPart}... - ${
-            expectedSecondaryText}", got "${actualPrimaryText} - ${
-            actualSecondaryText}"`);
-  });
+  await remoteCall.waitForFeedbackPanelItem(
+      appId,
+      transferInfo.isMove ? new RegExp('^Moving.*$') :
+                            new RegExp('^Copying.*$'),
+      new RegExp('^Checking.*$'));
 
   // After the scanning label is shown, we resume the transfer.
   // Issue the responses, s.t., the transfer can continue.
   await sendTestMessage({name: 'issueFileTransferResponses'});
+
+  const usesNewFileTransferConnectorUI =
+      await sendTestMessage({name: 'usesNewFileTransferConnectorUI'}) ===
+      'true';
+
+  const expectedNumberOfWarnedFilesByConnectors = await sendTestMessage(
+      {name: 'getExpectedNumberOfWarnedFilesByConnectors'});
+
+  const bypassRequireJustification =
+      await sendTestMessage({name: 'doesBypassRequireJustification'}) ===
+      'true';
+
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+
+  if (usesNewFileTransferConnectorUI &&
+      expectedNumberOfWarnedFilesByConnectors > 0) {
+    // Check that the warning appears in the feedback panel.
+    await remoteCall.waitForFeedbackPanelItem(
+        appId,
+        transferInfo.isMove ? new RegExp('^Review is required before moving$') :
+                              new RegExp('^Review is required before copying$'),
+        new RegExp(`^${expectedWarnMsg}$`));
+
+    if (transferInfo.proceedOnWarning) {
+      // Expect warning proceeded messages.
+      await sendTestMessage({
+        name: 'expectFileTransferReports',
+        source_volume: transferInfo.source.enterpriseConnectorsVolumeIdentifier,
+        destination_volume:
+            transferInfo.destination.enterpriseConnectorsVolumeIdentifier,
+        entry_paths: entryTestSet.filter(entry => entry.type === EntryType.FILE)
+                         .map(entry => entry.targetPath),
+        expect_proceed_warning_reports: true,
+      });
+
+      // Proceed the warning (single file warning without user justification
+      // required) / open the warning dialog (multiple file warning or user
+      // justification required).
+      await verifyPanelButtonsAndClick(appId, 'cancel', 'primary');
+
+      if (expectedNumberOfWarnedFilesByConnectors > 1 ||
+          bypassRequireJustification) {
+        await sendTestMessage({
+          name: 'verifyFileTransferWarningDialogAndProceed',
+          app_id: appId,
+        });
+      }
+    } else {
+      // Cancel the warning by pressing on the secondary button.
+      await verifyPanelButtonsAndClick(appId, 'cancel', 'secondary');
+
+      // Wait 500ms to ensure files aren't moved.
+      await new Promise(r => setTimeout(r, 500));
+
+      // Ensure progress panel item is gone.
+      await remoteCall.waitForElementLost(
+          appId, ['#progress-panel', 'xf-panel-item']);
+
+      // Wait for the expected files to appear in the file list.
+
+      // No file should be transferred, so there should be no new file at the
+      // destination.
+      const expectedEntries = [ENTRIES.hello];
+      await verifyDirectoryRecursively(
+          appId, expectedEntries, transferInfo.destination.breadcrumbsPath);
+
+      // All files should still exist at the destination.
+      await directoryTree.navigateToPath(transferInfo.source.breadcrumbsPath);
+      const expectedSourceEntries = entryTestSet;
+      // Wait for the expected files to appear in the file list.
+      await verifyDirectoryRecursively(
+          appId, expectedSourceEntries, transferInfo.source.breadcrumbsPath);
+
+      // If the warning is cancelled, the transfer is also cancelled, so do not
+      // perform any further checks, as there will be no further notifications,
+      // etc.
+      return;
+    }
+  }
 
   // Wait for the expected files to appear in the file list.
   // Files marked as 'blocked' should not appear.
@@ -512,7 +784,7 @@ async function verifyAfterPasteBlocking(
       appId, expectedEntries, transferInfo.destination.breadcrumbsPath);
 
   // Verify contents of the source directory.
-  await navigateWithDirectoryTree(appId, transferInfo.source.breadcrumbsPath);
+  await directoryTree.navigateToPath(transferInfo.source.breadcrumbsPath);
   let expectedSourceEntries = entryTestSet;
   if (transferInfo.isMove) {
     // For a move, paths that include "allowed" should not be present at the
@@ -525,26 +797,32 @@ async function verifyAfterPasteBlocking(
       appId, expectedSourceEntries, transferInfo.source.breadcrumbsPath);
 
   // Check that the error appears in the feedback panel.
-  // TODO(crbug.com/1361898): Adapt this check for proper error details.
-  let element = {};
-  await repeatUntil(async () => {
-    element = await remoteCall.waitForElement(
-        appId, ['#progress-panel', 'xf-panel-item']);
+  const expectedNumberOfBlockedFilesByConnectors = await sendTestMessage(
+      {name: 'getExpectedNumberOfBlockedFilesByConnectors'});
+  if (usesNewFileTransferConnectorUI &&
+      expectedNumberOfBlockedFilesByConnectors > 1) {
+    // There should be a review button if there are at least two errors.
+    await remoteCall.waitForFeedbackPanelItem(
+        appId, new RegExp(`^${expectedFinalMsg}$`),
+        new RegExp('^Review for further details$'));
 
-    const actualMsg = element.attributes['primary-text'];
+    await verifyPanelButtonsAndClick(appId, 'dismiss', 'primary');
+    await sendTestMessage({
+      name: 'verifyFileTransferErrorDialogAndDismiss',
+      app_id: appId,
+    });
+  } else if (usesNewFileTransferConnectorUI) {
+    // For a single file error, this should show an error reason as secondary
+    // text.
+    await remoteCall.waitForFeedbackPanelItem(
+        appId, new RegExp(`^${expectedFinalMsg}$`),
+        new RegExp('was blocked because of content$'));
 
-    if (actualMsg === expectedFinalMsg) {
-      return;
-    }
-
-    return pending(
-        caller,
-        `Expected feedback panel msg: "${expectedFinalMsg}", got "${
-            actualMsg}"`);
-  });
-
-  // Check that only one line of text is shown.
-  chrome.test.assertFalse(!!element.attributes['secondary-text']);
+  } else {
+    // Check that only one line of text is shown.
+    await remoteCall.waitForFeedbackPanelItem(
+        appId, new RegExp(`^${expectedFinalMsg}$`), new RegExp(`^$`));
+  }
 }
 
 /**
@@ -565,7 +843,8 @@ async function verifyAfterPasteReportOnly(appId, transferInfo, entryTestSet) {
       appId, expectedEntries, transferInfo.destination.breadcrumbsPath);
 
   // Verify contents of the source directory.
-  await navigateWithDirectoryTree(appId, transferInfo.source.breadcrumbsPath);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(transferInfo.source.breadcrumbsPath);
   let expectedSourceEntries = entryTestSet;
   if (transferInfo.isMove) {
     // For a move, the source directory should be empty.
@@ -599,7 +878,7 @@ testcase.transferConnectorFromAndroidFilesToDownloadsDeep = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 testcase.transferConnectorFromAndroidFilesToDownloadsFlat = () => {
@@ -609,7 +888,7 @@ testcase.transferConnectorFromAndroidFilesToDownloadsFlat = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 
@@ -623,7 +902,7 @@ testcase.transferConnectorFromCrostiniToDownloadsDeep = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 testcase.transferConnectorFromCrostiniToDownloadsFlat = () => {
@@ -633,7 +912,7 @@ testcase.transferConnectorFromCrostiniToDownloadsFlat = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 
@@ -647,7 +926,7 @@ testcase.transferConnectorFromDriveToDownloadsDeep = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 testcase.transferConnectorFromDriveToDownloadsFlat = () => {
@@ -657,7 +936,7 @@ testcase.transferConnectorFromDriveToDownloadsFlat = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 
@@ -672,7 +951,7 @@ testcase.transferConnectorFromDriveToDownloadsMoveDeep = () => {
         isMove: true,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      MOVE_FAIL_DIRECTORY_MESSAGE,
+      OLD_MOVE_FAIL_DIRECTORY_MESSAGE,
   );
 };
 testcase.transferConnectorFromDriveToDownloadsMoveFlat = () => {
@@ -683,7 +962,7 @@ testcase.transferConnectorFromDriveToDownloadsMoveFlat = () => {
         isMove: true,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      MOVE_FAIL_FILE_MESSAGE,
+      OLD_MOVE_FAIL_FILE_MESSAGE,
   );
 };
 
@@ -697,7 +976,7 @@ testcase.transferConnectorFromMtpToDownloadsDeep = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 testcase.transferConnectorFromMtpToDownloadsFlat = () => {
@@ -707,7 +986,7 @@ testcase.transferConnectorFromMtpToDownloadsFlat = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 
@@ -721,7 +1000,7 @@ testcase.transferConnectorFromSmbfsToDownloadsDeep = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 testcase.transferConnectorFromSmbfsToDownloadsFlat = () => {
@@ -731,7 +1010,7 @@ testcase.transferConnectorFromSmbfsToDownloadsFlat = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 
@@ -745,7 +1024,7 @@ testcase.transferConnectorFromUsbToDownloadsDeep = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_DEEP,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
   );
 };
 testcase.transferConnectorFromUsbToDownloadsFlat = () => {
@@ -755,6 +1034,128 @@ testcase.transferConnectorFromUsbToDownloadsFlat = () => {
         destination: TRANSFER_LOCATIONS.downloads,
       }),
       CONNECTOR_ENTRIES_FLAT,
-      COPY_FAIL_MESSAGE,
+      OLD_COPY_FAIL_MESSAGE,
+  );
+};
+
+/**
+ * Tests for new UX.
+ */
+testcase.transferConnectorFromUsbToDownloadsDeepNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+      }),
+      CONNECTOR_ENTRIES_DEEP,
+      TWO_FILES_COPY_FAIL_MESSAGE,
+  );
+};
+testcase.transferConnectorFromUsbToDownloadsFlatNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+      }),
+      CONNECTOR_ENTRIES_FLAT,
+      NEW_COPY_FAIL_MESSAGE,
+  );
+};
+testcase.transferConnectorFromUsbToDownloadsDeepMoveNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+        isMove: true,
+      }),
+      CONNECTOR_ENTRIES_DEEP,
+      TWO_FILES_MOVE_FAIL_MESSAGE,
+  );
+};
+testcase.transferConnectorFromUsbToDownloadsFlatMoveNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+        isMove: true,
+      }),
+      CONNECTOR_ENTRIES_FLAT,
+      NEW_MOVE_FAIL_MESSAGE,
+  );
+};
+testcase.transferConnectorFromUsbToDownloadsFlatWarnProceedNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+        proceedOnWarning: true,
+      }),
+      CONNECTOR_ENTRIES_FLAT_WARNED,
+      NEW_COPY_FAIL_MESSAGE,
+      SINGLE_FILE_WARN_MESSAGE,
+  );
+};
+testcase
+    .transferConnectorFromUsbToDownloadsFlatWarnProceedWithJustificationNewUX =
+    () => {
+      return transferBetweenVolumes(
+          new TransferInfo({
+            source: TRANSFER_LOCATIONS.usb,
+            destination: TRANSFER_LOCATIONS.downloads,
+            proceedOnWarning: true,
+          }),
+          CONNECTOR_ENTRIES_FLAT_WARNED,
+          NEW_COPY_FAIL_MESSAGE,
+          SINGLE_FILE_WARN_MESSAGE,
+      );
+    };
+testcase.transferConnectorFromUsbToDownloadsDeepWarnProceedNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+        proceedOnWarning: true,
+      }),
+      CONNECTOR_ENTRIES_DEEP_WARNED,
+      TWO_FILES_COPY_FAIL_MESSAGE,
+      TWO_FILES_WARN_MESSAGE,
+  );
+};
+testcase
+    .transferConnectorFromUsbToDownloadsDeepWarnProceedWithJustificationNewUX =
+    () => {
+      return transferBetweenVolumes(
+          new TransferInfo({
+            source: TRANSFER_LOCATIONS.usb,
+            destination: TRANSFER_LOCATIONS.downloads,
+            proceedOnWarning: true,
+          }),
+          CONNECTOR_ENTRIES_DEEP_WARNED,
+          TWO_FILES_COPY_FAIL_MESSAGE,
+          TWO_FILES_WARN_MESSAGE,
+      );
+    };
+testcase.transferConnectorFromUsbToDownloadsFlatWarnCancelNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+        isMove: true,
+      }),
+      CONNECTOR_ENTRIES_FLAT_WARNED,
+      '',
+      SINGLE_FILE_WARN_MESSAGE,
+  );
+};
+testcase.transferConnectorFromUsbToDownloadsDeepWarnCancelNewUX = () => {
+  return transferBetweenVolumes(
+      new TransferInfo({
+        source: TRANSFER_LOCATIONS.usb,
+        destination: TRANSFER_LOCATIONS.downloads,
+        isMove: true,
+      }),
+      CONNECTOR_ENTRIES_DEEP_WARNED,
+      '',
+      TWO_FILES_WARN_MESSAGE,
   );
 };

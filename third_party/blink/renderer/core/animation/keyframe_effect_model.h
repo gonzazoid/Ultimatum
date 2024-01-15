@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/core/animation/interpolation_effect.h"
 #include "third_party/blink/renderer/core/animation/property_handle.h"
 #include "third_party/blink/renderer/core/animation/string_keyframe.h"
+#include "third_party/blink/renderer/core/animation/timeline_range.h"
 #include "third_party/blink/renderer/core/animation/transition_keyframe.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/animation/timing_function.h"
@@ -123,6 +124,7 @@ class CORE_EXPORT KeyframeEffectModelBase : public EffectModel {
 
   virtual bool IsStringKeyframeEffectModel() const { return false; }
   virtual bool IsTransitionKeyframeEffectModel() const { return false; }
+  virtual bool IsCssKeyframeEffectModel() { return false; }
 
   bool HasSyntheticKeyframes() const {
     EnsureKeyframeGroups();
@@ -157,6 +159,8 @@ class CORE_EXPORT KeyframeEffectModelBase : public EffectModel {
     return has_revert_;
   }
 
+  bool HasNamedRangeKeyframes() { return has_named_range_keyframes_; }
+
   bool RequiresPropertyNode() const;
 
   bool IsTransformRelatedEffect() const override;
@@ -168,6 +172,13 @@ class CORE_EXPORT KeyframeEffectModelBase : public EffectModel {
 
   virtual KeyframeEffectModelBase* Clone() = 0;
 
+  // Ensure timeline offsets are properly resolved. If any of the offsets
+  // changed, the keyframes are resorted and cached data is cleared. Returns
+  // true if one or more offsets were affected.
+  bool ResolveTimelineOffsets(const TimelineRange&,
+                              double range_start,
+                              double range_end);
+
   void Trace(Visitor*) const override;
 
  protected:
@@ -178,10 +189,7 @@ class CORE_EXPORT KeyframeEffectModelBase : public EffectModel {
         last_fraction_(std::numeric_limits<double>::quiet_NaN()),
         last_iteration_duration_(AnimationTimeDelta()),
         composite_(composite),
-        default_keyframe_easing_(std::move(default_keyframe_easing)),
-        has_synthetic_keyframes_(false),
-        needs_compositor_keyframes_snapshot_(true),
-        has_revert_(false) {}
+        default_keyframe_easing_(std::move(default_keyframe_easing)) {}
 
   // Lazily computes the groups of property-specific keyframes.
   void EnsureKeyframeGroups() const;
@@ -210,6 +218,15 @@ class CORE_EXPORT KeyframeEffectModelBase : public EffectModel {
       ShouldSnapshotPropertyFunction should_process_property,
       ShouldSnapshotKeyframeFunction should_process_keyframe) const;
 
+  // Keyframes require tracking of the original position in the list and
+  // resolution of computed offsets for sorting. As timeline offsets are layout
+  // dependent, keyframes require shuffling whenever a timeline offset resolves
+  // to a new value. Different ordering rules are needed for generation of
+  // property specific keyframes and for reporting in a getKeyframes calls.
+  // In both cases, the ordering rules depend on a combination of the computed
+  // offset and original index.
+  void IndexKeyframesAndResolveComputedOffsets();
+
   KeyframeVector keyframes_;
   // The spec describes filtering the normalized keyframes at sampling time
   // to get the 'property-specific keyframes'. For efficiency, we cache the
@@ -222,9 +239,16 @@ class CORE_EXPORT KeyframeEffectModelBase : public EffectModel {
   CompositeOperation composite_;
   scoped_refptr<TimingFunction> default_keyframe_easing_;
 
-  mutable bool has_synthetic_keyframes_;
-  mutable bool needs_compositor_keyframes_snapshot_;
-  mutable bool has_revert_;
+  mutable bool has_synthetic_keyframes_ = false;
+  mutable bool needs_compositor_keyframes_snapshot_ = true;
+  mutable bool has_revert_ = false;
+  mutable bool has_named_range_keyframes_ = false;
+
+  // The timeline and animation ranges last used to resolve
+  // named range offsets. (See ResolveTimelineOffsets).
+  absl::optional<TimelineRange> last_timeline_range_;
+  absl::optional<double> last_range_start_;
+  absl::optional<double> last_range_end_;
 
   friend class KeyframeEffectModelTest;
 };
@@ -237,9 +261,12 @@ class KeyframeEffectModel : public KeyframeEffectModelBase {
   KeyframeEffectModel(
       const KeyframeVector& keyframes,
       CompositeOperation composite = kCompositeReplace,
-      scoped_refptr<TimingFunction> default_keyframe_easing = nullptr)
+      scoped_refptr<TimingFunction> default_keyframe_easing = nullptr,
+      bool has_named_range_keyframes = false)
       : KeyframeEffectModelBase(composite, std::move(default_keyframe_easing)) {
     keyframes_.AppendVector(keyframes);
+    IndexKeyframesAndResolveComputedOffsets();
+    has_named_range_keyframes_ = has_named_range_keyframes;
   }
 
   KeyframeEffectModelBase* Clone() override {

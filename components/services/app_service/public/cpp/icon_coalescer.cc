@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 
@@ -44,14 +44,13 @@ IconCoalescer::IconCoalescer(IconLoader* wrapped_loader)
 
 IconCoalescer::~IconCoalescer() = default;
 
-absl::optional<IconKey> IconCoalescer::GetIconKey(const std::string& app_id) {
+absl::optional<IconKey> IconCoalescer::GetIconKey(const std::string& id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return wrapped_loader_ ? wrapped_loader_->GetIconKey(app_id) : absl::nullopt;
+  return wrapped_loader_ ? wrapped_loader_->GetIconKey(id) : absl::nullopt;
 }
 
 std::unique_ptr<IconLoader::Releaser> IconCoalescer::LoadIconFromIconKey(
-    AppType app_type,
-    const std::string& app_id,
+    const std::string& id,
     const IconKey& icon_key,
     IconType icon_type,
     int32_t size_hint_in_dip,
@@ -66,12 +65,12 @@ std::unique_ptr<IconLoader::Releaser> IconCoalescer::LoadIconFromIconKey(
   if (icon_type != IconType::kUncompressed &&
       icon_type != IconType::kStandard) {
     return wrapped_loader_->LoadIconFromIconKey(
-        app_type, app_id, icon_key, icon_type, size_hint_in_dip,
-        allow_placeholder_icon, std::move(callback));
+        id, icon_key, icon_type, size_hint_in_dip, allow_placeholder_icon,
+        std::move(callback));
   }
 
   scoped_refptr<RefCountedReleaser> shared_releaser;
-  IconLoader::Key key(app_type, app_id, icon_key, icon_type, size_hint_in_dip,
+  IconLoader::Key key(id, icon_key, icon_type, size_hint_in_dip,
                       allow_placeholder_icon);
 
   auto iter = non_immediate_requests_.find(key);
@@ -117,8 +116,7 @@ std::unique_ptr<IconLoader::Releaser> IconCoalescer::LoadIconFromIconKey(
 
     std::unique_ptr<IconLoader::Releaser> unique_releaser =
         wrapped_loader_->LoadIconFromIconKey(
-            app_type, app_id, icon_key, icon_type, size_hint_in_dip,
-            allow_placeholder_icon,
+            id, icon_key, icon_type, size_hint_in_dip, allow_placeholder_icon,
             base::BindOnce(&IconCoalescer::OnLoadIcon,
                            weak_ptr_factory_.GetWeakPtr(), key, seq_num));
 

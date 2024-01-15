@@ -13,24 +13,35 @@
 #include "chrome/browser/ui/webui/privacy_sandbox/privacy_sandbox_dialog_handler.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
-#include "chrome/grit/google_chrome_strings.h"
 #include "chrome/grit/privacy_sandbox_resources.h"
 #include "chrome/grit/privacy_sandbox_resources_map.h"
+#include "components/strings/grit/components_strings.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "ui/base/webui/web_ui_util.h"
 
 PrivacySandboxDialogUI::PrivacySandboxDialogUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
-  auto* source = content::WebUIDataSource::Create(
-      chrome::kChromeUIPrivacySandboxDialogHost);
+  auto* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUIPrivacySandboxDialogHost);
 
   webui::SetupWebUIDataSource(
       source,
       base::make_span(kPrivacySandboxResources, kPrivacySandboxResourcesSize),
       IDR_PRIVACY_SANDBOX_PRIVACY_SANDBOX_DIALOG_HTML);
+
+  source->AddResourcePath(
+      chrome::kChromeUIPrivacySandboxDialogCombinedPath,
+      IDR_PRIVACY_SANDBOX_PRIVACY_SANDBOX_COMBINED_DIALOG_HTML);
+  source->AddResourcePath(
+      chrome::kChromeUIPrivacySandboxDialogNoticePath,
+      IDR_PRIVACY_SANDBOX_PRIVACY_SANDBOX_NOTICE_DIALOG_HTML);
+  source->AddResourcePath(
+      chrome::kChromeUIPrivacySandboxDialogNoticeRestrictedPath,
+      IDR_PRIVACY_SANDBOX_PRIVACY_SANDBOX_NOTICE_RESTRICTED_DIALOG_HTML);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"privacySandboxTitle", IDS_SETTINGS_PRIVACY_SANDBOX_TITLE},
@@ -77,11 +88,112 @@ PrivacySandboxDialogUI::PrivacySandboxDialogUI(content::WebUI* web_ui)
        IDS_PRIVACY_SANDBOX_DIALOG_NOTICE_ACKNOWLEDGE_BUTTON},
       {"noticeOpenSettingsButton",
        IDS_PRIVACY_SANDBOX_DIALOG_NOTICE_OPEN_SETTINGS_BUTTON},
-  };
+
+      {"adPrivacyPageTitle", IDS_SETTINGS_AD_PRIVACY_PAGE_TITLE},
+
+      // Strings for the consent step of the combined dialog (kM1Consent).
+      {"m1ConsentTitle", IDS_PRIVACY_SANDBOX_M1_CONSENT_TITLE},
+      {"m1ConsentDescription1", IDS_PRIVACY_SANDBOX_M1_CONSENT_DESCRIPTION_1},
+      {"m1ConsentDescription2", IDS_PRIVACY_SANDBOX_M1_CONSENT_DESCRIPTION_2},
+      {"m1ConsentDescription3", IDS_PRIVACY_SANDBOX_M1_CONSENT_DESCRIPTION_3},
+      {"m1ConsentLearnMoreExpandLabel",
+       IDS_PRIVACY_SANDBOX_M1_CONSENT_LEARN_MORE_EXPAND_LABEL},
+      {"m1ConsentDescription4", IDS_PRIVACY_SANDBOX_M1_CONSENT_DESCRIPTION_4},
+      {"m1ConsentSavingLabel", IDS_PRIVACY_SANDBOX_M1_CONSENT_SAVING_LABEL},
+      {"m1ConsentAcceptButton", IDS_PRIVACY_SANDBOX_M1_CONSENT_ACCEPT_BUTTON},
+      {"m1ConsentDeclineButton", IDS_PRIVACY_SANDBOX_M1_CONSENT_DECLINE_BUTTON},
+      {"m1ConsentLearnMoreBullet1",
+       IDS_PRIVACY_SANDBOX_M1_CONSENT_LEARN_MORE_BULLET_1},
+      {"m1ConsentLearnMoreBullet2",
+       IDS_PRIVACY_SANDBOX_M1_CONSENT_LEARN_MORE_BULLET_2},
+      {"m1ConsentLearnMoreBullet3",
+       IDS_PRIVACY_SANDBOX_M1_CONSENT_LEARN_MORE_BULLET_3},
+      {"m1ConsentLearnMoreLink",
+       IDS_PRIVACY_SANDBOX_M1_CONSENT_LEARN_MORE_LINK},
+
+      // Strings for the notice step of the combined dialog (kM1NoticeEEA).
+      {"m1NoticeEeaTitle", IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_TITLE},
+      {"m1NoticeEeaDescription1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_DESCRIPTION_1},
+      {"m1NoticeEeaBullet1", IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_BULLET_1},
+      {"m1NoticeEeaBullet2", IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_BULLET_2},
+      {"m1NoticeEeaLearnMoreExpandLabel",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_EXPAND_LABEL},
+      {"m1NoticeEeaDescription2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_DESCRIPTION_2},
+      {"m1NoticeEeaAckButton", IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_ACK_BUTTON},
+      {"m1NoticeEeaSettingsButton",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_SETTINGS_BUTTON},
+      {"m1NoticeEeaLearnMoreHeading1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_HEADING_1},
+      {"m1NoticeEeaLearnMoreDescription",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_DESCRIPTION},
+      {"m1NoticeEeaLearnMoreHeading2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_HEADING_2},
+      {"m1NoticeEeaLearnMoreBullet1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_BULLET_1},
+      {"m1NoticeEeaLearnMoreBullet2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_BULLET_2},
+      {"m1NoticeEeaLearnMoreBullet3",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_EEA_LEARN_MORE_BULLET_3},
+
+      // Strings for the notice dialog (kM1NoticeROW).
+      {"m1NoticeRowTitle", IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_TITLE},
+      {"m1NoticeRowDescription1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_DESCRIPTION_1},
+      {"m1NoticeRowDescription2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_DESCRIPTION_2},
+      {"m1NoticeRowDescription3",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_DESCRIPTION_3},
+      {"m1NoticeRowDescription4",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_DESCRIPTION_4},
+      {"m1NoticeRowAckButton", IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_ACK_BUTTON},
+      {"m1NoticeRowSettingsButton",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_SETTINGS_BUTTON},
+      {"m1NoticeRowLearnMoreExpandLabel",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_EXPAND_LABEL},
+      {"m1NoticeRowLearnMoreHeading1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_HEADING_1},
+      {"m1NoticeRowLearnMoreDescription1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_DESCRIPTION_1},
+      {"m1NoticeRowLearnMoreBullet1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_BULLET_1},
+      {"m1NoticeRowLearnMoreBullet2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_BULLET_2},
+      {"m1NoticeRowLearnMoreDescription2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_DESCRIPTION_2},
+      {"m1NoticeRowLearnMoreDescription3",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_DESCRIPTION_3},
+      {"m1NoticeRowLearnMoreHeading2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_HEADING_2},
+      {"m1NoticeRowLearnMoreDescription4",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_DESCRIPTION_4},
+      {"m1NoticeRowLearnMoreDescription5",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_ROW_LEARN_MORE_DESCRIPTION_5},
+      // Strings for the restricted notice dialog (kM1NoticeRestricted).
+      {"m1NoticeRestrictedTitle",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_RESTRICTED_TITLE},
+      {"m1NoticeRestrictedDescription1",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_RESTRICTED_DESCRIPTION_1},
+      {"m1NoticeRestrictedDescription2",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_RESTRICTED_DESCRIPTION_2},
+      {"m1NoticeRestrictedDescription3",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_RESTRICTED_DESCRIPTION_3},
+      {"m1NoticeRestrictedAckButton",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_RESTRICTED_ACK_BUTTON},
+      {"m1NoticeRestrictedSettingsButton",
+       IDS_PRIVACY_SANDBOX_M1_NOTICE_RESTRICTED_SETTINGS_BUTTON},
+      // Shared for all dialogs.
+      {"m1DialogMoreButton", IDS_PRIVACY_SANDBOX_M1_DIALOG_MORE_BUTTON}};
 
   source->AddLocalizedStrings(kStrings);
 
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source);
+  const GURL& url = web_ui->GetWebContents()->GetVisibleURL();
+  if (url.query().find("debug") != std::string::npos) {
+    // Not intended to be hooked to anything. The dialog will not initialize it
+    // so we force it here.
+    InitializeForDebug(source);
+  }
 }
 
 PrivacySandboxDialogUI::~PrivacySandboxDialogUI() = default;
@@ -92,17 +204,25 @@ void PrivacySandboxDialogUI::Initialize(
     base::OnceCallback<void(int)> resize_callback,
     base::OnceClosure show_dialog_callback,
     base::OnceClosure open_settings_callback,
+    base::OnceClosure open_measurement_settings_callback,
     PrivacySandboxService::PromptType prompt_type) {
   base::Value::Dict update;
-  update.Set("isConsent",
-             prompt_type == PrivacySandboxService::PromptType::kConsent);
   content::WebUIDataSource::Update(
       profile, chrome::kChromeUIPrivacySandboxDialogHost, std::move(update));
-
   auto handler = std::make_unique<PrivacySandboxDialogHandler>(
       std::move(close_callback), std::move(resize_callback),
       std::move(show_dialog_callback), std::move(open_settings_callback),
-      prompt_type);
+      std::move(open_measurement_settings_callback), prompt_type);
+  web_ui()->AddMessageHandler(std::move(handler));
+}
+
+void PrivacySandboxDialogUI::InitializeForDebug(
+    content::WebUIDataSource* source) {
+  auto handler = std::make_unique<PrivacySandboxDialogHandler>(
+      base::DoNothing(), base::DoNothing(), base::DoNothing(),
+      base::DoNothing(), base::DoNothing(),
+      PrivacySandboxService::PromptType::kNone);
+  source->AddBoolean("isConsent", false);
   web_ui()->AddMessageHandler(std::move(handler));
 }
 

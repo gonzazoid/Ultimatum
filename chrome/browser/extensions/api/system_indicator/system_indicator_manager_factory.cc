@@ -21,24 +21,33 @@ SystemIndicatorManager* SystemIndicatorManagerFactory::GetForContext(
 
 // static
 SystemIndicatorManagerFactory* SystemIndicatorManagerFactory::GetInstance() {
-  return base::Singleton<SystemIndicatorManagerFactory>::get();
+  static base::NoDestructor<SystemIndicatorManagerFactory> instance;
+  return instance.get();
 }
 
 SystemIndicatorManagerFactory::SystemIndicatorManagerFactory()
-    : ProfileKeyedServiceFactory("SystemIndicatorManager") {
+    : ProfileKeyedServiceFactory(
+          "SystemIndicatorManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
 }
 
-SystemIndicatorManagerFactory::~SystemIndicatorManagerFactory() {}
+SystemIndicatorManagerFactory::~SystemIndicatorManagerFactory() = default;
 
-KeyedService* SystemIndicatorManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SystemIndicatorManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
   StatusTray* status_tray = g_browser_process->status_tray();
   if (status_tray == NULL)
     return NULL;
 
-  return new SystemIndicatorManager(static_cast<Profile*>(profile),
-                                    status_tray);
+  return std::make_unique<SystemIndicatorManager>(
+      static_cast<Profile*>(profile), status_tray);
 }
 
 bool SystemIndicatorManagerFactory::ServiceIsCreatedWithBrowserContext() const {

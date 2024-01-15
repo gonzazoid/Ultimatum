@@ -4,17 +4,17 @@
 
 #include "chrome/browser/accessibility/soda_installer_impl.h"
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "chrome/browser/browser_process.h"
@@ -82,6 +82,29 @@ void SodaInstallerImpl::InstallLanguage(const std::string& language,
           g_browser_process->component_updater())) {
     component_updater_observation_.Observe(
         g_browser_process->component_updater());
+  }
+}
+
+void SodaInstallerImpl::UninstallLanguage(const std::string& language,
+                                          PrefService* global_prefs) {
+  speech::LanguageCode language_code = speech::GetLanguageCode(language);
+  if (language_code != speech::LanguageCode::kNone) {
+    // Remove the language from the preference tracking installed language packs
+    // and unregister the corresponding component from the component updater
+    // service to remove the files and prevent future updates.
+    SodaInstaller::UnregisterLanguage(language, global_prefs);
+    const std::string crx_id = component_updater::
+        SodaLanguagePackComponentInstallerPolicy::GetExtensionId(language_code);
+    auto* component_updater_service = g_browser_process->component_updater();
+    if (component_updater_service) {
+      component_updater_service->UnregisterComponent(crx_id);
+    }
+
+    std::set<speech::LanguageCode>::iterator it =
+        installed_languages_.find(language_code);
+    if (it != installed_languages_.end()) {
+      installed_languages_.erase(it);
+    }
   }
 }
 
@@ -217,7 +240,7 @@ void SodaInstallerImpl::UpdateAndNotifyOnSodaProgress(
 
   DCHECK_LE(downloaded_bytes, total_bytes);
   int progress =
-      100 * base::clamp(static_cast<double>(downloaded_bytes) / total_bytes,
+      100 * std::clamp(static_cast<double>(downloaded_bytes) / total_bytes,
                         0.0, 1.0);
   if (language_code != soda_code)
     language_pack_progress_[language_code] = progress;

@@ -7,12 +7,11 @@
 #include <utility>
 
 #include "ash/webui/help_app_ui/search/search_metadata.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "chromeos/ash/components/local_search_service/public/cpp/local_search_service_proxy.h"
 
-namespace ash {
-namespace help_app {
+namespace ash::help_app {
 namespace {
 
 // Converts from search concept to the format required by LSS for indexing.
@@ -46,7 +45,7 @@ SearchTagRegistry::SearchTagRegistry(
     local_search_service::LocalSearchServiceProxy* local_search_service_proxy) {
   local_search_service_proxy->GetIndex(
       local_search_service::IndexId::kHelpAppLauncher,
-      local_search_service::Backend::kInvertedIndex,
+      local_search_service::Backend::kLinearMap,
       index_remote_.BindNewPipeAndPassReceiver());
   DCHECK(index_remote_.is_bound());
 }
@@ -78,6 +77,17 @@ void SearchTagRegistry::Update(
           .Then(std::move(callback)));
 }
 
+void SearchTagRegistry::ClearAndUpdate(
+    std::vector<mojom::SearchConceptPtr> search_tags,
+    base::OnceCallback<void()> callback) {
+  // Reset the metadata map and the index in the local search service before
+  // feeding the new data.
+  result_id_to_metadata_list_map_.clear();
+  index_remote_->ClearIndex(
+      base::BindOnce(&SearchTagRegistry::Update, weak_ptr_factory_.GetWeakPtr(),
+                     std::move(search_tags), std::move(callback)));
+}
+
 const SearchMetadata& SearchTagRegistry::GetTagMetadata(
     const std::string& result_id) const {
   const auto it = result_id_to_metadata_list_map_.find(result_id);
@@ -97,5 +107,4 @@ void SearchTagRegistry::NotifyRegistryAdded() {
   NotifyRegistryUpdated();
 }
 
-}  // namespace help_app
-}  // namespace ash
+}  // namespace ash::help_app

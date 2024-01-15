@@ -8,9 +8,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -22,7 +22,6 @@
 #include "mojo/public/cpp/bindings/interface_endpoint_client.h"
 #include "mojo/public/cpp/bindings/interface_endpoint_controller.h"
 #include "mojo/public/cpp/bindings/lib/may_auto_lock.h"
-#include "mojo/public/cpp/bindings/lib/message_quota_checker.h"
 #include "mojo/public/cpp/bindings/sequence_local_sync_event_watcher.h"
 
 namespace mojo {
@@ -74,11 +73,11 @@ class MultiplexRouter::InterfaceEndpoint
     handle_created_ = true;
   }
 
-  const absl::optional<DisconnectReason>& disconnect_reason() const {
+  const std::optional<DisconnectReason>& disconnect_reason() const {
     return disconnect_reason_;
   }
   void set_disconnect_reason(
-      const absl::optional<DisconnectReason>& disconnect_reason) {
+      const std::optional<DisconnectReason>& disconnect_reason) {
     router_->AssertLockAcquired();
     disconnect_reason_ = disconnect_reason;
   }
@@ -236,7 +235,7 @@ class MultiplexRouter::InterfaceEndpoint
   // endpoint.
   bool handle_created_;
 
-  absl::optional<DisconnectReason> disconnect_reason_;
+  std::optional<DisconnectReason> disconnect_reason_;
 
   // The task runner on which |client_|'s methods can be called.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
@@ -388,11 +387,6 @@ MultiplexRouter::MultiplexRouter(
 
   connector_.set_incoming_receiver(&dispatcher_);
 
-  scoped_refptr<internal::MessageQuotaChecker> quota_checker =
-      internal::MessageQuotaChecker::MaybeCreate();
-  if (quota_checker)
-    connector_.SetMessageQuotaChecker(std::move(quota_checker));
-
   if (primary_interface_name) {
     control_message_handler_.SetDescription(base::JoinString(
         {primary_interface_name, "[primary] PipeControlMessageHandler"}, " "));
@@ -499,7 +493,7 @@ ScopedInterfaceEndpointHandle MultiplexRouter::CreateLocalEndpointHandle(
 
 void MultiplexRouter::CloseEndpointHandle(
     InterfaceId id,
-    const absl::optional<DisconnectReason>& reason) {
+    const std::optional<DisconnectReason>& reason) {
   if (!IsValidInterfaceId(id))
     return;
 
@@ -748,7 +742,7 @@ bool MultiplexRouter::Accept(Message* message) {
 
 bool MultiplexRouter::OnPeerAssociatedEndpointClosed(
     InterfaceId id,
-    const absl::optional<DisconnectReason>& reason) {
+    const std::optional<DisconnectReason>& reason) {
   MayAutoLock locker(&lock_);
   InterfaceEndpoint* endpoint = FindOrInsertEndpoint(id, nullptr);
 
@@ -1003,7 +997,7 @@ bool MultiplexRouter::ProcessNotifyErrorTask(
   DCHECK(endpoint->task_runner()->RunsTasksInCurrentSequence());
 
   InterfaceEndpointClient* client = endpoint->client();
-  absl::optional<DisconnectReason> disconnect_reason(
+  std::optional<DisconnectReason> disconnect_reason(
       endpoint->disconnect_reason());
 
   {
@@ -1067,6 +1061,12 @@ bool MultiplexRouter::ProcessIncomingMessage(
 
   bool can_direct_call;
   if (message->has_flag(Message::kFlagIsSync)) {
+    if (!message->has_flag(Message::kFlagIsResponse) &&
+        !base::Contains(endpoint->client()->sync_method_ordinals(),
+                        message->name())) {
+      RaiseErrorInNonTestingMode();
+      return true;
+    }
     can_direct_call = client_call_behavior != NO_DIRECT_CLIENT_CALLS &&
                       endpoint->task_runner()->RunsTasksInCurrentSequence();
   } else {
@@ -1237,7 +1237,7 @@ void MultiplexRouter::CloseEndpointsForMessage(const Message& message) {
 
     UpdateEndpointStateMayRemove(endpoint, ENDPOINT_CLOSED);
     MayAutoUnlock unlocker(&lock_);
-    control_message_proxy_.NotifyPeerEndpointClosed(ids[i], absl::nullopt);
+    control_message_proxy_.NotifyPeerEndpointClosed(ids[i], std::nullopt);
   }
 
   ProcessTasks(NO_DIRECT_CLIENT_CALLS, nullptr);

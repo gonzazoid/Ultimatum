@@ -7,21 +7,20 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
+#include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/ui/views/user_board_view.h"
 #include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/ui/webui/ash/login/l10n_util.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -106,7 +105,7 @@ void ChromeUserSelectionScreen::CheckForPublicSessionDisplayNameChange(
   // and `this` are informed of the display name change is undefined. Post a
   // task that will update the UI after the UserManager is guaranteed to have
   // been informed of the change.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ChromeUserSelectionScreen::SetPublicSessionDisplayName,
                      weak_factory_.GetWeakPtr(), account_id));
@@ -151,7 +150,7 @@ void ChromeUserSelectionScreen::CheckForPublicSessionLocalePolicyChange(
 void ChromeUserSelectionScreen::CheckIfFullManagementDisclosureNeeded(
     policy::DeviceLocalAccountPolicyBroker* broker) {
   SetPublicSessionShowFullManagementDisclosure(
-      ChromeUserManager::Get()->IsFullManagementDisclosureNeeded(broker));
+      ash::login::IsFullManagementDisclosureNeeded(broker));
 }
 
 void ChromeUserSelectionScreen::SetPublicSessionDisplayName(

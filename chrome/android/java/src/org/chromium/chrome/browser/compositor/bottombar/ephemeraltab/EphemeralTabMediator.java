@@ -6,10 +6,13 @@ package org.chromium.chrome.browser.compositor.bottombar.ephemeraltab;
 
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
+import android.view.ViewGroup;
 
 import androidx.annotation.DrawableRes;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.ObserverList;
+import org.chromium.base.ObserverList.RewindableIterator;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
@@ -26,15 +29,14 @@ import org.chromium.content_public.common.ResourceRequestBody;
 import org.chromium.ui.widget.Toast;
 import org.chromium.url.GURL;
 
-/**
- * Mediator class for preview tab, responsible for communicating with other objects.
- */
+/** Mediator class for preview tab, responsible for communicating with other objects. */
 public class EphemeralTabMediator {
     /** The delay (four video frames) after which the hide progress will be hidden. */
     private static final long HIDE_PROGRESS_BAR_DELAY_MS = (1000 / 60) * 4;
 
     private final BottomSheetController mBottomSheetController;
     private final EphemeralTabCoordinator.FaviconLoader mFaviconLoader;
+    private final ObserverList<EphemeralTabObserver> mObservers;
     private final int mTopControlsHeightDp;
 
     private WebContents mWebContents;
@@ -43,21 +45,23 @@ public class EphemeralTabMediator {
     private WebContentsDelegateAndroid mWebContentsDelegate;
     private Profile mProfile;
 
-    /**
-     * Constructor.
-     */
-    public EphemeralTabMediator(BottomSheetController bottomSheetController,
-            EphemeralTabCoordinator.FaviconLoader faviconLoader, int topControlsHeightDp) {
+    /** Constructor. */
+    public EphemeralTabMediator(
+            BottomSheetController bottomSheetController,
+            EphemeralTabCoordinator.FaviconLoader faviconLoader,
+            int topControlsHeightDp) {
         mBottomSheetController = bottomSheetController;
         mFaviconLoader = faviconLoader;
         mTopControlsHeightDp = topControlsHeightDp;
+        mObservers = new ObserverList<EphemeralTabObserver>();
     }
 
-    /**
-     * Initializes various objects for a new tab.
-     */
-    void init(WebContents webContents, ContentView contentView,
-            EphemeralTabSheetContent sheetContent, Profile profile) {
+    /** Initializes various objects for a new tab. */
+    void init(
+            WebContents webContents,
+            ContentView contentView,
+            EphemeralTabSheetContent sheetContent,
+            Profile profile) {
         // Ensures that initialization is performed only when a new tab is opened.
         assert mProfile == null && mWebContentsObserver == null && mWebContentsDelegate == null;
 
@@ -69,9 +73,49 @@ public class EphemeralTabMediator {
         mSheetContent.attachWebContents(mWebContents, contentView, mWebContentsDelegate);
     }
 
-    /**
-     * Loads a new URL into the tab and makes it visible.
-     */
+    /** Add observer to be notified of ephemeral tab events. */
+    void addObserver(EphemeralTabObserver ephemeralTabObserver) {
+        mObservers.addObserver(ephemeralTabObserver);
+    }
+
+    /** Remove observer. */
+    void removeObserver(EphemeralTabObserver ephemeralTabObserver) {
+        mObservers.removeObserver(ephemeralTabObserver);
+    }
+
+    /** Clear observers. */
+    void clearObservers() {
+        mObservers.clear();
+    }
+
+    /** Notify observers on toolbar creation. */
+    public void onToolbarCreated(ViewGroup toolbarView) {
+        RewindableIterator<EphemeralTabObserver> observersIterator =
+                mObservers.rewindableIterator();
+        while (observersIterator.hasNext()) {
+            observersIterator.next().onToolbarCreated(toolbarView);
+        }
+    }
+
+    /** Notify observers on navigation start. */
+    public void onNavigationStarted(GURL clickedUrl) {
+        RewindableIterator<EphemeralTabObserver> observersIterator =
+                mObservers.rewindableIterator();
+        while (observersIterator.hasNext()) {
+            observersIterator.next().onNavigationStarted(clickedUrl);
+        }
+    }
+
+    /** Notify observers on title set. */
+    public void onTitleSet(EphemeralTabSheetContent sheetContent, String title) {
+        RewindableIterator<EphemeralTabObserver> observersIterator =
+                mObservers.rewindableIterator();
+        while (observersIterator.hasNext()) {
+            observersIterator.next().onTitleSet(sheetContent, title);
+        }
+    }
+
+    /** Loads a new URL into the tab and makes it visible. */
     void requestShowContent(GURL url, String title) {
         loadUrl(url);
         mSheetContent.updateTitle(title);
@@ -84,67 +128,65 @@ public class EphemeralTabMediator {
 
     private void createWebContentsObserver() {
         assert mWebContentsObserver == null;
-        mWebContentsObserver = new WebContentsObserver(mWebContents) {
-            /** Whether the currently loaded page is an error (interstitial) page. */
-            private boolean mIsOnErrorPage;
+        mWebContentsObserver =
+                new WebContentsObserver(mWebContents) {
+                    /** Whether the currently loaded page is an error (interstitial) page. */
+                    private boolean mIsOnErrorPage;
 
-            private GURL mCurrentUrl;
+                    private GURL mCurrentUrl;
 
-            @Override
-            public void loadProgressChanged(float progress) {
-                if (mSheetContent != null) mSheetContent.setProgress(progress);
-            }
-
-            @Override
-            public void didStartNavigationInPrimaryMainFrame(NavigationHandle navigation) {
-                if (!navigation.isSameDocument()) {
-                    GURL url = navigation.getUrl();
-                    if (url.equals(mCurrentUrl)) return;
-
-                    // The link Back to Safety on the interstitial page will go to the previous
-                    // page. If there is no previous page, i.e. previous page is NTP, the preview
-                    // tab will be closed.
-                    if (mIsOnErrorPage && UrlUtilities.isNTPUrl(url)) {
-                        mBottomSheetController.hideContent(mSheetContent, /* animate= */ true);
-                        mCurrentUrl = null;
-                        return;
+                    @Override
+                    public void loadProgressChanged(float progress) {
+                        if (mSheetContent != null) mSheetContent.setProgress(progress);
                     }
 
-                    mCurrentUrl = url;
-                    mFaviconLoader.loadFavicon(
-                            url, (drawable) -> onFaviconAvailable(drawable), mProfile);
-                }
-            }
+                    @Override
+                    public void didStartNavigationInPrimaryMainFrame(NavigationHandle navigation) {
+                        if (!navigation.isSameDocument()) {
+                            GURL url = navigation.getUrl();
+                            if (url.equals(mCurrentUrl)) return;
 
-            @Override
-            public void didStartNavigationNoop(NavigationHandle navigation) {
-                if (!navigation.isInPrimaryMainFrame()) return;
-            }
+                            // The link Back to Safety on the interstitial page will go to the
+                            // previous page. If there is no previous page, i.e. previous page is
+                            // NTP, the preview tab will be closed.
+                            if (mIsOnErrorPage && UrlUtilities.isNtpUrl(url)) {
+                                mBottomSheetController.hideContent(
+                                        mSheetContent, /* animate= */ true);
+                                mCurrentUrl = null;
+                                return;
+                            }
 
-            @Override
-            public void titleWasSet(String title) {
-                mSheetContent.updateTitle(title);
-            }
+                            onNavigationStarted(url);
 
-            @Override
-            public void didFinishNavigationInPrimaryMainFrame(NavigationHandle navigation) {
-                if (navigation.hasCommitted()) {
-                    mIsOnErrorPage = navigation.isErrorPage();
-                    mSheetContent.updateURL(mWebContents.get().getVisibleUrl());
-                } else {
-                    // Not viewable contents such as download. Show a toast and close the tab.
-                    Toast.makeText(ContextUtils.getApplicationContext(),
-                                 R.string.ephemeral_tab_sheet_not_viewable, Toast.LENGTH_SHORT)
-                            .show();
-                    mBottomSheetController.hideContent(mSheetContent, /* animate= */ true);
-                }
-            }
+                            mCurrentUrl = url;
+                            mFaviconLoader.loadFavicon(
+                                    url, (drawable) -> onFaviconAvailable(drawable), mProfile);
+                        }
+                    }
 
-            @Override
-            public void didFinishNavigationNoop(NavigationHandle navigation) {
-                if (navigation.isInPrimaryMainFrame()) return;
-            }
-        };
+                    @Override
+                    public void titleWasSet(String title) {
+                        mSheetContent.updateTitle(title);
+                        onTitleSet(mSheetContent, title);
+                    }
+
+                    @Override
+                    public void didFinishNavigationInPrimaryMainFrame(NavigationHandle navigation) {
+                        if (navigation.hasCommitted()) {
+                            mIsOnErrorPage = navigation.isErrorPage();
+                            mSheetContent.updateURL(mWebContents.get().getVisibleUrl());
+                        } else if (navigation.isDownload()) {
+                            // Not viewable contents such as download. Show a toast and close the
+                            // tab.
+                            Toast.makeText(
+                                            ContextUtils.getApplicationContext(),
+                                            R.string.ephemeral_tab_sheet_not_viewable,
+                                            Toast.LENGTH_SHORT)
+                                    .show();
+                            mBottomSheetController.hideContent(mSheetContent, /* animate= */ true);
+                        }
+                    }
+                };
     }
 
     private void onFaviconAvailable(Drawable drawable) {
@@ -153,53 +195,65 @@ public class EphemeralTabMediator {
 
     private void createWebContentsDelegate() {
         assert mWebContentsDelegate == null;
-        mWebContentsDelegate = new WebContentsDelegateAndroid() {
-            @Override
-            public void visibleSSLStateChanged() {
-                if (mSheetContent == null) return;
-                int securityLevel = SecurityStateModel.getSecurityLevelForWebContents(mWebContents);
-                mSheetContent.setSecurityIcon(getSecurityIconResource(securityLevel));
-                mSheetContent.updateURL(mWebContents.getVisibleUrl());
-            }
+        mWebContentsDelegate =
+                new WebContentsDelegateAndroid() {
+                    @Override
+                    public void visibleSSLStateChanged() {
+                        if (mSheetContent == null) return;
+                        int securityLevel =
+                                SecurityStateModel.getSecurityLevelForWebContents(mWebContents);
+                        mSheetContent.setSecurityIcon(getSecurityIconResource(securityLevel));
+                        mSheetContent.updateURL(mWebContents.getVisibleUrl());
+                    }
 
-            @Override
-            public void openNewTab(GURL url, String extraHeaders, ResourceRequestBody postData,
-                    int disposition, boolean isRendererInitiated) {
-                // We never open a separate tab when navigating in a preview tab.
-                loadUrl(url);
-            }
+                    @Override
+                    public void openNewTab(
+                            GURL url,
+                            String extraHeaders,
+                            ResourceRequestBody postData,
+                            int disposition,
+                            boolean isRendererInitiated) {
+                        // We never open a separate tab when navigating in a preview tab.
+                        loadUrl(url);
+                    }
 
-            @Override
-            public boolean shouldCreateWebContents(GURL targetUrl) {
-                loadUrl(targetUrl);
-                return false;
-            }
+                    @Override
+                    public boolean shouldCreateWebContents(GURL targetUrl) {
+                        loadUrl(targetUrl);
+                        return false;
+                    }
 
-            @Override
-            public void loadingStateChanged(boolean shouldShowLoadingUI) {
-                boolean isLoading = mWebContents != null && mWebContents.isLoading();
-                if (isLoading) {
-                    if (mSheetContent == null) return;
-                    mSheetContent.setProgress(0);
-                    mSheetContent.setProgressVisible(true);
-                } else {
-                    // Hides the Progress Bar after a delay to make sure it is rendered for at least
-                    // a few frames, otherwise its completion won't be visually noticeable.
-                    new Handler().postDelayed(() -> {
-                        if (mSheetContent != null) mSheetContent.setProgressVisible(false);
-                    }, HIDE_PROGRESS_BAR_DELAY_MS);
-                }
-            }
+                    @Override
+                    public void loadingStateChanged(boolean shouldShowLoadingUI) {
+                        boolean isLoading = mWebContents != null && mWebContents.isLoading();
+                        if (isLoading) {
+                            if (mSheetContent == null) return;
+                            mSheetContent.setProgress(0);
+                            mSheetContent.setProgressVisible(true);
+                        } else {
+                            // Hides the Progress Bar after a delay to make sure it is rendered for
+                            // at least a few frames, otherwise its completion won't be visually
+                            // noticeable.
+                            new Handler()
+                                    .postDelayed(
+                                            () -> {
+                                                if (mSheetContent != null) {
+                                                    mSheetContent.setProgressVisible(false);
+                                                }
+                                            },
+                                            HIDE_PROGRESS_BAR_DELAY_MS);
+                        }
+                    }
 
-            @Override
-            public int getTopControlsHeight() {
-                return mTopControlsHeightDp;
-            }
-        };
+                    @Override
+                    public int getTopControlsHeight() {
+                        return mTopControlsHeightDp;
+                    }
+                };
     }
 
-    @DrawableRes
-    private static int getSecurityIconResource(@ConnectionSecurityLevel int securityLevel) {
+    private static @DrawableRes int getSecurityIconResource(
+            @ConnectionSecurityLevel int securityLevel) {
         switch (securityLevel) {
             case ConnectionSecurityLevel.NONE:
             case ConnectionSecurityLevel.WARNING:
@@ -215,9 +269,7 @@ public class EphemeralTabMediator {
         return 0;
     }
 
-    /**
-     * Destroys the objects used for the current preview tab.
-     */
+    /** Destroys the objects used for the current preview tab. */
     void destroyContent() {
         if (mWebContentsObserver != null) {
             mWebContentsObserver.destroy();
@@ -227,5 +279,6 @@ public class EphemeralTabMediator {
         mWebContents = null;
         mSheetContent = null;
         mProfile = null;
+        clearObservers();
     }
 }

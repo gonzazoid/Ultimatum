@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,6 +109,8 @@ var defaultTests = [
           chrome.test.assertTrue(status.hasOwnProperty("isLoggedIn"));
           chrome.test.assertTrue(status.hasOwnProperty("isOwner"));
           chrome.test.assertTrue(status.hasOwnProperty("isScreenLocked"));
+          chrome.test.assertTrue(
+              status.hasOwnProperty('isLockscreenWallpaperAnimating'));
           chrome.test.assertTrue(status.hasOwnProperty("isRegularUser"));
           chrome.test.assertTrue(status.hasOwnProperty("isGuest"));
           chrome.test.assertTrue(status.hasOwnProperty("isKiosk"));
@@ -300,10 +302,6 @@ var defaultTests = [
           chrome.test.succeed();
         });
   },
-  function bootstrapMachineLearningService() {
-    chrome.autotestPrivate.bootstrapMachineLearningService(
-        chrome.test.callbackFail('ML Service connection error'));
-  },
   function runCrostiniUninstaller() {
     chrome.autotestPrivate.runCrostiniUninstaller(chrome.test.callbackFail(
         'Crostini is not available for the current user'));
@@ -405,16 +403,6 @@ var defaultTests = [
     chrome.autotestPrivate.getArcPackage(
          'fake.package',
          chrome.test.callbackFail('Package is not available'));
-  },
-  // Launch fails, no any ARC app by default
-  function launchArcApp() {
-    chrome.autotestPrivate.launchArcApp(
-        'bifanmfigailifmdhaomnmchcgflbbdn',
-        '#Intent;',
-        function(appLaunched) {
-          chrome.test.assertFalse(appLaunched);
-          chrome.test.succeed();
-        });
   },
   // This gets the primary display's scale factor.
   function getPrimaryDisplayScaleFactor() {
@@ -602,6 +590,7 @@ var defaultTests = [
       chrome.test.assertEq('Running', item.status);
       chrome.test.assertTrue(item.showsTooltip);
       chrome.test.assertFalse(item.pinnedByPolicy);
+      chrome.test.assertFalse(item.pinStateForcedByType);
       chrome.test.assertFalse(item.hasNotification);
     }));
   },
@@ -617,7 +606,7 @@ var defaultTests = [
           break;
         }
       }
-      chrome.test.assertTrue(displayId != "-1");
+      chrome.test.assertNe("-1", displayId);
       // SHELF_AUTO_HIDE_ALWAYS_HIDDEN not supported by shelf_prefs.
       // TODO(ricardoq): Use enums in IDL instead of hardcoded strings.
       var behaviors = ["always", "never"];
@@ -649,7 +638,7 @@ var defaultTests = [
           break;
         }
       }
-      chrome.test.assertTrue(displayId != "-1");
+      chrome.test.assertNe("-1", displayId);
       // SHELF_ALIGNMENT_BOTTOM_LOCKED not supported by shelf_prefs.
       var alignments = [chrome.autotestPrivate.ShelfAlignmentType.LEFT,
         chrome.autotestPrivate.ShelfAlignmentType.BOTTOM,
@@ -682,7 +671,7 @@ var defaultTests = [
           break;
         }
       }
-      chrome.test.assertTrue(displayId != "-1");
+      chrome.test.assertNe("-1", displayId);
       chrome.system.display.setDisplayProperties(displayId, {rotation: 90},
         function() {
           chrome.autotestPrivate.waitForDisplayRotation(displayId, 'Rotate90',
@@ -715,7 +704,7 @@ var defaultTests = [
           break;
         }
       }
-      chrome.test.assertTrue(displayId != "-1");
+      chrome.test.assertNe("-1", displayId);
       chrome.system.display.setDisplayProperties(
           displayId, {rotation: 180},
           function() {
@@ -824,7 +813,7 @@ var defaultTests = [
               });
             });
       }
-      chrome.test.assertTrue(-1 != browserFrameIndex);
+      chrome.test.assertNe(browserFrameIndex, -1);
     });
   },
 
@@ -1076,7 +1065,7 @@ var defaultTests = [
   function setAndGetClipboardTextData() {
     const textData = 'foo bar';
     chrome.autotestPrivate.getClipboardTextData(function(beforeData) {
-      chrome.test.assertTrue(textData != beforeData);
+      chrome.test.assertNe(beforeData, textData);
       chrome.autotestPrivate.setClipboardTextData(textData, function() {
         chrome.autotestPrivate.getClipboardTextData(function(afterData) {
           chrome.test.assertEq(afterData, textData);
@@ -1113,6 +1102,46 @@ var defaultTests = [
         });
       });
     });
+  },
+
+  function collectFrameCountingData() {
+    let extraWindow;
+    promisify(
+        chrome.autotestPrivate.startFrameCounting, /*bucketSizeInSeconds=*/1)
+        .then(function() {
+          // Create a browser window after start api call.
+          return new Promise(resolve => {
+            extraWindow = window.open("about:blank");
+            resolve();
+          });
+        })
+        .then(function() {
+          // Minimize/restore to trigger screen updates.
+          return promisify(minimizeBrowserWindow);
+        })
+        .then(function() {
+          return promisify(unminimizeBrowserWindow);
+        })
+        .then(function() {
+          return promisify(
+              chrome.autotestPrivate.stopFrameCounting);
+        })
+        .then(function(data) {
+          extraWindow.close();
+          chrome.test.assertTrue(data.length >= 0);
+          chrome.test.succeed();
+        })
+        .catch(function(err) {
+          if (extraWindow)
+            extraWindow.close();
+          chrome.test.fail(err);
+        });
+  },
+
+  function stopFrameCountingWithoutStart() {
+    // Expects the stop call to fail when not paired with a start call.
+    chrome.autotestPrivate.stopFrameCounting(
+        chrome.test.callbackFail('No frame counting data'));
   },
 
   // KEEP |lockScreen()| TESTS AT THE BOTTOM OF THE defaultTests AS IT WILL
@@ -1198,32 +1227,9 @@ var arcEnabledTests = [
           chrome.test.assertTrue(
               Date.now() <= packageInfo.lastBackupTime + 5 * 60 * 1000.0);
           chrome.test.assertEq(true, packageInfo.shouldSync);
-          chrome.test.assertEq(false, packageInfo.system);
           chrome.test.assertEq(false, packageInfo.vpnProvider);
           chrome.test.succeed();
         }));
-  },
-  // Launch existing ARC app
-  function launchArcApp() {
-    chrome.autotestPrivate.launchArcApp(
-        'bifanmfigailifmdhaomnmchcgflbbdn',
-        '#Intent;',
-        function(appLaunched) {
-          chrome.test.assertNoLastError();
-          chrome.test.assertTrue(appLaunched);
-          chrome.test.succeed();
-        });
-  },
-  // Launch non-existing ARC app
-  function launchNonExistingApp() {
-    chrome.autotestPrivate.launchArcApp(
-        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        '#Intent;',
-        function(appLaunched) {
-          chrome.test.assertNoLastError();
-          chrome.test.assertFalse(appLaunched);
-          chrome.test.succeed();
-        });
   },
 
   async function douleStartArc() {
@@ -1294,6 +1300,16 @@ var policyTests = [
     );
   },
 
+];
+
+var remoteCommandsTests = [
+  function refreshRemoteCommands() {
+    chrome.autotestPrivate.refreshRemoteCommands(
+      chrome.test.callbackPass(function () {
+        chrome.test.succeed();
+      })
+    );
+  },
 ];
 
 var arcPerformanceTracingTests = [
@@ -1383,13 +1399,13 @@ var overviewDragTests = [
   }
 ];
 
-var splitviewLeftSnappedTests = [
-  function getSplitViewControllerStateLeftSnapped() {
+var splitviewPrimarySnappedTests = [
+  function getSplitViewControllerStatePrimarySnapped() {
     chrome.autotestPrivate.getAppWindowList(
         chrome.test.callbackPass(function(list) {
           var found = false;
           list.forEach(window => {
-            if (window.stateType == 'LeftSnapped')
+            if (window.stateType == 'PrimarySnapped')
               found = true;
           });
           chrome.test.assertTrue(found);
@@ -1497,12 +1513,71 @@ var shelfTests = [function fetchShelfUIInfo() {
       }));
 }];
 
+var isFeatureEnabledTests = [
+  function getEnabledFeature() {
+    chrome.autotestPrivate.isFeatureEnabled("EnabledFeatureForTest",
+      chrome.test.callbackPass(enabled => {
+        chrome.test.assertTrue(enabled);
+      }));
+  },
+  function getDisabledFeature() {
+    chrome.autotestPrivate.isFeatureEnabled("DisabledFeatureForTest",
+      chrome.test.callbackPass(enabled => {
+        chrome.test.assertFalse(enabled);
+      }));
+  },
+  function getUnknownFeature() {
+    chrome.autotestPrivate.isFeatureEnabled("UnknownFeature",
+      chrome.test.callbackFail(
+        "feature UnknownFeature is not on allowlist, see " +
+        "AutotestPrivateIsFeatureEnabledFunction::Run() to update the list"));
+  }
+];
+
+var launcherSearchBoxStateTests = [ function verifyGhostText(){
+  chrome.autotestPrivate.getLauncherSearchBoxState(
+      chrome.test.callbackPass(info => {
+        chrome.test.assertEq('youtube - Websites', info.ghostText);
+      }));
+}];
+
 var holdingSpaceTests = [
   function resetHoldingSpace(options) {
     // State after this call is checked in C++ test code.
     chrome.autotestPrivate.resetHoldingSpace(options,
       chrome.test.callbackPass());
   },
+];
+
+var isFieldTrialActiveTests = [
+  function getActiveTrialActiveGroup() {
+    chrome.autotestPrivate.isFieldTrialActive(
+        'ActiveTrialForTest', 'GroupForTest',
+        chrome.test.callbackPass(enabled => {
+          chrome.test.assertTrue(enabled);
+        }));
+  },
+  function getActiveTrialInactiveGroup() {
+    chrome.autotestPrivate.isFieldTrialActive(
+        'ActiveTrialForTest', 'WrongGroupForTest',
+        chrome.test.callbackPass(enabled => {
+          chrome.test.assertFalse(enabled);
+        }));
+  },
+  function getInactiveTrial() {
+    chrome.autotestPrivate.isFieldTrialActive(
+        'InactiveTrialForTest', 'GroupForTest',
+        chrome.test.callbackPass(enabled => {
+          chrome.test.assertFalse(enabled);
+        }));
+  }
+];
+
+var clearAllowedPrefTests = [
+  function clearAllowedPrefs(pref_name) {
+    chrome.autotestPrivate.clearAllowedPref(pref_name,
+        chrome.test.callbackPass());
+  }
 ];
 
 // Tests that requires a concrete system web app installation.
@@ -1519,33 +1594,38 @@ var systemWebAppsTests = [
       })
     );
   },
-  function isSystemWebAppOpen() {
-    chrome.autotestPrivate.waitForSystemWebAppsInstall(
-        chrome.test.callbackPass(() => {
-          // Test system app should not be open by default.
-          chrome.autotestPrivate.isSystemWebAppOpen(
-              'maphiehpiinjgiaepbljmopkodkadcbh',
-              chrome.test.callbackPass(isOpen => {
-                chrome.test.assertFalse(isOpen);
-              }));
+  async function isSystemWebAppOpen() {
+    const waitForSystemWebAppsInstall = (...args) =>
+        promisify(chrome.autotestPrivate.waitForSystemWebAppsInstall, ...args);
+    const isSystemWebAppOpen = (...args) =>
+        promisify(chrome.autotestPrivate.isSystemWebAppOpen, ...args);
+    const launchSystemWebApp = (...args) =>
+        promisify(chrome.autotestPrivate.launchSystemWebApp, ...args);
 
-          // Open test app and verify the state should be open.
-          chrome.autotestPrivate.launchSystemWebApp(
-              'OSSettings', 'chrome://test-system-app/',
-              chrome.test.callbackPass(() => {
-                chrome.autotestPrivate.isSystemWebAppOpen(
-                    'maphiehpiinjgiaepbljmopkodkadcbh',
-                    chrome.test.callbackPass(isOpen => {
-                      chrome.test.assertTrue(isOpen);
-                    }));
-              }));
+    await waitForSystemWebAppsInstall();
 
-          // Check for invalid app.
-          chrome.autotestPrivate.isSystemWebAppOpen(
-              '',
-              chrome.test.callbackFail(
-                  'No system web app is found by given app id.'));
-        }));
+    // Checking for an invalid app should fail.
+    let did_error = false;
+    await isSystemWebAppOpen('').catch(() => did_error = true);
+    chrome.test.assertTrue(did_error, 'Checking an invalid app should error');
+    chrome.test.assertLastError('No system web app is found by given app id.');
+
+    // App isn't opened at the start.
+    chrome.test.assertFalse(
+        await isSystemWebAppOpen('maphiehpiinjgiaepbljmopkodkadcbh'),
+        'App shouldn\'t be opened before launchSystemWebApp');
+
+    // Launch an app.
+    await launchSystemWebApp('OSSettings', 'chrome://test-system-app/');
+
+    // App launch might be queued and processed later. We don't have a method to
+    // wait for launch completion, so we poll instead. If this test times out,
+    // most likely something is wrong with system web app launch logic.
+    while (!await isSystemWebAppOpen('maphiehpiinjgiaepbljmopkodkadcbh')) {
+      await sleep(100);
+    }
+
+    chrome.test.succeed();
   },
 ]
 
@@ -1563,10 +1643,10 @@ var systemWebAppsTests = [
       function checkLacrosInfoFieldValue() {
         chrome.autotestPrivate.getLacrosInfo(
             chrome.test.callbackPass(function(lacrosInfo) {
-              chrome.test.assertEq('Stopped', lacrosInfo['state']);
-              chrome.test.assertTrue(!lacrosInfo['isKeepAlive']);
-              chrome.test.assertEq('/run/lacros', lacrosInfo['lacrosPath']);
-              chrome.test.assertEq('SideBySide', lacrosInfo['mode']);
+              chrome.test.assertEq('Unavailable', lacrosInfo['state']);
+              chrome.test.assertTrue(lacrosInfo['isKeepAlive']);
+              chrome.test.assertEq('', lacrosInfo['lacrosPath']);
+              chrome.test.assertEq('Only', lacrosInfo['mode']);
             }));
       },
     ]
@@ -1576,15 +1656,20 @@ var systemWebAppsTests = [
       'arcEnabled': arcEnabledTests,
       'arcProcess': arcProcessTests,
       'enterprisePolicies': policyTests,
+      'remoteCommands': remoteCommandsTests,
       'arcPerformanceTracing': arcPerformanceTracingTests,
       'overviewDefault': overviewTests,
       'overviewDrag': overviewDragTests,
-      'splitviewLeftSnapped': splitviewLeftSnappedTests,
+      'splitviewPrimarySnapped': splitviewPrimarySnappedTests,
       'scrollableShelf': scrollableShelfTests,
       'shelf': shelfTests,
+      'isFeatureEnabled': isFeatureEnabledTests,
       'holdingSpace': holdingSpaceTests,
       'systemWebApps': systemWebAppsTests,
       'lacrosEnabled': lacrosEnabledTests,
+      'launcherSearchBoxState': launcherSearchBoxStateTests,
+      'isFieldTrialActive': isFieldTrialActiveTests,
+      'clearAllowedPref': clearAllowedPrefTests
     };
 
 chrome.test.getConfig(function(config) {

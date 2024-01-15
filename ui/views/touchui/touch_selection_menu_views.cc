@@ -15,18 +15,18 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/pointer/touch_editing_controller.h"
-#include "ui/color/color_id.h"
-#include "ui/color/color_provider.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
-#include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/text_utils.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/touch_selection/touch_selection_menu_runner.h"
+#include "ui/touch_selection/touch_selection_metrics.h"
 #include "ui/views/controls/button/label_button.h"
+#include "ui/views/controls/separator.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/views_features.h"
 
@@ -36,14 +36,31 @@ namespace {
 struct MenuCommand {
   int command_id;
   int message_id;
-} kMenuCommands[] = {
+};
+
+MenuCommand kMenuCommands[] = {
     {ui::TouchEditable::kCut, IDS_APP_CUT},
     {ui::TouchEditable::kCopy, IDS_APP_COPY},
     {ui::TouchEditable::kPaste, IDS_APP_PASTE},
+};
+
+MenuCommand kMenuSelectCommands[] = {
+    {ui::TouchEditable::kSelectWord, IDS_APP_SELECT},
     {ui::TouchEditable::kSelectAll, IDS_APP_SELECT_ALL},
 };
 
-constexpr int kSpacingBetweenButtons = 2;
+// Constants to apply when touch text editing redesign is disabled.
+constexpr gfx::Insets kMenuMargins = gfx::Insets(1);
+constexpr gfx::Size kMenuButtonMinSize = gfx::Size(63, 38);
+
+// Constants to apply when touch text editing redesign is enabled.
+constexpr gfx::Insets kEmptyMenuMargins = gfx::Insets(0);
+constexpr int kMenuCornerRadius = 8;
+// Padding to add space between the menu and the selection bounds and handles.
+constexpr int kMenuAnchorRectPadding = 8;
+// Padding to apply horizontally around button labels.
+constexpr int kButtonHorizontalPadding = 16;
+constexpr int kButtonMinHeight = 40;
 
 }  // namespace
 
@@ -60,15 +77,17 @@ TouchSelectionMenuViews::TouchSelectionMenuViews(
   DialogDelegate::SetButtons(ui::DIALOG_BUTTON_NONE);
   set_shadow(BubbleBorder::STANDARD_SHADOW);
   set_parent_window(context);
-  constexpr gfx::Insets kMenuMargins = gfx::Insets(1);
-  set_margins(kMenuMargins);
+  if (::features::IsTouchTextEditingRedesignEnabled()) {
+    set_margins(kEmptyMenuMargins);
+    set_corner_radius(kMenuCornerRadius);
+  } else {
+    set_margins(kMenuMargins);
+  }
   SetCanActivate(false);
   set_adjust_if_offscreen(true);
   SetFlipCanvasOnPaintForRTLUI(true);
 
-  SetLayoutManager(
-      std::make_unique<BoxLayout>(BoxLayout::Orientation::kHorizontal,
-                                  gfx::Insets(), kSpacingBetweenButtons));
+  SetLayoutManager(std::make_unique<BoxLayout>());
 }
 
 void TouchSelectionMenuViews::ShowMenu(const gfx::Rect& anchor_rect,
@@ -88,6 +107,9 @@ void TouchSelectionMenuViews::ShowMenu(const gfx::Rect& anchor_rect,
   if (menu_width > anchor_rect.width() - handle_image_size.width())
     adjusted_anchor_rect.Inset(
         gfx::Insets::TLBR(0, 0, -handle_image_size.height(), 0));
+  if (::features::IsTouchTextEditingRedesignEnabled()) {
+    adjusted_anchor_rect.Outset(kMenuAnchorRectPadding);
+  }
   SetAnchorRect(adjusted_anchor_rect);
 
   BubbleDialogDelegateView::CreateBubble(this);
@@ -118,11 +140,15 @@ bool TouchSelectionMenuViews::IsMenuAvailable(
   const auto is_enabled = [client](MenuCommand command) {
     return client->IsCommandIdEnabled(command.command_id);
   };
-  return base::ranges::any_of(kMenuCommands, is_enabled);
+  bool is_available = base::ranges::any_of(kMenuCommands, is_enabled);
+  is_available |= ::features::IsTouchTextEditingRedesignEnabled() &&
+                  base::ranges::any_of(kMenuSelectCommands, is_enabled);
+  return is_available;
 }
 
 void TouchSelectionMenuViews::CloseMenu() {
-  DisconnectOwner();
+  if (owner_)
+    DisconnectOwner();
   // Closing the widget will self-destroy this object.
   Widget* widget = GetWidget();
   if (widget && !widget->IsClosed())
@@ -134,11 +160,26 @@ TouchSelectionMenuViews::~TouchSelectionMenuViews() = default;
 void TouchSelectionMenuViews::CreateButtons() {
   DCHECK(client_);
   for (const auto& command : kMenuCommands) {
-    if (client_->IsCommandIdEnabled(command.command_id)) {
+    if (!client_->IsCommandIdEnabled(command.command_id)) {
+      continue;
+    }
+    CreateButton(
+        l10n_util::GetStringUTF16(command.message_id),
+        base::BindRepeating(&TouchSelectionMenuViews::ButtonPressed,
+                            base::Unretained(this), command.command_id));
+    CreateSeparator();
+  }
+
+  if (::features::IsTouchTextEditingRedesignEnabled()) {
+    for (const auto& command : kMenuSelectCommands) {
+      if (!client_->IsCommandIdEnabled(command.command_id)) {
+        continue;
+      }
       CreateButton(
           l10n_util::GetStringUTF16(command.message_id),
           base::BindRepeating(&TouchSelectionMenuViews::ButtonPressed,
                               base::Unretained(this), command.command_id));
+      CreateSeparator();
     }
   }
 
@@ -156,30 +197,25 @@ LabelButton* TouchSelectionMenuViews::CreateButton(
   std::u16string label = gfx::RemoveAccelerator(title);
   auto* button = AddChildView(std::make_unique<LabelButton>(
       std::move(callback), label, style::CONTEXT_TOUCH_MENU));
-  constexpr gfx::Size kMenuButtonMinSize = gfx::Size(63, 38);
-  button->SetMinSize(kMenuButtonMinSize);
+  if (::features::IsTouchTextEditingRedesignEnabled()) {
+    button->SetBorder(
+        CreateEmptyBorder(gfx::Insets::VH(0, kButtonHorizontalPadding)));
+    button->SetMinSize(gfx::Size(0, kButtonMinHeight));
+  } else {
+    button->SetMinSize(kMenuButtonMinSize);
+  }
   button->SetHorizontalAlignment(gfx::ALIGN_CENTER);
   return button;
+}
+
+void TouchSelectionMenuViews::CreateSeparator() {
+  AddChildView(std::make_unique<Separator>());
 }
 
 void TouchSelectionMenuViews::DisconnectOwner() {
   DCHECK(owner_);
   owner_->menu_ = nullptr;
   owner_ = nullptr;
-}
-
-void TouchSelectionMenuViews::OnPaint(gfx::Canvas* canvas) {
-  BubbleDialogDelegateView::OnPaint(canvas);
-  if (children().empty())
-    return;
-
-  // Draw separator bars.
-  for (auto i = children().cbegin(); i != std::prev(children().cend()); ++i) {
-    const View* child = *i;
-    int x = child->bounds().right() + kSpacingBetweenButtons / 2;
-    canvas->FillRect(gfx::Rect(x, 0, 1, child->height()),
-                     GetColorProvider()->GetColor(ui::kColorSeparator));
-  }
 }
 
 void TouchSelectionMenuViews::WindowClosing() {
@@ -191,18 +227,22 @@ void TouchSelectionMenuViews::WindowClosing() {
 
 void TouchSelectionMenuViews::ButtonPressed(int command,
                                             const ui::Event& event) {
-  DCHECK(client_);
+  ui::RecordTouchSelectionMenuCommandAction(command);
   CloseMenu();
-  client_->ExecuteCommand(command, event.flags());
+  if (client_) {
+    client_->ExecuteCommand(command, event.flags());
+  }
 }
 
 void TouchSelectionMenuViews::EllipsisPressed(const ui::Event& event) {
-  DCHECK(client_);
+  ui::RecordTouchSelectionMenuEllipsisAction();
   CloseMenu();
-  client_->RunContextMenu();
+  if (client_) {
+    client_->RunContextMenu();
+  }
 }
 
-BEGIN_METADATA(TouchSelectionMenuViews, BubbleDialogDelegateView)
+BEGIN_METADATA(TouchSelectionMenuViews)
 END_METADATA
 
 }  // namespace views

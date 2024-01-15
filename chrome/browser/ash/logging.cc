@@ -6,11 +6,11 @@
 
 #include <cstdio>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/platform_file.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/system/sys_info.h"
@@ -19,9 +19,9 @@
 #include "chrome/common/logging_chrome.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/zygote_host/zygote_host_linux.h"
-#include "content/public/common/child_process_host.h"
 
 namespace ash {
 

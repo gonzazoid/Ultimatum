@@ -31,6 +31,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_DOM_DATA_STORE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_DOM_DATA_STORE_H_
 
+#include "base/containers/contains.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
@@ -71,11 +72,11 @@ class DOMDataStore final : public GarbageCollected<DOMDataStore> {
                                  ScriptWrappable* object,
                                  v8::Local<v8::Object> holder,
                                  const ScriptWrappable* wrappable) {
-    if (CanUseMainWorldWrapper()
-        // The second fastest way to check if we're in the main world is to
-        // check if the wrappable's wrapper is the same as the holder.
-        || HolderContainsWrapper(holder, wrappable))
+    if (HolderContainsWrapperForMainWorld(holder, wrappable)) {
+      // Verify our assumptions about the main world.
+      DCHECK(Current(return_value.GetIsolate()).is_main_world_);
       return object->SetReturnValue(return_value);
+    }
     return Current(return_value.GetIsolate())
         .SetReturnValueFrom(return_value, object);
   }
@@ -132,27 +133,30 @@ class DOMDataStore final : public GarbageCollected<DOMDataStore> {
       return object->SetWrapper(isolate, wrapper_type_info, wrapper);
 
     auto result = wrapper_map_.insert(
-        object, TraceWrapperV8Reference<v8::Object>(isolate, wrapper));
-    if (LIKELY(result.is_new_entry)) {
-      wrapper_type_info->ConfigureWrapper(&result.stored_value->value);
-    } else {
+        object, wrapper_type_info->SupportsDroppingWrapper()
+                    ? TraceWrapperV8Reference<v8::Object>(
+                          isolate, wrapper,
+                          TraceWrapperV8Reference<v8::Object>::IsDroppable{})
+                    : TraceWrapperV8Reference<v8::Object>(isolate, wrapper));
+    // TODO(mlippautz): Check whether there's still recursive cases of
+    // Wrap()/AssociateWithWrapper() that can run into the case of an existing
+    // entry.
+    if (UNLIKELY(!result.is_new_entry)) {
       DCHECK(!result.stored_value->value.IsEmpty());
       wrapper = result.stored_value->value.Get(isolate);
     }
     return result.is_new_entry;
   }
 
-  bool UnsetSpecificWrapperIfSet(
-      ScriptWrappable* object,
-      const v8::TracedReference<v8::Object>& handle) {
+  template <typename HandleType>
+  bool ClearWrapperIfEqualTo(ScriptWrappable* object,
+                             const HandleType& handle) {
     DCHECK(!is_main_world_);
     const auto& it = wrapper_map_.find(object);
-    if (it != wrapper_map_.end()) {
-      if (it->value == handle) {
-        it->value.Reset();
-        wrapper_map_.erase(it);
-        return true;
-      }
+    if (it != wrapper_map_.end() && it->value == handle) {
+      it->value.Reset();
+      wrapper_map_.erase(it);
+      return true;
     }
     return false;
   }
@@ -163,7 +167,7 @@ class DOMDataStore final : public GarbageCollected<DOMDataStore> {
       return object->SetReturnValue(return_value);
     auto it = wrapper_map_.find(object);
     if (it != wrapper_map_.end()) {
-      return_value.Set(it->value);
+      return_value.SetNonEmpty(it->value);
       return true;
     }
     return false;
@@ -172,7 +176,7 @@ class DOMDataStore final : public GarbageCollected<DOMDataStore> {
   bool ContainsWrapper(const ScriptWrappable* object) {
     if (is_main_world_)
       return object->ContainsWrapper();
-    return wrapper_map_.find(object) != wrapper_map_.end();
+    return base::Contains(wrapper_map_, object);
   }
 
   virtual void Trace(Visitor*) const;
@@ -188,12 +192,17 @@ class DOMDataStore final : public GarbageCollected<DOMDataStore> {
            !DOMWrapperWorld::NonMainWorldsExistInMainThread();
   }
 
-  static bool HolderContainsWrapper(v8::Local<v8::Object> holder,
-                                    const ScriptWrappable* wrappable) {
-    // Verify our assumptions about the main world.
+  static bool HolderContainsWrapperForMainWorld(
+      v8::Local<v8::Object> holder,
+      const ScriptWrappable* wrappable) {
+    // The first fastest way is to check that there is only the main world
+    // on the main thread.
+    if (CanUseMainWorldWrapper()) {
+      return true;
+    }
+    // The second fastest way to check if we're in the main world is to
+    // check if the wrappable's wrapper is the same as the holder.
     DCHECK(wrappable);
-    DCHECK(!wrappable->ContainsWrapper() || !wrappable->IsEqualTo(holder) ||
-           Current(v8::Isolate::GetCurrent()).is_main_world_);
     return wrappable->IsEqualTo(holder);
   }
 

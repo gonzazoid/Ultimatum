@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/time_formatting.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
@@ -42,9 +42,9 @@ using content::WebUIMessageHandler;
 
 namespace {
 
-content::WebUIDataSource* CreateWebRtcLogsUIHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIWebRtcLogsHost);
+void CreateAndAddWebRtcLogsUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIWebRtcLogsHost);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"webrtcLogsTitle", IDS_WEBRTC_LOGS_TITLE},
@@ -77,7 +77,6 @@ content::WebUIDataSource* CreateWebRtcLogsUIHTMLSource() {
   source->AddResourcePath("webrtc_logs.css", IDR_MEDIA_WEBRTC_LOGS_CSS);
   source->AddResourcePath("webrtc_logs.js", IDR_MEDIA_WEBRTC_LOGS_JS);
   source->SetDefaultResource(IDR_MEDIA_WEBRTC_LOGS_HTML);
-  return source;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -132,7 +131,7 @@ class WebRtcLogsDOMHandler final : public WebUIMessageHandler {
   base::Value EventLogUploadInfoToValue(
       const UploadList::UploadInfo& info) const;
 
-  // Helpers for EventLogUploadInfoToDictionaryValue().
+  // Helpers for `EventLogUploadInfoToValue()`.
   base::Value FromPendingLog(const UploadList::UploadInfo& info) const;
   base::Value FromActivelyUploadedLog(const UploadList::UploadInfo& info) const;
   base::Value FromNotUploadedLog(const UploadList::UploadInfo& info) const;
@@ -255,21 +254,22 @@ base::Value::List WebRtcLogsDOMHandler::UpdateUIWithTextLogs() const {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   base::Value::List result;
-  std::vector<UploadList::UploadInfo> uploads;
-  text_log_upload_list_->GetUploads(50, &uploads);
+  const std::vector<const UploadList::UploadInfo*> uploads =
+      text_log_upload_list_->GetUploads(50);
 
-  for (const auto& upload : uploads) {
+  for (const auto* upload : uploads) {
     base::Value::Dict upload_value;
-    upload_value.Set("id", upload.upload_id);
+    upload_value.Set("id", upload->upload_id);
 
     std::u16string value_w;
-    if (!upload.upload_time.is_null())
-      value_w = base::TimeFormatFriendlyDateAndTime(upload.upload_time);
+    if (!upload->upload_time.is_null()) {
+      value_w = base::TimeFormatFriendlyDateAndTime(upload->upload_time);
+    }
     upload_value.Set("upload_time", value_w);
 
     std::string value;
-    if (!upload.local_id.empty()) {
-      value = text_log_dir_.AppendASCII(upload.local_id)
+    if (!upload->local_id.empty()) {
+      value = text_log_dir_.AppendASCII(upload->local_id)
                   .AddExtension(FILE_PATH_LITERAL(".gz"))
                   .AsUTF8Unsafe();
     }
@@ -281,19 +281,21 @@ base::Value::List WebRtcLogsDOMHandler::UpdateUIWithTextLogs() const {
     // to a time within reasonable bounds, otherwise we fall back on the upload
     // time.
     // TODO(grunell): Use |capture_time| only.
-    if (!upload.capture_time.is_null()) {
-      value_w = base::TimeFormatFriendlyDateAndTime(upload.capture_time);
+    if (!upload->capture_time.is_null()) {
+      value_w = base::TimeFormatFriendlyDateAndTime(upload->capture_time);
     } else {
       // Fall back on local ID as time. We need to check that it's within
       // resonable bounds, since the ID may not represent time. Check between
       // 2012 when the feature was introduced and now.
       double seconds_since_epoch;
-      if (base::StringToDouble(upload.local_id, &seconds_since_epoch)) {
-        base::Time capture_time = base::Time::FromDoubleT(seconds_since_epoch);
-        const base::Time::Exploded lower_limit = {2012, 1, 0, 1, 0, 0, 0, 0};
+      if (base::StringToDouble(upload->local_id, &seconds_since_epoch)) {
+        base::Time capture_time =
+            base::Time::FromSecondsSinceUnixEpoch(seconds_since_epoch);
+        static constexpr base::Time::Exploded kLowerLimit = {
+            .year = 2012, .month = 1, .day_of_month = 1};
         base::Time out_time;
         bool conversion_success =
-            base::Time::FromUTCExploded(lower_limit, &out_time);
+            base::Time::FromUTCExploded(kLowerLimit, &out_time);
         DCHECK(conversion_success);
         if (capture_time > out_time && capture_time < base::Time::Now()) {
           value_w = base::TimeFormatFriendlyDateAndTime(capture_time);
@@ -470,5 +472,5 @@ WebRtcLogsUI::WebRtcLogsUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<WebRtcLogsDOMHandler>(profile));
 
   // Set up the chrome://webrtc-logs/ source.
-  content::WebUIDataSource::Add(profile, CreateWebRtcLogsUIHTMLSource());
+  CreateAndAddWebRtcLogsUIHTMLSource(profile);
 }

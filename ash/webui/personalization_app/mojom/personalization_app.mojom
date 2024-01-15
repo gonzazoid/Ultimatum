@@ -4,9 +4,11 @@
 
 module ash.personalization_app.mojom;
 
+import "ash/style/mojom/color_scheme.mojom";
 import "mojo/public/mojom/base/big_buffer.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/string16.mojom";
+import "mojo/public/mojom/base/time.mojom";
 import "skia/public/mojom/skcolor.mojom";
 import "url/mojom/url.mojom";
 
@@ -47,6 +49,8 @@ enum WallpaperType {
                            // album id.
   kOnceGooglePhotos = 11,  // WallpaperInfo.location contains the Google Photos
                            // photo id.
+  kOobe = 12,  // Wallpaper shown during OOBE if not overridden.
+  kSeaPen = 13,
 };
 
 // The image type specific to online wallpapers. This should be kept in sync
@@ -55,6 +59,9 @@ enum OnlineImageType {
   kUnknown = 0,
   kLight = 1,
   kDark = 2,
+  kPreview = 3, // Used to indicate a preview image. Not an actual wallpaper.
+  kMorning = 4,
+  kLateAfternoon = 5,
 };
 
 // Values for the user-level setting indicating access to Google Photos data.
@@ -78,6 +85,10 @@ struct WallpaperCollection {
     // Name of this collection to be displayed to the user.
     string name;
 
+    // Extra description text about the wallpaper collection. May be empty
+    // string.
+    string description_content;
+
     // The preview image URLs of this collection.
     array<url.mojom.Url> previews;
 };
@@ -96,6 +107,12 @@ struct GooglePhotosAlbum {
 
     // URL to the bytes of the album's displayed cover photo.
     url.mojom.Url preview;
+
+    // Latest modification timestamp used to sort albums.
+    mojo_base.mojom.Time timestamp;
+
+    // Whether the album is a shared album.
+    bool is_shared;
 };
 
 // Represents the server-provided response to a Google Photos albums request.
@@ -165,22 +182,19 @@ struct FetchGooglePhotosPhotosResponse {
     string? resume_token;
 };
 
-// Represents the response to a daily refresh request.
-struct SetDailyRefreshResponse {
-  // Indicates whether the request is successful.
-  bool success;
-
-  // Indicates whether the request forces the current wallpaper image to
-  // refresh.
-  bool force_refresh;
-};
-
-// Represents the currently selected wallpaper image.
-struct CurrentWallpaper {
+// Represents the attribution of the currently selected wallpaper image.
+struct CurrentAttribution {
   // Attribution text such as "Photo by John Doe" or the file name of the local
   // image.
   array<string> attribution;
 
+  // A unique identifier for the image. This is used to map the attribution to
+  // its image when a new attribution is cached to the local storage.
+  string key;
+};
+
+// Represents the currently selected wallpaper image.
+struct CurrentWallpaper {
   // The layout of the image.
   WallpaperLayout layout;
 
@@ -190,12 +204,28 @@ struct CurrentWallpaper {
   // A unique identifier for the image. This is used to identify which
   // |WallpaperImage| or local image the user has selected.
   string key;
+
+  // Extra description title about the image. Currently only supplied for
+  // images supplied by backdrop server with type
+  // `WallpaperType::{kDaily, kOnline}`.
+  // May be empty string.
+  string description_title;
+
+  // Extra description content about the image. Same as above, only supplied for
+  // `WallpaperType::{kDaily, kOnline}`.
+  // May be empty string.
+  string description_content;
 };
 
 // Receives updated wallpaper information whenever it is changed.
 interface WallpaperObserver {
   // Triggered by |WallpaperControllerObserver::OnWallpaperPreviewEnded|.
   OnWallpaperPreviewEnded();
+
+  // Triggered by |WallpaperControllerObserver::OnAttributionChanged|. Retrieves
+  // updated attribution of the current wallpaper and calls the observer.
+  // |attribution| will be null if there is an error retrieving attribution.
+  OnAttributionChanged(CurrentAttribution? attribution);
 
   // Triggered by |WallpaperControllerObserver::OnWallpaperChanged|. Retrieves
   // updated wallpaper information and calls the observer. |image| will be null
@@ -236,6 +266,15 @@ interface WallpaperProvider {
     FetchGooglePhotosAlbums(string? resume_token) =>
         (FetchGooglePhotosAlbumsResponse response);
 
+    // Fetch the list of albums shared with the user or shared by the user in
+    // Google Photos. Albums with no photo assets will not be returned. On
+    // error, |response.albums| will be absent. |response.resume_token| will
+    // be present when there are more results to fetch; |resume_token| will
+    // be present when this is a follow-up query to one that indicated there
+    // were more results to fetch.
+    FetchGooglePhotosSharedAlbums(string? resume_token) =>
+        (FetchGooglePhotosAlbumsResponse response);
+
     // Fetch whether the user is allowed to access Google Photos data.
     FetchGooglePhotosEnabled() => (GooglePhotosEnablementState state);
 
@@ -271,7 +310,7 @@ interface WallpaperProvider {
     SetWallpaperObserver(pending_remote<WallpaperObserver> observer);
 
     // Sets the given backdrop wallpaper as the user's background.
-    SelectWallpaper(uint64 image_asset_id, bool preview_mode) =>
+    SelectWallpaper(uint64 unit_id, bool preview_mode) =>
         (bool success);
 
     // Select the device default image as the user's background. Not all devices
@@ -290,8 +329,7 @@ interface WallpaperProvider {
     // Sets the Google Photos album with the given id as the daily refresh
     // album. May refresh the current wallpaper image if it is not part of the
     // album.
-    SelectGooglePhotosAlbum(string id)
-        => (SetDailyRefreshResponse response);
+    SelectGooglePhotosAlbum(string id) => (bool success);
 
     // Gets the id of the current Google Photos album on daily refresh, or an
     // empty string if Google Photos daily refresh is not active.
@@ -302,8 +340,7 @@ interface WallpaperProvider {
 
     // Sets and enables daily refresh for the given |collection_id|. May refresh
     // the current wallpaper image if it is not part of the collection.
-    SetDailyRefreshCollectionId(string collection_id)
-        => (SetDailyRefreshResponse response);
+    SetDailyRefreshCollectionId(string collection_id) => (bool success);
 
     // Get the daily refresh collection id. It can be empty if daily refresh is
     // not enabled.
@@ -322,6 +359,34 @@ interface WallpaperProvider {
     // Cancels the wallpaper preview and reverts to the user wallpaper. Must be
     // called in preview mode.
     CancelPreviewWallpaper();
+
+    // Determines whether to show the time of day wallpaper dialog.
+    ShouldShowTimeOfDayWallpaperDialog() => (bool should_show_dialog);
+};
+
+// Static color options used to generate the system UI's color palette. These
+// options are not based off the user's wallpaper.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum StaticColor {
+  kUnknown = 0,
+  kGoogleBlue = 1,
+  kLightPink = 2,
+  kDarkGreen = 3,
+  kLightPurple = 4,
+};
+
+const uint32 kStaticColorGoogleBlue = 0x4285F4;
+const uint32 kStaticColorLightPink = 0xFFD6D6;
+const uint32 kStaticColorDarkGreen = 0x485045;
+const uint32 kStaticColorLightPurple = 0xCBBFFF;
+
+// Samples of a color scheme for the tri-color scheme preview.
+struct SampleColorScheme {
+  ash.style.mojom.ColorScheme scheme;
+  skia.mojom.SkColor primary;
+  skia.mojom.SkColor secondary;
+  skia.mojom.SkColor tertiary;
 };
 
 // Receives information whenever there are theme related changes such as color
@@ -333,6 +398,18 @@ interface ThemeObserver {
 
   // Notifies the JS side the current state of color mode auto scheduler.
   OnColorModeAutoScheduleChanged(bool enabled);
+
+  //Notifies the JS side about the current state of the color scheme.
+  OnColorSchemeChanged(ash.style.mojom.ColorScheme color_scheme);
+
+  // Notifies the JS side that the sample color schemes have changed.
+  OnSampleColorSchemesChanged(array<SampleColorScheme> sample_color_schemes);
+
+  // Notifies the JS side about the current state of the static color.
+  OnStaticColorChanged(skia.mojom.SkColor? color);
+
+  // Notifies the JS side about the system geolocation permission change.
+  OnGeolocationPermissionForSystemServicesChanged(bool enabled);
 };
 
 // Provides APIs to expose theme settings such dark/light color mode.
@@ -346,11 +423,35 @@ interface ThemeProvider {
   // Disables or enables dark color mode auto scheduler.
   SetColorModeAutoScheduleEnabled(bool enabled);
 
+  // Sets the color scheme for dynamic color.
+  // @see //ash/style/color_palette_controller.h
+  SetColorScheme(ash.style.mojom.ColorScheme colorScheme);
+
+  // Sets the seed color for dynamic color.
+  // @see //ash/style/color_palette_controller.h
+  SetStaticColor(skia.mojom.SkColor static_color);
+
+  // Sets the system geolocation permission to "Only allowed for system".
+  EnableGeolocationForSystemServices();
+
+  // Retrieves the color scheme for dynamic color.
+  GetColorScheme() => (ash.style.mojom.ColorScheme color_scheme);
+
+  // Retrieves the static seed color for dynamic color.
+  GetStaticColor() => (skia.mojom.SkColor? static_color);
+
+  // Generate samples of all the color schemes.
+  GenerateSampleColorSchemes() => (array<SampleColorScheme> sample_color_schemes);
+
   // Returns whether color mode auto scheduler is enabled.
   IsColorModeAutoScheduleEnabled() => (bool enabled);
 
   // Returns whether dark mode is enabled.
   IsDarkModeEnabled() => (bool dark_mode_enabled);
+
+  // Returns if the system geolocation permission is enabled for system
+  // services.
+  IsGeolocationEnabledForSystemServices() => (bool geolocation_enabled);
 };
 
 // Contains information about the current user.
@@ -463,12 +564,16 @@ interface UserProvider {
   SelectLastExternalUserImage();
 };
 
-// The animation theme for screen saver. Should be kept in sync with
-// |ash::AmbientAnimationTheme|.
-enum AnimationTheme {
+// The ambient theme for screen saver. Each corresponds to a distinct UI in
+// ambient mode that can be selected by the user.
+//
+// These values are persisted in user pref storage and logs, so they should
+// never be renumbered or reused.
+enum AmbientTheme {
   kSlideshow = 0,
   kFeelTheBreeze = 1,
   kFloatOnBy = 2,
+  kVideo = 3,
 };
 
 // The source of the screensaver images come from.
@@ -478,12 +583,28 @@ enum TopicSource {
 
   // Art related sources in Backdrop server.
   kArtGallery = 1,
+
+  // For all video screensavers. No images are actually used when rendering
+  // these screensavers themselves, but it has the same requirements as other
+  // sources from the personalization app's POV (preview images, etc). Each
+  // possible video option is the equivalent of an "album" in other topic
+  // sources.
+  kVideo = 2,
 };
 
 // Temperature unit for screensaver weather section.
 enum TemperatureUnit {
   kFahrenheit = 0,
   kCelsius = 1,
+};
+
+// Enumeration of UI visibility states.
+// This should be kept in sync with |ash:AmbientUiVisibility|.
+enum AmbientUiVisibility {
+  kShouldShow = 0,
+  kPreview = 1,
+  kHidden = 2,
+  kClosed = 3,
 };
 
 // Album metadaba to display. Contains necessary data for both topic sources.
@@ -514,11 +635,16 @@ interface AmbientObserver {
   // Retrieves information whether ambient mode is enabled.
   OnAmbientModeEnabledChanged(bool ambient_mode_enabled);
 
-  // Notifies the JS side the current state of AnimationTheme.
-  OnAnimationThemeChanged(AnimationTheme animation_theme);
+  // Notifies the JS side the current state of AmbientTheme.
+  OnAmbientThemeChanged(AmbientTheme ambient_theme);
 
   // Notifies the JS side about the current state of TopicSource.
   OnTopicSourceChanged(TopicSource topic_source);
+
+  // Notifies the JS side about the current state of ScreenSaverDuration.
+  //
+  // SPECIAL NOTE: 0 means forever.
+  OnScreenSaverDurationChanged(uint32 minutes);
 
   // Notifies the JS side about the current state of TemperatureUnit.
   OnTemperatureUnitChanged(TemperatureUnit temperature_unit);
@@ -526,13 +652,20 @@ interface AmbientObserver {
   // Notifies the JS side about the current albums.
   OnAlbumsChanged(array<AmbientModeAlbum> albums);
 
-  // Notifies the JS side about the previews of the selected Google Photos
-  // albums.
-  OnGooglePhotosAlbumsPreviewsFetched(array<url.mojom.Url> previews);
+  // Notifies the JS side about the previews of the selected albums.
+  OnPreviewsFetched(array<url.mojom.Url> previews);
+
+  // Notifies the JS side when ambient visibility is changed.
+  OnAmbientUiVisibilityChanged(AmbientUiVisibility visibility);
+
+  // Notifies the JS side about the system geolocation permission change.
+  // TODO(b/319443587): Refactor out the Geolocation interfaces from Ambient*
+  // and Theme* intefaces.
+  OnGeolocationPermissionForSystemServicesChanged(bool enabled);
 };
 
 // Provides APIs to expose Ambient mode settings.
-// Used by the Personalization Hub.
+// Used by the personalization hub WebUI to call into the browser process.
 interface AmbientProvider {
   // Boolean pref for whether ambient mode is enabled.
   IsAmbientModeEnabled() => (bool enabled);
@@ -543,16 +676,25 @@ interface AmbientProvider {
   // Binds a listener to start receiving updates on ambient mode pref changes.
   SetAmbientObserver(pending_remote<AmbientObserver> observer);
 
-  // Sets the ambient animation theme.
-  SetAnimationTheme(AnimationTheme animation_theme);
+  // Sets the ambient theme.
+  SetAmbientTheme(AmbientTheme ambient_theme);
+
+  // Sets the screen saver running duration before put into sleep.
+  //
+  // SPECIAL NOTE: |minutes| with value 0 means forever.
+  SetScreenSaverDuration(int32 minutes);
 
   // Sets the ambient mode topic source.
+  //
+  // SPECIAL NOTE: If |SetAmbientTheme(kVideo)| is called, the provider's
+  // topic source is automatically set to |kVideo| internally. Calling
+  // |SetTopicSource()| with a non-video |topic_source| afterwards is an error.
   SetTopicSource(TopicSource topic_source);
 
   // Sets the ambient mode temperature unit.
   SetTemperatureUnit(TemperatureUnit temperature_unit);
 
-  // Sets one album as selected or not.
+  // Sets one album as selected or not. See note above |SetTopicSource()|.
   SetAlbumSelected(string id, TopicSource topic_source, bool selected);
 
   // Record that the user viewed the Ambient mode page.
@@ -560,6 +702,22 @@ interface AmbientProvider {
 
   // Request updated Ambient mode settings and albums.
   FetchSettingsAndAlbums();
+
+  // Starts the screen saver preview.
+  StartScreenSaverPreview();
+
+  // Determines whether to show the time of day promo banner.
+  ShouldShowTimeOfDayBanner() => (bool should_show_banner);
+
+  // Called when the time of day promo banner is dismissed.
+  HandleTimeOfDayBannerDismissed();
+
+  // Returns if the system geolocation permission is enabled for system
+  // services.
+  IsGeolocationEnabledForSystemServices() => (bool geolocation_enabled);
+
+  // Sets the system geolocation permission to "Only allowed for system".
+  EnableGeolocationForSystemServices();
 };
 
 // The supported preset colors for keyboard backlight.
@@ -587,11 +745,19 @@ const uint32 kBlueColor = 0x00A3C2;
 const uint32 kIndigoColor = 0x4285F4;
 const uint32 kPurpleColor = 0xB76DF8;
 
+union CurrentBacklightState {
+  // Set if the user has selected a specific color as backlight color.
+  BacklightColor color;
+
+  // Set if the user has selected multi-zone colors as backlight color.
+  array<BacklightColor> zone_colors;
+};
+
 // Receives information whenever there are keyboard backlight related changes
 // such as backlight colors.
 interface KeyboardBacklightObserver {
-  // Notifies the JS side about the current state of the backlight color.
-  OnBacklightColorChanged(BacklightColor color);
+  // Notifies the JS side about the current backlight state.
+  OnBacklightStateChanged(CurrentBacklightState currentBacklightState);
 
   // Notifies the JS side the current wallpaper-extracted color.
   OnWallpaperColorChanged(skia.mojom.SkColor wallpaper_color);
@@ -605,6 +771,10 @@ interface KeyboardBacklightProvider {
 
   // Sets the backlight color.
   SetBacklightColor(BacklightColor backlight_color);
+
+  // Sets the backlight color for the given zone. May only be called if device
+  // supports multizone.
+  SetBacklightZoneColor(int32 zone, BacklightColor backlight_color);
 
   // Determines whether to show the education nudge.
   ShouldShowNudge() => (bool should_show_nudge);

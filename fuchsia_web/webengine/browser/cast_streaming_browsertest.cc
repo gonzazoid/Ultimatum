@@ -4,8 +4,8 @@
 
 #include <fuchsia/mem/cpp/fidl.h>
 
-#include "base/callback_helpers.h"
 #include "base/fuchsia/mem_buffer_util.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/test_future.h"
 #include "base/threading/platform_thread.h"
 #include "components/cast/message_port/fuchsia/message_port_fuchsia.h"
@@ -13,11 +13,11 @@
 #include "components/cast_streaming/test/cast_streaming_test_sender.h"
 #include "content/public/test/browser_test.h"
 #include "fuchsia_web/common/test/fit_adapter.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "media/base/media_util.h"
@@ -146,11 +146,11 @@ IN_PROC_BROWSER_TEST_F(CastStreamingTest, LoadSuccess) {
                                        page_url.spec()));
 
   ASSERT_TRUE(sender.RunUntilActive());
-  frame.navigation_listener().RunUntilTitleEquals("canplay");
+  frame.navigation_listener().RunUntilTitleEquals("loadedmetadata");
 
   EXPECT_TRUE(post_result.Wait());
-  EXPECT_NE(sender.audio_decoder_config(), absl::nullopt);
-  EXPECT_NE(sender.video_decoder_config(), absl::nullopt);
+  EXPECT_NE(sender.audio_decoder_config(), std::nullopt);
+  EXPECT_NE(sender.video_decoder_config(), std::nullopt);
 }
 
 // Check that attempting to start a video-only receiver properly disables audio.
@@ -191,9 +191,9 @@ IN_PROC_BROWSER_TEST_F(CastStreamingTest, VideoOnlyReceiver) {
                                        kPageUrl.spec()));
 
   ASSERT_TRUE(sender.RunUntilActive());
-  frame.navigation_listener().RunUntilTitleEquals("canplay");
+  frame.navigation_listener().RunUntilTitleEquals("loadedmetadata");
 
   EXPECT_TRUE(post_result.Wait());
-  EXPECT_EQ(sender.audio_decoder_config(), absl::nullopt);
-  EXPECT_NE(sender.video_decoder_config(), absl::nullopt);
+  EXPECT_EQ(sender.audio_decoder_config(), std::nullopt);
+  EXPECT_NE(sender.video_decoder_config(), std::nullopt);
 }

@@ -4,13 +4,14 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
@@ -54,13 +55,14 @@ constexpr char kBadIconErrorTemplate[] = R"({
 
 // Drops all CR and LF characters.
 std::string TrimLineEndings(base::StringPiece text) {
-  return CollapseWhitespaceASCII(text,
-                                 /*trim_sequences_with_line_breaks=*/true);
+  return base::CollapseWhitespaceASCII(
+      text,
+      /*trim_sequences_with_line_breaks=*/true);
 }
 
 }  // namespace
 
-class WebAppInternalsBrowserTest : public InProcessBrowserTest {
+class WebAppInternalsBrowserTest : public WebAppControllerBrowserTest {
  public:
   WebAppInternalsBrowserTest() = default;
   WebAppInternalsBrowserTest(const WebAppInternalsBrowserTest&) = delete;
@@ -76,30 +78,29 @@ class WebAppInternalsBrowserTest : public InProcessBrowserTest {
                             base::Unretained(this)));
     ASSERT_TRUE(embedded_test_server()->Start());
 
-    InProcessBrowserTest::SetUp();
+    WebAppControllerBrowserTest::SetUp();
   }
 
   void SetUpOnMainThread() override {
     test::WaitUntilReady(WebAppProvider::GetForTest(browser()->profile()));
-    InProcessBrowserTest::SetUpOnMainThread();
+    WebAppControllerBrowserTest::SetUpOnMainThread();
   }
 
-  AppId InstallWebApp(const GURL& app_url) {
+  webapps::AppId InstallWebApp(const GURL& app_url) {
     EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), app_url));
 
-    AppId app_id;
+    webapps::AppId app_id;
     base::RunLoop run_loop;
     GetProvider().scheduler().FetchManifestAndInstall(
         webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON,
         browser()->tab_strip_model()->GetActiveWebContents()->GetWeakPtr(),
-        /*bypass_service_worker_check=*/false,
         base::BindOnce(test::TestAcceptDialogCallback),
-        base::BindLambdaForTesting(
-            [&](const AppId& new_app_id, webapps::InstallResultCode code) {
-              EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
-              app_id = new_app_id;
-              run_loop.Quit();
-            }),
+        base::BindLambdaForTesting([&](const webapps::AppId& new_app_id,
+                                       webapps::InstallResultCode code) {
+          EXPECT_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
+          app_id = new_app_id;
+          run_loop.Quit();
+        }),
         /*use_fallback=*/true);
 
     run_loop.Run();
@@ -134,8 +135,6 @@ class WebAppInternalsBrowserTest : public InProcessBrowserTest {
  private:
   net::EmbeddedTestServer::HandleRequestCallback request_override_;
 
-  OsIntegrationManager::ScopedSuppressForTesting os_hooks_suppress_;
-
   base::test::ScopedFeatureList scoped_feature_list_{
       features::kRecordWebAppDebugInfo};
 };
@@ -145,10 +144,10 @@ IN_PROC_BROWSER_TEST_F(WebAppInternalsBrowserTest,
   OverrideHttpRequest(embedded_test_server()->GetURL("/banners/bad_icon.png"),
                       net::HTTP_NOT_FOUND);
 
-  AppId app_id = InstallWebApp(embedded_test_server()->GetURL(
+  webapps::AppId app_id = InstallWebApp(embedded_test_server()->GetURL(
       "/banners/manifest_test_page.html?manifest=manifest_bad_icon.json"));
 
-  const WebApp* web_app = GetProvider().registrar().GetAppById(app_id);
+  const WebApp* web_app = GetProvider().registrar_unsafe().GetAppById(app_id);
   ASSERT_TRUE(web_app);
   EXPECT_TRUE(web_app->is_generated_icon());
 
@@ -161,8 +160,8 @@ IN_PROC_BROWSER_TEST_F(WebAppInternalsBrowserTest,
 
   const base::Value& error_log =
       (*GetProvider().install_manager().error_log())[0];
-
-  EXPECT_EQ(4u, error_log.DictSize());
+  EXPECT_TRUE(error_log.is_dict());
+  EXPECT_EQ(4u, error_log.GetDict().size());
 
   EXPECT_EQ(TrimLineEndings(expected_error),
             TrimLineEndings(error_log.DebugString()));
@@ -177,12 +176,12 @@ IN_PROC_BROWSER_TEST_F(WebAppInternalsBrowserTest,
 
   const base::Value& error_log =
       (*GetProvider().install_manager().error_log())[0];
-
-  EXPECT_EQ(4u, error_log.DictSize());
+  EXPECT_TRUE(error_log.is_dict());
+  EXPECT_EQ(4u, error_log.GetDict().size());
 
   // Parses base url from the log: the port for embedded_test_server() changes
   // on every test run.
-  const std::string* url_value = error_log.FindStringKey("!url");
+  const std::string* url_value = error_log.GetDict().FindString("!url");
   ASSERT_TRUE(url_value);
   GURL url{*url_value};
   ASSERT_TRUE(url.is_valid());

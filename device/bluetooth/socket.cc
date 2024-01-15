@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "device/bluetooth/bluetooth_socket.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -17,6 +17,16 @@
 #include "net/base/io_buffer.h"
 
 namespace bluetooth {
+namespace {
+// TODO(b/269348144) - BluetoothSocket is constructed in UI thread and must also
+// be destructed in UI thread. We must keep this reference until disconnect
+// completes so that the destructor does not run in the socket thread.
+void HoldReferenceUntilDisconnected(
+    scoped_refptr<device::BluetoothSocket> socket,
+    mojom::Socket::DisconnectCallback callback) {
+  std::move(callback).Run();
+}
+}  // namespace
 
 Socket::Socket(scoped_refptr<device::BluetoothSocket> bluetooth_socket,
                mojo::ScopedDataPipeProducerHandle receive_stream,
@@ -45,11 +55,13 @@ Socket::Socket(scoped_refptr<device::BluetoothSocket> bluetooth_socket,
 Socket::~Socket() {
   ShutdownReceive();
   ShutdownSend();
-  bluetooth_socket_->Disconnect(base::DoNothing());
+  bluetooth_socket_->Disconnect(base::BindOnce(
+      &HoldReferenceUntilDisconnected, bluetooth_socket_, base::DoNothing()));
 }
 
 void Socket::Disconnect(DisconnectCallback callback) {
-  bluetooth_socket_->Disconnect(std::move(callback));
+  bluetooth_socket_->Disconnect(base::BindOnce(
+      &HoldReferenceUntilDisconnected, bluetooth_socket_, std::move(callback)));
 }
 
 void Socket::OnReceiveStreamWritable(MojoResult result) {
@@ -165,13 +177,15 @@ void Socket::SendMore() {
     return;
   }
 
-  bluetooth_socket_->Send(base::MakeRefCounted<net::WrappedIOBuffer>(
-                              static_cast<const char*>(pending_read_buffer)),
-                          pending_read_buffer_size,
-                          base::BindOnce(&Socket::OnBluetoothSocketSend,
-                                         weak_ptr_factory_.GetWeakPtr()),
-                          base::BindOnce(&Socket::OnBluetoothSocketSendError,
-                                         weak_ptr_factory_.GetWeakPtr()));
+  bluetooth_socket_->Send(
+      base::MakeRefCounted<net::WrappedIOBuffer>(
+          base::make_span(static_cast<const char*>(pending_read_buffer),
+                          static_cast<size_t>(pending_read_buffer_size))),
+      pending_read_buffer_size,
+      base::BindOnce(&Socket::OnBluetoothSocketSend,
+                     weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&Socket::OnBluetoothSocketSendError,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void Socket::OnBluetoothSocketSend(int num_bytes_sent) {

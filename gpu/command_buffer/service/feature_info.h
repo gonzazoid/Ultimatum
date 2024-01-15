@@ -89,10 +89,8 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
     bool ext_discard_framebuffer = false;
     bool angle_depth_texture = false;
     bool is_swiftshader_for_webgl = false;
-    bool chromium_texture_filtering_hint = false;
     bool angle_texture_usage = false;
     bool ext_texture_storage = false;
-    bool chromium_framebuffer_mixed_samples = false;
     bool blend_equation_advanced = false;
     bool blend_equation_advanced_coherent = false;
     bool ext_texture_rg = false;
@@ -128,7 +126,6 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
     bool oes_rgb8_rgba8 = false;
     bool angle_robust_resource_initialization = false;
     bool nv_fence = false;
-    bool texture_storage_image = false;
     bool ext_window_rectangles = false;
     bool chromium_gpu_fence = false;
     bool separate_stencil_ref_mask_writemask = false;
@@ -149,7 +146,13 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
     bool ext_texture_compression_rgtc = false;
     bool oes_draw_buffers_indexed = false;
     bool ext_yuv_target = false;
+    bool angle_shader_pixel_local_storage = false;
     bool angle_rgbx_internal_format = false;
+    bool angle_provoking_vertex = false;
+    bool angle_clip_cull_distance = false;
+    bool angle_polygon_mode = false;
+    bool ext_clip_control = false;
+    bool ext_polygon_offset_clamp = false;
   };
 
   FeatureInfo();
@@ -208,7 +211,6 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
   bool IsWebGL2OrES3OrHigherContext() const;
   bool IsES31ForTestingContext() const;
 
-  void EnableTextureStorageImage();
   void EnableCHROMIUMColorBufferFloatRGBA();
   void EnableCHROMIUMColorBufferFloatRGB();
   void EnableEXTFloatBlend();
@@ -226,6 +228,10 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
 
   bool ext_color_buffer_half_float_available() const {
     return ext_color_buffer_half_float_available_;
+  }
+
+  bool oes_texture_float_available() const {
+    return oes_texture_float_available_;
   }
 
   bool oes_texture_float_linear_available() const {
@@ -275,6 +281,7 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
   bool ext_color_buffer_float_available_ = false;
   bool ext_color_buffer_half_float_available_ = false;
   bool ext_texture_filter_anisotropic_available_ = false;
+  bool oes_texture_float_available_ = false;
   bool oes_texture_float_linear_available_ = false;
   bool oes_texture_half_float_linear_available_ = false;
 

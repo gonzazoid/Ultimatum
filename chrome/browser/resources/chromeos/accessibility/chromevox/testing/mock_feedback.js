@@ -51,57 +51,64 @@ MockFeedback = class {
    */
   constructor(opt_finishedCallback) {
     /**
-     * @type {function}
-     * @private
+     * @private {function(): undefined}
      */
     this.finishedCallback_ = opt_finishedCallback || null;
     /**
      * True when |replay| has been called and actions are being replayed.
-     * @type {boolean}
-     * @private
+     * @private {boolean}
      */
     this.replaying_ = false;
     /**
      * True when inside the |process| function to prevent nested calls.
-     * @type {boolean}
-     * @private
+     * @private {boolean}
      */
     this.inProcess_ = false;
     /**
      * Pending expectations and callbacks.
-     * @type {Array<{perform(): boolean, toString(): string}>}
-     * @private
+     * @private {Array<{
+     *     perform: (function(): boolean),
+     *     toString: (function(): string)
+     * }>}
      */
     this.pendingActions_ = [];
     /**
      * Pending speech utterances.
-     * @type {Array<{text: string, callback: (function|undefined)}>}
-     * @private
+     * @private {Array<{text: string, callback: (function()|undefined)}>}
      */
     this.pendingUtterances_ = [];
     /**
      * Pending braille output.
-     * @type {Array<{text: string, callback: (function|undefined)}>}
-     * @private
+     * @private {Array<{text: string, callback: (function()|undefined)}>}
      */
     this.pendingBraille_ = [];
     /**
      * Pending earcons.
-     * @type {Array<{text: string, callback: (function|undefined)}>}
-     * @private
+     * @private {Array<{text: string, callback: (function()|undefined)}>}
      */
     this.pendingEarcons_ = [];
     /**
      * Handle for the timeout set for debug logging.
-     * @type {number}
-     * @private
+     * @private {number}
      */
     this.logTimeoutId_ = 0;
-    /**
-     * @type {NavBraille}
-     * @private
-     */
+    /** @private {NavBraille} */
     this.lastMatchedBraille_ = null;
+  }
+
+  static async imports() {
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'AbstractEarcons', '/chromevox/background/abstract_earcons.js'),
+      importModule(
+          'BrailleInterface',
+          '/chromevox/background/braille/braille_interface.js'),
+      importModule('ChromeVox', '/chromevox/background/chromevox.js'),
+      importModule('NavBraille', '/chromevox/common/braille/nav_braille.js'),
+      importModule('TtsInterface', '/chromevox/background/tts_interface.js'),
+      importModule('QueueMode', '/chromevox/common/tts_types.js'),
+    ]);
   }
 
   /**
@@ -114,7 +121,7 @@ MockFeedback = class {
     const MockTts = function() {};
     MockTts.prototype = {
       __proto__: TtsInterface.prototype,
-      speak: this.addUtterance_.bind(this),
+      speak: (...args) => this.addUtterance_(...args),
     };
 
     ChromeVox.tts = new MockTts();
@@ -122,7 +129,7 @@ MockFeedback = class {
     const MockBraille = function() {};
     MockBraille.prototype = {
       __proto__: BrailleInterface.prototype,
-      write: this.addBraille_.bind(this),
+      write: (...args) => this.addBraille_(...args),
     };
 
     ChromeVox.braille = new MockBraille();
@@ -130,7 +137,7 @@ MockFeedback = class {
     const MockEarcons = function() {};
     MockEarcons.prototype = {
       __proto__: AbstractEarcons.prototype,
-      playEarcon: this.addEarcon_.bind(this),
+      playEarcon: (...args) => this.addEarcon_(...args),
     };
 
     // ChromeVox.earcons is a getter that switches between Classic and
@@ -295,14 +302,14 @@ MockFeedback = class {
         this.replaying_, 'expectBraille: Should not already be replaying.');
     const props = opt_props || {};
     this.pendingActions_.push({
-      perform: function() {
+      perform: () => {
         const match =
             MockFeedback.matchAndConsume_(text, props, this.pendingBraille_);
         if (match) {
           this.lastMatchedBraille_ = match;
         }
         return Boolean(match);
-      }.bind(this),
+      },
       toString() {
         return 'Braille \'' + text + '\' ' + JSON.stringify(props);
       },
@@ -319,11 +326,11 @@ MockFeedback = class {
     assertFalse(
         this.replaying_, 'expectEarcon: Should not already be replaying.');
     this.pendingActions_.push({
-      perform: function() {
+      perform: () => {
         const match =
             MockFeedback.matchAndConsume_(earconName, {}, this.pendingEarcons_);
         return Boolean(match);
-      }.bind(this),
+      },
       toString() {
         return 'Earcon \'' + earconName + '\'';
       },
@@ -358,11 +365,11 @@ MockFeedback = class {
    * @return {MockFeedback} |this| for chaining
    */
   clearPendingOutput() {
-    this.call(function() {
+    this.call(() => {
       this.pendingUtterances_.length = 0;
       this.pendingBraille_.length = 0;
       this.pendingEarcons_.length = 0;
-    }.bind(this));
+    });
 
     return this;
   }
@@ -437,44 +444,69 @@ MockFeedback = class {
     this.process_();
   }
 
-  /*** @private */
+  /** @private */
   process_() {
     if (!this.replaying_ || this.inProcess_) {
       return;
     }
     try {
       this.inProcess_ = true;
-      while (this.pendingActions_.length > 0) {
-        const action = this.pendingActions_[0];
-        if (action.perform()) {
-          this.pendingActions_.shift();
-          if (this.logTimeoutId_) {
-            clearTimeout(this.logTimeoutId_);
-            this.logTimeoutId_ = 0;
-          }
-        } else {
-          break;
-        }
-      }
-      if (this.pendingActions_.length === 0) {
-        if (this.finishedCallback_) {
-          this.finishedCallback_();
-          this.finishedCallback_ = null;
-        }
-        this.resolve_();
-      } else {
-        // If there are pending actions and no matching feedback for a few
-        // seconds, log the pending state to ease debugging.
-        if (!this.logTimeoutId_) {
-          this.logTimeoutId_ =
-              setTimeout(this.logPendingState_.bind(this), 2000);
-        }
-      }
+      this.performActionsUntilBlocked_();
     } catch (e) {
       this.reject_(e);
       throw e;
     } finally {
       this.inProcess_ = false;
+    }
+  }
+
+  /** @private */
+  performActionsUntilBlocked_() {
+    while (this.pendingActions_.length > 0) {
+      if (!this.performNextAction_()) {
+        break;
+      }
+    }
+    if (this.pendingActions_.length === 0) {
+      this.finished_();
+    } else {
+      this.blocked_();
+    }
+  }
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  performNextAction_() {
+    const action = this.pendingActions_[0];
+    if (action.perform()) {
+      this.pendingActions_.shift();
+      if (this.logTimeoutId_) {
+        clearTimeout(this.logTimeoutId_);
+        this.logTimeoutId_ = 0;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** @private */
+  finished_() {
+    if (this.finishedCallback_) {
+      this.finishedCallback_();
+      this.finishedCallback_ = null;
+    }
+    this.resolve_();
+  }
+
+  /** @private */
+  blocked_() {
+    // If there are pending actions and no matching feedback for a few
+    // seconds, log the pending state to ease debugging.
+    if (!this.logTimeoutId_) {
+      this.logTimeoutId_ =
+          setTimeout((...args) => this.logPendingState_(...args), 2000);
     }
   }
 

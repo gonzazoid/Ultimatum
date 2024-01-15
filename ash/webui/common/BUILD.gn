@@ -22,6 +22,52 @@ static_library("keyboard_diagram_strings") {
   ]
 }
 
+static_library("shortcut_input_key_strings") {
+  sources = [
+    "shortcut_input_key_strings.cc",
+    "shortcut_input_key_strings.h",
+  ]
+
+  deps = [
+    "//chromeos/strings/",
+    "//content/public/browser",
+    "//ui/base",
+  ]
+}
+
+source_set("chrome_os_webui_config") {
+  sources = [ "chrome_os_webui_config.h" ]
+
+  deps = [
+    "//base",
+    "//content/public/browser",
+    "//content/public/common",
+  ]
+}
+
+source_set("trusted_types_util") {
+  sources = [
+    "trusted_types_util.cc",
+    "trusted_types_util.h",
+  ]
+
+  deps = [
+    "//content/public/browser",
+    "//services/network/public/mojom:url_loader_base",
+  ]
+}
+
+source_set("trusted_types_test_util") {
+  testonly = true
+
+  sources = [
+    "trusted_types_test_util.cc",
+    "trusted_types_test_util.h",
+  ]
+
+  deps = [ "//content/test:test_support" ]
+}
+
 group("closure_compile") {
   deps = [ "resources:closure_compile" ]
 }

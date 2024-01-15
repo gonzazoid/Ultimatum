@@ -14,13 +14,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/display/display_features.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/types/display_snapshot.h"
-#include "ui/ozone/platform/drm/common/display_types.h"
+#include "ui/ozone/platform/drm/common/drm_wrapper.h"
 #include "ui/ozone/platform/drm/common/scoped_drm_types.h"
 
 typedef struct _drmModeModeInfo drmModeModeInfo;
@@ -29,21 +29,28 @@ namespace display {
 class DisplayMode;
 }  // namespace display
 
-namespace gfx {
-class Point;
-}
-
 namespace ui {
-
+// TODO(b/193019614): clean |kMaxDrmCount|'s and |kMaxDrmConnectors|'s
+// assignment up once EDID-based ID migration is complete and the flag is
+// removed.
 // It is safe to assume there will be no more than 256 connected DRM devices.
-constexpr int kMaxDrmCount = 256u;
+const size_t kMaxDrmCount =
+    display::features::IsEdidBasedDisplayIdsEnabled() ? 256u : 16u;
 
 // It is safe to assume there will be no more than 256 connectors per DRM.
-constexpr int kMaxDrmConnectors = 256u;
+const size_t kMaxDrmConnectors =
+    display::features::IsEdidBasedDisplayIdsEnabled() ? 256u : 16u;
 
 // DRM property names.
+const char kContentProtectionKey[] = "Content Protection Key";
 const char kContentProtection[] = "Content Protection";
 const char kHdcpContentType[] = "HDCP Content Type";
+
+const char kColorSpace[] = "Colorspace";
+const char kColorSpaceBT2020RGBEnumName[] = "BT2020_RGB";
+const char kColorSpaceDefaultEnumName[] = "Default";
+
+const char kHdrOutputMetadata[] = "HDR_OUTPUT_METADATA";
 
 constexpr char kPrivacyScreenPropertyNameLegacy[] = "privacy-screen";
 constexpr char kPrivacyScreenHwStatePropertyName[] = "privacy-screen hw-state";
@@ -56,7 +63,7 @@ constexpr char kVrrEnabledPropertyName[] = "VRR_ENABLED";
 template <typename InternalType>
 struct DrmPropertyEnumToInternalTypeMapping {
   const char* drm_enum;
-  const InternalType& internal_state;
+  const InternalType internal_state;
 };
 
 constexpr std::array<
@@ -98,6 +105,8 @@ class HardwareDisplayControllerInfo {
   drmModeCrtc* crtc() const { return crtc_.get(); }
   uint8_t index() const { return index_; }
 
+  ScopedDrmConnectorPtr ReleaseConnector() { return std::move(connector_); }
+
  private:
   ScopedDrmConnectorPtr connector_;
   ScopedDrmCrtcPtr crtc_;
@@ -112,10 +121,11 @@ using HardwareDisplayControllerInfoList =
 // TODO(markyacoub): Create unit tests that tests the different bits and pieces
 // that this function goes through.
 std::pair<HardwareDisplayControllerInfoList, std::vector<uint32_t>>
-GetDisplayInfosAndInvalidCrtcs(int fd);
+GetDisplayInfosAndInvalidCrtcs(const DrmWrapper& drm);
 
 // Returns the display infos parsed in |GetDisplayInfosAndInvalidCrtcs|
-HardwareDisplayControllerInfoList GetAvailableDisplayControllerInfos(int fd);
+HardwareDisplayControllerInfoList GetAvailableDisplayControllerInfos(
+    const DrmWrapper& drm);
 
 bool SameMode(const drmModeModeInfo& lhs, const drmModeModeInfo& rhs);
 
@@ -131,24 +141,22 @@ display::DisplaySnapshot::DisplayModeList ExtractDisplayModes(
     const display::DisplayMode** out_current_mode,
     const display::DisplayMode** out_native_mode);
 
-// |info| provides the DRM information related to the display, |fd| is the
-// connection to the DRM device.
+// |info| provides the DRM information related to the display, |drm| is the
+// access point to the DRM device to which |info| is related to.
 std::unique_ptr<display::DisplaySnapshot> CreateDisplaySnapshot(
+    const DrmWrapper& drm,
     HardwareDisplayControllerInfo* info,
-    int fd,
-    const base::FilePath& sys_path,
-    uint8_t device_index,
-    const gfx::Point& origin);
+    uint8_t device_index);
 
 int GetFourCCFormatForOpaqueFramebuffer(gfx::BufferFormat format);
 
-gfx::Size GetMaximumCursorSize(int fd);
+gfx::Size GetMaximumCursorSize(const DrmWrapper& drm);
 
-ScopedDrmPropertyPtr FindDrmProperty(int fd,
+ScopedDrmPropertyPtr FindDrmProperty(const DrmWrapper& drm,
                                      drmModeObjectProperties* properties,
                                      const char* name);
 
-bool HasColorCorrectionMatrix(int fd, drmModeCrtc* crtc);
+bool HasColorCorrectionMatrix(const DrmWrapper& drm, drmModeCrtc* crtc);
 
 bool MatchMode(const display::DisplayMode& display_mode,
                const drmModeModeInfo& m);
@@ -159,13 +167,23 @@ float ModeRefreshRate(const drmModeModeInfo& mode);
 
 bool ModeIsInterlaced(const drmModeModeInfo& mode);
 
-bool IsVrrCapable(int fd, drmModeConnector* connector);
+bool IsVrrCapable(const DrmWrapper& drm, drmModeConnector* connector);
 
-bool IsVrrEnabled(int fd, drmModeCrtc* crtc);
+bool IsVrrEnabled(const DrmWrapper& drm, drmModeCrtc* crtc);
 
-uint64_t GetEnumValueForName(int fd, int property_id, const char* str);
+display::VariableRefreshRateState GetVariableRefreshRateState(
+    const DrmWrapper& drm,
+    HardwareDisplayControllerInfo* info);
+
+const char* GetNameForColorspace(const gfx::ColorSpace color_space);
+uint64_t GetEnumValueForName(const DrmWrapper& drm,
+                             int property_id,
+                             const char* str);
 
 std::vector<uint64_t> ParsePathBlob(const drmModePropertyBlobRes& path_blob);
+
+// Whether or not |drm| supports supplying modifiers for AddFramebuffer2.
+bool IsAddfb2ModifierCapable(const DrmWrapper& drm);
 
 // Extracts the DRM |property| current value's enum. Returns an empty string
 // upon failure.

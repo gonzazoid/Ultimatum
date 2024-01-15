@@ -5,11 +5,12 @@
 #include "third_party/blink/renderer/controller/memory_usage_monitor.h"
 
 #include "base/observer_list.h"
-#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/heap/process_heap.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
+#include "v8/include/v8.h"
 
 namespace blink {
 
@@ -65,13 +66,19 @@ MemoryUsage MemoryUsageMonitor::GetCurrentMemoryUsage() {
 }
 
 void MemoryUsageMonitor::GetV8MemoryUsage(MemoryUsage& usage) {
-  v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
-  DCHECK(isolate);
-  v8::HeapStatistics heap_statistics;
-  isolate->GetHeapStatistics(&heap_statistics);
+  usage.v8_bytes = 0;
   // TODO: Add memory usage for worker threads.
-  usage.v8_bytes =
-      heap_statistics.total_heap_size() + heap_statistics.malloced_memory();
+  Thread::MainThread()
+      ->Scheduler()
+      ->ToMainThreadScheduler()
+      ->ForEachMainThreadIsolate(WTF::BindRepeating(
+          [](MemoryUsage& usage, v8::Isolate* isolate) {
+            v8::HeapStatistics heap_statistics;
+            isolate->GetHeapStatistics(&heap_statistics);
+            usage.v8_bytes += heap_statistics.total_heap_size() +
+                              heap_statistics.malloced_memory();
+          },
+          std::ref(usage)));
 }
 
 void MemoryUsageMonitor::GetBlinkMemoryUsage(MemoryUsage& usage) {

@@ -8,13 +8,12 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/lock.h"
 #include "base/test/task_environment.h"
 #include "base/unguessable_token.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -232,4 +231,3 @@ TEST_F(ScheduledExecutorTest, DestroyAllowExistingTaskToCompleteImmediately) {
 }
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

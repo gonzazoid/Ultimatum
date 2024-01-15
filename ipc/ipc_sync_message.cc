@@ -9,6 +9,7 @@
 #include "base/atomic_sequence_num.h"
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/synchronization/waitable_event.h"
 #include "build/build_config.h"
 
 namespace {
@@ -24,9 +25,9 @@ namespace IPC {
 SyncMessage::SyncMessage(int32_t routing_id,
                          uint32_t type,
                          PriorityValue priority,
-                         MessageReplyDeserializer* deserializer)
+                         std::unique_ptr<MessageReplyDeserializer> deserializer)
     : Message(routing_id, type, priority),
-      deserializer_(deserializer) {
+      deserializer_(std::move(deserializer)) {
   set_sync();
   set_unblock(true);
 
@@ -38,9 +39,9 @@ SyncMessage::SyncMessage(int32_t routing_id,
 
 SyncMessage::~SyncMessage() = default;
 
-MessageReplyDeserializer* SyncMessage::GetReplyDeserializer() {
-  DCHECK(deserializer_.get());
-  return deserializer_.release();
+std::unique_ptr<MessageReplyDeserializer> SyncMessage::TakeReplyDeserializer() {
+  DCHECK(deserializer_);
+  return std::move(deserializer_);
 }
 
 bool SyncMessage::IsMessageReplyTo(const Message& msg, int request_id) {
@@ -113,5 +114,14 @@ bool SyncMessage::WriteSyncHeader(Message* msg, const SyncHeader& header) {
 bool MessageReplyDeserializer::SerializeOutputParameters(const Message& msg) {
   return SerializeOutputParameters(msg, SyncMessage::GetDataIterator(&msg));
 }
+
+PendingSyncMsg::PendingSyncMsg(int id,
+                               std::unique_ptr<MessageReplyDeserializer> d,
+                               std::unique_ptr<base::WaitableEvent> e)
+    : id(id), deserializer(std::move(d)), done_event(std::move(e)) {}
+
+PendingSyncMsg::PendingSyncMsg(PendingSyncMsg&& that) = default;
+
+PendingSyncMsg::~PendingSyncMsg() = default;
 
 }  // namespace IPC

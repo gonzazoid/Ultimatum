@@ -17,7 +17,7 @@
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_features.h"
-#include "ui/chromeos/events/keyboard_layout_util.h"
+#include "ui/events/ash/keyboard_layout_util.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -665,7 +665,7 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        IDS_KSV_DESCRIPTION_KEYBOARD_SHORTCUT_HELPER,
        {},
        // |accelerator_ids|
-       {{ui::VKEY_OEM_2, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN}}},
+       {{ui::VKEY_S, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kTabAndWindow},
@@ -1173,7 +1173,7 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        IDS_KSV_DESCRIPTION_OPEN_GET_HELP,
        {},
        // |accelerator_ids|
-       {{ui::VKEY_OEM_2, ui::EF_CONTROL_DOWN}}},
+       {{ui::VKEY_H, ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kSystemAndDisplay},
@@ -1277,6 +1277,13 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
        {},
        // |accelerator_ids|
        {{ui::VKEY_F, ui::EF_COMMAND_DOWN | ui::EF_ALT_DOWN}}},
+
+      {// |categories|
+       {ShortcutCategory::kTabAndWindow},
+       IDS_KSV_DESCRIPTION_TOGGLE_MULTITASK_MENU,
+       {},
+       // |accelerator_ids|
+       {{ui::VKEY_Z, ui::EF_COMMAND_DOWN}}},
 
       {// |categories|
        {ShortcutCategory::kPageAndBrowser},
@@ -1385,10 +1392,7 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
   if (!is_initialized) {
     is_initialized = true;
 
-    // The improved desks keyboard shortcuts should only be enabled if the
-    // improved keyboard shortcuts flag is also enabled.
-    if (::features::IsImprovedKeyboardShortcutsEnabled() &&
-        ash::features::IsImprovedDesksKeyboardShortcutsEnabled()) {
+    if (::features::IsImprovedKeyboardShortcutsEnabled()) {
       const ash::KeyboardShortcutItem indexed_activation_shortcut = {
           // |categories|
           {ShortcutCategory::kTabAndWindow},
@@ -1412,19 +1416,17 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
       item_list->emplace_back(toggle_all_desks_shortcut);
     }
 
-    if (ash::features::IsCalendarViewEnabled()) {
-      const ash::KeyboardShortcutItem toggle_calendar = {
-          // |categories|
-          {ShortcutCategory::kSystemAndDisplay},
-          IDS_KSV_DESCRIPTION_TOGGLE_CALENDAR,
-          {},
-          // |accelerator_ids|
-          {},
-          // |shortcut_key_codes|
-          {{ui::VKEY_COMMAND, ui::VKEY_UNKNOWN, ui::VKEY_C}}};
+    const ash::KeyboardShortcutItem toggle_calendar = {
+        // |categories|
+        {ShortcutCategory::kSystemAndDisplay},
+        IDS_KSV_DESCRIPTION_TOGGLE_CALENDAR,
+        {},
+        // |accelerator_ids|
+        {},
+        // |shortcut_key_codes|
+        {{ui::VKEY_COMMAND, ui::VKEY_UNKNOWN, ui::VKEY_C}}};
 
-      item_list->emplace_back(toggle_calendar);
-    }
+    item_list->emplace_back(toggle_calendar);
 
     for (auto& item : *item_list) {
       if (item.shortcut_key_codes.empty() && !item.accelerator_ids.empty()) {
@@ -1440,15 +1442,17 @@ const std::vector<ash::KeyboardShortcutItem>& GetKeyboardShortcutItemList() {
             // ui::VKEY_UNKNOWN is used as a separator and will be shown as a
             // highlighted "+" sign between the bubble views and the rest of the
             // text.
-            if (!item.shortcut_key_codes.empty())
+            if (!item.shortcut_key_codes.empty()) {
               item.shortcut_key_codes.push_back(ui::VKEY_UNKNOWN);
+            }
             item.shortcut_key_codes.push_back(GetKeyCodeForModifier(modifier));
           }
         }
         // For non grouped accelerators, we need to populate the key as well.
         if (item.accelerator_ids.size() == 1) {
-          if (!item.shortcut_key_codes.empty())
+          if (!item.shortcut_key_codes.empty()) {
             item.shortcut_key_codes.push_back(ui::VKEY_UNKNOWN);
+          }
           item.shortcut_key_codes.push_back(accelerator_id.keycode);
         }
       }

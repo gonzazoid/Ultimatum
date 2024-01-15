@@ -10,16 +10,39 @@ import "mojo/public/mojom/base/string16.mojom";
 // There is one instance of this interface per render frame in the render
 // process. All methods are called by browser on renderer.
 interface AutofillAgent {
-  // Triggers a reparse of the new forms. This is done when a form is seen in
-  // a subframe and it is not known which form is its parent.
-  TriggerReparse();
+  // Triggers form re-extraction the new forms. This is done when a form is seen
+  // in a subframe and it is not known which form is its parent.
+  TriggerFormExtraction();
 
-  // Instructs the renderer to fill or preview the active form with the given
-  // form data. Refer to AutofillDriver.AskForValuesToFill for comments
-  // about the |query_id|.
-  FillOrPreviewForm(int32 query_id,
-                    FormData form,
-                    RendererFormDataAction action);
+  // Triggers form re-extraction the new forms and notifies the caller when
+  // it's done.
+  // If `success == false`, TriggerFormExtractionWithResponse() was triggered
+  // while another TriggerFormExtractionWithResponse() was ongoing.
+  TriggerFormExtractionWithResponse() => (bool success);
+
+  // Fills or previews the form identified by `form_renderer_id` with
+  // the data in `fields`.
+  // `action_type` denotes if the action is a Fill or Undo.
+  // `action_persistence` denotes if the operation is a Fill or Preview.
+  ApplyFormAction(ActionType action_type,
+                  ActionPersistence action_persistence,
+                  FormRendererId form_renderer_id,
+                  array<FormFieldData> fields);
+
+  // Fills or previews the field identified by `field` with `value`.
+  // `action_persistence` denotes if the operation is a Fill or Preview.
+  // `text_replacement` indicates whether to replace the field's entire value
+  // or only the current selection. For non-text fields, this parameter has no
+  // effect. This must not be `kReplaceSelection` if `action_persistence` is
+  // `kPreview`. Enabling this is desirable but not implemented, yet.
+  ApplyFieldAction(ActionPersistence action_persistence,
+                   TextReplacement text_replacement,
+                   FieldRendererId field,
+                   mojo_base.mojom.String16 value);
+
+  // Extracts the given form and responds with the FormData if that form can
+  // be found and extracted.
+  ExtractForm(FormRendererId form) => (FormData? form);
 
   // Sends the heuristic and server field type predictions to the renderer.
   FieldTypePredictionsAvailable(array<FormDataPredictions> forms);
@@ -32,31 +55,38 @@ interface AutofillAgent {
   // Tells the renderer that the Autofill previewed form should be cleared.
   ClearPreviewedForm();
 
-  // Sets the value of |field| (if it is still the currently selected node).
-  FillFieldWithValue(FieldRendererId field, mojo_base.mojom.String16 value);
-
-  // Sets the suggested value of |field| (if it is still the currently selected
-  // node).
-  PreviewFieldWithValue(FieldRendererId field, mojo_base.mojom.String16 value);
+  // Tells the renderer to trigger Autofill suggestions on the `field`, as if
+  // triggered through the provided `trigger_source`.
+  // For the most part, suggestions are triggered through Blink events on the
+  // renderer-side. However, manual fallbacks from the context menu are
+  // triggered from the browser processes. They need to make another round-trip
+  // to the renderer, since rendering suggestions relies on the `field`'s
+  // position. Since the browser process doesn't have up-to-date coordinates,
+  // suggestions are triggered through the renderer, which causes the field and
+  // its coordinates to be re-extracted.
+  // Assuming the `field` is found, the driver's `AskForValuesToFill()` will be
+  // called.
+  TriggerSuggestions(FieldRendererId field,
+                     AutofillSuggestionTriggerSource trigger_source);
 
   // Sets the autofill/autocomplete suggestion availability of |field| (if it is
   // still the currently selected node).
-  SetSuggestionAvailability(FieldRendererId field, AutofillState type);
+  SetSuggestionAvailability(
+    FieldRendererId field,
+    AutofillSuggestionAvailability suggestion_availability);
 
   // Sets the value of |field| (if it is still the currently selected node).
   // to the given data list value.
   AcceptDataListSuggestion(FieldRendererId field,
                            mojo_base.mojom.String16 value);
 
-  // Tells the renderer to fill the username and password with with given
-  // values.
-  FillPasswordSuggestion(mojo_base.mojom.String16 username,
-                         mojo_base.mojom.String16 password);
-
   // Tells the renderer to preview the username and password with the given
   // values.
   PreviewPasswordSuggestion(mojo_base.mojom.String16 username,
                             mojo_base.mojom.String16 password);
+
+  // Tells the renderer to preview the generated password.
+  PreviewPasswordGenerationSuggestion(mojo_base.mojom.String16 password);
 
   // Configures the render to require, or not, a user gesture before notifying
   // the autofill agent of a field change. The default is true. Bypassing the
@@ -77,23 +107,16 @@ interface AutofillAgent {
   // Configures whether AutofillAgent will query password field autofill suggestions. The default is false.
   SetQueryPasswordSuggestion(bool query);
 
-  // Get form element's form and field data. The form field is given by a
-  // stable devtools node identifier in the backend node id.
-  // https://chromedevtools.github.io/devtools-protocol/tot/DOM/#type-BackendNodeId
-  // The corresponding entity in the renderer is the DOMNodeIds.
-  GetElementFormAndFieldDataForDevToolsNodeId(int32 backend_node_id) => (
-      autofill.mojom.FormData form, autofill.mojom.FormFieldData field);
-
-  // Set whether or not the Autofill Assistant currently wants to suppress the
-  // keyboard from showing.
-  SetAssistantKeyboardSuppressState(bool suppress);
-
   // Allows heavy scraping of form data (e.g., button titles for
   // unowned forms).
   EnableHeavyFormDataScraping();
 
-  // Update fields that are eligible to show manual filling on form interaction.
-  SetFieldsEligibleForManualFilling(array<FieldRendererId> fields);
+  // Returns a vector of four digit combinations present in the DOM of a
+  // webpage. Used to check for the presence of the virtual card last four in
+  // the DOM prior to offering CVC autofill for a virtual card saved on a
+  // merchant website.
+  GetPotentialLastFourCombinationsForStandaloneCvc() =>
+      (array<string> potential_matches);
 };
 
 // There is one instance of this interface per render frame in the render
@@ -104,6 +127,11 @@ interface PasswordAutofillAgent {
   // know if it should disable the popup because the browser process will own
   // the popup UI.
   SetPasswordFillData(PasswordFormFillData form_data);
+
+  // Tells the renderer to fill the username and password with with given
+  // values.
+  FillPasswordSuggestion(mojo_base.mojom.String16 username,
+                         mojo_base.mojom.String16 password);
 
   // Lets the renderer know that there are no saved credentials for filling.
   // This is the "no results" equivalent of SetPasswordFillData.
@@ -116,10 +144,12 @@ interface PasswordAutofillAgent {
   // logging the decisions made about saving the password.
   SetLoggingState(bool active);
 
-  // Informs the renderer that the Touch To Fill sheet has been closed.
+  // Informs the renderer that the Keyboard Replacing Surface has been closed.
   // Indicates whether the virtual keyboard should be shown instead.
+  // TODO(crbug/1462532): Remove this API once PasswordSuggestionBottomSheetV2
+  // is launched.
   [EnableIf=is_android]
-  TouchToFillClosed(bool show_virtual_keyboard);
+  KeyboardReplacingSurfaceClosed(bool show_virtual_keyboard);
 
   // Triggers a form submission on the last interacted element.
   [EnableIf=is_android]
@@ -145,4 +175,8 @@ interface PasswordGenerationAgent {
   // Tells the renderer that a password can be generated on the fields
   // identified by |form|.
   FoundFormEligibleForGeneration(PasswordFormGenerationData form);
+
+  // Tells the renderer to advance focus to the next field after password fields
+  // (assuming that password fields are adjacent in account creation).
+  FocusNextFieldAfterPasswords();
 };

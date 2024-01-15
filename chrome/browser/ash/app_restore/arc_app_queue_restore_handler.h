@@ -7,7 +7,9 @@
 
 #include <list>
 #include <map>
+#include <optional>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
@@ -18,7 +20,6 @@
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/env.h"
 #include "ui/aura/env_observer.h"
 #include "ui/aura/window.h"
@@ -59,23 +60,6 @@ enum class RestoreResult {
   kMaxValue = kNotFinish,
 };
 
-// This is usded for logging, so do not remove or reorder existing entries.
-enum class NoGhostWindowReason {
-  kNoHandler = 0,
-  kNoHandlerFromCrash = 1,
-  kNoRootBounds = 2,
-  kNoRootBoundsFromCrash = 3,
-  kNoScreenBounds = 4,
-  kNoScreenBoundsFromCrash = 5,
-  kFlagDisabled = 6,
-  kNotARCVM = 7,
-  kNoExoHelper = 8,
-
-  // Add any new values above this one, and update kMaxValue to the highest
-  // enumerator value.
-  kMaxValue = kNoExoHelper,
-};
-
 // This is used for logging, so do not remove or reorder existing entries.
 enum class ArcRestoreState {
   kSuccess = 0,
@@ -109,11 +93,15 @@ class ArcAppQueueRestoreHandler
       public wm::ActivationChangeObserver,
       public aura::EnvObserver,
       public aura::WindowObserver,
-      public chromeos::SchedulerConfigurationManagerBase::Observer {
+      public SchedulerConfigurationManagerBase::Observer {
  public:
   struct WindowInfo {
     std::string app_id;
     int32_t window_id;
+
+    bool operator==(const WindowInfo& rhs) const {
+      return app_id == rhs.app_id && window_id == rhs.window_id;
+    }
   };
 
   ArcAppQueueRestoreHandler();
@@ -155,7 +143,7 @@ class ArcAppQueueRestoreHandler
   // aura::WindowObserver:
   void OnWindowDestroying(aura::Window* window) override;
 
-  // chromeos::SchedulerConfigurationManagerBase::Observer:
+  // SchedulerConfigurationManagerBase::Observer:
   void OnConfigurationSet(bool success, size_t num_cores_disabled) override;
 
   void set_desk_template_launch_id(int32_t desk_template_launch_id) {
@@ -184,7 +172,7 @@ class ArcAppQueueRestoreHandler
 
   // Override ResourcedClient::Observer
   void OnMemoryPressure(ResourcedClient::PressureLevel level,
-                        uint64_t reclaim_target_kb) override;
+                        memory_pressure::ReclaimTarget target) override;
 
   // Returns true if there are windows to be restored. Otherwise, returns false.
   bool HasRestoreData();
@@ -228,12 +216,11 @@ class ArcAppQueueRestoreHandler
   void OnProbeServiceDisconnect();
 
   void RecordArcGhostWindowLaunch(bool is_arc_ghost_window);
-  void RecordLaunchBoundsState(bool has_root_bounds, bool has_screen_bounds);
   void RecordRestoreResult();
 
-  ash::SchedulerConfigurationManager* GetSchedulerConfigurationManager();
+  SchedulerConfigurationManager* GetSchedulerConfigurationManager();
 
-  AppLaunchHandler* handler_ = nullptr;
+  raw_ptr<AppLaunchHandler, DanglingUntriaged> handler_ = nullptr;
 
   // The app id list from the restore data. If the app has been added the
   // AppRegistryCache, the app will be removed from `app_ids_` to
@@ -256,7 +243,7 @@ class ArcAppQueueRestoreHandler
   std::map<int32_t, int32_t> window_id_to_session_id_;
   std::map<int32_t, int32_t> session_id_to_window_id_;
 
-  full_restore::ArcGhostWindowHandler* window_handler_ = nullptr;
+  raw_ptr<full_restore::ArcGhostWindowHandler> window_handler_ = nullptr;
 
   // If the system is under memory pressuure or high CPU usage rate, only launch
   // 1 window following the window stack priority. `first_run_` is used to check
@@ -296,7 +283,7 @@ class ArcAppQueueRestoreHandler
   ResourcedClient::PressureLevel pressure_level_ =
       ResourcedClient::PressureLevel::MODERATE;
 
-  absl::optional<bool> should_apply_cpu_restirction_;
+  std::optional<bool> should_apply_cpu_restirction_;
 
   // Record if the restore process faced memory pressure or CPU usage limiting.
   bool was_memory_pressured_ = false;
@@ -306,7 +293,7 @@ class ArcAppQueueRestoreHandler
 
   // Cpu usage rate count window. It save the cpu usage in a time interval.
   std::list<CpuTick> cpu_tick_window_;
-  absl::optional<CpuTick> last_cpu_tick_;
+  std::optional<CpuTick> last_cpu_tick_;
   base::RepeatingTimer cpu_tick_count_timer_;
 
   base::ScopedObservation<apps::AppRegistryCache,

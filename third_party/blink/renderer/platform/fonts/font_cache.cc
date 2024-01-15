@@ -38,6 +38,7 @@
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/font_family_names.h"
 #include "third_party/blink/renderer/platform/fonts/alternate_font_family.h"
@@ -79,7 +80,6 @@ float FontCache::device_scale_factor_ = 1.0;
 #if BUILDFLAG(IS_WIN)
 bool FontCache::antialiased_text_enabled_ = false;
 bool FontCache::lcd_text_enabled_ = false;
-bool FontCache::use_skia_font_fallback_ = false;
 static bool should_use_test_font_mgr = false;
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -89,20 +89,8 @@ FontCache& FontCache::Get() {
 
 FontCache::FontCache()
     : font_manager_(sk_ref_sp(static_font_manager_)),
-#if defined(USE_PARALLEL_TEXT_SHAPING)
-      // See destructor for lifetime management of
-      // `{FontPlatformDataCache,FontDataCache}::SharedInstance()`.
-      font_platform_data_cache_(
-          RuntimeEnabledFeatures::ParallelTextShapingEnabled()
-              ? base::WrapUnique(&FontPlatformDataCache::SharedInstance())
-              : FontPlatformDataCache::Create()),
-      font_data_cache_(RuntimeEnabledFeatures::ParallelTextShapingEnabled()
-                           ? base::WrapUnique(&FontDataCache::SharedInstance())
-                           : FontDataCache::Create()) {
-#else
       font_platform_data_cache_(FontPlatformDataCache::Create()),
       font_data_cache_(FontDataCache::Create()) {
-#endif
 #if BUILDFLAG(IS_WIN)
   if (!font_manager_ || should_use_test_font_mgr) {
     // This code path is only for unit tests. This SkFontMgr does not work in
@@ -124,22 +112,14 @@ FontCache::FontCache()
 #endif
 }
 
-FontCache::~FontCache() {
-#if defined(USE_PARALLEL_TEXT_SHAPING)
-  if (RuntimeEnabledFeatures::ParallelTextShapingEnabled()) {
-    // Because `FontDataCache` and `FontPlatformDataCache` are shared among
-    // threads, we should not destruct here.
-    font_data_cache_.release();
-    font_platform_data_cache_.release();
-  }
-#endif
-}
+FontCache::~FontCache() = default;
 
 #if !BUILDFLAG(IS_MAC)
 FontPlatformData* FontCache::SystemFontPlatformData(
     const FontDescription& font_description) {
   const AtomicString& family = FontCache::SystemFontFamily();
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA) || \
+    BUILDFLAG(IS_IOS)
   if (family.empty() || family == font_family_names::kSystemUi)
     return nullptr;
 #else
@@ -374,7 +354,7 @@ void FontCache::CrashWithFontInfo(const FontDescription* font_description) {
   // In production, these 3 font managers must match.
   // They don't match in unit tests or in single process mode.
   SkFontMgr* static_font_mgr = static_font_manager_;
-  SkFontMgr* skia_default_font_mgr = SkFontMgr::RefDefault().get();
+  SkFontMgr* skia_default_font_mgr = skia::DefaultFontMgr().get();
   base::debug::Alias(&font_mgr);
   base::debug::Alias(&static_font_mgr);
   base::debug::Alias(&skia_default_font_mgr);

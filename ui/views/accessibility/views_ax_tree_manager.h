@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -93,7 +93,9 @@ class VIEWS_EXPORT ViewsAXTreeManager : public ui::AXTreeManager,
   void OnWidgetDestroyed(Widget* widget) override;
 
  private:
-  using ViewsAXTreeSerializer = ui::AXTreeSerializer<AXAuraObjWrapper*>;
+  using ViewsAXTreeSerializer = ui::AXTreeSerializer<
+      AXAuraObjWrapper*,
+      std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>>>;
 
   void SerializeTreeUpdates();
   void UnserializeTreeUpdates(const std::vector<ui::AXTreeUpdate>& updates);

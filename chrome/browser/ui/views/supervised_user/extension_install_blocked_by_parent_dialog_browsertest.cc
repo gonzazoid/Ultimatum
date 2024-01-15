@@ -4,7 +4,7 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/extensions/extensions_dialogs.h"
@@ -25,10 +25,9 @@ class ExtensionInstallBlockedByParentDialogViewTest : public DialogBrowserTest {
         extensions::ExtensionBuilder::Type::EXTENSION;
     if (name == "extension") {
       // type EXTENSION is correct.
-    } else if (name == "app") {
-      type = extensions::ExtensionBuilder::Type::PLATFORM_APP;
     } else {
-      NOTREACHED();
+      CHECK_EQ(name, "app");
+      type = extensions::ExtensionBuilder::Type::PLATFORM_APP;
     }
     extension_ = extensions::ExtensionBuilder("test extension", type).Build();
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -15,13 +15,15 @@ It performs the following steps:
 4. Creates a new stamp file.
 """
 
-from __future__ import print_function
 
 import argparse
 import os
 import shutil
 import subprocess
 import sys
+
+import action_helpers
+import zip_helpers
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'android', 'gyp'))
 from util import build_utils
@@ -42,7 +44,7 @@ def _EnforceJavaPackage(proto_srcs):
 
 def main(argv):
   parser = argparse.ArgumentParser()
-  build_utils.AddDepfileOption(parser)
+  action_helpers.add_depfile_arg(parser)
   parser.add_argument('--protoc', required=True, help='Path to protoc binary.')
   parser.add_argument('--plugin', help='Path to plugin executable')
   parser.add_argument('--proto-path',
@@ -92,12 +94,13 @@ def main(argv):
       build_utils.DeleteDirectory(options.java_out_dir)
       shutil.copytree(temp_dir, options.java_out_dir)
     else:
-      build_utils.ZipDir(options.srcjar, temp_dir)
+      with action_helpers.atomic_output(options.srcjar) as f:
+        zip_helpers.zip_directory(f, temp_dir)
 
   if options.depfile:
     assert options.srcjar
     deps = options.protos + [options.protoc]
-    build_utils.WriteDepfile(options.depfile, options.srcjar, deps)
+    action_helpers.write_depfile(options.depfile, options.srcjar, deps)
 
   if options.stamp:
     build_utils.Touch(options.stamp)

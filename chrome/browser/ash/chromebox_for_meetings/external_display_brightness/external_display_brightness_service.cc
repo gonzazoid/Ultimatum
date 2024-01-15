@@ -12,7 +12,8 @@ namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 static ExternalDisplayBrightnessService* g_external_display_brightness_service =
@@ -83,7 +84,7 @@ void ExternalDisplayBrightnessService::SetExternalDisplayALSBrightness(
 
 void ExternalDisplayBrightnessService::OnGetExternalDisplayALSBrightness(
     GetExternalDisplayALSBrightnessCallback callback,
-    absl::optional<bool> enabled) {
+    std::optional<bool> enabled) {
   std::move(callback).Run(enabled.value_or(false));
 }
 
@@ -104,7 +105,7 @@ void ExternalDisplayBrightnessService::SetExternalDisplayBrightnessPercent(
 
 void ExternalDisplayBrightnessService::OnGetExternalDisplayBrightnessPercent(
     GetExternalDisplayBrightnessPercentCallback callback,
-    absl::optional<double> percent) {
+    std::optional<double> percent) {
   std::move(callback).Run(percent.value_or(-1.0));
 }
 

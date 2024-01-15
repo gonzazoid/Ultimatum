@@ -25,11 +25,17 @@ source_set("cc") {
   ]
 
   sources = [
+    "etc1_thumbnail_helper.cc",
+    "etc1_thumbnail_helper.h",
+    "jpeg_thumbnail_helper.cc",
+    "jpeg_thumbnail_helper.h",
     "scoped_ptr_expiring_cache.h",
     "thumbnail.cc",
     "thumbnail.h",
     "thumbnail_cache.cc",
     "thumbnail_cache.h",
+    "thumbnail_capture_tracker.cc",
+    "thumbnail_capture_tracker.h",
   ]
 
   if (is_android) {
@@ -46,10 +52,29 @@ source_set("unit_tests") {
   deps = [
     ":cc",
     "//base",
+    "//base/test:test_support",
+    "//content/test:test_support",
     "//net",
+    "//skia",
     "//testing/gmock",
     "//testing/gtest",
+    "//third_party/abseil-cpp:absl",
+    "//ui/gfx",
   ]
 
   sources = [ "scoped_ptr_expiring_cache_unittest.cc" ]
+
+  if (is_android) {
+    sources += [
+      "etc1_thumbnail_helper_unittest.cc",
+      "jpeg_thumbnail_helper_unittest.cc",
+      "thumbnail_cache_unittest.cc",
+      "thumbnail_capture_tracker_unittest.cc",
+    ]
+
+    deps += [
+      "//third_party/android_opengl/etc1",
+      "//ui/android",
+    ]
+  }
 }

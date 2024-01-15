@@ -21,11 +21,9 @@
 
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
-#include "third_party/blink/renderer/core/layout/svg/svg_layout_support.h"
 #include "third_party/blink/renderer/core/paint/svg_object_painter.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_length.h"
 #include "third_party/blink/renderer/core/svg/svg_element.h"
-#include "third_party/blink/renderer/core/svg/svg_length_context.h"
 #include "third_party/blink/renderer/core/svg/svg_mask_element.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
@@ -41,27 +39,17 @@ LayoutSVGResourceMasker::~LayoutSVGResourceMasker() = default;
 
 void LayoutSVGResourceMasker::RemoveAllClientsFromCache() {
   NOT_DESTROYED();
-  cached_paint_record_.reset();
+  cached_paint_record_ = absl::nullopt;
   MarkAllClientsForInvalidation(kPaintPropertiesInvalidation |
                                 kPaintInvalidation);
 }
 
-sk_sp<const PaintRecord> LayoutSVGResourceMasker::CreatePaintRecord(
-    const AffineTransform& content_transformation,
-    GraphicsContext& context) {
+PaintRecord LayoutSVGResourceMasker::CreatePaintRecord() {
   NOT_DESTROYED();
   if (cached_paint_record_)
-    return cached_paint_record_;
+    return *cached_paint_record_;
 
-  SubtreeContentTransformScope content_transform_scope(content_transformation);
-  auto* builder = MakeGarbageCollected<PaintRecordBuilder>(context);
-
-  ColorFilter mask_content_filter =
-      StyleRef().ColorInterpolation() == EColorInterpolation::kLinearrgb
-          ? kColorFilterSRGBToLinearRGB
-          : kColorFilterNone;
-  builder->Context().SetColorFilter(mask_content_filter);
-
+  auto* builder = MakeGarbageCollected<PaintRecordBuilder>();
   for (const SVGElement& child_element :
        Traversal<SVGElement>::ChildrenOf(*GetElement())) {
     const LayoutObject* layout_object = child_element.GetLayoutObject();
@@ -70,11 +58,12 @@ sk_sp<const PaintRecord> LayoutSVGResourceMasker::CreatePaintRecord(
     if (DisplayLockUtilities::LockedAncestorPreventingLayout(*layout_object) ||
         layout_object->StyleRef().Display() == EDisplay::kNone)
       continue;
-    SVGObjectPainter(*layout_object).PaintResourceSubtree(builder->Context());
+    SVGObjectPainter(*layout_object)
+        .PaintResourceSubtree(builder->Context(), PaintFlag::kPaintingSVGMask);
   }
 
   cached_paint_record_ = builder->EndRecording();
-  return cached_paint_record_;
+  return *cached_paint_record_;
 }
 
 SVGUnitTypes::SVGUnitType LayoutSVGResourceMasker::MaskUnits() const {
@@ -93,19 +82,22 @@ gfx::RectF LayoutSVGResourceMasker::ResourceBoundingBox(
     const gfx::RectF& reference_box,
     float reference_box_zoom) {
   NOT_DESTROYED();
-  DCHECK(!SelfNeedsLayout());
+  DCHECK(!SelfNeedsFullLayout());
   auto* mask_element = To<SVGMaskElement>(GetElement());
   DCHECK(mask_element);
 
-  SVGUnitTypes::SVGUnitType mask_units = MaskUnits();
-  gfx::RectF mask_boundaries = SVGLengthContext::ResolveRectangle(
-      mask_element, mask_units, reference_box);
+  const SVGUnitTypes::SVGUnitType mask_units = MaskUnits();
+  gfx::RectF mask_boundaries = ResolveRectangle(
+      mask_units, reference_box, *mask_element->x()->CurrentValue(),
+      *mask_element->y()->CurrentValue(),
+      *mask_element->width()->CurrentValue(),
+      *mask_element->height()->CurrentValue());
   // If the mask bounds were resolved relative to the current userspace we need
   // to adjust/scale with the zoom to get to the same space as the reference
   // box.
-  if (mask_units == SVGUnitTypes::kSvgUnitTypeUserspaceonuse)
+  if (mask_units == SVGUnitTypes::kSvgUnitTypeUserspaceonuse) {
     mask_boundaries.Scale(reference_box_zoom);
-
+  }
   return mask_boundaries;
 }
 

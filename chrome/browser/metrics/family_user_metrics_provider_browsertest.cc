@@ -7,7 +7,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/guest_session_mixin.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/ash/login/test/scoped_policy_update.h"
@@ -18,6 +17,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/account_id/account_id.h"
@@ -61,14 +61,13 @@ absl::optional<AccountId> GetPrimaryAccountId(
     // kStudentAtHome is the only one with an enterprise managed primary
     // account.
     return AccountId::FromUserEmailGaiaId(
-        ash::FakeGaiaMixin::kEnterpriseUser1,
-        ash::FakeGaiaMixin::kEnterpriseUser1GaiaId);
+        FakeGaiaMixin::kEnterpriseUser1, FakeGaiaMixin::kEnterpriseUser1GaiaId);
   }
   // Use the default FakeGaiaMixin::kFakeUserEmail consumer test account id.
   return absl::nullopt;
 }
 
-void ProvideCurrentSessionData() {
+void ProvideHistograms() {
   // The purpose of the below call is to avoid a DCHECK failure in an unrelated
   // metrics provider, in |FieldTrialsProvider::ProvideCurrentSessionData()|.
   metrics::SystemProfileProto system_profile_proto;
@@ -76,10 +75,10 @@ void ProvideCurrentSessionData() {
       ->GetDelegatingProviderForTesting()
       ->ProvideSystemProfileMetricsWithLogCreationTime(base::TimeTicks::Now(),
                                                        &system_profile_proto);
-  metrics::ChromeUserMetricsExtension uma_proto;
+
   g_browser_process->metrics_service()
       ->GetDelegatingProviderForTesting()
-      ->ProvideCurrentSessionData(&uma_proto);
+      ->OnDidCreateMetricsLog();
 }
 
 }  // namespace
@@ -121,9 +120,9 @@ class FamilyUserMetricsProviderTest
 
 IN_PROC_BROWSER_TEST_P(FamilyUserMetricsProviderTest, UserCategory) {
   base::HistogramTester histogram_tester;
-  // Simulate calling ProvideCurrentSessionData() prior to logging in.
-  // This call should return prematurely.
-  ProvideCurrentSessionData();
+  // Simulate calling ProvideHistograms() prior to logging in. This call should
+  // return prematurely.
+  ProvideHistograms();
 
   // No metrics were recorded.
   histogram_tester.ExpectTotalCount(
@@ -152,8 +151,8 @@ IN_PROC_BROWSER_TEST_P(FamilyUserMetricsProviderTest, UserCategory) {
         identity_manager->HasAccountWithRefreshToken(account_info.account_id));
   }
 
-  // Simulate calling ProvideCurrentSessionData() after logging in.
-  ProvideCurrentSessionData();
+  // Simulate calling ProvideHistograms() after logging in.
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       FamilyUserMetricsProvider::
@@ -192,7 +191,7 @@ IN_PROC_BROWSER_TEST_F(FamilyUserMetricsProviderGuestModeTest,
                        NoCrashInGuestMode) {
   base::HistogramTester histogram_tester;
 
-  ProvideCurrentSessionData();
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       FamilyUserMetricsProvider::
@@ -247,7 +246,7 @@ IN_PROC_BROWSER_TEST_F(FamilyUserMetricsProviderEphemeralUserTest,
                        EphemeralUserZeroSecondaryAccounts) {
   base::HistogramTester histogram_tester;
 
-  ProvideCurrentSessionData();
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       FamilyUserMetricsProvider::

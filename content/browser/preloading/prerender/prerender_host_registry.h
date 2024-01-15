@@ -5,31 +5,57 @@
 #ifndef CONTENT_BROWSER_PRELOADING_PRERENDER_PRERENDER_HOST_REGISTRY_H_
 #define CONTENT_BROWSER_PRELOADING_PRERENDER_PRERENDER_HOST_REGISTRY_H_
 
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/memory_pressure_listener.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/timer/timer.h"
 #include "base/types/pass_key.h"
-#include "content/browser/preloading/prerender/prerender_attributes.h"
 #include "content/browser/preloading/prerender/prerender_final_status.h"
-#include "content/browser/preloading/prerender/prerender_host.h"
-#include "content/browser/renderer_host/back_forward_cache_impl.h"
 #include "content/common/content_export.h"
+#include "content/common/frame.mojom-forward.h"
+#include "content/public/browser/preloading.h"
 #include "content/public/browser/visibility.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
-#include "services/resource_coordinator/public/cpp/memory_instrumentation/global_memory_dump.h"
-#include "third_party/blink/public/common/tokens/tokens.h"
-#include "url/gurl.h"
-#include "url/origin.h"
+#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom-shared.h"
+
+class GURL;
+
+namespace base {
+class SingleThreadTaskRunner;
+}
+
+namespace memory_instrumentation {
+class GlobalMemoryDump;
+}
+
+namespace net {
+class HttpResponseHeaders;
+}
+
+namespace network {
+class SimpleURLLoader;
+}  // namespace network
 
 namespace content {
 
+class FrameTree;
+class NavigationRequest;
+class PrerenderCancellationReason;
+class PrerenderHost;
+class PrerenderNewTabHandle;
 class RenderFrameHostImpl;
+class StoredPage;
+struct PrerenderAttributes;
 
 // PrerenderHostRegistry creates and retains a prerender host, and reserves it
 // for NavigationRequest to activate the prerendered page. This is created per
@@ -48,10 +74,16 @@ class RenderFrameHostImpl;
 class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
  public:
   // The time to allow prerendering kept alive in the background. All the hosts
-  // that this PrerenderHostRegistry holds will be terminated with
-  // kTimeoutBackgrounded when the timer exceeds this. The value was determined
-  // to align with the default value of BFCache's eviction timer.
-  static constexpr base::TimeDelta kTimeToLiveInBackground = base::Seconds(180);
+  // that this PrerenderHostRegistry holds will be terminated when the timer
+  // exceeds this. The timeout value differs depending on the trigger type. The
+  // value for an embedder was determined by
+  // PageLoad.Clients.Prerender.NavigationToActivation.*.
+  // The value for speculation rules was determined to align with the default
+  // value of BFCache's eviction timer.
+  static constexpr base::TimeDelta kTimeToLiveInBackgroundForEmbedder =
+      base::Seconds(19);
+  static constexpr base::TimeDelta kTimeToLiveInBackgroundForSpeculationRules =
+      base::Seconds(180);
 
   using PassKey = base::PassKey<PrerenderHostRegistry>;
 
@@ -71,6 +103,10 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
     // registry at the time this is called.
     virtual void OnTrigger(const GURL& url) {}
 
+    // Called when CancelHosts() actually cancels each host.
+    virtual void OnCancel(int host_frame_tree_node_id,
+                          const PrerenderCancellationReason& reason) {}
+
     // Called from the registry's destructor. The observer
     // should drop any reference to the registry.
     virtual void OnRegistryDestroyed() {}
@@ -85,11 +121,19 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // `preloading_attempt` is the attempt corresponding to this prerender, the
   // default value is set to nullptr as every case of prerendering trigger is
   // not yet integrated with PreloadingAttempt.
-  // TODO(crbug.com/1325073): Remove the default value as nullptr for
-  // preloading_attempt once prerendering is integrated with Preloading APIs.
+  // TODO(crbug.com/1350676): Remove the default value as nullptr for
+  // preloading_attempt once new-tab-prerender is integrated with Preloading
+  // APIs.
   int CreateAndStartHost(const PrerenderAttributes& attributes,
-                         WebContents& web_contents,
                          PreloadingAttempt* preloading_attempt = nullptr);
+
+  // Creates and starts a host in a new WebContents so that a navigation in a
+  // new tab will be able to activate it. PrerenderHostRegistry associated with
+  // the new WebContents manages the started host, and `this`
+  // PrerenderHostRegistry manages PrerenderNewTabHandle that owns the
+  // WebContents (see `prerender_new_tab_handle_by_frame_tree_node_id_`).
+  int CreateAndStartHostForNewTab(const PrerenderAttributes& attributes,
+                                  PreloadingPredictor preloading_predictor);
 
   // Cancels the host registered for `frame_tree_node_id`. The host is
   // immediately removed from the map of non-reserved hosts but asynchronously
@@ -97,11 +141,14 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // for self destruction.
   // Returns true if a cancelation has occurred.
   bool CancelHost(int frame_tree_node_id, PrerenderFinalStatus final_status);
+  // Same as CancelHost, but can pass a detailed reason for recording if given.
+  bool CancelHost(int frame_tree_node_id,
+                  const PrerenderCancellationReason& reason);
 
-  // Cancels the existing hosts specified in the vector with the same final
-  // status.
-  void CancelHosts(const std::vector<int>& frame_tree_node_ids,
-                   PrerenderFinalStatus final_status);
+  // Cancels the existing hosts specified in the vector with the same reason.
+  // Returns a subset of `frame_tree_node_ids` that were actually cancelled.
+  std::set<int> CancelHosts(const std::vector<int>& frame_tree_node_ids,
+                            const PrerenderCancellationReason& reason);
 
   // Applies CancelHost for all existing PrerenderHost.
   void CancelAllHosts(PrerenderFinalStatus final_status);
@@ -148,9 +195,15 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // does not match any non-reserved host.
   PrerenderHost* FindNonReservedHostById(int frame_tree_node_id);
 
-  // Returns the reserved host with the given id. Returns nullptr if the id
-  // does not match any reserved host.
-  PrerenderHost* FindReservedHostById(int frame_tree_node_id);
+  // Returns true if this registry reserves a host for activation.
+  bool HasReservedHost() const;
+
+  // Returns the ownership of a pre-created WebContentsImpl that contains a
+  // prerendered page that corresponds to the given params for a new tab
+  // navigation, if it exists.
+  std::unique_ptr<WebContentsImpl> TakePreCreatedWebContentsForNewTabIfExists(
+      const mojom::CreateNewWindowParams& create_new_window_params,
+      const WebContents::CreateParams& web_contents_create_params);
 
   // Returns the FrameTrees owned by this registry's prerender hosts.
   std::vector<FrameTree*> GetPrerenderFrameTrees();
@@ -159,45 +212,72 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // the URL doesn't match any non-reserved host.
   PrerenderHost* FindHostByUrlForTesting(const GURL& prerendering_url);
 
+  // Returns whether prerender_new_tab_handle_by_frame_tree_node_id_ has the
+  // given id.
+  bool HasNewTabHandleByIdForTesting(int frame_tree_node_id);
+
   // Cancels all hosts.
   void CancelAllHostsForTesting();
 
   // Gets the trigger type from the reserved PrerenderHost.
-  PrerenderTriggerType GetPrerenderTriggerType(int frame_tree_node_id);
+  PreloadingTriggerType GetPrerenderTriggerType(int frame_tree_node_id);
   // Gets the embedder histogram suffix from the reserved PrerenderHost. Only
   // used for metrics.
   const std::string& GetPrerenderEmbedderHistogramSuffix(
       int frame_tree_node_id);
 
+  // Represents the group of prerender limit calculated by PreloadingTriggerType
+  // and SpeculationEagerness on GetPrerenderLimitGroup.
+  // Currently, this is used when kPrerender2NewLimitAndScheduler is enabled.
+  enum class PrerenderLimitGroup {
+    kSpeculationRulesEager,
+    kSpeculationRulesNonEager,
+    kEmbedder,
+  };
+
+  // May be called when it is believed to be likely that the user will perform a
+  // back navigation due to the trigger indicated by `predictor` (e.g. they're
+  // hovering over a back button).
+  void BackNavigationLikely(PreloadingPredictor predictor);
+
   base::WeakPtr<PrerenderHostRegistry> GetWeakPtr();
 
-  // Applies the callback function to all prerender hosts owned by
-  // this registry.
-  void ForEachPrerenderHost(
-      base::RepeatingCallback<void(PrerenderHost&)> callback);
-
   // Only used for tests.
-  base::OneShotTimer* GetTimerForTesting() { return &timeout_timer_; }
+  base::OneShotTimer* GetEmbedderTimerForTesting() {
+    return &timeout_timer_for_embedder_;
+  }
+  base::OneShotTimer* GetSpeculationRulesTimerForTesting() {
+    return &timeout_timer_for_speculation_rules_;
+  }
   void SetTaskRunnerForTesting(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+  bool HasOngoingHttpCacheQueryForTesting() const {
+    return !!http_cache_query_loader_;
+  }
 
  private:
   // WebContentsObserver implementation:
+  void DidStartNavigation(NavigationHandle* navigation_handle) override;
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
   void OnVisibilityChanged(Visibility visibility) override;
-  void ResourceLoadComplete(
-      RenderFrameHost* render_frame_host,
-      const GlobalRequestID& request_id,
-      const blink::mojom::ResourceLoadInfo& resource_load_info) override;
+  void PrimaryMainFrameRenderProcessGone(
+      base::TerminationStatus status) override;
+
+  bool CancelHostInternal(int frame_tree_node_id,
+                          const PrerenderCancellationReason& reason);
+  bool CancelNewTabHostInternal(int frame_tree_node_id,
+                                const PrerenderCancellationReason& reason);
 
   int FindHostToActivateInternal(NavigationRequest& navigation_request);
 
   void ScheduleToDeleteAbandonedHost(
       std::unique_ptr<PrerenderHost> prerender_host,
-      PrerenderFinalStatus final_status);
+      const PrerenderCancellationReason& cancellation_reason);
   void DeleteAbandonedHosts();
 
   void NotifyTrigger(const GURL& url);
+  void NotifyCancel(int host_frame_tree_node_id,
+                    const PrerenderCancellationReason& reason);
 
   // Pops one PrerenderHost from the queue and starts the prerendering if
   // there's no running prerender and `kNoFrameTreeNode` is passed as
@@ -207,11 +287,31 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // cancelled.
   int StartPrerendering(int frame_tree_node_id);
 
-  // Returns whether a certain type of PrerenderTriggerType is allowed to be
+  // Cancels the existing hosts that were triggered by `trigger_types`.
+  void CancelHostsForTriggers(std::vector<PreloadingTriggerType> trigger_types,
+                              const PrerenderCancellationReason& reason);
+
+  // Calculates PrerenderLimitGroup by PreloadingTriggerType and
+  // SpeculationEagerness.
+  // Currently, this is only used under kPrerender2NewLimitAndScheduler.
+  PrerenderLimitGroup GetPrerenderLimitGroup(
+      PreloadingTriggerType trigger_type,
+      std::optional<blink::mojom::SpeculationEagerness> eagerness);
+
+  // Returns the number of hosts that prerender_host_by_frame_tree_node_id_
+  // holds by trigger type / limit group.
+  int GetHostCountByTriggerType(PreloadingTriggerType trigger_type);
+  int GetHostCountByLimitGroup(PrerenderLimitGroup limit_group);
+
+  // Returns whether a certain type of PreloadingTriggerType is allowed to be
   // added to PrerenderHostRegistry according to the limit of the given
-  // PrerenderTriggerType.
+  // PreloadingTriggerType.
+  // If kPrerender2NewLimitAndScheduler is enabled, SpeculationEagerness is
+  // additionally considered to apply the new limits and behaviors according to
+  // PrerenderLimitGroup.
   bool IsAllowedToStartPrerenderingForTrigger(
-      PrerenderTriggerType trigger_type);
+      PreloadingTriggerType trigger_type,
+      std::optional<blink::mojom::SpeculationEagerness> eagerness);
 
   // Destroys a host when the current memory usage is higher than a certain
   // threshold.
@@ -221,6 +321,17 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
       bool success,
       std::unique_ptr<memory_instrumentation::GlobalMemoryDump> dump);
 
+  // Called when we have the HTTP cache result of the main resource of the back
+  // navigation queried by `BackNavigationLikely`.
+  void OnBackResourceCacheResult(
+      PreloadingPredictor predictor,
+      base::WeakPtr<PreloadingAttempt> attempt,
+      GURL back_url,
+      scoped_refptr<net::HttpResponseHeaders> headers);
+
+  void OnMemoryPressure(
+      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+
   scoped_refptr<base::SingleThreadTaskRunner> GetTimerTaskRunner();
 
   // Holds the frame_tree_node_id of running PrerenderHost. Reset to
@@ -228,7 +339,6 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // Tracks only the host id of speculation rules triggers and ignores requests
   // from embedder because embedder requests are more urgent and we'd like to
   // handle embedder prerender independently from speculation rules requests.
-  // This is valid only when kPrerender2SequentialPrerendering is enabled.
   int running_prerender_host_id_ = RenderFrameHost::kNoFrameTreeNodeId;
 
   // Holds the ids of upcoming prerender requests. The requests from embedder
@@ -236,7 +346,6 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // requests from the speculation rules are appended to the back. This may
   // contain ids of cancelled requests. You can identify cancelled requests by
   // checking if an id is in `prerender_host_by_frame_tree_node_id_`.
-  // This is valid only when kPrerender2SequentialPrerendering is enabled.
   base::circular_deque<int> pending_prerenders_;
 
   // Hosts that are not reserved for activation yet. This map also includes the
@@ -246,8 +355,17 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   base::flat_map<int, std::unique_ptr<PrerenderHost>>
       prerender_host_by_frame_tree_node_id_;
 
+  // Holds the host id of non-eager prerenders by their arrival order.
+  // Currently, it is used to calculate the oldest prerender on
+  // GetOldestHostPerLimitGroup for kPrerender2NewLimitAndScheduler.
+  base::circular_deque<int> non_eager_prerender_host_id_by_arrival_order_;
+
   // The host that is reserved for activation.
   std::unique_ptr<PrerenderHost> reserved_prerender_host_;
+
+  // Handles that manage WebContents for prerendering in new tabs.
+  base::flat_map<int, std::unique_ptr<PrerenderNewTabHandle>>
+      prerender_new_tab_handle_by_frame_tree_node_id_;
 
   // Hosts that are scheduled to be deleted asynchronously.
   // Design note: PrerenderHostRegistry should explicitly manage the hosts to be
@@ -257,11 +375,18 @@ class CONTENT_EXPORT PrerenderHostRegistry : public WebContentsObserver {
   // of the registry) and results in UAF.
   std::vector<std::unique_ptr<PrerenderHost>> to_be_deleted_hosts_;
 
-  // Starts running the timer when prerendering gets hidden.
-  base::OneShotTimer timeout_timer_;
+  // Starts running the timers when prerendering gets hidden.
+  base::OneShotTimer timeout_timer_for_embedder_;
+  base::OneShotTimer timeout_timer_for_speculation_rules_;
   // Only used for tests. This task runner is used for precise injection in
   // tests and for timing control.
   scoped_refptr<base::SingleThreadTaskRunner> timer_task_runner_for_testing_;
+
+  // A pending cache-only load of a URL, used to identify whether there is an
+  // entry for it in the HTTP cache.
+  std::unique_ptr<network::SimpleURLLoader> http_cache_query_loader_;
+
+  base::MemoryPressureListener memory_pressure_listener_;
 
   base::ObserverList<Observer> observers_;
 

@@ -7,11 +7,11 @@
 
 #import <Foundation/Foundation.h>
 
-#import "components/password_manager/core/browser/password_store_interface.h"
-#import "ios/chrome/browser/autofill/form_input_navigator.h"
-#import "ios/chrome/browser/autofill/form_suggestion_client.h"
-#import "ios/chrome/browser/ui/autofill/form_input_accessory/branding_view_controller_delegate.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer_bridge.h"
+#import "components/password_manager/core/browser/password_store/password_store_interface.h"
+#import "components/prefs/pref_service.h"
+#import "ios/chrome/browser/autofill/model/form_input_navigator.h"
+#import "ios/chrome/browser/autofill/model/form_suggestion_client.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 
 @class ChromeCoordinator;
@@ -36,22 +36,18 @@ class WebStateList;
 // The mediator detected that the keyboard input view should be reset.
 - (void)resetFormInputView;
 
-// The mediator notifies that password suggestions have been shown.
-- (void)notifyPasswordSuggestionsShown;
+// The mediator shows autofill suggestion tip if needed.
+- (void)showAutofillSuggestionIPHIfNeeded;
 
-// The mediator notifies that a password suggestion has been selected.
-- (void)notifyPasswordSuggestionSelected;
-
-// The mediator shows password suggestion tip if needed.
-- (void)showPasswordSuggestionIPHIfNeeded;
+// The mediator notifies that the autofill suggestion has been selected.
+- (void)notifyAutofillSuggestionWithIPHSelected;
 
 @end
 
 // This class contains all the logic to get and provide keyboard input accessory
 // views to its consumer. As well as telling the consumer when the default
 // accessory view should be restored to the system default.
-@interface FormInputAccessoryMediator
-    : NSObject <BrandingViewControllerDelegate, FormSuggestionClient>
+@interface FormInputAccessoryMediator : NSObject <FormSuggestionClient>
 
 // Returns a mediator observing the passed `WebStateList` and associated with
 // the passed consumer. `webSateList` can be nullptr and `consumer` can be nil.
@@ -60,9 +56,12 @@ class WebStateList;
                    handler:(id<FormInputAccessoryMediatorHandler>)handler
               webStateList:(WebStateList*)webStateList
        personalDataManager:(autofill::PersonalDataManager*)personalDataManager
-             passwordStore:
-                 (scoped_refptr<password_manager::PasswordStoreInterface>)
-                     passwordStore
+      profilePasswordStore:
+          (scoped_refptr<password_manager::PasswordStoreInterface>)
+              profilePasswordStore
+      accountPasswordStore:
+          (scoped_refptr<password_manager::PasswordStoreInterface>)
+              accountPasswordStore
       securityAlertHandler:(id<SecurityAlertCommands>)securityAlertHandler
     reauthenticationModule:(ReauthenticationModule*)reauthenticationModule;
 
@@ -71,6 +70,10 @@ class WebStateList;
 
 @property(nonatomic, readonly, getter=isInputAccessoryViewActive)
     BOOL inputAccessoryViewActive;
+
+// Pref service from the original browser state, used to retrieve preferred
+// omnibox position.
+@property(nonatomic, assign) PrefService* originalPrefService;
 
 // Disables suggestions updates and asks the consumer to remove the current
 // ones.
@@ -85,6 +88,9 @@ class WebStateList;
 
 // Returns YES if the last focused field is of type 'password'.
 - (BOOL)lastFocusedFieldWasPassword;
+
+// Returns the last seen valid params of a form before retrieving suggestions.
+- (const autofill::FormActivityParams&)lastSeenParams;
 
 @end
 

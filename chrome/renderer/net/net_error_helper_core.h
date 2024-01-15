@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "components/error_page/common/error.h"
 #include "components/error_page/common/localized_error.h"
@@ -49,6 +49,7 @@ class NetErrorHelperCore {
     MORE_BUTTON,
     EASTER_EGG,
     DIAGNOSE_ERROR,
+    PORTAL_SIGNIN,
     DOWNLOAD_BUTTON,  // "Download page later" experiment.
   };
 
@@ -63,7 +64,7 @@ class NetErrorHelperCore {
         bool can_show_network_diagnostics_dialog,
         content::mojom::AlternativeErrorPageOverrideInfoPtr
             alternative_error_page_info,
-        std::string* html) const = 0;
+        std::string* html) = 0;
 
     // Create extra Javascript bindings in the error page. Will only be invoked
     // after an error page has finished loading.
@@ -93,6 +94,9 @@ class NetErrorHelperCore {
 
     // Run the platform diagnostics too for the specified URL.
     virtual void DiagnoseError(const GURL& page_url) = 0;
+
+    // Show the captive portal signin page.
+    virtual void PortalSignin() = 0;
 
     // Schedule to download the page at a later time.
     virtual void DownloadPageLater() = 0;
@@ -202,7 +206,7 @@ class NetErrorHelperCore {
 
   void Reload();
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalRenderer> delegate_;
 
   // The last DnsProbeStatus received from the browser.
   error_page::DnsProbeStatus last_probe_status_;

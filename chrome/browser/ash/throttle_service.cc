@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 
 namespace ash {
@@ -41,6 +41,10 @@ void ThrottleService::SetObserversForTesting(
   StopObservers();
   observers_ = std::move(observers);
   StartObservers();
+}
+
+bool ThrottleService::HasServiceObserverForTesting(ServiceObserver* candidate) {
+  return service_observers_.HasObserver(candidate);
 }
 
 void ThrottleService::AddObserver(std::unique_ptr<ThrottleObserver> observer) {

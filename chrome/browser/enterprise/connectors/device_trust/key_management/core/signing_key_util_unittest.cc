@@ -7,12 +7,14 @@
 #include <vector>
 
 #include "base/containers/span.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/common/key_types.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/mock_key_persistence_delegate.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/scoped_key_persistence_delegate_factory.h"
 #include "crypto/unexportable_key.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+using testing::_;
 using BPKUR = enterprise_management::BrowserPublicKeyUploadRequest;
 
 namespace enterprise_connectors {
@@ -53,10 +55,12 @@ class SigningKeyUtilTest : public testing::Test {
 
     auto* mock_delegate_ptr = mocked_delegate.get();
     factory_.set_next_instance(std::move(mocked_delegate));
-    EXPECT_CALL(*mock_delegate_ptr, LoadKeyPair());
 
-    auto key_pair = LoadPersistedKey();
-    ValidateSigningKey(key_pair.get(), trust_level);
+    EXPECT_CALL(*mock_delegate_ptr, LoadKeyPair(KeyStorageType::kPermanent, _));
+
+    auto loaded_key = LoadPersistedKey();
+    EXPECT_EQ(loaded_key.result, LoadPersistedKeyResult::kSuccess);
+    ValidateSigningKey(loaded_key.key_pair.get(), trust_level);
   }
 
   test::ScopedKeyPersistenceDelegateFactory factory_;

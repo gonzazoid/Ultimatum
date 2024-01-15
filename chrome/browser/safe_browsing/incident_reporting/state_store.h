@@ -80,7 +80,7 @@ class StateStore {
     // The store corresponding to this transaction.
     raw_ptr<StateStore> store_;
 
-    // A ScopedUserPrefUpdate through which changes to the incidents_sent
+    // A ScopedDictPrefUpdate through which changes to the incidents_sent
     // preference are made.
     std::unique_ptr<ScopedDictPrefUpdate> pref_update_;
   };
@@ -102,10 +102,10 @@ class StateStore {
   void CleanLegacyValues(Transaction* transaction);
 
   // The profile to which this state corresponds.
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 
   // A read-only view on the profile's incidents_sent preference.
-  const base::Value::Dict* incidents_sent_ = nullptr;
+  raw_ptr<const base::Value::Dict, DanglingUntriaged> incidents_sent_ = nullptr;
 
 #if DCHECK_IS_ON()
   // True when a Transaction instance is outstanding.

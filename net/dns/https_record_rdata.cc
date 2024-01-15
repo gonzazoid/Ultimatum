@@ -21,7 +21,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_piece.h"
 #include "net/base/ip_address.h"
-#include "net/dns/dns_util.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/public/dns_protocol.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -188,7 +188,7 @@ std::unique_ptr<AliasFormHttpsRecordRdata> AliasFormHttpsRecordRdata::Parse(
     return nullptr;
 
   absl::optional<std::string> alias_name =
-      DnsDomainToString(reader, true /* require_complete */);
+      dns_names_util::NetworkToDottedName(reader, true /* require_complete */);
   if (!alias_name.has_value())
     return nullptr;
 
@@ -245,8 +245,8 @@ ServiceFormHttpsRecordRdata::ServiceFormHttpsRecordRdata(
       ipv6_hint_(std::move(ipv6_hint)),
       unparsed_params_(std::move(unparsed_params)) {
   DCHECK_NE(priority_, 0);
-  DCHECK(mandatory_keys_.find(dns_protocol::kHttpsServiceParamKeyMandatory) ==
-         mandatory_keys_.end());
+  DCHECK(!base::Contains(mandatory_keys_,
+                         dns_protocol::kHttpsServiceParamKeyMandatory));
 
 #if DCHECK_IS_ON()
   for (const IPAddress& address : ipv4_hint_) {
@@ -296,7 +296,7 @@ std::unique_ptr<ServiceFormHttpsRecordRdata> ServiceFormHttpsRecordRdata::Parse(
     return nullptr;
 
   absl::optional<std::string> service_name =
-      DnsDomainToString(reader, true /* require_complete */);
+      dns_names_util::NetworkToDottedName(reader, true /* require_complete */);
   if (!service_name.has_value())
     return nullptr;
 
@@ -431,13 +431,14 @@ bool ServiceFormHttpsRecordRdata::IsCompatible() const {
   for (uint16_t mandatory_key : mandatory_keys_) {
     DCHECK_NE(mandatory_key, dns_protocol::kHttpsServiceParamKeyMandatory);
 
-    if (supported_keys.find(mandatory_key) == supported_keys.end())
+    if (!base::Contains(supported_keys, mandatory_key)) {
       return false;
+    }
   }
 
 #if DCHECK_IS_ON()
   for (const auto& unparsed_param : unparsed_params_) {
-    DCHECK(mandatory_keys_.find(unparsed_param.first) == mandatory_keys_.end());
+    DCHECK(!base::Contains(mandatory_keys_, unparsed_param.first));
   }
 #endif  // DCHECK_IS_ON()
 
@@ -450,7 +451,7 @@ bool ServiceFormHttpsRecordRdata::IsSupportedKey(uint16_t key) {
   return base::Contains(kSupportedKeys, key);
 #else
   // Only intended for DCHECKs.
-  IMMEDIATE_CRASH();
+  base::ImmediateCrash();
 #endif  // DCHECK_IS_ON()
 }
 

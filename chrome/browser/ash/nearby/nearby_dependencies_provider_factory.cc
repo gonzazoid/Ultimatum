@@ -4,12 +4,30 @@
 
 #include "chrome/browser/ash/nearby/nearby_dependencies_provider_factory.h"
 
+#include "ash/constants/ash_features.h"
 #include "chrome/browser/ash/nearby/nearby_dependencies_provider.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace ash::nearby {
+
+namespace {
+
+// This needs to be overridden because the default implementation returns
+// nullptr for "Ash internal" profiles (i.e. the signin profile), which would
+// prevent using this with Quick Start. We allow this service to be created for
+// the OTR signin profile for use with Quick Start, and for the regular user
+// profile with all other features. See ProfileSelections and
+// NearbyProcessManagerFactory documentation for more detail.
+ProfileSelections BuildNearbyDependenciesProviderProfileSelections() {
+  return ProfileSelections::Builder()
+      .WithRegular(ProfileSelection::kOriginalOnly)
+      .WithAshInternals(ProfileSelection::kOffTheRecordOnly)
+      .Build();
+}
+
+}  // namespace
 
 // static
 NearbyDependenciesProvider* NearbyDependenciesProviderFactory::GetForProfile(
@@ -22,23 +40,25 @@ NearbyDependenciesProvider* NearbyDependenciesProviderFactory::GetForProfile(
 // static
 NearbyDependenciesProviderFactory*
 NearbyDependenciesProviderFactory::GetInstance() {
-  return base::Singleton<NearbyDependenciesProviderFactory>::get();
+  static base::NoDestructor<NearbyDependenciesProviderFactory> instance;
+  return instance.get();
 }
 
 NearbyDependenciesProviderFactory::NearbyDependenciesProviderFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "NearbyDependenciesProvider",
-          BrowserContextDependencyManager::GetInstance()) {
+          BuildNearbyDependenciesProviderProfileSelections()) {
   DependsOn(IdentityManagerFactory::GetInstance());
 }
 
 NearbyDependenciesProviderFactory::~NearbyDependenciesProviderFactory() =
     default;
 
-KeyedService* NearbyDependenciesProviderFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NearbyDependenciesProviderFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new NearbyDependenciesProvider(
+  return std::make_unique<NearbyDependenciesProvider>(
       profile, IdentityManagerFactory::GetForProfile(profile));
 }
 

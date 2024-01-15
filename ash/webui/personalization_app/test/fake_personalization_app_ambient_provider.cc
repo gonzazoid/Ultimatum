@@ -4,6 +4,7 @@
 
 #include "ash/webui/personalization_app/test/fake_personalization_app_ambient_provider.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/webui/personalization_app/mojom/personalization_app.mojom-forward.h"
 #include "content/public/browser/web_ui.h"
 
@@ -25,6 +26,22 @@ void FakePersonalizationAppAmbientProvider::BindInterface(
 void FakePersonalizationAppAmbientProvider::IsAmbientModeEnabled(
     IsAmbientModeEnabledCallback callback) {
   std::move(callback).Run(std::move(true));
+}
+
+void FakePersonalizationAppAmbientProvider::ShouldShowTimeOfDayBanner(
+    ShouldShowTimeOfDayBannerCallback callback) {
+  std::move(callback).Run(features::IsTimeOfDayScreenSaverEnabled());
+}
+
+void FakePersonalizationAppAmbientProvider::
+    IsGeolocationEnabledForSystemServices(
+        IsGeolocationEnabledForSystemServicesCallback callback) {
+  std::move(callback).Run(geolocation_enabled_for_system);
+}
+
+void FakePersonalizationAppAmbientProvider::
+    EnableGeolocationForSystemServices() {
+  geolocation_enabled_for_system = true;
 }
 
 }  // namespace ash::personalization_app

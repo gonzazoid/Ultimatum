@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "base/cxx17_backports.h"
+#include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/tabs/tab_style.h"
 #include "ui/gfx/animation/tween.h"
 #include "ui/gfx/geometry/rect.h"
@@ -20,7 +20,7 @@ namespace {
 TabSizer CalculateSpaceFractionAvailable(
     const TabLayoutConstants& layout_constants,
     const std::vector<TabWidthConstraints>& tabs,
-    absl::optional<int> width) {
+    std::optional<int> width) {
   if (!width.has_value())
     return TabSizer(LayoutDomain::kInactiveWidthEqualsActiveWidth, 1);
 
@@ -65,7 +65,7 @@ TabSizer CalculateSpaceFractionAvailable(
                                          (preferred_width - crossover_width);
   }
 
-  space_fraction_available = base::clamp(space_fraction_available, 0.0f, 1.0f);
+  space_fraction_available = std::clamp(space_fraction_available, 0.0f, 1.0f);
   return TabSizer(domain, space_fraction_available);
 }
 
@@ -108,7 +108,7 @@ bool TabSizer::IsAlreadyPreferredWidth() const {
 // use up that width.
 void AllocateExtraSpace(std::vector<gfx::Rect>* bounds,
                         const std::vector<TabWidthConstraints>& tabs,
-                        absl::optional<int> extra_space,
+                        std::optional<int> extra_space,
                         TabSizer tab_sizer) {
   // Don't expand tabs if they are already at their preferred width.
   if (tab_sizer.IsAlreadyPreferredWidth() || !extra_space.has_value())
@@ -129,7 +129,7 @@ void AllocateExtraSpace(std::vector<gfx::Rect>* bounds,
 std::vector<gfx::Rect> CalculateTabBounds(
     const TabLayoutConstants& layout_constants,
     const std::vector<TabWidthConstraints>& tabs,
-    absl::optional<int> width) {
+    std::optional<int> width) {
   if (tabs.empty())
     return std::vector<gfx::Rect>();
 
@@ -144,11 +144,11 @@ std::vector<gfx::Rect> CalculateTabBounds(
     next_x += tab_width - layout_constants.tab_overlap;
   }
 
-  const absl::optional<int> calculated_extra_space =
+  const std::optional<int> calculated_extra_space =
       width.has_value()
-          ? absl::make_optional(width.value() - bounds.back().right())
-          : absl::nullopt;
-  const absl::optional<int> extra_space = calculated_extra_space;
+          ? std::make_optional(width.value() - bounds.back().right())
+          : std::nullopt;
+  const std::optional<int> extra_space = calculated_extra_space;
   AllocateExtraSpace(&bounds, tabs, extra_space, tab_sizer);
 
   return bounds;

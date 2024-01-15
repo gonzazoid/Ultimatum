@@ -8,9 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_seat.h"
@@ -38,9 +38,9 @@ class XdgActivation::Token {
   ~Token();
 
  private:
-  static void Done(void* data,
-                   struct xdg_activation_token_v1* xdg_activation_token_v1,
-                   const char* token);
+  static void OnDone(void* data,
+                     xdg_activation_token_v1* activation_token,
+                     const char* token);
 
   wl::Object<xdg_activation_token_v1> token_;
 
@@ -80,19 +80,24 @@ XdgActivation::XdgActivation(wl::Object<xdg_activation_v1> xdg_activation_v1,
 XdgActivation::~XdgActivation() = default;
 
 void XdgActivation::Activate(wl_surface* surface) const {
-  const WaylandWindow* const active_window =
-      connection_->wayland_window_manager()->GetCurrentActiveWindow();
-  if (!active_window) {
-    LOG(WARNING) << "Cannot activate a window because no active windows found!";
-    return;
-  }
-
+  // The spec isn't clear about what types of surfaces should be used as
+  // the requestor surface, but all implementations of xdg_activation_v1
+  // known to date accept the currently keyboard focused surface for
+  // activation. Update if needed once the upstream issue gets fixed:
+  // https://gitlab.freedesktop.org/wayland/wayland-protocols/-/issues/129
+  const WaylandWindow* const keyboard_focused_window =
+      connection_->window_manager()->GetCurrentKeyboardFocusedWindow();
   if (token_.get() != nullptr) {
     // If the earlier activation request is still being served, store the
     // incoming request and try to serve it after the current one is done.
     activation_queue_.emplace(surface);
     return;
   }
+
+  wl_surface* const keyboard_focused_surface =
+      keyboard_focused_window
+          ? keyboard_focused_window->root_surface()->surface()
+          : nullptr;
 
   auto* const token =
       xdg_activation_v1_get_activation_token(xdg_activation_v1_.get());
@@ -102,8 +107,7 @@ void XdgActivation::Activate(wl_surface* surface) const {
   }
 
   token_ = std::make_unique<Token>(
-      wl::Object<xdg_activation_token_v1>(token),
-      active_window->root_surface()->surface(),
+      wl::Object<xdg_activation_token_v1>(token), keyboard_focused_surface,
       connection_->seat()->wl_object(),
       connection_->serial_tracker().GetSerial(
           {wl::SerialType::kTouchPress, wl::SerialType::kMousePress,
@@ -127,23 +131,29 @@ XdgActivation::Token::Token(wl::Object<xdg_activation_token_v1> token,
                             absl::optional<wl::Serial> serial,
                             ActivationDoneCallback callback)
     : token_(std::move(token)), callback_(std::move(callback)) {
-  static constexpr xdg_activation_token_v1_listener kListener = {&Done};
-  xdg_activation_token_v1_add_listener(token_.get(), &kListener, this);
-  xdg_activation_token_v1_set_surface(token_.get(), surface);
-  if (serial)
+  static constexpr xdg_activation_token_v1_listener kXdgActivationListener = {
+      .done = &OnDone};
+  xdg_activation_token_v1_add_listener(token_.get(), &kXdgActivationListener,
+                                       this);
+  if (surface) {
+    xdg_activation_token_v1_set_surface(token_.get(), surface);
+  }
+  if (serial) {
     xdg_activation_token_v1_set_serial(token_.get(), serial->value, seat);
+  }
   xdg_activation_token_v1_commit(token_.get());
 }
 
 XdgActivation::Token::~Token() = default;
 
 // static
-void XdgActivation::Token::Done(
-    void* data,
-    struct xdg_activation_token_v1* xdg_activation_token_v1,
-    const char* token) {
-  auto* const self = static_cast<XdgActivation::Token*>(data);
-  std::move(self->callback_).Run(token);
+void XdgActivation::Token::OnDone(void* data,
+                                  xdg_activation_token_v1* activation_token,
+                                  const char* token) {
+  if (auto* const self = static_cast<XdgActivation::Token*>(data)) {
+    DCHECK(!self->callback_.is_null());
+    std::move(self->callback_).Run(token);
+  }
 }
 
 }  // namespace ui

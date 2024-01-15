@@ -539,6 +539,50 @@ AX_TEST_F(
     });
 
 AX_TEST_F(
+    'SelectToSpeakParagraphUnitTest', 'BuildNodeGroupWithAndroidClickable',
+    function() {
+      const root = {role: 'application'};
+      const listRoot = {role: 'list', parent: root, root};
+      const clickableContainer =
+          {role: 'genericContainer', parent: listRoot, root, clickable: true};
+      const text1 =
+          {role: 'staticText', parent: clickableContainer, root, name: 'text1'};
+      const text2 =
+          {role: 'staticText', parent: clickableContainer, root, name: 'text2'};
+
+      const result = ParagraphUtils.buildNodeGroup(
+          [text1, text2], 0, {splitOnLanguage: false});
+      assertEquals('text1 text2 ', result.text);
+      assertEquals(clickableContainer, result.blockParent);
+    });
+
+AX_TEST_F(
+    'SelectToSpeakParagraphUnitTest',
+    'BuildNodeGroupWithMultipleAndroidClickables', function() {
+      const root = {role: 'application'};
+      const container = {role: 'genericContainer', parent: root, root};
+      const button1 = {
+        role: 'button',
+        parent: container,
+        root,
+        clickable: true,
+        name: 'button1',
+      };
+      const button2 = {
+        role: 'button',
+        parent: container,
+        root,
+        clickable: true,
+        name: 'button2',
+      };
+
+      const result = ParagraphUtils.buildNodeGroup(
+          [button1, button2], 0, {splitOnLanguage: false});
+      assertEquals('button1 ', result.text);
+      assertEquals(button1, result.blockParent);
+    });
+
+AX_TEST_F(
     'SelectToSpeakParagraphUnitTest', 'findNodeFromNodeGroupByCharIndex',
     function() {
       // The array has four inline text nodes and one static text node.

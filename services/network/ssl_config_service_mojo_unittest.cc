@@ -8,8 +8,8 @@
 #include "base/files/file_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/test/repeating_test_future.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "crypto/sha2.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -49,14 +49,14 @@ class TestSSLConfigServiceObserver : public net::SSLConfigService::Observer {
   }
 
   ~TestSSLConfigServiceObserver() override {
-    EXPECT_TRUE(config_changed_calls_.IsEmpty())
+    EXPECT_FALSE(config_changed_call_.IsReady())
         << "Unexpected calls to OnSSLContextConfigChanged()";
     ssl_config_service_->RemoveObserver(this);
   }
 
   // net::SSLConfigService::Observer implementation:
   void OnSSLContextConfigChanged() override {
-    config_changed_calls_.AddValue(ssl_config_service_->GetSSLContextConfig());
+    config_changed_call_.SetValue(ssl_config_service_->GetSSLContextConfig());
   }
 
   // Waits for a SSLContextConfig change. The first time it's called, waits for
@@ -65,23 +65,23 @@ class TestSSLConfigServiceObserver : public net::SSLConfigService::Observer {
   // happens, and fails if more than once change happens between calls, or
   // during a call.
   net::SSLContextConfig WaitForChange() {
-    EXPECT_TRUE(config_changed_calls_.Wait())
+    EXPECT_TRUE(config_changed_call_.Wait())
         << "Missing call to OnSSLContextConfigChanged()";
-    return config_changed_calls_.Take();
+    return config_changed_call_.Take();
   }
 
  private:
   const raw_ptr<net::SSLConfigService> ssl_config_service_;
 
-  // All calls to OnSSLContextConfigChanged().
-  base::test::RepeatingTestFuture<net::SSLContextConfig> config_changed_calls_;
+  // Most recent call to OnSSLContextConfigChanged().
+  base::test::TestFuture<net::SSLContextConfig> config_changed_call_;
 };
 
 class TestCertVerifierConfigObserver : public net::CertVerifier {
  public:
   TestCertVerifierConfigObserver() = default;
   ~TestCertVerifierConfigObserver() override {
-    EXPECT_TRUE(set_config_calls_.IsEmpty())
+    EXPECT_FALSE(set_config_call_.IsReady())
         << "Unexpected call to SetConfig()";
   }
 
@@ -95,21 +95,23 @@ class TestCertVerifierConfigObserver : public net::CertVerifier {
     return net::ERR_FAILED;
   }
   void SetConfig(const Config& config) override {
-    set_config_calls_.AddValue(config);
+    set_config_call_.SetValue(config);
   }
+  void AddObserver(Observer* observer) override {}
+  void RemoveObserver(Observer* observer) override {}
 
   // Waits for a SSLConfig change. The first time it's called, waits for the
   // first change, if one hasn't been observed already, the second time, waits
   // for the second, etc. Must be called once for each change that happens, and
   // fails it more than once change happens between calls, or during a call.
   net::CertVerifier::Config WaitForChange() {
-    EXPECT_TRUE(set_config_calls_.Wait()) << "Missing call to SetConfig()";
-    return set_config_calls_.Take();
+    EXPECT_TRUE(set_config_call_.Wait()) << "Missing call to SetConfig()";
+    return set_config_call_.Take();
   }
 
  private:
-  // All calls to SetConfig().
-  base::test::RepeatingTestFuture<Config> set_config_calls_;
+  // Most recent call to SetConfig().
+  base::test::TestFuture<Config> set_config_call_;
 };
 
 class NetworkServiceSSLConfigServiceTest : public testing::Test {
@@ -157,40 +159,32 @@ class NetworkServiceSSLConfigServiceTest : public testing::Test {
                           const net::SSLContextConfig& expected_net_config) {
     // The expected configuration must not be the default configuration, or the
     // change test won't send an event.
-    EXPECT_FALSE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        net::SSLContextConfig(), expected_net_config));
+    EXPECT_NE(net::SSLContextConfig(), expected_net_config);
 
     // Set up |mojo_config| as the initial configuration of a NetworkContext.
     mojom::NetworkContextParamsPtr network_context_params =
         mojom::NetworkContextParams::New();
     network_context_params->initial_ssl_config = mojo_config.Clone();
     SetUpNetworkContext(std::move(network_context_params));
-    EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        GetSSLContextConfig(), expected_net_config));
+    EXPECT_EQ(GetSSLContextConfig(), expected_net_config);
     // Sanity check.
-    EXPECT_FALSE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        GetSSLContextConfig(), net::SSLContextConfig()));
+    EXPECT_NE(GetSSLContextConfig(), net::SSLContextConfig());
 
     // Reset the configuration to the default ones, and check the results.
     TestSSLConfigServiceObserver observer(
         network_context_->url_request_context()->ssl_config_service());
     ssl_config_client_->OnSSLConfigUpdated(mojom::SSLConfig::New());
     net::SSLContextConfig config_during_change = observer.WaitForChange();
-    EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        GetSSLContextConfig(), net::SSLContextConfig()));
-    EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        config_during_change, net::SSLContextConfig()));
+    EXPECT_EQ(GetSSLContextConfig(), net::SSLContextConfig());
+    EXPECT_EQ(config_during_change, net::SSLContextConfig());
     // Sanity check.
-    EXPECT_FALSE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        GetSSLContextConfig(), expected_net_config));
+    EXPECT_NE(GetSSLContextConfig(), expected_net_config);
 
     // Set the configuration to |mojo_config| again, and check the results.
     ssl_config_client_->OnSSLConfigUpdated(mojo_config.Clone());
     config_during_change = observer.WaitForChange();
-    EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        GetSSLContextConfig(), expected_net_config));
-    EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-        config_during_change, expected_net_config));
+    EXPECT_EQ(GetSSLContextConfig(), expected_net_config);
+    EXPECT_EQ(config_during_change, expected_net_config);
   }
 
   // Runs two conversion tests for |mojo_config|.  Uses it as an initial
@@ -246,8 +240,7 @@ class NetworkServiceSSLConfigServiceTest : public testing::Test {
 // net::SSLConfig.
 TEST_F(NetworkServiceSSLConfigServiceTest, NoSSLConfig) {
   SetUpNetworkContext(mojom::NetworkContextParams::New());
-  EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-      GetSSLContextConfig(), net::SSLContextConfig()));
+  EXPECT_EQ(GetSSLContextConfig(), net::SSLContextConfig());
 
   // Make sure the default TLS version range is as expected.
   EXPECT_EQ(net::kDefaultSSLVersionMin, GetSSLContextConfig().version_min);
@@ -261,8 +254,7 @@ TEST_F(NetworkServiceSSLConfigServiceTest, Default) {
       mojom::NetworkContextParams::New();
   network_context_params->initial_ssl_config = mojom::SSLConfig::New();
   SetUpNetworkContext(std::move(network_context_params));
-  EXPECT_TRUE(net::SSLConfigService::SSLContextConfigsAreEqualForTesting(
-      GetSSLContextConfig(), net::SSLContextConfig()));
+  EXPECT_EQ(GetSSLContextConfig(), net::SSLContextConfig());
 
   // Make sure the default TLS version range is as expected.
   EXPECT_EQ(net::kDefaultSSLVersionMin, GetSSLContextConfig().version_min);
@@ -345,8 +337,6 @@ TEST_F(NetworkServiceSSLConfigServiceTest, SSLVersion) {
     mojom::SSLVersion mojo_ssl_version;
     int net_ssl_version;
   } kVersionTable[] = {
-      {mojom::SSLVersion::kTLS1, net::SSL_PROTOCOL_VERSION_TLS1},
-      {mojom::SSLVersion::kTLS11, net::SSL_PROTOCOL_VERSION_TLS1_1},
       {mojom::SSLVersion::kTLS12, net::SSL_PROTOCOL_VERSION_TLS1_2},
       {mojom::SSLVersion::kTLS13, net::SSL_PROTOCOL_VERSION_TLS1_3},
   };

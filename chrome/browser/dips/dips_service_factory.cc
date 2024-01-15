@@ -4,11 +4,13 @@
 
 #include "chrome/browser/dips/dips_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/dips/dips_service.h"
-#include "chrome/browser/engagement/site_engagement_service_factory.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
+#include "content/public/common/content_features.h"
 
-// static
+/* static */
 DIPSService* DIPSServiceFactory::GetForBrowserContext(
     content::BrowserContext* context) {
   return static_cast<DIPSService*>(
@@ -16,14 +18,23 @@ DIPSService* DIPSServiceFactory::GetForBrowserContext(
 }
 
 DIPSServiceFactory* DIPSServiceFactory::GetInstance() {
-  return base::Singleton<DIPSServiceFactory>::get();
+  static base::NoDestructor<DIPSServiceFactory> instance;
+  return instance.get();
+}
+
+/* static */
+ProfileSelections DIPSServiceFactory::CreateProfileSelections() {
+  if (!base::FeatureList::IsEnabled(features::kDIPS)) {
+    return ProfileSelections::BuildNoProfilesSelected();
+  }
+
+  return GetHumanProfileSelections();
 }
 
 DIPSServiceFactory::DIPSServiceFactory()
-    : ProfileKeyedServiceFactory(
-          "DIPSService",
-          ProfileSelections::BuildForRegularAndIncognito()) {
-  DependsOn(site_engagement::SiteEngagementServiceFactory::GetInstance());
+    : ProfileKeyedServiceFactory("DIPSService", CreateProfileSelections()) {
+  DependsOn(CookieSettingsFactory::GetInstance());
+  DependsOn(IdentityManagerFactory::GetInstance());
 }
 
 DIPSServiceFactory::~DIPSServiceFactory() = default;

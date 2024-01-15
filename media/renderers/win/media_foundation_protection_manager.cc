@@ -9,7 +9,7 @@
 
 #include "base/logging.h"
 #include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/scoped_hstring.h"
@@ -36,9 +36,6 @@ HRESULT MediaFoundationProtectionManager::RuntimeClassInitialize(
 
   task_runner_ = std::move(task_runner);
   waiting_cb_ = std::move(waiting_cb);
-
-  if (!base::win::ScopedHString::ResolveCoreWinRTStringDelayload())
-    return kErrorResolveCoreWinRTStringDelayload;
 
   // Init an empty |property_set_| as MFMediaEngine could access it via
   // |get_Properties| before we populate it within SetPMPServer.

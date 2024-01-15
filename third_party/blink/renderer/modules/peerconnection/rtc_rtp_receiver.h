@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_RTP_RECEIVER_H_
 
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/web_vector.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_rtp_contributing_source.h"
@@ -44,12 +45,21 @@ class RTCRtpReceiver final : public ScriptWrappable,
  public:
   enum class MediaKind { kAudio, kVideo };
 
-  // Takes ownership of the receiver.
+  // If |require_encoded_insertable_streams| is true, no received frames will be
+  // passed to the decoder until |createEncodedStreams()| has been called and
+  // the frames have been transformed and passed back to the returned
+  // WritableStream. If it's false, during construction a task will be posted to
+  // |encoded_transform_shortcircuit_runner| to check if
+  // |createEncodedStreams()| has been called yet and if not will tell the
+  // underlying WebRTC receiver to 'short circuit' the transform, so frames will
+  // flow directly to the decoder.
   RTCRtpReceiver(RTCPeerConnection*,
                  std::unique_ptr<RTCRtpReceiverPlatform>,
                  MediaStreamTrack*,
                  MediaStreamVector,
-                 bool encoded_insertable_streams);
+                 bool require_encoded_insertable_streams,
+                 scoped_refptr<base::SequencedTaskRunner>
+                     encoded_transform_shortcircuit_runner);
 
   static RTCRtpCapabilities* getCapabilities(ScriptState* state,
                                              const String& kind);
@@ -91,7 +101,8 @@ class RTCRtpReceiver final : public ScriptWrappable,
   void UnregisterEncodedAudioStreamCallback();
   void InitializeEncodedAudioStreams(ScriptState*);
   void OnAudioFrameFromDepacketizer(
-      std::unique_ptr<webrtc::TransformableFrameInterface> encoded_audio_frame);
+      std::unique_ptr<webrtc::TransformableAudioFrameInterface>
+          encoded_audio_frame);
   void RegisterEncodedVideoStreamCallback();
   void UnregisterEncodedVideoStreamCallback();
   void InitializeEncodedVideoStreams(ScriptState*);
@@ -108,6 +119,11 @@ class RTCRtpReceiver final : public ScriptWrappable,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
   void SetVideoUnderlyingSink(
       RTCEncodedVideoUnderlyingSink* new_underlying_sink);
+  void LogMessage(const std::string& message);
+
+  // If createEncodedStreams has not yet been called, instead tell the webrtc
+  // encoded transform to 'short circuit', skipping calling the transform.
+  void MaybeShortCircuitEncodedStreams();
 
   Member<RTCPeerConnection> pc_;
   std::unique_ptr<RTCRtpReceiverPlatform> receiver_;
@@ -125,9 +141,7 @@ class RTCRtpReceiver final : public ScriptWrappable,
   // means default value must be used.
   absl::optional<double> playout_delay_hint_;
 
-  // Insertable Streams flag, |True| if the receiver has been configured to
-  // use Encoded Insertable Streams.
-  bool encoded_insertable_streams_;
+  THREAD_CHECKER(thread_checker_);
 
   // Insertable Streams support for audio.
   base::Lock audio_underlying_source_lock_;
@@ -138,7 +152,7 @@ class RTCRtpReceiver final : public ScriptWrappable,
   CrossThreadPersistent<RTCEncodedAudioUnderlyingSink>
       audio_to_decoder_underlying_sink_ GUARDED_BY(audio_underlying_sink_lock_);
   Member<RTCInsertableStreams> encoded_audio_streams_;
-  scoped_refptr<blink::RTCEncodedAudioStreamTransformer::Broker>
+  const scoped_refptr<blink::RTCEncodedAudioStreamTransformer::Broker>
       encoded_audio_transformer_;
 
   // Insertable Streams support for video.
@@ -150,10 +164,9 @@ class RTCRtpReceiver final : public ScriptWrappable,
   CrossThreadPersistent<RTCEncodedVideoUnderlyingSink>
       video_to_decoder_underlying_sink_ GUARDED_BY(video_underlying_sink_lock_);
   Member<RTCInsertableStreams> encoded_video_streams_;
-  scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>
+  const scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>
       encoded_video_transformer_;
-
-  THREAD_CHECKER(thread_checker_);
+  bool transform_shortcircuited_;
 };
 
 }  // namespace blink

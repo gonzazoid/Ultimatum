@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/chromeos/point_transformer.h"
@@ -111,8 +111,9 @@ void LocalKeyboardInputMonitorChromeos::Core::DidProcessEvent(
     const ui::PlatformEvent& event) {
   // Do not pass on events remotely injected by CRD, as we're supposed to
   // monitor for local input only.
-  if (IsInjectedByCrd(event))
+  if (IsInjectedByCrd(event)) {
     return;
+  }
 
   ui::EventType type = ui::EventTypeFromNative(event);
   if (type == ui::ET_KEY_PRESSED) {

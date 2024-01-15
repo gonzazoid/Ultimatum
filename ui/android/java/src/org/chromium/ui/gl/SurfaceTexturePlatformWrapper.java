@@ -7,16 +7,14 @@ package org.chromium.ui.gl;
 import android.graphics.SurfaceTexture;
 import android.util.Log;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.build.annotations.MainDex;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
 
 /**
  * Wrapper class for the underlying platform's SurfaceTexture in order to
  * provide a stable JNI API.
  */
 @JNINamespace("gl")
-@MainDex
 class SurfaceTexturePlatformWrapper {
     private static final String TAG = "SurfaceTexturePlatformWrapper";
 
@@ -32,8 +30,8 @@ class SurfaceTexturePlatformWrapper {
     }
 
     @CalledByNative
-    private static void setFrameAvailableCallback(SurfaceTexture surfaceTexture,
-            long nativeSurfaceTextureListener) {
+    private static void setFrameAvailableCallback(
+            SurfaceTexture surfaceTexture, long nativeSurfaceTextureListener) {
         surfaceTexture.setOnFrameAvailableListener(
                 new SurfaceTextureListener(nativeSurfaceTextureListener));
     }

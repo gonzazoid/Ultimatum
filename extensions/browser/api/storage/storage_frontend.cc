@@ -8,9 +8,10 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
@@ -18,6 +19,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "components/value_store/value_store_factory.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
@@ -118,7 +120,7 @@ ValueStoreCache* StorageFrontend::GetValueStoreCache(
 
 bool StorageFrontend::IsStorageEnabled(
     settings_namespace::Namespace settings_namespace) const {
-  return caches_.find(settings_namespace) != caches_.end();
+  return base::Contains(caches_, settings_namespace);
 }
 
 void StorageFrontend::RunWithStorage(
@@ -171,9 +173,11 @@ void StorageFrontend::DisableStorageForTesting(
 
 // Forwards changes on to the extension processes for |browser_context_| and its
 // incognito partner if it exists.
-void StorageFrontend::OnSettingsChanged(const std::string& extension_id,
-                                        StorageAreaNamespace storage_area,
-                                        base::Value changes) {
+void StorageFrontend::OnSettingsChanged(
+    const std::string& extension_id,
+    StorageAreaNamespace storage_area,
+    absl::optional<api::storage::AccessLevel> session_access_level,
+    base::Value changes) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   TRACE_EVENT1("browser", "SettingsObserver:OnSettingsChanged", "extension_id",
                extension_id);
@@ -198,20 +202,36 @@ void StorageFrontend::OnSettingsChanged(const std::string& extension_id,
   bool has_area_changed_event_listener =
       event_router->ExtensionHasEventListener(extension_id, area_event_name);
 
-  auto make_changed_event = [&namespace_string](base::Value changes) {
+  // Restrict event to blessed context if session access level is set only to
+  // trusted contexts.
+  absl::optional<mojom::ContextType> restrict_to_context_type = absl::nullopt;
+  if (storage_area == StorageAreaNamespace::kSession) {
+    CHECK(session_access_level.has_value());
+    if (session_access_level.value() ==
+        api::storage::AccessLevel::kTrustedContexts) {
+      restrict_to_context_type = mojom::ContextType::kPrivilegedExtension;
+    }
+  }
+
+  auto make_changed_event = [&namespace_string,
+                             restrict_to_context_type](base::Value changes) {
     base::Value::List args;
     args.Append(std::move(changes));
     args.Append(namespace_string);
-    return std::make_unique<Event>(events::STORAGE_ON_CHANGED,
-                                   api::storage::OnChanged::kEventName,
-                                   std::move(args));
+
+    return std::make_unique<Event>(
+        events::STORAGE_ON_CHANGED, api::storage::OnChanged::kEventName,
+        std::move(args), /*restrict_to_browser_context=*/nullptr,
+        restrict_to_context_type);
   };
-  auto make_area_changed_event = [&storage_area,
-                                  &area_event_name](base::Value changes) {
+  auto make_area_changed_event = [&storage_area, &area_event_name,
+                                  restrict_to_context_type](
+                                     base::Value changes) {
     base::Value::List args;
     args.Append(std::move(changes));
     return std::make_unique<Event>(StorageAreaToEventHistogram(storage_area),
-                                   area_event_name, std::move(args));
+                                   area_event_name, std::move(args), nullptr,
+                                   restrict_to_context_type);
   };
   // We only dispatch the events if there's a valid listener (even though
   // EventRouter would handle the no-listener case) since copying `changes`

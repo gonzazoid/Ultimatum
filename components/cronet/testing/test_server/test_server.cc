@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
@@ -188,7 +188,7 @@ bool TestServer::StartServeFilesFromDirectory(
 /* static */
 bool TestServer::Start() {
   base::FilePath src_root;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_root));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_root));
   return StartServeFilesFromDirectory(src_root.Append(kTestDataRelativePath));
 }
 

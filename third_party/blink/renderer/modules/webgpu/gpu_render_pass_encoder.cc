@@ -5,7 +5,6 @@
 #include "third_party/blink/renderer/modules/webgpu/gpu_render_pass_encoder.h"
 
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_index_format.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_union_doublesequence_gpucolordict.h"
 #include "third_party/blink/renderer/core/typed_arrays/typed_flexible_array_buffer_view.h"
 #include "third_party/blink/renderer/modules/webgpu/dawn_conversions.h"
 #include "third_party/blink/renderer/modules/webgpu/gpu_bind_group.h"
@@ -27,9 +26,9 @@ void GPURenderPassEncoder::setBindGroup(
     uint32_t index,
     GPUBindGroup* bindGroup,
     const Vector<uint32_t>& dynamicOffsets) {
+  WGPUBindGroupImpl* bgImpl = bindGroup ? bindGroup->GetHandle() : nullptr;
   GetProcs().renderPassEncoderSetBindGroup(
-      GetHandle(), index, bindGroup->GetHandle(), dynamicOffsets.size(),
-      dynamicOffsets.data());
+      GetHandle(), index, bgImpl, dynamicOffsets.size(), dynamicOffsets.data());
 }
 
 void GPURenderPassEncoder::setBindGroup(
@@ -48,19 +47,18 @@ void GPURenderPassEncoder::setBindGroup(
   const uint32_t* data =
       dynamic_offsets_data.DataMaybeOnStack() + dynamic_offsets_data_start;
 
-  GetProcs().renderPassEncoderSetBindGroup(GetHandle(), index,
-                                           bind_group->GetHandle(),
+  WGPUBindGroupImpl* bgImpl = bind_group ? bind_group->GetHandle() : nullptr;
+  GetProcs().renderPassEncoderSetBindGroup(GetHandle(), index, bgImpl,
                                            dynamic_offsets_data_length, data);
 }
 
 void GPURenderPassEncoder::setBlendConstant(const V8GPUColor* color,
                                             ExceptionState& exception_state) {
-  if (color->IsDoubleSequence() && color->GetAsDoubleSequence().size() != 4) {
-    exception_state.ThrowRangeError("color size must be 4");
+  WGPUColor dawn_color;
+  if (!ConvertToDawn(color, &dawn_color, exception_state)) {
     return;
   }
 
-  WGPUColor dawn_color = AsDawnType(color);
   GetProcs().renderPassEncoderSetBlendConstant(GetHandle(), &dawn_color);
 }
 
@@ -76,26 +74,19 @@ void GPURenderPassEncoder::writeTimestamp(
     const DawnObject<WGPUQuerySet>* querySet,
     uint32_t queryIndex,
     ExceptionState& exception_state) {
-  // TODO(crbug.com/1379384): Avoid using string comparisons for checking
-  // features because of inefficiency, maybe we can use V8GPUFeatureName instead
-  // of string.
-  const char* requiredFeature = "timestamp-query-inside-passes";
-  if (!device_->features()->has(requiredFeature)) {
+  V8GPUFeatureName::Enum requiredFeatureEnum =
+      V8GPUFeatureName::Enum::kChromiumExperimentalTimestampQueryInsidePasses;
+
+  if (!device_->features()->has(requiredFeatureEnum)) {
     exception_state.ThrowTypeError(String::Format(
         "Use of the writeTimestamp() method on render pass requires the '%s' "
         "feature to be enabled on %s.",
-        requiredFeature, device_->formattedLabel().c_str()));
+        V8GPUFeatureName(requiredFeatureEnum).AsCStr(),
+        device_->formattedLabel().c_str()));
     return;
   }
   GetProcs().renderPassEncoderWriteTimestamp(GetHandle(), querySet->GetHandle(),
                                              queryIndex);
-}
-
-void GPURenderPassEncoder::endPass() {
-  device_->AddConsoleWarning(
-      "endPass() has been deprecated and will soon be "
-      "removed. Use end() instead.");
-  end();
 }
 
 }  // namespace blink

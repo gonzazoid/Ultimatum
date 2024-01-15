@@ -15,8 +15,7 @@ class ContentPasswordManagerDriverFactoryTestApi {
  public:
   static std::unique_ptr<ContentPasswordManagerDriverFactory> Create(
       content::WebContents* web_contents,
-      PasswordManagerClient* password_manager_client,
-      autofill::AutofillClient* autofill_client);
+      PasswordManagerClient* password_manager_client);
 };
 
 }  // namespace password_manager

@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/printing/print_job.h"
@@ -35,26 +35,29 @@ FakePrintJobController::FakePrintJobController() = default;
 
 FakePrintJobController::~FakePrintJobController() = default;
 
-scoped_refptr<printing::PrintJob> FakePrintJobController::StartPrintJob(
-    const std::string& extension_id,
-    std::unique_ptr<printing::MetafileSkia> metafile,
-    std::unique_ptr<printing::PrintSettings> settings) {
+void FakePrintJobController::CreatePrintJob(
+    std::unique_ptr<printing::MetafileSkia> pdf,
+    std::unique_ptr<printing::PrintSettings> settings,
+    crosapi::mojom::PrintJob::Source source,
+    const std::string& source_id,
+    PrintJobCreatedCallback callback) {
   auto job = base::MakeRefCounted<PrintJobForTesting>();
+  job->SetSource(source, source_id);
+  StartWatchingPrintJob(job, std::move(callback));
+
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&FakePrintJobController::StartPrinting,
-                                weak_ptr_factory_.GetWeakPtr(), job,
-                                extension_id, std::move(settings)));
-  return job;
+      FROM_HERE,
+      base::BindOnce(&FakePrintJobController::CreatePrintJobImpl,
+                     weak_ptr_factory_.GetWeakPtr(), job, std::move(settings)));
 }
 
-void FakePrintJobController::StartPrinting(
+void FakePrintJobController::CreatePrintJobImpl(
     scoped_refptr<printing::PrintJob> job,
-    const std::string& extension_id,
     std::unique_ptr<printing::PrintSettings> settings) {
   job_id_++;
-  job->SetSource(printing::PrintJob::Source::EXTENSION, extension_id);
   auto document = base::MakeRefCounted<printing::PrintedDocument>(
-      std::move(settings), std::u16string(), 0);
+      std::move(settings), std::u16string(),
+      printing::PrintSettings::NewCookie());
   int observer_count = 0;
   for (auto& observer : job->GetObserversForTesting()) {
     if (fail_)

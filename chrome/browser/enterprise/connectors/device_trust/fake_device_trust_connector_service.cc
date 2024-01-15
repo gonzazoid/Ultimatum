@@ -4,11 +4,27 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/fake_device_trust_connector_service.h"
 
+#include <string>
+#include <utility>
+
 #include "chrome/browser/enterprise/connectors/device_trust/prefs.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 
 namespace enterprise_connectors {
+
+namespace {
+
+std::string ToPrefName(DTCPolicyLevel policy_level) {
+  switch (policy_level) {
+    case DTCPolicyLevel::kBrowser:
+      return kBrowserContextAwareAccessSignalsAllowlistPref;
+    case DTCPolicyLevel::kUser:
+      return kUserContextAwareAccessSignalsAllowlistPref;
+  }
+}
+
+}  // namespace
 
 FakeDeviceTrustConnectorService::FakeDeviceTrustConnectorService(
     sync_preferences::TestingPrefServiceSyncable* profile_prefs)
@@ -16,9 +32,10 @@ FakeDeviceTrustConnectorService::FakeDeviceTrustConnectorService(
 
 FakeDeviceTrustConnectorService::~FakeDeviceTrustConnectorService() = default;
 
-void FakeDeviceTrustConnectorService::update_policy(
-    base::Value::List new_urls) {
-  test_prefs_->SetManagedPref(kContextAwareAccessSignalsAllowlistPref,
+void FakeDeviceTrustConnectorService::UpdateInlinePolicy(
+    base::Value::List new_urls,
+    DTCPolicyLevel policy_level) {
+  test_prefs_->SetManagedPref(ToPrefName(policy_level),
                               base::Value(std::move(new_urls)));
 }
 

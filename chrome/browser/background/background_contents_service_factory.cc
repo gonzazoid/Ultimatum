@@ -7,6 +7,7 @@
 #include "base/command_line.h"
 #include "chrome/browser/background/background_contents_service.h"
 #include "chrome/browser/extensions/extension_system_factory.h"
+#include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -24,24 +25,32 @@ BackgroundContentsService* BackgroundContentsServiceFactory::GetForProfile(
 // static
 BackgroundContentsServiceFactory*
 BackgroundContentsServiceFactory::GetInstance() {
-  return base::Singleton<BackgroundContentsServiceFactory>::get();
+  static base::NoDestructor<BackgroundContentsServiceFactory> instance;
+  return instance.get();
 }
 
 BackgroundContentsServiceFactory::BackgroundContentsServiceFactory()
     : ProfileKeyedServiceFactory(
           "BackgroundContentsService",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
   DependsOn(extensions::ExtensionSystemFactory::GetInstance());
   DependsOn(extensions::ExtensionHostRegistry::GetFactory());
+  DependsOn(NotificationDisplayServiceFactory::GetInstance());
 }
 
-BackgroundContentsServiceFactory::~BackgroundContentsServiceFactory() {}
+BackgroundContentsServiceFactory::~BackgroundContentsServiceFactory() = default;
 
-KeyedService* BackgroundContentsServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+BackgroundContentsServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  return new BackgroundContentsService(static_cast<Profile*>(profile),
-                                       base::CommandLine::ForCurrentProcess());
+  return std::make_unique<BackgroundContentsService>(
+      static_cast<Profile*>(profile));
 }
 
 void BackgroundContentsServiceFactory::RegisterProfilePrefs(

@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ui/webui/ash/login/enable_debugging_screen_handler.h"
@@ -69,11 +69,5 @@ class EnableDebuggingScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::EnableDebuggingScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_ENABLE_DEBUGGING_SCREEN_H_

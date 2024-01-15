@@ -7,13 +7,12 @@
 #include <memory>
 
 #include "ash/ambient/ambient_constants.h"
-#include "ash/ambient/ui/ambient_info_view.h"
-#include "ash/ambient/ui/ambient_shield_view.h"
+#include "ash/ambient/ui/ambient_slideshow_peripheral_ui.h"
+#include "ash/ambient/ui/ambient_view_delegate.h"
 #include "ash/ambient/ui/ambient_view_ids.h"
-#include "ash/ambient/ui/jitter_calculator.h"
-#include "ash/ambient/ui/media_string_view.h"
 #include "ash/ambient/util/ambient_util.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_id.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -38,11 +37,9 @@ namespace ash {
 
 namespace {
 
-// Appearance.
-constexpr int kMediaStringMarginDip = 32;
-
 gfx::ImageSkia ResizeImage(const gfx::ImageSkia& image,
-                           const gfx::Size& view_size) {
+                           const gfx::Size& view_size,
+                           const bool force_resize_to_fit) {
   if (image.isNull())
     return gfx::ImageSkia();
 
@@ -55,14 +52,23 @@ gfx::ImageSkia ResizeImage(const gfx::ImageSkia& image,
   const double image_ratio = image_height / image_width;
   const double view_ratio = view_height / view_width;
 
-  // If the image and the container view has the same orientation, e.g. both
-  // portrait, the |scale| will make the image filled the whole view with
-  // possible cropping on one direction. If they are in different orientation,
-  // the |scale| will display the image in the view without any cropping, but
-  // with empty background.
-  const double scale = (image_ratio - 1) * (view_ratio - 1) > 0
-                           ? std::max(horizontal_ratio, vertical_ratio)
-                           : std::min(horizontal_ratio, vertical_ratio);
+  double scale = 1.0;
+
+  // If force fitting is enabled, we will always scale to the smaller ratio to
+  // ensure that no part of the image is cropped out and the whole image is
+  // shown on the screen with possible black bars.
+  if (force_resize_to_fit) {
+    scale = std::min(horizontal_ratio, vertical_ratio);
+  } else {
+    // If the image and the container view has the same orientation, e.g. both
+    // portrait, the |scale| will make the image filled the whole view with
+    // possible cropping on one direction. If they are in different orientation,
+    // the |scale| will display the image in the view without any cropping, but
+    // with empty background.
+    scale = (image_ratio - 1) * (view_ratio - 1) > 0
+                ? std::max(horizontal_ratio, vertical_ratio)
+                : std::min(horizontal_ratio, vertical_ratio);
+  }
   const gfx::Size& resized = gfx::ScaleToCeiledSize(image.size(), scale);
   return gfx::ImageSkiaOperations::CreateResizedImage(
       image, skia::ImageOperations::RESIZE_BEST, resized);
@@ -105,7 +111,7 @@ gfx::ImageSkia MaybeRotateImage(const gfx::ImageSkia& image,
         rotation_amount = SkBitmapOperations::RotationAmount::ROTATION_90_CW;
         break;
       default:
-        NOTREACHED();
+        // No action.
         break;
     }
     if (should_rotate) {
@@ -120,12 +126,9 @@ gfx::ImageSkia MaybeRotateImage(const gfx::ImageSkia& image,
 }  // namespace
 
 AmbientBackgroundImageView::AmbientBackgroundImageView(
-    AmbientViewDelegate* delegate,
-    JitterCalculator* glanceable_info_jitter_calculator)
-    : delegate_(delegate),
-      glanceable_info_jitter_calculator_(glanceable_info_jitter_calculator) {
+    AmbientViewDelegate* delegate)
+    : delegate_(delegate) {
   DCHECK(delegate_);
-  DCHECK(glanceable_info_jitter_calculator_);
   SetID(AmbientViewID::kAmbientBackgroundImageView);
   InitLayout();
 }
@@ -165,7 +168,7 @@ void AmbientBackgroundImageView::UpdateImage(
   is_portrait_ = is_portrait;
   topic_type_ = type;
 
-  UpdateGlanceableInfoPosition();
+  ambient_peripheral_ui_->UpdateGlanceableInfoPosition();
 
   const bool has_change = UpdateRelatedImageViewVisibility();
 
@@ -183,7 +186,7 @@ void AmbientBackgroundImageView::UpdateImageDetails(
     const std::u16string& related_details) {
   details_ = details;
   related_details_ = related_details;
-  ambient_info_view_->UpdateImageDetails(
+  ambient_peripheral_ui_->UpdateImageDetails(
       details, MustShowPairs() ? related_details : std::u16string());
 }
 
@@ -229,7 +232,7 @@ void AmbientBackgroundImageView::InitLayout() {
   // Set a place holder size for Flex layout to assign bounds.
   image_view_->SetPreferredSize(gfx::Size(1, 1));
   image_view_->SetProperty(views::kFlexBehaviorKey, kUnboundedScaleToZero);
-  observed_views_.AddObservation(image_view_);
+  observed_views_.AddObservation(image_view_.get());
 
   related_image_view_ =
       image_container_->AddChildView(std::make_unique<views::ImageView>());
@@ -237,65 +240,10 @@ void AmbientBackgroundImageView::InitLayout() {
   related_image_view_->SetPreferredSize(gfx::Size(1, 1));
   related_image_view_->SetProperty(views::kFlexBehaviorKey,
                                    kUnboundedScaleToZero);
-  observed_views_.AddObservation(related_image_view_);
+  observed_views_.AddObservation(related_image_view_.get());
 
-
-  AddChildView(std::make_unique<AmbientShieldView>());
-
-  ambient_info_view_ =
-      AddChildView(std::make_unique<AmbientInfoView>(delegate_));
-
-  gfx::Insets shadow_insets =
-      gfx::ShadowValue::GetMargin(ambient::util::GetTextShadowValues(nullptr));
-
-  // Inits the media string view. The media string view is positioned on the
-  // right-top corner of the container.
-  views::View* media_string_view_container_ =
-      AddChildView(std::make_unique<views::View>());
-  views::BoxLayout* media_string_layout =
-      media_string_view_container_->SetLayoutManager(
-          std::make_unique<views::BoxLayout>(
-              views::BoxLayout::Orientation::kVertical));
-  media_string_layout->set_main_axis_alignment(
-      views::BoxLayout::MainAxisAlignment::kStart);
-  media_string_layout->set_cross_axis_alignment(
-      views::BoxLayout::CrossAxisAlignment::kEnd);
-  media_string_layout->set_inside_border_insets(
-      gfx::Insets::TLBR(kMediaStringMarginDip + shadow_insets.top(), 0, 0,
-                        kMediaStringMarginDip + shadow_insets.right()));
-  media_string_view_ = media_string_view_container_->AddChildView(
-      std::make_unique<MediaStringView>(MediaStringView::Settings(
-          {/*icon_light_mode_color=*/ambient::util::GetContentLayerColor(
-               AshColorProvider::ContentLayerType::kIconColorPrimary,
-               /*dark_mode_enable=*/false),
-           /*icon_dark_mode_color=*/
-           ambient::util::GetContentLayerColor(
-               AshColorProvider::ContentLayerType::kIconColorPrimary,
-               /*dark_mode_enable=*/true),
-           /*text_light_mode_color=*/
-           ambient::util::GetContentLayerColor(
-               AshColorProvider::ContentLayerType::kTextColorPrimary,
-               /*dark_mode_enable=*/false),
-           /*text_dark_mode_color=*/
-           ambient::util::GetContentLayerColor(
-               AshColorProvider::ContentLayerType::kTextColorPrimary,
-               /*dark_mode_enable=*/true),
-           /*text_shadow_elevation=*/
-           ambient::util::kDefaultTextShadowElevation})));
-  media_string_view_->SetVisible(false);
-}
-
-void AmbientBackgroundImageView::UpdateGlanceableInfoPosition() {
-  gfx::Vector2d jitter = glanceable_info_jitter_calculator_->Calculate();
-  gfx::Transform transform;
-  transform.Translate(jitter);
-  ambient_info_view_->SetTextTransform(transform);
-
-  if (media_string_view_->GetVisible()) {
-    gfx::Transform media_string_transform;
-    media_string_transform.Translate(-jitter.x(), -jitter.y());
-    media_string_view_->layer()->SetTransform(media_string_transform);
-  }
+  ambient_peripheral_ui_ =
+      AddChildView(std::make_unique<AmbientSlideshowPeripheralUi>(delegate_));
 }
 
 void AmbientBackgroundImageView::UpdateLayout() {
@@ -339,13 +287,22 @@ void AmbientBackgroundImageView::SetResizedImage(
       topic_type_ == ::ambient::TopicType::kGeo
           ? MaybeRotateImage(image_unscaled, image_view->size(), GetWidget())
           : image_unscaled;
-  image_view->SetImage(ResizeImage(image_rotated, image_view->size()));
+  image_view->SetImage(
+      ResizeImage(image_rotated, image_view->size(), force_resize_to_fit_));
 
   // Intend to update the image origin in image view.
   // There is no bounds change or preferred size change when updating image from
   // landscape to portrait when device is in portrait orientation because we
   // only show one photo. Call ResetImageSize() to trigger UpdateImageOrigin().
   image_view->ResetImageSize();
+}
+
+void AmbientBackgroundImageView::SetPeripheralUiVisibility(bool visible) {
+  ambient_peripheral_ui_->SetVisible(visible);
+}
+
+void AmbientBackgroundImageView::SetForceResizeToFit(bool force_resize_to_fit) {
+  force_resize_to_fit_ = force_resize_to_fit;
 }
 
 bool AmbientBackgroundImageView::MustShowPairs() const {

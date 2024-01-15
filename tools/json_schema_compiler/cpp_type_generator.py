@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from code import Code
+from code_util import Code
 from model import PropertyType
 import cpp_util
 from json_parse import OrderedDict
@@ -35,32 +35,99 @@ class CppTypeGenerator(object):
       self._default_namespace = list(model.namespaces.values())[0]
     self._namespace_resolver = namespace_resolver
 
-  def GetEnumNoneValue(self, type_):
-    """Gets the enum value in the given model.Property indicating no value has
+  def GetOptionalReturnType(self, typename, support_errors=False):
+    """ Composes a C++ return type to be used as a return value. Wraps the
+    typename in an optional, for the regular case, or uses a base::expected for
+    when it should support string errors.
+    """
+    return (('base::expected<{typename}, std::u16string>'
+        if support_errors else 'std::optional<{typename}>')
+          .format(typename=typename))
+
+  def GetEnumNoneValue(self, type_, full_name=True):
+    """Gets the enum value in the given model. Property indicating no value has
     been set.
     """
-    return '%s_NONE' % self.FollowRef(type_).unix_name.upper()
+    prefix = ''
+    if full_name:
+      classname = cpp_util.Classname(type_.name)
+      prefix = '{typename}::'.format(typename=classname)
+    return '{enum_name}kNone'.format(enum_name=prefix)
 
-  def GetEnumLastValue(self, type_):
-    """Gets the enum value in the given model.Property indicating the last value
-    for the type.
+  def GetEnumDefaultValue(self, type_, current_namespace):
+    """Gets the representation for an enum default initialised, which is the
+    typename with a default initialiser. e.g. MyEnum().
     """
-    return '%s_LAST' % self.FollowRef(type_).unix_name.upper()
+    cpp_type = self.GetCppType(type_)
+    return '{cpp_type}()'.format(cpp_type=cpp_type)
 
-  def GetEnumValue(self, type_, enum_value):
+  def FormatStringForEnumValue(self, name):
+    """Formats a string enum entry to the common constant format favoured by the
+    style guide.
+
+    Output examples:
+      SHOUTY_CASE: kShoutyCase
+      underscore_case: kUnderscoreCase
+      dash-case: kDashCase
+      camelCaseWithLowerFirst: kCamelCaseWithLowerFirst
+      CamelCaseWithUpperFirst: kCamelCaseWithUpperFirst.
+      x86_64: kX86_64
+      x86_ARCH: kX86Arch
+      '': EmptyString
+      kConstantSupport: kConstantSupport.
+    """
+
+    if not name:
+      return 'EmptyString'
+
+    # For cases where the enum entry is something like kValue, an exception is
+    # made to drop the initial `k` to avoid generating a key that looks like
+    # kKvalue, which is less readable than kValue.
+    if len(name) > 1 and name.startswith('k') and name[1].isupper():
+      name = name[1:]
+
+    change_to_upper = True
+    last_was_lower = True
+    result = ''
+    for char in name:
+      if char in {'_', '-'}:
+        change_to_upper=True
+      elif change_to_upper:
+        # Numbers must be kept separate, for better readability (e.g. kX86_64).
+        if char.isnumeric() and result and result[-1].isnumeric():
+          result += '_'
+
+        result += char.upper()
+        change_to_upper = False
+        last_was_lower = False
+      elif last_was_lower and char.isupper():
+        result += char
+        last_was_lower = False
+      elif char.isupper():
+        result += char.lower()
+      else:
+        result += char
+        last_was_lower = True
+
+    return result
+
+  def GetEnumValue(self, type_, enum_value, full_name=True):
     """Gets the enum value of the given model.Property of the given type.
 
-    e.g VAR_STRING
+    |full_name| is set to true, producing an enum value with a fully qualified
+    name.
+
+    e.g Enum::kValue
     """
-    value = cpp_util.Classname(enum_value.name.upper())
-    prefix = (type_.cpp_enum_prefix_override or
-              self.FollowRef(type_).unix_name)
-    value = '%s_%s' % (prefix.upper(), value)
-    # To avoid collisions with built-in OS_* preprocessor definitions, we add a
-    # trailing slash to enum names that start with OS_.
-    if value.startswith("OS_"):
-      value += "_"
-    return value
+    prefix = ''
+    if full_name:
+      classname = cpp_util.Classname(type_.name)
+      prefix = '{classname}::'.format(classname=classname)
+    # We kCamelCase the string, also removing any _ from the name, to allow
+    # SHOUTY_CASE keys to be kCamelCase as well.
+    return '{prefix}k{name}'.format(
+              prefix=prefix,
+              name=self.FormatStringForEnumValue(enum_value.name))
 
   def GetCppType(self, type_, is_optional=False):
     """Translates a model.Property or model.Type into its C++ type.
@@ -112,7 +179,10 @@ class CppTypeGenerator(object):
         cpp_type = 'base::Value::Dict'
     elif type_.property_type == PropertyType.ARRAY:
       item_cpp_type = self.GetCppType(type_.item_type)
-      cpp_type = 'std::vector<%s>' % item_cpp_type
+      if item_cpp_type == 'base::Value':
+        cpp_type = 'base::Value::List'
+      else:
+        cpp_type = 'std::vector<%s>' % item_cpp_type
     elif type_.property_type == PropertyType.BINARY:
       cpp_type = 'std::vector<uint8_t>'
     else:
@@ -123,8 +193,8 @@ class CppTypeGenerator(object):
     # TODO(kalman): change this - but it's an exceedingly far-reaching change.
     if not self.FollowRef(type_).property_type == PropertyType.ENUM:
       if is_optional:
-        if cpp_util.ShouldUseAbslOptional(self.FollowRef(type_)):
-          cpp_type = 'absl::optional<%s>' % cpp_type
+        if cpp_util.ShouldUseStdOptional(self.FollowRef(type_)):
+          cpp_type = 'std::optional<%s>' % cpp_type
         else:
           cpp_type = 'std::unique_ptr<%s>' % cpp_type
 
@@ -159,12 +229,29 @@ class CppTypeGenerator(object):
       c.Concat(cpp_util.CloseNamespace(cpp_namespace))
     return c
 
-  def GenerateIncludes(self, include_soft=False):
+  def GenerateIncludes(self, include_soft=False, generate_error_messages=False):
     """Returns the #include lines for self._default_namespace.
     """
     c = Code()
-    if self._default_namespace.manifest_keys:
+
+    # The inclusion of the StringPiece header is dependent on either the
+    # presence of enums, or manifest keys.
+    include_string_piece = (self._default_namespace.manifest_keys or
+        any(type_.property_type is PropertyType.ENUM for type_ in
+            self._default_namespace.types.values()))
+
+    if include_string_piece:
       c.Append('#include "base/strings/string_piece.h"')
+
+    # The header for `base::expected` should be included whenever error messages
+    # are supposed to be returned, which only occurs with object, choices, or
+    # functions.
+    if (generate_error_messages and (
+        len(self._default_namespace.functions.values()) or
+        any(type_.property_type in
+            [PropertyType.OBJECT, PropertyType.CHOICES] for type_ in
+            self._default_namespace.types.values()))):
+      c.Append('#include "base/types/expected.h"')
 
     # Note: It's possible that there are multiple dependencies from the same
     # API. Make sure to only include them once.

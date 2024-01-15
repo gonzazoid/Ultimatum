@@ -9,6 +9,9 @@
  * used as labels. If no label will be provided, a .no-label class should be
  * added to hide the spacing between the checkbox and the label container.
  *
+ * If a label is provided, it will be shown by default after the checkbox. A
+ * .label-first CSS class can be added to show the label before the checkbox.
+ *
  * List of customizable styles:
  *  --cr-checkbox-border-size
  *  --cr-checkbox-checked-box-background-color
@@ -68,6 +71,8 @@ export class CrCheckboxElement extends CrCheckboxElementBase {
 
       ariaDescription: String,
 
+      ariaLabelOverride: String,
+
       tabIndex: {
         type: Number,
         value: 0,
@@ -79,6 +84,7 @@ export class CrCheckboxElement extends CrCheckboxElementBase {
   checked: boolean;
   disabled: boolean;
   ariaDescription: string;
+  ariaLabelOverride: string;
   override tabIndex: number;
 
   /* eslint-disable-next-line @typescript-eslint/naming-convention */
@@ -86,11 +92,27 @@ export class CrCheckboxElement extends CrCheckboxElementBase {
 
   override ready() {
     super.ready();
+
+    // <if expr="chromeos_ash">
+    // TODO(b/309689294) Remove this once CrOS UIs migrate to Jellybean
+    // components and no longer use cr-elements.
+    // Force stamp the ripple element to enable CrOS focus styles. Ripple
+    // visibility is controlled by the event listeners below.
+    if (document.documentElement.hasAttribute('chrome-refresh-2023')) {
+      this.getRipple();
+    }
+    // </if>
+
     this.removeAttribute('unresolved');
-    this.addEventListener('blur', this.hideRipple_.bind(this));
     this.addEventListener('click', this.onClick_.bind(this));
-    this.addEventListener('focus', this.showRipple_.bind(this));
-    this.addEventListener('up', this.hideRipple_.bind(this));
+    this.addEventListener('pointerup', this.hideRipple_.bind(this));
+    if (document.documentElement.hasAttribute('chrome-refresh-2023')) {
+      this.addEventListener('pointerdown', this.showRipple_.bind(this));
+      this.addEventListener('pointerleave', this.hideRipple_.bind(this));
+    } else {
+      this.addEventListener('blur', this.hideRipple_.bind(this));
+      this.addEventListener('focus', this.showRipple_.bind(this));
+    }
   }
 
   override focus() {
@@ -117,6 +139,10 @@ export class CrCheckboxElement extends CrCheckboxElementBase {
   }
 
   private showRipple_() {
+    if (this.noink) {
+      return;
+    }
+
     this.getRipple().showAndHoldDown();
   }
 

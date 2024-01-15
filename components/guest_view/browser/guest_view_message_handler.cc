@@ -14,14 +14,38 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
+#include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 using content::BrowserThread;
 using content::RenderFrameHost;
 
 namespace guest_view {
 
-GuestViewMessageHandler::GuestViewMessageHandler(int render_process_id)
-    : render_process_id_(render_process_id) {}
+class ViewHandle : public mojom::ViewHandle {
+ public:
+  ViewHandle(int view_instance_id,
+             base::WeakPtr<GuestViewManager> guest_view_manager,
+             int render_process_id)
+      : view_instance_id_(view_instance_id),
+        guest_view_manager_(guest_view_manager),
+        render_process_id_(render_process_id) {}
+
+  ~ViewHandle() override {
+    if (guest_view_manager_) {
+      guest_view_manager_->ViewGarbageCollected(render_process_id_,
+                                                view_instance_id_);
+    }
+  }
+
+ private:
+  const int view_instance_id_;
+  base::WeakPtr<GuestViewManager> guest_view_manager_;
+  const int render_process_id_;
+};
+
+GuestViewMessageHandler::GuestViewMessageHandler(
+    const content::GlobalRenderFrameHostId& frame_id)
+    : frame_id_(frame_id) {}
 
 GuestViewMessageHandler::~GuestViewMessageHandler() = default;
 
@@ -30,7 +54,7 @@ GuestViewManager* GuestViewMessageHandler::GetOrCreateGuestViewManager() {
   auto* manager = GuestViewManager::FromBrowserContext(browser_context);
   if (!manager) {
     manager = GuestViewManager::CreateWithDelegate(
-        browser_context, CreateGuestViewManagerDelegate(browser_context));
+        browser_context, CreateGuestViewManagerDelegate());
   }
   return manager;
 }
@@ -46,8 +70,7 @@ GuestViewManager* GuestViewMessageHandler::GetGuestViewManagerOrKill() {
 }
 
 std::unique_ptr<GuestViewManagerDelegate>
-GuestViewMessageHandler::CreateGuestViewManagerDelegate(
-    content::BrowserContext* context) const {
+GuestViewMessageHandler::CreateGuestViewManagerDelegate() const {
   return std::make_unique<GuestViewManagerDelegate>();
 }
 
@@ -56,25 +79,25 @@ content::BrowserContext* GuestViewMessageHandler::GetBrowserContext() const {
   return rph ? rph->GetBrowserContext() : nullptr;
 }
 
-void GuestViewMessageHandler::ViewCreated(int view_instance_id,
-                                          const std::string& view_type) {
+void GuestViewMessageHandler::ViewCreated(
+    int view_instance_id,
+    const std::string& view_type,
+    mojo::PendingReceiver<mojom::ViewHandle> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!GetBrowserContext())
+  if (!GetBrowserContext()) {
     return;
-  GetOrCreateGuestViewManager()->ViewCreated(render_process_id(),
-                                             view_instance_id, view_type);
-}
-
-void GuestViewMessageHandler::ViewGarbageCollected(int view_instance_id) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!GetBrowserContext())
-    return;
-  GetOrCreateGuestViewManager()->ViewGarbageCollected(render_process_id(),
-                                                      view_instance_id);
+  }
+  auto* guest_view_manager = GetOrCreateGuestViewManager();
+  guest_view_manager->ViewCreated(render_process_id(), view_instance_id,
+                                  view_type);
+  mojo::MakeSelfOwnedReceiver(
+      std::make_unique<ViewHandle>(view_instance_id,
+                                   guest_view_manager->AsWeakPtr(),
+                                   render_process_id()),
+      std::move(receiver));
 }
 
 void GuestViewMessageHandler::AttachToEmbedderFrame(
-    int embedder_local_render_frame_id,
     int element_instance_id,
     int guest_instance_id,
     base::Value::Dict params,
@@ -108,8 +131,18 @@ void GuestViewMessageHandler::AttachToEmbedderFrame(
 
   content::WebContents* owner_web_contents = guest->owner_web_contents();
   DCHECK(owner_web_contents);
-  auto* embedder_frame = RenderFrameHost::FromID(
-      render_process_id(), embedder_local_render_frame_id);
+  auto* outer_contents_frame = RenderFrameHost::FromID(frame_id_);
+
+  const bool changed_owner_web_contents =
+      owner_web_contents !=
+      content::WebContents::FromRenderFrameHost(outer_contents_frame);
+  base::UmaHistogramBoolean(
+      "Extensions.GuestView.ChangeOwnerWebContentsOnAttach",
+      changed_owner_web_contents);
+
+  if (changed_owner_web_contents) {
+    guest->MaybeRecreateGuestContents(outer_contents_frame);
+  }
 
   // Update the guest manager about the attachment.
   // This sets up the embedder and guest pairing information inside
@@ -117,15 +150,8 @@ void GuestViewMessageHandler::AttachToEmbedderFrame(
   manager->AttachGuest(render_process_id(), element_instance_id,
                        guest_instance_id, params);
 
-  const bool changed_owner_web_contents =
-      owner_web_contents !=
-      content::WebContents::FromRenderFrameHost(embedder_frame);
-  base::UmaHistogramBoolean(
-      "Extensions.GuestView.ChangeOwnerWebContentsOnAttach",
-      changed_owner_web_contents);
-
   guest->AttachToOuterWebContentsFrame(
-      std::move(owned_guest), embedder_frame, element_instance_id,
+      std::move(owned_guest), outer_contents_frame, element_instance_id,
       false /* is_full_page_plugin */, std::move(callback));
 }
 

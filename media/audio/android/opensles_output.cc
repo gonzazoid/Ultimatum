@@ -49,10 +49,11 @@ OpenSLESOutputStream::OpenSLESOutputStream(AudioManagerAndroid* manager,
            << "stream_type=" << stream_type << ")";
 
   if (AudioManagerAndroid::SupportsPerformanceModeForOutput()) {
-    if (params.latency_tag() == AudioLatency::LATENCY_PLAYBACK)
+    if (params.latency_tag() == AudioLatency::Type::kPlayback) {
       performance_mode_ = SL_ANDROID_PERFORMANCE_POWER_SAVING;
-    else if (params.latency_tag() == AudioLatency::LATENCY_RTC)
+    } else if (params.latency_tag() == AudioLatency::Type::kRtc) {
       performance_mode_ = SL_ANDROID_PERFORMANCE_LATENCY_EFFECTS;
+    }
   }
 
   audio_bus_ = AudioBus::Create(params);
@@ -390,8 +391,8 @@ void OpenSLESOutputStream::FillBufferQueueNoLock() {
       AudioTimestampHelper::FramesToTime(delay_frames, samples_per_second_);
 
   // Read data from the registered client source.
-  const int frames_filled =
-      callback_->OnMoreData(delay, base::TimeTicks::Now(), 0, audio_bus_.get());
+  const int frames_filled = callback_->OnMoreData(delay, base::TimeTicks::Now(),
+                                                  {}, audio_bus_.get());
   if (frames_filled <= 0) {
     // Audio source is shutting down, or halted on error.
     return;

@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/version.h"
 
 namespace component_updater {
 
@@ -25,8 +26,34 @@ FakeCrOSComponentManager::ComponentInfo::ComponentInfo(
   DCHECK(load_response == Error::NONE ||
          (install_path.empty() && mount_path.empty()));
   // Component should have install path set if it's expected to be loaded.
-  DCHECK(load_response != Error::NONE || !install_path.empty());
+  DCHECK(load_response != Error::NONE || (!install_path.empty()));
 }
+
+FakeCrOSComponentManager::ComponentInfo::ComponentInfo(
+    Error load_response,
+    const base::FilePath& install_path,
+    const base::FilePath& mount_path,
+    const base::Version& version)
+    : load_response(load_response),
+      install_path(install_path),
+      mount_path(mount_path),
+      version(version) {
+  // If component load fails, neither install nor mount path should be set and
+  // version should be invalid.
+  DCHECK(load_response == Error::NONE ||
+         (install_path.empty() && mount_path.empty() && !version.IsValid()));
+  // Component should have install path and version set if it's expected to be
+  // loaded.
+  DCHECK(load_response != Error::NONE ||
+         (!install_path.empty() && version.IsValid()));
+}
+
+FakeCrOSComponentManager::ComponentInfo::ComponentInfo(
+    const FakeCrOSComponentManager::ComponentInfo& other) = default;
+
+FakeCrOSComponentManager::ComponentInfo&
+FakeCrOSComponentManager::ComponentInfo::operator=(
+    const FakeCrOSComponentManager::ComponentInfo& other) = default;
 
 FakeCrOSComponentManager::ComponentInfo::~ComponentInfo() = default;
 
@@ -57,16 +84,15 @@ bool FakeCrOSComponentManager::FinishLoadRequest(
 
 bool FakeCrOSComponentManager::ResetComponentState(const std::string& name,
                                                    const ComponentInfo& state) {
-  if (!supported_components_.count(name))
+  if (!supported_components_.count(name)) {
     return false;
+  }
 
   installed_components_.erase(name);
   mounted_components_.erase(name);
 
   component_infos_.erase(name);
-  component_infos_.emplace(
-      name,
-      ComponentInfo(state.load_response, state.install_path, state.mount_path));
+  component_infos_.emplace(name, ComponentInfo(state));
   return true;
 }
 
@@ -95,7 +121,7 @@ void FakeCrOSComponentManager::Load(const std::string& name,
                                     UpdatePolicy update_policy,
                                     LoadCallback load_callback) {
   if (!supported_components_.count(name)) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(load_callback),
                                   Error::UNKNOWN_COMPONENT, base::FilePath()));
     return;
@@ -123,7 +149,7 @@ void FakeCrOSComponentManager::Load(const std::string& name,
 
   // The component has been prevoiusly installed, and mounted as required by
   // this load request - run the callback according to the existing state.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(load_callback), Error::NONE,
                                 mount_policy == MountPolicy::kMount
                                     ? mounted_components_[name]
@@ -142,8 +168,8 @@ bool FakeCrOSComponentManager::Unload(const std::string& name) {
 
 void FakeCrOSComponentManager::RegisterCompatiblePath(
     const std::string& name,
-    const base::FilePath& path) {
-  installed_components_[name] = path;
+    CompatibleComponentInfo info) {
+  installed_components_[name] = std::move(info);
 }
 
 void FakeCrOSComponentManager::UnregisterCompatiblePath(
@@ -154,9 +180,10 @@ void FakeCrOSComponentManager::UnregisterCompatiblePath(
 base::FilePath FakeCrOSComponentManager::GetCompatiblePath(
     const std::string& name) const {
   const auto& it = installed_components_.find(name);
-  if (it == installed_components_.end())
+  if (it == installed_components_.end()) {
     return base::FilePath();
-  return it->second;
+  }
+  return it->second.path;
 }
 
 void FakeCrOSComponentManager::SetRegisteredComponents(
@@ -172,6 +199,19 @@ bool FakeCrOSComponentManager::IsRegisteredMayBlock(const std::string& name) {
 
 void FakeCrOSComponentManager::RegisterInstalled() {
   NOTIMPLEMENTED();
+}
+
+void FakeCrOSComponentManager::GetVersion(
+    const std::string& name,
+    base::OnceCallback<void(const base::Version&)> version_callback) const {
+  const auto& component_info = component_infos_.find(name);
+  if (component_info == component_infos_.end() ||
+      !component_info->second.version.has_value()) {
+    std::move(version_callback).Run(base::Version());
+    return;
+  }
+
+  std::move(version_callback).Run(component_info->second.version.value());
 }
 
 FakeCrOSComponentManager::LoadRequest::LoadRequest(bool mount_requested,
@@ -195,7 +235,7 @@ void FakeCrOSComponentManager::HandlePendingRequest(const std::string& name,
 
   const auto& component_info = component_infos_.find(name);
   if (component_info == component_infos_.end()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), Error::INSTALL_FAILURE,
                                   base::FilePath()));
     return;
@@ -203,7 +243,7 @@ void FakeCrOSComponentManager::HandlePendingRequest(const std::string& name,
 
   FinishComponentLoad(name, mount_requested, component_info->second);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), component_info->second.load_response,
                      component_info->second.mount_path));
@@ -218,13 +258,16 @@ void FakeCrOSComponentManager::FinishComponentLoad(
     registered_components_.insert(name);
   }
 
-  if (component_info.load_response != Error::NONE)
+  if (component_info.load_response != Error::NONE) {
     return;
+  }
 
   DCHECK_EQ(mount_requested, !component_info.mount_path.empty());
-  installed_components_[name] = component_info.install_path;
-  if (mount_requested)
+  installed_components_[name] = CompatibleComponentInfo(
+      component_info.install_path, component_info.version);
+  if (mount_requested) {
     mounted_components_[name] = component_info.mount_path;
+  }
 }
 
 }  // namespace component_updater

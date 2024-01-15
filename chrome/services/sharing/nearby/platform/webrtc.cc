@@ -5,6 +5,9 @@
 #include "chrome/services/sharing/nearby/platform/webrtc.h"
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "chrome/services/sharing/webrtc/ipc_network_manager.h"
 #include "chrome/services/sharing/webrtc/ipc_packet_socket_factory.h"
@@ -17,12 +20,12 @@
 #include "third_party/nearby/src/internal/platform/count_down_latch.h"
 #include "third_party/nearby/src/internal/platform/future.h"
 #include "third_party/nearby/src/internal/platform/logging.h"
+#include "third_party/webrtc/api/async_dns_resolver.h"
 #include "third_party/webrtc/api/jsep.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
 #include "third_party/webrtc_overrides/task_queue_factory.h"
 #include "unicode/locid.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -93,20 +96,36 @@ const std::string GetCurrentCountryCode() {
   return std::string(icu::Locale::getDefault().getCountry());
 }
 
-class ProxyAsyncResolverFactory final : public webrtc::AsyncResolverFactory {
+class ProxyAsyncDnsResolverFactory final
+    : public webrtc::AsyncDnsResolverFactoryInterface {
  public:
-  explicit ProxyAsyncResolverFactory(
+  explicit ProxyAsyncDnsResolverFactory(
       sharing::IpcPacketSocketFactory* socket_factory)
       : socket_factory_(socket_factory) {
     DCHECK(socket_factory_);
   }
 
-  rtc::AsyncResolverInterface* Create() override {
-    return socket_factory_->CreateAsyncResolver();
+  std::unique_ptr<webrtc::AsyncDnsResolverInterface> Create() override {
+    return socket_factory_->CreateAsyncDnsResolver();
+  }
+  std::unique_ptr<webrtc::AsyncDnsResolverInterface> CreateAndResolve(
+      const rtc::SocketAddress& addr,
+      absl::AnyInvocable<void()> callback) override {
+    auto temp = Create();
+    temp->Start(addr, std::move(callback));
+    return temp;
+  }
+  std::unique_ptr<webrtc::AsyncDnsResolverInterface> CreateAndResolve(
+      const rtc::SocketAddress& addr,
+      int family,
+      absl::AnyInvocable<void()> callback) override {
+    auto temp = Create();
+    temp->Start(addr, family, std::move(callback));
+    return temp;
   }
 
  private:
-  sharing::IpcPacketSocketFactory* socket_factory_;
+  raw_ptr<sharing::IpcPacketSocketFactory> socket_factory_;
 };
 
 // This object only exists to forward incoming mojo messages. It will be created
@@ -153,7 +172,7 @@ class WebRtcSignalingMessengerImpl : public api::WebRtcSignalingMessenger {
  public:
   WebRtcSignalingMessengerImpl(
       const std::string& self_id,
-      const connections::LocationHint& location_hint,
+      const location::nearby::connections::LocationHint& location_hint,
       const mojo::SharedRemote<sharing::mojom::WebRtcSignalingMessenger>&
           messenger)
       : self_id_(self_id),
@@ -273,7 +292,7 @@ class WebRtcSignalingMessengerImpl : public api::WebRtcSignalingMessenger {
  private:
   bool receiving_messages_ = false;
   std::string self_id_;
-  connections::LocationHint location_hint_;
+  location::nearby::connections::LocationHint location_hint_;
   // This is received and stored on a successful StartReceiveMessages(). We
   // choose to not bind right away because multiple threads end up
   // creating/calling/destroying WebRtcSignalingMessengerImpl by the design
@@ -362,7 +381,7 @@ void WebRtcMedium::FetchIceServers(webrtc::PeerConnectionObserver* observer,
                                    PeerConnectionCallback callback) {
   ice_config_fetcher_->GetIceServers(base::BindOnce(
       &WebRtcMedium::OnIceServersFetched, weak_ptr_factory_.GetWeakPtr(),
-      observer, std::move(callback)));
+      base::UnsafeDanglingUntriaged(observer), std::move(callback)));
 }
 
 void WebRtcMedium::InitWebRTCThread(rtc::Thread** thread_to_set) {
@@ -528,23 +547,26 @@ void WebRtcMedium::OnIceServersFetched(
   port_config.enable_nonproxied_udp = true;
   dependencies.allocator = std::make_unique<sharing::P2PPortAllocator>(
       network_manager_.get(), socket_factory_.get(), port_config);
-  dependencies.async_resolver_factory =
-      std::make_unique<ProxyAsyncResolverFactory>(socket_factory_.get());
+  dependencies.async_dns_resolver_factory =
+      std::make_unique<ProxyAsyncDnsResolverFactory>(socket_factory_.get());
 
-  rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection =
-      peer_connection_factory_->CreatePeerConnection(rtc_config,
-                                                     std::move(dependencies));
-  callback(std::move(peer_connection));
+  webrtc::RTCErrorOr<rtc::scoped_refptr<webrtc::PeerConnectionInterface>>
+      peer_connection = peer_connection_factory_->CreatePeerConnectionOrError(
+          rtc_config, std::move(dependencies));
+  if (peer_connection.ok()) {
+    callback(peer_connection.MoveValue());
+  } else {
+    callback(/*peer_connection=*/nullptr);
+  }
 }
 
 std::unique_ptr<api::WebRtcSignalingMessenger>
 WebRtcMedium::GetSignalingMessenger(
     absl::string_view self_id,
-    const connections::LocationHint& location_hint) {
+    const location::nearby::connections::LocationHint& location_hint) {
   return std::make_unique<WebRtcSignalingMessengerImpl>(
       std::string(self_id), location_hint, webrtc_signaling_messenger_);
 }
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/crostini/crostini_uninstaller_view.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
@@ -61,7 +61,7 @@ bool CrostiniUninstallerView::Accept() {
                      weak_ptr_factory_.GetWeakPtr()));
 
   progress_bar_ = new views::ProgressBar();
-  AddChildView(progress_bar_);
+  AddChildView(progress_bar_.get());
   // Setting value to -1 makes the progress bar play the
   // "indeterminate animation".
   progress_bar_->SetValue(-1);
@@ -102,7 +102,7 @@ CrostiniUninstallerView::CrostiniUninstallerView(Profile* profile)
   message_label_ = new views::Label(message);
   message_label_->SetMultiLine(true);
   message_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  AddChildView(message_label_);
+  AddChildView(message_label_.get());
 }
 
 CrostiniUninstallerView::~CrostiniUninstallerView() {
@@ -147,5 +147,5 @@ void CrostiniUninstallerView::RecordUninstallResultHistogram(
   has_logged_result_ = true;
 }
 
-BEGIN_METADATA(CrostiniUninstallerView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(CrostiniUninstallerView)
 END_METADATA

@@ -11,7 +11,8 @@
 
 // static
 UrlLanguageHistogramFactory* UrlLanguageHistogramFactory::GetInstance() {
-  return base::Singleton<UrlLanguageHistogramFactory>::get();
+  static base::NoDestructor<UrlLanguageHistogramFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -23,14 +24,22 @@ UrlLanguageHistogramFactory::GetForBrowserContext(
 }
 
 UrlLanguageHistogramFactory::UrlLanguageHistogramFactory()
-    : ProfileKeyedServiceFactory("UrlLanguageHistogram") {}
+    : ProfileKeyedServiceFactory(
+          "UrlLanguageHistogram",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-UrlLanguageHistogramFactory::~UrlLanguageHistogramFactory() {}
+UrlLanguageHistogramFactory::~UrlLanguageHistogramFactory() = default;
 
-KeyedService* UrlLanguageHistogramFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+UrlLanguageHistogramFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* const browser_context) const {
   Profile* const profile = Profile::FromBrowserContext(browser_context);
-  return new language::UrlLanguageHistogram(profile->GetPrefs());
+  return std::make_unique<language::UrlLanguageHistogram>(profile->GetPrefs());
 }
 
 void UrlLanguageHistogramFactory::RegisterProfilePrefs(

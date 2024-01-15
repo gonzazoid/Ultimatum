@@ -7,42 +7,40 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
 #include "components/captive_portal/core/captive_portal_detector.h"
 #include "components/captive_portal/core/captive_portal_types.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace network {
 class SharedURLLoaderFactory;
 namespace mojom {
 class URLLoaderFactory;
-}
+}  // namespace mojom
 }  // namespace network
 
 namespace ash {
 
 class NetworkState;
+class NetworkStateHandler;
 
 // This class does the following:
 // 1. Provides an interface to enable captive portal detection (once the
 //    EULA is accepted).
 // 2. Provides an interface to start portal detection.
-//    Currently this is Chrome only, TODO(b/207088236): Trigger Shill detection.
+//    Currently this is Chrome only.
 // 3. Observes the NetworkStateHandler class and triggers Chrome captive portal
 //    detection (captive_portal::CaptivePortalService) when the Shill state
 //    changes (if required) then updates NetworkStateHandler accordingly.
@@ -50,8 +48,7 @@ class NetworkState;
 // The status reflects the combined Shill + Chrome detection results
 // (as does NetworkState::GetPortalState()).
 class NetworkPortalDetectorImpl : public NetworkPortalDetector,
-                                  public NetworkStateHandlerObserver,
-                                  public content::NotificationObserver {
+                                  public NetworkStateHandlerObserver {
  public:
   explicit NetworkPortalDetectorImpl(
       network::mojom::URLLoaderFactory* loader_factory_for_testing = nullptr);
@@ -66,6 +63,7 @@ class NetworkPortalDetectorImpl : public NetworkPortalDetector,
   CaptivePortalStatus GetCaptivePortalStatus() override;
   bool IsEnabled() override;
   void Enable() override;
+  void RequestCaptivePortalDetection() override;
 
  private:
   friend class NetworkPortalDetectorImplTest;
@@ -104,11 +102,6 @@ class NetworkPortalDetectorImpl : public NetworkPortalDetector,
   void OnShuttingDown() override;
   void PortalStateChanged(const NetworkState* default_network,
                           NetworkState::PortalState portal_state) override;
-
-  // content::NotificationObserver implementation:
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
 
   void DetectionCompleted(const NetworkState* network,
                           const CaptivePortalStatus& results);
@@ -178,23 +171,15 @@ class NetworkPortalDetectorImpl : public NetworkPortalDetector,
   base::TimeDelta next_attempt_delay_;
 
   // Delay before next portal detection for testing.
-  absl::optional<base::TimeDelta> attempt_delay_for_testing_;
+  std::optional<base::TimeDelta> attempt_delay_for_testing_;
 
   // Timeout before attempt is timed out.
   base::TimeDelta attempt_timeout_;
-
-  // Last received result from captive portal detector.
-  CaptivePortalStatus last_detection_status_ = CAPTIVE_PORTAL_STATUS_UNKNOWN;
-
-  // Number of detection attempts with same result in a row.
-  int same_detection_result_count_ = 0;
 
   // Number of detection attempts.
   int captive_portal_detector_run_count_ = 0;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  content::NotificationRegistrar registrar_;
 
   base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};

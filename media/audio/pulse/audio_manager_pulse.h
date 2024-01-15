@@ -12,10 +12,11 @@
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "media/audio/audio_manager_base.h"
 
 namespace media {
+
+class PulseLoopbackManager;
 
 class MEDIA_EXPORT AudioManagerPulse : public AudioManagerBase {
  public:
@@ -107,6 +108,7 @@ class MEDIA_EXPORT AudioManagerPulse : public AudioManagerBase {
   raw_ptr<pa_threaded_mainloop> input_mainloop_;
   raw_ptr<pa_context> input_context_;
   raw_ptr<AudioDeviceNames> devices_;
+  std::unique_ptr<PulseLoopbackManager> loopback_manager_;
   int native_input_sample_rate_;
   int native_channel_count_;
   std::string default_source_name_;

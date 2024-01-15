@@ -36,9 +36,24 @@ def _CreateSizeInfo(aliases=None, containers=None):
   build_config = {}
   metadata = {}
   section_sizes = {'.text': 100, '.bss': 40}
+  metrics_by_file = {
+      'classes.dex': {
+          'COUNT/HEADER': 1,
+          'COUNT/STRING_ID': 11,
+          'COUNT/CODE': 3,
+          'COUNT/STRING_DATA': 11,
+          'SIZE/HEADER': 1024,
+          'SIZE/STRING_ID': 44,
+          'SIZE/CODE': 1337,
+          'SIZE/STRING_DATA': 888,
+      },
+  }
   if not containers:
     containers = [
-        models.Container('', metadata=metadata, section_sizes=section_sizes)
+        models.Container('',
+                         metadata=metadata,
+                         section_sizes=section_sizes,
+                         metrics_by_file=metrics_by_file)
     ]
   models.BaseContainer.AssignShortNames(containers)
   TEXT = models.SECTION_TEXT
@@ -114,8 +129,14 @@ class DiffTest(unittest.TestCase):
     self.assertEqual(0, d.raw_symbols.size)
 
   def testDontMatchAcrossContainers(self):
-    container_a = models.Container('A', metadata={}, section_sizes={})
-    container_b = models.Container('B', metadata={}, section_sizes={})
+    container_a = models.Container('A',
+                                   metadata={},
+                                   section_sizes={},
+                                   metrics_by_file={})
+    container_b = models.Container('B',
+                                   metadata={},
+                                   section_sizes={},
+                                   metrics_by_file={})
     containers = [container_a, container_b]
     size_info1 = _CreateSizeInfo(containers=containers)
     size_info1.raw_symbols[0].container = container_b
@@ -209,6 +230,28 @@ class DiffTest(unittest.TestCase):
     d = diff.Diff(size_info1, size_info2)
     self.assertEqual((0, 1, 1), d.raw_symbols.CountsByDiffStatus()[1:])
     self.assertEqual(0, d.raw_symbols.size)
+
+  def testChangedPaths_NamedStringLiteralsSameSize(self):
+    # Ensure that named string literals are matched up with same size.
+    size_info1 = _CreateSizeInfo()
+    size_info1.raw_symbols[0].full_name = '"asdf..."'
+    size_info2 = _CreateSizeInfo()
+    size_info2.raw_symbols[0].full_name = '"asdf..."'
+    size_info2.raw_symbols[0].object_path = 'asdf'
+    d = diff.Diff(size_info1, size_info2)
+    self.assertEqual((0, 0, 0), d.raw_symbols.CountsByDiffStatus()[1:])
+
+  def testChangedPaths_NamedStringLiteralsDifferentSize(self):
+    # Ensure that named string literals are matched up with same size.
+    size_info1 = _CreateSizeInfo()
+    size_info1.raw_symbols[0].full_name = '"asdf..."'
+    size_info2 = _CreateSizeInfo()
+    size_info2.raw_symbols[0].full_name = '"asdf..."'
+    size_info2.raw_symbols[0].object_path = 'asdf'
+    size_info2.raw_symbols[0].size += 10
+    d = diff.Diff(size_info1, size_info2)
+    self.assertEqual((0, 1, 1), d.raw_symbols.CountsByDiffStatus()[1:])
+    self.assertEqual(10, d.raw_symbols.size)
 
   def testChangedPaths_Java(self):
     # Ensure that Java symbols are matched up.

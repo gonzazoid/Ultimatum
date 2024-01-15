@@ -4,20 +4,26 @@
 
 #include "content/public/browser/url_loader_throttles.h"
 
+#include <optional>
+
 #include "base/feature_list.h"
+#include "base/memory/safe_ref.h"
 #include "components/variations/net/omnibox_url_loader_throttle.h"
 #include "components/variations/net/variations_url_loader_throttle.h"
 #include "content/browser/client_hints/client_hints.h"
 #include "content/browser/client_hints/critical_client_hints_throttle.h"
 #include "content/browser/origin_trials/critical_origin_trials_throttle.h"
 #include "content/browser/reduce_accept_language/reduce_accept_language_throttle.h"
+#include "content/browser/renderer_host/frame_tree_node.h"
+#include "content/browser/webid/webid_utils.h"
+#include "content/common/features.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/client_hints_controller_delegate.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/origin_trials_controller_delegate.h"
 #include "content/public/browser/reduce_accept_language_controller_delegate.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/content_features.h"
+#include "content/public/common/web_identity.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
@@ -36,11 +42,12 @@ CreateContentBrowserURLLoaderThrottles(
     BrowserContext* browser_context,
     const base::RepeatingCallback<WebContents*()>& wc_getter,
     NavigationUIData* navigation_ui_data,
-    int frame_tree_node_id) {
+    int frame_tree_node_id,
+    absl::optional<int64_t> navigation_id) {
   std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles =
       GetContentClient()->browser()->CreateURLLoaderThrottles(
           request, browser_context, wc_getter, navigation_ui_data,
-          frame_tree_node_id);
+          frame_tree_node_id, navigation_id);
   variations::OmniboxURLLoaderThrottle::AppendThrottleIfNeeded(&throttles);
   // TODO(crbug.com/1094303): Consider whether we want to use the WebContents to
   // determine the value for variations::Owner. Alternatively, this is the
@@ -63,7 +70,9 @@ CreateContentBrowserURLLoaderThrottles(
   // Creating a throttle only for outermost main frames to persist the reduced
   // accept language for an origin and to restart requests if needed, due to
   // language negotiation.
-  if (base::FeatureList::IsEnabled(network::features::kReduceAcceptLanguage)) {
+  if (base::FeatureList::IsEnabled(network::features::kReduceAcceptLanguage) ||
+      base::FeatureList::IsEnabled(
+          network::features::kReduceAcceptLanguageOriginTrial)) {
     ReduceAcceptLanguageControllerDelegate* reduce_accept_lang_delegate =
         browser_context->GetReduceAcceptLanguageControllerDelegate();
     if (request.is_outermost_main_frame && reduce_accept_lang_delegate) {
@@ -72,9 +81,19 @@ CreateContentBrowserURLLoaderThrottles(
     }
   }
 
-  if (base::FeatureList::IsEnabled(features::kPersistentOriginTrials)) {
-    OriginTrialsControllerDelegate* origin_trials_delegate =
-        browser_context->GetOriginTrialsControllerDelegate();
+  // frame_tree_node_id may be invalid if we are loading the first frame
+  // of the tab.
+  FrameTreeNode* frame_tree_node = nullptr;
+  if (frame_tree_node_id != FrameTreeNode::kFrameTreeNodeInvalidId) {
+    frame_tree_node = FrameTreeNode::GloballyFindByID(frame_tree_node_id);
+  }
+
+  // Handle Critical Origin Trial headers if the context supports it and this
+  // is a navigation request.
+  OriginTrialsControllerDelegate* origin_trials_delegate =
+      browser_context->GetOriginTrialsControllerDelegate();
+  if (origin_trials_delegate &&
+      CriticalOriginTrialsThrottle::IsNavigationRequest(request)) {
     // Critical Origin Trials may restart the network request, so only allow on
     // safe methods, since the origin trials in question may change request
     // headers or other aspects of the network request. We want to avoid servers
@@ -82,12 +101,49 @@ CreateContentBrowserURLLoaderThrottles(
     // headers are changed, any idempotent method is still allowed to make
     // further changes to server state.
     if (net::HttpUtil::IsMethodSafe(request.method) && origin_trials_delegate) {
+      std::optional<url::Origin> top_origin = std::nullopt;
+      // The throttle should only use a top-frame origin for partitioning if
+      // this is not the outermost frame.
+      if (frame_tree_node && frame_tree_node->GetParentOrOuterDocument()) {
+        top_origin = frame_tree_node->GetParentOrOuterDocument()
+                         ->GetOutermostMainFrame()
+                         ->GetLastCommittedOrigin();
+      }
       throttles.push_back(std::make_unique<CriticalOriginTrialsThrottle>(
-          *origin_trials_delegate));
+          *origin_trials_delegate, std::move(top_origin)));
     }
   }
+
+  auto throttle = MaybeCreateIdentityUrlLoaderThrottle(base::BindRepeating(
+      webid::SetIdpSigninStatus, browser_context, frame_tree_node_id));
+  if (throttle)
+    throttles.push_back(std::move(throttle));
 
   return throttles;
 }
 
+std::vector<std::unique_ptr<blink::URLLoaderThrottle>>
+CreateContentBrowserURLLoaderThrottlesForKeepAlive(
+    const network::ResourceRequest& request,
+    BrowserContext* browser_context,
+    const base::RepeatingCallback<WebContents*()>& wc_getter,
+    int frame_tree_node_id) {
+  std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles =
+      GetContentClient()->browser()->CreateURLLoaderThrottlesForKeepAlive(
+          request, browser_context, wc_getter, frame_tree_node_id);
+  variations::OmniboxURLLoaderThrottle::AppendThrottleIfNeeded(&throttles);
+  // TODO(crbug.com/1094303): Consider whether we want to use the WebContents to
+  // determine the value for variations::Owner. Alternatively, this is the
+  // browser side, and we might be fine with Owner::kUnknown.
+  variations::VariationsURLLoaderThrottle::AppendThrottleIfNeeded(
+      browser_context->GetVariationsClient(), &throttles);
+
+  auto throttle = MaybeCreateIdentityUrlLoaderThrottle(base::BindRepeating(
+      webid::SetIdpSigninStatus, browser_context, frame_tree_node_id));
+  if (throttle) {
+    throttles.push_back(std::move(throttle));
+  }
+
+  return throttles;
+}
 }  // namespace content

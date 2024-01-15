@@ -8,15 +8,16 @@
 #include <sddl.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <limits>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "base/base_switches.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
-#include "base/guid.h"
+#include "base/i18n/time_formatting.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -24,10 +25,10 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
+#include "base/uuid.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_bstr.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "remoting/base/auto_thread_task_runner.h"
 #include "remoting/host/base/screen_resolution.h"
 #include "remoting/host/base/switches.h"
@@ -63,7 +64,7 @@ const wchar_t kDaemonIpcSecurityDescriptor[] =
 
 // The command line parameters that should be copied from the service's command
 // line to the desktop process.
-const char* kCopiedSwitchNames[] = { switches::kV, switches::kVModule };
+const char* const kCopiedSwitchNames[] = {switches::kV, switches::kVModule};
 
 // The default screen dimensions for an RDP session.
 const int kDefaultRdpScreenWidth = 1280;
@@ -73,29 +74,9 @@ const int kDefaultRdpScreenHeight = 768;
 const int kMinRdpScreenWidth = 800;
 const int kMinRdpScreenHeight = 600;
 
-// Win7 SP1 (and Vista) supports dimensions up to 4096x2048.
-const int kMaxRdpScreenWidthForWin7 = 4096;
-const int kMaxRdpScreenHeightForWin7 = 2048;
-
-// Win8+ supports dimensions up to 8192x8192.
-const int kMaxRdpScreenWidthForWin8AndLater = 8192;
-const int kMaxRdpScreenHeightForWin8AndLater = 8192;
-
-int GetMaxRdpScreenWidth() {
-  static int max_rdp_screen_width =
-      base::win::GetVersion() >= base::win::Version::WIN8
-          ? kMaxRdpScreenWidthForWin8AndLater
-          : kMaxRdpScreenWidthForWin7;
-  return max_rdp_screen_width;
-}
-
-int GetMaxRdpScreenHeight() {
-  static int max_rdp_screen_height =
-      base::win::GetVersion() >= base::win::Version::WIN8
-          ? kMaxRdpScreenHeightForWin8AndLater
-          : kMaxRdpScreenHeightForWin7;
-  return max_rdp_screen_height;
-}
+// Windows supports dimensions up to 8192x8192.
+const int kMaxRdpScreenWidth = 8192;
+const int kMaxRdpScreenHeight = 8192;
 
 // Default dots per inch used by RDP is 96 DPI.
 const int kDefaultRdpDpi = 96;
@@ -114,7 +95,8 @@ const int kSecurityLayerTlsRequired = 2;
 // The values used to establish RDP connections are stored in the registry.
 const wchar_t kRdpSettingsKeyName[] =
     L"SYSTEM\\CurrentControlSet\\Control\\Terminal Server";
-const wchar_t kRdpTcpSettingsKeyName[] = L"SYSTEM\\CurrentControlSet\\"
+const wchar_t kRdpTcpSettingsKeyName[] =
+    L"SYSTEM\\CurrentControlSet\\"
     L"Control\\Terminal Server\\WinStations\\RDP-Tcp";
 const wchar_t kRdpPortValueName[] = L"PortNumber";
 const wchar_t kDenyTsConnectionsValueName[] = L"fDenyTSConnections";
@@ -123,8 +105,8 @@ const wchar_t kSecurityLayerValueName[] = L"SecurityLayer";
 
 webrtc::DesktopSize GetBoundedRdpDesktopSize(int width, int height) {
   return webrtc::DesktopSize(
-      base::clamp(width, kMinRdpScreenWidth, GetMaxRdpScreenWidth()),
-      base::clamp(height, kMinRdpScreenHeight, GetMaxRdpScreenHeight()));
+      std::clamp(width, kMinRdpScreenWidth, kMaxRdpScreenWidth),
+      std::clamp(height, kMinRdpScreenHeight, kMaxRdpScreenHeight));
 }
 
 // DesktopSession implementation which attaches to the host's physical console.
@@ -134,12 +116,11 @@ webrtc::DesktopSize GetBoundedRdpDesktopSize(int width, int height) {
 class ConsoleSession : public DesktopSessionWin {
  public:
   // Same as DesktopSessionWin().
-  ConsoleSession(
-    scoped_refptr<AutoThreadTaskRunner> caller_task_runner,
-    scoped_refptr<AutoThreadTaskRunner> io_task_runner,
-    DaemonProcess* daemon_process,
-    int id,
-    WtsTerminalMonitor* monitor);
+  ConsoleSession(scoped_refptr<AutoThreadTaskRunner> caller_task_runner,
+                 scoped_refptr<AutoThreadTaskRunner> io_task_runner,
+                 DaemonProcess* daemon_process,
+                 int id,
+                 WtsTerminalMonitor* monitor);
 
   ConsoleSession(const ConsoleSession&) = delete;
   ConsoleSession& operator=(const ConsoleSession&) = delete;
@@ -164,12 +145,11 @@ class ConsoleSession : public DesktopSessionWin {
 class RdpSession : public DesktopSessionWin {
  public:
   // Same as DesktopSessionWin().
-  RdpSession(
-    scoped_refptr<AutoThreadTaskRunner> caller_task_runner,
-    scoped_refptr<AutoThreadTaskRunner> io_task_runner,
-    DaemonProcess* daemon_process,
-    int id,
-    WtsTerminalMonitor* monitor);
+  RdpSession(scoped_refptr<AutoThreadTaskRunner> caller_task_runner,
+             scoped_refptr<AutoThreadTaskRunner> io_task_runner,
+             DaemonProcess* daemon_process,
+             int id,
+             WtsTerminalMonitor* monitor);
 
   RdpSession(const RdpSession&) = delete;
   RdpSession& operator=(const RdpSession&) = delete;
@@ -246,13 +226,15 @@ ConsoleSession::ConsoleSession(
     DaemonProcess* daemon_process,
     int id,
     WtsTerminalMonitor* monitor)
-    : DesktopSessionWin(caller_task_runner, io_task_runner, daemon_process, id,
+    : DesktopSessionWin(caller_task_runner,
+                        io_task_runner,
+                        daemon_process,
+                        id,
                         monitor) {
   StartMonitoring(WtsTerminalMonitor::kConsole);
 }
 
-ConsoleSession::~ConsoleSession() {
-}
+ConsoleSession::~ConsoleSession() {}
 
 void ConsoleSession::SetScreenResolution(const ScreenResolution& resolution) {
   // Do nothing. The screen resolution of the console session is controlled by
@@ -263,10 +245,12 @@ void ConsoleSession::SetScreenResolution(const ScreenResolution& resolution) {
 void ConsoleSession::InjectSas() {
   DCHECK(caller_task_runner()->BelongsToCurrentThread());
 
-  if (!sas_injector_)
+  if (!sas_injector_) {
     sas_injector_ = SasInjector::Create();
-  if (!sas_injector_->InjectSas())
+  }
+  if (!sas_injector_->InjectSas()) {
     LOG(ERROR) << "Failed to inject Secure Attention Sequence.";
+  }
 }
 
 RdpSession::RdpSession(scoped_refptr<AutoThreadTaskRunner> caller_task_runner,
@@ -280,8 +264,7 @@ RdpSession::RdpSession(scoped_refptr<AutoThreadTaskRunner> caller_task_runner,
                         id,
                         monitor) {}
 
-RdpSession::~RdpSession() {
-}
+RdpSession::~RdpSession() {}
 
 bool RdpSession::Initialize(const ScreenResolution& resolution) {
   DCHECK(caller_task_runner()->BelongsToCurrentThread());
@@ -296,8 +279,8 @@ bool RdpSession::Initialize(const ScreenResolution& resolution) {
       ::CoCreateInstance(__uuidof(RdpDesktopSession), nullptr, CLSCTX_ALL,
                          IID_PPV_ARGS(&rdp_desktop_session_));
   if (FAILED(result)) {
-    LOG(ERROR) << "Failed to create RdpSession object, 0x"
-               << std::hex << result << std::dec << ".";
+    LOG(ERROR) << "Failed to create RdpSession object, 0x" << std::hex << result
+               << std::dec << ".";
     return false;
   }
 
@@ -311,7 +294,7 @@ bool RdpSession::Initialize(const ScreenResolution& resolution) {
         webrtc::DesktopVector(kDefaultRdpDpi, kDefaultRdpDpi));
   }
 
-  // Get the screen dimensions assuming the default DPI.
+  // Get the screen dimensions using the default DPI for the RDP client window.
   webrtc::DesktopSize host_size = local_resolution.ScaleDimensionsToDpi(
       webrtc::DesktopVector(kDefaultRdpDpi, kDefaultRdpDpi));
 
@@ -330,14 +313,14 @@ bool RdpSession::Initialize(const ScreenResolution& resolution) {
   // Create an RDP session.
   Microsoft::WRL::ComPtr<IRdpDesktopSessionEventHandler> event_handler(
       new EventHandler(weak_factory_.GetWeakPtr()));
-  terminal_id_ = base::GenerateGUID();
+  terminal_id_ = base::Uuid::GenerateRandomV4().AsLowercaseString();
   base::win::ScopedBstr terminal_id(base::UTF8ToWide(terminal_id_));
   result = rdp_desktop_session_->Connect(
       host_size.width(), host_size.height(), kDefaultRdpDpi, kDefaultRdpDpi,
       terminal_id.Get(), server_port, event_handler.Get());
   if (FAILED(result)) {
-    LOG(ERROR) << "RdpSession::Create() failed, 0x"
-               << std::hex << result << std::dec << ".";
+    LOG(ERROR) << "RdpSession::Create() failed, 0x" << std::hex << result
+               << std::dec << ".";
     return false;
   }
 
@@ -361,12 +344,12 @@ void RdpSession::SetScreenResolution(const ScreenResolution& resolution) {
   DCHECK(caller_task_runner()->BelongsToCurrentThread());
   DCHECK(!resolution.IsEmpty());
 
-  webrtc::DesktopSize new_size = resolution.ScaleDimensionsToDpi(
-      webrtc::DesktopVector(kDefaultRdpDpi, kDefaultRdpDpi));
-  new_size = GetBoundedRdpDesktopSize(new_size.width(), new_size.height());
+  webrtc::DesktopSize bounded_size = GetBoundedRdpDesktopSize(
+      resolution.dimensions().width(), resolution.dimensions().height());
 
-  rdp_desktop_session_->ChangeResolution(new_size.width(), new_size.height(),
-      kDefaultRdpDpi, kDefaultRdpDpi);
+  rdp_desktop_session_->ChangeResolution(
+      bounded_size.width(), bounded_size.height(), resolution.dpi().x(),
+      resolution.dpi().y());
 }
 
 void RdpSession::InjectSas() {
@@ -433,15 +416,14 @@ bool RdpSession::RetrieveDwordRegistryValue(const wchar_t* key_name,
 
 RdpSession::EventHandler::EventHandler(
     base::WeakPtr<RdpSession> desktop_session)
-    : ref_count_(0),
-      desktop_session_(desktop_session) {
-}
+    : ref_count_(0), desktop_session_(desktop_session) {}
 
 RdpSession::EventHandler::~EventHandler() {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (desktop_session_)
+  if (desktop_session_) {
     desktop_session_->OnRdpClosed();
+  }
 }
 
 ULONG STDMETHODCALLTYPE RdpSession::EventHandler::AddRef() {
@@ -465,8 +447,7 @@ STDMETHODIMP
 RdpSession::EventHandler::QueryInterface(REFIID riid, void** ppv) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (riid == IID_IUnknown ||
-      riid == IID_IRdpDesktopSessionEventHandler) {
+  if (riid == IID_IUnknown || riid == IID_IRdpDesktopSessionEventHandler) {
     *ppv = static_cast<IRdpDesktopSessionEventHandler*>(this);
     AddRef();
     return S_OK;
@@ -479,8 +460,9 @@ RdpSession::EventHandler::QueryInterface(REFIID riid, void** ppv) {
 STDMETHODIMP RdpSession::EventHandler::OnRdpConnected() {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (desktop_session_)
+  if (desktop_session_) {
     desktop_session_->OnRdpConnected();
+  }
 
   return S_OK;
 }
@@ -488,8 +470,9 @@ STDMETHODIMP RdpSession::EventHandler::OnRdpConnected() {
 STDMETHODIMP RdpSession::EventHandler::OnRdpClosed() {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (!desktop_session_)
+  if (!desktop_session_) {
     return S_OK;
+  }
 
   base::WeakPtr<RdpSession> desktop_session = desktop_session_;
   desktop_session_.reset();
@@ -497,7 +480,7 @@ STDMETHODIMP RdpSession::EventHandler::OnRdpClosed() {
   return S_OK;
 }
 
-} // namespace
+}  // namespace
 
 // static
 std::unique_ptr<DesktopSession> DesktopSessionWin::CreateForConsole(
@@ -521,8 +504,9 @@ std::unique_ptr<DesktopSession> DesktopSessionWin::CreateForVirtualTerminal(
   std::unique_ptr<RdpSession> session(
       new RdpSession(caller_task_runner, io_task_runner, daemon_process, id,
                      HostService::GetInstance()));
-  if (!session->Initialize(resolution))
+  if (!session->Initialize(resolution)) {
     return nullptr;
+  }
 
   return std::move(session);
 }
@@ -642,17 +626,12 @@ void DesktopSessionWin::OnSessionAttached(uint32_t session_id) {
 
   ReportElapsedTime("attached");
 
-  // Launch elevated on Win8+ to enable injection of Alt+Tab and Ctrl+Alt+Del.
-  bool launch_elevated = base::win::GetVersion() >= base::win::Version::WIN8;
-
-  // Get the name of the executable to run. |kDesktopBinaryName| specifies
-  // uiAccess="true" in its manifest.  Prefer kDesktopBinaryName for Win8+ but
-  // fall back to kHostBinaryName if there is a problem loading it.
+  // Get the name of the executable to run. `kDesktopBinaryName` specifies
+  // uiAccess="true" in its manifest.  Prefer kDesktopBinaryName but fall back
+  // to kHostBinaryName if there is a problem loading it.
   base::FilePath desktop_binary;
-  bool result = false;
-  if (launch_elevated) {
-    result = GetInstalledBinaryPath(kDesktopBinaryName, &desktop_binary);
-  }
+  bool result = GetInstalledBinaryPath(kDesktopBinaryName, &desktop_binary);
+
   if (!result || !IsBinaryTrusted(desktop_binary)) {
     result = GetInstalledBinaryPath(kHostBinaryName, &desktop_binary);
   }
@@ -669,12 +648,13 @@ void DesktopSessionWin::OnSessionAttached(uint32_t session_id) {
   target->AppendSwitchASCII(kProcessTypeSwitchName, kProcessTypeDesktop);
   // Copy the command line switches enabling verbose logging.
   target->CopySwitchesFrom(*base::CommandLine::ForCurrentProcess(),
-                           kCopiedSwitchNames, std::size(kCopiedSwitchNames));
+                           kCopiedSwitchNames);
 
   // Create a delegate capable of launching a process in a different session.
+  // Launch elevated to enable injection of Alt+Tab and Ctrl+Alt+Del.
   std::unique_ptr<WtsSessionProcessDelegate> delegate(
       new WtsSessionProcessDelegate(
-          io_task_runner_, std::move(target), launch_elevated,
+          io_task_runner_, std::move(target), /*launch_elevated=*/true,
           base::WideToUTF8(kDaemonIpcSecurityDescriptor)));
   if (!delegate->Initialize(session_id)) {
     TerminateSession();
@@ -736,16 +716,10 @@ void DesktopSessionWin::ReportElapsedTime(const std::string& event) {
                                 (now - last_timestamp_).InSecondsF());
   }
 
-  base::Time::Exploded exploded;
-  now.LocalExplode(&exploded);
-  VLOG(1) << base::StringPrintf("session(%d): %s at %02d:%02d:%02d.%03d%s",
-                                id(),
-                                event.c_str(),
-                                exploded.hour,
-                                exploded.minute,
-                                exploded.second,
-                                exploded.millisecond,
-                                passed.c_str());
+  VLOG(1) << base::StringPrintf(
+      "session(%d): %s at %s%s", id(), event.c_str(),
+      base::UnlocalizedTimeFormatWithPattern(now, "HH:mm:ss.SSS").c_str(),
+      passed.c_str());
 
   last_timestamp_ = now;
 }

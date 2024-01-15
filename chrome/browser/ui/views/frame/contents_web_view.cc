@@ -4,28 +4,30 @@
 
 #include "chrome/browser/ui/views/frame/contents_web_view.h"
 
-#include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/status_bubble_views.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/theme_provider.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_tree_owner.h"
 #include "ui/views/background.h"
+#include "ui/views/view_class_properties.h"
 
 #if defined(USE_AURA)
 #include "ui/aura/window.h"
 #include "ui/wm/core/window_util.h"
 #endif
 
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(ContentsWebView,
+                                      kContentsWebViewElementId);
+
 ContentsWebView::ContentsWebView(content::BrowserContext* browser_context)
     : views::WebView(browser_context),
       status_bubble_(nullptr) {
+  SetProperty(views::kElementIdentifierKey, kContentsWebViewElementId);
 }
 
 ContentsWebView::~ContentsWebView() {
@@ -47,6 +49,17 @@ void ContentsWebView::SetBackgroundVisible(bool background_visible) {
   background_visible_ = background_visible;
   if (GetWidget())
     UpdateBackgroundColor();
+}
+
+void ContentsWebView::SetBackgroundRadii(const gfx::RoundedCornersF& radii) {
+  if (background_radii_ == radii) {
+    return;
+  }
+
+  background_radii_ = radii;
+  if (GetWidget()) {
+    UpdateBackgroundColor();
+  }
 }
 
 bool ContentsWebView::GetNeedsNotificationWhenVisibleBoundsChange() const {
@@ -72,7 +85,8 @@ void ContentsWebView::UpdateBackgroundColor() {
   SkColor color = GetColorProvider()->GetColor(
       is_letterboxing() ? kColorWebContentsBackgroundLetterboxing
                         : kColorWebContentsBackground);
-  SetBackground(background_visible_ ? views::CreateSolidBackground(color)
+  SetBackground(background_visible_ ? views::CreateRoundedRectBackground(
+                                          color, background_radii_)
                                     : nullptr);
 
   if (web_contents()) {
@@ -143,6 +157,6 @@ void ContentsWebView::RenderViewReady() {
   WebView::RenderViewReady();
 }
 
-BEGIN_METADATA(ContentsWebView, views::WebView)
+BEGIN_METADATA(ContentsWebView)
 ADD_PROPERTY_METADATA(StatusBubbleViews*, StatusBubble)
 END_METADATA

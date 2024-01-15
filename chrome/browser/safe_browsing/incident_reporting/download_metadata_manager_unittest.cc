@@ -9,10 +9,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/test/base/testing_profile.h"
@@ -139,8 +140,7 @@ class DownloadMetadataManagerTestBase : public ::testing::Test {
   void WriteTestMetadataFileForItem(uint32_t download_id) {
     std::string data;
     ASSERT_TRUE(GetTestMetadata(download_id)->SerializeToString(&data));
-    ASSERT_EQ(static_cast<int>(data.size()),
-              base::WriteFile(GetMetadataPath(), data.data(), data.size()));
+    ASSERT_TRUE(base::WriteFile(GetMetadataPath(), data));
   }
 
   // Writes a test DownloadMetadata file for kTestDownloadId to the test profile
@@ -202,7 +202,8 @@ class DownloadMetadataManagerTestBase : public ::testing::Test {
     ON_CALL(*test_item_, GetId())
         .WillByDefault(Return(kTestDownloadId));
     ON_CALL(*test_item_, GetEndTime())
-        .WillByDefault(Return(base::Time::FromJsTime(kTestDownloadEndTimeMs)));
+        .WillByDefault(Return(base::Time::FromMillisecondsSinceUnixEpoch(
+            kTestDownloadEndTimeMs)));
     ON_CALL(*test_item_, GetState())
         .WillByDefault(Return(download::DownloadItem::COMPLETE));
     content::DownloadItemUtils::AttachInfoForTesting(test_item_.get(),
@@ -214,7 +215,8 @@ class DownloadMetadataManagerTestBase : public ::testing::Test {
     ON_CALL(*other_item_, GetId())
         .WillByDefault(Return(kOtherDownloadId));
     ON_CALL(*other_item_, GetEndTime())
-        .WillByDefault(Return(base::Time::FromJsTime(kTestDownloadEndTimeMs)));
+        .WillByDefault(Return(base::Time::FromMillisecondsSinceUnixEpoch(
+            kTestDownloadEndTimeMs)));
     content::DownloadItemUtils::AttachInfoForTesting(other_item_.get(),
                                                      &profile_, nullptr);
     dm_observer_->OnDownloadCreated(&download_manager_, other_item_.get());
@@ -224,7 +226,8 @@ class DownloadMetadataManagerTestBase : public ::testing::Test {
     ON_CALL(*zero_item_, GetId())
         .WillByDefault(Return(0));
     ON_CALL(*zero_item_, GetEndTime())
-        .WillByDefault(Return(base::Time::FromJsTime(kTestDownloadEndTimeMs)));
+        .WillByDefault(Return(base::Time::FromMillisecondsSinceUnixEpoch(
+            kTestDownloadEndTimeMs)));
     ON_CALL(*zero_item_, GetState())
         .WillByDefault(Return(download::DownloadItem::COMPLETE));
     content::DownloadItemUtils::AttachInfoForTesting(zero_item_.get(),
@@ -258,7 +261,9 @@ class DownloadMetadataManagerTestBase : public ::testing::Test {
 
   // The DownloadMetadataManager's content::DownloadManager::Observer. Captured
   // by download_manager_'s AddObserver action.
-  content::DownloadManager::Observer* dm_observer_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION content::DownloadManager::Observer* dm_observer_ = nullptr;
 };
 
 // A parameterized test that exercises GetDownloadDetails. The parameters

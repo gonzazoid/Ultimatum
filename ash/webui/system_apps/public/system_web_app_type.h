@@ -5,6 +5,12 @@
 #ifndef ASH_WEBUI_SYSTEM_APPS_PUBLIC_SYSTEM_WEB_APP_TYPE_H_
 #define ASH_WEBUI_SYSTEM_APPS_PUBLIC_SYSTEM_WEB_APP_TYPE_H_
 
+#include "build/chromeos_buildflags.h"
+
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#error "Ash-only"
+#endif
+
 namespace ash {
 
 // An enum that lists the different System Apps that exist. Can be used to
@@ -101,13 +107,14 @@ enum class SystemWebAppType {
   // contact: skuhne@google.com
   OS_FLAGS = 23,
 
-  // Face ML app aims to provide UI interactions to help Face ML team train
-  // their models on CrOS. This is an internal app that is only enabled on
-  // pre-released Chromebooks with appropriate hardware and OS support.
-  //
-  // Source: //ash/webui/face_ml_app_ui/
-  // contact: googleo@google.com
-  FACE_ML = 24,
+  // FaceML was deprecated.
+  // FACE_ML = 24,
+
+  // VC Background allows users to control webcam settings, including blur and
+  // background image.
+  // Source: //ash/webui/vc_background_ui/
+  // Contact: assistive-eng@google.com
+  VC_BACKGROUND = 25,
 
   // When adding a new System App, remember to:
   //
@@ -148,7 +155,7 @@ enum class SystemWebAppType {
   //
   // 8. Have one of System Web App Platform owners review the CL.
   //    See: //ash/webui/PLATFORM_OWNERS
-  kMaxValue = FACE_ML,
+  kMaxValue = VC_BACKGROUND,
 };
 
 }  // namespace ash

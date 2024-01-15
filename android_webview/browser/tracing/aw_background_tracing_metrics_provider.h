@@ -7,7 +7,14 @@
 
 #include "components/tracing/common/background_tracing_metrics_provider.h"
 
+#include <optional>
+#include "base/memory/weak_ptr.h"
+
 namespace tracing {
+
+// Only upload traces under 512 KB to decrease the risk of filling up
+// the app's IPC binder buffer (1 MB) and causing crashes.
+constexpr static int kCompressedUploadLimitBytes = 512 * 1024;
 
 class AwBackgroundTracingMetricsProvider
     : public BackgroundTracingMetricsProvider {
@@ -22,13 +29,17 @@ class AwBackgroundTracingMetricsProvider
   ~AwBackgroundTracingMetricsProvider() override;
 
   // metrics::MetricsProvider:
-  void Init() override;
+  void DoInit() override;
+
+  void RecordCoreSystemProfileMetrics(
+      metrics::SystemProfileProto* system_profile_proto) override;
 
  private:
   // BackgroundTracingMetricsProvider:
-  void ProvideEmbedderMetrics(
-      metrics::ChromeUserMetricsExtension* uma_proto,
-      base::HistogramSnapshotManager* snapshot_manager) override;
+  base::OnceCallback<bool(metrics::ChromeUserMetricsExtension*, std::string&&)>
+  GetEmbedderMetricsProvider() override;
+
+  base::WeakPtrFactory<AwBackgroundTracingMetricsProvider> weak_factory_{this};
 };
 
 }  // namespace tracing

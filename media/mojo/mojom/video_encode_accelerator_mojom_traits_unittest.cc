@@ -14,6 +14,17 @@
 
 namespace media {
 
+TEST(SVCScalabilityModeTest, RoundTrip) {
+  auto hw_supported_svc_modes =
+      ::media::GetSupportedScalabilityModesByHWEncoderForTesting();
+  for (::media::SVCScalabilityMode input_svc_mode : hw_supported_svc_modes) {
+    SVCScalabilityMode output_svc_mode;
+    ASSERT_TRUE(mojo::test::SerializeAndDeserialize<mojom::SVCScalabilityMode>(
+        input_svc_mode, output_svc_mode));
+    EXPECT_EQ(input_svc_mode, output_svc_mode);
+  }
+}
+
 TEST(VideoEncodeAcceleratorSupportedProfile, RoundTrip) {
   ::media::VideoEncodeAccelerator::SupportedProfile input;
   input.profile = VP9PROFILE_PROFILE0;
@@ -25,6 +36,8 @@ TEST(VideoEncodeAcceleratorSupportedProfile, RoundTrip) {
                              VideoEncodeAccelerator::kVariableMode;
   input.scalability_modes.push_back(::media::SVCScalabilityMode::kL1T3);
   input.scalability_modes.push_back(::media::SVCScalabilityMode::kL3T3Key);
+  input.scalability_modes.push_back(::media::SVCScalabilityMode::kS2T3);
+  input.scalability_modes.push_back(::media::SVCScalabilityMode::kS3T1);
 
   ::media::VideoEncodeAccelerator::SupportedProfile output;
   ASSERT_TRUE(mojo::test::SerializeAndDeserialize<
@@ -35,6 +48,8 @@ TEST(VideoEncodeAcceleratorSupportedProfile, RoundTrip) {
 TEST(VideoEncoderInfoStructTraitTest, RoundTrip) {
   ::media::VideoEncoderInfo input;
   input.implementation_name = "FakeVideoEncodeAccelerator";
+  // Set `frame_delay` but leave `input_capacity` empty.
+  input.frame_delay = 3;
   // FPS allocation.
   for (size_t i = 0; i < ::media::VideoEncoderInfo::kMaxSpatialLayers; ++i)
     input.fps_allocation[i] = {5, 5, 10};
@@ -165,11 +180,15 @@ TEST(VideoEncodeAcceleratorConfigStructTraitTest, RoundTrip) {
 
   ::media::VideoEncodeAccelerator::Config input_config(
       ::media::PIXEL_FORMAT_NV12, kBaseSize, ::media::VP9PROFILE_PROFILE0,
-      kBitrate, kBaseFramerate, absl::nullopt, absl::nullopt, false,
-      ::media::VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer,
-      ::media::VideoEncodeAccelerator::Config::ContentType::kCamera,
-      input_spatial_layers,
-      ::media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOnKeyPic);
+      kBitrate);
+  input_config.initial_framerate = kBaseFramerate;
+  input_config.storage_type =
+      ::media::VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer;
+  input_config.content_type =
+      ::media::VideoEncodeAccelerator::Config::ContentType::kCamera;
+  input_config.drop_frame_thresh_percentage = 30;
+  input_config.spatial_layers = input_spatial_layers;
+  input_config.inter_layer_pred = ::media::SVCInterLayerPredMode::kOnKeyPic;
 
   ::media::VideoEncodeAccelerator::Config output_config{};
   ASSERT_TRUE(

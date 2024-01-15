@@ -6,8 +6,8 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
@@ -17,6 +17,7 @@
 #include "chrome/android/chrome_jni_headers/UmaSessionStats_jni.h"
 #include "chrome/browser/android/metrics/android_session_durations_service.h"
 #include "chrome/browser/android/metrics/android_session_durations_service_factory.h"
+#include "chrome/browser/android/preferences/shared_preferences_migrator_android.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
@@ -39,6 +40,33 @@ namespace {
 // Used to keep the state of whether we should consider metric consent enabled.
 // This is used/read only within the ChromeMetricsServiceAccessor methods.
 bool g_metrics_consent_for_testing = false;
+}  // namespace
+
+namespace {
+// Counter for the number of times onPreCreate and onResume were called between
+// foreground sessions that reach native code. The code PXRY means:
+// * onPreCreate was called X times
+// * onResume was called Y times
+// * the counters are capped at 3, so that value means "3 or more".
+enum class ChromeActivityCounter : int32_t {
+  P0R0 = 0,
+  P0R1 = 1,
+  P0R2 = 2,
+  P0R3 = 3,
+  P1R0 = 4,
+  P1R1 = 5,
+  P1R2 = 6,
+  P1R3 = 7,
+  P2R0 = 8,
+  P2R1 = 9,
+  P2R2 = 10,
+  P2R3 = 11,
+  P3R0 = 12,
+  P3R1 = 13,
+  P3R2 = 14,
+  P3R3 = 15,
+  kMaxValue = 15,
+};
 }  // namespace
 
 void UmaSessionStats::UmaResumeSession(JNIEnv* env,
@@ -151,6 +179,21 @@ bool UmaSessionStats::IsBackgroundSessionStartForTesting() {
               .is_null();
 }
 
+void UmaSessionStats::EmitAndResetCounters() {
+  std::optional<int> on_postcreate_counter =
+      android::shared_preferences::GetAndClearInt(
+          "Chrome.UMA.OnPostCreateCounter2");
+  std::optional<int> on_resume_counter =
+      android::shared_preferences::GetAndClearInt(
+          "Chrome.UMA.OnResumeCounter2");
+  int on_create_count = std::min(on_postcreate_counter.value_or(0), 3);
+  int on_resume_count = std::min(on_resume_counter.value_or(0), 3);
+  ChromeActivityCounter count_code =
+      static_cast<ChromeActivityCounter>(4 * on_create_count + on_resume_count);
+  UMA_HISTOGRAM_ENUMERATION("UMA.AndroidPreNative.ChromeActivityCounter2",
+                            count_code);
+}
+
 void UmaSessionStats::SessionTimeTracker::AccumulateBackgroundSessionTime() {
   // No time spent in background since the last call to
   // |AccumulateBackgroundSessionTime()|.
@@ -178,6 +221,10 @@ void UmaSessionStats::SessionTimeTracker::ReportBackgroundSessionTime() {
 }
 
 bool UmaSessionStats::SessionTimeTracker::BeginForegroundSession() {
+  // Emit onPostCreate & onResume counters. This is done early in the session
+  // to ensure that these are captured even if the session is not ended
+  // cleanly.
+  UmaSessionStats::EmitAndResetCounters();
   AccumulateBackgroundSessionTime();
   background_session_start_time_ = {};
   session_start_time_ = base::TimeTicks::Now();
@@ -206,8 +253,10 @@ void UmaSessionStats::SessionTimeTracker::BeginBackgroundSession() {
 // the Java side.
 static void JNI_UmaSessionStats_ChangeMetricsReportingConsent(
     JNIEnv*,
-    jboolean consent) {
-  UpdateMetricsPrefsOnPermissionChange(consent);
+    jboolean consent,
+    jint called_from) {
+  UpdateMetricsPrefsOnPermissionChange(
+      consent, static_cast<ChangeMetricsReportingStateCalledFrom>(called_from));
 
   // This function ensures a consent file in the data directory is either
   // created, or deleted, depending on consent. Starting up metrics services
@@ -328,8 +377,16 @@ static void JNI_UmaSessionStats_RecordPageLoaded(
   }
 }
 
+static void JNI_UmaSessionStats_RecordPageLoadedWithAccessory(JNIEnv*) {
+  base::RecordAction(UserMetricsAction("MobilePageLoadedWithAccessory"));
+}
+
 static void JNI_UmaSessionStats_RecordPageLoadedWithKeyboard(JNIEnv*) {
   base::RecordAction(UserMetricsAction("MobilePageLoadedWithKeyboard"));
+}
+
+static void JNI_UmaSessionStats_RecordPageLoadedWithMouse(JNIEnv*) {
+  base::RecordAction(UserMetricsAction("MobilePageLoadedWithMouse"));
 }
 
 static jlong JNI_UmaSessionStats_Init(JNIEnv* env) {

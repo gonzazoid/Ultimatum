@@ -4,15 +4,11 @@
 
 #import "ios/chrome/browser/ui/webui/user_actions_handler.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/metrics/user_metrics.h"
 #import "base/time/time.h"
 #import "base/values.h"
 #import "ios/web/public/webui/web_ui_ios.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 UserActionsHandler::UserActionsHandler()
     : action_callback_(base::BindRepeating(&UserActionsHandler::OnUserAction,

@@ -46,12 +46,11 @@ class SVGElementReferenceObserver : public IdTargetObserver {
   void IdTargetChanged() override { closure_.Run(); }
   base::RepeatingClosure closure_;
 };
-}
+}  // namespace
 
 SVGURIReference::SVGURIReference(SVGElement* element)
     : href_(MakeGarbageCollected<SVGAnimatedHref>(element)) {
   DCHECK(element);
-  href_->AddToPropertyMap(element);
 }
 
 const String& SVGURIReference::HrefString() const {
@@ -60,6 +59,16 @@ const String& SVGURIReference::HrefString() const {
 
 SVGAnimatedString* SVGURIReference::href() const {
   return href_.Get();
+}
+
+SVGAnimatedPropertyBase* SVGURIReference::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  return href_->PropertyFromAttribute(attribute_name);
+}
+
+void SVGURIReference::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{href_.Get()};
+  SVGElement::SynchronizeListOfSVGAttributes(attrs);
 }
 
 void SVGURIReference::Trace(Visitor* visitor) const {

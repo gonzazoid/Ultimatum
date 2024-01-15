@@ -9,7 +9,9 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_data_base.h"
 #include "chrome/browser/extensions/webstore_data_fetcher_delegate.h"
 #include "components/account_id/account_id.h"
@@ -20,17 +22,15 @@ class Profile;
 namespace extensions {
 class Extension;
 class WebstoreDataFetcher;
-}
+}  // namespace extensions
 
 namespace gfx {
 class Image;
 }
 
-namespace network {
-namespace mojom {
+namespace network::mojom {
 class URLLoaderFactory;
-}
-}
+}  // namespace network::mojom
 
 namespace ash {
 
@@ -89,14 +89,6 @@ class KioskAppData : public KioskAppDataBase,
       const GURL& update_url,
       const std::string& required_platform_version);
 
-  // Callbacks for KioskAppIconLoader.
-  void OnIconLoadSuccess(const gfx::ImageSkia& icon) override;
-  void OnIconLoadFailure() override;
-
-  // Tests do not always fake app data download.
-  // This allows to ignore download errors.
-  static void SetIgnoreKioskAppDataLoadFailuresForTesting(bool value);
-
  private:
   class CrxLoader;
   class WebstoreDataParser;
@@ -129,15 +121,15 @@ class KioskAppData : public KioskAppDataBase,
   void OnWebstoreRequestFailure(const std::string& extension_id) override;
   void OnWebstoreResponseParseSuccess(
       const std::string& extension_id,
-      std::unique_ptr<base::DictionaryValue> webstore_data) override;
+      const base::Value::Dict& webstore_data) override;
   void OnWebstoreResponseParseFailure(const std::string& extension_id,
                                       const std::string& error) override;
 
-  // Helper function for testing for the existence of |key| in
-  // |response|. Passes |key|'s content via |value| and returns
-  // true when |key| is present.
+  // Helper function for testing for the existence of `key` in
+  // `response`. Passes `key`'s content via `value` and returns
+  // true when `key` is present.
   bool CheckResponseKeyValue(const std::string& extension_id,
-                             const base::DictionaryValue* response,
+                             const base::Value::Dict& response,
                              const char* key,
                              std::string* value);
 
@@ -147,7 +139,9 @@ class KioskAppData : public KioskAppDataBase,
 
   void OnCrxLoadFinished(const CrxLoader* crx_loader);
 
-  KioskAppDataDelegate* delegate_;  // not owned.
+  void OnIconLoadDone(std::optional<gfx::ImageSkia> icon);
+
+  raw_ptr<KioskAppDataDelegate> delegate_;  // not owned.
   Status status_;
 
   GURL update_url_;
@@ -161,10 +155,5 @@ class KioskAppData : public KioskAppDataBase,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when moved to chrome/browser/ash/.
-namespace chromeos {
-using ::ash::KioskAppData;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_KIOSK_APP_DATA_H_

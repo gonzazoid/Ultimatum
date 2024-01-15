@@ -19,22 +19,6 @@ namespace blink {
 
 class ExecutionContext;
 
-// These values match the "FeaturePolicyAllowlistType" enum in
-// tools/metrics/histograms/enums.xml. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class FeaturePolicyAllowlistType {
-  kEmpty = 0,
-  kNone = 1,
-  kSelf = 2,
-  kSrc = 3,
-  kStar = 4,
-  kOrigins = 5,
-  kKeywordsOnly = 6,
-  kMixed = 7,
-  kMinValue = 0,
-  kMaxValue = kMixed
-};
-
 // Returns the list of features which are currently available in this context,
 // including any features which have been made available by an origin trial.
 CORE_EXPORT const Vector<String> GetAvailableFeatures(ExecutionContext*);
@@ -50,12 +34,13 @@ class CORE_EXPORT PermissionsPolicyParser {
   STATIC_ONLY(PermissionsPolicyParser);
 
  public:
-  // Following is the intermediate represetnation(IR) of permissions policy.
+  // Following is the intermediate representation(IR) of permissions policy.
   // Parsing of syntax structures is done in this IR, but semantic checks, e.g.
   // whether feature_name is valid, are not yet performed.
   struct Declaration {
     String feature_name;
     Vector<String> allowlist;
+    String endpoint;
   };
   // We need to keep track of the source of the list of declarations as
   // different features (e.g., wildcards) might be active per-context.

@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "components/policy/core/common/device_local_account_type.h"
+
 namespace ash {
 class CrosSettings;
 class OwnerSettingsServiceAsh;
@@ -58,6 +60,8 @@ struct WebKioskAppBasicInfo {
 // This must match DeviceLocalAccountInfoProto.AccountType in
 // chrome_device_policy.proto.
 struct DeviceLocalAccount {
+  // DEPRECATED: please use DeviceLocalAccountType, instead.
+  // TODO(b/267685577): Remove this.
   enum Type {
     // A login-less, policy-configured browsing session.
     TYPE_PUBLIC_SESSION,
@@ -73,19 +77,47 @@ struct DeviceLocalAccount {
     // Sentinel, must be last.
     TYPE_COUNT
   };
+  static_assert(TYPE_PUBLIC_SESSION ==
+                static_cast<Type>(DeviceLocalAccountType::kPublicSession));
+  static_assert(TYPE_KIOSK_APP ==
+                static_cast<Type>(DeviceLocalAccountType::kKioskApp));
+  static_assert(TYPE_ARC_KIOSK_APP ==
+                static_cast<Type>(DeviceLocalAccountType::kArcKioskApp));
+  static_assert(TYPE_SAML_PUBLIC_SESSION ==
+                static_cast<Type>(DeviceLocalAccountType::kSamlPublicSession));
+  static_assert(TYPE_WEB_KIOSK_APP ==
+                static_cast<Type>(DeviceLocalAccountType::kWebKioskApp));
+
+  enum class EphemeralMode {
+    // Default value. Same behaviour as `kFollowDeviceWidePolicy` value.
+    kUnset = 0,
+    // Device-local account ephemeral mode controlled by
+    // `DeviceEphemeralUsersEnabled` policy.
+    kFollowDeviceWidePolicy = 1,
+    // Device-local account must be non-ephemeral.
+    kDisable = 2,
+    // Device-local account must be ephemeral.
+    kEnable = 3,
+    // Max value, must be last.
+    kMaxValue = kEnable,
+  };
 
   DeviceLocalAccount(Type type,
+                     EphemeralMode ephemeral_mode,
                      const std::string& account_id,
                      const std::string& kiosk_app_id,
                      const std::string& kiosk_app_update_url);
-  DeviceLocalAccount(const ArcKioskAppBasicInfo& arc_kiosk_app_info,
+  DeviceLocalAccount(EphemeralMode ephemeral_mode,
+                     const ArcKioskAppBasicInfo& arc_kiosk_app_info,
                      const std::string& account_id);
-  DeviceLocalAccount(const WebKioskAppBasicInfo& app_info,
+  DeviceLocalAccount(EphemeralMode ephemeral_mode,
+                     const WebKioskAppBasicInfo& app_info,
                      const std::string& account_id);
   DeviceLocalAccount(const DeviceLocalAccount& other);
   ~DeviceLocalAccount();
 
   Type type;
+  EphemeralMode ephemeral_mode;
   // A device-local account has two identifiers:
   // * The |account_id| is chosen by the entity that defines the device-local
   //   account. The only constraints are that the |account_id| be unique and,
@@ -112,11 +144,15 @@ struct DeviceLocalAccount {
   WebKioskAppBasicInfo web_kiosk_app_info;
 };
 
+// DEPRECATED: please use the one defined in
+// components/policy/core/common/device_local_account_type.h
+// TODO(b/267685577): Remove this.
 std::string GenerateDeviceLocalAccountUserId(const std::string& account_id,
                                              DeviceLocalAccount::Type type);
 
-// Determines whether |user_id| belongs to a device-local account and if so,
-// returns the type of device-local account in |type| unless |type| is NULL.
+// DEPRECATED: please use the one defined in
+// components/policy/core/common/device_local_account_type.h
+// TODO(b/267685577): Remove this.
 bool IsDeviceLocalAccountUser(const std::string& user_id,
                               DeviceLocalAccount::Type* type);
 

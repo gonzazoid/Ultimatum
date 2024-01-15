@@ -39,8 +39,22 @@ class ASH_PUBLIC_EXPORT AppListNotifier {
 
   class Observer : public base::CheckedObserver {
    public:
+    // Called when the search query is first updated after activating the search
+    // box or the app list view state transitions to kFullscreenSearch.
+    virtual void OnSearchSessionStarted() {}
+
+    // Called when an active search session ends when exiting bubble launcher
+    // search or the app list view state transitions out of kFullscreenSearch.
+    virtual void OnSearchSessionEnded(const std::u16string& query) {}
+
     // Called when |results| have been displayed for the length of the
     // impression timer.
+    virtual void OnSeen(Location location,
+                        const std::vector<Result>& results,
+                        const std::u16string& query) {}
+
+    // Called when |results| have been displayed for the length of the
+    // impression timer, launched, or ignored.
     virtual void OnImpression(Location location,
                               const std::vector<Result>& results,
                               const std::u16string& query) {}
@@ -54,7 +68,7 @@ class ASH_PUBLIC_EXPORT AppListNotifier {
 
     // Called when the |location| UI view displayed |results|, but the user
     // launched a result in a different UI view. This can only happen when
-    // |location| is kList or kTile.
+    // |location| is kContinue or kRecentApps.
     virtual void OnIgnore(Location location,
                           const std::vector<Result>& results,
                           const std::u16string& query) {}

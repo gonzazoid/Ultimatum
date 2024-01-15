@@ -33,12 +33,15 @@ const InstallConstants kInstallModes[] = {
             L"",  // Empty install_suffix for the primary install mode.
         .logo_suffix = L"",  // No logo suffix for the primary install mode.
         .app_guid =
-            L"",  // Empty app_guid since no integraion with Google Update.
-        .base_app_name = L"Chromium",      // A distinct base_app_name.
-        .base_app_id = L"Chromium",        // A distinct base_app_id.
-        .prog_id_prefix = L"ChromiumHTM",  // ProgID prefix.
-        .prog_id_description =
-            L"Chromium HTML Document",  // ProgID description.
+            L"",  // Empty app_guid since no integration with Google Update.
+        .base_app_name = L"Chromium",              // A distinct base_app_name.
+        .base_app_id = L"Chromium",                // A distinct base_app_id.
+        .browser_prog_id_prefix = L"ChromiumHTM",  // Browser ProgID prefix.
+        .browser_prog_id_description =
+            L"Chromium HTML Document",         // Browser ProgID description.
+        .pdf_prog_id_prefix = L"ChromiumPDF",  // PDF ProgID prefix.
+        .pdf_prog_id_description =
+            L"Chromium PDF Document",  // PDF ProgID description.
         .active_setup_guid =
             L"{7D2B3E1D-D096-4594-9D8F-A6667F12E0AC}",  // Active Setup GUID.
         .legacy_command_execute_clsid =
@@ -66,8 +69,6 @@ const InstallConstants kInstallModes[] = {
         .supports_system_level = true,  // Supports system-level installs.
         .supports_set_as_default_browser =
             true,  // Supports in-product set as default browser UX.
-        .supports_retention_experiments =
-            false,  // Does not support retention experiments.
         .app_icon_resource_index =
             icon_resources::kApplicationIndex,  // App icon resource index.
         .app_icon_resource_id = IDR_MAINFRAME,  // App icon resource id.

@@ -16,6 +16,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
+#include "base/scoped_observation_traits.h"
 #include "base/unguessable_token.h"
 #include "components/permissions/object_permission_context_base.h"
 #include "content/public/browser/serial_delegate.h"
@@ -47,10 +48,13 @@ class SerialChooserContext
 
   ~SerialChooserContext() override;
 
+  static base::Value::Dict PortInfoToValue(
+      const device::mojom::SerialPortInfo& port);
+
   // ObjectPermissionContextBase:
-  std::string GetKeyForObject(const base::Value& object) override;
-  bool IsValidObject(const base::Value& object) override;
-  std::u16string GetObjectDisplayName(const base::Value& object) override;
+  std::string GetKeyForObject(const base::Value::Dict& object) override;
+  bool IsValidObject(const base::Value::Dict& object) override;
+  std::u16string GetObjectDisplayName(const base::Value::Dict& object) override;
   // ObjectPermissionContextBase::PermissionObserver:
   void OnPermissionRevoked(const url::Origin& origin) override;
 
@@ -60,7 +64,7 @@ class SerialChooserContext
       const url::Origin& origin) override;
   std::vector<std::unique_ptr<Object>> GetAllGrantedObjects() override;
   void RevokeObjectPermission(const url::Origin& origin,
-                              const base::Value& object) override;
+                              const base::Value::Dict& object) override;
 
   // Serial-specific interface for granting, checking, and revoking permissions.
   void GrantPortPermission(const url::Origin& origin,
@@ -101,7 +105,7 @@ class SerialChooserContext
   bool CanApplyPortSpecificPolicy();
 
   void RevokeObjectPermissionInternal(const url::Origin& origin,
-                                      const base::Value& object,
+                                      const base::Value::Dict& object,
                                       bool revoked_by_website);
 
   // This raw pointer is safe because instances of this class are created by
@@ -128,5 +132,22 @@ class SerialChooserContext
 
   base::WeakPtrFactory<SerialChooserContext> weak_factory_{this};
 };
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<SerialChooserContext,
+                               SerialChooserContext::PortObserver> {
+  static void AddObserver(SerialChooserContext* source,
+                          SerialChooserContext::PortObserver* observer) {
+    source->AddPortObserver(observer);
+  }
+  static void RemoveObserver(SerialChooserContext* source,
+                             SerialChooserContext::PortObserver* observer) {
+    source->RemovePortObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROME_BROWSER_SERIAL_SERIAL_CHOOSER_CONTEXT_H_

@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/payments/card_unmask_delegate.h"
@@ -18,12 +18,7 @@
 namespace autofill {
 class AutofillProfile;
 class CreditCard;
-class FormStructure;
 }  // namespace autofill
-
-namespace web {
-class WebFrame;
-}  // namespace web
 
 // WebView extension of AutofillClientIOSBridge.
 @protocol CWVAutofillClientIOSBridge<AutofillClientIOSBridge>
@@ -42,22 +37,18 @@ class WebFrame;
 - (void)handleCreditCardUploadCompleted:(BOOL)cardSaved;
 
 // Bridge for AutofillClient's method |ShowUnmaskPrompt|.
-- (void)
-showUnmaskPromptForCard:(const autofill::CreditCard&)creditCard
-                 reason:(autofill::AutofillClient::UnmaskCardReason)reason
-               delegate:(base::WeakPtr<autofill::CardUnmaskDelegate>)delegate;
+- (void)showUnmaskPromptForCard:(const autofill::CreditCard&)creditCard
+        cardUnmaskPromptOptions:
+            (const autofill::CardUnmaskPromptOptions&)cardUnmaskPromptOptions
+                       delegate:(base::WeakPtr<autofill::CardUnmaskDelegate>)
+                                    delegate;
 
 // Bridge for AutofillClient's method |onUnmaskVerificationResult|.
 - (void)didReceiveUnmaskVerificationResult:
     (autofill::AutofillClient::PaymentsRpcResult)result;
 
-// Bridge for AutofillClient's method |LoadRiskData|.
+// Bridge for PaymentsAutofillClient's method `LoadRiskData`.
 - (void)loadRiskData:(base::OnceCallback<void(const std::string&)>)callback;
-
-// Bridge for AutofillClient's method |PropagateAutofillPredictions|.
-- (void)propagateAutofillPredictionsForForms:
-            (const std::vector<autofill::FormStructure*>&)forms
-                                     inFrame:(web::WebFrame*)frame;
 
 // Bridge for AutofillClient's method |ConfirmSaveAddressProfile|.
 - (void)

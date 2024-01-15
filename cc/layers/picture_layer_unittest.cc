@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "cc/animation/animation_host.h"
 #include "cc/base/completion_event.h"
 #include "cc/layers/append_quads_data.h"
@@ -44,7 +44,7 @@ TEST(PictureLayerTest, NoTilesIfEmptyBounds) {
 
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);
@@ -54,7 +54,8 @@ TEST(PictureLayerTest, NoTilesIfEmptyBounds) {
   EXPECT_EQ(0, host->SourceFrameNumber());
   host->WillCommit(/*completion=*/nullptr, /*has_updates=*/false);
   EXPECT_EQ(1, host->SourceFrameNumber());
-  host->CommitComplete({base::TimeTicks(), base::TimeTicks::Now()});
+  host->CommitComplete(host->SourceFrameNumber(),
+                       {base::TimeTicks(), base::TimeTicks::Now()});
   EXPECT_EQ(1, host->SourceFrameNumber());
 
   layer->SetBounds(gfx::Size(0, 0));
@@ -93,7 +94,7 @@ TEST(PictureLayerTest, InvalidateRasterAfterUpdate) {
 
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);
@@ -134,7 +135,7 @@ TEST(PictureLayerTest, InvalidateRasterWithoutUpdate) {
 
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);
@@ -175,7 +176,7 @@ TEST(PictureLayerTest, ClearVisibleRectWhenNoTiling) {
 
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);
@@ -184,7 +185,8 @@ TEST(PictureLayerTest, ClearVisibleRectWhenNoTiling) {
 
   EXPECT_EQ(0, host->SourceFrameNumber());
   host->WillCommit(/*completion=*/nullptr, /*has_updates=*/false);
-  host->CommitComplete({base::TimeTicks(), base::TimeTicks::Now()});
+  host->CommitComplete(host->SourceFrameNumber(),
+                       {base::TimeTicks(), base::TimeTicks::Now()});
   EXPECT_EQ(1, host->SourceFrameNumber());
 
   layer->Update();
@@ -211,7 +213,8 @@ TEST(PictureLayerTest, ClearVisibleRectWhenNoTiling) {
   std::unique_ptr<CommitState> commit_state =
       host->WillCommit(/*completion=*/nullptr, /*has_updates=*/true);
   layer->PushPropertiesTo(layer_impl, *commit_state, unsafe_state);
-  host->CommitComplete({base::TimeTicks(), base::TimeTicks::Now()});
+  host->CommitComplete(commit_state->source_frame_number,
+                       {base::TimeTicks(), base::TimeTicks::Now()});
 
   EXPECT_EQ(2, host->SourceFrameNumber());
 
@@ -260,26 +263,26 @@ TEST(PictureLayerTest, NonMonotonicSourceFrameNumber) {
   client.set_bounds(gfx::Size());
   scoped_refptr<FakePictureLayer> layer = FakePictureLayer::Create(&client);
 
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
 
   LayerTreeHost::InitParams params;
   params.client = &host_client1;
   params.settings = &settings;
   params.task_graph_runner = &task_graph_runner;
-  params.main_task_runner = base::ThreadTaskRunnerHandle::Get();
+  params.main_task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
   params.mutator_host = animation_host.get();
   std::unique_ptr<LayerTreeHost> host1 = LayerTreeHost::CreateSingleThreaded(
       &single_thread_client, std::move(params));
   host1->SetVisible(true);
   host_client1.SetLayerTreeHost(host1.get());
 
-  auto animation_host2 = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host2 = AnimationHost::CreateForTesting(ThreadInstance::kMain);
 
   LayerTreeHost::InitParams params2;
   params2.client = &host_client1;
   params2.settings = &settings;
   params2.task_graph_runner = &task_graph_runner;
-  params2.main_task_runner = base::ThreadTaskRunnerHandle::Get();
+  params2.main_task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
   params2.client = &host_client2;
   params2.mutator_host = animation_host2.get();
   std::unique_ptr<LayerTreeHost> host2 = LayerTreeHost::CreateSingleThreaded(
@@ -292,13 +295,13 @@ TEST(PictureLayerTest, NonMonotonicSourceFrameNumber) {
   // Do a main frame, record the picture layers.
   EXPECT_EQ(0, layer->update_count());
   layer->SetNeedsDisplay();
-  host1->CompositeForTest(base::TimeTicks::Now(), false);
+  host1->CompositeForTest(base::TimeTicks::Now(), false, base::OnceClosure());
   EXPECT_EQ(1, layer->update_count());
   EXPECT_EQ(1, host1->SourceFrameNumber());
 
   // The source frame number in |host1| is now higher than host2.
   layer->SetNeedsDisplay();
-  host1->CompositeForTest(base::TimeTicks::Now(), false);
+  host1->CompositeForTest(base::TimeTicks::Now(), false, base::OnceClosure());
   EXPECT_EQ(2, layer->update_count());
   EXPECT_EQ(2, host1->SourceFrameNumber());
 
@@ -309,7 +312,7 @@ TEST(PictureLayerTest, NonMonotonicSourceFrameNumber) {
   // Do a main frame, record the picture layers. The frame number has changed
   // non-monotonically.
   layer->SetNeedsDisplay();
-  host2->CompositeForTest(base::TimeTicks::Now(), false);
+  host2->CompositeForTest(base::TimeTicks::Now(), false, base::OnceClosure());
   EXPECT_EQ(3, layer->update_count());
   EXPECT_EQ(1, host2->SourceFrameNumber());
 
@@ -332,26 +335,26 @@ TEST(PictureLayerTest, ChangingHostsWithCollidingFrames) {
   client.set_bounds(gfx::Size());
   scoped_refptr<FakePictureLayer> layer = FakePictureLayer::Create(&client);
 
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
 
   LayerTreeHost::InitParams params;
   params.client = &host_client1;
   params.settings = &settings;
   params.task_graph_runner = &task_graph_runner;
-  params.main_task_runner = base::ThreadTaskRunnerHandle::Get();
+  params.main_task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
   params.mutator_host = animation_host.get();
   std::unique_ptr<LayerTreeHost> host1 = LayerTreeHost::CreateSingleThreaded(
       &single_thread_client, std::move(params));
   host1->SetVisible(true);
   host_client1.SetLayerTreeHost(host1.get());
 
-  auto animation_host2 = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host2 = AnimationHost::CreateForTesting(ThreadInstance::kMain);
 
   LayerTreeHost::InitParams params2;
   params2.client = &host_client1;
   params2.settings = &settings;
   params2.task_graph_runner = &task_graph_runner;
-  params2.main_task_runner = base::ThreadTaskRunnerHandle::Get();
+  params2.main_task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
   params2.client = &host_client2;
   params2.mutator_host = animation_host2.get();
   std::unique_ptr<LayerTreeHost> host2 = LayerTreeHost::CreateSingleThreaded(
@@ -364,7 +367,7 @@ TEST(PictureLayerTest, ChangingHostsWithCollidingFrames) {
   // Do a main frame, record the picture layers.
   EXPECT_EQ(0, layer->update_count());
   layer->SetBounds(gfx::Size(500, 500));
-  host1->CompositeForTest(base::TimeTicks::Now(), false);
+  host1->CompositeForTest(base::TimeTicks::Now(), false, base::OnceClosure());
   EXPECT_EQ(1, layer->update_count());
   EXPECT_EQ(1, host1->SourceFrameNumber());
   EXPECT_EQ(gfx::Size(500, 500), layer->bounds());
@@ -382,7 +385,7 @@ TEST(PictureLayerTest, ChangingHostsWithCollidingFrames) {
 
   // Change its bounds while it's in a state that can't update.
   layer->SetBounds(gfx::Size(600, 600));
-  host2->CompositeForTest(base::TimeTicks::Now(), false);
+  host2->CompositeForTest(base::TimeTicks::Now(), false, base::OnceClosure());
 
   // This layer should not have been updated because it is invisible.
   EXPECT_EQ(1, layer->update_count());
@@ -425,7 +428,7 @@ TEST(PictureLayerTest, RecordingScaleIsCorrectlySet) {
 
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);

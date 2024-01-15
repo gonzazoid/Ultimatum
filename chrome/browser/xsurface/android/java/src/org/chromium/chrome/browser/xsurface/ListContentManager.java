@@ -12,6 +12,8 @@ import androidx.annotation.Nullable;
 import java.util.Map;
 
 /**
+ * Implemented in Chromium.
+ *
  * Interface to provide native views to incorporate in an external surface-controlled
  * RecyclerView.
  *
@@ -55,9 +57,7 @@ public interface ListContentManager {
         return position;
     }
 
-    /**
-     * Binds the data at the specified location.
-     */
+    /** Binds the data at the specified location. */
     default void bindNativeView(int index, View v) {}
 
     /** Returns number of items to show. */

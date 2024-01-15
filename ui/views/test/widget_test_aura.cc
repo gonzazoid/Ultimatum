@@ -4,6 +4,8 @@
 
 #include "ui/views/test/widget_test.h"
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/aura/client/focus_client.h"
@@ -19,8 +21,7 @@
 #include "ui/views/widget/desktop_aura/desktop_window_tree_host_platform.h"
 #endif
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
@@ -29,9 +30,10 @@ namespace {
 // When a layer is found, it is set to null. Returns once |second| is found, or
 // when there are no children left.
 // Note that ui::Layer children are bottom-to-top stacking order.
-bool FindLayersInOrder(const std::vector<ui::Layer*>& children,
-                       const ui::Layer** first,
-                       const ui::Layer** second) {
+bool FindLayersInOrder(
+    const std::vector<raw_ptr<ui::Layer, VectorExperimental>>& children,
+    const ui::Layer** first,
+    const ui::Layer** second) {
   for (const ui::Layer* child : children) {
     if (child == *second) {
       *second = nullptr;
@@ -54,7 +56,9 @@ bool FindLayersInOrder(const std::vector<ui::Layer*>& children,
 #if BUILDFLAG(IS_WIN)
 
 struct FindAllWindowsData {
-  std::vector<aura::Window*>* windows;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #reinterpret-cast-trivial-type
+  RAW_PTR_EXCLUSION std::vector<aura::Window*>* windows;
 };
 
 BOOL CALLBACK FindAllWindowsCallback(HWND hwnd, LPARAM param) {
@@ -126,9 +130,9 @@ gfx::Size WidgetTest::GetNativeWidgetMinimumContentSize(Widget* widget) {
 // of lacros-chrome is complete.
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
   return widget->GetNativeWindow()->delegate()->GetMinimumSize();
+#else
+  NOTREACHED_NORETURN();
 #endif
-  NOTREACHED();
-  return gfx::Size();
 }
 
 // static
@@ -173,5 +177,4 @@ Widget::Widgets WidgetTest::GetAllWidgets() {
 // static
 void WidgetTest::WaitForSystemAppActivation() {}
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

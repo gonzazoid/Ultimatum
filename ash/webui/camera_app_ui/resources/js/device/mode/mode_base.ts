@@ -60,8 +60,6 @@ export abstract class ModeBase {
 
   /**
    * Stops the ongoing capture operation.
-   *
-   * @return Promise for ongoing capture operation.
    */
   async stopCapture(): Promise<void> {
     this.stop();
@@ -83,23 +81,19 @@ export abstract class ModeBase {
 
   /**
    * Adds an observer to save image metadata.
-   *
-   * @return Promise for the operation.
    */
   async addMetadataObserver(): Promise<void> {
     if (this.video.isExpired()) {
       return;
     }
-    this.crosImageCapture.addMetadataObserver();
+    await this.crosImageCapture.addMetadataObserver();
   }
 
   /**
    * Removes the observer that saves metadata.
-   *
-   * @return Promise for the operation.
    */
-  async removeMetadataObserver(): Promise<void> {
-    if (!this.video.isExpired) {
+  removeMetadataObserver(): void {
+    if (!this.video.isExpired()) {
       return;
     }
     this.crosImageCapture.removeMetadataObserver();
@@ -126,9 +120,6 @@ export abstract class ModeBase {
 }
 
 export abstract class ModeFactory {
-  /**
-   * Preview video.
-   */
   protected previewVideo: PreviewVideo|null = null;
 
   /**

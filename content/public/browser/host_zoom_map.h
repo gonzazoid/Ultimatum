@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "content/common/content_export.h"
 #include "url/gurl.h"
@@ -25,7 +25,9 @@ namespace content {
 class NavigationEntry;
 class BrowserContext;
 class SiteInstance;
+class StoragePartition;
 class WebContents;
+struct GlobalRenderFrameHostId;
 
 // Maps hostnames to custom zoom levels.  Written on the UI thread and read on
 // any thread.  One instance per browser context. Must be created on the UI
@@ -76,6 +78,10 @@ class HostZoomMap {
   // multiple WebContents share the same SiteInstance, then they share a single
   // HostZoomMap.
   CONTENT_EXPORT static HostZoomMap* GetForWebContents(WebContents* contents);
+
+  // Returns the HostZoomMap associated with this StoragePartition.
+  CONTENT_EXPORT static HostZoomMap* GetForStoragePartition(
+      StoragePartition* storage_partition);
 
   // Returns the current zoom level for the specified WebContents. May be
   // temporary or host-specific.
@@ -141,17 +147,16 @@ class HostZoomMap {
                                             const std::string& host,
                                             double level) = 0;
 
-  // Returns whether the view manages its zoom level independently of other
-  // views displaying content from the same host.
-  virtual bool UsesTemporaryZoomLevel(int render_process_id,
-                                      int render_view_id) = 0;
+  // Returns whether the frame manages its zoom level independently of other
+  // frames from the same host.
+  virtual bool UsesTemporaryZoomLevel(
+      const GlobalRenderFrameHostId& rfh_id) = 0;
 
   // Sets the temporary zoom level that's only valid for the lifetime of this
-  // WebContents.
+  // RenderFrameHost.
   //
   // This should only be called on the UI thread.
-  virtual void SetTemporaryZoomLevel(int render_process_id,
-                                     int render_view_id,
+  virtual void SetTemporaryZoomLevel(const GlobalRenderFrameHostId& rfh_id,
                                      double level) = 0;
 
   // Clear zoom levels with a modification date greater than or equal
@@ -160,11 +165,11 @@ class HostZoomMap {
   virtual void ClearZoomLevels(base::Time delete_begin,
                                base::Time delete_end) = 0;
 
-  // Clears the temporary zoom level stored for this WebContents.
+  // Clears the temporary zoom level stored for this RenderFrameHost.
   //
   // This should only be called on the UI thread.
-  virtual void ClearTemporaryZoomLevel(int render_process_id,
-                                       int render_view_id) = 0;
+  virtual void ClearTemporaryZoomLevel(
+      const GlobalRenderFrameHostId& rfh_id) = 0;
 
   // Get/Set the default zoom level for pages that don't override it.
   virtual double GetDefaultZoomLevel() = 0;
@@ -186,7 +191,32 @@ class HostZoomMap {
 
   virtual void SetDefaultZoomLevelPrefCallback(
       DefaultZoomChangedCallback callback) = 0;
+
+  // TODO(crbug.com/1424904): Make an Android-specific impl of host_zoom_map, or
+  //                          combine method with GetZoomLevelForHostAndScheme.
+  virtual double GetZoomLevelForHostAndScheme(
+      const std::string& scheme,
+      const std::string& host,
+      bool is_overriding_user_agent) = 0;
 #endif
+
+  // Accessors for preview
+  //
+  // Zoom levels for preview are isolated from normal ones, stored to memory
+  // only in a session and not persisted to prefs.
+  //
+  // See also `PreviewZoomController`.
+  //
+  // In long-term, we are planning to persist zoom levels for preview as same as
+  // normal ones. An option is adding HostZoomMapImpl::is_for_preview_ and
+  // another instance of HostZoomMapImpl to StoragePartition via
+  // HostZoomLevelContext. In short-term, we tihs is not appropriate and we
+  // tentatively use HostZoomMapImpl.
+  //
+  // TODO(b:315313138): Revisit here and redesign it.
+  virtual double GetZoomLevelForPreviewAndHost(const std::string& host) = 0;
+  virtual void SetZoomLevelForPreviewAndHost(const std::string& host,
+                                             double level) = 0;
 
  protected:
   virtual ~HostZoomMap() {}

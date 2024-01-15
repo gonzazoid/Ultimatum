@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "build/build_config.h"
+#include "ui/views/examples/actions_example.h"
 #include "ui/views/examples/animated_image_view_example.h"
 #include "ui/views/examples/animation_example.h"
 #include "ui/views/examples/ax_example.h"
+#include "ui/views/examples/badge_example.h"
 #include "ui/views/examples/box_layout_example.h"
 #include "ui/views/examples/bubble_example.h"
 #include "ui/views/examples/button_example.h"
@@ -44,6 +46,7 @@
 #include "ui/views/examples/throbber_example.h"
 #include "ui/views/examples/toggle_button_example.h"
 #include "ui/views/examples/tree_view_example.h"
+#include "ui/views/examples/typography_example.h"
 #include "ui/views/examples/vector_example.h"
 #include "ui/views/examples/widget_example.h"
 
@@ -51,15 +54,16 @@
 #include "ui/views/examples/color_chooser_example.h"
 #endif
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 // Creates the default set of examples.
 ExampleVector CreateExamples(ExampleVector extra_examples) {
   ExampleVector examples = std::move(extra_examples);
+  examples.push_back(std::make_unique<ActionsExample>());
   examples.push_back(std::make_unique<AnimatedImageViewExample>());
   examples.push_back(std::make_unique<AnimationExample>());
   examples.push_back(std::make_unique<AxExample>());
+  examples.push_back(std::make_unique<BadgeExample>());
   examples.push_back(std::make_unique<BoxLayoutExample>());
   examples.push_back(std::make_unique<BubbleExample>());
   examples.push_back(std::make_unique<ButtonExample>());
@@ -96,10 +100,10 @@ ExampleVector CreateExamples(ExampleVector extra_examples) {
   examples.push_back(std::make_unique<ToggleButtonExample>());
   examples.push_back(std::make_unique<ThrobberExample>());
   examples.push_back(std::make_unique<TreeViewExample>());
+  examples.push_back(std::make_unique<TypographyExample>());
   examples.push_back(std::make_unique<VectorExample>());
   examples.push_back(std::make_unique<WidgetExample>());
   return examples;
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

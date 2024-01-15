@@ -59,8 +59,8 @@ class MonikerMap {
  public:
   struct ExtractTokenResult {
     enum class ResultType {
-      // The fs_url_as_string was a Moniker FileSystemURL (it started with the
-      // fusebox::kMonikerFileSystemURL prefix) and held a well-formed token.
+      // The fs_url_as_string was a Moniker FileSystemURL (it started with
+      // "moniker/") and held a well-formed token.
       OK = 0,
       // The fs_url_as_string was not a Moniker FileSystemURL.
       NOT_A_MONIKER_FS_URL = 1,
@@ -77,9 +77,12 @@ class MonikerMap {
 
   using FSURLAndReadOnlyState = std::pair<storage::FileSystemURL, bool>;
 
-  // Returns the 1234etc base::Token from a storage::FileSystemURL in its
-  // string form (like "dummy://moniker/1234etc"), where "dummy://moniker" is
-  // the fusebox::kMonikerFileSystemURL prefix.
+  // Returns the 1234etc base::Token from a Fusebox relative path (like
+  // "moniker/1234etc"), where "moniker" is the fusebox::kMonikerSubdir prefix.
+  //
+  // The argument name is "fs_url_etc", as in storage::FileSystemURL, for
+  // historical reasons, even though it is a relative path, not a FileSystemURL
+  // (in string form) any more.
   //
   // This function does not resolve the base::Token (for that, use the Resolve
   // function instead). It does not confirm the token's *validity* (that the
@@ -99,7 +102,7 @@ class MonikerMap {
   // string form) for the target. It is the caller's responsibility to call
   // DestroyMoniker when the moniker is no longer required but also to keep the
   // FileSystemURL's backing content alive until that DestroyMoniker call.
-  Moniker CreateMoniker(storage::FileSystemURL target, bool read_only);
+  Moniker CreateMoniker(const storage::FileSystemURL& target, bool read_only);
 
   // Tears down the link, so that Resolve will return invalid FileSystemURL
   // values.
@@ -110,7 +113,7 @@ class MonikerMap {
   // is_valid() will be false if there was no such moniker or if it was
   // destroyed. If valid, the bool element is the read_only argument passed to
   // CreateMoniker.
-  FSURLAndReadOnlyState Resolve(const Moniker& moniker);
+  FSURLAndReadOnlyState Resolve(const Moniker& moniker) const;
 
   // Returns human-readable debugging information as a JSON value.
   base::Value GetDebugJSON();

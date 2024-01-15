@@ -12,7 +12,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
@@ -34,7 +34,6 @@ class HttpRequestHeaders;
 class HttpResponseInfo;
 class IOBuffer;
 class SSLCertRequestInfo;
-class SSLInfo;
 class StreamSocket;
 class UploadDataStream;
 
@@ -109,8 +108,6 @@ class NET_EXPORT_PRIVATE HttpStreamParser {
     return non_informational_response_start_time_;
   }
   base::TimeTicks first_early_hints_time() { return first_early_hints_time_; }
-
-  void GetSSLInfo(SSLInfo* ssl_info);
 
   void GetSSLCertRequestInfo(SSLCertRequestInfo* cert_request_info);
 
@@ -217,7 +214,7 @@ class NET_EXPORT_PRIVATE HttpStreamParser {
   State io_state_ = STATE_NONE;
 
   // Null when read state machine is invoked.
-  raw_ptr<const HttpRequestInfo, DanglingUntriaged> request_;
+  raw_ptr<const HttpRequestInfo, AcrossTasksDanglingUntriaged> request_;
 
   // The request header data.  May include a merged request body.
   scoped_refptr<DrainableIOBuffer> request_headers_;
@@ -249,7 +246,7 @@ class NET_EXPORT_PRIVATE HttpStreamParser {
   // cannot be safely accessed after reading the final set of headers, as the
   // caller of SendRequest may have been destroyed - this happens in the case an
   // HttpResponseBodyDrainer is used.
-  raw_ptr<HttpResponseInfo, DanglingUntriaged> response_ = nullptr;
+  raw_ptr<HttpResponseInfo, AcrossTasksDanglingUntriaged> response_ = nullptr;
 
   // Time at which the first bytes of the first header response including
   // informational responses (1xx) are about to be parsed. This corresponds to
@@ -304,7 +301,7 @@ class NET_EXPORT_PRIVATE HttpStreamParser {
   // The underlying socket, owned by the caller. The HttpStreamParser must be
   // destroyed before the caller destroys the socket, or relinquishes ownership
   // of it.
-  raw_ptr<StreamSocket, DanglingUntriaged> stream_socket_;
+  raw_ptr<StreamSocket, AcrossTasksDanglingUntriaged> stream_socket_;
 
   // Whether the socket has already been used. Only used in HTTP/0.9 detection
   // logic.

@@ -7,13 +7,10 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (relative positioned) (floating) DIV id='float'",
+      "name": "LayoutNGBlockFlow (relative positioned, floating) DIV id='float'",
       "bounds": [100, 100],
       "contentsOpaque": true,
       "backgroundColor": "#008000",
-      "invalidations": [
-        [0, 0, 100, 100]
-      ],
       "transform": 1
     }
   ],

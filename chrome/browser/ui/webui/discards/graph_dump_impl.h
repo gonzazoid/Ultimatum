@@ -5,8 +5,8 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_DISCARDS_GRAPH_DUMP_IMPL_H_
 #define CHROME_BROWSER_UI_WEBUI_DISCARDS_GRAPH_DUMP_IMPL_H_
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
@@ -101,14 +101,19 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   void OnHadFormInteractionChanged(
       const performance_manager::FrameNode* frame_node) override {}
   // Ignored.
+  void OnHadUserEditsChanged(
+      const performance_manager::FrameNode* frame_node) override {}
+  // Ignored.
   void OnIsAudibleChanged(
+      const performance_manager::FrameNode* frame_node) override {}
+  void OnIsCapturingMediaStreamChanged(
       const performance_manager::FrameNode* frame_node) override {}
   // Ignored.
   void OnFirstContentfulPaint(
       const performance_manager::FrameNode* frame_node,
       base::TimeDelta time_since_navigation_start) override {}
   // Ignored.
-  void OnViewportIntersectionChanged(
+  void OnIntersectsViewportChanged(
       const performance_manager::FrameNode* frame_node) override {}
   // Ignored.
   void OnFrameVisibilityChanged(
@@ -130,10 +135,16 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   void OnTypeChanged(const performance_manager::PageNode* page_node,
                      performance_manager::PageType previous_type) override {}
   // Ignored.
+  void OnIsFocusedChanged(
+      const performance_manager::PageNode* page_node) override {}
+  // Ignored.
   void OnIsVisibleChanged(
       const performance_manager::PageNode* page_node) override {}
   // Ignored.
   void OnIsAudibleChanged(
+      const performance_manager::PageNode* page_node) override {}
+  // Ignored.
+  void OnHasPictureInPictureChanged(
       const performance_manager::PageNode* page_node) override {}
   // Ignored.
   void OnLoadingStateChanged(
@@ -159,6 +170,9 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   // Ignored.
   void OnHadFormInteractionChanged(
       const performance_manager::PageNode* page_node) override {}
+  // Ignored
+  void OnHadUserEditsChanged(
+      const performance_manager::PageNode* page_node) override {}
   // Ignored.
   void OnTitleUpdated(const performance_manager::PageNode* page_node) override {
   }
@@ -167,11 +181,15 @@ class DiscardsGraphDumpImpl : public discards::mojom::GraphDump,
   // Ignored.
   void OnFreezingVoteChanged(
       const performance_manager::PageNode* page_node,
-      absl::optional<performance_manager::freezing::FreezingVote>) override {}
+      std::optional<performance_manager::freezing::FreezingVote>) override {}
   // Ignored.
   void OnPageStateChanged(
       const performance_manager::PageNode* page_node,
       performance_manager::PageNode::PageState old_state) override {}
+  // Ignored.
+  void OnAboutToBeDiscarded(
+      const performance_manager::PageNode* page_node,
+      const performance_manager::PageNode* new_page_node) override {}
 
   // ProcessNodeObserver implementation:
   void OnProcessNodeAdded(

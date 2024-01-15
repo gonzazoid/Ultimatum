@@ -7,11 +7,10 @@
 
 #include "extensions/browser/api/execute_code_function.h"
 
+#include <optional>
 #include <utility>
-
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
-#include "extensions/browser/api/extension_types_utils.h"
 #include "extensions/browser/extension_api_frame_id_map.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/load_and_localize_file.h"
@@ -20,7 +19,8 @@
 #include "extensions/common/extension_resource.h"
 #include "extensions/common/mojom/css_origin.mojom-shared.h"
 #include "extensions/common/mojom/run_location.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "extensions/common/utils/content_script_utils.h"
+#include "extensions/common/utils/extension_types_utils.h"
 
 namespace {
 
@@ -49,7 +49,7 @@ ExecuteCodeFunction::~ExecuteCodeFunction() {
 void ExecuteCodeFunction::DidLoadAndLocalizeFile(
     const std::string& file,
     std::vector<std::unique_ptr<std::string>> data,
-    absl::optional<std::string> load_error) {
+    std::optional<std::string> load_error) {
   if (load_error) {
     // TODO(viettrungluu): bug: there's no particular reason the path should be
     // UTF-8, in which case this may fail.
@@ -100,11 +100,11 @@ bool ExecuteCodeFunction::Execute(const std::string& code_string,
 
   mojom::CSSOrigin css_origin = mojom::CSSOrigin::kAuthor;
   switch (details_->css_origin) {
-    case api::extension_types::CSS_ORIGIN_NONE:
-    case api::extension_types::CSS_ORIGIN_AUTHOR:
+    case api::extension_types::CSSOrigin::kNone:
+    case api::extension_types::CSSOrigin::kAuthor:
       css_origin = mojom::CSSOrigin::kAuthor;
       break;
-    case api::extension_types::CSS_ORIGIN_USER:
+    case api::extension_types::CSSOrigin::kUser:
       css_origin = mojom::CSSOrigin::kUser;
       break;
   }
@@ -112,7 +112,7 @@ bool ExecuteCodeFunction::Execute(const std::string& code_string,
   mojom::CodeInjectionPtr injection;
   bool is_css_injection = ShouldInsertCSS() || ShouldRemoveCSS();
   if (is_css_injection) {
-    absl::optional<std::string> injection_key;
+    std::optional<std::string> injection_key;
     if (host_id_.type == mojom::HostID::HostType::kExtensions) {
       injection_key = ScriptExecutor::GenerateInjectionKey(
           host_id_, script_url_, code_string);
@@ -162,7 +162,7 @@ ExtensionFunction::ResponseAction ExecuteCodeFunction::Run() {
   if (details_->code && details_->file)
     return RespondNow(Error(kMoreThanOneValuesError));
 
-  if (details_->css_origin != api::extension_types::CSS_ORIGIN_NONE &&
+  if (details_->css_origin != api::extension_types::CSSOrigin::kNone &&
       !ShouldInsertCSS() && !ShouldRemoveCSS()) {
     return RespondNow(Error(kCSSOriginForNonCSSError));
   }
@@ -204,6 +204,7 @@ bool ExecuteCodeFunction::LoadFile(const std::string& file,
   std::string relative_path = resource.relative_path().AsUTF8Unsafe();
   LoadAndLocalizeResources(
       *extension(), {std::move(resource)}, might_require_localization,
+      script_parsing::GetMaxScriptLength(),
       base::BindOnce(&ExecuteCodeFunction::DidLoadAndLocalizeFile, this,
                      relative_path));
 
@@ -246,13 +247,13 @@ void ExecuteCodeFunction::OnExecuteCodeFinished(
 
   // Place the root frame result at the beginning.
   std::iter_swap(root_frame_result, results.begin());
-  base::Value result_list(base::Value::Type::LIST);
+  base::Value::List result_list;
   for (auto& result : results) {
     if (result.error.empty())
       result_list.Append(std::move(result.value));
   }
 
-  Respond(OneArgument(std::move(result_list)));
+  Respond(WithArguments(std::move(result_list)));
 }
 
 }  // namespace extensions

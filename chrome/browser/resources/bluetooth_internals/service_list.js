@@ -42,7 +42,8 @@ export class ServiceListElement extends ExpandableListElement {
   /** @override */
   createItem(data) {
     const item = document.createElement('service-list-item');
-    item.initialize(data, assert(this.deviceAddress_));
+    assert(this.deviceAddress_);
+    item.initialize(data, this.deviceAddress_);
     return item;
   }
 

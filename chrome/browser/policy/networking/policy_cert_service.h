@@ -11,7 +11,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/network/policy_certificate_provider.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -72,6 +71,9 @@ class PolicyCertService : public KeyedService,
   // PolicyCertificateProvider::Observer:
   void OnPolicyProvidedCertsChanged() override;
 
+  // PolicyCertificateProvider::OnDestroying:
+  void OnPolicyCertificateProviderDestroying() override;
+
   // Fills *|out_all_server_and_authority_certificates| and *|out_trust_anchors|
   // with policy-provided certificates that should be used when verifying a
   // server certificate for Web requests from the StoragePartition identified by
@@ -100,10 +102,14 @@ class PolicyCertService : public KeyedService,
   // is false, always returns an empty list.
   net::CertificateList GetAllowedProfileWideTrustAnchors();
 
+  // Stops listening for updates from `policy_certificate_provider_`, if
+  // `policy_certificate_provider_` is set. Otherwise it does nothing.
+  void StopListeningToPolicyCertificateProvider();
+
   const raw_ptr<Profile> profile_;
 
   // The source of certificates for this PolicyCertService.
-  const raw_ptr<ash::PolicyCertificateProvider> policy_certificate_provider_;
+  raw_ptr<ash::PolicyCertificateProvider> policy_certificate_provider_;
 
   // If true, CA certificates |policy_certificate_provider_| that have requested
   // "Web" trust and have profile-wide scope may be used for |profile_|.

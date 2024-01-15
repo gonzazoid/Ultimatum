@@ -9,7 +9,7 @@ py_library(
     srcs = [
         "text_embedder.py",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//tensorflow_lite_support:users"],
     deps = [
         "//tensorflow_lite_support/python/task/core:base_options",
         "//tensorflow_lite_support/python/task/processor/proto:embedding_options_pb2",
@@ -38,7 +38,7 @@ py_library(
     srcs = [
         "nl_classifier.py",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//tensorflow_lite_support:users"],
     deps = [
         "//tensorflow_lite_support/python/task/core:base_options",
         "//tensorflow_lite_support/python/task/processor/proto:classification_options_pb2",
@@ -52,7 +52,7 @@ py_library(
     srcs = [
         "bert_nl_classifier.py",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//tensorflow_lite_support:users"],
     deps = [
         "//tensorflow_lite_support/python/task/core:base_options",
         "//tensorflow_lite_support/python/task/processor/proto:classifications_pb2",

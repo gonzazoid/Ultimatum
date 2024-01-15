@@ -7,13 +7,47 @@
 
 namespace gpu {
 
-SharedImageBackingFactory::SharedImageBackingFactory() = default;
+SharedImageBackingFactory::SharedImageBackingFactory(uint32_t valid_usages)
+    : invalid_usages_(~valid_usages) {}
 
 SharedImageBackingFactory::~SharedImageBackingFactory() = default;
 
 base::WeakPtr<SharedImageBackingFactory>
 SharedImageBackingFactory::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
+}
+
+std::unique_ptr<SharedImageBacking>
+SharedImageBackingFactory::CreateSharedImage(const Mailbox& mailbox,
+                                             viz::SharedImageFormat format,
+                                             SurfaceHandle surface_handle,
+                                             const gfx::Size& size,
+                                             const gfx::ColorSpace& color_space,
+                                             GrSurfaceOrigin surface_origin,
+                                             SkAlphaType alpha_type,
+                                             uint32_t usage,
+                                             std::string debug_label,
+                                             bool is_thread_safe,
+                                             gfx::BufferUsage buffer_usage) {
+  NOTREACHED();
+  return nullptr;
+}
+
+bool SharedImageBackingFactory::CanCreateSharedImage(
+    uint32_t usage,
+    viz::SharedImageFormat format,
+    const gfx::Size& size,
+    bool thread_safe,
+    gfx::GpuMemoryBufferType gmb_type,
+    GrContextType gr_context_type,
+    base::span<const uint8_t> pixel_data) {
+  if (invalid_usages_ & usage) {
+    // This factory doesn't support all the usages.
+    return false;
+  }
+
+  return IsSupported(usage, format, size, thread_safe, gmb_type,
+                     gr_context_type, pixel_data);
 }
 
 void SharedImageBackingFactory::InvalidateWeakPtrsForTesting() {

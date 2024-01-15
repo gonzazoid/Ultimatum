@@ -4,22 +4,24 @@
 
 #include "content/browser/interest_group/auction_process_manager.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "content/public/browser/service_process_host.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/services/auction_worklet/public/mojom/auction_worklet_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -44,6 +46,7 @@ class AuctionProcessManager::WorkletProcess
       : render_process_host_(render_process_host),
         worklet_type_(worklet_type),
         origin_(origin),
+        start_time_(base::TimeTicks::Now()),
         uses_shared_process_(uses_shared_process),
         auction_process_manager_(auction_process_manager),
         service_(std::move(service)) {
@@ -74,19 +77,21 @@ class AuctionProcessManager::WorkletProcess
     return render_process_host_;
   }
 
-  absl::optional<base::ProcessId> GetPid(
+  std::optional<base::ProcessId> GetPid(
       base::OnceCallback<void(base::ProcessId)> callback) {
     if (pid_.has_value()) {
       return pid_;
     } else {
       waiting_for_pid_.push_back(std::move(callback));
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
   void OnLaunchedWithPid(base::ProcessId pid) {
+    base::UmaHistogramTimes("Ads.InterestGroup.Auction.ProcessLaunchTime",
+                            base::TimeTicks::Now() - start_time_);
     DCHECK(!pid_.has_value());
-    pid_ = absl::make_optional<base::ProcessId>(pid);
+    pid_ = std::make_optional<base::ProcessId>(pid);
     std::vector<base::OnceCallback<void(base::ProcessId)>> waiting_for_pid =
         std::move(waiting_for_pid_);
     for (auto& callback : waiting_for_pid) {
@@ -132,9 +137,10 @@ class AuctionProcessManager::WorkletProcess
 
   const WorkletType worklet_type_;
   const url::Origin origin_;
+  const base::TimeTicks start_time_;
   bool uses_shared_process_;
 
-  absl::optional<base::ProcessId> pid_;
+  std::optional<base::ProcessId> pid_;
   std::vector<base::OnceCallback<void(base::ProcessId)>> waiting_for_pid_;
 
   // nulled out once OnWorkletProcessUnusable() called.
@@ -168,7 +174,7 @@ AuctionProcessManager::ProcessHandle::GetRenderProcessHostForTesting() {
   return worklet_process_->render_process_host();
 }
 
-absl::optional<base::ProcessId> AuctionProcessManager::ProcessHandle::GetPid(
+std::optional<base::ProcessId> AuctionProcessManager::ProcessHandle::GetPid(
     base::OnceCallback<void(base::ProcessId)> callback) {
   DCHECK(worklet_process_);
   return worklet_process_->GetPid(std::move(callback));
@@ -182,7 +188,7 @@ void AuctionProcessManager::ProcessHandle::AssignProcess(
   manager_ = nullptr;
 
   if (callback_) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&ProcessHandle::InvokeCallback,
                                   weak_ptr_factory_.GetWeakPtr()));
   }

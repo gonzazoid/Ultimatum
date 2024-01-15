@@ -48,9 +48,14 @@ MATCHER_P(MemoryEq, other, "Eq matcher for base::RefCountedMemory contents") {
 class MockDataDecoderDelegate
     : public SanitizedImageSource::DataDecoderDelegate {
  public:
-  MOCK_METHOD2(DecodeAnimation,
-               void(const std::string& data,
-                    SanitizedImageSource::DecodeAnimationCallback callback));
+  MOCK_METHOD(void,
+              DecodeImage,
+              (const std::string& data,
+               SanitizedImageSource::DecodeImageCallback callback));
+  MOCK_METHOD(void,
+              DecodeAnimation,
+              (const std::string& data,
+               SanitizedImageSource::DecodeAnimationCallback callback));
 };
 
 class SanitizedImageSourceTest : public testing::Test {
@@ -67,6 +72,7 @@ class SanitizedImageSourceTest : public testing::Test {
   }
 
   void TearDown() override {
+    mock_data_decoder_delegate_ = nullptr;
     sanitized_image_source_.reset();
     profile_.reset();
     test_url_loader_factory_.ClearResponses();
@@ -76,7 +82,7 @@ class SanitizedImageSourceTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   network::TestURLLoaderFactory test_url_loader_factory_;
-  raw_ptr<MockDataDecoderDelegate> mock_data_decoder_delegate_;
+  raw_ptr<MockDataDecoderDelegate> mock_data_decoder_delegate_ = nullptr;
   std::unique_ptr<SanitizedImageSource> sanitized_image_source_;
 };
 
@@ -144,9 +150,27 @@ TEST_F(SanitizedImageSourceTest, FailedLoad) {
               DecodeAnimation(testing::_, testing::_))
       .Times(0);
   base::MockCallback<content::URLDataSource::GotDataCallback> callback;
-  EXPECT_CALL(callback,
-              Run(MemoryEq(base::MakeRefCounted<base::RefCountedString>())))
-      .Times(1);
+  EXPECT_CALL(callback, Run(testing::IsNull())).Times(1);
+
+  // Issue request.
+  sanitized_image_source_->StartDataRequest(
+      GURL(base::StrCat({chrome::kChromeUIImageURL, "?", kImageUrl})),
+      content::WebContents::Getter(), callback.Get());
+  task_environment_.RunUntilIdle();
+}
+
+// Verifies that the image source sends back an error in case the external
+// image is served via an HTTP scheme.
+TEST_F(SanitizedImageSourceTest, HttpScheme) {
+  constexpr char kImageUrl[] = "http://foo.com/img.png";
+
+  // Set up expectations and mock data.
+  test_url_loader_factory_.AddResponse(kImageUrl, "abcd");
+  EXPECT_CALL(*mock_data_decoder_delegate_,
+              DecodeAnimation(testing::_, testing::_))
+      .Times(0);
+  base::MockCallback<content::URLDataSource::GotDataCallback> callback;
+  EXPECT_CALL(callback, Run(testing::IsNull())).Times(1);
 
   // Issue request.
   sanitized_image_source_->StartDataRequest(
@@ -162,9 +186,7 @@ TEST_F(SanitizedImageSourceTest, WrongUrl) {
               DecodeAnimation(testing::_, testing::_))
       .Times(0);
   base::MockCallback<content::URLDataSource::GotDataCallback> callback;
-  EXPECT_CALL(callback,
-              Run(MemoryEq(base::MakeRefCounted<base::RefCountedString>())))
-      .Times(2);
+  EXPECT_CALL(callback, Run(testing::IsNull())).Times(2);
 
   // Issue request.
   sanitized_image_source_->StartDataRequest(
@@ -201,13 +223,12 @@ TEST_F(SanitizedImageSourceTest, GooglePhotosImage) {
 
   // Encode a URL so that it can be used as a param value.
   url::RawCanonOutputT<char> encoded_url;
-  url::EncodeURIComponent(kImageUrl, std::size(kImageUrl), &encoded_url);
+  url::EncodeURIComponent(kImageUrl, &encoded_url);
   EXPECT_GT(encoded_url.length(), 0u);
-  base::StringPiece encoded_url_str(encoded_url.data(), encoded_url.length());
 
   // Verify that param-formatted requests can be sent with auth tokens.
   sanitized_image_source_->StartDataRequest(
-      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url_str,
+      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url.view(),
                          "&isGooglePhotos=true"})),
       content::WebContents::Getter(), callback.Get());
   ASSERT_EQ(1, test_url_loader_factory_.NumPending());
@@ -222,7 +243,7 @@ TEST_F(SanitizedImageSourceTest, GooglePhotosImage) {
 
   // Verify that param-formatted requests can be sent without auth tokens.
   sanitized_image_source_->StartDataRequest(
-      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url_str,
+      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url.view(),
                          "&isGooglePhotos=false"})),
       content::WebContents::Getter(), callback.Get());
   EXPECT_FALSE(identity_test_env.IsAccessTokenRequestPending());
@@ -232,7 +253,8 @@ TEST_F(SanitizedImageSourceTest, GooglePhotosImage) {
           net::HttpRequestHeaders::kAuthorization));
 
   sanitized_image_source_->StartDataRequest(
-      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url_str})),
+      GURL(base::StrCat(
+          {chrome::kChromeUIImageURL, "?url=", encoded_url.view()})),
       content::WebContents::Getter(), callback.Get());
   EXPECT_FALSE(identity_test_env.IsAccessTokenRequestPending());
 
@@ -243,7 +265,7 @@ TEST_F(SanitizedImageSourceTest, GooglePhotosImage) {
 
   // Verify that no download is attempted when authentication fails.
   sanitized_image_source_->StartDataRequest(
-      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url_str,
+      GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=", encoded_url.view(),
                          "&isGooglePhotos=true"})),
       content::WebContents::Getter(), callback.Get());
   ASSERT_EQ(4, test_url_loader_factory_.NumPending());
@@ -256,15 +278,12 @@ TEST_F(SanitizedImageSourceTest, GooglePhotosImage) {
   // Verify that no auth token is sent for URLs not served by Google Photos.
   constexpr char kBadImageUrl[] = "https://foo.com/img.png";
   url::RawCanonOutputT<char> encoded_bad_url;
-  url::EncodeURIComponent(kBadImageUrl, std::size(kBadImageUrl),
-                          &encoded_bad_url);
+  url::EncodeURIComponent(kBadImageUrl, &encoded_bad_url);
   EXPECT_GT(encoded_bad_url.length(), 0u);
-  base::StringPiece encoded_bad_url_str(encoded_bad_url.data(),
-                                        encoded_bad_url.length());
 
   sanitized_image_source_->StartDataRequest(
       GURL(base::StrCat({chrome::kChromeUIImageURL, "?url=",
-                         encoded_bad_url_str, "&isGooglePhotos=true"})),
+                         encoded_bad_url.view(), "&isGooglePhotos=true"})),
       content::WebContents::Getter(), callback.Get());
   EXPECT_FALSE(identity_test_env.IsAccessTokenRequestPending());
   ASSERT_EQ(5, test_url_loader_factory_.NumPending());
@@ -295,6 +314,48 @@ TEST_F(SanitizedImageSourceTest, StaticImage) {
   // Issue requests.
   sanitized_image_source_->StartDataRequest(
       GURL(base::StrCat({chrome::kChromeUIImageURL, "?", test_url})),
+      content::WebContents::Getter(), callback.Get());
+
+  // Answer requests and check correctness.
+  auto* request = test_url_loader_factory_.GetPendingRequest(0);
+  EXPECT_EQ(network::mojom::CredentialsMode::kOmit,
+            request->request.credentials_mode);
+  EXPECT_EQ(test_url, request->request.url);
+  test_url_loader_factory_.SimulateResponseWithoutRemovingFromPendingList(
+      request, test_body);
+
+  task_environment_.RunUntilIdle();
+}
+
+TEST_F(SanitizedImageSourceTest, StaticImageWithWebPEncode) {
+  const std::string test_body = "abc";
+  const std::string test_url = "https://foo.com/img.png";
+
+  // Set up expectations and mock data.
+  base::MockCallback<content::URLDataSource::GotDataCallback> callback;
+  EXPECT_CALL(*mock_data_decoder_delegate_,
+              DecodeAnimation(test_body, testing::_))
+      .Times(1)
+      .WillOnce([](const std::string&,
+                   SanitizedImageSource::DecodeAnimationCallback callback) {
+        std::vector<AnimationFramePtr> frames;
+        frames.push_back(MakeImageFrame(SK_ColorRED));
+        std::move(callback).Run(std::move(frames));
+      });
+  auto image =
+      gfx::Image::CreateFrom1xBitmap(MakeImageFrame(SK_ColorRED)->bitmap);
+  EXPECT_CALL(callback, Run(testing::_))
+      .Times(1)
+      .WillOnce([](scoped_refptr<base::RefCountedMemory> bytes) {
+        std::string data_string(reinterpret_cast<char const*>(bytes->data()));
+        // Make sure the image is encoded into WebP format.
+        EXPECT_TRUE(base::StartsWith(data_string, "RIFF"));
+      });
+
+  // Issue requests.
+  sanitized_image_source_->StartDataRequest(
+      GURL(base::StrCat(
+          {chrome::kChromeUIImageURL, "?url=", test_url, "&encodeType=webp"})),
       content::WebContents::Getter(), callback.Get());
 
   // Answer requests and check correctness.
@@ -358,16 +419,11 @@ TEST_F(SanitizedImageSourceTest, AnimatedImageWithStaticEncode) {
 
   // Set up expectations and mock data.
   base::MockCallback<content::URLDataSource::GotDataCallback> callback;
-  EXPECT_CALL(*mock_data_decoder_delegate_,
-              DecodeAnimation(test_body, testing::_))
+  EXPECT_CALL(*mock_data_decoder_delegate_, DecodeImage(test_body, testing::_))
       .Times(1)
       .WillOnce([](const std::string&,
-                   SanitizedImageSource::DecodeAnimationCallback callback) {
-        std::vector<AnimationFramePtr> frames;
-        frames.push_back(MakeImageFrame(SK_ColorRED));
-        frames.push_back(MakeImageFrame(SK_ColorBLUE));
-        frames.push_back(MakeImageFrame(SK_ColorGREEN));
-        std::move(callback).Run(std::move(frames));
+                   SanitizedImageSource::DecodeImageCallback callback) {
+        std::move(callback).Run(std::move(MakeImageFrame(SK_ColorRED)->bitmap));
       });
   auto image =
       gfx::Image::CreateFrom1xBitmap(MakeImageFrame(SK_ColorRED)->bitmap);

@@ -7,13 +7,13 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "chromecast/cast_core/runtime/browser/message_port_service.h"
 #include "components/cast/message_port/message_port.h"
+#include "components/cast_receiver/browser/public/message_port_service.h"
 #include "components/cast_receiver/common/public/status.h"
 #include "third_party/cast_core/public/src/proto/v2/core_message_port_application_service.castcore.pb.h"
 #include "third_party/cast_core/public/src/proto/web/message_channel.pb.h"
@@ -24,15 +24,20 @@ class MessagePortHandler;
 
 // This class defines a gRPC-based implementation of the MessagePortService
 // interface, for use with Cast Core.
-class MessagePortServiceGrpc : public MessagePortService {
+class MessagePortServiceGrpc : public cast_receiver::MessagePortService {
  public:
   // |core_app_stub| must outlive |this|.
   MessagePortServiceGrpc(
       cast::v2::CoreMessagePortApplicationServiceStub* core_app_stub);
   ~MessagePortServiceGrpc() override;
 
+  // Handles a message incoming over RPC. The message will be routed to the
+  // appropriate destination based on its channel ID. Returns |true| in the case
+  // that this message was successfully processed, and false in all other cases
+  // including the case that there's no handler for the incoming channel ID.
+  cast_receiver::Status HandleMessage(cast::web::Message message);
+
   // MessagePortService implementation:
-  cast_receiver::Status HandleMessage(cast::web::Message message) override;
   void ConnectToPortAsync(
       base::StringPiece port_name,
       std::unique_ptr<cast_api_bindings::MessagePort> port) override;

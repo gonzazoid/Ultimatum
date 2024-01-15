@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "build/build_config.h"
@@ -32,6 +33,10 @@
 #include "ui/gl/gl_mock.h"
 #include "ui/gl/init/gl_factory.h"
 #include "ui/gl/test/gl_surface_test_support.h"
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/ozone/public/ozone_platform.h"
+#endif
 
 using ::gl::MockGLInterface;
 using ::testing::_;
@@ -60,8 +65,8 @@ void NormalizeInitState(gpu::gles2::GLES2DecoderTestBase::InitState* init) {
       "GL_APPLE_vertex_array_object"
   };
   bool contains_vao_extension = false;
-  for (size_t ii = 0; ii < std::size(kVAOExtensions); ++ii) {
-    if (init->extensions.find(kVAOExtensions[ii]) != std::string::npos) {
+  for (const char* extension : kVAOExtensions) {
+    if (base::Contains(init->extensions, extension)) {
       contains_vao_extension = true;
       break;
     }
@@ -163,14 +168,6 @@ void GLES2DecoderTestBase::SetUp() {
   InitDecoder(init);
 }
 
-void GLES2DecoderTestBase::AddExpectationsForVertexAttribManager() {
-  for (GLint ii = 0; ii < kNumVertexAttribs; ++ii) {
-    EXPECT_CALL(*gl_, VertexAttrib4f(ii, 0.0f, 0.0f, 0.0f, 1.0f))
-        .Times(1)
-        .RetiresOnSaturation();
-  }
-}
-
 GLES2DecoderTestBase::InitState::InitState() = default;
 GLES2DecoderTestBase::InitState::InitState(const InitState& other) = default;
 GLES2DecoderTestBase::InitState& GLES2DecoderTestBase::InitState::operator=(
@@ -208,13 +205,13 @@ ContextResult GLES2DecoderTestBase::MaybeInitDecoderWithWorkarounds(
   scoped_refptr<FeatureInfo> feature_info =
       new FeatureInfo(workarounds, gpu_feature_info);
 
-  group_ = scoped_refptr<ContextGroup>(new ContextGroup(
-      gpu_preferences_, GetParam(), &mailbox_manager_,
-      std::move(memory_tracker_), &shader_translator_cache_,
-      &framebuffer_completeness_cache_, feature_info,
-      normalized_init.bind_generates_resource, nullptr /* image_factory */,
-      nullptr /* progress_reporter */, gpu_feature_info, &discardable_manager_,
-      nullptr, &shared_image_manager_));
+  group_ = scoped_refptr<ContextGroup>(
+      new ContextGroup(gpu_preferences_, GetParam(), &mailbox_manager_,
+                       std::move(memory_tracker_), &shader_translator_cache_,
+                       &framebuffer_completeness_cache_, feature_info,
+                       normalized_init.bind_generates_resource,
+                       nullptr /* progress_reporter */, gpu_feature_info,
+                       &discardable_manager_, nullptr, &shared_image_manager_));
   bool use_default_textures = normalized_init.bind_generates_resource;
 
   InSequence sequence;
@@ -274,9 +271,6 @@ ContextResult GLES2DecoderTestBase::MaybeInitDecoderWithWorkarounds(
         .RetiresOnSaturation();
     EXPECT_CALL(*gl_, BindVertexArrayOES(_)).Times(1).RetiresOnSaturation();
   }
-
-  if (group_->feature_info()->workarounds().init_vertex_attributes)
-    AddExpectationsForVertexAttribManager();
 
   AddExpectationsForBindVertexArrayOES();
 
@@ -494,9 +488,6 @@ ContextResult GLES2DecoderTestBase::MaybeInitDecoderWithWorkarounds(
   ClearSharedMemory();
 
   ContextCreationAttribs attribs;
-  attribs.alpha_size = normalized_init.request_alpha ? 8 : 0;
-  attribs.depth_size = normalized_init.request_depth ? 24 : 0;
-  attribs.stencil_size = normalized_init.request_stencil ? 8 : 0;
   attribs.lose_context_when_out_of_memory =
       normalized_init.lose_context_when_out_of_memory;
   attribs.context_type = init.context_type;
@@ -513,7 +504,6 @@ ContextResult GLES2DecoderTestBase::MaybeInitDecoderWithWorkarounds(
         new MockCopyTexImageResourceManager(feature_info.get());
     decoder_->SetCopyTexImageBlitterForTest(copy_tex_image_blitter_);
   }
-
   gpu::ContextResult result = decoder_->Initialize(
       surface_, context_, false, DisallowedFeatures(), attribs);
   if (result != gpu::ContextResult::kSuccess) {
@@ -2420,37 +2410,38 @@ void GLES2DecoderPassthroughTestBase::SetUp() {
   command_line->AppendSwitchASCII(switches::kUseANGLE,
                                   gl::kANGLEImplementationNullName);
 
-  context_creation_attribs_.offscreen_framebuffer_size = gfx::Size(4, 4);
-  context_creation_attribs_.alpha_size = 8;
-  context_creation_attribs_.blue_size = 8;
-  context_creation_attribs_.green_size = 8;
-  context_creation_attribs_.red_size = 8;
-  context_creation_attribs_.depth_size = 24;
-  context_creation_attribs_.stencil_size = 8;
+#if BUILDFLAG(IS_OZONE)
+  ui::OzonePlatform::InitParams params;
+  params.single_process = true;
+  ui::OzonePlatform::InitializeForGPU(params);
+#endif
+
   context_creation_attribs_.bind_generates_resource = true;
 
   gl::init::InitializeStaticGLBindingsImplementation(
-      gl::GLImplementationParts(gl::kGLImplementationEGLANGLE), false);
+      gl::GLImplementationParts(gl::ANGLEImplementation::kNull), false);
   display_ = gl::init::InitializeGLOneOffPlatformImplementation(
       /*fallback_to_software_gl=*/false,
       /*disable_gl_drawing=*/false,
       /*init_extensions=*/true,
-      /*system_device_id=*/0);
+      /*gpu_preference=*/gl::GpuPreference::kDefault);
+
+  // Ensure we're running with Null Backend.
+  ASSERT_EQ(gl::GetANGLEImplementation(), gl::ANGLEImplementation::kNull);
 
   scoped_refptr<gles2::FeatureInfo> feature_info = new gles2::FeatureInfo();
   group_ = new gles2::ContextGroup(
       gpu_preferences_, true, &mailbox_manager_, nullptr /* memory_tracker */,
       &shader_translator_cache_, &framebuffer_completeness_cache_, feature_info,
       context_creation_attribs_.bind_generates_resource,
-      nullptr /* image_factory */, nullptr /* progress_reporter */,
-      GpuFeatureInfo(), &discardable_manager_,
+      nullptr /* progress_reporter */, GpuFeatureInfo(), &discardable_manager_,
       &passthrough_discardable_manager_, &shared_image_manager_);
 
-  surface_ = gl::init::CreateOffscreenGLSurface(
-      display_, context_creation_attribs_.offscreen_framebuffer_size);
-  context_ = gl::init::CreateGLContext(
-      nullptr, surface_.get(),
-      GenerateGLContextAttribs(context_creation_attribs_, group_.get()));
+  surface_ = gl::init::CreateOffscreenGLSurface(display_, gfx::Size(4, 4));
+  context_ =
+      gl::init::CreateGLContext(nullptr, surface_.get(),
+                                GenerateGLContextAttribsForDecoder(
+                                    context_creation_attribs_, group_.get()));
   context_->MakeCurrent(surface_.get());
 
   command_buffer_service_ = std::make_unique<FakeCommandBufferServiceBase>();
@@ -2466,8 +2457,12 @@ void GLES2DecoderPassthroughTestBase::SetUp() {
       group_->Initialize(decoder_.get(), context_creation_attribs_.context_type,
                          DisallowedFeatures()),
       gpu::ContextResult::kSuccess);
+
+  // We need command buffer to emulate default framebuffer is the GLSurface is
+  // surfaceless.
+  const bool offscreen = surface_->IsSurfaceless();
   ASSERT_EQ(
-      decoder_->Initialize(surface_, context_, false, DisallowedFeatures(),
+      decoder_->Initialize(surface_, context_, offscreen, DisallowedFeatures(),
                            context_creation_attribs_),
       gpu::ContextResult::kSuccess);
 
@@ -2492,6 +2487,11 @@ void GLES2DecoderPassthroughTestBase::TearDown() {
   group_->Destroy(decoder_.get(), false);
   decoder_.reset();
   group_ = nullptr;
+
+  // Drop unowned references to buffer memory before service destroys them.
+  shared_memory_address_ = nullptr;
+  shared_memory_base_ = nullptr;
+
   command_buffer_service_.reset();
   gl::init::ShutdownGL(display_, false);
 }

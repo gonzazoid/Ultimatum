@@ -10,7 +10,9 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/tray/tray_background_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
 
@@ -28,6 +30,8 @@ class Shelf;
 // kShowLogoutButtonInTray pref.
 class ASH_EXPORT LogoutButtonTray : public TrayBackgroundView,
                                     public SessionObserver {
+  METADATA_HEADER(LogoutButtonTray, TrayBackgroundView)
+
  public:
   explicit LogoutButtonTray(Shelf* shelf);
 
@@ -43,10 +47,13 @@ class ASH_EXPORT LogoutButtonTray : public TrayBackgroundView,
   void UpdateLayout() override;
   void UpdateBackground() override;
   void ClickedOutsideBubble() override;
+  // No need to override since this view doesn't have an active/inactive state.
+  // Clicking on it will log out of the session and make this view disappear.
+  void UpdateTrayItemColor(bool is_active) override {}
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
   std::u16string GetAccessibleNameForTray() override;
   void HandleLocaleChange() override;
-  const char* GetClassName() const override;
   void OnThemeChanged() override;
 
   // SessionObserver:
@@ -62,7 +69,7 @@ class ASH_EXPORT LogoutButtonTray : public TrayBackgroundView,
 
   void ButtonPressed();
 
-  views::MdTextButton* button_;
+  raw_ptr<views::MdTextButton> button_;
   bool show_logout_button_in_tray_ = false;
   base::TimeDelta dialog_duration_;
 

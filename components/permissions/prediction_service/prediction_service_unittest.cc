@@ -7,12 +7,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/permissions/features.h"
 #include "components/permissions/permission_request_enums.h"
@@ -35,7 +35,7 @@ namespace {
 // type.
 
 // A request that has all counts 0. With user gesture.
-const permissions::PredictionRequestFeatures kFeaturesAllCountsZero = {
+permissions::PredictionRequestFeatures kFeaturesAllCountsZero = {
     permissions::PermissionRequestGestureType::GESTURE,
     permissions::RequestType::kNotifications,
     {0, 0, 0, 0},
@@ -255,7 +255,7 @@ class PredictionServiceTest : public testing::Test {
                int err_code = net::OK) {
     if (delay_in_seconds > 0) {
       // Post a task to rerun this after |delay_in_seconds| seconds
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&PredictionServiceTest::Respond,
                          base::Unretained(this), url, 0, err_code),
@@ -315,6 +315,8 @@ class PredictionServiceTest : public testing::Test {
   const GURL kUrl_Unlikely{"http://predictionsevice.com/unlikely"};
   const GURL kUrl_Likely{"http://predictionsevice.com/likely"};
   const GURL kUrl_Invalid{"http://predictionsevice.com/invalid"};
+  const GURL test_requesting_url{
+      "https://www.test.example/path/to/page.html:8080"};
 
  private:
   std::string GetResponseForUrl(const GURL& url) {
@@ -337,6 +339,14 @@ class PredictionServiceTest : public testing::Test {
 };
 
 TEST_F(PredictionServiceTest, BuiltProtoRequestIsCorrect) {
+  // Test origin being added correctly in the request.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      permissions::features::kPermissionPredictionsV2);
+  kFeaturesAllCountsZero.url = test_requesting_url.GetWithEmptyPath();
+  kRequestAllCountsZero.mutable_site_features()->set_origin(
+      "https://www.test.example/");
+
   struct {
     PredictionRequestFeatures entity;
     GeneratePredictionsRequest expected_request;

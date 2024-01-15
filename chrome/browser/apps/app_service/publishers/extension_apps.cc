@@ -4,30 +4,32 @@
 
 #include "chrome/browser/apps/app_service/publishers/extension_apps.h"
 
+#include <memory>
+#include <optional>
+#include <utility>
+
+#include "build/build_config.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
-#include "chrome/browser/apps/app_service/extension_uninstaller.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/web_applications/extension_status_utils.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "extensions/common/extension.h"
 
 namespace apps {
 
-ExtensionApps::ExtensionApps(AppServiceProxy* proxy, AppType app_type)
-    : ExtensionAppsBase(proxy, app_type) {}
+ExtensionApps::ExtensionApps(AppServiceProxy* proxy)
+    : ExtensionAppsBase(proxy, AppType::kChromeApp) {}
 
 ExtensionApps::~ExtensionApps() = default;
 
-// static
-void ExtensionApps::UninstallImpl(Profile* profile,
-                                  const std::string& app_id,
-                                  gfx::NativeWindow parent_window) {
-  if (!profile) {
-    return;
-  }
-
-  ExtensionUninstaller::Create(profile, app_id, parent_window);
-}
-
 bool ExtensionApps::Accepts(const extensions::Extension* extension) {
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_FUCHSIA)
+  if (extensions::IsExtensionUnsupportedDeprecatedApp(profile(),
+                                                      extension->id())) {
+    return false;
+  }
+#endif
   if (!extension->is_app()) {
     return false;
   }
@@ -43,23 +45,9 @@ bool ExtensionApps::ShouldShownInLauncher(
 AppPtr ExtensionApps::CreateApp(const extensions::Extension* extension,
                                 Readiness readiness) {
   auto app = CreateAppImpl(extension, readiness);
-  app->icon_key =
-      std::move(*icon_key_factory().CreateIconKey(GetIconEffects(extension)));
+  app->icon_key = IconKey(GetIconEffects(extension));
   app->has_badge = false;
   app->paused = false;
-  return app;
-}
-
-apps::mojom::AppPtr ExtensionApps::Convert(
-    const extensions::Extension* extension,
-    apps::mojom::Readiness readiness) {
-  apps::mojom::AppPtr app = ConvertImpl(extension, readiness);
-
-  app->icon_key = icon_key_factory().MakeIconKey(GetIconEffects(extension));
-
-  app->has_badge = apps::mojom::OptionalBool::kFalse;
-  app->paused = apps::mojom::OptionalBool::kFalse;
-
   return app;
 }
 

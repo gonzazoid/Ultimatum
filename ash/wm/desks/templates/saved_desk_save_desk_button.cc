@@ -4,19 +4,17 @@
 
 #include "ash/wm/desks/templates/saved_desk_save_desk_button.h"
 
-#include "ash/constants/ash_features.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/style/style_util.h"
-#include "ash/wm/overview/overview_constants.h"
+#include "ash/wm/desks/templates/saved_desk_constants.h"
 #include "ash/wm/overview/overview_utils.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/highlight_border.h"
+#include "ui/views/view.h"
+#include "ui/views/view_utils.h"
 
 namespace ash {
-
-constexpr int kCornerRadius = 16;
 
 SavedDeskSaveDeskButton::SavedDeskSaveDeskButton(
     base::RepeatingClosure callback,
@@ -25,23 +23,24 @@ SavedDeskSaveDeskButton::SavedDeskSaveDeskButton(
     const gfx::VectorIcon* icon)
     : PillButton(callback,
                  text,
-                 PillButton::Type::kDefaultWithIconLeading,
+                 PillButton::Type::kDefaultElevatedWithIconLeading,
                  icon),
       callback_(callback),
       button_type_(button_type) {
-  views::FocusRing* focus_ring =
-      StyleUtil::SetUpFocusRingForView(this, kFocusRingHaloInset);
-  focus_ring->SetHasFocusPredicate([](views::View* view) {
-    return static_cast<SavedDeskSaveDeskButton*>(view)->IsViewHighlighted();
-  });
-  focus_ring->SetColorId(ui::kColorAshFocusRing);
+  auto* focus_ring = views::FocusRing::Get(this);
+  focus_ring->SetOutsetFocusRingDisabled(true);
+  focus_ring->SetHasFocusPredicate(
+      base::BindRepeating([](const views::View* view) {
+        const auto* v = views::AsViewClass<SavedDeskSaveDeskButton>(view);
+        CHECK(v);
+        return v->is_focused();
+      }));
 
-  if (features::IsDarkLightModeEnabled()) {
-    SetBorder(std::make_unique<views::HighlightBorder>(
-        /*corner_radius=*/kCornerRadius,
-        views::HighlightBorder::Type::kHighlightBorder2,
-        /*use_light_colors=*/false));
-  }
+  SetBorder(std::make_unique<views::HighlightBorder>(
+      kSaveDeskCornerRadius,
+      views::HighlightBorder::Type::kHighlightBorderNoShadow));
+
+  SetEnableBackgroundBlur(true);
 }
 
 SavedDeskSaveDeskButton::~SavedDeskSaveDeskButton() = default;
@@ -50,37 +49,31 @@ views::View* SavedDeskSaveDeskButton::GetView() {
   return this;
 }
 
-void SavedDeskSaveDeskButton::MaybeActivateHighlightedView() {
+void SavedDeskSaveDeskButton::MaybeActivateFocusedView() {
   if (GetEnabled())
     callback_.Run();
 }
 
-void SavedDeskSaveDeskButton::MaybeCloseHighlightedView(bool primary_action) {}
+void SavedDeskSaveDeskButton::MaybeCloseFocusedView(bool primary_action) {}
 
-void SavedDeskSaveDeskButton::MaybeSwapHighlightedView(bool right) {}
+void SavedDeskSaveDeskButton::MaybeSwapFocusedView(bool right) {}
 
-void SavedDeskSaveDeskButton::OnViewHighlighted() {
+void SavedDeskSaveDeskButton::OnFocusableViewFocused() {
   views::FocusRing::Get(this)->SchedulePaint();
 }
 
-void SavedDeskSaveDeskButton::OnViewUnhighlighted() {
+void SavedDeskSaveDeskButton::OnFocusableViewBlurred() {
   views::FocusRing::Get(this)->SchedulePaint();
-}
-
-void SavedDeskSaveDeskButton::OnThemeChanged() {
-  PillButton::OnThemeChanged();
-  SetBackgroundColor(AshColorProvider::Get()->GetBaseLayerColor(
-      AshColorProvider::BaseLayerType::kTransparent80));
 }
 
 void SavedDeskSaveDeskButton::OnFocus() {
-  UpdateOverviewHighlightForFocusAndSpokenFeedback(this);
-  OnViewHighlighted();
+  MoveFocusToView(this);
+  OnFocusableViewFocused();
   View::OnFocus();
 }
 
 void SavedDeskSaveDeskButton::OnBlur() {
-  OnViewUnhighlighted();
+  OnFocusableViewBlurred();
   View::OnBlur();
 }
 

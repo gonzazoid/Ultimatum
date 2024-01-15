@@ -4,15 +4,16 @@
 
 package org.chromium.chrome.browser.keyboard_accessory.bar_component;
 
+import android.view.View;
+
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.tabs.TabLayout;
-
 import org.chromium.base.Callback;
+import org.chromium.chrome.browser.keyboard_accessory.button_group_component.KeyboardAccessoryButtonGroupCoordinator.SheetOpenerCallbacks;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.Action;
-import org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutCoordinator.TabLayoutCallbacks;
 import org.chromium.components.autofill.AutofillSuggestion;
 import org.chromium.ui.modelutil.ListModel;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -39,32 +40,38 @@ class KeyboardAccessoryProperties {
     static final WritableBooleanPropertyKey SKIP_CLOSING_ANIMATION =
             new WritableBooleanPropertyKey("skip_closing_animation");
     static final WritableIntPropertyKey BOTTOM_OFFSET_PX = new WritableIntPropertyKey("offset");
-    static final WritableObjectPropertyKey<String> SHEET_TITLE =
-            new WritableObjectPropertyKey<>("sheet_title");
-    static final WritableBooleanPropertyKey KEYBOARD_TOGGLE_VISIBLE =
-            new WritableBooleanPropertyKey("toggle_visible");
-    static final WritableObjectPropertyKey<TabLayoutBarItem> TAB_LAYOUT_ITEM =
-            new WritableObjectPropertyKey<>("tab_layout_item");
-    static final WritableObjectPropertyKey<Runnable> SHOW_KEYBOARD_CALLBACK =
-            new WritableObjectPropertyKey<>("keyboard_callback");
+    static final WritableObjectPropertyKey<SheetOpenerBarItem> SHEET_OPENER_ITEM =
+            new WritableObjectPropertyKey<>("sheet_opener_item");
     static final ReadableBooleanPropertyKey DISABLE_ANIMATIONS_FOR_TESTING =
             new ReadableBooleanPropertyKey("skip_all_animations_for_testing");
     static final WritableObjectPropertyKey<Callback<Integer>> OBFUSCATED_CHILD_AT_CALLBACK =
             new WritableObjectPropertyKey<>("obfuscated_child_at_callback");
     static final WritableBooleanPropertyKey SHOW_SWIPING_IPH =
             new WritableBooleanPropertyKey("show_swiping_iph");
+    static final WritableBooleanPropertyKey HAS_SUGGESTIONS =
+            new WritableBooleanPropertyKey("has_suggestions");
+
+    static final WritableObjectPropertyKey<KeyboardAccessoryView.AnimationListener>
+            ANIMATION_LISTENER = new WritableObjectPropertyKey<>("animation_listener");
 
     static PropertyModel.Builder defaultModelBuilder() {
-        return new PropertyModel
-                .Builder(DISABLE_ANIMATIONS_FOR_TESTING, BAR_ITEMS, VISIBLE, SKIP_CLOSING_ANIMATION,
-                        BOTTOM_OFFSET_PX, TAB_LAYOUT_ITEM, KEYBOARD_TOGGLE_VISIBLE, SHEET_TITLE,
-                        SHOW_KEYBOARD_CALLBACK, OBFUSCATED_CHILD_AT_CALLBACK, SHOW_SWIPING_IPH)
+        return new PropertyModel.Builder(
+                        DISABLE_ANIMATIONS_FOR_TESTING,
+                        BAR_ITEMS,
+                        VISIBLE,
+                        SKIP_CLOSING_ANIMATION,
+                        BOTTOM_OFFSET_PX,
+                        SHEET_OPENER_ITEM,
+                        OBFUSCATED_CHILD_AT_CALLBACK,
+                        SHOW_SWIPING_IPH,
+                        HAS_SUGGESTIONS,
+                        ANIMATION_LISTENER)
                 .with(BAR_ITEMS, new ListModel<>())
                 .with(VISIBLE, false)
                 .with(SKIP_CLOSING_ANIMATION, false)
-                .with(KEYBOARD_TOGGLE_VISIBLE, false)
                 .with(DISABLE_ANIMATIONS_FOR_TESTING, false)
-                .with(SHOW_SWIPING_IPH, false);
+                .with(SHOW_SWIPING_IPH, false)
+                .with(HAS_SUGGESTIONS, false);
     }
 
     /**
@@ -72,27 +79,31 @@ class KeyboardAccessoryProperties {
      * It can hold an {@link Action}s that defines a callback and a recording type.
      */
     static class BarItem {
-        /**
-         * This type is used to infer which type of view will represent this item.
-         */
-        @IntDef({Type.ACTION_BUTTON, Type.SUGGESTION, Type.TAB_LAYOUT})
+        /** This type is used to infer which type of view will represent this item. */
+        @IntDef({Type.ACTION_BUTTON, Type.SUGGESTION, Type.TAB_LAYOUT, Type.ACTION_CHIP})
         @Retention(RetentionPolicy.SOURCE)
         @interface Type {
             int ACTION_BUTTON = 0;
             int SUGGESTION = 1;
             int TAB_LAYOUT = 2;
+            int ACTION_CHIP = 3;
         }
+
         private @Type int mType;
         private final @Nullable Action mAction;
+        private final @StringRes int mCaptionId;
 
         /**
          * Creates a new item. An item must have a type and can have an action.
+         *
          * @param type A {@link Type}.
          * @param action An {@link Action}.
+         * @param caption A {@link StringRes} to describe the bar item.
          */
-        BarItem(@Type int type, @Nullable Action action) {
+        BarItem(@Type int type, @Nullable Action action, @StringRes int captionId) {
             mType = type;
             mAction = action;
+            mCaptionId = captionId;
         }
 
         /**
@@ -113,6 +124,16 @@ class KeyboardAccessoryProperties {
             return mAction;
         }
 
+        /**
+         * If applicable, returns the caption id of this bar item.
+         *
+         * @return A {@link StringRes}.
+         */
+        @StringRes
+        int getCaptionId() {
+            return mCaptionId;
+        }
+
         @Override
         public String toString() {
             String typeName = "BarItem(" + mType + ")"; // Fallback. We shouldn't crash.
@@ -126,10 +147,14 @@ class KeyboardAccessoryProperties {
                 case Type.TAB_LAYOUT:
                     typeName = "TAB_LAYOUT";
                     break;
+                case Type.ACTION_CHIP:
+                    typeName = "ACTION_CHIP";
+                    break;
             }
             return typeName + ": " + mAction;
         }
     }
+
     /**
      * This {@link BarItem} is used to render Autofill suggestions into the accessory bar.
      * For that, it needs (in addition to an {@link Action}) the held {@link AutofillSuggestion}.
@@ -145,7 +170,7 @@ class KeyboardAccessoryProperties {
          * @param action An {@link Action}.
          */
         AutofillBarItem(AutofillSuggestion suggestion, Action action) {
-            super(Type.SUGGESTION, action);
+            super(Type.SUGGESTION, action, 0);
             mSuggestion = suggestion;
         }
 
@@ -173,24 +198,24 @@ class KeyboardAccessoryProperties {
     }
 
     /**
-     * A tab layout in a {@link RecyclerView} can be destroyed and recreated whenever it is
-     * scrolled out of/into view. This wrapper allows to trigger a callback whenever the view is
-     * recreated so it can be bound to its component.
+     * A tab layout or a button group in a {@link RecyclerView} can be destroyed and recreated
+     * whenever it is scrolled out of/into view. This wrapper allows to trigger a callback whenever
+     * the view is recreated so it can be bound to its component.
      */
-    static final class TabLayoutBarItem extends BarItem {
-        private final TabLayoutCallbacks mTabLayoutCallbacks;
+    static final class SheetOpenerBarItem extends BarItem {
+        private final SheetOpenerCallbacks mSheetOpenerCallbacks;
 
-        TabLayoutBarItem(TabLayoutCallbacks tabLayoutCallbacks) {
-            super(Type.TAB_LAYOUT, null);
-            mTabLayoutCallbacks = tabLayoutCallbacks;
+        SheetOpenerBarItem(SheetOpenerCallbacks sheetOpenerCallbacks) {
+            super(Type.TAB_LAYOUT, null, 0);
+            mSheetOpenerCallbacks = sheetOpenerCallbacks;
         }
 
-        void notifyAboutViewCreation(TabLayout tabs) {
-            mTabLayoutCallbacks.onTabLayoutBound(tabs);
+        void notifyAboutViewCreation(View view) {
+            mSheetOpenerCallbacks.onViewBound(view);
         }
 
-        void notifyAboutViewDestruction(TabLayout tabs) {
-            mTabLayoutCallbacks.onTabLayoutUnbound(tabs);
+        void notifyAboutViewDestruction(View view) {
+            mSheetOpenerCallbacks.onViewUnbound(view);
         }
     }
 

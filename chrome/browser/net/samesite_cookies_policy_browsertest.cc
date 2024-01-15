@@ -7,12 +7,15 @@
 #include "base/command_line.h"
 #include "base/path_service.h"
 #include "base/test/scoped_feature_list.h"
+#include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/net/storage_test_utils.h"
 #include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/content_settings/core/browser/cookie_settings.h"
+#include "components/content_settings/core/common/content_settings.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/policy_constants.h"
@@ -63,8 +66,9 @@ class SameSiteCookiesPolicyTest : public PolicyTest,
   }
 
   GURL GetURL(const std::string& host, const std::string& path, bool secure) {
-    if (secure)
+    if (secure) {
       return https_server_.GetURL(host, path);
+    }
 
     return http_server_.GetURL(host, path);
   }
@@ -115,13 +119,13 @@ IN_PROC_BROWSER_TEST_P(SameSiteCookiesPolicyTest,
   GURL other_domain_url("http://other-domain.example");
 
   // Set a policy to allow Legacy cookie access for one domain only.
-  base::Value policy_value(base::Value::Type::LIST);
+  base::Value::List policy_value;
   policy_value.Append(legacy_allowed_domain_url.host());
 
   PolicyMap policies;
   // Set a policy to allow Legacy access for the given domain only.
   SetPolicy(&policies, key::kLegacySameSiteCookieBehaviorEnabledForDomainList,
-            std::move(policy_value));
+            base::Value(std::move(policy_value)));
   UpdateProviderPolicy(policies);
 
   Profile* profile = browser()->profile();
@@ -232,12 +236,14 @@ IN_PROC_BROWSER_TEST_P(SameSiteCookiesPolicyTest,
 
 IN_PROC_BROWSER_TEST_P(SameSiteCookiesPolicyTest,
                        AllowCrossSchemeFrameLegacyCookies) {
+  CookieSettingsFactory::GetForProfile(browser()->profile())
+      ->SetCookieSetting(GetURL("a.test", true), CONTENT_SETTING_ALLOW);
   PolicyMap policies;
   // Set a policy to force legacy access for our cookies.
-  base::Value policy_value(base::Value::Type::LIST);
+  base::Value::List policy_value;
   policy_value.Append(GURL("http://a.test").host());
   SetPolicy(&policies, key::kLegacySameSiteCookieBehaviorEnabledForDomainList,
-            std::move(policy_value));
+            base::Value(std::move(policy_value)));
   PolicyTest::UpdateProviderPolicy(policies);
 
   // Set a cookie that will only be sent with legacy behavior.
@@ -291,10 +297,10 @@ IN_PROC_BROWSER_TEST_P(SameSiteCookiesPolicyTest,
                        AllowStrictOnCrossSchemeNavigation) {
   PolicyMap policies;
   // Set a policy to force legacy access for our cookies.
-  base::Value policy_value(base::Value::Type::LIST);
+  base::Value::List policy_value;
   policy_value.Append(GURL("http://a.test").host());
   SetPolicy(&policies, key::kLegacySameSiteCookieBehaviorEnabledForDomainList,
-            std::move(policy_value));
+            base::Value(std::move(policy_value)));
   PolicyTest::UpdateProviderPolicy(policies);
 
   // Set a cookie that will only be sent with legacy behavior.

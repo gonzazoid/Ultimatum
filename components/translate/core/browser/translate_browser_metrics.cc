@@ -5,9 +5,6 @@
 #include "components/translate/core/browser/translate_browser_metrics.h"
 
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/metrics/metrics_hashes.h"
-#include "components/language/core/browser/language_usage_metrics.h"
 
 namespace translate {
 
@@ -15,17 +12,9 @@ namespace {
 
 // Constant string values to indicate UMA names. All entries should have
 // a corresponding index in MetricsNameIndex and an entry in |kMetricsEntries|.
-const char kTranslateInitiationStatus[] = "Translate.InitiationStatus.v2";
 const char kTranslateLanguageDetectionContentLength[] =
     "Translate.LanguageDetection.ContentLength";
-const char kTranslateUnsupportedLanguageAtInitiation[] =
-    "Translate.UnsupportedLanguageAtInitiation";
-const char kTranslateSourceLanguage[] = "Translate.SourceLanguage";
-const char kTranslateTargetLanguage[] = "Translate.TargetLanguage";
 const char kTranslateHrefHintStatus[] = "Translate.HrefHint.Status";
-const char kTranslateHrefHintPrefsFilterStatus[] =
-    "Translate.HrefHint.PrefsFilterStatus";
-const char kTranslateTargetLanguageOrigin[] = "Translate.TargetLanguage.Origin";
 const char kTranslateMenuTranslationUnavailableReasons[] =
     "Translate.MenuTranslation.UnavailableReasons";
 
@@ -33,15 +22,10 @@ const char kTranslateMenuTranslationUnavailableReasons[] =
 
 namespace TranslateBrowserMetrics {
 
-void ReportInitiationStatus(InitiationStatusType type) {
-  UMA_HISTOGRAM_ENUMERATION(kTranslateInitiationStatus, type,
-                            INITIATION_STATUS_MAX);
-}
-
 void ReportMenuTranslationUnavailableReason(
     MenuTranslationUnavailableReason reason) {
-  UMA_HISTOGRAM_ENUMERATION(kTranslateMenuTranslationUnavailableReasons,
-                            reason);
+  base::UmaHistogramEnumeration(kTranslateMenuTranslationUnavailableReasons,
+                                reason);
 }
 
 void ReportLanguageDetectionContentLength(size_t length) {
@@ -49,34 +33,8 @@ void ReportLanguageDetectionContentLength(size_t length) {
                                  length);
 }
 
-void ReportUnsupportedLanguageAtInitiation(base::StringPiece language) {
-  int language_code =
-      language::LanguageUsageMetrics::ToLanguageCodeHash(language);
-  base::UmaHistogramSparse(kTranslateUnsupportedLanguageAtInitiation,
-                           language_code);
-}
-
-void ReportTranslateSourceLanguage(base::StringPiece language) {
-  base::UmaHistogramSparse(kTranslateSourceLanguage,
-                           base::HashMetricName(language));
-}
-
-void ReportTranslateTargetLanguage(base::StringPiece language) {
-  base::UmaHistogramSparse(kTranslateTargetLanguage,
-                           base::HashMetricName(language));
-}
-
 void ReportTranslateHrefHintStatus(HrefTranslateStatus status) {
   base::UmaHistogramEnumeration(kTranslateHrefHintStatus, status);
-}
-
-void ReportTranslateHrefHintPrefsFilterStatus(
-    HrefTranslatePrefsFilterStatus status) {
-  base::UmaHistogramEnumeration(kTranslateHrefHintPrefsFilterStatus, status);
-}
-
-void ReportTranslateTargetLanguageOrigin(TargetLanguageOrigin origin) {
-  base::UmaHistogramEnumeration(kTranslateTargetLanguageOrigin, origin);
 }
 
 }  // namespace TranslateBrowserMetrics

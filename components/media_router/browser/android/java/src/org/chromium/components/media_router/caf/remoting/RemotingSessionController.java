@@ -8,6 +8,7 @@ import com.google.android.gms.cast.framework.CastSession;
 
 import org.chromium.base.Log;
 import org.chromium.components.media_router.CastSessionUtil;
+import org.chromium.components.media_router.MediaSource;
 import org.chromium.components.media_router.caf.BaseNotificationController;
 import org.chromium.components.media_router.caf.BaseSessionController;
 import org.chromium.components.media_router.caf.CafBaseMediaRouteProvider;
@@ -33,16 +34,31 @@ public class RemotingSessionController extends BaseSessionController {
         sInstance = new WeakReference<>(this);
     }
 
+    /**
+     * Called when media source needs to be updated.
+     *
+     * @param source The new media source.
+     */
+    public void updateMediaSource(MediaSource source) {
+        mFlingingControllerAdapter.updateMediaUrl(((RemotingMediaSource) source).getMediaUrl());
+        getRouteCreationInfo().setMediaSource(source);
+        getProvider().updateRouteMediaSource(getRouteCreationInfo().routeId, source.getSourceId());
+    }
+
     @Override
     public void attachToCastSession(CastSession session) {
         super.attachToCastSession(session);
 
         try {
-            getSession().setMessageReceivedCallbacks(
-                    CastSessionUtil.MEDIA_NAMESPACE, this::onMessageReceived);
+            getSession()
+                    .setMessageReceivedCallbacks(
+                            CastSessionUtil.MEDIA_NAMESPACE, this::onMessageReceived);
         } catch (Exception e) {
-            Log.e(TAG, "Failed to register namespace listener for %s",
-                    CastSessionUtil.MEDIA_NAMESPACE, e);
+            Log.e(
+                    TAG,
+                    "Failed to register namespace listener for %s",
+                    CastSessionUtil.MEDIA_NAMESPACE,
+                    e);
         }
     }
 
@@ -50,7 +66,11 @@ public class RemotingSessionController extends BaseSessionController {
     public void onSessionStarted() {
         super.onSessionStarted();
         RemotingMediaSource source = (RemotingMediaSource) getSource();
-        mFlingingControllerAdapter = new FlingingControllerAdapter(this, source.getMediaUrl());
+        if (source != null) {
+            mFlingingControllerAdapter = new FlingingControllerAdapter(this, source.getMediaUrl());
+        } else {
+            throw new AssertionError("Remoting Session started with an invalid source.");
+        }
     }
 
     @Override

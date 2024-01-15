@@ -9,11 +9,8 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/values.h"
 #include "chromeos/ash/components/login/auth/public/challenge_response_key.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace ash {
 
@@ -26,12 +23,12 @@ namespace ash {
 // * "extension_id" - contains the base64-encoded id of the extension that is
 //   used to sign the key.
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
-base::Value SerializeChallengeResponseKeysForKnownUser(
+base::Value::List SerializeChallengeResponseKeysForKnownUser(
     const std::vector<ChallengeResponseKey>& challenge_response_keys);
 
 COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
 bool DeserializeChallengeResponseKeyFromKnownUser(
-    const base::Value& pref_value,
+    const base::Value::List& pref_value,
     std::vector<DeserializedChallengeResponseKey>*
         deserialized_challenge_response_keys);
 

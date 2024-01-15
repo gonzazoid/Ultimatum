@@ -7,6 +7,8 @@
 #include <va/va.h>
 
 #include "base/memory/ref_counted_memory.h"
+#include "base/trace_event/trace_event.h"
+#include "media/base/media_util.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/codec_picture.h"
 #include "media/gpu/gpu_video_encode_accelerator_helpers.h"
@@ -42,10 +44,10 @@ VaapiVideoEncoderDelegate::EncodeJob::EncodeJob(bool keyframe,
 
 VaapiVideoEncoderDelegate::EncodeJob::~EncodeJob() = default;
 
-std::unique_ptr<VaapiVideoEncoderDelegate::EncodeResult>
+VaapiVideoEncoderDelegate::EncodeResult
 VaapiVideoEncoderDelegate::EncodeJob::CreateEncodeResult(
     const BitstreamBufferMetadata& metadata) && {
-  return std::make_unique<EncodeResult>(std::move(coded_buffer_), metadata);
+  return EncodeResult(std::move(coded_buffer_), metadata);
 }
 
 base::TimeDelta VaapiVideoEncoderDelegate::EncodeJob::timestamp() const {
@@ -53,6 +55,7 @@ base::TimeDelta VaapiVideoEncoderDelegate::EncodeJob::timestamp() const {
 }
 
 VABufferID VaapiVideoEncoderDelegate::EncodeJob::coded_buffer_id() const {
+  CHECK(coded_buffer_);
   return coded_buffer_->id();
 }
 
@@ -72,7 +75,13 @@ VaapiVideoEncoderDelegate::EncodeResult::EncodeResult(
 
 VaapiVideoEncoderDelegate::EncodeResult::~EncodeResult() = default;
 
+VaapiVideoEncoderDelegate::EncodeResult::EncodeResult(EncodeResult&&) = default;
+
+VaapiVideoEncoderDelegate::EncodeResult&
+VaapiVideoEncoderDelegate::EncodeResult::operator=(EncodeResult&&) = default;
+
 VABufferID VaapiVideoEncoderDelegate::EncodeResult::coded_buffer_id() const {
+  CHECK(coded_buffer_);
   return coded_buffer_->id();
 }
 
@@ -84,11 +93,11 @@ VaapiVideoEncoderDelegate::EncodeResult::metadata() const {
 VaapiVideoEncoderDelegate::VaapiVideoEncoderDelegate(
     scoped_refptr<VaapiWrapper> vaapi_wrapper,
     base::RepeatingClosure error_cb)
-    : vaapi_wrapper_(vaapi_wrapper), error_cb_(error_cb) {
-  DETACH_FROM_SEQUENCE(sequence_checker_);
-}
+    : vaapi_wrapper_(vaapi_wrapper), error_cb_(error_cb) {}
 
-VaapiVideoEncoderDelegate::~VaapiVideoEncoderDelegate() = default;
+VaapiVideoEncoderDelegate::~VaapiVideoEncoderDelegate() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+}
 
 size_t VaapiVideoEncoderDelegate::GetBitstreamBufferSize() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -97,7 +106,7 @@ size_t VaapiVideoEncoderDelegate::GetBitstreamBufferSize() const {
 }
 
 void VaapiVideoEncoderDelegate::BitrateControlUpdate(
-    uint64_t encoded_chunk_size_bytes) {
+    const BitstreamBufferMetadata& metadata) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
@@ -111,9 +120,19 @@ BitstreamBufferMetadata VaapiVideoEncoderDelegate::GetMetadata(
 }
 
 bool VaapiVideoEncoderDelegate::Encode(EncodeJob& encode_job) {
-  if (!PrepareEncodeJob(encode_job)) {
+  TRACE_EVENT0("media,gpu", "VAVEDelegate::Encode");
+  PrepareEncodeJobResult result = PrepareEncodeJob(encode_job);
+  if (result == PrepareEncodeJobResult::kFail) {
     VLOGF(1) << "Failed preparing an encode job";
     return false;
+  }
+
+  if (result == PrepareEncodeJobResult::kDrop) {
+    // An encoder must not drop a keyframe.
+    CHECK(!encode_job.IsKeyframeRequested());
+    DVLOGF(3) << "Drop frame";
+    encode_job.DropFrame();
+    return true;
   }
 
   if (!vaapi_wrapper_->ExecuteAndDestroyPendingBuffers(
@@ -125,21 +144,27 @@ bool VaapiVideoEncoderDelegate::Encode(EncodeJob& encode_job) {
   return true;
 }
 
-std::unique_ptr<VaapiVideoEncoderDelegate::EncodeResult>
+absl::optional<VaapiVideoEncoderDelegate::EncodeResult>
 VaapiVideoEncoderDelegate::GetEncodeResult(
     std::unique_ptr<EncodeJob> encode_job) {
+  TRACE_EVENT0("media,gpu", "VAVEDelegate::GetEncodeResult");
+  if (encode_job->IsFrameDropped()) {
+    return absl::make_optional<EncodeResult>(nullptr,
+                                             GetMetadata(*encode_job, 0u));
+  }
+
   const VASurfaceID va_surface_id = encode_job->input_surface_id();
   const uint64_t encoded_chunk_size = vaapi_wrapper_->GetEncodedChunkSize(
       encode_job->coded_buffer_id(), va_surface_id);
   if (encoded_chunk_size == 0) {
     VLOGF(1) << "Invalid encoded chunk size";
-    return nullptr;
+    return absl::nullopt;
   }
 
-  BitrateControlUpdate(encoded_chunk_size);
-
   auto metadata = GetMetadata(*encode_job, encoded_chunk_size);
-  return std::move(*encode_job).CreateEncodeResult(metadata);
+  BitrateControlUpdate(metadata);
+  return absl::make_optional<EncodeResult>(
+      std::move(*encode_job).CreateEncodeResult(metadata));
 }
 
 }  // namespace media

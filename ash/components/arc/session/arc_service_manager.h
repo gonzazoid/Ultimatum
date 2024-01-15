@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "components/account_id/account_id.h"
 
@@ -66,7 +67,7 @@ class ArcServiceManager {
 
   std::unique_ptr<ArcBridgeService> arc_bridge_service_;
 
-  // This holds the pointer to the BrowserContext (practically Profile)
+  // This holds the unowned pointer to the BrowserContext (practically Profile)
   // which is allowed to use ARC.
   // This is set just before BrowserContextKeyedService classes are
   // instantiated.
@@ -75,7 +76,7 @@ class ArcServiceManager {
   // allowed to use ARC.
   // TODO(hidehiko): Remove this when we move IsArcAllowedForProfile() to
   // components/arc. See browser_context() for details.
-  content::BrowserContext* browser_context_ = nullptr;
+  raw_ptr<content::BrowserContext> browser_context_ = nullptr;
 
   // This holds the AccountId corresponding to the |browser_context_|.
   // TODO(hidehiko): Remove this when we move IsArcAllowedForProfile() to

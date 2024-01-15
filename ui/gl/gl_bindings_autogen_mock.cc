@@ -49,6 +49,13 @@ void GL_BINDING_CALL MockGLInterface::Mock_glAttachShader(GLuint program,
   interface_->AttachShader(program, shader);
 }
 
+void GL_BINDING_CALL
+MockGLInterface::Mock_glBeginPixelLocalStorageANGLE(GLsizei n,
+                                                    const GLenum* loadops) {
+  MakeGlMockFunctionUnique("glBeginPixelLocalStorageANGLE");
+  interface_->BeginPixelLocalStorageANGLE(n, loadops);
+}
+
 void GL_BINDING_CALL MockGLInterface::Mock_glBeginQuery(GLenum target,
                                                         GLuint id) {
   MakeGlMockFunctionUnique("glBeginQuery");
@@ -599,6 +606,12 @@ MockGLInterface::Mock_glClientWaitSyncAPPLE(GLsync sync,
   return interface_->ClientWaitSyncAPPLE(sync, flags, timeout);
 }
 
+void GL_BINDING_CALL MockGLInterface::Mock_glClipControlEXT(GLenum origin,
+                                                            GLenum depth) {
+  MakeGlMockFunctionUnique("glClipControlEXT");
+  interface_->ClipControlEXT(origin, depth);
+}
+
 void GL_BINDING_CALL MockGLInterface::Mock_glColorMask(GLboolean red,
                                                        GLboolean green,
                                                        GLboolean blue,
@@ -930,18 +943,6 @@ void GL_BINDING_CALL
 MockGLInterface::Mock_glCoverStrokePathNV(GLuint name, GLenum coverMode) {
   MakeGlMockFunctionUnique("glCoverStrokePathNV");
   interface_->CoverStrokePathNV(name, coverMode);
-}
-
-void GL_BINDING_CALL
-MockGLInterface::Mock_glCoverageModulationCHROMIUM(GLenum components) {
-  MakeGlMockFunctionUnique("glCoverageModulationCHROMIUM");
-  interface_->CoverageModulationNV(components);
-}
-
-void GL_BINDING_CALL
-MockGLInterface::Mock_glCoverageModulationNV(GLenum components) {
-  MakeGlMockFunctionUnique("glCoverageModulationNV");
-  interface_->CoverageModulationNV(components);
 }
 
 void GL_BINDING_CALL
@@ -1500,6 +1501,13 @@ void GL_BINDING_CALL MockGLInterface::Mock_glEnableiOES(GLenum target,
   interface_->EnableiOES(target, index);
 }
 
+void GL_BINDING_CALL
+MockGLInterface::Mock_glEndPixelLocalStorageANGLE(GLsizei n,
+                                                  const GLenum* storeops) {
+  MakeGlMockFunctionUnique("glEndPixelLocalStorageANGLE");
+  interface_->EndPixelLocalStorageANGLE(n, storeops);
+}
+
 void GL_BINDING_CALL MockGLInterface::Mock_glEndQuery(GLenum target) {
   MakeGlMockFunctionUnique("glEndQuery");
   interface_->EndQuery(target);
@@ -1580,6 +1588,15 @@ MockGLInterface::Mock_glFlushMappedBufferRangeEXT(GLenum target,
 }
 
 void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferMemorylessPixelLocalStorageANGLE(
+    GLint plane,
+    GLenum internalformat) {
+  MakeGlMockFunctionUnique("glFramebufferMemorylessPixelLocalStorageANGLE");
+  interface_->FramebufferMemorylessPixelLocalStorageANGLE(plane,
+                                                          internalformat);
+}
+
+void GL_BINDING_CALL
 MockGLInterface::Mock_glFramebufferParameteri(GLenum target,
                                               GLenum pname,
                                               GLint param) {
@@ -1593,6 +1610,42 @@ MockGLInterface::Mock_glFramebufferParameteriMESA(GLenum target,
                                                   GLint param) {
   MakeGlMockFunctionUnique("glFramebufferParameteriMESA");
   interface_->FramebufferParameteri(target, pname, param);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferPixelLocalClearValuefvANGLE(
+    GLint plane,
+    const GLfloat* value) {
+  MakeGlMockFunctionUnique("glFramebufferPixelLocalClearValuefvANGLE");
+  interface_->FramebufferPixelLocalClearValuefvANGLE(plane, value);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferPixelLocalClearValueivANGLE(
+    GLint plane,
+    const GLint* value) {
+  MakeGlMockFunctionUnique("glFramebufferPixelLocalClearValueivANGLE");
+  interface_->FramebufferPixelLocalClearValueivANGLE(plane, value);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferPixelLocalClearValueuivANGLE(
+    GLint plane,
+    const GLuint* value) {
+  MakeGlMockFunctionUnique("glFramebufferPixelLocalClearValueuivANGLE");
+  interface_->FramebufferPixelLocalClearValueuivANGLE(plane, value);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferPixelLocalStorageInterruptANGLE() {
+  MakeGlMockFunctionUnique("glFramebufferPixelLocalStorageInterruptANGLE");
+  interface_->FramebufferPixelLocalStorageInterruptANGLE();
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferPixelLocalStorageRestoreANGLE() {
+  MakeGlMockFunctionUnique("glFramebufferPixelLocalStorageRestoreANGLE");
+  interface_->FramebufferPixelLocalStorageRestoreANGLE();
 }
 
 void GL_BINDING_CALL
@@ -1682,6 +1735,17 @@ MockGLInterface::Mock_glFramebufferTextureMultiviewOVR(GLenum target,
   MakeGlMockFunctionUnique("glFramebufferTextureMultiviewOVR");
   interface_->FramebufferTextureMultiviewOVR(target, attachment, texture, level,
                                              baseViewIndex, numViews);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glFramebufferTexturePixelLocalStorageANGLE(
+    GLint plane,
+    GLuint backingtexture,
+    GLint level,
+    GLint layer) {
+  MakeGlMockFunctionUnique("glFramebufferTexturePixelLocalStorageANGLE");
+  interface_->FramebufferTexturePixelLocalStorageANGLE(plane, backingtexture,
+                                                       level, layer);
 }
 
 void GL_BINDING_CALL MockGLInterface::Mock_glFrontFace(GLenum mode) {
@@ -2097,6 +2161,52 @@ MockGLInterface::Mock_glGetFramebufferParameterivRobustANGLE(GLenum target,
   MakeGlMockFunctionUnique("glGetFramebufferParameterivRobustANGLE");
   interface_->GetFramebufferParameterivRobustANGLE(target, pname, bufSize,
                                                    length, params);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glGetFramebufferPixelLocalStorageParameterfvANGLE(
+    GLint plane,
+    GLenum pname,
+    GLfloat* params) {
+  MakeGlMockFunctionUnique("glGetFramebufferPixelLocalStorageParameterfvANGLE");
+  interface_->GetFramebufferPixelLocalStorageParameterfvANGLE(plane, pname,
+                                                              params);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glGetFramebufferPixelLocalStorageParameterfvRobustANGLE(
+    GLint plane,
+    GLenum pname,
+    GLsizei bufSize,
+    GLsizei* length,
+    GLfloat* params) {
+  MakeGlMockFunctionUnique(
+      "glGetFramebufferPixelLocalStorageParameterfvRobustANGLE");
+  interface_->GetFramebufferPixelLocalStorageParameterfvRobustANGLE(
+      plane, pname, bufSize, length, params);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glGetFramebufferPixelLocalStorageParameterivANGLE(
+    GLint plane,
+    GLenum pname,
+    GLint* params) {
+  MakeGlMockFunctionUnique("glGetFramebufferPixelLocalStorageParameterivANGLE");
+  interface_->GetFramebufferPixelLocalStorageParameterivANGLE(plane, pname,
+                                                              params);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glGetFramebufferPixelLocalStorageParameterivRobustANGLE(
+    GLint plane,
+    GLenum pname,
+    GLsizei bufSize,
+    GLsizei* length,
+    GLint* params) {
+  MakeGlMockFunctionUnique(
+      "glGetFramebufferPixelLocalStorageParameterivRobustANGLE");
+  interface_->GetFramebufferPixelLocalStorageParameterivRobustANGLE(
+      plane, pname, bufSize, length, params);
 }
 
 GLenum GL_BINDING_CALL MockGLInterface::Mock_glGetGraphicsResetStatus(void) {
@@ -3581,6 +3691,11 @@ void GL_BINDING_CALL MockGLInterface::Mock_glPauseTransformFeedback(void) {
   interface_->PauseTransformFeedback();
 }
 
+void GL_BINDING_CALL MockGLInterface::Mock_glPixelLocalStorageBarrierANGLE() {
+  MakeGlMockFunctionUnique("glPixelLocalStorageBarrierANGLE");
+  interface_->PixelLocalStorageBarrierANGLE();
+}
+
 void GL_BINDING_CALL MockGLInterface::Mock_glPixelStorei(GLenum pname,
                                                          GLint param) {
   MakeGlMockFunctionUnique("glPixelStorei");
@@ -3599,10 +3714,24 @@ void GL_BINDING_CALL MockGLInterface::Mock_glPolygonMode(GLenum face,
   interface_->PolygonMode(face, mode);
 }
 
+void GL_BINDING_CALL MockGLInterface::Mock_glPolygonModeANGLE(GLenum face,
+                                                              GLenum mode) {
+  MakeGlMockFunctionUnique("glPolygonModeANGLE");
+  interface_->PolygonModeANGLE(face, mode);
+}
+
 void GL_BINDING_CALL MockGLInterface::Mock_glPolygonOffset(GLfloat factor,
                                                            GLfloat units) {
   MakeGlMockFunctionUnique("glPolygonOffset");
   interface_->PolygonOffset(factor, units);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glPolygonOffsetClampEXT(GLfloat factor,
+                                              GLfloat units,
+                                              GLfloat clamp) {
+  MakeGlMockFunctionUnique("glPolygonOffsetClampEXT");
+  interface_->PolygonOffsetClampEXT(factor, units, clamp);
 }
 
 void GL_BINDING_CALL MockGLInterface::Mock_glPopDebugGroup() {
@@ -3980,6 +4109,12 @@ MockGLInterface::Mock_glProgramUniformMatrix4x3fv(GLuint program,
   MakeGlMockFunctionUnique("glProgramUniformMatrix4x3fv");
   interface_->ProgramUniformMatrix4x3fv(program, location, count, transpose,
                                         value);
+}
+
+void GL_BINDING_CALL
+MockGLInterface::Mock_glProvokingVertexANGLE(GLenum provokeMode) {
+  MakeGlMockFunctionUnique("glProvokingVertexANGLE");
+  interface_->ProvokingVertexANGLE(provokeMode);
 }
 
 void GL_BINDING_CALL
@@ -5418,6 +5553,9 @@ MockGLInterface::GetGLProcAddress(const char* name) {
     return reinterpret_cast<GLFunctionPointerType>(Mock_glActiveTexture);
   if (strcmp(name, "glAttachShader") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glAttachShader);
+  if (strcmp(name, "glBeginPixelLocalStorageANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glBeginPixelLocalStorageANGLE);
   if (strcmp(name, "glBeginQuery") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glBeginQuery);
   if (strcmp(name, "glBeginQueryARB") == 0)
@@ -5570,6 +5708,9 @@ MockGLInterface::GetGLProcAddress(const char* name) {
     return reinterpret_cast<GLFunctionPointerType>(Mock_glClientWaitSync);
   if (strcmp(name, "glClientWaitSyncAPPLE") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glClientWaitSyncAPPLE);
+  if (strcmp(name, "glClipControlEXT") == 0) {
+    return reinterpret_cast<GLFunctionPointerType>(Mock_glClipControlEXT);
+  }
   if (strcmp(name, "glColorMask") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glColorMask);
   if (strcmp(name, "glColorMaski") == 0)
@@ -5635,11 +5776,6 @@ MockGLInterface::GetGLProcAddress(const char* name) {
         Mock_glCoverStrokePathInstancedNV);
   if (strcmp(name, "glCoverStrokePathNV") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glCoverStrokePathNV);
-  if (strcmp(name, "glCoverageModulationCHROMIUM") == 0)
-    return reinterpret_cast<GLFunctionPointerType>(
-        Mock_glCoverageModulationCHROMIUM);
-  if (strcmp(name, "glCoverageModulationNV") == 0)
-    return reinterpret_cast<GLFunctionPointerType>(Mock_glCoverageModulationNV);
   if (strcmp(name, "glCreateMemoryObjectsEXT") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glCreateMemoryObjectsEXT);
@@ -5821,6 +5957,9 @@ MockGLInterface::GetGLProcAddress(const char* name) {
     return reinterpret_cast<GLFunctionPointerType>(Mock_glEnablei);
   if (strcmp(name, "glEnableiOES") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glEnableiOES);
+  if (strcmp(name, "glEndPixelLocalStorageANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glEndPixelLocalStorageANGLE);
   if (strcmp(name, "glEndQuery") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glEndQuery);
   if (strcmp(name, "glEndQueryARB") == 0)
@@ -5852,12 +5991,30 @@ MockGLInterface::GetGLProcAddress(const char* name) {
   if (strcmp(name, "glFlushMappedBufferRangeEXT") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glFlushMappedBufferRangeEXT);
+  if (strcmp(name, "glFramebufferMemorylessPixelLocalStorageANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferMemorylessPixelLocalStorageANGLE);
   if (strcmp(name, "glFramebufferParameteri") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glFramebufferParameteri);
   if (strcmp(name, "glFramebufferParameteriMESA") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glFramebufferParameteriMESA);
+  if (strcmp(name, "glFramebufferPixelLocalClearValuefvANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferPixelLocalClearValuefvANGLE);
+  if (strcmp(name, "glFramebufferPixelLocalClearValueivANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferPixelLocalClearValueivANGLE);
+  if (strcmp(name, "glFramebufferPixelLocalClearValueuivANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferPixelLocalClearValueuivANGLE);
+  if (strcmp(name, "glFramebufferPixelLocalStorageInterruptANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferPixelLocalStorageInterruptANGLE);
+  if (strcmp(name, "glFramebufferPixelLocalStorageRestoreANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferPixelLocalStorageRestoreANGLE);
   if (strcmp(name, "glFramebufferRenderbuffer") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glFramebufferRenderbuffer);
@@ -5881,6 +6038,9 @@ MockGLInterface::GetGLProcAddress(const char* name) {
   if (strcmp(name, "glFramebufferTextureMultiviewOVR") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glFramebufferTextureMultiviewOVR);
+  if (strcmp(name, "glFramebufferTexturePixelLocalStorageANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glFramebufferTexturePixelLocalStorageANGLE);
   if (strcmp(name, "glFrontFace") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glFrontFace);
   if (strcmp(name, "glGenBuffers") == 0)
@@ -6002,6 +6162,20 @@ MockGLInterface::GetGLProcAddress(const char* name) {
   if (strcmp(name, "glGetFramebufferParameterivRobustANGLE") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glGetFramebufferParameterivRobustANGLE);
+  if (strcmp(name, "glGetFramebufferPixelLocalStorageParameterfvANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glGetFramebufferPixelLocalStorageParameterfvANGLE);
+  if (strcmp(name, "glGetFramebufferPixelLocalStorageParameterfvRobustANGLE") ==
+      0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glGetFramebufferPixelLocalStorageParameterfvRobustANGLE);
+  if (strcmp(name, "glGetFramebufferPixelLocalStorageParameterivANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glGetFramebufferPixelLocalStorageParameterivANGLE);
+  if (strcmp(name, "glGetFramebufferPixelLocalStorageParameterivRobustANGLE") ==
+      0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glGetFramebufferPixelLocalStorageParameterivRobustANGLE);
   if (strcmp(name, "glGetGraphicsResetStatus") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glGetGraphicsResetStatus);
@@ -6448,14 +6622,24 @@ MockGLInterface::GetGLProcAddress(const char* name) {
   if (strcmp(name, "glPauseTransformFeedback") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glPauseTransformFeedback);
+  if (strcmp(name, "glPixelLocalStorageBarrierANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glPixelLocalStorageBarrierANGLE);
   if (strcmp(name, "glPixelStorei") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glPixelStorei);
   if (strcmp(name, "glPointParameteri") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glPointParameteri);
   if (strcmp(name, "glPolygonMode") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glPolygonMode);
+  if (strcmp(name, "glPolygonModeANGLE") == 0) {
+    return reinterpret_cast<GLFunctionPointerType>(Mock_glPolygonModeANGLE);
+  }
   if (strcmp(name, "glPolygonOffset") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glPolygonOffset);
+  if (strcmp(name, "glPolygonOffsetClampEXT") == 0) {
+    return reinterpret_cast<GLFunctionPointerType>(
+        Mock_glPolygonOffsetClampEXT);
+  }
   if (strcmp(name, "glPopDebugGroup") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glPopDebugGroup);
   if (strcmp(name, "glPopDebugGroupKHR") == 0)
@@ -6552,6 +6736,8 @@ MockGLInterface::GetGLProcAddress(const char* name) {
   if (strcmp(name, "glProgramUniformMatrix4x3fv") == 0)
     return reinterpret_cast<GLFunctionPointerType>(
         Mock_glProgramUniformMatrix4x3fv);
+  if (strcmp(name, "glProvokingVertexANGLE") == 0)
+    return reinterpret_cast<GLFunctionPointerType>(Mock_glProvokingVertexANGLE);
   if (strcmp(name, "glPushDebugGroup") == 0)
     return reinterpret_cast<GLFunctionPointerType>(Mock_glPushDebugGroup);
   if (strcmp(name, "glPushDebugGroupKHR") == 0)

@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(`Tests node xPath construction\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
 
   await TestRunner.loadHTML(`
@@ -36,7 +40,7 @@
   TestRunner.completeTest();
 
   async function processElement(element) {
-    if (element instanceof Elements.ElementsTreeElement && !element.isClosingTag() && element.node().nodeNameInCorrectCase() !== 'base') {
+    if (element instanceof ElementsModule.ElementsTreeElement.ElementsTreeElement && !element.isClosingTag() && element.node().nodeNameInCorrectCase() !== 'base') {
       TestRunner.addResult('\n' + element.listItemElement.textContent);
       await element.copyStyles();
     }

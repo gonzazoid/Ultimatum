@@ -6,12 +6,14 @@
 load("//lib/builders.star", "os")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
+load("//lib/builder_health_indicators.star", "health_spec")
 
 ci.defaults.set(
-    cores = 8,
-    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
-    os = os.LINUX_DEFAULT,
     pool = ci.DEFAULT_POOL,
+    cores = 8,
+    os = os.LINUX_DEFAULT,
+    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
+    health_spec = health_spec.DEFAULT,
 )
 
 consoles.console_view(
@@ -29,11 +31,12 @@ tool.
 
 ci.builder(
     name = "metadata-exporter",
+    description_html = description,
+    executable = "recipe:chromium_export_metadata",
     console_view_entry = consoles.console_view_entry(
         console_view = "metadata.exporter",
     ),
-    executable = "recipe:chromium_export_metadata",
     notifies = "metadata-mapping",
     service_account = "component-mapping-updater@chops-service-accounts.iam.gserviceaccount.com",
-    description_html = description,
+    shadow_service_account = "chromium-try-builder@chops-service-accounts.iam.gserviceaccount.com",
 )

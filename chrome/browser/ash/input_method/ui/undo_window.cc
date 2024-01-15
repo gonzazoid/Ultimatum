@@ -5,11 +5,13 @@
 #include "chrome/browser/ash/input_method/ui/undo_window.h"
 
 #include "ash/public/cpp/style/color_provider.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/ash/input_method/assistive_window_properties.h"
 #include "chrome/browser/ash/input_method/ui/border_factory.h"
 #include "chrome/browser/ash/input_method/ui/colors.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/strings/grit/components_strings.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -30,6 +32,15 @@ constexpr int kIconSize = 16;
 // TODO(crbug/1099044): Update and use cros_colors.json5
 constexpr cros_styles::ColorName kButtonHighlightColor =
     cros_styles::ColorName::kRippleColor;
+
+void SetHighlighted(views::View& view, bool highlighted) {
+  if (!!view.background() != highlighted) {
+    view.SetBackground(highlighted
+                           ? views::CreateRoundedRectBackground(
+                                 ResolveSemanticColor(kButtonHighlightColor), 2)
+                           : nullptr);
+  }
+}
 
 }  // namespace
 
@@ -59,21 +70,48 @@ UndoWindow::UndoWindow(gfx::NativeView parent, AssistiveDelegate* delegate)
   undo_button_->SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
   undo_button_->SetMaxSize(
       gfx::Size(std::numeric_limits<int>::max(), kHeight - 2 * kPadding));
+
+  learn_more_button_ =
+      AddChildView(std::make_unique<views::ImageButton>(base::BindRepeating(
+          &AssistiveDelegate::AssistiveWindowButtonClicked,
+          base::Unretained(delegate_),
+          AssistiveWindowButton{
+              .id = ui::ime::ButtonId::kLearnMore,
+              .window_type = ash::ime::AssistiveWindowType::kLearnMore})));
+  learn_more_button_->SetImageHorizontalAlignment(
+      views::ImageButton::ALIGN_CENTER);
+  learn_more_button_->SetImageVerticalAlignment(
+      views::ImageButton::ALIGN_MIDDLE);
+  learn_more_button_->SetTooltipText(l10n_util::GetStringUTF16(IDS_LEARN_MORE));
+  learn_more_button_->SetVisible(false);
 }
 
 void UndoWindow::OnThemeChanged() {
-  // Without the scoped light mode, default for ash color provider is dark mode,
-  // which is bad.
-  ash::ScopedLightModeAsDefault scoped_light_mode_as_default;
-  undo_button_->SetImage(
+  undo_button_->SetImageModel(
       views::Button::ButtonState::STATE_NORMAL,
-      gfx::CreateVectorIcon(
-          kAutocorrectUndoIcon, kIconSize,
+      ui::ImageModel::FromVectorIcon(
+          kAutocorrectUndoIcon,
           ash::ColorProvider::Get()->GetContentLayerColor(
-              ash::ColorProvider::ContentLayerType::kIconColorPrimary)));
+              ash::ColorProvider::ContentLayerType::kIconColorPrimary),
+          kIconSize));
   undo_button_->SetEnabledTextColors(
       ash::ColorProvider::Get()->GetContentLayerColor(
           ash::ColorProvider::ContentLayerType::kTextColorSecondary));
+
+  const auto* const color_provider = GetColorProvider();
+  learn_more_button_->SetBorder(views::CreatePaddedBorder(
+      views::CreateSolidSidedBorder(
+          gfx::Insets::TLBR(4, 0, 4, 4),
+          color_provider->GetColor(ui::kColorButtonBackground)),
+      views::LayoutProvider::Get()->GetInsetsMetric(
+          views::INSETS_VECTOR_IMAGE_BUTTON)));
+
+  // TODO(crbug.com/1099044): Update and use cros colors.
+  learn_more_button_->SetImageModel(
+      views::Button::ButtonState::STATE_NORMAL,
+      ui::ImageModel::FromVectorIcon(vector_icons::kSettingsOutlineIcon,
+                                     ui::kColorIconSecondary));
+
   BubbleDialogDelegateView::OnThemeChanged();
 }
 
@@ -95,8 +133,10 @@ void UndoWindow::Hide() {
   GetWidget()->Close();
 }
 
-void UndoWindow::Show() {
+void UndoWindow::Show(const bool show_setting_link) {
+  learn_more_button_->SetVisible(show_setting_link);
   GetWidget()->Show();
+  SizeToContents();
 }
 
 void UndoWindow::SetBounds(const gfx::Rect& word_bounds) {
@@ -105,17 +145,11 @@ void UndoWindow::SetBounds(const gfx::Rect& word_bounds) {
 
 void UndoWindow::SetButtonHighlighted(const AssistiveWindowButton& button,
                                       bool highlighted) {
-  if (button.id != ButtonId::kUndo)
-    return;
-
-  bool currently_hightlighted = undo_button_->background() != nullptr;
-  if (highlighted == currently_hightlighted)
-    return;
-
-  undo_button_->SetBackground(
-      highlighted ? views::CreateSolidBackground(
-                        ResolveSemanticColor(kButtonHighlightColor))
-                  : nullptr);
+  if (button.id == ButtonId::kUndo) {
+    SetHighlighted(*undo_button_, highlighted);
+  } else if (button.id == ButtonId::kLearnMore) {
+    SetHighlighted(*learn_more_button_, highlighted);
+  }
 }
 
 views::Button* UndoWindow::GetUndoButtonForTesting() {

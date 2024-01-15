@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "chrome/browser/ui/webui/ash/in_session_password_change/confirm_password_change_handler.h"
 #include "chrome/common/webui_url_constants.h"
@@ -159,7 +159,7 @@ gfx::Size ConfirmPasswordChangeDialog::GetSize(
 }
 
 void ConfirmPasswordChangeDialog::GetWebUIMessageHandlers(
-    std::vector<content::WebUIMessageHandler*>* handlers) const {
+    std::vector<content::WebUIMessageHandler*>* handlers) {
   handlers->push_back(new ConfirmPasswordChangeHandler(
       scraped_old_password_, scraped_new_password_, show_spinner_initially_));
 }

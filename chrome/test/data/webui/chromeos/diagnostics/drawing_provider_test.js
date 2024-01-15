@@ -2,11 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://diagnostics/strings.m.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
+
 import {CanvasDrawingProvider} from 'chrome://diagnostics/drawing_provider.js';
 import {constructRgba, DESTINATION_OVER, LINE_CAP, LINE_WIDTH, lookupCssVariableValue, MARK_COLOR, MARK_OPACITY, MARK_RADIUS, TRAIL_COLOR, TRAIL_MAX_OPACITY} from 'chrome://diagnostics/drawing_provider_utils.js';
+import {assertDeepEquals, assertEquals} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-import {assertDeepEquals, assertEquals} from '../../chai_assert.js';
-import {MockController} from '../../mock_controller.js';
+import {MockController} from '../mock_controller.m.js';
 
 /**
  * FakeCanvasCtx class mocks various html Canvas API methods to make it easy to
@@ -46,7 +49,7 @@ class FakeCanvasCtx {
   }
 }
 
-export function drawingProviderTestSuite() {
+suite('drawingProviderTestSuite', function() {
   /** @type {{createFunctionMock: Function, reset: Function}} */
   let mockController;
 
@@ -128,4 +131,4 @@ export function drawingProviderTestSuite() {
     assertEquals(
         DESTINATION_OVER, drawingProvider.getGlobalCompositeOperation());
   });
-}
+});

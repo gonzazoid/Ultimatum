@@ -11,18 +11,17 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/mock_entropy_provider.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/history/chrome_history_client.h"
@@ -70,8 +69,8 @@ std::unique_ptr<KeyedService> BuildHistoryService(
           std::make_unique<ChromeHistoryClient>(
               BookmarkModelFactory::GetForBrowserContext(profile)),
           std::unique_ptr<history::VisitDelegate>()));
-  if (history_service->Init(
-          history::HistoryDatabaseParamsForPath(profile->GetPath()))) {
+  if (history_service->Init(history::HistoryDatabaseParamsForPath(
+          profile->GetPath(), version_info::Channel::UNKNOWN))) {
     return std::move(history_service);
   }
 
@@ -265,7 +264,7 @@ class LastDownloadFinderTest : public testing::Test {
     row.interrupt_reason = history::ToHistoryDownloadInterruptReason(
         download::DOWNLOAD_INTERRUPT_REASON_NONE);
     row.id = download_id_++;
-    row.guid = base::GenerateGUID();
+    row.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
     row.opened = false;
     row.last_access_time = now - base::Minutes(5);
     row.transient = false;
@@ -423,7 +422,7 @@ TEST_F(LastDownloadFinderTest, AddProfileAfterStarting) {
   base::RunLoop run_loop;
 
   // Post a task that will create a second profile once the main loop is run.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&LastDownloadFinderTest::CreateProfileWithDownload,
                      base::Unretained(this)));

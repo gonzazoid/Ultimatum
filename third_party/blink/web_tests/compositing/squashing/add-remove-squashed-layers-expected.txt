@@ -20,7 +20,6 @@ CASE 1, original layer tree with overlap1 and overlap2:
       "name": "LayoutNGBlockFlow (positioned) DIV id='A' class='overlap1'",
       "position": [140, 140],
       "bounds": [120, 120],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#00FF00"
     }
   ],
@@ -57,7 +56,6 @@ CASE 2, overlap3 gets added:
       "name": "LayoutNGBlockFlow (positioned) DIV id='A' class='overlap1'",
       "position": [140, 140],
       "bounds": [140, 140],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#FF00FF",
       "invalidations": [
         [40, 40, 100, 100]
@@ -97,7 +95,6 @@ CASE 3, overlap2 gets removed. Since this does not resize the layer, there shoul
       "name": "LayoutNGBlockFlow (positioned) DIV id='A' class='overlap1'",
       "position": [140, 140],
       "bounds": [140, 140],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#FF00FF",
       "invalidations": [
         [20, 20, 100, 100]
@@ -138,10 +135,7 @@ CASE 4, overlap1 gets removed:
       "position": [180, 180],
       "bounds": [100, 100],
       "contentsOpaque": true,
-      "backgroundColor": "#FF00FF",
-      "invalidations": [
-        [0, 0, 100, 100]
-      ]
+      "backgroundColor": "#FF00FF"
     }
   ],
   "transforms": [
@@ -177,7 +171,6 @@ CASE 5, overlap2 gets added back:
       "name": "LayoutNGBlockFlow (positioned) DIV id='B' class='overlap2'",
       "position": [160, 160],
       "bounds": [120, 120],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#FF00FF",
       "invalidations": [
         [0, 0, 120, 120]
@@ -217,7 +210,6 @@ CASE 6, overlap1 gets added back, and overlap3 gets removed:
       "name": "LayoutNGBlockFlow (positioned) DIV id='A' class='overlap1'",
       "position": [140, 140],
       "bounds": [120, 120],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#00FF00",
       "invalidations": [
         [0, 0, 120, 120]

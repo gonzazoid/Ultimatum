@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/contextual_search/core/browser/contextual_search_context.h"
 #include "components/contextual_search/core/browser/contextual_search_delegate.h"
@@ -36,6 +36,11 @@ struct PartialTranslateRequest {
 
   // The desired target language.
   std::string target_language;
+
+  // Whether or not |source_language| should be applied as a hint for backend
+  // language detection. Otherwise, backend translation is forced using
+  // |source_language|.
+  bool apply_lang_hint = false;
 };
 
 // Indicates the outcome of a Partial Translate request.
@@ -82,7 +87,7 @@ class PartialTranslateManager {
   // call |callback| once the request is completed (unless another request
   // subsumes it).
   void StartPartialTranslate(content::WebContents* web_contents,
-                             PartialTranslateRequest request,
+                             const PartialTranslateRequest& request,
                              PartialTranslateCallback callback);
 
  private:

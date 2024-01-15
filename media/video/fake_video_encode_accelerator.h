@@ -11,8 +11,8 @@
 #include <list>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "media/base/bitrate.h"
@@ -46,15 +46,22 @@ class FakeVideoEncodeAccelerator : public VideoEncodeAccelerator {
                   std::unique_ptr<MediaLog> media_log = nullptr) override;
   void Encode(scoped_refptr<VideoFrame> frame, bool force_keyframe) override;
   void UseOutputBitstreamBuffer(BitstreamBuffer buffer) override;
-  void RequestEncodingParametersChange(const Bitrate& bitrate,
-                                       uint32_t framerate) override;
-  void RequestEncodingParametersChange(const VideoBitrateAllocation& bitrate,
-                                       uint32_t framerate) override;
+  void RequestEncodingParametersChange(
+      const Bitrate& bitrate,
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size) override;
+  void RequestEncodingParametersChange(
+      const VideoBitrateAllocation& bitrate,
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size) override;
   bool IsGpuFrameResizeSupported() override;
   void Destroy() override;
 
   const std::vector<Bitrate>& stored_bitrates() const {
     return stored_bitrates_;
+  }
+  const std::vector<gfx::Size>& stored_frame_sizes() const {
+    return stored_frame_sizes_;
   }
   const std::vector<VideoBitrateAllocation>& stored_bitrate_allocations()
       const {
@@ -62,6 +69,7 @@ class FakeVideoEncodeAccelerator : public VideoEncodeAccelerator {
   }
   void SetWillInitializationSucceed(bool will_initialization_succeed);
   void SetWillEncodingSucceed(bool will_encoding_succeed);
+  void SetSupportFrameSizeChange(bool support_frame_size_change);
 
   size_t minimum_output_buffer_size() const { return kMinimumOutputBufferSize; }
 
@@ -84,18 +92,23 @@ class FakeVideoEncodeAccelerator : public VideoEncodeAccelerator {
 
   void SupportResize() { resize_supported_ = true; }
 
+  void NotifyEncoderInfoChange(const VideoEncoderInfo& info);
+
  private:
+  void DoNotifyEncoderInfoChange(const VideoEncoderInfo& info);
   void DoRequireBitstreamBuffers(unsigned int input_count,
                                  const gfx::Size& input_coded_size,
                                  size_t output_buffer_size) const;
   void EncodeTask();
   void DoBitstreamBufferReady(BitstreamBuffer buffer,
                               FrameToEncode frame_to_encode) const;
+  void UpdateOutputFrameSize(const gfx::Size& size);
 
   // Our original (constructor) calling message loop used for all tasks.
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
   std::vector<Bitrate> stored_bitrates_;
   std::vector<VideoBitrateAllocation> stored_bitrate_allocations_;
+  std::vector<gfx::Size> stored_frame_sizes_;
   bool will_initialization_succeed_;
   bool will_encoding_succeed_;
   bool resize_supported_ = false;
@@ -114,6 +127,9 @@ class FakeVideoEncodeAccelerator : public VideoEncodeAccelerator {
 
   // Callback that, if set, does actual frame to buffer conversion.
   EncodingCallback encoding_callback_;
+
+  // Current encoder info. Call |NotifyEncoderInfoChange| when it changes.
+  VideoEncoderInfo encoder_info_;
 
   base::WeakPtrFactory<FakeVideoEncodeAccelerator> weak_this_factory_{this};
 };

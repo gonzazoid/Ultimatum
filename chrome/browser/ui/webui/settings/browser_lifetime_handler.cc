@@ -4,11 +4,13 @@
 
 #include "chrome/browser/ui/webui/settings/browser_lifetime_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "components/policy/core/common/management/management_service.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/tpm_firmware_update.h"
@@ -120,7 +122,7 @@ void BrowserLifetimeHandler::HandleFactoryReset(const base::Value::List& args) {
 
   // TODO(crbug.com/891905): Centralize powerwash restriction checks.
   bool allow_powerwash =
-      !webui::IsEnterpriseManaged() &&
+      !policy::ManagementServiceFactory::GetForPlatform()->IsManaged() &&
       !user_manager::UserManager::Get()->IsLoggedInAsGuest() &&
       !user_manager::UserManager::Get()->IsLoggedInAsChildUser();
 

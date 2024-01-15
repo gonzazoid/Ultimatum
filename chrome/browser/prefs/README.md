@@ -19,8 +19,8 @@ Prefs are not for:
 ## Adding a new pref
 1. Pick a name that resembles / shares a pref namespace with existing related
    prefs if possible.
-1. Define a new unique name in a pref_names.cc file. Either in:
-   * chrome/common/pref_names.cc -- being careful to put it in the right
+1. Define a new unique name in a pref_names.cc or pref_names.h file. Either in:
+   * chrome/common/pref_names.h -- being careful to put it in the right
      section (LOCAL STATE versus PROFILE PREFS) and alongside similar prefs
       (existing ifdefs and/or pref namespaces); or, ideally in:
    * a pref_names.cc local to your component (typically inside a prefs:: C++
@@ -28,8 +28,15 @@ Prefs are not for:
 1. Add a registration call from chrome/browser/prefs/browser_prefs.cc to your
    component to register your new pref using `RegisterLocalState()` or
    `RegisterProfilePrefs()` as appropriate.
-1. If your pref should be synced (only an option for profile prefs), add the
-   `SYNCABLE_PREF` flag when registering it.
+1. If your pref should be synced (only an option for profile prefs), add one of
+   the `SYNCABLE_PREF` flags when registering it and add it to the syncable
+   prefs database (see components/sync_preferences/README.md for details):
+   * iOS-specific syncable prefs should be added to
+     ios/chrome/browser/sync/prefs/ios_chrome_syncable_prefs_database.cc.
+   * Syncable prefs which are not valid for iOS should be added to
+     chrome/browser/sync/prefs/chrome_syncable_prefs_database.cc.
+   * Everything else (i.e. exists on iOS and at least one other platform) should
+     be added to components/sync_preferences/common_syncable_prefs_database.cc.
 
 ## Querying a pref
 Use `base::PrefService::Get*()` APIs on `g_browser_process->local_state()` or

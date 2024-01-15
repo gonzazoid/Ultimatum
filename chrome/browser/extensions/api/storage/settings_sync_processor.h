@@ -9,8 +9,10 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "components/sync/base/model_type.h"
 #include "components/value_store/value_store_change.h"
+#include "extensions/common/extension_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
@@ -38,7 +40,7 @@ class SettingsSyncProcessor {
   ~SettingsSyncProcessor();
 
   // Initializes this with the initial state of sync.
-  void Init(const base::Value& initial_state);
+  void Init(const base::Value::Dict& initial_state);
 
   // Sends |changes| to sync.
   absl::optional<syncer::ModelError> SendChanges(
@@ -52,7 +54,7 @@ class SettingsSyncProcessor {
 
  private:
   // ID of the extension the changes are for.
-  const std::string extension_id_;
+  const ExtensionId extension_id_;
 
   // Sync model type. Either EXTENSION_SETTING or APP_SETTING.
   const syncer::ModelType type_;

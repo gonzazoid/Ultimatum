@@ -4,32 +4,28 @@
 
 #import "ios/chrome/browser/ui/infobars/modals/infobar_save_card_table_view_controller.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/feature_list.h"
-#import "base/mac/foundation_util.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "components/autofill/core/common/autofill_features.h"
-#import "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
-#import "ios/chrome/browser/net/crurl.h"
+#import "ios/chrome/browser/autofill/model/message/save_card_message_with_links.h"
+#import "ios/chrome/browser/infobars/model/infobar_metrics_recorder.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_edit_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_link_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/autofill/cells/target_account_item.h"
 #import "ios/chrome/browser/ui/autofill/save_card_infobar_metrics_recorder.h"
-#import "ios/chrome/browser/ui/autofill/save_card_message_with_links.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_save_card_modal_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_edit_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_link_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Number of Months in a year.
@@ -157,7 +153,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   TableViewTextEditItem* cardLastDigitsItem = [self
       textEditItemWithType:ItemTypeCardLastDigits
-             textFieldName:l10n_util::GetNSString(IDS_IOS_AUTOFILL_CARD_NUMBER)
+        fieldNameLabelText:l10n_util::GetNSString(IDS_IOS_AUTOFILL_CARD_NUMBER)
             textFieldValue:self.cardNumber
           textFieldEnabled:NO];
   cardLastDigitsItem.identifyingIcon = self.cardIssuerIcon;
@@ -166,7 +162,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   self.cardholderNameItem =
       [self textEditItemWithType:ItemTypeCardHolderName
-                   textFieldName:l10n_util::GetNSString(
+              fieldNameLabelText:l10n_util::GetNSString(
                                      IDS_IOS_AUTOFILL_CARDHOLDER_NAME)
                   textFieldValue:self.cardholderName
                 textFieldEnabled:self.supportsEditing];
@@ -175,7 +171,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   self.expirationMonthItem = [self
       textEditItemWithType:ItemTypeCardExpireMonth
-             textFieldName:l10n_util::GetNSString(IDS_IOS_AUTOFILL_EXP_MONTH)
+        fieldNameLabelText:l10n_util::GetNSString(IDS_IOS_AUTOFILL_EXP_MONTH)
             textFieldValue:self.expirationMonth
           textFieldEnabled:self.supportsEditing];
   [model addItem:self.expirationMonthItem
@@ -183,7 +179,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   self.expirationYearItem = [self
       textEditItemWithType:ItemTypeCardExpireYear
-             textFieldName:l10n_util::GetNSString(IDS_IOS_AUTOFILL_EXP_YEAR)
+        fieldNameLabelText:l10n_util::GetNSString(IDS_IOS_AUTOFILL_EXP_YEAR)
             textFieldValue:self.expirationYear
           textFieldEnabled:self.supportsEditing];
   [model addItem:self.expirationYearItem
@@ -279,7 +275,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeCardHolderName: {
       TableViewTextEditCell* editCell =
-          base::mac::ObjCCast<TableViewTextEditCell>(cell);
+          base::apple::ObjCCast<TableViewTextEditCell>(cell);
       [editCell.textField addTarget:self
                              action:@selector(nameEditDidBegin)
                    forControlEvents:UIControlEventEditingDidBegin];
@@ -293,7 +289,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeCardExpireMonth: {
       TableViewTextEditCell* editCell =
-          base::mac::ObjCCast<TableViewTextEditCell>(cell);
+          base::apple::ObjCCast<TableViewTextEditCell>(cell);
       [editCell.textField addTarget:self
                              action:@selector(monthEditDidBegin)
                    forControlEvents:UIControlEventEditingDidBegin];
@@ -307,7 +303,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeCardExpireYear: {
       TableViewTextEditCell* editCell =
-          base::mac::ObjCCast<TableViewTextEditCell>(cell);
+          base::apple::ObjCCast<TableViewTextEditCell>(cell);
       [editCell.textField addTarget:self
                              action:@selector(yearEditDidBegin)
                    forControlEvents:UIControlEventEditingDidBegin];
@@ -321,7 +317,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeCardLegalMessage: {
       TableViewTextLinkCell* linkCell =
-          base::mac::ObjCCast<TableViewTextLinkCell>(cell);
+          base::apple::ObjCCast<TableViewTextLinkCell>(cell);
       linkCell.delegate = self;
       linkCell.separatorInset =
           UIEdgeInsetsMake(0, self.tableView.bounds.size.width, 0, 0);
@@ -329,7 +325,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeCardSave: {
       TableViewTextButtonCell* tableViewTextButtonCell =
-          base::mac::ObjCCastStrict<TableViewTextButtonCell>(cell);
+          base::apple::ObjCCastStrict<TableViewTextButtonCell>(cell);
       [tableViewTextButtonCell.button
                  addTarget:self
                     action:@selector(saveCardButtonWasPressed:)
@@ -452,12 +448,12 @@ typedef NS_ENUM(NSInteger, ItemType) {
 #pragma mark - Helpers
 
 - (TableViewTextEditItem*)textEditItemWithType:(ItemType)type
-                                 textFieldName:(NSString*)name
+                            fieldNameLabelText:(NSString*)name
                                 textFieldValue:(NSString*)value
                               textFieldEnabled:(BOOL)enabled {
   TableViewTextEditItem* textEditItem =
       [[TableViewTextEditItem alloc] initWithType:type];
-  textEditItem.textFieldName = name;
+  textEditItem.fieldNameLabelText = name;
   textEditItem.textFieldValue = value;
   textEditItem.textFieldEnabled = enabled;
   textEditItem.hideIcon = !enabled;

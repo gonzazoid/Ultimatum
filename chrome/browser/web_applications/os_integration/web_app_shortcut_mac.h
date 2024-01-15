@@ -11,10 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
 #include "base/process/process.h"
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut.h"
 
@@ -100,17 +101,30 @@
 
 // -----------------------------------------------------------------------------
 
-// Whether to enable update and launch of app shims in tests. (Normally shims
-// are never created or launched in tests). Note that update only creates
-// internal shim bundles, i.e. it does not create new shims in ~/Applications.
-extern bool g_app_shims_allow_update_and_launch_in_tests;
-
 namespace web_app {
 
 enum class LaunchShimUpdateBehavior {
-  DO_NOT_RECREATE,
-  RECREATE_IF_INSTALLED,
-  RECREATE_UNCONDITIONALLY,
+  kDoNotRecreate,
+  kRecreateIfInstalled,
+  kRecreateUnconditionally,
+};
+
+inline bool RecreateShimsRequested(LaunchShimUpdateBehavior update_behavior) {
+  switch (update_behavior) {
+    case LaunchShimUpdateBehavior::kDoNotRecreate:
+      return false;
+    case LaunchShimUpdateBehavior::kRecreateIfInstalled:
+    case LaunchShimUpdateBehavior::kRecreateUnconditionally:
+      return true;
+  }
+  NOTREACHED();
+}
+
+enum class ShimLaunchMode {
+  // Launch the app shim as a normal application.
+  kNormal,
+  // Launch the app shim in background mode, invisible to the user.
+  kBackground,
 };
 
 // Callback type for LaunchShim. If |shim_process| is valid then the
@@ -126,22 +140,48 @@ using ShimTerminatedCallback = base::OnceClosure;
 // invalid pid if none was launched). If |launched_callback| returns a valid
 // pid, then |terminated_callback| will be called when that process terminates.
 void LaunchShim(LaunchShimUpdateBehavior update_behavior,
+                ShimLaunchMode launch_mode,
                 ShimLaunchedCallback launched_callback,
                 ShimTerminatedCallback terminated_callback,
                 std::unique_ptr<ShortcutInfo> shortcut_info);
 
-std::unique_ptr<ShortcutInfo> RecordAppShimErrorAndBuildShortcutInfo(
-    const base::FilePath& bundle_path);
+// Launch the shim specified by `shim_path` as if the user launched it directly,
+// except making sure that it connects to the currently running chrome or
+// browser_test instance.
+// If `urls` is not empty, the app is launched to handle those urls.
+// Return in `launched_callback` the pid that was launched (or an invalid pid
+// if none was launched). If `launched_callback` returns a valid pid, then
+// `terminated_callback` will be called when that process terminates.
+void LaunchShimForTesting(
+    const base::FilePath& shim_path,
+    const std::vector<GURL>& urls,
+    ShimLaunchedCallback launched_callback,
+    ShimTerminatedCallback terminated_callback,
+    const base::FilePath& chromium_path = base::FilePath());
 
-// Return true if launching and updating app shims will fail because of the
-// testing environment.
-bool AppShimLaunchDisabled();
+// Waits for the shim with the given `app_id` and `shim_path` to terminate. If
+// there is no running application matching `app_id` and `shim_path` returns
+// immediately.
+// If `terminate_shim` is true, causes the shim to terminate before waiting.
+void WaitForShimToQuitForTesting(const base::FilePath& shim_path,
+                                 const std::string& app_id,
+                                 bool terminate_shim = false);
+
+// Disable app shims in tests if the shortcut folder is not set.
+// Because shims created in ~/Applications will not be cleaned up.
+bool AppShimCreationAndLaunchDisabledForTest();
 
 // Returns a path to the Chrome Apps folder in ~/Applications.
 base::FilePath GetChromeAppsFolder();
 
 // Remove the specified app from the OS login item list.
 void RemoveAppShimFromLoginItems(const std::string& app_id);
+
+// Returns the bundle identifier for an app. If |profile_path| is unset, then
+// the returned bundle id will be profile-agnostic.
+std::string GetBundleIdentifierForShim(
+    const std::string& app_id,
+    const base::FilePath& profile_path = base::FilePath());
 
 class WebAppAutoLoginUtil {
  public:
@@ -203,6 +243,8 @@ class WebAppShortcutCreator {
   // services, sorted by preference.
   std::vector<base::FilePath> GetAppBundlesById() const;
 
+  std::string GetAppBundleId() const;
+
   bool CreateShortcuts(ShortcutCreationReason creation_reason,
                        ShortcutLocations creation_locations);
 
@@ -256,6 +298,9 @@ class WebAppShortcutCreator {
 
   // Updates the icon for the shortcut.
   bool UpdateIcon(const base::FilePath& app_path) const;
+
+  // Updates the code signature of |app_path|.
+  bool UpdateSignature(const base::FilePath& app_path) const;
 
   // Path to the data directory for this app. For example:
   // ~/Library/Application Support/Chromium/Default/Web Applications/_crx_abc/

@@ -97,6 +97,7 @@ class TabModel {
     // Opened from an app widget.
     FROM_APP_WIDGET,
     // Open from the long press context menu item 'Open in Incognito Tab'.
+    // This is deprecated; use `FROM_LONGPRESS_FOREGROUND` in new code.
     FROM_LONGPRESS_INCOGNITO,
     // Opened in background from Recent Tabs. This is a non-link launch with no
     // parent/child relationship. The tab is added to the end of the TabModel.
@@ -105,6 +106,16 @@ class TabModel {
     // Opened from a Reading list. When going "back" on Android, the Reading
     // list should be reopened.
     FROM_READING_LIST,
+    // Opened from Tab Switcher UI.
+    FROM_TAB_SWITCHER_UI,
+    // Opened from the Restore Tabs UI. When restoring synced tabs the first
+    // tab is opened but not brought to the foreground.
+    FROM_RESTORE_TABS_UI,
+    // Opened to load an omnibox search query in a new tab.
+    FROM_OMNIBOX,
+    // Used for tab pre-warming where the reason for tab creation is not yet
+    // known.
+    UNSET,
     // Must be last.
     SIZE
   };
@@ -221,6 +232,10 @@ class TabModel {
   // unique within the current session, and is not guaranteed to be unique
   // across sessions.
   SessionID session_id_;
+
+  // Records metrics about which percentage of syncable tabs are actually
+  // synced.
+  void RecordActualSyncedTabsHistogram();
 };
 
 #endif  // CHROME_BROWSER_UI_ANDROID_TAB_MODEL_TAB_MODEL_H_

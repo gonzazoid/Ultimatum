@@ -1,22 +1,22 @@
 include_rules = [
+  # Code in the ash-chrome binary cannot use lacros-chrome code.
+  "-chrome/browser/lacros",
+  "-chrome/browser/ui/lacros",
+  "-chrome/browser/ui/quick_answers/lacros",
+  "-chrome/browser/sync/test/lacros",
+
   # See README.md.
   "+ash",
-
-  # TODO(ananta): Remove this when we move files which display UI in
-  # chrome/browser/chromeos to chrome/browser/ui/views/chromeos
-  # crbug.com/728877
-  "+chrome/browser/ui/views",
 
   "+components/guest_os",
   "+dbus",
 ]
 
 specific_include_rules = {
+  ".*test\.cc": [
+    "+chrome/browser/ui/views/chrome_layout_provider.h",
+  ],
   "external_protocol_dialog\.cc": [
     "+chrome/browser/ui/views/external_protocol_dialog.h",
-  ],
-  "file_manager_browsertest_base.cc": [
-    "+chrome/browser/ui/views/extensions/extension_dialog.h",
-    "+chrome/browser/ui/views/select_file_dialog_extension.h",
   ],
 }

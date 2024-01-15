@@ -30,16 +30,12 @@ class DeviceCommandRunRoutineJob : public RemoteCommandJob {
   enterprise_management::RemoteCommand_Type GetType() const override;
 
  private:
-  class Payload;
-
   // RemoteCommandJob:
   bool ParseCommandPayload(const std::string& command_payload) override;
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
 
   void OnCrosHealthdResponseReceived(
-      CallbackWithResult succeeded_callback,
-      CallbackWithResult failed_callback,
+      CallbackWithResult result_callback,
       ash::cros_healthd::mojom::RunRoutineResponsePtr response);
 
   // Which routine the DeviceCommandRunRoutineJob will run.
@@ -47,7 +43,7 @@ class DeviceCommandRunRoutineJob : public RemoteCommandJob {
   // Parameters for the routine to be run. See
   // chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom for
   // details on the parameters accepted by each individual routine.
-  base::Value params_dict_;
+  base::Value::Dict params_dict_;
 
   base::WeakPtrFactory<DeviceCommandRunRoutineJob> weak_ptr_factory_{this};
 };

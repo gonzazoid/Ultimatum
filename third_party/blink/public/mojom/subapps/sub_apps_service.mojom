@@ -4,52 +4,42 @@
 
 module blink.mojom;
 
-import "url/mojom/url.mojom";
-
-enum SubAppsServiceResult {
+enum SubAppsServiceResultCode {
   kSuccess,
   kFailure,
 };
 
-// `unhashed_app_id` is the sub app id generated according to
-// https://www.w3.org/TR/appmanifest/#dfn-identity.
-// `install_url` is a fully qualified URL to a page hosting or
-// containing a link to the app's manifest.
-struct SubAppsServiceAddInfo {
-  string unhashed_app_id;
-  url.mojom.Url install_url;
+// `manifest_id_path` is the sub app id generated according to
+// https://www.w3.org/TR/appmanifest/#dfn-identity, but only the path component
+// of the full url.
+// `install_url_path` is a path to a page hosting or containing a link to the
+// app's manifest.
+// Name of this struct can't be "SubAppsServiceAddParams" because it causes a
+// collision in the Android mojo bindings (interface name "SubAppsService" plus
+// method name "Add" plus suffix "Params" create the colliding name).
+struct SubAppsServiceAddParameters {
+  string manifest_id_path;
+  string install_url_path;
 };
 
-enum SubAppsServiceAddResultCode {
-  // Success category:
-  kSuccessNewInstall,
-  kSuccessAlreadyInstalled,
-
-  // Failure category:
-  kUserInstallDeclined,
-  kExpectedAppIdCheckFailed,
-  kParentAppUninstalled,
-  kInstallUrlInvalid,
-  kNotValidManifestForWebApp,
-  kFailure,
-};
-
-// `unhashed_app_id` is the sub app id generated according to
-// https://www.w3.org/TR/appmanifest/#dfn-identity.
-// `result_code` specifies the type of success or failure of the installation.
 struct SubAppsServiceAddResult {
-  string unhashed_app_id;
-  SubAppsServiceAddResultCode result_code;
+  string manifest_id_path;
+  SubAppsServiceResultCode result_code;
 };
 
 struct SubAppsServiceListResult {
-  SubAppsServiceResult code;
-  array<SubAppsServiceListInfo> sub_apps;
+  SubAppsServiceResultCode result_code;
+  array<SubAppsServiceListResultEntry> sub_apps_list;
 };
 
-struct SubAppsServiceListInfo {
-  string unhashed_app_id;
+struct SubAppsServiceListResultEntry {
+  string manifest_id_path;
   string app_name;
+};
+
+struct SubAppsServiceRemoveResult {
+  string manifest_id_path;
+  SubAppsServiceResultCode result_code;
 };
 
 // Sub Apps APIs allow installed PWAs to install shortcuts to their various
@@ -63,17 +53,12 @@ struct SubAppsServiceListInfo {
 interface SubAppsService {
   // Installs one or more sub-apps of an already-installed app corresponding to
   // this instance of SubAppsService.
-  Add(array<SubAppsServiceAddInfo> sub_apps) => (array<SubAppsServiceAddResult> result);
+  Add(array<SubAppsServiceAddParameters> sub_apps_to_add) => (array<SubAppsServiceAddResult> result);
 
-  // List all sub-app `app_ids` installed by the app making the API call. The
-  // `app_id` format is the same as the `web_app::GenerateAppIdUnhashed`
-  // function which returns app identity according to the specification:
-  // https://www.w3.org/TR/appmanifest/#dfn-identity.
+  // List all sub-apps installed by the app making the API call.
   List() => (SubAppsServiceListResult result);
 
-  // Uninstalls the sub-app represented by the given `unhashed_app_id`
-  // previously installed via the `Add` method by the same app making the
-  // current API call. Format of the `unhashed_app_id` argument is the same as
-  // the return of the `List` method.
-  Remove(string unhashed_app_id) => (SubAppsServiceResult result);
+  // Uninstalls the sub-apps represented by the given argument previously
+  // installed via the `Add` method by the same app making the current API call.
+  Remove(array<string> manifest_id_paths) => (array<SubAppsServiceRemoveResult> result);
 };

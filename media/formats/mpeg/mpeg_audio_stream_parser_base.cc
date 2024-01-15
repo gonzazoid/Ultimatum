@@ -6,16 +6,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/numerics/checked_math.h"
 #include "base/time/time.h"
+#include "media/base/byte_queue.h"
 #include "media/base/media_log.h"
 #include "media/base/media_tracks.h"
 #include "media/base/media_util.h"
 #include "media/base/stream_parser.h"
 #include "media/base/stream_parser_buffer.h"
-#include "media/base/text_track_config.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_decoder_config.h"
 
@@ -68,7 +68,6 @@ void MPEGAudioStreamParserBase::Init(
     InitCB init_cb,
     NewConfigCB config_cb,
     NewBuffersCB new_buffers_cb,
-    bool ignore_text_tracks,
     EncryptedMediaInitDataCB encrypted_media_init_data_cb,
     NewMediaSegmentCB new_segment_cb,
     EndMediaSegmentCB end_of_segment_cb,
@@ -132,7 +131,10 @@ bool MPEGAudioStreamParserBase::AppendToParseBuffer(const uint8_t* buf,
   CHECK_EQ(uninspected_pending_bytes_, 0);
 
   uninspected_pending_bytes_ = base::checked_cast<int>(size);
-  queue_.Push(buf, uninspected_pending_bytes_);
+  if (!queue_.Push(buf, uninspected_pending_bytes_)) {
+    DVLOG(2) << "AppendToParseBuffer(): Failed to push buf of size " << size;
+    return false;
+  }
 
   return true;
 }
@@ -298,8 +300,9 @@ int MPEGAudioStreamParserBase::ParseFrame(const uint8_t* data,
                                   MediaTrack::Kind("main"), MediaTrack::Label(),
                                   MediaTrack::Language());
     }
-    if (!config_cb_.Run(std::move(media_tracks), TextTrackConfigMap()))
+    if (!config_cb_.Run(std::move(media_tracks))) {
       return -1;
+    }
 
     if (init_cb_) {
       InitParameters params(kInfiniteDuration);
@@ -352,9 +355,6 @@ int MPEGAudioStreamParserBase::ParseIcecastHeader(const uint8_t* data,
 int MPEGAudioStreamParserBase::ParseID3v1(const uint8_t* data, int size) {
   DVLOG(1) << __func__ << "(" << size << ")";
 
-  // TODO(acolwell): Add code to actually validate ID3v1 data and
-  // expose it as a metadata text track.
-
   if (size < 4)
     return 0;
 
@@ -390,8 +390,6 @@ int MPEGAudioStreamParserBase::ParseID3v2(const uint8_t* data, int size) {
   if (size < actual_tag_size)
     return 0;
 
-  // TODO(acolwell): Add code to actually validate ID3v2 data and
-  // expose it as a metadata text track.
   return actual_tag_size;
 }
 

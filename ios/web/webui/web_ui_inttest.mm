@@ -5,7 +5,7 @@
 #import <memory>
 #import <string>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/run_loop.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/web/grit/ios_web_resources.h"
@@ -22,10 +22,6 @@
 #import "ios/web/web_state/web_state_impl.h"
 #import "url/gurl.h"
 #import "url/scheme_host_port.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -129,7 +125,7 @@ class WebUITest : public WebTestWithWebState {
 // Tests that a web UI page is loaded and that the WebState correctly reports
 // `WebStateImpl::HasWebUI`.
 TEST_F(WebUITest, LoadWebUIPage) {
-  ASSERT_TRUE(static_cast<WebStateImpl*>(web_state())->HasWebUI());
+  ASSERT_TRUE(WebStateImpl::FromWebState(web_state())->HasWebUI());
 
   EXPECT_TRUE(WaitForWebViewContainingText(web_state(), kWebUIPageText));
 }
@@ -147,7 +143,7 @@ TEST_F(WebUITest, LoadWebUIPageLoadViaLinkClick) {
     return !web_state()->IsLoading() && url.spec() == BaseUrl();
   }));
 
-  ASSERT_TRUE(static_cast<WebStateImpl*>(web_state())->HasWebUI());
+  ASSERT_TRUE(WebStateImpl::FromWebState(web_state())->HasWebUI());
 }
 
 }  // namespace web

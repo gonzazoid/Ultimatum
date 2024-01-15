@@ -4,9 +4,9 @@
 
 #import "ios/web_view/internal/cwv_lookalike_url_handler_internal.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "components/lookalikes/core/lookalike_url_util.h"
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
@@ -16,10 +16,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/gtest_mac.h"
 #include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -42,7 +38,8 @@ class CWVLookalikeURLHandlerTest : public PlatformTest {
       const GURL& request_url,
       base::OnceCallback<void(NSString*)> callback) {
     auto url_info = std::make_unique<LookalikeUrlContainer::LookalikeUrlInfo>(
-        safe_url, request_url, LookalikeUrlMatchType::kSiteEngagement);
+        safe_url, request_url,
+        lookalikes::LookalikeUrlMatchType::kSkeletonMatchSiteEngagement);
     return
         [[CWVLookalikeURLHandler alloc] initWithWebState:&web_state_
                                         lookalikeURLInfo:std::move(url_info)

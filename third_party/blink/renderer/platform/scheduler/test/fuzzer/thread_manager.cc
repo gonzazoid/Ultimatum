@@ -2,8 +2,9 @@
 
 #include <algorithm>
 
-#include "base/task/sequence_manager/test/test_task_queue.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/test/fuzzer/thread_pool_manager.h"
 
 namespace base {
@@ -11,28 +12,38 @@ namespace sequence_manager {
 
 namespace {
 
-TaskQueue::QueuePriority ToTaskQueuePriority(
+blink::scheduler::TaskPriority ToTaskQueuePriority(
     SequenceManagerTestDescription::QueuePriority priority) {
-  static_assert(TaskQueue::kQueuePriorityCount == 7,
-                "Number of task queue priorities has changed in "
-                "TaskQueue::QueuePriority.");
+  using blink::scheduler::TaskPriority;
+
+  static_assert(static_cast<int>(TaskPriority::kPriorityCount) == 11,
+                "Number of task priorities has changed in "
+                "blink::scheduler::TaskPriority.");
 
   switch (priority) {
     case SequenceManagerTestDescription::BEST_EFFORT:
-      return TaskQueue::kBestEffortPriority;
+      return TaskPriority::kBestEffortPriority;
     case SequenceManagerTestDescription::LOW:
-      return TaskQueue::kLowPriority;
+      return TaskPriority::kLowPriority;
+    case SequenceManagerTestDescription::LOW_CONTINUATION:
+      return TaskPriority::kLowPriorityContinuation;
     case SequenceManagerTestDescription::UNDEFINED:
     case SequenceManagerTestDescription::NORMAL:
-      return TaskQueue::kNormalPriority;
+      return TaskPriority::kNormalPriority;
+    case SequenceManagerTestDescription::NORMAL_CONTINUATION:
+      return TaskPriority::kNormalPriorityContinuation;
     case SequenceManagerTestDescription::HIGH:
-      return TaskQueue::kHighPriority;
+      return TaskPriority::kHighPriority;
+    case SequenceManagerTestDescription::HIGH_CONTINUATION:
+      return TaskPriority::kHighPriorityContinuation;
     case SequenceManagerTestDescription::VERY_HIGH:
-      return TaskQueue::kVeryHighPriority;
+      return TaskPriority::kVeryHighPriority;
+    case SequenceManagerTestDescription::EXTREMELY_HIGH:
+      return TaskPriority::kExtremelyHighPriority;
     case SequenceManagerTestDescription::HIGHEST:
-      return TaskQueue::kHighestPriority;
+      return TaskPriority::kHighestPriority;
     case SequenceManagerTestDescription::CONTROL:
-      return TaskQueue::kControlPriority;
+      return TaskPriority::kControlPriority;
   }
 }
 
@@ -53,13 +64,16 @@ ThreadManager::ThreadManager(base::TimeTicks initial_time,
 
   test_task_runner_->AdvanceMockTickClock(initial_time - base::TimeTicks());
 
-  manager_ =
-      SequenceManagerForTest::Create(nullptr, ThreadTaskRunnerHandle::Get(),
-                                     test_task_runner_->GetMockTickClock());
+  manager_ = SequenceManagerForTest::Create(
+      nullptr, SingleThreadTaskRunner::GetCurrentDefault(),
+      test_task_runner_->GetMockTickClock(),
+      SequenceManager::Settings::Builder()
+          .SetPrioritySettings(::blink::scheduler::CreatePrioritySettings())
+          .Build());
 
   TaskQueue::Spec spec = TaskQueue::Spec(QueueName::DEFAULT_TQ);
-  task_queues_.emplace_back(MakeRefCounted<TaskQueueWithVoters>(
-      manager_->CreateTaskQueueWithType<TestTaskQueue>(spec)));
+  task_queues_.emplace_back(
+      MakeRefCounted<TaskQueueWithVoters>(manager_->CreateTaskQueue(spec)));
 }
 
 ThreadManager::~ThreadManager() = default;
@@ -154,11 +168,11 @@ void ThreadManager::ExecuteCreateTaskQueueAction(
 
   TaskQueue::Spec spec = TaskQueue::Spec(QueueName::TEST_TQ);
 
-  TestTaskQueue* chosen_task_queue;
+  TaskQueue* chosen_task_queue;
   {
     AutoLock lock(lock_);
-    task_queues_.emplace_back(MakeRefCounted<TaskQueueWithVoters>(
-        manager_->CreateTaskQueueWithType<TestTaskQueue>(spec)));
+    task_queues_.emplace_back(
+        MakeRefCounted<TaskQueueWithVoters>(manager_->CreateTaskQueue(spec)));
     chosen_task_queue = task_queues_.back()->queue.get();
   }
   chosen_task_queue->SetQueuePriority(
@@ -197,18 +211,19 @@ void ThreadManager::PostDelayedTask(
     uint64_t task_queue_id,
     uint32_t delay_ms,
     const SequenceManagerTestDescription::Task& task) {
-  // PostDelayedTask could be called cross-thread - therefore we need a
-  // refptr to the TestTaskQueue which could potentially be deleted by the
-  // thread on which ThreadManager lives.
-  scoped_refptr<TestTaskQueue> chosen_task_queue =
-      GetTaskQueueFor(task_queue_id)->queue.get();
+  // PostDelayedTask can be called cross-thread, which can race with destroying
+  // the task queue on the thread on which ThreadManager lives. Instead of
+  // accessing the queue, get the task runner, which is synchronized with task
+  // queue destruction.
+  scoped_refptr<SingleThreadTaskRunner> chosen_task_runner =
+      GetTaskRunnerFor(task_queue_id);
 
   std::unique_ptr<Task> pending_task = std::make_unique<Task>(this);
 
   // TODO(farahcharab) After adding non-nestable/nestable tasks, fix this to
   // PostNonNestableDelayedTask for the former and PostDelayedTask for the
   // latter.
-  chosen_task_queue->task_runner()->PostDelayedTask(
+  chosen_task_runner->PostDelayedTask(
       FROM_HERE,
       BindOnce(&Task::Execute, pending_task->weak_ptr_factory_.GetWeakPtr(),
                task),
@@ -229,9 +244,10 @@ void ThreadManager::ExecuteSetQueuePriorityAction(
                                   ActionForTest::ActionType::kSetQueuePriority,
                                   NowTicks());
 
-  TestTaskQueue* chosen_task_queue =
-      GetTaskQueueFor(action.task_queue_id())->queue.get();
-  chosen_task_queue->SetQueuePriority(ToTaskQueuePriority(action.priority()));
+  scoped_refptr<TaskQueueWithVoters> chosen_task_queue =
+      GetTaskQueueFor(action.task_queue_id());
+  chosen_task_queue->queue->SetQueuePriority(
+      ToTaskQueuePriority(action.priority()));
 }
 
 void ThreadManager::ExecuteSetQueueEnabledAction(
@@ -279,21 +295,13 @@ void ThreadManager::ExecuteShutdownTaskQueueAction(
                                   ActionForTest::ActionType::kShutdownTaskQueue,
                                   NowTicks());
 
-  TestTaskQueue* chosen_task_queue = nullptr;
-  wtf_size_t queue_index;
-  {
-    AutoLock lock(lock_);
-
-    // We always want to have a default task queue.
-    if (task_queues_.size() > 1) {
-      queue_index = action.task_queue_id() % task_queues_.size();
-      chosen_task_queue = task_queues_[queue_index]->queue.get();
-    }
-  }
-
-  if (chosen_task_queue) {
-    chosen_task_queue->ShutdownTaskQueue();
-    AutoLock lock(lock_);
+  // The shutdown needs to happen with the lock held to prevent cross-thread
+  // task posting from grabbing a dangling pointer.
+  AutoLock lock(lock_);
+  // We always want to have a default task queue.
+  if (task_queues_.size() > 1) {
+    wtf_size_t queue_index = action.task_queue_id() % task_queues_.size();
+    task_queues_[queue_index].reset();
     task_queues_.erase(task_queues_.begin() + queue_index);
   }
 }
@@ -329,14 +337,14 @@ void ThreadManager::ExecuteInsertFenceAction(
                                   ActionForTest::ActionType::kInsertFence,
                                   NowTicks());
 
-  scoped_refptr<TestTaskQueue> chosen_task_queue =
-      GetTaskQueueFor(action.task_queue_id())->queue.get();
+  scoped_refptr<TaskQueueWithVoters> chosen_task_queue =
+      GetTaskQueueFor(action.task_queue_id());
 
   if (action.position() ==
       SequenceManagerTestDescription::InsertFenceAction::NOW) {
-    chosen_task_queue->InsertFence(TaskQueue::InsertFencePosition::kNow);
+    chosen_task_queue->queue->InsertFence(TaskQueue::InsertFencePosition::kNow);
   } else {
-    chosen_task_queue->InsertFence(
+    chosen_task_queue->queue->InsertFence(
         TaskQueue::InsertFencePosition::kBeginningOfTime);
   }
 }
@@ -350,9 +358,9 @@ void ThreadManager::ExecuteRemoveFenceAction(
                                   ActionForTest::ActionType::kRemoveFence,
                                   NowTicks());
 
-  scoped_refptr<TestTaskQueue> chosen_task_queue =
-      GetTaskQueueFor(action.task_queue_id())->queue.get();
-  chosen_task_queue->RemoveFence();
+  scoped_refptr<TaskQueueWithVoters> chosen_task_queue =
+      GetTaskQueueFor(action.task_queue_id());
+  chosen_task_queue->queue->RemoveFence();
 }
 
 void ThreadManager::ExecuteTask(
@@ -398,6 +406,14 @@ scoped_refptr<TaskQueueWithVoters> ThreadManager::GetTaskQueueFor(
   AutoLock lock(lock_);
   DCHECK(!task_queues_.empty());
   return task_queues_[task_queue_id % task_queues_.size()].get();
+}
+
+scoped_refptr<SingleThreadTaskRunner> ThreadManager::GetTaskRunnerFor(
+    uint64_t task_queue_id) {
+  AutoLock lock(lock_);
+  DCHECK(!task_queues_.empty());
+  return task_queues_[task_queue_id % task_queues_.size()]
+      ->queue->task_runner();
 }
 
 const Vector<SequenceManagerFuzzerProcessor::TaskForTest>&

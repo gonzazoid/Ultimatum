@@ -5,10 +5,11 @@
 #ifndef ANDROID_WEBVIEW_BROWSER_GFX_VIZ_COMPOSITOR_THREAD_RUNNER_WEBVIEW_H_
 #define ANDROID_WEBVIEW_BROWSER_GFX_VIZ_COMPOSITOR_THREAD_RUNNER_WEBVIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "components/viz/service/main/viz_compositor_thread_runner.h"
@@ -36,6 +37,8 @@ namespace android_webview {
 // in VizMainImpl, which may cause confusion for developers. If this proves to
 // be common, then an alternative is assume viz runs in the browser process
 // and directly connect viz classes to mojo end points in the browser.
+//
+// Lifetime: Singleton
 class VizCompositorThreadRunnerWebView : public viz::VizCompositorThreadRunner {
  public:
   static VizCompositorThreadRunnerWebView* GetInstance();

@@ -7,18 +7,16 @@
 #import <Foundation/Foundation.h>
 
 #import "ios/web/public/session/crw_session_storage.h"
+#import "ios/web/public/web_state_id.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 CRWSessionStorage* CreateSessionForTest(BOOL has_opener) {
   CRWSessionStorage* session = [[CRWSessionStorage alloc] init];
   session.stableIdentifier = [[NSUUID UUID] UUIDString];
+  session.uniqueIdentifier = web::WebStateID::NewUnique();
   session.hasOpener = has_opener;
   return session;
 }
@@ -26,8 +24,6 @@ CRWSessionStorage* CreateSessionForTest(BOOL has_opener) {
 SessionWindowIOS* CreateSessionWindowForTest(NSUInteger selectedIndex) {
   return [[SessionWindowIOS alloc]
       initWithSessions:@[ CreateSessionForTest(YES), CreateSessionForTest(NO) ]
-       sessionsSummary:nil
-           tabContents:nil
          selectedIndex:selectedIndex];
 }
 

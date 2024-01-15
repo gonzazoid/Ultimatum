@@ -7,15 +7,16 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/sync_file_system/file_change.h"
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
@@ -99,7 +100,7 @@ void OnGetFileMetadata(const base::Location& where,
 struct PostStatusFunctor {
   explicit PostStatusFunctor(SyncStatusCode status) : status_(status) {}
   void operator()(SyncStatusCallback callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), status_));
   }
 
@@ -112,14 +113,14 @@ struct PostStatusAndRecordChangeFunctor {
                                    std::vector<FileChange>* changes)
       : status_(status), changes_(changes) {}
   void operator()(FileChange change, SyncStatusCallback callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), status_));
     changes_->push_back(change);
   }
 
  private:
   SyncStatusCode status_;
-  std::vector<FileChange>* changes_;
+  raw_ptr<std::vector<FileChange>> changes_;
 };
 
 }  // namespace
@@ -233,13 +234,11 @@ class LocalFileSyncServiceTest
 TEST_F(LocalFileSyncServiceTest, RemoteSyncStepsSimple) {
   const FileSystemURL kFile(file_system_->URL("file"));
   const FileSystemURL kDir(file_system_->URL("dir"));
-  const char kTestFileData[] = "0123456789";
-  const int kTestFileDataSize = static_cast<int>(std::size(kTestFileData) - 1);
+  const std::string kTestFileData = "0123456789";
 
   base::FilePath local_path;
   ASSERT_TRUE(base::CreateTemporaryFileInDir(temp_dir_.GetPath(), &local_path));
-  ASSERT_EQ(kTestFileDataSize,
-            base::WriteFile(local_path, kTestFileData, kTestFileDataSize));
+  ASSERT_TRUE(base::WriteFile(local_path, kTestFileData));
 
   // Run PrepareForProcessRemoteChange for kFile.
   SyncFileMetadata expected_metadata;
@@ -535,7 +534,7 @@ TEST_F(LocalFileSyncServiceTest, ProcessLocalChange_MultipleChanges) {
 
 TEST_F(LocalFileSyncServiceTest, ProcessLocalChange_GetLocalMetadata) {
   const FileSystemURL kURL(file_system_->URL("foo"));
-  const base::Time kTime = base::Time::FromDoubleT(333);
+  const base::Time kTime = base::Time::FromSecondsSinceUnixEpoch(333);
   const int kSize = 555;
 
   base::RunLoop run_loop;

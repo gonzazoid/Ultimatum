@@ -7,10 +7,11 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/strcat.h"
@@ -18,7 +19,6 @@
 #include "base/syslog_logging.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/services/storage/dom_storage/local_storage_impl.h"
 #include "components/services/storage/dom_storage/session_storage_impl.h"
@@ -26,11 +26,13 @@
 #include "components/services/storage/public/mojom/storage_policy_update.mojom.h"
 #include "components/services/storage/public/mojom/storage_usage_info.mojom.h"
 #include "content/browser/dom_storage/session_storage_namespace_impl.h"
+#include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
+#include "content/public/browser/permission_controller.h"
 #include "content/public/browser/session_storage_usage_info.h"
 #include "content/public/browser/storage_usage_info.h"
 #include "content/public/common/content_client.h"
@@ -38,6 +40,7 @@
 #include "content/public/common/content_switches.h"
 #include "storage/browser/quota/special_storage_policy.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace content {
@@ -239,7 +242,7 @@ void DOMStorageContextWrapper::Flush() {
 
 void DOMStorageContextWrapper::OpenLocalStorage(
     const blink::StorageKey& storage_key,
-    absl::optional<blink::LocalFrameToken> local_frame_token,
+    std::optional<blink::LocalFrameToken> local_frame_token,
     mojo::PendingReceiver<blink::mojom::StorageArea> receiver,
     ChildProcessSecurityPolicyImpl::Handle security_policy_handle,
     mojo::ReportBadMessageCallback bad_message_callback) {
@@ -268,7 +271,7 @@ void DOMStorageContextWrapper::BindNamespace(
 
 void DOMStorageContextWrapper::BindStorageArea(
     const blink::StorageKey& storage_key,
-    absl::optional<blink::LocalFrameToken> local_frame_token,
+    std::optional<blink::LocalFrameToken> local_frame_token,
     const std::string& namespace_id,
     mojo::PendingReceiver<blink::mojom::StorageArea> receiver,
     ChildProcessSecurityPolicyImpl::Handle security_policy_handle,
@@ -286,7 +289,7 @@ void DOMStorageContextWrapper::BindStorageArea(
 bool DOMStorageContextWrapper::IsRequestValid(
     const StorageType type,
     const blink::StorageKey& storage_key,
-    absl::optional<blink::LocalFrameToken> local_frame_token,
+    std::optional<blink::LocalFrameToken> local_frame_token,
     ChildProcessSecurityPolicyImpl::Handle security_policy_handle,
     mojo::ReportBadMessageCallback bad_message_callback) {
   bool host_storage_key_did_not_match = false;
@@ -297,7 +300,34 @@ bool DOMStorageContextWrapper::IsRequestValid(
     if (!host) {
       return false;
     }
-    host_storage_key_did_not_match = host->storage_key() != storage_key;
+    switch (type) {
+      case StorageType::kLocalStorage: {
+        host_storage_key_did_not_match = host->GetStorageKey() != storage_key;
+        break;
+      }
+      case StorageType::kSessionStorage: {
+        host_storage_key_did_not_match =
+            host->frame_tree()->GetSessionStorageKey(host->GetStorageKey()) !=
+            storage_key;
+        break;
+      }
+    }
+    // If the storage keys did not match, but storage access has been granted
+    // and the request was for a first-party storage key on the same origin as
+    // the frame's storage key, we can allow the request to proceed. See:
+    // third_party/blink/renderer/modules/storage_access/README.md
+    if (host_storage_key_did_not_match) {
+      auto* permission_controller =
+          host->GetBrowserContext()->GetPermissionController();
+      blink::mojom::PermissionStatus status =
+          permission_controller->GetPermissionStatusForCurrentDocument(
+              blink::PermissionType::STORAGE_ACCESS_GRANT, host);
+      if (status == blink::mojom::PermissionStatus::GRANTED) {
+        host_storage_key_did_not_match =
+            blink::StorageKey::CreateFirstParty(
+                host->GetStorageKey().origin()) != storage_key;
+      }
+    }
   }
   if (!security_policy_handle.CanAccessDataForOrigin(storage_key.origin())) {
     const std::string type_string =
@@ -360,14 +390,14 @@ void DOMStorageContextWrapper::AddNamespace(
     const std::string& namespace_id,
     SessionStorageNamespaceImpl* session_namespace) {
   base::AutoLock lock(alive_namespaces_lock_);
-  DCHECK(alive_namespaces_.find(namespace_id) == alive_namespaces_.end());
+  DCHECK(!base::Contains(alive_namespaces_, namespace_id));
   alive_namespaces_[namespace_id] = session_namespace;
 }
 
 void DOMStorageContextWrapper::RemoveNamespace(
     const std::string& namespace_id) {
   base::AutoLock lock(alive_namespaces_lock_);
-  DCHECK(alive_namespaces_.find(namespace_id) != alive_namespaces_.end());
+  DCHECK(base::Contains(alive_namespaces_, namespace_id));
   alive_namespaces_.erase(namespace_id);
 }
 

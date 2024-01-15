@@ -32,6 +32,7 @@
 #include "absl/base/config.h"
 #include "absl/base/log_severity.h"
 #include "absl/base/optimization.h"
+#include "absl/log/internal/append_truncated.h"
 #include "absl/log/internal/config.h"
 #include "absl/log/internal/globals.h"
 #include "absl/strings/numbers.h"
@@ -48,7 +49,7 @@ namespace {
 
 // This templated function avoids compiler warnings about tautological
 // comparisons when log_internal::Tid is unsigned. It can be replaced with a
-// constexpr if once the minimum C++ version Abseil suppports is C++17.
+// constexpr if once the minimum C++ version Abseil supports is C++17.
 template <typename T>
 inline std::enable_if_t<!std::is_signed<T>::value>
 PutLeadingWhitespace(T tid, char*& p) {
@@ -112,27 +113,29 @@ size_t FormatBoundedFields(absl::LogSeverity severity, absl::Time timestamp,
   char* p = buf.data();
   *p++ = absl::LogSeverityName(severity)[0];
   const absl::TimeZone::CivilInfo ci = tz->At(timestamp);
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(ci.cs.month()), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(ci.cs.month()), p);
   p += 2;
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(ci.cs.day()), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(ci.cs.day()), p);
   p += 2;
   *p++ = ' ';
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(ci.cs.hour()), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(ci.cs.hour()), p);
   p += 2;
   *p++ = ':';
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(ci.cs.minute()), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(ci.cs.minute()),
+                                       p);
   p += 2;
   *p++ = ':';
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(ci.cs.second()), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(ci.cs.second()),
+                                       p);
   p += 2;
   *p++ = '.';
   const int64_t usecs = absl::ToInt64Microseconds(ci.subsecond);
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(usecs / 10000), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(usecs / 10000), p);
   p += 2;
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(usecs / 100 % 100),
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(usecs / 100 % 100),
                                        p);
   p += 2;
-  absl::numbers_internal::PutTwoDigits(static_cast<size_t>(usecs % 100), p);
+  absl::numbers_internal::PutTwoDigits(static_cast<uint32_t>(usecs % 100), p);
   p += 2;
   *p++ = ' ';
   PutLeadingWhitespace(tid, p);
@@ -141,15 +144,6 @@ size_t FormatBoundedFields(absl::LogSeverity severity, absl::Time timestamp,
   const size_t bytes_formatted = static_cast<size_t>(p - buf.data());
   buf.remove_prefix(bytes_formatted);
   return bytes_formatted;
-}
-
-// Copies into `dst` as many bytes of `src` as will fit, then advances `dst`
-// past the copied bytes and returns the number of bytes written.
-size_t AppendTruncated(absl::string_view src, absl::Span<char>& dst) {
-  if (src.size() > dst.size()) src = src.substr(0, dst.size());
-  memcpy(dst.data(), src.data(), src.size());
-  dst.remove_prefix(src.size());
-  return src.size();
 }
 
 size_t FormatLineNumber(int line, absl::Span<char>& buf) {
@@ -177,13 +171,13 @@ std::string FormatLogMessage(absl::LogSeverity severity,
                              absl::CivilSecond civil_second,
                              absl::Duration subsecond, log_internal::Tid tid,
                              absl::string_view basename, int line,
-                             absl::string_view message) {
+                             PrefixFormat format, absl::string_view message) {
   return absl::StrFormat(
-      "%c%02d%02d %02d:%02d:%02d.%06d %7d %s:%d] %s",
+      "%c%02d%02d %02d:%02d:%02d.%06d %7d %s:%d] %s%s",
       absl::LogSeverityName(severity)[0], civil_second.month(),
       civil_second.day(), civil_second.hour(), civil_second.minute(),
       civil_second.second(), absl::ToInt64Microseconds(subsecond), tid,
-      basename, line, message);
+      basename, line, format == PrefixFormat::kRaw ? "RAW: " : "", message);
 }
 
 // This method is fairly hot, and the library always passes a huge `buf`, so we
@@ -197,10 +191,12 @@ std::string FormatLogMessage(absl::LogSeverity severity,
 // 3. line number and bracket
 size_t FormatLogPrefix(absl::LogSeverity severity, absl::Time timestamp,
                        log_internal::Tid tid, absl::string_view basename,
-                       int line, absl::Span<char>& buf) {
+                       int line, PrefixFormat format, absl::Span<char>& buf) {
   auto prefix_size = FormatBoundedFields(severity, timestamp, tid, buf);
-  prefix_size += AppendTruncated(basename, buf);
+  prefix_size += log_internal::AppendTruncated(basename, buf);
   prefix_size += FormatLineNumber(line, buf);
+  if (format == PrefixFormat::kRaw)
+    prefix_size += log_internal::AppendTruncated("RAW: ", buf);
   return prefix_size;
 }
 

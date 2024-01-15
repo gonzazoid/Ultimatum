@@ -7,13 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sync_socket.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/unguessable_token.h"
+#include "content/public/test/browser_task_environment.h"
 #include "media/base/audio_parameters.h"
 #include "media/mojo/mojom/audio_data_pipe.mojom.h"
 #include "media/mojo/mojom/audio_output_stream.mojom.h"
@@ -163,7 +164,9 @@ struct TestEnvironment {
 
   void RunUntilIdle() { env.RunUntilIdle(); }
 
-  base::test::TaskEnvironment env;
+  // MediaInternals RenderProcessHost observation setup asserts being run on the
+  // UI thread.
+  BrowserTaskEnvironment env;
   base::UnguessableToken group;
   MockDeleterCallback deleter;
   StrictMock<MockAudioOutputStreamProviderClient> provider_client;
@@ -176,7 +179,7 @@ struct TestEnvironment {
 }  // namespace
 
 TEST(AudioOutputStreamBrokerTest, StoresProcessAndFrameId) {
-  base::test::TaskEnvironment env;
+  BrowserTaskEnvironment env;
   MockDeleterCallback deleter;
   StrictMock<MockAudioOutputStreamProviderClient> provider_client;
 
@@ -213,7 +216,7 @@ TEST(AudioOutputStreamBrokerTest, StreamCreationSuccess_Propagates) {
   base::SyncSocket socket1, socket2;
   base::SyncSocket::CreatePair(&socket1, &socket2);
   std::move(stream_request_data.created_callback)
-      .Run({absl::in_place, base::UnsafeSharedMemoryRegion::Create(kShMemSize),
+      .Run({std::in_place, base::UnsafeSharedMemoryRegion::Create(kShMemSize),
             mojo::PlatformHandle(socket1.Take())});
 
   EXPECT_CALL(env.provider_client, OnCreated());

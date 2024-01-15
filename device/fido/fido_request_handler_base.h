@@ -11,15 +11,15 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "build/build_config.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_discovery_base.h"
@@ -58,6 +58,19 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
   // components of TransportAvailabilityInfo is set,
   // AuthenticatorRequestClientDelegate should be notified.
   struct COMPONENT_EXPORT(DEVICE_FIDO) TransportAvailabilityInfo {
+    enum class ConditionalUITreatment {
+      kDefault = 0,
+      // kDontShowEmptyConditionalUI requests that, if there are no matching
+      // credentials for conditional UI, that the option to use a passkey from
+      // another device not be offered. This is for measurement and
+      // experimentation.
+      kDontShowEmptyConditionalUI,
+      // kNeverOfferPasskeyFromAnotherDevice requests that the option to use a
+      // passkey from another device is never offered in conditional UI. This is
+      // for measurement and experimentation.
+      kNeverOfferPasskeyFromAnotherDevice,
+    };
+
     TransportAvailabilityInfo();
     TransportAvailabilityInfo(const TransportAvailabilityInfo& other);
     TransportAvailabilityInfo& operator=(
@@ -70,6 +83,13 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
     // list.
     bool has_empty_allow_list = false;
 
+    // is_only_hybrid_or_internal is true if credentials in the allow-list only
+    // contain the hybrid or internal transports.
+    bool is_only_hybrid_or_internal = false;
+
+    // True this process has iCloud Keychain support. Only meaningful on macOS.
+    bool has_icloud_keychain = false;
+
     // The intersection of transports supported by the client and allowed by the
     // relying party.
     base::flat_set<FidoTransportProtocol> available_transports;
@@ -77,14 +97,20 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
     // Whether the platform authenticator has a matching credential for the
     // request. This is only set for a GetAssertion request.
     RecognizedCredential has_platform_authenticator_credential =
-        RecognizedCredential::kUnknown;
+        RecognizedCredential::kNoRecognizedCredential;
 
-    // The set of recognized platform credential user entities that can fulfill
-    // a GetAssertion request. Not all platform authenticators report this, so
-    // the set might be empty even if
-    // |has_platform_authenticator_credential| is |kHasRecognizedCredential|.
-    std::vector<DiscoverableCredentialMetadata>
-        recognized_platform_authenticator_credentials;
+    // This field mirrors the previous one but is specific to iCloud
+    // Keychain. They are separate because a macOS system can have both the
+    // Chromium platform authenticator and iCloud Keychain as platform
+    // authenticators.
+    RecognizedCredential has_icloud_keychain_credential =
+        RecognizedCredential::kNoRecognizedCredential;
+
+    // The set of recognized credential user entities that can fulfill a
+    // GetAssertion request. Not all authenticators report this, so the set
+    // might be empty even if |has_platform_authenticator_credential| is
+    // |kHasRecognizedCredential|.
+    std::vector<DiscoverableCredentialMetadata> recognized_credentials;
 
     bool is_ble_powered = false;
     bool can_power_on_ble_adapter = false;
@@ -105,11 +131,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
     // when creating a resident credential.
     bool win_native_ui_shows_resident_credential_notice = false;
 
-    // Contains the authenticator ID of the native Windows
-    // authenticator if |has_win_native_api_authenticator| is true.
-    // This allows the observer to distinguish it from other
-    // authenticators.
-    std::string win_native_api_authenticator_id;
+    // Whether the native Windows API reports that a user verifying platform
+    // authenticator is available.
+    bool win_is_uvpaa = false;
 
     // Indicates whether the request is occurring in an off-the-record
     // BrowserContext (e.g. Chrome Incognito mode).
@@ -123,6 +147,47 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
     // authenticator and thus have privacy implications.
     ResidentKeyRequirement resident_key_requirement =
         ResidentKeyRequirement::kDiscouraged;
+
+    // Indicates the UserVerificationRequirement of the current request.
+    UserVerificationRequirement user_verification_requirement =
+        UserVerificationRequirement::kDiscouraged;
+
+    // transport_list_did_include_internal is set to true during a getAssertion
+    // request if at least one element of the allowList included the "internal"
+    // transport, or didn't have any transports.
+    //
+    // An embedder may use this to show a more precise UI when no transports
+    // are available. If the lack of transports is because the allowList only
+    // contained NFC-based credentials, and there's no NFC support, then that
+    // might be meaningfully different from the case where the allowList
+    // contained credentials that could have been on the local device but
+    // weren't.
+    bool transport_list_did_include_internal = false;
+
+    // transport_list_did_include_hybrid is set to true during a getAssertion
+    // request if at least one element of the allowList included the "hybrid"
+    // transport, or didn't have any transports.
+    bool transport_list_did_include_hybrid = false;
+
+    // transport_list_did_include_security_key is set to true during a
+    // getAssertion request if at least one element of the allowList included
+    // the "usb", "nfc", or "ble" transport, or didn't have any transports.
+    bool transport_list_did_include_security_key = false;
+
+    // request_is_internal_only indicates that this request can only be serviced
+    // by internal authenticators (e.g. due to the attachment setting).
+    // See also `make_credential_attachment`.
+    bool request_is_internal_only = false;
+
+    // make_credential_attachment contains the attachment preference for
+    // makeCredential requests. See also `request_is_internal_only`, which isn't
+    // specific to makeCredential requests.
+    absl::optional<AuthenticatorAttachment> make_credential_attachment;
+
+    // conditional_ui_treatment_ controls how conditional UI will be handled for
+    // this request.
+    ConditionalUITreatment conditional_ui_treatment =
+        ConditionalUITreatment::kDefault;
   };
 
   class COMPONENT_EXPORT(DEVICE_FIDO) Observer {
@@ -163,7 +228,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
     virtual void BluetoothAdapterPowerChanged(bool is_powered_on) = 0;
     virtual void FidoAuthenticatorAdded(
         const FidoAuthenticator& authenticator) = 0;
-    virtual void FidoAuthenticatorRemoved(base::StringPiece device_id) = 0;
+    virtual void FidoAuthenticatorRemoved(std::string_view device_id) = 0;
 
     // SupportsPIN returns true if this observer supports collecting a PIN from
     // the user. If this function returns false, |CollectPIN| and
@@ -233,7 +298,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
   // received from the any one of the connected authenticators, in which case
   // all other authenticators are cancelled.
   // https://w3c.github.io/webauthn/#iface-pkcredential
-  void CancelActiveAuthenticators(base::StringPiece exclude_id = "");
+  void CancelActiveAuthenticators(std::string_view exclude_id = "");
   virtual void OnBluetoothAdapterEnumerated(bool is_present,
                                             bool is_powered_on,
                                             bool can_power_on,
@@ -317,8 +382,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
   // platform authenticator whether it has responsive discoverable credentials
   // and whether it has responsive credentials at all.
   void OnHavePlatformCredentialStatus(
+      AuthenticatorType authenticator_type,
       std::vector<DiscoverableCredentialMetadata> user_entities,
-      bool have_credential);
+      RecognizedCredential has_credentials);
 
  private:
   friend class FidoRequestHandlerTest;
@@ -332,6 +398,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
   void InitializeAuthenticatorAndDispatchRequest(
       const std::string& authenticator_id);
   void ConstructBleAdapterPowerManager();
+  void OnWinIsUvpaa(bool is_uvpaa);
 
   AuthenticatorMap active_authenticators_;
   std::vector<std::unique_ptr<FidoDiscoveryBase>> discoveries_;
@@ -344,10 +411,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoRequestHandlerBase
   // |OnTransportAvailabilityEnumerated| on |observer_|.
   std::unique_ptr<TransportAvailabilityCallbackReadiness>
       transport_availability_callback_readiness_;
-
-  // internal_authenticator_found_ is used to check that at most one kInternal
-  // authenticator is discovered.
-  bool internal_authenticator_found_ = false;
 
   base::WeakPtrFactory<FidoRequestHandlerBase> weak_factory_{this};
 };

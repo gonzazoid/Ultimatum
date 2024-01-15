@@ -5,18 +5,20 @@
 #include "gpu/command_buffer/service/shared_image/raw_draw_image_backing.h"
 
 #include "base/logging.h"
-#include "base/strings/stringprintf.h"
-#include "base/trace_event/process_memory_dump.h"
+#include "base/types/optional_util.h"
 #include "cc/paint/paint_op_buffer.h"
 #include "components/viz/common/resources/resource_sizes.h"
-#include "gpu/command_buffer/common/shared_image_trace_utils.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "gpu/command_buffer/service/skia_utils.h"
+#include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
-#include "third_party/skia/include/core/SkPromiseImageTexture.h"
-#include "ui/gl/trace_util.h"
+#include "third_party/skia/include/gpu/GpuTypes.h"
+#include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
 
 namespace gpu {
 
@@ -33,7 +35,7 @@ class RawDrawImageBacking::RasterRawDrawImageRepresentation
       scoped_refptr<SharedContextState> context_state,
       int final_msaa_count,
       const SkSurfaceProps& surface_props,
-      const absl::optional<SkColor4f>& clear_color,
+      const std::optional<SkColor4f>& clear_color,
       bool visible) override {
     return raw_draw_backing()->BeginRasterWriteAccess(
         std::move(context_state), final_msaa_count, surface_props, clear_color,
@@ -45,7 +47,7 @@ class RawDrawImageBacking::RasterRawDrawImageRepresentation
   }
 
   cc::PaintOpBuffer* BeginReadAccess(
-      absl::optional<SkColor4f>& clear_color) override {
+      std::optional<SkColor4f>& clear_color) override {
     return raw_draw_backing()->BeginRasterReadAccess(clear_color);
   }
 
@@ -58,12 +60,13 @@ class RawDrawImageBacking::RasterRawDrawImageRepresentation
 };
 
 class RawDrawImageBacking::SkiaRawDrawImageRepresentation
-    : public SkiaImageRepresentation {
+    : public SkiaGaneshImageRepresentation {
  public:
-  SkiaRawDrawImageRepresentation(SharedImageManager* manager,
+  SkiaRawDrawImageRepresentation(GrDirectContext* gr_context,
+                                 SharedImageManager* manager,
                                  SharedImageBacking* backing,
                                  MemoryTypeTracker* tracker)
-      : SkiaImageRepresentation(manager, backing, tracker) {}
+      : SkiaGaneshImageRepresentation(gr_context, manager, backing, tracker) {}
 
   bool SupportsMultipleConcurrentReadAccess() override { return true; }
 
@@ -73,25 +76,25 @@ class RawDrawImageBacking::SkiaRawDrawImageRepresentation
       const gfx::Rect& update_rect,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override {
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override {
     NOTIMPLEMENTED();
     return {};
   }
 
-  std::vector<sk_sp<SkPromiseImageTexture>> BeginWriteAccess(
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginWriteAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override {
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override {
     NOTIMPLEMENTED();
     return {};
   }
 
   void EndWriteAccess() override { NOTIMPLEMENTED(); }
 
-  std::vector<sk_sp<SkPromiseImageTexture>> BeginReadAccess(
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginReadAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override {
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override {
     auto promise_texture = raw_draw_backing()->BeginSkiaReadAccess();
     if (!promise_texture)
       return {};
@@ -140,35 +143,6 @@ void RawDrawImageBacking::Update(std::unique_ptr<gfx::GpuFence> in_fence) {
   NOTIMPLEMENTED();
 }
 
-void RawDrawImageBacking::OnMemoryDump(
-    const std::string& dump_name,
-    base::trace_event::MemoryAllocatorDumpGuid client_guid,
-    base::trace_event::ProcessMemoryDump* pmd,
-    uint64_t client_tracing_id) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  AutoLock auto_lock(this);
-
-  SharedImageBacking::OnMemoryDump(dump_name, client_guid, pmd,
-                                   client_tracing_id);
-
-  if (auto tracing_id = GrBackendTextureTracingID(backend_texture_)) {
-    // Add a |service_guid| which expresses shared ownership between the
-    // various GPU dumps.
-    auto service_guid = gl::GetGLTextureServiceGUIDForTracing(tracing_id);
-    pmd->CreateSharedGlobalAllocatorDump(service_guid);
-    pmd->AddOwnershipEdge(client_guid, service_guid, kOwningEdgeImportance);
-  }
-}
-
-size_t RawDrawImageBacking::EstimatedSizeForMemTracking() const {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  AutoLock auto_lock(this);
-  return backend_texture_.isValid()
-             ? viz::ResourceSizes::UncheckedSizeInBytes<size_t>(size(),
-                                                                format())
-             : 0u;
-}
-
 std::unique_ptr<RasterImageRepresentation> RawDrawImageBacking::ProduceRaster(
     SharedImageManager* manager,
     MemoryTypeTracker* tracker) {
@@ -176,7 +150,8 @@ std::unique_ptr<RasterImageRepresentation> RawDrawImageBacking::ProduceRaster(
                                                             tracker);
 }
 
-std::unique_ptr<SkiaImageRepresentation> RawDrawImageBacking::ProduceSkia(
+std::unique_ptr<SkiaGaneshImageRepresentation>
+RawDrawImageBacking::ProduceSkiaGanesh(
     SharedImageManager* manager,
     MemoryTypeTracker* tracker,
     scoped_refptr<SharedContextState> context_state) {
@@ -184,8 +159,8 @@ std::unique_ptr<SkiaImageRepresentation> RawDrawImageBacking::ProduceSkia(
   if (!context_state_)
     context_state_ = context_state;
   DCHECK(context_state_ == context_state);
-  return std::make_unique<SkiaRawDrawImageRepresentation>(manager, this,
-                                                          tracker);
+  return std::make_unique<SkiaRawDrawImageRepresentation>(
+      context_state->gr_context(), manager, this, tracker);
 }
 
 void RawDrawImageBacking::ResetPaintOpBuffer() {
@@ -213,31 +188,27 @@ bool RawDrawImageBacking::CreateBackendTextureAndFlushPaintOps(bool flush) {
   if (context_state_->context_lost())
     return false;
 
-  auto mipmap = usage() & SHARED_IMAGE_USAGE_MIPMAP ? GrMipMapped::kYes
-                                                    : GrMipMapped::kNo;
-  auto sk_color = viz::ResourceFormatToClosestSkColorType(
+  auto sk_color = viz::ToClosestSkColorType(
       /*gpu_compositing=*/true, format());
   const std::string label =
       "RawDrawImageBacking" + CreateLabelForSharedImageUsage(usage());
-  backend_texture_ = context_state_->gr_context()->createBackendTexture(
-      size().width(), size().height(), sk_color, mipmap, GrRenderable::kYes,
-      GrProtected::kNo, label);
+  GrDirectContext* direct_context = context_state_->gr_context();
+  CHECK(direct_context);
+  backend_texture_ = direct_context->createBackendTexture(
+      size().width(), size().height(), sk_color, skgpu::Mipmapped::kNo,
+      GrRenderable::kYes, GrProtected::kNo, label);
   if (!backend_texture_.isValid()) {
     DLOG(ERROR) << "createBackendTexture() failed with SkColorType:"
                 << sk_color;
     return false;
   }
-  promise_texture_ = SkPromiseImageTexture::Make(backend_texture_);
+  promise_texture_ = GrPromiseImageTexture::Make(backend_texture_);
 
-  // TODO(crbug.com/1353911): The estimated size recorded with GPU memory
-  // tracker should be updated after `backend_texture_` is allocated.
-
-  auto surface = SkSurface::MakeFromBackendTexture(
-      context_state_->gr_context(), backend_texture_, surface_origin(),
-      final_msaa_count_, sk_color, color_space().ToSkColorSpace(),
-      &surface_props_);
+  auto surface = SkSurfaces::WrapBackendTexture(
+      direct_context, backend_texture_, surface_origin(), final_msaa_count_,
+      sk_color, color_space().ToSkColorSpace(), &surface_props_);
   if (!surface) {
-    DLOG(ERROR) << "SkSurface::MakeFromBackendTexture() failed! SkColorType:"
+    DLOG(ERROR) << "SkSurfaces::WrapBackendTexture() failed! SkColorType:"
                 << sk_color;
     DestroyBackendTexture();
     return false;
@@ -252,15 +223,17 @@ bool RawDrawImageBacking::CreateBackendTextureAndFlushPaintOps(bool flush) {
   }
 
   if (flush) {
-    surface->flush();
+    direct_context->flush(surface.get());
   } else {
     // For a MSAA SkSurface, if gr_context->flush() is called, all draws on the
     // SkSurface will be flush into a temp MSAA buffer, but the it will not
     // resolved the temp MSAA buffer to the wrapped backend texture.
     // So call resolveMSAA() to insert resolve op in surface's command stream,
     // and when gr_context->flush() is call, the surface will be resolved.
-    surface->resolveMSAA();
+    SkSurfaces::ResolveMSAA(surface);
   }
+
+  UpdateEstimatedSize(format().EstimatedSizeInBytes(size()));
 
   return true;
 }
@@ -279,7 +252,7 @@ cc::PaintOpBuffer* RawDrawImageBacking::BeginRasterWriteAccess(
     scoped_refptr<SharedContextState> context_state,
     int final_msaa_count,
     const SkSurfaceProps& surface_props,
-    const absl::optional<SkColor4f>& clear_color,
+    const std::optional<SkColor4f>& clear_color,
     bool visible) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   AutoLock auto_lock(this);
@@ -299,8 +272,9 @@ cc::PaintOpBuffer* RawDrawImageBacking::BeginRasterWriteAccess(
   // Should we keep the backing?
   DestroyBackendTexture();
 
-  if (!paint_op_buffer_)
-    paint_op_buffer_ = sk_make_sp<cc::PaintOpBuffer>();
+  if (!paint_op_buffer_) {
+    paint_op_buffer_.emplace();
+  }
 
   DCHECK(!context_state_ || context_state_ == context_state);
   context_state_ = std::move(context_state);
@@ -310,7 +284,7 @@ cc::PaintOpBuffer* RawDrawImageBacking::BeginRasterWriteAccess(
   clear_color_ = clear_color;
   visible_ = visible;
 
-  return paint_op_buffer_.get();
+  return base::OptionalToPtr(paint_op_buffer_);
 }
 
 void RawDrawImageBacking::EndRasterWriteAccess(base::OnceClosure callback) {
@@ -343,7 +317,7 @@ void RawDrawImageBacking::EndRasterWriteAccess(base::OnceClosure callback) {
 }
 
 cc::PaintOpBuffer* RawDrawImageBacking::BeginRasterReadAccess(
-    absl::optional<SkColor4f>& clear_color) {
+    std::optional<SkColor4f>& clear_color) {
   // paint ops will be read on compositor thread, so do not check thread with
   // DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   AutoLock auto_lock(this);
@@ -372,14 +346,14 @@ cc::PaintOpBuffer* RawDrawImageBacking::BeginRasterReadAccess(
   read_count_++;
 
   if (!paint_op_buffer_) {
-    paint_op_buffer_ = sk_make_sp<cc::PaintOpBuffer>();
+    paint_op_buffer_.emplace();
   }
 
   clear_color = clear_color_;
-  return paint_op_buffer_.get();
+  return base::OptionalToPtr(paint_op_buffer_);
 }
 
-sk_sp<SkPromiseImageTexture> RawDrawImageBacking::BeginSkiaReadAccess() {
+sk_sp<GrPromiseImageTexture> RawDrawImageBacking::BeginSkiaReadAccess() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   AutoLock auto_lock(this);
   if (!backend_texture_.isValid() &&

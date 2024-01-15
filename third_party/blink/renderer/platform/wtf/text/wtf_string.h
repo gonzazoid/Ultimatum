@@ -39,11 +39,9 @@
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
-#ifdef __OBJC__
-#include <objc/objc.h>
-#endif
-
 namespace WTF {
+
+class CodePointIterator;
 
 #define DISPATCH_CASE_OP(caseSensitivity, op, args)     \
   ((caseSensitivity == kTextCaseSensitive)              \
@@ -185,6 +183,11 @@ class WTF_EXPORT String {
       return 0;
     return (*impl_)[index];
   }
+
+  // `begin()` and `end()` return iterators for `UChar32`, neither `UChar` nor
+  // `LChar`. If you'd like to iterate code units, use `[]` and `length()`.
+  CodePointIterator begin() const;
+  CodePointIterator end() const;
 
   template <typename IntegerType>
   static String Number(IntegerType number) {
@@ -352,6 +355,10 @@ class WTF_EXPORT String {
   // This function converts ASCII characters only.
   [[nodiscard]] String UpperASCII() const;
 
+  // Returns the length of the string after stripping white spaces.
+  // This is equivalent (minus the allocation overhead) of doing:
+  // `string.StripWhiteSpace().length()`
+  [[nodiscard]] unsigned LengthWithStrippedWhiteSpace() const;
   [[nodiscard]] String StripWhiteSpace() const;
   [[nodiscard]] String StripWhiteSpace(IsWhiteSpaceFunctionPtr) const;
   [[nodiscard]] String SimplifyWhiteSpace(
@@ -672,15 +679,36 @@ void String::PrependTo(BufferType& result,
 }
 
 template <typename T>
-struct DefaultHash;
+struct HashTraits;
 // Defined in string_hash.h.
 template <>
-struct DefaultHash<String>;
+struct HashTraits<String>;
 
 // Shared global empty string.
 WTF_EXPORT extern const String& g_empty_string;
 WTF_EXPORT extern const String& g_empty_string16_bit;
 WTF_EXPORT extern const String& g_xmlns_with_colon;
+
+// Table representing common HTML strings of type '\n<space>*'.
+class WTF_EXPORT NewlineThenWhitespaceStringsTable {
+ public:
+  // The constant is kept small to minimize the overhead of the table (496
+  // bytes).
+  static constexpr size_t kTableSize = 32;
+
+  static void Init();
+
+  static inline String GetStringForLength(size_t string_length) {
+    DCHECK_NE(string_length, 0u);
+    DCHECK_LT(string_length, kTableSize);
+    return g_table_[string_length];
+  }
+
+  static bool IsNewlineThenWhitespaces(const StringView& view);
+
+ private:
+  static const String (&g_table_)[kTableSize];
+};
 
 // Pretty printer for gtest and base/logging.*.  It prepends and appends
 // double-quotes, and escapes characters other than ASCII printables.

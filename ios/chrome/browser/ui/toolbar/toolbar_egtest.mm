@@ -19,10 +19,6 @@
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using chrome_test_util::OmniboxText;
 using chrome_test_util::SystemSelectionCallout;
 using chrome_test_util::SystemSelectionCalloutCopyButton;
@@ -40,8 +36,7 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
                                      grey_descendant(
                                          grey_accessibilityLabel(suggestion)),
                                      grey_accessibilityID(accessibilityID),
-                                     grey_kindOfClassName(
-                                         @"OmniboxPopupRowCell"),
+                                     chrome_test_util::OmniboxPopupRow(),
                                      grey_sufficientlyVisible(), nil)]
         assertWithMatcher:grey_sufficientlyVisible()
                     error:&error];
@@ -123,7 +118,7 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
       assertWithMatcher:chrome_test_util::OmniboxText(URL.GetContent())];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"foo")];
+      performAction:grey_replaceText(@"foo")];
 
   id<GREYMatcher> cancelButton =
       grey_accessibilityID(kToolbarCancelOmniboxEditButtonIdentifier);
@@ -154,7 +149,7 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
       assertWithMatcher:chrome_test_util::OmniboxText(URL.GetContent())];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"foo")];
+      performAction:grey_replaceText(@"foo")];
 
   id<GREYMatcher> hideKeyboard = grey_accessibilityLabel(@"Hide keyboard");
   [[EarlGrey selectElementWithMatcher:hideKeyboard] performAction:grey_tap()];
@@ -166,11 +161,10 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
 // Tests whether input mode in an omnibox can be canceled via tapping the typing
 // shield and asserts it doesn't commit the omnibox contents if the input is
 // canceled.
-// TODO(crbug.com/1378626): Test is flaky.
-- (void)DISABLED_testToolbarOmniboxTypingShield {
+- (void)testToolbarOmniboxTypingShield {
   // Tablet only (handset keyboard does not have "hide keyboard" button).
   if (![ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_SKIPPED(@"Test not support on iPhone");
+    EARL_GREY_TEST_SKIPPED(@"There is no typing shield on iPhone, skip.");
   }
 
   const GURL URL = self.testServer->GetURL("/echo");
@@ -302,7 +296,7 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
       performAction:grey_tap()];
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"foo")];
+      performAction:grey_replaceText(@"foo")];
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
       assertWithMatcher:chrome_test_util::OmniboxText("foo")];
@@ -319,8 +313,10 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
 - (void)testTypeJavaScriptIntoOmnibox {
   [ChromeEarlGrey loadURL:self.testServer->GetURL("/echo")];
 
-  [ChromeEarlGreyUI
-      focusOmniboxAndType:@"javascript:alert('JS Alert Text');\n"];
+  [ChromeEarlGreyUI focusOmniboxAndType:@"javascript:alert('JS Alert Text');"];
+  // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+  // replaceText can properly handle \n.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 
   ConditionBlock condition = ^{
     NSError* error = nil;
@@ -350,53 +346,47 @@ void WaitForOmniboxSuggestion(NSString* suggestion, int section, int row) {
 }
 
 // Tests typing in the omnibox.
-// TODO(crbug.com/1283854): Fix test.
-- (void)DISABLED_testToolbarOmniboxTyping {
-  // TODO(crbug.com/642559): Enable this test for iPad when typing bug is fixed.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Disabled for iPad due to a simulator bug.");
-  }
+- (void)testToolbarOmniboxTyping {
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]
+      performAction:grey_tap()];
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::NewTabPageOmnibox()]
-      performAction:grey_typeText(@"a")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"a" flags:0];
   WaitForOmniboxSuggestion(@"a", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"b")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"b" flags:0];
   WaitForOmniboxSuggestion(@"ab", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"C")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"C" flags:UIKeyModifierShift];
   WaitForOmniboxSuggestion(@"abC", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"1")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"1" flags:0];
   WaitForOmniboxSuggestion(@"abC1", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"2")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"2" flags:0];
   WaitForOmniboxSuggestion(@"abC12", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"@")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"@" flags:UIKeyModifierShift];
   WaitForOmniboxSuggestion(@"abC12@", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"{")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"{" flags:UIKeyModifierShift];
   WaitForOmniboxSuggestion(@"abC12@{", 0, 0);
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText(@"#")];
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"#" flags:UIKeyModifierShift];
   WaitForOmniboxSuggestion(@"abC12@{#", 0, 0);
 
-  id<GREYMatcher> cancelButton =
-      grey_accessibilityID(kToolbarCancelOmniboxEditButtonIdentifier);
-  DCHECK(cancelButton);
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"escape" flags:0];
+  } else {
+    id<GREYMatcher> cancelButton =
+        grey_accessibilityID(kToolbarCancelOmniboxEditButtonIdentifier);
+    DCHECK(cancelButton);
 
-  [[EarlGrey
-      selectElementWithMatcher:grey_allOf(cancelButton,
-                                          grey_sufficientlyVisible(), nil)]
-      performAction:grey_tap()];
+    [[EarlGrey
+        selectElementWithMatcher:grey_allOf(cancelButton,
+                                            grey_sufficientlyVisible(), nil)]
+        performAction:grey_tap()];
+  }
+
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
       assertWithMatcher:chrome_test_util::OmniboxText("")];
 }

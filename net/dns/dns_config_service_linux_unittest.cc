@@ -11,10 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/cancelable_callback.h"
 #include "base/check.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
@@ -26,7 +26,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_waitable_event.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/ip_address.h"
 #include "net/base/test_completion_callback.h"
 #include "net/dns/dns_config.h"
@@ -223,7 +222,7 @@ class BlockingHelper {
   base::TestWaitableEvent block_event_;
   base::TestWaitableEvent blocker_event_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_ =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
 };
 
 class TestScopedResState : public ScopedResState {
@@ -277,7 +276,7 @@ class TestResolvReader : public ResolvReader {
 
  private:
   std::unique_ptr<TestScopedResState> value_;
-  BlockingHelper* blocking_helper_ = nullptr;
+  raw_ptr<BlockingHelper> blocking_helper_ = nullptr;
 };
 
 class TestNsswitchReader : public NsswitchReader {

@@ -15,37 +15,30 @@
 #include "ui/views/controls/label.h"
 #include "ui/views/metadata/view_factory.h"
 
-namespace base {
-class FilePath;
-}
-
 namespace content {
 class WebContents;
 }  // namespace content
 
 namespace views {
 class ImageView;
-class LabelButton;
 class MdTextButton;
 class View;
 }  // namespace views
 
 class Profile;
-struct NavigateParams;
 
 namespace sharing_hub {
 
 // Dialog that displays a captured screenshot, and provides the option
-// to edit, share, or download.
+// to share or download.
 class ScreenshotCapturedBubble : public LocationBarBubbleDelegateView {
+  METADATA_HEADER(ScreenshotCapturedBubble, LocationBarBubbleDelegateView)
+
  public:
-  METADATA_HEADER(ScreenshotCapturedBubble);
-  ScreenshotCapturedBubble(
-      views::View* anchor_view,
-      content::WebContents* web_contents,
-      const gfx::Image& image,
-      Profile* profile,
-      base::OnceCallback<void(NavigateParams*)> edit_callback);
+  ScreenshotCapturedBubble(views::View* anchor_view,
+                           content::WebContents* web_contents,
+                           const gfx::Image& image,
+                           Profile* profile);
   ScreenshotCapturedBubble(const ScreenshotCapturedBubble&) = delete;
   ScreenshotCapturedBubble& operator=(const ScreenshotCapturedBubble&) = delete;
   ~ScreenshotCapturedBubble() override;
@@ -67,16 +60,7 @@ class ScreenshotCapturedBubble : public LocationBarBubbleDelegateView {
 
   void DownloadButtonPressed();
 
-  void EditButtonPressed();
-
-  void SearchImageButtonPressed();
-
   gfx::Size GetImageSize();
-
-  // Requests navigation to the image editor page.
-  // 'screenshot_file_path' is the path to a valid screenshot
-  // for use as background, or empty to start with a blank canvas.
-  void NavigateToImageEditor(const base::FilePath& screenshot_file_path);
 
   // Makes a copy of the image to use in button callbacks without worry of
   // dereferencing
@@ -86,13 +70,9 @@ class ScreenshotCapturedBubble : public LocationBarBubbleDelegateView {
 
   raw_ptr<Profile> profile_;
 
-  base::OnceCallback<void(NavigateParams*)> edit_callback_;
-
   // Pointers to view widgets; weak.
-  views::ImageView* image_view_ = nullptr;
-  views::MdTextButton* download_button_ = nullptr;
-  views::LabelButton* edit_button_ = nullptr;
-  views::LabelButton* search_image_button_ = nullptr;
+  raw_ptr<views::ImageView> image_view_ = nullptr;
+  raw_ptr<views::MdTextButton> download_button_ = nullptr;
 
   base::WeakPtrFactory<ScreenshotCapturedBubble> weak_factory_{this};
 };

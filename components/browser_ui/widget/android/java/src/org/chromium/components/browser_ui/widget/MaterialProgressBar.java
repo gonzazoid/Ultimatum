@@ -14,7 +14,6 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.View;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.core.view.ViewCompat;
 
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
@@ -161,14 +160,17 @@ public class MaterialProgressBar extends View implements AnimatorUpdateListener 
         int secondaryProgressColor = context.getColor(R.color.progress_bar_secondary);
 
         if (attrs != null) {
-            TypedArray a = context.obtainStyledAttributes(
-                    attrs, R.styleable.MaterialProgressBar, defStyle, 0);
+            TypedArray a =
+                    context.obtainStyledAttributes(
+                            attrs, R.styleable.MaterialProgressBar, defStyle, 0);
             backgroundColor =
                     a.getColor(R.styleable.MaterialProgressBar_colorBackground, backgroundColor);
             progressColor =
                     a.getColor(R.styleable.MaterialProgressBar_colorProgress, progressColor);
-            secondaryProgressColor = a.getColor(
-                    R.styleable.MaterialProgressBar_colorSecondaryProgress, secondaryProgressColor);
+            secondaryProgressColor =
+                    a.getColor(
+                            R.styleable.MaterialProgressBar_colorSecondaryProgress,
+                            secondaryProgressColor);
             a.recycle();
         }
 
@@ -240,7 +242,6 @@ public class MaterialProgressBar extends View implements AnimatorUpdateListener 
     }
 
     /** @return The current progress value. */
-    @VisibleForTesting
     public int getProgressForTesting() {
         return mProgress;
     }

@@ -26,7 +26,9 @@ void AuthenticatorImpl::Create(
   // navigates or is deleted. See DocumentService for details.
   new AuthenticatorImpl(
       *render_frame_host, std::move(receiver),
-      std::make_unique<AuthenticatorCommonImpl>(render_frame_host));
+      std::make_unique<AuthenticatorCommonImpl>(
+          render_frame_host,
+          AuthenticatorCommonImpl::ServingRequestsFor::kWebContents));
 }
 
 void AuthenticatorImpl::CreateForTesting(
@@ -69,13 +71,13 @@ void AuthenticatorImpl::GetAssertion(
 void AuthenticatorImpl::IsUserVerifyingPlatformAuthenticatorAvailable(
     IsUserVerifyingPlatformAuthenticatorAvailableCallback callback) {
   authenticator_common_impl_->IsUserVerifyingPlatformAuthenticatorAvailable(
-      std::move(callback));
+      origin(), std::move(callback));
 }
 
 void AuthenticatorImpl::IsConditionalMediationAvailable(
     IsConditionalMediationAvailableCallback callback) {
   authenticator_common_impl_->IsConditionalMediationAvailable(
-      std::move(callback));
+      origin(), std::move(callback));
 }
 
 void AuthenticatorImpl::Cancel() {

@@ -6,9 +6,9 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/profiler/sample_metadata.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
-#include "services/metrics/public/cpp/ukm_builders.h"
-#include "services/metrics/public/cpp/ukm_recorder.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -81,8 +81,7 @@ InteractiveDetector::InteractiveDetector(
           document.GetTaskRunner(TaskType::kInternalDefault),
           this,
           &InteractiveDetector::TimeToInteractiveTimerFired),
-      initially_hidden_(document.hidden()),
-      ukm_recorder_(document.UkmRecorder()) {}
+      initially_hidden_(document.hidden()) {}
 
 void InteractiveDetector::SetNavigationStartTime(
     base::TimeTicks navigation_start_time) {
@@ -153,21 +152,6 @@ InteractiveDetector::GetFirstInputDelaysAfterBackForwardCacheRestore() const {
 absl::optional<base::TimeTicks> InteractiveDetector::GetFirstInputTimestamp()
     const {
   return page_event_times_.first_input_timestamp;
-}
-
-absl::optional<base::TimeDelta> InteractiveDetector::GetLongestInputDelay()
-    const {
-  return page_event_times_.longest_input_delay;
-}
-
-absl::optional<base::TimeTicks> InteractiveDetector::GetLongestInputTimestamp()
-    const {
-  return page_event_times_.longest_input_timestamp;
-}
-
-absl::optional<base::TimeDelta>
-InteractiveDetector::GetFirstInputProcessingTime() const {
-  return page_event_times_.first_input_processing_time;
 }
 
 absl::optional<base::TimeTicks> InteractiveDetector::GetFirstScrollTimestamp()
@@ -313,25 +297,12 @@ void InteractiveDetector::HandleForInputDelay(
         .back() = delay;
   }
 
-  if (GetSupplementable()->Loader()) {
-    GetSupplementable()->Loader()->DidObserveInputDelay(delay);
-  }
-
   UMA_HISTOGRAM_CUSTOM_TIMES(kHistogramInputDelay, delay, base::Milliseconds(1),
                              base::Seconds(60), 50);
   UMA_HISTOGRAM_CUSTOM_TIMES(kHistogramInputTimestamp,
                              event_timestamp - page_event_times_.nav_start,
                              base::Milliseconds(10), base::Minutes(10), 100);
 
-  // Only update longest input delay if page was not backgrounded while the
-  // input was queued.
-  if ((!page_event_times_.longest_input_delay.has_value() ||
-       delay > *page_event_times_.longest_input_delay) &&
-      !PageWasBackgroundedSinceEvent(event_timestamp)) {
-    page_event_times_.longest_input_delay = delay;
-    page_event_times_.longest_input_timestamp = event_timestamp;
-    interactive_timing_metrics_changed = true;
-  }
 
   if (GetSupplementable()->Loader() && interactive_timing_metrics_changed) {
     GetSupplementable()->Loader()->DidChangePerformanceTiming();
@@ -556,26 +527,34 @@ void InteractiveDetector::CheckTimeToInteractiveReached() {
   if (!interactive_time_.is_null())
     return;
 
+  const bool ignore_fcp =
+      base::FeatureList::IsEnabled(features::kInteractiveDetectorIgnoreFcp);
   // FCP and DCL have not been detected yet.
-  if (page_event_times_.first_contentful_paint.is_null() ||
-      page_event_times_.dom_content_loaded_end.is_null())
+  if ((page_event_times_.first_contentful_paint.is_null() && !ignore_fcp) ||
+      page_event_times_.dom_content_loaded_end.is_null()) {
     return;
+  }
 
   const base::TimeTicks current_time = clock_->NowTicks();
-  if (current_time - page_event_times_.first_contentful_paint <
-      kTimeToInteractiveWindow) {
+  if (!ignore_fcp && (current_time - page_event_times_.first_contentful_paint <
+                      kTimeToInteractiveWindow)) {
     // Too close to FCP to determine Time to Interactive.
     return;
   }
 
   AddCurrentlyActiveNetworkQuietInterval(current_time);
-  const base::TimeTicks interactive_candidate = FindInteractiveCandidate(
+  base::TimeTicks interactive_candidate = FindInteractiveCandidate(
       page_event_times_.first_contentful_paint, current_time);
   RemoveCurrentlyActiveNetworkQuietInterval();
 
   // No Interactive Candidate found.
-  if (interactive_candidate.is_null())
-    return;
+  if (interactive_candidate.is_null()) {
+    if (ignore_fcp) {
+      interactive_candidate = page_event_times_.dom_content_loaded_end;
+    } else {
+      return;
+    }
+  }
 
   interactive_time_ = std::max(
       {interactive_candidate, page_event_times_.dom_content_loaded_end});
@@ -593,7 +572,7 @@ void InteractiveDetector::OnTimeToInteractiveDetected() {
 
   TRACE_EVENT_MARK_WITH_TIMESTAMP2(
       "loading,rail", "InteractiveTime", interactive_time_, "frame",
-      ToTraceValue(GetSupplementable()->GetFrame()), "args",
+      GetFrameIdForTracing(GetSupplementable()->GetFrame()), "args",
       [&](perfetto::TracedValue context) {
         // We log the trace event even if there is user input, but annotate the
         // event with whether that happened.
@@ -609,6 +588,10 @@ void InteractiveDetector::OnTimeToInteractiveDetected() {
       });
 
   long_tasks_.clear();
+
+  if (frame != nullptr && frame->IsMainFrame() && frame->GetFrameScheduler()) {
+    frame->GetFrameScheduler()->OnMainFrameInteractive();
+  }
 }
 
 base::TimeDelta InteractiveDetector::ComputeTotalBlockingTime() {
@@ -647,52 +630,13 @@ void InteractiveDetector::SetTaskRunnerForTesting(
   time_to_interactive_timer_.MoveToNewTaskRunner(task_runner_for_testing);
 }
 
-ukm::UkmRecorder* InteractiveDetector::GetUkmRecorder() const {
-  return ukm_recorder_;
-}
-
-void InteractiveDetector::SetUkmRecorderForTesting(
-    ukm::UkmRecorder* test_ukm_recorder) {
-  ukm_recorder_ = test_ukm_recorder;
-}
-
-void InteractiveDetector::RecordInputEventTimingUKM(
-    base::TimeDelta input_delay,
+void InteractiveDetector::RecordInputEventTimingUMA(
     base::TimeDelta processing_time,
-    base::TimeDelta time_to_next_paint,
-    AtomicString event_type) {
-  auto EventTypeToEnum = [](const AtomicString& name) -> InputEventType {
-    if (name == "mousedown")
-      return InputEventType::kMousedown;
-    if (name == "click")
-      return InputEventType::kClick;
-    if (name == "keydown")
-      return InputEventType::kKeydown;
-    if (name == "pointerup")
-      return InputEventType::kPointerup;
-    CHECK(false) << "Unknown event name: " << name;
-    return InputEventType();
-  };
-  ukm::SourceId source_id = GetSupplementable()->UkmSourceID();
-  DCHECK_NE(source_id, ukm::kInvalidSourceId);
-  ukm::builders::InputEvent(source_id)
-      .SetEventType(static_cast<int>(EventTypeToEnum(event_type)))
-      .SetInteractiveTiming_InputDelay(input_delay.InMilliseconds())
-      .SetInteractiveTiming_ProcessingTime(processing_time.InMilliseconds())
-      .SetInteractiveTiming_ProcessingFinishedToNextPaint(
-          time_to_next_paint.InMilliseconds())
-      .Record(GetUkmRecorder());
-
+    base::TimeDelta time_to_next_paint) {
   UmaHistogramCustomTimes(kHistogramProcessingTime, processing_time,
                           base::Milliseconds(1), base::Seconds(60), 50);
   UmaHistogramCustomTimes(kHistogramTimeToNextPaint, time_to_next_paint,
                           base::Milliseconds(1), base::Seconds(60), 50);
-  if (!page_event_times_.first_input_processing_time) {
-    page_event_times_.first_input_processing_time = processing_time;
-    if (GetSupplementable()->Loader()) {
-      GetSupplementable()->Loader()->DidChangePerformanceTiming();
-    }
-  }
 }
 
 void InteractiveDetector::DidObserveFirstScrollDelay(

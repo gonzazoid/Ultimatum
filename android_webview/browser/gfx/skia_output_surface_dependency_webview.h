@@ -5,7 +5,7 @@
 #ifndef ANDROID_WEBVIEW_BROWSER_GFX_SKIA_OUTPUT_SURFACE_DEPENDENCY_WEBVIEW_H_
 #define ANDROID_WEBVIEW_BROWSER_GFX_SKIA_OUTPUT_SURFACE_DEPENDENCY_WEBVIEW_H_
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "components/viz/service/display_embedder/skia_output_surface_dependency.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
@@ -18,6 +18,8 @@ class TaskQueueWebView;
 class GpuServiceWebView;
 
 // Implementation for access to gpu objects and task queue for WebView.
+//
+// Lifetime: WebView
 class SkiaOutputSurfaceDependencyWebView
     : public viz::SkiaOutputSurfaceDependency {
  public:
@@ -42,25 +44,27 @@ class SkiaOutputSurfaceDependencyWebView
   scoped_refptr<gpu::SharedContextState> GetSharedContextState() override;
   gpu::raster::GrShaderCache* GetGrShaderCache() override;
   viz::VulkanContextProvider* GetVulkanContextProvider() override;
-  viz::DawnContextProvider* GetDawnContextProvider() override;
+  gpu::DawnContextProvider* GetDawnContextProvider() override;
   const gpu::GpuPreferences& GetGpuPreferences() const override;
   const gpu::GpuFeatureInfo& GetGpuFeatureInfo() override;
   gpu::MailboxManager* GetMailboxManager() override;
-  gpu::ImageFactory* GetGpuImageFactory() override;
   void ScheduleGrContextCleanup() override;
   void ScheduleDelayedGPUTaskFromGPUThread(base::OnceClosure task) override;
   scoped_refptr<base::TaskRunner> GetClientTaskRunner() override;
   bool IsOffscreen() override;
   gpu::SurfaceHandle GetSurfaceHandle() override;
+  scoped_refptr<gl::Presenter> CreatePresenter(
+      base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub) override;
   scoped_refptr<gl::GLSurface> CreateGLSurface(
       base::WeakPtr<gpu::ImageTransportSurfaceDelegate> stub,
       gl::GLSurfaceFormat format) override;
+  base::ScopedClosureRunner CachePresenter(gl::Presenter* presenter) override;
   base::ScopedClosureRunner CacheGLSurface(gl::GLSurface* surface) override;
   void DidLoseContext(gpu::error::ContextLostReason reason,
                       const GURL& active_url) override;
 
-  base::TimeDelta GetGpuBlockedTimeSinceLastSwap() override;
   bool NeedsSupportForExternalStencil() override;
+  bool IsUsingCompositorGpuThread() override;
 
  private:
   const raw_ptr<gl::GLSurface> gl_surface_;

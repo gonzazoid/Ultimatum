@@ -7,14 +7,12 @@
 #include "chrome/browser/extensions/api/tab_capture/tab_capture_api.h"
 
 #include <algorithm>
-#include <memory>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/api/tab_capture/tab_capture_registry.h"
@@ -118,15 +116,13 @@ void AddMediaStreamSourceConstraints(content::WebContents* target_contents,
 // include incognito profile browsers.
 Browser* GetLastActiveBrowser(const Profile* profile,
                               const bool match_incognito_profile) {
-  BrowserList* browser_list = BrowserList::GetInstance();
   Browser* target_browser = nullptr;
-  for (auto iter = browser_list->begin_browsers_ordered_by_activation();
-       iter != browser_list->end_browsers_ordered_by_activation(); ++iter) {
-    Profile* browser_profile = (*iter)->profile();
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
+    Profile* browser_profile = browser->profile();
     if (browser_profile == profile ||
         (match_incognito_profile &&
          browser_profile->GetOriginalProfile() == profile)) {
-      target_browser = *iter;
+      target_browser = browser;
       break;
     }
   }
@@ -134,22 +130,16 @@ Browser* GetLastActiveBrowser(const Profile* profile,
   return target_browser;
 }
 
-// Get the id of the allowlisted extension. At the moment two switches can
-// contain it. Prioritize the non-deprecated one.
+// Get the id of the allowlisted extension.
 std::string GetAllowlistedExtensionID() {
-  std::string id = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+  return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
       switches::kAllowlistedExtensionID);
-  if (id.empty()) {
-    id = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-        switches::kDEPRECATED_AllowlistedExtensionID);
-  }
-  return id;
 }
 
 }  // namespace
 
 ExtensionFunction::ResponseAction TabCaptureCaptureFunction::Run() {
-  std::unique_ptr<api::tab_capture::Capture::Params> params =
+  absl::optional<api::tab_capture::Capture::Params> params =
       TabCapture::Capture::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -200,9 +190,13 @@ ExtensionFunction::ResponseAction TabCaptureCaptureFunction::Run() {
   DesktopMediaID source =
       BuildDesktopMediaID(target_contents, &params->options);
   TabCaptureRegistry* registry = TabCaptureRegistry::Get(browser_context());
+  content::RenderFrameHost* main_frame =
+      extension_web_contents->GetPrimaryMainFrame();
+  int caller_process_id = main_frame->GetProcess()->GetID();
+  int frame_id = main_frame->GetRoutingID();
   std::string device_id = registry->AddRequest(
       target_contents, extension_id, false, extension()->url(), source,
-      extension()->name(), extension_web_contents);
+      caller_process_id, frame_id);
   if (device_id.empty()) {
     return RespondNow(Error(kCapturingSameTab));
   }
@@ -216,8 +210,7 @@ ExtensionFunction::ResponseAction TabCaptureCaptureFunction::Run() {
   // virtual audio/video capture devices and set up all the data flows.  The
   // custom JS bindings can be found here:
   // chrome/renderer/resources/extensions/tab_capture_custom_bindings.js
-  base::Value result(params->options.ToValue());
-  return RespondNow(OneArgument(std::move(result)));
+  return RespondNow(WithArguments(params->options.ToValue()));
 }
 
 ExtensionFunction::ResponseAction TabCaptureGetCapturedTabsFunction::Run() {
@@ -225,11 +218,11 @@ ExtensionFunction::ResponseAction TabCaptureGetCapturedTabsFunction::Run() {
   base::Value::List list;
   if (registry)
     registry->GetCapturedTabs(extension()->id(), &list);
-  return RespondNow(OneArgument(base::Value(std::move(list))));
+  return RespondNow(WithArguments(std::move(list)));
 }
 
 ExtensionFunction::ResponseAction TabCaptureGetMediaStreamIdFunction::Run() {
-  std::unique_ptr<api::tab_capture::GetMediaStreamId::Params> params =
+  absl::optional<api::tab_capture::GetMediaStreamId::Params> params =
       TabCapture::GetMediaStreamId::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -264,17 +257,20 @@ ExtensionFunction::ResponseAction TabCaptureGetMediaStreamIdFunction::Run() {
     return RespondNow(Error(kGrantError));
   }
 
-  // |consumer_contents| is the WebContents for which the stream is created.
-  content::WebContents* consumer_contents = nullptr;
-  std::string consumer_name;
   GURL origin;
+  int caller_process_id = -1;
+  absl::optional<int> restrict_to_render_frame_id;
+  bool should_restrict_to_render_frame = extension()->manifest_version() < 3;
   if (params->options && params->options->consumer_tab_id) {
+    content::WebContents* consumer_contents = nullptr;
     if (!ExtensionTabUtil::GetTabById(*(params->options->consumer_tab_id),
                                       browser_context(), true,
                                       &consumer_contents)) {
       return RespondNow(Error(kInvalidTabIdError));
     }
 
+    // TODO(https://crbug.com/1270878): Use url::Origin directly here and
+    // throughout this stack.
     origin =
         consumer_contents->GetLastCommittedURL().DeprecatedGetOriginAsURL();
     if (!origin.is_valid()) {
@@ -285,24 +281,46 @@ ExtensionFunction::ResponseAction TabCaptureGetMediaStreamIdFunction::Run() {
       return RespondNow(Error(kTabUrlNotSecure));
     }
 
-    consumer_name = net::GetHostAndOptionalPort(origin);
-  } else {
+    content::RenderFrameHost* main_frame =
+        consumer_contents->GetPrimaryMainFrame();
+    caller_process_id = main_frame->GetProcess()->GetID();
+    restrict_to_render_frame_id = main_frame->GetRoutingID();
+  } else if (should_restrict_to_render_frame) {
+    content::WebContents* sender_contents = GetSenderWebContents();
+    if (!sender_contents) {
+      return RespondNow(Error(
+          "`tabCapture.getMediaStreamId()` must be called from a frame in "
+          "manifest version 2."));
+    }
+
+    // TODO(https://crbug.com/1270878): Use url::Origin directly here and
+    // throughout this stack.
     origin = extension()->url();
-    consumer_name = extension()->name();
-    consumer_contents = GetSenderWebContents();
+    content::RenderFrameHost* main_frame =
+        sender_contents->GetPrimaryMainFrame();
+    caller_process_id = main_frame->GetProcess()->GetID();
+    restrict_to_render_frame_id = main_frame->GetRoutingID();
+  } else {
+    // TODO(https://crbug.com/1270878): Use url::Origin directly here and
+    // throughout this stack.
+    origin = extension()->url();
+    caller_process_id = source_process_id();
   }
-  EXTENSION_FUNCTION_VALIDATE(consumer_contents);
+
+  CHECK_NE(-1, caller_process_id);
+  CHECK(restrict_to_render_frame_id.has_value() ||
+        !should_restrict_to_render_frame);
 
   DesktopMediaID source = BuildDesktopMediaID(target_contents, nullptr);
   TabCaptureRegistry* registry = TabCaptureRegistry::Get(browser_context());
   std::string device_id =
       registry->AddRequest(target_contents, extension_id, false, origin, source,
-                           consumer_name, consumer_contents);
+                           caller_process_id, restrict_to_render_frame_id);
   if (device_id.empty()) {
     return RespondNow(Error(kCapturingSameTab));
   }
 
-  return RespondNow(OneArgument(base::Value(device_id)));
+  return RespondNow(WithArguments(device_id));
 }
 
 }  // namespace extensions

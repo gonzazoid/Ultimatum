@@ -7,11 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
@@ -108,8 +107,8 @@ bool MediaStreamAudioSource::ConnectToInitializedTrack(
   deliverer_.AddConsumer(track);
   LogMessage(
       base::StringPrintf("%s => (added new MediaStreamAudioTrack as consumer, "
-                         "total number of consumers=%d)",
-                         __func__, NumConsumers()));
+                         "total number of consumers=%zu)",
+                         __func__, NumTracks()));
   return true;
 }
 
@@ -216,8 +215,8 @@ void MediaStreamAudioSource::StopAudioDeliveryTo(MediaStreamAudioTrack* track) {
   const bool did_remove_last_track = deliverer_.RemoveConsumer(track);
   LogMessage(
       base::StringPrintf("%s => (removed MediaStreamAudioTrack as consumer, "
-                         "total number of consumers=%u)",
-                         __func__, NumConsumers()));
+                         "total number of consumers=%zu)",
+                         __func__, NumTracks()));
 
   // The W3C spec requires a source automatically stop when the last track is
   // stopped.
@@ -261,7 +260,7 @@ int MediaStreamAudioSource::NumPreferredChannels() const {
   return deliverer_.NumPreferredChannels();
 }
 
-int MediaStreamAudioSource::NumConsumers() const {
+size_t MediaStreamAudioSource::NumTracks() const {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
   Vector<MediaStreamAudioTrack*> audio_tracks;
   deliverer_.GetConsumerList(&audio_tracks);

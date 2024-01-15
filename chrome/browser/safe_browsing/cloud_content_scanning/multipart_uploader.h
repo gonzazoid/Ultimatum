@@ -8,14 +8,15 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/multipart_data_pipe_getter.h"
+#include "components/file_access/scoped_file_access.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -55,6 +56,7 @@ class MultipartUploadRequest {
       const GURL& base_url,
       const std::string& metadata,
       const base::FilePath& path,
+      uint64_t file_size,
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
       Callback callback);
 
@@ -98,6 +100,7 @@ class MultipartUploadRequest {
       const GURL& base_url,
       const std::string& metadata,
       const base::FilePath& file,
+      uint64_t file_size,
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
       MultipartUploadRequest::Callback callback);
 
@@ -115,6 +118,8 @@ class MultipartUploadRequest {
 
   void set_access_token(const std::string& access_token);
 
+  void SetRequestHeaders(network::ResourceRequest* request);
+
  private:
   FRIEND_TEST_ALL_PREFIXES(MultipartUploadRequestTest, GeneratesCorrectBody);
   FRIEND_TEST_ALL_PREFIXES(MultipartUploadRequestTest, RetriesCorrectly);
@@ -125,6 +130,7 @@ class MultipartUploadRequest {
   FRIEND_TEST_ALL_PREFIXES(MultipartUploadRequestTest,
                            EmitsRetriesNeededHistogram);
   FRIEND_TEST_ALL_PREFIXES(MultipartUploadDataPipeRequestTest, Retries);
+  FRIEND_TEST_ALL_PREFIXES(MultipartUploadDataPipeRequestTest, DataControls);
   FRIEND_TEST_ALL_PREFIXES(MultipartUploadDataPipeRequestTest,
                            EquivalentToStringRequest);
 
@@ -136,12 +142,12 @@ class MultipartUploadRequest {
                                   const std::string& data);
 
   // Called whenever a net request finishes (on success or failure).
-  void OnURLLoaderComplete(std::unique_ptr<std::string> response_body);
+  void OnURLLoaderComplete(std::optional<std::string> response_body);
 
   // Called whenever a net request finishes (on success or failure).
   void RetryOrFinish(int net_error,
                      int response_code,
-                     std::unique_ptr<std::string> response_body);
+                     std::optional<std::string> response_body);
 
   // Called to send a single request. Is overridden in tests.
   virtual void SendRequest();
@@ -159,6 +165,9 @@ class MultipartUploadRequest {
   virtual void CompleteSendRequest(
       std::unique_ptr<network::ResourceRequest> request);
 
+  void CreateDatapipe(std::unique_ptr<network::ResourceRequest> request,
+                      file_access::ScopedFileAccess file_access);
+
   static MultipartUploadRequestFactory* factory_;
 
   GURL base_url_;
@@ -175,6 +184,9 @@ class MultipartUploadRequest {
 
   // Memory to upload. Only populated for PAGE requests.
   base::ReadOnlySharedMemoryRegion page_region_;
+
+  // Size of the file or page region.
+  uint64_t data_size_ = 0;
 
   // Data pipe getter used to stream a file or a page. Only populated for the
   // corresponding requests.
@@ -194,6 +206,8 @@ class MultipartUploadRequest {
 
   std::string access_token_;
 
+  std::unique_ptr<file_access::ScopedFileAccess> scoped_file_access_;
+
   base::WeakPtrFactory<MultipartUploadRequest> weak_factory_{this};
 };
 
@@ -212,6 +226,7 @@ class MultipartUploadRequestFactory {
       const GURL& base_url,
       const std::string& metadata,
       const base::FilePath& path,
+      uint64_t file_size,
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
       MultipartUploadRequest::Callback callback) = 0;
   virtual std::unique_ptr<MultipartUploadRequest> CreatePageRequest(

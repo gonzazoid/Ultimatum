@@ -7,9 +7,10 @@
 #include <algorithm>
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/task_manager/sampling/shared_sampler.h"
@@ -306,7 +307,7 @@ void TaskGroup::RefreshWindowsHandles() {
 void TaskGroup::RefreshNaClDebugStubPort(int child_process_unique_id) {
   // Note this needs to be in a PostTask to avoid a use-after-free (see
   // https://crbug.com/1221406).
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TaskGroup::OnRefreshNaClDebugStubPortDone,
                                 weak_ptr_factory_.GetWeakPtr(),
                                 GetNaClDebugStubPortOnProcessThread(
@@ -344,10 +345,10 @@ void TaskGroup::OnSwappedMemRefreshDone(int64_t swapped_mem_bytes) {
   OnBackgroundRefreshTypeFinished(REFRESH_TYPE_SWAPPED_MEM);
 }
 
-void TaskGroup::OnProcessPriorityDone(bool is_backgrounded) {
+void TaskGroup::OnProcessPriorityDone(base::Process::Priority priority) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  is_backgrounded_ = is_backgrounded;
+  is_backgrounded_ = priority == base::Process::Priority::kBestEffort;
   OnBackgroundRefreshTypeFinished(REFRESH_TYPE_PRIORITY);
 }
 

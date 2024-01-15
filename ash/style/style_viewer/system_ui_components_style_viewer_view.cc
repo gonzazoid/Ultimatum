@@ -6,13 +6,17 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "ash/shell.h"
 #include "ash/style/style_viewer/system_ui_components_grid_view.h"
 #include "ash/style/style_viewer/system_ui_components_grid_view_factories.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
@@ -44,7 +48,7 @@ constexpr ui::ColorId kActiveButtonBackgroundColorId =
 constexpr ui::ColorId kActiveButtonTextColorId = cros_tokens::kCrosSysOnPrimary;
 // The background color id of inactive component button.
 constexpr ui::ColorId kInactiveButtonBackgroundColorId =
-    cros_tokens::kCrosSysSysOnBase;
+    cros_tokens::kCrosSysSystemOnBase;
 // The text color id of inactive component button.
 constexpr ui::ColorId kInactiveButtonTextColorId =
     cros_tokens::kCrosSysOnSurface;
@@ -58,17 +62,21 @@ static views::Widget* g_instance = nullptr;
 // SystemUIComponentsStyleViewerView::ComponentButton:
 class SystemUIComponentsStyleViewerView::ComponentButton
     : public views::LabelButton {
+  METADATA_HEADER(ComponentButton, views::LabelButton)
+
  public:
   ComponentButton(views::LabelButton::PressedCallback pressed_callback,
                   const std::u16string& name)
-      : views::LabelButton(pressed_callback, name) {
+      : views::LabelButton(std::move(pressed_callback), name) {
     SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_CENTER);
     SetBorder(std::make_unique<views::HighlightBorder>(
-        0, views::HighlightBorder::Type::kHighlightBorder1,
-        /*use_light_color=*/false));
+        0, chromeos::features::IsJellyrollEnabled()
+               ? views::HighlightBorder::Type::kHighlightBorderNoShadow
+               : views::HighlightBorder::Type::kHighlightBorder1));
     label()->SetSubpixelRenderingEnabled(false);
     label()->SetFontList(views::Label::GetDefaultFontList().Derive(
         1, gfx::Font::NORMAL, gfx::Font::Weight::MEDIUM));
+    SetFocusBehavior(views::View::FocusBehavior::NEVER);
   }
   ComponentButton(const ComponentButton&) = delete;
   ComponentButton& operator=(const ComponentButton&) = delete;
@@ -110,6 +118,11 @@ class SystemUIComponentsStyleViewerView::ComponentButton
   ui::ColorId background_color_id_ = kInactiveButtonBackgroundColorId;
   ui::ColorId text_color_id_ = kInactiveButtonTextColorId;
 };
+
+BEGIN_METADATA(SystemUIComponentsStyleViewerView,
+               ComponentButton,
+               views::LabelButton)
+END_METADATA
 
 // -----------------------------------------------------------------------------
 // SystemUIComponentsStyleViewerView:
@@ -154,7 +167,28 @@ void SystemUIComponentsStyleViewerView::CreateAndShowWidget() {
   viewer_view->AddComponent(
       u"IconButton", base::BindRepeating(&CreateIconButtonInstancesGridView));
   viewer_view->AddComponent(
-      u"IconSwitch", base::BindRepeating(&CreateIconSwitchInstancesGridView));
+      u"Checkbox", base::BindRepeating(&CreateCheckboxInstancesGridView));
+  viewer_view->AddComponent(
+      u"CheckboxGroup",
+      base::BindRepeating(&CreateCheckboxGroupInstancesGridView));
+  viewer_view->AddComponent(
+      u"RadioButton", base::BindRepeating(&CreateRadioButtonInstancesGridView));
+  viewer_view->AddComponent(
+      u"RadioButtonGroup",
+      base::BindRepeating(&CreateRadioButtonGroupInstancesGridView));
+  viewer_view->AddComponent(
+      u"Switch", base::BindRepeating(&CreateSwitchInstancesGridView));
+  viewer_view->AddComponent(
+      u"TabSlider", base::BindRepeating(&CreateTabSliderInstancesGridView));
+  viewer_view->AddComponent(
+      u"System Textfield",
+      base::BindRepeating(&CreateSystemTextfieldInstancesGridView));
+  viewer_view->AddComponent(
+      u"Pagination", base::BindRepeating(&CreatePaginationInstancesGridView));
+  viewer_view->AddComponent(
+      u"Combobox", base::BindRepeating(&CreateComboboxInstancesGridView));
+  viewer_view->AddComponent(
+      u"Typography", base::BindRepeating(&CreateTypographyInstancesGridView));
 
   // Show PillButton on start.
   viewer_view->ShowComponentInstances(u"PillButton");
@@ -194,8 +228,10 @@ void SystemUIComponentsStyleViewerView::ShowComponentInstances(
 
   // Set the button corresponding to the component indicated by the name active.
   // Set other buttons inactive.
-  for (auto* button : buttons_)
+  for (ash::SystemUIComponentsStyleViewerView::ComponentButton* button :
+       buttons_) {
     button->SetActive(button->GetText() == name);
+  }
 
   // Toggle corresponding components grid view.
   components_grid_view_ = component_instances_scroll_view_->SetContents(
@@ -217,5 +253,8 @@ void SystemUIComponentsStyleViewerView::OnWidgetDestroyed(
     views::Widget* widget) {
   g_instance = nullptr;
 }
+
+BEGIN_METADATA(SystemUIComponentsStyleViewerView)
+END_METADATA
 
 }  // namespace ash

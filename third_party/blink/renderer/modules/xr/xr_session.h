@@ -9,12 +9,15 @@
 
 #include "base/containers/span.h"
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
+#include "device/vr/public/mojom/xr_session.mojom-blink.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_xr_light_probe_init.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/xr/xr_frame_request_callback_collection.h"
 #include "third_party/blink/renderer/modules/xr/xr_input_source.h"
 #include "third_party/blink/renderer/modules/xr/xr_input_source_array.h"
@@ -24,10 +27,10 @@
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -63,11 +66,9 @@ class XRWebGLLayer;
 
 using XRSessionFeatureSet = HashSet<device::mojom::XRSessionFeature>;
 
-class XRSession final
-    : public EventTargetWithInlineData,
-      public device::mojom::blink::XRSessionClient,
-      public device::mojom::blink::XRInputSourceButtonListener,
-      public ActiveScriptWrappable<XRSession> {
+class XRSession final : public EventTarget,
+                        public device::mojom::blink::XRSessionClient,
+                        public ActiveScriptWrappable<XRSession> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -127,17 +128,23 @@ class XRSession final
             XRSessionFeatureSet enabled_features);
   ~XRSession() override = default;
 
-  XRSystem* xr() const { return xr_; }
+  XRSystem* xr() const { return xr_.Get(); }
   const String& environmentBlendMode() const { return blend_mode_string_; }
   const String& interactionMode() const { return interaction_mode_string_; }
-  XRDOMOverlayState* domOverlayState() const { return dom_overlay_state_; }
+  XRDOMOverlayState* domOverlayState() const {
+    return dom_overlay_state_.Get();
+  }
   const String visibilityState() const;
-  XRRenderState* renderState() const { return render_state_; }
+  absl::optional<float> frameRate() const { return absl::nullopt; }
+  DOMFloat32Array* supportedFrameRates() const { return nullptr; }
+  XRRenderState* renderState() const { return render_state_.Get(); }
 
   // ARCore by default returns textures in RGBA half-float HDR format and no
   // other runtimes support reflection mapping, so just return this until we
   // have a need to differentiate based on the underlying runtime.
   const String preferredReflectionFormat() const { return "rgba16f"; }
+
+  Vector<String> enabledFeatures() const;
 
   XRSpace* viewerSpace() const;
 
@@ -155,12 +162,16 @@ class XRSession final
   DEFINE_ATTRIBUTE_EVENT_LISTENER(squeeze, kSqueeze)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(squeezestart, kSqueezestart)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(squeezeend, kSqueezeend)
+  DEFINE_ATTRIBUTE_EVENT_LISTENER(frameratechange, kFrameratechange)
 
   void updateRenderState(XRRenderStateInit* render_state_init,
                          ExceptionState& exception_state);
 
   const String& depthUsage(ExceptionState& exception_state);
   const String& depthDataFormat(ExceptionState& exception_state);
+
+  ScriptPromise updateTargetFrameRate(float rate,
+                                      ExceptionState&);
 
   ScriptPromise requestReferenceSpace(ScriptState* script_state,
                                       const String& type,
@@ -176,7 +187,7 @@ class XRSession final
   // plane.
   ScriptPromise CreateAnchorHelper(
       ScriptState* script_state,
-      const blink::TransformationMatrix& native_origin_from_anchor,
+      const gfx::Transform& native_origin_from_anchor,
       const device::mojom::blink::XRNativeOriginInformationPtr&
           native_origin_information,
       absl::optional<uint64_t> maybe_plane_id,
@@ -187,7 +198,7 @@ class XRSession final
   // stationary reference space.
   struct ReferenceSpaceInformation {
     device::mojom::blink::XRNativeOriginInformationPtr native_origin;
-    blink::TransformationMatrix mojo_from_space;
+    gfx::Transform mojo_from_space;
   };
 
   // Helper for anchor creation - returns information about the reference space
@@ -259,10 +270,6 @@ class XRSession final
       const absl::optional<gpu::MailboxHolder>& output_mailbox_holder,
       const absl::optional<gpu::MailboxHolder>& camera_image_mailbox_holder);
 
-  // XRInputSourceButtonListener
-  void OnButtonEvent(
-      device::mojom::blink::XRInputSourceStatePtr input_source) override;
-
   const HeapVector<Member<XRViewData>>& views();
 
   void AddTransientInputSource(XRInputSource* input_source);
@@ -273,10 +280,6 @@ class XRSession final
   const device::mojom::blink::VRStageParametersPtr& GetStageParameters() const {
     return stage_parameters_;
   }
-
-  mojo::PendingAssociatedRemote<
-      device::mojom::blink::XRInputSourceButtonListener>
-  GetInputClickListener();
 
   bool EmulatedPosition() const {
     // If we don't have display info then we should be using the identity
@@ -315,7 +318,6 @@ class XRSession final
   bool RemoveHitTestSource(XRHitTestSource* hit_test_source);
   bool RemoveHitTestSource(XRTransientInputHitTestSource* hit_test_source);
 
-  bool UsesInputEventing() { return uses_input_eventing_; }
   bool LightEstimationEnabled() { return !!world_light_probe_; }
 
   void Trace(Visitor* visitor) const override;
@@ -335,7 +337,7 @@ class XRSession final
   // Note: currently, the information about the mojo_from_-floor-type spaces is
   // stored elsewhere, this method will not work for those reference space
   // types.
-  absl::optional<TransformationMatrix> GetMojoFrom(
+  absl::optional<gfx::Transform> GetMojoFrom(
       device::mojom::blink::XRReferenceSpaceType space_type) const;
 
   XRCPUDepthInformation* GetCpuDepthInformation(
@@ -576,16 +578,13 @@ class XRSession final
 
   HeapMojoReceiver<device::mojom::blink::XRSessionClient, XRSession>
       client_receiver_;
-  HeapMojoAssociatedReceiver<device::mojom::blink::XRInputSourceButtonListener,
-                             XRSession>
-      input_receiver_;
 
   // Used to schedule video.rVFC callbacks for immersive sessions.
   Vector<ExecuteVfcCallback> vfc_execution_queue_;
 
   Member<XRFrameRequestCallbackCollection> callback_collection_;
   // Viewer pose in mojo space.
-  std::unique_ptr<TransformationMatrix> mojo_from_viewer_;
+  std::unique_ptr<gfx::Transform> mojo_from_viewer_;
 
   bool pending_frame_ = false;
   bool resolving_frame_ = false;
@@ -603,7 +602,6 @@ class XRSession final
   int output_width_ = 1;
   int output_height_ = 1;
 
-  bool uses_input_eventing_ = false;
   float recommended_framebuffer_scale_ = 1.0;
 
   // Corresponds to mojo XRSession.supportsViewportScaling

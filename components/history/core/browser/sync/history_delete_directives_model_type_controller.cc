@@ -6,11 +6,13 @@
 
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/memory/weak_ptr.h"
 #include "components/history/core/browser/history_service.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/base/features.h"
 #include "components/sync/model/model_type_store_service.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 
 namespace history {
 
@@ -22,6 +24,19 @@ base::WeakPtr<syncer::SyncableService> GetSyncableServiceFromHistoryService(
     return history_service->GetDeleteDirectivesSyncableService();
   }
   return nullptr;
+}
+
+using DelegateMode =
+    syncer::SyncableServiceBasedModelTypeController::DelegateMode;
+
+DelegateMode GetDelegateMode() {
+  // Transport mode is only supported if if `kReplaceSyncPromosWithSignInPromos`
+  // is enabled.
+  if (base::FeatureList::IsEnabled(
+          syncer::kReplaceSyncPromosWithSignInPromos)) {
+    return DelegateMode::kTransportModeWithSingleModel;
+  }
+  return DelegateMode::kLegacyFullSyncModeOnly;
 }
 
 }  // namespace
@@ -37,7 +52,8 @@ HistoryDeleteDirectivesModelTypeController::
           syncer::HISTORY_DELETE_DIRECTIVES,
           model_type_store_service->GetStoreFactory(),
           GetSyncableServiceFromHistoryService(history_service),
-          dump_stack),
+          dump_stack,
+          GetDelegateMode()),
       helper_(syncer::HISTORY_DELETE_DIRECTIVES, sync_service, pref_service) {}
 
 HistoryDeleteDirectivesModelTypeController::
@@ -58,20 +74,19 @@ void HistoryDeleteDirectivesModelTypeController::LoadModels(
   DCHECK(CalledOnValidThread());
   DCHECK_EQ(NOT_RUNNING, state());
 
-  helper_.sync_service()->AddObserver(this);
+  sync_service_observation_.Observe(helper_.sync_service());
   SyncableServiceBasedModelTypeController::LoadModels(configure_context,
                                                       model_load_callback);
 }
 
 void HistoryDeleteDirectivesModelTypeController::Stop(
-    syncer::ShutdownReason shutdown_reason,
+    syncer::SyncStopMetadataFate fate,
     StopCallback callback) {
   DCHECK(CalledOnValidThread());
 
-  helper_.sync_service()->RemoveObserver(this);
+  sync_service_observation_.Reset();
 
-  SyncableServiceBasedModelTypeController::Stop(shutdown_reason,
-                                                std::move(callback));
+  SyncableServiceBasedModelTypeController::Stop(fate, std::move(callback));
 }
 
 void HistoryDeleteDirectivesModelTypeController::OnStateChanged(

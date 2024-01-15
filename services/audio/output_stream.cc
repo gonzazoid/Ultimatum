@@ -6,11 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 
@@ -249,7 +248,7 @@ void OutputStream::OnControllerError() {
   OnError();
 }
 
-void OutputStream::OnLog(base::StringPiece message) {
+void OutputStream::OnLog(std::string_view message) {
   // No sequence check: |log_| is thread-safe.
   if (log_) {
     log_->OnLogMessage(base::StringPrintf("%s", std::string(message).c_str()));
@@ -261,7 +260,7 @@ void OutputStream::OnError() {
   TRACE_EVENT_NESTABLE_ASYNC_INSTANT0("audio", "OnError", this);
 
   // Defer callback so we're not destructed while in the constructor.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&OutputStream::CallDeleter, weak_factory_.GetWeakPtr()));
 

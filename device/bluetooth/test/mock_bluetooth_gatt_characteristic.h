@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
 #include "device/bluetooth/bluetooth_remote_gatt_descriptor.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
@@ -65,12 +65,12 @@ class MockBluetoothGattCharacteristic
   }
   MOCK_METHOD2(StartNotifySession_,
                void(NotifySessionCallback&, ErrorCallback&));
-  void StopNotifySession(BluetoothGattNotifySession* s,
+  void StopNotifySession(BluetoothGattNotifySession::Id s,
                          base::OnceClosure c) override {
     StopNotifySession_(s, c);
   }
   MOCK_METHOD2(StopNotifySession_,
-               void(BluetoothGattNotifySession*, base::OnceClosure&));
+               void(BluetoothGattNotifySession::Id, base::OnceClosure&));
   void ReadRemoteCharacteristic(ValueCallback c) override {
     ReadRemoteCharacteristic_(c);
   }

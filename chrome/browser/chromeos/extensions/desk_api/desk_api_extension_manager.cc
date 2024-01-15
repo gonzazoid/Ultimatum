@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
@@ -51,7 +51,14 @@ class DeskApiExtensionManagerFactory : public ProfileKeyedServiceFactory {
 };
 
 DeskApiExtensionManagerFactory::DeskApiExtensionManagerFactory()
-    : ProfileKeyedServiceFactory("DeskApiExtensionManager") {}
+    : ProfileKeyedServiceFactory(
+          "DeskApiExtensionManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 DeskApiExtensionManagerFactory::~DeskApiExtensionManagerFactory() = default;
 
@@ -80,6 +87,8 @@ void DeskApiExtensionManager::Delegate::InstallExtension(
     const std::string& manifest_content) {
   component_loader->Add(manifest_content,
                         base::FilePath(FILE_PATH_LITERAL("chromeos/desk_api")));
+  // Force reload extension.
+  component_loader->Reload(extension_misc::kDeskApiExtensionId);
 }
 
 void DeskApiExtensionManager::Delegate::UninstallExtension(
@@ -220,6 +229,11 @@ void DeskApiExtensionManager::RemoveExtensionIfInstalled() {
   if (delegate_->IsExtensionInstalled(component_loader_)) {
     delegate_->UninstallExtension(component_loader_);
   }
+}
+
+// static
+void DeskApiExtensionManager::EnsureFactoryBuilt() {
+  DeskApiExtensionManager::GetFactory();
 }
 
 }  // namespace chromeos

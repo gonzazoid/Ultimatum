@@ -5,13 +5,13 @@
 #ifndef IOS_WEB_VIEW_INTERNAL_SYNC_WEB_VIEW_TRUSTED_VAULT_CLIENT_H_
 #define IOS_WEB_VIEW_INTERNAL_SYNC_WEB_VIEW_TRUSTED_VAULT_CLIENT_H_
 
-#include "components/sync/driver/trusted_vault_client.h"
+#include "components/trusted_vault/trusted_vault_client.h"
 
 namespace ios_web_view {
 
 // ChromeWebView implementation of TrustedVaultClient.
 // This class uses the Chrome trusted vault service to store the shared keys.
-class WebViewTrustedVaultClient : public syncer::TrustedVaultClient {
+class WebViewTrustedVaultClient : public trusted_vault::TrustedVaultClient {
  public:
   explicit WebViewTrustedVaultClient();
   ~WebViewTrustedVaultClient() override;
@@ -35,7 +35,7 @@ class WebViewTrustedVaultClient : public syncer::TrustedVaultClient {
                                 const std::vector<uint8_t>& public_key,
                                 int method_type_hint,
                                 base::OnceClosure callback) override;
-  void ClearDataForAccount(const CoreAccountInfo& account_info) override;
+  void ClearLocalDataForAccount(const CoreAccountInfo& account_info) override;
 
   // Not copyable or movable
   WebViewTrustedVaultClient(const WebViewTrustedVaultClient&) = delete;

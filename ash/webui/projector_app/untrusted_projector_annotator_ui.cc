@@ -10,6 +10,7 @@
 #include "ash/webui/grit/ash_projector_common_resources_map.h"
 #include "ash/webui/media_app_ui/buildflags.h"
 #include "ash/webui/projector_app/public/cpp/projector_app_constants.h"
+#include "ash/webui/projector_app/untrusted_annotator_page_handler_impl.h"
 #include "chromeos/grit/chromeos_projector_app_bundle_resources.h"
 #include "chromeos/grit/chromeos_projector_app_bundle_resources_map.h"
 #include "content/public/browser/web_contents.h"
@@ -26,10 +27,12 @@ namespace ash {
 
 namespace {
 
-content::WebUIDataSource* CreateProjectorAnnotatorHTMLSource(
+void CreateAndAddProjectorAnnotatorHTMLSource(
+    content::WebUI* web_ui,
     UntrustedProjectorAnnotatorUIDelegate* delegate) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(kChromeUIUntrustedAnnotatorUrl);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      web_ui->GetWebContents()->GetBrowserContext(),
+      kChromeUIUntrustedAnnotatorUrl);
 
   // TODO(b/216523790): Split untrusted annotator resources into a separate
   // bundle.
@@ -85,13 +88,8 @@ content::WebUIDataSource* CreateProjectorAnnotatorHTMLSource(
   // Loading WASM in chrome-untrusted://projector-annotator/annotator/ink.js is
   // not compatible with trusted types.
   source->DisableTrustedTypesCSP();
-
-  source->AddFrameAncestor(GURL(kChromeUITrustedAnnotatorUrl));
-
   delegate->PopulateLoadTimeData(source);
   source->UseStringsJs();
-
-  return source;
 }
 
 }  // namespace
@@ -100,11 +98,28 @@ UntrustedProjectorAnnotatorUI::UntrustedProjectorAnnotatorUI(
     content::WebUI* web_ui,
     UntrustedProjectorAnnotatorUIDelegate* delegate)
     : UntrustedWebUIController(web_ui) {
-  auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context,
-                                CreateProjectorAnnotatorHTMLSource(delegate));
+  CreateAndAddProjectorAnnotatorHTMLSource(web_ui, delegate);
 }
 
 UntrustedProjectorAnnotatorUI::~UntrustedProjectorAnnotatorUI() = default;
+
+void UntrustedProjectorAnnotatorUI::BindInterface(
+    mojo::PendingReceiver<
+        annotator::mojom::UntrustedAnnotatorPageHandlerFactory> factory) {
+  if (receiver_.is_bound()) {
+    receiver_.reset();
+  }
+  receiver_.Bind(std::move(factory));
+}
+
+void UntrustedProjectorAnnotatorUI::Create(
+    mojo::PendingReceiver<annotator::mojom::UntrustedAnnotatorPageHandler>
+        annotator_handler,
+    mojo::PendingRemote<annotator::mojom::UntrustedAnnotatorPage> annotator) {
+  handler_ = std::make_unique<UntrustedAnnotatorPageHandlerImpl>(
+      std::move(annotator_handler), std::move(annotator), web_ui());
+}
+
+WEB_UI_CONTROLLER_TYPE_IMPL(UntrustedProjectorAnnotatorUI)
 
 }  // namespace ash

@@ -18,6 +18,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "media/audio/audio_device_name.h"
 #include "media/base/audio_parameters.h"
@@ -52,7 +53,7 @@ class MEDIA_EXPORT CoreAudioUtil {
     size_t size() const;
 
    private:
-    WAVEFORMATEX* ptr_;
+    raw_ptr<WAVEFORMATEX> ptr_;
   };
 
   CoreAudioUtil() = delete;
@@ -77,10 +78,6 @@ class MEDIA_EXPORT CoreAudioUtil {
   // One reference-time unit is 100 nanoseconds.
   // Example: double s = RefererenceTimeToTimeDelta(t).InMillisecondsF();
   static base::TimeDelta ReferenceTimeToTimeDelta(REFERENCE_TIME time);
-
-  // Returns 1, 2, or 3 corresponding to the highest version of IAudioClient
-  // the platform supports.
-  static uint32_t GetIAudioClientVersion();
 
   // Returns AUDCLNT_SHAREMODE_EXCLUSIVE if --enable-exclusive-mode is used
   // as command-line flag and AUDCLNT_SHAREMODE_SHARED otherwise (default).

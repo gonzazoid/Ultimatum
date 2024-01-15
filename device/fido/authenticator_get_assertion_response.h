@@ -13,6 +13,7 @@
 #include "base/component_export.h"
 #include "device/fido/authenticator_data.h"
 #include "device/fido/fido_constants.h"
+#include "device/fido/fido_transport_protocol.h"
 #include "device/fido/large_blob.h"
 #include "device/fido/public_key_credential_descriptor.h"
 #include "device/fido/public_key_credential_user_entity.h"
@@ -34,10 +35,13 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorGetAssertionResponse {
   CreateFromU2fSignResponse(
       base::span<const uint8_t, kRpIdHashLength> relying_party_id_hash,
       base::span<const uint8_t> u2f_data,
-      base::span<const uint8_t> key_handle);
+      base::span<const uint8_t> key_handle,
+      absl::optional<FidoTransportProtocol> transport_used);
 
-  AuthenticatorGetAssertionResponse(AuthenticatorData authenticator_data,
-                                    std::vector<uint8_t> signature);
+  AuthenticatorGetAssertionResponse(
+      AuthenticatorData authenticator_data,
+      std::vector<uint8_t> signature,
+      absl::optional<FidoTransportProtocol> transport_used);
   AuthenticatorGetAssertionResponse(AuthenticatorGetAssertionResponse&& that);
   AuthenticatorGetAssertionResponse& operator=(
       AuthenticatorGetAssertionResponse&& other);
@@ -49,7 +53,8 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorGetAssertionResponse {
   absl::optional<PublicKeyCredentialUserEntity> user_entity;
   absl::optional<uint8_t> num_credentials;
 
-  // hmac_secret contains the output of the hmac_secret extension.
+  // hmac-secret contains the output of the hmac-secret or prf extension. The
+  // values have already been decrypted.
   absl::optional<std::vector<uint8_t>> hmac_secret;
 
   // hmac_secret_not_evaluated will be true in cases where the
@@ -69,20 +74,20 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AuthenticatorGetAssertionResponse {
   bool user_selected = false;
 
   // The large blob associated with the credential.
-  absl::optional<LargeBlob> large_blob;
+  absl::optional<std::vector<uint8_t>> large_blob;
 
   // Whether a large blob was successfully written as part of this GetAssertion
   // request.
   bool large_blob_written = false;
 
+  // Contains the compressed largeBlob data when the extension form is used.
+  // This will be decompressed during processing and used to populate
+  // `large_blob`.
+  absl::optional<LargeBlob> large_blob_extension;
+
   // The transport used to generate this response. This is unknown when using
   // the Windows WebAuthn API.
   absl::optional<FidoTransportProtocol> transport_used;
-
-  // device_public_key_signature contains the optional signature from the
-  // device-bound key. See
-  // https://github.com/fido-alliance/fido-2-specs/pull/1346
-  absl::optional<std::vector<uint8_t>> device_public_key_signature;
 };
 
 }  // namespace device

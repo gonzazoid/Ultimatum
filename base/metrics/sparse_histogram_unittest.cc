@@ -137,6 +137,84 @@ TEST_P(SparseHistogramTest, BasicTestAddCount) {
   EXPECT_EQ(25, snapshot2->GetCount(101));
 }
 
+// Check that delta calculations work correctly with SnapshotUnloggedSamples()
+// and MarkSamplesAsLogged().
+TEST_P(SparseHistogramTest, UnloggedSamplesTest) {
+  std::unique_ptr<SparseHistogram> histogram(NewSparseHistogram("Sparse"));
+  histogram->AddCount(1, 1);
+  histogram->AddCount(2, 2);
+
+  std::unique_ptr<HistogramSamples> samples =
+      histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(3, samples->TotalCount());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(2, samples->GetCount(2));
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(5, samples->sum());
+
+  // Snapshot unlogged samples again, which would be the same as above.
+  samples = histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(3, samples->TotalCount());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(2, samples->GetCount(2));
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(5, samples->sum());
+
+  // Verify that marking the samples as logged works correctly, and that
+  // SnapshotDelta() will not pick up the samples.
+  histogram->MarkSamplesAsLogged(*samples);
+  samples = histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(0, samples->sum());
+  samples = histogram->SnapshotDelta();
+  EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(0, samples->sum());
+
+  // Similarly, verify that SnapshotDelta() marks the samples as logged.
+  histogram->AddCount(1, 1);
+  histogram->AddCount(2, 2);
+  samples = histogram->SnapshotDelta();
+  EXPECT_EQ(3, samples->TotalCount());
+  EXPECT_EQ(1, samples->GetCount(1));
+  EXPECT_EQ(2, samples->GetCount(2));
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(5, samples->sum());
+  samples = histogram->SnapshotUnloggedSamples();
+  EXPECT_EQ(0, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(0, samples->sum());
+
+  // Verify that the logged samples contain everything emitted.
+  samples = histogram->SnapshotSamples();
+  EXPECT_EQ(6, samples->TotalCount());
+  EXPECT_EQ(samples->TotalCount(), samples->redundant_count());
+  EXPECT_EQ(2, samples->GetCount(1));
+  EXPECT_EQ(4, samples->GetCount(2));
+  EXPECT_EQ(10, samples->sum());
+}
+
+// Check that IsDefinitelyEmpty() works with the results of SnapshotDelta().
+TEST_P(SparseHistogramTest, IsDefinitelyEmpty_SnapshotDelta) {
+  std::unique_ptr<SparseHistogram> histogram(NewSparseHistogram("Sparse"));
+
+  // No samples initially.
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+
+  histogram->Add(1);
+  EXPECT_FALSE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  histogram->Add(10);
+  histogram->Add(10);
+  EXPECT_FALSE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  histogram->Add(1);
+  histogram->Add(50);
+  EXPECT_FALSE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+  EXPECT_TRUE(histogram->SnapshotDelta()->IsDefinitelyEmpty());
+}
+
 TEST_P(SparseHistogramTest, AddCount_LargeValuesDontOverflow) {
   std::unique_ptr<SparseHistogram> histogram(NewSparseHistogram("Sparse"));
   std::unique_ptr<HistogramSamples> snapshot(histogram->SnapshotSamples());

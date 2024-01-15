@@ -44,7 +44,7 @@ namespace blink {
 class LocalDOMWindow;
 
 class MODULES_EXPORT SpeechSynthesis final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public SpeechSynthesisBase,
       public Supplement<LocalDOMWindow>,
       public mojom::blink::SpeechSynthesisVoiceListObserver {
@@ -94,7 +94,8 @@ class MODULES_EXPORT SpeechSynthesis final
   void DidStartSpeaking(SpeechSynthesisUtterance*);
   void DidPauseSpeaking(SpeechSynthesisUtterance*);
   void DidResumeSpeaking(SpeechSynthesisUtterance*);
-  void DidFinishSpeaking(SpeechSynthesisUtterance*);
+  void DidFinishSpeaking(SpeechSynthesisUtterance*,
+                         mojom::blink::SpeechSynthesisErrorCode);
   void SpeakingErrorOccurred(SpeechSynthesisUtterance*);
   void WordBoundaryEventOccurred(SpeechSynthesisUtterance*,
                                  unsigned char_index,
@@ -110,7 +111,9 @@ class MODULES_EXPORT SpeechSynthesis final
  private:
   void VoicesDidChange();
   void StartSpeakingImmediately();
-  void HandleSpeakingCompleted(SpeechSynthesisUtterance*, bool error_occurred);
+  void HandleSpeakingCompleted(
+      SpeechSynthesisUtterance*,
+      mojom::blink::SpeechSynthesisErrorCode error_code);
   void FireEvent(const AtomicString& type,
                  SpeechSynthesisUtterance*,
                  uint32_t char_index,

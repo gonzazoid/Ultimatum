@@ -8,7 +8,6 @@
 #include <memory>
 #include <queue>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "chromecast/media/api/cma_backend.h"
@@ -59,7 +58,7 @@ class PushBufferPendingHandler : public AudioChannelPushBufferHandler {
   CmaBackend::BufferStatus PushBuffer(
       const PushBufferRequest& request) override;
   bool HasBufferedData() const override;
-  absl::optional<PushBufferRequest> GetBufferedData() override;
+  std::optional<PushBufferRequest> GetBufferedData() override;
 
  private:
   friend class PushBufferPendingHandlerTest;

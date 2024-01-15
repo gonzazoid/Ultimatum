@@ -16,7 +16,7 @@ export const MOVE_THRESHOLD_PX: number = 5;
  */
 import {PaperRippleBehavior} from '//resources/polymer/v3_0/paper-behaviors/paper-ripple-behavior.js';
 import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {assert} from '//resources/js/assert_ts.js';
+import {assert} from '//resources/js/assert.js';
 import '../cr_shared_vars.css.js';
 import {getTemplate} from './cr_toggle.html.js';
 
@@ -90,9 +90,12 @@ export class CrToggleElement extends CrToggleElementBase {
     this.setAttribute('aria-pressed', this.checked ? 'true' : 'false');
     this.setAttribute('aria-disabled', this.disabled ? 'true' : 'false');
 
-    this.addEventListener('blur', this.hideRipple_.bind(this));
+    if (!document.documentElement.hasAttribute('chrome-refresh-2023')) {
+      this.addEventListener('blur', this.hideRipple_.bind(this));
+      this.addEventListener('focus', this.onFocus_.bind(this));
+    }
+
     this.addEventListener('click', this.onClick_.bind(this));
-    this.addEventListener('focus', this.onFocus_.bind(this));
     this.addEventListener('keydown', this.onKeyDown_.bind(this));
     this.addEventListener('keyup', this.onKeyUp_.bind(this));
     this.addEventListener('pointerdown', this.onPointerDown_.bind(this));

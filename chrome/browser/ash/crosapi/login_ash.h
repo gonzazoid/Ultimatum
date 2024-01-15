@@ -5,19 +5,19 @@
 #ifndef CHROME_BROWSER_ASH_CROSAPI_LOGIN_ASH_H_
 #define CHROME_BROWSER_ASH_CROSAPI_LOGIN_ASH_H_
 
+#include <optional>
 #include <string>
 
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
-#include "base/scoped_observation.h"
+#include "base/scoped_observation_traits.h"
 #include "chromeos/crosapi/mojom/login.mojom.h"
 #include "components/user_manager/user_type.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace crosapi {
 
@@ -35,13 +35,13 @@ class LoginAsh : public mojom::Login {
   ~LoginAsh() override;
 
   using OptionalErrorCallback =
-      base::OnceCallback<void(const absl::optional<std::string>&)>;
+      base::OnceCallback<void(const std::optional<std::string>&)>;
 
   void BindReceiver(mojo::PendingReceiver<mojom::Login> receiver);
 
   // crosapi::mojom::Login:
   void ExitCurrentSession(
-      const absl::optional<std::string>& data_for_next_login_attempt,
+      const std::optional<std::string>& data_for_next_login_attempt,
       ExitCurrentSessionCallback callback) override;
   void FetchDataForNextLoginAttempt(
       FetchDataForNextLoginAttemptCallback callback) override;
@@ -59,10 +59,11 @@ class LoginAsh : public mojom::Login {
       mojo::PendingRemote<mojom::ExternalLogoutRequestObserver> observer)
       override;
   void NotifyOnExternalLogoutDone() override;
+  void ShowGuestSessionConfirmationDialog() override;
   // Methods that are removed from mojom::Login interface. The methods cannot be
   // completely removed, only renamed, because the interface is Stable and has
   // to preserve backward-compatibility.
-  void REMOVED_0(const absl::optional<std::string>& password,
+  void REMOVED_0(const std::optional<std::string>& password,
                  REMOVED_0Callback callback) override;
   void REMOVED_4(const std::string& password,
                  REMOVED_4Callback callback) override;
@@ -83,7 +84,7 @@ class LoginAsh : public mojom::Login {
   // If a password is provided, the Managed Guest Session will be lockable and
   // can be unlocked by providing the same password to
   // `UnlockManagedGuestSession()`.
-  void LaunchManagedGuestSession(const absl::optional<std::string>& password,
+  void LaunchManagedGuestSession(const std::optional<std::string>& password,
                                  OptionalErrorCallback callback);
   // Deprecated. Use `UnlockCurrentSession()` below.
   void UnlockManagedGuestSession(const std::string& password,
@@ -139,14 +140,13 @@ class LoginAsh : public mojom::Login {
 
  private:
   void OnScreenLockerAuthenticate(OptionalErrorCallback callback, bool success);
-  void OnOptionalErrorCallbackComplete(
-      OptionalErrorCallback callback,
-      const absl::optional<std::string>& error);
-  absl::optional<std::string> CanLaunchSession();
-  absl::optional<std::string> LockSession(
-      absl::optional<user_manager::UserType> user_type = absl::nullopt);
-  absl::optional<std::string> CanUnlockSession(
-      absl::optional<user_manager::UserType> user_type = absl::nullopt);
+  void OnOptionalErrorCallbackComplete(OptionalErrorCallback callback,
+                                       const std::optional<std::string>& error);
+  std::optional<std::string> CanLaunchSession();
+  std::optional<std::string> LockSession(
+      std::optional<user_manager::UserType> user_type = std::nullopt);
+  std::optional<std::string> CanUnlockSession(
+      std::optional<user_manager::UserType> user_type = std::nullopt);
   void UnlockSession(const std::string& password,
                      OptionalErrorCallback callback);
 
@@ -164,5 +164,24 @@ class LoginAsh : public mojom::Login {
 };
 
 }  // namespace crosapi
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<crosapi::LoginAsh,
+                               crosapi::LoginAsh::ExternalLogoutDoneObserver> {
+  static void AddObserver(
+      crosapi::LoginAsh* source,
+      crosapi::LoginAsh::ExternalLogoutDoneObserver* observer) {
+    source->AddExternalLogoutDoneObserver(observer);
+  }
+  static void RemoveObserver(
+      crosapi::LoginAsh* source,
+      crosapi::LoginAsh::ExternalLogoutDoneObserver* observer) {
+    source->RemoveExternalLogoutDoneObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROME_BROWSER_ASH_CROSAPI_LOGIN_ASH_H_

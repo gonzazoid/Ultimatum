@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -163,8 +163,7 @@ std::u16string ComponentsHandler::ServiceStatusToString(
       return l10n_util::GetStringUTF16(IDS_COMPONENTS_SVC_STATUS_UPTODATE);
     case update_client::ComponentState::kUpdateError:
       return l10n_util::GetStringUTF16(IDS_COMPONENTS_SVC_STATUS_UPDATE_ERROR);
-    case update_client::ComponentState::kUninstalled:  // Fall through.
-    case update_client::ComponentState::kRegistration:
+    case update_client::ComponentState::kPingOnly:  // Fall through.
     case update_client::ComponentState::kRun:
     case update_client::ComponentState::kLastStatus:
       return l10n_util::GetStringUTF16(IDS_COMPONENTS_UNKNOWN);
@@ -176,7 +175,7 @@ std::u16string ComponentsHandler::ServiceStatusToString(
 void ComponentsHandler::HandleCrosUrlComponentsRedirect(
     const base::Value::List& args) {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  lacros_url_handling::NavigateInAsh(GURL(chrome::kOsUIComponentsURL));
+  lacros_url_handling::NavigateInAsh(GURL(chrome::kChromeUIComponentsUrl));
 #else
   // Note: This will only be called by the UI when Lacros is available.
   DCHECK(crosapi::BrowserManager::Get());
@@ -197,7 +196,7 @@ base::Value::List ComponentsHandler::LoadComponents() {
   const std::vector<std::string> component_ids =
       component_updater_->GetComponentIDs();
 
-  // Construct DictionaryValues to return to UI.
+  // Construct `base::Value::Dict` to return to UI.
   base::Value::List component_list;
   for (const auto& component_id : component_ids) {
     update_client::CrxUpdateItem item;

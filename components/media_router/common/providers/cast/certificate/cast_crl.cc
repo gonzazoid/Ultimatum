@@ -9,24 +9,27 @@
 
 #include <memory>
 
+#include "base/build_time.h"
 #include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
+#include "base/time/time.h"
+#include "components/media_router/common/providers/cast/certificate/cast_fallback_crl.h"
 #include "crypto/sha2.h"
-#include "net/cert/pki/cert_errors.h"
-#include "net/cert/pki/parse_certificate.h"
-#include "net/cert/pki/parsed_certificate.h"
-#include "net/cert/pki/path_builder.h"
-#include "net/cert/pki/simple_path_builder_delegate.h"
-#include "net/cert/pki/trust_store_in_memory.h"
-#include "net/cert/pki/verify_certificate_chain.h"
+#include "net/cert/time_conversions.h"
 #include "net/cert/x509_util.h"
-#include "net/der/encode_values.h"
-#include "net/der/input.h"
-#include "net/der/parse_values.h"
 #include "third_party/boringssl/src/include/openssl/bytestring.h"
 #include "third_party/boringssl/src/include/openssl/digest.h"
 #include "third_party/boringssl/src/include/openssl/evp.h"
+#include "third_party/boringssl/src/pki/cert_errors.h"
+#include "third_party/boringssl/src/pki/input.h"
+#include "third_party/boringssl/src/pki/parse_certificate.h"
+#include "third_party/boringssl/src/pki/parse_values.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
+#include "third_party/boringssl/src/pki/path_builder.h"
+#include "third_party/boringssl/src/pki/simple_path_builder_delegate.h"
+#include "third_party/boringssl/src/pki/trust_store_in_memory.h"
+#include "third_party/boringssl/src/pki/verify_certificate_chain.h"
 #include "third_party/openscreen/src/cast/common/certificate/proto/revocation.pb.h"
 
 namespace cast_certificate {
@@ -63,6 +66,11 @@ enum CrlVersion {
 
 #include "components/media_router/common/providers/cast/certificate/cast_crl_root_ca_cert_der-inc.h"
 
+// When the fallback Cast CRL is used, ignore the back-up Cast CRL’s validity
+// range. Instead, use the Build Time as the not_before date and Build Time + 20
+// weeks as the not_after time. This is a constant as 20 weeks in seconds
+constexpr static int kFallbackCrlValidityInSeconds = 20 * 7 * 24 * 60 * 60;
+
 // Singleton for the Cast CRL trust store.
 class CastCRLTrustStore {
  public:
@@ -74,34 +82,34 @@ class CastCRLTrustStore {
   CastCRLTrustStore(const CastCRLTrustStore&) = delete;
   CastCRLTrustStore& operator=(const CastCRLTrustStore&) = delete;
 
-  static net::TrustStore& Get() { return GetInstance()->store_; }
+  static bssl::TrustStore& Get() { return GetInstance()->store_; }
 
  private:
   friend struct base::DefaultSingletonTraits<CastCRLTrustStore>;
 
   CastCRLTrustStore() {
     // Initialize the trust store with the root certificate.
-    net::CertErrors errors;
-    scoped_refptr<net::ParsedCertificate> cert = net::ParsedCertificate::Create(
-        net::x509_util::CreateCryptoBufferFromStaticDataUnsafe(
-            kCastCRLRootCaDer),
-        {}, &errors);
+    bssl::CertErrors errors;
+    std::shared_ptr<const bssl::ParsedCertificate> cert =
+        bssl::ParsedCertificate::Create(
+            net::x509_util::CreateCryptoBufferFromStaticDataUnsafe(
+                kCastCRLRootCaDer),
+            {}, &errors);
     CHECK(cert) << errors.ToDebugString();
     // Enforce pathlen constraints and policies defined on the root certificate.
     store_.AddTrustAnchorWithConstraints(std::move(cert));
   }
 
-  net::TrustStoreInMemory store_;
+  bssl::TrustStoreInMemory store_;
 };
 
 // Converts a uint64_t unix timestamp to net::der::GeneralizedTime.
 bool ConvertTimeSeconds(uint64_t seconds,
-                        net::der::GeneralizedTime* generalized_time) {
+                        bssl::der::GeneralizedTime* generalized_time) {
   base::Time unix_timestamp =
       base::Time::UnixEpoch() +
       base::Seconds(base::saturated_cast<int64_t>(seconds));
-  return net::der::EncodeTimeAsGeneralizedTime(unix_timestamp,
-                                               generalized_time);
+  return net::EncodeTimeAsGeneralizedTime(unix_timestamp, generalized_time);
 }
 
 // Verifies the CRL is signed by a trusted CRL authority at the time the CRL
@@ -110,19 +118,22 @@ bool ConvertTimeSeconds(uint64_t seconds,
 // at |time|. The validity period of the CRL is adjusted to be the earliest
 // of the issuer certificate chain's expiration and the CRL's expiration and
 // the result is stored in |overall_not_after|.
+// |is_fallback_crl| states whether a fallback CRL is used. When true,
+// ignore the validity range of the fallback CRL's issuer certificate.
 bool VerifyCRL(const Crl& crl,
                const TbsCrl& tbs_crl,
                const base::Time& time,
-               net::TrustStore* trust_store,
-               net::der::GeneralizedTime* overall_not_after) {
+               bssl::TrustStore* trust_store,
+               bssl::der::GeneralizedTime* overall_not_after,
+               bool is_fallback_crl) {
   if (!crl.has_signature() || !crl.has_signer_cert()) {
     VLOG(2) << "CRL - Missing fields";
     return false;
   }
 
-  net::CertErrors parse_errors;
-  scoped_refptr<net::ParsedCertificate> parsed_cert =
-      net::ParsedCertificate::Create(
+  bssl::CertErrors parse_errors;
+  std::shared_ptr<const bssl::ParsedCertificate> parsed_cert =
+      bssl::ParsedCertificate::Create(
           net::x509_util::CreateCryptoBuffer(crl.signer_cert()), {},
           &parse_errors);
   if (parsed_cert == nullptr) {
@@ -160,25 +171,34 @@ bool VerifyCRL(const Crl& crl,
   }
 
   // Verify the issuer certificate.
-  net::der::GeneralizedTime verification_time;
-  if (!net::der::EncodeTimeAsGeneralizedTime(time, &verification_time)) {
-    VLOG(2) << "CRL - Unable to parse verification time.";
+  bssl::der::GeneralizedTime issuer_verification_time;
+  base::Time time_issuer_check = time;
+  if (is_fallback_crl) {
+    time_issuer_check = base::Time::FromTimeT(kCastFallbackCRLTimestamp);
+    VLOG(2) << "CRL - Issuer certifcate's verification time overridden for the "
+               "fallback CRL.";
+  }
+  if (!net::EncodeTimeAsGeneralizedTime(time_issuer_check,
+                                        &issuer_verification_time)) {
+    VLOG(2) << "CRL - Unable to parse verification time for issuer certificate "
+               "check.";
     return false;
   }
 
   // SimplePathBuilderDelegate will enforce required signature algorithms of
   // RSASSA PKCS#1 v1.5 with SHA-256, and RSA keys 2048-bits or longer.
-  net::SimplePathBuilderDelegate path_builder_delegate(
-      2048, net::SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1);
+  bssl::SimplePathBuilderDelegate path_builder_delegate(
+      2048, bssl::SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1);
 
   // Verify the trust of the CRL authority.
-  net::CertPathBuilder path_builder(
-      parsed_cert.get(), trust_store, &path_builder_delegate, verification_time,
-      net::KeyPurpose::ANY_EKU, net::InitialExplicitPolicy::kFalse,
-      {net::der::Input(net::kAnyPolicyOid)},
-      net::InitialPolicyMappingInhibit::kFalse,
-      net::InitialAnyPolicyInhibit::kFalse);
-  net::CertPathBuilder::Result result = path_builder.Run();
+  bssl::CertPathBuilder path_builder(
+      parsed_cert, trust_store, &path_builder_delegate,
+      issuer_verification_time, bssl::KeyPurpose::ANY_EKU,
+      bssl::InitialExplicitPolicy::kFalse,
+      {bssl::der::Input(bssl::kAnyPolicyOid)},
+      bssl::InitialPolicyMappingInhibit::kFalse,
+      bssl::InitialAnyPolicyInhibit::kFalse);
+  bssl::CertPathBuilder::Result result = path_builder.Run();
   if (!result.HasValidPath()) {
     VLOG(2) << "CRL - Issuer certificate verification failed.";
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
@@ -190,17 +210,24 @@ bool VerifyCRL(const Crl& crl,
   // particular KeyUsages. Leaf certificate checks are bypassed.
 
   // Verify the CRL is still valid.
-  net::der::GeneralizedTime not_before;
+  bssl::der::GeneralizedTime crl_verification_time;
+  if (!net::EncodeTimeAsGeneralizedTime(time, &crl_verification_time)) {
+    VLOG(2)
+        << "CRL - Unable to parse verification time for CRL validity check.";
+    return false;
+  }
+  bssl::der::GeneralizedTime not_before;
   if (!ConvertTimeSeconds(tbs_crl.not_before_seconds(), &not_before)) {
     VLOG(2) << "CRL - Unable to parse not_before.";
     return false;
   }
-  net::der::GeneralizedTime not_after;
+  bssl::der::GeneralizedTime not_after;
   if (!ConvertTimeSeconds(tbs_crl.not_after_seconds(), &not_after)) {
     VLOG(2) << "CRL - Unable to parse not_after.";
     return false;
   }
-  if ((verification_time < not_before) || (verification_time > not_after)) {
+  if ((crl_verification_time < not_before) ||
+      (crl_verification_time > not_after)) {
     VLOG(2) << "CRL - Not time-valid.";
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     return false;
@@ -215,15 +242,19 @@ bool VerifyCRL(const Crl& crl,
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
   // We don't expect to have a valid path during fuzz testing, so just use a
   // single cert.
-  const net::ParsedCertificateList path_certs = {parsed_cert};
+  const bssl::ParsedCertificateList path_certs = {parsed_cert};
 #else
-  const net::ParsedCertificateList& path_certs =
+  const bssl::ParsedCertificateList& path_certs =
       result.GetBestValidPath()->certs;
 #endif
-  for (const auto& cert : path_certs) {
-    net::der::GeneralizedTime cert_not_after = cert->tbs().validity_not_after;
-    if (cert_not_after < *overall_not_after)
-      *overall_not_after = cert_not_after;
+  if (!is_fallback_crl) {
+    for (const auto& cert : path_certs) {
+      bssl::der::GeneralizedTime cert_not_after =
+          cert->tbs().validity_not_after;
+      if (cert_not_after < *overall_not_after) {
+        *overall_not_after = cert_not_after;
+      }
+    }
   }
 
   // Perform sanity check on serial numbers.
@@ -241,14 +272,14 @@ bool VerifyCRL(const Crl& crl,
 class CastCRLImpl : public CastCRL {
  public:
   CastCRLImpl(const TbsCrl& tbs_crl,
-              const net::der::GeneralizedTime& overall_not_after);
+              const bssl::der::GeneralizedTime& overall_not_after);
 
   CastCRLImpl(const CastCRLImpl&) = delete;
   CastCRLImpl& operator=(const CastCRLImpl&) = delete;
 
   ~CastCRLImpl() override;
 
-  bool CheckRevocation(const net::ParsedCertificateList& trusted_chain,
+  bool CheckRevocation(const bssl::ParsedCertificateList& trusted_chain,
                        const base::Time& time) const override;
 
  private:
@@ -257,8 +288,8 @@ class CastCRLImpl : public CastCRL {
     uint64_t last_serial;
   };
 
-  net::der::GeneralizedTime not_before_;
-  net::der::GeneralizedTime not_after_;
+  bssl::der::GeneralizedTime not_before_;
+  bssl::der::GeneralizedTime not_after_;
 
   // Revoked public key hashes.
   // The values consist of the SHA256 hash of the SubjectPublicKeyInfo.
@@ -272,7 +303,7 @@ class CastCRLImpl : public CastCRL {
 };
 
 CastCRLImpl::CastCRLImpl(const TbsCrl& tbs_crl,
-                         const net::der::GeneralizedTime& overall_not_after) {
+                         const bssl::der::GeneralizedTime& overall_not_after) {
   // Parse the validity information.
   // Assume ConvertTimeSeconds will succeed. Successful call to VerifyCRL
   // means that these calls were successful.
@@ -310,14 +341,14 @@ CastCRLImpl::~CastCRLImpl() {}
 // Verifies the revocation status of the certificate chain, at the specified
 // time.
 bool CastCRLImpl::CheckRevocation(
-    const net::ParsedCertificateList& trusted_chain,
+    const bssl::ParsedCertificateList& trusted_chain,
     const base::Time& time) const {
   if (trusted_chain.empty())
     return false;
 
   // Check the validity of the CRL at the specified time.
-  net::der::GeneralizedTime verification_time;
-  if (!net::der::EncodeTimeAsGeneralizedTime(time, &verification_time)) {
+  bssl::der::GeneralizedTime verification_time;
+  if (!net::EncodeTimeAsGeneralizedTime(time, &verification_time)) {
     VLOG(2) << "CRL verification time malformed.";
     return false;
   }
@@ -329,7 +360,7 @@ bool CastCRLImpl::CheckRevocation(
   // Check revocation. This loop iterates over both certificates AND then the
   // trust anchor after exhausting the certs.
   for (size_t i = 0; i < trusted_chain.size(); ++i) {
-    const net::der::Input& spki_tlv = trusted_chain[i]->tbs().spki_tlv;
+    const bssl::der::Input& spki_tlv = trusted_chain[i]->tbs().spki_tlv;
 
     // Calculate the public key's hash to check for revocation.
     std::string spki_hash = crypto::SHA256HashString(spki_tlv.AsString());
@@ -351,8 +382,8 @@ bool CastCRLImpl::CheckRevocation(
         uint64_t serial_number;
         // Only Google generated device certificates will be revoked by range.
         // These will always be less than 64 bits in length.
-        if (!net::der::ParseUint64(subordinate->tbs().serial_number,
-                                   &serial_number)) {
+        if (!bssl::der::ParseUint64(subordinate->tbs().serial_number,
+                                    &serial_number)) {
           continue;
         }
         for (const auto& revoked_serial : issuer_iter->second) {
@@ -371,17 +402,19 @@ bool CastCRLImpl::CheckRevocation(
 }  // namespace
 
 std::unique_ptr<CastCRL> ParseAndVerifyCRL(const std::string& crl_proto,
-                                           const base::Time& time) {
-  return ParseAndVerifyCRLUsingCustomTrustStore(crl_proto, time,
-                                                &CastCRLTrustStore::Get());
+                                           const base::Time& time,
+                                           const bool is_fallback_crl) {
+  return ParseAndVerifyCRLUsingCustomTrustStore(
+      crl_proto, time, &CastCRLTrustStore::Get(), is_fallback_crl);
 }
 
 std::unique_ptr<CastCRL> ParseAndVerifyCRLUsingCustomTrustStore(
     const std::string& crl_proto,
     const base::Time& time,
-    net::TrustStore* trust_store) {
+    bssl::TrustStore* trust_store,
+    const bool is_fallback_crl) {
   if (!trust_store)
-    return ParseAndVerifyCRL(crl_proto, time);
+    return ParseAndVerifyCRL(crl_proto, time, is_fallback_crl);
 
   CrlBundle crl_bundle;
   if (!crl_bundle.ParseFromString(crl_proto)) {
@@ -397,8 +430,16 @@ std::unique_ptr<CastCRL> ParseAndVerifyCRLUsingCustomTrustStore(
     if (tbs_crl.version() != CRL_VERSION_0) {
       continue;
     }
-    net::der::GeneralizedTime overall_not_after;
-    if (!VerifyCRL(crl, tbs_crl, time, trust_store, &overall_not_after)) {
+
+    if (is_fallback_crl) {
+      tbs_crl.set_not_before_seconds(base::GetBuildTime().ToTimeT());
+      tbs_crl.set_not_after_seconds(base::GetBuildTime().ToTimeT() +
+                                    kFallbackCrlValidityInSeconds);
+    }
+
+    bssl::der::GeneralizedTime overall_not_after;
+    if (!VerifyCRL(crl, tbs_crl, time, trust_store, &overall_not_after,
+                   is_fallback_crl)) {
       LOG(ERROR) << "CRL - Verification failed.";
       return nullptr;
     }
@@ -406,6 +447,16 @@ std::unique_ptr<CastCRL> ParseAndVerifyCRLUsingCustomTrustStore(
   }
   LOG(ERROR) << "No supported version of revocation data.";
   return nullptr;
+}
+
+std::unique_ptr<CastCRL> ParseAndVerifyFallbackCRLUsingCustomTrustStore(
+    const base::Time& time,
+    bssl::TrustStore* trust_store) {
+  std::string fallback_serialized_crl(
+      kCastFallbackCRLs, kCastFallbackCRLs + sizeof kCastFallbackCRLs /
+                                                 sizeof kCastFallbackCRLs[0]);
+  return ParseAndVerifyCRLUsingCustomTrustStore(
+      fallback_serialized_crl, time, trust_store, true /* is_fallback_crl */);
 }
 
 }  // namespace cast_certificate

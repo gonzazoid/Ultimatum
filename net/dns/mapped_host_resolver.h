@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/strings/string_piece.h"
+#include "base/values.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_mapping_rules.h"
 #include "net/base/net_export.h"
@@ -40,7 +41,7 @@ class NET_EXPORT MappedHostResolver : public HostResolver {
   //   "EXCLUDE" <hostname_pattern>
   //
   // The <replacement_host> can be either a hostname, or an IP address literal,
-  // or "~NOTFOUND". If it is "~NOTFOUND" then all matched hostnames will fail
+  // or "^NOTFOUND". If it is "^NOTFOUND" then all matched hostnames will fail
   // to be resolved with ERR_NAME_NOT_RESOLVED.
   //
   // Returns true if the rule was successfully parsed and added.
@@ -67,7 +68,7 @@ class NET_EXPORT MappedHostResolver : public HostResolver {
       override;
   std::unique_ptr<ProbeRequest> CreateDohProbeRequest() override;
   HostCache* GetHostCache() override;
-  base::Value GetDnsConfigAsValue() const override;
+  base::Value::Dict GetDnsConfigAsValue() const override;
   void SetRequestContext(URLRequestContext* request_context) override;
   HostResolverManager* GetManagerForTesting() override;
 

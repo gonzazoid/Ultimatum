@@ -7,22 +7,26 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/chrome/app/application_mode.h"
-#import "ios/chrome/browser/ui/main/browser_interface_provider.h"
+#import "ios/chrome/app/application_mode.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
 
 @protocol ApplicationCommands;
 @protocol BrowsingDataCommands;
 class Browser;
 class ChromeBrowserState;
 @class SceneState;
+@class WrangledBrowser;
 
 // Wrangler (a class in need of further refactoring) for handling the creation
 // and ownership of Browser instances and their associated
 // BrowserViewControllers.
-@interface BrowserViewWrangler : NSObject <BrowserInterfaceProvider>
+@interface BrowserViewWrangler : NSObject <BrowserProviderInterface>
 
 // Initialize a new instance of this class using `browserState` as the primary
-// browser state for the tab models and BVCs.
+// browser state for the tab models and BVCs. The Browser objects are created
+// during the initialization (the OTR Browser may be destroyed and recreated
+// during the application lifetime).
+//
 // `sceneState` is the scene state that will be associated with any Browsers
 // created.
 // `applicationCommandEndpoint` and `browsingDataCommandEndpoint` are the
@@ -38,19 +42,29 @@ class ChromeBrowserState;
 
 - (instancetype)init NS_UNAVAILABLE;
 
-// Creates the main Browser used by the receiver, using the browser state
-// it was configured with.
-// Returns the created browser. The browser's internals, e.g.
-// the dispatcher, can now be accessed. But createMainCoordinatorAndInterface
-// should be called shortly after.
-- (Browser*)createMainBrowser;
+// One interface must be designated as being the "current" interface.
+// It's typically an error to assign this an interface which is neither of
+// mainInterface` or `incognitoInterface`. The initial value of
+// `currentInterface` is an implementation decision, but `mainInterface` is
+// typical.
+// Changing this value may or may not trigger actual UI changes, or may just be
+// bookkeeping associated with UI changes handled elsewhere.
+@property(nonatomic, weak) WrangledBrowser* currentInterface;
+// The "main" (meaning non-incognito -- the nomenclature is legacy) interface.
+// This interface's `incognito` property is expected to be NO.
+@property(nonatomic, readonly) WrangledBrowser* mainInterface;
+// The incognito interface. Its `incognito` property must be YES.
+@property(nonatomic, readonly) WrangledBrowser* incognitoInterface;
 
 // Creates the main interface; until this
 // method is called, the main and incognito interfaces will be nil. This should
 // be done before the main interface is accessed, usually immediately after
 // initialization.
-// -createMainBrowser MUST be called before calling this method.
 - (void)createMainCoordinatorAndInterface;
+
+// Requests the session to be loaded for all Browsers. Needs to be called
+// after -createMainCoordinatorAndInterface.
+- (void)loadSession;
 
 // Tells the receiver to clean up all the state that is tied to the incognito
 // BrowserState. This method should be called before the incognito BrowserState

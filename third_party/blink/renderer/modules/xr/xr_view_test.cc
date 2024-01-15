@@ -4,15 +4,15 @@
 
 #include "third_party/blink/renderer/modules/xr/xr_view.h"
 
-#include "third_party/blink/renderer/modules/xr/xr_test_utils.h"
-
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
+#include "third_party/blink/renderer/modules/xr/xr_test_utils.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 
@@ -27,6 +27,7 @@ void AssertMatrixEquals(const Vector<double>& actual,
 }
 
 TEST(XRViewTest, ViewMatrices) {
+  test::TaskEnvironment task_environment;
   const double kDepthNear = 0.1;
   const double kDepthFar = 1000.0;
   const float kFov = 52.0f;
@@ -52,16 +53,15 @@ TEST(XRViewTest, ViewMatrices) {
 
   XRViewData* view_data =
       MakeGarbageCollected<XRViewData>(xr_view, kDepthNear, kDepthFar);
-  XRView view(nullptr, view_data, TransformationMatrix(ref_space_from_mojo));
+  XRView view(nullptr, view_data, ref_space_from_mojo);
 
-  AssertMatrixEquals(
-      GetMatrixDataForTest(view_data->MojoFromView()),
-      GetMatrixDataForTest(TransformationMatrix(mojo_from_view)));
+  AssertMatrixEquals(GetMatrixDataForTest(view_data->MojoFromView()),
+                     GetMatrixDataForTest(mojo_from_view));
   AssertMatrixEquals(
       GetMatrixDataForTest(view.refSpaceFromView()->TransformMatrix()),
-      GetMatrixDataForTest(TransformationMatrix(ref_space_from_view)));
+      GetMatrixDataForTest(ref_space_from_view));
   AssertMatrixEquals(GetMatrixDataForTest(view_data->ProjectionMatrix()),
-                     GetMatrixDataForTest(TransformationMatrix::ColMajor(
+                     GetMatrixDataForTest(gfx::Transform::ColMajor(
                          0.78128596636, 0, 0, 0, 0, 0.78128596636, 0, 0, 0, 0,
                          -1.00020002, -1, 0, 0, -0.200020002, 0)));
 }

@@ -6,19 +6,18 @@ package org.chromium.components.browser_ui.widget.promo;
 
 import android.view.View;
 
-import org.chromium.base.ApiCompatibilityUtils;
+import androidx.core.widget.ImageViewCompat;
+
 import org.chromium.base.Callback;
 import org.chromium.base.Log;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * View binder than binds the promo view with the property model.
- */
+/** View binder than binds the promo view with the property model. */
 class PromoCardViewBinder
-        implements PropertyModelChangeProcessor
-                           .ViewBinder<PropertyModel, PromoCardView, PropertyKey> {
+        implements PropertyModelChangeProcessor.ViewBinder<
+                PropertyModel, PromoCardView, PropertyKey> {
     private static final String TAG = "PromoCardViewBinder";
 
     @Override
@@ -26,7 +25,7 @@ class PromoCardViewBinder
         if (propertyKey == PromoCardProperties.IMAGE) {
             view.mPromoImage.setImageDrawable(model.get(PromoCardProperties.IMAGE));
         } else if (propertyKey == PromoCardProperties.ICON_TINT) {
-            ApiCompatibilityUtils.setImageTintList(
+            ImageViewCompat.setImageTintList(
                     view.mPromoImage, model.get(PromoCardProperties.ICON_TINT));
         } else if (propertyKey == PromoCardProperties.TITLE) {
             view.mTitle.setText(model.get(PromoCardProperties.TITLE));

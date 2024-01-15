@@ -4,14 +4,10 @@
 
 #import "ios/web/public/session/serializable_user_data_manager.h"
 
+#import "ios/web/public/session/crw_session_user_data.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#import "ios/web/session/crw_session_user_data.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // User Data and Key to use for tests.

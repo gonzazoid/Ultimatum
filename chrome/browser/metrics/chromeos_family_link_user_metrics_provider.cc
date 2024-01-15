@@ -4,7 +4,7 @@
 
 #include "chrome/browser/metrics/chromeos_family_link_user_metrics_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -44,11 +44,11 @@ ChromeOSFamilyLinkUserMetricsProvider::
 
 // This function is called at unpredictable intervals throughout the entire
 // ChromeOS session, so guarantee it will never crash.
-void ChromeOSFamilyLinkUserMetricsProvider::ProvideCurrentSessionData(
-    metrics::ChromeUserMetricsExtension* uma_proto_unused) {
+bool ChromeOSFamilyLinkUserMetricsProvider::ProvideHistograms() {
   if (!log_segment_)
-    return;
+    return false;
   base::UmaHistogramEnumeration(kHistogramName, log_segment_.value());
+  return true;
 }
 
 void ChromeOSFamilyLinkUserMetricsProvider::OnUserSessionStarted(

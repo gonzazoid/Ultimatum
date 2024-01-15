@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/policy/core/common/async_policy_loader.h"
 #include "components/policy/core/common/policy_bundle.h"
 #include "components/policy/core/common/schema_registry.h"
@@ -37,13 +36,15 @@ void AsyncPolicyProvider::Init(SchemaRegistry* registry) {
   if (!loader_)
     return;
 
-  AsyncPolicyLoader::UpdateCallback callback = base::BindRepeating(
-      &AsyncPolicyProvider::LoaderUpdateCallback,
-      base::ThreadTaskRunnerHandle::Get(), weak_factory_.GetWeakPtr());
+  AsyncPolicyLoader::UpdateCallback callback =
+      base::BindRepeating(&AsyncPolicyProvider::LoaderUpdateCallback,
+                          base::SingleThreadTaskRunner::GetCurrentDefault(),
+                          weak_factory_.GetWeakPtr());
   bool post = loader_->task_runner()->PostTask(
       FROM_HERE,
       base::BindOnce(&AsyncPolicyLoader::Init, base::Unretained(loader_.get()),
-                     base::ThreadTaskRunnerHandle::Get(), callback));
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
+                     callback));
   DCHECK(post) << "AsyncPolicyProvider::Init() called with threads not running";
 }
 
@@ -64,7 +65,7 @@ void AsyncPolicyProvider::Shutdown() {
   ConfigurationPolicyProvider::Shutdown();
 }
 
-void AsyncPolicyProvider::RefreshPolicies() {
+void AsyncPolicyProvider::RefreshPolicies(PolicyFetchReason reason) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Subtle: RefreshPolicies() has a contract that requires the next policy

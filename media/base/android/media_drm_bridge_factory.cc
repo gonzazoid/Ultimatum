@@ -4,10 +4,12 @@
 
 #include "media/base/android/media_drm_bridge_factory.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "media/base/cdm_config.h"
 #include "media/base/content_decryption_module.h"
+#include "media/base/key_system_names.h"
+#include "media/cdm/clear_key_cdm_common.h"
 #include "third_party/widevine/cdm/widevine_cdm_common.h"
 
 namespace media {
@@ -43,6 +45,8 @@ void MediaDrmBridgeFactory::Create(
     security_level_ = cdm_config.use_hw_secure_codecs
                           ? MediaDrmBridge::SECURITY_LEVEL_1
                           : MediaDrmBridge::SECURITY_LEVEL_3;
+  } else if (media::IsExternalClearKey(cdm_config.key_system)) {
+    security_level_ = MediaDrmBridge::SECURITY_LEVEL_DEFAULT;
   } else if (!cdm_config.use_hw_secure_codecs) {
     // Assume other key systems require hardware-secure codecs and thus do not
     // support full compositing.
@@ -60,15 +64,14 @@ void MediaDrmBridgeFactory::Create(
   session_expiration_update_cb_ = session_expiration_update_cb;
   cdm_created_cb_ = std::move(cdm_created_cb);
 
-  // MediaDrmStorage may be lazy created in MediaDrmStorageBridge.
-  storage_ = std::make_unique<MediaDrmStorageBridge>();
-
-  if (!MediaDrmBridge::IsPerOriginProvisioningSupported()) {
-    // Per-origin provisioning isn't supported, so proceed without specifying an
-    // origin ID.
+  if (media::IsExternalClearKey(cdm_config.key_system)) {
+    // We don't use storage in ClearKey so we return before creation, and
+    // initialize the Media Drm Bridge with an empty string.
     CreateMediaDrmBridge("");
     return;
   }
+  // MediaDrmStorage may be lazy created in MediaDrmStorageBridge.
+  storage_ = std::make_unique<MediaDrmStorageBridge>();
 
   storage_->Initialize(
       create_storage_cb_,

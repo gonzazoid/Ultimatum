@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/render_frame_host_delegate.h"
@@ -63,7 +63,7 @@ class MediaStreamUIProxy::Core {
                                       const DesktopMediaID& new_media_id);
 
   void OnRegionCaptureRectChanged(
-      const absl::optional<gfx::Rect>& region_capture_rect);
+      const std::optional<gfx::Rect>& region_capture_rect);
 
 #if !BUILDFLAG(IS_ANDROID)
   void SetFocus(const DesktopMediaID& media_id,
@@ -203,7 +203,7 @@ void MediaStreamUIProxy::Core::OnDeviceStoppedForSourceChange(
 }
 
 void MediaStreamUIProxy::Core::OnRegionCaptureRectChanged(
-    const absl::optional<gfx::Rect>& region_capture_rec) {
+    const std::optional<gfx::Rect>& region_capture_rec) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (ui_) {
     ui_->OnRegionCaptureRectChanged(region_capture_rec);
@@ -422,7 +422,7 @@ void MediaStreamUIProxy::OnDeviceStoppedForSourceChange(
 }
 
 void MediaStreamUIProxy::OnRegionCaptureRectChanged(
-    const absl::optional<gfx::Rect>& region_capture_rec) {
+    const std::optional<gfx::Rect>& region_capture_rec) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
   GetUIThreadTaskRunner({})->PostTask(
@@ -487,7 +487,7 @@ void MediaStreamUIProxy::OnWindowId(WindowIdCallback window_id_callback,
 
 FakeMediaStreamUIProxy::FakeMediaStreamUIProxy(
     bool tests_use_fake_render_frame_hosts)
-    : MediaStreamUIProxy(nullptr), mic_access_(true), camera_access_(true) {
+    : MediaStreamUIProxy(nullptr) {
   core_->tests_use_fake_render_frame_hosts_ = tests_use_fake_render_frame_hosts;
 }
 
@@ -504,6 +504,10 @@ void FakeMediaStreamUIProxy::SetMicAccess(bool access) {
 
 void FakeMediaStreamUIProxy::SetCameraAccess(bool access) {
   camera_access_ = access;
+}
+
+void FakeMediaStreamUIProxy::SetAudioShare(bool audio_share) {
+  audio_share_ = audio_share;
 }
 
 void FakeMediaStreamUIProxy::RequestAccess(
@@ -559,6 +563,9 @@ void FakeMediaStreamUIProxy::RequestAccess(
     devices_to_use = blink::mojom::StreamDevices();
   }
 
+  if (!audio_share_) {
+    devices_to_use.audio_device = std::nullopt;
+  }
   const bool is_devices_empty = !devices_to_use.audio_device.has_value() &&
                                 !devices_to_use.video_device.has_value();
   if (is_devices_empty) {

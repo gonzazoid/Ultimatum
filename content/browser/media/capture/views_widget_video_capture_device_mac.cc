@@ -4,9 +4,9 @@
 
 #include "content/browser/media/capture/views_widget_video_capture_device_mac.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/remote_cocoa/browser/scoped_cg_window_id.h"
 #include "content/browser/media/capture/mouse_cursor_overlay_controller.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -23,7 +23,7 @@ class ViewsWidgetVideoCaptureDeviceMac::UIThreadDelegate final
       const base::WeakPtr<FrameSinkVideoCaptureDevice> device,
       const base::WeakPtr<MouseCursorOverlayController> cursor_controller)
       : cg_window_id_(cg_window_id),
-        device_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+        device_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
         device_(device),
         cursor_controller_(cursor_controller) {
     // Note that the use of base::Unretained below is safe, because
@@ -56,7 +56,7 @@ class ViewsWidgetVideoCaptureDeviceMac::UIThreadDelegate final
           base::BindOnce(
               &FrameSinkVideoCaptureDevice::OnTargetChanged, device_,
               viz::VideoCaptureTarget(scoped_cg_window_id_->GetFrameSinkId()),
-              /*crop_version=*/0));
+              /*sub_capture_target_version=*/0));
     } else {
       // It is entirely possible (although unlikely) that the window
       // corresponding to |cg_window_id| be destroyed between when the capture

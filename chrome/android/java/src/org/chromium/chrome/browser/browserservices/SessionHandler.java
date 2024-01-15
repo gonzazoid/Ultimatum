@@ -14,6 +14,8 @@ import android.widget.RemoteViews;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsSessionToken;
 
+import org.chromium.chrome.browser.tab.Tab;
+
 /**
  * Interface to handle browser services calls whenever the session id matched.
  * TODO(yusufo): Add a way to handle mayLaunchUrl as well.
@@ -39,14 +41,30 @@ public interface SessionHandler {
             RemoteViews remoteViews, int[] clickableIDs, PendingIntent pendingIntent);
 
     /**
+     * Updates the {@link PendingIntent} to be sent when the user swipes up from the secondary
+     * (bottom) toolbar.
+     * @param pendingIntent The {@link PendingIntent}.
+     * @return Whether this update is successful.
+     */
+    boolean updateSecondaryToolbarSwipeUpPendingIntent(PendingIntent pendingIntent);
+
+    /**
+     * @return The current tab being displayed to the user.
+     */
+    @Nullable
+    Tab getCurrentTab();
+
+    /**
      * @return The current url being displayed to the user.
      */
-    @Nullable String getCurrentUrl();
+    @Nullable
+    String getCurrentUrl();
 
     /**
      * @return The url of a pending navigation, if any.
      */
-    @Nullable String getPendingUrl();
+    @Nullable
+    String getPendingUrl();
 
     /**
      * @return the task id the content handler is running in.

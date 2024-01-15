@@ -13,15 +13,15 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "components/download/public/common/download_content.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_export.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
 #include "components/download/public/common/download_source.h"
+#include "mojo/public/c/system/types.h"
 #include "net/base/network_change_notifier.h"
-#include "net/http/http_response_info.h"
 #include "url/gurl.h"
 
 namespace base {
@@ -143,36 +143,6 @@ enum DownloadCountTypes {
   DOWNLOAD_COUNT_TYPES_LAST_ENTRY
 };
 
-// Enum for in-progress download DB, used in histogram
-// "Download.InProgressDB.Counts".
-enum InProgressDBCountTypes : uint8_t {
-  // Count of initialization attempts.
-  kInitializationCount = 0,
-
-  // Count of initialization attempts that succeeded.
-  kInitializationSucceededCount = 1,
-
-  // Count of initialization attempts that failed.
-  kInitializationFailedCount = 2,
-
-  // Count of load attempts that succeeded.
-  kLoadSucceededCount = 3,
-
-  // Count of load attempts that failed.
-  kLoadFailedCount = 4,
-
-  // Count of in-progress cache migration attempts.
-  kCacheMigrationCount = 5,
-
-  // Count of in-progress cache migration attempts that succeeded.
-  kCacheMigrationSucceededCount = 6,
-
-  // Count of in-progress cache migration attempts that failed.
-  kCacheMigrationFailedCount = 7,
-
-  kMaxValue = kCacheMigrationFailedCount
-};
-
 // Events for user scheduled downloads. Used in histograms, don't reuse or
 // remove items. Keep in sync with DownloadLaterEvent in enums.xml.
 enum class DownloadLaterEvent {
@@ -219,17 +189,8 @@ COMPONENTS_DOWNLOAD_EXPORT void RecordDangerousDownloadAccept(
     DownloadDangerType danger_type,
     const base::FilePath& file_path);
 
-// Records various metrics at the start of a download resumption.
-COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadResumption(
-    DownloadInterruptReason reason,
-    bool user_resume);
-
 // Records the interrupt reason when a download is retried.
 COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadRetry(
-    DownloadInterruptReason reason);
-
-// Records whenever a download hits max auto-resumption limit.
-COMPONENTS_DOWNLOAD_EXPORT void RecordAutoResumeCountLimitReached(
     DownloadInterruptReason reason);
 
 // Returns the type of download.
@@ -245,9 +206,6 @@ COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadMimeType(
 COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadMimeTypeForNormalProfile(
     const std::string& mime_type);
 
-// Record the number of completed unopened downloads when a download is opened.
-COMPONENTS_DOWNLOAD_EXPORT void RecordOpensOutstanding(int size);
-
 // Record overall bandwidth stats at the file end.
 // Does not count in any hash computation or file open/close time.
 COMPONENTS_DOWNLOAD_EXPORT void RecordFileBandwidth(
@@ -259,40 +217,10 @@ COMPONENTS_DOWNLOAD_EXPORT void RecordParallelizableDownloadCount(
     DownloadCountTypes type,
     bool is_parallel_download_enabled);
 
-// Records the actual total number of requests sent for a parallel download,
-// including the initial request.
-COMPONENTS_DOWNLOAD_EXPORT void RecordParallelDownloadRequestCount(
-    int request_count);
-
 // Record the result of a download file rename.
 COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadFileRenameResultAfterRetry(
     base::TimeDelta time_since_first_failure,
     DownloadInterruptReason interrupt_reason);
-
-enum SavePackageEvent {
-  // The user has started to save a page as a package.
-  SAVE_PACKAGE_STARTED,
-
-  // The save package operation was cancelled.
-  SAVE_PACKAGE_CANCELLED,
-
-  // The save package operation finished without being cancelled.
-  SAVE_PACKAGE_FINISHED,
-
-  // The save package tried to write to an already completed file.
-  SAVE_PACKAGE_WRITE_TO_COMPLETED,
-
-  // The save package tried to write to an already failed file.
-  SAVE_PACKAGE_WRITE_TO_FAILED,
-
-  // Instead of using save package API, used download API to save non HTML
-  // format files.
-  SAVE_PACKAGE_DOWNLOAD_ON_NON_HTML,
-
-  SAVE_PACKAGE_LAST_ENTRY
-};
-
-COMPONENTS_DOWNLOAD_EXPORT void RecordSavePackageEvent(SavePackageEvent event);
 
 // Enumeration for histogramming purposes.
 // These values are written to logs.  New enum values can be added, but existing
@@ -327,6 +255,20 @@ enum class DownloadMetricsCallsite {
   kMixContentDownloadBlocking,
 };
 
+enum class InputStreamReadError {
+  // Reading the input stream cause a mojo input argument error.
+  kInvalidArgument = 0,
+
+  // Reading the input stream cause a mojo out of range error.
+  kOutOfRange = 1,
+
+  // Reading the input stream cause a mojo busy error.
+  kBusy = 2,
+
+  kUnknown = 3,
+  kMaxValue = kUnknown,
+};
+
 COMPONENTS_DOWNLOAD_EXPORT DownloadConnectionSecurity
 CheckDownloadConnectionSecurity(const GURL& download_url,
                                 const std::vector<GURL>& url_chain);
@@ -347,32 +289,21 @@ COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadHttpResponseCode(
     int response_code,
     bool is_background_mode);
 
-COMPONENTS_DOWNLOAD_EXPORT void RecordInProgressDBCount(
-    InProgressDBCountTypes type);
-
-COMPONENTS_DOWNLOAD_EXPORT void RecordDuplicateInProgressDownloadIdCount(
-    int count);
-
-// Records the interrupt reason that causes download to restart.
-COMPONENTS_DOWNLOAD_EXPORT void RecordResumptionRestartReason(
-    DownloadInterruptReason reason);
-
 // Records the interrupt reason that causes download to restart.
 COMPONENTS_DOWNLOAD_EXPORT void RecordResumptionStrongValidators(
     DownloadInterruptReason reason);
 
-COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadManagerCreationTimeSinceStartup(
-    base::TimeDelta elapsed_time);
-
-COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadManagerMemoryUsage(
-    size_t bytes_used);
-
+// TODO(https://crbug.com/1488120): This is only used for the purposes of tests
+// and should be refactored.
 COMPONENTS_DOWNLOAD_EXPORT void RecordParallelRequestCreationFailure(
     DownloadInterruptReason reason);
 
-// Record download later events.
-COMPONENTS_DOWNLOAD_EXPORT void RecordDownloadLaterEvent(
-    DownloadLaterEvent event);
+COMPONENTS_DOWNLOAD_EXPORT int
+GetParallelRequestCreationFailureCountForTesting();
+
+// Records the input stream read error type.
+COMPONENTS_DOWNLOAD_EXPORT void RecordInputStreamReadError(
+    MojoResult mojo_result);
 
 #if BUILDFLAG(IS_ANDROID)
 enum class BackgroudTargetDeterminationResultTypes {
@@ -388,16 +319,8 @@ enum class BackgroudTargetDeterminationResultTypes {
   kMaxValue = kPathReservationFailed
 };
 
-// Records whether download target determination is successfully completed in
-// reduced mode.
-COMPONENTS_DOWNLOAD_EXPORT void RecordBackgroundTargetDeterminationResult(
-    BackgroudTargetDeterminationResultTypes type);
 #endif  // BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_WIN)
-// Records the OS error code when moving a file on Windows.
-COMPONENTS_DOWNLOAD_EXPORT void RecordWinFileMoveError(int os_error);
-#endif  // BUILDFLAG(IS_WIN)
 }  // namespace download
 
 #endif  // COMPONENTS_DOWNLOAD_PUBLIC_COMMON_DOWNLOAD_STATS_H_

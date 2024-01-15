@@ -10,12 +10,13 @@
 #include "base/files/important_file_writer.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/metrics/structured/histogram_util.h"
-#include "components/metrics/structured/storage.pb.h"
+#include "components/metrics/structured/lib/proto/key.pb.h"
+#include "components/metrics/structured/proto/event_storage.pb.h"
 
 namespace metrics {
 namespace structured {
@@ -25,16 +26,19 @@ template <class T>
 std::pair<ReadStatus, std::unique_ptr<T>> Read(const base::FilePath& filepath) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
-  if (!base::PathExists(filepath))
+  if (!base::PathExists(filepath)) {
     return {ReadStatus::kMissing, nullptr};
+  }
 
   std::string proto_str;
-  if (!base::ReadFileToString(filepath, &proto_str))
+  if (!base::ReadFileToString(filepath, &proto_str)) {
     return {ReadStatus::kReadError, nullptr};
+  }
 
   auto proto = std::make_unique<T>();
-  if (!proto->ParseFromString(proto_str))
+  if (!proto->ParseFromString(proto_str)) {
     return {ReadStatus::kParseError, nullptr};
+  }
 
   return {ReadStatus::kOk, std::move(proto)};
 }
@@ -42,8 +46,9 @@ std::pair<ReadStatus, std::unique_ptr<T>> Read(const base::FilePath& filepath) {
 WriteStatus Write(const base::FilePath& filepath,
                   const std::string& proto_str) {
   const auto directory = filepath.DirName();
-  if (!base::DirectoryExists(directory))
+  if (!base::DirectoryExists(directory)) {
     base::CreateDirectory(directory);
+  }
 
   bool write_result;
   {
@@ -53,8 +58,9 @@ WriteStatus Write(const base::FilePath& filepath,
         filepath, proto_str, "StructuredMetricsPersistentProto");
   }
 
-  if (!write_result)
+  if (!write_result) {
     return WriteStatus::kWriteError;
+  }
   return WriteStatus::kOk;
 }
 
@@ -81,7 +87,15 @@ PersistentProto<T>::PersistentProto(
 }
 
 template <class T>
-PersistentProto<T>::~PersistentProto() = default;
+PersistentProto<T>::~PersistentProto() {
+  if (has_value()) {
+    std::string proto_str;
+    if (!proto_->SerializeToString(&proto_str)) {
+      OnWriteComplete(WriteStatus::kSerializationError);
+    }
+    Write(path_, proto_str);
+  }
+}
 
 template <class T>
 void PersistentProto<T>::OnReadComplete(
@@ -106,15 +120,17 @@ void PersistentProto<T>::OnReadComplete(
 template <class T>
 void PersistentProto<T>::QueueWrite() {
   DCHECK(proto_);
-  if (!proto_)
+  if (!proto_) {
     return;
+  }
 
   // If a save is already queued, do nothing.
-  if (write_is_queued_)
+  if (write_is_queued_) {
     return;
+  }
   write_is_queued_ = true;
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&PersistentProto<T>::OnQueueWrite,
                      weak_factory_.GetWeakPtr()),
@@ -133,16 +149,18 @@ void PersistentProto<T>::OnQueueWrite() {
 template <class T>
 void PersistentProto<T>::StartWrite() {
   DCHECK(proto_);
-  if (!proto_)
+  if (!proto_) {
     return;
+  }
 
   // Serialize the proto outside of the posted task, because otherwise we need
   // to pass a proto pointer into the task. This causes a rare race condition
   // during destruction where the proto can be destroyed before serialization,
   // causing a crash.
   std::string proto_str;
-  if (!proto_->SerializeToString(&proto_str))
+  if (!proto_->SerializeToString(&proto_str)) {
     OnWriteComplete(WriteStatus::kSerializationError);
+  }
 
   // The SequentialTaskRunner ensures the writes won't trip over each other, so
   // we can schedule without checking whether another write is currently active.

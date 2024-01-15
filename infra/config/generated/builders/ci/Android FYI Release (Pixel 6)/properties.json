@@ -17,7 +17,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "config": "android",
                 "target_platform": "android"
@@ -50,7 +50,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "config": "android",
                 "target_platform": "android"
@@ -73,6 +73,10 @@
         }
       ],
       "mirroring_builder_group_and_names": [
+        {
+          "builder": "gpu-fyi-cq-android-arm64",
+          "group": "tryserver.chromium.android"
+        },
         {
           "builder": "gpu-fyi-try-android-pixel-6-64",
           "group": "tryserver.chromium.android"

@@ -18,13 +18,11 @@ source_set("main_content_ui") {
     "web_scroll_view_main_content_ui_forwarder.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/broadcaster",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/web_state_list",
     "//ios/web/public",
   ]
 }
@@ -35,11 +33,11 @@ source_set("main_content_ui_broadcasting_util") {
     "main_content_ui_broadcasting_util.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":main_content_ui",
+    "//base",
     "//ios/chrome/browser/ui/broadcaster",
+    "//ios/web/common:features",
   ]
 }
 
@@ -50,17 +48,15 @@ source_set("unit_tests") {
     "main_content_ui_state_unittest.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":main_content",
     ":main_content_ui",
     ":main_content_ui_broadcasting_util",
     "//base",
     "//base/test:test_support",
+    "//ios/chrome/browser/shared/model/web_state_list",
     "//ios/chrome/browser/ui/broadcaster",
     "//ios/chrome/browser/ui/main_content/test",
-    "//ios/chrome/browser/web_state_list",
     "//ios/chrome/common/ui/util",
     "//ios/web/public/test",
     "//ios/web/public/test/fakes",

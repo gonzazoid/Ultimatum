@@ -11,14 +11,21 @@
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "ipc/ipc_message_macros.h"
 #include "ipc/param_traits_macros.h"
-#include "media/gpu/ipc/service/gpu_video_decode_accelerator.h"
 #include "media/gpu/ipc/service/media_gpu_channel.h"
 
 namespace media {
 
 MediaGpuChannelManager::MediaGpuChannelManager(
     gpu::GpuChannelManager* channel_manager)
-    : channel_manager_(channel_manager) {}
+    : channel_manager_(channel_manager) {
+#if BUILDFLAG(IS_WIN)
+  gpu::ContextResult result;
+  auto shared_context_state = channel_manager_->GetSharedContextState(&result);
+  if (shared_context_state) {
+    d3d11_device_ = shared_context_state->GetD3D11Device();
+  }
+#endif
+}
 
 MediaGpuChannelManager::~MediaGpuChannelManager() = default;
 

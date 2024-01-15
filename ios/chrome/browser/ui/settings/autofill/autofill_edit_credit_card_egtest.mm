@@ -15,10 +15,6 @@
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using chrome_test_util::ButtonWithAccessibilityLabel;
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::NavigationBarDoneButton;
@@ -68,6 +64,10 @@ id<GREYMatcher> YearOfExpiryTextField() {
 - (void)setUp {
   [super setUp];
 
+  [AutofillAppInterface setUpMockReauthenticationModule];
+  [AutofillAppInterface mockReauthenticationModuleCanAttempt:YES];
+  [AutofillAppInterface setMandatoryReauthEnabled:YES];
+
   [AutofillAppInterface clearCreditCardStore];
   NSString* lastDigits = [AutofillAppInterface saveLocalCreditCard];
 
@@ -82,6 +82,7 @@ id<GREYMatcher> YearOfExpiryTextField() {
 
 - (void)tearDown {
   [AutofillAppInterface clearCreditCardStore];
+  [AutofillAppInterface clearMockReauthenticationModule];
   [super tearDown];
 }
 

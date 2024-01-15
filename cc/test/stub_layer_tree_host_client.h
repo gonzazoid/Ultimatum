@@ -30,8 +30,8 @@ class StubLayerTreeHostClient : public LayerTreeHostClient {
   void OnDeferCommitsChanged(
       bool,
       PaintHoldingReason,
-      absl::optional<PaintHoldingCommitTrigger>) override {}
-  void OnPauseRenderingChanged(bool) override {}
+      std::optional<PaintHoldingCommitTrigger>) override {}
+  void OnCommitRequested() override {}
   void RecordStartOfFrameMetrics() override {}
   void RecordEndOfFrameMetrics(base::TimeTicks,
                                ActiveFrameSequenceTrackers) override {}
@@ -48,18 +48,19 @@ class StubLayerTreeHostClient : public LayerTreeHostClient {
   void DidInitializeLayerTreeFrameSink() override {}
   void DidFailToInitializeLayerTreeFrameSink() override {}
   void WillCommit(const CommitState&) override {}
-  void DidCommit(base::TimeTicks, base::TimeTicks) override {}
-  void DidCommitAndDrawFrame() override {}
+  void DidCommit(int source_frame_number,
+                 base::TimeTicks,
+                 base::TimeTicks) override {}
+  void DidCommitAndDrawFrame(int source_frame_number) override {}
   void DidObserveFirstScrollDelay(
+      int source_frame_number,
       base::TimeDelta first_scroll_delay,
       base::TimeTicks first_scroll_timestamp) override {}
   void DidReceiveCompositorFrameAck() override {}
-  void DidCompletePageScaleAnimation() override {}
+  void DidCompletePageScaleAnimation(int source_frame_number) override {}
   void DidPresentCompositorFrame(
       uint32_t frame_token,
       const gfx::PresentationFeedback& feedback) override {}
-  void ReportEventLatency(
-      std::vector<EventLatencyTracker::LatencyData> latencies) override {}
 };
 
 }  // namespace cc

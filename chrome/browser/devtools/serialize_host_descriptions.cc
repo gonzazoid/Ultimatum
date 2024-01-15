@@ -15,14 +15,14 @@ namespace {
 // Returns the serialization of |root|. It expects |children[x]| to be the
 // vector of child nodes for all descendants |x| of |root|. The serialization
 // consists of taking the |representation| value of each node, starting in
-// leaves, and injecting children's representations into a ListValue under the
-// key |child_key| in the parent's |representation|. This is desctructive to the
+// leaves, and injecting children's representations into a list under the
+// key |child_key| in the parent's |representation|. This is destructive to the
 // representation stored with the nodes (which gets moved out of them).
 base::Value Serialize(
     base::StringPiece child_key,
     base::Value* root,
     const std::map<base::Value*, std::vector<base::Value*>>& children) {
-  base::Value children_list(base::Value::Type::LIST);
+  base::Value::List children_list;
   auto child_it = children.find(root);
   if (child_it != children.end()) {
     for (base::Value* child : child_it->second) {
@@ -30,8 +30,8 @@ base::Value Serialize(
     }
   }
 
-  if (!children_list.GetListDeprecated().empty())
-    root->SetKey(child_key, std::move(children_list));
+  if (!children_list.empty())
+    root->GetDict().Set(child_key, std::move(children_list));
   return std::move(*root);
 }
 
@@ -45,17 +45,14 @@ void CreateDictionaryForest(
     std::vector<HostDescriptionNode> hosts,
     std::map<base::Value*, std::vector<base::Value*>>* children,
     std::unordered_set<base::Value*>* roots,
-    std::vector<base::Value>* representations) {
+    base::Value::List* representations) {
   representations->reserve(hosts.size());
-  children->clear();
-  roots->clear();
-  representations->clear();
 
   std::map<base::StringPiece, base::Value*> name_to_representation;
 
   // First move the representations and map the names to them.
   for (HostDescriptionNode& node : hosts) {
-    representations->push_back(std::move(node.representation));
+    representations->Append(std::move(node.representation));
     // If there are multiple nodes with the same name, subsequent insertions
     // will be ignored, so only the first node with a given name will be
     // referenced by |roots| and |children|.
@@ -86,7 +83,7 @@ base::Value::List SerializeHostDescriptions(
     base::StringPiece child_key) {
   // |representations| must outlive |children| and |roots|, which contain
   // pointers to objects in |representations|.
-  std::vector<base::Value> representations;
+  base::Value::List representations;
   std::map<base::Value*, std::vector<base::Value*>> children;
   std::unordered_set<base::Value*> roots;
 

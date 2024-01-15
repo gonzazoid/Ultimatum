@@ -30,9 +30,13 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_AUDIO_AUDIO_DESTINATION_H_
 
 #include <memory>
+
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
+#include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
+#include "media/base/audio_renderer_sink.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/web_audio_device.h"
 #include "third_party/blink/public/platform/web_vector.h"
@@ -61,29 +65,19 @@ class WebAudioSinkDescriptor;
 //    AudioDeviceThread.
 //  - Dual-thread (experimental): Use WebThread for the WebAudio rendering with
 //    AudioWorkletThread.
-class PLATFORM_EXPORT AudioDestination
+class PLATFORM_EXPORT AudioDestination final
     : public ThreadSafeRefCounted<AudioDestination>,
-      public WebAudioDevice::RenderCallback {
+      public media::AudioRendererSink::RenderCallback {
   USING_FAST_MALLOC(AudioDestination);
 
  public:
-  // Represents the current state of the underlying |WebAudioDevice| object
+  // Represents the current state of the underlying `WebAudioDevice` object
   // (RendererWebAudioDeviceImpl).
   enum DeviceState {
     kRunning,
     kPaused,
     kStopped,
   };
-
-  AudioDestination(AudioIOCallback&,
-                   const WebAudioSinkDescriptor& sink_descriptor,
-                   unsigned number_of_output_channels,
-                   const WebAudioLatencyHint&,
-                   absl::optional<float> context_sample_rate,
-                   unsigned render_quantum_frames);
-  AudioDestination(const AudioDestination&) = delete;
-  AudioDestination& operator=(const AudioDestination&) = delete;
-  ~AudioDestination() override;
 
   static scoped_refptr<AudioDestination> Create(
       AudioIOCallback&,
@@ -93,75 +87,95 @@ class PLATFORM_EXPORT AudioDestination
       absl::optional<float> context_sample_rate,
       unsigned render_quantum_frames);
 
-  // The actual render function (WebAudioDevice::RenderCallback) isochronously
-  // invoked by the media renderer. This is never called after Stop() is called.
-  void Render(const WebVector<float*>& destination_data,
-              uint32_t number_of_frames,
-              double delay,
-              double delay_timestamp,
-              size_t prior_frames_skipped) override;
+  AudioDestination(const AudioDestination&) = delete;
+  AudioDestination& operator=(const AudioDestination&) = delete;
+  ~AudioDestination() override;
 
-  // The actual render request to the WebAudio destination node. This method
-  // can be invoked on both AudioDeviceThread (single-thread rendering) and
-  // AudioWorkletThread (dual-thread rendering).
-  void RequestRender(size_t frames_requested,
-                     size_t frames_to_render,
-                     double delay,
-                     double delay_timestamp,
-                     size_t prior_frames_skipped);
+  // The actual render function isochronously invoked by the media
+  // renderer. This is never called after Stop() is called.
+  int Render(base::TimeDelta delay,
+             base::TimeTicks delay_timestamp,
+             const media::AudioGlitchInfo& glitch_info,
+             media::AudioBus* dest) override;
 
-  virtual void Start();
-  virtual void Stop();
-  virtual void Pause();
-  virtual void Resume();
+  void OnRenderError() override;
 
-  // Starts the destination with the AudioWorklet support.
+  void Start();
+  void Stop();
+  void Pause();
+  void Resume();
+
+  // Sets the destination for worklet operation, but does not start rendering.
+  void SetWorkletTaskRunner(
+      scoped_refptr<base::SingleThreadTaskRunner> worklet_task_runner);
+
+  // Starts rendering in the AudioWorklet mode.
   void StartWithWorkletTaskRunner(
       scoped_refptr<base::SingleThreadTaskRunner> worklet_task_runner);
 
-  // Getters must be accessed from the main thread.
-  uint32_t CallbackBufferSize() const;
   bool IsPlaying();
 
   // This is the context sample rate, not the device one.
-  double SampleRate() const { return context_sample_rate_; }
+  double SampleRate() const;
+
+  uint32_t CallbackBufferSize() const;
 
   // Returns the audio buffer size in frames used by the underlying audio
   // hardware.
   int FramesPerBuffer() const;
 
-  // The information from the actual audio hardware. (via Platform::Current)
-  static size_t HardwareBufferSize();
-  static float HardwareSampleRate();
-  static uint32_t MaxChannelCount();
+  // The maximum channel count of the current audio sink device.
+  uint32_t MaxChannelCount();
 
-  // Sets the detect silence flag for |web_audio_device_|.
+  // Sets the detect silence flag for `web_audio_device_`.
   void SetDetectSilence(bool detect_silence);
 
-  // This should only be called from the audio thread.
-  unsigned RenderQuantumFrames() const { return render_quantum_frames_; }
+  unsigned RenderQuantumFrames() const;
+
+  // Creates a new sink and return its device status. If the status is OK,
+  // replace the existing sink with the new one. This function is called in
+  // RealtimeAudioDestinationHandler::SetSinkDescriptor, which can be invoked
+  // from the constructor of AudioContext and AudioContext.setSinkId() method.
+  media::OutputDeviceStatus CreateSinkAndGetDeviceStatus();
 
  private:
+  explicit AudioDestination(AudioIOCallback&,
+                            const WebAudioSinkDescriptor& sink_descriptor,
+                            unsigned number_of_output_channels,
+                            const WebAudioLatencyHint&,
+                            absl::optional<float> context_sample_rate,
+                            unsigned render_quantum_frames);
+
   void SetDeviceState(DeviceState);
+
+  // The actual render request to the WebAudio destination node. This method
+  // can be invoked on both AudioDeviceThread (single-thread rendering) and
+  // AudioWorkletThread (dual-thread rendering).
+  void RequestRenderWait(size_t frames_requested,
+                         size_t frames_to_render,
+                         double delay,
+                         double delay_timestamp);
+  void RequestRender(size_t frames_requested,
+                     size_t frames_to_render,
+                     double delay,
+                     double delay_timestamp);
 
   // Provide input to the resampler (if used).
   void ProvideResamplerInput(int resampler_frame_delay, AudioBus* dest);
 
-  // Check if the buffer size chosen by the WebAudioDevice is too large.
-  bool CheckBufferSize(unsigned render_quantum_frames);
-
-  void SendLogMessage(const String& message);
-
-  unsigned render_quantum_frames_;
+  void SendLogMessage(const String& message) const;
 
   // Accessed by the main thread.
   std::unique_ptr<WebAudioDevice> web_audio_device_;
-  const unsigned number_of_output_channels_;
-  uint32_t callback_buffer_size_;
 
-  // The task runner for AudioWorklet operation. This is only valid when
-  // the AudioWorklet is activated.
-  scoped_refptr<base::SingleThreadTaskRunner> worklet_task_runner_;
+  const uint32_t callback_buffer_size_;
+
+  const unsigned number_of_output_channels_;
+
+  const unsigned render_quantum_frames_;
+
+  // The sample rate used for rendering the Web Audio graph.
+  const float context_sample_rate_;
 
   // Can be accessed by both threads: resolves the buffer size mismatch between
   // the WebAudio engine and the callback function from the actual audio device.
@@ -176,13 +190,10 @@ class PLATFORM_EXPORT AudioDestination
 
   // Accessed by rendering thread: the render callback function of WebAudio
   // engine. (i.e. DestinationNode)
-  AudioIOCallback& callback_;
+  const raw_ref<AudioIOCallback, ExperimentalRenderer> callback_;
 
   // Accessed by rendering thread.
-  size_t frames_elapsed_;
-
-  // The sample rate used for rendering the Web Audio graph.
-  float context_sample_rate_;
+  size_t frames_elapsed_ = 0;
 
   // Used for resampling if the Web Audio sample rate differs from the platform
   // one.
@@ -192,17 +203,27 @@ class PLATFORM_EXPORT AudioDestination
   // Required for RequestRender and also in the resampling callback (if used).
   AudioIOPosition output_position_;
 
-  AudioCallbackMetricReporter metric_reporter_;
+  // The task runner for AudioWorklet operation. This is only valid when
+  // the AudioWorklet is activated.
+  scoped_refptr<base::SingleThreadTaskRunner> worklet_task_runner_;
 
-  // This protects |device_state_| below.
-  mutable base::Lock state_change_lock_;
+  // This protects `device_state_` below.
+  mutable base::Lock device_state_lock_;
 
   // Modified only on the main thread, so it can be read without holding a lock
   // there.
-  DeviceState device_state_;
+  DeviceState device_state_ = kStopped;
+
+  AudioCallbackMetricReporter metric_reporter_;
 
   // Collect the device latency matric only from the initial callback.
   bool is_latency_metric_collected_ = false;
+
+  // This WaitableEvent is only for use with the kWebAudioBypassOutputBuffering
+  // flag enabled. No other WaitableEvents may be used in this class.
+  base::WaitableEvent output_buffer_bypass_wait_event_;
+
+  const bool is_output_buffer_bypassed_ = false;
 };
 
 }  // namespace blink

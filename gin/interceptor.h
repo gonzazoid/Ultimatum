@@ -36,6 +36,8 @@ class GIN_EXPORT NamedPropertyInterceptor {
   virtual std::vector<std::string> EnumerateNamedProperties(
       v8::Isolate* isolate);
 
+  void ClearForTesting();
+
  private:
   raw_ptr<v8::Isolate> isolate_;
   raw_ptr<WrappableBase> base_;
@@ -57,6 +59,8 @@ class GIN_EXPORT IndexedPropertyInterceptor {
                                   v8::Local<v8::Value> value);
   virtual std::vector<uint32_t> EnumerateIndexedProperties(
       v8::Isolate* isolate);
+
+  void ClearForTesting();
 
  private:
   raw_ptr<v8::Isolate> isolate_;

@@ -4,7 +4,6 @@
 
 module mac_notifications.mojom;
 
-import "mojo/public/mojom/base/process_id.mojom";
 import "mojo/public/mojom/base/string16.mojom";
 import "sandbox/policy/mojom/sandbox.mojom";
 import "ui/gfx/image/mojom/image.mojom";
@@ -46,10 +45,10 @@ struct NotificationMetadata {
   // if requested through a chrome app or extension or if it's a system
   // notification.
   url.mojom.Url origin_url;
-  // Contains the browser process id that created this notification. We use this
-  // to make sure we handle notification events in the correct browser instance
-  // as multiple may run with different user data dirs.
-  mojo_base.mojom.ProcessId creator_pid;
+  // The user data dir for the browser process that created this
+  // notification. We use this to make sure we handle notification events in the
+  // correct browser instance as multiple may run with different user data dirs.
+  string user_data_dir;
 };
 
 // The operation taken on a notification.
@@ -114,11 +113,12 @@ interface MacNotificationService {
   DisplayNotification(Notification notification);
 
   // Gets a list of notification ids that are currently shown in the system
-  // notification center. If a |profile| is passed, the list is filtered to only
+  // notification center. If a `profile` is passed, the list is filtered to only
   // include notification ids for that profile. Otherwise this will return all
-  // displayed notification ids for all profiles.
-  GetDisplayedNotifications(ProfileIdentifier? profile) =>
-      (array<NotificationIdentifier> notifications);
+  // displayed notification ids for all profiles. If an `origin` is passed, the
+  // list is also filtered to only include notifications for that origin.
+  GetDisplayedNotifications(ProfileIdentifier? profile, url.mojom.Url? origin)
+      => (array<NotificationIdentifier> notifications);
 
   // Closes the notification identified by |identifier|.
   CloseNotification(NotificationIdentifier identifier);
@@ -129,6 +129,11 @@ interface MacNotificationService {
   // Closes all notifications shown by the helper app in the system notification
   // center for all profiles.
   CloseAllNotifications();
+
+  // Checks if it is okay to terminate this service. Returns false if for
+  // example there are still displayed notifications, or if terminating the
+  // service would interrupt/abort any pending permission requests.
+  OkayToTerminateService() => (bool can_terminate);
 };
 
 // Handles notification actions such as click or close. Implemented in the

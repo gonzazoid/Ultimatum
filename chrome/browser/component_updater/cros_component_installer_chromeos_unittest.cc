@@ -2,26 +2,28 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
+
 #include <map>
 #include <utility>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_path_override.h"
+#include "base/test/test_future.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
-#include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
 #include "chrome/browser/component_updater/metadata_table_chromeos.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -45,6 +47,8 @@ constexpr char kTestComponentValidMinEnvVersion[] = "1.0";
 constexpr char kTestComponentInvalidMinEnvVersion[] = "0.0.1";
 constexpr char kTestComponentMountPath[] =
     "/run/imageloader/demo-mode-resources";
+
+constexpr char kGrowthCampaignsName[] = "growth-campaigns";
 
 MATCHER_P(CrxComponentWithName, name, "") {
   return arg.name == name;
@@ -143,8 +147,9 @@ class TestUpdater : public OnDemandUpdater {
                     const base::FilePath& unpacked_path,
                     std::map<std::string, Callback>* updates) {
     auto it = updates->find(name);
-    if (it == updates->end())
+    if (it == updates->end()) {
       return false;
+    }
 
     Callback callback = std::move(it->second);
     updates->erase(it);
@@ -156,8 +161,9 @@ class TestUpdater : public OnDemandUpdater {
 
     scoped_refptr<update_client::CrxInstaller> installer =
         component_installers_[name];
-    if (!installer)
+    if (!installer) {
       return false;
+    }
 
     base::ThreadPool::PostTask(
         FROM_HERE, {base::MayBlock()},
@@ -327,19 +333,21 @@ class CrOSComponentInstallerTest : public testing::Test {
       const std::string& name,
       const std::string& version,
       const std::string& min_env_version) {
-    if (!base::CreateDirectory(path))
+    if (!base::CreateDirectory(path)) {
       return absl::nullopt;
+    }
 
-    const std::string manifest_template = R"({
+    static constexpr char kManifestTemplate[] = R"({
         "name": "%s",
         "version": "%s",
         "min_env_version": "%s"
     })";
     const std::string manifest =
-        base::StringPrintf(manifest_template.c_str(), name.c_str(),
-                           version.c_str(), min_env_version.c_str());
-    if (!base::WriteFile(path.AppendASCII("manifest.json"), manifest))
+        base::StringPrintf(kManifestTemplate, name.c_str(), version.c_str(),
+                           min_env_version.c_str());
+    if (!base::WriteFile(path.AppendASCII("manifest.json"), manifest)) {
       return absl::nullopt;
+    }
 
     return absl::make_optional(path);
   }
@@ -349,7 +357,7 @@ class CrOSComponentInstallerTest : public testing::Test {
   user_manager::ScopedUserManager user_manager_;
 
   // Image loader client that is active during the test.
-  ash::FakeImageLoaderClient* image_loader_client_ = nullptr;
+  raw_ptr<ash::FakeImageLoaderClient> image_loader_client_ = nullptr;
 
   base::ScopedTempDir base_component_paths_;
 
@@ -373,9 +381,19 @@ TEST_F(CrOSComponentInstallerTest, CompatibleCrOSComponent) {
             std::string());
 
   const base::FilePath kPath("/component/path/v0");
-  cros_component_manager->RegisterCompatiblePath(kComponent, kPath);
+  const base::Version kVersion = base::Version("1.0.0.0");
+  cros_component_manager->RegisterCompatiblePath(
+      kComponent, CompatibleComponentInfo(kPath, kVersion));
   EXPECT_TRUE(cros_component_manager->IsCompatible(kComponent));
   EXPECT_EQ(cros_component_manager->GetCompatiblePath(kComponent), kPath);
+  // Make sure the version has also been updated.
+  base::test::TestFuture<const base::Version&> get_version_future;
+  cros_component_manager->GetVersion(kComponent,
+                                     get_version_future.GetCallback());
+  const base::Version& result = get_version_future.Get<0>();
+  EXPECT_EQ(result.CompareTo(kVersion), 0);
+
+  // Unregister the version.
   cros_component_manager->UnregisterCompatiblePath(kComponent);
   EXPECT_FALSE(cros_component_manager->IsCompatible(kComponent));
 }
@@ -389,8 +407,8 @@ TEST_F(CrOSComponentInstallerTest, CompatibilityOK) {
   EnvVersionInstallerPolicy policy(config, installer.get());
   base::Version version;
   base::FilePath path("/path");
-  base::Value manifest(base::Value::Type::DICTIONARY);
-  manifest.SetStringKey("min_env_version", "2.1");
+  base::Value::Dict manifest;
+  manifest.Set("min_env_version", "2.1");
   policy.ComponentReady(version, path, std::move(manifest));
   // Component is compatible and was registered.
   EXPECT_EQ(path, installer->GetCompatiblePath("component"));
@@ -405,7 +423,7 @@ TEST_F(CrOSComponentInstallerTest, CompatibilityMissingManifest) {
   EnvVersionInstallerPolicy policy(config, installer.get());
   base::Version version;
   base::FilePath path("/path");
-  base::Value manifest(base::Value::Type::DICTIONARY);
+  base::Value::Dict manifest;
   policy.ComponentReady(version, path, std::move(manifest));
   // No compatible path was registered.
   EXPECT_EQ(base::FilePath(), installer->GetCompatiblePath("component"));
@@ -435,16 +453,33 @@ TEST_F(CrOSComponentInstallerTest, LacrosMinVersion) {
   LacrosInstallerPolicy policy(config, installer.get());
 
   // Simulate finding an incompatible existing install.
-  policy.ComponentReady(
-      base::Version("8.0.0.0"), base::FilePath("/lacros/8.0.0.0"),
-      /*manifest=*/base::Value(base::Value::Type::DICTIONARY));
+  policy.ComponentReady(base::Version("8.0.0.0"),
+                        base::FilePath("/lacros/8.0.0.0"),
+                        /*manifest=*/base::Value::Dict());
+  EXPECT_TRUE(installer->GetCompatiblePath("lacros-fishfood").empty());
+
+  policy.ComponentReady(base::Version("9.0.0.0"),
+                        base::FilePath("/lacros/9.0.0.0"),
+                        /*manifest=*/base::Value::Dict());
   EXPECT_TRUE(installer->GetCompatiblePath("lacros-fishfood").empty());
 
   // Simulate finding a compatible existing install.
-  policy.ComponentReady(
-      base::Version("9.0.0.0"), base::FilePath("/lacros/9.0.0.0"),
-      /*manifest=*/base::Value(base::Value::Type::DICTIONARY));
-  EXPECT_EQ("/lacros/9.0.0.0",
+  policy.ComponentReady(base::Version("10.0.0.0"),
+                        base::FilePath("/lacros/10.0.0.0"),
+                        /*manifest=*/base::Value::Dict());
+  EXPECT_EQ("/lacros/10.0.0.0",
+            installer->GetCompatiblePath("lacros-fishfood").MaybeAsASCII());
+
+  policy.ComponentReady(base::Version("11.0.0.0"),
+                        base::FilePath("/lacros/11.0.0.0"),
+                        /*manifest=*/base::Value::Dict());
+  EXPECT_EQ("/lacros/11.0.0.0",
+            installer->GetCompatiblePath("lacros-fishfood").MaybeAsASCII());
+
+  policy.ComponentReady(base::Version("12.0.0.0"),
+                        base::FilePath("/lacros/12.0.0.0"),
+                        /*manifest=*/base::Value::Dict());
+  EXPECT_EQ("/lacros/12.0.0.0",
             installer->GetCompatiblePath("lacros-fishfood").MaybeAsASCII());
 
   LacrosInstallerPolicy::SetAshVersionForTest(nullptr);
@@ -1042,6 +1077,40 @@ TEST_F(CrOSComponentInstallerTest,
                         load_result2,
                         GetInstalledComponentPath(kTestComponentName, "2.0"));
   EXPECT_EQ(mount_path1, mount_path2);
+}
+
+TEST_F(CrOSComponentInstallerTest, LoadGrowthComponent) {
+  image_loader_client()->SetMountPathForComponent(
+      kGrowthCampaignsName,
+      base::FilePath("/run/imageloader/growth-campaigns"));
+  TestUpdater updater;
+  std::unique_ptr<MockComponentUpdateService> update_service =
+      CreateUpdateServiceForSingleRegistration(kGrowthCampaignsName, &updater);
+  scoped_refptr<CrOSComponentInstaller> cros_component_manager =
+      base::MakeRefCounted<CrOSComponentInstaller>(nullptr,
+                                                   update_service.get());
+
+  absl::optional<CrOSComponentManager::Error> load_result;
+  base::FilePath mount_path;
+  cros_component_manager->Load(
+      kGrowthCampaignsName, CrOSComponentManager::MountPolicy::kMount,
+      CrOSComponentManager::UpdatePolicy::kDontForce,
+      base::BindOnce(&RecordLoadResult, &load_result, &mount_path));
+
+  RunUntilIdle();
+  absl::optional<base::FilePath> unpacked_path = CreateUnpackedComponent(
+      kGrowthCampaignsName, "1.0", kTestComponentValidMinEnvVersion);
+  ASSERT_TRUE(unpacked_path.has_value());
+  ASSERT_TRUE(updater.FinishForegroundUpdate(
+      kGrowthCampaignsName, update_client::Error::NONE, unpacked_path.value()));
+
+  RunUntilIdle();
+  ASSERT_FALSE(updater.HasPendingUpdate(kGrowthCampaignsName));
+
+  VerifyComponentLoaded(cros_component_manager, kGrowthCampaignsName,
+                        load_result,
+                        GetInstalledComponentPath(kGrowthCampaignsName, "1.0"));
+  EXPECT_EQ(base::FilePath("/run/imageloader/growth-campaigns"), mount_path);
 }
 
 }  // namespace component_updater

@@ -16,16 +16,12 @@ source_set("x11") {
     "client_native_pixmap_factory_x11.h",
     "gl_egl_utility_x11.cc",
     "gl_egl_utility_x11.h",
-    "gl_ozone_glx.cc",
-    "gl_ozone_glx.h",
     "gl_surface_egl_readback_x11.cc",
     "gl_surface_egl_readback_x11.h",
     "hit_test_x11.cc",
     "hit_test_x11.h",
     "native_pixmap_egl_x11_binding.cc",
     "native_pixmap_egl_x11_binding.h",
-    "native_pixmap_glx_binding.cc",
-    "native_pixmap_glx_binding.h",
     "os_exchange_data_provider_x11.cc",
     "os_exchange_data_provider_x11.h",
     "ozone_platform_x11.cc",
@@ -36,8 +32,8 @@ source_set("x11") {
     "x11_clipboard_ozone.h",
     "x11_global_shortcut_listener_ozone.cc",
     "x11_global_shortcut_listener_ozone.h",
-    "x11_keyboard_hook_ozone.cc",
-    "x11_keyboard_hook_ozone.h",
+    "x11_keyboard_hook.cc",
+    "x11_keyboard_hook.h",
     "x11_menu_utils.cc",
     "x11_menu_utils.h",
     "x11_screen_ozone.cc",
@@ -74,8 +70,8 @@ source_set("x11") {
     "//ui/base/ime",
     "//ui/base/x",
     "//ui/base/x:gl",
-    "//ui/display/fake",
     "//ui/events",
+    "//ui/events:dom_keycode_converter",
     "//ui/events/devices",
     "//ui/events/devices/x11",
     "//ui/events/ozone",
@@ -174,7 +170,7 @@ source_set("x11_unittests") {
     "//ui/ozone/common",
   ]
 
-  if (!is_chromeos && !is_chromeos) {
+  if (!is_chromeos) {
     sources += [ "test/os_exchange_data_provider_x11_unittest.cc" ]
     deps += [ "//ui/base/clipboard:clipboard_types" ]
 
@@ -198,6 +194,7 @@ source_set("test_support") {
   ]
 
   deps = [
+    "//ui/aura:aura",
     "//ui/base/x",
     "//ui/base/x:test_support",
   ]

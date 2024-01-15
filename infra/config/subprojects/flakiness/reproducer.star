@@ -3,8 +3,15 @@
 # found in the LICENSE file.
 
 load("//lib/builders.star", "builders", "os")
-load("//lib/try.star", "try_")
 load("//lib/consoles.star", "consoles")
+
+consoles.defaults.set(
+    repo = "https://chromium.googlesource.com/chromium/src",
+)
+
+consoles.console_view(
+    name = "chromium.flakiness",
+)
 
 luci.bucket(
     name = "flaky-reproducer",
@@ -28,14 +35,14 @@ builders.builder(
     name = "runner",
     bucket = "flaky-reproducer",
     executable = "recipe:flakiness/reproducer",
-    build_numbers = False,
-    execution_timeout = 2 * time.hour,
-    os = os.LINUX_DEFAULT,
     pool = "luci.chromium.try",
-    service_account = try_.DEFAULT_SERVICE_ACCOUNT,
+    os = os.LINUX_DEFAULT,
     console_view_entry = consoles.console_view_entry(
         console_view = "chromium.flakiness",
         category = "flakiness",
         short_name = "reproducer",
     ),
+    build_numbers = False,
+    execution_timeout = 2 * time.hour,
+    service_account = "flaky-reproducer-builder@chops-service-accounts.iam.gserviceaccount.com",
 )

@@ -9,7 +9,7 @@
 #include <map>
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial_params.h"
@@ -106,6 +106,8 @@ class AdsPageLoadMetricsObserver
   ObservePolicy OnStart(content::NavigationHandle* navigation_handle,
                         const GURL& currently_committed_url,
                         bool started_in_foreground) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
@@ -137,6 +139,8 @@ class AdsPageLoadMetricsObserver
       const gfx::Rect& main_frame_intersection_rect) override;
   void OnMainFrameViewportRectChanged(
       const gfx::Rect& main_frame_viewport_rect) override;
+  void OnMainFrameImageAdRectsChanged(
+      const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) override;
   void OnSubFrameDeleted(int frame_tree_node_id) override;
   void OnV8MemoryChanged(
       const std::vector<MemoryUpdate>& memory_updates) override;
@@ -229,13 +233,6 @@ class AdsPageLoadMetricsObserver
   // OnResourceDataUpdate for the delayed resource.
   void ProcessOngoingNavigationResource(
       content::NavigationHandle* navigation_handle);
-
-  // Records whether an ad frame was ignored by the Restricted Navigation
-  // AdTagging feature. For frames that are ignored, this is recorded when a
-  // FrameTreeData object would have been created for them, or when their
-  // FrameTreeData is deleted. For non-ignored frames, this is recorded when it
-  // is logged to metrics.
-  void RecordAdFrameIgnoredByRestrictedAdTagging(bool ignored);
 
   // Find the FrameTreeData object associated with a given FrameTreeNodeId in
   // |ad_frames_data_storage_|.

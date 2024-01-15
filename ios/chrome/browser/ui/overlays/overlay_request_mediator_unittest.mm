@@ -5,21 +5,17 @@
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator+subclassing.h"
 
-#import "base/bind.h"
-#import "ios/chrome/browser/overlays/public/overlay_callback_manager.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/overlay_response.h"
-#import "ios/chrome/browser/overlays/public/overlay_response_support.h"
-#import "ios/chrome/browser/overlays/test/fake_overlay_request_callback_installer.h"
-#import "ios/chrome/browser/overlays/test/overlay_test_macros.h"
+#import "base/functional/bind.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_callback_manager.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_response.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_response_support.h"
+#import "ios/chrome/browser/overlays/model/test/fake_overlay_request_callback_installer.h"
+#import "ios/chrome/browser/overlays/model/test/overlay_test_macros.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // ConfigType and InfoType used in tests.

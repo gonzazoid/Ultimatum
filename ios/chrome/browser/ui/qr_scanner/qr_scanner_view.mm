@@ -9,15 +9,11 @@
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // Width and height of the QR scanner viewport.
-const CGSize kViewportSizeIPhone = CGSizeMake(250, 250);
-const CGSize kViewportSizeIPad = CGSizeMake(300, 300);
+constexpr CGSize kViewportSizeIPhone = CGSize{.width = 250, .height = 250};
+constexpr CGSize kViewportSizeIPad = CGSize{.width = 300, .height = 300};
 
 }  // namespace
 

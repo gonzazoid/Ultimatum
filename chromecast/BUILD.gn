@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
+import("//build/config/cronet/config.gni")
 import("//build/config/features.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//build/config/ui.gni")
@@ -27,6 +28,8 @@ declare_args() {
   vendor_cast_media_gtest_excludes = []
 }
 
+assert(!is_cronet_build)
+
 # Depends on all non-test targets that should be built by the Chromecast
 # internal build infrastructure.
 group("all") {
@@ -36,7 +39,9 @@ group("all") {
     if (chromecast_branding == "public") {
       deps += [ ":cast_shell_apk" ]
     } else {
-      deps += [ ":cast_browser_bundle_module" ]
+      foreach(device_type, android_device_types) {
+        deps += [ ":cast_browser_${device_type}_bundle_module" ]
+      }
     }
   } else if (!is_fuchsia) {
     data_deps += [
@@ -281,14 +286,12 @@ cast_test_group("cast_tests") {
       } else {
         # Disable ProcessMetricsTest.GetNumberOfThreads (b/15610509)
         # Disable ProcessUtilTest.* (need to define OS_ANDROID)
-        # Disable StackContainer.BufferAlignment (don't support 16-byte alignment)
         # Disable SystemMetrics2Test.GetSystemMemoryInfo (buffers>0 can't be guaranteed)
         # Disable PostTasksViaTaskRunner/* to green up devices (b/62246873)
         # Disable WorkerDetaches to green up devices (b/62246873)
         gtest_excludes += [
           "ProcessMetricsTest.GetNumberOfThreads",
           "ProcessUtilTest.*",
-          "StackContainer.BufferAlignment",
           "SystemMetrics2Test.GetSystemMemoryInfo",
           "OneTraitsExecutionModePair/ThreadPoolImplTest.PostTasksViaTaskRunner/*",
           "TaskSchedulerWorkerTest.WorkerDetaches",
@@ -472,7 +475,7 @@ if (is_android) {
       "//content/public/android:content_junit_tests",
       "//net/android:net_junit_tests",
       "//testing/android/junit:junit_unit_tests",
-      "//ui/android:ui_junit_tests",
+      "//ui:ui_junit_tests",
     ]
   }
 
@@ -576,14 +579,14 @@ if (!is_fuchsia) {
       "$root_gen_dir/chromecast/app/shell_resources.pak",
       "$root_gen_dir/components/cast/named_message_port_connector/named_message_port_connector_resources.pak",
       "$root_gen_dir/content/content_resources.pak",
-      "$root_gen_dir/content/dev_ui_content_resources.pak",
+      "$root_gen_dir/content/gpu_resources.pak",
       "$root_gen_dir/mojo/public/js/mojo_bindings_resources.pak",
       "$root_gen_dir/net/net_resources.pak",
       "$root_gen_dir/third_party/blink/public/resources/blink_resources.pak",
       "$root_gen_dir/third_party/blink/public/resources/blink_scaled_resources_100_percent.pak",
       "$root_gen_dir/third_party/blink/public/strings/blink_strings_en-US.pak",
       "$root_gen_dir/ui/resources/ui_resources_100_percent.pak",
-      "$root_gen_dir/ui/resources/webui_generated_resources.pak",
+      "$root_gen_dir/ui/resources/webui_resources.pak",
       "$root_gen_dir/ui/strings/app_locale_settings_en-US.pak",
       "$root_gen_dir/ui/strings/ax_strings_en-US.pak",
       "$root_gen_dir/ui/strings/ui_strings_en-US.pak",
@@ -595,7 +598,7 @@ if (!is_fuchsia) {
       "//chromecast/app:resources",
       "//components/cast/named_message_port_connector:resources",
       "//content:content_resources",
-      "//content:dev_ui_content_resources",
+      "//content/browser/resources/gpu:resources",
       "//mojo/public/js:resources",
       "//net:net_resources",
       "//third_party/blink/public:resources",
@@ -615,6 +618,7 @@ if (!is_fuchsia) {
     repack("_cast_repack_${locale}") {
       visibility = [ ":chromecast_locales_pak" ]
       output = "$root_out_dir/chromecast_locales/${locale}.pak"
+      mark_as_data = true
       sources =
           [ "$root_gen_dir/chromecast/app/chromecast_settings_${locale}.pak" ]
       deps = [ "//chromecast/app:chromecast_settings" ]
@@ -624,20 +628,15 @@ if (!is_fuchsia) {
           "$root_gen_dir/chromecast/internal/castui/app_strings_${locale}.pak",
         ]
         deps += [ "//chromecast/internal/castui:cast_ui_app_strings" ]
-
-        if (enable_chromecast_webui) {
-          sources += [ "$root_gen_dir/chromecast/internal/castui/ui_localized_${locale}.pak" ]
-          deps += [ "//chromecast/internal/castui:cast_ui_localized" ]
-        }
       }
     }
   }
 
   # A meta-target which repacks resources by locale.
   group("chromecast_locales_pak") {
-    data_deps = []
+    public_deps = []
     foreach(locale, cast_locales) {
-      data_deps += [ ":_cast_repack_${locale}" ]
+      public_deps += [ ":_cast_repack_${locale}" ]
     }
   }
 }  # !is_fuchsia
@@ -649,7 +648,6 @@ buildflag_header("chromecast_buildflags") {
     "DEFAULT_COMMAND_LINE_FLAGS=\"$_command_line_flags\"",
     "DISABLE_SECURE_FLAC_OPUS_DECODING=$disable_secure_flac_and_opus_decoding",
     "ENABLE_ASSISTANT=$enable_assistant",
-    "ENABLE_CHROMECAST_WEBUI=$enable_chromecast_webui",
     "ENABLE_EXTERNAL_MOJO_SERVICES=$enable_external_mojo_services",
     "ENABLE_PLAYREADY=$enable_playready",
     "ENABLE_VIDEO_CAPTURE_SERVICE=$enable_video_capture_service",
@@ -662,22 +660,14 @@ buildflag_header("chromecast_buildflags") {
 }
 
 if (is_android) {
-  generate_jni_registration("cast_shell_jni_registration") {
-    targets = [ ":cast_shell_apk" ]
-    if (chromecast_branding != "public") {
-      targets += [ ":cast_browser_bundle_module" ]
-    }
-    header_output = "$root_gen_dir/chromecast/android/${target_name}.h"
-  }
-
   android_assets("cast_shell_apk_assets") {
     sources = [ "$root_out_dir/assets/cast_shell.pak" ]
 
     deps = [
       ":cast_shell_apk_locale_assets",
       ":cast_shell_pak",
+      "//gin:v8_snapshot_assets",
       "//third_party/icu:icu_assets",
-      "//v8:v8_external_startup_data_assets",
     ]
     disable_compression = true
   }
@@ -706,72 +696,76 @@ if (is_android) {
     android_manifest = "$root_gen_dir/cast_shell_manifest/AndroidManifest.xml"
     android_manifest_dep = "//chromecast/browser/android:cast_shell_manifest"
 
-    min_sdk_version = 23
+    min_sdk_version = 24
     target_sdk_version = 33
 
     shared_libraries = [ "//chromecast/android:libcast_shell_android" ]
+    srcjar_deps =
+        [ "//chromecast/android:libcast_shell_android__jni_registration" ]
 
     deps = [
       ":cast_shell_apk_assets",
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//chromecast/android:libcast_shell_android",
       "//chromecast/browser/android:cast_shell_java",
       "//components/crash/core/app:chrome_crashpad_handler_named_as_so",
+      "//third_party/jni_zero:jni_zero_java",
     ]
 
     loadable_modules = [ "$root_out_dir/libchrome_crashpad_handler.so" ]
 
     command_line_flags_file = "castshell-command-line"
-    enable_multidex = true
+
+    product_config_java_packages = [ "org.chromium.chromecast.shell" ]
   }
 
   if (chromecast_branding != "public") {
-    android_app_bundle_module("cast_browser_bundle_module") {
-      is_base_module = false
-      base_module_target = "//chromecast/internal/service/main/android:cast_service_bundle_module"
+    foreach(device_type, android_device_types) {
+      android_app_bundle_module("cast_browser_${device_type}_bundle_module") {
+        is_base_module = false
+        base_module_target = "//chromecast/internal/service/main/android:cast_service_${device_type}_bundle_module"
 
-      android_manifest =
-          "$root_gen_dir/cast_browser_manifest/AndroidManifest.xml"
-      android_manifest_dep =
-          "//chromecast/browser/android:cast_browser_manifest"
+        android_manifest = "$root_gen_dir/cast_browser_${device_type}_manifest.AndroidManifest.xml"
+        android_manifest_dep =
+            "//chromecast/browser/android:cast_browser_${device_type}_manifest"
 
-      min_sdk_version = 23
-      target_sdk_version = 33
+        min_sdk_version = 24
+        target_sdk_version = 33
 
-      package_name = "cast_browser"
+        module_name = "cast_browser"
 
-      # |package_id| is required because the default one conflicts with the base
-      # modules' ID (0x7f).
-      package_id = 125
+        # |package_id| is required because the default one conflicts with the base
+        # modules' ID (0x7f).
+        package_id = 125
 
-      shared_libraries = [ "//chromecast/android:libcast_browser_android" ]
-      deps = [
-        "//base:base_java",
-        "//base:jni_java",
-        "//build/android:build_java",
-        "//chromecast/browser/android:cast_browser_java",
-        "//components/crash/core/app:chrome_crashpad_handler_named_as_so",
-        "//components/viz/service:service_java",
-        "//third_party/crashpad/crashpad/handler:crashpad_handler_trampoline",
-      ]
+        shared_libraries = [ "//chromecast/android:libcast_browser_android" ]
+        srcjar_deps =
+            [ "//chromecast/android:libcast_browser_android__jni_registration" ]
+        deps = [
+          "//base:base_java",
+          "//build/android:build_java",
+          "//chromecast/browser/android:cast_browser_java",
+          "//components/crash/core/app:chrome_crashpad_handler_named_as_so",
+          "//components/viz/service:service_java",
+          "//third_party/crashpad/crashpad/handler:crashpad_handler_trampoline",
+          "//third_party/jni_zero:jni_zero_java",
+        ]
 
-      loadable_modules = [
-        "$root_out_dir/libchrome_crashpad_handler.so",
-        "$root_out_dir/libcrashpad_handler_trampoline.so",
-      ]
+        loadable_modules = [
+          "$root_out_dir/libchrome_crashpad_handler.so",
+          "$root_out_dir/libcrashpad_handler_trampoline.so",
+        ]
 
-      # TODO(b/228506503): remove the exclusion rule after cast_service and
-      # cast_browser depend on different resource targets.
-      resource_exclusion_regex = "cast_web_contents_activity.xml"
+        # TODO(b/228506503): remove the exclusion rule after cast_service and
+        # cast_browser depend on different resource targets.
+        resource_exclusion_regex = "cast_web_contents_activity.xml"
 
-      enable_multidex = true
-
-      # TODO(b/222780347): Enable when compile errors are resolved on release
-      # builds.
-      proguard_enabled = false
-      generate_native_libraries_java = true
+        # TODO(b/222780347): Enable when compile errors are resolved on release
+        # builds.
+        proguard_enabled = false
+        generate_native_libraries_java = true
+      }
     }
   }
 }

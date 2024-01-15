@@ -31,6 +31,7 @@ struct CompositorFrameMetadata {
   bool may_contain_video;
   bool may_throttle_if_undrawn_frames;
   bool is_resourceless_software_draw_with_scroll_or_animation;
+  bool is_handling_interaction;
   skia.mojom.SkColor4f root_background_color;
   array<ui.mojom.LatencyInfo> latency_info;
   array<SurfaceRange> referenced_surfaces;
@@ -74,7 +75,7 @@ struct CompositorFrameMetadata {
   // representing their coordinates in the root render pass system.
   RegionCaptureBounds capture_bounds;
 
-  // Indicates if this frame is embedding SharedElementResourceIds which need to
+  // Indicates if this frame is embedding ViewTransitionElementResourceIds which need to
   // be replaced by corresponding live render passes or cached textures in the
   // Viz process.
   bool has_shared_element_resources;

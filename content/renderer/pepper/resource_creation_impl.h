@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+#include "base/functional/callback.h"
+#include "content/common/content_export.h"
 #include "ppapi/thunk/resource_creation_api.h"
 
 namespace content {
@@ -17,7 +19,8 @@ class PepperPluginInstanceImpl;
 // "old-style" resources are handled here. See
 // content/renderer/pepper/pepper_in_process_resource_creation.h for functions
 // that implement "new-style" resources.
-class ResourceCreationImpl : public ppapi::thunk::ResourceCreationAPI {
+class CONTENT_EXPORT ResourceCreationImpl
+    : public ppapi::thunk::ResourceCreationAPI {
  public:
   explicit ResourceCreationImpl(PepperPluginInstanceImpl* instance);
 
@@ -49,8 +52,9 @@ class ResourceCreationImpl : public ppapi::thunk::ResourceCreationAPI {
   PP_Resource CreateGraphics3DRaw(
       PP_Instance instance,
       PP_Resource share_context,
-      const gpu::ContextCreationAttribs& attrib_helper,
+      const ppapi::Graphics3DContextAttribs& context_attribs,
       gpu::Capabilities* capabilities,
+      gpu::GLCapabilities* gl_capabilities,
       const base::UnsafeSharedMemoryRegion** shared_state,
       gpu::CommandBufferId* command_buffer_id) override;
   PP_Resource CreateHostResolver(PP_Instance instance) override;

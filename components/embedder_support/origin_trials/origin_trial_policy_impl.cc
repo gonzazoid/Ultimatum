@@ -5,18 +5,22 @@
 #include "components/embedder_support/origin_trials/origin_trial_policy_impl.h"
 
 #include <stdint.h>
+
+#include <algorithm>
 #include <vector>
 
 #include "base/base64.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "components/embedder_support/origin_trials/features.h"
 #include "components/embedder_support/switches.h"
 #include "content/public/common/content_features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
+#include "third_party/blink/public/common/origin_trials/origin_trials.h"
+#include "third_party/blink/public/common/origin_trials/origin_trials_settings_provider.h"
 
 namespace embedder_support {
 
@@ -44,10 +48,13 @@ OriginTrialPolicyImpl::OriginTrialPolicyImpl() {
       SetDisabledFeatures(
           command_line->GetSwitchValueASCII(kOriginTrialDisabledFeatures));
     }
-    if (command_line->HasSwitch(kOriginTrialDisabledTokens)) {
-      SetDisabledTokens(
-          command_line->GetSwitchValueASCII(kOriginTrialDisabledTokens));
-    }
+  }
+
+  blink::mojom::OriginTrialsSettingsPtr settings =
+      blink::OriginTrialsSettingsProvider::Get()->GetSettings();
+
+  if (!settings.is_null()) {
+    SetDisabledTokens(settings->disabled_tokens);
   }
 }
 
@@ -63,6 +70,11 @@ OriginTrialPolicyImpl::GetPublicKeys() const {
 }
 
 bool OriginTrialPolicyImpl::IsFeatureDisabled(base::StringPiece feature) const {
+  if (allow_only_deprecation_trials_) {
+    if (!blink::origin_trials::IsDeprecationTrial(feature)) {
+      return true;
+    }
+  }
   return disabled_features_.count(std::string(feature)) > 0;
 }
 
@@ -78,13 +90,15 @@ bool OriginTrialPolicyImpl::IsFeatureDisabledForUser(
     base::StringPiece feature) const {
   struct OriginTrialFeatureToBaseFeatureMap {
     const char* origin_trial_feature_name;
-    const base::Feature& field_trial_feature;
+    const raw_ref<const base::Feature> field_trial_feature;
   } origin_trial_feature_to_field_trial_feature_map[] = {
-      {"FrobulateThirdParty", kOriginTrialsSampleAPIThirdPartyAlternativeUsage},
-      {"ConversionMeasurement", kConversionMeasurementAPIAlternativeUsage}};
+      {"FrobulateThirdParty",
+       raw_ref(kOriginTrialsSampleAPIThirdPartyAlternativeUsage)},
+      {"ConversionMeasurement",
+       raw_ref(kConversionMeasurementAPIAlternativeUsage)}};
   for (const auto& mapping : origin_trial_feature_to_field_trial_feature_map) {
     if (feature == mapping.origin_trial_feature_name) {
-      return !base::FeatureList::IsEnabled(mapping.field_trial_feature);
+      return !base::FeatureList::IsEnabled(*mapping.field_trial_feature);
     }
   }
   return false;
@@ -135,13 +149,12 @@ bool OriginTrialPolicyImpl::SetDisabledFeatures(
 }
 
 bool OriginTrialPolicyImpl::SetDisabledTokens(
-    const std::string& disabled_token_list) {
+    const std::vector<std::string>& tokens) {
   std::set<std::string> new_disabled_tokens;
-  const std::vector<std::string> tokens =
-      base::SplitString(disabled_token_list, "|", base::TRIM_WHITESPACE,
-                        base::SPLIT_WANT_NONEMPTY);
   for (const std::string& ascii_token : tokens) {
     std::string token_signature;
+    // TODO(crbug.com/1431177): Investigate storing the decoded strings. If so,
+    // this decode logic can be removed.
     if (!base::Base64Decode(ascii_token, &token_signature))
       continue;
     if (token_signature.size() != 64)
@@ -150,6 +163,20 @@ bool OriginTrialPolicyImpl::SetDisabledTokens(
   }
   disabled_tokens_.swap(new_disabled_tokens);
   return true;
+}
+
+void OriginTrialPolicyImpl::SetAllowOnlyDeprecationTrials(
+    bool allow_only_deprecation_trials) {
+  allow_only_deprecation_trials_ = allow_only_deprecation_trials;
+}
+
+bool OriginTrialPolicyImpl::GetAllowOnlyDeprecationTrials() const {
+  return allow_only_deprecation_trials_;
+}
+
+const std::set<std::string>*
+OriginTrialPolicyImpl::GetDisabledTokensForTesting() const {
+  return &disabled_tokens_;
 }
 
 }  // namespace embedder_support

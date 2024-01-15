@@ -6,8 +6,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/printing/printers_sync_bridge.h"
 #include "components/sync/test/model_type_store_test_util.h"
@@ -57,7 +57,7 @@ TEST_F(PrintersSyncBridgeTest, AddPrinterOverwrites) {
   overwrite->set_description(kLazerDescription);
   bridge_->AddPrinter(std::move(overwrite));
 
-  absl::optional<PrinterSpecifics> printer = bridge_->GetPrinter("0");
+  std::optional<PrinterSpecifics> printer = bridge_->GetPrinter("0");
   ASSERT_TRUE(printer.has_value());
   EXPECT_EQ("0", printer->id());
   EXPECT_EQ(kLazerDescription, printer->description());
@@ -77,7 +77,7 @@ TEST_F(PrintersSyncBridgeTest, UpdatePrinterMerge) {
   bool is_new = bridge_->UpdatePrinter(std::move(overwrite));
   EXPECT_FALSE(is_new);
 
-  absl::optional<PrinterSpecifics> printer = bridge_->GetPrinter("0");
+  std::optional<PrinterSpecifics> printer = bridge_->GetPrinter("0");
   ASSERT_TRUE(printer.has_value());
   EXPECT_EQ("0", printer->id());
   // Description is overwritten.
@@ -94,7 +94,7 @@ TEST_F(PrintersSyncBridgeTest, UpdatePrinterNewPrinter) {
   bool is_new = bridge_->UpdatePrinter(std::move(first));
   EXPECT_TRUE(is_new);
 
-  absl::optional<PrinterSpecifics> printer = bridge_->GetPrinter("0");
+  std::optional<PrinterSpecifics> printer = bridge_->GetPrinter("0");
   ASSERT_TRUE(printer.has_value());
   EXPECT_EQ("0", printer->id());
   EXPECT_EQ(kInkyDescription, printer->description());

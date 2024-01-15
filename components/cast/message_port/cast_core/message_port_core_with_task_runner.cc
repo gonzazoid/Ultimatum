@@ -4,10 +4,10 @@
 
 #include "components/cast/message_port/cast_core/message_port_core_with_task_runner.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/sequence_checker.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace cast_api_bindings {
 
@@ -51,7 +51,7 @@ MessagePortCoreWithTaskRunner& MessagePortCoreWithTaskRunner::operator=(
 }
 
 void MessagePortCoreWithTaskRunner::SetTaskRunner() {
-  task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 }
 
 void MessagePortCoreWithTaskRunner::AcceptOnSequence(Message message) {

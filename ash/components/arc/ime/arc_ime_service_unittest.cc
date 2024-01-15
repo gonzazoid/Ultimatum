@@ -14,6 +14,7 @@
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_content_view.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -142,7 +143,7 @@ class FakeInputMethod : public ui::DummyInputMethod {
   int count_dispatch_key_event() const { return count_dispatch_key_event_; }
 
  private:
-  ui::TextInputClient* client_;
+  raw_ptr<ui::TextInputClient> client_;
   int count_show_ime_if_needed_;
   int count_cancel_composition_;
   int count_set_focused_text_input_client_;
@@ -169,7 +170,7 @@ class FakeArcWindowDelegate : public ArcImeService::ArcWindowDelegate {
 
   ui::InputMethod* GetInputMethodForWindow(
       aura::Window* window) const override {
-    return window ? test_input_method_ : nullptr;
+    return window ? test_input_method_.get() : nullptr;
   }
 
   std::unique_ptr<aura::Window> CreateFakeArcWindow() {
@@ -189,7 +190,7 @@ class FakeArcWindowDelegate : public ArcImeService::ArcWindowDelegate {
   aura::test::TestWindowDelegate dummy_delegate_;
   int next_id_;
   std::set<int> arc_window_id_;
-  ui::InputMethod* test_input_method_;
+  raw_ptr<ui::InputMethod> test_input_method_;
 };
 
 }  // namespace
@@ -202,9 +203,9 @@ class ArcImeServiceTest : public testing::Test {
   std::unique_ptr<ArcBridgeService> arc_bridge_service_;
   std::unique_ptr<FakeInputMethod> fake_input_method_;
   std::unique_ptr<ArcImeService> instance_;
-  FakeArcImeBridge* fake_arc_ime_bridge_;  // Owned by |instance_|
+  raw_ptr<FakeArcImeBridge> fake_arc_ime_bridge_;  // Owned by |instance_|
 
-  FakeArcWindowDelegate* fake_window_delegate_;  // Owned by |instance_|
+  raw_ptr<FakeArcWindowDelegate> fake_window_delegate_;  // Owned by |instance_|
   std::unique_ptr<aura::Window> arc_win_;
 
   // Needed by ArcImeService.
@@ -222,7 +223,8 @@ class ArcImeServiceTest : public testing::Test {
     instance_ = base::WrapUnique(new ArcImeService(
         nullptr, arc_bridge_service_.get(), std::move(delegate)));
     fake_arc_ime_bridge_ = new FakeArcImeBridge();
-    instance_->SetImeBridgeForTesting(base::WrapUnique(fake_arc_ime_bridge_));
+    instance_->SetImeBridgeForTesting(
+        base::WrapUnique(fake_arc_ime_bridge_.get()));
 
     arc_win_ = fake_window_delegate_->CreateFakeArcWindow();
 
@@ -230,7 +232,7 @@ class ArcImeServiceTest : public testing::Test {
   }
 
   void TearDown() override {
-    ArcImeService::SetOverrideDefaultDeviceScaleFactorForTesting(absl::nullopt);
+    ArcImeService::SetOverrideDefaultDeviceScaleFactorForTesting(std::nullopt);
     arc_win_.reset();
     fake_window_delegate_ = nullptr;
     fake_arc_ime_bridge_ = nullptr;
@@ -335,13 +337,15 @@ TEST_F(ArcImeServiceTest, InsertChar) {
   // When text input type is NONE, the event is not forwarded.
   instance_->OnTextInputTypeChanged(ui::TEXT_INPUT_TYPE_NONE, false,
                                     mojom::TEXT_INPUT_FLAG_NONE);
-  instance_->InsertChar(ui::KeyEvent('a', ui::VKEY_A, ui::DomCode::NONE, 0));
+  instance_->InsertChar(
+      ui::KeyEvent::FromCharacter('a', ui::VKEY_A, ui::DomCode::NONE, 0));
   EXPECT_EQ(0, fake_arc_ime_bridge_->count_send_insert_text());
 
   // When the bridge is accepting text inputs, forward the event.
   instance_->OnTextInputTypeChanged(ui::TEXT_INPUT_TYPE_TEXT, true,
                                     mojom::TEXT_INPUT_FLAG_NONE);
-  instance_->InsertChar(ui::KeyEvent('a', ui::VKEY_A, ui::DomCode::NONE, 0));
+  instance_->InsertChar(
+      ui::KeyEvent::FromCharacter('a', ui::VKEY_A, ui::DomCode::NONE, 0));
   EXPECT_EQ(1, fake_arc_ime_bridge_->count_send_insert_text());
 }
 
@@ -673,7 +677,7 @@ TEST_F(ArcImeServiceTest, SendKeyEvent) {
                      ui::DomKey::FromCharacter('A'),
                      ui::EventTimeForNow()};
   {
-    absl::optional<bool> handled;
+    std::optional<bool> handled;
     auto copy = std::make_unique<ui::KeyEvent>(event);
     instance_->SendKeyEvent(
         std::move(copy),
@@ -693,7 +697,7 @@ TEST_F(ArcImeServiceTest, SendKeyEvent) {
       ui::ET_KEY_PRESSED,       ui::VKEY_RETURN,      ui::DomCode::ENTER, 0,
       ui::DomKey::UNIDENTIFIED, ui::EventTimeForNow()};
   {
-    absl::optional<bool> handled;
+    std::optional<bool> handled;
     auto copy = std::make_unique<ui::KeyEvent>(non_character_event);
     instance_->SendKeyEvent(
         std::move(copy),
@@ -716,7 +720,7 @@ TEST_F(ArcImeServiceTest, SendKeyEvent) {
                                 ui::DomKey::FromCharacter('A'),
                                 ui::EventTimeForNow()};
   {
-    absl::optional<bool> handled;
+    std::optional<bool> handled;
     auto copy = std::make_unique<ui::KeyEvent>(fabricated_event);
     instance_->SendKeyEvent(
         std::move(copy),

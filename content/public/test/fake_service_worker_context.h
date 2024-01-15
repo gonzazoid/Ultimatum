@@ -9,7 +9,7 @@
 #include <tuple>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "content/public/browser/service_worker_context.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -50,20 +50,23 @@ class FakeServiceWorkerContext : public ServiceWorkerContext {
   void UnregisterServiceWorker(const GURL& scope,
                                const blink::StorageKey& key,
                                ResultCallback callback) override;
+  void UnregisterServiceWorkerImmediately(const GURL& scope,
+                                          const blink::StorageKey& key,
+                                          ResultCallback callback) override;
   ServiceWorkerExternalRequestResult StartingExternalRequest(
       int64_t service_worker_version_id,
       content::ServiceWorkerExternalRequestTimeoutType timeout_type,
-      const std::string& request_uuid) override;
+      const base::Uuid& request_uuid) override;
   ServiceWorkerExternalRequestResult FinishedExternalRequest(
       int64_t service_worker_version_id,
-      const std::string& request_uuid) override;
+      const base::Uuid& request_uuid) override;
   size_t CountExternalRequestsForTest(const blink::StorageKey& key) override;
   bool ExecuteScriptForTest(
       const std::string& script,
       int64_t service_worker_version_id,
       ServiceWorkerScriptExecutionCallback callback) override;
   bool MaybeHasRegistrationForStorageKey(const blink::StorageKey& key) override;
-  void GetAllOriginsInfo(GetUsageInfoCallback callback) override;
+  void GetAllStorageKeysInfo(GetUsageInfoCallback callback) override;
   void DeleteForStorageKey(const blink::StorageKey& key,
                            ResultCallback callback) override;
   void CheckHasServiceWorker(const GURL& url,
@@ -80,8 +83,11 @@ class FakeServiceWorkerContext : public ServiceWorkerContext {
       const blink::StorageKey& key,
       ServiceWorkerContext::StartWorkerCallback info_callback,
       ServiceWorkerContext::StatusCodeCallback failure_callback) override;
+  bool IsLiveStartingServiceWorker(int64_t service_worker_version_id) override;
   bool IsLiveRunningServiceWorker(int64_t service_worker_version_id) override;
   service_manager::InterfaceProvider& GetRemoteInterfaces(
+      int64_t service_worker_version_id) override;
+  blink::AssociatedInterfaceProvider& GetRemoteAssociatedInterfaces(
       int64_t service_worker_version_id) override;
   void StartServiceWorkerAndDispatchMessage(
       const GURL& scope,
@@ -92,6 +98,9 @@ class FakeServiceWorkerContext : public ServiceWorkerContext {
       const GURL& document_url,
       const blink::StorageKey& key,
       StartServiceWorkerForNavigationHintCallback callback) override;
+  void WarmUpServiceWorker(const GURL& document_url,
+                           const blink::StorageKey& key,
+                           WarmUpServiceWorkerCallback callback) override;
   void StopAllServiceWorkersForStorageKey(
       const blink::StorageKey& key) override;
   void StopAllServiceWorkers(base::OnceClosure callback) override;

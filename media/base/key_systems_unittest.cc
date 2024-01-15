@@ -2,13 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// TODO(sandersd): Refactor to remove recomputed codec arrays, and generally
-// shorten and improve coverage.
-//   - http://crbug.com/417444
-//   - http://crbug.com/457438
-// TODO(sandersd): Add tests to cover codec vectors with empty items.
-// http://crbug.com/417461
-
 #include <string>
 #include <vector>
 
@@ -22,6 +15,7 @@
 #include "media/base/key_systems.h"
 #include "media/base/media.h"
 #include "media/base/media_client.h"
+#include "media/cdm/clear_key_cdm_common.h"
 #include "media/media_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -36,9 +30,6 @@ namespace {
 // kExternal uses an external CDM, such as library CDM or Android platform CDM.
 const char kUsesAes[] = "x-org.example.usesaes";
 const char kExternal[] = "x-com.example.external";
-
-const char kClearKey[] = "org.w3.clearkey";
-const char kExternalClearKey[] = "org.chromium.externalclearkey";
 
 const char kAudioWebM[] = "audio/webm";
 const char kVideoWebM[] = "video/webm";
@@ -131,14 +122,13 @@ class ExternalKeySystemInfo : public TestKeySystemInfoBase {
   EmeConfig::Rule GetEncryptionSchemeConfigRule(
       EncryptionScheme encryption_scheme) const override {
     switch (encryption_scheme) {
-      case media::EncryptionScheme::kUnencrypted:
-      case media::EncryptionScheme::kCenc:
+      case EncryptionScheme::kUnencrypted:
+      case EncryptionScheme::kCenc:
         return EmeConfig::SupportedRule();
-      case media::EncryptionScheme::kCbcs:
+      case EncryptionScheme::kCbcs:
         return EmeConfig{.hw_secure_codecs = EmeConfigRuleState::kNotAllowed};
     }
-    NOTREACHED();
-    return EmeConfig::UnsupportedRule();
+    NOTREACHED_NORETURN();
   }
 
   // We have hardware secure codec support for FOO_VIDEO and FOO_SECURE_VIDEO.
@@ -153,14 +143,12 @@ class ExternalKeySystemInfo : public TestKeySystemInfoBase {
       const bool* /*hw_secure_requirement*/) const override {
     if (requested_robustness == kRobustnessSupported) {
       return EmeConfig::SupportedRule();
-    } else if (requested_robustness == kRobustnessSecureCodecsRequired) {
-      return EmeConfig{.hw_secure_codecs = EmeConfigRuleState::kRequired};
-    } else if (requested_robustness == kRobustnessNotSupported) {
-      return EmeConfig::UnsupportedRule();
-    } else {
-      NOTREACHED();
-      return EmeConfig::UnsupportedRule();
     }
+    if (requested_robustness == kRobustnessSecureCodecsRequired) {
+      return EmeConfig{.hw_secure_codecs = EmeConfigRuleState::kRequired};
+    }
+    CHECK_EQ(requested_robustness, kRobustnessNotSupported);
+    return EmeConfig::UnsupportedRule();
   }
 
   EmeConfig::Rule GetPersistentLicenseSessionSupport() const override {
@@ -246,15 +234,15 @@ class TestMediaClient : public MediaClient {
 
   // MediaClient implementation.
   void GetSupportedKeySystems(GetSupportedKeySystemsCB cb) final;
-  bool IsSupportedAudioType(const media::AudioType& type) final;
-  bool IsSupportedVideoType(const media::VideoType& type) final;
+  bool IsSupportedAudioType(const AudioType& type) final;
+  bool IsSupportedVideoType(const VideoType& type) final;
   bool IsSupportedBitstreamAudioCodec(AudioCodec codec) final;
 
   // Helper function to disable "kExternal" key system support so that we can
   // test the key system update case.
   void DisableExternalKeySystemSupport();
 
-  absl::optional<::media::AudioRendererAlgorithmParameters>
+  absl::optional<AudioRendererAlgorithmParameters>
   GetAudioRendererAlgorithmParameters(AudioParameters audio_parameters) final;
 
  private:
@@ -274,11 +262,11 @@ void TestMediaClient::GetSupportedKeySystems(GetSupportedKeySystemsCB cb) {
   get_supported_key_systems_cb_.Run(GetSupportedKeySystemsInternal());
 }
 
-bool TestMediaClient::IsSupportedAudioType(const media::AudioType& type) {
+bool TestMediaClient::IsSupportedAudioType(const AudioType& type) {
   return true;
 }
 
-bool TestMediaClient::IsSupportedVideoType(const media::VideoType& type) {
+bool TestMediaClient::IsSupportedVideoType(const VideoType& type) {
   return true;
 }
 
@@ -291,7 +279,7 @@ void TestMediaClient::DisableExternalKeySystemSupport() {
   get_supported_key_systems_cb_.Run(GetSupportedKeySystemsInternal());
 }
 
-absl::optional<::media::AudioRendererAlgorithmParameters>
+absl::optional<AudioRendererAlgorithmParameters>
 TestMediaClient::GetAudioRendererAlgorithmParameters(
     AudioParameters audio_parameters) {
   return absl::nullopt;
@@ -446,22 +434,22 @@ TEST_F(KeySystemsTest, EmptyKeySystem) {
 
 // Clear Key is the only key system registered in content.
 TEST_F(KeySystemsTest, ClearKey) {
-  EXPECT_TRUE(IsSupportedKeySystem(kClearKey));
+  EXPECT_TRUE(IsSupportedKeySystem(kClearKeyKeySystem));
   EXPECT_TRUE(IsSupportedKeySystemWithMediaMimeType(kVideoWebM, no_codecs(),
-                                                    kClearKey));
+                                                    kClearKeyKeySystem));
 
-  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKey));
+  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKeyKeySystem));
 }
 
 TEST_F(KeySystemsTest, ClearKeyWithInitDataType) {
-  EXPECT_TRUE(IsSupportedKeySystem(kClearKey));
-  EXPECT_TRUE(
-      IsSupportedKeySystemWithInitDataType(kClearKey, EmeInitDataType::WEBM));
-  EXPECT_TRUE(
-      IsSupportedKeySystemWithInitDataType(kClearKey, EmeInitDataType::KEYIDS));
+  EXPECT_TRUE(IsSupportedKeySystem(kClearKeyKeySystem));
+  EXPECT_TRUE(IsSupportedKeySystemWithInitDataType(kClearKeyKeySystem,
+                                                   EmeInitDataType::WEBM));
+  EXPECT_TRUE(IsSupportedKeySystemWithInitDataType(kClearKeyKeySystem,
+                                                   EmeInitDataType::KEYIDS));
 
   // All other InitDataTypes are not supported.
-  EXPECT_FALSE(IsSupportedKeySystemWithInitDataType(kClearKey,
+  EXPECT_FALSE(IsSupportedKeySystemWithInitDataType(kClearKeyKeySystem,
                                                     EmeInitDataType::UNKNOWN));
 }
 
@@ -757,9 +745,9 @@ TEST_F(KeySystemsTest,
 }
 
 TEST_F(KeySystemsTest, KeySystemNameForUMA) {
-  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKey));
-  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKey, false));
-  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKey, true));
+  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKeyKeySystem));
+  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKeyKeySystem, false));
+  EXPECT_EQ("ClearKey", GetKeySystemNameForUMA(kClearKeyKeySystem, true));
   EXPECT_EQ("Widevine", GetKeySystemNameForUMA(kWidevineKeySystem));
   EXPECT_EQ("Widevine.SoftwareSecure",
             GetKeySystemNameForUMA(kWidevineKeySystem, false));
@@ -770,9 +758,11 @@ TEST_F(KeySystemsTest, KeySystemNameForUMA) {
   EXPECT_EQ("Unknown", GetKeySystemNameForUMA("Foo", true));
 
   // External Clear Key never has a UMA name.
-  EXPECT_EQ("Unknown", GetKeySystemNameForUMA(kExternalClearKey));
-  EXPECT_EQ("Unknown", GetKeySystemNameForUMA(kExternalClearKey, false));
-  EXPECT_EQ("Unknown", GetKeySystemNameForUMA(kExternalClearKey, true));
+  EXPECT_EQ("Unknown", GetKeySystemNameForUMA(kExternalClearKeyKeySystem));
+  EXPECT_EQ("Unknown",
+            GetKeySystemNameForUMA(kExternalClearKeyKeySystem, false));
+  EXPECT_EQ("Unknown",
+            GetKeySystemNameForUMA(kExternalClearKeyKeySystem, true));
 }
 
 TEST_F(KeySystemsTest, KeySystemsUpdate) {

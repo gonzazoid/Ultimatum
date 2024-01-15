@@ -18,12 +18,12 @@
 #include <xf86drm.h>
 
 #include "base/bits.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/cpu.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/process/launch.h"
 #include "base/strings/pattern.h"
@@ -33,18 +33,18 @@
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_suite.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "media/base/media_switches.h"
+#include "media/base/platform_features.h"
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 #include "media/media_buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/linux/gbm_defines.h"
 
-#if defined(USE_OZONE) && BUILDFLAG(IS_LINUX)
-// GN doesn't understand conditional includes, so we need nogncheck here.
-// See crbug.com/1125897.
-#include "ui/ozone/public/ozone_platform.h"  // nogncheck
+#ifndef I915_FORMAT_MOD_4_TILED
+#define I915_FORMAT_MOD_4_TILED 0x100000000000009
 #endif
 
 namespace media {
@@ -120,14 +120,6 @@ absl::optional<VAEntrypoint> StringToVAEntrypoint(
   return it != kStringToVAEntrypoint.end()
              ? absl::make_optional<VAEntrypoint>(it->second)
              : absl::nullopt;
-}
-
-std::unique_ptr<base::test::ScopedFeatureList> CreateScopedFeatureList() {
-  auto scoped_feature_list = std::make_unique<base::test::ScopedFeatureList>();
-  scoped_feature_list->InitWithFeatures(
-      /*enabled_features=*/{media::kVaapiAV1Decoder},
-      /*disabled_features=*/{});
-  return scoped_feature_list;
 }
 
 unsigned int ToVaRTFormat(uint32_t va_fourcc) {
@@ -224,20 +216,32 @@ const char* VAProfileToString(VAProfile profile) {
 #if VA_MAJOR_VERSION >= 2 || VA_MINOR_VERSION >= 11
     TOSTR(VAProfileProtected);
 #endif
+#if VA_MAJOR_VERSION >= 2 || VA_MINOR_VERSION >= 18
+    TOSTR(VAProfileH264High10);
+#endif
   }
   // clang-format on
   return "<unknown profile>";
+}
+
+// Returns true if the Display version is 14. CPU model ID's are referenced from
+// the following file in the kernel source: arch/x86/include/asm/intel-family.h.
+bool IsDisplayVer14() {
+  constexpr int kMeteorLakeModelId = 0xAC;
+  constexpr int kMeteorLake_LModelId = 0xAA;
+  constexpr int kPentiumAndLaterFamily = 0x06;
+  const base::CPU cpuid;
+  return cpuid.family() == kPentiumAndLaterFamily &&
+         (cpuid.model() == kMeteorLakeModelId ||
+          cpuid.model() == kMeteorLake_LModelId);
 }
 
 }  // namespace
 
 class VaapiTest : public testing::Test {
  public:
-  VaapiTest() : scoped_feature_list_(CreateScopedFeatureList()) {}
+  VaapiTest() = default;
   ~VaapiTest() override = default;
-
- private:
-  std::unique_ptr<base::test::ScopedFeatureList> scoped_feature_list_;
 };
 
 std::map<VAProfile, std::vector<VAEntrypoint>> ParseVainfo(
@@ -339,6 +343,17 @@ TEST_F(VaapiTest, GetSupportedEncodeProfiles) {
   for (const auto& profile : VaapiWrapper::GetSupportedEncodeProfiles()) {
     const auto va_profile = ConvertToVAProfile(profile.profile);
     ASSERT_TRUE(va_profile.has_value());
+    constexpr VAProfile kSupportableVideoEncoderProfiles[] = {
+        VAProfileH264ConstrainedBaseline,
+        VAProfileH264Main,
+        VAProfileH264High,
+        VAProfileVP8Version0_3,
+        VAProfileVP9Profile0,
+        VAProfileAV1Profile0,
+    };
+    // Check if VaapiWrapper reports a profile that is not supported by
+    // VaapiVideoEncodeAccelerator.
+    ASSERT_TRUE(base::Contains(kSupportableVideoEncoderProfiles, va_profile));
 
     EXPECT_TRUE(base::Contains(va_info.at(*va_profile), VAEntrypointEncSlice) ||
                 base::Contains(va_info.at(*va_profile), VAEntrypointEncSliceLP))
@@ -398,6 +413,7 @@ TEST_F(VaapiTest, VbrAndCbrResolutionsMatch) {
 }
 
 #if BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 // Verifies that VAProfileProtected is indeed supported by the command line
 // vainfo utility.
 TEST_F(VaapiTest, VaapiProfileProtected) {
@@ -415,6 +431,7 @@ TEST_F(VaapiTest, VaapiProfileProtected) {
     EXPECT_EQ(impl, VAImplementation::kMesaGallium);
   }
 }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 #endif  // BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
 
 // Verifies that if JPEG decoding and encoding are supported by VaapiWrapper,
@@ -531,21 +548,24 @@ TEST_F(VaapiTest, LowQualityEncodingSetting) {
 
 // This test checks the supported SVC scalability mode.
 TEST_F(VaapiTest, CheckSupportedSVCScalabilityModes) {
+  const std::vector<SVCScalabilityMode> kSupportedL1T1 = {
+      SVCScalabilityMode::kL1T1};
 #if BUILDFLAG(IS_CHROMEOS)
   const std::vector<SVCScalabilityMode> kSupportedTemporalSVC = {
-      SVCScalabilityMode::kL1T2, SVCScalabilityMode::kL1T3};
+      SVCScalabilityMode::kL1T1, SVCScalabilityMode::kL1T2,
+      SVCScalabilityMode::kL1T3};
   const std::vector<SVCScalabilityMode> kSupportedTemporalAndKeySVC = {
-      SVCScalabilityMode::kL1T2,    SVCScalabilityMode::kL1T3,
-      SVCScalabilityMode::kL2T2Key, SVCScalabilityMode::kL2T3Key,
-      SVCScalabilityMode::kL3T2Key, SVCScalabilityMode::kL3T3Key};
+      SVCScalabilityMode::kL1T1,    SVCScalabilityMode::kL1T2,
+      SVCScalabilityMode::kL1T3,    SVCScalabilityMode::kL2T2Key,
+      SVCScalabilityMode::kL2T3Key, SVCScalabilityMode::kL3T2Key,
+      SVCScalabilityMode::kL3T3Key};
 #endif
 
   const auto scalability_modes_vp9_profile0 =
       VaapiWrapper::GetSupportedScalabilityModes(VP9PROFILE_PROFILE0,
                                                  VAProfileVP9Profile0);
 #if BUILDFLAG(IS_CHROMEOS)
-  if (base::FeatureList::IsEnabled(kVaapiVp9kSVCHWEncoding) &&
-      VaapiWrapper::GetDefaultVaEntryPoint(
+  if (VaapiWrapper::GetDefaultVaEntryPoint(
           VaapiWrapper::kEncodeConstantQuantizationParameter,
           VAProfileVP9Profile0) == VAEntrypointEncSliceLP) {
     EXPECT_EQ(scalability_modes_vp9_profile0, kSupportedTemporalAndKeySVC);
@@ -553,13 +573,13 @@ TEST_F(VaapiTest, CheckSupportedSVCScalabilityModes) {
     EXPECT_EQ(scalability_modes_vp9_profile0, kSupportedTemporalSVC);
   }
 #else
-  EXPECT_TRUE(scalability_modes_vp9_profile0.empty());
+  EXPECT_EQ(scalability_modes_vp9_profile0, kSupportedL1T1);
 #endif
 
   const auto scalability_modes_vp9_profile2 =
       VaapiWrapper::GetSupportedScalabilityModes(VP9PROFILE_PROFILE2,
                                                  VAProfileVP9Profile2);
-  EXPECT_TRUE(scalability_modes_vp9_profile2.empty());
+  EXPECT_EQ(scalability_modes_vp9_profile2, kSupportedL1T1);
 
   const auto scalability_modes_vp8 = VaapiWrapper::GetSupportedScalabilityModes(
       VP8PROFILE_ANY, VAProfileVP8Version0_3);
@@ -567,10 +587,10 @@ TEST_F(VaapiTest, CheckSupportedSVCScalabilityModes) {
   if (base::FeatureList::IsEnabled(kVaapiVp8TemporalLayerHWEncoding)) {
     EXPECT_EQ(scalability_modes_vp8, kSupportedTemporalSVC);
   } else {
-    EXPECT_TRUE(scalability_modes_vp8.empty());
+    EXPECT_EQ(scalability_modes_vp8, kSupportedL1T1);
   }
 #else
-  EXPECT_TRUE(scalability_modes_vp8.empty());
+  EXPECT_EQ(scalability_modes_vp8, kSupportedL1T1);
 #endif
 
   const auto scalability_modes_h264_baseline =
@@ -580,10 +600,10 @@ TEST_F(VaapiTest, CheckSupportedSVCScalabilityModes) {
   if (base::FeatureList::IsEnabled(kVaapiH264TemporalLayerHWEncoding)) {
     EXPECT_EQ(scalability_modes_h264_baseline, kSupportedTemporalSVC);
   } else {
-    EXPECT_TRUE(scalability_modes_h264_baseline.empty());
+    EXPECT_EQ(scalability_modes_h264_baseline, kSupportedL1T1);
   }
 #else
-  EXPECT_TRUE(scalability_modes_h264_baseline.empty());
+  EXPECT_EQ(scalability_modes_h264_baseline, kSupportedL1T1);
 #endif
 }
 
@@ -659,7 +679,7 @@ TEST_P(VaapiVppTest, BlitWithVAAllocatedSurfaces) {
 
   ASSERT_TRUE(wrapper->BlitSurface(*surface_in, *surface_out,
                                    gfx::Rect(kInputSize),
-                                   gfx::Rect(kOutputSize), VIDEO_ROTATION_0));
+                                   gfx::Rect(kOutputSize)));
   ASSERT_TRUE(wrapper->SyncSurface(scoped_surface_out->id()));
   wrapper->DestroyContext();
 }
@@ -805,9 +825,10 @@ TEST_P(VaapiMinigbmTest, AllocateAndCompareWithMinigbm) {
   uint64_t expected_drm_modifier = DRM_FORMAT_MOD_LINEAR;
 
   if (backend == VAImplementation::kIntelIHD) {
-    expected_drm_modifier = I915_FORMAT_MOD_Y_TILED;
+    expected_drm_modifier =
+        IsDisplayVer14() ? I915_FORMAT_MOD_4_TILED : I915_FORMAT_MOD_Y_TILED;
   } else if (backend == VAImplementation::kMesaGallium) {
-    if (va_vendor_string.find("STONEY") != std::string::npos) {
+    if (va_vendor_string.find("stoney") != std::string::npos) {
       expected_drm_modifier = DRM_FORMAT_MOD_INVALID;
     }
   }
@@ -831,7 +852,8 @@ TEST_P(VaapiMinigbmTest, AllocateAndCompareWithMinigbm) {
           base::checked_cast<uint32_t>(scoped_va_surface->size().width()));
     } else {
       const auto expected_rounded_up_pitch =
-          base::bits::AlignUp(scoped_va_surface->size().width(), 2);
+          base::bits::AlignUpDeprecatedDoNotUse(
+              scoped_va_surface->size().width(), 2);
       EXPECT_GE(va_descriptor.layers[i].pitch[0],
                 base::checked_cast<uint32_t>(expected_rounded_up_pitch));
     }
@@ -931,28 +953,10 @@ INSTANTIATE_TEST_SUITE_P(
 
 int main(int argc, char** argv) {
   base::TestSuite test_suite(argc, argv);
-  {
-    // Enables/Disables features during PreSandboxInitialization(). We have to
-    // destruct ScopedFeatureList after it because base::TestSuite::Run()
-    // creates a ScopedFeatureList and multiple concurrent ScopedFeatureLists
-    // are not allowed.
-    auto scoped_feature_list = media::CreateScopedFeatureList();
 
-#if defined(USE_OZONE) && BUILDFLAG(IS_LINUX)
-    // Initialize Ozone so that the VADisplayState can decide if we're running
-    // on top of a platform that can deal with VA-API buffers.
-    // TODO(b/230370976): we may no longer need to initialize Ozone since we
-    // don't use it for buffer allocation.
-    ui::OzonePlatform::InitParams params;
-    params.single_process = true;
-    ui::OzonePlatform::InitializeForUI(params);
-    ui::OzonePlatform::InitializeForGPU(params);
-#endif
-
-    // PreSandboxInitialization() loads and opens the driver, queries its
-    // capabilities and fills in the VASupportedProfiles.
-    media::VaapiWrapper::PreSandboxInitialization();
-  }
+  // PreSandboxInitialization() loads and opens the driver, queries its
+  // capabilities and fills in the VASupportedProfiles.
+  media::VaapiWrapper::PreSandboxInitialization();
 
   return base::LaunchUnitTests(
       argc, argv,

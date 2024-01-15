@@ -7,8 +7,8 @@
 #include "build/build_config.h"
 #include "content/browser/webrtc/webrtc_webcam_browsertest.h"
 #include "content/public/browser/browser_child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/video_capture_service.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
@@ -66,8 +66,9 @@ class WebRtcVideoCaptureBrowserTest : public ContentBrowserTest {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 // TODO(https://crbug.com/1235254): This test is flakey on macOS.
+// TODO(https://crbug.com/1444362): This test is flaky on Windows.
 #define MAYBE_RecoverFromCrashInVideoCaptureProcess \
   DISABLED_RecoverFromCrashInVideoCaptureProcess
 #else
@@ -85,8 +86,7 @@ IN_PROC_BROWSER_TEST_F(WebRtcVideoCaptureBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
   // Start video capture and wait until it started rendering
-  ASSERT_EQ("OK", EvalJs(shell(), kStartVideoCaptureAndVerifySize,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  ASSERT_TRUE(ExecJs(shell(), kStartVideoCaptureAndVerifySize));
 
   // Simulate crash in video capture process
   mojo::Remote<video_capture::mojom::TestingControls> service_controls;
@@ -95,14 +95,11 @@ IN_PROC_BROWSER_TEST_F(WebRtcVideoCaptureBrowserTest,
   service_controls->Crash();
 
   // Wait for video element to turn black
-  ASSERT_EQ("OK", EvalJs(shell(), kWaitForVideoToTurnBlack,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
-  ASSERT_EQ("OK", EvalJs(shell(), kVerifyHasReceivedTrackEndedEvent,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  ASSERT_TRUE(ExecJs(shell(), kWaitForVideoToTurnBlack));
+  ASSERT_TRUE(ExecJs(shell(), kVerifyHasReceivedTrackEndedEvent));
 
   // Start capturing again and expect it to work.
-  ASSERT_EQ("OK", EvalJs(shell(), kStartVideoCaptureAndVerifySize,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  ASSERT_TRUE(ExecJs(shell(), kStartVideoCaptureAndVerifySize));
 }
 
 }  // namespace content

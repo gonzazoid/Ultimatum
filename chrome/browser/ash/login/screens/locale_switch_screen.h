@@ -5,19 +5,20 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_SCREENS_LOCALE_SWITCH_SCREEN_H_
 #define CHROME_BROWSER_ASH_LOGIN_SCREENS_LOCALE_SWITCH_SCREEN_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/base/locale_util.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/ash/login/locale_switch_screen_handler.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 
 namespace ash {
+
+class LocaleSwitchView;
 
 // This screen waits for account information (locale and account capabilities)
 // to be fetched and handles OOBE locale switch for the post-login screens.
@@ -25,12 +26,13 @@ class LocaleSwitchScreen : public BaseScreen,
                            public signin::IdentityManager::Observer {
  public:
   enum class Result {
-    LOCALE_FETCH_FAILED,
-    LOCALE_FETCH_TIMEOUT,
-    NO_SWITCH_NEEDED,
-    SWITCH_SUCCEDED,
-    SWITCH_FAILED,
-    NOT_APPLICABLE
+    kLocaleFetchFailed,
+    kLocaleFetchTimeout,
+    kNoSwitchNeeded,
+    kSwitchSucceded,
+    kSwitchFailed,
+    kSwitchDelegated,
+    kNotApplicable
   };
 
   static std::string GetResultString(Result result);
@@ -47,6 +49,14 @@ class LocaleSwitchScreen : public BaseScreen,
   void OnExtendedAccountInfoUpdated(const AccountInfo& info) override;
   void OnRefreshTokensLoaded() override;
 
+  const ScreenExitCallback& get_exit_callback_for_testing() {
+    return exit_callback_;
+  }
+
+  void set_exit_callback_for_testing(const ScreenExitCallback& callback) {
+    exit_callback_ = callback;
+  }
+
  private:
   // BaseScreen:
   void ShowImpl() override;
@@ -56,6 +66,8 @@ class LocaleSwitchScreen : public BaseScreen,
   void SwitchLocale(std::string locale);
   void OnLanguageChangedCallback(
       const locale_util::LanguageSwitchResult& result);
+  void OnLanguageChangedNotificationCallback(
+      const locale_util::LanguageSwitchResult& result);
 
   void ResetState();
   void OnTimeout();
@@ -64,7 +76,7 @@ class LocaleSwitchScreen : public BaseScreen,
 
   std::string gaia_id_;
   ScreenExitCallback exit_callback_;
-  signin::IdentityManager* identity_manager_ = nullptr;
+  raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
   base::ScopedObservation<signin::IdentityManager,
                           signin::IdentityManager::Observer>
       identity_manager_observer_{this};
@@ -77,11 +89,5 @@ class LocaleSwitchScreen : public BaseScreen,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::LocaleSwitchScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_LOCALE_SWITCH_SCREEN_H_

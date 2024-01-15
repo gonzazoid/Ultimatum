@@ -7,14 +7,19 @@
         flex: 1
       }
 
-      /* Tooltip is hidden since site-list will display a common tooltip. */
+      /* Tooltip is hidden since site-list will display a common tooltip.
+       * Not using 'display: none' because tooltip still needs to be accessible
+       * by screen readers. */
       cr-policy-pref-indicator::part(tooltip) {
-        display: none;
+        clip: rect(0 0 0 0);
+        height: 1px;
+        overflow: hidden;
+        width: 1px;
       }
     </style>
     <div class="list-item" focus-row-container>
       <div class="settings-row"
-          actionable$="[[allowNavigateToSiteDetail_]]" on-click="onOriginTap_">
+          actionable$="[[allowNavigateToSiteDetail_]]" on-click="onOriginClick_">
         <site-favicon url="[[computeFaviconOrigin_(model)]]"></site-favicon>
         <div class="middle no-min-width">
           <div class="text-elide">
@@ -37,7 +42,7 @@
       </div>
       <template is="dom-if" if="[[showPolicyPrefIndicator_]]">
         <cr-policy-pref-indicator pref="[[model]]"
-            icon-aria-label="[[label]]" on-mouseenter="onShowTooltip_"
+            on-mouseenter="onShowTooltip_"
             on-focus="onShowTooltip_" focus-row-control focus-type="policy">
         </cr-policy-pref-indicator>
       </template>
@@ -50,12 +55,13 @@
             on-focus="onShowIncognitoTooltip_"></cr-tooltip-icon>
       </template>
       <cr-icon-button id="resetSite" class="icon-delete-gray"
-          hidden="[[shouldHideResetButton_(model, readOnlyList)]]"
-          on-click="onResetButtonTap_"
-          aria-label="$i18n{siteSettingsActionReset}" focus-row-control
+          hidden="[[!shouldShowResetButton_(model, readOnlyList)]]"
+          on-click="onResetButtonClick_"
+          aria-label="$i18n{siteSettingsActionReset}
+              [[computeDisplayName_(model)]]" focus-row-control
           focus-type="reset"></cr-icon-button>
       <cr-icon-button id="actionMenuButton" class="icon-more-vert"
-          hidden="[[shouldHideActionMenu_(model, readOnlyList)]]"
-          on-click="onShowActionMenuTap_" title="$i18n{moreActions}"
+          hidden="[[!shouldShowActionMenu_(model, readOnlyList)]]"
+          on-click="onShowActionMenuClick_" title="$i18n{moreActions}"
           focus-row-control focus-type="menu"></cr-icon-button>
     </div>

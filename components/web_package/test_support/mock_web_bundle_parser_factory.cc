@@ -9,10 +9,14 @@
 #include "base/threading/thread_restrictions.h"
 #include "components/web_package/test_support/mock_web_bundle_parser.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/gurl.h"
 
 namespace web_package {
 
-MockWebBundleParserFactory::MockWebBundleParserFactory() = default;
+MockWebBundleParserFactory::MockWebBundleParserFactory(
+    base::RepeatingCallback<void(absl::optional<GURL>)> on_create_parser)
+    : on_create_parser_(std::move(on_create_parser)) {}
 
 MockWebBundleParserFactory::~MockWebBundleParserFactory() = default;
 
@@ -23,18 +27,20 @@ void MockWebBundleParserFactory::AddReceiver(
 
 void MockWebBundleParserFactory::WaitUntilParseIntegrityBlockCalled(
     base::OnceClosure closure) {
-  if (parser_)
+  if (parser_) {
     parser_->WaitUntilParseIntegrityBlockCalled(std::move(closure));
-  else
+  } else {
     wait_parse_integrity_block_callback_ = std::move(closure);
+  }
 }
 
 void MockWebBundleParserFactory::WaitUntilParseMetadataCalled(
-    base::OnceCallback<void(int64_t offset)> callback) {
-  if (parser_)
+    base::OnceCallback<void(absl::optional<uint64_t> offset)> callback) {
+  if (parser_) {
     parser_->WaitUntilParseMetadataCalled(std::move(callback));
-  else
+  } else {
     wait_parse_metadata_callback_ = std::move(callback);
+  }
 }
 
 void MockWebBundleParserFactory::RunIntegrityBlockCallback(
@@ -50,10 +56,10 @@ void MockWebBundleParserFactory::RunIntegrityBlockCallback(
 }
 
 void MockWebBundleParserFactory::RunMetadataCallback(
-    int64_t expected_metadata_offset,
+    absl::optional<uint64_t> expected_metadata_offset,
     mojom::BundleMetadataPtr metadata,
     web_package::mojom::BundleMetadataParseErrorPtr error) {
-  base::test::TestFuture<int64_t> future;
+  base::test::TestFuture<absl::optional<uint64_t>> future;
   WaitUntilParseMetadataCalled(future.GetCallback());
   EXPECT_EQ(expected_metadata_offset, future.Get());
 
@@ -130,7 +136,10 @@ void MockWebBundleParserFactory::SimulateParseResponseCrash() {
 }
 
 void MockWebBundleParserFactory::GetParser(
-    mojo::PendingReceiver<mojom::WebBundleParser> receiver) {
+    mojo::PendingReceiver<mojom::WebBundleParser> receiver,
+    const absl::optional<GURL>& base_url) {
+  on_create_parser_.Run(base_url);
+
   if (parser_) {
     // If a parser existed previously, assume that it has been disconnected, and
     // copy its `wait_` callbacks over to the new instance.
@@ -170,20 +179,15 @@ void MockWebBundleParserFactory::GetParser(
   }
 }
 
-void MockWebBundleParserFactory::GetParserForFile(
-    mojo::PendingReceiver<mojom::WebBundleParser> receiver,
-    base::File file) {
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    file.Close();
-  }
-  GetParser(std::move(receiver));
-}
+void MockWebBundleParserFactory::BindFileDataSource(
+    mojo::PendingReceiver<mojom::BundleDataSource> data_source_receiver,
+    base::File file) {}
 
 void MockWebBundleParserFactory::GetParserForDataSource(
     mojo::PendingReceiver<mojom::WebBundleParser> receiver,
+    const absl::optional<GURL>& base_url,
     mojo::PendingRemote<mojom::BundleDataSource> data_source) {
-  GetParser(std::move(receiver));
+  GetParser(std::move(receiver), base_url);
 }
 
 }  // namespace web_package

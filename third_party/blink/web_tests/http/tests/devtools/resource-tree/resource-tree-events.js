@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests top frame navigation events.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
   await TestRunner.showPanel('resources');
 
   // Reset resourceTreeModel.
@@ -28,8 +32,11 @@
         TestRunner.addResult(`    ${eventName} : ${frame.id}`);
         break;
       case 'FrameNavigated':
-      case 'MainFrameNavigated':
         var frame = event.data;
+        TestRunner.addResult(`    ${eventName} : ${frame.id} : ${frame.loaderId}`);
+        break;
+      case 'PrimaryPageChanged':
+        var frame = event.data.frame;
         TestRunner.addResult(`    ${eventName} : ${frame.id} : ${frame.loaderId}`);
         break;
       case 'SecurityOriginAdded':

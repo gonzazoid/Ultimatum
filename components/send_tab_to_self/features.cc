@@ -9,9 +9,10 @@
 
 namespace send_tab_to_self {
 
-BASE_FEATURE(kSendTabToSelfSigninPromo,
-             "SendTabToSelfSigninPromo",
+BASE_FEATURE(kSendTabToSelfEnableNotificationTimeOut,
+             "SendTabToSelfEnableNotificationTimeOut",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 BASE_FEATURE(kSendTabToSelfV2,

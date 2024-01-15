@@ -33,6 +33,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/common/notifications/notification_constants.h"
@@ -163,7 +164,8 @@ Notification* Notification::Create(ExecutionContext* context,
 Notification::Notification(ExecutionContext* context,
                            Type type,
                            mojom::blink::NotificationDataPtr data)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<Notification>({}),
+      ExecutionContextLifecycleObserver(context),
       type_(type),
       state_(State::kLoading),
       data_(std::move(data)),
@@ -173,7 +175,7 @@ Notification::Notification(ExecutionContext* context,
       listener_receiver_(this, context) {
   if (data_->show_trigger_timestamp.has_value()) {
     show_trigger_ = TimestampTrigger::Create(static_cast<DOMTimeStamp>(
-        data_->show_trigger_timestamp.value().ToJsTime()));
+        data_->show_trigger_timestamp.value().InMillisecondsFSinceUnixEpoch()));
   }
 }
 
@@ -355,15 +357,15 @@ ScriptValue Notification::data(ScriptState* script_state) {
                      serialized_value->Deserialize(script_state->GetIsolate()));
 }
 
-Vector<v8::Local<v8::Value>> Notification::actions(
+v8::LocalVector<v8::Value> Notification::actions(
     ScriptState* script_state) const {
-  Vector<v8::Local<v8::Value>> result;
+  v8::LocalVector<v8::Value> result(script_state->GetIsolate());
   if (!data_->actions.has_value())
     return result;
 
   const Vector<mojom::blink::NotificationActionPtr>& actions =
       data_->actions.value();
-  result.Grow(actions.size());
+  result.resize(actions.size());
   for (wtf_size_t i = 0; i < actions.size(); ++i) {
     NotificationAction* action = NotificationAction::Create();
 
@@ -393,6 +395,18 @@ Vector<v8::Local<v8::Value>> Notification::actions(
   }
 
   return result;
+}
+
+String Notification::scenario() const {
+  switch (data_->scenario) {
+    case mojom::blink::NotificationScenario::DEFAULT:
+      return "default";
+    case mojom::blink::NotificationScenario::INCOMING_CALL:
+      return "incoming-call";
+  }
+
+  NOTREACHED();
+  return String();
 }
 
 String Notification::PermissionString(
@@ -514,7 +528,7 @@ void Notification::Trace(Visitor* visitor) const {
   visitor->Trace(prepare_show_timer_);
   visitor->Trace(loader_);
   visitor->Trace(listener_receiver_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 

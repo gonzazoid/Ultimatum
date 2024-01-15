@@ -7,6 +7,8 @@
 
 #include "ash/public/cpp/ash_web_view.h"
 #include "base/observer_list.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "url/gurl.h"
 
 namespace views {
 class View;
@@ -15,6 +17,8 @@ namespace ash {
 
 // An implementation of AshWebView for use in unittests.
 class TestAshWebView : public AshWebView {
+  METADATA_HEADER(TestAshWebView, AshWebView)
+
  public:
   explicit TestAshWebView(const AshWebView::InitParams& init_params);
   ~TestAshWebView() override;
@@ -31,15 +35,27 @@ class TestAshWebView : public AshWebView {
   views::View* GetInitiallyFocusedView() override;
   void RequestFocus() override;
   bool HasFocus() const override;
+  const GURL& GetVisibleURL() override;
+  bool IsErrorDocument() override;
 
   const AshWebView::InitParams& init_params_for_testing() const {
     return init_params_;
+  }
+
+  // The most recent url that was requested via Navigate(). Will be empty if
+  // Navigate() has not been called.
+  const GURL& current_url() const { return current_url_; }
+
+  void set_is_error_document(bool is_error_document) {
+    is_error_document_ = is_error_document;
   }
 
  private:
   base::ObserverList<Observer> observers_;
   bool focused_ = false;
   AshWebView::InitParams init_params_;
+  GURL current_url_;
+  bool is_error_document_ = false;
 
   base::WeakPtrFactory<TestAshWebView> weak_factory_{this};
 };

@@ -5,11 +5,11 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/interface_endpoint_client.h"
 #include "mojo/public/cpp/bindings/lib/multiplex_router.h"
@@ -201,22 +201,22 @@ TEST_F(MojoBindingsPerftest, MultiplexRouterPingPong) {
   scoped_refptr<internal::MultiplexRouter> router0(
       internal::MultiplexRouter::CreateAndStartReceiving(
           std::move(pipe.handle0), internal::MultiplexRouter::SINGLE_INTERFACE,
-          true, base::ThreadTaskRunnerHandle::Get()));
+          true, base::SingleThreadTaskRunner::GetCurrentDefault()));
   scoped_refptr<internal::MultiplexRouter> router1(
       internal::MultiplexRouter::CreateAndStartReceiving(
           std::move(pipe.handle1), internal::MultiplexRouter::SINGLE_INTERFACE,
-          false, base::ThreadTaskRunnerHandle::Get()));
+          false, base::SingleThreadTaskRunner::GetCurrentDefault()));
 
   PingPongPaddle paddle0(nullptr);
   PingPongPaddle paddle1(nullptr);
 
   InterfaceEndpointClient client0(
       router0->CreateLocalEndpointHandle(kPrimaryInterfaceId), &paddle0,
-      nullptr, false, base::ThreadTaskRunnerHandle::Get(), 0u,
+      nullptr, {}, base::SingleThreadTaskRunner::GetCurrentDefault(), 0u,
       kTestInterfaceName, MessageToMethodInfo, MessageToMethodName);
   InterfaceEndpointClient client1(
       router1->CreateLocalEndpointHandle(kPrimaryInterfaceId), &paddle1,
-      nullptr, false, base::ThreadTaskRunnerHandle::Get(), 0u,
+      nullptr, {}, base::SingleThreadTaskRunner::GetCurrentDefault(), 0u,
       kTestInterfaceName, MessageToMethodInfo, MessageToMethodName);
 
   paddle0.set_sender(&client0);
@@ -260,11 +260,11 @@ TEST_F(MojoBindingsPerftest, MultiplexRouterDispatchCost) {
   scoped_refptr<internal::MultiplexRouter> router =
       internal::MultiplexRouter::Create(
           std::move(pipe.handle0), internal::MultiplexRouter::SINGLE_INTERFACE,
-          true, base::ThreadTaskRunnerHandle::Get());
+          true, base::SingleThreadTaskRunner::GetCurrentDefault());
   CounterReceiver receiver;
   InterfaceEndpointClient client(
       router->CreateLocalEndpointHandle(kPrimaryInterfaceId), &receiver,
-      nullptr, false, base::ThreadTaskRunnerHandle::Get(), 0u,
+      nullptr, {}, base::SingleThreadTaskRunner::GetCurrentDefault(), 0u,
       kTestInterfaceName, MessageToMethodInfo, MessageToMethodName);
 
   static const uint32_t kIterations[] = {1000, 3000000};

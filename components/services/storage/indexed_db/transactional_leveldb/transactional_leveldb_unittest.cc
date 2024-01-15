@@ -9,10 +9,10 @@
 #include <tuple>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_piece.h"
@@ -73,10 +73,7 @@ class TransactionalLevelDBDatabaseTest : public LevelDBScopesTestBase {
     leveldb::Status status = scopes->Initialize();
     if (!status.ok())
       return status;
-    status = scopes->StartRecoveryAndCleanupTasks(
-        LevelDBScopes::TaskRunnerMode::kUseCurrentSequence);
-    if (!status.ok())
-      return status;
+    scopes->StartRecoveryAndCleanupTasks();
     transactional_leveldb_database_ =
         transactional_leveldb_factory_.CreateLevelDBDatabase(
             leveldb_, std::move(scopes), nullptr,
@@ -172,43 +169,6 @@ TEST(LevelDB, Locking) {
 
   status = env->UnlockFile(lock);
   EXPECT_TRUE(status.ok());
-}
-
-TEST_F(TransactionalLevelDBDatabaseTest, LastModified) {
-  SetUpRealDatabase();
-  const std::string key("key");
-  const std::string value("value");
-  std::string put_value;
-  auto test_clock = std::make_unique<base::SimpleTestClock>();
-  base::SimpleTestClock* clock_ptr = test_clock.get();
-  clock_ptr->Advance(base::Hours(2));
-
-  leveldb::Status status = OpenLevelDBDatabase();
-  ASSERT_TRUE(status.ok());
-  transactional_leveldb_database_->SetClockForTesting(std::move(test_clock));
-  // Calling |Put| sets time modified.
-  put_value = value;
-  base::Time now_time = clock_ptr->Now();
-  status = transactional_leveldb_database_->Put(key, &put_value);
-  EXPECT_TRUE(status.ok());
-  EXPECT_EQ(now_time, transactional_leveldb_database_->LastModified());
-
-  // Calling |Remove| sets time modified.
-  clock_ptr->Advance(base::Seconds(200));
-  now_time = clock_ptr->Now();
-  status = transactional_leveldb_database_->Remove(key);
-  EXPECT_TRUE(status.ok());
-  EXPECT_EQ(now_time, transactional_leveldb_database_->LastModified());
-
-  // Calling |Write| sets time modified
-  clock_ptr->Advance(base::Minutes(15));
-  now_time = clock_ptr->Now();
-  auto batch = LevelDBWriteBatch::Create();
-  batch->Put(key, value);
-  batch->Remove(key);
-  status = transactional_leveldb_database_->Write(batch.get());
-  EXPECT_TRUE(status.ok());
-  EXPECT_EQ(now_time, transactional_leveldb_database_->LastModified());
 }
 
 }  // namespace leveldb_unittest

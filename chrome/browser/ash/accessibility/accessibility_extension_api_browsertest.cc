@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/ui/accessibility_confirmation_dialog.h"
+#include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/shell.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
@@ -24,6 +25,8 @@
 #include "extensions/test/result_catcher.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/base/ui_base_features.h"
+#include "ui/display/test/display_manager_test_api.h"
+#include "ui/events/base_event_utils.h"
 
 namespace ash {
 
@@ -40,11 +43,11 @@ class AccessibilityPrivateApiTest
   AccessibilityPrivateApiTest(const AccessibilityPrivateApiTest&) = delete;
 
  protected:
-  // ExtensionApiTest:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ExtensionApiTest::SetUpCommandLine(command_line);
+    // Required for the installFaceGazeAssets API to work.
     scoped_feature_list_.InitAndEnableFeature(
-        ::features::kExperimentalAccessibilityDictationWithPumpkin);
+        ::features::kAccessibilityFaceGaze);
   }
 
   void SetUpOnMainThread() override {
@@ -79,7 +82,7 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, OpenSettingsSubpage) {
   Profile* profile = AccessibilityManager::Get()->profile();
 
   // Install the Settings App.
-  ash::SystemWebAppManager::GetForTest(profile)->InstallSystemAppsForTesting();
+  SystemWebAppManager::GetForTest(profile)->InstallSystemAppsForTesting();
 
   ASSERT_TRUE(RunSubtest("testOpenSettingsSubpage")) << message_;
 
@@ -103,7 +106,7 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
   Profile* profile = AccessibilityManager::Get()->profile();
 
   // Install the Settings App.
-  ash::SystemWebAppManager::GetForTest(profile)->InstallSystemAppsForTesting();
+  SystemWebAppManager::GetForTest(profile)->InstallSystemAppsForTesting();
 
   ASSERT_TRUE(RunSubtest("testOpenSettingsSubpageInvalidSubpage")) << message_;
 
@@ -130,10 +133,10 @@ class AccessibilityPrivateApiFeatureTest : public AccessibilityPrivateApiTest {
     AccessibilityPrivateApiTest::SetUpCommandLine(command_line);
     if (enabled) {
       scoped_feature_list_.InitAndEnableFeature(
-          ::features::kEnhancedNetworkVoices);
+          ::features::kExperimentalAccessibilityDictationContextChecking);
     } else {
       scoped_feature_list_.InitAndDisableFeature(
-          ::features::kEnhancedNetworkVoices);
+          ::features::kExperimentalAccessibilityDictationContextChecking);
     }
   }
 
@@ -356,6 +359,123 @@ IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, GetDlcContentsSuccess) {
       base::WriteFile(dlc_dir.GetPath().Append("voice.zvoice"), content));
 
   ASSERT_TRUE(RunSubtest("testGetDlcContentsSuccess")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       GetTtsDlcContentsDlcNotOnDevice) {
+  ASSERT_TRUE(RunSubtest("testGetTtsDlcContentsDlcNotOnDevice")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, GetTtsDlcContentsSuccess) {
+  // Create a fake DLC file. We need to put this in a ScopedTempDir because this
+  // test doesn't have write access to the actual DLC directory
+  // (/run/imageloader/).
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedTempDir dlc_dir;
+  ASSERT_TRUE(dlc_dir.CreateUniqueTempDir());
+  AccessibilityManager::Get()->SetDlcPathForTest(dlc_dir.GetPath());
+  std::string content = "Fake DLC file content";
+  ASSERT_TRUE(
+      base::WriteFile(dlc_dir.GetPath().Append("voice.zvoice"), content));
+
+  ASSERT_TRUE(RunSubtest("testGetTtsDlcContentsSuccess")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       GetVariantTtsDlcContentsDlcNotOnDevice) {
+  ASSERT_TRUE(RunSubtest("testGetVariantTtsDlcContentsDlcNotOnDevice"))
+      << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       GetVariantTtsDlcContentsSuccess) {
+  // Create a fake DLC file. We need to put this in a ScopedTempDir because this
+  // test doesn't have write access to the actual DLC directory
+  // (/run/imageloader/).
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedTempDir dlc_dir;
+  ASSERT_TRUE(dlc_dir.CreateUniqueTempDir());
+  AccessibilityManager::Get()->SetDlcPathForTest(dlc_dir.GetPath());
+  std::string content = "Fake DLC file content";
+  ASSERT_TRUE(base::WriteFile(dlc_dir.GetPath().Append("voice-standard.zvoice"),
+                              content));
+
+  ASSERT_TRUE(RunSubtest("testGetVariantTtsDlcContentsSuccess")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, SetCursorPosition) {
+  const std::string kTestCases[] = {"800x600", "1000x800*2.0",
+                                    "801+0-400x300,1+0-400x300"};
+  for (const auto& test : kTestCases) {
+    display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
+        .UpdateDisplay(test);
+    ScreenOrientationControllerTestApi(
+        Shell::Get()->screen_orientation_controller())
+        .UpdateNaturalOrientation();
+    // The setCursorPosition method takes density-independent pixels.
+    ASSERT_TRUE(RunSubtest("testSetCursorPosition")) << message_;
+    // The screen point is in density-independent pixels, so it should always be
+    // the same as what the JS has set, (450, 350), assuming all the
+    // multiple-display and DPI math was correct.
+    const gfx::Point point =
+        display::Screen::GetScreen()->GetCursorScreenPoint();
+    EXPECT_EQ(point, gfx::Point(450, 350));
+  }
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, GetDisplayBoundsSimple) {
+  display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
+      .UpdateDisplay("800x600");
+  ScreenOrientationControllerTestApi(
+      Shell::Get()->screen_orientation_controller())
+      .UpdateNaturalOrientation();
+  ASSERT_TRUE(RunSubtest("testGetDisplayBoundsSimple")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, GetDisplayBoundsHighDPI) {
+  display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
+      .UpdateDisplay("1000x800*2.0");
+  ScreenOrientationControllerTestApi(
+      Shell::Get()->screen_orientation_controller())
+      .UpdateNaturalOrientation();
+  ASSERT_TRUE(RunSubtest("testGetDisplayBoundsHighDPI")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       GetDisplayBoundsMultipleDisplays) {
+  display::test::DisplayManagerTestApi(Shell::Get()->display_manager())
+      .UpdateDisplay("801+0-400x300,1+0-800x600*2.0");
+  ScreenOrientationControllerTestApi(
+      Shell::Get()->screen_orientation_controller())
+      .UpdateNaturalOrientation();
+  ASSERT_TRUE(RunSubtest("testGetDisplayBoundsMultipleDisplays")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest, InstallFaceGazeAssetsFail) {
+  Shell::Get()->accessibility_controller()->face_gaze().SetEnabled(true);
+  ASSERT_TRUE(RunSubtest("testInstallFaceGazeAssetsFail")) << message_;
+}
+
+IN_PROC_BROWSER_TEST_P(AccessibilityPrivateApiTest,
+                       InstallFaceGazeAssetsSuccess) {
+  Shell::Get()->accessibility_controller()->face_gaze().SetEnabled(true);
+
+  // Initialize DLC directory.
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedTempDir face_gaze_assets_root_dir;
+  ASSERT_TRUE(face_gaze_assets_root_dir.CreateUniqueTempDir());
+
+  // Create fake DLC files.
+  AccessibilityManager::Get()->SetDlcPathForTest(
+      face_gaze_assets_root_dir.GetPath());
+  ASSERT_TRUE(base::WriteFile(
+      face_gaze_assets_root_dir.GetPath().Append("face_landmarker.task"),
+      "Fake facelandmarker model"));
+  ASSERT_TRUE(base::WriteFile(
+      face_gaze_assets_root_dir.GetPath().Append("vision_wasm_internal.wasm"),
+      "Fake mediapipe web assembly"));
+
+  ASSERT_TRUE(RunSubtest("testInstallFaceGazeAssetsSuccess")) << message_;
 }
 
 INSTANTIATE_TEST_SUITE_P(PersistentBackground,

@@ -76,8 +76,8 @@ class BrowserTestDriver(Driver):
 
     def cmd_line(self, per_test_args):
         """Command line arguments to run the browser test."""
-        cmd = self._command_wrapper(self._port.get_option('wrapper'))
-        cmd.append(self._port._path_to_driver())
+        cmd = list(self._port.get_option('wrapper', []))
+        cmd.append(self._port.path_to_driver())
         cmd.append(
             '--gtest_filter=PrintPreviewPdfGeneratedBrowserTest.MANUAL_LayoutTestDriver'
         )

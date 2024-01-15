@@ -9,12 +9,13 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/media/webrtc/same_origin_observer.h"
 #include "chrome/browser/ui/browser_list_observer.h"
+#include "chrome/browser/ui/tab_sharing/tab_sharing_infobar_delegate.h"
 #include "chrome/browser/ui/tab_sharing/tab_sharing_ui.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
@@ -48,8 +49,10 @@ class TabSharingUIViews : public TabSharingUI,
  public:
   TabSharingUIViews(content::GlobalRenderFrameHostId capturer,
                     const content::DesktopMediaID& media_id,
-                    std::u16string app_name,
-                    bool favicons_used_for_switch_to_tab_button);
+                    const std::u16string& capturer_name,
+                    bool favicons_used_for_switch_to_tab_button,
+                    bool app_preferred_current_tab,
+                    TabSharingInfoBarDelegate::TabShareType capture_type);
   ~TabSharingUIViews() override;
 
   // MediaStreamUI:
@@ -94,7 +97,7 @@ class TabSharingUIViews : public TabSharingUI,
   // rate-limit our response.
 
   void OnRegionCaptureRectChanged(
-      const absl::optional<gfx::Rect>& region_capture_rect) override;
+      const std::optional<gfx::Rect>& region_capture_rect) override;
 
  protected:
 #if BUILDFLAG(IS_CHROMEOS)
@@ -140,7 +143,7 @@ class TabSharingUIViews : public TabSharingUI,
   void RefreshFavicons();
 
   void MaybeUpdateFavicon(content::WebContents* focus_target,
-                          absl::optional<uint32_t>* current_hash,
+                          std::optional<uint32_t>* current_hash,
                           content::WebContents* infobar_owner);
 
   ui::ImageModel TabFavicon(content::WebContents* web_contents) const;
@@ -154,6 +157,17 @@ class TabSharingUIViews : public TabSharingUI,
   void UpdateTabCaptureData(content::WebContents* contents,
                             TabCaptureUpdate update);
 
+  // Whether the share-this-tab-instead button may be shown for |web_contents|.
+  bool IsShareInsteadButtonPossible(content::WebContents* web_contents) const;
+
+  // Tabs eligible for capture include:
+  // * Tabs from the same profile.
+  // * Tabs from an incognito profile may capture the original profile's tabs,
+  //   and vice versa.
+  // * Guest tabs may only capture other guest tabs. (Note that a guest tab's
+  //   "original" session might be an arbitrary non-guest session.)
+  bool IsCapturableByCapturer(const Profile* profile) const;
+
   // As for the purpose of this identification:
   // Assume a tab is captured twice, and both sessions use Region Capture.
   // The blue border falls back on its viewport-encompassing form. But when
@@ -161,6 +175,9 @@ class TabSharingUIViews : public TabSharingUI,
   // remaining session's crop-target.
   static CaptureSessionId next_capture_session_id_;
   const CaptureSessionId capture_session_id_;
+
+  // The capturer's profile.
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   InfoBars infobars_;
   std::map<content::WebContents*, std::unique_ptr<SameOriginObserver>>
@@ -170,11 +187,13 @@ class TabSharingUIViews : public TabSharingUI,
   const bool can_focus_capturer_;
   const bool capturer_restricted_to_same_origin_ = false;
   content::DesktopMediaID shared_tab_media_id_;
-  const std::u16string app_name_;
+
+  // Represents the web app name or the sink name receiving the captured stream.
+  const std::u16string capturer_name_;
+
   raw_ptr<content::WebContents, DanglingUntriaged> shared_tab_;
   std::unique_ptr<SameOriginObserver> shared_tab_origin_observer_;
   std::u16string shared_tab_name_;
-  raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<content::MediaStreamUI> tab_capture_indicator_ui_;
 
   // FaviconPeriodicUpdate() runs on a delayed task which re-posts itself.
@@ -191,8 +210,13 @@ class TabSharingUIViews : public TabSharingUI,
   // TODO(crbug.com/1224363): Re-enable favicons by default or drop the code.
   const bool favicons_used_for_switch_to_tab_button_;
 
-  absl::optional<uint32_t> capturer_favicon_hash_;
-  absl::optional<uint32_t> captured_favicon_hash_;
+  const bool app_preferred_current_tab_;
+
+  // Indicates whether this instance is used for casting or capturing.
+  const TabSharingInfoBarDelegate::TabShareType capture_type_;
+
+  std::optional<uint32_t> capturer_favicon_hash_;
+  std::optional<uint32_t> captured_favicon_hash_;
 
   std::map<content::WebContents*, ui::ImageModel>
       favicon_overrides_for_testing_;

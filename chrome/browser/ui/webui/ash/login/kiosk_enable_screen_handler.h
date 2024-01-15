@@ -6,13 +6,11 @@
 #define CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_KIOSK_ENABLE_SCREEN_HANDLER_H_
 
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // Interface between enable kiosk screen and its representation.
-// Note, do not forget to call OnViewDestroyed in the dtor.
 class KioskEnableScreenView
     : public base::SupportsWeakPtr<KioskEnableScreenView> {
  public:
@@ -47,13 +45,6 @@ class KioskEnableScreenHandler : public KioskEnableScreenView,
       ::login::LocalizedValuesBuilder* builder) override;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::KioskEnableScreenHandler;
-using ::chromeos::KioskEnableScreenView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_KIOSK_ENABLE_SCREEN_HANDLER_H_

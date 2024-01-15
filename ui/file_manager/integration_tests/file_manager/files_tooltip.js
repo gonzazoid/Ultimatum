@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {ENTRIES, getCaller, pending, repeatUntil, RootPath, sendTestMessage, wait} from '../test_util.js';
+import {ENTRIES, getCaller, pending, repeatUntil, RootPath, wait} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
 import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 
 const tooltipQuery = 'files-tooltip';
 const tooltipQueryHidden = 'files-tooltip:not([visible])';
@@ -19,42 +20,6 @@ const cancelButton = '#cancel-selection-button[has-tooltip]';
 const deleteButton = '#delete-button[has-tooltip]';
 
 const tooltipShowTimeout = 500;  // ms
-
-/**
- * $i18n{} labels used when template replacement is disabled.
- *
- * @const {!Object<string, string>}
- */
-const i18nLabelReplacements = {
-  'SEARCH_TEXT_LABEL': 'Search',
-  'READONLY_INDICATOR_TOOLTIP': 'The contents of this folder are read-only. ' +
-      'Some activities are not supported.',
-  'CANCEL_SELECTION_BUTTON_LABEL': 'Cancel selection',
-  'CHANGE_TO_THUMBNAILVIEW_BUTTON_LABEL': 'Switch to thumbnail view',
-  'CHANGE_TO_LISTVIEW_BUTTON_LABEL': 'Switch to list view',
-};
-
-/**
- * Returns $i18n{} label if devtools code coverage is enabled, otherwise the
- * replaced contents.
- *
- * @param {string} key $i18n{} key of replacement text
- * @return {!Promise<string>}
- */
-async function getExpectedLabelText(key) {
-  const isDevtoolsCoverageActive =
-      await sendTestMessage({name: 'isDevtoolsCoverageActive'});
-
-  if (isDevtoolsCoverageActive === 'true') {
-    return '$i18n{' + key + '}';
-  }
-
-  // Verify |key| has a $i18n{} replacement in |i18nLabelReplacements|.
-  const label = i18nLabelReplacements[key];
-  chrome.test.assertEq('string', typeof label, 'Missing: ' + key);
-
-  return label;
-}
 
 /**
  * Waits until the element by |id| is the document.activeElement.
@@ -89,10 +54,9 @@ testcase.filesTooltipFocus = async () => {
   await getActiveElementById(appId, 'search-button');
 
   // Check: the search button tooltip should be visible.
-  let expectedLabelText = await getExpectedLabelText('SEARCH_TEXT_LABEL');
   let label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, label.text);
+  chrome.test.assertEq('Search', label.text);
 
   // Focus an element that has no tooltip: the file-list.
   await remoteCall.focus(appId, [fileList]);
@@ -110,11 +74,9 @@ testcase.filesTooltipFocus = async () => {
   await getActiveElementById(appId, 'cancel-selection-button');
 
   // Check: the cancel selection button tooltip should be visible.
-  expectedLabelText =
-      await getExpectedLabelText('CANCEL_SELECTION_BUTTON_LABEL');
   label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, label.text);
+  chrome.test.assertEq('Cancel selection', label.text);
 };
 
 /**
@@ -132,11 +94,9 @@ testcase.filesTooltipLabelChange = async () => {
   await getActiveElementById(appId, 'view-button');
 
   // Check: the view button tooltip should be visible.
-  let expectedLabelText =
-      await getExpectedLabelText('CHANGE_TO_THUMBNAILVIEW_BUTTON_LABEL');
   let label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, label.text);
+  chrome.test.assertEq('Switch to thumbnail view', label.text);
 
   // Click the view button to update its label.
   await remoteCall.waitAndClickElement(appId, [viewButton]);
@@ -145,11 +105,9 @@ testcase.filesTooltipLabelChange = async () => {
   await getActiveElementById(appId, 'view-button');
 
   // Check: the tooltip text should be updated.
-  expectedLabelText =
-      await getExpectedLabelText('CHANGE_TO_LISTVIEW_BUTTON_LABEL');
   label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, label.text);
+  chrome.test.assertEq('Switch to list view', label.text);
 };
 
 /**
@@ -167,10 +125,9 @@ testcase.filesTooltipMouseOver = async () => {
       'fakeMouseOver', appId, [searchButton]));
 
   // Check: the search button tooltip should be visible.
-  const expectedLabelText = await getExpectedLabelText('SEARCH_TEXT_LABEL');
   const firstElement =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, firstElement.text);
+  chrome.test.assertEq('Search', firstElement.text);
 
   // Move the mouse away from the search button.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -186,7 +143,7 @@ testcase.filesTooltipMouseOver = async () => {
   // Check: the search button tooltip should be visible.
   const lastElement =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, lastElement.text);
+  chrome.test.assertEq('Search', lastElement.text);
 };
 
 /**
@@ -204,10 +161,9 @@ testcase.filesTooltipMouseOverStaysOpen = async () => {
       'fakeMouseOver', appId, [searchButton]));
 
   // Check: the search button tooltip should be visible.
-  const expectedLabelText = await getExpectedLabelText('SEARCH_TEXT_LABEL');
   const firstElement =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, firstElement.text);
+  chrome.test.assertEq('Search', firstElement.text);
 
   // Move the mouse away from the search button, but on the tooltip.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -241,10 +197,9 @@ testcase.filesTooltipClickHides = async () => {
       'fakeMouseOver', appId, [searchButton]));
 
   // Check: the search button tooltip should be visible.
-  const expectedLabelText = await getExpectedLabelText('SEARCH_TEXT_LABEL');
   const label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, label.text);
+  chrome.test.assertEq('Search', label.text);
 
   // Click the body element.
   chrome.test.assertTrue(
@@ -262,8 +217,8 @@ testcase.filesCardTooltipClickHides = async () => {
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.beautiful], []);
 
   // Click the 'Android files' volume tab in the directory tree.
-  await remoteCall.simulateUiClick(
-      appId, ['[volume-type-for-testing=android_files]']);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('android_files');
 
   // Wait for the read-only bubble to appear in the files app tool bar.
   const readonlyBubbleShown = '#read-only-indicator:not([hidden])';
@@ -277,8 +232,8 @@ testcase.filesCardTooltipClickHides = async () => {
       'fakeMouseOver', appId, [readonlyIndicator]));
 
   // Check: the read-only bubble card tooltip should be visible.
-  const expectedLabelText =
-      await getExpectedLabelText('READONLY_INDICATOR_TOOLTIP');
+  const expectedLabelText = 'The contents of this folder are read-only. ' +
+      'Some activities are not supported.';
   const tooltip = await remoteCall.waitForElement(appId, tooltipQueryVisible);
   const label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
@@ -309,10 +264,9 @@ testcase.filesTooltipHidesOnWindowResize = async () => {
   await getActiveElementById(appId, 'search-button');
 
   // Check: the search button tooltip should be visible.
-  const expectedLabelText = await getExpectedLabelText('SEARCH_TEXT_LABEL');
   const label =
       await remoteCall.waitForElement(appId, [tooltipQueryVisible, '#label']);
-  chrome.test.assertEq(expectedLabelText, label.text);
+  chrome.test.assertEq('Search', label.text);
 
   // Resize the window.
   chrome.test.assertTrue(

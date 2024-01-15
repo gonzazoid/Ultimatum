@@ -18,16 +18,17 @@
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/syslog_logging.h"
 #include "base/values.h"
-#include "build/branding_buildflags.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/ec_signing_key.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/metrics_utils.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/shared_command_constants.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/signing_key_pair.h"
+#include "components/policy/core/common/policy_paths.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "crypto/unexportable_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -46,18 +47,6 @@ constexpr int kMaxBufferSize = 2048;
 constexpr char kSigningKeyName[] = "signingKey";
 constexpr char kSigningKeyTrustLevel[] = "trustLevel";
 
-// The path to the policy directory should be the same as
-// `chrome::DIR_POLICY_FILES`. This file duplicates those constants, as it runs
-// in the chrome-management-service binary and thus cannot directly use
-// `chrome::DIR_POLICY_FILES`.
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-base::FilePath::CharType kDirPolicyPath[] =
-    FILE_PATH_LITERAL("/etc/opt/chrome/policies");
-#else
-base::FilePath::CharType kDirPolicyPath[] =
-    FILE_PATH_LITERAL("/etc/chromium/policies");
-#endif
-
 absl::optional<base::FilePath>& GetTestFilePathStorage() {
   static base::NoDestructor<absl::optional<base::FilePath>> storage;
   return *storage;
@@ -68,7 +57,7 @@ base::FilePath GetSigningKeyFilePath() {
   if (storage) {
     return storage.value();
   }
-  base::FilePath path(kDirPolicyPath);
+  base::FilePath path(policy::kPolicyPath);
   return path.Append(constants::kSigningKeyFilePath);
 }
 
@@ -137,7 +126,7 @@ bool LinuxKeyPersistenceDelegate::StoreKeyPair(
     DCHECK_EQ(wrapped.size(), 0u);
     if (file.error_details() == base::File::FILE_OK) {
       return true;
-    };
+    }
 
     return RecordFailure(KeyPersistenceOperation::kStoreKeyPair,
                            KeyPersistenceError::kDeleteKeyPairFailed,
@@ -154,10 +143,10 @@ bool LinuxKeyPersistenceDelegate::StoreKeyPair(
   }
 
   // Storing key and trust level information.
-  base::Value keyinfo(base::Value::Type::DICTIONARY);
+  base::Value::Dict keyinfo;
   const std::string encoded_key = base::Base64Encode(wrapped);
-  keyinfo.SetKey(kSigningKeyName, base::Value(encoded_key));
-  keyinfo.SetKey(kSigningKeyTrustLevel, base::Value(trust_level));
+  keyinfo.Set(kSigningKeyName, base::Value(encoded_key));
+  keyinfo.Set(kSigningKeyTrustLevel, base::Value(trust_level));
   std::string keyinfo_str;
   if (!base::JSONWriter::Write(keyinfo, &keyinfo_str)) {
     return RecordFailure(
@@ -177,16 +166,21 @@ bool LinuxKeyPersistenceDelegate::StoreKeyPair(
                        "the signing key storage.");
 }
 
-std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair() {
+scoped_refptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair(
+    KeyStorageType type,
+    LoadPersistedKeyResult* result) {
+  // TODO(b/301644429): Verify if the errors should be finer grained for "not
+  // found" versus other error types.
   std::string file_content;
   if (!base::ReadFileToStringWithMaxSize(GetSigningKeyFilePath(), &file_content,
-                                         kMaxBufferSize)) {
+                                         kMaxBufferSize) ||
+      file_content.empty()) {
     RecordFailure(
         KeyPersistenceOperation::kLoadKeyPair,
         KeyPersistenceError::kReadPersistenceStorageFailed,
         "Device trust key rotation failed. Failed to read from the signing key "
         "storage.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kNotFound, result);
   }
 
   // Get dictionary key info.
@@ -197,17 +191,17 @@ std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair() {
         KeyPersistenceError::kInvalidSigningKeyPairFormat,
         "Device trust key rotation failed. Invalid signing key format found in "
         "signing key storage.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
   // Get the trust level.
-  auto stored_trust_level = keyinfo->FindIntKey(kSigningKeyTrustLevel);
+  auto stored_trust_level = keyinfo->GetDict().FindInt(kSigningKeyTrustLevel);
   if (!stored_trust_level.has_value()) {
     RecordFailure(KeyPersistenceOperation::kLoadKeyPair,
                   KeyPersistenceError::kKeyPairMissingTrustLevel,
                   "Device trust key rotation failed. Signing key pair missing "
                   "trust level details.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
   if (stored_trust_level != BPKUR::CHROME_BROWSER_OS_KEY) {
@@ -215,11 +209,11 @@ std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair() {
                   KeyPersistenceError::kInvalidTrustLevel,
                   "Device trust key rotation failed. Invalid trust level for "
                   "the signing key.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
   // Get the key.
-  std::string* encoded_key = keyinfo->FindStringKey(kSigningKeyName);
+  std::string* encoded_key = keyinfo->GetDict().FindString(kSigningKeyName);
   std::string decoded_key;
   if (!encoded_key) {
     RecordFailure(
@@ -227,7 +221,7 @@ std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair() {
         KeyPersistenceError::kKeyPairMissingSigningKey,
         "Device trust key rotation failed. Signing key pair missing signing "
         "key details.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
   if (!base::Base64Decode(*encoded_key, &decoded_key)) {
@@ -235,7 +229,7 @@ std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair() {
         KeyPersistenceOperation::kLoadKeyPair,
         KeyPersistenceError::kFailureDecodingSigningKey,
         "Device trust key rotation failed. Failure decoding the signing key.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
   std::vector<uint8_t> wrapped =
       std::vector<uint8_t>(decoded_key.begin(), decoded_key.end());
@@ -248,14 +242,17 @@ std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::LoadKeyPair() {
         KeyPersistenceError::kCreateSigningKeyFromWrappedFailed,
         "Device trust key rotation failed. Failure creating a signing key "
         "object from the signing key details.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
-  return std::make_unique<SigningKeyPair>(std::move(signing_key),
-                                          BPKUR::CHROME_BROWSER_OS_KEY);
+  if (result) {
+    *result = LoadPersistedKeyResult::kSuccess;
+  }
+  return base::MakeRefCounted<SigningKeyPair>(std::move(signing_key),
+                                              BPKUR::CHROME_BROWSER_OS_KEY);
 }
 
-std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::CreateKeyPair() {
+scoped_refptr<SigningKeyPair> LinuxKeyPersistenceDelegate::CreateKeyPair() {
   // TODO (http://b/210343211): TPM support for linux.
   auto provider = std::make_unique<ECSigningKeyProvider>();
   auto algorithm = {crypto::SignatureVerifier::ECDSA_SHA256};
@@ -270,8 +267,18 @@ std::unique_ptr<SigningKeyPair> LinuxKeyPersistenceDelegate::CreateKeyPair() {
     return nullptr;
   }
 
-  return std::make_unique<SigningKeyPair>(std::move(signing_key),
-                                          BPKUR::CHROME_BROWSER_OS_KEY);
+  return base::MakeRefCounted<SigningKeyPair>(std::move(signing_key),
+                                              BPKUR::CHROME_BROWSER_OS_KEY);
+}
+
+bool LinuxKeyPersistenceDelegate::PromoteTemporaryKeyPair() {
+  // TODO(b/290068350): Implement this method.
+  return true;
+}
+
+bool LinuxKeyPersistenceDelegate::DeleteKeyPair(KeyStorageType type) {
+  // TODO(b/290068350): Implement this method.
+  return true;
 }
 
 // static

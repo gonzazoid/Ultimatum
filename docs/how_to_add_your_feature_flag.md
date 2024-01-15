@@ -1,11 +1,11 @@
 # Adding a new feature flag in chrome://flags
 
 This document describes how to add a new Chrome feature flag visible to users
-via chrome://flag UI.
+via `chrome://flags` UI.
 
 *** note
 **NOTE:** It's NOT required if you don't intend to make your feature appear in
-chrome://flag UI.
+`chrome://flags` UI.
 ***
 
 See also the following for definitions:
@@ -16,12 +16,19 @@ See also the following for definitions:
 
 This step would be different depending on where you want to use the flag:
 
-### To Use the Flag in `content/` Only
+### To use the Flag in `content/` and its embedders
 
 Add a `base::Feature` to the following files:
 
 * [content/public/common/content_features.cc](https://cs.chromium.org/chromium/src/content/public/common/content_features.cc)
 * [content/public/common/content_features.h](https://cs.chromium.org/chromium/src/content/public/common/content_features.h)
+
+### To use the Flag in `content/` Only
+
+Add a `base::Feature` to the following files:
+
+* [content/common/features.cc](https://cs.chromium.org/chromium/src/content/common/features.cc)
+* [content/common/features.h](https://cs.chromium.org/chromium/src/content/common/features.h)
 
 ### To Use the Flag in `third_party/blink/` (and Possibly in `content/`)
 
@@ -60,7 +67,7 @@ When you add a flag, you can consider to use that.
 ## Step 2: Adding the feature flag to the chrome://flags UI.
 
 *** promo
-Googlers: Read also [Chrome Feature Flag in chrome://flags](http/go/finch-feature-api#chrome-feature-flag-in-chromeflags).
+Googlers: Read also [Chrome Feature Flag in chrome://flags](http://go/finch-feature-api#chrome-feature-flag-in-chromeflags).
 ***
 
 *** promo
@@ -80,22 +87,23 @@ You have to modify these five files in total.
 
 At first you need to add an entry to __about_flags.cc__,
 __flag_descriptions.cc__ and __flag_descriptions.h__. After that, try running
-the following test.
+the following script which will update enums.xml:
 
 ```bash
-# Build unit_tests
-autoninja -C out/Default unit_tests
-# Run AboutFlagsHistogramTest.CheckHistograms
+# Updates enums.xml
+./tools/metrics/histograms/generate_flag_enums.py --feature <your awesome feature>
+# Run AboutFlagsHistogramTest.CheckHistograms to verify enums.xml
 ./out/Default/unit_tests --gtest_filter=AboutFlagsHistogramTest.CheckHistograms
-# Run AboutFlagsHistogramTest.CheckHistograms on Android
+# Run AboutFlagsHistogramTest.CheckHistograms on Android to verify enums.xml
 ./out/Default/bin/run_unit_tests --gtest_filter=AboutFlagsHistogramTest.CheckHistograms
 ```
 
-That test will ask you to add several entries to enums.xml. After doing so, run
-`git cl format` which will insert the entries in enums.xml in the correct order
-and run the tests again.
-You can refer to [this CL](https://chromium-review.googlesource.com/c/593707) as
-an example.
+*** note
+**NOTE:** If CheckHistograms returns an error, it will ask you to add several
+entries to enums.xml. After doing so, run `git cl format` which will insert the
+entries in enums.xml in the correct order and run the tests again. You can refer
+to [this CL](https://chromium-review.googlesource.com/c/593707) as an example.
+***
 
 Finally, run the following test.
 
@@ -105,6 +113,23 @@ Finally, run the following test.
 
 That test will ask you to update the flag expiry metadata in
 [flag-metadata.json](https://cs.chromium.org/chromium/src/chrome/browser/flag-metadata.json).
+
+## Removing the feature flag.
+
+When a feature flag is no longer used it should be removed. Once it has reached it's final state it
+can be removed in stages.
+
+First remove the flag from the UI:
+* [chrome/browser/about_flags.cc](https://cs.chromium.org/chromium/src/chrome/browser/about_flags.cc)
+* [chrome/browser/flag_descriptions.cc](https://cs.chromium.org/chromium/src/chrome/browser/flag_descriptions.cc)
+* [chrome/browser/flag_descriptions.h](https://cs.chromium.org/chromium/src/chrome/browser/flag_descriptions.h)
+* [chrome/browser/flag-metadata.json](https://cs.chromium.org/chromium/src/chrome/browser/flag-metadata.json)
+* Do not edit enums.xml. Keep the flag for archeological purposes.
+
+Once there is no way to change the flag value, it's usage can be removed from the code.
+
+Finally, once the flag is no longer referenced, it can be removed from content/ and
+third_party/blink/
 
 ## Related Documents
 

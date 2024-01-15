@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -33,15 +33,16 @@ class FakeAudioConsumer : public AudioStub {
 
   ~FakeAudioConsumer() override = default;
 
-  base::WeakPtr<FakeAudioConsumer> GetWeakPtr(){
+  base::WeakPtr<FakeAudioConsumer> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
 
   // AudioStub implementation.
   void ProcessAudioPacket(std::unique_ptr<AudioPacket> packet,
                           base::OnceClosure done) override {
-    if (!done.is_null())
+    if (!done.is_null()) {
       std::move(done).Run();
+    }
   }
 
  private:

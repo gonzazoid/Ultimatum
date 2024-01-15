@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "media/base/output_device_info.h"
@@ -46,10 +46,6 @@ class WebMediaStreamAudioRenderer
   // Time stamp that reflects the current render time. Should not be updated
   // when paused.
   virtual base::TimeDelta GetCurrentRenderTime() = 0;
-
-  // Returns true if the implementation is a local renderer and false
-  // otherwise.
-  virtual bool IsLocalRenderer() = 0;
 
  protected:
   friend class base::RefCountedThreadSafe<WebMediaStreamAudioRenderer>;

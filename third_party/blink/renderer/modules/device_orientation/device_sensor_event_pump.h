@@ -5,9 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_DEVICE_ORIENTATION_DEVICE_SENSOR_EVENT_PUMP_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_DEVICE_ORIENTATION_DEVICE_SENSOR_EVENT_PUMP_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "services/device/public/mojom/sensor_provider.mojom-blink.h"
+#include "third_party/blink/public/mojom/sensor/web_sensor_provider.mojom-blink.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
@@ -35,8 +36,7 @@ class MODULES_EXPORT DeviceSensorEventPump : public GarbageCollectedMixin {
   void HandleSensorProviderError();
 
   void SetSensorProviderForTesting(
-      mojo::PendingRemote<device::mojom::blink::SensorProvider>
-          sensor_provider);
+      mojo::PendingRemote<mojom::blink::WebSensorProvider> sensor_provider);
   PumpState GetPumpStateForTesting();
 
   void Trace(Visitor* visitor) const override;
@@ -67,14 +67,16 @@ class MODULES_EXPORT DeviceSensorEventPump : public GarbageCollectedMixin {
 
   virtual void DidStartIfPossible();
 
-  HeapMojoRemote<device::mojom::blink::SensorProvider> sensor_provider_;
+  PumpState state() const { return state_; }
+
+  HeapMojoRemote<mojom::blink::WebSensorProvider> sensor_provider_;
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
  private:
   virtual bool SensorsReadyOrErrored() const = 0;
 
-  PumpState state_;
+  PumpState state_ = PumpState::kStopped;
   HeapTaskRunnerTimer<DeviceSensorEventPump> timer_;
 };
 

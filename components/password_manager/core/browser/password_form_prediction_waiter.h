@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_FORM_PREDICTION_WAITER_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_FORM_PREDICTION_WAITER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -18,7 +18,7 @@ class OneShotTimer;
 namespace password_manager {
 
 // Filling timeout for waiting for asynchronous predictions.
-constexpr base::TimeDelta kMaxFillingDelayForAsyncPredictions =
+inline constexpr base::TimeDelta kMaxFillingDelayForAsyncPredictions =
     base::Milliseconds(500);
 
 // Helper class for PasswordFormManager to manage outstanding asynchronous
@@ -45,6 +45,12 @@ class PasswordFormPredictionWaiter {
   ~PasswordFormPredictionWaiter();
 
   void StartTimer();
+
+  // Resets the timer and `outstanding_closures_`.
+  void Reset();
+
+  // Returns whether the waiter is currently active and waiting.
+  bool IsActive() const;
 
   // Issues a new closure that should be invoked when a task is completed.
   // When the timer is active, all issued closures have to be invoked before

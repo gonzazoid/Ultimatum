@@ -16,7 +16,6 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
-using protocol::Response;
 
 namespace {
 
@@ -118,8 +117,8 @@ void InspectorLogAgent::ConsoleMessageAdded(ConsoleMessage* message) {
 
   std::unique_ptr<protocol::Log::LogEntry> entry =
       protocol::Log::LogEntry::create()
-          .setSource(MessageSourceValue(message->Source()))
-          .setLevel(MessageLevelValue(message->Level()))
+          .setSource(MessageSourceValue(message->GetSource()))
+          .setLevel(MessageLevelValue(message->GetLevel()))
           .setText(message->Message())
           .setTimestamp(message->Timestamp())
           .build();
@@ -131,10 +130,11 @@ void InspectorLogAgent::ConsoleMessageAdded(ConsoleMessage* message) {
     entry->setStackTrace(std::move(stack_trace));
   if (message->Location()->LineNumber())
     entry->setLineNumber(message->Location()->LineNumber() - 1);
-  if (message->Source() == mojom::blink::ConsoleMessageSource::kWorker &&
-      !message->WorkerId().empty())
+  if (message->GetSource() == ConsoleMessage::Source::kWorker &&
+      !message->WorkerId().empty()) {
     entry->setWorkerId(message->WorkerId());
-  if (message->Source() == mojom::blink::ConsoleMessageSource::kNetwork &&
+  }
+  if (message->GetSource() == ConsoleMessage::Source::kNetwork &&
       !message->RequestIdentifier().IsNull()) {
     entry->setNetworkRequestId(message->RequestIdentifier());
   }
@@ -192,26 +192,26 @@ void InspectorLogAgent::InnerEnable() {
     ConsoleMessageAdded(storage_->at(i));
 }
 
-Response InspectorLogAgent::enable() {
+protocol::Response InspectorLogAgent::enable() {
   if (enabled_.Get())
-    return Response::Success();
+    return protocol::Response::Success();
   enabled_.Set(true);
   InnerEnable();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorLogAgent::disable() {
+protocol::Response InspectorLogAgent::disable() {
   if (!enabled_.Get())
-    return Response::Success();
+    return protocol::Response::Success();
   enabled_.Clear();
   stopViolationsReport();
   instrumenting_agents_->RemoveInspectorLogAgent(this);
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorLogAgent::clear() {
+protocol::Response InspectorLogAgent::clear() {
   storage_->Clear();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 static PerformanceMonitor::Violation ParseViolation(const String& name) {
@@ -232,12 +232,12 @@ static PerformanceMonitor::Violation ParseViolation(const String& name) {
   return PerformanceMonitor::kAfterLast;
 }
 
-Response InspectorLogAgent::startViolationsReport(
+protocol::Response InspectorLogAgent::startViolationsReport(
     std::unique_ptr<protocol::Array<ViolationSetting>> settings) {
   if (!enabled_.Get())
-    return Response::ServerError("Log is not enabled");
+    return protocol::Response::ServerError("Log is not enabled");
   if (!performance_monitor_) {
-    return Response::ServerError(
+    return protocol::Response::ServerError(
         "Violations are not supported for this target");
   }
   performance_monitor_->UnsubscribeAll(this);
@@ -252,17 +252,17 @@ Response InspectorLogAgent::startViolationsReport(
                                     this);
     violation_thresholds_.Set(name, threshold);
   }
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorLogAgent::stopViolationsReport() {
+protocol::Response InspectorLogAgent::stopViolationsReport() {
   violation_thresholds_.Clear();
   if (!performance_monitor_) {
-    return Response::ServerError(
+    return protocol::Response::ServerError(
         "Violations are not supported for this target");
   }
   performance_monitor_->UnsubscribeAll(this);
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 void InspectorLogAgent::ReportLongLayout(base::TimeDelta duration) {

@@ -40,7 +40,8 @@ class CaptionBubbleController {
   CaptionBubbleController& operator=(const CaptionBubbleController&) = delete;
 
   static std::unique_ptr<CaptionBubbleController> Create(
-      PrefService* profile_prefs);
+      PrefService* profile_prefs,
+      const std::string& application_locale);
 
   // Called when a transcription is received from the service. Returns whether
   // the transcription result was set on the caption bubble successfully.
@@ -64,13 +65,14 @@ class CaptionBubbleController {
   virtual void UpdateCaptionStyle(
       absl::optional<ui::CaptionStyle> caption_style) = 0;
 
- private:
-  friend class LiveCaptionControllerTest;
-  friend class LiveCaptionSpeechRecognitionHostTest;
-  friend class LiveCaptionUnavailabilityNotifierTest;
-
   virtual bool IsWidgetVisibleForTesting() = 0;
+  virtual bool IsGenericErrorMessageVisibleForTesting() = 0;
   virtual std::string GetBubbleLabelTextForTesting() = 0;
+  virtual void CloseActiveModelForTesting() = 0;
+
+  virtual void OnLanguageIdentificationEvent(
+      CaptionBubbleContext* caption_bubble_context,
+      const media::mojom::LanguageIdentificationEventPtr& event) = 0;
 };
 
 }  // namespace captions

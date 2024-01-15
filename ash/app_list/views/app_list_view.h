@@ -6,21 +6,20 @@
 #define ASH_APP_LIST_VIEWS_APP_LIST_VIEW_H_
 
 #include <memory>
-#include <string>
-#include <vector>
+#include <optional>
 
 #include "ash/app_list/app_list_metrics.h"
 #include "ash/app_list/app_list_view_delegate.h"
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/metrics_util.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window_observer.h"
-#include "ui/compositor/presentation_time_recorder.h"
 #include "ui/events/event.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -46,14 +45,9 @@ class AppsGridView;
 class PagedAppsGridView;
 class PaginationModel;
 class SearchBoxView;
-class StateTransitionNotifier;
 
 FORWARD_DECLARE_TEST(AppListControllerImplTest,
                      CheckAppListViewBoundsWhenDismissVKeyboard);
-
-// The fraction of app list height that the app list must be released at in
-// order to transition to the next state.
-constexpr int kAppListThresholdDenominator = 3;
 
 // AppListView is the top-level view and controller of app list UI. It creates
 // and hosts a AppsGridView and passes AppListModel to it for display.
@@ -74,7 +68,7 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
     PagedAppsGridView* GetRootAppsGridView();
 
    private:
-    AppListView* const view_;
+    const raw_ptr<AppListView> view_;
   };
 
   class ASH_EXPORT ScopedAccessibilityAnnouncementLock {
@@ -89,7 +83,7 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
     }
 
    private:
-    AppListView* const view_;
+    const raw_ptr<AppListView> view_;
   };
 
   // Used to prevent the app list contents from being reset when the app list
@@ -105,25 +99,10 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
     ~ScopedContentsResetDisabler();
 
    private:
-    AppListView* const view_;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION AppListView* const view_;
   };
-
-  // The opacity of the app list background.
-  static constexpr float kAppListOpacity = 0.95;
-
-  // The opacity of the app list background with blur.
-  static constexpr float kAppListOpacityWithBlur = 0.8;
-
-  // The preferred blend alpha with wallpaper color for background.
-  static constexpr int kAppListColorDarkenAlpha = 178;
-
-  // The duration the AppListView ignores scroll events which could transition
-  // its state.
-  static constexpr int kScrollIgnoreTimeMs = 500;
-
-  // The animation duration for app list movement.
-  static constexpr int kAppListAnimationDurationMs = 200;
-  static constexpr int kAppListAnimationDurationFromFullscreenMs = 250;
 
   // Does not take ownership of |delegate|.
   explicit AppListView(AppListViewDelegate* delegate);
@@ -146,14 +125,9 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Initializes this view's widget.
   void InitWidget(gfx::NativeView parent);
 
-  // Initializes the SearchBox's widget.
-  void InitChildWidget();
-
   // Sets the state of all child views to be re-shown, then shows the view.
-  // |preferred_state| - The initial app list view state. It may be overridden
-  // depending on device state. For example, peeking state is not supported in
-  // tablet mode, or for side shelf.
-  void Show(AppListViewState preferred_state, bool is_side_shelf);
+  // |preferred_state| - The initial app list view state.
+  void Show(AppListViewState preferred_state);
 
   // If |drag_and_drop_host| is not nullptr it will be called upon drag and drop
   // operations outside the application list. This has to be called after
@@ -161,9 +135,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // it can set the host.
   void SetDragAndDropHostOfCurrentAppList(
       ApplicationDragAndDropHost* drag_and_drop_host);
-
-  // Dismisses the UI, cleans up and sets the state to CLOSED.
-  void Dismiss();
 
   // Resets the child views before showing the AppListView.
   void ResetForShow();
@@ -192,12 +163,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   void OnScrollEvent(ui::ScrollEvent* event) override;
   void OnMouseEvent(ui::MouseEvent* event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
-
-  // Called when tablet mode starts and ends.
-  void OnTabletModeChanged(bool started);
-
-  // Called when the wallpaper colors change.
-  void OnWallpaperColorsChanged();
 
   // Handles scroll events from various sources.
   bool HandleScroll(const gfx::Point& location,
@@ -241,14 +206,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Gets the PaginationModel owned by this view's apps grid.
   PaginationModel* GetAppsPaginationModel();
 
-  // Gets the content bounds of the app info dialog of the app list in the
-  // screen coordinates.
-  gfx::Rect GetAppInfoDialogBounds() const;
-
-  // Returns the expected app list view height (measured from the screen bottom)
-  // in the provided state.
-  int GetHeightForState(AppListViewState state) const;
-
   // Returns the height of app list in fullscreen state.
   int GetFullscreenStateHeight() const;
 
@@ -264,11 +221,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   void OnTabletModeAnimationTransitionNotified(
       TabletModeAnimationTransition animation_transition);
 
-  // Moves the AppListView off screen and calls a layout if needed.
-  void OnBoundsAnimationCompleted(AppListViewState target_state);
-
-  gfx::NativeView parent_window() const { return parent_window_; }
-
   AppListViewState app_list_state() const { return app_list_state_; }
 
   SearchBoxView* search_box_view() const { return search_box_view_; }
@@ -281,14 +233,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
     return app_list_state_ == AppListViewState::kFullscreenAllApps ||
            app_list_state_ == AppListViewState::kFullscreenSearch;
   }
-
-  bool is_tablet_mode() const { return delegate_->IsInTabletMode(); }
-
-  bool is_side_shelf() const { return is_side_shelf_; }
-
-  void SetShelfHasRoundedCorners(bool shelf_has_rounded_corners);
-
-  bool shelf_has_rounded_corners() const { return shelf_has_rounded_corners_; }
 
   void set_onscreen_keyboard_shown(bool onscreen_keyboard_shown) {
     onscreen_keyboard_shown_ = onscreen_keyboard_shown;
@@ -331,20 +275,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Set child views for |target_state|.
   void SetChildViewsForStateTransition(AppListViewState target_state);
 
-  // Gets the animation duration that transition to |taget_state| should have.
-  base::TimeDelta GetStateTransitionAnimationDuration(
-      AppListViewState target_state);
-
-  // Kicks off the proper animation for the state change. If an animation is
-  // in progress it will be interrupted.
-  void StartAnimationForState(AppListViewState new_state);
-
-  void MaybeIncreasePrivacyInfoRowShownCounts(AppListViewState new_state);
-
-  // Applies a bounds animation on this views layer.
-  void ApplyBoundsAnimation(AppListViewState target_state,
-                            base::TimeDelta duration_ms);
-
   // Records the state transition for UMA.
   void RecordStateTransitionForUma(AppListViewState new_state);
 
@@ -356,10 +286,6 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // display bounds available to the app list view change.
   void EnsureWidgetBoundsMatchCurrentState();
 
-  // Returns the remaining vertical distance for the bounds movement
-  // animation.
-  int GetRemainingBoundsAnimationDistance() const;
-
   // Gets the display nearest to the parent window.
   display::Display GetDisplayNearestView() const;
 
@@ -369,71 +295,41 @@ class ASH_EXPORT AppListView : public views::WidgetDelegateView,
   // Gets the root apps grid view owned by this view.
   PagedAppsGridView* GetRootAppsGridView();
 
-  // Gets the apps grid view within the folder view owned by this view.
-  AppsGridView* GetFolderAppsGridView();
-
-  // Gets the AppListStateTransitionSource for |app_list_state_| to
-  // |target_state|. If we are not interested in recording a state transition
-  // (ie. PEEKING->PEEKING) then return kMaxAppListStateTransition. If this is
-  // modified, histograms will be affected.
-  AppListStateTransitionSource GetAppListStateTransitionSource(
-      AppListViewState target_state) const;
-
   // Overridden from views::WidgetDelegateView:
   views::View* GetInitiallyFocusedView() override;
 
   // Returns true if scroll events should be ignored.
   bool ShouldIgnoreScrollEvents();
 
-  // Returns preferred y of fullscreen widget bounds in parent window for the
-  // specified state.
-  int GetPreferredWidgetYForState(AppListViewState state) const;
-
-  // Returns preferred fullscreen widget bounds in parent window for the
-  // specified state. Note that this function should only be called after the
-  // widget is initialized.
-  gfx::Rect GetPreferredWidgetBoundsForState(AppListViewState state);
+  // Returns preferred fullscreen widget bounds in parent window. Note that this
+  // function should only be called after the widget is initialized.
+  gfx::Rect GetPreferredWidgetBounds();
 
   // Reset the subpixel position offset of the |layer| so that it's DP origin
   // is snapped.
   void ResetSubpixelPositionOffset(ui::Layer* layer);
 
-  AppListViewDelegate* const delegate_;
+  const raw_ptr<AppListViewDelegate> delegate_;
 
   // Keeps track of the number of locks that prevent the app list view
   // from creating app list transition accessibility events. This is used to
   // prevent A11Y announcements when showing the assistant UI.
   int accessibility_event_disablers_ = 0;
-  AppListMainView* app_list_main_view_ = nullptr;
-  gfx::NativeView parent_window_ = nullptr;
+  raw_ptr<AppListMainView, DanglingUntriaged> app_list_main_view_ = nullptr;
 
-  SearchBoxView* search_box_view_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<SearchBoxView, DanglingUntriaged> search_box_view_ =
+      nullptr;  // Owned by views hierarchy.
 
   // The time the AppListView was requested to be shown. Used for metrics.
-  absl::optional<base::Time> time_shown_;
-
-  // Whether the shelf is oriented on the side.
-  bool is_side_shelf_ = false;
-
-  // Whether the shelf has rounded corners.
-  bool shelf_has_rounded_corners_ = false;
+  std::optional<base::Time> time_shown_;
 
   // Whether the view is being built.
   bool is_building_ = false;
-
-  // The velocity of the gesture event.
-  float last_fling_velocity_ = 0;
 
   // The state of the app list, controlled via SetState().
   AppListViewState app_list_state_ = AppListViewState::kClosed;
   // Set to target app list state while `SetState()` is being handled.
   AppListViewState target_app_list_state_ = AppListViewState::kClosed;
-
-  // The timestamp when the ongoing animation ends.
-  base::TimeTicks animation_end_timestamp_;
-
-  // An observer to notify AppListView of bounds animation completion.
-  std::unique_ptr<StateTransitionNotifier> state_transition_notifier_;
 
   // Metric reporter for state change animations.
   const std::unique_ptr<StateAnimationMetricsReporter>

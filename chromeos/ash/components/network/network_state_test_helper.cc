@@ -10,8 +10,24 @@
 #include "chromeos/ash/components/network/network_device_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
 
 namespace ash {
+
+FakeHotspotOperationDelegate::FakeHotspotOperationDelegate(
+    TechnologyStateController* technology_state_controller) {
+  technology_state_controller_ = technology_state_controller;
+  technology_state_controller_->set_hotspot_operation_delegate(this);
+}
+
+FakeHotspotOperationDelegate::~FakeHotspotOperationDelegate() {
+  technology_state_controller_->set_hotspot_operation_delegate(nullptr);
+}
+
+void FakeHotspotOperationDelegate::PrepareEnableWifi(
+    base::OnceCallback<void(bool prepare_success)> callback) {
+  std::move(callback).Run(/*success=*/true);
+}
 
 NetworkStateTestHelper::NetworkStateTestHelper(
     bool use_default_devices_and_services) {
@@ -20,13 +36,21 @@ NetworkStateTestHelper::NetworkStateTestHelper(
   network_state_handler_ = NetworkStateHandler::InitializeForTest();
   network_device_handler_ =
       NetworkDeviceHandler::InitializeForTesting(network_state_handler_.get());
+  technology_state_controller_ = std::make_unique<TechnologyStateController>();
+  technology_state_controller_->Init(network_state_handler_.get());
+
+  fake_hotspot_operation_delegate_ =
+      std::make_unique<FakeHotspotOperationDelegate>(
+          technology_state_controller_.get());
 
   if (!use_default_devices_and_services)
     ResetDevicesAndServices();
 }
 
 NetworkStateTestHelper::~NetworkStateTestHelper() {
+  fake_hotspot_operation_delegate_.reset();
   network_device_handler_.reset();
+  technology_state_controller_.reset();
   if (!network_state_handler_)
     return;
   network_state_handler_->Shutdown();

@@ -5,13 +5,14 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_SYNC_PASSWORD_SYNC_BRIDGE_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_SYNC_PASSWORD_SYNC_BRIDGE_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
-#include "components/password_manager/core/browser/password_store_change.h"
-#include "components/password_manager/core/browser/password_store_sync.h"
+#include "components/password_manager/core/browser/password_store/password_store_change.h"
+#include "components/password_manager/core/browser/sync/password_store_sync.h"
 #include "components/sync/model/metadata_batch.h"
 #include "components/sync/model/model_type_sync_bridge.h"
+#include "components/sync/model/wipe_model_upon_sync_disabled_behavior.h"
 
 namespace syncer {
 class MetadataChangeList;
@@ -36,6 +37,8 @@ class PasswordSyncBridge : public syncer::ModelTypeSyncBridge {
   PasswordSyncBridge(
       std::unique_ptr<syncer::ModelTypeChangeProcessor> change_processor,
       PasswordStoreSync* password_store_sync,
+      syncer::WipeModelUponSyncDisabledBehavior
+          wipe_model_upon_sync_disabled_behavior,
       const base::RepeatingClosure& sync_enabled_or_disabled_cb);
 
   PasswordSyncBridge(const PasswordSyncBridge&) = delete;
@@ -51,10 +54,10 @@ class PasswordSyncBridge : public syncer::ModelTypeSyncBridge {
   // ModelTypeSyncBridge implementation.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  std::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  std::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -62,9 +65,9 @@ class PasswordSyncBridge : public syncer::ModelTypeSyncBridge {
   std::string GetClientTag(const syncer::EntityData& entity_data) override;
   std::string GetStorageKey(const syncer::EntityData& entity_data) override;
   bool SupportsGetStorageKey() const override;
-  void ApplyStopSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
-                                delete_metadata_change_list) override;
-  sync_pb::EntitySpecifics TrimRemoteSpecificsForCaching(
+  void ApplyDisableSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
+                                   delete_metadata_change_list) override;
+  sync_pb::EntitySpecifics TrimAllSupportedFieldsFromRemoteSpecifics(
       const sync_pb::EntitySpecifics& entity_specifics) const override;
 
   static std::string ComputeClientTagForTesting(
@@ -75,8 +78,8 @@ class PasswordSyncBridge : public syncer::ModelTypeSyncBridge {
   // to modification of encryption key in Keychain or Keyring
   // (https://crbug.com/730625). This method deletes those logins from the
   // store. So during merge, the data in sync will be added to the password
-  // store. This should be called during MergeSyncData().
-  absl::optional<syncer::ModelError> CleanupPasswordStore();
+  // store. This should be called during MergeFullSyncData().
+  std::optional<syncer::ModelError> CleanupPasswordStore();
 
   // Retrieves the storage keys of all unsynced passwords in the store.
   std::set<FormPrimaryKey> GetUnsyncedPasswordsStorageKeys();
@@ -93,6 +96,10 @@ class PasswordSyncBridge : public syncer::ModelTypeSyncBridge {
 
   // Password store responsible for persistence.
   const raw_ptr<PasswordStoreSync> password_store_sync_;
+
+  syncer::WipeModelUponSyncDisabledBehavior
+      wipe_model_upon_sync_disabled_behavior_ =
+          syncer::WipeModelUponSyncDisabledBehavior::kNever;
 
   base::RepeatingClosure sync_enabled_or_disabled_cb_;
 

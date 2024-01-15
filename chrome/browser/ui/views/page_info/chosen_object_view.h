@@ -18,14 +18,15 @@ class ImageButton;
 }
 
 class ChosenObjectViewObserver;
-class PageInfoRowView;
+class RichControlsContainerView;
 
 // A ChosenObjectView is a row in the Page Info bubble that shows an individual
 // object (e.g. a Bluetooth device, a USB device) that the current site has
 // access to.
 class ChosenObjectView : public views::View {
+  METADATA_HEADER(ChosenObjectView, views::View)
+
  public:
-  METADATA_HEADER(ChosenObjectView);
   explicit ChosenObjectView(std::unique_ptr<PageInfoUI::ChosenObjectInfo> info,
                             std::u16string display_name);
   ChosenObjectView(const ChosenObjectView&) = delete;
@@ -44,7 +45,7 @@ class ChosenObjectView : public views::View {
   void ExecuteDeleteCommand();
 
   raw_ptr<views::ImageButton> delete_button_ = nullptr;
-  raw_ptr<PageInfoRowView> row_view_ = nullptr;
+  raw_ptr<RichControlsContainerView> row_view_ = nullptr;
 
   base::ObserverList<ChosenObjectViewObserver>::Unchecked observer_list_;
   std::unique_ptr<PageInfoUI::ChosenObjectInfo> info_;

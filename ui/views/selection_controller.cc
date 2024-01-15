@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "build/build_config.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/events/event.h"
@@ -20,9 +19,7 @@
 namespace views {
 
 SelectionController::SelectionController(SelectionControllerDelegate* delegate)
-    : aggregated_clicks_(0),
-      delegate_(delegate),
-      handles_selection_clipboard_(false) {
+    : delegate_(delegate) {
   // If selection clipboard is used, update it on a text selection.
   if (ui::Clipboard::IsSupportedClipboardBuffer(
           ui::ClipboardBuffer::kSelection)) {
@@ -72,7 +69,7 @@ bool SelectionController::OnMousePressed(
         SelectAll();
         break;
       default:
-        NOTREACHED();
+        NOTREACHED_NORETURN();
     }
   }
 
@@ -119,7 +116,7 @@ bool SelectionController::OnMouseDragged(const ui::MouseEvent& event) {
     SelectThroughLastDragLocation();
   } else if (!drag_selection_timer_.IsRunning()) {
     // Select through the edge of the visible text, then start the scroll timer.
-    last_drag_location_.set_x(base::clamp(x, 0, width));
+    last_drag_location_.set_x(std::clamp(x, 0, width));
     SelectThroughLastDragLocation();
 
     drag_selection_timer_.Start(

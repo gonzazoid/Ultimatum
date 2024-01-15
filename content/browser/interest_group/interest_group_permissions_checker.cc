@@ -4,7 +4,7 @@
 
 #include "content/browser/interest_group/interest_group_permissions_checker.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"
@@ -191,9 +191,9 @@ void InterestGroupPermissionsChecker::OnJsonParsed(
     return;
   }
 
-  absl::optional<bool> can_join =
+  std::optional<bool> can_join =
       result->GetDict().FindBool("joinAdInterestGroup");
-  absl::optional<bool> can_leave =
+  std::optional<bool> can_leave =
       result->GetDict().FindBool("leaveAdInterestGroup");
   Permissions permissions{/*can_join=*/can_join.value_or(false),
                           /*can_leave=*/can_leave.value_or(false)};

@@ -4,6 +4,10 @@
 
 #include "chromeos/ash/services/federated/public/cpp/fake_service_connection.h"
 
+#include <optional>
+
+#include "base/containers/flat_map.h"
+
 namespace ash {
 namespace federated {
 
@@ -29,7 +33,9 @@ void FakeServiceConnectionImpl::ReportExample(
   return;
 }
 
-void FakeServiceConnectionImpl::StartScheduling() {
+void FakeServiceConnectionImpl::StartScheduling(
+    const std::optional<base::flat_map<std::string, std::string>>&
+        client_launch_stage) {
   return;
 }
 

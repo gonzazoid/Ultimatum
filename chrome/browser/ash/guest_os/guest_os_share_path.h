@@ -10,16 +10,20 @@
 #include <set>
 #include <vector>
 
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager_observer.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
+#include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/seneschal/seneschal_service.pb.h"
-#include "chromeos/ash/components/drivefs/drivefs_host_observer.h"
+#include "chromeos/ash/components/drivefs/drivefs_host.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace guest_os {
@@ -40,9 +44,9 @@ struct SharedPathInfo {
 // Handles sharing and unsharing paths from the Chrome OS host to guest VMs via
 // seneschal.
 class GuestOsSharePath : public KeyedService,
-                         public ash::ConciergeClient::VmObserver,
-                         public file_manager::VolumeManagerObserver,
-                         public drivefs::DriveFsHostObserver {
+                         ash::ConciergeClient::VmObserver,
+                         file_manager::VolumeManagerObserver,
+                         drivefs::DriveFsHost::Observer {
  public:
   using SharePathCallback =
       base::OnceCallback<void(const base::FilePath&, bool, const std::string&)>;
@@ -58,6 +62,18 @@ class GuestOsSharePath : public KeyedService,
                                            const base::FilePath& path) = 0;
     virtual void OnUnshare(const std::string& vm_name,
                            const base::FilePath& path) = 0;
+    virtual void OnGuestRegistered(const guest_os::GuestId& guest) = 0;
+    virtual void OnGuestUnregistered(const guest_os::GuestId& guest) = 0;
+  };
+
+  // ConvertArgsToPathsToShare returns this.
+  struct PathsToShare {
+    PathsToShare();
+    PathsToShare(PathsToShare&);
+    ~PathsToShare();
+
+    std::vector<base::FilePath> paths_to_share;
+    std::vector<std::string> launch_args;
   };
 
   static GuestOsSharePath* GetForProfile(Profile* profile);
@@ -75,6 +91,16 @@ class GuestOsSharePath : public KeyedService,
 
   // Observer receives unshare events.
   void AddObserver(Observer* obs);
+  void RemoveObserver(Observer* obs);
+
+  // Convert launch args and return paths to share with the VM, and string args
+  // to pass to the app being launched. On failure, returns an error string
+  // instead.
+  absl::variant<PathsToShare, std::string> ConvertArgsToPathsToShare(
+      const guest_os::GuestOsRegistryService::Registration& registration,
+      const std::vector<guest_os::LaunchArg>& args,
+      const base::FilePath& vm_mount,
+      bool map_crostini_home);
 
   // Share specified absolute |path| with vm. If |persist| is set, the path will
   // be automatically shared at container startup. Callback receives path mapped
@@ -101,7 +127,7 @@ class GuestOsSharePath : public KeyedService,
                    SuccessCallback callback);
 
   // Returns true the first time it is called on this service.
-  bool GetAndSetFirstForSession();
+  bool GetAndSetFirstForSession(const std::string& vm_name);
 
   // Get list of all shared paths for the specified VM.
   std::vector<base::FilePath> GetPersistedSharedPaths(
@@ -130,7 +156,7 @@ class GuestOsSharePath : public KeyedService,
   void OnVolumeUnmounted(ash::MountError error_code,
                          const file_manager::Volume& volume) override;
 
-  // drivefs::DriveFsHostObserver
+  // DriveFsHost::Observer implementation.
   void OnFilesChanged(
       const std::vector<drivefs::mojom::FileChange>& changes) override;
 
@@ -144,6 +170,18 @@ class GuestOsSharePath : public KeyedService,
   // Runs on UI Thread to handle when a path is deleted.
   // Visible for testing.
   void PathDeleted(const base::FilePath& path);
+
+  // Registers `guest` with this service, so methods which take a VmType will
+  // operate on it.
+  void RegisterGuest(const GuestId& guest);
+
+  // Unregisters `guest` so it no longer is included by methods taking a
+  // `VmType`.
+  void UnregisterGuest(const GuestId& guest);
+
+  // Returns the list of guests which are currently registered with this
+  // service.
+  const base::flat_set<GuestId>& ListGuests();
 
   // Allow seneschal callback to be overridden for testing.
   void set_seneschal_callback_for_testing(SeneschalCallback callback) {
@@ -171,15 +209,18 @@ class GuestOsSharePath : public KeyedService,
   // true if path is no longer shared with any VMs.
   bool RemoveSharedPathInfo(SharedPathInfo& info, const std::string& vm_name);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   // Task runner for FilePathWatchers to be created, run, and be destroyed on.
   scoped_refptr<base::SequencedTaskRunner> file_watcher_task_runner_;
-  bool first_for_session_ = true;
+
+  // List of VMs GetAndSetFirstForSession has been called on.
+  std::set<std::string> first_for_session_;
 
   // Allow seneschal callback to be overridden for testing.
   SeneschalCallback seneschal_callback_;
   base::ObserverList<Observer>::Unchecked observers_;
   std::map<base::FilePath, SharedPathInfo> shared_paths_;
+  base::flat_set<GuestId> guests_;
 
   base::WeakPtrFactory<GuestOsSharePath> weak_ptr_factory_{this};
 };  // class

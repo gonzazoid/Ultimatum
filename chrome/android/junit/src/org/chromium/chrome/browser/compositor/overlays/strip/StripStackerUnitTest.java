@@ -9,9 +9,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.when;
 
-import android.os.Build;
-
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -20,12 +17,12 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.ui.base.LocalizationUtils;
 
 /** Tests for {@link StripStacker}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, sdk = Build.VERSION_CODES.M, qualifiers = "sw600dp")
+@Config(manifest = Config.NONE, qualifiers = "sw600dp")
 public class StripStackerUnitTest {
     private static final float TAB_WIDTH = 25;
     private static final float CACHED_TAB_WIDTH = 30;
@@ -39,16 +36,11 @@ public class StripStackerUnitTest {
 
     private StripStacker mTarget = new DummyStacker();
 
-    @Mock
-    private StripLayoutTab mTab1;
-    @Mock
-    private StripLayoutTab mTab2;
-    @Mock
-    private StripLayoutTab mTab3;
-    @Mock
-    private StripLayoutTab mTab4;
-    @Mock
-    private StripLayoutTab mTab5;
+    @Mock private StripLayoutTab mTab1;
+    @Mock private StripLayoutTab mTab2;
+    @Mock private StripLayoutTab mTab3;
+    @Mock private StripLayoutTab mTab4;
+    @Mock private StripLayoutTab mTab5;
     private StripLayoutTab[] mInput;
 
     @Before
@@ -62,12 +54,6 @@ public class StripStackerUnitTest {
             when(tab.getDrawX()).thenReturn(x);
             x += TAB_WIDTH;
         }
-        setTabStripImprovementFeature(false);
-    }
-
-    @After
-    public void tearDown() {
-        setTabStripImprovementFeature(false);
     }
 
     @Test
@@ -81,19 +67,18 @@ public class StripStackerUnitTest {
     }
 
     @Test
+    @DisabledTest(message = "https://crbug.com/1385702")
     public void testComputeNewTabButtonOffset() {
-        float result = mTarget.computeNewTabButtonOffset(mInput, TAB_OVERLAP, STRIP_LEFT_MARGIN,
-                STRIP_RIGHT_MARGIN, STRIP_WIDTH, BUTTON_WIDTH, TOUCH_OFFSET, CACHED_TAB_WIDTH,
-                true);
-        assertThat("New Tab button offset does not match", result, is(130f));
-    }
-
-    @Test
-    public void testComputeNewTabButtonOffset_withTabStripImprovements() {
-        setTabStripImprovementFeature(true);
-        float result = mTarget.computeNewTabButtonOffset(mInput, TAB_OVERLAP, STRIP_LEFT_MARGIN,
-                STRIP_RIGHT_MARGIN, STRIP_WIDTH, BUTTON_WIDTH, TOUCH_OFFSET, CACHED_TAB_WIDTH,
-                true);
+        float result =
+                mTarget.computeNewTabButtonOffset(
+                        mInput,
+                        TAB_OVERLAP,
+                        STRIP_LEFT_MARGIN,
+                        STRIP_RIGHT_MARGIN,
+                        STRIP_WIDTH,
+                        BUTTON_WIDTH,
+                        CACHED_TAB_WIDTH,
+                        true);
         assertThat("New Tab button offset does not match", result, is(35f));
     }
 
@@ -101,50 +86,35 @@ public class StripStackerUnitTest {
     public void testComputeNewTabButtonOffsetRTL() {
         LocalizationUtils.setRtlForTesting(true);
         float expected_res = 3f;
-        // Update drawX for RTL = ((mInput.length -1 ) * TAB_WIDTH) + TOUCH_OFFSET + BUTTON_WIDTH
-        // +expected_res = 4*25 + 5 + 10 +3
-        float draw_x = 118f;
-        for (StripLayoutTab tab : mInput) {
-            when(tab.getDrawX()).thenReturn(draw_x);
-            draw_x -= TAB_WIDTH;
-        }
-        float result = mTarget.computeNewTabButtonOffset(mInput, TAB_OVERLAP, STRIP_LEFT_MARGIN,
-                STRIP_RIGHT_MARGIN, STRIP_WIDTH, BUTTON_WIDTH, TOUCH_OFFSET, CACHED_TAB_WIDTH,
-                true);
-        assertThat("New Tab button offset does not match", result, is(expected_res));
-    }
-
-    @Test
-    public void testComputeNewTabButtonOffsetRTL_withTabStripImprovements() {
-        LocalizationUtils.setRtlForTesting(true);
-        setTabStripImprovementFeature(true);
-        float expected_res = 3f;
-        // Update idealX for RTL = ((mInput.length -1 ) * TAB_WIDTH) + TOUCH_OFFSET + BUTTON_WIDTH +
-        // expected_res = 4*25 + 5 + 10 + 3
-        float ideal_x = 118f;
+        // Update idealX for RTL = ((mInput.length -1 ) * TAB_WIDTH) + BUTTON_WIDTH +
+        // expected_res = 4*25 + 10 + 3
+        float ideal_x = 113f;
         for (StripLayoutTab tab : mInput) {
             when(tab.getIdealX()).thenReturn(ideal_x);
             ideal_x -= TAB_WIDTH;
         }
-        float result = mTarget.computeNewTabButtonOffset(mInput, TAB_OVERLAP, STRIP_LEFT_MARGIN,
-                STRIP_RIGHT_MARGIN, STRIP_WIDTH, BUTTON_WIDTH, TOUCH_OFFSET, CACHED_TAB_WIDTH,
-                true);
+        float result =
+                mTarget.computeNewTabButtonOffset(
+                        mInput,
+                        TAB_OVERLAP,
+                        STRIP_LEFT_MARGIN,
+                        STRIP_RIGHT_MARGIN,
+                        STRIP_WIDTH,
+                        BUTTON_WIDTH,
+                        CACHED_TAB_WIDTH,
+                        true);
         assertThat("New Tab button offset does not match", result, is(expected_res));
-    }
-
-    private void setTabStripImprovementFeature(boolean value) {
-        ChromeFeatureList.sTabStripImprovements.setForTesting(value);
     }
 
     class DummyStacker extends StripStacker {
         @Override
-        public void setTabOffsets(int selectedIndex, StripLayoutTab[] indexOrderedTabs,
-                float tabStackWidth, int maxTabsToStack, float tabOverlapWidth,
-                float stripLeftMargin, float stripRightMargin, float stripWidth,
-                boolean inReorderMode, boolean tabClosing, float cachedTabWidth) {}
+        public void setTabOffsets(
+                StripLayoutTab[] indexOrderedTabs,
+                boolean tabClosing,
+                boolean tabCreating,
+                float cachedTabWidth) {}
 
         @Override
-        public void performOcclusionPass(
-                int selectedIndex, StripLayoutTab[] indexOrderedTabs, float stripWidth) {}
+        public void performOcclusionPass(StripLayoutTab[] indexOrderedTabs, float stripWidth) {}
     }
 }

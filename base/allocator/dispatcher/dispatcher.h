@@ -12,9 +12,6 @@
 
 namespace base::allocator::dispatcher {
 
-void BASE_EXPORT InstallStandardAllocatorHooks();
-void BASE_EXPORT RemoveStandardAllocatorHooksForTesting();
-
 namespace internal {
 struct DispatchData;
 }

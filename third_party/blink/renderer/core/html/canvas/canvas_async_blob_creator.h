@@ -19,6 +19,7 @@
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_handle.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/image-encoders/image_encoder.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -28,13 +29,7 @@
 namespace blink {
 
 class ExecutionContext;
-
-constexpr const char* kSRGBImageColorSpaceName = "srgb";
-constexpr const char* kRec2020ImageColorSpaceName = "rec2020";
-constexpr const char* kDisplayP3ImageColorSpaceName = "display-p3";
-
-constexpr const char* kRGBA8ImagePixelFormatName = "uint8";
-constexpr const char* kRGBA16ImagePixelFormatName = "uint16";
+class ImageDataBuffer;
 
 class CORE_EXPORT CanvasAsyncBlobCreator
     : public GarbageCollected<CanvasAsyncBlobCreator> {
@@ -52,7 +47,6 @@ class CORE_EXPORT CanvasAsyncBlobCreator
   };
   enum ToBlobFunctionType {
     kHTMLCanvasToBlobCallback,
-    kHTMLCanvasConvertToBlobPromise,
     kOffscreenCanvasConvertToBlobPromise
   };
 
@@ -81,14 +75,6 @@ class CORE_EXPORT CanvasAsyncBlobCreator
 
   virtual void Trace(Visitor*) const;
 
-  static sk_sp<SkColorSpace> BlobColorSpaceToSkColorSpace(
-      String blob_color_space);
-
-  bool EncodeImageForConvertToBlobTest();
-  Vector<unsigned char> GetEncodedImageForConvertToBlobTest() {
-    return encoded_image_;
-  }
-
  protected:
   static ImageEncodeOptions* GetImageEncodeOptionsForMimeType(
       ImageEncodingMimeType);
@@ -99,7 +85,7 @@ class CORE_EXPORT CanvasAsyncBlobCreator
                                               base::OnceClosure,
                                               double delay_ms);
   virtual void SignalAlternativeCodePathFinishedForTesting() {}
-  virtual void CreateBlobAndReturnResult();
+  virtual void CreateBlobAndReturnResult(Vector<unsigned char> encoded_image);
   virtual void CreateNullAndReturnResult();
 
   void InitiateEncoding(double quality, base::TimeTicks deadline);
@@ -115,16 +101,18 @@ class CORE_EXPORT CanvasAsyncBlobCreator
   void Dispose();
 
   scoped_refptr<StaticBitmapImage> image_;
+  Member<ExecutionContext> context_;
+
+  // The following members are used for progressive/idle encoding,
+  // see comment above the implementation of ScheduleAsyncBlobCreation.
+  sk_sp<SkImage> skia_image_;
+  SkPixmap src_data_;  // Holds a raw pointer owned by `skia_ìmage`.
   std::unique_ptr<ImageEncoder> encoder_;
   Vector<unsigned char> encoded_image_;
   int num_rows_completed_;
-  Member<ExecutionContext> context_;
 
-  SkPixmap src_data_;
   ImageEncodingMimeType mime_type_;
-  Member<const ImageEncodeOptions> encode_options_;
   ToBlobFunctionType function_type_;
-  sk_sp<SkData> png_data_helper_;
 
   // Chrome metrics use
   base::TimeTicks start_time_;
@@ -141,20 +129,29 @@ class CORE_EXPORT CanvasAsyncBlobCreator
   // Used for OffscreenCanvas only
   Member<ScriptPromiseResolver> script_promise_resolver_;
 
-  bool EncodeImage(const double&);
+  static bool EncodeImage(std::unique_ptr<ImageDataBuffer>,
+                          ImageEncodingMimeType,
+                          const double& quality,
+                          Vector<unsigned char>* encoded_image);
 
   // PNG, JPEG
   bool InitializeEncoder(double quality);
-  void ForceEncodeRowsOnCurrentThread();  // Similar to IdleEncodeRows
-                                          // without deadline
+  void ForceEncodeRows();  // Similar to IdleEncodeRows without deadline.
 
   // WEBP
-  void EncodeImageOnEncoderThread(double quality);
+  static void EncodeImageOnEncoderThread(
+      CrossThreadHandle<CanvasAsyncBlobCreator>,
+      scoped_refptr<base::SingleThreadTaskRunner>,
+      sk_sp<SkImage>,
+      std::unique_ptr<ImageDataBuffer>,
+      ImageEncodingMimeType,
+      double quality);
 
   void IdleTaskStartTimeoutEvent(double quality);
   void IdleTaskCompleteTimeoutEvent();
 
   void RecordIdentifiabilityMetric();
+  void TraceCanvasContent(Vector<unsigned char>* encoded_image);
 };
 
 }  // namespace blink

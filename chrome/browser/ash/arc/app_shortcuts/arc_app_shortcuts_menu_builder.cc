@@ -7,16 +7,16 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/search/ranking/launch_data.h"
+#include "chrome/browser/ash/app_list/search/search_controller.h"
+#include "chrome/browser/ash/app_list/search/types.h"
 #include "chrome/browser/ash/arc/app_shortcuts/arc_app_shortcuts_request.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/search/ranking/launch_data.h"
-#include "chrome/browser/ui/app_list/search/ranking/ranking_item_util.h"
-#include "chrome/browser/ui/app_list/search/search_controller.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/models/simple_menu_model.h"
 
@@ -57,10 +57,10 @@ void ArcAppShortcutsMenuBuilder::BuildMenu(
   // |arc_app_shortcuts_request_|. When |this| is deleted,
   // |arc_app_shortcuts_request_| is also deleted, and once that happens,
   // |arc_app_shortcuts_request_| will never run the callback.
-  arc_app_shortcuts_request_ = std::make_unique<ArcAppShortcutsRequest>(
-      base::BindOnce(&ArcAppShortcutsMenuBuilder::OnGetAppShortcutItems,
-                     base::Unretained(this), base::TimeTicks::Now(),
-                     std::move(menu_model), std::move(callback)));
+  arc_app_shortcuts_request_ =
+      std::make_unique<ArcAppShortcutsRequest>(base::BindOnce(
+          &ArcAppShortcutsMenuBuilder::OnGetAppShortcutItems,
+          base::Unretained(this), std::move(menu_model), std::move(callback)));
   arc_app_shortcuts_request_->StartForPackage(package_name);
 }
 
@@ -82,12 +82,11 @@ void ArcAppShortcutsMenuBuilder::ExecuteCommand(int command_id) {
   launch_data.id = ConstructArcAppShortcutUrl(
       app_id_, app_shortcut_items_->at(index).shortcut_id),
   launch_data.result_type = ash::AppListSearchResultType::kArcAppShortcut;
-  launch_data.ranking_item_type = app_list::RankingItemType::kArcAppShortcut;
+  launch_data.category = app_list::Category::kAppShortcuts;
   app_list_client_impl->search_controller()->Train(std::move(launch_data));
 }
 
 void ArcAppShortcutsMenuBuilder::OnGetAppShortcutItems(
-    const base::TimeTicks& start_time,
     std::unique_ptr<ui::SimpleMenuModel> menu_model,
     GetMenuModelCallback callback,
     std::unique_ptr<apps::AppShortcutItems> app_shortcut_items) {
@@ -116,10 +115,6 @@ void ArcAppShortcutsMenuBuilder::OnGetAppShortcutItems(
   }
   std::move(callback).Run(std::move(menu_model));
   arc_app_shortcuts_request_.reset();
-
-  // Record user metrics.
-  UMA_HISTOGRAM_TIMES("Arc.AppShortcuts.BuildMenuTime",
-                      base::TimeTicks::Now() - start_time);
 }
 
 }  // namespace arc

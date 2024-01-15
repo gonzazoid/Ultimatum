@@ -11,8 +11,8 @@
 #include <windows.h>
 #elif BUILDFLAG(IS_MAC)
 #include <Carbon/Carbon.h>
-#include "base/mac/scoped_cftyperef.h"
-#elif defined(USE_OZONE)
+#include "base/apple/scoped_cftyperef.h"
+#elif BUILDFLAG(IS_OZONE)
 #include "ui/events/ozone/layout/scoped_keyboard_layout_engine.h"  // nogncheck
 #endif
 
@@ -33,7 +33,7 @@ enum KeyboardLayout {
 #if BUILDFLAG(IS_WIN)
 using PlatformKeyboardLayout = HKL;
 #elif BUILDFLAG(IS_MAC)
-using PlatformKeyboardLayout = base::ScopedCFTypeRef<TISInputSourceRef>;
+using PlatformKeyboardLayout = base::apple::ScopedCFTypeRef<TISInputSourceRef>;
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
@@ -51,7 +51,7 @@ class ScopedKeyboardLayout {
   ~ScopedKeyboardLayout();
 
  private:
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   std::unique_ptr<ScopedKeyboardLayoutEngine> scoped_keyboard_layout_engine_;
 #endif
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)

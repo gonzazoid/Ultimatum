@@ -10,7 +10,7 @@
 #include "base/check.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/libassistant/libassistant_factory.h"
 #include "chromeos/ash/services/libassistant/libassistant_loader_impl.h"
 #include "chromeos/ash/services/libassistant/public/mojom/speech_recognition_observer.mojom.h"
@@ -31,32 +31,14 @@ class LibassistantFactoryImpl : public LibassistantFactory {
   // LibassistantFactory implementation:
   std::unique_ptr<assistant_client::AssistantManager> CreateAssistantManager(
       const std::string& lib_assistant_config) override {
-    if (!assistant::features::IsLibAssistantDlcEnabled()) {
-      return base::WrapUnique(assistant_client::AssistantManager::Create(
-          platform_api_, lib_assistant_config));
-    }
-
     auto* entrypoint = LibassistantLoaderImpl::GetInstance()->GetEntryPoint();
     assistant_client::AssistantManager* assistant_manager =
         entrypoint->NewAssistantManager(lib_assistant_config, platform_api_);
     return base::WrapUnique(assistant_manager);
   }
 
-  assistant_client::AssistantManagerInternal* UnwrapAssistantManagerInternal(
-      assistant_client::AssistantManager* assistant_manager) override {
-    if (!assistant::features::IsLibAssistantDlcEnabled()) {
-      return assistant_client::UnwrapAssistantManagerInternal(
-          assistant_manager);
-    }
-
-    auto* entrypoint = LibassistantLoaderImpl::GetInstance()->GetEntryPoint();
-    auto* assistant_manager_internal =
-        entrypoint->GetAssistantManagerInternal(assistant_manager);
-    return assistant_manager_internal;
-  }
-
  private:
-  assistant_client::PlatformApi* const platform_api_;
+  const raw_ptr<assistant_client::PlatformApi> platform_api_;
 };
 
 std::unique_ptr<LibassistantFactory> FactoryOrDefault(

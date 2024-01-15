@@ -10,13 +10,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/values.h"
 #include "content/browser/metrics/histogram_synchronizer.h"
 #include "content/browser/metrics/histograms_monitor.h"
-#include "content/grit/content_resources.h"
+#include "content/grit/histograms_resources.h"
+#include "content/grit/histograms_resources_map.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -24,12 +25,11 @@
 #include "content/public/browser/web_ui_message_handler.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/url_constants.h"
+#include "services/network/public/mojom/content_security_policy.mojom.h"
 
 namespace content {
 namespace {
 
-const char kHistogramsUIJs[] = "histograms_internals.js";
-const char kHistogramsUICss[] = "histograms_internals.css";
 const char kHistogramsUIRequestHistograms[] = "requestHistograms";
 const char kHistogramsUIStartMonitoring[] = "startMonitoring";
 const char kHistogramsUIFetchDiff[] = "fetchDiff";
@@ -38,15 +38,19 @@ const char kHistogramsUIFetchDiff[] = "fetchDiff";
 struct JsParams {
   std::string callback_id;
   std::string query;
+  bool include_subprocesses;
 };
 
-WebUIDataSource* CreateHistogramsHTMLSource() {
-  WebUIDataSource* source = WebUIDataSource::Create(kChromeUIHistogramHost);
+void CreateAndAddHistogramsHTMLSource(BrowserContext* browser_context) {
+  WebUIDataSource* source =
+      WebUIDataSource::CreateAndAdd(browser_context, kChromeUIHistogramHost);
+  source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::ScriptSrc,
+      "script-src chrome://resources chrome://webui-test 'self';");
 
-  source->AddResourcePath(kHistogramsUIJs, IDR_HISTOGRAMS_INTERNALS_JS);
-  source->AddResourcePath(kHistogramsUICss, IDR_HISTOGRAMS_INTERNALS_CSS);
-  source->SetDefaultResource(IDR_HISTOGRAMS_INTERNALS_HTML);
-  return source;
+  source->AddResourcePaths(
+      base::make_span(kHistogramsResources, kHistogramsResourcesSize));
+  source->SetDefaultResource(IDR_HISTOGRAMS_HISTOGRAMS_INTERNALS_HTML);
 }
 
 // This class receives javascript messages from the renderer.
@@ -72,12 +76,16 @@ class HistogramsMessageHandler : public WebUIMessageHandler {
   // Calls AllowJavascript() and unpacks the passed params.
   JsParams AllowJavascriptAndUnpackParams(const base::Value::List& args);
 
+  // Import histograms, and those from subprocesses if |include_subprocesses| is
+  // true.
+  void ImportHistograms(bool include_subprocesses);
+
   HistogramsMonitor histogram_monitor_;
 };
 
-HistogramsMessageHandler::HistogramsMessageHandler() {}
+HistogramsMessageHandler::HistogramsMessageHandler() = default;
 
-HistogramsMessageHandler::~HistogramsMessageHandler() {}
+HistogramsMessageHandler::~HistogramsMessageHandler() = default;
 
 JsParams HistogramsMessageHandler::AllowJavascriptAndUnpackParams(
     const base::Value::List& args_list) {
@@ -87,18 +95,31 @@ JsParams HistogramsMessageHandler::AllowJavascriptAndUnpackParams(
     params.callback_id = args_list[0].GetString();
   if (args_list.size() > 1u && args_list[1].is_string())
     params.query = args_list[1].GetString();
+  if (args_list.size() > 2u && args_list[2].is_bool())
+    params.include_subprocesses = args_list[2].GetBool();
   return params;
+}
+
+void HistogramsMessageHandler::ImportHistograms(bool include_subprocesses) {
+  if (include_subprocesses) {
+    // Synchronously fetch subprocess histograms that live in shared memory.
+    base::StatisticsRecorder::ImportProvidedHistogramsSync();
+
+    // Asynchronously fetch subprocess histograms that do not live in shared
+    // memory (e.g., they were emitted before the shared memory was set up).
+    HistogramSynchronizer::FetchHistograms();
+  }
 }
 
 void HistogramsMessageHandler::HandleRequestHistograms(
     const base::Value::List& args) {
-  base::StatisticsRecorder::ImportProvidedHistograms();
-  HistogramSynchronizer::FetchHistograms();
   JsParams params = AllowJavascriptAndUnpackParams(args);
+  ImportHistograms(params.include_subprocesses);
   base::Value::List histograms_list;
   for (base::HistogramBase* histogram :
        base::StatisticsRecorder::Sort(base::StatisticsRecorder::WithName(
-           base::StatisticsRecorder::GetHistograms(), params.query))) {
+           base::StatisticsRecorder::GetHistograms(), params.query,
+           /*case_sensitive=*/false))) {
     base::Value::Dict histogram_dict = histogram->ToGraphDict();
     if (!histogram_dict.empty())
       histograms_list.Append(std::move(histogram_dict));
@@ -110,6 +131,7 @@ void HistogramsMessageHandler::HandleRequestHistograms(
 void HistogramsMessageHandler::HandleStartMoninoring(
     const base::Value::List& args) {
   JsParams params = AllowJavascriptAndUnpackParams(args);
+  ImportHistograms(params.include_subprocesses);
   histogram_monitor_.StartMonitoring(params.query);
   ResolveJavascriptCallback(base::Value(params.callback_id),
                             base::Value("Success"));
@@ -117,6 +139,7 @@ void HistogramsMessageHandler::HandleStartMoninoring(
 
 void HistogramsMessageHandler::HandleFetchDiff(const base::Value::List& args) {
   JsParams params = AllowJavascriptAndUnpackParams(args);
+  ImportHistograms(params.include_subprocesses);
   base::Value::List histograms_list = histogram_monitor_.GetDiff();
   ResolveJavascriptCallback(base::Value(params.callback_id),
                             std::move(histograms_list));
@@ -150,9 +173,8 @@ HistogramsInternalsUI::HistogramsInternalsUI(WebUI* web_ui)
   web_ui->AddMessageHandler(std::make_unique<HistogramsMessageHandler>());
 
   // Set up the chrome://histograms/ source.
-  BrowserContext* browser_context =
-      web_ui->GetWebContents()->GetBrowserContext();
-  WebUIDataSource::Add(browser_context, CreateHistogramsHTMLSource());
+  CreateAndAddHistogramsHTMLSource(
+      web_ui->GetWebContents()->GetBrowserContext());
 }
 
 }  // namespace content

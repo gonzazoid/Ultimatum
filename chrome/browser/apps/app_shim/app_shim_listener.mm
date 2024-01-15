@@ -7,10 +7,10 @@
 #import <Foundation/Foundation.h>
 #include <unistd.h>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/hash/md5.h"
 #include "base/path_service.h"
 #include "base/task/thread_pool.h"
@@ -21,9 +21,10 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/mac/app_mode_common.h"
+#include "components/variations/net/variations_command_line.h"
 #include "content/public/browser/browser_task_traits.h"
 
-AppShimListener::AppShimListener() {}
+AppShimListener::AppShimListener() = default;
 
 void AppShimListener::Init() {
   has_initialized_ = true;
@@ -90,6 +91,11 @@ void AppShimListener::InitOnBackgroundThread() {
       app_mode::ChromeConnectionConfig::GenerateForCurrentProcess();
   base::DeleteFile(version_path);
   base::CreateSymbolicLink(config.EncodeAsPath(), version_path);
+
+  if (!variations::VariationsCommandLine::GetForCurrentProcess().WriteToFile(
+          user_data_dir.Append(app_mode::kFeatureStateFileName))) {
+    LOG(ERROR) << "Failed to write feature state to " << user_data_dir;
+  }
 }
 
 void AppShimListener::OnClientConnected(mojo::PlatformChannelEndpoint endpoint,

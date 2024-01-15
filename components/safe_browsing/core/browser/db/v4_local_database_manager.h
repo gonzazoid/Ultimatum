@@ -34,13 +34,17 @@ typedef unsigned ThreatSeverity;
 // SafeBrowsing service and interfaces with the protocol manager.
 class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
  public:
+  using RecordMigrationMetricsCallback =
+      base::OnceCallback<void(HashPrefixMap::MigrateResult)>;
+
   // Create and return an instance of V4LocalDatabaseManager, if Finch trial
   // allows it; nullptr otherwise.
   static scoped_refptr<V4LocalDatabaseManager> Create(
       const base::FilePath& base_path,
       scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
       scoped_refptr<base::SequencedTaskRunner> io_task_runner,
-      ExtendedReportingLevelCallback extended_reporting_level_callback);
+      ExtendedReportingLevelCallback extended_reporting_level_callback,
+      RecordMigrationMetricsCallback record_migration_metrics_callback);
 
   V4LocalDatabaseManager(const V4LocalDatabaseManager&) = delete;
   V4LocalDatabaseManager& operator=(const V4LocalDatabaseManager&) = delete;
@@ -64,32 +68,39 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
       network::mojom::RequestDestination request_destination) const override;
   bool CanCheckUrl(const GURL& url) const override;
   bool ChecksAreAlwaysAsync() const override;
-  bool CheckBrowseUrl(const GURL& url,
-                      const SBThreatTypeSet& threat_types,
-                      Client* client) override;
+  bool CheckBrowseUrl(
+      const GURL& url,
+      const SBThreatTypeSet& threat_types,
+      Client* client,
+      CheckBrowseUrlType check_type) override;
   AsyncMatch CheckCsdAllowlistUrl(const GURL& url, Client* client) override;
   bool CheckDownloadUrl(const std::vector<GURL>& url_chain,
                         Client* client) override;
   // TODO(vakh): |CheckExtensionIDs| in the base class accepts a set of
   // std::strings but the overriding method in this class accepts a set of
-  // FullHash objects. Since FullHash is currently std::string, it compiles,
-  // but this difference should be eliminated.
-  bool CheckExtensionIDs(const std::set<FullHash>& extension_ids,
+  // FullHashStr objects. Since FullHashStr is currently std::string, it
+  // compiles, but this difference should be eliminated.
+  bool CheckExtensionIDs(const std::set<FullHashStr>& extension_ids,
                          Client* client) override;
   bool CheckResourceUrl(const GURL& url, Client* client) override;
-  AsyncMatch CheckUrlForHighConfidenceAllowlist(const GURL& url,
-                                                Client* client) override;
-  bool CheckUrlForAccuracyTips(const GURL& url, Client* client) override;
+  void CheckUrlForHighConfidenceAllowlist(
+      const GURL& url,
+      const std::string& metric_variation,
+      base::OnceCallback<void(bool)> callback) override;
   bool CheckUrlForSubresourceFilter(const GURL& url, Client* client) override;
-  bool MatchDownloadAllowlistUrl(const GURL& url) override;
-  bool MatchMalwareIP(const std::string& ip_address) override;
-  safe_browsing::ThreatSource GetThreatSource() const override;
+  void MatchDownloadAllowlistUrl(
+      const GURL& url,
+      base::OnceCallback<void(bool)> callback) override;
+  safe_browsing::ThreatSource GetBrowseUrlThreatSource(
+      CheckBrowseUrlType check_type) const override;
+  safe_browsing::ThreatSource GetNonBrowseUrlThreatSource() const override;
   bool IsDownloadProtectionEnabled() const override;
 
-  void StartOnIOThread(
+  void StartOnSBThread(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const V4ProtocolConfig& config) override;
-  void StopOnIOThread(bool shutdown) override;
+  void StopOnSBThread(bool shutdown) override;
+  bool IsDatabaseReady() const override;
 
   // The stores/lists to always get full hashes for, regardless of which store
   // the hash prefix matched. We request all lists since it makes the full hash
@@ -105,10 +116,11 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
 
  protected:
   // Construct V4LocalDatabaseManager.
-  // Must be initialized by calling StartOnIOThread() before using.
+  // Must be initialized by calling StartOnSBThread() before using.
   V4LocalDatabaseManager(
       const base::FilePath& base_path,
       ExtendedReportingLevelCallback extended_reporting_level_callback,
+      RecordMigrationMetricsCallback record_migration_metrics_callback,
       scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
       scoped_refptr<base::SequencedTaskRunner> io_task_runner,
       scoped_refptr<base::SequencedTaskRunner> task_runner_for_tests);
@@ -140,12 +152,6 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
     // part of the CSD allowlist.
     CHECK_CSD_ALLOWLIST,
 
-    // TODO(vakh): Explain this.
-    CHECK_HIGH_CONFIDENCE_ALLOWLIST,
-
-    // Checks whether the URL should shown an accuracy tip.
-    CHECK_ACCURACY_TIPS,
-
     // This represents the other cases when a check is being performed
     // synchronously so a client callback isn't required. For instance, when
     // trying to determing if an IP address is unsafe due to hosting Malware.
@@ -163,12 +169,12 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
     PendingCheck(Client* client,
                  ClientCallbackType client_callback_type,
                  const StoresToCheck& stores_to_check,
-                 const std::set<FullHash>& full_hashes);
+                 const std::set<FullHashStr>& full_hashes);
 
     ~PendingCheck();
 
     // The SafeBrowsing client that's waiting for the safe/unsafe verdict.
-    raw_ptr<Client, DanglingUntriaged> client;
+    raw_ptr<Client, AcrossTasksDanglingUntriaged> client;
 
     // Determines which funtion from the |client| needs to be called once we
     // know whether the URL in |url| is safe or unsafe.
@@ -190,7 +196,7 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
     const std::vector<GURL> urls;
 
     // The full hashes that are being checked for being safe.
-    std::vector<FullHash> full_hashes;
+    std::vector<FullHashStr> full_hashes;
 
     // The most severe SBThreatType for each full hash in |full_hashes|. The
     // length of |full_hash_threat_type| must always match |full_hashes|.
@@ -211,7 +217,7 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
 
     // The full hash that matched for a blocklisted resource URL. Used only for
     // |CheckResourceUrl| case.
-    FullHash matching_full_hash;
+    FullHashStr matching_full_hash;
 
     // Specifies whether the PendingCheck is in the V4LocalDatabaseManager's
     // |pending_checks_| set. This property is for sanity-checking that when the
@@ -255,8 +261,12 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   void GetArtificialPrefixMatches(const std::unique_ptr<PendingCheck>& check);
 
   // Identifies the prefixes and the store they matched in, for a given |check|.
-  // Returns true if one or more hash prefix matches are found; false otherwise.
-  bool GetPrefixMatches(const std::unique_ptr<PendingCheck>& check);
+  // The callback is run synchronously, or asynchronously if
+  // MmapSafeBrowsingDatabaseAsync is enabled, with the identifier of the stores
+  // along with the matching hash prefixes.
+  void GetPrefixMatches(
+      PendingCheck* check,
+      base::OnceCallback<void(FullHashToStoreAndHashPrefixesMap)> callback);
 
   // Goes over the |full_hash_infos| and stores the most severe SBThreatType in
   // |most_severe_threat_type|, the corresponding metadata in |metadata|, and
@@ -265,11 +275,11 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   // |full_hashes|.
   void GetSeverestThreatTypeAndMetadata(
       const std::vector<FullHashInfo>& full_hash_infos,
-      const std::vector<FullHash>& full_hashes,
+      const std::vector<FullHashStr>& full_hashes,
       std::vector<SBThreatType>* full_hash_threat_types,
       SBThreatType* most_severe_threat_type,
       ThreatMetadata* metadata,
-      FullHash* matching_full_hash);
+      FullHashStr* matching_full_hash);
 
   // Returns the SBThreatType for a given ListIdentifier.
   SBThreatType GetSBThreatTypeForList(const ListIdentifier& list_id);
@@ -280,9 +290,29 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   // schedules a task to perform full hash check and returns false.
   bool HandleCheck(std::unique_ptr<PendingCheck> check);
 
+  // `match` is only valid if kMmapSafeBrowsingDatabaseAsync is false.
+  void HandleCheckContinuation(std::unique_ptr<PendingCheck> check,
+                               AsyncMatch* match,
+                               FullHashToStoreAndHashPrefixesMap results);
+
   // Like HandleCheck, but for allowlists that have both full-hashes and
-  // partial hashes in the DB. Returns MATCH, NO_MATCH, or ASYNC.
-  AsyncMatch HandleAllowlistCheck(std::unique_ptr<PendingCheck> check);
+  // partial hashes in the DB. If |allow_async_full_hash_check| is false, it
+  // will only return either MATCH or NO_MATCH unless
+  // kMmapSafeBrowsingDatabaseAsync is enabled in which case it will return
+  // ASYNC. If |allow_async_full_hash_check| is true, it returns
+  // MATCH, NO_MATCH, or ASYNC. In the ASYNC case, it will schedule performing
+  // the full hash check.
+  AsyncMatch HandleAllowlistCheck(std::unique_ptr<PendingCheck> check,
+                                  bool allow_async_full_hash_check,
+                                  base::OnceCallback<void(bool)> callback);
+
+  // `match` is only valid if async is kMmapSafeBrowsingDatabaseAsync is false.
+  void HandleAllowlistCheckContinuation(
+      std::unique_ptr<PendingCheck> check,
+      bool allow_async_full_hash_check,
+      base::OnceCallback<void(bool)> callback,
+      AsyncMatch* match,
+      FullHashToStoreAndHashPrefixesMap results);
 
   // Computes the hashes of URLs that have artificially been marked as unsafe
   // using any of the following command line flags: "mark_as_phishing",
@@ -293,16 +323,11 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   void ScheduleFullHashCheck(std::unique_ptr<PendingCheck> check);
 
   // Checks |stores_to_check| in database synchronously for hash prefixes
-  // matching |hash|. Returns true if there's a match; false otherwise. This is
-  // used for lists that have full hash information in the database.
-  bool HandleHashSynchronously(const FullHash& hash,
-                               const StoresToCheck& stores_to_check);
-
-  // Checks |stores_to_check| in database synchronously for hash prefixes
-  // matching the full hashes for |url|. See |HandleHashSynchronously| for
-  // details.
-  bool HandleUrlSynchronously(const GURL& url,
-                              const StoresToCheck& stores_to_check);
+  // matching the full hashes for |url|. This function is meant for stores that
+  // have full hash information locally.
+  void HandleUrl(const GURL& url,
+                 const StoresToCheck& stores_to_check,
+                 base::OnceCallback<void(bool)> callback);
 
   // Called when the |v4_get_hash_protocol_manager_| has the full hash response
   // available for the URL that we requested. It determines the severest
@@ -318,12 +343,20 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   // while the database was loading from disk.
   void ProcessQueuedChecks();
 
-  // Called on StopOnIOThread, it responds to the clients that are (1) waiting
+  void ProcessQueuedChecksContinuation(
+      std::unique_ptr<PendingCheck> check,
+      FullHashToStoreAndHashPrefixesMap results);
+
+  // Called on StopOnSBThread, it responds to the clients that are (1) waiting
   // for the database to become available with the verdict as SAFE, or (2)
   // waiting for a full hash response from the SafeBrowsing service.
   void RespondSafeToQueuedAndPendingChecks();
 
-  // Calls the appopriate method on the |client| object, based on the contents
+  // Called on StopOnSBThread, it drops all the requests, as if they were
+  // complete. This is used to get to a safe state for shutdown.
+  void DropQueuedAndPendingChecks();
+
+  // Calls the appropriate method on the |client| object, based on the contents
   // of |pending_check|.
   void RespondToClient(std::unique_ptr<PendingCheck> pending_check);
 
@@ -382,6 +415,9 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   // SafeBrowsing service. Returns the swapped copy of the checks.
   PendingChecks CopyAndRemoveAllPendingChecks();
 
+  // Delete any *.store files from disk that are no longer used.
+  void DeleteUnusedStoreFiles();
+
   // Stores full hashes of URLs that have been artificially marked as unsafe.
   StoreAndHashPrefixes artificially_marked_store_and_hash_prefixes_;
 
@@ -399,6 +435,9 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   // manager.
   ExtendedReportingLevelCallback extended_reporting_level_callback_;
 
+  // Callback to record metrics on database migration after initialization.
+  RecordMigrationMetricsCallback record_migration_metrics_callback_;
+
   // The client_state of each list currently being synced. This is updated each
   // time a database update completes, and used to send list client_state
   // information in the full hash request.
@@ -410,10 +449,13 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   // name of the file on disk that would contain the prefixes, if applicable.
   ListInfos list_infos_;
 
-  // The checks awaiting for a full hash response from the SafeBrowsing service.
   // These are used to avoid responding to a client if it cancels a pending
   // check, and to respond back "safe" to all waiting clients if SafeBrowsing is
-  // stopped.
+  // stopped. This occurs in two conditions:
+  // 1) If kMmapSafeBrowsingDatabaseAsync is enabled then the hash prefix map
+  // lookup is asynchronous.
+  // 2) Checks are awaiting for a full hash response from the SafeBrowsing
+  // service.
   PendingChecks pending_checks_;
 
   // The checks that need to be scheduled when the database becomes ready for
@@ -424,11 +466,21 @@ class V4LocalDatabaseManager : public SafeBrowsingDatabaseManager {
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   // The database that manages the stores containing the hash prefix updates.
-  // All writes to this variable must happen on the IO thread only.
+  // All writes to this variable must happen on the IO thread only unless
+  // kSafeBrowsingOnUIThread is enabled in which case it'll be UI thread.
   std::unique_ptr<V4Database, base::OnTaskRunnerDeleter> v4_database_;
 
   // The protocol manager that downloads the hash prefix updates.
   std::unique_ptr<V4UpdateProtocolManager> v4_update_protocol_manager_;
+
+  // Whether the service is running. 'enabled_' is used by the
+  // V4LocalDatabaseManager on the IO thread during normal operations.
+  bool enabled_;
+
+  // Whether the service has been stopped due to browser shutdown. We can be
+  // `!enabled_` if the browser is shutting down or if the Safe Browsing pref
+  // has been turned off.
+  bool is_shutdown_;
 
   base::WeakPtrFactory<V4LocalDatabaseManager> weak_factory_{this};
 };  // class V4LocalDatabaseManager

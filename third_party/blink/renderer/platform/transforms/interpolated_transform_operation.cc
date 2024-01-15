@@ -40,14 +40,15 @@ bool InterpolatedTransformOperation::IsEqualAssumingSameType(
 }
 
 void InterpolatedTransformOperation::Apply(
-    TransformationMatrix& transform,
+    gfx::Transform& transform,
     const gfx::SizeF& border_box_size) const {
-  TransformationMatrix from_transform;
-  TransformationMatrix to_transform;
+  gfx::Transform from_transform;
+  gfx::Transform to_transform;
   from_.ApplyRemaining(border_box_size, starting_index_, from_transform);
   to_.ApplyRemaining(border_box_size, starting_index_, to_transform);
 
-  to_transform.Blend(from_transform, progress_);
+  if (!to_transform.Blend(from_transform, progress_) && progress_ < 0.5)
+    to_transform = from_transform;
   transform.PreConcat(to_transform);
 }
 

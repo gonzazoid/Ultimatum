@@ -4,6 +4,7 @@
   const {page, session, dp} = await testRunner.startBlank(
       'Tracing of FLEDGE worklets.', {url: base + 'fledge_join.html?40'});
 
+  await dp.Target.setAutoAttach({autoAttach: true, flatten: true, waitForDebuggerOnStart: false});
   const TracingHelper =
       await testRunner.loadScript('../resources/tracing-test.js');
   const tracingHelper = new TracingHelper(testRunner, session);
@@ -32,7 +33,7 @@
 
   const auctionJs = `
     navigator.runAdAuction({
-      decisionLogicUrl: "${base}fledge_decision_logic.js.php",
+      decisionLogicURL: "${base}fledge_decision_logic.js.php",
       seller: "https://a.test:8443",
       interestGroupBuyers: ["https://a.test:8443"]})`;
 
@@ -50,7 +51,6 @@
   let sawBidderRunningInProcess = 'nope';
   let sawSellerRunningInProcess = 'nope';
   let sawBidderDoneWithProcess = 'nope';
-  let sawSellerDoneWithProcess = 'nope';
   for (ev of devtoolsEvents) {
     if (ev.name === 'AuctionWorkletRunningInProcess') {
       let data = ev.args.data;
@@ -65,9 +65,9 @@
       let data = ev.args.data;
       if (data.type === 'bidder') {
         sawBidderDoneWithProcess = data.host;
-      } else if (data.type === 'seller') {
-        sawSellerDoneWithProcess = data.host;
       }
+      // Note that seller unload is not guaranteed to be observed, as it can
+      // happen after auction completion.
       verifyAuctionProcessEventData(data);
     }
     if (ev.name === 'generate_bid')
@@ -95,8 +95,8 @@
       sawSellerRunningInProcess);
   testRunner.log(
       'Saw process release for bidder for host:' + sawBidderDoneWithProcess);
-  testRunner.log(
-      'Saw process release for seller for host:' + sawSellerDoneWithProcess);
+  // Note that seller unload is not guaranteed to be observed, as it can happen
+  // after auction completion.
 
   testRunner.completeTest();
 })

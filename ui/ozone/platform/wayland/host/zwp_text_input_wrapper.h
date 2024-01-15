@@ -12,8 +12,10 @@
 
 #include "base/strings/string_piece.h"
 #include "ui/base/ime/grammar_fragment.h"
+#include "ui/base/ime/text_input_client.h"
 #include "ui/base/ime/text_input_mode.h"
 #include "ui/base/ime/text_input_type.h"
+#include "url/gurl.h"
 
 namespace gfx {
 class Rect;
@@ -61,7 +63,10 @@ class ZWPTextInputWrapperClient {
   // Notify when a key event was sent. Key events should not be used
   // for normal text input operations, which should be done with
   // commit_string, delete_surrounding_text, etc.
-  virtual void OnKeysym(uint32_t key, uint32_t state, uint32_t modifiers) = 0;
+  virtual void OnKeysym(uint32_t key,
+                        uint32_t state,
+                        uint32_t modifiers,
+                        uint32_t time) = 0;
 
   // Called when a new preedit region is specified. The region is specified
   // by |index| and |length| on the surrounding text sent do wayland compositor
@@ -91,6 +96,9 @@ class ZWPTextInputWrapperClient {
   virtual void OnSetVirtualKeyboardOccludedBounds(
       const gfx::Rect& screen_bounds) = 0;
 
+  // Called when confirming the preedit.
+  virtual void OnConfirmPreedit(bool keep_selection) = 0;
+
   // Called when the visibility state of the input panel changed.
   // There's no detailed spec of |state|, and no actual implementor except
   // components/exo is found in the world at this moment.
@@ -105,6 +113,9 @@ class ZWPTextInputWrapperClient {
   // on OnKeysym. E.g., if LSB of modifiers is set, modifiers_map[0] is
   // set, if (1 << 1) of modifiers is set, modifiers_map[1] is set, and so on.
   virtual void OnModifiersMap(std::vector<std::string> modifiers_map) = 0;
+
+  // Called when some image is being inserted.
+  virtual void OnInsertImage(const GURL& src) = 0;
 };
 
 // A wrapper around different versions of wayland text input protocols.
@@ -117,7 +128,8 @@ class ZWPTextInputWrapper {
 
   virtual void Reset() = 0;
 
-  virtual void Activate(WaylandWindow* window) = 0;
+  virtual void Activate(WaylandWindow* window,
+                        ui::TextInputClient::FocusReason reason) = 0;
   virtual void Deactivate() = 0;
 
   virtual void ShowInputPanel() = 0;
@@ -126,10 +138,13 @@ class ZWPTextInputWrapper {
   virtual void SetCursorRect(const gfx::Rect& rect) = 0;
   virtual void SetSurroundingText(const std::string& text,
                                   const gfx::Range& selection_range) = 0;
+  virtual bool HasAdvancedSurroundingTextSupport() const = 0;
+  virtual void SetSurroundingTextOffsetUtf16(uint32_t offset_utf16) = 0;
   virtual void SetContentType(ui::TextInputType type,
                               ui::TextInputMode mode,
                               uint32_t flags,
-                              bool should_do_learning) = 0;
+                              bool should_do_learning,
+                              bool can_compose_inline) = 0;
 
   virtual void SetGrammarFragmentAtCursor(
       const ui::GrammarFragment& fragment) = 0;

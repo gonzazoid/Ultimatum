@@ -5,20 +5,26 @@
 #include "ash/wm/desks/desks_util.h"
 
 #include <array>
+#include <optional>
 
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desk.h"
-#include "ash/wm/desks/desks_bar_view.h"
 #include "ash/wm/desks/desks_controller.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
+#include "ash/wm/float/float_controller.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_session.h"
+#include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
+#include "base/containers/adapters.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
+#include "ui/display/screen.h"
 
 namespace ash {
 
@@ -112,9 +118,39 @@ aura::Window* GetActiveDeskContainerForRoot(aura::Window* root) {
 ASH_EXPORT bool BelongsToActiveDesk(aura::Window* window) {
   DCHECK(window);
 
+  // This function may be called early on during window construction. If there
+  // is no parent, then it's not part of any desk yet. See b/260851890 for more
+  // details.
+  if (!window->parent())
+    return false;
+
+  auto* window_state = WindowState::Get(window);
+  // A floated window may be associated with a desk, but they would be parented
+  // to the float container.
+  if (window_state && window_state->IsFloated()) {
+    // When restoring floated window, this will be called when window is not
+    // assigned to a desk by float controller yet. Only return `desk` when it
+    // exists.
+    // Note: in above case, `window` still belongs to desk container and
+    // can be checked in statements below.
+    if (auto* desk =
+            Shell::Get()->float_controller()->FindDeskOfFloatedWindow(window)) {
+      return desk->is_active();
+    }
+  }
+
   const int active_desk_id = GetActiveDeskContainerId();
   aura::Window* desk_container = GetDeskContainerForContext(window);
   return desk_container && desk_container->GetId() == active_desk_id;
+}
+
+std::optional<uint64_t> GetActiveDeskLacrosProfileId() {
+  std::optional<uint64_t> id;
+  if (auto* desk_controller = DesksController::Get();
+      desk_controller && chromeos::features::IsDeskProfilesEnabled()) {
+    id = desk_controller->active_desk()->lacros_profile_id();
+  }
+  return id;
 }
 
 aura::Window* GetDeskContainerForContext(aura::Window* context) {
@@ -130,8 +166,25 @@ aura::Window* GetDeskContainerForContext(aura::Window* context) {
   return nullptr;
 }
 
+const Desk* GetDeskForContext(aura::Window* context) {
+  DCHECK(context);
+
+  if (aura::Window* context_desk = GetDeskContainerForContext(context)) {
+    for (auto& desk : DesksController::Get()->desks()) {
+      if (desk->container_id() == context_desk->GetId()) {
+        return desk.get();
+      }
+    }
+  }
+
+  if (WindowState::Get(context)->IsFloated())
+    return Shell::Get()->float_controller()->FindDeskOfFloatedWindow(context);
+
+  return nullptr;
+}
+
 bool ShouldDesksBarBeCreated() {
-  return !TabletMode::Get()->InTabletMode() ||
+  return !display::Screen::GetScreen()->InTabletMode() ||
          DesksController::Get()->desks().size() > 1;
 }
 
@@ -153,7 +206,7 @@ bool IsDraggingAnyDesk() {
     return false;
 
   for (auto& grid : overview_session->grid_list()) {
-    const DesksBarView* desks_bar_view = grid->desks_bar_view();
+    const LegacyDeskBarView* desks_bar_view = grid->desks_bar_view();
     if (desks_bar_view && desks_bar_view->IsDraggingDesk())
       return true;
   }
@@ -164,6 +217,27 @@ bool IsDraggingAnyDesk() {
 bool IsWindowVisibleOnAllWorkspaces(const aura::Window* window) {
   return window->GetProperty(aura::client::kWindowWorkspaceKey) ==
          aura::client::kWindowWorkspaceVisibleOnAllWorkspaces;
+}
+
+bool IsZOrderTracked(aura::Window* window) {
+  return window->GetType() == aura::client::WindowType::WINDOW_TYPE_NORMAL &&
+         window->GetProperty(aura::client::kZOrderingKey) ==
+             ui::ZOrderLevel::kNormal;
+}
+
+std::optional<size_t> GetWindowZOrder(
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>& windows,
+    aura::Window* window) {
+  size_t position = 0;
+  for (aura::Window* w : base::Reversed(windows)) {
+    if (IsZOrderTracked(w)) {
+      if (w == window)
+        return position;
+      ++position;
+    }
+  }
+
+  return std::nullopt;
 }
 
 }  // namespace desks_util

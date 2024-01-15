@@ -8,32 +8,26 @@
 
 #import <memory>
 
-#import "base/bind.h"
-#import "base/compiler_specific.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync/test/mock_sync_service.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/system_identity.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
-#import "ios/chrome/browser/sync/sync_setup_service_mock.h"
+#import "ios/chrome/browser/settings/model/sync/utils/sync_util.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/system_identity.h"
 #import "ios/chrome/browser/ui/settings/cells/byo_textfield_item.h"
 #import "ios/chrome/browser/ui/settings/passphrase_table_view_controller_test.h"
-#import "ios/chrome/browser/ui/settings/sync/utils/sync_util.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -47,22 +41,23 @@ class SyncEncryptionPassphraseTableViewControllerTest
   SyncEncryptionPassphraseTableViewControllerTest() = default;
 
   void TurnSyncPassphraseErrorOn() {
-    ON_CALL(*mock_sync_setup_service_, GetSyncServiceState)
-        .WillByDefault(Return(SyncSetupService::kSyncServiceNeedsPassphrase));
+    ON_CALL(*fake_sync_service_, GetUserActionableError())
+        .WillByDefault(
+            Return(syncer::SyncService::UserActionableError::kNeedsPassphrase));
     ON_CALL(*fake_sync_service_->GetMockUserSettings(), IsPassphraseRequired)
         .WillByDefault(Return(true));
   }
 
-  void TurnSyncOtherErrorOn(SyncSetupService::SyncServiceState state) {
-    ON_CALL(*mock_sync_setup_service_, GetSyncServiceState)
-        .WillByDefault(Return(state));
+  void TurnSyncOtherErrorOn(syncer::SyncService::UserActionableError error) {
+    ON_CALL(*fake_sync_service_, GetUserActionableError())
+        .WillByDefault(Return(error));
     ON_CALL(*fake_sync_service_->GetMockUserSettings(), IsPassphraseRequired)
         .WillByDefault(Return(false));
   }
 
   void TurnSyncErrorOff() {
-    ON_CALL(*mock_sync_setup_service_, GetSyncServiceState)
-        .WillByDefault(Return(SyncSetupService::kNoSyncServiceError));
+    ON_CALL(*fake_sync_service_, GetUserActionableError())
+        .WillByDefault(Return(syncer::SyncService::UserActionableError::kNone));
     ON_CALL(*fake_sync_service_->GetMockUserSettings(), IsPassphraseRequired)
         .WillByDefault(Return(false));
   }
@@ -70,10 +65,6 @@ class SyncEncryptionPassphraseTableViewControllerTest
  protected:
   void SetUp() override {
     PassphraseTableViewControllerTest::SetUp();
-    mock_sync_setup_service_ = static_cast<NiceMock<SyncSetupServiceMock>*>(
-        SyncSetupServiceFactory::GetInstance()->SetTestingFactoryAndUse(
-            chrome_browser_state_.get(),
-            base::BindRepeating(&SyncSetupServiceMock::CreateKeyedService)));
     ON_CALL(*fake_sync_service_, GetTransportState)
         .WillByDefault(Return(syncer::SyncService::TransportState::ACTIVE));
     ON_CALL(*fake_sync_service_->GetMockUserSettings(),
@@ -82,12 +73,7 @@ class SyncEncryptionPassphraseTableViewControllerTest
     TurnSyncErrorOff();
   }
 
-  void TearDown() override {
-    [SyncController() stopObserving];
-    PassphraseTableViewControllerTest::TearDown();
-  }
-
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[SyncEncryptionPassphraseTableViewController alloc]
         initWithBrowser:browser_.get()];
   }
@@ -96,9 +82,6 @@ class SyncEncryptionPassphraseTableViewControllerTest
     return static_cast<SyncEncryptionPassphraseTableViewController*>(
         controller());
   }
-
-  // Weak, owned by `profile_`.
-  NiceMock<SyncSetupServiceMock>* mock_sync_setup_service_;
 };
 
 TEST_F(SyncEncryptionPassphraseTableViewControllerTest, TestModel) {
@@ -214,15 +197,15 @@ TEST_F(SyncEncryptionPassphraseTableViewControllerTest, TestMessage) {
   // Default.
   EXPECT_FALSE([sync_controller syncErrorMessage]);
 
-  SyncSetupService::SyncServiceState otherState =
-      SyncSetupService::kSyncServiceSignInNeedsUpdate;
+  syncer::SyncService::UserActionableError otherError =
+      syncer::SyncService::UserActionableError::kSignInNeedsUpdate;
 
   // With a custom message.
   [sync_controller setSyncErrorMessage:@"message"];
   EXPECT_NSEQ(@"message", [sync_controller syncErrorMessage]);
   TurnSyncPassphraseErrorOn();
   EXPECT_NSEQ(@"message", [sync_controller syncErrorMessage]);
-  TurnSyncOtherErrorOn(otherState);
+  TurnSyncOtherErrorOn(otherError);
   EXPECT_NSEQ(@"message", [sync_controller syncErrorMessage]);
   TurnSyncErrorOff();
   EXPECT_NSEQ(@"message", [sync_controller syncErrorMessage]);
@@ -232,7 +215,7 @@ TEST_F(SyncEncryptionPassphraseTableViewControllerTest, TestMessage) {
   EXPECT_FALSE([sync_controller syncErrorMessage]);
   TurnSyncPassphraseErrorOn();
   EXPECT_FALSE([sync_controller syncErrorMessage]);
-  TurnSyncOtherErrorOn(otherState);
+  TurnSyncOtherErrorOn(otherError);
   EXPECT_NSEQ(GetSyncErrorMessageForBrowserState(chrome_browser_state_.get()),
               [sync_controller syncErrorMessage]);
   TurnSyncErrorOff();

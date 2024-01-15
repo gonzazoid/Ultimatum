@@ -120,13 +120,21 @@ class InterfaceFactoryImpl final
                                const std::string& error_message);
 #endif  // BUILDFLAG(ENABLE_MOJO_CDM)
 
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  void FinishCreatingVideoDecoder(
+      mojo::PendingReceiver<mojom::VideoDecoder> receiver,
+      mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
+          dst_video_decoder);
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+
   // Must be declared before the receivers below because the bound objects might
   // take a raw pointer of |cdm_service_context_| and assume it's always
   // available.
   MojoCdmServiceContext cdm_service_context_;
 
 #if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
-  mojo::UniqueReceiverSet<mojom::AudioDecoder> audio_decoder_receivers_;
+  class AudioDecoderReceivers;
+  std::unique_ptr<AudioDecoderReceivers> audio_decoder_receivers_;
 #endif  // BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
 
 #if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)

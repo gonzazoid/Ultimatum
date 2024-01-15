@@ -13,6 +13,10 @@
   display: flex;
 }
 
+.row:not(.policy.row) {
+  background-color: var(--table-row-expanded-background);
+}
+
 .row > * {
   box-sizing: border-box;
   flex: 0 0 10%;
@@ -23,18 +27,23 @@
   white-space: nowrap;
 }
 
-.name {
-  border-inline-end: 1px solid rgba(0, 0, 0, .06);
-  flex: 0 0 15%;
+.level,
+.messages,
+.name,
+.scope,
+.source,
+.policy.row .value {
+  border-inline-end: 1px solid var(--table-border);
 }
 
+.name,
 .value {
-  flex: 0 0 35%;
+  flex: 0 0 25%;
 }
 
 .row.header {
-  background-color: rgb(240, 240, 240);
-  border-bottom: 1px solid rgba(0, 0, 0, .06);
+  background-color: var(--table-header);
+  border-bottom: 1px solid var(--table-border);
 }
 
 .value.row .value {
@@ -50,7 +59,7 @@
 
 .expanded .policy.row,
 .policy.row:hover {
-  background-color: rgb(250, 250, 250);
+  background-color: var(--element-hover);
 }
 
 .warnings.row .value,
@@ -75,7 +84,7 @@
 </if>
 
 a {
-  color: rgb(26, 115, 232);
+  color: var(--link-color);
   cursor: pointer;
   text-decoration: underline;
 }
@@ -122,15 +131,30 @@ a {
   flex: 0 0 50%;
 }
 
+.level.row,
+.scope.row {
+  border-inline-end: none;
+}
+
 .toggle,
 .source,
+.scope.row .name,
+.level.row .name,
 .messages.row .name,
-.value.row .name {
+.value.row .name,
+.errors.row .name,
+.warnings.row .name,
+.infos.row .name {
   flex: 0 0 25%;
 }
 
+.scope.row .value,
+.level.row .value,
 .messages.row .value,
-.value.row .value {
+.value.row .value,
+.errors.row .value,
+.warnings.row .value,
+.infos.row .value {
   display: block;
   flex: 1;
 }
@@ -162,6 +186,16 @@ a {
     </a>
   </div>
 </div>
+<if expr="is_android or is_ios">
+  <div class="scope row" role="row" hidden>
+    <div class="name" role="rowheader">$i18n{headerScope}</div>
+    <div class="value" role="cell"></div>
+  </div>
+  <div class="level row" role="row" hidden>
+    <div class="name" role="rowheader">$i18n{headerLevel}</div>
+    <div class="value" role="cell"></div>
+  </div>
+</if>
 <div class="errors row" role="row" hidden>
   <div class="name" role="rowheader">$i18n{error}</div>
   <div class="value" role="cell"></div>

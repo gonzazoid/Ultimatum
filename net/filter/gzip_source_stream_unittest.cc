@@ -5,8 +5,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/io_buffer.h"
 #include "net/base/test_completion_callback.h"
@@ -71,7 +71,8 @@ class GzipSourceStreamTest : public ::testing::TestWithParam<GzipTestParam> {
     CompressGzip(source_data_, source_data_len_, encoded_data_,
                  &encoded_data_len_, type != SourceStream::TYPE_DEFLATE);
 
-    output_buffer_ = base::MakeRefCounted<IOBuffer>(output_buffer_size_);
+    output_buffer_ =
+        base::MakeRefCounted<IOBufferWithSize>(output_buffer_size_);
     auto source = std::make_unique<MockSourceStream>();
     if (GetParam().read_result_type == ReadResultType::ONE_BYTE_AT_A_TIME)
       source->set_read_one_byte_at_a_time(true);
@@ -140,7 +141,7 @@ class GzipSourceStreamTest : public ::testing::TestWithParam<GzipTestParam> {
   scoped_refptr<IOBuffer> output_buffer_;
   const int output_buffer_size_;
 
-  raw_ptr<MockSourceStream> source_;
+  raw_ptr<MockSourceStream, DanglingUntriaged> source_;
   std::unique_ptr<GzipSourceStream> stream_;
 };
 

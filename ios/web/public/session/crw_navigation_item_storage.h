@@ -13,10 +13,12 @@
 #include "base/time/time.h"
 #include "ios/web/common/user_agent.h"
 #include "ios/web/public/navigation/referrer.h"
-#import "ios/web/public/ui/page_display_state.h"
 #include "url/gurl.h"
 
 namespace web {
+namespace proto {
+class NavigationItemStorage;
+}  // namespace proto
 
 // Keys used to serialize navigation properties.
 
@@ -35,8 +37,6 @@ extern NSString* const kNavigationItemStorageReferrerPolicyKey;
 extern NSString* const kNavigationItemStorageTimestampKey;
 // Page title (NSString).
 extern NSString* const kNavigationItemStorageTitleKey;
-// The PageDisplayState (NSDictionary).
-extern NSString* const kNavigationItemStoragePageDisplayStateKey;
 // HTTP request headers (NSDictionary).
 extern NSString* const kNavigationItemStorageHTTPRequestHeadersKey;
 // Whether or not to bypass showing the resubmit data confirmation when loading
@@ -44,15 +44,6 @@ extern NSString* const kNavigationItemStorageHTTPRequestHeadersKey;
 extern NSString* const kNavigationItemStorageSkipRepostFormConfirmationKey;
 // The user agent type (std::string).
 extern NSString* const kNavigationItemStorageUserAgentTypeKey;
-
-// Constants for histogram names.
-extern const char kNavigationItemSerializedSizeHistogram[];
-extern const char kNavigationItemSerializedVirtualURLSizeHistogram[];
-extern const char kNavigationItemSerializedURLSizeHistogram[];
-extern const char kNavigationItemSerializedReferrerURLSizeHistogram[];
-extern const char kNavigationItemSerializedTitleSizeHistogram[];
-extern const char kNavigationItemSerializedDisplayStateSizeHistogram[];
-extern const char kNavigationItemSerializedRequestHeadersSizeHistogram[];
 
 }  // namespace web
 
@@ -65,9 +56,15 @@ extern const char kNavigationItemSerializedRequestHeadersSizeHistogram[];
 @property(nonatomic, assign) web::Referrer referrer;
 @property(nonatomic, assign) base::Time timestamp;
 @property(nonatomic, assign) const std::u16string& title;
-@property(nonatomic, assign) web::PageDisplayState displayState;
 @property(nonatomic, assign) web::UserAgentType userAgentType;
-@property(nonatomic, copy) NSDictionary* HTTPRequestHeaders;
+@property(nonatomic, copy)
+    NSDictionary<NSString*, NSString*>* HTTPRequestHeaders;
+
+// Convenience initializer that creates an instance from proto representation.
+- (instancetype)initWithProto:(const web::proto::NavigationItemStorage&)storage;
+
+// Serializes the CRWNavigationItemStorage into `storage`.
+- (void)serializeToProto:(web::proto::NavigationItemStorage&)storage;
 
 @end
 

@@ -7,11 +7,17 @@
 #include <utility>
 
 #include "ash/public/cpp/child_accounts/parent_access_controller.h"
+#include "ash/public/cpp/login/login_utils.h"
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/login_screen_model.h"
-#include "base/bind.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "ash/webui/settings/public/constants/setting.mojom-shared.h"
+#include "base/check_is_test.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_service.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/hats_unlock_survey_trigger.h"
@@ -20,8 +26,6 @@
 #include "chrome/browser/ash/login/login_auth_recorder.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/reauth_stats.h"
-#include "chrome/browser/ash/login/saml/in_session_password_sync_manager.h"
-#include "chrome/browser/ash/login/saml/in_session_password_sync_manager_factory.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/ui/login_display_host_webui.h"
@@ -31,13 +35,11 @@
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/ui/ash/wallpaper_controller_client_impl.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/ash/in_session_password_change/lock_screen_reauth_dialogs.h"
+#include "chrome/browser/ui/webui/ash/lock_screen_reauth/lock_screen_reauth_dialogs.h"
 #include "chrome/browser/ui/webui/ash/login/l10n_util.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/session_manager/core/session_manager.h"
-#include "components/user_manager/remove_user_delegate.h"
 #include "components/user_manager/user_names.h"
 #include "ui/base/ime/ash/input_method_manager.h"
 
@@ -60,9 +62,20 @@ LoginScreenClientImpl::LoginScreenClientImpl()
 
   DCHECK(!g_login_screen_client_instance);
   g_login_screen_client_instance = this;
+
+  if (user_manager::UserManager::IsInitialized()) {
+    user_manager::UserManager::Get()->AddObserver(this);
+  } else {
+    CHECK_IS_TEST();
+  }
 }
 
 LoginScreenClientImpl::~LoginScreenClientImpl() {
+  if (user_manager::UserManager::IsInitialized()) {
+    user_manager::UserManager::Get()->RemoveObserver(this);
+  } else {
+    CHECK_IS_TEST();
+  }
   ash::LoginScreen::Get()->SetClient(nullptr);
   DCHECK_EQ(this, g_login_screen_client_instance);
   g_login_screen_client_instance = nullptr;
@@ -154,23 +167,13 @@ ash::ParentCodeValidationResult LoginScreenClientImpl::ValidateParentAccessCode(
     const AccountId& account_id,
     const std::string& access_code,
     base::Time validation_time) {
-  return chromeos::parent_access::ParentAccessService::Get()
+  return ash::parent_access::ParentAccessService::Get()
       .ValidateParentAccessCode(account_id, access_code, validation_time);
-}
-
-void LoginScreenClientImpl::HardlockPod(const AccountId& account_id) {
-  if (delegate_)
-    delegate_->HandleHardlockPod(account_id);
 }
 
 void LoginScreenClientImpl::OnFocusPod(const AccountId& account_id) {
   if (delegate_)
     delegate_->HandleOnFocusPod(account_id);
-}
-
-void LoginScreenClientImpl::OnNoPodFocused() {
-  if (delegate_)
-    delegate_->HandleOnNoPodFocused();
 }
 
 void LoginScreenClientImpl::FocusLockScreenApps(bool reverse) {
@@ -189,14 +192,34 @@ void LoginScreenClientImpl::FocusOobeDialog() {
 }
 
 void LoginScreenClientImpl::ShowGaiaSignin(const AccountId& prefilled_account) {
+  MakePreAuthenticationChecks(
+      prefilled_account,
+      base::BindOnce(&LoginScreenClientImpl::ShowGaiaSigninInternal,
+                     weak_ptr_factory_.GetWeakPtr(), prefilled_account));
+}
+
+void LoginScreenClientImpl::StartUserRecovery(
+    const AccountId& account_to_recover) {
+  CHECK(!account_to_recover.empty());
+  MakePreAuthenticationChecks(
+      account_to_recover,
+      base::BindOnce(&LoginScreenClientImpl::StartUserRecoveryInternal,
+                     weak_ptr_factory_.GetWeakPtr(), account_to_recover));
+}
+
+void LoginScreenClientImpl::MakePreAuthenticationChecks(
+    const AccountId& account_id,
+    base::OnceClosure continuation) {
   if (time_show_gaia_signin_initiated_.is_null())
     time_show_gaia_signin_initiated_ = base::TimeTicks::Now();
   // Check trusted status as a workaround to ensure that device owner id is
   // ready. Device owner ID is necessary for IsApprovalRequired checks.
+  auto continuation_split = base::SplitOnceCallback(std::move(continuation));
   const ash::CrosSettingsProvider::TrustedStatus status =
       ash::CrosSettings::Get()->PrepareTrustedValues(
-          base::BindOnce(&LoginScreenClientImpl::ShowGaiaSignin,
-                         weak_ptr_factory_.GetWeakPtr(), prefilled_account));
+          base::BindOnce(&LoginScreenClientImpl::MakePreAuthenticationChecks,
+                         weak_ptr_factory_.GetWeakPtr(), account_id,
+                         std::move(continuation_split.second)));
   switch (status) {
     case ash::CrosSettingsProvider::TRUSTED:
       // Owner account ID is available. Record time spent waiting for owner
@@ -217,10 +240,9 @@ void LoginScreenClientImpl::ShowGaiaSignin(const AccountId& prefilled_account) {
       return;
   }
 
-  auto supervised_action = prefilled_account.empty()
-                               ? SupervisedAction::kAddUser
-                               : SupervisedAction::kReauth;
-  if (chromeos::parent_access::ParentAccessService::Get().IsApprovalRequired(
+  auto supervised_action = account_id.empty() ? SupervisedAction::kAddUser
+                                              : SupervisedAction::kReauth;
+  if (ash::parent_access::ParentAccessService::Get().IsApprovalRequired(
           supervised_action)) {
     // Show the client native parent access widget and processed to GAIA signin
     // flow in |OnParentAccessValidation| when validation success.
@@ -230,10 +252,11 @@ void LoginScreenClientImpl::ShowGaiaSignin(const AccountId& prefilled_account) {
     ash::ParentAccessController::Get()->ShowWidget(
         AccountId(),
         base::BindOnce(&LoginScreenClientImpl::OnParentAccessValidation,
-                       weak_ptr_factory_.GetWeakPtr(), prefilled_account),
+                       weak_ptr_factory_.GetWeakPtr(),
+                       std::move(continuation_split.first)),
         supervised_action, false /* extra_dimmer */, base::Time::Now());
   } else {
-    ShowGaiaSigninInternal(prefilled_account);
+    std::move(continuation_split.first).Run();
   }
 }
 
@@ -252,8 +275,7 @@ void LoginScreenClientImpl::RemoveUser(const AccountId& account_id) {
   ProfileMetrics::LogProfileDeleteUser(
       ProfileMetrics::DELETE_PROFILE_USER_MANAGER);
   user_manager::UserManager::Get()->RemoveUser(
-      account_id, user_manager::UserRemovalReason::LOCAL_USER_INITIATED,
-      /*delegate=*/nullptr);
+      account_id, user_manager::UserRemovalReason::LOCAL_USER_INITIATED);
   if (ash::LoginDisplayHost::default_host())
     ash::LoginDisplayHost::default_host()->UpdateAddUserButtonStatus();
 }
@@ -269,7 +291,7 @@ void LoginScreenClientImpl::LaunchPublicSession(
 void LoginScreenClientImpl::RequestPublicSessionKeyboardLayouts(
     const AccountId& account_id,
     const std::string& locale) {
-  chromeos::GetKeyboardLayoutsForLocale(
+  ash::GetKeyboardLayoutsForLocale(
       base::BindOnce(&LoginScreenClientImpl::SetPublicSessionKeyboardLayout,
                      weak_ptr_factory_.GetWeakPtr(), account_id, locale),
       locale, ash::input_method::InputMethodManager::Get());
@@ -297,7 +319,10 @@ void LoginScreenClientImpl::ShowParentAccessHelpApp() {
 void LoginScreenClientImpl::ShowLockScreenNotificationSettings() {
   chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
       ProfileManager::GetActiveUserProfile(),
-      chromeos::settings::mojom::kSecurityAndSignInSubpagePathV2);
+      std::string(chromeos::settings::mojom::kSecurityAndSignInSubpagePathV2) +
+          "?settingId=" +
+          base::NumberToString(static_cast<int>(
+              chromeos::settings::mojom::Setting::kLockScreenNotification)));
 }
 
 void LoginScreenClientImpl::OnFocusLeavingSystemTray(bool reverse) {
@@ -313,14 +338,6 @@ void LoginScreenClientImpl::OnSystemTrayBubbleShown() {
 void LoginScreenClientImpl::OnLoginScreenShown() {
   for (LoginScreenShownObserver& observer : login_screen_shown_observers_)
     observer.OnLoginScreenShown();
-}
-
-void LoginScreenClientImpl::LoadWallpaper(const AccountId& account_id) {
-  WallpaperControllerClientImpl::Get()->ShowUserWallpaper(account_id);
-}
-
-void LoginScreenClientImpl::SignOutUser() {
-  ash::ScreenLocker::default_screen_locker()->Signout();
 }
 
 void LoginScreenClientImpl::CancelAddUser() {
@@ -382,14 +399,6 @@ void LoginScreenClientImpl::SetPublicSessionKeyboardLayout(
       account_id, locale, result);
 }
 
-void LoginScreenClientImpl::OnUserActivity() {
-  if (ash::LoginDisplayHost::default_host()) {
-    ash::LoginDisplayHost::default_host()
-        ->GetExistingUserController()
-        ->ResetAutoLoginTimer();
-  }
-}
-
 views::Widget* LoginScreenClientImpl::GetLoginWindowWidget() {
   if (ash::LoginDisplayHost::default_host()) {
     return ash::LoginDisplayHost::default_host()->GetLoginWindowWidget();
@@ -397,26 +406,33 @@ views::Widget* LoginScreenClientImpl::GetLoginWindowWidget() {
   return nullptr;
 }
 
+void LoginScreenClientImpl::OnUserImageChanged(const user_manager::User& user) {
+  ash::LoginScreen::Get()->GetModel()->SetAvatarForUser(
+      user.GetAccountId(), ash::BuildAshUserAvatarForUser(user));
+}
+
 void LoginScreenClientImpl::OnParentAccessValidation(
-    const AccountId& prefilled_account,
+    base::OnceClosure continuation,
     bool success) {
-  if (success)
-    ShowGaiaSigninInternal(prefilled_account);
+  if (success) {
+    std::move(continuation).Run();
+  }
 }
 
 void LoginScreenClientImpl::ShowGaiaSigninInternal(
     const AccountId& prefilled_account) {
   if (ash::LoginDisplayHost::default_host()) {
+    // Login screen case.
     ash::LoginDisplayHost::default_host()->ShowGaiaDialog(prefilled_account);
   } else {
-    const user_manager::User* user =
-        user_manager::UserManager::Get()->FindUser(prefilled_account);
-    Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
-    DCHECK(session_manager::SessionManager::Get()->IsScreenLocked());
-    auto* password_sync_manager =
-        ash::InSessionPasswordSyncManagerFactory::GetForProfile(profile);
-    if (password_sync_manager) {
-      password_sync_manager->CreateAndShowDialog();
-    }
+    // Lock screen case.
+    ash::LockScreenStartReauthDialog::Show();
   }
+}
+
+void LoginScreenClientImpl::StartUserRecoveryInternal(
+    const AccountId& account_to_recover) {
+  CHECK(ash::LoginDisplayHost::default_host())
+      << "Recovery is not supported on the lock screen";
+  ash::LoginDisplayHost::default_host()->StartUserRecovery(account_to_recover);
 }

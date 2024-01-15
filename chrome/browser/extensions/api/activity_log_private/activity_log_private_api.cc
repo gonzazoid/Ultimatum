@@ -10,7 +10,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
@@ -100,33 +100,33 @@ void ActivityLogAPI::OnExtensionActivity(scoped_refptr<Action> activity) {
 
 ExtensionFunction::ResponseAction
 ActivityLogPrivateGetExtensionActivitiesFunction::Run() {
-  std::unique_ptr<activity_log_private::GetExtensionActivities::Params> params(
-      activity_log_private::GetExtensionActivities::Params::Create(args()));
+  absl::optional<activity_log_private::GetExtensionActivities::Params> params =
+      activity_log_private::GetExtensionActivities::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   // Get the arguments in the right format.
   Filter filter = std::move(params->filter);
   Action::ActionType action_type = Action::ACTION_API_CALL;
   switch (filter.activity_type) {
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_API_CALL:
+    case activity_log_private::ExtensionActivityFilter::kApiCall:
       action_type = Action::ACTION_API_CALL;
       break;
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_API_EVENT:
+    case activity_log_private::ExtensionActivityFilter::kApiEvent:
       action_type = Action::ACTION_API_EVENT;
       break;
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_CONTENT_SCRIPT:
+    case activity_log_private::ExtensionActivityFilter::kContentScript:
       action_type = Action::ACTION_CONTENT_SCRIPT;
       break;
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_DOM_ACCESS:
+    case activity_log_private::ExtensionActivityFilter::kDomAccess:
       action_type = Action::ACTION_DOM_ACCESS;
       break;
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_DOM_EVENT:
+    case activity_log_private::ExtensionActivityFilter::kDomEvent:
       action_type = Action::ACTION_DOM_EVENT;
       break;
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_WEB_REQUEST:
+    case activity_log_private::ExtensionActivityFilter::kWebRequest:
       action_type = Action::ACTION_WEB_REQUEST;
       break;
-    case activity_log_private::EXTENSION_ACTIVITY_FILTER_ANY:
+    case activity_log_private::ExtensionActivityFilter::kAny:
     default:
       action_type = Action::ACTION_ANY;
   }
@@ -168,8 +168,8 @@ void ActivityLogPrivateGetExtensionActivitiesFunction::OnLookupCompleted(
 
 ExtensionFunction::ResponseAction
 ActivityLogPrivateDeleteActivitiesFunction::Run() {
-  std::unique_ptr<activity_log_private::DeleteActivities::Params> params(
-      activity_log_private::DeleteActivities::Params::Create(args()));
+  absl::optional<activity_log_private::DeleteActivities::Params> params =
+      activity_log_private::DeleteActivities::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   // Put the arguments in the right format.
@@ -188,9 +188,10 @@ ActivityLogPrivateDeleteActivitiesFunction::Run() {
 
 ExtensionFunction::ResponseAction
 ActivityLogPrivateDeleteActivitiesByExtensionFunction::Run() {
-  std::unique_ptr<activity_log_private::DeleteActivitiesByExtension::Params>
-      params(activity_log_private::DeleteActivitiesByExtension::Params::Create(
-          args()));
+  absl::optional<activity_log_private::DeleteActivitiesByExtension::Params>
+      params =
+          activity_log_private::DeleteActivitiesByExtension::Params::Create(
+              args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   ActivityLog* activity_log = ActivityLog::GetInstance(browser_context());
@@ -208,8 +209,8 @@ ActivityLogPrivateDeleteDatabaseFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction ActivityLogPrivateDeleteUrlsFunction::Run() {
-  std::unique_ptr<activity_log_private::DeleteUrls::Params> params(
-      activity_log_private::DeleteUrls::Params::Create(args()));
+  absl::optional<activity_log_private::DeleteUrls::Params> params =
+      activity_log_private::DeleteUrls::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   // Put the arguments in the right format.

@@ -4,7 +4,6 @@
 
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_event_router_factory.h"
 
-#include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate_factory.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_event_router.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/extension_system_provider.h"
@@ -23,24 +22,28 @@ PasswordsPrivateEventRouterFactory::GetForProfile(
 // static
 PasswordsPrivateEventRouterFactory*
 PasswordsPrivateEventRouterFactory::GetInstance() {
-  return base::Singleton<PasswordsPrivateEventRouterFactory>::get();
+  static base::NoDestructor<PasswordsPrivateEventRouterFactory> instance;
+  return instance.get();
 }
 
 PasswordsPrivateEventRouterFactory::PasswordsPrivateEventRouterFactory()
     : ProfileKeyedServiceFactory(
           "PasswordsPrivateEventRouter",
-          ProfileSelections::BuildRedirectedInIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
-  DependsOn(PasswordsPrivateDelegateFactory::GetInstance());
 }
 
-PasswordsPrivateEventRouterFactory::
-    ~PasswordsPrivateEventRouterFactory() {
-}
+PasswordsPrivateEventRouterFactory::~PasswordsPrivateEventRouterFactory() =
+    default;
 
 KeyedService* PasswordsPrivateEventRouterFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-  return PasswordsPrivateEventRouter::Create(context);
+  return new PasswordsPrivateEventRouter(context);
 }
 
 bool PasswordsPrivateEventRouterFactory::

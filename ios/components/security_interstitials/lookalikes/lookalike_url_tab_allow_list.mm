@@ -4,11 +4,8 @@
 
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
 
+#import "base/containers/contains.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 WEB_STATE_USER_DATA_KEY_IMPL(LookalikeUrlTabAllowList)
 
@@ -23,7 +20,7 @@ LookalikeUrlTabAllowList& LookalikeUrlTabAllowList::operator=(
 LookalikeUrlTabAllowList::~LookalikeUrlTabAllowList() = default;
 
 bool LookalikeUrlTabAllowList::IsDomainAllowed(const std::string& domain) {
-  return allowed_domains_.find(domain) != allowed_domains_.end();
+  return base::Contains(allowed_domains_, domain);
 }
 
 void LookalikeUrlTabAllowList::AllowDomain(const std::string& domain) {

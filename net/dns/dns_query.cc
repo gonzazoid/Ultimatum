@@ -12,7 +12,7 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/sys_byteorder.h"
 #include "net/base/io_buffer.h"
-#include "net/dns/dns_util.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/opt_record_rdata.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/dns/record_rdata.h"
@@ -101,13 +101,14 @@ std::unique_ptr<OptRecordRdata> AddPaddingIfNecessary(
 // bit, which directs the name server to pursue query recursively, and sets
 // the QDCOUNT to 1, meaning the question section has a single entry.
 DnsQuery::DnsQuery(uint16_t id,
-                   base::StringPiece qname,
+                   base::span<const uint8_t> qname,
                    uint16_t qtype,
                    const OptRecordRdata* opt_rdata,
                    PaddingStrategy padding_strategy)
     : qname_size_(qname.size()) {
 #if DCHECK_IS_ON()
-  absl::optional<std::string> dotted_name = DnsDomainToString(qname);
+  absl::optional<std::string> dotted_name =
+      dns_names_util::NetworkToDottedName(qname);
   DCHECK(dotted_name && !dotted_name.value().empty());
 #endif  // DCHECK_IS_ON()
 
@@ -216,8 +217,10 @@ uint16_t DnsQuery::id() const {
   return base::NetToHost16(header_->id);
 }
 
-base::StringPiece DnsQuery::qname() const {
-  return base::StringPiece(io_buffer_->data() + kHeaderSize, qname_size_);
+base::span<const uint8_t> DnsQuery::qname() const {
+  return base::span<const uint8_t>(
+      reinterpret_cast<const uint8_t*>(io_buffer_->data() + kHeaderSize),
+      qname_size_);
 }
 
 uint16_t DnsQuery::qtype() const {
@@ -281,7 +284,7 @@ bool DnsQuery::ReadName(base::BigEndianReader* reader, std::string* out) {
     if (!reader->ReadPiece(&label, label_length)) {
       return false;
     }
-    out->append(label.data(), label.size());
+    out->append(label);
     if (!reader->ReadU8(&label_length)) {
       return false;
     }

@@ -14,7 +14,9 @@ namespace blink {
 PictureInPictureWindow::PictureInPictureWindow(
     ExecutionContext* execution_context,
     const gfx::Size& size)
-    : ExecutionContextClient(execution_context), size_(size) {}
+    : ActiveScriptWrappable<PictureInPictureWindow>({}),
+      ExecutionContextClient(execution_context),
+      size_(size) {}
 
 void PictureInPictureWindow::OnClose() {
   size_ = gfx::Size();
@@ -40,8 +42,7 @@ void PictureInPictureWindow::AddedEventListener(
                       WebFeature::kPictureInPictureWindowResizeEventListener);
   }
 
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
 }
 
 bool PictureInPictureWindow::HasPendingActivity() const {
@@ -49,7 +50,7 @@ bool PictureInPictureWindow::HasPendingActivity() const {
 }
 
 void PictureInPictureWindow::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 

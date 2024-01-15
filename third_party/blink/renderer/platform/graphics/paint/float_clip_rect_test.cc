@@ -5,7 +5,6 @@
 #include "third_party/blink/renderer/platform/graphics/paint/float_clip_rect.h"
 
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/testing/transformation_matrix_test_helpers.h"
 #include "ui/gfx/geometry/rect_f.h"
 
 namespace blink {
@@ -101,25 +100,23 @@ TEST_F(FloatClipRectTest, ClearIsTight) {
 
 TEST_F(FloatClipRectTest, Map) {
   FloatClipRect rect;
-  TransformationMatrix identity;
-  TransformationMatrix translation = MakeTranslationMatrix(10, 20);
-  TransformationMatrix rotate = MakeRotationMatrix(45);
+  gfx::Transform identity;
+  gfx::Transform translation = gfx::Transform::MakeTranslation(10, 20);
+  gfx::Transform rotate;
+  rotate.Rotate(45);
 
   rect.Map(rotate);
   EXPECT_TRUE(rect.IsInfinite());
   EXPECT_FALSE(rect.IsTight());
 
-  // FloatClipRect::Map() assumes that the transform always makes the clip rect
-  // not tight. The caller should use MoveBy() to keep tightness if the
-  // transform is known to be identity or a 2d translation.
   FloatClipRect rect2(gfx::RectF(1, 2, 3, 4));
   rect2.Map(identity);
   EXPECT_EQ(gfx::RectF(1, 2, 3, 4), rect2.Rect());
-  EXPECT_FALSE(rect2.IsTight());
+  EXPECT_TRUE(rect2.IsTight());
 
   rect2.Map(translation);
   EXPECT_EQ(gfx::RectF(11, 22, 3, 4), rect2.Rect());
-  EXPECT_FALSE(rect2.IsTight());
+  EXPECT_TRUE(rect2.IsTight());
 }
 
 }  // namespace blink

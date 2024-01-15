@@ -4,9 +4,10 @@
 
 #include "content/browser/devtools/devtools_video_consumer.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "cc/paint/skia_paint_canvas.h"
 #include "components/viz/common/surfaces/subtree_capture_id.h"
@@ -16,7 +17,6 @@
 #include "media/capture/mojom/video_capture_buffer.mojom.h"
 #include "media/capture/mojom/video_capture_types.mojom.h"
 #include "media/renderers/paint_canvas_video_renderer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -178,8 +178,8 @@ void DevToolsVideoConsumer::OnFrameCaptured(
   // portion of the frame that contains content is used.
   scoped_refptr<media::VideoFrame> frame = media::VideoFrame::WrapExternalData(
       info->pixel_format, info->coded_size, content_rect, content_rect.size(),
-      const_cast<uint8_t*>(static_cast<const uint8_t*>(mapping.memory())),
-      mapping.size(), info->timestamp);
+      static_cast<const uint8_t*>(mapping.memory()), mapping.size(),
+      info->timestamp);
   if (!frame) {
     DLOG(ERROR) << "Unable to create VideoFrame wrapper around the shmem.";
     return;
@@ -191,8 +191,7 @@ void DevToolsVideoConsumer::OnFrameCaptured(
              callbacks) {},
       std::move(data), std::move(mapping), std::move(callbacks)));
   frame->set_metadata(info->metadata);
-  if (info->color_space.has_value())
-    frame->set_color_space(info->color_space.value());
+  frame->set_color_space(info->color_space);
 
   callback_.Run(std::move(frame));
 }

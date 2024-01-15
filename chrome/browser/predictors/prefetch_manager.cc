@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/predictors/predictors_features.h"
 #include "chrome/browser/predictors/predictors_switches.h"
 #include "chrome/browser/predictors/resource_prefetch_predictor.h"
@@ -201,6 +201,8 @@ blink::mojom::ResourceType GetResourceType(
       return blink::mojom::ResourceType::kScript;
     case network::mojom::RequestDestination::kStyle:
       return blink::mojom::ResourceType::kStylesheet;
+    case network::mojom::RequestDestination::kFont:
+      return blink::mojom::ResourceType::kFontResource;
     default:
       NOTREACHED() << destination;
   }
@@ -258,7 +260,8 @@ void PrefetchManager::PrefetchUrl(
       content::CreateContentBrowserURLLoaderThrottles(
           request, profile_, std::move(wc_getter),
           /*navigation_ui_data=*/nullptr,
-          content::RenderFrameHost::kNoFrameTreeNodeId);
+          content::RenderFrameHost::kNoFrameTreeNodeId,
+          /*navigation_id=*/absl::nullopt);
 
   auto client = std::make_unique<network::EmptyURLLoaderClient>();
 
@@ -276,7 +279,7 @@ void PrefetchManager::PrefetchUrl(
           std::move(factory), std::move(throttles),
           content::GlobalRequestID::MakeBrowserInitiated().request_id, options,
           &request, client.get(), kPrefetchTrafficAnnotation,
-          base::ThreadTaskRunnerHandle::Get(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
           /*cors_exempt_header_list=*/absl::nullopt);
 
   delegate_->PrefetchInitiated(info.url, job->url);

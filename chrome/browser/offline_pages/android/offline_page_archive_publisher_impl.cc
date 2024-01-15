@@ -12,11 +12,11 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "chrome/android/chrome_jni_headers/OfflinePageArchivePublisherBridge_jni.h"
 #include "chrome/browser/offline_pages/android/offline_page_bridge.h"
 #include "components/offline_pages/core/archive_manager.h"
@@ -114,8 +114,8 @@ void OfflinePageArchivePublisherImpl::PublishArchive(
     const OfflinePageItem& offline_page,
     const scoped_refptr<base::SequencedTaskRunner>& background_task_runner,
     PublishArchiveDoneCallback publish_done_callback) const {
-  base::PostTaskAndReplyWithResult(
-      background_task_runner.get(), FROM_HERE,
+  background_task_runner->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&MoveAndRegisterArchive, offline_page,
                      archive_manager_->GetPublicArchivesDir(), delegate_),
       base::BindOnce(std::move(publish_done_callback), offline_page));
@@ -153,10 +153,11 @@ OfflinePageArchivePublisherImpl::Delegate::AddCompletedDownload(
   JNIEnv* env = base::android::AttachCurrentThread();
 
   if (ShouldUseDownloadsCollection()) {
-    base::FilePath new_file_path = base::FilePath(ConvertJavaStringToUTF8(
-        Java_OfflinePageArchivePublisherBridge_publishArchiveToDownloadsCollection(
-            env,
-            android::OfflinePageBridge::ConvertToJavaOfflinePage(env, page))));
+    base::FilePath new_file_path =
+        base::FilePath(base::android::ConvertJavaStringToUTF8(
+            Java_OfflinePageArchivePublisherBridge_publishArchiveToDownloadsCollection(
+                env, android::OfflinePageBridge::ConvertToJavaOfflinePage(
+                         env, page))));
 
     if (new_file_path.empty())
       return PublishArchiveResult::Failure(SavePageResult::FILE_MOVE_FAILED);

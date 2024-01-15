@@ -34,11 +34,11 @@ source_set("download") {
     "download_session_task_impl.mm",
     "download_task_impl.h",
     "download_task_impl.mm",
+    "download_task_observer.mm",
+    "download_task_observer_bridge.mm",
   ]
 
   frameworks = [ "UIKit.framework" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("download_cookies") {
@@ -56,12 +56,9 @@ source_set("download_cookies") {
   ]
 
   frameworks = [ "Foundation.framework" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("download_unittests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   deps = [
     ":download_cookies",
@@ -73,7 +70,6 @@ source_set("download_unittests") {
     "//ios/web/public/download",
     "//ios/web/public/test",
     "//ios/web/public/test:download_test_utils",
-    "//ios/web/public/test:test_fixture",
     "//ios/web/public/test:test_fixture",
     "//ios/web/public/test/fakes",
     "//ios/web/test/fakes",
@@ -93,7 +89,6 @@ source_set("download_unittests") {
 }
 
 source_set("download_inttests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   deps = [
     "//base/test:test_support",

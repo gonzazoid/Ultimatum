@@ -14,9 +14,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/stack.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
@@ -155,7 +155,7 @@ bool GetOrCreateV8Value(v8::Local<v8::Context> context,
       HostArrayBufferVar* host_buffer =
           static_cast<HostArrayBufferVar*>(buffer);
       *result = blink::WebArrayBufferConverter::ToV8Value(
-          &host_buffer->webkit_buffer(), context->Global(), isolate);
+          &host_buffer->webkit_buffer(), isolate);
       break;
     }
     case PP_VARTYPE_ARRAY:

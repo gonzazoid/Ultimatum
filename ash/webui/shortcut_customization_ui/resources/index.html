@@ -7,7 +7,17 @@
     <title></title>
     <meta charset="utf-8">
     <style>
+      html {
+        background-color: var(--cros-bg-color);
+        height: 100%;
+      }
+
+      html:has(body.jelly-enabled) {
+        background-color: var(--cros-sys-app_base_shaded);
+      }
+
       body {
+        height: 100%;
         margin: 0;
       }
     </style>

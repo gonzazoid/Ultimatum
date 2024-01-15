@@ -4,7 +4,7 @@
 
 import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
 import {$} from 'chrome://resources/js/util.js';
 
 /**
@@ -32,7 +32,7 @@ function initialize() {
       addDownloadUrlChecked(url_and_result);
     });
   });
-  addWebUIListener('download-url-checked-update', function(url_and_result) {
+  addWebUiListener('download-url-checked-update', function(url_and_result) {
     addDownloadUrlChecked(url_and_result);
   });
 
@@ -42,7 +42,7 @@ function initialize() {
           addSentClientDownloadRequestsInfo(cdr);
         });
       });
-  addWebUIListener('sent-client-download-requests-update', function(result) {
+  addWebUiListener('sent-client-download-requests-update', function(result) {
     addSentClientDownloadRequestsInfo(result);
   });
 
@@ -52,7 +52,7 @@ function initialize() {
           addReceivedClientDownloadResponseInfo(cdr);
         });
       });
-  addWebUIListener(
+  addWebUiListener(
       'received-client-download-responses-update', function(result) {
         addReceivedClientDownloadResponseInfo(result);
       });
@@ -63,7 +63,7 @@ function initialize() {
           addSentClientPhishingRequestsInfo(cpr);
         });
       });
-  addWebUIListener('sent-client-phishing-requests-update', function(result) {
+  addWebUiListener('sent-client-phishing-requests-update', function(result) {
     addSentClientPhishingRequestsInfo(result);
   });
 
@@ -73,7 +73,7 @@ function initialize() {
           addReceivedClientPhishingResponseInfo(cpr);
         });
       });
-  addWebUIListener(
+  addWebUiListener(
       'received-client-phishing-responses-update', function(result) {
         addReceivedClientPhishingResponseInfo(result);
       });
@@ -83,7 +83,7 @@ function initialize() {
       addSentCSBRRsInfo(csbrr);
     });
   });
-  addWebUIListener('sent-csbrr-update', function(result) {
+  addWebUiListener('sent-csbrr-update', function(result) {
     addSentCSBRRsInfo(result);
   });
 
@@ -92,7 +92,7 @@ function initialize() {
       addSentHitReportsInfo(hitReports);
     });
   });
-  addWebUIListener('sent-hit-report-list', function(result) {
+  addWebUiListener('sent-hit-report-list', function(result) {
     addSentHitReportsInfo(result);
   });
 
@@ -101,7 +101,7 @@ function initialize() {
       addPGEvent(pgEvent);
     });
   });
-  addWebUIListener('sent-pg-event', function(result) {
+  addWebUiListener('sent-pg-event', function(result) {
     addPGEvent(result);
   });
 
@@ -110,7 +110,7 @@ function initialize() {
       addSecurityEvent(securityEvent);
     });
   });
-  addWebUIListener('sent-security-event', function(result) {
+  addWebUiListener('sent-security-event', function(result) {
     addSecurityEvent(result);
   });
 
@@ -119,7 +119,7 @@ function initialize() {
       addPGPing(pgPing);
     });
   });
-  addWebUIListener('pg-pings-update', function(result) {
+  addWebUiListener('pg-pings-update', function(result) {
     addPGPing(result);
   });
 
@@ -128,26 +128,44 @@ function initialize() {
       addPGResponse(pgResponse);
     });
   });
-  addWebUIListener('pg-responses-update', function(result) {
+  addWebUiListener('pg-responses-update', function(result) {
     addPGResponse(result);
   });
 
-  sendWithPromise('getRTLookupPings', []).then((rtLookupPings) => {
-    rtLookupPings.forEach(function(rtLookupPing) {
-      addRTLookupPing(rtLookupPing);
+  sendWithPromise('getURTLookupPings', []).then((urtLookupPings) => {
+    urtLookupPings.forEach(function(urtLookupPing) {
+      addURTLookupPing(urtLookupPing);
     });
   });
-  addWebUIListener('rt-lookup-pings-update', function(result) {
-    addRTLookupPing(result);
+  addWebUiListener('urt-lookup-pings-update', function(result) {
+    addURTLookupPing(result);
   });
 
-  sendWithPromise('getRTLookupResponses', []).then((rtLookupResponses) => {
-    rtLookupResponses.forEach(function(rtLookupResponse) {
-      addRTLookupResponse(rtLookupResponse);
+  sendWithPromise('getURTLookupResponses', []).then((urtLookupResponses) => {
+    urtLookupResponses.forEach(function(urtLookupResponse) {
+      addURTLookupResponse(urtLookupResponse);
     });
   });
-  addWebUIListener('rt-lookup-responses-update', function(result) {
-    addRTLookupResponse(result);
+  addWebUiListener('urt-lookup-responses-update', function(result) {
+    addURTLookupResponse(result);
+  });
+
+  sendWithPromise('getHPRTLookupPings', []).then((hprtLookupPings) => {
+    hprtLookupPings.forEach(function(hprtLookupPing) {
+      addHPRTLookupPing(hprtLookupPing);
+    });
+  });
+  addWebUiListener('hprt-lookup-pings-update', function(result) {
+    addHPRTLookupPing(result);
+  });
+
+  sendWithPromise('getHPRTLookupResponses', []).then((hprtLookupResponses) => {
+    hprtLookupResponses.forEach(function(hprtLookupResponse) {
+      addHPRTLookupResponse(hprtLookupResponse);
+    });
+  });
+  addWebUiListener('hprt-lookup-responses-update', function(result) {
+    addHPRTLookupResponse(result);
   });
 
   sendWithPromise('getLogMessages', []).then((logMessages) => {
@@ -155,7 +173,7 @@ function initialize() {
       addLogMessage(message);
     });
   });
-  addWebUIListener('log-messages-update', function(message) {
+  addWebUiListener('log-messages-update', function(message) {
     addLogMessage(message);
   });
 
@@ -164,7 +182,7 @@ function initialize() {
       addReportingEvent(reportingEvent);
     });
   });
-  addWebUIListener('reporting-events-update', function(reportingEvent) {
+  addWebUiListener('reporting-events-update', function(reportingEvent) {
     addReportingEvent(reportingEvent);
   });
 
@@ -173,7 +191,7 @@ function initialize() {
       addDeepScan(request);
     });
   });
-  addWebUIListener('deep-scan-request-update', function(result) {
+  addWebUiListener('deep-scan-request-update', function(result) {
     addDeepScan(result);
   });
 
@@ -362,12 +380,20 @@ function addPGResponse(result) {
   addResultToTable('pg-ping-list', result[0], result[1], 1);
 }
 
-function addRTLookupPing(result) {
-  addResultToTable('rt-lookup-ping-list', result[0], result[1], 0);
+function addURTLookupPing(result) {
+  addResultToTable('urt-lookup-ping-list', result[0], result[1], 0);
 }
 
-function addRTLookupResponse(result) {
-  addResultToTable('rt-lookup-ping-list', result[0], result[1], 1);
+function addURTLookupResponse(result) {
+  addResultToTable('urt-lookup-ping-list', result[0], result[1], 1);
+}
+
+function addHPRTLookupPing(result) {
+  addResultToTable('hprt-lookup-ping-list', result[0], result[1], 0);
+}
+
+function addHPRTLookupResponse(result) {
+  addResultToTable('hprt-lookup-ping-list', result[0], result[1], 1);
 }
 
 function addDeepScan(result) {

@@ -5,7 +5,6 @@
 import("//build/config/chrome_build.gni")
 
 source_set("consistency_default_account") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "consistency_default_account_consumer.h",
     "consistency_default_account_coordinator.h",
@@ -18,22 +17,25 @@ source_set("consistency_default_account") {
   deps = [
     "//components/prefs",
     "//components/strings",
+    "//components/sync/base",
+    "//components/sync/service",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/signin:system_identity",
-    "//ios/chrome/browser/sync",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:system_identity",
+    "//ios/chrome/browser/sync/model",
     "//ios/chrome/browser/ui/authentication:authentication",
     "//ios/chrome/browser/ui/authentication/enterprise:enterprise_utils",
     "//ios/chrome/browser/ui/authentication/signin/consistency_promo_signin:layout",
     "//ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_sheet",
     "//ios/chrome/browser/ui/authentication/views",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/util",
+    "//ios/chrome/browser/ui/keyboard",
+    "//ios/chrome/common:button_config",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
-    "//ios/public/provider/chrome/browser",
-    "//ios/public/provider/chrome/browser/signin",
     "//ui/base",
   ]
 }

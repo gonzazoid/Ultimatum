@@ -10,6 +10,15 @@
 
 namespace ash {
 
+namespace {
+
+// ID used to lookup existing DiagnosticsDialog instance from
+// SystemWebDialogDelegate list and ensure only one instance of
+// DiagnosticsDialog exists at a time.
+constexpr char kDiagnosticsDialogId[] = "diagnostics-dialog";
+
+}  // namespace
+
 class DiagnosticsDialog : public SystemWebDialogDelegate {
  public:
   // Denotes different sub-pages of the diagnostics app.
@@ -26,7 +35,10 @@ class DiagnosticsDialog : public SystemWebDialogDelegate {
 
   // |page| is the initial page shown when the app is opened.
   static void ShowDialog(DiagnosticsPage page = DiagnosticsPage::kDefault,
-                         gfx::NativeWindow parent = gfx::kNullNativeWindow);
+                         gfx::NativeWindow parent = gfx::NativeWindow());
+
+  // Closes an existing Diagnostics dialog if it exists.
+  static void MaybeCloseExistingDialog();
 
  protected:
   explicit DiagnosticsDialog(DiagnosticsPage page);
@@ -36,13 +48,15 @@ class DiagnosticsDialog : public SystemWebDialogDelegate {
   DiagnosticsDialog& operator=(const DiagnosticsDialog&) = delete;
 
   // SystemWebDialogDelegate
-  const std::string& Id() override;
+  std::string Id() override;
+  bool ShouldCloseDialogOnEscape() const override;
 
   // ui::WebDialogDelegate
   void GetDialogSize(gfx::Size* size) const override;
 
  private:
-  const std::string id_ = "diagnostics-dialog";
+  const std::string dialog_id_ = kDiagnosticsDialogId;
+  friend class DiagnosticsDialogTest;
 };
 }  // namespace ash
 

@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
@@ -20,7 +20,7 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/threading/scoped_blocking_call.h"
 #include "base/time/time.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "components/services/storage/public/cpp/constants.h"
@@ -36,6 +36,27 @@
 using ::blink::StorageKey;
 
 namespace storage {
+
+// This object signals the given `WaitableEvent` when it goes out of scope.
+class ScopedWaitableEvent {
+ public:
+  explicit ScopedWaitableEvent(base::WaitableEvent& event) : event_(&event) {}
+  ScopedWaitableEvent(ScopedWaitableEvent&& other) {
+    event_ = std::exchange(other.event_, nullptr);
+  }
+
+  ~ScopedWaitableEvent() {
+    if (event_) {
+      event_->Signal();
+    }
+  }
+
+  ScopedWaitableEvent(const ScopedWaitableEvent& other) = delete;
+  ScopedWaitableEvent& operator=(const ScopedWaitableEvent& other) = delete;
+
+ private:
+  raw_ptr<base::WaitableEvent> event_;
+};
 
 QuotaManagerProxy::QuotaManagerProxy(
     QuotaManagerImpl* quota_manager_impl,
@@ -88,8 +109,9 @@ void QuotaManagerProxy::BindInternalsHandler(
     return;
   }
   DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
-  if (quota_manager_impl_)
+  if (quota_manager_impl_) {
     quota_manager_impl_->BindInternalsHandler(std::move(receiver));
+  }
 }
 
 void QuotaManagerProxy::UpdateOrCreateBucket(
@@ -113,7 +135,7 @@ void QuotaManagerProxy::UpdateOrCreateBucket(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -124,38 +146,38 @@ QuotaErrorOr<BucketInfo> QuotaManagerProxy::GetOrCreateBucketSync(
     const BucketInitParams& params) {
   // Ensure that the task runner we want is free and can be blocked on.
   DCHECK(!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence());
-  QuotaErrorOr<BucketInfo> bucket;
+  QuotaErrorOr<BucketInfo> bucket = base::unexpected(QuotaError::kUnknownError);
   base::WaitableEvent waiter(base::WaitableEvent::ResetPolicy::AUTOMATIC,
                              base::WaitableEvent::InitialState::NOT_SIGNALED);
+  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
+                                                base::BlockingType::WILL_BLOCK);
   // Asynchronously call UpdateOrCreateBucket and block until it completes.
   quota_manager_impl_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](const scoped_refptr<QuotaManagerProxy>& self,
-             const BucketInitParams& params, base::WaitableEvent* waiter,
+             const BucketInitParams& params, ScopedWaitableEvent waiter,
              QuotaErrorOr<BucketInfo>* sync_bucket) {
             DCHECK_CALLED_ON_VALID_SEQUENCE(
                 self->quota_manager_impl_sequence_checker_);
-            // If the database is still bootstrapping, return an error rather
-            // than risking deadlock.
+            // If the database is still bootstrapping, return rather than
+            // risking deadlock.
             if (!self->quota_manager_impl_ ||
                 self->quota_manager_impl_->is_bootstrapping_database_) {
-              *sync_bucket = QuotaError::kUnknownError;
-              waiter->Signal();
               return;
             }
             // Otherwise, return the bucket value and resolve the waiter.
             self->quota_manager_impl_->UpdateOrCreateBucket(
                 params, base::BindOnce(
-                            [](base::WaitableEvent* waiter,
+                            [](ScopedWaitableEvent waiter,
                                QuotaErrorOr<BucketInfo>* sync_bucket,
                                QuotaErrorOr<BucketInfo> result_bucket) {
                               *sync_bucket = std::move(result_bucket);
-                              waiter->Signal();
                             },
-                            waiter, sync_bucket));
+                            std::move(waiter), sync_bucket));
           },
-          base::WrapRefCounted(this), params, &waiter, &bucket));
+          base::WrapRefCounted(this), params, ScopedWaitableEvent(waiter),
+          &bucket));
   waiter.Wait();
   return bucket;
 }
@@ -182,7 +204,7 @@ void QuotaManagerProxy::GetOrCreateBucketDeprecated(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -213,7 +235,7 @@ void QuotaManagerProxy::CreateBucketForTesting(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -221,7 +243,7 @@ void QuotaManagerProxy::CreateBucketForTesting(
       storage_key, bucket_name, storage_type, std::move(respond));
 }
 
-void QuotaManagerProxy::GetBucketForTesting(
+void QuotaManagerProxy::GetBucketByNameUnsafe(
     const StorageKey& storage_key,
     const std::string& bucket_name,
     blink::mojom::StorageType type,
@@ -233,7 +255,7 @@ void QuotaManagerProxy::GetBucketForTesting(
   if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
     quota_manager_impl_task_runner_->PostTask(
         FROM_HERE,
-        base::BindOnce(&QuotaManagerProxy::GetBucketForTesting, this,
+        base::BindOnce(&QuotaManagerProxy::GetBucketByNameUnsafe, this,
                        storage_key, bucket_name, type,
                        std::move(callback_task_runner), std::move(callback)));
     return;
@@ -244,11 +266,11 @@ void QuotaManagerProxy::GetBucketForTesting(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
-  quota_manager_impl_->GetBucketForTesting(  // IN-TEST
+  quota_manager_impl_->GetBucketByNameUnsafe(  // IN-TEST
       storage_key, bucket_name, type, std::move(respond));
 }
 
@@ -275,7 +297,7 @@ void QuotaManagerProxy::GetBucketsForStorageKey(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -303,7 +325,7 @@ void QuotaManagerProxy::GetBucketById(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -362,7 +384,7 @@ void QuotaManagerProxy::UpdateBucketExpiration(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -392,7 +414,7 @@ void QuotaManagerProxy::UpdateBucketPersistence(
   auto respond =
       base::BindPostTask(std::move(callback_task_runner), std::move(callback));
   if (!quota_manager_impl_) {
-    std::move(respond).Run(QuotaError::kUnknownError);
+    std::move(respond).Run(base::unexpected(QuotaError::kUnknownError));
     return;
   }
 
@@ -400,73 +422,25 @@ void QuotaManagerProxy::UpdateBucketPersistence(
                                                std::move(respond));
 }
 
-void QuotaManagerProxy::NotifyStorageAccessed(const StorageKey& storage_key,
-                                              blink::mojom::StorageType type,
-                                              base::Time access_time) {
-  if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
-    quota_manager_impl_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&QuotaManagerProxy::NotifyStorageAccessed,
-                                  this, storage_key, type, access_time));
-    return;
-  }
-
-  DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
-  if (quota_manager_impl_)
-    quota_manager_impl_->NotifyStorageAccessed(storage_key, type, access_time);
-}
-
-void QuotaManagerProxy::NotifyBucketAccessed(BucketId bucket_id,
+void QuotaManagerProxy::NotifyBucketAccessed(const BucketLocator& bucket,
                                              base::Time access_time) {
   if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
     quota_manager_impl_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&QuotaManagerProxy::NotifyBucketAccessed,
-                                  this, bucket_id, access_time));
+                                  this, bucket, access_time));
     return;
   }
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
-  if (quota_manager_impl_)
-    quota_manager_impl_->NotifyBucketAccessed(bucket_id, access_time);
-}
-
-void QuotaManagerProxy::NotifyStorageModified(
-    QuotaClientType client_id,
-    const StorageKey& storage_key,
-    blink::mojom::StorageType type,
-    int64_t delta,
-    base::Time modification_time,
-    scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
-    base::OnceClosure callback) {
-  DCHECK(callback_task_runner);
-  DCHECK(callback);
-
-  if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
-    quota_manager_impl_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&QuotaManagerProxy::NotifyStorageModified, this,
-                       client_id, storage_key, type, delta, modification_time,
-                       std::move(callback_task_runner), std::move(callback)));
-    return;
+  if (quota_manager_impl_) {
+    quota_manager_impl_->NotifyBucketAccessed(bucket, access_time);
   }
-
-  DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
-  auto manager_callback =
-      base::BindPostTask(std::move(callback_task_runner), std::move(callback));
-
-  if (!quota_manager_impl_) {
-    std::move(manager_callback).Run();
-    return;
-  }
-
-  quota_manager_impl_->NotifyStorageModified(client_id, storage_key, type,
-                                             delta, modification_time,
-                                             std::move(manager_callback));
 }
 
 void QuotaManagerProxy::NotifyBucketModified(
     QuotaClientType client_id,
-    BucketId bucket_id,
-    int64_t delta,
+    const BucketLocator& bucket,
+    std::optional<int64_t> delta,
     base::Time modification_time,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     base::OnceClosure callback) {
@@ -477,7 +451,7 @@ void QuotaManagerProxy::NotifyBucketModified(
     quota_manager_impl_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&QuotaManagerProxy::NotifyBucketModified, this,
-                       client_id, bucket_id, delta, modification_time,
+                       client_id, bucket, delta, modification_time,
                        std::move(callback_task_runner), std::move(callback)));
     return;
   }
@@ -491,22 +465,22 @@ void QuotaManagerProxy::NotifyBucketModified(
     return;
   }
 
-  quota_manager_impl_->NotifyBucketModified(client_id, bucket_id, delta,
-                                            modification_time,
-                                            std::move(manager_callback));
+  quota_manager_impl_->NotifyBucketModified(
+      client_id, bucket, delta, modification_time, std::move(manager_callback));
 }
 
-void QuotaManagerProxy::NotifyWriteFailed(const StorageKey& storage_key) {
+void QuotaManagerProxy::OnClientWriteFailed(const StorageKey& storage_key) {
   if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
     quota_manager_impl_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&QuotaManagerProxy::NotifyWriteFailed, this,
+        FROM_HERE, base::BindOnce(&QuotaManagerProxy::OnClientWriteFailed, this,
                                   storage_key));
     return;
   }
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
-  if (quota_manager_impl_)
-    quota_manager_impl_->NotifyWriteFailed(storage_key);
+  if (quota_manager_impl_) {
+    quota_manager_impl_->OnClientWriteFailed(storage_key);
+  }
 }
 
 void QuotaManagerProxy::SetUsageCacheEnabled(QuotaClientType client_id,
@@ -557,7 +531,7 @@ void QuotaManagerProxy::GetUsageAndQuota(
 }
 
 void QuotaManagerProxy::GetBucketUsageAndQuota(
-    const BucketInfo& bucket,
+    BucketId bucket,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     UsageAndQuotaCallback callback) {
   DCHECK(callback_task_runner);
@@ -581,6 +555,33 @@ void QuotaManagerProxy::GetBucketUsageAndQuota(
   }
 
   quota_manager_impl_->GetBucketUsageAndQuota(bucket, std::move(respond));
+}
+
+void QuotaManagerProxy::GetBucketSpaceRemaining(
+    const BucketLocator& bucket,
+    scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
+    base::OnceCallback<void(QuotaErrorOr<int64_t>)> callback) {
+  DCHECK(callback_task_runner);
+  DCHECK(callback);
+
+  if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
+    quota_manager_impl_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(&QuotaManagerProxy::GetBucketSpaceRemaining,
+                                  this, bucket, std::move(callback_task_runner),
+                                  std::move(callback)));
+    return;
+  }
+
+  DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
+
+  auto respond =
+      base::BindPostTask(std::move(callback_task_runner), std::move(callback));
+  if (!quota_manager_impl_) {
+    std::move(respond).Run(false);
+    return;
+  }
+
+  quota_manager_impl_->GetBucketSpaceRemaining(bucket, std::move(respond));
 }
 
 void QuotaManagerProxy::IsStorageUnlimited(
@@ -611,6 +612,36 @@ void QuotaManagerProxy::IsStorageUnlimited(
   std::move(respond).Run(is_storage_unlimited);
 }
 
+void QuotaManagerProxy::GetStorageKeyUsageWithBreakdown(
+    const blink::StorageKey& storage_key,
+    blink::mojom::StorageType type,
+    scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
+    UsageWithBreakdownCallback callback) {
+  CHECK(callback_task_runner);
+  CHECK(callback);
+
+  if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
+    quota_manager_impl_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&QuotaManagerProxy::GetStorageKeyUsageWithBreakdown,
+                       this, storage_key, type, std::move(callback_task_runner),
+                       std::move(callback)));
+    return;
+  }
+
+  DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
+
+  auto respond =
+      base::BindPostTask(std::move(callback_task_runner), std::move(callback));
+  if (!quota_manager_impl_) {
+    std::move(respond).Run(0, nullptr);
+    return;
+  }
+
+  quota_manager_impl_->GetStorageKeyUsageWithBreakdown(storage_key, type,
+                                                       std::move(respond));
+}
+
 std::unique_ptr<QuotaOverrideHandle>
 QuotaManagerProxy::GetQuotaOverrideHandle() {
   return std::make_unique<QuotaOverrideHandle>(this);
@@ -619,7 +650,7 @@ QuotaManagerProxy::GetQuotaOverrideHandle() {
 void QuotaManagerProxy::OverrideQuotaForStorageKey(
     int handle_id,
     const StorageKey& storage_key,
-    absl::optional<int64_t> quota_size,
+    std::optional<int64_t> quota_size,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     base::OnceClosure callback) {
   DCHECK(callback_task_runner);
@@ -655,8 +686,9 @@ void QuotaManagerProxy::WithdrawOverridesForHandle(int handle_id) {
   }
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
-  if (quota_manager_impl_)
+  if (quota_manager_impl_) {
     quota_manager_impl_->WithdrawOverridesForHandle(handle_id);
+  }
 }
 
 void QuotaManagerProxy::GetOverrideHandleId(
@@ -687,6 +719,23 @@ void QuotaManagerProxy::InvalidateQuotaManagerImpl(
 
   DCHECK(quota_manager_impl_) << __func__ << " called multiple times";
   quota_manager_impl_ = nullptr;
+}
+
+void QuotaManagerProxy::AddObserver(
+    mojo::PendingRemote<storage::mojom::QuotaManagerObserver> observer) {
+  if (!quota_manager_impl_task_runner_->RunsTasksInCurrentSequence()) {
+    quota_manager_impl_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(&QuotaManagerProxy::AddObserver, this,
+                                  std::move(observer)));
+    return;
+  }
+
+  DCHECK_CALLED_ON_VALID_SEQUENCE(quota_manager_impl_sequence_checker_);
+  if (!quota_manager_impl_) {
+    return;
+  }
+
+  quota_manager_impl_->AddObserver(std::move(observer));
 }
 
 }  // namespace storage

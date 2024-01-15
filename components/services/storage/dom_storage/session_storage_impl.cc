@@ -9,10 +9,10 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -20,6 +20,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
 #include "components/services/storage/dom_storage/async_dom_storage_database.h"
@@ -109,7 +110,8 @@ SessionStorageImpl::SessionStorageImpl(
       memory_dump_id_(base::StringPrintf("SessionStorage/0x%" PRIXPTR,
                                          reinterpret_cast<uintptr_t>(this))),
       receiver_(this, std::move(receiver)),
-      is_low_end_device_(base::SysInfo::IsLowEndDevice()) {
+      is_low_end_mode_(
+          base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()) {
   base::trace_event::MemoryDumpManager::GetInstance()
       ->RegisterDumpProviderWithSequencedTaskRunner(
           this, "SessionStorage", std::move(memory_dump_task_runner),
@@ -454,8 +456,9 @@ void SessionStorageImpl::PurgeUnusedAreasIfNeeded() {
     purge_reason = SessionStorageCachePurgeReason::kSizeLimitExceeded;
   else if (data_maps_.size() > kMaxSessionStorageAreaCount)
     purge_reason = SessionStorageCachePurgeReason::kAreaCountLimitExceeded;
-  else if (is_low_end_device_)
+  else if (is_low_end_mode_) {
     purge_reason = SessionStorageCachePurgeReason::kInactiveOnLowEndDevice;
+  }
 
   if (purge_reason == SessionStorageCachePurgeReason::kNotNeeded)
     return;
@@ -528,7 +531,7 @@ bool SessionStorageImpl::OnMemoryDump(
   pmd->AddOwnershipEdge(leveldb_mad->guid(), global_dump->guid(), kImportance);
 
   if (args.level_of_detail ==
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     size_t total_cache_size, unused_area_count;
     GetStatistics(&total_cache_size, &unused_area_count);
     auto* mad = pmd->CreateAllocatorDump(context_name + "/cache_size");
@@ -945,7 +948,7 @@ SessionStorageImpl::MetadataParseResult SessionStorageImpl::ParseNamespaces(
             },
             base::BindOnce(&SessionStorageImpl::OnCommitResult,
                            weak_ptr_factory_.GetWeakPtr()),
-            base::SequencedTaskRunnerHandle::Get()));
+            base::SequencedTaskRunner::GetCurrentDefault()));
   }
 
   return {OpenResult::kSuccess, ""};

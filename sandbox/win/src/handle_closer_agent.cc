@@ -6,13 +6,12 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include "base/check.h"
 #include "base/logging.h"
 #include "base/win/static_constants.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/win_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sandbox {
 
@@ -39,11 +38,12 @@ bool HandleCloserAgent::AttemptToStuffHandleSlot(HANDLE closed_handle,
     return true;
   }
 
-  if (!dummy_handle_.IsValid())
+  if (!dummy_handle_.is_valid()) {
     return false;
+  }
 
   // This should never happen, as g_dummy is created before closing to_stuff.
-  DCHECK(dummy_handle_.Get() != closed_handle);
+  DCHECK(dummy_handle_.get() != closed_handle);
 
   std::vector<HANDLE> to_close;
 
@@ -72,7 +72,7 @@ bool HandleCloserAgent::AttemptToStuffHandleSlot(HANDLE closed_handle,
 
       do {
         result =
-            ::DuplicateHandle(::GetCurrentProcess(), dummy_handle_.Get(),
+            ::DuplicateHandle(::GetCurrentProcess(), dummy_handle_.get(),
                               ::GetCurrentProcess(), &dup_dummy, 0, false, 0);
         if (!result) {
           break;
@@ -148,14 +148,8 @@ bool HandleCloserAgent::CloseHandles() {
   // avoid invalid-handle exceptions.
   if (base::win::IsAppVerifierLoaded())
     return true;
-  // If the accurate handle enumeration fails then fallback to the old brute
-  // force approach. This should only happen on Windows 7 and 8.0.
-  absl::optional<ProcessHandleMap> handle_map = GetCurrentProcessHandles();
-  if (!handle_map) {
-    DCHECK(base::win::GetVersion() < base::win::Version::WIN8_1);
-    handle_map = GetCurrentProcessHandlesWin7();
-  }
 
+  std::optional<ProcessHandleMap> handle_map = GetCurrentProcessHandles();
   if (!handle_map)
     return false;
 
@@ -167,10 +161,9 @@ bool HandleCloserAgent::CloseHandles() {
     for (HANDLE handle : result->second) {
       // Empty set means close all handles of this type; otherwise check name.
       if (!names.empty()) {
-        std::wstring handle_name;
+        auto handle_name = GetPathFromHandle(handle);
         // Move on to the next handle if this name doesn't match.
-        if (!GetPathFromHandle(handle, &handle_name) ||
-            !names.count(handle_name)) {
+        if (!handle_name || !names.count(handle_name.value())) {
           continue;
         }
       }

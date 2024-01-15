@@ -2,15 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// #import {assert, assertNotReached} from '//resources/js/assert.js';
+import {assert, assertNotReached} from '//resources/ash/common/assert.js';
+
+import {loadTimeData} from '../i18n_setup.js';
 
 /**
  * @fileoverview web view loader.
  */
 
-/* #export */ const CLEAR_ANCHORS_CONTENT_SCRIPT = {
+export const CLEAR_ANCHORS_CONTENT_SCRIPT = {
   code: 'A=Array.from(document.getElementsByTagName("a"));' +
-      'for(var i = 0; i < A.length; ++i) {' +
+      'for(let i = 0; i < A.length; ++i) {' +
       '  const el = A[i];' +
       '  let e = document.createElement("span");' +
       '  if (el.textContent.trim().length > 0) {' +
@@ -20,15 +22,37 @@
       '}',
 };
 
-const WEB_VIEW_FONTS_CSS = {
-  code: `body * {
-        font-family: Roboto, sans-serif !important;
-        font-size: 13px !important;
-        line-height: 20px !important;}
-       body h2 {
-         font-size: 15px !important;
-         line-height: 22px !important;}`,
+const GENERATE_FONTS_CSS = () => {
+  const isOobeJellyEnabled = loadTimeData.getBoolean('isOobeJellyEnabled');
+  if (!isOobeJellyEnabled) {
+    return {
+      code: `body * {
+            font-family: Roboto, sans-serif !important;
+            font-size: 13px !important;
+            line-height: 20px !important;}
+            body h2 {
+             font-size: 15px !important;
+             line-height: 22px !important;}`,
+    };
+  }
+
+  return {
+    // 'body *' values correspond to the body2 typography token.
+    // 'body h2' values correspond to the button2 typography token.
+    code: `body * {
+      font-family: 'Google Sans Text Regular', 'Google Sans', 'Roboto', sans-serif !important;
+      font-size: 13px !important;
+      font-weight: 400 !important;
+      line-height: 20px !important;}
+      body h2 {
+       font-family: 'Google Sans Text Medium', 'Google Sans', 'Roboto', sans-serif !important;
+       font-size: 13px !important;
+       font-weight: 500 !important;
+       line-height: 20px !important;}`,
+  };
 };
+
+const WEB_VIEW_FONTS_CSS = GENERATE_FONTS_CSS();
 
 /**
  * Timeout between consequent loads of online webview.
@@ -65,7 +89,7 @@ const OobeWebViewLoadResult = {
 // When using WebViewLoader to load a new webview, add the webview id with the
 // first character capitalized to the variants of
 // `OOBE.WebViewLoader.FirstLoadResult` histogram.
-/* #export */ class WebViewLoader {
+export class WebViewLoader {
   /**
    * @suppress {missingProperties} as WebView type has no addContentScripts
    */
@@ -91,15 +115,10 @@ const OobeWebViewLoadResult = {
     if (clear_anchors) {
       // Add the CLEAR_ANCHORS_CONTENT_SCRIPT that will clear <a><\a>
       // (anchors) in order to prevent any navigation in the webview itself.
-      webview.addContentScripts([{
-        name: 'clearAnchors',
-        matches: ['<all_urls>'],
-        js: CLEAR_ANCHORS_CONTENT_SCRIPT,
-      }]);
       webview.addEventListener('contentload', () => {
         webview.executeScript(CLEAR_ANCHORS_CONTENT_SCRIPT, () => {
           if (chrome.runtime.lastError) {
-            console.error(
+            console.warn(
                 'Clear anchors script failed: ' +
                 chrome.runtime.lastError.message);
           }
@@ -108,7 +127,12 @@ const OobeWebViewLoadResult = {
     }
     if (inject_css) {
       webview.addEventListener('contentload', () => {
-        webview.insertCSS(WEB_VIEW_FONTS_CSS);
+        webview.insertCSS(WEB_VIEW_FONTS_CSS, () => {
+          if (chrome.runtime.lastError) {
+            console.warn(
+                'Failed to insertCSS: ' + chrome.runtime.lastError.message);
+          }
+        });
       });
     }
 

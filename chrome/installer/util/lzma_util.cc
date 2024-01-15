@@ -14,6 +14,7 @@
 #include "base/files/file_util.h"
 #include "base/files/memory_mapped_file.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/lzma_sdk/google/seven_zip_reader.h"
 
 namespace {
@@ -42,7 +43,7 @@ class SevenZipDelegateImpl : public seven_zip::Delegate {
   bool CreateDirectory(const base::FilePath& dir);
 
   const base::FilePath location_;
-  base::FilePath* const output_file_;
+  const raw_ptr<base::FilePath> output_file_;
 
   std::set<base::FilePath> directories_created_;
   absl::optional<DWORD> error_code_;
@@ -125,6 +126,14 @@ bool SevenZipDelegateImpl::OnDirectory(const seven_zip::EntryInfo& entry) {
 
 bool SevenZipDelegateImpl::OnEntry(const seven_zip::EntryInfo& entry,
                                    base::span<uint8_t>& output) {
+  if (entry.file_path.ReferencesParent()) {
+    PLOG(ERROR) << "Path contains a parent directory traversal which is not "
+                   "allowed because it could become a security issue: "
+                << entry.file_path;
+    unpack_error_ = UNPACK_CREATE_FILE_ERROR;
+    return false;
+  }
+
   base::FilePath file_path = location_.Append(entry.file_path);
   if (output_file_)
     *output_file_ = file_path;
@@ -148,18 +157,22 @@ bool SevenZipDelegateImpl::OnEntry(const seven_zip::EntryInfo& entry,
   // The target file is deleted by default unless extracting succeeds.
   current_file_.DeleteOnClose(true);
 
-  mapped_file_.emplace();
-  bool mapped_file_ok = mapped_file_->Initialize(
-      current_file_.Duplicate(), {0, static_cast<size_t>(entry.file_size)},
-      base::MemoryMappedFile::READ_WRITE_EXTEND);
-  if (!mapped_file_ok) {
-    PLOG(ERROR) << "Can't map file to memory";
-    error_code_ = ::GetLastError();
-    unpack_error_ = UNPACK_ALLOCATE_ERROR;
-    return false;
-  }
+  if (entry.file_size > 0) {
+    mapped_file_.emplace();
+    bool mapped_file_ok = mapped_file_->Initialize(
+        current_file_.Duplicate(), {0, static_cast<size_t>(entry.file_size)},
+        base::MemoryMappedFile::READ_WRITE_EXTEND);
+    if (!mapped_file_ok) {
+      PLOG(ERROR) << "Can't map file to memory";
+      error_code_ = ::GetLastError();
+      unpack_error_ = UNPACK_ALLOCATE_ERROR;
+      return false;
+    }
 
-  output = base::span<uint8_t>(mapped_file_->data(), mapped_file_->length());
+    output = base::span<uint8_t>(mapped_file_->data(), mapped_file_->length());
+  } else {
+    output = base::span<uint8_t>();
+  }
 
   // Clear the last error code before the entry is extracted to reduce the
   // likelihood that it will hold an unrelated error code in case extraction
@@ -210,34 +223,30 @@ bool SevenZipDelegateImpl::EntryDone(seven_zip::Result result,
     return false;
   }
 
-  // Modified pages are not written to disk until they're evicted from the
-  // working set. Explicitly kick off the write to disk now
-  // (asynchronously) to improve the odds that the file's contents are
-  // on-disk when another process (such as chrome.exe) would like to use
-  // them.
-  ::FlushViewOfFile(mapped_file_->data(), 0);
-  // Unmap the target file from the process's address space.
-  mapped_file_.reset();
-  // Flush to avoid odd behavior, such as the bug in Windows 7 through
-  // Windows 10 1809 for PE files described in
-  // https://randomascii.wordpress.com/2018/02/25/compiler-bug-linker-bug-windows-kernel-bug/.
-  // We've also observed oddly empty files on other Windows versions, so
-  // this is unconditional.
-  current_file.Flush();
+  if (mapped_file_) {
+    // Modified pages are not written to disk until they're evicted from the
+    // working set. Explicitly kick off the write to disk now
+    // (asynchronously) to improve the odds that the file's contents are
+    // on-disk when another process (such as chrome.exe) would like to use
+    // them.
+    ::FlushViewOfFile(mapped_file_->data(), 0);
+    // Unmap the target file from the process's address space.
+    mapped_file_.reset();
+    // Flush to avoid odd behavior, such as the bug in Windows 7 through
+    // Windows 10 1809 for PE files described in
+    // https://randomascii.wordpress.com/2018/02/25/compiler-bug-linker-bug-windows-kernel-bug/.
+    // We've also observed oddly empty files on other Windows versions, so
+    // this is unconditional.
+    current_file.Flush();
+  }
 
   // On success, `current_file` is kept.
   current_file.DeleteOnClose(false);
 
   if (!entry.last_modified_time.is_null()) {
     FILETIME filetime = entry.last_modified_time.ToFileTime();
-    if (!SetFileTime(current_file.GetPlatformFile(), nullptr, nullptr,
-                     &filetime)) {
-      PLOG(ERROR) << "Error returned by SetFileTime";
-      // TODO(crbug/1368654): This should not be a fatal error.
-      error_code_ = ::GetLastError();
-      unpack_error_ = UNPACK_SET_FILE_TIME_ERROR;
-      return false;
-    }
+    // Make a best-effort attempt to set the file time.
+    SetFileTime(current_file.GetPlatformFile(), nullptr, nullptr, &filetime);
   }
 
   return true;
@@ -298,7 +307,11 @@ UnPackStatus LzmaUtilImpl::UnPack(const base::FilePath& location,
   DCHECK(archive_file_.IsValid());
 
   SevenZipDelegateImpl delegate(location, output_file);
-  seven_zip::Extract(archive_file_.Duplicate(), delegate);
+  std::unique_ptr<seven_zip::SevenZipReader> reader =
+      seven_zip::SevenZipReader::Create(archive_file_.Duplicate(), delegate);
+  if (reader) {
+    reader->Extract();
+  }
   error_code_ = delegate.error_code();
   return delegate.unpack_error();
 }

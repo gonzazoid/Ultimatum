@@ -7,25 +7,21 @@
 #include <deque>
 #include <memory>
 #include <set>
-#include <tuple>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
 #include "base/check_is_test.h"
 #include "base/containers/adapters.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "components/prefs/pref_service.h"
 #include "components/segmentation_platform/internal/constants.h"
-#include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/internal/database/signal_database.h"
-#include "components/segmentation_platform/internal/database/signal_storage_config.h"
-#include "components/segmentation_platform/internal/execution/default_model_manager.h"
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
 #include "components/segmentation_platform/internal/stats.h"
 #include "components/segmentation_platform/public/proto/types.pb.h"
@@ -37,7 +33,6 @@ constexpr uint64_t kMaxSignalStorageDays = 60;
 
 namespace segmentation_platform {
 using SignalIdentifier = DatabaseMaintenanceImpl::SignalIdentifier;
-using CleanupItem = DatabaseMaintenanceImpl::CleanupItem;
 
 namespace {
 // Gets the end of the UTC day time for `current_time`.
@@ -47,10 +42,10 @@ base::Time GetEndOfDayTime(base::Time current_time) {
 }
 
 std::set<SignalIdentifier> CollectAllSignalIdentifiers(
-    const DefaultModelManager::SegmentInfoList& segment_infos) {
+    std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> segment_infos) {
   std::set<SignalIdentifier> signal_ids;
-  for (const auto& info : segment_infos) {
-    const proto::SegmentInfo& segment_info = info->segment_info;
+  for (const auto& info : *segment_infos) {
+    const proto::SegmentInfo& segment_info = *info.second;
     const auto& metadata = segment_info.model_metadata();
     auto features =
         metadata_utils::GetAllUmaFeatures(metadata, /*include_outputs=*/true);
@@ -102,29 +97,26 @@ DatabaseMaintenanceImpl::DatabaseMaintenanceImpl(
     SegmentInfoDatabase* segment_info_database,
     SignalDatabase* signal_database,
     SignalStorageConfig* signal_storage_config,
-    DefaultModelManager* default_model_manager,
     PrefService* profile_prefs)
     : segment_ids_(segment_ids),
       clock_(clock),
       segment_info_database_(segment_info_database),
       signal_database_(signal_database),
       signal_storage_config_(signal_storage_config),
-      default_model_manager_(default_model_manager),
       profile_prefs_(profile_prefs) {}
 
 DatabaseMaintenanceImpl::~DatabaseMaintenanceImpl() = default;
 
 void DatabaseMaintenanceImpl::ExecuteMaintenanceTasks() {
-  default_model_manager_->GetAllSegmentInfoFromBothModels(
-      segment_ids_, segment_info_database_,
-      base::BindOnce(&DatabaseMaintenanceImpl::OnSegmentInfoCallback,
-                     weak_ptr_factory_.GetWeakPtr()));
+  auto available_segments =
+      segment_info_database_->GetSegmentInfoForBothModels(segment_ids_);
+  OnSegmentInfoCallback(std::move(available_segments));
 }
 
 void DatabaseMaintenanceImpl::OnSegmentInfoCallback(
-    DefaultModelManager::SegmentInfoList segment_infos) {
+    std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> segment_infos) {
   std::set<SignalIdentifier> signal_ids =
-      CollectAllSignalIdentifiers(segment_infos);
+      CollectAllSignalIdentifiers(std::move(segment_infos));
   stats::RecordMaintenanceSignalIdentifierCount(signal_ids.size());
 
   auto all_tasks = GetAllTasks(signal_ids);
@@ -160,8 +152,13 @@ void DatabaseMaintenanceImpl::CleanupSignalStorage(
   auto cleanup_state = std::make_unique<CleanupState>();
   // Convert the vector of cleanup items to a deque so we can easily handle
   // the state by popping the first one until it is empty.
-  for (auto& item : signals_to_cleanup)
-    cleanup_state->signals_to_cleanup_.emplace_back(item);
+  for (auto& signal : signals_to_cleanup) {
+    // If UKM signal, skip deleting it as it is not present in signal database.
+    if (signal.event_hash != CleanupItem::kNonUkmEventHash) {
+      continue;
+    }
+    cleanup_state->signals_to_cleanup_.emplace_back(signal);
+  }
 
   CleanupSignalStorageProcessNext(
       std::move(cleanup_state),
@@ -187,9 +184,10 @@ void DatabaseMaintenanceImpl::CleanupSignalStorageProcessNext(
   CleanupItem cleanup_item = cleanup_state->signals_to_cleanup_.front();
   cleanup_state->signals_to_cleanup_.pop_front();
 
-  proto::SignalType signal_type = std::get<1>(cleanup_item);
-  uint64_t name_hash = std::get<0>(cleanup_item);
-  base::Time end_time = std::get<2>(cleanup_item);
+  proto::SignalType signal_type = cleanup_item.signal_type;
+  uint64_t name_hash = cleanup_item.name_hash;
+  base::Time end_time = cleanup_item.timestamp;
+
   signal_database_->DeleteSamples(
       signal_type, name_hash, end_time,
       base::BindOnce(&DatabaseMaintenanceImpl::CleanupSignalStorageProcessNext,
@@ -233,7 +231,7 @@ void DatabaseMaintenanceImpl::CompactSamples(
     }
     compaction_day -= base::Days(1);
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&DatabaseMaintenanceImpl::CompactSamplesDone,
                      weak_ptr_factory_.GetWeakPtr(), std::move(next_action),

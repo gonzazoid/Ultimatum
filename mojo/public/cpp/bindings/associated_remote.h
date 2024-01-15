@@ -9,14 +9,15 @@
 #include <tuple>
 #include <utility>
 
-#include "base/callback_forward.h"
 #include "base/check.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_interface_ptr_info.h"
 #include "mojo/public/cpp/bindings/lib/associated_interface_ptr_state.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
+#include "mojo/public/cpp/bindings/runtime_features.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 
 namespace mojo {
@@ -50,8 +51,8 @@ class AssociatedRemote {
 
   // Constructs a new AssociatedRemote which is bound from |pending_remote| and
   // which schedules response callbacks and disconnection notifications on the
-  // default SequencedTaskRunner (i.e., base::SequencedTaskRunnerHandle::Get()
-  // at construction time).
+  // default SequencedTaskRunner (i.e.,
+  // base::SequencedTaskRunner::GetCurrentDefault() at construction time).
   explicit AssociatedRemote(PendingAssociatedRemote<Interface> pending_remote)
       : AssociatedRemote(std::move(pending_remote), nullptr) {}
 
@@ -185,7 +186,9 @@ class AssociatedRemote {
       scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr) {
     DCHECK(!is_bound()) << "AssociatedRemote for " << Interface::Name_
                         << " is already bound";
-
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      return PendingAssociatedReceiver<Interface>();
+    }
     ScopedInterfaceEndpointHandle remote_handle;
     ScopedInterfaceEndpointHandle receiver_handle;
     ScopedInterfaceEndpointHandle::CreatePairPendingAssociation(
@@ -206,6 +209,10 @@ class AssociatedRemote {
                         << " is already bound";
 
     if (!pending_remote) {
+      reset();
+      return;
+    }
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
       reset();
       return;
     }
@@ -238,7 +245,9 @@ class AssociatedRemote {
 
     PendingAssociatedReceiver<Interface> receiver =
         BindNewEndpointAndPassReceiver();
-    receiver.EnableUnassociatedUsage();
+    if (receiver) {
+      receiver.EnableUnassociatedUsage();
+    }
     return receiver;
   }
 

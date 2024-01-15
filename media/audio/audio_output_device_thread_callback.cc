@@ -8,7 +8,10 @@
 
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+#include "media/audio/audio_device_stats_reporter.h"
+#include "media/base/audio_glitch_info.h"
 
 namespace media {
 
@@ -22,7 +25,9 @@ AudioOutputDeviceThreadCallback::AudioOutputDeviceThreadCallback(
           /*segment count*/ 1),
       shared_memory_region_(std::move(shared_memory_region)),
       render_callback_(render_callback),
-      create_time_(base::TimeTicks::Now()) {
+      create_time_(base::TimeTicks::Now()),
+      stats_reporter_(audio_parameters,
+                      AudioDeviceStatsReporter::Type::kOutput) {
   // CHECK that the shared memory is large enough. The memory allocated must be
   // at least as large as expected.
   CHECK(memory_length_ <= shared_memory_region_.GetSize());
@@ -49,24 +54,26 @@ void AudioOutputDeviceThreadCallback::MapSharedMemory() {
 void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   callback_num_++;
 
-  // Read and reset the number of frames skipped.
+  // Read and reset the glitch info.
   media::AudioOutputBuffer* buffer =
       reinterpret_cast<media::AudioOutputBuffer*>(
           shared_memory_mapping_.memory());
-  uint32_t frames_skipped = buffer->params.frames_skipped;
-  buffer->params.frames_skipped = 0;
+  media::AudioGlitchInfo glitch_info{
+      .duration = base::Microseconds(buffer->params.glitch_duration_us),
+      .count = buffer->params.glitch_count};
+  buffer->params.glitch_duration_us = {};
+  buffer->params.glitch_count = 0;
 
   TRACE_EVENT_BEGIN2("audio", "AudioOutputDevice::FireRenderCallback",
-                     "callback_num", callback_num_, "frames skipped",
-                     frames_skipped);
+                     "callback_num", callback_num_, "glitches",
+                     glitch_info.count);
 
   base::TimeDelta delay = base::Microseconds(buffer->params.delay_us);
 
   base::TimeTicks delay_timestamp =
       base::TimeTicks() + base::Microseconds(buffer->params.delay_timestamp_us);
 
-  DVLOG(4) << __func__ << " delay:" << delay << " delay_timestamp:" << delay
-           << " frames_skipped:" << frames_skipped;
+  DVLOG(4) << __func__ << " delay:" << delay << " delay_timestamp:" << delay;
 
   // When playback starts, we get an immediate callback to Process to make sure
   // that we have some data, we'll get another one after the device is awake and
@@ -84,8 +91,9 @@ void AudioOutputDeviceThreadCallback::Process(uint32_t control_signal) {
   // frames, and ask client to render audio.  Since |output_bus_| is wrapping
   // the shared memory the Render() call is writing directly into the shared
   // memory.
-  render_callback_->Render(delay, delay_timestamp, frames_skipped,
+  render_callback_->Render(delay, delay_timestamp, glitch_info,
                            output_bus_.get());
+  stats_reporter_.ReportCallback(delay, glitch_info);
 
   if (audio_parameters_.IsBitstreamFormat()) {
     buffer->params.bitstream_data_size = output_bus_->GetBitstreamDataSize();

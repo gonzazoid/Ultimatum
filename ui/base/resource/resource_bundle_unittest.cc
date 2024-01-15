@@ -6,9 +6,12 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
+#include <algorithm>
+#include <map>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "base/base_paths.h"
 #include "base/big_endian.h"
@@ -16,18 +19,18 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/base/layout.h"
 #include "ui/base/resource/data_pack.h"
 #include "ui/base/resource/data_pack_literal.h"
 #include "ui/base/resource/mock_resource_bundle_delegate.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/size.h"
@@ -59,15 +62,16 @@ const unsigned char kPngScaleChunk[12] = { 0x00, 0x00, 0x00, 0x00,
                                            'c', 's', 'C', 'l',
                                            0xc1, 0x30, 0x60, 0x4d };
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 // A string with the "LOTTIE" prefix that GRIT adds to Lottie assets.
 constexpr char kLottieData[] = "LOTTIEtest";
+// The contents after the prefix has been removed.
+constexpr uint8_t kLottieExpected[] = {'t', 'e', 's', 't'};
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 // Mock of |lottie::ParseLottieAsStillImage|. Checks that |kLottieData| is
 // properly stripped of the "LOTTIE" prefix.
-gfx::ImageSkia ParseLottieAsStillImageForTesting(
-    const std::string& bytes_string) {
-  CHECK_EQ("test", bytes_string);
+gfx::ImageSkia ParseLottieAsStillImageForTesting(std::vector<uint8_t> data) {
+  CHECK(base::ranges::equal(data, kLottieExpected));
 
   constexpr int kDimension = 16;
   return gfx::ImageSkia(
@@ -132,7 +136,7 @@ class ResourceBundleTest : public testing::Test {
 
   // Overridden from testing::Test:
   void TearDown() override {
-    delete resource_bundle_;
+    resource_bundle_.reset();
     if (temp_dir_.IsValid())
       ASSERT_TRUE(temp_dir_.Delete());
   }
@@ -142,27 +146,24 @@ class ResourceBundleTest : public testing::Test {
   // ResourceBundle.
   ResourceBundle* CreateResourceBundle(ResourceBundle::Delegate* delegate) {
     DCHECK(!resource_bundle_);
-
-    resource_bundle_ = new ResourceBundle(delegate);
-    return resource_bundle_;
+    resource_bundle_ = std::make_unique<ResourceBundle>(delegate);
+    return resource_bundle_.get();
   }
 
  protected:
   base::ScopedTempDir temp_dir_;
-  raw_ptr<ResourceBundle> resource_bundle_;
+  MockResourceBundleDelegate delegate_;
+  std::unique_ptr<ResourceBundle> resource_bundle_;
 };
 
 TEST_F(ResourceBundleTest, DelegateGetPathForResourcePack) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
-
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
   base::FilePath pack_path(FILE_PATH_LITERAL("/path/to/test_path.pak"));
   ResourceScaleFactor pack_scale_factor = ui::k200Percent;
 
-  EXPECT_CALL(delegate,
-      GetPathForResourcePack(
-          Property(&base::FilePath::value, pack_path.value()),
-          pack_scale_factor))
+  EXPECT_CALL(delegate_, GetPathForResourcePack(Property(&base::FilePath::value,
+                                                         pack_path.value()),
+                                                pack_scale_factor))
       .Times(1)
       .WillOnce(Return(pack_path));
 
@@ -172,13 +173,12 @@ TEST_F(ResourceBundleTest, DelegateGetPathForResourcePack) {
 TEST_F(ResourceBundleTest, DelegateGetPathForLocalePack) {
   ResourceBundle* orig_instance =
       ResourceBundle::SwapSharedInstanceForTesting(nullptr);
-  MockResourceBundleDelegate delegate;
-  ResourceBundle::InitSharedInstance(&delegate);
+  ResourceBundle::InitSharedInstance(&delegate_);
 
   std::string locale = "en-US";
 
   // Cancel the load.
-  EXPECT_CALL(delegate, GetPathForLocalePack(_, _))
+  EXPECT_CALL(delegate_, GetPathForLocalePack(_, _))
       .WillRepeatedly(Return(base::FilePath()))
       .RetiresOnSaturation();
 
@@ -187,7 +187,7 @@ TEST_F(ResourceBundleTest, DelegateGetPathForLocalePack) {
                     locale, /*crash_on_failure=*/false));
 
   // Allow the load to proceed.
-  EXPECT_CALL(delegate, GetPathForLocalePack(_, _))
+  EXPECT_CALL(delegate_, GetPathForLocalePack(_, _))
       .WillRepeatedly(ReturnArg<0>());
 
   EXPECT_TRUE(ResourceBundle::LocaleDataPakExists(locale));
@@ -199,13 +199,11 @@ TEST_F(ResourceBundleTest, DelegateGetPathForLocalePack) {
 }
 
 TEST_F(ResourceBundleTest, DelegateGetImageNamed) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
-
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
   gfx::Image empty_image = resource_bundle->GetEmptyImage();
   int resource_id = 5;
 
-  EXPECT_CALL(delegate, GetImageNamed(resource_id))
+  EXPECT_CALL(delegate_, GetImageNamed(resource_id))
       .Times(1)
       .WillOnce(Return(empty_image));
 
@@ -214,18 +212,16 @@ TEST_F(ResourceBundleTest, DelegateGetImageNamed) {
 }
 
 TEST_F(ResourceBundleTest, DelegateGetNativeImageNamed) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
 
   gfx::Image empty_image = resource_bundle->GetEmptyImage();
   int resource_id = 5;
 
   // Some platforms delegate GetNativeImageNamed calls to GetImageNamed.
-  EXPECT_CALL(delegate, GetImageNamed(resource_id))
+  EXPECT_CALL(delegate_, GetImageNamed(resource_id))
       .Times(Between(0, 1))
       .WillOnce(Return(empty_image));
-  EXPECT_CALL(delegate,
-      GetNativeImageNamed(resource_id))
+  EXPECT_CALL(delegate_, GetNativeImageNamed(resource_id))
       .Times(Between(0, 1))
       .WillOnce(Return(empty_image));
 
@@ -234,8 +230,7 @@ TEST_F(ResourceBundleTest, DelegateGetNativeImageNamed) {
 }
 
 TEST_F(ResourceBundleTest, DelegateLoadDataResourceBytes) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
 
   // Create the data resource for testing purposes.
   unsigned char data[] = "My test data";
@@ -245,8 +240,9 @@ TEST_F(ResourceBundleTest, DelegateLoadDataResourceBytes) {
   int resource_id = 5;
   ResourceScaleFactor scale_factor = ui::kScaleFactorNone;
 
-  EXPECT_CALL(delegate, LoadDataResourceBytes(resource_id, scale_factor))
-      .Times(1).WillOnce(Return(static_memory.get()));
+  EXPECT_CALL(delegate_, LoadDataResourceBytes(resource_id, scale_factor))
+      .Times(1)
+      .WillOnce(Return(static_memory.get()));
 
   scoped_refptr<base::RefCountedMemory> result =
       resource_bundle->LoadDataResourceBytesForScale(resource_id, scale_factor);
@@ -254,8 +250,7 @@ TEST_F(ResourceBundleTest, DelegateLoadDataResourceBytes) {
 }
 
 TEST_F(ResourceBundleTest, DelegateGetRawDataResource) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
 
   // Create the string piece for testing purposes.
   char data[] = "My test data";
@@ -263,7 +258,7 @@ TEST_F(ResourceBundleTest, DelegateGetRawDataResource) {
 
   int resource_id = 5;
 
-  EXPECT_CALL(delegate,
+  EXPECT_CALL(delegate_,
               GetRawDataResource(resource_id, ui::kScaleFactorNone, _))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<2>(string_piece), Return(true)));
@@ -311,13 +306,11 @@ TEST_F(ResourceBundleTest, IsBrotli) {
 }
 
 TEST_F(ResourceBundleTest, DelegateGetLocalizedString) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
-
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
   std::u16string data = u"My test data";
   int resource_id = 5;
 
-  EXPECT_CALL(delegate, GetLocalizedString(resource_id, _))
+  EXPECT_CALL(delegate_, GetLocalizedString(resource_id, _))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<1>(data), Return(true)));
 
@@ -343,7 +336,6 @@ TEST_F(ResourceBundleTest, OverrideStringResource) {
 #if DCHECK_IS_ON()
 TEST_F(ResourceBundleTest, CanOverrideStringResources) {
   ResourceBundle* resource_bundle = CreateResourceBundle(nullptr);
-
   std::u16string data = u"My test data";
   int resource_id = 5;
 
@@ -356,13 +348,11 @@ TEST_F(ResourceBundleTest, CanOverrideStringResources) {
 #endif
 
 TEST_F(ResourceBundleTest, DelegateGetLocalizedStringWithOverride) {
-  MockResourceBundleDelegate delegate;
-  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate);
-
+  ResourceBundle* resource_bundle = CreateResourceBundle(&delegate_);
   std::u16string delegate_data = u"My delegate data";
   int resource_id = 5;
 
-  EXPECT_CALL(delegate, GetLocalizedString(resource_id, _))
+  EXPECT_CALL(delegate_, GetLocalizedString(resource_id, _))
       .Times(1)
       .WillOnce(DoAll(SetArgPointee<1>(delegate_data), Return(true)));
 
@@ -569,11 +559,8 @@ TEST_F(ResourceBundleImageTest, GetImageNamed) {
 #if BUILDFLAG(IS_WIN)
   display::win::SetDefaultDeviceScaleFactor(2.0);
 #endif
-  std::vector<ResourceScaleFactor> supported_factors;
-  supported_factors.push_back(k100Percent);
-  supported_factors.push_back(k200Percent);
   test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      supported_factors);
+      {k100Percent, k200Percent});
   base::FilePath data_1x_path = dir_path().AppendASCII("sample_1x.pak");
   base::FilePath data_2x_path = dir_path().AppendASCII("sample_2x.pak");
 
@@ -626,11 +613,8 @@ TEST_F(ResourceBundleImageTest, GetImageNamed) {
 // Test that GetImageNamed() behaves properly for images which GRIT has
 // annotated as having fallen back to 1x.
 TEST_F(ResourceBundleImageTest, GetImageNamedFallback1x) {
-  std::vector<ResourceScaleFactor> supported_factors;
-  supported_factors.push_back(k100Percent);
-  supported_factors.push_back(k200Percent);
   test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      supported_factors);
+      {k100Percent, k200Percent});
   base::FilePath data_path = dir_path().AppendASCII("sample.pak");
   base::FilePath data_2x_path = dir_path().AppendASCII("sample_2x.pak");
 
@@ -661,15 +645,10 @@ TEST_F(ResourceBundleImageTest, GetImageNamedFallback1x) {
 }
 
 TEST_F(ResourceBundleImageTest, FallbackToNone) {
-  std::vector<ResourceScaleFactor> supported_factors;
-  supported_factors.push_back(k100Percent);
-  supported_factors.push_back(k200Percent);
-  supported_factors.push_back(k300Percent);
-
   // Presents a consistent set of supported scale factors for all platforms.
   // iOS does not include k100Percent, which breaks the test below.
   test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      supported_factors);
+      {k100Percent, k200Percent, k300Percent});
 
   base::FilePath data_default_path = dir_path().AppendASCII("sample.pak");
 
@@ -687,16 +666,10 @@ TEST_F(ResourceBundleImageTest, FallbackToNone) {
                                  image_skia->image_reps()[0].scale()));
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 TEST_F(ResourceBundleImageTest, Lottie) {
-  ui::ResourceBundle::SetLottieParsingFunctions(
-      &ParseLottieAsStillImageForTesting,
-      /*parse_lottie_as_themed_still_image=*/nullptr);
-  test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      {k100Percent, k200Percent});
-  base::FilePath data_unscaled_path = dir_path().AppendASCII("sample.pak");
-
   // Create the pak files.
+  const base::FilePath data_unscaled_path =
+      dir_path().AppendASCII("sample.pak");
   const std::map<uint16_t, base::StringPiece> resources = {
       std::make_pair(3u, kLottieData)};
   DataPack::WritePack(data_unscaled_path, resources, ui::DataPack::BINARY);
@@ -704,6 +677,17 @@ TEST_F(ResourceBundleImageTest, Lottie) {
   // Load the unscaled pack file.
   ResourceBundle* resource_bundle = CreateResourceBundleWithEmptyLocalePak();
   resource_bundle->AddDataPackFromPath(data_unscaled_path, kScaleFactorNone);
+
+  absl::optional<std::vector<uint8_t>> data = resource_bundle->GetLottieData(3);
+  ASSERT_TRUE(data.has_value());
+  EXPECT_TRUE(base::ranges::equal(*data, kLottieExpected));
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  ui::ResourceBundle::SetLottieParsingFunctions(
+      &ParseLottieAsStillImageForTesting,
+      /*parse_lottie_as_themed_still_image=*/nullptr);
+  test::ScopedSetSupportedResourceScaleFactors scoped_supported(
+      {k100Percent, k200Percent});
 
   gfx::ImageSkia* image_skia = resource_bundle->GetImageSkiaNamed(3);
 
@@ -714,7 +698,7 @@ TEST_F(ResourceBundleImageTest, Lottie) {
 
   // Lottie resource should be 'unscaled'.
   EXPECT_TRUE(image_skia->image_reps()[0].unscaled());
-}
 #endif
+}
 
 }  // namespace ui

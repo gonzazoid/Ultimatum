@@ -55,6 +55,12 @@ void SVGAnimateTransformElement::ResolveTargetProperty() {
   css_property_id_ = CSSPropertyID::kInvalid;
 }
 
+SVGPropertyBase* SVGAnimateTransformElement::CreateUnderlyingValueForAnimation()
+    const {
+  DCHECK(IsAnimatingSVGDom());
+  return To<SVGTransformList>(target_property_->BaseValueBase()).Clone();
+}
+
 SVGPropertyBase* SVGAnimateTransformElement::ParseValue(
     const String& value) const {
   DCHECK(IsAnimatingSVGDom());
@@ -65,8 +71,9 @@ static SVGTransformType ParseTypeAttribute(const String& value) {
   if (value.IsNull())
     return SVGTransformType::kTranslate;
   SVGTransformType transform_type = ParseTransformType(value);
-  // Since ParseTransformType() is also used when parsing transform lists, it accepts the value
-  // "matrix". That value is however not recognized by the 'type' attribute, so treat it as invalid.
+  // Since ParseTransformType() is also used when parsing transform lists, it
+  // accepts the value "matrix". That value is however not recognized by the
+  // 'type' attribute, so treat it as invalid.
   if (transform_type == SVGTransformType::kMatrix)
     transform_type = SVGTransformType::kUnknown;
   return transform_type;

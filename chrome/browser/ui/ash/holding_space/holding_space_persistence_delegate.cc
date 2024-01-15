@@ -6,6 +6,7 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
+#include "ash/public/cpp/holding_space/holding_space_file.h"
 #include "ash/public/cpp/holding_space/holding_space_image.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
@@ -27,7 +28,7 @@ namespace {
 // backed items in a secondary user profile.
 bool ShouldIgnoreItem(Profile* profile, const HoldingSpaceItem* item) {
   return file_manager::util::GetAndroidFilesPath().IsParent(
-             item->file_path()) &&
+             item->file().file_path) &&
          !ProfileHelper::IsPrimaryProfile(profile);
 }
 
@@ -82,8 +83,8 @@ void HoldingSpacePersistenceDelegate::OnHoldingSpaceItemsRemoved(
   // Remove the `items` from persistent storage.
   ScopedListPrefUpdate update(profile()->GetPrefs(), kPersistencePath);
   update->EraseIf([&items](const base::Value& persisted_item) {
-    const std::string& persisted_item_id = HoldingSpaceItem::DeserializeId(
-        base::Value::AsDictionaryValue(persisted_item));
+    const std::string& persisted_item_id =
+        HoldingSpaceItem::DeserializeId(persisted_item.GetDict());
     return base::Contains(items, persisted_item_id, &HoldingSpaceItem::id);
   });
 }
@@ -103,13 +104,12 @@ void HoldingSpacePersistenceDelegate::OnHoldingSpaceItemUpdated(
   base::Value::List& list = update.Get();
   auto item_it = base::ranges::find(
       list, item->id(), [](const base::Value& persisted_item) {
-        return HoldingSpaceItem::DeserializeId(
-            base::Value::AsDictionaryValue(persisted_item));
+        return HoldingSpaceItem::DeserializeId(persisted_item.GetDict());
       });
 
   // If the finalized `item` already exists in persistent storage, update it.
   if (item_it != list.end()) {
-    *item_it = item->Serialize();
+    *item_it = base::Value(item->Serialize());
     return;
   }
 
@@ -118,7 +118,7 @@ void HoldingSpacePersistenceDelegate::OnHoldingSpaceItemUpdated(
   item_it = list.begin();
   for (const auto& candidate_item : model()->items()) {
     if (candidate_item.get() == item) {
-      list.Insert(item_it, item->Serialize());
+      list.Insert(item_it, base::Value(item->Serialize()));
       return;
     }
     if (candidate_item->progress().IsComplete())
@@ -132,16 +132,18 @@ void HoldingSpacePersistenceDelegate::OnHoldingSpaceItemUpdated(
 void HoldingSpacePersistenceDelegate::RestoreModelFromPersistence() {
   DCHECK(model()->items().empty());
 
-  // Clear suggestions before restoration if needed.
-  MaybeRemoveSuggestionsFromPersistence();
+  // Remove items from persistent storage that should not be restored to the
+  // in-memory holding space model.
+  MaybeRemoveItemsFromPersistence();
 
-  const auto& persisted_holding_space_items =
+  const base::Value::List& persisted_holding_space_items =
       profile()->GetPrefs()->GetList(kPersistencePath);
 
   // If persistent storage is empty we can immediately notify the callback of
   // persistence restoration completion and quit early.
+  std::vector<std::unique_ptr<HoldingSpaceItem>> restored_items;
   if (persisted_holding_space_items.empty()) {
-    std::move(persistence_restored_callback_).Run();
+    std::move(persistence_restored_callback_).Run(std::move(restored_items));
     return;
   }
 
@@ -149,28 +151,45 @@ void HoldingSpacePersistenceDelegate::RestoreModelFromPersistence() {
        persisted_holding_space_items) {
     std::unique_ptr<HoldingSpaceItem> holding_space_item =
         HoldingSpaceItem::Deserialize(
-            base::Value::AsDictionaryValue(persisted_holding_space_item),
+            persisted_holding_space_item.GetDict(),
             base::BindOnce(&holding_space_util::ResolveImage,
                            base::Unretained(thumbnail_loader_)));
 
-    if (!ShouldIgnoreItem(profile(), holding_space_item.get()))
-      service()->AddItem(std::move(holding_space_item));
+    if (!ShouldIgnoreItem(profile(), holding_space_item.get())) {
+      restored_items.push_back(std::move(holding_space_item));
+    }
   }
 
   // Notify completion of persistence restoration.
-  std::move(persistence_restored_callback_).Run();
+  std::move(persistence_restored_callback_).Run(std::move(restored_items));
 }
 
-void HoldingSpacePersistenceDelegate::MaybeRemoveSuggestionsFromPersistence() {
-  DCHECK(is_restoring_persistence());
+void HoldingSpacePersistenceDelegate::MaybeRemoveItemsFromPersistence() {
+  CHECK(is_restoring_persistence());
 
-  if (features::IsHoldingSpaceSuggestionsEnabled())
+  const bool remove_camera_app_items =
+      !features::IsHoldingSpaceCameraAppIntegrationEnabled();
+  const bool remove_photoshop_web_items =
+      !features::IsHoldingSpacePhotoshopWebIntegrationEnabled();
+  const bool remove_suggestion_items =
+      !features::IsHoldingSpaceSuggestionsEnabled();
+
+  // No-op when there are no item types we'd attempt to remove.
+  if (!remove_camera_app_items && !remove_photoshop_web_items &&
+      !remove_suggestion_items) {
     return;
+  }
 
   ScopedListPrefUpdate update(profile()->GetPrefs(), kPersistencePath);
-  update->EraseIf([](const base::Value& persisted_item) {
-    return HoldingSpaceItem::IsSuggestion(HoldingSpaceItem::DeserializeType(
-        base::Value::AsDictionaryValue(persisted_item)));
+  update->EraseIf([&](const base::Value& persisted_item) {
+    auto type = HoldingSpaceItem::DeserializeType(persisted_item.GetDict());
+    if ((remove_camera_app_items && HoldingSpaceItem::IsCameraAppType(type)) ||
+        (remove_photoshop_web_items &&
+         type == HoldingSpaceItem::Type::kPhotoshopWeb) ||
+        (remove_suggestion_items && HoldingSpaceItem::IsSuggestionType(type))) {
+      return true;
+    }
+    return false;
   });
 }
 

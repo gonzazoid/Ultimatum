@@ -121,87 +121,6 @@ class WebTestResultsTest(unittest.TestCase):
     "builder_name": "mock_builder_name"
 });"""
 
-    example_resultsdb_unexpected_json = [
-        {
-            "name": "tests/example/flaky.html/results/1",
-            "testId": "ninja://:blink_web_tests/example/flaky.html",
-            "resultId": "1",
-            "variant": {
-                "def": {
-                    "builder": "linux-blink-rel",
-                    "os": "Ubuntu-18.04",
-                    "test_suite": "blink_web_tests"
-                }
-            },
-            "status": "FAIL",
-        },
-        {
-            "name": "tests/example/flaky.html/results/2",
-            "testId": "ninja://:blink_web_tests/example/flaky.html",
-            "resultId": "2",
-            "variant": {
-                "def": {
-                    "builder": "linux-blink-rel",
-                    "os": "Ubuntu-18.04",
-                    "test_suite": "blink_web_tests"
-                }
-            },
-            "status": "PASS",
-        },
-        {
-            "name": "tests/example/flaky.html/results/3",
-            "testId": "ninja://:blink_web_tests/example/unexpected_fail.html",
-            "resultId": "3",
-            "variant": {
-                "def": {
-                    "builder": "linux-blink-rel",
-                    "os": "Ubuntu-18.04",
-                    "test_suite": "blink_web_tests"
-                }
-            },
-            "status": "FAIL",
-        },
-        {
-            "name": "tests/example/flaky.html/results/4",
-            "testId": "ninja://:blink_web_tests/example/unexpected_fail.html",
-            "resultId": "4",
-            "variant": {
-                "def": {
-                    "builder": "linux-blink-rel",
-                    "os": "Ubuntu-18.04",
-                    "test_suite": "blink_web_tests"
-                }
-            },
-            "status": "FAIL",
-        },
-        {
-            "name": "tests/example/flaky.html/results/5",
-            "testId": "ninja://:blink_web_tests/example/unexpected_pass.html",
-            "resultId": "5",
-            "variant": {
-                "def": {
-                    "builder": "linux-blink-rel",
-                    "os": "Ubuntu-18.04",
-                    "test_suite": "blink_web_tests"
-                }
-            },
-            "status": "PASS",
-        },
-        {
-            "name": "tests/example/flaky.html/results/6",
-            "testId": "ninja://:blink_web_tests/example/unexpected_pass.html",
-            "resultId": "6",
-            "variant": {
-                "def": {
-                    "builder": "linux-blink-rel",
-                    "os": "Ubuntu-18.04",
-                    "test_suite": "blink_web_tests"
-                }
-            },
-            "status": "PASS",
-        },
-    ]
-
     def test_empty_results_from_string(self):
         self.assertIsNone(WebTestResults.results_from_string(None))
         self.assertIsNone(WebTestResults.results_from_string(''))
@@ -246,11 +165,12 @@ class WebTestResultsTest(unittest.TestCase):
         results = WebTestResults.results_from_string(
             self.example_full_results_json)
         self.assertEqual(
-            results.result_for_test('fast/dom/unexpected-pass.html').
-            actual_results(), 'PASS')
+            results.result_for_test(
+                'fast/dom/unexpected-pass.html').actual_results(), ['PASS'])
         self.assertEqual(
-            results.result_for_test('fast/dom/unexpected-flaky.html').
-            actual_results(), 'PASS FAIL')
+            results.result_for_test(
+                'fast/dom/unexpected-flaky.html').actual_results(),
+            ['PASS', 'FAIL'])
 
     def test_expected_results(self):
         results = WebTestResults.results_from_string(
@@ -262,18 +182,15 @@ class WebTestResultsTest(unittest.TestCase):
             results.result_for_test('fast/dom/expected-flaky.html').
             expected_results(), 'PASS FAIL')
 
-    def test_has_non_reftest_mismatch(self):
+    def test_has_mismatch(self):
         results = WebTestResults.results_from_string(
             self.example_full_results_json)
         self.assertTrue(
-            results.result_for_test('fast/dom/many-mismatches.html').
-            has_non_reftest_mismatch())
+            results.result_for_test(
+                'fast/dom/many-mismatches.html').has_mismatch())
         self.assertTrue(
-            results.result_for_test('fast/dom/mismatch-implicit-baseline.html'
-                                    ).has_non_reftest_mismatch())
-        self.assertFalse(
-            results.result_for_test('fast/dom/reference-mismatch.html').
-            has_non_reftest_mismatch())
+            results.result_for_test(
+                'fast/dom/mismatch-implicit-baseline.html').has_mismatch())
 
     def test_is_missing_baseline(self):
         results = WebTestResults.results_from_string(
@@ -288,30 +205,7 @@ class WebTestResultsTest(unittest.TestCase):
     def test_suffixes_for_test_result(self):
         results = WebTestResults.results_from_string(
             self.example_full_results_json)
-        self.assertSetEqual(
-            results.result_for_test('fast/dom/many-mismatches.html').
-            suffixes_for_test_result(), {'txt', 'png'})
-        self.assertSetEqual(
-            results.result_for_test('fast/dom/missing-text.html').
-            suffixes_for_test_result(), {'txt'})
-
-    def test_failed_unexpected_resultdb(self):
-        results = WebTestResults.results_from_resultdb(
-            self.example_resultsdb_unexpected_json)
-        failed_results = results.failed_unexpected_resultdb()
-        self.assertEqual(len(failed_results), 1)
-        self.assertDictEqual(
-            {
-                'status': 'FAIL',
-                'variant': {
-                    'def': {
-                        'builder': 'linux-blink-rel',
-                        'test_suite': 'blink_web_tests',
-                        'os': 'Ubuntu-18.04'
-                    }
-                },
-                'resultId': '4',
-                'name': 'tests/example/flaky.html/results/4',
-                'testId':
-                'ninja://:blink_web_tests/example/unexpected_fail.html'
-            }, failed_results[0])
+        result = results.result_for_test('fast/dom/many-mismatches.html')
+        self.assertEqual(set(result.baselines_by_suffix()), {'txt', 'png'})
+        result = results.result_for_test('fast/dom/missing-text.html')
+        self.assertEqual(set(result.baselines_by_suffix()), {'txt'})

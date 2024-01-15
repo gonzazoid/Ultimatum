@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/time/time.h"
@@ -171,9 +171,9 @@ TEST_F(PolicyStatisticsCollectorTest, CollectPending) {
 TEST_F(PolicyStatisticsCollectorTest, CollectPendingVeryOld) {
   SetPolicy(kTestPolicy1, POLICY_LEVEL_MANDATORY);
 
-  // Must not be 0.0 (read comment for Time::FromDoubleT).
+  // Must not be 0.0 (read comment for Time::FromSecondsSinceUnixEpoch).
   prefs_.SetTime(policy_prefs::kLastPolicyStatisticsUpdate,
-                 base::Time::FromDoubleT(1.0));
+                 base::Time::FromSecondsSinceUnixEpoch(1.0));
 
   policy_statistics_collector_->Initialize();
 
@@ -205,25 +205,6 @@ TEST_F(PolicyStatisticsCollectorTest, MultiplePolicies) {
   histogram_tester_.ExpectBucketCount("Enterprise.Policies", kTestPolicy1Id, 1);
   histogram_tester_.ExpectBucketCount("Enterprise.Policies", kTestPolicy2Id, 1);
   histogram_tester_.ExpectTotalCount("Enterprise.Policies", 2);
-}
-
-TEST_F(PolicyStatisticsCollectorTest, PolicyIgnoredByAtomicGroup) {
-  SetPolicyIgnoredByAtomicGroup(kTestPolicy3);
-  const AtomicGroup* extensions = nullptr;
-
-  for (size_t i = 0; i < kPolicyAtomicGroupMappingsLength; ++i) {
-    if (kPolicyAtomicGroupMappings[i].policy_group == group::kExtensions) {
-      extensions = &kPolicyAtomicGroupMappings[i];
-      break;
-    }
-  }
-
-  DCHECK(extensions);
-
-  policy_statistics_collector_->Initialize();
-
-  histogram_tester_.ExpectUniqueSample(
-      "Enterprise.Policies.IgnoredByPolicyGroup", kTestPolicy3Id, 1);
 }
 
 TEST_F(PolicyStatisticsCollectorTest, MandatoryPolicy) {

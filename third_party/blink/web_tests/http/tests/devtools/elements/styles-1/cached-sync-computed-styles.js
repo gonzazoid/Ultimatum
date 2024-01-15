@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as ProtocolClient from 'devtools/core/protocol_client/protocol_client.js';
+
 (async function() {
   TestRunner.addResult(`Tests that computed styles are cached across synchronous requests.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -35,7 +39,7 @@
   function step1(node) {
     var callsLeft = 2;
     nodeId = node.id;
-    TestRunner.addSniffer(ProtocolClient.SessionRouter.prototype, 'sendMessage', onBackendCall, true);
+    TestRunner.addSniffer(ProtocolClient.InspectorBackend.SessionRouter.prototype, 'sendMessage', onBackendCall, true);
     TestRunner.cssModel.getComputedStyle(nodeId).then(styleCallback);
     TestRunner.cssModel.getComputedStyle(nodeId).then(styleCallback);
     function styleCallback() {

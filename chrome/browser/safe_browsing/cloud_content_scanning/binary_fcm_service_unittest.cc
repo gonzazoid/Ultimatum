@@ -10,7 +10,7 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -339,7 +339,7 @@ TEST_F(BinaryFCMServiceTest, UnregisterTwoTokensTwoCalls) {
 
   EXPECT_CALL(instance_id, DeleteToken)
       .Times(2)
-      .WillOnce(
+      .WillRepeatedly(
           Invoke([](const std::string&, const std::string&,
                     instance_id::InstanceID::DeleteTokenCallback callback) {
             std::move(callback).Run(instance_id::InstanceID::Result::SUCCESS);

@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 #include "base/check.h"
 #include "base/notreached.h"
 #include "cc/paint/skottie_wrapper.h"
@@ -13,8 +14,8 @@
 
 namespace ash {
 
-FakeAmbientAnimationStaticResources::FakeAmbientAnimationStaticResources() =
-    default;
+FakeAmbientAnimationStaticResources::FakeAmbientAnimationStaticResources()
+    : ui_settings_(personalization_app::mojom::AmbientTheme::kFeelTheBreeze) {}
 
 FakeAmbientAnimationStaticResources::~FakeAmbientAnimationStaticResources() =
     default;
@@ -44,9 +45,9 @@ gfx::ImageSkia FakeAmbientAnimationStaticResources::GetStaticImageAsset(
   return iter == images_.end() ? gfx::ImageSkia() : iter->second;
 }
 
-AmbientAnimationTheme
-FakeAmbientAnimationStaticResources::GetAmbientAnimationTheme() const {
-  return ambient_animation_theme_;
+const AmbientUiSettings& FakeAmbientAnimationStaticResources::GetUiSettings()
+    const {
+  return ui_settings_;
 }
 
 }  // namespace ash

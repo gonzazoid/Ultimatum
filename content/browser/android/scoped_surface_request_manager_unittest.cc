@@ -4,7 +4,7 @@
 
 #include "content/browser/android/scoped_surface_request_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "content/public/test/browser_task_environment.h"
@@ -25,7 +25,7 @@ class ScopedSurfaceRequestManagerUnitTest : public testing::Test {
     manager_->clear_requests_for_testing();
 
     last_received_request_ = 0;
-    dummy_token_ = base::UnguessableToken::Deserialize(123, 456);
+    dummy_token_ = base::UnguessableToken::CreateForTesting(123, 456);
 
     mock_texture_owner = base::MakeRefCounted<NiceMock<gpu::MockTextureOwner>>(
         0, nullptr, nullptr);

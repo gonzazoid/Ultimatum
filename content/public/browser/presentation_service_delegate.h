@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "media/base/flinging_controller.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -49,9 +49,7 @@ using PresentationConnectionStateChangedCallback =
     base::RepeatingCallback<void(const PresentationConnectionStateChangeInfo&)>;
 
 using ReceiverConnectionAvailableCallback = base::RepeatingCallback<void(
-    blink::mojom::PresentationInfoPtr,
-    mojo::PendingRemote<blink::mojom::PresentationConnection>,
-    mojo::PendingReceiver<blink::mojom::PresentationConnection>)>;
+    blink::mojom::PresentationConnectionResultPtr)>;
 
 // Base class for ControllerPresentationServiceDelegate and
 // ReceiverPresentationServiceDelegate.

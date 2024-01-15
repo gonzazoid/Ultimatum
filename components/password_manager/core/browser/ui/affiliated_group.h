@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_UI_AFFILIATED_GROUP_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_UI_AFFILIATED_GROUP_H_
 
-#include "components/password_manager/core/browser/android_affiliation/affiliation_utils.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 
 namespace password_manager {
@@ -15,29 +15,28 @@ namespace password_manager {
 class AffiliatedGroup {
  public:
   AffiliatedGroup();
-  explicit AffiliatedGroup(
-      const std::vector<CredentialUIEntry> credential_groups);
+  AffiliatedGroup(std::vector<CredentialUIEntry> credentials,
+                  const FacetBrandingInfo& branding);
   AffiliatedGroup(const AffiliatedGroup& other);
   AffiliatedGroup(AffiliatedGroup&& other);
   AffiliatedGroup& operator=(const AffiliatedGroup& other);
   AffiliatedGroup& operator=(AffiliatedGroup&& other);
   ~AffiliatedGroup();
 
-  // Method to add a credential to the credential group.
-  void AddCredential(const CredentialUIEntry& credential);
-
   // Credential Groups Getter.
-  const std::vector<CredentialUIEntry>& GetCredentialGroups() const {
-    return credential_groups_;
+  base::span<const CredentialUIEntry> GetCredentials() const {
+    return base::make_span(credential_groups_.begin(),
+                           credential_groups_.end());
   }
 
-  // Branding Info Setter.
-  void SetBrandingInfo(const FacetBrandingInfo& branding_info) {
-    branding_info_ = branding_info;
-  }
+  // Method that returns the display name for this affiliated group.
+  const std::string& GetDisplayName() const { return branding_info_.name; }
 
-  // Branding Info Getter.
-  const FacetBrandingInfo& GetBrandingInfo() const { return branding_info_; }
+  // Method that returns the icon URL for this affiliated group.
+  const GURL& GetIconURL() const { return branding_info_.icon_url; }
+
+  // Fallback icon when icon returned by the affiliation service can't be used.
+  GURL GetFallbackIconURL() const;
 
  private:
   // The branding information for the affiliated group. Corresponds to the
@@ -48,9 +47,7 @@ class AffiliatedGroup {
   std::vector<CredentialUIEntry> credential_groups_;
 };
 
-#ifdef UNIT_TEST
 bool operator==(const AffiliatedGroup& lhs, const AffiliatedGroup& rhs);
-#endif
 
 }  // namespace password_manager
 

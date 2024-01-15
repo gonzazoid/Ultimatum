@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ import "extension_install.proto";
 // Almost all the fields should be populated on every upload. (The only
 // exception is some fields in the stability section that are only uploaded
 // once per browsing session, usually shortly after startup.)
-// Next tag: 42
+// Next tag: 46
 message SystemProfileProto {
   // The time when the client was compiled/linked, in seconds since the epoch.
   optional int64 build_timestamp = 1;
@@ -54,8 +54,7 @@ message SystemProfileProto {
   optional string log_written_by_app_version = 40;
 
   // The brand code or distribution tag assigned to a partner, if available.
-  // Brand codes are only available on Windows.  Not every Windows install
-  // though will have a brand code.
+  // Windows, Mac, iOS, and CrOS clients may have a brand code.
   optional string brand_code = 12;
 
   // The possible channels for an installation, from least to most stable.
@@ -77,10 +76,14 @@ message SystemProfileProto {
   // This field was renamed from |is_asan_build| to reflect its actual meaning.
   optional bool is_instrumented_build = 20 [default = false];
 
-  // The date the user enabled UMA, in seconds since the epoch.
+  // For Chrome, the date the user enabled UMA, in seconds since the epoch.
   // If the user has toggled the UMA enabled state multiple times, this will
   // be the most recent date on which UMA was enabled.
   // For privacy, this is rounded to the nearest hour (M30+).
+  // For WebView, the field stores the date "January 1st, 2014 00:00:00 UTC"
+  // if the user opted into metrics collection before WebView started tracking
+  // this information. Otherwise, the field value should correctly reflect the
+  // first startup for this app after the user opted into metrics collection.
   optional int64 uma_enabled_date = 3;
 
   // The time when the client was installed, in seconds since the epoch.
@@ -165,6 +168,7 @@ message SystemProfileProto {
     // - 'Linux' (includes ChromeOS prior to 07/2020)
     // - 'iOS' (iOS versions >= 9)
     // - 'iPhone OS' (iOS versions <= 8)
+    // - 'iPadOS'
     // - 'Mac OS X'
     optional string name = 1;
 
@@ -178,7 +182,8 @@ message SystemProfileProto {
     // used only on iOS. Chrome for iOS detects whether device contains a
     // DynamicLibraries/ directory. It's a necessary but insufficient indicator
     // of whether the operating system has been jailbroken.
-    optional bool is_jailbroken = 4;
+    // Deprecated 01/2023. This was never set.
+    optional bool DEPRECATED_is_jailbroken = 4 [deprecated = true];
 
     // The build number for the OS version. The same OS version may have a
     // different build number. The meaning of this field is OS-dependent.
@@ -261,10 +266,13 @@ message SystemProfileProto {
   optional OS os = 5;
 
   // Information on the user's hardware.
-  // Next tag: 27
+  // Next tag: 28
   message Hardware {
-    // OS CPU architecture. Common options are: x86, x86_64, armv7l, armv8l,
-    // and aarch64.
+    // OS CPU architecture. Common options are: x86, x86_64, arm64, armv7,
+    // armv7l, armv8l and aarch64.
+    // Note: On Windows, this is not the true OS CPU architecture in the case
+    // of running under emulation (e.g. on Windows on ARM, which would report
+    // either x86 or x86_64, depending on the bitness of the exe being run).
     // Started being correctly recorded on iOS in M90: crrev/c/2723012.
     optional string cpu_architecture = 1;
 
@@ -325,10 +333,10 @@ message SystemProfileProto {
     optional float max_dpi_x = 9;
     optional float max_dpi_y = 10;
 
-    // The form factor of the device. Added in M101.
-    // Android devices can be phone, tablet, or TV. iOS devices can be phone or
-    // tablet. For Windows, Mac, ChromeOS, Lacros, and Linux, the desktop form
-    // factor is always used.
+    // The form factor of the device. Added in M101, foldable added in M120.
+    // Android devices can be phone, tablet, TV, automotive or foldable. iOS
+    // devices can be phone or tablet. For Windows, Mac, ChromeOS, Lacros, and
+    // Linux, the desktop form factor is always used.
     enum FormFactor {
       FORM_FACTOR_UNKNOWN = 0;
       FORM_FACTOR_DESKTOP = 1;
@@ -336,6 +344,8 @@ message SystemProfileProto {
       FORM_FACTOR_TABLET = 3;
       FORM_FACTOR_TV = 4;
       FORM_FACTOR_MEET_DEVICE = 5;
+      FORM_FACTOR_AUTOMOTIVE = 6;
+      FORM_FACTOR_FOLDABLE = 7;
     }
     optional FormFactor form_factor = 22;
 
@@ -404,22 +414,23 @@ message SystemProfileProto {
     // Logged on ChromeOS only.
     optional bool internal_display_supports_touch = 14;
 
-    // Internal storage device information on ChromeOS.
-    // TODO(dlunev): Expand comment about which milestone this
-    // started to be logged on once the client code is submitted.
+    // Internal storage device information on ChromeOS. Added in M94.
     // Next tag: 9
     message InternalStorageDevice {
-      // Id of the storage device manufcaturer.
-      // Can be vendor_id(32bit), oemid(16bit) etc. depending on the device
-      // type.
+      // Id of the storage device manufacturer.
+      // Can be vendor_id (for NVMe, 32bit), manfid (for eMMC, 16bit, since
+      // M113), oemid (for eMMC, 16bit, before M113), JEDEC manfid (for UFS,
+      // 16bit) etc. depending on the device type.
       optional uint32 vendor_id = 1;
 
       // Id of the storage device product.
-      // Can be product_id(32bit), PNM(48bit) etc. depending on the device type.
+      // Can be product_id (for NVMe, 32bit), PNM (for eMMC, 48bit), hashed
+      // model name (for UFS, 32bit) etc. depending on the device type.
       optional uint64 product_id = 2;
 
       // Revision of the storage device product.
-      // Can be PCIe rev(8bit), PRV(8bit) etc. depending on the device type.
+      // Can be PCIe rev (for NVMe, 8bit), PRV(for eMMC, 8bit) etc. depending on
+      // the device type.
       optional uint32 revision = 3;
 
       // Storage Device model. Comes from /sys/block/<device>/device/model.
@@ -487,6 +498,10 @@ message SystemProfileProto {
     // Firmware version of the TPM on the device. This field is only filled in
     // on ChromeOS devices (both CrOS and LaCrOS platforms).
     optional uint64 tpm_firmware_version = 26;
+
+    // RW Firmware version of the TPM on the device. This field is only filled
+    // in on ChromeOS devices.
+    optional string tpm_rw_firmware_version = 27;
   }
   optional Hardware hardware = 6;
 
@@ -703,7 +718,7 @@ message SystemProfileProto {
   optional bool client_id_was_used_for_trial_assignment = 33;
 
   // The unhashed client_id for this report. This is a uuid in its canonical
-  // textual represetnation in the form 8-4-4-4-12 for a total of 36 characters.
+  // textual representation in the form 8-4-4-4-12 for a total of 36 characters.
   // Used to simulate field trial assignments for the client.
   optional string client_uuid = 34;
 
@@ -984,7 +999,9 @@ message SystemProfileProto {
     STATE_EXPIRED = 3;
   }
 
-  // Information about AntiVirus products installed.
+  // Information about installed antivirus products. Windows only. See
+  // https://cs.chromium.org/chromium/src/chrome/browser/metrics/antivirus_metrics_provider_win.cc.
+  //
   // Next Tag: 6
   message AntiVirusProduct {
     // The product name e.g. "System Center Endpoint Protection". This might not
@@ -1046,11 +1063,43 @@ message SystemProfileProto {
     // Hardware Decryption CDM only for Chrome on Windows.
     MEDIA_FOUNDATION_WIDEVINE_CDM = 30;
     CROWD_DENY = 31;
+    APP_PROVISIONING = 32;
+    AUTOFILL_STATES = 33;
+    CLIENT_SIDE_PHISHING = 34;
+    COMMERCE_HEURISTICS = 35;
+    CROW_DOMAIN_LIST = 36;
+    DEMO_MODE_APP = 37;
+    DESKTOP_SCREENSHOT_EDITOR = 38;
+    DESKTOP_SHARING_HUB = 39;
+    FIRST_PARTY_SETS = 40;
+    HYPHENATION = 41;
+    INTERVENTION_POLICY_DATABASE = 42;
+    LACROS_DOGFOOD_BETA = 43;
+    LACROS_DOGFOOD_CANARY = 44;
+    LACROS_DOGFOOD_DEV = 45;
+    LACROS_DOGFOOD_STABLE = 46;
+    MEI_PRELOAD = 47;
+    PKI_METADATA = 48;
+    REAL_TIME_URL_CHECKS_ALLOWLIST = 49;
+    RECOVERY_IMPROVED = 50;
+    SAFETY_TIPS = 51;
+    SCREEN_AI = 52;
+    SMART_DIM = 53;
+    SODA = 54;
+    SODA_DE_DE = 55;
+    SODA_EN_US = 56;
+    SODA_ES_ES = 57;
+    SODA_FR_FR = 58;
+    SODA_IT_IT = 59;
+    SODA_JA_JP = 60;
+    THIRD_PARTY_MODULE_LIST = 61;
+    TRUST_TOKEN_KEY_COMMITMENTS = 62;
+    THIRD_PARTY_COOKIE_DEPRECATION_METADATA = 63;
   }
 
   // Information about what Chrome components are registered and at which
   // version.
-  // Next Tag: 4
+  // Next Tag: 5
   message ChromeComponent {
     // Which component this information is for.
     optional ComponentId component_id = 1 [default = UNKNOWN];
@@ -1065,6 +1114,11 @@ message SystemProfileProto {
     // was installed as the component. It is a stronger version number that can
     // vary across platform, architecture, or branches of an A/B component test.
     optional fixed32 omaha_fingerprint = 3;
+
+    // A hash of the cohort identifier of this component, excluding
+    // non-assignment information. The hash function is Chromium's
+    // PersistentHash.
+    optional fixed32 cohort_hash = 4;
   }
   repeated ChromeComponent chrome_component = 24;
 
@@ -1073,9 +1127,68 @@ message SystemProfileProto {
   // installed in multiple profiles, it will be recorded multiple times.
   repeated ExtensionInstallProto extension_install = 25;
 
-  // The Chrome package name on Android, if it's different from
-  // "com.android.chrome".
+  // Android-only.
+  // For Chrome UMA records, this field contains the package name of the
+  // version of Chrome that is running if it's different from
+  // "com.android.chrome".  ("com.android.chrome" is the name of the Chrome
+  // stable channel app package name.)
+  // For WebView UMA records, under some conditions this field contains the
+  // package name of the currently-running app.  See http://shortn/_5HRGU153JL
+  // for details.
   optional string app_package_name = 26;
+
+  // Indicates if the `app_package_name` should be filtered out on the
+  // server-side. The client will use this to signal no further filtering is
+  // required if filtering is enabled on the client-side. If the package name is
+  // a system app and the server-side filtering is enabled, the client will use
+  // this to indicate no filtering is required since system apps are not subject
+  // to filtering. Only recorded on the Android WebView platform.
+  enum AppPackageNameAllowlistFilter {
+    // Indicates the package name filtering was not set.
+    // This will be the case with data coming from old WebView versions.
+    SERVER_SIDE_FILTER_UNSPECIFIED = 0;
+    // Indicates the package name filtering should occur on the server-side
+    SERVER_SIDE_FILTER_REQUIRED = 1;
+    // Indicates the `app_package_name` does not need filtering since it is
+    // a system app.
+    NO_SERVER_SIDE_FILTER_REQUIRED_FOR_SYSTEM_APPS = 3;
+
+    // Removed in cl/567086405:
+    reserved 2;
+    reserved "NO_SERVER_SIDE_FILTER_REQUIRED_DUE_TO_CLIENT_FILTERING";
+  }
+
+  optional AppPackageNameAllowlistFilter app_package_name_allowlist_filter = 42;
+
+  enum ClientSideSamplingStatus {
+    // Default value, no conclusion can be drawn.
+    SAMPLING_UNKNOWN = 0;
+    // Client-side sampling was applied.
+    SAMPLING_APPLIED = 1;
+    // Client-side sampling was not applied.
+    SAMPLING_NOT_APPLIED = 2;
+  }
+
+  // Specifies whether sampling was applied on the client. Older clients will
+  // not set this field, which will result in the default value of UNKNOWN.
+  optional ClientSideSamplingStatus client_side_sampling_status = 43;
+
+  enum MetricsFilteringStatus {
+    // Not expected to be reported explicitly, used when the field was not set.
+    METRICS_UNKNOWN = 0;
+    // Client is reporting all recorded histograms and user actions.
+    METRICS_ALL = 1;
+    // Client is reporting only a chosen set of histogrms and user actions.
+    // The semantics of METRICS_ONLY_CRITICAL may vary by platform and evolve
+    // over time.
+    METRICS_ONLY_CRITICAL = 2;
+  }
+
+  // Specifies whether metrics filtering was applied on the client. Metrics
+  // filtering applies to both histograms and user actions. The chosen metrics
+  // to filter may vary by platform and evolve over time. Older clients will not
+  // set this field, which will result in the default value of METRICS_UNKNOWN.
+  optional MetricsFilteringStatus metrics_filtering_status = 44;
 
   // The package which installed Chrome, as reported by
   // PackageManager.getInstallerPackageName().
@@ -1109,12 +1222,13 @@ message SystemProfileProto {
     optional bool is_instant_tethering_enabled = 3;
 
     // True if Messages integration is enabled on this Chromebook.
-    optional bool is_messages_enabled = 4;
+    // Deprecated 10/23.
+    optional bool is_messages_enabled = 4 [deprecated = true];
   }
   optional LinkedAndroidPhoneData linked_android_phone_data = 29;
 
   // Demo mode related dimension information.
-  // Next Tag: 4
+  // Next Tag: 6
   message DemoModeDimensions {
     optional string country = 1;
 
@@ -1129,8 +1243,39 @@ message SystemProfileProto {
     enum CustomizationFacet {
       UNDEFINED = 0;
       CLOUD_GAMING_DEVICE = 1;
+      FEATURE_AWARE_DEVICE = 2;
     }
     repeated CustomizationFacet customization_facet = 3 [packed = true];
+
+    // The Demo Mode highlights app version. The version number is used to
+    // identify the Omaha Chrome Component - Demo Mode App package that was
+    // downloaded onto the device.
+    optional string app_version = 4;
+
+    // The Demo Mode resources version. The version number is used to identify
+    // the Omaha Chrome Component - Demo Mode Resources bundle that was
+    // downloaded onto the device.
+    optional string resources_version = 5;
   }
   optional DemoModeDimensions demo_mode_dimensions = 41;
+
+  // LTSChannel indicates whether ChromeOS is running an lts channel.
+  // https://chromium.googlesource.com/chromiumos/docs/+/HEAD/releases.md#channels
+  enum LTSChannel {
+    // This field was not set.
+    LTS_CHANNEL_UNKNOWN = 0;
+    // ChromeOS is running stable-channel and not lts.
+    LTS_CHANNEL_STABLE = 1;
+    // ChromeOS is running ltc-channel.
+    LTS_CHANNEL_LTC = 2;
+    // ChromeOS is running lts-channel.
+    LTS_CHANNEL_LTS = 3;
+  }
+
+  // Report whether ChromeOS is running ltc or lts channel.
+  // Instead of extending the Channel enum, we report stable-channel and use
+  // this separate field to filter out for ltc or lts. Most UMA users are not
+  // aware of the existence of lts and we would lose monitoring for many Chrome
+  // features.
+  optional LTSChannel lts_channel = 45;
 }

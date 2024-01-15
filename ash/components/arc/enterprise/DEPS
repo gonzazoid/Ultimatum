@@ -1,4 +1,0 @@
-include_rules = [
-  "+ui/gl/gl_switches.h",
-  "+ui/ozone/public/ozone_switches.h",
-]

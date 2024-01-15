@@ -52,17 +52,17 @@ void AddWebApk(Profile* profile,
   generated_webapks->EnsureDict(app_id)->Set(kPackageNameKey, package_name);
 }
 
-absl::optional<std::string> GetWebApkPackageName(Profile* profile,
-                                                 const std::string& app_id) {
+std::optional<std::string> GetWebApkPackageName(Profile* profile,
+                                                const std::string& app_id) {
   const base::Value::Dict* app_dict =
       profile->GetPrefs()->GetDict(kGeneratedWebApksPref).FindDict(app_id);
   if (!app_dict) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const std::string* package_name = app_dict->FindString(kPackageNameKey);
   if (!package_name) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return *package_name;
@@ -87,7 +87,8 @@ base::flat_set<std::string> GetInstalledWebApkPackageNames(Profile* profile) {
       profile->GetPrefs()->GetDict(kGeneratedWebApksPref);
 
   for (const auto kv : generated_webapks) {
-    const std::string* package_name = kv.second.FindStringKey(kPackageNameKey);
+    const std::string* package_name =
+        kv.second.GetDict().FindString(kPackageNameKey);
     DCHECK(package_name);
     package_names.insert(*package_name);
   }
@@ -95,7 +96,7 @@ base::flat_set<std::string> GetInstalledWebApkPackageNames(Profile* profile) {
   return package_names;
 }
 
-absl::optional<std::string> RemoveWebApkByPackageName(
+std::optional<std::string> RemoveWebApkByPackageName(
     Profile* profile,
     const std::string& package_name) {
   ScopedDictPrefUpdate generated_webapks(profile->GetPrefs(),
@@ -103,7 +104,7 @@ absl::optional<std::string> RemoveWebApkByPackageName(
 
   for (auto kv : *generated_webapks) {
     const std::string* item_package_name =
-        kv.second.FindStringKey(kPackageNameKey);
+        kv.second.GetDict().FindString(kPackageNameKey);
     if (item_package_name && *item_package_name == package_name) {
       std::string app_id = kv.first;
       generated_webapks->Remove(kv.first);
@@ -111,7 +112,7 @@ absl::optional<std::string> RemoveWebApkByPackageName(
     }
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void SetUpdateNeededForApp(Profile* profile,
@@ -120,8 +121,9 @@ void SetUpdateNeededForApp(Profile* profile,
   ScopedDictPrefUpdate generated_webapks(profile->GetPrefs(),
                                          kGeneratedWebApksPref);
   base::Value::Dict* app_dict = generated_webapks->FindDict(app_id);
-  if (app_dict)
+  if (app_dict) {
     app_dict->Set(kUpdateNeededKey, update_needed);
+  }
 }
 
 base::flat_set<std::string> GetUpdateNeededAppIds(Profile* profile) {
@@ -130,8 +132,8 @@ base::flat_set<std::string> GetUpdateNeededAppIds(Profile* profile) {
       profile->GetPrefs()->GetDict(kGeneratedWebApksPref);
 
   for (auto kv : generated_webapks) {
-    absl::optional<bool> update_needed =
-        kv.second.FindBoolKey(kUpdateNeededKey);
+    std::optional<bool> update_needed =
+        kv.second.GetDict().FindBool(kUpdateNeededKey);
     if (update_needed.has_value() && update_needed.value()) {
       ids.insert(kv.first);
     }

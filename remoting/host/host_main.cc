@@ -29,7 +29,7 @@
 #include "remoting/host/usage_stats_consent.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif  // BUILDFLAG(IS_APPLE)
 
 #if BUILDFLAG(IS_WIN)
@@ -102,8 +102,9 @@ int RunElevated() {
   base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
   for (base::CommandLine::SwitchMap::const_iterator i = switches.begin();
        i != switches.end(); ++i) {
-    if (i->first != kElevateSwitchName)
+    if (i->first != kElevateSwitchName) {
       command_line.AppendSwitchNative(i->first, i->second);
+    }
   }
   for (base::CommandLine::StringVector::const_iterator i = args.begin();
        i != args.end(); ++i) {
@@ -169,7 +170,7 @@ MainRoutineFn SelectMainRoutine(const std::string& process_type) {
 int HostMain(int argc, char** argv) {
 #if BUILDFLAG(IS_APPLE)
   // Needed so we don't leak objects when threads are created.
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif
 
   base::CommandLine::Init(argc, argv);
@@ -246,7 +247,13 @@ int HostMain(int argc, char** argv) {
 
   remoting::LoadResources("");
 
-  mojo::core::Init();
+  mojo::core::Init({
+#if BUILDFLAG(IS_WIN)
+    .is_broker_process = main_routine == &DaemonProcessMain
+#else
+    .is_broker_process = main_routine == &HostProcessMain
+#endif
+  });
 
   // Invoke the entry point.
   int exit_code = main_routine();

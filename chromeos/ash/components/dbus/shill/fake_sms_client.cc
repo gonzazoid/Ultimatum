@@ -6,18 +6,20 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
-#include "dbus/object_path.h"
 
 namespace ash {
+
+// static
+const char FakeSMSClient::kNumber[] = "000-000-0000";
+const char FakeSMSClient::kTimestamp[] = "Fri Jun  8 13:26:04 EDT 2012";
 
 FakeSMSClient::FakeSMSClient() = default;
 
@@ -30,15 +32,22 @@ void FakeSMSClient::GetAll(const std::string& service_name,
           chromeos::switches::kSmsTestMessages)) {
     return;
   }
-  // Ownership passed to callback
-  base::Value sms(base::Value::Type::DICTIONARY);
-  sms.SetStringKey("Number", "000-000-0000");
-  sms.SetStringKey("Text",
-                   "FakeSMSClient: Test Message: " + object_path.value());
-  sms.SetStringKey("Timestamp", "Fri Jun  8 13:26:04 EDT 2012");
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), std::move(sms)));
+  pending_get_all_callback_ = std::move(callback);
+  pending_get_all_object_path_ = object_path;
+}
+
+void FakeSMSClient::CompleteGetAll() {
+  DCHECK(pending_get_all_callback_) << "No pending call to GetAll()";
+
+  base::Value::Dict sms;
+  sms.Set("Number", kNumber);
+  sms.Set("Text", "FakeSMSClient: Test Message: " +
+                      pending_get_all_object_path_.value());
+  sms.Set("Timestamp", kTimestamp);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(pending_get_all_callback_), std::move(sms)));
 }
 
 }  // namespace ash

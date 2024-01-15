@@ -4,13 +4,13 @@
 
 #include "content/browser/devtools/auction_worklet_devtools_agent_host.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "content/browser/devtools/render_frame_devtools_agent_host.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 
 namespace content {
 
@@ -78,6 +78,20 @@ bool AuctionWorkletDevToolsAgentHost::AttachSession(DevToolsSession* session,
   return true;
 }
 
+// static
+scoped_refptr<AuctionWorkletDevToolsAgentHost>
+AuctionWorkletDevToolsAgentHost::Create(DebuggableAuctionWorklet* worklet) {
+  auto self =
+      base::WrapRefCounted(new AuctionWorkletDevToolsAgentHost(worklet));
+  // This needs to be outside of constructor due to bind until we make the base
+  // class a `StartRefCountFromOne` (i.e. REQUIRE_ADOPTION_FOR_REFCOUNTED_TYPE).
+  if (auto pid_opt = worklet->GetPid(base::BindOnce(
+          &AuctionWorkletDevToolsAgentHost::SetProcessId, self))) {
+    self->SetProcessId(*pid_opt);
+  }
+  return self;
+}
+
 AuctionWorkletDevToolsAgentHost::AuctionWorkletDevToolsAgentHost(
     DebuggableAuctionWorklet* worklet)
     : DevToolsAgentHostImpl(worklet->UniqueId()), worklet_(worklet) {
@@ -96,7 +110,7 @@ AuctionWorkletDevToolsAgentHost::~AuctionWorkletDevToolsAgentHost() = default;
 
 void AuctionWorkletDevToolsAgentHost::WorkletDestroyed() {
   worklet_ = nullptr;
-  ForceDetachAllSessions();
+  auto retain_this = ForceDetachAllSessionsImpl();
   associated_agent_remote_.reset();
 }
 
@@ -143,8 +157,7 @@ AuctionWorkletDevToolsAgentHostManager::GetOrCreateFor(
   if (it != hosts_.end())
     return it->second;
 
-  auto host =
-      base::WrapRefCounted(new AuctionWorkletDevToolsAgentHost(worklet));
+  auto host = AuctionWorkletDevToolsAgentHost::Create(worklet);
   hosts_.insert(std::make_pair(worklet, host));
   return host;
 }

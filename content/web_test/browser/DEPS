@@ -3,6 +3,7 @@ include_rules = [
   "+components/download",
   "+components/keyed_service/core",
   "+components/network_session_configurator/common",
+  "+components/origin_trials",
   "+components/viz/common",
   "+content/public/browser",
   "+content/public/common",
@@ -11,6 +12,7 @@ include_rules = [
   "+content/web_test/common",
   "+device/bluetooth",
   "+services/device/public/cpp/test",
+  "+services/device/public/mojom",
   "+services/network/public/cpp",
   "+services/network/public/mojom",
   "+services/proxy_resolver",
@@ -19,6 +21,7 @@ include_rules = [
   "+third_party/test_fonts",
   "+ui/aura",
   "+ui/base/resource",
+  "+ui/ozone/public",
 ]
 
 specific_include_rules = {
@@ -26,5 +29,7 @@ specific_include_rules = {
   # //content/browser.
   ".*\.(cc|mm)": [
     "+content/browser",
+    "+services/tracing/public/cpp",
+    "+third_party/perfetto/include",
   ],
 }

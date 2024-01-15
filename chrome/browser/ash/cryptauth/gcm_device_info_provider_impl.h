@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_ASH_CRYPTAUTH_GCM_DEVICE_INFO_PROVIDER_IMPL_H_
 #define CHROME_BROWSER_ASH_CRYPTAUTH_GCM_DEVICE_INFO_PROVIDER_IMPL_H_
 
-#include "ash/services/device_sync/proto/cryptauth_api.pb.h"
-#include "ash/services/device_sync/public/cpp/gcm_device_info_provider.h"
 #include "base/no_destructor.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_api.pb.h"
+#include "chromeos/ash/services/device_sync/public/cpp/gcm_device_info_provider.h"
 
 namespace ash {
 
@@ -30,10 +30,5 @@ class GcmDeviceInfoProviderImpl : public device_sync::GcmDeviceInfoProvider {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::GcmDeviceInfoProviderImpl;
-}
 
 #endif  // CHROME_BROWSER_ASH_CRYPTAUTH_GCM_DEVICE_INFO_PROVIDER_IMPL_H_

@@ -9,6 +9,7 @@
 #include "ash/public/cpp/session/session_controller.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/human_presence/snooping_protection_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/message_center/message_center.h"
@@ -76,8 +77,8 @@ class ASH_EXPORT SnoopingProtectionNotificationBlocker
 
   // message_center::NotificationObserver:
   void Close(bool by_user) override;
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override;
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override;
 
  private:
   // Starts or stops blocking and showing the info notification based on the
@@ -99,8 +100,8 @@ class ASH_EXPORT SnoopingProtectionNotificationBlocker
   // currently-blocked notifications.
   std::unique_ptr<message_center::Notification> CreateInfoNotification() const;
 
-  message_center::MessageCenter* const message_center_;
-  SnoopingProtectionController* const controller_;
+  const raw_ptr<message_center::MessageCenter> message_center_;
+  const raw_ptr<SnoopingProtectionController> controller_;
 
   bool info_popup_exists_ = false;
 

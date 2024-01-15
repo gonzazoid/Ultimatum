@@ -7,14 +7,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/number_formatting.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/notifications/passphrase_textfield.h"
 #include "chrome/browser/ui/browser_dialogs.h"
-#include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -32,6 +31,7 @@
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/flex_layout.h"
+#include "ui/views/layout/layout_provider.h"
 #include "ui/views/layout/table_layout_view.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
@@ -159,7 +159,7 @@ void RequestSystemProxyCredentialsView::Init() {
   username_textfield_ =
       auth_container->AddChildView(std::make_unique<views::Textfield>());
   username_textfield_->SetEnabled(true);
-  username_textfield_->SetAssociatedLabel(username_label);
+  username_textfield_->SetAccessibleName(username_label);
 
   const int related_vertical_spacing =
       provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
@@ -173,7 +173,7 @@ void RequestSystemProxyCredentialsView::Init() {
   password_textfield_ = auth_container->AddChildView(
       std::make_unique<chromeos::PassphraseTextfield>());
   password_textfield_->SetEnabled(true);
-  password_textfield_->SetAssociatedLabel(password_label);
+  password_textfield_->SetAccessibleName(password_label);
   auth_container->AddPaddingRow(views::TableLayout::kFixedSize,
                                 related_vertical_spacing);
 

@@ -24,14 +24,22 @@ GuestOsMimeTypesServiceFactory* GuestOsMimeTypesServiceFactory::GetInstance() {
 }
 
 GuestOsMimeTypesServiceFactory::GuestOsMimeTypesServiceFactory()
-    : ProfileKeyedServiceFactory("GuestOsMimeTypesService") {}
+    : ProfileKeyedServiceFactory(
+          "GuestOsMimeTypesService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 GuestOsMimeTypesServiceFactory::~GuestOsMimeTypesServiceFactory() = default;
 
-KeyedService* GuestOsMimeTypesServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsMimeTypesServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new GuestOsMimeTypesService(profile);
+  return std::make_unique<GuestOsMimeTypesService>(profile);
 }
 
 }  // namespace guest_os

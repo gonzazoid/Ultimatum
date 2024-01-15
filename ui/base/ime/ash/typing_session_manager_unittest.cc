@@ -7,7 +7,6 @@
 #include <memory>
 #include <utility>
 
-#include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
@@ -27,7 +26,7 @@ class TypingSessionManagerTest : public testing::Test {
   TypingSessionManagerTest() : typing_session_manager_(&test_clock_) {}
 
   base::SimpleTestClock test_clock_;
-  ui::TypingSessionManager typing_session_manager_;
+  TypingSessionManager typing_session_manager_;
 };
 
 TEST_F(TypingSessionManagerTest, RecordMetricsForSimpleTypingSession) {

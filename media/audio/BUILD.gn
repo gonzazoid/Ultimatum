@@ -40,6 +40,7 @@ source_set("audio") {
   # is a roll-up target which is part of the //media component. Most other DEPs
   # should be using //media and not directly DEP this roll-up target.
   visibility = [
+    ":flac_audio_handler_fuzzer",
     ":wav_audio_handler_fuzzer",
     "//media",
     "//media/renderers",
@@ -57,8 +58,6 @@ source_set("audio") {
     "agc_audio_stream.h",
     "alive_checker.cc",
     "alive_checker.h",
-    "audio_bus_pool.cc",
-    "audio_bus_pool.h",
     "audio_debug_file_writer.cc",
     "audio_debug_file_writer.h",
     "audio_debug_recording_helper.cc",
@@ -70,10 +69,13 @@ source_set("audio") {
     "audio_device_description.h",
     "audio_device_name.cc",
     "audio_device_name.h",
+    "audio_device_stats_reporter.cc",
+    "audio_device_stats_reporter.h",
     "audio_device_thread.cc",
     "audio_device_thread.h",
     "audio_features.cc",
     "audio_features.h",
+    "audio_handler.h",
     "audio_input_delegate.cc",
     "audio_input_delegate.h",
     "audio_input_device.cc",
@@ -104,8 +106,6 @@ source_set("audio") {
     "audio_output_proxy.h",
     "audio_output_resampler.cc",
     "audio_output_resampler.h",
-    "audio_output_stream_sink.cc",
-    "audio_output_stream_sink.h",
     "audio_sink_parameters.cc",
     "audio_sink_parameters.h",
     "audio_source_parameters.cc",
@@ -131,10 +131,14 @@ source_set("audio") {
     "fake_audio_manager.h",
     "fake_audio_output_stream.cc",
     "fake_audio_output_stream.h",
+    "flac_audio_handler.cc",
+    "flac_audio_handler.h",
     "null_audio_sink.cc",
     "null_audio_sink.h",
     "power_observer_helper.cc",
     "power_observer_helper.h",
+    "reconfigurable_audio_bus_pool.cc",
+    "reconfigurable_audio_bus_pool.h",
     "scoped_task_runner_observer.cc",
     "scoped_task_runner_observer.h",
     "simple_sources.cc",
@@ -149,6 +153,7 @@ source_set("audio") {
     "//build:chromecast_buildflags",
     "//build:chromeos_buildflags",
     "//media/base",
+    "//third_party/flac",
     "//third_party/opus:opus",
     "//url",
   ]
@@ -159,31 +164,63 @@ source_set("audio") {
     "//media:subcomponent_config",
   ]
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
+      "apple/audio_io_stream_client.h",
+      "apple/audio_manager_apple.cc",
+      "apple/audio_manager_apple.h",
       "mac/audio_auhal_mac.cc",
       "mac/audio_auhal_mac.h",
-      "mac/audio_device_listener_mac.cc",
-      "mac/audio_device_listener_mac.h",
       "mac/audio_input_mac.cc",
       "mac/audio_input_mac.h",
       "mac/audio_low_latency_input_mac.cc",
       "mac/audio_low_latency_input_mac.h",
+      "mac/scoped_audio_unit.cc",
+      "mac/scoped_audio_unit.h",
+    ]
+
+    deps += [ "//media/base/mac" ]
+
+    frameworks = [
+      "AudioToolbox.framework",
+      "CoreAudio.framework",
+      "CoreFoundation.framework",
+    ]
+  }
+
+  if (is_mac) {
+    sources += [
+      "mac/audio_device_listener_mac.cc",
+      "mac/audio_device_listener_mac.h",
+      "mac/audio_loopback_input_mac.h",
+      "mac/audio_loopback_input_mac_impl.h",
+      "mac/audio_loopback_input_mac_impl.mm",
       "mac/audio_manager_mac.cc",
       "mac/audio_manager_mac.h",
       "mac/core_audio_util_mac.cc",
       "mac/core_audio_util_mac.h",
       "mac/coreaudio_dispatch_override.cc",
       "mac/coreaudio_dispatch_override.h",
-      "mac/scoped_audio_unit.cc",
-      "mac/scoped_audio_unit.h",
+      "mac/screen_capture_kit_swizzler.h",
+      "mac/screen_capture_kit_swizzler.mm",
     ]
-    frameworks = [
-      "AudioToolbox.framework",
+    frameworks += [
       "AudioUnit.framework",
-      "CoreAudio.framework",
-      "CoreFoundation.framework",
+      "CoreMedia.framework",
     ]
+    weak_frameworks = [ "ScreenCaptureKit.framework" ]  # macOS 13.0
+  }
+
+  if (is_ios) {
+    sources += [
+      "ios/audio_manager_ios.cc",
+      "ios/audio_manager_ios.h",
+      "ios/audio_private_api.h",
+      "ios/audio_session_manager_ios.h",
+      "ios/audio_session_manager_ios.mm",
+    ]
+
+    frameworks += [ "AVFoundation.framework" ]
   }
 
   if (is_win) {
@@ -204,8 +241,6 @@ source_set("audio") {
       "win/core_audio_util_win.h",
       "win/device_enumeration_win.cc",
       "win/device_enumeration_win.h",
-      "win/volume_range_util.cc",
-      "win/volume_range_util.h",
       "win/waveout_output_win.cc",
       "win/waveout_output_win.h",
     ]
@@ -221,8 +256,12 @@ source_set("audio") {
 
   if (is_android) {
     sources += [
+      "android/aaudio_input.cc",
+      "android/aaudio_input.h",
       "android/aaudio_output.cc",
       "android/aaudio_output.h",
+      "android/aaudio_stream_wrapper.cc",
+      "android/aaudio_stream_wrapper.h",
       "android/audio_manager_android.cc",
       "android/audio_manager_android.h",
       "android/audio_track_output_stream.cc",
@@ -272,28 +311,18 @@ source_set("audio") {
 
   if (use_cras) {
     sources += [
+      "cras/audio_manager_cras.cc",
+      "cras/audio_manager_cras.h",
       "cras/audio_manager_cras_base.cc",
       "cras/audio_manager_cras_base.h",
       "cras/cras_input.cc",
       "cras/cras_input.h",
       "cras/cras_unified.cc",
       "cras/cras_unified.h",
+      "cras/cras_util.cc",
+      "cras/cras_util.h",
     ]
     configs += [ ":libcras" ]
-    if (is_chromeos_ash) {
-      sources += [
-        "cras/audio_manager_chromeos.cc",
-        "cras/audio_manager_chromeos.h",
-      ]
-      deps += [ "//chromeos/ash/components/audio" ]
-    } else if (is_linux || is_chromeos_lacros) {
-      sources += [
-        "cras/audio_manager_cras.cc",
-        "cras/audio_manager_cras.h",
-        "cras/cras_util.cc",
-        "cras/cras_util.h",
-      ]
-    }
   }
 
   if (use_pulseaudio) {
@@ -302,6 +331,10 @@ source_set("audio") {
       "pulse/audio_manager_pulse.h",
       "pulse/pulse_input.cc",
       "pulse/pulse_input.h",
+      "pulse/pulse_loopback.cc",
+      "pulse/pulse_loopback.h",
+      "pulse/pulse_loopback_manager.cc",
+      "pulse/pulse_loopback_manager.h",
       "pulse/pulse_output.cc",
       "pulse/pulse_output.h",
       "pulse/pulse_util.cc",
@@ -328,7 +361,7 @@ source_set("audio") {
     ]
     deps += [
       "//media/fuchsia/common",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media:fuchsia.media_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
     ]
   }
@@ -358,7 +391,6 @@ static_library("test_support") {
     "audio_device_info_accessor_for_tests.h",
     "audio_system_test_util.cc",
     "audio_system_test_util.h",
-    "audio_unittest_util.cc",
     "audio_unittest_util.h",
     "mock_aecdump_recording_manager.cc",
     "mock_aecdump_recording_manager.h",
@@ -400,10 +432,11 @@ source_set("unit_tests") {
   sources = [
     "aecdump_recording_manager_unittest.cc",
     "alive_checker_unittest.cc",
-    "audio_bus_pool_unittest.cc",
     "audio_debug_file_writer_unittest.cc",
     "audio_debug_recording_helper_unittest.cc",
     "audio_debug_recording_manager_unittest.cc",
+    "audio_device_description_unittest.cc",
+    "audio_device_stats_reporter_unittest.cc",
     "audio_encoders_unittest.cc",
     "audio_input_device_unittest.cc",
     "audio_input_stream_data_interceptor_unittest.cc",
@@ -415,6 +448,7 @@ source_set("unit_tests") {
     "audio_system_impl_unittest.cc",
     "audio_thread_hang_monitor_unittest.cc",
     "power_observer_helper_unittest.cc",
+    "reconfigurable_audio_bus_pool_unittest.cc",
     "simple_sources_unittest.cc",
   ]
 
@@ -436,42 +470,42 @@ source_set("unit_tests") {
 
   if (is_android) {
     sources += [ "android/audio_android_unittest.cc" ]
-    deps += [ "//ui/gl" ]
+    deps += [
+      "//media/gpu:gpu",
+      "//ui/gl",
+    ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
       "mac/audio_auhal_mac_unittest.cc",
-      "mac/audio_device_listener_mac_unittest.cc",
       "mac/audio_low_latency_input_mac_unittest.cc",
     ]
   }
 
+  if (is_mac) {
+    sources += [
+      "mac/audio_device_listener_mac_unittest.cc",
+      "mac/audio_loopback_input_mac_unittest.mm",
+      "mac/audio_manager_mac_unittest.cc",
+    ]
+    deps += [ "//third_party/ocmock" ]
+    frameworks = [ "CoreMedia.framework" ]
+    weak_frameworks = [ "ScreenCaptureKit.framework" ]  # macOS 13.0
+  }
+
   if (is_chromeos_ash || is_castos || is_cast_android) {
     sources += [
+      "flac_audio_handler_unittest.cc",
       "test_data.h",
       "wav_audio_handler_unittest.cc",
     ]
   }
 
-  if (is_chromeos_ash) {
-    deps += [
-      "//chromeos/ash/components/audio",
-      "//chromeos/ash/components/dbus/audio",
-    ]
-
-    if (use_cras) {
-      sources += [ "cras/audio_manager_chromeos_unittest.cc" ]
-    }
-  }
-
-  if (is_chromeos_lacros && use_cras) {
-    sources += [ "cras/audio_manager_cras_unittest.cc" ]
-  }
-
   if (use_cras) {
     sources += [
       "cras/audio_manager_cras_base_unittest.cc",
+      "cras/audio_manager_cras_unittest.cc",
       "cras/cras_input_unittest.cc",
       "cras/cras_unified_unittest.cc",
     ]
@@ -486,7 +520,6 @@ source_set("unit_tests") {
       "win/audio_session_event_listener_win_unittest.cc",
       "win/core_audio_util_win_unittest.cc",
       "win/device_enumeration_win_unittest.cc",
-      "win/volume_range_util_unittest.cc",
     ]
 
     deps += [ "//media/gpu:gpu" ]
@@ -508,6 +541,15 @@ source_set("unit_tests") {
 
 fuzzer_test("wav_audio_handler_fuzzer") {
   sources = [ "wav_audio_handler_fuzzer.cc" ]
+  deps = [
+    ":audio",
+    "//base",
+    "//media:test_support",
+  ]
+}
+
+fuzzer_test("flac_audio_handler_fuzzer") {
+  sources = [ "flac_audio_handler_fuzzer.cc" ]
   deps = [
     ":audio",
     "//base",

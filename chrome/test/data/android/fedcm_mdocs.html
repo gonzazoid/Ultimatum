@@ -1,0 +1,37 @@
+<html>
+
+<head>
+  <title>FedCM MDocs Test Page</title>
+</head>
+<script>
+  async function request() {
+    const mdoc = await navigator.credentials.get({
+      identity: {
+        providers: [{
+          holder: {
+            selector: {
+              format: ["mdoc"],
+              doctype: "org.iso.18013.5.1.mDL",
+              fields: [
+                "org.iso.18013.5.1.family_name"
+              ]
+            },
+            params: {
+              nonce: "1234",
+              readerPublicKey: 'test_reader_public_key',
+              moreParametersAsNeededHere: true
+            },
+          },
+        }],
+      },
+    });
+   const token = mdoc.token;
+   document.getElementById("log").textContent += `${token}`;
+  }
+</script>
+
+<body>
+  <textarea id="log"></textarea>
+</body>
+
+</html>

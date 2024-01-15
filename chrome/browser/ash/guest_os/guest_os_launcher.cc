@@ -42,17 +42,16 @@ void LaunchBorealis(Profile* profile, LaunchCallback callback) {
           [](LaunchCallback callback,
              borealis::BorealisContextManager::ContextOrFailure
                  context_or_failure) {
-            if (!context_or_failure) {
+            if (!context_or_failure.has_value()) {
               std::stringstream error_msg;
               error_msg << "Failed to launch ("
-                        << static_cast<int>(context_or_failure.Error().error())
-                        << "): " << context_or_failure.Error().description();
-              std::move(callback).Run(
-                  ResponseType::Unexpected(error_msg.str()));
+                        << static_cast<int>(context_or_failure.error().error())
+                        << "): " << context_or_failure.error().description();
+              std::move(callback).Run(base::unexpected(error_msg.str()));
               return;
             }
             std::move(callback).Run(Success(
-                context_or_failure.Value()->vm_name(), /*container_name=*/""));
+                context_or_failure.value()->vm_name(), /*container_name=*/""));
           },
           std::move(callback)));
 }
@@ -72,8 +71,7 @@ void LaunchCrostini(Profile* profile,
               std::stringstream error_msg;
               error_msg << "Failed to launch: code="
                         << static_cast<int>(result);
-              std::move(callback).Run(
-                  ResponseType::Unexpected(error_msg.str()));
+              std::move(callback).Run(base::unexpected(error_msg.str()));
               return;
             }
             std::move(callback).Run(Success(vm_name, container_name));
@@ -88,7 +86,7 @@ void LaunchPluginVm(Profile* profile, LaunchCallback callback) {
           [](LaunchCallback callback, bool success) {
             if (!success) {
               std::move(callback).Run(
-                  ResponseType::Unexpected("Failed to launch Plugin VM"));
+                  base::unexpected("Failed to launch Plugin VM"));
               return;
             }
             std::move(callback).Run(
@@ -103,8 +101,8 @@ void LaunchBruschetta(Profile* profile,
   auto* service = bruschetta::BruschettaService::GetForProfile(profile);
   auto launcher = service->GetLauncher(name);
   if (!launcher) {
-    std::move(callback).Run(ResponseType::Unexpected(
-        "No record found of a Bruschetta VM named " + name));
+    std::move(callback).Run(
+        base::unexpected("No record found of a Bruschetta VM named " + name));
     return;
   }
   launcher->EnsureRunning(base::BindOnce(
@@ -112,7 +110,7 @@ void LaunchBruschetta(Profile* profile,
          bruschetta::BruschettaResult result) {
         if (result != bruschetta::BruschettaResult::kSuccess) {
           std::move(callback).Run(
-              ResponseType::Unexpected("Failed to launch Bruschetta"));
+              base::unexpected("Failed to launch Bruschetta"));
           return;
         }
         std::move(callback).Run(Success(name, /*container_name=*/"penguin"));
@@ -126,7 +124,7 @@ void EnsureLaunched(const vm_tools::launch::EnsureVmLaunchedRequest& request,
                     LaunchCallback response_callback) {
   if (request.launch_descriptors().empty()) {
     std::move(response_callback)
-        .Run(ResponseType::Unexpected("No launch_descriptors provided"));
+        .Run(base::unexpected("No launch_descriptors provided"));
     return;
   }
 
@@ -134,7 +132,7 @@ void EnsureLaunched(const vm_tools::launch::EnsureVmLaunchedRequest& request,
   if (!profile || ash::ProfileHelper::GetUserIdHashFromProfile(profile) !=
                       request.owner_id()) {
     std::move(response_callback)
-        .Run(ResponseType::Unexpected(
+        .Run(base::unexpected(
             "Provided owner_id does not match the primary profile"));
     return;
   }
@@ -159,17 +157,57 @@ void EnsureLaunched(const vm_tools::launch::EnsureVmLaunchedRequest& request,
   } else if (main_descriptor == "bruschetta") {
     if (request.launch_descriptors().size() == 1) {
       std::move(response_callback)
-          .Run(ResponseType::Unexpected(
-              "Error: Bruschetta needs a name to launch"));
+          .Run(base::unexpected("Error: Bruschetta needs a name to launch"));
       return;
     }
     const std::string& name = request.launch_descriptors()[1];
     LaunchBruschetta(profile, name, std::move(response_callback));
   } else {
     std::move(response_callback)
-        .Run(
-            ResponseType::Unexpected("Unknown descriptor: " + main_descriptor));
+        .Run(base::unexpected("Unknown descriptor: " + main_descriptor));
   }
+}
+
+void LaunchApplication(Profile* profile,
+                       const guest_os::GuestId& guest_id,
+                       std::string desktop_file_id,
+                       const std::vector<std::string>& files,
+                       bool display_scaled,
+                       SuccessCallback callback) {
+  vm_tools::cicerone::LaunchContainerApplicationRequest request;
+  request.set_owner_id(crostini::CryptohomeIdForProfile(profile));
+  request.set_vm_name(guest_id.vm_name);
+  request.set_container_name(guest_id.container_name);
+  request.set_desktop_file_id(std::move(desktop_file_id));
+  if (display_scaled) {
+    request.set_display_scaling(
+        vm_tools::cicerone::LaunchContainerApplicationRequest::SCALED);
+  }
+  base::ranges::copy(files, google::protobuf::RepeatedFieldBackInserter(
+                                request.mutable_files()));
+
+  const std::vector<vm_tools::cicerone::ContainerFeature> container_features =
+      crostini::GetContainerFeatures();
+  request.mutable_container_features()->Add(container_features.begin(),
+                                            container_features.end());
+
+  ash::CiceroneClient::Get()->LaunchContainerApplication(
+      std::move(request),
+      base::BindOnce(
+          [](SuccessCallback callback,
+             absl::optional<
+                 vm_tools::cicerone::LaunchContainerApplicationResponse>
+                 response) {
+            if (!response) {
+              std::move(callback).Run(/*success=*/false,
+                                      "Failed to launch application. Empty "
+                                      "LaunchContainerApplicationResponse.");
+              return;
+            }
+            std::move(callback).Run(response->success(),
+                                    response->failure_reason());
+          },
+          std::move(callback)));
 }
 
 }  // namespace guest_os::launcher

@@ -7,19 +7,15 @@
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "components/autofill/core/browser/data_model/autofill_profile.h"
-#import "ios/chrome/browser/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 // Takes in an autofill profile and an autofill field type and returns the
 // corresponding field value.
 NSString* FieldValueOfTypeOnProfile(const autofill::AutofillProfile& profile,
-                                    autofill::ServerFieldType fieldType) {
+                                    autofill::FieldType fieldType) {
   return base::SysUTF16ToNSString(
       profile.GetInfo(autofill::AutofillType(fieldType),
                       GetApplicationContext()->GetApplicationLocale()));

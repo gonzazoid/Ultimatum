@@ -5,16 +5,27 @@
 group("signin") {
   testonly = true
   deps = [
+    ":choice",
     ":signin_error",
+    ":signin_identity",
     ":signin_resources",
     ":signin_sso",
     ":trusted_vault",
   ]
 }
 
+source_set("choice") {
+  sources = [ "test_choice.mm" ]
+  deps = [
+    "//base",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/public/provider/chrome/browser/signin:choice_api",
+  ]
+  frameworks = [ "UIKit.framework" ]
+}
+
 source_set("signin_error") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "test_signin_error.mm" ]
   deps = [
     "//base",
@@ -23,9 +34,18 @@ source_set("signin_error") {
   frameworks = [ "Foundation.framework" ]
 }
 
+source_set("signin_identity") {
+  testonly = true
+  sources = [ "test_signin_identity.mm" ]
+  deps = [
+    "//ios/chrome/browser/signin/model:fake_system_identity_manager",
+    "//ios/public/provider/chrome/browser/signin:signin_identity_api",
+  ]
+  frameworks = [ "Foundation.framework" ]
+}
+
 source_set("signin_resources") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "test_signin_resources.mm" ]
   deps = [
     "//ios/public/provider/chrome/browser/signin:signin_resources_api",
@@ -36,7 +56,6 @@ source_set("signin_resources") {
 
 source_set("signin_sso") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "test_signin_sso.mm" ]
   deps = [ "//ios/public/provider/chrome/browser/signin:signin_sso_api" ]
   frameworks = [ "Foundation.framework" ]
@@ -44,7 +63,6 @@ source_set("signin_sso") {
 
 source_set("trusted_vault") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "fake_trusted_vault_client_backend.h",
     "fake_trusted_vault_client_backend.mm",
@@ -52,7 +70,7 @@ source_set("trusted_vault") {
   ]
   deps = [
     "//base",
-    "//ios/chrome/browser/signin:trusted_vault",
+    "//ios/chrome/browser/signin/model:trusted_vault",
     "//ios/public/provider/chrome/browser/signin:trusted_vault_api",
   ]
   frameworks = [ "UIKit.framework" ]

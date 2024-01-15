@@ -11,9 +11,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_split.h"
@@ -168,8 +168,8 @@ class UrlLoaderTest : public testing::Test {
   std::unique_ptr<UrlLoader> loader_;
 
   // Becomes invalid if `loader_` is closed or destructed.
-  raw_ptr<MockWebAssociatedURLLoader> mock_url_loader_ =
-      fake_client_.mock_url_loader();
+  raw_ptr<MockWebAssociatedURLLoader, DisableDanglingPtrDetection>
+      mock_url_loader_ = fake_client_.mock_url_loader();
 
   blink::WebURLRequest saved_request_;
 };
@@ -579,8 +579,9 @@ TEST_F(UrlLoaderTest, DidFailWithErrorNetworkAccessDenied) {
 }
 
 TEST_F(UrlLoaderTest, DidFailWithWebSecurityViolationError) {
-  blink::WebURLError error(network::CorsErrorStatus(),
-                           blink::WebURLError::HasCopyInCache::kFalse, GURL());
+  blink::WebURLError error(
+      network::CorsErrorStatus(network::mojom::CorsError::kDisallowedByMode),
+      blink::WebURLError::HasCopyInCache::kFalse, GURL());
   ASSERT_TRUE(error.is_web_security_violation());
 
   int32_t result = DidFailWithError(error);

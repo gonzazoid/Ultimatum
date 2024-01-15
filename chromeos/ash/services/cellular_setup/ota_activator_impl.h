@@ -8,9 +8,10 @@
 #include <memory>
 #include <ostream>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
@@ -21,10 +22,10 @@
 
 namespace ash {
 
-class NetworkState;
-class NetworkStateHandler;
 class NetworkActivationHandler;
 class NetworkConnectionHandler;
+class NetworkState;
+class NetworkStateHandler;
 
 namespace cellular_setup {
 
@@ -53,7 +54,7 @@ class OtaActivatorImpl : public OtaActivator,
         NetworkConnectionHandler* network_connection_handler,
         NetworkActivationHandler* network_activation_handler,
         scoped_refptr<base::TaskRunner> task_runner =
-            base::ThreadTaskRunnerHandle::Get());
+            base::SingleThreadTaskRunner::GetCurrentDefault());
     static void SetFactoryForTesting(Factory* test_factory);
 
    protected:
@@ -128,12 +129,14 @@ class OtaActivatorImpl : public OtaActivator,
   void FlushForTesting();
 
   mojo::Remote<mojom::ActivationDelegate> activation_delegate_;
-  NetworkStateHandler* network_state_handler_;
-  NetworkConnectionHandler* network_connection_handler_;
-  NetworkActivationHandler* network_activation_handler_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+  raw_ptr<NetworkConnectionHandler> network_connection_handler_;
+  raw_ptr<NetworkActivationHandler> network_activation_handler_;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
 
   State state_ = State::kNotYetStarted;
-  absl::optional<mojom::CarrierPortalStatus> last_carrier_portal_status_;
+  std::optional<mojom::CarrierPortalStatus> last_carrier_portal_status_;
   std::string iccid_;
   bool has_sent_metadata_ = false;
   bool has_called_complete_activation_ = false;

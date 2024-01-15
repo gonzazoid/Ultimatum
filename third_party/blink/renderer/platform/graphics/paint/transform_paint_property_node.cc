@@ -10,29 +10,24 @@
 
 namespace blink {
 
-TransformPaintPropertyNode::TransformAndOrigin::TransformAndOrigin(
-    const AffineTransform& transform) {
-  if (transform.IsIdentityOrTranslation()) {
-    translation_2d_ = gfx::Vector2dF(transform.E(), transform.F());
-  } else {
-    matrix_and_origin_ = std::make_unique<MatrixAndOrigin>(
-        TransformationMatrix(transform), gfx::Point3F());
-  }
+namespace {
+
+bool Keeps2dAxisAlignmentStatus(const gfx::Transform& a,
+                                const gfx::Transform& b) {
+  if (a.Preserves2dAxisAlignment() && b.Preserves2dAxisAlignment())
+    return true;
+
+  return (a.InverseOrIdentity() * b).Preserves2dAxisAlignment();
 }
 
-TransformationMatrix
-TransformPaintPropertyNode::TransformAndOrigin::SlowMatrix() const {
-  return matrix_and_origin_ ? matrix_and_origin_->matrix
-                            : TransformationMatrix::MakeTranslation(
-                                  translation_2d_.x(), translation_2d_.y());
-}
+}  // anonymous namespace
 
 PaintPropertyChangeType
 TransformPaintPropertyNode::State::ComputeTransformChange(
     const TransformAndOrigin& other,
     const AnimationState& animation_state) const {
-  bool matrix_changed = !transform_and_origin.TransformEquals(other);
-  bool origin_changed = transform_and_origin.Origin() != other.Origin();
+  bool matrix_changed = transform_and_origin.matrix != other.matrix;
+  bool origin_changed = transform_and_origin.origin != other.origin;
   bool transform_changed = matrix_changed || origin_changed;
 
   if (!transform_changed)
@@ -49,15 +44,17 @@ TransformPaintPropertyNode::State::ComputeTransformChange(
                : PaintPropertyChangeType::kChangedOnlyCompositedValues;
   }
 
-  if (RuntimeEnabledFeatures::ScrollUpdateOptimizationsEnabled() &&
-      direct_compositing_reasons & CompositingReason::kStickyPosition) {
-    // The compositor handles sticky offset changes automatically.
-    DCHECK(transform_and_origin.ChangePreserves2dAxisAlignment(other));
+  if ((direct_compositing_reasons & CompositingReason::kStickyPosition) ||
+      (direct_compositing_reasons & CompositingReason::kAnchorPosition)) {
+    // The compositor handles sticky offset changes and anchor position
+    // translation offset changes automatically.
+    DCHECK(transform_and_origin.matrix.Preserves2dAxisAlignment());
+    DCHECK(other.matrix.Preserves2dAxisAlignment());
     return PaintPropertyChangeType::kChangedOnlyCompositedValues;
   }
 
   if (matrix_changed &&
-      !transform_and_origin.ChangePreserves2dAxisAlignment(other)) {
+      !Keeps2dAxisAlignmentStatus(transform_and_origin.matrix, other.matrix)) {
     // An additional cc::EffectNode may be required if
     // blink::TransformPaintPropertyNode is not axis-aligned (see:
     // PropertyTreeManager::SyntheticEffectType). Changes to axis alignment
@@ -73,28 +70,28 @@ PaintPropertyChangeType TransformPaintPropertyNode::State::ComputeChange(
     const State& other,
     const AnimationState& animation_state) const {
   // Whether or not a node is considered a frame root should be invariant.
-  DCHECK_EQ(flags.is_frame_paint_offset_translation,
-            other.flags.is_frame_paint_offset_translation);
+  DCHECK_EQ(is_frame_paint_offset_translation,
+            other.is_frame_paint_offset_translation);
 
   // Changes other than compositing reason and the transform are not simple.
-  if (flags.flattens_inherited_transform !=
-          other.flags.flattens_inherited_transform ||
-      flags.in_subtree_of_page_scale != other.flags.in_subtree_of_page_scale ||
-      flags.animation_is_axis_aligned !=
-          other.flags.animation_is_axis_aligned ||
-      flags.delegates_to_parent_for_backface !=
-          other.flags.delegates_to_parent_for_backface ||
-      flags.is_frame_paint_offset_translation !=
-          other.flags.is_frame_paint_offset_translation ||
-      flags.is_for_svg_child != other.flags.is_for_svg_child ||
+  if (flattens_inherited_transform != other.flattens_inherited_transform ||
+      in_subtree_of_page_scale != other.in_subtree_of_page_scale ||
+      animation_is_axis_aligned != other.animation_is_axis_aligned ||
+      is_frame_paint_offset_translation !=
+          other.is_frame_paint_offset_translation ||
+      is_for_svg_child != other.is_for_svg_child ||
       backface_visibility != other.backface_visibility ||
       rendering_context_id != other.rendering_context_id ||
       compositor_element_id != other.compositor_element_id ||
+      // This change affects cull rect expansion for scrolling contents.
+      UsesCompositedScrolling() != other.UsesCompositedScrolling() ||
+      // This change affects cull rect expansion for the element itself.
+      RequiresCullRectExpansion() != other.RequiresCullRectExpansion() ||
       scroll != other.scroll ||
       scroll_translation_for_fixed != other.scroll_translation_for_fixed ||
       !base::ValuesEquivalent(sticky_constraint, other.sticky_constraint) ||
-      !base::ValuesEquivalent(anchor_scroll_containers_data,
-                              other.anchor_scroll_containers_data) ||
+      !base::ValuesEquivalent(anchor_position_scrollers_data,
+                              other.anchor_position_scrollers_data) ||
       visible_frame_element_id != other.visible_frame_element_id) {
     return PaintPropertyChangeType::kChangedOnlyValues;
   }
@@ -135,10 +132,8 @@ const TransformPaintPropertyNode& TransformPaintPropertyNode::Root() {
   DEFINE_STATIC_REF(
       TransformPaintPropertyNode, root,
       base::AdoptRef(new TransformPaintPropertyNode(
-          nullptr,
-          State{gfx::Vector2dF(), &ScrollPaintPropertyNode::Root(), nullptr,
-                State::Flags{false /* flattens_inherited_transform */,
-                             false /* in_subtree_of_page_scale */}})));
+          nullptr, State{.scroll = &ScrollPaintPropertyNode::Root(),
+                         .in_subtree_of_page_scale = false})));
   return *root;
 }
 
@@ -157,19 +152,45 @@ bool TransformPaintPropertyNodeOrAlias::Changed(
   return relative_to_node.Changed(change, TransformPaintPropertyNode::Root());
 }
 
+bool TransformPaintPropertyNodeOrAlias::ChangedExceptScroll(
+    PaintPropertyChangeType change,
+    const TransformPaintPropertyNodeOrAlias& relative_to_node) const {
+  for (const auto* node = this; node; node = node->Parent()) {
+    if (node == &relative_to_node) {
+      return false;
+    }
+    if (!node->IsParentAlias() &&
+        static_cast<const TransformPaintPropertyNode*>(node)->ScrollNode()) {
+      continue;
+    }
+    if (node->NodeChanged() >= change) {
+      return true;
+    }
+  }
+
+  // |this| is not a descendant of |relative_to_node|. We have seen no changed
+  // flag from |this| to the root. Now check |relative_to_node| to the root.
+  return relative_to_node.Changed(change, TransformPaintPropertyNode::Root());
+}
+
 std::unique_ptr<JSONObject> TransformPaintPropertyNode::ToJSON() const {
   auto json = ToJSONBase();
-  if (IsIdentityOr2DTranslation()) {
-    if (!Translation2D().IsZero())
-      json->SetString("translation2d", String(Translation2D().ToString()));
+  if (IsIdentityOr2dTranslation()) {
+    if (!Get2dTranslation().IsZero())
+      json->SetString("translation2d", String(Get2dTranslation().ToString()));
   } else {
-    json->SetString("matrix", Matrix().ToString());
+    String matrix(Matrix().ToDecomposedString());
+    if (matrix.EndsWith("\n"))
+      matrix = matrix.Left(matrix.length() - 1);
+    json->SetString("matrix", matrix.Replace("\n", ", "));
     json->SetString("origin", String(Origin().ToString()));
   }
-  if (!state_.flags.flattens_inherited_transform)
+  if (!state_.flattens_inherited_transform) {
     json->SetBoolean("flattensInheritedTransform", false);
-  if (!state_.flags.in_subtree_of_page_scale)
+  }
+  if (!state_.in_subtree_of_page_scale) {
     json->SetBoolean("in_subtree_of_page_scale", false);
+  }
   if (state_.backface_visibility != BackfaceVisibility::kInherited) {
     json->SetString("backface",
                     state_.backface_visibility == BackfaceVisibility::kVisible
@@ -187,7 +208,7 @@ std::unique_ptr<JSONObject> TransformPaintPropertyNode::ToJSON() const {
   }
   if (state_.compositor_element_id) {
     json->SetString("compositorElementId",
-                    state_.compositor_element_id.ToString().c_str());
+                    String(state_.compositor_element_id.ToString()));
   }
   if (state_.scroll)
     json->SetString("scroll", String::Format("%p", state_.scroll.get()));

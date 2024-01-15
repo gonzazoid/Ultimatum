@@ -27,16 +27,23 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "util/file/file_io.h"
+
+#if !BUILDFLAG(IS_FUCHSIA)
 #include "util/misc/capture_context.h"
+#endif  // !BUILDFLAG(IS_FUCHSIA)
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/scoped_mach_port.h"
 #elif BUILDFLAG(IS_WIN)
 #include <windows.h>
 #include "util/win/scoped_handle.h"
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
 #include <signal.h>
 #include <ucontext.h>
+#endif
+
+#if BUILDFLAG(IS_IOS)
+#include "client/upload_behavior_ios.h"
 #endif
 
 namespace crashpad {
@@ -449,6 +456,24 @@ class CrashpadClient {
   //! \param[in] handler The custom crash signal handler to install.
   static void SetFirstChanceExceptionHandler(FirstChanceHandler handler);
 
+  //! \brief Installs a custom crash signal handler which runs after the
+  //!     currently installed Crashpad handler.
+  //!
+  //! Handling signals appropriately can be tricky and use of this method
+  //! should be avoided, if possible.
+  //!
+  //! A handler must have already been installed before calling this method.
+  //!
+  //! The custom handler runs in a signal handler context and must be safe for
+  //! that purpose.
+  //!
+  //! If the custom handler returns `true`, the signal is not reraised.
+  //!
+  //! \param[in] handler The custom crash signal handler to install.
+  static void SetLastChanceExceptionHandler(bool (*handler)(int,
+                                                            siginfo_t*,
+                                                            ucontext_t*));
+
   //! \brief Configures a set of signals that shouldn't have Crashpad signal
   //!     handlers installed.
   //!
@@ -531,7 +556,12 @@ class CrashpadClient {
   //! on another thread. This method does not block.
   //!
   //! A handler must have already been installed before calling this method.
-  static void StartProcessingPendingReports();
+  //!
+  //! \param[in] upload_behavior Controls when the upload thread will run and
+  //!     process pending reports. By default, only uploads pending reports
+  //!     when the application is active.
+  static void StartProcessingPendingReports(
+      UploadBehavior upload_behavior = UploadBehavior::kUploadWhenAppIsActive);
 
   //! \brief Requests that the handler capture an intermediate dump even though
   //!     there hasn't been a crash. The intermediate dump will be converted
@@ -615,7 +645,7 @@ class CrashpadClient {
   //!     Crashpad exception handler service.
   //!
   //! \return `true` on success, `false` on failure with a message logged.
-  bool SetHandlerMachPort(base::mac::ScopedMachSendRight exception_port);
+  bool SetHandlerMachPort(base::apple::ScopedMachSendRight exception_port);
 
   //! \brief Retrieves a send right to the process’ crash handler Mach port.
   //!
@@ -636,7 +666,7 @@ class CrashpadClient {
   //!     SetHandlerMachService(). This method must only be called after a
   //!     successful call to one of those methods. `MACH_PORT_NULL` on failure
   //!     with a message logged.
-  base::mac::ScopedMachSendRight GetHandlerMachPort() const;
+  base::apple::ScopedMachSendRight GetHandlerMachPort() const;
 #endif
 
 #if BUILDFLAG(IS_WIN) || DOXYGEN
@@ -777,11 +807,17 @@ class CrashpadClient {
 #endif
 
  private:
+#if BUILDFLAG(IS_WIN)
+  //!  \brief Registers process handlers for the client.
+  void RegisterHandlers();
+#endif
+
 #if BUILDFLAG(IS_APPLE)
-  base::mac::ScopedMachSendRight exception_port_;
+  base::apple::ScopedMachSendRight exception_port_;
 #elif BUILDFLAG(IS_WIN)
   std::wstring ipc_pipe_;
   ScopedKernelHANDLE handler_start_thread_;
+  ScopedVectoredExceptionRegistration vectored_handler_;
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
   std::set<int> unhandled_signals_;
 #endif  // BUILDFLAG(IS_APPLE)

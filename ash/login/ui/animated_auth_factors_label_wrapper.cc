@@ -5,11 +5,13 @@
 #include "ash/login/ui/animated_auth_factors_label_wrapper.h"
 
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "base/time/time.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/layer_animator.h"
@@ -39,13 +41,14 @@ constexpr int kLabelLineHeightDp = 20;
 constexpr int kLabelWrapperHeightDp = kLabelMaxLines * kLabelLineHeightDp;
 
 class AuthFactorsLabel : public views::Label {
+  METADATA_HEADER(AuthFactorsLabel, views::Label)
+
  public:
   AuthFactorsLabel(bool visible_to_screen_reader)
       : visible_to_screen_reader_(visible_to_screen_reader) {
     SetSubpixelRenderingEnabled(false);
     SetAutoColorReadabilityEnabled(false);
-    SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
-        AshColorProvider::ContentLayerType::kTextColorSecondary));
+    SetEnabledColorId(kColorAshTextColorSecondary);
     SetMultiLine(true);
     SetMaxLines(kLabelMaxLines);
     SetLineHeight(kLabelLineHeightDp);
@@ -66,15 +69,8 @@ class AuthFactorsLabel : public views::Label {
     views::Label::GetAccessibleNodeData(node_data);
   }
 
-  // views::Label:
-  void OnThemeChanged() override {
-    views::Label::OnThemeChanged();
-    SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
-        AshColorProvider::ContentLayerType::kTextColorSecondary));
-  }
-
-  // views::View:
-  gfx::Size CalculatePreferredSize() const override {
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override {
     return gfx::Size(kAuthFactorsViewWidthDp, kLabelWrapperHeightDp);
   }
 
@@ -84,6 +80,9 @@ class AuthFactorsLabel : public views::Label {
   // represent content that should be made accessible.
   bool visible_to_screen_reader_ = true;
 };
+
+BEGIN_METADATA(AuthFactorsLabel)
+END_METADATA
 
 }  // namespace
 
@@ -134,8 +133,9 @@ void AnimatedAuthFactorsLabelWrapper::SetLabelTextAndAccessibleName(
   // If |previous_text_| is empty, then this is the first time the text is
   // being set. Avoid animating because it looks janky to have an animation in
   // progress when the lock screen first becomes visible.
-  if (!animate || previous_text.empty())
+  if (!animate || previous_text.empty()) {
     return;
+  }
 
   // Set the text/transform/opacity of the previous label to match the
   // appearance of the current label before the animation.
@@ -204,5 +204,8 @@ void AnimatedAuthFactorsLabelWrapper::SetLabelTextAndAccessibleName(
 gfx::Size AnimatedAuthFactorsLabelWrapper::CalculatePreferredSize() const {
   return gfx::Size(kAuthFactorsViewWidthDp, kLabelWrapperHeightDp);
 }
+
+BEGIN_METADATA(AnimatedAuthFactorsLabelWrapper)
+END_METADATA
 
 }  // namespace ash

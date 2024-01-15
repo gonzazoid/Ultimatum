@@ -6,14 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/feature_list.h"
+#include "base/check_deref.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_trust_checker.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_validator.h"
-#include "chrome/browser/web_applications/isolated_web_apps/signed_web_bundle_signature_verifier.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "content/public/common/content_features.h"
+#include "components/web_package/signed_web_bundles/signed_web_bundle_signature_verifier.h"
+#include "content/public/browser/isolated_web_apps_policy.h"
 
 namespace web_app {
 
@@ -28,7 +29,8 @@ IsolatedWebAppReaderRegistryFactory::GetForProfile(Profile* profile) {
 // static
 IsolatedWebAppReaderRegistryFactory*
 IsolatedWebAppReaderRegistryFactory::GetInstance() {
-  return base::Singleton<IsolatedWebAppReaderRegistryFactory>::get();
+  static base::NoDestructor<IsolatedWebAppReaderRegistryFactory> instance;
+  return instance.get();
 }
 
 IsolatedWebAppReaderRegistryFactory::IsolatedWebAppReaderRegistryFactory()
@@ -39,18 +41,29 @@ IsolatedWebAppReaderRegistryFactory::IsolatedWebAppReaderRegistryFactory()
 IsolatedWebAppReaderRegistryFactory::~IsolatedWebAppReaderRegistryFactory() =
     default;
 
-KeyedService* IsolatedWebAppReaderRegistryFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+IsolatedWebAppReaderRegistryFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new IsolatedWebAppReaderRegistry(
-      std::make_unique<IsolatedWebAppValidator>(), base::BindRepeating([]() {
-        return std::make_unique<SignedWebBundleSignatureVerifier>();
+  Profile* profile = Profile::FromBrowserContext(context);
+
+  auto isolated_web_app_trust_checker =
+      std::make_unique<IsolatedWebAppTrustChecker>(
+          CHECK_DEREF(profile->GetPrefs()));
+
+  auto validator = std::make_unique<IsolatedWebAppValidator>(
+      std::move(isolated_web_app_trust_checker));
+
+  return std::make_unique<IsolatedWebAppReaderRegistry>(
+      std::move(validator), base::BindRepeating([]() {
+        return std::make_unique<
+            web_package::SignedWebBundleSignatureVerifier>();
       }));
 }
 
 content::BrowserContext*
 IsolatedWebAppReaderRegistryFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  if (!base::FeatureList::IsEnabled(features::kIsolatedWebApps)) {
+  if (!content::IsolatedWebAppsPolicy::AreIsolatedWebAppsEnabled(context)) {
     return nullptr;
   }
 

@@ -6,13 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "device/bluetooth/dbus/bluez_dbus_manager.h"
 #include "device/bluetooth/dbus/fake_bluetooth_device_client.h"
@@ -171,8 +171,7 @@ void FakeBluetoothGattCharacteristicClient::ReadValue(
     return;
   }
 
-  if (action_extra_requests_.find("ReadValue") !=
-      action_extra_requests_.end()) {
+  if (base::Contains(action_extra_requests_, "ReadValue")) {
     DelayedCallback* delayed = action_extra_requests_["ReadValue"];
     delayed->delay_--;
     std::move(error_callback)
@@ -210,7 +209,7 @@ void FakeBluetoothGattCharacteristicClient::ReadValue(
 void FakeBluetoothGattCharacteristicClient::WriteValue(
     const dbus::ObjectPath& object_path,
     const std::vector<uint8_t>& value,
-    base::StringPiece type_option,
+    std::string_view type_option,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
   if (!authenticated_) {
@@ -245,8 +244,7 @@ void FakeBluetoothGattCharacteristicClient::WriteValue(
   }
 
   DCHECK(heart_rate_control_point_properties_.get());
-  if (action_extra_requests_.find("WriteValue") !=
-      action_extra_requests_.end()) {
+  if (base::Contains(action_extra_requests_, "WriteValue")) {
     DelayedCallback* delayed = action_extra_requests_["WriteValue"];
     delayed->delay_--;
     std::move(error_callback)
@@ -357,7 +355,7 @@ void FakeBluetoothGattCharacteristicClient::StartNotify(
   ScheduleHeartRateMeasurementValueChange();
 
   // Respond asynchronously.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, std::move(callback),
       base::Milliseconds(kStartNotifyResponseIntervalMs));
 }
@@ -558,7 +556,7 @@ void FakeBluetoothGattCharacteristicClient::
   std::vector<uint8_t> measurement = GetHeartRateMeasurementValue();
   heart_rate_measurement_properties_->value.ReplaceValue(measurement);
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&FakeBluetoothGattCharacteristicClient::
                          ScheduleHeartRateMeasurementValueChange,

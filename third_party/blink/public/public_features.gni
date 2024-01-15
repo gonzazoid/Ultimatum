@@ -4,15 +4,10 @@
 
 import("//build/config/ui.gni")
 
-declare_args() {
-  # If true, adds support for JPEG XL image decoding.
-  enable_jxl_decoder = !is_ios
-}
-
 # Unhandled Tap enable means Contextual Search aka Touch to Search.
 # TODO(donnd): remove all unhandled-tap handling after the Long-press experiment
 #              is fully launched.
 enable_unhandled_tap = is_android
 
 # Use Minikin hyphenation engine.
-use_minikin_hyphenation = !is_mac
+use_minikin_hyphenation = !is_apple

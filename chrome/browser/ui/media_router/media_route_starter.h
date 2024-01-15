@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -95,6 +96,10 @@ class MediaRouteStarter : public content::PresentationObserver {
   // provide.
   static bool GetScreenCapturePermission(MediaCastMode cast_mode);
 
+  QueryResultManager* GetQueryResultManagerForTesting() const {
+    return query_result_manager_.get();
+  }
+
  private:
   friend class MediaRouteStarterTest;
   friend class MediaRouterViewsUITest;
@@ -141,7 +146,8 @@ class MediaRouteStarter : public content::PresentationObserver {
 
   // If set, this is the tab for which this casting request was initiated. May
   // be null in the case of desktop tab casting.
-  const raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
 
   // If set, then the result of the next presentation route request will
   // be handled by this object instead of |presentation_manager_|
@@ -156,7 +162,7 @@ class MediaRouteStarter : public content::PresentationObserver {
 
   // Set to the presentation request corresponding to the presentation cast
   // mode, if supported. Otherwise set to nullopt.
-  absl::optional<content::PresentationRequest> presentation_request_;
+  std::optional<content::PresentationRequest> presentation_request_;
 
   // Registered observers.
   base::ObserverList<PresentationRequestSourceObserver>::Unchecked observers_;

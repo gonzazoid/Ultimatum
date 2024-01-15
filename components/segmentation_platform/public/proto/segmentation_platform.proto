@@ -10,59 +10,69 @@ option java_outer_classname = "SegmentationProto";
 package segmentation_platform.proto;
 
 // List of user segment types.
-// Any segment that needs a server provided model should have an entry in
-// OptimizationTarget. If the segment only uses default model, then the segment
-// should have a value higher than `MAX_OPTIMIZATION_TARGET`.
+// There are two types of user segments:
+//   - Server model segments: These segments support receiving updated models
+//     from a server, and its values must be less than MAX_OPTIMIZATION_TARGET.
+//   - Default model segments: These segments only support a client-side default
+//     model, its values must be greater than MAX_OPTIMIZATION_TARGET.
+//
+// All new SegmentIds should be added to the following locations:
+//   1. The list of segmentation client keys in
+//      components/segmentation_platform/public/constants.h.
+//   2. Histogram variant must be added to SegmentationModel in
+//      tools/metrics/histograms/metadata/segmentation_platform/histograms.xml.
+//
+// New server model segments must be added to the following locations:
+//   - OptimizationTargetProto in
+//     components/optimization_guide/proto/models.proto.
+//   - SegmentationPlatformSegmentationModel enum in
+//     tools/metrics/histograms/enums.xml
 enum SegmentId {
-  reserved 20;
+  // Reserved fields are `OptimizationTarget`s that are not used by segmentation
+  // to prevent accidental misuse.
+  reserved 1, 2, 3, 7, 8, 9, 13, 14, 15, 19, 20, 24, 25, 26, 30, 31, 33, 34, 35,
+      36, 39, 40;
 
   OPTIMIZATION_TARGET_UNKNOWN = 0;
-  // Should only be applied when the page load is predicted to be painful.
-  OPTIMIZATION_TARGET_PAINFUL_PAGE_LOAD = 1;
-  // Target for supplying the language detection model via the model downloader.
-  OPTIMIZATION_TARGET_LANGUAGE_DETECTION = 2;
-  // Target for determining topics present on a page.
-  OPTIMIZATION_TARGET_PAGE_TOPICS = 3;
   // Target for segmentation: New tab page user.
   OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB = 4;
   // Target for segmentation: Share user.
   OPTIMIZATION_TARGET_SEGMENTATION_SHARE = 5;
   // Target for segmentation: Voice user.
   OPTIMIZATION_TARGET_SEGMENTATION_VOICE = 6;
-  // Target for model validation.
-  OPTIMIZATION_TARGET_MODEL_VALIDATION = 7;
-  // Target for determining entities present on a page.
-  OPTIMIZATION_TARGET_PAGE_ENTITIES = 8;
-  // Target for Chrome Permissions Suggestions Service: Notification permission.
-  OPTIMIZATION_TARGET_NOTIFICATION_PERMISSION_PREDICTIONS = 9;
   // Target that enables data collection on client side for various experiments.
   OPTIMIZATION_TARGET_SEGMENTATION_DUMMY = 10;
   // Target for segmentation: Chrome Android Start user.
   OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID = 11;
   // Target for segmentation: Query Tiles user.
   OPTIMIZATION_TARGET_SEGMENTATION_QUERY_TILES = 12;
-  // Target for determining the UI visibility of a page.
-  OPTIMIZATION_TARGET_PAGE_VISIBILITY = 13;
-  // Target for supplying the Autofill Assistant annotate DOM model via the
-  // model downloader.
-  OPTIMIZATION_TARGET_AUTOFILL_ASSISTANT = 14;
-  // Target for determining topics present on a page.
-  // TODO(crbug/1266504): Remove PAGE_TOPICS in favor of this target.
-  OPTIMIZATION_TARGET_PAGE_TOPICS_V2 = 15;
   // Target for segmentation: Determine users with low engagement with chrome.
   OPTIMIZATION_TARGET_SEGMENTATION_CHROME_LOW_USER_ENGAGEMENT = 16;
   // Target for segmentation: Determine users who prefer to use Feed.
   OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER = 17;
   // Target for price tracking action when shown as a contextual page action.
   OPTIMIZATION_TARGET_CONTEXTUAL_PAGE_ACTION_PRICE_TRACKING = 18;
-  // Target for smart text selection and entity extraction.
-  OPTIMIZATION_TARGET_TEXT_CLASSIFIER = 19;
   // Target for segmentation: Determine users who are interested in shopping.
   OPTIMIZATION_TARGET_SEGMENTATION_SHOPPING_USER = 21;
   // Target for segmentation: Chrome Android Start user V2.
   OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID_V2 = 22;
   // Target for segmentation: Determine users who frequently search.
   OPTIMIZATION_TARGET_SEGMENTATION_SEARCH_USER = 23;
+  // Target for segmentation: Segment of users who switched devices.
+  OPTIMIZATION_TARGET_SEGMENTATION_DEVICE_SWITCHER = 27;
+  // Target for segmentation: Adaptive toolbar.
+  OPTIMIZATION_TARGET_SEGMENTATION_ADAPTIVE_TOOLBAR = 28;
+  // Target for segmentation: Determine users who are tabletproductivity users.
+  OPTIMIZATION_TARGET_SEGMENTATION_TABLET_PRODUCTIVITY_USER = 29;
+  // Target for web app install promotion.
+  OPTIMIZATION_TARGET_WEB_APP_INSTALLATION_PROMO = 32;
+  // Target for ios module ranker.
+  OPTIMIZATION_TARGET_SEGMENTATION_IOS_MODULE_RANKER = 37;
+  // Target for segmentation: Determine what modules a user should see on their
+  // Desktop New Tab Page.
+  OPTIMIZATION_TARGET_SEGMENTATION_DESKTOP_NTP_MODULE = 38;
+  // Target for android home module ranker.
+  OPTIMIZATION_TARGET_SEGMENTATION_ANDROID_HOME_MODULE_RANKER = 41;
   // Add new entries to OptimizationTarget proto.
 
   // New entries should start from a 1000 if OptimizationTarget does not
@@ -80,4 +90,14 @@ enum SegmentId {
   INTENTIONAL_USER_SEGMENT = 1003;
   // User segment: User is more likely to use resume features in chrome..
   RESUME_HEAVY_USER_SEGMENT = 1004;
+  // Determine device tiers for different user devices.
+  DEVICE_TIER_SEGMENT = 1005;
+  // Determine if a tab is likely to be resumed.
+  TAB_RESUMPTION_CLASSIFIER = 1006;
+  // Segment for users who use password manager features.
+  PASSWORD_MANAGER_USER = 1007;
+  // Segment for users who use most visited tiles.
+  MOST_VISITED_TILES_USER = 1008;
+  // Default model used for tracking metrics used by DatabaseClient API.
+  DATABASE_API_CLIENTS = 1009;
 };

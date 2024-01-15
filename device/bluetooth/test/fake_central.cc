@@ -9,9 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/bluetooth_discovery_filter.h"
@@ -553,6 +554,13 @@ void FakeCentral::SetDiscoverable(bool discoverable,
   NOTREACHED();
 }
 
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+base::TimeDelta FakeCentral::GetDiscoverableTimeout() const {
+  NOTREACHED();
+  return base::Microseconds(0);
+}
+#endif
+
 bool FakeCentral::IsDiscovering() const {
   NOTREACHED();
   return false;
@@ -653,7 +661,7 @@ void FakeCentral::UpdateFilter(
     std::unique_ptr<device::BluetoothDiscoveryFilter> discovery_filter,
     DiscoverySessionResultCallback callback) {
   if (!IsPresent()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             std::move(callback), /*is_error=*/true,
@@ -661,7 +669,7 @@ void FakeCentral::UpdateFilter(
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), /*is_error=*/false,
                      device::UMABluetoothDiscoverySessionOutcome::SUCCESS));
@@ -671,7 +679,7 @@ void FakeCentral::StartScanWithFilter(
     std::unique_ptr<device::BluetoothDiscoveryFilter> discovery_filter,
     DiscoverySessionResultCallback callback) {
   if (!IsPresent()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             std::move(callback), /*is_error=*/true,
@@ -679,7 +687,7 @@ void FakeCentral::StartScanWithFilter(
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), /*is_error=*/false,
                      device::UMABluetoothDiscoverySessionOutcome::SUCCESS));
@@ -687,7 +695,7 @@ void FakeCentral::StartScanWithFilter(
 
 void FakeCentral::StopScan(DiscoverySessionResultCallback callback) {
   if (!IsPresent()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             std::move(callback), /*is_error=*/false,
@@ -695,7 +703,7 @@ void FakeCentral::StopScan(DiscoverySessionResultCallback callback) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           std::move(callback), /*is_error=*/false,

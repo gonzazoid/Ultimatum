@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "apps/launcher.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
@@ -42,12 +42,12 @@ apps::AppTypeName GetHistogrameAppType(apps::AppType app_type) {
       return apps::AppTypeName::kChromeApp;
     case apps::AppType::kWeb:
       return apps::AppTypeName::kWeb;
-    case apps::AppType::kMacOs:
     case apps::AppType::kPluginVm:
     case apps::AppType::kStandaloneBrowser:
     case apps::AppType::kStandaloneBrowserChromeApp:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
+    case apps::AppType::kBruschetta:
     case apps::AppType::kExtension:
     case apps::AppType::kStandaloneBrowserExtension:
       return apps::AppTypeName::kUnknown;
@@ -89,7 +89,7 @@ void AppLaunchHandler::OnAppUpdate(const apps::AppUpdate& update) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&AppLaunchHandler::LaunchApp, GetWeakPtrAppLaunchHandler(),
                      update.AppType(), update.AppId()));
@@ -101,7 +101,7 @@ void AppLaunchHandler::OnAppTypeInitialized(apps::AppType app_type) {
 
 void AppLaunchHandler::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  apps::AppRegistryCache::Observer::Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void AppLaunchHandler::LaunchApps() {
@@ -116,7 +116,7 @@ void AppLaunchHandler::LaunchApps() {
       apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile_));
   auto* cache = &apps::AppServiceProxyFactory::GetForProfile(profile_)
                      ->AppRegistryCache();
-  Observe(cache);
+  ObserveCache(cache);
   for (const auto app_type : cache->InitializedAppTypes()) {
     OnAppTypeInitialized(app_type);
   }
@@ -180,15 +180,23 @@ void AppLaunchHandler::LaunchApp(apps::AppType app_type,
     case apps::AppType::kCrostini:
     case apps::AppType::kPluginVm:
     case apps::AppType::kUnknown:
-    case apps::AppType::kMacOs:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
+    case apps::AppType::kBruschetta:
     case apps::AppType::kExtension:
     case apps::AppType::kStandaloneBrowserExtension:
       NOTREACHED();
       break;
   }
   restore_data_->RemoveApp(app_id);
+}
+
+void AppLaunchHandler::ObserveCache(apps::AppRegistryCache* source) {
+  DCHECK(source);
+  if (!app_registry_cache_observer_.IsObservingSource(source)) {
+    app_registry_cache_observer_.Reset();
+    app_registry_cache_observer_.Observe(source);
+  }
 }
 
 void AppLaunchHandler::LaunchSystemWebAppOrChromeApp(
@@ -211,10 +219,10 @@ void AppLaunchHandler::LaunchSystemWebAppOrChromeApp(
           extensions::ExtensionRegistry::Get(profile_)->GetInstalledExtension(
               app_id);
       if (extension) {
-        DCHECK(it.second->file_paths.has_value());
+        DCHECK(!it.second->file_paths.empty());
         apps::LaunchPlatformAppWithFileHandler(profile_, extension,
                                                it.second->handler_id.value(),
-                                               it.second->file_paths.value());
+                                               it.second->file_paths);
       }
       continue;
     }
@@ -232,8 +240,7 @@ void AppLaunchHandler::LaunchSystemWebAppOrChromeApp(
         static_cast<WindowOpenDisposition>(it.second->disposition.value()),
         it.second->override_url.value_or(GURL()),
         apps::LaunchSource::kFromFullRestore, it.second->display_id.value(),
-        it.second->file_paths.has_value() ? it.second->file_paths.value()
-                                          : std::vector<base::FilePath>{},
+        it.second->file_paths,
         it.second->intent ? it.second->intent->Clone() : nullptr);
     params.restore_id = it.first;
     proxy->LaunchAppWithParams(std::move(params));

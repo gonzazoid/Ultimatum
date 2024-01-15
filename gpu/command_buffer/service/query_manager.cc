@@ -8,8 +8,8 @@
 #include <stdint.h>
 
 #include "base/atomicops.h"
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
 #include "ui/gl/gl_bindings.h"
@@ -376,6 +376,10 @@ void QueryManager::RemoveQuery(GLuint client_id) {
     queries_.erase(it);
   }
   generated_query_ids_.erase(client_id);
+}
+
+void QueryManager::RemoveAllQueries() {
+  queries_.clear();
 }
 
 void QueryManager::StartTracking(QueryManager::Query* /* query */) {

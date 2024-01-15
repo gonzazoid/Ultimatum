@@ -7,13 +7,14 @@
 
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "base/base_export.h"
 #include "base/dcheck_is_on.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/message_loop/timer_slack.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/task/sequence_manager/task_time_observer.h"
 #include "base/task/sequenced_task_runner.h"
@@ -26,20 +27,7 @@ class MessagePump;
 class TaskObserver;
 
 namespace sequence_manager {
-
 class TimeDomain;
-
-// Represent outstanding work the sequence underlying a SequenceManager (e.g.,
-// a native system task for drawing the UI). As long as this handle is alive,
-// the work is considered to be pending.
-class NativeWorkHandle {
- public:
-  virtual ~NativeWorkHandle();
-  NativeWorkHandle(const NativeWorkHandle&) = delete;
-
- protected:
-  NativeWorkHandle() = default;
-};
 
 // SequenceManager manages TaskQueues which have different properties
 // (e.g. priority, common task type) multiplexing all posted tasks into
@@ -79,6 +67,87 @@ class BASE_EXPORT SequenceManager {
     }
   };
 
+  class BASE_EXPORT PrioritySettings {
+   public:
+    // This limit is based on an implementation detail of `TaskQueueSelector`'s
+    // `ActivePriorityTracker`, which can be refactored if more priorities are
+    // needed.
+    static constexpr size_t kMaxPriorities = sizeof(size_t) * 8 - 1;
+
+    static PrioritySettings CreateDefault();
+
+    template <typename T,
+              typename = typename std::enable_if_t<std::is_enum_v<T>>>
+    PrioritySettings(T priority_count, T default_priority)
+        : PrioritySettings(
+              static_cast<TaskQueue::QueuePriority>(priority_count),
+              static_cast<TaskQueue::QueuePriority>(default_priority)) {
+      static_assert(
+          std::is_same_v<std::underlying_type_t<T>, TaskQueue::QueuePriority>,
+          "Enumerated priorites must have the same underlying type as "
+          "TaskQueue::QueuePriority");
+    }
+
+    PrioritySettings(TaskQueue::QueuePriority priority_count,
+                     TaskQueue::QueuePriority default_priority);
+
+    ~PrioritySettings();
+
+    PrioritySettings(PrioritySettings&&) noexcept;
+    PrioritySettings& operator=(PrioritySettings&&);
+
+    TaskQueue::QueuePriority priority_count() const { return priority_count_; }
+
+    TaskQueue::QueuePriority default_priority() const {
+      return default_priority_;
+    }
+
+#if BUILDFLAG(ENABLE_BASE_TRACING)
+    void SetProtoPriorityConverter(
+        perfetto::protos::pbzero::SequenceManagerTask::Priority (
+            *proto_priority_converter)(TaskQueue::QueuePriority)) {
+      proto_priority_converter_ = proto_priority_converter;
+    }
+
+    perfetto::protos::pbzero::SequenceManagerTask::Priority TaskPriorityToProto(
+        TaskQueue::QueuePriority priority) const;
+#endif
+
+   private:
+    TaskQueue::QueuePriority priority_count_;
+    TaskQueue::QueuePriority default_priority_;
+
+#if BUILDFLAG(ENABLE_BASE_TRACING)
+    perfetto::protos::pbzero::SequenceManagerTask::Priority (
+        *proto_priority_converter_)(TaskQueue::QueuePriority) = nullptr;
+#endif
+
+#if DCHECK_IS_ON()
+   public:
+    PrioritySettings(
+        TaskQueue::QueuePriority priority_count,
+        TaskQueue::QueuePriority default_priority,
+        std::vector<TimeDelta> per_priority_cross_thread_task_delay,
+        std::vector<TimeDelta> per_priority_same_thread_task_delay);
+
+    const std::vector<TimeDelta>& per_priority_cross_thread_task_delay() const {
+      return per_priority_cross_thread_task_delay_;
+    }
+
+    const std::vector<TimeDelta>& per_priority_same_thread_task_delay() const {
+      return per_priority_same_thread_task_delay_;
+    }
+
+   private:
+    // Scheduler policy induced raciness is an area of concern. This lets us
+    // apply an extra delay per priority for cross thread posting.
+    std::vector<TimeDelta> per_priority_cross_thread_task_delay_;
+
+    // Like the above but for same thread posting.
+    std::vector<TimeDelta> per_priority_same_thread_task_delay_;
+#endif
+  };
+
   // Settings defining the desired SequenceManager behaviour: the type of the
   // MessageLoop and whether randomised sampling should be enabled.
   struct BASE_EXPORT Settings {
@@ -98,8 +167,13 @@ class BASE_EXPORT SequenceManager {
     raw_ptr<const TickClock, DanglingUntriaged> clock =
         DefaultTickClock::GetInstance();
 
-    // If true, add the timestamp the task got queued to the task.
+    // Whether or not queueing timestamp will be added to tasks.
     bool add_queue_time_to_tasks = false;
+
+    // Whether many tasks may run between each check for native work.
+    bool can_run_tasks_by_batches = false;
+
+    PrioritySettings priority_settings = PrioritySettings::CreateDefault();
 
 #if DCHECK_IS_ON()
     // TODO(alexclarke): Consider adding command line flags to control these.
@@ -121,15 +195,6 @@ class BASE_EXPORT SequenceManager {
     // If true debug logs will be emitted when a delayed task becomes eligible
     // to run.
     bool log_task_delay_expiry = false;
-
-    // Scheduler policy induced raciness is an area of concern. This lets us
-    // apply an extra delay per priority for cross thread posting.
-    std::array<TimeDelta, TaskQueue::kQueuePriorityCount>
-        per_priority_cross_thread_task_delay;
-
-    // Like the above but for same thread posting.
-    std::array<TimeDelta, TaskQueue::kQueuePriorityCount>
-        per_priority_same_thread_task_delay;
 
     // If not zero this seeds a PRNG used by the task selection logic to choose
     // a random TaskQueue for a given priority rather than the TaskQueue with
@@ -185,7 +250,7 @@ class BASE_EXPORT SequenceManager {
   virtual absl::optional<WakeUp> GetNextDelayedWakeUp() const = 0;
 
   // Sets the SingleThreadTaskRunner that will be returned by
-  // ThreadTaskRunnerHandle::Get on the main thread.
+  // SingleThreadTaskRunner::GetCurrentDefault on the main thread.
   virtual void SetDefaultTaskRunner(
       scoped_refptr<SingleThreadTaskRunner> task_runner) = 0;
 
@@ -202,10 +267,6 @@ class BASE_EXPORT SequenceManager {
   // logic at the cost of a potentially worse latency. 1 by default.
   virtual void SetWorkBatchSize(int work_batch_size) = 0;
 
-  // Requests desired timer precision from the OS.
-  // Has no effect on some platforms.
-  virtual void SetTimerSlack(TimerSlack timer_slack) = 0;
-
   // Enables crash keys that can be set in the scope of a task which help
   // to identify the culprit if upcoming work results in a crash.
   // Key names must be thread-specific to avoid races and corrupted crash dumps.
@@ -214,22 +275,12 @@ class BASE_EXPORT SequenceManager {
   // Returns the metric recording configuration for the current SequenceManager.
   virtual const MetricRecordingSettings& GetMetricRecordingSettings() const = 0;
 
-  // Creates a task queue with the given type, `spec` and args.
-  // Must be called on the main thread.
-  // TODO(scheduler-dev): SequenceManager should not create TaskQueues.
-  template <typename TaskQueueType, typename... Args>
-  scoped_refptr<TaskQueueType> CreateTaskQueueWithType(
-      const TaskQueue::Spec& spec,
-      Args&&... args) {
-    return WrapRefCounted(new TaskQueueType(CreateTaskQueueImpl(spec), spec,
-                                            std::forward<Args>(args)...));
-  }
+  virtual TaskQueue::QueuePriority GetPriorityCount() const = 0;
 
-  // Creates a vanilla TaskQueue rather than a user type derived from it. This
-  // should be used if you don't wish to sub class TaskQueue.
-  // Must be called on the main thread.
-  virtual scoped_refptr<TaskQueue> CreateTaskQueue(
-      const TaskQueue::Spec& spec) = 0;
+  // Creates a `TaskQueue` and returns a `TaskQueue::Handle`for it. The queue is
+  // owned by the handle and shut down when the handle is destroyed. Must be
+  // called on the main thread.
+  virtual TaskQueue::Handle CreateTaskQueue(const TaskQueue::Spec& spec) = 0;
 
   // Returns true iff this SequenceManager has no immediate work to do. I.e.
   // there are no pending non-delayed tasks or delayed tasks that are due to
@@ -245,27 +296,10 @@ class BASE_EXPORT SequenceManager {
   // Returns a JSON string which describes all pending tasks.
   virtual std::string DescribeAllPendingTasks() const = 0;
 
-  // Indicates that the underlying sequence (e.g., the message pump) has pending
-  // work at priority `priority`. If the priority of the work in this
-  // SequenceManager is lower, it will yield to let the native work run. The
-  // native work is assumed to remain pending while the returned handle is
-  // valid.
-  //
-  // Must be called on the main thread, and the returned handle must also be
-  // deleted on the main thread.
-  virtual std::unique_ptr<NativeWorkHandle> OnNativeWorkPending(
-      TaskQueue::QueuePriority priority) = 0;
-
   // While Now() is less than `prioritize_until` we will alternate between a
   // SequenceManager task and a yielding to the underlying sequence (e.g., the
   // message pump).
   virtual void PrioritizeYieldingToNative(base::TimeTicks prioritize_until) = 0;
-
-  // Enable periodically yielding to the system message loop every |interval|.
-  // If |interval.is_inf()|, then SequenceManager won't yield to the system
-  // message pump unless it is out of immediate work.
-  // Currently only takes effect on Android.
-  virtual void EnablePeriodicYieldingToNative(base::TimeDelta interval) = 0;
 
   // Adds an observer which reports task execution. Can only be called on the
   // same thread that `this` is running on.
@@ -274,10 +308,6 @@ class BASE_EXPORT SequenceManager {
   // Removes an observer which reports task execution. Can only be called on the
   // same thread that `this` is running on.
   virtual void RemoveTaskObserver(TaskObserver* task_observer) = 0;
-
- protected:
-  virtual std::unique_ptr<internal::TaskQueueImpl> CreateTaskQueueImpl(
-      const TaskQueue::Spec& spec) = 0;
 };
 
 class BASE_EXPORT SequenceManager::Settings::Builder {
@@ -296,6 +326,11 @@ class BASE_EXPORT SequenceManager::Settings::Builder {
   // Whether or not queueing timestamp will be added to tasks.
   Builder& SetAddQueueTimeToTasks(bool add_queue_time_to_tasks);
 
+  // Whether many tasks may run between each check for native work.
+  Builder& SetCanRunTasksByBatches(bool can_run_tasks_by_batches);
+
+  Builder& SetPrioritySettings(PrioritySettings settings);
+
 #if DCHECK_IS_ON()
   // Controls task execution logging.
   Builder& SetTaskLogging(TaskLogging task_execution_logging);
@@ -306,18 +341,6 @@ class BASE_EXPORT SequenceManager::Settings::Builder {
   // Whether or not debug logs will be emitted when a delayed task becomes
   // eligible to run.
   Builder& SetLogTaskDelayExpiry(bool log_task_delay_expiry);
-
-  // Scheduler policy induced raciness is an area of concern. This lets us
-  // apply an extra delay per priority for cross thread posting.
-  Builder& SetPerPriorityCrossThreadTaskDelay(
-      std::array<TimeDelta, TaskQueue::kQueuePriorityCount>
-          per_priority_cross_thread_task_delay);
-
-  // Scheduler policy induced raciness is an area of concern. This lets us
-  // apply an extra delay per priority for same thread posting.
-  Builder& SetPerPrioritySameThreadTaskDelay(
-      std::array<TimeDelta, TaskQueue::kQueuePriorityCount>
-          per_priority_same_thread_task_delay);
 
   // If not zero this seeds a PRNG used by the task selection logic to choose a
   // random TaskQueue for a given priority rather than the TaskQueue with the

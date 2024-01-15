@@ -12,6 +12,8 @@
 
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/strings/stringprintf.h"
+#include "base/trace_event/typed_macros.h"
 #include "base/win/scoped_variant.h"
 #include "base/win/windows_version.h"
 #include "content/browser/accessibility/browser_accessibility_state_impl.h"
@@ -19,7 +21,7 @@
 #include "content/browser/accessibility/web_ax_platform_tree_manager_delegate.h"
 #include "content/browser/renderer_host/legacy_render_widget_host_win.h"
 #include "content/public/common/content_switches.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate_utils_win.h"
@@ -83,7 +85,24 @@ BrowserAccessibilityManagerWin::BrowserAccessibilityManagerWin(
   Initialize(initial_tree);
 }
 
-BrowserAccessibilityManagerWin::~BrowserAccessibilityManagerWin() = default;
+BrowserAccessibilityManagerWin::~BrowserAccessibilityManagerWin() {
+  // In some cases, an iframe's HWND is destroyed before the hypertext
+  // on the parent child tree owner is destroyed. In this case, we reset
+  // the parent's hypertext to avoid API calls involving stale hypertext.
+  BrowserAccessibility* parent =
+      GetParentNodeFromParentTreeAsBrowserAccessibility();
+  if (!parent) {
+    return;
+  }
+
+  ui::AXPlatformNode* parent_ax_platform_node = parent->GetAXPlatformNode();
+  if (!parent_ax_platform_node) {
+    return;
+  }
+
+  static_cast<ui::AXPlatformNodeWin*>(parent_ax_platform_node)
+      ->ResetComputedHypertext();
+}
 
 // static
 ui::AXTreeUpdate BrowserAccessibilityManagerWin::GetEmptyDocument() {
@@ -108,11 +127,6 @@ void BrowserAccessibilityManagerWin::UserIsReloading() {
   if (GetBrowserAccessibilityRoot())
     FireWinAccessibilityEvent(IA2_EVENT_DOCUMENT_RELOAD,
                               GetBrowserAccessibilityRoot());
-}
-
-BrowserAccessibility* BrowserAccessibilityManagerWin::GetFocus() const {
-  BrowserAccessibility* focus = BrowserAccessibilityManager::GetFocus();
-  return GetActiveDescendant(focus);
 }
 
 void BrowserAccessibilityManagerWin::FireFocusEvent(ui::AXNode* node) {
@@ -487,6 +501,7 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::NONE:
     case ui::AXEventGenerator::Event::ATK_TEXT_OBJECT_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
+    case ui::AXEventGenerator::Event::AUTOFILL_AVAILABILITY_CHANGED:
     case ui::AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
     case ui::AXEventGenerator::Event::CHECKED_STATE_DESCRIPTION_CHANGED:
     case ui::AXEventGenerator::Event::DETAILS_CHANGED:
@@ -494,6 +509,7 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::FOCUS_CHANGED:
     case ui::AXEventGenerator::Event::LIVE_REGION_NODE_CHANGED:
     case ui::AXEventGenerator::Event::MENU_ITEM_SELECTED:
+    case ui::AXEventGenerator::Event::ORIENTATION_CHANGED:
     case ui::AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::PARENT_CHANGED:
     case ui::AXEventGenerator::Event::PORTAL_ACTIVATED:
@@ -508,6 +524,7 @@ void BrowserAccessibilityManagerWin::FireGeneratedEvent(
 void BrowserAccessibilityManagerWin::FireWinAccessibilityEvent(
     LONG win_event_type,
     BrowserAccessibility* node) {
+  TRACE_EVENT("accessibility", "FireWinAccessibilityEvent");
   if (!ShouldFireEventForNode(node))
     return;
   // Suppress events when |IGNORED_CHANGED| except for related SHOW / HIDE.
@@ -538,8 +555,11 @@ void BrowserAccessibilityManagerWin::FireWinAccessibilityEvent(
   // argument to NotifyWinEvent; the AT client will then call get_accChild
   // on the HWND's accessibility object and pass it that same id, which
   // we can use to retrieve the IAccessible for this node.
-  LONG child_id = -(ToBrowserAccessibilityWin(node)->GetCOM()->GetUniqueId());
-  ::NotifyWinEvent(win_event_type, hwnd, OBJID_CLIENT, child_id);
+  auto* const com = ToBrowserAccessibilityWin(node)->GetCOM();
+  TRACE_EVENT("accessibility", "NotifyWinEvent",
+              perfetto::Flow::FromPointer(com), "win_event_type",
+              base::StringPrintf("0x%04lX", win_event_type));
+  ::NotifyWinEvent(win_event_type, hwnd, OBJID_CLIENT, -(com->GetUniqueId()));
 }
 
 bool BrowserAccessibilityManagerWin::IsIgnoredChangedNode(
@@ -551,8 +571,9 @@ bool BrowserAccessibilityManagerWin::IsIgnoredChangedNode(
 void BrowserAccessibilityManagerWin::FireUiaAccessibilityEvent(
     LONG uia_event,
     BrowserAccessibility* node) {
-  if (!::switches::IsExperimentalAccessibilityPlatformUIAEnabled())
+  if (!::features::IsUiaProviderEnabled()) {
     return;
+  }
   if (!ShouldFireEventForNode(node))
     return;
 
@@ -590,8 +611,9 @@ void BrowserAccessibilityManagerWin::FireUiaAccessibilityEvent(
 void BrowserAccessibilityManagerWin::FireUiaPropertyChangedEvent(
     LONG uia_property,
     BrowserAccessibility* node) {
-  if (!::switches::IsExperimentalAccessibilityPlatformUIAEnabled())
+  if (!::features::IsUiaProviderEnabled()) {
     return;
+  }
   if (!ShouldFireEventForNode(node))
     return;
   // Suppress events when |IGNORED_CHANGED| with the exception for firing
@@ -620,8 +642,9 @@ void BrowserAccessibilityManagerWin::FireUiaPropertyChangedEvent(
 void BrowserAccessibilityManagerWin::FireUiaStructureChangedEvent(
     StructureChangeType change_type,
     BrowserAccessibility* node) {
-  if (!::switches::IsExperimentalAccessibilityPlatformUIAEnabled())
+  if (!::features::IsUiaProviderEnabled()) {
     return;
+  }
   if (!ShouldFireEventForNode(node))
     return;
   // Suppress events when |IGNORED_CHANGED| except for related structure changes
@@ -676,10 +699,13 @@ bool BrowserAccessibilityManagerWin::
 // static
 UiaRaiseActiveTextPositionChangedEventFunction
 BrowserAccessibilityManagerWin::GetUiaActiveTextPositionChangedEventFunction() {
-  // This API is only supported from Win8.1 onwards. On older platforms (such as
-  // Windows 7), we will return nullptr for the querying result for the address
-  // of the method "UiaRaiseActiveTextPositionChangedEvent" in
-  // uiautomationcore.dll.
+  // MSDN
+  // (https://learn.microsoft.com/en-us/windows/win32/api/uiautomationcoreapi/nf-uiautomationcoreapi-uiaraiseactivetextpositionchangedevent)
+  // claims this API is fully supported from Win8.1 ownwards, but older
+  // versions of this dll on Win10 (e.g., Windows-10-15063 aka. version 1703)
+  // don't seem to have the API, which makes chrome.dll fail to load, if
+  // ::UiaRaiseActiveTextPositionChangedEvent is called directly. On these older
+  // versions of Win10, we will return nullptr.
   return reinterpret_cast<UiaRaiseActiveTextPositionChangedEventFunction>(
       ::GetProcAddress(::GetModuleHandle(L"uiautomationcore.dll"),
                        "UiaRaiseActiveTextPositionChangedEvent"));
@@ -699,9 +725,9 @@ void BrowserAccessibilityManagerWin::FireUiaActiveTextPositionChangedEvent(
 
   // Create the text range contained by the target node.
   auto* target_node = ToBrowserAccessibilityWin(node)->GetCOM();
-  Microsoft::WRL::ComPtr<ITextRangeProvider> text_range =
-      ui::AXPlatformNodeTextProviderWin::CreateDegenerateRangeAtStart(
-          target_node);
+  Microsoft::WRL::ComPtr<ITextRangeProvider> text_range;
+  ui::AXPlatformNodeTextProviderWin::CreateDegenerateRangeAtStart(target_node,
+                                                                  &text_range);
 
   // Fire the UiaRaiseActiveTextPositionChangedEvent.
   active_text_position_changed_func(target_node, text_range.Get());
@@ -768,19 +794,13 @@ void BrowserAccessibilityManagerWin::OnAtomicUpdateFinished(
 // static
 bool BrowserAccessibilityManagerWin::IsIA2NodeSelected(
     BrowserAccessibility* node) {
-  return node->GetBoolAttribute(ax::mojom::BoolAttribute::kSelected);
+  return node->IsIA2NodeSelected();
 }
 
 // static
 bool BrowserAccessibilityManagerWin::IsUIANodeSelected(
     BrowserAccessibility* node) {
-  // https://www.w3.org/TR/core-aam-1.1/#mapping_state-property_table
-  // SelectionItem.IsSelected is set according to the True or False value of
-  // aria-checked for 'radio' and 'menuitemradio' roles.
-  if (ui::IsRadio(node->GetRole()))
-    return node->GetData().GetCheckedState() == ax::mojom::CheckedState::kTrue;
-
-  return node->GetBoolAttribute(ax::mojom::BoolAttribute::kSelected);
+  return node->IsUIANodeSelected();
 }
 
 void BrowserAccessibilityManagerWin::FireIA2SelectionEvents(
@@ -793,14 +813,15 @@ void BrowserAccessibilityManagerWin::FireIA2SelectionEvents(
   } else {
     const bool container_is_multiselectable =
         container && container->HasState(ax::mojom::State::kMultiselectable);
-    for (auto* item : changes.added) {
+    for (content::BrowserAccessibility* item : changes.added) {
       if (container_is_multiselectable)
         FireWinAccessibilityEvent(EVENT_OBJECT_SELECTIONADD, item);
       else
         FireWinAccessibilityEvent(EVENT_OBJECT_SELECTION, item);
     }
-    for (auto* item : changes.removed)
+    for (content::BrowserAccessibility* item : changes.removed) {
       FireWinAccessibilityEvent(EVENT_OBJECT_SELECTIONREMOVE, item);
+    }
   }
 }
 
@@ -814,8 +835,9 @@ void BrowserAccessibilityManagerWin::FireUIASelectionEvents(
                               only_selected_child);
     FireUiaPropertyChangedEvent(UIA_SelectionItemIsSelectedPropertyId,
                                 only_selected_child);
-    for (auto* item : changes.removed)
+    for (content::BrowserAccessibility* item : changes.removed) {
       FireUiaPropertyChangedEvent(UIA_SelectionItemIsSelectedPropertyId, item);
+    }
   } else {
     // Per UIA documentation, beyond the "invalidate limit" we're supposed to
     // fire a 'SelectionInvalidated' event.  The exact value isn't specified,
@@ -827,7 +849,7 @@ void BrowserAccessibilityManagerWin::FireUIASelectionEvents(
     } else {
       const bool container_is_multiselectable =
           container && container->HasState(ax::mojom::State::kMultiselectable);
-      for (auto* item : changes.added) {
+      for (content::BrowserAccessibility* item : changes.added) {
         if (container_is_multiselectable) {
           FireUiaAccessibilityEvent(
               UIA_SelectionItem_ElementAddedToSelectionEventId, item);
@@ -838,7 +860,7 @@ void BrowserAccessibilityManagerWin::FireUIASelectionEvents(
         FireUiaPropertyChangedEvent(UIA_SelectionItemIsSelectedPropertyId,
                                     item);
       }
-      for (auto* item : changes.removed) {
+      for (content::BrowserAccessibility* item : changes.removed) {
         FireUiaAccessibilityEvent(
             UIA_SelectionItem_ElementRemovedFromSelectionEventId, item);
         FireUiaPropertyChangedEvent(UIA_SelectionItemIsSelectedPropertyId,

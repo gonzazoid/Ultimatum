@@ -43,6 +43,12 @@ def blink_class_name(idl_definition):
         # cases.  Plus, we prefer a simple naming rule conformant to the
         # Chromium coding style.  So, we go with this way.
         return "V8Union{}".format("Or".join(idl_definition.member_tokens))
+    elif isinstance(idl_definition, web_idl.AsyncIterator):
+        return "AsyncIterator<{}>".format(
+            blink_class_name(idl_definition.interface))
+    elif isinstance(idl_definition, web_idl.SyncIterator):
+        return "SyncIterator<{}>".format(
+            blink_class_name(idl_definition.interface))
     else:
         return idl_definition.identifier
 
@@ -53,11 +59,16 @@ def v8_bridge_class_name(idl_definition):
     """
     assert isinstance(
         idl_definition,
-        (web_idl.CallbackInterface, web_idl.Interface, web_idl.Namespace))
+        (web_idl.AsyncIterator, web_idl.CallbackInterface, web_idl.Interface,
+         web_idl.Namespace, web_idl.SyncIterator))
 
     assert idl_definition.identifier[0].isupper()
     # Do not apply |name_style.class_| due to the same reason as
     # |blink_class_name|.
+    if isinstance(idl_definition, web_idl.AsyncIterator):
+        return "V8AsyncIterator{}".format(idl_definition.interface.identifier)
+    if isinstance(idl_definition, web_idl.SyncIterator):
+        return "V8SyncIterator{}".format(idl_definition.interface.identifier)
     return "V8{}".format(idl_definition.identifier)
 
 
@@ -89,6 +100,7 @@ def blink_type_info(idl_type):
             self._is_move_effective = is_move_effective
             self._is_traceable = (is_gc_type or is_heap_vector_type
                                   or is_traceable)
+            self._is_member_t_cppgc_member = member_fmt == "Member<{}>"
             self._clear_member_var_fmt = clear_member_var_fmt
 
             self._ref_t = ref_fmt.format(typename)
@@ -122,8 +134,8 @@ def blink_type_info(idl_type):
         @property
         def value_t(self):
             """
-            Returns the type of a variable that behaves as a value.  E.g. String =>
-            String
+            Returns the type of a variable that behaves as a value. E.g. String
+            => String
             """
             return self._value_t
 
@@ -187,6 +199,15 @@ def blink_type_info(idl_type):
             """
             return self._is_traceable
 
+        def member_var_to_ref_expr(self, var_name):
+            """
+            Returns an expression to convert the given member variable into
+            a reference type. E.g. Member<T> => var_name.Get()
+            """
+            if self._is_member_t_cppgc_member:
+                return "{}.Get()".format(var_name)
+            return var_name
+
         def clear_member_var_expr(self, var_name):
             """
             Returns an expression to reset the given member variable.  E.g.
@@ -215,6 +236,12 @@ def blink_type_info(idl_type):
         return TypeInfo(cxx_type[real_type.keyword_typename],
                         const_ref_fmt="{}",
                         clear_member_var_fmt="{} = 0")
+
+    if real_type.is_bigint:
+        return TypeInfo("BigInt",
+                        ref_fmt="{}&",
+                        const_ref_fmt="const {}&",
+                        clear_member_var_fmt="{} = BigInt()")
 
     if real_type.is_string:
         return TypeInfo("String",
@@ -270,8 +297,8 @@ def blink_type_info(idl_type):
                         has_null_value=True,
                         is_traceable=True)
 
-    if real_type.is_void:
-        assert False, "Blink does not support/accept IDL void type."
+    if real_type.is_undefined:
+        assert False, "Blink does not support/accept IDL undefined type."
 
     if real_type.type_definition_object:
         typename = blink_class_name(real_type.type_definition_object)
@@ -415,7 +442,7 @@ def _native_value_tag_impl(idl_type):
     real_type = idl_type.unwrap(typedef=True)
 
     if (real_type.is_boolean or real_type.is_numeric or real_type.is_string
-            or real_type.is_any or real_type.is_object):
+            or real_type.is_any or real_type.is_object or real_type.is_bigint):
         return "IDL{}".format(
             idl_type.type_name_with_extended_attribute_key_values)
 
@@ -434,8 +461,8 @@ def _native_value_tag_impl(idl_type):
     if real_type.is_symbol:
         assert False, "Blink does not support/accept IDL symbol type."
 
-    if real_type.is_void:
-        assert False, "Blink does not support/accept IDL void type."
+    if real_type.is_undefined:
+        assert False, "Blink does not support/accept IDL undefined type."
 
     if real_type.type_definition_object:
         return blink_class_name(real_type.type_definition_object)
@@ -735,8 +762,9 @@ def make_v8_to_blink_value(blink_var_name,
         # A key point of this fast path is that it doesn't require an
         # ExceptionState.
         fast_path_cond = "LIKELY({}->IsString())".format(v8_value_expr)
-        fast_path_body_text = "{}.Init({}.As<v8::String>());".format(
-            blink_var_name, v8_value_expr)
+        fast_path_body_text = _format(
+            "{}.Init(${isolate}, {}.As<v8::String>());", blink_var_name,
+            v8_value_expr)
     elif idl_type.unwrap(typedef=True).is_callback_function:
         # A key point of this fast path is that it doesn't require an
         # ExceptionState.

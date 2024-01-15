@@ -4,8 +4,7 @@ background-image: initial
 background-position-x: initial
 background-position-y: initial
 background-size: initial
-background-repeat-x: initial
-background-repeat-y: initial
+background-repeat: initial
 background-attachment: initial
 background-origin: initial
 background-clip: initial
@@ -20,6 +19,13 @@ font-variant-caps: normal
 font-variant-ligatures: normal
 font-variant-numeric: normal
 font-variant-east-asian: normal
+font-variant-alternates: normal
+font-size-adjust: none
+font-kerning: auto
+font-optical-sizing: auto
+font-feature-settings: normal
+font-variation-settings: normal
+font-variant-position: normal
 font-weight: normal
 font-stretch: normal
 font-size: 24px

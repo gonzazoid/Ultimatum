@@ -3,19 +3,20 @@
 // found in the LICENSE file.
 #include "chromeos/dbus/dlp/dlp_client.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/dbus/dlp/dlp_service.pb.h"
 #include "chromeos/dbus/dlp/fake_dlp_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/dlp/dbus-constants.h"
 
 namespace chromeos {
@@ -32,12 +33,14 @@ const char kProtoMessageParsingFailure[] =
 // will return an appropriate error message.
 const char* DeserializeProto(dbus::Response* response,
                              google::protobuf::MessageLite* proto) {
-  if (!response)
+  if (!response) {
     return kDbusCallFailure;
+  }
 
   dbus::MessageReader reader(response);
-  if (!reader.PopArrayOfBytesAsProto(proto))
+  if (!reader.PopArrayOfBytesAsProto(proto)) {
     return kProtoMessageParsingFailure;
+  }
 
   return nullptr;
 }
@@ -54,6 +57,9 @@ class DlpClientImpl : public DlpClient {
   void Init(dbus::Bus* bus) {
     proxy_ = bus->GetObjectProxy(dlp::kDlpServiceName,
                                  dbus::ObjectPath(dlp::kDlpServicePath));
+
+    proxy_->SetNameOwnerChangedCallback(base::BindRepeating(
+        &DlpClientImpl::NameOwnerChangedReceived, weak_factory_.GetWeakPtr()));
   }
 
   void SetDlpFilesPolicy(const dlp::SetDlpFilesPolicyRequest request,
@@ -66,7 +72,7 @@ class DlpClientImpl : public DlpClient {
       dlp::SetDlpFilesPolicyResponse response;
       response.set_error_message(base::StrCat(
           {"Failure to call d-bus method: ", dlp::kSetDlpFilesPolicyMethod}));
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), response));
       return;
     }
@@ -77,24 +83,24 @@ class DlpClientImpl : public DlpClient {
                        weak_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  void AddFile(const dlp::AddFileRequest request,
-               AddFileCallback callback) override {
-    dbus::MethodCall method_call(dlp::kDlpInterface, dlp::kAddFileMethod);
+  void AddFiles(const dlp::AddFilesRequest request,
+                AddFilesCallback callback) override {
+    dbus::MethodCall method_call(dlp::kDlpInterface, dlp::kAddFilesMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
-      dlp::AddFileResponse response;
+      dlp::AddFilesResponse response;
       response.set_error_message(base::StrCat(
-          {"Failure to call d-bus method: ", dlp::kAddFileMethod}));
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+          {"Failure to call d-bus method: ", dlp::kAddFilesMethod}));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), response));
       return;
     }
 
-    proxy_->CallMethod(
-        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::BindOnce(&DlpClientImpl::HandleAddFileResponse,
-                       weak_factory_.GetWeakPtr(), std::move(callback)));
+    proxy_->CallMethod(&method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+                       base::BindOnce(&DlpClientImpl::HandleAddFilesResponse,
+                                      weak_factory_.GetWeakPtr(),
+                                      std::move(request), std::move(callback)));
   }
 
   void GetFilesSources(const dlp::GetFilesSourcesRequest request,
@@ -107,7 +113,7 @@ class DlpClientImpl : public DlpClient {
       dlp::GetFilesSourcesResponse response;
       response.set_error_message(base::StrCat(
           {"Failure to call d-bus method: ", dlp::kGetFilesSourcesMethod}));
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), response));
       return;
     }
@@ -128,13 +134,13 @@ class DlpClientImpl : public DlpClient {
       dlp::CheckFilesTransferResponse response;
       response.set_error_message(base::StrCat(
           {"Failure to call d-bus method: ", dlp::kCheckFilesTransferMethod}));
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), response));
       return;
     }
 
     proxy_->CallMethod(
-        &method_call, /*5 minutes*/ 300000,
+        &method_call, base::Minutes(6).InMilliseconds(),
         base::BindOnce(&DlpClientImpl::HandleCheckFilesTransferResponse,
                        weak_factory_.GetWeakPtr(), std::move(callback)));
   }
@@ -149,7 +155,7 @@ class DlpClientImpl : public DlpClient {
       dlp::RequestFileAccessResponse response;
       response.set_error_message(base::StrCat(
           {"Failure to call d-bus method: ", dlp::kRequestFileAccessMethod}));
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(callback), response, base::ScopedFD()));
       return;
@@ -161,7 +167,30 @@ class DlpClientImpl : public DlpClient {
                        weak_factory_.GetWeakPtr(), std::move(callback)));
   }
 
+  void GetDatabaseEntries(GetDatabaseEntriesCallback callback) override {
+    dbus::MethodCall method_call(dlp::kDlpInterface,
+                                 dlp::kGetDatabaseEntriesMethod);
+    dbus::MessageWriter writer(&method_call);
+
+    proxy_->CallMethod(
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        base::BindOnce(&DlpClientImpl::HandleGetDatabaseEntriesResponse,
+                       weak_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
   bool IsAlive() const override { return is_alive_; }
+
+  void AddObserver(Observer* observer) override {
+    observers_.AddObserver(observer);
+  }
+
+  void RemoveObserver(Observer* observer) override {
+    observers_.RemoveObserver(observer);
+  }
+
+  bool HasObserver(const Observer* observer) const override {
+    return observers_.HasObserver(observer);
+  }
 
  private:
   TestInterface* GetTestInterface() override { return nullptr; }
@@ -179,12 +208,21 @@ class DlpClientImpl : public DlpClient {
     std::move(callback).Run(response_proto);
   }
 
-  void HandleAddFileResponse(AddFileCallback callback,
-                             dbus::Response* response) {
-    dlp::AddFileResponse response_proto;
+  void HandleAddFilesResponse(const dlp::AddFilesRequest request,
+                              AddFilesCallback callback,
+                              dbus::Response* response) {
+    dlp::AddFilesResponse response_proto;
     const char* error_message = DeserializeProto(response, &response_proto);
     if (error_message) {
       response_proto.set_error_message(error_message);
+    } else {
+      std::vector<base::FilePath> added_files;
+      for (const auto& add_file_request : request.add_file_requests()) {
+        added_files.emplace_back(add_file_request.file_path());
+      }
+      for (auto& observer : observers_) {
+        observer.OnFilesAddedToDlpDaemon(added_files);
+      }
     }
     std::move(callback).Run(response_proto);
   }
@@ -233,11 +271,35 @@ class DlpClientImpl : public DlpClient {
     std::move(callback).Run(response_proto, std::move(fd));
   }
 
+  void HandleGetDatabaseEntriesResponse(GetDatabaseEntriesCallback callback,
+                                        dbus::Response* response) {
+    dlp::GetDatabaseEntriesResponse response_proto;
+    const char* error_message = DeserializeProto(response, &response_proto);
+    if (error_message) {
+      response_proto.set_error_message(error_message);
+    }
+    std::move(callback).Run(response_proto);
+  }
+
+  void NameOwnerChangedReceived(const std::string& old_owner,
+                                const std::string& new_owner) {
+    is_alive_ = false;
+    // Do not notify if the service was shut down, only if a new one is started.
+    if (new_owner.empty()) {
+      return;
+    }
+    for (auto& observer : observers_) {
+      observer.DlpDaemonRestarted();
+    }
+  }
+
   // D-Bus proxy for the Dlp daemon, not owned.
   raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   // Indicates whether the daemon was started and DLP Files rules are enforced.
   bool is_alive_ = false;
+
+  base::ObserverList<Observer> observers_;
 
   base::WeakPtrFactory<DlpClientImpl> weak_factory_{this};
 };

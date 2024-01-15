@@ -9,7 +9,9 @@
 
 #include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/ash/services/libassistant/public/mojom/device_settings_delegate.mojom.h"
 #include "chromeos/ash/services/libassistant/util.h"
@@ -46,10 +48,10 @@ class Setting {
   virtual const char* setting_id() const = 0;
   virtual void Modify(const client_op::ModifySettingArgs& request) = 0;
 
-  DeviceSettingsDelegate& delegate() { return delegate_; }
+  DeviceSettingsDelegate& delegate() { return *delegate_; }
 
  private:
-  DeviceSettingsDelegate& delegate_;
+  const raw_ref<DeviceSettingsDelegate> delegate_;
 };
 
 namespace {
@@ -270,7 +272,7 @@ class BrightnessSetting : public Setting {
 }  // namespace
 
 DeviceSettingsController::DeviceSettingsController()
-    : mojom_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : mojom_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 DeviceSettingsController::~DeviceSettingsController() = default;
 
 void DeviceSettingsController::Bind(

@@ -5,7 +5,11 @@
 #ifndef CC_PAINT_IMAGE_PROVIDER_H_
 #define CC_PAINT_IMAGE_PROVIDER_H_
 
-#include "base/callback.h"
+#include <utility>
+
+#include <optional>
+#include "base/functional/callback.h"
+#include "base/types/optional_util.h"
 #include "cc/paint/decoded_draw_image.h"
 #include "cc/paint/draw_image.h"
 #include "cc/paint/paint_export.h"
@@ -24,7 +28,7 @@ class CC_PAINT_EXPORT ImageProvider {
 
     ScopedResult();
     explicit ScopedResult(DecodedDrawImage image);
-    explicit ScopedResult(sk_sp<PaintRecord> record);
+    explicit ScopedResult(std::optional<PaintRecord> record);
     ScopedResult(DecodedDrawImage image, DestructionCallback callback);
     ScopedResult(const ScopedResult&) = delete;
     ScopedResult(ScopedResult&& other);
@@ -36,16 +40,18 @@ class CC_PAINT_EXPORT ImageProvider {
     explicit operator bool() const { return image_ || record_; }
     const DecodedDrawImage& decoded_image() const { return image_; }
     bool needs_unlock() const { return !destruction_callback_.is_null(); }
-    const PaintRecord* paint_record() {
-      DCHECK(record_);
-      return record_.get();
+
+    bool has_paint_record() const { return record_.has_value(); }
+    PaintRecord ReleaseAsRecord() {
+      DCHECK(has_paint_record());
+      return std::move(record_.value());
     }
 
    private:
     void DestroyDecode();
 
     DecodedDrawImage image_;
-    sk_sp<PaintRecord> record_;
+    std::optional<PaintRecord> record_;
     DestructionCallback destruction_callback_;
   };
 

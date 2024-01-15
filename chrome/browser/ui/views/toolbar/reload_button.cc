@@ -13,6 +13,7 @@
 #include "chrome/browser/command_updater.h"
 #include "chrome/browser/external_protocol/external_protocol_handler.h"
 #include "chrome/browser/themes/theme_properties.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
@@ -21,11 +22,13 @@
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/base/theme_provider.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/base/window_open_disposition_utils.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/metrics.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 
 // ReloadButton ---------------------------------------------------------------
@@ -36,6 +39,14 @@ ReloadButton::ReloadButton(CommandUpdater* command_updater)
                     CreateMenuModel(),
                     nullptr),
       command_updater_(command_updater),
+      reload_icon_(features::IsChromeRefresh2023()
+                       ? vector_icons::kReloadChromeRefreshIcon
+                       : vector_icons::kReloadIcon),
+      reload_touch_icon_(kReloadTouchIcon),
+      stop_icon_(features::IsChromeRefresh2023()
+                     ? kNavigateStopChromeRefreshIcon
+                     : kNavigateStopIcon),
+      stop_touch_icon_(kNavigateStopTouchIcon),
       double_click_timer_delay_(
           base::Milliseconds(views::GetDoubleClickInterval())),
       mode_switch_timer_delay_(base::Milliseconds(1350)) {
@@ -43,6 +54,7 @@ ReloadButton::ReloadButton(CommandUpdater* command_updater)
   SetTriggerableEventFlags(ui::EF_LEFT_MOUSE_BUTTON |
                            ui::EF_MIDDLE_MOUSE_BUTTON);
   SetAccessibleName(l10n_util::GetStringUTF16(IDS_ACCNAME_RELOAD));
+  SetProperty(views::kElementIdentifierKey, kReloadButtonElementId);
   SetID(VIEW_ID_RELOAD_BUTTON);
 }
 
@@ -76,6 +88,24 @@ void ReloadButton::ChangeMode(Mode mode, bool force) {
       mode_switch_timer_.Start(FROM_HERE, mode_switch_timer_delay_, this,
                                &ReloadButton::OnStopToReloadTimer);
     }
+  }
+}
+
+void ReloadButton::SetVectorIconsForMode(Mode mode,
+                                         const gfx::VectorIcon& icon,
+                                         const gfx::VectorIcon& touch_icon) {
+  switch (mode) {
+    case Mode::kReload:
+      reload_icon_ = icon;
+      reload_touch_icon_ = touch_icon;
+      break;
+    case Mode::kStop:
+      stop_icon_ = icon;
+      stop_touch_icon_ = touch_icon;
+      break;
+  }
+  if (mode == visible_mode_) {
+    SetVisibleMode(visible_mode_);
   }
 }
 
@@ -153,10 +183,10 @@ void ReloadButton::SetVisibleMode(Mode mode) {
   visible_mode_ = mode;
   switch (mode) {
     case Mode::kReload:
-      SetVectorIcons(vector_icons::kReloadIcon, kReloadTouchIcon);
+      SetVectorIcons(*reload_icon_, *reload_touch_icon_);
       break;
     case Mode::kStop:
-      SetVectorIcons(kNavigateStopIcon, kNavigateStopTouchIcon);
+      SetVectorIcons(*stop_icon_, *stop_touch_icon_);
       break;
   }
 }
@@ -227,6 +257,6 @@ void ReloadButton::OnStopToReloadTimer() {
   ChangeMode(intended_mode_, true);
 }
 
-BEGIN_METADATA(ReloadButton, ToolbarButton)
+BEGIN_METADATA(ReloadButton)
 ADD_PROPERTY_METADATA(bool, MenuEnabled)
 END_METADATA

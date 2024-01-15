@@ -7,15 +7,13 @@ import("//build/config/features.gni")
 import("//build/config/ui.gni")
 import("//content/public/common/zygote/features.gni")
 import("//ipc/features.gni")
+import("//media/media_options.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//ppapi/buildflags/buildflags.gni")
 import("//sandbox/features.gni")
+import("//testing/libfuzzer/fuzzer_test.gni")
 import("//tools/ipc_fuzzer/ipc_fuzzer.gni")
 import("features.gni")
-if (is_mac) {
-  import("//build/config/mac/mac_sdk.gni")
-  import("//content/public/app/mac_helpers.gni")
-}
 
 # For feature flags internal to content. See content/public/common:features
 # for feature flags that clients of contents need to know about.
@@ -31,6 +29,7 @@ buildflag_header("buildflags") {
     "ENABLE_SCREEN_CAPTURE=$enable_screen_capture",
     "MBI_MODE_PER_RENDER_PROCESS_HOST=$_mbi_mode_per_render_process_host",
     "MBI_MODE_PER_SITE_INSTANCE=$_mbi_mode_per_site_instance",
+    "CONTENT_ENABLE_LEGACY_IPC=$content_enable_legacy_ipc",
   ]
 }
 
@@ -74,12 +73,8 @@ source_set("common") {
 
   sources = [
     "all_messages.h",
-    "ax_serialization_utils.cc",
-    "ax_serialization_utils.h",
     "background_fetch/background_fetch_types.cc",
     "background_fetch/background_fetch_types.h",
-    "child_process_host_impl.cc",
-    "child_process_host_impl.h",
     "color_parser.cc",
     "common_param_traits.cc",
     "common_param_traits.h",
@@ -100,8 +95,8 @@ source_set("common") {
     "content_switches_internal.h",
     "cursors/webcursor.cc",
     "cursors/webcursor.h",
+    "cursors/webcursor_ash.cc",
     "cursors/webcursor_aura.cc",
-    "cursors/webcursor_ozone.cc",
     "debug_utils.cc",
     "debug_utils.h",
     "features.cc",
@@ -119,48 +114,110 @@ source_set("common") {
     "input/actions_parser.cc",
     "input/actions_parser.h",
     "input/event_with_latency_info.h",
+    "input/fling_controller.cc",
+    "input/fling_controller.h",
+    "input/fling_scheduler_base.h",
+    "input/gesture_event_queue.cc",
+    "input/gesture_event_queue.h",
     "input/gesture_event_stream_validator.cc",
     "input/gesture_event_stream_validator.h",
+    "input/input_disposition_handler.h",
     "input/input_event_ack_state.cc",
     "input/input_event_stream_validator.cc",
     "input/input_event_stream_validator.h",
+    "input/input_router.h",
+    "input/input_router_client.h",
+    "input/input_router_config_helper.cc",
+    "input/input_router_config_helper.h",
+    "input/input_router_impl.cc",
+    "input/input_router_impl.h",
+    "input/mouse_wheel_event_queue.cc",
+    "input/mouse_wheel_event_queue.h",
+    "input/passthrough_touch_event_queue.cc",
+    "input/passthrough_touch_event_queue.h",
+    "input/synthetic_gesture.cc",
+    "input/synthetic_gesture.h",
+    "input/synthetic_gesture_controller.cc",
+    "input/synthetic_gesture_controller.h",
     "input/synthetic_gesture_params.cc",
     "input/synthetic_gesture_params.h",
+    "input/synthetic_gesture_target.h",
+    "input/synthetic_mouse_driver.cc",
+    "input/synthetic_mouse_driver.h",
+    "input/synthetic_pen_driver.cc",
+    "input/synthetic_pen_driver.h",
+    "input/synthetic_pinch_gesture.cc",
+    "input/synthetic_pinch_gesture.h",
     "input/synthetic_pinch_gesture_params.cc",
     "input/synthetic_pinch_gesture_params.h",
+    "input/synthetic_pointer_action.cc",
+    "input/synthetic_pointer_action.h",
     "input/synthetic_pointer_action_list_params.cc",
     "input/synthetic_pointer_action_list_params.h",
     "input/synthetic_pointer_action_params.cc",
     "input/synthetic_pointer_action_params.h",
+    "input/synthetic_pointer_driver.cc",
+    "input/synthetic_pointer_driver.h",
+    "input/synthetic_smooth_drag_gesture.cc",
+    "input/synthetic_smooth_drag_gesture.h",
     "input/synthetic_smooth_drag_gesture_params.cc",
     "input/synthetic_smooth_drag_gesture_params.h",
+    "input/synthetic_smooth_move_gesture.cc",
+    "input/synthetic_smooth_move_gesture.h",
+    "input/synthetic_smooth_scroll_gesture.cc",
+    "input/synthetic_smooth_scroll_gesture.h",
     "input/synthetic_smooth_scroll_gesture_params.cc",
     "input/synthetic_smooth_scroll_gesture_params.h",
+    "input/synthetic_tap_gesture.cc",
+    "input/synthetic_tap_gesture.h",
     "input/synthetic_tap_gesture_params.cc",
     "input/synthetic_tap_gesture_params.h",
+    "input/synthetic_touch_driver.cc",
+    "input/synthetic_touch_driver.h",
+    "input/synthetic_touchpad_pinch_gesture.cc",
+    "input/synthetic_touchpad_pinch_gesture.h",
+    "input/synthetic_touchscreen_pinch_gesture.cc",
+    "input/synthetic_touchscreen_pinch_gesture.h",
+    "input/tap_suppression_controller.cc",
+    "input/tap_suppression_controller.h",
+    "input/timeout_monitor.cc",
+    "input/timeout_monitor.h",
+    "input/touch_action_filter.cc",
+    "input/touch_action_filter.h",
     "input/touch_event_stream_validator.cc",
     "input/touch_event_stream_validator.h",
+    "input/touch_timeout_handler.cc",
+    "input/touch_timeout_handler.h",
+    "input/touchpad_pinch_event_queue.cc",
+    "input/touchpad_pinch_event_queue.h",
+    "input/touchpad_tap_suppression_controller.cc",
+    "input/touchpad_tap_suppression_controller.h",
+    "input/touchscreen_tap_suppression_controller.cc",
+    "input/touchscreen_tap_suppression_controller.h",
     "input/web_touch_event_traits.cc",
     "input/web_touch_event_traits.h",
     "media/cdm_info.cc",
     "mojo_core_library_support.cc",
     "mojo_core_library_support.h",
+    "native_web_keyboard_event_aura.cc",
     "navigation_gesture.h",
     "navigation_params_utils.h",
     "origin_util.cc",
-    "partition_alloc_support.cc",
-    "partition_alloc_support.h",
-    "private_aggregation_features.cc",
-    "private_aggregation_features.h",
     "process_type.cc",
     "process_visibility_tracker.cc",
     "process_visibility_tracker.h",
     "pseudonymization_salt.cc",
     "pseudonymization_salt.h",
+    "service_worker/forwarded_race_network_request_url_loader_factory.cc",
+    "service_worker/forwarded_race_network_request_url_loader_factory.h",
+    "service_worker/race_network_request_url_loader_client.cc",
+    "service_worker/race_network_request_url_loader_client.h",
+    "service_worker/service_worker_resource_loader.cc",
+    "service_worker/service_worker_resource_loader.h",
+    "service_worker/service_worker_router_evaluator.cc",
+    "service_worker/service_worker_router_evaluator.h",
     "set_process_title.cc",
     "set_process_title.h",
-    "shared_file_util.cc",
-    "shared_file_util.h",
     "skia_utils.cc",
     "skia_utils.h",
     "thread_pool_util.cc",
@@ -169,8 +226,12 @@ source_set("common") {
     "url_schemes.cc",
     "url_schemes.h",
     "user_agent.cc",
+    "user_level_memory_pressure_signal_features.cc",
+    "user_level_memory_pressure_signal_features.h",
     "web_package/signed_exchange_utils.cc",
     "web_package/signed_exchange_utils.h",
+    "webid/identity_url_loader_throttle.cc",
+    "webid/identity_url_loader_throttle.h",
   ]
 
   configs += [
@@ -193,6 +254,7 @@ source_set("common") {
     "//ui/accessibility",
     "//ui/accessibility/mojom",
     "//ui/base/cursor",
+    "//ui/events/gestures/blink",
     "//ui/events/ipc",
   ]
   deps = [
@@ -204,11 +266,9 @@ source_set("common") {
     "//build:chromeos_buildflags",
     "//build/util:chromium_git_revision",
     "//components/discardable_memory/common",
-    "//components/power_scheduler",
     "//components/services/filesystem/public/mojom",
     "//components/tracing:startup_tracing",
     "//content:content_resources",
-    "//content:dev_ui_content_resources",
     "//content/common/fetch:fetch_api_request_proto",
     "//content/public/common:interfaces",
     "//content/public/common/zygote:buildflags",
@@ -227,7 +287,6 @@ source_set("common") {
     "//media/base/ipc",
     "//media/capture",
     "//media/gpu:buildflags",
-    "//media/gpu/ipc/client",
     "//media/gpu/ipc/common",
     "//media/midi",
     "//media/midi:mojo",
@@ -251,7 +310,9 @@ source_set("common") {
     "//ui/base",
     "//ui/base/cursor/mojom:cursor_type",
     "//ui/base/ime",
+    "//ui/color",
     "//ui/display",
+    "//ui/events:gesture_detection",
     "//ui/events/blink",
     "//ui/gfx",
     "//ui/gfx/geometry",
@@ -279,6 +340,13 @@ source_set("common") {
     "//content/public/common:interfaces",
   ]
 
+  if (is_posix) {
+    sources += [
+      "shared_file_util.cc",
+      "shared_file_util.h",
+    ]
+  }
+
   if (is_android) {
     sources += [
       "android/cpu_time_metrics.cc",
@@ -297,31 +365,41 @@ source_set("common") {
       "android/sync_compositor_statics.h",
       "cursors/webcursor_android.cc",
       "font_list_android.cc",
+      "input/web_input_event_builders_android.cc",
+      "input/web_input_event_builders_android.h",
+      "native_web_keyboard_event_android.cc",
     ]
 
     if (use_seccomp_bpf) {
-      sources += [
-        "//sandbox/policy/linux/bpf_base_policy_linux.cc",
-        "//sandbox/policy/linux/bpf_base_policy_linux.h",
-      ]
+      deps += [ "//sandbox/policy" ]
     }
+  }
+
+  if (is_ios) {
+    # TOOD: Create ios file instead of stealing android
+    sources += [
+      "cursors/webcursor_android.cc",
+      "input/web_input_event_builders_ios.h",
+      "input/web_input_event_builders_ios.mm",
+      "native_web_keyboard_event_ios.mm",
+    ]
   }
 
   if (is_mac) {
     sources += [
-      "cursors/webcursor_mac.mm",
-      "font_list_mac.mm",
+      "input/web_input_event_builders_mac.h",
+      "input/web_input_event_builders_mac.mm",
       "mac/attributed_string_type_converters.h",
       "mac/attributed_string_type_converters.mm",
-      "mac/font_loader.h",
-      "mac/font_loader.mm",
       "mac/task_port_policy.cc",
       "mac/task_port_policy.h",
+      "native_web_keyboard_event_mac.mm",
     ]
-    deps += [
-      ":mac_helpers",
-      "//sandbox/mac:seatbelt",
-    ]
+    deps += [ "//sandbox/mac:seatbelt" ]
+  }
+
+  if (is_apple) {
+    sources += [ "font_list_mac.mm" ]
   }
 
   if (is_win) {
@@ -341,39 +419,54 @@ source_set("common") {
     libs += [ "android" ]
   }
 
-  if (is_debug && !is_component_build && enable_plugins) {
+  if (is_debug && !is_component_build && enable_ppapi) {
     # Content depends on the PPAPI message logging stuff; if this isn't here,
     # some unit test binaries won't compile. This only worked in release mode
     # because logging is disabled there.
     deps += [ "//ppapi/proxy:ipc_sources" ]
   }
 
-  if (!use_ozone) {
-    sources -= [ "cursors/webcursor_ozone.cc" ]
+  if (!is_chromeos_ash) {
+    sources -= [ "cursors/webcursor_ash.cc" ]
   }
 
   if (use_aura) {
     deps += [ "//ui/wm" ]
   } else {
-    sources -= [ "cursors/webcursor_aura.cc" ]
-  }
-
-  if (is_linux || is_chromeos) {
-    deps += [
-      ":sandbox_support_linux",
-      ":set_process_title_linux",
-      "//third_party/fontconfig",
+    sources -= [
+      "cursors/webcursor_aura.cc",
+      "native_web_keyboard_event_aura.cc",
     ]
   }
 
-  if (use_zygote_handle) {
+  if (is_linux || is_chromeos) {
+    sources += [
+      "gpu_pre_sandbox_hook_linux.cc",
+      "gpu_pre_sandbox_hook_linux.h",
+    ]
+    public_deps += [ "//sandbox/policy" ]
+    deps += [
+      ":sandbox_support_linux",
+      ":set_process_title_linux",
+      "//media/gpu:buildflags",
+      "//sandbox/linux:sandbox_services",
+      "//sandbox/linux:seccomp_bpf",
+      "//sandbox/policy:chromecast_sandbox_allowlist_buildflags",
+      "//third_party/fontconfig",
+    ]
+    if (use_v4l2_codec) {
+      deps += [ "//media/gpu/v4l2" ]
+    }
+  }
+
+  if (use_zygote) {
     sources += [
       "zygote/zygote_handle_impl_linux.h",
       "zygote/zygote_handle_linux.cc",
     ]
   }
 
-  if (is_mac || is_win || is_android || is_fuchsia) {
+  if (is_mac || is_win || is_android || is_fuchsia || is_ios) {
     sources -= [ "font_list_fontconfig.cc" ]
   }
 
@@ -452,7 +545,6 @@ mojom("mojo_bindings") {
 
   sources = [
     "agent_scheduling_group.mojom",
-    "aggregatable_report.mojom",
     "associated_interfaces.mojom",
     "child_process.mojom",
     "dom_automation_controller.mojom",
@@ -465,21 +557,25 @@ mojom("mojo_bindings") {
     "media/media_log_records.mojom",
     "native_types.mojom",
     "navigation_client.mojom",
-    "private_aggregation_host.mojom",
     "render_message_filter.mojom",
     "renderer.mojom",
     "renderer_host.mojom",
     "renderer_variations_configuration.mojom",
-    "shared_storage_worklet_service.mojom",
+    "synthetic_trial_configuration.mojom",
     "web_ui.mojom",
   ]
+
+  if (is_linux || is_chromeos) {
+    sources += [ "thread_type_switcher.mojom" ]
+  }
+
+  if (is_android) {
+    sources += [ "gin_java_bridge.mojom" ]
+  }
 
   enabled_features = []
   if (enable_ipc_logging) {
     enabled_features += [ "ipc_logging" ]
-  }
-  if (is_linux || is_chromeos) {
-    enabled_features += [ "supports_thread_types" ]
   }
   if (use_clang_profiling_inside_sandbox) {
     enabled_features += [ "clang_profiling_inside_sandbox" ]
@@ -498,10 +594,6 @@ mojom("mojo_bindings") {
         {
           mojom = "content.mojom.ChildFrameOwnerElementType"
           cpp = "::blink::FrameOwnerElementType"
-        },
-        {
-          mojom = "content.mojom.ContentSecurityPolicy"
-          cpp = "::content::ContentSecurityPolicy"
         },
         {
           mojom = "content.mojom.NavigationGesture"
@@ -547,14 +639,9 @@ mojom("mojo_bindings") {
           mojom = "content.mojom.VisualProperties"
           cpp = "::blink::VisualProperties"
         },
-        {
-          mojom = "content.mojom.WebPopupType"
-          cpp = "::blink::WebPopupType"
-        },
       ]
 
       traits_headers = [
-        "//cc/input/touch_action.h",
         "//content/common/frame_owner_element_type_mojom_traits.h",
         "//content/common/input/input_injector_mojom_traits.h",
         "//content/common/input/synthetic_pinch_gesture_params.h",
@@ -564,16 +651,9 @@ mojom("mojo_bindings") {
         "//content/common/input/synthetic_tap_gesture_params.h",
         "//content/common/navigation_gesture.h",
         "//net/base/network_change_notifier.h",
-        "//third_party/blink/public/common/input/web_coalesced_input_event_mojom_traits.h",
-        "//third_party/blink/public/common/input/web_input_event.h",
-        "//third_party/blink/public/common/input/web_mouse_wheel_event.h",
-        "//third_party/blink/public/common/input/web_pointer_properties.h",
-        "//third_party/blink/public/common/input/web_touch_point.h",
-        "//third_party/blink/public/common/web_preferences/web_preferences.h",
+        "//third_party/blink/public/common/navigation/impression.h",
         "//third_party/blink/public/common/widget/visual_properties.h",
-        "//ui/events/blink/did_overscroll_params.h",
-        "//ui/events/blink/web_input_event_traits.h",
-        "//ui/latency/ipc/latency_info_param_traits.h",
+        "//ui/events/types/scroll_types.h",
         "//ui/native_theme/native_theme.h",
       ]
 
@@ -596,20 +676,8 @@ mojom("mojo_bindings") {
         # transitive allowance, so those targets' own public_deps aren't included in
         # the set of implied dependencies.
         "//content/common:buildflags",
-        "//media",
-        "//media/base/ipc",
-        "//net",
         "//ppapi/buildflags",
-        "//services/network/public/cpp",
-        "//third_party/blink/public/common",
-        "//ui/accessibility",
-        "//ui/base/ime:text_input_types",
         "//ui/events/blink",
-        "//ui/gfx/ipc",
-        "//ui/gfx/ipc/color",
-        "//ui/gfx/ipc/skia",
-        "//ui/surface",
-        "//url/ipc:url_ipc",
       ]
     },
     {
@@ -633,7 +701,7 @@ mojom("mojo_bindings") {
 
   public_deps = [
     "//cc/mojom",
-    "//components/services/storage/shared_storage/public/mojom",
+    "//components/attribution_reporting:mojom",
     "//components/variations:variations_mojom",
     "//content/public/common:interfaces",
     "//ipc:mojom",
@@ -649,6 +717,7 @@ mojom("mojo_bindings") {
     "//services/viz/public/mojom",
     "//skia/public/mojom",
     "//third_party/blink/public/mojom:mojom_core",
+    "//third_party/blink/public/mojom:mojom_modules",
     "//third_party/blink/public/mojom:web_feature_mojo_bindings",
     "//ui/accessibility:ax_enums_mojo",
     "//ui/accessibility/mojom",
@@ -657,6 +726,7 @@ mojom("mojo_bindings") {
     "//ui/color:mojom",
     "//ui/display/mojom",
     "//ui/events/mojom",
+    "//ui/events/mojom:event_latency_metadata_mojom",
     "//ui/gfx/geometry/mojom",
     "//ui/gfx/image/mojom",
     "//ui/gfx/mojom",
@@ -691,7 +761,10 @@ mojom("mojo_bindings") {
     ]
   }
 
-  overridden_deps = [ "//third_party/blink/public/mojom:mojom_core" ]
+  overridden_deps = [
+    "//third_party/blink/public/mojom:mojom_core",
+    "//third_party/blink/public/mojom:mojom_modules",
+  ]
   component_deps = [ "//third_party/blink/public/common" ]
 
   component_output_prefix = "content_common_mojo_bindings"
@@ -700,32 +773,11 @@ mojom("mojo_bindings") {
   export_header = "content/common/content_export.h"
 }
 
-if (is_mac) {
-  source_set("mac_helpers") {
-    _lines = [
-      "// This file is generated by " +
-          get_label_info(target_name, "label_no_toolchain"),
-      "",
-      "#ifndef GEN_CONTENT_COMMON_MAC_HELPERS_H_",
-      "#define GEN_CONTENT_COMMON_MAC_HELPERS_H_",
-      "",
-      "namespace content {",
-      "",
-    ]
-    foreach(helper_params, content_mac_helpers) {
-      _lines += [ "const char kMacHelperSuffix_${helper_params[0]}[] = \"${helper_params[2]}\";" ]
-    }
-    _lines += [
-      "",
-      "}  // namespace content",
-      "",
-      "#endif  // GEN_CONTENT_COMMON_MAC_HELPERS_H_",
-    ]
-
-    _file = "$target_gen_dir/mac_helpers.h"
-
-    write_file(_file, _lines)
-
-    sources = [ _file ]
-  }
+fuzzer_test("content_input_actions_parser_fuzzer") {
+  sources = [ "input/actions_parser_fuzzer.cc" ]
+  deps = [
+    "//base",
+    "//content/public/common",
+    "//third_party/abseil-cpp:absl",
+  ]
 }

@@ -19,13 +19,19 @@ namespace {
 
 constexpr int kBluetoothAddressSize = 6;
 FastPairRepository* g_instance = nullptr;
+FastPairRepository* g_test_instance = nullptr;
 
 }  // namespace
 
 // static
 FastPairRepository* FastPairRepository::Get() {
-  // b/240621764 team members have seen g_instance return null during testing.
-  // Fail loudly if that happens to avoid undefined behavior.
+  if (g_test_instance) {
+    return g_test_instance;
+  }
+  // This fails for component builds, however, production builds are not
+  // component builds and we have not seen any production crashes here. If
+  // crashes start appearing in production, we should re-evaluate the
+  // FastPairRepository setup.
   CHECK(g_instance);
   return g_instance;
 }
@@ -52,13 +58,13 @@ void FastPairRepository::SetInstance(FastPairRepository* instance) {
   g_instance = instance;
 }
 
-FastPairRepository::FastPairRepository() {
-  SetInstance(this);
+// static
+void FastPairRepository::SetInstanceForTesting(FastPairRepository* instance) {
+  g_test_instance = instance;
 }
 
-FastPairRepository::~FastPairRepository() {
-  SetInstance(nullptr);
-}
+FastPairRepository::FastPairRepository() = default;
+FastPairRepository::~FastPairRepository() = default;
 
 }  // namespace quick_pair
 }  // namespace ash

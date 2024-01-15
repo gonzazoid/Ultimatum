@@ -10,12 +10,22 @@
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/stringprintf.h"
 #include "base/test/gtest_util.h"
 #include "base/test/launcher/test_launcher.h"
+#include "third_party/libxml/chromium/libxml_utils.h"
 #include "third_party/libxml/chromium/xml_reader.h"
 
 namespace base {
+
+namespace {
+
+// No-op error handler that replaces libxml's default, which writes to stderr.
+// The test launcher's worker threads speculatively parse results XML to detect
+// timeouts in the processes they manage, so logging parsing errors could be
+// noisy (e.g., crbug.com/1466897).
+void NullXmlErrorFunc(void* context, const char* message, ...) {}
+
+}  // namespace
 
 struct Link {
   // The name of the test case.
@@ -35,6 +45,17 @@ struct Property {
   std::string value;
 };
 
+struct Tag {
+  // The name of the test case.
+  std::string name;
+  // The name of the classname of the test.
+  std::string classname;
+  // The name of the tag.
+  std::string tag_name;
+  // The value of the tag.
+  std::string tag_value;
+};
+
 bool ProcessGTestOutput(const base::FilePath& output_file,
                         std::vector<TestResult>* results,
                         bool* crashed) {
@@ -43,6 +64,9 @@ bool ProcessGTestOutput(const base::FilePath& output_file,
   std::string xml_contents;
   if (!ReadFileToString(output_file, &xml_contents))
     return false;
+
+  // Silence XML errors - otherwise they go to stderr.
+  ScopedXmlErrorFunc error_func(nullptr, &NullXmlErrorFunc);
 
   XmlReader xml_reader;
   if (!xml_reader.Load(xml_contents))
@@ -60,6 +84,8 @@ bool ProcessGTestOutput(const base::FilePath& output_file,
   std::vector<Link> links;
 
   std::vector<Property> properties;
+
+  std::vector<Tag> tags;
 
   while (xml_reader.Read()) {
     xml_reader.SkipToElement();
@@ -167,7 +193,13 @@ bool ProcessGTestOutput(const base::FilePath& output_file,
           for (const Property& property : properties) {
             result.AddProperty(property.name, property.value);
           }
-          links.clear();
+          properties.clear();
+          for (const Tag& tag : tags) {
+            if (tag.name == test_name && tag.classname == test_case_name) {
+              result.AddTag(tag.tag_name, tag.tag_value);
+            }
+          }
+          tags.clear();
           results->push_back(result);
         } else if (node_name == "link" && !xml_reader.IsClosingElement()) {
           Link link;
@@ -181,6 +213,19 @@ bool ProcessGTestOutput(const base::FilePath& output_file,
             return false;
           links.push_back(link);
         } else if (node_name == "link" && xml_reader.IsClosingElement()) {
+          // Deliberately empty.
+        } else if (node_name == "tag" && !xml_reader.IsClosingElement()) {
+          Tag tag;
+          if (!xml_reader.NodeAttribute("name", &tag.name))
+            return false;
+          if (!xml_reader.NodeAttribute("classname", &tag.classname))
+            return false;
+          if (!xml_reader.NodeAttribute("tag_name", &tag.tag_name))
+            return false;
+          if (!xml_reader.ReadElementContent(&tag.tag_value))
+            return false;
+          tags.push_back(tag);
+        } else if (node_name == "tag" && xml_reader.IsClosingElement()) {
           // Deliberately empty.
         } else if (node_name == "properties" &&
                    !xml_reader.IsClosingElement()) {

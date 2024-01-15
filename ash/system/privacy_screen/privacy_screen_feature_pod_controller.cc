@@ -11,7 +11,8 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/unified/feature_pod_button.h"
+#include "ash/system/unified/feature_tile.h"
+#include "ash/system/unified/quick_settings_metrics_util.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/layout/box_layout.h"
 
@@ -25,11 +26,17 @@ PrivacyScreenFeaturePodController::~PrivacyScreenFeaturePodController() {
   Shell::Get()->privacy_screen_controller()->RemoveObserver(this);
 }
 
-FeaturePodButton* PrivacyScreenFeaturePodController::CreateButton() {
-  DCHECK(!button_);
-  button_ = new FeaturePodButton(this);
-  UpdateButton();
-  return button_;
+std::unique_ptr<FeatureTile> PrivacyScreenFeaturePodController::CreateTile(
+    bool compact) {
+  DCHECK(!tile_);
+  auto tile = std::make_unique<FeatureTile>(
+      base::BindRepeating(&PrivacyScreenFeaturePodController::OnIconPressed,
+                          weak_factory_.GetWeakPtr()));
+  tile_ = tile.get();
+  // `UpdateTile()` will update the visibility.
+  tile_->SetVisible(false);
+  UpdateTile();
+  return tile;
 }
 
 QsFeatureCatalogName PrivacyScreenFeaturePodController::GetCatalogName() {
@@ -48,53 +55,60 @@ void PrivacyScreenFeaturePodController::TogglePrivacyScreen() {
   DCHECK(privacy_screen_controller->IsSupported());
 
   privacy_screen_controller->SetEnabled(
-      !privacy_screen_controller->GetEnabled(),
-      PrivacyScreenController::kToggleUISurfaceFeaturePod);
+      !privacy_screen_controller->GetEnabled());
 }
 
-void PrivacyScreenFeaturePodController::UpdateButton() {
+void PrivacyScreenFeaturePodController::UpdateTile() {
   auto* privacy_screen_controller = Shell::Get()->privacy_screen_controller();
 
-  bool is_supported = privacy_screen_controller->IsSupported();
-  button_->SetVisible(is_supported);
-  if (!is_supported)
+  const bool is_supported = privacy_screen_controller->IsSupported();
+  // If the button's visibility changes from invisible to visible, log its
+  // visibility.
+  if (!tile_->GetVisible() && is_supported) {
+    TrackVisibilityUMA();
+  }
+  tile_->SetVisible(is_supported);
+  if (!is_supported) {
     return;
+  }
 
-  bool is_enabled = privacy_screen_controller->GetEnabled();
-  bool is_managed = privacy_screen_controller->IsManaged();
+  const bool is_enabled = privacy_screen_controller->GetEnabled();
+  const bool is_managed = privacy_screen_controller->IsManaged();
 
-  button_->SetVectorIcon(kPrivacyScreenIcon);
-  button_->SetToggled(is_enabled);
-  button_->SetLabel(
+  tile_->SetVectorIcon(kPrivacyScreenIcon);
+  tile_->SetToggled(is_enabled);
+  tile_->SetLabel(
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_LABEL));
 
   std::u16string tooltip_state;
   if (is_enabled) {
-    button_->SetSubLabel(l10n_util::GetStringUTF16(
+    tile_->SetSubLabel(l10n_util::GetStringUTF16(
         IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_ON_SUBLABEL));
     tooltip_state =
         l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_ON_STATE);
   } else {
-    button_->SetSubLabel(l10n_util::GetStringUTF16(
+    tile_->SetSubLabel(l10n_util::GetStringUTF16(
         IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_OFF_SUBLABEL));
     tooltip_state =
         l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_OFF_STATE);
   }
 
   if (is_managed) {
-    button_->SetSubLabel(l10n_util::GetStringUTF16(
+    tile_->SetSubLabel(l10n_util::GetStringUTF16(
         IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_MANAGED_SUBLABEL));
   }
 
-  button_->SetIconAndLabelTooltips(l10n_util::GetStringFUTF16(
+  tile_->SetTooltipText(l10n_util::GetStringFUTF16(
       IDS_ASH_STATUS_TRAY_PRIVACY_SCREEN_TOOLTIP, tooltip_state));
 }
 
 void PrivacyScreenFeaturePodController::OnPrivacyScreenSettingChanged(
     bool enabled,
     bool notify_ui) {
-  if (notify_ui)
-    UpdateButton();
+  if (!notify_ui) {
+    return;
+  }
+  UpdateTile();
 }
 
 }  // namespace ash

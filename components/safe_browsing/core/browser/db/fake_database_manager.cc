@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "components/safe_browsing/core/browser/db/fake_database_manager.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/safe_browsing/core/browser/db/util.h"
 
 namespace safe_browsing {
@@ -44,7 +45,8 @@ bool FakeSafeBrowsingDatabaseManager::ChecksAreAlwaysAsync() const {
 bool FakeSafeBrowsingDatabaseManager::CheckBrowseUrl(
     const GURL& url,
     const SBThreatTypeSet& threat_types,
-    Client* client) {
+    Client* client,
+    CheckBrowseUrlType check_type) {
   const auto it = dangerous_urls_.find(url);
   if (it == dangerous_urls_.end())
     return true;
@@ -59,7 +61,7 @@ bool FakeSafeBrowsingDatabaseManager::CheckBrowseUrl(
     pattern_type = it1->second;
   }
 
-  io_task_runner()->PostTask(
+  sb_task_runner()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeSafeBrowsingDatabaseManager::CheckBrowseURLAsync, url,
                      result_threat_type, pattern_type, client));
@@ -80,7 +82,7 @@ bool FakeSafeBrowsingDatabaseManager::CheckDownloadUrl(
     if (result_threat_type == SB_THREAT_TYPE_SAFE)
       continue;
 
-    io_task_runner()->PostTask(
+    sb_task_runner()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeSafeBrowsingDatabaseManager::CheckDownloadURLAsync,
                        url_chain, result_threat_type, client));
@@ -102,8 +104,14 @@ bool FakeSafeBrowsingDatabaseManager::CheckUrlForSubresourceFilter(
   return true;
 }
 
-safe_browsing::ThreatSource FakeSafeBrowsingDatabaseManager::GetThreatSource()
-    const {
+safe_browsing::ThreatSource
+FakeSafeBrowsingDatabaseManager::GetBrowseUrlThreatSource(
+    CheckBrowseUrlType check_type) const {
+  return safe_browsing::ThreatSource::LOCAL_PVER4;
+}
+
+safe_browsing::ThreatSource
+FakeSafeBrowsingDatabaseManager::GetNonBrowseUrlThreatSource() const {
   return safe_browsing::ThreatSource::LOCAL_PVER4;
 }
 

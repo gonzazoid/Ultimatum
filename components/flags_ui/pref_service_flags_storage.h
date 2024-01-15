@@ -37,6 +37,10 @@ class PrefServiceFlagsStorage : public FlagsStorage {
       const std::string& internal_entry_name) const override;
   void SetOriginListFlag(const std::string& internal_entry_name,
                          const std::string& origin_list_value) override;
+  std::string GetStringFlag(
+      const std::string& internal_entry_name) const override;
+  void SetStringFlag(const std::string& internal_entry_name,
+                     const std::string& string_value) override;
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
@@ -45,7 +49,7 @@ class PrefServiceFlagsStorage : public FlagsStorage {
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
  private:
-  raw_ptr<PrefService> prefs_;
+  raw_ptr<PrefService, DanglingUntriaged> prefs_;
 };
 
 }  // namespace flags_ui

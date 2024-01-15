@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ui/views/touchui/touch_selection_controller_impl.h"
+
 #include <stddef.h>
 
 #include <memory>
@@ -9,8 +11,14 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
+#include "base/test/simple_test_tick_clock.h"
+#include "base/time/time.h"
 #include "ui/aura/client/screen_position_client.h"
 #include "ui/aura/test/test_cursor_client.h"
 #include "ui/aura/window.h"
@@ -19,17 +27,19 @@
 #include "ui/base/pointer/touch_editing_controller.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/ui_base_switches.h"
+#include "ui/events/base_event_utils.h"
+#include "ui/events/event_constants.h"
 #include "ui/events/event_utils.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/render_text.h"
+#include "ui/touch_selection/touch_selection_menu_runner.h"
+#include "ui/touch_selection/touch_selection_metrics.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/controls/textfield/textfield_test_api.h"
 #include "ui/views/test/views_test_base.h"
-#include "ui/views/touchui/touch_selection_controller_impl.h"
-#include "ui/views/views_touch_selection_controller_factory.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 
@@ -64,19 +74,14 @@ namespace views {
 
 class TouchSelectionControllerImplTest : public ViewsTestBase {
  public:
-  TouchSelectionControllerImplTest()
-      : views_tsc_factory_(new ViewsTouchEditingControllerFactory) {
-    ui::TouchEditingControllerFactory::SetInstance(views_tsc_factory_.get());
-  }
+  TouchSelectionControllerImplTest() = default;
 
   TouchSelectionControllerImplTest(const TouchSelectionControllerImplTest&) =
       delete;
   TouchSelectionControllerImplTest& operator=(
       const TouchSelectionControllerImplTest&) = delete;
 
-  ~TouchSelectionControllerImplTest() override {
-    ui::TouchEditingControllerFactory::SetInstance(nullptr);
-  }
+  ~TouchSelectionControllerImplTest() override = default;
 
   void SetUp() override {
     ViewsTestBase::SetUp();
@@ -85,36 +90,38 @@ class TouchSelectionControllerImplTest : public ViewsTestBase {
   }
 
   void TearDown() override {
+    textfield_ = nullptr;
     test_cursor_client_.reset();
-    if (textfield_widget_ && !textfield_widget_->IsClosed())
-      textfield_widget_->Close();
-    if (widget_ && !widget_->IsClosed())
-      widget_->Close();
+
+    auto close_widget = [](raw_ptr<Widget>& widget) {
+      if (widget && !widget->IsClosed()) {
+        widget.ExtractAsDangling()->Close();
+      }
+    };
+    close_widget(textfield_widget_);
+    close_widget(widget_);
+
     ViewsTestBase::TearDown();
   }
 
   void CreateTextfield() {
-    textfield_ = new Textfield();
-
-    // Focusable views must have an accessible name in order to pass the
-    // accessibility paint checks. The name can be literal text, placeholder
-    // text or an associated label.
-    textfield_->SetPlaceholderText(u"Foo");
-
     textfield_widget_ = new Widget;
     Widget::InitParams params =
         CreateParams(Widget::InitParams::TYPE_WINDOW_FRAMELESS);
     params.bounds = gfx::Rect(0, 0, 200, 200);
     textfield_widget_->Init(std::move(params));
-    textfield_widget_->SetContentsView(std::make_unique<View>())
-        ->AddChildView(textfield_.get());
+    // Focusable views must have an accessible name in order to pass the
+    // accessibility paint checks. The name can be literal text, placeholder
+    // text or an associated label.
+    textfield_ = textfield_widget_->SetContentsView(std::make_unique<View>())
+                     ->AddChildView(Builder<Textfield>()
+                                        .SetPlaceholderText(u"Foo")
+                                        .SetID(1)
+                                        .SetBoundsRect(gfx::Rect(0, 0, 200, 21))
+                                        .Build());
 
-    textfield_->SetBoundsRect(gfx::Rect(0, 0, 200, 21));
-    textfield_->SetID(1);
     textfield_widget_->Show();
-
     textfield_->RequestFocus();
-    textfield_test_api_ = std::make_unique<TextfieldTestApi>(textfield_);
   }
 
   void CreateWidget() {
@@ -126,15 +133,16 @@ class TouchSelectionControllerImplTest : public ViewsTestBase {
   }
 
  protected:
-  static bool IsCursorHandleVisibleFor(
-      ui::TouchEditingControllerDeprecated* controller) {
+  static bool IsCursorHandleVisibleFor(TouchSelectionController* controller) {
     TouchSelectionControllerImpl* impl =
         static_cast<TouchSelectionControllerImpl*>(controller);
     return impl->IsCursorHandleVisible();
   }
 
   gfx::Rect GetCursorRect(const gfx::SelectionModel& sel) {
-    return textfield_test_api_->GetRenderText()->GetCursorBounds(sel, true);
+    return TextfieldTestApi(textfield_)
+        .GetRenderText()
+        ->GetCursorBounds(sel, true);
   }
 
   gfx::Point GetCursorPosition(const gfx::SelectionModel& sel) {
@@ -143,15 +151,15 @@ class TouchSelectionControllerImplTest : public ViewsTestBase {
 
   TouchSelectionControllerImpl* GetSelectionController() {
     return static_cast<TouchSelectionControllerImpl*>(
-        textfield_test_api_->touch_selection_controller());
+        TextfieldTestApi(textfield_).touch_selection_controller());
   }
 
   void StartTouchEditing() {
-    textfield_test_api_->CreateTouchSelectionControllerAndNotifyIt();
+    TextfieldTestApi(textfield_).CreateTouchSelectionControllerAndNotifyIt();
   }
 
   void EndTouchEditing() {
-    textfield_test_api_->ResetTouchSelectionController();
+    TextfieldTestApi(textfield_).ResetTouchSelectionController();
   }
 
   void SimulateSelectionHandleDrag(gfx::Vector2d v, int selection_handle) {
@@ -224,8 +232,21 @@ class TouchSelectionControllerImplTest : public ViewsTestBase {
     return GetSelectionController()->IsCursorHandleVisible();
   }
 
+  bool IsQuickMenuVisible() {
+    TouchSelectionControllerImpl* controller = GetSelectionController();
+    if (controller && controller->quick_menu_requested_) {
+      controller->ShowQuickMenuImmediatelyForTesting();
+    }
+    return ui::TouchSelectionMenuRunner::GetInstance() &&
+           ui::TouchSelectionMenuRunner::GetInstance()->IsRunning();
+  }
+
+  bool IsMagnifierVisible() {
+    return GetSelectionController()->touch_selection_magnifier_ != nullptr;
+  }
+
   gfx::RenderText* GetRenderText() {
-    return textfield_test_api_->GetRenderText();
+    return TextfieldTestApi(textfield_).GetRenderText();
   }
 
   gfx::Point GetCursorHandleDragPoint() {
@@ -314,12 +335,15 @@ class TouchSelectionControllerImplTest : public ViewsTestBase {
               textfield_->GetSelectedRange());
   }
 
+  void CloseHandle1Widget() {
+    GetSelectionController()->GetHandle1View()->GetWidget()->CloseWithReason(
+        views::Widget::ClosedReason::kUnspecified);
+  }
+
   raw_ptr<Widget> textfield_widget_ = nullptr;
   raw_ptr<Widget> widget_ = nullptr;
 
   raw_ptr<Textfield> textfield_ = nullptr;
-  std::unique_ptr<TextfieldTestApi> textfield_test_api_;
-  std::unique_ptr<ViewsTouchEditingControllerFactory> views_tsc_factory_;
   std::unique_ptr<aura::test::TestCursorClient> test_cursor_client_;
 };
 
@@ -408,9 +432,9 @@ TEST_F(TouchSelectionControllerImplTest, SelectionInBidiTextfieldTest) {
   VerifyHandlePositions(false, true, FROM_HERE);
 }
 
-// Tests if the SelectRect callback is called appropriately when selection
-// handles are moved.
-TEST_F(TouchSelectionControllerImplTest, SelectRectCallbackTest) {
+// Tests if the selection update callbacks are called appropriately when
+// selection handles are moved.
+TEST_F(TouchSelectionControllerImplTest, SelectionUpdateCallbackTest) {
   CreateTextfield();
   textfield_->SetText(u"textfield with selected text");
   // Tap the textfield to invoke touch selection.
@@ -452,7 +476,7 @@ TEST_F(TouchSelectionControllerImplTest, SelectRectCallbackTest) {
   VerifyHandlePositions(false, true, FROM_HERE);
 }
 
-TEST_F(TouchSelectionControllerImplTest, SelectRectInBidiCallbackTest) {
+TEST_F(TouchSelectionControllerImplTest, SelectionUpdateInBidiCallbackTest) {
   CreateTextfield();
   textfield_->SetText(
       u"abc\x05e1\x05e2\x05e3"
@@ -646,6 +670,404 @@ TEST_F(TouchSelectionControllerImplTest,
   EXPECT_TRUE(textfield_->HasSelection());
 }
 
+// Touch selection menu is not supported on Cast.
+#if BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(TouchSelectionControllerImplTest,
+       MenuAppearsAfterDraggingSelectionHandles) {
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  textfield_->SetSelectedRange(gfx::Range(2, 15));
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+  EXPECT_FALSE(IsQuickMenuVisible());
+
+  // Tap on the selected text to make selection handles appear, menu should also
+  // appear.
+  generator.GestureTapAt(gfx::Point(30, 15));
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Drag the selection handles, menu should appear after each drag ends.
+  SimulateSelectionHandleDrag(gfx::Vector2d(3, 0), 1);
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  SimulateSelectionHandleDrag(gfx::Vector2d(-5, 0), 2);
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Lose focus, menu should disappear.
+  textfield_widget_->GetFocusManager()->ClearFocus();
+  EXPECT_FALSE(IsQuickMenuVisible());
+}
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+TEST_F(TouchSelectionControllerImplTest,
+       MagnifierShownWhenDraggingCursorHandle) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the textfield to make the cursor handle appear.
+  generator.GestureTapAt(gfx::Point(10, 10));
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsMagnifierVisible());
+
+  // Drag the cursor handle. Magnifier should be shown while dragging the
+  // handle, then hidden once dragging ends.
+  const gfx::Point drag_start = GetCursorHandleBounds().CenterPoint();
+  const gfx::Point drag_end = drag_start + gfx::Vector2d(50, 0);
+  generator.GestureScrollSequenceWithCallback(
+      drag_start, drag_end, /*duration=*/base::Milliseconds(50),
+      /*steps=*/5,
+      base::BindLambdaForTesting(
+          [&](ui::EventType event_type, const gfx::Vector2dF& offset) {
+            if (event_type == ui::ET_GESTURE_SCROLL_UPDATE) {
+              EXPECT_TRUE(IsMagnifierVisible());
+            }
+          }));
+  EXPECT_FALSE(IsMagnifierVisible());
+}
+
+TEST_F(TouchSelectionControllerImplTest,
+       MagnifierShownWhenDraggingSelectionHandles) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  textfield_->SetSelectedRange(gfx::Range(2, 15));
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap on the selected text to make selection handles appear.
+  generator.GestureTapAt(gfx::Point(30, 15));
+  EXPECT_TRUE(IsSelectionHandle1Visible());
+  EXPECT_FALSE(IsMagnifierVisible());
+
+  // Drag selection handles. Magnifier should be shown while dragging handles,
+  // then hidden once dragging ends.
+  gfx::Point drag_start = GetSelectionHandle1Bounds().CenterPoint();
+  gfx::Point drag_end = drag_start + gfx::Vector2d(50, 0);
+  generator.GestureScrollSequenceWithCallback(
+      drag_start, drag_end, /*duration=*/base::Milliseconds(50),
+      /*steps=*/5,
+      base::BindLambdaForTesting(
+          [&](ui::EventType event_type, const gfx::Vector2dF& offset) {
+            if (event_type == ui::ET_GESTURE_SCROLL_UPDATE) {
+              EXPECT_TRUE(IsMagnifierVisible());
+            }
+          }));
+  EXPECT_FALSE(IsMagnifierVisible());
+
+  drag_start = GetSelectionHandle2Bounds().CenterPoint();
+  drag_end = drag_start + gfx::Vector2d(-60, 0);
+  generator.GestureScrollSequenceWithCallback(
+      drag_start, drag_end, /*duration=*/base::Milliseconds(50),
+      /*steps=*/5,
+      base::BindLambdaForTesting(
+          [&](ui::EventType event_type, const gfx::Vector2dF& offset) {
+            if (event_type == ui::ET_GESTURE_SCROLL_UPDATE) {
+              EXPECT_TRUE(IsMagnifierVisible());
+            }
+          }));
+  EXPECT_FALSE(IsMagnifierVisible());
+}
+
+// Tests that the magnifier is shown when directly dragging the cursor in the
+// textfield, i.e. when performing a scroll gesture on the textfield rather than
+// on the touch handles.
+TEST_F(TouchSelectionControllerImplTest, MagnifierShownWhenDraggingCursor) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Scroll in a horizontal direction over the textfield to move the cursor.
+  // Magnifier should be shown during the dragging movement, then hidden once
+  // dragging ends.
+  const gfx::Point drag_start =
+      GetCursorPosition(gfx::SelectionModel(6, gfx::CURSOR_FORWARD));
+  const gfx::Point drag_end = drag_start + gfx::Vector2d(80, 0);
+  generator.GestureScrollSequenceWithCallback(
+      drag_start, drag_end, /*duration=*/base::Milliseconds(50),
+      /*steps=*/5,
+      base::BindLambdaForTesting(
+          [&](ui::EventType event_type, const gfx::Vector2dF& offset) {
+            if (event_type == ui::ET_GESTURE_SCROLL_UPDATE) {
+              EXPECT_TRUE(IsMagnifierVisible());
+            }
+          }));
+  EXPECT_FALSE(IsMagnifierVisible());
+}
+
+// Tests that touch handles are correctly shown when directly dragging the
+// cursor in the textfield.
+TEST_F(TouchSelectionControllerImplTest, DraggingCursorShowsHandle) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Scroll in a horizontal direction over the textfield to move the cursor.
+  // Touch handles should be hidden during the dragging movement, then the
+  // cursor handle should be shown once dragging ends.
+  const gfx::Point drag_start =
+      GetCursorPosition(gfx::SelectionModel(6, gfx::CURSOR_FORWARD));
+  const gfx::Point drag_end = drag_start + gfx::Vector2d(80, 0);
+  generator.GestureScrollSequenceWithCallback(
+      drag_start, drag_end, /*duration=*/base::Milliseconds(50),
+      /*steps=*/5,
+      base::BindLambdaForTesting(
+          [&](ui::EventType event_type, const gfx::Vector2dF& offset) {
+            if (event_type == ui::ET_GESTURE_SCROLL_UPDATE) {
+              EXPECT_FALSE(IsCursorHandleVisible());
+              EXPECT_FALSE(IsSelectionHandle1Visible());
+              EXPECT_FALSE(IsSelectionHandle2Visible());
+            }
+          }));
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsSelectionHandle1Visible());
+  EXPECT_FALSE(IsSelectionHandle2Visible());
+}
+
+TEST_F(TouchSelectionControllerImplTest, TapOnHandleTogglesMenu) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the textfield to invoke touch selection. Cursor handle should be
+  // shown, but not the quick menu.
+  generator.GestureTapAt(gfx::Point(10, 10));
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsQuickMenuVisible());
+
+  // Tap the touch handle, the quick menu should appear.
+  gfx::Point handle_pos = GetCursorHandleBounds().CenterPoint();
+  generator.GestureTapAt(handle_pos);
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Tap the touch handle again, the quick menu should disappear.
+  generator.GestureTapAt(handle_pos);
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsQuickMenuVisible());
+
+  // Tap the touch handle again, the quick menu should appear.
+  generator.GestureTapAt(handle_pos);
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Tap a different spot in the textfield, handle should remain visible but the
+  // quick menu should disappear.
+  generator.GestureTapAt(gfx::Point(60, 10));
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsQuickMenuVisible());
+}
+
+TEST_F(TouchSelectionControllerImplTest, TapOnCursorTogglesMenu) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  textfield_->SetSelectedRange(gfx::Range(7, 7));
+  const gfx::Point cursor_position =
+      GetCursorRect(textfield_->GetSelectionModel()).CenterPoint();
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the cursor. Cursor handle and quick menu should appear.
+  generator.GestureTapAt(cursor_position);
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Tap the cursor, the quick menu should disappear. We advance the clock
+  // before tapping again to avoid the tap being treated as a double tap.
+  generator.AdvanceClock(base::Milliseconds(1000));
+  generator.GestureTapAt(cursor_position);
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsQuickMenuVisible());
+
+  // Tap the cursor, the quick menu should appear.
+  generator.AdvanceClock(base::Milliseconds(1000));
+  generator.GestureTapAt(cursor_position);
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Tap a different spot in the textfield to move the cursor. The handle should
+  // remain visible but the quick menu should disappear.
+  generator.AdvanceClock(base::Milliseconds(1000));
+  generator.GestureTapAt(gfx::Point(100, 10));
+  EXPECT_TRUE(IsCursorHandleVisible());
+  EXPECT_FALSE(IsQuickMenuVisible());
+}
+
+// Tests that the quick menu is hidden when moving the cursor with a dragging
+// gesture on the textfield.
+TEST_F(TouchSelectionControllerImplTest, MenuHiddenWhenDraggingCursor) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the textfield to invoke touch selection, then tap the touch handle to
+  // show the quick menu.
+  generator.GestureTapAt(gfx::Point(10, 10));
+  generator.GestureTapAt(GetCursorHandleBounds().CenterPoint());
+  EXPECT_TRUE(IsQuickMenuVisible());
+
+  // Scroll in a horizontal direction over the textfield to move the cursor.
+  // Menu should be hidden during the dragging movement.
+  const gfx::Point drag_start =
+      GetCursorPosition(gfx::SelectionModel(6, gfx::CURSOR_FORWARD));
+  const gfx::Point drag_end = drag_start + gfx::Vector2d(80, 0);
+  generator.GestureScrollSequenceWithCallback(
+      drag_start, drag_end, /*duration=*/base::Milliseconds(50),
+      /*steps=*/5,
+      base::BindLambdaForTesting(
+          [&](ui::EventType event_type, const gfx::Vector2dF& offset) {
+            if (event_type == ui::ET_GESTURE_SCROLL_UPDATE) {
+              EXPECT_FALSE(IsQuickMenuVisible());
+            }
+          }));
+}
+
+TEST_F(TouchSelectionControllerImplTest, SelectCommands) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the textfield to invoke touch selection.
+  generator.GestureTapAt(gfx::Point(10, 10));
+
+  // Select all and select word options should be enabled after initial tap.
+  ui::TouchSelectionMenuClient* menu_client = GetSelectionController();
+  ASSERT_TRUE(menu_client);
+  EXPECT_TRUE(menu_client->IsCommandIdEnabled(ui::TouchEditable::kSelectAll));
+  EXPECT_TRUE(menu_client->IsCommandIdEnabled(ui::TouchEditable::kSelectWord));
+
+  // Select word at current position. Select word command should now be disabled
+  // since there is already a selection.
+  menu_client->ExecuteCommand(ui::TouchEditable::kSelectWord,
+                              ui::EF_FROM_TOUCH);
+  EXPECT_EQ("some", UTF16ToUTF8(textfield_->GetSelectedText()));
+  menu_client = GetSelectionController();
+  ASSERT_TRUE(menu_client);
+  EXPECT_TRUE(menu_client->IsCommandIdEnabled(ui::TouchEditable::kSelectAll));
+  EXPECT_FALSE(menu_client->IsCommandIdEnabled(ui::TouchEditable::kSelectWord));
+
+  // Select all text. Select all and select word commands should now be
+  // disabled.
+  menu_client->ExecuteCommand(ui::TouchEditable::kSelectAll, ui::EF_FROM_TOUCH);
+  EXPECT_EQ("some text", UTF16ToUTF8(textfield_->GetSelectedText()));
+  menu_client = GetSelectionController();
+  ASSERT_TRUE(menu_client);
+  EXPECT_FALSE(menu_client->IsCommandIdEnabled(ui::TouchEditable::kSelectAll));
+  EXPECT_FALSE(menu_client->IsCommandIdEnabled(ui::TouchEditable::kSelectWord));
+}
+
+TEST_F(TouchSelectionControllerImplTest, CursorHandleDraggingMetrics) {
+  base::HistogramTester histogram_tester;
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the textfield to make the cursor handle appear.
+  generator.GestureTapAt(gfx::Point(10, 10));
+  EXPECT_TRUE(IsCursorHandleVisible());
+
+  // Drag the cursor handle.
+  const gfx::Point drag_start = GetCursorHandleBounds().CenterPoint();
+  const gfx::Point drag_end = drag_start + gfx::Vector2d(50, 0);
+  generator.GestureScrollSequence(drag_start, drag_end,
+                                  /*duration=*/base::Milliseconds(50),
+                                  /*steps=*/5);
+  histogram_tester.ExpectBucketCount(
+      ui::kTouchSelectionDragTypeHistogramName,
+      ui::TouchSelectionDragType::kCursorHandleDrag, 1);
+}
+
+TEST_F(TouchSelectionControllerImplTest, SelectionHandleDraggingMetrics) {
+  base::HistogramTester histogram_tester;
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{::features::kTouchTextEditingRedesign},
+      /*disabled_features=*/{});
+
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  textfield_->SetSelectedRange(gfx::Range(2, 15));
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap on the selected text to make selection handles appear.
+  generator.GestureTapAt(gfx::Point(30, 15));
+  EXPECT_TRUE(IsSelectionHandle1Visible());
+
+  // Drag selection handle 1.
+  gfx::Point drag_start = GetSelectionHandle1Bounds().CenterPoint();
+  gfx::Point drag_end = drag_start + gfx::Vector2d(50, 0);
+  generator.GestureScrollSequence(drag_start, drag_end,
+                                  /*duration=*/base::Milliseconds(50),
+                                  /*steps=*/5);
+  histogram_tester.ExpectBucketCount(
+      ui::kTouchSelectionDragTypeHistogramName,
+      ui::TouchSelectionDragType::kSelectionHandleDrag, 1);
+
+  // Drag selection handle 2.
+  drag_start = GetSelectionHandle2Bounds().CenterPoint();
+  drag_end = drag_start + gfx::Vector2d(-60, 0);
+  generator.GestureScrollSequence(drag_start, drag_end,
+                                  /*duration=*/base::Milliseconds(50),
+                                  /*steps=*/5);
+  histogram_tester.ExpectBucketCount(
+      ui::kTouchSelectionDragTypeHistogramName,
+      ui::TouchSelectionDragType::kSelectionHandleDrag, 2);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 // A simple implementation of TouchEditable that allows faking cursor position
 // inside its boundaries.
 class TestTouchEditable : public ui::TouchEditable {
@@ -668,16 +1090,21 @@ class TestTouchEditable : public ui::TouchEditable {
 
  private:
   // Overridden from ui::TouchEditable.
-  void SelectRect(const gfx::Point& start, const gfx::Point& end) override {
-    NOTREACHED();
+  void MoveCaret(const gfx::Point& position) override { NOTREACHED_NORETURN(); }
+  void MoveRangeSelectionExtent(const gfx::Point& extent) override {
+    NOTREACHED_NORETURN();
   }
-  void MoveCaretTo(const gfx::Point& point) override { NOTREACHED(); }
+  void SelectBetweenCoordinates(const gfx::Point& base,
+                                const gfx::Point& extent) override {
+    NOTREACHED_NORETURN();
+  }
   void GetSelectionEndPoints(gfx::SelectionBound* anchor,
                              gfx::SelectionBound* focus) override {
     *anchor = *focus = cursor_bound_;
   }
   gfx::Rect GetBounds() override { return gfx::Rect(bounds_.size()); }
   gfx::NativeView GetNativeView() const override { return window_; }
+  bool IsSelectionDragging() const override { return false; }
   void ConvertPointToScreen(gfx::Point* point) override {
     aura::client::ScreenPositionClient* screen_position_client =
         aura::client::GetScreenPositionClient(window_->GetRootWindow());
@@ -690,21 +1117,20 @@ class TestTouchEditable : public ui::TouchEditable {
     if (screen_position_client)
       screen_position_client->ConvertPointFromScreen(window_, point);
   }
-  bool DrawsHandles() override { return false; }
-  void OpenContextMenu(const gfx::Point& anchor) override { NOTREACHED(); }
-  void DestroyTouchSelection() override { NOTREACHED(); }
+  void OpenContextMenu(const gfx::Point& anchor) override {
+    NOTREACHED_NORETURN();
+  }
+  void DestroyTouchSelection() override { NOTREACHED_NORETURN(); }
 
   // Overridden from ui::SimpleMenuModel::Delegate.
   bool IsCommandIdChecked(int command_id) const override {
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
   bool IsCommandIdEnabled(int command_id) const override {
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
   void ExecuteCommand(int command_id, int event_flags) override {
-    NOTREACHED();
+    NOTREACHED_NORETURN();
   }
 
   raw_ptr<aura::Window> window_;
@@ -723,9 +1149,8 @@ TEST_F(TouchSelectionControllerImplTest,
   CreateWidget();
 
   TestTouchEditable touch_editable(widget_->GetNativeView());
-  std::unique_ptr<ui::TouchEditingControllerDeprecated>
-      touch_selection_controller(
-          ui::TouchEditingControllerDeprecated::Create(&touch_editable));
+  std::unique_ptr<TouchSelectionController> touch_selection_controller =
+      std::make_unique<TouchSelectionControllerImpl>(&touch_editable);
 
   touch_editable.set_bounds(gfx::Rect(0, 0, 100, 20));
 
@@ -879,6 +1304,38 @@ TEST_F(TouchSelectionControllerImplTest, KeyEventDeactivatesTouchSelection) {
   StartTouchEditing();
   EXPECT_TRUE(GetSelectionController());
   generator.PressKey(ui::VKEY_A, 0);
+  RunPendingMessages();
+  EXPECT_FALSE(GetSelectionController());
+}
+
+// Tests that the touch selection controller doesn't crash when a handle widget
+// is destroyed while touch selection is still active. Regression test for
+// https://crbug.com/1448682.
+TEST_F(TouchSelectionControllerImplTest,
+       DestroyingEditingHandleWidgetDoesNotCrash) {
+  CreateTextfield();
+  textfield_->SetText(u"some text in a textfield");
+  textfield_->SetSelectedRange(gfx::Range(7, 7));
+  const gfx::Point cursor_position =
+      GetCursorRect(textfield_->GetSelectionModel()).CenterPoint();
+  ui::test::EventGenerator generator(
+      textfield_->GetWidget()->GetNativeView()->GetRootWindow());
+
+  // Tap the textfield to start touch selection.
+  generator.GestureTapAt(cursor_position);
+  EXPECT_TRUE(GetSelectionController());
+
+  // Close one of the handle widgets.
+  CloseHandle1Widget();
+  RunPendingMessages();
+
+  // Try to continue touch selection by tapping at the cursor. This should not
+  // crash.
+  generator.GestureTapAt(cursor_position);
+  generator.GestureTapAt(cursor_position);
+
+  // Check that we can destroy touch selection without crashing.
+  textfield_->DestroyTouchSelection();
   RunPendingMessages();
   EXPECT_FALSE(GetSelectionController());
 }

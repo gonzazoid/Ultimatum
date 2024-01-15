@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/ios-simulator/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -46,11 +49,7 @@
           "group": "tryserver.chromium.mac"
         },
         {
-          "builder": "ios-simulator-inverse-fieldtrials-fyi",
-          "group": "tryserver.chromium.mac"
-        },
-        {
-          "builder": "ios-simulator-rts",
+          "builder": "ios-simulator-siso",
           "group": "tryserver.chromium.mac"
         }
       ]
@@ -59,7 +58,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 250,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -74,5 +74,5 @@
     "chromium",
     "ios"
   ],
-  "xcode_build_version": "14a309"
+  "xcode_build_version": "15a507"
 }

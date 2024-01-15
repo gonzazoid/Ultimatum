@@ -8,15 +8,16 @@
 #include <tuple>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/task/thread_pool.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "chrome/browser/ash/power/ml/smart_dim/metrics.h"
 #include "chrome/browser/ash/power/ml/smart_dim/ml_agent.h"
@@ -43,7 +44,7 @@ const base::FilePath::CharType kSmartDimMetaJsonFileName[] =
 const char kDefaultVersion[] = "20210201.1";
 
 constexpr base::FeatureParam<std::string> kVersion{
-    &chromeos::features::kSmartDimExperimentalComponent,
+    &ash::features::kSmartDimExperimentalComponent,
     "smart_dim_experimental_version", kDefaultVersion};
 
 // The SHA256 of the SubjectPublicKeyInfo used to sign the extension.
@@ -96,8 +97,7 @@ SmartDimComponentInstallerPolicy::SmartDimComponentInstallerPolicy(
 SmartDimComponentInstallerPolicy::~SmartDimComponentInstallerPolicy() = default;
 
 const std::string SmartDimComponentInstallerPolicy::GetExtensionId() {
-  return crx_file::id_util::GenerateIdFromHash(
-      kSmartDimPublicKeySHA256, sizeof(kSmartDimPublicKeySHA256));
+  return crx_file::id_util::GenerateIdFromHash(kSmartDimPublicKeySHA256);
 }
 
 bool SmartDimComponentInstallerPolicy::
@@ -111,7 +111,7 @@ bool SmartDimComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 SmartDimComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -121,7 +121,7 @@ void SmartDimComponentInstallerPolicy::OnCustomUninstall() {}
 void SmartDimComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   // If IsDownloadWorkerReady(), newly downloaded components will take effect
   // on next reboot. This makes sure the updating happens at most once.
@@ -145,12 +145,12 @@ void SmartDimComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool SmartDimComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // Get component version from manifest and compare to the expected_version_.
   // Note: versions should not be treated as simple strings, for example,
   // base::Version("2020.02.06") == base::Version("2020.2.6").
-  const std::string* version_string = manifest.FindStringKey("version");
+  const std::string* version_string = manifest.FindString("version");
   DCHECK(version_string);
   const base::Version component_version(*version_string);
   const base::Version expected_version(expected_version_);
@@ -190,7 +190,8 @@ SmartDimComponentInstallerPolicy::GetInstallerAttributes() const {
   return attrs;
 }
 
-void RegisterSmartDimComponent(ComponentUpdateService* cus) {
+void RegisterSmartDimComponent(ComponentUpdateService* cus,
+                               base::OnceClosure callback) {
   DVLOG(1) << "Registering smart dim component.";
   const std::string expected_version = kVersion.Get();
 
@@ -200,14 +201,15 @@ void RegisterSmartDimComponent(ComponentUpdateService* cus) {
     return;
   }
 
-  if (expected_version == kDefaultVersion)
+  if (expected_version == kDefaultVersion) {
     LogComponentVersionType(ComponentVersionType::kDefault);
-  else
+  } else {
     LogComponentVersionType(ComponentVersionType::kExperimental);
+  }
 
   auto installer = base::MakeRefCounted<ComponentInstaller>(
       std::make_unique<SmartDimComponentInstallerPolicy>(expected_version));
-  installer->Register(cus, base::OnceClosure());
+  installer->Register(cus, std::move(callback));
 }
 
 }  // namespace component_updater

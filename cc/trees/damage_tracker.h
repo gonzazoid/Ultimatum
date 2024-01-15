@@ -13,6 +13,8 @@
 #include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/layers/layer_collections.h"
+#include "cc/layers/view_transition_content_layer_impl.h"
+#include "cc/paint/element_id.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace gfx {
@@ -52,6 +54,9 @@ class CC_EXPORT DamageTracker {
   }
 
  private:
+  using ViewTransitionElementResourceIdToRenderSurfaceMap =
+      base::flat_map<viz::ViewTransitionElementResourceId, RenderSurfaceImpl*>;
+
   DamageTracker();
 
   class DamageAccumulator {
@@ -94,20 +99,35 @@ class CC_EXPORT DamageTracker {
 
   DamageAccumulator TrackDamageFromLeftoverRects();
 
+  static void InitializeUpdateDamageTracking(
+      LayerTreeImpl* layer_tree_impl,
+      ViewTransitionElementResourceIdToRenderSurfaceMap&
+          id_to_render_surface_map);
+
   // These helper functions are used only during UpdateDamageTracking().
   void PrepareForUpdate();
-  void AccumulateDamageFromLayer(LayerImpl* layer);
+  // view_transition_content_surface corresponds to the render surface which
+  // produces content drawn by a ViewTransitionContentLayer. Must be provided if
+  // layer has a valid view transition resource id.
+  void AccumulateDamageFromLayer(
+      LayerImpl* layer,
+      ViewTransitionElementResourceIdToRenderSurfaceMap&
+          id_to_render_surface_map);
   void AccumulateDamageFromRenderSurface(RenderSurfaceImpl* render_surface);
   void ComputeSurfaceDamage(RenderSurfaceImpl* render_surface);
   void ExpandDamageInsideRectWithFilters(const gfx::Rect& pre_filter_rect,
                                          const FilterOperations& filters);
 
+  gfx::Rect GetViewTransitionContentSurfaceDamageInSharedElementLayerSpace(
+      LayerImpl* layer,
+      ViewTransitionElementResourceIdToRenderSurfaceMap&
+          id_to_render_surface_map);
+
   struct LayerRectMapData {
-    LayerRectMapData() : layer_id_(0), mailboxId_(0) {}
-    explicit LayerRectMapData(int layer_id)
-        : layer_id_(layer_id), mailboxId_(0) {}
-    void Update(const gfx::Rect& rect, unsigned int mailboxId) {
-      mailboxId_ = mailboxId;
+    LayerRectMapData() = default;
+    explicit LayerRectMapData(int layer_id) : layer_id_(layer_id) {}
+    void Update(const gfx::Rect& rect, unsigned int mailbox_id) {
+      mailbox_id_ = mailbox_id;
       rect_ = rect;
     }
 
@@ -115,17 +135,17 @@ class CC_EXPORT DamageTracker {
       return layer_id_ < other.layer_id_;
     }
 
-    int layer_id_;
-    unsigned int mailboxId_;
+    int layer_id_ = 0;
+    unsigned int mailbox_id_ = 0;
     gfx::Rect rect_;
   };
 
   struct SurfaceRectMapData {
-    SurfaceRectMapData() : surface_id_(0), mailboxId_(0) {}
-    explicit SurfaceRectMapData(uint64_t surface_id)
-        : surface_id_(surface_id), mailboxId_(0) {}
-    void Update(const gfx::Rect& rect, unsigned int mailboxId) {
-      mailboxId_ = mailboxId;
+    SurfaceRectMapData() = default;
+    explicit SurfaceRectMapData(ElementId surface_id)
+        : surface_id_(surface_id) {}
+    void Update(const gfx::Rect& rect, unsigned int mailbox_id) {
+      mailbox_id_ = mailbox_id;
       rect_ = rect;
     }
 
@@ -133,21 +153,21 @@ class CC_EXPORT DamageTracker {
       return surface_id_ < other.surface_id_;
     }
 
-    uint64_t surface_id_;
-    unsigned int mailboxId_;
+    ElementId surface_id_;
+    unsigned int mailbox_id_ = 0;
     gfx::Rect rect_;
   };
   typedef std::vector<LayerRectMapData> SortedRectMapForLayers;
   typedef std::vector<SurfaceRectMapData> SortedRectMapForSurfaces;
 
   LayerRectMapData& RectDataForLayer(int layer_id, bool* layer_is_new);
-  SurfaceRectMapData& RectDataForSurface(uint64_t surface_id,
+  SurfaceRectMapData& RectDataForSurface(ElementId surface_id,
                                          bool* layer_is_new);
 
   SortedRectMapForLayers rect_history_for_layers_;
   SortedRectMapForSurfaces rect_history_for_surfaces_;
 
-  unsigned int mailboxId_ = 0;
+  unsigned int mailbox_id_ = 0;
   DamageAccumulator current_damage_;
   // Damage from contributing render surface and layer
   bool has_damage_from_contributing_content_ = false;
@@ -163,6 +183,16 @@ class CC_EXPORT DamageTracker {
   };
 
   std::vector<SurfaceWithRect> contributing_surfaces_;
+
+  // Track the view transition content render surfaces.
+  // The corresponding content surface of a view transition layer might be
+  // omitted. Surface appearing and disappearing should cause full damage on the
+  // view transition layer. Tracking previous/current content surfaces to
+  // determine surface appearing and disappearing.
+  std::vector<viz::ViewTransitionElementResourceId>
+      previous_view_transition_content_surfaces_by_id_;
+  std::vector<viz::ViewTransitionElementResourceId>
+      current_view_transition_content_surfaces_by_id_;
 };
 
 }  // namespace cc

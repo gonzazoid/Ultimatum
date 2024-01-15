@@ -11,6 +11,7 @@
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "components/webapps/services/web_app_origin_association/web_app_origin_association_uma_util.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_task_environment.h"
@@ -25,13 +26,9 @@
 namespace {
 
 constexpr char kWebAppOriginAssociationFileContent[] =
-    R"({\"web_apps\": [{"
-    "    \"manifest\": \"https://foo.com/manifest.json\","
-    "    \"details\": {"
-    "      \"paths\": [\"/*\"],"
-    "      \"exclude_paths\": [\"/blog/data\"]"
-    "    }"
-    "}]})";
+    R"({\"web_apps\": ["
+  "    { \"web_app_identity\": \"https://foo.com/\"}"
+  "]})";
 
 constexpr char kFetchResultHistogram[] =
     "Webapp.WebAppOriginAssociationFetchResult";
@@ -89,60 +86,46 @@ class WebAppOriginAssociationFetcherTest : public testing::Test {
 };
 
 TEST_F(WebAppOriginAssociationFetcherTest, FileExists) {
-  base::RunLoop run_loop;
-  auto handler = apps::UrlHandlerInfo();
-  handler.origin = url::Origin::Create(GURL(server_.base_url()));
+  base::test::TestFuture<std::unique_ptr<std::string>> future;
   fetcher_->FetchWebAppOriginAssociationFile(
-      handler, shared_url_loader_factory_.get(),
-      base::BindLambdaForTesting(
-          [&](std::unique_ptr<std::string> file_content) {
-            ASSERT_FALSE(!file_content);
-            EXPECT_EQ(*file_content, kWebAppOriginAssociationFileContent);
-            histogram_tester_.ExpectBucketCount(
-                kFetchResultHistogram,
-                WebAppOriginAssociationMetrics::FetchResult::kFetchSucceed, 1);
-            run_loop.Quit();
-          }));
-  run_loop.Run();
+      url::Origin::Create(GURL(server_.base_url())),
+      shared_url_loader_factory_.get(), future.GetCallback());
+
+  auto file_content = future.Take();
+  ASSERT_FALSE(!file_content);
+  EXPECT_EQ(*file_content, kWebAppOriginAssociationFileContent);
+  histogram_tester_.ExpectBucketCount(
+      kFetchResultHistogram,
+      WebAppOriginAssociationMetrics::FetchResult::kFetchSucceed, 1);
 }
 
 TEST_F(WebAppOriginAssociationFetcherTest, FileDoesNotExist) {
-  base::RunLoop run_loop;
-  auto handler = apps::UrlHandlerInfo();
+  base::test::TestFuture<std::unique_ptr<std::string>> future;
   GURL url = server_.GetURL("foo.com", "/");
-  handler.origin = url::Origin::Create(url);
-  fetcher_->FetchWebAppOriginAssociationFile(
-      handler, shared_url_loader_factory_.get(),
-      base::BindLambdaForTesting(
-          [&](std::unique_ptr<std::string> file_content) {
-            ASSERT_TRUE(!file_content);
-            histogram_tester_.ExpectBucketCount(
-                kFetchResultHistogram,
-                WebAppOriginAssociationMetrics::FetchResult::
-                    kFetchFailedNoResponseBody,
-                1);
-            run_loop.Quit();
-          }));
-  run_loop.Run();
+
+  fetcher_->FetchWebAppOriginAssociationFile(url::Origin::Create(url),
+                                             shared_url_loader_factory_.get(),
+                                             future.GetCallback());
+  auto file_content = future.Take();
+
+  ASSERT_TRUE(!file_content);
+  histogram_tester_.ExpectBucketCount(
+      kFetchResultHistogram,
+      WebAppOriginAssociationMetrics::FetchResult::kFetchFailedNoResponseBody,
+      1);
 }
 
 TEST_F(WebAppOriginAssociationFetcherTest, FileUrlIsInvalid) {
-  base::RunLoop run_loop;
-  auto handler = apps::UrlHandlerInfo();
-  handler.origin = url::Origin::Create(GURL("https://co.uk"));
+  base::test::TestFuture<std::unique_ptr<std::string>> future;
   fetcher_->FetchWebAppOriginAssociationFile(
-      handler, shared_url_loader_factory_.get(),
-      base::BindLambdaForTesting(
-          [&](std::unique_ptr<std::string> file_content) {
-            ASSERT_TRUE(!file_content);
-            histogram_tester_.ExpectBucketCount(
-                kFetchResultHistogram,
-                WebAppOriginAssociationMetrics::FetchResult::
-                    kFetchFailedInvalidUrl,
-                1);
-            run_loop.Quit();
-          }));
-  run_loop.Run();
+      url::Origin::Create(GURL("https://co.uk")),
+      shared_url_loader_factory_.get(), future.GetCallback());
+
+  auto file_content = future.Take();
+  ASSERT_TRUE(!file_content);
+  histogram_tester_.ExpectBucketCount(
+      kFetchResultHistogram,
+      WebAppOriginAssociationMetrics::FetchResult::kFetchFailedInvalidUrl, 1);
 }
 
 }  // namespace webapps

@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/feature_list.h"
+#include "base/features.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -197,9 +199,13 @@ JSONParser::StringBuilder& JSONParser::StringBuilder::operator=(
 void JSONParser::StringBuilder::Append(base_icu::UChar32 point) {
   DCHECK(IsValidCodepoint(point));
 
-  if (point < kExtendedASCIIStart && !string_) {
-    DCHECK_EQ(static_cast<char>(point), pos_[length_]);
-    ++length_;
+  if (point < kExtendedASCIIStart) {
+    if (!string_) {
+      DCHECK_EQ(static_cast<char>(point), pos_[length_]);
+      ++length_;
+    } else {
+      string_->push_back(static_cast<char>(point));
+    }
   } else {
     Convert();
     if (UNLIKELY(point == kUnicodeReplacementPoint)) {
@@ -529,11 +535,14 @@ bool JSONParser::ConsumeStringRaw(StringBuilder* out) {
   // std::string.
   StringBuilder string(pos());
 
-  while (PeekChar()) {
+  while (absl::optional<char> c = PeekChar()) {
     base_icu::UChar32 next_char = 0;
-    if (!ReadUnicodeCharacter(input_.data(), input_.length(), &index_,
-                              &next_char) ||
-        !IsValidCodepoint(next_char)) {
+    if (static_cast<unsigned char>(*c) < kExtendedASCIIStart) {
+      // Fast path for ASCII.
+      next_char = *c;
+    } else if (!ReadUnicodeCharacter(input_.data(), input_.length(), &index_,
+                                     &next_char) ||
+               !IsValidCodepoint(next_char)) {
       if ((options_ & JSON_REPLACE_INVALID_CHARACTERS) == 0) {
         ReportError(JSON_UNSUPPORTED_ENCODING, 0);
         return false;
@@ -794,8 +803,16 @@ absl::optional<Value> JSONParser::ConsumeNumber() {
   StringPiece num_string(num_start, end_index - start_index);
 
   int num_int;
-  if (StringToInt(num_string, &num_int))
+  if (StringToInt(num_string, &num_int)) {
+    // StringToInt will treat `-0` as zero, losing the significance of the
+    // negation.
+    if (num_int == 0 && num_string.starts_with('-')) {
+      if (base::FeatureList::IsEnabled(features::kJsonNegativeZero)) {
+        return Value(-0.0);
+      }
+    }
     return Value(num_int);
+  }
 
   double num_double;
   if (StringToDouble(num_string, &num_double) && std::isfinite(num_double)) {

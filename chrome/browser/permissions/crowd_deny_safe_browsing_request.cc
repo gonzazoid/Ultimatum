@@ -6,16 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/timer/timer.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "components/safe_browsing/core/common/features.h"
+#include "content/public/browser/browser_thread.h"
 #include "url/origin.h"
 
 namespace {
@@ -47,7 +48,10 @@ class CrowdDenySafeBrowsingRequest::SafeBrowsingClient
   }
 
   void CheckOrigin(const url::Origin& origin) {
-    DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+    DCHECK_CURRENTLY_ON(
+        base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+            ? content::BrowserThread::UI
+            : content::BrowserThread::IO);
 
     // Start the timer before the call to CheckApiBlocklistUrl(), as it may
     // call back into OnCheckApiBlocklistUrlResult() synchronously.
@@ -110,15 +114,21 @@ CrowdDenySafeBrowsingRequest::CrowdDenySafeBrowsingRequest(
       request_start_time_(clock->Now()) {
   client_ = std::make_unique<SafeBrowsingClient>(
       database_manager, weak_factory_.GetWeakPtr(),
-      base::SequencedTaskRunnerHandle::Get());
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&SafeBrowsingClient::CheckOrigin,
-                                base::Unretained(client_.get()), origin));
+      base::SequencedTaskRunner::GetCurrentDefault());
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    client_->CheckOrigin(origin);
+  } else {
+    content::GetIOThreadTaskRunner({})->PostTask(
+        FROM_HERE, base::BindOnce(&SafeBrowsingClient::CheckOrigin,
+                                  base::Unretained(client_.get()), origin));
+  }
 }
 
 CrowdDenySafeBrowsingRequest::~CrowdDenySafeBrowsingRequest() {
-  content::BrowserThread::DeleteSoon(content::BrowserThread::IO, FROM_HERE,
-                                     client_.release());
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    content::BrowserThread::DeleteSoon(content::BrowserThread::IO, FROM_HERE,
+                                       client_.release());
+  }
 }
 
 void CrowdDenySafeBrowsingRequest::OnReceivedResult(Verdict verdict) {

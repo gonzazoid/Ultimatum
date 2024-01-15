@@ -1,3 +1,5 @@
 include_rules = [
   "+components/webauthn/android",
+  "+components/externalauth/android",
+  "+device/fido",
 ]

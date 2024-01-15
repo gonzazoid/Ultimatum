@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_AUTOFILL_PAYMENTS_SAVE_PAYMENT_ICON_VIEW_H_
 
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 class CommandUpdater;
 
@@ -17,10 +18,13 @@ class SavePaymentIconController;
 // choose to save the credit card info to use again later without re-entering
 // it.
 class SavePaymentIconView : public PageActionIconView {
+  METADATA_HEADER(SavePaymentIconView, PageActionIconView)
+
  public:
   SavePaymentIconView(CommandUpdater* command_updater,
                       IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
-                      PageActionIconView::Delegate* page_action_icon_delegate);
+                      PageActionIconView::Delegate* page_action_icon_delegate,
+                      int command_id);
 
   SavePaymentIconView(const SavePaymentIconView&) = delete;
   SavePaymentIconView& operator=(const SavePaymentIconView&) = delete;
@@ -36,14 +40,14 @@ class SavePaymentIconView : public PageActionIconView {
   // PageActionIconView:
   void OnExecuting(PageActionIconView::ExecuteSource execute_source) override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  const gfx::VectorIcon& GetVectorIconBadge() const override;
-  const char* GetClassName() const override;
 
  private:
   SavePaymentIconController* GetController() const;
 
   // gfx::AnimationDelegate:
   void AnimationEnded(const gfx::Animation* animation) override;
+
+  int command_id_ = 0;
 };
 
 }  // namespace autofill

@@ -8,8 +8,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
 #include "chrome/browser/ash/file_system_provider/observer.h"
@@ -30,8 +31,7 @@
 #include "storage/browser/file_system/external_mount_points.h"
 #include "storage/common/file_system/file_system_mount_option.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 // Maximum number of file systems to be mounted in the same time, per profile.
@@ -47,7 +47,7 @@ Service::Service(Profile* profile,
   extension_registry_->AddObserver(this);
 }
 
-Service::~Service() {}
+Service::~Service() = default;
 
 // static
 Service* Service::Get(content::BrowserContext* context) {
@@ -258,11 +258,17 @@ bool Service::RequestUnmount(const ProviderId& provider_id,
   return true;
 }
 
-bool Service::RequestMount(const ProviderId& provider_id) {
+bool Service::RequestMount(const ProviderId& provider_id,
+                           RequestMountCallback callback) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
   ProviderInterface* const provider = GetProvider(provider_id);
-  return provider->RequestMount(profile_);
+  if (!provider) {
+    LOG(ERROR) << "Provider id " << provider_id.ToString() << " not found";
+    std::move(callback).Run(base::File::FILE_ERROR_FAILED);
+    return false;
+  }
+  return provider->RequestMount(profile_, std::move(callback));
 }
 
 std::vector<ProvidedFileSystemInfo> Service::GetProvidedFileSystemInfoList() {
@@ -463,5 +469,4 @@ ProviderInterface* Service::GetProvider(const ProviderId& provider_id) {
   return it->second.get();
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

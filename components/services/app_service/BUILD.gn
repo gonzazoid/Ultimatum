@@ -1,46 +1,28 @@
-# Copyright 2018 The Chromium Authors
+# Copyright 2023 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-source_set("lib") {
-  sources = [
-    "app_service_mojom_impl.cc",
-    "app_service_mojom_impl.h",
-  ]
+import("//build/config/chromeos/ui_mode.gni")
 
-  deps = [
-    "//base",
-    "//mojo/public/cpp/bindings",
-  ]
-
+# The primary public target for the App Service component. Prefer to use this
+# instead of depending on individual targets inside the component.
+# :instance_update is not included in this target as it introduces a dependency
+# on //content.
+source_set("app_service") {
   public_deps = [
-    "//components/services/app_service/public/cpp:app_types",
-    "//components/services/app_service/public/cpp:intents",
-    "//components/services/app_service/public/cpp:preferred_app",
-    "//components/services/app_service/public/cpp:preferred_apps",
-    "//components/services/app_service/public/mojom",
-    "//components/services/app_service/public/protos",
-  ]
-}
-
-source_set("unit_tests") {
-  testonly = true
-
-  sources = [ "app_service_mojom_impl_unittest.cc" ]
-
-  deps = [
-    ":lib",
-    "//components/prefs:test_support",
+    "//components/services/app_service/public/cpp:app_file_handling",
+    "//components/services/app_service/public/cpp:app_share_target",
     "//components/services/app_service/public/cpp:app_types",
     "//components/services/app_service/public/cpp:app_update",
-    "//components/services/app_service/public/cpp:icon_types",
+    "//components/services/app_service/public/cpp:app_url_handling",
+    "//components/services/app_service/public/cpp:crosapi_utils",
+    "//components/services/app_service/public/cpp:icon_loader",
     "//components/services/app_service/public/cpp:intents",
-    "//components/services/app_service/public/cpp:preferred_app",
     "//components/services/app_service/public/cpp:preferred_apps",
-    "//components/services/app_service/public/cpp:publisher",
-    "//components/services/app_service/public/cpp:run_on_os_login",
-    "//components/services/app_service/public/cpp:test_support",
-    "//content/test:test_support",
-    "//testing/gtest",
+    "//components/services/app_service/public/cpp:protocol_handling",
   ]
+
+  if (is_chromeos) {
+    public_deps += [ "//components/services/app_service/public/cpp/shortcut" ]
+  }
 }

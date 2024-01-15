@@ -12,6 +12,7 @@
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_util.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace ash {
@@ -27,7 +28,8 @@ ProhibitedTechnologiesHandler::~ProhibitedTechnologiesHandler() {
 
 void ProhibitedTechnologiesHandler::Init(
     ManagedNetworkConfigurationHandler* managed_network_configuration_handler,
-    NetworkStateHandler* network_state_handler) {
+    NetworkStateHandler* network_state_handler,
+    TechnologyStateController* technology_state_controller) {
   if (LoginState::IsInitialized())
     LoginState::Get()->AddObserver(this);
 
@@ -41,6 +43,7 @@ void ProhibitedTechnologiesHandler::Init(
   // triggers a browser process restart, Init() is always invoked to reallow any
   // network technology forbidden for the previous user.
   network_state_handler_->SetProhibitedTechnologies(std::vector<std::string>());
+  technology_state_controller_ = technology_state_controller;
 
   if (LoginState::IsInitialized())
     LoggedInStateChanged();
@@ -63,11 +66,11 @@ void ProhibitedTechnologiesHandler::PoliciesApplied(
 }
 
 void ProhibitedTechnologiesHandler::SetProhibitedTechnologies(
-    const base::Value& prohibited_list) {
+    const base::Value::List& prohibited_list) {
   // Build up prohibited network type list and save it for further use when
   // enforced
   session_prohibited_technologies_.clear();
-  for (const auto& item : prohibited_list.GetList()) {
+  for (const auto& item : prohibited_list) {
     std::string translated_tech =
         network_util::TranslateONCTypeToShill(item.GetString());
     if (!translated_tech.empty())
@@ -91,7 +94,7 @@ void ProhibitedTechnologiesHandler::EnforceProhibitedTechnologies() {
           NetworkTypePattern::Ethernet()) &&
       !network_state_handler_->IsTechnologyEnabled(
           NetworkTypePattern::Ethernet())) {
-    network_state_handler_->SetTechnologyEnabled(
+    technology_state_controller_->SetTechnologiesEnabled(
         NetworkTypePattern::Ethernet(), true, network_handler::ErrorCallback());
   }
 }

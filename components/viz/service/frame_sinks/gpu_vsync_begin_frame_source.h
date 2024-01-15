@@ -33,6 +33,7 @@ class VIZ_SERVICE_EXPORT GpuVSyncBeginFrameSource
   // ExternalBeginFrameSource overrides.
   BeginFrameArgs GetMissedBeginFrameArgs(BeginFrameObserver* obs) override;
   void SetPreferredInterval(base::TimeDelta interval) override;
+  void SetVSyncDisplayID(int64_t display_id) override;
 
   // BeginFrameSource:
   void SetDynamicBeginFrameDeadlineOffsetSource(

@@ -7,17 +7,18 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/aura/aura_export.h"
 #include "ui/aura/window.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
+#include "ui/compositor/layer_tree_owner.h"
 
 namespace ui {
 class DropTargetEvent;
-}
+}  // namespace ui
 
 namespace aura {
 class Window;
@@ -42,9 +43,10 @@ class AURA_EXPORT DragDropDelegate {
   // Callback emitted by GetDropCallback used to handle deferred drop events.
   // Note that it does not contain a location. If implementers need a location,
   // they should bind it in GetDropCallback. See crbug.com/1289902.
-  using DropCallback =
-      base::OnceCallback<void(std::unique_ptr<ui::OSExchangeData> data,
-                              ui::mojom::DragOperation& output_drag_op)>;
+  using DropCallback = base::OnceCallback<void(
+      std::unique_ptr<ui::OSExchangeData> data,
+      ui::mojom::DragOperation& output_drag_op,
+      std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner)>;
 
   // OnDragEntered is invoked when the mouse enters this window during a drag &
   // drop session. This is immediately followed by an invocation of
@@ -61,9 +63,9 @@ class AURA_EXPORT DragDropDelegate {
   virtual void OnDragExited() = 0;
 
   // Invoked during a drag and drop session when the user release the mouse, but
-  // the drop is held because of the DataTransferPolicyController.
-  // The returned callback may be NullCallback if there's nothing to do and the
-  // drop event is ignored.
+  // the drop is held because of the DataTransferPolicyController. If the
+  // returned callback is null, there's nothing to do and the drop event is
+  // ignored.
   virtual DropCallback GetDropCallback(const ui::DropTargetEvent& event) = 0;
 
  protected:

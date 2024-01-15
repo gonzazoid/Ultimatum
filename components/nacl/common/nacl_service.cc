@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/core/embedder/scoped_ipc_support.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
@@ -21,27 +22,12 @@
 #include "content/public/common/content_descriptors.h"
 #endif
 
-#if BUILDFLAG(IS_APPLE)
-#include "base/mac/mach_port_rendezvous.h"
-#endif
-
 namespace {
 
 mojo::IncomingInvitation GetMojoInvitation() {
   mojo::PlatformChannelEndpoint endpoint;
-#if BUILDFLAG(IS_WIN)
-  endpoint = mojo::PlatformChannel::RecoverPassedEndpointFromCommandLine(
-      *base::CommandLine::ForCurrentProcess());
-#elif BUILDFLAG(IS_APPLE)
-  auto* client = base::MachPortRendezvousClient::GetInstance();
-  if (client) {
-    endpoint = mojo::PlatformChannelEndpoint(
-        mojo::PlatformHandle(client->TakeReceiveRight('mojo')));
-  }
-#else
   endpoint = mojo::PlatformChannelEndpoint(mojo::PlatformHandle(base::ScopedFD(
       base::GlobalDescriptors::GetInstance()->Get(kMojoIPCChannel))));
-#endif  // !BUILDFLAG(IS_WIN)
   DCHECK(endpoint.is_valid());
   return mojo::IncomingInvitation::Accept(std::move(endpoint));
 }

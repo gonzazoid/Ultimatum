@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_source_handle.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_stream_track.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_point_2d.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_restriction_target.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_certificate.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_encoded_audio_frame.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_encoded_video_frame.h"
@@ -43,6 +44,7 @@
 #include "third_party/blink/renderer/modules/mediastream/crop_target.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_utils.h"
+#include "third_party/blink/renderer/modules/mediastream/restriction_target.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_certificate.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_frame.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_audio_frame_delegate.h"
@@ -77,9 +79,7 @@ bool V8ScriptValueSerializerForModules::ExtractTransferable(
   if (exception_state.HadException())
     return false;
 
-  if (V8VideoFrame::HasInstance(object, isolate)) {
-    VideoFrame* video_frame =
-        V8VideoFrame::ToImpl(v8::Local<v8::Object>::Cast(object));
+  if (VideoFrame* video_frame = V8VideoFrame::ToWrappable(isolate, object)) {
     VideoFrameTransferList* transfer_list =
         transferables.GetOrCreateTransferList<VideoFrameTransferList>();
     if (transfer_list->video_frames.Contains(video_frame)) {
@@ -93,9 +93,7 @@ bool V8ScriptValueSerializerForModules::ExtractTransferable(
     return true;
   }
 
-  if (V8AudioData::HasInstance(object, isolate)) {
-    AudioData* audio_data =
-        V8AudioData::ToImpl(v8::Local<v8::Object>::Cast(object));
+  if (AudioData* audio_data = V8AudioData::ToWrappable(isolate, object)) {
     AudioDataTransferList* transfer_list =
         transferables.GetOrCreateTransferList<AudioDataTransferList>();
     if (transfer_list->audio_data_collection.Contains(audio_data)) {
@@ -109,29 +107,24 @@ bool V8ScriptValueSerializerForModules::ExtractTransferable(
     return true;
   }
 
-  if (V8MediaStreamTrack::HasInstance(object, isolate) &&
-      RuntimeEnabledFeatures::MediaStreamTrackTransferEnabled(
-          CurrentExecutionContext(isolate))) {
-    MediaStreamTrack* track =
-        V8MediaStreamTrack::ToImpl(v8::Local<v8::Object>::Cast(object));
-    if (transferables.media_stream_tracks.Contains(track)) {
-      exception_state.ThrowDOMException(
-          DOMExceptionCode::kDataCloneError,
-          "MediaStreamTrack at index " + String::Number(object_index) +
-              " is a duplicate of an earlier MediaStreamTrack.");
-      return false;
+  if (MediaStreamTrack* track =
+          V8MediaStreamTrack::ToWrappable(isolate, object)) {
+    if (RuntimeEnabledFeatures::MediaStreamTrackTransferEnabled(
+            CurrentExecutionContext(isolate))) {
+      if (transferables.media_stream_tracks.Contains(track)) {
+        exception_state.ThrowDOMException(
+            DOMExceptionCode::kDataCloneError,
+            "MediaStreamTrack at index " + String::Number(object_index) +
+                " is a duplicate of an earlier MediaStreamTrack.");
+        return false;
+      }
+      transferables.media_stream_tracks.push_back(track);
+      return true;
     }
-    transferables.media_stream_tracks.push_back(track);
-    return true;
   }
 
-  if (V8MediaSourceHandle::HasInstance(object, isolate) &&
-      RuntimeEnabledFeatures::MediaSourceInWorkersEnabled(
-          CurrentExecutionContext(isolate)) &&
-      RuntimeEnabledFeatures::MediaSourceInWorkersUsingHandleEnabled(
-          CurrentExecutionContext(isolate))) {
-    MediaSourceHandleImpl* media_source_handle =
-        V8MediaSourceHandle::ToImpl(v8::Local<v8::Object>::Cast(object));
+  if (MediaSourceHandleImpl* media_source_handle =
+          V8MediaSourceHandle::ToWrappable(isolate, object)) {
     MediaSourceHandleTransferList* transfer_list =
         transferables.GetOrCreateTransferList<MediaSourceHandleTransferList>();
     if (transfer_list->media_source_handles.Contains(media_source_handle)) {
@@ -232,10 +225,6 @@ bool V8ScriptValueSerializerForModules::WriteDOMObject(
     return WriteRTCEncodedVideoFrame(video_frame);
   }
   if (auto* video_frame = dispatcher.ToMostDerived<VideoFrame>()) {
-    if (!RuntimeEnabledFeatures::WebCodecsEnabled(
-            ExecutionContext::From(GetScriptState()))) {
-      return false;
-    }
     if (IsForStorage()) {
       exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
                                         "A VideoFrame cannot be serialized for "
@@ -252,10 +241,6 @@ bool V8ScriptValueSerializerForModules::WriteDOMObject(
     return WriteVideoFrameHandle(std::move(handle));
   }
   if (auto* audio_data = dispatcher.ToMostDerived<AudioData>()) {
-    if (!RuntimeEnabledFeatures::WebCodecsEnabled(
-            ExecutionContext::From(GetScriptState()))) {
-      return false;
-    }
     if (IsForStorage()) {
       exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
                                         "AudioData cannot be serialized for "
@@ -272,10 +257,6 @@ bool V8ScriptValueSerializerForModules::WriteDOMObject(
     return WriteMediaAudioBuffer(std::move(data));
   }
   if (auto* audio_chunk = dispatcher.ToMostDerived<EncodedAudioChunk>()) {
-    if (!RuntimeEnabledFeatures::WebCodecsEnabled(
-            ExecutionContext::From(GetScriptState()))) {
-      return false;
-    }
     if (IsForStorage()) {
       exception_state.ThrowDOMException(
           DOMExceptionCode::kDataCloneError,
@@ -285,10 +266,6 @@ bool V8ScriptValueSerializerForModules::WriteDOMObject(
     return WriteDecoderBuffer(audio_chunk->buffer(), /*for_audio=*/true);
   }
   if (auto* video_chunk = dispatcher.ToMostDerived<EncodedVideoChunk>()) {
-    if (!RuntimeEnabledFeatures::WebCodecsEnabled(
-            ExecutionContext::From(GetScriptState()))) {
-      return false;
-    }
     if (IsForStorage()) {
       exception_state.ThrowDOMException(
           DOMExceptionCode::kDataCloneError,
@@ -323,14 +300,22 @@ bool V8ScriptValueSerializerForModules::WriteDOMObject(
     }
     return WriteCropTarget(crop_target);
   }
-  if (auto* media_source_handle =
-          dispatcher.ToMostDerived<MediaSourceHandleImpl>()) {
-    if (!(RuntimeEnabledFeatures::MediaSourceInWorkersEnabled(
-              ExecutionContext::From(GetScriptState())) &&
-          RuntimeEnabledFeatures::MediaSourceInWorkersUsingHandleEnabled(
-              ExecutionContext::From(GetScriptState())))) {
+  if (auto* restriction_target =
+          dispatcher.ToMostDerived<RestrictionTarget>()) {
+    if (!RuntimeEnabledFeatures::ElementCaptureEnabled(
+            ExecutionContext::From(GetScriptState()))) {
       return false;
     }
+    if (IsForStorage()) {
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kDataCloneError,
+          "A RestrictionTarget cannot be serialized for storage.");
+      return false;
+    }
+    return WriteRestrictionTarget(restriction_target);
+  }
+  if (auto* media_source_handle =
+          dispatcher.ToMostDerived<MediaSourceHandleImpl>()) {
     if (IsForStorage()) {
       exception_state.ThrowDOMException(
           DOMExceptionCode::kDataCloneError,
@@ -394,6 +379,8 @@ uint32_t AlgorithmIdForWireFormat(WebCryptoAlgorithmId id) {
       return kPbkdf2Tag;
     case kWebCryptoAlgorithmIdEd25519:
       return kEd25519Tag;
+    case kWebCryptoAlgorithmIdX25519:
+      return kX25519Tag;
   }
   NOTREACHED() << "Unknown algorithm ID " << id;
   return 0;
@@ -509,10 +496,15 @@ bool V8ScriptValueSerializerForModules::WriteCryptoKey(
     case kWebCryptoKeyAlgorithmParamsTypeNone:
       switch (algorithm.Id()) {
         case kWebCryptoAlgorithmIdEd25519:
-          WriteOneByte(kEd25519KeyTag);
+        case kWebCryptoAlgorithmIdX25519: {
+          CryptoKeySubTag tag = algorithm.Id() == kWebCryptoAlgorithmIdEd25519
+                                    ? kEd25519KeyTag
+                                    : kX25519KeyTag;
+          WriteOneByte(tag);
           WriteUint32(AlgorithmIdForWireFormat(algorithm.Id()));
           WriteUint32(AsymmetricKeyTypeForWireFormat(key.GetType()));
           break;
+        }
         default:
           DCHECK(WebCryptoAlgorithm::IsKdf(algorithm.Id()));
           WriteOneByte(kNoParamsKeyTag);
@@ -633,19 +625,13 @@ bool V8ScriptValueSerializerForModules::WriteMediaStreamTrack(
     MediaStreamTrack* track,
     ScriptWrappable::TypeDispatcher& dispatcher,
     ExceptionState& exception_state) {
-  if (track->Ended()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "MediaStreamTrack has ended.");
+  String message;
+  if (!track->TransferAllowed(message)) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
+                                      message);
     return false;
   }
   absl::optional<const MediaStreamDevice> device = track->device();
-  if (!(device && device->serializable_session_id() &&
-        IsMediaStreamDeviceTransferrable(*device))) {
-    exception_state.ThrowDOMException(
-        DOMExceptionCode::kDataCloneError,
-        "MediaStreamTrack could not be serialized.");
-    return false;
-  }
   // TODO(crbug.com/1352414): Replace this UnguessableToken with a mojo
   // interface.
   auto transfer_id = base::UnguessableToken::Create();
@@ -665,7 +651,6 @@ bool V8ScriptValueSerializerForModules::WriteMediaStreamTrack(
   // Using `switch` to ensure new enum values are handled.
   switch (track_impl_subtype) {
     case SerializedTrackImplSubtype::kTrackImplSubtypeBase:
-    case SerializedTrackImplSubtype::kTrackImplSubtypeFocusable:
       // No additional data needs to be serialized.
       break;
     case SerializedTrackImplSubtype::kTrackImplSubtypeCanvasCapture:
@@ -678,15 +663,13 @@ bool V8ScriptValueSerializerForModules::WriteMediaStreamTrack(
           "MediaStreamTrack could not be serialized.");
       return false;
     case SerializedTrackImplSubtype::kTrackImplSubtypeBrowserCapture:
-      // Parent class is FocusableMediaStreamTrack, which needs no additional
-      // data.
       MediaStreamSource* const source = track->Component()->Source();
       DCHECK(source);
       DCHECK_EQ(source->GetType(), MediaStreamSource::kTypeVideo);
       MediaStreamVideoSource* const native_source =
           MediaStreamVideoSource::GetVideoSource(source);
       DCHECK(native_source);
-      WriteUint32(native_source->GetCropVersion());
+      WriteUint32(native_source->GetSubCaptureTargetVersion());
       break;
   }
   // TODO(crbug.com/1288839): Needs to move to FinalizeTransfer?
@@ -696,8 +679,21 @@ bool V8ScriptValueSerializerForModules::WriteMediaStreamTrack(
 
 bool V8ScriptValueSerializerForModules::WriteCropTarget(
     CropTarget* crop_target) {
+  CHECK(crop_target);
+  const String& id = crop_target->GetId();
+  CHECK(!id.empty());
   WriteAndRequireInterfaceTag(kCropTargetTag);
-  WriteUTF8String(crop_target->GetCropId());
+  WriteUTF8String(id);
+  return true;
+}
+
+bool V8ScriptValueSerializerForModules::WriteRestrictionTarget(
+    RestrictionTarget* restriction_target) {
+  CHECK(restriction_target);
+  const String& id = restriction_target->GetId();
+  CHECK(!id.empty());
+  WriteAndRequireInterfaceTag(kRestrictionTargetTag);
+  WriteUTF8String(id);
   return true;
 }
 

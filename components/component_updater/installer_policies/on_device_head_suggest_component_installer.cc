@@ -9,11 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
+#include "base/values.h"
 #include "components/component_updater/component_installer.h"
 #include "components/component_updater/component_updater_service.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
@@ -36,22 +38,25 @@ std::string GetNormalizedLocale(const std::string& raw_locale) {
   std::string locale, locale_constraint;
   // Both incognito and non-incognito will use a same model so it's okay to
   // fetch the param from either feature.
-  if (OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForIncognito())
+  if (OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForIncognito()) {
     locale_constraint =
         OmniboxFieldTrial::OnDeviceHeadModelLocaleConstraint(true);
-  else if (OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForNonIncognito())
+  } else if (OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForNonIncognito()) {
     locale_constraint =
         OmniboxFieldTrial::OnDeviceHeadModelLocaleConstraint(false);
+  }
 
   locale = raw_locale;
-  for (const auto c : "-_")
+  for (const auto c : "-_") {
     locale.erase(std::remove(locale.begin(), locale.end(), c), locale.end());
+  }
 
-  std::transform(locale.begin(), locale.end(), locale.begin(),
-                 [](char c) -> char { return base::ToUpperASCII(c); });
+  base::ranges::transform(locale, locale.begin(),
+                          [](char c) { return base::ToUpperASCII(c); });
 
-  if (!locale_constraint.empty())
+  if (!locale_constraint.empty()) {
     locale += locale_constraint;
+  }
 
   VLOG(1) << "On Device Head Component will fetch model for locale: " << locale;
 
@@ -68,12 +73,13 @@ OnDeviceHeadSuggestInstallerPolicy::~OnDeviceHeadSuggestInstallerPolicy() =
     default;
 
 bool OnDeviceHeadSuggestInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
-  const std::string* name = manifest.FindStringKey("name");
+  const std::string* name = manifest.FindString("name");
 
-  if (!name || *name != ("OnDeviceHeadSuggest" + accept_locale_))
+  if (!name || *name != ("OnDeviceHeadSuggest" + accept_locale_)) {
     return false;
+  }
 
   bool is_successful = base::PathExists(install_dir);
   VLOG(1) << "On Device head model "
@@ -94,7 +100,7 @@ bool OnDeviceHeadSuggestInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 OnDeviceHeadSuggestInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -104,10 +110,11 @@ void OnDeviceHeadSuggestInstallerPolicy::OnCustomUninstall() {}
 void OnDeviceHeadSuggestInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   auto* listener = OnDeviceModelUpdateListener::GetInstance();
-  if (listener)
-    listener->OnModelUpdate(install_dir);
+  if (listener) {
+    listener->OnHeadModelUpdate(install_dir);
+  }
 }
 
 base::FilePath OnDeviceHeadSuggestInstallerPolicy::GetRelativeInstallDir()
@@ -135,7 +142,7 @@ void RegisterOnDeviceHeadSuggestComponent(ComponentUpdateService* cus,
   // Ideally we should only check if the feature is enabled for non-incognito or
   // incognito, but whether the browser is currently on incognito or not is not
   // available yet during component registration on iOS platform.
-  if (OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForAnyMode()) {
+  if (OmniboxFieldTrial::IsOnDeviceHeadSuggestEnabledForLocale(locale)) {
     auto installer = base::MakeRefCounted<ComponentInstaller>(
         std::make_unique<OnDeviceHeadSuggestInstallerPolicy>(locale));
     installer->Register(cus, base::OnceClosure());

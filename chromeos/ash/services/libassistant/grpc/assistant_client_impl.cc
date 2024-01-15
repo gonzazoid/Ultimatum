@@ -5,31 +5,32 @@
 #include "chromeos/ash/services/libassistant/grpc/assistant_client_impl.h"
 
 #include <memory>
+#include <string>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
-#include "base/check.h"
-#include "base/containers/flat_set.h"
-#include "base/notreached.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/logging.h"
 #include "base/system/sys_info.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "chromeos/ash/services/assistant/public/cpp/features.h"
-#include "chromeos/ash/services/libassistant/callback_utils.h"
-#include "chromeos/ash/services/libassistant/grpc/assistant_client_v1.h"
+#include "base/time/time.h"
+#include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/ash/services/libassistant/grpc/external_services/action_service.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_libassistant_client.h"
 #include "chromeos/ash/services/libassistant/grpc/services_status_observer.h"
+#include "chromeos/ash/services/libassistant/grpc/utils/media_status_utils.h"
 #include "chromeos/ash/services/libassistant/grpc/utils/timer_utils.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_timer.h"
 #include "chromeos/assistant/internal/grpc_transport/request_utils.h"
 #include "chromeos/assistant/internal/internal_constants.h"
 #include "chromeos/assistant/internal/internal_util.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/assistant/internal/libassistant_util.h"
+#include "chromeos/assistant/internal/proto/shared/proto/settings_ui.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/alarm_timer_interface.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/audio_utils_interface.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/bootup_settings_interface.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/config_settings_interface.pb.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/delegate/event_handler_interface.pb.h"
+#include "chromeos/assistant/internal/proto/shared/proto/v2/device_state_event.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/display_interface.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/experiment_interface.pb.h"
 #include "chromeos/assistant/internal/proto/shared/proto/v2/query_interface.pb.h"
@@ -41,8 +42,14 @@ namespace {
 
 using ::assistant::api::EnableListeningRequest;
 using ::assistant::api::EnableListeningResponse;
+using ::assistant::api::GetAssistantSettingsResponse;
+using ::assistant::api::OnAlarmTimerEventRequest;
+using ::assistant::api::OnDeviceStateEventRequest;
+using ::assistant::api::OnSpeakerIdEnrollmentEventRequest;
 using ::assistant::api::SetLocaleOverrideRequest;
 using ::assistant::api::SetLocaleOverrideResponse;
+using ::assistant::api::UpdateAssistantSettingsResponse;
+using ::assistant::ui::SettingsUiUpdate;
 
 // Rpc call config constants.
 constexpr int kMaxRpcRetries = 5;
@@ -82,15 +89,20 @@ GetLoggingCallback(const std::string& request_name) {
 
 AssistantClientImpl::AssistantClientImpl(
     std::unique_ptr<assistant_client::AssistantManager> assistant_manager,
-    assistant_client::AssistantManagerInternal* assistant_manager_internal,
     const std::string& libassistant_service_address,
     const std::string& assistant_service_address)
-    : AssistantClientV1(std::move(assistant_manager),
-                        assistant_manager_internal),
+    : AssistantClient(std::move(assistant_manager)),
       grpc_services_(libassistant_service_address, assistant_service_address),
       libassistant_client_(grpc_services_.GrpcLibassistantClient()) {}
 
-AssistantClientImpl::~AssistantClientImpl() = default;
+AssistantClientImpl::~AssistantClientImpl() {
+  // The following sequence is used to prevent unnecessary heart beats from
+  // being sent during shutdown:
+  // 1. Stop other LibAssistant gRPC services by destroying the
+  // `assistant_manager_`.
+  // 2. Stop assistant_grpc service by destroying `grpc_services_`.
+  ResetAssistantManager();
+}
 
 void AssistantClientImpl::StartServices(
     ServicesStatusObserver* services_status_observer) {
@@ -116,7 +128,7 @@ void AssistantClientImpl::AddExperimentIds(
       ::assistant::api::UpdateExperimentIdsRequest_Operation_MERGE);
   *request.mutable_experiment_ids() = {exp_ids.begin(), exp_ids.end()};
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::UpdateExperimentIdsResponse>(
           /*request_name=*/__func__),
@@ -135,7 +147,7 @@ void AssistantClientImpl::RemoveSpeakerIdEnrollmentEventObserver(
 
 void AssistantClientImpl::StartSpeakerIdEnrollment(
     const StartSpeakerIdEnrollmentRequest& request) {
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::StartSpeakerIdEnrollmentResponse>(
           /*request_name=*/__func__),
@@ -144,7 +156,7 @@ void AssistantClientImpl::StartSpeakerIdEnrollment(
 
 void AssistantClientImpl::CancelSpeakerIdEnrollment(
     const CancelSpeakerIdEnrollmentRequest& request) {
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::CancelSpeakerIdEnrollmentResponse>(
           /*request_name=*/__func__),
@@ -154,7 +166,7 @@ void AssistantClientImpl::CancelSpeakerIdEnrollment(
 void AssistantClientImpl::GetSpeakerIdEnrollmentInfo(
     const GetSpeakerIdEnrollmentInfoRequest& request,
     base::OnceCallback<void(bool user_model_exists)> on_done) {
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       base::BindOnce(
           [](base::OnceCallback<void(bool user_model_exists)> on_done,
@@ -164,11 +176,9 @@ void AssistantClientImpl::GetSpeakerIdEnrollmentInfo(
             bool has_model = false;
             //  `response` could have an error field.
             // Treat any error as no existing model.
-            if (response.has_cloud_enrollment_status_response()) {
-              has_model = response.cloud_enrollment_status_response()
-                              .utterance_status() ==
-                          ::assistant::api::CloudEnrollmentStatusResponse::
-                              HAS_UTTERANCES;
+            if (response.has_user_model_status_response()) {
+              has_model =
+                  response.user_model_status_response().user_model_exists();
             }
             std::move(on_done).Run(has_model);
           },
@@ -177,20 +187,12 @@ void AssistantClientImpl::GetSpeakerIdEnrollmentInfo(
 }
 
 void AssistantClientImpl::ResetAllDataAndShutdown() {
-  // ResetAllDataAndShutdown request may have high latency. Server
-  // recommendation is to set proper deadlines for every RPC.
-  constexpr int kResetAllDataAndShutdownTimeoutMs = 10000;
-  StateConfig custom_config(kMaxRpcRetries, kResetAllDataAndShutdownTimeoutMs);
-  libassistant_client_.CallServiceMethod(
-      ::assistant::api::ResetAllDataAndShutdownRequest(),
-      GetLoggingCallback<::assistant::api::ResetAllDataAndShutdownResponse>(
-          /*request_name=*/__func__),
-      custom_config);
+  assistant_manager()->ResetAllDataAndShutdown();
 }
 
 void AssistantClientImpl::SendDisplayRequest(
     const OnDisplayRequestRequest& request) {
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::OnDisplayRequestResponse>(
           /*request_name=*/__func__),
@@ -200,6 +202,22 @@ void AssistantClientImpl::SendDisplayRequest(
 void AssistantClientImpl::AddDisplayEventObserver(
     GrpcServicesObserver<OnAssistantDisplayEventRequest>* observer) {
   grpc_services_.AddAssistantDisplayEventObserver(observer);
+}
+
+void AssistantClientImpl::ResumeCurrentStream() {
+  assistant_manager()->GetMediaManager()->Resume();
+}
+
+void AssistantClientImpl::PauseCurrentStream() {
+  assistant_manager()->GetMediaManager()->Pause();
+}
+
+void AssistantClientImpl::SetExternalPlaybackState(
+    const MediaStatus& status_proto) {
+  assistant_client::MediaStatus media_status;
+  ConvertMediaStatusToV1FromV2(status_proto, &media_status);
+  assistant_manager()->GetMediaManager()->SetExternalPlaybackState(
+      media_status);
 }
 
 void AssistantClientImpl::AddDeviceStateEventObserver(
@@ -221,7 +239,7 @@ void AssistantClientImpl::SendVoicelessInteraction(
   chromeos::libassistant::PopulateSendQueryRequest(interaction, description,
                                                    options, &request);
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       base::BindOnce(
           [](base::OnceCallback<void(bool)> on_done, const grpc::Status& status,
@@ -237,13 +255,8 @@ void AssistantClientImpl::RegisterActionModule(
   grpc_services_.GetActionService()->RegisterActionModule(action_module);
 }
 
-void AssistantClientImpl::SendScreenContextRequest(
-    const std::vector<std::string>& context_protos) {
-  NOTIMPLEMENTED();
-}
-
 void AssistantClientImpl::StartVoiceInteraction() {
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       ::assistant::api::StartVoiceQueryRequest(),
       GetLoggingCallback<::assistant::api::StartVoiceQueryResponse>(
           /*request_name=*/__func__),
@@ -255,7 +268,7 @@ void AssistantClientImpl::StopAssistantInteraction(bool cancel_conversation) {
   request.set_type(::assistant::api::StopQueryRequest::ACTIVE_INTERNAL);
   request.set_cancel_conversation(cancel_conversation);
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::StopQueryResponse>(
           /*request_name=*/__func__),
@@ -276,7 +289,7 @@ void AssistantClientImpl::SetAuthenticationInfo(const AuthTokens& tokens) {
     proto->set_auth_token(token.second);
   }
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::SetAuthInfoResponse>(
           /*request_name=*/__func__),
@@ -295,7 +308,7 @@ void AssistantClientImpl::SetInternalOptions(const std::string& locale,
   constexpr int kAssistantReconfigureInternalDefaultTimeoutMs = 20000;
   StateConfig custom_config(kMaxRpcRetries,
                             kAssistantReconfigureInternalDefaultTimeoutMs);
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::SetInternalOptionsResponse>(
           /*request_name=*/__func__),
@@ -326,8 +339,8 @@ void AssistantClientImpl::UpdateAssistantSettings(
         std::move(on_done).Run(response);
       },
       std::move(on_done));
-  libassistant_client_.CallServiceMethod(request, std::move(cb),
-                                         kDefaultStateConfig);
+  libassistant_client_->CallServiceMethod(request, std::move(cb),
+                                          kDefaultStateConfig);
 }
 
 void AssistantClientImpl::GetAssistantSettings(
@@ -351,24 +364,28 @@ void AssistantClientImpl::GetAssistantSettings(
       },
       std::move(on_done));
 
-  libassistant_client_.CallServiceMethod(request, std::move(cb),
-                                         kDefaultStateConfig);
+  libassistant_client_->CallServiceMethod(request, std::move(cb),
+                                          kDefaultStateConfig);
 }
 
 void AssistantClientImpl::SetLocaleOverride(const std::string& locale) {
   SetLocaleOverrideRequest request;
   request.set_locale(locale);
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request, GetLoggingCallback<SetLocaleOverrideResponse>(__func__),
       kDefaultStateConfig);
+}
+
+std::string AssistantClientImpl::GetDeviceId() {
+  return assistant_manager()->GetDeviceId();
 }
 
 void AssistantClientImpl::EnableListening(bool listening_enabled) {
   EnableListeningRequest request;
   request.set_enable(listening_enabled);
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request, GetLoggingCallback<EnableListeningResponse>(__func__),
       kDefaultStateConfig);
 }
@@ -378,7 +395,7 @@ void AssistantClientImpl::AddTimeToTimer(const std::string& id,
   ::assistant::api::AddTimeToTimerRequest request;
   request.set_timer_id(id);
   request.set_extra_time_seconds(duration.InSeconds());
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::AddTimeToTimerResponse>(
           /*request_name=*/__func__),
@@ -388,7 +405,7 @@ void AssistantClientImpl::AddTimeToTimer(const std::string& id,
 void AssistantClientImpl::PauseTimer(const std::string& timer_id) {
   ::assistant::api::PauseTimerRequest request;
   request.set_timer_id(timer_id);
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::PauseTimerResponse>(
           /*request_name=*/__func__),
@@ -398,7 +415,7 @@ void AssistantClientImpl::PauseTimer(const std::string& timer_id) {
 void AssistantClientImpl::RemoveTimer(const std::string& timer_id) {
   ::assistant::api::RemoveTimerRequest request;
   request.set_timer_id(timer_id);
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::RemoveTimerResponse>(
           /*request_name=*/__func__),
@@ -408,7 +425,7 @@ void AssistantClientImpl::RemoveTimer(const std::string& timer_id) {
 void AssistantClientImpl::ResumeTimer(const std::string& timer_id) {
   ::assistant::api::ResumeTimerRequest request;
   request.set_timer_id(timer_id);
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       request,
       GetLoggingCallback<::assistant::api::ResumeTimerResponse>(
           /*request_name=*/__func__),
@@ -420,7 +437,7 @@ void AssistantClientImpl::GetTimers(
         on_done) {
   ::assistant::api::GetTimersResponse response;
 
-  libassistant_client_.CallServiceMethod(
+  libassistant_client_->CallServiceMethod(
       ::assistant::api::GetTimersRequest(),
       base::BindOnce(
           [](base::OnceCallback<void(
@@ -446,21 +463,12 @@ void AssistantClientImpl::AddAlarmTimerEventObserver(
 
 // static
 std::unique_ptr<AssistantClient> AssistantClient::Create(
-    std::unique_ptr<assistant_client::AssistantManager> assistant_manager,
-    assistant_client::AssistantManagerInternal* assistant_manager_internal) {
-  if (assistant::features::IsLibAssistantV2Enabled()) {
-    const bool is_chromeos_device = base::SysInfo::IsRunningOnChromeOS();
-    // Note that we should *not* depend on |assistant_manager_internal| for V2,
-    // so |assistant_manager_internal| will be nullptr after the migration has
-    // done.
-    return std::make_unique<AssistantClientImpl>(
-        std::move(assistant_manager), assistant_manager_internal,
-        chromeos::assistant::GetLibassistantServiceAddress(is_chromeos_device),
-        chromeos::assistant::GetAssistantServiceAddress(is_chromeos_device));
-  }
-
-  return std::make_unique<AssistantClientV1>(std::move(assistant_manager),
-                                             assistant_manager_internal);
+    std::unique_ptr<assistant_client::AssistantManager> assistant_manager) {
+  const bool is_chromeos_device = base::SysInfo::IsRunningOnChromeOS();
+  return std::make_unique<AssistantClientImpl>(
+      std::move(assistant_manager),
+      chromeos::assistant::GetLibassistantServiceAddress(is_chromeos_device),
+      chromeos::assistant::GetAssistantServiceAddress(is_chromeos_device));
 }
 
 }  // namespace ash::libassistant

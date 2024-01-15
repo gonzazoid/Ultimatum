@@ -30,7 +30,6 @@ std::unique_ptr<views::ImageView> CreatePrimaryIconView() {
   return icon_view;
 }
 
-// TODO(b/202529859): Change text to match final UX design
 std::u16string CreateText() {
   return l10n_util::GetStringUTF16(IDS_ACCESS_CODE_CAST_CONNECT);
 }
@@ -61,7 +60,7 @@ void CastDialogAccessCodeCastButton::OnMouseReleased(
   return HoverButton::OnMouseReleased(event);
 }
 
-BEGIN_METADATA(CastDialogAccessCodeCastButton, HoverButton)
+BEGIN_METADATA(CastDialogAccessCodeCastButton)
 END_METADATA
 
 }  // namespace media_router

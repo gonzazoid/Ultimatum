@@ -7,15 +7,22 @@
 
 #include <memory>
 
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/commands/web_app_command.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/locks/noop_lock.h"
+#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_install_params.h"
 #include "chrome/browser/web_applications/web_app_logging.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
 #include "components/webapps/browser/install_result_code.h"
+#include "components/webapps/browser/installable/installable_logging.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
+#include "components/webapps/common/web_app_id.h"
+#include "content/public/browser/visibility.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -24,44 +31,50 @@
 
 namespace content {
 class WebContents;
-}
+class NavigationHandle;
+}  // namespace content
 
 namespace web_app {
 
-class AppLockDescription;
-class LockDescription;
-class NoopLockDescription;
+class AppLock;
 class WebAppDataRetriever;
-class WebAppInstallFinalizer;
 
 // Install web app from manifest for current `WebContents`.
-class FetchManifestAndInstallCommand : public WebAppCommand {
+class FetchManifestAndInstallCommand
+    : public WebAppCommand<NoopLock,
+                           const webapps::AppId&,
+                           webapps::InstallResultCode>,
+      public content::WebContentsObserver {
  public:
   // `use_fallback` allows getting fallback information from current document
   // to enable installing a non-promotable site.
   FetchManifestAndInstallCommand(
       webapps::WebappInstallSource install_surface,
       base::WeakPtr<content::WebContents> contents,
-      bool bypass_service_worker_check,
       WebAppInstallDialogCallback dialog_callback,
       OnceInstallCallback callback,
       bool use_fallback,
-      WebAppInstallFinalizer* install_finalizer,
+      base::WeakPtr<WebAppUiManager> ui_manager,
       std::unique_ptr<WebAppDataRetriever> data_retriever);
 
   ~FetchManifestAndInstallCommand() override;
 
-  LockDescription& lock_description() const override;
+  // WebAppCommand:
+  void OnShutdown(base::PassKey<WebAppCommandManager>) const override;
+  content::WebContents* GetInstallingWebContents(
+      base::PassKey<WebAppCommandManager>) override;
 
-  void Start() override;
-  void OnSyncSourceRemoved() override;
-  void OnShutdown() override;
-
-  content::WebContents* GetInstallingWebContents() override;
-
-  base::Value ToDebugValue() const override;
+ protected:
+  // WebAppCommand:
+  void StartWithLock(std::unique_ptr<NoopLock> lock) override;
 
  private:
+  // content::WebContentsObserver:
+  void DidFinishNavigation(
+      content::NavigationHandle* navigation_handle) override;
+  void OnVisibilityChanged(content::Visibility visibility) override;
+  void WebContentsDestroyed() override;
+
   void Abort(webapps::InstallResultCode code);
   bool IsWebContentsDestroyed();
 
@@ -72,14 +85,15 @@ class FetchManifestAndInstallCommand : public WebAppCommand {
   void OnDidPerformInstallableCheck(blink::mojom::ManifestPtr opt_manifest,
                                     const GURL& manifest_url,
                                     bool valid_manifest_for_web_app,
-                                    bool is_installable);
+                                    webapps::InstallableStatusCode error_code);
 
   // Either dispatches an asynchronous check for whether this installation
   // should be stopped and an intent to the Play Store should be made, or
   // synchronously calls OnDidCheckForIntentToPlayStore() implicitly failing the
   // check if it cannot be made.
   void CheckForPlayStoreIntentOrGetIcons(base::flat_set<GURL> icon_urls,
-                                         bool skip_page_favicons);
+                                         bool skip_page_favicons,
+                                         std::unique_ptr<AppLock> app_lock);
 
   // Called when the asynchronous check for whether an intent to the Play Store
   // should be made returns.
@@ -105,34 +119,34 @@ class FetchManifestAndInstallCommand : public WebAppCommand {
       DownloadedIconsHttpResults icons_http_results);
   void OnDialogCompleted(bool user_accepted,
                          std::unique_ptr<WebAppInstallInfo> web_app_info);
-  void OnInstallFinalizedMaybeReparentTab(const AppId& app_id,
+  void OnInstallFinalizedMaybeReparentTab(const webapps::AppId& app_id,
                                           webapps::InstallResultCode code,
                                           OsHooksErrors os_hooks_errors);
 
-  void OnInstallCompleted(const AppId& app_id, webapps::InstallResultCode code);
+  void OnInstallCompleted(const webapps::AppId& app_id,
+                          webapps::InstallResultCode code);
 
   void LogInstallInfo();
 
-  std::unique_ptr<NoopLockDescription> noop_lock_description_;
-  std::unique_ptr<AppLockDescription> app_lock_description_;
+  std::unique_ptr<AppLock> app_lock_;
+  std::unique_ptr<NoopLock> noop_lock_;
 
   webapps::WebappInstallSource install_surface_;
   base::WeakPtr<content::WebContents> web_contents_;
-  bool bypass_service_worker_check_;
   WebAppInstallDialogCallback dialog_callback_;
-  OnceInstallCallback install_callback_;
   // Whether using fallback installation data from the document.
   bool use_fallback_ = false;
 
-  raw_ptr<WebAppInstallFinalizer> install_finalizer_;
+  bool did_navigation_occur_before_start_ = false;
+
+  base::WeakPtr<WebAppUiManager> ui_manager_;
   std::unique_ptr<WebAppDataRetriever> data_retriever_;
 
   InstallErrorLogEntry install_error_log_entry_;
 
-  AppId app_id_;
+  webapps::AppId app_id_;
   std::unique_ptr<WebAppInstallInfo> web_app_info_;
   blink::mojom::ManifestPtr opt_manifest_;
-  base::Value::Dict debug_log_;
 
   base::WeakPtrFactory<FetchManifestAndInstallCommand> weak_ptr_factory_{this};
 };

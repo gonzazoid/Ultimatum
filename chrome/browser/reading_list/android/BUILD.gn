@@ -12,16 +12,9 @@ group("android") {
 
 source_set("reading_list") {
   sources = [
-    "empty_reading_list_manager.cc",
-    "empty_reading_list_manager.h",
     "reading_list_manager.h",
     "reading_list_manager_impl.cc",
     "reading_list_manager_impl.h",
-    "reading_list_notification_client.cc",
-    "reading_list_notification_client.h",
-    "reading_list_notification_delegate.h",
-    "reading_list_notification_service.cc",
-    "reading_list_notification_service.h",
   ]
 
   # This target should not depend on the whole //chrome/browser target.
@@ -41,17 +34,14 @@ source_set("reading_list") {
 
 source_set("unit_tests") {
   testonly = true
-  sources = [
-    "reading_list_manager_impl_unittest.cc",
-    "reading_list_notification_client_unittest.cc",
-    "reading_list_notification_service_unittest.cc",
-  ]
+  sources = [ "reading_list_manager_impl_unittest.cc" ]
   deps = [
     ":android",
     "//base/test:test_support",
     "//chrome/browser/notifications/scheduler/test:test_support",
     "//components/bookmarks/browser",
     "//components/reading_list/core:core",
+    "//components/reading_list/core:test_support",
     "//components/reading_list/features:flags",
     "//components/sync",
     "//components/sync:test_support",

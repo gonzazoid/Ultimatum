@@ -4,48 +4,21 @@
 
 #include "chrome/updater/setup.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/time/time.h"
 #include "chrome/updater/constants.h"
-#include "chrome/updater/launchd_util.h"
-#include "chrome/updater/mac/setup/setup.h"
-#include "chrome/updater/mac/xpc_service_names.h"
+#include "chrome/updater/posix/setup.h"
 #include "chrome/updater/updater_scope.h"
 
 namespace updater {
 
-namespace {
-
-void SetupDone(base::OnceCallback<void(int)> callback,
-               UpdaterScope scope,
-               int result) {
-  if (result != kErrorOk) {
-    std::move(callback).Run(result);
-    return;
-  }
-  PollLaunchctlList(
-      scope, GetUpdateServiceInternalLaunchdName(scope),
-      LaunchctlPresence::kPresent, base::Seconds(kWaitForLaunchctlUpdateSec),
-      base::BindOnce(
-          [](base::OnceCallback<void(int)> callback, bool service_exists) {
-            std::move(callback).Run(
-                service_exists
-                    ? kErrorOk
-                    : kErrorFailedAwaitingLaunchdUpdateServiceInternalJob);
-          },
-          std::move(callback)));
-}
-
-}  // namespace
-
 void InstallCandidate(UpdaterScope scope,
                       base::OnceCallback<void(int)> callback) {
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()}, base::BindOnce(&Setup, scope),
-      base::BindOnce(&SetupDone, std::move(callback), scope));
+  base::ThreadPool::PostTaskAndReplyWithResult(FROM_HERE, {base::MayBlock()},
+                                               base::BindOnce(&Setup, scope),
+                                               std::move(callback));
 }
 
 }  // namespace updater

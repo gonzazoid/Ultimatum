@@ -20,8 +20,8 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/mediastream/apply_constraints_processor.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_tracker.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/mediastream/webrtc_uma_histograms.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
@@ -41,8 +41,8 @@ void UpdateAPICount(UserMediaRequestType media_type) {
     case UserMediaRequestType::kDisplayMedia:
       api_name = RTCAPIName::kGetDisplayMedia;
       break;
-    case UserMediaRequestType::kDisplayMediaSet:
-      api_name = RTCAPIName::kGetDisplayMediaSet;
+    case UserMediaRequestType::kAllScreensMedia:
+      api_name = RTCAPIName::kGetAllScreensMedia;
       break;
   }
   UpdateWebRTCMethodCount(api_name);
@@ -66,7 +66,7 @@ class UserMediaClient::RequestQueue final
   void EnqueueAndMaybeProcess(Request* request);
   bool IsCapturing() { return user_media_processor_->HasActiveSources(); }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   void FocusCapturedSurface(const String& label, bool focus) {
     user_media_processor_->FocusCapturedSurface(label, focus);
   }
@@ -108,6 +108,7 @@ UserMediaClient::RequestQueue::RequestQueue(
       user_media_processor_(user_media_processor),
       apply_constraints_processor_(
           MakeGarbageCollected<ApplyConstraintsProcessor>(
+              frame,
               WTF::BindRepeating(
                   [](UserMediaClient* client)
                       -> mojom::blink::MediaDevicesDispatcherHost* {
@@ -149,27 +150,15 @@ void UserMediaClient::RequestQueue::CancelUserMediaRequest(
     }
   }
 
-  bool did_remove_request = false;
-  if (user_media_processor_->DeleteUserMediaRequest(user_media_request)) {
-    did_remove_request = true;
-  } else {
+  if (!user_media_processor_->DeleteUserMediaRequest(user_media_request)) {
     for (auto it = pending_requests_.begin(); it != pending_requests_.end();
          ++it) {
       if ((*it)->IsUserMedia() &&
           (*it)->user_media_request() == user_media_request) {
         pending_requests_.erase(it);
-        did_remove_request = true;
         break;
       }
     }
-  }
-
-  if (did_remove_request) {
-    // We can't abort the stream generation process.
-    // Instead, erase the request. Once the stream is generated we will stop the
-    // stream if the request does not exist.
-    LogUserMediaRequestWithNoResult(
-        blink::MEDIA_STREAM_REQUEST_EXPLICITLY_CANCELLED);
   }
 }
 
@@ -269,7 +258,7 @@ UserMediaClient::Request::~Request() = default;
 UserMediaRequest* UserMediaClient::Request::MoveUserMediaRequest() {
   auto user_media_request = user_media_request_;
   user_media_request_ = nullptr;
-  return user_media_request;
+  return user_media_request.Get();
 }
 
 UserMediaClient::UserMediaClient(
@@ -281,18 +270,18 @@ UserMediaClient::UserMediaClient(
       ExecutionContextLifecycleObserver(frame->DomWindow()),
       frame_(frame),
       media_devices_dispatcher_(frame->DomWindow()),
-      pending_requests_(MakeGarbageCollected<RequestQueue>(frame,
-                                                           user_media_processor,
-                                                           this,
-                                                           task_runner)),
+      pending_device_requests_(
+          MakeGarbageCollected<RequestQueue>(frame,
+                                             user_media_processor,
+                                             this,
+                                             task_runner)),
       pending_display_requests_(
-          display_user_media_processor
-              ? MakeGarbageCollected<RequestQueue>(frame,
-                                                   display_user_media_processor,
-                                                   this,
-                                                   task_runner)
-              : nullptr) {
-  DCHECK(frame_);
+          MakeGarbageCollected<RequestQueue>(frame,
+                                             display_user_media_processor,
+                                             this,
+                                             task_runner)) {
+  CHECK(frame_);
+
   // WrapWeakPersistent is safe because the |frame_| owns UserMediaClient.
   frame_->SetIsCapturingMediaCallback(WTF::BindRepeating(
       [](UserMediaClient* client) { return client && client->IsCapturing(); },
@@ -316,20 +305,18 @@ UserMediaClient::UserMediaClient(
                   },
                   WrapWeakPersistent(this)),
               frame->GetTaskRunner(blink::TaskType::kInternalMedia)),
-          base::FeatureList::IsEnabled(features::kSplitUserMediaQueues)
-              ? MakeGarbageCollected<UserMediaProcessor>(
-                    frame,
-                    WTF::BindRepeating(
-                        [](UserMediaClient* client)
-                            -> mojom::blink::MediaDevicesDispatcherHost* {
-                          // |client| is guaranteed to be not null because
-                          // |client| transitively owns this UserMediaProcessor.
-                          DCHECK(client);
-                          return client->GetMediaDevicesDispatcher();
-                        },
-                        WrapWeakPersistent(this)),
-                    frame->GetTaskRunner(blink::TaskType::kInternalMedia))
-              : nullptr,
+          MakeGarbageCollected<UserMediaProcessor>(
+              frame,
+              WTF::BindRepeating(
+                  [](UserMediaClient* client)
+                      -> mojom::blink::MediaDevicesDispatcherHost* {
+                    // |client| is guaranteed to be not null because
+                    // |client| transitively owns this UserMediaProcessor.
+                    DCHECK(client);
+                    return client->GetMediaDevicesDispatcher();
+                  },
+                  WrapWeakPersistent(this)),
+              frame->GetTaskRunner(blink::TaskType::kInternalMedia)),
           std::move(task_runner)) {}
 
 void UserMediaClient::RequestUserMedia(UserMediaRequest* user_media_request) {
@@ -368,7 +355,14 @@ void UserMediaClient::RequestUserMedia(UserMediaRequest* user_media_request) {
   // TODO(crbug.com/787254): Communicate directly with the
   // PeerConnectionTrackerHost mojo object once it is available from Blink.
   if (auto* window = user_media_request->GetWindow()) {
-    PeerConnectionTracker::From(*window).TrackGetUserMedia(user_media_request);
+    if (user_media_request->MediaRequestType() ==
+        UserMediaRequestType::kUserMedia) {
+      PeerConnectionTracker::From(*window).TrackGetUserMedia(
+          user_media_request);
+    } else {
+      PeerConnectionTracker::From(*window).TrackGetDisplayMedia(
+          user_media_request);
+    }
   }
 
   user_media_request->set_has_transient_user_activation(
@@ -407,35 +401,28 @@ void UserMediaClient::StopTrack(MediaStreamComponent* track) {
 }
 
 bool UserMediaClient::IsCapturing() {
-  return pending_requests_->IsCapturing() ||
-         (pending_display_requests_ &&
-          pending_display_requests_->IsCapturing());
+  return pending_device_requests_->IsCapturing() ||
+         pending_display_requests_->IsCapturing();
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 void UserMediaClient::FocusCapturedSurface(const String& label, bool focus) {
-  // Get queue with display capture requests.  Only display capturer can be
-  // focused.
-  RequestQueue* queue =
-      pending_display_requests_ ? pending_display_requests_ : pending_requests_;
-  queue->FocusCapturedSurface(label, focus);
+  pending_display_requests_->FocusCapturedSurface(label, focus);
 }
 #endif
 
 void UserMediaClient::CancelUserMediaRequest(
     UserMediaRequest* user_media_request) {
-  pending_requests_->CancelUserMediaRequest(user_media_request);
-  if (pending_display_requests_)
-    pending_display_requests_->CancelUserMediaRequest(user_media_request);
+  pending_device_requests_->CancelUserMediaRequest(user_media_request);
+  pending_display_requests_->CancelUserMediaRequest(user_media_request);
 }
 
 void UserMediaClient::DeleteAllUserMediaRequests() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (frame_)
     frame_->SetIsCapturingMediaCallback(LocalFrame::IsCapturingMediaCallback());
-  pending_requests_->DeleteAllUserMediaRequests();
-  if (pending_display_requests_)
-    pending_display_requests_->DeleteAllUserMediaRequests();
+  pending_device_requests_->DeleteAllUserMediaRequests();
+  pending_display_requests_->DeleteAllUserMediaRequests();
 }
 
 void UserMediaClient::ContextDestroyed() {
@@ -449,7 +436,7 @@ void UserMediaClient::Trace(Visitor* visitor) const {
   ExecutionContextLifecycleObserver::Trace(visitor);
   visitor->Trace(frame_);
   visitor->Trace(media_devices_dispatcher_);
-  visitor->Trace(pending_requests_);
+  visitor->Trace(pending_device_requests_);
   visitor->Trace(pending_display_requests_);
 }
 
@@ -494,23 +481,18 @@ void UserMediaClient::KeepDeviceAliveForTransfer(
     base::UnguessableToken session_id,
     base::UnguessableToken transfer_id,
     UserMediaProcessor::KeepDeviceAliveForTransferCallback keep_alive_cb) {
-  // Get queue with display capture requests.  Only display capture requests are
-  // supported for transfer.
-  UserMediaClient::RequestQueue* queue =
-      pending_display_requests_ ? pending_display_requests_ : pending_requests_;
-  queue->KeepDeviceAliveForTransfer(session_id, transfer_id,
-                                    std::move(keep_alive_cb));
+  pending_display_requests_->KeepDeviceAliveForTransfer(
+      session_id, transfer_id, std::move(keep_alive_cb));
 }
 
 UserMediaClient::RequestQueue* UserMediaClient::GetRequestQueue(
     mojom::blink::MediaStreamType media_stream_type) {
-  if (pending_display_requests_ &&
-      (IsScreenCaptureMediaType(media_stream_type) ||
-       media_stream_type ==
-           mojom::blink::MediaStreamType::DISPLAY_AUDIO_CAPTURE)) {
-    return pending_display_requests_;
+  if (IsScreenCaptureMediaType(media_stream_type) ||
+      media_stream_type ==
+          mojom::blink::MediaStreamType::DISPLAY_AUDIO_CAPTURE) {
+    return pending_display_requests_.Get();
   } else {
-    return pending_requests_;
+    return pending_device_requests_.Get();
   }
 }
 

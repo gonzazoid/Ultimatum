@@ -5,11 +5,11 @@
 #include <cstring>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/browser.h"
@@ -115,7 +115,7 @@ class TestOption : public InProcessBrowserTest {
 
   void QuitAfter(base::TimeDelta delta) {
     DCHECK(delta.is_positive());
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop_->QuitClosure(), delta);
   }
 
@@ -125,7 +125,8 @@ class TestOption : public InProcessBrowserTest {
 
   std::unique_ptr<base::RunLoop> run_loop_;
   MockObserver holder_;
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
   std::unique_ptr<net::test_server::EmbeddedTestServer> https_server_;
 };
 
@@ -269,8 +270,15 @@ IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
       Optional(AllOf(Not(IsDistillable()), IsLast(), Not(IsMobileFriendly()))));
 }
 
+// TODO(crbug.com/1461973): Flaky on Linux MSAN.
+#if BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)
+#define MAYBE_ObserverNotCalledAfterRemoval \
+  DISABLED_ObserverNotCalledAfterRemoval
+#else
+#define MAYBE_ObserverNotCalledAfterRemoval ObserverNotCalledAfterRemoval
+#endif
 IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
-                       ObserverNotCalledAfterRemoval) {
+                       MAYBE_ObserverNotCalledAfterRemoval) {
   RemoveObserver(web_contents_, &holder_);
   EXPECT_CALL(holder_, OnResult(_)).Times(0);
   NavigateAndWait(kSimpleArticlePath, kWaitNoExpectedCall);
@@ -289,8 +297,9 @@ IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
   ukm::TestAutoSetUkmRecorder ukm_recorder;
   NavigateAndWait(kSimpleArticlePath, base::TimeDelta());
 
-  std::vector<const ukm::mojom::UkmEntry*> distillability_entries =
-      ukm_recorder.GetEntriesByName("ReaderModeReceivedDistillability");
+  std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>>
+      distillability_entries =
+          ukm_recorder.GetEntriesByName("ReaderModeReceivedDistillability");
   ASSERT_THAT(distillability_entries, SizeIs(1));
   EXPECT_THAT(ukm_recorder.GetEntryMetric(distillability_entries.front(),
                                           "IsPageDistillable"),
@@ -305,8 +314,9 @@ IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
   ukm::TestAutoSetUkmRecorder ukm_recorder;
   NavigateAndWait(kNonArticlePath, base::TimeDelta());
 
-  std::vector<const ukm::mojom::UkmEntry*> distillability_entries =
-      ukm_recorder.GetEntriesByName("ReaderModeReceivedDistillability");
+  std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>>
+      distillability_entries =
+          ukm_recorder.GetEntriesByName("ReaderModeReceivedDistillability");
   ASSERT_THAT(distillability_entries, SizeIs(1));
   EXPECT_THAT(ukm_recorder.GetEntryMetric(distillability_entries.front(),
                                           "IsPageDistillable"),

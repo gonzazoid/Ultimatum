@@ -7,14 +7,14 @@
 #include "ash/constants/ash_features.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
-#include "chrome/browser/ash/login/screens/gaia_password_changed_screen.h"
+#include "chrome/browser/ash/login/screens/osauth/gaia_password_changed_screen.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/login/localized_values_builder.h"
 #include "ui/chromeos/devicetype_utils.h"
 
-namespace chromeos {
+namespace ash {
 
 GaiaPasswordChangedScreenHandler::GaiaPasswordChangedScreenHandler()
     : BaseScreenHandler(kScreenId) {}
@@ -38,25 +38,24 @@ void GaiaPasswordChangedScreenHandler::DeclareLocalizedValues(
   builder->Add("passwordChangedTryAgain", IDS_LOGIN_PASSWORD_CHANGED_TRY_AGAIN);
   builder->Add("dataLossWarningTitle",
                IDS_LOGIN_PASSWORD_CHANGED_DATA_LOSS_WARNING_TITLE);
-  builder->Add("dataLossWarningSubtitleP1",
-               IDS_LOGIN_PASSWORD_CHANGED_DATA_LOSS_WARNING_SUBTITLE_P1);
-  builder->Add("dataLossWarningSubtitleP2",
-               IDS_LOGIN_PASSWORD_CHANGED_DATA_LOSS_WARNING_SUBTITLE_P2);
+  builder->Add("dataLossWarningSubtitle",
+               IDS_LOGIN_PASSWORD_CHANGED_DATA_LOSS_WARNING_SUBTITLE);
   builder->Add("recoverLocalDataTitle",
                IDS_LOGIN_PASSWORD_CHANGED_RECOVER_DATA_TITLE);
   builder->Add("recoverLocalDataSubtitle",
                IDS_LOGIN_PASSWORD_CHANGED_RECOVER_DATA_SUBTITLE);
   builder->Add("continueAndDeleteDataButton",
                IDS_LOGIN_PASSWORD_CHANGED_CONTINUE_AND_DELETE_BUTTON);
-  builder->Add("continueWithoutLocalDataButton",
-               IDS_LOGIN_PASSWORD_CHANGED_CONTINUE_WITHOUT_LOCAL_DATA_BUTTON);
-}
+  builder->Add("forgotOldPasswordButton",
+               IDS_LOGIN_PASSWORD_CHANGED_FORGOT_OLD_PASSWORD_BUTTON);
 
-void GaiaPasswordChangedScreenHandler::GetAdditionalParameters(
-    base::Value::Dict* dict) {
-  dict->Set("isCryptohomeRecoveryUIFlowEnabled",
-            ash::features::IsCryptohomeRecoveryFlowUIEnabled());
-  BaseScreenHandler::GetAdditionalParameters(dict);
+  builder->Add("recoveryOptInTitle", IDS_LOGIN_PASSWORD_CHANGED_RECOVERY_TITLE);
+  builder->Add("recoveryOptInSubtitle",
+               IDS_LOGIN_PASSWORD_CHANGED_RECOVERY_SUBTITLE);
+  builder->Add("recoveryOptInNoButton",
+               IDS_LOGIN_PASSWORD_CHANGED_RECOVERY_NO_BUTTON);
+  builder->Add("recoveryOptInEnableButton",
+               IDS_LOGIN_PASSWORD_CHANGED_RECOVERY_ENABLE_BUTTON);
 }
 
 void GaiaPasswordChangedScreenHandler::Show(const std::string& email,
@@ -67,4 +66,19 @@ void GaiaPasswordChangedScreenHandler::Show(const std::string& email,
   ShowInWebUI(std::move(data));
 }
 
-}  // namespace chromeos
+void GaiaPasswordChangedScreenHandler::Show(const std::string& email) {
+  base::Value::Dict data;
+  data.Set("email", email);
+  data.Set("showError", false);
+  ShowInWebUI(std::move(data));
+}
+
+void GaiaPasswordChangedScreenHandler::ShowWrongPasswordError() {
+  CallExternalAPI("showWrongPasswordError");
+}
+
+void GaiaPasswordChangedScreenHandler::SuggestRecovery() {
+  CallExternalAPI("suggestRecovery");
+}
+
+}  // namespace ash

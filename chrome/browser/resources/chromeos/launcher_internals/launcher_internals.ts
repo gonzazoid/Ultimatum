@@ -13,8 +13,9 @@ import {LauncherResultsTableElement} from './results_table.js';
 
 interface LauncherInternalsElement {
   $: {
-    'zeroStateResults': LauncherResultsTableElement,
     'searchResults': LauncherResultsTableElement,
+    'recentFiles': LauncherResultsTableElement,
+    'recentApps': LauncherResultsTableElement,
   };
 }
 
@@ -28,18 +29,18 @@ class LauncherInternalsElement extends PolymerElement {
   }
 
   static get properties() {
-    return {
-      query: String,
-    };
+    return {query: String, keywords: [String]};
   }
 
   private query: string;
+  private keywords: string[];
   private listenerIds: number[];
   private router: PageCallbackRouter;
 
   constructor() {
     super();
     this.query = '';
+    this.keywords = [];
     this.listenerIds = [];
     this.router = BrowserProxy.getInstance().callbackRouter;
   }
@@ -55,19 +56,49 @@ class LauncherInternalsElement extends PolymerElement {
     this.listenerIds.forEach(id => this.router.removeListener(id));
   }
 
-  private updateResults(query: string, results: Result[]) {
-    if (query === '') {
-      this.$.zeroStateResults.clearResults();
-      this.$.zeroStateResults.addResults(results);
-      return;
+  private updateResults(query: string, keywords: string[], results: Result[]) {
+    // Split the results array into its three display surfaces.
+    const recentFiles: Result[] = [];
+    const recentApps: Result[] = [];
+    const searchResults: Result[] = [];
+
+    results.forEach(result => {
+      switch (result.displayType) {
+        case 'Continue':
+          recentFiles.push(result);
+          break;
+        case 'RecentApps':
+          recentApps.push(result);
+          break;
+        default:
+          searchResults.push(result);
+          break;
+      }
+    });
+
+    if (recentFiles.length > 0) {
+      this.$.recentFiles.clearResults();
+      this.$.recentFiles.addResults(recentFiles);
     }
 
-    if (this.query != query) {
-      // Reset the results table whenever the query changes.
-      this.$.searchResults.clearResults();
-      this.query = query;
+    if (recentApps.length > 0) {
+      this.$.recentApps.clearResults();
+      this.$.recentApps.addResults(recentApps);
     }
-    this.$.searchResults.addResults(results);
+
+    if (searchResults.length > 0) {
+      if (this.query != query) {
+        // Only reset search results if the query changes.
+        this.$.searchResults.clearResults();
+        this.query = query;
+      }
+
+      if (this.keywords != keywords) {
+        this.keywords = keywords;
+      }
+
+      this.$.searchResults.addResults(searchResults);
+    }
   }
 }
 

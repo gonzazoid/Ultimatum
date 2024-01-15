@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -29,6 +29,8 @@ class Size;
 }
 
 namespace media {
+
+class VideoEncoderMetricsProvider;
 
 namespace cast {
 
@@ -102,6 +104,7 @@ class CastSender {
   // |status_change_cb| will be run as operational status changes.
   virtual void InitializeVideo(
       const FrameSenderConfig& video_config,
+      std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
       const StatusChangeCallback& status_change_cb,
       const CreateVideoEncodeAcceleratorCallback& create_vea_cb) = 0;
 

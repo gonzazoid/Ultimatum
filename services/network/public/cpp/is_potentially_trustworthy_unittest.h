@@ -5,8 +5,9 @@
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_IS_POTENTIALLY_TRUSTWORTHY_UNITTEST_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_IS_POTENTIALLY_TRUSTWORTHY_UNITTEST_H_
 
+#include <string_view>
+
 #include "base/containers/contains.h"
-#include "base/strings/string_piece.h"
 #include "base/test/scoped_command_line.h"
 #include "net/base/url_util.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
@@ -22,7 +23,7 @@ namespace test {
 // with a class that has to expose the same members as url::UrlOriginTestTraits
 // and the following extra members:
 //   static bool IsOriginPotentiallyTrustworthy(const OriginType& origin);
-//   static bool IsUrlPotentiallyTrustworthy(base::StringPiece str);
+//   static bool IsUrlPotentiallyTrustworthy(std::string_view str);
 //   static bool IsOriginOfLocalhost(const OriginType& origin);
 template <typename TTrustworthinessTraits>
 class AbstractTrustworthinessTest
@@ -37,11 +38,11 @@ class AbstractTrustworthinessTest
   bool IsOriginPotentiallyTrustworthy(const OriginType& origin) {
     return TTrustworthinessTraits::IsOriginPotentiallyTrustworthy(origin);
   }
-  bool IsOriginPotentiallyTrustworthy(base::StringPiece str) {
+  bool IsOriginPotentiallyTrustworthy(std::string_view str) {
     auto origin = this->CreateOriginFromString(str);
     return TTrustworthinessTraits::IsOriginPotentiallyTrustworthy(origin);
   }
-  bool IsUrlPotentiallyTrustworthy(base::StringPiece str) {
+  bool IsUrlPotentiallyTrustworthy(std::string_view str) {
     return TTrustworthinessTraits::IsUrlPotentiallyTrustworthy(str);
   }
   bool IsOriginOfLocalhost(const OriginType& origin) {
@@ -67,9 +68,6 @@ TYPED_TEST_P(AbstractTrustworthinessTest, OriginFromString) {
   EXPECT_FALSE(
       this->IsOriginPotentiallyTrustworthy("javascript:alert('blah')"));
   EXPECT_FALSE(this->IsOriginPotentiallyTrustworthy("data:test/plain;blah"));
-
-  EXPECT_TRUE(this->IsOriginPotentiallyTrustworthy(
-      "quic-transport://example.com/counter"));
 }
 
 TYPED_TEST_P(AbstractTrustworthinessTest, CustomSchemes) {
@@ -208,9 +206,6 @@ TYPED_TEST_P(AbstractTrustworthinessTest, UrlFromString) {
       "filesystem:blob:https://example.com/"
       "578223a1-8c13-17b3-84d5-eca045ae384a"));
 
-  EXPECT_TRUE(this->IsUrlPotentiallyTrustworthy(
-      "quic-transport://example.com/counter"));
-
   // These tests are imported from IsPotentiallyTrustworthy.Url.
   EXPECT_TRUE(this->IsUrlPotentiallyTrustworthy("file:///test/fun.html"));
   EXPECT_TRUE(this->IsUrlPotentiallyTrustworthy("file:///test/"));
@@ -318,7 +313,6 @@ TYPED_TEST_P(AbstractTrustworthinessTest, TestcasesInheritedFromBlink) {
       // Secure transports are considered trustworthy.
       {true, false, "https://foobar.com"},
       {true, false, "wss://foobar.com"},
-      {true, false, "quic-transport://example.com/counter"},
 
       // Insecure transports are not considered trustworthy.
       {false, false, "ftp://foobar.com"},

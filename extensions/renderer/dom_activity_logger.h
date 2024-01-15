@@ -10,6 +10,9 @@
 
 #include "base/values.h"
 #include "extensions/common/dom_action_types.h"
+#include "extensions/common/extension_id.h"
+#include "extensions/common/mojom/renderer_host.mojom.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
 #include "third_party/blink/public/web/web_dom_activity_logger.h"
 #include "v8/include/v8-forward.h"
 
@@ -44,38 +47,35 @@ class DOMActivityLogger: public blink::WebDOMActivityLogger {
   // log.
   // These methods don't have the override keyword due to the complexities it
   // introduces when changes blink apis.
-  void LogGetter(const blink::WebString& api_name,
+  void LogGetter(v8::Isolate* isolate,
+                 v8::Local<v8::Context> context,
+                 const blink::WebString& api_name,
                  const blink::WebURL& url,
                  const blink::WebString& title) override;
-  void LogSetter(const blink::WebString& api_name,
+  void LogSetter(v8::Isolate* isolate,
+                 v8::Local<v8::Context> context,
+                 const blink::WebString& api_name,
                  const v8::Local<v8::Value>& new_value,
                  const blink::WebURL& url,
                  const blink::WebString& title) override;
-  virtual void logSetter(const blink::WebString& api_name,
-                         const v8::Local<v8::Value>& new_value,
-                         const v8::Local<v8::Value>& old_value,
-                         const blink::WebURL& url,
-                         const blink::WebString& title);
-  void LogMethod(const blink::WebString& api_name,
+  void LogMethod(v8::Isolate* isolate,
+                 v8::Local<v8::Context> context,
+                 const blink::WebString& api_name,
                  int argc,
                  const v8::Local<v8::Value>* argv,
                  const blink::WebURL& url,
                  const blink::WebString& title) override;
-  void LogEvent(const blink::WebString& event_name,
+  void LogEvent(blink::WebLocalFrame& frame,
+                const blink::WebString& event_name,
                 int argc,
                 const blink::WebString* argv,
                 const blink::WebURL& url,
                 const blink::WebString& title) override;
 
-  // Helper function to actually send the message across IPC.
-  void SendDomActionMessage(const std::string& api_call,
-                            const GURL& url,
-                            const std::u16string& url_title,
-                            DomActionType::Type call_type,
-                            base::Value::List args);
+  mojom::RendererHost* GetRendererHost(v8::Local<v8::Context> context);
 
   // The id of the extension with which this logger is associated.
-  std::string extension_id_;
+  ExtensionId extension_id_;
 };
 
 }  // namespace extensions

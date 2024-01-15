@@ -21,29 +21,23 @@ namespace mojo {
 
 template <>
 struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
-    StructTraits<network::mojom::NetworkAnonymizationKeyDataView,
+    StructTraits<network::mojom::EmptyNetworkAnonymizationKeyDataView,
                  net::NetworkAnonymizationKey> {
-  static const absl::optional<net::SchemefulSite>& top_frame_site(
-      const net::NetworkAnonymizationKey& input) {
-    return input.GetTopFrameSite();
-  }
+  static bool Read(network::mojom::EmptyNetworkAnonymizationKeyDataView data,
+                   net::NetworkAnonymizationKey* out);
+};
 
-  static const absl::optional<net::SchemefulSite>& frame_site(
+template <>
+struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
+    StructTraits<network::mojom::NonEmptyNetworkAnonymizationKeyDataView,
+                 net::NetworkAnonymizationKey> {
+  static const net::SchemefulSite& top_frame_site(
       const net::NetworkAnonymizationKey& input) {
-    // TODO(crbug/1343856): update to use OptionalAsPointer rather than
-    // NoDestructor.
-    static const base::NoDestructor<absl::optional<net::SchemefulSite>>
-        nullopt_origin;
-    return net::NetworkAnonymizationKey::IsFrameSiteEnabled()
-               ? input.GetFrameSite()
-               : *nullopt_origin;
+    return input.GetTopFrameSite().value();
   }
 
   static bool is_cross_site(const net::NetworkAnonymizationKey& input) {
-    if (!net::NetworkAnonymizationKey::IsCrossSiteFlagSchemeEnabled()) {
-      return false;
-    }
-    return input.GetIsCrossSite().value_or(false);
+    return input.IsCrossSite();
   }
 
   static const absl::optional<base::UnguessableToken>& nonce(
@@ -51,8 +45,29 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
     return input.GetNonce();
   }
 
+  static bool Read(network::mojom::NonEmptyNetworkAnonymizationKeyDataView data,
+                   net::NetworkAnonymizationKey* out);
+};
+
+template <>
+struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
+    UnionTraits<network::mojom::NetworkAnonymizationKeyDataView,
+                net::NetworkAnonymizationKey> {
+  static const net::NetworkAnonymizationKey& empty(
+      const net::NetworkAnonymizationKey& input) {
+    return input;
+  }
+
+  static const net::NetworkAnonymizationKey& non_empty(
+      const net::NetworkAnonymizationKey& input) {
+    return input;
+  }
+
   static bool Read(network::mojom::NetworkAnonymizationKeyDataView data,
                    net::NetworkAnonymizationKey* out);
+
+  static network::mojom::NetworkAnonymizationKeyDataView::Tag GetTag(
+      const net::NetworkAnonymizationKey& input);
 };
 
 }  // namespace mojo

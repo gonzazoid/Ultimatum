@@ -16,7 +16,8 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/aura/window.h"
@@ -92,7 +93,7 @@ class HTClientView : public views::ClientView {
   HUDDisplayView* GetHUDDisplayViewForTesting() { return hud_display_; }
 
  private:
-  HUDDisplayView* hud_display_;
+  raw_ptr<HUDDisplayView> hud_display_;
 };
 
 BEGIN_METADATA(HTClientView, views::ClientView)
@@ -147,8 +148,11 @@ void HUDDisplayView::Toggle() {
   params.bounds = gfx::Rect(kHUDWidth, kHUDHeightWithGraph);
   auto* widget = CreateViewTreeHostWidget(std::move(params));
   widget->GetLayer()->SetName("HUDDisplayView");
-  static_cast<ViewTreeHostRootView*>(widget->GetRootView())
-      ->SetIsOverlayCandidate(g_hud_overlay_mode);
+
+  ViewTreeHostRootView* root_view =
+      static_cast<ViewTreeHostRootView*>(widget->GetRootView());
+  root_view->SetIsOverlayCandidate(g_hud_overlay_mode);
+  root_view->Init(widget->GetNativeView());
   widget->Show();
 
   g_hud_widget = widget;

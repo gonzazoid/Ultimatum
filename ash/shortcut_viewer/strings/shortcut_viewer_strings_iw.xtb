@@ -59,7 +59,7 @@
 <translation id="2872353916818027657">החלפת הצג הראשי</translation>
 <translation id="2914313326123580426">הצגה או הסתרה של החלונית 'כלים למפתחים'</translation>
 <translation id="292495055542441795">החלפה של מצב מסך מלא</translation>
-<translation id="3020183492814296499">קיצורים</translation>
+<translation id="3020183492814296499">קיצורי דרך</translation>
 <translation id="3084301071537457911">הדגשת הפריט הבא במדף</translation>
 <translation id="309173601632226815">הדגשת הלחצן של מרכז האפליקציות במדף</translation>
 <translation id="3140353188828248647">התמקדות בשורת כתובת האתר</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">הדגשת הסרגל של שורת כתובת האתר</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> או <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">מצב סקירה כללית</translation>
+<translation id="4275283744500212192">פתיחת האפשרויות לפריסת החלון</translation>
 <translation id="4382340674111381977">חזרה לדף הקודם</translation>
 <translation id="4458670250301149821">העברה של סמל אפליקציה אל תיקייה או מחוץ לה בתצוגת האפליקציות</translation>
 <translation id="4472417192667361414">הגדרות תצוגה ומערכת</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">גרירת הקישור לאזור ריק בשורת הכרטיסיות</translation>
 <translation id="8389638407792712197">פתיחת חלון חדש</translation>
 <translation id="8429696719963529183">‏שימוש במקשי F ‏(F1 עד F12)</translation>
+<translation id="8539396513118402548">רשימת קיצורי הדרך</translation>
 <translation id="85690795166292698">פתיחת הקישור בכרטיסייה חדשה</translation>
 <translation id="8609384513243082612">פתיחת כרטיסייה חדשה</translation>
 <translation id="8644639153978066712">הצגת קבצים מוסתרים באפליקציה 'קבצים'</translation>

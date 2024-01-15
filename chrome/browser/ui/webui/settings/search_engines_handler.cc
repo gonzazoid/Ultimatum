@@ -4,13 +4,16 @@
 
 #include "chrome/browser/ui/webui/settings/search_engines_handler.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/check_deref.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/user_metrics.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
@@ -19,10 +22,15 @@
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
 #include "chrome/browser/ui/search_engines/template_url_table_model.h"
+#include "chrome/browser/ui/webui/search_engine_choice/icon_utils.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/country_codes/country_codes.h"
 #include "components/prefs/pref_service.h"
+#include "components/search_engines/search_engine_choice_utils.h"
+#include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "content/public/browser/web_ui.h"
@@ -30,6 +38,10 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/management_policy.h"
 #include "extensions/common/extension.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/public/cpp/new_window_delegate.h"
+#endif
 
 namespace {
 // The following strings need to match with the IDs of the text input elements
@@ -92,6 +104,13 @@ void SearchEnginesHandler::RegisterMessages() {
       base::BindRepeating(
           &SearchEnginesHandler::HandleSearchEngineEditCompleted,
           base::Unretained(this)));
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  web_ui()->RegisterMessageCallback(
+      "openBrowserSearchSettings",
+      base::BindRepeating(
+          &SearchEnginesHandler::HandleOpenBrowserSearchSettings,
+          base::Unretained(this)));
+#endif
 }
 
 void SearchEnginesHandler::OnJavascriptAllowed() {
@@ -107,7 +126,7 @@ base::Value::Dict SearchEnginesHandler::GetSearchEnginesList() {
   // Find the default engine.
   const TemplateURL* default_engine =
       list_controller_.GetDefaultSearchProvider();
-  absl::optional<size_t> default_index =
+  std::optional<size_t> default_index =
       list_controller_.table_model()->IndexOfTemplateURL(default_engine);
 
   // Build the first list (default search engines).
@@ -120,8 +139,7 @@ base::Value::Dict SearchEnginesHandler::GetSearchEnginesList() {
     defaults.Append(CreateDictionaryForEngine(i, i == default_index));
   }
 
-  // Build the second list (active search engines). This will not have any
-  // entries if the new Search Engines page is not enabled.
+  // Build the second list (active search engines).
   base::Value::List actives;
   size_t last_active_engine_index =
       list_controller_.table_model()->last_active_engine_index();
@@ -133,7 +151,7 @@ base::Value::Dict SearchEnginesHandler::GetSearchEnginesList() {
     actives.Append(CreateDictionaryForEngine(i, i == default_index));
   }
 
-  // Build the second list (other search engines).
+  // Build the third list (other search engines).
   base::Value::List others;
   size_t last_other_engine_index =
       list_controller_.table_model()->last_other_engine_index();
@@ -211,6 +229,40 @@ base::Value::Dict SearchEnginesHandler::CreateDictionaryForEngine(
   GURL icon_url = template_url->favicon_url();
   if (icon_url.is_valid())
     dict.Set("iconURL", icon_url.spec());
+
+  const bool is_search_engine_choice_settings_ui =
+      search_engines::IsChoiceScreenFlagEnabled(
+          search_engines::ChoicePromo::kAny);
+
+  // The icons that are used for search engines in the EEA region are bundled
+  // with Chrome. We use the favicon service for countries outside the EEA
+  // region to guarantee having icons for all search engines.
+  const bool is_eea_region = search_engines::IsEeaChoiceCountry(
+      search_engines::GetSearchEngineChoiceCountryId(profile_->GetPrefs()));
+  if (is_search_engine_choice_settings_ui && is_eea_region &&
+      template_url->prepopulate_id() != 0) {
+    std::string_view icon_path =
+        GetSearchEngineGeneratedIconPath(template_url->keyword());
+    if (icon_path.empty()) {
+      SCOPED_CRASH_KEY_NUMBER("SearchEnginesHandler", "engine_id",
+                              template_url->prepopulate_id());
+      SCOPED_CRASH_KEY_STRING64("SearchEnginesHandler", "engine_keyword",
+                                base::UTF16ToUTF8(template_url->keyword()));
+      SCOPED_CRASH_KEY_STRING32(
+          "SearchEnginesHandler", "user_country",
+          country_codes::CountryIDToCountryString(
+              search_engines::GetSearchEngineChoiceCountryId(
+                  profile_->GetPrefs())));
+      base::debug::DumpWithoutCrashing();
+    } else {
+      // The search engine icon path are 24px, but displayed at 16px, or 32px on
+      // HiDPI screens. Use the 2x version (48px) for a large enough icon.
+      // Note that this icon path is used in `site-favicon` which does not
+      // support `image-set`.
+      dict.Set("iconPath", base::StrCat({icon_path, "@2x"}));
+    }
+  }
+
   dict.Set("modelIndex", base::checked_cast<int>(index));
 
   dict.Set("canBeRemoved", list_controller_.CanRemove(template_url));
@@ -221,6 +273,7 @@ base::Value::Dict SearchEnginesHandler::CreateDictionaryForEngine(
   dict.Set("canBeDeactivated", list_controller_.CanDeactivate(template_url));
   dict.Set("shouldConfirmDeletion",
            list_controller_.ShouldConfirmDeletion(template_url));
+  dict.Set("isManaged", list_controller_.IsManaged(template_url));
   TemplateURL::Type type = template_url->type();
   dict.Set("isOmniboxExtension", type == TemplateURL::OMNIBOX_API_EXTENSION);
   if (type == TemplateURL::NORMAL_CONTROLLED_BY_EXTENSION ||
@@ -252,14 +305,20 @@ void SearchEnginesHandler::HandleGetSearchEnginesList(
 
 void SearchEnginesHandler::HandleSetDefaultSearchEngine(
     const base::Value::List& args) {
-  CHECK_EQ(1U, args.size());
+  CHECK_EQ(2U, args.size());
   int index = args[0].GetInt();
   if (index < 0 || static_cast<size_t>(index) >=
                        list_controller_.table_model()->RowCount()) {
     return;
   }
 
-  list_controller_.MakeDefaultTemplateURL(index);
+  search_engines::ChoiceMadeLocation choice_made_location =
+      static_cast<search_engines::ChoiceMadeLocation>(args[1].GetInt());
+  CHECK(choice_made_location ==
+            search_engines::ChoiceMadeLocation::kSearchSettings ||
+        choice_made_location ==
+            search_engines::ChoiceMadeLocation::kSearchEngineSettings);
+  list_controller_.MakeDefaultTemplateURL(index, choice_made_location);
 
   base::RecordAction(base::UserMetricsAction("Options_SearchEngineSetDefault"));
 }
@@ -379,5 +438,15 @@ void SearchEnginesHandler::HandleSearchEngineEditCompleted(
                                       base::UTF8ToUTF16(keyword), query_url);
   }
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void SearchEnginesHandler::HandleOpenBrowserSearchSettings(
+    const base::Value::List& args) {
+  ash::NewWindowDelegate::GetPrimary()->OpenUrl(
+      GURL(chrome::kChromeUISettingsURL).Resolve(chrome::kSearchSubPage),
+      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kSwitchToTab);
+}
+#endif
 
 }  // namespace settings

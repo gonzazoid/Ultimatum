@@ -10,6 +10,7 @@
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/sequence_checker.h"
 #include "media/base/callback_registry.h"
 #include "media/base/cdm_context.h"
 #include "media/mojo/mojom/stable/stable_video_decoder.mojom.h"
@@ -32,6 +33,8 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) StableCdmContextImpl
 
   ~StableCdmContextImpl() override;
 
+  const media::CdmContext* cdm_context() const { return cdm_context_; }
+
   // media::stable::mojom::StableCdmContext:
   void GetHwKeyData(std::unique_ptr<media::DecryptConfig> decrypt_config,
                     const std::vector<uint8_t>& hw_identifier,
@@ -41,10 +44,19 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) StableCdmContextImpl
           callback) override;
   void GetHwConfigData(GetHwConfigDataCallback callback) override;
   void GetScreenResolutions(GetScreenResolutionsCallback callback) override;
+  void AllocateSecureBuffer(uint32_t size,
+                            AllocateSecureBufferCallback callback) override;
+  void ParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ParseEncryptedSliceHeaderCallback callback) override;
 
  private:
   // Receives callbacks from the |cdm_context_| after we register with it.
   void CdmEventCallback(media::CdmContext::Event event);
+
+  SEQUENCE_CHECKER(sequence_checker_);
 
   const raw_ptr<media::CdmContext> cdm_context_;
   std::unique_ptr<media::CdmContextRef> cdm_context_ref_;

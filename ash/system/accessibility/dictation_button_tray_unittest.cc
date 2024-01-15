@@ -5,7 +5,7 @@
 #include "ash/system/accessibility/dictation_button_tray.h"
 #include <memory>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/test_accessibility_controller_client.h"
 #include "ash/constants/ash_features.h"
 #include "ash/display/window_tree_host_manager.h"
@@ -16,7 +16,7 @@
 #include "ash/rotator/screen_rotation_animator.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/progress_indicator/progress_indicator.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/status_area_widget_test_helper.h"
@@ -33,6 +33,7 @@
 #include "base/test/metrics/user_action_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/soda/soda_installer.h"
 #include "components/soda/soda_installer_impl_chromeos.h"
 #include "ui/accessibility/accessibility_features.h"
@@ -66,12 +67,6 @@ DictationButtonTray* GetTray() {
       ->dictation_button_tray();
 }
 
-ui::GestureEvent CreateTapEvent(
-    base::TimeDelta delta_from_start = base::TimeDelta()) {
-  return ui::GestureEvent(0, 0, 0, base::TimeTicks() + delta_from_start,
-                          ui::GestureEventDetails(ui::ET_GESTURE_TAP));
-}
-
 // ProgressIndicatorWaiter -----------------------------------------------------
 
 // A class which supports waiting for a progress indicator to reach a desired
@@ -86,7 +81,7 @@ class ProgressIndicatorWaiter {
   // Waits for `progress_indicator` to reach the specified `progress`. If the
   // `progress_indicator` is already at `progress`, this method no-ops.
   void WaitForProgress(ProgressIndicator* progress_indicator,
-                       const absl::optional<float>& progress) {
+                       const std::optional<float>& progress) {
     if (progress_indicator->progress() == progress)
       return;
     base::RunLoop run_loop;
@@ -115,8 +110,8 @@ class DictationButtonTrayTest : public AshTestBase {
     // Focus some input text so the Dictation button will be enabled.
     fake_text_input_client_ =
         std::make_unique<ui::FakeTextInputClient>(ui::TEXT_INPUT_TYPE_TEXT);
-    ui::InputMethodAsh ime(nullptr);
-    ui::IMEBridge::Get()->SetInputContextHandler(&ime);
+    InputMethodAsh ime(nullptr);
+    IMEBridge::Get()->SetInputContextHandler(&ime);
     AshTestBase::SetUp();
     FocusTextInputClient();
   }
@@ -147,7 +142,7 @@ class DictationButtonTrayTest : public AshTestBase {
 // Ensures that creation doesn't cause any crashes and adds the image icon.
 // Also checks that the tray is visible.
 TEST_F(DictationButtonTrayTest, BasicConstruction) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->dictation().SetEnabled(true);
   EXPECT_TRUE(GetImageView(GetTray()));
@@ -156,22 +151,22 @@ TEST_F(DictationButtonTrayTest, BasicConstruction) {
 
 // Test that clicking the button activates dictation.
 TEST_F(DictationButtonTrayTest, ButtonActivatesDictation) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   TestAccessibilityControllerClient client;
   controller->dictation().SetEnabled(true);
   EXPECT_FALSE(controller->dictation_active());
 
-  GetTray()->PerformAction(CreateTapEvent());
+  GestureTapOn(GetTray());
   EXPECT_TRUE(controller->dictation_active());
 
-  GetTray()->PerformAction(CreateTapEvent());
+  GestureTapOn(GetTray());
   EXPECT_FALSE(controller->dictation_active());
 }
 
 // Test that activating dictation causes the button to activate.
 TEST_F(DictationButtonTrayTest, ActivatingDictationActivatesButton) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->dictation().SetEnabled(true);
   Shell::Get()->OnDictationStarted();
@@ -184,7 +179,7 @@ TEST_F(DictationButtonTrayTest, ActivatingDictationActivatesButton) {
 // Tests that the tray only renders as active while dictation is listening. Any
 // termination of dictation clears the active state.
 TEST_F(DictationButtonTrayTest, ActiveStateOnlyDuringDictation) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   TestAccessibilityControllerClient client;
   controller->dictation().SetEnabled(true);
@@ -195,34 +190,44 @@ TEST_F(DictationButtonTrayTest, ActiveStateOnlyDuringDictation) {
   EXPECT_TRUE(GetTray()->GetEnabled());
 
   Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
-      AcceleratorAction::TOGGLE_DICTATION, {});
+      AcceleratorAction::kEnableOrToggleDictation, {});
   EXPECT_TRUE(controller->dictation_active());
   EXPECT_TRUE(GetTray()->is_active());
 
   Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
-      AcceleratorAction::TOGGLE_DICTATION, {});
+      AcceleratorAction::kEnableOrToggleDictation, {});
   EXPECT_FALSE(controller->dictation_active());
   EXPECT_FALSE(GetTray()->is_active());
 }
 
 TEST_F(DictationButtonTrayTest, ImageIcons) {
-  SkColor color = AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kIconColorPrimary);
-  gfx::ImageSkia off_icon =
-      gfx::CreateVectorIcon(kDictationOffNewuiIcon, color);
-  gfx::ImageSkia on_icon = gfx::CreateVectorIcon(kDictationOnNewuiIcon, color);
-
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   TestAccessibilityControllerClient client;
   controller->dictation().SetEnabled(true);
+
+  const bool is_jelly_enabled = chromeos::features::IsJellyEnabled();
+  const auto* color_provider = GetTray()->GetColorProvider();
+  const auto off_icon_color = color_provider->GetColor(
+      is_jelly_enabled
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysOnSurface)
+          : kColorAshIconColorPrimary);
+  const auto on_icon_color = color_provider->GetColor(
+      is_jelly_enabled ? static_cast<ui::ColorId>(
+                             cros_tokens::kCrosSysSystemOnPrimaryContainer)
+                       : kColorAshIconColorPrimary);
+
+  gfx::ImageSkia off_icon =
+      gfx::CreateVectorIcon(kDictationOffNewuiIcon, off_icon_color);
+  gfx::ImageSkia on_icon =
+      gfx::CreateVectorIcon(kDictationOnNewuiIcon, on_icon_color);
 
   views::ImageView* view = GetImageView(GetTray());
   EXPECT_TRUE(gfx::test::AreBitmapsEqual(*view->GetImage().bitmap(),
                                          *off_icon.bitmap()));
 
   Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
-      AcceleratorAction::TOGGLE_DICTATION, {});
+      AcceleratorAction::kEnableOrToggleDictation, {});
 
   EXPECT_TRUE(gfx::test::AreBitmapsEqual(*view->GetImage().bitmap(),
                                          *on_icon.bitmap()));
@@ -231,7 +236,7 @@ TEST_F(DictationButtonTrayTest, ImageIcons) {
 TEST_F(DictationButtonTrayTest, DisabledWhenNoInputFocused) {
   DetachTextInputClient();
 
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->dictation().SetEnabled(true);
   DictationButtonTray* tray = GetTray();
@@ -239,7 +244,7 @@ TEST_F(DictationButtonTrayTest, DisabledWhenNoInputFocused) {
 
   // Action doesn't work because disabled.
   Shell::Get()->accelerator_controller()->PerformActionIfEnabled(
-      AcceleratorAction::TOGGLE_DICTATION, {});
+      AcceleratorAction::kEnableOrToggleDictation, {});
   EXPECT_FALSE(controller->dictation_active());
   EXPECT_FALSE(tray->GetEnabled());
 
@@ -285,7 +290,7 @@ class DictationButtonTraySodaTest : public DictationButtonTrayTest {
 
   float GetProgressIndicatorProgress() const {
     DCHECK(GetTray()->progress_indicator_);
-    absl::optional<float> progress = GetTray()->progress_indicator_->progress();
+    std::optional<float> progress = GetTray()->progress_indicator_->progress();
     DCHECK(progress.has_value());
     return progress.value();
   }
@@ -313,7 +318,7 @@ class DictationButtonTraySodaTest : public DictationButtonTrayTest {
 
 // Tests the behavior of the UpdateOnSpeechRecognitionDownloadChanged() method.
 TEST_F(DictationButtonTraySodaTest, UpdateOnSpeechRecognitionDownloadChanged) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->dictation().SetEnabled(true);
   DictationButtonTray* tray = GetTray();

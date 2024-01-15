@@ -6,11 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/web_applications/web_app_origin_association_task.h"
 #include "components/webapps/services/web_app_origin_association/web_app_origin_association_fetcher.h"
 #include "components/webapps/services/web_app_origin_association/web_app_origin_association_parser_service.h"
-#include "url/gurl.h"
 
 namespace web_app {
 
@@ -20,16 +19,17 @@ WebAppOriginAssociationManager::WebAppOriginAssociationManager()
 WebAppOriginAssociationManager::~WebAppOriginAssociationManager() = default;
 
 void WebAppOriginAssociationManager::GetWebAppOriginAssociations(
-    const GURL& manifest_url,
-    apps::UrlHandlers url_handlers,
+    const GURL& web_app_identity,
+    ScopeExtensions scope_extensions,
     OnDidGetWebAppOriginAssociations callback) {
-  if (url_handlers.empty()) {
-    std::move(callback).Run(apps::UrlHandlers());
+  if (scope_extensions.empty()) {
+    std::move(callback).Run(ScopeExtensions());
     return;
   }
 
-  auto task = std::make_unique<Task>(manifest_url, std::move(url_handlers),
-                                     *this, std::move(callback));
+  auto task =
+      std::make_unique<Task>(web_app_identity, std::move(scope_extensions),
+                             *this, std::move(callback));
   pending_tasks_.push_back(std::move(task));
   MaybeStartNextTask();
 }
@@ -52,6 +52,12 @@ void WebAppOriginAssociationManager::OnTaskCompleted() {
 void WebAppOriginAssociationManager::SetFetcherForTest(
     std::unique_ptr<webapps::WebAppOriginAssociationFetcher> fetcher) {
   fetcher_ = std::move(fetcher);
+}
+
+webapps::WebAppOriginAssociationFetcher&
+WebAppOriginAssociationManager::GetFetcherForTest() {
+  DCHECK(fetcher_);
+  return *fetcher_;
 }
 
 const mojo::Remote<webapps::mojom::WebAppOriginAssociationParser>&

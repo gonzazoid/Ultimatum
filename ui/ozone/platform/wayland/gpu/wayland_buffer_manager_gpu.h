@@ -9,17 +9,21 @@
 #include <map>
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/synchronization/lock.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 #include "ui/ozone/platform/wayland/mojom/wayland_buffer_manager.mojom.h"
+#include "ui/ozone/public/drm_modifiers_filter.h"
 
 namespace gfx {
 enum class SwapResult;
@@ -40,6 +44,7 @@ class WaylandWindow;
 class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
  public:
   WaylandBufferManagerGpu();
+  explicit WaylandBufferManagerGpu(const base::FilePath& drm_node_path);
   WaylandBufferManagerGpu(const WaylandBufferManagerGpu&) = delete;
   WaylandBufferManagerGpu& operator=(const WaylandBufferManagerGpu&) = delete;
 
@@ -57,7 +62,10 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
       bool supports_dma_buf,
       bool supports_viewporter,
       bool supports_acquire_fence,
-      uint32_t supported_surface_augmentor_version) override;
+      bool supports_overlays,
+      uint32_t supported_surface_augmentor_version,
+      bool supports_single_pixel_buffer,
+      const base::Version& server_version) override;
 
   // These two calls get the surface, which backs the |widget| and notifies it
   // about the submission and the presentation. After the surface receives the
@@ -65,10 +73,13 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
   void OnSubmission(gfx::AcceleratedWidget widget,
                     uint32_t frame_id,
                     gfx::SwapResult swap_result,
-                    gfx::GpuFenceHandle release_fence_handle) override;
+                    gfx::GpuFenceHandle release_fence_handle,
+                    const std::vector<wl::WaylandPresentationInfo>&
+                        presentation_infos) override;
+
   void OnPresentation(gfx::AcceleratedWidget widget,
-                      uint32_t frame_id,
-                      const gfx::PresentationFeedback& feedback) override;
+                      const std::vector<wl::WaylandPresentationInfo>&
+                          presentation_infos) override;
 
   // If the client, which uses this manager and implements WaylandSurfaceGpu,
   // wants to receive OnSubmission and OnPresentation callbacks and know the
@@ -106,6 +117,10 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
                               const gfx::Size& size,
                               uint32_t buf_id);
 
+  // Asks Wayland to create a single pixel wl_buffer that is not backed by
+  // anything on the gpu side. Requires single pixel buffer protocol.
+  void CreateSinglePixelBuffer(SkColor4f color, uint32_t buf_id);
+
   // Asks Wayland to find a wl_buffer with the |buffer_id| and attach the
   // buffer to the WaylandWindow's surface, which backs the following |widget|.
   // Once the buffer is submitted and presented, the OnSubmission and
@@ -122,6 +137,7 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
   void CommitBuffer(gfx::AcceleratedWidget widget,
                     uint32_t frame_id,
                     uint32_t buffer_id,
+                    gfx::FrameData data,
                     const gfx::Rect& bounds_rect,
                     const gfx::RoundedCornersF& corners,
                     float surface_scale_factor,
@@ -130,6 +146,7 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
   // |widget|.
   void CommitOverlays(gfx::AcceleratedWidget widget,
                       uint32_t frame_id,
+                      gfx::FrameData data,
                       std::vector<wl::WaylandOverlayConfig> overlays);
 
   // Asks Wayland to destroy a wl_buffer.
@@ -142,8 +159,12 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
 
   bool supports_acquire_fence() const { return supports_acquire_fence_; }
   bool supports_viewporter() const { return supports_viewporter_; }
+  bool supports_overlays() const { return supports_overlays_; }
   bool supports_non_backed_solid_color_buffers() const {
     return supports_non_backed_solid_color_buffers_;
+  }
+  bool supports_single_pixel_buffer() const {
+    return supports_single_pixel_buffer_;
   }
   bool supports_subpixel_accurate_position() const {
     return supports_subpixel_accurate_position_;
@@ -152,17 +173,30 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
     return supports_surface_background_color_;
   }
   bool supports_clip_rect() const { return supports_clip_rect_; }
+  bool supports_affine_transform() const { return supports_affine_transform_; }
+  bool supports_out_of_window_clip_rect() const {
+    return supports_out_of_window_clip_rect_;
+  }
+  bool has_transformation_fix() const { return has_transformation_fix_; }
+
+  void set_drm_modifiers_filter(
+      std::unique_ptr<DrmModifiersFilter> drm_modifiers_filter) {
+    drm_modifiers_filter_ = std::move(drm_modifiers_filter);
+  }
 
   // Adds a WaylandBufferManagerGpu binding.
   void AddBindingWaylandBufferManagerGpu(
       mojo::PendingReceiver<ozone::mojom::WaylandBufferManagerGpu> receiver);
 
   // Returns supported modifiers for the supplied |buffer_format|.
-  const std::vector<uint64_t>& GetModifiersForBufferFormat(
+  const std::vector<uint64_t> GetModifiersForBufferFormat(
       gfx::BufferFormat buffer_format) const;
 
   // Allocates a unique buffer ID.
   uint32_t AllocateBufferID();
+
+  // Returns if a format is supported by current Wayland implementation.
+  bool SupportsFormat(gfx::BufferFormat buffer_format) const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(WaylandSurfaceFactoryTest, CreateSurfaceCheckGbm);
@@ -187,14 +221,15 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
 
   // Provides the WaylandSurfaceGpu, which backs the |widget|, with swap and
   // presentation results.
-  void SubmitSwapResultOnOriginThread(gfx::AcceleratedWidget widget,
-                                      uint32_t frame_id,
-                                      gfx::SwapResult swap_result,
-                                      gfx::GpuFenceHandle release_fence);
-  void SubmitPresentationOnOriginThread(
+  void HandleSubmissionOnOriginThread(
       gfx::AcceleratedWidget widget,
       uint32_t frame_id,
-      const gfx::PresentationFeedback& feedback);
+      gfx::SwapResult swap_result,
+      gfx::GpuFenceHandle release_fence,
+      const std::vector<wl::WaylandPresentationInfo>& presentation_infos);
+  void HandlePresentationOnOriginThread(
+      gfx::AcceleratedWidget widget,
+      const std::vector<wl::WaylandPresentationInfo>& presentation_infos);
 
   void OnHostDisconnected();
 
@@ -221,15 +256,17 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
   void CreateSolidColorBufferTask(SkColor4f color,
                                   const gfx::Size& size,
                                   uint32_t buf_id);
+  void CreateSinglePixelBufferTask(SkColor4f color, uint32_t buf_id);
   void CommitOverlaysTask(gfx::AcceleratedWidget widget,
                           uint32_t frame_id,
+                          gfx::FrameData data,
                           std::vector<wl::WaylandOverlayConfig> overlays);
   void DestroyBufferTask(uint32_t buffer_id);
 
 #if defined(WAYLAND_GBM)
-  // Finds drm render node, opens it and stores the handle into
+  // Uses |drm_node_path| to open the handle and store it into
   // |drm_render_node_fd|.
-  void OpenAndStoreDrmRenderNodeFd();
+  void OpenAndStoreDrmRenderNodeFd(const base::FilePath& drm_node_path);
   // Used by the gbm_device for self creation.
   base::ScopedFD drm_render_node_fd_;
   // A DRM render node based gbm device.
@@ -246,9 +283,16 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
   // cropping and scaling buffers.
   bool supports_viewporter_ = false;
 
+  // Whether delegated overlays should be used for this Wayland server.
+  bool supports_overlays_ = false;
+
   // Determines whether solid color overlays can be delegated without a backing
   // image via a wayland protocol.
   bool supports_non_backed_solid_color_buffers_ = false;
+
+  // Determines whether single pixel buffer are supported via a wayland
+  // protocol.
+  bool supports_single_pixel_buffer_ = false;
 
   // Determines whether subpixel accurate position is supported.
   bool supports_subpixel_accurate_position_ = false;
@@ -261,6 +305,22 @@ class WaylandBufferManagerGpu : public ozone::mojom::WaylandBufferManagerGpu {
   bool supports_dmabuf_ = true;
 
   bool supports_clip_rect_ = false;
+
+  // Determines whether Wayland server supports delegating non axis-aligned 2d
+  // transforms.
+  bool supports_affine_transform_ = false;
+
+  // Whether wayland server supports clip delegation for quads that are
+  // partially or fully outside of the window.
+  bool supports_out_of_window_clip_rect_ = false;
+
+  // Whether wayland server has the fix that applies transformations in the
+  // correct order.
+  bool has_transformation_fix_ = false;
+
+  // A DRM modifiers filter to ensure we don't allocate buffers with modifiers
+  // not supported by Vulkan.
+  std::unique_ptr<DrmModifiersFilter> drm_modifiers_filter_;
 
   mojo::ReceiverSet<ozone::mojom::WaylandBufferManagerGpu> receiver_set_;
 

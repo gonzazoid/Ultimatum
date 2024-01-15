@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 
+#include <atomic>
 #include <vector>
 
 #include "base/base_export.h"
@@ -16,7 +17,6 @@
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/sequenced_task_source.h"
 #include "base/task/sequence_manager/task_order.h"
-#include "base/task/sequence_manager/task_queue_selector_logic.h"
 #include "base/task/sequence_manager/work_queue_sets.h"
 #include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -40,9 +40,12 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
   TaskQueueSelector& operator=(const TaskQueueSelector&) = delete;
   ~TaskQueueSelector() override;
 
+  static void InitializeFeatures();
+
   // Called to register a queue that can be selected. This function is called
   // on the main thread.
-  void AddQueue(internal::TaskQueueImpl* queue);
+  void AddQueue(internal::TaskQueueImpl* queue,
+                TaskQueue::QueuePriority priority);
 
   // The specified work will no longer be considered for selection. This
   // function is called on the main thread.
@@ -74,6 +77,9 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
 
     // Called when |queue| transitions from disabled to enabled.
     virtual void OnTaskQueueEnabled(internal::TaskQueueImpl* queue) = 0;
+
+    // Called when work becomes available.
+    virtual void OnWorkAvailable() = 0;
   };
 
   // Called once to set the Observer. This function is called
@@ -108,7 +114,7 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
 
   // Maximum number of delayed tasks tasks which can be run while there's a
   // waiting non-delayed task.
-  static const int kMaxDelayedStarvationTasks = 3;
+  static const int kDefaultMaxDelayedStarvationTasks = 3;
 
   // Tracks which priorities are currently active, meaning there are pending
   // runnable tasks with that priority. Because there are only a handful of
@@ -122,7 +128,7 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
     bool HasActivePriority() const { return active_priorities_ != 0; }
 
     bool IsActive(TaskQueue::QueuePriority priority) const {
-      return active_priorities_ & (1u << static_cast<size_t>(priority));
+      return active_priorities_ & (size_t{1} << static_cast<size_t>(priority));
     }
 
     void SetActive(TaskQueue::QueuePriority priority, bool is_active);
@@ -130,7 +136,7 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
     TaskQueue::QueuePriority HighestActivePriority() const;
 
    private:
-    static_assert(TaskQueue::QueuePriority::kQueuePriorityCount <
+    static_assert(SequenceManager::PrioritySettings::kMaxPriorities <
                       sizeof(size_t) * 8,
                   "The number of priorities must be strictly less than the "
                   "number of bits of |active_priorities_|!");
@@ -167,7 +173,7 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
   template <typename SetOperation>
   WorkQueue* ChooseWithPriority(TaskQueue::QueuePriority priority) const {
     // Select an immediate work queue if we are starving immediate tasks.
-    if (immediate_starvation_count_ >= kMaxDelayedStarvationTasks) {
+    if (immediate_starvation_count_ >= g_max_delayed_starvation_tasks) {
       WorkQueue* queue =
           ChooseImmediateOnlyWithPriority<SetOperation>(priority);
       if (queue)
@@ -198,6 +204,8 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
   }
 
  private:
+  size_t priority_count() const { return non_empty_set_counts_.size(); }
+
   void ChangeSetIndex(internal::TaskQueueImpl* queue,
                       TaskQueue::QueuePriority priority);
   void AddQueueImpl(internal::TaskQueueImpl* queue,
@@ -224,10 +232,6 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
     return ChooseDelayedOnlyWithPriority<SetOperation>(priority);
   }
 
-  // Returns the priority which is next after |priority|.
-  static TaskQueue::QueuePriority NextPriority(
-      TaskQueue::QueuePriority priority);
-
   // Returns true if there are pending tasks with priority |priority|.
   bool HasTasksWithPriority(TaskQueue::QueuePriority priority) const;
 
@@ -239,9 +243,12 @@ class BASE_EXPORT TaskQueueSelector : public WorkQueueSets::Observer {
 
   // Count of the number of sets (delayed or immediate) for each priority.
   // Should only contain 0, 1 or 2.
-  std::array<int, TaskQueue::kQueuePriorityCount> non_empty_set_counts_ = {{0}};
+  std::vector<int> non_empty_set_counts_;
 
   static constexpr const int kMaxNonEmptySetCount = 2;
+  // An atomic is used here because InitializeFeatures() can race with
+  // SequenceManager reading this.
+  static std::atomic_int g_max_delayed_starvation_tasks;
 
   // List of active priorities, which is used to work out which priority to run
   // next.

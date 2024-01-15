@@ -479,8 +479,8 @@ TEST(IdentifiabilityStudyStateStandaloneTest, ShouldReportEncounteredSurface) {
   // The specific surface doesn't matter.
   EXPECT_TRUE(state.ShouldReportEncounteredSurface(ukm::AssignNewSourceId(),
                                                    kRegularSurface1));
-  EXPECT_FALSE(state.ShouldReportEncounteredSurface(ukm::NoURLSourceId(),
-                                                    kRegularSurface1));
+  EXPECT_TRUE(state.ShouldReportEncounteredSurface(ukm::NoURLSourceId(),
+                                                   kRegularSurface1));
 }
 
 // Test the mode in which only the meta experiment (i.e. reporting encountered
@@ -690,7 +690,8 @@ TEST(IdentifiabilityStudyStateStandaloneTest, NextOffsetIsTooExpensive) {
   EXPECT_THAT(state.seen_surfaces(), ElementsAre(kRegularSurface1));
 }
 
-TEST(IdentifiabilityStudyStateStandaloneTest, ReachesPivotPoint) {
+// TODO(1407940): Flaky on all platforms
+TEST(IdentifiabilityStudyStateStandaloneTest, DISABLED_ReachesPivotPoint) {
   test::ScopedPrivacyBudgetConfig::Parameters parameters;
   parameters.active_surface_budget = kTestingActiveSurfaceBudget;
 

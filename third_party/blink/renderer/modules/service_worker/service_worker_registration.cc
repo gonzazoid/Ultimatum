@@ -140,9 +140,12 @@ ServiceWorkerRegistration* ServiceWorkerRegistration::Take(
 ServiceWorkerRegistration::ServiceWorkerRegistration(
     ExecutionContext* execution_context,
     WebServiceWorkerRegistrationObjectInfo info)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : ActiveScriptWrappable<ServiceWorkerRegistration>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       registration_id_(info.registration_id),
       scope_(std::move(info.scope)),
+      host_(execution_context),
+      receiver_(this, execution_context),
       stopped_(false) {
   DCHECK_NE(mojom::blink::kInvalidServiceWorkerRegistrationId,
             registration_id_);
@@ -152,9 +155,12 @@ ServiceWorkerRegistration::ServiceWorkerRegistration(
 ServiceWorkerRegistration::ServiceWorkerRegistration(
     ExecutionContext* execution_context,
     mojom::blink::ServiceWorkerRegistrationObjectInfoPtr info)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : ActiveScriptWrappable<ServiceWorkerRegistration>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       registration_id_(info->registration_id),
       scope_(std::move(info->scope)),
+      host_(execution_context),
+      receiver_(this, execution_context),
       stopped_(false) {
   DCHECK_NE(mojom::blink::kInvalidServiceWorkerRegistrationId,
             registration_id_);
@@ -182,7 +188,7 @@ void ServiceWorkerRegistration::Attach(
 
   // If |host_| is bound, it already points to the same object host as
   // |info.host_remote|, so there is no need to bind again.
-  if (!host_) {
+  if (!host_.is_bound()) {
     host_.Bind(std::move(info.host_remote),
                GetExecutionContext()->GetTaskRunner(
                    blink::TaskType::kInternalDefault));
@@ -214,7 +220,7 @@ const AtomicString& ServiceWorkerRegistration::InterfaceName() const {
 NavigationPreloadManager* ServiceWorkerRegistration::navigationPreload() {
   if (!navigation_preload_)
     navigation_preload_ = MakeGarbageCollected<NavigationPreloadManager>(this);
-  return navigation_preload_;
+  return navigation_preload_.Get();
 }
 
 String ServiceWorkerRegistration::scope() const {
@@ -237,6 +243,9 @@ String ServiceWorkerRegistration::updateViaCache() const {
 void ServiceWorkerRegistration::EnableNavigationPreload(
     bool enable,
     ScriptPromiseResolver* resolver) {
+  if (!host_.is_bound()) {
+    return;
+  }
   host_->EnableNavigationPreload(
       enable,
       WTF::BindOnce(&DidEnableNavigationPreload, WrapPersistent(resolver)));
@@ -244,6 +253,9 @@ void ServiceWorkerRegistration::EnableNavigationPreload(
 
 void ServiceWorkerRegistration::GetNavigationPreloadState(
     ScriptPromiseResolver* resolver) {
+  if (!host_.is_bound()) {
+    return;
+  }
   host_->GetNavigationPreloadState(
       WTF::BindOnce(&DidGetNavigationPreloadState, WrapPersistent(resolver)));
 }
@@ -251,6 +263,9 @@ void ServiceWorkerRegistration::GetNavigationPreloadState(
 void ServiceWorkerRegistration::SetNavigationPreloadHeader(
     const String& value,
     ScriptPromiseResolver* resolver) {
+  if (!host_.is_bound()) {
+    return;
+  }
   host_->SetNavigationPreloadHeader(
       value,
       WTF::BindOnce(&DidSetNavigationPreloadHeader, WrapPersistent(resolver)));
@@ -341,7 +356,9 @@ void ServiceWorkerRegistration::Trace(Visitor* visitor) const {
   visitor->Trace(waiting_);
   visitor->Trace(active_);
   visitor->Trace(navigation_preload_);
-  EventTargetWithInlineData::Trace(visitor);
+  visitor->Trace(host_);
+  visitor->Trace(receiver_);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   Supplementable<ServiceWorkerRegistration>::Trace(visitor);
 }
@@ -387,8 +404,9 @@ void ServiceWorkerRegistration::UpdateFound() {
 void ServiceWorkerRegistration::UpdateInternal(
     mojom::blink::FetchClientSettingsObjectPtr mojom_settings_object,
     ScriptPromiseResolver* resolver) {
-  if (!host_)
+  if (!host_.is_bound()) {
     return;
+  }
   host_->Update(std::move(mojom_settings_object),
                 WTF::BindOnce(&DidUpdate, WrapPersistent(resolver),
                               WrapPersistent(this)));
@@ -396,8 +414,9 @@ void ServiceWorkerRegistration::UpdateInternal(
 
 void ServiceWorkerRegistration::UnregisterInternal(
     ScriptPromiseResolver* resolver) {
-  if (!host_)
+  if (!host_.is_bound()) {
     return;
+  }
   host_->Unregister(WTF::BindOnce(&DidUnregister, WrapPersistent(resolver)));
 }
 

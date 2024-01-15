@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/mac/scoped_nsobject.h"
 #include "base/memory/raw_ptr.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service.h"
 
@@ -21,11 +20,11 @@
 
 namespace device {
 
-class BluetoothAdapterMac;
 class BluetoothDevice;
+class BluetoothLowEnergyAdapterApple;
+class BluetoothLowEnergyDeviceMac;
 class BluetoothRemoteGattCharacteristicMac;
 class BluetoothRemoteGattDescriptorMac;
-class BluetoothLowEnergyDeviceMac;
 
 class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattServiceMac
     : public BluetoothRemoteGattService {
@@ -65,8 +64,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattServiceMac
   // discovered.
   void SendNotificationIfComplete();
 
-  // Returns the mac adapter.
-  BluetoothAdapterMac* GetMacAdapter() const;
+  // Returns the LowEnergyBluetooth adapter.
+  BluetoothLowEnergyAdapterApple* GetLowEnergyAdapter() const;
   // Returns CBPeripheral.
   CBPeripheral* GetCBPeripheral() const;
   // Returns CBService.
@@ -81,7 +80,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattServiceMac
   // bluetooth_device_mac_ owns instances of this class.
   raw_ptr<BluetoothLowEnergyDeviceMac> bluetooth_device_mac_;
   // A service from CBPeripheral.services.
-  base::scoped_nsobject<CBService> service_;
+  CBService* __strong service_;
   bool is_primary_;
   // Service identifier.
   std::string identifier_;

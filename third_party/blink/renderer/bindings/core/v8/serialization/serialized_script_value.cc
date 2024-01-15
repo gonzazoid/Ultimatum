@@ -34,7 +34,9 @@
 
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/sys_byteorder.h"
+#include "base/types/expected_macros.h"
 #include "third_party/blink/public/web/web_serialized_script_value_version.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
@@ -215,7 +217,7 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create(
     return Create();
 
   DataBufferPtr data_buffer = AllocateBuffer(data.size());
-  std::copy(data.begin(), data.end(), data_buffer.get());
+  base::ranges::copy(data, data_buffer.get());
   SwapWiredDataIfNeeded(data_buffer.get(), data.size());
 
   return base::AdoptRef(
@@ -230,8 +232,7 @@ scoped_refptr<SerializedScriptValue> SerializedScriptValue::Create(
   DataBufferPtr data_buffer = AllocateBuffer(buffer->size());
   size_t offset = 0;
   for (const auto& span : *buffer) {
-    std::copy(span.data(), span.data() + span.size(),
-              data_buffer.get() + offset);
+    base::ranges::copy(span, data_buffer.get() + offset);
     offset += span.size();
   }
   SwapWiredDataIfNeeded(data_buffer.get(), buffer->size());
@@ -356,7 +357,7 @@ void SerializedScriptValue::TransferOffscreenCanvas(
       return;
     }
     if (offscreen_canvases[i]->RenderingContext()) {
-      exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
+      exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                         "OffscreenCanvas at index " +
                                             String::Number(i) +
                                             " has an associated context.");
@@ -451,7 +452,10 @@ MessagePort* SerializedScriptValue::AddStreamChannel(
   auto* local_port = MakeGarbageCollected<MessagePort>(*execution_context);
 
   // 4. Entangle port1 and port2.
-  local_port->Entangle(pipe.TakePort0());
+  // As these ports are only meant to transfer streams, we don't care about Task
+  // Attribution for them, and hence can pass a nullptr as the MessagePort*
+  // here.
+  local_port->Entangle(pipe.TakePort0(), nullptr);
 
   // 9. Set dataHolder.[[port]] to ! StructuredSerializeWithTransfer(port2,
   //    « port2 »).
@@ -620,11 +624,14 @@ SerializedScriptValue::TransferArrayBufferContents(
             "ArrayBuffer at index " + String::Number(index) +
             " is not detachable and could not be transferred.");
         return ArrayBufferContentsArray();
-      } else if (!array_buffer->Transfer(isolate, contents.at(index))) {
+      } else if (array_buffer->IsDetached()) {
         exception_state.ThrowDOMException(DOMExceptionCode::kDataCloneError,
                                           "ArrayBuffer at index " +
                                               String::Number(index) +
                                               " could not be transferred.");
+        return ArrayBufferContentsArray();
+      } else if (!array_buffer->Transfer(isolate, contents.at(index),
+                                         exception_state)) {
         return ArrayBufferContentsArray();
       }
     }
@@ -667,10 +674,8 @@ bool SerializedScriptValue::IsOriginCheckRequired() const {
 bool SerializedScriptValue::CanDeserializeIn(
     ExecutionContext* execution_context) {
   TrailerReader reader(GetWireData());
-  if (auto result = reader.SkipToTrailer(); !result.has_value())
-    return false;
-  if (auto result = reader.Read(); !result.has_value())
-    return false;
+  RETURN_IF_ERROR(reader.SkipToTrailer(), [](auto) { return false; });
+  RETURN_IF_ERROR(reader.Read(), [](auto) { return false; });
   auto& factory = SerializedScriptValueFactory::Instance();
   bool result = base::ranges::all_of(
       reader.required_exposed_interfaces(), [&](SerializationTag tag) {

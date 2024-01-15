@@ -20,43 +20,71 @@
 #include "ash/public/cpp/holding_space/holding_space_test_api.h"
 #include "ash/public/cpp/holding_space/mock_holding_space_client.h"
 #include "ash/public/cpp/holding_space/mock_holding_space_model_observer.h"
+#include "ash/root_window_controller.h"
+#include "ash/shelf/shelf.h"
+#include "ash/shell.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "ash/system/holding_space/holding_space_animation_registry.h"
+#include "ash/system/notification_center/message_popup_animation_waiter.h"
+#include "ash/system/notification_center/notification_center_tray.h"
+#include "ash/system/progress_indicator/progress_ring_animation.h"
+#include "ash/system/status_area_widget.h"
 #include "ash/test/view_drawn_waiter.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
 #include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_locale.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
+#include "chrome/browser/ash/file_manager/file_tasks_observer.h"
+#include "chrome/browser/ash/file_suggest/file_suggest_keyed_service.h"
+#include "chrome/browser/ash/file_suggest/file_suggest_keyed_service_factory.h"
+#include "chrome/browser/ash/file_suggest/local_file_suggestion_provider.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/download/chrome_download_manager_delegate.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/ash/ash_test_util.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_browsertest_base.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_downloads_delegate.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_factory.h"
+#include "chrome/browser/ui/ash/holding_space/holding_space_test_util.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_util.h"
+#include "chrome/browser/ui/ash/mock_activation_change_observer.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/download/public/common/mock_download_item.h"
+#include "components/user_manager/user.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/mock_download_manager.h"
+#include "storage/browser/file_system/external_mount_points.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/aura/window.h"
 #include "ui/base/clipboard/custom_data_helper.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/compositor/compositor_observer.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/base_event_utils.h"
+#include "ui/events/event_constants.h"
+#include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/image/image_unittest_util.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -68,12 +96,32 @@
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
-#include "ui/wm/public/activation_change_observer.h"
 #include "ui/wm/public/activation_client.h"
 
 namespace ash {
-
 namespace {
+
+// Aliases.
+using ::testing::Conditional;
+using ::testing::Eq;
+using ::testing::Matches;
+using ::testing::Optional;
+using ::testing::Property;
+
+// Matchers --------------------------------------------------------------------
+
+MATCHER_P(EnabledColor, matcher, "") {
+  return Matches(matcher)(arg->GetEnabledColor());
+}
+
+MATCHER_P(EnabledColorId, matcher, "") {
+  return Matches(matcher)(arg->GetEnabledColorId());
+}
+
+MATCHER_P2(JellyConditional, enabled, disabled, "") {
+  return chromeos::features::IsJellyEnabled() ? Matches(enabled)(arg)
+                                              : Matches(disabled)(arg);
+}
 
 // Helpers ---------------------------------------------------------------------
 
@@ -97,18 +145,9 @@ std::vector<HoldingSpaceItem::Type> GetHoldingSpaceItemTypes() {
 // Flushes the message loop by posting a task and waiting for it to run.
 void FlushMessageLoop() {
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   run_loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
-}
-
-// Performs a click on `view` with optional `flags`.
-void Click(const views::View* view, int flags = ui::EF_NONE) {
-  auto* root_window = HoldingSpaceBrowserTestBase::GetRootWindowForNewWindows();
-  ui::test::EventGenerator event_generator(root_window);
-  event_generator.set_flags(flags);
-  event_generator.MoveMouseTo(view->GetBoundsInScreen().CenterPoint());
-  event_generator.ClickLeftButton();
 }
 
 // Performs a double click on `view`.
@@ -196,60 +235,6 @@ void MouseDrag(const views::View* from,
   std::move(after_release_callback).Run();
 }
 
-// Moves mouse to `view` over `count` number of events.
-void MoveMouseTo(const views::View* view, size_t count = 1u) {
-  auto* root_window = HoldingSpaceBrowserTestBase::GetRootWindowForNewWindows();
-  ui::test::EventGenerator event_generator(root_window);
-  event_generator.MoveMouseTo(view->GetBoundsInScreen().CenterPoint(), count);
-}
-
-// Performs a press and release of the specified `key_code` with `flags`.
-void PressAndReleaseKey(ui::KeyboardCode key_code, int flags = ui::EF_NONE) {
-  auto* root_window = HoldingSpaceBrowserTestBase::GetRootWindowForNewWindows();
-  ui::test::EventGenerator event_generator(root_window);
-  event_generator.PressAndReleaseKey(key_code, flags);
-}
-
-// Performs a right click on `view` with the specified `flags`.
-void RightClick(const views::View* view, int flags = ui::EF_NONE) {
-  auto* root_window = view->GetWidget()->GetNativeWindow()->GetRootWindow();
-  ui::test::EventGenerator event_generator(root_window);
-  event_generator.MoveMouseTo(view->GetBoundsInScreen().CenterPoint());
-  event_generator.set_flags(flags);
-  event_generator.ClickRightButton();
-}
-
-// Selects the menu item with the specified command ID. Returns the selected
-// menu item if successful, `nullptr` otherwise.
-views::MenuItemView* SelectMenuItemWithCommandId(
-    HoldingSpaceCommandId command_id) {
-  auto* menu_controller = views::MenuController::GetActiveInstance();
-  if (!menu_controller)
-    return nullptr;
-
-  PressAndReleaseKey(ui::KeyboardCode::VKEY_DOWN);
-  auto* const first_selected_menu_item = menu_controller->GetSelectedMenuItem();
-  if (!first_selected_menu_item)
-    return nullptr;
-
-  auto* selected_menu_item = first_selected_menu_item;
-  do {
-    if (selected_menu_item->GetCommand() == static_cast<int>(command_id))
-      return selected_menu_item;
-
-    PressAndReleaseKey(ui::KeyboardCode::VKEY_DOWN);
-    selected_menu_item = menu_controller->GetSelectedMenuItem();
-
-    // It is expected that context menus loop selection traversal. If the
-    // currently `selected_menu_item` is the `first_selected_menu_item` then the
-    // context menu has been completely traversed.
-  } while (selected_menu_item != first_selected_menu_item);
-
-  // If this LOC is reached the menu has been completely traversed without
-  // finding a menu item for the desired `command_id`.
-  return nullptr;
-}
-
 // Waits for the specified `label` to have the desired `text`.
 void WaitForText(views::Label* label, const std::u16string& text) {
   if (label->GetText() == text)
@@ -264,16 +249,6 @@ void WaitForText(views::Label* label, const std::u16string& text) {
 }
 
 // Mocks -----------------------------------------------------------------------
-
-class MockActivationChangeObserver : public wm::ActivationChangeObserver {
- public:
-  MOCK_METHOD(void,
-              OnWindowActivated,
-              (wm::ActivationChangeObserver::ActivationReason reason,
-               aura::Window* gained_active,
-               aura::Window* lost_active),
-              (override));
-};
 
 class MockDownloadControllerClient
     : public crosapi::mojom::DownloadControllerClient {
@@ -391,8 +366,8 @@ class DropSenderView : public views::WidgetDelegateView,
     widget->Init(std::move(params));
   }
 
-  absl::optional<std::vector<ui::FileInfo>> filenames_data_;
-  absl::optional<base::Pickle> file_system_sources_data_;
+  std::optional<std::vector<ui::FileInfo>> filenames_data_;
+  std::optional<base::Pickle> file_system_sources_data_;
 };
 
 // DropTargetView --------------------------------------------------------------
@@ -431,8 +406,12 @@ class DropTargetView : public views::WidgetDelegateView {
   }
 
   void PerformDrop(const ui::DropTargetEvent& event,
-                   ui::mojom::DragOperation& output_drag_op) {
-    EXPECT_TRUE(event.data().GetFilename(&copied_file_path_));
+                   ui::mojom::DragOperation& output_drag_op,
+                   std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
+    std::vector<ui::FileInfo> files;
+    EXPECT_TRUE(event.data().GetFilenames(&files));
+    ASSERT_EQ(1u, files.size());
+    copied_file_path_ = files[0].path;
     output_drag_op = ui::mojom::DragOperation::kCopy;
   }
 
@@ -452,30 +431,45 @@ class DropTargetView : public views::WidgetDelegateView {
   base::FilePath copied_file_path_;
 };
 
+// NextMainFrameWaiter ---------------------------------------------------------
+
+// A helper class that waits until the next main frame is processed.
+class NextMainFrameWaiter : public ui::CompositorObserver {
+ public:
+  explicit NextMainFrameWaiter(ui::Compositor* compositor) {
+    observation_.Observe(compositor);
+  }
+
+  void Wait() {
+    CHECK(!run_loop_.running());
+    run_loop_.Run();
+  }
+
+ private:
+  // ui::CompositorObserver:
+  void OnDidBeginMainFrame(ui::Compositor* compositor) override {
+    if (run_loop_.running()) {
+      run_loop_.Quit();
+    }
+  }
+
+  base::RunLoop run_loop_;
+  base::ScopedObservation<ui::Compositor, ui::CompositorObserver> observation_{
+      this};
+};
+
 // HoldingSpaceUiBrowserTest ---------------------------------------------------
 
-// Base class for holding space UI browser tests.
-class HoldingSpaceUiBrowserTest : public HoldingSpaceBrowserTestBase {
+class HoldingSpaceUiBrowserTest : public HoldingSpaceUiBrowserTestBase {
  public:
-  // HoldingSpaceBrowserTestBase:
-  void SetUpOnMainThread() override {
-    HoldingSpaceBrowserTestBase::SetUpOnMainThread();
-
-    ui::ScopedAnimationDurationScaleMode scoped_animation_duration_scale_mode(
-        ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
-
-    // The holding space tray will not show until the user has added a file to
-    // holding space. Holding space UI browser tests don't need to assert that
-    // behavior since it is already asserted in ash_unittests. As a convenience,
-    // add and remove a holding space item so that the holding space tray will
-    // already be showing during test execution.
-    ASSERT_FALSE(test_api().IsShowingInShelf());
-    RemoveItem(AddDownloadFile());
-    ASSERT_TRUE(test_api().IsShowingInShelf());
-
-    // Confirm that holding space model has been emptied for test execution.
-    ASSERT_TRUE(HoldingSpaceController::Get()->model()->items().empty());
+  HoldingSpaceUiBrowserTest() {
+    // TODO(crbug.com/1382945): Parameterize.
+    scoped_feature_list_.InitAndDisableFeature(
+        features::kHoldingSpacePredictability);
   }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 }  // namespace
@@ -524,7 +518,7 @@ class HoldingSpaceUiDragAndDropBrowserTest
     // Cache a reference to preview layers.
     const ui::Layer* previews_container_layer =
         test_api().GetPreviewsTrayIcon()->layer()->children()[0];
-    const std::vector<ui::Layer*>& preview_layers =
+    const std::vector<raw_ptr<ui::Layer, VectorExperimental>>& preview_layers =
         previews_container_layer->children();
 
     // Iterate over the layers for each preview.
@@ -636,8 +630,8 @@ class HoldingSpaceUiDragAndDropBrowserTest
     return GetStorageLocationFlags() & flag;
   }
 
-  DropSenderView* drop_sender_view_ = nullptr;
-  DropTargetView* drop_target_view_ = nullptr;
+  raw_ptr<DropSenderView> drop_sender_view_ = nullptr;
+  raw_ptr<DropTargetView> drop_target_view_ = nullptr;
 };
 
 // Flaky on ChromeOS bots: crbug.com/1338054
@@ -662,7 +656,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest,
   ASSERT_EQ(1u, download_chips.size());
 
   PerformDragAndDrop(/*from=*/download_chips[0], /*to=*/target());
-  EXPECT_EQ(download_file->file_path(), target()->copied_file_path());
+  EXPECT_EQ(download_file->file().file_path, target()->copied_file_path());
 
   // Drag-and-drop should close holding space UI.
   FlushMessageLoop();
@@ -683,7 +677,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest,
   ASSERT_EQ(3u, pinned_file_chips.size());
 
   PerformDragAndDrop(/*from=*/pinned_file_chips.back(), /*to=*/target());
-  EXPECT_EQ(pinned_file->file_path(), target()->copied_file_path());
+  EXPECT_EQ(pinned_file->file().file_path, target()->copied_file_path());
 
   // Drag-and-drop should close holding space UI.
   FlushMessageLoop();
@@ -700,7 +694,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest,
   ASSERT_EQ(1u, screen_capture_views.size());
 
   PerformDragAndDrop(/*from=*/screen_capture_views[0], /*to=*/target());
-  EXPECT_EQ(screenshot_file->file_path(), target()->copied_file_path());
+  EXPECT_EQ(screenshot_file->file().file_path, target()->copied_file_path());
 
   // Drag-and-drop should close holding space UI.
   FlushMessageLoop();
@@ -746,7 +740,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest,
         .WillOnce([&](const std::vector<const HoldingSpaceItem*>& items) {
           ASSERT_EQ(items.size(), 1u);
           ASSERT_EQ(items[0]->type(), HoldingSpaceItem::Type::kPinnedFile);
-          ASSERT_EQ(items[0]->file_path(), file_paths[0]);
+          ASSERT_EQ(items[0]->file().file_path, file_paths[0]);
           run_loop.Quit();
         });
 
@@ -788,9 +782,9 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiDragAndDropBrowserTest,
         .WillOnce([&](const std::vector<const HoldingSpaceItem*>& items) {
           ASSERT_EQ(items.size(), 2u);
           ASSERT_EQ(items[0]->type(), HoldingSpaceItem::Type::kPinnedFile);
-          ASSERT_EQ(items[0]->file_path(), file_paths[1]);
+          ASSERT_EQ(items[0]->file().file_path, file_paths[1]);
           ASSERT_EQ(items[1]->type(), HoldingSpaceItem::Type::kPinnedFile);
-          ASSERT_EQ(items[1]->file_path(), file_paths[2]);
+          ASSERT_EQ(items[1]->file().file_path, file_paths[2]);
           run_loop.Quit();
         });
 
@@ -956,7 +950,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, PinAndUnpinItems) {
   // context menu, still without de-selecting the in-progress download. Because
   // the selection contains items which are not in-progress and at least one of
   // those items are unpinned, the selection should be pin-able.
-  Click(pinned_file_chips.front(), ui::EF_CONTROL_DOWN);
+  test::Click(pinned_file_chips.front(), ui::EF_CONTROL_DOWN);
   RightClick(download_chips.front());
   ASSERT_TRUE(SelectMenuItemWithCommandId(HoldingSpaceCommandId::kPinItem));
   PressAndReleaseKey(ui::KeyboardCode::VKEY_RETURN);
@@ -1060,7 +1054,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, RemoveItem) {
 
   // Add a download item to the selection and show the context menu.
   ViewDrawnWaiter().Wait(download_chips.front());
-  Click(download_chips.front(), ui::EF_CONTROL_DOWN);
+  test::Click(download_chips.front(), ui::EF_CONTROL_DOWN);
   RightClick(download_chips.front());
   ASSERT_TRUE(views::MenuController::GetActiveInstance());
 
@@ -1072,7 +1066,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, RemoveItem) {
   ASSERT_FALSE(views::MenuController::GetActiveInstance());
 
   // Unselect the pinned item and right click show the context menu.
-  Click(pinned_file_chips.front(), ui::EF_CONTROL_DOWN);
+  test::Click(pinned_file_chips.front(), ui::EF_CONTROL_DOWN);
   RightClick(download_chips.front());
   ASSERT_TRUE(views::MenuController::GetActiveInstance());
 
@@ -1115,7 +1109,7 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, RemoveItem) {
 
   // Select a screen capture item and show the context menu.
   ViewDrawnWaiter().Wait(screen_capture_views.front());
-  Click(screen_capture_views.front());
+  test::Click(screen_capture_views.front());
   RightClick(screen_capture_views.front());
   ASSERT_TRUE(views::MenuController::GetActiveInstance());
 
@@ -1154,13 +1148,13 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, RemoveItem) {
     // Select all visible download items.
     for (views::View* download_chip : download_chips) {
       ViewDrawnWaiter().Wait(download_chip);
-      Click(download_chip, ui::EF_CONTROL_DOWN);
+      test::Click(download_chip, ui::EF_CONTROL_DOWN);
     }
 
     // Select all visible screen capture items.
     for (views::View* screen_capture_view : screen_capture_views) {
       ViewDrawnWaiter().Wait(screen_capture_view);
-      Click(screen_capture_view, ui::EF_CONTROL_DOWN);
+      test::Click(screen_capture_view, ui::EF_CONTROL_DOWN);
     }
 
     // Show the context menu. There should be a `kRemoveItem` command.
@@ -1191,8 +1185,9 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, RemoveItem) {
       EXPECT_CALL(mock, OnHoldingSpaceItemsRemoved)
           .WillOnce([&](const std::vector<const HoldingSpaceItem*>& items) {
             ASSERT_EQ(items.size(), item_ids.size());
-            for (const HoldingSpaceItem* item : items)
+            for (const HoldingSpaceItem* item : items) {
               ASSERT_TRUE(base::Contains(item_ids, item->id()));
+            }
             run_loop.Quit();
           });
 
@@ -1242,11 +1237,11 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, UnpinItem) {
   // so move the mouse and wait for the pin button to be drawn. Note that the
   // mouse is moved over multiple events to ensure that the appropriate mouse
   // enter event is also generated.
-  MoveMouseTo(pinned_file_chip, /*count=*/10);
+  test::MoveMouseTo(pinned_file_chip, /*count=*/10);
   auto* pin_btn = pinned_file_chip->GetViewByID(kHoldingSpaceItemPinButtonId);
   ViewDrawnWaiter().Wait(pin_btn);
 
-  Click(pin_btn);
+  test::Click(pin_btn);
 
   pinned_file_chips = test_api().GetPinnedFileChips();
   ASSERT_EQ(kNumPinnedItems - 1, pinned_file_chips.size());
@@ -1268,7 +1263,8 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, TogglePreviews) {
   ASSERT_TRUE(previews_tray_icon);
   ASSERT_TRUE(previews_tray_icon->layer());
   ASSERT_EQ(1u, previews_tray_icon->layer()->children().size());
-  auto* previews_container_layer = previews_tray_icon->layer()->children()[0];
+  auto* previews_container_layer =
+      previews_tray_icon->layer()->children()[0].get();
   EXPECT_FALSE(previews_tray_icon->GetVisible());
 
   // After pinning a file, we should have a single preview in the tray icon.
@@ -1411,7 +1407,7 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
 
           // Swap out the production download manager for the mock.
           context->SetDownloadManagerForTesting(
-              base::WrapUnique(download_manager_));
+              base::WrapUnique(download_manager_.get()));
 
           // Install a new download manager delegate after swapping out the
           // production download manager so it will properly register itself
@@ -1604,12 +1600,12 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
   }
 
   // Updates whether the specified `in_progress_download` of the appropriate
-  // type for Ash or Lacros given test parameterization is dangerous, mixed
-  // content, or might be malicious.
-  void UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+  // type for Ash or Lacros given test parameterization is dangerous, insecure,
+  // or might be malicious.
+  void UpdateInProgressDownloadIsDangerousInsecureOrMightBeMalicious(
       AshOrLacrosDownload* in_progress_download,
       bool is_dangerous,
-      bool is_mixed_content,
+      bool is_insecure,
       bool might_be_malicious) {
     ASSERT_TRUE(is_dangerous || !might_be_malicious);
     switch (GetDownloadTypeToUse()) {
@@ -1627,8 +1623,8 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
                           DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
         ON_CALL(*in_progress_ash_download, IsDangerous())
             .WillByDefault(testing::Return(is_dangerous));
-        ON_CALL(*in_progress_ash_download, IsMixedContent())
-            .WillByDefault(testing::Return(is_mixed_content));
+        ON_CALL(*in_progress_ash_download, IsInsecure())
+            .WillByDefault(testing::Return(is_insecure));
         NotifyObserversAshDownloadUpdated(in_progress_ash_download.get());
         return;
       }
@@ -1643,7 +1639,7 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
                          : crosapi::mojom::DownloadDangerType::
                                kDownloadDangerTypeNotDangerous;
         in_progress_lacros_download->is_dangerous = is_dangerous;
-        in_progress_lacros_download->is_mixed_content = is_mixed_content;
+        in_progress_lacros_download->is_insecure = is_insecure;
         NotifyObserversLacrosDownloadUpdated(in_progress_lacros_download.get());
         return;
       }
@@ -1766,7 +1762,7 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
     // Mock `download::DownloadItem::GetGuid()`.
     ON_CALL(*ash_download_item, GetGuid)
         .WillByDefault(testing::ReturnRefOfCopy(
-            base::GUID::GenerateRandomV4().AsLowercaseString()));
+            base::Uuid::GenerateRandomV4().AsLowercaseString()));
 
     // Mock `download::DownloadItem::GetId()`.
     ON_CALL(*ash_download_item, GetId).WillByDefault(testing::Invoke([]() {
@@ -1794,11 +1790,6 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
     auto open_when_complete = std::make_unique<bool>(false);
     ON_CALL(*ash_download_item, GetOpenWhenComplete)
         .WillByDefault(testing::ReturnPointee(open_when_complete.get()));
-
-    // Mock `download::DownloadItem::GetRerouteInfo()`.
-    ON_CALL(*ash_download_item, GetRerouteInfo)
-        .WillByDefault(
-            testing::ReturnRefOfCopy(download::DownloadItemRerouteInfo()));
 
     // Mock `download::DownloadItem::GetReceivedBytes()`.
     ON_CALL(*ash_download_item, GetReceivedBytes)
@@ -1918,7 +1909,7 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
     auto lacros_download_item = crosapi::mojom::DownloadItem::New();
 
     lacros_download_item->guid =
-        base::GUID::GenerateRandomV4().AsLowercaseString();
+        base::Uuid::GenerateRandomV4().AsLowercaseString();
     lacros_download_item->state = state;
     lacros_download_item->full_path = file_path;
     lacros_download_item->target_file_path = target_file_path;
@@ -1931,8 +1922,8 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
     lacros_download_item->start_time = base::Time::Now();
     lacros_download_item->is_dangerous = false;
     lacros_download_item->has_is_dangerous = true;
-    lacros_download_item->is_mixed_content = false;
-    lacros_download_item->has_is_mixed_content = true;
+    lacros_download_item->is_insecure = false;
+    lacros_download_item->has_is_insecure = true;
 
     auto* const download_controller_ash = crosapi::CrosapiManager::Get()
                                               ->crosapi_ash()
@@ -2013,8 +2004,10 @@ class HoldingSpaceUiInProgressDownloadsBrowserTestBase
 
   const DownloadTypeToUse download_type_to_use_;
   base::test::ScopedFeatureList scoped_feature_list_;
-  testing::NiceMock<content::MockDownloadManager>* download_manager_ = nullptr;
-  content::DownloadManagerDelegate* download_manager_delegate_ = nullptr;
+  raw_ptr<testing::NiceMock<content::MockDownloadManager>, DanglingUntriaged>
+      download_manager_ = nullptr;
+  raw_ptr<content::DownloadManagerDelegate> download_manager_delegate_ =
+      nullptr;
   base::ObserverList<content::DownloadManager::Observer>::Unchecked
       download_manager_observers_;
   testing::NiceMock<MockDownloadControllerClient> download_controller_client_;
@@ -2064,6 +2057,19 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   std::vector<views::View*> download_chips = test_api().GetDownloadChips();
   ASSERT_EQ(download_chips.size(), 1u);
 
+  // Wait for the download chip to be drawn with an indeterminate progress ring
+  // animation.
+  NextMainFrameWaiter(Shell::GetPrimaryRootWindow()->GetHost()->compositor())
+      .Wait();
+  EXPECT_THAT(
+      HoldingSpaceAnimationRegistry::GetInstance()
+          ->GetProgressRingAnimationForKey(
+              ProgressIndicatorAnimationRegistry::AsAnimationKey(
+                  HoldingSpaceController::Get()->model()->GetItem(
+                      test_api().GetHoldingSpaceItemId(download_chips[0])))),
+      Property(&ProgressRingAnimation::type,
+               Eq(ProgressRingAnimation::Type::kIndeterminate)));
+
   // Cache pointers to the `primary_label` and `secondary_label`.
   auto* primary_label = static_cast<views::Label*>(
       download_chips[0]->GetViewByID(kHoldingSpaceItemPrimaryChipLabelId));
@@ -2083,8 +2089,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   // `0 B` as there is no knowledge of the total number of bytes expected.
   EXPECT_TRUE(secondary_label->GetVisible());
   EXPECT_EQ(secondary_label->GetText(), u"0 B");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
@@ -2102,8 +2113,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 0 B");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress and
   // that progress is paused.
@@ -2121,8 +2137,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 1,024 KB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress and
   // that progress is paused.
@@ -2140,8 +2161,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"1,024 KB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
@@ -2159,8 +2185,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"1.0/2.0 MB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
@@ -2178,8 +2209,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 1.0/2.0 MB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress and
   // that progress is paused.
@@ -2200,8 +2236,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 2.0/2.0 MB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress and
   // that progress is paused.
@@ -2209,10 +2250,10 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
             base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
   // Mark the download as dangerous.
-  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+  UpdateInProgressDownloadIsDangerousInsecureOrMightBeMalicious(
       in_progress_download.get(),
       /*is_dangerous=*/true,
-      /*is_mixed_content=*/false,
+      /*is_insecure=*/false,
       /*might_be_malicious=*/true);
 
   // Because the download is marked as dangerous, that should be indicated in
@@ -2221,8 +2262,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Dangerous file");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleRed300 : gfx::kGoogleRed600);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(cros_tokens::kTextColorAlert)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleRed300),
+                                                Eq(gfx::kGoogleRed600)))));
 
   // The accessible name should indicate that the download is dangerous.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
@@ -2237,17 +2283,22 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Scanning");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleBlue300 : gfx::kGoogleBlue600);
+  EXPECT_THAT(secondary_label,
+              JellyConditional(
+                  /*enabled=*/EnabledColorId(
+                      Optional(cros_tokens::kTextColorProminent)),
+                  /*disabled=*/EnabledColor(
+                      Conditional(is_dark_mode_state, Eq(gfx::kGoogleBlue300),
+                                  Eq(gfx::kGoogleBlue600)))));
 
   // The accessible name should indicate that the download is being scanning.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
             base::UTF16ToUTF8(u"Download scanning " + target_file_name));
 
   // Stop scanning and mark that the download is *not* malicious.
-  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+  UpdateInProgressDownloadIsDangerousInsecureOrMightBeMalicious(
       in_progress_download.get(), /*is_dangerous=*/true,
-      /*is_mixed_content=*/false, /*might_be_malicious=*/false);
+      /*is_insecure=*/false, /*might_be_malicious=*/false);
 
   // Because the download is *not* malicious, the user will be able to keep/
   // discard the download via notification. That should be indicated in the
@@ -2256,18 +2307,23 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Confirm download");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleYellow300 : gfx::kGoogleYellow900);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(cros_tokens::kTextColorWarning)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleYellow300),
+                                                Eq(gfx::kGoogleYellow900)))));
 
   // The accessible name should indicate that the download must be confirmed.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
             base::UTF16ToUTF8(u"Confirm download " + target_file_name));
 
   // Mark the download as safe.
-  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+  UpdateInProgressDownloadIsDangerousInsecureOrMightBeMalicious(
       in_progress_download.get(),
       /*is_dangerous=*/false,
-      /*is_mixed_content=*/false,
+      /*is_insecure=*/false,
       /*might_be_malicious=*/false);
 
   // Because the download is no longer marked as dangerous, that should be
@@ -2276,49 +2332,64 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 2.0/2.0 MB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress and
   // that progress is paused.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
             base::UTF16ToUTF8(u"Download paused " + target_file_name));
 
-  // Mark the download as mixed content.
-  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+  // Mark the download as insecure.
+  UpdateInProgressDownloadIsDangerousInsecureOrMightBeMalicious(
       in_progress_download.get(),
       /*is_dangerous=*/false,
-      /*is_mixed_content=*/true,
+      /*is_insecure=*/true,
       /*might_be_malicious=*/false);
 
-  // Because the download is marked as mixed content, that should be indicated
+  // Because the download is marked as insecure, that should be indicated
   // in the `secondary_label` of the holding space item chip view.
   EXPECT_TRUE(primary_label->GetVisible());
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Dangerous file");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleRed300 : gfx::kGoogleRed600);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(cros_tokens::kTextColorAlert)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleRed300),
+                                                Eq(gfx::kGoogleRed600)))));
 
   // The accessible name should indicate that the download is dangerous.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
             base::UTF16ToUTF8(u"Download dangerous " + target_file_name));
 
-  // Mark the download as *not* mixed content.
-  UpdateInProgressDownloadIsDangerousMixedContentOrMightBeMalicious(
+  // Mark the download as *not* insecure.
+  UpdateInProgressDownloadIsDangerousInsecureOrMightBeMalicious(
       in_progress_download.get(),
       /*is_dangerous=*/false,
-      /*is_mixed_content=*/false,
+      /*is_insecure=*/false,
       /*might_be_malicious=*/false);
 
-  // Because the download is no longer marked as mixed content, that should be
+  // Because the download is no longer marked as insecure, that should be
   // indicated in the `secondary_label` of the holding space item chip view.
   EXPECT_TRUE(primary_label->GetVisible());
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_TRUE(secondary_label->GetVisible());
   WaitForText(secondary_label, u"Paused, 2.0/2.0 MB");
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate that the download is in progress and
   // that progress is paused.
@@ -2332,8 +2403,13 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   EXPECT_TRUE(primary_label->GetVisible());
   EXPECT_EQ(primary_label->GetText(), target_file_name);
   EXPECT_FALSE(secondary_label->GetVisible());
-  EXPECT_EQ(secondary_label->GetEnabledColor(),
-            is_dark_mode_state ? gfx::kGoogleGrey400 : gfx::kGoogleGrey700);
+  EXPECT_THAT(
+      secondary_label,
+      JellyConditional(
+          /*enabled=*/EnabledColorId(Optional(kColorAshTextColorSecondary)),
+          /*disabled=*/EnabledColor(Conditional(is_dark_mode_state,
+                                                Eq(gfx::kGoogleGrey400),
+                                                Eq(gfx::kGoogleGrey700)))));
 
   // The accessible name should indicate the target file name.
   EXPECT_EQ(GetAccessibleName(download_chips.at(0)),
@@ -2381,7 +2457,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   // selected and its underlying download is in-progress, the context menu
   // should contain a "Cancel" command.
   PressAndReleaseKey(ui::KeyboardCode::VKEY_ESCAPE);
-  Click(in_progress_download_chip);
+  test::Click(in_progress_download_chip);
   RightClick(in_progress_download_chip);
   ASSERT_TRUE(SelectMenuItemWithCommandId(HoldingSpaceCommandId::kCancelItem));
 
@@ -2446,7 +2522,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
 
   // Hover over the `completed_download_chip`. Because the underlying download
   // is completed, the chip should contain a visible primary action for "Pin".
-  MoveMouseTo(completed_download_chip, /*count=*/10);
+  test::MoveMouseTo(completed_download_chip, /*count=*/10);
   auto* primary_action_container = completed_download_chip->GetViewByID(
       kHoldingSpaceItemPrimaryActionContainerId);
   auto* primary_action_cancel =
@@ -2460,7 +2536,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   // Hover over the `in_progress_download_chip`. Because the underlying download
   // is in-progress, the chip should contain a visible primary action for
   // "Cancel".
-  MoveMouseTo(in_progress_download_chip, /*count=*/10);
+  test::MoveMouseTo(in_progress_download_chip, /*count=*/10);
   primary_action_container = in_progress_download_chip->GetViewByID(
       kHoldingSpaceItemPrimaryActionContainerId);
   primary_action_cancel =
@@ -2493,7 +2569,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
         ASSERT_EQ(items[0]->id(), in_progress_download_id);
         run_loop.Quit();
       });
-  Click(primary_action_container);
+  test::Click(primary_action_container);
   run_loop.Run();
 
   // Verify that there is now only a single download chip.
@@ -2621,7 +2697,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiInProgressDownloadsBrowserTest,
   // selected and its underlying download is completed, the context menu should
   // contain a "Remove" command.
   PressAndReleaseKey(ui::KeyboardCode::VKEY_ESCAPE);
-  Click(completed_download_chip);
+  test::Click(completed_download_chip);
   RightClick(completed_download_chip);
   ASSERT_TRUE(SelectMenuItemWithCommandId(HoldingSpaceCommandId::kRemoveItem));
 
@@ -2747,7 +2823,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiPauseOrResumeBrowserTest,
   // selected and its underlying download is in-progress, the context menu
   // should contain a "Pause" or "Resume" command.
   PressAndReleaseKey(ui::KeyboardCode::VKEY_ESCAPE);
-  Click(in_progress_download_chip);
+  test::Click(in_progress_download_chip);
   RightClick(in_progress_download_chip);
   ASSERT_TRUE(SelectMenuItemWithCommandId(GetPauseOrResumeCommandId()));
 
@@ -2815,7 +2891,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiPauseOrResumeBrowserTest,
 
   // Hover over the `completed_download_chip`. Because the underlying download
   // is completed, the chip should not contain a visible secondary action.
-  MoveMouseTo(completed_download_chip, /*count=*/10);
+  test::MoveMouseTo(completed_download_chip, /*count=*/10);
   ASSERT_FALSE(completed_download_chip
                    ->GetViewByID(kHoldingSpaceItemSecondaryActionContainerId)
                    ->GetVisible());
@@ -2823,7 +2899,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiPauseOrResumeBrowserTest,
   // Hover over the `in_progress_download_chip`. Because the underlying download
   // is in-progress, the chip should contain a visible secondary action for
   // either "Pause" or "Resume", depending on test parameterization.
-  MoveMouseTo(in_progress_download_chip, /*count=*/10);
+  test::MoveMouseTo(in_progress_download_chip, /*count=*/10);
   auto* secondary_action_container = in_progress_download_chip->GetViewByID(
       kHoldingSpaceItemSecondaryActionContainerId);
   auto* secondary_action_pause =
@@ -2855,7 +2931,7 @@ IN_PROC_BROWSER_TEST_P(HoldingSpaceUiPauseOrResumeBrowserTest,
             HoldingSpaceModelObserver::UpdatedField::kInProgressCommands);
         run_loop.Quit();
       });
-  Click(secondary_action_container);
+  test::Click(secondary_action_container);
   run_loop.Run();
 
   // Verify that there are still two download chips.
@@ -2913,9 +2989,24 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, AddScreenshot) {
   EXPECT_EQ(1u, test_api().GetScreenCaptureViews().size());
 }
 
+// Base class for tests of holding space's integration with the capture mode
+// screen recording feature, parameterized by the type of recording.
+class HoldingSpaceScreenRecordingUiBrowserTest
+    : public HoldingSpaceUiBrowserTest,
+      public testing::WithParamInterface<RecordingType> {
+ public:
+  RecordingType recording_type() const { return GetParam(); }
+};
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         HoldingSpaceScreenRecordingUiBrowserTest,
+                         testing::Values(RecordingType::kGif,
+                                         RecordingType::kWebM));
+
 // Verifies that taking a screen recording adds a screen recording holding space
-// item.
-IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, AddScreenRecording) {
+// item. The type of holding space item depends on the type of screen recording.
+IN_PROC_BROWSER_TEST_P(HoldingSpaceScreenRecordingUiBrowserTest,
+                       AddScreenRecording) {
   // Verify that no screen recordings exist in holding space UI.
   test_api().Show();
   ASSERT_TRUE(test_api().IsShowing());
@@ -2924,11 +3015,13 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, AddScreenRecording) {
   test_api().Close();
   ASSERT_FALSE(test_api().IsShowing());
   ash::CaptureModeTestApi capture_mode_test_api;
-  capture_mode_test_api.StartForFullscreen(/*for_video=*/true);
+  capture_mode_test_api.SetRecordingType(recording_type());
+  capture_mode_test_api.StartForRegion(/*for_video=*/true);
+  capture_mode_test_api.SetUserSelectedRegion(gfx::Rect(200, 200));
   capture_mode_test_api.PerformCapture();
   // Record a 100 ms long video.
   base::RunLoop video_recording_time;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, video_recording_time.QuitClosure(), base::Milliseconds(100));
   video_recording_time.Run();
   capture_mode_test_api.StopVideoRecording();
@@ -2944,15 +3037,142 @@ IN_PROC_BROWSER_TEST_F(HoldingSpaceUiBrowserTest, AddScreenRecording) {
   EXPECT_CALL(mock, OnHoldingSpaceItemsAdded)
       .WillOnce([&](const std::vector<const HoldingSpaceItem*>& items) {
         ASSERT_EQ(items.size(), 1u);
-        ASSERT_EQ(items[0]->type(), HoldingSpaceItem::Type::kScreenRecording);
+        ASSERT_EQ(items[0]->type(),
+                  recording_type() == RecordingType::kGif
+                      ? HoldingSpaceItem::Type::kScreenRecordingGif
+                      : HoldingSpaceItem::Type::kScreenRecording);
         wait_for_item.Quit();
       });
   wait_for_item.Run();
+
+  // The video recording and / or the GIF recording progress notifications can
+  // get in the way while tapping on the holding space tray button. Therefore,
+  // we must wait until the notification animation completes before attempting
+  // to tap on it.
+  // TODO(b/275558519): This should not be needed, since the notification should
+  // not overlap the shelf.
+  MessagePopupAnimationWaiter(ash::Shell::GetPrimaryRootWindowController()
+                                  ->shelf()
+                                  ->GetStatusAreaWidget()
+                                  ->notification_center_tray()
+                                  ->popup_collection())
+      .Wait();
 
   // Verify that the screen recording appears in holding space UI.
   test_api().Show();
   ASSERT_TRUE(test_api().IsShowing());
   EXPECT_EQ(1u, test_api().GetScreenCaptureViews().size());
+}
+
+// Used to check the holding space suggestion feature.
+class HoldingSpaceSuggestionUiBrowserTest : public HoldingSpaceUiBrowserTest {
+ public:
+  HoldingSpaceSuggestionUiBrowserTest() {
+    scoped_feature_list_.InitAndEnableFeature(
+        features::kHoldingSpaceSuggestions);
+  }
+
+  // HoldingSpaceUiBrowserTest:
+  void SetUpOnMainThread() override {
+    HoldingSpaceUiBrowserTest::SetUpOnMainThread();
+
+    // Initialize `local_file_directory_`.
+    EXPECT_TRUE(local_file_directory_.CreateUniqueTempDirUnderPath(
+        browser()->profile()->GetPath()));
+    EXPECT_TRUE(browser()->profile()->GetMountPoints()->RegisterFileSystem(
+        /*mount_name=*/"archive", storage::kFileSystemTypeLocal,
+        storage::FileSystemMountOption(), GetLocalFileMountPath()));
+  }
+
+  // Creates multiple files and suggests them through service.
+  std::vector<base::FilePath> CreateFileSuggestions(size_t count) {
+    using FileOpenEvent =
+        file_manager::file_tasks::FileTasksObserver::FileOpenEvent;
+    using FileOpenType = file_manager::file_tasks::FileTasksObserver::OpenType;
+
+    base::ScopedAllowBlockingForTesting allow_blocking;
+
+    std::vector<base::FilePath> paths(count);
+    std::vector<FileOpenEvent> open_events;
+    for (auto& path : paths) {
+      EXPECT_TRUE(
+          base::CreateTemporaryFileInDir(GetLocalFileMountPath(), &path));
+      FileOpenEvent e;
+      e.path = path;
+      e.open_type = FileOpenType::kOpen;
+      open_events.push_back(std::move(e));
+    }
+
+    FileSuggestKeyedServiceFactory::GetInstance()
+        ->GetService(GetProfile())
+        ->local_file_suggestion_provider_for_test()
+        ->OnFilesOpened(open_events);
+    return paths;
+  }
+
+  base::FilePath GetLocalFileMountPath() {
+    return local_file_directory_.GetPath();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+
+  // The directory that hosts local files.
+  base::ScopedTempDir local_file_directory_;
+};
+
+// Verifies suggestion removal through holding space item context menu.
+IN_PROC_BROWSER_TEST_F(HoldingSpaceSuggestionUiBrowserTest, RemoveSuggestion) {
+  // Use zero animation duration so that UI updates are immediate.
+  ui::ScopedAnimationDurationScaleMode scoped_animation_duration_scale_mode(
+      ui::ScopedAnimationDurationScaleMode::ZERO_DURATION);
+
+  // Create file suggestions and wait until the suggested files exist in the
+  // holding space model.
+  constexpr size_t kSuggestionFileCount = 3;
+  std::vector<base::FilePath> file_paths =
+      CreateFileSuggestions(kSuggestionFileCount);
+  HoldingSpaceModel* model = HoldingSpaceController::Get()->model();
+  WaitForSuggestionsInModel(
+      model,
+      /*expected_suggestions=*/
+      {{HoldingSpaceItem::Type::kLocalSuggestion, file_paths[0]},
+       {HoldingSpaceItem::Type::kLocalSuggestion, file_paths[1]},
+       {HoldingSpaceItem::Type::kLocalSuggestion, file_paths[2]}});
+
+  test_api().Show();
+
+  // The count of suggestion chips should be equal to that of suggested files.
+  std::vector<views::View*> suggestion_chips = test_api().GetSuggestionChips();
+  ASSERT_EQ(suggestion_chips.size(), kSuggestionFileCount);
+
+  // Select two suggestion chips and open context menu.
+  ASSERT_FALSE(views::MenuController::GetActiveInstance());
+  test::Click(suggestion_chips.front(), ui::EF_CONTROL_DOWN);
+  RightClick(suggestion_chips[1], ui::EF_CONTROL_DOWN);
+  ASSERT_TRUE(views::MenuController::GetActiveInstance());
+
+  // Remove the selected suggestion chips through context menu.
+  auto* menu_item =
+      SelectMenuItemWithCommandId(HoldingSpaceCommandId::kRemoveItem);
+  ASSERT_TRUE(menu_item);
+  test::Click(menu_item);
+  WaitForSuggestionsInModel(
+      model, /*expected_suggestions=*/{
+          {HoldingSpaceItem::Type::kLocalSuggestion, file_paths[0]}});
+
+  // Remove the remaining suggestion item view through context menu.
+  suggestion_chips = test_api().GetSuggestionChips();
+  ASSERT_EQ(suggestion_chips.size(), 1u);
+  ASSERT_FALSE(views::MenuController::GetActiveInstance());
+  RightClick(suggestion_chips.front());
+  ASSERT_TRUE(views::MenuController::GetActiveInstance());
+  menu_item = SelectMenuItemWithCommandId(HoldingSpaceCommandId::kRemoveItem);
+  ASSERT_TRUE(menu_item);
+  test::Click(menu_item);
+
+  // There should not be any suggestion item view left.
+  EXPECT_EQ(test_api().GetSuggestionChips().size(), 0u);
 }
 
 }  // namespace ash

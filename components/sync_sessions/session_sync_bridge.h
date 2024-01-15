@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -51,23 +51,27 @@ class SessionSyncBridge : public syncer::ModelTypeSyncBridge,
   SessionsGlobalIdMapper* GetGlobalIdMapper();
   OpenTabsUIDelegate* GetOpenTabsUIDelegate();
 
+  bool IsLocalDataOutOfSyncForTest() const;
+
   // ModelTypeSyncBridge implementation.
   void OnSyncStarting(
       const syncer::DataTypeActivationRequest& request) override;
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
   void GetAllDataForDebugging(DataCallback callback) override;
   std::string GetClientTag(const syncer::EntityData& entity_data) override;
   std::string GetStorageKey(const syncer::EntityData& entity_data) override;
-  void ApplyStopSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
-                                delete_metadata_change_list) override;
+  void ApplyDisableSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
+                                   delete_metadata_change_list) override;
+  void OnSyncPaused() override;
+  bool IsEntityDataValid(const syncer::EntityData& entity_data) const override;
 
   // LocalSessionEventHandlerImpl::Delegate implementation.
   std::unique_ptr<LocalSessionEventHandlerImpl::WriteBatch>
@@ -103,15 +107,6 @@ class SessionSyncBridge : public syncer::ModelTypeSyncBridge,
 
     std::unique_ptr<OpenTabsUIDelegateImpl> open_tabs_ui_delegate;
     std::unique_ptr<LocalSessionEventHandlerImpl> local_session_event_handler;
-
-    // Tracks whether our local representation of which sync nodes map to what
-    // tabs (belonging to the current local session) is inconsistent.  This can
-    // happen if a foreign client deems our session as "stale" and decides to
-    // delete it. Rather than respond by bullishly re-creating our nodes
-    // immediately, which could lead to ping-pong sequences, we give the benefit
-    // of the doubt and hold off until another local navigation occurs, which
-    // proves that we are still relevant.
-    bool local_data_out_of_sync = false;
   };
 
   // TODO(mastiz): We should rather rename this to |syncing_state_|.

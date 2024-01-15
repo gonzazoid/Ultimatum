@@ -4,15 +4,18 @@
 
 #include "content/browser/cache_storage/cache_storage_dispatcher_host.h"
 
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
@@ -32,7 +35,6 @@
 #include "services/network/public/cpp/cross_origin_resource_policy.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/mojom/cross_origin_embedder_policy.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom.h"
@@ -147,7 +149,7 @@ bool ResponseBlockedByCrossOriginResourcePolicy(
   if (response->response_type != FetchResponseType::kOpaque)
     return false;
 
-  absl::optional<std::string> corp_header_value;
+  std::optional<std::string> corp_header_value;
   auto corp_header =
       response->headers.find(network::CrossOriginResourcePolicy::kHeaderName);
   if (corp_header != response->headers.end())
@@ -571,7 +573,7 @@ class CacheStorageDispatcherHost::CacheImpl
     content::CacheStorageCache* cache = cache_handle_.value();
     if (!cache) {
       std::move(cb).Run(CacheStorageVerboseError::New(
-          CacheStorageError::kErrorNotFound, absl::nullopt));
+          CacheStorageError::kErrorNotFound, std::nullopt));
       return;
     }
 
@@ -602,8 +604,7 @@ class CacheStorageDispatcherHost::CacheImpl
       return;
     }
 
-    scoped_refptr<net::IOBuffer> buf =
-        base::MakeRefCounted<net::IOBuffer>(data.size());
+    auto buf = base::MakeRefCounted<net::IOBufferWithSize>(data.size());
     if (data.size())
       memcpy(buf->data(), data.data(), data.size());
 
@@ -634,7 +635,7 @@ class CacheStorageDispatcherHost::CacheStorageImpl final
  public:
   CacheStorageImpl(
       CacheStorageDispatcherHost* host,
-      const absl::optional<storage::BucketLocator>& bucket,
+      const std::optional<storage::BucketLocator>& bucket,
       bool incognito,
       const CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
@@ -1021,10 +1022,10 @@ class CacheStorageDispatcherHost::CacheStorageImpl final
   void UpdateOrCreateBucketCallback(
       base::OnceCallback<void(content::CacheStorage*)> callback,
       storage::QuotaErrorOr<storage::BucketInfo> result) {
-    if (result.ok()) {
+    if (result.has_value()) {
       bucket_ = result->ToBucketLocator();
     } else {
-      bucket_ = absl::nullopt;
+      bucket_ = std::nullopt;
       std::move(callback).Run(nullptr);
       return;
     }
@@ -1081,8 +1082,8 @@ class CacheStorageDispatcherHost::CacheStorageImpl final
   // Owns this.
   const raw_ptr<CacheStorageDispatcherHost> host_;
 
-  // absl::nullopt when bucket retrieval has failed.
-  absl::optional<storage::BucketLocator> bucket_;
+  // std::nullopt when bucket retrieval has failed.
+  std::optional<storage::BucketLocator> bucket_;
   const CrossOriginEmbedderPolicy cross_origin_embedder_policy_;
   mojo::Remote<network::mojom::CrossOriginEmbedderPolicyReporter>
       coep_reporter_;
@@ -1109,7 +1110,7 @@ void CacheStorageDispatcherHost::AddReceiver(
     mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
         coep_reporter,
     const blink::StorageKey& storage_key,
-    const absl::optional<storage::BucketLocator>& bucket,
+    const std::optional<storage::BucketLocator>& bucket,
     storage::mojom::CacheStorageOwner owner,
     mojo::PendingReceiver<blink::mojom::CacheStorage> receiver) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -1162,13 +1163,13 @@ void CacheStorageDispatcherHost::UpdateOrCreateDefaultBucket(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   quota_manager_proxy_->UpdateOrCreateBucket(
       storage::BucketInitParams::ForDefaultBucket(storage_key),
-      base::SequencedTaskRunnerHandle::Get(), std::move(callback));
+      base::SequencedTaskRunner::GetCurrentDefault(), std::move(callback));
 }
 
 bool CacheStorageDispatcherHost::WasNotifiedOfBucketDataDeletion(
     const storage::BucketLocator& bucket_locator) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return deleted_buckets_.find(bucket_locator) != deleted_buckets_.end();
+  return base::Contains(deleted_buckets_, bucket_locator);
 }
 
 void CacheStorageDispatcherHost::NotifyBucketDataDeleted(

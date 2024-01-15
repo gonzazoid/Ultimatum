@@ -7,11 +7,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "base/callback_list.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -25,7 +28,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefService;
 class PrefChangeRegistrar;
@@ -73,14 +75,26 @@ class PrefsAsh : public mojom::Prefs,
 
  private:
   FRIEND_TEST_ALL_PREFIXES(PrefsAshTest, LocalStatePrefs);
+  FRIEND_TEST_ALL_PREFIXES(PrefsAshTest, CrosSettingsPrefs);
+
+  enum class AshPrefSource {
+    kNormal = 0,
+    kExtensionControlled = 1,
+    kCrosSettings = 2,
+  };
 
   struct State {
-    PrefService* pref_service;
-    PrefChangeRegistrar* registrar;
-    bool is_extension_controlled_pref;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION PrefService* pref_service;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION PrefChangeRegistrar* registrar;
+    AshPrefSource pref_source;
     std::string path;
   };
-  absl::optional<State> GetState(mojom::PrefPath path);
+  std::optional<State> GetState(mojom::PrefPath path);
+  const base::Value* GetValueForState(std::optional<State> state);
 
   void OnPrefChanged(mojom::PrefPath path);
   void OnDisconnect(mojom::PrefPath path, mojo::RemoteSetElementId id);
@@ -91,11 +105,15 @@ class PrefsAsh : public mojom::Prefs,
   void OnAppTerminating();
 
   // In production, owned by g_browser_process, which outlives this object.
-  PrefService* const local_state_;
+  const raw_ptr<PrefService, DanglingUntriaged> local_state_;
 
   PrefChangeRegistrar local_state_registrar_;
   std::unique_ptr<PrefChangeRegistrar> profile_prefs_registrar_;
   PrefChangeRegistrar extension_prefs_registrar_;
+
+  // CrosSettings doesn't support PrefService and therefore also doesn't support
+  // PrefChangeRegistrar, so track these separately.
+  std::map<mojom::PrefPath, base::CallbackListSubscription> cros_settings_subs_;
 
   // This class supports any number of connections.
   mojo::ReceiverSet<mojom::Prefs> receivers_;

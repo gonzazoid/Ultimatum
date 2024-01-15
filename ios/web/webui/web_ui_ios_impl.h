@@ -9,15 +9,10 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #import "ios/web/public/web_state.h"
 #include "ios/web/public/webui/web_ui_ios.h"
-
-namespace web {
-class WebFrame;
-}
 
 namespace web {
 
@@ -51,11 +46,6 @@ class WebUIIOSImpl : public web::WebUIIOS,
   void FireWebUIListenerSpan(base::span<const base::ValueView> values) override;
 
  private:
-  void OnJsMessage(const base::Value& message,
-                   const GURL& page_url,
-                   bool user_is_interacting,
-                   web::WebFrame* sender_frame);
-
   // Executes JavaScript asynchronously on the page.
   void ExecuteJavascript(const std::u16string& javascript);
 
@@ -66,9 +56,6 @@ class WebUIIOSImpl : public web::WebUIIOS,
 
   // The WebUIIOSMessageHandlers we own.
   std::vector<std::unique_ptr<WebUIIOSMessageHandler>> handlers_;
-
-  // Subscription for JS message.
-  base::CallbackListSubscription subscription_;
 
   // Non-owning pointer to the WebState this WebUIIOS is associated with.
   WebState* web_state_;

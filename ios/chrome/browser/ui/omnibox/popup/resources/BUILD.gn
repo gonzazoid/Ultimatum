@@ -4,13 +4,14 @@
 
 import("//build/config/ios/asset_catalog.gni")
 
-colorset("background_color_swiftui_ios14") {
-  sources = [ "background_color_swiftui_ios14.colorset/Contents.json" ]
-}
-
-colorset("grouped_primary_background_color_swiftui_ios14") {
-  sources = [
-    "grouped_primary_background_color_swiftui_ios14.colorset/Contents.json",
+group("resources") {
+  deps = [
+    ":omnibox_suggestion_answer_icon_color",
+    ":omnibox_suggestion_answer_icon_dark_color",
+    ":omnibox_suggestion_icon_color",
+    ":omnibox_suggestion_icon_dark_color",
+    ":omnibox_suggestion_row_highlight_color",
+    ":omnibox_suggestion_row_separator_color",
   ]
 }
 
@@ -35,10 +36,6 @@ colorset("omnibox_suggestion_row_highlight_color") {
   sources = [ "omnibox_suggestion_row_highlight_color.colorset/Contents.json" ]
 }
 
-imageset("omnibox_popup_tab_match") {
-  sources = [
-    "omnibox_popup_tab_match.imageset/Contents.json",
-    "omnibox_popup_tab_match.imageset/omnibox_popup_tab_match@2x.png",
-    "omnibox_popup_tab_match.imageset/omnibox_popup_tab_match@3x.png",
-  ]
+colorset("omnibox_suggestion_row_separator_color") {
+  sources = [ "omnibox_suggestion_row_separator_color.colorset/Contents.json" ]
 }

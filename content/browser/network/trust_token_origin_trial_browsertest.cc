@@ -36,7 +36,10 @@
 //
 // As an example, consider
 //
-//    fetch("https://chromium.org", {trustToken: {type: 'token-request'}}),
+//    fetch("https://chromium.org", {
+//        privateToken: {
+//            version: 1,
+//            operation: 'token-request'}})
 //
 // a representative fetch with an associated Trust Tokens issuance operation.
 // When Trust Tokens is completely disabled (e.g. "third-party origin trial"
@@ -133,10 +136,12 @@ class TrustTokenOriginTrialBrowsertest
   TrustTokenOriginTrialBrowsertest() {
     auto& field_trial_param =
         network::features::kTrustTokenOperationsRequiringOriginTrial;
-    features_.InitAndEnableFeatureWithParameters(
-        network::features::kTrustTokens,
-        {{field_trial_param.name,
-          field_trial_param.GetName(std::get<1>(GetParam()).trial_type)}});
+    // kPrivateStateTokens ignores origin trial params
+    features_.InitWithFeaturesAndParameters(
+        {{network::features::kFledgePst,
+          {{field_trial_param.name,
+            field_trial_param.GetName(std::get<1>(GetParam()).trial_type)}}}},
+        {network::features::kPrivateStateTokens});
   }
 
   // kPageWithOriginTrialToken is a landing page from which we execute Trust
@@ -229,16 +234,13 @@ class TrustTokenOriginTrialBrowsertest
   // |on_received_request_| is called once a request arrives at
   // |kTrustTokenUrl|; the request is then placed in |trust_token_request_|.
   base::OnceClosure on_received_request_ GUARDED_BY(mutex_);
-  absl::optional<network::ResourceRequest> trust_token_request_
+  std::optional<network::ResourceRequest> trust_token_request_
       GUARDED_BY(mutex_);
 };
 
 const TestDescription kTestDescriptions[] = {
     {Op::kIssuance, Outcome::kSuccess,
      TrialType::kOnlyIssuanceRequiresOriginTrial, TrialEnabled::kEnabled},
-
-    {Op::kIssuance, Outcome::kFailure,
-     TrialType::kOnlyIssuanceRequiresOriginTrial, TrialEnabled::kDisabled},
 
     {Op::kRedemption, Outcome::kSuccess,
      TrialType::kOnlyIssuanceRequiresOriginTrial, TrialEnabled::kEnabled},
@@ -305,6 +307,7 @@ INSTANTIATE_TEST_SUITE_P(ExecutingAllOperations,
 IN_PROC_BROWSER_TEST_P(TrustTokenOriginTrialBrowsertest,
                        ProvidesParamsOnlyWhenAllowed) {
   TestDescription test_description = std::get<1>(GetParam());
+  Interface interface = std::get<0>(GetParam());
 
   URLLoaderInterceptor interceptor(base::BindLambdaForTesting(
       [this](URLLoaderInterceptor::RequestParams* params) {
@@ -330,7 +333,7 @@ IN_PROC_BROWSER_TEST_P(TrustTokenOriginTrialBrowsertest,
   }
 
   network::TrustTokenTestParameters trust_token_params(
-      test_description.op, absl::nullopt, absl::nullopt);
+      1, test_description.op, std::nullopt, std::nullopt);
 
   network::TrustTokenParametersAndSerialization
       expected_params_and_serialization =
@@ -338,12 +341,15 @@ IN_PROC_BROWSER_TEST_P(TrustTokenOriginTrialBrowsertest,
               trust_token_params);
 
   std::string command;
-  switch (std::get<0>(GetParam()) /* interface */) {
+  switch (interface) {
     case Interface::kFetch:
-      command = JsReplace("fetch($1, {trustToken: ", kTrustTokenUrl) +
+      command = JsReplace("fetch($1, {privateToken: ", kTrustTokenUrl) +
                 expected_params_and_serialization.serialized_params + "});";
       break;
     case Interface::kIframe:
+      if (test_description.op != Op::kSigning) {
+        return;
+      }
       command = JsReplace(
           "let iframe = document.createElement('iframe');"
           "iframe.src = $1;"
@@ -361,7 +367,7 @@ IN_PROC_BROWSER_TEST_P(TrustTokenOriginTrialBrowsertest,
 
   if (test_description.outcome == Outcome::kFailure) {
     // Use EvalJs here to wait for promises to resolve.
-    EXPECT_FALSE(EvalJs(shell(), command).error.empty());
+    EXPECT_THAT(EvalJs(shell(), command), EvalJsResult::IsError());
     return;
   }
 

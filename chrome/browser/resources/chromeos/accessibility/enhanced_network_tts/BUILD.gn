@@ -7,29 +7,68 @@ import("//build/config/features.gni")
 import(
     "//chrome/browser/resources/chromeos/accessibility/tools/run_jsbundler.gni")
 import("//chrome/common/features.gni")
-import("//chrome/test/base/js2gtest.gni")
-import("//third_party/closure_compiler/compile_js.gni")
+import("//chrome/test/base/ash/js2gtest.gni")
+import("//tools/typescript/ts_library.gni")
 
 assert(is_chromeos_ash)
 
 enhanced_network_tts_dir =
     "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts"
+tsc_out_dir = "$target_gen_dir/tsc"
+
+# TS files to compile.
+ts_modules = [
+  "background.ts",
+  "enhanced_network_tts.ts",
+]
+
+# JS files needed by the TS compiler.
+js_deps = []
+
+# Root dir must be parent directory to access common/.
+ts_library("ts_build") {
+  root_dir = "../"
+  out_dir = tsc_out_dir
+  definitions = [
+    "mojo_bindings_externs.d.ts",
+    "../definitions/extensions.d.ts",
+    "../definitions/extension_types.d.ts",
+    "../definitions/runtime.d.ts",
+    "../definitions/tabs.d.ts",
+    "../definitions/tts.d.ts",
+    "../definitions/tts_engine.d.ts",
+    "//tools/typescript/definitions/windows.d.ts",
+  ]
+
+  in_files = []
+  foreach(_js_file, js_deps) {
+    in_files += [ "enhanced_network_tts/" + _js_file ]
+  }
+  foreach(_ts_file, ts_modules) {
+    in_files += [ "enhanced_network_tts/" + _ts_file ]
+  }
+
+  tsconfig_base = "../tsconfig.base.json"
+}
 
 group("build") {
-  deps = [ ":enhanced_network_tts_copied_files" ]
+  deps = [ ":copied_files" ]
 }
 
 # Instead of setting up one copy target for each subdirectory, use a script
 # to copy all files.
-run_jsbundler("enhanced_network_tts_copied_files") {
+run_jsbundler("copied_files") {
   mode = "copy"
-  dest_dir = enhanced_network_tts_dir
-  sources = [
-    "background.html",
-    "background.js",
-    "enhanced_network_tts.js",
+  deps = [
+    ":ts_build",
+    "../common:copied_files",
   ]
+  dest_dir = enhanced_network_tts_dir
+  sources = [ "background.html" ]
+  sources += filter_include(get_target_outputs(":ts_build"), [ "*.js" ])
+
   rewrite_rules = [
+    rebase_path("$tsc_out_dir/enhanced_network_tts", root_build_dir) + ":",
     rebase_path(".", root_build_dir) + ":",
     rebase_path(closure_library_dir, root_build_dir) + ":closure",
   ]
@@ -42,7 +81,9 @@ source_set("browser_tests") {
   deps = [ ":enhanced_network_tts_extjs_tests" ]
 
   data = [
-    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/",
+    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/background.html",
+    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/background.js",
+    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/enhanced_network_tts.js",
     "//chrome/browser/resources/chromeos/accessibility/common/",
     "//chrome/browser/resources/chromeos/accessibility/enhanced_network_tts/",
   ]
@@ -71,18 +112,4 @@ js2gtest("enhanced_network_tts_extjs_tests") {
     "//chrome/common",
   ]
   defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
-}
-
-js_type_check("closure_compile") {
-  deps = [ ":enhanced_network_tts" ]
-}
-
-js_library("enhanced_network_tts") {
-  deps = [ "//chromeos/ash/components/enhanced_network_tts/mojom:mojom_js_library_for_compile" ]
-  externs_list = [
-    "mojo_bindings_externs.js",
-    "$externs_path/tts.js",
-    "$externs_path/ttsEngine.js",
-    "$externs_path/mojo_private.js",
-  ]
 }

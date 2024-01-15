@@ -14,16 +14,16 @@ extensions::api::networking_private::CaptivePortalStatus
 GetApiCaptivePortalStatus(crosapi::mojom::CaptivePortalStatus mojoStatus) {
   switch (mojoStatus) {
     case crosapi::mojom::CaptivePortalStatus::kUnknown:
-      return extensions::api::networking_private::CAPTIVE_PORTAL_STATUS_UNKNOWN;
+      return extensions::api::networking_private::CaptivePortalStatus::kUnknown;
     case crosapi::mojom::CaptivePortalStatus::kOffline:
-      return extensions::api::networking_private::CAPTIVE_PORTAL_STATUS_OFFLINE;
+      return extensions::api::networking_private::CaptivePortalStatus::kOffline;
     case crosapi::mojom::CaptivePortalStatus::kOnline:
-      return extensions::api::networking_private::CAPTIVE_PORTAL_STATUS_ONLINE;
+      return extensions::api::networking_private::CaptivePortalStatus::kOnline;
     case crosapi::mojom::CaptivePortalStatus::kPortal:
-      return extensions::api::networking_private::CAPTIVE_PORTAL_STATUS_PORTAL;
+      return extensions::api::networking_private::CaptivePortalStatus::kPortal;
     case crosapi::mojom::CaptivePortalStatus::kProxyAuthRequired:
-      return extensions::api::networking_private::
-          CAPTIVE_PORTAL_STATUS_PROXYAUTHREQUIRED;
+      return extensions::api::networking_private::CaptivePortalStatus::
+          kProxyAuthRequired;
   }
 }
 
@@ -37,7 +37,7 @@ LacrosNetworkingPrivateObserver::LacrosNetworkingPrivateObserver()
     return;
   }
 
-  if (service->GetInterfaceVersion(NetworkingPrivate::Uuid_) <
+  if (service->GetInterfaceVersion<NetworkingPrivate>() <
       static_cast<int>(
           NetworkingPrivate::MethodMinVersions::kAddObserverMinVersion)) {
     DLOG(WARNING) << "Unsupported ash version.";

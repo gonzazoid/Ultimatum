@@ -11,10 +11,11 @@
 #include "ash/accessibility/magnifier/fullscreen_magnifier_controller.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_types.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
@@ -130,8 +131,13 @@ void MagnificationManager::OnMouseEvent(ui::MouseEvent* event) {
 
 void MagnificationManager::OnViewEvent(views::View* view,
                                        ax::mojom::Event event_type) {
-  if (!fullscreen_magnifier_enabled_ && !IsDockedMagnifierEnabled())
+  if (!view) {
     return;
+  }
+
+  if (!fullscreen_magnifier_enabled_ && !IsDockedMagnifierEnabled()) {
+    return;
+  }
 
   if (event_type != ax::mojom::Event::kFocus &&
       event_type != ax::mojom::Event::kSelection) {
@@ -154,15 +160,22 @@ MagnificationManager::MagnificationManager() {
 
 MagnificationManager::~MagnificationManager() {
   CHECK(this == g_magnification_manager);
-  views::AXEventManager::Get()->RemoveObserver(this);
-  user_manager::UserManager::Get()->RemoveSessionStateObserver(this);
+  auto* event_manager = views::AXEventManager::Get();
+  if (event_manager) {
+    event_manager->RemoveObserver(this);
+  }
+  auto* user_manager = user_manager::UserManager::Get();
+  if (user_manager) {
+    user_manager->RemoveSessionStateObserver(this);
+  }
 }
 
 void MagnificationManager::OnLoginOrLockScreenVisible() {
   // Update `profile_` when entering the login screen.
   Profile* profile = ProfileManager::GetActiveUserProfile();
-  if (ProfileHelper::IsSigninProfile(profile))
+  if (IsSigninBrowserContext(profile)) {
     SetProfile(profile);
+  }
 }
 
 void MagnificationManager::ActiveUserChanged(user_manager::User* active_user) {
@@ -175,12 +188,13 @@ void MagnificationManager::ActiveUserChanged(user_manager::User* active_user) {
 }
 
 void MagnificationManager::SetProfileByUser(const user_manager::User* user) {
-  SetProfile(ProfileHelper::Get()->GetProfileByUser(user));
+  SetProfile(Profile::FromBrowserContext(
+      BrowserContextHelper::Get()->GetBrowserContextByUser(user)));
 }
 
 void MagnificationManager::SetProfile(Profile* profile) {
   if (profile_) {
-    DCHECK(profile_observation_.IsObservingSource(profile_));
+    DCHECK(profile_observation_.IsObservingSource(profile_.get()));
     profile_observation_.Reset();
   }
   DCHECK(!profile_observation_.IsObserving());

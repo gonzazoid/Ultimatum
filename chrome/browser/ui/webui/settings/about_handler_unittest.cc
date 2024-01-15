@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 #include "chrome/browser/ui/webui/settings/about_handler.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -41,7 +42,7 @@ class AboutHandlerTest : public testing::Test {
   void SetUp() override {
     fake_update_engine_client_ =
         ash::UpdateEngineClient::InitializeFakeForTest();
-    ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
+    ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
 
     handler_ = std::make_unique<TestAboutHandler>(&profile_);
     handler_->set_web_ui(&web_ui_);
@@ -55,7 +56,7 @@ class AboutHandlerTest : public testing::Test {
   void TearDown() override {
     handler_.reset();
     TestingBrowserProcess::GetGlobal()->SetLocalState(nullptr);
-    ConciergeClient::Shutdown();
+    ash::ConciergeClient::Shutdown();
     ash::UpdateEngineClient::Shutdown();
   }
 
@@ -78,8 +79,8 @@ class AboutHandlerTest : public testing::Test {
     EXPECT_EQ("cr.webUIResponse", call_data.function_name());
     EXPECT_EQ("handlerFunctionName", call_data.arg1()->GetString());
     EXPECT_EQ(has_eol_passed,
-              call_data.arg3()->FindKey("hasEndOfLife")->GetBool());
-    return call_data.arg3()->FindKey("aboutPageEndOfLifeMessage")->GetString();
+              *call_data.arg3()->GetDict().FindBool("hasEndOfLife"));
+    return *call_data.arg3()->GetDict().FindString("aboutPageEndOfLifeMessage");
   }
 
   void SetCurrentTimeToUtc(const char* utc_date_string) {
@@ -99,7 +100,8 @@ class AboutHandlerTest : public testing::Test {
   TestingProfile profile_;
   content::TestWebUI web_ui_;
   std::unique_ptr<TestAboutHandler> handler_;
-  ash::FakeUpdateEngineClient* fake_update_engine_client_;
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_;
   std::unique_ptr<base::SimpleTestClock> clock_;
 };
 
@@ -116,7 +118,7 @@ TEST_F(AboutHandlerTest, EndOfLifeMessageInAboutDetailsSubpage) {
   SetEolDateUtc("15 May 2023");
   EXPECT_EQ(
       "This device will get automatic software and security updates "
-      "until May 2023. <a target=\"_blank\" href=\"http://support.google"
+      "until May 2023. <a target=\"_blank\" href=\"https://support.google"
       ".com/chrome/a?p=auto-update-policy\">Learn more</a>",
       CallGetEndOfLifeInfoAndReturnString(false /*=has_eol_passed*/));
 

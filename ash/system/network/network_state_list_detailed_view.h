@@ -8,8 +8,10 @@
 #include <string>
 
 #include "ash/login_status.h"
+#include "ash/system/network/network_utils.h"
 #include "ash/system/network/tray_network_state_observer.h"
 #include "ash/system/tray/tray_detailed_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"
@@ -48,10 +50,8 @@ class ASH_EXPORT NetworkStateListDetailedView
   const char* GetClassName() const override;
 
  protected:
-  enum ListType { LIST_TYPE_NETWORK, LIST_TYPE_VPN };
-
   NetworkStateListDetailedView(DetailedViewDelegate* delegate,
-                               ListType list_type,
+                               NetworkDetailedViewListType list_type,
                                LoginStatus login);
 
   // Refreshes the network list.
@@ -106,18 +106,18 @@ class ASH_EXPORT NetworkStateListDetailedView
   bool IsWifiEnabled();
 
   // Type of list (all networks or vpn)
-  ListType list_type_;
+  NetworkDetailedViewListType list_type_;
 
   // Track login state.
   LoginStatus login_;
 
-  TrayNetworkStateModel* model_;
+  raw_ptr<TrayNetworkStateModel> model_;
 
-  views::Button* info_button_;
-  views::Button* settings_button_;
+  raw_ptr<views::Button> info_button_;
+  raw_ptr<views::Button> settings_button_;
 
   // A small bubble for displaying network info.
-  InfoBubble* info_bubble_;
+  raw_ptr<InfoBubble> info_bubble_;
 
   // Timer for starting and stopping network scans.
   base::RepeatingTimer network_scan_repeating_timer_;

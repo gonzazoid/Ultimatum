@@ -5,7 +5,7 @@
 #include "components/invalidation/impl/fake_ack_handler.h"
 
 #include "base/ranges/algorithm.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/invalidation/public/ack_handle.h"
 #include "components/invalidation/public/invalidation.h"
 
@@ -34,7 +34,9 @@ FakeAckHandler::~FakeAckHandler() = default;
 
 void FakeAckHandler::RegisterInvalidation(Invalidation* invalidation) {
   unacked_invalidations_.push_back(*invalidation);
-  invalidation->SetAckHandler(AsWeakPtr(), base::ThreadTaskRunnerHandle::Get());
+  invalidation->SetAckHandler(
+      weak_ptr_factory_.GetWeakPtr(),
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void FakeAckHandler::RegisterUnsentInvalidation(Invalidation* invalidation) {
@@ -48,11 +50,6 @@ bool FakeAckHandler::IsUnacked(const Invalidation& invalidation) const {
 
 bool FakeAckHandler::IsAcknowledged(const Invalidation& invalidation) const {
   return base::ranges::any_of(acked_invalidations_,
-                              AckHandleMatcher(invalidation.ack_handle()));
-}
-
-bool FakeAckHandler::IsDropped(const Invalidation& invalidation) const {
-  return base::ranges::any_of(dropped_invalidations_,
                               AckHandleMatcher(invalidation.ack_handle()));
 }
 
@@ -77,17 +74,6 @@ void FakeAckHandler::Acknowledge(const Topic& topic, const AckHandle& handle) {
   if (it2 != unrecovered_drop_events_.end() && it2->second.Equals(handle)) {
     unrecovered_drop_events_.erase(it2);
   }
-}
-
-void FakeAckHandler::Drop(const Topic& topic, const AckHandle& handle) {
-  auto it =
-      base::ranges::find_if(unacked_invalidations_, AckHandleMatcher(handle));
-  if (it != unacked_invalidations_.end()) {
-    dropped_invalidations_.push_back(*it);
-    unacked_invalidations_.erase(it);
-  }
-  unrecovered_drop_events_.erase(topic);
-  unrecovered_drop_events_.emplace(topic, handle);
 }
 
 }  // namespace invalidation

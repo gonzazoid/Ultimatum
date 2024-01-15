@@ -4,7 +4,7 @@
 
 #include "third_party/blink/renderer/platform/instrumentation/memory_pressure_listener.h"
 
-#include "base/allocator/partition_allocator/memory_reclaimer.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/memory_reclaimer.h"
 #include "base/feature_list.h"
 #include "base/synchronization/lock.h"
 #include "base/system/sys_info.h"
@@ -41,6 +41,23 @@ bool MemoryPressureListenerRegistry::is_low_end_device_ = false;
 // static
 bool MemoryPressureListenerRegistry::IsLowEndDevice() {
   return is_low_end_device_;
+}
+
+bool MemoryPressureListenerRegistry::
+    IsLowEndDeviceOrPartialLowEndModeEnabled() {
+  return is_low_end_device_ ||
+         base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled();
+}
+
+bool MemoryPressureListenerRegistry::
+    IsLowEndDeviceOrPartialLowEndModeEnabledIncludingCanvasFontCache() {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS)
+  return is_low_end_device_ ||
+         base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled(
+             blink::features::kPartialLowEndModeExcludeCanvasFontCache);
+#else
+  return IsLowEndDeviceOrPartialLowEndModeEnabled();
+#endif
 }
 
 // static

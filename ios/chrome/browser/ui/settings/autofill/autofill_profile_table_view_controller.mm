@@ -4,45 +4,54 @@
 
 #import "ios/chrome/browser/ui/settings/autofill/autofill_profile_table_view_controller.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/check.h"
-#import "base/mac/foundation_util.h"
+#import "base/i18n/message_formatter.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "components/autofill/core/browser/personal_data_manager.h"
+#import "components/autofill/core/browser/profile_requirement_utils.h"
+#import "components/autofill/core/common/autofill_features.h"
 #import "components/autofill/core/common/autofill_prefs.h"
 #import "components/autofill/ios/browser/personal_data_manager_observer_bridge.h"
 #import "components/password_manager/core/common/password_manager_features.h"
 #import "components/prefs/pref_service.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/autofill/personal_data_manager_factory.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/net/crurl.h"
+#import "components/sync/base/features.h"
+#import "components/sync/service/sync_user_settings.h"
+#import "ios/chrome/browser/autofill/model/personal_data_manager_factory.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/ui/settings/autofill/autofill_constants.h"
-#import "ios/chrome/browser/ui/settings/autofill/autofill_profile_edit_table_view_controller.h"
+#import "ios/chrome/browser/ui/settings/autofill/autofill_profile_edit_coordinator.h"
+#import "ios/chrome/browser/ui/settings/autofill/cells/autofill_address_profile_source.h"
 #import "ios/chrome/browser/ui/settings/autofill/cells/autofill_profile_item.h"
 #import "ios/chrome/browser/ui/settings/elements/enterprise_info_popover_view_controller.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/table_view_model.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "net/base/mac/url_conversions.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/strings/grit/ui_strings.h"
 
 namespace {
 
@@ -64,11 +73,12 @@ typedef NS_ENUM(NSInteger, ItemType) {
 #pragma mark - AutofillProfileTableViewController
 
 @interface AutofillProfileTableViewController () <
+    AutofillProfileEditCoordinatorDelegate,
     PersonalDataManagerObserver,
     PopoverLabelViewControllerDelegate> {
   autofill::PersonalDataManager* _personalDataManager;
 
-  ChromeBrowserState* _browserState;
+  Browser* _browser;
   std::unique_ptr<autofill::PersonalDataManagerObserverBridge> _observer;
 
   // Deleting profiles updates PersonalDataManager resulting in an observer
@@ -77,33 +87,47 @@ typedef NS_ENUM(NSInteger, ItemType) {
   // such as inserting or removing items/sections. This boolean is used to
   // stop the observer callback from acting on user-initiated changes.
   BOOL _deletionInProgress;
+
+  // Whether Settings have been dismissed.
+  BOOL _settingsAreDismissed;
 }
 
 @property(nonatomic, getter=isAutofillProfileEnabled)
     BOOL autofillProfileEnabled;
 
+// The account email of the signed-in user, or nil if there is no
+// signed-in user.
+@property(nonatomic, strong) NSString* userEmail;
+
+// Default NO. YES, when the autofill syncing is enabled.
+@property(nonatomic, assign, getter=isSyncEnabled) BOOL syncEnabled;
+
+// Coordinator that managers a UIAlertController to delete addresses.
+@property(nonatomic, strong) ActionSheetCoordinator* deletionSheetCoordinator;
+
+// Coordinator to view/edit profile details.
+@property(nonatomic, strong)
+    AutofillProfileEditCoordinator* autofillProfileEditCoordinator;
+
 @end
 
 @implementation AutofillProfileTableViewController
 
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)browserState {
-  DCHECK(browserState);
+- (instancetype)initWithBrowser:(Browser*)browser {
+  DCHECK(browser);
 
   self = [super initWithStyle:ChromeTableViewStyle()];
   if (self) {
     self.title = l10n_util::GetNSString(IDS_AUTOFILL_ADDRESSES_SETTINGS_TITLE);
     self.shouldDisableDoneButtonOnEdit = YES;
-    _browserState = browserState;
+    _browser = browser;
     _personalDataManager =
-        autofill::PersonalDataManagerFactory::GetForBrowserState(_browserState);
+        autofill::PersonalDataManagerFactory::GetForBrowserState(
+            _browser->GetBrowserState());
     _observer.reset(new autofill::PersonalDataManagerObserverBridge(self));
     _personalDataManager->AddObserver(_observer.get());
   }
   return self;
-}
-
-- (void)dealloc {
-  _personalDataManager->RemoveObserver(_observer.get());
 }
 
 - (void)viewDidLoad {
@@ -112,17 +136,21 @@ typedef NS_ENUM(NSInteger, ItemType) {
   self.tableView.accessibilityIdentifier = kAutofillProfileTableViewID;
   self.tableView.estimatedSectionFooterHeight =
       kTableViewHeaderFooterViewHeight;
+  [self determineUserEmail];
   [self updateUIForEditState];
   [self loadModel];
 }
 
 - (void)loadModel {
   [super loadModel];
+  if (_settingsAreDismissed)
+    return;
+
   TableViewModel* model = self.tableViewModel;
 
   [model addSectionWithIdentifier:SectionIdentifierSwitches];
 
-  if (_browserState->GetPrefs()->IsManagedPreference(
+  if (_browser->GetBrowserState()->GetPrefs()->IsManagedPreference(
           autofill::prefs::kAutofillProfileEnabled)) {
     [model addItem:[self managedAddressItem]
         toSectionWithIdentifier:SectionIdentifierSwitches];
@@ -146,9 +174,12 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 // Populates profile section using personalDataManager.
 - (void)populateProfileSection {
+  if (_settingsAreDismissed)
+    return;
+
   TableViewModel* model = self.tableViewModel;
   const std::vector<autofill::AutofillProfile*> autofillProfiles =
-      _personalDataManager->GetProfiles();
+      _personalDataManager->GetProfilesForSettings();
   if (!autofillProfiles.empty()) {
     [model addSectionWithIdentifier:SectionIdentifierProfiles];
     [model setHeader:[self profileSectionHeader]
@@ -201,8 +232,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 - (TableViewItem*)itemForProfile:
     (const autofill::AutofillProfile&)autofillProfile {
-  assert(autofillProfile.record_type() ==
-         autofill::AutofillProfile::LOCAL_PROFILE);
   std::string guid(autofillProfile.guid());
   NSString* title = base::SysUTF16ToNSString(
       autofillProfile.GetInfo(autofill::AutofillType(autofill::NAME_FULL),
@@ -213,16 +242,34 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   AutofillProfileItem* item =
       [[AutofillProfileItem alloc] initWithType:ItemTypeAddress];
-  item.text = title;
-  item.leadingDetailText = subTitle;
+  item.title = title;
+  item.detailText = subTitle;
   item.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
   item.accessibilityIdentifier = title;
   item.GUID = guid;
+  item.showMigrateToAccountButton = NO;
+  item.localProfileIconShown = NO;
+  if (autofillProfile.source() == autofill::AutofillProfile::Source::kAccount) {
+    item.autofillProfileSource =
+        AutofillAddressProfileSource::AutofillAccountProfile;
+  } else if (self.syncEnabled) {
+    item.autofillProfileSource =
+        AutofillAddressProfileSource::AutofillSyncableProfile;
+  } else {
+    item.autofillProfileSource = AutofillLocalProfile;
+    if ([self shouldShowCloudOffIconForProfile:autofillProfile]) {
+      item.showMigrateToAccountButton = YES;
+      item.image = CustomSymbolTemplateWithPointSize(
+          kCloudSlashSymbol, kCloudSlashSymbolPointSize);
+      item.localProfileIconShown = YES;
+    }
+  }
   return item;
 }
 
 - (BOOL)localProfilesExist {
-  return !_personalDataManager->GetProfiles().empty();
+  return !_settingsAreDismissed &&
+         !_personalDataManager->GetProfilesForSettings().empty();
 }
 
 #pragma mark - SettingsControllerProtocol
@@ -235,6 +282,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
   base::RecordAction(base::UserMetricsAction("MobileAddressesSettingsBack"));
 }
 
+- (void)settingsWillBeDismissed {
+  DCHECK(!_settingsAreDismissed);
+
+  [self stopAutofillProfileEditCoordinator];
+  _personalDataManager->RemoveObserver(_observer.get());
+  [self dismissDeletionSheet];
+
+  // Remove observer bridges.
+  _observer.reset();
+
+  // Clear C++ ivars.
+  _personalDataManager = nullptr;
+  _browser = nullptr;
+
+  _settingsAreDismissed = YES;
+}
+
 #pragma mark - SettingsRootTableViewController
 
 - (BOOL)editButtonEnabled {
@@ -242,7 +306,14 @@ typedef NS_ENUM(NSInteger, ItemType) {
 }
 
 - (BOOL)shouldHideToolbar {
-  return self.navigationController.visibleViewController != self;
+  // Hide the toolbar if the visible view controller is not the current view
+  // controller or the `deletionSheetCoordinator` is shown.
+  if (self.navigationController.visibleViewController == self) {
+    return NO;
+  } else if (self.deletionSheetCoordinator != nil) {
+    return ![self.deletionSheetCoordinator isVisible];
+  }
+  return YES;
 }
 
 - (BOOL)shouldShowEditDoneButton {
@@ -258,24 +329,15 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 // Override.
 - (void)deleteItems:(NSArray<NSIndexPath*>*)indexPaths {
-  // If there are no index paths, return early. This can happen if the user
-  // presses the Delete button twice in quick succession.
-  if (![indexPaths count])
-    return;
-
-  _deletionInProgress = YES;
-  [self willDeleteItemsAtIndexPaths:indexPaths];
-  // Call super to delete the items in the table view.
-  [super deleteItems:indexPaths];
-
-  // TODO(crbug.com/650390) Generalize removing empty sections
-  [self removeSectionIfEmptyForSectionWithIdentifier:SectionIdentifierProfiles];
+    [self showDeletionConfirmationForIndexPaths:indexPaths];
 }
 
 #pragma mark - UITableViewDelegate
 
 - (void)setEditing:(BOOL)editing animated:(BOOL)animated {
   [super setEditing:editing animated:animated];
+  if (_settingsAreDismissed)
+    return;
 
   [self updateUIForEditState];
 }
@@ -283,6 +345,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)tableView:(UITableView*)tableView
     didSelectRowAtIndexPath:(NSIndexPath*)indexPath {
   [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+  if (_settingsAreDismissed)
+    return;
 
   // Edit mode is the state where the user can select and delete entries. In
   // edit mode, selection is handled by the superclass. When not in edit mode
@@ -292,25 +356,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
     return;
   }
 
-  TableViewModel* model = self.tableViewModel;
-  if ([model itemTypeForIndexPath:indexPath] != ItemTypeAddress)
+  if (![self isItemTypeForIndexPathAddress:indexPath]) {
     return;
+  }
 
-  const std::vector<autofill::AutofillProfile*> autofillProfiles =
-      _personalDataManager->GetProfiles();
-  AutofillProfileEditTableViewController* controller =
-      [AutofillProfileEditTableViewController
-          controllerWithProfile:*autofillProfiles[indexPath.item]
-            personalDataManager:_personalDataManager];
-  controller.dispatcher = self.dispatcher;
-  [self.navigationController pushViewController:controller animated:YES];
+  AutofillProfileItem* item = base::apple::ObjCCastStrict<AutofillProfileItem>(
+      [self.tableViewModel itemAtIndexPath:indexPath]);
+  [self
+      showAddressProfileDetailsPageForProfile:_personalDataManager
+                                                  ->GetProfileByGUID(item.GUID)
+                   withMigrateToAccountButton:item.showMigrateToAccountButton];
   [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
 }
 
 - (void)tableView:(UITableView*)tableView
     didDeselectRowAtIndexPath:(NSIndexPath*)indexPath {
   [super tableView:tableView didDeselectRowAtIndexPath:indexPath];
-  if (!self.tableView.editing)
+  if (_settingsAreDismissed || !self.tableView.editing)
     return;
 
   if (self.tableView.indexPathsForSelectedRows.count == 0)
@@ -322,6 +384,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
 // Called when the user clicks on the information button of the managed
 // setting's UI. Shows a textual bubble with the information of the enterprise.
 - (void)didTapManagedUIInfoButton:(UIButton*)buttonView {
+  if (_settingsAreDismissed)
+    return;
+
   EnterpriseInfoPopoverViewController* bubbleViewController =
       [[EnterpriseInfoPopoverViewController alloc] initWithEnterpriseName:nil];
   bubbleViewController.delegate = self;
@@ -342,6 +407,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 - (BOOL)tableView:(UITableView*)tableView
     canEditRowAtIndexPath:(NSIndexPath*)indexPath {
+  if (_settingsAreDismissed)
+    return NO;
+
   // Only profile data cells are editable.
   TableViewItem* item = [self.tableViewModel itemAtIndexPath:indexPath];
   return [item isKindOfClass:[AutofillProfileItem class]];
@@ -350,7 +418,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)tableView:(UITableView*)tableView
     commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
      forRowAtIndexPath:(NSIndexPath*)indexPath {
-  if (editingStyle != UITableViewCellEditingStyleDelete)
+  if (editingStyle != UITableViewCellEditingStyleDelete ||
+      _settingsAreDismissed)
     return;
   [self deleteItems:@[ indexPath ]];
 }
@@ -359,6 +428,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
         cellForRowAtIndexPath:(NSIndexPath*)indexPath {
   UITableViewCell* cell = [super tableView:tableView
                      cellForRowAtIndexPath:indexPath];
+  if (_settingsAreDismissed)
+    return cell;
 
   switch (static_cast<ItemType>(
       [self.tableViewModel itemTypeForIndexPath:indexPath])) {
@@ -368,7 +439,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       break;
     case ItemTypeAutofillAddressSwitch: {
       TableViewSwitchCell* switchCell =
-          base::mac::ObjCCastStrict<TableViewSwitchCell>(cell);
+          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
       [switchCell.switchView addTarget:self
                                 action:@selector(autofillAddressSwitchChanged:)
                       forControlEvents:UIControlEventValueChanged];
@@ -376,7 +447,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeAutofillAddressManaged: {
       TableViewInfoButtonCell* managedCell =
-          base::mac::ObjCCastStrict<TableViewInfoButtonCell>(cell);
+          base::apple::ObjCCastStrict<TableViewInfoButtonCell>(cell);
       [managedCell.trailingButton
                  addTarget:self
                     action:@selector(didTapManagedUIInfoButton:)
@@ -405,7 +476,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [self.tableViewModel indexPathForItemType:switchItemType
                               sectionIdentifier:SectionIdentifierSwitches];
   TableViewSwitchItem* switchItem =
-      base::mac::ObjCCastStrict<TableViewSwitchItem>(
+      base::apple::ObjCCastStrict<TableViewSwitchItem>(
           [self.tableViewModel itemAtIndexPath:switchPath]);
   switchItem.on = on;
 }
@@ -424,7 +495,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [model indexPathForItemType:switchItemType
                 sectionIdentifier:SectionIdentifierSwitches];
   TableViewSwitchItem* switchItem =
-      base::mac::ObjCCastStrict<TableViewSwitchItem>(
+      base::apple::ObjCCastStrict<TableViewSwitchItem>(
           [model itemAtIndexPath:switchPath]);
   [switchItem setEnabled:enabled];
   [self reconfigureCellsForItems:@[ switchItem ]];
@@ -441,6 +512,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     [self setEditing:NO animated:NO];
   }
 
+  [self determineUserEmail];
   [self updateUIForEditState];
   [self reloadData];
 }
@@ -448,30 +520,85 @@ typedef NS_ENUM(NSInteger, ItemType) {
 #pragma mark - Getters and Setter
 
 - (BOOL)isAutofillProfileEnabled {
-  return autofill::prefs::IsAutofillProfileEnabled(_browserState->GetPrefs());
+  return autofill::prefs::IsAutofillProfileEnabled(
+      _browser->GetBrowserState()->GetPrefs());
 }
 
 - (void)setAutofillProfileEnabled:(BOOL)isEnabled {
-  return autofill::prefs::SetAutofillProfileEnabled(_browserState->GetPrefs(),
-                                                    isEnabled);
+  return autofill::prefs::SetAutofillProfileEnabled(
+      _browser->GetBrowserState()->GetPrefs(), isEnabled);
+}
+
+- (void)determineUserEmail {
+  self.syncEnabled = NO;
+  self.userEmail = nil;
+  AuthenticationService* authenticationService =
+      AuthenticationServiceFactory::GetForBrowserState(
+          _browser->GetBrowserState());
+  CHECK(authenticationService);
+  id<SystemIdentity> identity =
+      authenticationService->GetPrimaryIdentity(signin::ConsentLevel::kSignin);
+  if (identity) {
+    self.userEmail = identity.userEmail;
+    self.syncEnabled = _personalDataManager->IsSyncFeatureEnabledForAutofill();
+  }
+}
+
+#pragma mark - PopoverLabelViewControllerDelegate
+
+- (void)didTapLinkURL:(NSURL*)URL {
+  [self view:nil didTapLinkURL:[[CrURL alloc] initWithNSURL:URL]];
+}
+
+#pragma mark - AutofillProfileEditCoordinatorDelegate
+
+- (void)autofillProfileEditCoordinatorTableViewControllerDidFinish:
+    (AutofillProfileEditCoordinator*)coordinator {
+  DCHECK_EQ(self.autofillProfileEditCoordinator, coordinator);
+  [self stopAutofillProfileEditCoordinator];
 }
 
 #pragma mark - Private
+- (void)dismissDeletionSheet {
+  [self.deletionSheetCoordinator stop];
+  self.deletionSheetCoordinator = nil;
+}
+
+- (void)stopAutofillProfileEditCoordinator {
+  self.autofillProfileEditCoordinator.delegate = nil;
+  [self.autofillProfileEditCoordinator stop];
+  self.autofillProfileEditCoordinator = nil;
+}
 
 // Removes the item from the personal data manager model.
 - (void)willDeleteItemsAtIndexPaths:(NSArray*)indexPaths {
+  if (_settingsAreDismissed)
+    return;
+
+  _deletionInProgress = YES;
   for (NSIndexPath* indexPath in indexPaths) {
-    AutofillProfileItem* item = base::mac::ObjCCastStrict<AutofillProfileItem>(
-        [self.tableViewModel itemAtIndexPath:indexPath]);
+    AutofillProfileItem* item =
+        base::apple::ObjCCastStrict<AutofillProfileItem>(
+            [self.tableViewModel itemAtIndexPath:indexPath]);
     _personalDataManager->RemoveByGUID([item GUID]);
   }
+
+  [self.tableView
+      performBatchUpdates:^{
+        [self removeFromModelItemAtIndexPaths:indexPaths];
+        [self.tableView
+            deleteRowsAtIndexPaths:indexPaths
+                  withRowAnimation:UITableViewRowAnimationAutomatic];
+      }
+               completion:nil];
 }
 
 // Remove the section from the model and collectionView if there are no more
 // items in the section.
 - (void)removeSectionIfEmptyForSectionWithIdentifier:
     (SectionIdentifier)sectionIdentifier {
-  if (![self.tableViewModel hasSectionForSectionIdentifier:sectionIdentifier]) {
+  if (_settingsAreDismissed ||
+      ![self.tableViewModel hasSectionForSectionIdentifier:sectionIdentifier]) {
     _deletionInProgress = NO;
     return;
   }
@@ -515,10 +642,133 @@ typedef NS_ENUM(NSInteger, ItemType) {
   }
 }
 
-#pragma mark - PopoverLabelViewControllerDelegate
+// Shows the action sheet asking for the confirmation on delete from the user.
+- (void)showDeletionConfirmationForIndexPaths:
+    (NSArray<NSIndexPath*>*)indexPaths {
+  BOOL accountProfiles = NO;
+  BOOL syncProfiles = NO;
 
-- (void)didTapLinkURL:(NSURL*)URL {
-  [self view:nil didTapLinkURL:[[CrURL alloc] initWithNSURL:URL]];
+  int profileCount = 0;
+
+  for (NSIndexPath* indexPath in indexPaths) {
+    if (![self isItemTypeForIndexPathAddress:indexPath]) {
+      continue;
+    }
+    profileCount++;
+    AutofillProfileItem* item =
+        base::apple::ObjCCastStrict<AutofillProfileItem>(
+            [self.tableViewModel itemAtIndexPath:indexPath]);
+    switch (item.autofillProfileSource) {
+      case AutofillAccountProfile:
+        accountProfiles = YES;
+        break;
+      case AutofillSyncableProfile:
+        syncProfiles = YES;
+        break;
+      case AutofillLocalProfile:
+        break;
+    }
+  }
+
+  // Can happen if user presses delete in quick succesion.
+  if (!profileCount) {
+    return;
+  }
+
+  NSString* deletionConfirmationString =
+      [self getDeletionConfirmationStringUsingProfileCount:profileCount
+                                           accountProfiles:accountProfiles
+                                              syncProfiles:syncProfiles];
+  self.deletionSheetCoordinator = [[ActionSheetCoordinator alloc]
+      initWithBaseViewController:self
+                         browser:_browser
+                           title:deletionConfirmationString
+                         message:nil
+                   barButtonItem:self.deleteButton];
+
+  if (UIContentSizeCategoryIsAccessibilityCategory(
+          UIApplication.sharedApplication.preferredContentSizeCategory)) {
+    self.deletionSheetCoordinator.alertStyle = UIAlertControllerStyleAlert;
+  }
+
+  self.deletionSheetCoordinator.popoverArrowDirection =
+      UIPopoverArrowDirectionAny;
+  __weak AutofillProfileTableViewController* weakSelf = self;
+  [self.deletionSheetCoordinator
+      addItemWithTitle:
+          l10n_util::GetPluralNSStringF(
+              IDS_IOS_SETTINGS_AUTOFILL_DELETE_ADDRESS_CONFIRMATION_BUTTON,
+              profileCount)
+                action:^{
+                  [weakSelf willDeleteItemsAtIndexPaths:indexPaths];
+                  // TODO(crbug.com/650390) Generalize removing empty sections
+                  [weakSelf removeSectionIfEmptyForSectionWithIdentifier:
+                                SectionIdentifierProfiles];
+                  [weakSelf dismissDeletionSheet];
+                }
+                 style:UIAlertActionStyleDestructive];
+  [self.deletionSheetCoordinator
+      addItemWithTitle:l10n_util::GetNSString(IDS_APP_CANCEL)
+                action:^{
+                  [weakSelf dismissDeletionSheet];
+                }
+                 style:UIAlertActionStyleCancel];
+  [self.deletionSheetCoordinator start];
+}
+
+// Returns the deletion confirmation message string based on
+// `profileCount` and if it the source has any `accountProfiles` or
+// `syncProfiles`.
+- (NSString*)getDeletionConfirmationStringUsingProfileCount:(int)profileCount
+                                            accountProfiles:
+                                                (BOOL)accountProfiles
+                                               syncProfiles:(BOOL)syncProfiles {
+  if (accountProfiles) {
+    std::u16string pattern = l10n_util::GetStringUTF16(
+        IDS_IOS_SETTINGS_AUTOFILL_DELETE_ACCOUNT_ADDRESS_CONFIRMATION_TITLE);
+    std::u16string confirmationString =
+        base::i18n::MessageFormatter::FormatWithNamedArgs(
+            pattern, "email", base::SysNSStringToUTF16(self.userEmail), "count",
+            profileCount);
+    return base::SysUTF16ToNSString(confirmationString);
+  }
+  if (syncProfiles) {
+    return l10n_util::GetPluralNSStringF(
+        IDS_IOS_SETTINGS_AUTOFILL_DELETE_SYNC_ADDRESS_CONFIRMATION_TITLE,
+        profileCount);
+  }
+  return l10n_util::GetPluralNSStringF(
+      IDS_IOS_SETTINGS_AUTOFILL_DELETE_LOCAL_ADDRESS_CONFIRMATION_TITLE,
+      profileCount);
+}
+
+// Returns true when the item type for `indexPath` is Address.
+- (BOOL)isItemTypeForIndexPathAddress:(NSIndexPath*)indexPath {
+  return
+      [self.tableViewModel itemTypeForIndexPath:indexPath] == ItemTypeAddress;
+}
+
+- (void)showAddressProfileDetailsPageForProfile:
+            (autofill::AutofillProfile*)profile
+                     withMigrateToAccountButton:(BOOL)migrateToAccountButton {
+  self.autofillProfileEditCoordinator = [[AutofillProfileEditCoordinator alloc]
+      initWithBaseNavigationController:self.navigationController
+                               browser:_browser
+                               profile:*profile
+                migrateToAccountButton:migrateToAccountButton];
+  self.autofillProfileEditCoordinator.delegate = self;
+  [self.autofillProfileEditCoordinator start];
+}
+
+// Returns YES if the cloud off icon should be shown next to the profile. Only
+// those profiles, that are eligible for the migration to Account show cloud off
+// icon.
+- (BOOL)shouldShowCloudOffIconForProfile:
+    (const autofill::AutofillProfile&)profile {
+  return IsEligibleForMigrationToAccount(*_personalDataManager, profile) &&
+         base::FeatureList::IsEnabled(
+             syncer::kSyncEnableContactInfoDataTypeInTransportMode) &&
+         self.userEmail != nil;
 }
 
 @end

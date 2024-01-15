@@ -53,12 +53,15 @@ class FakeSafeBrowsingDatabaseManager
   bool CanCheckRequestDestination(
       network::mojom::RequestDestination /* request_destination */)
       const override;
-  safe_browsing::ThreatSource GetThreatSource() const override;
+  safe_browsing::ThreatSource GetBrowseUrlThreatSource(
+      safe_browsing::CheckBrowseUrlType check_type) const override;
+  safe_browsing::ThreatSource GetNonBrowseUrlThreatSource() const override;
   bool CheckExtensionIDs(const std::set<std::string>& extension_ids,
                          Client* client) override;
 
  private:
-  void OnCheckUrlForSubresourceFilterComplete(Client* client, const GURL& url);
+  void OnCheckUrlForSubresourceFilterComplete(base::WeakPtr<Client> client,
+                                              const GURL& url);
 
   std::set<Client*> checks_;
   std::map<

@@ -3,33 +3,30 @@
 // found in the LICENSE file.
 
 import 'chrome://nearby/strings.m.js';
+import 'chrome://nearby/shared/nearby_visibility_page.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
-import {setNearbyShareSettingsForTesting} from 'chrome://nearby/shared/nearby_share_settings.js';
-import {NearbyVisibilityPageElement} from 'chrome://nearby/shared/nearby_visibility_page.js';
+import {DataUsage, FastInitiationNotificationState, Visibility} from 'chrome://resources/mojo/chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom-webui.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {isChildVisible} from '../../test_util.js';
-
-import {FakeNearbyShareSettings} from './fake_nearby_share_settings.js';
+import {assertFalse, assertTrue} from '../../chromeos/chai_assert.js';
 
 suite('nearby-visibility-page', function() {
   /** @type {!NearbyVisibilityPageElement} */
   let visibility_page;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
 
     visibility_page = /** @type {!NearbyVisibilityPageElement} */ (
         document.createElement('nearby-visibility-page'));
     visibility_page.settings = {
       enabled: false,
-      fastInitiationNotificationState:
-          nearbyShare.mojom.FastInitiationNotificationState.kEnabled,
+      fastInitiationNotificationState: FastInitiationNotificationState.kEnabled,
       isFastInitiationHardwareSupported: true,
       deviceName: 'deviceName',
-      dataUsage: nearbyShare.mojom.DataUsage.kOnline,
-      visibility: nearbyShare.mojom.Visibility.kAllContacts,
+      dataUsage: DataUsage.kOnline,
+      visibility: Visibility.kAllContacts,
       isOnboardingComplete: false,
       allowedContacts: [],
     };

@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifndef CHROME_BROWSER_UI_AUTOFILL_PAYMENTS_VIRTUAL_CARD_ENROLL_BUBBLE_CONTROLLER_IMPL_H_
+#define CHROME_BROWSER_UI_AUTOFILL_PAYMENTS_VIRTUAL_CARD_ENROLL_BUBBLE_CONTROLLER_IMPL_H_
+
+#include <memory>
+
 #include "chrome/browser/ui/autofill/autofill_bubble_controller_base.h"
 #include "components/autofill/core/browser/metrics/payments/virtual_card_enrollment_metrics.h"
 #include "components/autofill/core/browser/payments/legal_message_line.h"
@@ -10,18 +15,11 @@
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents_user_data.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include <jni.h>
-#include <memory>
-#include "base/android/jni_string.h"
-#include "base/android/scoped_java_ref.h"
-#include "chrome/browser/ui/android/autofill/virtual_card_enrollment_view_android.h"
-#endif
-
-#ifndef CHROME_BROWSER_UI_AUTOFILL_PAYMENTS_VIRTUAL_CARD_ENROLL_BUBBLE_CONTROLLER_IMPL_H_
-#define CHROME_BROWSER_UI_AUTOFILL_PAYMENTS_VIRTUAL_CARD_ENROLL_BUBBLE_CONTROLLER_IMPL_H_
-
 namespace autofill {
+
+#if BUILDFLAG(IS_ANDROID)
+class AutofillVCNEnrollBottomSheetBridge;
+#endif
 
 class VirtualCardEnrollBubbleControllerImpl
     : public AutofillBubbleControllerBase,
@@ -47,12 +45,8 @@ class VirtualCardEnrollBubbleControllerImpl
   void ReshowBubble();
 
   // VirtualCardEnrollBubbleController:
-  std::u16string GetWindowTitle() const override;
-  std::u16string GetExplanatoryMessage() const override;
-  std::u16string GetAcceptButtonText() const override;
-  std::u16string GetDeclineButtonText() const override;
-  std::u16string GetLearnMoreLinkText() const override;
-  const VirtualCardEnrollmentFields GetVirtualCardEnrollmentFields()
+  const VirtualCardEnrollUiModel& GetUiModel() const override;
+  VirtualCardEnrollmentBubbleSource GetVirtualCardEnrollmentBubbleSource()
       const override;
   AutofillBubbleBase* GetVirtualCardEnrollBubbleView() const override;
 
@@ -65,22 +59,7 @@ class VirtualCardEnrollBubbleControllerImpl
   void OnLinkClicked(VirtualCardEnrollmentLinkType link_type,
                      const GURL& url) override;
   void OnBubbleClosed(PaymentsBubbleClosedReason closed_reason) override;
-
-#if BUILDFLAG(IS_ANDROID)
-  void OnAccepted(JNIEnv* env);
-  void OnDeclined(JNIEnv* env);
-  void OnDismissed(JNIEnv* env);
-  void OnLinkClicked(JNIEnv* env, jstring url, jint link_type);
-#endif
-
   bool IsIconVisible() const override;
-
-#if defined(UNIT_TEST)
-  void SetBubbleShownClosureForTesting(
-      base::RepeatingClosure bubble_shown_closure_for_testing) {
-    bubble_shown_closure_for_testing_ = bubble_shown_closure_for_testing;
-  }
-#endif
 
  protected:
   explicit VirtualCardEnrollBubbleControllerImpl(
@@ -92,19 +71,23 @@ class VirtualCardEnrollBubbleControllerImpl
   void DoShowBubble() override;
 
  private:
-  // Gets the correct virtual card enrollment source metric to log.
-  VirtualCardEnrollmentBubbleSource GetVirtualCardEnrollmentBubbleSource();
+  friend class VirtualCardEnrollBubbleControllerImplTestApi;
 
   friend class content::WebContentsUserData<
       VirtualCardEnrollBubbleControllerImpl>;
 
-  // Contains more details regarding the sort of bubble to show the users.
-  VirtualCardEnrollmentFields virtual_card_enrollment_fields_;
+  // Contains the UI assets shown in the virtual card enrollment view.
+  VirtualCardEnrollUiModel ui_model_;
 
   // Whether we should re-show the dialog when users return to the tab.
   bool reprompt_required_ = false;
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
+  // A Java bridge for the bottom sheet version of the virtual card enrollment
+  // UI.
+  std::unique_ptr<AutofillVCNEnrollBottomSheetBridge>
+      autofill_vcn_enroll_bottom_sheet_bridge_;
+#else
   // Returns whether the web content associated with this controller is active.
   virtual bool IsWebContentsActive();
 
@@ -125,16 +108,6 @@ class VirtualCardEnrollBubbleControllerImpl
   // Closure used for testing purposes that notifies that the enrollment bubble
   // has been shown.
   base::RepeatingClosure bubble_shown_closure_for_testing_;
-
-#if BUILDFLAG(IS_ANDROID)
-  // VirtualCardEnrollBubbleController:
-  base::android::ScopedJavaGlobalRef<jobject> GetOrCreateJavaDelegate()
-      override;
-
-  // The Android delegate that facilitates making native calls from Android
-  // view.
-  base::android::ScopedJavaGlobalRef<jobject> java_delegate_;
-#endif
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

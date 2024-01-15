@@ -5,9 +5,8 @@
 /**
  * @fileoverview Handles user keyboard input events.
  */
-import {UserActionMonitor} from '../background/user_action_monitor.js';
 
-import {Command} from './command_store.js';
+import {Command} from './command.js';
 import {KeyMap} from './key_map.js';
 import {KeyUtil} from './key_util.js';
 

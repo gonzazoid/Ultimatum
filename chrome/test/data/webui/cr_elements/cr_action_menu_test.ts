@@ -7,14 +7,16 @@ import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 
 import {AnchorAlignment, CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
-import {isMac, isWindows} from 'chrome://resources/js/cr.m.js';
+import {isMac, isWindows} from 'chrome://resources/js/platform.js';
 import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
 import {getDeepActiveElement} from 'chrome://resources/js/util.js';
 import {keyDownOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
-import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {getTrustedHtml} from 'chrome://webui-test/trusted_html.js';
+import {getTrustedHTML as getTrustedStaticHtml} from 'chrome://resources/js/static_types.js';
 // clang-format on
 
 /**
@@ -31,7 +33,7 @@ suite('CrActionMenu', function() {
 
   setup(function() {
     FocusOutlineManager.forDocument(document).visible = false;
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedStaticHtml`
       <button id="dots">...</button>
       <cr-action-menu>
         <button class="dropdown-item">Un</button>
@@ -332,9 +334,9 @@ suite('CrActionMenu', function() {
   });
 
   test('positioning', function() {
-    // A 40x10 box at (100, 250).
+    // A 40x10 box at (200, 250).
     const config = {
-      left: 100,
+      left: 200,
       top: 250,
       width: 40,
       height: 10,
@@ -342,21 +344,31 @@ suite('CrActionMenu', function() {
       maxY: 2000,
     };
 
-    // Show right and bottom aligned by default.
+    // By default, aligns top-left of menu with top-left of anchor.
     menu.showAtPosition(config);
     assertTrue(dialog.open);
-    assertEquals('100px', dialog.style.left);
-    assertEquals('250px', dialog.style.top);
+    assertEquals(`${config.left}px`, dialog.style.left);
+    assertEquals(`${config.top}px`, dialog.style.top);
     menu.close();
+
+    // Align the menu's bottom-right to the anchor's top-left.
+    menu.showAtPosition(Object.assign({}, config, {
+      anchorAlignmentX: AnchorAlignment.BEFORE_START,
+      anchorAlignmentY: AnchorAlignment.BEFORE_START,
+    }));
+    const menuHeight = dialog.offsetHeight;
+    const menuWidth = dialog.offsetWidth;
+    assertEquals(`${config.top - menuHeight}px`, dialog.style.top);
+    assertEquals(`${config.left - menuWidth}px`, dialog.style.left);
 
     // Center the menu horizontally.
     menu.showAtPosition(Object.assign({}, config, {
       anchorAlignmentX: AnchorAlignment.CENTER,
     }));
-    const menuWidth = dialog.offsetWidth;
-    const menuHeight = dialog.offsetHeight;
-    assertEquals(`${120 - menuWidth / 2}px`, dialog.style.left);
-    assertEquals('250px', dialog.style.top);
+    assertEquals(
+        `${(config.left + config.width / 2) - menuWidth / 2}px`,
+        dialog.style.left);
+    assertEquals(`${config.top}px`, dialog.style.top);
     menu.close();
 
     // Center the menu in both axes.
@@ -364,17 +376,23 @@ suite('CrActionMenu', function() {
       anchorAlignmentX: AnchorAlignment.CENTER,
       anchorAlignmentY: AnchorAlignment.CENTER,
     }));
-    assertEquals(`${120 - menuWidth / 2}px`, dialog.style.left);
-    assertEquals(`${255 - menuHeight / 2}px`, dialog.style.top);
+    assertEquals(
+        `${(config.left + config.width / 2) - menuWidth / 2}px`,
+        dialog.style.left);
+    assertEquals(
+        `${(config.top + config.height / 2) - menuHeight / 2}px`,
+        dialog.style.top);
     menu.close();
 
-    // Left and top align the menu.
+    // Align bottom-right of menu to top-left of anchor.
     menu.showAtPosition(Object.assign({}, config, {
       anchorAlignmentX: AnchorAlignment.BEFORE_END,
       anchorAlignmentY: AnchorAlignment.BEFORE_END,
     }));
-    assertEquals(`${140 - menuWidth}px`, dialog.style.left);
-    assertEquals(`${260 - menuHeight}px`, dialog.style.top);
+    assertEquals(
+        `${config.left + config.width - menuWidth}px`, dialog.style.left);
+    assertEquals(
+        `${config.top + config.height - menuHeight}px`, dialog.style.top);
     menu.close();
 
     // Being left and top aligned at (0, 0) should anchor to the bottom right.
@@ -416,8 +434,8 @@ suite('CrActionMenu', function() {
     document.body.style.direction = 'rtl';
     menu.showAtPosition(config);
     assertTrue(dialog.open);
-    assertEquals(140 - menuWidth, dialog.offsetLeft);
-    assertEquals('250px', dialog.style.top);
+    assertEquals(config.left + config.width - menuWidth, dialog.offsetLeft);
+    assertEquals(`${config.top}px`, dialog.style.top);
     menu.close();
   });
 
@@ -435,7 +453,7 @@ suite('CrActionMenu', function() {
           // Anchored at right-top by default.
           menu.showAt(dots);
           assertTrue(dialog.open);
-          let menuRect = menu.getBoundingClientRect();
+          let menuRect = dialog.getBoundingClientRect();
           assertEquals(
               Math.round(dotsRect.left + dotsRect.width),
               Math.round(menuRect.left + menuRect.width));
@@ -446,7 +464,7 @@ suite('CrActionMenu', function() {
 
           menu.addEventListener('cr-action-menu-repositioned', () => {
             assertTrue(dialog.open);
-            menuRect = menu.getBoundingClientRect();
+            menuRect = dialog.getBoundingClientRect();
             // Test that menu width got larger.
             assertTrue(menuRect.width > lastMenuWidth);
             // Test that menu upper-left moved further left.
@@ -464,6 +482,54 @@ suite('CrActionMenu', function() {
         });
   })();
 
+  test('accessibilityLabel', function() {
+    document.body.innerHTML = getTrustedStaticHtml`
+      <cr-action-menu accessibility-label="foo">
+        <button class="dropdown-item">Un</button>
+      </cr-action-menu>`;
+    menu = document.querySelector('cr-action-menu')!;
+
+    // Check initial state, populated from HTML markup.
+    assertEquals('foo', menu.accessibilityLabel);
+    assertEquals('foo', menu.$.wrapper.getAttribute('aria-label'));
+
+    // Check value provided with direct assignment.
+    const label: string = 'dummy label';
+    menu.accessibilityLabel = label;
+    assertEquals(label, menu.$.wrapper.ariaLabel);
+    assertEquals(label, menu.$.wrapper.getAttribute('aria-label'));
+
+    // Check setting to undefined.
+    menu.accessibilityLabel = undefined;
+    assertEquals(null, menu.$.wrapper.ariaLabel);
+    assertFalse(menu.$.wrapper.hasAttribute('aria-label'));
+  });
+
+  test('roleDescription', function() {
+    document.body.innerHTML = getTrustedStaticHtml`
+      <cr-action-menu role-description="foo">
+        <button class="dropdown-item">Un</button>
+      </cr-action-menu>`;
+    menu = document.querySelector('cr-action-menu')!;
+
+    // Check initial state, populated from HTML markup.
+    assertEquals('foo', menu.roleDescription);
+    assertEquals('foo', menu.$.dialog.ariaRoleDescription);
+    assertEquals('foo', menu.$.dialog.getAttribute('aria-roledescription'));
+
+    // Check value provided with direct assignment.
+    const description: string = 'dummy description';
+    menu.roleDescription = description;
+    assertEquals(description, menu.$.dialog.ariaRoleDescription);
+    assertEquals(
+        description, menu.$.dialog.getAttribute('aria-roledescription'));
+
+    // Check setting to undefined.
+    menu.roleDescription = undefined;
+    assertEquals(null, menu.$.dialog.ariaRoleDescription);
+    assertFalse(menu.$.dialog.hasAttribute('aria-roledescription'));
+  });
+
   suite('offscreen scroll positioning', function() {
     const bodyHeight = 10000;
     const bodyWidth = 20000;
@@ -471,11 +537,13 @@ suite('CrActionMenu', function() {
     const containerTop = 10000;
     const containerWidth = 500;
 
-    suiteSetup(function() {
-      Polymer({
-        is: 'test-element',
+    class TestElement extends PolymerElement {
+      static get is() {
+        return 'test-element';
+      }
 
-        _template: html`
+      static get template() {
+        return html`
           <style>
             #container {
               overflow: auto;
@@ -503,21 +571,23 @@ suite('CrActionMenu', function() {
               </cr-action-menu>
             </div>
           </div>
-        `,
-      });
-    });
+        `;
+      }
+    }
+
+    customElements.define(TestElement.is, TestElement);
 
     setup(function() {
       document.body.scrollTop = 0;
       document.body.scrollLeft = 0;
-      document.body.innerHTML = `
+      document.body.innerHTML = getTrustedHtml(`
         <style>
           test-element {
             height: ${bodyHeight}px;
             width: ${bodyWidth}px;
           }
         </style>
-        <test-element></test-element>`;
+        <test-element></test-element>`);
 
       const testElement = document.querySelector('test-element')!;
       menu = testElement.shadowRoot!.querySelector('cr-action-menu')!;

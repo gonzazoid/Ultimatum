@@ -6,8 +6,8 @@
 
 #include <sstream>
 
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/path_service.h"
@@ -94,7 +94,7 @@ void ExtensionTelemetryPersister::PersisterInit() {
   }
   write_index_ = (read_index_ + 1) % max_num_files_;
   initialization_complete_ = true;
-  RecordNumberOfFilesInCacheOnStartup(read_index_ + 1);
+  RecordNumberOfFilesInCacheOnStartup(read_index_);
 }
 
 void ExtensionTelemetryPersister::WriteReport(const std::string write_string) {

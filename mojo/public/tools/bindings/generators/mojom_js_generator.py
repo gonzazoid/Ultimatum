@@ -77,9 +77,22 @@ _kind_to_closure_type = {
     mojom.INT32: "number",
     mojom.UINT32: "number",
     mojom.FLOAT: "number",
-    mojom.INT64: "number",
-    mojom.UINT64: "number",
+    mojom.INT64: "bigint",
+    mojom.UINT64: "bigint",
     mojom.DOUBLE: "number",
+    # The nullability annotation i.e. '?' is added by the code that needs it, so
+    # these have the same types as the above non-nullable kinds.
+    mojom.NULLABLE_BOOL: "boolean",
+    mojom.NULLABLE_INT8: "number",
+    mojom.NULLABLE_UINT8: "number",
+    mojom.NULLABLE_INT16: "number",
+    mojom.NULLABLE_UINT16: "number",
+    mojom.NULLABLE_INT32: "number",
+    mojom.NULLABLE_UINT32: "number",
+    mojom.NULLABLE_FLOAT: "number",
+    mojom.NULLABLE_INT64: "bigint",
+    mojom.NULLABLE_UINT64: "bigint",
+    mojom.NULLABLE_DOUBLE: "number",
     mojom.STRING: "string",
     mojom.NULLABLE_STRING: "string",
     mojom.HANDLE: "MojoHandle",
@@ -173,16 +186,27 @@ _js_reserved_keywords = [
 
 _primitive_kind_to_fuzz_type = {
     mojom.BOOL: "Bool",
+    mojom.NULLABLE_BOOL: "Bool",
     mojom.INT8: "Int8",
+    mojom.NULLABLE_INT8: "Int8",
     mojom.UINT8: "Uint8",
+    mojom.NULLABLE_UINT8: "Uint8",
     mojom.INT16: "Int16",
+    mojom.NULLABLE_INT16: "Int16",
     mojom.UINT16: "Uint16",
+    mojom.NULLABLE_UINT16: "Uint16",
     mojom.INT32: "Int32",
+    mojom.NULLABLE_INT32: "Int32",
     mojom.UINT32: "Uint32",
+    mojom.NULLABLE_UINT32: "Uint32",
     mojom.FLOAT: "Float",
+    mojom.NULLABLE_FLOAT: "Float",
     mojom.INT64: "Int64",
+    mojom.NULLABLE_INT64: "Int64",
     mojom.UINT64: "Uint64",
+    mojom.NULLABLE_UINT64: "Uint64",
     mojom.DOUBLE: "Double",
+    mojom.NULLABLE_DOUBLE: "Double",
     mojom.STRING: "String",
     mojom.NULLABLE_STRING: "String",
     mojom.HANDLE: "Handle",
@@ -200,11 +224,18 @@ _primitive_kind_to_fuzz_type = {
 }
 
 
-_SHARED_MODULE_PREFIX = 'chrome://resources/mojo'
+_CHROME_SCHEME_PREFIX = 'chrome:'
+_SHARED_MODULE_PREFIX = '//resources/mojo'
+
+
+def _IsSharedModulePath(path):
+  return path.startswith(_SHARED_MODULE_PREFIX) or \
+      path.startswith(_CHROME_SCHEME_PREFIX + _SHARED_MODULE_PREFIX)
 
 
 def _IsAbsoluteChromeResourcesPath(path):
-  return path.startswith('chrome://resources/')
+  return path.startswith('chrome://resources/') or \
+      path.startswith('//resources/')
 
 
 def _GetWebUiModulePath(module):
@@ -321,6 +352,10 @@ class Generator(generator.Generator):
 
   def GetFilters(self):
     js_filters = {
+        "is_nullable_value_kind_packed_field":
+        pack.IsNullableValueKindPackedField,
+        "is_primary_nullable_value_kind_packed_field":
+        pack.IsPrimaryNullableValueKindPackedField,
         "closure_type": self._ClosureType,
         "constant_value": self._GetConstantValue,
         "constant_value_in_js_module": self._GetConstantValueInJsModule,
@@ -429,7 +464,7 @@ class Generator(generator.Generator):
                           "%s-lite-for-compile.js" % self.module.path)
     self.WriteWithComment(self._GenerateJsModule(),
                           "%s.m.js" % self.module.path)
-    if _GetWebUiModulePath(self.module) is not None:
+    if self.module.metadata.get("generate_webui_js") is not None:
       self.WriteWithComment(self._GenerateWebUiModule(),
                             "mojom-webui/%s-webui.js" % self.module.path)
 
@@ -509,6 +544,8 @@ class Generator(generator.Generator):
                                  kind,
                                  with_nullability=False,
                                  for_module=False):
+    # If `with_nullability` is true, we'll include a nullable annotation which
+    # in the Closure case is `?`. Otherwise, the annotation will be omitted.
     def recurse_with_nullability(kind):
       return self._GetTypeNameForNewBindings(kind,
                                              with_nullability=True,
@@ -572,6 +609,8 @@ class Generator(generator.Generator):
         return "Object"
       raise Exception("No valid closure type: %s" % kind)
 
+    # Prepend `?` for nullable kinds and `!` for non-nullable kinds. These are
+    # used by Closure.
     if with_nullability:
       return ('?' if mojom.IsNullableKind(kind) else '!') + get_type_name(kind)
 
@@ -780,7 +819,10 @@ class Generator(generator.Generator):
     if field.kind in mojom.PRIMITIVES:
       return _kind_to_javascript_default_value[field.kind]
     if mojom.IsEnumKind(field.kind):
+      if field.kind.min_value is not None:
+        return f'{field.kind.min_value}'
       return "0"
+
     return "null"
 
   def _LiteJavaScriptDefaultValue(self, field):
@@ -996,9 +1038,15 @@ class Generator(generator.Generator):
 
   def _GetJsModuleImports(self, for_webui_module=False):
     this_module_path = _GetWebUiModulePath(self.module)
-    this_module_is_shared = bool(
-        this_module_path and this_module_path.startswith(_SHARED_MODULE_PREFIX))
+    this_module_is_shared = bool(this_module_path
+                                 and _IsSharedModulePath(this_module_path))
     imports = dict()
+
+    def strip_prefix(s, prefix):
+      if s.startswith(prefix):
+        return s[len(prefix):]
+      return s
+
     for spec, kind in self.module.imported_kinds.items():
       if for_webui_module:
         assert this_module_path is not None
@@ -1007,15 +1055,15 @@ class Generator(generator.Generator):
         import_path = '{}{}-webui.js'.format(base_path,
                                              os.path.basename(kind.module.path))
 
-        import_module_is_shared = import_path.startswith(_SHARED_MODULE_PREFIX)
+        import_module_is_shared = _IsSharedModulePath(import_path)
         if this_module_is_shared:
           assert import_module_is_shared, \
               'Shared WebUI module "{}" cannot depend on non-shared WebUI ' \
                   'module "{}"'.format(self.module.path, kind.module.path)
 
-        # Some Mojo JS files are served from chrome://resources/, but not from
-        # chrome://resources/mojo/, for example from
-        # chrome://resources/cr_components/. Need to use absolute paths when
+        # Some Mojo JS files are served from //resources/, but not from
+        # //resources/mojo/, for example from
+        # //resources/cr_components/. Need to use absolute paths when
         # referring to such files from other modules, so that TypeScript can
         # correctly resolve them since they belong to a different ts_library()
         # target compared to |this_module_path|.
@@ -1032,19 +1080,19 @@ class Generator(generator.Generator):
                 import_module_is_shared == this_module_is_shared
 
         if use_relative_path:
-
-          def strip_prefix(s, prefix):
-            if s.startswith(prefix):
-              return s[len(prefix):]
-            return s
-
           import_path = urllib.request.pathname2url(
               os.path.relpath(
-                  strip_prefix(import_path, _SHARED_MODULE_PREFIX),
-                  strip_prefix(this_module_path, _SHARED_MODULE_PREFIX)))
+                  strip_prefix(strip_prefix(import_path, _CHROME_SCHEME_PREFIX),
+                               _SHARED_MODULE_PREFIX),
+                  strip_prefix(
+                      strip_prefix(this_module_path, _CHROME_SCHEME_PREFIX),
+                      _SHARED_MODULE_PREFIX)))
           if (not import_path.startswith('.')
               and not import_path.startswith('/')):
             import_path = './' + import_path
+        else:
+          # Import absolute imports from scheme-relative paths.
+          import_path = strip_prefix(import_path, _CHROME_SCHEME_PREFIX)
       else:
         import_path = self._GetRelativePath(kind.module.path) + '.m.js'
 

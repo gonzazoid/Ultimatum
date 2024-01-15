@@ -6,12 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/leveldb_proto/internal/shared_proto_database.h"
 
 namespace leveldb_proto {
@@ -27,7 +26,7 @@ ProtoDatabaseProvider::ProtoDatabaseProvider(const base::FilePath& profile_dir,
                                              bool is_in_memory)
     : profile_dir_(profile_dir),
       is_in_memory_(is_in_memory),
-      client_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      client_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 ProtoDatabaseProvider::~ProtoDatabaseProvider() {
   base::AutoLock lock(get_db_lock_);

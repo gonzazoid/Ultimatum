@@ -20,7 +20,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "net/base/mime_sniffer.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
@@ -32,7 +31,6 @@
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
-using base::StringPiece;
 using Decision = network::corb::ResponseAnalyzer::Decision;
 using MimeType = network::corb::CrossOriginReadBlocking::MimeType;
 using SniffingResult = network::corb::CrossOriginReadBlocking::SniffingResult;
@@ -76,11 +74,11 @@ const char kJsonProtobuf[] = "application/json+protobuf";
 const char kJsonSuffix[] = "+json";
 const char kXmlSuffix[] = "+xml";
 
-void AdvancePastWhitespace(StringPiece* data) {
+void AdvancePastWhitespace(std::string_view* data) {
   size_t offset = data->find_first_not_of(" \t\r\n");
-  if (offset == base::StringPiece::npos) {
+  if (offset == std::string_view::npos) {
     // |data| was entirely whitespace.
-    *data = StringPiece();
+    *data = std::string_view();
   } else {
     data->remove_prefix(offset);
   }
@@ -91,8 +89,8 @@ void AdvancePastWhitespace(StringPiece* data) {
 // |signatures|, and kNo otherwise.
 //
 // When kYes is returned, the matching prefix is erased from |data|.
-SniffingResult MatchesSignature(StringPiece* data,
-                                const StringPiece signatures[],
+SniffingResult MatchesSignature(std::string_view* data,
+                                const std::string_view signatures[],
                                 size_t arr_size,
                                 base::CompareCase compare_case) {
   for (size_t i = 0; i < arr_size; ++i) {
@@ -114,7 +112,7 @@ SniffingResult MatchesSignature(StringPiece* data,
   return CrossOriginReadBlocking::kNo;
 }
 
-size_t FindFirstJavascriptLineTerminator(const base::StringPiece& hay,
+size_t FindFirstJavascriptLineTerminator(const std::string_view& hay,
                                          size_t pos) {
   // https://www.ecma-international.org/ecma-262/8.0/index.html#prod-LineTerminator
   // defines LineTerminator ::= <LF> | <CR> | <LS> | <PS>.
@@ -125,8 +123,9 @@ size_t FindFirstJavascriptLineTerminator(const base::StringPiece& hay,
   // In UTF8 encoding <LS> is 0xE2 0x80 0xA8 and <PS> is 0xE2 0x80 0xA9.
   while (true) {
     pos = hay.find_first_of("\n\r\xe2", pos);
-    if (pos == base::StringPiece::npos)
+    if (pos == std::string_view::npos) {
       break;
+    }
 
     if (hay[pos] != '\xe2') {
       DCHECK(hay[pos] == '\r' || hay[pos] == '\n');
@@ -135,7 +134,7 @@ size_t FindFirstJavascriptLineTerminator(const base::StringPiece& hay,
 
     // TODO(lukasza): Prevent matching 3 bytes that span/straddle 2 UTF8
     // characters.
-    base::StringPiece substr = hay.substr(pos);
+    std::string_view substr = hay.substr(pos);
     if (base::StartsWith(substr, "\u2028") ||
         base::StartsWith(substr, "\u2029"))
       break;
@@ -156,26 +155,28 @@ size_t FindFirstJavascriptLineTerminator(const base::StringPiece& hay,
 // SingleLineHTMLCloseComment ECMAscript rule is taken into account which means
 // that characters following an HTML comment are consumed up to the nearest line
 // terminating character.
-SniffingResult MaybeSkipHtmlComment(StringPiece* data) {
-  constexpr StringPiece kStartString = "<!--";
+SniffingResult MaybeSkipHtmlComment(std::string_view* data) {
+  constexpr std::string_view kStartString = "<!--";
   if (!base::StartsWith(*data, kStartString)) {
     if (base::StartsWith(kStartString, *data))
       return CrossOriginReadBlocking::kMaybe;
     return CrossOriginReadBlocking::kNo;
   }
 
-  constexpr StringPiece kEndString = "-->";
+  constexpr std::string_view kEndString = "-->";
   size_t end_of_html_comment = data->find(kEndString, kStartString.length());
-  if (end_of_html_comment == StringPiece::npos)
+  if (end_of_html_comment == std::string_view::npos) {
     return CrossOriginReadBlocking::kMaybe;
+  }
   end_of_html_comment += kEndString.length();
 
   // Skipping until the first line terminating character.  See
   // https://crbug.com/839945 for the motivation behind this.
   size_t end_of_line =
       FindFirstJavascriptLineTerminator(*data, end_of_html_comment);
-  if (end_of_line == base::StringPiece::npos)
+  if (end_of_line == std::string_view::npos) {
     return CrossOriginReadBlocking::kMaybe;
+  }
 
   // Found real end of the combined HTML/JS comment.
   data->remove_prefix(end_of_line);
@@ -211,7 +212,7 @@ SniffingResult MaybeSkipHtmlComment(StringPiece* data) {
 // "application/pdf" even though Chrome happens to support this resource type.
 const auto& GetNeverSniffedMimeTypes() {
   static constexpr auto kNeverSniffedMimeTypes = base::MakeFixedFlatSet<
-      base::StringPiece>({
+      std::string_view>({
       // clang-format off
       // The types below (zip, protobuf, etc.) are based on most commonly used
       // content types according to HTTP Archive - see:
@@ -283,15 +284,10 @@ const auto& GetNeverSniffedMimeTypes() {
   return kNeverSniffedMimeTypes;
 }
 
-void LogAction(CrossOriginReadBlocking::Action action) {
-  UMA_HISTOGRAM_ENUMERATION("SiteIsolation.XSD.Browser.Action", action);
-}
-
 }  // namespace
 
 // static
-bool CrossOriginReadBlocking::IsJavascriptMimeType(
-    base::StringPiece mime_type) {
+bool CrossOriginReadBlocking::IsJavascriptMimeType(std::string_view mime_type) {
   constexpr auto kCaseInsensitive = base::CompareCase::INSENSITIVE_ASCII;
   for (const std::string& suffix : kJavaScriptSuffixes) {
     if (base::EndsWith(mime_type, suffix, kCaseInsensitive))
@@ -303,7 +299,7 @@ bool CrossOriginReadBlocking::IsJavascriptMimeType(
 
 // static
 MimeType CrossOriginReadBlocking::GetCanonicalMimeType(
-    base::StringPiece mime_type) {
+    std::string_view mime_type) {
   // Checking for image/svg+xml and application/dash+xml early ensures that they
   // won't get classified as MimeType::kXml by the presence of the "+xml"
   // suffix.
@@ -344,7 +340,7 @@ MimeType CrossOriginReadBlocking::GetCanonicalMimeType(
 
 // static
 // This function is a slight modification of |net::SniffForHTML|.
-SniffingResult CrossOriginReadBlocking::SniffForHTML(StringPiece data) {
+SniffingResult CrossOriginReadBlocking::SniffForHTML(std::string_view data) {
   // The content sniffers used by Chrome and Firefox are using "<!--" as one of
   // the HTML signatures, but it also appears in valid JavaScript, considered as
   // well-formed JS by the browser.  Since we do not want to block any JS, we
@@ -359,21 +355,21 @@ SniffingResult CrossOriginReadBlocking::SniffForHTML(StringPiece data) {
   // TODO(dsjang): Once CrossOriginReadBlocking is moved into the browser
   // process, we should do single-thread checking here for the static
   // initializer.
-  static constexpr StringPiece kHtmlSignatures[] = {
-      StringPiece("<!doctype html"),  // HTML5 spec
-      StringPiece("<script"),         // HTML5 spec, Mozilla
-      StringPiece("<html"),           // HTML5 spec, Mozilla
-      StringPiece("<head"),           // HTML5 spec, Mozilla
-      StringPiece("<iframe"),         // Mozilla
-      StringPiece("<h1"),             // Mozilla
-      StringPiece("<div"),            // Mozilla
-      StringPiece("<font"),           // Mozilla
-      StringPiece("<table"),          // Mozilla
-      StringPiece("<a"),              // Mozilla
-      StringPiece("<style"),          // Mozilla
-      StringPiece("<title"),          // Mozilla
-      StringPiece("<b"),              // Mozilla (note: subsumes <body>, <br>)
-      StringPiece("<p")               // Mozilla
+  static constexpr std::string_view kHtmlSignatures[] = {
+      std::string_view("<!doctype html"),  // HTML5 spec
+      std::string_view("<script"),         // HTML5 spec, Mozilla
+      std::string_view("<html"),           // HTML5 spec, Mozilla
+      std::string_view("<head"),           // HTML5 spec, Mozilla
+      std::string_view("<iframe"),         // Mozilla
+      std::string_view("<h1"),             // Mozilla
+      std::string_view("<div"),            // Mozilla
+      std::string_view("<font"),           // Mozilla
+      std::string_view("<table"),          // Mozilla
+      std::string_view("<a"),              // Mozilla
+      std::string_view("<style"),          // Mozilla
+      std::string_view("<title"),          // Mozilla
+      std::string_view("<b"),  // Mozilla (note: subsumes <body>, <br>)
+      std::string_view("<p")   // Mozilla
   };
 
   while (data.length() > 0) {
@@ -395,18 +391,19 @@ SniffingResult CrossOriginReadBlocking::SniffForHTML(StringPiece data) {
 }
 
 // static
-SniffingResult CrossOriginReadBlocking::SniffForXML(base::StringPiece data) {
+SniffingResult CrossOriginReadBlocking::SniffForXML(std::string_view data) {
   // TODO(dsjang): Once CrossOriginReadBlocking is moved into the browser
   // process, we should do single-thread checking here for the static
   // initializer.
   AdvancePastWhitespace(&data);
-  static constexpr StringPiece kXmlSignatures[] = {StringPiece("<?xml")};
+  static constexpr std::string_view kXmlSignatures[] = {
+      std::string_view("<?xml")};
   return MatchesSignature(&data, kXmlSignatures, std::size(kXmlSignatures),
                           base::CompareCase::SENSITIVE);
 }
 
 // static
-SniffingResult CrossOriginReadBlocking::SniffForJSON(base::StringPiece data) {
+SniffingResult CrossOriginReadBlocking::SniffForJSON(std::string_view data) {
   // Currently this function looks for an opening brace ('{'), followed by a
   // double-quoted string literal, followed by a colon. Importantly, such a
   // sequence is a Javascript syntax error: although the JSON object syntax is
@@ -466,7 +463,7 @@ SniffingResult CrossOriginReadBlocking::SniffForJSON(base::StringPiece data) {
 
 // static
 SniffingResult CrossOriginReadBlocking::SniffForFetchOnlyResource(
-    base::StringPiece data) {
+    std::string_view data) {
   // kScriptBreakingPrefixes contains prefixes that are conventionally used to
   // prevent a JSON response from becoming a valid Javascript program (an attack
   // vector known as XSSI). The presence of such a prefix is a strong signal
@@ -478,7 +475,7 @@ SniffingResult CrossOriginReadBlocking::SniffForFetchOnlyResource(
   // infinite loop. In either case, the prefix must create a guarantee that no
   // matter what bytes follow it, the entire response would be worthless to
   // execute as a <script>.
-  static constexpr StringPiece kScriptBreakingPrefixes[] = {
+  static constexpr std::string_view kScriptBreakingPrefixes[] = {
       // Parser breaker prefix.
       //
       // Built into angular.js (followed by a comma and a newline):
@@ -488,19 +485,19 @@ SniffingResult CrossOriginReadBlocking::SniffForFetchOnlyResource(
       //   https://goo.gl/xP7FWn
       //
       // Observed on google.com (without a comma, followed by a newline).
-      StringPiece(")]}'"),
+      std::string_view(")]}'"),
 
       // Apache struts: https://struts.apache.org/plugins/json/#prefix
-      StringPiece("{}&&"),
+      std::string_view("{}&&"),
 
       // Spring framework (historically): https://goo.gl/JYPFAv
-      StringPiece("{} &&"),
+      std::string_view("{} &&"),
 
       // Infinite loops.
-      StringPiece("for(;;);"),  // observed on facebook.com
-      StringPiece("while(1);"),
-      StringPiece("for (;;);"),
-      StringPiece("while (1);"),
+      std::string_view("for(;;);"),  // observed on facebook.com
+      std::string_view("while(1);"),
+      std::string_view("for (;;);"),
+      std::string_view("while (1);"),
   };
   SniffingResult has_parser_breaker = MatchesSignature(
       &data, kScriptBreakingPrefixes, std::size(kScriptBreakingPrefixes),
@@ -520,7 +517,7 @@ class CrossOriginReadBlocking::CorbResponseAnalyzer::ConfirmationSniffer {
 
   // Called after data is read from the network. |sniffing_buffer| contains the
   // entire response body delivered thus far.
-  virtual void OnDataAvailable(base::StringPiece sniffing_buffer) = 0;
+  virtual void OnDataAvailable(std::string_view sniffing_buffer) = 0;
 
   // Returns true if the return value of IsConfirmedContentType() might change
   // with the addition of more data. Returns false if a final decision is
@@ -550,7 +547,7 @@ class CrossOriginReadBlocking::CorbResponseAnalyzer::SimpleConfirmationSniffer
   SimpleConfirmationSniffer& operator=(const SimpleConfirmationSniffer*) =
       delete;
 
-  void OnDataAvailable(base::StringPiece sniffing_buffer) final {
+  void OnDataAvailable(std::string_view sniffing_buffer) final {
     // The sniffing functions don't support streaming, so with each new chunk of
     // data, call the sniffer on the whole buffer.
     last_sniff_result_ = (*sniffer_function_)(sniffing_buffer);
@@ -585,6 +582,7 @@ Decision CrossOriginReadBlocking::CorbResponseAnalyzer::Init(
     const GURL& request_url,
     const absl::optional<url::Origin>& request_initiator,
     mojom::RequestMode request_mode,
+    mojom::RequestDestination /*request_destination_from_renderer*/,
     const mojom::URLResponseHead& response) {
   seems_sensitive_from_cors_heuristic_ =
       SeemsSensitiveFromCORSHeuristic(response);
@@ -595,8 +593,6 @@ Decision CrossOriginReadBlocking::CorbResponseAnalyzer::Init(
   content_length_ = response.content_length;
   http_response_code_ =
       response.headers ? response.headers->response_code() : 0;
-
-  LogAction(Action::kResponseStarted);
 
   // CORB should look directly at the Content-Type header if one has been
   // received from the network. Ignoring |response.mime_type| helps avoid
@@ -637,22 +633,11 @@ Decision CrossOriginReadBlocking::CorbResponseAnalyzer::Init(
         mojom::RequestMode::kNoCors, request_url,
         cross_origin_request_initiator, response, canonical_mime_type_);
     corb_protection_logging_needs_sniffing_ =
-        (would_protect_based_on_headers == Decision::kSniffMore) &&
-        base::FeatureList::IsEnabled(features::kCORBProtectionSniffing);
+        (would_protect_based_on_headers == Decision::kSniffMore);
     hypothetical_sniffing_mode_ =
         corb_protection_logging_needs_sniffing_ &&
         should_block_based_on_headers_ != Decision::kSniffMore;
     mime_type_bucket_ = GetMimeTypeBucket(response);
-    UMA_HISTOGRAM_BOOLEAN("SiteIsolation.CORBProtection.SensitiveResource",
-                          true);
-    if (!corb_protection_logging_needs_sniffing_) {
-      // If we are not going to sniff, then we can and must log everything now.
-      LogSensitiveResponseProtection(
-          BlockingDecisionToProtectionDecision(would_protect_based_on_headers));
-    }
-  } else {
-    UMA_HISTOGRAM_BOOLEAN("SiteIsolation.CORBProtection.SensitiveResource",
-                          false);
   }
   if (needs_sniffing())
     CreateSniffers();
@@ -662,16 +647,8 @@ Decision CrossOriginReadBlocking::CorbResponseAnalyzer::Init(
 
 CrossOriginReadBlocking::CorbResponseAnalyzer::CorbResponseAnalyzer() = default;
 
-CrossOriginReadBlocking::CorbResponseAnalyzer::~CorbResponseAnalyzer() {
-  if (ShouldBlock()) {
-    LogBlockedResponse();
-  } else {
-    // Allowing happens either 1) explicitly, or 2) when sniffing didn't reach a
-    // conclusion after sniffing 1024 (or all) bytes.
-    DCHECK(ShouldAllow() || needs_sniffing());
-    LogAllowedResponse();
-  }
-}
+CrossOriginReadBlocking::CorbResponseAnalyzer::~CorbResponseAnalyzer() =
+    default;
 
 // static
 Decision
@@ -930,7 +907,7 @@ void CrossOriginReadBlocking::CorbResponseAnalyzer::CreateSniffers() {
 }
 
 Decision CrossOriginReadBlocking::CorbResponseAnalyzer::Sniff(
-    base::StringPiece data) {
+    std::string_view data) {
   DCHECK(needs_sniffing());
   DCHECK(!sniffers_.empty());
   DCHECK(!found_blockable_content_);
@@ -1044,54 +1021,11 @@ Decision CrossOriginReadBlocking::CorbResponseAnalyzer::GetCorbDecision() {
     return Decision::kSniffMore;
 }
 
-void CrossOriginReadBlocking::CorbResponseAnalyzer::LogAllowedResponse() {
-  DCHECK(!has_logged_final_decision_);
-  has_logged_final_decision_ = true;
-
-  if (corb_protection_logging_needs_sniffing_) {
-    LogSensitiveResponseProtection(
-        SniffingDecisionToProtectionDecision(found_blockable_content_));
-  }
-  // Note that if a response is allowed because of hitting EOF or
-  // kMaxBytesToSniff, then |sniffers_| are not emptied and consequently
-  // ShouldAllow doesn't start returning true.  This means that we can't
-  // DCHECK(ShouldAllow()) or DCHECK(sniffers_.empty()) here - the decision to
-  // allow the response could have been made in the
-  // CrossSiteDocumentResourceHandler layer without CrossOriginReadBlocking
-  // realizing that it has hit EOF or kMaxBytesToSniff.
-
-  // Note that the response might be allowed even if ShouldBlock() returns true
-  // - for example to allow responses to requests initiated by content scripts.
-  // This means that we cannot DCHECK(!ShouldBlock()) here.
-
-  LogAction(needs_sniffing() ? Action::kAllowedAfterSniffing
-                             : Action::kAllowedWithoutSniffing);
-}
-
-void CrossOriginReadBlocking::CorbResponseAnalyzer::LogBlockedResponse() {
-  DCHECK(!has_logged_final_decision_);
-  has_logged_final_decision_ = true;
-
-  DCHECK(!ShouldAllow());
-  DCHECK(ShouldBlock());
-  DCHECK(sniffers_.empty());
-
-  if (corb_protection_logging_needs_sniffing_) {
-    LogSensitiveResponseProtection(
-        SniffingDecisionToProtectionDecision(found_blockable_content_));
-  }
-
-  LogAction(needs_sniffing() ? Action::kBlockedAfterSniffing
-                             : Action::kBlockedWithoutSniffing);
-
-  UMA_HISTOGRAM_ENUMERATION(
-      "SiteIsolation.XSD.Browser.Blocked.CanonicalMimeType",
-      canonical_mime_type_);
-}
-
 // static
 bool CrossOriginReadBlocking::CorbResponseAnalyzer::HasNoSniff(
     const mojom::URLResponseHead& response) {
+  // TODO(vogelheim): Check for compatibility with spec &
+  //   ParseContentTypeOptionsHeader. Maybe move this to parsed_headers.
   if (!response.headers)
     return false;
   std::string nosniff_header;
@@ -1103,107 +1037,10 @@ bool CrossOriginReadBlocking::CorbResponseAnalyzer::HasNoSniff(
 // static
 CrossOriginReadBlocking::CorbResponseAnalyzer::CrossOriginProtectionDecision
 CrossOriginReadBlocking::CorbResponseAnalyzer::
-    BlockingDecisionToProtectionDecision(Decision blocking_decision) {
-  switch (blocking_decision) {
-    case Decision::kAllow:
-      return CrossOriginProtectionDecision::kAllow;
-    case Decision::kBlock:
-      return CrossOriginProtectionDecision::kBlock;
-    case Decision::kSniffMore:
-      return CrossOriginProtectionDecision::kNeedToSniffMore;
-  }
-}
-
-// static
-CrossOriginReadBlocking::CorbResponseAnalyzer::CrossOriginProtectionDecision
-CrossOriginReadBlocking::CorbResponseAnalyzer::
     SniffingDecisionToProtectionDecision(bool found_blockable_content) {
   if (found_blockable_content)
     return CrossOriginProtectionDecision::kBlockedAfterSniffing;
   return CrossOriginProtectionDecision::kAllowedAfterSniffing;
-}
-
-void CrossOriginReadBlocking::CorbResponseAnalyzer::
-    LogSensitiveResponseProtection(
-        CrossOriginProtectionDecision protection_decision) const {
-  DCHECK(seems_sensitive_from_cors_heuristic_ ||
-         seems_sensitive_from_cache_heuristic_);
-  if (seems_sensitive_from_cors_heuristic_) {
-    switch (mime_type_bucket_) {
-      case kProtected:
-        UMA_HISTOGRAM_ENUMERATION(
-            "SiteIsolation.CORBProtection.CORSHeuristic.ProtectedMimeType",
-            protection_decision);
-        // We report if a response with a protected MIME type supports range
-        // requests since we want to measure how often making a multipart range
-        // requests would have allowed bypassing CORB.
-        if (protection_decision == CrossOriginProtectionDecision::kBlock) {
-          UMA_HISTOGRAM_BOOLEAN(
-              "SiteIsolation.CORBProtection.CORSHeuristic.ProtectedMimeType."
-              "BlockedWithRangeSupport",
-              supports_range_requests_);
-          UMA_HISTOGRAM_BOOLEAN(
-              "SiteIsolation.CORBProtection.CORSHeuristic.ProtectedMimeType."
-              "BlockedWithoutSniffing.HasNoSniff",
-              has_nosniff_header_);
-        } else if (protection_decision ==
-                   CrossOriginProtectionDecision::kBlockedAfterSniffing) {
-          UMA_HISTOGRAM_BOOLEAN(
-              "SiteIsolation.CORBProtection.CORSHeuristic.ProtectedMimeType."
-              "BlockedAfterSniffingWithRangeSupport",
-              supports_range_requests_);
-        }
-        break;
-      case kPublic:
-        UMA_HISTOGRAM_ENUMERATION(
-            "SiteIsolation.CORBProtection.CORSHeuristic.PublicMimeType",
-            protection_decision);
-        break;
-      case kOther:
-        UMA_HISTOGRAM_ENUMERATION(
-            "SiteIsolation.CORBProtection.CORSHeuristic.OtherMimeType",
-            protection_decision);
-    }
-  }
-  if (seems_sensitive_from_cache_heuristic_) {
-    switch (mime_type_bucket_) {
-      case kProtected:
-        UMA_HISTOGRAM_ENUMERATION(
-            "SiteIsolation.CORBProtection.CacheHeuristic.ProtectedMimeType",
-            protection_decision);
-        if (protection_decision == CrossOriginProtectionDecision::kBlock) {
-          UMA_HISTOGRAM_BOOLEAN(
-              "SiteIsolation.CORBProtection.CacheHeuristic.ProtectedMimeType."
-              "BlockedWithRangeSupport",
-              supports_range_requests_);
-          UMA_HISTOGRAM_BOOLEAN(
-              "SiteIsolation.CORBProtection.CacheHeuristic.ProtectedMimeType."
-              "BlockedWithoutSniffing.HasNoSniff",
-              has_nosniff_header_);
-        } else if (protection_decision ==
-                   CrossOriginProtectionDecision::kBlockedAfterSniffing) {
-          UMA_HISTOGRAM_BOOLEAN(
-              "SiteIsolation.CORBProtection.CacheHeuristic.ProtectedMimeType."
-              "BlockedAfterSniffingWithRangeSupport",
-              supports_range_requests_);
-        }
-        break;
-      case kPublic:
-        UMA_HISTOGRAM_ENUMERATION(
-            "SiteIsolation.CORBProtection.CacheHeuristic.PublicMimeType",
-            protection_decision);
-        break;
-      case kOther:
-        UMA_HISTOGRAM_ENUMERATION(
-            "SiteIsolation.CORBProtection.CacheHeuristic.OtherMimeType",
-            protection_decision);
-    }
-  }
-  // Also log if the server supports range requests, since these may allow
-  // bypassing CORB.
-  UMA_HISTOGRAM_BOOLEAN(
-      "SiteIsolation.CORBProtection.SensitiveWithRangeSupport",
-      supports_range_requests_);
 }
 
 }  // namespace network::corb

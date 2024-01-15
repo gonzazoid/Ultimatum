@@ -11,6 +11,10 @@
 // chrome/test/data/extensions/api_test/stubs_app/manifest.json
 
 {
+  "activeTab": {
+    "channel": "stable",
+    "extension_types": ["extension", "legacy_packaged_app"]
+  },
   "alarms": {
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"]
@@ -134,7 +138,7 @@
     {
       "channel": "stable",
       "extension_types": ["platform_app"],
-      "platforms": ["chromeos", "win", "mac", "linux"],
+      "platforms": ["chromeos", "lacros", "win", "mac", "linux"],
       "allowlist": [
         "1C93BD3CF875F4A73C0B2A163BB8FBDA8B8B3D80",  // http://crbug.com/387169
         "A3BC37E2148AC4E99BE4B16AF9D42DD1E592BBBE",  // http://crbug.com/387169
@@ -365,12 +369,10 @@
     "channel": "stable",
     "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
     "allowlist": [
-      // The file manager and Google Now are component extensions, and they can
-      // currently use allowlisted interfaces without being on the corresponding
-      // allowlist.
-      // Adding it to this allowlist documents their dependency, however, and
-      // also doesn't hurt anything.
-      "A948368FC53BE437A55FEB414106E207925482F5",  // File manager
+      // Google Now is a component extension, and can currently use allowlisted
+      // interfaces without being on the corresponding allowlist.
+      // Adding it to this allowlist documents the dependency, however, and also
+      // doesn't hurt anything.
       "2FC374607C2DF285634B67C64A2E356C607091C3",  // Quickoffice
       "3727DD3E564B6055387425027AD74C58784ACC15",  // Quickoffice internal
       "12E618C3C6E97495AAECF2AC12DEB082353241C6",  // QO component extension
@@ -412,7 +414,8 @@
       "46578A13607D38F1DC8E280C4F499FB0A2F9565C",  // http://crbug.com/819404
       "898FB5A39687D210766B8998BA4530B99C9E6586",  // http://crbug.com/819404
       "82F30B65397BC3E4ADE627BBD857AB8A58210648",  // http://crbug.com/819404
-      "C74B2AF138F9EDECD04D0965AB36CA66C8290466"   // http://crbug.com/957772
+      "C74B2AF138F9EDECD04D0965AB36CA66C8290466",  // http://crbug.com/957772
+      "1B1388598AC9A5608F43DE38316D6FB5FAD3574A"   // OneDrive FS extension
     ]
   },
   "nativeMessaging": {
@@ -459,7 +462,9 @@
       "827B5D482FADCE120F4694AD0FA0680E3717C6EC",  // http://crbug.com/1105137
       "A430CF8BD146137B32764433F69685A53BF11F03",  // http://crbug.com/1256996
       "F9AEB1FBFD91AFB39A16798763FB4707E5EB71C2",  // http://crbug.com/1256996
-      "A547E19FA29B6371C507EFF218B4948AF7B8597B"   // http://crbug.com/1256996
+      "A547E19FA29B6371C507EFF218B4948AF7B8597B",  // http://crbug.com/1256996
+      "A4CC6F00ACF41015AF38F1D5C98E97C2B8B3B320",  // http://crbug.com/1483151
+      "4E09F1C1EEC4D27F1F7DF18BA3643307107A7C41"   // http://crbug.com/1483151
     ]
   },
   {
@@ -493,19 +498,39 @@
       "5B9E39EA374B136CBE7AED2D872003107642EAD5",  // http://crbug.com/610452
       "E0E94FB0C01FFB9CDC7A5F098C99B5A8D2F95902",  // http://crbug.com/610452
       "52E0557059A7A28F74ED1D92DDD997E0CCD37806",  // http://crbug.com/610452
-      "A9A9FC0228ADF541F0334F22BEFB8F9C245B21D7"   // http://crbug.com/839189
+      "A9A9FC0228ADF541F0334F22BEFB8F9C245B21D7",  // http://crbug.com/839189
+      "A4CC6F00ACF41015AF38F1D5C98E97C2B8B3B320",  // http://crbug.com/1483151
+      "4E09F1C1EEC4D27F1F7DF18BA3643307107A7C41"   // http://crbug.com/1483151
     ]
   },
-  "offscreen": {
-    "channel": "canary",
+  "odfsConfigPrivate": {
+    "channel": "stable",
     "extension_types": ["extension"],
-    "min_manifest_version": 3,
-    "feature_flag": "ExtensionsOffscreenDocuments"
+    "platforms": ["chromeos", "lacros"],
+    "allowlist": [
+      "1B1388598AC9A5608F43DE38316D6FB5FAD3574A"  // ODFS extension
+    ]
   },
-  "power": {
+  "offscreen": [{
+    "channel": "stable",
+    "extension_types": ["extension"],
+    "min_manifest_version": 3
+  },
+  {
+    "channel": "stable",
+    "dependencies": ["behavior:imprivata_login_screen_extension"],
+    "extension_types": ["login_screen_extension"],
+    "min_manifest_version": 3
+  }],
+  "power": [{
     "channel": "stable",
     "extension_types": [ "extension", "legacy_packaged_app", "platform_app" ]
   },
+  {
+    "channel": "stable",
+    "dependencies": ["behavior:imprivata_login_screen_extension"],
+    "extension_types": ["login_screen_extension"]
+  }],
   "printerProvider": {
     "channel": "stable",
     "extension_types": ["extension", "platform_app" ]
@@ -520,22 +545,10 @@
     "channel": "stable",
     "extension_types": ["platform_app"]
   },
-  "socket": [
-    {
-      "channel": "stable",
-      "extension_types": ["platform_app"]
-    },
-    {
-      "channel": "stable",
-      "extension_types": ["extension"],
-      "allowlist": [
-        // The connectivity diagnostic utility is a component extension that is
-        // used to try to provide suggestions on how to fix connection issues.
-        // It should be the only non-app allowed to use the socket API.
-        "32A1BA997F8AB8DE29ED1BA94AAF00CF2A3FEFA7"
-      ]
-    }
-  ],
+  "socket": {
+    "channel": "stable",
+    "extension_types": ["platform_app"]
+  },
   "storage": [
     {
       "channel": "stable",
@@ -548,8 +561,9 @@
       "location": "policy",
       "platforms": ["chromeos"],
       "allowlist": [
-        // https://crbug.com/1233881
-        "EC3DE21E048B67319893889529354DFBFA96FD23",   // Smart Card Connector
+        "93B7178E8C275515C38D4F43D9DF4648F0EA9B03",   // Badge Based Auth Extension
+        "EC3DE21E048B67319893889529354DFBFA96FD23",   // https://crbug.com/1233881
+        "A19608AC34215B127FF9D7C006D67F5C8ED8146D",   // https://crbug.com/1233881
         // https://crbug.com/1194693
         "6B748A5C005F21B7CBCF4170C2F883E435DEB511",   // CSSI Smart Card Middleware
         "075FF17D52ED6E3C2E5EC4D99F188E7A25AF47EA"    // Beta CSSI Smart Card Middleware
@@ -601,6 +615,11 @@
       "allowlist": ["B44D08FD98F1523ED5837D78D0A606EA9D6206E5"]  // Web Store
     },
     {
+      "channel": "stable",
+      "extension_types": ["extension"],
+      "allowlist": ["DD87C93131FF8D3DE4E483DC1EB298D73C7223A6"]  // http://crbug.com/1328114
+    },
+    {
       "channel": "dev",
       "extension_types": ["extension"]
     }
@@ -634,6 +653,12 @@
       "6F9E349A0561C78A0D3F41496FE521C5151C7F71",  // Security Key
       "C06709A259378015404ED20F75C7D08547E0F10B"   // Security Key (dev)
     ]
+  },
+  "userScripts": {
+    "channel": "stable",
+    "extension_types": [ "extension" ],
+    "min_manifest_version": 3,
+    "feature_flag": "ApiUserScripts"
   },
   "unlimitedStorage": {
     "channel": "stable",

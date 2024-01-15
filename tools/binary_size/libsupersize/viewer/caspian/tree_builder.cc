@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <stack>
 #include <utility>
 
 namespace caspian {
@@ -15,10 +16,11 @@ namespace {
 /** Name used by a directory created to hold symbols with no name. */
 constexpr const char kComponentSep = '>';
 constexpr const char kPathSep = '/';
-constexpr const char kNoPath[] = "(No path)";
 }  // namespace
 
-TreeBuilder::TreeBuilder(SizeInfo* size_info) : diff_mode_(false) {
+TreeBuilder::TreeBuilder(SizeInfo* size_info)
+    : diff_mode_(false),
+      root_(tree_node_factory_.Make(ArtifactType::kDirectory)) {
   symbols_.reserve(size_info->raw_symbols.size());
   for (const Symbol& sym : size_info->raw_symbols) {
     symbols_.push_back(&sym);
@@ -26,10 +28,22 @@ TreeBuilder::TreeBuilder(SizeInfo* size_info) : diff_mode_(false) {
   size_info_ = size_info;
 }
 
-TreeBuilder::TreeBuilder(DeltaSizeInfo* size_info) : diff_mode_(true) {
+TreeBuilder::TreeBuilder(DeltaSizeInfo* size_info)
+    : diff_mode_(true),
+      root_(tree_node_factory_.Make(ArtifactType::kDirectory)) {
   symbols_.reserve(size_info->delta_symbols.size());
   for (const DeltaSymbol& sym : size_info->delta_symbols) {
     symbols_.push_back(&sym);
+  }
+  if (size_info->removed_sources) {
+    for (const auto& s : *size_info->removed_sources) {
+      source_to_diff_status_[s] = DiffStatus::kRemoved;
+    }
+  }
+  if (size_info->added_sources) {
+    for (const auto& s : *size_info->added_sources) {
+      source_to_diff_status_[s] = DiffStatus::kAdded;
+    }
   }
   size_info_ = size_info;
 }
@@ -46,16 +60,13 @@ void TreeBuilder::Build(std::unique_ptr<BaseLens> lens,
   sep_ = separator;
 
   // Initialize tree root.
-  root_.artifact_type = ArtifactType::kDirectory;
-  root_.id_path = GroupedPath{"", ""};
-  _parents[root_.id_path] = &root_;
+  root_->id_path = GroupedPath{"", ""};
+  _parents[root_->id_path] = root_.get();
 
   std::unordered_map<GroupedPath, std::vector<const BaseSymbol*>>
       symbols_by_grouped_path;
   for (const BaseSymbol* sym : symbols_) {
-    const char* path = *sym->SourcePath()   ? sym->SourcePath()
-                       : *sym->ObjectPath() ? sym->ObjectPath()
-                                            : kNoPath;
+    const char* path = sym->GroupingPath();
     GroupedPath key = GroupedPath{lens_->ParentName(*sym), path};
     if (ShouldIncludeSymbol(key, *sym)) {
       symbols_by_grouped_path[key].push_back(sym);
@@ -99,7 +110,7 @@ TreeNode* TreeBuilder::Find(std::string_view path) {
     path = path.substr(idx + 1);
   }
 
-  TreeNode* node = &root_;
+  TreeNode* node = root_.get();
   for (std::string_view id_path : id_paths) {
     TreeNode* old_node = node;
     node = nullptr;
@@ -140,6 +151,21 @@ Json::Value TreeBuilder::Open(const char* path) {
   return v;
 }
 
+Json::Value TreeBuilder::GetAncestryById(uint32_t id) {
+  Json::Value v(Json::arrayValue);
+  TreeNode* node = FindNodeById(id);
+  if (node) {
+    int end = 0;  // >= 0 always in the loops below.
+    for (TreeNode* cur = node; cur; cur = cur->parent) {
+      ++end;
+    }
+    for (TreeNode* cur = node; cur; cur = cur->parent) {
+      v[--end] = cur->id;
+    }
+  }
+  return v;
+}
+
 void TreeBuilder::AddFileEntry(GroupedPath grouped_path,
                                const std::vector<const BaseSymbol*>& symbols) {
   // Creates a single file node with a child for each symbol in that file.
@@ -162,8 +188,7 @@ void TreeBuilder::AddFileEntry(GroupedPath grouped_path,
       node_stats += NodeStats(*sym);
       continue;
     }
-    TreeNode* symbol_node = new TreeNode();
-    symbol_node->artifact_type = ArtifactType::kSymbol;
+    TreeNode* symbol_node = tree_node_factory_.Make(ArtifactType::kSymbol);
     symbol_node->id_path =
         GroupedPath{"", sym->IsDex() ? sym->TemplateName() : sym->FullName()};
     symbol_node->size = sym->Pss();
@@ -183,13 +208,17 @@ void TreeBuilder::AddFileEntry(GroupedPath grouped_path,
 
   TreeNode* file_node = _parents[grouped_path];
   if (file_node == nullptr || grouped_path.path.empty()) {
-    file_node = new TreeNode();
-    file_node->artifact_type = ArtifactType::kFile;
+    file_node = tree_node_factory_.Make(ArtifactType::kFile);
     file_node->id_path = grouped_path;
     file_node->short_name_index =
         file_node->id_path.size() - file_node->id_path.ShortName(sep_).size();
     _parents[file_node->id_path] = file_node;
     file_node->node_stats = node_stats;
+    auto it = source_to_diff_status_.find(grouped_path.path);
+    std::string p(grouped_path.path);
+    if (it != source_to_diff_status_.end()) {
+      file_node->node_stats.imposed_diff_status = it->second;
+    }
   }
 
   for (TreeNode* symbol_node : symbol_nodes) {
@@ -197,7 +226,7 @@ void TreeBuilder::AddFileEntry(GroupedPath grouped_path,
   }
 
   TreeNode* orphan_node = file_node;
-  while (orphan_node != &root_) {
+  while (orphan_node != root_.get()) {
     orphan_node = GetOrMakeParentNode(orphan_node);
   }
 
@@ -209,11 +238,11 @@ TreeNode* TreeBuilder::GetOrMakeParentNode(TreeNode* child_node) {
 
   TreeNode*& parent = _parents[parent_path];
   if (parent == nullptr) {
-    parent = new TreeNode();
+    parent =
+        tree_node_factory_.Make(ArtifactTypeFromChild(child_node->id_path));
     parent->id_path = parent_path;
     parent->short_name_index =
         parent->id_path.size() - parent->id_path.ShortName(sep_).size();
-    parent->artifact_type = ArtifactTypeFromChild(child_node->id_path);
   }
   if (child_node->parent != parent) {
     AttachToParent(child_node, parent);
@@ -244,6 +273,34 @@ void TreeBuilder::AttachToParent(TreeNode* child, TreeNode* parent) {
     node->parent->node_stats += child->node_stats;
     node = node->parent;
   }
+}
+
+TreeNode* TreeBuilder::FindNodeById(int32_t id) {
+  // Recursion-free preorder tree traversal using a stack.
+  struct Frame {
+    Frame(TreeNode* node_in, std::vector<TreeNode*>::const_iterator it_in)
+        : node(node_in), it(it_in) {}
+    TreeNode* node;
+    std::vector<TreeNode*>::const_iterator it;
+  };
+  if (root_->id == id) {
+    return root_.get();
+  }
+  std::stack<Frame> st;
+  st.emplace(root_.get(), root_->children.begin());
+  while (!st.empty()) {
+    Frame& fr = st.top();
+    if (fr.it == fr.node->children.end()) {
+      st.pop();
+    } else {
+      TreeNode* child = *(fr.it++);
+      if (child->id == id) {
+        return child;
+      }
+      st.emplace(child, child->children.begin());
+    }
+  }
+  return nullptr;
 }
 
 ArtifactType TreeBuilder::ArtifactTypeFromChild(GroupedPath child_path) const {
@@ -279,11 +336,15 @@ void TreeBuilder::JoinDexMethodClasses(TreeNode* node) {
 
   // Bucket dex symbols by their class.
   for (TreeNode* child : node->children) {
-    const size_t split_index = child->id_path.path.find_first_of('#');
+    bool is_string_literal = child->id_path.path.starts_with("\"");
+    const size_t split_index = is_string_literal
+                                   ? std::string_view::npos
+                                   : child->id_path.path.find_first_of('#');
     // No return type / field type means it's a class node.
     const bool is_class_node =
-        child->id_path.path.find_first_of(' ', child->short_name_index) ==
-        std::string_view::npos;
+        !is_string_literal &&
+        (child->id_path.path.find_first_of(' ', child->short_name_index) ==
+         std::string_view::npos);
     const bool has_class_prefix =
         is_class_node || split_index != std::string_view::npos;
 
@@ -311,7 +372,7 @@ void TreeBuilder::JoinDexMethodClasses(TreeNode* node) {
         // which for class nodes would be as "org.x.y.ClassName" even if that
         // node's parent is the file "a/b/c". So if we want an id_path of the
         // form "a/b/c/ClassName$0", we have to create it.
-        class_node = new TreeNode();
+        class_node = tree_node_factory_.Make(ArtifactType::kJavaClass);
         owned_strings_.push_back(std::string(node->id_path.path) + "/" +
                                  std::string(class_id_path));
         class_node->id_path =
@@ -320,7 +381,6 @@ void TreeBuilder::JoinDexMethodClasses(TreeNode* node) {
             short_name_index + node->id_path.size() + 1;
         class_node->src_path = node->src_path;
         class_node->component = node->component;
-        class_node->artifact_type = ArtifactType::kJavaClass;
         _parents[class_node->id_path] = class_node;
       }
 

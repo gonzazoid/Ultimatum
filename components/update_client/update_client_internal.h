@@ -10,11 +10,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_checker.h"
+#include "base/sequence_checker.h"
 #include "components/update_client/crx_downloader.h"
 #include "components/update_client/update_checker.h"
 #include "components/update_client/update_client.h"
@@ -44,6 +44,11 @@ class UpdateClientImpl : public UpdateClient {
       CrxDataCallback crx_data_callback,
       CrxStateChangeCallback crx_state_change_callback,
       Callback callback) override;
+  void CheckForUpdate(const std::string& id,
+                      CrxDataCallback crx_data_callback,
+                      CrxStateChangeCallback crx_state_change_callback,
+                      bool is_foreground,
+                      Callback callback) override;
   void Update(const std::vector<std::string>& ids,
               CrxDataCallback crx_data_callback,
               CrxStateChangeCallback crx_state_change_callback,
@@ -56,16 +61,21 @@ class UpdateClientImpl : public UpdateClient {
   void SendUninstallPing(const CrxComponent& crx_component,
                          int reason,
                          Callback callback) override;
+  void SendInstallPing(const CrxComponent& crx_component,
+                       bool success,
+                       int error_code,
+                       int extra_code1,
+                       Callback callback) override;
 
  private:
   ~UpdateClientImpl() override;
 
   void RunTask(scoped_refptr<Task> task);
   void OnTaskComplete(Callback callback, scoped_refptr<Task> task, Error error);
-
   void NotifyObservers(Observer::Events event, const std::string& id);
+  void RunOrEnqueueTask(scoped_refptr<Task> task);
 
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 
   // True if Stop method has been called.
   bool is_stopped_ = false;

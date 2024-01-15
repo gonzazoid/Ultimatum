@@ -12,6 +12,13 @@ RootWebArea
     domNode : html
     ignored : true
     ignoredReasons : [
+        [0] : {
+            name : uninteresting
+            value : {
+                type : boolean
+                value : true
+            }
+        }
     ]
     nodeId : <string>
     parentId : <string>
@@ -24,8 +31,8 @@ RootWebArea
 RootWebArea
   none
     none
-      img
-        *img
+      image
+        *image
 {
     childIds : <object>
     chromeRole : {
@@ -62,7 +69,7 @@ RootWebArea
     ]
     role : {
         type : role
-        value : img
+        value : image
     }
 }
 
@@ -689,7 +696,7 @@ RootWebArea
     ignored : true
     ignoredReasons : [
         [0] : {
-            name : notRendered
+            name : uninteresting
             value : {
                 type : boolean
                 value : true

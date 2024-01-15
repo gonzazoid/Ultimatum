@@ -7,24 +7,28 @@
 
 #include <string>
 
+#include "content/public/browser/identity_request_account.h"
 #include "content/public/browser/identity_request_dialog_controller.h"
 
-class IdentityProviderDisplayData {
- public:
+struct IdentityProviderDisplayData {
   IdentityProviderDisplayData(
       const std::u16string& idp_etld_plus_one,
       const content::IdentityProviderMetadata& idp_metadata,
-      const content::ClientIdData& client_data,
-      const std::vector<content::IdentityRequestAccount>& accounts);
+      const content::ClientMetadata& client_metadata,
+      const std::vector<content::IdentityRequestAccount>& accounts,
+      bool request_permission,
+      bool has_login_status_mismatch);
 
   IdentityProviderDisplayData(const IdentityProviderDisplayData& other);
 
   ~IdentityProviderDisplayData();
 
-  std::u16string idp_etld_plus_one_;
-  content::IdentityProviderMetadata idp_metadata_;
-  content::ClientIdData client_data_;
-  std::vector<content::IdentityRequestAccount> accounts_;
+  std::u16string idp_etld_plus_one;
+  content::IdentityProviderMetadata idp_metadata;
+  content::ClientMetadata client_metadata;
+  std::vector<content::IdentityRequestAccount> accounts;
+  bool request_permission;
+  bool has_login_status_mismatch;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEBID_IDENTITY_PROVIDER_DISPLAY_DATA_H_

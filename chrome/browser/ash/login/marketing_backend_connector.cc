@@ -7,11 +7,11 @@
 #include <cstddef>
 
 #include "ash/constants/ash_switches.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
@@ -22,6 +22,7 @@
 #include "components/signin/public/identity_manager/scope_set.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
+#include "google_apis/credentials_mode.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_status_code.h"
@@ -65,7 +66,8 @@ std::unique_ptr<network::ResourceRequest> GetResourceRequest() {
   auto resource_request = std::make_unique<network::ResourceRequest>();
   resource_request->url = GetChromebookServiceEndpoint();
   resource_request->load_flags = net::LOAD_DISABLE_CACHE;
-  resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  resource_request->credentials_mode =
+      google_apis::GetOmitCredentialsModeForGaiaRequests();
   resource_request->method = "POST";
   return resource_request;
 }
@@ -96,7 +98,7 @@ void MarketingBackendConnector::UpdateEmailPreferences(
 
   scoped_refptr<MarketingBackendConnector> ref =
       new MarketingBackendConnector(profile);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&MarketingBackendConnector::PerformRequest, ref,
                                 country_code));
 }
@@ -124,7 +126,8 @@ void MarketingBackendConnector::StartTokenFetch() {
       "MarketingBackendConnector", identity_manager, chromebook_scope,
       base::BindOnce(&MarketingBackendConnector::OnAccessTokenRequestCompleted,
                      this),
-      signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate);
+      signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate,
+      signin::ConsentLevel::kSync);
 }
 
 void MarketingBackendConnector::OnAccessTokenRequestCompleted(

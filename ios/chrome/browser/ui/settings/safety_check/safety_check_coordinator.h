@@ -5,7 +5,11 @@
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_SAFETY_CHECK_SAFETY_CHECK_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_SAFETY_CHECK_SAFETY_CHECK_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+
+namespace password_manager {
+enum class PasswordCheckReferrer;
+}  // namespace password_manager
 
 @protocol ApplicationCommands;
 @class SafetyCheckCoordinator;
@@ -29,10 +33,13 @@
 
 // `navigationController`: Handles user movement to check subpages.
 // `browser`: browser state for preferences and password check.
-- (instancetype)initWithBaseNavigationController:
-                    (UINavigationController*)navigationController
-                                         browser:(Browser*)browser
-    NS_DESIGNATED_INITIALIZER;
+// `referrer`: Where in the app the Safety Check is being requested from.
+- (instancetype)
+    initWithBaseNavigationController:
+        (UINavigationController*)navigationController
+                             browser:(Browser*)browser
+                            referrer:(password_manager::PasswordCheckReferrer)
+                                         referrer NS_DESIGNATED_INITIALIZER;
 
 // Start a safety check if it is not currently running.
 - (void)startCheckIfNotRunning;

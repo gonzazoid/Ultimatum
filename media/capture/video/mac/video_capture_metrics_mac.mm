@@ -5,7 +5,7 @@
 #import "media/capture/video/mac/video_capture_metrics_mac.h"
 
 #include "base/metrics/histogram_functions.h"
-#import "media/capture/video/mac/video_capture_device_avfoundation_mac.h"
+#import "media/capture/video/apple/video_capture_device_avfoundation.h"
 #include "media/capture/video/video_capture_device_info.h"
 
 namespace media {
@@ -54,7 +54,7 @@ void LogFirstCapturedVideoFrame(const AVCaptureDeviceFormat* bestCaptureFormat,
                                 const CMSampleBufferRef buffer) {
   if (bestCaptureFormat) {
     const CMFormatDescriptionRef requestedFormat =
-        [bestCaptureFormat formatDescription];
+        bestCaptureFormat.formatDescription;
     base::UmaHistogramEnumeration(
         "Media.VideoCapture.Mac.Device.RequestedPixelFormat",
         [VideoCaptureDeviceAVFoundation
@@ -77,10 +77,10 @@ void LogFirstCapturedVideoFrame(const AVCaptureDeviceFormat* bestCaptureFormat,
 
       const CVPixelBufferRef pixelBufferRef =
           CMSampleBufferGetImageBuffer(buffer);
-      bool is_io_sufrace =
+      bool is_io_surface =
           pixelBufferRef && CVPixelBufferGetIOSurface(pixelBufferRef);
       base::UmaHistogramBoolean(
-          "Media.VideoCapture.Mac.Device.CapturedIOSurface", is_io_sufrace);
+          "Media.VideoCapture.Mac.Device.CapturedIOSurface", is_io_surface);
     }
   }
 }

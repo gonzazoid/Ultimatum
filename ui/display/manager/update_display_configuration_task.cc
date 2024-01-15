@@ -6,19 +6,23 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "ui/display/manager/configure_displays_task.h"
 #include "ui/display/manager/display_layout_manager.h"
-#include "ui/display/manager/display_manager_util.h"
+#include "ui/display/manager/util/display_manager_util.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/types/native_display_delegate.h"
 
 namespace display {
+
 namespace {
+
 bool InternalDisplayThrottled(
-    const std::vector<DisplaySnapshot*>& cached_displays) {
+    const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>&
+        cached_displays) {
   for (const DisplaySnapshot* display : cached_displays) {
     if (display->type() == DISPLAY_CONNECTION_TYPE_INTERNAL) {
       if (!display->current_mode())
@@ -37,6 +41,30 @@ bool InternalDisplayThrottled(
   // No internal displays
   return false;
 }
+
+// Move all internal panel displays to the front of the display list. Otherwise,
+// the list remains in order.
+void MoveInternalDisplaysToTheFront(
+    std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays) {
+  DisplayConfigurator::DisplayStateList sorted_displays;
+
+  // First pass for internal panels.
+  for (DisplaySnapshot* display : displays) {
+    if (display->type() == DISPLAY_CONNECTION_TYPE_INTERNAL)
+      sorted_displays.push_back(display);
+  }
+
+  // Second pass for the rest.
+  for (DisplaySnapshot* display : displays) {
+    if (display->type() == DISPLAY_CONNECTION_TYPE_INTERNAL)
+      continue;
+
+    sorted_displays.push_back(display);
+  }
+
+  displays.swap(sorted_displays);
+}
+
 }  // namespace
 
 UpdateDisplayConfigurationTask::UpdateDisplayConfigurationTask(
@@ -46,6 +74,7 @@ UpdateDisplayConfigurationTask::UpdateDisplayConfigurationTask(
     chromeos::DisplayPowerState new_power_state,
     int power_flags,
     RefreshRateThrottleState refresh_rate_throttle_state,
+    bool new_vrr_state_,
     bool force_configure,
     ConfigurationType configuration_type,
     ResponseCallback callback)
@@ -55,6 +84,7 @@ UpdateDisplayConfigurationTask::UpdateDisplayConfigurationTask(
       new_power_state_(new_power_state),
       power_flags_(power_flags),
       refresh_rate_throttle_state_(refresh_rate_throttle_state),
+      new_vrr_state_(new_vrr_state_),
       force_configure_(force_configure),
       configuration_type_(configuration_type),
       callback_(std::move(callback)),
@@ -67,7 +97,6 @@ UpdateDisplayConfigurationTask::~UpdateDisplayConfigurationTask() {
 }
 
 void UpdateDisplayConfigurationTask::Run() {
-  start_timestamp_ = base::TimeTicks::Now();
   requesting_displays_ = true;
   delegate_->GetDisplays(
       base::BindOnce(&UpdateDisplayConfigurationTask::OnDisplaysUpdated,
@@ -87,8 +116,9 @@ void UpdateDisplayConfigurationTask::OnDisplaySnapshotsInvalidated() {
 }
 
 void UpdateDisplayConfigurationTask::OnDisplaysUpdated(
-    const std::vector<DisplaySnapshot*>& displays) {
+    const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays) {
   cached_displays_ = displays;
+  MoveInternalDisplaysToTheFront(cached_displays_);
   requesting_displays_ = false;
 
   // If the user hasn't requested a display state, update it using the requested
@@ -101,6 +131,7 @@ void UpdateDisplayConfigurationTask::OnDisplaysUpdated(
           << " new_power_state=" << DisplayPowerStateToString(new_power_state_)
           << " flags=" << power_flags_ << " refresh_rate_throttle_state_="
           << RefreshRateThrottleStateToString(refresh_rate_throttle_state_)
+          << " new_vrr_state=" << new_vrr_state_
           << " force_configure=" << force_configure_
           << " display_count=" << cached_displays_.size();
   if (ShouldConfigure()) {
@@ -120,7 +151,7 @@ void UpdateDisplayConfigurationTask::EnterState(
   std::vector<DisplayConfigureRequest> requests;
   if (!layout_manager_->GetDisplayLayout(
           cached_displays_, new_display_state_, new_power_state_,
-          refresh_rate_throttle_state_, &requests)) {
+          refresh_rate_throttle_state_, new_vrr_state_, &requests)) {
     std::move(callback).Run(ConfigureDisplaysTask::ERROR);
     return;
   }
@@ -178,17 +209,12 @@ void UpdateDisplayConfigurationTask::OnEnableSoftwareMirroring(
 }
 
 void UpdateDisplayConfigurationTask::FinishConfiguration(bool success) {
-  DCHECK(start_timestamp_);
-  base::UmaHistogramTimes(
-      "DisplayManager.UpdateDisplayConfigurationTask.ExecutionTime",
-      base::TimeTicks::Now() - *start_timestamp_);
   base::UmaHistogramBoolean(
       "DisplayManager.UpdateDisplayConfigurationTask.Success", success);
-  start_timestamp_.reset();
 
   std::move(callback_).Run(success, cached_displays_,
                            cached_unassociated_displays_, new_display_state_,
-                           new_power_state_);
+                           new_power_state_, new_vrr_state_);
 }
 
 bool UpdateDisplayConfigurationTask::ShouldForceDpms() const {
@@ -216,6 +242,10 @@ bool UpdateDisplayConfigurationTask::ShouldConfigure() const {
       InternalDisplayThrottled(cached_displays_))
     return true;
 
+  if (ShouldConfigureVrr()) {
+    return true;
+  }
+
   return false;
 }
 
@@ -241,6 +271,20 @@ MultipleDisplayState UpdateDisplayConfigurationTask::ChooseDisplayState()
   if (!state_controller)
     return MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED;
   return state_controller->GetStateForDisplayIds(cached_displays_);
+}
+
+bool UpdateDisplayConfigurationTask::ShouldConfigureVrr() const {
+  for (const DisplaySnapshot* display : cached_displays_) {
+    if (!display->IsVrrCapable()) {
+      continue;
+    }
+
+    if (display->IsVrrEnabled() != new_vrr_state_) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }  // namespace display

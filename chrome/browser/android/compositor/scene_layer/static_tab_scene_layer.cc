@@ -4,7 +4,10 @@
 
 #include "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h"
 
-#include "cc/layers/layer.h"
+#include <vector>
+
+#include "cc/slim/filter.h"
+#include "cc/slim/layer.h"
 #include "chrome/android/chrome_jni_headers/StaticTabSceneLayer_jni.h"
 #include "chrome/browser/android/compositor/layer/content_layer.h"
 #include "chrome/browser/android/compositor/layer_title_cache.h"
@@ -16,20 +19,38 @@ using base::android::JavaParamRef;
 using base::android::JavaRef;
 
 namespace android {
+namespace {
+
+static bool LayerDraws(scoped_refptr<cc::slim::Layer> layer) {
+  if (!layer.get() || layer->opacity() == 0.0f ||
+      layer->hide_layer_and_subtree()) {
+    return false;
+  }
+
+  if (layer->draws_content()) {
+    return true;
+  }
+
+  for (const auto& child : layer->children()) {
+    if (LayerDraws(child)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
 
 StaticTabSceneLayer::StaticTabSceneLayer(JNIEnv* env,
                                          const JavaRef<jobject>& jobj)
     : SceneLayer(env, jobj),
       tab_content_manager_(nullptr),
-      last_set_tab_id_(-1),
-      background_color_(SK_ColorWHITE),
-      brightness_(1.f) {}
+      background_color_(SK_ColorWHITE) {}
 
-StaticTabSceneLayer::~StaticTabSceneLayer() {
-}
+StaticTabSceneLayer::~StaticTabSceneLayer() = default;
 
 bool StaticTabSceneLayer::ShouldShowBackground() {
-  scoped_refptr<cc::Layer> root = layer_->RootLayer();
+  scoped_refptr<cc::slim::Layer> root = layer_->RootLayer();
   return root && root->bounds() != layer_->bounds();
 }
 
@@ -37,17 +58,15 @@ SkColor StaticTabSceneLayer::GetBackgroundColor() {
   return background_color_;
 }
 
-void StaticTabSceneLayer::UpdateTabLayer(
-    JNIEnv* env,
-    const JavaParamRef<jobject>& jobj,
-    jint id,
-    jboolean can_use_live_layer,
-    jint default_background_color,
-    jfloat x,
-    jfloat y,
-    jfloat static_to_view_blend,
-    jfloat saturation,
-    jfloat brightness) {
+void StaticTabSceneLayer::UpdateTabLayer(JNIEnv* env,
+                                         const JavaParamRef<jobject>& jobj,
+                                         jint id,
+                                         jboolean can_use_live_layer,
+                                         jint default_background_color,
+                                         jfloat x,
+                                         jfloat y,
+                                         jfloat static_to_view_blend,
+                                         jfloat saturation) {
   DCHECK(tab_content_manager_)
       << "TabContentManager must be set before updating the layer";
 
@@ -56,30 +75,24 @@ void StaticTabSceneLayer::UpdateTabLayer(
     content_layer_ = android::ContentLayer::Create(tab_content_manager_);
     layer_->AddChild(content_layer_->layer());
   }
+  if (id != -1 && can_use_live_layer) {
+    // StaticLayout may not know that the live layer cannot draw. Ensure it gets
+    // a thumbnail if needed.
+    auto live_layer = tab_content_manager_->GetLiveLayer(id);
+    if (live_layer) {
+      live_layer->SetHideLayerAndSubtree(!can_use_live_layer);
+      if (!LayerDraws(live_layer)) {
+        std::vector<int> tab_ids = {id};
+        tab_content_manager_->UpdateVisibleIds(tab_ids, id);
+      }
+    }
+  }
 
-  // Only override the alpha of content layers when the static tab is first
-  // assigned to the layer tree.
-  float content_alpha_override = 1.f;
-  bool should_override_content_alpha = last_set_tab_id_ != id;
-  last_set_tab_id_ = id;
-
-  content_layer_->SetProperties(
-      id, can_use_live_layer, static_to_view_blend,
-      should_override_content_alpha, content_alpha_override, saturation,
-      false, gfx::Rect());
+  content_layer_->SetProperties(id, can_use_live_layer, static_to_view_blend,
+                                false, 1.f, saturation, false, gfx::Rect());
 
   content_layer_->layer()->SetPosition(gfx::PointF(x, y));
   content_layer_->layer()->SetIsDrawable(true);
-
-  // Only applies the brightness filter if the value has changed and is less
-  // than 1.
-  if (brightness != brightness_) {
-    brightness_ = brightness;
-    cc::FilterOperations filters;
-    if (brightness_ < 1.f)
-      filters.Append(cc::FilterOperation::CreateBrightnessFilter(brightness_));
-    layer_->SetFilters(filters);
-  }
 }
 
 void StaticTabSceneLayer::SetTabContentManager(

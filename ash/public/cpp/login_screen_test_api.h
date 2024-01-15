@@ -9,7 +9,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/login_types.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -48,6 +48,7 @@ class ASH_PUBLIC_EXPORT LoginScreenTestApi {
   static bool IsPasswordFieldShown(const AccountId& account_id);
   static bool IsDisplayPasswordButtonShown(const AccountId& account_id);
   static bool IsManagedIconShown(const AccountId& account_id);
+  static bool ShowRemoveAccountDialog(const AccountId& account_id);
   static bool IsManagedMessageInDialogShown(const AccountId& account_id);
   static bool IsForcedOnlineSignin(const AccountId& account_id);
   static void SubmitPassword(const AccountId& account_id,
@@ -58,6 +59,7 @@ class ASH_PUBLIC_EXPORT LoginScreenTestApi {
   static void ClickChallengeResponseButton(const AccountId& account_id);
   static int64_t GetUiUpdateCount();
   static bool LaunchApp(const std::string& app_id);
+  static bool LaunchApp(const AccountId& account_id);
   static bool ClickAppsButton();
   static bool ClickAddUserButton();
   static bool ClickCancelButton();
@@ -103,6 +105,11 @@ class ASH_PUBLIC_EXPORT LoginScreenTestApi {
   static std::u16string GetPinRequestWidgetTitle();
   static void SubmitPinRequestWidget(const std::string& pin);
   static void CancelPinRequestWidget();
+
+  static bool IsLocalAuthenticationDialogVisible();
+  static void CancelLocalAuthenticationDialog();
+  static void SubmitPasswordLocalAuthenticationDialog(
+      const std::string& password);
 };
 
 }  // namespace ash

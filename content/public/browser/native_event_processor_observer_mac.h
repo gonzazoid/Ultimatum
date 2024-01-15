@@ -6,13 +6,14 @@
 #define CONTENT_PUBLIC_BROWSER_NATIVE_EVENT_PROCESSOR_OBSERVER_MAC_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/observer_list.h"
 #include "content/common/content_export.h"
 
-#if defined(__OBJC__)
+#if __OBJC__
+
 @class NSEvent;
-#else   // __OBJC__
-class NSEvent;
+
 #endif  // __OBJC__
 
 namespace content {
@@ -25,6 +26,8 @@ class NativeEventProcessorObserver {
   // Called right after a native event is run.
   virtual void DidRunNativeEvent(const void* opaque_identifier) = 0;
 };
+
+#if __OBJC__
 
 // The constructor sends a WillRunNativeEvent callback to each observer.
 // The destructor sends a DidRunNativeEvent callback to each observer.
@@ -45,8 +48,12 @@ class CONTENT_EXPORT ScopedNotifyNativeEventProcessorObserver {
  private:
   raw_ptr<base::ObserverList<NativeEventProcessorObserver>::Unchecked>
       observer_list_;
-  NSEvent* event_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #union
+  RAW_PTR_EXCLUSION NSEvent* __strong event_;
 };
+
+#endif  // __OBJC__
 
 }  // namespace content
 

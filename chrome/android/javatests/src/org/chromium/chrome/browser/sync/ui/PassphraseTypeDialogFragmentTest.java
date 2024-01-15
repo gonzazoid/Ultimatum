@@ -26,9 +26,9 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.ActivityTestUtils;
 import org.chromium.components.sync.PassphraseType;
 import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
@@ -36,16 +36,14 @@ import org.chromium.ui.test.util.RenderTestRule;
 
 import java.io.IOException;
 
-/**
- * Tests to make sure that PassphraseTypeDialogFragment presents the correct options.
- */
+/** Tests to make sure that PassphraseTypeDialogFragment presents the correct options. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class PassphraseTypeDialogFragmentTest extends BlankUiTestActivityTestCase {
     @Rule
     public RenderTestRule mRenderTestRule =
             RenderTestRule.Builder.withPublicCorpus()
-                    .setRevision(1)
+                    .setRevision(2)
                     .setBugComponent(RenderTestRule.Component.SERVICES_SYNC)
                     .build();
 

@@ -41,10 +41,6 @@ bookmarks::BookmarkModel* OmniboxClient::GetBookmarkModel() {
   return nullptr;
 }
 
-OmniboxControllerEmitter* OmniboxClient::GetOmniboxControllerEmitter() {
-  return nullptr;
-}
-
 TemplateURLService* OmniboxClient::GetTemplateURLService() {
   return nullptr;
 }
@@ -85,6 +81,8 @@ bool OmniboxClient::ProcessExtensionKeyword(const std::u16string& text,
                                             WindowOpenDisposition disposition) {
   return false;
 }
+
+void OmniboxClient::OnUserPastedInOmniboxResultingInValidURL() {}
 
 gfx::Image OmniboxClient::GetFaviconForPageUrl(
     const GURL& page_url,

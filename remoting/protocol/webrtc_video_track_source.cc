@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "remoting/protocol/webrtc_video_frame_adapter.h"
 
 namespace remoting::protocol {
@@ -16,7 +16,7 @@ namespace remoting::protocol {
 WebrtcVideoTrackSource::WebrtcVideoTrackSource(
     AddSinkCallback add_sink_callback)
     : add_sink_callback_(add_sink_callback),
-      main_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 WebrtcVideoTrackSource::~WebrtcVideoTrackSource() = default;
 
 webrtc::MediaSourceInterface::SourceState WebrtcVideoTrackSource::state()
@@ -32,8 +32,8 @@ bool WebrtcVideoTrackSource::is_screencast() const {
   return true;
 }
 
-absl::optional<bool> WebrtcVideoTrackSource::needs_denoising() const {
-  return absl::nullopt;
+std::optional<bool> WebrtcVideoTrackSource::needs_denoising() const {
+  return std::nullopt;
 }
 
 bool WebrtcVideoTrackSource::GetStats(

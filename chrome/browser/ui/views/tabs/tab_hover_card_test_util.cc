@@ -39,6 +39,7 @@ TabHoverCardBubbleView* TabHoverCardTestUtil::GetHoverCard(
 TabHoverCardBubbleView* TabHoverCardTestUtil::WaitForHoverCardVisible(
     TabStrip* tab_strip) {
   auto* const hover_card = GetHoverCard(tab_strip);
+  DCHECK(hover_card);
   views::test::WidgetVisibleWaiter(hover_card->GetWidget()).Wait();
   return hover_card;
 }
@@ -54,8 +55,7 @@ bool TabHoverCardTestUtil::IsHoverCardVisible(TabStrip* tab_strip) {
 int TabHoverCardTestUtil::GetHoverCardsSeenCount(Browser* browser) {
   return GetTabStrip(browser)
       ->hover_card_controller_for_testing()
-      ->metrics_for_testing()
-      ->cards_seen_count();
+      ->hover_cards_seen_count_for_testing();
 }
 
 // static

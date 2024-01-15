@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -98,10 +98,12 @@ class MojoCertVerifier::MojoReconnector
 
 MojoCertVerifier::MojoCertVerifier(
     mojo::PendingRemote<mojom::CertVerifierService> mojo_cert_verifier,
+    mojo::PendingReceiver<mojom::CertVerifierServiceClient> client_receiver,
     mojo::PendingRemote<network::mojom::URLLoaderFactory> url_loader_factory,
     base::RepeatingCallback<void(
         mojo::PendingReceiver<network::mojom::URLLoaderFactory>)> reconnector)
-    : mojo_cert_verifier_(std::move(mojo_cert_verifier)) {
+    : mojo_cert_verifier_(std::move(mojo_cert_verifier)),
+      client_receiver_(this, std::move(client_receiver)) {
   mojo::PendingRemote<mojom::URLLoaderFactoryConnector> reconnector_remote;
 
   reconnector_ = std::make_unique<MojoReconnector>(
@@ -124,9 +126,8 @@ int MojoCertVerifier::Verify(
   mojo::PendingRemote<mojom::CertVerifierRequest> cert_verifier_request;
   auto cert_verifier_receiver =
       cert_verifier_request.InitWithNewPipeAndPassReceiver();
-  mojo_cert_verifier_->Verify(
-      params, static_cast<uint32_t>(net_log.source().type), net_log.source().id,
-      net_log.source().start_time, std::move(cert_verifier_request));
+  mojo_cert_verifier_->Verify(params, net_log.source(),
+                              std::move(cert_verifier_request));
   *out_req = std::make_unique<CertVerifierRequestImpl>(
       std::move(cert_verifier_receiver), params.certificate(), verify_result,
       std::move(callback), net_log);
@@ -136,6 +137,20 @@ int MojoCertVerifier::Verify(
 
 void MojoCertVerifier::SetConfig(const net::CertVerifier::Config& config) {
   mojo_cert_verifier_->SetConfig(config);
+}
+
+void MojoCertVerifier::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void MojoCertVerifier::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+void MojoCertVerifier::OnCertVerifierChanged() {
+  for (Observer& observer : observers_) {
+    observer.OnCertVerifierChanged();
+  }
 }
 
 void MojoCertVerifier::FlushForTesting() {

@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/views/frame/immersive_mode_controller_chromeos.h"
 
 #include "ash/public/cpp/test/shell_test_api.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile_io_data.h"
@@ -28,11 +29,12 @@
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "chromeos/ui/frame/immersive/immersive_fullscreen_controller_test_api.h"
 #include "components/permissions/request_type.h"
+#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/test/button_test_api.h"
 #include "ui/views/window/frame_caption_button.h"
 
@@ -56,7 +58,7 @@ class ImmersiveModeControllerChromeosWebAppBrowserTest
     ASSERT_TRUE(https_server_.Start());
 
     const GURL app_url = GetAppUrl();
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_info->start_url = app_url;
     web_app_info->scope = app_url.GetWithoutFilename();
     web_app_info->theme_color = SK_ColorBLUE;
@@ -110,10 +112,9 @@ class ImmersiveModeControllerChromeosWebAppBrowserTest
     }
   }
 
-  void VerifyButtonsInImmersiveMode(
-      BrowserNonClientFrameViewChromeOS* frame_view) {
+  void VerifyButtonsInImmersiveMode(BrowserView* browser_view) {
     WebAppFrameToolbarView* container =
-        frame_view->web_app_frame_toolbar_for_testing();
+        browser_view->web_app_frame_toolbar_for_testing();
     views::test::InkDropHostTestApi ink_drop_api(
         views::InkDrop::Get(container->GetAppMenuButton()));
     EXPECT_TRUE(container->GetContentSettingContainerForTesting()->layer());
@@ -131,9 +132,9 @@ class ImmersiveModeControllerChromeosWebAppBrowserTest
   }
 
  private:
-  web_app::AppId app_id;
-  Browser* browser_ = nullptr;
-  ImmersiveModeController* controller_ = nullptr;
+  webapps::AppId app_id;
+  raw_ptr<Browser, DanglingUntriaged> browser_ = nullptr;
+  raw_ptr<ImmersiveModeController, DanglingUntriaged> controller_ = nullptr;
 
   std::unique_ptr<ImmersiveRevealedLock> revealed_lock_;
 
@@ -271,7 +272,7 @@ IN_PROC_BROWSER_TEST_F(ImmersiveModeControllerChromeosWebAppBrowserTest,
       static_cast<BrowserNonClientFrameViewChromeOS*>(
           browser_view->GetWidget()->non_client_view()->frame_view());
   chromeos::FrameCaptionButtonContainerView* caption_button_container =
-      frame_view->caption_button_container_;
+      frame_view->caption_button_container();
   chromeos::FrameCaptionButtonContainerView::TestApi frame_test_api(
       caption_button_container);
 
@@ -283,7 +284,7 @@ IN_PROC_BROWSER_TEST_F(ImmersiveModeControllerChromeosWebAppBrowserTest,
 
   EXPECT_TRUE(frame_test_api.size_button()->GetVisible());
 
-  VerifyButtonsInImmersiveMode(frame_view);
+  VerifyButtonsInImmersiveMode(browser_view);
 
   // Verify the size button is visible in clamshell mode, and that it does not
   // cover the other two buttons.
@@ -296,7 +297,7 @@ IN_PROC_BROWSER_TEST_F(ImmersiveModeControllerChromeosWebAppBrowserTest,
   EXPECT_FALSE(frame_test_api.size_button()->GetBoundsInScreen().Intersects(
       frame_test_api.minimize_button()->GetBoundsInScreen()));
 
-  VerifyButtonsInImmersiveMode(frame_view);
+  VerifyButtonsInImmersiveMode(browser_view);
 }
 
 // Verify that the frame layout for new windows is as expected when using
@@ -317,15 +318,12 @@ IN_PROC_BROWSER_TEST_F(ImmersiveModeControllerChromeosWebAppBrowserTest,
     task_runner->FastForwardBy(titlebar_animation_delay());
   }
 
-  BrowserNonClientFrameViewChromeOS* frame_view =
-      static_cast<BrowserNonClientFrameViewChromeOS*>(
-          browser_view->GetWidget()->non_client_view()->frame_view());
-  VerifyButtonsInImmersiveMode(frame_view);
+  VerifyButtonsInImmersiveMode(browser_view);
 
   // Verify the size button is visible in clamshell mode, and that it does not
   // cover the other two buttons.
   ash::ShellTestApi().SetTabletModeEnabledForTest(false);
-  VerifyButtonsInImmersiveMode(frame_view);
+  VerifyButtonsInImmersiveMode(browser_view);
 }
 
 // Tests that the permissions bubble dialog is anchored to the correct location.
@@ -350,6 +348,8 @@ IN_PROC_BROWSER_TEST_F(ImmersiveModeControllerChromeosWebAppBrowserTest,
 
   // The permission prompt is shown asynchronously. Without immersive mode
   // enabled the anchor should exist.
+  // TODO(https://crbug.com/1317865): Change from RunUntilIdle to a more
+  // explicit notification.
   base::RunLoop().RunUntilIdle();
 
   views::Widget* prompt_widget = test_api->GetPromptWindow();
@@ -358,18 +358,53 @@ IN_PROC_BROWSER_TEST_F(ImmersiveModeControllerChromeosWebAppBrowserTest,
   ASSERT_TRUE(bubble_dialog);
   EXPECT_TRUE(bubble_dialog->GetAnchorView());
 
-  // Turn on immersive, but do not reveal. The app menu button is hidden from
-  // sight so the anchor should be null. The bubble will get placed in the top
-  // left corner of the app.
+  // Turn on immersive, but do not reveal.
   auto* immersive_mode_controller =
       BrowserView::GetBrowserViewForBrowser(browser())
           ->immersive_mode_controller();
   immersive_mode_controller->SetEnabled(true);
+
+  // Since a bubble was visible and anchored to the header, the header should
+  // have been automatically revealed.
+  EXPECT_TRUE(immersive_mode_controller->IsRevealed());
+  EXPECT_TRUE(bubble_dialog->GetAnchorView());
+
+  // Closing the bubble should cause the header to no longer be revealed.
+  bubble_dialog->AcceptDialog();
+  EXPECT_FALSE(immersive_mode_controller->IsRevealed());
+
+  // Make sure the old permission prompt fully goes away before opening a new
+  // prompt.
+  // TODO(https://crbug.com/1317865): Change from RunUntilIdle to a more
+  // explicit notification.
+  base::RunLoop().RunUntilIdle();
+  ASSERT_FALSE(test_api->GetPromptWindow());
+
+  // Opening a new permission bubble should not cause the header to reveal.
+  test_api->AddSimpleRequest(browser()
+                                 ->tab_strip_model()
+                                 ->GetActiveWebContents()
+                                 ->GetPrimaryMainFrame(),
+                             permissions::RequestType::kMicStream);
+
+  // The permission prompt is shown asynchronously.
+  // TODO(https://crbug.com/1317865): Change from RunUntilIdle to a more
+  // explicit notification.
+  base::RunLoop().RunUntilIdle();
+  prompt_widget = test_api->GetPromptWindow();
+  ASSERT_TRUE(prompt_widget);
+  ASSERT_TRUE(prompt_widget->widget_delegate());
+  bubble_dialog = prompt_widget->widget_delegate()->AsBubbleDialogDelegate();
+  ASSERT_TRUE(bubble_dialog);
+
+  // The app menu button is hidden from
+  // sight so the anchor should be null. The bubble will get placed in the top
+  // left corner of the app.
   EXPECT_FALSE(immersive_mode_controller->IsRevealed());
   EXPECT_FALSE(bubble_dialog->GetAnchorView());
 
-  // Reveal the header. The anchor should exist since the app menu button is now
-  // visible.
+  // Reveal the header. The anchor should exist since the app menu button is
+  // now visible.
   {
     std::unique_ptr<ImmersiveRevealedLock> focus_reveal_lock =
         immersive_mode_controller->GetRevealedLock(

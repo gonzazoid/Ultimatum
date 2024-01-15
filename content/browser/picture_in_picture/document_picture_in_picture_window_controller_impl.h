@@ -8,7 +8,7 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/common/content_export.h"
@@ -53,8 +53,9 @@ class CONTENT_EXPORT DocumentPictureInPictureWindowControllerImpl
   void CloseAndFocusInitiator() override;
   void OnWindowDestroyed(bool should_pause_video) override;
   WebContents* GetWebContents() override;
-  absl::optional<gfx::Rect> GetWindowBounds() override;
+  std::optional<gfx::Rect> GetWindowBounds() override;
   WebContents* GetChildWebContents() override;
+  std::optional<url::Origin> GetOrigin() override;
 
   // DocumentPictureInPictureWindowController:
   void SetChildWebContents(WebContents* child_contents) override;
@@ -106,6 +107,9 @@ class CONTENT_EXPORT DocumentPictureInPictureWindowControllerImpl
 
     // If the PiP window is destroyed, notify the opener.
     void WebContentsDestroyed() override;
+
+    // The PiP window should never be duplicated.
+    void DidCloneToNewWebContents(WebContents*, WebContents*) override;
 
    private:
     // Called, via post, to request that the pip session end.

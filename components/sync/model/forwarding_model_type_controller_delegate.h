@@ -38,9 +38,12 @@ class ForwardingModelTypeControllerDelegate
       base::OnceCallback<void(const TypeEntitiesCount&)> callback)
       const override;
   void RecordMemoryUsageAndCountsHistograms() override;
+  void ClearMetadataIfStopped() override;
+  void ReportBridgeErrorForTest() override;
 
  private:
-  const raw_ptr<ModelTypeControllerDelegate, DanglingUntriaged> other_;
+  const raw_ptr<ModelTypeControllerDelegate, AcrossTasksDanglingUntriaged>
+      other_;
 };
 
 }  // namespace syncer

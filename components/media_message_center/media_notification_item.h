@@ -6,13 +6,30 @@
 #define COMPONENTS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ITEM_H_
 
 #include "base/component_export.h"
-#include "base/memory/weak_ptr.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #include "services/media_session/public/mojom/media_controller.mojom.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace base {
+class UnguessableToken;
+}  // namespace base
 
 namespace media_message_center {
 
+// The source of the media item. This is used in metrics so new values must only
+// be added to the end.
+enum class Source {
+  kUnknown,
+  kWeb,
+  kAssistant,
+  kArc,
+  kLocalCastSession,
+  kNonLocalCastSession,
+  kCastDevicePicker,
+  kMaxValue = kCastDevicePicker,
+};
+
+// The source type of the media item.
 enum class SourceType {
   kLocalMediaSession,
   kCast,
@@ -34,21 +51,6 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationItem {
 
   // The name of the histogram used when recording the source.
   static const char kSourceHistogramName[];
-
-  // The name of the histogram used for recording starting and stopping casting.
-  static const char kCastStartStopHistogramName[];
-
-  // The source of the media session. This is used in metrics so new values must
-  // only be added to the end.
-  enum class Source {
-    kUnknown,
-    kWeb,
-    kAssistant,
-    kArc,
-    kLocalCastSession,
-    kNonLocalCastSession,
-    kMaxValue = kNonLocalCastSession,
-  };
 
   MediaNotificationItem() = default;
   MediaNotificationItem(const MediaNotificationItem&) = delete;
@@ -74,8 +76,18 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationItem {
   // Called by MediaNotificationView when mute button is clicked.
   virtual void SetMute(bool mute) = 0;
 
-  // Returns the type of source.
-  virtual media_message_center::SourceType SourceType() = 0;
+  // Called by MediaNotificationService when a Remote Playback session is
+  // started.
+  virtual bool RequestMediaRemoting() = 0;
+
+  // Returns the source of the media item for recording metrics.
+  virtual media_message_center::Source GetSource() const = 0;
+
+  // Returns the source type of the media item.
+  virtual media_message_center::SourceType GetSourceType() const = 0;
+
+  // Returns the ID of the source of the media session, if it has one.
+  virtual absl::optional<base::UnguessableToken> GetSourceId() const = 0;
 };
 
 }  // namespace media_message_center

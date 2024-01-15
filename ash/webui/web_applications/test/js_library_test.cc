@@ -8,9 +8,9 @@
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -39,18 +39,26 @@ bool IsSystemAppTestURL(const GURL& url) {
 
 void HandleRequest(const std::string& url_path,
                    content::WebUIDataSource::GotDataCallback callback) {
-  base::FilePath path;
-  CHECK(base::PathService::Get(base::BasePathKey::DIR_SOURCE_ROOT, &path));
-  path = path.Append(kRootDir);
-  path = path.AppendASCII(url_path.substr(0, url_path.find('?')));
-
+  const auto& path_for_key = [url_path](base::BasePathKey key) {
+    base::FilePath path;
+    CHECK(base::PathService::Get(key, &path));
+    path = path.Append(kRootDir);
+    path = path.AppendASCII(url_path.substr(0, url_path.find('?')));
+    return path;
+  };
+  // First try the source dir, then try generated files.
+  base::FilePath path = path_for_key(base::BasePathKey::DIR_SRC_TEST_DATA_ROOT);
   std::string contents;
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
+    if (!base::PathExists(path)) {
+      path = path_for_key(base::BasePathKey::DIR_GEN_TEST_DATA_ROOT);
+    }
     CHECK(base::ReadFileToString(path, &contents)) << path.value();
   }
 
-  std::move(callback).Run(base::RefCountedString::TakeString(&contents));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(contents)));
 }
 
 void SetRequestFilterForDataSource(content::WebUIDataSource& data_source) {
@@ -59,8 +67,11 @@ void SetRequestFilterForDataSource(content::WebUIDataSource& data_source) {
       base::BindRepeating(&HandleRequest));
 }
 
-content::WebUIDataSource* CreateTrustedSysemAppTestDataSource() {
-  auto* trusted_source = content::WebUIDataSource::Create(kSystemAppTestHost);
+void CreateAndAddTrustedSystemAppTestDataSource(
+    content::BrowserContext* browser_context) {
+  content::WebUIDataSource* trusted_source =
+      content::WebUIDataSource::CreateAndAdd(browser_context,
+                                             kSystemAppTestHost);
 
   // We need a CSP override to be able to embed a chrome-untrusted:// iframe.
   std::string csp =
@@ -69,16 +80,16 @@ content::WebUIDataSource* CreateTrustedSysemAppTestDataSource() {
       network::mojom::CSPDirectiveName::FrameSrc, csp);
 
   SetRequestFilterForDataSource(*trusted_source);
-  return trusted_source;
 }
 
-content::WebUIDataSource* CreateUntrustedSystemAppTestDataSource() {
-  auto* untrusted_source =
-      content::WebUIDataSource::Create(kUntrustedSystemAppTestURL);
+void CreateAndAddUntrustedSystemAppTestDataSource(
+    content::BrowserContext* browser_context) {
+  content::WebUIDataSource* untrusted_source =
+      content::WebUIDataSource::CreateAndAdd(browser_context,
+                                             kUntrustedSystemAppTestURL);
   untrusted_source->AddFrameAncestor(GURL(kSystemAppTestURL));
 
   SetRequestFilterForDataSource(*untrusted_source);
-  return untrusted_source;
 }
 
 class JsLibraryTestWebUIController : public ui::MojoWebUIController {
@@ -86,11 +97,8 @@ class JsLibraryTestWebUIController : public ui::MojoWebUIController {
   explicit JsLibraryTestWebUIController(content::WebUI* web_ui)
       : ui::MojoWebUIController(web_ui) {
     auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-
-    content::WebUIDataSource::Add(browser_context,
-                                  CreateTrustedSysemAppTestDataSource());
-    content::WebUIDataSource::Add(browser_context,
-                                  CreateUntrustedSystemAppTestDataSource());
+    CreateAndAddTrustedSystemAppTestDataSource(browser_context);
+    CreateAndAddUntrustedSystemAppTestDataSource(browser_context);
 
     // Add ability to request chrome-untrusted: URLs
     web_ui->AddRequestableScheme(content::kChromeUIUntrustedScheme);

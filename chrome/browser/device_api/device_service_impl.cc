@@ -3,15 +3,13 @@
 // found in the LICENSE file.
 #include "chrome/browser/device_api/device_service_impl.h"
 
-#include <memory>
-
+#include "base/check_deref.h"
 #include "base/containers/contains.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/device_api/device_attribute_api.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/policy/web_app_policy_constants.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
@@ -23,7 +21,6 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_data.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_manager.h"
-#include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
 #include "components/user_manager/user_manager.h"
 #endif
 
@@ -54,6 +51,12 @@ bool IsEqualToKioskOrigin(const url::Origin& origin) {
       user_manager::UserManager::Get()->GetPrimaryUser()->GetAccountId();
   const ash::WebKioskAppData* app_data =
       ash::WebKioskAppManager::Get()->GetAppByAccountId(account_id);
+  if (!app_data) {
+    // This can happen when the device service APIs are accessed from inside a
+    // ChromeApp.
+    return false;
+  }
+
   return url::Origin::Create(app_data->install_url()) == origin;
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   DCHECK(KioskSessionServiceLacros::Get());
@@ -72,7 +75,8 @@ bool IsForceInstalledOrigin(const PrefService* prefs,
       prefs->GetList(prefs::kWebAppInstallForceList);
 
   return base::Contains(prefs_list, origin, [](const auto& entry) {
-    std::string entry_url = entry.FindKey(web_app::kUrlKey)->GetString();
+    std::string entry_url =
+        CHECK_DEREF(entry.GetDict().FindString(web_app::kUrlKey));
     return url::Origin::Create(GURL(entry_url));
   });
 }
@@ -99,20 +103,16 @@ bool IsAffiliatedUser() {
 
 bool IsTrustedContext(content::RenderFrameHost& host,
                       const url::Origin& origin) {
-  // TODO(anqing): This feature flag is turned on by default for origin trial.
-  // The flag will be removed when permission policies are ready.
-  if (!base::FeatureList::IsEnabled(features::kEnableRestrictedWebApis))
-    return false;
-
   // Do not create the service for the incognito mode.
-  if (GetProfile(host)->IsIncognitoProfile())
+  if (GetProfile(host)->IsIncognitoProfile()) {
     return false;
+  }
 
   if (chrome::IsRunningInAppMode()) {
     return IsEqualToKioskOrigin(origin);
-  } else {
-    return IsForceInstalledOrigin(GetPrefs(host), origin);
   }
+
+  return IsForceInstalledOrigin(GetPrefs(host), origin);
 }
 
 }  // namespace

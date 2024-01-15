@@ -10,31 +10,34 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_snapshot_manager.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/metrics/user_metrics.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/test/test_simple_task_runner.h"
+#include "base/test/task_environment.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/metrics/clean_exit_beacon.h"
 #include "components/metrics/client_info.h"
+#include "components/metrics/cloned_install_detector.h"
 #include "components/metrics/environment_recorder.h"
 #include "components/metrics/log_decoder.h"
 #include "components/metrics/metrics_features.h"
 #include "components/metrics/metrics_log.h"
 #include "components/metrics/metrics_pref_names.h"
+#include "components/metrics/metrics_scheduler.h"
 #include "components/metrics/metrics_state_manager.h"
 #include "components/metrics/metrics_upload_scheduler.h"
 #include "components/metrics/stability_metrics_helper.h"
@@ -61,9 +64,10 @@ class TestUnsentLogStore : public UnsentLogStore {
                        service,
                        kTestPrefName,
                        nullptr,
-                       /*min_log_count=*/3,
-                       /*min_log_bytes=*/1,
-                       /*max_log_size=*/0,
+                       // Set to 3 so logs are not dropped in the test.
+                       UnsentLogStore::UnsentLogStoreLimits{
+                           .min_log_count = 3,
+                       },
                        /*signing_key=*/std::string(),
                        /*logs_event_manager=*/nullptr) {}
   ~TestUnsentLogStore() override = default;
@@ -75,11 +79,6 @@ class TestUnsentLogStore : public UnsentLogStore {
     registry->RegisterListPref(kTestPrefName);
   }
 };
-
-void YieldUntil(base::Time when) {
-  while (base::Time::Now() <= when)
-    base::PlatformThread::YieldCurrentThread();
-}
 
 // Returns true if |id| is present in |proto|'s collection of FieldTrials.
 bool IsFieldTrialPresent(const SystemProfileProto& proto,
@@ -107,6 +106,7 @@ class TestMetricsService : public MetricsService {
 
   ~TestMetricsService() override = default;
 
+  using MetricsService::INIT_TASK_DONE;
   using MetricsService::INIT_TASK_SCHEDULED;
   using MetricsService::RecordCurrentEnvironmentHelper;
   using MetricsService::SENDING_LOGS;
@@ -141,7 +141,7 @@ class TestMetricsLog : public MetricsLog {
   TestMetricsLog(const TestMetricsLog&) = delete;
   TestMetricsLog& operator=(const TestMetricsLog&) = delete;
 
-  ~TestMetricsLog() override {}
+  ~TestMetricsLog() override = default;
 };
 
 const char kOnDidCreateMetricsLogHistogramName[] = "Test.OnDidCreateMetricsLog";
@@ -156,20 +156,84 @@ class TestMetricsProviderForOnDidCreateMetricsLog : public TestMetricsProvider {
   }
 };
 
+const char kProvideHistogramsHistogramName[] = "Test.ProvideHistograms";
+
+class TestMetricsProviderForProvideHistograms : public TestMetricsProvider {
+ public:
+  TestMetricsProviderForProvideHistograms() = default;
+  ~TestMetricsProviderForProvideHistograms() override = default;
+
+  bool ProvideHistograms() override {
+    base::UmaHistogramBoolean(kProvideHistogramsHistogramName, true);
+    return true;
+  }
+
+  void ProvideCurrentSessionData(
+      ChromeUserMetricsExtension* uma_proto) override {
+    MetricsProvider::ProvideCurrentSessionData(uma_proto);
+  }
+};
+
+class TestMetricsProviderForProvideHistogramsEarlyReturn
+    : public TestMetricsProviderForProvideHistograms {
+ public:
+  TestMetricsProviderForProvideHistogramsEarlyReturn() = default;
+  ~TestMetricsProviderForProvideHistogramsEarlyReturn() override = default;
+
+  void OnDidCreateMetricsLog() override {}
+};
+
+class TestIndependentMetricsProvider : public MetricsProvider {
+ public:
+  TestIndependentMetricsProvider() = default;
+  ~TestIndependentMetricsProvider() override = default;
+
+  // MetricsProvider:
+  bool HasIndependentMetrics() override {
+    // Only return true the first time this is called (i.e., we only have one
+    // independent log to provide).
+    if (!has_independent_metrics_called_) {
+      has_independent_metrics_called_ = true;
+      return true;
+    }
+    return false;
+  }
+  void ProvideIndependentMetrics(
+      base::OnceClosure serialize_log_callback,
+      base::OnceCallback<void(bool)> done_callback,
+      ChromeUserMetricsExtension* uma_proto,
+      base::HistogramSnapshotManager* snapshot_manager) override {
+    provide_independent_metrics_called_ = true;
+    uma_proto->set_client_id(123);
+    std::move(done_callback).Run(true);
+  }
+
+  bool has_independent_metrics_called() const {
+    return has_independent_metrics_called_;
+  }
+
+  bool provide_independent_metrics_called() const {
+    return provide_independent_metrics_called_;
+  }
+
+ private:
+  bool has_independent_metrics_called_ = false;
+  bool provide_independent_metrics_called_ = false;
+};
+
 class MetricsServiceTest : public testing::Test {
  public:
   MetricsServiceTest()
-      : task_runner_(new base::TestSimpleTaskRunner),
-        task_runner_handle_(task_runner_),
-        enabled_state_provider_(new TestEnabledStateProvider(false, false)) {
-    base::SetRecordActionTaskRunner(task_runner_);
+      : enabled_state_provider_(new TestEnabledStateProvider(false, false)) {
+    base::SetRecordActionTaskRunner(
+        task_environment_.GetMainThreadTaskRunner());
     MetricsService::RegisterPrefs(testing_local_state_.registry());
   }
 
   MetricsServiceTest(const MetricsServiceTest&) = delete;
   MetricsServiceTest& operator=(const MetricsServiceTest&) = delete;
 
-  ~MetricsServiceTest() override {}
+  ~MetricsServiceTest() override = default;
 
   void SetUp() override { ASSERT_TRUE(temp_dir_.CreateUniqueTempDir()); }
 
@@ -228,7 +292,7 @@ class MetricsServiceTest : public testing::Test {
       const base::HistogramBase* histogram = FindHistogram(histograms, hash);
       EXPECT_TRUE(histogram) << hash;
 
-      EXPECT_EQ(kStabilityFlags, histogram->flags() & kStabilityFlags) << hash;
+      EXPECT_TRUE(histogram->HasFlags(kStabilityFlags)) << hash;
     }
   }
 
@@ -268,8 +332,8 @@ class MetricsServiceTest : public testing::Test {
   const base::FilePath user_data_dir_path() { return temp_dir_.GetPath(); }
 
  protected:
-  scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle task_runner_handle_;
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   base::test::ScopedFeatureList feature_list_;
 
  private:
@@ -279,24 +343,30 @@ class MetricsServiceTest : public testing::Test {
   base::ScopedTempDir temp_dir_;
 };
 
-class MetricsServiceTestWithConsolidateInitialLogLogicFeature
+class MetricsServiceTestWithFeatures
     : public MetricsServiceTest,
-      public ::testing::WithParamInterface<bool> {
+      public ::testing::WithParamInterface<std::tuple<bool>> {
  public:
-  MetricsServiceTestWithConsolidateInitialLogLogicFeature() = default;
-  ~MetricsServiceTestWithConsolidateInitialLogLogicFeature() override = default;
+  MetricsServiceTestWithFeatures() = default;
+  ~MetricsServiceTestWithFeatures() override = default;
 
-  bool ShouldConsolidateInitialLogLogic() { return GetParam(); }
+  bool ShouldSnapshotInBg() { return std::get<0>(GetParam()); }
 
   void SetUp() override {
     MetricsServiceTest::SetUp();
-    if (ShouldConsolidateInitialLogLogic()) {
-      feature_list_.InitWithFeatures(
-          {features::kConsolidateMetricsServiceInitialLogLogic}, {});
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
+
+    if (ShouldSnapshotInBg()) {
+      enabled_features.emplace_back(features::kMetricsServiceDeltaSnapshotInBg,
+                                    base::FieldTrialParams());
     } else {
-      feature_list_.InitWithFeatures(
-          {}, {features::kConsolidateMetricsServiceInitialLogLogic});
+      disabled_features.emplace_back(
+          features::kMetricsServiceDeltaSnapshotInBg);
     }
+
+    feature_list_.InitWithFeaturesAndParameters(enabled_features,
+                                                disabled_features);
   }
 
  private:
@@ -304,32 +374,35 @@ class MetricsServiceTestWithConsolidateInitialLogLogicFeature
 };
 
 struct StartupVisibilityTestParams {
-  const std::string test_name;
   metrics::StartupVisibility startup_visibility;
-  bool consolidate_initial_log_logic;
   bool expected_beacon_value;
 };
 
 class MetricsServiceTestWithStartupVisibility
     : public MetricsServiceTest,
-      public ::testing::WithParamInterface<StartupVisibilityTestParams> {
+      public ::testing::WithParamInterface<
+          std::tuple<StartupVisibilityTestParams, bool>> {
  public:
   MetricsServiceTestWithStartupVisibility() = default;
   ~MetricsServiceTestWithStartupVisibility() override = default;
 
-  bool ShouldConsolidateInitialLogLogic() {
-    return GetParam().consolidate_initial_log_logic;
-  }
+  bool ShouldSnapshotInBg() { return std::get<1>(GetParam()); }
 
   void SetUp() override {
     MetricsServiceTest::SetUp();
-    if (ShouldConsolidateInitialLogLogic()) {
-      feature_list_.InitWithFeatures(
-          {features::kConsolidateMetricsServiceInitialLogLogic}, {});
+    std::vector<base::test::FeatureRefAndParams> enabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
+
+    if (ShouldSnapshotInBg()) {
+      enabled_features.emplace_back(features::kMetricsServiceDeltaSnapshotInBg,
+                                    base::FieldTrialParams());
     } else {
-      feature_list_.InitWithFeatures(
-          {}, {features::kConsolidateMetricsServiceInitialLogLogic});
+      disabled_features.emplace_back(
+          features::kMetricsServiceDeltaSnapshotInBg);
     }
+
+    feature_list_.InitWithFeaturesAndParameters(enabled_features,
+                                                disabled_features);
   }
 
  private:
@@ -375,24 +448,40 @@ base::HistogramBase::Count GetHistogramDeltaTotalCount(base::StringPiece name) {
 
 }  // namespace
 
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-    testing::Bool());
+INSTANTIATE_TEST_SUITE_P(All,
+                         MetricsServiceTestWithFeatures,
+                         ::testing::Combine(::testing::Bool()));
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       InitialStabilityLogAfterCleanShutDown) {
+TEST_P(MetricsServiceTestWithFeatures, RecordId) {
+  EnableMetricsReporting();
+  GetMetricsStateManager(user_data_dir_path())->ForceClientIdCreation();
+
+  // Set an initial value for the record-ids, to make them predictable.
+  GetLocalState()->SetInteger(prefs::kMetricsLogRecordId, 1000);
+
+  TestMetricsServiceClient client;
+  TestMetricsService service(GetMetricsStateManager(user_data_dir_path()),
+                             &client, GetLocalState());
+
+  auto log1 = service.CreateLogForTesting(MetricsLog::ONGOING_LOG);
+  auto log2 = service.CreateLogForTesting(MetricsLog::INITIAL_STABILITY_LOG);
+  auto log3 = service.CreateLogForTesting(MetricsLog::INDEPENDENT_LOG);
+
+  EXPECT_EQ(1001, log1->uma_proto()->record_id());
+  EXPECT_EQ(1002, log2->uma_proto()->record_id());
+  EXPECT_EQ(1003, log3->uma_proto()->record_id());
+}
+
+TEST_P(MetricsServiceTestWithFeatures, InitialStabilityLogAfterCleanShutDown) {
   base::HistogramTester histogram_tester;
   EnableMetricsReporting();
   // Write a beacon file indicating that Chrome exited cleanly. Note that the
   // crash streak value is arbitrary.
   const base::FilePath beacon_file_path =
       user_data_dir_path().Append(kCleanExitBeaconFilename);
-  ASSERT_LT(0,
-            base::WriteFile(beacon_file_path,
-                            CleanExitBeacon::CreateBeaconFileContentsForTesting(
-                                /*exited_cleanly=*/true, /*crash_streak=*/1)
-                                .data()));
+  ASSERT_TRUE(base::WriteFile(
+      beacon_file_path, CleanExitBeacon::CreateBeaconFileContentsForTesting(
+                            /*exited_cleanly=*/true, /*crash_streak=*/1)));
 
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(user_data_dir_path()),
@@ -422,15 +511,14 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
                                      StabilityEventType::kBrowserCrash, 0);
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       InitialStabilityLogAtProviderRequest) {
+TEST_P(MetricsServiceTestWithFeatures, InitialStabilityLogAtProviderRequest) {
   base::HistogramTester histogram_tester;
   EnableMetricsReporting();
 
   // Save an existing system profile to prefs, to correspond to what would be
   // saved from a previous session.
   TestMetricsServiceClient client;
-  TestMetricsLog log("client", 1, &client);
+  TestMetricsLog log("0a94430b-18e5-43c8-a657-580f7e855ce1", 1, &client);
   DelegatingProvider delegating_provider;
   TestMetricsService::RecordCurrentEnvironmentHelper(&log, GetLocalState(),
                                                      &delegating_provider);
@@ -445,11 +533,9 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   // crash streak value is arbitrary.
   const base::FilePath beacon_file_path =
       user_data_dir_path().Append(kCleanExitBeaconFilename);
-  ASSERT_LT(0,
-            base::WriteFile(beacon_file_path,
-                            CleanExitBeacon::CreateBeaconFileContentsForTesting(
-                                /*exited_cleanly=*/true, /*crash_streak=*/1)
-                                .data()));
+  ASSERT_TRUE(base::WriteFile(
+      beacon_file_path, CleanExitBeacon::CreateBeaconFileContentsForTesting(
+                            /*exited_cleanly=*/true, /*crash_streak=*/1)));
 
   TestMetricsService service(GetMetricsStateManager(user_data_dir_path()),
                              &client, GetLocalState());
@@ -488,6 +574,8 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_EQ(0, uma_log.user_action_event_size());
   EXPECT_EQ(0, uma_log.omnibox_event_size());
   CheckForNonStabilityHistograms(uma_log);
+  EXPECT_EQ(
+      1, GetHistogramSampleCount(uma_log, "UMA.InitialStabilityRecordBeacon"));
 
   // As there wasn't an unclean shutdown, no browser crash samples should have
   // been emitted.
@@ -495,43 +583,195 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
                                      StabilityEventType::kBrowserCrash, 0);
 }
 
+TEST_P(MetricsServiceTestWithFeatures, IndependentLogAtProviderRequest) {
+  EnableMetricsReporting();
+  TestMetricsServiceClient client;
+  TestMetricsService service(GetMetricsStateManager(), &client,
+                             GetLocalState());
+
+  // Create a a provider that will have one independent log to provide.
+  auto* test_provider = new TestIndependentMetricsProvider();
+  service.RegisterMetricsProvider(
+      std::unique_ptr<MetricsProvider>(test_provider));
+
+  service.InitializeMetricsRecordingState();
+  // Start() will create the first ongoing log.
+  service.Start();
+  ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
+
+  // Verify that the independent log provider has not yet been called, and emit
+  // a histogram. This histogram should not be put into the independent log.
+  EXPECT_FALSE(test_provider->has_independent_metrics_called());
+  EXPECT_FALSE(test_provider->provide_independent_metrics_called());
+  const std::string test_histogram = "Test.Histogram";
+  base::UmaHistogramBoolean(test_histogram, true);
+
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time by another |initialization_delay|, which is when
+  // metrics providers are called to provide independent logs.
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_TRUE(test_provider->has_independent_metrics_called());
+  EXPECT_TRUE(test_provider->provide_independent_metrics_called());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| twice, we only need to fast forward by
+  // N - 2 * |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      2 * initialization_delay);
+  EXPECT_EQ(TestMetricsService::SENDING_LOGS, service.state());
+
+  MetricsLogStore* test_log_store = service.LogStoreForTest();
+
+  // The currently staged log should be the independent log created by the
+  // independent log provider. The log should have a client id of 123. It should
+  // also not contain |test_histogram|.
+  ASSERT_TRUE(test_log_store->has_staged_log());
+  ChromeUserMetricsExtension uma_log;
+  EXPECT_TRUE(DecodeLogDataToProto(test_log_store->staged_log(), &uma_log));
+  EXPECT_EQ(uma_log.client_id(), 123UL);
+  EXPECT_EQ(GetHistogramSampleCount(uma_log, test_histogram), 0);
+
+  // Discard the staged log and stage the next one. It should be the first
+  // ongoing log.
+  test_log_store->DiscardStagedLog();
+  ASSERT_TRUE(test_log_store->has_unsent_logs());
+  test_log_store->StageNextLog();
+  ASSERT_TRUE(test_log_store->has_staged_log());
+
+  // Verify that the first ongoing log contains |test_histogram| (it should not
+  // have been put into the independent log).
+  EXPECT_TRUE(DecodeLogDataToProto(test_log_store->staged_log(), &uma_log));
+  EXPECT_EQ(GetHistogramSampleCount(uma_log, test_histogram), 1);
+}
+
+TEST_P(MetricsServiceTestWithFeatures, OnDidCreateMetricsLogAtShutdown) {
+  base::HistogramTester histogram_tester;
+  EnableMetricsReporting();
+  TestMetricsServiceClient client;
+
+  TestMetricsService service(GetMetricsStateManager(), &client,
+                             GetLocalState());
+
+  // Create a provider that will log to |kOnDidCreateMetricsLogHistogramName|
+  // in OnDidCreateMetricsLog().
+  auto* test_provider = new TestMetricsProviderForOnDidCreateMetricsLog();
+  service.RegisterMetricsProvider(
+      std::unique_ptr<MetricsProvider>(test_provider));
+
+  service.InitializeMetricsRecordingState();
+  // Start() will create the first ongoing log.
+  service.Start();
+
+  // OnDidCreateMetricsLog() is called once when the first ongoing log is
+  // created.
+  histogram_tester.ExpectBucketCount(kOnDidCreateMetricsLogHistogramName, true,
+                                     1);
+  service.Stop();
+
+  // OnDidCreateMetricsLog() will be called during shutdown to emit histograms.
+  histogram_tester.ExpectBucketCount(kOnDidCreateMetricsLogHistogramName, true,
+                                     2);
+
+  // Clean up histograms.
+  base::StatisticsRecorder::ForgetHistogramForTesting(
+      kOnDidCreateMetricsLogHistogramName);
+}
+
+TEST_P(MetricsServiceTestWithFeatures, ProvideHistograms) {
+  base::HistogramTester histogram_tester;
+  EnableMetricsReporting();
+  TestMetricsServiceClient client;
+
+  TestMetricsService service(GetMetricsStateManager(), &client,
+                             GetLocalState());
+
+  // Create a provider that will log to |kProvideHistogramsHistogramName|
+  // in ProvideHistograms().
+  auto* test_provider = new TestMetricsProviderForProvideHistograms();
+  service.RegisterMetricsProvider(
+      std::unique_ptr<MetricsProvider>(test_provider));
+
+  service.InitializeMetricsRecordingState();
+  // Start() will create the first ongoing log.
+  service.Start();
+
+  // ProvideHistograms() is called in OnDidCreateMetricsLog().
+  histogram_tester.ExpectBucketCount(kProvideHistogramsHistogramName, true, 1);
+
+  service.StageCurrentLogForTest();
+
+  histogram_tester.ExpectBucketCount(kProvideHistogramsHistogramName, true, 2);
+
+  service.Stop();
+
+  // Clean up histograms.
+  base::StatisticsRecorder::ForgetHistogramForTesting(
+      kProvideHistogramsHistogramName);
+}
+
+TEST_P(MetricsServiceTestWithFeatures, ProvideHistogramsEarlyReturn) {
+  base::HistogramTester histogram_tester;
+  EnableMetricsReporting();
+  TestMetricsServiceClient client;
+
+  TestMetricsService service(GetMetricsStateManager(), &client,
+                             GetLocalState());
+
+  // Create a provider that will log to |kOnDidCreateMetricsLogHistogramName|
+  // in OnDidCreateMetricsLog().
+  auto* test_provider =
+      new TestMetricsProviderForProvideHistogramsEarlyReturn();
+  service.RegisterMetricsProvider(
+      std::unique_ptr<MetricsProvider>(test_provider));
+
+  service.InitializeMetricsRecordingState();
+  // Start() will create the first ongoing log.
+  service.Start();
+
+  // Make sure no histogram is emitted when having an early return.
+  histogram_tester.ExpectBucketCount(kProvideHistogramsHistogramName, true, 0);
+
+  service.StageCurrentLogForTest();
+  // ProvideHistograms() should be called in ProvideCurrentSessionData() if
+  // histograms haven't been emitted.
+  histogram_tester.ExpectBucketCount(kProvideHistogramsHistogramName, true, 1);
+
+  // Try another log to make sure emission status is reset between logs.
+  service.LogStoreForTest()->DiscardStagedLog();
+  service.StageCurrentLogForTest();
+  histogram_tester.ExpectBucketCount(kProvideHistogramsHistogramName, true, 2);
+
+  service.Stop();
+
+  // Clean up histograms.
+  base::StatisticsRecorder::ForgetHistogramForTesting(
+      kProvideHistogramsHistogramName);
+}
+
 INSTANTIATE_TEST_SUITE_P(
     All,
     MetricsServiceTestWithStartupVisibility,
-    ::testing::Values(
-        StartupVisibilityTestParams{
-            .test_name = "UnknownVisibility",
-            .startup_visibility = StartupVisibility::kUnknown,
-            .consolidate_initial_log_logic = false,
-            .expected_beacon_value = true},
-        StartupVisibilityTestParams{
-            .test_name = "BackgroundVisibility",
-            .startup_visibility = StartupVisibility::kBackground,
-            .consolidate_initial_log_logic = false,
-            .expected_beacon_value = true},
-        StartupVisibilityTestParams{
-            .test_name = "ForegroundVisibility",
-            .startup_visibility = StartupVisibility::kForeground,
-            .consolidate_initial_log_logic = false,
-            .expected_beacon_value = false},
-        StartupVisibilityTestParams{
-            .test_name = "UnknownVisibilityConsolidateInitialLogLogic",
-            .startup_visibility = StartupVisibility::kUnknown,
-            .consolidate_initial_log_logic = true,
-            .expected_beacon_value = true},
-        StartupVisibilityTestParams{
-            .test_name = "BackgroundVisibilityConsolidateInitialLogLogic",
-            .startup_visibility = StartupVisibility::kBackground,
-            .consolidate_initial_log_logic = true,
-            .expected_beacon_value = true},
-        StartupVisibilityTestParams{
-            .test_name = "ForegroundVisibilityConsolidateInitialLogLogic",
-            .startup_visibility = StartupVisibility::kForeground,
-            .consolidate_initial_log_logic = true,
-            .expected_beacon_value = false}),
-    [](const ::testing::TestParamInfo<StartupVisibilityTestParams>& params) {
-      return params.param.test_name;
-    });
+    ::testing::Combine(
+        ::testing::Values(
+            StartupVisibilityTestParams{
+                .startup_visibility = StartupVisibility::kUnknown,
+                .expected_beacon_value = true},
+            StartupVisibilityTestParams{
+                .startup_visibility = StartupVisibility::kBackground,
+                .expected_beacon_value = true},
+            StartupVisibilityTestParams{
+                .startup_visibility = StartupVisibility::kForeground,
+                .expected_beacon_value = false}),
+        ::testing::Bool()));
 
 TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
   base::HistogramTester histogram_tester;
@@ -542,11 +782,9 @@ TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
   // crash streak value is arbitrary.
   const base::FilePath beacon_file_path =
       user_data_dir_path().Append(kCleanExitBeaconFilename);
-  ASSERT_LT(0,
-            base::WriteFile(beacon_file_path,
-                            CleanExitBeacon::CreateBeaconFileContentsForTesting(
-                                /*exited_cleanly=*/false, /*crash_streak=*/1)
-                                .data()));
+  ASSERT_TRUE(base::WriteFile(
+      beacon_file_path, CleanExitBeacon::CreateBeaconFileContentsForTesting(
+                            /*exited_cleanly=*/false, /*crash_streak=*/1)));
 
   // Set up prefs to simulate restarting after a crash.
 
@@ -555,7 +793,7 @@ TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
   TestMetricsServiceClient client;
   const std::string kCrashedVersion = "4.0.321.0-64-devel";
   client.set_version_string(kCrashedVersion);
-  TestMetricsLog log("client", 1, &client);
+  TestMetricsLog log("0a94430b-18e5-43c8-a657-580f7e855ce1", 1, &client);
   DelegatingProvider delegating_provider;
   TestMetricsService::RecordCurrentEnvironmentHelper(&log, local_state,
                                                      &delegating_provider);
@@ -569,7 +807,7 @@ TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
   const std::string kCurrentVersion = "5.0.322.0-64-devel";
   client.set_version_string(kCurrentVersion);
 
-  StartupVisibilityTestParams params = GetParam();
+  StartupVisibilityTestParams params = std::get<0>(GetParam());
   TestMetricsService service(
       GetMetricsStateManager(user_data_dir_path(), params.startup_visibility),
       &client, local_state);
@@ -611,6 +849,10 @@ TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
   EXPECT_TRUE(test_provider->provide_initial_stability_metrics_called());
   EXPECT_TRUE(test_provider->provide_stability_metrics_called());
 
+  // The test provider should have been called when the initial stability log
+  // was closed.
+  EXPECT_TRUE(test_provider->record_initial_histogram_snapshots_called());
+
   // Stage the log and retrieve it.
   test_log_store->StageNextLog();
   EXPECT_TRUE(test_log_store->has_staged_log());
@@ -624,6 +866,13 @@ TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
   EXPECT_EQ(0, uma_log.user_action_event_size());
   EXPECT_EQ(0, uma_log.omnibox_event_size());
   CheckForNonStabilityHistograms(uma_log);
+  EXPECT_EQ(
+      1, GetHistogramSampleCount(uma_log, "UMA.InitialStabilityRecordBeacon"));
+
+  // Verify that the histograms emitted by the test provider made it into the
+  // log.
+  EXPECT_EQ(GetHistogramSampleCount(uma_log, "TestMetricsProvider.Initial"), 1);
+  EXPECT_EQ(GetHistogramSampleCount(uma_log, "TestMetricsProvider.Regular"), 1);
 
   EXPECT_EQ(kCrashedVersion, uma_log.system_profile().app_version());
   EXPECT_EQ(kCurrentVersion,
@@ -633,7 +882,7 @@ TEST_P(MetricsServiceTestWithStartupVisibility, InitialStabilityLogAfterCrash) {
                                      StabilityEventType::kBrowserCrash, 1);
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
+TEST_P(MetricsServiceTestWithFeatures,
        InitialLogsHaveOnDidCreateMetricsLogHistograms) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
@@ -651,9 +900,24 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   service.Start();
   ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
 
-  // Run pending tasks to finish init task and complete the first ongoing log.
-  task_runner_->RunPendingTasks();
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log. Also verify that the test provider
+  // was called when closing the log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
   ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
+  EXPECT_TRUE(test_provider->record_histogram_snapshots_called());
 
   MetricsLogStore* test_log_store = service.LogStoreForTest();
 
@@ -665,18 +929,28 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   // Discard the staged log and close and stage the next log, which is the
   // second "ongoing log".
   // Check that it has one sample in |kOnDidCreateMetricsLogHistogramName|.
+  // Also verify that the test provider was called when closing the new log.
+  test_provider->set_record_histogram_snapshots_called(false);
   test_log_store->DiscardStagedLog();
   service.StageCurrentLogForTest();
   EXPECT_EQ(1, GetSampleCountOfOnDidCreateLogHistogram(test_log_store));
+  EXPECT_TRUE(test_provider->record_histogram_snapshots_called());
 
   // Check one more log for good measure.
+  test_provider->set_record_histogram_snapshots_called(false);
   test_log_store->DiscardStagedLog();
   service.StageCurrentLogForTest();
   EXPECT_EQ(1, GetSampleCountOfOnDidCreateLogHistogram(test_log_store));
+  EXPECT_TRUE(test_provider->record_histogram_snapshots_called());
+
+  service.Stop();
+
+  // Clean up histograms.
+  base::StatisticsRecorder::ForgetHistogramForTesting(
+      kOnDidCreateMetricsLogHistogramName);
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       MarkCurrentHistogramsAsReported) {
+TEST_P(MetricsServiceTestWithFeatures, MarkCurrentHistogramsAsReported) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -708,16 +982,11 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   base::StatisticsRecorder::ForgetHistogramForTesting("Test.After.Histogram");
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       LogHasUserActions) {
+TEST_P(MetricsServiceTestWithFeatures, LogHasUserActions) {
   // This test verifies that user actions are properly captured in UMA logs.
   // In particular, it checks that the first log has actions, a behavior that
   // was buggy in the past, plus additional checks for subsequent logs with
-  // different numbers of actions. This behavior is only fixed after
-  // consolidating the initial log logic.
-  if (!ShouldConsolidateInitialLogLogic())
-    return;
-
+  // different numbers of actions.
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -733,8 +1002,21 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   base::RecordAction(base::UserMetricsAction("TestAction"));
   base::RecordAction(base::UserMetricsAction("DifferentAction"));
 
-  // Run pending tasks to finish init task and complete the first ongoing log.
-  task_runner_->RunPendingTasks();
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
   ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
 
   MetricsLogStore* test_log_store = service.LogStoreForTest();
@@ -762,8 +1044,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_EQ(2, GetNumberOfUserActions(test_log_store));
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       FirstLogCreatedBeforeUnsentLogsSent) {
+TEST_P(MetricsServiceTestWithFeatures, FirstLogCreatedBeforeUnsentLogsSent) {
   // This test checks that we will create and serialize the first ongoing log
   // before starting to send unsent logs from the past session. The latter is
   // simulated by injecting some fake ongoing logs into the MetricsLogStore.
@@ -783,14 +1064,28 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   // is never deserialized to proto, so we're just passing some dummy content.
   ASSERT_EQ(0u, test_log_store->initial_log_count());
   ASSERT_EQ(0u, test_log_store->ongoing_log_count());
-  test_log_store->StoreLog("blah_blah", MetricsLog::ONGOING_LOG, LogMetadata());
+  test_log_store->StoreLog("blah_blah", MetricsLog::ONGOING_LOG, LogMetadata(),
+                           MetricsLogsEventManager::CreateReason::kUnknown);
   // Note: |initial_log_count()| refers to initial stability logs, so the above
   // log is counted an ongoing log (per its type).
   ASSERT_EQ(0u, test_log_store->initial_log_count());
   ASSERT_EQ(1u, test_log_store->ongoing_log_count());
 
-  // Run pending tasks to finish init task and complete the first ongoing log.
-  task_runner_->RunPendingTasks();
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
   ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
   // When the init task is complete, the first ongoing log should be created
   // and added to the ongoing logs.
@@ -798,7 +1093,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_EQ(2u, test_log_store->ongoing_log_count());
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
+TEST_P(MetricsServiceTestWithFeatures,
        MetricsProviderOnRecordingDisabledCalledOnInitialStop) {
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -814,8 +1109,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_TRUE(test_provider->on_recording_disabled_called());
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       MetricsProvidersInitialized) {
+TEST_P(MetricsServiceTestWithFeatures, MetricsProvidersInitialized) {
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
                              GetLocalState());
@@ -831,8 +1125,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
 
 // Verify that FieldTrials activated by a MetricsProvider are reported by the
 // FieldTrialsProvider.
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       ActiveFieldTrialsReported) {
+TEST_P(MetricsServiceTestWithFeatures, ActiveFieldTrialsReported) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -868,7 +1161,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
       IsFieldTrialPresent(uma_log.system_profile(), trial_name2, group_name2));
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
+TEST_P(MetricsServiceTestWithFeatures,
        SystemProfileDataProvidedOnEnableRecording) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
@@ -893,50 +1186,172 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_FALSE(service.persistent_system_profile_complete());
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature, SplitRotation) {
+// Verify that the two separate MetricsSchedulers (MetricsRotationScheduler and
+// MetricsUploadScheduler) function together properly.
+TEST_P(MetricsServiceTestWithFeatures, SplitRotation) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
                              GetLocalState());
   service.InitializeMetricsRecordingState();
   service.Start();
-  // Rotation loop should create a log and mark state as idle.
-  // Upload loop should start upload or be restarted.
-  // The independent-metrics upload job will be started and always be a task.
-  task_runner_->RunPendingTasks();
-  // Rotation loop should terminated due to being idle.
-  // Upload loop should start uploading if it isn't already.
-  task_runner_->RunPendingTasks();
+  ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
+
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log. The independent-metrics upload job
+  // will be started and always be a task. This should also mark the rotation
+  // scheduler as idle, so that the next time we attempt to create a log, we
+  // return early (and don't create a log).
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  MetricsLogStore* log_store = service.LogStoreForTest();
+  EXPECT_FALSE(log_store->has_unsent_logs());
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
+  ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
+  EXPECT_TRUE(log_store->has_unsent_logs());
+  EXPECT_EQ(1U, log_store->ongoing_log_count());
+
+  // There should be three (delayed) tasks: one for querying independent logs
+  // from metrics providers, one for uploading the unsent log, and one for
+  // creating the next log.
+  EXPECT_EQ(3U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Fast forward the time so that the upload loop starts uploading logs.
+  base::TimeDelta unsent_log_interval =
+      MetricsUploadScheduler::GetUnsentLogsInterval();
+  task_environment_.FastForwardBy(unsent_log_interval);
   EXPECT_TRUE(client.uploader()->is_uploading());
-  EXPECT_EQ(1U, task_runner_->NumPendingTasks());
-  service.OnApplicationNotIdle();
-  EXPECT_TRUE(client.uploader()->is_uploading());
-  EXPECT_EQ(2U, task_runner_->NumPendingTasks());
-  // Log generation should be suppressed due to unsent log.
-  // Idle state should not be reset.
-  task_runner_->RunPendingTasks();
-  EXPECT_TRUE(client.uploader()->is_uploading());
-  EXPECT_EQ(2U, task_runner_->NumPendingTasks());
-  // Make sure idle state was not reset.
-  task_runner_->RunPendingTasks();
-  EXPECT_TRUE(client.uploader()->is_uploading());
-  EXPECT_EQ(2U, task_runner_->NumPendingTasks());
-  // Upload should not be rescheduled, since there are no other logs.
+  // There should be two (delayed) tasks: one for querying independent logs from
+  // metrics providers, and one for creating the next log. I.e., the task to
+  // upload a log should be running, and should not be in the task queue
+  // anymore. The uploading of this log will only be completed later on in order
+  // to simulate an edge case here.
+  EXPECT_EQ(2U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Fast forward the time so that the task to create another log is run. This
+  // time, however, it should return early due to being idle (i.e., not create a
+  // log), and it should not post another task to create another log. I.e.,
+  // there should only be one (delayed) task: one for querying independent logs
+  // from metrics providers.
+  // Note: The log is only created after |rotation_scheduler_interval| seconds,
+  // and since we already fast forwarded by |unsent_log_interval| once, we only
+  // need to fast forward by
+  // |rotation_scheduler_interval| - |unsent_log_interval|.
+  base::TimeDelta rotation_scheduler_interval = client.GetUploadInterval();
+  task_environment_.FastForwardBy(rotation_scheduler_interval -
+                                  unsent_log_interval);
+  EXPECT_EQ(1U, log_store->ongoing_log_count());
+  EXPECT_EQ(1U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Simulate completing the upload. Since there is no other log to be uploaded,
+  // no task should be re-posted. I.e., there should only be one (delayed)
+  // task: one for querying independent logs from metrics providers.
   client.uploader()->CompleteUpload(200);
   EXPECT_FALSE(client.uploader()->is_uploading());
-  EXPECT_EQ(2U, task_runner_->NumPendingTasks());
-  // Running should generate a log, restart upload loop, and mark idle.
-  task_runner_->RunPendingTasks();
+  EXPECT_FALSE(log_store->has_unsent_logs());
+  EXPECT_EQ(1U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Simulate interacting with the browser, which should 1) set the rotation
+  // scheduler to not idle, 2) queue a task to upload the next log (if there is
+  // one), and 3) queue a task to create the next log. I.e., there should be
+  // three (delayed) tasks: one for querying independent logs from metrics
+  // providers, one for uploading an unsent log, and one for creating the next
+  // log.
+  service.OnApplicationNotIdle();
+  EXPECT_EQ(3U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // We now simulate a more common scenario.
+
+  // Fast forward the time so that the task to upload a log runs. Since there
+  // should be no logs, it should return early, and not re-post a task. I.e.,
+  // there should be two tasks: one for querying independent logs from metrics
+  // providers, and one for creating the next log.
+  task_environment_.FastForwardBy(unsent_log_interval);
   EXPECT_FALSE(client.uploader()->is_uploading());
-  EXPECT_EQ(3U, task_runner_->NumPendingTasks());
-  // Upload should start, and rotation loop should idle out.
-  task_runner_->RunPendingTasks();
+  EXPECT_FALSE(log_store->has_unsent_logs());
+  EXPECT_EQ(2U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Fast forward the time so that the next log is created. It should re-post
+  // a task to create a new log, and should also re-start the upload scheduler.
+  // I.e., there should be three (delayed) tasks: one for querying independent
+  // logs from metrics providers, one for uploading an unsent log, and one for
+  // creating the next log.
+  // Note: The log is only created after |rotation_scheduler_interval| seconds,
+  // and since we already fast forwarded by |unsent_log_interval| once, we only
+  // need to fast forward by
+  // |rotation_scheduler_interval| - |unsent_log_interval|.
+  task_environment_.FastForwardBy(rotation_scheduler_interval -
+                                  unsent_log_interval);
+  EXPECT_TRUE(log_store->has_unsent_logs());
+  EXPECT_EQ(3U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Fast forward the time so that the task to upload a log runs.
+  task_environment_.FastForwardBy(unsent_log_interval);
   EXPECT_TRUE(client.uploader()->is_uploading());
-  EXPECT_EQ(1U, task_runner_->NumPendingTasks());
+  // There should be two (delayed) tasks: one for querying independent logs from
+  // metrics providers, and one for creating the next log. I.e., the task to
+  // upload a log should be running, and should not be in the task queue
+  // anymore.
+  EXPECT_EQ(2U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Simulate completing the upload. However, before doing so, add a dummy log
+  // in order to test that when the upload task completes, if it detects another
+  // log, it will re-post a task to upload the next log. I.e., after uploading
+  // the log, there should be three (delayed) tasks: one for querying
+  // independent logs from metrics providers, one for uploading an unsent log,
+  // and one for creating the next log.
+  log_store->StoreLog("dummy log", MetricsLog::LogType::ONGOING_LOG,
+                      LogMetadata(),
+                      MetricsLogsEventManager::CreateReason::kUnknown);
+  EXPECT_EQ(2U, log_store->ongoing_log_count());
+  client.uploader()->CompleteUpload(200);
+  EXPECT_FALSE(client.uploader()->is_uploading());
+  EXPECT_EQ(1U, log_store->ongoing_log_count());
+  EXPECT_EQ(3U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Fast forward the time so that the task to upload a log runs.
+  task_environment_.FastForwardBy(unsent_log_interval);
+  EXPECT_TRUE(client.uploader()->is_uploading());
+  // There should be two (delayed) tasks: one for querying independent logs from
+  // metrics providers, and one for creating the next log. I.e., the task to
+  // upload a log should be running, and should not be in the task queue
+  // anymore.
+  EXPECT_EQ(2U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Simulate completing the upload. Since there is no other log to be uploaded,
+  // no task should be posted. I.e., there should only be two (delayed) tasks:
+  // one for querying independent logs from metrics providers, and one.
+  client.uploader()->CompleteUpload(200);
+  EXPECT_FALSE(client.uploader()->is_uploading());
+  EXPECT_FALSE(log_store->has_unsent_logs());
+  EXPECT_EQ(2U, task_environment_.GetPendingMainThreadTaskCount());
+
+  // Fast forward the time so that the task to create another log is run. It
+  // should return early due to being idle (i.e., not create a log), and it
+  // should not post another task to create another log. I.e., there should only
+  // be one (delayed) task: one for querying independent logs from metrics
+  // providers.
+  // Note: The log is only created after |rotation_scheduler_interval| seconds,
+  // and since we already fast forwarded by |unsent_log_interval| twice, we only
+  // need to fast forward by
+  // |rotation_scheduler_interval| - 2 * |unsent_log_interval|.
+  task_environment_.FastForwardBy(rotation_scheduler_interval -
+                                  2 * unsent_log_interval);
+  EXPECT_FALSE(log_store->has_unsent_logs());
+  EXPECT_EQ(1U, task_environment_.GetPendingMainThreadTaskCount());
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       LastLiveTimestamp) {
+TEST_P(MetricsServiceTestWithFeatures, LastLiveTimestamp) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -947,9 +1362,26 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
 
   service.InitializeMetricsRecordingState();
   service.Start();
+  ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
 
-  task_runner_->RunPendingTasks();
-  size_t num_pending_tasks = task_runner_->NumPendingTasks();
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log. Also verify that the test provider
+  // was called when closing the log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
+  ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
+  size_t num_pending_tasks = task_environment_.GetPendingMainThreadTaskCount();
 
   service.StartUpdatingLastLiveTimestamp();
 
@@ -958,29 +1390,26 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_EQ(
       initial_last_live_time,
       GetLocalState()->GetTime(prefs::kStabilityBrowserLastLiveTimeStamp));
-  EXPECT_EQ(num_pending_tasks + 1, task_runner_->NumPendingTasks());
+  EXPECT_EQ(num_pending_tasks + 1,
+            task_environment_.GetPendingMainThreadTaskCount());
 
-  // To avoid flakiness, yield until we're over a microsecond threshold.
-  YieldUntil(initial_last_live_time + base::Microseconds(2));
-
-  task_runner_->RunPendingTasks();
+  // Fast forward the time so that the task to update the "last alive timestamp"
+  // runs.
+  task_environment_.FastForwardBy(service.GetUpdateLastAliveTimestampDelay());
 
   // Verify that the time has updated in local state.
   base::Time updated_last_live_time =
       GetLocalState()->GetTime(prefs::kStabilityBrowserLastLiveTimeStamp);
   EXPECT_LT(initial_last_live_time, updated_last_live_time);
 
-  // Double check that an update schedules again...
-  YieldUntil(updated_last_live_time + base::Microseconds(2));
-
-  task_runner_->RunPendingTasks();
+  // Double check that an update was scheduled again.
+  task_environment_.FastForwardBy(service.GetUpdateLastAliveTimestampDelay());
   EXPECT_LT(
       updated_last_live_time,
       GetLocalState()->GetTime(prefs::kStabilityBrowserLastLiveTimeStamp));
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       EnablementObserverNotification) {
+TEST_P(MetricsServiceTestWithFeatures, EnablementObserverNotification) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -1004,10 +1433,58 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_FALSE(enabled.value());
 }
 
+// Verifies that when a cloned install is detected, logs are purged.
+TEST_P(MetricsServiceTestWithFeatures, PurgeLogsOnClonedInstallDetected) {
+  EnableMetricsReporting();
+  TestMetricsServiceClient client;
+  TestMetricsService service(GetMetricsStateManager(), &client,
+                             GetLocalState());
+  service.InitializeMetricsRecordingState();
+
+  // Store various logs.
+  MetricsLogStore* test_log_store = service.LogStoreForTest();
+  test_log_store->StoreLog("dummy log data", MetricsLog::ONGOING_LOG,
+                           LogMetadata(),
+                           MetricsLogsEventManager::CreateReason::kUnknown);
+  test_log_store->StageNextLog();
+  test_log_store->StoreLog("more dummy log data", MetricsLog::ONGOING_LOG,
+                           LogMetadata(),
+                           MetricsLogsEventManager::CreateReason::kUnknown);
+  test_log_store->StoreLog("dummy stability log",
+                           MetricsLog::INITIAL_STABILITY_LOG, LogMetadata(),
+                           MetricsLogsEventManager::CreateReason::kUnknown);
+  test_log_store->SetAlternateOngoingLogStore(InitializeTestLogStoreAndGet());
+  test_log_store->StoreLog("dummy log for alternate ongoing log store",
+                           MetricsLog::ONGOING_LOG, LogMetadata(),
+                           MetricsLogsEventManager::CreateReason::kUnknown);
+  EXPECT_TRUE(test_log_store->has_staged_log());
+  EXPECT_TRUE(test_log_store->has_unsent_logs());
+
+  ClonedInstallDetector* cloned_install_detector =
+      GetMetricsStateManager()->cloned_install_detector_for_testing();
+
+  static constexpr char kTestRawId[] = "test";
+  // Hashed machine id for |kTestRawId|.
+  static constexpr int kTestHashedId = 2216819;
+
+  // Save a machine id that will not cause a clone to be detected.
+  GetLocalState()->SetInteger(prefs::kMetricsMachineId, kTestHashedId);
+  cloned_install_detector->SaveMachineId(GetLocalState(), kTestRawId);
+  // Verify that the logs are still present.
+  EXPECT_TRUE(test_log_store->has_staged_log());
+  EXPECT_TRUE(test_log_store->has_unsent_logs());
+
+  // Save a machine id that will cause a clone to be detected.
+  GetLocalState()->SetInteger(prefs::kMetricsMachineId, kTestHashedId + 1);
+  cloned_install_detector->SaveMachineId(GetLocalState(), kTestRawId);
+  // Verify that the logs were purged.
+  EXPECT_FALSE(test_log_store->has_staged_log());
+  EXPECT_FALSE(test_log_store->has_unsent_logs());
+}
+
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 // ResetClientId is only enabled on certain targets.
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
-       SetClientIdToExternalId) {
+TEST_P(MetricsServiceTestWithFeatures, SetClientIdToExternalId) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
   TestMetricsService service(GetMetricsStateManager(), &client,
@@ -1027,7 +1504,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
 #endif  //  BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
+TEST_P(MetricsServiceTestWithFeatures,
        OngoingLogNotFlushedBeforeInitialLogWhenUserLogStoreSet) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
@@ -1037,6 +1514,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   service.InitializeMetricsRecordingState();
   // Start() will create the first ongoing log.
   service.Start();
+  ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
 
   MetricsLogStore* test_log_store = service.LogStoreForTest();
   std::unique_ptr<TestUnsentLogStore> alternate_ongoing_log_store =
@@ -1054,8 +1532,21 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   ASSERT_EQ(0u, test_log_store->initial_log_count());
   ASSERT_EQ(0u, test_log_store->ongoing_log_count());
 
-  // Run pending tasks to finish init task and complete the first ongoing log.
-  task_runner_->RunPendingTasks();
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
   ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
   // When the init task is complete, the first ongoing log should be created
   // in the alternate ongoing log store.
@@ -1064,7 +1555,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   EXPECT_EQ(1u, alternate_ongoing_log_store_ptr->size());
 }
 
-TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
+TEST_P(MetricsServiceTestWithFeatures,
        OngoingLogFlushedAfterInitialLogWhenUserLogStoreSet) {
   EnableMetricsReporting();
   TestMetricsServiceClient client;
@@ -1074,6 +1565,7 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   service.InitializeMetricsRecordingState();
   // Start() will create the first ongoing log.
   service.Start();
+  ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
 
   MetricsLogStore* test_log_store = service.LogStoreForTest();
   std::unique_ptr<TestUnsentLogStore> alternate_ongoing_log_store =
@@ -1083,8 +1575,21 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   ASSERT_EQ(0u, test_log_store->initial_log_count());
   ASSERT_EQ(0u, test_log_store->ongoing_log_count());
 
-  // Run pending tasks to finish init task and complete the first ongoing log.
-  task_runner_->RunPendingTasks();
+  // Fast forward the time by |initialization_delay|, which is when the pending
+  // init tasks will run.
+  base::TimeDelta initialization_delay = service.GetInitializationDelay();
+  task_environment_.FastForwardBy(initialization_delay);
+  EXPECT_EQ(TestMetricsService::INIT_TASK_DONE, service.state());
+
+  // Fast forward the time until the MetricsRotationScheduler first runs, which
+  // should complete the first ongoing log.
+  // Note: The first log is only created after N = GetInitialIntervalSeconds()
+  // seconds since the start, and since we already fast forwarded by
+  // |initialization_delay| once, we only need to fast forward by
+  // N - |initialization_delay|.
+  task_environment_.FastForwardBy(
+      base::Seconds(MetricsScheduler::GetInitialIntervalSeconds()) -
+      initialization_delay);
   ASSERT_EQ(TestMetricsService::SENDING_LOGS, service.state());
   ASSERT_EQ(0u, test_log_store->initial_log_count());
   ASSERT_EQ(1u, test_log_store->ongoing_log_count());
@@ -1096,6 +1601,45 @@ TEST_P(MetricsServiceTestWithConsolidateInitialLogLogicFeature,
   ASSERT_EQ(0u, test_log_store->initial_log_count());
   ASSERT_EQ(2u, test_log_store->ongoing_log_count());
 }
-#endif
+
+TEST_P(MetricsServiceTestWithFeatures,
+       OngoingLogDiscardedAfterEarlyUnsetUserLogStore) {
+  EnableMetricsReporting();
+  TestMetricsServiceClient client;
+  TestMetricsService service(GetMetricsStateManager(), &client,
+                             GetLocalState());
+
+  service.InitializeMetricsRecordingState();
+  // Start() will create the first ongoing log.
+  service.Start();
+  ASSERT_EQ(TestMetricsService::INIT_TASK_SCHEDULED, service.state());
+
+  MetricsLogStore* test_log_store = service.LogStoreForTest();
+  std::unique_ptr<TestUnsentLogStore> alternate_ongoing_log_store =
+      InitializeTestLogStoreAndGet();
+
+  ASSERT_EQ(0u, test_log_store->initial_log_count());
+  ASSERT_EQ(0u, test_log_store->ongoing_log_count());
+
+  service.SetUserLogStore(std::move(alternate_ongoing_log_store));
+
+  // Unset the user log store before we started sending logs.
+  base::UmaHistogramBoolean("Test.Before.Histogram", true);
+  service.UnsetUserLogStore();
+  base::UmaHistogramBoolean("Test.After.Histogram", true);
+
+  // Verify that the current log was discarded.
+  EXPECT_FALSE(service.GetCurrentLogForTest());
+
+  // Verify that histograms from before unsetting the user log store were
+  // flushed.
+  EXPECT_EQ(0, GetHistogramDeltaTotalCount("Test.Before.Histogram"));
+  EXPECT_EQ(1, GetHistogramDeltaTotalCount("Test.After.Histogram"));
+
+  // Clean up histograms.
+  base::StatisticsRecorder::ForgetHistogramForTesting("Test.Before.Histogram");
+  base::StatisticsRecorder::ForgetHistogramForTesting("Test.After.Histogram");
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 }  // namespace metrics

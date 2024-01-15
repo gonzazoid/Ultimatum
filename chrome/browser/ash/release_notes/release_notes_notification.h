@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/release_notes/release_notes_storage.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
@@ -45,7 +46,7 @@ class ReleaseNotesNotification {
 
   void HandleClickShowNotification();
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::unique_ptr<ReleaseNotesStorage> release_notes_storage_;
   std::unique_ptr<message_center::Notification>
       release_notes_available_notification_;
@@ -54,10 +55,5 @@ class ReleaseNotesNotification {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::ReleaseNotesNotification;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_RELEASE_NOTES_RELEASE_NOTES_NOTIFICATION_H_

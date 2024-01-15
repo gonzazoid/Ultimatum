@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/throttle_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/template_util.h"
 #include "base/test/task_environment.h"
@@ -14,15 +14,13 @@ namespace ash {
 
 constexpr const char kObserverName[] = "TestObserver";
 
-class ThrottleObserverTest
-    : public testing::Test,
-      public base::SupportsWeakPtr<ThrottleObserverTest> {
+class ThrottleObserverTest : public testing::Test {
  public:
   ThrottleObserverTest() {
     observer_.StartObserving(
         nullptr /* content::BrowserContext* */,
         base::BindRepeating(&ThrottleObserverTest::OnObserverStateChanged,
-                            AsWeakPtr()));
+                            weak_ptr_factory_.GetWeakPtr()));
   }
 
   ThrottleObserverTest(const ThrottleObserverTest&) = delete;
@@ -37,6 +35,7 @@ class ThrottleObserverTest
  private:
   ThrottleObserver observer_{kObserverName};
   size_t notify_count_{0};
+  base::WeakPtrFactory<ThrottleObserverTest> weak_ptr_factory_{this};
 };
 
 // Tests that ThrottleObserver can be constructed and destructed.

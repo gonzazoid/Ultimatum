@@ -10,7 +10,6 @@
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/file_system/external_mount_points.h"
 #include "storage/browser/file_system/file_observers.h"
 #include "storage/browser/file_system/file_system_context.h"
@@ -64,8 +63,8 @@ FileSystemURL CreateSyncableFileSystemURL(const GURL& origin,
     path_for_url = base::FilePath(path.value().substr(1));
 
   return ExternalMountPoints::GetSystemInstance()->CreateExternalFileSystemURL(
-      blink::StorageKey(url::Origin::Create(origin)), kSyncableMountName,
-      path_for_url);
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(origin)),
+      kSyncableMountName, path_for_url);
 }
 
 FileSystemURL CreateSyncableFileSystemURLForSync(
@@ -94,7 +93,7 @@ bool DeserializeSyncableFileSystemURL(const std::string& serialized_url,
   const GURL gurl(serialized_url);
   FileSystemURL deserialized =
       ExternalMountPoints::GetSystemInstance()->CrackURL(
-          gurl, blink::StorageKey(url::Origin::Create(gurl)));
+          gurl, blink::StorageKey::CreateFirstParty(url::Origin::Create(gurl)));
   if (!deserialized.is_valid() ||
       deserialized.type() != storage::kFileSystemTypeSyncable) {
     return false;
@@ -109,7 +108,8 @@ base::FilePath GetSyncFileSystemDir(const base::FilePath& profile_base_dir) {
 }
 
 void RunSoon(const base::Location& from_here, base::OnceClosure callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(from_here, std::move(callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      from_here, std::move(callback));
 }
 
 }  // namespace sync_file_system

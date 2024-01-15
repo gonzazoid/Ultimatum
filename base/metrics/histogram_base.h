@@ -166,6 +166,7 @@ class BASE_EXPORT HistogramBase {
   int32_t flags() const { return flags_.load(std::memory_order_relaxed); }
   void SetFlags(int32_t flags);
   void ClearFlags(int32_t flags);
+  bool HasFlags(int32_t flags) const;
 
   virtual HistogramType GetHistogramType() const = 0;
 
@@ -215,7 +216,7 @@ class BASE_EXPORT HistogramBase {
 
   // Snapshot the current complete set of sample data.
   // Note that histogram data is stored per-process. The browser process
-  // periodically injests data from subprocesses. As such, the browser
+  // periodically ingests data from subprocesses. As such, the browser
   // process can see histogram data from any process but other processes
   // can only see histogram data recorded in the subprocess.
   // Moreover, the data returned here may not be up to date:
@@ -230,11 +231,42 @@ class BASE_EXPORT HistogramBase {
   // in about:histograms and test code.
   virtual std::unique_ptr<HistogramSamples> SnapshotSamples() const = 0;
 
-  // Calculate the change (delta) in histogram counts since the previous call
-  // to this method. Each successive call will return only those counts
-  // changed since the last call.
+  // Returns a copy of the samples that have not yet been logged. To mark the
+  // returned samples as logged, see MarkSamplesAsLogged().
   //
   // See additional caveats by SnapshotSamples().
+  //
+  // WARNING: This may be called from a background thread by the metrics
+  // collection system. Do not make a call to this unless it was properly vetted
+  // by someone familiar with the system.
+  // TODO(crbug/1052796): Consider gating this behind a PassKey, so that
+  // eventually, only StatisticsRecorder can use this.
+  virtual std::unique_ptr<HistogramSamples> SnapshotUnloggedSamples() const = 0;
+
+  // Marks the passed |samples| as logged. More formally, the |samples| passed
+  // will not appear in the samples returned by a subsequent call to
+  // SnapshotDelta().
+  //
+  // See additional caveats by SnapshotSamples().
+  //
+  // WARNING: This may be called from a background thread by the metrics
+  // collection system. Do not make a call to this unless it was properly vetted
+  // by someone familiar with the system.
+  // TODO(crbug/1052796): Consider gating this behind a PassKey, so that
+  // eventually, only StatisticsRecorder can use this.
+  virtual void MarkSamplesAsLogged(const HistogramSamples& samples) = 0;
+
+  // Calculate the change (delta) in histogram counts since the previous call
+  // to this method. Each successive call will return only those counts changed
+  // since the last call. Calls to MarkSamplesAsLogged() will also affect the
+  // samples returned. Logically, this function is equivalent to a call to
+  // SnapshotUnloggedSamples() followed by a call to MarkSamplesAsLogged().
+  //
+  // See additional caveats by SnapshotSamples().
+  //
+  // WARNING: This may be called from a background thread by the metrics
+  // collection system. Do not make a call to this unless it was properly vetted
+  // by someone familiar with the system.
   virtual std::unique_ptr<HistogramSamples> SnapshotDelta() = 0;
 
   // Calculate the change (delta) in histogram counts since the previous call
@@ -256,9 +288,6 @@ class BASE_EXPORT HistogramBase {
   // {"header": "Name of the histogram with samples, mean, and/or flags",
   // "body": "ASCII histogram representation"}
   virtual base::Value::Dict ToGraphDict() const = 0;
-
-  // TODO(bcwhite): Remove this after https://crbug/836875.
-  virtual void ValidateHistogramContents() const;
 
   // Produce a JSON representation of the histogram with |verbosity_level| as
   // the serialization verbosity. This is implemented with the help of

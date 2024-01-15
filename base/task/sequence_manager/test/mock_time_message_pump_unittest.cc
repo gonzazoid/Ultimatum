@@ -23,10 +23,12 @@ using ::testing::StrictMock;
 class MockMessagePumpDelegate : public MessagePump::Delegate {
  public:
   MOCK_METHOD0(OnBeginWorkItem, void());
-  MOCK_METHOD0(OnEndWorkItem, void());
+  MOCK_METHOD1(OnEndWorkItem, void(int));
   MOCK_METHOD0(BeforeWait, void());
+  MOCK_METHOD0(BeginNativeWorkBeforeDoWork, void());
   MOCK_METHOD0(DoWork, NextWorkInfo());
   MOCK_METHOD0(DoIdleWork, bool());
+  MOCK_METHOD0(RunDepth, int());
 };
 
 MessagePump::Delegate::NextWorkInfo NextWorkInfo(TimeTicks delayed_run_time) {
@@ -136,8 +138,8 @@ TEST(MockMessagePumpTest, StoresNextWakeUpTimeInScheduleDelayedWork) {
   const auto kStartTime = mock_clock.NowTicks();
   const auto kNextDelayedWorkTime = kStartTime + Seconds(2);
 
-  pump.ScheduleDelayedWork(
-      MessagePump::Delegate::NextWorkInfo{kNextDelayedWorkTime, kStartTime});
+  pump.ScheduleDelayedWork(MessagePump::Delegate::NextWorkInfo{
+      kNextDelayedWorkTime, TimeDelta(), kStartTime});
 
   EXPECT_THAT(pump.next_wake_up_time(), Eq(kNextDelayedWorkTime));
 }

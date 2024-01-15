@@ -7,10 +7,11 @@
 #include <objbase.h>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util.h"
@@ -127,6 +128,8 @@ class OSExchangeDataWinTest : public ::testing::Test {
   void OnGotVirtualFilesAsTempFiles(
       const std::vector<std::pair<base::FilePath, base::FilePath>>&
           filepaths_and_names) {
+    on_got_virtual_files_as_temp_files_called_ = true;
+
     // Clear any previous results and cache a vector of FileInfo objects for
     // verification.
     retrieved_virtual_files_.clear();
@@ -138,8 +141,23 @@ class OSExchangeDataWinTest : public ::testing::Test {
   }
 
  protected:
+  class OnGotVirtualFilesAsTempFilesCalledChecker {
+   public:
+    OnGotVirtualFilesAsTempFilesCalledChecker(OSExchangeDataWinTest* test)
+        : test_(test) {
+      test_->on_got_virtual_files_as_temp_files_called_ = false;
+    }
+    ~OnGotVirtualFilesAsTempFilesCalledChecker() {
+      EXPECT_TRUE(test_->on_got_virtual_files_as_temp_files_called_);
+    }
+
+   private:
+    raw_ptr<OSExchangeDataWinTest> test_;
+  };
+
   std::vector<FileInfo> retrieved_virtual_files_;
   base::test::TaskEnvironment task_environment_;
+  bool on_got_virtual_files_as_temp_files_called_ = false;
 };
 
 // Test getting using the IDataObject COM API
@@ -157,7 +175,7 @@ TEST_F(OSExchangeDataWinTest, StringDataAccessViaCOM) {
   STGMEDIUM medium;
   EXPECT_EQ(S_OK, com_data->GetData(&format_etc, &medium));
   std::wstring output =
-      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).get();
+      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).data();
   EXPECT_EQ(input, output);
   ReleaseStgMedium(&medium);
 }
@@ -178,7 +196,7 @@ TEST_F(OSExchangeDataWinTest, StringDataWritingViaCOM) {
   medium.tymed = TYMED_HGLOBAL;
   HGLOBAL glob = GlobalAlloc(GPTR, sizeof(wchar_t) * (input.size() + 1));
   base::win::ScopedHGlobal<wchar_t*> global_lock(glob);
-  wchar_t* buffer_handle = global_lock.get();
+  wchar_t* buffer_handle = global_lock.data();
   wcscpy_s(buffer_handle, input.size() + 1, input.c_str());
   medium.hGlobal = glob;
   medium.pUnkForRelease = NULL;
@@ -214,7 +232,7 @@ TEST_F(OSExchangeDataWinTest, RemoveData) {
   {
     HGLOBAL glob = GlobalAlloc(GPTR, sizeof(wchar_t) * (input.size() + 1));
     base::win::ScopedHGlobal<wchar_t*> global_lock(glob);
-    wchar_t* buffer_handle = global_lock.get();
+    wchar_t* buffer_handle = global_lock.data();
     wcscpy_s(buffer_handle, input.size() + 1, input.c_str());
     medium.hGlobal = glob;
     medium.pUnkForRelease = NULL;
@@ -224,7 +242,7 @@ TEST_F(OSExchangeDataWinTest, RemoveData) {
   {
     HGLOBAL glob = GlobalAlloc(GPTR, sizeof(wchar_t) * (input2.size() + 1));
     base::win::ScopedHGlobal<wchar_t*> global_lock(glob);
-    wchar_t* buffer_handle = global_lock.get();
+    wchar_t* buffer_handle = global_lock.data();
     wcscpy_s(buffer_handle, input2.size() + 1, input2.c_str());
     medium.hGlobal = glob;
     medium.pUnkForRelease = NULL;
@@ -258,7 +276,7 @@ TEST_F(OSExchangeDataWinTest, URLDataAccessViaCOM) {
   STGMEDIUM medium;
   EXPECT_EQ(S_OK, com_data->GetData(&format_etc, &medium));
   std::wstring output =
-      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).get();
+      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).data();
   EXPECT_EQ(url.spec(), base::WideToUTF8(output));
   ReleaseStgMedium(&medium);
 }
@@ -285,7 +303,7 @@ TEST_F(OSExchangeDataWinTest, MultipleFormatsViaCOM) {
   STGMEDIUM medium;
   EXPECT_EQ(S_OK, com_data->GetData(&url_format_etc, &medium));
   std::wstring output_url =
-      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).get();
+      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).data();
   EXPECT_EQ(url.spec(), base::WideToUTF8(output_url));
   ReleaseStgMedium(&medium);
 
@@ -293,7 +311,7 @@ TEST_F(OSExchangeDataWinTest, MultipleFormatsViaCOM) {
   // |text|! This is because the URL is added first and thus takes precedence!
   EXPECT_EQ(S_OK, com_data->GetData(&text_format_etc, &medium));
   std::wstring output_text =
-      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).get();
+      base::win::ScopedHGlobal<wchar_t*>(medium.hGlobal).data();
   EXPECT_EQ(url_spec, base::WideToUTF8(output_text));
   ReleaseStgMedium(&medium);
 }
@@ -407,7 +425,7 @@ TEST_F(OSExchangeDataWinTest, TestURLExchangeFormatsViaCOM) {
     STGMEDIUM medium;
     EXPECT_EQ(S_OK, com_data->GetData(&format_etc, &medium));
     base::win::ScopedHGlobal<char*> glob(medium.hGlobal);
-    std::string output(glob.get(), glob.Size());
+    std::string output(glob.data(), glob.size());
     std::string file_contents = "[InternetShortcut]\r\nURL=";
     file_contents += url_spec;
     file_contents += "\r\n";
@@ -465,7 +483,8 @@ TEST_F(OSExchangeDataWinTest, VirtualFiles) {
         base::BindOnce(&OSExchangeDataWinTest::OnGotVirtualFilesAsTempFiles,
                        base::Unretained(this));
 
-    EXPECT_TRUE(copy.GetVirtualFilesAsTempFiles(std::move(callback)));
+    OnGotVirtualFilesAsTempFilesCalledChecker checker(this);
+    copy.GetVirtualFilesAsTempFiles(std::move(callback));
 
     // RunUntilIdle assures all async tasks are run.
     task_environment_.RunUntilIdle();
@@ -541,7 +560,8 @@ TEST_F(OSExchangeDataWinTest, VirtualFilesRealFilesPreferred) {
         base::BindOnce(&OSExchangeDataWinTest::OnGotVirtualFilesAsTempFiles,
                        base::Unretained(this));
 
-    EXPECT_FALSE(copy.GetVirtualFilesAsTempFiles(std::move(callback)));
+    OnGotVirtualFilesAsTempFilesCalledChecker checker(this);
+    copy.GetVirtualFilesAsTempFiles(std::move(callback));
 
     // RunUntilIdle assures all async tasks are run.
     task_environment_.RunUntilIdle();
@@ -590,7 +610,8 @@ TEST_F(OSExchangeDataWinTest, VirtualFilesDuplicateNames) {
         base::BindOnce(&OSExchangeDataWinTest::OnGotVirtualFilesAsTempFiles,
                        base::Unretained(this));
 
-    EXPECT_TRUE(copy.GetVirtualFilesAsTempFiles(std::move(callback)));
+    OnGotVirtualFilesAsTempFilesCalledChecker checker(this);
+    copy.GetVirtualFilesAsTempFiles(std::move(callback));
 
     // RunUntilIdle assures all async tasks are run.
     task_environment_.RunUntilIdle();
@@ -673,7 +694,8 @@ TEST_F(OSExchangeDataWinTest, VirtualFilesDuplicateNamesCaseInsensitivity) {
         base::BindOnce(&OSExchangeDataWinTest::OnGotVirtualFilesAsTempFiles,
                        base::Unretained(this));
 
-    EXPECT_TRUE(copy.GetVirtualFilesAsTempFiles(std::move(callback)));
+    OnGotVirtualFilesAsTempFilesCalledChecker checker(this);
+    copy.GetVirtualFilesAsTempFiles(std::move(callback));
 
     // RunUntilIdle assures all async tasks are run.
     task_environment_.RunUntilIdle();
@@ -783,7 +805,8 @@ TEST_F(OSExchangeDataWinTest, VirtualFilesInvalidAndDuplicateNames) {
         base::BindOnce(&OSExchangeDataWinTest::OnGotVirtualFilesAsTempFiles,
                        base::Unretained(this));
 
-    EXPECT_TRUE(copy.GetVirtualFilesAsTempFiles(std::move(callback)));
+    OnGotVirtualFilesAsTempFilesCalledChecker checker(this);
+    copy.GetVirtualFilesAsTempFiles(std::move(callback));
 
     // RunUntilIdle assures all async tasks are run.
     task_environment_.RunUntilIdle();
@@ -868,7 +891,8 @@ TEST_F(OSExchangeDataWinTest, VirtualFilesEmptyContents) {
         base::BindOnce(&OSExchangeDataWinTest::OnGotVirtualFilesAsTempFiles,
                        base::Unretained(this));
 
-    EXPECT_TRUE(copy.GetVirtualFilesAsTempFiles(std::move(callback)));
+    OnGotVirtualFilesAsTempFilesCalledChecker checker(this);
+    copy.GetVirtualFilesAsTempFiles(std::move(callback));
 
     // RunUntilIdle assures all async tasks are run.
     task_environment_.RunUntilIdle();
@@ -924,7 +948,7 @@ TEST_F(OSExchangeDataWinTest, CFHtml) {
   IDataObject* data_object = OSExchangeDataProviderWin::GetIDataObject(data);
   EXPECT_EQ(S_OK, data_object->GetData(&format, &medium));
   base::win::ScopedHGlobal<char*> glob(medium.hGlobal);
-  std::string output(glob.get(), glob.Size());
+  std::string output(glob.data(), glob.size());
   EXPECT_EQ(expected_cf_html, output);
   ReleaseStgMedium(&medium);
 }

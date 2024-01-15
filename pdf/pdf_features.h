@@ -15,9 +15,11 @@ namespace features {
 
 BASE_DECLARE_FEATURE(kAccessiblePDFForm);
 BASE_DECLARE_FEATURE(kPdfIncrementalLoading);
+BASE_DECLARE_FEATURE(kPdfOopif);
 BASE_DECLARE_FEATURE(kPdfPartialLoading);
+BASE_DECLARE_FEATURE(kPdfPortfolio);
+BASE_DECLARE_FEATURE(kPdfUseSkiaRenderer);
 BASE_DECLARE_FEATURE(kPdfXfaSupport);
-BASE_DECLARE_FEATURE(kTabAcrossPDFAnnotations);
 
 }  // namespace features
 }  // namespace chrome_pdf

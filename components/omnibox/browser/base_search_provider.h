@@ -26,8 +26,11 @@
 class AutocompleteProviderClient;
 class GURL;
 class SearchTermsData;
-class SuggestionDeletionHandler;
 class TemplateURL;
+
+namespace network {
+class SimpleURLLoader;
+}
 
 // Base functionality for receiving suggestions from a search engine.
 // This class is abstract and should only be used as a base for other
@@ -45,17 +48,6 @@ class BaseSearchProvider : public AutocompleteProvider {
 
   // Returns whether |match| is flagged as a query that should be prerendered.
   static bool ShouldPrerender(const AutocompleteMatch& match);
-
-  // Returns a simpler AutocompleteMatch suitable for persistence like in
-  // ShortcutsDatabase.  This wrapper function uses a number of default values
-  // that may or may not be appropriate for your needs.
-  // NOTE: Use with care. Most likely you want the other CreateSearchSuggestion.
-  static AutocompleteMatch CreateSearchSuggestion(
-      const std::u16string& suggestion,
-      AutocompleteMatchType::Type type,
-      bool from_keyword_provider,
-      const TemplateURL* template_url,
-      const SearchTermsData& search_terms_data);
 
   // Returns an AutocompleteMatch with the given |autocomplete_provider|
   // for the search |suggestion|, which represents a search via |template_url|.
@@ -83,8 +75,16 @@ class BaseSearchProvider : public AutocompleteProvider {
       int accepted_suggestion,
       bool append_extra_query_params_from_command_line);
 
-  // A helper function to convert result from on device providers to
-  // AutocompleteMatch instance.
+  // A helper function to return an AutocompleteMatch suitable for persistence
+  // in ShortcutsDatabase.
+  static AutocompleteMatch CreateShortcutSearchSuggestion(
+      const std::u16string& suggestion,
+      AutocompleteMatchType::Type type,
+      bool from_keyword_provider,
+      const TemplateURL* template_url,
+      const SearchTermsData& search_terms_data);
+
+  // A helper function to return an AutocompleteMatch for on device provider.
   static AutocompleteMatch CreateOnDeviceSearchSuggestion(
       AutocompleteProvider* autocomplete_provider,
       const AutocompleteInput& input,
@@ -92,7 +92,14 @@ class BaseSearchProvider : public AutocompleteProvider {
       int relevance,
       const TemplateURL* template_url,
       const SearchTermsData& search_terms_data,
-      int accepted_suggestion);
+      int accepted_suggestion,
+      bool is_tail_suggestion);
+
+  static scoped_refptr<OmniboxAction> CreateActionInSuggest(
+      omnibox::ActionInfo action_info,
+      const TemplateURLRef& search_url,
+      const TemplateURLRef::SearchTermsArgs& original_search_terms,
+      const SearchTermsData& search_terms_data);
 
   // Appends specific suggest client based on page |page_classification| to
   // the additional query params of |search_terms_args| only for Google template
@@ -103,16 +110,6 @@ class BaseSearchProvider : public AutocompleteProvider {
       metrics::OmniboxEventProto::PageClassification page_classification,
       TemplateURLRef::SearchTermsArgs* search_terms_args);
 
-  // Returns whether the provided classification indicates some sort of NTP.
-  static bool IsNTPPage(
-      metrics::OmniboxEventProto::PageClassification classification);
-  // Returns whether the provided classification indicates Search Results Page.
-  static bool IsSearchResultsPage(
-      metrics::OmniboxEventProto::PageClassification classification);
-  // Returns whether the provided classification indicates a non-NTP/non-SRP Web
-  // Page.
-  static bool IsOtherWebPage(
-      metrics::OmniboxEventProto::PageClassification classification);
   // Returns whether the URL of the current page is eligible to be sent in any
   // suggest request. Only valid URLs with an HTTP or HTTPS scheme are eligible.
   static bool CanSendPageURLInRequest(const GURL& page_url);
@@ -148,10 +145,6 @@ class BaseSearchProvider : public AutocompleteProvider {
   void DeleteMatch(const AutocompleteMatch& match) override;
   void AddProviderInfo(ProvidersInfo* provider_info) const override;
 
-  bool field_trial_triggered_in_session() const {
-    return field_trial_triggered_in_session_;
-  }
-
  protected:
   // The following keys are used to record additional information on matches.
 
@@ -182,8 +175,6 @@ class BaseSearchProvider : public AutocompleteProvider {
 
   using MatchKey = ACMatchKey<std::u16string, std::string>;
   using MatchMap = std::map<MatchKey, AutocompleteMatch>;
-  using SuggestionDeletionHandlers =
-      std::vector<std::unique_ptr<SuggestionDeletionHandler>>;
 
   // Returns the appropriate value for the fill_into_edit field of an
   // AutcompleteMatch. The result consists of the suggestion text from
@@ -229,15 +220,6 @@ class BaseSearchProvider : public AutocompleteProvider {
   AutocompleteProviderClient* client() { return client_; }
   const AutocompleteProviderClient* client() const { return client_; }
 
-  bool field_trial_triggered() const { return field_trial_triggered_; }
-
-  void set_field_trial_triggered(bool triggered) {
-    field_trial_triggered_ = triggered;
-  }
-  void set_field_trial_triggered_in_session(bool triggered) {
-    field_trial_triggered_in_session_ = triggered;
-  }
-
  private:
   friend class SearchProviderTest;
   FRIEND_TEST_ALL_PREFIXES(SearchProviderTest, TestDeleteMatch);
@@ -248,25 +230,16 @@ class BaseSearchProvider : public AutocompleteProvider {
   // This gets called when we have requested a suggestion deletion from the
   // server to handle the results of the deletion. It will be called after the
   // deletion request completes.
-  void OnDeletionComplete(bool success,
-                          SuggestionDeletionHandler* handler);
+  void OnDeletionComplete(const network::SimpleURLLoader* source,
+                          const int response_code,
+                          std::unique_ptr<std::string> response_body);
 
   raw_ptr<AutocompleteProviderClient> client_;
 
-  // Whether a field trial, if any, has triggered in the most recent
-  // autocomplete query. This field is set to true only if the suggestion
-  // provider has completed and the response contained
-  // '"google:fieldtrialtriggered":true'.
-  bool field_trial_triggered_;
-
-  // Same as above except that it is maintained across the current Omnibox
-  // session.
-  bool field_trial_triggered_in_session_;
-
-  // Each deletion handler in this vector corresponds to an outstanding request
+  // Each deletion loader in this vector corresponds to an outstanding request
   // that a server delete a personalized suggestion. Making this a vector of
   // unique_ptr causes us to auto-cancel all such requests on shutdown.
-  SuggestionDeletionHandlers deletion_handlers_;
+  std::vector<std::unique_ptr<network::SimpleURLLoader>> deletion_loaders_;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_BASE_SEARCH_PROVIDER_H_

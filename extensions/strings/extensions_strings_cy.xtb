@@ -4,9 +4,11 @@
 <translation id="1135328998467923690">Mae'r pecyn yn annilys: '<ph name="ERROR_CODE" />'.</translation>
 <translation id="1140871961407805696">Yn wynebu'r amgylchedd</translation>
 <translation id="1196338895211115272">Wedi methu ag allforio allwedd breifat.</translation>
+<translation id="132960226125594336">Ni ellid llwytho'r ffeil '<ph name="RELATIVE_PATH" />' ar gyfer sgript cynnwys gan y byddai'n fwy na maint mwyaf y sgript neu uchafswm maint sgript cynnwys cyfanswm yr estyniad.</translation>
 <translation id="1420684932347524586">Iesgwn! Wedi methu â chynhyrchu allwedd breifat RSA ar hap.</translation>
 <translation id="1445572445564823378">Mae'r estyniad hwn yn arafu <ph name="PRODUCT_NAME" />. Dylech ei analluogi i adfer perfformiad <ph name="PRODUCT_NAME" />.</translation>
 <translation id="1468038450257740950">Nid yw WebGL yn cael ei gefnogi.</translation>
+<translation id="1610570795592207282">Nid oedd modd llwytho'r css '<ph name="RELATIVE_PATH" />' ar gyfer sgript.</translation>
 <translation id="1803557475693955505">Ni ellid llwytho'r dudalen gefndir '<ph name="BACKGROUND_PAGE" />'.</translation>
 <translation id="2159915644201199628">Methu â dadgodio'r llun: '<ph name="IMAGE_NAME" />'</translation>
 <translation id="2350172092385603347">Defnyddiwyd lleoleiddio, ond ni nodwyd default_locale yn y maniffest.</translation>
@@ -17,14 +19,12 @@
 <translation id="3115238746683532089">Cynnyrch anhysbys <ph name="PRODUCT_ID" /> gan y gwerthwr <ph name="VENDOR_ID" /> (rhif cyfresol <ph name="SERIAL_NUMBER" />)</translation>
 <translation id="3144135466825225871">Methwyd â disodli ffeil crx. Gwiriwch a yw'r ffeil yn cael ei defnyddio.</translation>
 <translation id="3163201441334626963">Cynnyrch anhysbys <ph name="PRODUCT_ID" /> gan y gwerthwr <ph name="VENDOR_ID" /></translation>
-<translation id="3302709122321372472">Nid oedd modd llwytho'r css '<ph name="RELATIVE_PATH" />' ar gyfer sgript cynnwys.</translation>
 <translation id="3369521687965833290">Methu â dadbacio'r estyniad.  Er mwyn dadbacio estyniad, rhaid bod llwybr i gyfeiriadur eich proffil sy'n dechrau gyda llythyren gyriant ac ni all gynnwys cyffordd, pwynt gosod neu ddolen symbolaidd.  Nid oes llwybr o'r fath yn bodoli ar gyfer eich proffil.</translation>
 <translation id="3393440416772303020"><ph name="PRODUCT_NAME" /> (rhif cyfresol <ph name="SERIAL_NUMBER" />)</translation>
 <translation id="3466070586188012397"><ph name="PRODUCT_NAME" /> o'r gwerthwr <ph name="VENDOR_ID" /> (rhif cyfresol <ph name="SERIAL_NUMBER" />)</translation>
 <translation id="3561217442734750519">Rhaid i werth mewnbwn allwedd breifat fod yn llwybr dilys.</translation>
 <translation id="388442998277590542">Methu â llwytho'r dudalen dewisiadau '<ph name="OPTIONS_PAGE" />'.</translation>
 <translation id="3984413272403535372">Bu gwall wrth lofnodi estyniad.</translation>
-<translation id="39964277676607559">Methu â llwytho javascript '<ph name="RELATIVE_PATH" />' ar gyfer sgript cynnwys.</translation>
 <translation id="4115165561519362854">Mae gweinyddwr y peiriant hwn yn ei gwneud yn ofynnol i <ph name="EXTENSION_NAME" /> fod â fersiwn <ph name="EXTENSION_VERSION" /> o leiaf. Ni ellir ei alluogi nes ei fod wedi diweddaru i'r fersiwn honno (neu'n uwch).</translation>
 <translation id="4233778200880751280">Methu â llwytho'r dudalen ynghylch '<ph name="ABOUT_PAGE" />'.</translation>
 <translation id="471800408830181311">Wedi methu ag allbynnu'r allwedd breifat.</translation>
@@ -32,8 +32,8 @@
 <translation id="4988792151665380515">Wedi methu allforio ag allwedd gyhoeddus.</translation>
 <translation id="5026754133087629784">Gwedd we: <ph name="WEBVIEW_TAG_NAME" /></translation>
 <translation id="5098647635849512368">Methu â dod o hyd i'r llwybr absoliwt i'r cyfeiriadur i'w bacio.</translation>
+<translation id="5160071981665899014">Methu â llwytho javascript '<ph name="RELATIVE_PATH" />' ar gyfer sgript.</translation>
 <translation id="5356315618422219272">Gwedd ap: <ph name="APPVIEW_TAG_NAME" /></translation>
-<translation id="5436430103864390185">Nid yw ffenestri wedi'u siapio yn cael eu cefnogi.</translation>
 <translation id="5456409301717116725">Mae'r estyniad hwn yn cynnwys y ffeil allwedd '<ph name="KEY_PATH" />'. Mae'n debyg nad ydych eisiau gwneud hynny.</translation>
 <translation id="5486326529110362464">Rhaid i werth mewnbwn ar gyfer allwedd breifat fodoli.</translation>
 <translation id="5972529113578162692">Mae gweinyddwr y peiriant hwn yn ei gwneud yn ofynnol i osod <ph name="EXTENSION_NAME" />. Ni ellir ei ddadosod.</translation>
@@ -61,6 +61,7 @@
 <translation id="8636666366616799973">Mae'r pecyn yn annilys. Manylion: '<ph name="ERROR_MESSAGE" />'.</translation>
 <translation id="8761756413268424715">Mae "<ph name="APP_NAME" />" yn gofyn am fynediad at un o'ch dyfeisiau:</translation>
 <translation id="8885905466771744233">Mae allwedd breifat ar gyfer yr estyniad dan sylw eisoes yn bodoli. Ailddefnyddiwch yr allwedd honno neu ei dileu'n gyntaf.</translation>
+<translation id="9039223174332979184">Mae gweinyddwr y peiriant hwn yn gofyn bod gan <ph name="EXTENSION_NAME" /> fersiwn maniffest leiaf o 3.</translation>
 <translation id="907841381057066561">Wedi methu â chreu ffeil sip dros dro wrth becynnu.</translation>
 <translation id="941543339607623937">Allwedd breifat annilys.</translation>
 </translationbundle>

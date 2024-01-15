@@ -56,8 +56,8 @@ IPC_ENUM_TRAITS_MAX_VALUE(media::AudioCodec, media::AudioCodec::kMaxValue)
 IPC_ENUM_TRAITS_MAX_VALUE(media::AudioCodecProfile,
                           media::AudioCodecProfile::kMaxValue)
 
-IPC_ENUM_TRAITS_MAX_VALUE(media::AudioLatency::LatencyType,
-                          media::AudioLatency::LATENCY_COUNT)
+IPC_ENUM_TRAITS_MAX_VALUE(media::AudioLatency::Type,
+                          media::AudioLatency::Type::kMaxValue)
 
 IPC_ENUM_TRAITS_MAX_VALUE(media::AudioParameters::Format,
                           media::AudioParameters::AUDIO_FORMAT_LAST)
@@ -100,13 +100,13 @@ IPC_ENUM_TRAITS_MAX_VALUE(media::EncryptionScheme,
 IPC_ENUM_TRAITS_MAX_VALUE(media::HdcpVersion,
                           media::HdcpVersion::kMaxValue)
 
-IPC_ENUM_TRAITS_MAX_VALUE(media::MediaContentType, media::MediaContentType::Max)
+IPC_ENUM_TRAITS_MAX_VALUE(media::MediaContentType, media::MediaContentType::kMax)
 
 IPC_ENUM_TRAITS_MAX_VALUE(media::MediaLogRecord::Type,
                           media::MediaLogRecord::Type::kMaxValue)
 
 IPC_ENUM_TRAITS_MAX_VALUE(media::MediaStatus::State,
-                          media::MediaStatus::State::STATE_MAX)
+                          media::MediaStatus::State::kStateMax)
 
 IPC_ENUM_TRAITS_MAX_VALUE(media::OutputDeviceStatus,
                           media::OUTPUT_DEVICE_STATUS_MAX)
@@ -137,8 +137,9 @@ IPC_ENUM_TRAITS_MAX_VALUE(media::VideoPixelFormat, media::PIXEL_FORMAT_MAX)
 
 IPC_ENUM_TRAITS_MAX_VALUE(media::VideoRotation, media::VIDEO_ROTATION_MAX)
 
-IPC_ENUM_TRAITS_MAX_VALUE(media::container_names::MediaContainerName,
-                          media::container_names::CONTAINER_MAX)
+IPC_ENUM_TRAITS_MAX_VALUE(
+    media::container_names::MediaContainerName,
+    media::container_names::MediaContainerName::kMaxValue)
 
 #if BUILDFLAG(ENABLE_MEDIA_DRM_STORAGE)
 IPC_ENUM_TRAITS_MIN_MAX_VALUE(media::MediaDrmKeyType,
@@ -183,28 +184,6 @@ IPC_STRUCT_TRAITS_END()
 IPC_STRUCT_TRAITS_BEGIN(media::SubsampleEntry)
   IPC_STRUCT_TRAITS_MEMBER(clear_bytes)
   IPC_STRUCT_TRAITS_MEMBER(cypher_bytes)
-IPC_STRUCT_TRAITS_END()
-
-IPC_STRUCT_TRAITS_BEGIN(media::VideoColorSpace)
-  IPC_STRUCT_TRAITS_MEMBER(primaries)
-  IPC_STRUCT_TRAITS_MEMBER(transfer)
-  IPC_STRUCT_TRAITS_MEMBER(matrix)
-  IPC_STRUCT_TRAITS_MEMBER(range)
-IPC_STRUCT_TRAITS_END()
-
-IPC_STRUCT_TRAITS_BEGIN(gfx::ColorVolumeMetadata)
-  IPC_STRUCT_TRAITS_MEMBER(primary_r)
-  IPC_STRUCT_TRAITS_MEMBER(primary_g)
-  IPC_STRUCT_TRAITS_MEMBER(primary_b)
-  IPC_STRUCT_TRAITS_MEMBER(white_point)
-  IPC_STRUCT_TRAITS_MEMBER(luminance_max)
-  IPC_STRUCT_TRAITS_MEMBER(luminance_min)
-IPC_STRUCT_TRAITS_END()
-
-IPC_STRUCT_TRAITS_BEGIN(gfx::HDRMetadata)
-  IPC_STRUCT_TRAITS_MEMBER(color_volume_metadata)
-  IPC_STRUCT_TRAITS_MEMBER(max_content_light_level)
-  IPC_STRUCT_TRAITS_MEMBER(max_frame_average_light_level)
 IPC_STRUCT_TRAITS_END()
 
 IPC_STRUCT_TRAITS_BEGIN(media::OverlayInfo)

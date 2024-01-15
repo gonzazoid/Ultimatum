@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/values.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
@@ -86,11 +86,15 @@ base::Value::List FetchSandboxFeatures() {
   features.Append(
       FeatureToValue(sandbox::policy::features::kRendererAppContainer));
   features.Append(
-      FeatureToValue(sandbox::policy::features::kSharedSandboxPolicies));
+      FeatureToValue(sandbox::policy::features::kWinSboxRendererCloseKsecDD));
   features.Append(FeatureToValue(
       sandbox::policy::features::kWinSboxDisableExtensionPoints));
   features.Append(
-      FeatureToValue(sandbox::policy::features::kWinSboxDisableKtmComponent));
+      FeatureToValue(sandbox::policy::features::kWinSboxWarmupProcessPrng));
+  features.Append(
+      FeatureToValue(sandbox::policy::features::kWinSboxZeroAppShim));
+  features.Append(
+      FeatureToValue(sandbox::policy::features::kWinSboxFsctlLockdown));
   return features;
 }
 

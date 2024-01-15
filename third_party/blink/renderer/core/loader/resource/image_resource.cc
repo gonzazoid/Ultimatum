@@ -30,6 +30,7 @@
 
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/loader/referrer_utils.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -42,6 +43,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_client.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
+#include "third_party/blink/renderer/platform/loader/fetch/resource_load_timing.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader_options.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loading_log.h"
@@ -82,9 +84,34 @@ class ImageResource::ImageResourceInfoImpl final
 
  private:
   const KURL& Url() const override { return resource_->Url(); }
+  base::TimeTicks LoadEnd() const override {
+    if (ResourceLoadTiming* load_timing =
+            resource_->GetResponse().GetResourceLoadTiming()) {
+      return load_timing->ResponseEnd();
+    }
+    return base::TimeTicks();
+  }
+
   base::TimeTicks LoadResponseEnd() const override {
     return resource_->LoadResponseEnd();
   }
+
+  base::TimeTicks LoadStart() const override {
+    if (ResourceLoadTiming* load_timing =
+            resource_->GetResponse().GetResourceLoadTiming()) {
+      return load_timing->SendStart();
+    }
+    return base::TimeTicks();
+  }
+
+  base::TimeTicks DiscoveryTime() const override {
+    if (ResourceLoadTiming* load_timing =
+            resource_->GetResponse().GetResourceLoadTiming()) {
+      return load_timing->DiscoveryTime();
+    }
+    return base::TimeTicks();
+  }
+
   const ResourceResponse& GetResponse() const override {
     return resource_->GetResponse();
   }
@@ -283,12 +310,6 @@ void ImageResource::DestroyDecodedDataForFailedRevalidation() {
 
 void ImageResource::DestroyDecodedDataIfPossible() {
   GetContent()->DestroyDecodedData();
-  if (GetContent()->HasImage() && !IsUnusedPreload() &&
-      GetContent()->IsRefetchableDataFromDiskCache()) {
-    UMA_HISTOGRAM_MEMORY_KB(
-        "Memory.Renderer.EstimatedDroppableEncodedSize",
-        base::saturated_cast<base::Histogram::Sample>(EncodedSize() / 1024));
-  }
 }
 
 void ImageResource::AllClientsAndObserversRemoved() {
@@ -384,7 +405,7 @@ void ImageResource::DecodeError(bool all_data_received) {
     // Observers are notified via ImageResource::finish().
     // TODO(hiroshige): Do not call didFinishLoading() directly.
     Loader()->AbortResponseBodyLoading();
-    Loader()->DidFinishLoading(base::TimeTicks::Now(), size, size, size, false);
+    Loader()->DidFinishLoading(base::TimeTicks::Now(), size, size, size);
   } else {
     auto result = GetContent()->UpdateImage(
         nullptr, GetStatus(),
@@ -416,9 +437,9 @@ void ImageResource::Finish(base::TimeTicks load_finish_time,
       UpdateImageAndClearBuffer();
   } else {
     UpdateImage(Data(), ImageResourceContent::kUpdateImage, true);
-    // As encoded image data can be created from m_image  (see
-    // ImageResource::resourceBuffer(), we don't have to keep m_data. Let's
-    // clear this. As for the lifetimes of m_image and m_data, see this
+    // As encoded image data can be obtained from Image::Data() via `content_`
+    // (see ResourceBuffer()), we don't have to keep `data_`. Let's
+    // clear it. As for the lifetimes of `content_` and `data_`, see this
     // document:
     // https://docs.google.com/document/d/1v0yTAZ6wkqX2U_M6BNIGUJpM1s0TIw1VsqpxoL7aciY/edit?usp=sharing
     ClearData();
@@ -508,11 +529,11 @@ bool ImageResource::IsAccessAllowed(
 }
 
 ImageResourceContent* ImageResource::GetContent() {
-  return content_;
+  return content_.Get();
 }
 
 const ImageResourceContent* ImageResource::GetContent() const {
-  return content_;
+  return content_.Get();
 }
 
 std::pair<ResourcePriority, ResourcePriority>

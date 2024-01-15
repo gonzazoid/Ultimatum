@@ -4,36 +4,37 @@
 
 #include "chrome/browser/ash/borealis/borealis_task.h"
 
+#include <optional>
 #include <sstream>
 #include <string>
 
 #include "ash/constants/ash_features.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/process/launch.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/borealis/borealis_context.h"
-#include "chrome/browser/ash/borealis/borealis_disk_manager.h"
 #include "chrome/browser/ash/borealis/borealis_features.h"
 #include "chrome/browser/ash/borealis/borealis_launch_options.h"
-#include "chrome/browser/ash/borealis/borealis_metrics.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
 #include "chrome/browser/ash/borealis/borealis_util.h"
+#include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_service.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_wayland_server.h"
+#include "chrome/browser/ash/guest_os/public/types.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
-#include "chromeos/ash/components/dbus/dlcservice/dlcservice.pb.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/dbus/vm_launch/launch.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace borealis {
 
@@ -54,7 +55,7 @@ void BorealisTask::Complete(BorealisStartupResult status, std::string message) {
                << (base::Time::Now() - start_time_);
   // Task completion is self-mutually-exclusive, because tasks are deleted once
   // complete.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback_), status, std::move(message)));
 }
@@ -103,10 +104,8 @@ MountDlc::~MountDlc() = default;
 void MountDlc::RunInternal(BorealisContext* context) {
   // TODO(b/172279567): Ensure the DLC is present before trying to install,
   // otherwise we will silently download borealis here.
-  dlcservice::InstallRequest install_request;
-  install_request.set_id(kBorealisDlcName);
-  ash::DlcserviceClient::Get()->Install(
-      install_request,
+  installation_ = std::make_unique<guest_os::GuestOsDlcInstallation>(
+      kBorealisDlcName,
       base::BindOnce(&MountDlc::OnMountDlc, weak_factory_.GetWeakPtr(),
                      context),
       base::DoNothing());
@@ -114,10 +113,39 @@ void MountDlc::RunInternal(BorealisContext* context) {
 
 void MountDlc::OnMountDlc(
     BorealisContext* context,
-    const ash::DlcserviceClient::InstallResult& install_result) {
-  if (install_result.error != dlcservice::kErrorNone) {
-    Complete(BorealisStartupResult::kMountFailed,
-             "Mounting the DLC for Borealis failed: " + install_result.error);
+    guest_os::GuestOsDlcInstallation::Result install_result) {
+  if (!install_result.has_value()) {
+    std::stringstream ss;
+    ss << "Mounting the DLC for Borealis failed: " << install_result.error();
+    switch (install_result.error()) {
+      case guest_os::GuestOsDlcInstallation::Error::Cancelled:
+        Complete(BorealisStartupResult::kDlcCancelled, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::Offline:
+        Complete(BorealisStartupResult::kDlcOffline, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::NeedUpdate:
+        Complete(BorealisStartupResult::kDlcNeedUpdateError, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::NeedReboot:
+        Complete(BorealisStartupResult::kDlcNeedRebootError, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::DiskFull:
+        Complete(BorealisStartupResult::kDlcNeedSpaceError, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::Busy:
+        Complete(BorealisStartupResult::kDlcBusyError, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::Internal:
+        Complete(BorealisStartupResult::kDlcInternalError, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::Invalid:
+        Complete(BorealisStartupResult::kDlcUnsupportedError, ss.str());
+        return;
+      case guest_os::GuestOsDlcInstallation::Error::UnknownFailure:
+        Complete(BorealisStartupResult::kDlcUnknownError, ss.str());
+        return;
+    }
   } else {
     Complete(BorealisStartupResult::kSuccess, "");
   }
@@ -127,6 +155,20 @@ CreateDiskImage::CreateDiskImage() : BorealisTask("CreateDiskImage") {}
 CreateDiskImage::~CreateDiskImage() = default;
 
 void CreateDiskImage::RunInternal(BorealisContext* context) {
+  ash::ConciergeClient::Get()->WaitForServiceToBeAvailable(
+      base::BindOnce(&CreateDiskImage::OnConciergeAvailable,
+                     weak_factory_.GetWeakPtr(), context));
+}
+
+void CreateDiskImage::OnConciergeAvailable(BorealisContext* context,
+                                           bool is_available) {
+  if (!is_available) {
+    context->set_disk_path({});
+    Complete(BorealisStartupResult::kConciergeUnavailable,
+             "Concierge service is not available");
+    return;
+  }
+
   vm_tools::concierge::CreateDiskImageRequest request;
   request.set_vm_name(context->vm_name());
   request.set_cryptohome_id(
@@ -134,11 +176,8 @@ void CreateDiskImage::RunInternal(BorealisContext* context) {
   request.set_image_type(vm_tools::concierge::DISK_IMAGE_AUTO);
   request.set_storage_location(vm_tools::concierge::STORAGE_CRYPTOHOME_ROOT);
   request.set_disk_size(0);
-  if (base::FeatureList::IsEnabled(
-          chromeos::features::kBorealisStorageBallooning)) {
-    request.set_filesystem_type(vm_tools::concierge::EXT4);
-    request.set_storage_ballooning(true);
-  }
+  request.set_filesystem_type(vm_tools::concierge::EXT4);
+  request.set_storage_ballooning(true);
 
   ash::ConciergeClient::Get()->CreateDiskImage(
       std::move(request), base::BindOnce(&CreateDiskImage::OnCreateDiskImage,
@@ -147,10 +186,10 @@ void CreateDiskImage::RunInternal(BorealisContext* context) {
 
 void CreateDiskImage::OnCreateDiskImage(
     BorealisContext* context,
-    absl::optional<vm_tools::concierge::CreateDiskImageResponse> response) {
+    std::optional<vm_tools::concierge::CreateDiskImageResponse> response) {
   if (!response) {
     context->set_disk_path(base::FilePath());
-    Complete(BorealisStartupResult::kDiskImageFailed,
+    Complete(BorealisStartupResult::kEmptyDiskResponse,
              "Failed to create disk image for Borealis: Empty response.");
     return;
   }
@@ -167,43 +206,20 @@ void CreateDiskImage::OnCreateDiskImage(
   Complete(BorealisStartupResult::kSuccess, "");
 }
 
-RequestWaylandServer::RequestWaylandServer()
-    : BorealisTask("RequestWaylandServer") {}
-RequestWaylandServer::~RequestWaylandServer() = default;
-
-void RequestWaylandServer::RunInternal(BorealisContext* context) {
-  guest_os::GuestOsService::GetForProfile(context->profile())
-      ->WaylandServer()
-      ->Get(vm_tools::launch::BOREALIS,
-            base::BindOnce(&RequestWaylandServer::OnServerRequested,
-                           weak_factory_.GetWeakPtr(), context));
-}
-
-void RequestWaylandServer::OnServerRequested(
-    BorealisContext* context,
-    guest_os::GuestOsWaylandServer::Result result) {
-  if (!result) {
-    Complete(BorealisStartupResult::kRequestWaylandFailed,
-             "Failed to create a wayland server");
-    return;
-  }
-  context->set_wayland_path(result.Value()->server_path());
-  Complete(BorealisStartupResult::kSuccess, "");
-}
-
 namespace {
 
-absl::optional<base::File> MaybeOpenFile(
-    absl::optional<base::FilePath> file_path) {
-  if (!file_path)
-    return absl::nullopt;
+std::optional<base::File> MaybeOpenFile(
+    std::optional<base::FilePath> file_path) {
+  if (!file_path) {
+    return std::nullopt;
+  }
 
   base::File file(file_path.value(), base::File::FLAG_OPEN |
                                          base::File::FLAG_READ |
                                          base::File::FLAG_WRITE);
   if (!file.IsValid()) {
     LOG(WARNING) << "Failed to open " << file_path.value();
-    return absl::nullopt;
+    return std::nullopt;
   }
   return file;
 }
@@ -222,11 +238,9 @@ void StartBorealisVm::RunInternal(BorealisContext* context) {
 }
 void StartBorealisVm::StartBorealisWithExternalDisk(
     BorealisContext* context,
-    absl::optional<base::File> external_disk) {
+    std::optional<base::File> external_disk) {
   vm_tools::concierge::StartVmRequest request;
   request.mutable_vm()->set_dlc_id(kBorealisDlcName);
-  request.mutable_vm()->set_wayland_server(
-      context->wayland_path().AsUTF8Unsafe());
   request.set_start_termina(false);
   request.set_owner_id(
       ash::ProfileHelper::GetUserIdHashFromProfile(context->profile()));
@@ -234,13 +248,13 @@ void StartBorealisVm::StartBorealisWithExternalDisk(
   request.set_software_tpm(false);
   request.set_enable_audio_capture(false);
   request.set_enable_vulkan(true);
-  if (base::FeatureList::IsEnabled(chromeos::features::kBorealisBigGl)) {
+  if (base::FeatureList::IsEnabled(ash::features::kBorealisBigGl)) {
     request.set_enable_big_gl(true);
   }
   request.set_name(context->vm_name());
-  if (base::FeatureList::IsEnabled(
-          chromeos::features::kBorealisStorageBallooning)) {
-    request.set_storage_ballooning(true);
+  request.set_storage_ballooning(true);
+  if (base::FeatureList::IsEnabled(ash::features::kBorealisDGPU)) {
+    request.set_enable_dgpu_passthrough(true);
   }
 
   vm_tools::concierge::DiskImage* disk_image = request.add_disks();
@@ -265,9 +279,9 @@ void StartBorealisVm::StartBorealisWithExternalDisk(
 
 void StartBorealisVm::OnStartBorealisVm(
     BorealisContext* context,
-    absl::optional<vm_tools::concierge::StartVmResponse> response) {
+    std::optional<vm_tools::concierge::StartVmResponse> response) {
   if (!response) {
-    Complete(BorealisStartupResult::kStartVmFailed,
+    Complete(BorealisStartupResult::kStartVmEmptyResponse,
              "Failed to start Borealis VM: Empty response.");
     return;
   }
@@ -283,31 +297,37 @@ void StartBorealisVm::OnStartBorealisVm(
                " (code " + base::NumberToString(response->status()) + ")");
 }
 
-AwaitBorealisStartup::AwaitBorealisStartup(Profile* profile,
-                                           std::string vm_name)
-    : BorealisTask("AwaitBorealisStartup"), watcher_(profile, vm_name) {}
+AwaitBorealisStartup::AwaitBorealisStartup()
+    : BorealisTask("AwaitBorealisStartup") {}
 AwaitBorealisStartup::~AwaitBorealisStartup() = default;
 
 void AwaitBorealisStartup::RunInternal(BorealisContext* context) {
-  watcher_.AwaitLaunch(
-      base::BindOnce(&AwaitBorealisStartup::OnAwaitBorealisStartup,
-                     weak_factory_.GetWeakPtr(), context));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&AwaitBorealisStartup::OnTimeout,
+                     weak_factory_.GetWeakPtr()),
+      base::Seconds(30));
+  // TODO(b/292020283): make hard-coded "penguin"s into a constant.
+  guest_os::GuestId id(guest_os::VmType::BOREALIS, context->vm_name(),
+                       "penguin");
+  // It is safe to BindOnce() the context* since it is guaranteed to be alive
+  // until this task calls Complete().
+  subscription_ =
+      guest_os::GuestOsSessionTracker::GetForProfile(context->profile())
+          ->RunOnceContainerStarted(
+              id, base::BindOnce(&AwaitBorealisStartup::OnContainerStarted,
+                                 weak_factory_.GetWeakPtr(), context));
 }
 
-BorealisLaunchWatcher& AwaitBorealisStartup::GetWatcherForTesting() {
-  return watcher_;
-}
-
-void AwaitBorealisStartup::OnAwaitBorealisStartup(
-    BorealisContext* context,
-    absl::optional<std::string> container) {
-  if (!container) {
-    Complete(BorealisStartupResult::kAwaitBorealisStartupFailed,
-             "Awaiting for Borealis launch failed: timed out");
-    return;
-  }
-  context->set_container_name(container.value());
+void AwaitBorealisStartup::OnContainerStarted(BorealisContext* context,
+                                              guest_os::GuestInfo info) {
+  context->set_container_name(info.guest_id.container_name);
   Complete(BorealisStartupResult::kSuccess, "");
+}
+
+void AwaitBorealisStartup::OnTimeout() {
+  Complete(BorealisStartupResult::kAwaitBorealisStartupFailed,
+           "Awaiting for Borealis launch failed: timed out");
 }
 
 namespace {
@@ -321,6 +341,18 @@ void PushFlag(const base::Feature& feature,
       (base::FeatureList::IsEnabled(feature) ? "true" : "false"));
 }
 
+// Helper for converting |feature| and |param| of enum type into
+// feature_name=param_value arg for the given |out_command|.
+template <typename Enum>
+void PushParamEnum(const base::Feature& feature,
+                   const base::FeatureParam<Enum>& param,
+                   std::vector<std::string>& out_command) {
+  out_command.emplace_back(std::string(feature.name) + "=" +
+                           (base::FeatureList::IsEnabled(feature)
+                                ? param.GetName(param.Get())
+                                : "false"));
+}
+
 // Runs the update_flags script on the vm with the given |vm_name| and
 // |owner_id|, where the |flags| are <name, value> pairs. Returns "" on success,
 // otherwise returns an error message.
@@ -331,9 +363,13 @@ std::string SendFlagsToVm(const std::string& owner_id,
   std::vector<std::string> command{"/usr/bin/vsh", "--owner_id=" + owner_id,
                                    "--vm_name=" + vm_name, "--",
                                    "update_chrome_flags"};
-  PushFlag(chromeos::features::kBorealisLinuxMode, command);
-  PushFlag(chromeos::features::kBorealisForceBetaClient, command);
-  PushFlag(chromeos::features::kBorealisForceDoubleScale, command);
+  PushFlag(ash::features::kBorealisLinuxMode, command);
+  PushFlag(ash::features::kBorealisForceBetaClient, command);
+  PushFlag(ash::features::kBorealisForceDoubleScale, command);
+  PushFlag(ash::features::kBorealisScaleClientByDPI, command);
+
+  PushParamEnum(ash::features::kBorealisZinkGlDriver,
+                ash::features::kBorealisZinkGlDriverParam, command);
 
   std::string output;
   if (!base::GetAppOutput(command, &output)) {
@@ -364,27 +400,6 @@ void UpdateChromeFlags::OnFlagsUpdated(BorealisContext* context,
   // success.
   if (!error.empty()) {
     LOG(ERROR) << "Failed to update chrome's flags in Borealis: " << error;
-  }
-  Complete(BorealisStartupResult::kSuccess, "");
-}
-
-SyncBorealisDisk::SyncBorealisDisk() : BorealisTask("SyncBorealisDisk") {}
-SyncBorealisDisk::~SyncBorealisDisk() = default;
-
-void SyncBorealisDisk::RunInternal(BorealisContext* context) {
-  context->get_disk_manager().SyncDiskSize(
-      base::BindOnce(&SyncBorealisDisk::OnSyncBorealisDisk,
-                     weak_factory_.GetWeakPtr(), context));
-}
-
-void SyncBorealisDisk::OnSyncBorealisDisk(
-    BorealisContext* context,
-    Expected<BorealisSyncDiskSizeResult, Described<BorealisSyncDiskSizeResult>>
-        result) {
-  // This step should not block startup, so just log the error and declare
-  // success.
-  if (!result) {
-    LOG(ERROR) << "Failed to sync disk: " << result.Error().description();
   }
   Complete(BorealisStartupResult::kSuccess, "");
 }

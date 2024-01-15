@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "cc/base/region.h"
 #include "cc/base/tiling_data.h"
 #include "cc/cc_export.h"
@@ -108,7 +109,9 @@ class CC_EXPORT PictureLayerTiling {
 
   PictureLayerTilingClient* client() const { return client_; }
 
-  void SetRasterSourceAndResize(scoped_refptr<RasterSource> raster_source);
+  // Returns true if the current tiling needs to update tile priority rects and
+  // tiles.
+  bool SetRasterSourceAndResize(scoped_refptr<RasterSource> raster_source);
   void Invalidate(const Region& layer_invalidation);
   void CreateMissingTilesInLiveTilesRect();
   void TakeTilesAndPropertiesFrom(PictureLayerTiling* pending_twin,
@@ -250,7 +253,9 @@ class CC_EXPORT PictureLayerTiling {
     bool AtEnd() const;
 
    private:
-    PictureLayerTiling* tiling_;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION PictureLayerTiling* tiling_;
     PictureLayerTiling::TileMap::iterator iter_;
   };
 
@@ -505,6 +510,8 @@ class CC_EXPORT PictureLayerTiling {
       const gfx::Rect& layer_rect) const;
   gfx::Rect EnclosingLayerRectFromContentsRect(
       const gfx::Rect& contents_rect) const;
+
+  void SetTilingSize(const gfx::Size& tiling_size);
 
   // Given properties.
   const gfx::AxisTransform2d raster_transform_;

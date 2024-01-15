@@ -6,7 +6,7 @@
 #define UI_OZONE_PLATFORM_DRM_GPU_PAGE_FLIP_REQUEST_H_
 
 #include "base/atomic_ref_count.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "ui/gfx/swap_result.h"
 #include "ui/ozone/public/swap_completion_callback.h"
@@ -19,7 +19,7 @@ class PageFlipRequest : public base::RefCounted<PageFlipRequest> {
       base::OnceCallback<void(unsigned int /* frame */,
                               base::TimeTicks /* timestamp */)>;
 
-  PageFlipRequest(const base::TimeDelta& refresh_interval);
+  explicit PageFlipRequest(const base::TimeDelta& refresh_interval);
 
   PageFlipRequest(const PageFlipRequest&) = delete;
   PageFlipRequest& operator=(const PageFlipRequest&) = delete;

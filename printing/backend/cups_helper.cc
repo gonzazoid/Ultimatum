@@ -9,8 +9,11 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <tuple>
+#include <utility>
 #include <vector>
 
+#include <optional>
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
@@ -22,9 +25,11 @@
 #include "printing/backend/print_backend.h"
 #include "printing/backend/print_backend_consts.h"
 #include "printing/mojom/print.mojom.h"
-#include "printing/print_job_constants.h"
+#include "printing/print_job_constants_cups.h"
 #include "printing/printing_utils.h"
 #include "printing/units.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 
 using base::EqualsCaseInsensitiveASCII;
@@ -51,12 +56,6 @@ constexpr int32_t kDefaultMaxCopies = 9999;
 constexpr char kCupsMaxCopies[] = "cupsMaxCopies";
 
 constexpr char kColorDevice[] = "ColorDevice";
-constexpr char kColorModel[] = "ColorModel";
-constexpr char kColorMode[] = "ColorMode";
-constexpr char kProcessColorModel[] = "ProcessColorModel";
-constexpr char kPrintoutMode[] = "PrintoutMode";
-constexpr char kDraftGray[] = "Draft.Gray";
-constexpr char kHighGray[] = "High.Gray";
 
 constexpr char kDuplex[] = "Duplex";
 constexpr char kDuplexNone[] = "None";
@@ -66,32 +65,6 @@ constexpr char kPageSize[] = "PageSize";
 
 // Brother printer specific options.
 constexpr char kBrotherDuplex[] = "BRDuplex";
-constexpr char kBrotherMonoColor[] = "BRMonoColor";
-constexpr char kBrotherPrintQuality[] = "BRPrintQuality";
-
-// Epson printer specific options.
-constexpr char kEpsonInk[] = "Ink";
-constexpr char kEpsonColor[] = "COLOR";
-constexpr char kEpsonMono[] = "MONO";
-
-// HP printer specific options.
-constexpr char kHpColorMode[] = "HPColorMode";
-constexpr char kHpColorPrint[] = "ColorPrint";
-constexpr char kHpGrayscalePrint[] = "GrayscalePrint";
-
-// Samsung printer specific options.
-constexpr char kSamsungColorTrue[] = "True";
-constexpr char kSamsungColorFalse[] = "False";
-
-// Sharp printer specific options.
-constexpr char kSharpARCMode[] = "ARCMode";
-constexpr char kSharpCMColor[] = "CMColor";
-constexpr char kSharpCMBW[] = "CMBW";
-
-// Xerox printer specific options.
-constexpr char kXeroxXRXColor[] = "XRXColor";
-constexpr char kXeroxAutomatic[] = "Automatic";
-constexpr char kXeroxBW[] = "BW";
 
 int32_t GetCopiesMax(ppd_file_t* ppd) {
   ppd_attr_t* attr = ppdFindAttr(ppd, kCupsMaxCopies, nullptr);
@@ -103,92 +76,136 @@ int32_t GetCopiesMax(ppd_file_t* ppd) {
   return base::StringToInt(attr->value, &ret) ? ret : kDefaultMaxCopies;
 }
 
-void GetDuplexSettings(ppd_file_t* ppd,
-                       std::vector<mojom::DuplexMode>* duplex_modes,
-                       mojom::DuplexMode* duplex_default) {
+std::pair<std::vector<mojom::DuplexMode>, mojom::DuplexMode> GetDuplexSettings(
+    ppd_file_t* ppd) {
+  std::vector<mojom::DuplexMode> duplex_modes;
+  mojom::DuplexMode duplex_default = mojom::DuplexMode::kUnknownDuplexMode;
+
   ppd_choice_t* duplex_choice = ppdFindMarkedChoice(ppd, kDuplex);
   ppd_option_t* option = ppdFindOption(ppd, kDuplex);
   if (!option)
     option = ppdFindOption(ppd, kBrotherDuplex);
 
   if (!option)
-    return;
+    return std::make_pair(std::move(duplex_modes), duplex_default);
 
   if (!duplex_choice)
     duplex_choice = ppdFindChoice(option, option->defchoice);
 
   if (ppdFindChoice(option, kDuplexNone))
-    duplex_modes->push_back(mojom::DuplexMode::kSimplex);
+    duplex_modes.push_back(mojom::DuplexMode::kSimplex);
 
   if (ppdFindChoice(option, kDuplexNoTumble))
-    duplex_modes->push_back(mojom::DuplexMode::kLongEdge);
+    duplex_modes.push_back(mojom::DuplexMode::kLongEdge);
 
   if (ppdFindChoice(option, kDuplexTumble))
-    duplex_modes->push_back(mojom::DuplexMode::kShortEdge);
+    duplex_modes.push_back(mojom::DuplexMode::kShortEdge);
 
   if (!duplex_choice)
-    return;
+    return std::make_pair(std::move(duplex_modes), duplex_default);
 
   const char* choice = duplex_choice->choice;
   if (EqualsCaseInsensitiveASCII(choice, kDuplexNone)) {
-    *duplex_default = mojom::DuplexMode::kSimplex;
+    duplex_default = mojom::DuplexMode::kSimplex;
   } else if (EqualsCaseInsensitiveASCII(choice, kDuplexTumble)) {
-    *duplex_default = mojom::DuplexMode::kShortEdge;
+    duplex_default = mojom::DuplexMode::kShortEdge;
   } else {
-    *duplex_default = mojom::DuplexMode::kLongEdge;
+    duplex_default = mojom::DuplexMode::kLongEdge;
   }
+  return std::make_pair(std::move(duplex_modes), duplex_default);
 }
 
-void GetResolutionSettings(ppd_file_t* ppd,
-                           std::vector<gfx::Size>* dpis,
-                           gfx::Size* default_dpi) {
+std::optional<gfx::Size> ParseResolutionString(const char* input) {
+  int len = strlen(input);
+  if (len == 0) {
+    VLOG(1) << "Bad PPD resolution choice: null string";
+    return std::nullopt;
+  }
+
+  int n = 0;  // number of chars successfully parsed by sscanf()
+  int dpi_x;
+  int dpi_y;
+  sscanf(input, "%ddpi%n", &dpi_x, &n);
+  if (n == len) {
+    dpi_y = dpi_x;
+  } else {
+    sscanf(input, "%dx%ddpi%n", &dpi_x, &dpi_y, &n);
+    if (n != len) {
+      VLOG(1) << "Bad PPD resolution choice: " << input;
+      return std::nullopt;
+    }
+  }
+  if (dpi_x <= 0 || dpi_y <= 0) {
+    VLOG(1) << "Invalid PPD resolution dimensions: " << dpi_x << " " << dpi_y;
+    return std::nullopt;
+  }
+
+  return gfx::Size(dpi_x, dpi_y);
+}
+
+std::pair<std::vector<gfx::Size>, gfx::Size> GetResolutionSettings(
+    ppd_file_t* ppd) {
   static constexpr const char* kResolutions[] = {
-      "Resolution", "JCLResolution",  "SetResolution",
-      "CNRes_PGP",  "HPPrintQuality", "LXResolution"};
+      "Resolution",     "JCLResolution", "SetResolution", "CNRes_PGP",
+      "HPPrintQuality", "LXResolution",  "BRResolution"};
   ppd_option_t* res;
   for (const char* res_name : kResolutions) {
     res = ppdFindOption(ppd, res_name);
     if (res)
       break;
   }
-  if (!res)
-    return;
-  for (int i = 0; i < res->num_choices; i++) {
-    char* choice = res->choices[i].choice;
-    DCHECK(choice);
-    int len = strlen(choice);
-    if (len == 0) {
-      VLOG(1) << "Bad PPD resolution choice: null string";
-      continue;
-    }
-    int n = 0;  // number of chars successfully parsed by sscanf()
-    int dpi_x;
-    int dpi_y;
-    sscanf(choice, "%ddpi%n", &dpi_x, &n);
-    if (n == len) {
-      dpi_y = dpi_x;
-    } else {
-      sscanf(choice, "%dx%ddpi%n", &dpi_x, &dpi_y, &n);
-      if (n != len) {
-        VLOG(1) << "Bad PPD resolution choice: " << choice;
+
+  // Some printers, such as Generic-CUPS-BRF-Printer, do not specify a
+  // resolution in their ppd file. Provide a default DPI if no valid DPI is
+  // found.
+#if BUILDFLAG(IS_MAC)
+  constexpr gfx::Size kDefaultMissingDpi(kDefaultMacDpi, kDefaultMacDpi);
+#else
+  constexpr gfx::Size kDefaultMissingDpi(kDefaultPdfDpi, kDefaultPdfDpi);
+#endif
+
+  std::vector<gfx::Size> dpis;
+  gfx::Size default_dpi;
+  if (res) {
+    for (int i = 0; i < res->num_choices; i++) {
+      char* choice = res->choices[i].choice;
+      CHECK(choice);
+      std::optional<gfx::Size> parsed_size = ParseResolutionString(choice);
+      if (!parsed_size.has_value()) {
         continue;
       }
+
+      dpis.push_back(parsed_size.value());
+      if (!strcmp(choice, res->defchoice)) {
+        default_dpi = dpis.back();
+      }
     }
-    if (dpi_x <= 0 || dpi_y <= 0) {
-      VLOG(1) << "Invalid PPD resolution dimensions: " << dpi_x << " " << dpi_y;
-      continue;
+  } else {
+    // If there is no resolution option, then check for a standalone
+    // DefaultResolution.
+    ppd_attr_t* attr = ppdFindAttr(ppd, "DefaultResolution", nullptr);
+    if (attr) {
+      CHECK(attr->value);
+      std::optional<gfx::Size> parsed_size = ParseResolutionString(attr->value);
+      if (parsed_size.has_value()) {
+        dpis.push_back(parsed_size.value());
+        default_dpi = parsed_size.value();
+      }
     }
-    dpis->push_back({dpi_x, dpi_y});
-    if (!strcmp(choice, res->defchoice))
-      *default_dpi = dpis->back();
   }
+
+  if (dpis.empty()) {
+    dpis.push_back(kDefaultMissingDpi);
+    default_dpi = kDefaultMissingDpi;
+  }
+  return std::make_pair(std::move(dpis), default_dpi);
 }
 
 bool GetBasicColorModelSettings(ppd_file_t* ppd,
                                 mojom::ColorModel* color_model_for_black,
                                 mojom::ColorModel* color_model_for_color,
                                 bool* color_is_default) {
-  ppd_option_t* color_model = ppdFindOption(ppd, kColorModel);
+  ppd_option_t* color_model = ppdFindOption(ppd, kCUPSColorModel);
   if (!color_model)
     return false;
 
@@ -216,7 +233,7 @@ bool GetBasicColorModelSettings(ppd_file_t* ppd,
   else if (ppdFindChoice(color_model, kCMY_K))
     *color_model_for_color = mojom::ColorModel::kCMYPlusK;
 
-  ppd_choice_t* marked_choice = ppdFindMarkedChoice(ppd, kColorModel);
+  ppd_choice_t* marked_choice = ppdFindMarkedChoice(ppd, kCUPSColorModel);
   if (!marked_choice)
     marked_choice = ppdFindChoice(color_model, color_model->defchoice);
 
@@ -233,7 +250,7 @@ bool GetPrintOutModeColorSettings(ppd_file_t* ppd,
                                   mojom::ColorModel* color_model_for_black,
                                   mojom::ColorModel* color_model_for_color,
                                   bool* color_is_default) {
-  ppd_option_t* printout_mode = ppdFindOption(ppd, kPrintoutMode);
+  ppd_option_t* printout_mode = ppdFindOption(ppd, kCUPSPrintoutMode);
   if (!printout_mode)
     return false;
 
@@ -249,7 +266,8 @@ bool GetPrintOutModeColorSettings(ppd_file_t* ppd,
 
   // Get the default marked choice to identify the default color setting
   // value.
-  ppd_choice_t* printout_mode_choice = ppdFindMarkedChoice(ppd, kPrintoutMode);
+  ppd_choice_t* printout_mode_choice =
+      ppdFindMarkedChoice(ppd, kCUPSPrintoutMode);
   if (!printout_mode_choice) {
     printout_mode_choice =
         ppdFindChoice(printout_mode, printout_mode->defchoice);
@@ -270,7 +288,7 @@ bool GetColorModeSettings(ppd_file_t* ppd,
                           mojom::ColorModel* color_model_for_color,
                           bool* color_is_default) {
   // Samsung printers use "ColorMode" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kColorMode);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSColorMode);
   if (!color_mode_option)
     return false;
 
@@ -284,7 +302,7 @@ bool GetColorModeSettings(ppd_file_t* ppd,
     *color_model_for_black = mojom::ColorModel::kColorModeMonochrome;
   }
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kColorMode);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSColorMode);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -304,9 +322,9 @@ bool GetBrotherColorSettings(ppd_file_t* ppd,
                              bool* color_is_default) {
   // Some Brother printers use "BRMonoColor" attribute in their PPDs.
   // Some Brother printers use "BRPrintQuality" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kBrotherMonoColor);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSBrotherMonoColor);
   if (!color_mode_option)
-    color_mode_option = ppdFindOption(ppd, kBrotherPrintQuality);
+    color_mode_option = ppdFindOption(ppd, kCUPSBrotherPrintQuality);
   if (!color_mode_option)
     return false;
 
@@ -320,7 +338,7 @@ bool GetBrotherColorSettings(ppd_file_t* ppd,
   else if (ppdFindChoice(color_mode_option, kBlack))
     *color_model_for_black = mojom::ColorModel::kBrotherBRScript3Black;
 
-  ppd_choice_t* marked_choice = ppdFindMarkedChoice(ppd, kColorMode);
+  ppd_choice_t* marked_choice = ppdFindMarkedChoice(ppd, kCUPSColorMode);
   if (!marked_choice) {
     marked_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -347,7 +365,7 @@ bool GetHPColorSettings(ppd_file_t* ppd,
   if (ppdFindChoice(color_mode_option, kBlack))
     *color_model_for_black = mojom::ColorModel::kHPColorBlack;
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kColorMode);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSColorMode);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -363,7 +381,7 @@ bool GetHPColorModeSettings(ppd_file_t* ppd,
                             mojom::ColorModel* color_model_for_color,
                             bool* color_is_default) {
   // Some HP printers use "HPColorMode/Mode" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kHpColorMode);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSHpColorMode);
   if (!color_mode_option)
     return false;
 
@@ -372,7 +390,7 @@ bool GetHPColorModeSettings(ppd_file_t* ppd,
   if (ppdFindChoice(color_mode_option, kHpGrayscalePrint))
     *color_model_for_black = mojom::ColorModel::kHPColorBlack;
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kHpColorMode);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSHpColorMode);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -384,12 +402,98 @@ bool GetHPColorModeSettings(ppd_file_t* ppd,
   return true;
 }
 
+bool GetHpPjlColorAsGrayModeSettings(ppd_file_t* ppd,
+                                     mojom::ColorModel* color_model_for_black,
+                                     mojom::ColorModel* color_model_for_color,
+                                     bool* color_is_default) {
+  // Some HP printers use "HPPJLColorAsGray" attribute in their PPDs.
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSHpPjlColorAsGray);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kHpPjlColorAsGrayYes)) {
+    *color_model_for_black = mojom::ColorModel::kHpPjlColorAsGrayYes;
+  }
+
+  if (ppdFindChoice(color_mode_option, kHpPjlColorAsGrayNo)) {
+    *color_model_for_color = mojom::ColorModel::kHpPjlColorAsGrayNo;
+  }
+
+  ppd_choice_t* marked_choice = ppdFindMarkedChoice(ppd, kCUPSHpPjlColorAsGray);
+  if (!marked_choice) {
+    marked_choice =
+        ppdFindChoice(color_mode_option, color_mode_option->defchoice);
+  }
+  if (marked_choice) {
+    *color_is_default =
+        EqualsCaseInsensitiveASCII(marked_choice->choice, kHpPjlColorAsGrayNo);
+  }
+  return true;
+}
+
+bool GetCanonCNColorModeSettings(ppd_file_t* ppd,
+                                 mojom::ColorModel* color_model_for_black,
+                                 mojom::ColorModel* color_model_for_color,
+                                 bool* color_is_default) {
+  // Some Canon printers use "CNColorMode" attribute in their PPDs.
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSCanonCNColorMode);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kColor)) {
+    *color_model_for_color = mojom::ColorModel::kCanonCNColorModeColor;
+  }
+
+  if (ppdFindChoice(color_mode_option, kMono)) {
+    *color_model_for_black = mojom::ColorModel::kCanonCNColorModeMono;
+  }
+
+  ppd_choice_t* marked_choice = ppdFindMarkedChoice(ppd, kCUPSCanonCNColorMode);
+  if (!marked_choice) {
+    marked_choice =
+        ppdFindChoice(color_mode_option, color_mode_option->defchoice);
+  }
+  if (marked_choice) {
+    *color_is_default =
+        EqualsCaseInsensitiveASCII(marked_choice->choice, kColor);
+  }
+  return true;
+}
+
+bool GetCanonCNIJGrayscaleSettings(ppd_file_t* ppd,
+                                   mojom::ColorModel* color_model_for_black,
+                                   mojom::ColorModel* color_model_for_color,
+                                   bool* color_is_default) {
+  // Some Canon printers use "CNIJGrayScale" attribute in their PPDs.
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSCanonCNIJGrayScale);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kZero)) {
+    *color_model_for_color = mojom::ColorModel::kCanonCNIJGrayScaleZero;
+  }
+  if (ppdFindChoice(color_mode_option, kOne)) {
+    *color_model_for_black = mojom::ColorModel::kCanonCNIJGrayScaleOne;
+  }
+
+  ppd_choice_t* marked_choice =
+      ppdFindMarkedChoice(ppd, kCUPSCanonCNIJGrayScale);
+  if (marked_choice) {
+    *color_is_default =
+        !EqualsCaseInsensitiveASCII(marked_choice->choice, kOne);
+  }
+  return true;
+}
+
 bool GetEpsonInkSettings(ppd_file_t* ppd,
                          mojom::ColorModel* color_model_for_black,
                          mojom::ColorModel* color_model_for_color,
                          bool* color_is_default) {
   // Epson printers use "Ink" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kEpsonInk);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSEpsonInk);
   if (!color_mode_option)
     return false;
 
@@ -398,7 +502,7 @@ bool GetEpsonInkSettings(ppd_file_t* ppd,
   if (ppdFindChoice(color_mode_option, kEpsonMono))
     *color_model_for_black = mojom::ColorModel::kEpsonInkMono;
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kEpsonInk);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSEpsonInk);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -410,12 +514,101 @@ bool GetEpsonInkSettings(ppd_file_t* ppd,
   return true;
 }
 
+bool GetKonicaMinoltaSelectColorSettings(
+    ppd_file_t* ppd,
+    mojom::ColorModel* color_model_for_black,
+    mojom::ColorModel* color_model_for_color,
+    bool* color_is_default) {
+  ppd_option_t* color_mode_option =
+      ppdFindOption(ppd, kCUPSKonicaMinoltaSelectColor);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kColor)) {
+    *color_model_for_color = mojom::ColorModel::kColor;
+  }
+  if (ppdFindChoice(color_mode_option, kGrayscale)) {
+    *color_model_for_black = mojom::ColorModel::kGrayscale;
+  }
+
+  ppd_choice_t* mode_choice =
+      ppdFindMarkedChoice(ppd, kCUPSKonicaMinoltaSelectColor);
+  if (!mode_choice) {
+    mode_choice =
+        ppdFindChoice(color_mode_option, color_mode_option->defchoice);
+  }
+
+  if (mode_choice) {
+    *color_is_default = EqualsCaseInsensitiveASCII(mode_choice->choice, kColor);
+  }
+  return true;
+}
+
+bool GetLexmarkBLWSettings(ppd_file_t* ppd,
+                           mojom::ColorModel* color_model_for_black,
+                           mojom::ColorModel* color_model_for_color,
+                           bool* color_is_default) {
+  // Lexmark printers use "BLW" attribute in their PPDs.
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSLexmarkBLW);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kLexmarkBLWFalse)) {
+    *color_model_for_color = mojom::ColorModel::kColor;
+  }
+  if (ppdFindChoice(color_mode_option, kLexmarkBLWTrue)) {
+    *color_model_for_black = mojom::ColorModel::kGray;
+  }
+
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSLexmarkBLW);
+  if (!mode_choice) {
+    mode_choice =
+        ppdFindChoice(color_mode_option, color_mode_option->defchoice);
+  }
+
+  if (mode_choice) {
+    *color_is_default = EqualsCaseInsensitiveASCII(mode_choice->choice, kColor);
+  }
+  return true;
+}
+
+bool GetOkiSettings(ppd_file_t* ppd,
+                    mojom::ColorModel* color_model_for_black,
+                    mojom::ColorModel* color_model_for_color,
+                    bool* color_is_default) {
+  // Oki printers use "OKControl" attribute in their PPDs.
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSOkiControl);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kAuto)) {
+    *color_model_for_color = mojom::ColorModel::kOkiOKControlColor;
+  }
+  if (ppdFindChoice(color_mode_option, kGray)) {
+    *color_model_for_black = mojom::ColorModel::kOkiOKControlGray;
+  }
+
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSOkiControl);
+  if (!mode_choice) {
+    mode_choice =
+        ppdFindChoice(color_mode_option, color_mode_option->defchoice);
+  }
+
+  if (mode_choice) {
+    *color_is_default = EqualsCaseInsensitiveASCII(mode_choice->choice, kAuto);
+  }
+  return true;
+}
+
 bool GetSharpARCModeSettings(ppd_file_t* ppd,
                              mojom::ColorModel* color_model_for_black,
                              mojom::ColorModel* color_model_for_color,
                              bool* color_is_default) {
   // Sharp printers use "ARCMode" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kSharpARCMode);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSSharpARCMode);
   if (!color_mode_option)
     return false;
 
@@ -424,7 +617,7 @@ bool GetSharpARCModeSettings(ppd_file_t* ppd,
   if (ppdFindChoice(color_mode_option, kSharpCMBW))
     *color_model_for_black = mojom::ColorModel::kSharpARCModeCMBW;
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kSharpARCMode);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSSharpARCMode);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -443,7 +636,7 @@ bool GetXeroxColorSettings(ppd_file_t* ppd,
                            mojom::ColorModel* color_model_for_color,
                            bool* color_is_default) {
   // Some Xerox printers use "XRXColor" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kXeroxXRXColor);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSXeroxXRXColor);
   if (!color_mode_option)
     return false;
 
@@ -452,7 +645,7 @@ bool GetXeroxColorSettings(ppd_file_t* ppd,
   if (ppdFindChoice(color_mode_option, kXeroxBW))
     *color_model_for_black = mojom::ColorModel::kXeroxXRXColorBW;
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kXeroxXRXColor);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSXeroxXRXColor);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -466,12 +659,43 @@ bool GetXeroxColorSettings(ppd_file_t* ppd,
   return true;
 }
 
+bool GetXeroxOutputColorSettings(ppd_file_t* ppd,
+                                 mojom::ColorModel* color_model_for_black,
+                                 mojom::ColorModel* color_model_for_color,
+                                 bool* color_is_default) {
+  // Some Xerox printers use "XROutputColor" attribute in their PPDs.
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSXeroxXROutputColor);
+  if (!color_mode_option) {
+    return false;
+  }
+
+  if (ppdFindChoice(color_mode_option, kPrintAsColor)) {
+    *color_model_for_color = mojom::ColorModel::kXeroxXROutputColorPrintAsColor;
+  }
+  if (ppdFindChoice(color_mode_option, kPrintAsGrayscale)) {
+    *color_model_for_black =
+        mojom::ColorModel::kXeroxXROutputColorPrintAsGrayscale;
+  }
+
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSXeroxXROutputColor);
+  if (!mode_choice) {
+    mode_choice =
+        ppdFindChoice(color_mode_option, color_mode_option->defchoice);
+  }
+
+  if (mode_choice) {
+    *color_is_default =
+        EqualsCaseInsensitiveASCII(mode_choice->choice, kPrintAsColor);
+  }
+  return true;
+}
+
 bool GetProcessColorModelSettings(ppd_file_t* ppd,
                                   mojom::ColorModel* color_model_for_black,
                                   mojom::ColorModel* color_model_for_color,
                                   bool* color_is_default) {
   // Canon printers use "ProcessColorModel" attribute in their PPDs.
-  ppd_option_t* color_mode_option = ppdFindOption(ppd, kProcessColorModel);
+  ppd_option_t* color_mode_option = ppdFindOption(ppd, kCUPSProcessColorModel);
   if (!color_mode_option)
     return false;
 
@@ -483,7 +707,7 @@ bool GetProcessColorModelSettings(ppd_file_t* ppd,
   if (ppdFindChoice(color_mode_option, kGreyscale))
     *color_model_for_black = mojom::ColorModel::kProcessColorModelGreyscale;
 
-  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kProcessColorModel);
+  ppd_choice_t* mode_choice = ppdFindMarkedChoice(ppd, kCUPSProcessColorModel);
   if (!mode_choice) {
     mode_choice =
         ppdFindChoice(color_mode_option, color_mode_option->defchoice);
@@ -512,10 +736,18 @@ bool GetColorModelSettings(ppd_file_t* ppd,
          GetColorModeSettings(ppd, cm_black, cm_color, is_color) ||
          GetHPColorSettings(ppd, cm_black, cm_color, is_color) ||
          GetHPColorModeSettings(ppd, cm_black, cm_color, is_color) ||
+         GetHpPjlColorAsGrayModeSettings(ppd, cm_black, cm_color, is_color) ||
          GetBrotherColorSettings(ppd, cm_black, cm_color, is_color) ||
+         GetCanonCNColorModeSettings(ppd, cm_black, cm_color, is_color) ||
+         GetCanonCNIJGrayscaleSettings(ppd, cm_black, cm_color, is_color) ||
          GetEpsonInkSettings(ppd, cm_black, cm_color, is_color) ||
+         GetKonicaMinoltaSelectColorSettings(ppd, cm_black, cm_color,
+                                             is_color) ||
+         GetLexmarkBLWSettings(ppd, cm_black, cm_color, is_color) ||
+         GetOkiSettings(ppd, cm_black, cm_color, is_color) ||
          GetSharpARCModeSettings(ppd, cm_black, cm_color, is_color) ||
          GetXeroxColorSettings(ppd, cm_black, cm_color, is_color) ||
+         GetXeroxOutputColorSettings(ppd, cm_black, cm_color, is_color) ||
          GetProcessColorModelSettings(ppd, cm_black, cm_color, is_color);
 }
 
@@ -633,8 +865,8 @@ bool ParsePpdCapabilities(cups_dest_t* dest,
   caps.collate_default = true;
   caps.copies_max = GetCopiesMax(ppd);
 
-  GetDuplexSettings(ppd, &caps.duplex_modes, &caps.duplex_default);
-  GetResolutionSettings(ppd, &caps.dpis, &caps.default_dpi);
+  std::tie(caps.duplex_modes, caps.duplex_default) = GetDuplexSettings(ppd);
+  std::tie(caps.dpis, caps.default_dpi) = GetResolutionSettings(ppd);
 
   mojom::ColorModel cm_black = mojom::ColorModel::kUnknownColorModel;
   mojom::ColorModel cm_color = mojom::ColorModel::kUnknownColorModel;
@@ -656,22 +888,52 @@ bool ParsePpdCapabilities(cups_dest_t* dest,
     ppd_option_t* paper_option = ppdFindOption(ppd, kPageSize);
     bool is_default_found = false;
     for (int i = 0; i < ppd->num_sizes; ++i) {
-      gfx::Size paper_size_microns(
+      const gfx::Size paper_size_um(
           ConvertUnit(ppd->sizes[i].width, kPointsPerInch, kMicronsPerInch),
           ConvertUnit(ppd->sizes[i].length, kPointsPerInch, kMicronsPerInch));
-      if (!paper_size_microns.IsEmpty()) {
-        PrinterSemanticCapsAndDefaults::Paper paper;
-        paper.size_um = paper_size_microns;
-        paper.vendor_id = ppd->sizes[i].name;
+      if (!paper_size_um.IsEmpty()) {
+        std::string display_name;
         if (paper_option) {
           ppd_choice_t* paper_choice =
               ppdFindChoice(paper_option, ppd->sizes[i].name);
           // Human readable paper name should be UTF-8 encoded, but some PPDs
           // do not follow this standard.
           if (paper_choice && base::IsStringUTF8(paper_choice->text)) {
-            paper.display_name = paper_choice->text;
+            display_name = paper_choice->text;
           }
         }
+        int printable_area_left_um =
+            ConvertUnit(ppd->sizes[i].left, kPointsPerInch, kMicronsPerInch);
+        int printable_area_bottom_um =
+            ConvertUnit(ppd->sizes[i].bottom, kPointsPerInch, kMicronsPerInch);
+        // ppd->sizes[i].right is the horizontal distance from the left of the
+        // paper to the right of the printable area.
+        int printable_area_right_um =
+            ConvertUnit(ppd->sizes[i].right, kPointsPerInch, kMicronsPerInch);
+        // ppd->sizes[i].top is the vertical distance from the bottom of the
+        // paper to the top of the printable area.
+        int printable_area_top_um =
+            ConvertUnit(ppd->sizes[i].top, kPointsPerInch, kMicronsPerInch);
+
+        gfx::Rect printable_area_um(
+            printable_area_left_um, printable_area_bottom_um,
+            /*width=*/printable_area_right_um - printable_area_left_um,
+            /*height=*/printable_area_top_um - printable_area_bottom_um);
+
+        // Default to the paper size if printable area is empty.
+        // We've seen some drivers have a printable area that goes out of bounds
+        // of the paper size. In those cases, set the printable area to be the
+        // size. (See crbug.com/1412305.)
+        const gfx::Rect size_um_rect = gfx::Rect(paper_size_um);
+        if (printable_area_um.IsEmpty() ||
+            !size_um_rect.Contains(printable_area_um)) {
+          printable_area_um = size_um_rect;
+        }
+
+        PrinterSemanticCapsAndDefaults::Paper paper(
+            display_name,
+            /*vendor_id=*/ppd->sizes[i].name, paper_size_um, printable_area_um);
+
         caps.papers.push_back(paper);
         if (ppd->sizes[i].marked) {
           caps.default_paper = paper;
@@ -680,14 +942,13 @@ bool ParsePpdCapabilities(cups_dest_t* dest,
       }
     }
     if (!is_default_found) {
-      gfx::Size locale_paper_microns =
-          GetDefaultPaperSizeFromLocaleMicrons(locale);
+      gfx::Size locale_paper_um = GetDefaultPaperSizeFromLocaleMicrons(locale);
       for (const PrinterSemanticCapsAndDefaults::Paper& paper : caps.papers) {
         // Set epsilon to 500 microns to allow tolerance of rounded paper sizes.
         // While the above utility function returns paper sizes in microns, they
         // are still rounded to the nearest millimeter (1000 microns).
         constexpr int kSizeEpsilon = 500;
-        if (SizesEqualWithinEpsilon(paper.size_um, locale_paper_microns,
+        if (SizesEqualWithinEpsilon(paper.size_um(), locale_paper_um,
                                     kSizeEpsilon)) {
           caps.default_paper = paper;
           is_default_found = true;

@@ -9,7 +9,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
@@ -75,8 +75,7 @@ std::vector<std::string> GetAggregatedSelectors(
 // static
 std::unique_ptr<LinkToTextMenuObserver> LinkToTextMenuObserver::Create(
     RenderViewContextMenuProxy* proxy,
-    content::GlobalRenderFrameHostId render_frame_host_id,
-    CompletionCallback callback) {
+    content::GlobalRenderFrameHostId render_frame_host_id) {
   // WebContents can be null in tests.
   content::WebContents* web_contents = proxy->GetWebContents();
   if (web_contents && extensions::ProcessManager::Get(
@@ -87,17 +86,14 @@ std::unique_ptr<LinkToTextMenuObserver> LinkToTextMenuObserver::Create(
   }
 
   DCHECK(content::RenderFrameHost::FromID(render_frame_host_id));
-  return base::WrapUnique(new LinkToTextMenuObserver(
-      proxy, render_frame_host_id, std::move(callback)));
+  return base::WrapUnique(
+      new LinkToTextMenuObserver(proxy, render_frame_host_id));
 }
 
 LinkToTextMenuObserver::LinkToTextMenuObserver(
     RenderViewContextMenuProxy* proxy,
-    content::GlobalRenderFrameHostId render_frame_host_id,
-    CompletionCallback callback)
-    : proxy_(proxy),
-      render_frame_host_id_(render_frame_host_id),
-      completion_callback_(std::move(callback)) {}
+    content::GlobalRenderFrameHostId render_frame_host_id)
+    : proxy_(proxy), render_frame_host_id_(render_frame_host_id) {}
 
 LinkToTextMenuObserver::~LinkToTextMenuObserver() = default;
 
@@ -153,8 +149,6 @@ void LinkToTextMenuObserver::ExecuteCommand(int command_id) {
   // This should only be called for the command for copying link to text.
   DCHECK(IsCommandIdSupported(command_id));
 
-  execute_command_pending_ = false;
-
   if (command_id == IDC_CONTENT_CONTEXT_COPYLINKTOTEXT) {
     ExecuteCopyLinkToText();
   } else if (command_id == IDC_CONTENT_CONTEXT_RESHARELINKTOTEXT) {
@@ -162,11 +156,6 @@ void LinkToTextMenuObserver::ExecuteCommand(int command_id) {
   } else if (command_id == IDC_CONTENT_CONTEXT_REMOVELINKTOTEXT) {
     RemoveHighlights();
   }
-}
-
-void LinkToTextMenuObserver::OnMenuClosed() {
-  is_menu_closed_ = true;
-  NotifyLinkToTextMenuCompleted();
 }
 
 void LinkToTextMenuObserver::OnRequestLinkGenerationCompleted(
@@ -190,11 +179,13 @@ void LinkToTextMenuObserver::OnRequestLinkGenerationCompleted(
   shared_highlighting::LogLinkRequestedBeforeStatus(status, ready_status);
 
   if (status == LinkGenerationStatus::kSuccess) {
-    DCHECK_EQ(error, LinkGenerationError::kNone);
-    DCHECK(rfh);
+    CHECK_EQ(error, LinkGenerationError::kNone);
+    CHECK(rfh);
+    CHECK(!rfh->IsInLifecycleState(
+        content::RenderFrameHost::LifecycleState::kPrerendering));
     shared_highlighting::LogRequestedSuccessMetrics(rfh->GetPageUkmSourceId());
   } else {
-    DCHECK_NE(error, LinkGenerationError::kNone);
+    CHECK_NE(error, LinkGenerationError::kNone);
     CompleteWithError(error);
 
     // If there is no valid selector, leave the menu item disabled.
@@ -257,7 +248,7 @@ void LinkToTextMenuObserver::StartLinkGenerationRequestWithTimeout() {
   GetRemote()->RequestSelector(
       base::BindOnce(&LinkToTextMenuObserver::OnRequestLinkGenerationCompleted,
                      weak_ptr_factory_.GetWeakPtr()));
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&LinkToTextMenuObserver::Timeout,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -277,9 +268,6 @@ void LinkToTextMenuObserver::ExecuteCopyLinkToText() {
   feature_engagement::TrackerFactory::GetForBrowserContext(
       proxy_->GetWebContents()->GetBrowserContext())
       ->NotifyEvent("iph_desktop_shared_highlighting_used");
-
-  execute_command_pending_ = false;
-  NotifyLinkToTextMenuCompleted();
 }
 
 void LinkToTextMenuObserver::Timeout() {
@@ -300,12 +288,11 @@ void LinkToTextMenuObserver::CompleteWithError(LinkGenerationError error) {
   is_generation_complete_ = true;
   auto* rfh = content::RenderFrameHost::FromID(render_frame_host_id_);
   if (rfh) {
+    CHECK(!rfh->IsInLifecycleState(
+        content::RenderFrameHost::LifecycleState::kPrerendering));
     shared_highlighting::LogRequestedFailureMetrics(rfh->GetPageUkmSourceId(),
                                                     error);
   }
-
-  execute_command_pending_ = false;
-  NotifyLinkToTextMenuCompleted();
 }
 
 void LinkToTextMenuObserver::ReshareLink() {
@@ -367,18 +354,12 @@ void LinkToTextMenuObserver::OnGetExistingSelectorsComplete(
   LogDesktopLinkGenerationCopiedLinkType(
       shared_highlighting::LinkGenerationCopiedLinkType::
           kCopiedFromExistingHighlight);
-
-  execute_command_pending_ = false;
-  NotifyLinkToTextMenuCompleted();
 }
 
 void LinkToTextMenuObserver::RemoveHighlights() {
   // Remove highlights from all frames in the primary page.
   proxy_->GetWebContents()->GetPrimaryMainFrame()->ForEachRenderFrameHost(
       &RemoveHighlightsInFrame);
-
-  execute_command_pending_ = false;
-  NotifyLinkToTextMenuCompleted();
 }
 
 mojo::Remote<blink::mojom::TextFragmentReceiver>&
@@ -405,13 +386,4 @@ void LinkToTextMenuObserver::CopyTextToClipboard(const std::string& text) {
   ui::ScopedClipboardWriter scw(ui::ClipboardBuffer::kCopyPaste,
                                 std::move(data_transfer_endpoint));
   scw.WriteText(base::UTF8ToUTF16(text));
-}
-
-void LinkToTextMenuObserver::NotifyLinkToTextMenuCompleted() {
-  // LinkToTextMenuObserver is not needed anymore if menu is closed and no
-  // commands are being executed.
-  if (is_menu_closed_ && !execute_command_pending_) {
-    // Calling completion callback will destroy this object.
-    std::move(completion_callback_).Run();
-  }
 }

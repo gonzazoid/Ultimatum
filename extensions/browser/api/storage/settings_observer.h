@@ -5,18 +5,22 @@
 #ifndef EXTENSIONS_BROWSER_API_STORAGE_SETTINGS_OBSERVER_H_
 #define EXTENSIONS_BROWSER_API_STORAGE_SETTINGS_OBSERVER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/types/strong_alias.h"
 #include "base/values.h"
+#include "extensions/common/api/storage.h"
 
 namespace extensions {
 
 enum class StorageAreaNamespace;
 
-using SettingsChangedCallback = base::RepeatingCallback<
-    void(const std::string&, StorageAreaNamespace, base::Value)>;
+using SettingsChangedCallback =
+    base::RepeatingCallback<void(const std::string&,
+                                 StorageAreaNamespace,
+                                 absl::optional<api::storage::AccessLevel>,
+                                 base::Value)>;
 
 using SequenceBoundSettingsChangedCallback =
     base::StrongAlias<class SequenceBoundSettingsChangedCallbackTag,

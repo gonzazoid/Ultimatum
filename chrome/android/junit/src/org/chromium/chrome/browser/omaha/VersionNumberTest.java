@@ -9,12 +9,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.BlockJUnit4ClassRunner;
 
+import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.Feature;
 
-/**
- * Unit tests for VersionNumber.
- */
+/** Unit tests for VersionNumber. */
 @RunWith(BlockJUnit4ClassRunner.class)
+@Batch(Batch.UNIT_TESTS)
 public class VersionNumberTest {
     private static final String DEVELOPER_BUILD = "0.1 Developer Build";
     private static final String BUILD_BOGUS_1_2_3_4 = "Bogus-1.2.3.4";
@@ -80,15 +80,15 @@ public class VersionNumberTest {
         Assert.assertTrue("Should have been smaller", BUILD_1_1_3_4.isSmallerThan(BUILD_1_2_3_4));
         Assert.assertTrue("Should have been smaller", BUILD_1_2_2_4.isSmallerThan(BUILD_1_2_3_4));
         Assert.assertTrue("Should have been smaller", BUILD_1_2_3_3.isSmallerThan(BUILD_1_2_3_4));
-        Assert.assertTrue("Should have been smaller",
-                BUILD_26_0_1410_49.isSmallerThan(BUILD_27_0_1453_42));
+        Assert.assertTrue(
+                "Should have been smaller", BUILD_26_0_1410_49.isSmallerThan(BUILD_27_0_1453_42));
 
         Assert.assertFalse("Should have been bigger", BUILD_1_2_3_4.isSmallerThan(BUILD_0_2_3_4));
         Assert.assertFalse("Should have been bigger", BUILD_1_2_3_4.isSmallerThan(BUILD_1_1_3_4));
         Assert.assertFalse("Should have been bigger", BUILD_1_2_3_4.isSmallerThan(BUILD_1_2_2_4));
         Assert.assertFalse("Should have been bigger", BUILD_1_2_3_4.isSmallerThan(BUILD_1_2_3_3));
-        Assert.assertFalse("Should have been bigger",
-                BUILD_27_0_1453_42.isSmallerThan(BUILD_26_0_1410_49));
+        Assert.assertFalse(
+                "Should have been bigger", BUILD_27_0_1453_42.isSmallerThan(BUILD_26_0_1410_49));
     }
 
     /** Asserts that parsing a particular string should fail. */

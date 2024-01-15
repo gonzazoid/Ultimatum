@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 // clang-format on
 
 export interface AppearanceBrowserProxy {
@@ -13,6 +13,8 @@ export interface AppearanceBrowserProxy {
 
   /** @return Whether the current profile is a child account. */
   isChildAccount(): boolean;
+
+  recordHoverCardImagesEnabledChanged(enabled: boolean): void;
 
   useDefaultTheme(): void;
 
@@ -35,6 +37,11 @@ export class AppearanceBrowserProxyImpl implements AppearanceBrowserProxy {
 
   isChildAccount() {
     return loadTimeData.getBoolean('isChildAccount');
+  }
+
+  recordHoverCardImagesEnabledChanged(enabled: boolean) {
+    chrome.metricsPrivate.recordBoolean(
+        'Settings.HoverCards.ImagePreview.Enabled', enabled);
   }
 
   useDefaultTheme() {

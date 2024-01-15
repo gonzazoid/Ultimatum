@@ -1,35 +1,39 @@
 // Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-import './help_app_ui.mojom-lite.js';
-// The order here matters, types must be imported before index and search which
-// rely on it.
-import './types.mojom-lite.js';
-import './index.mojom-lite.js';
-import './search.mojom-lite.js';
+import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
+import {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
+import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 
-import {MessagePipe} from './message_pipe.m.js';
+import {PageHandlerFactory, PageHandlerRemote} from './help_app_ui.mojom-webui.js';
+import {Index, IndexRemote} from './index.mojom-webui.js';
+import {MessagePipe} from './message_pipe.js';
 import {Message} from './message_types.js';
+import {SearchConcept, SearchHandler, SearchHandlerRemote} from './search.mojom-webui.js';
+import {Content, ResponseStatus, Result} from './types.mojom-webui.js';
 
 const help_app = {
-  handler: new ash.helpApp.mojom.PageHandlerRemote(),
+  handler: new PageHandlerRemote(),
 };
 
 // Set up a page handler to talk to the browser process.
-ash.helpApp.mojom.PageHandlerFactory.getRemote().createPageHandler(
+PageHandlerFactory.getRemote().createPageHandler(
     help_app.handler.$.bindNewPipeAndPassReceiver());
 
 // Set up an index remote to talk to Local Search Service.
-/** @type {!ash.localSearchService.mojom.IndexRemote} */
-const indexRemote = ash.localSearchService.mojom.Index.getRemote();
+/** @type {!IndexRemote} */
+const indexRemote = Index.getRemote();
+
+// Expose `indexRemote` on `window`, because it is accessed by a CrOS Tast test.
+Object.assign(window, {indexRemote});
 
 /**
  * Talks to the search handler. Use for updating the content for launcher
  * search.
  *
- * @type {!ash.helpApp.mojom.SearchHandlerRemote}
+ * @type {!SearchHandlerRemote}
  */
-const searchHandlerRemote = ash.helpApp.mojom.SearchHandler.getRemote();
+const searchHandlerRemote = SearchHandler.getRemote();
 
 const GUEST_ORIGIN = 'chrome-untrusted://help-app';
 const MAX_STRING_LEN = 9999;
@@ -49,12 +53,24 @@ const isLauncherSearchEnabled =
     help_app.handler.isLauncherSearchEnabled().then(result => result.enabled);
 
 /**
- * @param {string} s
- * @return {!mojoBase.mojom.String16Spec}
+ * @param {string|Object} url
+ * @return {!Url}
  */
-function toString16(s) {
-  return /** @type {!mojoBase.mojom.String16Spec} */ (
-      {data: Array.from(truncate(s), c => c.charCodeAt())});
+function toUrl(url) {
+  // TODO(b/279132899): Figure out why `url` is an empty object when it should
+  // have been an empty string.
+  if (url === '' || typeof (url) !== 'string') {
+    return /** @type {!Url} */ ({url: ''});
+  }
+  return /** @type {!Url} */ ({url});
+}
+
+/**
+ * @param {string} s
+ * @return {!String16}
+ */
+function toTruncatedString16(s) {
+  return /** @type {!String16} */ (stringToMojoString16(truncate(s)));
 }
 const TITLE_ID = 'title';
 const BODY_ID = 'body';
@@ -82,6 +98,11 @@ guestMessagePipe.registerHandler(Message.SHOW_PARENTAL_CONTROLS, () => {
 });
 
 guestMessagePipe.registerHandler(
+    Message.TRIGGER_WELCOME_TIP_CALL_TO_ACTION, (actionTypeId) => {
+      help_app.handler.triggerWelcomeTipCallToAction(actionTypeId);
+    });
+
+guestMessagePipe.registerHandler(
     Message.ADD_OR_UPDATE_SEARCH_INDEX, async (message) => {
       if (!(await isLssEnabled)) {
         return;
@@ -89,16 +110,16 @@ guestMessagePipe.registerHandler(
       const data_from_app =
           /** @type {!Array<!helpApp.SearchableItem>} */ (message);
       const data_to_send = data_from_app.map(searchable_item => {
-        /** @type {!Array<!ash.localSearchService.mojom.Content>} */
+        /** @type {!Array<!Content>} */
         const contents = [
           {
             id: TITLE_ID,
-            content: toString16(searchable_item.title),
+            content: toTruncatedString16(searchable_item.title),
             weight: 1.0,
           },
           {
             id: CATEGORY_ID,
-            content: toString16(searchable_item.mainCategoryName),
+            content: toTruncatedString16(searchable_item.mainCategoryName),
             weight: 0.1,
           },
         ];
@@ -106,7 +127,7 @@ guestMessagePipe.registerHandler(
           for (let i = 0; i < searchable_item.subcategoryNames.length; ++i) {
             contents.push({
               id: SUBCATEGORY_ID + i,
-              content: toString16(searchable_item.subcategoryNames[i]),
+              content: toTruncatedString16(searchable_item.subcategoryNames[i]),
               weight: 0.1,
             });
           }
@@ -116,14 +137,14 @@ guestMessagePipe.registerHandler(
           for (let i = 0; i < searchable_item.subheadings.length; ++i) {
             contents.push({
               id: SUBHEADING_ID + i,
-              content: toString16(searchable_item.subheadings[i]),
+              content: toTruncatedString16(searchable_item.subheadings[i]),
               weight: 0.4,
             });
           }
         } else if (searchable_item.body) {
           contents.push({
             id: BODY_ID,
-            content: toString16(searchable_item.body),
+            content: toTruncatedString16(searchable_item.body),
             weight: 0.2,
           });
         }
@@ -152,21 +173,13 @@ guestMessagePipe.registerHandler(
           /** @type {{query: string, maxResults:(number|undefined)}} */
           (message);
       const response = await indexRemote.find(
-          toString16(dataFromApp.query), dataFromApp.maxResults || 50);
+          toTruncatedString16(dataFromApp.query), dataFromApp.maxResults || 50);
 
-      // Record the search status in the trusted frame.
-      chrome.metricsPrivate.recordEnumerationValue(
-          'Discover.Search.SearchStatus', response.status,
-          ash.localSearchService.mojom.ResponseStatus.MAX_VALUE);
-
-      if (response.status !==
-              ash.localSearchService.mojom.ResponseStatus.kSuccess ||
-          !response.results) {
+      if (response.status !== ResponseStatus.kSuccess || !response.results) {
         return {results: null};
       }
       const search_results =
-          /** @type {!Array<!ash.localSearchService.mojom.Result>} */ (
-              response.results);
+          /** @type {!Array<!Result>} */ (response.results);
       // Sort results by decreasing score.
       search_results.sort((a, b) => b.score - a.score);
       /** @type {!Array<!helpApp.SearchResult>} */
@@ -251,13 +264,13 @@ guestMessagePipe.registerHandler(
 
       const dataFromApp =
           /** @type {!Array<!helpApp.LauncherSearchableItem>} */ (message);
-      /** @type {!Array<!ash.helpApp.mojom.SearchConcept>} */
+      /** @type {!Array<!SearchConcept>} */
       const dataToSend = dataFromApp.map(
           searchableItem => ({
             id: truncate(searchableItem.id),
-            title: toString16(searchableItem.title),
-            mainCategory: toString16(searchableItem.mainCategoryName),
-            tags: searchableItem.tags.map(tag => toString16(tag))
+            title: toTruncatedString16(searchableItem.title),
+            mainCategory: toTruncatedString16(searchableItem.mainCategoryName),
+            tags: searchableItem.tags.map(tag => toTruncatedString16(tag))
                       .filter(tag => tag.data.length > 0),
             tagLocale: searchableItem.tagLocale || '',
             urlPathWithParameters:
@@ -279,6 +292,10 @@ guestMessagePipe.registerHandler(
       return searchHandlerRemote.update(dataFiltered);
     });
 
+guestMessagePipe.registerHandler(Message.LAUNCH_MICROSOFT_365_SETUP, () => {
+  help_app.handler.launchMicrosoft365Setup();
+});
+
 guestMessagePipe.registerHandler(
     Message.MAYBE_SHOW_DISCOVER_NOTIFICATION, () => {
       help_app.handler.maybeShowDiscoverNotification();
@@ -287,6 +304,15 @@ guestMessagePipe.registerHandler(
 guestMessagePipe.registerHandler(
     Message.MAYBE_SHOW_RELEASE_NOTES_NOTIFICATION, () => {
       help_app.handler.maybeShowReleaseNotesNotification();
+    });
+
+guestMessagePipe.registerHandler(Message.GET_DEVICE_INFO, async () => {
+  return (await help_app.handler.getDeviceInfo()).deviceInfo;
+});
+
+guestMessagePipe.registerHandler(
+    Message.OPEN_URL_IN_BROWSER_AND_TRIGGER_INSTALL_DIALOG, (url) => {
+      help_app.handler.openUrlInBrowserAndTriggerInstallDialog(toUrl(url));
     });
 
 /**

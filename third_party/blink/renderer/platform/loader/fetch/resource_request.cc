@@ -29,9 +29,12 @@
 #include <memory>
 
 #include "base/unguessable_token.h"
+#include "net/base/request_priority.h"
 #include "services/network/public/mojom/ip_address_space.mojom-blink.h"
 #include "services/network/public/mojom/web_bundle_handle.mojom-blink.h"
+#include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 #include "third_party/blink/renderer/platform/network/http_names.h"
@@ -87,19 +90,23 @@ ResourceRequestHead::ResourceRequestHead(const KURL& url)
     : url_(url),
       timeout_interval_(default_timeout_interval_),
       http_method_(http_names::kGET),
-      allow_stored_credentials_(true),
       report_upload_progress_(false),
       has_user_gesture_(false),
       has_text_fragment_token_(false),
       download_to_blob_(false),
       use_stream_on_response_(false),
       keepalive_(false),
+      browsing_topics_(false),
+      ad_auction_headers_(false),
+      shared_storage_writable_opted_in_(false),
+      shared_storage_writable_eligible_(false),
       allow_stale_response_(false),
       cache_mode_(mojom::blink::FetchCacheMode::kDefault),
       skip_service_worker_(false),
       download_to_cache_only_(false),
       site_for_cookies_set_(false),
       is_form_submission_(false),
+      priority_incremental_(net::kDefaultPriorityIncremental),
       initial_priority_(ResourceLoadPriority::kUnresolved),
       priority_(ResourceLoadPriority::kUnresolved),
       intra_priority_value_(0),
@@ -112,7 +119,8 @@ ResourceRequestHead::ResourceRequestHead(const KURL& url)
       referrer_string_(Referrer::ClientReferrerString()),
       referrer_policy_(network::mojom::ReferrerPolicy::kDefault),
       cors_preflight_policy_(
-          network::mojom::CorsPreflightPolicy::kConsiderPreflight) {}
+          network::mojom::CorsPreflightPolicy::kConsiderPreflight),
+      target_address_space_(network::mojom::IPAddressSpace::kUnknown) {}
 
 ResourceRequestHead::ResourceRequestHead(const ResourceRequestHead&) = default;
 
@@ -201,7 +209,11 @@ std::unique_ptr<ResourceRequest> ResourceRequestHead::CreateRedirectRequest(
   request->SetTargetAddressSpace(GetTargetAddressSpace());
   request->SetCredentialsMode(GetCredentialsMode());
   request->SetKeepalive(GetKeepalive());
+  request->SetBrowsingTopics(GetBrowsingTopics());
+  request->SetAdAuctionHeaders(GetAdAuctionHeaders());
+  request->SetSharedStorageWritableOptedIn(GetSharedStorageWritableOptedIn());
   request->SetPriority(Priority());
+  request->SetPriorityIncremental(PriorityIncremental());
 
   request->SetCorsPreflightPolicy(CorsPreflightPolicy());
   if (IsAdResource())
@@ -216,7 +228,14 @@ std::unique_ptr<ResourceRequest> ResourceRequestHead::CreateRedirectRequest(
   request->SetFromOriginDirtyStyleSheet(IsFromOriginDirtyStyleSheet());
   request->SetRecursivePrefetchToken(RecursivePrefetchToken());
   request->SetFetchLikeAPI(IsFetchLikeAPI());
+  request->SetFetchLaterAPI(IsFetchLaterAPI());
   request->SetFavicon(IsFavicon());
+  request->SetAttributionReportingSupport(GetAttributionReportingSupport());
+  request->SetAttributionReportingEligibility(
+      GetAttributionReportingEligibility());
+  request->SetAttributionReportingRuntimeFeatures(
+      GetAttributionReportingRuntimeFeatures());
+  request->SetAttributionReportingSrcToken(GetAttributionSrcToken());
 
   return request;
 }
@@ -336,14 +355,6 @@ void ResourceRequest::SetHttpBody(scoped_refptr<EncodedFormData> http_body) {
   body_.SetFormBody(std::move(http_body));
 }
 
-bool ResourceRequestHead::AllowStoredCredentials() const {
-  return allow_stored_credentials_;
-}
-
-void ResourceRequestHead::SetAllowStoredCredentials(bool allow_credentials) {
-  allow_stored_credentials_ = allow_credentials;
-}
-
 ResourceLoadPriority ResourceRequestHead::InitialPriority() const {
   return initial_priority_;
 }
@@ -366,6 +377,14 @@ void ResourceRequestHead::SetPriority(ResourceLoadPriority priority,
     initial_priority_ = priority;
   priority_ = priority;
   intra_priority_value_ = intra_priority_value;
+}
+
+bool ResourceRequestHead::PriorityIncremental() const {
+  return priority_incremental_;
+}
+
+void ResourceRequestHead::SetPriorityIncremental(bool priority_incremental) {
+  priority_incremental_ = priority_incremental;
 }
 
 void ResourceRequestHead::AddHttpHeaderField(const AtomicString& name,
@@ -452,6 +471,31 @@ bool ResourceRequestHead::NeedsHTTPOrigin() const {
   // For non-GET and non-HEAD methods, always send an Origin header so the
   // server knows we support this feature.
   return true;
+}
+
+bool ResourceRequest::IsFeatureEnabledForSubresourceRequestAssumingOptIn(
+    const PermissionsPolicy* policy,
+    mojom::blink::PermissionsPolicyFeature feature,
+    const url::Origin& origin) {
+  if (!policy) {
+    return false;
+  }
+
+  bool browsing_topics_opted_in =
+      (feature == mojom::blink::PermissionsPolicyFeature::kBrowsingTopics ||
+       feature == mojom::blink::PermissionsPolicyFeature::
+                      kBrowsingTopicsBackwardCompatible) &&
+      GetBrowsingTopics();
+  bool shared_storage_opted_in =
+      feature == mojom::blink::PermissionsPolicyFeature::kSharedStorage &&
+      GetSharedStorageWritableOptedIn();
+
+  if (!browsing_topics_opted_in && !shared_storage_opted_in) {
+    return false;
+  }
+
+  return policy->IsFeatureEnabledForSubresourceRequestAssumingOptIn(feature,
+                                                                    origin);
 }
 
 }  // namespace blink

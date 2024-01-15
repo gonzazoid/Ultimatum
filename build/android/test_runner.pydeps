@@ -64,10 +64,8 @@
 ../../third_party/catapult/devil/devil/android/sdk/bundletool.py
 ../../third_party/catapult/devil/devil/android/sdk/intent.py
 ../../third_party/catapult/devil/devil/android/sdk/keyevent.py
-../../third_party/catapult/devil/devil/android/sdk/shared_prefs.py
 ../../third_party/catapult/devil/devil/android/sdk/split_select.py
 ../../third_party/catapult/devil/devil/android/sdk/version_codes.py
-../../third_party/catapult/devil/devil/android/settings.py
 ../../third_party/catapult/devil/devil/android/tools/__init__.py
 ../../third_party/catapult/devil/devil/android/tools/device_recovery.py
 ../../third_party/catapult/devil/devil/android/tools/device_status.py
@@ -104,8 +102,8 @@
 ../../third_party/colorama/src/colorama/win32.py
 ../../third_party/colorama/src/colorama/winterm.py
 ../../third_party/jinja2/__init__.py
-../../third_party/jinja2/_compat.py
 ../../third_party/jinja2/_identifier.py
+../../third_party/jinja2/async_utils.py
 ../../third_party/jinja2/bccache.py
 ../../third_party/jinja2/compiler.py
 ../../third_party/jinja2/defaults.py
@@ -130,9 +128,11 @@
 ../../third_party/markupsafe/__init__.py
 ../../third_party/markupsafe/_compat.py
 ../../third_party/markupsafe/_native.py
+../action_helpers.py
 ../gn_helpers.py
 ../print_python_deps.py
 ../skia_gold_common/__init__.py
+../skia_gold_common/output_managerless_skia_gold_session.py
 ../skia_gold_common/skia_gold_properties.py
 ../skia_gold_common/skia_gold_session.py
 ../skia_gold_common/skia_gold_session_manager.py
@@ -142,12 +142,12 @@
 ../util/lib/results/__init__.py
 ../util/lib/results/result_sink.py
 ../util/lib/results/result_types.py
+../zip_helpers.py
 devil_chromium.py
 gyp/dex.py
 gyp/util/__init__.py
 gyp/util/build_utils.py
 gyp/util/md5_check.py
-gyp/util/zipalign.py
 incremental_install/__init__.py
 incremental_install/installer.py
 pylib/__init__.py
@@ -168,6 +168,8 @@ pylib/constants/__init__.py
 pylib/constants/host_paths.py
 pylib/gtest/__init__.py
 pylib/gtest/gtest_test_instance.py
+pylib/hostside/__init__.py
+pylib/hostside/hostside_test_instance.py
 pylib/instrumentation/__init__.py
 pylib/instrumentation/instrumentation_parser.py
 pylib/instrumentation/instrumentation_test_instance.py
@@ -190,6 +192,7 @@ pylib/local/emulator/proto/avd_pb2.py
 pylib/local/local_test_server_spawner.py
 pylib/local/machine/__init__.py
 pylib/local/machine/local_machine_environment.py
+pylib/local/machine/local_machine_hostside_test_run.py
 pylib/local/machine/local_machine_junit_test_run.py
 pylib/monkey/__init__.py
 pylib/monkey/monkey_test_instance.py
@@ -208,9 +211,11 @@ pylib/results/presentation/test_results_presentation.py
 pylib/results/report_results.py
 pylib/symbols/__init__.py
 pylib/symbols/deobfuscator.py
+pylib/symbols/expensive_line_transformer.py
 pylib/symbols/stack_symbolizer.py
 pylib/utils/__init__.py
 pylib/utils/chrome_proxy_utils.py
+pylib/utils/code_coverage_utils.py
 pylib/utils/decorators.py
 pylib/utils/device_dependencies.py
 pylib/utils/dexdump.py
@@ -221,7 +226,6 @@ pylib/utils/local_utils.py
 pylib/utils/logdog_helper.py
 pylib/utils/logging_utils.py
 pylib/utils/repo_utils.py
-pylib/utils/shared_preference_utils.py
 pylib/utils/test_filter.py
 pylib/utils/time_profile.py
 pylib/valgrind_tools.py

@@ -4,18 +4,17 @@
 
 #include "chromeos/ash/components/drivefs/drivefs_host.h"
 
-#include <set>
 #include <type_traits>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
-#include "base/scoped_observation.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_split.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/gmock_move_support.h"
@@ -25,13 +24,12 @@
 #include "base/timer/mock_timer.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "chromeos/ash/components/disks/mock_disk_mount_manager.h"
-#include "chromeos/ash/components/drivefs/drivefs_host_observer.h"
+#include "chromeos/ash/components/drivefs/drivefs_host.h"
 #include "chromeos/ash/components/drivefs/fake_drivefs.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom-test-utils.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
 #include "chromeos/components/mojo_bootstrap/pending_connection_manager.h"
-#include "components/drive/drive_notification_manager.h"
-#include "components/drive/drive_notification_observer.h"
+#include "components/account_id/account_id.h"
 #include "components/invalidation/impl/fake_invalidation_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
@@ -39,7 +37,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/test/test_network_connection_tracker.h"
@@ -53,6 +50,11 @@ using base::test::RunOnceClosure;
 using testing::_;
 using MountFailure = DriveFsHost::MountObserver::MountFailure;
 using ChangeLogOptionPair = std::pair<int64_t, std::string>;
+
+using mojom::ItemEvent::State::kCompleted;
+using mojom::ItemEvent::State::kFailed;
+using mojom::ItemEvent::State::kInProgress;
+using mojom::ItemEventReason::kTransfer;
 
 constexpr base::TimeDelta kTokenLifetime = base::Hours(1);
 
@@ -95,10 +97,10 @@ class MockDriveFs : public mojom::DriveFsInterceptorForTesting,
 
   MOCK_METHOD(drive::FileError,
               OnGetNextPage,
-              (absl::optional<std::vector<mojom::QueryItemPtr>> * items));
+              (std::optional<std::vector<mojom::QueryItemPtr>> * items));
 
   void GetNextPage(GetNextPageCallback callback) override {
-    absl::optional<std::vector<mojom::QueryItemPtr>> items;
+    std::optional<std::vector<mojom::QueryItemPtr>> items;
     auto error = OnGetNextPage(&items);
     std::move(callback).Run(error, std::move(items));
   }
@@ -112,17 +114,11 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate,
  public:
   TestingDriveFsHostDelegate(signin::IdentityManager* identity_manager,
                              const AccountId& account_id)
-      : identity_manager_(identity_manager),
-        account_id_(account_id),
-        drive_notification_manager_(&invalidation_service_) {}
+      : identity_manager_(identity_manager), account_id_(account_id) {}
 
   TestingDriveFsHostDelegate(const TestingDriveFsHostDelegate&) = delete;
   TestingDriveFsHostDelegate& operator=(const TestingDriveFsHostDelegate&) =
       delete;
-
-  ~TestingDriveFsHostDelegate() override {
-    drive_notification_manager_.Shutdown();
-  }
 
   void set_pending_bootstrap(
       mojo::PendingRemote<mojom::DriveFsBootstrap> pending_bootstrap) {
@@ -133,7 +129,7 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate,
     verbose_logging_enabled_ = enabled;
   }
 
-  drivefs::mojom::ExtensionConnectionParams& get_last_extension_params() {
+  mojom::ExtensionConnectionParams& get_last_extension_params() {
     return *extension_params_;
   }
 
@@ -141,12 +137,8 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate,
   MOCK_METHOD(void, OnMounted, (const base::FilePath&));
   MOCK_METHOD(void,
               OnMountFailed,
-              (MountFailure, absl::optional<base::TimeDelta>));
-  MOCK_METHOD(void, OnUnmounted, (absl::optional<base::TimeDelta>));
-
-  drive::DriveNotificationManager& GetDriveNotificationManager() override {
-    return drive_notification_manager_;
-  }
+              (MountFailure, std::optional<base::TimeDelta>));
+  MOCK_METHOD(void, OnUnmounted, (std::optional<base::TimeDelta>));
 
  private:
   // DriveFsHost::Delegate:
@@ -179,29 +171,29 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate,
 
   bool IsVerboseLoggingEnabled() override { return verbose_logging_enabled_; }
 
-  drivefs::mojom::DriveFsDelegate::ExtensionConnectionStatus ConnectToExtension(
-      drivefs::mojom::ExtensionConnectionParamsPtr params,
-      mojo::PendingReceiver<drivefs::mojom::NativeMessagingPort> port,
-      mojo::PendingRemote<drivefs::mojom::NativeMessagingHost> host) override {
+  void ConnectToExtension(
+      mojom::ExtensionConnectionParamsPtr params,
+      mojo::PendingReceiver<mojom::NativeMessagingPort> port,
+      mojo::PendingRemote<mojom::NativeMessagingHost> host,
+      mojom::DriveFsDelegate::ConnectToExtensionCallback callback) override {
     extension_params_ = std::move(params);
-    return drivefs::mojom::DriveFsDelegate::ExtensionConnectionStatus::
-        kExtensionNotFound;
+    std::move(callback).Run(
+        mojom::ExtensionConnectionStatus::kExtensionNotFound);
   }
 
   const std::string GetMachineRootID() override { return ""; }
 
   void PersistMachineRootID(const std::string& id) override {}
 
-  signin::IdentityManager* const identity_manager_;
+  const raw_ptr<signin::IdentityManager> identity_manager_;
   const AccountId account_id_;
   mojo::PendingRemote<mojom::DriveFsBootstrap> pending_bootstrap_;
   bool verbose_logging_enabled_ = false;
   invalidation::FakeInvalidationService invalidation_service_;
-  drive::DriveNotificationManager drive_notification_manager_;
-  drivefs::mojom::ExtensionConnectionParamsPtr extension_params_;
+  mojom::ExtensionConnectionParamsPtr extension_params_;
 };
 
-class MockDriveFsHostObserver : public DriveFsHostObserver {
+class MockDriveFsHostObserver : public DriveFsHost::Observer {
  public:
   MOCK_METHOD(void, OnUnmounted, ());
   MOCK_METHOD(void,
@@ -214,6 +206,7 @@ class MockDriveFsHostObserver : public DriveFsHostObserver {
               OnFilesChanged,
               (const std::vector<mojom::FileChange>& changes));
   MOCK_METHOD(void, OnError, (const mojom::DriveError& error));
+  MOCK_METHOD(void, OnItemProgress, (const mojom::ProgressEvent& event));
 };
 
 class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
@@ -283,11 +276,11 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
 
   void SendOnMounted() { delegate_->OnMounted(); }
 
-  void SendOnUnmounted(absl::optional<base::TimeDelta> delay) {
+  void SendOnUnmounted(std::optional<base::TimeDelta> delay) {
     delegate_->OnUnmounted(std::move(delay));
   }
 
-  void SendMountFailed(absl::optional<base::TimeDelta> delay) {
+  void SendMountFailed(std::optional<base::TimeDelta> delay) {
     delegate_->OnMountFailed(std::move(delay));
   }
 
@@ -316,6 +309,7 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
     SendOnMounted();
     run_loop.Run();
     ASSERT_TRUE(host_->IsMounted());
+    mount_path_ = host_->GetMountPath();
   }
 
   void DoUnmount() {
@@ -352,8 +346,8 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
   signin::IdentityTestEnvironment identity_test_env_;
   std::unique_ptr<TestingDriveFsHostDelegate> host_delegate_;
   std::unique_ptr<DriveFsHost> host_;
-  base::MockOneShotTimer* timer_;
-  absl::optional<bool> verbose_logging_enabled_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> timer_;
+  std::optional<bool> verbose_logging_enabled_;
 
   mojo::Receiver<mojom::DriveFsBootstrap> bootstrap_receiver_{this};
   MockDriveFs mock_drivefs_;
@@ -361,14 +355,13 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
   mojo::Remote<mojom::DriveFsDelegate> delegate_;
   mojo::PendingReceiver<mojom::DriveFsDelegate> pending_delegate_receiver_;
   std::string token_;
-  absl::optional<std::string> init_access_token_;
+  std::optional<std::string> init_access_token_;
+  base::FilePath mount_path_;
 };
 
 TEST_F(DriveFsHostTest, Basic) {
   MockDriveFsHostObserver observer;
-  base::ScopedObservation<DriveFsHost, DriveFsHostObserver> observation_scoper(
-      &observer);
-  observation_scoper.Observe(host_.get());
+  observer.Observe(host_.get());
 
   EXPECT_FALSE(host_->IsMounted());
 
@@ -499,13 +492,11 @@ ACTION_P(CloneStruct, output) {
 TEST_F(DriveFsHostTest, OnSyncingStatusUpdate_ForwardToObservers) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
   MockDriveFsHostObserver observer;
-  base::ScopedObservation<DriveFsHost, DriveFsHostObserver> observation_scoper(
-      &observer);
-  observation_scoper.Observe(host_.get());
+  observer.Observe(host_.get());
   auto status = mojom::SyncingStatus::New();
-  status->item_events.emplace_back(absl::in_place, 12, 34, "filename.txt",
-                                   mojom::ItemEvent::State::kInProgress, 123,
-                                   456, mojom::ItemEventReason::kPin);
+  status->item_events.emplace_back(std::in_place, 12, 34, "filename.txt",
+                                   kInProgress, 123, 456,
+                                   mojom::ItemEventReason::kPin);
   mojom::SyncingStatusPtr observed_status;
   EXPECT_CALL(observer, OnSyncingStatusUpdate(_))
       .WillOnce(CloneStruct(&observed_status));
@@ -525,15 +516,13 @@ ACTION_P(CloneVectorOfStructs, output) {
 TEST_F(DriveFsHostTest, OnFilesChanged_ForwardToObservers) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
   MockDriveFsHostObserver observer;
-  base::ScopedObservation<DriveFsHost, DriveFsHostObserver> observation_scoper(
-      &observer);
-  observation_scoper.Observe(host_.get());
+  observer.Observe(host_.get());
   std::vector<mojom::FileChangePtr> changes;
-  changes.emplace_back(absl::in_place, base::FilePath("/create"),
+  changes.emplace_back(std::in_place, base::FilePath("/create"),
                        mojom::FileChange::Type::kCreate);
-  changes.emplace_back(absl::in_place, base::FilePath("/delete"),
+  changes.emplace_back(std::in_place, base::FilePath("/delete"),
                        mojom::FileChange::Type::kDelete);
-  changes.emplace_back(absl::in_place, base::FilePath("/modify"),
+  changes.emplace_back(std::in_place, base::FilePath("/modify"),
                        mojom::FileChange::Type::kModify);
   std::vector<mojom::FileChangePtr> observed_changes;
   EXPECT_CALL(observer, OnFilesChanged(_))
@@ -548,11 +537,10 @@ TEST_F(DriveFsHostTest, OnFilesChanged_ForwardToObservers) {
 TEST_F(DriveFsHostTest, OnError_ForwardToObservers) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
   MockDriveFsHostObserver observer;
-  base::ScopedObservation<DriveFsHost, DriveFsHostObserver> observation_scoper(
-      &observer);
-  observation_scoper.Observe(host_.get());
-  auto error = mojom::DriveError::New(
-      mojom::DriveError::Type::kCantUploadStorageFull, base::FilePath("/foo"));
+  observer.Observe(host_.get());
+  auto error =
+      mojom::DriveError::New(mojom::DriveError::Type::kCantUploadStorageFull,
+                             base::FilePath("/foo"), 1);
   mojom::DriveErrorPtr observed_error;
   EXPECT_CALL(observer, OnError(_)).WillOnce(CloneStruct(&observed_error));
   delegate_->OnError(error.Clone());
@@ -565,16 +553,14 @@ TEST_F(DriveFsHostTest, OnError_ForwardToObservers) {
 TEST_F(DriveFsHostTest, OnError_IgnoreUnknownErrorTypes) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
   MockDriveFsHostObserver observer;
-  base::ScopedObservation<DriveFsHost, DriveFsHostObserver> observation_scoper(
-      &observer);
-  observation_scoper.Observe(host_.get());
+  observer.Observe(host_.get());
   EXPECT_CALL(observer, OnError(_)).Times(0);
   delegate_->OnError(mojom::DriveError::New(
       static_cast<mojom::DriveError::Type>(
           static_cast<std::underlying_type_t<mojom::DriveError::Type>>(
               mojom::DriveError::Type::kMaxValue) +
           1),
-      base::FilePath("/foo")));
+      base::FilePath("/foo"), 1));
   delegate_.FlushForTesting();
 }
 
@@ -636,100 +622,6 @@ TEST_F(DriveFsHostTest, DisplayConfirmDialogImpl_IgnoreUnknownReasonTypes) {
   EXPECT_TRUE(called);
 }
 
-TEST_F(DriveFsHostTest, TeamDriveTracking) {
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-
-  delegate_->OnTeamDrivesListReady({"a", "b"});
-  delegate_.FlushForTesting();
-  EXPECT_EQ(
-      (std::set<std::string>{"a", "b"}),
-      host_delegate_->GetDriveNotificationManager().team_drive_ids_for_test());
-
-  delegate_->OnTeamDriveChanged(
-      "c", mojom::DriveFsDelegate::CreateOrDelete::kCreated);
-  delegate_.FlushForTesting();
-  EXPECT_EQ(
-      (std::set<std::string>{"a", "b", "c"}),
-      host_delegate_->GetDriveNotificationManager().team_drive_ids_for_test());
-
-  delegate_->OnTeamDriveChanged(
-      "b", mojom::DriveFsDelegate::CreateOrDelete::kDeleted);
-  delegate_.FlushForTesting();
-  EXPECT_EQ(
-      (std::set<std::string>{"a", "c"}),
-      host_delegate_->GetDriveNotificationManager().team_drive_ids_for_test());
-}
-
-TEST_F(DriveFsHostTest, TeamDriveTrackingIgnoreChanges) {
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-
-  EXPECT_EQ(
-      std::set<std::string>(),
-      host_delegate_->GetDriveNotificationManager().team_drive_ids_for_test());
-
-  delegate_->OnTeamDriveChanged(
-      "a", mojom::DriveFsDelegate::CreateOrDelete::kCreated);
-  delegate_.FlushForTesting();
-  EXPECT_EQ(
-      std::set<std::string>(),
-      host_delegate_->GetDriveNotificationManager().team_drive_ids_for_test());
-
-  delegate_->OnTeamDriveChanged(
-      "b", mojom::DriveFsDelegate::CreateOrDelete::kDeleted);
-  delegate_.FlushForTesting();
-  EXPECT_EQ(
-      std::set<std::string>(),
-      host_delegate_->GetDriveNotificationManager().team_drive_ids_for_test());
-}
-
-TEST_F(DriveFsHostTest, Invalidation) {
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-
-  delegate_->OnTeamDrivesListReady({"a", "b"});
-  delegate_.FlushForTesting();
-
-  EXPECT_CALL(mock_drivefs_,
-              FetchChangeLogImpl(
-                  std::vector<ChangeLogOptionPair>{{123, ""}, {456, "a"}}));
-
-  for (auto& observer :
-       host_delegate_->GetDriveNotificationManager().observers_for_test()) {
-    observer.OnNotificationReceived({{"", 123}, {"a", 456}});
-  }
-  receiver_.FlushForTesting();
-}
-
-TEST_F(DriveFsHostTest, InvalidateAll) {
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-
-  delegate_->OnTeamDrivesListReady({"a", "b"});
-  delegate_.FlushForTesting();
-
-  EXPECT_CALL(mock_drivefs_, FetchAllChangeLogs());
-
-  for (auto& observer :
-       host_delegate_->GetDriveNotificationManager().observers_for_test()) {
-    observer.OnNotificationTimerFired();
-  }
-  receiver_.FlushForTesting();
-}
-
-TEST_F(DriveFsHostTest, RemoveDriveNotificationObserver) {
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-
-  delegate_->OnTeamDrivesListReady({"a", "b"});
-  delegate_.FlushForTesting();
-  EXPECT_TRUE(!host_delegate_->GetDriveNotificationManager()
-                   .observers_for_test()
-                   .empty());
-
-  host_.reset();
-
-  EXPECT_FALSE(!host_delegate_->GetDriveNotificationManager()
-                    .observers_for_test()
-                    .empty());
-}
-
 TEST_F(DriveFsHostTest, Remount_CachedOnceOnly) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
 
@@ -749,7 +641,7 @@ TEST_F(DriveFsHostTest, Remount_CachedOnceOnly) {
       "auth token", clock_.Now() + kTokenLifetime);
   EXPECT_FALSE(identity_test_env_.IsAccessTokenRequestPending());
 
-  absl::optional<base::TimeDelta> delay = base::Seconds(5);
+  std::optional<base::TimeDelta> delay = base::Seconds(5);
   EXPECT_CALL(*host_delegate_, OnUnmounted(delay));
   SendOnUnmounted(delay);
   base::RunLoop().RunUntilIdle();
@@ -785,7 +677,7 @@ TEST_F(DriveFsHostTest, Remount_RequestInflight) {
       base::BindLambdaForTesting([&](mojom::AccessTokenStatus status,
                                      const std::string& token) { FAIL(); }));
 
-  absl::optional<base::TimeDelta> delay = base::Seconds(5);
+  std::optional<base::TimeDelta> delay = base::Seconds(5);
   EXPECT_CALL(*host_delegate_, OnUnmounted(delay));
   SendOnUnmounted(delay);
   base::RunLoop().RunUntilIdle();
@@ -810,7 +702,7 @@ TEST_F(DriveFsHostTest, Remount_RequestInflightCompleteAfterMount) {
       base::BindLambdaForTesting([&](mojom::AccessTokenStatus status,
                                      const std::string& token) { FAIL(); }));
 
-  absl::optional<base::TimeDelta> delay = base::Seconds(5);
+  std::optional<base::TimeDelta> delay = base::Seconds(5);
   EXPECT_CALL(*host_delegate_, OnUnmounted(delay));
   SendOnUnmounted(delay);
   base::RunLoop().RunUntilIdle();
@@ -842,22 +734,18 @@ TEST_F(DriveFsHostTest, Remount_RequestInflightCompleteAfterMount) {
 TEST_F(DriveFsHostTest, ConnectToExtension) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
 
-  mojo::Remote<drivefs::mojom::NativeMessagingPort> remote;
-  mojo::PendingRemote<drivefs::mojom::NativeMessagingHost> host_remote;
+  mojo::Remote<mojom::NativeMessagingPort> remote;
+  mojo::PendingRemote<mojom::NativeMessagingHost> host_remote;
   auto receiver = host_remote.InitWithNewPipeAndPassReceiver();
 
   base::RunLoop run_loop;
   delegate_->ConnectToExtension(
-      drivefs::mojom::ExtensionConnectionParams::New("foo"),
+      mojom::ExtensionConnectionParams::New("foo"),
       remote.BindNewPipeAndPassReceiver(), std::move(host_remote),
-      base::BindLambdaForTesting(
-          [&](drivefs::mojom::DriveFsDelegate::ExtensionConnectionStatus
-                  status) {
-            EXPECT_EQ(drivefs::mojom::DriveFsDelegate::
-                          ExtensionConnectionStatus::kExtensionNotFound,
-                      status);
-            run_loop.Quit();
-          }));
+      base::BindLambdaForTesting([&](mojom::ExtensionConnectionStatus status) {
+        EXPECT_EQ(mojom::ExtensionConnectionStatus::kExtensionNotFound, status);
+        run_loop.Quit();
+      }));
   run_loop.Run();
   EXPECT_EQ("foo", host_delegate_->get_last_extension_params().extension_id);
 }
@@ -865,13 +753,11 @@ TEST_F(DriveFsHostTest, ConnectToExtension) {
 TEST_F(DriveFsHostTest, OnMirrorSyncingStatusUpdate_ForwardToObservers) {
   ASSERT_NO_FATAL_FAILURE(DoMount());
   MockDriveFsHostObserver observer;
-  base::ScopedObservation<DriveFsHost, DriveFsHostObserver> observation_scoper(
-      &observer);
-  observation_scoper.Observe(host_.get());
+  observer.Observe(host_.get());
   auto status = mojom::SyncingStatus::New();
-  status->item_events.emplace_back(absl::in_place, 12, 34, "filename.txt",
-                                   mojom::ItemEvent::State::kInProgress, 123,
-                                   456, mojom::ItemEventReason::kPin);
+  status->item_events.emplace_back(std::in_place, 12, 34, "filename.txt",
+                                   kInProgress, 123, 456,
+                                   mojom::ItemEventReason::kPin);
   mojom::SyncingStatusPtr observed_status;
   EXPECT_CALL(observer, OnMirrorSyncingStatusUpdate(_))
       .WillOnce(CloneStruct(&observed_status));
@@ -880,66 +766,6 @@ TEST_F(DriveFsHostTest, OnMirrorSyncingStatusUpdate_ForwardToObservers) {
   testing::Mock::VerifyAndClear(&observer);
 
   EXPECT_EQ(status, observed_status);
-}
-
-TEST_F(DriveFsHostTest, OnSyncingStatusUpdate_SyncStatusTracksStatus) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      chromeos::features::kFilesInlineSyncStatus);
-
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-  auto first_status = mojom::SyncingStatus::New();
-  first_status->item_events.emplace_back(
-      absl::in_place, 12, 34, "/foo/bar/filename.txt",
-      mojom::ItemEvent::State::kInProgress, 123, 456,
-      mojom::ItemEventReason::kTransfer);
-  delegate_->OnSyncingStatusUpdate(std::move(first_status));
-  delegate_.FlushForTesting();
-  EXPECT_EQ(host_->GetSyncStatusForPath(
-                host_->GetMountPath().Append("foo/bar/filename.txt")),
-            SyncStatus::kInProgress);
-
-  auto second_status = mojom::SyncingStatus::New();
-  second_status->item_events.emplace_back(
-      absl::in_place, 12, 34, "/foo/bar/filename_error.txt",
-      mojom::ItemEvent::State::kFailed, 123, 456,
-      mojom::ItemEventReason::kTransfer);
-  delegate_->OnSyncingStatusUpdate(std::move(second_status));
-  delegate_.FlushForTesting();
-  EXPECT_EQ(host_->GetSyncStatusForPath(
-                host_->GetMountPath().Append("foo/bar/filename_error.txt")),
-            SyncStatus::kError);
-  EXPECT_EQ(host_->GetSyncStatusForPath(
-                host_->GetMountPath().Append("foo/bar/filename.txt")),
-            SyncStatus::kInProgress);
-  EXPECT_EQ(
-      host_->GetSyncStatusForPath(host_->GetMountPath().Append("foo/bar")),
-      SyncStatus::kError);
-
-  auto third_status = mojom::SyncingStatus::New();
-  third_status->item_events.emplace_back(
-      absl::in_place, 12, 34, "/foo/bar/filename_error.txt",
-      mojom::ItemEvent::State::kCompleted, 123, 456,
-      mojom::ItemEventReason::kTransfer);
-  delegate_->OnSyncingStatusUpdate(std::move(third_status));
-  delegate_.FlushForTesting();
-  EXPECT_EQ(host_->GetSyncStatusForPath(
-                host_->GetMountPath().Append("foo/bar/filename_error.txt")),
-            SyncStatus::kNotFound);
-  EXPECT_EQ(
-      host_->GetSyncStatusForPath(host_->GetMountPath().Append("foo/bar")),
-      SyncStatus::kInProgress);
-
-  auto fourth_status = mojom::SyncingStatus::New();
-  fourth_status->item_events.emplace_back(
-      absl::in_place, 12, 34, "relative/path.txt",
-      mojom::ItemEvent::State::kInProgress, 123, 456,
-      mojom::ItemEventReason::kTransfer);
-  delegate_->OnSyncingStatusUpdate(std::move(fourth_status));
-  delegate_.FlushForTesting();
-
-  EXPECT_EQ(host_->GetSyncStatusForPath(
-                host_->GetMountPath().Append("relative/path.txt")),
-            SyncStatus::kNotFound);
 }
 
 }  // namespace

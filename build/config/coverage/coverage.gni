@@ -4,7 +4,7 @@
 
 import("//build/toolchain/toolchain.gni")
 if (is_fuchsia) {
-  import("//third_party/fuchsia-sdk/sdk/build/component.gni")
+  import("//third_party/fuchsia-gn-sdk/src/component.gni")
 }
 
 # There are two ways to enable code coverage instrumentation:
@@ -34,6 +34,9 @@ declare_args() {
   #
   # NOTE that this arg will be non-op if use_clang_coverage is false.
   coverage_instrumentation_input_file = ""
+
+  # Enables TypeScript/JavaScript code coverage.
+  use_javascript_coverage = false
 }
 
 assert(!use_clang_coverage || is_clang,

@@ -14,15 +14,20 @@ import './privacy_guide_fragment_shared.css.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ClearBrowsingDataBrowserProxyImpl, UpdateSyncStateEvent} from '../../clear_browsing_data_dialog/clear_browsing_data_browser_proxy.js';
 import {loadTimeData} from '../../i18n_setup.js';
-import {MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyGuideInteractions} from '../../metrics_browser_proxy.js';
-import {OpenWindowProxyImpl} from '../../open_window_proxy.js';
-import {Router} from '../../router.js';
+import {MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyGuideInteractions, PrivacyGuideStepsEligibleAndReached} from '../../metrics_browser_proxy.js';
 
 import {getTemplate} from './privacy_guide_completion_fragment.html.js';
+
+export interface PrivacyGuideCompletionFragmentElement {
+  $: {
+    backButton: HTMLElement,
+  };
+}
 
 const PrivacyGuideCompletionFragmentElementBase =
     WebUiListenerMixin(I18nMixin(PolymerElement));
@@ -53,17 +58,13 @@ export class PrivacyGuideCompletionFragmentElement extends
 
       shouldShowPrivacySandbox_: {
         type: Boolean,
-        value: () => !loadTimeData.getBoolean('isPrivacySandboxRestricted'),
+        value: () => !loadTimeData.getBoolean('isPrivacySandboxRestricted') ||
+            loadTimeData.getBoolean('isPrivacySandboxRestrictedNoticeEnabled'),
       },
 
       shouldShowWaa_: {
         type: Boolean,
         value: false,
-      },
-
-      enablePrivacyGuide2_: {
-        type: Boolean,
-        value: () => loadTimeData.getBoolean('privacyGuide2Enabled'),
       },
     };
   }
@@ -75,16 +76,23 @@ export class PrivacyGuideCompletionFragmentElement extends
 
   override ready() {
     super.ready();
-    this.addWebUIListener(
+    this.addEventListener('view-enter-start', this.onViewEnterStart_);
+
+    this.addWebUiListener(
         'update-sync-state',
         (event: UpdateSyncStateEvent) => this.updateWaaLink_(event.signedIn));
     ClearBrowsingDataBrowserProxyImpl.getInstance().getSyncState().then(
-        (status: UpdateSyncStateEvent) =>
-            this.updateWaaLink_(status.signedIn));
+        (status: UpdateSyncStateEvent) => this.updateWaaLink_(status.signedIn));
   }
 
   override focus() {
     this.shadowRoot!.querySelector<HTMLElement>('.headline')!.focus();
+  }
+
+  private onViewEnterStart_() {
+    this.metricsBrowserProxy_
+        .recordPrivacyGuideStepsEligibleAndReachedHistogram(
+            PrivacyGuideStepsEligibleAndReached.COMPLETION_REACHED);
   }
 
   private computeIsNoLinkLayout_() {
@@ -97,9 +105,7 @@ export class PrivacyGuideCompletionFragmentElement extends
         this.i18n('privacyGuideCompletionCardSubHeader');
   }
 
-  /**
-   * Updates the completion card waa link depending on the signin state.
-   */
+  /** Updates the completion card waa link depending on the signin state. */
   private updateWaaLink_(isSignedIn: boolean) {
     this.shouldShowWaa_ = isSignedIn;
   }
@@ -115,14 +121,9 @@ export class PrivacyGuideCompletionFragmentElement extends
         PrivacyGuideInteractions.COMPLETION_NEXT_BUTTON);
     this.metricsBrowserProxy_.recordAction(
         'Settings.PrivacyGuide.NextClickCompletion');
-    if (loadTimeData.getBoolean('privacyGuide2Enabled')) {
-      // Send a |close| event to the privacy guide dialog to close itself.
-      this.dispatchEvent(
-          new CustomEvent('close', {bubbles: true, composed: true}));
-    } else {
-      // Navigate away from the privacy guide settings subpage.
-      Router.getInstance().navigateToPreviousRoute();
-    }
+    // Send a |close| event to the privacy guide dialog to close itself.
+    this.dispatchEvent(
+        new CustomEvent('close', {bubbles: true, composed: true}));
   }
 
   private onPrivacySandboxClick_() {
@@ -143,7 +144,7 @@ export class PrivacyGuideCompletionFragmentElement extends
         PrivacyGuideInteractions.SWAA_COMPLETION_LINK);
     this.metricsBrowserProxy_.recordAction(
         'Settings.PrivacyGuide.CompletionSWAAClick');
-    OpenWindowProxyImpl.getInstance().openURL(
+    OpenWindowProxyImpl.getInstance().openUrl(
         loadTimeData.getString('activityControlsUrlInPrivacyGuide'));
   }
 }

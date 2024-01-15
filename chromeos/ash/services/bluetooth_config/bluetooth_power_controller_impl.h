@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_BLUETOOTH_POWER_CONTROLLER_IMPL_H_
 #define CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_BLUETOOTH_POWER_CONTROLLER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/bluetooth_config/bluetooth_power_controller.h"
 
 #include "base/scoped_observation.h"
@@ -64,12 +65,12 @@ class BluetoothPowerControllerImpl : public BluetoothPowerController,
 
   // The state the adapter should be set to once it is available. This is set if
   // SetAdapterState() is called before the adapter is available.
-  absl::optional<bool> pending_adapter_enabled_state_;
+  std::optional<bool> pending_adapter_enabled_state_;
 
-  PrefService* primary_profile_prefs_ = nullptr;
-  PrefService* local_state_ = nullptr;
+  raw_ptr<PrefService> primary_profile_prefs_ = nullptr;
+  raw_ptr<PrefService> local_state_ = nullptr;
 
-  AdapterStateController* adapter_state_controller_;
+  raw_ptr<AdapterStateController> adapter_state_controller_;
 
   base::ScopedObservation<AdapterStateController,
                           AdapterStateController::Observer>

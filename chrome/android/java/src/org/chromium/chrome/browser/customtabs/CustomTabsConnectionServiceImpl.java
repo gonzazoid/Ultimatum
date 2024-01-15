@@ -12,6 +12,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSessionToken;
+import androidx.browser.customtabs.EngagementSignalsCallback;
 
 import org.chromium.chrome.browser.firstrun.FirstRunFlowSequencer;
 import org.chromium.chrome.browser.init.ProcessInitializationHandler;
@@ -19,9 +20,7 @@ import org.chromium.components.embedder_support.util.Origin;
 
 import java.util.List;
 
-/**
- * Custom tabs connection service, used by the embedded Chrome activities.
- */
+/** Custom tabs connection service, used by the embedded Chrome activities. */
 public class CustomTabsConnectionServiceImpl extends CustomTabsConnectionService.Impl {
     private CustomTabsConnection mConnection;
     private Intent mBindIntent;
@@ -60,7 +59,10 @@ public class CustomTabsConnectionServiceImpl extends CustomTabsConnectionService
     }
 
     @Override
-    protected boolean mayLaunchUrl(CustomTabsSessionToken sessionToken, Uri url, Bundle extras,
+    protected boolean mayLaunchUrl(
+            CustomTabsSessionToken sessionToken,
+            Uri url,
+            Bundle extras,
             List<Bundle> otherLikelyBundles) {
         if (!isFirstRunDone()) return false;
         return mConnection.mayLaunchUrl(sessionToken, url, extras, otherLikelyBundles);
@@ -79,10 +81,13 @@ public class CustomTabsConnectionServiceImpl extends CustomTabsConnectionService
 
     @Override
     protected boolean requestPostMessageChannel(
-            CustomTabsSessionToken sessionToken, Uri postMessageOrigin) {
-        Origin origin = Origin.create(postMessageOrigin);
-        if (origin == null) return false;
-        return mConnection.requestPostMessageChannel(sessionToken, origin);
+            CustomTabsSessionToken sessionToken,
+            Uri postMessageSourceOrigin,
+            @Nullable Uri postMessageTargetOrigin) {
+        Origin sourceOrigin = Origin.create(postMessageSourceOrigin);
+        if (sourceOrigin == null) return false;
+        return mConnection.requestPostMessageChannel(
+                sessionToken, sourceOrigin, Origin.create(postMessageTargetOrigin));
     }
 
     @Override
@@ -105,9 +110,26 @@ public class CustomTabsConnectionServiceImpl extends CustomTabsConnectionService
     }
 
     @Override
-    protected boolean receiveFile(@NonNull CustomTabsSessionToken sessionToken, @NonNull Uri uri,
-            int purpose, @Nullable Bundle extras) {
+    protected boolean receiveFile(
+            @NonNull CustomTabsSessionToken sessionToken,
+            @NonNull Uri uri,
+            int purpose,
+            @Nullable Bundle extras) {
         return mConnection.receiveFile(sessionToken, uri, purpose, extras);
+    }
+
+    @Override
+    protected boolean isEngagementSignalsApiAvailable(
+            CustomTabsSessionToken sessionToken, Bundle extras) {
+        return mConnection.isEngagementSignalsApiAvailable(sessionToken, extras);
+    }
+
+    @Override
+    protected boolean setEngagementSignalsCallback(
+            CustomTabsSessionToken sessionToken,
+            EngagementSignalsCallback callback,
+            Bundle extras) {
+        return mConnection.setEngagementSignalsCallback(sessionToken, callback, extras);
     }
 
     private boolean isFirstRunDone() {

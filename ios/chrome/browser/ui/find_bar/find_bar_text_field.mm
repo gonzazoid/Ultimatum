@@ -5,13 +5,9 @@
 #import "ios/chrome/browser/ui/find_bar/find_bar_text_field.h"
 
 #import "base/i18n/rtl.h"
-#import "ios/chrome/browser/find_in_page/find_in_page_controller.h"
+#import "ios/chrome/browser/find_in_page/model/find_in_page_controller.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Find bar left padding

@@ -11,10 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/singleton.h"
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
+#include "base/scoped_observation_traits.h"
 #include "build/chromeos_buildflags.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/tts_utterance.h"
@@ -44,10 +44,8 @@ struct CONTENT_EXPORT VoiceData {
   bool native;
   std::string native_voice_identifier;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // If true, the voice is from a remote tts engine.
-  bool from_crosapi = false;
-#endif
+  // If true, the voice is provided by a remote TTS engine.
+  bool from_remote_tts_engine = false;
 };
 
 // Interface that delegates TTS requests to engines in content embedders.
@@ -67,13 +65,10 @@ class CONTENT_EXPORT TtsEngineDelegate {
   // Stop speaking the given utterance by sending an event to the target
   // associated with this utterance.
   virtual void Stop(TtsUtterance* utterance) = 0;
-
   // Pause in the middle of speaking this utterance.
   virtual void Pause(TtsUtterance* utterance) = 0;
-
   // Resume speaking this utterance.
   virtual void Resume(TtsUtterance* utterance) = 0;
-
   // Load the built-in TTS engine.
   virtual void LoadBuiltInTtsEngine(BrowserContext* browser_context) = 0;
 
@@ -91,6 +86,21 @@ class CONTENT_EXPORT RemoteTtsEngineDelegate {
   // Returns a list of voices from remote tts engine for |browser_context|.
   virtual void GetVoices(BrowserContext* browser_context,
                          std::vector<VoiceData>* out_voices) = 0;
+
+  // Requests the given remote TTS engine to speak |utterance| with |voice|.
+  virtual void Speak(TtsUtterance* utterance, const VoiceData& voice) = 0;
+
+  // Requests the remote TTS engine associated with |utterance| to stop
+  // speaking the |utterance|.
+  virtual void Stop(TtsUtterance* utterance) = 0;
+
+  // Requests the remote TTS engine associated with |utterance| to pause
+  // speaking the |utterance|.
+  virtual void Pause(TtsUtterance* utterance) = 0;
+
+  // Requests the remote TTS engine associated with |utterance| to resume
+  // speaking the |utterance|.
+  virtual void Resume(TtsUtterance* utterance) = 0;
 };
 
 // Class that wants to be notified when the set of
@@ -204,5 +214,22 @@ class CONTENT_EXPORT TtsController {
 };
 
 }  // namespace content
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<content::TtsController,
+                               content::VoicesChangedDelegate> {
+  static void AddObserver(content::TtsController* source,
+                          content::VoicesChangedDelegate* observer) {
+    source->AddVoicesChangedDelegate(observer);
+  }
+  static void RemoveObserver(content::TtsController* source,
+                             content::VoicesChangedDelegate* observer) {
+    source->RemoveVoicesChangedDelegate(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CONTENT_PUBLIC_BROWSER_TTS_CONTROLLER_H_

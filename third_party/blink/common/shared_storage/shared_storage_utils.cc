@@ -5,6 +5,8 @@
 #include "third_party/blink/public/common/shared_storage/shared_storage_utils.h"
 
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/string_piece.h"
+#include "base/strings/string_util.h"
 #include "third_party/blink/public/common/features.h"
 
 namespace blink {
@@ -31,6 +33,17 @@ bool IsValidSharedStorageValueStringLength(size_t length) {
 void LogSharedStorageWorkletError(SharedStorageWorkletErrorType error_type) {
   base::UmaHistogramEnumeration("Storage.SharedStorage.Worklet.Error.Type",
                                 error_type);
+}
+
+bool ShouldDefinePrivateAggregationInSharedStorage() {
+  return base::FeatureList::IsEnabled(
+             blink::features::kPrivateAggregationApi) &&
+         blink::features::kPrivateAggregationApiEnabledInSharedStorage.Get();
+}
+
+bool IsValidPrivateAggregationContextId(base::StringPiece context_id) {
+  return context_id.size() <= blink::kPrivateAggregationApiContextIdMaxLength &&
+         base::IsStringUTF8AllowingNoncharacters(context_id);
 }
 
 }  // namespace blink

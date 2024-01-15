@@ -4,8 +4,8 @@
 
 #include "components/mirroring/browser/single_client_video_capture_host.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/token.h"
 #include "content/public/browser/web_contents_media_capture_id.h"
@@ -99,7 +99,8 @@ void SingleClientVideoCaptureHost::Start(
       base::BindOnce([](std::unique_ptr<content::VideoCaptureDeviceLauncher>,
                         std::unique_ptr<DeviceLauncherCallbacks>) {},
                      std::move(device_launcher),
-                     std::move(device_launcher_callbacks)));
+                     std::move(device_launcher_callbacks)),
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>{});
 }
 
 void SingleClientVideoCaptureHost::Stop(
@@ -179,14 +180,13 @@ void SingleClientVideoCaptureHost::GetDeviceFormatsInUse(
   std::move(callback).Run(media::VideoCaptureFormats());
 }
 
-void SingleClientVideoCaptureHost::OnFrameDropped(
-    const base::UnguessableToken& device_id,
-    media::VideoCaptureFrameDropReason reason) {
+void SingleClientVideoCaptureHost::OnCaptureConfigurationChanged() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Ignore this call.
 }
 
-void SingleClientVideoCaptureHost::OnNewCropVersion(uint32_t crop_version) {
+void SingleClientVideoCaptureHost::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Ignore this call.
 }
@@ -217,8 +217,7 @@ void SingleClientVideoCaptureHost::OnNewBuffer(
 }
 
 void SingleClientVideoCaptureHost::OnFrameReadyInBuffer(
-    media::ReadyFrameInBuffer frame,
-    std::vector<media::ReadyFrameInBuffer> scaled_frames) {
+    media::ReadyFrameInBuffer frame) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DVLOG(3) << __func__ << ": buffer_id=" << frame.buffer_id;
   DCHECK(observer_);
@@ -232,8 +231,7 @@ void SingleClientVideoCaptureHost::OnFrameReadyInBuffer(
   DCHECK(insert_result.second);
   // This implementation does not forward scaled frames.
   observer_->OnBufferReady(media::mojom::ReadyBuffer::New(
-                               buffer_context_id, std::move(frame.frame_info)),
-                           {});
+      buffer_context_id, std::move(frame.frame_info)));
 }
 
 void SingleClientVideoCaptureHost::OnBufferRetired(int buffer_id) {

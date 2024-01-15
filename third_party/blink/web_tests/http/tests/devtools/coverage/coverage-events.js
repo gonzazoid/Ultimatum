@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {CoverageTestRunner} from 'coverage_test_runner';
+
+import * as Coverage from 'devtools/panels/coverage/coverage.js';
+
 (async function() {
   TestRunner.addResult(`Tests the if events are getting emitted when coverage changes.\n`);
-  await TestRunner.loadLegacyModule('panels/coverage'); await TestRunner.loadTestModule('coverage_test_runner');
 
 
   TestRunner.addResult('Should have coverage information even when not covered yet');
@@ -19,7 +23,7 @@
 
   TestRunner.addResult('Coverage should emit an event whenever it changes');
 
-  const sizesUpdatedPromise = coverageInfo.once(Coverage.URLCoverageInfo.Events.SizesChanged);
+  const sizesUpdatedPromise = coverageInfo.once(Coverage.CoverageModel.URLCoverageInfo.Events.SizesChanged);
   await TestRunner.evaluateInPagePromise('performActions()');
   await sizesUpdatedPromise; // Wait for the event to be triggered.
 

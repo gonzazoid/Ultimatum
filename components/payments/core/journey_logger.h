@@ -43,6 +43,7 @@ class JourneyLogger {
     COMPLETION_STATUS_USER_ABORTED = 1,
     COMPLETION_STATUS_OTHER_ABORTED = 2,
     COMPLETION_STATUS_COULD_NOT_SHOW = 3,
+    COMPLETION_STATUS_USER_OPTED_OUT = 4,
     COMPLETION_STATUS_MAX,
   };
 
@@ -120,6 +121,8 @@ class JourneyLogger {
 
   // A new version of Event. Some basic-card/autofill related bits are
   // removed to free up more bits for new future payment methods.
+  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.payments
+  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: Event2
   enum class Event2 {
     // Initiated means the PaymentRequest object was constructed.
     kInitiated = 0,
@@ -144,12 +147,21 @@ class JourneyLogger {
     kOtherAborted = 1 << 6,
     // Whether or not any requested method is available.
     kHadInitialFormOfPayment = 1 << 7,
+    // An opt-out experience was offered to the user as part of the flow.
+    kOptOutOffered = 1 << 8,
+    // The user elected to opt-out of the flow (and future flows).
+    kUserOptedOut = 1 << 9,
+
+    // .show() was allowed without a user activaiton.
+    kActivationlessShow = 1 << 10,
 
     // Correspond to the merchant specifying requestShipping,
     // requestPayerName,
     // requestPayerEmail, requestPayerPhone.
     kRequestShipping = 1 << 11,
 
+    // The merchent requested a Google Pay Authentication method.
+    kRequestMethodGooglePayAuthentication = 1 << 13,
     // The merchant requested a Play Billing payment method.
     kRequestMethodPlayBilling = 1 << 14,
     // The merchant requested at least one basic-card method.
@@ -170,6 +182,7 @@ class JourneyLogger {
     kCouldNotShow = 1 << 23,
 
     // Bits for secure-payment-confirmation method.
+    kNoMatchingCredentials = 1 << 29,
     kRequestMethodSecurePaymentConfirmation = 1 << 30,
     kSelectedSecurePaymentConfirmation = 1 << 31,
 
@@ -191,18 +204,8 @@ class JourneyLogger {
     ABORT_REASON_OTHER = 8,
     ABORT_REASON_USER_NAVIGATION = 9,
     ABORT_REASON_MERCHANT_NAVIGATION = 10,
+    ABORT_REASON_USER_OPTED_OUT = 11,
     ABORT_REASON_MAX,
-  };
-
-  // The reason why the Payment Request was not shown to the user.
-  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.payments
-  // GENERATED_JAVA_CLASS_NAME_OVERRIDE: NotShownReason
-  enum NotShownReason {
-    NOT_SHOWN_REASON_NO_MATCHING_PAYMENT_METHOD = 0,
-    NOT_SHOWN_REASON_NO_SUPPORTED_PAYMENT_METHOD = 1,
-    NOT_SHOWN_REASON_CONCURRENT_REQUESTS = 2,
-    NOT_SHOWN_REASON_OTHER = 3,
-    NOT_SHOWN_REASON_MAX = 4,
   };
 
   // The categories of the payment methods.
@@ -214,7 +217,8 @@ class JourneyLogger {
     kPlayBilling = 2,
     kSecurePaymentConfirmation = 3,
     kOther = 4,
-    kMaxValue = kOther,
+    kGooglePayAuthentication = 5,
+    kMaxValue = kGooglePayAuthentication,
   };
 
   // Records different checkout steps for payment requests. The difference
@@ -261,6 +265,13 @@ class JourneyLogger {
   // its return value.
   void SetHasEnrolledInstrumentValue(bool value);
 
+  // Records that an Opt Out experience is being offered to the user in the
+  // current UI flow.
+  void SetOptOutOffered();
+
+  // Records that a show() was allowed without a user activation.
+  void SetActivationlessShow();
+
   // Records that a payment app has been shown without payment UIs being shown
   // before that.
   void SetSkippedShow();
@@ -298,13 +309,15 @@ class JourneyLogger {
   // logging of all the journey metrics.
   void SetCompleted();
 
-  // Records that the Payment Request was aborted along with the reason. Also
-  // starts the logging of all the journey metrics.
+  // Records that the Payment Request was aborted. This counts as a completion,
+  // starting the logging of all the journey metrics.
   void SetAborted(AbortReason reason);
 
-  // Records that the Payment Request was not shown to the user, along with the
-  // reason.
-  void SetNotShown(NotShownReason reason);
+  // Records that the Payment Request was not shown to the user.
+  void SetNotShown();
+
+  // Records that the SPC No Matching Credentials UX was shown to the user.
+  void SetNoMatchingCredentialsShown();
 
   // Increments the bucket count for the given checkout step.
   void RecordCheckoutStep(CheckoutFunnelStep step);

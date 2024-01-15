@@ -11,6 +11,7 @@
 #include "base/base64.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_view_host.h"
@@ -64,7 +65,7 @@ ClipboardImageModelRequest::Params::~Params() = default;
 
 ClipboardImageModelRequest::TestParams::TestParams(
     RequestStopCallback callback,
-    const absl::optional<bool>& enforce_auto_resize)
+    const std::optional<bool>& enforce_auto_resize)
     : callback(callback), enforce_auto_resize(enforce_auto_resize) {}
 
 ClipboardImageModelRequest::TestParams::~TestParams() = default;
@@ -111,6 +112,8 @@ ClipboardImageModelRequest::ClipboardImageModelRequest(
       web_view_(new views::WebView(profile)),
       on_request_finished_callback_(std::move(on_request_finished_callback)),
       request_creation_time_(base::TimeTicks::Now()) {
+  CHECK(profile);
+
   views::Widget::InitParams widget_params;
   widget_params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
   widget_params.ownership =
@@ -206,7 +209,7 @@ bool ClipboardImageModelRequest::IsModifyingClipboard() const {
 }
 
 bool ClipboardImageModelRequest::IsRunningRequest(
-    absl::optional<base::UnguessableToken> request_id) const {
+    std::optional<base::UnguessableToken> request_id) const {
   return request_id.has_value() ? *request_id == request_id_
                                 : !request_id_.is_empty();
 }
@@ -290,7 +293,7 @@ void ClipboardImageModelRequest::PostCopySurfaceTask() {
   copy_surface_weak_ptr_factory_.InvalidateWeakPtrs();
   DCHECK(
       web_contents()->GetRenderWidgetHostView()->IsSurfaceAvailableForCopy());
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ClipboardImageModelRequest::CopySurface,
                      copy_surface_weak_ptr_factory_.GetWeakPtr()),

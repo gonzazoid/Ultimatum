@@ -11,11 +11,12 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.UseParametersRunnerFactory;
 
 import org.chromium.android_webview.AwContents;
 import org.chromium.android_webview.permission.AwPermissionRequest;
 import org.chromium.android_webview.permission.Resource;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 
 /**
@@ -25,10 +26,10 @@ import org.chromium.base.test.util.Feature;
  * Although, WebView requires Lollipop for the onPermissionRequest() API,
  * this test intercepts this path and thus can run on KitKat.
  */
-@RunWith(AwJUnit4ClassRunner.class)
-public class KeySystemTest {
-    @Rule
-    public AwActivityTestRule mActivityTestRule = new AwActivityTestRule();
+@RunWith(Parameterized.class)
+@UseParametersRunnerFactory(AwJUnit4ClassRunnerWithParameters.Factory.class)
+public class KeySystemTest extends AwParameterizedTest {
+    @Rule public AwActivityTestRule mActivityTestRule;
 
     /**
      * AwContentsClient subclass that allows permissions requests for the
@@ -44,10 +45,14 @@ public class KeySystemTest {
                 awPermissionRequest.deny();
             }
         }
-    };
+    }
 
     private TestAwContentsClient mContentsClient = new EmeAllowingAwContentsClient();
     private AwContents mAwContents;
+
+    public KeySystemTest(AwSettingsMutation param) {
+        this.mActivityTestRule = new AwActivityTestRule(param.getMutation());
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -56,7 +61,9 @@ public class KeySystemTest {
         mAwContents = testContainerView.getAwContents();
         AwActivityTestRule.enableJavaScriptOnUiThread(mAwContents);
 
-        mActivityTestRule.loadUrlSync(mAwContents, mContentsClient.getOnPageFinishedHelper(),
+        mActivityTestRule.loadUrlSync(
+                mAwContents,
+                mContentsClient.getOnPageFinishedHelper(),
                 "file:///android_asset/key-system-test.html");
     }
 
@@ -70,17 +77,19 @@ public class KeySystemTest {
     }
 
     private boolean areProprietaryCodecsSupported() throws Exception {
-        String result = mActivityTestRule.maybeStripDoubleQuotes(
-                mActivityTestRule.executeJavaScriptAndWaitForResult(
-                        mAwContents, mContentsClient, "areProprietaryCodecsSupported()"));
+        String result =
+                mActivityTestRule.maybeStripDoubleQuotes(
+                        mActivityTestRule.executeJavaScriptAndWaitForResult(
+                                mAwContents, mContentsClient, "areProprietaryCodecsSupported()"));
         return !result.isEmpty();
     }
 
     private String getResultFromJS() {
         String result = "null";
         try {
-            result = mActivityTestRule.executeJavaScriptAndWaitForResult(
-                    mAwContents, mContentsClient, "result");
+            result =
+                    mActivityTestRule.executeJavaScriptAndWaitForResult(
+                            mAwContents, mContentsClient, "result");
         } catch (Exception e) {
             Assert.fail("Unable to get result");
         }
@@ -112,7 +121,6 @@ public class KeySystemTest {
     @Test
     @Feature({"AndroidWebView"})
     @SmallTest
-    @DisabledTest(message = "https://crbug.com/701916")
     public void testSupportWidevineKeySystem() throws Throwable {
         Assert.assertEquals(
                 getPlatformKeySystemExpectations(), isKeySystemSupported("com.widevine.alpha"));
@@ -128,9 +136,9 @@ public class KeySystemTest {
     @Test
     @Feature({"AndroidWebView"})
     @SmallTest
-    @DisabledTest(message = "https://crbug.com/701916")
     public void testSupportPlatformKeySystem() throws Throwable {
-        Assert.assertEquals(getPlatformKeySystemExpectations(),
+        Assert.assertEquals(
+                getPlatformKeySystemExpectations(),
                 isKeySystemSupported("x-com.oem.test-keysystem"));
     }
 

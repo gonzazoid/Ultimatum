@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -30,6 +30,10 @@ class ScreenLockerTester : public session_manager::SessionManagerObserver {
   // Synchronously lock the device.
   void Lock();
 
+  // Not necessary when using Lock() because it does this internally, this is
+  // used when triggering a lock via some other means.
+  void WaitForLock();
+
   void WaitForUnlock();
 
   // Injects authenticators that only authenticate with the given password.
@@ -45,7 +49,8 @@ class ScreenLockerTester : public session_manager::SessionManagerObserver {
   // Returns true if Shutdown button is visible.
   bool IsLockShutdownButtonShown();
 
-  // Enters and submits the given password for the given account.
+  // Enters and submits the given password for the given account. This does not
+  // wait for the unlock to complete, call WaitForUnlock() to synchronize.
   void UnlockWithPassword(const AccountId& account_id,
                           const std::string& password);
 
@@ -66,11 +71,5 @@ class ScreenLockerTester : public session_manager::SessionManagerObserver {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::ScreenLockerTester;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_LOCK_SCREEN_LOCKER_TESTER_H_

@@ -14,10 +14,10 @@
 #include "third_party/blink/renderer/core/loader/document_load_timing.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/loader/interactive_detector.h"
-#include "third_party/blink/renderer/core/paint/image_paint_timing_detector.h"
-#include "third_party/blink/renderer/core/paint/paint_timing.h"
-#include "third_party/blink/renderer/core/paint/paint_timing_detector.h"
-#include "third_party/blink/renderer/core/paint/text_paint_timing_detector.h"
+#include "third_party/blink/renderer/core/paint/timing/image_paint_timing_detector.h"
+#include "third_party/blink/renderer/core/paint/timing/paint_timing.h"
+#include "third_party/blink/renderer/core/paint/timing/paint_timing_detector.h"
+#include "third_party/blink/renderer/core/paint/timing/text_paint_timing_detector.h"
 #include "third_party/blink/renderer/core/timing/performance.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_timing.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
@@ -310,11 +310,8 @@ ResourceLoadTiming* PerformanceTiming::GetResourceLoadTiming() const {
   return loader->GetResponse().GetResourceLoadTiming();
 }
 
-std::unique_ptr<TracedValue> PerformanceTiming::GetNavigationTracingData() {
-  auto data = std::make_unique<TracedValue>();
-  data->SetString("navigationId",
-                  IdentifiersFactory::LoaderId(GetDocumentLoader()));
-  return data;
+void PerformanceTiming::WriteInto(perfetto::TracedDictionary& dict) const {
+  dict.Add("navigationId", IdentifiersFactory::LoaderId(GetDocumentLoader()));
 }
 
 // static

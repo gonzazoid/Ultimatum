@@ -189,7 +189,8 @@ TEST_F(WindowTreeHostTest, NoRewritesPostIME) {
   ui::test::TestEventRewriter event_rewriter;
   host()->AddEventRewriter(&event_rewriter);
 
-  ui::KeyEvent key_event('A', ui::VKEY_A, ui::DomCode::NONE, 0);
+  ui::KeyEvent key_event =
+      ui::KeyEvent::FromCharacter('A', ui::VKEY_A, ui::DomCode::NONE, 0);
   ui::EventDispatchDetails details =
       host()->GetInputMethod()->DispatchKeyEvent(&key_event);
   ASSERT_TRUE(!details.dispatcher_destroyed && !details.target_destroyed);
@@ -368,12 +369,11 @@ cc::Layer* ccLayerFromUiLayer(ui::Layer* layer) {
 bool WaitForFrame(WindowTreeHost* host) {
   base::RunLoop run_loop;
   bool got_frame = false;
-  host->compositor()->RequestPresentationTimeForNextFrame(
-      base::BindLambdaForTesting(
-          [&](const gfx::PresentationFeedback& feedback) {
-            got_frame = true;
-            run_loop.Quit();
-          }));
+  host->compositor()->RequestSuccessfulPresentationTimeForNextFrame(
+      base::BindLambdaForTesting([&](base::TimeTicks presentation_timestamp) {
+        got_frame = true;
+        run_loop.Quit();
+      }));
   run_loop.Run();
   return got_frame;
 }

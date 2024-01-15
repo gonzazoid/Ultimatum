@@ -137,6 +137,9 @@ class GEOMETRY_SKIA_EXPORT RRectF {
     return skrrect_.contains(gfx::RectFToSkRect(rect));
   }
 
+  // Returns the bounding box that contains the specified rounded corner.
+  gfx::RectF CornerBoundingRect(Corner corner) const;
+
   // Scales the rectangle by |scale|.
   void Scale(float scale) { Scale(scale, scale); }
   // Scales the rectangle by |x_scale| and |y_scale|.
@@ -166,8 +169,12 @@ class GEOMETRY_SKIA_EXPORT RRectF {
 
   explicit operator SkRRect() const { return skrrect_; }
 
+  static RRectF ToEnclosingRRectF(const RRectF& rrect);
+
  private:
   void GetAllRadii(SkVector radii[4]) const;
+
+  gfx::RoundedCornersF GetRoundedCorners() const;
 
   SkRRect skrrect_;
 };

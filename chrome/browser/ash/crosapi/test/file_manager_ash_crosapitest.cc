@@ -2,13 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <memory>
+
+#include "base/base_switches.h"
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "base/test/test_future.h"
 #include "base/threading/thread_restrictions.h"
+#include "chrome/browser/ash/crosapi/test/ash_crosapi_tests_env.h"
 #include "chrome/browser/ash/crosapi/test/crosapi_test_base.h"
 #include "chromeos/crosapi/mojom/app_service.mojom.h"
 #include "chromeos/crosapi/mojom/app_service_types.mojom.h"
@@ -23,14 +28,35 @@ namespace {
 
 constexpr char kFakeChromeAppName[] = "fake-chrome-app";
 
+class FileManagerCrosapiTestCommandLineModifier
+    : public AshCrosapiTestCommandLineModifierDelegate {
+ public:
+  FileManagerCrosapiTestCommandLineModifier() = default;
+  FileManagerCrosapiTestCommandLineModifier(
+      const FileManagerCrosapiTestCommandLineModifier&) = delete;
+  FileManagerCrosapiTestCommandLineModifier& operator=(
+      const FileManagerCrosapiTestCommandLineModifier&) = delete;
+  ~FileManagerCrosapiTestCommandLineModifier() override = default;
+
+  void AddExtraCommandLine(base::CommandLine* command_line) override {
+    // This switch allows app installation.
+    command_line->AppendSwitchASCII(switches::kEnableFeatures,
+                                    "WebAppsCrosapi");
+  }
+};
+
 class FileManagerCrosapiTest : public CrosapiTestBase {
+ public:
+  FileManagerCrosapiTest()
+      : CrosapiTestBase(
+            std::make_unique<FileManagerCrosapiTestCommandLineModifier>()) {}
+
  protected:
   void SetUp() override {
-    CrosapiTestBase::SetUp();
-
     app_publisher_ = BindCrosapiInterface(&mojom::Crosapi::BindWebAppPublisher);
     file_manager_ = BindCrosapiInterface(&mojom::Crosapi::BindFileManager);
   }
+
   const base::FilePath GetMyFilesPath() {
     return GetUserDataDir().Append("test-user").Append("MyFiles");
   }
@@ -109,7 +135,8 @@ TEST_F(FileManagerCrosapiTest, OpenFile) {
   EXPECT_EQ(future2.Get(), mojom::OpenResult::kFailedInvalidType);
 }
 
-TEST_F(FileManagerCrosapiTest, OpenFileWithAppInstalled) {
+// TODO(crbug.com/1463936): Re-enable this test
+TEST_F(FileManagerCrosapiTest, DISABLED_OpenFileWithAppInstalled) {
   const base::FilePath pakfile_path = GetMyFilesPath().Append("test_file.pak");
   {
     base::ScopedAllowBlockingForTesting scoped_allow_blocking;

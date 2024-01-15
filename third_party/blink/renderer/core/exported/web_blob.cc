@@ -35,9 +35,12 @@
 #include "third_party/blink/public/mojom/blob/blob.mojom.h"
 #include "third_party/blink/public/mojom/blob/serialized_blob.mojom.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_blob.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fileapi/blob.h"
+#include "third_party/blink/renderer/core/fileapi/file_backed_blob_factory_dispatcher.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/file_metadata.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -50,18 +53,18 @@ WebBlob WebBlob::CreateFromSerializedBlob(mojom::SerializedBlobPtr blob) {
       blob->size, ToCrossVariantMojoType(std::move(blob->blob))));
 }
 
-WebBlob WebBlob::CreateFromFile(const WebString& path, uint64_t size) {
-  auto blob_data = std::make_unique<BlobData>();
-  blob_data->AppendFile(path, 0, size, absl::nullopt);
-  return MakeGarbageCollected<Blob>(
-      BlobDataHandle::Create(std::move(blob_data), size));
+WebBlob WebBlob::CreateFromFile(v8::Isolate* isolate,
+                                const WebString& path,
+                                uint64_t size) {
+  return MakeGarbageCollected<Blob>(BlobDataHandle::CreateForFile(
+      FileBackedBlobFactoryDispatcher::GetFileBackedBlobFactory(
+          ExecutionContext::From(isolate->GetCurrentContext())),
+      path, /*offset=*/0, size, /*expected_modification_time=*/absl::nullopt,
+      /*content_type=*/""));
 }
 
-WebBlob WebBlob::FromV8Value(v8::Local<v8::Value> value) {
-  if (V8Blob::HasInstance(value, v8::Isolate::GetCurrent())) {
-    v8::Local<v8::Object> object = v8::Local<v8::Object>::Cast(value);
-    Blob* blob = V8Blob::ToImpl(object);
-    DCHECK(blob);
+WebBlob WebBlob::FromV8Value(v8::Isolate* isolate, v8::Local<v8::Value> value) {
+  if (Blob* blob = V8Blob::ToWrappable(isolate, value)) {
     return blob;
   }
   return WebBlob();
@@ -84,7 +87,13 @@ WebString WebBlob::Uuid() {
 v8::Local<v8::Value> WebBlob::ToV8Value(v8::Isolate* isolate) {
   if (!private_.Get())
     return v8::Local<v8::Value>();
-  return ToV8(private_.Get(), isolate->GetCurrentContext()->Global(), isolate);
+  v8::Local<v8::Value> value;
+  if (!ToV8Traits<Blob>::ToV8(ScriptState::From(isolate->GetCurrentContext()),
+                              private_.Get())
+           .ToLocal(&value)) {
+    return v8::Local<v8::Value>();
+  }
+  return value;
 }
 
 WebBlob::WebBlob(Blob* blob) : private_(blob) {}

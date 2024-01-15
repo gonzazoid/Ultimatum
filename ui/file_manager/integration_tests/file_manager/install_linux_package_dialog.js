@@ -6,11 +6,9 @@ import {addEntries, ENTRIES, getCaller, pending, repeatUntil, RootPath, TestEntr
 import {testcase} from '../testcase.js';
 
 import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 
 testcase.installLinuxPackageDialog = async () => {
-  const fake = '#directory-tree .tree-item [root-type-icon="crostini"]';
-  const real = '#directory-tree .tree-item [volume-type-icon="crostini"]';
-
   // The dialog has an INSTALL and OK button, both as .cr-dialog-ok, but only
   // one is visible at a time.
   const dialog = '#install-linux-package-dialog';
@@ -22,11 +20,12 @@ testcase.installLinuxPackageDialog = async () => {
   await addEntries(['crostini'], [ENTRIES.debPackage]);
 
   // Linux files fake root is shown.
-  await remoteCall.waitForElement(appId, fake);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForPlaceholderItemByType('crostini');
 
   // Mount crostini, and ensure real root and files are shown.
-  remoteCall.callRemoteTestUtil('fakeMouseClick', appId, [fake]);
-  await remoteCall.waitForElement(appId, real);
+  await directoryTree.selectPlaceholderItemByType('crostini');
+  await directoryTree.waitForItemByType('crostini');
   const files = TestEntryInfo.getExpectedRows([ENTRIES.debPackage]);
   await remoteCall.waitForFiles(appId, files);
 
@@ -44,11 +43,11 @@ testcase.installLinuxPackageDialog = async () => {
     // returns as a single string. These values come from
     // fake_cicerone_client.cc.
     return elements[0] &&
-        elements[0].text ==
-            ('Details' +
-             'Application: Fake Package' +
-             'Version: 1.0' +
-             'Description: A package that is fake') ||
+        elements[0].innerText ===
+            ('Details\n' +
+             'Application: Fake Package\n' +
+             'Version: 1.0\n' +
+             'Description: A package that is fake\n') ||
         pending(caller, 'Waiting for installation to start.');
   });
 
@@ -61,7 +60,7 @@ testcase.installLinuxPackageDialog = async () => {
     const elements = await remoteCall.callRemoteTestUtil(
         'queryAllElements', appId, ['.cr-dialog-text']);
     return elements[0] &&
-        elements[0].text == 'Installation successfully started.' ||
+        elements[0].text === 'Installation successfully started.' ||
         pending(caller, 'Waiting for installation to start.');
   });
 

@@ -10,11 +10,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/enum_set.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/process/process.h"
 #include "base/types/pass_key.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
@@ -32,6 +32,29 @@ class FileSystemContext;
 class FileSystemURL;
 class FileWriterDelegate;
 class ShareableFileReference;
+
+// Operation type called by FileSystemOperationRunner.
+enum class OperationType {
+  kNone,
+  kCreateFile,
+  kCreateDirectory,
+  kCreateSnapshotFile,
+  kCopy,
+  kCopyInForeignFile,
+  kMove,
+  kDirectoryExists,
+  kFileExists,
+  kGetMetadata,
+  kReadDirectory,
+  kRemove,
+  kWrite,
+  kTruncate,
+  kTouchFile,
+  kOpenFile,
+  kCloseFile,
+  kGetLocalPath,
+  kCancel,
+};
 
 // The interface class for FileSystemOperation implementations.
 //
@@ -58,6 +81,7 @@ class FileSystemOperation {
  public:
   COMPONENT_EXPORT(STORAGE_BROWSER)
   static std::unique_ptr<FileSystemOperation> Create(
+      OperationType type,
       const FileSystemURL& url,
       FileSystemContext* file_system_context,
       std::unique_ptr<FileSystemOperationContext> operation_context);
@@ -173,22 +197,28 @@ class FileSystemOperation {
                                             CopyOrMoveOption::kFirst,
                                             CopyOrMoveOption::kLast>;
 
-  // Fields requested for the GetMetadata method. Used as a bitmask.
-  enum GetMetadataField {
-    GET_METADATA_FIELD_NONE = 0,
+  // Fields requested for the GetMetadata method. Used as an EnumSet to allow
+  // multiple fields to be specified.
+  enum class GetMetadataField {
+    // Returns the size of the target. Undefined for directories. See also
+    // kRecursiveSize.
+    kSize,
 
-    // Returns the size of the target. Undefined for directories.
-    // See also GET_METADATA_FIELD_TOTAL_SIZE.
-    GET_METADATA_FIELD_SIZE = 1 << 0,
+    kIsDirectory,
 
-    GET_METADATA_FIELD_IS_DIRECTORY = 1 << 1,
-
-    GET_METADATA_FIELD_LAST_MODIFIED = 1 << 2,
+    kLastModified,
 
     // If the target is directory, then total size of directory contents
-    // is returned, otherwise it's identical to GET_METADATA_FIELD_SIZE.
-    GET_METADATA_FIELD_TOTAL_SIZE = 1 << 3,
+    // is returned, otherwise it's identical to kSize.
+    kRecursiveSize,
+
+    kFirst = kSize,
+    kLast = kRecursiveSize
   };
+
+  using GetMetadataFieldSet = base::EnumSet<GetMetadataField,
+                                            GetMetadataField::kFirst,
+                                            GetMetadataField::kLast>;
 
   // Used for Write().
   using WriteCallback = base::RepeatingCallback<
@@ -275,7 +305,7 @@ class FileSystemOperation {
 
   // Gets the metadata of a file or directory at |path|.
   virtual void GetMetadata(const FileSystemURL& path,
-                           int fields,
+                           GetMetadataFieldSet fields,
                            GetMetadataCallback callback) = 0;
 
   // Reads contents of a directory at |path|.
@@ -356,7 +386,7 @@ class FileSystemOperation {
   // the metadata of the file itself (as well as GetMetadata does),
   // while in remote filesystem case the backend may want to download the file
   // into a temporary snapshot file and return the metadata of the
-  // temporary file.  Or if the implementaiton already has the local cache
+  // temporary file.  Or if the implementation already has the local cache
   // data for |path| it can simply return the path to the cache.
   virtual void CreateSnapshotFile(const FileSystemURL& path,
                                   SnapshotFileCallback callback) = 0;
@@ -448,29 +478,6 @@ class FileSystemOperation {
       base::FilePath* platform_path) = 0;
 
  protected:
-  // Used only for internal assertions.
-  enum OperationType {
-    kOperationNone,
-    kOperationCreateFile,
-    kOperationCreateDirectory,
-    kOperationCreateSnapshotFile,
-    kOperationCopy,
-    kOperationCopyInForeignFile,
-    kOperationMove,
-    kOperationDirectoryExists,
-    kOperationFileExists,
-    kOperationGetMetadata,
-    kOperationReadDirectory,
-    kOperationRemove,
-    kOperationWrite,
-    kOperationTruncate,
-    kOperationTouchFile,
-    kOperationOpenFile,
-    kOperationCloseFile,
-    kOperationGetLocalPath,
-    kOperationCancel,
-  };
-
   FileSystemOperation() = default;
 
   // Allows subclasses to call the FileSystemOperationImpl constructor.

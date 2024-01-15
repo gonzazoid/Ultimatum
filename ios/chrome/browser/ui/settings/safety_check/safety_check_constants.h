@@ -53,8 +53,14 @@ typedef NS_ENUM(NSInteger, UpdateCheckRowStates) {
 typedef NS_ENUM(NSInteger, PasswordCheckRowStates) {
   // When no compromised passwords were detected.
   PasswordCheckRowStateSafe,
-  // When user has compromised passwords.
-  PasswordCheckRowStateUnSafe,
+  // When user has unmuted compromised passwords.
+  PasswordCheckRowStateUnmutedCompromisedPasswords,
+  // When user has reused passwords.
+  PasswordCheckRowStateReusedPasswords,
+  // When user has weak passwords.
+  PasswordCheckRowStateWeakPasswords,
+  // When user has dismissed warnings.
+  PasswordCheckRowStateDismissedWarnings,
   // When check has not been run yet.
   PasswordCheckRowStateDefault,
   // When password check is running.
@@ -86,5 +92,23 @@ typedef NS_ENUM(NSInteger, CheckStartStates) {
   // When the check is running.
   CheckStartStateCancel,
 };
+
+// Name of the histogram used for recording the resulting state of the updates
+// check.
+extern const char kSafetyCheckMetricsUpdates[];
+
+// Name of the histogram used for recording the resulting state of the password
+// check.
+extern const char kSafetyCheckMetricsPasswords[];
+
+// Name of the histogram used for recording the resulting state of the Safe
+// Browsing check.
+extern const char kSafetyCheckMetricsSafeBrowsing[];
+
+// Name of the histogram used for recording safety check interactions.
+extern const char kSafetyCheckInteractions[];
+
+// Accessibility identifier for the Check Now button in the Safety Check module.
+extern NSString* const kSafetyCheckCheckNowButtonAccessibilityID;
 
 #endif  // IOS_CHROME_BROWSER_UI_SETTINGS_SAFETY_CHECK_SAFETY_CHECK_CONSTANTS_H_

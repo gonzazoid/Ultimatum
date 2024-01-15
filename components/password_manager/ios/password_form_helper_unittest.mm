@@ -6,36 +6,39 @@
 
 #include <stddef.h>
 
-#include "base/mac/bundle_locations.h"
+#include "base/apple/bundle_locations.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/ios/wait_util.h"
 #include "base/test/metrics/histogram_tester.h"
+#import "base/values.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/password_form_fill_data.h"
 #import "components/autofill/ios/form_util/autofill_test_with_web_state.h"
+#import "components/autofill/ios/form_util/form_handlers_java_script_feature.h"
 #import "components/autofill/ios/form_util/form_util_java_script_feature.h"
 #include "components/autofill/ios/form_util/unique_id_data_tab_helper.h"
+#import "components/autofill/ios/form_util/unique_id_data_tab_helper.h"
 #include "components/password_manager/ios/account_select_fill_data.h"
 #include "components/password_manager/ios/password_manager_java_script_feature.h"
 #include "components/password_manager/ios/test_helpers.h"
 #include "components/ukm/ios/ukm_url_recorder.h"
 #include "components/ukm/test_ukm_recorder.h"
-#include "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/script_message.h"
+#import "ios/web/public/js_messaging/web_frame.h"
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/test/fakes/fake_navigation_context.h"
 #include "ios/web/public/test/fakes/fake_web_client.h"
+#import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/gtest_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "third_party/ocmock/OCMock/OCMock.h"
+#import "third_party/ocmock/gtest_support.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -51,6 +54,18 @@ using test_helpers::SetFillData;
 using test_helpers::SetFormData;
 
 namespace {
+
+// A FakeWebState that returns nullopt as the last trusted committed URL.
+class FakeWebStateWithoutTrustedCommittedUrl : public web::FakeWebState {
+ public:
+  ~FakeWebStateWithoutTrustedCommittedUrl() override {}
+
+  // WebState implementation.
+  std::optional<GURL> GetLastCommittedURLIfTrusted() const override {
+    return std::nullopt;
+  }
+};
+
 class PasswordFormHelperTest : public AutofillTestWithWebState {
  public:
   PasswordFormHelperTest()
@@ -58,7 +73,8 @@ class PasswordFormHelperTest : public AutofillTestWithWebState {
     web::FakeWebClient* web_client =
         static_cast<web::FakeWebClient*>(GetWebClient());
     web_client->SetJavaScriptFeatures(
-        {autofill::FormUtilJavaScriptFeature::GetInstance(),
+        {autofill::FormHandlersJavaScriptFeature::GetInstance(),
+         autofill::FormUtilJavaScriptFeature::GetInstance(),
          password_manager::PasswordManagerJavaScriptFeature::GetInstance()});
   }
 
@@ -80,12 +96,18 @@ class PasswordFormHelperTest : public AutofillTestWithWebState {
     web::WebTestWithWebState::TearDown();
   }
 
+  web::WebFrame* GetMainFrame() {
+    password_manager::PasswordManagerJavaScriptFeature* feature =
+        password_manager::PasswordManagerJavaScriptFeature::GetInstance();
+    return feature->GetWebFramesManager(web_state())->GetMainWebFrame();
+  }
+
   // Sets up unique form ids and returns true if successful.
   bool SetUpUniqueIDs() {
     __block web::WebFrame* main_frame = nullptr;
     bool success =
         WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
-          main_frame = web_state()->GetWebFramesManager()->GetMainWebFrame();
+          main_frame = GetMainFrame();
           return main_frame != nullptr;
         });
     if (!success) {
@@ -101,7 +123,7 @@ class PasswordFormHelperTest : public AutofillTestWithWebState {
     // Run password forms search to set up unique IDs.
     __block bool complete = false;
     password_manager::PasswordManagerJavaScriptFeature::GetInstance()
-        ->FindPasswordFormsInFrame(web::GetMainFrame(web_state()),
+        ->FindPasswordFormsInFrame(main_frame,
                                    base::BindOnce(^(NSString* forms) {
                                      complete = true;
                                    }));
@@ -109,6 +131,28 @@ class PasswordFormHelperTest : public AutofillTestWithWebState {
     return WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
       return complete;
     });
+  }
+
+  // Returns a valid form submitted message body.
+  std::unique_ptr<base::Value> ValidFormSubmittedMessageBody(
+      std::string frame_id) {
+    return std::make_unique<base::Value>(
+        base::Value::Dict()
+            .Set("name", "test_form")
+            .Set("origin", BaseUrl())
+            .Set("fields", base::Value::List().Append(
+                               base::Value::Dict()
+                                   .Set("name", "test_field")
+                                   .Set("form_control_type", "password")))
+            .Set("frame_id", frame_id));
+  }
+
+  // Returns a script message that can represent a form submission.
+  web::ScriptMessage ScriptMessageForSubmit(std::unique_ptr<base::Value> body) {
+    return web::ScriptMessage(std::move(body),
+                              /*is_user_interacting=*/true,
+                              /*is_main_frame=*/true,
+                              /*request_url=*/std::nullopt);
   }
 
  protected:
@@ -183,7 +227,7 @@ TEST_F(PasswordFormHelperTest, FindPasswordFormsInView) {
     LoadHtml(data.html_string);
     __block std::vector<FormData> forms;
     __block BOOL block_was_called = NO;
-    [helper_ findPasswordFormsInFrame:web::GetMainFrame(web_state())
+    [helper_ findPasswordFormsInFrame:GetMainFrame()
                     completionHandler:^(const std::vector<FormData>& result,
                                         uint32_t maxID) {
                       block_was_called = YES;
@@ -259,7 +303,7 @@ TEST_F(PasswordFormHelperTest, FillPasswordFormWithFillData) {
 
   __block int call_counter = 0;
   [helper_ fillPasswordFormWithFillData:fill_data
-                                inFrame:web::GetMainFrame(web_state())
+                                inFrame:GetMainFrame()
                        triggeredOnField:username_field_id
                       completionHandler:^(BOOL complete) {
                         ++call_counter;
@@ -285,22 +329,21 @@ TEST_F(PasswordFormHelperTest, FillPasswordFormWithFillData) {
 TEST_F(PasswordFormHelperTest, FillPasswordFormWithFillDataFillingFailure) {
   ukm::TestAutoSetUkmRecorder test_recorder;
   base::HistogramTester histogram_tester;
-  LoadHtml(@"<form><input id='u1' type='text' name='un1'>"
-            "<input id='p1' type='password' name='pw1'></form>");
+  LoadHtml(@"<form><input id='p1' type='password' name='pw1'></form>");
 
   ASSERT_TRUE(SetUpUniqueIDs());
   const std::string base_url = BaseUrl();
-  FieldRendererId username_field_id(2);
+  FieldRendererId username_field_id(0);
   // The password renderer id does not exist, that's why the filling will fail
   FieldRendererId password_field_id(404);
   FillData fill_data;
-  SetFillData(base_url, 1, username_field_id.value(), "john.doe@gmail.com",
+  SetFillData(base_url, 1, username_field_id.value(), "",
               password_field_id.value(), "super!secret", &fill_data);
 
   __block int call_counter = 0;
   [helper_ fillPasswordFormWithFillData:fill_data
-                                inFrame:web::GetMainFrame(web_state())
-                       triggeredOnField:username_field_id
+                                inFrame:GetMainFrame()
+                       triggeredOnField:password_field_id
                       completionHandler:^(BOOL complete) {
                         ++call_counter;
                       }];
@@ -334,7 +377,7 @@ TEST_F(PasswordFormHelperTest, ExtractPasswordFormData) {
   __block int success_counter = 0;
   __block FormData result = FormData();
   [helper_ extractPasswordFormData:FormRendererId(1)
-                           inFrame:web::GetMainFrame(web_state())
+                           inFrame:GetMainFrame()
                  completionHandler:^(BOOL complete, const FormData& form) {
                    ++call_counter;
                    if (complete) {
@@ -353,7 +396,7 @@ TEST_F(PasswordFormHelperTest, ExtractPasswordFormData) {
   result = FormData();
 
   [helper_ extractPasswordFormData:FormRendererId(404)
-                           inFrame:web::GetMainFrame(web_state())
+                           inFrame:GetMainFrame()
                  completionHandler:^(BOOL complete, const FormData& form) {
                    ++call_counter;
                    if (complete) {
@@ -391,7 +434,7 @@ TEST_F(PasswordFormHelperTest, FillPasswordIntoFormWithUserTypedUsername) {
   __block bool called = NO;
   __block bool success = NO;
   [helper_ fillPasswordFormWithFillData:fill_data
-                                inFrame:web::GetMainFrame(web_state())
+                                inFrame:GetMainFrame()
                        triggeredOnField:password_field_id
                       completionHandler:^(BOOL res) {
                         called = YES;
@@ -403,6 +446,153 @@ TEST_F(PasswordFormHelperTest, FillPasswordIntoFormWithUserTypedUsername) {
   EXPECT_EQ(success, YES);
   id result = ExecuteJavaScript(kInputFieldValueVerificationScript);
   EXPECT_NSEQ(@"u1=typed@typed.com;p1=store!pw;", result);
+}
+
+// Tests that the form submit message is fully handled when in the correct
+// format and with the minimal viable content.
+TEST_F(PasswordFormHelperTest, HandleFormSubmittedMessage) {
+  id delegate = OCMStrictProtocolMock(@protocol(PasswordFormHelperDelegate));
+  OCMExpect([[delegate ignoringNonObjectArgs] formHelper:helper_
+                                           didSubmitForm:FormData()
+                                                 inFrame:GetMainFrame()]);
+  helper_.delegate = delegate;
+
+  LoadHtml(@"<p>");
+
+  // Set a message with the minimal viable body to succeed in form data
+  // extraction.
+  web::ScriptMessage submit_message = ScriptMessageForSubmit(
+      ValidFormSubmittedMessageBody(GetMainFrame()->GetFrameId()));
+
+  HandleSubmittedFormStatus status =
+      [helper_ handleFormSubmittedMessage:submit_message];
+
+  EXPECT_EQ(HandleSubmittedFormStatus::kHandled, status);
+
+  EXPECT_OCMOCK_VERIFY(delegate);
+}
+
+// Tests that the form submit message isn't handled when the message isn't in
+// the correct format.
+TEST_F(PasswordFormHelperTest, HandleFormSubmittedMessage_InvalidFormat) {
+  // Set the delegate mock in a way that the test will crash if there is any
+  // delegate call to handle the message.
+  id delegate = OCMStrictProtocolMock(@protocol(PasswordFormHelperDelegate));
+  helper_.delegate = delegate;
+
+  LoadHtml(@"<p>");
+
+  // Set the message value content as a string which is an invalid format
+  // because a dictionary is expected.
+  auto invalid_body =
+      std::make_unique<base::Value>(base::Value("invalid_because_expect_dict"));
+
+  web::ScriptMessage submit_message =
+      ScriptMessageForSubmit(std::move(invalid_body));
+
+  HandleSubmittedFormStatus status =
+      [helper_ handleFormSubmittedMessage:submit_message];
+
+  EXPECT_EQ(HandleSubmittedFormStatus::kRejectedMessageBodyNotADict, status);
+
+  // Verify that the delegate is never called because the message isn't handled
+  // because of the early return.
+  EXPECT_OCMOCK_VERIFY(delegate);
+}
+
+// Tests that the form submit message isn't handled when there is no trusted URL
+// loaded in the webstate.
+TEST_F(PasswordFormHelperTest, HandleFormSubmittedMessage_NoTrustedUrl) {
+  FakeWebStateWithoutTrustedCommittedUrl web_state;
+  UniqueIDDataTabHelper::CreateForWebState(&web_state);
+  PasswordFormHelper* helper =
+      [[PasswordFormHelper alloc] initWithWebState:&web_state];
+
+  // Set the delegate mock in a way that the test will crash if there is any
+  // delegate call to handle the message.
+  id delegate = OCMStrictProtocolMock(@protocol(PasswordFormHelperDelegate));
+  helper.delegate = delegate;
+
+  // Set a dummy message.
+  web::ScriptMessage submit_message =
+      ScriptMessageForSubmit(std::make_unique<base::Value>("whatever"));
+
+  HandleSubmittedFormStatus status =
+      [helper handleFormSubmittedMessage:submit_message];
+
+  EXPECT_EQ(HandleSubmittedFormStatus::kRejectedNoTrustedUrl, status);
+
+  // Verify that the delegate is never called because the message isn't handled
+  // because of the early return.
+  EXPECT_OCMOCK_VERIFY(delegate);
+}
+
+// Tests that the form submit message isn't handled when there is no webstate.
+TEST_F(PasswordFormHelperTest, HandleFormSubmittedMessage_NoWebState) {
+  // Set the delegate mock in a way that the test will crash if there is any
+  // delegate call to handle the message.
+  id delegate = OCMStrictProtocolMock(@protocol(PasswordFormHelperDelegate));
+  helper_.delegate = delegate;
+
+  // Set a dummy message.
+  web::ScriptMessage submit_message =
+      ScriptMessageForSubmit(std::make_unique<base::Value>("whatever"));
+
+  // Destroying the webstate will nullify the webstate pointer in the helper.
+  DestroyWebState();
+
+  HandleSubmittedFormStatus status =
+      [helper_ handleFormSubmittedMessage:submit_message];
+
+  EXPECT_EQ(HandleSubmittedFormStatus::kRejectedNoWebState, status);
+
+  // Verify that the delegate is never called because the message isn't handled
+  // because of the early return.
+  EXPECT_OCMOCK_VERIFY(delegate);
+}
+
+// Tests that the form submit message isn't handled when there is no frame
+// matching the provided frame id.
+TEST_F(PasswordFormHelperTest, HandleFormSubmittedMessage_NoFormMatchingId) {
+  id delegate = OCMStrictProtocolMock(@protocol(PasswordFormHelperDelegate));
+  helper_.delegate = delegate;
+
+  LoadHtml(@"<p>");
+
+  // Set a message with an nonexisting frame id.
+  web::ScriptMessage submit_message = ScriptMessageForSubmit(
+      ValidFormSubmittedMessageBody("nonexisting_frame_id"));
+
+  HandleSubmittedFormStatus status =
+      [helper_ handleFormSubmittedMessage:submit_message];
+
+  EXPECT_EQ(HandleSubmittedFormStatus::kRejectedNoFrameMatchingId, status);
+
+  EXPECT_OCMOCK_VERIFY(delegate);
+}
+
+// Tests that the form submit message isn't handled when form data can't be
+// extracted from the message's body.
+TEST_F(PasswordFormHelperTest, HandleFormSubmittedMessage_CantExtractFormData) {
+  id delegate = OCMStrictProtocolMock(@protocol(PasswordFormHelperDelegate));
+  helper_.delegate = delegate;
+
+  LoadHtml(@"<p>");
+
+  auto incomplete_message_body = std::make_unique<base::Value>(
+      base::Value::Dict().Set("frame_id", GetMainFrame()->GetFrameId()));
+
+  // Set a message with an incomplete body that misses the required keys to be
+  // parsed to form data.
+  web::ScriptMessage submit_message =
+      ScriptMessageForSubmit(std::move(incomplete_message_body));
+
+  HandleSubmittedFormStatus status =
+      [helper_ handleFormSubmittedMessage:submit_message];
+
+  EXPECT_EQ(HandleSubmittedFormStatus::kRejectedCantExtractFormData, status);
+
+  EXPECT_OCMOCK_VERIFY(delegate);
 }
 
 }  // namespace

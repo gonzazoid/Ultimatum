@@ -24,9 +24,9 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
-import org.chromium.chrome.browser.sync.SyncService;
+import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.browser.tab.TabLaunchType;
-import org.chromium.chrome.browser.tabmodel.document.TabDelegate;
+import org.chromium.chrome.browser.tabmodel.document.ChromeAsyncTabLauncher;
 import org.chromium.components.browser_ui.settings.ClickableSpansTextMessagePreference;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.search_engines.TemplateUrl;
@@ -34,6 +34,7 @@ import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.sync.ModelType;
+import org.chromium.components.sync.SyncService;
 import org.chromium.ui.text.NoUnderlineClickableSpan;
 import org.chromium.ui.text.SpanApplier;
 import org.chromium.ui.text.SpanApplier.SpanInfo;
@@ -79,19 +80,22 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
         super.onCreate(savedInstanceState);
 
         ClearBrowsingDataCheckBoxPreference historyCheckbox =
-                (ClearBrowsingDataCheckBoxPreference) findPreference(
-                        getPreferenceKey(DialogOption.CLEAR_HISTORY));
+                (ClearBrowsingDataCheckBoxPreference)
+                        findPreference(getPreferenceKey(DialogOption.CLEAR_HISTORY));
         ClearBrowsingDataCheckBoxPreference cookiesCheckbox =
-                (ClearBrowsingDataCheckBoxPreference) findPreference(
-                        getPreferenceKey(DialogOption.CLEAR_COOKIES_AND_SITE_DATA));
+                (ClearBrowsingDataCheckBoxPreference)
+                        findPreference(getPreferenceKey(DialogOption.CLEAR_COOKIES_AND_SITE_DATA));
 
-        historyCheckbox.setLinkClickDelegate(() -> {
-            new TabDelegate(false /* incognito */)
-                    .launchUrl(UrlConstants.MY_ACTIVITY_URL_IN_CBD, TabLaunchType.FROM_CHROME_UI);
-        });
+        historyCheckbox.setLinkClickDelegate(
+                () -> {
+                    new ChromeAsyncTabLauncher(/* incognito= */ false)
+                            .launchUrl(
+                                    UrlConstants.MY_ACTIVITY_URL_IN_CBD,
+                                    TabLaunchType.FROM_CHROME_UI);
+                });
 
-        IdentityManager identityManager = IdentityServicesProvider.get().getIdentityManager(
-                Profile.getLastUsedRegularProfile());
+        IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(getProfile());
         if (identityManager.hasPrimaryAccount(ConsentLevel.SIGNIN)) {
             // Update the Clear Browsing History text based on the sign-in/sync state and whether
             // the link to MyActivity is displayed inline or at the bottom of the page.
@@ -108,14 +112,15 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         super.onCreatePreferences(savedInstanceState, rootKey);
-        IdentityManager identityManager = IdentityServicesProvider.get().getIdentityManager(
-                Profile.getLastUsedRegularProfile());
+        Profile profile = getProfile();
+        IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(profile);
         ClickableSpansTextMessagePreference googleDataTextPref =
-                (ClickableSpansTextMessagePreference) findPreference(
-                        ClearBrowsingDataFragment.PREF_GOOGLE_DATA_TEXT);
+                (ClickableSpansTextMessagePreference)
+                        findPreference(ClearBrowsingDataFragment.PREF_GOOGLE_DATA_TEXT);
         Preference nonGoogleSearchHistoryTextPref =
                 findPreference(ClearBrowsingDataFragment.PREF_SEARCH_HISTORY_NON_GOOGLE_TEXT);
-        TemplateUrlService templateUrlService = TemplateUrlServiceFactory.get();
+        TemplateUrlService templateUrlService = TemplateUrlServiceFactory.getForProfile(profile);
         TemplateUrl defaultSearchEngine = templateUrlService.getDefaultSearchEngineTemplateUrl();
         boolean isDefaultSearchEngineGoogle = templateUrlService.isDefaultSearchEngineGoogle();
 
@@ -145,8 +150,10 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
         } else if (defaultSearchEngine.getIsPrepopulated()) {
             // Prepopulated non-Google DSE. Use its name in the text.
             nonGoogleSearchHistoryTextPref.setSummary(
-                    getContext().getString(R.string.clear_search_history_non_google_dse,
-                            defaultSearchEngine.getShortName()));
+                    getContext()
+                            .getString(
+                                    R.string.clear_search_history_non_google_dse,
+                                    defaultSearchEngine.getShortName()));
         } else {
             // Unknown non-Google DSE. Use generic text.
             nonGoogleSearchHistoryTextPref.setSummary(
@@ -175,29 +182,38 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
     }
 
     private SpannableString buildGoogleSearchHistoryText() {
-        return SpanApplier.applySpans(getContext().getString(R.string.clear_search_history_link),
-                new SpanInfo("<link1>", "</link1>",
-                        new NoUnderlineClickableSpan(getContext(),
-                                createOpenMyActivityCallback(/* openSearchHistory = */ true))),
-                new SpanInfo("<link2>", "</link2>",
-                        new NoUnderlineClickableSpan(getContext(),
-                                createOpenMyActivityCallback(/* openSearchHistory = */ false))));
+        return SpanApplier.applySpans(
+                getContext().getString(R.string.clear_search_history_link),
+                new SpanInfo(
+                        "<link1>",
+                        "</link1>",
+                        new NoUnderlineClickableSpan(
+                                getContext(),
+                                createOpenMyActivityCallback(/* openSearchHistory= */ true))),
+                new SpanInfo(
+                        "<link2>",
+                        "</link2>",
+                        new NoUnderlineClickableSpan(
+                                getContext(),
+                                createOpenMyActivityCallback(/* openSearchHistory= */ false))));
     }
 
     private SpannableString buildGoogleMyActivityText() {
         return SpanApplier.applySpans(
                 getContext().getString(R.string.clear_search_history_link_other_forms),
-                new SpanInfo("<link1>", "</link1>",
-                        new NoUnderlineClickableSpan(getContext(),
-                                createOpenMyActivityCallback(/* openSearchHistory = */ false))));
+                new SpanInfo(
+                        "<link1>",
+                        "</link1>",
+                        new NoUnderlineClickableSpan(
+                                getContext(),
+                                createOpenMyActivityCallback(/* openSearchHistory= */ false))));
     }
 
     /** If openSearchHistory is true, opens the search history page; otherwise: top level. */
     private Callback<View> createOpenMyActivityCallback(boolean openSearchHistory) {
         return (widget) -> {
-            assert mCustomTabHelper
-                    != null
-                : "CCT helper must be set on ClearBrowsingFragmentBasic before opening a link.";
+            assert mCustomTabHelper != null
+                    : "CCT helper must be set on ClearBrowsingFragmentBasic before opening a link.";
             CustomTabsIntent customTabIntent =
                     new CustomTabsIntent.Builder().setShowTitle(true).build();
 
@@ -206,16 +222,19 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
                 url = UrlConstants.GOOGLE_SEARCH_HISTORY_URL_IN_CBD;
                 RecordHistogram.recordEnumeratedHistogram(
                         "Settings.ClearBrowsingData.OpenMyActivity",
-                        MyActivityNavigation.SEARCH_HISTORY, MyActivityNavigation.NUM_ENTRIES);
+                        MyActivityNavigation.SEARCH_HISTORY,
+                        MyActivityNavigation.NUM_ENTRIES);
             } else {
                 url = UrlConstants.MY_ACTIVITY_URL_IN_CBD;
                 RecordHistogram.recordEnumeratedHistogram(
-                        "Settings.ClearBrowsingData.OpenMyActivity", MyActivityNavigation.TOP_LEVEL,
+                        "Settings.ClearBrowsingData.OpenMyActivity",
+                        MyActivityNavigation.TOP_LEVEL,
                         MyActivityNavigation.NUM_ENTRIES);
             }
             customTabIntent.intent.setData(Uri.parse(url));
-            Intent intent = mCustomTabHelper.createCustomTabActivityIntent(
-                    getContext(), customTabIntent.intent);
+            Intent intent =
+                    mCustomTabHelper.createCustomTabActivityIntent(
+                            getContext(), customTabIntent.intent);
             intent.setPackage(getContext().getPackageName());
             intent.putExtra(Browser.EXTRA_APPLICATION_ID, getContext().getPackageName());
             IntentUtils.addTrustedIntentExtras(intent);
@@ -224,8 +243,9 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
     }
 
     private boolean isHistorySyncEnabled() {
-        SyncService syncService = SyncService.get();
-        return syncService != null && syncService.isSyncFeatureEnabled()
+        SyncService syncService = SyncServiceFactory.getForProfile(getProfile());
+        return syncService != null
+                && syncService.isSyncFeatureEnabled()
                 && syncService.getActiveDataTypes().contains(ModelType.HISTORY_DELETE_DIRECTIVES);
     }
 
@@ -236,15 +256,19 @@ public class ClearBrowsingDataFragmentBasic extends ClearBrowsingDataFragment {
 
     @Override
     protected List<Integer> getDialogOptions() {
-        return Arrays.asList(DialogOption.CLEAR_HISTORY, DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
+        return Arrays.asList(
+                DialogOption.CLEAR_HISTORY,
+                DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
                 DialogOption.CLEAR_CACHE);
     }
 
     @Override
     protected void onClearBrowsingData() {
         super.onClearBrowsingData();
-        RecordHistogram.recordEnumeratedHistogram("History.ClearBrowsingData.UserDeletedFromTab",
-                ClearBrowsingDataTab.BASIC, ClearBrowsingDataTab.NUM_TYPES);
+        RecordHistogram.recordEnumeratedHistogram(
+                "History.ClearBrowsingData.UserDeletedFromTab",
+                ClearBrowsingDataTab.BASIC,
+                ClearBrowsingDataTab.NUM_TYPES);
         RecordUserAction.record("ClearBrowsingData_BasicTab");
     }
 }

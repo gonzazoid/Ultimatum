@@ -5,11 +5,14 @@
 #include "third_party/blink/renderer/core/css/properties/longhands/custom_property.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
+#include "third_party/blink/renderer/core/css/css_numeric_literal_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_test_helpers.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_local_context.h"
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
@@ -18,7 +21,6 @@
 namespace blink {
 
 using css_test_helpers::RegisterProperty;
-using VariableMode = CSSParserLocalContext::VariableMode;
 
 namespace {
 
@@ -31,7 +33,7 @@ class CustomPropertyTest : public PageTestBase {
   }
 
   const ComputedStyle& GetComputedStyle() {
-    Element* node = GetDocument().getElementById("target");
+    Element* node = GetDocument().getElementById(AtomicString("target"));
     return node->ComputedStyleRef();
   }
 
@@ -41,54 +43,55 @@ class CustomPropertyTest : public PageTestBase {
                                               false /* allow_visited_style */);
   }
 
-  const CSSValue* ParseValue(const Longhand& property,
+  const CSSValue* ParseValue(const CustomProperty& property,
                              const String& value,
                              const CSSParserLocalContext& local_context) {
     CSSTokenizer tokenizer(value);
     const auto tokens = tokenizer.TokenizeToEOF();
     CSSParserTokenRange range(tokens);
     auto* context = MakeGarbageCollected<CSSParserContext>(GetDocument());
-    return property.ParseSingleValue(range, *context, local_context);
+    return property.Parse(CSSTokenizedValue{range, value}, *context,
+                          local_context);
   }
 };
 
 }  // namespace
 
 TEST_F(CustomPropertyTest, UnregisteredPropertyIsInherited) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   EXPECT_TRUE(property.IsInherited());
 }
 
 TEST_F(CustomPropertyTest, RegisteredNonInheritedPropertyIsNotInherited) {
   RegisterProperty(GetDocument(), "--x", "<length>", "42px", false);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   EXPECT_FALSE(property.IsInherited());
 }
 
 TEST_F(CustomPropertyTest, RegisteredInheritedPropertyIsInherited) {
   RegisterProperty(GetDocument(), "--x", "<length>", "42px", true);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   EXPECT_TRUE(property.IsInherited());
 }
 
 TEST_F(CustomPropertyTest, StaticVariableInstance) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   EXPECT_FALSE(Variable::IsStaticInstance(property));
   EXPECT_TRUE(Variable::IsStaticInstance(GetCSSPropertyVariable()));
 }
 
 TEST_F(CustomPropertyTest, PropertyID) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   EXPECT_EQ(CSSPropertyID::kVariable, property.PropertyID());
 }
 
 TEST_F(CustomPropertyTest, GetPropertyNameAtomicString) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   EXPECT_EQ(AtomicString("--x"), property.GetPropertyNameAtomicString());
 }
 
 TEST_F(CustomPropertyTest, ComputedCSSValueUnregistered) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   SetElementWithStyle("--x:foo");
   const CSSValue* value = GetComputedValue(property);
   EXPECT_TRUE(value->IsCustomPropertyDeclaration());
@@ -97,7 +100,7 @@ TEST_F(CustomPropertyTest, ComputedCSSValueUnregistered) {
 
 TEST_F(CustomPropertyTest, ComputedCSSValueInherited) {
   RegisterProperty(GetDocument(), "--x", "<length>", "0px", true);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   SetElementWithStyle("--x:100px");
   const CSSValue* value = GetComputedValue(property);
   ASSERT_TRUE(value->IsPrimitiveValue());
@@ -107,7 +110,7 @@ TEST_F(CustomPropertyTest, ComputedCSSValueInherited) {
 
 TEST_F(CustomPropertyTest, ComputedCSSValueNonInherited) {
   RegisterProperty(GetDocument(), "--x", "<length>", "0px", false);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   SetElementWithStyle("--x:100px");
   const CSSValue* value = GetComputedValue(property);
   ASSERT_TRUE(value->IsPrimitiveValue());
@@ -117,7 +120,7 @@ TEST_F(CustomPropertyTest, ComputedCSSValueNonInherited) {
 
 TEST_F(CustomPropertyTest, ComputedCSSValueInitial) {
   RegisterProperty(GetDocument(), "--x", "<length>", "100px", false);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   SetElementWithStyle("");  // Do not apply --x.
   const CSSValue* value = GetComputedValue(property);
   ASSERT_TRUE(value->IsPrimitiveValue());
@@ -126,14 +129,14 @@ TEST_F(CustomPropertyTest, ComputedCSSValueInitial) {
 }
 
 TEST_F(CustomPropertyTest, ComputedCSSValueEmptyInitial) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   SetElementWithStyle("");  // Do not apply --x.
   const CSSValue* value = GetComputedValue(property);
   EXPECT_FALSE(value);
 }
 
 TEST_F(CustomPropertyTest, ComputedCSSValueLateRegistration) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   SetElementWithStyle("--x:100px");
   RegisterProperty(GetDocument(), "--x", "<length>", "100px", false);
   // The property was not registered when the style was computed, hence the
@@ -143,8 +146,28 @@ TEST_F(CustomPropertyTest, ComputedCSSValueLateRegistration) {
   EXPECT_EQ("100px", value->CssText());
 }
 
+TEST_F(CustomPropertyTest, ComputedCSSValueNumberCalc) {
+  RegisterProperty(GetDocument(), "--x", "<number>", "0", false);
+  CustomProperty property(AtomicString("--x"), GetDocument());
+  SetElementWithStyle("--x:calc(24 / 10)");
+  const CSSValue* value = GetComputedValue(property);
+  ASSERT_TRUE(value->IsNumericLiteralValue());
+  const auto* numeric_literal = To<CSSNumericLiteralValue>(value);
+  EXPECT_DOUBLE_EQ(2.4, numeric_literal->GetDoubleValue());
+}
+
+TEST_F(CustomPropertyTest, ComputedCSSValueIntegerCalc) {
+  RegisterProperty(GetDocument(), "--x", "<integer>", "0", false);
+  CustomProperty property(AtomicString("--x"), GetDocument());
+  SetElementWithStyle("--x:calc(24 / 10)");
+  const CSSValue* value = GetComputedValue(property);
+  ASSERT_TRUE(value->IsNumericLiteralValue());
+  const auto* numeric_literal = To<CSSNumericLiteralValue>(value);
+  EXPECT_DOUBLE_EQ(2.0, numeric_literal->GetDoubleValue());
+}
+
 TEST_F(CustomPropertyTest, ParseSingleValueUnregistered) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   const CSSValue* value =
       ParseValue(property, "100px", CSSParserLocalContext());
   ASSERT_TRUE(value->IsCustomPropertyDeclaration());
@@ -152,7 +175,7 @@ TEST_F(CustomPropertyTest, ParseSingleValueUnregistered) {
 }
 
 TEST_F(CustomPropertyTest, ParseSingleValueAnimationTainted) {
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   const CSSValue* value1 = ParseValue(
       property, "100px", CSSParserLocalContext().WithAnimationTainted(true));
   const CSSValue* value2 = ParseValue(
@@ -166,7 +189,7 @@ TEST_F(CustomPropertyTest, ParseSingleValueAnimationTainted) {
 
 TEST_F(CustomPropertyTest, ParseSingleValueTyped) {
   RegisterProperty(GetDocument(), "--x", "<length>", "0px", false);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
   const CSSValue* value1 =
       ParseValue(property, "100px", CSSParserLocalContext());
   EXPECT_TRUE(value1->IsPrimitiveValue());
@@ -177,32 +200,10 @@ TEST_F(CustomPropertyTest, ParseSingleValueTyped) {
   EXPECT_FALSE(value2);
 }
 
-TEST_F(CustomPropertyTest, ParseSingleValueUntyped) {
-  RegisterProperty(GetDocument(), "--x", "<length>", "0px", false);
-  CustomProperty property("--x", GetDocument());
-  const CSSValue* value = ParseValue(
-      property, "maroon",
-      CSSParserLocalContext().WithVariableMode(VariableMode::kUntyped));
-  ASSERT_TRUE(value->IsCustomPropertyDeclaration());
-  EXPECT_EQ("maroon", value->CssText());
-}
-
-TEST_F(CustomPropertyTest, ParseSingleValueValidatedUntyped) {
-  RegisterProperty(GetDocument(), "--x", "<length>", "0px", false);
-  CustomProperty property("--x", GetDocument());
-  auto local_context =
-      CSSParserLocalContext().WithVariableMode(VariableMode::kValidatedUntyped);
-  const CSSValue* value1 = ParseValue(property, "100px", local_context);
-  ASSERT_TRUE(value1->IsCustomPropertyDeclaration());
-  EXPECT_EQ("100px", value1->CssText());
-
-  const CSSValue* value2 = ParseValue(property, "maroon", local_context);
-  EXPECT_FALSE(value2);
-}
-
 TEST_F(CustomPropertyTest, GetCSSPropertyName) {
-  CustomProperty property("--x", GetDocument());
-  EXPECT_EQ(CSSPropertyName("--x"), property.GetCSSPropertyName());
+  CustomProperty property(AtomicString("--x"), GetDocument());
+  EXPECT_EQ(CSSPropertyName(AtomicString("--x")),
+            property.GetCSSPropertyName());
 }
 
 TEST_F(CustomPropertyTest, SupportsGuaranteedInvalid) {
@@ -210,10 +211,10 @@ TEST_F(CustomPropertyTest, SupportsGuaranteedInvalid) {
   RegisterProperty(GetDocument(), "--no-initial", "*", absl::nullopt, true);
   RegisterProperty(GetDocument(), "--length", "<length>", "0px", true);
 
-  CustomProperty unregistered("--unregistered", GetDocument());
-  CustomProperty universal("--universal", GetDocument());
-  CustomProperty no_initial_value("--no-initial", GetDocument());
-  CustomProperty length("--length", GetDocument());
+  CustomProperty unregistered(AtomicString("--unregistered"), GetDocument());
+  CustomProperty universal(AtomicString("--universal"), GetDocument());
+  CustomProperty no_initial_value(AtomicString("--no-initial"), GetDocument());
+  CustomProperty length(AtomicString("--length"), GetDocument());
 
   EXPECT_TRUE(unregistered.SupportsGuaranteedInvalid());
   EXPECT_TRUE(universal.SupportsGuaranteedInvalid());
@@ -226,10 +227,10 @@ TEST_F(CustomPropertyTest, HasInitialValue) {
   RegisterProperty(GetDocument(), "--no-initial", "*", absl::nullopt, true);
   RegisterProperty(GetDocument(), "--length", "<length>", "0px", true);
 
-  CustomProperty unregistered("--unregistered", GetDocument());
-  CustomProperty universal("--universal", GetDocument());
-  CustomProperty no_initial_value("--no-initial", GetDocument());
-  CustomProperty length("--length", GetDocument());
+  CustomProperty unregistered(AtomicString("--unregistered"), GetDocument());
+  CustomProperty universal(AtomicString("--universal"), GetDocument());
+  CustomProperty no_initial_value(AtomicString("--no-initial"), GetDocument());
+  CustomProperty length(AtomicString("--length"), GetDocument());
 
   EXPECT_FALSE(unregistered.HasInitialValue());
   EXPECT_TRUE(universal.HasInitialValue());
@@ -241,7 +242,7 @@ TEST_F(CustomPropertyTest, ParseAnchorQueriesAsLength) {
   ScopedCSSAnchorPositioningForTest enabled_scope(true);
 
   RegisterProperty(GetDocument(), "--x", "<length>", "0px", false);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
 
   // We can't parse anchor queries as a <length>, because it can't be resolved
   // into a pixel value at style time.
@@ -255,7 +256,7 @@ TEST_F(CustomPropertyTest, ParseAnchorQueriesAsLengthPercentage) {
   ScopedCSSAnchorPositioningForTest enabled_scope(true);
 
   RegisterProperty(GetDocument(), "--x", "<length-percentage>", "0px", false);
-  CustomProperty property("--x", GetDocument());
+  CustomProperty property(AtomicString("--x"), GetDocument());
 
   {
     const CSSValue* value =
@@ -282,6 +283,42 @@ TEST_F(CustomPropertyTest, ParseAnchorQueriesAsLengthPercentage) {
     ASSERT_TRUE(value);
     EXPECT_EQ("calc(anchor(--foo top) + anchor-size(--foo width))",
               value->CssText());
+  }
+}
+
+TEST_F(CustomPropertyTest, ValueMode) {
+  RegisterProperty(GetDocument(), "--x", "<length>", "0px", false);
+
+  CustomProperty property(AtomicString("--x"), GetDocument());
+
+  scoped_refptr<CSSVariableData> data =
+      css_test_helpers::CreateVariableData("100px");
+  ASSERT_FALSE(data->IsAnimationTainted());
+  auto* declaration = MakeGarbageCollected<CSSCustomPropertyDeclaration>(
+      data, /* parser_context */ nullptr);
+
+  // ValueMode::kNormal
+  {
+    StyleResolverState state(GetDocument(), *GetDocument().documentElement(),
+                             /* StyleRecalcContext */ nullptr, StyleRequest());
+    state.SetStyle(*GetDocument().GetStyleResolver().InitialStyleForElement());
+    property.ApplyValue(state, *declaration, CSSProperty::ValueMode::kNormal);
+    const ComputedStyle* style = state.TakeStyle();
+    ASSERT_TRUE(style->GetVariableData(AtomicString("--x")));
+    EXPECT_FALSE(
+        style->GetVariableData(AtomicString("--x"))->IsAnimationTainted());
+  }
+
+  // ValueMode::kAnimated
+  {
+    StyleResolverState state(GetDocument(), *GetDocument().documentElement(),
+                             /* StyleRecalcContext */ nullptr, StyleRequest());
+    state.SetStyle(*GetDocument().GetStyleResolver().InitialStyleForElement());
+    property.ApplyValue(state, *declaration, CSSProperty::ValueMode::kAnimated);
+    const ComputedStyle* style = state.TakeStyle();
+    ASSERT_TRUE(style->GetVariableData(AtomicString("--x")));
+    EXPECT_TRUE(
+        style->GetVariableData(AtomicString("--x"))->IsAnimationTainted());
   }
 }
 

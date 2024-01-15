@@ -7,11 +7,11 @@
 #include <memory>
 #include <ostream>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/values.h"
@@ -103,7 +103,7 @@ bool IsLockScreenCapable(Profile* profile, const std::string& app_id) {
     return false;
   }
   return extensions::ActionHandlersInfo::HasLockScreenActionHandler(
-      chrome_app, app_runtime::ACTION_TYPE_NEW_NOTE);
+      chrome_app, app_runtime::ActionType::kNewNote);
 }
 
 // Gets the set of app IDs that are allowed to be launched on the lock screen,

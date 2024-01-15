@@ -5,11 +5,12 @@
 #ifndef CHROMEOS_ASH_SERVICES_SECURE_CHANNEL_BLE_CHARACTERISTICS_FINDER_H_
 #define CHROMEOS_ASH_SERVICES_SECURE_CHANNEL_BLE_CHARACTERISTICS_FINDER_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/services/secure_channel/remote_attribute.h"
 #include "device/bluetooth/bluetooth_adapter.h"
@@ -59,7 +60,7 @@ class BluetoothLowEnergyCharacteristicsFinder
       const multidevice::RemoteDeviceRef& remote_device,
       std::unique_ptr<BackgroundEidGenerator> background_eid_generator,
       scoped_refptr<base::TaskRunner> task_runner =
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
 
   BluetoothLowEnergyCharacteristicsFinder(
       const BluetoothLowEnergyCharacteristicsFinder&) = delete;
@@ -100,7 +101,7 @@ class BluetoothLowEnergyCharacteristicsFinder
   void TryToVerifyEid(device::BluetoothRemoteGattCharacteristic* eid_char);
   void OnRemoteCharacteristicRead(
       const std::string& service_id,
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value);
   bool DoesEidMatchExpectedDevice(const std::vector<uint8_t>& eid_value_read);
 
@@ -108,7 +109,7 @@ class BluetoothLowEnergyCharacteristicsFinder
   scoped_refptr<device::BluetoothAdapter> adapter_;
 
   // The Bluetooth device to which the connection was established.
-  device::BluetoothDevice* bluetooth_device_;
+  raw_ptr<device::BluetoothDevice, DanglingUntriaged> bluetooth_device_;
 
   // Remote service the |connection_| was established with.
   RemoteAttribute remote_service_;

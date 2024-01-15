@@ -19,8 +19,8 @@
 #include <list>
 #include <memory>
 
-#include "base/callback_forward.h"
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/scoped_mach_port.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #include <list>
@@ -96,7 +96,7 @@ class BASE_EXPORT WaitableEvent {
   //   SendToOtherThread(e);
   //   e->Wait();
   //   delete e;
-  void NOT_TAIL_CALLED Wait();
+  NOT_TAIL_CALLED void Wait();
 
   // Wait up until wait_delta has passed for the event to be signaled
   // (real-time; ignores time overrides).  Returns true if the event was
@@ -104,7 +104,7 @@ class BASE_EXPORT WaitableEvent {
   // have elapsed if this returns false.
   //
   // TimedWait can synchronise its own destruction like |Wait|.
-  bool NOT_TAIL_CALLED TimedWait(TimeDelta wait_delta);
+  NOT_TAIL_CALLED bool TimedWait(TimeDelta wait_delta);
 
 #if BUILDFLAG(IS_WIN)
   HANDLE handle() const { return handle_.get(); }
@@ -115,8 +115,10 @@ class BASE_EXPORT WaitableEvent {
   // not synchronously waiting on this event before resuming ongoing work). This
   // is useful to avoid telling base-internals that this thread is "blocked"
   // when it's merely idle and ready to do work. As such, this is only expected
-  // to be used by thread and thread pool impls.
-  void declare_only_used_while_idle() { waiting_is_blocking_ = false; }
+  // to be used by thread and thread pool impls. In such cases wakeup.flow
+  // events aren't emitted on |Signal|/|Wait|, because threading implementations
+  // are responsible for emitting the cause of their wakeup from idle.
+  void declare_only_used_while_idle() { only_used_while_idle_ = true; }
 
   // Wait, synchronously, on multiple events.
   //   waitables: an array of WaitableEvent pointers
@@ -130,7 +132,7 @@ class BASE_EXPORT WaitableEvent {
   //
   // If more than one WaitableEvent is signaled to unblock WaitMany, the lowest
   // index among them is returned.
-  static size_t NOT_TAIL_CALLED WaitMany(WaitableEvent** waitables,
+  NOT_TAIL_CALLED static size_t WaitMany(WaitableEvent** waitables,
                                          size_t count);
 
   // For asynchronous waiting, see WaitableEventWatcher
@@ -201,7 +203,7 @@ class BASE_EXPORT WaitableEvent {
     friend class RefCountedThreadSafe<ReceiveRight>;
     ~ReceiveRight();
 
-    mac::ScopedMachReceiveRight right_;
+    apple::ScopedMachReceiveRight right_;
   };
 
   const ResetPolicy policy_;
@@ -212,7 +214,7 @@ class BASE_EXPORT WaitableEvent {
   // The send right used to signal the event. This can be disposed of with
   // the event, unlike the receive right, since a deleted event cannot be
   // signaled.
-  mac::ScopedMachSendRight send_right_;
+  apple::ScopedMachSendRight send_right_;
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   // On Windows, you must not close a HANDLE which is currently being waited on.
   // The MSDN documentation says that the resulting behaviour is 'undefined'.
@@ -260,8 +262,10 @@ class BASE_EXPORT WaitableEvent {
 #endif
 
   // Whether a thread invoking Wait() on this WaitableEvent should be considered
-  // blocked as opposed to idle (and potentially replaced if part of a pool).
-  bool waiting_is_blocking_ = true;
+  // blocked as opposed to idle (and potentially replaced if part of a pool),
+  // and whether WaitableEvent should emit a wakeup.flow event on Signal =>
+  // TimedWait.
+  bool only_used_while_idle_ = false;
 };
 
 }  // namespace base

@@ -11,13 +11,13 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
+#include <optional>
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/media/api/audio_provider.h"
@@ -36,7 +36,6 @@
 #include "media/base/audio_bus.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "media/filters/audio_renderer_algorithm.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromecast {
 namespace media {
@@ -328,7 +327,7 @@ class MixerInputConnection::TimestampedFader : public AudioProvider {
   const int num_channels_;
   const int sample_rate_;
 
-  absl::optional<int> pending_silence_;
+  std::optional<int> pending_silence_;
   FaderProvider fader_provider_;
   AudioFader fader_;
   bool after_silence_ = true;
@@ -374,7 +373,7 @@ MixerInputConnection::MixerInputConnection(
       enable_audio_clock_simulation_(pts_is_timestamp_ ||
                                      params.enable_audio_clock_simulation()),
       effective_playout_channel_(playout_channel_),
-      io_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      io_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       max_queued_frames_(std::max(GetQueueSize(params), algorithm_fill_size_)),
       start_threshold_frames_(GetStartThreshold(params)),
       never_timeout_connection_(params.never_timeout_connection()),
@@ -1196,8 +1195,8 @@ int MixerInputConnection::FillTimestampedAudio(int num_frames,
                               input_samples_per_second_);
 
     const int64_t error =
-        base::clamp(playout_time - desired_playout_time, -kTimestampErrorLimit,
-                    kTimestampErrorLimit);
+        std::clamp(playout_time - desired_playout_time, -kTimestampErrorLimit,
+                   kTimestampErrorLimit);
     if (error < -max_timestamp_error_ ||
         (after_silence &&
          error < -1e6 / (input_samples_per_second_ * playback_rate_))) {

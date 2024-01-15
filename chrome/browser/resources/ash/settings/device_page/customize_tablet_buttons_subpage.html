@@ -1,0 +1,11 @@
+<style include="settings-shared input-device-settings-shared">
+</style>
+<customize-buttons-subsection
+  button-remapping-list="{{selectedTablet.settings.tabletButtonRemappings}}"
+  action-list$="[[buttonActionList_]]"
+  has-launcher-button="[[hasLauncherButton_]]">
+</customize-buttons-subsection>
+<div id="description" class="subpage-description">
+  <iron-icon icon="os-settings:info-outline"></iron-icon>
+  <span>[[getDescription_(selectedTablet.*)]]</span>
+</div>

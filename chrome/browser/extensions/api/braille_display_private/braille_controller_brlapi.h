@@ -8,11 +8,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/singleton.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/extensions/api/braille_display_private/braille_controller.h"
 #include "chrome/browser/extensions/api/braille_display_private/brlapi_connection.h"
@@ -34,6 +35,9 @@ class BrailleControllerImpl : public BrailleController {
                  unsigned int rows) override;
   void AddObserver(BrailleObserver* observer) override;
   void RemoveObserver(BrailleObserver* observer) override;
+
+  // Use BrailleControllerImpl instead of Stub in tests.
+  bool use_self_in_tests() const { return use_self_in_tests_; }
 
  private:
   // For the unit tests.
@@ -72,6 +76,7 @@ class BrailleControllerImpl : public BrailleController {
   void DispatchOnDisplayStateChanged(std::unique_ptr<DisplayState> new_state);
 
   CreateBrlapiConnectionFunction create_brlapi_connection_function_;
+  bool use_self_in_tests_ = false;
 
   // Manipulated on the IO thread.
   LibBrlapiLoader libbrlapi_loader_;

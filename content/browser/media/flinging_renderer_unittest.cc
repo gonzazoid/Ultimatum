@@ -4,7 +4,7 @@
 
 #include "content/browser/media/flinging_renderer.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
@@ -66,8 +66,8 @@ class FlingingRendererTest : public testing::Test {
  protected:
   NiceMock<media::MockRendererClient> renderer_client_;
   std::unique_ptr<MockMediaController> media_controller_;
-  raw_ptr<StrictMock<MockFlingingController>> flinging_controller_;
   std::unique_ptr<FlingingRenderer> renderer_;
+  raw_ptr<StrictMock<MockFlingingController>> flinging_controller_;
 };
 
 TEST_F(FlingingRendererTest, StartPlayingFromTime) {

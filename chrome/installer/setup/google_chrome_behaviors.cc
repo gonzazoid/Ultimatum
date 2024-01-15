@@ -7,15 +7,15 @@
 #include <windows.h>
 
 #include <shellapi.h>
+
 #include <memory>
+#include <string_view>
 
 #include "base/files/file_path.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/logging.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
-#include "base/strings/string_split.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "base/version.h"
@@ -36,7 +36,7 @@ namespace installer {
 
 namespace {
 
-constexpr base::WStringPiece kUninstallSurveyUrl(
+constexpr std::wstring_view kUninstallSurveyUrl(
     L"https://support.google.com/chrome?p=chrome_uninstall_survey");
 
 bool NavigateToUrlWithEdge(const std::wstring& url) {
@@ -83,12 +83,10 @@ bool IsMetricsEnabled(const base::FilePath& file_path) {
   if (!root || !root->is_dict())
     return false;
 
-  auto path =
-      base::SplitStringPiece(metrics::prefs::kMetricsReportingEnabled, ".",
-                             base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-  const auto* value = root->FindPathOfType(path, base::Value::Type::BOOLEAN);
+  const absl::optional<bool> value = root->GetDict().FindBoolByDottedPath(
+      metrics::prefs::kMetricsReportingEnabled);
 
-  return value && value->GetBool();
+  return value.value_or(false);
 }
 
 }  // namespace
@@ -185,8 +183,9 @@ void DoPostUninstallOperations(const base::Version& version,
   const base::win::OSInfo* os_info = base::win::OSInfo::GetInstance();
   base::win::OSInfo::VersionNumber version_number = os_info->version_number();
   std::wstring os_version =
-      base::StringPrintf(L"%d.%d.%d", version_number.major,
-                         version_number.minor, version_number.build);
+      base::StrCat({base::NumberToWString(version_number.major), L".",
+                    base::NumberToWString(version_number.minor), L".",
+                    base::NumberToWString(version_number.build)});
 
   const std::wstring survey_url = std::wstring(kUninstallSurveyUrl);
 #if DCHECK_IS_ON()
@@ -196,9 +195,9 @@ void DoPostUninstallOperations(const base::Version& version,
   DCHECK_EQ(survey_url.find(L'?', pos + 1), std::wstring::npos);
   DCHECK_NE(survey_url.back(), L'&');
 #endif
-  auto url = base::StringPrintf(L"%ls&crversion=%ls&os=%ls", survey_url.c_str(),
-                                base::ASCIIToWide(version.GetString()).c_str(),
-                                os_version.c_str());
+  auto url = base::StrCat({survey_url, L"&crversion=",
+                           base::ASCIIToWide(version.GetString()), L"&os=",
+                           os_version});
 
   if (!distribution_data.empty() && IsMetricsEnabled(local_data_path)) {
     url += L"&";

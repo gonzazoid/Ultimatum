@@ -22,6 +22,7 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandler
   static constexpr double kDefaultInputGainPercent = 50;
   static constexpr double kDefaultOutputVolumePercent = 75;
   static constexpr double kDefaultHdmiOutputVolumePercent = 100;
+  static constexpr double kDefaultBluetoothOutputVolumePercent = 25;
 
   // Gets the audio output volume value from prefs for a device. Since we can
   // only have either a gain or a volume for a device (depending on whether it
@@ -82,6 +83,16 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_AUDIO) AudioDevicesPrefHandler
   virtual void DropLeastRecentlySeenDevices(
       const std::vector<AudioDevice>& connected_devices,
       size_t keep_devices) = 0;
+
+  // Reads whether input force respect ui gains is on from profile prefs.
+  virtual bool GetForceRespectUiGainsState() = 0;
+  // Sets the input force respect ui gains in profile prefs.
+  virtual void SetForceRespectUiGainsState(bool force_respect_ui_gains) = 0;
+
+  // Reads whether hfp_mic_sr is on from profile prefs.
+  virtual bool GetHfpMicSrState() = 0;
+  // Sets the hfp_mic_sr in profile prefs.
+  virtual void SetHfpMicSrState(bool hfp_mic_sr_state) = 0;
 
  protected:
   virtual ~AudioDevicesPrefHandler() = default;

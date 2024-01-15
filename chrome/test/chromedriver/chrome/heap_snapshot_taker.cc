@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "base/json/json_reader.h"
-#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 
@@ -61,14 +60,14 @@ bool HeapSnapshotTaker::ListensToConnections() const {
 
 Status HeapSnapshotTaker::OnEvent(DevToolsClient* client,
                                   const std::string& method,
-                                  const base::DictionaryValue& params) {
+                                  const base::Value::Dict& params) {
   if (method == "HeapProfiler.addHeapSnapshotChunk") {
-    std::string chunk;
-    if (!params.GetString("chunk", &chunk)) {
+    const std::string* chunk = params.FindString("chunk");
+    if (!chunk) {
       return Status(kUnknownError,
                     "HeapProfiler.addHeapSnapshotChunk has no 'chunk'");
     }
-    snapshot_.append(chunk);
+    snapshot_.append(*chunk);
   }
   return Status(kOk);
 }

@@ -9,10 +9,6 @@
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model_observer.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 TestFullscreenController::TestFullscreenController(FullscreenModel* model)
     : FullscreenController(),
       model_(model),
@@ -26,18 +22,6 @@ TestFullscreenController::~TestFullscreenController() {
 
 ChromeBroadcaster* TestFullscreenController::broadcaster() {
   return broadcaster_;
-}
-
-void TestFullscreenController::SetWebStateList(WebStateList* web_state_list) {
-  web_state_list_ = web_state_list;
-}
-
-const WebStateList* TestFullscreenController::GetWebStateList() const {
-  return web_state_list_;
-}
-
-WebStateList* TestFullscreenController::GetWebStateList() {
-  return web_state_list_;
 }
 
 void TestFullscreenController::AddObserver(
@@ -98,6 +82,32 @@ void TestFullscreenController::ExitFullscreen() {
     model_->ResetForNavigation();
 }
 
+void TestFullscreenController::ExitFullscreenWithoutAnimation() {
+  if (model_) {
+    model_->ResetForNavigation();
+  }
+}
+
+bool TestFullscreenController::IsForceFullscreenMode() const {
+  return model_ ? model_->IsForceFullscreenMode() : false;
+}
+
+void TestFullscreenController::EnterForceFullscreenMode() {
+  if (model_ && !model_->IsForceFullscreenMode()) {
+    model_->SetForceFullscreenMode(true);
+    model_->IncrementDisabledCounter();
+    model_->ForceEnterFullscreen();
+  }
+}
+
+void TestFullscreenController::ExitForceFullscreenMode() {
+  if (model_ && model_->IsForceFullscreenMode()) {
+    model_->DecrementDisabledCounter();
+    model_->SetForceFullscreenMode(false);
+    model_->ResetForNavigation();
+  }
+}
+
 void TestFullscreenController::OnFullscreenViewportInsetRangeChanged(
     UIEdgeInsets min_viewport_insets,
     UIEdgeInsets max_viewport_insets) {
@@ -128,12 +138,6 @@ void TestFullscreenController::OnFullscreenWillAnimate(
 
 void TestFullscreenController::ResizeHorizontalViewport() {
   // NOOP in tests.
-}
-
-void TestFullscreenController::FreezeToolbarHeight(bool freeze_toolbar_height) {
-  if (model_) {
-    model_->SetFreezeToolbarHeight(freeze_toolbar_height);
-  }
 }
 
 // static

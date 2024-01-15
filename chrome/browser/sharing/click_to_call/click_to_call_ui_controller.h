@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/sharing/click_to_call/click_to_call_metrics.h"
@@ -44,7 +44,7 @@ class ClickToCallUiController
   ~ClickToCallUiController() override;
 
   void OnDeviceSelected(const std::string& phone_number,
-                        const syncer::DeviceInfo& device,
+                        const SharingTargetDeviceInfo& device,
                         SharingClickToCallEntryPoint entry_point);
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -62,7 +62,7 @@ class ClickToCallUiController
   PageActionIconType GetIconType() override;
   sync_pb::SharingSpecificFields::EnabledFeatures GetRequiredFeature()
       const override;
-  void OnDeviceChosen(const syncer::DeviceInfo& device) override;
+  void OnDeviceChosen(const SharingTargetDeviceInfo& device) override;
   void OnAppChosen(const SharingApp& app) override;
   void OnDialogClosed(SharingDialog* dialog) override;
   std::u16string GetContentType() const override;
@@ -84,7 +84,7 @@ class ClickToCallUiController
       base::OnceCallback<void(SharingClickToCallSelection)>;
 
   // Sends |phone_number| to |device| as a SharingMessage.
-  void SendNumberToDevice(const syncer::DeviceInfo& device,
+  void SendNumberToDevice(const SharingTargetDeviceInfo& device,
                           const std::string& phone_number,
                           SharingClickToCallEntryPoint entry_point);
 

@@ -15,9 +15,7 @@ by a child template that "extends" this file.
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="{{manifest_package|default('com.android.webview')}}"
-    {% if use_isolated_splits is defined and use_isolated_splits == 'true' %}
     android:isolatedSplits="true"
-    {% endif %}
     tools:ignore="MissingLeanbackLauncher">
 
     <uses-feature android:name="android.hardware.touchscreen"
@@ -27,9 +25,12 @@ by a child template that "extends" this file.
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Required by WebView Developer UI only -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <!-- Required to run the foreground service-->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -37,8 +38,10 @@ by a child template that "extends" this file.
                  android:icon="@{{manifest_package|default('com.android.webview')}}:drawable/icon_webview"
                  android:name="{{ application_name|default('org.chromium.android_webview.nonembedded.WebViewApkApplication') }}"
                  android:multiArch="true"
-                 {{ use32bitAbi|default('android:use32bitAbi="true"') }}
-                 android:extractNativeLibs="{{ trichrome_library is not defined }}">
+                 {% if force_32_bit is defined and force_32_bit == 'true' %}
+                 android:use32bitAbi="true"
+                 {% endif %}
+                 android:extractNativeLibs="false">
         {# This part is shared between stand-alone WebView and Monochrome #}
         {% macro common(manifest_package, webview_lib) %}
             <meta-data android:name="com.android.webview.WebViewLibrary"
@@ -51,7 +54,10 @@ by a child template that "extends" this file.
               android:exported="true"
               tools:ignore="ExportedService">
               <meta-data
-                  android:name="SET_DATA_DIRECTORY_SUFFIX:DEV"
+                  android:name="STARTUP_FEATURE_SET_DATA_DIRECTORY_SUFFIX"
+                  android:value="true"/>
+              <meta-data
+                  android:name="STARTUP_FEATURE_SET_DIRECTORY_BASE_PATH"
                   android:value="true"/>
             </service>
             <!-- WebView Developer UI Activities. If you change these Activities, please update
@@ -119,6 +125,12 @@ by a child template that "extends" this file.
                       tools:ignore="ExportedContentProvider" />
             <!-- If you change this component make sure to update the corresponding copy in
                  test/shell/AndroidManifest.xml-->
+            <provider android:name="org.chromium.android_webview.services.SafeModeVariationsSeedContentProvider"
+                      android:visibleToInstantApps="true"
+                      android:exported="true"
+                      android:authorities="{{ manifest_package }}.SafeModeVariationsSeedContentProvider"
+                      android:process=":webview_service"  {# Explicit process required for monochrome compatibility. #}
+                      tools:ignore="ExportedContentProvider" />
             <provider android:name="org.chromium.android_webview.services.SafeModeContentProvider"
                       android:visibleToInstantApps="true"
                       android:exported="true"
@@ -155,9 +167,15 @@ by a child template that "extends" this file.
                          android:exported="true"
                          android:process=":webview_service" />  {# Explicit process required for monochrome compatibility. #}
                 <service android:name="org.chromium.android_webview.services.DeveloperUiService"
+                         android:foregroundServiceType="specialUse"
                          android:exported="true"
                          android:process=":webview_service"  {# Explicit process required for monochrome compatibility. #}
-                         tools:ignore="ExportedService" />
+                         tools:ignore="ExportedService" >
+                          <property
+                            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                            android:value="debugging"
+                          />
+                </service>
                 <service android:name="org.chromium.android_webview.services.SafeModeService"
                          android:exported="true"
                          android:process=":webview_service"  {# Explicit process required for monochrome compatibility. #}

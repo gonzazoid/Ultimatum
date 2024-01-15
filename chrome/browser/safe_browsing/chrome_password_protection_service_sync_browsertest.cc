@@ -4,7 +4,7 @@
 
 #include "chrome/browser/safe_browsing/chrome_password_protection_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -34,8 +34,8 @@
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "components/sync/test/fake_server_network_resources.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -74,8 +74,9 @@ class ChromePasswordProtectionServiceSyncBrowserTest : public SyncTest {
 
     ASSERT_TRUE(SetupClients());
 
-    // Sign the profile in.
-    ASSERT_TRUE(GetClient(0)->SignInPrimaryAccount());
+    // Sign the profile in and enable Sync.
+    ASSERT_TRUE(
+        GetClient(0)->SignInPrimaryAccount(signin::ConsentLevel::kSync));
 
     CoreAccountInfo current_info =
         IdentityManagerFactory::GetForProfile(GetProfile(0))
@@ -143,7 +144,7 @@ IN_PROC_BROWSER_TEST_F(ChromePasswordProtectionServiceSyncBrowserTest,
   std::string script =
       "var node = document.getElementById('reset-password-button'); \n"
       "node.click();";
-  ASSERT_TRUE(content::ExecuteScript(interstitial_web_contents, script));
+  ASSERT_TRUE(content::ExecJs(interstitial_web_contents, script));
   content::TestNavigationObserver observer1(interstitial_web_contents,
                                             /*number_of_navigations=*/1);
   observer1.Wait();

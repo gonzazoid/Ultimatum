@@ -1,8 +1,6 @@
 # Placeholder for internal Python strict binary compatibility macro.
 
-package(
-    licenses = ["notice"],
-)
+package(licenses = ["notice"])
 
 py_binary(
     name = "build_py_api_docs",

@@ -4,13 +4,12 @@
 
 #import "ios/web/download/download_session_task_impl.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/check.h"
-#import "base/mac/foundation_util.h"
 #import "base/sequence_checker.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/task/bind_post_task.h"
 #import "base/task/sequenced_task_runner.h"
-#import "base/threading/sequenced_task_runner_handle.h"
 #import "ios/net/cookies/system_cookie_util.h"
 #import "ios/web/common/user_agent.h"
 #import "ios/web/download/download_result.h"
@@ -25,10 +24,6 @@
 #import "net/cookies/cookie_store.h"
 #import "net/url_request/url_request_context.h"
 #import "net/url_request/url_request_context_getter.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace download {
@@ -56,7 +51,7 @@ class TaskInfo {
   static TaskInfo FromTask(NSURLSessionTask* task) {
     int http_code = -1;
     if ([task.response isKindOfClass:[NSHTTPURLResponse class]]) {
-      http_code = base::mac::ObjCCastStrict<NSHTTPURLResponse>(task.response)
+      http_code = base::apple::ObjCCastStrict<NSHTTPURLResponse>(task.response)
                       .statusCode;
     }
 
@@ -234,11 +229,11 @@ WriteDataResult WriteDataHelper(base::File file, NSArray<NSData*>* array) {
 }
 
 // Move the `base::File` out of `optional` and reset the `optional` to have
-// no value (i.e. to be equal to `absl::nullopt`).
-base::File take(absl::optional<base::File>& optional) {
+// no value (i.e. to be equal to `std::nullopt`).
+base::File take(std::optional<base::File>& optional) {
   DCHECK(optional.has_value());
   base::File value = std::move(optional.value());
-  optional = absl::nullopt;
+  optional = std::nullopt;
   return value;
 }
 
@@ -363,11 +358,11 @@ class Session {
   // empty or not, the data is enqueued in `pending_` or a new task is
   // posted to the background sequence using `task_runner_`.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
-  absl::optional<base::File> file_;
+  std::optional<base::File> file_;
   NSMutableArray<NSData*>* pending_ = nil;
 
   // Stores the error code received from `TaskFinished`.
-  absl::optional<int> error_code_;
+  std::optional<int> error_code_;
 
   // References to the NSURLSession and NSURLSessionTask used to perform
   // the download in the background.
@@ -422,13 +417,11 @@ Session::Session(base::File file,
   };
 
   // Invoked when data is received from NSURLSessionTask.
-  DataReceivedHandler data_received = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
+  DataReceivedHandler data_received = base::BindPostTaskToCurrentDefault(
       base::BindRepeating(&Session::DataReceived, weak_factory_.GetWeakPtr()));
 
   // Invoked when NSURLSessionTask complete.
-  TaskFinishedHandler task_finished = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
+  TaskFinishedHandler task_finished = base::BindPostTaskToCurrentDefault(
       base::BindRepeating(&Session::TaskFinished, weak_factory_.GetWeakPtr()));
 
   // The delegate passed to NSURLSession. It is strongly retained by the
@@ -640,12 +633,10 @@ void DownloadSessionTaskImpl::OnFileCreated(base::File file) {
   using download::internal::GetCookiesFromContextGetter;
   GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
-      base::BindOnce(
-          &GetCookiesFromContextGetter, context_getter,
-          base::BindPostTask(
-              base::SequencedTaskRunnerHandle::Get(),
-              base::BindOnce(&DownloadSessionTaskImpl::OnCookiesFetched,
-                             weak_factory_.GetWeakPtr(), std::move(file)))));
+      base::BindOnce(&GetCookiesFromContextGetter, context_getter,
+                     base::BindPostTaskToCurrentDefault(base::BindOnce(
+                         &DownloadSessionTaskImpl::OnCookiesFetched,
+                         weak_factory_.GetWeakPtr(), std::move(file)))));
 }
 
 void DownloadSessionTaskImpl::OnCookiesFetched(

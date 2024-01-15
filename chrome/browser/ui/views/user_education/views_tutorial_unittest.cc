@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/user_education/common/help_bubble_factory_registry.h"
 #include "components/user_education/common/help_bubble_params.h"
@@ -50,8 +49,8 @@ class TestTutorialService : public user_education::TutorialService {
 
 void FlushMessageQueue() {
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                run_loop.QuitClosure());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 
@@ -111,8 +110,8 @@ class ViewsTutorialTest : public views::ViewsTestBase {
                                         &help_bubble_registry_};
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<views::LabelButton> button_ = nullptr;
-  raw_ptr<views::Label> indicator_ = nullptr;
+  raw_ptr<views::LabelButton, DanglingUntriaged> button_ = nullptr;
+  raw_ptr<views::Label, DanglingUntriaged> indicator_ = nullptr;
   bool hide_button_on_press_ = false;
 
  private:
@@ -140,20 +139,24 @@ TEST_F(ViewsTutorialTest, BubbleDismissOnViewHiddenDoesNotEndTutorial) {
   constexpr user_education::HelpBubbleArrow kArrow =
       user_education::HelpBubbleArrow::kTopLeft;
   user_education::TutorialDescription desc;
-  desc.steps.emplace_back(0, IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP,
-                          ui::InteractionSequence::StepType::kShown,
-                          kButtonElementId, "", kArrow);
-  desc.steps.emplace_back(0, 0, ui::InteractionSequence::StepType::kActivated,
-                          kButtonElementId, "", kArrow);
-  desc.steps.emplace_back(0, IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP,
-                          ui::InteractionSequence::StepType::kShown,
-                          kIndicatorElementId, "", kArrow);
+  desc.steps.emplace_back(
+      user_education::TutorialDescription::BubbleStep(kButtonElementId)
+          .SetBubbleBodyText(IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP)
+          .SetBubbleArrow(kArrow));
+  desc.steps.emplace_back(
+      user_education::TutorialDescription::HiddenStep::WaitForActivated(
+          kButtonElementId));
+  desc.steps.emplace_back(
+      user_education::TutorialDescription::BubbleStep(kIndicatorElementId)
+          .SetBubbleBodyText(IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP)
+          .SetBubbleArrow(kArrow));
   tutorial_registry_.AddTutorial(kTutorialId, std::move(desc));
 
-  ASSERT_TRUE(tutorial_service_.StartTutorial(
+  tutorial_service_.StartTutorial(
       kTutorialId,
       views::ElementTrackerViews::GetContextForWidget(widget_.get()),
-      completed.Get(), aborted.Get()));
+      completed.Get(), aborted.Get());
+  ASSERT_TRUE(tutorial_service_.IsRunningTutorial());
 
   hide_button_on_press_ = true;
   views::test::InteractionTestUtilSimulatorViews::PressButton(
@@ -189,20 +192,24 @@ TEST_F(ViewsTutorialTest, FinalBubbleDismissOnViewHiddenDoesEndTutorial) {
   constexpr user_education::HelpBubbleArrow kArrow =
       user_education::HelpBubbleArrow::kTopLeft;
   user_education::TutorialDescription desc;
-  desc.steps.emplace_back(0, IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP,
-                          ui::InteractionSequence::StepType::kShown,
-                          kButtonElementId, "", kArrow);
-  desc.steps.emplace_back(0, 0, ui::InteractionSequence::StepType::kActivated,
-                          kButtonElementId, "", kArrow);
-  desc.steps.emplace_back(0, IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP,
-                          ui::InteractionSequence::StepType::kShown,
-                          kIndicatorElementId, "", kArrow);
+  desc.steps.emplace_back(
+      user_education::TutorialDescription::BubbleStep(kButtonElementId)
+          .SetBubbleBodyText(IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP)
+          .SetBubbleArrow(kArrow));
+  desc.steps.emplace_back(
+      user_education::TutorialDescription::HiddenStep::WaitForActivated(
+          kButtonElementId));
+  desc.steps.emplace_back(
+      user_education::TutorialDescription::BubbleStep(kIndicatorElementId)
+          .SetBubbleBodyText(IDS_TUTORIAL_TAB_GROUP_ADD_TAB_TO_GROUP)
+          .SetBubbleArrow(kArrow));
   tutorial_registry_.AddTutorial(kTutorialId, std::move(desc));
 
-  ASSERT_TRUE(tutorial_service_.StartTutorial(
+  tutorial_service_.StartTutorial(
       kTutorialId,
       views::ElementTrackerViews::GetContextForWidget(widget_.get()),
-      completed.Get(), aborted.Get()));
+      completed.Get(), aborted.Get());
+  ASSERT_TRUE(tutorial_service_.IsRunningTutorial());
 
   views::test::InteractionTestUtilSimulatorViews::PressButton(
       button_.get(), ui::test::InteractionTestUtil::InputType::kKeyboard);

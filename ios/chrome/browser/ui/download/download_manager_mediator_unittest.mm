@@ -6,11 +6,11 @@
 
 #import <UIKit/UIKit.h>
 
+#import "base/apple/foundation_util.h"
 #import "base/run_loop.h"
-#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#import "ios/chrome/browser/download/download_directory_util.h"
-#import "ios/chrome/browser/download/external_app_util.h"
+#import "ios/chrome/browser/download/model/download_directory_util.h"
+#import "ios/chrome/browser/download/model/external_app_util.h"
 #import "ios/chrome/test/fakes/fake_download_manager_consumer.h"
 #import "ios/web/public/test/fakes/fake_download_task.h"
 #import "ios/web/public/test/web_task_environment.h"
@@ -18,10 +18,6 @@
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -65,7 +61,7 @@ TEST_F(DownloadManagerMediatorTest, DestoryTaskAfterStart) {
   auto task =
       std::make_unique<web::FakeDownloadTask>(GURL(kTestUrl), kTestMimeType);
   mediator_.SetDownloadTask(task.get());
-  mediator_.StartDowloading();
+  mediator_.StartDownloading();
   task.reset();
 }
 
@@ -76,7 +72,7 @@ TEST_F(DownloadManagerMediatorTest, StartTempDownload) {
   task()->SetGeneratedFileName(base::FilePath(kTestSuggestedFileName));
   mediator_.SetDownloadTask(task());
   mediator_.SetConsumer(consumer_);
-  mediator_.StartDowloading();
+  mediator_.StartDownloading();
 
   // Starting download is async for task and sync for consumer.
   EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
@@ -87,13 +83,17 @@ TEST_F(DownloadManagerMediatorTest, StartTempDownload) {
         return task()->GetState() == web::DownloadTask::State::kInProgress;
       }));
 
+  // Download file should be located in tmp directory during the download.
+  base::FilePath tmp_dir;
+  ASSERT_TRUE(GetTempDownloadsDirectory(&tmp_dir));
+  EXPECT_TRUE(tmp_dir.IsParent(task()->GetResponsePath()));
+
+  // Once downloaded, the file should be located in download directory.
   task()->SetDone(true);
-  EXPECT_EQ(kDownloadManagerStateSucceeded, consumer_.state);
-  // Download file should be located in download directory.
-  base::FilePath file = mediator_.GetDownloadPath();
   base::FilePath download_dir;
-  ASSERT_TRUE(GetTempDownloadsDirectory(&download_dir));
-  EXPECT_TRUE(download_dir.IsParent(file));
+  GetDownloadsDirectory(&download_dir);
+  EXPECT_EQ(kDownloadManagerStateSucceeded, consumer_.state);
+  EXPECT_TRUE(download_dir.IsParent(mediator_.GetDownloadPath()));
 }
 
 // Tests starting the download. Verifies that download task is started and its
@@ -103,7 +103,7 @@ TEST_F(DownloadManagerMediatorTest, StartDownload) {
   task()->SetGeneratedFileName(base::FilePath(kTestSuggestedFileName));
   mediator_.SetDownloadTask(task());
   mediator_.SetConsumer(consumer_);
-  mediator_.StartDowloading();
+  mediator_.StartDownloading();
 
   // Starting download is async for task and sync for consumer.
   EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
@@ -118,7 +118,7 @@ TEST_F(DownloadManagerMediatorTest, StartDownload) {
   EXPECT_EQ(kDownloadManagerStateSucceeded, consumer_.state);
   // Download file should be located in download directory.
   base::FilePath download_dir;
-  GetTempDownloadsDirectory(&download_dir);
+  GetDownloadsDirectory(&download_dir);
   ASSERT_TRUE(
       WaitUntilConditionOrTimeout(base::test::ios::kWaitForDownloadTimeout, ^{
         base::RunLoop().RunUntilIdle();
@@ -136,7 +136,7 @@ TEST_F(DownloadManagerMediatorTest, ConsumerInstantUpdate) {
   task()->SetGeneratedFileName(base::FilePath(kTestSuggestedFileName));
   mediator_.SetDownloadTask(task());
   mediator_.SetConsumer(consumer_);
-  mediator_.StartDowloading();
+  mediator_.StartDownloading();
 
   // Starting download is async for task and sync for consumer.
   EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
@@ -157,7 +157,7 @@ TEST_F(DownloadManagerMediatorTest, ConsumerInstantUpdate) {
   EXPECT_EQ(kDownloadManagerStateSucceeded, consumer_.state);
   EXPECT_FALSE(consumer_.installDriveButtonVisible);
   EXPECT_EQ(base::FilePath(kTestSuggestedFileName),
-            base::FilePath(base::SysNSStringToUTF8(consumer_.fileName)));
+            base::apple::NSStringToFilePath(consumer_.fileName));
   EXPECT_EQ(kTestTotalBytes, consumer_.countOfBytesExpectedToReceive);
   EXPECT_EQ(kTestReceivedBytes, consumer_.countOfBytesReceived);
   EXPECT_FLOAT_EQ(0.8f, consumer_.progress);
@@ -183,7 +183,7 @@ TEST_F(DownloadManagerMediatorTest, ConsumerSuceededStateUpdate) {
   task()->SetGeneratedFileName(base::FilePath(kTestSuggestedFileName));
   mediator_.SetDownloadTask(task());
   mediator_.SetConsumer(consumer_);
-  mediator_.StartDowloading();
+  mediator_.StartDownloading();
 
   // Starting download is async for task and sync for consumer.
   EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
@@ -207,7 +207,7 @@ TEST_F(DownloadManagerMediatorTest,
   task()->SetGeneratedFileName(base::FilePath(kTestSuggestedFileName));
   mediator_.SetDownloadTask(task());
   mediator_.SetConsumer(consumer_);
-  mediator_.StartDowloading();
+  mediator_.StartDownloading();
 
   // Starting download is async for task and sync for consumer.
   EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
@@ -232,4 +232,41 @@ TEST_F(DownloadManagerMediatorTest, ConsumerInProgressStateUpdate) {
   EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
   EXPECT_FALSE(consumer_.installDriveButtonVisible);
   EXPECT_EQ(0.0, consumer_.progress);
+}
+
+// Tests that setting the consumer twice when the download is complete will only
+// move it once.
+TEST_F(DownloadManagerMediatorTest, SetConsumerAfterDownloadComplete) {
+  task()->SetGeneratedFileName(base::FilePath(kTestSuggestedFileName));
+  mediator_.SetDownloadTask(task());
+  mediator_.SetConsumer(consumer_);
+  mediator_.StartDownloading();
+
+  // Starting download is async for task and sync for consumer.
+  EXPECT_EQ(kDownloadManagerStateInProgress, consumer_.state);
+  EXPECT_FALSE(consumer_.installDriveButtonVisible);
+  ASSERT_TRUE(
+      WaitUntilConditionOrTimeout(base::test::ios::kWaitForDownloadTimeout, ^{
+        base::RunLoop().RunUntilIdle();
+        return task()->GetState() == web::DownloadTask::State::kInProgress;
+      }));
+
+  // Download file should be located in tmp directory during the download.
+  base::FilePath tmp_dir;
+  ASSERT_TRUE(GetTempDownloadsDirectory(&tmp_dir));
+  EXPECT_TRUE(tmp_dir.IsParent(task()->GetResponsePath()));
+
+  // Once downloaded, the file should be located in download directory.
+  task()->SetDone(true);
+  base::FilePath download_dir;
+  base::FilePath file_path = mediator_.GetDownloadPath();
+  GetDownloadsDirectory(&download_dir);
+  EXPECT_EQ(kDownloadManagerStateSucceeded, consumer_.state);
+  EXPECT_TRUE(download_dir.IsParent(file_path));
+
+  // Set the consumer a second time.
+  mediator_.SetConsumer(consumer_);
+  EXPECT_EQ(kDownloadManagerStateSucceeded, consumer_.state);
+  EXPECT_TRUE(download_dir.IsParent(file_path));
+  EXPECT_EQ(file_path, mediator_.GetDownloadPath());
 }

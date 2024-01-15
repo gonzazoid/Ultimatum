@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/views/tab_search_bubble_host.h"
 
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
@@ -16,6 +17,10 @@
 #include "content/public/test/browser_test.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/gfx/geometry/rect.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/ui/frame/multitask_menu/multitask_menu_nudge_controller.h"
+#endif
 
 void EnterFullscreen(Browser* browser) {
   browser->exclusive_access_manager()
@@ -41,8 +46,8 @@ class TabSearchBubbleHostBrowserTest : public InProcessBrowserTest {
   void RunUntilBubbleWidgetDestroyed() {
     ASSERT_NE(nullptr, bubble_manager()->GetBubbleWidget());
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
     run_loop.Run();
     ASSERT_EQ(nullptr, bubble_manager()->GetBubbleWidget());
   }
@@ -107,7 +112,11 @@ IN_PROC_BROWSER_TEST_F(TabSearchBubbleHostBrowserTest,
 
 class FullscreenTabSearchBubbleDialogTest : public DialogBrowserTest {
  public:
-  FullscreenTabSearchBubbleDialogTest() = default;
+  FullscreenTabSearchBubbleDialogTest() {
+#if BUILDFLAG(IS_CHROMEOS)
+    chromeos::MultitaskMenuNudgeController::SetSuppressNudgeForTesting(true);
+#endif
+  }
 
   FullscreenTabSearchBubbleDialogTest(
       const FullscreenTabSearchBubbleDialogTest&) = delete;

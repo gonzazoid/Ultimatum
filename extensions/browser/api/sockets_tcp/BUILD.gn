@@ -15,10 +15,11 @@ source_set("sockets_tcp") {
     "tcp_socket_event_dispatcher.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
     "//content/public/browser",
-    "//extensions/browser/api",
     "//extensions/browser/api/socket",
     "//extensions/common",
     "//extensions/common/api",

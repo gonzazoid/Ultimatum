@@ -10,60 +10,7 @@
 #include "base/logging.h"
 #include "base/numerics/checked_math.h"
 
-/*
-EventSetInformation configuration macros:
-
-TraceLogging works best if the EventSetInformation API can be used to notify
-ETW that the provider uses TraceLogging event encoding.
-
-The EventSetInformation API is available on Windows 8 and later. (It is also
-available on fully-patched Windows 7, but not on Windows 7 RTM).
-
-The TLM_HAVE_EVENT_SET_INFORMATION and TLM_EVENT_SET_INFORMATION macros can
-be set before compiling this file to  control how the TlmProvider class deals
-with the EventSetInformation API.
-
-If these macros are not set, the default behavior is to check the WINVER
-macro at compile time:
-
-- If WINVER is set to Windows 7 or before, TlmProvider will use GetProcAddress
-  to locate EventSetInformation, and then invoke it if present. This is less
-  efficient, but works on older versions of Windows.
-- If WINVER is set to Windows 8 or later, TlmProvider will directly invoke
-  EventSetInformation. This is more efficient, but the resulting application
-  will only work correctly on newer versions of Windows.
-
-If you need to run on Windows 7 RTM, but for some reason need to set WINVER to
-Windows 8 or higher, you can override the default behavior by defining
-TLM_HAVE_EVENT_SET_INFORMATION=2 when compiling this file.
-
-Details:
-- The TLM_EVENT_SET_INFORMATION macro can be set the name of a replacement
-  function that TlmProvider should use instead of EventSetInformation.
-- The TLM_HAVE_EVENT_SET_INFORMATION macro can be set to 0 (disable the use of
-  EventSetInformation), 1 (directly invoke EventSetInformation), or 2 (try to
-  locate EventSetInformation via GetProcAddress, and invoke if found).
-*/
-
-// This code needs to run on Windows 7 and this is magic which
-// removes static linking to EventSetInformation
-#define TLM_HAVE_EVENT_SET_INFORMATION 2
-
-#ifndef TLM_EVENT_SET_INFORMATION
-#define TLM_EVENT_SET_INFORMATION EventSetInformation
-#ifndef TLM_HAVE_EVENT_SET_INFORMATION
-#if WINVER < 0x0602 || !defined(EVENT_FILTER_TYPE_SCHEMATIZED)
-// Find "EventSetInformation" via GetModuleHandleExW+GetProcAddress
-#define TLM_HAVE_EVENT_SET_INFORMATION 2
-#else
-// Directly invoke TLM_EVENT_SET_INFORMATION(...)
-#define TLM_HAVE_EVENT_SET_INFORMATION 1
-#endif
-#endif
-#elif !defined(TLM_HAVE_EVENT_SET_INFORMATION)
-// Directly invoke TLM_EVENT_SET_INFORMATION(...)
-#define TLM_HAVE_EVENT_SET_INFORMATION 1
-#endif
+TlmProvider::TlmProvider() noexcept = default;
 
 TlmProvider::~TlmProvider() {
   Unregister();
@@ -71,28 +18,31 @@ TlmProvider::~TlmProvider() {
 
 TlmProvider::TlmProvider(const char* provider_name,
                          const GUID& provider_guid,
-                         PENABLECALLBACK enable_callback,
-                         void* enable_callback_context) noexcept {
-  ULONG status = Register(provider_name, provider_guid, enable_callback,
-                          enable_callback_context);
+                         base::RepeatingCallback<void(EventControlCode)>
+                             on_updated_callback) noexcept {
+  ULONG status =
+      Register(provider_name, provider_guid, std::move(on_updated_callback));
   LOG_IF(ERROR, status != ERROR_SUCCESS) << "Provider resistration failure";
 }
 
 // Appends a nul-terminated string to a metadata block.
 // Returns new meta_data_index value, or -1 for overflow.
-uint16_t TlmProvider::AppendNameToMetadata(char* metadata,
-                                           uint16_t metadata_size,
-                                           uint16_t metadata_index,
-                                           const char* name) const noexcept {
+uint16_t TlmProvider::AppendNameToMetadata(
+    char* metadata,
+    uint16_t metadata_size,
+    uint16_t metadata_index,
+    std::string_view name) const noexcept {
   uint16_t index = metadata_index;
   DCHECK_LE(index, metadata_size);
 
-  const size_t cch = strlen(name) + 1;
-  if (cch > static_cast<unsigned>(metadata_size - index))
+  const size_t cch = name.size();
+  if (cch + 1 > static_cast<unsigned>(metadata_size - index)) {
     return static_cast<uint16_t>(-1);
+  }
 
-  memcpy(metadata + index, name, cch);
-  index += static_cast<uint16_t>(cch);
+  memcpy(metadata + index, name.begin(), cch);
+  metadata[index + cch] = 0;
+  index += static_cast<uint16_t>(cch) + 1;
   return index;
 }
 
@@ -108,8 +58,8 @@ void TlmProvider::Unregister() noexcept {
 
 ULONG TlmProvider::Register(const char* provider_name,
                             const GUID& provider_guid,
-                            PENABLECALLBACK enable_callback,
-                            void* enable_callback_context) noexcept {
+                            base::RepeatingCallback<void(EventControlCode)>
+                                on_updated_callback) noexcept {
   // Calling Register when already registered is a fatal error.
   CHECK_EQ(reg_handle_, 0ULL);
 
@@ -127,49 +77,15 @@ ULONG TlmProvider::Register(const char* provider_name,
   // Fill in MetadataSize field at offset 0.
   *reinterpret_cast<uint16_t*>(provider_metadata_) = provider_metadata_size_;
 
-  enable_callback_ = enable_callback;
-  enable_callback_context_ = enable_callback_context;
+  on_updated_callback_ = std::move(on_updated_callback);
   ULONG status =
       EventRegister(&provider_guid, StaticEnableCallback, this, &reg_handle_);
   if (status != ERROR_SUCCESS)
     return status;
 
-#if TLM_HAVE_EVENT_SET_INFORMATION == 1
-
   // Best-effort, ignore failure.
-  status =
-      TLM_EVENT_SET_INFORMATION(reg_handle_, EventProviderSetTraits,
-                                provider_metadata_, provider_metadata_size_);
-
-#elif TLM_HAVE_EVENT_SET_INFORMATION == 2
-
-  HMODULE eventing_lib;
-  if (GetModuleHandleExW(0, L"api-ms-win-eventing-provider-l1-1-0.dll",
-                         &eventing_lib) ||
-      GetModuleHandleExW(0, L"advapi32.dll", &eventing_lib)) {
-    typedef ULONG(WINAPI * PFEventSetInformation)(
-        REGHANDLE reg_handle, EVENT_INFO_CLASS information_class,
-        PVOID event_information, ULONG information_length);
-    PFEventSetInformation event_set_information_ptr =
-        reinterpret_cast<decltype(&::EventSetInformation)>(
-            GetProcAddress(eventing_lib, "EventSetInformation"));
-    if (event_set_information_ptr) {
-      // Best-effort, ignore failure.
-      status = event_set_information_ptr(reg_handle_, EventProviderSetTraits,
-                                         provider_metadata_,
-                                         provider_metadata_size_);
-    }
-
-    FreeLibrary(eventing_lib);
-  }
-
-#else  // TLM_HAVE_EVENT_SET_INFORMATION == 0
-
-    // Make no attempt to invoke EventSetInformation.
-
-#endif  // TLM_HAVE_EVENT_SET_INFORMATION
-
-  return status;
+  return ::EventSetInformation(reg_handle_, EventProviderSetTraits,
+                               provider_metadata_, provider_metadata_size_);
 }
 
 bool TlmProvider::IsEnabled() const noexcept {
@@ -200,28 +116,28 @@ void TlmProvider::StaticEnableCallback(const GUID* source_id,
   if (!callback_context)
     return;
 
-  TlmProvider* pProvider = static_cast<TlmProvider*>(callback_context);
+  TlmProvider* provider = static_cast<TlmProvider*>(callback_context);
   switch (is_enabled) {
     case EVENT_CONTROL_CODE_DISABLE_PROVIDER:
-      pProvider->level_plus1_ = 0;
+      provider->level_plus1_ = 0;
       break;
     case EVENT_CONTROL_CODE_ENABLE_PROVIDER:
-      pProvider->level_plus1_ =
+      provider->level_plus1_ =
           level != 0 ? static_cast<unsigned>(level) + 1u : 256u;
-      pProvider->keyword_any_ = match_any_keyword;
-      pProvider->keyword_all_ = match_all_keyword;
       break;
   }
+  provider->keyword_any_ = match_any_keyword;
+  provider->keyword_all_ = match_all_keyword;
 
-  if (pProvider->enable_callback_) {
-    pProvider->enable_callback_(source_id, is_enabled, level, match_any_keyword,
-                                match_all_keyword, filter_data,
-                                pProvider->enable_callback_context_);
+  if (provider->on_updated_callback_ &&
+      is_enabled <= static_cast<size_t>(EventControlCode::kHighest)) {
+    provider->on_updated_callback_.Run(
+        static_cast<EventControlCode>(is_enabled));
   }
 }
 
 uint16_t TlmProvider::EventBegin(char* metadata,
-                                 const char* event_name) const noexcept {
+                                 std::string_view event_name) const noexcept {
   // EventMetadata for tracelogging has the following format
   //     UINT16 MetadataSize;
   //     BYTE SpecialFlags[]; // Not used, so always size 1.
@@ -313,6 +229,30 @@ ULONG TlmProvider::EventEnd(
 bool TlmProvider::KeywordEnabled(uint64_t keyword) const noexcept {
   return keyword == 0 ||
          ((keyword & keyword_any_) && (keyword & keyword_all_) == keyword_all_);
+}
+
+TlmInt64Field::TlmInt64Field(const char* name, const int64_t value) noexcept
+    : TlmFieldBase(name), value_(value) {
+  DCHECK_NE(Name(), nullptr);
+}
+int64_t TlmInt64Field::Value() const noexcept {
+  return value_;
+}
+void TlmInt64Field::FillEventDescriptor(
+    EVENT_DATA_DESCRIPTOR* descriptors) const noexcept {
+  EventDataDescCreate(&descriptors[0], (void*)&value_, sizeof(value_));
+}
+
+TlmUInt64Field::TlmUInt64Field(const char* name, const uint64_t value) noexcept
+    : TlmFieldBase(name), value_(value) {
+  DCHECK_NE(Name(), nullptr);
+}
+uint64_t TlmUInt64Field::Value() const noexcept {
+  return value_;
+}
+void TlmUInt64Field::FillEventDescriptor(
+    EVENT_DATA_DESCRIPTOR* descriptors) const noexcept {
+  EventDataDescCreate(&descriptors[0], (void*)&value_, sizeof(value_));
 }
 
 TlmMbcsStringField::TlmMbcsStringField(const char* name,

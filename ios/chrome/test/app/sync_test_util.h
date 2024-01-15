@@ -16,6 +16,10 @@ namespace base {
 class Time;
 }  // namespace base
 
+namespace synced_sessions {
+struct DistantSession;
+}  // namespace synced_sessions
+
 namespace chrome_test_util {
 
 // Whether or not the fake sync server has already been setup by
@@ -30,11 +34,14 @@ void SetUpFakeSyncServer();
 // real one. Must only be called if `IsFakeSyncServerSetUp()` is true.
 void TearDownFakeSyncServer();
 
-// Starts the sync server. The server should not be running when calling this.
-void StartSync();
+// Clears fake sync server data if the server is running, otherwise does
+// nothing.
+void ClearFakeSyncServerData();
 
-// Stops the sync server. The server should be running when calling this.
-void StopSync();
+// Ensures that all of the FakeServer's data is persisted to disk. This is
+// useful before app restarts, where otherwise the FakeServer may not get to do
+// its usual on-destruction flush.
+void FlushFakeSyncServerToDisk();
 
 // Triggers a sync cycle for a `type`.
 void TriggerSyncCycle(syncer::ModelType type);
@@ -59,6 +66,12 @@ void AddLegacyBookmarkToFakeSyncServer(std::string url,
                                        std::string title,
                                        std::string originator_client_item_id);
 
+// Injects a distant session into the fake sync server. Tabs in this session
+// will also be injected.
+// TODO(crbug.com/1434678): don't take a DistantSession; rewrite using entity
+// builder pattern.
+void AddSessionToFakeSyncServer(const synced_sessions::DistantSession& session);
+
 // Injects user demographics into the fake sync server.
 void AddUserDemographicsToSyncServer(
     int birth_year,
@@ -76,12 +89,8 @@ void DeleteAutofillProfileFromFakeSyncServer(std::string guid);
 // Clears the autofill profile for the given `guid`.
 void ClearAutofillProfile(std::string guid);
 
-// Clears fake sync server data if the server is running, otherwise does
-// nothing.
-void ClearSyncServerData();
-
-// Returns true if the sync backend server is intialized.
-bool IsSyncInitialized();
+// See SyncService::IsEngineInitialized().
+bool IsSyncEngineInitialized();
 
 // Returns the current sync cache guid. The sync server must be running when
 // calling this.
@@ -102,11 +111,17 @@ bool IsAutofillProfilePresent(std::string guid, std::string full_name);
 BOOL VerifySessionsOnSyncServer(const std::multiset<std::string>& expected_urls,
                                 NSError** error);
 
+// Verifies the URLs (in the HISTORY data type) on the Sync FakeServer.
+// `expected_urls` is the collection of expected URLs. On failure, returns NO
+// and `error` is set to an appropriate message.
+BOOL VerifyHistoryOnSyncServer(const std::multiset<GURL>& expected_urls,
+                               NSError** error);
+
 // Adds typed URL to HistoryService.
 void AddTypedURLToClient(const GURL& url);
 
-// Injects a typed URL into the fake sync server.
-void AddTypedURLToFakeSyncServer(const std::string& url);
+// Injects a HISTORY visit into the fake sync server.
+void AddHistoryVisitToFakeSyncServer(const GURL& url);
 
 // Injects a device info into the fake sync server.
 void AddDeviceInfoToFakeSyncServer(const std::string& device_name,
@@ -114,15 +129,12 @@ void AddDeviceInfoToFakeSyncServer(const std::string& device_name,
 
 // Returns YES if the provided `url` is present (or not) if `expected_present`
 // is YES (or NO).
-BOOL IsTypedUrlPresentOnClient(const GURL& url,
-                               BOOL expect_present,
-                               NSError** error);
+BOOL IsUrlPresentOnClient(const GURL& url,
+                          BOOL expect_present,
+                          NSError** error);
 
 // Deletes typed URL from HistoryService.
 void DeleteTypedUrlFromClient(const GURL& url);
-
-// Deletes typed URL on FakeServer by injecting a tombstone.
-void DeleteTypedUrlFromFakeSyncServer(std::string url);
 
 // Adds a bookmark with a sync passphrase. The sync server will need the sync
 // passphrase to start.

@@ -7,7 +7,6 @@
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/mock_bus.h"
@@ -22,12 +21,22 @@
 namespace {
 
 using testing::_;
+using testing::DoAll;
 
 constexpr char kTestSender[] = ":0.1";
 const int kTestSerial = 1;
 const int32_t kRegId1 = 1;
-const int32_t kAdvId1 = 1;
-const uint32_t kCallbackId1 = 1;
+const int32_t kAdvId1 = 2;
+const uint32_t kCallbackId1 = 3;
+
+void FakeExportMethod(
+    const std::string& interface_name,
+    const std::string& method_name,
+    const dbus::ExportedObject::MethodCallCallback& method_call_callback,
+    dbus::ExportedObject::OnExportedCallback on_exported_callback) {
+  std::move(on_exported_callback)
+      .Run(interface_name, method_name, /*success=*/true);
+}
 
 }  // namespace
 
@@ -37,6 +46,10 @@ class FlossAdvertiserClientTest : public testing::Test,
                                   public FlossAdvertiserClientObserver {
  public:
   FlossAdvertiserClientTest() = default;
+
+  base::Version GetCurrVersion() {
+    return floss::version::GetMaximalSupportedVersion();
+  }
 
   void SetUp() override {
     ::dbus::Bus::Options options;
@@ -152,7 +165,9 @@ TEST_F(FlossAdvertiserClientTest, StartAndStopAdvertisingSet) {
       .WillRepeatedly(::testing::Return(advclient_proxy_.get()));
 
   // There are 7 exported methods that we don't interested in it.
-  EXPECT_CALL(*exported_callbacks_.get(), ExportMethod).Times(7);
+  EXPECT_CALL(*exported_callbacks_.get(), ExportMethod)
+      .Times(7)
+      .WillRepeatedly(&FakeExportMethod);
 
   // Handle OnAdvertisingSetStarted, OnAdvertisingParametersUpdated,
   // OnAdvertisingSetStopped
@@ -167,19 +182,22 @@ TEST_F(FlossAdvertiserClientTest, StartAndStopAdvertisingSet) {
               ExportMethod(advertiser::kCallbackInterface,
                            advertiser::kOnAdvertisingSetStarted, _, _))
       .WillOnce(
-          testing::SaveArg<2>(&method_handler_on_advertising_set_started));
+          DoAll(testing::SaveArg<2>(&method_handler_on_advertising_set_started),
+                &FakeExportMethod));
 
   EXPECT_CALL(*exported_callbacks_.get(),
               ExportMethod(advertiser::kCallbackInterface,
                            advertiser::kOnAdvertisingParametersUpdated, _, _))
-      .WillOnce(testing::SaveArg<2>(
-          &method_handler_on_advertising_parameters_updated));
+      .WillOnce(DoAll(testing::SaveArg<2>(
+                          &method_handler_on_advertising_parameters_updated),
+                      &FakeExportMethod));
 
   EXPECT_CALL(*exported_callbacks_.get(),
               ExportMethod(advertiser::kCallbackInterface,
                            advertiser::kOnAdvertisingSetStopped, _, _))
       .WillOnce(
-          testing::SaveArg<2>(&method_handler_on_advertising_set_stopped));
+          DoAll(testing::SaveArg<2>(&method_handler_on_advertising_set_stopped),
+                &FakeExportMethod));
 
   EXPECT_CALL(*advclient_proxy_.get(),
               DoCallMethodWithErrorResponse(
@@ -192,7 +210,8 @@ TEST_F(FlossAdvertiserClientTest, StartAndStopAdvertisingSet) {
         std::move(*cb).Run(response.get(), nullptr);
       });
 
-  advclient_->Init(bus_.get(), kGattInterface, adapter_index_);
+  advclient_->Init(bus_.get(), kGattInterface, adapter_index_, GetCurrVersion(),
+                   base::DoNothing());
   ASSERT_TRUE(!!method_handler_on_advertising_set_started);
   ASSERT_TRUE(!!method_handler_on_advertising_parameters_updated);
   ASSERT_TRUE(!!method_handler_on_advertising_set_stopped);
@@ -229,7 +248,7 @@ TEST_F(FlossAdvertiserClientTest, StartAndStopAdvertisingSet) {
         FAIL();
       }));
   DoOnAdvertisingSetStarted(method_handler_on_advertising_set_started, kRegId1,
-                            kRegId1, /*tx_power=*/0,
+                            kAdvId1, /*tx_power=*/0,
                             AdvertisingStatus::kSuccess);
   run_loop0.Run();
 
@@ -274,6 +293,20 @@ TEST_F(FlossAdvertiserClientTest, StartAndStopAdvertisingSet) {
 
   DoOnAdvertisingSetStopped(method_handler_on_advertising_set_stopped, kAdvId1);
   run_loop2.Run();
+
+  // Expected call to UnregisterCallback when client is destroyed
+  EXPECT_CALL(*advclient_proxy_.get(),
+              DoCallMethodWithErrorResponse(
+                  HasMemberOf(advertiser::kUnregisterCallback), _, _))
+      .WillOnce([](::dbus::MethodCall* method_call, int timeout_ms,
+                   ::dbus::ObjectProxy::ResponseOrErrorCallback* cb) {
+        dbus::MessageReader msg(method_call);
+        // D-Bus method call should have 1 parameter.
+        uint32_t param1;
+        ASSERT_TRUE(FlossDBusClient::ReadAllDBusParams(&msg, &param1));
+        EXPECT_EQ(kCallbackId1, param1);
+        EXPECT_FALSE(msg.HasMoreData());
+      });
 }
 
 }  // namespace floss

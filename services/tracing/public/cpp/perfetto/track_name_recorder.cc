@@ -6,6 +6,7 @@
 
 #include "base/debug/crash_logging.h"
 #include "base/no_destructor.h"
+#include "base/process/current_process.h"
 #include "base/rand_util.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -21,7 +22,6 @@
 #endif
 
 namespace tracing {
-namespace {
 
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 // Set the track descriptor for the current process.
@@ -30,9 +30,9 @@ void SetProcessTrackDescriptor(int64_t process_start_timestamp) {
 
   const auto* trace_log = base::trace_event::TraceLog::GetInstance();
   int process_id = trace_log->process_id();
-  std::string process_name = trace_log->process_name();
+  std::string process_name = base::CurrentProcess::GetInstance().GetName({});
   auto process_type = static_cast<ChromeProcessDescriptor::ProcessType>(
-      GetProcessType(process_name));
+      base::CurrentProcess::GetInstance().GetType({}));
 
   // We record a few (string) fields here that are stripped for background
   // tracing. We rely on the post-process privacy filtering to remove them.
@@ -76,14 +76,17 @@ void SetProcessTrackDescriptor(int64_t process_start_timestamp) {
   }
 #endif  // BUILDFLAG(IS_ANDROID)
 
-  perfetto::TrackEvent::SetTrackDescriptor(process_track,
-                                           std::move(process_track_desc));
+  base::TrackEvent::SetTrackDescriptor(process_track,
+                                       std::move(process_track_desc));
 }
+
+namespace {
 
 void FillThreadTrack(const perfetto::ThreadTrack& track, const char* name) {
   using perfetto::protos::gen::ChromeThreadDescriptor;
 
-  int process_id = base::trace_event::TraceLog::GetInstance()->process_id();
+  int process_id = static_cast<int>(
+      base::trace_event::TraceLog::GetInstance()->process_id());
   auto desc = track.Serialize();
   desc.mutable_thread()->set_pid(process_id);
   desc.mutable_thread()->set_thread_name(name);
@@ -93,7 +96,7 @@ void FillThreadTrack(const perfetto::ThreadTrack& track, const char* name) {
     desc.mutable_chrome_thread()->set_thread_type(thread_type);
   }
 
-  perfetto::TrackEvent::SetTrackDescriptor(track, std::move(desc));
+  base::TrackEvent::SetTrackDescriptor(track, std::move(desc));
 }
 
 // Set track descriptors for all threads that exist in the current process
@@ -115,9 +118,9 @@ void SetThreadTrackDescriptors() {
   auto thread_track = perfetto::ThreadTrack::Current();
   FillThreadTrack(thread_track, thread_name);
 }
-#endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-
 }  // namespace
+
+#endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
 absl::optional<uint64_t> GetTraceCrashId() {
   static base::debug::CrashKeyString* key = base::debug::AllocateCrashKeyString(
@@ -135,7 +138,7 @@ TrackNameRecorder::TrackNameRecorder()
     : process_start_timestamp_(
           TRACE_TIME_TICKS_NOW().since_origin().InNanoseconds()) {
   base::ThreadIdNameManager::GetInstance()->AddObserver(this);
-  perfetto::TrackEvent::AddSessionObserver(this);
+  base::TrackEvent::AddSessionObserver(this);
   SetThreadTrackDescriptors();
 }
 
@@ -155,18 +158,12 @@ void TrackNameRecorder::OnStop(const perfetto::DataSourceBase::StopArgs&) {
   SetProcessTrackDescriptor(process_start_timestamp_);
 }
 
-void TrackNameRecorder::WillClearIncrementalState(
-    const perfetto::DataSourceBase::ClearIncrementalStateArgs&) {
-  // We periodically re-set the process track descriptor to keep track of
-  // changing process labels. Note that this leads to the descriptor being
-  // written twice, once before the state reset and once immediately after.
-  // TODO(khokhlov): Make it possible to set the track descriptor but not
-  // write it to the trace to save a little trace size here.
-  SetProcessTrackDescriptor(process_start_timestamp_);
-}
-
 void TrackNameRecorder::OnThreadNameChanged(const char* name) {
-  FillThreadTrack(perfetto::ThreadTrack::Current(), name);
+  // If tracing is not initialized, the thread name is lost, but this should
+  // never happen outside of tests.
+  if (perfetto::Tracing::IsInitialized()) {
+    FillThreadTrack(perfetto::ThreadTrack::Current(), name);
+  }
 }
 #endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 

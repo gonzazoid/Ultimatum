@@ -6,6 +6,7 @@
 
 #include "ash/accessibility/autoclick/autoclick_drag_event_rewriter.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/events/base_event_utils.h"
@@ -29,6 +30,7 @@ class CopyingSink : public ui::EventSink {
   // EventSink override:
   ui::EventDispatchDetails OnEventFromSource(ui::Event* event) override {
     last_event_ = event->Clone();
+    ui::Event::DispatcherApi(last_event_.get()).set_target(event->target());
     return ui::EventDispatchDetails();
   }
 
@@ -92,7 +94,7 @@ class AutoclickDragEventRewriterTest : public AshTestBase {
 
  protected:
   // Generates ui::Events from simulated user input.
-  ui::test::EventGenerator* generator_ = nullptr;
+  raw_ptr<ui::test::EventGenerator> generator_ = nullptr;
   // Records events delivered to the next event rewriter after
   // AutoclickDragEventRewriter.
   EventRecorder event_recorder_;
@@ -163,6 +165,12 @@ TEST_F(AutoclickDragEventRewriterTest, RewritesMouseMovesToDrags) {
   int changed_button_flags = ui::EF_LEFT_MOUSE_BUTTON;  // Set a random flag.
   ui::MouseEvent event(ui::EventType::ET_MOUSE_MOVED, location, root_location,
                        time_stamp, flags, changed_button_flags);
+
+  auto window = CreateToplevelTestWindow(gfx::Rect(50, 50, 400, 300),
+                                         /*shell_window_id=*/0);
+  ASSERT_NE(window.get(), nullptr);
+  ui::Event::DispatcherApi(&event).set_target(window.get());
+
   CopyingSink sink;
   ui::test::TestEventSource source(&sink);
   source.AddEventRewriter(&drag_event_rewriter_);
@@ -175,6 +183,9 @@ TEST_F(AutoclickDragEventRewriterTest, RewritesMouseMovesToDrags) {
 
   // Flags should include left mouse button.
   EXPECT_EQ(flags | ui::EF_LEFT_MOUSE_BUTTON, rewritten_event->flags());
+
+  // Original event target should be honored.
+  EXPECT_EQ(window.get(), rewritten_event->target());
 
   // Everything else should be the same as the original.
   ui::MouseEvent* rewritten_mouse_event = rewritten_event->AsMouseEvent();

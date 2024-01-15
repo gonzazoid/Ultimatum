@@ -86,33 +86,6 @@ enum class MediaRouterDialogActivationLocation {
   TOTAL_COUNT = 7
 };
 
-// The possible outcomes from a route creation response.
-enum class MediaRouterRouteCreationOutcome {
-  SUCCESS = 0,
-  FAILURE_NO_ROUTE = 1,
-  FAILURE_INVALID_SINK = 2,
-
-  // Note: Add entries only immediately above this line. Remember to also update
-  // tools/metrics/histograms/enums.xml.
-  TOTAL_COUNT = 3,
-};
-
-// The possible actions a user can take while interacting with the Media Router
-// dialog.
-enum class MediaRouterUserAction {
-  CHANGE_MODE = 0,
-  START_LOCAL = 1,
-  STOP_LOCAL = 2,
-  CLOSE = 3,
-  STATUS_REMOTE = 4,
-  REPLACE_LOCAL_ROUTE = 5,
-  STOP_REMOTE = 6,
-
-  // Note: Add entries only immediately above this line. Remember to also update
-  // tools/metrics/histograms/enums.xml.
-  TOTAL_COUNT = 7
-};
-
 enum class PresentationUrlType {
   kOther,
   kCast,            // cast:
@@ -161,22 +134,15 @@ class MediaRouterMetrics {
   ~MediaRouterMetrics();
 
   // UMA histogram names.
-  static const char kHistogramCloseLatency[];
   static const char kHistogramIconClickLocation[];
   static const char kHistogramMediaRouterFileFormat[];
   static const char kHistogramMediaRouterFileSize[];
   static const char kHistogramMediaSinkType[];
   static const char kHistogramPresentationUrlType[];
-  static const char kHistogramRouteCreationOutcome[];
-  static const char kHistogramStartLocalLatency[];
-  static const char kHistogramStartLocalPosition[];
-  static const char kHistogramStartLocalSessionSuccessful[];
-  static const char kHistogramStopRoute[];
   static const char kHistogramUiDeviceCount[];
   static const char kHistogramUiDialogActivationLocationAndCastMode[];
   static const char kHistogramUiDialogIconStateAtOpen[];
   static const char kHistogramUiDialogLoadedWithData[];
-  static const char kHistogramUiDialogPaint[];
   static const char kHistogramUiFirstAction[];
   static const char kHistogramUiIconStateAtInit[];
   static const char kHistogramUiAndroidDialogType[];
@@ -192,26 +158,9 @@ class MediaRouterMetrics {
   static void RecordMediaRouterDialogActivationLocation(
       MediaRouterDialogActivationLocation activation_location);
 
-  // Records the duration it takes for the Media Router dialog to open and
-  // finish painting after a user clicks to open the dialog.
-  static void RecordMediaRouterDialogPaint(const base::TimeDelta& delta);
-
   // Records the duration it takes for the Media Router dialog to load its
   // initial data after a user clicks to open the dialog.
   static void RecordMediaRouterDialogLoaded(const base::TimeDelta& delta);
-
-  // Records the duration it takes from the user opening the Media Router dialog
-  // to the user closing the dialog. This is only called if closing the dialog
-  // is the first action the user takes.
-  static void RecordCloseDialogLatency(const base::TimeDelta& delta);
-
-  // Records the first action the user took after the Media Router dialog
-  // opened.
-  static void RecordMediaRouterInitialUserAction(MediaRouterUserAction action);
-
-  // Records the outcome in a create route response.
-  static void RecordRouteCreationOutcome(
-      MediaRouterRouteCreationOutcome outcome);
 
   // Records the format of a cast file.
   static void RecordMediaRouterFileFormat(
@@ -228,51 +177,21 @@ class MediaRouterMetrics {
   static void RecordMediaSinkTypeForGlobalMediaControls(
       SinkIconType sink_icon_type);
   static void RecordMediaSinkTypeForCastDialog(SinkIconType sink_icon_type);
-  static void RecordMediaSinkTypeWhenCastAndDialPresent(
-      SinkIconType sink_icon_type,
-      UiType ui);
 
   // Records the number of devices shown in the Cast dialog. The device count
   // may be 0.
   static void RecordDeviceCount(int device_count);
 
-  // Records the number of sinks in |is_available| state, provided by |provider|
-  // that was opened via |activation_location|. Recorded for the global media
-  // controls and the Cast dialog, respectively.
-  static void RecordGmcDeviceCount(
-      MediaRouterDialogActivationLocation activation_location,
-      mojom::MediaRouteProviderId provider,
-      bool is_available,
-      int count);
-  static void RecordCastDialogDeviceCount(
-      MediaRouterDialogActivationLocation activation_location,
-      mojom::MediaRouteProviderId provider,
-      bool is_available,
-      int count);
-
   // Records the index of the device the user has started casting to on the
   // devices list. The index starts at 0.
   static void RecordStartRouteDeviceIndex(int index);
 
-  // Records the time it takes from the Media Router dialog showing at least one
-  // device to the user starting to cast. This is called only if casting is the
-  // first action taken by the user, aside from selecting the sink to cast to.
-  static void RecordStartLocalSessionLatency(const base::TimeDelta& delta);
-
   // Records whether or not an attempt to start casting was successful.
   static void RecordStartLocalSessionSuccessful(bool success);
-
-  // Records the user stopping a route in the UI.
-  static void RecordStopLocalRoute();
-  static void RecordStopRemoteRoute();
 
   // Records whether the toolbar icon is pinned by the user pref / admin policy.
   // Recorded whenever the Cast dialog is opened.
   static void RecordIconStateAtDialogOpen(bool is_pinned);
-
-  // Records whether the toolbar icon is pinned by the user pref / admin policy.
-  // Recorded whenever the browser is initialized.
-  static void RecordIconStateAtInit(bool is_pinned);
 
   // Records the outcome of a create route request to a Media Route Provider.
   // This and the following methods that record ResultCode use per-provider

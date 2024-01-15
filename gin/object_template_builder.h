@@ -8,8 +8,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "gin/converter.h"
@@ -46,9 +46,6 @@ class GIN_EXPORT ObjectTemplateBuilder {
  public:
   explicit ObjectTemplateBuilder(v8::Isolate* isolate);
   ObjectTemplateBuilder(v8::Isolate* isolate, const char* type_name);
-  ObjectTemplateBuilder(v8::Isolate* isolate,
-                        const char* type_name,
-                        v8::Local<v8::ObjectTemplate> tmpl);
   ObjectTemplateBuilder(const ObjectTemplateBuilder& other);
   ~ObjectTemplateBuilder();
 
@@ -134,6 +131,7 @@ class GIN_EXPORT ObjectTemplateBuilder {
   const char* type_name_ = nullptr;
 
   // ObjectTemplateBuilder should only be used on the stack.
+  v8::Local<v8::FunctionTemplate> constructor_template_;
   v8::Local<v8::ObjectTemplate> template_;
 };
 

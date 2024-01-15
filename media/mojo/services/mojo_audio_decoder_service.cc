@@ -7,22 +7,26 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/types/optional_util.h"
 #include "media/base/content_decryption_module.h"
 #include "media/mojo/common/media_type_converters.h"
 #include "media/mojo/common/mojo_decoder_buffer_converter.h"
 #include "media/mojo/services/mojo_cdm_service_context.h"
+#include "media/mojo/services/mojo_media_client.h"
+#include "media/mojo/services/mojo_media_log.h"
 
 namespace media {
 
 MojoAudioDecoderService::MojoAudioDecoderService(
+    MojoMediaClient* mojo_media_client,
     MojoCdmServiceContext* mojo_cdm_service_context,
-    std::unique_ptr<media::AudioDecoder> decoder)
-    : mojo_cdm_service_context_(mojo_cdm_service_context),
-      decoder_(std::move(decoder)) {
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+    : mojo_media_client_(mojo_media_client),
+      mojo_cdm_service_context_(mojo_cdm_service_context),
+      task_runner_(std::move(task_runner)) {
   DCHECK(mojo_cdm_service_context_);
   weak_this_ = weak_factory_.GetWeakPtr();
 }
@@ -30,9 +34,15 @@ MojoAudioDecoderService::MojoAudioDecoderService(
 MojoAudioDecoderService::~MojoAudioDecoderService() = default;
 
 void MojoAudioDecoderService::Construct(
-    mojo::PendingAssociatedRemote<mojom::AudioDecoderClient> client) {
+    mojo::PendingAssociatedRemote<mojom::AudioDecoderClient> client,
+    mojo::PendingRemote<mojom::MediaLog> media_log) {
   DVLOG(1) << __func__;
   client_.Bind(std::move(client));
+
+  auto mojo_media_log =
+      std::make_unique<MojoMediaLog>(std::move(media_log), task_runner_);
+  decoder_ = mojo_media_client_->CreateAudioDecoder(task_runner_,
+                                                    std::move(mojo_media_log));
 }
 
 void MojoAudioDecoderService::Initialize(
@@ -40,6 +50,12 @@ void MojoAudioDecoderService::Initialize(
     const absl::optional<base::UnguessableToken>& cdm_id,
     InitializeCallback callback) {
   DVLOG(1) << __func__ << " " << config.AsHumanReadableString();
+
+  if (!decoder_) {
+    OnInitialized(std::move(callback),
+                  DecoderStatus::Codes::kFailedToCreateDecoder);
+    return;
+  }
 
   // |cdm_context_ref_| must be kept as long as |cdm_context| is used by the
   // |decoder_|. We do NOT support resetting |cdm_context_ref_| because in

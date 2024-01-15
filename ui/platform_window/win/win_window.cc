@@ -14,7 +14,6 @@
 #include "base/notreached.h"
 #include "base/strings/string_util_win.h"
 #include "ui/base/cursor/platform_cursor.h"
-#include "ui/base/win/shell.h"
 #include "ui/base/win/win_cursor.h"
 #include "ui/events/event.h"
 #include "ui/events/event_utils.h"
@@ -132,7 +131,7 @@ bool WinWindow::HasCapture() const {
   return ::GetCapture() == hwnd();
 }
 
-void WinWindow::ToggleFullscreen() {}
+void WinWindow::SetFullscreen(bool fullscreen, int64_t target_display_id) {}
 
 void WinWindow::Maximize() {}
 
@@ -187,9 +186,9 @@ bool WinWindow::ShouldWindowContentsBeTransparent() const {
   // by the DWM rather than Chrome, so that area can show through.  This
   // function does not describe the transparency of the whole window appearance,
   // but merely of the content Chrome draws, so even when the system titlebars
-  // appear opaque (Win 8+), the content above them needs to be transparent, or
-  // they'll be covered by a black (undrawn) region.
-  return ui::win::IsAeroGlassEnabled() && !IsFullscreen();
+  // appear opaque, the content above them needs to be transparent, or they'll
+  // be covered by a black (undrawn) region.
+  return !IsFullscreen();
 }
 
 void WinWindow::SetZOrderLevel(ZOrderLevel order) {
@@ -240,11 +239,6 @@ bool WinWindow::IsAnimatingClosed() const {
   return false;
 }
 
-bool WinWindow::IsTranslucentWindowOpacitySupported() const {
-  NOTIMPLEMENTED_LOG_ONCE();
-  return false;
-}
-
 bool WinWindow::IsFullscreen() const {
   return GetPlatformWindowState() == PlatformWindowState::kFullScreen;
 }
@@ -258,7 +252,7 @@ LRESULT WinWindow::OnMouseRange(UINT message, WPARAM w_param, LPARAM l_param) {
                     {CR_GET_X_LPARAM(l_param), CR_GET_Y_LPARAM(l_param)}};
   std::unique_ptr<Event> event = EventFromNative(msg);
   if (IsMouseEventFromTouch(message))
-    event->set_flags(event->flags() | EF_FROM_TOUCH);
+    event->SetFlags(event->flags() | EF_FROM_TOUCH);
   if (!(event->flags() & ui::EF_IS_NON_CLIENT))
     delegate_->DispatchEvent(event.get());
   SetMsgHandled(event->handled());

@@ -10,6 +10,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "components/translate/content/common/translate.mojom.h"
 #include "components/translate/core/common/translate_errors.h"
@@ -27,9 +28,6 @@ namespace translate {
 
 // This class deals with page translation.
 // There is one TranslateAgent per RenderView.
-//
-// Note: this class only supports translation of the main frame. See
-// PerFrameTranslateAgent for sub frame translation support.
 class TranslateAgent : public content::RenderFrameObserver,
                        public mojom::TranslateAgent {
  public:
@@ -52,8 +50,6 @@ class TranslateAgent : public content::RenderFrameObserver,
   void PrepareForUrl(const GURL& url);
 
   // mojom::TranslateAgent implementation.
-  void GetWebLanguageDetectionDetails(
-      GetWebLanguageDetectionDetailsCallback callback) override;
   void TranslateFrame(const std::string& translate_script,
                       const std::string& source_lang,
                       const std::string& target_lang,
@@ -169,10 +165,6 @@ class TranslateAgent : public content::RenderFrameObserver,
   TranslateFrameCallback translate_callback_pending_;
   std::string source_lang_;
   std::string target_lang_;
-
-  // Time when a page language is determined. This is used to know a duration
-  // time from showing infobar to requesting translation.
-  base::TimeTicks language_determined_time_;
 
   // The world ID to use for script execution.
   int world_id_;

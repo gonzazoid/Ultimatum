@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "chrome/browser/chromeos/fileapi/file_system_backend_delegate.h"
+#include "chrome/browser/ash/fileapi/file_system_backend_delegate.h"
 
 class Profile;
 
@@ -24,10 +24,9 @@ class WatcherManager;
 
 namespace drive {
 
-// Delegate implementation of the some methods in chromeos::FileSystemBackend
+// Delegate implementation of the some methods in ash::FileSystemBackend
 // for Drive file system.
-class DriveFsFileSystemBackendDelegate
-    : public chromeos::FileSystemBackendDelegate {
+class DriveFsFileSystemBackendDelegate : public ash::FileSystemBackendDelegate {
  public:
   explicit DriveFsFileSystemBackendDelegate(Profile* profile);
 

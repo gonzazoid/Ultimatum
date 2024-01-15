@@ -8,18 +8,19 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "components/lookalikes/core/safety_tips.pb.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
-#include "components/reputation/core/safety_tips.pb.h"
 #include "components/url_formatter/url_formatter.h"
 #include "components/version_info/channel.h"
 #include "url/gurl.h"
 
-class GURL;
-
 namespace lookalikes {
-extern const char kHistogramName[];
+
+// Name of the histogram recorded by the interstitial for lookalike match types.
+extern const char kInterstitialHistogramName[];
 
 // Register applicable preferences with the provided registry.
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
@@ -29,10 +30,6 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 // heuristic that's not fully launched and it has an extra line about future
 // behavior of Chrome.
 std::string GetConsoleMessage(const GURL& lookalike_url, bool is_new_heuristic);
-}
-
-using LookalikeTargetAllowlistChecker =
-    base::RepeatingCallback<bool(const std::string&)>;
 
 // Used for |GetTargetEmbeddingType| return value. It shows if the target
 // embedding triggers on the input domain, and if it does, what type of warning
@@ -57,7 +54,7 @@ enum class LookalikeUrlMatchType {
   kNone = 0,
   // DEPRECATED: Use kSkeletonMatchTop500 or kSkeletonMatchTop5k.
   // kTopSite = 1,
-  kSiteEngagement = 2,
+  kSkeletonMatchSiteEngagement = 2,
   kEditDistance = 3,
   kEditDistanceSiteEngagement = 4,
   kTargetEmbedding = 5,
@@ -125,10 +122,13 @@ enum class NavigationSuggestionEvent {
   kMaxValue = kComboSquattingSiteEngagement,
 };
 
-struct Top500DomainsParams {
-  // Skeletons of top 500 domains. There can be fewer than 500 skeletons in
-  // this array.
-  const char* const* edit_distance_skeletons;
+struct TopBucketDomainsParams {
+  // Skeletons of top bucket domains. This is the top 500 or 1000 most popular
+  // domains (though, there can be fewer than 500 or 1000 skeletons in this
+  // array).
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const char* const* edit_distance_skeletons;
   // Number of skeletons in `edit_distance_skeletons`.
   size_t num_edit_distance_skeletons;
 };
@@ -138,12 +138,16 @@ struct ComboSquattingParams {
   // (in pairs). The first item in each pair is the brand name and the second
   // item is its skeleton. Brand names should be usable in domain names (i.e.
   // lower case, no punctuation except for - etc.)
-  const std::pair<const char*, const char*>* brand_names;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const std::pair<const char*, const char*>* brand_names;
   // Number of brand names in combo_squatting_brand_names.
   size_t num_brand_names;
 
   // List of popular keywords such as "login", "online".
-  const char* const* popular_keywords;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const char* const* popular_keywords;
   // Number of popular keywords in combo_squatting_keywords.
   size_t num_popular_keywords;
 };
@@ -216,9 +220,11 @@ bool IsTopDomain(const DomainInfo& domain_info);
 // which doesn't have a notion of private registries.
 std::string GetETLDPlusOne(const std::string& hostname);
 
-// Returns true if a lookalike interstitial should be shown for the given
-// match type.
-bool ShouldBlockLookalikeUrlNavigation(LookalikeUrlMatchType match_type);
+// Records an interstitial histogram entry for the given match type.
+void RecordUMAFromMatchType(LookalikeUrlMatchType match_type);
+
+using LookalikeTargetAllowlistChecker =
+    base::RepeatingCallback<bool(const std::string&)>;
 
 // Returns true if a domain is visually similar to the hostname of |url|. The
 // matching domain can be a top domain or an engaged site. Similarity
@@ -232,8 +238,6 @@ bool GetMatchingDomain(
     const reputation::SafetyTipsConfig* config_proto,
     std::string* matched_domain,
     LookalikeUrlMatchType* match_type);
-
-void RecordUMAFromMatchType(LookalikeUrlMatchType match_type);
 
 // Checks to see if a URL is a target embedding lookalike. This function sets
 // |safe_hostname| to the url of the embedded target domain. See the unit tests
@@ -275,10 +279,10 @@ void SetEnterpriseAllowlistForTesting(PrefService* pref_service,
 bool HasOneCharacterSwap(const std::u16string& str1,
                          const std::u16string& str2);
 
-// Sets information about top 500 domains for testing.
-void SetTop500DomainsParamsForTesting(const Top500DomainsParams& params);
-// Resets information about top 500 domains for testing.
-void ResetTop500DomainsParamsForTesting();
+// Sets information about top bucket domains for testing.
+void SetTopBucketDomainsParamsForTesting(const TopBucketDomainsParams& params);
+// Resets information about top bucket domains for testing.
+void ResetTopBucketDomainsParamsForTesting();
 
 // Returns true if the launch configuration provided by the component updater
 // enables `heuristic` for the given `etld_plus_one`.
@@ -302,5 +306,38 @@ ComboSquattingType GetComboSquattingType(
     const DomainInfo& navigated_domain,
     const std::vector<DomainInfo>& engaged_sites,
     std::string* matched_domain);
+
+// Returns true if `etld_plus_one` has a TLD that's considered safe for
+// lookalike checks, such as government sites.
+bool IsSafeTLD(const std::string& hostname);
+
+// The action to take for a given lookalike match.
+enum class LookalikeActionType {
+  // No action.
+  kNone,
+  // Only record metrics, don't show any UI warnings.
+  kRecordMetrics,
+  // Show a safety tip.
+  kShowSafetyTip,
+  // Show an interstitial.
+  kShowInterstitial,
+};
+
+// Returns the action to take for the given `etld_plus_one` and lookalike
+// `match_type`. Uses `config` to check whether the heuristic UI is enabled
+// via gradual rollout.
+LookalikeActionType GetActionForMatchType(
+    const reputation::SafetyTipsConfig* config,
+    version_info::Channel channel,
+    const std::string& etld_plus_one,
+    LookalikeUrlMatchType match_type);
+
+// Returns the suggested URL for the given parameters. Returns an https URL for
+// top domain matches because it's more likely for top sites to support https.
+GURL GetSuggestedURL(LookalikeUrlMatchType match_type,
+                     const GURL& navigated_url,
+                     const std::string& matched_hostname);
+
+}  // namespace lookalikes
 
 #endif  // COMPONENTS_LOOKALIKES_CORE_LOOKALIKE_URL_UTIL_H_

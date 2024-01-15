@@ -43,7 +43,7 @@ TARGET_DEVICES = {
             'Speedometer2': 10,
         },
     },
-    'android-go-perf': {
+    'android-go-wembley-perf': {
         'jetstream2': {
             'JetStream2': 5,
         },
@@ -73,17 +73,11 @@ TARGET_DEVICES = {
             'Speedometer2': 20,
         },
     },
-    'android-pixel4a_power-perf': {
-        'power.mobile': {
-            'browse:media:flickr_infinite_scroll:2019': 10,
-            'browse:media:tiktok_infinite_scroll:2021': 10,
-            'browse:social:pinterest_infinite_scroll:2021': 10,
-            'browse:social:tumblr_infinite_scroll:2018': 10,
-            'browse:tech:discourse_infinite_scroll:2018': 10,
-        }
-    },
     'linux-perf': {
         'jetstream2': {
+            'JetStream2': 5,
+        },
+        'jetstream2-nominorms': {
             'JetStream2': 5,
         },
         'system_health.common_desktop': {
@@ -93,6 +87,9 @@ TARGET_DEVICES = {
             'browse:media:youtubetv:2019': 10
         },
         'speedometer2': {
+            'Speedometer2': 20,
+        },
+        'speedometer2-nominorms': {
             'Speedometer2': 20,
         },
     },
@@ -105,6 +102,20 @@ TARGET_DEVICES = {
         },
     },
     'win-10-perf': {
+        'jetstream2': {
+            'JetStream2': 5,
+        },
+        'system_health.common_desktop': {
+            # cputimeToFirstContentfulPaint
+            'browse:media:tumblr:2018': 10,
+            'browse:social:tumblr_infinite_scroll:2018': 10,
+            'load:search:google:2018': 10,
+        },
+        'speedometer2': {
+            'Speedometer2': 20,
+        },
+    },
+    'win-11-perf': {
         'jetstream2': {
             'JetStream2': 5,
         },
@@ -139,8 +150,31 @@ TARGET_DEVICES = {
         'jetstream2': {
             'JetStream2': 5,
         },
+        'jetstream2-nominorms': {
+            'JetStream2': 5,
+        },
         'speedometer2': {
             'Speedometer2': 20,
+        },
+        'speedometer2-nominorms': {
+            'Speedometer2': 20,
+        },
+        'speedometer3': {
+            'Speedometer3': 20,
+        },
+        'speedometer3-nominorms': {
+            'Speedometer3': 20,
+        },
+    },
+    'mac-m1_mini_2020-perf-pgo': {
+        'jetstream2': {
+            'JetStream2': 4,
+        },
+        'speedometer2': {
+            'Speedometer2': 4,
+        },
+        'speedometer3': {
+            'Speedometer3': 4,
         },
     },
 }

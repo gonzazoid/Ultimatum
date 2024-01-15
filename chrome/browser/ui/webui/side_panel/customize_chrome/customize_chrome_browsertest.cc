@@ -7,21 +7,20 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/side_panel/customize_chrome/customize_chrome_tab_helper.h"
-#include "chrome/browser/ui/ui_features.h"
+#include "chrome/browser/ui/webui/side_panel/customize_chrome/customize_chrome_section.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/search/ntp_features.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "ui/base/ui_base_features.h"
 
 class CustomizeChromeSidePanelBrowserTest : public InProcessBrowserTest {
  protected:
   // InProcessBrowserTest:
   void SetUp() override {
-    scoped_feature_list_.InitWithFeatures(
-        {ntp_features::kCustomizeChromeSidePanel, features::kUnifiedSidePanel},
-        {});
+    scoped_feature_list_.InitWithFeatures({features::kCustomizeChromeSidePanel},
+                                          {});
     InProcessBrowserTest::SetUp();
   }
   // Activates the browser tab at `index`.
@@ -65,7 +64,8 @@ IN_PROC_BROWSER_TEST_F(CustomizeChromeSidePanelBrowserTest,
 
   // After calling show, the customize chrome entry should be shown in the side
   // panel
-  customize_chrome_tab_helper->ShowCustomizeChromeSidePanel();
+  customize_chrome_tab_helper->SetCustomizeChromeSidePanelVisible(
+      true, CustomizeChromeSection::kAppearance);
   EXPECT_TRUE(customize_chrome_tab_helper->IsCustomizeChromeEntryShowing());
 }
 
@@ -77,7 +77,8 @@ IN_PROC_BROWSER_TEST_F(CustomizeChromeSidePanelBrowserTest,
   auto* customize_chrome_tab_helper = GetTabHelper(browser());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(chrome::kChromeUINewTabURL)));
-  customize_chrome_tab_helper->ShowCustomizeChromeSidePanel();
+  customize_chrome_tab_helper->SetCustomizeChromeSidePanelVisible(
+      true, CustomizeChromeSection::kAppearance);
   EXPECT_TRUE(customize_chrome_tab_helper->IsCustomizeChromeEntryShowing());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(chrome::kChromeUISettingsURL)));
@@ -93,14 +94,30 @@ IN_PROC_BROWSER_TEST_F(CustomizeChromeSidePanelBrowserTest,
   AppendTab(browser(), GURL(chrome::kChromeUINewTabURL));
   ActivateTabAt(browser(), 1);
   // Navigate to URL to allow WebUI to load, if not then callback that is set
-  // in the New Tab Page constructor and run when ShowCustomizeChromeSidePanel()
-  // is called will not be set.
+  // in the New Tab Page constructor and run when
+  // SetCustomizeChromeSidePanelVisible() is called will not be set.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(chrome::kChromeUINewTabURL)));
   auto* customize_chrome_tab_helper1 = GetTabHelper(browser());
   EXPECT_FALSE(customize_chrome_tab_helper1->IsCustomizeChromeEntryShowing());
-  customize_chrome_tab_helper1->ShowCustomizeChromeSidePanel();
+  customize_chrome_tab_helper1->SetCustomizeChromeSidePanelVisible(
+      true, CustomizeChromeSection::kAppearance);
   ActivateTabAt(browser(), 2);
   auto* customize_chrome_tab_helper2 = GetTabHelper(browser());
   EXPECT_FALSE(customize_chrome_tab_helper2->IsCustomizeChromeEntryShowing());
+}
+
+IN_PROC_BROWSER_TEST_F(CustomizeChromeSidePanelBrowserTest,
+                       HideCustomizeChromeSidePanel) {
+  auto* customize_chrome_tab_helper = GetTabHelper(browser());
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
+                                           GURL(chrome::kChromeUINewTabURL)));
+  customize_chrome_tab_helper->SetCustomizeChromeSidePanelVisible(
+      true, CustomizeChromeSection::kAppearance);
+  EXPECT_TRUE(customize_chrome_tab_helper->IsCustomizeChromeEntryShowing());
+  // After calling hide, the customize chrome entry should be hidden in the side
+  // panel
+  customize_chrome_tab_helper->SetCustomizeChromeSidePanelVisible(
+      false, CustomizeChromeSection::kAppearance);
+  EXPECT_FALSE(customize_chrome_tab_helper->IsCustomizeChromeEntryShowing());
 }

@@ -4,10 +4,6 @@
 
 #import "ios/web/public/test/fakes/fake_find_in_page_manager_delegate.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 
 FakeFindInPageManagerDelegate::State::State() = default;
@@ -18,24 +14,38 @@ FakeFindInPageManagerDelegate::FakeFindInPageManagerDelegate() = default;
 
 FakeFindInPageManagerDelegate::~FakeFindInPageManagerDelegate() = default;
 
-void FakeFindInPageManagerDelegate::DidHighlightMatches(WebState* web_state,
-                                                        int match_count,
-                                                        NSString* query) {
-  delegate_state_ = std::make_unique<State>();
+void FakeFindInPageManagerDelegate::DidHighlightMatches(
+    AbstractFindInPageManager* manager,
+    WebState* web_state,
+    int match_count,
+    NSString* query) {
+  if (!delegate_state_) {
+    delegate_state_ = std::make_unique<State>();
+  }
   delegate_state_->web_state = web_state;
   delegate_state_->match_count = match_count;
   delegate_state_->query = query;
 }
 
-void FakeFindInPageManagerDelegate::DidSelectMatch(WebState* web_state,
-                                                   int index,
-                                                   NSString* context_string) {
+void FakeFindInPageManagerDelegate::DidSelectMatch(
+    AbstractFindInPageManager* manager,
+    WebState* web_state,
+    int index,
+    NSString* context_string) {
   if (!delegate_state_) {
     delegate_state_ = std::make_unique<State>();
   }
   delegate_state_->web_state = web_state;
   delegate_state_->index = index;
   delegate_state_->context_string = context_string;
+}
+
+void FakeFindInPageManagerDelegate::UserDismissedFindNavigator(
+    AbstractFindInPageManager* manager) {
+  if (!delegate_state_) {
+    delegate_state_ = std::make_unique<State>();
+  }
+  delegate_state_->user_dismissed_find_navigator = true;
 }
 
 }  // namespace web

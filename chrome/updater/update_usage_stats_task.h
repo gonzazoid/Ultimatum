@@ -8,13 +8,16 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/updater_scope.h"
 
 namespace updater {
+
+bool OtherAppUsageStatsAllowed(const std::vector<std::string>& app_ids,
+                               UpdaterScope scope);
 
 class PersistedData;
 
@@ -31,8 +34,6 @@ class UpdateUsageStatsTask
   FRIEND_TEST_ALL_PREFIXES(UpdateUsageStatsTaskTest, OneAppEnabled);
   FRIEND_TEST_ALL_PREFIXES(UpdateUsageStatsTaskTest, ZeroAppsEnabled);
   virtual ~UpdateUsageStatsTask();
-
-  bool UsageStatsAllowed(const std::vector<std::string>& app_ids) const;
 
   SEQUENCE_CHECKER(sequence_checker_);
   const UpdaterScope scope_;

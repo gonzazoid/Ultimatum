@@ -125,16 +125,6 @@ CharacterRange ShapeResultBuffer::GetCharacterRange(
   return CharacterRange(to_x, from_x, -min_y, max_y);
 }
 
-Vector<CharacterRange> ShapeResultBuffer::IndividualCharacterRanges(
-    TextDirection direction,
-    float total_width) const {
-  Vector<CharacterRange> ranges;
-  float current_x = direction == TextDirection::kRtl ? total_width : 0;
-  for (const scoped_refptr<const ShapeResult>& result : results_)
-    current_x = result->IndividualCharacterRanges(&ranges, current_x);
-  return ranges;
-}
-
 void ShapeResultBuffer::AddRunInfoAdvances(const ShapeResult::RunInfo& run_info,
                                            double offset,
                                            Vector<double>& advances) {
@@ -255,20 +245,6 @@ int ShapeResultBuffer::OffsetForPosition(
     }
   }
   return total_offset;
-}
-
-void ShapeResultBuffer::ExpandRangeToIncludePartialGlyphs(int* from,
-                                                          int* to) const {
-  int offset = 0;
-  for (unsigned j = 0; j < results_.size(); j++) {
-    const scoped_refptr<const ShapeResult> result = results_[j];
-    for (unsigned i = 0; i < result->runs_.size(); i++) {
-      if (!result->runs_[i])
-        continue;
-      result->runs_[i]->ExpandRangeToIncludePartialGlyphs(offset, from, to);
-      offset += result->runs_[i]->num_characters_;
-    }
-  }
 }
 
 Vector<ShapeResult::RunFontData> ShapeResultBuffer::GetRunFontData() const {

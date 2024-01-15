@@ -54,7 +54,7 @@ class EndToEndSyncTest : public testing::Test {
       base::test::SingleThreadTaskEnvironment::MainThreadType::IO};
   std::unique_ptr<TestService> test_service_;
   scoped_refptr<Bus> client_bus_;
-  raw_ptr<ObjectProxy> object_proxy_;
+  raw_ptr<ObjectProxy, DanglingUntriaged> object_proxy_;
 };
 
 TEST_F(EndToEndSyncTest, Echo) {
@@ -67,12 +67,11 @@ TEST_F(EndToEndSyncTest, Echo) {
 
   // Call the method.
   const int timeout_ms = ObjectProxy::TIMEOUT_USE_DEFAULT;
-  std::unique_ptr<Response> response(
-      object_proxy_->CallMethodAndBlock(&method_call, timeout_ms));
-  ASSERT_TRUE(response.get());
+  auto result = object_proxy_->CallMethodAndBlock(&method_call, timeout_ms);
+  ASSERT_TRUE(result.has_value());
 
   // Check the response. kHello should be echoed back.
-  MessageReader reader(response.get());
+  MessageReader reader(result->get());
   std::string returned_message;
   ASSERT_TRUE(reader.PopString(&returned_message));
   EXPECT_EQ(kHello, returned_message);
@@ -88,28 +87,25 @@ TEST_F(EndToEndSyncTest, Timeout) {
 
   // Call the method with timeout of 0ms.
   const int timeout_ms = 0;
-  std::unique_ptr<Response> response(
-      object_proxy_->CallMethodAndBlock(&method_call, timeout_ms));
+  auto result = object_proxy_->CallMethodAndBlock(&method_call, timeout_ms);
   // Should fail because of timeout.
-  ASSERT_FALSE(response.get());
+  ASSERT_FALSE(result.has_value());
 }
 
 TEST_F(EndToEndSyncTest, NonexistentMethod) {
   MethodCall method_call("org.chromium.TestInterface", "Nonexistent");
 
   const int timeout_ms = ObjectProxy::TIMEOUT_USE_DEFAULT;
-  std::unique_ptr<Response> response(
-      object_proxy_->CallMethodAndBlock(&method_call, timeout_ms));
-  ASSERT_FALSE(response.get());
+  auto result = object_proxy_->CallMethodAndBlock(&method_call, timeout_ms);
+  ASSERT_FALSE(result.has_value());
 }
 
 TEST_F(EndToEndSyncTest, BrokenMethod) {
   MethodCall method_call("org.chromium.TestInterface", "BrokenMethod");
 
   const int timeout_ms = ObjectProxy::TIMEOUT_USE_DEFAULT;
-  std::unique_ptr<Response> response(
-      object_proxy_->CallMethodAndBlock(&method_call, timeout_ms));
-  ASSERT_FALSE(response.get());
+  auto result = object_proxy_->CallMethodAndBlock(&method_call, timeout_ms);
+  ASSERT_FALSE(result.has_value());
 }
 
 TEST_F(EndToEndSyncTest, InvalidServiceName) {
@@ -123,9 +119,8 @@ TEST_F(EndToEndSyncTest, InvalidServiceName) {
   MethodCall method_call("org.chromium.TestInterface", "Echo");
 
   const int timeout_ms = ObjectProxy::TIMEOUT_USE_DEFAULT;
-  std::unique_ptr<Response> response(
-      object_proxy_->CallMethodAndBlock(&method_call, timeout_ms));
-  ASSERT_FALSE(response.get());
+  auto result = object_proxy_->CallMethodAndBlock(&method_call, timeout_ms);
+  ASSERT_FALSE(result.has_value());
 }
 
 TEST_F(EndToEndSyncTest, ConnectToSignalAndBlock) {

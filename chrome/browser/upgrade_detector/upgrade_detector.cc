@@ -7,14 +7,17 @@
 #include <algorithm>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/debug/alias.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/tick_clock.h"
 #include "base/values.h"
@@ -77,14 +80,30 @@ base::Time ComputeRelaunchWindowStartForDay(
     } else {
       --window_start_exploded.hour;
     }
-    CHECK(base::Time::FromLocalExploded(window_start_exploded, &window_start));
+
+    // The adjusted time could still fail `Time::FromLocalExploded`. This
+    // happens on ARM devices in ChromeOS. Once it happens, it could be sticky
+    // and creates a crash loop. Return the unadjusted time in this case.
+    // See http://crbug/1307913
+    if (!base::Time::FromLocalExploded(window_start_exploded, &window_start)) {
+      LOG(ERROR) << "FromLocalExploded failed with time=" << time
+                 << ", now=" << base::Time::Now()
+                 << ", year=" << window_start_exploded.year
+                 << ", month=" << window_start_exploded.month
+                 << ", day=" << window_start_exploded.day_of_month;
+
+      base::debug::Alias(&window_start_exploded);
+
+      // Dump once per chrome run.
+      static bool dumped = false;
+      if (!dumped) {
+        dumped = base::debug::DumpWithoutCrashing();
+      }
+
+      return time;
+    }
   }
   return window_start;
-}
-
-// Returns random TimeDelta uniformly selected between zero and `max`.
-base::TimeDelta GenRandomTimeDelta(base::TimeDelta max) {
-  return base::Microseconds(base::RandGenerator(max.InMicroseconds()));
 }
 
 }  // namespace
@@ -240,7 +259,7 @@ base::Time UpgradeDetector::AdjustDeadline(base::Time deadline,
       next_window_start =
           ComputeRelaunchWindowStartForDay(window, deadline + base::Hours(23));
     }
-    return next_window_start + GenRandomTimeDelta(duration);
+    return next_window_start + base::RandTimeDeltaUpTo(duration);
   }
 
   // Is the deadline within this day's window?
@@ -265,7 +284,7 @@ base::Time UpgradeDetector::AdjustDeadline(base::Time deadline,
 
   // The deadline is after previous day's window. Push the deadline forward into
   // a random interval in the day's window.
-  return window_start + GenRandomTimeDelta(duration);
+  return window_start + base::RandTimeDeltaUpTo(duration);
 }
 
 // static
@@ -284,15 +303,17 @@ UpgradeDetector::GetRelaunchWindowPolicyValue() {
   const base::Value* policy_value = preference->GetValue();
   DCHECK(policy_value->is_dict());
 
-  const base::Value* entries = policy_value->FindListKey("entries");
-  if (!entries || entries->GetList().empty())
+  const base::Value::List* entries =
+      policy_value->GetDict().FindList("entries");
+  if (!entries || entries->empty()) {
     return absl::nullopt;
+  }
 
   // Currently only single daily window is supported.
-  const auto& window = entries->GetList().front();
-  const absl::optional<int> hour = window.FindIntPath("start.hour");
-  const absl::optional<int> minute = window.FindIntPath("start.minute");
-  const absl::optional<int> duration_mins = window.FindIntKey("duration_mins");
+  const auto& window = entries->front().GetDict();
+  const absl::optional<int> hour = window.FindIntByDottedPath("start.hour");
+  const absl::optional<int> minute = window.FindIntByDottedPath("start.minute");
+  const absl::optional<int> duration_mins = window.FindInt("duration_mins");
 
   if (!hour || !minute || !duration_mins)
     return absl::nullopt;
@@ -433,7 +454,7 @@ void UpgradeDetector::OnRelaunchPrefChanged() {
     return;
 
   pref_change_task_pending_ = true;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(
                      [](base::WeakPtr<UpgradeDetector> weak_this) {
                        if (weak_this) {

@@ -6,9 +6,11 @@
 
 #include "ash/constants/ash_switches.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/crosapi/browser_data_migrator.h"
+#include "chrome/browser/ash/crosapi/browser_data_migrator_util.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
@@ -18,6 +20,7 @@
 #include "chrome/browser/ash/login/ui/login_display_host_mojo.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/lacros_data_migration_screen_handler.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
@@ -43,8 +46,7 @@ const test::UIPath kGotoFilesButton = {kLacrosDataMigrationId,
 class FakeMigrator : public BrowserDataMigrator {
  public:
   // BrowserDataMigrator overrides.
-  void Migrate(crosapi::browser_util::MigrationMode mode,
-               MigrateCallback callback) override {
+  void Migrate(MigrateCallback callback) override {
     callback_ = std::move(callback);
   }
   void Cancel() override { cancel_called_ = true; }
@@ -88,7 +90,7 @@ class LacrosDataMigrationScreenTest : public OobeBaseTest {
                 LacrosDataMigrationScreenView::kScreenId));
     fake_migrator_ = new FakeMigrator();
     lacros_data_migration_screen->SetMigratorForTesting(
-        base::WrapUnique(fake_migrator_));
+        base::WrapUnique(fake_migrator_.get()));
     lacros_data_migration_screen->SetAttemptRestartForTesting(
         base::BindRepeating(
             &LacrosDataMigrationScreenTest::OnAttemptRestartCalled,
@@ -100,8 +102,9 @@ class LacrosDataMigrationScreenTest : public OobeBaseTest {
   void SetUpCommandLine(base::CommandLine* command_line) override {
     OobeBaseTest::SetUpCommandLine(command_line);
 
-    command_line->AppendSwitchASCII(switches::kBrowserDataMigrationMode,
-                                    "copy");
+    command_line->AppendSwitchASCII(
+        switches::kBrowserDataMigrationMode,
+        browser_data_migrator_util::kMoveSwitchValue);
   }
 
   bool is_attempt_restart_called() const { return is_attempt_restart_called_; }
@@ -116,7 +119,7 @@ class LacrosDataMigrationScreenTest : public OobeBaseTest {
 
  private:
   // This is owned by `LacrosDataMigrationScreen`.
-  FakeMigrator* fake_migrator_;
+  raw_ptr<FakeMigrator, DanglingUntriaged> fake_migrator_;
   DeviceStateMixin device_state_{
       &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_CONSUMER_OWNED};
   LoginManagerMixin login_mixin_{&mixin_host_};

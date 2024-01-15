@@ -9,10 +9,6 @@
 
 namespace first_run {
 
-// The accessibility identifier for the UMA collection checkbox shown in first
-// run.
-extern NSString* const kUMAMetricsButtonAccessibilityIdentifier;
-
 // The accessibility identifier for the Welcome screen shown in first run.
 extern NSString* const kFirstRunWelcomeScreenAccessibilityIdentifier;
 
@@ -26,9 +22,17 @@ extern NSString* const kFirstRunLegacySignInScreenAccessibilityIdentifier;
 // The accessibility identifier for the Sync screen shown in first run.
 extern NSString* const kFirstRunSyncScreenAccessibilityIdentifier;
 
+// The accessibility identifier for the Choice screen title;
+extern NSString* const kSearchEngineChoiceTitleAccessibilityIdentifier;
+
 // The accessibility identifier for the Default browser screen shown in first
 // run.
 extern NSString* const kFirstRunDefaultBrowserScreenAccessibilityIdentifier;
+
+// The accessibility identifier for the Omnibox position choice screen shown in
+// first run.
+extern NSString* const
+    kFirstRunOmniboxPositionChoiceScreenAccessibilityIdentifier;
 
 // URL for the terms of service text.
 extern NSString* const kTermsOfServiceURL;

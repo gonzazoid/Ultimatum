@@ -7,15 +7,14 @@
 #include <map>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chrome_browser_main.h"
@@ -61,6 +60,7 @@
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/features.h"
 #include "url/gurl.h"
 
 namespace {
@@ -83,10 +83,18 @@ class VariationHeaderSetter : public ChromeBrowserMainExtraParts {
   }
 };
 
-class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
+class VariationsHttpHeadersBrowserTest
+    : public InProcessBrowserTest,
+      public testing::WithParamInterface<bool> {
  public:
   VariationsHttpHeadersBrowserTest()
-      : https_server_(net::test_server::EmbeddedTestServer::TYPE_HTTPS) {}
+      : https_server_(net::test_server::EmbeddedTestServer::TYPE_HTTPS) {
+    if (IsPlzDedicatedWorkerEnabled()) {
+      feature_list_.InitAndEnableFeature(blink::features::kPlzDedicatedWorker);
+    } else {
+      feature_list_.InitAndDisableFeature(blink::features::kPlzDedicatedWorker);
+    }
+  }
 
   VariationsHttpHeadersBrowserTest(const VariationsHttpHeadersBrowserTest&) =
       delete;
@@ -94,6 +102,8 @@ class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
       const VariationsHttpHeadersBrowserTest&) = delete;
 
   ~VariationsHttpHeadersBrowserTest() override = default;
+
+  static bool IsPlzDedicatedWorkerEnabled() { return GetParam(); }
 
   void CreatedBrowserMainParts(content::BrowserMainParts* parts) override {
     InProcessBrowserTest::CreatedBrowserMainParts(parts);
@@ -137,6 +147,14 @@ class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
   }
 
   GURL GetGoogleUrl() const { return GetGoogleUrlWithPath("/landing.html"); }
+
+  GURL GetGoogleIframeUrl() const {
+    return GetGoogleUrlWithPath("/iframe.html");
+  }
+
+  GURL GetGoogleSubresourceFetchingWorkerUrl() const {
+    return GetGoogleUrlWithPath("/subresource_fetch_worker.js");
+  }
 
   GURL GetGoogleRedirectUrl1() const {
     return GetGoogleUrlWithPath("/redirect");
@@ -192,24 +210,62 @@ class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
 
   void ClearReceivedHeaders() { received_headers_.clear(); }
 
-  bool FetchResource(Browser* browser, const GURL& url) {
+  bool LoadIframe(const content::ToRenderFrameHost& execution_target,
+                  const GURL& url) {
     if (!url.is_valid())
       return false;
-    std::string script(
-        "var xhr = new XMLHttpRequest();"
-        "xhr.open('GET', '");
-    script += url.spec() +
-              "', true);"
-              "xhr.onload = function (e) {"
-              "  if (xhr.readyState === 4) {"
-              "    window.domAutomationController.send(xhr.status === 200);"
-              "  }"
-              "};"
-              "xhr.onerror = function () {"
-              "  window.domAutomationController.send(false);"
-              "};"
-              "xhr.send(null)";
-    return ExecuteScript(browser, script);
+    return EvalJs(execution_target, content::JsReplace(R"(
+          (async () => {
+            return new Promise(resolve => {
+              const iframe = document.createElement('iframe');
+              iframe.addEventListener('load', () => { resolve(true); });
+              iframe.addEventListener('error', () => { resolve(false); });
+              iframe.src = $1;
+              document.body.appendChild(iframe);
+            });
+          })();
+        )",
+                                                       url))
+        .ExtractBool();
+  }
+
+  bool FetchResource(const content::ToRenderFrameHost& execution_target,
+                     const GURL& url) {
+    if (!url.is_valid()) {
+      return false;
+    }
+    return EvalJs(execution_target, content::JsReplace(R"(
+          (async () => {
+            try {
+              await fetch($1);
+              return true;
+            } catch {
+              return false;
+            }
+          })();
+        )",
+                                                       url))
+        .ExtractBool();
+  }
+  bool RunSubresourceFetchingWorker(
+      const content::ToRenderFrameHost& execution_target,
+      const GURL& worker_url,
+      const GURL& subresource_url) {
+    if (!worker_url.is_valid() || !subresource_url.is_valid()) {
+      return false;
+    }
+    return EvalJs(execution_target,
+                  content::JsReplace(R"(
+          (async () => {
+            return await new Promise(resolve => {
+              const worker = new Worker($1);
+              worker.addEventListener('message', (e) => { resolve(e.data); });
+              worker.postMessage($2);
+            });
+          })();
+        )",
+                                     worker_url, subresource_url))
+        .ExtractBool();
   }
 
   content::WebContents* GetWebContents() { return GetWebContents(browser()); }
@@ -217,6 +273,8 @@ class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
   content::WebContents* GetWebContents(Browser* browser) {
     return browser->tab_strip_model()->GetActiveWebContents();
   }
+
+  void GoogleWebVisibilityTopFrameTest(bool top_frame_is_first_party);
 
   // Registers a service worker for google.com root scope.
   void RegisterServiceWorker(const std::string& worker_path) {
@@ -308,14 +366,6 @@ class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
   }
 
  private:
-  bool ExecuteScript(Browser* browser, const std::string& script) {
-    bool xhr_result = false;
-    // The JS call will fail if disallowed because the process will be killed.
-    bool execute_result = ExecuteScriptAndExtractBool(GetWebContents(browser),
-                                                      script, &xhr_result);
-    return xhr_result && execute_result;
-  }
-
   // Custom request handler that record request headers and simulates a redirect
   // from google.com to example.com.
   std::unique_ptr<net::test_server::HttpResponse> RequestHandler(
@@ -328,30 +378,9 @@ class VariationsHttpHeadersBrowserTest : public InProcessBrowserTest {
 
   // For waiting for requests.
   std::map<GURL, base::OnceClosure> done_callbacks_;
-};
 
-// Used for testing the kRestrictGoogleWebVisibility feature.
-class VariationsHttpHeadersBrowserTestWithRestrictedVisibility
-    : public VariationsHttpHeadersBrowserTest,
-      public testing::WithParamInterface<bool> {
- public:
-  VariationsHttpHeadersBrowserTestWithRestrictedVisibility() {
-    if (GetParam()) {
-      scoped_feature_list_.InitAndEnableFeature(
-          variations::internal::kRestrictGoogleWebVisibility);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(
-          variations::internal::kRestrictGoogleWebVisibility);
-    }
-  }
-
-  VariationsHttpHeadersBrowserTestWithRestrictedVisibility(
-      const VariationsHttpHeadersBrowserTestWithRestrictedVisibility&) = delete;
-  VariationsHttpHeadersBrowserTestWithRestrictedVisibility& operator=(
-      const VariationsHttpHeadersBrowserTestWithRestrictedVisibility&) = delete;
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  // To enable/disable the PlzDedicatedWorker feature during the test.
+  base::test::ScopedFeatureList feature_list_;
 };
 
 std::unique_ptr<net::test_server::HttpResponse>
@@ -394,11 +423,29 @@ VariationsHttpHeadersBrowserTest::RequestHandler(
   } else if (request.relative_url == GetExampleUrl().path()) {
     http_response->set_code(net::HTTP_OK);
     http_response->set_content("hello");
-    http_response->set_content_type("text/plain");
+    http_response->set_content_type("text/html");
+  } else if (request.relative_url == GetGoogleIframeUrl().path()) {
+    http_response->set_code(net::HTTP_OK);
+    http_response->set_content("hello");
+    http_response->set_content_type("text/html");
   } else if (request.relative_url == GetGoogleSubresourceUrl().path()) {
     http_response->set_code(net::HTTP_OK);
     http_response->set_content("");
     http_response->set_content_type("image/png");
+  } else if (request.relative_url ==
+             GetGoogleSubresourceFetchingWorkerUrl().path()) {
+    http_response->set_code(net::HTTP_OK);
+    http_response->set_content(R"(
+      self.addEventListener('message', async (e) => {
+        try {
+          await fetch(e.data);
+          self.postMessage(true);
+        } catch {
+          self.postMessage(false);
+        }
+      });
+    )");
+    http_response->set_content_type("text/html");
   } else {
     return nullptr;
   }
@@ -445,41 +492,21 @@ void CreateFieldTrialsWithDifferentVisibilities() {
   variations::mojom::VariationsHeadersPtr signed_out_headers =
       provider->GetClientDataHeaders(/*is_signed_in=*/false);
 
-  if (base::FeatureList::IsEnabled(
-          variations::internal::kRestrictGoogleWebVisibility)) {
-    EXPECT_NE(signed_in_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::ANY),
-              signed_in_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::FIRST_PARTY));
-    EXPECT_NE(signed_out_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::ANY),
-              signed_out_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::FIRST_PARTY));
-  } else {
-    // When kRestrictGoogleWebVisibility is disabled, the transmission of
-    // VariationIDs is not restricted. This is the status quo implementation.
-    //
-    // This means that IDs associated with the FIRST_PARTY IDCollectionKeys are
-    // treated as if they were associated with their corresponding ANY_CONTEXT
-    // IDCollectionKeys. For example, when the feature is disabled, IDs
-    // associated with GOOGLE_WEB_PROPERTIES_FIRST_PARTY are transmitted when
-    // IDs associated with GOOGLE_WEB_PROPERTIES_ANY_CONTEXT are.
-    EXPECT_EQ(signed_in_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::ANY),
-              signed_in_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::FIRST_PARTY));
-    EXPECT_EQ(signed_out_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::ANY),
-              signed_out_headers->headers_map.at(
-                  variations::mojom::GoogleWebVisibility::FIRST_PARTY));
-  }
+  EXPECT_NE(signed_in_headers->headers_map.at(
+                variations::mojom::GoogleWebVisibility::ANY),
+            signed_in_headers->headers_map.at(
+                variations::mojom::GoogleWebVisibility::FIRST_PARTY));
+  EXPECT_NE(signed_out_headers->headers_map.at(
+                variations::mojom::GoogleWebVisibility::ANY),
+            signed_out_headers->headers_map.at(
+                variations::mojom::GoogleWebVisibility::FIRST_PARTY));
 }
 
 }  // namespace
 
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to network requests to Google but stripped on redirects.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        TestStrippingHeadersFromResourceRequest) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetGoogleRedirectUrl1()));
 
@@ -491,28 +518,30 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
 
 // Verify in an integration that that the variations header (X-Client-Data) is
 // correctly attached and stripped from network requests.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        TestStrippingHeadersFromSubresourceRequest) {
   GURL url = server()->GetURL("/simple_page.html");
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-  EXPECT_TRUE(FetchResource(browser(), GetGoogleRedirectUrl1()));
+  EXPECT_TRUE(
+      FetchResource(GetWebContents(browser()), GetGoogleRedirectUrl1()));
   EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl1(), "X-Client-Data"));
   EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl2(), "X-Client-Data"));
   EXPECT_TRUE(HasReceivedHeader(GetExampleUrl(), "Host"));
   EXPECT_FALSE(HasReceivedHeader(GetExampleUrl(), "X-Client-Data"));
 }
 
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, Incognito) {
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest, Incognito) {
   Browser* incognito = CreateIncognitoBrowser();
   ASSERT_TRUE(ui_test_utils::NavigateToURL(incognito, GetGoogleUrl()));
 
   EXPECT_FALSE(HasReceivedHeader(GetGoogleUrl(), "X-Client-Data"));
 
-  EXPECT_TRUE(FetchResource(incognito, GetGoogleSubresourceUrl()));
+  EXPECT_TRUE(
+      FetchResource(GetWebContents(incognito), GetGoogleSubresourceUrl()));
   EXPECT_FALSE(HasReceivedHeader(GetGoogleSubresourceUrl(), "X-Client-Data"));
 }
 
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, UserSignedIn) {
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest, UserSignedIn) {
   // Ensure GetClientDataHeader() returns different values when signed in vs
   // not signed in.
   variations::VariationID signed_in_id = 8;
@@ -562,7 +591,7 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, UserSignedIn) {
   EXPECT_TRUE(base::Contains(ids_any_context, signed_in_id));
 }
 
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, UserNotSignedIn) {
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest, UserNotSignedIn) {
   // Ensure GetClientDataHeader() returns different values when signed in vs
   // not signed in.
   variations::VariationID signed_in_id = 8;
@@ -609,7 +638,7 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, UserNotSignedIn) {
   EXPECT_FALSE(base::Contains(ids_any_context, signed_in_id));
 }
 
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        PRE_CheckLowEntropySourceValue) {
   // We use the PRE_ prefix mechanism to ensure that this test always runs
   // before CheckLowEntropyValue(). None of the subclasses in the
@@ -620,7 +649,7 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
   local_state->SetInteger(metrics::prefs::kMetricsLowEntropySource, 5);
 }
 
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        CheckLowEntropySourceValue) {
   auto entropy_providers = g_browser_process->GetMetricsServicesManager()
                                ->CreateEntropyProvidersForTesting();
@@ -665,36 +694,68 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
   EXPECT_TRUE(base::Contains(variation_ids, 33));
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    VariationsHttpHeadersBrowserTest,
-    VariationsHttpHeadersBrowserTestWithRestrictedVisibility,
-    testing::Bool());
-
-IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTestWithRestrictedVisibility,
-                       TestRestrictGoogleWebVisibilityInThirdPartyContexts) {
-  // Ensure GetClientDataHeader() returns different values when
-  // kRestrictGoogleWebVisibility is enabled and the same values otherwise.
+void VariationsHttpHeadersBrowserTest::GoogleWebVisibilityTopFrameTest(
+    bool top_frame_is_first_party) {
   CreateFieldTrialsWithDifferentVisibilities();
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GetGoogleUrl()));
-  absl::optional<std::string> header =
-      GetReceivedHeader(GetGoogleUrl(), "X-Client-Data");
-  ASSERT_TRUE(header);
-
-  variations::mojom::GoogleWebVisibility web_visibility =
-      base::FeatureList::IsEnabled(
-          variations::internal::kRestrictGoogleWebVisibility)
-          ? variations::mojom::GoogleWebVisibility::FIRST_PARTY
-          : variations::mojom::GoogleWebVisibility::ANY;
-
-  variations::mojom::VariationsHeadersPtr headers =
+  variations::mojom::VariationsHeadersPtr signed_out_headers =
       variations::VariationsIdsProvider::GetInstance()->GetClientDataHeaders(
           /*is_signed_in=*/false);
 
-  EXPECT_EQ(*header, headers->headers_map.at(web_visibility));
+  const std::string expected_header_value =
+      top_frame_is_first_party
+          ? signed_out_headers->headers_map.at(
+                variations::mojom::GoogleWebVisibility::FIRST_PARTY)
+          : signed_out_headers->headers_map.at(
+                variations::mojom::GoogleWebVisibility::ANY);
+
+  // Load a top frame.
+  const GURL top_frame_url =
+      top_frame_is_first_party ? GetGoogleUrl() : GetExampleUrl();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), top_frame_url));
+  if (top_frame_is_first_party) {
+    EXPECT_EQ(GetReceivedHeader(top_frame_url, "X-Client-Data"),
+              expected_header_value);
+  } else {
+    EXPECT_FALSE(GetReceivedHeader(top_frame_url, "X-Client-Data"));
+  }
+
+  // Load Google iframe.
+  EXPECT_TRUE(LoadIframe(GetWebContents(browser()), GetGoogleIframeUrl()));
+  EXPECT_EQ(GetReceivedHeader(GetGoogleIframeUrl(), "X-Client-Data"),
+            expected_header_value);
+
+  // Fetch Google subresource.
+  EXPECT_TRUE(FetchResource(ChildFrameAt(GetWebContents(browser()), 0),
+                            GetGoogleSubresourceUrl()));
+  EXPECT_EQ(GetReceivedHeader(GetGoogleSubresourceUrl(), "X-Client-Data"),
+            expected_header_value);
+
+  // Prepare for loading Google subresource from a dedicated worker. The same
+  // URL subresource was loaded above. So need to clear `received_headers_`.
+  ClearReceivedHeaders();
+
+  // Start Google worker and fetch Google subresource from the worker.
+  EXPECT_TRUE(RunSubresourceFetchingWorker(
+      ChildFrameAt(GetWebContents(browser()), 0),
+      GetGoogleSubresourceFetchingWorkerUrl(), GetGoogleSubresourceUrl()));
+  EXPECT_EQ(GetReceivedHeader(GetGoogleSubresourceFetchingWorkerUrl(),
+                              "X-Client-Data"),
+            expected_header_value);
+  EXPECT_EQ(GetReceivedHeader(GetGoogleSubresourceUrl(), "X-Client-Data"),
+            expected_header_value);
 }
 
-IN_PROC_BROWSER_TEST_F(
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
+                       TestGoogleWebVisibilityInFirstPartyContexts) {
+  GoogleWebVisibilityTopFrameTest(/*top_frame_is_first_party=*/true);
+}
+
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
+                       TestGoogleWebVisibilityInThirdPartyContexts) {
+  GoogleWebVisibilityTopFrameTest(/*top_frame_is_first_party=*/false);
+}
+
+IN_PROC_BROWSER_TEST_P(
     VariationsHttpHeadersBrowserTest,
     TestStrippingHeadersFromRequestUsingSimpleURLLoaderWithProfileNetworkContext) {
   GURL url = GetGoogleRedirectUrl1();
@@ -713,7 +774,7 @@ IN_PROC_BROWSER_TEST_F(
       partition->GetURLLoaderFactoryForBrowserProcess().get();
   content::SimpleURLLoaderTestHelper loader_helper;
   loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-      loader_factory, loader_helper.GetCallback());
+      loader_factory, loader_helper.GetCallbackDeprecated());
 
   // Wait for the response to complete.
   loader_helper.WaitForCallback();
@@ -726,7 +787,7 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_FALSE(HasReceivedHeader(GetExampleUrl(), "X-Client-Data"));
 }
 
-IN_PROC_BROWSER_TEST_F(
+IN_PROC_BROWSER_TEST_P(
     VariationsHttpHeadersBrowserTest,
     TestStrippingHeadersFromRequestUsingSimpleURLLoaderWithGlobalSystemNetworkContext) {
   GURL url = GetGoogleRedirectUrl1();
@@ -745,7 +806,7 @@ IN_PROC_BROWSER_TEST_F(
           .get();
   content::SimpleURLLoaderTestHelper loader_helper;
   loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-      loader_factory, loader_helper.GetCallback());
+      loader_factory, loader_helper.GetCallbackDeprecated());
 
   // Wait for the response to complete.
   loader_helper.WaitForCallback();
@@ -761,7 +822,7 @@ IN_PROC_BROWSER_TEST_F(
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to service worker navigation preload requests. Regression test
 // for https://crbug.com/873061.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        ServiceWorkerNavigationPreload) {
   // Register a service worker that uses navigation preload.
   RegisterServiceWorker("/service_worker/navigation_preload_worker.js");
@@ -777,14 +838,14 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
 
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to requests after the service worker falls back to network.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        ServiceWorkerNetworkFallback) {
   ServiceWorkerTest("/service_worker/network_fallback_worker.js");
 }
 
 // Verify in an integration test that the variations header (X-Client-Data) is
 // not exposed in the service worker fetch event.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        ServiceWorkerDoesNotSeeHeader) {
   ServiceWorkerTest("/service_worker/fail_on_variations_header_worker.js");
 }
@@ -792,14 +853,14 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to requests after the service worker does
 // respondWith(fetch(request)).
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        ServiceWorkerRespondWithFetch) {
   ServiceWorkerTest("/service_worker/respond_with_fetch_worker.js");
 }
 
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to requests for service worker scripts when installing and updating.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, ServiceWorkerScript) {
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest, ServiceWorkerScript) {
   // Register a service worker that imports scripts.
   GURL absolute_import = GetExampleUrlWithPath("/service_worker/empty.js");
   const std::string worker_path =
@@ -837,18 +898,22 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, ServiceWorkerScript) {
 
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to requests for shared worker scripts.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest, SharedWorkerScript) {
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest, SharedWorkerScript) {
   WorkerScriptTest("/workers/create_shared_worker.html",
                    "/workers/import_scripts_shared_worker.js");
 }
 
 // Verify in an integration test that the variations header (X-Client-Data) is
 // attached to requests for dedicated worker scripts.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTest,
                        DedicatedWorkerScript) {
   WorkerScriptTest("/workers/create_dedicated_worker.html",
                    "/workers/import_scripts_dedicated_worker.js");
 }
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         VariationsHttpHeadersBrowserTest,
+                         testing::Bool());
 
 namespace {
 
@@ -915,7 +980,7 @@ class VariationsHttpHeadersBrowserTestWithOptimizationGuide
 
 // Verify in an integration test that that the variations header (X-Client-Data)
 // is correctly attached to prefetch requests from the Loading Predictor.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTestWithOptimizationGuide,
+IN_PROC_BROWSER_TEST_P(VariationsHttpHeadersBrowserTestWithOptimizationGuide,
                        Prefetch) {
   GURL url = server()->GetURL("test.com", "/simple_page.html");
   GURL google_url = GetGoogleSubresourceUrl();
@@ -935,3 +1000,7 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTestWithOptimizationGuide,
   EXPECT_TRUE(HasReceivedHeader(google_url, "X-Client-Data"));
   EXPECT_FALSE(HasReceivedHeader(non_google_url, "X-Client-Data"));
 }
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         VariationsHttpHeadersBrowserTestWithOptimizationGuide,
+                         testing::Bool());

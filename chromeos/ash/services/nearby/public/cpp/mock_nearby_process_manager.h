@@ -5,9 +5,9 @@
 #ifndef CHROMEOS_ASH_SERVICES_NEARBY_PUBLIC_CPP_MOCK_NEARBY_PROCESS_MANAGER_H_
 #define CHROMEOS_ASH_SERVICES_NEARBY_PUBLIC_CPP_MOCK_NEARBY_PROCESS_MANAGER_H_
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/ash/services/nearby/public/cpp/nearby_process_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -25,8 +25,14 @@ class MockNearbyProcessManager : public NearbyProcessManager {
     ~MockNearbyProcessReference() override;
 
     MOCK_METHOD(const mojo::SharedRemote<
-                    location::nearby::connections::mojom::NearbyConnections>&,
+                    ::nearby::connections::mojom::NearbyConnections>&,
                 GetNearbyConnections,
+                (),
+                (const, override));
+
+    MOCK_METHOD(const mojo::SharedRemote<
+                    ::ash::nearby::presence::mojom::NearbyPresence>&,
+                GetNearbyPresence,
                 (),
                 (const, override));
 
@@ -34,6 +40,12 @@ class MockNearbyProcessManager : public NearbyProcessManager {
                 GetNearbySharingDecoder,
                 (),
                 (const, override));
+
+    MOCK_METHOD(
+        const mojo::SharedRemote<ash::quick_start::mojom::QuickStartDecoder>&,
+        GetQuickStartDecoder,
+        (),
+        (const, override));
   };
 
   MockNearbyProcessManager();
@@ -45,6 +57,8 @@ class MockNearbyProcessManager : public NearbyProcessManager {
               GetNearbyProcessReference,
               (NearbyProcessStoppedCallback on_process_stopped_callback),
               (override));
+
+  MOCK_METHOD(void, ShutDownProcess, (), (override));
 };
 
 }  // namespace nearby

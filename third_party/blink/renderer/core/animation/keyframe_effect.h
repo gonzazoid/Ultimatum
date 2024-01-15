@@ -82,7 +82,7 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
 
   // Returns the target element. If the animation targets a pseudo-element,
   // this returns the originating element.
-  Element* target() const { return target_element_; }
+  Element* target() const { return target_element_.Get(); }
   void setTarget(Element*);
   const String& pseudoElement() const;
   void setPseudoElement(String, ExceptionState&);
@@ -95,7 +95,7 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
 
   // Returns blink's representation of the effect target.
   // This can be a blink::PseudoElement which should not be web-exposed.
-  Element* EffectTarget() const { return effect_target_; }
+  Element* EffectTarget() const { return effect_target_.Get(); }
   void SetKeyframes(StringKeyframeVector keyframes);
 
   bool Affects(const PropertyHandle&) const override;
@@ -119,7 +119,9 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
                                   absl::optional<double> start_time,
                                   base::TimeDelta time_offset,
                                   double animation_playback_rate,
-                                  CompositorAnimation* = nullptr);
+                                  CompositorAnimation* = nullptr,
+                                  bool is_monotonic_timeline = true,
+                                  bool is_boundary_aligned = false);
   bool HasActiveAnimationsOnCompositor() const;
   bool HasActiveAnimationsOnCompositor(const PropertyHandle&) const;
   bool CancelAnimationOnCompositor(CompositorAnimation*);
@@ -160,7 +162,6 @@ class CORE_EXPORT KeyframeEffect final : public AnimationEffect {
   void DetachTarget(Animation*);
   void RefreshTarget();
   void CountAnimatedProperties() const;
-  AnimationTimeDelta IntrinsicIterationDuration() const override;
   AnimationTimeDelta CalculateTimeToEffectChange(
       bool forwards,
       absl::optional<AnimationTimeDelta> inherited_time,

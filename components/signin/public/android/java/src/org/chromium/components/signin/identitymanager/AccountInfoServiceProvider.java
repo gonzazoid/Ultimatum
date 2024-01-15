@@ -6,7 +6,6 @@ package org.chromium.components.signin.identitymanager;
 
 import androidx.annotation.MainThread;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Promise;
 import org.chromium.base.ThreadUtils;
@@ -18,9 +17,7 @@ import org.chromium.base.ThreadUtils;
 public final class AccountInfoServiceProvider {
     private static @Nullable Promise<AccountInfoService> sInstancePromise;
 
-    /**
-     * Initializes the singleton {@link AccountInfoService} instance.
-     */
+    /** Initializes the singleton {@link AccountInfoService} instance. */
     @MainThread
     public static void init(
             IdentityManager identityManager, AccountTrackerService accountTrackerService) {
@@ -66,13 +63,11 @@ public final class AccountInfoServiceProvider {
     }
 
     @MainThread
-    @VisibleForTesting
     public static void setInstanceForTests(AccountInfoService accountInfoService) {
         ThreadUtils.assertOnUiThread();
         sInstancePromise = Promise.fulfilled(accountInfoService);
     }
 
-    @VisibleForTesting
     public static void resetForTests() {
         sInstancePromise = null;
     }

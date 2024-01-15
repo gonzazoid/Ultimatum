@@ -7,36 +7,15 @@
 
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
+#include "media/base/media_export.h"
 #include "media/base/media_status.h"
+#include "media/base/renderer.h"
 #include "media/base/renderer_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
-
-// Types of media::Renderer.
-// WARNING: These values are reported to metrics. Entries should not be
-// renumbered and numeric values should not be reused. When adding new entries,
-// also update media::mojom::RendererType & tools/metrics/histograms/enums.xml.
-enum class RendererType {
-  kDefault = 0,          // DefaultRendererFactory
-  kMojo = 1,             // MojoRendererFactory
-  kMediaPlayer = 2,      // MediaPlayerRendererClientFactory
-  kCourier = 3,          // CourierRendererFactory
-  kFlinging = 4,         // FlingingRendererClientFactory
-  kCast = 5,             // CastRendererClientFactory
-  kMediaFoundation = 6,  // MediaFoundationRendererClientFactory
-  // kFuchsia = 7,       // Deprecated
-  kRemoting = 8,       // RemotingRendererFactory for remoting::Receiver
-  kCastStreaming = 9,  // PlaybackCommandForwardingRendererFactory
-  kContentEmbedderDefined = 10,  // Defined by the content embedder
-  kMaxValue = kContentEmbedderDefined,
-};
-
-// Get the name of the Renderer for `renderer_type`. The returned name could be
-// the actual Renderer class name or a descriptive name.
-std::string MEDIA_EXPORT GetRendererName(RendererType renderer_type);
 
 // RendererFactorySelector owns RendererFactory instances used within WMPI.
 // Its purpose is to aggregate the signals and centralize the logic behind
@@ -78,9 +57,6 @@ class MEDIA_EXPORT RendererFactorySelector {
 
   // Sets the base factory to be returned, when there are no signals telling us
   // to select any specific factory.
-  // NOTE: |type| can be different than RendererType::kDefault. kDefault is used
-  // to identify the DefaultRendererFactory, not to indicate that a factory
-  // should be used by default.
   void SetBaseRendererType(RendererType type);
 
   // Returns the type of the Renderer for what GetCurrentFactory() would return.

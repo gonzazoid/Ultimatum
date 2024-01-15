@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_CRX_FILE_ID_UTIL_H_
 #define COMPONENTS_CRX_FILE_ID_UTIL_H_
 
+#include "base/containers/span.h"
 #include "base/strings/string_piece.h"
 
 #include <stddef.h>
@@ -16,8 +17,7 @@ namespace base {
 class FilePath;
 }
 
-namespace crx_file {
-namespace id_util {
+namespace crx_file::id_util {
 
 // The number of bytes in a legal id.
 extern const size_t kIdSize;
@@ -31,8 +31,8 @@ std::string GenerateId(base::StringPiece input);
 std::string GenerateIdFromHex(const std::string& input);
 
 // Generates an ID from the first |kIdSize| bytes of a SHA256 hash.
-// |hash_size| must be at least |kIdSize|.
-std::string GenerateIdFromHash(const uint8_t* hash, size_t hash_size);
+// |span| must be at least |kIdSize| bytes.
+std::string GenerateIdFromHash(base::span<const uint8_t> hash);
 
 // Generates an ID for an extension in the given path.
 // Used while developing extensions, before they have a key.
@@ -47,9 +47,8 @@ base::FilePath MaybeNormalizePath(const base::FilePath& path);
 
 // Checks if |id| is a valid extension-id. Extension-ids are used for anything
 // that comes in a CRX file, including apps, extensions, and components.
-bool IdIsValid(const std::string& id);
+bool IdIsValid(base::StringPiece id);
 
-}  // namespace id_util
-}  // namespace crx_file
+}  // namespace crx_file::id_util
 
 #endif  // COMPONENTS_CRX_FILE_ID_UTIL_H_

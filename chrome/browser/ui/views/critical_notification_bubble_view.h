@@ -5,14 +5,31 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_CRITICAL_NOTIFICATION_BUBBLE_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_CRITICAL_NOTIFICATION_BUBBLE_VIEW_H_
 
+#include "base/auto_reset.h"
+#include "base/i18n/time_formatting.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
 class CriticalNotificationBubbleView : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(CriticalNotificationBubbleView,
+                  views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(CriticalNotificationBubbleView);
+  using TimeFormatter = bool (*)(base::TimeDelta,
+                                 base::DurationFormatWidth,
+                                 std::u16string*);
+
+  class [[maybe_unused, nodiscard]] ScopedSetTimeFormatterForTesting {
+   public:
+    explicit ScopedSetTimeFormatterForTesting(TimeFormatter time_formatter);
+    ~ScopedSetTimeFormatterForTesting();
+
+   private:
+    base::AutoReset<TimeFormatter> resetter_;
+  };
+
   explicit CriticalNotificationBubbleView(views::View* anchor_view);
   CriticalNotificationBubbleView(const CriticalNotificationBubbleView&) =
       delete;

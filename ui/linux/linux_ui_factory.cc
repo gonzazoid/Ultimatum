@@ -9,10 +9,15 @@
 
 #include "base/command_line.h"
 #include "base/environment.h"
+#include "base/memory/raw_ptr.h"
 #include "base/nix/xdg_util.h"
+#include "base/no_destructor.h"
 #include "base/strings/string_util.h"
+#include "build/chromecast_buildflags.h"
 #include "ui/base/buildflags.h"
+#include "ui/base/ui_base_switches.h"
 #include "ui/color/system_theme.h"
+#include "ui/linux/fallback_linux_ui.h"
 #include "ui/linux/linux_ui.h"
 #include "ui/linux/linux_ui_delegate.h"
 
@@ -23,80 +28,127 @@
 #include "ui/qt/qt_ui.h"
 #endif
 
+#if !BUILDFLAG(IS_CASTOS)
+#include "ui/shell_dialogs/shell_dialog_linux.h"
+#endif
+
 namespace ui {
 
 namespace {
 
-const char kUiToolkitFlag[] = "ui-toolkit";
+std::vector<raw_ptr<LinuxUiTheme, VectorExperimental>>& GetLinuxUiThemesImpl() {
+  static base::NoDestructor<
+      std::vector<raw_ptr<LinuxUiTheme, VectorExperimental>>>
+      themes;
+  return *themes;
+}
 
 std::unique_ptr<LinuxUiAndTheme> CreateGtkUi() {
 #if BUILDFLAG(USE_GTK)
   auto gtk_ui = BuildGtkUi();
-  if (gtk_ui->Initialize())
+  if (gtk_ui->Initialize()) {
+    GetLinuxUiThemesImpl().push_back(gtk_ui.get());
     return gtk_ui;
+  }
 #endif
   return nullptr;
 }
 
 LinuxUiAndTheme* GetGtkUi() {
   // LinuxUi creation will fail without a delegate.
-  if (!ui::LinuxUiDelegate::GetInstance())
+  if (!ui::LinuxUiDelegate::GetInstance()) {
     return nullptr;
+  }
   static LinuxUiAndTheme* gtk_ui = CreateGtkUi().release();
   return gtk_ui;
 }
 
 std::unique_ptr<LinuxUiAndTheme> CreateQtUi() {
-  if (!base::FeatureList::IsEnabled(kAllowQt))
+  if (!base::FeatureList::IsEnabled(kAllowQt)) {
     return nullptr;
+  }
 #if BUILDFLAG(USE_QT)
   auto qt_ui = qt::CreateQtUi(GetGtkUi());
-  if (qt_ui->Initialize())
+  if (qt_ui->Initialize()) {
+    GetLinuxUiThemesImpl().push_back(qt_ui.get());
     return qt_ui;
+  }
 #endif
   return nullptr;
 }
 
 LinuxUiAndTheme* GetQtUi() {
   // LinuxUi creation will fail without a delegate.
-  if (!ui::LinuxUiDelegate::GetInstance())
+  if (!ui::LinuxUiDelegate::GetInstance()) {
     return nullptr;
+  }
   static LinuxUiAndTheme* qt_ui = CreateQtUi().release();
   return qt_ui;
 }
 
+std::unique_ptr<LinuxUiAndTheme> CreateFallbackUi() {
+  return std::make_unique<FallbackLinuxUi>();
+}
+
+LinuxUiAndTheme* GetFallbackUi() {
+  static LinuxUiAndTheme* fallback_ui = CreateFallbackUi().release();
+  return fallback_ui;
+}
+
 LinuxUiAndTheme* GetDefaultLinuxUiAndTheme() {
   auto* cmd_line = base::CommandLine::ForCurrentProcess();
-  std::string ui_toolkit =
-      base::ToLowerASCII(cmd_line->GetSwitchValueASCII(kUiToolkitFlag));
+  std::string ui_toolkit = base::ToLowerASCII(
+      cmd_line->GetSwitchValueASCII(switches::kUiToolkitFlag));
   if (ui_toolkit == "gtk") {
-    if (auto* gtk_ui = GetGtkUi())
+    if (auto* gtk_ui = GetGtkUi()) {
       return gtk_ui;
+    }
   } else if (ui_toolkit == "qt") {
-    if (auto* qt_ui = GetQtUi())
+    if (auto* qt_ui = GetQtUi()) {
       return qt_ui;
+    }
+  } else if (ui_toolkit == "fallback") {
+    if (auto* fallback_ui = GetFallbackUi()) {
+      return fallback_ui;
+    }
   }
 
   std::unique_ptr<base::Environment> env = base::Environment::Create();
   switch (GetDefaultSystemTheme()) {
     case SystemTheme::kQt:
-      if (auto* qt_ui = GetQtUi())
+      if (auto* qt_ui = GetQtUi()) {
         return qt_ui;
-      return GetGtkUi();
+      }
+      if (auto* gtk_ui = GetGtkUi()) {
+        return gtk_ui;
+      }
+      return GetFallbackUi();
     case SystemTheme::kGtk:
     case SystemTheme::kDefault:
-      if (auto* gtk_ui = GetGtkUi())
+      if (auto* gtk_ui = GetGtkUi()) {
         return gtk_ui;
-      return GetQtUi();
+      }
+      if (auto* qt_ui = GetQtUi()) {
+        return qt_ui;
+      }
+      return GetFallbackUi();
   }
 }
 
 }  // namespace
 
-BASE_FEATURE(kAllowQt, "AllowQt", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowQt, "AllowQt", base::FEATURE_ENABLED_BY_DEFAULT);
 
 LinuxUi* GetDefaultLinuxUi() {
-  return GetDefaultLinuxUiAndTheme();
+  auto* linux_ui = GetDefaultLinuxUiAndTheme();
+#if !BUILDFLAG(IS_CASTOS)
+  // This may create an extra thread that may race against the LinuxUi instance
+  // initialization, GtkInitFromCommandLine, in GtkUi for example, so this must
+  // be done after the call to GetDefaultLinuxUiAndTheme above, so the race
+  // condition is avoided.
+  shell_dialog_linux::Initialize();
+#endif
+  return linux_ui;
 }
 
 LinuxUiTheme* GetDefaultLinuxUiTheme() {
@@ -114,6 +166,11 @@ LinuxUiTheme* GetLinuxUiTheme(SystemTheme system_theme) {
   }
 }
 
+const std::vector<raw_ptr<LinuxUiTheme, VectorExperimental>>&
+GetLinuxUiThemes() {
+  return GetLinuxUiThemesImpl();
+}
+
 SystemTheme GetDefaultSystemTheme() {
   std::unique_ptr<base::Environment> env = base::Environment::Create();
 
@@ -127,6 +184,7 @@ SystemTheme GetDefaultSystemTheme() {
     case base::nix::DESKTOP_ENVIRONMENT_KDE3:
     case base::nix::DESKTOP_ENVIRONMENT_KDE4:
     case base::nix::DESKTOP_ENVIRONMENT_KDE5:
+    case base::nix::DESKTOP_ENVIRONMENT_KDE6:
     case base::nix::DESKTOP_ENVIRONMENT_UKUI:
     case base::nix::DESKTOP_ENVIRONMENT_DEEPIN:
     case base::nix::DESKTOP_ENVIRONMENT_LXQT:

@@ -59,6 +59,10 @@ class CORE_EXPORT IdleSpellCheckController final
   // Called when spellchecking is disabled on the specific element.
   void SetSpellCheckingDisabled(const Element&);
 
+  ColdModeSpellCheckRequester& GetColdModeRequester() const {
+    return *cold_mode_requester_;
+  }
+
   // Exposed for testing only.
   SpellCheckRequester& GetSpellCheckRequester() const;
   void ForceInvocationForTesting();
@@ -69,6 +73,11 @@ class CORE_EXPORT IdleSpellCheckController final
   void Trace(Visitor*) const override;
 
  private:
+  friend class Internals;
+
+  // For testing and debugging only.
+  const char* GetStateAsString() const;
+
   class IdleCallback;
 
   LocalDOMWindow& GetWindow() const;

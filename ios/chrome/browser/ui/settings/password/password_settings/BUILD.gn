@@ -3,8 +3,8 @@
 # found in the LICENSE file.
 
 source_set("password_settings") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
+    "password_bulk_move_handler.h",
     "password_export_handler.h",
     "password_settings_coordinator.h",
     "password_settings_coordinator.mm",
@@ -19,25 +19,33 @@ source_set("password_settings") {
     "//components/google/core/common",
     "//components/keyed_service/core",
     "//components/password_manager/core/browser",
+    "//components/password_manager/core/browser/features:password_features",
     "//components/password_manager/core/common",
     "//components/prefs",
     "//components/signin/public/identity_manager/objc",
     "//components/strings",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/passwords:store_factory",
-    "//ios/chrome/browser/signin:signin",
-    "//ios/chrome/browser/sync:sync",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
+    "//ios/chrome/browser/passwords/model:store_factory",
+    "//ios/chrome/browser/passwords/model/metrics",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/prefs",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/utils",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/util:util",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/sync/model:model",
     "//ios/chrome/browser/ui/settings/elements:enterprise_info_popover_view_controller",
     "//ios/chrome/browser/ui/settings/password:common",
+    "//ios/chrome/browser/ui/settings/password:features",
     "//ios/chrome/browser/ui/settings/password:password_ui",
     "//ios/chrome/browser/ui/settings/password/passwords_in_other_apps",
+    "//ios/chrome/browser/ui/settings/password/reauthentication",
+    "//ios/chrome/browser/ui/settings/password/reauthentication:reauthentication_delegate",
     "//ios/chrome/browser/ui/settings/utils",
-    "//ios/chrome/browser/url:constants",
     "//ios/chrome/common/ui/reauthentication",
     "//ui/base",
     "//url",
@@ -45,7 +53,6 @@ source_set("password_settings") {
 }
 
 source_set("password_settings_ui") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "password_settings_consumer.h",
     "password_settings_delegate.h",
@@ -56,11 +63,13 @@ source_set("password_settings_ui") {
     ":password_settings_constants",
     "//components/strings",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:utils",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:utils",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/reauthentication",
+    "//ios/chrome/common/ui/util:image_util",
     "//ui/base",
   ]
   public_deps = [ "//ios/chrome/browser/ui/settings:settings_root" ]
@@ -68,16 +77,14 @@ source_set("password_settings_ui") {
 }
 
 source_set("password_settings_constants") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "password_settings_constants.h",
     "password_settings_constants.mm",
   ]
-  deps = [ "//ios/chrome/browser/ui/list_model" ]
+  deps = [ "//ios/chrome/browser/shared/ui/list_model" ]
 }
 
 source_set("common") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "scoped_password_settings_reauth_module_override.h",
     "scoped_password_settings_reauth_module_override.mm",
@@ -89,19 +96,33 @@ source_set("common") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
-  sources = [ "password_settings_mediator_unittest.mm" ]
+  sources = [
+    "password_settings_coordinator_unittest.mm",
+    "password_settings_mediator_unittest.mm",
+  ]
   deps = [
+    ":common",
     ":password_settings",
+    ":password_settings_ui",
     "//base/test:test_support",
     "//components/password_manager/core/browser:test_support",
+    "//components/password_manager/core/common:features",
     "//components/signin/public/identity_manager/objc",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/passwords:store_factory",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/sync",
+    "//ios/chrome/browser/passwords/model:store_factory",
+    "//ios/chrome/browser/passwords/model/metrics",
+    "//ios/chrome/browser/shared/coordinator/scene:scene_state_header",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/sync/model",
+    "//ios/chrome/browser/ui/settings/password:features",
+    "//ios/chrome/browser/ui/settings/password/reauthentication:reauthentication_ui",
     "//ios/chrome/common/ui/reauthentication",
+    "//ios/chrome/test:test_support",
+    "//ios/chrome/test/app:test_support",
+    "//ios/testing:protocol_fake",
     "//ios/web/public/test",
     "//testing/gmock",
     "//testing/gtest",

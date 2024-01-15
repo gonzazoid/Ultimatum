@@ -11,6 +11,7 @@
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "ui/aura/scoped_window_targeter.h"
+#include "ui/aura/window_observer.h"
 #include "ui/base/buildflags.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/views_export.h"
@@ -28,7 +29,8 @@ class WindowEventFilterLacros;
 
 // Contains Lacros specific implementation.
 class VIEWS_EXPORT DesktopWindowTreeHostLacros
-    : public DesktopWindowTreeHostPlatform {
+    : public DesktopWindowTreeHostPlatform,
+      public aura::WindowObserver {
  public:
   // Casts from a base WindowTreeHost instance.
   static DesktopWindowTreeHostLacros* From(WindowTreeHost* wth);
@@ -62,11 +64,31 @@ class VIEWS_EXPORT DesktopWindowTreeHostLacros
   void OnWindowStateChanged(
       ui::PlatformWindowState old_window_show_state,
       ui::PlatformWindowState new_window_show_state) override;
+  void OnFullscreenTypeChanged(ui::PlatformFullscreenType old_type,
+                               ui::PlatformFullscreenType new_type) override;
+  void OnOverviewModeChanged(bool in_overview) override;
+  void OnTooltipShownOnServer(const std::u16string& text,
+                              const gfx::Rect& bounds) override;
+  void OnTooltipHiddenOnServer() override;
+  void OnBoundsChanged(const BoundsChange& change) override;
 
   // DesktopWindowTreeHostPlatform overrides:
   void AddAdditionalInitProperties(
       const Widget::InitParams& params,
       ui::PlatformWindowInitProperties* properties) override;
+  Widget::MoveLoopResult RunMoveLoop(
+      const gfx::Vector2d& drag_offset,
+      Widget::MoveLoopSource source,
+      Widget::MoveLoopEscapeBehavior escape_behavior) override;
+
+  // aura::WindowObserver:
+  void OnWindowPropertyChanged(aura::Window* window,
+                               const void* key,
+                               intptr_t old) override;
+  void OnWindowDestroying(aura::Window* window) override;
+
+  // DesktopWindowTreeHost:
+  void OnWidgetInitDone() override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformImplTestWithTouch,
@@ -75,10 +97,16 @@ class VIEWS_EXPORT DesktopWindowTreeHostLacros
   void CreateNonClientEventFilter();
   void DestroyNonClientEventFilter();
 
+  // Sets hints for the WM/compositor that reflect the rounded corners.
+  void UpdateWindowHints();
+
   // A handler for events intended for non client area.
   // A posthandler for events intended for non client area. Handles events if no
   // other consumer handled them.
   std::unique_ptr<WindowEventFilterLacros> non_client_window_event_filter_;
+
+  base::ScopedObservation<aura::Window, aura::WindowObserver>
+      content_window_observation_{this};
 
   // The display and the native X window hosting the root window.
   base::WeakPtrFactory<DesktopWindowTreeHostLacros> weak_factory_{this};

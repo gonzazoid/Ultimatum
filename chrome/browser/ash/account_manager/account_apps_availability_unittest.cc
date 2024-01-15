@@ -5,12 +5,15 @@
 #include "chrome/browser/ash/account_manager/account_apps_availability.h"
 
 #include <memory>
+#include <utility>
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_manager_facade.h"
 #include "components/account_manager_core/mock_account_manager_facade.h"
@@ -63,16 +66,10 @@ class MockObserver : public AccountAppsAvailability::Observer {
 
 base::flat_set<account_manager::Account> GetAccountsAvailableInArcSync(
     AccountAppsAvailability* availability) {
-  base::flat_set<account_manager::Account> result;
-  base::RunLoop run_loop;
-  availability->GetAccountsAvailableInArc(base::BindLambdaForTesting(
-      [&result,
-       &run_loop](const base::flat_set<account_manager::Account>& accounts) {
-        result = accounts;
-        run_loop.Quit();
-      }));
-  run_loop.Run();
-  return result;
+  base::test::TestFuture<const base::flat_set<account_manager::Account>&>
+      future;
+  availability->GetAccountsAvailableInArc(future.GetCallback());
+  return future.Get();
 }
 
 MATCHER_P(AccountEqual, other, "") {
@@ -82,11 +79,13 @@ MATCHER_P(AccountEqual, other, "") {
 }  // namespace
 
 class AccountAppsAvailabilityTest : public testing::Test {
- protected:
-  AccountAppsAvailabilityTest() = default;
+ public:
   AccountAppsAvailabilityTest(const AccountAppsAvailabilityTest&) = delete;
   AccountAppsAvailabilityTest& operator=(const AccountAppsAvailabilityTest&) =
       delete;
+
+ protected:
+  AccountAppsAvailabilityTest() = default;
   ~AccountAppsAvailabilityTest() override = default;
 
   void SetUp() override {
@@ -94,10 +93,7 @@ class AccountAppsAvailabilityTest : public testing::Test {
     pref_service_ = std::make_unique<TestingPrefServiceSimple>();
     AccountAppsAvailability::RegisterPrefs(pref_service_->registry());
 
-    auto fake_user_manager = std::make_unique<user_manager::FakeUserManager>();
-    fake_user_manager_ = new user_manager::FakeUserManager();
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(fake_user_manager_));
+    fake_user_manager_.Reset(std::make_unique<user_manager::FakeUserManager>());
 
     primary_account_ = identity_test_env()->MakePrimaryAccountAvailable(
         kPrimaryAccountEmail, signin::ConsentLevel::kSignin);
@@ -131,9 +127,8 @@ class AccountAppsAvailabilityTest : public testing::Test {
   signin::IdentityTestEnvironment identity_test_env_;
   std::unique_ptr<TestingPrefServiceSimple> pref_service_;
   AccountInfo primary_account_;
-  // Owned by `scoped_user_manager_`.
-  user_manager::FakeUserManager* fake_user_manager_ = nullptr;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  user_manager::TypedScopedUserManager<user_manager::FakeUserManager>
+      fake_user_manager_;
 };
 
 TEST_F(AccountAppsAvailabilityTest, InitializationPrefIsPersistedOnDisk) {
@@ -180,19 +175,13 @@ TEST_F(AccountAppsAvailabilityTest, CallsBeforeInitialization) {
   // Make secondary account unavailable in ARC.
   account_apps_availability->SetIsAccountAvailableInArc(secondary_account,
                                                         false);
-  base::flat_set<account_manager::Account> result;
-  base::RunLoop run_loop;
-  account_apps_availability->GetAccountsAvailableInArc(
-      base::BindLambdaForTesting(
-          [&result, &run_loop](
-              const base::flat_set<account_manager::Account>& accounts) {
-            result = accounts;
-            run_loop.Quit();
-          }));
 
+  base::test::TestFuture<const base::flat_set<account_manager::Account>&>
+      future;
   // Wait for initialization and for `GetAccountsAvailableInArc` call
   // completion.
-  run_loop.Run();
+  account_apps_availability->GetAccountsAvailableInArc(future.GetCallback());
+  base::flat_set<account_manager::Account> result = future.Get();
   EXPECT_TRUE(account_apps_availability->IsInitialized());
 
   // Only primary account is available, secondary account was removed.

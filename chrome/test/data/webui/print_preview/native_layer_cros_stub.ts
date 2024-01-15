@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {NativeLayerCros, NativeLayerCrosImpl, PrinterSetupResponse, PrinterStatus, PrinterStatusReason, PrinterStatusSeverity, PrintServersConfig} from 'chrome://print/print_preview.js';
+import {LocalDestinationInfo, NativeLayerCros, NativeLayerCrosImpl, PrinterSetupResponse, PrinterStatus, PrinterStatusReason, PrinterStatusSeverity, PrintServersConfig} from 'chrome://print/print_preview.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
@@ -36,8 +36,12 @@ export class NativeLayerCrosStub extends TestBrowserProxy implements
   private printServersConfig_: PrintServersConfig|
       null = {printServers: [], isSingleServerFetchingMode: false};
 
+  private showManagePrinters: boolean = true;
+
   /** When true, all printer status retry requests return NO_ERROR. */
   private simulateStatusRetrySuccesful_: boolean = false;
+
+  private localPrinters_: LocalDestinationInfo[] = [];
 
   constructor() {
     super([
@@ -47,6 +51,8 @@ export class NativeLayerCrosStub extends TestBrowserProxy implements
       'choosePrintServers',
       'getPrintServersConfig',
       'recordPrinterStatusRetrySuccessHistogram',
+      'getShowManagePrinters',
+      'observeLocalPrinters',
     ]);
   }
 
@@ -58,9 +64,10 @@ export class NativeLayerCrosStub extends TestBrowserProxy implements
 
   setupPrinter(printerId: string) {
     this.methodCalled('setupPrinter', printerId);
+    assert(this.setupPrinterResponse_);
     return this.shouldRejectPrinterSetup_ ?
-        Promise.reject(assert(this.setupPrinterResponse_!)) :
-        Promise.resolve(assert(this.setupPrinterResponse_!));
+        Promise.reject(this.setupPrinterResponse_) :
+        Promise.resolve(this.setupPrinterResponse_);
   }
 
   grantExtensionPrinterAccess(provisionalId: string) {
@@ -143,11 +150,31 @@ export class NativeLayerCrosStub extends TestBrowserProxy implements
         'recordPrinterStatusRetrySuccessHistogram', retrySuccessful);
   }
 
+  recordPrintAttemptOutcome() {}
+
   setPrintServersConfig(printServersConfig: PrintServersConfig) {
     this.printServersConfig_ = printServersConfig;
   }
 
   simulateStatusRetrySuccesful() {
     this.simulateStatusRetrySuccesful_ = true;
+  }
+
+  getShowManagePrinters(): Promise<boolean> {
+    this.methodCalled('getShowManagePrinters');
+    return Promise.resolve(this.showManagePrinters);
+  }
+
+  setShowManagePrinters(show: boolean): void {
+    this.showManagePrinters = show;
+  }
+
+  setLocalPrinters(printers: LocalDestinationInfo[]): void {
+    this.localPrinters_ = printers;
+  }
+
+  observeLocalPrinters(): Promise<LocalDestinationInfo[]> {
+    this.methodCalled('observeLocalPrinters');
+    return Promise.resolve(this.localPrinters_);
   }
 }

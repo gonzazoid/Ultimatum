@@ -13,6 +13,7 @@
 #include "chromeos/lacros/lacros_service.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/event_router.h"
+#include "extensions/common/extension_id.h"
 
 namespace image_writer_api = extensions::api::image_writer_private;
 
@@ -27,19 +28,19 @@ const char kUnsupportedAshVersion[] = "UNSUPPORTED_ASH_VERSION";
 image_writer_api::Stage FromMojo(crosapi::mojom::Stage mojo_stage) {
   switch (mojo_stage) {
     case crosapi::mojom::Stage::kConfirmation:
-      return image_writer_api::Stage::STAGE_CONFIRMATION;
+      return image_writer_api::Stage::kConfirmation;
     case crosapi::mojom::Stage::kDownload:
-      return image_writer_api::Stage::STAGE_DOWNLOAD;
+      return image_writer_api::Stage::kDownload;
     case crosapi::mojom::Stage::kVerifyDownload:
-      return image_writer_api::Stage::STAGE_VERIFYDOWNLOAD;
+      return image_writer_api::Stage::kVerifyDownload;
     case crosapi::mojom::Stage::kUnzip:
-      return image_writer_api::Stage::STAGE_UNZIP;
+      return image_writer_api::Stage::kUnzip;
     case crosapi::mojom::Stage::kWrite:
-      return image_writer_api::Stage::STAGE_WRITE;
+      return image_writer_api::Stage::kWrite;
     case crosapi::mojom::Stage::kVerifyWrite:
-      return image_writer_api::Stage::STAGE_VERIFYWRITE;
+      return image_writer_api::Stage::kVerifyWrite;
     case crosapi::mojom::Stage::kUnknown:
-      return image_writer_api::Stage::STAGE_UNKNOWN;
+      return image_writer_api::Stage::kUnknown;
   }
 }
 
@@ -113,7 +114,7 @@ class ImageWriterControllerLacros::ImageWriterClientLacros
     // Note: |this| is deleted at this point.
   }
 
-  const std::string extension_id_;
+  const ExtensionId extension_id_;
   // Both pointers of |browser_context_| and |controller_| are guaranteed
   // to be valid for the lifetime of this class, as destruction of either
   // BrowserContext or ImageWriterControllerLacros will result in synchronous
@@ -178,7 +179,7 @@ void ImageWriterControllerLacros::WriteFromUrl(
     WriteOperationCallback callback) {
   chromeos::LacrosService* service = chromeos::LacrosService::Get();
   if (!service->IsAvailable<crosapi::mojom::ImageWriter>() ||
-      service->GetInterfaceVersion(crosapi::mojom::ImageWriter::Uuid_) < 1) {
+      service->GetInterfaceVersion<crosapi::mojom::ImageWriter>() < 1) {
     std::move(callback).Run(kUnsupportedAshVersion);
     return;
   }
@@ -203,7 +204,7 @@ void ImageWriterControllerLacros::WriteFromFile(
     WriteOperationCallback callback) {
   chromeos::LacrosService* service = chromeos::LacrosService::Get();
   if (!service->IsAvailable<crosapi::mojom::ImageWriter>() ||
-      service->GetInterfaceVersion(crosapi::mojom::ImageWriter::Uuid_) < 1) {
+      service->GetInterfaceVersion<crosapi::mojom::ImageWriter>() < 1) {
     std::move(callback).Run(kUnsupportedAshVersion);
     return;
   }

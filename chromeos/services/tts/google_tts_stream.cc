@@ -8,6 +8,7 @@
 #include <sys/resource.h>
 
 #include "base/files/file_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/services/tts/constants.h"
 #include "chromeos/services/tts/tts_service.h"
 
@@ -17,14 +18,14 @@ namespace tts {
 // Simple helper to bridge logging in the shared library to Chrome's logging.
 void HandleLibraryLogging(int severity, const char* message) {
   switch (severity) {
-    case logging::LOG_INFO:
+    case logging::LOGGING_INFO:
       // Suppressed.
       break;
-    case logging::LOG_WARNING:
+    case logging::LOGGING_WARNING:
       LOG(WARNING) << message;
       break;
-    case logging::LOG_FATAL:
-    case logging::LOG_ERROR:
+    case logging::LOGGING_ERROR:
+    case logging::LOGGING_FATAL:
       LOG(ERROR) << message;
       break;
     default:
@@ -122,7 +123,7 @@ void GoogleTtsStream::Speak(const std::vector<uint8_t>& text_jspb,
   tts_player_.Play(std::move(callback));
   is_buffering_ = true;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&GoogleTtsStream::ReadMoreFrames,
                      weak_factory_.GetWeakPtr(), true /* is_first_buffer */));
@@ -178,7 +179,7 @@ void GoogleTtsStream::ReadMoreFrames(bool is_first_buffer) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&GoogleTtsStream::ReadMoreFrames,
                      weak_factory_.GetWeakPtr(), false /* is_first_buffer */));

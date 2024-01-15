@@ -47,7 +47,7 @@ class ServiceWorkerNewScriptFetcherTest : public testing::Test {
     options.scope = scope;
     auto registration = CreateNewServiceWorkerRegistration(
         context()->registry(), options,
-        blink::StorageKey(url::Origin::Create(scope)));
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)));
     return registration;
   }
 
@@ -62,7 +62,7 @@ TEST_F(ServiceWorkerNewScriptFetcherTest, Basic) {
   EXPECT_EQ(
       blink::mojom::kInvalidServiceWorkerResourceId,
       version->script_cache_map()->LookupResourceId(version->script_url()));
-  EXPECT_FALSE(version->client_security_state());
+  EXPECT_FALSE(version->policy_container_host());
 
   const std::string kBody = "/* body */";
   FakeNetworkURLLoaderFactory fake_factory{
@@ -97,7 +97,7 @@ TEST_F(ServiceWorkerNewScriptFetcherTest, Basic) {
   EXPECT_NE(
       blink::mojom::kInvalidServiceWorkerResourceId,
       version->script_cache_map()->LookupResourceId(version->script_url()));
-  EXPECT_TRUE(version->client_security_state());
+  EXPECT_TRUE(version->policy_container_host());
 
   // Wait until the network request for the main script completes.
   network::TestURLLoaderClient client;

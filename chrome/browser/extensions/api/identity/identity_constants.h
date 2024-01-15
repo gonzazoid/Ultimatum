@@ -17,12 +17,15 @@ extern const char kUserNotSignedIn[];
 extern const char kUserNonPrimary[];
 extern const char kBrowserSigninNotAllowed[];
 extern const char kInteractionRequired[];
+extern const char kGetAuthTokenInteractivityDeniedError[];
 extern const char kInvalidRedirect[];
 extern const char kOffTheRecord[];
 extern const char kPageLoadFailure[];
-extern const char kSetAccountsInCookieFailure[];
+extern const char kPageLoadTimedOut[];
 extern const char kInvalidConsentResult[];
 extern const char kCanceled[];
+extern const char kCannotCreateWindow[];
+extern const char kInvalidURLScheme[];
 
 extern const int kCachedRemoteConsentTTLSeconds;
 }  // namespace identity_constants

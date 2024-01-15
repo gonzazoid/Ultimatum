@@ -28,10 +28,13 @@ through `builders.cpu`, `builders.os` and `builders.goma` respectively.
 load("//project.star", "settings")
 load("./args.star", "args")
 load("./branches.star", "branches")
+load("./gn_args.star", "register_gn_args")
 load("./bootstrap.star", "register_bootstrap")
 load("./builder_config.star", "register_builder_config")
+load("./builder_health_indicators.star", "register_health_spec")
 load("./recipe_experiments.star", "register_recipe_experiments_ref")
 load("./sheriff_rotations.star", "register_sheriffed_builder")
+load("./description_exceptions.star", "exempted_from_description_builders")
 
 ################################################################################
 # Constants for use with the builder function                                  #
@@ -57,23 +60,34 @@ os_category = struct(
 # The *_DEFAULT members enable distinguishing between a use that runs the
 # "current" version of the OS and a use that runs against a specific version
 # that happens to be the "current" version
-def os_enum(dimension, category):
-    return struct(dimension = dimension, category = category)
+def os_enum(category, dimension, dimension_overrides = None):
+    if dimension_overrides:
+        def get_dimension(bucket, builder):
+            return dimension_overrides.get(bucket, {}).get(builder, dimension)
+    else:
+        def get_dimension(_bucket, _builder):
+            return dimension
+
+    return struct(category = category, get_dimension = get_dimension)
 
 os = struct(
-    ANDROID = os_enum("Android", os_category.ANDROID),
-    LINUX_BIONIC = os_enum("Ubuntu-18.04", os_category.LINUX),
-    LINUX_FOCAL = os_enum("Ubuntu-20.04", os_category.LINUX),
-    LINUX_DEFAULT = os_enum("Ubuntu-18.04", os_category.LINUX),
-    MAC_10_15 = os_enum("Mac-10.15", os_category.MAC),
-    MAC_12 = os_enum("Mac-12", os_category.MAC),
-    MAC_13 = os_enum("Mac-13", os_category.MAC),
-    MAC_DEFAULT = os_enum("Mac-12", os_category.MAC),
-    MAC_ANY = os_enum("Mac", os_category.MAC),
-    WINDOWS_10 = os_enum("Windows-10", os_category.WINDOWS),
-    WINDOWS_11 = os_enum("Windows-11", os_category.WINDOWS),
-    WINDOWS_DEFAULT = os_enum("Windows-10", os_category.WINDOWS),
-    WINDOWS_ANY = os_enum("Windows", os_category.WINDOWS),
+    ANDROID = os_enum(os_category.ANDROID, "Android"),
+    LINUX_BIONIC = os_enum(os_category.LINUX, "Ubuntu-18.04"),
+    LINUX_FOCAL = os_enum(os_category.LINUX, "Ubuntu-20.04"),
+    # A migration off of bionic is in progress, builders identified in
+    # linux-default.json will have a different os dimension
+    LINUX_DEFAULT = os_enum(os_category.LINUX, "Ubuntu-22.04", json.decode(io.read_file("./linux-default.json"))),
+    MAC_10_15 = os_enum(os_category.MAC, "Mac-10.15"),
+    MAC_12 = os_enum(os_category.MAC, "Mac-12"),
+    MAC_13 = os_enum(os_category.MAC, "Mac-13"),
+    MAC_14 = os_enum(os_category.MAC, "Mac-14"),
+    MAC_DEFAULT = os_enum(os_category.MAC, "Mac-13"),
+    MAC_ANY = os_enum(os_category.MAC, "Mac"),
+    MAC_BETA = os_enum(os_category.MAC, "Mac-14"),
+    WINDOWS_10 = os_enum(os_category.WINDOWS, "Windows-10"),
+    WINDOWS_11 = os_enum(os_category.WINDOWS, "Windows-11"),
+    WINDOWS_DEFAULT = os_enum(os_category.WINDOWS, "Windows-10"),
+    WINDOWS_ANY = os_enum(os_category.WINDOWS, "Windows"),
 )
 
 # The constants to be used for the goma_backend and goma_jobs parameters of the
@@ -88,38 +102,11 @@ goma = struct(
             "server_host": "staging-goma.chromium.org",
             "rpc_extra_params": "?staging",
         },
-        RBE_TOT = {
-            "server_host": "staging-goma.chromium.org",
-            "rpc_extra_params": "?tot",
-        },
     ),
     jobs = struct(
-        J50 = 50,
-
         # This is for 4 cores mac. -j40 is too small, especially for clobber
         # builder.
         J80 = 80,
-
-        # This is for tryservers becoming slow and critical path of patch
-        # landing.
-        J150 = 150,
-
-        # This is for tryservers becoming very slow and critical path of patch
-        # landing.
-        J300 = 300,
-
-        # CI builders (of which are few) may use high number of concurrent Goma
-        # jobs.
-        # IMPORTANT: when
-        #  * bumping number of jobs below, or
-        #  * adding this mixin to many builders at once, or
-        #  * adding this mixin to a builder with many concurrent builds
-        # get review from Goma team.
-        MANY_JOBS_FOR_CI = 500,
-
-        # For load testing of the execution backend
-        LOAD_TESTING_J1000 = 1000,
-        LOAD_TESTING_J2000 = 2000,
     ),
 )
 
@@ -135,12 +122,22 @@ reclient = struct(
         LOW_JOBS_FOR_CI = 80,
         HIGH_JOBS_FOR_CI = 500,
         LOW_JOBS_FOR_CQ = 150,
-        HIGH_JOBS_FOR_CQ = 300,
+        HIGH_JOBS_FOR_CQ = 500,
+    ),
+)
+
+siso = struct(
+    project = struct(
+        DEFAULT_TRUSTED = reclient.instance.DEFAULT_TRUSTED,
+        DEFAULT_UNTRUSTED = reclient.instance.DEFAULT_UNTRUSTED,
     ),
 )
 
 def _rotation(name):
-    return branches.value({branches.MAIN: [name]})
+    return branches.value(
+        branch_selector = branches.selector.MAIN,
+        value = [name],
+    )
 
 # Sheriff rotations that a builder can be added to (only takes effect on trunk)
 # Arbitrary elements can't be added, new rotations must be added in SoM code
@@ -148,9 +145,10 @@ sheriff_rotations = struct(
     ANDROID = _rotation("android"),
     ANGLE = _rotation("angle"),
     CHROMIUM = _rotation("chromium"),
+    CFT = _rotation("cft"),
+    DAWN = _rotation("dawn"),
     FUCHSIA = _rotation("fuchsia"),
     CHROMIUM_CLANG = _rotation("chromium.clang"),
-    CHROMIUM_FUZZ = _rotation("chromium.fuzz"),
     CHROMIUM_GPU = _rotation("chromium.gpu"),
     IOS = _rotation("ios"),
 )
@@ -164,7 +162,10 @@ def xcode_enum(version):
 
 # Keep this in-sync with the versions of bots in //ios/build/bots/.
 xcode = struct(
-    # (current default for other projects) xc12.0 gm seed
+    # Default Xcode Version, stays in sync with x15main
+    xcode_default = xcode_enum("15a507"),
+
+    # xc12.0 gm seed
     x12a7209 = xcode_enum("12a7209"),
     # xc12.4 gm seed
     x12d4e = xcode_enum("12d4e"),
@@ -175,11 +176,15 @@ xcode = struct(
     # A newer Xcode 13 version used on beta bots.
     x13betabots = xcode_enum("13f17a"),
     # Xcode14 RC will be used to build Main iOS
-    x14main = xcode_enum("14a309"),
+    x14main = xcode_enum("14c18"),
     # A newer Xcode 14 RC  used on beta bots.
-    x14betabots = xcode_enum("14b5024i"),
+    x14betabots = xcode_enum("14e222b"),
+    # Default Xcode 15 for chromium iOS
+    x15main = xcode_enum("15a507"),
+    # A newer Xcode 15 version used on beta bots.
+    x15betabots = xcode_enum("15c500b"),
     # in use by ios-webkit-tot
-    x13wk = xcode_enum("13a1030dwk"),
+    x14wk = xcode_enum("14c18wk"),
 )
 
 # Free disk space in a machine reserved for build tasks.
@@ -195,23 +200,19 @@ free_space = struct(
 # Implementation details                                                       #
 ################################################################################
 
-_DEFAULT_BUILDERLESS_OS_CATEGORIES = [os_category.LINUX]
+_DEFAULT_BUILDERLESS_OS_CATEGORIES = [os_category.LINUX, os_category.WINDOWS]
 
 # Macs all have SSDs, so it doesn't make sense to use the default behavior of
 # setting ssd:0 dimension
 _EXCLUDE_BUILDERLESS_SSD_OS_CATEGORIES = [os_category.MAC]
 
-def _goma_property(*, goma_backend, goma_debug, goma_enable_ats, goma_jobs):
+def _goma_property(*, goma_backend, goma_enable_ats, goma_jobs):
     goma_properties = {}
 
     goma_backend = defaults.get_value("goma_backend", goma_backend)
     if goma_backend == None:
         return None
     goma_properties.update(goma_backend)
-
-    goma_debug = defaults.get_value("goma_debug", goma_debug)
-    if goma_debug:
-        goma_properties["debug"] = True
 
     if goma_enable_ats != None:
         goma_properties["enable_ats"] = goma_enable_ats
@@ -224,13 +225,22 @@ def _goma_property(*, goma_backend, goma_debug, goma_enable_ats, goma_jobs):
 
 def _code_coverage_property(
         *,
+        coverage_gs_bucket,
         use_clang_coverage,
         use_java_coverage,
         use_javascript_coverage,
         coverage_exclude_sources,
         coverage_test_types,
-        export_coverage_to_zoss):
+        export_coverage_to_zoss,
+        generate_blame_list):
     code_coverage = {}
+
+    coverage_gs_bucket = defaults.get_value(
+        "coverage_gs_bucket",
+        coverage_gs_bucket,
+    )
+    if coverage_gs_bucket:
+        code_coverage["coverage_gs_bucket"] = coverage_gs_bucket
 
     use_clang_coverage = defaults.get_value(
         "use_clang_coverage",
@@ -268,9 +278,18 @@ def _code_coverage_property(
     if export_coverage_to_zoss:
         code_coverage["export_coverage_to_zoss"] = export_coverage_to_zoss
 
+    generate_blame_list = defaults.get_value(
+        "generate_blame_list",
+        generate_blame_list,
+    )
+    if generate_blame_list:
+        code_coverage["generate_blame_list"] = generate_blame_list
+
     return code_coverage or None
 
-def _reclient_property(*, instance, service, jobs, rewrapper_env, profiler_service, publish_trace, cache_silo, ensure_verified, bootstrap_env):
+_VALID_REPROXY_ENV_PREFIX_LIST = ["RBE_", "GLOG_", "GOMA_"]
+
+def _reclient_property(*, instance, service, jobs, rewrapper_env, profiler_service, publish_trace, cache_silo, ensure_verified, bootstrap_env, scandeps_server, disable_bq_upload):
     reclient = {}
     instance = defaults.get_value("reclient_instance", instance)
     if not instance:
@@ -293,10 +312,13 @@ def _reclient_property(*, instance, service, jobs, rewrapper_env, profiler_servi
     bootstrap_env = defaults.get_value("reclient_bootstrap_env", bootstrap_env)
     if bootstrap_env:
         for k in bootstrap_env:
-            if not (k.startswith("RBE_") or k.startswith("GLOG_")):
-                fail("Environment variables in bootstrap_env must start with " +
-                     "'RBE_' or 'GLOG_', got '%s'" % k)
+            if not any([k.startswith(prefix) for prefix in _VALID_REPROXY_ENV_PREFIX_LIST]):
+                fail("Environment variables in bootstrap_env must start with one of (" +
+                     ", ".join(_VALID_REPROXY_ENV_PREFIX_LIST) +
+                     "), got '%s'" % k)
         reclient["bootstrap_env"] = bootstrap_env
+    if scandeps_server:
+        reclient["scandeps_server"] = scandeps_server
     profiler_service = defaults.get_value("reclient_profiler_service", profiler_service)
     if profiler_service:
         reclient["profiler_service"] = profiler_service
@@ -308,6 +330,9 @@ def _reclient_property(*, instance, service, jobs, rewrapper_env, profiler_servi
     ensure_verified = defaults.get_value("reclient_ensure_verified", ensure_verified)
     if ensure_verified:
         reclient["ensure_verified"] = True
+    disable_bq_upload = defaults.get_value("reclient_disable_bq_upload", disable_bq_upload)
+    if disable_bq_upload:
+        reclient["disable_bq_upload"] = True
 
     return reclient
 
@@ -352,7 +377,6 @@ defaults = args.defaults(
     cpu = None,
     fully_qualified_builder_dimension = False,
     goma_backend = None,
-    goma_debug = False,
     goma_enable_ats = args.COMPUTE,
     goma_jobs = None,
     console_view = args.COMPUTE,
@@ -362,12 +386,14 @@ defaults = args.defaults(
     sheriff_rotations = None,
     xcode = None,
     ssd = args.COMPUTE,
+    coverage_gs_bucket = None,
     use_clang_coverage = False,
     use_java_coverage = False,
     use_javascript_coverage = False,
     coverage_exclude_sources = None,
     coverage_test_types = None,
     export_coverage_to_zoss = False,
+    generate_blame_list = False,
     resultdb_enable = True,
     resultdb_bigquery_exports = [],
     resultdb_index_by_timestamp = False,
@@ -378,12 +404,24 @@ defaults = args.defaults(
     reclient_bootstrap_env = None,
     reclient_profiler_service = None,
     reclient_publish_trace = None,
+    reclient_scandeps_server = args.COMPUTE,
     reclient_cache_silo = None,
     reclient_ensure_verified = None,
+    reclient_disable_bq_upload = None,
+    siso_enabled = None,
+    siso_configs = None,
+    siso_project = None,
+    siso_enable_cloud_profiler = None,
+    siso_enable_cloud_trace = None,
+    siso_experiments = [],
+    health_spec = None,
 
-    # This is to enable luci.buildbucket.omit_python2 experiment.
-    # TODO(crbug.com/1362440): remove this after enabling this in all builders.
-    omit_python2 = True,
+    # Variables for modifying builder characteristics in a shadow bucket
+    shadow_builderless = None,
+    shadow_free_space = args.COMPUTE,  # None will clear the non-shadow dimension, so use args.COMPUTE as the default
+    shadow_pool = None,
+    shadow_service_account = None,
+    shadow_reclient_instance = None,
 
     # Provide vars for bucket and executable so users don't have to
     # unnecessarily make wrapper functions
@@ -391,12 +429,13 @@ defaults = args.defaults(
     executable = args.COMPUTE,
     notifies = None,
     triggered_by = args.COMPUTE,
+    contact_team_email = None,
 )
 
 def builder(
         *,
         name,
-        branch_selector = branches.MAIN,
+        branch_selector = branches.selector.MAIN,
         bucket = args.DEFAULT,
         executable = args.DEFAULT,
         notifies = None,
@@ -422,15 +461,16 @@ def builder(
         console_view_entry = None,
         list_view = args.DEFAULT,
         goma_backend = args.DEFAULT,
-        goma_debug = args.DEFAULT,
         goma_enable_ats = args.DEFAULT,
         goma_jobs = args.DEFAULT,
+        coverage_gs_bucket = args.DEFAULT,
         use_clang_coverage = args.DEFAULT,
         use_java_coverage = args.DEFAULT,
         use_javascript_coverage = args.DEFAULT,
         coverage_exclude_sources = args.DEFAULT,
         coverage_test_types = args.DEFAULT,
         export_coverage_to_zoss = args.DEFAULT,
+        generate_blame_list = args.DEFAULT,
         resultdb_enable = args.DEFAULT,
         resultdb_bigquery_exports = args.DEFAULT,
         resultdb_index_by_timestamp = args.DEFAULT,
@@ -441,9 +481,25 @@ def builder(
         reclient_bootstrap_env = args.DEFAULT,
         reclient_profiler_service = args.DEFAULT,
         reclient_publish_trace = args.DEFAULT,
+        reclient_scandeps_server = args.DEFAULT,
         reclient_cache_silo = None,
         reclient_ensure_verified = None,
-        omit_python2 = args.DEFAULT,
+        reclient_disable_bq_upload = None,
+        siso_enabled = args.DEFAULT,
+        siso_configs = args.DEFAULT,
+        siso_project = args.DEFAULT,
+        siso_enable_cloud_profiler = args.DEFAULT,
+        siso_enable_cloud_trace = args.DEFAULT,
+        siso_experiments = args.DEFAULT,
+        health_spec = args.DEFAULT,
+        shadow_builderless = args.DEFAULT,
+        shadow_free_space = args.DEFAULT,
+        shadow_pool = args.DEFAULT,
+        shadow_service_account = args.DEFAULT,
+        shadow_reclient_instance = args.DEFAULT,
+        gn_args = None,
+        targets = None,
+        contact_team_email = args.DEFAULT,
         **kwargs):
     """Define a builder.
 
@@ -474,13 +530,6 @@ def builder(
         triggered_by: an optional poller or builder that triggers the builder or
             a list of pollers and/or builders that trigger the builder. Supports
             a module-level default.
-        bootstrap: a boolean indicating whether the builder should have its
-            properties bootstrapped. If True, the builder's properties will be
-            written to a separate file and its definition will be updated with
-            new properties and executable that cause a bootstrapping binary to
-            be used. The build's default values for properties will be taken
-            from the properties file at the version that the build will check
-            out.
         os: a member of the `os` enum indicating the OS the builder requires for
             the machines that run it. Emits a dimension of the form 'os:os'. By
             default considered None.
@@ -491,6 +540,12 @@ def builder(
             in a machine for incoming build tasks. This value is used to create
             a "free_space" dimension, and this dimension is appended to only
             builderless builders.
+        builder_cache_name: The name of the cache to mount at cache path
+            "builder". By default, buildbucket will create a builder cache for
+            each builder with a name incorporating a hash of the builder's
+            project, bucket and name, so this only needs to be set for
+            exceptional circumstances such as sharing the builder cache between
+            multiple builders.
         override_builder_dimension: a string to assign to the "builder"
             dimension. Ignores any other "builder" and "builderless" dimensions
             that would have been assigned.
@@ -504,6 +559,19 @@ def builder(
             and `auto_builder_dimension` is considered True, a dimension will be
             emitted of the form 'builder:<project>/<bucket>/<name>'. By default,
             considered False.
+        cores: an int indicating the number of cores the builder requires for
+            the machines that run it. Emits a dimension of the form
+            'cores:<cores>' will be emitted. By default, considered None.
+        cpu: a member of the `cpu` enum indicating the cpu the builder requires
+            for the machines that run it. Emits a dimension of the form
+            'cpu:<cpu>'. By default, considered None.
+        bootstrap: a boolean indicating whether the builder should have its
+            properties bootstrapped. If True, the builder's properties will be
+            written to a separate file and its definition will be updated with
+            new properties and executable that cause a bootstrapping binary to
+            be used. The build's default values for properties will be taken
+            from the properties file at the version that the build will check
+            out.
         builder_group: a string with the group of the builder. Emits a property
             of the form 'builder_group:<builder_group>'. By default, considered
             None.
@@ -513,12 +581,6 @@ def builder(
             Cannot be set if `builder_spec` is set.
         try_settings: Try-builder-specific settings, can only be set if
             `mirrors` is set.
-        cores: an int indicating the number of cores the builder requires for
-            the machines that run it. Emits a dimension of the form
-            'cores:<cores>' will be emitted. By default, considered None.
-        cpu: a member of the `cpu` enum indicating the cpu the builder requires
-            for the machines that run it. Emits a dimension of the form
-            'cpu:<cpu>'. By default, considered None.
         pool: a string indicating the pool of the machines that run the builder.
             Emits a dimension of the form 'pool:<pool>'. By default, considered
             None. When running a builder that has no explicit pool dimension,
@@ -547,9 +609,6 @@ def builder(
         goma_backend: a member of the `goma.backend` enum indicating the goma
             backend the builder should use. Will be incorporated into the
             '$build/goma' property. By default, considered None.
-        goma_debug: a boolean indicating whether goma should be debugged. If
-            True, the 'debug' field will be set in the '$build/goma' property.
-            By default, considered False.
         goma_enable_ats: a boolean indicating whether ats should be enabled for
             goma or args.COMPUTE if ats should be enabled where it is needed.
             If True or False are explicitly set, the 'enable_ats' field will be
@@ -563,6 +622,9 @@ def builder(
             jobs to be used by the builder. Sets the 'jobs' field of the
             '$build/goma' property will be set according to the enum member. By
             default, the 'jobs' considered None.
+        coverage_gs_bucket: a string specifying the GS bucket to upload
+            coverage data to. Will be copied to '$build/code_coverage' property.
+            By default, considered None.
         use_clang_coverage: a boolean indicating whether clang coverage should
             be used. If True, the 'use_clang_coverage" field will be set in the
             '$build/code_coverage' property. By default, considered False.
@@ -582,7 +644,13 @@ def builder(
         export_coverage_to_zoss: a boolean indicating if the raw coverage data
             be exported zoss(and eventually in code search) in code_coverage
             recipe module. Will be copied to '$build/code_coverage' property
-            if set. Be default, considered False.
+            if set. By default, considered False.
+        generate_blame_list: a boolean indicating if blame list data for
+            files whose coverage is known gets generated and exported to GCS.
+            Will be copied to '$build/code_coverage' property if set.
+            By default considered False.
+        resultdb_enable: a boolean indicating if resultdb should be enabled for
+            the builder.
         resultdb_bigquery_exports: a list of resultdb.export_test_results(...)
             specifying parameters for exporting test results to BigQuery. By
             default, do not export.
@@ -611,13 +679,54 @@ def builder(
             not set.
         reclient_publish_trace: If True, it publish trace by rpl2cloudtrace. Has
             no effect if reclient_instance is not set.
+        reclient_scandeps_server: If true, reproxy should start its own scandeps_server
         reclient_cache_silo: A string indicating a cache siling key to use for
             remote caching. Has no effect if reclient_instance is not set.
         reclient_ensure_verified: If True, it verifies build artifacts. Has no
             effect if reclient_instance is not set.
-        omit_python2: If True, set luci.buildbucket.omit_python2 experiment.
-            TODO(crbug.com/1362440): remove this after enabling this in all
-            builders.
+        reclient_disable_bq_upload: If True, rbe_metrics will not be uploaded to
+            BigQuery after each build
+        siso_enabled: If True, $build/siso properties will be set, and Siso will
+            be used at compile step.
+        siso_configs: a list of siso configs to enable. available values are defined in
+            //build/config/siso/config.star.
+        siso_project: a string indicating the GCP project hosting the RBE
+            instance and other Cloud services. e.g. logging, trace etc.
+        siso_enable_cloud_profiler: If True, enable cloud profiler in siso.
+        siso_enable_cloud_trace: If True, enable cloud trace in siso.
+        siso_experiments: a list of experiment flags for siso.
+        health_spec: a health spec instance describing the threshold for when
+            the builder should be considered unhealthy.
+        shadow_builderless: If set to True, then led builds created for this
+            builder will have the builderless dimension set and the builder
+            dimension removed. If set to False, then led builds created for this
+            builder will have the builderless dimension removed and the builder
+            dimension set. See description of builderless and
+            auto_builder_dimension for more information.
+        shadow_free_space: If set, then led builds created for this builder will
+            use the specified value for the free_space dimension. None will
+            cause the free_space dimension to be removed for led builds. See
+            description of free_space for more information.
+        shadow_pool: If set, then led builds created for this Builder will be
+            set to use this alternate pool instead.
+        shadow_service_account: If set, then led builds created for this builder
+            will use this service account instead.
+        shadow_reclient_instance: If set, then led builds for this builder will
+            use this as the reclient instance instead of reclient_instance. The
+            other reclient_* values will continue to be used for the shadow
+            build.
+        gn_args: If set, the GN args config to use for the builder. It can be
+            set to the name of a predeclared config or an unnamed
+            gn_args.config declaration for an unphased config. A builder can use
+            phased configs by setting a dict with the phase names as keys and
+            the values being the config to use for the phase.
+        targets: The targets that should be built and/or run by the builder. Can
+            take the form of the name of a targets bundle (individual targets
+            define a bundle with the same name containing only that target), a
+            targets.bundle instance or a list where each element is the name of
+            a targets bundle or a targets.bundle instance.
+        contact_team_email: The e-mail of the team responsible for the health of
+            the builder.
         **kwargs: Additional keyword arguments to forward on to `luci.builder`.
 
     Returns:
@@ -643,25 +752,28 @@ def builder(
              "use sheriff_rotations instead")
     if "$build/goma" in properties:
         fail('Setting "$build/goma" property is not supported: ' +
-             "use goma_backend, goma_dbug, goma_enable_ats and goma_jobs instead")
+             "use goma_backend, goma_enable_ats and goma_jobs instead")
     if "$build/code_coverage" in properties:
         fail('Setting "$build/code_coverage" property is not supported: ' +
-             "use use_clang_coverage, use_java_coverage, use_javascript_coverage " +
-             " coverage_exclude_sources, coverage_test_types instead")
+             "use coverage_gs_bucket, use_clang_coverage, use_java_coverage, " +
+             "use_javascript_coverage, coverage_exclude_sources, " +
+             "coverage_test_types instead")
     if "$build/reclient" in properties:
         fail('Setting "$build/reclient" property is not supported: ' +
              "use reclient_instance and reclient_rewrapper_env instead")
     properties = dict(properties)
 
-    os = defaults.get_value("os", os)
-    if os:
-        dimensions["os"] = os.dimension
+    shadow_properties = {}
 
     # bucket might be the args.COMPUTE sentinel value if the caller didn't set
     # bucket in some way, which will result in a weird fully-qualified builder
     # dimension, but it shouldn't matter because the call to luci.builder will
     # fail without bucket being set
     bucket = defaults.get_value("bucket", bucket)
+
+    os = defaults.get_value("os", os)
+    if os:
+        dimensions["os"] = os.get_dimension(bucket, name)
 
     if override_builder_dimension:
         dimensions["builder"] = override_builder_dimension
@@ -697,6 +809,9 @@ def builder(
             path = "builder",
             wait_for_warm_cache = 4 * time.minute,
         ))
+
+    if not kwargs.get("description_html", "").strip() and name not in exempted_from_description_builders.get(bucket, []):
+        fail("Builder " + name + " must have a description_html. All new builders must specify a description.")
 
     cores = defaults.get_value("cores", cores)
     if cores != None:
@@ -737,7 +852,6 @@ def builder(
             goma_enable_ats = None
     gp = _goma_property(
         goma_backend = goma_backend,
-        goma_debug = goma_debug,
         goma_enable_ats = goma_enable_ats,
         goma_jobs = goma_jobs,
     )
@@ -745,15 +859,26 @@ def builder(
         properties["$build/goma"] = gp
 
     code_coverage = _code_coverage_property(
+        coverage_gs_bucket = coverage_gs_bucket,
         use_clang_coverage = use_clang_coverage,
         use_java_coverage = use_java_coverage,
         use_javascript_coverage = use_javascript_coverage,
         coverage_exclude_sources = coverage_exclude_sources,
         coverage_test_types = coverage_test_types,
         export_coverage_to_zoss = export_coverage_to_zoss,
+        generate_blame_list = generate_blame_list,
     )
     if code_coverage != None:
         properties["$build/code_coverage"] = code_coverage
+
+    reclient_scandeps_server = defaults.get_value(
+        "reclient_scandeps_server",
+        reclient_scandeps_server,
+    )
+
+    # Enable scandeps_server by default.
+    if reclient_scandeps_server == args.COMPUTE:
+        reclient_scandeps_server = True
 
     reclient = _reclient_property(
         instance = reclient_instance,
@@ -763,11 +888,57 @@ def builder(
         bootstrap_env = reclient_bootstrap_env,
         profiler_service = reclient_profiler_service,
         publish_trace = reclient_publish_trace,
+        scandeps_server = reclient_scandeps_server,
         cache_silo = reclient_cache_silo,
         ensure_verified = reclient_ensure_verified,
+        disable_bq_upload = reclient_disable_bq_upload,
     )
     if reclient != None:
         properties["$build/reclient"] = reclient
+        shadow_reclient_instance = defaults.get_value("shadow_reclient_instance", shadow_reclient_instance)
+        shadow_reclient = _reclient_property(
+            instance = shadow_reclient_instance,
+            service = reclient_service,
+            jobs = reclient_jobs,
+            rewrapper_env = reclient_rewrapper_env,
+            bootstrap_env = reclient_bootstrap_env,
+            profiler_service = reclient_profiler_service,
+            publish_trace = reclient_publish_trace,
+            scandeps_server = reclient_scandeps_server,
+            cache_silo = reclient_cache_silo,
+            ensure_verified = reclient_ensure_verified,
+            disable_bq_upload = reclient_disable_bq_upload,
+        )
+        if shadow_reclient:
+            shadow_properties["$build/reclient"] = shadow_reclient
+
+    siso_project = defaults.get_value("siso_project", siso_project)
+    use_siso = defaults.get_value("siso_enabled", siso_enabled) and siso_project
+    if use_siso:
+        properties["$build/siso"] = {
+            "configs": defaults.get_value("siso_configs", siso_configs),
+            "enable_cloud_profiler": defaults.get_value("siso_enable_cloud_profiler", siso_enable_cloud_profiler),
+            "enable_cloud_trace": defaults.get_value("siso_enable_cloud_trace", siso_enable_cloud_trace),
+            "experiments": defaults.get_value("siso_experiments", siso_experiments),
+            "project": siso_project,
+        }
+
+    shadow_dimensions = {}
+    shadow_builderless = defaults.get_value("shadow_builderless", shadow_builderless)
+    if shadow_builderless:
+        shadow_dimensions["builderless"] = "1"
+        shadow_dimensions["builder"] = None
+    elif shadow_builderless != None:
+        shadow_dimensions["builderless"] = None
+        shadow_dimensions["builder"] = name
+    shadow_free_space = defaults.get_value("shadow_free_space", shadow_free_space)
+    if shadow_free_space != args.COMPUTE:
+        shadow_dimensions["free_space"] = shadow_free_space
+    shadow_pool = defaults.get_value("shadow_pool", shadow_pool)
+    if shadow_pool != None:
+        shadow_dimensions["pool"] = shadow_pool
+
+    shadow_dimensions = {k: v for k, v in shadow_dimensions.items() if dimensions.get(k) != v}
 
     kwargs = dict(kwargs)
     if bucket != args.COMPUTE:
@@ -789,18 +960,11 @@ def builder(
     if triggered_by != args.COMPUTE:
         kwargs["triggered_by"] = triggered_by
 
-    experiments = kwargs.pop("experiments", None) or {}
-
-    # TODO: remove this after this experiment is removed from
-    # cr-buildbucket/settings.cfg (http://shortn/_cz2s9ql61X).
-    if defaults.get_value("omit_python2", omit_python2):
-        experiments["luci.buildbucket.omit_python2"] = 100
-    elif "luci.buildbucket.omit_python2" not in experiments:
-        experiments["luci.buildbucket.omit_python2"] = 0
-
+    contact_team_email = defaults.get_value("contact_team_email", contact_team_email)
     builder = branches.builder(
         name = name,
         branch_selector = branch_selector,
+        contact_team_email = contact_team_email,
         dimensions = dimensions,
         properties = properties,
         resultdb_settings = _resultdb_settings(
@@ -808,7 +972,9 @@ def builder(
             resultdb_bigquery_exports = resultdb_bigquery_exports,
             resultdb_index_by_timestamp = resultdb_index_by_timestamp,
         ),
-        experiments = experiments,
+        shadow_dimensions = shadow_dimensions,
+        shadow_service_account = defaults.get_value("shadow_service_account", shadow_service_account),
+        shadow_properties = shadow_properties,
         **kwargs
     )
 
@@ -821,9 +987,24 @@ def builder(
 
     register_recipe_experiments_ref(bucket, name, executable)
 
-    register_builder_config(bucket, name, builder_group, builder_spec, mirrors, try_settings)
+    additional_exclusions = register_gn_args(builder_group, bucket, name, gn_args, use_siso)
+
+    register_builder_config(
+        bucket,
+        name,
+        builder_group,
+        builder_spec,
+        mirrors,
+        try_settings,
+        targets,
+        additional_exclusions,
+    )
 
     register_bootstrap(bucket, name, bootstrap, executable)
+
+    health_spec = defaults.get_value("health_spec", health_spec)
+
+    register_health_spec(bucket, name, health_spec, contact_team_email)
 
     builder_name = "{}/{}".format(bucket, name)
 

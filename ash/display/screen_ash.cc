@@ -143,7 +143,6 @@ display::Display ScreenAsh::GetDisplayNearestWindow(
   const RootWindowSettings* rws = GetRootWindowSettings(root_window);
   int64_t id = rws->display_id;
   // if id is |kInvaildDisplayID|, it's being deleted.
-  DCHECK(id != display::kInvalidDisplayId);
   if (id == display::kInvalidDisplayId)
     return GetPrimaryDisplay();
 
@@ -155,6 +154,13 @@ display::Display ScreenAsh::GetDisplayNearestWindow(
   if (mirroring_display.is_valid())
     return mirroring_display;
   return display_manager->GetDisplayForId(id);
+}
+
+void ScreenAsh::SetDisplayForNewWindows(int64_t display_id) {
+  if (display_id_for_new_windows() == display_id)
+    return;
+  Screen::SetDisplayForNewWindows(display_id);
+  Shell::Get()->NotifyDisplayForNewWindowsChanged();
 }
 
 display::Display ScreenAsh::GetDisplayNearestPoint(

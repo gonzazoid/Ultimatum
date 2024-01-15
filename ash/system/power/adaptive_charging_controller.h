@@ -7,7 +7,6 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/power/adaptive_charging_notification_controller.h"
-#include "ash/system/power/adaptive_charging_nudge_controller.h"
 #include "base/scoped_observation.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
@@ -38,6 +37,7 @@ class ASH_EXPORT AdaptiveChargingController
   // chromeos::PowerManagerClient::Observer:
   void PowerChanged(const power_manager::PowerSupplyProperties& proto) override;
 
+  bool is_adaptive_charging_supported_ = false;
   bool is_adaptive_delaying_charge_ = false;
   bool is_on_charger_ = false;
 
@@ -45,7 +45,6 @@ class ASH_EXPORT AdaptiveChargingController
                           chromeos::PowerManagerClient::Observer>
       power_manager_observation_{this};
 
-  const std::unique_ptr<AdaptiveChargingNudgeController> nudge_controller_;
   const std::unique_ptr<AdaptiveChargingNotificationController>
       notification_controller_;
 };

@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
@@ -18,6 +18,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/compositor/paint_recorder.h"
+#include "ui/events/event_target.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
@@ -124,9 +125,16 @@ void ScreenshotFlow::RemoveUIOverlay() {
   event_capture_mac_.reset();
 #else
   const gfx::NativeWindow& native_window = web_contents_->GetNativeView();
+#if BUILDFLAG(IS_WIN)
+  // This handles cases where the overlay is removed while a drag is still in
+  // progress, including if ScreenshotFlow is destroyed. It is safe to call
+  // ReleaseCapture() even if the capture has not been set or has already been
+  // released.
+  native_window->ReleaseCapture();
+#endif  // BUILDFLAG(IS_WIN)
   event_capture_.Reset();
   ui::Layer* content_layer = native_window->layer();
-#endif
+#endif  // else
 
   content_layer->Remove(screen_capture_layer_.get());
 
@@ -163,18 +171,16 @@ void ScreenshotFlow::CaptureAndRunScreenshotCompleteCallback(
   }
 
   gfx::Rect bounds = web_contents_->GetViewBounds();
-#if BUILDFLAG(IS_MAC)
-  const gfx::NativeView& native_view = web_contents_->GetContentNativeView();
-  gfx::Image img;
-  bool rval = ui::GrabViewSnapshot(native_view, region, &img);
-  // If |img| is empty, clients should treat it as a canceled action, but
-  // we have a DCHECK for development as we expected this call to succeed.
-  DCHECK(rval);
-  RunScreenshotCompleteCallback(result_code, bounds, img);
-#else
-  ui::GrabWindowSnapshotAsyncCallback screenshot_callback =
+  ui::GrabSnapshotImageCallback screenshot_callback =
       base::BindOnce(&ScreenshotFlow::RunScreenshotCompleteCallback, weak_this_,
                      result_code, bounds);
+#if BUILDFLAG(IS_MAC)
+  // TODO: Why is the view captured on the Mac but the window captured on all
+  // other platforms?
+  const gfx::NativeView& native_view = web_contents_->GetContentNativeView();
+  ui::GrabViewSnapshotAsync(native_view, region,
+                            std::move(screenshot_callback));
+#else
   const gfx::NativeWindow& native_window = web_contents_->GetNativeView();
   ui::GrabWindowSnapshotAsync(native_window, region,
                               std::move(screenshot_callback));
@@ -231,7 +237,7 @@ void ScreenshotFlow::OnMouseEvent(ui::MouseEvent* event) {
             location.y() > web_contents_bounds.height()) {
           return;
         }
-        is_dragging_ = true;
+        SetIsDragging(true);
         drag_start_ = location;
         drag_end_ = location;
         event->SetHandled();
@@ -248,7 +254,7 @@ void ScreenshotFlow::OnMouseEvent(ui::MouseEvent* event) {
       if ((capture_mode_ == CaptureMode::SELECTION_RECTANGLE ||
            capture_mode_ == CaptureMode::SELECTION_ELEMENT) &&
           is_dragging_) {
-        is_dragging_ = false;
+        SetIsDragging(false);
         AttemptRegionCapture(web_contents_bounds);
         event->SetHandled();
       }
@@ -258,7 +264,7 @@ void ScreenshotFlow::OnMouseEvent(ui::MouseEvent* event) {
       if ((capture_mode_ == CaptureMode::SELECTION_RECTANGLE ||
            capture_mode_ == CaptureMode::SELECTION_ELEMENT) &&
           event->AsMouseWheelEvent()->y_offset() > 0 && is_dragging_) {
-        is_dragging_ = false;
+        SetIsDragging(false);
         AttemptRegionCapture(web_contents_bounds);
         event->SetHandled();
       }
@@ -279,7 +285,7 @@ void ScreenshotFlow::OnScrollEvent(ui::ScrollEvent* event) {
   if ((capture_mode_ == CaptureMode::SELECTION_RECTANGLE ||
        capture_mode_ == CaptureMode::SELECTION_ELEMENT) &&
       event->y_offset() > 0 && is_dragging_) {
-    is_dragging_ = false;
+    SetIsDragging(false);
     AttemptRegionCapture(web_contents_bounds);
     event->SetHandled();
   }
@@ -393,6 +399,18 @@ void ScreenshotFlow::SetCursor(ui::mojom::CursorType cursor_type) {
     ui::Cursor cursor(cursor_type);
     host->SetCursor(cursor);
   }
+}
+
+void ScreenshotFlow::SetIsDragging(bool value) {
+  is_dragging_ = value;
+#if BUILDFLAG(IS_WIN)
+  const gfx::NativeWindow& native_window = web_contents_->GetNativeView();
+  if (value) {
+    native_window->SetCapture();
+  } else {
+    native_window->ReleaseCapture();
+  }
+#endif
 }
 
 bool ScreenshotFlow::IsCaptureModeActive() {

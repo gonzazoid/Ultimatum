@@ -7,21 +7,22 @@
 #include "ash/constants/ash_features.h"
 #include "ash/system/system_notification_controller.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
 
 namespace ash {
+
 namespace {
 
 const char kTestCellularServicePath[] = "cellular_service_path";
@@ -36,9 +37,7 @@ const char kTestEid[] = "123456789012345678901234567890123";
 
 class ManagedSimLockNotifierTest : public NoSessionAshTestBase {
  protected:
-  ManagedSimLockNotifierTest() {
-    scoped_feature_list_.InitAndEnableFeature(features::kSimLockPolicy);
-  }
+  ManagedSimLockNotifierTest() = default;
   ManagedSimLockNotifierTest(const ManagedSimLockNotifierTest&) = delete;
   ManagedSimLockNotifierTest& operator=(const ManagedSimLockNotifierTest&) =
       delete;
@@ -47,8 +46,8 @@ class ManagedSimLockNotifierTest : public NoSessionAshTestBase {
   void SetUp() override {
     network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
 
-    network_config_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    network_config_helper_ =
+        std::make_unique<network_config::CrosNetworkConfigTestHelper>();
     AshTestBase::SetUp();
     base::RunLoop().RunUntilIdle();
 
@@ -71,15 +70,16 @@ class ManagedSimLockNotifierTest : public NoSessionAshTestBase {
   }
 
   void SetCellularEnabled(bool enabled) {
-    NetworkHandler::Get()->network_state_handler()->SetTechnologyEnabled(
-        NetworkTypePattern::Cellular(), enabled,
-        network_handler::ErrorCallback());
+    NetworkHandler::Get()
+        ->technology_state_controller()
+        ->SetTechnologiesEnabled(NetworkTypePattern::Cellular(), enabled,
+                                 network_handler::ErrorCallback());
     base::RunLoop().RunUntilIdle();
   }
 
   void SetCellularSimLockEnabled(
       bool enable,
-      const absl::optional<std::string>& lock_type = absl::nullopt) {
+      const std::optional<std::string>& lock_type = std::nullopt) {
     // Simulate a locked SIM.
     base::Value::Dict sim_lock_status;
     sim_lock_status.Set(shill::kSIMLockEnabledProperty, enable);
@@ -107,13 +107,12 @@ class ManagedSimLockNotifierTest : public NoSessionAshTestBase {
   }
 
   void SetAllowCellularSimLock(bool allow_cellular_sim_lock) {
-    base::DictionaryValue global_config;
-    global_config.SetBoolKey(
-        ::onc::global_network_config::kAllowCellularSimLock,
-        allow_cellular_sim_lock);
+    base::Value::Dict global_config;
+    global_config.Set(::onc::global_network_config::kAllowCellularSimLock,
+                      allow_cellular_sim_lock);
     managed_network_configuration_handler()->SetPolicy(
         ::onc::ONC_SOURCE_DEVICE_POLICY, /*userhash=*/std::string(),
-        base::ListValue(), global_config);
+        base::Value::List(), global_config);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -160,8 +159,7 @@ class ManagedSimLockNotifierTest : public NoSessionAshTestBase {
         ManagedSimLockNotifier::kManagedSimLockNotificationId);
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<network_config::CrosNetworkConfigTestHelper>
       network_config_helper_;
   std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
   base::HistogramTester histogram_tester_;

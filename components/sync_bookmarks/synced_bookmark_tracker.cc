@@ -10,7 +10,6 @@
 
 #include "base/base64.h"
 #include "base/containers/cxx20_erase.h"
-#include "base/guid.h"
 #include "base/hash/hash.h"
 #include "base/hash/sha1.h"
 #include "base/logging.h"
@@ -18,14 +17,15 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
 #include "base/trace_event/memory_usage_estimator.h"
-#include "components/bookmarks/browser/bookmark_model.h"
+#include "base/uuid.h"
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "components/sync/base/time.h"
 #include "components/sync/protocol/bookmark_model_metadata.pb.h"
-#include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
+#include "components/sync/protocol/model_type_state_helper.h"
 #include "components/sync/protocol/proto_memory_estimations.h"
 #include "components/sync/protocol/unique_position.pb.h"
+#include "components/sync_bookmarks/bookmark_model_view.h"
 #include "components/sync_bookmarks/switches.h"
 #include "components/sync_bookmarks/synced_bookmark_tracker_entity.h"
 #include "ui/base/models/tree_node_iterator.h"
@@ -42,7 +42,7 @@ void HashSpecifics(const sync_pb::EntitySpecifics& specifics,
 
 // Returns a map from id to node for all nodes in |model|.
 std::unordered_map<int64_t, const bookmarks::BookmarkNode*>
-BuildIdToBookmarkNodeMap(const bookmarks::BookmarkModel* model) {
+BuildIdToBookmarkNodeMap(const BookmarkModelView* model) {
   std::unordered_map<int64_t, const bookmarks::BookmarkNode*>
       id_to_bookmark_node_map;
 
@@ -62,10 +62,10 @@ BuildIdToBookmarkNodeMap(const bookmarks::BookmarkModel* model) {
 }  // namespace
 
 // static
-syncer::ClientTagHash SyncedBookmarkTracker::GetClientTagHashFromGUID(
-    const base::GUID& guid) {
+syncer::ClientTagHash SyncedBookmarkTracker::GetClientTagHashFromUuid(
+    const base::Uuid& uuid) {
   return syncer::ClientTagHash::FromUnhashed(syncer::BOOKMARKS,
-                                             guid.AsLowercaseString());
+                                             uuid.AsLowercaseString());
 }
 
 // static
@@ -82,11 +82,12 @@ std::unique_ptr<SyncedBookmarkTracker> SyncedBookmarkTracker::CreateEmpty(
 // static
 std::unique_ptr<SyncedBookmarkTracker>
 SyncedBookmarkTracker::CreateFromBookmarkModelAndMetadata(
-    const bookmarks::BookmarkModel* model,
+    const BookmarkModelView* model,
     sync_pb::BookmarkModelMetadata model_metadata) {
   DCHECK(model);
 
-  if (!model_metadata.model_type_state().initial_sync_done()) {
+  if (!syncer::IsInitialSyncDone(
+          model_metadata.model_type_state().initial_sync_state())) {
     return nullptr;
   }
 
@@ -150,9 +151,9 @@ SyncedBookmarkTracker::GetEntityForClientTagHash(
   return it != client_tag_hash_to_entities_map_.end() ? it->second : nullptr;
 }
 
-const SyncedBookmarkTrackerEntity* SyncedBookmarkTracker::GetEntityForGUID(
-    const base::GUID& guid) const {
-  return GetEntityForClientTagHash(GetClientTagHashFromGUID(guid));
+const SyncedBookmarkTrackerEntity* SyncedBookmarkTracker::GetEntityForUuid(
+    const base::Uuid& uuid) const {
+  return GetEntityForClientTagHash(GetClientTagHashFromUuid(uuid));
 }
 
 SyncedBookmarkTrackerEntity* SyncedBookmarkTracker::AsMutableEntity(
@@ -186,7 +187,7 @@ const SyncedBookmarkTrackerEntity* SyncedBookmarkTracker::Add(
 
   // Note that this gets computed for permanent nodes too.
   syncer::ClientTagHash client_tag_hash =
-      GetClientTagHashFromGUID(bookmark_node->guid());
+      GetClientTagHashFromUuid(bookmark_node->uuid());
 
   sync_pb::EntityMetadata metadata;
   metadata.set_is_deleted(false);
@@ -402,9 +403,9 @@ SyncedBookmarkTracker::SyncedBookmarkTracker(
 
 SyncedBookmarkTracker::CorruptionReason
 SyncedBookmarkTracker::InitEntitiesFromModelAndMetadata(
-    const bookmarks::BookmarkModel* model,
+    const BookmarkModelView* model,
     sync_pb::BookmarkModelMetadata model_metadata) {
-  DCHECK(model_type_state_.initial_sync_done());
+  DCHECK(syncer::IsInitialSyncDone(model_type_state_.initial_sync_state()));
 
   // Build a temporary map to look up bookmark nodes efficiently by node ID.
   std::unordered_map<int64_t, const bookmarks::BookmarkNode*>
@@ -489,24 +490,24 @@ SyncedBookmarkTracker::InitEntitiesFromModelAndMetadata(
     }
 
     // The client-tag-hash is expected to be equal to the hash of the bookmark's
-    // GUID. This can be hit for example if local bookmark GUIDs were
+    // UUID. This can be hit for example if local bookmark UUIDs were
     // reassigned upon startup due to duplicates (which is a BookmarkModel
     // invariant violation and should be impossible).
     const syncer::ClientTagHash client_tag_hash =
-        GetClientTagHashFromGUID(node->guid());
+        GetClientTagHashFromUuid(node->uuid());
     if (client_tag_hash !=
         syncer::ClientTagHash::FromHashed(
             bookmark_metadata.metadata().client_tag_hash())) {
       if (node->is_permanent_node()) {
         // For permanent nodes the client tag hash is irrelevant and subject to
         // change if the constants in components/bookmarks change and adopt
-        // different GUID constants. To avoid treating such state as corrupt
+        // different UUID constants. To avoid treating such state as corrupt
         // metadata, let's fix it automatically.
         bookmark_metadata.mutable_metadata()->set_client_tag_hash(
             client_tag_hash.value());
       } else {
-        DLOG(ERROR) << "Bookmark GUID does not match the client tag.";
-        return CorruptionReason::BOOKMARK_GUID_MISMATCH;
+        DLOG(ERROR) << "Bookmark UUID does not match the client tag.";
+        return CorruptionReason::BOOKMARK_UUID_MISMATCH;
       }
     }
 
@@ -545,7 +546,7 @@ SyncedBookmarkTracker::InitEntitiesFromModelAndMetadata(
       model->root_node());
   while (iterator.has_next()) {
     const bookmarks::BookmarkNode* node = iterator.Next();
-    if (!model->client()->CanSyncNode(node)) {
+    if (!model->IsNodeSyncable(node)) {
       if (bookmark_node_to_entities_map_.count(node) != 0) {
         return CorruptionReason::TRACKED_MANAGED_NODE;
       }
@@ -718,7 +719,7 @@ void SyncedBookmarkTracker::UndeleteTombstoneForBookmarkNode(
   DCHECK(node);
   DCHECK(entity->metadata().is_deleted());
   const syncer::ClientTagHash client_tag_hash =
-      GetClientTagHashFromGUID(node->guid());
+      GetClientTagHashFromUuid(node->uuid());
   // The same entity must be used only for the same bookmark node.
   DCHECK_EQ(entity->metadata().client_tag_hash(), client_tag_hash.value());
   DCHECK(bookmark_node_to_entities_map_.find(node) ==
@@ -771,7 +772,7 @@ void SyncedBookmarkTracker::ClearSpecificsHashForTest(
 }
 
 void SyncedBookmarkTracker::CheckAllNodesTracked(
-    const bookmarks::BookmarkModel* bookmark_model) const {
+    const BookmarkModelView* bookmark_model) const {
 #if DCHECK_IS_ON()
   DCHECK(GetEntityForBookmarkNode(bookmark_model->bookmark_bar_node()));
   DCHECK(GetEntityForBookmarkNode(bookmark_model->other_node()));
@@ -781,7 +782,7 @@ void SyncedBookmarkTracker::CheckAllNodesTracked(
       bookmark_model->root_node());
   while (iterator.has_next()) {
     const bookmarks::BookmarkNode* node = iterator.Next();
-    if (!bookmark_model->client()->CanSyncNode(node)) {
+    if (!bookmark_model->IsNodeSyncable(node)) {
       DCHECK(!GetEntityForBookmarkNode(node));
       continue;
     }

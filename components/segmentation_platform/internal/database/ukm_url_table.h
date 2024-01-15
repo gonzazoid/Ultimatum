@@ -24,8 +24,8 @@ class UkmUrlTable {
   explicit UkmUrlTable(sql::Database* db);
   ~UkmUrlTable();
 
-  UkmUrlTable(UkmUrlTable&) = delete;
-  UkmUrlTable& operator=(UkmUrlTable&) = delete;
+  UkmUrlTable(const UkmUrlTable&) = delete;
+  UkmUrlTable& operator=(const UkmUrlTable&) = delete;
 
   // Converts the given GURL to string.
   static std::string GetDatabaseUrlString(const GURL& url);
@@ -41,7 +41,10 @@ class UkmUrlTable {
 
   // Writes `url` to database with `url_id`. It is invalid to call this method
   // when `url_id` exists in the database.
-  bool WriteUrl(const GURL& url, UrlId url_id, base::Time timestamp);
+  bool WriteUrl(const GURL& url,
+                UrlId url_id,
+                base::Time timestamp,
+                const std::string& profile_id);
 
   // Update the last used timestamp for the URL.
   bool UpdateUrlTimestamp(UrlId url_id, base::Time timestamp);

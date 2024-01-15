@@ -76,6 +76,7 @@
 #include "ppapi/shared_impl/ppapi_nacl_plugin_args.h"
 #include "ppapi/shared_impl/ppapi_preferences.h"
 #include "ppapi/shared_impl/ppb_device_ref_shared.h"
+#include "ppapi/shared_impl/ppb_graphics_3d_shared.h"
 #include "ppapi/shared_impl/ppb_input_event_shared.h"
 #include "ppapi/shared_impl/ppb_tcp_socket_shared.h"
 #include "ppapi/shared_impl/ppb_view_shared.h"
@@ -399,6 +400,17 @@ IPC_STRUCT_TRAITS_MEMBER(max_framerate_denominator)
 IPC_STRUCT_TRAITS_MEMBER(hardware_accelerated)
 IPC_STRUCT_TRAITS_END()
 
+IPC_STRUCT_TRAITS_BEGIN(ppapi::Graphics3DContextAttribs)
+IPC_STRUCT_TRAITS_MEMBER(offscreen_framebuffer_size)
+IPC_STRUCT_TRAITS_MEMBER(alpha_size)
+IPC_STRUCT_TRAITS_MEMBER(depth_size)
+IPC_STRUCT_TRAITS_MEMBER(stencil_size)
+IPC_STRUCT_TRAITS_MEMBER(samples)
+IPC_STRUCT_TRAITS_MEMBER(sample_buffers)
+IPC_STRUCT_TRAITS_MEMBER(buffer_preserved)
+IPC_STRUCT_TRAITS_MEMBER(single_buffer)
+IPC_STRUCT_TRAITS_END()
+
 // These are from the browser to the plugin.
 // Loads the given plugin.
 IPC_MESSAGE_CONTROL2(PpapiMsg_LoadPlugin,
@@ -446,13 +458,13 @@ IPC_SYNC_MESSAGE_CONTROL1_1(PpapiMsg_SupportsInterface,
                             std::string /* interface_name */,
                             bool /* result */)
 
-#if !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#if !BUILDFLAG(IS_NACL)
 // Network state notification from the browser for implementing
 // PPP_NetworkState_Dev.
 IPC_MESSAGE_CONTROL1(PpapiMsg_SetNetworkState,
                      bool /* online */)
 
-#endif  // !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#endif  // !BUILDFLAG(IS_NACL)
 
 // PPB_Audio.
 
@@ -605,13 +617,13 @@ IPC_MESSAGE_ROUTED2(PpapiMsg_PPPTextInput_RequestSurroundingText,
                    PP_Instance /* instance */,
                    uint32_t /* desired_number_of_characters */)
 
-#if !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#if !BUILDFLAG(IS_NACL)
 // PPP_Instance_Private.
 IPC_SYNC_MESSAGE_ROUTED1_1(PpapiMsg_PPPInstancePrivate_GetInstanceObject,
                            PP_Instance /* instance */,
                            ppapi::proxy::SerializedVar /* result */)
 
-#endif  // !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#endif  // !BUILDFLAG(IS_NACL)
 
 // This message is sent from the renderer to the PNaCl compiler process
 // (NaCl untrusted code -- a nexe).  This implements the init_callback()
@@ -721,14 +733,16 @@ IPC_MESSAGE_ROUTED1(PpapiHostMsg_PPBCore_ReleaseResource,
                     ppapi::HostResource)
 
 // PPB_Graphics3D.
-IPC_SYNC_MESSAGE_ROUTED3_4(PpapiHostMsg_PPBGraphics3D_Create,
-                           PP_Instance /* instance */,
-                           ppapi::HostResource /* share_context */,
-                           gpu::ContextCreationAttribs /* attrib_helper */,
-                           ppapi::HostResource /* result */,
-                           gpu::Capabilities /* capabilities */,
-                           ppapi::proxy::SerializedHandle /* shared_state */,
-                           gpu::CommandBufferId /* command_buffer_id */)
+IPC_SYNC_MESSAGE_ROUTED3_5(
+    PpapiHostMsg_PPBGraphics3D_Create,
+    PP_Instance /* instance */,
+    ppapi::HostResource /* share_context */,
+    ppapi::Graphics3DContextAttribs /* context_attribs */,
+    ppapi::HostResource /* result */,
+    gpu::Capabilities /* capabilities */,
+    gpu::GLCapabilities /* gl_capabilities */,
+    ppapi::proxy::SerializedHandle /* shared_state */,
+    gpu::CommandBufferId /* command_buffer_id */)
 IPC_SYNC_MESSAGE_ROUTED2_0(PpapiHostMsg_PPBGraphics3D_SetGetBuffer,
                            ppapi::HostResource /* context */,
                            int32_t /* transfer_buffer_id */)
@@ -758,17 +772,21 @@ IPC_SYNC_MESSAGE_ROUTED2_0(PpapiHostMsg_PPBGraphics3D_DestroyTransferBuffer,
                            int32_t /* id */)
 // The receiver of this message takes ownership of the front buffer of the GL
 // context. Each call to PpapiHostMsg_PPBGraphics3D_SwapBuffers must be preceded
-// by exactly one call to PpapiHostMsg_PPBGraphics3D_TakeFrontBuffer. The
-// SyncToken passed to PpapiHostMsg_PPBGraphics3D_SwapBuffers must be generated
-// after this message is sent.
-IPC_MESSAGE_ROUTED1(PpapiHostMsg_PPBGraphics3D_TakeFrontBuffer,
-                    ppapi::HostResource /* graphics_3d */)
+// by exactly one call to
+// PpapiHostMsg_PPBGraphics3D_ResolveAndDetachFramebuffer. The SyncToken passed
+// to PpapiHostMsg_PPBGraphics3D_SwapBuffers must be generated after this
+// message is sent.
 IPC_MESSAGE_ROUTED3(PpapiHostMsg_PPBGraphics3D_SwapBuffers,
                     ppapi::HostResource /* graphics_3d */,
                     gpu::SyncToken /* sync_token */,
                     gfx::Size /* size */)
 IPC_MESSAGE_ROUTED1(PpapiHostMsg_PPBGraphics3D_EnsureWorkVisible,
                     ppapi::HostResource /* context */)
+IPC_MESSAGE_ROUTED1(PpapiHostMsg_PPBGraphics3D_ResolveAndDetachFramebuffer,
+                    ppapi::HostResource /* graphics_3d */)
+IPC_MESSAGE_ROUTED2(PpapiHostMsg_PPBGraphics3D_Resize,
+                    ppapi::HostResource /* graphics_3d */,
+                    gfx::Size /* size */)
 
 // PPB_ImageData.
 IPC_SYNC_MESSAGE_ROUTED4_3(PpapiHostMsg_PPBImageData_CreatePlatform,
@@ -936,7 +954,7 @@ IPC_SYNC_MESSAGE_ROUTED3_1(PpapiHostMsg_PPBVar_CreateObjectDeprecated,
                            int64_t /* object_data */,
                            ppapi::proxy::SerializedVar /* result */)
 
-#if !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#if !BUILDFLAG(IS_NACL)
 // PPB_Buffer.
 IPC_SYNC_MESSAGE_ROUTED2_2(
     PpapiHostMsg_PPBBuffer_Create,
@@ -945,7 +963,7 @@ IPC_SYNC_MESSAGE_ROUTED2_2(
     ppapi::HostResource /* result_resource */,
     ppapi::proxy::SerializedHandle /* result_shm_handle */)
 
-#endif  // !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#endif  // !BUILDFLAG(IS_NACL)
 
 // PPB_Testing.
 IPC_SYNC_MESSAGE_ROUTED3_1(
@@ -964,7 +982,7 @@ IPC_SYNC_MESSAGE_ROUTED1_0(
     PpapiHostMsg_PPBTesting_SetMinimumArrayBufferSizeForShmem,
     uint32_t /* threshold */)
 
-#if !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#if !BUILDFLAG(IS_NACL)
 
 // PPB_VideoDecoder_Dev.
 // (Messages from plugin to renderer.)
@@ -1019,7 +1037,7 @@ IPC_MESSAGE_ROUTED2(PpapiMsg_PPPVideoDecoder_PictureReady,
 IPC_MESSAGE_ROUTED2(PpapiMsg_PPPVideoDecoder_NotifyError,
                     ppapi::HostResource /* video_decoder */,
                     PP_VideoDecodeError_Dev /* error */)
-#endif  // !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#endif  // !BUILDFLAG(IS_NACL)
 
 //-----------------------------------------------------------------------------
 // Resource call/reply messages.
@@ -1661,7 +1679,8 @@ IPC_MESSAGE_CONTROL4(PpapiHostMsg_VideoDecoder_Initialize,
                      PP_VideoProfile /* profile */,
                      PP_HardwareAcceleration /* acceleration */,
                      uint32_t /* min_picture_count */)
-IPC_MESSAGE_CONTROL0(PpapiPluginMsg_VideoDecoder_InitializeReply)
+IPC_MESSAGE_CONTROL1(PpapiPluginMsg_VideoDecoder_InitializeReply,
+                     bool /* use_shared_images */)
 IPC_MESSAGE_CONTROL2(PpapiHostMsg_VideoDecoder_GetShm,
                      uint32_t /* shm_id */,
                      uint32_t /* shm_size */)
@@ -1686,8 +1705,15 @@ IPC_MESSAGE_CONTROL3(PpapiPluginMsg_VideoDecoder_PictureReady,
                      int32_t /* decode_id */,
                      uint32_t /* texture_id */,
                      PP_Rect /* visible_rect */)
+IPC_MESSAGE_CONTROL4(PpapiPluginMsg_VideoDecoder_SharedImageReady,
+                     int32_t /* decode_id */,
+                     gpu::Mailbox /* mailbox */,
+                     PP_Size /* size */,
+                     PP_Rect /* visible_rect */)
 IPC_MESSAGE_CONTROL1(PpapiHostMsg_VideoDecoder_RecyclePicture,
                      uint32_t /* texture_id */)
+IPC_MESSAGE_CONTROL1(PpapiHostMsg_VideoDecoder_RecycleSharedImage,
+                     gpu::Mailbox /* mailbox */)
 IPC_MESSAGE_CONTROL1(PpapiPluginMsg_VideoDecoder_DismissPicture,
                      uint32_t /* texture_id */)
 IPC_MESSAGE_CONTROL0(PpapiHostMsg_VideoDecoder_Flush)
@@ -1737,7 +1763,7 @@ IPC_MESSAGE_CONTROL1(PpapiPluginMsg_VideoEncoder_NotifyError,
                      int32_t /* error */)
 IPC_MESSAGE_CONTROL0(PpapiHostMsg_VideoEncoder_Close)
 
-#if !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#if !BUILDFLAG(IS_NACL)
 
 // Audio input.
 IPC_MESSAGE_CONTROL0(PpapiHostMsg_AudioInput_Create)
@@ -1818,6 +1844,6 @@ IPC_MESSAGE_CONTROL1(PpapiPluginMsg_VideoCapture_OnError,
 IPC_MESSAGE_CONTROL1(PpapiPluginMsg_VideoCapture_OnBufferReady,
                      uint32_t /* buffer */)
 
-#endif  // !BUILDFLAG(IS_NACL) && !defined(NACL_WIN64)
+#endif  // !BUILDFLAG(IS_NACL)
 
 #endif  // PPAPI_PROXY_PPAPI_MESSAGES_H_

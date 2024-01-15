@@ -8,9 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -18,7 +18,7 @@
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "components/offline_pages/core/background/offliner.h"
 #include "components/offline_pages/core/background/offliner_client.h"
@@ -37,139 +37,7 @@ namespace offline_pages {
 namespace {
 const bool kUserRequest = true;
 const bool kStartOfProcessing = true;
-constexpr base::TimeDelta kMinDuration = base::Seconds(1);
-constexpr base::TimeDelta kMaxDuration = base::Days(7);
-const int kDurationBuckets = 50;
 const int kDisabledTaskRecheckSeconds = 5;
-
-// TODO(dougarnett): Move to util location and share with model impl.
-std::string AddHistogramSuffix(const ClientId& client_id,
-                               const char* histogram_name) {
-  if (client_id.name_space.empty()) {
-    NOTREACHED();
-    return histogram_name;
-  }
-  std::string adjusted_histogram_name(histogram_name);
-  adjusted_histogram_name += ".";
-  adjusted_histogram_name += client_id.name_space;
-  return adjusted_histogram_name;
-}
-
-// Records the request status UMA for an offlining request. This should
-// only be called once per Offliner::LoadAndSave request.
-void RecordOfflinerResultUMA(const ClientId& client_id,
-                             const base::Time& request_creation_time,
-                             Offliner::RequestStatus request_status) {
-  base::UmaHistogramEnumeration(
-      AddHistogramSuffix(client_id,
-                         "OfflinePages.Background.OfflinerRequestStatus"),
-      request_status);
-
-  // For successful requests also record time from request to save.
-  if (request_status == Offliner::RequestStatus::SAVED ||
-      request_status == Offliner::RequestStatus::SAVED_ON_LAST_RETRY) {
-    base::TimeDelta duration = OfflineTimeNow() - request_creation_time;
-    base::UmaHistogramCustomCounts(
-        AddHistogramSuffix(client_id, "OfflinePages.Background.TimeToSaved"),
-        duration.InSeconds(), kMinDuration.InSeconds(),
-        kMaxDuration.InSeconds(), kDurationBuckets);
-  }
-}
-
-// Records final request status UMA for an offlining request. This should only
-// be called once per Offliner::LoadAndSave request. Every Offliner::LoadAndSave
-// request should also call this once.
-void RecordSavePageResultUMA(
-    const ClientId& client_id,
-    RequestNotifier::BackgroundSavePageResult request_status) {
-  base::UmaHistogramEnumeration(
-      AddHistogramSuffix(client_id,
-                         "OfflinePages.Background.FinalSavePageResult"),
-      request_status);
-}
-
-// Records whether the request comes from CCT or not
-void RecordSavePageResultCCTUMA(const ClientId& client_id,
-                                const std::string& origin) {
-  base::HistogramBase* histogram = base::BooleanHistogram::FactoryGet(
-      AddHistogramSuffix(client_id, "OfflinePages.Background.SavePageFromCCT"),
-      base::HistogramBase::kUmaTargetedHistogramFlag);
-  histogram->AddBoolean(!origin.empty());
-}
-
-void RecordStartTimeUMA(const SavePageRequest& request) {
-  std::string histogram_name("OfflinePages.Background.TimeToStart");
-  if (base::SysInfo::IsLowEndDevice()) {
-    histogram_name += ".Svelte";
-  }
-
-  base::TimeDelta duration = OfflineTimeNow() - request.creation_time();
-  base::UmaHistogramCustomTimes(
-      AddHistogramSuffix(request.client_id(), histogram_name.c_str()), duration,
-      base::Milliseconds(100), base::Days(7), 50);
-}
-
-void RecordCancelTimeUMA(const SavePageRequest& canceled_request) {
-  // Using regular histogram (with dynamic suffix) rather than time-oriented
-  // one to record samples in seconds rather than milliseconds.
-  base::TimeDelta duration =
-      OfflineTimeNow() - canceled_request.creation_time();
-  base::UmaHistogramCustomCounts(
-      AddHistogramSuffix(canceled_request.client_id(),
-                         "OfflinePages.Background.TimeToCanceled"),
-      duration.InSeconds(), kMinDuration.InSeconds(), kMaxDuration.InSeconds(),
-      kDurationBuckets);
-}
-
-// Records the number of started attempts for completed requests (whether
-// successful or not).
-void RecordAttemptCount(const SavePageRequest& request,
-                        RequestNotifier::BackgroundSavePageResult status) {
-  if (status == RequestNotifier::BackgroundSavePageResult::SUCCESS) {
-    // TODO(dougarnett): Also record UMA for completed attempts here.
-    UMA_HISTOGRAM_CUSTOM_COUNTS(
-        "OfflinePages.Background.RequestSuccess.StartedAttemptCount",
-        request.started_attempt_count(), 1, 10, 11);
-  } else {
-    UMA_HISTOGRAM_CUSTOM_COUNTS(
-        "OfflinePages.Background.RequestFailure.StartedAttemptCount",
-        request.started_attempt_count(), 1, 10, 11);
-  }
-}
-
-// Record the network quality at request creation time per namespace.
-void RecordSavePageLaterNetworkQuality(
-    const ClientId& client_id,
-    const net::EffectiveConnectionType effective_connection) {
-  // The histogram below is an expansion of the UMA_HISTOGRAM_ENUMERATION
-  // macro adapted to allow for a dynamically suffixed histogram name.
-  // Note: The factory creates and owns the histogram.
-  base::HistogramBase* histogram = base::LinearHistogram::FactoryGet(
-      AddHistogramSuffix(
-          client_id,
-          "OfflinePages.Background.EffectiveConnectionType.SavePageLater"),
-      1, net::EFFECTIVE_CONNECTION_TYPE_LAST - 1,
-      net::EFFECTIVE_CONNECTION_TYPE_LAST,
-      base::HistogramBase::kUmaTargetedHistogramFlag);
-  histogram->Add(effective_connection);
-}
-
-// Record the network quality at request creation time per namespace.
-void RecordNetworkQualityAtRequestStartForFailedRequest(
-    const ClientId& client_id,
-    const net::EffectiveConnectionType effective_connection) {
-  // The histogram below is an expansion of the UMA_HISTOGRAM_ENUMERATION
-  // macro adapted to allow for a dynamically suffixed histogram name.
-  // Note: The factory creates and owns the histogram.
-  base::HistogramBase* histogram = base::LinearHistogram::FactoryGet(
-      AddHistogramSuffix(
-          client_id,
-          "OfflinePages.Background.EffectiveConnectionType.OffliningStartType"),
-      1, net::EFFECTIVE_CONNECTION_TYPE_LAST - 1,
-      net::EFFECTIVE_CONNECTION_TYPE_LAST,
-      base::HistogramBase::kUmaTargetedHistogramFlag);
-  histogram->Add(effective_connection);
-}
 
 // Returns whether |result| is a successful result for a single request.
 bool IsSingleSuccessResult(const UpdateRequestsResult& result) {
@@ -318,7 +186,7 @@ int64_t RequestCoordinator::SavePageLater(
   if (!OfflinePageModel::CanSaveURL(save_page_later_params.url)) {
     DVLOG(1) << "Not able to save page for requested url: "
              << save_page_later_params.url;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(save_page_later_callback),
                                   AddRequestResult::URL_ERROR));
     return 0L;
@@ -348,11 +216,6 @@ int64_t RequestCoordinator::SavePageLater(
                      weak_ptr_factory_.GetWeakPtr(),
                      std::move(save_page_later_callback),
                      save_page_later_params.availability));
-
-  // Record the network quality when this request is made.
-  RecordSavePageLaterNetworkQuality(
-      save_page_later_params.client_id,
-      network_quality_tracker_->GetEffectiveConnectionType());
 
   return id;
 }
@@ -448,7 +311,6 @@ void RequestCoordinator::RemoveAttemptedRequest(
       remove_requests,
       base::BindOnce(&RequestCoordinator::HandleRemovedRequests,
                      weak_ptr_factory_.GetWeakPtr(), result));
-  RecordAttemptCount(request, result);
 }
 
 void RequestCoordinator::MarkAttemptAborted(int64_t request_id,
@@ -483,12 +345,6 @@ void RequestCoordinator::RemoveRequests(const std::vector<int64_t>& request_ids,
       base::BindOnce(&RequestCoordinator::HandleRemovedRequestsAndCallback,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback),
                      RequestNotifier::BackgroundSavePageResult::USER_CANCELED));
-
-  // Record the network quality when this request is removed.
-  UMA_HISTOGRAM_ENUMERATION(
-      "OfflinePages.Background.EffectiveConnectionType.RemoveRequests",
-      network_quality_tracker_->GetEffectiveConnectionType(),
-      net::EFFECTIVE_CONNECTION_TYPE_LAST);
 }
 
 void RequestCoordinator::RemoveRequestsIf(
@@ -515,12 +371,6 @@ void RequestCoordinator::PauseRequests(
       request_ids, SavePageRequest::RequestState::PAUSED,
       base::BindOnce(&RequestCoordinator::UpdateMultipleRequestsCallback,
                      weak_ptr_factory_.GetWeakPtr()));
-
-  // Record the network quality when this request is paused.
-  UMA_HISTOGRAM_ENUMERATION(
-      "OfflinePages.Background.EffectiveConnectionType.PauseRequests",
-      network_quality_tracker_->GetEffectiveConnectionType(),
-      net::EFFECTIVE_CONNECTION_TYPE_LAST);
 }
 
 void RequestCoordinator::ResumeRequests(
@@ -531,12 +381,6 @@ void RequestCoordinator::ResumeRequests(
       request_ids, SavePageRequest::RequestState::AVAILABLE,
       base::BindOnce(&RequestCoordinator::UpdateMultipleRequestsCallback,
                      weak_ptr_factory_.GetWeakPtr()));
-
-  // Record the network quality when this request is resumed.
-  UMA_HISTOGRAM_ENUMERATION(
-      "OfflinePages.Background.EffectiveConnectionType.ResumeRequests",
-      network_quality_tracker_->GetEffectiveConnectionType(),
-      net::EFFECTIVE_CONNECTION_TYPE_LAST);
 
   // Schedule a task, in case there is not one scheduled.
   ScheduleAsNeeded();
@@ -607,7 +451,6 @@ void RequestCoordinator::HandleRemovedRequestsAndCallback(
   // TODO(dougarnett): Define status code for user/api cancel and use here
   // to determine whether to record cancel time UMA.
   for (const auto& request : result.updated_items) {
-    RecordCancelTimeUMA(request);
     CancelActiveRequestIfItMatches(request.request_id());
   }
   std::move(callback).Run(result.item_statuses);
@@ -657,9 +500,6 @@ bool RequestCoordinator::StartImmediateProcessing(
   UpdateCurrentConditionsFromAndroid();
   OfflinerImmediateStartStatus immediate_start_status =
       TryImmediateStart(callback);
-  UMA_HISTOGRAM_ENUMERATION(
-      "OfflinePages.Background.ImmediateStartStatus", immediate_start_status,
-      RequestCoordinator::OfflinerImmediateStartStatus::STATUS_COUNT);
   return immediate_start_status == OfflinerImmediateStartStatus::STARTED;
 }
 
@@ -805,15 +645,13 @@ void RequestCoordinator::TryNextRequest(bool is_start_of_processing) {
 
   // Ask request queue to make a new PickRequestTask object, then put it on
   // the task queue.
-  queue_->PickNextRequest(
-      policy_.get(),
-      base::BindOnce(&RequestCoordinator::RequestPicked,
-                     weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&RequestCoordinator::RequestNotPicked,
-                     weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&RequestCoordinator::RequestCounts,
-                     weak_ptr_factory_.GetWeakPtr(), is_start_of_processing),
-      *current_conditions_, disabled_requests_, &prioritized_requests_);
+  queue_->PickNextRequest(policy_.get(),
+                          base::BindOnce(&RequestCoordinator::RequestPicked,
+                                         weak_ptr_factory_.GetWeakPtr()),
+                          base::BindOnce(&RequestCoordinator::RequestNotPicked,
+                                         weak_ptr_factory_.GetWeakPtr()),
+                          *current_conditions_, disabled_requests_,
+                          &prioritized_requests_);
 }
 
 // Called by the request picker when a request has been picked.
@@ -872,59 +710,9 @@ void RequestCoordinator::RequestNotPicked(
   scheduler_callback_.Run(true);
 }
 
-void RequestCoordinator::RequestCounts(bool is_start_of_processing,
-                                       size_t total_requests,
-                                       size_t available_requests) {
-  // Only capture request counts for the start of processing (not for
-  // continued processing in the same window).
-  if (!is_start_of_processing)
-    return;
-
-  if (processing_state_ == ProcessingWindowState::SCHEDULED_WINDOW) {
-    if (is_low_end_device_) {
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ScheduledStart.AvailableRequestCount."
-          "Svelte",
-          available_requests);
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ScheduledStart.UnavailableRequestCount."
-          "Svelte",
-          total_requests - available_requests);
-    } else {
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ScheduledStart.AvailableRequestCount",
-          available_requests);
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ScheduledStart.UnavailableRequestCount",
-          total_requests - available_requests);
-    }
-  } else if (processing_state_ == ProcessingWindowState::IMMEDIATE_WINDOW) {
-    if (is_low_end_device_) {
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ImmediateStart.AvailableRequestCount."
-          "Svelte",
-          available_requests);
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ImmediateStart.UnavailableRequestCount."
-          "Svelte",
-          total_requests - available_requests);
-    } else {
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ImmediateStart.AvailableRequestCount",
-          available_requests);
-      UMA_HISTOGRAM_COUNTS_1000(
-          "OfflinePages.Background.ImmediateStart.UnavailableRequestCount",
-          total_requests - available_requests);
-    }
-  }
-}
-
 void RequestCoordinator::SendRequestToOffliner(const SavePageRequest& request) {
   DCHECK(state_ == RequestCoordinatorState::OFFLINING);
   // Record start time if this is first attempt.
-  if (request.started_attempt_count() == 0) {
-    RecordStartTimeUMA(request);
-  }
   const OfflinePageClientPolicy& policy =
       GetPolicy(request.client_id().name_space);
   if (policy.defer_background_fetch_while_page_is_active &&
@@ -1015,15 +803,6 @@ void RequestCoordinator::UpdateRequestForAttempt(
     Offliner::RequestStatus status) {
   absl::optional<RequestNotifier::BackgroundSavePageResult> attempt_result =
       SingleAttemptResult(status);
-
-  // If the request failed, report the connection type as of the start of the
-  // request.
-  if (!attempt_result ||
-      attempt_result.value() !=
-          RequestNotifier::BackgroundSavePageResult::SUCCESS) {
-    RecordNetworkQualityAtRequestStartForFailedRequest(
-        request.client_id(), network_quality_at_request_start_);
-  }
 
   if (IsCanceledOrInternalFailure(status)) {
     UpdateRequestForAbortedAttempt(request);
@@ -1169,8 +948,6 @@ void RequestCoordinator::NotifyAdded(const SavePageRequest& request) {
 void RequestCoordinator::NotifyCompleted(
     const SavePageRequest& request,
     RequestNotifier::BackgroundSavePageResult status) {
-  RecordSavePageResultUMA(request.client_id(), status);
-  RecordSavePageResultCCTUMA(request.client_id(), request.request_origin());
   for (Observer& observer : observers_)
     observer.OnCompleted(request, status);
 }
@@ -1190,7 +967,6 @@ void RequestCoordinator::RecordOfflinerResult(const SavePageRequest& request,
                                               Offliner::RequestStatus status) {
   event_logger_.RecordOfflinerResult(request.client_id().name_space, status,
                                      request.request_id());
-  RecordOfflinerResultUMA(request.client_id(), request.creation_time(), status);
 }
 
 void RequestCoordinator::Shutdown() {

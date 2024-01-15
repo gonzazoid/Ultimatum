@@ -10,7 +10,6 @@
 
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/url_data_source.h"
-#include "ui/base/layout.h"
 
 class AccountId;
 
@@ -47,10 +46,5 @@ class UserImageSource : public content::URLDataSource {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::UserImageSource;
-}
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_USER_IMAGE_SOURCE_H_

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/platform/ax_unique_id.h"
@@ -42,7 +43,7 @@ AXAuraObjWrapper* AXViewObjWrapper::GetParent() {
 }
 
 void AXViewObjWrapper::GetChildren(
-    std::vector<AXAuraObjWrapper*>* out_children) {
+    std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>>* out_children) {
   const ViewAccessibility& view_accessibility = view_->GetViewAccessibility();
 
   // Ignore this view's descendants if it has a child tree.
@@ -66,17 +67,18 @@ void AXViewObjWrapper::Serialize(ui::AXNodeData* out_node_data) {
   ViewAccessibility& view_accessibility = view_->GetViewAccessibility();
   view_accessibility.GetAccessibleNodeData(out_node_data);
 
-  if (view_accessibility.GetNextFocus()) {
+  if (view_accessibility.GetNextWindowFocus()) {
     out_node_data->AddIntAttribute(
-        ax::mojom::IntAttribute::kNextFocusId,
-        aura_obj_cache_->GetOrCreate(view_accessibility.GetNextFocus())
+        ax::mojom::IntAttribute::kNextWindowFocusId,
+        aura_obj_cache_->GetOrCreate(view_accessibility.GetNextWindowFocus())
             ->GetUniqueId());
   }
 
-  if (view_accessibility.GetPreviousFocus()) {
+  if (view_accessibility.GetPreviousWindowFocus()) {
     out_node_data->AddIntAttribute(
-        ax::mojom::IntAttribute::kPreviousFocusId,
-        aura_obj_cache_->GetOrCreate(view_accessibility.GetPreviousFocus())
+        ax::mojom::IntAttribute::kPreviousWindowFocusId,
+        aura_obj_cache_
+            ->GetOrCreate(view_accessibility.GetPreviousWindowFocus())
             ->GetUniqueId());
   }
 }

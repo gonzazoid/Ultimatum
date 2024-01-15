@@ -5,15 +5,18 @@
 #include "third_party/blink/renderer/modules/file_system_access/file_system_handle.h"
 
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "third_party/blink/public/mojom/file_system_access/file_system_access_cloud_identifier.mojom-blink.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_error.mojom-blink.h"
-#include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_file_system_cloud_identifier.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_file_system_handle_permission_descriptor.h"
-#include "third_party/blink/renderer/core/dom/dom_exception.h"
-#include "third_party/blink/renderer/core/fileapi/file_error.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_file_system_permission_mode.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_permission_state.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_access_error.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_directory_handle.h"
 #include "third_party/blink/renderer/modules/file_system_access/file_system_file_handle.h"
+#include "third_party/blink/renderer/modules/permissions/permission_utils.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -36,22 +39,6 @@ FileSystemHandle* FileSystemHandle::CreateFromMojoEntry(
       execution_context, e->name, std::move(e->entry_handle->get_directory()));
 }
 
-namespace {
-String MojoPermissionStatusToString(mojom::blink::PermissionStatus status) {
-  switch (status) {
-    case mojom::blink::PermissionStatus::GRANTED:
-      return "granted";
-    case mojom::blink::PermissionStatus::DENIED:
-      return "denied";
-    case mojom::blink::PermissionStatus::ASK:
-      return "prompt";
-  }
-  NOTREACHED();
-  return "denied";
-}
-
-}  // namespace
-
 ScriptPromise FileSystemHandle::queryPermission(
     ScriptState* script_state,
     const FileSystemHandlePermissionDescriptor* descriptor) {
@@ -59,13 +46,13 @@ ScriptPromise FileSystemHandle::queryPermission(
   ScriptPromise result = resolver->Promise();
 
   QueryPermissionImpl(
-      descriptor->mode() == "readwrite",
+      descriptor->mode() == V8FileSystemPermissionMode::Enum::kReadwrite,
       WTF::BindOnce(
           [](FileSystemHandle* handle, ScriptPromiseResolver* resolver,
              mojom::blink::PermissionStatus result) {
             // Keep `this` alive so the handle will not be garbage-collected
             // before the promise is resolved.
-            resolver->Resolve(MojoPermissionStatusToString(result));
+            resolver->Resolve(PermissionStatusToString(result));
           },
           WrapPersistent(this), WrapPersistent(resolver)));
 
@@ -74,12 +61,14 @@ ScriptPromise FileSystemHandle::queryPermission(
 
 ScriptPromise FileSystemHandle::requestPermission(
     ScriptState* script_state,
-    const FileSystemHandlePermissionDescriptor* descriptor) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+    const FileSystemHandlePermissionDescriptor* descriptor,
+    ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   RequestPermissionImpl(
-      descriptor->mode() == "readwrite",
+      descriptor->mode() == V8FileSystemPermissionMode::Enum::kReadwrite,
       WTF::BindOnce(
           [](FileSystemHandle*, ScriptPromiseResolver* resolver,
              FileSystemAccessErrorPtr result,
@@ -90,7 +79,7 @@ ScriptPromise FileSystemHandle::requestPermission(
               file_system_access_error::Reject(resolver, *result);
               return;
             }
-            resolver->Resolve(MojoPermissionStatusToString(status));
+            resolver->Resolve(PermissionStatusToString(status));
           },
           WrapPersistent(this), WrapPersistent(resolver)));
 
@@ -98,8 +87,10 @@ ScriptPromise FileSystemHandle::requestPermission(
 }
 
 ScriptPromise FileSystemHandle::move(ScriptState* script_state,
-                                     const String& new_entry_name) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+                                     const String& new_entry_name,
+                                     ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   MoveImpl(
@@ -119,8 +110,10 @@ ScriptPromise FileSystemHandle::move(ScriptState* script_state,
 
 ScriptPromise FileSystemHandle::move(
     ScriptState* script_state,
-    FileSystemDirectoryHandle* destination_directory) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+    FileSystemDirectoryHandle* destination_directory,
+    ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   MoveImpl(destination_directory->Transfer(), name_,
@@ -139,8 +132,10 @@ ScriptPromise FileSystemHandle::move(
 ScriptPromise FileSystemHandle::move(
     ScriptState* script_state,
     FileSystemDirectoryHandle* destination_directory,
-    const String& new_entry_name) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+    const String& new_entry_name,
+    ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   MoveImpl(
@@ -159,8 +154,10 @@ ScriptPromise FileSystemHandle::move(
 }
 
 ScriptPromise FileSystemHandle::remove(ScriptState* script_state,
-                                       const FileSystemRemoveOptions* options) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+                                       const FileSystemRemoveOptions* options,
+                                       ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   RemoveImpl(options, WTF::BindOnce(
@@ -177,8 +174,10 @@ ScriptPromise FileSystemHandle::remove(ScriptState* script_state,
 }
 
 ScriptPromise FileSystemHandle::isSameEntry(ScriptState* script_state,
-                                            FileSystemHandle* other) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+                                            FileSystemHandle* other,
+                                            ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   IsSameEntryImpl(
@@ -198,16 +197,57 @@ ScriptPromise FileSystemHandle::isSameEntry(ScriptState* script_state,
   return result;
 }
 
-ScriptPromise FileSystemHandle::getUniqueId(ScriptState* script_state) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+ScriptPromise FileSystemHandle::getUniqueId(ScriptState* script_state,
+                                            ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise result = resolver->Promise();
 
   GetUniqueIdImpl(WTF::BindOnce(
       [](FileSystemHandle*, ScriptPromiseResolver* resolver,
-         const WTF::String& id) {
+         FileSystemAccessErrorPtr result, const WTF::String& id) {
         // Keep `this` alive so the handle will not be garbage-collected
         // before the promise is resolved.
+        if (result->status != mojom::blink::FileSystemAccessStatus::kOk) {
+          file_system_access_error::Reject(resolver, *result);
+          return;
+        }
+
         resolver->Resolve(std::move(id));
+      },
+      WrapPersistent(this), WrapPersistent(resolver)));
+  return result;
+}
+
+ScriptPromise FileSystemHandle::getCloudIdentifiers(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
+  ScriptPromise result = resolver->Promise();
+
+  GetCloudIdentifiersImpl(WTF::BindOnce(
+      [](FileSystemHandle*, ScriptPromiseResolver* resolver,
+         FileSystemAccessErrorPtr result,
+         Vector<mojom::blink::FileSystemAccessCloudIdentifierPtr>
+             cloud_identifiers) {
+        // Keep `this` alive so the handle will not be garbage-collected
+        // before the promise is resolved.
+        if (result->status != mojom::blink::FileSystemAccessStatus::kOk) {
+          file_system_access_error::Reject(resolver, *result);
+          return;
+        }
+
+        HeapVector<Member<FileSystemCloudIdentifier>> return_values;
+        return_values.ReserveInitialCapacity(cloud_identifiers.size());
+        for (auto& cloud_identifier : cloud_identifiers) {
+          FileSystemCloudIdentifier* return_value =
+              FileSystemCloudIdentifier::Create();
+          return_value->setProviderName(cloud_identifier->provider_name);
+          return_value->setId(cloud_identifier->id);
+          return_values.push_back(return_value);
+        }
+        resolver->Resolve(return_values);
       },
       WrapPersistent(this), WrapPersistent(resolver)));
   return result;

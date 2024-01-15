@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_rtp_encoding_parameters.h"
@@ -41,7 +42,8 @@ class RTCInsertableStreams;
 
 webrtc::RtpEncodingParameters ToRtpEncodingParameters(
     ExecutionContext* context,
-    const RTCRtpEncodingParameters*);
+    const RTCRtpEncodingParameters*,
+    const String& kind);
 RTCRtpHeaderExtensionParameters* ToRtpHeaderExtensionParameters(
     const webrtc::RtpExtension& headers);
 RTCRtpCodecParameters* ToRtpCodecParameters(
@@ -53,6 +55,14 @@ class RTCRtpSender final : public ScriptWrappable,
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  // If |require_encoded_insertable_streams| is true, no received frames will be
+  // passed to the packetizer until |createEncodedStreams()| has been called and
+  // the frames have been transformed and passed back to the returned
+  // WritableStream. If it's false, during construction a task will be posted to
+  // |encoded_transform_shortcircuit_runner| to check if
+  // |createEncodedStreams()| has been called yet and if not will tell the
+  // underlying WebRTC sender to 'short circuit' the transform, so frames will
+  // flow directly to the packetizer.
   // TODO(hbos): Get rid of sender's reference to RTCPeerConnection?
   // https://github.com/w3c/webrtc-pc/issues/1712
   RTCRtpSender(RTCPeerConnection*,
@@ -60,7 +70,9 @@ class RTCRtpSender final : public ScriptWrappable,
                String kind,
                MediaStreamTrack*,
                MediaStreamVector streams,
-               bool encoded_insertable_streams);
+               bool require_encoded_insertable_streams,
+               scoped_refptr<base::SequencedTaskRunner>
+                   encoded_transform_shortcircuit_runner);
 
   MediaStreamTrack* track();
   RTCDtlsTransport* transport();
@@ -101,7 +113,7 @@ class RTCRtpSender final : public ScriptWrappable,
   void UnregisterEncodedAudioStreamCallback();
   void InitializeEncodedAudioStreams(ScriptState*);
   void OnAudioFrameFromEncoder(
-      std::unique_ptr<webrtc::TransformableFrameInterface> frame);
+      std::unique_ptr<webrtc::TransformableAudioFrameInterface> frame);
 
   void RegisterEncodedVideoStreamCallback();
   void UnregisterEncodedVideoStreamCallback();
@@ -118,6 +130,11 @@ class RTCRtpSender final : public ScriptWrappable,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
   void SetVideoUnderlyingSink(
       RTCEncodedVideoUnderlyingSink* new_underlying_sink);
+  void LogMessage(const std::string& message);
+
+  // If createEncodedStreams has not yet been called, instead tell the webrtc
+  // encoded transform to 'short circuit', skipping calling the transform.
+  void MaybeShortCircuitEncodedStreams();
 
   Member<RTCPeerConnection> pc_;
   std::unique_ptr<RTCRtpSenderPlatform> sender_;
@@ -128,10 +145,7 @@ class RTCRtpSender final : public ScriptWrappable,
   MediaStreamVector streams_;
   Member<RTCRtpSendParameters> last_returned_parameters_;
   Member<RTCRtpTransceiver> transceiver_;
-
-  // Insertable Streams flag, |True| if the sender has been configured to
-  // use Encoded Insertable Streams.
-  bool encoded_insertable_streams_;
+  bool transform_shortcircuited_ = false;
 
   // Insertable Streams audio support
   base::Lock audio_underlying_source_lock_;
@@ -143,7 +157,7 @@ class RTCRtpSender final : public ScriptWrappable,
       audio_to_packetizer_underlying_sink_
           GUARDED_BY(audio_underlying_sink_lock_);
   Member<RTCInsertableStreams> encoded_audio_streams_;
-  scoped_refptr<blink::RTCEncodedAudioStreamTransformer::Broker>
+  const scoped_refptr<blink::RTCEncodedAudioStreamTransformer::Broker>
       encoded_audio_transformer_;
 
   // Insertable Streams video support
@@ -156,7 +170,7 @@ class RTCRtpSender final : public ScriptWrappable,
       video_to_packetizer_underlying_sink_
           GUARDED_BY(video_underlying_sink_lock_);
   Member<RTCInsertableStreams> encoded_video_streams_;
-  scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>
+  const scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>
       encoded_video_transformer_;
 
   THREAD_CHECKER(thread_checker_);

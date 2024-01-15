@@ -4,6 +4,7 @@
 
 #include "chrome/test/chromedriver/server/http_server.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_interfaces.h"
 #include "net/base/sys_addrinfo.h"
@@ -89,8 +90,8 @@ bool HostIsSafeToServe(GURL host_url,
     net::NetworkInterfaceList list;
     if (net::GetNetworkList(&list,
                             net::INCLUDE_HOST_SCOPE_VIRTUAL_INTERFACES)) {
-      for (const auto& networkInterface : list) {
-        if (networkInterface.address == host_address) {
+      for (const auto& network_interface : list) {
+        if (network_interface.address == host_address) {
           return true;
         }
       }

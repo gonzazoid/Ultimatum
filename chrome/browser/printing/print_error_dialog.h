@@ -7,12 +7,19 @@
 
 #include "base/functional/callback_forward.h"
 
-// Shows a window-modal error that printing failed for some unknown reason.
-void ShowPrintErrorDialog();
+// Functions related to showing error dialogs for printing errors. Whether a
+// dialog actually appears depends on the platform. Regardless of the platform,
+// error dialogs additionally create PRINTER_LOG() entries.
 
-// Provide callback for testing purposes.  Allows test framework to be notified
-// of a printer error dialog event without displaying a window-modal dialog
-// that would block testing completion.  Must be called from the UI thread.
+// Shows a window-modal error when a selected printer is invalid.
+void ShowPrintErrorDialogForInvalidPrinterError();
+
+// Shows a window-modal error when printing failed for some unknown reason.
+void ShowPrintErrorDialogForGenericError();
+
+// Allows tests to override the error dialogs. Instead of displaying a
+// window-modal dialog that can block test completion, runs `callback` instead.
+// Must be called from the UI thread.
 void SetShowPrintErrorDialogForTest(base::RepeatingClosure callback);
 
 #endif  // CHROME_BROWSER_PRINTING_PRINT_ERROR_DIALOG_H_

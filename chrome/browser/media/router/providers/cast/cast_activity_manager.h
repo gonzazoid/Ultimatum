@@ -81,14 +81,12 @@ class CastActivityManager : public CastActivityManagerBase,
                      const std::string& presentation_id,
                      const url::Origin& origin,
                      int frame_tree_node_id,
-                     bool incognito,
                      mojom::MediaRouteProvider::CreateRouteCallback callback);
 
   void JoinSession(const CastMediaSource& cast_source,
                    const std::string& presentation_id,
                    const url::Origin& origin,
                    int frame_tree_node_id,
-                   bool incognito,
                    mojom::MediaRouteProvider::JoinRouteCallback callback);
 
   // Terminates a Cast session represented by |route_id|.
@@ -96,7 +94,7 @@ class CastActivityManager : public CastActivityManagerBase,
       const MediaRoute::Id& route_id,
       mojom::MediaRouteProvider::TerminateRouteCallback callback);
 
-  bool CreateMediaController(
+  bool BindMediaController(
       const std::string& route_id,
       mojo::PendingReceiver<mojom::MediaController> media_controller,
       mojo::PendingRemote<mojom::MediaStatusObserver> observer);
@@ -120,6 +118,10 @@ class CastActivityManager : public CastActivityManagerBase,
                             const base::Value::Dict& media_status,
                             absl::optional<int> request_id) override;
 
+  void OnSourceChanged(const std::string& media_route_id,
+                       int old_frame_tree_node_id,
+                       int frame_tree_node_id);
+
   static void SetActitityFactoryForTest(CastActivityFactoryForTest* factory) {
     cast_activity_factory_for_test_ = factory;
   }
@@ -131,15 +133,24 @@ class CastActivityManager : public CastActivityManagerBase,
   void SendRouteMessage(const std::string& media_route_id,
                         const std::string& message);
 
+  MirroringActivity* FindMirroringActivityByRouteId(
+      const std::string& route_id);
+
+  void AddMirroringActivityForTest(
+      const MediaRoute::Id& route_id,
+      std::unique_ptr<MirroringActivity> mirroring_activity);
+
  private:
   friend class CastActivityManagerTest;
-  FRIEND_TEST_ALL_PREFIXES(CastActivityManagerTest,
+  FRIEND_TEST_ALL_PREFIXES(CastActivityManagerWithTerminatingTest,
                            LaunchSessionTerminatesExistingSessionOnSink);
   FRIEND_TEST_ALL_PREFIXES(CastActivityManagerTest,
                            LaunchSessionTerminatesExistingSessionFromTab);
   FRIEND_TEST_ALL_PREFIXES(CastActivityManagerTest,
                            LaunchSessionTerminatesPendingLaunchFromTab);
   FRIEND_TEST_ALL_PREFIXES(CastActivityManagerTest, SendMediaRequestToReceiver);
+  FRIEND_TEST_ALL_PREFIXES(CastActivityManagerTest,
+                           StartSessionAndRemoveExistingSessionOnSink);
 
   using ActivityMap =
       base::flat_map<MediaRoute::Id, std::unique_ptr<CastActivity>>;
@@ -155,7 +166,6 @@ class CastActivityManager : public CastActivityManagerBase,
       const std::string& presentation_id,
       const url::Origin& origin,
       int frame_tree_node_id,
-      bool incognito,
       mojom::MediaRouteProvider::CreateRouteCallback callback,
       data_decoder::DataDecoder::ValueOrError result);
 
@@ -206,7 +216,6 @@ class CastActivityManager : public CastActivityManagerBase,
   };
 
   void DoLaunchSession(DoLaunchSessionParams params);
-  void SetPendingLaunch(DoLaunchSessionParams params);
   void OnActivityStopped(const std::string& route_id);
 
   // Removes an activity, terminating any associated connections, then
@@ -253,8 +262,7 @@ class CastActivityManager : public CastActivityManagerBase,
                                        const url::Origin& origin,
                                        int frame_tree_node_id);
   bool CanJoinSession(const AppActivity& activity,
-                      const CastMediaSource& cast_source,
-                      bool incognito) const;
+                      const CastMediaSource& cast_source) const;
   AppActivity* FindActivityForSessionJoin(const CastMediaSource& cast_source,
                                           const std::string& presentation_id);
 
@@ -282,12 +290,29 @@ class CastActivityManager : public CastActivityManagerBase,
 
   // Returns a sink used to convert a mirroring activity to a cast activity.
   // If no conversion should occur, returns absl::nullopt.
-  absl::optional<MediaSinkInternal> ConvertMirrorToCast(int frame_tree_node_id);
+  absl::optional<MediaSinkInternal> GetSinkForMirroringActivity(
+      int frame_tree_node_id) const;
 
   std::string ChooseAppId(const CastMediaSource& source,
                           const MediaSinkInternal& sink) const;
 
   void TerminateAllLocalMirroringActivities();
+
+  void MaybeShowIssueAtLaunch(const MediaSource& media_source,
+                              const MediaSink::Id& sink_id);
+
+  void HandleMissingSinkOnJoin(
+      mojom::MediaRouteProvider::JoinRouteCallback callback,
+      const std::string& sink_id,
+      const std::string& source_id,
+      const std::string& session_id);
+  void HandleMissingSessionIdOnJoin(
+      mojom::MediaRouteProvider::JoinRouteCallback callback);
+  void HandleMissingSessionOnJoin(
+      mojom::MediaRouteProvider::JoinRouteCallback callback,
+      const std::string& sink_id,
+      const std::string& source_id,
+      const std::string& session_id);
 
   static CastActivityFactoryForTest* cast_activity_factory_for_test_;
 
@@ -307,11 +332,10 @@ class CastActivityManager : public CastActivityManagerBase,
   // low-end devices.
   base::flat_map<int, MediaRoute::Id> routes_by_frame_;
 
-  // Information for a session that will be launched once |this| is notified
-  // that the existing session on the receiver has been removed. We only store
-  // one pending launch at a time so that we don't accumulate orphaned pending
-  // launches over time.
-  absl::optional<DoLaunchSessionParams> pending_launch_;
+  // Used only when the feature `kStartCastSessionWithoutTerminating` is
+  // enabled.
+  absl::optional<std::pair<MediaSink::Id, MediaRoute::Id>>
+      pending_activity_removal_;
 
   // The following raw pointer fields are assumed to outlive |this|.
   const raw_ptr<MediaSinkServiceBase> media_sink_service_;

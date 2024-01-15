@@ -2,33 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-{%- if variant -%}
-{%-   set variant_path = "%s-%s"|format(module.path, variant) -%}
-{%- else -%}
-{%-   set variant_path = module.path -%}
-{%- endif -%}
+{%- from 'cpp_macros.tmpl' import
+ namespace_begin, namespace_end, include_guard, variant_path %}
 
-{%- set header_guard = "%s_H_"|format(
-        variant_path|upper|replace("/","_")|replace(".","_")|
-            replace("-", "_")) %}
-
-{%- macro namespace_begin() %}
-{%-   for namespace in namespaces_as_array %}
-namespace {{namespace}} {
-{%-   endfor %}
-{%-   if variant %}
-namespace {{variant}} {
-{%-   endif %}
-{%- endmacro %}
-
-{%- macro namespace_end() %}
-{%-   if variant %}
-}  // namespace {{variant}}
-{%-   endif %}
-{%-   for namespace in namespaces_as_array|reverse %}
-}  // namespace {{namespace}}
-{%-   endfor %}
-{%- endmacro %}
+{%- set header_guard = include_guard('', module.path, variant) %}
 
 {%- macro kythe_annotation(name) %}
 {%- if enable_kythe_annotations %}
@@ -45,7 +22,7 @@ namespace {{variant}} {
 #include <type_traits>
 #include <utility>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
 {%- if contains_only_enums %}
 #include "mojo/public/cpp/bindings/type_converter.h"
@@ -60,22 +37,15 @@ namespace {{variant}} {
 
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
+#include "{{module.path}}-features.h"
 #include "{{module.path}}-shared.h"
-#include "{{variant_path}}-forward.h"
+#include "{{variant_path(module.path, variant)}}-forward.h"
 
 {%- for import in imports %}
 {%-   if import|is_full_header_required_for_import %}
-{%-     if variant %}
-#include "{{"%s-%s.h"|format(import.path, variant)}}"
-{%-     else %}
-#include "{{import.path}}.h"
-{%-     endif %}
+#include "{{variant_path(import.path, variant)}}.h"
 {%-   else %}
-{%-     if variant %}
-#include "{{"%s-%s-forward.h"|format(import.path, variant)}}"
-{%-     else %}
-#include "{{import.path}}-forward.h"
-{%-     endif %}
+#include "{{variant_path(import.path, variant)}}-forward.h"
 {%-   endif %}
 {%- endfor %}
 
@@ -119,16 +89,6 @@ namespace {{variant}} {
 {{forward_declaration}}
 {%- endfor %}
 
-{#--- WTF enum hashing #}
-{%- from "enum_macros.tmpl" import enum_hash_blink%}
-{%- if for_blink %}
-{%-   for enum in all_enums %}
-{%-     if not enum|is_native_only_kind %}
-{{enum_hash_blink(enum)}}
-{%-     endif %}
-{%-   endfor %}
-{%- endif %}
-
 {#--- Constants that need headers (enum types) (basic types go in forward.h) #}
 {%- for constant in module.constants %}
 {%-  if constant.kind|is_enum_kind %}
@@ -137,7 +97,7 @@ namespace {{variant}} {
 {%- endif %}
 {%- endfor %}
 
-{{namespace_begin()}}
+{{namespace_begin(namespaces_as_array, variant)}}
 
 {%- set module_prefix = "%s"|format(namespaces_as_array|join(".")) %}
 
@@ -200,7 +160,7 @@ namespace {{variant}} {
 {%-   endif %}
 {%- endfor %}
 
-{{namespace_end()}}
+{{namespace_end(namespaces_as_array, variant)}}
 
 namespace mojo {
 
@@ -216,6 +176,15 @@ namespace mojo {
 {%-   for union in unions %}
 {%      include "union_traits_declaration.tmpl" %}
 {%-   endfor %}
+{%- endif %}
+
+{#--- Feature helper template overrides -#}
+{%- if interfaces|selectattr('runtime_feature')|list|length %}
+namespace internal {
+{%-   for interface in interfaces if interface.runtime_feature -%}
+{%      include "interface_feature_declaration.tmpl" %}
+{%-   endfor %}
+}  // namespace internal
 {%- endif %}
 
 }  // namespace mojo

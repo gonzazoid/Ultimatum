@@ -7,21 +7,27 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/task/lazy_thread_pool_task_runner.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
+#include "base/task/updateable_sequenced_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
+#include "base/timer/elapsed_timer.h"
 #include "base/values.h"
 #include "content/browser/aggregation_service/aggregatable_report.h"
 #include "content/browser/aggregation_service/aggregatable_report_assembler.h"
@@ -33,24 +39,23 @@
 #include "content/browser/aggregation_service/public_key.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/storage_partition.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace content {
 
 namespace {
 
-// The shared task runner for all aggregation service storage operations. Note
-// that different AggregationServiceImpl instances perform operations on the
-// same task runner. This prevents any potential races when a given storage
-// context is destroyed and recreated using the same backing storage. This uses
-// BLOCK_SHUTDOWN as some data deletion operations may be running when the
-// browser is closed, and we want to ensure all data is deleted correctly.
-base::LazyThreadPoolSequencedTaskRunner g_storage_task_runner =
-    LAZY_THREAD_POOL_SEQUENCED_TASK_RUNNER_INITIALIZER(
-        base::TaskTraits(base::TaskPriority::BEST_EFFORT,
-                         base::MayBlock(),
-                         base::TaskShutdownBehavior::BLOCK_SHUTDOWN));
+scoped_refptr<base::UpdateableSequencedTaskRunner> CreateStorageTaskRunner() {
+  // This uses BLOCK_SHUTDOWN as some data deletion operations may be running
+  // when the browser is closed, and we want to ensure all data is deleted
+  // correctly. Additionally, we use MUST_USE_FOREGROUND to avoid priority
+  // inversions if a task is already running when the priority is increased.
+  return base::ThreadPool::CreateUpdateableSequencedTaskRunner(
+      base::TaskTraits(base::TaskPriority::BEST_EFFORT, base::MayBlock(),
+                       base::TaskShutdownBehavior::BLOCK_SHUTDOWN,
+                       base::ThreadPolicy::MUST_USE_FOREGROUND));
+}
 
 }  // namespace
 
@@ -58,13 +63,14 @@ AggregationServiceImpl::AggregationServiceImpl(
     bool run_in_memory,
     const base::FilePath& user_data_directory,
     StoragePartitionImpl* storage_partition)
-    : storage_(
+    : storage_task_runner_(CreateStorageTaskRunner()),
+      storage_(
           // Ensure storage is constructed first (and destroyed last) so we can
           // safely pass `this` as an `AggregationServiceStorageContext` in the
           // below constructors.
           // TODO(alexmt): Pass the storage directly to avoid an extra wrapper.
           base::SequenceBound<AggregationServiceStorageSql>(
-              g_storage_task_runner.Get(),
+              storage_task_runner_,
               run_in_memory,
               user_data_directory,
               base::DefaultClock::GetInstance())),
@@ -102,8 +108,9 @@ AggregationServiceImpl::AggregationServiceImpl(
     std::unique_ptr<AggregatableReportScheduler> scheduler,
     std::unique_ptr<AggregatableReportAssembler> assembler,
     std::unique_ptr<AggregatableReportSender> sender)
-    : storage_(base::SequenceBound<AggregationServiceStorageSql>(
-          g_storage_task_runner.Get(),
+    : storage_task_runner_(CreateStorageTaskRunner()),
+      storage_(base::SequenceBound<AggregationServiceStorageSql>(
+          storage_task_runner_,
           run_in_memory,
           user_data_directory,
           clock)),
@@ -134,22 +141,39 @@ AggregationServiceImpl::GetStorage() {
   return storage_;
 }
 
+void AggregationServiceImpl::OnUserVisibleTaskStarted() {
+  // When a user-visible task is queued or running, we use a higher priority.
+  ++num_pending_user_visible_tasks_;
+  storage_task_runner_->UpdatePriority(base::TaskPriority::USER_VISIBLE);
+}
+
 void AggregationServiceImpl::ClearData(
     base::Time delete_begin,
     base::Time delete_end,
     StoragePartition::StorageKeyMatcherFunction filter,
     base::OnceClosure done) {
+  OnUserVisibleTaskStarted();
+
   storage_.AsyncCall(&AggregationServiceStorage::ClearDataBetween)
       .WithArgs(delete_begin, delete_end, std::move(filter))
-      .Then(base::BindOnce(
-          [](base::OnceClosure done,
-             base::WeakPtr<AggregationServiceImpl> aggregation_service) {
-            std::move(done).Run();
+      .Then(std::move(done).Then(
+          base::BindOnce(&AggregationServiceImpl::OnClearDataComplete,
+                         weak_factory_.GetWeakPtr())));
+}
 
-            if (aggregation_service)
-              aggregation_service->NotifyRequestStorageModified();
-          },
-          std::move(done), weak_factory_.GetWeakPtr()));
+void AggregationServiceImpl::OnUserVisibleTaskComplete() {
+  DCHECK_GT(num_pending_user_visible_tasks_, 0);
+  --num_pending_user_visible_tasks_;
+
+  // No more user visible tasks, so we can reset the priority.
+  if (num_pending_user_visible_tasks_ == 0) {
+    storage_task_runner_->UpdatePriority(base::TaskPriority::BEST_EFFORT);
+  }
+}
+
+void AggregationServiceImpl::OnClearDataComplete() {
+  OnUserVisibleTaskComplete();
+  NotifyRequestStorageModified();
 }
 
 void AggregationServiceImpl::ScheduleReport(
@@ -160,13 +184,14 @@ void AggregationServiceImpl::ScheduleReport(
 
 void AggregationServiceImpl::AssembleAndSendReport(
     AggregatableReportRequest report_request) {
-  AssembleAndSendReportImpl(std::move(report_request), /*id=*/absl::nullopt,
+  AssembleAndSendReportImpl(std::move(report_request),
+                            /*request_id=*/std::nullopt,
                             /*done=*/base::DoNothing());
 }
 
 void AggregationServiceImpl::AssembleAndSendReportImpl(
     AggregatableReportRequest report_request,
-    absl::optional<AggregationServiceStorage::RequestId> request_id,
+    std::optional<AggregationServiceStorage::RequestId> request_id,
     base::OnceClosure done) {
   GURL reporting_url = report_request.GetReportingUrl();
   AssembleReport(
@@ -175,7 +200,7 @@ void AggregationServiceImpl::AssembleAndSendReportImpl(
           &AggregationServiceImpl::OnReportAssemblyComplete,
           // `base::Unretained` is safe as the assembler is owned by `this`.
           base::Unretained(this), std::move(done), request_id,
-          std::move(reporting_url)));
+          std::move(reporting_url), base::ElapsedTimer()));
 }
 
 void AggregationServiceImpl::OnScheduledReportTimeReached(
@@ -186,13 +211,21 @@ void AggregationServiceImpl::OnScheduledReportTimeReached(
 
 void AggregationServiceImpl::OnReportAssemblyComplete(
     base::OnceClosure done,
-    absl::optional<AggregationServiceStorage::RequestId> request_id,
+    std::optional<AggregationServiceStorage::RequestId> request_id,
     GURL reporting_url,
+    base::ElapsedTimer elapsed_timer,
     AggregatableReportRequest report_request,
-    absl::optional<AggregatableReport> report,
+    std::optional<AggregatableReport> report,
     AggregatableReportAssembler::AssemblyStatus status) {
   DCHECK_EQ(report.has_value(),
             status == AggregatableReportAssembler::AssemblyStatus::kOk);
+  base::UmaHistogramLongTimes100(
+      request_id.has_value()
+          ? "PrivacySandbox.AggregationService.ScheduledRequests.AssemblyTime"
+          : "PrivacySandbox.AggregationService.UnscheduledRequests."
+            "AssemblyTime",
+      elapsed_timer.Elapsed());
+
   if (!report.has_value()) {
     std::move(done).Run();
 
@@ -203,7 +236,7 @@ void AggregationServiceImpl::OnReportAssemblyComplete(
     if (!will_retry) {
       NotifyReportHandled(
           std::move(report_request), request_id,
-          /*report=*/absl::nullopt,
+          /*report=*/std::nullopt,
           AggregationServiceObserver::ReportStatus::kFailedToAssemble);
     }
     if (request_id.has_value()) {
@@ -222,15 +255,34 @@ void AggregationServiceImpl::OnReportAssemblyComplete(
                  &AggregationServiceImpl::OnReportSendingComplete,
                  // `base::Unretained` is safe as the sender is owned by `this`.
                  base::Unretained(this), std::move(done),
-                 std::move(report_request), request_id, std::move(*report)));
+                 std::move(report_request), request_id, std::move(*report),
+                 /*sending_timer=*/base::ElapsedTimer()));
 }
 
 void AggregationServiceImpl::OnReportSendingComplete(
     base::OnceClosure done,
     AggregatableReportRequest report_request,
-    absl::optional<AggregationServiceStorage::RequestId> request_id,
+    std::optional<AggregationServiceStorage::RequestId> request_id,
     AggregatableReport report,
+    base::ElapsedTimer sending_timer,
     AggregatableReportSender::RequestStatus status) {
+  base::UmaHistogramLongTimes100(request_id.has_value()
+                                     ? "PrivacySandbox.AggregationService."
+                                       "ScheduledRequests.SendAttemptTime"
+                                     : "PrivacySandbox.AggregationService."
+                                       "UnscheduledRequests.SendAttemptTime",
+                                 sending_timer.Elapsed());
+  base::UmaHistogramCustomTimes(
+      request_id.has_value()
+          ? "PrivacySandbox.AggregationService.ScheduledRequests."
+            "DelayFromOriginalReportTime"
+          : "PrivacySandbox.AggregationService.UnscheduledRequests."
+            "DelayFromOriginalReportTime",
+      base::Time::Now() - report_request.shared_info().scheduled_report_time,
+      /*min=*/base::Seconds(1),
+      /*max=*/base::Days(24),
+      /*buckets=*/50);
+
   std::move(done).Run();
 
   AggregationServiceObserver::ReportStatus observer_status;
@@ -309,6 +361,16 @@ void AggregationServiceImpl::OnGetRequestsToSendFromWebUI(
   AssembleAndSendReports(std::move(requests_and_ids), std::move(barrier));
 }
 
+void AggregationServiceImpl::GetPendingReportReportingOrigins(
+    base::OnceCallback<void(std::set<url::Origin>)> callback) {
+  OnUserVisibleTaskStarted();
+  storage_
+      .AsyncCall(&AggregationServiceStorage::GetReportRequestReportingOrigins)
+      .Then(std::move(callback).Then(
+          base::BindOnce(&AggregationServiceImpl::OnUserVisibleTaskComplete,
+                         weak_factory_.GetWeakPtr())));
+}
+
 void AggregationServiceImpl::AddObserver(AggregationServiceObserver* observer) {
   observers_.AddObserver(observer);
 }
@@ -320,9 +382,29 @@ void AggregationServiceImpl::RemoveObserver(
 
 void AggregationServiceImpl::NotifyReportHandled(
     const AggregatableReportRequest& request,
-    absl::optional<AggregationServiceStorage::RequestId> request_id,
-    const absl::optional<AggregatableReport>& report,
+    std::optional<AggregationServiceStorage::RequestId> request_id,
+    const std::optional<AggregatableReport>& report,
     AggregationServiceObserver::ReportStatus status) {
+  bool is_scheduled_request = request_id.has_value();
+  bool did_request_succeed =
+      status == AggregationServiceObserver::ReportStatus::kSent;
+
+  if (is_scheduled_request) {
+    base::UmaHistogramEnumeration(
+        "PrivacySandbox.AggregationService.ScheduledRequests.Status", status);
+  } else {
+    base::UmaHistogramEnumeration(
+        "PrivacySandbox.AggregationService.UnscheduledRequests.Status", status);
+  }
+
+  if (is_scheduled_request && did_request_succeed) {
+    base::UmaHistogramExactLinear(
+        "PrivacySandbox.AggregationService.ScheduledRequests."
+        "NumRetriesBeforeSuccess",
+        request.failed_send_attempts(),
+        /*exclusive_max=*/AggregatableReportScheduler::kMaxRetries + 1);
+  }
+
   base::Time now = base::Time::Now();
   for (auto& observer : observers_) {
     observer.OnReportHandled(request, request_id, report,

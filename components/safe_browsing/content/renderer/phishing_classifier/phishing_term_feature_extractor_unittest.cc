@@ -11,15 +11,14 @@
 #include <string>
 #include <unordered_set>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/features.h"
@@ -125,7 +124,7 @@ class PhishingTermFeatureExtractorTest : public ::testing::Test {
         page_text, features, shingle_hashes,
         base::BindOnce(&PhishingTermFeatureExtractorTest::ExtractionDone,
                        base::Unretained(this)));
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&PhishingTermFeatureExtractorTest::QuitExtraction,
                        base::Unretained(this)));
@@ -330,9 +329,7 @@ TEST_F(PhishingTermFeatureExtractorTest, Continuation) {
       // Time check after the next 5 words.
       .WillOnce(Return(now + base::Milliseconds(25)))
       // Time check after the next 5 words.
-      .WillOnce(Return(now + base::Milliseconds(28)))
-      // A final check for the histograms.
-      .WillOnce(Return(now + base::Milliseconds(30)));
+      .WillOnce(Return(now + base::Milliseconds(28)));
   extractor_->SetTickClockForTesting(&tick_clock);
 
   FeatureMap expected_features;
@@ -416,9 +413,7 @@ TEST_F(PhishingTermFeatureExtractorTest, Continuation) {
       // Time check at the start of the second chunk of work.
       .WillOnce(Return(now + base::Milliseconds(350)))
       // Time check after the next 5 words.  This is over the limit.
-      .WillOnce(Return(now + base::Milliseconds(600)))
-      // A final time check for the histograms.
-      .WillOnce(Return(now + base::Milliseconds(620)));
+      .WillOnce(Return(now + base::Milliseconds(600)));
 
   features.Clear();
   shingle_hashes.clear();

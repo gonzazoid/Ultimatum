@@ -46,7 +46,7 @@
 #include "third_party/blink/renderer/core/events/error_event.h"
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
-#include "third_party/blink/renderer/core/frame/dom_timer_coordinator.h"
+#include "third_party/blink/renderer/core/frame/font_matching_metrics.h"
 #include "third_party/blink/renderer/core/frame/user_activation.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/inspector/console_message_storage.h"
@@ -71,7 +71,6 @@
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
-#include "third_party/blink/renderer/platform/fonts/font_matching_metrics.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
@@ -83,6 +82,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/virtual_time_controller.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
@@ -153,8 +153,6 @@ FontFaceSet* WorkerGlobalScope::fonts() {
 }
 
 WorkerGlobalScope::~WorkerGlobalScope() {
-  if (font_matching_metrics_)
-    font_matching_metrics_->PublishAllMetrics();
   DCHECK(!ScriptController());
   InstanceCounters::DecrementCounter(
       InstanceCounters::kWorkerGlobalScopeCounter);
@@ -185,7 +183,11 @@ scheduler::WorkerScheduler* WorkerGlobalScope::GetScheduler() {
 
 void WorkerGlobalScope::Dispose() {
   DCHECK(IsContextThread());
+  loading_virtual_time_pauser_ = WebScopedVirtualTimePauser();
   closing_ = true;
+  if (font_matching_metrics_) {
+    font_matching_metrics_->PublishAllMetrics();
+  }
   WorkerOrWorkletGlobalScope::Dispose();
 }
 
@@ -389,21 +391,25 @@ void WorkerGlobalScope::AddConsoleMessageImpl(ConsoleMessage* console_message,
                                               bool discard_duplicates) {
   DCHECK(IsContextThread());
   ReportingProxy().ReportConsoleMessage(
-      console_message->Source(), console_message->Level(),
+      console_message->GetSource(), console_message->GetLevel(),
       console_message->Message(), console_message->Location());
   GetThread()->GetConsoleMessageStorage()->AddConsoleMessage(
       this, console_message, discard_duplicates);
 }
 
-void WorkerGlobalScope::AddInspectorIssue(
-    mojom::blink::InspectorIssueInfoPtr info) {
-  GetThread()->GetInspectorIssueStorage()->AddInspectorIssue(this,
-                                                             std::move(info));
-}
-
 void WorkerGlobalScope::AddInspectorIssue(AuditsIssue issue) {
   GetThread()->GetInspectorIssueStorage()->AddInspectorIssue(this,
                                                              std::move(issue));
+}
+
+void WorkerGlobalScope::WillBeginLoading() {
+  loading_virtual_time_pauser_ =
+      GetScheduler()
+          ->GetVirtualTimeController()
+          ->CreateWebScopedVirtualTimePauser(
+              "WorkerStart",
+              WebScopedVirtualTimePauser::VirtualTaskDuration::kInstant);
+  loading_virtual_time_pauser_.PauseVirtualTime();
 }
 
 CoreProbeSink* WorkerGlobalScope::GetProbeSink() {
@@ -490,6 +496,7 @@ void WorkerGlobalScope::RunWorkerScript() {
     debugger->ExternalAsyncTaskStarted(*stack_id_);
 
   ReportingProxy().WillEvaluateScript();
+  loading_virtual_time_pauser_.UnpauseVirtualTime();
 
   // Step 24. If script is a classic script, then run the classic script script.
   // Otherwise, it is a module script; run the module script script. [spec text]
@@ -586,18 +593,17 @@ WorkerGlobalScope::WorkerGlobalScope(
               (creation_params->agent_cluster_id.is_empty()
                    ? base::UnguessableToken::Create()
                    : creation_params->agent_cluster_id),
-              base::FeatureList::IsEnabled(
-                  scheduler::kMicrotaskQueuePerWorkerAgent)
-                  ? v8::MicrotaskQueue::New(thread->GetIsolate(),
-                                            v8::MicrotasksPolicy::kScoped)
-                  : nullptr),
+              v8::MicrotaskQueue::New(thread->GetIsolate(),
+                                      v8::MicrotasksPolicy::kScoped)),
           creation_params->global_scope_name,
           creation_params->parent_devtools_token,
           creation_params->v8_cache_options,
           creation_params->worker_clients,
           std::move(creation_params->content_settings_client),
           std::move(creation_params->web_worker_fetch_context),
-          thread->GetWorkerReportingProxy()),
+          thread->GetWorkerReportingProxy(),
+          creation_params->script_url.ProtocolIsData()),
+      ActiveScriptWrappable<WorkerGlobalScope>({}),
       script_type_(creation_params->script_type),
       user_agent_(creation_params->user_agent),
       ua_metadata_(creation_params->ua_metadata),
@@ -607,7 +613,9 @@ WorkerGlobalScope::WorkerGlobalScope(
       time_origin_(time_origin),
       font_selector_(MakeGarbageCollected<OffscreenFontSelector>(this)),
       script_eval_state_(ScriptEvalState::kPauseAfterFetch),
-      ukm_source_id_(creation_params->ukm_source_id) {
+      ukm_source_id_(creation_params->ukm_source_id),
+      top_level_frame_security_origin_(
+          std::move(creation_params->top_level_frame_security_origin)) {
   InstanceCounters::IncrementCounter(
       InstanceCounters::kWorkerGlobalScopeCounter);
 
@@ -713,10 +721,10 @@ ukm::UkmRecorder* WorkerGlobalScope::UkmRecorder() {
   if (ukm_recorder_)
     return ukm_recorder_.get();
 
-  mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
   GetBrowserInterfaceBroker().GetInterface(
-      recorder.InitWithNewPipeAndPassReceiver());
-  ukm_recorder_ = std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+      factory.BindNewPipeAndPassReceiver());
+  ukm_recorder_ = ukm::MojoUkmRecorder::Create(*factory);
 
   return ukm_recorder_.get();
 }
@@ -737,11 +745,14 @@ void WorkerGlobalScope::Trace(Visitor* visitor) const {
   Supplementable<WorkerGlobalScope>::Trace(visitor);
 }
 
+bool WorkerGlobalScope::HasPendingActivity() const {
+  return !ExecutionContext::IsContextDestroyed();
+}
+
 FontMatchingMetrics* WorkerGlobalScope::GetFontMatchingMetrics() {
   if (!font_matching_metrics_) {
     font_matching_metrics_ = std::make_unique<FontMatchingMetrics>(
-        UkmRecorder(), UkmSourceID(),
-        GetTaskRunner(TaskType::kInternalDefault));
+        this, GetTaskRunner(TaskType::kInternalDefault));
   }
   return font_matching_metrics_.get();
 }
@@ -753,7 +764,7 @@ CodeCacheHost* WorkerGlobalScope::GetCodeCacheHost() {
     // don't rely on code caching so it's safe to return nullptr here.
     if (!GetBrowserInterfaceBroker().is_bound())
       return nullptr;
-    mojo::Remote<mojom::CodeCacheHost> remote;
+    mojo::Remote<mojom::blink::CodeCacheHost> remote;
     GetBrowserInterfaceBroker().GetInterface(
         remote.BindNewPipeAndPassReceiver());
     code_cache_host_ = std::make_unique<CodeCacheHost>(std::move(remote));

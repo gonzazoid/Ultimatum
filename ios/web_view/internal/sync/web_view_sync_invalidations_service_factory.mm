@@ -8,15 +8,10 @@
 #include "components/gcm_driver/gcm_profile_service.h"
 #include "components/gcm_driver/instance_id/instance_id_profile_service.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
-#include "components/sync/base/features.h"
 #include "components/sync/invalidations/sync_invalidations_service_impl.h"
 #include "ios/web_view/internal/sync/web_view_gcm_profile_service_factory.h"
 #include "ios/web_view/internal/sync/web_view_instance_id_profile_service_factory.h"
 #include "ios/web_view/internal/web_view_browser_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -49,10 +44,6 @@ WebViewSyncInvalidationsServiceFactory::
 std::unique_ptr<KeyedService>
 WebViewSyncInvalidationsServiceFactory::BuildServiceInstanceFor(
     web::BrowserState* context) const {
-  if (!base::FeatureList::IsEnabled(syncer::kSyncSendInterestedDataTypes)) {
-    return nullptr;
-  }
-
   WebViewBrowserState* browser_state =
       WebViewBrowserState::FromBrowserState(context);
 

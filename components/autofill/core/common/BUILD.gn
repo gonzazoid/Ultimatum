@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//testing/libfuzzer/fuzzer_test.gni")
+
 static_library("common") {
   sources = [
     "aliases.h",
@@ -28,8 +30,6 @@ static_library("common") {
     "autofill_regexes.h",
     "autofill_switches.cc",
     "autofill_switches.h",
-    "autofill_tick_clock.cc",
-    "autofill_tick_clock.h",
     "autofill_util.cc",
     "autofill_util.h",
     "dense_set.h",
@@ -44,8 +44,6 @@ static_library("common") {
     "form_field_data_predictions.cc",
     "form_field_data_predictions.h",
     "form_interactions_flow.h",
-    "gaia_id_hash.cc",
-    "gaia_id_hash.h",
     "html_field_types.cc",
     "html_field_types.h",
     "language_code.h",
@@ -86,6 +84,8 @@ static_library("common") {
     "//ui/gfx/geometry",
     "//url",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 component("features") {
@@ -99,6 +99,25 @@ component("features") {
   deps = [
     "//base",
     "//build:chromeos_buildflags",
+  ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+}
+
+static_library("test_support") {
+  testonly = true
+  sources = [
+    "autofill_test_utils.cc",
+    "autofill_test_utils.h",
+  ]
+  deps = [
+    "//base",
+    "//base/test:test_support",
+    "//url",
+  ]
+  public_deps = [
+    ":common",
+    "//testing/gmock",
   ]
 }
 
@@ -115,7 +134,6 @@ source_set("unit_tests") {
     "field_data_manager_unittest.cc",
     "form_data_unittest.cc",
     "form_field_data_unittest.cc",
-    "gaia_id_hash_unittest.cc",
     "logging/log_buffer_unittest.cc",
     "save_password_progress_logger_unittest.cc",
     "signatures_unittest.cc",
@@ -135,4 +153,21 @@ source_set("unit_tests") {
     "//testing/gtest",
     "//url",
   ]
+}
+
+static_library("fuzzer_support") {
+  sources = [
+    "form_data_fuzzed_producer.cc",
+    "form_data_fuzzed_producer.h",
+  ]
+
+  deps = [
+    ":common",
+    "//url",
+  ]
+}
+
+fuzzer_test("autofill_autocomplete_parsing_util_fuzzer") {
+  sources = [ "autocomplete_parsing_util_fuzzer.cc" ]
+  deps = [ ":common" ]
 }

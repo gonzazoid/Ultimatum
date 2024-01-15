@@ -4,22 +4,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
-#include "base/strings/utf_string_conversions.h"
+#include "base/functional/callback_forward.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
 #include "chrome/browser/ui/views/user_education/browser_user_education_service.h"
-#include "chrome/test/data/grit/chrome_test_resources.h"
-#include "components/user_education/common/feature_promo_specification.h"
 #include "components/user_education/common/help_bubble_params.h"
 #include "components/user_education/views/help_bubble_view.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "ui/base/interaction/expect_call_in_scope.h"
+#include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/widget/widget_observer.h"
 
 using user_education::HelpBubbleArrow;
@@ -55,7 +49,7 @@ class HelpBubbleViewTimeoutTest : public TestWithBrowserView {
 
   TestHelpBubbleView* CreateHelpBubbleView(HelpBubbleParams params) {
     return new TestHelpBubbleView(GetHelpBubbleDelegate(),
-                                  browser_view()->contents_container(),
+                                  {browser_view()->contents_container()},
                                   std::move(params));
   }
 };

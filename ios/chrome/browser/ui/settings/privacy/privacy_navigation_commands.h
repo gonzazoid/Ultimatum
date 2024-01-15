@@ -15,8 +15,14 @@
 // Shows ClearBrowsingData screen.
 - (void)showClearBrowsingData;
 
-// Shows SafeBrowsing screen.
+// Shows Safe Browsing screen.
 - (void)showSafeBrowsing;
+
+// Shows Lockdown Mode screen.
+- (void)showLockdownMode;
+
+// Show Privacy Guide screen.
+- (void)showPrivacyGuide;
 
 @end
 

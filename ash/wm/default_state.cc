@@ -5,25 +5,23 @@
 #include "ash/wm/default_state.h"
 
 #include "ash/public/cpp/metrics_util.h"
-#include "ash/public/cpp/shell_window_ids.h"
-#include "ash/public/cpp/window_animation_types.h"
 #include "ash/root_window_controller.h"
 #include "ash/screen_util.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/float/float_controller.h"
+#include "ash/wm/pip/pip_controller.h"
 #include "ash/wm/screen_pinning_controller.h"
-#include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_metrics_controller.h"
 #include "ash/wm/window_positioning_utils.h"
-#include "ash/wm/window_state.h"
 #include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_state_util.h"
+#include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace_controller.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chromeos/ui/base/window_state_type.h"
@@ -33,19 +31,16 @@
 #include "ui/aura/window_delegate.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/layer.h"
-#include "ui/display/display.h"
 #include "ui/display/display_observer.h"
 #include "ui/display/screen.h"
+#include "ui/display/types/display_constants.h"
+#include "ui/wm/core/window_animations.h"
 #include "ui/wm/core/window_util.h"
 
 namespace ash {
 namespace {
 
 using ::chromeos::WindowStateType;
-
-// This specifies how much percent (30%) of a window rect
-// must be visible when the window is added to the workspace.
-const float kMinimumPercentOnScreenArea = 0.3f;
 
 // When a window that has restore bounds at least as large as a work area is
 // unmaximized, inset the bounds slightly so that they are not exactly the same.
@@ -62,12 +57,47 @@ gfx::Size GetWindowMaximumSize(aura::Window* window) {
                             : gfx::Size();
 }
 
-void MoveToDisplayForRestore(WindowState* window_state) {
-  if (!window_state->HasRestoreBounds())
+// Moves the window to the specified display if necessary.
+void MoveWindowToDisplayAsNeeded(aura::Window* window, int64_t display_id) {
+  if (!window || display_id == display::kInvalidDisplayId) {
     return;
-  const gfx::Rect restore_bounds = window_state->GetRestoreBoundsInScreen();
+  }
+  aura::Window* root = Shell::GetRootWindowForDisplayId(display_id);
+  if (!root || root == window->GetRootWindow()) {
+    // No need to move unless window is rooted in a different display.
+    return;
+  }
+  root->GetChildById(window->parent()->GetId())->AddChild(window);
+}
 
-  // Move only if the restore bounds is outside of
+// Ensures the window is moved to the correct display when entering the
+// next state, taking into account whether it's restoring or not.
+void EnsureWindowInCorrectDisplay(WindowState* window_state,
+                                  WindowStateType previous_state_type) {
+  if (window_state->IsMinimized()) {
+    return;
+  }
+
+  // When restoring, we want to use the restore bounds to calculate which
+  // display it should be moved to, hence the check for IsRestoring() and
+  // HasRestoreBounds(), otherwise we move the window according to its current
+  // bounds. A special case is when we come out of minimized state, where the
+  // current bounds is the bounds of the new state we're going back to, so we
+  // use that to move the window.
+  // The check for IsMaximizedOrFullscreenOrPinned() was moved from
+  // EnterToNextState(), which preserves some legacy behavior that may not be
+  // relevant anymore. It may be needed for the case of maximizing to another
+  // display then restoring, which should remain on the other display.
+  // TODO(aluh): Look into removing check for IsMaximizedOrFullscreenOrPinned().
+  const gfx::Rect window_bounds =
+      ((window_state->IsMaximizedOrFullscreenOrPinned() ||
+        window_state->IsRestoring(previous_state_type)) &&
+       window_state->HasRestoreBounds() &&
+       !chromeos::IsMinimizedWindowStateType(previous_state_type))
+          ? window_state->GetRestoreBoundsInScreen()
+          : window_state->GetCurrentBoundsInScreen();
+
+  // Move only if the window bounds is outside of
   // the display. There is no information about in which
   // display it should be restored, so this is best guess.
   // TODO(oshima): Restore information should contain the
@@ -77,25 +107,37 @@ void MoveToDisplayForRestore(WindowState* window_state) {
                                ->GetDisplayNearestWindow(window_state->window())
                                .bounds();
 
-  if (!display_area.Intersects(restore_bounds)) {
-    const display::Display& display =
-        display::Screen::GetScreen()->GetDisplayMatching(restore_bounds);
-    RootWindowController* new_root_controller =
-        Shell::Get()->GetRootWindowControllerWithDisplayId(display.id());
-    if (new_root_controller->GetRootWindow() !=
-        window_state->window()->GetRootWindow()) {
-      aura::Window* new_container =
-          new_root_controller->GetRootWindow()->GetChildById(
-              window_state->window()->parent()->GetId());
-      new_container->AddChild(window_state->window());
-    }
+  if (!display_area.Intersects(window_bounds)) {
+    int64_t display_id =
+        display::Screen::GetScreen()->GetDisplayMatching(window_bounds).id();
+    MoveWindowToDisplayAsNeeded(window_state->window(), display_id);
   }
+}
+
+// Returns true if next state should be entered from the current state.
+bool ShouldEnterNextState(WindowStateType current_state,
+                          WindowStateType next_state,
+                          WindowState* window_state) {
+  if (current_state != next_state) {
+    return true;
+  }
+  // This handles the case where a window is already fullscreen on a display
+  // and we want to fullscreen it on a different display.
+  // TODO(aluh): Consider handling earlier, before call to EnterToNextState(),
+  // so we don't have to special case here. May run into tricky restore
+  // state/bounds corner cases.
+  if (next_state == chromeos::WindowStateType::kFullscreen &&
+      window_state->GetFullscreenTargetDisplayId() !=
+          display::kInvalidDisplayId) {
+    return true;
+  }
+  return false;
 }
 
 }  // namespace
 
 DefaultState::DefaultState(WindowStateType initial_state_type)
-    : BaseState(initial_state_type), stored_window_state_(nullptr) {}
+    : BaseState(initial_state_type) {}
 
 DefaultState::~DefaultState() = default;
 
@@ -125,7 +167,8 @@ void DefaultState::AttachState(WindowState* window_state,
         display::DisplayObserver::DISPLAY_METRIC_BOUNDS);
     window_state->OnWMEvent(&event);
   } else if (stored_display_state_.work_area() != current_display.work_area()) {
-    const WMEvent event(WM_EVENT_WORKAREA_BOUNDS_CHANGED);
+    const DisplayMetricsChangedWMEvent event(
+        display::DisplayObserver::DISPLAY_METRIC_WORK_AREA);
     window_state->OnWMEvent(&event);
   }
 }
@@ -195,33 +238,35 @@ void DefaultState::HandleWorkspaceEvents(WindowState* window_state,
       window_state->SetBoundsConstrained(bounds);
       return;
     }
-    case WM_EVENT_DISPLAY_BOUNDS_CHANGED: {
-      // When display bounds has changed, make sure the entire window is fully
-      // visible.
-      UpdateBoundsForDisplayOrWorkAreaBoundsChange(
-          window_state, /*ensure_full_window_visibility=*/true);
-      return;
-    }
-    case WM_EVENT_WORKAREA_BOUNDS_CHANGED: {
-      // Don't resize the maximized window when the desktop is covered
-      // by fullscreen window. crbug.com/504299.
-      // TODO(afakhry): Decide whether we want the active desk's workspace, or
-      // the workspace of the desk of `window_state->window()`.
-      // For now use the active desk's.
-      auto* workspace_controller =
-          GetActiveWorkspaceController(window_state->window()->GetRootWindow());
-      DCHECK(workspace_controller);
-      bool in_fullscreen = workspace_controller->GetWindowState() ==
-                           WorkspaceWindowState::kFullscreen;
-      if (in_fullscreen && window_state->IsMaximized())
-        return;
+    case WM_EVENT_DISPLAY_METRICS_CHANGED: {
+      const DisplayMetricsChangedWMEvent* display_event =
+          event->AsDisplayMetricsChangedWMEvent();
+      if (display_event->display_bounds_changed()) {
+        // When display bounds has changed, make sure the entire window is fully
+        // visible.
+        UpdateBoundsForDisplayOrWorkAreaBoundsChange(
+            window_state, /*ensure_full_window_visibility=*/true);
+      } else if (display_event->work_area_changed()) {
+        // Don't resize the maximized window when the desktop is covered
+        // by fullscreen window. crbug.com/504299.
+        // TODO(afakhry): Decide whether we want the active desk's workspace, or
+        // the workspace of the desk of `window_state->window()`.
+        // For now use the active desk's.
+        auto* workspace_controller = GetActiveWorkspaceController(
+            window_state->window()->GetRootWindow());
+        DCHECK(workspace_controller);
+        const bool in_fullscreen = workspace_controller->GetWindowState() ==
+                                   WorkspaceWindowState::kFullscreen;
+        if (in_fullscreen && window_state->IsMaximized()) {
+          return;
+        }
 
-      UpdateBoundsForDisplayOrWorkAreaBoundsChange(
-          window_state, /*ensure_full_window_visibility=*/false);
+        UpdateBoundsForDisplayOrWorkAreaBoundsChange(
+            window_state,
+            /*ensure_full_window_visibility=*/false);
+      }
       return;
     }
-    case WM_EVENT_SYSTEM_UI_AREA_CHANGED:
-      break;
     default:
       NOTREACHED() << "Unknown event:" << event->type();
   }
@@ -233,30 +278,10 @@ void DefaultState::HandleCompoundEvents(WindowState* window_state,
 
   switch (event->type()) {
     case WM_EVENT_TOGGLE_MAXIMIZE_CAPTION:
-      if (window_state->IsFullscreen()) {
-        const WMEvent wm_event(WM_EVENT_TOGGLE_FULLSCREEN);
-        window_state->OnWMEvent(&wm_event);
-      } else if (window_state->IsMaximized()) {
-        window_state->Restore();
-      } else if (window_state->IsNormalOrSnapped() ||
-                 window_state->IsFloated()) {
-        if (window_state->CanMaximize())
-          window_state->Maximize();
-      }
+      ToggleMaximizeCaption(window_state);
       return;
     case WM_EVENT_TOGGLE_MAXIMIZE:
-      if (window_state->IsFullscreen()) {
-        const WMEvent wm_event(WM_EVENT_TOGGLE_FULLSCREEN);
-        window_state->OnWMEvent(&wm_event);
-      } else if (window_state->IsMaximized()) {
-        window_state->Restore();
-      } else if (window_state->CanMaximize()) {
-        window_state->Maximize();
-      } else {
-        // If `window` cannot be maximized, then do a window bounce animation.
-        wm::AnimateWindow(window_state->window(),
-                          wm::WINDOW_ANIMATION_TYPE_BOUNCE);
-      }
+      ToggleMaximize(window_state);
       return;
     case WM_EVENT_TOGGLE_VERTICAL_MAXIMIZE: {
       gfx::Rect work_area =
@@ -330,9 +355,6 @@ void DefaultState::HandleBoundsEvents(WindowState* window_state,
           static_cast<const SetBoundsWMEvent*>(event);
       SetBounds(window_state, set_bounds_event);
     } break;
-    case WM_EVENT_CENTER:
-      CenterWindow(window_state);
-      break;
     default:
       NOTREACHED() << "Unknown event:" << event->type();
       break;
@@ -363,52 +385,44 @@ void DefaultState::HandleTransitionEvents(WindowState* window_state,
     return;
   }
 
-  if (type == WM_EVENT_SNAP_PRIMARY || type == WM_EVENT_SNAP_SECONDARY)
-    HandleWindowSnapping(window_state, type);
+  if (type == WM_EVENT_SNAP_PRIMARY || type == WM_EVENT_SNAP_SECONDARY) {
+    HandleWindowSnapping(window_state, type,
+                         event->AsSnapEvent()->snap_action_source());
+  }
 
   if (next_state_type == current_state_type && window_state->IsSnapped()) {
-    float snap_ratio = WindowSnapWMEvent::GetFloatValueForSnapRatio(
-        event->IsSnapInfoAvailable()
-            ? static_cast<const WindowSnapWMEvent*>(event)->snap_ratio()
-            : WindowSnapWMEvent::SnapRatio::kDefaultSnapRatio);
+    DCHECK(window_state->snap_ratio());
     gfx::Rect snapped_bounds =
         GetSnappedWindowBoundsInParent(window_state->window(),
                                        event->type() == WM_EVENT_SNAP_PRIMARY
                                            ? WindowStateType::kPrimarySnapped
                                            : WindowStateType::kSecondarySnapped,
-                                       snap_ratio);
+                                       *window_state->snap_ratio());
     window_state->SetBoundsDirectAnimated(snapped_bounds);
     return;
   }
 
-  if (next_state_type == WindowStateType::kPrimarySnapped ||
-      next_state_type == WindowStateType::kSecondarySnapped) {
-    if (type == WM_EVENT_RESTORE) {
-      window_state->set_snap_action_source(
-          WindowSnapActionSource::kSnapByWindowStateRestore);
-    }
-    window_state->RecordAndResetWindowSnapActionSource(current_state_type,
-                                                       next_state_type);
-
-    // If a snapped window is being restored, use the saved restore snap ratio.
+  if (IsSnappedWindowStateType(next_state_type)) {
     const bool is_restoring =
         window_state->window()->GetProperty(aura::client::kIsRestoringKey) ||
         type == WM_EVENT_RESTORE;
-
-    EnterToNextState(
-        window_state, next_state_type,
-        event->IsSnapInfoAvailable()
-            ? absl::make_optional(WindowSnapWMEvent::GetFloatValueForSnapRatio(
-                  static_cast<const WindowSnapWMEvent*>(event)->snap_ratio()))
-            : (is_restoring ? window_state->snap_ratio()
-                            : absl::make_optional(kDefaultPositionRatio)));
-    return;
+    if (is_restoring) {
+      window_state->RecordWindowSnapActionSource(
+          WindowSnapActionSource::kSnapByWindowStateRestore);
+    } else {
+      CHECK(event->IsSnapEvent());
+      window_state->RecordWindowSnapActionSource(
+          event->AsSnapEvent()->snap_action_source());
+    }
   }
 
-  EnterToNextState(window_state, next_state_type, absl::nullopt);
+  std::optional<chromeos::FloatStartLocation> float_start_location =
+      event->AsFloatEvent()
+          ? std::make_optional(event->AsFloatEvent()->float_start_location())
+          : std::nullopt;
+  EnterToNextState(window_state, next_state_type, float_start_location);
 }
 
-// static
 bool DefaultState::SetMaximizedOrFullscreenBounds(WindowState* window_state) {
   DCHECK(!window_state->is_dragged());
   DCHECK(!window_state->allow_set_bounds_direct());
@@ -425,10 +439,15 @@ bool DefaultState::SetMaximizedOrFullscreenBounds(WindowState* window_state) {
   return false;
 }
 
-// static
 void DefaultState::SetBounds(WindowState* window_state,
                              const SetBoundsWMEvent* event) {
-  if (window_state->is_dragged() || window_state->allow_set_bounds_direct()) {
+  // TODO(andreaorru|oshima): Fix dragging code so that if a window is dragging
+  // tabs, it contains drag details, and `is_dragged` is true for its state.
+  // Then we can simplify this condition and remove `IsDraggingTabs`.
+  bool is_dragged = window_state->is_dragged() ||
+                    window_util::IsDraggingTabs(window_state->window());
+
+  if (is_dragged || window_state->allow_set_bounds_direct()) {
     if (event->animate()) {
       window_state->SetBoundsDirectAnimated(event->requested_bounds(),
                                             event->duration());
@@ -453,13 +472,16 @@ void DefaultState::SetBounds(WindowState* window_state,
   }
 }
 
-void DefaultState::EnterToNextState(WindowState* window_state,
-                                    WindowStateType next_state_type,
-                                    absl::optional<float> snap_ratio) {
-  // Do nothing if  we're already in the same state.
-  if (state_type_ == next_state_type)
+void DefaultState::EnterToNextState(
+    WindowState* window_state,
+    WindowStateType next_state_type,
+    std::optional<chromeos::FloatStartLocation> float_start_location) {
+  if (!ShouldEnterNextState(state_type_, next_state_type, window_state)) {
     return;
+  }
 
+  const bool is_previous_normal_type =
+      window_state->IsNonVerticalOrHorizontalMaximizedNormalState();
   WindowStateType previous_state_type = state_type_;
   state_type_ = next_state_type;
 
@@ -476,7 +498,6 @@ void DefaultState::EnterToNextState(WindowState* window_state,
 
   // Unfloat floated window when exiting float state to another state.
   if (previous_state_type == WindowStateType::kFloated) {
-    // Remove float window from float container.
     float_controller->UnfloatImpl(window);
   }
 
@@ -484,39 +505,45 @@ void DefaultState::EnterToNextState(WindowState* window_state,
   // This can happen during dragging.
   // TODO(oshima): This was added for DOCKED windows. Investigate if
   // we still need this.
+  gfx::Rect restore_bounds_in_screen;
   if (window_state->window()->parent()) {
-    if (!window_state->HasRestoreBounds() &&
-        IsNormalWindowStateType(previous_state_type) &&
-        !window_state->IsMinimized() && !window_state->IsNormalStateType()) {
+    // Save the current bounds as the restore bounds if changing from normal
+    // state (not horizontal/vertical maximized) to other non-minimized window
+    // states.
+    if (is_previous_normal_type && !window_state->IsMinimized() &&
+        !window_state->IsNormalStateType()) {
       window_state->SaveCurrentBoundsForRestore();
     }
 
-    // When restoring from a minimized state, we want to restore to the
-    // previous bounds. However, we want to maintain the restore bounds.
-    // (The restore bounds are set if a user maximized the window in one
-    // axis by double clicking the window border for example).
-    gfx::Rect restore_bounds_in_screen;
+    // When restoring from the minimized state to horizontal/vertical maximized.
+    // We want to restore to the previous horizontal/vertical maximized bounds
+    // and keep its restore bounds.(E.g, double clicking the window border will
+    // set the window to be horizontal/vertical maximized and set the restore
+    // bounds).
     if (previous_state_type == WindowStateType::kMinimized &&
-        window_state->IsNormalStateType() && window_state->HasRestoreBounds() &&
+        window_state->IsVerticalOrHorizontalMaximized() &&
         !window_state->unminimize_to_restore_bounds()) {
       restore_bounds_in_screen = window_state->GetRestoreBoundsInScreen();
       window_state->SaveCurrentBoundsForRestore();
     }
 
-    if (window_state->IsMaximizedOrFullscreenOrPinned())
-      MoveToDisplayForRestore(window_state);
-
-    UpdateBoundsFromState(window_state, previous_state_type, snap_ratio);
+    UpdateBoundsFromState(window_state, previous_state_type,
+                          float_start_location);
     UpdateMinimizedState(window_state, previous_state_type);
-
-    // Normal state should have no restore bounds unless it's
-    // unminimized.
-    if (!restore_bounds_in_screen.IsEmpty())
-      window_state->SetRestoreBoundsInScreen(restore_bounds_in_screen);
-    else if (window_state->IsNormalStateType())
-      window_state->ClearRestoreBounds();
   }
   window_state->NotifyPostStateTypeChange(previous_state_type);
+
+  if (!restore_bounds_in_screen.IsEmpty()) {
+    // Set the restore bounds back after unminimize the window to normal state.
+    // Usually normal state window should have no restore bounds unless it was
+    // horizontal/vertical maximized before minimize.
+    window_state->SetRestoreBoundsInScreen(restore_bounds_in_screen);
+  } else if (window_state->window_state_restore_history().empty()) {
+    // Clear the restore bounds when restore history stack has been cleared to
+    // keep them consistent. Do this after window state updates as restore
+    // history stack will be updated during the process.
+    window_state->ClearRestoreBounds();
+  }
 
   if (IsPinnedWindowStateType(next_state_type) ||
       IsPinnedWindowStateType(previous_state_type)) {
@@ -551,15 +578,8 @@ void DefaultState::ReenterToCurrentState(
     window_state->SetRestoreBoundsInParent(stored_bounds_);
   }
 
-  // If reentering a snapped state, use the saved `snap_ratio()`.
-  bool is_snapped = state_type_ == WindowStateType::kPrimarySnapped ||
-                    state_type_ == WindowStateType::kSecondarySnapped;
   UpdateBoundsFromState(window_state, state_in_previous_mode->GetType(),
-                        is_snapped
-                            ? (window_state->snap_ratio().has_value()
-                                   ? window_state->snap_ratio()
-                                   : absl::make_optional(kDefaultSnapRatio))
-                            : absl::nullopt);
+                        /*float_start_location=*/std::nullopt);
   UpdateMinimizedState(window_state, state_in_previous_mode->GetType());
 
   // Then restore the restore bounds to their previous value.
@@ -571,25 +591,29 @@ void DefaultState::ReenterToCurrentState(
   window_state->NotifyPostStateTypeChange(previous_state_type);
 }
 
-void DefaultState::UpdateBoundsFromState(WindowState* window_state,
-                                         WindowStateType previous_state_type,
-                                         absl::optional<float> snap_ratio) {
+void DefaultState::UpdateBoundsFromState(
+    WindowState* window_state,
+    WindowStateType previous_state_type,
+    std::optional<chromeos::FloatStartLocation> float_start_location) {
   aura::Window* window = window_state->window();
   gfx::Rect bounds_in_parent;
 
+  // A window can be rooted in a different display than its bounds, in cases
+  // such as creating a new window with bounds in a different display, or
+  // restoring to a previous state that was in a different display.
+  EnsureWindowInCorrectDisplay(window_state, previous_state_type);
+
   switch (state_type_) {
-    // TODO(crbug.com/1335500): Refactor snap state type handling. Since only
-    // snap state types define `snap_ratio`, it makes sense to handle them
-    // separately.
     case WindowStateType::kPrimarySnapped:
     case WindowStateType::kSecondarySnapped:
-      DCHECK(snap_ratio.has_value());
+      DCHECK(window_state->snap_ratio());
       bounds_in_parent = GetSnappedWindowBoundsInParent(
-          window_state->window(), state_type_, snap_ratio.value());
+          window_state->window(), state_type_, *window_state->snap_ratio());
       base::UmaHistogramEnumeration(
           kSnapWindowDeviceOrientationHistogramName,
-          chromeos::IsDisplayLayoutHorizontal(
-              display::Screen::GetScreen()->GetDisplayNearestWindow(window))
+          display::Screen::GetScreen()
+                  ->GetDisplayNearestWindow(window)
+                  .is_landscape()
               ? SplitViewMetricsController::DeviceOrientation::kLandscape
               : SplitViewMetricsController::DeviceOrientation::kPortrait);
       break;
@@ -628,23 +652,25 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
     case WindowStateType::kFullscreen:
     case WindowStateType::kPinned:
     case WindowStateType::kTrustedPinned:
+      MoveWindowToDisplayAsNeeded(window_state->window(),
+                                  window_state->GetFullscreenTargetDisplayId());
       bounds_in_parent = screen_util::GetFullscreenWindowBoundsInParent(window);
       break;
 
     case WindowStateType::kMinimized:
       break;
     case WindowStateType::kFloated: {
-      // TODO(shidi): This needs to be updated if we decide to have float window
-      // for overview mode.
       // When a floated window is previously minimized, un-minimize will restore
       // the float state with previous floated bounds, without re-calculating
       // preferred bounds.
-      bounds_in_parent =
-          previous_state_type == WindowStateType::kMinimized
-              ? window->bounds()
-              : Shell::Get()
-                    ->float_controller()
-                    ->GetPreferredFloatWindowClamshellBounds(window);
+      if (previous_state_type == WindowStateType::kMinimized) {
+        bounds_in_parent = window->bounds();
+      } else {
+        bounds_in_parent =
+            Shell::Get()->float_controller()->GetFloatWindowClamshellBounds(
+                window, float_start_location.value_or(
+                            chromeos::FloatStartLocation::kBottomRight));
+      }
       break;
     }
     case WindowStateType::kInactive:
@@ -655,19 +681,18 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
   if (window_state->IsMinimized())
     return;
 
-  if (IsMinimizedWindowStateType(previous_state_type) ||
-      window_state->IsFullscreen() || window_state->IsPinned() ||
-      window_state->bounds_animation_type() ==
-          WindowState::BoundsChangeAnimationType::kNone) {
+  if (bool to_float = state_type_ == WindowStateType::kFloated;
+      to_float || previous_state_type == WindowStateType::kFloated) {
+    // Float and unfloat have their own animation.
+    window_state->SetBoundsDirectCrossFade(bounds_in_parent, to_float);
+  } else if (IsMinimizedWindowStateType(previous_state_type) ||
+             window_state->IsFullscreen() || window_state->IsPinned() ||
+             window_state->bounds_animation_type() ==
+                 WindowState::BoundsChangeAnimationType::kNone) {
     window_state->SetBoundsDirect(bounds_in_parent);
   } else if (window_state->IsMaximized() ||
              IsMaximizedOrFullscreenOrPinnedWindowStateType(
                  previous_state_type)) {
-    window_state->SetBoundsDirectCrossFade(bounds_in_parent);
-  } else if (window_state->IsFloated() &&
-             previous_state_type == WindowStateType::kFloated) {
-    // This can happen during the tablet -> clamshell transition. Use cross fade
-    // animation for better performance.
     window_state->SetBoundsDirectCrossFade(bounds_in_parent);
   } else if (window_state->is_dragged()) {
     // SetBoundsDirectAnimated does not work when the window gets reparented.
@@ -676,12 +701,12 @@ void DefaultState::UpdateBoundsFromState(WindowState* window_state,
   } else {
     // Record smoothness of the snapping animation if the size of the window
     // changes.
-    absl::optional<ui::AnimationThroughputReporter> reporter;
+    std::optional<ui::AnimationThroughputReporter> reporter;
     if (window_state->IsSnapped() &&
         bounds_in_parent.size() != window->bounds().size()) {
       reporter.emplace(
           window_state->window()->layer()->GetAnimator(),
-          metrics_util::ForSmoothness(base::BindRepeating([](int smoothness) {
+          metrics_util::ForSmoothnessV3(base::BindRepeating([](int smoothness) {
             UMA_HISTOGRAM_PERCENTAGE(kSnapWindowSmoothnessHistogramName,
                                      smoothness);
           })));
@@ -704,8 +729,11 @@ void DefaultState::UpdateBoundsForDisplayOrWorkAreaBoundsChange(
   gfx::Rect bounds = window_state->window()->GetTargetBounds();
   if (ensure_full_window_visibility)
     bounds.AdjustToFit(work_area_in_parent);
-  else if (!::wm::GetTransientParent(window_state->window()))
+  else if (!wm::GetTransientParent(window_state->window()) &&
+           !(window_state->IsPip() &&
+             Shell::Get()->pip_controller()->is_tucked())) {
     AdjustBoundsToEnsureMinimumWindowVisibility(work_area_in_parent, &bounds);
+  }
   window_state->AdjustSnappedBoundsForDisplayWorkspaceChange(&bounds);
 
   if (window_state->window()->GetTargetBounds() == bounds)

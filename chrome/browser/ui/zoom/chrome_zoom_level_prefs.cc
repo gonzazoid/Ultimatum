@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -154,7 +154,7 @@ void ChromeZoomLevelPrefs::ExtractPerHostZoomLevels(
   std::vector<std::string> keys_to_remove;
   base::Value::Dict host_zoom_dictionary_copy = host_zoom_dictionary.Clone();
   for (auto [host, value] : host_zoom_dictionary_copy) {
-    absl::optional<double> maybe_zoom;
+    std::optional<double> maybe_zoom;
     base::Time last_modified;
 
     if (value.is_dict()) {

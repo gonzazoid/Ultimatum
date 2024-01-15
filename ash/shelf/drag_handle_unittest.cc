@@ -4,7 +4,7 @@
 
 #include "ash/shelf/drag_handle.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shelf/shelf_navigation_widget.h"
 #include "ash/shelf/shelf_widget.h"
@@ -74,10 +74,7 @@ class DragHandleTest
 
 class DragHandleFocusTest : public AshTestBase {
  public:
-  DragHandleFocusTest() {
-    scoped_feature_list_.InitWithFeatureState(features::kShelfFocusOrderV1,
-                                              true);
-  }
+  DragHandleFocusTest() = default;
   ~DragHandleFocusTest() override = default;
 
   const DragHandle* drag_handle() const {
@@ -89,8 +86,8 @@ class DragHandleFocusTest : public AshTestBase {
     auto* drag_handle = GetPrimaryShelf()->shelf_widget()->GetDragHandle();
     views::ViewAccessibility& view_accessibility =
         drag_handle->GetViewAccessibility();
-    EXPECT_EQ(expected_previous, view_accessibility.GetPreviousFocus());
-    EXPECT_EQ(expected_next, view_accessibility.GetNextFocus());
+    EXPECT_EQ(expected_previous, view_accessibility.GetPreviousWindowFocus());
+    EXPECT_EQ(expected_next, view_accessibility.GetNextWindowFocus());
   }
 
   void ClickDragHandle() {
@@ -98,9 +95,6 @@ class DragHandleFocusTest : public AshTestBase {
     GetEventGenerator()->MoveMouseTo(center);
     GetEventGenerator()->ClickLeftButton();
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 }  // namespace

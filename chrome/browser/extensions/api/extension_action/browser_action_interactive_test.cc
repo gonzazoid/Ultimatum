@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -53,10 +54,9 @@
 #include "ui/views/widget/widget.h"
 
 #if !BUILDFLAG(IS_CHROMEOS)
-#include "chrome/browser/download/bubble/download_bubble_controller.h"
-#include "chrome/browser/download/bubble/download_display.h"
+#include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
 #include "chrome/browser/download/bubble/download_display_controller.h"
-#include "components/safe_browsing/core/common/features.h"
+#include "chrome/browser/ui/download/download_display.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -68,12 +68,10 @@ namespace {
 
 #if !BUILDFLAG(IS_CHROMEOS)
 bool IsDownloadSurfaceVisible(BrowserWindow* window) {
-  return base::FeatureList::IsEnabled(safe_browsing::kDownloadBubble)
-             ? window->GetDownloadBubbleUIController()
-                   ->GetDownloadDisplayController()
-                   ->download_display_for_testing()
-                   ->IsShowingDetails()
-             : window->IsDownloadShelfVisible();
+  return window->GetDownloadBubbleUIController()
+      ->GetDownloadDisplayController()
+      ->download_display_for_testing()
+      ->IsShowingDetails();
 }
 #endif
 
@@ -99,7 +97,7 @@ class PopupHostWatcher : public ExtensionHostRegistry::Observer {
 
     base::RunLoop run_loop;
     quit_closure_ = run_loop.QuitClosure();
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, quit_closure_, TestTimeouts::action_timeout());
     run_loop.Run();
   }
@@ -274,7 +272,7 @@ IN_PROC_BROWSER_TEST_F(BrowserActionInteractiveTest, DISABLED_TestOpenPopup) {
   {
     content::CreateAndLoadWebContentsObserver frame_observer;
     // Open a new window.
-    new_browser = chrome::FindBrowserWithWebContents(browser()->OpenURL(
+    new_browser = chrome::FindBrowserWithTab(browser()->OpenURL(
         content::OpenURLParams(GURL("about:blank"), content::Referrer(),
                                WindowOpenDisposition::NEW_WINDOW,
                                ui::PAGE_TRANSITION_TYPED, false)));
@@ -552,7 +550,7 @@ IN_PROC_BROWSER_TEST_F(BrowserActionInteractiveTest, DestroyHWNDDoesNotCrash) {
   OpenPopupViaAPI(false);
   auto test_util = ExtensionActionTestHelper::Create(browser());
   const gfx::NativeView popup_view = test_util->GetPopupNativeView();
-  EXPECT_NE(static_cast<gfx::NativeView>(nullptr), popup_view);
+  EXPECT_NE(gfx::NativeView(), popup_view);
   const HWND popup_hwnd = views::HWNDForNativeView(popup_view);
   EXPECT_EQ(TRUE, ::IsWindow(popup_hwnd));
   const HWND browser_hwnd =
@@ -727,6 +725,8 @@ IN_PROC_BROWSER_TEST_F(BrowserActionInteractiveTest, OpenPopupOnPopup) {
   // TODO(crbug.com/1115237): Now that this is an interactive test, is this
   // ifdef still necessary?
 #if !BUILDFLAG(IS_MAC)
+  ui_test_utils::BrowserActivationWaiter waiter(popup_browser);
+  waiter.WaitForActivation();
   EXPECT_TRUE(popup_browser->window()->IsActive());
 #endif
   EXPECT_FALSE(browser()->window()->IsActive());
@@ -807,7 +807,7 @@ IN_PROC_BROWSER_TEST_F(BrowserActionInteractiveTest,
       content::WebContents::FromRenderFrameHost(frame_host));
   GURL foo_url(embedded_test_server()->GetURL("foo.com", "/popup_iframe.html"));
   std::string script = "location.href = '" + foo_url.spec() + "'";
-  EXPECT_TRUE(ExecuteScript(frame_host, script));
+  EXPECT_TRUE(ExecJs(frame_host, script));
 
   frame_host = watcher.WaitAndReturnNewFrame();
 
@@ -855,8 +855,9 @@ IN_PROC_BROWSER_TEST_F(BrowserActionInteractiveFencedFrameTest,
       manager->GetRenderFrameHostsForExtension(extension->id());
   const auto& it = base::ranges::find_if(
       hosts, &content::RenderFrameHost::IsInPrimaryMainFrame);
-  content::RenderFrameHost* primary_rfh = (it != hosts.end()) ? *it : nullptr;
-  ASSERT_TRUE(primary_rfh);
+  content::RenderFrameHost* primary_render_frame_host =
+      (it != hosts.end()) ? *it : nullptr;
+  ASSERT_TRUE(primary_render_frame_host);
 
   // Navigate the popup's fenced frame to a (cross-site) web page via its
   // parent, and wait for that page to send a message, which will ensure that
@@ -864,18 +865,20 @@ IN_PROC_BROWSER_TEST_F(BrowserActionInteractiveFencedFrameTest,
   GURL foo_url(https_server.GetURL("a.test", "/popup_fencedframe.html"));
 
   content::TestNavigationObserver observer(
-      content::WebContents::FromRenderFrameHost(primary_rfh));
+      content::WebContents::FromRenderFrameHost(primary_render_frame_host));
   std::string script =
-      "document.querySelector('fencedframe').src = '" + foo_url.spec() + "'";
-  EXPECT_TRUE(ExecuteScript(primary_rfh, script));
+      "document.querySelector('fencedframe').config = new FencedFrameConfig('" +
+      foo_url.spec() + "')";
+  EXPECT_TRUE(ExecJs(primary_render_frame_host, script));
   observer.WaitForNavigationFinished();
 
-  content::RenderFrameHost* fenced_frame_rfh =
-      fenced_frame_test_helper().GetMostRecentlyAddedFencedFrame(primary_rfh);
-  ASSERT_TRUE(fenced_frame_rfh);
+  content::RenderFrameHost* fenced_frame_render_frame_host =
+      fenced_frame_test_helper().GetMostRecentlyAddedFencedFrame(
+          primary_render_frame_host);
+  ASSERT_TRUE(fenced_frame_render_frame_host);
 
   // Confirm that the new page (popup_fencedframe.html) is actually loaded.
-  content::DOMMessageQueue dom_message_queue(fenced_frame_rfh);
+  content::DOMMessageQueue dom_message_queue(fenced_frame_render_frame_host);
   std::string json;
   EXPECT_TRUE(dom_message_queue.WaitForMessage(&json));
   EXPECT_EQ("\"DONE\"", json);
@@ -953,20 +956,18 @@ class NavigatingExtensionPopupInteractiveTest
     GURL popup_url = popup_extension().GetResourceURL("popup.html");
     EXPECT_EQ(popup_url, popup->GetLastCommittedURL());
 
-    // Note that the |setTimeout| call below is needed to make sure
-    // ExecuteScriptAndExtractBool returns *after* a scheduled navigation has
-    // already started.
-    std::string script_to_execute =
-        navigation_starting_script +
-        "setTimeout(\n"
-        "    function() { window.domAutomationController.send(true); },\n"
-        "    0);\n";
+    // Note that the |setTimeout| call below is needed to make sure EvalJs
+    // returns *after* a scheduled navigation has already started.
+    std::string script_to_execute = navigation_starting_script +
+                                    "new Promise(resolve => {\n"
+                                    "  setTimeout(\n"
+                                    "    function() { resolve(true); },\n"
+                                    "    0);\n"
+                                    "});\n";
 
     // Try to navigate the pop-up.
-    bool ignored_script_result = false;
     content::WebContentsDestroyedWatcher popup_destruction_watcher(popup);
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(popup, script_to_execute,
-                                            &ignored_script_result));
+    EXPECT_TRUE(ExecJs(popup, script_to_execute));
     popup = popup_destruction_watcher.web_contents();
 
     // Verify if the popup navigation succeeded or failed as expected.

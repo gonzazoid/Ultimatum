@@ -2,9 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {NetworkTestRunner} from 'network_test_runner';
+
+import * as Network from 'devtools/panels/network/network.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Test network status of non http request.\n`);
-  await TestRunner.loadTestModule('network_test_runner');
   await TestRunner.showPanel('network');
   await TestRunner.evaluateInPagePromise(`
       function addScriptElement(src)
@@ -29,7 +34,7 @@
   var seenRequests = 0;
 
   function dumpRequests() {
-    var logView = UI.panels.network.networkLogView;
+    var logView = Network.NetworkPanel.NetworkPanel.instance().networkLogView;
     logView.refresh();
     var dataGrid = logView.element.querySelector('table.data');
     var urls = document.evaluate(

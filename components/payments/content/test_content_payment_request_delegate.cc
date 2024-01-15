@@ -6,8 +6,12 @@
 
 #include <utility>
 
+#include "base/functional/bind.h"
+#include "base/location.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/payments/content/payment_manifest_web_data_service.h"
 #include "components/payments/core/error_strings.h"
+#include "content/public/browser/render_frame_host.h"
 
 namespace payments {
 
@@ -16,7 +20,13 @@ TestContentPaymentRequestDelegate::TestContentPaymentRequestDelegate(
     autofill::PersonalDataManager* pdm)
     : core_delegate_(std::move(task_executor), pdm) {}
 
-TestContentPaymentRequestDelegate::~TestContentPaymentRequestDelegate() {}
+TestContentPaymentRequestDelegate::~TestContentPaymentRequestDelegate() =
+    default;
+
+content::RenderFrameHost*
+TestContentPaymentRequestDelegate::GetRenderFrameHost() const {
+  return content::RenderFrameHost::FromID(frame_routing_id_);
+}
 
 std::unique_ptr<webauthn::InternalAuthenticator>
 TestContentPaymentRequestDelegate::CreateInternalAuthenticator() const {
@@ -58,12 +68,10 @@ bool TestContentPaymentRequestDelegate::IsBrowserWindowActive() const {
   return core_delegate_.IsBrowserWindowActive();
 }
 
-bool TestContentPaymentRequestDelegate::SkipUiForBasicCard() const {
-  return false;
-}
-
-std::string TestContentPaymentRequestDelegate::GetTwaPackageName() const {
-  return "";
+void TestContentPaymentRequestDelegate::GetTwaPackageName(
+    GetTwaPackageNameCallback callback) const {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), ""));
 }
 
 PaymentRequestDialog* TestContentPaymentRequestDelegate::GetDialogForTesting() {
@@ -151,5 +159,10 @@ void TestContentPaymentRequestDelegate::ShowNoMatchingPaymentCredentialDialog(
     const std::string& rp_id,
     base::OnceClosure response_callback,
     base::OnceClosure opt_out_callback) {}
+
+absl::optional<base::UnguessableToken>
+TestContentPaymentRequestDelegate::GetChromeOSTWAInstanceId() const {
+  return absl::nullopt;
+}
 
 }  // namespace payments

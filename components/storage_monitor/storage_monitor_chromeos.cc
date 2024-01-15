@@ -7,20 +7,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/string_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromeos/ash/components/disks/disk.h"
 #include "components/storage_monitor/media_storage_util.h"
 #include "components/storage_monitor/mtp_manager_client_chromeos.h"
@@ -102,7 +96,7 @@ bool GetFixedStorageInfo(const Disk& disk, StorageInfo* info) {
 
 }  // namespace
 
-StorageMonitorCros::StorageMonitorCros() {}
+StorageMonitorCros::StorageMonitorCros() = default;
 
 StorageMonitorCros::~StorageMonitorCros() {
   DiskMountManager* manager = DiskMountManager::GetInstance();
@@ -144,8 +138,8 @@ void StorageMonitorCros::CheckExistingMountPoints() {
 
   for (const auto& mount_point :
        DiskMountManager::GetInstance()->mount_points()) {
-    base::PostTaskAndReplyWithResult(
-        blocking_task_runner.get(), FROM_HERE,
+    blocking_task_runner->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&MediaStorageUtil::HasDcim,
                        base::FilePath(mount_point.mount_path)),
         base::BindOnce(&StorageMonitorCros::AddMountedPath,
@@ -280,7 +274,7 @@ void StorageMonitorCros::EjectDevice(
     const std::string& device_id,
     base::OnceCallback<void(EjectStatus)> callback) {
   StorageInfo::Type type;
-  if (!StorageInfo::CrackDeviceId(device_id, &type, NULL)) {
+  if (!StorageInfo::CrackDeviceId(device_id, &type, nullptr)) {
     std::move(callback).Run(EJECT_FAILURE);
     return;
   }

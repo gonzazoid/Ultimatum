@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {Token} from 'chrome://resources/mojo/mojo/public/mojom/base/token.mojom-webui.js';
 
 import {RecentlyClosedTab, RecentlyClosedTabGroup, Tab, TabGroup} from './tab_search.mojom-webui.js';
@@ -72,6 +72,10 @@ function titleAndAlertAriaLabel(tabData: TabData): string {
     switch (alert) {
       case TabAlertState.kMediaRecording:
         return loadTimeData.getStringF('mediaRecording', tabTitle);
+      case TabAlertState.kAudioRecording:
+        return loadTimeData.getStringF('audioRecording', tabTitle);
+      case TabAlertState.kVideoRecording:
+        return loadTimeData.getStringF('videoRecording', tabTitle);
       case TabAlertState.kAudioPlaying:
         return loadTimeData.getStringF('audioPlaying', tabTitle);
       case TabAlertState.kAudioMuting:

@@ -9,16 +9,22 @@
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "net/base/schemeful_site.h"
 #include "net/first_party_sets/first_party_set_entry.h"
+#include "net/first_party_sets/first_party_set_entry_override.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/first_party_sets/first_party_sets_cache_filter.h"
 #include "net/first_party_sets/first_party_sets_context_config.h"
 #include "net/first_party_sets/global_first_party_sets.h"
+#include "net/first_party_sets/local_set_declaration.h"
 #include "services/network/public/mojom/first_party_sets.mojom.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
 namespace network {
 namespace {
+
+using testing::Key;
+using testing::UnorderedElementsAre;
 
 TEST(FirstPartySetsTraitsTest, Roundtrips_SiteIndex) {
   net::FirstPartySetEntry::SiteIndex original(1337);
@@ -56,38 +62,6 @@ TEST(FirstPartySetsTraitsTest, Roundtrips_FirstPartySetEntry) {
   EXPECT_EQ(round_tripped.primary(), primary);
 }
 
-TEST(FirstPartySetsTraitsTest, Roundtrips_SamePartyCookieContextType) {
-  using ContextType = net::SamePartyContext::Type;
-  for (ContextType context_type :
-       {ContextType::kCrossParty, ContextType::kSameParty}) {
-    ContextType roundtrip;
-    ASSERT_TRUE(
-        mojo::test::SerializeAndDeserialize<mojom::SamePartyCookieContextType>(
-            context_type, roundtrip));
-    EXPECT_EQ(context_type, roundtrip);
-  }
-}
-
-TEST(FirstPartySetsTraitsTest, RoundTrips_SamePartyContext) {
-  {
-    net::SamePartyContext same_party(net::SamePartyContext::Type::kSameParty);
-    net::SamePartyContext copy;
-
-    EXPECT_TRUE(mojo::test::SerializeAndDeserialize<mojom::SamePartyContext>(
-        same_party, copy));
-    EXPECT_EQ(copy.context_type(), net::SamePartyContext::Type::kSameParty);
-  }
-
-  {
-    net::SamePartyContext cross_party(net::SamePartyContext::Type::kCrossParty);
-    net::SamePartyContext copy;
-
-    EXPECT_TRUE(mojo::test::SerializeAndDeserialize<mojom::SamePartyContext>(
-        cross_party, copy));
-    EXPECT_EQ(copy.context_type(), net::SamePartyContext::Type::kCrossParty);
-  }
-}
-
 TEST(FirstPartySetsTraitsTest, Roundtrips_FirstPartySetMetadata) {
   net::SchemefulSite frame_owner(GURL("https://frame.test"));
   net::SchemefulSite top_frame_owner(GURL("https://top_frame.test"));
@@ -100,9 +74,7 @@ TEST(FirstPartySetsTraitsTest, Roundtrips_FirstPartySetMetadata) {
   auto make_metadata = [&]() {
     // Use non-default values to ensure serialization/deserialization works
     // properly.
-    return net::FirstPartySetMetadata(
-        net::SamePartyContext(net::SamePartyContext::Type::kSameParty),
-        &frame_entry, &top_frame_entry);
+    return net::FirstPartySetMetadata(&frame_entry, &top_frame_entry);
   };
 
   net::FirstPartySetMetadata original = make_metadata();
@@ -111,8 +83,6 @@ TEST(FirstPartySetsTraitsTest, Roundtrips_FirstPartySetMetadata) {
   EXPECT_TRUE(mojo::test::SerializeAndDeserialize<
               network::mojom::FirstPartySetMetadata>(original, round_tripped));
 
-  EXPECT_EQ(round_tripped.context(),
-            net::SamePartyContext(net::SamePartyContext::Type::kSameParty));
   EXPECT_EQ(round_tripped.frame_entry(), frame_entry);
   EXPECT_EQ(round_tripped.top_frame_entry(), top_frame_entry);
 
@@ -124,10 +94,10 @@ TEST(FirstPartySetsTraitsTest, RoundTrips_GlobalFirstPartySets) {
   net::SchemefulSite b(GURL("https://b.test"));
   net::SchemefulSite b_cctld(GURL("https://b.cctld"));
   net::SchemefulSite c(GURL("https://c.test"));
+  net::SchemefulSite c_cctld(GURL("https://c.cctld"));
 
-  net::FirstPartySetsContextConfig manual_config({{c, absl::nullopt}});
-
-  const net::GlobalFirstPartySets original(
+  net::GlobalFirstPartySets original(
+      base::Version("1.2.3"),
       /*entries=*/
       {
           {a,
@@ -136,7 +106,14 @@ TEST(FirstPartySetsTraitsTest, RoundTrips_GlobalFirstPartySets) {
           {c,
            net::FirstPartySetEntry(a, net::SiteType::kService, absl::nullopt)},
       },
-      /*aliases=*/{{b_cctld, b}}, manual_config.Clone());
+      /*aliases=*/{{c_cctld, c}});
+
+  original.ApplyManuallySpecifiedSet(net::LocalSetDeclaration(
+      /*set_entries=*/{{a, net::FirstPartySetEntry(a, net::SiteType::kPrimary,
+                                                   absl::nullopt)},
+                       {b, net::FirstPartySetEntry(
+                               a, net::SiteType::kAssociated, 0)}},
+      /*aliases=*/{{b_cctld, b}}));
 
   net::GlobalFirstPartySets round_tripped;
 
@@ -145,6 +122,49 @@ TEST(FirstPartySetsTraitsTest, RoundTrips_GlobalFirstPartySets) {
           original, round_tripped));
 
   EXPECT_EQ(original, round_tripped);
+  EXPECT_FALSE(round_tripped.empty());
+}
+
+TEST(FirstPartySetsTraitsTest, GlobalFirstPartySets_InvalidVersion) {
+  net::SchemefulSite a(GURL("https://a.test"));
+  net::SchemefulSite b(GURL("https://b.test"));
+  net::SchemefulSite b_cctld(GURL("https://b.cctld"));
+  net::SchemefulSite c(GURL("https://c.test"));
+  net::SchemefulSite c_cctld(GURL("https://c.cctld"));
+
+  net::GlobalFirstPartySets original(
+      base::Version(),
+      /*entries=*/
+      {
+          {a,
+           net::FirstPartySetEntry(a, net::SiteType::kPrimary, absl::nullopt)},
+          {b, net::FirstPartySetEntry(a, net::SiteType::kAssociated, 0)},
+          {c,
+           net::FirstPartySetEntry(a, net::SiteType::kService, absl::nullopt)},
+      },
+      /*aliases=*/{{c_cctld, c}});
+
+  original.ApplyManuallySpecifiedSet(net::LocalSetDeclaration(
+      /*set_entries=*/{{a, net::FirstPartySetEntry(a, net::SiteType::kPrimary,
+                                                   absl::nullopt)},
+                       {b, net::FirstPartySetEntry(
+                               a, net::SiteType::kAssociated, 0)}},
+      /*aliases=*/{{b_cctld, b}}));
+
+  net::GlobalFirstPartySets round_tripped;
+
+  EXPECT_TRUE(
+      mojo::test::SerializeAndDeserialize<network::mojom::GlobalFirstPartySets>(
+          original, round_tripped));
+
+  EXPECT_FALSE(round_tripped.empty());
+
+  // base::Version::operator== crashes for invalid versions, so we don't check
+  // equality of `round_tripped` and `original` that way. However, we can verify
+  // that the original entries and alias are not present in `round_tripped`:
+  EXPECT_THAT(round_tripped.FindEntries({a, b, b_cctld, c, c_cctld},
+                                        net::FirstPartySetsContextConfig()),
+              UnorderedElementsAre(Key(a), Key(b), Key(b_cctld)));
 }
 
 TEST(FirstPartySetsTraitsTest, RoundTrips_FirstPartySetsContextConfig) {
@@ -153,9 +173,11 @@ TEST(FirstPartySetsTraitsTest, RoundTrips_FirstPartySetsContextConfig) {
   net::SchemefulSite c(GURL("https://c.test"));
 
   const net::FirstPartySetsContextConfig original({
-      {a, net::FirstPartySetEntry(a, net::SiteType::kPrimary, absl::nullopt)},
-      {b, net::FirstPartySetEntry(a, net::SiteType::kAssociated, 0)},
-      {c, absl::nullopt},
+      {a, net::FirstPartySetEntryOverride(net::FirstPartySetEntry(
+              a, net::SiteType::kPrimary, absl::nullopt))},
+      {b, net::FirstPartySetEntryOverride(
+              net::FirstPartySetEntry(a, net::SiteType::kAssociated, 0))},
+      {c, net::FirstPartySetEntryOverride()},
   });
 
   net::FirstPartySetsContextConfig round_tripped;

@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "ui/events/event_constants.h"
+#include "ui/events/event_latency_metadata.h"
 #include "ui/events/events_base_export.h"
 #include "ui/events/types/event_type.h"
 #include "ui/events/types/scroll_types.h"
@@ -130,7 +131,12 @@ struct EVENTS_BASE_EXPORT GestureEventDetails {
 
   float scale() const {
     DCHECK_EQ(ET_GESTURE_PINCH_UPDATE, type_);
-    return data_.scale;
+    return data_.pinch_update.scale;
+  }
+
+  float pinch_angle() const {
+    DCHECK_EQ(ET_GESTURE_PINCH_UPDATE, type_);
+    return data_.pinch_update.angle;
   }
 
   bool swipe_left() const {
@@ -153,6 +159,26 @@ struct EVENTS_BASE_EXPORT GestureEventDetails {
     return data_.swipe.down;
   }
 
+  void set_swipe_left(bool swipe) {
+    DCHECK_EQ(ET_GESTURE_SWIPE, type_);
+    data_.swipe.left = swipe;
+  }
+
+  void set_swipe_right(bool swipe) {
+    DCHECK_EQ(ET_GESTURE_SWIPE, type_);
+    data_.swipe.right = swipe;
+  }
+
+  void set_swipe_up(bool swipe) {
+    DCHECK_EQ(ET_GESTURE_SWIPE, type_);
+    data_.swipe.up = swipe;
+  }
+
+  void set_swipe_down(bool swipe) {
+    DCHECK_EQ(ET_GESTURE_SWIPE, type_);
+    data_.swipe.down = swipe;
+  }
+
   int tap_count() const {
     DCHECK(type_ == ET_GESTURE_TAP ||
            type_ == ET_GESTURE_TAP_UNCONFIRMED ||
@@ -168,10 +194,33 @@ struct EVENTS_BASE_EXPORT GestureEventDetails {
     data_.tap_count = tap_count;
   }
 
+  int tap_down_count() const {
+    DCHECK_EQ(ET_GESTURE_TAP_DOWN, type_);
+    return data_.tap_down_count;
+  }
+
+  void set_tap_down_count(int tap_down_count) {
+    DCHECK_GE(tap_down_count, 0);
+    DCHECK_EQ(ET_GESTURE_TAP_DOWN, type_);
+    data_.tap_down_count = tap_down_count;
+  }
+
   void set_scale(float scale) {
     DCHECK_GE(scale, 0.0f);
     DCHECK_EQ(type_, ET_GESTURE_PINCH_UPDATE);
-    data_.scale = scale;
+    data_.pinch_update.scale = scale;
+  }
+
+  void set_pinch_angle(float angle) {
+    DCHECK_EQ(type_, ET_GESTURE_PINCH_UPDATE);
+    data_.pinch_update.angle = angle;
+  }
+
+  const EventLatencyMetadata& GetEventLatencyMetadata() const {
+    return input_timestamps_;
+  }
+  EventLatencyMetadata& GetModifiableEventLatencyMetadata() {
+    return input_timestamps_;
   }
 
   // Supports comparison over internal structures for testing.
@@ -203,7 +252,10 @@ struct EVENTS_BASE_EXPORT GestureEventDetails {
       // suppressed because the underlying touch was consumed.
     } scroll_update;
 
-    float scale;  // PINCH scale.
+    struct {  // PINCH details.
+      float scale;
+      float angle;
+    } pinch_update;
 
     struct {  // FLING velocity.
       float x;
@@ -224,9 +276,14 @@ struct EVENTS_BASE_EXPORT GestureEventDetails {
       bool down;
     } swipe;
 
-    // Tap information must be set for ET_GESTURE_TAP,
-    // ET_GESTURE_TAP_UNCONFIRMED, and ET_GESTURE_DOUBLE_TAP events.
-    int tap_count;  // TAP repeat count.
+    // Number of taps that have occurred in the current repeated tap sequence.
+    // Should be set for ET_GESTURE_TAP, ET_GESTURE_TAP_UNCONFIRMED, and
+    // ET_GESTURE_DOUBLE_TAP events.
+    int tap_count;
+
+    // Number of tap downs that have occurred in the current repeated tap
+    // sequence. Should be set for ET_GESTURE_TAP_DOWN events.
+    int tap_down_count;
   } data_;
 
   GestureDeviceType device_type_;
@@ -243,6 +300,8 @@ struct EVENTS_BASE_EXPORT GestureEventDetails {
   // Bounding box is an axis-aligned rectangle that contains all the
   // enclosing rectangles of the touch-points in the gesture.
   gfx::RectF bounding_box_;
+
+  EventLatencyMetadata input_timestamps_;
 };
 
 }  // namespace ui

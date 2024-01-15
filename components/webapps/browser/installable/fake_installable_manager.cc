@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/webapps/browser/installable/installable_data.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
@@ -19,13 +19,14 @@ namespace webapps {
 FakeInstallableManager::FakeInstallableManager(
     content::WebContents* web_contents)
     : InstallableManager(web_contents),
-      manifest_(blink::mojom::Manifest::New()) {}
+      manifest_(blink::mojom::Manifest::New()),
+      web_page_metadata_(mojom::WebPageMetadata::New()) {}
 
 FakeInstallableManager::~FakeInstallableManager() {}
 
 void FakeInstallableManager::GetData(const InstallableParams& params,
                                      InstallableCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeInstallableManager::RunCallback,
                      weak_factory_.GetWeakPtr(), std::move(callback)));
@@ -59,7 +60,6 @@ FakeInstallableManager::CreateForWebContentsWithManifest(
   installable_manager->manifest_url_ = manifest_url;
   installable_manager->manifest_ = std::move(manifest);
 
-  const bool has_worker = true;
   std::vector<InstallableStatusCode> errors;
 
   // Not used:
@@ -70,9 +70,9 @@ FakeInstallableManager::CreateForWebContentsWithManifest(
 
   auto installable_data = std::make_unique<InstallableData>(
       std::move(errors), installable_manager->manifest_url_,
-      *installable_manager->manifest_, GURL::EmptyGURL(), icon.get(), false,
+      *installable_manager->manifest_, *installable_manager->web_page_metadata_,
       GURL::EmptyGURL(), icon.get(), false, std::vector<Screenshot>(),
-      valid_manifest, has_worker);
+      valid_manifest);
 
   installable_manager->data_ = std::move(installable_data);
 

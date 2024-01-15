@@ -20,10 +20,12 @@ PpapiCommandBufferProxy::PpapiCommandBufferProxy(
     InstanceData::FlushInfo* flush_info,
     LockedSender* sender,
     const gpu::Capabilities& capabilities,
+    const gpu::GLCapabilities& gl_capabilities,
     SerializedHandle shared_state,
     gpu::CommandBufferId command_buffer_id)
     : command_buffer_id_(command_buffer_id),
       capabilities_(capabilities),
+      gl_capabilities_(gl_capabilities),
       resource_(resource),
       flush_info_(flush_info),
       sender_(sender),
@@ -119,6 +121,7 @@ void PpapiCommandBufferProxy::SetGetBuffer(int32_t transfer_buffer_id) {
 scoped_refptr<gpu::Buffer> PpapiCommandBufferProxy::CreateTransferBuffer(
     uint32_t size,
     int32_t* id,
+    uint32_t alignment,
     gpu::TransferBufferAllocationOption option) {
   *id = -1;
 
@@ -238,6 +241,10 @@ void PpapiCommandBufferProxy::SignalQuery(uint32_t query,
   NOTREACHED();
 }
 
+void PpapiCommandBufferProxy::CancelAllQueries() {
+  NOTREACHED();
+}
+
 void PpapiCommandBufferProxy::CreateGpuFence(uint32_t gpu_fence_id,
                                              ClientGpuFence source) {
   NOTREACHED();
@@ -256,6 +263,10 @@ void PpapiCommandBufferProxy::SetGpuControlClient(gpu::GpuControlClient*) {
 
 const gpu::Capabilities& PpapiCommandBufferProxy::GetCapabilities() const {
   return capabilities_;
+}
+
+const gpu::GLCapabilities& PpapiCommandBufferProxy::GetGLCapabilities() const {
+  return gl_capabilities_;
 }
 
 bool PpapiCommandBufferProxy::Send(IPC::Message* msg) {

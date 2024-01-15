@@ -106,9 +106,8 @@ void WebUIAllowlist::ResetWebUIAllowlistProvider() {
 }
 
 std::unique_ptr<content_settings::RuleIterator> WebUIAllowlist::GetRuleIterator(
-    ContentSettingsType content_type) const NO_THREAD_SAFETY_ANALYSIS {
-  // NO_THREAD_SAFETY_ANALYSIS: GetRuleIterator immediately locks the lock.
-  return value_map_.GetRuleIterator(content_type, &lock_);
+    ContentSettingsType content_type) const {
+  return value_map_.GetRuleIterator(content_type);
 }
 
 void WebUIAllowlist::SetContentSettingsAndNotifyProvider(
@@ -120,17 +119,16 @@ void WebUIAllowlist::SetContentSettingsAndNotifyProvider(
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   {
-    base::AutoLock auto_lock(lock_);
-    value_map_.SetValue(primary_pattern, secondary_pattern, type,
-                        base::Value(setting),
-                        /* metadata */ {});
+    base::AutoLock auto_lock(value_map_.GetLock());
+    if (!value_map_.SetValue(primary_pattern, secondary_pattern, type,
+                             base::Value(setting),
+                             /* metadata */ {})) {
+      return;
+    }
   }
 
   // Notify the provider. |provider_| can be nullptr if
   // HostContentSettingsRegistry is shutting down i.e. when Chrome shuts down.
-  //
-  // It's okay to notify the provider multiple times even if the setting isn't
-  // changed.
   if (provider_) {
     provider_->NotifyContentSettingChange(primary_pattern, secondary_pattern,
                                           type);

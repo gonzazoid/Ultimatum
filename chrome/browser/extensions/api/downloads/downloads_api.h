@@ -269,7 +269,7 @@ class DownloadsOpenFunction : public ExtensionFunction {
 
   ResponseAction Run() override;
 
-  typedef base::OnceCallback<void(DownloadOpenPrompt*)> OnPromptCreatedCallback;
+  using OnPromptCreatedCallback = base::OnceCallback<void(DownloadOpenPrompt*)>;
   static void set_on_prompt_created_cb_for_testing(
       OnPromptCreatedCallback* on_prompt_created_cb) {
     on_prompt_created_cb_ = on_prompt_created_cb;
@@ -392,8 +392,6 @@ class ExtensionDownloadsEventRouter
 
   void SetUiEnabled(const extensions::Extension* extension, bool enabled);
   bool IsUiEnabled() const;
-
-  bool IsDownloadObservedByExtension() const;
 
   // Called by ChromeDownloadManagerDelegate during the filename determination
   // process, allows extensions to change the item's target filename. If no

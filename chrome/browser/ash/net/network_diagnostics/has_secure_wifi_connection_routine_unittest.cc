@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/net/network_diagnostics/has_secure_wifi_connection_routine.h"
 
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -14,7 +14,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 const char* kInsecureSecurity = shill::kSecurityClassWep;
@@ -107,7 +106,7 @@ TEST_F(HasSecureWiFiConnectionRoutineTest, TestInsecureWiFiConnection) {
 }
 
 TEST_F(HasSecureWiFiConnectionRoutineTest, TestWiFiNotConnected) {
-  SetUpWiFi(shill::kStateOffline, kSecureSecurity);
+  SetUpWiFi(shill::kStateIdle, kSecureSecurity);
   std::vector<mojom::HasSecureWiFiConnectionProblem> expected_problems = {};
   has_secure_wifi_connection_routine()->RunRoutine(base::BindOnce(
       &HasSecureWiFiConnectionRoutineTest::CompareResult, weak_ptr(),

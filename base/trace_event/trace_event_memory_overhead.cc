@@ -15,8 +15,7 @@
 #include "base/trace_event/process_memory_dump.h"
 #include "base/values.h"
 
-namespace base {
-namespace trace_event {
+namespace base::trace_event {
 
 namespace {
 
@@ -113,9 +112,9 @@ void TraceEventMemoryOverhead::AddValue(const Value& value) {
       Add(kBaseValue, sizeof(Value) + value.GetBlob().size());
       break;
 
-    case Value::Type::DICTIONARY:
+    case Value::Type::DICT:
       Add(kBaseValue, sizeof(Value));
-      for (const auto pair : value.DictItems()) {
+      for (const auto pair : value.GetDict()) {
         AddString(pair.first);
         AddValue(pair.second);
       }
@@ -126,9 +125,6 @@ void TraceEventMemoryOverhead::AddValue(const Value& value) {
       for (const auto& v : value.GetList())
         AddValue(v);
       break;
-
-    default:
-      NOTREACHED();
   }
 }
 
@@ -169,5 +165,4 @@ void TraceEventMemoryOverhead::DumpInto(const char* base_name,
   }
 }
 
-}  // namespace trace_event
-}  // namespace base
+}  // namespace base::trace_event

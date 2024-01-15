@@ -7,6 +7,7 @@
 #include <tuple>
 
 #include "base/base64.h"
+#include "base/check_op.h"
 #include "base/json/values_util.h"
 #include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -15,87 +16,96 @@ namespace origin_trials {
 
 namespace {
 
-const char kExpiryTimeKey[] = "expiry";
-const char kSignatureKey[] = "signature";
-const char kTrialNameKey[] = "trial";
-const char kUsageKey[] = "usage";
-
-absl::optional<base::Time> TimeFromDict(const base::Value::Dict& dict,
-                                        const char* key) {
-  const base::Value* time_val = dict.Find(key);
-  if (!time_val) {
-    return absl::nullopt;
-  }
-  return base::ValueToTime(time_val);
-}
-
 auto to_tuple(const PersistedTrialToken& token) {
-  return std::tie(token.trial_name, token.token_expiry, token.usage_restriction,
-                  token.token_signature);
+  return std::tie(token.match_subdomains, token.trial_name, token.token_expiry,
+                  token.usage_restriction, token.token_signature);
 }
 
 }  // namespace
+
+PersistedTrialToken::PersistedTrialToken(
+    bool match_subdomains,
+    std::string name,
+    base::Time expiry,
+    blink::TrialToken::UsageRestriction usage,
+    std::string signature,
+    base::flat_set<std::string> partitions)
+    : match_subdomains(match_subdomains),
+      trial_name(std::move(name)),
+      token_expiry(expiry),
+      usage_restriction(usage),
+      token_signature(std::move(signature)),
+      partition_sites(std::move(partitions)) {}
+
+PersistedTrialToken::PersistedTrialToken(const blink::TrialToken& parsed_token,
+                                         const std::string& partition_site)
+    : PersistedTrialToken(parsed_token.match_subdomains(),
+                          parsed_token.feature_name(),
+                          parsed_token.expiry_time(),
+                          parsed_token.usage_restriction(),
+                          parsed_token.signature(),
+                          base::flat_set<std::string>()) {
+  AddToPartition(partition_site);
+}
+
+PersistedTrialToken::~PersistedTrialToken() = default;
+PersistedTrialToken::PersistedTrialToken(const PersistedTrialToken&) = default;
+PersistedTrialToken& PersistedTrialToken::operator=(
+    const PersistedTrialToken&) = default;
+PersistedTrialToken::PersistedTrialToken(PersistedTrialToken&&) = default;
+PersistedTrialToken& PersistedTrialToken::operator=(PersistedTrialToken&&) =
+    default;
+
+void PersistedTrialToken::AddToPartition(const std::string& partition_site) {
+  DCHECK_NE("", partition_site);
+  partition_sites.insert(partition_site);
+}
+
+void PersistedTrialToken::RemoveFromPartition(
+    const std::string& partition_site) {
+  partition_sites.erase(partition_site);
+}
+
+bool PersistedTrialToken::InAnyPartition() const {
+  return partition_sites.size() > 0;
+}
+
+bool PersistedTrialToken::Matches(const blink::TrialToken& token) const {
+  return match_subdomains == token.match_subdomains() &&
+         trial_name == token.feature_name() &&
+         token_expiry == token.expiry_time() &&
+         token_signature == token.signature();
+}
 
 bool operator<(const PersistedTrialToken& a, const PersistedTrialToken& b) {
   return to_tuple(a) < to_tuple(b);
 }
 
 bool operator==(const PersistedTrialToken& a, const PersistedTrialToken& b) {
-  return to_tuple(a) == to_tuple(b);
+  return to_tuple(a) == to_tuple(b) && a.partition_sites == b.partition_sites;
 }
 
-// static
-absl::optional<PersistedTrialToken> PersistedTrialToken::FromDict(
-    const base::Value::Dict& dict) {
-  const std::string* name = dict.FindString(kTrialNameKey);
-  if (!name) {
-    return absl::nullopt;
-  }
-
-  absl::optional<base::Time> expiry = TimeFromDict(dict, kExpiryTimeKey);
-  if (!expiry) {
-    return absl::nullopt;
-  }
-
-  absl::optional<int> usage = dict.FindInt(kUsageKey);
-  if (!usage) {
-    return absl::nullopt;
-  }
-
-  const std::string* signature_blob = dict.FindString(kSignatureKey);
-  if (!signature_blob) {
-    return absl::nullopt;
-  }
-
-  std::string signature_string;
-  if (!base::Base64Decode(*signature_blob, &signature_string)) {
-    return absl::nullopt;
-  }
-
-  return absl::make_optional<PersistedTrialToken>(
-      *name, *expiry, static_cast<blink::TrialToken::UsageRestriction>(*usage),
-      std::move(signature_string));
-}
-
-base::Value::Dict PersistedTrialToken::AsDict() const {
-  base::Value::Dict token_dict;
-
-  token_dict.Set(kTrialNameKey, trial_name);
-  token_dict.Set(kExpiryTimeKey, base::TimeToValue(token_expiry));
-  token_dict.Set(kUsageKey, static_cast<int>(usage_restriction));
-
-  // The signature is a binary blob, but the json writer used is not allowed to
-  // emit binary blobs, so saving it as base64.
-  // Simply saving it as a string will not work, as it may not be valid utf-8.
-  std::string signature_blob;
-  base::Base64Encode(token_signature, &signature_blob);
-  token_dict.Set(kSignatureKey, signature_blob);
-
-  return token_dict;
+bool operator!=(const PersistedTrialToken& a, const PersistedTrialToken& b) {
+  return !(a == b);
 }
 
 std::ostream& operator<<(std::ostream& out, const PersistedTrialToken& token) {
-  return out << token.AsDict();  // Dict already has a streaming operator.
+  out << "{";
+  out << "match_subdomains: " << (token.match_subdomains ? "true" : "false")
+      << ", ";
+  out << "trial: " << token.trial_name << ", ";
+  out << "expiry: " << base::TimeToValue(token.token_expiry) << ", ";
+  out << "usage: " << static_cast<int>(token.usage_restriction) << ", ";
+  std::string signature_blob;
+  base::Base64Encode(token.token_signature, &signature_blob);
+  out << "signature: " << signature_blob << ", ";
+  out << "partition_sites: [";
+  for (const auto& site : token.partition_sites) {
+    out << site << " ";
+  }
+  out << "]";
+  out << "}";
+  return out;
 }
 
 }  // namespace origin_trials

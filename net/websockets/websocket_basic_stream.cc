@@ -9,15 +9,22 @@
 
 #include <algorithm>
 #include <limits>
+#include <ostream>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/check.h"
+#include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
+#include "net/log/net_log_event_type.h"
 #include "net/socket/client_socket_handle.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/websockets/websocket_basic_stream_adapters.h"
 #include "net/websockets/websocket_errors.h"
 #include "net/websockets/websocket_frame.h"
@@ -106,13 +113,13 @@ int CalculateSerializedSizeAndTurnOnMaskBit(
   return static_cast<int>(total_size);
 }
 
-base::Value NetLogBufferSizeParam(int buffer_size) {
+base::Value::Dict NetLogBufferSizeParam(int buffer_size) {
   base::Value::Dict dict;
   dict.Set("read_buffer_size_in_bytes", buffer_size);
-  return base::Value(std::move(dict));
+  return dict;
 }
 
-base::Value NetLogFrameHeaderParam(const WebSocketFrameHeader* header) {
+base::Value::Dict NetLogFrameHeaderParam(const WebSocketFrameHeader* header) {
   base::Value::Dict dict;
   dict.Set("final", header->final);
   dict.Set("reserved1", header->reserved1);
@@ -121,7 +128,7 @@ base::Value NetLogFrameHeaderParam(const WebSocketFrameHeader* header) {
   dict.Set("opcode", header->opcode);
   dict.Set("masked", header->masked);
   dict.Set("payload_length", static_cast<double>(header->payload_length));
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace

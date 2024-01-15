@@ -6,78 +6,80 @@
 
 #import <UIKit/UIKit.h>
 
-#include <memory>
-#include <string>
-#include <utility>
+#import <memory>
+#import <string>
+#import <utility>
 
-#include "base/format_macros.h"
-#include "base/guid.h"
-#include "base/json/json_reader.h"
-#include "base/json/json_writer.h"
-#include "base/mac/foundation_util.h"
-#include "base/memory/weak_ptr.h"
-#include "base/metrics/field_trial.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/values.h"
-#include "components/autofill/core/browser/autofill_field.h"
-#include "components/autofill/core/browser/browser_autofill_manager.h"
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/data_model/credit_card.h"
-#include "components/autofill/core/browser/keyboard_accessory_metrics_logger.h"
-#include "components/autofill/core/browser/metrics/autofill_metrics.h"
-#include "components/autofill/core/browser/ui/popup_item_ids.h"
-#include "components/autofill/core/browser/ui/suggestion.h"
-#include "components/autofill/core/common/autofill_constants.h"
-#include "components/autofill/core/common/autofill_features.h"
-#include "components/autofill/core/common/autofill_prefs.h"
-#include "components/autofill/core/common/autofill_tick_clock.h"
-#include "components/autofill/core/common/autofill_util.h"
-#include "components/autofill/core/common/field_data_manager.h"
-#include "components/autofill/core/common/form_data.h"
-#include "components/autofill/core/common/form_data_predictions.h"
-#include "components/autofill/core/common/form_field_data.h"
-#include "components/autofill/ios/browser/autofill_driver_ios.h"
-#include "components/autofill/ios/browser/autofill_driver_ios_webframe.h"
+#import "base/apple/foundation_util.h"
+#import "base/format_macros.h"
+#import "base/json/json_reader.h"
+#import "base/json/json_writer.h"
+#import "base/memory/weak_ptr.h"
+#import "base/metrics/field_trial.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/strings/string_number_conversions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "base/time/time.h"
+#import "base/types/cxx23_to_underlying.h"
+#import "base/uuid.h"
+#import "base/values.h"
+#import "components/autofill/core/browser/autofill_field.h"
+#import "components/autofill/core/browser/browser_autofill_manager.h"
+#import "components/autofill/core/browser/data_model/autofill_profile.h"
+#import "components/autofill/core/browser/data_model/credit_card.h"
+#import "components/autofill/core/browser/metrics/autofill_metrics.h"
+#import "components/autofill/core/browser/ui/popup_item_ids.h"
+#import "components/autofill/core/browser/ui/popup_types.h"
+#import "components/autofill/core/browser/ui/suggestion.h"
+#import "components/autofill/core/common/autofill_constants.h"
+#import "components/autofill/core/common/autofill_features.h"
+#import "components/autofill/core/common/autofill_payments_features.h"
+#import "components/autofill/core/common/autofill_prefs.h"
+#import "components/autofill/core/common/autofill_util.h"
+#import "components/autofill/core/common/field_data_manager.h"
+#import "components/autofill/core/common/form_data.h"
+#import "components/autofill/core/common/form_data_predictions.h"
+#import "components/autofill/core/common/form_field_data.h"
+#import "components/autofill/ios/browser/autofill_driver_ios.h"
 #import "components/autofill/ios/browser/autofill_java_script_feature.h"
-#include "components/autofill/ios/browser/autofill_util.h"
+#import "components/autofill/ios/browser/autofill_util.h"
 #import "components/autofill/ios/browser/form_suggestion.h"
 #import "components/autofill/ios/browser/form_suggestion_provider.h"
 #import "components/autofill/ios/form_util/form_activity_observer_bridge.h"
-#include "components/autofill/ios/form_util/form_activity_params.h"
+#import "components/autofill/ios/form_util/form_activity_params.h"
 #import "components/autofill/ios/form_util/form_handlers_java_script_feature.h"
-#include "components/autofill/ios/form_util/unique_id_data_tab_helper.h"
+#import "components/autofill/ios/form_util/form_util_java_script_feature.h"
+#import "components/autofill/ios/form_util/unique_id_data_tab_helper.h"
 #import "components/prefs/ios/pref_observer_bridge.h"
-#include "components/prefs/pref_change_registrar.h"
-#include "components/prefs/pref_service.h"
-#include "components/ukm/ios/ukm_url_recorder.h"
-#include "ios/web/common/url_scheme_util.h"
-#include "ios/web/public/deprecated/url_verification_constants.h"
-#include "ios/web/public/js_messaging/web_frame.h"
-#include "ios/web/public/js_messaging/web_frame_util.h"
+#import "components/prefs/pref_change_registrar.h"
+#import "components/prefs/pref_service.h"
+#import "components/ukm/ios/ukm_url_recorder.h"
+#import "ios/web/common/url_scheme_util.h"
+#import "ios/web/public/js_messaging/web_frame.h"
 #import "ios/web/public/js_messaging/web_frames_manager.h"
+#import "ios/web/public/js_messaging/web_frames_manager_observer_bridge.h"
 #import "ios/web/public/navigation/navigation_context.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
-#include "services/metrics/public/cpp/ukm_builders.h"
-#include "ui/gfx/geometry/rect.h"
-#include "url/gurl.h"
+#import "services/metrics/public/cpp/ukm_builders.h"
+#import "ui/base/resource/resource_bundle.h"
+#import "ui/gfx/geometry/rect.h"
+#import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using base::NumberToString;
-using base::SysNSStringToUTF8;
-using base::SysNSStringToUTF16;
-using base::SysUTF16ToNSString;
-using autofill::FormGlobalId;
-using autofill::FormRendererId;
+using autofill::AutofillJavaScriptFeature;
 using autofill::FieldDataManager;
 using autofill::FieldRendererId;
+using autofill::FormGlobalId;
+using autofill::FormHandlersJavaScriptFeature;
+using autofill::FormRendererId;
+using autofill::FormUtilJavaScriptFeature;
 using autofill::FieldPropertiesFlags::kAutofilledOnUserTrigger;
+using base::NumberToString;
+using base::SysNSStringToUTF16;
+using base::SysNSStringToUTF8;
+using base::SysUTF16ToNSString;
+using base::SysUTF8ToNSString;
 
 namespace {
 
@@ -103,7 +105,7 @@ void GetFormField(autofill::FormFieldData* field,
     return;
 
   // Hack to get suggestions from select input elements.
-  if (field->form_control_type == "select-one") {
+  if (field->IsSelectElement()) {
     // Any value set will cause the BrowserAutofillManager to filter suggestions
     // (only show suggestions that begin the same as the current value) with the
     // effect that one only suggestion would be returned; the value itself.
@@ -111,9 +113,15 @@ void GetFormField(autofill::FormFieldData* field,
   }
 }
 
+// Delay for setting an utterance to be queued, it is required to ensure that
+// standard announcements have already been started and thus would not interrupt
+// the enqueued utterance.
+constexpr base::TimeDelta kA11yAnnouncementQueueDelay = base::Seconds(1);
+
 }  // namespace
 
 @interface AutofillAgent () <CRWWebStateObserver,
+                             CRWWebFramesManagerObserver,
                              FormActivityObserver,
                              PrefObserverDelegate> {
   // The WebState this instance is observing. Will be null after
@@ -122,6 +130,10 @@ void GetFormField(autofill::FormFieldData* field,
 
   // Bridge to observe the web state from Objective-C.
   std::unique_ptr<web::WebStateObserverBridge> _webStateObserverBridge;
+
+  // Bridge to observe the web frames manager from Objective-C.
+  std::unique_ptr<web::WebFramesManagerObserverBridge>
+      _webFramesManagerObserverBridge;
 
   // The pref service for which this agent was created.
   PrefService* _prefService;
@@ -165,20 +177,10 @@ void GetFormField(autofill::FormFieldData* field,
   std::unique_ptr<autofill::FormActivityObserverBridge>
       _formActivityObserverBridge;
 
-  // AutofillDriverIOSWebFrame will keep a refcountable AutofillDriverIOS.
-  // This is a workaround crbug.com/892612. On submission,
-  // AutofillDownloadManager and CreditCardSaveManager expect
-  // BrowserAutofillManager and AutofillDriver to live after web frame deletion
-  // so AutofillAgent will keep the latest submitted AutofillDriver alive.
-  // TODO(crbug.com/892612): remove this workaround once life cycle of
-  // BrowserAutofillManager is fixed.
-  scoped_refptr<autofill::AutofillDriverIOSRefCountable>
-      _last_submitted_autofill_driver;
-
   scoped_refptr<FieldDataManager> _fieldDataManager;
 
   // ID of the last Autofill query made. Used to discard outdated suggestions.
-  int _lastQueryID;
+  autofill::FieldGlobalId _lastQueriedFieldID;
 }
 
 @end
@@ -195,6 +197,12 @@ void GetFormField(autofill::FormFieldData* field,
     _webStateObserverBridge =
         std::make_unique<web::WebStateObserverBridge>(self);
     _webState->AddObserver(_webStateObserverBridge.get());
+    _webFramesManagerObserverBridge =
+        std::make_unique<web::WebFramesManagerObserverBridge>(self);
+    web::WebFramesManager* framesManager =
+        AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(
+            _webState);
+    framesManager->AddObserver(_webFramesManagerObserverBridge.get());
     _formActivityObserverBridge =
         std::make_unique<autofill::FormActivityObserverBridge>(_webState, self);
     _prefService = prefService;
@@ -208,7 +216,6 @@ void GetFormField(autofill::FormFieldData* field,
     UniqueIDDataTabHelper* uniqueIDDataTabHelper =
         UniqueIDDataTabHelper::FromWebState(_webState);
     _fieldDataManager = uniqueIDDataTabHelper->GetFieldDataManager();
-    _lastQueryID = 0;
   }
   return self;
 }
@@ -230,21 +237,40 @@ void GetFormField(autofill::FormFieldData* field,
                        webFrame:(web::WebFrame*)webFrame {
   if (!webState || !_webStateObserverBridge)
     return nullptr;
-  return autofill::AutofillDriverIOS::FromWebStateAndWebFrame(webState,
-                                                              webFrame)
-      ->autofill_manager();
+  return &autofill::AutofillDriverIOS::FromWebStateAndWebFrame(webState,
+                                                               webFrame)
+              ->GetAutofillManager();
 }
 
 // Notifies the autofill manager when forms are detected on a page.
-- (void)notifyBrowserAutofillManager:
-            (autofill::BrowserAutofillManager*)autofillManager
-                         ofFormsSeen:(const FormDataVector&)updated_forms {
-  DCHECK(autofillManager);
-  DCHECK(!updated_forms.empty());
+- (void)notifyFormsSeen:(const FormDataVector&)updatedForms
+                inFrame:(web::WebFrame*)frame {
+  auto* driver =
+      autofill::AutofillDriverIOS::FromWebStateAndWebFrame(_webState, frame);
+  if (!driver) {
+    return;
+  }
+
+  DCHECK(!updatedForms.empty());
+
+  if (base::FeatureList::IsEnabled(
+          autofill::features::kAutofillAcrossIframesIos)) {
+    for (const autofill::FormData& form : updatedForms) {
+      for (const autofill::FrameTokenWithPredecessor& childFrame :
+           form.child_frames) {
+        // This absl::get is safe because on iOS, FormData::child_frames is
+        // only ever populated with RemoteFrameTokens. absl::get will fail a
+        // CHECK if this assumption is ever wrong.
+        auto token = absl::get<autofill::RemoteFrameToken>(childFrame.token);
+        driver->NotifyOfChildFrame(token);
+      }
+    }
+  }
+
   // TODO(crbug.com/1215337): Notify |autofillManager| about deleted fields.
-  std::vector<FormGlobalId> removed_forms;
-  autofillManager->OnFormsSeen(/*updated_forms=*/updated_forms,
-                               /*removed_forms=*/removed_forms);
+  std::vector<FormGlobalId> removedForms;
+  driver->GetAutofillManager().OnFormsSeen(/*updated_forms=*/updatedForms,
+                                           /*removed_forms=*/removedForms);
 }
 
 // Notifies the autofill manager when forms are submitted.
@@ -258,7 +284,6 @@ void GetFormField(autofill::FormFieldData* field,
   autofill::FormData form = forms[0];
   autofillManager->OnFormSubmitted(
       form, false, autofill::mojom::SubmissionSource::FORM_SUBMISSION);
-  autofill::KeyboardAccessoryMetricsLogger::OnFormSubmitted();
 }
 
 // Invokes the form extraction script in |frame| and loads the output into the
@@ -284,11 +309,14 @@ void GetFormField(autofill::FormFieldData* field,
   GURL pageURL = _webState->GetLastCommittedURL();
   GURL frameOrigin =
       frame ? frame->GetSecurityOrigin() : pageURL.DeprecatedGetOriginAsURL();
-  autofill::AutofillJavaScriptFeature::GetInstance()->FetchForms(
+  scoped_refptr<autofill::FieldDataManager> fieldDataManager =
+      _fieldDataManager;
+  AutofillJavaScriptFeature::GetInstance()->FetchForms(
       frame, requiredFieldsCount, base::BindOnce(^(NSString* formJSON) {
         std::vector<autofill::FormData> formData;
         bool success = autofill::ExtractFormsData(
-            formJSON, filtered, formNameCopy, pageURL, frameOrigin, &formData);
+            formJSON, filtered, formNameCopy, pageURL, frameOrigin,
+            *fieldDataManager, &formData);
         completionHandler(success, formData);
       }));
 }
@@ -315,12 +343,16 @@ void GetFormField(autofill::FormFieldData* field,
                      frameID:(NSString*)frameID
                     webState:(web::WebState*)webState
            completionHandler:(SuggestionsAvailableCompletion)completion {
+  web::WebFramesManager* frames_manager =
+      AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(webState);
   web::WebFrame* frame =
-      GetWebFrameWithId(webState, SysNSStringToUTF8(frameID));
+      frames_manager->GetFrameWithId(SysNSStringToUTF8(frameID));
   autofill::BrowserAutofillManager* autofillManager =
       [self autofillManagerFromWebState:webState webFrame:frame];
-  if (!autofillManager)
+  if (!autofillManager) {
+    completion(NO);
     return;
+  }
 
   // Find the right field.
   autofill::FormFieldData field;
@@ -332,10 +364,11 @@ void GetFormField(autofill::FormFieldData* field,
 
   // Query the BrowserAutofillManager for suggestions. Results will arrive in
   // -showAutofillPopup:popupDelegate:.
+  _lastQueriedFieldID = field.global_id();
+  // TODO(crbug.com/1448447): Distinguish between different trigger sources.
   autofillManager->OnAskForValuesToFill(
-      form, field, gfx::RectF(), ++_lastQueryID,
-      autofill::AutoselectFirstSuggestion(false),
-      autofill::FormElementWasClicked(false));
+      form, field, gfx::RectF(),
+      autofill::AutofillSuggestionTriggerSource::kiOS);
 }
 
 - (void)checkIfSuggestionsAvailableForForm:
@@ -357,8 +390,10 @@ void GetFormField(autofill::FormFieldData* field,
     return;
   }
 
+  web::WebFramesManager* frames_manager =
+      AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(_webState);
   web::WebFrame* frame =
-      web::GetWebFrameWithId(_webState, SysNSStringToUTF8(formQuery.frameID));
+      frames_manager->GetFrameWithId(SysNSStringToUTF8(formQuery.frameID));
   if (!frame) {
     completion(NO);
     return;
@@ -419,22 +454,65 @@ void GetFormField(autofill::FormFieldData* field,
   DCHECK(completion);
   _suggestionHandledCompletion = [completion copy];
 
-  if (suggestion.identifier > 0) {
+  if (suggestion.acceptanceA11yAnnouncement != nil) {
+    __weak AutofillAgent* weakSelf = self;
+    // The announcement is done asyncronously with certain delay to make sure
+    // it is not interrupted by (almost) immediate standard announcements.
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW,
+                      kA11yAnnouncementQueueDelay.InNanoseconds()),
+        dispatch_get_main_queue(), ^{
+          AutofillAgent* strongSelf = weakSelf;
+          if (!strongSelf)
+            return;
+
+          // Queueing flag allows to preserve standard announcements, they
+          // are conveyed first and then announce this message.
+          // This is a tradeoff as there is no control over the standard
+          // utterances (they are interrupting) and it is not desirable
+          // to interrupt them. Hence acceptance announcement is done after
+          // standard ones (which takes seconds).
+          NSAttributedString* message = [[NSAttributedString alloc]
+              initWithString:suggestion.acceptanceA11yAnnouncement
+                  attributes:@{
+                    UIAccessibilitySpeechAttributeQueueAnnouncement : @YES
+                  }];
+          UIAccessibilityPostNotification(
+              UIAccessibilityAnnouncementNotification, message);
+        });
+  }
+
+  if (suggestion.popupItemId == autofill::PopupItemId::kAddressEntry ||
+      suggestion.popupItemId == autofill::PopupItemId::kCreditCardEntry ||
+      suggestion.popupItemId == autofill::PopupItemId::kCreateNewPlusAddress ||
+      (base::FeatureList::IsEnabled(
+           autofill::features::kAutofillEnableVirtualCards) &&
+       suggestion.popupItemId ==
+           autofill::PopupItemId::kVirtualCreditCardEntry)) {
     _pendingAutocompleteFieldID = uniqueFieldID;
     if (_popupDelegate) {
       // TODO(966411): Replace 0 with the index of the selected suggestion.
       autofill::Suggestion autofill_suggestion;
       autofill_suggestion.main_text.value =
           SysNSStringToUTF16(suggestion.value);
-      autofill_suggestion.frontend_id = suggestion.identifier;
-      autofill_suggestion.payload = autofill::Suggestion::BackendId();
-      _popupDelegate->DidAcceptSuggestion(autofill_suggestion, 0);
+      autofill_suggestion.popup_item_id = suggestion.popupItemId;
+      if (!suggestion.backendIdentifier.length) {
+        autofill_suggestion.payload = autofill::Suggestion::BackendId();
+      } else {
+        autofill_suggestion.payload =
+            autofill::Suggestion::BackendId(autofill::Suggestion::Guid(
+                SysNSStringToUTF8(suggestion.backendIdentifier)));
+      }
+
+      _popupDelegate->DidAcceptSuggestion(autofill_suggestion, {0, 0});
     }
     return;
   }
 
+  web::WebFramesManager* frames_manager =
+      AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(_webState);
   web::WebFrame* frame =
-      web::GetWebFrameWithId(_webState, SysNSStringToUTF8(frameID));
+      frames_manager->GetFrameWithId(SysNSStringToUTF8(frameID));
   if (!frame) {
     // The frame no longer exists, so the field can not be filled.
     if (_suggestionHandledCompletion) {
@@ -446,43 +524,51 @@ void GetFormField(autofill::FormFieldData* field,
     return;
   }
 
-  if (suggestion.identifier == autofill::POPUP_ITEM_ID_AUTOCOMPLETE_ENTRY) {
+  if (suggestion.popupItemId == autofill::PopupItemId::kAutocompleteEntry ||
+      suggestion.popupItemId ==
+          autofill::PopupItemId::kFillExistingPlusAddress) {
     // FormSuggestion is a simple, single value that can be filled out now.
     [self fillField:SysNSStringToUTF8(fieldIdentifier)
         uniqueFieldID:uniqueFieldID
              formName:SysNSStringToUTF8(formName)
                 value:SysNSStringToUTF16(suggestion.value)
               inFrame:frame];
-  } else if (suggestion.identifier == autofill::POPUP_ITEM_ID_CLEAR_FORM) {
+  } else if (suggestion.popupItemId == autofill::PopupItemId::kClearForm) {
     __weak AutofillAgent* weakSelf = self;
     SuggestionHandledCompletion suggestionHandledCompletionCopy =
         [_suggestionHandledCompletion copy];
     _suggestionHandledCompletion = nil;
-    autofill::AutofillJavaScriptFeature::GetInstance()
-        ->ClearAutofilledFieldsForForm(
-            frame, uniqueFormID, uniqueFieldID,
-            base::BindOnce(^(NSString* jsonString) {
-              AutofillAgent* strongSelf = weakSelf;
-              if (!strongSelf)
-                return;
-              [strongSelf updateFieldManagerForClearedIDs:jsonString];
-              suggestionHandledCompletionCopy();
-            }));
+    AutofillJavaScriptFeature::GetInstance()->ClearAutofilledFieldsForForm(
+        frame, uniqueFormID, uniqueFieldID,
+        base::BindOnce(^(NSString* jsonString) {
+          AutofillAgent* strongSelf = weakSelf;
+          if (!strongSelf) {
+            return;
+          }
+          [strongSelf updateFieldManagerForClearedIDs:jsonString];
+          suggestionHandledCompletionCopy();
+        }));
 
-  } else if (suggestion.identifier ==
-             autofill::POPUP_ITEM_ID_SHOW_ACCOUNT_CARDS) {
+  } else if (suggestion.popupItemId ==
+             autofill::PopupItemId::kShowAccountCards) {
     autofill::BrowserAutofillManager* autofillManager =
         [self autofillManagerFromWebState:_webState webFrame:frame];
     if (autofillManager) {
       autofillManager->OnUserAcceptedCardsFromAccountOption();
     }
   } else {
-    NOTREACHED() << "unknown identifier " << suggestion.identifier;
+    NOTREACHED() << "unknown identifier "
+                 << base::to_underlying(suggestion.popupItemId);
   }
 }
 
 - (SuggestionProviderType)type {
   return SuggestionProviderTypeAutofill;
+}
+
+- (autofill::PopupType)suggestionType {
+  return _popupDelegate ? _popupDelegate->GetPopupType()
+                        : autofill::PopupType::kUnspecified;
 }
 
 #pragma mark - AutofillDriverIOSBridge
@@ -512,8 +598,8 @@ void GetFormField(autofill::FormFieldData* field,
   // Store the form data when WebState is not visible, to send it as soon as it
   // becomes visible again, e.g., when the CVC unmask prompt is showing.
   if (!_webState->IsVisible()) {
-    _pendingFormData =
-        std::make_pair(web::GetWebFrameId(frame), std::move(autofillData));
+    _pendingFormData = std::make_pair(frame ? frame->GetFrameId() : "",
+                                      std::move(autofillData));
   } else {
     [self sendData:std::move(autofillData) toFrame:frame];
   }
@@ -521,20 +607,53 @@ void GetFormField(autofill::FormFieldData* field,
   autofill::BrowserAutofillManager* autofillManager =
       [self autofillManagerFromWebState:_webState webFrame:frame];
   if (autofillManager)
-    autofillManager->OnDidFillAutofillFormData(
-        form, autofill::AutofillTickClock::NowTicks());
+    autofillManager->OnDidFillAutofillFormData(form, base::TimeTicks::Now());
 }
 
-- (void)handleParsedForms:(const std::vector<autofill::FormStructure*>&)forms
+// Similar to `fillField`, but does not rely on `FillActiveFormField`, opting
+// instead to find and fill a specific field in `frame` with `value`. In other
+// words, `field` need not be `document.activeElement`.
+- (void)fillSpecificFormField:(const autofill::FieldRendererId&)field
+                    withValue:(const std::u16string)value
+                      inFrame:(web::WebFrame*)frame {
+  base::Value::Dict data;
+  data.Set("unique_renderer_id", static_cast<int>(field.value()));
+  data.Set("value", value);
+
+  __weak AutofillAgent* weakSelf = self;
+  SuggestionHandledCompletion suggestionHandledCompletionCopy =
+      [_suggestionHandledCompletion copy];
+  _suggestionHandledCompletion = nil;
+
+  AutofillJavaScriptFeature::GetInstance()->FillSpecificFormField(
+      frame, std::move(data), base::BindOnce(^(BOOL success) {
+        AutofillAgent* strongSelf = weakSelf;
+        if (!strongSelf) {
+          return;
+        }
+        if (success) {
+          [strongSelf updateFieldManagerForSpecificField:field withValue:value];
+        }
+        // Especially in test code, it is possible that the fill was not
+        // initiated by selecting a suggestion. In this case the callback is
+        // nil.
+        if (suggestionHandledCompletionCopy) {
+          suggestionHandledCompletionCopy();
+        }
+      }));
+}
+
+- (void)handleParsedForms:
+            (const std::vector<
+                raw_ptr<autofill::FormStructure, VectorExperimental>>&)forms
                   inFrame:(web::WebFrame*)frame {
-  // No op.
 }
 
 - (void)fillFormDataPredictions:
             (const std::vector<autofill::FormDataPredictions>&)forms
                         inFrame:(web::WebFrame*)frame {
   if (!base::FeatureList::IsEnabled(
-          autofill::features::kAutofillShowTypePredictions)) {
+          autofill::features::test::kAutofillShowTypePredictions)) {
     return;
   }
 
@@ -549,7 +668,7 @@ void GetFormField(autofill::FormFieldData* field,
     }
     predictionData.Set(base::UTF16ToUTF8(form.data.name), std::move(fieldData));
   }
-  autofill::AutofillJavaScriptFeature::GetInstance()->FillPredictionData(
+  AutofillJavaScriptFeature::GetInstance()->FillPredictionData(
       frame, std::move(predictionData));
 }
 
@@ -569,14 +688,26 @@ void GetFormField(autofill::FormFieldData* field,
     // for example. We can't include that enum because it's from WebKit, but
     // fortunately almost all the entries we are interested in (profile or
     // autofill entries) are zero or positive. Negative entries we are
-    // interested in is autofill::POPUP_ITEM_ID_CLEAR_FORM, used to show the
+    // interested in is autofill::PopupItemId::kClearForm, used to show the
     // "clear form" button.
     NSString* value = nil;
+    NSString* minorValue = nil;
     NSString* displayDescription = nil;
-    if (popup_suggestion.frontend_id >= 0) {
+    UIImage* icon = nil;
+
+    if (popup_suggestion.popup_item_id ==
+            autofill::PopupItemId::kAutocompleteEntry ||
+        popup_suggestion.popup_item_id ==
+            autofill::PopupItemId::kAddressEntry ||
+        popup_suggestion.popup_item_id ==
+            autofill::PopupItemId::kCreditCardEntry ||
+        (base::FeatureList::IsEnabled(
+             autofill::features::kAutofillEnableVirtualCards) &&
+         popup_suggestion.popup_item_id ==
+             autofill::PopupItemId::kVirtualCreditCardEntry)) {
       // Filter out any key/value suggestions if the user hasn't typed yet.
-      if (popup_suggestion.frontend_id ==
-              autofill::POPUP_ITEM_ID_AUTOCOMPLETE_ENTRY &&
+      if (popup_suggestion.popup_item_id ==
+              autofill::PopupItemId::kAutocompleteEntry &&
           [_typedValue length] == 0) {
         continue;
       }
@@ -584,34 +715,73 @@ void GetFormField(autofill::FormFieldData* field,
       // displayDescription will contain a summary of the data to be filled in
       // the other elements.
       value = SysUTF16ToNSString(popup_suggestion.main_text.value);
+
+      if (base::FeatureList::IsEnabled(
+              autofill::features::kAutofillEnableVirtualCards) &&
+          (!popup_suggestion.minor_text.value.empty())) {
+        // For Virtual Cards, the main_text is just "Virtual card" so we need to
+        // include the minor_text (which is the card name + last 4 digits ||
+        // card holder's name) as the minorValue.
+        minorValue = SysUTF16ToNSString(popup_suggestion.minor_text.value);
+      }
+
       if (!popup_suggestion.labels.empty()) {
         DCHECK_EQ(popup_suggestion.labels.size(), 1U);
         DCHECK_EQ(popup_suggestion.labels[0].size(), 1U);
         displayDescription =
             SysUTF16ToNSString(popup_suggestion.labels[0][0].value);
       }
-    } else if (popup_suggestion.frontend_id ==
-               autofill::POPUP_ITEM_ID_CLEAR_FORM) {
+
+      // Only show icon for credit card suggestions.
+      if (delegate &&
+          delegate->GetPopupType() == autofill::PopupType::kCreditCards) {
+        icon = [self createIcon:popup_suggestion];
+      }
+    } else if (popup_suggestion.popup_item_id ==
+               autofill::PopupItemId::kClearForm) {
       // Show the "clear form" button.
       value = SysUTF16ToNSString(popup_suggestion.main_text.value);
-    } else if (popup_suggestion.frontend_id ==
-               autofill::POPUP_ITEM_ID_SHOW_ACCOUNT_CARDS) {
+    } else if (popup_suggestion.popup_item_id ==
+               autofill::PopupItemId::kShowAccountCards) {
       // Show opt-in for showing cards from account.
+      value = SysUTF16ToNSString(popup_suggestion.main_text.value);
+    } else if (popup_suggestion.popup_item_id ==
+                   autofill::PopupItemId::kFillExistingPlusAddress ||
+               popup_suggestion.popup_item_id ==
+                   autofill::PopupItemId::kCreateNewPlusAddress) {
+      // Show any plus_address suggestions.
       value = SysUTF16ToNSString(popup_suggestion.main_text.value);
     }
 
     if (!value)
       continue;
 
+    NSString* acceptanceA11yAnnouncement =
+        popup_suggestion.acceptance_a11y_announcement.has_value()
+            ? SysUTF16ToNSString(*popup_suggestion.acceptance_a11y_announcement)
+            : nil;
+
     FormSuggestion* suggestion = [FormSuggestion
-        suggestionWithValue:value
-         displayDescription:displayDescription
-                       icon:base::SysUTF8ToNSString(popup_suggestion.icon)
-                 identifier:popup_suggestion.frontend_id
-             requiresReauth:NO];
+               suggestionWithValue:value
+                        minorValue:minorValue
+                displayDescription:displayDescription
+                              icon:icon
+                       popupItemId:popup_suggestion.popup_item_id
+                 backendIdentifier:SysUTF8ToNSString(
+                                       popup_suggestion
+                                           .GetBackendId<
+                                               autofill::Suggestion::Guid>()
+                                           .value())
+                    requiresReauth:NO
+        acceptanceA11yAnnouncement:acceptanceA11yAnnouncement];
+
+    if (!popup_suggestion.feature_for_iph.empty()) {
+      suggestion.featureForIPH =
+          base::SysUTF8ToNSString(popup_suggestion.feature_for_iph);
+    }
 
     // Put "clear form" entry at the front of the suggestions.
-    if (popup_suggestion.frontend_id == autofill::POPUP_ITEM_ID_CLEAR_FORM) {
+    if (popup_suggestion.popup_item_id == autofill::PopupItemId::kClearForm) {
       [suggestions insertObject:suggestion atIndex:0];
     } else {
       [suggestions addObject:suggestion];
@@ -629,8 +799,8 @@ void GetFormField(autofill::FormFieldData* field,
              popupDelegate:base::WeakPtr<autofill::AutofillPopupDelegate>()];
 }
 
-- (bool)isQueryIDRelevant:(int)queryID {
-  return queryID == _lastQueryID;
+- (bool)isLastQueriedField:(autofill::FieldGlobalId)fieldID {
+  return fieldID == _lastQueriedFieldID;
 }
 
 #pragma mark - CRWWebStateObserver
@@ -647,32 +817,10 @@ void GetFormField(autofill::FormFieldData* field,
 
   // The frameID cannot be empty.
   DCHECK(!pendingFormData.first.empty());
-  web::WebFrame* frame =
-      web::GetWebFrameWithId(_webState, pendingFormData.first);
+  web::WebFramesManager* frames_manager =
+      AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(_webState);
+  web::WebFrame* frame = frames_manager->GetFrameWithId(pendingFormData.first);
   [self sendData:std::move(pendingFormData.second) toFrame:frame];
-}
-
-- (void)webState:(web::WebState*)webState
-    frameDidBecomeAvailable:(web::WebFrame*)web_frame {
-  DCHECK_EQ(_webState, webState);
-  DCHECK(web_frame);
-  if (![self isAutofillEnabled] || webState->IsLoading()) {
-    return;
-  }
-  if (web_frame->IsMainFrame()) {
-    [self processPage:webState];
-    return;
-  }
-  // Check that the main frame has already been processed.
-  if (!webState->GetWebFramesManager()->GetMainWebFrame()) {
-    return;
-  }
-  if (!autofill::AutofillDriverIOS::FromWebStateAndWebFrame(
-           webState, webState->GetWebFramesManager()->GetMainWebFrame())
-           ->is_processed()) {
-    return;
-  }
-  [self processFrame:web_frame inWebState:webState];
 }
 
 - (void)webState:(web::WebState*)webState didLoadPageWithSuccess:(BOOL)success {
@@ -685,26 +833,56 @@ void GetFormField(autofill::FormFieldData* field,
 
 - (void)webStateDestroyed:(web::WebState*)webState {
   DCHECK_EQ(_webState, webState);
-  _last_submitted_autofill_driver = nullptr;
   if (_webState) {
     _formActivityObserverBridge.reset();
     _webState->RemoveObserver(_webStateObserverBridge.get());
     _webStateObserverBridge.reset();
+    web::WebFramesManager* framesManager =
+        AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(
+            _webState);
+    framesManager->RemoveObserver(_webFramesManagerObserverBridge.get());
+    _webFramesManagerObserverBridge.reset();
     _webState = nullptr;
   }
   // Do not wait for deallocation. Remove all observers here.
   _prefChangeRegistrar.RemoveAll();
 }
 
+#pragma mark - CRWWebFramesManagerObserver
+
+- (void)webFramesManager:(web::WebFramesManager*)webFramesManager
+    frameBecameAvailable:(web::WebFrame*)webFrame {
+  DCHECK(_webState);
+  DCHECK(webFrame);
+  if (![self isAutofillEnabled] || _webState->IsLoading()) {
+    return;
+  }
+  if (webFrame->IsMainFrame()) {
+    [self processPage:_webState];
+    return;
+  }
+  // Check that the main frame has already been processed.
+  if (!webFramesManager->GetMainWebFrame()) {
+    return;
+  }
+  if (!autofill::AutofillDriverIOS::FromWebStateAndWebFrame(
+           _webState, webFramesManager->GetMainWebFrame())
+           ->is_processed()) {
+    return;
+  }
+  [self processFrame:webFrame inWebState:_webState];
+}
+
 #pragma mark - Private methods
 
 - (void)processPage:(web::WebState*)webState {
-  web::WebFramesManager* framesManager = webState->GetWebFramesManager();
-  if (!framesManager->GetMainWebFrame()) {
+  web::WebFramesManager* frames_manager =
+      AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(webState);
+  if (!frames_manager->GetMainWebFrame()) {
     return;
   }
-  [self processFrame:framesManager->GetMainWebFrame() inWebState:webState];
-  for (auto* frame : framesManager->GetAllWebFrames()) {
+  [self processFrame:frames_manager->GetMainWebFrame() inWebState:webState];
+  for (auto* frame : frames_manager->GetAllWebFrames()) {
     if (frame->IsMainFrame()) {
       continue;
     }
@@ -713,8 +891,9 @@ void GetFormField(autofill::FormFieldData* field,
 }
 
 - (void)processFrame:(web::WebFrame*)frame inWebState:(web::WebState*)webState {
-  if (!frame || !frame->CanCallJavaScriptFunction())
+  if (!frame) {
     return;
+  }
 
   autofill::AutofillDriverIOS* driver =
       autofill::AutofillDriverIOS::FromWebStateAndWebFrame(webState, frame);
@@ -722,9 +901,10 @@ void GetFormField(autofill::FormFieldData* field,
   if (driver->is_processed())
     return;
   driver->set_processed(true);
-  autofill::AutofillJavaScriptFeature* autofill_feature =
-      autofill::AutofillJavaScriptFeature::GetInstance();
-  autofill_feature->AddJSDelayInFrame(frame);
+
+  FormUtilJavaScriptFeature::GetInstance()->SetAutofillAcrossIframes(
+      frame, base::FeatureList::IsEnabled(
+                 autofill::features::kAutofillAcrossIframesIos));
 
   if (frame->IsMainFrame()) {
     _popupDelegate.reset();
@@ -734,8 +914,8 @@ void GetFormField(autofill::FormFieldData* field,
     _typedValue = nil;
   }
 
-  autofill::FormHandlersJavaScriptFeature* formHandlerFeature =
-      autofill::FormHandlersJavaScriptFeature::GetInstance();
+  FormHandlersJavaScriptFeature* formHandlerFeature =
+      FormHandlersJavaScriptFeature::GetInstance();
 
   // Use a delay of 200ms when tracking form mutations to reduce the
   // communication overhead (as mutations are likely to come in batch).
@@ -755,13 +935,10 @@ void GetFormField(autofill::FormFieldData* field,
   __weak AutofillAgent* weakSelf = self;
   id completionHandler = ^(BOOL success, const FormDataVector& forms) {
     AutofillAgent* strongSelf = weakSelf;
-    if (!strongSelf || !success)
+    if (!strongSelf || !success || forms.empty()) {
       return;
-    autofill::BrowserAutofillManager* autofillManager =
-        [strongSelf autofillManagerFromWebState:webState webFrame:webFrame];
-    if (!autofillManager || forms.empty())
-      return;
-    [strongSelf notifyBrowserAutofillManager:autofillManager ofFormsSeen:forms];
+    }
+    [strongSelf notifyFormsSeen:forms inFrame:webFrame];
   };
   // The document has now been fully loaded. Scan for forms to be extracted.
   size_t min_required_fields =
@@ -785,8 +962,9 @@ void GetFormField(autofill::FormFieldData* field,
   if (![self isAutofillEnabled])
     return;
 
-  if (!frame || !frame->CanCallJavaScriptFunction())
+  if (!frame) {
     return;
+  }
 
   // Return early if the page is not processed yet.
   DCHECK(autofill::AutofillDriverIOS::FromWebStateAndWebFrame(webState, frame));
@@ -799,8 +977,8 @@ void GetFormField(autofill::FormFieldData* field,
     return;
 
   // If the event is a form_changed, then the event concerns the whole page and
-  // not a particular form. The whole page need to be reparsed to find the new
-  // forms.
+  // not a particular form. The whole document's forms need to be extracted to
+  // find the new forms.
   if (params.type == "form_changed") {
     [self scanFormsInWebState:webState inFrame:frame];
     return;
@@ -847,30 +1025,20 @@ void GetFormField(autofill::FormFieldData* field,
                            inFrame:(web::WebFrame*)frame {
   if (![self isAutofillEnabled])
     return;
-  if (!frame || !frame->CanCallJavaScriptFunction())
+  if (!frame) {
     return;
+  }
   FormDataVector forms;
 
   bool success = autofill::ExtractFormsData(
       base::SysUTF8ToNSString(formData), true, base::UTF8ToUTF16(formName),
-      webState->GetLastCommittedURL(), frame->GetSecurityOrigin(), &forms);
+      webState->GetLastCommittedURL(), frame->GetSecurityOrigin(),
+      *_fieldDataManager, &forms);
 
   autofill::BrowserAutofillManager* autofillManager =
       [self autofillManagerFromWebState:webState webFrame:frame];
   if (!autofillManager || !success || forms.empty())
     return;
-  // AutofillDriverIOSWebFrame will keep a refcountable AutofillDriverIOS.
-  // This is a workaround crbug.com/892612. On submission,
-  // AutofillDownloadManager and CreditCardSaveManager expect
-  // BrowserAutofillManager and AutofillDriver to live after web frame deletion
-  // so AutofillAgent will keep the latest submitted AutofillDriver alive.
-  // TODO(crbug.com/892612): remove this workaround once life cycle of
-  // BrowserAutofillManager is fixed.
-  DCHECK(frame);
-  _last_submitted_autofill_driver =
-      autofill::AutofillDriverIOSWebFrame::FromWebFrame(frame)
-          ->GetRetainableDriver();
-  DCHECK(_last_submitted_autofill_driver);
   DCHECK(forms.size() <= 1) << "Only one form should be extracted.";
   [self notifyBrowserAutofillManager:autofillManager
                     ofFormsSubmitted:forms
@@ -892,7 +1060,7 @@ void GetFormField(autofill::FormFieldData* field,
 // if the current URL has a web scheme and the page content is HTML.
 - (BOOL)isAutofillEnabled {
   if (!autofill::prefs::IsAutofillProfileEnabled(_prefService) &&
-      !autofill::prefs::IsAutofillCreditCardEnabled(_prefService)) {
+      !autofill::prefs::IsAutofillPaymentMethodsEnabled(_prefService)) {
     return NO;
   }
 
@@ -924,14 +1092,14 @@ void GetFormField(autofill::FormFieldData* field,
   SuggestionHandledCompletion suggestionHandledCompletionCopy =
       [_suggestionHandledCompletion copy];
   _suggestionHandledCompletion = nil;
-  autofill::AutofillJavaScriptFeature::GetInstance()->FillActiveFormField(
+  AutofillJavaScriptFeature::GetInstance()->FillActiveFormField(
       frame, std::move(data), base::BindOnce(^(BOOL success) {
         AutofillAgent* strongSelf = weakSelf;
         if (!strongSelf)
           return;
         if (success) {
-          strongSelf->_fieldDataManager->UpdateFieldDataMap(
-              uniqueFieldID, value, kAutofilledOnUserTrigger);
+          [strongSelf updateFieldManagerForSpecificField:uniqueFieldID
+                                               withValue:value];
         }
         suggestionHandledCompletionCopy();
       }));
@@ -955,6 +1123,12 @@ void GetFormField(autofill::FormFieldData* field,
       .Record(ukm::UkmRecorder::Get());
 }
 
+- (void)updateFieldManagerForSpecificField:(FieldRendererId)uniqueFieldID
+                                 withValue:(const std::u16string&)value {
+  _fieldDataManager->UpdateFieldDataMap(uniqueFieldID, value,
+                                        kAutofilledOnUserTrigger);
+}
+
 // Sends the the |data| to |frame| to actually fill the data.
 - (void)sendData:(base::Value::Dict)data toFrame:(web::WebFrame*)frame {
   DCHECK(_webState->IsVisible());
@@ -962,7 +1136,7 @@ void GetFormField(autofill::FormFieldData* field,
   SuggestionHandledCompletion suggestionHandledCompletionCopy =
       [_suggestionHandledCompletion copy];
   _suggestionHandledCompletion = nil;
-  autofill::AutofillJavaScriptFeature::GetInstance()->FillForm(
+  AutofillJavaScriptFeature::GetInstance()->FillForm(
       frame, std::move(data), _pendingAutocompleteFieldID,
       base::BindOnce(^(NSString* jsonString) {
         AutofillAgent* strongSelf = weakSelf;
@@ -990,9 +1164,11 @@ void GetFormField(autofill::FormFieldData* field,
   if (!_webState)
     return;
 
-  DCHECK(_webState->GetWebFramesManager());
-  web::WebFrame* webFrame =
-      _webState->GetWebFramesManager()->GetFrameWithId(webFrameId);
+  web::WebFramesManager* frames_manager =
+      AutofillJavaScriptFeature::GetInstance()->GetWebFramesManager(_webState);
+
+  DCHECK(frames_manager);
+  web::WebFrame* webFrame = frames_manager->GetFrameWithId(webFrameId);
   if (!webFrame)
     return;
 
@@ -1003,8 +1179,39 @@ void GetFormField(autofill::FormFieldData* field,
 
   autofill::FormFieldData field;
   GetFormField(&field, forms[0], fieldIdentifier);
-  autofillManager->OnTextFieldDidChange(
-      forms[0], field, gfx::RectF(), autofill::AutofillTickClock::NowTicks());
+  autofillManager->OnTextFieldDidChange(forms[0], field, gfx::RectF(),
+                                        base::TimeTicks::Now());
+}
+
+// Helper method to create icons for payment cards.
+- (UIImage*)createIcon:(autofill::Suggestion)popup_suggestion {
+  // If available, the custom icon for the card is preferred over the
+  // generic network icon. The network icon may also be missing, in
+  // which case we do not set an icon at all.
+  if (!popup_suggestion.custom_icon.IsEmpty()) {
+    UIImage* icon = popup_suggestion.custom_icon.ToUIImage();
+
+    // On iOS, the keyboard accessory wants smaller icons than the default
+    // 40x24 size, so we resize them to 32x20, if the provided icon is
+    // larger than that.
+    constexpr CGFloat kSuggestionIconWidth = 32;
+    if (icon && (icon.size.width > kSuggestionIconWidth)) {
+      // For a simple image resize, we can keep the same underlying image
+      // and only adjust the ratio.
+      CGFloat ratio = icon.size.width / kSuggestionIconWidth;
+      return [UIImage imageWithCGImage:[icon CGImage]
+                                 scale:icon.scale * ratio
+                           orientation:icon.imageOrientation];
+    }
+    return icon;
+  } else if (popup_suggestion.icon != autofill::Suggestion::Icon::kNoIcon) {
+    const int resourceID =
+        autofill::CreditCard::IconResourceId(popup_suggestion.icon);
+    return ui::ResourceBundle::GetSharedInstance()
+        .GetNativeImageNamed(resourceID)
+        .ToUIImage();
+  }
+  return nil;
 }
 
 @end

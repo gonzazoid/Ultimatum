@@ -14,6 +14,7 @@ import {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-w
 import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {loadTimeData} from './i18n_setup.js';
 import {IframeElement} from './iframe.js';
 import {getTemplate} from './logo.html.js';
 import {Doodle, DoodleImageType, DoodleShareChannel, ImageDoodle, PageHandlerRemote} from './new_tab_page.mojom-webui.js';
@@ -127,6 +128,12 @@ export class LogoElement extends PolymerElement {
         type: Number,
         computed: 'computeImageDoodleTabIndex_(doodle_, showAnimation_)',
       },
+
+      reducedLogoSpaceEnabled_: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: () => loadTimeData.getBoolean('reducedLogoSpaceEnabled'),
+      },
     };
   }
 
@@ -175,9 +182,12 @@ export class LogoElement extends PolymerElement {
     super.connectedCallback();
     this.eventTracker_.add(window, 'message', ({data}: MessageEvent) => {
       if (data['cmd'] === 'resizeDoodle') {
-        this.duration_ = assert(data.duration);
-        this.height_ = assert(data.height);
-        this.width_ = assert(data.width);
+        assert(data.duration);
+        this.duration_ = data.duration;
+        assert(data.height);
+        this.height_ = data.height;
+        assert(data.width);
+        this.width_ = data.width;
         this.expanded_ = true;
       } else if (data['cmd'] === 'sendMode') {
         this.sendMode_();

@@ -53,7 +53,7 @@ void SharingServiceProxyAndroid::SendSharedClipboardMessage(
   std::string guid = base::android::ConvertJavaStringToUTF8(env, j_guid);
   DCHECK(!guid.empty());
 
-  std::unique_ptr<syncer::DeviceInfo> device =
+  std::unique_ptr<SharingTargetDeviceInfo> device =
       sharing_service_->GetDeviceByGuid(guid);
 
   if (!device) {
@@ -91,7 +91,7 @@ void SharingServiceProxyAndroid::GetDeviceCandidates(
         base::android::ConvertUTF8ToJavaString(env, device_info->guid()),
         base::android::ConvertUTF8ToJavaString(env, device_info->client_name()),
         static_cast<int>(device_info->form_factor()),
-        device_info->last_updated_timestamp().ToJavaTime());
+        device_info->last_updated_timestamp().InMillisecondsSinceUnixEpoch());
   }
 }
 

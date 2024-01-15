@@ -5,6 +5,7 @@
 module help_bubble.mojom;
 
 import "mojo/public/mojom/base/time.mojom";
+import "ui/gfx/geometry/mojom/geometry.mojom";
 
 // Contains IPC calls that allow the HelpBubbleFactory system to connect to
 // the HelpBubbleMixin and HelpBubbleElement component.
@@ -68,7 +69,6 @@ struct HelpBubbleParams {
   string? title_text;
   string body_text;
   string close_button_alt_text;
-  bool force_close_button = false;
   string? body_icon_name;
   string body_icon_alt_text;
   Progress? progress;
@@ -105,7 +105,9 @@ interface HelpBubbleHandlerFactory {
 interface HelpBubbleHandler {
   // Indicates that the visibility of the element that the help bubble could be
   // anchored to has changed.
-  HelpBubbleAnchorVisibilityChanged(string native_identifier, bool visible);
+  HelpBubbleAnchorVisibilityChanged(string native_identifier,
+                                    bool visible,
+                                    gfx.mojom.RectF rect);
 
   // Notifies that a specific element tagged as a help bubble anchor has been
   // activated, which will in turn be propagated through the ui::ElementTracker
@@ -152,4 +154,9 @@ interface HelpBubbleClient {
   // Invoked to hide the help bubble anchored to `native_identifier` if it
   // should no longer be shown.
   HideHelpBubble(string native_identifier);
+
+  // Notifies the client that an external help bubble (i.e. one owned/displayed
+  // by the handler) anchored to `native_identifier` has been shown or hidden.
+  // The client may change the visual appearance of the anchor as a result.
+  ExternalHelpBubbleUpdated(string native_identifier, bool shown);
 };

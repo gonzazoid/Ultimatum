@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/extension_uninstall_dialog.h"
 #include "chrome/browser/ui/views/extensions/extensions_dialogs_utils.h"
@@ -84,9 +84,10 @@ void ExtensionUninstallDialogViews::Show() {
       .AddOkButton(
           base::BindOnce(&ExtensionUninstallDialogViews::DialogAccepted,
                          weak_ptr_factory_.GetWeakPtr()),
-          l10n_util::GetStringUTF16(IDS_EXTENSION_PROMPT_UNINSTALL_BUTTON))
+          ui::DialogModel::Button::Params().SetLabel(
+              l10n_util::GetStringUTF16(IDS_EXTENSION_PROMPT_UNINSTALL_BUTTON)))
       .AddCancelButton(
-          base::OnceClosure() /* Cancel is covered by WindowClosingCallback */);
+          base::DoNothing() /* Cancel is covered by WindowClosingCallback */);
 
   if (triggering_extension()) {
     dialog_builder.AddParagraph(

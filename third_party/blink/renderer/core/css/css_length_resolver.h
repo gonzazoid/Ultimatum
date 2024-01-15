@@ -19,14 +19,23 @@ class CORE_EXPORT CSSLengthResolver {
  public:
   explicit CSSLengthResolver(float zoom) : zoom_(zoom) {}
 
-  // Font-relative must be pre-zoomed.
-  virtual float EmFontSize() const = 0;
-  virtual float RemFontSize() const = 0;
-  virtual float ExFontSize() const = 0;
-  virtual float ChFontSize() const = 0;
-  virtual float IcFontSize() const = 0;
+  // Font-relative sizes handle the target zoom themselves. This is because
+  // font-relative sizes may be pre-zoomed (with a factor potentially different
+  // from the target zoom).
+  virtual float EmFontSize(float zoom) const = 0;
+  virtual float RemFontSize(float zoom) const = 0;
+  virtual float ExFontSize(float zoom) const = 0;
+  virtual float RexFontSize(float zoom) const = 0;
+  virtual float ChFontSize(float zoom) const = 0;
+  virtual float RchFontSize(float zoom) const = 0;
+  virtual float IcFontSize(float zoom) const = 0;
+  virtual float RicFontSize(float zoom) const = 0;
+  virtual float LineHeight(float zoom) const = 0;
+  virtual float RootLineHeight(float zoom) const = 0;
+  virtual float CapFontSize(float zoom) const = 0;
+  virtual float RcapFontSize(float zoom) const = 0;
 
-  // Other sizes must not be pre-zoomed.
+  // Other sizes are not pre-zoomed.
   virtual double ViewportWidth() const = 0;
   virtual double ViewportHeight() const = 0;
   virtual double SmallViewportWidth() const = 0;
@@ -37,9 +46,12 @@ class CORE_EXPORT CSSLengthResolver {
   virtual double DynamicViewportHeight() const = 0;
   virtual double ContainerWidth() const = 0;
   virtual double ContainerHeight() const = 0;
-  virtual float LineHeight() const = 0;
 
   virtual WritingMode GetWritingMode() const = 0;
+
+  // Invoked to notify the resolver that there is an anchor reference in a
+  // calc() expression. Used to track the use of tree-scoped references.
+  virtual void ReferenceAnchor() const = 0;
 
   float Zoom() const { return zoom_; }
   void SetZoom(float zoom) {

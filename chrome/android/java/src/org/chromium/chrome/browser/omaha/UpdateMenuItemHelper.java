@@ -8,17 +8,17 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.res.Resources;
 import android.text.TextUtils;
+import android.view.Choreographer;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.BuildInfo;
 import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.ObserverList;
-import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.R;
@@ -31,7 +31,6 @@ import org.chromium.chrome.browser.toolbar.menu_button.MenuItemState;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuUiState;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.user_prefs.UserPrefs;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 /**
  * Contains logic related to displaying app menu badge and a special menu item for information
@@ -45,20 +44,7 @@ import org.chromium.content_public.browser.UiThreadTaskTraits;
  * For manually testing this functionality, see {@link UpdateConfigs}.
  */
 public class UpdateMenuItemHelper {
-    static final String ACTION_TAKEN_ON_MENU_OPEN_HISTOGRAM =
-            "GoogleUpdate.MenuItem.ActionTakenOnMenuOpen";
     private static final String TAG = "UpdateMenuItemHelper";
-
-    // UMA constants for logging whether the menu item was clicked.
-    static final int ITEM_NOT_CLICKED = 0;
-    static final int ITEM_CLICKED_INTENT_LAUNCHED = 1;
-    static final int ITEM_CLICKED_INTENT_FAILED = 2;
-    private static final int ITEM_CLICKED_BOUNDARY = 3;
-
-    // UMA constants for logging whether Chrome was updated after the menu item was clicked.
-    private static final int UPDATED = 0;
-    private static final int NOT_UPDATED = 1;
-    private static final int UPDATED_BOUNDARY = 2;
 
     private static UpdateMenuItemHelper sInstance;
 
@@ -66,12 +52,12 @@ public class UpdateMenuItemHelper {
 
     private final ObserverList<Runnable> mObservers = new ObserverList<>();
 
-    private final Callback<UpdateStatusProvider.UpdateStatus> mUpdateCallback = status -> {
-        mStatus = status;
-        handleStateChanged();
-        pingObservers();
-        recordUpdateHistogram();
-    };
+    private final Callback<UpdateStatusProvider.UpdateStatus> mUpdateCallback =
+            status -> {
+                mStatus = status;
+                handleStateChanged();
+                pingObservers();
+            };
 
     /**
      * The current state of updates for Chrome.  This can change during runtime and may be {@code
@@ -83,9 +69,6 @@ public class UpdateMenuItemHelper {
     private @Nullable UpdateStatus mStatus;
 
     private @NonNull MenuUiState mMenuUiState = new MenuUiState();
-
-    // Whether the menu item was clicked. This is used to log the click-through rate.
-    private boolean mMenuItemClicked;
 
     /**
      * Whether the runnable posted when the app menu is dismissed has been executed. Tracked for
@@ -103,9 +86,9 @@ public class UpdateMenuItemHelper {
         }
     }
 
-    @VisibleForTesting
     public static void setInstanceForTesting(UpdateMenuItemHelper testingInstance) {
         sInstance = testingInstance;
+        ResettersForTesting.register(() -> sInstance = null);
     }
 
     /**
@@ -116,9 +99,11 @@ public class UpdateMenuItemHelper {
         if (!mObservers.addObserver(observer)) return;
 
         if (mStatus != null) {
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, () -> {
-                if (mObservers.hasObserver(observer)) observer.run();
-            });
+            PostTask.postTask(
+                    TaskTraits.UI_DEFAULT,
+                    () -> {
+                        if (mObservers.hasObserver(observer)) observer.run();
+                    });
             return;
         }
 
@@ -136,19 +121,10 @@ public class UpdateMenuItemHelper {
     }
 
     /**
-     * Logs whether an update was performed if the update menu item was clicked.
-     * Should be called from ChromeActivity#onStart().
-     */
-    public void onStart() {
-        if (mStatus != null) recordUpdateHistogram();
-    }
-
-    /**
      * Handles a click on the update menu item.
      * @param activity The current {@code Activity}.
      */
     public void onMenuItemClicked(Activity activity) {
-        mMenuItemClicked = true;
         if (mStatus == null) return;
 
         switch (mStatus.updateState) {
@@ -156,17 +132,14 @@ public class UpdateMenuItemHelper {
                 if (TextUtils.isEmpty(mStatus.updateUrl)) return;
 
                 try {
-                    UpdateStatusProvider.getInstance().startIntentUpdate(
-                            activity, false /* newTask */);
-                    recordItemClickedHistogram(ITEM_CLICKED_INTENT_LAUNCHED);
-                    getPrefService().setBoolean(Pref.CLICKED_UPDATE_MENU_ITEM, true);
+                    UpdateStatusProvider.getInstance()
+                            .startIntentUpdate(activity, /* newTask= */ false);
                 } catch (ActivityNotFoundException e) {
                     Log.e(TAG, "Failed to launch Activity for: %s", mStatus.updateUrl);
-                    recordItemClickedHistogram(ITEM_CLICKED_INTENT_FAILED);
                 }
                 break;
             case UpdateState.UNSUPPORTED_OS_VERSION:
-            // Intentional fall through.
+                // Intentional fall through.
             default:
                 return;
         }
@@ -174,25 +147,25 @@ public class UpdateMenuItemHelper {
         // If the update menu item is showing because it was forced on through about://flags
         // then mLatestVersion may be null.
         if (mStatus.latestVersion != null) {
-            getPrefService().setString(
-                    Pref.LATEST_VERSION_WHEN_CLICKED_UPDATE_MENU_ITEM, mStatus.latestVersion);
+            getPrefService()
+                    .setString(
+                            Pref.LATEST_VERSION_WHEN_CLICKED_UPDATE_MENU_ITEM,
+                            mStatus.latestVersion);
         }
 
         handleStateChanged();
     }
 
-    /**
-     * Called when the menu containing the update menu item is dismissed.
-     */
+    /** Called when the menu containing the update menu item is dismissed. */
     public void onMenuDismissed() {
         mMenuDismissedRunnableExecuted = false;
         // Post a task to record the item clicked histogram. Post task is used so that the runnable
         // executes after #onMenuItemClicked is called (if it's going to be called).
-        PostTask.postTask(TaskTraits.CHOREOGRAPHER_FRAME, () -> {
-            if (!mMenuItemClicked) recordItemClickedHistogram(ITEM_NOT_CLICKED);
-            mMenuItemClicked = false;
-            mMenuDismissedRunnableExecuted = true;
-        });
+        Choreographer.getInstance()
+                .postFrameCallback(
+                        (long frameTimeNanos) -> {
+                            mMenuDismissedRunnableExecuted = true;
+                        });
     }
 
     /**
@@ -218,10 +191,12 @@ public class UpdateMenuItemHelper {
             case UpdateState.UPDATE_AVAILABLE:
                 // The badge is hidden if the update menu item has been clicked until there is an
                 // even newer version of Chrome available.
-                showBadge |= !TextUtils.equals(
-                        getPrefService().getString(
-                                Pref.LATEST_VERSION_WHEN_CLICKED_UPDATE_MENU_ITEM),
-                        mStatus.latestUnsupportedVersion);
+                showBadge |=
+                        !TextUtils.equals(
+                                getPrefService()
+                                        .getString(
+                                                Pref.LATEST_VERSION_WHEN_CLICKED_UPDATE_MENU_ITEM),
+                                mStatus.latestUnsupportedVersion);
 
                 if (showBadge) {
                     mMenuUiState.buttonState = new MenuButtonState();
@@ -249,8 +224,10 @@ public class UpdateMenuItemHelper {
 
                 // In case the user has been upgraded since last time they tapped the toolbar badge
                 // we should show the badge again.
-                showBadge |= !TextUtils.equals(
-                        BuildInfo.getInstance().versionName, mStatus.latestUnsupportedVersion);
+                showBadge |=
+                        !TextUtils.equals(
+                                BuildInfo.getInstance().versionName,
+                                mStatus.latestUnsupportedVersion);
 
                 if (showBadge) {
                     mMenuUiState.buttonState = new MenuButtonState();
@@ -271,7 +248,7 @@ public class UpdateMenuItemHelper {
                 mMenuUiState.itemState.enabled = false;
                 break;
             case UpdateState.NONE:
-            // Intentional fall through.
+                // Intentional fall through.
             default:
                 break;
         }
@@ -281,28 +258,10 @@ public class UpdateMenuItemHelper {
         for (Runnable observer : mObservers) observer.run();
     }
 
-    private void recordItemClickedHistogram(int action) {
-        RecordHistogram.recordEnumeratedHistogram(
-                ACTION_TAKEN_ON_MENU_OPEN_HISTOGRAM, action, ITEM_CLICKED_BOUNDARY);
-    }
-
-    private void recordUpdateHistogram() {
-        assert mStatus != null;
-
-        if (getPrefService().getBoolean(Pref.CLICKED_UPDATE_MENU_ITEM)) {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "GoogleUpdate.MenuItem.ActionTakenAfterItemClicked",
-                    mStatus.updateState == UpdateState.UPDATE_AVAILABLE ? NOT_UPDATED : UPDATED,
-                    UPDATED_BOUNDARY);
-            getPrefService().setBoolean(Pref.CLICKED_UPDATE_MENU_ITEM, false);
-        }
-    }
-
     private static PrefService getPrefService() {
         return UserPrefs.get(Profile.getLastUsedRegularProfile());
     }
 
-    @VisibleForTesting
     boolean getMenuDismissedRunnableExecutedForTests() {
         return mMenuDismissedRunnableExecuted;
     }

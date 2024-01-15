@@ -4,15 +4,18 @@
 
 #include "third_party/blink/public/common/loader/throttling_url_loader.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
@@ -408,16 +411,16 @@ class ThrottlingURLLoaderTest : public testing::Test {
     throttles_.push_back(std::move(throttle));
   }
 
-  void CreateLoaderAndStart(bool sync = false) {
-    uint32_t options = 0;
-    if (sync)
-      options |= network::mojom::kURLLoadOptionSynchronous;
+  void CreateLoaderAndStart(
+      absl::optional<network::ResourceRequest::TrustedParams> trusted_params =
+          absl::nullopt) {
     network::ResourceRequest request;
     request.url = request_url;
+    request.trusted_params = std::move(trusted_params);
     loader_ = ThrottlingURLLoader::CreateLoaderAndStart(
-        factory_.shared_factory(), std::move(throttles_), 0, options, &request,
-        &client_, TRAFFIC_ANNOTATION_FOR_TESTS,
-        base::ThreadTaskRunnerHandle::Get());
+        factory_.shared_factory(), std::move(throttles_), /*request_id=*/0,
+        /*options=*/0, &request, &client_, TRAFFIC_ANNOTATION_FOR_TESTS,
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     factory_.factory_remote().FlushForTesting();
   }
 
@@ -554,6 +557,46 @@ TEST_F(ThrottlingURLLoaderTest, ModifyURLBeforeStart) {
   EXPECT_EQ(1u, throttle_->will_redirect_request_called());
 }
 
+TEST_F(ThrottlingURLLoaderTest,
+       CrossOriginRedirectBeforeStartWithIsolationInfo) {
+  const GURL modified_url = GURL("https://example.org");
+
+  throttle_->set_modify_url_in_will_start(modified_url);
+
+  network::ResourceRequest::TrustedParams trusted_params;
+  trusted_params.isolation_info = net::IsolationInfo::Create(
+      net::IsolationInfo::RequestType::kMainFrame,
+      url::Origin::Create(request_url), url::Origin::Create(request_url),
+      net::SiteForCookies());
+
+  const auto expected_redirected_isolation_info =
+      trusted_params.isolation_info.CreateForRedirect(
+          url::Origin::Create(modified_url));
+  ASSERT_FALSE(trusted_params.isolation_info.IsEqualForTesting(
+      expected_redirected_isolation_info));
+
+  CreateLoaderAndStart(std::move(trusted_params));
+
+  EXPECT_EQ(1u, throttle_->will_start_request_called());
+  EXPECT_EQ(1u, throttle_->will_redirect_request_called());
+  EXPECT_EQ(0u, factory_.create_loader_and_start_called());
+
+  base::RunLoop run_loop;
+  factory_.set_on_create_loader_and_start(base::BindLambdaForTesting(
+      [&](const network::ResourceRequest& url_request) {
+        run_loop.Quit();
+
+        ASSERT_TRUE(url_request.trusted_params);
+        EXPECT_TRUE(
+            url_request.trusted_params->isolation_info.IsEqualForTesting(
+                expected_redirected_isolation_info));
+      }));
+
+  loader_->FollowRedirect({}, {}, {});
+
+  run_loop.Run();
+}
+
 // Regression test for crbug.com/933538
 TEST_F(ThrottlingURLLoaderTest, ModifyURLAndDeferRedirect) {
   throttle_->set_modify_url_in_will_start(GURL("http://example.org/foo"));
@@ -616,7 +659,7 @@ TEST_F(ThrottlingURLLoaderTest,
   loader_ = ThrottlingURLLoader::CreateLoaderAndStart(
       factory_.shared_factory(), std::move(throttles_), 0, 0, &request,
       &client_, TRAFFIC_ANNOTATION_FOR_TESTS,
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 
   loader_ = nullptr;
 
@@ -747,6 +790,49 @@ TEST_F(ThrottlingURLLoaderTest, ModifyHeadersBeforeRedirect) {
       "X-Test-Header-4: Bar\r\n\r\n",
       factory_.headers_modified_on_redirect().ToString());
   ASSERT_FALSE(factory_.cors_exempt_headers_modified_on_redirect().IsEmpty());
+  EXPECT_EQ("X-Test-Cors-Exempt-Header-1: Bobble\r\n\r\n",
+            factory_.cors_exempt_headers_modified_on_redirect().ToString());
+}
+
+TEST_F(ThrottlingURLLoaderTest, RemoveAcceptLanguageHeader) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      {network::features::kReduceAcceptLanguageOriginTrial}, {});
+
+  // Remove Accept-Language header if new header has no Accept-Language header.
+  throttle_->set_will_redirect_request_callback(base::BindLambdaForTesting(
+      [](blink::URLLoaderThrottle::Delegate* delegate, bool* /* defer */,
+         std::vector<std::string>* removed_headers,
+         net::HttpRequestHeaders* modified_headers,
+         net::HttpRequestHeaders* modified_cors_exempt_headers) {
+        modified_headers->SetHeader("Accept-Language", "en");
+        modified_headers->SetHeader("X-Test-Header-1", "Foo");
+        modified_cors_exempt_headers->SetHeader("X-Test-Cors-Exempt-Header-1",
+                                                "Bubble");
+      }));
+
+  // New header without Accept-Language header.
+  client_.set_on_received_redirect_callback(base::BindLambdaForTesting([&]() {
+    net::HttpRequestHeaders modified_headers;
+    modified_headers.SetHeader("X-Test-Header-2", "Bar");
+    net::HttpRequestHeaders modified_cors_exempt_headers;
+    modified_cors_exempt_headers.SetHeader("X-Test-Cors-Exempt-Header-1",
+                                           "Bobble");
+    loader_->FollowRedirect({"Accept-Language"} /* removed_headers */,
+                            std::move(modified_headers),
+                            std::move(modified_cors_exempt_headers));
+  }));
+
+  CreateLoaderAndStart();
+  factory_.NotifyClientOnReceiveRedirect();
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_THAT(factory_.headers_removed_on_redirect(),
+              testing::ElementsAre("Accept-Language"));
+  EXPECT_EQ(
+      "X-Test-Header-1: Foo\r\n"
+      "X-Test-Header-2: Bar\r\n\r\n",
+      factory_.headers_modified_on_redirect().ToString());
   EXPECT_EQ("X-Test-Cors-Exempt-Header-1: Bobble\r\n\r\n",
             factory_.cors_exempt_headers_modified_on_redirect().ToString());
 }

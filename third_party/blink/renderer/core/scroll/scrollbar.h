@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
+#include "third_party/blink/renderer/core/style/style_scrollbar_color.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_client.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -44,8 +45,8 @@ class Rect;
 
 namespace blink {
 
-class Element;
 class GraphicsContext;
+class LayoutObject;
 class ScrollableArea;
 class ScrollbarTheme;
 class WebGestureEvent;
@@ -59,14 +60,11 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
   // scrollbar.
   static Scrollbar* CreateForTesting(ScrollableArea* scrollable_area,
                                      ScrollbarOrientation orientation,
-                                     ScrollbarTheme* theme) {
-    return MakeGarbageCollected<Scrollbar>(scrollable_area, orientation,
-                                           nullptr, theme);
-  }
+                                     ScrollbarTheme* theme);
 
   Scrollbar(ScrollableArea*,
             ScrollbarOrientation,
-            Element* style_source,
+            const LayoutObject* style_source,
             ScrollbarTheme* = nullptr);
   ~Scrollbar() override;
 
@@ -112,7 +110,7 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
   virtual void OffsetDidChange(mojom::blink::ScrollType scroll_type);
 
   virtual void DisconnectFromScrollableArea();
-  ScrollableArea* GetScrollableArea() const { return scrollable_area_; }
+  ScrollableArea* GetScrollableArea() const { return scrollable_area_.Get(); }
 
   int PressedPos() const { return pressed_pos_; }
 
@@ -131,15 +129,14 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
   // IsPlatformOverlayScrollbar() but we don't bother it because
   // overflow:overlay might be deprecated soon.
   virtual bool IsOverlayScrollbar() const;
+  virtual bool IsFluentOverlayScrollbarMinimalMode() const;
 
   bool ShouldParticipateInHitTesting();
 
   bool IsWindowActive() const;
 
-  // Return if the gesture event was handled. |shouldUpdateCapture|
-  // will be set to true if the handler should update the capture
-  // state for this scrollbar.
-  bool GestureEvent(const WebGestureEvent&, bool* should_update_capture);
+  // Return if the gesture event (tap/press) was handled.
+  bool HandleGestureTapOrPress(const WebGestureEvent&);
 
   bool HandlePointerEvent(const WebPointerEvent&);
 
@@ -176,6 +173,12 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
   bool ThumbNeedsRepaint() const { return thumb_needs_repaint_; }
   void ClearThumbNeedsRepaint() { thumb_needs_repaint_ = false; }
 
+  // Returns true if either the track or the thumb needs repaint, or the thumb
+  // moved (which doesn't need to repaint the track or the thumb in some
+  // scrollbar themes).
+  bool NeedsUpdateDisplay() const { return needs_update_display_; }
+  void ClearNeedsUpdateDisplay() { needs_update_display_ = false; }
+
   // DisplayItemClient.
   String DebugName() const final {
     return orientation_ == kHorizontalScrollbar ? "HorizontalScrollbar"
@@ -202,14 +205,24 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
 
   float EffectiveZoom() const;
   bool ContainerIsRightToLeft() const;
+  bool ContainerIsFormControl() const;
 
   // scrollbar-width CSS property
   EScrollbarWidth CSSScrollbarWidth() const;
+  // scrollbar-color CSS property
+  absl::optional<blink::Color> ScrollbarThumbColor() const;
+  absl::optional<blink::Color> ScrollbarTrackColor() const;
 
-  // The Element that supplies our style information. If the scrollbar is
-  // for a document, this is either the <body> or <html> element. Otherwise, it
-  // is the element that owns our PaintLayerScrollableArea.
-  Element* StyleSource() const { return style_source_.Get(); }
+  virtual bool IsOpaque() const;
+
+  // The LayoutObject that supplies our style information. If the scrollbar is
+  // for a document, this is:
+  // 1. the LayoutView (with some scrollbar related styles propagated from the
+  //    document element and/or the <body>), or
+  // 2. the <body> or document element's layout object if it has webkit custom
+  //    scrollbar styles.
+  // Otherwise, it is the LayoutBox that owns our PaintLayerScrollableArea.
+  const LayoutObject* StyleSource() const { return style_source_.Get(); }
 
   mojom::blink::ColorScheme UsedColorScheme() const;
 
@@ -257,8 +270,10 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
   bool ThumbWillBeUnderMouse() const;
   bool DeltaWillScroll(ScrollOffset delta) const;
 
-  bool track_needs_repaint_;
-  bool thumb_needs_repaint_;
+  bool track_needs_repaint_ = true;
+  bool thumb_needs_repaint_ = true;
+  bool needs_update_display_ = true;
+
   bool injected_gesture_scroll_begin_;
 
   // This is set based on the event modifiers. In scenarios like scrolling or
@@ -270,7 +285,7 @@ class CORE_EXPORT Scrollbar : public GarbageCollected<Scrollbar>,
   bool scrollbar_manipulation_in_progress_on_cc_thread_;
 
   gfx::Rect frame_rect_;
-  Member<Element> style_source_;
+  WeakMember<const LayoutObject> style_source_;
 
   // Tracks scroll delta that has been injected into the compositor thread as a
   // GestureScrollUpdate but hasn't yet updated the scroll position on main.

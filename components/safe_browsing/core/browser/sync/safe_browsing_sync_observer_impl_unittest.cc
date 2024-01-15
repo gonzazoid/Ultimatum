@@ -4,7 +4,7 @@
 
 #include "components/safe_browsing/core/browser/sync/safe_browsing_sync_observer_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "components/sync/test/test_sync_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -18,18 +18,24 @@ class SafeBrowsingSyncObserverImplTest : public PlatformTest {
 
   void SetUp() override {
     sync_service_.SetDisableReasons(
-        syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+        {syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN});
+    sync_service_.GetUserSettings()->SetSelectedTypes(
+        /*sync_everything=*/false, {});
   }
 
  protected:
   void EnableSync() {
     sync_service_.SetDisableReasons({});
+    sync_service_.GetUserSettings()->SetSelectedTypes(
+        /*sync_everything=*/true, syncer::UserSelectableTypeSet::All());
     sync_service_.FireStateChanged();
   }
 
   void DisableSync() {
     sync_service_.SetDisableReasons(
-        syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+        {syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN});
+    sync_service_.GetUserSettings()->SetSelectedTypes(
+        /*sync_everything=*/false, {});
     sync_service_.FireStateChanged();
   }
 
@@ -40,7 +46,7 @@ class SafeBrowsingSyncObserverImplTest : public PlatformTest {
 TEST_F(SafeBrowsingSyncObserverImplTest, ObserveSyncState) {
   SafeBrowsingSyncObserverImpl observer(&sync_service_);
   int invoke_cnt = 0;
-  observer.ObserveSyncStateChanged(base::BindRepeating(
+  observer.ObserveHistorySyncStateChanged(base::BindRepeating(
       [](int* invoke_cnt) { (*invoke_cnt)++; }, &invoke_cnt));
 
   EnableSync();
@@ -57,7 +63,7 @@ TEST_F(SafeBrowsingSyncObserverImplTest, ObserveSyncState) {
 TEST_F(SafeBrowsingSyncObserverImplTest, NullSyncService) {
   SafeBrowsingSyncObserverImpl observer(nullptr);
   int invoke_cnt = 0;
-  observer.ObserveSyncStateChanged(base::BindRepeating(
+  observer.ObserveHistorySyncStateChanged(base::BindRepeating(
       [](int* invoke_cnt) { (*invoke_cnt)++; }, &invoke_cnt));
 
   EnableSync();

@@ -9,7 +9,7 @@
 #include "content/public/browser/native_event_processor_mac.h"
 #include "content/public/browser/native_event_processor_observer_mac.h"
 
-@interface HeadlessShellCrApplication ()<NativeEventProcessor> {
+@interface HeadlessShellCrApplication () <NativeEventProcessor> {
   base::ObserverList<content::NativeEventProcessorObserver>::Unchecked
       _observers;
 }

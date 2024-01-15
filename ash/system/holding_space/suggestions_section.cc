@@ -15,16 +15,17 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/system/holding_space/holding_space_item_chip_view.h"
 #include "ash/system/holding_space/holding_space_ui.h"
 #include "ash/system/holding_space/holding_space_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/rrect_f.h"
@@ -35,8 +36,10 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/metadata/view_factory.h"
 #include "ui/views/metadata/view_factory_internal.h"
+#include "ui/views/view_class_properties.h"
 
 namespace ash {
 
@@ -47,27 +50,25 @@ namespace {
 class Header : public views::Button {
  public:
   Header() {
-    auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
-        views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
-        kHoldingSpaceSectionHeaderSpacing));
-
-    views::Label* label = nullptr;
+    // Layout/Properties.
     views::Builder<views::Button>(this)
         .SetID(kHoldingSpaceSuggestionsSectionHeaderId)
         .SetAccessibleName(
             l10n_util::GetStringUTF16(IDS_ASH_HOLDING_SPACE_SUGGESTIONS_TITLE))
         .SetCallback(
             base::BindRepeating(&Header::OnPressed, base::Unretained(this)))
+        .SetLayoutManager(std::make_unique<views::BoxLayout>(
+            views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
+            kHoldingSpaceSectionHeaderSpacing))
         .AddChildren(
             holding_space_ui::CreateSuggestionsSectionHeaderLabel(
                 IDS_ASH_HOLDING_SPACE_SUGGESTIONS_TITLE)
-                .CopyAddressTo(&label)
-                .SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT),
+                .SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT)
+                .SetProperty(views::kBoxLayoutFlexKey,
+                             views::BoxLayoutFlexSpecification()),
             views::Builder<views::ImageView>().CopyAddressTo(&chevron_).SetID(
                 kHoldingSpaceSuggestionsChevronIconId))
         .BuildChildren();
-
-    layout->SetFlexForView(label, 1);
 
     // Though the entirety of the header is focusable and behaves as a single
     // button, the focus ring is drawn as a circle around just the `chevron_`.
@@ -96,6 +97,9 @@ class Header : public views::Button {
     holding_space_prefs::AddSuggestionsExpandedChangedCallback(
         pref_change_registrar_.get(),
         base::BindRepeating(&Header::UpdateState, base::Unretained(this)));
+
+    // Initialize state.
+    UpdateState();
   }
 
  private:
@@ -108,11 +112,6 @@ class Header : public views::Button {
     node_data->AddState(holding_space_prefs::IsSuggestionsExpanded(prefs)
                             ? ax::mojom::State::kExpanded
                             : ax::mojom::State::kCollapsed);
-  }
-
-  void OnThemeChanged() override {
-    views::Button::OnThemeChanged();
-    UpdateState();
   }
 
   void OnPressed() {
@@ -128,13 +127,11 @@ class Header : public views::Button {
   void UpdateState() {
     // Chevron.
     auto* prefs = Shell::Get()->session_controller()->GetActivePrefService();
-    chevron_->SetImage(gfx::CreateVectorIcon(
+    chevron_->SetImage(ui::ImageModel::FromVectorIcon(
         holding_space_prefs::IsSuggestionsExpanded(prefs)
             ? kChevronUpSmallIcon
             : kChevronDownSmallIcon,
-        kHoldingSpaceSectionChevronIconSize,
-        AshColorProvider::Get()->GetContentLayerColor(
-            AshColorProvider::ContentLayerType::kIconColorSecondary)));
+        kColorAshIconColorSecondary, kHoldingSpaceSectionChevronIconSize));
 
     // Accessibility.
     NotifyAccessibilityEvent(ax::mojom::Event::kStateChanged,
@@ -142,7 +139,7 @@ class Header : public views::Button {
   }
 
   // Owned by view hierarchy.
-  views::ImageView* chevron_ = nullptr;
+  raw_ptr<views::ImageView> chevron_ = nullptr;
 
   // The user can expand and collapse the suggestions section by activating the
   // section header. This registrar is associated with the active user pref
@@ -174,10 +171,6 @@ SuggestionsSection::SuggestionsSection(HoldingSpaceViewDelegate* delegate)
 
 SuggestionsSection::~SuggestionsSection() = default;
 
-const char* SuggestionsSection::GetClassName() const {
-  return "SuggestionsSection";
-}
-
 std::unique_ptr<views::View> SuggestionsSection::CreateHeader() {
   return std::make_unique<Header>();
 }
@@ -201,5 +194,8 @@ bool SuggestionsSection::IsExpanded() {
   auto* prefs = Shell::Get()->session_controller()->GetActivePrefService();
   return holding_space_prefs::IsSuggestionsExpanded(prefs);
 }
+
+BEGIN_METADATA(SuggestionsSection, HoldingSpaceItemViewsSection)
+END_METADATA
 
 }  // namespace ash

@@ -7,6 +7,7 @@
 
 #include "base/base_export.h"
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/tasks.h"
 #include "base/time/tick_clock.h"
@@ -58,7 +59,8 @@ class BASE_EXPORT TimeDomain : public TickClock {
  private:
   friend class internal::SequenceManagerImpl;
 
-  internal::SequenceManagerImpl* sequence_manager_ = nullptr;  // Not owned.
+  raw_ptr<internal::SequenceManagerImpl, DanglingUntriaged> sequence_manager_ =
+      nullptr;
 };
 
 }  // namespace sequence_manager

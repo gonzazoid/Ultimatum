@@ -10,12 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/cache_type.h"
@@ -100,7 +100,8 @@ class HttpCacheDataCounterTest : public testing::Test {
       disk_cache::Entry* entry = result.ReleaseEntry();
       ASSERT_TRUE(entry);
 
-      auto io_buf = base::MakeRefCounted<net::IOBuffer>(test_entry.size);
+      auto io_buf =
+          base::MakeRefCounted<net::IOBufferWithSize>(test_entry.size);
       std::fill(io_buf->data(), io_buf->data() + test_entry.size, 0);
 
       net::TestCompletionCallback write_data_callback;
@@ -185,7 +186,7 @@ class HttpCacheDataCounterTest : public testing::Test {
   void InitNetworkContext() {
     mojom::NetworkContextParamsPtr context_params = CreateContextParams();
     context_params->http_cache_enabled = true;
-    context_params->http_cache_directory = cache_dir_.GetPath();
+    context_params->file_paths->http_cache_directory = cache_dir_.GetPath();
 
     network_context_ = std::make_unique<NetworkContext>(
         network_service_.get(),
@@ -201,7 +202,9 @@ class HttpCacheDataCounterTest : public testing::Test {
   // Stores the mojo::Remote<mojom::NetworkContext> of the most recently created
   // NetworkContext.
   mojo::Remote<mojom::NetworkContext> network_context_remote_;
-  disk_cache::Backend* backend_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION disk_cache::Backend* backend_ = nullptr;
 };
 
 TEST_F(HttpCacheDataCounterTest, Basic) {

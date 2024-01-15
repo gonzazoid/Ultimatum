@@ -11,25 +11,30 @@
 #include <ostream>
 
 #include "base/check_op.h"
+#include "base/numerics/safe_conversions.h"
 #include "third_party/icu/source/common/unicode/uidna.h"
 #include "third_party/icu/source/common/unicode/utypes.h"
 #include "url/url_canon_icu.h"
 #include "url/url_canon_internal.h"  // for _itoa_s
+#include "url/url_features.h"
 
 namespace url {
+
+namespace {
 
 // Use UIDNA, a C pointer to a UTS46/IDNA 2008 handling object opened with
 // uidna_openUTS46().
 //
 // We use UTS46 with BiDiCheck to migrate from IDNA 2003 (with unassigned
-// code points allowed) to IDNA 2008 with
-// the backward compatibility in mind. What it does:
+// code points allowed) to IDNA 2008 with the backward compatibility in mind.
+// What it does:
 //
 // 1. Use the up-to-date Unicode data.
 // 2. Define a case folding/mapping with the up-to-date Unicode data as
 //    in IDNA 2003.
-// 3. Use transitional mechanism for 4 deviation characters (sharp-s,
-//    final sigma, ZWJ and ZWNJ) for now.
+// 3. If `use_idna_non_transitional` is true, use non-transitional mechanism for
+//    4 deviation characters (sharp-s, final sigma, ZWJ and ZWNJ) per
+//    url.spec.whatwg.org.
 // 4. Continue to allow symbols and punctuations.
 // 5. Apply new BiDi check rules more permissive than the IDNA 2003 BiDI rules.
 // 6. Do not apply STD3 rules
@@ -39,24 +44,38 @@ namespace url {
 // http://goo.gl/3XBhqw ).
 // See http://http://unicode.org/reports/tr46/ and references therein
 // for more details.
-UIDNA* GetUIDNA() {
-  static UIDNA* uidna = [] {
-    UErrorCode err = U_ZERO_ERROR;
-    // TODO(jungshik): Change options as different parties (browsers,
-    // registrars, search engines) converge toward a consensus.
-    UIDNA* value = uidna_openUTS46(UIDNA_CHECK_BIDI, &err);
-    if (U_FAILURE(err)) {
-      CHECK(false) << "failed to open UTS46 data with error: "
-                   << u_errorName(err)
-                   << ". If you see this error message in a test environment "
-                   << "your test environment likely lacks the required data "
-                   << "tables for libicu. See https://crbug.com/778929.";
-      value = nullptr;
-    }
-    return value;
-  }();
-  return uidna;
+UIDNA* CreateIDNA(bool use_idna_non_transitional) {
+  uint32_t options = UIDNA_CHECK_BIDI;
+  if (use_idna_non_transitional) {
+    // Use non-transitional processing if enabled. See
+    // https://url.spec.whatwg.org/#idna for details.
+    options |=
+        UIDNA_NONTRANSITIONAL_TO_ASCII | UIDNA_NONTRANSITIONAL_TO_UNICODE;
+  }
+  UErrorCode err = U_ZERO_ERROR;
+  UIDNA* idna = uidna_openUTS46(options, &err);
+  if (U_FAILURE(err)) {
+    CHECK(false) << "failed to open UTS46 data with error: " << u_errorName(err)
+                 << ". If you see this error message in a test environment "
+                 << "your test environment likely lacks the required data "
+                 << "tables for libicu. See https://crbug.com/778929.";
+    idna = nullptr;
+  }
+  return idna;
 }
+
+UIDNA* GetUIDNA() {
+  // This logic results in having two UIDNA instances in tests. This is okay.
+  if (IsUsingIDNA2008NonTransitional()) {
+    static UIDNA* uidna = CreateIDNA(/*use_idna_non_transitional=*/true);
+    return uidna;
+  } else {
+    static UIDNA* uidna = CreateIDNA(/*use_idna_non_transitional=*/false);
+    return uidna;
+  }
+}
+
+}  // namespace
 
 // Converts the Unicode input representing a hostname to ASCII using IDN rules.
 // The output must be ASCII, but is represented as wide characters.
@@ -72,7 +91,7 @@ UIDNA* GetUIDNA() {
 // conversions in our code. In addition, consider using icu::IDNA's UTF-8/ASCII
 // version with StringByteSink. That way, we can avoid C wrappers and additional
 // string conversion.
-bool IDNToASCII(const char16_t* src, int src_len, CanonOutputW* output) {
+bool IDNToASCII(std::u16string_view src, CanonOutputW* output) {
   DCHECK(output->length() == 0);  // Output buffer is assumed empty.
 
   UIDNA* uidna = GetUIDNA();
@@ -80,8 +99,9 @@ bool IDNToASCII(const char16_t* src, int src_len, CanonOutputW* output) {
   while (true) {
     UErrorCode err = U_ZERO_ERROR;
     UIDNAInfo info = UIDNA_INFO_INITIALIZER;
-    int output_length = uidna_nameToASCII(uidna, src, src_len, output->data(),
-                                          output->capacity(), &info, &err);
+    int output_length = uidna_nameToASCII(
+        uidna, src.data(), base::checked_cast<int32_t>(src.size()),
+        output->data(), output->capacity(), &info, &err);
 
     // Ignore various errors for web compatibility. The options are specified
     // by the WHATWG URL Standard. See

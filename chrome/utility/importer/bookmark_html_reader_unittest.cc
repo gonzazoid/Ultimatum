@@ -8,10 +8,10 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -158,7 +158,7 @@ TEST(BookmarkHTMLReaderTest, CanImportURLAsSearchEngineTest) {
        "http://www.example.{searchTerms}.test.{searchTerms}.com/"},
       // Illegal characters in the host get escaped.
       {"http://www.test&test.%s.com", true,
-       "http://www.test%26test.{searchTerms}.com/"},
+       "http://www.test&test.{searchTerms}.com/"},
       {"http://www.example.com?q=%s&foo=bar", true,
        "http://www.example.com/?q={searchTerms}&foo=bar"},
       {"http://www.example.com/%s/?q=%s&foo=bar", true,

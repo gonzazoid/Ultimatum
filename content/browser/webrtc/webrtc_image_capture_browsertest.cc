@@ -53,6 +53,10 @@ namespace content {
 #define MAYBE_GetTrackSettings GetTrackSettings
 #endif
 
+// These tests are flaky on all platforms: https://crbug.com/1515035,
+// https://crbug.com/1187247
+#define MAYBE_GrabFrame DISABLED_GrabFrame
+
 namespace {
 
 static const char kImageCaptureHtmlFile[] = "/media/image_capture_test.html";
@@ -122,11 +126,7 @@ class WebRtcImageCaptureBrowserTestBase
 
     LookupAndLogNameAndIdOfFirstCamera();
 
-    std::string result =
-        EvalJs(shell(), command, EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-            .ExtractString();
-    DLOG_IF(ERROR, result != "OK") << result;
-    return result == "OK";
+    return ExecJs(shell(), command);
   }
 };
 
@@ -211,12 +211,6 @@ IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureSucceedsBrowserTest, MAYBE_TakePhoto) {
   ASSERT_TRUE(RunImageCaptureTestCase("testCreateAndTakePhotoSucceeds()"));
 }
 
-// TODO(crbug.com/1187247): Flaky on Linux/Windows.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
-#define MAYBE_GrabFrame DISABLED_GrabFrame
-#else
-#define MAYBE_GrabFrame GrabFrame
-#endif
 IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureSucceedsBrowserTest, MAYBE_GrabFrame) {
   embedded_test_server()->StartAcceptingConnections();
   ASSERT_TRUE(RunImageCaptureTestCase("testCreateAndGrabFrameSucceeds()"));
@@ -373,7 +367,7 @@ IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureGetPhotoStateFailsBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureGetPhotoStateFailsBrowserTest,
-                       GrabFrame) {
+                       MAYBE_GrabFrame) {
   embedded_test_server()->StartAcceptingConnections();
   ASSERT_TRUE(RunImageCaptureTestCase("testCreateAndGrabFrameSucceeds()"));
 }
@@ -400,7 +394,7 @@ IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureSetPhotoOptionsFailsBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureSetPhotoOptionsFailsBrowserTest,
-                       GrabFrame) {
+                       MAYBE_GrabFrame) {
   embedded_test_server()->StartAcceptingConnections();
   ASSERT_TRUE(RunImageCaptureTestCase("testCreateAndGrabFrameSucceeds()"));
 }
@@ -424,7 +418,8 @@ IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureTakePhotoFailsBrowserTest, TakePhoto) {
   ASSERT_TRUE(RunImageCaptureTestCase("testCreateAndTakePhotoIsRejected()"));
 }
 
-IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureTakePhotoFailsBrowserTest, GrabFrame) {
+IN_PROC_BROWSER_TEST_P(WebRtcImageCaptureTakePhotoFailsBrowserTest,
+                       MAYBE_GrabFrame) {
   embedded_test_server()->StartAcceptingConnections();
   ASSERT_TRUE(RunImageCaptureTestCase("testCreateAndGrabFrameSucceeds()"));
 }

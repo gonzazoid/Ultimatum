@@ -4,13 +4,13 @@
 
 #include "components/omnibox/browser/document_suggestions_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -33,8 +33,11 @@ namespace {
 
 variations::VariationID kVariationID = 123;
 
+void OnDocumentSuggestionsRequestAvailable(network::ResourceRequest* request) {}
+
 void OnDocumentSuggestionsLoaderAvailable(
-    std::unique_ptr<network::SimpleURLLoader> loader) {}
+    std::unique_ptr<network::SimpleURLLoader> loader,
+    const std::string& request_body) {}
 
 void OnURLLoadComplete(const network::SimpleURLLoader* source,
                        std::unique_ptr<std::string> response_body) {}
@@ -88,55 +91,11 @@ TEST_F(DocumentSuggestionsServiceTest, VariationHeaders) {
       }));
 
   document_suggestions_service_->CreateDocumentSuggestionsRequest(
-      u"", false, base::BindOnce(OnDocumentSuggestionsLoaderAvailable),
+      u"", false, base::BindOnce(OnDocumentSuggestionsRequestAvailable),
+      base::BindOnce(OnDocumentSuggestionsLoaderAvailable),
       base::BindOnce(OnURLLoadComplete));
 
   base::RunLoop().RunUntilIdle();
-}
-
-TEST_F(DocumentSuggestionsServiceTest, AsoParamInRequest) {
-  auto expect_aso_param = [&](const std::string& expected_value,
-                              const network::ResourceRequest& request) {
-    base::StringPiece request_string(request.request_body->elements()
-                                         ->at(0)
-                                         .As<network::DataElementBytes>()
-                                         .AsStringPiece());
-    absl::optional<base::Value> request_value =
-        base::JSONReader::Read(request_string);
-    ASSERT_TRUE(request_value) << expected_value;
-    std::string* param =
-        request_value->FindStringPath("requestOptions.debugOptions.optsParams");
-    ASSERT_NE(param, nullptr) << expected_value;
-    EXPECT_EQ(*param, expected_value) << expected_value;
-  };
-
-  {
-    // ASO disabled.
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeature(omnibox::kDocumentProviderAso);
-    test_url_loader_factory_.SetInterceptor(base::BindLambdaForTesting(
-        [&](const network::ResourceRequest& request) {
-          expect_aso_param("enable_aso_search:true", request);
-        }));
-    document_suggestions_service_->CreateDocumentSuggestionsRequest(
-        u"", false, base::BindOnce(OnDocumentSuggestionsLoaderAvailable),
-        base::BindOnce(OnURLLoadComplete));
-    base::RunLoop().RunUntilIdle();
-  }
-
-  {
-    // ASO enabled.
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndDisableFeature(omnibox::kDocumentProviderAso);
-    test_url_loader_factory_.SetInterceptor(base::BindLambdaForTesting(
-        [&](const network::ResourceRequest& request) {
-          expect_aso_param("enable_aso_search:false", request);
-        }));
-    document_suggestions_service_->CreateDocumentSuggestionsRequest(
-        u"", false, base::BindOnce(OnDocumentSuggestionsLoaderAvailable),
-        base::BindOnce(OnURLLoadComplete));
-    base::RunLoop().RunUntilIdle();
-  }
 }
 
 }  // namespace

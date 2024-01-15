@@ -25,7 +25,7 @@
 #include "ash/public/cpp/assistant/controller/assistant_suggestions_controller.h"
 #include "ash/test/fake_android_intent_helper.h"
 #include "ash/test/test_ash_web_view.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
@@ -273,10 +273,6 @@ TEST_F(AssistantInteractionControllerImplTest,
 TEST_F(AssistantInteractionControllerImplTest, CompactBubbleLauncher) {
   static constexpr int kStandardLayoutAshWebViewWidth = 592;
   static constexpr int kNarrowLayoutAshWebViewWidth = 496;
-
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      app_list_features::kCompactBubbleLauncher);
 
   UpdateDisplay("1200x800");
   ShowAssistantUi();

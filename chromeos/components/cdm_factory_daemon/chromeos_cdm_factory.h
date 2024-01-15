@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_COMPONENTS_CDM_FACTORY_DAEMON_CHROMEOS_CDM_FACTORY_H_
 #define CHROMEOS_COMPONENTS_CDM_FACTORY_DAEMON_CHROMEOS_CDM_FACTORY_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -62,6 +62,19 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) ChromeOsCdmFactory
   // our decode target size.
   static void GetScreenResolutions(
       ChromeOsCdmContext::GetScreenResolutionsCB callback);
+
+  // Allocates a secure buffer with ARM TrustZone for the target of decryption.
+  static void AllocateSecureBuffer(
+      uint32_t size,
+      ChromeOsCdmContext::AllocateSecureBufferCB callback);
+
+  // Parses H264 slice header data referenced in TrustZone memory by
+  // |secure_handle|.
+  static void ParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ChromeOsCdmContext::ParseEncryptedSliceHeaderCB callback);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Invoked in the OOP Video Decoder utility process to set the Mojo connection

@@ -27,10 +27,9 @@ UNKNOWN focusable has_input_focus
 ++++++UNKNOWN
 ++++++++STATIC_TEXT label='File: '
 ++++++++++UNKNOWN label='File: '
-++++++++BUTTON focusable label='File:' actions='{DEFAULT}' value='No file chosen'
-++++++++++BUTTON focusable label='Choose File' actions='{DEFAULT}'
-++++++++++++STATIC_TEXT label='Choose File'
-++++++++++++++UNKNOWN label='Choose File'
+++++++++BUTTON focusable label='File:: No file chosen' actions='{DEFAULT}' value='No file chosen'
+++++++++++BUTTON hidden focusable label='Choose File' actions='{DEFAULT}'
+++++++++++++STATIC_TEXT hidden label='Choose File'
 ++++++++++UNKNOWN hidden
 ++++++++++++STATIC_TEXT hidden label='No file chosen'
 ++++++UNKNOWN
@@ -40,6 +39,8 @@ UNKNOWN focusable has_input_focus
 ++++++++++IMAGE
 ++++++++++STATIC_TEXT label='Submit'
 ++++++++++++UNKNOWN label='Submit'
+++++++STATIC_TEXT label=' '
+++++++++UNKNOWN label=' '
 ++++++UNKNOWN
 ++++++++STATIC_TEXT label='Number: '
 ++++++++++UNKNOWN label='Number: '

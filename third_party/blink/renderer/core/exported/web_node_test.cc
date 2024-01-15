@@ -29,20 +29,20 @@ class WebNodeTest : public PageTestBase {
 
 TEST_F(WebNodeTest, QuerySelectorMatches) {
   SetInnerHTML("<div id=x><span class=a></span></div>");
-  WebElement element = Root().QuerySelector(".a");
+  WebElement element = Root().QuerySelector(AtomicString(".a"));
   EXPECT_FALSE(element.IsNull());
   EXPECT_TRUE(element.HasHTMLTagName("span"));
 }
 
 TEST_F(WebNodeTest, QuerySelectorDoesNotMatch) {
   SetInnerHTML("<div id=x><span class=a></span></div>");
-  WebElement element = Root().QuerySelector("section");
+  WebElement element = Root().QuerySelector(AtomicString("section"));
   EXPECT_TRUE(element.IsNull());
 }
 
 TEST_F(WebNodeTest, QuerySelectorError) {
   SetInnerHTML("<div></div>");
-  WebElement element = Root().QuerySelector("@invalid-selector");
+  WebElement element = Root().QuerySelector(AtomicString("@invalid-selector"));
   EXPECT_TRUE(element.IsNull());
 }
 
@@ -77,7 +77,7 @@ TEST_F(WebNodeSimTest, IsFocused) {
 
   css_resource.Start();
 
-  WebNode input_node(GetDocument().getElementById("focusable"));
+  WebNode input_node(GetDocument().getElementById(AtomicString("focusable")));
   EXPECT_FALSE(input_node.IsFocusable());
   EXPECT_FALSE(GetDocument().HaveRenderBlockingStylesheetsLoaded());
 
@@ -85,6 +85,27 @@ TEST_F(WebNodeSimTest, IsFocused) {
   css_resource.Complete("dummy {}");
   test::RunPendingTasks();
   EXPECT_TRUE(input_node.IsFocusable());
+}
+
+TEST_F(WebNodeTest, CannotFindTextInElementThatIsNotAContainer) {
+  SetInnerHTML(R"HTML(
+    <div><br class="not-a-container"/> Hello world! </div>
+  )HTML");
+  WebElement element = Root().QuerySelector(AtomicString(".not-a-container"));
+
+  EXPECT_FALSE(element.IsNull());
+  EXPECT_TRUE(element.FindTextInElementWith("Hello world").IsEmpty());
+}
+
+TEST_F(WebNodeTest, CanFindTextInElementThatIsAContainer) {
+  SetInnerHTML(R"HTML(
+    <body class="container"><div> Hello world! </div></body>
+  )HTML");
+  WebElement element = Root().QuerySelector(AtomicString(".container"));
+
+  EXPECT_FALSE(element.IsNull());
+  EXPECT_EQ(WebString(" Hello world! "),
+            element.FindTextInElementWith("Hello world"));
 }
 
 }  // namespace blink

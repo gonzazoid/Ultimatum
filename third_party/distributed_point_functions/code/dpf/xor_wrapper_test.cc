@@ -14,9 +14,10 @@
 
 #include "dpf/xor_wrapper.h"
 
-#include <gtest/gtest.h>
+#include <stdint.h>
 
 #include "absl/numeric/int128.h"
+#include "gtest/gtest.h"
 
 namespace distributed_point_functions {
 

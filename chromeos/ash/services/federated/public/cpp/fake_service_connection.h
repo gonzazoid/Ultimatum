@@ -5,8 +5,10 @@
 #ifndef CHROMEOS_ASH_SERVICES_FEDERATED_PUBLIC_CPP_FAKE_SERVICE_CONNECTION_H_
 #define CHROMEOS_ASH_SERVICES_FEDERATED_PUBLIC_CPP_FAKE_SERVICE_CONNECTION_H_
 
+#include <optional>
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "chromeos/ash/services/federated/public/cpp/service_connection.h"
 #include "chromeos/ash/services/federated/public/mojom/example.mojom.h"
 #include "chromeos/ash/services/federated/public/mojom/federated_service.mojom.h"
@@ -39,7 +41,9 @@ class FakeServiceConnectionImpl
                  receiver) override;
   void ReportExample(const std::string& client_name,
                      chromeos::federated::mojom::ExamplePtr example) override;
-  void StartScheduling() override;
+  void StartScheduling(
+      const std::optional<base::flat_map<std::string, std::string>>&
+          client_launch_stage) override;
 
  private:
   mojo::ReceiverSet<chromeos::federated::mojom::FederatedService> receivers_;

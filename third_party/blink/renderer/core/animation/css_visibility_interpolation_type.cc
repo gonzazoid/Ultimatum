@@ -100,7 +100,7 @@ class InheritedVisibilityChecker
 InterpolationValue CSSVisibilityInterpolationType::CreateVisibilityValue(
     EVisibility visibility) const {
   return InterpolationValue(
-      std::make_unique<InterpolableNumber>(0),
+      MakeGarbageCollected<InterpolableNumber>(0),
       CSSVisibilityNonInterpolableValue::Create(visibility, visibility));
 }
 
@@ -176,8 +176,8 @@ PairwiseInterpolationValue CSSVisibilityInterpolationType::MaybeMergeSingles(
       end_visibility != EVisibility::kVisible) {
     return nullptr;
   }
-  return PairwiseInterpolationValue(std::make_unique<InterpolableNumber>(0),
-                                    std::make_unique<InterpolableNumber>(1),
+  return PairwiseInterpolationValue(MakeGarbageCollected<InterpolableNumber>(0),
+                                    MakeGarbageCollected<InterpolableNumber>(1),
                                     CSSVisibilityNonInterpolableValue::Create(
                                         start_visibility, end_visibility));
 }
@@ -200,7 +200,7 @@ void CSSVisibilityInterpolationType::ApplyStandardPropertyValue(
   EVisibility visibility =
       To<CSSVisibilityNonInterpolableValue>(non_interpolable_value)
           ->Visibility(fraction);
-  state.Style()->SetVisibility(visibility);
+  state.StyleBuilder().SetVisibility(visibility);
 }
 
 }  // namespace blink

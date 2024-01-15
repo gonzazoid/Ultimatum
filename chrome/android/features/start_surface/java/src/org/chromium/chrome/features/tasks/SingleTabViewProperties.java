@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.features.tasks;
 
+import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 
@@ -14,16 +15,24 @@ import org.chromium.ui.modelutil.PropertyModel;
 class SingleTabViewProperties {
     private SingleTabViewProperties() {}
 
-    public static final PropertyModel
-            .WritableObjectPropertyKey<View.OnClickListener> CLICK_LISTENER =
-            new PropertyModel.WritableObjectPropertyKey<>();
+    public static final PropertyModel.WritableObjectPropertyKey<View.OnClickListener>
+            CLICK_LISTENER = new PropertyModel.WritableObjectPropertyKey<>();
     public static final PropertyModel.WritableObjectPropertyKey<Drawable> FAVICON =
             new PropertyModel.WritableObjectPropertyKey<>();
+    public static final PropertyModel.WritableObjectPropertyKey<Bitmap> TAB_THUMBNAIL =
+            new PropertyModel.WritableObjectPropertyKey<>(/* skipEquality= */ true);
     public static final PropertyModel.WritableBooleanPropertyKey IS_VISIBLE =
             new PropertyModel.WritableBooleanPropertyKey();
     public static final PropertyModel.WritableObjectPropertyKey<String> TITLE =
             new PropertyModel.WritableObjectPropertyKey<>();
 
+    public static final PropertyModel.WritableObjectPropertyKey<String> URL =
+            new PropertyModel.WritableObjectPropertyKey<>();
+    public static final PropertyModel.WritableIntPropertyKey LATERAL_MARGIN =
+            new PropertyModel.WritableIntPropertyKey();
+
     public static final PropertyKey[] ALL_KEYS =
-            new PropertyKey[] {CLICK_LISTENER, FAVICON, IS_VISIBLE, TITLE};
+            new PropertyKey[] {
+                CLICK_LISTENER, FAVICON, TAB_THUMBNAIL, IS_VISIBLE, TITLE, URL, LATERAL_MARGIN
+            };
 }

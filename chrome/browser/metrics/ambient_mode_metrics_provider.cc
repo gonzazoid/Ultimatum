@@ -4,9 +4,8 @@
 
 #include "chrome/browser/metrics/ambient_mode_metrics_provider.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/ambient/ambient_client.h"
-#include "ash/public/cpp/ambient/ambient_metrics.h"
+#include "ash/public/cpp/ambient/ambient_mode_photo_source.h"
 #include "ash/public/cpp/ambient/ambient_prefs.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -34,9 +33,6 @@ AmbientModeMetricsProvider::~AmbientModeMetricsProvider() = default;
 
 void AmbientModeMetricsProvider::ProvideCurrentSessionData(
     metrics::ChromeUserMetricsExtension* uma_proto_unused) {
-  if (!chromeos::features::IsAmbientModeEnabled())
-    return;
-
   auto* ambient_client = ash::AmbientClient::Get();
   if (!ambient_client || !ambient_client->IsAmbientModeAllowed())
     return;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 
 #include <utility>
 
+#include <poll.h>
+
 #include <wayland-client-core.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
 
@@ -32,16 +34,14 @@ TestWaylandClientThread::~TestWaylandClientThread() {
   FlushForTesting();
 }
 
-bool TestWaylandClientThread::Start(std::unique_ptr<TestClient> client,
-                                    TestClient::InitParams params) {
-  client_ = std::move(client);
-
+bool TestWaylandClientThread::Start(
+    base::OnceCallback<std::unique_ptr<TestClient>()> init_callback) {
   base::Thread::Options options;
   options.message_pump_type = base::MessagePumpType::IO;
   CHECK(base::Thread::StartWithOptions(std::move(options)));
 
   RunAndWait(base::BindOnce(&TestWaylandClientThread::DoInit,
-                            base::Unretained(this), std::move(params)));
+                            base::Unretained(this), std::move(init_callback)));
 
   return !!client_;
 }
@@ -60,27 +60,46 @@ void TestWaylandClientThread::RunAndWait(base::OnceClosure closure) {
       base::BindOnce(&TestWaylandClientThread::DoRun, base::Unretained(this),
                      std::move(closure)),
       run_loop.QuitClosure());
-  run_loop.Run();
+  // TODO(crbug.com/1424930): Use busy loop to workaround RunLoop::Run()
+  // erroneously advancing mock time.
+  while (!run_loop.AnyQuitCalled()) {
+    run_loop.RunUntilIdle();
+  }
 }
 
 void TestWaylandClientThread::OnFileCanReadWithoutBlocking(int fd) {
-  while (wl_display_prepare_read(client_->display()) != 0)
-    wl_display_dispatch_pending(client_->display());
+  if (wl_display_prepare_read(client_->display()) != 0) {
+    return;
+  }
+  // Disconnect can be seen as a read event, and wl_display_prepare_read_queue()
+  // is used to prevent read from other thread and does not actually check the
+  // `fd`'s state.  Make sure that `fd` has indeed has data to read.
+  struct pollfd fds;
+  fds.fd = fd;
+  fds.events = POLLIN;
+  fds.revents = 0;
+
+  auto ret = poll(&fds, 1, -1);
+
+  if (ret != POLLIN) {
+    wl_display_cancel_read(client_->display());
+    return;
+  }
 
   wl_display_read_events(client_->display());
   wl_display_dispatch_pending(client_->display());
+  wl_display_flush(client_->display());
 }
 
 void TestWaylandClientThread::OnFileCanWriteWithoutBlocking(int fd) {}
 
-void TestWaylandClientThread::DoInit(TestClient::InitParams params) {
-  bool result = client_->Init(params);
-  if (!result) {
-    client_.reset();
+void TestWaylandClientThread::DoInit(
+    TestWaylandClientThread::InitCallback init_callback) {
+  client_ = std::move(init_callback).Run();
+  if (!client_)
     return;
-  }
 
-  result = base::CurrentIOThread::Get().WatchFileDescriptor(
+  const bool result = base::CurrentIOThread::Get().WatchFileDescriptor(
       wl_display_get_fd(client_->display()), /*persistent=*/true,
       base::MessagePumpLibevent::WATCH_READ, &controller_, this);
 

@@ -4,8 +4,8 @@
 
 #include "third_party/blink/public/common/media/watch_time_component.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/media/display_type.h"
@@ -29,7 +29,6 @@ class WatchTimeInterceptor : public media::mojom::WatchTimeRecorder {
   MOCK_METHOD2(UpdateUnderflowDuration, void(int32_t, base::TimeDelta));
   MOCK_METHOD1(UpdateSecondaryProperties,
                void(media::mojom::SecondaryPlaybackPropertiesPtr));
-  MOCK_METHOD1(OnCurrentTimestampChanged, void(base::TimeDelta));
 };
 
 class WatchTimeComponentTest : public testing::Test {

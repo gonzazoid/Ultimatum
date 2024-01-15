@@ -10,17 +10,21 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
-#include "components/services/storage/shared_storage/public/mojom/shared_storage.mojom.h"
 #include "components/services/storage/shared_storage/shared_storage_database.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "third_party/blink/public/mojom/shared_storage/shared_storage_worklet_service.mojom.h"
 
 namespace base {
 class Time;
 }  // namespace base
+
+namespace net {
+class SchemefulSite;
+}  // namespace net
 
 namespace url {
 class Origin;
@@ -62,13 +66,13 @@ class AsyncSharedStorageDatabase {
 
   // `TrimMemory()`, `Get()`, `Set()`, `Append()`, `Delete()`, `Clear()`,
   // `Length()`, `Keys()`, `Entries()`, `PurgeMatchingOrigins()`,
-  // `PurgeStaleOrigins()`, `FetchOrigins()`, `MakeBudgetWithdrawal()`,
-  // `GetRemainingBudget()`, `GetCreationTime()`, `GetMetadata()`, and
-  // `GetEntriesForDevTools()` are all async versions of the corresponding
-  // methods in `storage::SharedStorageDatabase`, with the modification that
-  // `Set()` and `Append()` take a boolean callback to indicate that a value was
-  // set or appended, rather than a long integer callback with the row number
-  // for the next available row.
+  // `PurgeStale()`, `FetchOrigins()`, `MakeBudgetWithdrawal()`,
+  // `GetRemainingBudget()`, `GetCreationTime()`, `GetMetadata()`,
+  // `GetEntriesForDevTools()`, and `ResetBudgetForDevTools() are all async
+  // versions of the corresponding methods in `storage::SharedStorageDatabase`,
+  // with the modification that `Set()` and `Append()` take a boolean callback
+  // to indicate that a value was set or appended, rather than a long integer
+  // callback with the row number for the next available row.
   //
   // It is OK to call these async methods even if the database has failed to
   // initialize, as there is an alternate code path to handle this case that
@@ -155,8 +159,7 @@ class AsyncSharedStorageDatabase {
   // OperationResult to indicate whether the transaction was successful.
   virtual void Keys(
       url::Origin context_origin,
-      mojo::PendingRemote<
-          shared_storage_worklet::mojom::SharedStorageEntriesListener>
+      mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
           pending_listener,
       base::OnceCallback<void(OperationResult)> callback) = 0;
 
@@ -167,16 +170,15 @@ class AsyncSharedStorageDatabase {
   // transaction was successful.
   virtual void Entries(
       url::Origin context_origin,
-      mojo::PendingRemote<
-          shared_storage_worklet::mojom::SharedStorageEntriesListener>
+      mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
           pending_listener,
       base::OnceCallback<void(OperationResult)> callback) = 0;
 
   // Clears all origins that match `storage_key_matcher` run on the owning
-  // StoragePartition's `SpecialStoragePolicy` and have `last_used_time` between
-  // the times `begin` and `end`. If `perform_storage_cleanup` is true, vacuums
-  // the database afterwards. The parameter of `callback` reports whether the
-  // transaction was successful.
+  // StoragePartition's `SpecialStoragePolicy` and have any key with
+  // `last_used_time` between the times `begin` and `end`. If
+  // `perform_storage_cleanup` is true, vacuums the database afterwards. The
+  // parameter of `callback` reports whether the transaction was successful.
   //
   // Note that `storage_key_matcher` is accessed on a different sequence than
   // where it was created.
@@ -187,38 +189,36 @@ class AsyncSharedStorageDatabase {
       base::OnceCallback<void(OperationResult)> callback,
       bool perform_storage_cleanup = false) = 0;
 
-  // Clear all entries for all origins whose `last_read_time` (i.e. creation
-  // time) falls before `SharedStorageDatabase::clock_->Now() -
-  // SharedStorageDatabase::origin_staleness_threshold_`. Also purges, for all
-  // origins, all privacy budget withdrawals that have `time_stamps` older than
-  // `SharedStorageDatabase::clock_->Now() -
-  // SharedStorageDatabase::budget_interval_`.
-  virtual void PurgeStaleOrigins(
+  // Clear all entries whose `last_used_time` (currently the last write access)
+  // falls before `SharedStorageDatabase::clock_->Now() - staleness_threshold_`.
+  // Also purges, for all origins, all privacy budget withdrawals that have
+  // `time_stamps` older than `SharedStorageDatabase::clock_->Now() -
+  // budget_interval_`. The parameter of `callback` reports whether the
+  // transaction was successful.
+  virtual void PurgeStale(
       base::OnceCallback<void(OperationResult)> callback) = 0;
 
   // Fetches a vector of `mojom::StorageUsageInfoPtr`, with one
   // `mojom::StorageUsageInfoPtr` for each origin currently using shared
-  // storage in this profile. If `exclude_empty_origins` is true, then only
-  // those with positive `length` are included in the vector.
+  // storage in this profile.
   virtual void FetchOrigins(
       base::OnceCallback<void(std::vector<mojom::StorageUsageInfoPtr>)>
-          callback,
-      bool exclude_empty_origins = true) = 0;
+          callback) = 0;
 
   // Makes a withdrawal of `bits_debit` stamped with the current time from the
-  // privacy budget of `context_origin`.
+  // privacy budget of `context_site`.
   virtual void MakeBudgetWithdrawal(
-      url::Origin context_origin,
+      net::SchemefulSite context_site,
       double bits_debit,
       base::OnceCallback<void(OperationResult)> callback) = 0;
 
   // Determines the number of bits remaining in the privacy budget of
-  // `context_origin`, where only withdrawals within the most recent
+  // `context_site`, where only withdrawals within the most recent
   // `budget_interval_` are counted as still valid, and calls `callback` with
   // this information bundled with an `OperationResult` value to indicate
   // whether the database retrieval was successful.
   virtual void GetRemainingBudget(
-      url::Origin context_origin,
+      net::SchemefulSite context_site,
       base::OnceCallback<void(BudgetResult)> callback) = 0;
 
   // Calls `callback` with the most recent creation time (currently in the
@@ -232,7 +232,10 @@ class AsyncSharedStorageDatabase {
   // `SharedStorageDatabase::GetRemainingBudget()`, and
   // `SharedStorageDatabase::GetCreationTime()`, then bundles this info along
   // with the accompanying `OperationResult`s into a struct to send to the
-  // DevTools `StorageHandler` via `callback`.
+  // DevTools `StorageHandler` via `callback`. Because DevTools displays
+  // shared storage data by origin, we continue to pass a `url::Origin` in as
+  // parameter `context_origin` and compute the site on the fly to use as
+  // parameter for `GetRemainingBudget()`.
   virtual void GetMetadata(
       url::Origin context_origin,
       base::OnceCallback<void(MetadataResult)> callback) = 0;
@@ -242,6 +245,15 @@ class AsyncSharedStorageDatabase {
   virtual void GetEntriesForDevTools(
       url::Origin context_origin,
       base::OnceCallback<void(EntriesResult)> callback) = 0;
+
+  // Removes all budget withdrawals for `context_origin`'s site. Calls
+  // `callback` to indicate whether the transaction succeeded. Intended as a
+  // convenience for the DevTools UX. Because DevTools displays shared storage
+  // data by origin, we continue to pass a `url::Origin` in as parameter
+  // `context_origin` and compute the site on the fly.
+  virtual void ResetBudgetForDevTools(
+      url::Origin context_origin,
+      base::OnceCallback<void(OperationResult)> callback) = 0;
 };
 
 }  // namespace storage

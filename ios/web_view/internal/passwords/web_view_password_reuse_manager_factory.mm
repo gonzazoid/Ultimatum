@@ -2,23 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/web_view/internal/passwords/web_view_password_reuse_manager_factory.h"
+#import "ios/web_view/internal/passwords/web_view_password_reuse_manager_factory.h"
 
-#include "base/no_destructor.h"
-#include "build/build_config.h"
-#include "components/keyed_service/core/service_access_type.h"
-#include "components/keyed_service/ios/browser_state_dependency_manager.h"
-#include "components/password_manager/core/browser/password_reuse_manager_impl.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "components/prefs/pref_service.h"
-#include "ios/web_view/internal/app/application_context.h"
-#include "ios/web_view/internal/passwords/web_view_password_store_factory.h"
-#include "ios/web_view/internal/web_view_browser_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/no_destructor.h"
+#import "build/build_config.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/keyed_service/ios/browser_state_dependency_manager.h"
+#import "components/password_manager/core/browser/password_reuse_manager_impl.h"
+#import "components/password_manager/core/browser/password_store/password_store_interface.h"
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "components/prefs/pref_service.h"
+#import "ios/web_view/internal/app/application_context.h"
+#import "ios/web_view/internal/passwords/web_view_account_password_store_factory.h"
+#import "ios/web_view/internal/passwords/web_view_profile_password_store_factory.h"
+#import "ios/web_view/internal/web_view_browser_state.h"
 
 namespace ios_web_view {
 
@@ -46,7 +43,7 @@ WebViewPasswordReuseManagerFactory::WebViewPasswordReuseManagerFactory()
     : BrowserStateKeyedServiceFactory(
           "PasswordReuseManager",
           BrowserStateDependencyManager::GetInstance()) {
-  DependsOn(WebViewPasswordStoreFactory::GetInstance());
+  DependsOn(WebViewProfilePasswordStoreFactory::GetInstance());
 }
 
 WebViewPasswordReuseManagerFactory::~WebViewPasswordReuseManagerFactory() =
@@ -64,7 +61,10 @@ WebViewPasswordReuseManagerFactory::BuildServiceInstanceFor(
       std::make_unique<password_manager::PasswordReuseManagerImpl>();
 
   reuse_manager->Init(browser_state->GetPrefs(),
-                      WebViewPasswordStoreFactory::GetForBrowserState(
+                      WebViewProfilePasswordStoreFactory::GetForBrowserState(
+                          browser_state, ServiceAccessType::EXPLICIT_ACCESS)
+                          .get(),
+                      WebViewAccountPasswordStoreFactory::GetForBrowserState(
                           browser_state, ServiceAccessType::EXPLICIT_ACCESS)
                           .get());
   return reuse_manager;

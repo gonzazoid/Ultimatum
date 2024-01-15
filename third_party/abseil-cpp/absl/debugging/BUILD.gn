@@ -24,7 +24,16 @@ absl_source_set("stacktrace") {
     ":debugging_internal",
     "//third_party/abseil-cpp/absl/base:config",
     "//third_party/abseil-cpp/absl/base:core_headers",
+    "//third_party/abseil-cpp/absl/base:dynamic_annotations",
     "//third_party/abseil-cpp/absl/base:raw_logging_internal",
+  ]
+}
+
+absl_test("stacktrace_test") {
+  sources = ["stacktrace_test.cc"]
+  deps = [
+    ":stacktrace",
+    "//third_party/abseil-cpp/absl/base:core_headers",
   ]
 }
 
@@ -51,6 +60,7 @@ absl_source_set("symbolize") {
     "//third_party/abseil-cpp/absl/base:malloc_internal",
     "//third_party/abseil-cpp/absl/base:raw_logging_internal",
     "//third_party/abseil-cpp/absl/strings",
+    "//third_party/abseil-cpp/absl/strings:string_view",
   ]
 
   # TODO(mbonadei): The bazel file has:
@@ -111,7 +121,10 @@ absl_source_set("debugging_internal") {
 absl_source_set("demangle_internal") {
   sources = [ "internal/demangle.cc" ]
   public = [ "internal/demangle.h" ]
-  visibility = [ ":*" ]
+  visibility = [
+    "//third_party/abseil-cpp/absl/container:*",
+    "//third_party/abseil-cpp/absl/debugging:*",
+  ]
   deps = [
     "//third_party/abseil-cpp/absl/base",
     "//third_party/abseil-cpp/absl/base:config",

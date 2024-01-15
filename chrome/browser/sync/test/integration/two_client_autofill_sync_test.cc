@@ -12,7 +12,9 @@
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/autofill/core/browser/webdata/autofill_table.h"
+#include "components/autofill/core/browser/profile_token_quality.h"
+#include "components/autofill/core/browser/profile_token_quality_test_api.h"
+#include "components/autofill/core/browser/webdata/autofill_table_utils.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/sync/engine/cycle/entity_change_metric_recording.h"
 #include "content/public/test/browser_test.h"
@@ -21,7 +23,6 @@
 namespace {
 
 using autofill::AutofillProfile;
-using autofill::AutofillTable;
 using autofill::AutofillType;
 using autofill::CreditCard;
 using autofill::PersonalDataManager;
@@ -52,13 +53,8 @@ class TwoClientAutofillProfileSyncTest : public SyncTest {
   ~TwoClientAutofillProfileSyncTest() override = default;
 };
 
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_PersonalDataManagerSanity DISABLED_PersonalDataManagerSanity
-#else
-#define MAYBE_PersonalDataManagerSanity PersonalDataManagerSanity
-#endif
 IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest,
-                       MAYBE_PersonalDataManagerSanity) {
+                       PersonalDataManagerSanity) {
   ASSERT_TRUE(SetupSync());
 
   base::HistogramTester histograms;
@@ -156,51 +152,6 @@ IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest,
   AddProfile(1, profile1);
   ASSERT_TRUE(SetupSync());
   EXPECT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
-}
-
-IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest,
-                       AddDuplicateProfiles_OneIsVerified) {
-  ASSERT_TRUE(SetupClients());
-
-  // Create two identical profiles where one of them is verified, additionally.
-  AutofillProfile profile0 = autofill::test::GetFullProfile();
-  AutofillProfile profile1 =
-      autofill::test::GetVerifiedProfile();  // I.e. Full + Verified.
-  std::string verified_origin = profile1.origin();
-
-  AddProfile(0, profile0);
-  AddProfile(1, profile1);
-  ASSERT_TRUE(SetupSync());
-  EXPECT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
-
-  EXPECT_EQ(verified_origin, GetAllAutoFillProfiles(0)[0]->origin());
-  EXPECT_EQ(verified_origin, GetAllAutoFillProfiles(1)[0]->origin());
-}
-
-IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest,
-                       AddDuplicateProfiles_OneAtStart_OtherComesLater) {
-  ASSERT_TRUE(SetupClients());
-
-  AutofillProfile profile0 = autofill::test::GetFullProfile();
-  AutofillProfile profile1 =
-      autofill::test::GetVerifiedProfile();  // I.e. Full + Verified.
-  std::string verified_origin = profile1.origin();
-
-  AddProfile(0, profile0);
-  ASSERT_TRUE(SetupSync());
-  EXPECT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
-
-  // Add the same (but verified) profile on the other client, afterwards.
-  AddProfile(1, profile1);
-  EXPECT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
-
-  // The latter addition is caught in deduplication logic in PDM to sync. As a
-  // result, both clients end up with the non-verified profile.
-  EXPECT_EQ(1U, GetAllAutoFillProfiles(0).size());
-  EXPECT_EQ(1U, GetAllAutoFillProfiles(0).size());
-
-  EXPECT_NE(verified_origin, GetAllAutoFillProfiles(0)[0]->origin());
-  EXPECT_NE(verified_origin, GetAllAutoFillProfiles(1)[0]->origin());
 }
 
 // Tests that a null profile does not get synced across clients.
@@ -337,14 +288,13 @@ IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest,
 
   AutofillProfile* profile = GetAllAutoFillProfiles(0)[0];
   ASSERT_TRUE(profile);
-  UpdateProfile(
-      0, profile->guid(), AutofillType(autofill::NAME_FIRST),
-      profile->GetRawInfo(autofill::NAME_FIRST),
-      autofill::structured_address::VerificationStatus::kUserVerified);
+  UpdateProfile(0, profile->guid(), AutofillType(autofill::NAME_FIRST),
+                profile->GetRawInfo(autofill::NAME_FIRST),
+                autofill::VerificationStatus::kUserVerified);
 
   // Make sure the change is propagated to the other client.
   EXPECT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
-  EXPECT_EQ(autofill::structured_address::VerificationStatus::kUserVerified,
+  EXPECT_EQ(autofill::VerificationStatus::kUserVerified,
             GetAllAutoFillProfiles(1)[0]->GetVerificationStatus(
                 autofill::NAME_FIRST));
 }
@@ -444,7 +394,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest, MaxLength) {
   AddProfile(0, CreateAutofillProfile(PROFILE_HOMER));
   ASSERT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
 
-  std::u16string max_length_string(AutofillTable::kMaxDataLength, '.');
+  std::u16string max_length_string(autofill::kMaxDataLengthForDatabase, '.');
   UpdateProfile(0, GetAllAutoFillProfiles(0)[0]->guid(),
                 AutofillType(autofill::NAME_FULL), max_length_string);
   UpdateProfile(0, GetAllAutoFillProfiles(0)[0]->guid(),
@@ -455,14 +405,18 @@ IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest, MaxLength) {
   EXPECT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
 }
 
+// Tests that values exceeding `kMaxDataLengthForDatabase` are truncated.
+// TODO(crbug.com/1443393): As of the unified table layout, values are already
+// truncated in AutofillTable. No special logic on the Sync-side is necessary.
+// Clean this up.
 IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest, ExceedsMaxLength) {
   ASSERT_TRUE(SetupSync());
 
   AddProfile(0, CreateAutofillProfile(PROFILE_HOMER));
   ASSERT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1U).Wait());
 
-  std::u16string exceeds_max_length_string(AutofillTable::kMaxDataLength + 1,
-                                           '.');
+  std::u16string exceeds_max_length_string(
+      autofill::kMaxDataLengthForDatabase + 1, '.');
   UpdateProfile(0, GetAllAutoFillProfiles(0)[0]->guid(),
                 AutofillType(autofill::NAME_FIRST), exceeds_max_length_string);
   UpdateProfile(0, GetAllAutoFillProfiles(0)[0]->guid(),
@@ -473,9 +427,18 @@ IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest, ExceedsMaxLength) {
   UpdateProfile(0, GetAllAutoFillProfiles(0)[0]->guid(),
                 AutofillType(autofill::ADDRESS_HOME_LINE1),
                 exceeds_max_length_string);
+  // The values stored on clients 0 are already truncated.
+  AutofillProfile* profile = GetAllAutoFillProfiles(0)[0];
+  for (const auto type :
+       {autofill::NAME_FIRST, autofill::NAME_LAST, autofill::EMAIL_ADDRESS,
+        autofill::ADDRESS_HOME_LINE1}) {
+    EXPECT_EQ(profile->GetRawInfo(type).size(),
+              autofill::kMaxDataLengthForDatabase);
+  }
 
   ASSERT_TRUE(AwaitQuiescence());
-  EXPECT_FALSE(ProfilesMatch(0, 1));
+  // Both clients store the truncated values.
+  EXPECT_TRUE(ProfilesMatch(0, 1));
 }
 
 // Test credit cards don't sync.
@@ -520,6 +483,54 @@ IN_PROC_BROWSER_TEST_F(TwoClientAutofillProfileSyncTest,
   EXPECT_TRUE(AutofillProfileChecker(
                   0, 1, /*expected_count=*/init_autofill_profiles_count + 1)
                   .Wait());
+}
+
+class TwoClientProfileTokenQualityAutofillProfileSyncTest : public SyncTest {
+ public:
+  TwoClientProfileTokenQualityAutofillProfileSyncTest()
+      : SyncTest(TWO_CLIENT) {}
+
+ private:
+  base::test::ScopedFeatureList feature_{
+      autofill::features::kAutofillTrackProfileTokenQuality};
+};
+
+// ProfileTokenQuality observations are not synced. This test ensures that for
+// incoming updates through sync, local observations are reset only when the
+// value of the corresponding token has changed.
+IN_PROC_BROWSER_TEST_F(TwoClientProfileTokenQualityAutofillProfileSyncTest,
+                       ProfileTokenQuality) {
+  ASSERT_TRUE(SetupSync());
+
+  // Create a profile with observations on client 0 and sync it to client 1.
+  autofill::AutofillProfile profile = autofill::test::GetFullProfile();
+  autofill::test_api(profile.token_quality())
+      .AddObservation(
+          autofill::NAME_FIRST,
+          autofill::ProfileTokenQuality::ObservationType::kAccepted);
+  autofill::test_api(profile.token_quality())
+      .AddObservation(
+          autofill::NAME_LAST,
+          autofill::ProfileTokenQuality::ObservationType::kEditedFallback);
+  autofill_helper::AddProfile(0, profile);
+  ASSERT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1u).Wait());
+
+  // Modify the NAME_FIRST on client 1, triggering a resync to client 0.
+  autofill_helper::UpdateProfile(
+      1, profile.guid(), autofill::AutofillType(autofill::NAME_FIRST),
+      u"new " + profile.GetRawInfo(autofill::NAME_FIRST));
+  ASSERT_TRUE(AutofillProfileChecker(0, 1, /*expected_count=*/1u).Wait());
+
+  // Expect that only the observations for NAME_FIRST were reset on client 0.
+  const autofill::ProfileTokenQuality& token_quality =
+      GetPersonalDataManager(0)->GetProfiles()[0]->token_quality();
+  EXPECT_TRUE(
+      token_quality.GetObservationTypesForFieldType(autofill::NAME_FIRST)
+          .empty());
+  EXPECT_THAT(
+      token_quality.GetObservationTypesForFieldType(autofill::NAME_LAST),
+      testing::UnorderedElementsAre(
+          autofill::ProfileTokenQuality::ObservationType::kEditedFallback));
 }
 
 }  // namespace

@@ -8,23 +8,28 @@
 
 #include "ash/components/arc/arc_util.h"
 #include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_accelerators.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
+#include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/i18n/time_formatting.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/time/time_to_iso8601.h"
+#include "base/test/scoped_run_loop_timeout.h"
+#include "base/test/test_timeouts.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "chrome/browser/ash/login/demo_mode/demo_mode_test_utils.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
-#include "chrome/browser/ash/login/demo_mode/demo_setup_test_utils.h"
 #include "chrome/browser/ash/login/mock_network_state_helper.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screens/demo_setup_screen.h"
@@ -42,25 +47,29 @@
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_status.h"
+#include "chrome/browser/chrome_browser_main.h"
+#include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
+#include "chrome/browser/component_updater/fake_cros_component_manager.h"
 #include "chrome/browser/ui/webui/ash/login/demo_preferences_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/demo_setup_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
-#include "chrome/browser/ui/webui/ash/login/eula_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
-#include "chrome/common/pref_names.h"
+#include "chrome/browser/ui/webui/ash/login/network_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/browser_process_platform_part_test_api_chromeos.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
+#include "chromeos/ash/components/growth/campaigns_manager.h"
+#include "chromeos/ash/components/growth/campaigns_model.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/constants/chromeos_features.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/browser_test.h"
@@ -75,7 +84,6 @@ namespace {
 using test::DemoModeSetupResult;
 using test::SetupDummyOfflinePolicyDir;
 
-constexpr char kArcTosId[] = "arc-tos";
 constexpr char kConsolidatedConsentId[] = "consolidated-consent";
 constexpr char kDemoSetupId[] = "demo-setup";
 constexpr char kDemoPrefsId[] = "demo-preferences";
@@ -91,8 +99,12 @@ const test::UIPath kDemoPreferencesScreen = {kDemoPrefsId};
 const test::UIPath kDemoPreferencesCountry = {kDemoPrefsId, "countrySelect"};
 const test::UIPath kDemoPreferencesCountrySelect = {kDemoPrefsId,
                                                     "countrySelect", "select"};
-const test::UIPath kDemoPreferencesRetailerStoreId = {kDemoPrefsId,
-                                                      "retailerIdInput"};
+const test::UIPath kDemoPreferencesRetailerName = {kDemoPrefsId,
+                                                   "retailerNameInput"};
+const test::UIPath kDemoPreferencesStoreNumber = {kDemoPrefsId,
+                                                  "storeNumberInput"};
+const test::UIPath kDemoPreferencesStoreNumberInputDisplayMessage = {
+    kDemoPrefsId, "store-number-input-display-text"};
 const test::UIPath kDemoPreferencesNext = {kDemoPrefsId, "nextButton"};
 
 const test::UIPath kNetworkScreen = {kNetworkId};
@@ -110,12 +122,6 @@ const test::UIPath kDemoSetupErrorDialogBack = {kDemoSetupId, "back"};
 const test::UIPath kDemoSetupErrorDialogMessage = {kDemoSetupId,
                                                    "errorMessage"};
 
-const test::UIPath kArcTosDialog = {kArcTosId, "arcTosDialog"};
-const test::UIPath kArcTosAcceptButton = {kArcTosId, "arcTosAcceptButton"};
-const test::UIPath kArcTosDemoAppsNotice = {kArcTosId, "arcTosMetricsDemoApps"};
-const test::UIPath kArcTosBackButton = {kArcTosId, "arcTosBackButton"};
-const test::UIPath kArcTosNextButton = {kArcTosId, "arcTosNextButton"};
-
 const test::UIPath kCCAcceptButton = {kConsolidatedConsentId, "acceptButton"};
 const test::UIPath kCCArcTosLink = {kConsolidatedConsentId, "arcTosLink"};
 const test::UIPath kCCBackButton = {kConsolidatedConsentId, "backButton"};
@@ -124,6 +130,11 @@ constexpr char kDefaultNetworkServicePath[] = "/service/eth1";
 constexpr char kDefaultNetworkName[] = "eth1";
 
 constexpr int kInvokeDemoModeGestureTapsCount = 10;
+
+inline constexpr char kGrowthCampaignsComponentName[] = "growth-campaigns";
+inline constexpr char kDemoAppComponentName[] = "demo-mode-app";
+inline constexpr char kDemoResourcesComponentName[] = "demo-mode-resources";
+inline constexpr char kCampaignsFileName[] = "campaigns.json";
 
 // Basic tests for demo mode setup flow.
 class DemoSetupTestBase : public OobeBaseTest {
@@ -172,6 +183,10 @@ class DemoSetupTestBase : public OobeBaseTest {
     ClickOkOnConfirmationDialog();
 
     OobeScreenWaiter(NetworkScreenView::kScreenId).Wait();
+
+    WizardController::default_controller()
+        ->demo_setup_controller()
+        ->EnableLoadRealComponentsForTest();
   }
 
   // Returns whether error message is shown on demo setup error screen and
@@ -266,12 +281,28 @@ class DemoSetupTestBase : public OobeBaseTest {
     base::RunLoop().RunUntilIdle();
   }
 
+  void ProceedThroughDemoPreferencesScreen() {
+    SetAndVerifyValidRetailerNameAndStoreNumber("Retailer", "1234");
+    test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  }
+
+  // Type in valid input and verify that the "continue" button is enabled.
+  void SetAndVerifyValidRetailerNameAndStoreNumber(
+      const std::string& expected_retailer_name,
+      const std::string& expected_store_number) {
+    test::OobeJS().TypeIntoPath(expected_retailer_name,
+                                kDemoPreferencesRetailerName);
+    test::OobeJS().TypeIntoPath(expected_store_number,
+                                kDemoPreferencesStoreNumber);
+    test::OobeJS().ExpectEnabledPath(kDemoPreferencesNext);
+  }
+
   // Sets fake time in MultiTapDetector to remove dependency on real time in
   // test environment.
   void SetFakeTimeForMultiTapDetector(base::Time fake_time) {
     const std::string query =
         base::StrCat({"MultiTapDetector.setFakeTimeForTests(new Date('",
-                      base::TimeToISO8601(fake_time), "'));"});
+                      base::TimeFormatAsIso8601(fake_time), "'));"});
     test::ExecuteOobeJS(query);
   }
 
@@ -292,15 +323,103 @@ class DemoSetupTestBase : public OobeBaseTest {
   std::unique_ptr<base::AutoReset<bool>> branded_build_override_;
 };
 
+// Extra parts for setting up the FakeCrOSComponentManager before the real one
+// has been initialized on the browser
+class DemoSetupTestMainExtraParts : public ChromeBrowserMainExtraParts {
+ public:
+  explicit DemoSetupTestMainExtraParts(
+      bool growth_campaigns_enabled = false,
+      component_updater::CrOSComponentManager::Error
+          demo_mode_app_load_response =
+              component_updater::CrOSComponentManager::Error::NONE)
+      : growth_campaigns_enabled_(growth_campaigns_enabled),
+        demo_mode_app_load_response_(demo_mode_app_load_response) {
+    CHECK(components_temp_dir_.CreateUniqueTempDir());
+  }
+  DemoSetupTestMainExtraParts(const DemoSetupTestMainExtraParts&) = delete;
+  DemoSetupTestMainExtraParts& operator=(const DemoSetupTestMainExtraParts&) =
+      delete;
+
+  base::FilePath GetGrowthCampaignsPath() {
+    return components_temp_dir_.GetPath()
+        .AppendASCII("cros-components")
+        .AppendASCII(kGrowthCampaignsComponentName);
+  }
+
+  void PostEarlyInitialization() override {
+    auto cros_component_manager =
+        base::MakeRefCounted<component_updater::FakeCrOSComponentManager>();
+    std::set<std::string> supported_components = {kDemoResourcesComponentName,
+                                                  kDemoAppComponentName};
+    if (growth_campaigns_enabled_) {
+      supported_components.insert(kGrowthCampaignsComponentName);
+    }
+
+    cros_component_manager->set_supported_components(supported_components);
+    if (demo_mode_app_load_response_ ==
+        component_updater::CrOSComponentManager::Error::NONE) {
+      cros_component_manager->ResetComponentState(
+          kDemoAppComponentName,
+          component_updater::FakeCrOSComponentManager::ComponentInfo(
+              demo_mode_app_load_response_, base::FilePath("/dev/null"),
+              base::FilePath("/run/imageloader/demo-mode-app")));
+    } else {
+      cros_component_manager->ResetComponentState(
+          kDemoAppComponentName,
+          component_updater::FakeCrOSComponentManager::ComponentInfo(
+              demo_mode_app_load_response_, base::FilePath(),
+              base::FilePath()));
+    }
+    cros_component_manager->ResetComponentState(
+        kDemoResourcesComponentName,
+        component_updater::FakeCrOSComponentManager::ComponentInfo(
+            component_updater::CrOSComponentManager::Error::NONE,
+            base::FilePath("/dev/null"),
+            base::FilePath("/run/imageloader/demo-mode-resources")));
+
+    if (growth_campaigns_enabled_) {
+      cros_component_manager->ResetComponentState(
+          kGrowthCampaignsComponentName,
+          component_updater::FakeCrOSComponentManager::ComponentInfo(
+              component_updater::CrOSComponentManager::Error::NONE,
+              base::FilePath("/dev/null"), GetGrowthCampaignsPath()));
+    }
+
+    platform_part_test_api_ =
+        std::make_unique<BrowserProcessPlatformPartTestApi>(
+            g_browser_process->platform_part());
+    platform_part_test_api_->InitializeCrosComponentManager(
+        std::move(cros_component_manager));
+  }
+
+  void PostMainMessageLoopRun() override {
+    platform_part_test_api_->ShutdownCrosComponentManager();
+    platform_part_test_api_.reset();
+  }
+
+ private:
+  std::unique_ptr<BrowserProcessPlatformPartTestApi> platform_part_test_api_;
+  base::ScopedTempDir components_temp_dir_;
+  bool growth_campaigns_enabled_;
+  component_updater::CrOSComponentManager::Error demo_mode_app_load_response_;
+};
+
 class DemoSetupArcSupportedTest : public DemoSetupTestBase {
  public:
   DemoSetupArcSupportedTest() {
-    statistics_provider_.SetMachineStatistic(chromeos::system::kRegionKey,
-                                             "us");
+    statistics_provider_.SetMachineStatistic(system::kRegionKey, "us");
     statistics_provider_.SetVpdStatus(
         system::StatisticsProvider::VpdStatus::kValid);
   }
   ~DemoSetupArcSupportedTest() override = default;
+
+  void CreatedBrowserMainParts(
+      content::BrowserMainParts* browser_main_parts) override {
+    auto extra_parts = std::make_unique<DemoSetupTestMainExtraParts>();
+    static_cast<ChromeBrowserMainParts*>(browser_main_parts)
+        ->AddParts(std::move(extra_parts));
+    DemoSetupTestBase::CreatedBrowserMainParts(browser_main_parts);
+  }
 
   // DemoSetupTestBase:
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -308,18 +427,6 @@ class DemoSetupArcSupportedTest : public DemoSetupTestBase {
     command_line->AppendSwitchASCII(switches::kArcAvailability,
                                     "officially-supported");
     ASSERT_TRUE(arc::IsArcAvailable());
-  }
-
-  void SetPlayStoreTermsForTesting() {
-    test::ExecuteOobeJS(
-        R"(login.ArcTermsOfServiceScreen.setTosForTesting(
-              'Test Play Store Terms of Service');)");
-  }
-
-  void WaitForArcTosScreen() {
-    OobeScreenWaiter(ArcTermsOfServiceScreenView::kScreenId).Wait();
-    SetPlayStoreTermsForTesting();
-    test::OobeJS().CreateVisibilityWaiter(true, kArcTosDialog)->Wait();
   }
 
   void WaitForConsolidatedConsentScreen() {
@@ -331,47 +438,29 @@ class DemoSetupArcSupportedTest : public DemoSetupTestBase {
     test::OobeJS().ExpectVisiblePath(kCCAcceptButton);
   }
 
-  void AcceptArcTos() {
-    test::OobeJS().CreateVisibilityWaiter(true, kArcTosNextButton)->Wait();
-    test::OobeJS().ClickOnPath(kArcTosNextButton);
-    test::OobeJS().CreateVisibilityWaiter(true, kArcTosAcceptButton)->Wait();
-    test::OobeJS().ClickOnPath(kArcTosAcceptButton);
+  // Type in invalid input and the "continue" button is disabled.
+  void SetAndVerifyInvalidRetailerNameAndStoreNumber(
+      const std::string& expected_retailer_name,
+      const std::string& expected_store_number) {
+    test::OobeJS().TypeIntoPath(expected_retailer_name,
+                                kDemoPreferencesRetailerName);
+    test::OobeJS().TypeIntoPath(expected_store_number,
+                                kDemoPreferencesStoreNumber);
+    test::OobeJS().ExpectDisabledPath(kDemoPreferencesNext);
   }
 
   void AcceptTermsAndExpectDemoSetupProgress() {
     test::LockDemoDeviceInstallAttributes();
     // TODO(b/246012796): If possible, re-enable waiting on the setup screen to
     // be shown
-    if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-      WaitForConsolidatedConsentScreen();
-
-      test::TapConsolidatedConsentAccept();
-    } else {
-      test::WaitForEulaScreen();
-      test::TapEulaAccept();
-
-      WaitForArcTosScreen();
-
-      test::OobeJS().ExpectVisiblePath(kArcTosDemoAppsNotice);
-
-      AcceptArcTos();
-    }
+    WaitForConsolidatedConsentScreen();
+    test::TapConsolidatedConsentAccept();
   }
 
   void AcceptTermsAndExpectDemoSetupFailure() {
-    if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-      WaitForConsolidatedConsentScreen();
-      test::TapConsolidatedConsentAccept();
-    } else {
-      test::WaitForEulaScreen();
-      test::TapEulaAccept();
+    WaitForConsolidatedConsentScreen();
+    test::TapConsolidatedConsentAccept();
 
-      WaitForArcTosScreen();
-
-      test::OobeJS().ExpectVisiblePath(kArcTosDemoAppsNotice);
-
-      AcceptArcTos();
-    }
     // As we expect the error message to stay on the screen, it is safe to
     // wait for it in the usual manner.
     OobeScreenWaiter(DemoSetupScreenView::kScreenId).Wait();
@@ -418,11 +507,11 @@ class DemoSetupArcSupportedTest : public DemoSetupTestBase {
 
   system::ScopedFakeStatisticsProvider statistics_provider_;
 
-  void SelectFranceAndFinishSetup() {
-    // Select France as the Demo Mode country.
+  void PopulateDemoPreferencesAndFinishSetup() {
+    // Select France as the Demo Mode country and test retailer name and store
+    // number.
     test::OobeJS().SelectElementInPath("FR", kDemoPreferencesCountrySelect);
-    test::OobeJS().ExpectEnabledPath(kDemoPreferencesNext);
-    test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+    ProceedThroughDemoPreferencesScreen();
 
     AcceptTermsAndExpectDemoSetupProgress();
 
@@ -431,7 +520,7 @@ class DemoSetupArcSupportedTest : public DemoSetupTestBase {
               DemoSetupController::GetSubOrganizationEmail());
 
     // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
-    // it's shown again when Demo setup completes
+    // it's shown again when Demo setup completes.
     LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
 
     EXPECT_TRUE(StartupUtils::IsOobeCompleted());
@@ -441,6 +530,7 @@ class DemoSetupArcSupportedTest : public DemoSetupTestBase {
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
                        ShowConfirmationDialogAndProceed) {
+  WaitForOobeUI();
   IsConfirmationDialogHidden();
 
   InvokeDemoModeWithAccelerator();
@@ -453,6 +543,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
                        ShowConfirmationDialogAndCancel) {
+  WaitForOobeUI();
   IsConfirmationDialogHidden();
 
   InvokeDemoModeWithAccelerator();
@@ -465,6 +556,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
 }
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, InvokeWithTaps) {
+  WaitForOobeUI();
   // Use fake time to avoid flakiness.
   SetFakeTimeForMultiTapDetector(base::Time::UnixEpoch());
   IsConfirmationDialogHidden();
@@ -509,27 +601,25 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
 
   UseOnlineModeOnNetworkScreen();
 
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
   AcceptTermsAndExpectDemoSetupProgress();
 
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepCompletionTime.Consolidated-consent", 1);
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepShownStatus.Consolidated-consent", 1);
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepCompletionTimeByExitReason.Consolidated-consent."
-        "AcceptedDemo",
-        1);
-  }
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTime.Consolidated-consent", 1);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepShownStatus.Consolidated-consent", 1);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTimeByExitReason.Consolidated-consent."
+      "AcceptedDemo",
+      1);
 
   // Verify the email corresponds to US.
   EXPECT_EQ("admin-us@cros-demo-mode.com",
             DemoSetupController::GetSubOrganizationEmail());
 
   // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
-  // it's shown again when Demo setup completes
+  // it's shown again when Demo setup completes.
   LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
 
   EXPECT_TRUE(StartupUtils::IsOobeCompleted());
@@ -556,15 +646,17 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
     EXPECT_EQ(it->second, test::OobeJS().GetString(query));
   }
 
+  SetAndVerifyValidRetailerNameAndStoreNumber("Retailer", "1234");
+
   // Expect active "OK" button with "US" selected as country.
   test::OobeJS().ExpectEnabledPath(kDemoPreferencesNext);
   test::OobeJS().ExpectElementValue("US", kDemoPreferencesCountrySelect);
 
-  SelectFranceAndFinishSetup();
+  PopulateDemoPreferencesAndFinishSetup();
 }
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
-                       OnlineSetupFlowSuccessWithRetailerAndStoreId) {
+                       OnlineSetupFlowSuccessWithValidRetailerAndStore) {
   // Simulate successful online setup.
   enrollment_helper_.ExpectEnrollmentMode(
       policy::EnrollmentConfig::MODE_ATTESTATION);
@@ -575,16 +667,15 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
 
   UseOnlineModeOnNetworkScreen();
 
-  const std::string expectedRetailerStoreId = "ABC-1234";
+  // Test a couple valid inputs, verify the "continue" button is enabled.
+  SetAndVerifyValidRetailerNameAndStoreNumber("Ret@iler with $ymb0ls", "0000");
+  SetAndVerifyValidRetailerNameAndStoreNumber("R", "1");
+  SetAndVerifyValidRetailerNameAndStoreNumber("Retailer", "1234");
 
-  test::OobeJS().TypeIntoPath(expectedRetailerStoreId,
-                              kDemoPreferencesRetailerStoreId);
-  test::OobeJS().ExpectEnabledPath(kDemoPreferencesNext);
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
-
-  EXPECT_EQ(expectedRetailerStoreId, WizardController::default_controller()
-                                         ->demo_setup_controller()
-                                         ->get_retailer_store_id_input());
+  test::OobeJS().ExpectElementText(
+      l10n_util::GetStringUTF8(
+          IDS_OOBE_DEMO_SETUP_PREFERENCES_STORE_NUMBER_INPUT_HELP_TEXT),
+      kDemoPreferencesStoreNumberInputDisplayMessage);
 
   test::OobeJS().ClickOnPath(kDemoPreferencesNext);
 
@@ -593,16 +684,48 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
   EXPECT_EQ("admin-us@cros-demo-mode.com",
             DemoSetupController::GetSubOrganizationEmail());
   // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
-  // it's shown again when Demo setup completes
+  // it's shown again when Demo setup completes.
   LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
 
-  EXPECT_EQ("ABC", g_browser_process->local_state()->GetString(
-                       prefs::kDemoModeRetailerId));
+  // Verify that pref value has been normalized to uppercase.
+  EXPECT_EQ("retailer", g_browser_process->local_state()->GetString(
+                            prefs::kDemoModeRetailerId));
   EXPECT_EQ("1234", g_browser_process->local_state()->GetString(
                         prefs::kDemoModeStoreId));
 
   EXPECT_TRUE(StartupUtils::IsOobeCompleted());
   EXPECT_TRUE(StartupUtils::IsDeviceRegistered());
+}
+
+IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
+                       OnlineSetupNoEnrollmentWithInvalidRetailerAndStore) {
+  // Simulate demo online setup not finished.
+  enrollment_helper_.ExpectNoEnrollment();
+  SimulateNetworkConnected();
+
+  TriggerDemoModeOnWelcomeScreen();
+
+  UseOnlineModeOnNetworkScreen();
+
+  test::OobeJS().ExpectElementText(
+      l10n_util::GetStringUTF8(
+          IDS_OOBE_DEMO_SETUP_PREFERENCES_STORE_NUMBER_INPUT_HELP_TEXT),
+      kDemoPreferencesStoreNumberInputDisplayMessage);
+  test::OobeJS().ExpectDisabledPath(kDemoPreferencesNext);
+
+  SetAndVerifyInvalidRetailerNameAndStoreNumber("ValidRetailer", "NotANumber");
+  SetAndVerifyInvalidRetailerNameAndStoreNumber("", "1234");
+  SetAndVerifyInvalidRetailerNameAndStoreNumber("ValidRetailer", "");
+  SetAndVerifyInvalidRetailerNameAndStoreNumber("ValidRetailer", "1234a");
+  SetAndVerifyInvalidRetailerNameAndStoreNumber("ValidRetailer", "12-34");
+
+  // Verify that continue button goes back to being disabled after enabled
+  // for correct input
+  SetAndVerifyValidRetailerNameAndStoreNumber("ValidRetailer", "1234");
+  SetAndVerifyInvalidRetailerNameAndStoreNumber("", "");
+
+  EXPECT_FALSE(StartupUtils::IsOobeCompleted());
+  EXPECT_FALSE(StartupUtils::IsDeviceRegistered());
 }
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, OnlineSetupFlowErrorDefault) {
@@ -618,7 +741,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, OnlineSetupFlowErrorDefault) {
 
   UseOnlineModeOnNetworkScreen();
 
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
   AcceptTermsAndExpectDemoSetupFailure();
 
@@ -648,7 +771,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
 
   UseOnlineModeOnNetworkScreen();
 
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
   AcceptTermsAndExpectDemoSetupFailure();
 
@@ -663,34 +786,6 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
   EXPECT_FALSE(StartupUtils::IsDeviceRegistered());
 }
 
-IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
-                       OnlineSetupFlowCrosComponentFailure) {
-  // Simulate failure to load demo resources CrOS component.
-  // There is no enrollment attempt, as process fails earlier.
-  enrollment_helper_.ExpectNoEnrollment();
-  SimulateNetworkConnected();
-
-  TriggerDemoModeOnWelcomeScreen();
-
-  UseOnlineModeOnNetworkScreen();
-
-  // Set the component to fail to install when requested.
-  WizardController::default_controller()
-      ->demo_setup_controller()
-      ->SetCrOSComponentLoadErrorForTest(
-          component_updater::CrOSComponentManager::Error::INSTALL_FAILURE);
-
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
-
-  AcceptTermsAndExpectDemoSetupFailure();
-
-  ExpectErrorMessage(IDS_DEMO_SETUP_COMPONENT_ERROR,
-                     IDS_DEMO_SETUP_RECOVERY_CHECK_NETWORK);
-
-  EXPECT_FALSE(StartupUtils::IsOobeCompleted());
-  EXPECT_FALSE(StartupUtils::IsDeviceRegistered());
-}
-
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, OfflineDemoModeUnavailable) {
   SimulateNetworkDisconnected();
 
@@ -699,7 +794,9 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, OfflineDemoModeUnavailable) {
   test::OobeJS().ExpectDisabledPath(kNetworkNextButton);
 }
 
-IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, ClickNetworkOnNetworkScreen) {
+// Flaky. https://crbug.com/1453362.
+IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
+                       DISABLED_ClickNetworkOnNetworkScreen) {
   TriggerDemoModeOnWelcomeScreen();
   test::WaitForNetworkSelectionScreen();
 
@@ -709,13 +806,10 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, ClickNetworkOnNetworkScreen) {
   SimulateNetworkConnected();
 
   OobeScreenWaiter(DemoPreferencesScreenView::kScreenId).Wait();
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
 
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    test::WaitForConsolidatedConsentScreen();
-  } else {
-    test::WaitForEulaScreen();
-  }
+  ProceedThroughDemoPreferencesScreen();
+
+  test::WaitForConsolidatedConsentScreen();
 }
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
@@ -732,13 +826,9 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest,
 
   OobeScreenWaiter(DemoPreferencesScreenView::kScreenId).Wait();
 
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    test::WaitForConsolidatedConsentScreen();
-  } else {
-    test::WaitForEulaScreen();
-  }
+  test::WaitForConsolidatedConsentScreen();
 }
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, BackOnNetworkScreen) {
@@ -748,7 +838,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, BackOnNetworkScreen) {
   test::WaitForNetworkSelectionScreen();
 
   test::OobeJS().ClickOnPath(kNetworkBackButton);
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
 }
 
 IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, BackOnTermsScreen) {
@@ -756,29 +846,20 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, BackOnTermsScreen) {
 
   TriggerDemoModeOnWelcomeScreen();
 
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    UseOnlineModeOnNetworkScreen();
-    OobeScreenWaiter(DemoPreferencesScreenView::kScreenId).Wait();
-    test::OobeJS().ClickOnPath(kDemoPreferencesNext);
-    test::WaitForConsolidatedConsentScreen();
-    test::OobeJS().ClickOnPath(kCCBackButton);
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepCompletionTime.Consolidated-consent", 1);
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepShownStatus.Consolidated-consent", 1);
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepCompletionTimeByExitReason.Consolidated-consent."
-        "BackDemo",
-        1);
-  } else {
-    // User cannot go to ARC ToS screen without accepting eula - simulate that.
-    StartupUtils::MarkEulaAccepted();
-    UseOnlineModeOnNetworkScreen();
-    OobeScreenWaiter(DemoPreferencesScreenView::kScreenId).Wait();
-    test::OobeJS().ClickOnPath(kDemoPreferencesNext);
-    OobeScreenWaiter(ArcTermsOfServiceScreenView::kScreenId).Wait();
-    test::OobeJS().ClickOnPath(kArcTosBackButton);
-  }
+  UseOnlineModeOnNetworkScreen();
+  OobeScreenWaiter(DemoPreferencesScreenView::kScreenId).Wait();
+  ProceedThroughDemoPreferencesScreen();
+  test::WaitForConsolidatedConsentScreen();
+  test::OobeJS().ClickOnPath(kCCBackButton);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTime.Consolidated-consent", 1);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepShownStatus.Consolidated-consent", 1);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTimeByExitReason.Consolidated-consent."
+      "BackDemo",
+      1);
+
   OobeScreenWaiter(DemoPreferencesScreenView::kScreenId).Wait();
 }
 
@@ -795,17 +876,23 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, BackOnErrorScreen) {
 
   UseOnlineModeOnNetworkScreen();
 
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
   AcceptTermsAndExpectDemoSetupFailure();
 
   test::OobeJS().ExpectEnabledPath(kDemoSetupErrorDialogBack);
   test::OobeJS().ClickOnPath(kDemoSetupErrorDialogBack);
 
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
 }
 
-IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, RetryOnErrorScreen) {
+// TODO(crbug.com/1399073): Flaky on ChromeOS.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#define MAYBE_RetryOnErrorScreen DISABLED_RetryOnErrorScreen
+#else
+#define MAYBE_RetryOnErrorScreen RetryOnErrorScreen
+#endif
+IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, MAYBE_RetryOnErrorScreen) {
   // Simulate online setup failure.
   enrollment_helper_.ExpectEnrollmentMode(
       policy::EnrollmentConfig::MODE_ATTESTATION);
@@ -818,7 +905,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, RetryOnErrorScreen) {
 
   UseOnlineModeOnNetworkScreen();
 
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
   AcceptTermsAndExpectDemoSetupFailure();
   test::LockDemoDeviceInstallAttributes();
@@ -833,7 +920,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcSupportedTest, RetryOnErrorScreen) {
   test::OobeJS().ClickOnPath(kDemoSetupErrorDialogRetry);
 
   // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
-  // it's shown again when Demo setup completes
+  // it's shown again when Demo setup completes.
   LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
 
   EXPECT_TRUE(StartupUtils::IsOobeCompleted());
@@ -876,8 +963,8 @@ class DemoSetupProgressStepsTest : public DemoSetupArcSupportedTest {
   }
 };
 
+// TODO(b/271419599): Flaky.
 IN_PROC_BROWSER_TEST_F(DemoSetupProgressStepsTest,
-                       // TODO(crbug.com/1323032): Re-enable this test
                        DISABLED_SetupProgessStepsDisplayCorrectly) {
   SimulateNetworkConnected();
   TriggerDemoModeOnWelcomeScreen();
@@ -947,6 +1034,47 @@ IN_PROC_BROWSER_TEST_F(DemoSetupArcUnsupportedTest, DoNotInvokeWithTaps) {
 }
 
 /**
+ * Test case of Demo Mode setup with Growth Framework enabled.
+ */
+class DemoSetupComponentLoadErrorTest : public DemoSetupArcSupportedTest {
+ public:
+  DemoSetupComponentLoadErrorTest() = default;
+  ~DemoSetupComponentLoadErrorTest() override = default;
+
+  void CreatedBrowserMainParts(
+      content::BrowserMainParts* browser_main_parts) override {
+    auto extra_parts = std::make_unique<DemoSetupTestMainExtraParts>(
+        /*growth_campaigns_enabled=*/false,
+        component_updater::CrOSComponentManager::Error::INSTALL_FAILURE);
+    static_cast<ChromeBrowserMainParts*>(browser_main_parts)
+        ->AddParts(std::move(extra_parts));
+    DemoSetupTestBase::CreatedBrowserMainParts(browser_main_parts);
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(DemoSetupComponentLoadErrorTest,
+                       OnlineSetupFlowCrosComponentFailure) {
+  // Simulate failure to load demo resources CrOS component.
+  // There is no enrollment attempt, as process fails earlier.
+  enrollment_helper_.ExpectNoEnrollment();
+  SimulateNetworkConnected();
+
+  TriggerDemoModeOnWelcomeScreen();
+
+  UseOnlineModeOnNetworkScreen();
+
+  ProceedThroughDemoPreferencesScreen();
+
+  AcceptTermsAndExpectDemoSetupFailure();
+
+  ExpectErrorMessage(IDS_DEMO_SETUP_COMPONENT_ERROR,
+                     IDS_DEMO_SETUP_RECOVERY_CHECK_NETWORK);
+
+  EXPECT_FALSE(StartupUtils::IsOobeCompleted());
+  EXPECT_FALSE(StartupUtils::IsDeviceRegistered());
+}
+
+/**
  * Test case of device variant region code, e.g. ca.fr etc.
  */
 class DemoSetupVariantCountryCodeRegionTest : public DemoSetupArcSupportedTest {
@@ -954,8 +1082,7 @@ class DemoSetupVariantCountryCodeRegionTest : public DemoSetupArcSupportedTest {
   ~DemoSetupVariantCountryCodeRegionTest() override = default;
 
   DemoSetupVariantCountryCodeRegionTest() {
-    statistics_provider_.SetMachineStatistic(chromeos::system::kRegionKey,
-                                             "ca.fr");
+    statistics_provider_.SetMachineStatistic(system::kRegionKey, "ca.fr");
   }
 };
 
@@ -983,7 +1110,7 @@ IN_PROC_BROWSER_TEST_F(DemoSetupVariantCountryCodeRegionTest,
             DemoSetupController::GetSubOrganizationEmail());
 
   // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
-  // it's shown again when Demo setup completes
+  // it's shown again when Demo setup completes.
   LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
 
   EXPECT_TRUE(StartupUtils::IsOobeCompleted());
@@ -998,8 +1125,7 @@ class DemoSetupVirtualSetRegionCodeTest : public DemoSetupArcSupportedTest {
   ~DemoSetupVirtualSetRegionCodeTest() override = default;
 
   DemoSetupVirtualSetRegionCodeTest() {
-    statistics_provider_.SetMachineStatistic(chromeos::system::kRegionKey,
-                                             "nordic");
+    statistics_provider_.SetMachineStatistic(system::kRegionKey, "nordic");
   }
 };
 
@@ -1025,9 +1151,8 @@ IN_PROC_BROWSER_TEST_F(DemoSetupVirtualSetRegionCodeTest,
   // Expect inactive "OK" button when entering the preference screen.
   test::OobeJS().ExpectDisabledPath(kDemoPreferencesNext);
   test::OobeJS().ExpectElementValue("N/A", kDemoPreferencesCountrySelect);
-  // test::OobeJS().ClickOnPath(kDemoPreferencesNext);
 
-  SelectFranceAndFinishSetup();
+  PopulateDemoPreferencesAndFinishSetup();
 }
 
 /**
@@ -1038,28 +1163,34 @@ class DemoSetupRegionCodeNotExistTest : public DemoSetupArcSupportedTest {
   ~DemoSetupRegionCodeNotExistTest() override = default;
 
   DemoSetupRegionCodeNotExistTest() {
-    statistics_provider_.ClearMachineStatistic(chromeos::system::kRegionKey);
+    statistics_provider_.ClearMachineStatistic(system::kRegionKey);
   }
 };
 
-// TODO(crbug.com/1320444): Flaky test.
+// TODO(crbug.com/1486991): Flaky under dbg and asan.
+#if !defined(NDEBUG) || defined(ADDRESS_SANITIZER)
+#define MAYBE_RegionCodeNotExistPlaceholderIsSet \
+  DISABLED_RegionCodeNotExistPlaceholderIsSet
+#else
+#define MAYBE_RegionCodeNotExistPlaceholderIsSet \
+  RegionCodeNotExistPlaceholderIsSet
+#endif
 IN_PROC_BROWSER_TEST_F(DemoSetupRegionCodeNotExistTest,
-                       DISABLED_RegionCodeNotExistPlaceholderIsSet) {
+                       MAYBE_RegionCodeNotExistPlaceholderIsSet) {
   // Simulate successful online setup.
   enrollment_helper_.ExpectEnrollmentMode(
       policy::EnrollmentConfig::MODE_ATTESTATION);
   enrollment_helper_.ExpectAttestationEnrollmentSuccess();
   SimulateNetworkConnected();
 
-  // TODO(crbug.com/1320412): Re-enable this test
   TriggerDemoModeOnWelcomeScreen();
   UseOnlineModeOnNetworkScreen();
+
   // Expect inactive "OK" button when entering the preference screen.
   test::OobeJS().ExpectDisabledPath(kDemoPreferencesNext);
   test::OobeJS().ExpectElementValue("N/A", kDemoPreferencesCountrySelect);
-  // test::OobeJS().ClickOnPath(kDemoPreferencesNext);
 
-  SelectFranceAndFinishSetup();
+  PopulateDemoPreferencesAndFinishSetup();
 }
 
 /**
@@ -1070,8 +1201,7 @@ class DemoSetupBlazeyDeviceTest : public DemoSetupArcSupportedTest {
   ~DemoSetupBlazeyDeviceTest() override = default;
 
   DemoSetupBlazeyDeviceTest() {
-    statistics_provider_.SetMachineStatistic(chromeos::system::kRegionKey,
-                                             "us");
+    statistics_provider_.SetMachineStatistic(system::kRegionKey, "us");
     feature_list_.InitAndEnableFeature(chromeos::features::kCloudGamingDevice);
   }
 
@@ -1087,6 +1217,14 @@ class DemoSetupBlazeyDeviceTest : public DemoSetupArcSupportedTest {
 #endif
 IN_PROC_BROWSER_TEST_F(DemoSetupBlazeyDeviceTest,
                        MAYBE_DeviceIsBlazeyEnabledDevice) {
+  // `LoginOrLockScreenVisibleWaiter::WaitImpl` has a time out equals to
+  // `TestTimeouts::test_launcher_timeout()` (which is equals to 135s in this
+  // test), but sometimes it might be longer than 2 minutes, which left 15s for
+  // this test to run. Increase the timeout of this test so that it has enough
+  // time.
+  base::test::ScopedRunLoopTimeout increase_timeout(
+      FROM_HERE, TestTimeouts::test_launcher_timeout() + base::Seconds(60));
+
   // Simulate successful online setup.
   enrollment_helper_.ExpectEnrollmentMode(
       policy::EnrollmentConfig::MODE_ATTESTATION);
@@ -1097,9 +1235,8 @@ IN_PROC_BROWSER_TEST_F(DemoSetupBlazeyDeviceTest,
   UseOnlineModeOnNetworkScreen();
 
   // Expect active "OK" button when entering the preference screen.
-  test::OobeJS().ExpectEnabledPath(kDemoPreferencesNext);
   test::OobeJS().ExpectElementValue("US", kDemoPreferencesCountrySelect);
-  test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+  ProceedThroughDemoPreferencesScreen();
 
   AcceptTermsAndExpectDemoSetupProgress();
 
@@ -1108,11 +1245,162 @@ IN_PROC_BROWSER_TEST_F(DemoSetupBlazeyDeviceTest,
             DemoSetupController::GetSubOrganizationEmail());
 
   // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
-  // it's shown again when Demo setup completes
+  // it's shown again when Demo setup completes.
   LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
 
   EXPECT_TRUE(StartupUtils::IsOobeCompleted());
   EXPECT_TRUE(StartupUtils::IsDeviceRegistered());
+}
+
+/**
+ * Test case of Quick Start enabled device, where quick start button should not
+ * show for demo mode.
+ */
+class DemoSetupQuickStartEnabledTest : public DemoSetupArcSupportedTest {
+ public:
+  ~DemoSetupQuickStartEnabledTest() override = default;
+
+  DemoSetupQuickStartEnabledTest() {
+    feature_list_.InitAndEnableFeature(features::kOobeQuickStart);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(DemoSetupQuickStartEnabledTest, QuickStartButton) {
+  SimulateNetworkDisconnected();
+
+  TriggerDemoModeOnWelcomeScreen();
+
+  OobeScreenWaiter(NetworkScreenView::kScreenId).Wait();
+
+  // Check that QuickStart button is missing from network_selector
+  auto kQuickStartEntryPointName = l10n_util::GetStringUTF8(
+      IDS_LOGIN_QUICK_START_SETUP_NETWORK_SCREEN_ENTRY_POINT);
+
+  std::string networkElementSelector =
+      test::GetOobeElementPath(
+          {kNetworkId, "networkSelectLogin", "networkSelect"}) +
+      ".getNetworkListItemByNameForTest('" + kQuickStartEntryPointName + "')";
+
+  test::OobeJS().ExpectTrue(networkElementSelector + " == null");
+}
+
+/**
+ * Test case of Demo Mode setup with Growth Framework enabled.
+ */
+class DemoSetupGrowthFrameworkEnabledTest : public DemoSetupArcSupportedTest {
+ public:
+  ~DemoSetupGrowthFrameworkEnabledTest() override = default;
+
+  DemoSetupGrowthFrameworkEnabledTest() {
+    feature_list_.InitWithFeatures(
+        {features::kGrowthCampaignsInDemoMode, ash::features::kGrowthFramework},
+        {});
+  }
+
+  void CreatedBrowserMainParts(
+      content::BrowserMainParts* browser_main_parts) override {
+    auto extra_parts = std::make_unique<DemoSetupTestMainExtraParts>(
+        /*growth_campaigns_enabled=*/true);
+    growth_campaigns_mounted_path_ = extra_parts->GetGrowthCampaignsPath();
+    static_cast<ChromeBrowserMainParts*>(browser_main_parts)
+        ->AddParts(std::move(extra_parts));
+    DemoSetupTestBase::CreatedBrowserMainParts(browser_main_parts);
+  }
+
+  void CreateTestCampaignsFile(base::StringPiece data) {
+    CHECK(base::CreateDirectory(growth_campaigns_mounted_path_));
+
+    base::FilePath campaigns_file(
+        growth_campaigns_mounted_path_.Append(kCampaignsFileName));
+    CHECK(base::WriteFile(campaigns_file, data));
+  }
+
+  void SimulateSetupFlowAndVerifyComplete() {
+    // Simulate successful online setup.
+    enrollment_helper_.ExpectEnrollmentMode(
+        policy::EnrollmentConfig::MODE_ATTESTATION);
+    enrollment_helper_.ExpectAttestationEnrollmentSuccess();
+    SimulateNetworkConnected();
+
+    TriggerDemoModeOnWelcomeScreen();
+
+    UseOnlineModeOnNetworkScreen();
+
+    // Test a couple valid inputs, verify the "continue" button is enabled.
+    SetAndVerifyValidRetailerNameAndStoreNumber("Ret@iler with $ymb0ls",
+                                                "0000");
+    SetAndVerifyValidRetailerNameAndStoreNumber("R", "1");
+    SetAndVerifyValidRetailerNameAndStoreNumber("Retailer", "1234");
+
+    test::OobeJS().ExpectElementText(
+        l10n_util::GetStringUTF8(
+            IDS_OOBE_DEMO_SETUP_PREFERENCES_STORE_NUMBER_INPUT_HELP_TEXT),
+        kDemoPreferencesStoreNumberInputDisplayMessage);
+
+    test::OobeJS().ClickOnPath(kDemoPreferencesNext);
+
+    AcceptTermsAndExpectDemoSetupProgress();
+
+    EXPECT_EQ("admin-us@cros-demo-mode.com",
+              DemoSetupController::GetSubOrganizationEmail());
+    // LoginOrLockScreen is shown at beginning of OOBE, so we need to wait until
+    // it's shown again when Demo setup completes.
+    LoginOrLockScreenVisibleWaiter().WaitEvenIfShown();
+
+    // Verify that pref value has been normalized to uppercase.
+    EXPECT_EQ("retailer", g_browser_process->local_state()->GetString(
+                              prefs::kDemoModeRetailerId));
+    EXPECT_EQ("1234", g_browser_process->local_state()->GetString(
+                          prefs::kDemoModeStoreId));
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+  base::FilePath growth_campaigns_mounted_path_;
+};
+
+IN_PROC_BROWSER_TEST_F(DemoSetupGrowthFrameworkEnabledTest,
+                       OnlineSetupFlowSuccessWithNoCampaignsFile) {
+  SimulateSetupFlowAndVerifyComplete();
+  // Verify that loading growth component failed silently and fetching campaign
+  // returns nullptr.
+  EXPECT_EQ(nullptr, growth::CampaignsManager::Get()->GetCampaignBySlot(
+                         growth::Slot::kDemoModeApp));
+}
+
+IN_PROC_BROWSER_TEST_F(DemoSetupGrowthFrameworkEnabledTest,
+                       OnlineSetupFlowSuccessWithCampaigns) {
+  base::ScopedAllowBlockingForTesting scoped_allow_blocking;
+  CreateTestCampaignsFile(R"({
+    "0": [
+      {
+        "id": 3,
+        "targetings": [],
+        "payload": {
+          "demoModeApp": {
+            "attractionLoop": {
+              "videoSrcLang1": "/asset/peripherals_lang1.mp4",
+              "videoSrcLang2": "/asset/peripherals_lang2.mp4"
+            }
+          }
+        }
+      }
+    ]
+  })");
+
+  SimulateSetupFlowAndVerifyComplete();
+
+  // Verify that loading growth component and fetching campaign successfully.
+  const auto* campaign = growth::CampaignsManager::Get()->GetCampaignBySlot(
+      growth::Slot::kDemoModeApp);
+  const auto* payload = campaign->FindDictByDottedPath("payload.demoModeApp");
+  ASSERT_EQ("/asset/peripherals_lang1.mp4",
+            *payload->FindStringByDottedPath("attractionLoop.videoSrcLang1"));
+  ASSERT_EQ("/asset/peripherals_lang2.mp4",
+            *payload->FindStringByDottedPath("attractionLoop.videoSrcLang2"));
 }
 
 }  // namespace

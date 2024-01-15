@@ -4,12 +4,12 @@
 
 #include "chromeos/components/onc/variable_expander.h"
 
+#include "base/check_deref.h"
 #include "base/files/file_util.h"
 #include "base/values.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace variable_expander {
+namespace chromeos::variable_expander {
 
 TEST(VariableExpanderTest, DoesNothingWithoutVariables) {
   VariableExpander expander({{"machine_name", "chromebook"}});
@@ -128,37 +128,39 @@ TEST(VariableExpanderTest, EdgeCases) {
 }
 
 TEST(VariableExpanderTest, ExpandValueSucceeds) {
-  base::Value root(base::Value::Type::DICTIONARY);
-  base::Value list(base::Value::Type::LIST);
-  list.Append(base::Value(123));
-  list.Append(base::Value("${machine_name}"));
-  list.Append(base::Value(true));
-  root.SetKey("list", std::move(list));
-  root.SetKey("str", base::Value("${machine_name}"));
-  root.SetKey("double", base::Value(123.45));
+  base::Value root(base::Value::Type::DICT);
+  base::Value::List list;
+  list.Append(123);
+  list.Append("${machine_name}");
+  list.Append(true);
+  root.GetDict().Set("list", std::move(list));
+  root.GetDict().Set("str", "${machine_name}");
+  root.GetDict().Set("double", 123.45);
 
   VariableExpander expander({{"machine_name", "chromebook"}});
   EXPECT_TRUE(expander.ExpandValue(&root));
 
-  const base::Value::List& expanded_list = root.FindKey("list")->GetList();
+  const base::Value::Dict& root_dict = root.GetDict();
+  const base::Value::List& expanded_list =
+      CHECK_DEREF(root_dict.FindList("list"));
   EXPECT_EQ(expanded_list[0].GetInt(), 123);
   EXPECT_EQ(expanded_list[1].GetString(), "chromebook");
   EXPECT_EQ(expanded_list[2].GetBool(), true);
-  EXPECT_EQ(root.FindKey("str")->GetString(), "chromebook");
-  EXPECT_EQ(root.FindKey("double")->GetDouble(), 123.45);
+  EXPECT_EQ(CHECK_DEREF(root_dict.FindString("str")), "chromebook");
+  EXPECT_EQ(root_dict.FindDouble("double"), 123.45);
 }
 
 TEST(VariableExpanderTest, ExpandValueExpandsOnlyGoodVariables) {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetKey("str1", base::Value("${machine_nameBAD}"));
-  root.SetKey("str2", base::Value("${machine_name}"));
+  base::Value root(base::Value::Type::DICT);
+  root.GetDict().Set("str1", "${machine_nameBAD}");
+  root.GetDict().Set("str2", "${machine_name}");
 
   VariableExpander expander({{"machine_name", "chromebook"}});
   EXPECT_FALSE(expander.ExpandValue(&root));
 
-  EXPECT_EQ(root.FindKey("str1")->GetString(), "${machine_nameBAD}");
-  EXPECT_EQ(root.FindKey("str2")->GetString(), "chromebook");
+  const base::Value::Dict& root_dict = root.GetDict();
+  EXPECT_EQ(CHECK_DEREF(root_dict.FindString("str1")), "${machine_nameBAD}");
+  EXPECT_EQ(CHECK_DEREF(root_dict.FindString("str2")), "chromebook");
 }
 
-}  // namespace variable_expander
-}  // namespace chromeos
+}  // namespace chromeos::variable_expander

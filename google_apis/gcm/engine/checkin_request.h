@@ -9,10 +9,11 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "google_apis/gcm/base/gcm_export.h"
 #include "google_apis/gcm/protocol/android_checkin.pb.h"
@@ -85,9 +86,8 @@ class GCM_EXPORT CheckinRequest {
                          std::unique_ptr<std::string> body);
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(GCMClientImplCheckinTest, CheckinWithAccounts);
-  FRIEND_TEST_ALL_PREFIXES(GCMClientImplCheckinTest,
-                           CheckinWithAccountsEmptyWithFeature);
+  FRIEND_TEST_ALL_PREFIXES(GCMClientImplCheckinTest, CheckinWithAccountsEmpty);
+
   // Schedules a retry attempt with a backoff.
   void RetryWithBackoff();
 

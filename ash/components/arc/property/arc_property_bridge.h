@@ -9,6 +9,7 @@
 
 #include "ash/components/arc/mojom/property.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -21,15 +22,11 @@ namespace arc {
 class ArcBridgeService;
 
 // ARC Property Client gets system properties from ARC instances.
+// TODO(yhanada): Remove this class entirely once the other end of IPC is
+// cleaned up.
 class ArcPropertyBridge : public KeyedService,
                           public ConnectionObserver<mojom::PropertyInstance> {
  public:
-  // Public for testing.
-  static constexpr const char* kMinimizeOnBackButtonTrialName =
-      "ArcMinimizeOnBackButton";
-  static constexpr const char* kMinimizeOnBackButtonEnabled = "Enabled";
-  static constexpr const char* kMinimizeOnBackButtonDisabled = "Disabled";
-
   // Returns singleton instance for the given BrowserContext,
   // or nullptr if the browser |context| is not allowed to use ARC.
   static ArcPropertyBridge* GetForBrowserContext(
@@ -44,18 +41,15 @@ class ArcPropertyBridge : public KeyedService,
   // ConnectionObserver<mojom::PropertyInstance> overrides:
   void OnConnectionReady() override;
 
-  void GetGcaMigrationProperty(
-      mojom::PropertyInstance::GetGcaMigrationPropertyCallback callback);
+  static void EnsureFactoryBuilt();
 
  private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // Store pending requests when connection is not ready.
   std::vector<mojom::PropertyInstance::GetGcaMigrationPropertyCallback>
       pending_requests_;
-
-  // Send minimize on back button setting if specified by a field trial.
-  void SyncMinimizeOnBackButton();
 
   THREAD_CHECKER(thread_checker_);
 };

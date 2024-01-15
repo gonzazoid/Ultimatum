@@ -45,6 +45,8 @@ source_set("api") {
     "sync_file_system/sync_file_system_api_helpers.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//build:chromeos_buildflags",
     "//chrome/app:generated_resources_grit",
@@ -62,6 +64,7 @@ source_set("api") {
     "//components/storage_monitor",
     "//components/web_modal",
     "//extensions/browser",
+    "//ui/shell_dialogs",
   ]
 
   if (is_chromeos) {
@@ -77,22 +80,11 @@ source_set("api") {
     sources += [
       "arc_apps_private/arc_apps_private_api.cc",
       "arc_apps_private/arc_apps_private_api.h",
-      "webstore_widget_private/app_installer.cc",
-      "webstore_widget_private/app_installer.h",
-      "webstore_widget_private/webstore_widget_private_api.cc",
-      "webstore_widget_private/webstore_widget_private_api.h",
     ]
 
     deps += [
-      "//chrome:strings",
       "//chrome/browser/ash/crosapi",
-      "//chromeos/ash/components/multidevice/logging",
-      "//chromeos/ash/components/proximity_auth",
-      "//components/account_id",
-      "//components/strings:components_strings_grit",
-      "//components/user_manager",
-      "//device/bluetooth",
-      "//ui/chromeos",
+      "//ui/events:event_constants",
     ]
   }
 

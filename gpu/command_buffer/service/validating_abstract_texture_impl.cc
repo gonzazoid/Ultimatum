@@ -4,11 +4,11 @@
 
 #include "gpu/command_buffer/service/validating_abstract_texture_impl.h"
 
+#include "build/build_config.h"
 #include "gpu/command_buffer/service/context_group.h"
 #include "gpu/command_buffer/service/error_state.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "ui/gl/gl_context.h"
-#include "ui/gl/gl_image.h"
 #include "ui/gl/scoped_binders.h"
 #include "ui/gl/scoped_make_current.h"
 
@@ -49,61 +49,6 @@ void ValidatingAbstractTextureImpl::SetParameteri(GLenum pname, GLint param) {
                                  service_id());
   GetTextureManager()->SetParameteri(__func__, GetErrorState(),
                                      texture_ref_.get(), pname, param);
-}
-
-void ValidatingAbstractTextureImpl::BindImage(gl::GLImage* image,
-                                              bool client_managed) {
-  if (!texture_ref_)
-    return;
-
-  const GLuint target = texture_ref_->texture()->target();
-  const GLint level = 0;
-
-  // If there is a decoder-managed image bound, release it.
-  if (decoder_managed_image_) {
-    Texture::ImageState image_state;
-    gl::GLImage* current_image =
-        texture_ref_->texture()->GetLevelImage(target, 0, &image_state);
-    if (current_image && image_state == Texture::BOUND)
-      current_image->ReleaseTexImage(target);
-  }
-
-  // Configure the new image.
-  decoder_managed_image_ = image && !client_managed;
-  Texture::ImageState state = image && client_managed
-                                  ? Texture::ImageState::BOUND
-                                  : Texture::ImageState::UNBOUND;
-  GetTextureManager()->SetLevelImage(texture_ref_.get(), target, level, image,
-                                     state);
-  GetTextureManager()->SetLevelCleared(texture_ref_.get(), target, level,
-                                       image);
-}
-
-void ValidatingAbstractTextureImpl::BindStreamTextureImage(gl::GLImage* image,
-                                                           GLuint service_id) {
-  DCHECK(image);
-  DCHECK(!decoder_managed_image_);
-
-  if (!texture_ref_)
-    return;
-
-  const GLint level = 0;
-  const GLuint target = texture_ref_->texture()->target();
-
-  // We set the state to UNBOUND, so that CopyTexImage is called.
-  GetTextureManager()->SetLevelStreamTextureImage(
-      texture_ref_.get(), target, level, image, Texture::ImageState::UNBOUND,
-      service_id);
-  SetCleared();
-}
-
-gl::GLImage* ValidatingAbstractTextureImpl::GetImageForTesting() const {
-  if (!texture_ref_)
-    return nullptr;
-
-  const GLuint target = texture_ref_->texture()->target();
-  const GLint level = 0;
-  return texture_ref_->texture()->GetLevelImage(target, level, nullptr);
 }
 
 void ValidatingAbstractTextureImpl::SetCleared() {

@@ -24,16 +24,24 @@ GuestOsSharePathFactory* GuestOsSharePathFactory::GetInstance() {
 }
 
 GuestOsSharePathFactory::GuestOsSharePathFactory()
-    : ProfileKeyedServiceFactory("GuestOsSharePath") {
+    : ProfileKeyedServiceFactory(
+          "GuestOsSharePath",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(crostini::CrostiniManagerFactory::GetInstance());
 }
 
 GuestOsSharePathFactory::~GuestOsSharePathFactory() = default;
 
-KeyedService* GuestOsSharePathFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsSharePathFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new GuestOsSharePath(profile);
+  return std::make_unique<GuestOsSharePath>(profile);
 }
 
 }  // namespace guest_os

@@ -9,10 +9,16 @@
 
 class GURL;
 
+namespace security_interstitials::https_only_mode {
+struct HttpInterstitialState;
+}
+
 // Populates |load_time_data| for interstitial HTML.
 void PopulateHttpsOnlyModeStringsForBlockingPage(
     base::Value::Dict& load_time_data,
-    const GURL& url);
+    const GURL& url,
+    const security_interstitials::https_only_mode::HttpInterstitialState&
+        state);
 
 // Values added to get shared interstitial HTML to play nice.
 void PopulateHttpsOnlyModeStringsForSharedHTML(

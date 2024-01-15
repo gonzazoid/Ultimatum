@@ -4,14 +4,14 @@
 
 #include "chrome/browser/metrics/chromeos_family_link_user_metrics_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/guest_session_mixin.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/metrics/delegating_provider.h"
 #include "components/metrics/metrics_service.h"
@@ -33,7 +33,7 @@ ash::LoggedInUserMixin::LogInType GetLogInType(
   }
 }
 
-void ProvideCurrentSessionData() {
+void ProvideHistograms() {
   // The purpose of the below call is to avoid a DCHECK failure in an unrelated
   // metrics provider, in |FieldTrialsProvider::ProvideCurrentSessionData()|.
   metrics::SystemProfileProto system_profile_proto;
@@ -41,10 +41,9 @@ void ProvideCurrentSessionData() {
       ->GetDelegatingProviderForTesting()
       ->ProvideSystemProfileMetricsWithLogCreationTime(base::TimeTicks::Now(),
                                                        &system_profile_proto);
-  metrics::ChromeUserMetricsExtension uma_proto;
   g_browser_process->metrics_service()
       ->GetDelegatingProviderForTesting()
-      ->ProvideCurrentSessionData(&uma_proto);
+      ->OnDidCreateMetricsLog();
 }
 
 }  // namespace
@@ -88,9 +87,9 @@ IN_PROC_BROWSER_TEST_P(ChromeOSFamilyLinkUserMetricsProviderTest,
   ChromeOSFamilyLinkUserMetricsProviderForTesting provider;
   base::RunLoop run_loop;
 
-  // Simulate calling ProvideCurrentSessionData() prior to logging in. This call
-  // should return prematurely.
-  provider.ProvideCurrentSessionData(/*uma_proto_unused=*/nullptr);
+  // Simulate calling ProvideHistograms() prior to logging in. This call should
+  // return prematurely.
+  ProvideHistograms();
 
   // No metrics were recorded.
   histogram_tester.ExpectTotalCount(
@@ -108,8 +107,8 @@ IN_PROC_BROWSER_TEST_P(ChromeOSFamilyLinkUserMetricsProviderTest,
 
   run_loop.Run();
 
-  // Simulate calling ProvideCurrentSessionData() after logging in.
-  provider.ProvideCurrentSessionData(/*uma_proto_unused=*/nullptr);
+  // Simulate calling ProvideHistograms() after logging in.
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       ChromeOSFamilyLinkUserMetricsProvider::GetHistogramNameForTesting(),
@@ -135,7 +134,7 @@ IN_PROC_BROWSER_TEST_F(ChromeOSFamilyLinkUserMetricsProviderGuestModeTest,
                        GuestMode) {
   base::HistogramTester histogram_tester;
 
-  ProvideCurrentSessionData();
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       ChromeOSFamilyLinkUserMetricsProvider::GetHistogramNameForTesting(),

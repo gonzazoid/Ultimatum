@@ -35,7 +35,8 @@ class CONTENT_EXPORT HidDelegate {
     virtual void OnDeviceChanged(const device::mojom::HidDeviceInfo&) = 0;
     virtual void OnHidManagerConnectionError() = 0;
 
-    // Event forwarded from permissions::ChooserContextBase::PermissionObserver:
+    // Event forwarded from
+    // permissions::ObjectPermissionContextBase::PermissionObserver:
     virtual void OnPermissionRevoked(const url::Origin& origin) = 0;
   };
 
@@ -101,6 +102,15 @@ class CONTENT_EXPORT HidDelegate {
   virtual const device::mojom::HidDeviceInfo* GetDeviceInfo(
       BrowserContext* browser_context,
       const std::string& guid) = 0;
+
+  // Notify the delegate a connection is created on |origin| by
+  // |browser_context|.
+  virtual void IncrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
+  // Notify the delegate a connection is closed on |origin| by
+  // |browser_context|.
+  virtual void DecrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
 };
 
 }  // namespace content

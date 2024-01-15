@@ -4,11 +4,13 @@
 
 #include "chrome/browser/ui/webui/ash/login/l10n_util_test_util.h"
 
+#include <optional>
+
 #include <vector>
 
 #include "url/gurl.h"
 
-namespace chromeos {
+namespace ash {
 
 MockInputMethodManagerWithInputMethods::
     MockInputMethodManagerWithInputMethods() {
@@ -25,8 +27,8 @@ void MockInputMethodManagerWithInputMethods::AddInputMethod(
   std::vector<std::string> languages;
   languages.push_back(language_code);
   descriptors_.push_back(input_method::InputMethodDescriptor(
-      id, std::string(), std::string(), layout, languages, true, GURL(),
-      GURL()));
+      id, std::string(), std::string(), layout, languages, true, GURL(), GURL(),
+      /*handwriting_language=*/std::nullopt));
 }
 
-}  // namespace chromeos
+}  // namespace ash

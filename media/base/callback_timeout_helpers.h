@@ -8,12 +8,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 
 // This file provides callback wrappers to help handle the case where a
@@ -46,6 +46,16 @@
 //           base::BindOnce(&Foo::LogError, this, TIMEOUT)));
 
 namespace media {
+
+// Enum class for reporting callback timeout status to UMA.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class CallbackTimeoutStatus {
+  kCreate = 0,
+  kTimeout = 1,
+  kDestructedBeforeTimeout = 2,
+  kMaxValue = kDestructedBeforeTimeout,
+};
 
 // Callback time for the timeout handler in `WrapCallbackWithTimeoutHandler`.
 // If `called_on_destruction` is true, the timeout callback was called because
@@ -121,7 +131,7 @@ class CallbackWithTimeoutHelper<void(Args...)> {
 
   void ScheduleTimeoutCallback(base::TimeDelta timeout_delay) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&CallbackWithTimeoutHelper::OnTimeout,
                        weak_factory_.GetWeakPtr()),

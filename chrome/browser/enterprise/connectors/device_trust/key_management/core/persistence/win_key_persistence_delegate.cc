@@ -4,9 +4,11 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/win_key_persistence_delegate.h"
 
+#include <array>
 #include <string>
 #include <utility>
 
+#include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/syslog_logging.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/ec_signing_key.h"
@@ -29,38 +31,6 @@ bool RecordFailure(KeyPersistenceOperation operation,
   return false;
 }
 
-base::span<const crypto::SignatureVerifier::SignatureAlgorithm>&
-GetTestAcceptableAlgorithmStorage() {
-  static base::span<const crypto::SignatureVerifier::SignatureAlgorithm>
-      storage;
-  return storage;
-}
-
-// Returns the acceptable signature algorithms used for generating a signing
-// key. Uses the `trust_level` to determine which algorithms are acceptable for
-// the key.
-base::span<const crypto::SignatureVerifier::SignatureAlgorithm>
-GetAcceptableAlgorithms(KeyPersistenceDelegate::KeyTrustLevel trust_level) {
-  auto& test_instance = GetTestAcceptableAlgorithmStorage();
-  if (!test_instance.empty())
-    return std::move(test_instance);
-
-  auto acceptable_algorithms = {
-      crypto::SignatureVerifier::ECDSA_SHA256,
-      crypto::SignatureVerifier::RSA_PKCS1_SHA256,
-  };
-
-  if (trust_level == BPKUR::CHROME_BROWSER_HW_KEY) {
-    acceptable_algorithms = {
-        // This is a temporary fix to bug b/240187326 where The unexportable key
-        // when given the span of acceptable algorithms fails to create a TPM
-        // key using the ECDSA_SHA256 algorithm but works for the RSA algorithm.
-        crypto::SignatureVerifier::RSA_PKCS1_SHA256,
-    };
-  }
-  return acceptable_algorithms;
-}
-
 // Creates the unexportable signing key given the key `trust_level`.
 std::unique_ptr<crypto::UnexportableSigningKey> CreateSigningKey(
     KeyPersistenceDelegate::KeyTrustLevel trust_level) {
@@ -71,8 +41,11 @@ std::unique_ptr<crypto::UnexportableSigningKey> CreateSigningKey(
   } else if (trust_level == BPKUR::CHROME_BROWSER_OS_KEY) {
     provider = std::make_unique<ECSigningKeyProvider>();
   }
-  return provider ? provider->GenerateSigningKeySlowly(
-                        GetAcceptableAlgorithms(trust_level))
+
+  static constexpr std::array<crypto::SignatureVerifier::SignatureAlgorithm, 2>
+      kAcceptableAlgorithms = {crypto::SignatureVerifier::ECDSA_SHA256,
+                               crypto::SignatureVerifier::RSA_PKCS1_SHA256};
+  return provider ? provider->GenerateSigningKeySlowly(kAcceptableAlgorithms)
                   : nullptr;
 }
 
@@ -124,7 +97,9 @@ bool WinKeyPersistenceDelegate::StoreKeyPair(
                        "the signing key storage.");
 }
 
-std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair() {
+scoped_refptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair(
+    KeyStorageType type,
+    LoadPersistedKeyResult* result) {
   base::win::RegKey key;
   std::wstring signingkey_name;
   std::wstring trustlevel_name;
@@ -136,7 +111,9 @@ std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair() {
                   KeyPersistenceError::kOpenPersistenceStorageFailed,
                   "Device trust key rotation failed. Failed to open the "
                   "signing key storage for reading.");
-    return nullptr;
+    // TODO(b/301587025): Pipe error returned from opening the registry key for
+    // better logging.
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kNotFound, result);
   }
 
   DWORD trust_level_dw;
@@ -146,7 +123,7 @@ std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair() {
                   KeyPersistenceError::kKeyPairMissingTrustLevel,
                   "Device trust key rotation failed. Failed to get the trust "
                   "level details from the signing key storage.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kNotFound, result);
   }
 
   std::unique_ptr<crypto::UnexportableKeyProvider> provider;
@@ -162,17 +139,17 @@ std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair() {
                   KeyPersistenceError::kInvalidTrustLevel,
                   "Device trust key rotation failed. Invalid trust level for "
                   "the signing key.");
-
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
   std::vector<uint8_t> wrapped;
-  DWORD type = REG_NONE;
+  DWORD reg_type = REG_NONE;
   DWORD size = 0;
-  res = key.ReadValue(signingkey_name.c_str(), nullptr, &size, &type);
-  if (res == ERROR_SUCCESS && type == REG_BINARY) {
+  res = key.ReadValue(signingkey_name.c_str(), nullptr, &size, &reg_type);
+  if (res == ERROR_SUCCESS && reg_type == REG_BINARY) {
     wrapped.resize(size);
-    res = key.ReadValue(signingkey_name.c_str(), wrapped.data(), &size, &type);
+    res = key.ReadValue(signingkey_name.c_str(), wrapped.data(), &size,
+                        &reg_type);
   }
   if (res != ERROR_SUCCESS) {
     RecordFailure(
@@ -180,14 +157,15 @@ std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair() {
         KeyPersistenceError::kKeyPairMissingSigningKey,
         "Device trust key rotation failed. Failed to get the signing key "
         "details from the signing key storage.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kNotFound, result);
+  }
 
-  } else if (type != REG_BINARY) {
+  if (reg_type != REG_BINARY) {
     RecordFailure(
         KeyPersistenceOperation::kLoadKeyPair,
         KeyPersistenceError::kInvalidSigningKey,
         "Device trust key rotation failed. The signing key type is incorrect.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
   auto signing_key = provider->FromWrappedSigningKeySlowly(wrapped);
@@ -197,13 +175,17 @@ std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::LoadKeyPair() {
         KeyPersistenceError::kCreateSigningKeyFromWrappedFailed,
         "Device trust key rotation failed. Failure creating a signing key "
         "object from the signing key details.");
-    return nullptr;
+    return ReturnLoadKeyError(LoadPersistedKeyResult::kMalformedKey, result);
   }
 
-  return std::make_unique<SigningKeyPair>(std::move(signing_key), trust_level);
+  if (result) {
+    *result = LoadPersistedKeyResult::kSuccess;
+  }
+  return base::MakeRefCounted<SigningKeyPair>(std::move(signing_key),
+                                              trust_level);
 }
 
-std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::CreateKeyPair() {
+scoped_refptr<SigningKeyPair> WinKeyPersistenceDelegate::CreateKeyPair() {
   // Attempt to create a TPM signing key.
   KeyPersistenceDelegate::KeyTrustLevel trust_level =
       BPKUR::CHROME_BROWSER_HW_KEY;
@@ -228,15 +210,18 @@ std::unique_ptr<SigningKeyPair> WinKeyPersistenceDelegate::CreateKeyPair() {
     return nullptr;
   }
 
-  return std::make_unique<SigningKeyPair>(std::move(signing_key), trust_level);
+  return base::MakeRefCounted<SigningKeyPair>(std::move(signing_key),
+                                              trust_level);
 }
 
-// static
-void WinKeyPersistenceDelegate::SetAcceptableKeyAlgorithmForTesting(
-    base::span<const crypto::SignatureVerifier::SignatureAlgorithm>
-        acceptable_algorithms) {
-  auto& storage = GetTestAcceptableAlgorithmStorage();
-  storage = std::move(acceptable_algorithms);
+bool WinKeyPersistenceDelegate::PromoteTemporaryKeyPair() {
+  // TODO(b/290068551): Implement this method.
+  return true;
+}
+
+bool WinKeyPersistenceDelegate::DeleteKeyPair(KeyStorageType type) {
+  // TODO(b/290068551): Implement this method.
+  return true;
 }
 
 }  // namespace enterprise_connectors

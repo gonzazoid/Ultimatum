@@ -8,8 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "components/sync/engine/cancelation_signal.h"
 #include "components/sync/engine/net/http_post_provider.h"
@@ -33,11 +33,10 @@ class Connection : public CancelationSignal::Observer {
 
   ~Connection() override;
 
-  HttpResponse Init(const GURL& connection_url,
-                    const std::string& access_token,
-                    const std::string& payload,
-                    bool allow_batching);
-  bool ReadBufferResponse(std::string* buffer_out, HttpResponse* response);
+  HttpResponse PostRequestAndDownloadResponse(const GURL& connection_url,
+                                              const std::string& access_token,
+                                              const std::string& payload,
+                                              std::string* buffer_out);
 
   // CancelationSignal::Observer overrides.
   void OnCancelationSignalReceived() override;
@@ -52,8 +51,6 @@ class Connection : public CancelationSignal::Observer {
   const raw_ptr<CancelationSignal> cancelation_signal_;
 
   scoped_refptr<HttpPostProvider> const post_provider_;
-
-  std::string buffer_;
 };
 
 Connection::Connection(HttpPostProviderFactory* factory,
@@ -68,10 +65,11 @@ Connection::Connection(HttpPostProviderFactory* factory,
 
 Connection::~Connection() = default;
 
-HttpResponse Connection::Init(const GURL& sync_request_url,
-                              const std::string& access_token,
-                              const std::string& payload,
-                              bool allow_batching) {
+HttpResponse Connection::PostRequestAndDownloadResponse(
+    const GURL& sync_request_url,
+    const std::string& access_token,
+    const std::string& payload,
+    std::string* buffer_out) {
   post_provider_->SetURL(sync_request_url);
 
   if (!access_token.empty()) {
@@ -83,8 +81,6 @@ HttpResponse Connection::Init(const GURL& sync_request_url,
   // Must be octet-stream, or the payload may be parsed for a cookie.
   post_provider_->SetPostPayload("application/octet-stream", payload.length(),
                                  payload.data());
-
-  post_provider_->SetAllowBatching(allow_batching);
 
   // Issue the POST, blocking until it finishes.
   if (!cancelation_signal_->TryRegisterHandler(this)) {
@@ -108,34 +104,11 @@ HttpResponse Connection::Init(const GURL& sync_request_url,
   HttpResponse response = HttpResponse::ForHttpStatusCode(http_status_code);
   response.content_length =
       static_cast<int64_t>(post_provider_->GetResponseContentLength());
-  response.payload_length =
-      static_cast<int64_t>(post_provider_->GetResponseContentLength());
 
   // Write the content into the buffer.
-  buffer_.assign(post_provider_->GetResponseContent(),
-                 post_provider_->GetResponseContentLength());
+  buffer_out->assign(post_provider_->GetResponseContent(),
+                     post_provider_->GetResponseContentLength());
   return response;
-}
-
-bool Connection::ReadBufferResponse(std::string* buffer_out,
-                                    HttpResponse* response) {
-  if (net::HTTP_OK != response->http_status_code) {
-    response->server_status = HttpResponse::SYNC_SERVER_ERROR;
-    return false;
-  }
-
-  if (response->content_length <= 0)
-    return false;
-
-  const int64_t bytes_read = buffer_.length();
-  CHECK_LE(response->content_length, bytes_read);
-  buffer_out->assign(buffer_);
-
-  if (bytes_read != response->content_length) {
-    response->server_status = HttpResponse::IO_ERROR;
-    return false;
-  }
-  return true;
 }
 
 void Connection::OnCancelationSignalReceived() {
@@ -161,7 +134,6 @@ SyncServerConnectionManager::~SyncServerConnectionManager() = default;
 HttpResponse SyncServerConnectionManager::PostBuffer(
     const std::string& buffer_in,
     const std::string& access_token,
-    bool allow_batching,
     std::string* buffer_out) {
   if (access_token.empty()) {
     // Print a log to distinguish this "known failure" from others.
@@ -179,14 +151,11 @@ HttpResponse SyncServerConnectionManager::PostBuffer(
 
   // Note that the post may be aborted by now, which will just cause Init to
   // fail with CONNECTION_UNAVAILABLE.
-  HttpResponse http_response = connection->Init(sync_request_url_, access_token,
-                                                buffer_in, allow_batching);
+  HttpResponse http_response = connection->PostRequestAndDownloadResponse(
+      sync_request_url_, access_token, buffer_in, buffer_out);
 
   if (http_response.server_status == HttpResponse::SYNC_AUTH_ERROR) {
     ClearAccessToken();
-  } else if (http_response.server_status ==
-             HttpResponse::SERVER_CONNECTION_OK) {
-    connection->ReadBufferResponse(buffer_out, &http_response);
   }
 
   return http_response;

@@ -12,12 +12,12 @@
 #include "ash/wm/desks/desk.h"
 #include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desk_preview_view.h"
-#include "ash/wm/desks/desks_bar_view.h"
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_test_util.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
 #include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/overview/overview_focus_cycler.h"
 #include "ash/wm/overview/overview_grid.h"
-#include "ash/wm/overview/overview_highlight_controller.h"
 #include "ash/wm/overview/overview_test_util.h"
 #include "ash/wm/screen_pinning_controller.h"
 #include "ash/wm/window_cycle/window_cycle_controller.h"
@@ -38,8 +38,8 @@ bool InOverviewSession() {
   return Shell::Get()->overview_controller()->InOverviewSession();
 }
 
-const aura::Window* GetHighlightedWindow() {
-  return InOverviewSession() ? GetOverviewHighlightedWindow() : nullptr;
+const aura::Window* GetFocusedWindow() {
+  return InOverviewSession() ? GetOverviewFocusedWindow() : nullptr;
 }
 
 bool IsNaturalScrollOn() {
@@ -49,20 +49,10 @@ bool IsNaturalScrollOn() {
          pref->GetBoolean(prefs::kNaturalScroll);
 }
 
-int GetOffsetX(int offset) {
-  // The handler code uses the new directions which is the reverse of the old
-  // handler code. Reverse the offset if the ReverseScrollGestures feature is
-  // disabled so that the unit tests test the old behavior.
-  return features::IsReverseScrollGesturesEnabled() ? offset : -offset;
-}
-
 int GetOffsetY(int offset) {
-  // The handler code uses the new directions which is the reverse of the old
-  // handler code. Reverse the offset if the ReverseScrollGestures feature is
-  // disabled so that the unit tests test the old behavior.
-  if (!features::IsReverseScrollGesturesEnabled() || IsNaturalScrollOn())
-    return -offset;
-  return offset;
+  // Reverse the offset if natural scroll is enabled so that the unit tests test
+  // the opposite direction.
+  return IsNaturalScrollOn() ? -offset : offset;
 }
 
 }  // namespace
@@ -75,9 +65,9 @@ class WmGestureHandlerTest : public AshTestBase {
   ~WmGestureHandlerTest() override = default;
 
   void Scroll(float x_offset, float y_offset, int fingers) {
-    GetEventGenerator()->ScrollSequence(
-        gfx::Point(), base::Milliseconds(5), GetOffsetX(x_offset),
-        GetOffsetY(y_offset), /*steps=*/100, fingers);
+    GetEventGenerator()->ScrollSequence(gfx::Point(), base::Milliseconds(5),
+                                        x_offset, GetOffsetY(y_offset),
+                                        /*steps=*/100, fingers);
   }
 
   void MouseWheelScroll(int delta_x, int delta_y, int num_of_times) {
@@ -101,9 +91,6 @@ TEST_F(WmGestureHandlerTest, VerticalScrolls) {
 
 // Tests wrong gestures that swiping down to enter and up to exit overview.
 TEST_F(WmGestureHandlerTest, WrongVerticalScrolls) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kReverseScrollGestures);
-
   const float long_scroll = 2 * WmGestureHandler::kVerticalThresholdDp;
 
   // Swiping down cannot enter overview.
@@ -136,32 +123,29 @@ TEST_F(WmGestureHandlerTest, HorizontalScrollInOverview) {
   EnterOverview();
   EXPECT_TRUE(InOverviewSession());
 
-  // Scrolls until a window is highlight, ignoring any desks items (if any).
-  auto scroll_until_window_highlighted = [this](float x_offset,
-                                                float y_offset) {
+  // Scrolls until a window is focused, ignoring any desks items (if any).
+  auto scroll_until_window_focused = [this](float x_offset, float y_offset) {
     do {
-      Scroll(GetOffsetX(x_offset), GetOffsetY(y_offset),
-             kNumFingersForHighlight);
-    } while (!GetHighlightedWindow());
+      Scroll(x_offset, GetOffsetY(y_offset), kNumFingersForFocus);
+    } while (!GetFocusedWindow());
   };
 
   // Select the first window first.
-  scroll_until_window_highlighted(horizontal_scroll, 0);
+  scroll_until_window_focused(horizontal_scroll, 0);
 
   // Long scroll right moves selection to the fourth window.
-  scroll_until_window_highlighted(horizontal_scroll * 3, 0);
+  scroll_until_window_focused(horizontal_scroll * 3, 0);
   EXPECT_TRUE(InOverviewSession());
 
   // Short scroll left moves selection to the third window.
-  scroll_until_window_highlighted(-horizontal_scroll, 0);
+  scroll_until_window_focused(-horizontal_scroll, 0);
   EXPECT_TRUE(InOverviewSession());
 
   // Short scroll left moves selection to the second window.
-  scroll_until_window_highlighted(-horizontal_scroll, 0);
+  scroll_until_window_focused(-horizontal_scroll, 0);
   EXPECT_TRUE(InOverviewSession());
 
-  // Swiping down (3 fingers) exits and selects the currently-highlighted
-  // window.
+  // Swiping down (3 fingers) exits and selects the currently focused window.
   Scroll(0, -vertical_scroll, 3);
   EXPECT_FALSE(InOverviewSession());
 
@@ -172,10 +156,10 @@ TEST_F(WmGestureHandlerTest, HorizontalScrollInOverview) {
 // Tests that a mostly horizontal scroll does not trigger overview.
 TEST_F(WmGestureHandlerTest, HorizontalScrolls) {
   const float long_scroll = 2 * WmGestureHandler::kVerticalThresholdDp;
-  Scroll(long_scroll + 100, long_scroll, kNumFingersForHighlight);
+  Scroll(long_scroll + 100, long_scroll, kNumFingersForFocus);
   EXPECT_FALSE(InOverviewSession());
 
-  Scroll(-long_scroll - 100, long_scroll, kNumFingersForHighlight);
+  Scroll(-long_scroll - 100, long_scroll, kNumFingersForFocus);
   EXPECT_FALSE(InOverviewSession());
 }
 
@@ -294,9 +278,9 @@ TEST_F(DesksGestureHandlerTest, NoDeskChangesInLockScreen) {
   EXPECT_EQ(desk_controller->desks()[0].get(), desk_controller->active_desk());
 }
 
-// Tests that activate highlighted desk when using 3-finger swipes to exit
+// Tests that we activate focused desk when using 3-finger swipes to exit
 // overview.
-TEST_F(WmGestureHandlerTest, ActivateHighlightedDeskWithVerticalScroll) {
+TEST_F(WmGestureHandlerTest, ActivateFocusedDeskWithVerticalScroll) {
   auto* desks_controller = DesksController::Get();
 
   EnterOverview();
@@ -309,7 +293,7 @@ TEST_F(WmGestureHandlerTest, ActivateHighlightedDeskWithVerticalScroll) {
   // The current active desk is the first desk.
   EXPECT_EQ(0, desks_controller->GetActiveDeskIndex());
 
-  // Move highlight to the second desk.
+  // Move focus to the second desk.
   OverviewSession* overview_session =
       Shell::Get()->overview_controller()->overview_session();
   DeskMiniView* mini_view_1 =
@@ -317,9 +301,9 @@ TEST_F(WmGestureHandlerTest, ActivateHighlightedDeskWithVerticalScroll) {
           ->desks_bar_view()
           ->mini_views()[1];
 
-  overview_session->highlight_controller()->MoveHighlightToView(
+  overview_session->focus_cycler()->MoveFocusToView(
       mini_view_1->desk_preview());
-  EXPECT_TRUE(mini_view_1->desk_preview()->IsViewHighlighted());
+  EXPECT_TRUE(mini_view_1->desk_preview()->is_focused());
 
   // Exit overview with 3-fingers downward swipes.
   DeskSwitchAnimationWaiter waiter;
@@ -342,7 +326,6 @@ class ReverseGestureHandlerTest : public WmGestureHandlerTest {
 
   // AshTestBase:
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(features::kReverseScrollGestures);
     AshTestBase::SetUp();
 
     // Set natural scroll on.
@@ -352,9 +335,6 @@ class ReverseGestureHandlerTest : public WmGestureHandlerTest {
     pref->SetBoolean(prefs::kNaturalScroll, true);
     pref->SetBoolean(prefs::kMouseReverseScroll, true);
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(ReverseGestureHandlerTest, Overview) {
@@ -390,6 +370,33 @@ TEST_F(ReverseGestureHandlerTest, SwitchDesk) {
   // Scroll right to get previous desk.
   ScrollToSwitchDesks(/*scroll_left=*/false, GetEventGenerator());
   EXPECT_EQ(desk1, GetActiveDesk());
+}
+
+// Test state for gestures in kiosk.
+class WmGestureHandlerKioskTest : public WmGestureHandlerTest {
+ public:
+  WmGestureHandlerKioskTest() = default;
+  WmGestureHandlerKioskTest(const WmGestureHandlerKioskTest&) = delete;
+  WmGestureHandlerKioskTest& operator=(const WmGestureHandlerKioskTest&) =
+      delete;
+  ~WmGestureHandlerKioskTest() override = default;
+
+  void SetUp() override {
+    WmGestureHandlerTest::SetUp();
+    SimulateKioskMode(user_manager::USER_TYPE_WEB_KIOSK_APP);
+  }
+};
+
+// Tests that a three fingers upwards scroll gesture does not enter overview.
+TEST_F(WmGestureHandlerKioskTest, VerticalScrollDisabledKiosk) {
+  EXPECT_FALSE(InOverviewSession());
+
+  const float long_scroll = 2 * WmGestureHandler::kVerticalThresholdDp;
+  const int finger_count = 3;
+  Scroll(0, long_scroll, finger_count);
+
+  // Overview was not opened by gesture.
+  EXPECT_FALSE(InOverviewSession());
 }
 
 }  // namespace ash

@@ -18,6 +18,8 @@ class ArcOptInPreferenceHandler;
 
 namespace ash {
 
+class ScopedSessionRefresher;
+
 // Controller for the consolidated consent screen.
 class ConsolidatedConsentScreen
     : public BaseScreen,
@@ -35,6 +37,19 @@ class ConsolidatedConsentScreen
 
     // Consolidated Consent screen skipped.
     NOT_APPLICABLE,
+  };
+
+  // The result of the cryptohome recovery opt-in.
+  // These values are logged to UMA
+  // ("OOBE.ConsolidatedConsentScreen.RecoveryOptInResult"). Entries should not
+  // be renumbered and numeric values should never be reused.
+  enum class RecoveryOptInResult {
+    kNotSupported = 0,
+    kUserOptIn = 1,
+    kUserOptOut = 2,
+    kPolicyOptIn = 3,
+    kPolicyOptOut = 4,
+    kMaxValue = kPolicyOptOut,
   };
 
   class Observer : public base::CheckedObserver {
@@ -78,6 +93,10 @@ class ConsolidatedConsentScreen
   void OnBackupAndRestoreModeChanged(bool enabled, bool managed) override;
   void OnLocationServicesModeChanged(bool enabled, bool managed) override;
 
+  // Called by unit tests to notify observers that the user aceepted the terms
+  // of service.
+  void NotifyConsolidatedConsentAcceptForTesting();
+
  protected:
   // BaseScreen:
   bool MaybeSkip(WizardContext& context) override;
@@ -111,7 +130,7 @@ class ConsolidatedConsentScreen
   // Updates the state of the metrics toggle.
   void UpdateMetricsMode(bool enabled, bool managed);
 
-  absl::optional<bool> is_owner_;
+  std::optional<bool> is_owner_;
 
   bool is_child_account_ = false;
 
@@ -120,6 +139,9 @@ class ConsolidatedConsentScreen
   bool location_services_managed_ = false;
 
   base::ObserverList<Observer, true> observer_list_;
+
+  // Keeps cryptohome authsession alive.
+  std::unique_ptr<ScopedSessionRefresher> session_refresher_;
 
   std::unique_ptr<arc::ArcOptInPreferenceHandler> pref_handler_;
 
@@ -131,11 +153,5 @@ class ConsolidatedConsentScreen
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash ::ConsolidatedConsentScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_CONSOLIDATED_CONSENT_SCREEN_H_

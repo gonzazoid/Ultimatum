@@ -6,5 +6,8 @@
 
 [
   RuntimeEnabled=MachineLearningNeuralNetwork,
-  Exposed=Window
-] interface MLOperand {};
+  Exposed=(Window, DedicatedWorker)
+] interface MLOperand {
+  MLOperandDataType dataType();
+  sequence<unsigned long> shape();
+};

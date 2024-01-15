@@ -46,16 +46,11 @@ BASE_DECLARE_FEATURE(kEnablePowerManager);
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 BASE_DECLARE_FEATURE(kEnableLibAssistantBetaBackend);
 
-// Enables the sandbox of LibAssistant service.
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
-BASE_DECLARE_FEATURE(kEnableLibAssistantSandbox);
-
-// Enables the LibAssistantV2 APIs and related features.
-COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
-BASE_DECLARE_FEATURE(kEnableLibAssistantV2);
+BASE_DECLARE_FEATURE(kEnableLibAssistantDLC);
 
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
-BASE_DECLARE_FEATURE(kEnableLibAssistantDlc);
+BASE_DECLARE_FEATURE(kEnableAssistantOnboarding);
 
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsAppSupportEnabled();
 
@@ -71,8 +66,6 @@ COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsPowerManagerEnabled();
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 bool IsLibAssistantBetaBackendEnabled();
 
-COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsRoutinesEnabled();
-
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsStereoAudioInputEnabled();
 
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsVoiceMatchDisabled();
@@ -82,13 +75,14 @@ COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsWaitSchedulingEnabled();
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 bool IsLibAssistantSandboxEnabled();
 
-COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsLibAssistantV2Enabled();
+COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsLibAssistantDLCEnabled();
 
-COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsLibAssistantDlcEnabled();
+COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) bool IsOnboardingEnabled();
 
 }  // namespace ash::assistant::features
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
 namespace chromeos::assistant {
 namespace features = ::ash::assistant::features;
 }

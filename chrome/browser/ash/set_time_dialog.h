@@ -18,7 +18,7 @@ class SetTimeDialog : public SystemWebDialogDelegate {
 
   // Shows the set time/date dialog. If |parent| is not null, shows the dialog
   // as a child of |parent|, e.g. the Settings window.
-  static void ShowDialog(gfx::NativeWindow parent = nullptr);
+  static void ShowDialog(gfx::NativeWindow parent = gfx::NativeWindow());
 
   // Returns true if the dialog should show the timezone <select>.
   static bool ShouldShowTimezone();
@@ -32,10 +32,5 @@ class SetTimeDialog : public SystemWebDialogDelegate {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::SetTimeDialog;
-}
 
 #endif  // CHROME_BROWSER_ASH_SET_TIME_DIALOG_H_

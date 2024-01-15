@@ -19,18 +19,15 @@ import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.BatteryManager;
-import android.os.Build;
-import android.os.Build.VERSION;
-import android.os.Build.VERSION_CODES;
 import android.os.PowerManager;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
-import org.robolectric.util.ReflectionHelpers;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
@@ -41,43 +38,14 @@ import org.chromium.net.NetworkChangeNotifier;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config
 public class DeviceConditionsTest {
-    @Mock
-    private Context mContext;
-    @Mock
-    private ConnectivityManager mConnectivityManager;
-    @Mock
-    private PowerManager mPowerManager;
-    @Mock
-    private NetworkChangeNotifier mNetworkChangeNotifier;
-    @Mock
-    private NetworkInfo mNetworkInfo;
-    @Mock
-    private KeyguardManager mKeyguardManager;
+    @Mock private Context mContext;
+    @Mock private ConnectivityManager mConnectivityManager;
+    @Mock private PowerManager mPowerManager;
+    @Mock private NetworkChangeNotifier mNetworkChangeNotifier;
+    @Mock private NetworkInfo mNetworkInfo;
+    @Mock private KeyguardManager mKeyguardManager;
 
     private Intent mBatteryStatus;
-
-    /** Helps change the SDK version in testing to one of the supported versions. */
-    private static class BuildVersionHelper implements AutoCloseable {
-        private int mOriginalSdkInt;
-
-        public BuildVersionHelper() {
-            mOriginalSdkInt = VERSION.SDK_INT;
-        }
-
-        /**
-         * Sets Build.VERSION.SDK_INT to provided version Code.
-         * @param versionCode Version code to set.
-         */
-        public void setSdkVersion(int versionCode) {
-            ReflectionHelpers.setStaticField(Build.VERSION.class, "SDK_INT", versionCode);
-        }
-
-        /** Reverts the SDK version to original value. */
-        @Override
-        public void close() {
-            setSdkVersion(mOriginalSdkInt);
-        }
-    }
 
     @Before
     public void setUp() {
@@ -88,7 +56,12 @@ public class DeviceConditionsTest {
         mBatteryStatus.putExtra(BatteryManager.EXTRA_SCALE, 100);
         mBatteryStatus.putExtra(BatteryManager.EXTRA_LEVEL, 50);
         setBatteryStatus(BatteryManager.BATTERY_STATUS_UNKNOWN);
-        doReturn(mBatteryStatus).when(mContext).registerReceiver(isNull(), any());
+        doReturn(mBatteryStatus)
+                .when(mContext)
+                .registerReceiver(isNull(), any(), isNull(), isNull());
+        doReturn(mBatteryStatus)
+                .when(mContext)
+                .registerReceiver(isNull(), any(), isNull(), isNull(), eq(0));
 
         // Set up connectivity manager.
         doReturn(null).when(mConnectivityManager).getActiveNetworkInfo();
@@ -112,6 +85,12 @@ public class DeviceConditionsTest {
 
         // Make sure context is shared with ContextUtils.
         ContextUtils.initApplicationContextForTests(mContext);
+    }
+
+    @After
+    public void tearDown() {
+        // Reset the network change notifier.
+        NetworkChangeNotifier.resetInstanceForTests();
     }
 
     private void setBatteryStatus(int batteryStatus) {
@@ -183,7 +162,8 @@ public class DeviceConditionsTest {
 
     @Test
     public void testNoNpeOnNullBatteryStatus() {
-        doReturn(null).when(mContext).registerReceiver(isNull(), any());
+        doReturn(null).when(mContext).registerReceiver(isNull(), any(), isNull(), isNull());
+        doReturn(null).when(mContext).registerReceiver(isNull(), any(), isNull(), isNull(), eq(0));
 
         DeviceConditions deviceConditions = DeviceConditions.getCurrent(mContext);
 
@@ -210,7 +190,10 @@ public class DeviceConditionsTest {
         Intent intent = new Intent();
         intent.putExtra(BatteryManager.EXTRA_SCALE, 0);
         intent.putExtra(BatteryManager.EXTRA_LEVEL, 50);
-        doReturn(intent).when(mContext).registerReceiver(isNull(), any());
+        doReturn(intent).when(mContext).registerReceiver(isNull(), any(), isNull(), isNull());
+        doReturn(intent)
+                .when(mContext)
+                .registerReceiver(isNull(), any(), isNull(), isNull(), eq(0));
 
         deviceConditions = DeviceConditions.getCurrent(mContext);
         assertNotNull(deviceConditions);
@@ -254,39 +237,21 @@ public class DeviceConditionsTest {
 
     @Test
     public void testIsInIdleMode() {
-        try (BuildVersionHelper sdkHelper = new BuildVersionHelper()) {
-            // We expect LOLLIPOP to never indicate being in idle mode.
-            sdkHelper.setSdkVersion(VERSION_CODES.LOLLIPOP);
-            setDeviceInIdleMode(false);
-            assertFalse(DeviceConditions.isCurrentlyInIdleMode(mContext));
+        setDeviceInIdleMode(false);
+        assertFalse(DeviceConditions.isCurrentlyInIdleMode(mContext));
 
-            setDeviceInIdleMode(true);
-            assertFalse(DeviceConditions.isCurrentlyInIdleMode(mContext));
-
-            // We expect LOLLIPOP to never indicate being in idle mode.
-            sdkHelper.setSdkVersion(VERSION_CODES.LOLLIPOP_MR1);
-            setDeviceInIdleMode(false);
-            assertFalse(DeviceConditions.isCurrentlyInIdleMode(mContext));
-
-            setDeviceInIdleMode(true);
-            assertFalse(DeviceConditions.isCurrentlyInIdleMode(mContext));
-
-            // But it should be on MARSHMALLOW+.
-            sdkHelper.setSdkVersion(VERSION_CODES.M);
-            setDeviceInIdleMode(false);
-            assertFalse(DeviceConditions.isCurrentlyInIdleMode(mContext));
-
-            setDeviceInIdleMode(true);
-            assertTrue(DeviceConditions.isCurrentlyInIdleMode(mContext));
-        }
+        setDeviceInIdleMode(true);
+        assertTrue(DeviceConditions.isCurrentlyInIdleMode(mContext));
     }
 
     @Test
     public void testForceConnectionTypeNoneForTesting() {
         DeviceConditions.sForceConnectionTypeForTesting = true;
-        assertEquals(ConnectionType.CONNECTION_NONE,
+        assertEquals(
+                ConnectionType.CONNECTION_NONE,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_NONE,
+        assertEquals(
+                ConnectionType.CONNECTION_NONE,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
         DeviceConditions.sForceConnectionTypeForTesting = false;
     }
@@ -294,11 +259,18 @@ public class DeviceConditionsTest {
     @Test
     public void testNcnConnectionType() {
         @ConnectionType
-        int[] connectionTypes = new int[] {ConnectionType.CONNECTION_UNKNOWN,
-                ConnectionType.CONNECTION_ETHERNET, ConnectionType.CONNECTION_WIFI,
-                ConnectionType.CONNECTION_2G, ConnectionType.CONNECTION_3G,
-                ConnectionType.CONNECTION_4G, ConnectionType.CONNECTION_NONE,
-                ConnectionType.CONNECTION_BLUETOOTH, ConnectionType.CONNECTION_5G};
+        int[] connectionTypes =
+                new int[] {
+                    ConnectionType.CONNECTION_UNKNOWN,
+                    ConnectionType.CONNECTION_ETHERNET,
+                    ConnectionType.CONNECTION_WIFI,
+                    ConnectionType.CONNECTION_2G,
+                    ConnectionType.CONNECTION_3G,
+                    ConnectionType.CONNECTION_4G,
+                    ConnectionType.CONNECTION_NONE,
+                    ConnectionType.CONNECTION_BLUETOOTH,
+                    ConnectionType.CONNECTION_5G
+                };
         assertEquals(ConnectionType.CONNECTION_LAST + 1, connectionTypes.length);
 
         for (@ConnectionType int connectionType : connectionTypes) {
@@ -315,41 +287,53 @@ public class DeviceConditionsTest {
         NetworkChangeNotifier.resetInstanceForTests(null);
 
         setNetworkInfoToNull();
-        assertEquals(ConnectionType.CONNECTION_NONE,
+        assertEquals(
+                ConnectionType.CONNECTION_NONE,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_NONE,
+        assertEquals(
+                ConnectionType.CONNECTION_NONE,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
 
         setNetworkInfoDisconnected();
-        assertEquals(ConnectionType.CONNECTION_NONE,
+        assertEquals(
+                ConnectionType.CONNECTION_NONE,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_NONE,
+        assertEquals(
+                ConnectionType.CONNECTION_NONE,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
 
         setNetworkInfoConnectionType(ConnectivityManager.TYPE_WIFI);
-        assertEquals(ConnectionType.CONNECTION_WIFI,
+        assertEquals(
+                ConnectionType.CONNECTION_WIFI,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_WIFI,
+        assertEquals(
+                ConnectionType.CONNECTION_WIFI,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
 
         // Connection of type mobile is presumed to have lowest possible quality, i.e. 2G.
         // This inference is only relevant when native is not loaded.
         setNetworkInfoConnectionType(ConnectivityManager.TYPE_MOBILE);
-        assertEquals(ConnectionType.CONNECTION_2G,
+        assertEquals(
+                ConnectionType.CONNECTION_2G,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_2G,
+        assertEquals(
+                ConnectionType.CONNECTION_2G,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
 
         setNetworkInfoConnectionType(ConnectivityManager.TYPE_BLUETOOTH);
-        assertEquals(ConnectionType.CONNECTION_BLUETOOTH,
+        assertEquals(
+                ConnectionType.CONNECTION_BLUETOOTH,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_BLUETOOTH,
+        assertEquals(
+                ConnectionType.CONNECTION_BLUETOOTH,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
 
         setNetworkInfoConnectionType(ConnectivityManager.TYPE_DUMMY);
-        assertEquals(ConnectionType.CONNECTION_UNKNOWN,
+        assertEquals(
+                ConnectionType.CONNECTION_UNKNOWN,
                 DeviceConditions.getCurrentNetConnectionType(mContext));
-        assertEquals(ConnectionType.CONNECTION_UNKNOWN,
+        assertEquals(
+                ConnectionType.CONNECTION_UNKNOWN,
                 DeviceConditions.getCurrent(mContext).getNetConnectionType());
     }
 

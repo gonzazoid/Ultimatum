@@ -9,6 +9,7 @@
 
 #include "base/memory/ptr_util.h"
 #include "third_party/blink/renderer/core/animation/css/css_timing_data.h"
+#include "third_party/blink/renderer/core/animation/effect_model.h"
 #include "third_party/blink/renderer/core/animation/timing.h"
 #include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/core/style/style_name_or_keyword.h"
@@ -16,7 +17,7 @@
 
 namespace blink {
 
-class CSSAnimationData final : public CSSTimingData {
+class CORE_EXPORT CSSAnimationData final : public CSSTimingData {
  public:
   CSSAnimationData();
   explicit CSSAnimationData(const CSSAnimationData&);
@@ -48,6 +49,24 @@ class CSSAnimationData final : public CSSTimingData {
   const Vector<EAnimPlayState>& PlayStateList() const {
     return play_state_list_;
   }
+  const Vector<absl::optional<TimelineOffset>>& RangeStartList() const {
+    return range_start_list_;
+  }
+  const Vector<absl::optional<TimelineOffset>>& RangeEndList() const {
+    return range_end_list_;
+  }
+
+  const Vector<EffectModel::CompositeOperation>& CompositionList() const {
+    return composition_list_;
+  }
+
+  EffectModel::CompositeOperation GetComposition(size_t animation_index) const {
+    if (!composition_list_.size()) {
+      return EffectModel::kCompositeReplace;
+    }
+    wtf_size_t index = animation_index % composition_list_.size();
+    return composition_list_[index];
+  }
 
   Vector<AtomicString>& NameList() { return name_list_; }
   Vector<StyleTimeline>& TimelineList() { return timeline_list_; }
@@ -56,6 +75,30 @@ class CSSAnimationData final : public CSSTimingData {
   Vector<Timing::FillMode>& FillModeList() { return fill_mode_list_; }
   Vector<EAnimPlayState>& PlayStateList() { return play_state_list_; }
 
+  Vector<absl::optional<TimelineOffset>>& RangeStartList() {
+    return range_start_list_;
+  }
+  Vector<absl::optional<TimelineOffset>>& RangeEndList() {
+    return range_end_list_;
+  }
+  Vector<EffectModel::CompositeOperation>& CompositionList() {
+    return composition_list_;
+  }
+
+  bool HasSingleInitialTimeline() const {
+    return timeline_list_.size() == 1u &&
+           timeline_list_.front() == InitialTimeline();
+  }
+  bool HasSingleInitialRangeStart() const {
+    return range_start_list_.size() == 1u &&
+           range_start_list_.front() == InitialRangeStart();
+  }
+  bool HasSingleInitialRangeEnd() const {
+    return range_end_list_.size() == 1u &&
+           range_end_list_.front() == InitialRangeEnd();
+  }
+
+  static absl::optional<double> InitialDuration();
   static const AtomicString& InitialName();
   static const StyleTimeline& InitialTimeline();
   static Timing::PlaybackDirection InitialDirection() {
@@ -64,14 +107,26 @@ class CSSAnimationData final : public CSSTimingData {
   static Timing::FillMode InitialFillMode() { return Timing::FillMode::NONE; }
   static double InitialIterationCount() { return 1.0; }
   static EAnimPlayState InitialPlayState() { return EAnimPlayState::kPlaying; }
+  static absl::optional<TimelineOffset> InitialRangeStart() {
+    return absl::nullopt;
+  }
+  static absl::optional<TimelineOffset> InitialRangeEnd() {
+    return absl::nullopt;
+  }
+  static EffectModel::CompositeOperation InitialComposition() {
+    return EffectModel::CompositeOperation::kCompositeReplace;
+  }
 
  private:
   Vector<AtomicString> name_list_;
   Vector<StyleTimeline> timeline_list_;
+  Vector<absl::optional<TimelineOffset>> range_start_list_;
+  Vector<absl::optional<TimelineOffset>> range_end_list_;
   Vector<double> iteration_count_list_;
   Vector<Timing::PlaybackDirection> direction_list_;
   Vector<Timing::FillMode> fill_mode_list_;
   Vector<EAnimPlayState> play_state_list_;
+  Vector<EffectModel::CompositeOperation> composition_list_;
 };
 
 }  // namespace blink

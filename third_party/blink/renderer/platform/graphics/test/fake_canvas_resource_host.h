@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_host.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
+#include "third_party/blink/renderer/platform/graphics/gpu/shared_gpu_context.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_canvas.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
@@ -18,11 +19,18 @@ namespace blink {
 
 class FakeCanvasResourceHost : public CanvasResourceHost {
  public:
-  explicit FakeCanvasResourceHost(gfx::Size size) : size_(size) {}
+  explicit FakeCanvasResourceHost(gfx::Size size) : CanvasResourceHost(size) {}
+  ~FakeCanvasResourceHost() override = default;
   void NotifyGpuContextLost() override {}
   void SetNeedsCompositingUpdate() override {}
-  void RestoreCanvasMatrixClipStack(cc::PaintCanvas*) const override {}
+  void InitializeForRecording(cc::PaintCanvas*) const override {}
   void UpdateMemoryUsage() override {}
+  bool PrintedInCurrentTask() const override { return false; }
+  bool IsPageVisible() override { return page_visible_; }
+  bool IsHibernating() const override { return is_hibernating_; }
+  void SetIsHibernating(bool is_hibernating) {
+    is_hibernating_ = is_hibernating;
+  }
   size_t GetMemoryUsage() const override { return 0; }
   CanvasResourceProvider* GetOrCreateCanvasResourceProvider(
       RasterModeHint hint) override {
@@ -33,31 +41,31 @@ class FakeCanvasResourceHost : public CanvasResourceHost {
     if (ResourceProvider())
       return ResourceProvider();
     const SkImageInfo resource_info =
-        SkImageInfo::MakeN32Premul(size_.width(), size_.height());
-
+        SkImageInfo::MakeN32Premul(Size().width(), Size().height());
+    constexpr auto kFilterQuality = cc::PaintFlags::FilterQuality::kMedium;
+    constexpr auto kShouldInitialize =
+        CanvasResourceProvider::ShouldInitialize::kCallClear;
     std::unique_ptr<CanvasResourceProvider> provider;
     if (hint == RasterModeHint::kPreferGPU ||
         RuntimeEnabledFeatures::Canvas2dImageChromiumEnabled()) {
-      uint32_t shared_image_usage_flags = gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
-                                          gpu::SHARED_IMAGE_USAGE_SCANOUT;
+      constexpr uint32_t kSharedImageUsageFlags =
+          gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+          gpu::SHARED_IMAGE_USAGE_SCANOUT;
       provider = CanvasResourceProvider::CreateSharedImageProvider(
-          resource_info, cc::PaintFlags::FilterQuality::kMedium,
-          CanvasResourceProvider::ShouldInitialize::kCallClear,
+          resource_info, kFilterQuality, kShouldInitialize,
           SharedGpuContext::ContextProviderWrapper(),
           hint == RasterModeHint::kPreferGPU ? RasterMode::kGPU
                                              : RasterMode::kCPU,
-          false /*is_origin_top_left*/, shared_image_usage_flags);
+          kSharedImageUsageFlags, this);
     }
     if (!provider) {
       provider = CanvasResourceProvider::CreateSharedBitmapProvider(
-          resource_info, cc::PaintFlags::FilterQuality::kMedium,
-          CanvasResourceProvider::ShouldInitialize::kCallClear,
-          nullptr /* dispatcher_weakptr */);
+          resource_info, kFilterQuality, kShouldInitialize,
+          /*resource_dispatcher=*/nullptr, this);
     }
     if (!provider) {
       provider = CanvasResourceProvider::CreateBitmapProvider(
-          resource_info, cc::PaintFlags::FilterQuality::kMedium,
-          CanvasResourceProvider::ShouldInitialize::kCallClear);
+          resource_info, kFilterQuality, kShouldInitialize, this);
     }
 
     ReplaceResourceProvider(std::move(provider));
@@ -65,8 +73,16 @@ class FakeCanvasResourceHost : public CanvasResourceHost {
     return ResourceProvider();
   }
 
+  void SetPageVisible(bool visible) {
+    if (page_visible_ != visible) {
+      page_visible_ = visible;
+      PageVisibilityChanged();
+    }
+  }
+
  private:
-  gfx::Size size_;
+  bool page_visible_ = true;
+  bool is_hibernating_ = false;
 };
 
 }  // namespace blink

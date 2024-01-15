@@ -16,6 +16,8 @@
 #include "components/omnibox/browser/match_compare.h"
 #include "components/omnibox/browser/search_suggestion_parser.h"
 #include "components/omnibox/browser/suggestion_group_util.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/omnibox_proto/groups.pb.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -26,6 +28,7 @@
 class AutocompleteInput;
 class AutocompleteProvider;
 class AutocompleteProviderClient;
+class OmniboxTriggeredFeatureService;
 class PrefService;
 class TemplateURLService;
 
@@ -97,20 +100,44 @@ class AutocompleteResult {
   // Adds a new set of matches to the result set.  Does not re-sort.
   void AppendMatches(const ACMatches& matches);
 
-  // Removes duplicates, puts the list in sorted order and culls to leave only
-  // the best GetMaxMatches() matches. Sets the default match to the best match
-  // and updates the alternate nav URL.
+  // Modifies |matches| such that any duplicate matches are coalesced into
+  // representative "best" matches. The erased matches are moved into the
+  // |duplicate_matches| members of their representative matches.
+  void DeduplicateMatches(const AutocompleteInput& input,
+                          TemplateURLService* template_url_service);
+
+  // See `Sort()`. `SortAndCull()` also groups and culls the suggestions.
+  // TODO(manukh): `Sort()` without grouping and culling is only needed
+  //   temporarily for ML ranking without changing the search v URL balance.
+  //   After we remove that restriction, they should be re-merged into 1
+  //   function, because calling `Sort()` without calling `SortAndCull()`
+  //   afterwards is probably invalid.
+  void SortAndCull(const AutocompleteInput& input,
+                   TemplateURLService* template_url_service,
+                   OmniboxTriggeredFeatureService* triggered_feature_service,
+                   absl::optional<AutocompleteMatch> default_match_to_preserve =
+                       absl::nullopt);
+
+  // Removes duplicates, puts the list in sorted order. Sets the default match
+  // to the best match and updates the alternate nav URL.
   //
-  // |preserve_default_match| can be used to prevent the default match from
+  // `default_match_to_preserve` can be used to prevent the default match from
   // being surprisingly swapped out during the asynchronous pass. If it has a
   // value, this method searches the results for that match, and promotes it to
   // the top. But we don't add back that match if it doesn't already exist.
   //
   // On desktop, it filters the matches to be either all tail suggestions
   // (except for the first match) or no tail suggestions.
-  void SortAndCull(const AutocompleteInput& input,
-                   TemplateURLService* template_url_service,
-                   const AutocompleteMatch* preserve_default_match = nullptr);
+  //
+  // TODO(manukh): `Sort()` is useful for determining the default suggestion
+  //   accurately. It includes more code than absolutely necessary for
+  //   determining the default suggestion to help avoid accidentally leaving the
+  //   results in an invalid state. But it really shouldn't be called except if
+  //   `SortAndCull()` is guaranteed to be called soon after. The 2 should be
+  //   re-merged into 1 function once this is no longer needed.
+  void Sort(const AutocompleteInput& input,
+            TemplateURLService* template_url_service,
+            absl::optional<AutocompleteMatch> default_match_to_preserve);
 
   // Ensures that matches belonging to suggestion groups, i.e., those with a
   // suggestion_group_id value and a corresponding suggestion group info, are
@@ -136,6 +163,12 @@ class AutocompleteResult {
   //
   // Called after matches are deduped and sorted and before they are culled.
   void GroupAndDemoteMatchesInGroups();
+
+  // Filter and remove OmniboxActions according to Platform-specific rules.
+  void TrimOmniboxActions(bool is_zero_suggest);
+
+  // Split some `actions` on matches out to become their own matches.
+  void SplitActionsToSuggestions();
 
   // Sets |action| in matches that have Pedal-triggering text.
   void AttachPedalsToMatches(const AutocompleteInput& input,
@@ -174,9 +207,11 @@ class AutocompleteResult {
                                           ACMatches* matches);
 
   // If the top match is a Search Entity, and it was deduplicated with a
-  // non-entity match, split off the non-entity match from the list of
-  // duplicates, promote it to the top, and return true.
-  static bool DiscourageTopMatchFromBeingSearchEntity(ACMatches* matches);
+  // non-entity match, splits off the non-entity match from the list of
+  // duplicates and returns true. Otherwise returns false.
+  // The non-entity duplicate is promoted to the top, unless the entity match
+  // has Action in Suggest where it remains at the top.
+  static bool UndedupTopSearchEntityMatch(ACMatches* matches);
 
   // Just a helper function to encapsulate the logic of deciding how many
   // matches to keep, with respect to configured maximums, URL limits,
@@ -201,9 +236,6 @@ class AutocompleteResult {
 
   void Swap(AutocompleteResult* other);
 
-  // operator=() by another name.
-  void CopyFrom(const AutocompleteResult& other);
-
 #if DCHECK_IS_ON()
   // Does a data integrity check on this result.
   void Validate() const;
@@ -218,13 +250,6 @@ class AutocompleteResult {
 
   // Gets common prefix from SEARCH_SUGGEST_TAIL matches
   std::u16string GetCommonPrefix();
-
-  // Populates tail_suggest_common_prefix on the matches as well as prepends
-  // ellipses.
-  void SetTailSuggestContentPrefixes();
-
-  // Populates tail_suggest_common_prefix on the matches.
-  void SetTailSuggestCommonPrefixes();
 
   // Estimates dynamic memory usage.
   // See base/trace_event/memory_usage_estimator.h for more info.
@@ -264,6 +289,18 @@ class AutocompleteResult {
   omnibox::GroupSection GetSectionForSuggestionGroup(
       omnibox::GroupId suggestion_group_id) const;
 
+  // Returns the side type associated with `suggestion_group_id`.
+  // Returns omnibox::DEFAULT_PRIMARY if `suggestion_group_id` is not found in
+  // `suggestion_groups_map_`.
+  omnibox::GroupConfig_SideType GetSideTypeForSuggestionGroup(
+      omnibox::GroupId suggestion_group_id) const;
+
+  // Returns the render type associated with `suggestion_group_id`.
+  // Returns omnibox::DEFAULT_VERTICAL if `suggestion_group_id` is not found in
+  // `suggestion_groups_map_`.
+  omnibox::GroupConfig_RenderType GetRenderTypeForSuggestionGroup(
+      omnibox::GroupId suggestion_group_id) const;
+
   // Updates |suggestion_groups_map_| with the suggestion groups information
   // from |suggeston_groups_map|. Followed by GroupAndDemoteMatchesInGroups()
   // which sorts the matches based on the order in which their groups should
@@ -271,6 +308,13 @@ class AutocompleteResult {
   // group.
   void MergeSuggestionGroupsMap(
       const omnibox::GroupConfigMap& suggeston_groups_map);
+
+  // Erase matches where `predicate` returns true. In other words, this
+  // preserves only those matches for which `predicate` returns false.
+  template <typename UnaryPredicate>
+  size_t EraseMatchesWhere(UnaryPredicate predicate) {
+    return std::erase_if(matches_, predicate);
+  }
 
   // This method implements a stateful stable partition. Matches which are
   // search types, and their submatches regardless of type, are shifted
@@ -284,12 +328,12 @@ class AutocompleteResult {
   static constexpr size_t kMaxAutocompletePositionValue = 30;
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(AutocompleteResultTest,
-                           DemoteOnDeviceSearchSuggestions);
-  FRIEND_TEST_ALL_PREFIXES(
-      AutocompleteResultTest,
-      GroupSuggestionsBySearchVsURLHonorsProtectedSuggestions);
+  friend class AutocompleteController;  // Friended to use `CopyFrom()`.
+  friend class AutocompleteResultForTesting;
+  friend class AutocompleteProviderTest;
   friend class HistoryURLProviderTest;
+  FRIEND_TEST_ALL_PREFIXES(AutocompleteResultTest, Desktop_TwoColumnRealbox);
+  FRIEND_TEST_ALL_PREFIXES(AutocompleteResultTest, Android_TrimOmniboxActions);
 
   typedef std::map<AutocompleteProvider*, ACMatches> ProviderToMatches;
 
@@ -301,10 +345,16 @@ class AutocompleteResult {
   typedef ACMatches::iterator::difference_type matches_difference_type;
 #endif
 
+  // operator=() by another name.
+  // To be called in AutocompleteController and AutocompleteProviderTest only.
+  void CopyFrom(const AutocompleteResult& other);
+
   // Modifies |matches| such that any duplicate matches are coalesced into
   // representative "best" matches. The erased matches are moved into the
   // |duplicate_matches| members of their representative matches.
-  static void DeduplicateMatches(ACMatches* matches);
+  static void DeduplicateMatches(ACMatches* matches,
+                                 const AutocompleteInput& input,
+                                 TemplateURLService* template_url_service);
 
   // Returns true if |matches| contains a match with the same destination as
   // |match|.

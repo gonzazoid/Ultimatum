@@ -25,6 +25,10 @@ bool ContentId::operator==(const ContentId& content_id) const {
   return name_space == content_id.name_space && id == content_id.id;
 }
 
+bool ContentId::operator!=(const ContentId& content_id) const {
+  return !(content_id == *this);
+}
+
 bool ContentId::operator<(const ContentId& content_id) const {
   return std::tie(name_space, id) <
          std::tie(content_id.name_space, content_id.id);
@@ -99,6 +103,7 @@ bool OfflineItem::operator==(const OfflineItem& offline_item) const {
          is_off_the_record == offline_item.is_off_the_record &&
          otr_profile_id == offline_item.otr_profile_id &&
          attribution == offline_item.attribution &&
+         referrer_url == offline_item.referrer_url &&
          state == offline_item.state && fail_state == offline_item.fail_state &&
          pending_state == offline_item.pending_state &&
          is_resumable == offline_item.is_resumable &&

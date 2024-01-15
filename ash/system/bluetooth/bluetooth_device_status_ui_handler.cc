@@ -6,12 +6,13 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/bluetooth_config_service.h"
+#include "ash/public/cpp/hats_bluetooth_revamp_trigger.h"
 #include "ash/public/cpp/system/toast_data.h"
 #include "ash/public/cpp/system/toast_manager.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
 #include "base/check.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/services/bluetooth_config/public/cpp/cros_bluetooth_config_util.h"
 #include "device/bluetooth/chromeos/bluetooth_utils.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -30,7 +31,7 @@ const char kBluetoothToastIdPrefix[] = "cros_bluetooth_device_toast_id-";
 BluetoothDeviceStatusUiHandler::BluetoothDeviceStatusUiHandler() {
   // Asynchronously bind to CrosBluetoothConfig so that we don't want to attempt
   // to bind to it before it has initialized.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BluetoothDeviceStatusUiHandler::BindToCrosBluetoothConfig,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -48,7 +49,7 @@ void BluetoothDeviceStatusUiHandler::OnDevicePaired(
           IDS_ASH_STATUS_TRAY_BLUETOOTH_PAIRED_OR_CONNECTED_TOAST,
           GetPairedDeviceName(device)));
 
-  ShowToast(toast_data);
+  ShowToast(std::move(toast_data));
   device::RecordUiSurfaceDisplayed(device::BluetoothUiSurface::kPairedToast);
 }
 
@@ -61,7 +62,7 @@ void BluetoothDeviceStatusUiHandler::OnDeviceDisconnected(
       l10n_util::GetStringFUTF16(
           IDS_ASH_STATUS_TRAY_BLUETOOTH_DISCONNECTED_TOAST,
           GetPairedDeviceName(device)));
-  ShowToast(toast_data);
+  ShowToast(std::move(toast_data));
   device::RecordUiSurfaceDisplayed(
       device::BluetoothUiSurface::kDisconnectedToast);
 }
@@ -75,14 +76,17 @@ void BluetoothDeviceStatusUiHandler::OnDeviceConnected(
       l10n_util::GetStringFUTF16(
           IDS_ASH_STATUS_TRAY_BLUETOOTH_PAIRED_OR_CONNECTED_TOAST,
           GetPairedDeviceName(device)));
-  ShowToast(toast_data);
+  ShowToast(std::move(toast_data));
   device::RecordUiSurfaceDisplayed(
       device::BluetoothUiSurface::kConnectionToast);
+
+  if (auto* hats_bluetooth_revamp_trigger = HatsBluetoothRevampTrigger::Get()) {
+    hats_bluetooth_revamp_trigger->TryToShowSurvey();
+  }
 }
 
-void BluetoothDeviceStatusUiHandler::ShowToast(
-    const ash::ToastData& toast_data) {
-  ash::ToastManager::Get()->Show(toast_data);
+void BluetoothDeviceStatusUiHandler::ShowToast(ash::ToastData toast_data) {
+  ash::ToastManager::Get()->Show(std::move(toast_data));
 }
 
 std::string BluetoothDeviceStatusUiHandler::GetToastId(

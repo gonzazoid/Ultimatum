@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 #include "ui/gfx/vector_icon_types.h"
 
@@ -19,7 +20,6 @@ namespace ash {
 
 class BluetoothDeviceListItemView;
 class DetailedViewDelegate;
-class TriView;
 
 // This class defines both the interface used to interact with the detailed
 // Bluetooth page within the quick settings, including the view responsible for
@@ -68,8 +68,9 @@ class ASH_EXPORT BluetoothDetailedView {
   // when testing, where the implementation might not inherit from views::View.
   virtual views::View* GetAsView() = 0;
 
-  // Updates the detailed view to reflect a Bluetooth state of |enabled|.
-  virtual void UpdateBluetoothEnabledState(bool enabled) = 0;
+  // Updates the detailed view to reflect a Bluetooth state of |system_state|.
+  virtual void UpdateBluetoothEnabledState(
+      const bluetooth_config::mojom::BluetoothSystemState system_state) = 0;
 
   // Creates a targetable row for a single device within the device list. The
   // client is expected to configure the returned view themselves, and to use
@@ -79,13 +80,15 @@ class ASH_EXPORT BluetoothDetailedView {
   // Adds a sticky sub-header to the end of the device list containing |icon|
   // and text represented by the |text_id| resource ID. The client is expected
   // to use the returned pointer for removing and rearranging the sub-header.
-  virtual ash::TriView* AddDeviceListSubHeader(const gfx::VectorIcon& icon,
-                                               int text_id) = 0;
+  virtual views::View* AddDeviceListSubHeader(const gfx::VectorIcon& icon,
+                                              int text_id) = 0;
 
   // Notifies that the device list has changed and the layout is invalid.
   virtual void NotifyDeviceListChanged() = 0;
 
-  // Returns the device list.
+  // Returns the main content view which contains a list of child views that
+  // make up the list of connected and previously connected bluetooth devices,
+  // including their headers.
   virtual views::View* device_list() = 0;
 
  protected:
@@ -94,7 +97,7 @@ class ASH_EXPORT BluetoothDetailedView {
   Delegate* delegate() { return delegate_; }
 
  private:
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 };
 
 }  // namespace ash

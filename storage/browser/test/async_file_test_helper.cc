@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "storage/browser/blob/shareable_file_reference.h"
 #include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 #include "storage/browser/file_system/file_system_backend.h"
@@ -19,6 +20,7 @@
 #include "storage/browser/file_system/file_system_url.h"
 #include "storage/browser/file_system/file_system_util.h"
 #include "storage/browser/quota/quota_manager.h"
+#include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/common/file_system/file_system_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -226,14 +228,14 @@ base::File::Error AsyncFileTestHelper::CreateFile(FileSystemContext* context,
 base::File::Error AsyncFileTestHelper::CreateFileWithData(
     FileSystemContext* context,
     const FileSystemURL& url,
-    const char* buf,
-    int buf_size) {
+    std::string_view data) {
   base::ScopedTempDir dir;
   if (!dir.CreateUniqueTempDir())
     return base::File::FILE_ERROR_FAILED;
   base::FilePath local_path = dir.GetPath().AppendASCII("tmp");
-  if (!base::WriteFile(local_path, base::StringPiece(buf, buf_size)))
+  if (!base::WriteFile(local_path, data)) {
     return base::File::FILE_ERROR_FAILED;
+  }
   base::File::Error result = base::File::FILE_ERROR_FAILED;
   base::RunLoop run_loop;
   context->operation_runner()->CopyInForeignFile(
@@ -261,9 +263,9 @@ base::File::Error AsyncFileTestHelper::GetMetadata(
   base::RunLoop run_loop;
   context->operation_runner()->GetMetadata(
       url,
-      FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-          FileSystemOperation::GET_METADATA_FIELD_SIZE |
-          FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED,
+      {storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+       storage::FileSystemOperation::GetMetadataField::kSize,
+       storage::FileSystemOperation::GetMetadataField::kLastModified},
       base::BindOnce(&GetMetadataCallback, &run_loop, &result, file_info));
   run_loop.Run();
   return result;
@@ -310,7 +312,7 @@ blink::mojom::QuotaStatusCode AsyncFileTestHelper::GetUsageAndQuota(
   base::RunLoop run_loop;
   quota_manager_proxy->GetUsageAndQuota(
       storage_key, FileSystemTypeToQuotaStorageType(type),
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindOnce(&DidGetUsageAndQuota, &status, usage, quota,
                      run_loop.QuitWhenIdleClosure()));
   run_loop.Run();

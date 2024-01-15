@@ -10,8 +10,8 @@
 #include <cmath>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -73,14 +73,14 @@ class TickGenerator {
 class VideoRendererAlgorithmTest : public testing::Test {
  public:
   VideoRendererAlgorithmTest()
-      : tick_clock_(new base::SimpleTestTickClock()),
+      : tick_clock_(std::make_unique<base::SimpleTestTickClock>()),
+        time_source_(tick_clock_.get()),
         algorithm_(base::BindRepeating(&WallClockTimeSource::GetWallClockTimes,
                                        base::Unretained(&time_source_)),
                    &media_log_) {
     // Always start the TickClock at a non-zero value since null values have
     // special connotations.
     tick_clock_->Advance(base::Microseconds(10000));
-    time_source_.SetTickClockForTesting(tick_clock_.get());
   }
 
   VideoRendererAlgorithmTest(const VideoRendererAlgorithmTest&) = delete;

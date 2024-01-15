@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/inspector/exception_metadata.h"
 #include "third_party/blink/renderer/core/inspector/identifiers_factory.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
@@ -31,6 +32,152 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 
 namespace blink {
+
+namespace {
+
+const char* kHtmlNamespace = "http://www.w3.org/1999/xhtml";
+
+struct AttributeTypeEntry {
+  AtomicString element;
+  AtomicString attribute;
+  AtomicString element_namespace;
+  AtomicString attribute_namespace;
+  SpecificTrustedType type;
+};
+
+typedef Vector<AttributeTypeEntry> AttributeTypeVector;
+
+AttributeTypeVector BuildAttributeVector() {
+  const QualifiedName any_element(g_null_atom, g_star_atom, g_null_atom);
+  const struct {
+    const QualifiedName& element;
+    const AtomicString attribute;
+    SpecificTrustedType type;
+  } kTypeTable[] = {
+      {html_names::kEmbedTag, html_names::kSrcAttr.LocalName(),
+       SpecificTrustedType::kScriptURL},
+      {html_names::kIFrameTag, html_names::kSrcdocAttr.LocalName(),
+       SpecificTrustedType::kHTML},
+      {html_names::kObjectTag, html_names::kCodebaseAttr.LocalName(),
+       SpecificTrustedType::kScriptURL},
+      {html_names::kObjectTag, html_names::kDataAttr.LocalName(),
+       SpecificTrustedType::kScriptURL},
+      {html_names::kScriptTag, html_names::kSrcAttr.LocalName(),
+       SpecificTrustedType::kScriptURL},
+#define FOREACH_EVENT_HANDLER(name) \
+  {any_element, AtomicString(#name), SpecificTrustedType::kScript},
+      EVENT_HANDLER_LIST(FOREACH_EVENT_HANDLER)
+#undef FOREACH_EVENT_HANDLER
+  };
+
+  AttributeTypeVector table;
+  for (const auto& entry : kTypeTable) {
+    // Attribute comparisons are case-insensitive, for both element and
+    // attribute name. We rely on the fact that they're stored as lowercase.
+    DCHECK(entry.element.LocalName().IsLowerASCII());
+    DCHECK(entry.attribute.IsLowerASCII());
+    table.push_back(AttributeTypeEntry{
+        entry.element.LocalName(), entry.attribute,
+        entry.element.NamespaceURI(), g_null_atom, entry.type});
+  }
+  return table;
+}
+
+const AttributeTypeVector& GetAttributeTypeVector() {
+  DEFINE_STATIC_LOCAL(AttributeTypeVector, attribute_table_,
+                      (BuildAttributeVector()));
+  return attribute_table_;
+}
+
+AttributeTypeVector BuildPropertyVector() {
+  const QualifiedName any_element(g_null_atom, g_star_atom, g_null_atom);
+  const struct {
+    const QualifiedName& element;
+    const char* property;
+    SpecificTrustedType type;
+  } kTypeTable[] = {
+      {html_names::kEmbedTag, "src", SpecificTrustedType::kScriptURL},
+      {html_names::kIFrameTag, "srcdoc", SpecificTrustedType::kHTML},
+      {html_names::kObjectTag, "codeBase", SpecificTrustedType::kScriptURL},
+      {html_names::kObjectTag, "data", SpecificTrustedType::kScriptURL},
+      {html_names::kScriptTag, "innerText", SpecificTrustedType::kScript},
+      {html_names::kScriptTag, "src", SpecificTrustedType::kScriptURL},
+      {html_names::kScriptTag, "text", SpecificTrustedType::kScript},
+      {html_names::kScriptTag, "textContent", SpecificTrustedType::kScript},
+      {any_element, "innerHTML", SpecificTrustedType::kHTML},
+      {any_element, "outerHTML", SpecificTrustedType::kHTML},
+  };
+  AttributeTypeVector table;
+  for (const auto& entry : kTypeTable) {
+    // Elements are case-insensitive, but property names are not.
+    // Properties don't have a namespace, so we're leaving that blank.
+    DCHECK(entry.element.LocalName().IsLowerASCII());
+    table.push_back(AttributeTypeEntry{
+        entry.element.LocalName(), AtomicString(entry.property),
+        entry.element.NamespaceURI(), AtomicString(), entry.type});
+  }
+  return table;
+}
+
+const AttributeTypeVector& GetPropertyTypeVector() {
+  DEFINE_STATIC_LOCAL(AttributeTypeVector, property_table_,
+                      (BuildPropertyVector()));
+  return property_table_;
+}
+
+// Find an entry matching `attribute` on any element in an AttributeTypeVector.
+// Assumes that argument normalization has already happened.
+SpecificTrustedType FindUnboundAttributeInAttributeTypeVector(
+    const AttributeTypeVector& attribute_type_vector,
+    const AtomicString& attribute) {
+  for (const auto& entry : attribute_type_vector) {
+    bool entry_matches = entry.attribute == attribute &&
+                         entry.element == g_star_atom &&
+                         entry.attribute_namespace == g_null_atom;
+    if (entry_matches) {
+      return entry.type;
+    }
+  }
+  return SpecificTrustedType::kNone;
+}
+
+// Find a matching entry in an AttributeTypeVector. Assumes that argument
+// normalization has already happened.
+SpecificTrustedType FindEntryInAttributeTypeVector(
+    const AttributeTypeVector& attribute_type_vector,
+    const AtomicString& element,
+    const AtomicString& attribute,
+    const AtomicString& element_namespace,
+    const AtomicString& attribute_namespace) {
+  for (const auto& entry : attribute_type_vector) {
+    bool entry_matches = ((entry.element == element &&
+                           entry.element_namespace == element_namespace) ||
+                          entry.element == g_star_atom) &&
+                         entry.attribute == attribute &&
+                         entry.attribute_namespace == attribute_namespace;
+    if (entry_matches)
+      return entry.type;
+  }
+  return SpecificTrustedType::kNone;
+}
+
+// Find a matching entry in an AttributeTypeVector. Converts arguments to
+// AtomicString and does spec-mandated mapping of empty strings as namespaces.
+SpecificTrustedType FindEntryInAttributeTypeVector(
+    const AttributeTypeVector& attribute_type_vector,
+    const String& element,
+    const String& attribute,
+    const String& element_namespace,
+    const String& attribute_namespace) {
+  return FindEntryInAttributeTypeVector(
+      attribute_type_vector, AtomicString(element), AtomicString(attribute),
+      element_namespace.empty() ? AtomicString(kHtmlNamespace)
+                                : AtomicString(element_namespace),
+      attribute_namespace.empty() ? AtomicString()
+                                  : AtomicString(attribute_namespace));
+}
+
+}  // anonymous namespace
 
 TrustedTypePolicy* TrustedTypePolicyFactory::createPolicy(
     const String& policy_name,
@@ -186,61 +333,6 @@ TrustedScript* TrustedTypePolicyFactory::emptyScript() const {
   return empty_script_.Get();
 }
 
-const struct {
-  const char* element;
-  const char* property;
-  const char* element_namespace;
-  SpecificTrustedType type;
-  // We use this table for both attributes and properties. Most are both,
-  // because DOM "reflects" the attributes onto their specified poperties.
-  // We use is_not_* so that the default value initialization (false) will
-  // match the common case and we only need to explicitly provide the uncommon
-  // values.
-  bool is_not_property : 1;
-  bool is_not_attribute : 1;
-} kTypeTable[] = {
-    {"embed", "src", nullptr, SpecificTrustedType::kScriptURL},
-    {"iframe", "srcdoc", nullptr, SpecificTrustedType::kHTML},
-    {"object", "codeBase", nullptr, SpecificTrustedType::kScriptURL},
-    {"object", "data", nullptr, SpecificTrustedType::kScriptURL},
-    {"script", "innerText", nullptr, SpecificTrustedType::kScript, false, true},
-    {"script", "src", nullptr, SpecificTrustedType::kScriptURL},
-    {"script", "text", nullptr, SpecificTrustedType::kScript, false, true},
-    {"script", "textContent", nullptr, SpecificTrustedType::kScript, false,
-     true},
-    {"*", "innerHTML", nullptr, SpecificTrustedType::kHTML, false, true},
-    {"*", "outerHTML", nullptr, SpecificTrustedType::kHTML, false, true},
-#define FOREACH_EVENT_HANDLER(name) \
-  {"*", #name, nullptr, SpecificTrustedType::kScript, true, false},
-    EVENT_HANDLER_LIST(FOREACH_EVENT_HANDLER)
-#undef FOREACH_EVENT_HANDLER
-};
-
-// Does a type table entry match a property?
-// (Properties are evaluated by JavaScript and are case-sensitive.)
-bool EqualsProperty(decltype(*kTypeTable)& left,
-                    const String& tag,
-                    const String& attr,
-                    const String& ns) {
-  DCHECK_EQ(tag.LowerASCII(), tag);
-  return (left.element == tag || !strcmp(left.element, "*")) &&
-         left.property == attr && left.element_namespace == ns &&
-         !left.is_not_property;
-}
-
-// Does a type table entry match an attribute?
-// (Attributes get queried by calling acecssor methods on the DOM. These are
-//  case-insensitive, because DOM.)
-bool EqualsAttribute(decltype(*kTypeTable)& left,
-                     const String& tag,
-                     const String& attr,
-                     const String& ns) {
-  DCHECK_EQ(tag.LowerASCII(), tag);
-  return (left.element == tag || !strcmp(left.element, "*")) &&
-         CodeUnitCompareIgnoringASCIICase(attr, left.property) == 0 &&
-         left.element_namespace == ns && !left.is_not_attribute;
-}
-
 String getTrustedTypeName(SpecificTrustedType type) {
   switch (type) {
     case SpecificTrustedType::kHTML:
@@ -254,39 +346,13 @@ String getTrustedTypeName(SpecificTrustedType type) {
   }
 }
 
-typedef bool (*PropertyEqualsFn)(decltype(*kTypeTable)&,
-                                 const String&,
-                                 const String&,
-                                 const String&);
-
-SpecificTrustedType FindTypeInTypeTable(const String& tagName,
-                                        const String& propertyName,
-                                        const String& elementNS,
-                                        PropertyEqualsFn equals) {
-  SpecificTrustedType type = SpecificTrustedType::kNone;
-  for (auto* it = std::cbegin(kTypeTable); it != std::cend(kTypeTable); it++) {
-    if ((*equals)(*it, tagName, propertyName, elementNS)) {
-      type = it->type;
-      break;
-    }
-  }
-  return type;
-}
-
-String FindTypeNameInTypeTable(const String& tagName,
-                               const String& propertyName,
-                               const String& elementNS,
-                               PropertyEqualsFn equals) {
-  return getTrustedTypeName(
-      FindTypeInTypeTable(tagName, propertyName, elementNS, equals));
-}
-
 String TrustedTypePolicyFactory::getPropertyType(
     const String& tagName,
     const String& propertyName,
     const String& elementNS) const {
-  return FindTypeNameInTypeTable(tagName.LowerASCII(), propertyName, elementNS,
-                                 &EqualsProperty);
+  return getTrustedTypeName(FindEntryInAttributeTypeVector(
+      GetPropertyTypeVector(), tagName.LowerASCII(), propertyName, elementNS,
+      String()));
 }
 
 String TrustedTypePolicyFactory::getAttributeType(
@@ -294,32 +360,73 @@ String TrustedTypePolicyFactory::getAttributeType(
     const String& attributeName,
     const String& tagNS,
     const String& attributeNS) const {
-  return FindTypeNameInTypeTable(tagName.LowerASCII(), attributeName, tagNS,
-                                 &EqualsAttribute);
-}
-
-String TrustedTypePolicyFactory::getPropertyType(
-    const String& tagName,
-    const String& propertyName) const {
-  return getPropertyType(tagName, propertyName, String());
-}
-
-String TrustedTypePolicyFactory::getAttributeType(
-    const String& tagName,
-    const String& attributeName) const {
-  return getAttributeType(tagName, attributeName, String(), String());
-}
-
-String TrustedTypePolicyFactory::getAttributeType(const String& tagName,
-                                                  const String& attributeName,
-                                                  const String& tagNS) const {
-  return getAttributeType(tagName, attributeName, tagNS, String());
+  return getTrustedTypeName(FindEntryInAttributeTypeVector(
+      GetAttributeTypeVector(), tagName.LowerASCII(),
+      attributeName.LowerASCII(), tagNS, attributeNS));
 }
 
 ScriptValue TrustedTypePolicyFactory::getTypeMapping(
     ScriptState* script_state) const {
   return getTypeMapping(script_state, String());
 }
+
+namespace {
+
+// Support method for getTypeMapping: Ensure that top has a an element and
+// attributes or properties entry.
+// E.g. {element: { "attributes": {}}
+void EnsureAttributeAndPropertiesDict(
+    ScriptState* script_state,
+    v8::Local<v8::Object>& top,
+    const v8::Local<v8::String>& element,
+    const v8::Local<v8::String>& attributes_or_properties) {
+  if (!top->Has(script_state->GetContext(), element).ToChecked()) {
+    top->Set(script_state->GetContext(), element,
+             v8::Object::New(script_state->GetIsolate()))
+        .Check();
+  }
+  v8::Local<v8::Object> middle = top->Get(script_state->GetContext(), element)
+                                     .ToLocalChecked()
+                                     ->ToObject(script_state->GetContext())
+                                     .ToLocalChecked();
+  if (!middle->Has(script_state->GetContext(), attributes_or_properties)
+           .ToChecked()) {
+    middle
+        ->Set(script_state->GetContext(), attributes_or_properties,
+              v8::Object::New(script_state->GetIsolate()))
+        .Check();
+  }
+}
+
+// Support method for getTypeMapping: Iterate over AttributeTypeVector and
+// fill in the map entries.
+void PopulateTypeMapping(
+    ScriptState* script_state,
+    v8::Local<v8::Object>& top,
+    const AttributeTypeVector& attribute_vector,
+    const v8::Local<v8::String>& attributes_or_properties) {
+  for (const auto& iter : attribute_vector) {
+    v8::Local<v8::String> element =
+        V8String(script_state->GetIsolate(), iter.element);
+    EnsureAttributeAndPropertiesDict(script_state, top, element,
+                                     attributes_or_properties);
+    top->Get(script_state->GetContext(), element)
+        .ToLocalChecked()
+        ->ToObject(script_state->GetContext())
+        .ToLocalChecked()
+        ->Get(script_state->GetContext(), attributes_or_properties)
+        .ToLocalChecked()
+        ->ToObject(script_state->GetContext())
+        .ToLocalChecked()
+        ->Set(
+            script_state->GetContext(),
+            V8String(script_state->GetIsolate(), iter.attribute),
+            V8String(script_state->GetIsolate(), getTrustedTypeName(iter.type)))
+        .Check();
+  }
+}
+
+}  // anonymous namespace
 
 ScriptValue TrustedTypePolicyFactory::getTypeMapping(ScriptState* script_state,
                                                      const String& ns) const {
@@ -331,46 +438,10 @@ ScriptValue TrustedTypePolicyFactory::getTypeMapping(ScriptState* script_state,
 
   v8::HandleScope handle_scope(script_state->GetIsolate());
   v8::Local<v8::Object> top = v8::Object::New(script_state->GetIsolate());
-  v8::Local<v8::Object> properties;
-  v8::Local<v8::Object> attributes;
-  const char* element = nullptr;
-  for (const auto& iter : kTypeTable) {
-    if (properties.IsEmpty() || !element || strcmp(iter.element, element)) {
-      element = iter.element;
-      v8::Local<v8::Object> middle =
-          v8::Object::New(script_state->GetIsolate());
-      top->Set(script_state->GetContext(),
-               V8String(script_state->GetIsolate(), iter.element), middle)
-          .Check();
-      properties = v8::Object::New(script_state->GetIsolate());
-      middle
-          ->Set(script_state->GetContext(),
-                V8String(script_state->GetIsolate(), "properties"), properties)
-          .Check();
-      attributes = v8::Object::New(script_state->GetIsolate());
-      middle
-          ->Set(script_state->GetContext(),
-                V8String(script_state->GetIsolate(), "attributes"), attributes)
-          .Check();
-    }
-    if (!iter.is_not_property) {
-      properties
-          ->Set(script_state->GetContext(),
-                V8String(script_state->GetIsolate(), iter.property),
-                V8String(script_state->GetIsolate(),
-                         getTrustedTypeName(iter.type)))
-          .Check();
-    }
-    if (!iter.is_not_attribute) {
-      attributes
-          ->Set(script_state->GetContext(),
-                V8String(script_state->GetIsolate(), iter.property),
-                V8String(script_state->GetIsolate(),
-                         getTrustedTypeName(iter.type)))
-          .Check();
-    }
-  }
-
+  PopulateTypeMapping(script_state, top, GetAttributeTypeVector(),
+                      V8String(script_state->GetIsolate(), "attributes"));
+  PopulateTypeMapping(script_state, top, GetPropertyTypeVector(),
+                      V8String(script_state->GetIsolate(), "properties"));
   return ScriptValue(script_state->GetIsolate(), top);
 }
 
@@ -391,7 +462,7 @@ ExecutionContext* TrustedTypePolicyFactory::GetExecutionContext() const {
 }
 
 void TrustedTypePolicyFactory::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
   visitor->Trace(empty_html_);
   visitor->Trace(empty_script_);
@@ -401,7 +472,8 @@ void TrustedTypePolicyFactory::Trace(Visitor* visitor) const {
 inline bool FindEventHandlerAttributeInTable(
     const AtomicString& attributeName) {
   return SpecificTrustedType::kScript ==
-         FindTypeInTypeTable("*", attributeName, String(), &EqualsAttribute);
+         FindUnboundAttributeInAttributeTypeVector(GetAttributeTypeVector(),
+                                                   attributeName);
 }
 
 bool TrustedTypePolicyFactory::IsEventHandlerAttributeName(

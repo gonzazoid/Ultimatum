@@ -5,7 +5,8 @@
 #ifndef COMPONENTS_SERVICES_UNZIP_PUBLIC_CPP_UNZIP_H_
 #define COMPONENTS_SERVICES_UNZIP_PUBLIC_CPP_UNZIP_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/services/unzip/public/mojom/unzipper.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -84,7 +85,6 @@ class ZipFileUnpacker : public base::RefCountedThreadSafe<ZipFileUnpacker> {
 
   base::File zip_file_;
   scoped_refptr<UnzipParams> params_;
-  mojo::PendingRemote<filesystem::mojom::Directory> directory_remote_;
   mojo::PendingRemote<unzip::mojom::UnzipFilter> filter_remote_;
   mojo::PendingRemote<unzip::mojom::UnzipListener> listener_remote_;
 };

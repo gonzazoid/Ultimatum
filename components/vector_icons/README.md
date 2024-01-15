@@ -28,7 +28,7 @@ Some SVGs are already pretty minimal, like the ones at [the Material Design Icon
 
 Once you have created an `.icon` file, place it in an appropriate `vector_icon` subdirectory and add the filename to the corresponding `BUILD.gn`. A constant is automatically generated so that the icon can be referenced at runtime. The icon file `foo_bar.icon` is mapped to the constant name of `kFooBarIcon` ('k' + camel-cased filename + 'Icon'), which you can use to reference that icon in code. The icon's name should match its identifier on [the MD icons site](https://material.io/icons/) if that's where it came from. For example, `ic_accessibility` would become `accessibility.icon`.
 
-Make sure not to add [trademarked resources](../../docs/google_chrome_branded_builds.md) such as Google product logos to the Chromium repo.
+**Make sure not to add [trademarked resources](../../docs/google_chrome_branded_builds.md) such as Google product logos to the Chromium repo**. The handful of vector icons that are trademarked live in `//components/vector_icons/google_chrome` with open-source counterparts in `//components/vector_icons/chromium`.
 
 ### Icons with multiple definitions
 
@@ -55,6 +55,8 @@ Chrome's native UI on desktop platforms. Currently the vector icons are in exten
 ### How can I preview vector icons?
 
 Use [this extension](https://github.com/sadrulhc/vector-icons) to preview icons in [codesearch](http://cs.chromium.org/).
+
+You can also use the [Vector Icon Viewer](https://marketplace.visualstudio.com/items?itemName=adolfdaniel.vscode-chromium-vector-icons) extension for VS Code to preview icons in Visual Studio. This is especially helpful when adding new icons.
 
 You can also build and run the `views_examples_exe` (or `views_examples_with_content_exe`) target and select "Vector Icons" from the dropdown menu. This loads a simple interface which allows you view a provided vector icon file at a specified size and color. Contributions to improve this interface are welcome ([bug](https://bugs.chromium.org/p/chromium/issues/detail?id=630295)).
 

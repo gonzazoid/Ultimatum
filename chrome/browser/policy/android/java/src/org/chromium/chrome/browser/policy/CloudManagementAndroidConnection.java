@@ -4,15 +4,13 @@
 
 package org.chromium.chrome.browser.policy;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.CalledByNative;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.chromium.base.ResettersForTesting;
 
 import java.util.UUID;
 
-/**
- * Allows access to cloud management functionalities implemented downstream.
- */
+/** Allows access to cloud management functionalities implemented downstream. */
 public class CloudManagementAndroidConnection {
     private static class LazyHolder {
         private static final CloudManagementAndroidConnection INSTANCE =
@@ -57,9 +55,9 @@ public class CloudManagementAndroidConnection {
     /** Overrides {@link mDelegate} if not null. */
     private static CloudManagementAndroidConnectionDelegate sDelegateForTesting;
 
-    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public static void setDelegateForTesting(CloudManagementAndroidConnectionDelegate delegate) {
         sDelegateForTesting = delegate;
+        ResettersForTesting.register(() -> sDelegateForTesting = null);
     }
 
     private CloudManagementAndroidConnectionDelegate getDelegate() {

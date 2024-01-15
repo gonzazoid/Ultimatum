@@ -5,7 +5,8 @@
 #ifndef CHROME_BROWSER_UI_COLOR_CHROME_COLOR_MIXER_H_
 #define CHROME_BROWSER_UI_COLOR_CHROME_COLOR_MIXER_H_
 
-#include "ui/color/color_provider_manager.h"
+#include "third_party/skia/include/core/SkColor.h"
+#include "ui/color/color_provider_key.h"
 
 namespace ui {
 class ColorProvider;
@@ -14,6 +15,6 @@ class ColorProvider;
 // Adds a color mixer to |provider| that supplies default values for various
 // chrome/ colors before taking into account any custom themes.
 void AddChromeColorMixer(ui::ColorProvider* provider,
-                         const ui::ColorProviderManager::Key& key);
+                         const ui::ColorProviderKey& key);
 
 #endif  // CHROME_BROWSER_UI_COLOR_CHROME_COLOR_MIXER_H_

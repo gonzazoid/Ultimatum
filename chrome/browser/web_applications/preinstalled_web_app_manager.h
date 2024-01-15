@@ -9,19 +9,20 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
-#include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/external_install_options.h"
 #include "chrome/browser/web_applications/externally_managed_app_manager.h"
 #include "chrome/browser/web_applications/file_utils_wrapper.h"
-#include "ui/events/devices/device_data_manager.h"
-#include "ui/events/devices/input_device_event_observer.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/web_applications/preinstalled_web_app_window_experiment.h"
+#endif
 
 namespace user_prefs {
 class PrefRegistrySyncable;
@@ -36,8 +37,7 @@ struct LoadedConfigs;
 struct ParsedConfigs;
 }  // namespace
 
-class ExternallyManagedAppManager;
-class WebAppRegistrar;
+class WebAppProvider;
 
 // Installs web apps to be preinstalled on the device (AKA default apps) during
 // start up. Will keep the apps installed on the device in sync with the set of
@@ -77,14 +77,14 @@ class PreinstalledWebAppManager {
 
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
-  static void SkipStartupForTesting();
-  static void BypassOfflineManifestRequirementForTesting();
-
-  static void OverridePreviousUserUninstallConfigForTesting();
-  static void SetConfigDirForTesting(const base::FilePath* config_dir);
-
-  static void SetConfigsForTesting(const std::vector<base::Value>* configs);
-  static void SetFileUtilsForTesting(FileUtilsWrapper* file_utils);
+  static base::AutoReset<bool> SkipStartupForTesting();
+  static base::AutoReset<bool> BypassAwaitingDependenciesForTesting();
+  static base::AutoReset<bool> BypassOfflineManifestRequirementForTesting();
+  static base::AutoReset<bool> OverridePreviousUserUninstallConfigForTesting();
+  static base::AutoReset<const base::Value::List*> SetConfigsForTesting(
+      const base::Value::List* configs);
+  static base::AutoReset<FileUtilsWrapper*> SetFileUtilsForTesting(
+      FileUtilsWrapper* file_utils);
 
   explicit PreinstalledWebAppManager(Profile* profile);
   PreinstalledWebAppManager(const PreinstalledWebAppManager&) = delete;
@@ -92,14 +92,11 @@ class PreinstalledWebAppManager {
       delete;
   ~PreinstalledWebAppManager();
 
-  void SetSubsystems(
-      WebAppRegistrar* registrar,
-      const WebAppUiManager* ui_manager,
-      ExternallyManagedAppManager* externally_managed_app_manager);
+  void SetProvider(base::PassKey<WebAppProvider>, WebAppProvider& provider);
 
   // Loads the preinstalled app configs and synchronizes them with the device's
   // installed apps.
-  void Start();
+  void Start(base::OnceClosure on_init_complete);
 
   void LoadAndSynchronizeForTesting(SynchronizeCallback callback);
 
@@ -109,6 +106,14 @@ class PreinstalledWebAppManager {
 
   void RemoveObserver(PreinstalledWebAppManager::Observer* observer);
 
+  // Must be called before `Start`. Similar to `SkipStartupForTesting` but not a
+  // global setting.
+  void SetSkipStartupSynchronizeForTesting(bool skip_startup);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  PreinstalledWebAppWindowExperiment& GetWindowExperimentForTesting();
+#endif
+
   // Debugging info used by: chrome://web-app-internals
   struct DebugInfo {
     DebugInfo();
@@ -116,10 +121,10 @@ class PreinstalledWebAppManager {
 
     bool is_start_up_task_complete = false;
     std::vector<std::string> parse_errors;
-    std::vector<ExternalInstallOptions> enabled_configs;
-    using DisabledConfigWithReason =
-        std::pair<ExternalInstallOptions, std::string>;
-    std::vector<DisabledConfigWithReason> disabled_configs;
+    using ConfigWithLog = std::pair<ExternalInstallOptions, std::string>;
+    std::vector<ConfigWithLog> uninstall_configs;
+    std::vector<ConfigWithLog> install_configs;
+    std::vector<ConfigWithLog> ignore_configs;
     std::map<InstallUrl, ExternallyManagedAppManager::InstallResult>
         install_results;
     std::map<InstallUrl, bool> uninstall_results;
@@ -144,7 +149,8 @@ class PreinstalledWebAppManager {
                    std::vector<ExternalInstallOptions>);
   void OnExternalWebAppsSynchronized(
       ExternallyManagedAppManager::SynchronizeCallback callback,
-      std::map<InstallUrl, std::vector<AppId>> desired_uninstall_and_replaces,
+      std::map<InstallUrl, std::vector<webapps::AppId>>
+          desired_uninstall_and_replaces,
       std::map<InstallUrl, ExternallyManagedAppManager::InstallResult>
           install_results,
       std::map<InstallUrl, bool> uninstall_results);
@@ -162,17 +168,20 @@ class PreinstalledWebAppManager {
   bool IsReinstallPastMilestoneNeededSinceLastSync(
       int force_reinstall_for_milestone);
 
-  raw_ptr<WebAppRegistrar, DanglingUntriaged> registrar_ = nullptr;
-  raw_ptr<const WebAppUiManager, DanglingUntriaged> ui_manager_ = nullptr;
-  raw_ptr<ExternallyManagedAppManager, DanglingUntriaged>
-      externally_managed_app_manager_ = nullptr;
   const raw_ptr<Profile> profile_;
+  raw_ptr<WebAppProvider> provider_ = nullptr;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  PreinstalledWebAppWindowExperiment preinstalled_web_app_window_experiment_;
+#endif
+
+  bool skip_startup_for_testing_ = false;
   std::unique_ptr<DebugInfo> debug_info_;
 
   std::unique_ptr<DeviceDataInitializedEvent> device_data_initialized_event_;
 
-  base::ObserverList<PreinstalledWebAppManager::Observer> observers_;
+  base::ObserverList<PreinstalledWebAppManager::Observer, /*check_empty=*/true>
+      observers_;
 
   base::WeakPtrFactory<PreinstalledWebAppManager> weak_ptr_factory_{this};
 };

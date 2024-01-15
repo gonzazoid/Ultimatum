@@ -24,6 +24,10 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+#include "components/optimization_guide/core/test_model_info_builder.h"
+#endif
+
 using testing::_;
 using testing::NiceMock;
 using testing::Return;
@@ -33,7 +37,7 @@ class OnDeviceHeadProviderTest : public testing::Test,
  protected:
   void SetUp() override {
     client_ = std::make_unique<FakeAutocompleteProviderClient>();
-    SetTestOnDeviceHeadModel();
+    SetupTestOnDeviceHeadModel();
     provider_ = OnDeviceHeadProvider::Create(client_.get(), this);
     task_environment_.RunUntilIdle();
   }
@@ -50,17 +54,59 @@ class OnDeviceHeadProviderTest : public testing::Test,
     // No action required.
   }
 
-  void SetTestOnDeviceHeadModel() {
+  void SetupTestOnDeviceHeadModel() {
     base::FilePath file_path;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path);
     // The same test model also used in ./on_device_head_model_unittest.cc.
     file_path = file_path.AppendASCII("components/test/data/omnibox");
     ASSERT_TRUE(base::PathExists(file_path));
     auto* update_listener = OnDeviceModelUpdateListener::GetInstance();
     if (update_listener)
-      update_listener->OnModelUpdate(file_path);
+      update_listener->OnHeadModelUpdate(file_path);
     task_environment_.RunUntilIdle();
   }
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+  void SetupTestOnDeviceTailModel() {
+    base::FilePath dir_path, tail_model_path, vocab_path;
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &dir_path);
+    dir_path = dir_path.AppendASCII("components/test/data/omnibox");
+    // The same test model also used in
+    // ./on_device_tail_model_executor_unittest.cc.
+    tail_model_path = dir_path.AppendASCII("test_tail_model.tflite");
+    ASSERT_TRUE(base::PathExists(tail_model_path));
+    vocab_path = dir_path.AppendASCII("vocab_test.txt");
+    ASSERT_TRUE(base::PathExists(vocab_path));
+
+    base::flat_set<base::FilePath> additional_files;
+    additional_files.insert(vocab_path);
+
+    OnDeviceTailModelExecutor::ModelMetadata metadata;
+    metadata.mutable_lstm_model_params()->set_num_layer(1);
+    metadata.mutable_lstm_model_params()->set_state_size(512);
+    metadata.mutable_lstm_model_params()->set_embedding_dimension(64);
+
+    optimization_guide::proto::Any any_metadata;
+    any_metadata.set_type_url(
+        "type.googleapis.com/com.foo.OnDeviceTailSuggestModelMetadata");
+    metadata.SerializeToString(any_metadata.mutable_value());
+
+    std::unique_ptr<optimization_guide::ModelInfo> model_info =
+        optimization_guide::TestModelInfoBuilder()
+            .SetModelFilePath(tail_model_path)
+            .SetAdditionalFiles(additional_files)
+            .SetVersion(123)
+            .SetModelMetadata(any_metadata)
+            .Build();
+
+    client_->GetOnDeviceTailModelService()->OnModelUpdated(
+        optimization_guide::proto::OptimizationTarget::
+            OPTIMIZATION_TARGET_OMNIBOX_ON_DEVICE_TAIL_SUGGEST,
+        *model_info);
+
+    task_environment_.RunUntilIdle();
+  }
+#endif
 
   void ResetModelInstance() {
     auto* update_listener = OnDeviceModelUpdateListener::GetInstance();
@@ -151,7 +197,7 @@ TEST_F(OnDeviceHeadProviderTest, NoMatches) {
   EXPECT_TRUE(provider_->done());
 }
 
-TEST_F(OnDeviceHeadProviderTest, HasMatches) {
+TEST_F(OnDeviceHeadProviderTest, HasHeadMatches) {
   AutocompleteInput input(u"M", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
   input.set_omit_asynchronous_matches(false);
@@ -171,6 +217,30 @@ TEST_F(OnDeviceHeadProviderTest, HasMatches) {
   EXPECT_EQ(u"mail", provider_->matches()[1].contents);
   EXPECT_EQ(u"map", provider_->matches()[2].contents);
 }
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+TEST_F(OnDeviceHeadProviderTest, HasTailMatches) {
+  scoped_feature_list_.InitAndEnableFeature(omnibox::kOnDeviceTailModel);
+  SetupTestOnDeviceTailModel();
+  AutocompleteInput input(u"Faceb", metrics::OmniboxEventProto::OTHER,
+                          TestSchemeClassifier());
+  input.set_omit_asynchronous_matches(false);
+
+  EXPECT_CALL(*client_.get(), IsOffTheRecord()).WillRepeatedly(Return(false));
+  EXPECT_CALL(*client_.get(), SearchSuggestEnabled())
+      .WillRepeatedly(Return(true));
+
+  ASSERT_TRUE(IsOnDeviceHeadProviderAllowed(input));
+
+  provider_->Start(input, false);
+  task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(provider_->done());
+  EXPECT_FALSE(provider_->matches().empty());
+  EXPECT_TRUE(base::StartsWith(provider_->matches()[0].contents, u"facebook",
+                               base::CompareCase::SENSITIVE));
+}
+#endif
 
 TEST_F(OnDeviceHeadProviderTest, CancelInProgressRequest) {
   AutocompleteInput input1(u"g", metrics::OmniboxEventProto::OTHER,

@@ -5,7 +5,9 @@
 #ifndef SERVICES_TRACING_PUBLIC_CPP_PERFETTO_PERFETTO_TRACING_BACKEND_H_
 #define SERVICES_TRACING_PUBLIC_CPP_PERFETTO_PERFETTO_TRACING_BACKEND_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/perfetto/include/perfetto/tracing/tracing_backend.h"
 
@@ -55,15 +57,13 @@ class PerfettoTracingBackend : public perfetto::TracingBackend {
 
  private:
   void BindProducerConnectionIfNecessary();
-  void CreateConsumerConnection();
+  void CreateConsumerConnection(base::WeakPtr<ConsumerEndpoint>);
 
   SEQUENCE_CHECKER(muxer_sequence_checker_);
   base::Lock task_runner_lock_;
   base::WeakPtr<ProducerEndpoint> producer_endpoint_;
-  base::WeakPtr<ConsumerEndpoint> consumer_endpoint_;
-  perfetto::base::TaskRunner* muxer_task_runner_ = nullptr;
+  raw_ptr<perfetto::base::TaskRunner> muxer_task_runner_ = nullptr;
   mojo::PendingRemote<mojom::PerfettoService> perfetto_service_;
-  mojo::PendingRemote<mojom::ConsumerHost> consumer_host_remote_;
 
   scoped_refptr<base::SequencedTaskRunner> consumer_connection_task_runner_;
   ConsumerConnectionFactory consumer_connection_factory_;

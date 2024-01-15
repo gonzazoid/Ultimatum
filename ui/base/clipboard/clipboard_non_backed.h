@@ -9,8 +9,14 @@
 #include <stdint.h>
 
 #include "base/component_export.h"
+#include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
+#include "build/build_config.h"
 #include "ui/base/clipboard/clipboard.h"
+
+namespace headless {
+class HeadlessClipboard;
+}
 
 namespace ui {
 
@@ -35,27 +41,34 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardNonBacked
   ClipboardNonBacked& operator=(const ClipboardNonBacked&) = delete;
 
   // Returns the current ClipboardData.
-  const ClipboardData* GetClipboardData(DataTransferEndpoint* data_dst) const;
+  const ClipboardData* GetClipboardData(
+      DataTransferEndpoint* data_dst,
+      ClipboardBuffer buffer = ClipboardBuffer::kCopyPaste) const;
 
   // Writes the current ClipboardData and returns the previous data.
   // The data source is expected to be set in `data`.
   std::unique_ptr<ClipboardData> WriteClipboardData(
-      std::unique_ptr<ClipboardData> data);
+      std::unique_ptr<ClipboardData> data,
+      ClipboardBuffer buffer = ClipboardBuffer::kCopyPaste);
 
   // Clipboard overrides:
-  DataTransferEndpoint* GetSource(ClipboardBuffer buffer) const override;
+  absl::optional<DataTransferEndpoint> GetSource(
+      ClipboardBuffer buffer) const override;
   const ClipboardSequenceNumberToken& GetSequenceNumber(
       ClipboardBuffer buffer) const override;
 
-  int NumImagesEncodedForTesting() const;
+  int NumImagesEncodedForTesting(
+      ClipboardBuffer buffer = ClipboardBuffer::kCopyPaste) const;
 
  private:
   friend class Clipboard;
   friend class ClipboardNonBackedTestBase;
+  friend class headless::HeadlessClipboard;
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, TextURIList);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, ImageEncoding);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, EncodeImageOnce);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, EncodeMultipleImages);
+  FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedTest, ClipboardBufferTypes);
   FRIEND_TEST_ALL_PREFIXES(ClipboardNonBackedMockTimeTest,
                            RecordsTimeIntervalBetweenCommitAndRead);
   ClipboardNonBacked();
@@ -107,33 +120,32 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardNonBacked
   void ReadData(const ClipboardFormatType& format,
                 const DataTransferEndpoint* data_dst,
                 std::string* result) const override;
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   bool IsSelectionBufferAvailable() const override;
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
   void WritePortableAndPlatformRepresentations(
       ClipboardBuffer buffer,
       const ObjectMap& objects,
       std::vector<Clipboard::PlatformRepresentation> platform_representations,
       std::unique_ptr<DataTransferEndpoint> data_src) override;
-  void WriteText(const char* text_data, size_t text_len) override;
-  void WriteHTML(const char* markup_data,
-                 size_t markup_len,
-                 const char* url_data,
-                 size_t url_len) override;
-  void WriteSvg(const char* markup_data, size_t markup_len) override;
-  void WriteRTF(const char* rtf_data, size_t data_len) override;
+  void WriteText(base::StringPiece text) override;
+  void WriteHTML(base::StringPiece markup,
+                 absl::optional<base::StringPiece> source_url,
+                 ClipboardContentType content_type) override;
+  void WriteSvg(base::StringPiece markup) override;
+  void WriteRTF(base::StringPiece rtf) override;
   void WriteFilenames(std::vector<ui::FileInfo> filenames) override;
-  void WriteBookmark(const char* title_data,
-                     size_t title_len,
-                     const char* url_data,
-                     size_t url_len) override;
+  void WriteBookmark(base::StringPiece title, base::StringPiece url) override;
   void WriteWebSmartPaste() override;
   void WriteBitmap(const SkBitmap& bitmap) override;
   void WriteData(const ClipboardFormatType& format,
-                 const char* data_data,
-                 size_t data_len) override;
+                 base::span<const uint8_t> data) override;
 
-  const std::unique_ptr<ClipboardInternal> clipboard_internal_;
+  const ClipboardInternal& GetInternalClipboard(ClipboardBuffer buffer) const;
+  ClipboardInternal& GetInternalClipboard(ClipboardBuffer buffer);
+
+  base::flat_map<ClipboardBuffer, std::unique_ptr<ClipboardInternal>>
+      internal_clipboards_;
 };
 
 }  // namespace ui

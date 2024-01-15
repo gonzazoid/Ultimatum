@@ -5,7 +5,8 @@
 #ifndef ASH_SESSION_TELEPORT_WARNING_DIALOG_H_
 #define ASH_SESSION_TELEPORT_WARNING_DIALOG_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/window/dialog_delegate.h"
 
 namespace views {
@@ -37,7 +38,7 @@ class TeleportWarningDialog : public views::DialogDelegateView {
  private:
   void InitDialog();
 
-  views::Checkbox* never_show_again_checkbox_;
+  raw_ptr<views::Checkbox> never_show_again_checkbox_;
 
   OnAcceptCallback on_accept_;
 };

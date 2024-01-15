@@ -10,7 +10,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -18,6 +18,7 @@
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/trace_event/typed_macros.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_provider_client.h"
@@ -46,16 +47,16 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/layout_constants.h"
-#include "chrome/browser/ui/omnibox/chrome_omnibox_edit_controller.h"
+#include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/omnibox/chrome_omnibox_navigation_observer.h"
 #include "chrome/browser/ui/omnibox/omnibox_tab_helper.h"
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/favicon/core/favicon_service.h"
+#include "components/omnibox/browser/autocomplete_controller_emitter.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_result.h"
 #include "components/omnibox/browser/base_search_provider.h"
 #include "components/omnibox/browser/location_bar_model.h"
-#include "components/omnibox/browser/omnibox_controller_emitter.h"
 #include "components/omnibox/browser/search_provider.h"
 #include "components/omnibox/browser/shortcuts_backend.h"
 #include "components/omnibox/common/omnibox_features.h"
@@ -65,19 +66,29 @@
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/image/canvas_image_source.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "url/gurl.h"
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/ui/extensions/settings_api_bubble_helpers.h"
+#endif
+
 using predictors::AutocompleteActionPredictor;
 
-ChromeOmniboxClient::ChromeOmniboxClient(OmniboxEditController* controller,
+ChromeOmniboxClient::ChromeOmniboxClient(LocationBar* location_bar,
+                                         Browser* browser,
                                          Profile* profile)
-    : controller_(static_cast<ChromeOmniboxEditController*>(controller)),
+    : location_bar_(location_bar),
+      browser_(browser),
       profile_(profile),
       scheme_classifier_(profile),
       favicon_cache_(FaviconServiceFactory::GetForProfile(
@@ -101,31 +112,32 @@ ChromeOmniboxClient::CreateAutocompleteProviderClient() {
 }
 
 bool ChromeOmniboxClient::CurrentPageExists() const {
-  return (controller_->GetWebContents() != nullptr);
+  return (location_bar_->GetWebContents() != nullptr);
 }
 
 const GURL& ChromeOmniboxClient::GetURL() const {
-  return CurrentPageExists() ? controller_->GetWebContents()->GetVisibleURL()
+  return CurrentPageExists() ? location_bar_->GetWebContents()->GetVisibleURL()
                              : GURL::EmptyGURL();
 }
 
 const std::u16string& ChromeOmniboxClient::GetTitle() const {
-  return CurrentPageExists() ? controller_->GetWebContents()->GetTitle()
+  return CurrentPageExists() ? location_bar_->GetWebContents()->GetTitle()
                              : base::EmptyString16();
 }
 
 gfx::Image ChromeOmniboxClient::GetFavicon() const {
   return favicon::ContentFaviconDriver::FromWebContents(
-             controller_->GetWebContents())
+             location_bar_->GetWebContents())
       ->GetFavicon();
 }
 
 bool ChromeOmniboxClient::IsLoading() const {
-  return controller_->GetWebContents()->IsLoading();
+  return location_bar_->GetWebContents()->IsLoading();
 }
 
 bool ChromeOmniboxClient::IsPasteAndGoEnabled() const {
-  return controller_->command_updater()->IsCommandEnabled(IDC_OPEN_CURRENT_URL);
+  return location_bar_->command_updater()->IsCommandEnabled(
+      IDC_OPEN_CURRENT_URL);
 }
 
 bool ChromeOmniboxClient::IsDefaultSearchProviderEnabled() const {
@@ -135,18 +147,23 @@ bool ChromeOmniboxClient::IsDefaultSearchProviderEnabled() const {
               .value_or(false);
 }
 
-const SessionID& ChromeOmniboxClient::GetSessionID() const {
+SessionID ChromeOmniboxClient::GetSessionID() const {
   return sessions::SessionTabHelper::FromWebContents(
-             controller_->GetWebContents())
+             location_bar_->GetWebContents())
       ->session_id();
+}
+
+PrefService* ChromeOmniboxClient::GetPrefs() {
+  return profile_->GetPrefs();
 }
 
 bookmarks::BookmarkModel* ChromeOmniboxClient::GetBookmarkModel() {
   return BookmarkModelFactory::GetForBrowserContext(profile_);
 }
 
-OmniboxControllerEmitter* ChromeOmniboxClient::GetOmniboxControllerEmitter() {
-  return OmniboxControllerEmitter::GetForBrowserContext(profile_);
+AutocompleteControllerEmitter*
+ChromeOmniboxClient::GetAutocompleteControllerEmitter() {
+  return AutocompleteControllerEmitter::GetForBrowserContext(profile_);
 }
 
 TemplateURLService* ChromeOmniboxClient::GetTemplateURLService() {
@@ -230,7 +247,7 @@ bool ChromeOmniboxClient::ProcessExtensionKeyword(
   size_t prefix_length =
       std::min(match.keyword.length() + 1, match.fill_into_edit.length());
   extensions::ExtensionOmniboxEventRouter::OnInputEntered(
-      controller_->GetWebContents(), template_url->GetExtensionId(),
+      location_bar_->GetWebContents(), template_url->GetExtensionId(),
       base::UTF16ToUTF8(match.fill_into_edit.substr(prefix_length)),
       disposition);
 
@@ -239,20 +256,22 @@ bool ChromeOmniboxClient::ProcessExtensionKeyword(
 }
 
 void ChromeOmniboxClient::OnInputStateChanged() {
-  if (!controller_->GetWebContents())
+  if (!location_bar_->GetWebContents()) {
     return;
+  }
   if (auto* helper =
-          OmniboxTabHelper::FromWebContents(controller_->GetWebContents())) {
+          OmniboxTabHelper::FromWebContents(location_bar_->GetWebContents())) {
     helper->OnInputStateChanged();
   }
 }
 
 void ChromeOmniboxClient::OnFocusChanged(OmniboxFocusState state,
                                          OmniboxFocusChangeReason reason) {
-  if (!controller_->GetWebContents())
+  if (!location_bar_->GetWebContents()) {
     return;
+  }
   if (auto* helper =
-          OmniboxTabHelper::FromWebContents(controller_->GetWebContents())) {
+          OmniboxTabHelper::FromWebContents(location_bar_->GetWebContents())) {
     helper->OnFocusChanged(state, reason);
   }
 }
@@ -265,7 +284,7 @@ void ChromeOmniboxClient::OnResultChanged(
   if (should_preload) {
     if (SearchPrefetchService* search_prefetch_service =
             SearchPrefetchServiceFactory::GetForProfile(profile_)) {
-      search_prefetch_service->OnResultChanged(controller_->GetWebContents(),
+      search_prefetch_service->OnResultChanged(location_bar_->GetWebContents(),
                                                result);
     }
   }
@@ -329,7 +348,7 @@ void ChromeOmniboxClient::OnTextChanged(const AutocompleteMatch& current_match,
   AutocompleteActionPredictor::Action recommended_action =
       AutocompleteActionPredictor::ACTION_NONE;
   if (user_input_in_progress) {
-    content::WebContents* web_contents = controller_->GetWebContents();
+    content::WebContents* web_contents = location_bar_->GetWebContents();
     AutocompleteActionPredictor* action_predictor =
         predictors::AutocompleteActionPredictorFactory::GetForProfile(profile_);
     action_predictor->RegisterTransitionalMatches(user_text, result);
@@ -342,10 +361,6 @@ void ChromeOmniboxClient::OnTextChanged(const AutocompleteMatch& current_match,
     recommended_action = action_predictor->RecommendAction(
         user_text, current_match, web_contents);
   }
-
-  UMA_HISTOGRAM_ENUMERATION("AutocompleteActionPredictor.Action",
-                            recommended_action,
-                            AutocompleteActionPredictor::LAST_PREDICT_ACTION);
 
   switch (recommended_action) {
     case AutocompleteActionPredictor::ACTION_PRERENDER:
@@ -365,6 +380,8 @@ void ChromeOmniboxClient::OnTextChanged(const AutocompleteMatch& current_match,
     case AutocompleteActionPredictor::ACTION_NONE:
       break;
   }
+
+  location_bar_->OnChanged();
 }
 
 void ChromeOmniboxClient::OnRevert() {
@@ -378,11 +395,11 @@ void ChromeOmniboxClient::OnURLOpenedFromOmnibox(OmniboxLog* log) {
   // Record the value if prerender for search suggestion was not started. Other
   // values (kHitFinished, kUnused, kCancelled) are recorded in
   // PrerenderManager.
-  content::WebContents* web_contents = controller_->GetWebContents();
+  content::WebContents* web_contents = location_bar_->GetWebContents();
   if (web_contents) {
     if (SearchPrefetchService* search_prefetch_service =
             SearchPrefetchServiceFactory::GetForProfile(profile_)) {
-      search_prefetch_service->OnURLOpenedFromOmnibox(log, web_contents);
+      search_prefetch_service->OnURLOpenedFromOmnibox(log);
     }
 
     auto* prerender_manager = PrerenderManager::FromWebContents(web_contents);
@@ -404,21 +421,18 @@ void ChromeOmniboxClient::OnBookmarkLaunched() {
 }
 
 void ChromeOmniboxClient::DiscardNonCommittedNavigations() {
-  controller_->GetWebContents()->GetController().DiscardNonCommittedEntries();
+  location_bar_->GetWebContents()->GetController().DiscardNonCommittedEntries();
 }
 
 void ChromeOmniboxClient::OpenUpdateChromeDialog() {
-  const content::WebContents* contents = controller_->GetWebContents();
+  const content::WebContents* contents = location_bar_->GetWebContents();
   if (contents) {
-    Browser* browser = chrome::FindBrowserWithWebContents(contents);
+    Browser* browser = chrome::FindBrowserWithTab(contents);
     if (browser) {
       // Here we record and take action more directly than
       // chrome::OpenUpdateChromeDialog because that call is intended for use
       // by the delayed-update/auto-nag system, possibly presenting dialogs
       // that don't apply when the goal is immediate relaunch & update.
-      // TODO(orinj): Ensure that this is the correct way to handle
-      // explicitly requested update regardless of the kind of update ready.
-      // See comments at https://crrev.com/c/1281162 for context.
       base::RecordAction(base::UserMetricsAction("UpdateChrome"));
       browser->window()->ShowUpdateChromeDialog();
     }
@@ -426,8 +440,9 @@ void ChromeOmniboxClient::OpenUpdateChromeDialog() {
 }
 
 void ChromeOmniboxClient::FocusWebContents() {
-  if (controller_->GetWebContents())
-    controller_->GetWebContents()->Focus();
+  if (location_bar_->GetWebContents()) {
+    location_bar_->GetWebContents()->Focus();
+  }
 }
 
 void ChromeOmniboxClient::OnNavigationLikely(
@@ -437,12 +452,74 @@ void ChromeOmniboxClient::OnNavigationLikely(
   if (SearchPrefetchService* search_prefetch_service =
           SearchPrefetchServiceFactory::GetForProfile(profile_)) {
     search_prefetch_service->OnNavigationLikely(
-        index, match, navigation_predictor, controller_->GetWebContents());
+        index, match, navigation_predictor, location_bar_->GetWebContents());
   }
 }
 
+void ChromeOmniboxClient::OnAutocompleteAccept(
+    const GURL& destination_url,
+    TemplateURLRef::PostContent* post_content,
+    WindowOpenDisposition disposition,
+    ui::PageTransition transition,
+    AutocompleteMatchType::Type match_type,
+    base::TimeTicks match_selection_timestamp,
+    bool destination_url_entered_without_scheme,
+    bool destination_url_entered_with_http_scheme,
+    const std::u16string& text,
+    const AutocompleteMatch& match,
+    const AutocompleteMatch& alternative_nav_match,
+    IDNA2008DeviationCharacter deviation_char_in_hostname) {
+  TRACE_EVENT("omnibox", "ChromeOmniboxClient::OnAutocompleteAccept", "text",
+              text, "match", match, "alternative_nav_match",
+              alternative_nav_match);
+
+  // Store the details necessary to open the omnibox match via browser commands.
+  location_bar_->set_navigation_params(LocationBar::NavigationParams(
+      destination_url, disposition, transition, match_selection_timestamp,
+      destination_url_entered_without_scheme,
+      destination_url_entered_with_http_scheme));
+
+  if (browser_) {
+    auto navigation = chrome::OpenCurrentURL(browser_);
+    ChromeOmniboxNavigationObserver::Create(navigation.get(), profile_, text,
+                                            match, alternative_nav_match);
+
+    // If this navigation was typed by the user and the hostname contained an
+    // IDNA 2008 deviation character, record a UKM. See idn_spoof_checker.h
+    // for details about deviation characters.
+    if (deviation_char_in_hostname != IDNA2008DeviationCharacter::kNone) {
+      ukm::SourceId source_id = ukm::ConvertToSourceId(
+          navigation->GetNavigationId(), ukm::SourceIdType::NAVIGATION_ID);
+      ukm::builders::Navigation_IDNA2008Transition(source_id)
+          .SetCharacter(static_cast<int>(deviation_char_in_hostname))
+          .Record(ukm::UkmRecorder::Get());
+    }
+  }
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  extensions::MaybeShowExtensionControlledSearchNotification(
+      location_bar_->GetWebContents(), match_type);
+#endif
+}
+
+void ChromeOmniboxClient::OnInputInProgress(bool in_progress) {
+  location_bar_->UpdateWithoutTabRestore();
+}
+
+void ChromeOmniboxClient::OnPopupVisibilityChanged() {
+  location_bar_->OnPopupVisibilityChanged();
+}
+
+LocationBarModel* ChromeOmniboxClient::GetLocationBarModel() {
+  return location_bar_->GetLocationBarModel();
+}
+
+base::WeakPtr<OmniboxClient> ChromeOmniboxClient::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
+}
+
 void ChromeOmniboxClient::DoPrerender(const AutocompleteMatch& match) {
-  content::WebContents* web_contents = controller_->GetWebContents();
+  content::WebContents* web_contents = location_bar_->GetWebContents();
 
   // Don't prerender when DevTools is open in this tab.
   if (content::DevToolsAgentHost::IsDebuggerAttached(web_contents))
@@ -461,9 +538,6 @@ void ChromeOmniboxClient::DoPreconnect(const AutocompleteMatch& match) {
   if (match.destination_url.SchemeIs(extensions::kExtensionScheme))
     return;
 
-  // Warm up DNS Prefetch cache, or preconnect to a search service.
-  UMA_HISTOGRAM_ENUMERATION("Autocomplete.MatchType", match.type,
-                            AutocompleteMatchType::NUM_TYPES);
   auto* loading_predictor =
       predictors::LoadingPredictorFactory::GetForProfile(profile_);
   if (loading_predictor) {

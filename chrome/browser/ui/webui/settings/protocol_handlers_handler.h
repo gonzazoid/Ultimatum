@@ -11,13 +11,13 @@
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
-#include "chrome/browser/web_applications/app_registrar_observer.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager_observer.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "chrome/browser/web_applications/web_app_registrar_observer.h"
 #include "components/custom_handlers/protocol_handler_registry.h"
+#include "components/webapps/common/web_app_id.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // ProtocolHandlersHandler
@@ -32,7 +32,7 @@ namespace settings {
 class ProtocolHandlersHandler
     : public SettingsPageUIHandler,
       public custom_handlers::ProtocolHandlerRegistry::Observer,
-      public web_app::AppRegistrarObserver,
+      public web_app::WebAppRegistrarObserver,
       public web_app::WebAppInstallManagerObserver {
  public:
   explicit ProtocolHandlersHandler(Profile* profile);
@@ -51,11 +51,14 @@ class ProtocolHandlersHandler
   void OnProtocolHandlerRegistryChanged() override;
 
   // web_app::WebAppInstallManagerObserver:
-  void OnWebAppUninstalled(const web_app::AppId& app_id) override;
+  void OnWebAppUninstalled(
+      const webapps::AppId& app_id,
+      webapps::WebappUninstallSource uninstall_source) override;
   void OnWebAppInstallManagerDestroyed() override;
 
-  // web_app::AppRegistrarObserver:
+  // web_app::WebAppRegistrarObserver:
   void OnWebAppProtocolSettingsChanged() override;
+  void OnAppRegistrarDestroyed() override;
 
  private:
   // Called to fetch the state of the protocol handlers. If the full list of
@@ -124,19 +127,15 @@ class ProtocolHandlersHandler
   // Called when OnWebAppProtocolSettingsChanged() is notified or on page load.
   void UpdateAllDisallowedLaunchProtocols();
 
-  // Remove an approved app handler.
+  // Used to remove a protocol handler from the approved or disapproved list.
   // |args| is a list of [protocol, url, app_id].
-  void HandleRemoveAllowedAppHandler(const base::Value::List& args);
-
-  // Remove a disallowed app handler.
-  // |args| is a list of [protocol, url, app_id].
-  void HandleRemoveDisallowedAppHandler(const base::Value::List& args);
+  void ResetProtocolHandlerUserApproval(const base::Value::List& args);
 
   const raw_ptr<Profile> profile_;
   const raw_ptr<web_app::WebAppProvider> web_app_provider_;
 
   base::ScopedObservation<web_app::WebAppRegistrar,
-                          web_app::AppRegistrarObserver>
+                          web_app::WebAppRegistrarObserver>
       app_observation_{this};
   base::ScopedObservation<web_app::WebAppInstallManager,
                           web_app::WebAppInstallManagerObserver>

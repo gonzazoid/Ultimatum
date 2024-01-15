@@ -17,6 +17,16 @@ check_dep() {
   fi
 }
 
+replace_section() {
+  start_tag="# TAG(reproduce.sh) START_$1"
+  end_tag="# TAG(reproduce.sh) END_$1"
+  new_text=$2
+  file=$3
+
+  sed -e "/${start_tag}/,/${end_tag}/c\\${start_tag}\n${new_text}${end_tag}" $file > /tmp/reproduce_replace_section_output
+  mv /tmp/reproduce_replace_section_output $file
+}
+
 check_dep "which npm" "npm" "visiting https://nodejs.org/en/"
 check_dep "which rsync" "rsync" "installing rsync"
 check_dep "which egrep" "egrep" "installing egrep"
@@ -56,7 +66,7 @@ deleted=$(git status --porcelain components-chromium | grep '^.D' | \
 
 if [[ ! -z "${deleted}" ]]; then
   echo
-  echo 'These files appear to have been removed:'
+  echo 'INFO (no action needed): These files appear to have been removed:'
   echo "${deleted}" | sed 's/^/  /'
 fi
 
@@ -64,43 +74,28 @@ if [[ ! -z "${new}${deleted}" ]]; then
   echo
 fi
 
-cat > BUILD.gn << EOF
-# Copyright 2022 The Chromium Authors
-# Use of this source code is governed by a BSD-style license that can be
-# found in the LICENSE file.
+echo "Updating build.gn ..."
 
-import("//tools/typescript/ts_library.gni")
-import("//ui/webui/resources/tools/generate_grd.gni")
-
-generate_grd("build_grdp") {
-  grd_prefix = "material_web_components"
-  out_grd = "\${target_gen_dir}/\${grd_prefix}_resources.grdp"
-
-  # TODO(b/229804752): Clean up and find the minimal set of necessary resources.
-  input_files = [
-EOF
-for x in `find components-chromium/node_modules  | grep js$ | cut -f3- -d/`; do
-  echo "    \"$x\"," >> BUILD.gn
-done
-cat >> BUILD.gn << EOF
-  ]
-
-  input_files_base_dir = rebase_path("components-chromium/node_modules", "//")
-  resource_path_prefix = "mwc"
-}
-
-ts_library("library") {
-  composite = true
-  tsconfig_base = "tsconfig_base.json"
-
-  # TODO(b/229804752): Clean up and find the minimal set of necessary resources.
-  definitions = [
-EOF
+# In our BUILD file we have a ts_library rule which exposes all lit type
+# definitions, update these.
+new_text=""
 for x in `find components-chromium/node_modules -type f  | grep d.ts$`; do
-  echo "    \"$x\"," >> BUILD.gn
+  new_text+="  \"$x\",\n"
 done
-cat >> BUILD.gn << EOF
-  ]
-}
-EOF
+replace_section DEFINITIONS "${new_text}" BUILD.gn
+
+# Also update the list of material files.
+new_text=""
+cd components-chromium/node_modules
+for x in `find @material/ \( -name "*.js"  \) -type f`; do
+  new_text+="  \"$x\",\n"
+done
+cd ../..
+replace_section MATERIAL_FILES "${new_text}" BUILD.gn
+
+echo "Cleaning up ..."
+
+rm -r "node_modules/"
 popd > /dev/null
+
+echo "Done! Thanks for using me :)"

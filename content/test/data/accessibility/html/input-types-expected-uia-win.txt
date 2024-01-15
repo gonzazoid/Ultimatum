@@ -15,13 +15,14 @@ Document
 ++++++Edit Name='Email:'
 ++++Text
 ++++++Text Name='File: '
-++++++Button Name='File:' Value.Value='No file chosen'
-++++++++Button Name='Choose File'
+++++++Button Name='File:: No file chosen' Value.Value='No file chosen'
+++++++++Button Name='Choose File' IsControlElement=false
 ++++Text
 ++++++Text Name='Image: '
 ++++++Button Name='Image:'
 ++++++++Image
 ++++++++Text Name='Submit' IsControlElement=false
+++++Text Name=' '
 ++++Text
 ++++++Text Name='Number: '
 ++++++Spinner Name='Number:' RangeValue.IsReadOnly=false RangeValue.LargeChange=10.00 RangeValue.SmallChange=1.00 RangeValue.Maximum=0.00 RangeValue.Minimum=0.00 RangeValue.Value=0.00

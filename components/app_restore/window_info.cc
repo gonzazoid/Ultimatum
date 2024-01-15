@@ -11,33 +11,37 @@ namespace app_restore {
 
 namespace {
 
-std::string ToPrefixedString(absl::optional<int32_t> val,
+std::string ToPrefixedString(std::optional<int32_t> val,
                              const std::string& prefix) {
-  return prefix + base::StringPrintf(": %d \n", val ? *val : -1);
+  return prefix + base::StringPrintf(": %d \n", val.value_or(-1));
 }
 
-std::string ToPrefixedString(absl::optional<gfx::Rect> val,
+std::string ToPrefixedString(std::optional<gfx::Rect> val,
                              const std::string& prefix) {
-  return prefix + ": " + (val ? *val : gfx::Rect()).ToString() + " \n";
+  return prefix + ": " + val.value_or(gfx::Rect()).ToString() + " \n";
 }
 
-std::string ToPrefixedString(absl::optional<chromeos::WindowStateType> val,
+std::string ToPrefixedString(std::optional<chromeos::WindowStateType> val,
                              const std::string& prefix) {
-  absl::optional<int> new_val =
-      val ? absl::make_optional(static_cast<int>(*val)) : absl::nullopt;
+  std::optional<int> new_val =
+      val ? std::make_optional(static_cast<int32_t>(*val)) : std::nullopt;
   return ToPrefixedString(new_val, prefix);
 }
 
-std::string ToPrefixedString(absl::optional<ui::WindowShowState> val,
+std::string ToPrefixedString(std::optional<ui::WindowShowState> val,
                              const std::string& prefix) {
-  absl::optional<int> new_val =
-      val ? absl::make_optional(static_cast<int>(*val)) : absl::nullopt;
+  std::optional<int> new_val =
+      val ? std::make_optional(static_cast<int32_t>(*val)) : std::nullopt;
   return ToPrefixedString(new_val, prefix);
 }
 
-std::string ToPrefixedString(absl::optional<std::u16string> val,
+std::string ToPrefixedString(std::optional<std::u16string> val,
                              const std::string& prefix) {
   return prefix + ": " + base::UTF16ToASCII(val.value_or(u""));
+}
+
+std::string ToPrefixedString(base::Uuid val, const std::string& prefix) {
+  return prefix + ": " + val.AsLowercaseString() + " \n";
 }
 
 }  // namespace
@@ -58,6 +62,7 @@ WindowInfo* WindowInfo::Clone() {
   new_window_info->window = window;
   new_window_info->activation_index = activation_index;
   new_window_info->desk_id = desk_id;
+  new_window_info->desk_guid = desk_guid;
   new_window_info->current_bounds = current_bounds;
   new_window_info->window_state_type = window_state_type;
   new_window_info->pre_minimized_show_state_type =
@@ -72,6 +77,7 @@ WindowInfo* WindowInfo::Clone() {
 std::string WindowInfo::ToString() const {
   return ToPrefixedString(activation_index, "Activation index") +
          ToPrefixedString(desk_id, "Desk") +
+         ToPrefixedString(desk_guid, "Desk guid") +
          ToPrefixedString(current_bounds, "Current bounds") +
          ToPrefixedString(window_state_type, "Window state") +
          ToPrefixedString(pre_minimized_show_state_type,

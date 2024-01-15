@@ -14,7 +14,7 @@
 #include "base/notreached.h"
 #include "base/numerics/checked_math.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "gpu/command_buffer/service/context_state.h"
@@ -51,7 +51,8 @@ BufferManager::BufferManager(MemoryTracker* memory_tracker,
   // so don't register a dump provider.
   if (memory_tracker_) {
     base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-        this, "gpu::BufferManager", base::ThreadTaskRunnerHandle::Get());
+        this, "gpu::BufferManager",
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -756,7 +757,7 @@ bool BufferManager::OnMemoryDump(const base::trace_event::MemoryDumpArgs& args,
   using base::trace_event::MemoryAllocatorDump;
   using base::trace_event::MemoryDumpLevelOfDetail;
 
-  if (args.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     std::string dump_name =
         base::StringPrintf("gpu/gl/buffers/context_group_0x%" PRIX64 "",
                            memory_tracker_->ContextGroupTracingId());

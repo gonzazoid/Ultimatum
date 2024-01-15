@@ -18,8 +18,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_timestamp_helper.h"
@@ -163,6 +163,7 @@ class AudioRendererAlgorithmTest : public testing::Test {
             1, 1, frame_size, kNoTimestamp);
         break;
       case kSampleFormatDts:
+      case kSampleFormatDtse:
       case kSampleFormatDtsxP2:
         buffer = MakeBitstreamAudioBuffer(
             sample_format_, channel_layout_,
@@ -619,7 +620,7 @@ TEST_F(AudioRendererAlgorithmTest, DotProduct) {
   std::unique_ptr<AudioBus> a = AudioBus::Create(kChannels, kFrames);
   std::unique_ptr<AudioBus> b = AudioBus::Create(kChannels, kFrames);
 
-  std::unique_ptr<float[]> dot_prod(new float[kChannels]);
+  auto dot_prod = std::make_unique<float[]>(kChannels);
 
   FillWithSquarePulseTrain(kHalfPulseWidth, 0, 0, a.get());
   FillWithSquarePulseTrain(kHalfPulseWidth, 1, 1, a.get());
@@ -650,7 +651,7 @@ TEST_F(AudioRendererAlgorithmTest, MovingBlockEnergy) {
   const int kFramesPerBlock = 3;
   const int kNumBlocks = kFrames - (kFramesPerBlock - 1);
   std::unique_ptr<AudioBus> a = AudioBus::Create(kChannels, kFrames);
-  std::unique_ptr<float[]> energies(new float[kChannels * kNumBlocks]);
+  auto energies = std::make_unique<float[]>(kChannels * kNumBlocks);
   float* ch_left = a->channel(0);
   float* ch_right = a->channel(1);
 
@@ -712,7 +713,7 @@ TEST_F(AudioRendererAlgorithmTest, FullAndDecimatedSearch) {
   ch = target->channel(1);
   memcpy(ch, target_1, sizeof(float) * kFramePerBlock);
 
-  std::unique_ptr<float[]> energy_target(new float[kChannels]);
+  auto energy_target = std::make_unique<float[]>(kChannels);
 
   internal::MultiChannelDotProduct(target.get(), 0, target.get(), 0,
                                    kFramePerBlock, energy_target.get());
@@ -721,8 +722,8 @@ TEST_F(AudioRendererAlgorithmTest, FullAndDecimatedSearch) {
   ASSERT_EQ(2.01f, energy_target[1]);
 
   const int kNumCandidBlocks = kFramesInSearchRegion - (kFramePerBlock - 1);
-  std::unique_ptr<float[]> energy_candid_blocks(
-      new float[kNumCandidBlocks * kChannels]);
+  auto energy_candid_blocks =
+      std::make_unique<float[]>(kNumCandidBlocks * kChannels);
 
   internal::MultiChannelMovingBlockEnergies(
       search_region.get(), kFramePerBlock, energy_candid_blocks.get());

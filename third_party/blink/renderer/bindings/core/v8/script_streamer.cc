@@ -9,13 +9,19 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_restrictions.h"
 #include "mojo/public/cpp/system/wait.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/page/v8_compile_hints_histograms.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_common.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_consumer.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_producer.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
@@ -23,6 +29,7 @@
 #include "third_party/blink/renderer/core/loader/resource/script_resource.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/crypto.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/instrumentation/histogram.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/loader/fetch/cached_metadata.h"
@@ -160,9 +167,8 @@ class ResourceScriptStreamer::ScriptDecoder {
       std::unique_ptr<ParkableStringImpl::SecureDigest> digest,
       CrossThreadOnceClosure main_thread_continuation) {
     if (response_body_loader_client) {
-      response_body_loader_client->DidReceiveDecodedData(
-          decoded_data, std::make_unique<ScriptResource::ScriptDecodedDataInfo>(
-                            std::move(digest)));
+      response_body_loader_client->DidReceiveDecodedData(decoded_data,
+                                                         std::move(digest));
     }
 
     std::move(main_thread_continuation).Run();
@@ -383,6 +389,7 @@ class SourceStream : public v8::ScriptCompiler::ExternalSourceStream {
  private:
   void SetFinished(ResourceScriptStreamer::LoadingState state) {
     load_state_ = state;
+    data_pipe_.reset();
   }
 
   // TODO(leszeks): Make this a DCHECK-only flag.
@@ -746,11 +753,85 @@ bool ResourceScriptStreamer::TryStartStreamingTask() {
   source_ = std::make_unique<v8::ScriptCompiler::StreamedSource>(
       std::move(stream_ptr), encoding_);
 
+  v8::ScriptCompiler::CompileOptions compile_options =
+      v8::ScriptCompiler::kNoCompileOptions;
+  v8::CompileHintCallback compile_hint_callback = nullptr;
+  void* compile_hint_callback_data = nullptr;
+
+  v8_compile_hints::V8CrowdsourcedCompileHintsProducer* compile_hints_producer =
+      script_resource_->GetV8CrowdsourcedCompileHintsProducer();
+  v8_compile_hints::V8CrowdsourcedCompileHintsConsumer* compile_hints_consumer =
+      script_resource_->GetV8CrowdsourcedCompileHintsConsumer();
+
+  bool local_compile_hints_enabled =
+      base::FeatureList::IsEnabled(features::kLocalCompileHints);
+
+  if (compile_hints_producer && compile_hints_producer->MightGenerateData()) {
+    DCHECK(base::FeatureList::IsEnabled(features::kProduceCompileHints2));
+    compile_options = v8::ScriptCompiler::kProduceCompileHints;
+    base::UmaHistogramEnumeration(
+        v8_compile_hints::kStatusHistogram,
+        v8_compile_hints::Status::kProduceCompileHintsStreaming);
+  } else if (local_compile_hints_enabled &&
+             V8CodeCache::HasCompileHints(
+                 script_resource_->CacheHandler(),
+                 CachedMetadataHandler::kAllowUnchecked) &&
+             V8CodeCache::HasHotTimestamp(script_resource_->CacheHandler())) {
+    // For now, we can only consume local or crowdsourced compile hints, but
+    // not both at the same time.
+    // TODO(chromium:1495723): Enable consuming both at the same time.
+
+    // TODO(1495723): It's not clear what we should do if the resource is not
+    // hot but we have compile hints. 1) Consume compile hints and produce new
+    // ones (currently not possible in the API) and combine both compile hints.
+    // 2) Ignore existing compile hints (we're anyway not creating the
+    // code cache yet) and produce new ones.
+    CachedMetadataHandler* cache_handler = script_resource_->CacheHandler();
+    scoped_refptr<CachedMetadata> cached_metadata =
+        V8CodeCache::GetCachedMetadataForCompileHints(cache_handler);
+    local_compile_hints_consumer_ =
+        std::make_unique<v8_compile_hints::V8LocalCompileHintsConsumer>(
+            cached_metadata.get());
+    if (!local_compile_hints_consumer_->IsRejected()) {
+      compile_hint_callback_data = local_compile_hints_consumer_.get();
+      compile_hint_callback =
+          v8_compile_hints::V8LocalCompileHintsConsumer::GetCompileHint;
+      compile_options = v8::ScriptCompiler::kConsumeCompileHints;
+      base::UmaHistogramEnumeration(
+          v8_compile_hints::kStatusHistogram,
+          v8_compile_hints::Status::kConsumeLocalCompileHintsStreaming);
+    }
+  } else if (compile_hints_consumer && compile_hints_consumer->HasData()) {
+    // This doesn't need to be gated behind a runtime flag, because there won't
+    // be any data unless the v8_compile_hints::kConsumeCompileHints
+    // flag is on.
+    crowdsourced_compile_hint_callback_data_ =
+        compile_hints_consumer->GetDataWithScriptNameHash(
+            v8_compile_hints::ScriptNameHash(script_resource_->Url()));
+    compile_hint_callback_data = crowdsourced_compile_hint_callback_data_.get();
+    compile_hint_callback =
+        &v8_compile_hints::V8CrowdsourcedCompileHintsConsumer::
+            CompileHintCallback;
+    compile_options = v8::ScriptCompiler::kConsumeCompileHints;
+    base::UmaHistogramEnumeration(
+        v8_compile_hints::kStatusHistogram,
+        v8_compile_hints::Status::kConsumeCrowdsourcedCompileHintsStreaming);
+  } else if (local_compile_hints_enabled) {
+    // Produce local compile hints. TODO(chromium:1495723): If we later find out
+    // there were local compile hints (but the cache arrived late), we'll need
+    // to use them.
+    compile_options = v8::ScriptCompiler::kProduceCompileHints;
+    base::UmaHistogramEnumeration(
+        v8_compile_hints::kStatusHistogram,
+        v8_compile_hints::Status::kProduceCompileHintsStreaming);
+  }
+
   std::unique_ptr<v8::ScriptCompiler::ScriptStreamingTask>
       script_streaming_task =
           base::WrapUnique(v8::ScriptCompiler::StartStreaming(
               V8PerIsolateData::MainThreadIsolate(), source_.get(),
-              script_type_));
+              script_type_, compile_options, compile_hint_callback,
+              compile_hint_callback_data));
 
   if (!script_streaming_task) {
     // V8 cannot stream the script.

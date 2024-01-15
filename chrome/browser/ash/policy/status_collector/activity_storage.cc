@@ -9,9 +9,10 @@
 #include <memory>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "chrome/common/pref_names.h"
@@ -58,10 +59,10 @@ void ActivityStorage::PruneActivityPeriods(
 
 void ActivityStorage::TrimActivityPeriods(int64_t min_day_key,
                                           int64_t max_day_key) {
-  base::DictionaryValue copy;
+  base::Value::Dict copy;
 
   ForEachActivityPeriodFromPref(base::BindRepeating(
-      [](base::DictionaryValue* copy, int64_t min_day_key, int64_t max_day_key,
+      [](base::Value::Dict& copy, int64_t min_day_key, int64_t max_day_key,
          int64_t start, int64_t end, const std::string& activity_id) {
         int64_t day_key = start;
         // Remove data that is too old, or too far in the future.
@@ -76,12 +77,12 @@ void ActivityStorage::TrimActivityPeriods(int64_t min_day_key,
         if (duration <= 0)
           return;
         const std::string key = MakeActivityPeriodPrefKey(day_key, activity_id);
-        copy->SetIntPath(key, duration);
+        copy.SetByDottedPath(key, base::saturated_cast<int>(duration));
       },
-      &copy, min_day_key, max_day_key));
+      std::ref(copy), min_day_key, max_day_key));
 
   // Flush the activities into pref_service_
-  pref_service_->Set(pref_name_, copy);
+  pref_service_->SetDict(pref_name_, std::move(copy));
 }
 
 void ActivityStorage::RemoveOverlappingActivityPeriods() {
@@ -172,8 +173,9 @@ void ActivityStorage::AddActivityPeriod(base::Time start,
 
     const int64_t day_key = LocalTimeToUtcDayStart(start);
     const std::string key = MakeActivityPeriodPrefKey(day_key, activity_id);
-    VLOG(1) << "Add Activity: " << base::Time::FromJavaTime(day_key) << " to "
-            << base::Time::FromJavaTime(day_key + activity);
+    VLOG(1) << "Add Activity: "
+            << base::Time::FromMillisecondsSinceUnixEpoch(day_key) << " to "
+            << base::Time::FromMillisecondsSinceUnixEpoch(day_key + activity);
     const auto previous_activity = activity_times.FindIntByDottedPath(key);
     if (previous_activity.has_value()) {
       activity += previous_activity.value();
@@ -185,19 +187,19 @@ void ActivityStorage::AddActivityPeriod(base::Time start,
 
 void ActivityStorage::SetActivityPeriods(
     const std::map<std::string, Activities>& new_activity_periods) {
-  base::DictionaryValue copy;
+  base::Value::Dict copy;
   for (const auto& activity_pair : new_activity_periods) {
     const std::string& activity_id = activity_pair.first;
     const Activities& activities = activity_pair.second;
     for (const auto& activity : activities) {
       const std::string& key =
           MakeActivityPeriodPrefKey(activity.start_timestamp(), activity_id);
-      copy.SetIntKey(key,
-                     activity.end_timestamp() - activity.start_timestamp());
+      copy.Set(key, base::saturated_cast<int>(activity.end_timestamp() -
+                                              activity.start_timestamp()));
     }
   }
 
-  pref_service_->Set(pref_name_, copy);
+  pref_service_->SetDict(pref_name_, std::move(copy));
 }
 
 int64_t ActivityStorage::LocalTimeToUtcDayStart(base::Time timestamp) const {
@@ -206,7 +208,7 @@ int64_t ActivityStorage::LocalTimeToUtcDayStart(base::Time timestamp) const {
     // is not needed, just keep it as is. timestamp like this cannot be part
     // of an actual activity interval, it only happens as a threshold for
     // activities report.
-    return timestamp.ToJavaTime();
+    return timestamp.InMillisecondsSinceUnixEpoch();
   }
 
   base::Time::Exploded exploded;
@@ -219,7 +221,7 @@ int64_t ActivityStorage::LocalTimeToUtcDayStart(base::Time timestamp) const {
   base::Time out_time;
   bool conversion_success = base::Time::FromUTCExploded(exploded, &out_time);
   DCHECK(conversion_success);
-  return out_time.ToJavaTime();
+  return out_time.InMillisecondsSinceUnixEpoch();
 }
 
 // static
@@ -230,9 +232,7 @@ std::string ActivityStorage::MakeActivityPeriodPrefKey(
   if (activity_id.empty())
     return day_key;
 
-  std::string encoded_activity_id;
-  base::Base64Encode(activity_id, &encoded_activity_id);
-  return day_key + kActivityKeySeparator + encoded_activity_id;
+  return day_key + kActivityKeySeparator + base::Base64Encode(activity_id);
 }
 
 // static

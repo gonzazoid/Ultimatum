@@ -5,6 +5,7 @@
 #include "chrome/browser/browsing_data/cookies_tree_model.h"
 
 #include <memory>
+#include <numeric>
 #include <string>
 #include <utility>
 
@@ -12,14 +13,16 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/browsing_data/mock_browsing_data_quota_helper.h"
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/content_settings/mock_settings_observer.h"
+#include "chrome/browser/privacy_sandbox/tracking_protection_settings_factory.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/browsing_data/content/cookie_helper.h"
+#include "components/browsing_data/content/mock_browsing_data_quota_helper.h"
 #include "components/browsing_data/content/mock_cache_storage_helper.h"
 #include "components/browsing_data/content/mock_cookie_helper.h"
 #include "components/browsing_data/content/mock_database_helper.h"
@@ -28,12 +31,12 @@
 #include "components/browsing_data/content/mock_local_storage_helper.h"
 #include "components/browsing_data/content/mock_service_worker_helper.h"
 #include "components/browsing_data/content/mock_shared_worker_helper.h"
+#include "components/browsing_data/core/features.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/prefs/pref_service.h"
+#include "components/supervised_user/core/common/features.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/storage_usage_info.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/buildflags/buildflags.h"
@@ -43,9 +46,8 @@
 #include "chrome/browser/extensions/extension_special_storage_policy.h"
 #endif
 
-using ::testing::_;
 using content::BrowserThread;
-using QueryReason = content_settings::CookieSettings::QueryReason;
+using ::testing::_;
 
 namespace {
 
@@ -66,41 +68,51 @@ class CookiesTreeModelTest : public testing::Test {
   }
 
   void SetUp() override {
+    if (base::FeatureList::IsEnabled(
+            browsing_data::features::kDeprecateCookiesTreeModel)) {
+      GTEST_SKIP() << "kDeprecateCookiesTreeModel is enabled skipping "
+                      "CookiesTreeModel tests";
+    }
+
     profile_ = std::make_unique<TestingProfile>();
+    auto* storage_partition = profile_->GetDefaultStoragePartition();
     mock_browsing_data_cookie_helper_ =
-        base::MakeRefCounted<browsing_data::MockCookieHelper>(profile_.get());
+        base::MakeRefCounted<browsing_data::MockCookieHelper>(
+            storage_partition);
     mock_browsing_data_database_helper_ =
-        base::MakeRefCounted<browsing_data::MockDatabaseHelper>(profile_.get());
+        base::MakeRefCounted<browsing_data::MockDatabaseHelper>(
+            storage_partition);
     mock_browsing_data_local_storage_helper_ =
         base::MakeRefCounted<browsing_data::MockLocalStorageHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_session_storage_helper_ =
         base::MakeRefCounted<browsing_data::MockLocalStorageHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_indexed_db_helper_ =
         base::MakeRefCounted<browsing_data::MockIndexedDBHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_file_system_helper_ =
         base::MakeRefCounted<browsing_data::MockFileSystemHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_quota_helper_ =
-        base::MakeRefCounted<MockBrowsingDataQuotaHelper>(profile_.get());
+        base::MakeRefCounted<MockBrowsingDataQuotaHelper>();
     mock_browsing_data_service_worker_helper_ =
         base::MakeRefCounted<browsing_data::MockServiceWorkerHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_shared_worker_helper_ =
         base::MakeRefCounted<browsing_data::MockSharedWorkerHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_cache_storage_helper_ =
         base::MakeRefCounted<browsing_data::MockCacheStorageHelper>(
-            profile_.get());
+            storage_partition);
 
     const char kExtensionScheme[] = "extensionscheme";
     auto cookie_settings =
         base::MakeRefCounted<content_settings::CookieSettings>(
             HostContentSettingsMapFactory::GetForProfile(profile_.get()),
-            profile_->GetPrefs(), profile_->IsIncognitoProfile(),
-            kExtensionScheme);
+            profile_->GetPrefs(),
+            TrackingProtectionSettingsFactory::GetForProfile(profile_.get()),
+            profile_->IsIncognitoProfile(), kExtensionScheme);
 #if BUILDFLAG(ENABLE_EXTENSIONS)
     special_storage_policy_ =
         base::MakeRefCounted<ExtensionSpecialStoragePolicy>(
@@ -109,17 +121,19 @@ class CookiesTreeModelTest : public testing::Test {
   }
 
   void TearDown() override {
-    mock_browsing_data_service_worker_helper_ = nullptr;
-    mock_browsing_data_shared_worker_helper_ = nullptr;
     mock_browsing_data_cache_storage_helper_ = nullptr;
+    mock_browsing_data_shared_worker_helper_ = nullptr;
+    mock_browsing_data_service_worker_helper_ = nullptr;
     mock_browsing_data_quota_helper_ = nullptr;
     mock_browsing_data_file_system_helper_ = nullptr;
     mock_browsing_data_indexed_db_helper_ = nullptr;
     mock_browsing_data_session_storage_helper_ = nullptr;
     mock_browsing_data_local_storage_helper_ = nullptr;
     mock_browsing_data_database_helper_ = nullptr;
+    mock_browsing_data_cookie_helper_ = nullptr;
     base::RunLoop().RunUntilIdle();
   }
+
   std::unique_ptr<CookiesTreeModel> CreateCookiesTreeModelWithInitialSample() {
     auto container = std::make_unique<LocalDataContainer>(
         mock_browsing_data_cookie_helper_, mock_browsing_data_database_helper_,
@@ -238,13 +252,11 @@ class CookiesTreeModelTest : public testing::Test {
         EXPECT_FALSE(host->CanCreateContentException());
       } else {
         cookie_settings->ResetCookieSetting(expected_url);
-        EXPECT_FALSE(cookie_settings->IsCookieSessionOnly(
-            expected_url, QueryReason::kSetting));
+        EXPECT_FALSE(cookie_settings->IsCookieSessionOnly(expected_url));
 
         host->CreateContentException(cookie_settings,
                                      CONTENT_SETTING_SESSION_ONLY);
-        EXPECT_TRUE(cookie_settings->IsCookieSessionOnly(
-            expected_url, QueryReason::kSetting));
+        EXPECT_TRUE(cookie_settings->IsCookieSessionOnly(expected_url));
       }
     }
   }
@@ -285,7 +297,8 @@ class CookiesTreeModelTest : public testing::Test {
                    .spec() +
                ",";
       case CookieTreeNode::DetailedInfo::TYPE_QUOTA:
-        return node->GetDetailedInfo().quota_info->host + ",";
+        return node->GetDetailedInfo().quota_info->storage_key.origin().host() +
+               ",";
       case CookieTreeNode::DetailedInfo::TYPE_SHARED_WORKER:
         return node->GetDetailedInfo().shared_worker_info->worker.spec() + ",";
       default:
@@ -1440,9 +1453,9 @@ TEST_F(CookiesTreeModelTest, ContentSettings) {
   origin->CreateContentException(
       cookie_settings, CONTENT_SETTING_SESSION_ONLY);
   EXPECT_TRUE(cookie_settings->IsFullCookieAccessAllowed(
-      host, host, QueryReason::kSetting));
-  EXPECT_TRUE(
-      cookie_settings->IsCookieSessionOnly(host, QueryReason::kSetting));
+      host, net::SiteForCookies::FromUrl(host), url::Origin::Create(host),
+      net::CookieSettingOverrides()));
+  EXPECT_TRUE(cookie_settings->IsCookieSessionOnly(host));
 }
 
 TEST_F(CookiesTreeModelTest, FileSystemFilter) {
@@ -1645,35 +1658,66 @@ TEST_F(CookiesTreeModelTest, CanonicalizeCookieSource) {
       cookie_settings, GURL("http://example4.com"));
 }
 
-TEST_F(CookiesTreeModelTest, CookiesFilterWithoutSource) {
-  // CanonicalCookies don't persist their source_ field. This is a regression
-  // test for crbug.com/601582.
-  auto container = std::make_unique<LocalDataContainer>(
-      mock_browsing_data_cookie_helper_, mock_browsing_data_database_helper_,
-      mock_browsing_data_local_storage_helper_,
-      mock_browsing_data_session_storage_helper_,
-      mock_browsing_data_indexed_db_helper_,
-      mock_browsing_data_file_system_helper_, mock_browsing_data_quota_helper_,
-      mock_browsing_data_service_worker_helper_,
-      mock_browsing_data_shared_worker_helper_,
-      mock_browsing_data_cache_storage_helper_);
-  CookiesTreeModel cookies_model(std::move(container),
-                                 special_storage_policy());
-
-  mock_browsing_data_cookie_helper_->
-      AddCookieSamples(GURL(), "A=1");
-  mock_browsing_data_cookie_helper_->Notify();
-  EXPECT_EQ("A", GetDisplayedCookies(&cookies_model));
-}
-
 TEST_F(CookiesTreeModelTest, CookieDeletionFilterNormalUser) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(
+      supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
   auto callback =
       CookiesTreeModel::GetCookieDeletionDisabledCallback(profile_.get());
   EXPECT_FALSE(callback);
 }
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(CookiesTreeModelTest, CookieDeletionFilterIncognitoProfile) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
+  auto* incognito_profile = profile_->GetOffTheRecordProfile(
+      Profile::OTRProfileID::CreateUniqueForTesting(), true);
+  ASSERT_TRUE(incognito_profile->IsOffTheRecord());
+  auto callback =
+      CookiesTreeModel::GetCookieDeletionDisabledCallback(incognito_profile);
+  EXPECT_FALSE(callback);
+}
+
 TEST_F(CookiesTreeModelTest, CookieDeletionFilterChildUser) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(
+      supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
+  profile_->SetIsSupervisedProfile();
+  auto callback =
+      CookiesTreeModel::GetCookieDeletionDisabledCallback(profile_.get());
+
+  EXPECT_TRUE(callback);
+  EXPECT_FALSE(callback.Run(GURL("https://google.com")));
+  EXPECT_FALSE(callback.Run(GURL("https://example.com")));
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+  EXPECT_FALSE(callback.Run(GURL("http://youtube.com")));
+  EXPECT_FALSE(callback.Run(GURL("https://youtube.com")));
+#else
+  EXPECT_TRUE(callback.Run(GURL("http://youtube.com")));
+  EXPECT_TRUE(callback.Run(GURL("https://youtube.com")));
+#endif
+}
+
+TEST_F(
+    CookiesTreeModelTest,
+    CookieDeletionFilterNormalUserWithClearingCookiesEnabledForSupervisedUsers) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
+  auto callback =
+      CookiesTreeModel::GetCookieDeletionDisabledCallback(profile_.get());
+
+  EXPECT_FALSE(callback);
+}
+
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
+TEST_F(
+    CookiesTreeModelTest,
+    CookieDeletionFilterChildUserWithClearingCookiesEnabledForSupervisedUsers) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      supervised_user::kClearingCookiesKeepsSupervisedUsersSignedIn);
   profile_->SetIsSupervisedProfile();
   auto callback =
       CookiesTreeModel::GetCookieDeletionDisabledCallback(profile_.get());
@@ -1685,5 +1729,20 @@ TEST_F(CookiesTreeModelTest, CookieDeletionFilterChildUser) {
   EXPECT_TRUE(callback.Run(GURL("https://youtube.com")));
 }
 #endif
+
+TEST_F(CookiesTreeModelTest, InclusiveSize) {
+  std::unique_ptr<CookiesTreeModel> cookies_model(
+      CreateCookiesTreeModelWithInitialSample());
+
+  // The root node doesn't have a concept of inclusive size, and so we must look
+  // at the host nodes.
+  auto& host_nodes = cookies_model->GetRoot()->children();
+  uint64_t total =
+      std::accumulate(host_nodes.cbegin(), host_nodes.cend(), int64_t{0},
+                      [](int64_t total, const auto& child) {
+                        return total + child->InclusiveSize();
+                      });
+  EXPECT_EQ(51u, total);
+}
 
 }  // namespace

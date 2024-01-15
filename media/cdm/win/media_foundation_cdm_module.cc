@@ -62,6 +62,8 @@ void MediaFoundationCdmModule::Initialize(const base::FilePath& cdm_path) {
 
     // Only report load time for success loads.
     ReportLoadTime(kUmaPrefix, load_time);
+
+    ReportLoadResult(kUmaPrefix, CdmLoadResult::kLoadSuccess);
   }
 }
 
@@ -89,13 +91,10 @@ HRESULT MediaFoundationCdmModule::GetCdmFactory(
   if (!cdm_factory_) {
     auto hr = ActivateCdmFactory();
     if (FAILED(hr)) {
-      ReportLoadResult(kUmaPrefix, CdmLoadResult::kActivateCdmFactoryFailed);
       base::UmaHistogramSparse(
           std::string(kUmaPrefix) + "ActivateCdmFactoryResult", hr);
       return hr;
     }
-
-    ReportLoadResult(kUmaPrefix, CdmLoadResult::kLoadSuccess);
   }
 
   cdm_factory = cdm_factory_;
@@ -104,6 +103,13 @@ HRESULT MediaFoundationCdmModule::GetCdmFactory(
 
 HRESULT MediaFoundationCdmModule::ActivateCdmFactory() {
   DCHECK(initialized_);
+
+  if (activated_) {
+    DLOG(ERROR) << "CDM failed to activate previously";
+    return E_NOT_VALID_STATE;
+  }
+
+  activated_ = true;
 
   // For OS or store CDM, the `cdm_path_` is empty. Just use default creation.
   if (cdm_path_.empty()) {
@@ -122,10 +128,6 @@ HRESULT MediaFoundationCdmModule::ActivateCdmFactory() {
     LOG(ERROR) << "CDM failed to load previously";
     return kErrorLoadLibrary;
   }
-
-  // Initialization required to call base::win::ScopedHString::Create();
-  if (!base::win::ScopedHString::ResolveCoreWinRTStringDelayload())
-    return kErrorResolveCoreWinRTStringDelayload;
 
   // Get function pointer to the activation factory.
   using GetActivationFactoryFunc =

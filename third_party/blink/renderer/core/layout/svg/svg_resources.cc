@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/core/layout/svg/svg_resources.h"
 
 #include "base/ranges/algorithm.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_resource_filter.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_resource_paint_server.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_text.h"
@@ -29,6 +30,7 @@
 #include "third_party/blink/renderer/core/style/style_svg_resource.h"
 #include "third_party/blink/renderer/core/svg/graphics/filters/svg_filter_builder.h"
 #include "third_party/blink/renderer/core/svg/svg_filter_primitive_standard_attributes.h"
+#include "third_party/blink/renderer/core/svg/svg_length_functions.h"
 #include "third_party/blink/renderer/core/svg/svg_resource.h"
 #include "third_party/blink/renderer/platform/graphics/filters/filter.h"
 #include "third_party/blink/renderer/platform/graphics/filters/filter_effect.h"
@@ -47,14 +49,9 @@ SVGElementResourceClient& SVGResources::EnsureClient(
 }
 
 gfx::RectF SVGResources::ReferenceBoxForEffects(
-    const LayoutObject& layout_object) {
-  // For SVG foreign objects, remove the position part of the bounding box. The
-  // position is already baked into the transform, and we don't want to re-apply
-  // the offset when, e.g., using "objectBoundingBox" for clipPathUnits.
-  // Use the frame size since it should have the proper zoom applied.
-  if (layout_object.IsSVGForeignObjectIncludingNG())
-    return gfx::RectF(gfx::SizeF(To<LayoutBox>(layout_object).Size()));
-
+    const LayoutObject& layout_object,
+    GeometryBox geometry_box,
+    ForeignObjectQuirk foreign_object_quirk) {
   // Text "sub-elements" (<tspan>, <textpath>, <a>) should use the entire
   // <text>s object bounding box rather then their own.
   // https://svgwg.org/svg2-draft/text.html#ObjectBoundingBoxUnitsTextObjects
@@ -64,7 +61,41 @@ gfx::RectF SVGResources::ReferenceBoxForEffects(
         LayoutSVGText::LocateLayoutSVGTextAncestor(&layout_object);
   }
   DCHECK(obb_layout_object);
-  return obb_layout_object->ObjectBoundingBox();
+
+  gfx::RectF box;
+  switch (geometry_box) {
+    case GeometryBox::kPaddingBox:
+    case GeometryBox::kContentBox:
+    case GeometryBox::kFillBox:
+      box = obb_layout_object->ObjectBoundingBox();
+      break;
+    case GeometryBox::kMarginBox:
+    case GeometryBox::kBorderBox:
+    case GeometryBox::kStrokeBox:
+      box = obb_layout_object->StrokeBoundingBox();
+      break;
+    case GeometryBox::kViewBox: {
+      const SVGViewportResolver viewport_resolver(obb_layout_object);
+      box.set_size(viewport_resolver.ResolveViewport());
+      break;
+    }
+    default:
+      NOTREACHED();
+  }
+
+  if (foreign_object_quirk == ForeignObjectQuirk::kEnabled &&
+      obb_layout_object->IsSVGForeignObject()) {
+    // For SVG foreign objects, remove the position part of the bounding box.
+    // The position is already baked into the transform, and we don't want to
+    // re-apply the offset when, e.g., using "objectBoundingBox" for
+    // clipPathUnits. Similarly, the reference box should have zoom applied.
+    // This simple approach only works because foreign objects do not support
+    // strokes.
+    box.set_origin(gfx::PointF());
+    box.Scale(obb_layout_object->StyleRef().EffectiveZoom());
+  }
+
+  return box;
 }
 
 void SVGResources::UpdateEffects(LayoutObject& object,
@@ -184,8 +215,10 @@ class SVGElementResourceClient::FilterData final
   FilterData(FilterEffect* last_effect, SVGFilterGraphNodeMap* node_map)
       : last_effect_(last_effect), node_map_(node_map) {}
 
+  bool HasEffects() const { return last_effect_ != nullptr; }
   sk_sp<PaintFilter> BuildPaintFilter() {
-    return paint_filter_builder::Build(last_effect_, kInterpolationSpaceSRGB);
+    return paint_filter_builder::Build(last_effect_.Get(),
+                                       kInterpolationSpaceSRGB);
   }
 
   // Perform a finegrained invalidation of the filter chain for the
@@ -298,6 +331,10 @@ void SVGElementResourceClient::FilterPrimitiveChanged(
     return;
   layout_object->SetNeedsPaintPropertyUpdate();
   MarkFilterDataDirty();
+  LayoutSVGResourceContainer::InvalidateDependentElements(*layout_object,
+                                                          false);
+  LayoutSVGResourceContainer::InvalidateAncestorChainResources(*layout_object,
+                                                               false);
 }
 
 SVGElementResourceClient::FilterData*
@@ -307,7 +344,7 @@ SVGElementResourceClient::CreateFilterDataWithNodeMap(
   auto* node_map = MakeGarbageCollected<SVGFilterGraphNodeMap>();
   Filter* filter =
       builder.BuildReferenceFilter(reference_filter, nullptr, node_map);
-  if (!filter || !filter->LastEffect())
+  if (!filter)
     return nullptr;
   paint_filter_builder::PopulateSourceGraphicImageFilters(
       filter->GetSourceGraphic(), kInterpolationSpaceSRGB);
@@ -323,7 +360,9 @@ void SVGElementResourceClient::UpdateFilterData(
       reference_box == operations.ReferenceBox())
     return;
   const ComputedStyle& style = object.StyleRef();
-  FilterEffectBuilder builder(reference_box, 1);
+  FilterEffectBuilder builder(
+      reference_box, 1, style.VisitedDependentColor(GetCSSPropertyColor()),
+      style.UsedColorScheme());
   builder.SetShorthandScale(1 / style.EffectiveZoom());
   const FilterOperations& filter = style.Filter();
   // If the filter is a single 'url(...)' reference we can optimize some
@@ -338,11 +377,15 @@ void SVGElementResourceClient::UpdateFilterData(
     }
     operations.Clear();
     if (filter_data_) {
-      operations.AppendReferenceFilter(filter_data_->BuildPaintFilter());
-    } else {
-      // Filter construction failed. Create a filter chain that yields
-      // transparent black.
-      operations.AppendOpacityFilter(0);
+      // If the referenced filter exists but does not contain any primitives,
+      // then the rendering of the element should be disabled.
+      if (filter_data_->HasEffects()) {
+        // BuildPaintFilter() can return null which means pass-through.
+        operations.AppendReferenceFilter(filter_data_->BuildPaintFilter());
+      } else {
+        // Create a filter chain that yields transparent black.
+        operations.AppendOpacityFilter(0);
+      }
     }
   } else {
     // Drop any existing filter data since the filter is no longer
@@ -390,7 +433,7 @@ void SVGResourceInvalidator::InvalidateEffects() {
     if (SVGElementResourceClient* client = SVGResources::GetClient(object_))
       client->InvalidateFilterData();
   }
-  if (style.HasClipPath() || style.MaskerResource()) {
+  if (style.HasClipPath() || style.HasMaskForSVG()) {
     object_.SetShouldDoFullPaintInvalidation();
     object_.SetNeedsPaintPropertyUpdate();
   }

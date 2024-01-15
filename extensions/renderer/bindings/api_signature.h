@@ -6,17 +6,14 @@
 #define EXTENSIONS_RENDERER_BINDINGS_API_SIGNATURE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "extensions/renderer/bindings/api_binding_types.h"
 #include "extensions/renderer/bindings/binding_access_checker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "v8/include/v8.h"
-
-namespace base {
-class Value;
-}
 
 namespace extensions {
 class APITypeReferenceMap;
@@ -43,7 +40,7 @@ class APISignature {
     // The list of expected arguments for the asynchronous return. Can be
     // nullopt if response validation isn't enabled, as it is only used when
     // validating a response from the API.
-    absl::optional<std::vector<std::unique_ptr<ArgumentSpec>>> signature;
+    std::optional<std::vector<std::unique_ptr<ArgumentSpec>>> signature;
     // Indicates if passing the callback when calling the API is optional for
     // contexts or APIs which do not support promises (passing the callback is
     // always inheriently optional if promises are supported).
@@ -87,13 +84,13 @@ class APISignature {
     // since it will include null-filled optional arguments. Populated if
     // parsing was successful. Note that the callback, if any, is included in
     // this list.
-    absl::optional<std::vector<v8::Local<v8::Value>>> arguments;
+    std::optional<v8::LocalVector<v8::Value>> arguments;
 
     // Whether the asynchronous response is handled by a callback or a promise.
     binding::AsyncResponseType async_type = binding::AsyncResponseType::kNone;
 
     // The parse error, if parsing failed.
-    absl::optional<std::string> error;
+    std::optional<std::string> error;
   };
 
   struct JSONParseResult {
@@ -103,12 +100,12 @@ class APISignature {
     JSONParseResult(JSONParseResult&& other);
     JSONParseResult& operator=(JSONParseResult&& other);
 
-    bool succeeded() const { return !!arguments_list; }
+    bool succeeded() const { return arguments_list.has_value(); }
 
     // The parsed JSON arguments, with null-filled optional arguments filled in.
     // Populated if parsing was successful. Does not include the callback (if
     // any).
-    std::unique_ptr<base::Value> arguments_list;
+    std::optional<base::Value::List> arguments_list;
 
     // The callback, if one was provided.
     v8::Local<v8::Function> callback;
@@ -117,21 +114,20 @@ class APISignature {
     binding::AsyncResponseType async_type = binding::AsyncResponseType::kNone;
 
     // The parse error, if parsing failed.
-    absl::optional<std::string> error;
+    std::optional<std::string> error;
   };
 
   // Parses |arguments| against this signature, returning the result and
   // performing no argument conversion.
-  V8ParseResult ParseArgumentsToV8(
-      v8::Local<v8::Context> context,
-      const std::vector<v8::Local<v8::Value>>& arguments,
-      const APITypeReferenceMap& type_refs) const;
+  V8ParseResult ParseArgumentsToV8(v8::Local<v8::Context> context,
+                                   const v8::LocalVector<v8::Value>& arguments,
+                                   const APITypeReferenceMap& type_refs) const;
 
   // Parses |arguments| against this signature, returning the result after
   // converting to base::Values.
   JSONParseResult ParseArgumentsToJSON(
       v8::Local<v8::Context> context,
-      const std::vector<v8::Local<v8::Value>>& arguments,
+      const v8::LocalVector<v8::Value>& arguments,
       const APITypeReferenceMap& type_refs) const;
 
   // Converts |arguments| to base::Values, ignoring the defined signature.
@@ -140,13 +136,13 @@ class APISignature {
   // this parsing will never fail.
   JSONParseResult ConvertArgumentsIgnoringSchema(
       v8::Local<v8::Context> context,
-      const std::vector<v8::Local<v8::Value>>& arguments) const;
+      const v8::LocalVector<v8::Value>& arguments) const;
 
   // Validates the provided |arguments| as if they were returned as a response
   // to an API call. This validation is much stricter than the versions above,
   // since response arguments are not allowed to have optional inner parameters.
   bool ValidateResponse(v8::Local<v8::Context> context,
-                        const std::vector<v8::Local<v8::Value>>& arguments,
+                        const v8::LocalVector<v8::Value>& arguments,
                         const APITypeReferenceMap& type_refs,
                         std::string* error) const;
 
@@ -155,7 +151,7 @@ class APISignature {
   // validating that APIs return proper values to an event (which has a
   // signature, but no return).
   bool ValidateCall(v8::Local<v8::Context> context,
-                    const std::vector<v8::Local<v8::Value>>& arguments,
+                    const v8::LocalVector<v8::Value>& arguments,
                     const APITypeReferenceMap& type_refs,
                     std::string* error) const;
 
@@ -182,7 +178,7 @@ class APISignature {
   std::unique_ptr<APISignature::ReturnsAsync> returns_async_;
 
   // The associated access checker; required to outlive this object.
-  const BindingAccessChecker* access_checker_;
+  raw_ptr<const BindingAccessChecker, DanglingUntriaged> access_checker_;
 
   // A developer-readable method signature string, lazily set.
   mutable std::string expected_signature_;

@@ -68,8 +68,8 @@ bool IndexSupportsGroupMove(TabStripModel* tab_strip,
 }  // namespace
 
 ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
-  std::unique_ptr<api::tab_groups::Get::Params> params(
-      api::tab_groups::Get::Params::Create(args()));
+  absl::optional<api::tab_groups::Get::Params> params =
+      api::tab_groups::Get::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   int group_id = params->group_id;
 
@@ -89,15 +89,15 @@ ExtensionFunction::ResponseAction TabGroupsGetFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
-  std::unique_ptr<api::tab_groups::Query::Params> params(
-      api::tab_groups::Query::Params::Create(args()));
+  absl::optional<api::tab_groups::Query::Params> params =
+      api::tab_groups::Query::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   base::Value::List result_list;
   Profile* profile = Profile::FromBrowserContext(browser_context());
   Browser* current_browser =
       ChromeExtensionFunctionDetails(this).GetCurrentBrowser();
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     if (!profile->IsSameOrParent(browser->profile()))
       continue;
 
@@ -124,11 +124,9 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
     }
 
     TabStripModel* tab_strip = browser->tab_strip_model();
-    if (!tab_strip)
-      return RespondNow(Error(tabs_constants::kTabStripNotEditableQueryError));
-    if (!tab_strip->SupportsTabGroups())
-      return RespondNow(
-          Error(tabs_constants::kTabStripDoesNotSupportTabGroupsError));
+    if (!tab_strip->SupportsTabGroups()) {
+      continue;
+    }
 
     for (const tab_groups::TabGroupId& id :
          tab_strip->group_model()->ListTabGroups()) {
@@ -146,7 +144,7 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
         continue;
       }
 
-      if (params->query_info.color != api::tab_groups::COLOR_NONE &&
+      if (params->query_info.color != api::tab_groups::Color::kNone &&
           params->query_info.color !=
               tab_groups_util::ColorIdToColor(visual_data->color())) {
         continue;
@@ -161,8 +159,8 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
-  std::unique_ptr<api::tab_groups::Update::Params> params(
-      api::tab_groups::Update::Params::Create(args()));
+  absl::optional<api::tab_groups::Update::Params> params =
+      api::tab_groups::Update::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   int group_id = params->group_id;
@@ -183,8 +181,9 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
     collapsed = *params->update_properties.collapsed;
 
   tab_groups::TabGroupColorId color = visual_data->color();
-  if (params->update_properties.color != api::tab_groups::COLOR_NONE)
+  if (params->update_properties.color != api::tab_groups::Color::kNone) {
     color = tab_groups_util::ColorToColorId(params->update_properties.color);
+  }
 
   std::u16string title = visual_data->title();
   if (params->update_properties.title)
@@ -199,6 +198,10 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
         Error(tabs_constants::kTabStripDoesNotSupportTabGroupsError));
   TabGroup* tab_group = tab_strip_model->group_model()->GetTabGroup(id);
 
+  if (tab_groups_util::IsGroupSaved(id, tab_strip_model)) {
+    return RespondNow(Error(tabs_constants::kSavedTabGroupNotEditableError));
+  }
+
   tab_groups::TabGroupVisualData new_visual_data(title, color, collapsed);
   tab_group->SetVisualData(std::move(new_visual_data));
 
@@ -211,8 +214,8 @@ ExtensionFunction::ResponseAction TabGroupsUpdateFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction TabGroupsMoveFunction::Run() {
-  std::unique_ptr<api::tab_groups::Move::Params> params(
-      api::tab_groups::Move::Params::Create(args()));
+  absl::optional<api::tab_groups::Move::Params> params =
+      api::tab_groups::Move::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   int group_id = params->group_id;

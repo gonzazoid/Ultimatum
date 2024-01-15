@@ -18,7 +18,6 @@
 #include "components/tab_groups/tab_group_visual_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-class Profile;
 class SavedTabGroupModelObserver;
 class SavedTabGroup;
 
@@ -27,7 +26,6 @@ class SavedTabGroup;
 class SavedTabGroupModel {
  public:
   SavedTabGroupModel();
-  explicit SavedTabGroupModel(Profile* profile);
   SavedTabGroupModel(const SavedTabGroupModel&) = delete;
   SavedTabGroupModel& operator=(const SavedTabGroupModel& other) = delete;
   ~SavedTabGroupModel();
@@ -36,28 +34,26 @@ class SavedTabGroupModel {
   const std::vector<SavedTabGroup>& saved_tab_groups() const {
     return saved_tab_groups_;
   }
-  Profile* profile() const { return profile_; }
   std::vector<SavedTabGroup> saved_tab_groups() { return saved_tab_groups_; }
+
+  bool is_loaded() { return is_loaded_; }
 
   // Returns the index of the SavedTabGroup if it exists in the vector. Else
   // absl::nullopt.
   absl::optional<int> GetIndexOf(
       const tab_groups::TabGroupId local_group_id) const;
-  absl::optional<int> GetIndexOf(const base::GUID& id) const;
+  absl::optional<int> GetIndexOf(const base::Uuid& id) const;
 
   // Get a pointer to the SavedTabGroup from an ID. Returns nullptr if not in
   // vector.
   const SavedTabGroup* Get(const tab_groups::TabGroupId local_group_id) const;
-  const SavedTabGroup* Get(const base::GUID& id) const;
-  // TODO(crbug/1372503): Remove non-const accessor functions.
-  SavedTabGroup* Get(const tab_groups::TabGroupId local_group_id);
-  SavedTabGroup* Get(const base::GUID& id);
+  const SavedTabGroup* Get(const base::Uuid& id) const;
 
   // Methods for checking if a group is in the SavedTabGroupModel.
   bool Contains(const tab_groups::TabGroupId& local_group_id) const {
     return GetIndexOf(local_group_id).has_value();
   }
-  bool Contains(const base::GUID& id) const {
+  bool Contains(const base::Uuid& id) const {
     return GetIndexOf(id).has_value();
   }
 
@@ -70,10 +66,10 @@ class SavedTabGroupModel {
   // Add / Remove / Update a single tab group from the model.
   void Add(SavedTabGroup saved_group);
   void Remove(const tab_groups::TabGroupId local_group_id);
-  void Remove(const base::GUID& id);
+  void Remove(const base::Uuid& id);
   void UpdateVisualData(const tab_groups::TabGroupId local_group_id,
                         const tab_groups::TabGroupVisualData* visual_data);
-  void UpdateVisualData(const base::GUID& id,
+  void UpdateVisualData(const base::Uuid& id,
                         const tab_groups::TabGroupVisualData* visual_data);
 
   // Similar to the Add/Remove/Update but originate from sync. As such, these
@@ -81,58 +77,73 @@ class SavedTabGroupModel {
   // calls.
   void AddedFromSync(SavedTabGroup saved_group);
   void RemovedFromSync(const tab_groups::TabGroupId local_group_id);
-  void RemovedFromSync(const base::GUID& id);
+  void RemovedFromSync(const base::Uuid& id);
   void UpdatedVisualDataFromSync(
       const tab_groups::TabGroupId local_group_id,
       const tab_groups::TabGroupVisualData* visual_data);
   void UpdatedVisualDataFromSync(
-      const base::GUID& id,
+      const base::Uuid& id,
       const tab_groups::TabGroupVisualData* visual_data);
 
+  SavedTabGroup* GetGroupContainingTab(const base::Uuid& saved_tab_guid);
+  SavedTabGroup* GetGroupContainingTab(const base::Token& local_tab_id);
+
   // Adds a saved tab to `index` in the specified group denoted by `group_id` if
-  // it exists.
-  void AddTabToGroup(const base::GUID& group_id,
-                     SavedTabGroupTab tab,
-                     int index);
+  // it exists. Notify local observers if the tab was added locally, and sync
+  // observers if it was added from sync.
+  void AddTabToGroupLocally(const base::Uuid& group_id, SavedTabGroupTab tab);
+  void AddTabToGroupFromSync(const base::Uuid& group_id, SavedTabGroupTab tab);
 
-  // Removes a saved tab from `index` in the specified group denoted by
-  // `group_id` if it exists.
-  void RemoveTabFromGroup(const base::GUID& group_id, const base::GUID& tab_id);
+  // Calls the UpdateTab method on a group found by group id in the model.
+  // Calls the observer function SavedTabGroupUpdatedLocally.
+  void UpdateTabInGroup(const base::Uuid& group_id, SavedTabGroupTab tab);
 
-  // Replaces a saved tab at `index` in the specified group denoted by
-  // `group_id` if it exists.
-  void ReplaceTabInGroupAt(const base::GUID& group_id,
-                           const base::GUID& tab_id,
-                           SavedTabGroupTab new_tab);
+  // Updates `tab` with a new `local_id`. Unlike `UpdateTabInGroup`, this method
+  // does not notify observers, as this is not a change we want to sync.
+  void UpdateLocalTabId(const base::Uuid& group_id,
+                        SavedTabGroupTab tab,
+                        absl::optional<base::Token> local_id);
+
+  // Removes saved tab `tab_id` in the specified group denoted by
+  // `group_id` if it exists. We delete the group instead if the last tab is
+  // removed from it. Notify local observers if the tab was removed locally, and
+  // sync observers if it was removed from sync.
+  void RemoveTabFromGroupLocally(const base::Uuid& group_id,
+                                 const base::Uuid& tab_id);
+  void RemoveTabFromGroupFromSync(const base::Uuid& group_id,
+                                  const base::Uuid& tab_id);
 
   // Moves a saved tab from its current position to `index` in the specified
   // group denoted by `group_id` if it exists.
-  void MoveTabInGroupTo(const base::GUID& group_id,
-                        const base::GUID& tab_id,
+  void MoveTabInGroupTo(const base::Uuid& group_id,
+                        const base::Uuid& tab_id,
                         int index);
 
   // Attempts to merge the sync_specific with the local object that holds the
   // same guid.
   std::unique_ptr<sync_pb::SavedTabGroupSpecifics> MergeGroup(
-      std::unique_ptr<sync_pb::SavedTabGroupSpecifics> sync_specific);
+      const sync_pb::SavedTabGroupSpecifics& sync_specific);
   std::unique_ptr<sync_pb::SavedTabGroupSpecifics> MergeTab(
-      std::unique_ptr<sync_pb::SavedTabGroupSpecifics> sync_specific);
+      const sync_pb::SavedTabGroupSpecifics& sync_specific);
 
   // Changes the index of a given tab group by id. The new index provided is the
-  // expected index after the group is removed.
-  void Reorder(const base::GUID& id, int new_index);
+  // expected index after the group is removed. Notify local observers if the
+  // group was reordered locally, and sync observers if the group was reordered
+  // from sync.
+  void ReorderGroupLocally(const base::Uuid& id, int new_index);
+  void ReorderGroupFromSync(const base::Uuid& id, int new_index);
 
   // Loads the entries (a sync_pb::SavedTabGroupSpecifics can be a group or a
   // tab) saved locally in the model type store (local storage) and attempts to
   // reconstruct the model by matching groups with their tabs using their
-  // `group_id`'s. We do this by adding the groups to the model first, then
-  // populating them with their respective tabs. Note: Any tabs that do not have
-  // a matching group, will be lost.
-  void LoadStoredEntries(std::vector<sync_pb::SavedTabGroupSpecifics> entries);
+  // `group_id`'s. Note: Any tabs that do not have a matching group, will be
+  // returned to the bridge to keep track of.
+  std::vector<sync_pb::SavedTabGroupSpecifics> LoadStoredEntries(
+      std::vector<sync_pb::SavedTabGroupSpecifics> entries);
 
   // Functions that should be called when a SavedTabGroup's corresponding
   // TabGroup is closed or opened.
-  void OnGroupOpenedInTabStrip(const base::GUID& id,
+  void OnGroupOpenedInTabStrip(const base::Uuid& id,
                                const tab_groups::TabGroupId& local_group_id);
   void OnGroupClosedInTabStrip(const tab_groups::TabGroupId& local_group_id);
 
@@ -141,6 +152,19 @@ class SavedTabGroupModel {
   void RemoveObserver(SavedTabGroupModelObserver* observer);
 
  private:
+  // Moves the group denoted by `id` to the position `new_index`.
+  void ReorderGroupImpl(const base::Uuid& id, int new_index);
+
+  // Updates all group positions to match the index they are currently stored
+  // at.
+  void UpdateGroupPositionsImpl();
+
+  // Insert `group` into sorted order based on its position compared to already
+  // stored groups in `saved_tab_groups_`. It should be noted that
+  // `saved_tab_groups` must already be in sorted order for this function to
+  // work as intended. To do this, UpdatePositionsImpl() can be called.
+  void InsertGroupImpl(const SavedTabGroup& group);
+
   // Implementations of CRUD operations.
   std::unique_ptr<SavedTabGroup> RemoveImpl(int index);
   void UpdateVisualDataImpl(int index,
@@ -149,12 +173,15 @@ class SavedTabGroupModel {
   // Obsevers of the model.
   base::ObserverList<SavedTabGroupModelObserver>::Unchecked observers_;
 
-  // Storage of all saved tab groups in the order they are displayed.
-  std::vector<SavedTabGroup> saved_tab_groups_;
+  // True when SavedTabGroupModel::LoadStoredEntries has finished, false
+  // otherwise.
+  bool is_loaded_ = false;
 
-  // SavedTabGroupModels are created on a per profile basis with a keyed
-  // service. Returns the Profile that made the SavedTabGroupModel
-  raw_ptr<Profile> profile_ = nullptr;
+  // Storage of all saved tab groups in the order they are displayed. The
+  // position of the groups must maintain sorted order as sync may not propagate
+  // an entire update completely leaving us with missing groups / gaps between
+  // the positions.
+  std::vector<SavedTabGroup> saved_tab_groups_;
 };
 
 #endif  // COMPONENTS_SAVED_TAB_GROUPS_SAVED_TAB_GROUP_MODEL_H_

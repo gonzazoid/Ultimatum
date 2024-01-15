@@ -8,20 +8,18 @@ static_library("web_package") {
   sources = [
     "input_reader.cc",
     "input_reader.h",
-    "shared_file.cc",
-    "shared_file.h",
-    "signed_web_bundles/ed25519_public_key.cc",
-    "signed_web_bundles/ed25519_public_key.h",
-    "signed_web_bundles/ed25519_signature.cc",
-    "signed_web_bundles/ed25519_signature.h",
     "signed_web_bundles/integrity_block_parser.cc",
     "signed_web_bundles/integrity_block_parser.h",
     "signed_web_bundles/signed_web_bundle_id.cc",
     "signed_web_bundles/signed_web_bundle_id.h",
     "signed_web_bundles/signed_web_bundle_integrity_block.cc",
     "signed_web_bundles/signed_web_bundle_integrity_block.h",
+    "signed_web_bundles/signed_web_bundle_signature_stack.cc",
+    "signed_web_bundles/signed_web_bundle_signature_stack.h",
     "signed_web_bundles/signed_web_bundle_signature_stack_entry.cc",
     "signed_web_bundles/signed_web_bundle_signature_stack_entry.h",
+    "signed_web_bundles/signed_web_bundle_signature_verifier.cc",
+    "signed_web_bundles/signed_web_bundle_signature_verifier.h",
     "signed_web_bundles/signed_web_bundle_utils.cc",
     "signed_web_bundles/signed_web_bundle_utils.h",
     "web_bundle_builder.cc",
@@ -43,17 +41,39 @@ static_library("web_package") {
     "//services/network/public/mojom",
   ]
 
-  public_deps = [ "//components/web_package/mojom" ]
+  public_deps = [
+    "//components/web_package:mojom_mapped_types",
+    "//components/web_package/mojom",
+  ]
+}
+
+source_set("mojom_mapped_types") {
+  visibility = [ "./*" ]
+
+  sources = [
+    "signed_web_bundles/ed25519_public_key.cc",
+    "signed_web_bundles/ed25519_public_key.h",
+    "signed_web_bundles/ed25519_signature.cc",
+    "signed_web_bundles/ed25519_signature.h",
+  ]
+
+  deps = [
+    "//base",
+    "//mojo/public/cpp/bindings",
+  ]
 }
 
 source_set("unit_tests") {
   testonly = true
   sources = [
+    "mojom/web_bundle_parser_mojom_traits_unittest.cc",
     "signed_web_bundles/ed25519_public_key_unittest.cc",
     "signed_web_bundles/ed25519_signature_unittest.cc",
     "signed_web_bundles/signed_web_bundle_id_unittest.cc",
     "signed_web_bundles/signed_web_bundle_integrity_block_unittest.cc",
     "signed_web_bundles/signed_web_bundle_signature_stack_entry_unittest.cc",
+    "signed_web_bundles/signed_web_bundle_signature_stack_unittest.cc",
+    "signed_web_bundles/signed_web_bundle_signature_verifier_unittest.cc",
     "signed_web_bundles/signed_web_bundle_utils_unittest.cc",
     "web_bundle_builder_unittest.cc",
     "web_bundle_parser_factory_unittest.cc",
@@ -65,8 +85,14 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//components/cbor",
     "//components/web_package/test_support",
+    "//mojo/public/cpp/bindings",
+    "//mojo/public/cpp/test_support:test_utils",
     "//testing/gtest",
   ]
+
+  if (is_ios) {
+    deps += [ "//components/test:web_package_test_bundle_data" ]
+  }
 }
 
 fuzzer_test("web_bundle_parser_fuzzer") {

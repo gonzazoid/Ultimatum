@@ -11,12 +11,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 
-import android.app.Activity;
-import android.os.Build;
-import android.support.test.runner.lifecycle.Stage;
+import android.content.res.Resources;
 import android.view.View;
 
-import androidx.test.filters.MediumTest;
+import androidx.test.ext.junit.rules.ActivityScenarioRule;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -33,106 +31,85 @@ import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.Supplier;
-import org.chromium.base.test.BaseActivityTestRule;
-import org.chromium.base.test.util.ApplicationTestUtils;
-import org.chromium.base.test.util.Batch;
-import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.base.test.util.UserActionTester;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.share.ChromeShareExtras.DetailedContentType;
+import org.chromium.chrome.browser.share.ShareContentTypeHelper;
+import org.chromium.chrome.browser.share.ShareContentTypeHelper.ContentType;
 import org.chromium.chrome.browser.share.link_to_text.LinkToTextCoordinator.LinkGeneration;
+import org.chromium.chrome.browser.share.send_tab_to_self.EntryPointDisplayReason;
 import org.chromium.chrome.browser.share.send_tab_to_self.SendTabToSelfAndroidBridge;
 import org.chromium.chrome.browser.share.send_tab_to_self.SendTabToSelfAndroidBridgeJni;
 import org.chromium.chrome.browser.share.share_sheet.ShareSheetLinkToggleCoordinator.LinkToggleState;
 import org.chromium.chrome.browser.share.share_sheet.ShareSheetLinkToggleMetricsHelper.LinkToggleMetricsDetails;
-import org.chromium.chrome.browser.share.share_sheet.ShareSheetPropertyModelBuilder.ContentType;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.AutomotiveContextWrapperTestRule;
 import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
+import org.chromium.components.browser_ui.device_lock.DeviceLockActivityLauncher;
 import org.chromium.components.browser_ui.share.ShareParams;
 import org.chromium.components.feature_engagement.Tracker;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.components.user_prefs.UserPrefsJni;
 import org.chromium.content_public.browser.WebContents;
-import org.chromium.content_public.browser.test.NativeLibraryTestUtils;
+import org.chromium.ui.base.TestActivity;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
-import org.chromium.ui.test.util.BlankUiTestActivity;
 import org.chromium.url.GURL;
+import org.chromium.url.JUnitTestGURLs;
 
-import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests {@link ChromeProvidedSharingOptionsProvider}.
- */
-@Batch(Batch.UNIT_TESTS)
-@RunWith(ChromeJUnit4ClassRunner.class)
-@EnableFeatures(
-        {ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT, ChromeFeatureList.WEBNOTES_STYLIZE})
-@DisableFeatures(
-        {ChromeFeatureList.LIGHTWEIGHT_REACTIONS, ChromeFeatureList.UPCOMING_SHARING_FEATURES,
-                ChromeFeatureList.SEND_TAB_TO_SELF_SIGNIN_PROMO})
+/** Instrumentation Unit tests {@link ChromeProvidedSharingOptionsProvider}. */
+@RunWith(BaseRobolectricTestRunner.class)
 public class ChromeProvidedSharingOptionsProviderTest {
     @Rule
-    public BaseActivityTestRule<BlankUiTestActivity> mActivityTestRule =
-            new BaseActivityTestRule<>(BlankUiTestActivity.class);
+    public ActivityScenarioRule<TestActivity> mActivityScenarioRule =
+            new ActivityScenarioRule<>(TestActivity.class);
+
+    @Rule public TestRule mFeatureProcessor = new Features.JUnitProcessor();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
     @Rule
-    public TestRule mFeatureProcessor = new Features.JUnitProcessor();
+    public AutomotiveContextWrapperTestRule mAutoTestRule = new AutomotiveContextWrapperTestRule();
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    private static final String URL = JUnitTestGURLs.EXAMPLE_URL.getSpec();
 
-    private static final String URL = "http://www.google.com/";
+    @Mock private UserPrefs.Natives mUserPrefsNatives;
+    @Mock private SendTabToSelfAndroidBridge.Natives mSendTabToSelfAndroidBridgeNatives;
+    @Mock private Profile mProfile;
+    @Mock private PrefService mPrefService;
+    @Mock private ShareSheetCoordinator mShareSheetCoordinator;
+    @Mock private Supplier<Tab> mTabProvider;
+    @Mock private Tab mTab;
+    @Mock private BottomSheetController mBottomSheetController;
+    @Mock private WebContents mWebContents;
+    @Mock private Tracker mTracker;
+    @Mock private ShareParams.TargetChosenCallback mTargetChosenCallback;
+    @Mock private WindowAndroid mWindowAndroid;
+    @Mock private DeviceLockActivityLauncher mDeviceLockActivityLauncher;
 
-    @Mock
-    private UserPrefs.Natives mUserPrefsNatives;
-    @Mock
-    private SendTabToSelfAndroidBridge.Natives mSendTabToSelfAndroidBridgeNatives;
-    @Mock
-    private Profile mProfile;
-    @Mock
-    private PrefService mPrefService;
-    @Mock
-    private ShareSheetCoordinator mShareSheetCoordinator;
-    @Mock
-    private Supplier<Tab> mTabProvider;
-    @Mock
-    private Tab mTab;
-    @Mock
-    private BottomSheetController mBottomSheetController;
-    @Mock
-    private WebContents mWebContents;
-    @Mock
-    private Tracker mTracker;
-    @Mock
-    private ShareParams.TargetChosenCallback mTargetChosenCallback;
-    @Mock
-    private WindowAndroid mWindowAndroid;
-
-    private Activity mActivity;
+    private TestActivity mActivity;
     private ChromeProvidedSharingOptionsProvider mChromeProvidedSharingOptionsProvider;
     private UserActionTester mActionTester;
 
     @Before
     public void setUp() {
-        NativeLibraryTestUtils.loadNativeLibraryNoBrowserProcess();
+        mActivityScenarioRule.getScenario().onActivity(activity -> mActivity = activity);
+
         MockitoAnnotations.initMocks(this);
         mJniMocker.mock(UserPrefsJni.TEST_HOOKS, mUserPrefsNatives);
         mJniMocker.mock(
                 SendTabToSelfAndroidBridgeJni.TEST_HOOKS, mSendTabToSelfAndroidBridgeNatives);
         Mockito.when(mUserPrefsNatives.get(mProfile)).thenReturn(mPrefService);
-        Mockito.when(mSendTabToSelfAndroidBridgeNatives.getEntryPointDisplayReason(
-                             any(), anyString()))
+        Mockito.when(
+                        mSendTabToSelfAndroidBridgeNatives.getEntryPointDisplayReason(
+                                any(), anyString()))
                 .thenReturn(null);
         Mockito.when(mTabProvider.hasValue()).thenReturn(true);
         Mockito.when(mTabProvider.get()).thenReturn(mTab);
@@ -141,357 +118,357 @@ public class ChromeProvidedSharingOptionsProviderTest {
         Mockito.doNothing().when(mBottomSheetController).hideContent(any(), anyBoolean());
 
         TrackerFactory.setTrackerForTests(mTracker);
-        mActivityTestRule.launchActivity(null);
-        ApplicationTestUtils.waitForActivityState(mActivityTestRule.getActivity(), Stage.RESUMED);
-        mActivity = mActivityTestRule.getActivity();
     }
 
     @After
     public void tearDown() throws Exception {
-        TrackerFactory.setTrackerForTests(null);
         if (mActionTester != null) mActionTester.tearDown();
     }
 
     @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void getPropertyModels_lightweightReactionsEnabled() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, LinkGeneration.MAX);
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ShareSheetPropertyModelBuilder.ALL_CONTENT_TYPES_FOR_TEST,
-                        DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
-
-        assertTrue("Property models should contain Lightweight Reactions.",
-                propertyModelsContain(propertyModels, R.string.sharing_lightweight_reactions));
-    }
-
-    @Test
-    @MediumTest
     public void getPropertyModels_longScreenshotEnabledNoTab_excludesLongScreenshot() {
         Mockito.when(mTabProvider.hasValue()).thenReturn(false);
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ true, LinkGeneration.MAX);
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ShareSheetPropertyModelBuilder.ALL_CONTENT_TYPES_FOR_TEST,
+                        ShareContentTypeHelper.ALL_CONTENT_TYPES_FOR_TEST,
                         DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
+                        /* isMultiWindow= */ false);
 
-        assertFalse("Property models should not contain long screenshots.",
+        assertFalse(
+                "Property models should not contain long screenshots.",
                 propertyModelsContain(propertyModels, R.string.sharing_long_screenshot));
     }
 
     @Test
-    @MediumTest
     public void getPropertyModels_printingEnabledNoTab_excludesPrinting() {
         Mockito.when(mTabProvider.hasValue()).thenReturn(false);
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ true, LinkGeneration.MAX);
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ShareSheetPropertyModelBuilder.ALL_CONTENT_TYPES_FOR_TEST,
+                        ShareContentTypeHelper.ALL_CONTENT_TYPES_FOR_TEST,
                         DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
+                        /* isMultiWindow= */ false);
 
-        assertFalse("Property models should not contain printing.",
+        assertFalse(
+                "Property models should not contain printing.",
                 propertyModelsContain(propertyModels, R.string.print_share_activity_title));
     }
 
     @Test
-    @MediumTest
     public void getPropertyModels_printingEnabled_includesPrinting() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ true, LinkGeneration.MAX);
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ShareSheetPropertyModelBuilder.ALL_CONTENT_TYPES_FOR_TEST,
+                        ShareContentTypeHelper.ALL_CONTENT_TYPES_FOR_TEST,
                         DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
+                        /* isMultiWindow= */ false);
 
-        assertTrue("Property models should contain printing.",
+        assertTrue(
+                "Property models should contain printing.",
                 propertyModelsContain(propertyModels, R.string.print_share_activity_title));
     }
 
     @Test
-    @MediumTest
-    @Features.DisableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT,
-            ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void
-    getPropertyModels_linkAndTextShare() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, LinkGeneration.MAX);
-
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ImmutableSet.of(ContentType.LINK_AND_TEXT,
-                                ContentType.LINK_PAGE_NOT_VISIBLE, ContentType.TEXT),
-                        DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/true);
-
-        assertCorrectModelsAreInTheRightOrder(propertyModels,
-                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy),
-                        mActivity.getResources().getString(
-                                R.string.send_tab_to_self_share_activity_title),
-                        mActivity.getResources().getString(R.string.qr_code_share_icon_label)));
-    }
-
-    @Test
-    @MediumTest
-    @Features.DisableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT,
-            ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void
-    getPropertyModels_linkShare() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, LinkGeneration.MAX);
-
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ImmutableSet.of(ContentType.LINK_PAGE_NOT_VISIBLE),
-                        DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/true);
-
-        assertCorrectModelsAreInTheRightOrder(propertyModels,
-                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_url),
-                        mActivity.getResources().getString(
-                                R.string.send_tab_to_self_share_activity_title),
-                        mActivity.getResources().getString(R.string.qr_code_share_icon_label)));
-    }
-
-    @Test
-    @MediumTest
-    @Features.DisableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT,
-            ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void
-    getPropertyModels_textShare() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, LinkGeneration.MAX);
-
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ImmutableSet.of(ContentType.TEXT), DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/true);
-
-        assertCorrectModelsAreInTheRightOrder(propertyModels,
-                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_text)));
-    }
-
-    @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT})
-    public void getPropertyModels_multiWindow_doesNotIncludeScreenshot() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, LinkGeneration.MAX);
-
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ShareSheetPropertyModelBuilder.ALL_CONTENT_TYPES_FOR_TEST,
-                        DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/true);
-
-        assertFalse("Property models should not contain Screenshot.",
-                propertyModelsContain(propertyModels, R.string.sharing_screenshot));
-    }
-
-    @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT})
     public void getPropertyModels_isIncognito_doesNotIncludeQrCode() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/true,
-                /*printingEnabled=*/false, LinkGeneration.MAX);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ true, /* printingEnabled= */ false, LinkGeneration.MAX);
 
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ShareSheetPropertyModelBuilder.ALL_CONTENT_TYPES_FOR_TEST,
+                        ShareContentTypeHelper.ALL_CONTENT_TYPES_FOR_TEST,
                         DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
+                        /* isMultiWindow= */ false);
 
-        assertFalse("Property models should not contain QR Code.",
+        assertFalse(
+                "Property models should not contain QR Code.",
                 propertyModelsContain(propertyModels, R.string.qr_code_share_icon_label));
     }
 
     @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT,
-            ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void
-    getPropertyModels_filtersByContentType() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
+    public void getPropertyModels_filtersByContentType() {
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ true, LinkGeneration.MAX);
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
                         ImmutableSet.of(ContentType.LINK_PAGE_NOT_VISIBLE),
                         DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
+                        /* isMultiWindow= */ false);
 
-        assertCorrectModelsAreInTheRightOrder(propertyModels,
-                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_url),
-                        mActivity.getResources().getString(
-                                R.string.send_tab_to_self_share_activity_title),
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(
+                        mActivity.getResources().getString(R.string.sharing_copy_url),
                         mActivity.getResources().getString(R.string.qr_code_share_icon_label)));
     }
 
     @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT,
-            ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void
-    getPropertyModels_multipleTypes_filtersByContentType() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
+    public void getPropertyModels_multipleTypes_filtersByContentType() {
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ true, LinkGeneration.MAX);
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
                         ImmutableSet.of(ContentType.LINK_PAGE_NOT_VISIBLE, ContentType.IMAGE),
                         DetailedContentType.NOT_SPECIFIED,
-                        /*isMultiWindow=*/false);
+                        /* isMultiWindow= */ false);
 
         // Long Screenshots is supported >= Android N (7.0).
-        List<String> expectedModels = new ArrayList<String>();
-        expectedModels.add(mActivity.getResources().getString(R.string.sharing_screenshot));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            expectedModels.add(
-                    mActivity.getResources().getString(R.string.sharing_long_screenshot));
-        }
-        expectedModels.addAll(ImmutableList.of(
-                mActivity.getResources().getString(R.string.sharing_lightweight_reactions),
-                mActivity.getResources().getString(R.string.sharing_copy_url),
-                mActivity.getResources().getString(R.string.sharing_copy_image),
-                mActivity.getResources().getString(R.string.send_tab_to_self_share_activity_title),
-                mActivity.getResources().getString(R.string.qr_code_share_icon_label),
-                mActivity.getResources().getString(R.string.sharing_save_image)));
-
-        assertCorrectModelsAreInTheRightOrder(propertyModels, expectedModels);
-    }
-
-    @Test
-    @MediumTest
-    @Features.DisableFeatures({ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void getPropertyModels_nonLightweightReactions_doesNotFilterByDetailedContentType() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ImmutableSet.of(ContentType.IMAGE), DetailedContentType.IMAGE,
-                        /*isMultiWindow=*/false);
-
-        List<String> expectedModels = new ArrayList<String>();
-        expectedModels.add(mActivity.getResources().getString(R.string.sharing_screenshot));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            expectedModels.add(
-                    mActivity.getResources().getString(R.string.sharing_long_screenshot));
-        }
-        expectedModels.addAll(ImmutableList.of(
-                mActivity.getResources().getString(R.string.sharing_copy_image),
-                mActivity.getResources().getString(R.string.send_tab_to_self_share_activity_title),
-                mActivity.getResources().getString(R.string.qr_code_share_icon_label),
-                mActivity.getResources().getString(R.string.sharing_save_image)));
-
-        assertCorrectModelsAreInTheRightOrder(propertyModels, expectedModels);
-    }
-
-    @Test
-    @MediumTest
-    public void getPropertyModels_webnotes_filtersByDetailedContentType() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ImmutableSet.of(ContentType.IMAGE), DetailedContentType.WEB_NOTES,
-                        /*isMultiWindow=*/false);
-
         List<String> expectedModels =
-                ImmutableList.<String>builder()
-                        .add(mActivity.getResources().getString(R.string.sharing_copy_image))
-                        .add(mActivity.getResources().getString(R.string.sharing_save_image))
-                        .build();
+                ImmutableList.of(
+                        mActivity.getResources().getString(R.string.sharing_copy_url),
+                        mActivity.getResources().getString(R.string.sharing_copy_image),
+                        mActivity.getResources().getString(R.string.sharing_long_screenshot),
+                        mActivity.getResources().getString(R.string.qr_code_share_icon_label));
 
         assertCorrectModelsAreInTheRightOrder(propertyModels, expectedModels);
     }
 
     @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    public void getPropertyModels_lightweightReactions_filtersByDetailedContentType() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/true, LinkGeneration.MAX);
+    public void getPropertyModels_doesNotFilterByDetailedContentType() {
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ true, LinkGeneration.MAX);
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
                         ImmutableSet.of(ContentType.IMAGE),
-                        DetailedContentType.LIGHTWEIGHT_REACTION,
-                        /*isMultiWindow=*/false);
+                        DetailedContentType.IMAGE,
+                        /* isMultiWindow= */ false);
 
-        assertCorrectModelsAreInTheRightOrder(propertyModels,
-                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_gif)));
+        List<String> expectedModels =
+                ImmutableList.of(
+                        mActivity.getResources().getString(R.string.sharing_copy_image),
+                        mActivity.getResources().getString(R.string.sharing_long_screenshot),
+                        mActivity.getResources().getString(R.string.qr_code_share_icon_label));
+
+        assertCorrectModelsAreInTheRightOrder(propertyModels, expectedModels);
     }
 
     @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.PREEMPTIVE_LINK_TO_TEXT_GENERATION})
-    @Features.DisableFeatures({ChromeFeatureList.CHROME_SHARE_LONG_SCREENSHOT,
-            ChromeFeatureList.LIGHTWEIGHT_REACTIONS})
-    @DisabledTest(message = "https://crbug.com/1318398")
-    public void
-    getShareDetailsMetrics_LinkGeneration() {
-        @LinkGeneration
-        int linkGenerationStatus = LinkGeneration.LINK;
-
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, linkGenerationStatus);
-        List<PropertyModel> propertyModels =
-                mChromeProvidedSharingOptionsProvider.getPropertyModels(
-                        ImmutableSet.of(ContentType.HIGHLIGHTED_TEXT),
-                        DetailedContentType.NOT_SPECIFIED, /*isMultiWindow=*/false);
-
-        assertCorrectLinkGenerationMetrics(propertyModels, linkGenerationStatus);
-    }
-
-    @Test
-    @MediumTest
     public void getPropertyModels_onClick_callsOnTargetChosen() {
-        setUpChromeProvidedSharingOptionsProviderTest(/*isIncognito=*/false,
-                /*printingEnabled=*/false, LinkGeneration.LINK);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, LinkGeneration.LINK);
 
         List<PropertyModel> propertyModels =
                 mChromeProvidedSharingOptionsProvider.getPropertyModels(
                         ImmutableSet.of(ContentType.LINK_PAGE_VISIBLE),
-                        DetailedContentType.NOT_SPECIFIED, /*isMultiWindow=*/false);
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ false);
         View.OnClickListener onClickListener =
                 propertyModels.get(0).get(ShareSheetItemViewProperties.CLICK_LISTENER);
 
         onClickListener.onClick(null);
         Mockito.verify(mTargetChosenCallback, Mockito.times(1))
-                .onTargetChosen(ChromeProvidedSharingOptionsProvider
-                                        .CHROME_PROVIDED_FEATURE_COMPONENT_NAME);
+                .onTargetChosen(
+                        ChromeProvidedSharingOptionsProvider
+                                .CHROME_PROVIDED_FEATURE_COMPONENT_NAME);
     }
 
-    private void setUpChromeProvidedSharingOptionsProviderTest(boolean isIncognito,
-            boolean printingEnabled, @LinkGeneration int linkGenerationStatus) {
+    @Test
+    public void getPropertyModels_linksForAutomotive() {
+        mAutoTestRule.setIsAutomotive(true);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, LinkGeneration.MAX);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.LINK_PAGE_VISIBLE),
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ true);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(
+                        mActivity.getResources().getString(R.string.sharing_copy_url),
+                        mActivity.getResources().getString(R.string.qr_code_share_icon_label)));
+    }
+
+    @Test
+    public void getPropertyModels_sharingImageForAutomotiveIncognito() {
+        mAutoTestRule.setIsAutomotive(true);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ true, /* printingEnabled= */ false, LinkGeneration.LINK);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.IMAGE_AND_LINK, ContentType.LINK_PAGE_VISIBLE),
+                        DetailedContentType.IMAGE,
+                        /* isMultiWindow= */ false);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_image)));
+    }
+
+    @Test
+    public void getPropertyModels_textAndLinksIncognito() {
+        mAutoTestRule.setIsAutomotive(true);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ true, /* printingEnabled= */ false, LinkGeneration.MAX);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.LINK_PAGE_VISIBLE, ContentType.LINK_AND_TEXT),
+                        DetailedContentType.WEB_SHARE,
+                        /* isMultiWindow= */ false);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy)));
+    }
+
+    @Test
+    public void getPropertyModels_highlightTextIncognito() {
+        mAutoTestRule.setIsAutomotive(true);
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ true, /* printingEnabled= */ false, LinkGeneration.LINK);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.HIGHLIGHTED_TEXT),
+                        DetailedContentType.HIGHLIGHTED_TEXT,
+                        /* isMultiWindow= */ false);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_text)));
+    }
+
+    @Test
+    public void getPropertyModels_linkAndTextShare() {
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, LinkGeneration.MAX);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(
+                                ContentType.LINK_AND_TEXT,
+                                ContentType.LINK_PAGE_NOT_VISIBLE,
+                                ContentType.TEXT),
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ true);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(
+                        mActivity.getResources().getString(R.string.sharing_copy),
+                        mActivity.getResources().getString(R.string.qr_code_share_icon_label)));
+    }
+
+    @Test
+    public void getPropertyModels_linkShare() {
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, LinkGeneration.MAX);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.LINK_PAGE_NOT_VISIBLE),
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ true);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(
+                        mActivity.getResources().getString(R.string.sharing_copy_url),
+                        mActivity.getResources().getString(R.string.qr_code_share_icon_label)));
+    }
+
+    @Test
+    public void getPropertyModels_sendTabToSelf() {
+        Mockito.when(
+                        mSendTabToSelfAndroidBridgeNatives.getEntryPointDisplayReason(
+                                any(), anyString()))
+                .thenReturn(EntryPointDisplayReason.OFFER_FEATURE);
+
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, LinkGeneration.MAX);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.LINK_PAGE_VISIBLE),
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ false);
+
+        assertTrue(
+                "Property models should contain send-tab-to-self.",
+                propertyModelsContain(propertyModels, R.string.sharing_send_tab_to_self));
+    }
+
+    @Test
+    public void getPropertyModels_textShare() {
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, LinkGeneration.MAX);
+
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.TEXT),
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ true);
+
+        assertCorrectModelsAreInTheRightOrder(
+                propertyModels,
+                ImmutableList.of(mActivity.getResources().getString(R.string.sharing_copy_text)));
+    }
+
+    @Test
+    public void getShareDetailsMetrics_linkGeneration() {
+        @LinkGeneration int linkGenerationStatus = LinkGeneration.LINK;
+
+        setUpChromeProvidedSharingOptionsProviderTest(
+                /* isIncognito= */ false, /* printingEnabled= */ false, linkGenerationStatus);
+        List<PropertyModel> propertyModels =
+                mChromeProvidedSharingOptionsProvider.getPropertyModels(
+                        ImmutableSet.of(ContentType.HIGHLIGHTED_TEXT),
+                        DetailedContentType.NOT_SPECIFIED,
+                        /* isMultiWindow= */ false);
+
+        assertCorrectLinkGenerationMetrics(propertyModels, linkGenerationStatus);
+    }
+
+    private void setUpChromeProvidedSharingOptionsProviderTest(
+            boolean isIncognito,
+            boolean printingEnabled,
+            @LinkGeneration int linkGenerationStatus) {
         Mockito.when(mPrefService.getBoolean(anyString())).thenReturn(printingEnabled);
         Mockito.when(mTab.isIncognito()).thenReturn(isIncognito);
 
-        ShareParams shareParams = new ShareParams.Builder(null, /*title=*/"", /*url=*/"")
-                                          .setCallback(mTargetChosenCallback)
-                                          .setText("")
-                                          .build();
-        mChromeProvidedSharingOptionsProvider = new ChromeProvidedSharingOptionsProvider(mActivity,
-                mWindowAndroid, mTabProvider, mBottomSheetController,
-                new ShareSheetBottomSheetContent(mActivity, null, mShareSheetCoordinator,
-                        shareParams, /*featureEngagementTracker=*/null),
-                shareParams,
-                /*TabPrinterDelegate=*/null, isIncognito,
-                /*shareStartTime=*/0, mShareSheetCoordinator,
-                /*imageEditorModuleProvider*/ null, mTracker, URL, linkGenerationStatus,
-                new LinkToggleMetricsDetails(
-                        LinkToggleState.COUNT, DetailedContentType.NOT_SPECIFIED),
-                mProfile);
+        ShareParams shareParams =
+                new ShareParams.Builder(null, /* title= */ "", /* url= */ "")
+                        .setCallback(mTargetChosenCallback)
+                        .setText("")
+                        .build();
+        mChromeProvidedSharingOptionsProvider =
+                new ChromeProvidedSharingOptionsProvider(
+                        mActivity,
+                        mWindowAndroid,
+                        mTabProvider,
+                        mBottomSheetController,
+                        new ShareSheetBottomSheetContent(
+                                mActivity,
+                                null,
+                                mShareSheetCoordinator,
+                                shareParams,
+                                /* featureEngagementTracker= */ null),
+                        shareParams,
+                        /* TabPrinterDelegate= */ null,
+                        isIncognito,
+                        /* shareStartTime= */ 0,
+                        mShareSheetCoordinator,
+                        mTracker,
+                        URL,
+                        linkGenerationStatus,
+                        new LinkToggleMetricsDetails(
+                                LinkToggleState.COUNT, DetailedContentType.NOT_SPECIFIED),
+                        mProfile,
+                        mDeviceLockActivityLauncher);
     }
 
     private boolean propertyModelsContain(List<PropertyModel> propertyModels, int labelId) {
         for (PropertyModel propertyModel : propertyModels) {
-            if (propertyModel.get(ShareSheetItemViewProperties.LABEL)
-                            .equals(mActivity.getResources().getString(labelId))) {
+            if (propertyModel
+                    .get(ShareSheetItemViewProperties.LABEL)
+                    .equals(mActivity.getResources().getString(labelId))) {
                 return true;
             }
         }
@@ -513,17 +490,10 @@ public class ChromeProvidedSharingOptionsProviderTest {
         mActionTester = new UserActionTester();
         View view = Mockito.mock(View.class);
         for (PropertyModel propertyModel : propertyModels) {
-            // There is no link generation for Stylize Cards yet.
-            if (propertyModel.get(ShareSheetItemViewProperties.LABEL)
-                            .equals(mActivity.getResources().getString(
-                                    R.string.sharing_webnotes_create_card))) {
-                continue;
-            }
-
-            // There is no link generation for Screenshots yet either.
-            if (propertyModel.get(ShareSheetItemViewProperties.LABEL)
-                            .equals(mActivity.getResources().getString(
-                                    R.string.sharing_screenshot))) {
+            String label = propertyModel.get(ShareSheetItemViewProperties.LABEL);
+            Resources res = mActivity.getResources();
+            // There is no link generation for Stylize Cards / Screenshots / Long Screenshots.
+            if (label.equals(res.getString(R.string.sharing_long_screenshot))) {
                 continue;
             }
 
@@ -535,27 +505,41 @@ public class ChromeProvidedSharingOptionsProviderTest {
                 case LinkGeneration.LINK:
                     assertTrue(
                             "Expected a SharingHubAndroid...Success.LinkToTextShared user action",
-                            mActionTester.getActions().contains(
-                                    "SharingHubAndroid.LinkGeneration.Success.LinkToTextShared"));
-                    assertEquals("Expected a 'link' shared stated metric to be a recorded", 1,
+                            mActionTester
+                                    .getActions()
+                                    .contains(
+                                            "SharingHubAndroid.LinkGeneration.Success.LinkToTextShared"));
+                    assertEquals(
+                            "Expected a 'link' shared stated metric to be a recorded",
+                            1,
                             RecordHistogram.getHistogramValueCountForTesting(
                                     "SharedHighlights.AndroidShareSheet.SharedState",
                                     LinkGeneration.LINK));
                     break;
                 case LinkGeneration.TEXT:
-                    assertTrue("Expected a SharingHubAndroid...Success.TextShared user action",
-                            mActionTester.getActions().contains(
-                                    "SharingHubAndroid.LinkGeneration.Success.TextShared"));
-                    assertEquals("Expected a 'text' shared stated metric to be a recorded", 1,
+                    assertTrue(
+                            "Expected a SharingHubAndroid...Success.TextShared user action",
+                            mActionTester
+                                    .getActions()
+                                    .contains(
+                                            "SharingHubAndroid.LinkGeneration.Success.TextShared"));
+                    assertEquals(
+                            "Expected a 'text' shared stated metric to be a recorded",
+                            1,
                             RecordHistogram.getHistogramValueCountForTesting(
                                     "SharedHighlights.AndroidShareSheet.SharedState",
                                     LinkGeneration.TEXT));
                     break;
                 case LinkGeneration.FAILURE:
-                    assertTrue("Expected a SharingHubAndroid...Failure.TextShared user action",
-                            mActionTester.getActions().contains(
-                                    "SharingHubAndroid.LinkGeneration.Failure.TextShared"));
-                    assertEquals("Expected a 'failure' shared stated metric to be a recorded", 1,
+                    assertTrue(
+                            "Expected a SharingHubAndroid...Failure.TextShared user action",
+                            mActionTester
+                                    .getActions()
+                                    .contains(
+                                            "SharingHubAndroid.LinkGeneration.Failure.TextShared"));
+                    assertEquals(
+                            "Expected a 'failure' shared stated metric to be a recorded",
+                            1,
                             RecordHistogram.getHistogramValueCountForTesting(
                                     "SharedHighlights.AndroidShareSheet.SharedState",
                                     LinkGeneration.FAILURE));

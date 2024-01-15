@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/aura/client/drag_drop_client.h"
@@ -19,16 +19,13 @@
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/ozone/buildflags.h"
 #include "ui/platform_window/wm/wm_drag_handler.h"
 #include "ui/platform_window/wm/wm_drop_handler.h"
 #include "ui/views/views_export.h"
 
-namespace aura {
-namespace client {
+namespace aura::client {
 class DragDropDelegate;
-}
-}  // namespace aura
+}  // namespace aura::client
 
 namespace ui {
 class DropTargetEvent;
@@ -106,8 +103,7 @@ class VIEWS_EXPORT DesktopDragDropClientOzone
   int OnDragMotion(const gfx::PointF& point,
                    int operation,
                    int modifiers) override;
-  void OnDragDrop(std::unique_ptr<ui::OSExchangeData> data,
-                  int modifiers) override;
+  void OnDragDrop(int modifiers) override;
   void OnDragLeave() override;
 
   // aura::WindowObserver
@@ -140,7 +136,7 @@ class VIEWS_EXPORT DesktopDragDropClientOzone
   aura::Window* root_window() { return root_window_; }
 
  private:
-  const raw_ptr<aura::Window> root_window_;
+  const raw_ptr<aura::Window, DanglingUntriaged> root_window_;
 
   const raw_ptr<ui::WmDragHandler> drag_handler_;
 

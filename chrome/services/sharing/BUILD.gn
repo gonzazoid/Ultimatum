@@ -10,6 +10,8 @@ source_set("sharing") {
     "sharing_impl.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "nearby",
     "webrtc",
@@ -35,7 +37,7 @@ source_set("unit_tests") {
     "//ash/public/cpp",
     "//base/test:test_support",
     "//chromeos/ash/services/nearby/public/cpp:test_support",
-    "//chromeos/services/network_config/public/cpp:test_support",
+    "//chromeos/ash/services/network_config/public/cpp:test_support",
     "//testing/gmock",
     "//testing/gtest",
   ]

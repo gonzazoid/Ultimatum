@@ -7,10 +7,12 @@
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/scoped_feature_list.h"
 #import "base/test/task_environment.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/ui/menu/action_factory+protected.h"
 #import "ios/chrome/browser/ui/menu/menu_action_type.h"
 #import "ios/chrome/browser/ui/menu/menu_histograms.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "testing/gmock/include/gmock/gmock.h"
 #import "testing/gtest/include/gtest/gtest.h"
@@ -22,20 +24,15 @@
 #import "ui/base/test/ios/ui_image_test_utils.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-MenuScenario kTestMenuScenario = MenuScenario::kHistoryEntry;
+const MenuScenarioHistogram kTestMenuScenario =
+    kMenuScenarioHistogramHistoryEntry;
 }  // namespace
 
 // Test fixture for the ActionFactory.
 class ActionFactoryTest : public PlatformTest {
  protected:
-  ActionFactoryTest() : test_title_(@"SomeTitle") {
-    feature_list_.InitAndEnableFeature(kUseSFSymbols);
-  }
+  ActionFactoryTest() : test_title_(@"SomeTitle") {}
 
   // Creates a blue square.
   UIImage* CreateMockImage() {
@@ -84,8 +81,8 @@ TEST_F(ActionFactoryTest, BookmarkAction) {
   EXPECT_EQ(expectedImage, action.image);
 }
 
-// Tests that the close action has the right title and image.
-TEST_F(ActionFactoryTest, CloseAction) {
+// Tests that the close regular tab action has the right title and image.
+TEST_F(ActionFactoryTest, CloseRegularTabAction) {
   ActionFactory* factory =
       [[ActionFactory alloc] initWithScenario:kTestMenuScenario];
 
@@ -94,7 +91,24 @@ TEST_F(ActionFactoryTest, CloseAction) {
   NSString* expectedTitle =
       l10n_util::GetNSString(IDS_IOS_CONTENT_CONTEXT_CLOSETAB);
 
-  UIAction* action = [factory actionToCloseTabWithBlock:^{
+  UIAction* action = [factory actionToCloseRegularTabWithBlock:^{
+  }];
+
+  EXPECT_TRUE([expectedTitle isEqualToString:action.title]);
+  EXPECT_EQ(expectedImage, action.image);
+}
+
+// Tests that the close pinned tab action has the right title and image.
+TEST_F(ActionFactoryTest, ClosePinnedTabAction) {
+  ActionFactory* factory =
+      [[ActionFactory alloc] initWithScenario:kTestMenuScenario];
+
+  UIImage* expectedImage =
+      DefaultSymbolWithPointSize(kXMarkSymbol, kSymbolActionPointSize);
+  NSString* expectedTitle =
+      l10n_util::GetNSString(IDS_IOS_CONTENT_CONTEXT_CLOSEPINNEDTAB);
+
+  UIAction* action = [factory actionToClosePinnedTabWithBlock:^{
   }];
 
   EXPECT_TRUE([expectedTitle isEqualToString:action.title]);
@@ -110,8 +124,7 @@ TEST_F(ActionFactoryTest, CopyAction) {
   NSString* expectedTitle =
       l10n_util::GetNSString(IDS_IOS_COPY_LINK_ACTION_TITLE);
 
-  GURL testURL = GURL("https://example.com");
-
+  CrURL* testURL = [[CrURL alloc] initWithGURL:GURL("https://example.com")];
   UIAction* action = [factory actionToCopyURL:testURL];
 
   EXPECT_TRUE([expectedTitle isEqualToString:action.title]);
@@ -239,7 +252,8 @@ TEST_F(ActionFactoryTest, MoveFolderAction) {
   ActionFactory* factory =
       [[ActionFactory alloc] initWithScenario:kTestMenuScenario];
 
-  UIImage* expectedImage = [UIImage imageNamed:@"move_folder"];
+  UIImage* expectedImage = MakeSymbolMulticolor(
+      CustomSymbolWithPointSize(kMoveFolderSymbol, kSymbolActionPointSize));
 
   NSString* expectedTitle =
       l10n_util::GetNSString(IDS_IOS_BOOKMARK_CONTEXT_MENU_MOVE);
@@ -248,7 +262,7 @@ TEST_F(ActionFactoryTest, MoveFolderAction) {
   }];
 
   EXPECT_TRUE([expectedTitle isEqualToString:action.title]);
-  EXPECT_EQ(expectedImage, action.image);
+  EXPECT_NSEQ(expectedImage, action.image);
 }
 
 // Tests that the Mark As Read action has the right title and image.
@@ -274,8 +288,8 @@ TEST_F(ActionFactoryTest, markAsUnreadAction) {
   ActionFactory* factory =
       [[ActionFactory alloc] initWithScenario:kTestMenuScenario];
 
-  UIImage* expectedImage =
-      DefaultSymbolWithPointSize(kHideActionSymbol, kSymbolActionPointSize);
+  UIImage* expectedImage = DefaultSymbolWithPointSize(kMarkAsUnreadActionSymbol,
+                                                      kSymbolActionPointSize);
 
   NSString* expectedTitle =
       l10n_util::GetNSString(IDS_IOS_READING_LIST_MARK_AS_UNREAD_ACTION);
@@ -293,7 +307,7 @@ TEST_F(ActionFactoryTest, viewOfflineVersion) {
   ActionFactory* factory =
       [[ActionFactory alloc] initWithScenario:kTestMenuScenario];
 
-  UIImage* expectedImage = DefaultSymbolWithPointSize(kCheckMarkCircleSymbol,
+  UIImage* expectedImage = DefaultSymbolWithPointSize(kCheckmarkCircleSymbol,
                                                       kSymbolActionPointSize);
 
   NSString* expectedTitle =
@@ -362,7 +376,7 @@ TEST_F(ActionFactoryTest, SelectTabsAction) {
   ActionFactory* factory =
       [[ActionFactory alloc] initWithScenario:kTestMenuScenario];
 
-  UIImage* expectedImage = DefaultSymbolWithPointSize(kCheckMarkCircleSymbol,
+  UIImage* expectedImage = DefaultSymbolWithPointSize(kCheckmarkCircleSymbol,
                                                       kSymbolActionPointSize);
   NSString* expectedTitle =
       l10n_util::GetNSString(IDS_IOS_CONTENT_CONTEXT_SELECTTABS);

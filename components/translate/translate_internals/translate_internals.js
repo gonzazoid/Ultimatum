@@ -9,8 +9,8 @@ import 'chrome://resources/js/ios/web_ui.js';
 import './strings.m.js';
 import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
-import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {addWebUiListener} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {$} from 'chrome://resources/js/util.js';
 
 const detectionLogs = [];
@@ -373,6 +373,17 @@ function onLanguageDetectionInfoAdded(detail) {
 
   const tr = document.createElement('tr');
 
+  // If language detection was skipped, do not populate related details.
+  const hasRunLangDetection = JSON.parse(detail['has_run_lang_detection']);
+  const cldLang = hasRunLangDetection ?
+      formatLanguageCode(detail['model_detected_language']) :
+      'No page content - language detection skipped';
+  const modelVersion =
+      hasRunLangDetection ? detail['detection_model_version'] : '';
+  const reliabilityScore =
+      hasRunLangDetection ? detail['model_reliability_score'].toFixed(2) : '';
+  const isReliable = hasRunLangDetection ? detail['is_model_reliable'] : '';
+
   appendTD(tr, formatDate(new Date(detail['time'])), 'detection-logs-time');
   appendTD(tr, detail['url'], 'detection-logs-url');
   appendTD(
@@ -381,16 +392,10 @@ function onLanguageDetectionInfoAdded(detail) {
   appendTD(
       tr, formatLanguageCode(detail['html_root_language']),
       'detection-logs-html-root-language');
-  appendTD(
-      tr, formatLanguageCode(detail['model_detected_language']),
-      'detection-logs-cld-language');
-  appendTD(
-      tr, detail['detection_model_version'],
-      'detection-logs-detection-model-version');
-  appendTD(
-      tr, detail['model_reliability_score'].toFixed(2),
-      'detection-logs-model-reliability');
-  appendTD(tr, detail['is_model_reliable'], 'detection-logs-is-cld-reliable');
+  appendTD(tr, cldLang, 'detection-logs-cld-language');
+  appendTD(tr, modelVersion, 'detection-logs-detection-model-version');
+  appendTD(tr, reliabilityScore, 'detection-logs-model-reliability');
+  appendTD(tr, isReliable, 'detection-logs-is-cld-reliable');
   appendTD(tr, detail['has_notranslate'], 'detection-logs-has-notranslate');
   appendTD(
       tr, formatLanguageCode(detail['adopted_language']),
@@ -550,13 +555,13 @@ function appendClearButton(elt, enabled, clearCallback) {
 }
 
 function addMessageHandlers() {
-  addWebUIListener('languageDetectionInfoAdded', onLanguageDetectionInfoAdded);
-  addWebUIListener('prefsUpdated', onPrefsUpdated);
-  addWebUIListener('supportedLanguagesUpdated', onSupportedLanguagesUpdated);
-  addWebUIListener('countryUpdated', onCountryUpdated);
-  addWebUIListener('translateErrorDetailsAdded', onTranslateErrorDetailsAdded);
-  addWebUIListener('translateEventDetailsAdded', onTranslateEventDetailsAdded);
-  addWebUIListener('translateInitDetailsAdded', onTranslateInitDetailsAdded);
+  addWebUiListener('languageDetectionInfoAdded', onLanguageDetectionInfoAdded);
+  addWebUiListener('prefsUpdated', onPrefsUpdated);
+  addWebUiListener('supportedLanguagesUpdated', onSupportedLanguagesUpdated);
+  addWebUiListener('countryUpdated', onCountryUpdated);
+  addWebUiListener('translateErrorDetailsAdded', onTranslateErrorDetailsAdded);
+  addWebUiListener('translateEventDetailsAdded', onTranslateEventDetailsAdded);
+  addWebUiListener('translateInitDetailsAdded', onTranslateInitDetailsAdded);
 }
 
 /**

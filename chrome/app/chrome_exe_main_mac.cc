@@ -19,7 +19,7 @@
 
 #include <memory>
 
-#include "base/allocator/early_zone_registration_mac.h"
+#include "base/allocator/early_zone_registration_apple.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/common/chrome_version.h"
@@ -127,7 +127,13 @@ typedef int (*ChromeMainPtr)(int, char**);
 // If the main executable has a significant change in size, this will need to be
 // revised. Hopefully a more elegant solution will become apparent before that's
 // required.
+#if !defined(DCHECK_ALWAYS_ON)
 __attribute__((used)) const char kGrossPaddingForCrbug1300598[56 * 1024] = {};
+#else
+// DCHECK builds are larger and therefore require less padding. See
+// https://crbug.com/1394196 for the calculations.
+__attribute__((used)) const char kGrossPaddingForCrbug1300598[36 * 1024] = {};
+#endif  // !defined(DCHECK_ALWAYS_ON)
 #endif
 
 [[noreturn]] void FatalError(const char* format, ...) {

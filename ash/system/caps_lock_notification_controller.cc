@@ -4,7 +4,7 @@
 
 #include "ash/system/caps_lock_notification_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/resources/vector_icons/vector_icons.h"
@@ -19,8 +19,8 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/chromeos/events/modifier_key.h"
-#include "ui/chromeos/events/pref_names.h"
+#include "ui/events/ash/mojom/modifier_key.mojom.h"
+#include "ui/events/ash/pref_names.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
 
@@ -40,7 +40,7 @@ std::unique_ptr<Notification> CreateNotification() {
       CapsLockNotificationController::IsSearchKeyMappedToCapsLock()
           ? IDS_ASH_STATUS_TRAY_CAPS_LOCK_CANCEL_BY_SEARCH
           : IDS_ASH_STATUS_TRAY_CAPS_LOCK_CANCEL_BY_ALT_SEARCH;
-  std::unique_ptr<Notification> notification = ash::CreateSystemNotification(
+  std::unique_ptr<Notification> notification = ash::CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, kCapsLockNotificationId,
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAPS_LOCK_ENABLED),
       l10n_util::GetStringUTF16(string_id),
@@ -93,20 +93,7 @@ bool CapsLockNotificationController::IsSearchKeyMappedToCapsLock() {
   // to worry about sync changing the pref while the menu or notification is
   // visible.
   return prefs->GetInteger(prefs::kLanguageRemapSearchKeyTo) ==
-         static_cast<int>(ui::chromeos::ModifierKey::kCapsLockKey);
-}
-
-// static
-void CapsLockNotificationController::RegisterProfilePrefs(
-    PrefRegistrySimple* registry,
-    bool for_test) {
-  if (for_test) {
-    // There is no remote pref service, so pretend that ash owns the pref.
-    registry->RegisterIntegerPref(
-        prefs::kLanguageRemapSearchKeyTo,
-        static_cast<int>(ui::chromeos::ModifierKey::kSearchKey));
-    return;
-  }
+         static_cast<int>(ui::mojom::ModifierKey::kCapsLock);
 }
 
 void CapsLockNotificationController::OnCapsLockChanged(bool enabled) {
@@ -117,8 +104,7 @@ void CapsLockNotificationController::OnCapsLockChanged(bool enabled) {
   if (enabled) {
     base::RecordAction(base::UserMetricsAction("StatusArea_CapsLock_Popup"));
     MessageCenter::Get()->AddNotification(CreateNotification());
-  } else if (MessageCenter::Get()->FindVisibleNotificationById(
-                 kCapsLockNotificationId)) {
+  } else {
     MessageCenter::Get()->RemoveNotification(kCapsLockNotificationId, false);
   }
 }

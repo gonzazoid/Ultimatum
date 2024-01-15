@@ -13,13 +13,13 @@
 #include "chrome/browser/command_updater_impl.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/safe_browsing/chrome_password_reuse_detection_manager_client.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/content_settings/content_setting_bubble_model_delegate.h"
 #include "chrome/browser/ui/view_ids.h"
-#include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/toolbar/reload_button.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
@@ -40,6 +40,7 @@
 #include "ui/views/background.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/layout_provider.h"
 #include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
@@ -78,7 +79,7 @@ class ToolbarRowView : public views::View {
     layout->set_cross_axis_alignment(
         views::BoxLayout::CrossAxisAlignment::kCenter);
     layout->set_between_child_spacing(
-        ChromeLayoutProvider::Get()->GetDistanceMetric(
+        views::LayoutProvider::Get()->GetDistanceMetric(
             views::DISTANCE_RELATED_CONTROL_HORIZONTAL));
 
     AddChildView(std::move(back));
@@ -147,9 +148,11 @@ void SimpleWebViewDialog::StartLoad(const GURL& url) {
   DCHECK(web_contents);
 
   // Create the password manager that is needed for the proxy.
-  ChromePasswordManagerClient::CreateForWebContentsWithAutofillClient(
-      web_contents,
-      autofill::ChromeAutofillClient::FromWebContents(web_contents));
+  autofill::ChromeAutofillClient::CreateForWebContents(web_contents);
+  ChromePasswordManagerClient::CreateForWebContents(web_contents);
+
+  // Create the password reuse detection manager for simple web view dialog.
+  ChromePasswordReuseDetectionManagerClient::CreateForWebContents(web_contents);
 
   // Set this as the web modal delegate so that web dialog can appear.
   web_modal::WebContentsModalDialogManager::CreateForWebContents(web_contents);
@@ -314,22 +317,22 @@ SimpleWebViewDialog::MakeWidgetDelegate() {
 void SimpleWebViewDialog::LoadImages() {
   const ui::ThemeProvider* tp = GetThemeProvider();
 
-  back_->SetImage(views::Button::STATE_NORMAL, tp->GetImageSkiaNamed(IDR_BACK));
-  back_->SetImage(views::Button::STATE_HOVERED,
-                  tp->GetImageSkiaNamed(IDR_BACK_H));
-  back_->SetImage(views::Button::STATE_PRESSED,
-                  tp->GetImageSkiaNamed(IDR_BACK_P));
-  back_->SetImage(views::Button::STATE_DISABLED,
-                  tp->GetImageSkiaNamed(IDR_BACK_D));
+  auto set_image_model = [=](views::ImageButton* button,
+                            views::Button::ButtonState state, int idr) {
+    gfx::ImageSkia* image = tp->GetImageSkiaNamed(idr);
+    button->SetImageModel(state, image ? ui::ImageModel::FromImageSkia(*image)
+                                       : ui::ImageModel());
+  };
 
-  forward_->SetImage(views::Button::STATE_NORMAL,
-                     tp->GetImageSkiaNamed(IDR_FORWARD));
-  forward_->SetImage(views::Button::STATE_HOVERED,
-                     tp->GetImageSkiaNamed(IDR_FORWARD_H));
-  forward_->SetImage(views::Button::STATE_PRESSED,
-                     tp->GetImageSkiaNamed(IDR_FORWARD_P));
-  forward_->SetImage(views::Button::STATE_DISABLED,
-                     tp->GetImageSkiaNamed(IDR_FORWARD_D));
+  set_image_model(back_, views::Button::STATE_NORMAL, IDR_BACK);
+  set_image_model(back_, views::Button::STATE_HOVERED, IDR_BACK_H);
+  set_image_model(back_, views::Button::STATE_PRESSED, IDR_BACK_P);
+  set_image_model(back_, views::Button::STATE_DISABLED, IDR_BACK_D);
+
+  set_image_model(forward_, views::Button::STATE_NORMAL, IDR_FORWARD);
+  set_image_model(forward_, views::Button::STATE_HOVERED, IDR_FORWARD_H);
+  set_image_model(forward_, views::Button::STATE_PRESSED, IDR_FORWARD_P);
+  set_image_model(forward_, views::Button::STATE_DISABLED, IDR_FORWARD_D);
 }
 
 void SimpleWebViewDialog::UpdateButtons() {

@@ -21,6 +21,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "components/viz/common/surfaces/surface_id.h"
@@ -107,7 +108,9 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
   // in response to a BeginFrame, or a CopyOutputRequest is issued.
   //
   // |ack.sequence_number| is only valid if called in response to a BeginFrame.
-  bool SurfaceModified(const SurfaceId& surface_id, const BeginFrameAck& ack);
+  bool SurfaceModified(const SurfaceId& surface_id,
+                       const BeginFrameAck& ack,
+                       SurfaceObserver::HandleInteraction handle_interaction);
 
   // Called when a surface has an active frame for the first time.
   void FirstSurfaceActivation(const SurfaceInfo& surface_info);
@@ -208,7 +211,7 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
   void AggregatedFrameSinksChanged();
 
   using CommitPredicate =
-      base::RepeatingCallback<bool(const SurfaceId&, const BeginFrameId&)>;
+      base::FunctionRef<bool(const SurfaceId&, const BeginFrameId&)>;
   // Commits all surfaces in range and their referenced surfaces. For each
   // surface processed calls `predicate` for each uncommitted frame from oldest
   // to newest. If predicate returns true, surface is committed. If not the
@@ -294,13 +297,15 @@ class VIZ_SERVICE_EXPORT SurfaceManager {
   base::flat_map<base::UnguessableToken,
                  std::unique_ptr<SurfaceAllocationGroup>>
       embed_token_to_allocation_group_;
-  base::flat_map<FrameSinkId, std::vector<SurfaceAllocationGroup*>>
+  base::flat_map<
+      FrameSinkId,
+      std::vector<raw_ptr<SurfaceAllocationGroup, VectorExperimental>>>
       frame_sink_id_to_allocation_groups_;
   base::flat_map<SurfaceId, std::unique_ptr<Surface>> surface_map_;
   base::ObserverList<SurfaceObserver>::Unchecked observer_list_;
   base::ThreadChecker thread_checker_;
 
-  base::flat_set<SurfaceId> surfaces_to_destroy_;
+  base::flat_map<SurfaceId, base::TimeTicks> surfaces_to_destroy_;
 
   // Root SurfaceId that references display root surfaces. There is no Surface
   // with this id, it's for bookkeeping purposes only.

@@ -10,6 +10,8 @@ static_library("web_ui") {
     "safe_browsing_ui.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
     "//components/enterprise/common/proto:connectors_proto",
@@ -23,10 +25,12 @@ static_library("web_ui") {
     "//components/safe_browsing/core/browser:referrer_chain_provider",
     "//components/safe_browsing/core/browser/db:hit_report",
     "//components/safe_browsing/core/browser/db:v4_local_database_manager",
+    "//components/safe_browsing/core/browser/hashprefix_realtime:hash_realtime_service",
     "//components/safe_browsing/core/common",
     "//components/safe_browsing/core/common:safe_browsing_prefs",
     "//components/safe_browsing/core/common/proto:csd_proto",
     "//components/safe_browsing/core/common/proto:realtimeapi_proto",
+    "//components/safe_browsing/core/common/proto:safebrowsingv5_proto",
     "//components/strings:components_strings_grit",
     "//components/sync/protocol:protocol",
     "//components/user_prefs:user_prefs",
@@ -44,6 +48,7 @@ source_set("unit_tests") {
 
   deps = [
     ":web_ui",
+    "//components/safe_browsing/core/common/proto:safebrowsingv5_proto",
     "//content/test:test_support",
     "//testing/gtest",
   ]

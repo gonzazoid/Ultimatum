@@ -7,6 +7,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "ui/base/cursor/platform_cursor.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/platform_window/platform_window_delegate.h"
 
 namespace ui {
@@ -40,7 +41,6 @@ void StubWindow::Close() {
 }
 
 bool StubWindow::IsVisible() const {
-  NOTIMPLEMENTED_LOG_ONCE();
   return true;
 }
 
@@ -77,12 +77,10 @@ bool StubWindow::HasCapture() const {
   return false;
 }
 
-void StubWindow::ToggleFullscreen() {
-  if (window_state_ == ui::PlatformWindowState::kUnknown) {
-    window_state_ = ui::PlatformWindowState::kFullScreen;
-  } else {
-    window_state_ = ui::PlatformWindowState::kUnknown;
-  }
+void StubWindow::SetFullscreen(bool fullscreen, int64_t target_display_id) {
+  DCHECK_EQ(target_display_id, display::kInvalidDisplayId);
+  window_state_ = fullscreen ? ui::PlatformWindowState::kFullScreen
+                             : ui::PlatformWindowState::kUnknown;
 }
 
 void StubWindow::Maximize() {}
@@ -96,11 +94,17 @@ PlatformWindowState StubWindow::GetPlatformWindowState() const {
 }
 
 void StubWindow::Activate() {
-  NOTIMPLEMENTED_LOG_ONCE();
+  if (activation_state_ != ActivationState::kActive) {
+    activation_state_ = ActivationState::kActive;
+    delegate_->OnActivationChanged(/*active=*/true);
+  }
 }
 
 void StubWindow::Deactivate() {
-  NOTIMPLEMENTED_LOG_ONCE();
+  if (activation_state_ != ActivationState::kInactive) {
+    activation_state_ = ActivationState::kInactive;
+    delegate_->OnActivationChanged(/*active=*/false);
+  }
 }
 
 void StubWindow::SetUseNativeFrame(bool use_native_frame) {}

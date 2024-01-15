@@ -8,6 +8,7 @@ using fuchsia.diagnostics;
 using fuchsia.media;
 using fuchsia.ui.gfx;
 using fuchsia.web;
+using zx;
 
 /// Describes the configuration under which a Cast application should run.
 type ApplicationConfig = resource table {
@@ -50,13 +51,20 @@ type ApplicationConfig = resource table {
     /// specified, then audio will be played through
     /// [`fuchsia.media/AudioConsumer`].
     11: audio_renderer_usage fuchsia.media.AudioRenderUsage;
+
+    /// Optionally specifies an amount of time to grant to the Cast activity's
+    /// web content to perform teardown tasks, in addition to the time permitted
+    /// for the component to stop. Setting this value therefore allows the
+    /// application's web content to out-live the component itself, for up to
+    /// the specified duration.
+    12: shutdown_delay zx.Duration;
 };
 
 /// Service interface for working with application configurations.
 @discoverable
-protocol ApplicationConfigManager {
+closed protocol ApplicationConfigManager {
     /// Returns the ApplicationConfig for the specified application Id.
-    GetConfig(struct {
+    strict GetConfig(struct {
         id string;
     }) -> (resource struct {
         config ApplicationConfig;

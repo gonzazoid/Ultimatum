@@ -8,14 +8,15 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <random>
 #include <set>
 #include <vector>
 
-#include "base/allocator/partition_allocator/address_pool_manager.h"
-#include "base/allocator/partition_allocator/partition_address_space.h"
-#include "base/allocator/partition_allocator/partition_alloc_config.h"
-#include "base/allocator/partition_allocator/partition_alloc_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/address_pool_manager.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_address_space.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/memory/page_size.h"
@@ -35,7 +36,6 @@
 #include "chromeos/ash/components/memory/userspace_swap/userspace_swap.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 
 namespace ash {
@@ -138,7 +138,7 @@ class RendererSwapDataImpl : public RendererSwapData {
   // for a call to MovePTEs. This makes swapping easier, because now we just
   // wait to observe the remap event as our indicator that we can read the
   // memory from the process.
-  absl::optional<Region> AllocFromSwapRegion();
+  std::optional<Region> AllocFromSwapRegion();
   void DeallocFromSwapRegion(const Region& region);
 
   // Swap at most |size_limit| bytes worth of memory on this renderer.
@@ -242,9 +242,9 @@ void RendererSwapDataImpl::UnaccountSwapSpace(int64_t reclaimed,
   AccountSwapSpace(-reclaimed, -swap_size);
 }
 
-absl::optional<Region> RendererSwapDataImpl::AllocFromSwapRegion() {
+std::optional<Region> RendererSwapDataImpl::AllocFromSwapRegion() {
   if (free_swap_dest_areas_.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   Region r = free_swap_dest_areas_.top();
@@ -415,8 +415,7 @@ std::ostream& operator<<(std::ostream& out, const UserspaceSwapConfig& c) {
 // KernelSupportsUserspaceSwap will test for all features necessary to enable
 // userspace swap.
 COMPONENT_EXPORT(USERSPACE_SWAP) bool KernelSupportsUserspaceSwap() {
-#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
-    !defined(PA_HAS_64_BITS_POINTERS)
+#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || !BUILDFLAG(HAS_64_BIT_POINTERS)
   // We currently only support 64bit partition alloc.
   return false;
 #else
@@ -449,7 +448,7 @@ COMPONENT_EXPORT(USERSPACE_SWAP) bool KernelSupportsUserspaceSwap() {
 
   return userfault_fd_supported && mremap_dontunmap_supported;
 #endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
-        // !defined(PA_HAS_64_BITS_POINTERS)
+        // !BUILDFLAG(HAS_64_BIT_POINTERS)
 }
 
 RendererSwapData::RendererSwapData() = default;
@@ -487,8 +486,7 @@ bool GetPartitionAllocSuperPagesInUse(
     int32_t max_superpages,
     std::vector<::userspace_swap::mojom::MemoryRegionPtr>& regions) {
   regions.clear();
-#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
-    !defined(PA_HAS_64_BITS_POINTERS)
+#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || !BUILDFLAG(HAS_64_BIT_POINTERS)
   return false;
 #else
 
@@ -520,7 +518,7 @@ bool GetPartitionAllocSuperPagesInUse(
         current_area_length += partition_alloc::kSuperPageSize;
       } else {
         if (current_area) {
-          regions.emplace_back(absl::in_place, current_area,
+          regions.emplace_back(std::in_place, current_area,
                                current_area_length);
           current_area = 0;
           current_area_length = 0;
@@ -529,7 +527,7 @@ bool GetPartitionAllocSuperPagesInUse(
     }
 
     if (current_area) {
-      regions.emplace_back(absl::in_place, current_area, current_area_length);
+      regions.emplace_back(std::in_place, current_area, current_area_length);
     }
 
     if (!superpages_remaining)
@@ -538,7 +536,7 @@ bool GetPartitionAllocSuperPagesInUse(
 
   return true;
 #endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
-        // !defined(PA_HAS_64_BITS_POINTERS)
+        // !BUILDFLAG(HAS_64_BIT_POINTERS)
 }
 
 COMPONENT_EXPORT(USERSPACE_SWAP) uint64_t GetGlobalMemoryReclaimed() {

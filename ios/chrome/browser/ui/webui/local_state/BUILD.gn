@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("local_state") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "local_state_ui.h",
     "local_state_ui.mm",
@@ -13,9 +12,9 @@ source_set("local_state") {
     "//components/local_state",
     "//components/prefs",
     "//components/resources",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/url:constants",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
     "//ios/web/public/webui",
   ]
 }

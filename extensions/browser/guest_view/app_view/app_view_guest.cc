@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "components/guest_view/browser/guest_view_manager.h"
 #include "content/public/browser/render_process_host.h"
@@ -19,6 +19,7 @@
 #include "extensions/browser/extension_host.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/guest_view/app_view/app_view_constants.h"
+#include "extensions/browser/guest_view/guest_view_feature_util.h"
 #include "extensions/browser/lazy_context_id.h"
 #include "extensions/browser/lazy_context_task_queue.h"
 #include "extensions/browser/process_manager.h"
@@ -107,17 +108,18 @@ bool AppViewGuest::CompletePendingRequest(
 
 // static
 std::unique_ptr<GuestViewBase> AppViewGuest::Create(
-    WebContents* owner_web_contents) {
-  return base::WrapUnique(new AppViewGuest(owner_web_contents));
+    content::RenderFrameHost* owner_rfh) {
+  return base::WrapUnique(new AppViewGuest(owner_rfh));
 }
 
-AppViewGuest::AppViewGuest(WebContents* owner_web_contents)
-    : GuestView<AppViewGuest>(owner_web_contents),
+AppViewGuest::AppViewGuest(content::RenderFrameHost* owner_rfh)
+    : GuestView<AppViewGuest>(owner_rfh),
       app_view_guest_delegate_(base::WrapUnique(
           ExtensionsAPIClient::Get()->CreateAppViewGuestDelegate())) {
   if (app_view_guest_delegate_) {
-    app_delegate_ = base::WrapUnique(
-        app_view_guest_delegate_->CreateAppDelegate(owner_web_contents));
+    app_delegate_ =
+        base::WrapUnique(app_view_guest_delegate_->CreateAppDelegate(
+            owner_rfh->GetBrowserContext()));
   }
 }
 
@@ -156,7 +158,7 @@ void AppViewGuest::RequestMediaAccessPermission(
 
 bool AppViewGuest::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   if (!app_delegate_) {
     return WebContentsDelegate::CheckMediaAccessPermission(
@@ -203,7 +205,8 @@ void AppViewGuest::CreateWebContents(std::unique_ptr<GuestViewBase> owned_this,
     return;
   }
 
-  const LazyContextId context_id(browser_context(), guest_extension->id());
+  const auto context_id =
+      LazyContextId::ForExtension(browser_context(), guest_extension);
   LazyContextTaskQueue* queue = context_id.GetTaskQueue();
   if (queue->ShouldEnqueueTask(browser_context(), guest_extension)) {
     queue->AddPendingTask(
@@ -233,6 +236,14 @@ void AppViewGuest::DidInitialize(const base::Value::Dict& create_params) {
                           std::string());
 }
 
+void AppViewGuest::MaybeRecreateGuestContents(
+    content::RenderFrameHost* outer_contents_frame) {
+  if (AreWebviewMPArchBehaviorsEnabled(browser_context())) {
+    // This situation is not possible for AppView.
+    NOTREACHED();
+  }
+}
+
 const char* AppViewGuest::GetAPINamespace() const {
   return appview::kEmbedderAPINamespace;
 }
@@ -246,6 +257,12 @@ void AppViewGuest::CompleteCreateWebContents(
     const Extension* guest_extension,
     std::unique_ptr<GuestViewBase> owned_this,
     WebContentsCreatedCallback callback) {
+  if (!owner_rfh()) {
+    // The owner was destroyed before getting a response to the embedding
+    // request, so we can't proceed with creating a guest.
+    std::move(callback).Run(std::move(owned_this), nullptr);
+    return;
+  }
   if (!url.is_valid()) {
     std::move(callback).Run(std::move(owned_this), nullptr);
     return;

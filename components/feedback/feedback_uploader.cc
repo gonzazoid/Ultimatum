@@ -4,10 +4,11 @@
 
 #include "components/feedback/feedback_uploader.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/feedback/features.h"
@@ -103,10 +104,11 @@ void FeedbackUploader::SetMinimumRetryDelayForTesting(base::TimeDelta delay) {
 }
 
 void FeedbackUploader::QueueReport(std::unique_ptr<std::string> data,
-                                   bool has_email) {
+                                   bool has_email,
+                                   int product_id) {
   reports_queue_.emplace(base::MakeRefCounted<FeedbackReport>(
       feedback_reports_path_, base::Time::Now(), std::move(data), task_runner_,
-      has_email));
+      has_email, product_id));
   UpdateUploadTimer();
 }
 
@@ -205,6 +207,18 @@ void FeedbackUploader::DispatchReport() {
             "information' prevents sending logs as well), the screenshot, or "
             "even his/her email address."
           destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts {
+              email: "cros-feedback-app@google.com"
+            }
+          }
+          user_data {
+            type: ARBITRARY_DATA
+            type: EMAIL
+            type: IMAGE
+            type: USER_CONTENT
+          }
+          last_reviewed: "2023-08-14"
         }
         policy {
           cookies_allowed: NO
@@ -223,11 +237,13 @@ void FeedbackUploader::DispatchReport() {
   resource_request->method = "POST";
 
   // Tell feedback server about the variation state of this install.
-  variations::AppendVariationsHeaderUnknownSignedIn(
-      feedback_post_url_,
-      is_off_the_record_ ? variations::InIncognito::kYes
-                         : variations::InIncognito::kNo,
-      resource_request.get());
+  if (report_being_dispatched_->should_include_variations()) {
+    variations::AppendVariationsHeaderUnknownSignedIn(
+        feedback_post_url_,
+        is_off_the_record_ ? variations::InIncognito::kYes
+                           : variations::InIncognito::kNo,
+        resource_request.get());
+  }
 
   if (report_being_dispatched_->has_email()) {
     AppendExtraHeadersToUploadRequest(resource_request.get());

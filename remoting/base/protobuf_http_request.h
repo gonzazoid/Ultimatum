@@ -5,16 +5,14 @@
 #ifndef REMOTING_BASE_PROTOBUF_HTTP_REQUEST_H_
 #define REMOTING_BASE_PROTOBUF_HTTP_REQUEST_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "remoting/base/protobuf_http_request_base.h"
 
-namespace google {
-namespace protobuf {
+namespace google::protobuf {
 class MessageLite;
-}  // namespace protobuf
-}  // namespace google
+}  // namespace google::protobuf
 
 namespace remoting {
 
@@ -65,11 +63,13 @@ class ProtobufHttpRequest final : public ProtobufHttpRequestBase {
   // Parses |response_body| and writes it to |response_message_|.
   ProtobufHttpStatus ParseResponse(std::unique_ptr<std::string> response_body);
 
+  void RunResponseCallback(const ProtobufHttpStatus& status);
+
   base::TimeDelta timeout_duration_ = base::Seconds(30);
+  base::OnceCallback<void(const ProtobufHttpStatus&)> response_callback_;
 
   // This is owned by |response_callback_|.
   raw_ptr<google::protobuf::MessageLite> response_message_;
-  base::OnceCallback<void(const ProtobufHttpStatus&)> response_callback_;
 };
 
 }  // namespace remoting

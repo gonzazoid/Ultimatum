@@ -9,9 +9,10 @@
 #include "base/json/json_writer.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/values.h"
+#include "components/local_state/local_state_utils.h"
 #include "components/prefs/pref_service.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/url/chrome_url_constants.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "ios/web/public/webui/url_data_source_ios.h"
 
@@ -47,12 +48,10 @@ class PrefsInternalsSource : public web::URLDataSourceIOS {
     }
 
     DCHECK_CURRENTLY_ON(web::WebThread::UI);
-    std::string json;
-    base::Value prefs = browser_state_->GetPrefs()->GetPreferenceValues(
-        PrefService::INCLUDE_DEFAULTS);
-    CHECK(base::JSONWriter::WriteWithOptions(
-        prefs, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json));
-    std::move(callback).Run(base::RefCountedString::TakeString(&json));
+
+    std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>(
+        local_state_utils::GetPrefsAsJson(browser_state_->GetPrefs())
+            .value_or(std::string())));
   }
 
  private:

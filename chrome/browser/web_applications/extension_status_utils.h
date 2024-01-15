@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "build/build_config.h"
 
 class Profile;
@@ -17,6 +17,14 @@ class BrowserContext;
 }
 
 namespace extensions {
+namespace testing {
+// Because the allow-list needs to stick around for a while, this flag makes it
+// easy for us to continue testing chrome apps on Windows/Mac/Linux without
+// having to jump through hurdles to add ids to the allow-list.
+// TODO(http://b/268221237): Remove this & tests on WML once allow-list is
+// removed.
+extern bool g_enable_chrome_apps_for_testing;
+}  // namespace testing
 
 bool IsExtensionBlockedByPolicy(content::BrowserContext* context,
                                 const std::string& extension_id);
@@ -41,6 +49,11 @@ bool IsExtensionDefaultInstalled(content::BrowserContext* context,
 // with |extension_id|.
 bool IsExternalExtensionUninstalled(content::BrowserContext* context,
                                     const std::string& extension_id);
+
+// Clears any recording of |extension_id| as being an externally installed
+// extension uninstalled by the user. Returns whether any change was made.
+bool ClearExternalExtensionUninstalled(content::BrowserContext* context,
+                                       const std::string& extension_id);
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
     BUILDFLAG(IS_FUCHSIA)

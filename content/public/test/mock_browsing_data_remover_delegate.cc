@@ -4,7 +4,7 @@
 
 #include "content/public/test/mock_browsing_data_remover_delegate.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -27,6 +27,7 @@ bool MockBrowsingDataRemoverDelegate::MayRemoveDownloadHistory() {
 
 std::vector<std::string>
 MockBrowsingDataRemoverDelegate::GetDomainsForDeferredCookieDeletion(
+    StoragePartition* storage_partition,
     uint64_t remove_mask) {
   return {};
 }
@@ -137,6 +138,15 @@ std::ostream& operator<<(
     }
     os << "  filter_builder: " << std::endl;
     os << "    mode: " << mode_string << std::endl;
+
+    auto config = p.filter_builder_->GetStoragePartitionConfig();
+    os << "    StoragePartition: ";
+    if (config.has_value()) {
+      os << config.value();
+    } else {
+      os << "NULL";
+    }
+    os << std::endl;
   }
   return os;
 }

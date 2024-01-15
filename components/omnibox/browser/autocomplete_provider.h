@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/in_memory_url_index_types.h"
@@ -173,6 +174,7 @@ class AutocompleteProvider
     TYPE_HISTORY_FUZZY = 1 << 16,
     TYPE_OPEN_TAB = 1 << 17,
     TYPE_HISTORY_CLUSTER_PROVIDER = 1 << 18,
+    TYPE_CALCULATOR = 1 << 19,
   };
 
   explicit AutocompleteProvider(Type type);
@@ -273,11 +275,6 @@ class AutocompleteProvider
   // information it wants to |provider_info|.
   virtual void AddProviderInfo(ProvidersInfo* provider_info) const;
 
-  // Called when a new omnibox session starts or the current session ends.
-  // This gives the opportunity to reset the internal state, if any, associated
-  // with the previous session.
-  virtual void ResetSession();
-
   // Estimates dynamic memory usage.
   // See base/trace_event/memory_usage_estimator.h for more info.
   //
@@ -322,62 +319,9 @@ class AutocompleteProvider
 
   typedef std::multimap<char16_t, std::u16string> WordMap;
 
-  // Finds the matches for |find_text| in |text|, classifies those matches,
-  // merges those classifications with |original_class|, and returns the merged
-  // classifications.
-  // If |text_is_search_query| is false, matches are classified as MATCH, and
-  // non-matches are classified as NONE. Otherwise, if |text_is_search_query| is
-  // true, matches are classified as NONE, and non-matches are classified as
-  // MATCH. This is done to mimic the behavior of SearchProvider which decorates
-  // matches according to the approach used by Google Suggest.
-  // |find_text| and |text| will be lowercased.
-  //
-  //   For example, given
-  //     |find_text| is "sp new",
-  //     |text| is "Sports and News at sports.somesite.com - visit us!",
-  //     |text_is_search_query| is false, and
-  //     |original_class| is {{0, NONE}, {19, URL}, {38, NONE}} (marking
-  //     "sports.somesite.com" as a URL),
-  //   Then this will return
-  //     {{0, MATCH}, {2, NONE}, {11, MATCH}, {14, NONE}, {19, URL|MATCH},
-  //     {21, URL}, {38, NONE}}; i.e.,
-  //     "Sports and News at sports.somesite.com - visit us!"
-  //      ^ ^        ^  ^    ^ ^                ^
-  //      0 2        11 14  19 21               38
-  //      M N        M  N  U|M U                N
-  //
-  //   For example, given
-  //     |find_text| is "canal",
-  //     |text| is "panama canal",
-  //     |text_is_search_query| is true, and
-  //     |original_class| is {{0, NONE}},
-  //   Then this will return
-  //     {{0,MATCH}, {7, NONE}}; i.e.,
-  //     "panama canal"
-  //      ^      ^
-  //      0 M    7 N
-  static ACMatchClassifications ClassifyAllMatchesInString(
-      const std::u16string& find_text,
-      const std::u16string& text,
-      const bool text_is_search_query,
-      const ACMatchClassifications& original_class = ACMatchClassifications());
-
   // Uses the keyword entry mode in `input` to decide if the user is currently
   // in keyword mode.
   static bool InKeywordMode(const AutocompleteInput& input);
-
-  // Used to determine if we're in keyword mode, if experimental keyword
-  // mode is enabled, and if we're confident that the user is intentionally
-  // (not accidentally) in keyword mode. Combined, this method returns
-  // whether the caller should perform steps that are only valid in this state.
-  static bool InExplicitExperimentalKeywordMode(const AutocompleteInput& input,
-                                                const std::u16string& keyword);
-
-  // Uses the keyword entry mode in `input` (and possibly compare the length
-  // of the user input vs `keyword`) to decide if the user intentionally
-  // entered keyword mode.
-  static bool InExplicitKeywordMode(const AutocompleteInput& input,
-                                    const std::u16string& keyword);
 
   // Trims "http:" or "https:" and up to two subsequent slashes from |url|. If
   // |trim_https| is true, trims "https:", otherwise trims "http:". Returns the
@@ -397,6 +341,12 @@ class AutocompleteProvider
 
   virtual ~AutocompleteProvider();
 
+  // Limits the size of `matches_` to `max_matches`. When ML scoring is enabled,
+  // the provider should pass all suggestions to the controller. In that case,
+  // this does not resize the list of matches, but instead marks all matches
+  // beyond `max_matches` as zero relevance and `culled_by_provider`.
+  void ResizeMatches(size_t max_matches, bool ml_scoring_enabled);
+
   // Fixes up user URL input to make it more possible to match against.  Among
   // many other things, this takes care of the following:
   // * Prepending file:// to file URLs
@@ -413,7 +363,8 @@ class AutocompleteProvider
   // string unconditionally.
   static FixupReturn FixupUserInput(const AutocompleteInput& input);
 
-  std::vector<AutocompleteProviderListener*> listeners_;
+  std::vector<raw_ptr<AutocompleteProviderListener, VectorExperimental>>
+      listeners_;
 
   const size_t provider_max_matches_;
   const size_t provider_max_matches_in_keyword_mode_{7};

@@ -10,10 +10,8 @@
 #include <utility>
 
 #include "base/containers/cxx20_erase.h"
-#include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
-#include "base/guid.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/clamped_math.h"
@@ -64,14 +62,6 @@ static const char kOtherBookmarksFolderServerTag[] = "other_bookmarks";
 static const char kOtherBookmarksFolderName[] = "Other Bookmarks";
 static const char kSyncedBookmarksFolderServerTag[] = "synced_bookmarks";
 static const char kSyncedBookmarksFolderName[] = "Synced Bookmarks";
-
-// Returns entity's version without increasing it by one for tombstones. The
-// version is updated and set in SaveEntity() and there is no need to increment
-// it again in CommitResponse. Otherwise, it would be possible that the next
-// commit request would return the same version.
-BASE_FEATURE(kSyncReturnRealVersionOnCommitInLoopbackServer,
-             "SyncReturnRealVersionOnCommitInLoopbackServer",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 int GetServerMigrationVersion(
     const std::map<ModelType, int>& server_migration_versions,
@@ -244,29 +234,24 @@ bool SortByVersion(const LoopbackServerEntity* lhs,
 }  // namespace
 
 LoopbackServer::LoopbackServer(const base::FilePath& persistent_file)
-    : strong_consistency_model_enabled_(false),
-      version_(0),
-      store_birthday_(0),
-      persistent_file_(persistent_file),
+    : persistent_file_(persistent_file),
       writer_(
           persistent_file_,
           base::ThreadPool::CreateSequencedTaskRunner(
-              {base::MayBlock(), base::TaskShutdownBehavior::BLOCK_SHUTDOWN})),
-      observer_for_tests_(nullptr) {
+              {base::MayBlock(), base::TaskShutdownBehavior::BLOCK_SHUTDOWN})) {
   DCHECK(!persistent_file_.empty());
   Init();
 }
 
 LoopbackServer::~LoopbackServer() {
-  if (writer_.HasPendingWrite())
-    writer_.DoScheduledWrite();
+  FlushToDisk();
 }
 
 void LoopbackServer::Init() {
   if (LoadStateFromFile())
     return;
 
-  store_birthday_ = base::Time::Now().ToJavaTime();
+  store_birthday_ = base::Time::Now().InMillisecondsSinceUnixEpoch();
   keystore_keys_.push_back(GenerateNewKeystoreKey());
 
   const bool create_result = CreateDefaultPermanentItems();
@@ -286,7 +271,7 @@ bool LoopbackServer::CreatePermanentBookmarkFolder(
   std::unique_ptr<LoopbackServerEntity> entity =
       PersistentPermanentEntity::CreateNew(
           syncer::BOOKMARKS, server_tag, name,
-          ModelTypeToRootTag(syncer::BOOKMARKS));
+          ModelTypeToProtocolRootTag(syncer::BOOKMARKS));
   if (!entity)
     return false;
 
@@ -297,8 +282,8 @@ bool LoopbackServer::CreatePermanentBookmarkFolder(
 bool LoopbackServer::CreateDefaultPermanentItems() {
   // Permanent folders are always required for Bookmarks (hierarchical
   // structure) and Nigori (data stored in permanent root folder).
-  ModelTypeSet permanent_folder_types =
-      ModelTypeSet(syncer::BOOKMARKS, syncer::NIGORI);
+  const ModelTypeSet permanent_folder_types = {syncer::BOOKMARKS,
+                                               syncer::NIGORI};
 
   for (ModelType model_type : permanent_folder_types) {
     std::unique_ptr<LoopbackServerEntity> top_level_entity =
@@ -408,6 +393,12 @@ void LoopbackServer::AddNewKeystoreKeyForTesting() {
   keystore_keys_.push_back(GenerateNewKeystoreKey());
 }
 
+void LoopbackServer::FlushToDisk() {
+  if (writer_.HasPendingWrite()) {
+    writer_.DoScheduledWrite();
+  }
+}
+
 bool LoopbackServer::HandleGetUpdatesRequest(
     const sync_pb::GetUpdatesMessage& get_updates,
     const std::string& store_birthday,
@@ -509,7 +500,7 @@ bool LoopbackServer::HandleGetUpdatesRequest(
   // During initial bookmark sync, we create new entities for bookmark permanent
   // folders, and hence we should inform the observers.
   if (is_initial_bookmark_sync && observer_for_tests_) {
-    observer_for_tests_->OnCommit(invalidator_client_id, {syncer::BOOKMARKS});
+    observer_for_tests_->OnCommit({syncer::BOOKMARKS});
   }
 
   return true;
@@ -610,14 +601,7 @@ void LoopbackServer::BuildEntryResponseForSuccessfulCommit(
                                         ? response_type_override_.Run(entity)
                                         : sync_pb::CommitResponse::SUCCESS);
   entry_response->set_id_string(entity.GetId());
-
-  if (entity.IsDeleted() &&
-      !base::FeatureList::IsEnabled(
-          kSyncReturnRealVersionOnCommitInLoopbackServer)) {
-    entry_response->set_version(entity.GetVersion() + 1);
-  } else {
-    entry_response->set_version(entity.GetVersion());
-  }
+  entry_response->set_version(entity.GetVersion());
 }
 
 bool LoopbackServer::IsChild(const string& id,
@@ -662,9 +646,6 @@ bool LoopbackServer::HandleCommitRequest(
   string guid = commit.cache_guid();
   ModelTypeSet committed_model_types;
 
-  ModelTypeSet enabled_types = GetModelTypeSetFromSpecificsFieldNumberList(
-      commit.config_params().enabled_type_ids());
-
   // TODO(pvalenzuela): Add validation of CommitMessage.entries.
   for (const sync_pb::SyncEntity& client_entity : commit.entries()) {
     sync_pb::CommitResponse_EntryResponse* entry_response =
@@ -698,30 +679,9 @@ bool LoopbackServer::HandleCommitRequest(
     DCHECK(iter != entities_.end());
     committed_model_types.Put(iter->second->GetModelType());
 
-    // Notify observers about history having been synced. There are two
-    // iterations of "History sync" both guarded by the user's selection in the
-    // settings page:
-    // 1) The "old" one based on SESSIONS data, only enabled if TYPED_URLS and
-    //    HISTORY_DELETE_DIRECTIVES are also enabled. Note that for custom
-    //    passphrase users, HISTORY_DELETE_DIRECTIVES will not be enabled (and
-    //    since they commit encrypted specifics, the server couldn't inspect the
-    //    data anyway).
-    // 2) The "new" one based on a dedicated HISTORY data type. This data type
-    //    is itself disabled for custom passphrase users.
-    // In practice, at most one of TYPED_URLS or HISTORY can be enabled at the
-    // same time, so OnHistoryCommit() gets called at most once per URL.
-    DCHECK(!(enabled_types.Has(TYPED_URLS) && enabled_types.Has(HISTORY)));
+    // Notify observers about history having been synced.
     if (observer_for_tests_) {
-      if (iter->second->GetModelType() == SESSIONS &&
-          enabled_types.Has(HISTORY_DELETE_DIRECTIVES) &&
-          enabled_types.Has(TYPED_URLS)) {
-        // "Old" history sync.
-        for (const sync_pb::TabNavigation& navigation :
-             client_entity.specifics().session().tab().navigation()) {
-          observer_for_tests_->OnHistoryCommit(navigation.virtual_url());
-        }
-      } else if (iter->second->GetModelType() == HISTORY) {
-        // "New" history sync.
+      if (iter->second->GetModelType() == HISTORY) {
         const sync_pb::HistorySpecifics& specifics =
             client_entity.specifics().history();
         // The last entry of the redirect chain is the "actual" URL. In the case
@@ -734,7 +694,7 @@ bool LoopbackServer::HandleCommitRequest(
   }
 
   if (observer_for_tests_)
-    observer_for_tests_->OnCommit(invalidator_client_id, committed_model_types);
+    observer_for_tests_->OnCommit(committed_model_types);
 
   return throttled_datatypes_in_request->Empty();
 }
@@ -743,7 +703,7 @@ void LoopbackServer::ClearServerData() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   entities_.clear();
   keystore_keys_.clear();
-  store_birthday_ = base::Time::Now().ToJavaTime();
+  store_birthday_ = base::Time::Now().InMillisecondsSinceUnixEpoch();
   base::DeleteFile(persistent_file_);
   Init();
 }
@@ -792,17 +752,14 @@ LoopbackServer::GetPermanentSyncEntitiesByModelType(ModelType model_type) {
   return sync_entities;
 }
 
-std::unique_ptr<base::DictionaryValue>
-LoopbackServer::GetEntitiesAsDictionaryValue() {
+base::Value::Dict LoopbackServer::GetEntitiesAsDictForTesting() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::unique_ptr<base::DictionaryValue> dictionary(
-      new base::DictionaryValue());
+  base::Value::Dict dictionary;
 
   // Initialize an empty Value::List for all ModelTypes.
   ModelTypeSet all_types = ModelTypeSet::All();
   for (ModelType type : all_types) {
-    dictionary->SetKey(ModelTypeToDebugString(type),
-                       base::Value(base::Value::Type::LIST));
+    dictionary.Set(ModelTypeToDebugString(type), base::Value::List());
   }
 
   for (const auto& [id, entity] : entities_) {
@@ -812,11 +769,11 @@ LoopbackServer::GetEntitiesAsDictionaryValue() {
       // consider them.
       continue;
     }
-    base::Value* list_value;
-    if (!dictionary->Get(ModelTypeToDebugString(entity->GetModelType()),
-                         &list_value)) {
-      return nullptr;
-    }
+
+    base::Value::List* list_value =
+        dictionary.FindList(ModelTypeToDebugString(entity->GetModelType()));
+    DCHECK(list_value);
+
     // TODO(pvalenzuela): Store more data for each entity so additional
     // verification can be performed. One example of additional verification
     // is checking the correctness of the bookmark hierarchy.
@@ -839,6 +796,9 @@ bool LoopbackServer::ModifyEntitySpecifics(
   LoopbackServerEntity* entity = iter->second.get();
   entity->SetSpecifics(updated_specifics);
   UpdateEntityVersion(entity);
+
+  ScheduleSaveStateToFile();
+
   return true;
 }
 
@@ -862,6 +822,9 @@ bool LoopbackServer::ModifyBookmarkEntity(
     entity->SetName(updated_specifics.bookmark().legacy_canonicalized_title());
   }
   UpdateEntityVersion(entity);
+
+  ScheduleSaveStateToFile();
+
   return true;
 }
 
@@ -903,19 +866,20 @@ bool LoopbackServer::DeSerializeState(
   return true;
 }
 
-bool LoopbackServer::SerializeData(std::string* data) {
+absl::optional<std::string> LoopbackServer::SerializeData() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   sync_pb::LoopbackServerProto proto;
   SerializeState(&proto);
-  if (!proto.SerializeToString(data)) {
+  std::string data;
+  if (!proto.SerializeToString(&data)) {
     LOG(ERROR) << "Loopback sync proto could not be serialized";
-    return false;
+    return absl::nullopt;
   }
   UMA_HISTOGRAM_MEMORY_KB(
       "Sync.Local.FileSizeKB",
       base::saturated_cast<base::Histogram::Sample>(
-          base::ClampDiv(base::ClampAdd(data->size(), 512), 1024)));
-  return true;
+          base::ClampDiv(base::ClampAdd(data.size(), 512), 1024)));
+  return data;
 }
 
 bool LoopbackServer::ScheduleSaveStateToFile() {

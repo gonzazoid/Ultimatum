@@ -53,11 +53,13 @@ class MockAccountManagerFacade : public account_manager::AccountManagerFacade {
   MOCK_METHOD(void,
               ShowAddAccountDialog,
               (AccountAdditionSource,
-               base::OnceCallback<void(const AccountAdditionResult& result)>),
+               base::OnceCallback<void(const AccountUpsertionResult& result)>),
               (override));
   MOCK_METHOD(void,
               ShowReauthAccountDialog,
-              (AccountAdditionSource, const std::string&, base::OnceClosure),
+              (AccountAdditionSource,
+               const std::string&,
+               base::OnceCallback<void(const AccountUpsertionResult& result)>),
               (override));
   MOCK_METHOD(void, ShowManageAccountsSettings, (), (override));
   MOCK_METHOD(void,

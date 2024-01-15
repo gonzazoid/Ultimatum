@@ -4,18 +4,19 @@
 
 #include "chrome/browser/sharing/shared_clipboard/shared_clipboard_message_handler_desktop.h"
 
-#include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/mock_callback.h"
+#include "base/uuid.h"
 #include "chrome/browser/sharing/fake_device_info.h"
 #include "chrome/browser/sharing/mock_sharing_device_source.h"
 #include "chrome/browser/sharing/mock_sharing_service.h"
 #include "chrome/browser/sharing/proto/shared_clipboard_message.pb.h"
 #include "chrome/browser/sharing/shared_clipboard/shared_clipboard_test_base.h"
+#include "chrome/browser/sharing/sharing_constants.h"
+#include "chrome/browser/sharing/sharing_target_device_info.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/sync/protocol/sync_enums.pb.h"
-#include "components/sync_device_info/device_info.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -64,13 +65,13 @@ class SharedClipboardMessageHandlerTest : public SharedClipboardTestBase {
 }  // namespace
 
 TEST_F(SharedClipboardMessageHandlerTest, NotificationWithoutDeviceName) {
-  std::string guid = base::GenerateGUID();
+  std::string guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   {
     EXPECT_CALL(device_source_, GetDeviceByGuid(guid))
-        .WillOnce(
-            [](const std::string& guid) -> std::unique_ptr<syncer::DeviceInfo> {
-              return nullptr;
-            });
+        .WillOnce([](const std::string& guid)
+                      -> std::unique_ptr<SharingTargetDeviceInfo> {
+          return nullptr;
+        });
     base::MockCallback<SharingMessageHandler::DoneCallback> done_callback;
     EXPECT_CALL(done_callback, Run(testing::Eq(nullptr))).Times(1);
     message_handler_->OnMessage(CreateMessage(guid, kEmptyDeviceName, kText),
@@ -85,14 +86,17 @@ TEST_F(SharedClipboardMessageHandlerTest, NotificationWithoutDeviceName) {
 
 TEST_F(SharedClipboardMessageHandlerTest,
        NotificationWithDeviceNameFromDeviceInfo) {
-  std::string guid = base::GenerateGUID();
+  std::string guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   {
     EXPECT_CALL(device_source_, GetDeviceByGuid(guid))
-        .WillOnce(
-            [](const std::string& guid) -> std::unique_ptr<syncer::DeviceInfo> {
-              return CreateFakeDeviceInfo(base::GenerateGUID(),
-                                          kDeviceNameInDeviceInfo);
-            });
+        .WillOnce([](const std::string& guid) {
+          return std::make_unique<SharingTargetDeviceInfo>(
+              base::Uuid::GenerateRandomV4().AsLowercaseString(),
+              kDeviceNameInDeviceInfo, SharingDevicePlatform::kUnknown,
+              /*pulse_interval=*/base::TimeDelta(),
+              syncer::DeviceInfo::FormFactor::kUnknown,
+              /*last_updated_timestamp=*/base::Time());
+        });
     base::MockCallback<SharingMessageHandler::DoneCallback> done_callback;
     EXPECT_CALL(done_callback, Run(testing::Eq(nullptr))).Times(1);
     message_handler_->OnMessage(CreateMessage(guid, kEmptyDeviceName, kText),
@@ -107,13 +111,13 @@ TEST_F(SharedClipboardMessageHandlerTest,
 
 TEST_F(SharedClipboardMessageHandlerTest,
        NotificationWithDeviceNameFromMessage) {
-  std::string guid = base::GenerateGUID();
+  std::string guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   {
     EXPECT_CALL(device_source_, GetDeviceByGuid(guid))
-        .WillOnce(
-            [](const std::string& guid) -> std::unique_ptr<syncer::DeviceInfo> {
-              return nullptr;
-            });
+        .WillOnce([](const std::string& guid)
+                      -> std::unique_ptr<SharingTargetDeviceInfo> {
+          return nullptr;
+        });
     base::MockCallback<SharingMessageHandler::DoneCallback> done_callback;
     EXPECT_CALL(done_callback, Run(testing::Eq(nullptr))).Times(1);
     message_handler_->OnMessage(

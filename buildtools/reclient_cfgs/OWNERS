@@ -1,2 +1,2 @@
-tikuta@chromium.org
-ukai@google.com
+include ../../infra/config/groups/chrome-build/OWNERS
+include ../../infra/config/groups/foundry-x/OWNERS

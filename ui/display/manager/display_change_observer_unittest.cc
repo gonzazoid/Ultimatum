@@ -5,21 +5,29 @@
 #include "ui/display/manager/display_change_observer.h"
 
 #include <cmath>
+#include <memory>
 #include <set>
 #include <string>
 #include <tuple>
 
+#include "base/command_line.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/gtest_util.h"
+#include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/base/math_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/display/display.h"
 #include "ui/display/display_features.h"
 #include "ui/display/display_switches.h"
-#include "ui/display/fake/fake_display_snapshot.h"
 #include "ui/display/manager/display_configurator.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/manager/managed_display_info.h"
+#include "ui/display/manager/test/fake_display_snapshot.h"
+#include "ui/display/manager/util/display_manager_test_util.h"
+#include "ui/display/manager/util/display_manager_util.h"
 #include "ui/display/screen.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/types/display_mode.h"
@@ -27,6 +35,7 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/range/range_f.h"
 
@@ -49,13 +58,34 @@ std::unique_ptr<DisplayMode> MakeDisplayMode(int width,
                                              int height,
                                              bool is_interlaced,
                                              float refresh_rate) {
-  return std::make_unique<DisplayMode>(gfx::Size(width, height), is_interlaced,
-                                       refresh_rate);
+  return CreateDisplayModePtrForTest({width, height}, is_interlaced,
+                                     refresh_rate);
 }
 
 }  // namespace
 
-class DisplayChangeObserverTest : public testing::Test,
+class DisplayChangeObserverTestBase : public testing::Test {
+ public:
+  DisplayChangeObserverTestBase() = default;
+
+  DisplayChangeObserverTestBase(const DisplayChangeObserverTestBase&) = delete;
+  DisplayChangeObserverTestBase& operator=(
+      const DisplayChangeObserverTestBase&) = delete;
+
+  ~DisplayChangeObserverTestBase() override = default;
+
+  // Pass through method to be called by individual test cases.
+  ManagedDisplayInfo CreateManagedDisplayInfo(DisplayChangeObserver* observer,
+                                              const DisplaySnapshot* snapshot,
+                                              const DisplayMode* mode_info) {
+    return observer->CreateManagedDisplayInfoInternal(snapshot, mode_info);
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+class DisplayChangeObserverTest : public DisplayChangeObserverTestBase,
                                   public testing::WithParamInterface<bool> {
  public:
   DisplayChangeObserverTest() = default;
@@ -66,7 +96,7 @@ class DisplayChangeObserverTest : public testing::Test,
 
   ~DisplayChangeObserverTest() override = default;
 
-  // testing::Test:
+  // DisplayChangeObserverTestBase:
   void SetUp() override {
     if (GetParam()) {
       scoped_feature_list_.InitAndEnableFeature(features::kListAllDisplayModes);
@@ -75,19 +105,91 @@ class DisplayChangeObserverTest : public testing::Test,
           features::kListAllDisplayModes);
     }
 
-    Test::SetUp();
+    DisplayChangeObserverTestBase::SetUp();
   }
-
-  // Pass through method to be called by individual test cases.
-  ManagedDisplayInfo CreateManagedDisplayInfo(DisplayChangeObserver* observer,
-                                              const DisplaySnapshot* snapshot,
-                                              const DisplayMode* mode_info) {
-    return observer->CreateManagedDisplayInfo(snapshot, mode_info);
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
+
+class DisplayChangeObserverPanelRadiiTest
+    : public DisplayChangeObserverTestBase {
+ public:
+  DisplayChangeObserverPanelRadiiTest() = default;
+
+  DisplayChangeObserverPanelRadiiTest(
+      const DisplayChangeObserverPanelRadiiTest&) = delete;
+  DisplayChangeObserverPanelRadiiTest& operator=(
+      const DisplayChangeObserverPanelRadiiTest&) = delete;
+
+  ~DisplayChangeObserverPanelRadiiTest() override = default;
+
+  // testing::Test:
+  void SetUp() override {
+    display_manager_ = std::make_unique<DisplayManager>(/*screen=*/nullptr);
+    default_display_mode_ = MakeDisplayMode(1920, 1080, true, 60);
+    scoped_feature_list_.InitAndEnableFeature(features::kRoundedDisplay);
+
+    ui::DeviceDataManager::CreateInstance();
+    DisplayChangeObserverTestBase::SetUp();
+  }
+
+  void InitializeDisplayChangeObserver() {
+    display_change_observer_ =
+        std::make_unique<DisplayChangeObserver>(display_manager_.get());
+  }
+
+ protected:
+  base::test::ScopedCommandLine command_line_;
+  std::unique_ptr<DisplayManager> display_manager_;
+  std::unique_ptr<DisplayChangeObserver> display_change_observer_;
+  std::unique_ptr<DisplayMode> default_display_mode_;
+};
+
+TEST_F(DisplayChangeObserverPanelRadiiTest, RadiiSpecifiedForInternalDisplay) {
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      switches::kDisplayProperties,
+      "[{\"connector-type\": 14, \"rounded-corners\": {\"bottom-left\": 15, "
+      "\"bottom-right\": 15, \"top-left\": 16, \"top-right\": 16}}]");
+
+  InitializeDisplayChangeObserver();
+
+  // Radii specified for the connection protocol.
+  std::unique_ptr<DisplaySnapshot> display_snapshot =
+      FakeDisplaySnapshot::Builder()
+          .SetId(123)
+          .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
+          .SetType(
+              display::DisplayConnectionType::DISPLAY_CONNECTION_TYPE_INTERNAL)
+          .Build();
+
+  const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+      display_change_observer_.get(), display_snapshot.get(),
+      default_display_mode_.get());
+
+  EXPECT_EQ(display_info.panel_corners_radii(),
+            gfx::RoundedCornersF(16, 16, 15, 15));
+}
+
+TEST_F(DisplayChangeObserverPanelRadiiTest, IgnoreRadiiIfNotInternalDisplay) {
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      switches::kDisplayProperties,
+      "[{\"connector-type\": 15, \"rounded-corners\": {\"bottom-left\": 15, "
+      "\"bottom-right\": 15, \"top-left\": 16, \"top-right\": 16}}]");
+
+  InitializeDisplayChangeObserver();
+
+  // The snapshot is of a display that is not a internal display.
+  std::unique_ptr<DisplaySnapshot> display_snapshot =
+      FakeDisplaySnapshot::Builder()
+          .SetId(123)
+          .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
+          .SetType(display::DisplayConnectionType::DISPLAY_CONNECTION_TYPE_HDMI)
+          .Build();
+
+  const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+      display_change_observer_.get(), display_snapshot.get(),
+      default_display_mode_.get());
+
+  EXPECT_TRUE(display_info.panel_corners_radii().IsEmpty());
+}
 
 TEST_P(DisplayChangeObserverTest, GetExternalManagedDisplayModeList) {
   std::unique_ptr<DisplaySnapshot> display_snapshot =
@@ -200,9 +302,10 @@ TEST_P(DisplayChangeObserverTest, GetEmptyExternalManagedDisplayModeList) {
       /*connector_index=*/0x0001, gfx::Point(), gfx::Size(),
       DISPLAY_CONNECTION_TYPE_UNKNOWN,
       /*base_connector_id=*/1u, /*path_topology=*/{}, false, false,
-      PrivacyScreenState::kNotSupported, false, false, std::string(), {},
-      nullptr, nullptr, 0, gfx::Size(), gfx::ColorSpace(),
-      /*bits_per_channel=*/8u, /*hdr_static_metadata=*/{});
+      PrivacyScreenState::kNotSupported, false, false, std::string(),
+      base::FilePath(), {}, nullptr, nullptr, 0, gfx::Size(), gfx::ColorSpace(),
+      /*bits_per_channel=*/8u, /*hdr_static_metadata=*/{}, kVrrNotCapable,
+      absl::nullopt, DrmFormatsAndModifiers());
 
   ManagedDisplayInfo::ManagedDisplayModeList display_modes =
       DisplayChangeObserver::GetExternalManagedDisplayModeList(
@@ -449,7 +552,12 @@ TEST_P(DisplayChangeObserverTest, HDRDisplayColorSpaces) {
           .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
           .SetColorSpace(display_color_space)
           .SetBitsPerChannel(10u)
-          .SetHDRStaticMetadata({600.0, 500.0, 0.01})
+          .SetHDRStaticMetadata(
+              {600.0, 500.0, 0.01,
+               gfx::HDRStaticMetadata::EotfMask({
+                   gfx::HDRStaticMetadata::Eotf::kGammaSdrRange,
+                   gfx::HDRStaticMetadata::Eotf::kPq,
+               })})
           .Build();
 
   ui::DeviceDataManager::CreateInstance();
@@ -492,15 +600,142 @@ TEST_P(DisplayChangeObserverTest, HDRDisplayColorSpaces) {
 }
 #endif
 
+TEST_P(DisplayChangeObserverTest, VSyncRateMin) {
+  ui::DeviceDataManager::CreateInstance();
+  DisplayManager manager(nullptr);
+  DisplayChangeObserver observer(&manager);
+
+  // Verify that vsync_rate_min is absent from DisplayInfo when it is not
+  // present from the DisplaySnapshot.
+  {
+    const std::unique_ptr<DisplaySnapshot> display_snapshot =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetName("AmazingFakeDisplay")
+            .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
+            .Build();
+    const auto display_mode = std::make_unique<DisplayMode>(
+        gfx::Size{1920, 1080}, true, 60, 2720, 1696, 553580);
+    const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+        &observer, display_snapshot.get(), display_mode.get());
+
+    EXPECT_EQ(display_info.vsync_rate_min(), absl::nullopt);
+  }
+
+  // Verify that the value of vsync_rate_min falls back to the value from the
+  // EDID when it cannot be calculated from the mode.
+  {
+    const std::unique_ptr<DisplaySnapshot> display_snapshot =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetName("AmazingFakeDisplay")
+            .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
+            .SetVsyncRateMin(48)
+            .Build();
+    const auto display_mode =
+        std::make_unique<DisplayMode>(gfx::Size{1920, 1080}, true, 60, 0, 0, 0);
+    const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+        &observer, display_snapshot.get(), display_mode.get());
+
+    EXPECT_EQ(display_info.vsync_rate_min(), 48.0f);
+  }
+
+  // Verify that the value of vsync_rate_min is correctly calculated.
+  {
+    const std::unique_ptr<DisplaySnapshot> display_snapshot =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetName("AmazingFakeDisplay")
+            .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
+            .SetVsyncRateMin(48)
+            .Build();
+    const auto display_mode = std::make_unique<DisplayMode>(
+        gfx::Size{1920, 1080}, true, 60, 2720, 1696, 553580);
+    const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+        &observer, display_snapshot.get(), display_mode.get());
+
+    EXPECT_EQ(display_info.vsync_rate_min(), 48.000488f);
+  }
+}
+
+TEST_P(DisplayChangeObserverTest, DisplayModeNativeCalculation) {
+  ui::DeviceDataManager::CreateInstance();
+  DisplayManager manager(nullptr);
+  DisplayChangeObserver observer(&manager);
+
+  // For external display, verify that native attribute is determined by
+  // comparing current mode with the DisplaySnapshot's native mode. Native is
+  // true when they are the same.
+  {
+    const std::unique_ptr<DisplaySnapshot> display_snapshot =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetType(DISPLAY_CONNECTION_TYPE_DISPLAYPORT)
+            .SetNativeMode(MakeDisplayMode(1920, 1080, true, 60))
+            .SetCurrentMode(MakeDisplayMode(1920, 1080, true, 60))
+            .Build();
+
+    const DisplayMode* display_mode = display_snapshot->current_mode();
+    const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+        &observer, display_snapshot.get(), display_mode);
+
+    EXPECT_TRUE(display_info.native());
+  }
+
+  // For external display, verify that native attribute is determined by
+  // comparing current mode with the DisplaySnapshot's native mode. Native is
+  // false when they are different.
+  {
+    const std::unique_ptr<DisplaySnapshot> display_snapshot =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetType(DISPLAY_CONNECTION_TYPE_DISPLAYPORT)
+            .SetNativeMode(MakeDisplayMode(3840, 2160, true, 60))
+            .SetCurrentMode(MakeDisplayMode(1920, 1080, true, 60))
+            .Build();
+
+    const DisplayMode* display_mode = display_snapshot->current_mode();
+    const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+        &observer, display_snapshot.get(), display_mode);
+
+    EXPECT_FALSE(display_info.native());
+  }
+
+  // For internal display, verify that native attribute is always true.
+  {
+    const std::unique_ptr<DisplaySnapshot> display_snapshot =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+            .SetCurrentMode(MakeDisplayMode(1920, 1080, true, 60))
+            .Build();
+
+    const DisplayMode* display_mode = display_snapshot->current_mode();
+    const ManagedDisplayInfo display_info = CreateManagedDisplayInfo(
+        &observer, display_snapshot.get(), display_mode);
+
+    EXPECT_TRUE(display_info.native());
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(All,
                          DisplayChangeObserverTest,
                          ::testing::Values(false, true));
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 using DisplayResolutionTest = testing::Test;
 
-TEST_F(DisplayResolutionTest, CheckEffectiveResoutionUMAIndex) {
-  std::map<int, gfx::Size> effective_resolutions;
+auto CreateDisplay = [](const ManagedDisplayInfo& managed_display_info) {
+  Display display(/*id=*/1);
+  const float effective_scale =
+      managed_display_info.GetEffectiveDeviceScaleFactor();
+  display.SetScaleAndBounds(effective_scale,
+                            managed_display_info.bounds_in_native());
+  EXPECT_EQ(effective_scale, display.device_scale_factor());
+  return display;
+};
+
+TEST_F(DisplayResolutionTest, CheckEffectiveResolutionUMAIndex) {
+  std::map<int, gfx::Size> logical_resolutions;
   for (const auto& display_config : display_configs) {
     gfx::Size size = display_config.resolution;
     if (size.width() < size.height())
@@ -527,50 +762,120 @@ TEST_F(DisplayResolutionTest, CheckEffectiveResoutionUMAIndex) {
     }
     EXPECT_TRUE(found);
     for (float zoom_level : zoom_levels) {
-      float effective_scale = 1.f / (zoom_level * dsf);
-      gfx::SizeF effective_resolution_f(size);
-      effective_resolution_f.Scale(effective_scale);
+      ManagedDisplayInfo info;
+      info.set_device_scale_factor(dsf);
+      info.set_zoom_factor(zoom_level);
+      info.SetBounds(gfx::Rect(size));
 
-      gfx::Size effective_resolution =
-          gfx::ToEnclosedRectIgnoringError(gfx::RectF(effective_resolution_f),
-                                           0.01f)
-              .size();
-      gfx::Size portrait_effective_resolution = gfx::Size(
-          effective_resolution.height(), effective_resolution.width());
+      Display display = CreateDisplay(info);
+
+      gfx::Size logical_resolution = display.size();
+      gfx::Size portrait_logical_resolution = logical_resolution;
+      portrait_logical_resolution.Transpose();
 
       const int landscape_key =
-          effective_resolution.width() * effective_resolution.height();
+          logical_resolution.width() * logical_resolution.height();
       const int portrait_key = landscape_key - 1;
 
-      auto it = effective_resolutions.find(landscape_key);
-      if (it != effective_resolutions.end())
-        EXPECT_EQ(it->second, effective_resolution);
-      else
-        effective_resolutions[landscape_key] = effective_resolution;
+      auto it = logical_resolutions.find(landscape_key);
+      if (it != logical_resolutions.end()) {
+        EXPECT_EQ(it->second, logical_resolution);
+      } else {
+        logical_resolutions[landscape_key] = logical_resolution;
+      }
 
-      it = effective_resolutions.find(portrait_key);
-      if (it != effective_resolutions.end())
-        EXPECT_EQ(it->second, portrait_effective_resolution);
-      else
-        effective_resolutions[portrait_key] = portrait_effective_resolution;
+      it = logical_resolutions.find(portrait_key);
+      if (it != logical_resolutions.end()) {
+        EXPECT_EQ(it->second, portrait_logical_resolution);
+      } else {
+        logical_resolutions[portrait_key] = portrait_logical_resolution;
+      }
     }
   }
 
 #if 0
   // Enable this code to re-generate the "EffectiveResolution" in enums.xml.
-  for (auto pair : effective_resolutions) {
-    LOG(ERROR) << "<int value=\"" << pair.first << "\" label=\""
+  for (auto pair : logical_resolutions) {
+    std::cout << "  <int value=\"" << pair.first << "\" label=\""
                << pair.second.width() << " x " << pair.second.height()
-               << "\"/>";
+              << "\"/>" << std::endl;
   }
 #endif
 
-  // With the current set of display configs and zoom levels, there are only 314
+  // With the current set of display configs and zoom levels, there are only 322
   // possible effective resolutions for internal displays in chromebooks. Update
   // this value when adding a new display config, and re-generate the
   // EffectiveResolution value in enum.xml.
-  EXPECT_EQ(effective_resolutions.size(), 322ul);
+  EXPECT_EQ(logical_resolutions.size(), 322ul);
 }
-#endif
+
+// Make sure that when display zoom is applied, the effective device scale
+// factor (device_scale_factor * zoomfactor) and the rational number (pixel
+// width / logical with) is close enough (<kDeviceScaleFactorErrorTolerance).
+TEST_F(DisplayResolutionTest, DisplayZoom) {
+  // For internal displays
+  for (auto& config : display_configs) {
+    const float dpi = ComputeDpi(config.diagonal_size, config.resolution);
+    const auto snapshot = FakeDisplaySnapshot::Builder()
+                              .SetId(10)
+                              .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                              .SetNativeMode(config.resolution)
+                              .SetCurrentMode(config.resolution)
+                              .SetDPI(dpi)
+                              .Build();
+    const auto* native_mode = snapshot->native_mode();
+    auto managed_display_info = DisplayChangeObserver::CreateManagedDisplayInfo(
+        snapshot.get(), native_mode,
+        /*native=*/true, config.expected_dsf, dpi, std::string());
+    const std::vector<float> zooms =
+        GetDisplayZoomFactors(managed_display_info.display_modes()[0]);
+    // For default scale factor, they should be the same.
+    EXPECT_NEAR(config.expected_dsf,
+                managed_display_info.GetEffectiveDeviceScaleFactor(),
+                0.0000001);
+
+    for (auto zoom : zooms) {
+      managed_display_info.set_zoom_factor(zoom);
+      const Display display = CreateDisplay(managed_display_info);
+
+      // Emulate how lacros computes the scale factor.
+      const float scale_factor = config.resolution.width() /
+                                 static_cast<float>(display.size().width());
+      EXPECT_NEAR(scale_factor, display.device_scale_factor(),
+                  kDeviceScaleFactorErrorTolerance);
+    }
+  }
+
+  // Typical external display sizes.
+  constexpr gfx::Size kExternalDisplaySizes[] = {
+      {4096, 2160}, {3840, 2160}, {3440, 1440}, {2560, 1600}, {2560, 1440},
+      {1920, 1200}, {1920, 1080}, {1600, 900},  {1440, 900}};
+  for (auto& size : kExternalDisplaySizes) {
+    const auto snapshot = FakeDisplaySnapshot::Builder()
+                              .SetId(10)
+                              .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                              .SetNativeMode(size)
+                              .SetCurrentMode(size)
+                              .Build();
+    const auto* native_mode = snapshot->native_mode();
+    auto managed_display_info = DisplayChangeObserver::CreateManagedDisplayInfo(
+        snapshot.get(), native_mode,
+        /*native=*/true, /*device_scale_factor=*/1.0f, /*dpi=*/160,
+        std::string());
+    const std::vector<float> zooms =
+        GetDisplayZoomFactors(managed_display_info.display_modes()[0]);
+
+    for (auto zoom : zooms) {
+      managed_display_info.set_zoom_factor(zoom);
+      const Display display = CreateDisplay(managed_display_info);
+
+      // Emulate how lacros computes the scale factor.
+      const float scale_factor =
+          size.width() / static_cast<float>(display.size().width());
+      EXPECT_NEAR(scale_factor, display.device_scale_factor(),
+                  kDeviceScaleFactorErrorTolerance);
+    }
+  }
+}
 
 }  // namespace display

@@ -8,7 +8,6 @@ See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
 for more details about the presubmit API built into depot_tools.
 """
 
-USE_PYTHON3 = True
 
 import os
 from xml.dom import minidom
@@ -25,14 +24,15 @@ def _CheckNoProductNameInGeneratedResources(input_api, output_api):
   filename_filter = lambda x: x.LocalPath().endswith(('.grd', '.grdp'))
 
   for f, line_num, line in input_api.RightHandSideLines(filename_filter):
-    if 'PRODUCT_NAME' in line:
+    if ('PRODUCT_NAME' in line and 'name="IDS_PRODUCT_NAME"' not in line and
+       'name="IDS_SHORT_PRODUCT_NAME"' not in line):
       problems.append('%s:%d' % (f.LocalPath(), line_num))
 
   if problems:
     return [output_api.PresubmitPromptWarning(
-        "Don't use PRODUCT_NAME placeholders in string resources. Instead, add "
-        "separate strings to google_chrome_strings.grd and "
-        "chromium_strings.grd. See http://goo.gl/6614MQ for more information."
+        "Don't use PRODUCT_NAME placeholders in string resources. Instead, "
+        "add separate strings to google_chrome_strings.grd and "
+        "chromium_strings.grd. See http://goo.gl/6614MQ for more information. "
         "Problems with this check? Contact dubroy@chromium.org.",
         items=problems)]
   return []

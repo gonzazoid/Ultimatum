@@ -7,33 +7,36 @@
 #include <stddef.h>
 
 #include <memory>
+#include <string>
 #include <utility>
 
-#include "base/guid.h"
+#include "base/containers/contains.h"
+#include "base/files/file_path.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/download/chrome_download_manager_delegate.h"
+#include "chrome/browser/download/download_commands.h"
 #include "chrome/browser/download/notification/download_notification_manager.h"
 #include "chrome/browser/download/offline_item_utils.h"
+#include "chrome/browser/enterprise/connectors/test/deep_scanning_test_utils.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "chrome/browser/notifications/notification_test_util.h"
 #include "chrome/browser/notifications/platform_notification_service_impl.h"
-#include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_test_utils.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/download/public/common/download_danger_type.h"
+#include "components/download/public/common/download_item.h"
 #include "components/download/public/common/mock_download_item.h"
-#include "components/enterprise/common/download_item_reroute_info.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_download_manager.h"
@@ -42,10 +45,12 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_features.h"
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/lacros/lacros_test_helper.h"
-#include "chromeos/startup/browser_init_params.h"
-#include "chromeos/startup/browser_params_proxy.h"
+#include "chrome/browser/apps/app_service/app_service_proxy.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/common/pref_names.h"
+#include "components/services/app_service/public/cpp/app_types.h"
+#include "components/sync_preferences/testing_pref_service_syncable.h"
 #endif
 
 using testing::_;
@@ -53,25 +58,19 @@ using testing::NiceMock;
 using testing::Return;
 using testing::ReturnRefOfCopy;
 using testing::ValuesIn;
-using Provider = enterprise_connectors::FileSystemServiceProvider;
-using RerouteInfo = enterprise_connectors::DownloadItemRerouteInfo;
 
 namespace {
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+constexpr char kGalleryAppPdfEditNotificationTextParamName[] = "text";
+constexpr char kGalleryAppPdfEditNotificationTextParamValue[] =
+    "testCommandLabel";
+#endif
+
+const base::FilePath kTestPdfFilePath("test.pdf");
+
 const base::FilePath::CharType kDownloadItemTargetPathString[] =
     FILE_PATH_LITERAL("/tmp/TITLE.bin");
-
-bool IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  return ash::features::
-      IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled();
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  return chromeos::BrowserParamsProxy::Get()
-      ->IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled();
-#else
-  return false;
-#endif
-}
 
 }  // anonymous namespace
 
@@ -79,22 +78,7 @@ namespace test {
 
 class DownloadItemNotificationTest : public testing::Test {
  public:
-  explicit DownloadItemNotificationTest(
-      bool
-          is_holding_space_in_progress_downloads_notification_suppression_enabled)
-      : profile_(nullptr) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    scoped_feature_list_.InitWithFeatureState(
-        ash::features::kHoldingSpaceInProgressDownloadsNotificationSuppression,
-        is_holding_space_in_progress_downloads_notification_suppression_enabled);
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-    auto init_params(crosapi::mojom::BrowserInitParams::New());
-    init_params
-        ->is_holding_space_in_progress_downloads_notification_suppression_enabled =
-        is_holding_space_in_progress_downloads_notification_suppression_enabled;
-    chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
-#endif
-  }
+  DownloadItemNotificationTest() : profile_(nullptr) {}
 
   void SetUp() override {
     testing::Test::SetUp();
@@ -114,7 +98,8 @@ class DownloadItemNotificationTest : public testing::Test {
     download_item_ = std::make_unique<NiceMock<download::MockDownloadItem>>();
     ON_CALL(*download_item_, GetId()).WillByDefault(Return(12345));
     ON_CALL(*download_item_, GetGuid())
-        .WillByDefault(ReturnRefOfCopy(base::GenerateGUID()));
+        .WillByDefault(ReturnRefOfCopy(
+            base::Uuid::GenerateRandomV4().AsLowercaseString()));
     ON_CALL(*download_item_, GetState())
         .WillByDefault(Return(download::DownloadItem::IN_PROGRESS));
     ON_CALL(*download_item_, IsDangerous()).WillByDefault(Return(false));
@@ -122,8 +107,6 @@ class DownloadItemNotificationTest : public testing::Test {
         .WillByDefault(Return(base::FilePath("TITLE.bin")));
     ON_CALL(*download_item_, GetTargetFilePath())
         .WillByDefault(ReturnRefOfCopy(download_item_target_path));
-    ON_CALL(*download_item_, GetRerouteInfo())
-        .WillByDefault(ReturnRefOfCopy(RerouteInfo()));
     ON_CALL(*download_item_, GetDangerType())
         .WillByDefault(Return(download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
     ON_CALL(*download_item_, IsDone()).WillByDefault(Return(false));
@@ -184,47 +167,45 @@ class DownloadItemNotificationTest : public testing::Test {
     return download_item_notification_->GetStatusString();
   }
 
+  std::unique_ptr<std::vector<DownloadCommands::Command>> GetExtraActions() {
+    return download_item_notification_->GetExtraActions();
+  }
+
+  std::u16string GetCommandLabel(DownloadCommands::Command command) const {
+    return download_item_notification_->GetCommandLabel(command);
+  }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void InstallChromeApp(const std::string& app_id) {
+    apps::AppServiceProxy* proxy =
+        apps::AppServiceProxyFactory::GetForProfile(profile_);
+    WaitForAppServiceProxyReady(proxy);
+
+    std::vector<apps::AppPtr> apps;
+    apps::AppPtr app =
+        std::make_unique<apps::App>(apps::AppType::kChromeApp, app_id);
+    app->readiness = apps::Readiness::kReady;
+    app->policy_ids = {app_id};
+    apps.push_back(std::move(app));
+
+    proxy->OnApps(std::move(apps), apps::AppType::kChromeApp,
+                  /*should_notify_initialized=*/false);
+  }
+#endif
+
   base::test::ScopedFeatureList scoped_feature_list_;
   content::BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  raw_ptr<Profile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 
   std::unique_ptr<NiceMock<download::MockDownloadItem>> download_item_;
   std::unique_ptr<DownloadNotificationManager> download_notification_manager_;
   raw_ptr<DownloadItemNotification> download_item_notification_;
   std::unique_ptr<NotificationDisplayServiceTester> service_tester_;
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  chromeos::ScopedLacrosServiceTestHelper scoped_lacros_service_test_helper_;
-#endif
 };
 
-class DownloadItemNotificationParameterizedTest
-    : public DownloadItemNotificationTest,
-      public testing::WithParamInterface<
-          /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
-          bool> {
- public:
-  DownloadItemNotificationParameterizedTest()
-      : DownloadItemNotificationTest(
-            /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
-            GetParam()) {}
-};
-
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    DownloadItemNotificationParameterizedTest,
-    /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
-    testing::Bool());
-
-TEST_P(DownloadItemNotificationParameterizedTest, ShowAndCloseNotification) {
-  // This test is only relevant if holding space in-progress downloads
-  // notification suppression is disabled. Otherwise the notification will be
-  // suppressed.
-  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
-    return;
-
+TEST_F(DownloadItemNotificationTest, ShowAndCloseNotification) {
   base::HistogramTester histograms;
   EXPECT_EQ(0u, NotificationCount());
 
@@ -248,8 +229,7 @@ TEST_P(DownloadItemNotificationParameterizedTest, ShowAndCloseNotification) {
   histograms.ExpectTotalCount("Download.ShowedDownloadWarning", 0);
 }
 
-TEST_P(DownloadItemNotificationParameterizedTest,
-       ShowAndCloseDangerousNotification) {
+TEST_F(DownloadItemNotificationTest, ShowAndCloseDangerousNotification) {
   base::HistogramTester histograms;
   EXPECT_CALL(*download_item_, GetDangerType())
       .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_DANGEROUS_CONTENT));
@@ -272,13 +252,7 @@ TEST_P(DownloadItemNotificationParameterizedTest,
                                1);
 }
 
-TEST_P(DownloadItemNotificationParameterizedTest, PauseAndResumeNotification) {
-  // This test is only relevant if holding space in-progress downloads
-  // notification suppression is disabled. Otherwise the notification will be
-  // suppressed.
-  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
-    return;
-
+TEST_F(DownloadItemNotificationTest, PauseAndResumeNotification) {
   // Shows a notification
   CreateDownloadItemNotification();
   download_item_->NotifyObserversDownloadOpened();
@@ -299,7 +273,7 @@ TEST_P(DownloadItemNotificationParameterizedTest, PauseAndResumeNotification) {
   download_item_->NotifyObserversDownloadUpdated();
 }
 
-TEST_P(DownloadItemNotificationParameterizedTest, OpenDownload) {
+TEST_F(DownloadItemNotificationTest, OpenDownload) {
   EXPECT_CALL(*download_item_, GetState())
       .WillRepeatedly(Return(download::DownloadItem::COMPLETE));
   EXPECT_CALL(*download_item_, IsDone()).WillRepeatedly(Return(true));
@@ -315,13 +289,7 @@ TEST_P(DownloadItemNotificationParameterizedTest, OpenDownload) {
   download_item_notification_->Click(absl::nullopt, absl::nullopt);
 }
 
-TEST_P(DownloadItemNotificationParameterizedTest, OpenWhenComplete) {
-  // This test is only relevant if holding space in-progress downloads
-  // notification suppression is disabled. Otherwise the notification will be
-  // suppressed.
-  if (IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled())
-    return;
-
+TEST_F(DownloadItemNotificationTest, OpenWhenComplete) {
   // Shows a notification
   CreateDownloadItemNotification();
   download_item_->NotifyObserversDownloadOpened();
@@ -362,29 +330,16 @@ TEST_P(DownloadItemNotificationParameterizedTest, OpenWhenComplete) {
   // automatically due to the open-when-complete flag.
 }
 
-TEST_P(DownloadItemNotificationParameterizedTest, DisablePopup) {
+TEST_F(DownloadItemNotificationTest, DisablePopup) {
   CreateDownloadItemNotification();
   download_item_->NotifyObserversDownloadOpened();
 
-  // If holding space in-progress downloads notification suppression is enabled,
-  // the notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
-    EXPECT_EQ(message_center::DEFAULT_PRIORITY,
-              LookUpNotification()->priority());
-  } else {
-    EXPECT_EQ(0u, NotificationCount());
-  }
+  EXPECT_EQ(message_center::DEFAULT_PRIORITY, LookUpNotification()->priority());
 
   download_item_notification_->DisablePopup();
 
-  // If holding space in-progress downloads notification suppression is enabled,
-  // the notification is expected to have been suppressed.
-  if (!IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()) {
-    // Priority is low.
-    EXPECT_EQ(message_center::LOW_PRIORITY, LookUpNotification()->priority());
-  } else {
-    EXPECT_EQ(0u, NotificationCount());
-  }
+  // Priority is low.
+  EXPECT_EQ(message_center::LOW_PRIORITY, LookUpNotification()->priority());
 
   // Downloading is completed.
   EXPECT_CALL(*download_item_, GetState())
@@ -396,7 +351,7 @@ TEST_P(DownloadItemNotificationParameterizedTest, DisablePopup) {
   EXPECT_GT(LookUpNotification()->priority(), message_center::LOW_PRIORITY);
 }
 
-TEST_P(DownloadItemNotificationParameterizedTest, DeepScanning) {
+TEST_F(DownloadItemNotificationTest, DeepScanning) {
   // Setup deep scanning in progress.
   EXPECT_CALL(*download_item_, GetDangerType())
       .WillRepeatedly(Return(download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING));
@@ -408,9 +363,9 @@ TEST_P(DownloadItemNotificationParameterizedTest, DeepScanning) {
   CreateDownloadItemNotification();
 
   // Can't open while scanning.
-  safe_browsing::SetAnalysisConnector(profile_->GetPrefs(),
-                                      enterprise_connectors::FILE_DOWNLOADED,
-                                      R"(
+  enterprise_connectors::test::SetAnalysisConnector(
+      profile_->GetPrefs(), enterprise_connectors::FILE_DOWNLOADED,
+      R"(
         {
           "service_provider": "google",
           "enable": [{"url_list": ["*"], "tags": ["malware"]}],
@@ -423,9 +378,9 @@ TEST_P(DownloadItemNotificationParameterizedTest, DeepScanning) {
   download_item_notification_->Click(absl::nullopt, absl::nullopt);
 
   // Can be opened while scanning.
-  safe_browsing::SetAnalysisConnector(profile_->GetPrefs(),
-                                      enterprise_connectors::FILE_DOWNLOADED,
-                                      R"(
+  enterprise_connectors::test::SetAnalysisConnector(
+      profile_->GetPrefs(), enterprise_connectors::FILE_DOWNLOADED,
+      R"(
         {
           "service_provider": "google",
           "enable": [{"url_list": ["*"], "tags": ["malware"]}],
@@ -464,211 +419,99 @@ TEST_P(DownloadItemNotificationParameterizedTest, DeepScanning) {
   download_item_notification_->Click(absl::nullopt, absl::nullopt);
 }
 
-// Verifies that download in-progress notifications are suppressed if and only
-// if the holding space in-progress downloads notification suppression feature
-// is enabled.
-TEST_P(DownloadItemNotificationParameterizedTest,
-       MaybeSuppressInProgressNotifications) {
-  // Creates a download in-progress notification.
-  CreateDownloadItemNotification();
+// Test that PLATFORM_ACTION is added for pdf file if
+// kGalleryAppPdfEditNotification flag is enabled on CHROMEOS_ASH. It should not
+// be added for other build configs.
+TEST_F(DownloadItemNotificationTest, GalleryAppPdfEditNotification) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      ash::features::kGalleryAppPdfEditNotification,
+      {{kGalleryAppPdfEditNotificationTextParamName,
+        kGalleryAppPdfEditNotificationTextParamValue}});
+#endif
 
-  // Confirms that the notification is suppressed if and only if holding space
-  // in-progress downloads notification suppression is enabled.
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-
-  // Disabling popups should not override notification suppression.
-  download_item_notification_->DisablePopup();
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-}
-
-// Verifies that download in-progress notifications are displayed even if the
-// holding space in-progress downloads notification suppression feature is
-// enabled if the underlying download is dangerous.
-TEST_P(DownloadItemNotificationParameterizedTest,
-       ShowInProgressNotificationsIfDangerous) {
-  // Creates a download in-progress notification.
-  CreateDownloadItemNotification();
-
-  // Confirms that the notification is suppressed if and only if holding space
-  // in-progress downloads notification suppression is enabled.
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-
-  // The download becoming dangerous should cause the notification to be
-  // displayed even if it was previously suppressed.
-  ON_CALL(*download_item_, GetDangerType)
-      .WillByDefault(Return(
-          download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE));
-  ON_CALL(*download_item_, IsDangerous).WillByDefault(Return(true));
-  download_item_->NotifyObserversDownloadUpdated();
-  EXPECT_EQ(1u, NotificationCount());
-
-  // The download becoming non-dangerous should cause the notification to be
-  // suppressed if an only if holding space in-progress downloads notification
-  // suppression is enabled.
-  ON_CALL(*download_item_, GetDangerType)
-      .WillByDefault(Return(
-          download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
-  ON_CALL(*download_item_, IsDangerous).WillByDefault(Return(false));
-  download_item_->NotifyObserversDownloadUpdated();
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-}
-
-// Verifies that download in-progress notifications are displayed even if the
-// holding space in-progress downloads notification suppression feature is
-// enabled if the underlying download is mixed content.
-TEST_P(DownloadItemNotificationParameterizedTest,
-       ShowInProgressNotificationsIfMixedContent) {
-  // Creates a download in-progress notification.
-  CreateDownloadItemNotification();
-
-  // Confirms that the notification is suppressed if and only if holding space
-  // in-progress downloads notification suppression is enabled.
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-
-  // The download becoming mixed-content should cause the notification to be
-  // displayed even if it was previously suppressed.
-  ON_CALL(*download_item_, GetMixedContentStatus)
-      .WillByDefault(Return(download::DownloadItem::MixedContentStatus::WARN));
-  ON_CALL(*download_item_, IsMixedContent).WillByDefault(Return(true));
-  download_item_->NotifyObserversDownloadUpdated();
-  EXPECT_EQ(1u, NotificationCount());
-
-  // The download becoming non-mixed content should cause the notification to be
-  // suppressed if an only if holding space in-progress downloads notification
-  // suppression is enabled.
-  ON_CALL(*download_item_, GetMixedContentStatus)
-      .WillByDefault(Return(download::DownloadItem::MixedContentStatus::SAFE));
-  ON_CALL(*download_item_, IsMixedContent).WillByDefault(Return(false));
-  download_item_->NotifyObserversDownloadUpdated();
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-}
-
-// Verifies that download complete notifications are displayed even if the
-// holding space in-progress downloads notification suppression feature is
-// enabled.
-TEST_P(DownloadItemNotificationParameterizedTest, ShowCompleteNotifications) {
-  // Creates a download in-progress notification.
-  CreateDownloadItemNotification();
-
-  // Confirms that the notification is suppressed if and only if holding space
-  // in-progress downloads notification suppression is enabled.
-  EXPECT_EQ(IsHoldingSpaceInProgressDownloadsNotificationSuppressionEnabled()
-                ? 0u
-                : 1u,
-            NotificationCount());
-
-  // Completing the download should cause the notification to be displayed even
-  // if it was previously suppressed.
   ON_CALL(*download_item_, GetState)
       .WillByDefault(Return(download::DownloadItem::COMPLETE));
   ON_CALL(*download_item_, IsDone).WillByDefault(Return(true));
-  download_item_->NotifyObserversDownloadUpdated();
-  EXPECT_EQ(1u, NotificationCount());
-}
+  ON_CALL(*download_item_, GetTargetFilePath)
+      .WillByDefault(testing::ReturnRef(kTestPdfFilePath));
 
-struct FileReroutedTestCase {
-  download::DownloadItem::DownloadState state;
-  download::DownloadInterruptReason reason;
-  RerouteInfo reroute_info;
-};
-
-RerouteInfo MakeTestRerouteInfo(std::string file_id = std::string()) {
-  RerouteInfo info;
-  info.set_service_provider(Provider::BOX);
-  if (!file_id.empty())
-    info.mutable_box()->set_file_id(file_id);
-  return info;
-}
-
-RerouteInfo MakeTestRerouteInfoWithError(const std::string& error_message) {
-  RerouteInfo info;
-  info.set_service_provider(Provider::BOX);
-  info.mutable_box()->set_error_message(error_message);
-  return info;
-}
-
-class DownloadItemNotificationFileReroutedParametrizedTest
-    : public DownloadItemNotificationTest,
-      public ::testing::WithParamInterface<std::tuple<
-          /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
-          bool,
-          FileReroutedTestCase>> {
- public:
-  DownloadItemNotificationFileReroutedParametrizedTest()
-      : DownloadItemNotificationTest(
-            /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
-            std::get<0>(GetParam())) {}
-
- protected:
-  const FileReroutedTestCase& GetTestCase() const {
-    return std::get<1>(GetParam());
-  }
-};
-
-TEST_P(DownloadItemNotificationFileReroutedParametrizedTest,
-       CreateDownloadItemNotification) {
-  RerouteInfo reroute_info;
-  reroute_info.set_service_provider(Provider::BOX);
-
-  // Setup file rerouted to Box info.
-  EXPECT_CALL(*download_item_, GetRerouteInfo())
-      .WillRepeatedly(ReturnRefOfCopy(GetTestCase().reroute_info));
-  EXPECT_CALL(*download_item_, GetState())
-      .WillRepeatedly(Return(GetTestCase().state));
-
-  switch (GetTestCase().state) {
-    case (download::DownloadItem::INTERRUPTED):
-      EXPECT_CALL(*download_item_, GetLastReason())
-          .WillRepeatedly(Return(GetTestCase().reason));
-      break;
-    case (download::DownloadItem::COMPLETE):
-      EXPECT_CALL(*download_item_, IsDone()).WillRepeatedly(Return(true));
-      [[fallthrough]];
-    default:
-      EXPECT_CALL(*download_item_, GetLastReason()).Times(0);
-  }
-
-  // Show the download item notification.
   CreateDownloadItemNotification();
-  download_item_->NotifyObserversDownloadOpened();
+  auto actions = GetExtraActions();
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  EXPECT_TRUE(base::Contains(*actions, DownloadCommands::PLATFORM_OPEN));
+  EXPECT_EQ(u"testCommandLabel",
+            GetCommandLabel(DownloadCommands::PLATFORM_OPEN));
+#else
+  EXPECT_FALSE(base::Contains(*actions, DownloadCommands::PLATFORM_OPEN));
+#endif
 }
 
-const FileReroutedTestCase kFileReroutedTestCases[] = {
-    {download::DownloadItem::DownloadState::IN_PROGRESS,
-     download::DOWNLOAD_INTERRUPT_REASON_NONE, MakeTestRerouteInfo()},
-    {download::DownloadItem::DownloadState::INTERRUPTED,
-     download::DOWNLOAD_INTERRUPT_REASON_NETWORK_TIMEOUT,
-     MakeTestRerouteInfo()},
-    {download::DownloadItem::DownloadState::INTERRUPTED,
-     download::DOWNLOAD_INTERRUPT_REASON_SERVER_FAILED,
-     MakeTestRerouteInfoWithError("400 - \"item_name_invalid\"")},
-    {download::DownloadItem::DownloadState::COMPLETE,
-     download::DOWNLOAD_INTERRUPT_REASON_NONE, MakeTestRerouteInfo("13579")}};
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Test that PLATFORM_OPEN is not added if a user's default app for pdf file is
+// not the Gallery app.
+TEST_F(DownloadItemNotificationTest,
+       GalleryAppPdfEditNotificationDefaultNonGallery) {
+  constexpr char kNonGalleryAppTaskId[] = "non-gallery-app|app|open";
 
-INSTANTIATE_TEST_SUITE_P(
-    ReroutedByFileSystemConnectorTest,
-    DownloadItemNotificationFileReroutedParametrizedTest,
-    testing::Combine(
-        /*is_holding_space_in_progress_downloads_notification_suppression_enabled=*/
-        testing::Bool(),
-        ValuesIn(kFileReroutedTestCases)));
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      ash::features::kGalleryAppPdfEditNotification,
+      {{kGalleryAppPdfEditNotificationTextParamName,
+        kGalleryAppPdfEditNotificationTextParamValue}});
+
+  base::Value::Dict suffix_dict;
+  suffix_dict.Set(".pdf", kNonGalleryAppTaskId);
+  profile_->GetTestingPrefService()->SetDict(prefs::kDefaultTasksBySuffix,
+                                             std::move(suffix_dict));
+  base::Value::Dict mime_dict;
+  mime_dict.Set("application/pdf", kNonGalleryAppTaskId);
+  profile_->GetTestingPrefService()->SetDict(prefs::kDefaultTasksByMimeType,
+                                             std::move(mime_dict));
+
+  ON_CALL(*download_item_, GetState)
+      .WillByDefault(Return(download::DownloadItem::COMPLETE));
+  ON_CALL(*download_item_, IsDone).WillByDefault(Return(true));
+  ON_CALL(*download_item_, GetTargetFilePath)
+      .WillByDefault(testing::ReturnRef(kTestPdfFilePath));
+
+  CreateDownloadItemNotification();
+  auto actions = GetExtraActions();
+  EXPECT_FALSE(base::Contains(*actions, DownloadCommands::PLATFORM_OPEN));
+}
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Test that PLATFORM_OPEN is not added if a policy-set default app for pdf file
+// is not the Gallery app.
+TEST_F(DownloadItemNotificationTest,
+       GalleryAppPdfEditNotificationPolicyDefaultNonGallery) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeatureWithParameters(
+      ash::features::kGalleryAppPdfEditNotification,
+      {{kGalleryAppPdfEditNotificationTextParamName,
+        kGalleryAppPdfEditNotificationTextParamValue}});
+
+  constexpr char kChromeAppId[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  InstallChromeApp(kChromeAppId);
+
+  profile_->GetTestingPrefService()->SetDict(
+      prefs::kDefaultHandlersForFileExtensions,
+      base::Value::Dict().Set(".pdf", kChromeAppId));
+
+  ON_CALL(*download_item_, GetState)
+      .WillByDefault(Return(download::DownloadItem::COMPLETE));
+  ON_CALL(*download_item_, IsDone).WillByDefault(Return(true));
+  ON_CALL(*download_item_, GetTargetFilePath)
+      .WillByDefault(testing::ReturnRef(kTestPdfFilePath));
+
+  CreateDownloadItemNotification();
+  auto actions = GetExtraActions();
+  EXPECT_FALSE(base::Contains(*actions, DownloadCommands::PLATFORM_OPEN));
+}
+#endif
 
 }  // namespace test

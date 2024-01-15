@@ -5,8 +5,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
@@ -76,8 +76,9 @@ class VideoThumbnailDecoderTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_;
 
-  raw_ptr<MockVideoDecoder> mock_video_decoder_;
+  // Must outlive `mock_video_decoder_`.
   std::unique_ptr<VideoThumbnailDecoder> thumbnail_decoder_;
+  raw_ptr<MockVideoDecoder> mock_video_decoder_;
 
   // The video frame returned from the thumbnail decoder.
   scoped_refptr<VideoFrame> frame_;
@@ -92,7 +93,8 @@ TEST_F(VideoThumbnailDecoderTest, Success) {
                       RunCallback<4>(expected_frame)));
   EXPECT_CALL(*mock_video_decoder(), Decode_(_, _))
       .Times(2)
-      .WillRepeatedly(RunOnceCallback<1>(DecoderStatus::Codes::kOk));
+      .WillRepeatedly(
+          base::test::RunOnceCallbackRepeatedly<1>(DecoderStatus::Codes::kOk));
 
   Start();
   EXPECT_TRUE(frame());

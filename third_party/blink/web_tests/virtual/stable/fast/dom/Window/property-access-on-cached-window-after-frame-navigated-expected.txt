@@ -4,8 +4,11 @@ On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE
 
 PASS oldChildWindow.closed is newChildWindow.closed
 PASS oldChildWindow.cookieStore.onchange is newChildWindow.cookieStore.onchange
+PASS oldChildWindow.credentialless is newChildWindow.credentialless
 PASS oldChildWindow.crossOriginIsolated is newChildWindow.crossOriginIsolated
 PASS oldChildWindow.devicePixelRatio is newChildWindow.devicePixelRatio
+PASS oldChildWindow.documentPictureInPicture.onenter is newChildWindow.documentPictureInPicture.onenter
+PASS oldChildWindow.documentPictureInPicture.window is newChildWindow.documentPictureInPicture.window
 PASS oldChildWindow.innerHeight is newChildWindow.innerHeight
 PASS oldChildWindow.innerWidth is newChildWindow.innerWidth
 PASS oldChildWindow.isSecureContext is newChildWindow.isSecureContext
@@ -41,6 +44,7 @@ PASS oldChildWindow.navigator.connection.saveData is newChildWindow.navigator.co
 PASS oldChildWindow.navigator.cookieEnabled is newChildWindow.navigator.cookieEnabled
 PASS oldChildWindow.navigator.deviceMemory is newChildWindow.navigator.deviceMemory
 PASS oldChildWindow.navigator.doNotTrack is newChildWindow.navigator.doNotTrack
+PASS oldChildWindow.navigator.gpu.wgslLanguageFeatures.size is newChildWindow.navigator.gpu.wgslLanguageFeatures.size
 PASS oldChildWindow.navigator.hardwareConcurrency is newChildWindow.navigator.hardwareConcurrency
 PASS oldChildWindow.navigator.hid.onconnect is newChildWindow.navigator.hid.onconnect
 PASS oldChildWindow.navigator.hid.ondisconnect is newChildWindow.navigator.hid.ondisconnect
@@ -99,6 +103,7 @@ PASS oldChildWindow.onbeforeinput is newChildWindow.onbeforeinput
 PASS oldChildWindow.onbeforeinstallprompt is newChildWindow.onbeforeinstallprompt
 PASS oldChildWindow.onbeforematch is newChildWindow.onbeforematch
 PASS oldChildWindow.onbeforeprint is newChildWindow.onbeforeprint
+PASS oldChildWindow.onbeforetoggle is newChildWindow.onbeforetoggle
 PASS oldChildWindow.onbeforeunload is newChildWindow.onbeforeunload
 PASS oldChildWindow.onbeforexrselect is newChildWindow.onbeforexrselect
 PASS oldChildWindow.onblur is newChildWindow.onblur
@@ -108,7 +113,7 @@ PASS oldChildWindow.oncanplaythrough is newChildWindow.oncanplaythrough
 PASS oldChildWindow.onchange is newChildWindow.onchange
 PASS oldChildWindow.onclick is newChildWindow.onclick
 PASS oldChildWindow.onclose is newChildWindow.onclose
-PASS oldChildWindow.oncontentvisibilityautostatechanged is newChildWindow.oncontentvisibilityautostatechanged
+PASS oldChildWindow.oncontentvisibilityautostatechange is newChildWindow.oncontentvisibilityautostatechange
 PASS oldChildWindow.oncontextlost is newChildWindow.oncontextlost
 PASS oldChildWindow.oncontextmenu is newChildWindow.oncontextmenu
 PASS oldChildWindow.oncontextrestored is newChildWindow.oncontextrestored
@@ -176,6 +181,7 @@ PASS oldChildWindow.onrejectionhandled is newChildWindow.onrejectionhandled
 PASS oldChildWindow.onreset is newChildWindow.onreset
 PASS oldChildWindow.onresize is newChildWindow.onresize
 PASS oldChildWindow.onscroll is newChildWindow.onscroll
+PASS oldChildWindow.onscrollend is newChildWindow.onscrollend
 PASS oldChildWindow.onsearch is newChildWindow.onsearch
 PASS oldChildWindow.onsecuritypolicyviolation is newChildWindow.onsecuritypolicyviolation
 PASS oldChildWindow.onseeked is newChildWindow.onseeked
@@ -214,7 +220,6 @@ PASS oldChildWindow.outerHeight is newChildWindow.outerHeight
 PASS oldChildWindow.outerWidth is newChildWindow.outerWidth
 PASS oldChildWindow.pageXOffset is newChildWindow.pageXOffset
 PASS oldChildWindow.pageYOffset is newChildWindow.pageYOffset
-PASS oldChildWindow.performance.eventCounts.size is newChildWindow.performance.eventCounts.size
 PASS oldChildWindow.performance.navigation.redirectCount is newChildWindow.performance.navigation.redirectCount
 PASS oldChildWindow.performance.navigation.type is newChildWindow.performance.navigation.type
 PASS oldChildWindow.performance.onresourcetimingbufferfull is newChildWindow.performance.onresourcetimingbufferfull

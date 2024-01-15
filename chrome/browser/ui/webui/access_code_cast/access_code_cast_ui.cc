@@ -20,15 +20,17 @@
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "ui/base/webui/web_ui_util.h"
 
 namespace media_router {
 
 AccessCodeCastUI::AccessCodeCastUI(content::WebUI* web_ui)
     : MojoWebDialogUI(web_ui) {
-  auto source = base::WrapUnique(
-      content::WebUIDataSource::Create(chrome::kChromeUIAccessCodeCastHost));
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      web_ui->GetWebContents()->GetBrowserContext(),
+      chrome::kChromeUIAccessCodeCastHost);
   webui::SetupWebUIDataSource(
-      source.get(),
+      source,
       base::make_span(kAccessCodeCastResources, kAccessCodeCastResourcesSize),
       IDR_ACCESS_CODE_CAST_INDEX_HTML);
 
@@ -40,6 +42,7 @@ AccessCodeCastUI::AccessCodeCastUI(content::WebUI* web_ui)
       {"dialogTitle", IDS_ACCESS_CODE_CAST_DIALOG_TITLE},
       {"enterCharacter", IDS_ACCESS_CODE_CAST_ENTER_CHARACTER},
       {"errorAccessCode", IDS_ACCESS_CODE_CAST_ERROR_ACCESS_CODE},
+      {"errorDifferentNetwork", IDS_ACCESS_CODE_CAST_ERROR_DIFFERENT_NETWORK},
       {"errorNetwork", IDS_ACCESS_CODE_CAST_ERROR_NETWORK},
       {"errorPermission", IDS_ACCESS_CODE_CAST_ERROR_PERMISSION},
       {"errorProfileSync", IDS_ACCESS_CODE_CAST_ERROR_PROFILE_SYNC},
@@ -58,6 +61,8 @@ AccessCodeCastUI::AccessCodeCastUI(content::WebUI* web_ui)
   source->AddBoolean("qrScannerEnabled", false);
   source->AddString("learnMoreUrl", chrome::kAccessCodeCastLearnMoreURL);
 
+  webui::SetupChromeRefresh2023(source);
+
   Profile* const profile = Profile::FromWebUI(web_ui);
   source->AddInteger("rememberedDeviceDuration",
                      GetAccessCodeDeviceDurationPref(profile).InSeconds());
@@ -73,10 +78,6 @@ AccessCodeCastUI::AccessCodeCastUI(content::WebUI* web_ui)
   plural_string_handler->AddLocalizedString(
       "managedFootnoteYears", IDS_ACCESS_CODE_CAST_MANAGED_FOOTNOTE_YEARS);
   web_ui->AddMessageHandler(std::move(plural_string_handler));
-
-  content::BrowserContext* browser_context =
-      web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, source.release());
 }
 
 AccessCodeCastUI::~AccessCodeCastUI() = default;

@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_FIRST_PARTY_SETS_FIRST_PARTY_SETS_POLICY_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_FIRST_PARTY_SETS_FIRST_PARTY_SETS_POLICY_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/values.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -25,8 +25,7 @@ class FirstPartySetsPolicyService;
 //
 // Listens for the BrowserContext's destruction notification and cleans up the
 // associated FirstPartySetsPolicyService.
-class FirstPartySetsPolicyServiceFactory
-    : public BrowserContextKeyedServiceFactory {
+class FirstPartySetsPolicyServiceFactory : public ProfileKeyedServiceFactory {
  public:
   FirstPartySetsPolicyServiceFactory(
       const FirstPartySetsPolicyServiceFactory&) = delete;
@@ -42,16 +41,13 @@ class FirstPartySetsPolicyServiceFactory
   void SetTestingFactoryForTesting(TestingFactory test_factory);
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      FirstPartySetsPolicyServiceFactory>;
+  friend base::NoDestructor<FirstPartySetsPolicyServiceFactory>;
 
   FirstPartySetsPolicyServiceFactory();
   ~FirstPartySetsPolicyServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   void RegisterProfilePrefs(

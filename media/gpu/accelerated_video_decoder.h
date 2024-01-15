@@ -10,10 +10,12 @@
 
 #include "media/base/decoder_buffer.h"
 #include "media/base/video_codecs.h"
+#include "media/base/video_color_space.h"
 #include "media/base/video_types.h"
 #include "media/gpu/media_gpu_export.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/hdr_metadata.h"
 
 namespace media {
 
@@ -23,12 +25,11 @@ namespace media {
 // frame and state management.
 class MEDIA_GPU_EXPORT AcceleratedVideoDecoder {
  public:
-  AcceleratedVideoDecoder() {}
+  AcceleratedVideoDecoder() = default;
+  virtual ~AcceleratedVideoDecoder() = default;
 
   AcceleratedVideoDecoder(const AcceleratedVideoDecoder&) = delete;
   AcceleratedVideoDecoder& operator=(const AcceleratedVideoDecoder&) = delete;
-
-  virtual ~AcceleratedVideoDecoder() {}
 
   // Set the buffer owned by |decoder_buffer| as the current source of encoded
   // stream data. AcceleratedVideoDecoder doesn't have an ownership of the
@@ -53,15 +54,12 @@ class MEDIA_GPU_EXPORT AcceleratedVideoDecoder {
     // in decoding; in future it could perhaps be possible to fall back
     // to software decoding instead.
     // kStreamError,  // Error in stream.
-    kConfigChange,        // This is returned when some configuration (e.g.
-                          // profile or picture size) is changed. A client may
-                          // need to apply the client side the configuration
-                          // properly (e.g. allocate buffers with the new
-                          // resolution).
+    kConfigChange,  // Stream configuration has changed. E.g., profile, coded
+                    // size, bit depth, or color space. A client may need to
+                    // reallocate resources to apply the new configuration
+                    // properly. E.g. allocate buffers with the new resolution.
     kRanOutOfStreamData,  // Need more stream data to proceed.
     kRanOutOfSurfaces,    // Waiting for the client to free up output surfaces.
-    kNeedContextUpdate,   // Waiting for the client to update decoding context
-                          // with data acquired from the accelerator.
     kTryAgain,  // The accelerator needs additional data (independently
     // provided) in order to proceed. This may be a new key in order to decrypt
     // encrypted data, or existing hardware resources freed so that they can be
@@ -74,8 +72,8 @@ class MEDIA_GPU_EXPORT AcceleratedVideoDecoder {
   [[nodiscard]] virtual DecodeResult Decode() = 0;
 
   // Return dimensions/visible rectangle/profile/bit depth/chroma sampling
-  // format/required number of pictures that client should be ready to provide
-  // for the decoder to function properly (of which up to
+  // format/hdr metadata/required number of pictures that client should be
+  // ready to provide for the decoder to function properly (of which up to
   // GetNumReferenceFrames() might be needed for internal decoding). To be used
   // after Decode() returns kConfigChange.
   virtual gfx::Size GetPicSize() const = 0;
@@ -83,6 +81,14 @@ class MEDIA_GPU_EXPORT AcceleratedVideoDecoder {
   virtual VideoCodecProfile GetProfile() const = 0;
   virtual uint8_t GetBitDepth() const = 0;
   virtual VideoChromaSampling GetChromaSampling() const = 0;
+  // Returns the video color space for the in-band metadata / stream
+  // configuration. The returned color space may vary between in-band metadata
+  // and stream config based on video decoder's internal
+  // preferences.
+  virtual VideoColorSpace GetVideoColorSpace() const = 0;
+  // Returns in-band HDR metadata if it exists. Clients must prefer in-band
+  // metadata over container metadata to support dynamic HDR metadata.
+  virtual absl::optional<gfx::HDRMetadata> GetHDRMetadata() const = 0;
   virtual size_t GetRequiredNumOfPictures() const = 0;
   virtual size_t GetNumReferenceFrames() const = 0;
 

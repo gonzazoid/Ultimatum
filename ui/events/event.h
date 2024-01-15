@@ -14,6 +14,7 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/gesture_event_details.h"
 #include "ui/events/gestures/gesture_types.h"
@@ -34,6 +35,7 @@ namespace ui {
 
 class CancelModeEvent;
 class Event;
+class EventRewriter;
 class EventTarget;
 class KeyEvent;
 class LocatedEvent;
@@ -42,7 +44,7 @@ class MouseWheelEvent;
 class ScrollEvent;
 class TouchEvent;
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 
 // Note: In order for Clone() to work properly, every concrete class
 // transitively inheriting Event must implement Clone() explicitly, even if any
@@ -69,7 +71,7 @@ class EVENTS_EXPORT Event {
     void set_time_stamp(base::TimeTicks time) { event_->time_stamp_ = time; }
 
    private:
-    raw_ptr<Event, DanglingUntriaged> event_;
+    raw_ptr<Event, AcrossTasksDanglingUntriaged> event_;
   };
 
   void SetNativeEvent(const PlatformEvent& event);
@@ -86,7 +88,7 @@ class EVENTS_EXPORT Event {
 
   // This is only intended to be used externally by classes that are modifying
   // events in an EventRewriter.
-  void set_flags(int flags) { flags_ = flags; }
+  void SetFlags(int flags);
 
   EventTarget* target() const { return target_; }
   EventPhase phase() const { return phase_; }
@@ -288,6 +290,17 @@ class EVENTS_EXPORT Event {
   void SetHandled();
   bool handled() const { return result_ != ER_UNHANDLED; }
 
+  // Marks the event as skipped. This immediately stops the propagation of the
+  // event like `StopPropagation()` but sets an extra bit so that the dispatcher
+  // of the event can use this extra information to decide to handle the event
+  // themselves. For example in the case of ash-chrome - lacros-chrome
+  // interaction in ChromeOS, lacros-chrome can mark the event as 'skipped' to
+  // stop the propagation, but also notifies ash-chroem that the event was not
+  // handled in lacros. Note that `handled()` will still return true to stop the
+  // event from being passed to the next phase. Note that SetSkipped() can be
+  // called only for cancelable events.
+  void SetSkipped();
+
   // For debugging. Not a stable serialization format.
   virtual std::string ToString() const;
 
@@ -309,22 +322,24 @@ class EVENTS_EXPORT Event {
 
   void set_time_stamp(base::TimeTicks time_stamp) { time_stamp_ = time_stamp; }
 
+  // Override per concrete class if some data needs to get invalidated or
+  // updated when the event flags are updated.
+  virtual void OnFlagsUpdated() {}
+
  private:
   friend class EventTestApi;
+  friend class EventRewriter;
 
   EventType type_;
   base::TimeTicks time_stamp_;
   LatencyInfo latency_;
   int flags_;
   PlatformEvent native_event_;
-  bool delete_native_event_ = false;
   bool cancelable_ = true;
   // Neither Event copy constructor nor the assignment operator copies
   // `target_`, as `target_` should be explicitly set so the setter will be
   // responsible for tracking it.
-  //
-  // TODO(crbug.com/1298696): Breaks events_unittests.
-  raw_ptr<EventTarget, DanglingUntriagedDegradeToNoOpWhenMTE> target_ = nullptr;
+  raw_ptr<EventTarget, AcrossTasksDanglingUntriaged> target_ = nullptr;
   EventPhase phase_ = EP_PREDISPATCH;
   EventResult result_ = ER_UNHANDLED;
 
@@ -460,7 +475,7 @@ class EVENTS_EXPORT MouseEvent : public LocatedEvent {
         movement_(model.movement_),
         pointer_details_(model.pointer_details_) {
     SetType(type);
-    set_flags(flags);
+    SetFlags(flags);
   }
 
   // Note: Use the ctor for MouseWheelEvent if type is ET_MOUSEWHEEL.
@@ -498,7 +513,7 @@ class EVENTS_EXPORT MouseEvent : public LocatedEvent {
     // TODO(eirage): convert this to builder pattern.
     void set_movement(const gfx::Vector2dF& movement) {
       event_->movement_ = movement;
-      event_->set_flags(event_->flags() | EF_UNADJUSTED_MOUSE);
+      event_->SetFlags(event_->flags() | EF_UNADJUSTED_MOUSE);
     }
 
    private:
@@ -668,7 +683,6 @@ class EVENTS_EXPORT TouchEvent : public LocatedEvent {
       : LocatedEvent(model, source, target),
         unique_event_id_(model.unique_event_id_),
         may_cause_scrolling_(model.may_cause_scrolling_),
-        hovering_(false),
         pointer_details_(model.pointer_details_) {}
 
   TouchEvent(EventType type,
@@ -707,6 +721,13 @@ class EVENTS_EXPORT TouchEvent : public LocatedEvent {
   void DisableSynchronousHandling();
   bool synchronous_handling_disabled() const {
     return !!(result() & ER_DISABLE_SYNC_HANDLING);
+  }
+
+  // Forces to process the gesture recognition even if the event is marked
+  // as `handled` or `stopped_propagation`.
+  void ForceProcessGesture();
+  bool force_process_gesture() const {
+    return !!(result() & ER_FORCE_PROCESS_GESTURE);
   }
 
   const PointerDetails& pointer_details() const { return pointer_details_; }
@@ -766,7 +787,7 @@ class EVENTS_EXPORT TouchEvent : public LocatedEvent {
 //    Japanese, etc. all use VKEY_Q for the key beside Tab, while French uses
 //    VKEY_A. The stored key_code_ is non-located (e.g. VKEY_SHIFT rather than
 //    VKEY_LSHIFT, VKEY_1 rather than VKEY_NUMPAD1).
-// -- |uint32_t scan_code_| [USE_OZONE only] supports remapping of the top
+// -- |uint32_t scan_code_| [IS_OZONE only] supports remapping of the top
 //    function row based on a sysfs attribute provided by the kernel. This
 //    allows devices to have a custom top row layout and still be able to
 //    perform translation back and forth between F-Key and Action-Key. The
@@ -807,12 +828,12 @@ class EVENTS_EXPORT KeyEvent : public Event {
            base::TimeTicks time_stamp,
            bool is_char = false);
 
-  // Create a character event.
-  KeyEvent(char16_t character,
+  // Create an event with event type.
+  KeyEvent(EventType type,
            KeyboardCode key_code,
            DomCode code,
            int flags,
-           base::TimeTicks time_stamp = base::TimeTicks());
+           base::TimeTicks time_stamp);
 
   // Used for synthetic events with code of DOM KeyboardEvent (e.g. 'KeyA')
   // See also: ui/events/keycodes/dom/dom_values.txt
@@ -829,6 +850,13 @@ class EVENTS_EXPORT KeyEvent : public Event {
 
   // Sets whether to enable synthesizing key repeat in InitializeNative().
   static void SetSynthesizeKeyRepeatEnabled(bool enabled);
+
+  static ui::KeyEvent FromCharacter(
+      char16_t character,
+      KeyboardCode key_code,
+      DomCode code,
+      int flags,
+      base::TimeTicks time_stamp = base::TimeTicks());
 
   void InitializeNative();
 
@@ -869,13 +897,13 @@ class EVENTS_EXPORT KeyEvent : public Event {
   // events in an EventRewriter.
   void set_key_code(KeyboardCode key_code) { key_code_ = key_code; }
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // The scan code of the physical key. This is used to perform the mapping
   // of top row keys from Actions back to F-Keys on new Chrome OS keyboards
   // that supply the mapping via the kernel.
   uint32_t scan_code() const { return scan_code_; }
   void set_scan_code(uint32_t scan_code) { scan_code_ = scan_code; }
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
 
   // Returns the same value as key_code(), except that located codes are
   // returned in place of non-located ones (e.g. VKEY_LSHIFT or VKEY_RSHIFT
@@ -903,6 +931,10 @@ class EVENTS_EXPORT KeyEvent : public Event {
   // (Native X11 event flags describe the state before the event.)
   void NormalizeFlags();
 
+  // Invalidates the DomKey associated with this event as the flags updating can
+  // change the semantic meaning of the key.
+  void OnFlagsUpdated() override;
+
   // Event:
   std::string ToString() const override;
   std::unique_ptr<Event> Clone() const override;
@@ -926,10 +958,10 @@ class EVENTS_EXPORT KeyEvent : public Event {
 
   KeyboardCode key_code_;
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // The scan code of the physical key on Chrome OS.
   uint32_t scan_code_ = 0;
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
 
   // DOM KeyboardEvent |code| (e.g. DomCode::US_A, DomCode::SPACE).
   // http://www.w3.org/TR/DOM-Level-3-Events-code/
@@ -956,7 +988,7 @@ class EVENTS_EXPORT KeyEvent : public Event {
   mutable DomKey key_ = DomKey::NONE;
 
   static KeyEvent* last_key_event_;
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   static KeyEvent* last_ibus_key_event_;
 #endif
 

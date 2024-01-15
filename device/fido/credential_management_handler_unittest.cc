@@ -6,12 +6,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "base/test/task_environment.h"
 #include "device/fido/credential_management.h"
 #include "device/fido/fido_constants.h"
-#include "device/fido/fido_request_handler_base.h"
+#include "device/fido/fido_parsing_utils.h"
+#include "device/fido/fido_types.h"
 #include "device/fido/public_key_credential_descriptor.h"
 #include "device/fido/public_key_credential_rp_entity.h"
 #include "device/fido/public_key_credential_user_entity.h"
@@ -70,7 +72,7 @@ class CredentialManagementHandlerTest : public ::testing::Test {
   test::VirtualFidoDeviceFactory virtual_device_factory_;
 };
 
-TEST_F(CredentialManagementHandlerTest, TestDeleteCredential) {
+TEST_F(CredentialManagementHandlerTest, TestDeleteCredentials) {
   VirtualCtap2Device::Config ctap_config;
   ctap_config.pin_support = true;
   ctap_config.resident_key_support = true;
@@ -107,14 +109,150 @@ TEST_F(CredentialManagementHandlerTest, TestDeleteCredential) {
   ASSERT_TRUE(num_remaining);
   EXPECT_EQ(*num_remaining, 99u);
 
-  handler->DeleteCredential(
-      opt_response->front().credentials.front().credential_id,
+  handler->DeleteCredentials(
+      {opt_response->front().credentials.front().credential_id},
       delete_callback_.callback());
 
   delete_callback_.WaitForCallback();
   ASSERT_EQ(CtapDeviceResponseCode::kSuccess, delete_callback_.value());
   EXPECT_EQ(virtual_device_factory_.mutable_state()->registrations.size(), 0u);
   EXPECT_FALSE(finished_callback_.was_called());
+}
+
+// Tests that the credential management handler performs garbage collection when
+// starting up.
+TEST_F(CredentialManagementHandlerTest, TestGarbageCollectLargeBlob_Startup) {
+  VirtualCtap2Device::Config ctap_config;
+  ctap_config.pin_support = true;
+  ctap_config.resident_key_support = true;
+  ctap_config.credential_management_support = true;
+  ctap_config.large_blob_support = true;
+  ctap_config.pin_uv_auth_token_support = true;
+  ctap_config.ctap2_versions = {Ctap2Version::kCtap2_1};
+  virtual_device_factory_.SetCtap2Config(ctap_config);
+  virtual_device_factory_.SetSupportedProtocol(device::ProtocolVersion::kCtap2);
+  virtual_device_factory_.mutable_state()->pin = kPIN;
+  virtual_device_factory_.mutable_state()->pin_retries = device::kMaxPinRetries;
+  std::vector<uint8_t> empty_large_blob =
+      virtual_device_factory_.mutable_state()->large_blob;
+
+  PublicKeyCredentialRpEntity rp(kRPID, kRPName);
+  PublicKeyCredentialUserEntity user(fido_parsing_utils::Materialize(kUserID),
+                                     kUserName, kUserDisplayName);
+  ASSERT_TRUE(virtual_device_factory_.mutable_state()->InjectResidentKey(
+      kCredentialID, rp, user));
+
+  std::vector<uint8_t> credential_id =
+      fido_parsing_utils::Materialize(kCredentialID);
+  LargeBlob blob(std::vector<uint8_t>{'b', 'l', 'o', 'b'}, 4);
+  virtual_device_factory_.mutable_state()->InjectLargeBlob(
+      &virtual_device_factory_.mutable_state()->registrations.at(credential_id),
+      std::move(blob));
+  ASSERT_NE(virtual_device_factory_.mutable_state()->large_blob,
+            empty_large_blob);
+
+  // Orphan the large blob by removing the credential.
+  virtual_device_factory_.mutable_state()->registrations.clear();
+
+  auto handler = MakeHandler();
+  ready_callback_.WaitForCallback();
+  EXPECT_EQ(virtual_device_factory_.mutable_state()->large_blob,
+            empty_large_blob);
+}
+
+// Tests that CredentialManagementHandler::DeleteCredentials performs large blob
+// garbage collection.
+TEST_F(CredentialManagementHandlerTest, TestGarbageCollectLargeBlob_Delete) {
+  VirtualCtap2Device::Config ctap_config;
+  ctap_config.pin_support = true;
+  ctap_config.resident_key_support = true;
+  ctap_config.credential_management_support = true;
+  ctap_config.large_blob_support = true;
+  ctap_config.pin_uv_auth_token_support = true;
+  ctap_config.ctap2_versions = {Ctap2Version::kCtap2_1};
+  virtual_device_factory_.SetCtap2Config(ctap_config);
+  virtual_device_factory_.SetSupportedProtocol(device::ProtocolVersion::kCtap2);
+  virtual_device_factory_.mutable_state()->pin = kPIN;
+  virtual_device_factory_.mutable_state()->pin_retries = device::kMaxPinRetries;
+  std::vector<uint8_t> empty_large_blob =
+      virtual_device_factory_.mutable_state()->large_blob;
+
+  auto handler = MakeHandler();
+  ready_callback_.WaitForCallback();
+
+  PublicKeyCredentialRpEntity rp(kRPID, kRPName);
+  PublicKeyCredentialUserEntity user(fido_parsing_utils::Materialize(kUserID),
+                                     kUserName, kUserDisplayName);
+  ASSERT_TRUE(virtual_device_factory_.mutable_state()->InjectResidentKey(
+      kCredentialID, rp, user));
+
+  std::vector<uint8_t> credential_id =
+      fido_parsing_utils::Materialize(kCredentialID);
+  LargeBlob blob(std::vector<uint8_t>{'b', 'l', 'o', 'b'}, 4);
+  virtual_device_factory_.mutable_state()->InjectLargeBlob(
+      &virtual_device_factory_.mutable_state()->registrations.at(credential_id),
+      std::move(blob));
+  ASSERT_NE(virtual_device_factory_.mutable_state()->large_blob,
+            empty_large_blob);
+
+  PublicKeyCredentialDescriptor credential(CredentialType::kPublicKey,
+                                           credential_id);
+  handler->DeleteCredentials({credential}, delete_callback_.callback());
+  delete_callback_.WaitForCallback();
+  ASSERT_EQ(CtapDeviceResponseCode::kSuccess, delete_callback_.value());
+  EXPECT_EQ(virtual_device_factory_.mutable_state()->registrations.size(), 0u);
+  EXPECT_EQ(virtual_device_factory_.mutable_state()->large_blob,
+            empty_large_blob);
+}
+
+// Tests that CredentialManagementHandler::DeleteCredentials does not attempt
+// large blob garbage collection if there is an error deleting the credential.
+TEST_F(CredentialManagementHandlerTest,
+       TestGarbageCollectLargeBlob_DeleteError) {
+  VirtualCtap2Device::Config ctap_config;
+  ctap_config.pin_support = true;
+  ctap_config.resident_key_support = true;
+  ctap_config.credential_management_support = true;
+  ctap_config.large_blob_support = true;
+  ctap_config.pin_uv_auth_token_support = true;
+  ctap_config.ctap2_versions = {Ctap2Version::kCtap2_1};
+  virtual_device_factory_.SetCtap2Config(ctap_config);
+  virtual_device_factory_.SetSupportedProtocol(device::ProtocolVersion::kCtap2);
+  virtual_device_factory_.mutable_state()->pin = kPIN;
+  virtual_device_factory_.mutable_state()->pin_retries = device::kMaxPinRetries;
+  std::vector<uint8_t> empty_large_blob =
+      virtual_device_factory_.mutable_state()->large_blob;
+
+  auto handler = MakeHandler();
+  ready_callback_.WaitForCallback();
+
+  PublicKeyCredentialRpEntity rp(kRPID, kRPName);
+  PublicKeyCredentialUserEntity user(fido_parsing_utils::Materialize(kUserID),
+                                     kUserName, kUserDisplayName);
+  ASSERT_TRUE(virtual_device_factory_.mutable_state()->InjectResidentKey(
+      kCredentialID, rp, user));
+  std::vector<uint8_t> credential_id =
+      fido_parsing_utils::Materialize(kCredentialID);
+  LargeBlob blob(std::vector<uint8_t>{'b', 'l', 'o', 'b'}, 4);
+  virtual_device_factory_.mutable_state()->InjectLargeBlob(
+      &virtual_device_factory_.mutable_state()->registrations.at(credential_id),
+      std::move(blob));
+  ASSERT_NE(virtual_device_factory_.mutable_state()->large_blob,
+            empty_large_blob);
+
+  // Delete the credential directly from the authenticator.
+  virtual_device_factory_.mutable_state()->registrations.clear();
+
+  // Trying to delete the credential again should fail, and it should not
+  // trigger garbage collection.
+  PublicKeyCredentialDescriptor credential(CredentialType::kPublicKey,
+                                           credential_id);
+  handler->DeleteCredentials({credential}, delete_callback_.callback());
+  delete_callback_.WaitForCallback();
+  ASSERT_EQ(CtapDeviceResponseCode::kCtap2ErrNoCredentials,
+            delete_callback_.value());
+  EXPECT_NE(virtual_device_factory_.mutable_state()->large_blob,
+            empty_large_blob);
 }
 
 TEST_F(CredentialManagementHandlerTest, TestUpdateUserInformation) {
@@ -282,8 +420,8 @@ TEST_F(CredentialManagementHandlerTest, EnumerateCredentialsMultipleRPs) {
   ASSERT_EQ(responses.size(), 3u);
 
   PublicKeyCredentialRpEntity got_rps[3];
-  std::transform(responses.begin(), responses.end(), std::begin(got_rps),
-                 [](const auto& response) { return response.rp; });
+  base::ranges::transform(responses, std::begin(got_rps),
+                          &AggregatedEnumerateCredentialsResponse::rp);
   EXPECT_THAT(got_rps, UnorderedElementsAreArray(rps));
 
   for (const AggregatedEnumerateCredentialsResponse& response : responses) {

@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/services/multidevice_setup/public/cpp/fake_multidevice_setup.h"
@@ -61,7 +61,7 @@ class MultiDeviceSetupPrivilegedHostDeviceSetterImplTest
     last_set_host_success_ = success;
   }
 
-  absl::optional<bool> last_set_host_success_;
+  std::optional<bool> last_set_host_success_;
 
   std::unique_ptr<FakeMultiDeviceSetup> fake_multidevice_setup_;
   std::unique_ptr<PrivilegedHostDeviceSetterBase> host_setter_;

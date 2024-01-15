@@ -16,15 +16,6 @@
 let FakeSettingsPrivatePref;
 
 /**
- * Creates a deep copy of the object.
- * @param {*} obj
- * @return {*}
- */
-function deepCopy(obj) {
-  return JSON.parse(JSON.stringify(obj));
-}
-
-/**
  * Fake of chrome.settingsPrivate API. Use by setting
  * CrSettingsPrefs.deferInitialization to true, then passing a
  * FakeSettingsPrivate to settings-prefs#initialize().
@@ -54,7 +45,7 @@ class FakeSettingsPrivate {
     // Send a copy of prefs to keep our internal state private.
     const prefs = [];
     for (const key in this.prefs) {
-      prefs.push(deepCopy(this.prefs[key]));
+      prefs.push(structuredClone(this.prefs[key]));
     }
 
     // Run the callback asynchronously to test that the prefs aren't actually
@@ -69,16 +60,19 @@ class FakeSettingsPrivate {
     assertEquals(Array.isArray(value), Array.isArray(pref.value));
 
     if (this.failNextSetPref_) {
-      callback(false);
+      if (callback) {
+        callback(false);
+      }
       this.failNextSetPref_ = false;
       return;
     }
     assertNotEquals(true, this.disallowSetPref_);
 
     const changed = JSON.stringify(pref.value) !== JSON.stringify(value);
-    pref.value = deepCopy(value);
-    callback(true);
-
+    pref.value = structuredClone(value);
+    if (callback) {
+      callback(true);
+    }
     // Like chrome.settingsPrivate, send a notification when prefs change.
     if (changed) {
       this.sendPrefChanges([{key, value}]);
@@ -89,7 +83,8 @@ class FakeSettingsPrivate {
     const pref = this.prefs[key];
     assertNotEquals(undefined, pref);
     callback(
-        /** @type {!chrome.settingsPrivate.PrefObject} */ (deepCopy(pref)));
+        /** @type {!chrome.settingsPrivate.PrefObject} */ (
+            structuredClone(pref)));
   }
 
   // Functions used by tests.
@@ -118,7 +113,7 @@ class FakeSettingsPrivate {
       const pref = this.prefs[change.key];
       assertNotEquals(undefined, pref);
       pref.value = change.value;
-      prefs.push(deepCopy(pref));
+      prefs.push(structuredClone(pref));
     }
     /** @type {FakeChromeEvent} */ (this.onPrefsChanged).callListeners(prefs);
   }

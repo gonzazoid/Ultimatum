@@ -7,24 +7,31 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_message_loop.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/audio_device_info_accessor_for_tests.h"
+#include "media/audio/audio_features.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
 #include "media/audio/audio_unittest_util.h"
 #include "media/audio/test_audio_thread.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/media_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "media/audio/android/audio_manager_android.h"
+#endif
 
 #if BUILDFLAG(IS_FUCHSIA)
 #include <fuchsia/media/cpp/fidl_test_base.h>
@@ -70,7 +77,8 @@ class TestInputCallback : public AudioInputStream::AudioInputCallback {
         had_error_(0) {}
   void OnData(const AudioBus* source,
               base::TimeTicks capture_time,
-              double volume) override {
+              double volume,
+              const AudioGlitchInfo& glitch_info) override {
     if (!quit_closure_.is_null()) {
       ++callback_count_;
       if (callback_count_ >= 2) {
@@ -103,13 +111,24 @@ class TestInputCallback : public AudioInputStream::AudioInputCallback {
   int had_error_;
 };
 
-class AudioInputTest : public testing::Test {
+class AudioInputTest : public testing::TestWithParam<bool> {
  public:
   AudioInputTest()
       : message_loop_(base::MessagePumpType::UI),
         audio_manager_(AudioManager::CreateForTesting(
             std::make_unique<TestAudioThread>())),
         audio_input_stream_(nullptr) {
+#if BUILDFLAG(IS_ANDROID)
+    // The only parameter is used to enable/disable AAudio.
+    should_use_aaudio_ = GetParam();
+    if (should_use_aaudio_) {
+      features_.InitAndEnableFeature(features::kUseAAudioInput);
+
+      aaudio_is_supported_ =
+          reinterpret_cast<AudioManagerAndroid*>(audio_manager_.get())
+              ->IsUsingAAudioForTesting();
+    }
+#endif
     base::RunLoop().RunUntilIdle();
   }
 
@@ -233,24 +252,54 @@ class AudioInputTest : public testing::Test {
 #endif  // BUILDFLAG(IS_FUCHSIA)
   std::unique_ptr<AudioManager> audio_manager_;
   raw_ptr<AudioInputStream> audio_input_stream_;
+
+  bool should_use_aaudio_ = false;
+  bool aaudio_is_supported_ = false;
+#if BUILDFLAG(IS_ANDROID)
+  base::test::ScopedFeatureList features_;
+#endif
 };
 
 // Test create and close of an AudioInputStream without recording audio.
-TEST_F(AudioInputTest, CreateAndClose) {
+TEST_P(AudioInputTest, CreateAndClose) {
+  if (should_use_aaudio_ && !aaudio_is_supported_) {
+    return;
+  }
+
   ABORT_AUDIO_TEST_IF_NOT(InputDevicesAvailable());
   MakeAudioInputStreamOnAudioThread();
   CloseAudioInputStreamOnAudioThread();
 }
 
 // Test create, open and close of an AudioInputStream without recording audio.
-TEST_F(AudioInputTest, OpenAndClose) {
+// TODO(crbug.com/1429490): This test is failing on ios-blink-dbg-fyi bot.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_OpenAndClose DISABLED_OpenAndClose
+#else
+#define MAYBE_OpenAndClose OpenAndClose
+#endif
+TEST_P(AudioInputTest, MAYBE_OpenAndClose) {
+  if (should_use_aaudio_ && !aaudio_is_supported_) {
+    return;
+  }
+
   ABORT_AUDIO_TEST_IF_NOT(InputDevicesAvailable());
   MakeAudioInputStreamOnAudioThread();
   OpenAndCloseAudioInputStreamOnAudioThread();
 }
 
 // Test create, open, stop and close of an AudioInputStream without recording.
-TEST_F(AudioInputTest, OpenStopAndClose) {
+// TODO(crbug.com/1429490): This test is failing on ios-blink-dbg-fyi bot.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_OpenStopAndClose DISABLED_OpenStopAndClose
+#else
+#define MAYBE_OpenStopAndClose OpenStopAndClose
+#endif
+TEST_P(AudioInputTest, MAYBE_OpenStopAndClose) {
+  if (should_use_aaudio_ && !aaudio_is_supported_) {
+    return;
+  }
+
   ABORT_AUDIO_TEST_IF_NOT(InputDevicesAvailable());
   MakeAudioInputStreamOnAudioThread();
   OpenStopAndCloseAudioInputStreamOnAudioThread();
@@ -258,7 +307,17 @@ TEST_F(AudioInputTest, OpenStopAndClose) {
 
 // Test a normal recording sequence using an AudioInputStream.
 // Very simple test which starts capturing and verifies that recording starts.
-TEST_F(AudioInputTest, Record) {
+// TODO(crbug.com/1429490): This test is failing on ios-blink-dbg-fyi bot.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_Record DISABLED_Record
+#else
+#define MAYBE_Record Record
+#endif
+TEST_P(AudioInputTest, MAYBE_Record) {
+  if (should_use_aaudio_ && !aaudio_is_supported_) {
+    return;
+  }
+
   ABORT_AUDIO_TEST_IF_NOT(InputDevicesAvailable());
   MakeAudioInputStreamOnAudioThread();
 
@@ -272,5 +331,15 @@ TEST_F(AudioInputTest, Record) {
 
   StopAndCloseAudioInputStreamOnAudioThread();
 }
+
+// The test parameter is only relevant on Android. It controls whether or not we
+// allow the use of AAudio.
+INSTANTIATE_TEST_SUITE_P(Base, AudioInputTest, testing::Values(false));
+
+#if BUILDFLAG(IS_ANDROID)
+// Run tests with AAudio enabled. On Android P and below, these tests should not
+// run, as we only use AAudio on Q+.
+INSTANTIATE_TEST_SUITE_P(AAudio, AudioInputTest, testing::Values(true));
+#endif
 
 }  // namespace media

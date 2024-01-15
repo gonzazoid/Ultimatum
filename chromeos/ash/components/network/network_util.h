@@ -16,8 +16,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/values.h"
 
@@ -125,7 +125,7 @@ bool ParseCellularSIMSlotInfo(const base::Value::List& list,
 // This includes properties from the corresponding NetworkState if it exists.
 // Assumed to be called from the primary user profile.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-base::Value TranslateNetworkStateToONC(const NetworkState* network);
+base::Value::Dict TranslateNetworkStateToONC(const NetworkState* network);
 
 // Retrieves the list of network services by passing |pattern|,
 // |configured_only|, and |visible_only| to NetworkStateHandler::
@@ -133,10 +133,10 @@ base::Value TranslateNetworkStateToONC(const NetworkState* network);
 // dictionaries using TranslateShillServiceToONCPart. |limit| is used to limit
 // the number of results.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-base::Value TranslateNetworkListToONC(NetworkTypePattern pattern,
-                                      bool configured_only,
-                                      bool visible_only,
-                                      int limit);
+base::Value::List TranslateNetworkListToONC(NetworkTypePattern pattern,
+                                            bool configured_only,
+                                            bool visible_only,
+                                            int limit);
 
 // Returns the Shill type corresponding to ONC |type| or an empty string if
 // there is no match. Only valid for ethernet, wifi, cellular, and vpn.
@@ -154,10 +154,5 @@ std::string TranslateShillTypeToONC(const std::string& type);
 
 }  // namespace network_util
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace network_util = ::ash::network_util;
-}  // namespace chromeos
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_UTIL_H_

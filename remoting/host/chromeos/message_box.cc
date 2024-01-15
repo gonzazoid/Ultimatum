@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -53,10 +54,10 @@ class MessageBox::Core : public views::DialogDelegateView {
  private:
   const std::u16string title_label_;
   ResultCallback result_callback_;
-  MessageBox* message_box_;
+  raw_ptr<MessageBox> message_box_;
 
   // Owned by the native widget hierarchy.
-  views::MessageBoxView* message_box_view_;
+  raw_ptr<views::MessageBoxView> message_box_view_;
 };
 
 MessageBox::Core::Core(const std::u16string& title_label,
@@ -74,8 +75,9 @@ MessageBox::Core::Core(const std::u16string& title_label,
   SetButtonLabel(ui::DIALOG_BUTTON_CANCEL, cancel_label);
 
   auto run_callback = [](MessageBox::Core* core, Result result) {
-    if (core->result_callback_)
+    if (core->result_callback_) {
       std::move(core->result_callback_).Run(result);
+    }
   };
   SetAcceptCallback(base::BindOnce(run_callback, base::Unretained(this), OK));
   SetCancelCallback(
@@ -84,8 +86,9 @@ MessageBox::Core::Core(const std::u16string& title_label,
       base::BindOnce(run_callback, base::Unretained(this), CANCEL));
   RegisterDeleteDelegateCallback(base::BindOnce(
       [](Core* dialog) {
-        if (dialog->message_box_)
+        if (dialog->message_box_) {
           dialog->message_box_->core_ = nullptr;
+        }
       },
       this));
 }

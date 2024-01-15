@@ -13,11 +13,14 @@ import './profile_card.js';
 import './profile_picker_shared.css.js';
 import './strings.m.js';
 
+import {listenOnce} from '//resources/js/util.js';
 import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {afterNextRender, DomRepeat, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {DragDropReorderTileListDelegate, DraggableTileListInterface} from './drag_drop_reorder_tile_list_delegate.js';
 import {ManageProfilesBrowserProxy, ManageProfilesBrowserProxyImpl, ProfileState} from './manage_profiles_browser_proxy.js';
 import {navigateTo, NavigationMixin, Routes} from './navigation_mixin.js';
 import {isAskOnStartupAllowed, isGuestModeEnabled, isProfileCreationAllowed} from './policy_helper.js';
@@ -31,6 +34,8 @@ export interface ProfilePickerMainViewElement {
     browseAsGuestButton: HTMLElement,
     profilesContainer: HTMLElement,
     wrapper: HTMLElement,
+    profiles: DomRepeat,
+    forceSigninErrorDialog: CrDialogElement,
   };
 }
 
@@ -38,7 +43,7 @@ const ProfilePickerMainViewElementBase =
     WebUiListenerMixin(NavigationMixin(PolymerElement));
 
 export class ProfilePickerMainViewElement extends
-    ProfilePickerMainViewElementBase {
+    ProfilePickerMainViewElementBase implements DraggableTileListInterface {
   static get is() {
     return 'profile-picker-main-view';
   }
@@ -66,7 +71,6 @@ export class ProfilePickerMainViewElement extends
         type: Boolean,
         value: true,
         computed: 'computeHideAskOnStartup_(profilesList_.length)',
-
       },
 
       askOnStartup_: {
@@ -74,6 +78,23 @@ export class ProfilePickerMainViewElement extends
         value() {
           return loadTimeData.getBoolean('askOnStartup');
         },
+      },
+
+      forceSigninErrorDialogTitle_: {
+        type: String,
+      },
+
+      forceSigninErrorDialogBody_: {
+        type: String,
+      },
+
+      forceSigninErrorProfilePath_: {
+        type: String,
+      },
+
+      shouldShownSigninButton_: {
+        type: Boolean,
+        value: false,
       },
     };
   }
@@ -85,6 +106,18 @@ export class ProfilePickerMainViewElement extends
   private manageProfilesBrowserProxy_: ManageProfilesBrowserProxy =
       ManageProfilesBrowserProxyImpl.getInstance();
   private resizeObserver_: ResizeObserver|null = null;
+  private previousRoute_: Routes|null = null;
+
+  private dragDelegate_: DragDropReorderTileListDelegate|null = null;
+  private dragDuration_: number = 300;
+
+  // TODO(crbug.com/1478217): Move the dialog into it's own element with the
+  // below members. This dialog state should be independent of the Profile
+  // Picker itself.
+  private forceSigninErrorDialogTitle_: string;
+  private forceSigninErrorDialogBody_: string;
+  private forceSigninErrorProfilePath_: string;
+  private shouldShownSigninButton_: boolean;
 
   override ready() {
     super.ready();
@@ -95,21 +128,48 @@ export class ProfilePickerMainViewElement extends
     if (!isProfileCreationAllowed()) {
       this.$.addProfile.style.display = 'none';
     }
+
+    this.addEventListener('view-enter-finish', this.onViewEnterFinish_);
+
+    this.addEventListener('toggle-drag', this.toggleDrag_);
   }
 
   override connectedCallback() {
     super.connectedCallback();
     this.addResizeObserver_();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profiles-list-changed', this.handleProfilesListChanged_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profile-removed', this.handleProfileRemoved_.bind(this));
+    this.addWebUiListener(
+        'display-force-signin-error-dialog',
+        (title: string, body: string, profilePath: string) =>
+            this.showForceSigninErrorDialog(title, body, profilePath));
     this.manageProfilesBrowserProxy_.initializeMainView();
   }
 
   override disconnectedCallback() {
     super.disconnectedCallback();
     this.resizeObserver_!.disconnect();
+
+    if (this.dragDelegate_) {
+      this.dragDelegate_.clearListeners();
+    }
+  }
+
+  override onRouteChange(route: Routes) {
+    if (route === Routes.MAIN) {
+      return;
+    }
+    this.previousRoute_ = route;
+  }
+
+  private onViewEnterFinish_() {
+    if (this.previousRoute_ !== Routes.NEW_PROFILE) {
+      return;
+    }
+    // Focus the 'Add' button if coming back from the Add Profile flow.
+    this.$.addProfile.focus();
   }
 
   private addResizeObserver_() {
@@ -122,7 +182,7 @@ export class ProfilePickerMainViewElement extends
     this.resizeObserver_.observe(profilesContainer);
   }
 
-  private onProductLogoTap_() {
+  private onProductLogoClick_() {
     this.$['product-logo'].animate(
         {
           transform: ['none', 'rotate(-10turn)'],
@@ -134,11 +194,33 @@ export class ProfilePickerMainViewElement extends
   }
 
   /**
+   * Initializes the drag delegate, making sure to clear a previously existing
+   * one.
+   */
+  private initializeDragDelegate_() {
+    if (loadTimeData.getBoolean('profilesReorderingEnabled')) {
+      if (this.dragDelegate_) {
+        this.dragDelegate_.clearListeners();
+      }
+
+      this.dragDelegate_ = new DragDropReorderTileListDelegate(
+          this, this, 'profilesList_', this.profilesList_.length,
+          this.dragDuration_);
+    }
+  }
+
+  /**
    * Handler for when the profiles list are updated.
    */
   private handleProfilesListChanged_(profilesList: ProfileState[]) {
     this.profilesListLoaded_ = true;
     this.profilesList_ = profilesList;
+
+    listenOnce(this, 'dom-change', () => {
+      afterNextRender(this, () => {
+        this.initializeDragDelegate_();
+      });
+    });
   }
 
   /**
@@ -175,11 +257,74 @@ export class ProfilePickerMainViewElement extends
         break;
       }
     }
+
+    this.initializeDragDelegate_();
   }
 
   private computeHideAskOnStartup_(): boolean {
     return !isAskOnStartupAllowed() || !this.profilesList_ ||
         this.profilesList_.length < 2;
+  }
+
+  private toggleDrag_(e: Event) {
+    if (!this.dragDelegate_) {
+      return;
+    }
+
+    const customEvent = e as CustomEvent;
+    this.dragDelegate_.toggleDrag(customEvent.detail.toggle);
+  }
+
+  // @override
+  onDragEnd(initialIndex: number, finalIndex: number): void {
+    this.manageProfilesBrowserProxy_.updateProfileOrder(
+        initialIndex, finalIndex);
+  }
+
+  // @override
+  getDraggableTile(index: number): HTMLElement {
+    return this.shadowRoot!.querySelector<HTMLElement>('#profile-' + index)!;
+  }
+
+  // @override
+  getDraggableTileIndex(tile: HTMLElement): number {
+    return this.$.profiles.indexForElement(tile) as number;
+  }
+
+  setDraggingTransitionDurationForTesting(duration: number) {
+    this.dragDuration_ = duration;
+  }
+
+  getProfileListForTesting(): ProfileState[] {
+    return this.profilesList_;
+  }
+
+  showForceSigninErrorDialog(title: string, body: string, profilePath: string):
+      void {
+    this.forceSigninErrorDialogTitle_ = title;
+    this.forceSigninErrorDialogBody_ = body;
+    this.forceSigninErrorProfilePath_ = profilePath;
+    this.shouldShownSigninButton_ = profilePath.length !== 0;
+    this.$.forceSigninErrorDialog.showModal();
+  }
+
+  private onForceSigninErrorDialogOkButtonClicked_(): void {
+    this.$.forceSigninErrorDialog.close();
+    this.clearErrorDialogInfo_();
+  }
+
+  private onReauthClicked_(): void {
+    this.$.forceSigninErrorDialog.close();
+    this.manageProfilesBrowserProxy_.launchSelectedProfile(
+        this.forceSigninErrorProfilePath_);
+    this.clearErrorDialogInfo_();
+  }
+
+  private clearErrorDialogInfo_(): void {
+    this.forceSigninErrorDialogTitle_ = '';
+    this.forceSigninErrorDialogBody_ = '';
+    this.forceSigninErrorProfilePath_ = '';
+    this.shouldShownSigninButton_ = false;
   }
 }
 

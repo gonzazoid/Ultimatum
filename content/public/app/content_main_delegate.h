@@ -6,13 +6,13 @@
 #define CONTENT_PUBLIC_APP_CONTENT_MAIN_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/common/main_function_params.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace variations {
@@ -39,7 +39,10 @@ class CONTENT_EXPORT ContentMainDelegate {
 
   // Indicates the delegate is being invoked in a child process. The
   // `kProcessType` switch will hold the precise child process type.
-  struct InvokedInChildProcess {};
+  struct InvokedInChildProcess {
+    // True if the child process was forked from one of the browser's zygotes.
+    bool is_zygote_child = false;
+  };
 
   // The context in which a delegate method is invoked, including the process
   // type and whether it is in a test harness. Can distinguish between
@@ -56,7 +59,7 @@ class CONTENT_EXPORT ContentMainDelegate {
   // embedder to do the things that must happen at the start. Most of its
   // startup code should be in the methods below, handling of early exit
   // command-line switches can wait until PreBrowserMain at the latest.
-  virtual absl::optional<int> BasicStartupComplete();
+  virtual std::optional<int> BasicStartupComplete();
 
   // This is where the embedder puts all of its startup code that needs to run
   // before the sandbox is engaged.
@@ -115,7 +118,7 @@ class CONTENT_EXPORT ContentMainDelegate {
   // BrowserMainParts, etc. are created). Return an error code if the process
   // should exit afterwards. This is the place for embedder to do the things
   // that can shortcut browser execution (i.e. command-line switches).
-  virtual absl::optional<int> PreBrowserMain();
+  virtual std::optional<int> PreBrowserMain();
 
   // Returns true if content should create field trials and initialize the
   // FeatureList instance for this process. Default implementation returns true.
@@ -143,16 +146,16 @@ class CONTENT_EXPORT ContentMainDelegate {
   // won't run until base::ThreadPoolInstance::Start() is called.
   //
   // It is also possible to post tasks to the main thread loop via
-  // base::ThreadTaskRunnerHandle. These tasks won't run until
-  // base::RunLoop::Run() is called on the main thread, which happens after all
-  // ContentMainDelegate entry points.
+  // base::SingleThreadTaskRunner::CurrentDefaultHandle. These tasks won't run
+  // until base::RunLoop::Run() is called on the main thread, which happens
+  // after all ContentMainDelegate entry points.
   //
   // If ShouldCreateFeatureList() returns true for `invoked_in`, the
   // field trials and FeatureList have been initialized. Otherwise, the
   // implementation must initialize the field trials and FeatureList before
   // returning from PostEarlyInitialization. Return an error code if the process
   // should exit afterwards.
-  virtual absl::optional<int> PostEarlyInitialization(InvokedIn invoked_in);
+  virtual std::optional<int> PostEarlyInitialization(InvokedIn invoked_in);
 
 #if BUILDFLAG(IS_WIN)
   // Allows the embedder to indicate that console control events (e.g., Ctrl-C,

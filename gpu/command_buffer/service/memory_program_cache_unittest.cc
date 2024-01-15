@@ -9,11 +9,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "gpu/command_buffer/common/activity_flags.h"
 #include "gpu/command_buffer/common/gles2_cmd_format.h"
+#include "gpu/command_buffer/common/shm_count.h"
 #include "gpu/command_buffer/service/gl_utils.h"
 #include "gpu/command_buffer/service/gpu_service_test.h"
 #include "gpu/command_buffer/service/shader_manager.h"
@@ -83,12 +83,16 @@ class MemoryProgramCacheTest : public GpuServiceTest, public DecoderClient {
       : cache_(new MemoryProgramCache(kCacheSizeBytes,
                                       kDisableGpuDiskCache,
                                       kDisableCachingForTransformFeedback,
-                                      &activity_flags_)),
+                                      &use_shader_cache_shm_count_)),
         shader_manager_(nullptr),
         vertex_shader_(nullptr),
         fragment_shader_(nullptr),
         shader_cache_count_(0) {}
-  ~MemoryProgramCacheTest() override { shader_manager_.Destroy(false); }
+  ~MemoryProgramCacheTest() override {
+    vertex_shader_ = nullptr;
+    fragment_shader_ = nullptr;
+    shader_manager_.Destroy(false);
+  }
 
   void OnConsoleMessage(int32_t id, const std::string& message) override {}
   void CacheBlob(gpu::GpuDiskCacheType type,
@@ -201,9 +205,10 @@ class MemoryProgramCacheTest : public GpuServiceTest, public DecoderClient {
                 .WillOnce(SetArgPointee<2>(GL_FALSE));
   }
 
-  GpuProcessActivityFlags activity_flags_;
+  GpuProcessShmCount use_shader_cache_shm_count_;
   std::unique_ptr<MemoryProgramCache> cache_;
   ShaderManager shader_manager_;
+  // These shaders are owned by |shader_manager_|.
   raw_ptr<Shader> vertex_shader_;
   raw_ptr<Shader> fragment_shader_;
   int32_t shader_cache_count_;
@@ -504,7 +509,7 @@ TEST_F(MemoryProgramCacheTest, LoadFailIfTransformFeedbackCachingDisabled) {
   // Forcibly reset the program cache so we can disable caching of
   // programs which include transform feedback varyings.
   cache_.reset(new MemoryProgramCache(kCacheSizeBytes, kDisableGpuDiskCache,
-                                      true, &activity_flags_));
+                                      true, &use_shader_cache_shm_count_));
   varyings_.push_back("test");
   cache_->SaveLinkedProgram(kProgramId, vertex_shader_, fragment_shader_,
                             nullptr, varyings_, GL_INTERLEAVED_ATTRIBS, this);

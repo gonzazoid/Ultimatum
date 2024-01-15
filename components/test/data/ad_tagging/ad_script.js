@@ -6,9 +6,10 @@
 
 function createAdFencedFrame(url, name) {
   const frame = document.createElement('fencedframe');
+  const config = new FencedFrameConfig(url);
   frame.name = name;
   frame.id = name;
-  frame.src = url;
+  frame.config = config;
   document.body.appendChild(frame);
 }
 
@@ -35,8 +36,12 @@ function createAdFramePromise(url, name, sbox_attr) {
   });
 }
 
-function windowOpenFromAdScript() {
-  window.open();
+function windowOpenFromAdScript(url) {
+  window.open(url);
+}
+
+function navigateIframeFromAdScript(name, url) {
+  document.getElementsByName(name)[0].src = url;
 }
 
 async function createDocWrittenAdFrame(name, base_url) {
@@ -48,11 +53,13 @@ async function createDocWrittenAdFrame(name, base_url) {
   document.body.appendChild(frame);
 
   frame.contentDocument.open();
-  frame.onload = function() {
-    window.domAutomationController.send(true);
-  };
-  frame.contentDocument.write(docText);
-  frame.contentDocument.close();
+  return new Promise(resolve => {
+    frame.onload = function() {
+      resolve(true);
+    };
+    frame.contentDocument.write(docText);
+    frame.contentDocument.close();
+  });
 }
 
 function createAdFrameWithDocWriteAbortedLoad(name) {

@@ -31,6 +31,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-blink-forward.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/permissions_policy/document_policy_feature.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
@@ -41,7 +42,8 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
-#include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
@@ -50,9 +52,6 @@ class ExecutionContext;
 class PermissionsPolicy;
 class PolicyValue;
 class SecurityOrigin;
-struct ParsedPermissionsPolicyDeclaration;
-
-using ParsedPermissionsPolicy = std::vector<ParsedPermissionsPolicyDeclaration>;
 
 enum class SecureContextMode { kInsecureContext, kSecureContext };
 
@@ -87,7 +86,7 @@ class CORE_EXPORT SecurityContext {
 
   void Trace(Visitor*) const;
 
-  using InsecureNavigationsSet = HashSet<unsigned, WTF::AlreadyHashed>;
+  using InsecureNavigationsSet = HashSet<unsigned, AlreadyHashedTraits>;
   static WTF::Vector<unsigned> SerializeInsecureNavigationSet(
       const InsecureNavigationsSet&);
 
@@ -152,18 +151,27 @@ class CORE_EXPORT SecurityContext {
   }
   void SetReportOnlyDocumentPolicy(std::unique_ptr<DocumentPolicy> policy);
 
-  // Tests whether the policy-controlled feature is enabled in this frame.
-  // Use ExecutionContext::IsFeatureEnabled if a failure should be reported.
-  // |should_report| is an extra return value that indicates whether
-  // the potential violation should be reported.
-  bool IsFeatureEnabled(mojom::blink::PermissionsPolicyFeature,
-                        bool* should_report = nullptr) const;
-
-  bool IsFeatureEnabled(mojom::blink::DocumentPolicyFeature) const;
+  // Used by both Permissions and Document Policy
   struct FeatureStatus {
-    bool enabled;       /* Whether the feature is enabled. */
-    bool should_report; /* Whether a report should be sent. */
+    // Whether the feature is enabled.
+    bool enabled;
+    // Whether a report should be sent (to Reporting API, ReportingObservers,
+    // and the console).
+    bool should_report;
+    // Where a report should be sent, if one should be. nullopt if no reporting
+    // is configured for this feature.
+    absl::optional<String> reporting_endpoint;
   };
+
+  // Permissions Policy
+
+  // Tests whether the policy-controlled feature is enabled in this frame.
+  // Note: For consistency in reporting, most code should use
+  // ExecutionContext::IsFeatureEnabled if a failure should be reported.
+  FeatureStatus IsFeatureEnabled(mojom::blink::PermissionsPolicyFeature) const;
+
+  // Document Policy
+  bool IsFeatureEnabled(mojom::blink::DocumentPolicyFeature) const;
   FeatureStatus IsFeatureEnabled(mojom::blink::DocumentPolicyFeature,
                                  PolicyValue threshold_value) const;
 
@@ -173,6 +181,10 @@ class CORE_EXPORT SecurityContext {
 
   SecureContextModeExplanation GetSecureContextModeExplanation() const {
     return secure_context_explanation_;
+  }
+
+  void SetIsWorkerLoadedFromDataURL(bool is_worker_loaded_from_data_url) {
+    is_worker_loaded_from_data_url_ = is_worker_loaded_from_data_url;
   }
 
  protected:
@@ -191,6 +203,7 @@ class CORE_EXPORT SecurityContext {
   SecureContextMode secure_context_mode_ = SecureContextMode::kInsecureContext;
   SecureContextModeExplanation secure_context_explanation_ =
       SecureContextModeExplanation::kInsecureScheme;
+  bool is_worker_loaded_from_data_url_ = false;
 };
 
 }  // namespace blink

@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
+#include <optional>
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace remoting {
 
@@ -105,26 +105,47 @@ void DesktopEnvironmentOptions::set_enable_remote_webauthn(bool enabled) {
   enable_remote_webauthn_ = enabled;
 }
 
-const absl::optional<size_t>& DesktopEnvironmentOptions::clipboard_size()
-    const {
+const std::optional<size_t>& DesktopEnvironmentOptions::clipboard_size() const {
   return clipboard_size_;
 }
 
 void DesktopEnvironmentOptions::set_clipboard_size(
-    absl::optional<size_t> clipboard_size) {
+    std::optional<size_t> clipboard_size) {
   clipboard_size_ = std::move(clipboard_size);
+}
+
+bool DesktopEnvironmentOptions::capture_video_on_dedicated_thread() const {
+  // TODO(joedow): Determine whether we can migrate additional platforms to
+  // using the DesktopCaptureWrapper instead of the DesktopCaptureProxy. Then
+  // clean up DesktopCapturerProxy::Core::CreateCapturer().
+#if BUILDFLAG(IS_LINUX)
+  return capture_video_on_dedicated_thread_;
+#else
+  return false;
+#endif
+}
+
+void DesktopEnvironmentOptions::set_capture_video_on_dedicated_thread(
+    bool use_dedicated_thread) {
+  capture_video_on_dedicated_thread_ = use_dedicated_thread;
 }
 
 void DesktopEnvironmentOptions::ApplySessionOptions(
     const SessionOptions& options) {
   // This field is for test purpose. Usually it should not be set to false.
-  absl::optional<bool> detect_updated_region =
+  std::optional<bool> detect_updated_region =
       options.GetBool("Detect-Updated-Region");
-  if (detect_updated_region) {
+  if (detect_updated_region.has_value()) {
     desktop_capture_options_.set_detect_updated_region(*detect_updated_region);
+  }
+  std::optional<bool> capture_video_on_dedicated_thread =
+      options.GetBool("Capture-Video-On-Dedicated-Thread");
+  if (capture_video_on_dedicated_thread.has_value()) {
+    set_capture_video_on_dedicated_thread(*capture_video_on_dedicated_thread);
   }
 #if defined(WEBRTC_USE_PIPEWIRE)
   desktop_capture_options_.set_allow_pipewire(true);
+  desktop_capture_options_.set_pipewire_use_damage_region(true);
 #endif  // defined(WEBRTC_USE_PIPEWIRE)
 }
 

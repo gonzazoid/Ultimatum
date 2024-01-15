@@ -101,8 +101,8 @@ class CastMediaNotificationItemTest : public testing::Test {
 
   void SetView() {
     EXPECT_CALL(view_, UpdateWithVectorIcon(_))
-        .WillOnce([](const gfx::VectorIcon& vector_icon) {
-          EXPECT_EQ(vector_icons::kMediaRouterIdleIcon.reps, vector_icon.reps);
+        .WillOnce([](const gfx::VectorIcon* vector_icon) {
+          EXPECT_EQ(vector_icons::kMediaRouterIdleIcon.reps, vector_icon->reps);
         });
     EXPECT_CALL(view_, UpdateWithMediaSessionInfo(_))
         .WillOnce([&](const MediaSessionInfoPtr& session_info) {
@@ -128,17 +128,18 @@ class CastMediaNotificationItemTest : public testing::Test {
   }
 
  protected:
-  MOCK_METHOD3(CreateBitmapFetcher,
-               std::unique_ptr<BitmapFetcher>(
-                   const GURL& url,
-                   BitmapFetcherDelegate* delegate,
-                   const net::NetworkTrafficAnnotationTag& traffic_annotation));
+  MOCK_METHOD(std::unique_ptr<BitmapFetcher>,
+              CreateBitmapFetcher,
+              (const GURL& url,
+               BitmapFetcherDelegate* delegate,
+               const net::NetworkTrafficAnnotationTag& traffic_annotation));
 
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
   testing::NiceMock<global_media_controls::test::MockMediaItemManager>
       item_manager_;
-  raw_ptr<MockSessionController> session_controller_ = nullptr;
+  raw_ptr<MockSessionController, DanglingUntriaged> session_controller_ =
+      nullptr;
   // This needs to be a NiceMock, because the uninteresting mock function calls
   // slow down the tests enough to make
   // CastMediaNotificationItemTest.MediaPositionUpdate flaky.
@@ -376,6 +377,5 @@ TEST_F(CastMediaNotificationItemTest, StopCasting) {
 
   EXPECT_CALL(*mock_router, TerminateRoute(item_->route_id()));
   EXPECT_CALL(item_manager_, FocusDialog());
-  item_->StopCasting(
-      global_media_controls::GlobalMediaControlsEntryPoint::kPresentation);
+  item_->StopCasting();
 }

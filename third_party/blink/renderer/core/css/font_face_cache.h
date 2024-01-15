@@ -105,10 +105,7 @@ class CORE_EXPORT FontFaceCache final : public GarbageCollected<FontFaceCache> {
   class FontSelectionQueryResult final
       : public GarbageCollected<FontSelectionQueryResult> {
     using Map =
-        HeapHashMap<FontSelectionRequestKey,
-                    Member<CSSSegmentedFontFace>,
-                    FontSelectionRequestKeyHash,
-                    WTF::SimpleClassHashTraits<FontSelectionRequestKey>>;
+        HeapHashMap<FontSelectionRequestKey, Member<CSSSegmentedFontFace>>;
 
    public:
     CSSSegmentedFontFace* GetOrCreate(const FontSelectionRequest& request,
@@ -124,8 +121,9 @@ class CORE_EXPORT FontFaceCache final : public GarbageCollected<FontFaceCache> {
   class FontSelectionQueryCache final {
     DISALLOW_NEW();
 
-    using Map =
-        HeapHashMap<String, Member<FontSelectionQueryResult>, CaseFoldingHash>;
+    using Map = HeapHashMap<String,
+                            Member<FontSelectionQueryResult>,
+                            CaseFoldingHashTraits<String>>;
 
    public:
     void Clear();
@@ -157,7 +155,9 @@ class CORE_EXPORT FontFaceCache final : public GarbageCollected<FontFaceCache> {
     void Trace(Visitor*) const;
 
    private:
-    using Map = HeapHashMap<String, Member<CapabilitiesSet>, CaseFoldingHash>;
+    using Map = HeapHashMap<String,
+                            Member<CapabilitiesSet>,
+                            CaseFoldingHashTraits<String>>;
 
     Map map_;
   };

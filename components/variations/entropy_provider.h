@@ -54,6 +54,9 @@ struct ValueInRange {
 // the actual low entropy source's hash would fall in the sorted list of all
 // those hashes, and uses that as the final value. For more info, see:
 // https://docs.google.com/document/d/1cPF5PruriWNP2Z5gSkq4MBTm0wSZqLyIJkUO9ekibeo
+//
+// Note: this class should be kept consistent with
+// NormalizedMurmurHashEntropyProvider on the Java side.
 class COMPONENT_EXPORT(VARIATIONS) NormalizedMurmurHashEntropyProvider final
     : public base::FieldTrial::EntropyProvider {
  public:
@@ -69,6 +72,7 @@ class COMPONENT_EXPORT(VARIATIONS) NormalizedMurmurHashEntropyProvider final
   double GetEntropyForTrial(base::StringPiece trial_name,
                             uint32_t randomization_seed) const override;
 
+  uint32_t entropy_value() const { return entropy_value_.value; }
   uint32_t entropy_domain() const { return entropy_value_.range; }
 
  private:
@@ -88,8 +92,10 @@ class COMPONENT_EXPORT(VARIATIONS) EntropyProviders {
  public:
   // Construct providers from the given entropy sources.
   // If |high_entropy_source| is empty, no high entropy provider is created.
+  // If |enable_benchmarking| is true, randomization should be suppressed.
   EntropyProviders(const std::string& high_entropy_value,
-                   ValueInRange low_entropy_value);
+                   ValueInRange low_entropy_value,
+                   bool enable_benchmarking = false);
   EntropyProviders(const EntropyProviders&) = delete;
   EntropyProviders& operator=(const EntropyProviders&) = delete;
   virtual ~EntropyProviders();
@@ -106,12 +112,16 @@ class COMPONENT_EXPORT(VARIATIONS) EntropyProviders {
     return high_entropy_.has_value();
   }
 
+  size_t low_entropy_value() const { return low_entropy_.entropy_value(); }
   size_t low_entropy_domain() const { return low_entropy_.entropy_domain(); }
+
+  bool benchmarking_enabled() const { return benchmarking_enabled_; }
 
  private:
   absl::optional<SHA1EntropyProvider> high_entropy_;
   NormalizedMurmurHashEntropyProvider low_entropy_;
   SessionEntropyProvider session_entropy_;
+  bool benchmarking_enabled_;
 };
 
 }  // namespace variations

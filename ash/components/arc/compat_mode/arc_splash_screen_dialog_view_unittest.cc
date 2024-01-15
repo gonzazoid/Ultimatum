@@ -7,7 +7,9 @@
 #include <memory>
 
 #include "ash/components/arc/compat_mode/test/compat_mode_test_base.h"
-#include "base/callback_helpers.h"
+#include "ash/style/ash_color_provider.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
@@ -54,7 +56,7 @@ class ArcSplashScreenDialogViewTest : public CompatModeTestBase {
         std::make_unique<views::View>());
   }
   void RemoveAnchor() {
-    parent_widget_->GetRootView()->RemoveChildViewT(anchor_);
+    parent_widget_->GetRootView()->RemoveChildViewT(anchor_.get());
     anchor_ = nullptr;
   }
 
@@ -63,8 +65,9 @@ class ArcSplashScreenDialogViewTest : public CompatModeTestBase {
   views::Widget* parent_widget() { return parent_widget_.get(); }
 
  private:
+  ash::AshColorProvider ash_color_provider_;
   std::unique_ptr<views::Widget> parent_widget_;
-  views::View* anchor_{nullptr};
+  raw_ptr<views::View, DanglingUntriaged> anchor_{nullptr};
 };
 
 TEST_F(ArcSplashScreenDialogViewTest, TestCloseButton) {

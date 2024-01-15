@@ -7,7 +7,6 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/renderer/media/android/stream_texture_factory.h"
 #include "content/renderer/stream_texture_host_android.h"
 #include "gpu/command_buffer/common/mailbox.h"
@@ -19,6 +18,8 @@
 
 namespace content {
 
+namespace {
+
 // GpuChannelHost is expected to be created on the IO thread, and posts tasks to
 // setup its IPC listener, so it must be created after the thread task runner
 // handle is set.
@@ -29,12 +30,15 @@ class TestGpuChannelHost : public gpu::GpuChannelHost {
             0 /* channel_id */,
             gpu::GPUInfo(),
             gpu::GpuFeatureInfo(),
+            gpu::SharedImageCapabilities(),
             mojo::ScopedMessagePipeHandle(
                 mojo::MessagePipeHandle(mojo::kInvalidHandleValue))) {}
 
  protected:
   ~TestGpuChannelHost() override {}
 };
+
+}  // namespace
 
 class StreamTextureProxyTest : public testing::Test {
  public:

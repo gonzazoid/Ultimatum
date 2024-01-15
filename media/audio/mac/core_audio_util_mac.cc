@@ -4,23 +4,32 @@
 
 #include "media/audio/mac/core_audio_util_mac.h"
 
-#include <IOKit/audio/IOAudioTypes.h>
+#include "build/build_config.h"
 
 #include <utility>
 
-#include "base/mac/mac_logging.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
+#include "media/audio/mac/scoped_audio_unit.h"
+#include "media/base/audio_timestamp_helper.h"
+
+#include <IOKit/audio/IOAudioTypes.h>
 
 namespace media {
 namespace core_audio_mac {
-
 namespace {
 
 AudioObjectPropertyScope InputOutputScope(bool is_input) {
   return is_input ? kAudioObjectPropertyScopeInput
                   : kAudioObjectPropertyScopeOutput;
+}
+
+void RecordCompositionPropertyIsNull(bool is_null) {
+  base::UmaHistogramBoolean(
+      "Media.Audio.Mac.AggregateDeviceCompositionPropertyIsNull", is_null);
 }
 
 absl::optional<std::string> GetDeviceStringProperty(
@@ -30,7 +39,7 @@ absl::optional<std::string> GetDeviceStringProperty(
   UInt32 size = sizeof(property_value);
   AudioObjectPropertyAddress property_address = {
       property_selector, kAudioObjectPropertyScopeGlobal,
-      kAudioObjectPropertyElementMaster};
+      kAudioObjectPropertyElementMain};
 
   OSStatus result = AudioObjectGetPropertyData(
       device_id, &property_address, 0 /* inQualifierDataSize */,
@@ -56,7 +65,7 @@ absl::optional<uint32_t> GetDeviceUint32Property(
     AudioObjectPropertySelector property_selector,
     AudioObjectPropertyScope property_scope) {
   AudioObjectPropertyAddress property_address = {
-      property_selector, property_scope, kAudioObjectPropertyElementMaster};
+      property_selector, property_scope, kAudioObjectPropertyElementMain};
   UInt32 property_value;
   UInt32 size = sizeof(property_value);
   OSStatus result = AudioObjectGetPropertyData(
@@ -72,7 +81,7 @@ uint32_t GetDevicePropertySize(AudioObjectID device_id,
                                AudioObjectPropertySelector property_selector,
                                AudioObjectPropertyScope property_scope) {
   AudioObjectPropertyAddress property_address = {
-      property_selector, property_scope, kAudioObjectPropertyElementMaster};
+      property_selector, property_scope, kAudioObjectPropertyElementMain};
   UInt32 size = 0;
   OSStatus result = AudioObjectGetPropertyDataSize(
       device_id, &property_address, 0 /* inQualifierDataSize */,
@@ -91,7 +100,7 @@ std::vector<AudioObjectID> GetAudioObjectIDs(
     AudioObjectPropertySelector property_selector) {
   AudioObjectPropertyAddress property_address = {
       property_selector, kAudioObjectPropertyScopeGlobal,
-      kAudioObjectPropertyElementMaster};
+      kAudioObjectPropertyElementMain};
   UInt32 size = 0;
   OSStatus result = AudioObjectGetPropertyDataSize(
       audio_object_id, &property_address, 0 /* inQualifierDataSize */,
@@ -191,7 +200,7 @@ absl::optional<std::string> TranslateDeviceSource(AudioObjectID device_id,
   UInt32 translation_size = sizeof(AudioValueTranslation);
   AudioObjectPropertyAddress property_address = {
       kAudioDevicePropertyDataSourceNameForIDCFString,
-      InputOutputScope(is_input), kAudioObjectPropertyElementMaster};
+      InputOutputScope(is_input), kAudioObjectPropertyElementMain};
 
   OSStatus result = AudioObjectGetPropertyData(
       device_id, &property_address, 0 /* inQualifierDataSize */,
@@ -278,7 +287,7 @@ bool IsPrivateAggregateDevice(AudioObjectID device_id) {
 
   const AudioObjectPropertyAddress property_address = {
       kAudioAggregateDevicePropertyComposition, kAudioObjectPropertyScopeGlobal,
-      kAudioObjectPropertyElementMaster};
+      kAudioObjectPropertyElementMain};
   CFDictionaryRef dictionary = nullptr;
   UInt32 size = sizeof(dictionary);
   OSStatus result = AudioObjectGetPropertyData(
@@ -292,7 +301,17 @@ bool IsPrivateAggregateDevice(AudioObjectID device_id) {
     return false;
   }
 
-  DCHECK_EQ(CFGetTypeID(dictionary), CFDictionaryGetTypeID());
+  // It is possible that though the result was successful, the dictionary
+  // might still be null.
+  if (!dictionary) {
+    RecordCompositionPropertyIsNull(/*is_null=*/true);
+    DLOG(WARNING) << "Property " << kAudioAggregateDevicePropertyComposition
+                  << " is null for device " << device_id;
+    return false;
+  }
+
+  CHECK_EQ(CFGetTypeID(dictionary), CFDictionaryGetTypeID());
+  RecordCompositionPropertyIsNull(/*is_null=*/false);
   bool is_private = false;
   CFTypeRef value = CFDictionaryGetValue(
       dictionary, CFSTR(kAudioAggregateDeviceIsPrivateKey));
@@ -353,6 +372,74 @@ bool IsInputDevice(AudioObjectID device_id) {
 
 bool IsOutputDevice(AudioObjectID device_id) {
   return GetNumStreams(device_id, false) > 0;
+}
+
+// static
+base::TimeDelta GetHardwareLatency(AudioUnit audio_unit,
+                                   AudioDeviceID device_id,
+                                   AudioObjectPropertyScope scope,
+                                   int sample_rate) {
+  if (!audio_unit || device_id == kAudioObjectUnknown) {
+    DLOG(WARNING) << "Audio unit object is NULL or device ID is unknown";
+    return base::TimeDelta();
+  }
+
+  // Get audio unit latency.
+  Float64 audio_unit_latency_sec = 0.0;
+  UInt32 size = sizeof(audio_unit_latency_sec);
+  OSStatus result = AudioUnitGetProperty(
+      audio_unit, kAudioUnitProperty_Latency, kAudioUnitScope_Global,
+      AUElement::OUTPUT, &audio_unit_latency_sec, &size);
+  OSSTATUS_DLOG_IF(WARNING, result != noErr, result)
+      << "Could not get audio unit latency";
+
+  // Get audio device latency.
+  AudioObjectPropertyAddress property_address = {
+      kAudioDevicePropertyLatency, scope, kAudioObjectPropertyElementMain};
+  UInt32 device_latency_frames = 0;
+  size = sizeof(device_latency_frames);
+  result = AudioObjectGetPropertyData(device_id, &property_address, 0, nullptr,
+                                      &size, &device_latency_frames);
+  OSSTATUS_DLOG_IF(WARNING, result != noErr, result)
+      << "Could not get audio device latency.";
+
+  // Retrieve stream ids and take the stream latency from the first stream.
+  // There may be multiple streams with different latencies, but since we're
+  // likely using this delay information for a/v sync we must choose one of
+  // them; Apple recommends just taking the first entry.
+  //
+  // TODO(dalecurtis): Refactor all these "get data size" + "get data" calls
+  // into a common utility function that just returns a std::unique_ptr.
+  UInt32 stream_latency_frames = 0;
+  property_address.mSelector = kAudioDevicePropertyStreams;
+  result = AudioObjectGetPropertyDataSize(device_id, &property_address, 0,
+                                          nullptr, &size);
+  if (result == noErr && size >= sizeof(AudioStreamID)) {
+    std::unique_ptr<uint8_t[]> stream_id_storage(new uint8_t[size]);
+    AudioStreamID* stream_ids =
+        reinterpret_cast<AudioStreamID*>(stream_id_storage.get());
+    result = AudioObjectGetPropertyData(device_id, &property_address, 0,
+                                        nullptr, &size, stream_ids);
+    if (result == noErr) {
+      property_address.mSelector = kAudioStreamPropertyLatency;
+      size = sizeof(stream_latency_frames);
+      result =
+          AudioObjectGetPropertyData(stream_ids[0], &property_address, 0,
+                                     nullptr, &size, &stream_latency_frames);
+      OSSTATUS_DLOG_IF(WARNING, result != noErr, result)
+          << "Could not get stream latency for stream #0.";
+    } else {
+      OSSTATUS_DLOG(WARNING, result)
+          << "Could not get audio device stream ids.";
+    }
+  } else {
+    OSSTATUS_DLOG_IF(WARNING, result != noErr, result)
+        << "Could not get audio device stream ids size.";
+  }
+
+  return base::Seconds(audio_unit_latency_sec) +
+         AudioTimestampHelper::FramesToTime(
+             device_latency_frames + stream_latency_frames, sample_rate);
 }
 
 }  // namespace core_audio_mac

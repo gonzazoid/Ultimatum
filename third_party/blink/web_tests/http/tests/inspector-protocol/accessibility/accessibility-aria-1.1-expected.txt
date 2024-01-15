@@ -22,14 +22,18 @@ Tests ARIA 1.1 accessibility markup.
                 type : relatedElement
             }
             [3] : {
+                attribute : title
+                type : attribute
+            }
+            [4] : {
                 attribute : placeholder
                 type : placeholder
             }
-            [4] : {
+            [5] : {
                 attribute : aria-placeholder
                 type : placeholder
             }
-            [5] : {
+            [6] : {
                 attribute : title
                 type : attribute
             }
@@ -98,7 +102,8 @@ Tests ARIA 1.1 accessibility markup.
                         nodeResult : h3#err
                     }
                 ]
-                type : idref
+                type : idrefList
+                value : err
             }
         }
     ]
@@ -166,7 +171,7 @@ Tests ARIA 1.1 accessibility markup.
     ]
     role : {
         type : role
-        value : img
+        value : image
     }
 }
 {

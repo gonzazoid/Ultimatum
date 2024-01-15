@@ -4,11 +4,11 @@
 
 package org.chromium.components.omnibox;
 
+import androidx.annotation.NonNull;
 import androidx.collection.ArraySet;
 
 import org.chromium.chrome.browser.omnibox.MatchClassificationStyle;
-import org.chromium.chrome.browser.omnibox.OmniboxSuggestionType;
-import org.chromium.components.omnibox.action.OmniboxPedal;
+import org.chromium.components.omnibox.action.OmniboxAction;
 import org.chromium.components.query_tiles.QueryTile;
 import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
@@ -45,7 +45,7 @@ public class AutocompleteMatchBuilder {
     private byte[] mClipboardImageData;
     private boolean mHasTabMatch;
     private List<AutocompleteMatch.SuggestTile> mSuggestTiles;
-    private OmniboxPedal mOmniboxPedal;
+    private List<OmniboxAction> mActions;
 
     /**
      * Create a suggestion builder for a search suggestion.
@@ -55,10 +55,9 @@ public class AutocompleteMatchBuilder {
     public static AutocompleteMatchBuilder searchWithType(@OmniboxSuggestionType int type) {
         return new AutocompleteMatchBuilder(type)
                 .setIsSearch(true)
-                .setDisplayText("Dummy Suggestion")
-                .setDescription("Dummy Description")
-                // Use either JUnitTest or actual GURL (depends on whether ShadowGURL is applied).
-                .setUrl(new GURL(JUnitTestGURLs.SEARCH_URL));
+                .setDisplayText("Placeholder Suggestion")
+                .setDescription("Placeholder Description")
+                .setUrl(JUnitTestGURLs.SEARCH_URL);
     }
 
     public AutocompleteMatchBuilder(@OmniboxSuggestionType int type) {
@@ -70,9 +69,7 @@ public class AutocompleteMatchBuilder {
         this(AutocompleteMatch.INVALID_TYPE);
     }
 
-    /**
-     * Reset the Builder to its default state.
-     */
+    /** Reset the Builder to its default state. */
     public void reset() {
         mType = AutocompleteMatch.INVALID_TYPE;
         mSubtypes = new ArraySet<>();
@@ -96,7 +93,7 @@ public class AutocompleteMatchBuilder {
         mClipboardImageData = null;
         mHasTabMatch = false;
         mSuggestTiles = null;
-        mOmniboxPedal = null;
+        mActions = null;
 
         mDisplayTextClassifications.add(
                 new AutocompleteMatch.MatchClassification(0, MatchClassificationStyle.NONE));
@@ -105,17 +102,36 @@ public class AutocompleteMatchBuilder {
     }
 
     /**
-     * Construct AutocompleteMatch from user set parameters.
-     * Default/fallback values for not explicitly initialized fields are supplied by the builder.
+     * Construct AutocompleteMatch from user set parameters. Default/fallback values for not
+     * explicitly initialized fields are supplied by the builder.
      *
      * @return New AutocompleteMatch.
      */
     public AutocompleteMatch build() {
-        return new AutocompleteMatch(mType, mSubtypes, mIsSearchType, mRelevance, mTransition,
-                mDisplayText, mDisplayTextClassifications, mDescription,
-                mDescriptionClassifications, mAnswer, mFillIntoEdit, mUrl, mImageUrl,
-                mImageDominantColor, mIsDeletable, mPostContentType, mPostData, mGroupId,
-                mQueryTiles, mClipboardImageData, mHasTabMatch, mSuggestTiles, mOmniboxPedal);
+        return new AutocompleteMatch(
+                mType,
+                mSubtypes,
+                mIsSearchType,
+                mRelevance,
+                mTransition,
+                mDisplayText,
+                mDisplayTextClassifications,
+                mDescription,
+                mDescriptionClassifications,
+                mAnswer,
+                mFillIntoEdit,
+                mUrl,
+                mImageUrl,
+                mImageDominantColor,
+                mIsDeletable,
+                mPostContentType,
+                mPostData,
+                mGroupId,
+                mQueryTiles,
+                mClipboardImageData,
+                mHasTabMatch,
+                mSuggestTiles,
+                mActions);
     }
 
     /**
@@ -133,6 +149,15 @@ public class AutocompleteMatchBuilder {
      */
     public AutocompleteMatchBuilder setDescription(String text) {
         mDescription = text;
+        return this;
+    }
+
+    /**
+     * @param text The text to replace the Omnibox content with.
+     * @return Omnibox suggestion builder.
+     */
+    public AutocompleteMatchBuilder setFillIntoEdit(String text) {
+        mFillIntoEdit = text;
         return this;
     }
 
@@ -263,11 +288,11 @@ public class AutocompleteMatchBuilder {
     }
 
     /**
-     * @param omniboxPedal Omnibox pedal.
+     * @param actions List of actions to add to the AutocompleteMatch.
      * @return Omnibox suggestion builder.
      */
-    public AutocompleteMatchBuilder setOmniboxPedal(OmniboxPedal omniboxPedal) {
-        mOmniboxPedal = omniboxPedal;
+    public AutocompleteMatchBuilder setActions(@NonNull List<OmniboxAction> actions) {
+        mActions = actions;
         return this;
     }
 

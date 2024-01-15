@@ -41,7 +41,7 @@ bool ParseRange(base::StringPiece range, size_t* start, size_t* count) {
 //   - ${variable_name,pos,count} -> |replacement.substr(pos,count)|
 // Strictly enforces the format (up to whitespace), e.g.
 // ${variable_name ,  2 , 9  } works, but ${variable_name,2o,9e} doesn't.
-// Returns true if no error occured.
+// Returns true if no error occurred.
 bool Expand(base::StringPiece variable_name,
             base::StringPiece replacement,
             std::string* str) {
@@ -127,9 +127,10 @@ bool VariableExpander::ExpandValue(base::Value* value) const {
       break;
     }
 
-    case base::Value::Type::DICTIONARY: {
-      for (const auto child : value->DictItems())
+    case base::Value::Type::DICT: {
+      for (const auto child : value->GetDict()) {
         no_error &= ExpandValue(&child.second);
+      }
       break;
     }
 

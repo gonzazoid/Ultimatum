@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
@@ -67,7 +67,6 @@ class MODULES_EXPORT TrackAudioRenderer
   // Called on the main thread.
   TrackAudioRenderer(MediaStreamComponent* audio_component,
                      LocalFrame& playout_web_frame,
-                     const base::UnguessableToken& session_id,
                      const String& device_id,
                      base::RepeatingClosure on_render_error_callback);
 
@@ -82,7 +81,6 @@ class MODULES_EXPORT TrackAudioRenderer
   void Pause() override;
   void SetVolume(float volume) override;
   base::TimeDelta GetCurrentRenderTime() override;
-  bool IsLocalRenderer() override;
   void SwitchOutputDevice(const std::string& device_id,
                           media::OutputDeviceStatusCB callback) override;
 
@@ -131,7 +129,7 @@ class MODULES_EXPORT TrackAudioRenderer
   // on the IO thread.
   int Render(base::TimeDelta delay,
              base::TimeTicks delay_timestamp,
-             int prior_frames_skipped,
+             const media::AudioGlitchInfo& glitch_info,
              media::AudioBus* audio_bus) override;
   void OnRenderError() override;
 
@@ -174,7 +172,6 @@ class MODULES_EXPORT TrackAudioRenderer
 
   // The LocalFrame in which the audio is rendered into |sink_|.
   WeakPersistent<LocalFrame> playout_frame_;
-  const base::UnguessableToken session_id_;
 
   // MessageLoop associated with the single thread that performs all control
   // tasks.  Set to the MessageLoop that invoked the ctor.

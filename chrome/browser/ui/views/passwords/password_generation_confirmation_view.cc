@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/passwords/passwords_model_delegate.h"
 #include "chrome/browser/ui/passwords/ui_utils.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -75,7 +75,7 @@ ui::ImageModel PasswordGenerationConfirmationView::GetWindowIcon() {
 }
 
 void PasswordGenerationConfirmationView::StyledLabelLinkClicked() {
-  controller_.OnNavigateToPasswordManagerAccountDashboardLinkClicked(
+  controller_.OnGooglePasswordManagerLinkClicked(
       password_manager::ManagePasswordsReferrer::
           kPasswordGenerationConfirmation);
   CloseBubble();

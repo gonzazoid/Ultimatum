@@ -4,13 +4,12 @@
 
 package org.chromium.net.test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.runner.AndroidJUnit4;
 
+import androidx.test.core.app.ApplicationProvider;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Before;
@@ -19,9 +18,7 @@ import org.junit.runner.RunWith;
 
 import org.chromium.net.impl.ImplVersion;
 
-/**
- * Test functionality of {@link FakeCronetProvider}.
- */
+/** Test functionality of {@link FakeCronetProvider}. */
 @RunWith(AndroidJUnit4.class)
 public class FakeCronetProviderTest {
     Context mContext;
@@ -29,7 +26,7 @@ public class FakeCronetProviderTest {
 
     @Before
     public void setUp() {
-        mContext = InstrumentationRegistry.getTargetContext();
+        mContext = ApplicationProvider.getApplicationContext();
         mProvider = new FakeCronetProvider(mContext);
     }
 
@@ -37,31 +34,31 @@ public class FakeCronetProviderTest {
     @SmallTest
     public void testGetName() {
         String expectedName = "Fake-Cronet-Provider";
-        assertEquals(expectedName, mProvider.getName());
+        assertThat(mProvider.getName()).isEqualTo(expectedName);
     }
 
     @Test
     @SmallTest
     public void testGetVersion() {
-        assertEquals(ImplVersion.getCronetVersion(), mProvider.getVersion());
+        assertThat(mProvider.getVersion()).isEqualTo(ImplVersion.getCronetVersion());
     }
 
     @Test
     @SmallTest
     public void testIsEnabled() {
-        assertTrue(mProvider.isEnabled());
+        assertThat(mProvider.isEnabled()).isTrue();
     }
 
     @Test
     @SmallTest
     public void testHashCode() {
         FakeCronetProvider otherProvider = new FakeCronetProvider(mContext);
-        assertEquals(otherProvider.hashCode(), mProvider.hashCode());
+        assertThat(mProvider.hashCode()).isEqualTo(otherProvider.hashCode());
     }
 
     @Test
     @SmallTest
     public void testEquals() {
-        assertTrue(mProvider.equals(new FakeCronetProvider(mContext)));
+        assertThat(mProvider).isEqualTo(new FakeCronetProvider(mContext));
     }
 }

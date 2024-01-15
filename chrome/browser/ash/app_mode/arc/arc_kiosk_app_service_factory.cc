@@ -4,9 +4,9 @@
 
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_service_factory.h"
 
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs_factory.h"
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs_factory.h"
 
 namespace ash {
 
@@ -14,16 +14,24 @@ namespace ash {
 ArcKioskAppService* ArcKioskAppServiceFactory::GetForBrowserContext(
     content::BrowserContext* context) {
   return static_cast<ArcKioskAppService*>(
-      GetInstance()->GetServiceForBrowserContext(context, true /* create */));
+      GetInstance()->GetServiceForBrowserContext(context, /*create=*/true));
 }
 
 // static
 ArcKioskAppServiceFactory* ArcKioskAppServiceFactory::GetInstance() {
-  return base::Singleton<ArcKioskAppServiceFactory>::get();
+  static base::NoDestructor<ArcKioskAppServiceFactory> instance;
+  return instance.get();
 }
 
 ArcKioskAppServiceFactory::ArcKioskAppServiceFactory()
-    : ProfileKeyedServiceFactory("ArcKioskAppService") {
+    : ProfileKeyedServiceFactory(
+          "ArcKioskAppService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ArcAppListPrefsFactory::GetInstance());
 }
 

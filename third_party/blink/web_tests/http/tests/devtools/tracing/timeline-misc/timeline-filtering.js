@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {PerformanceTestRunner} from 'performance_test_runner';
+
+import * as Timeline from 'devtools/panels/timeline/timeline.js';
+
 (async function() {
   TestRunner.addResult(`Test filtering in Timeline Tree View panel.\n`);
-  await TestRunner.loadLegacyModule('timeline'); await TestRunner.loadTestModule('performance_test_runner');
   await TestRunner.showPanel('timeline');
 
   var sessionId = '4.20';
@@ -278,12 +282,12 @@
   ];
 
   var model = await PerformanceTestRunner.createPerformanceModelWithEvents(testData);
-  const tabbedPane = UI.panels.timeline.flameChart.detailsView.tabbedPane;
+  const tabbedPane = Timeline.TimelinePanel.TimelinePanel.instance().flameChart.detailsView.tabbedPane;
   tabbedPane.selectTab(Timeline.TimelineDetailsView.Tab.EventLog);
   const view = tabbedPane.visibleView;
 
   view.setModel(model, PerformanceTestRunner.mainTrack());
-  view.updateContents(Timeline.TimelineSelection.fromRange(
+  view.updateContents(Timeline.TimelineSelection.TimelineSelection.fromRange(
       model.timelineModel().minimumRecordTime(), model.timelineModel().maximumRecordTime()));
   function printEventMessage(event, level) {
     const text = event.args['data'] && event.args['data']['message'] || event.name;

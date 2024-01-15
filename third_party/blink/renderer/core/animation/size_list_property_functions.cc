@@ -14,6 +14,7 @@ static const FillLayer* GetFillLayerForSize(const CSSProperty& property,
     case CSSPropertyID::kBackgroundSize:
       return &style.BackgroundLayers();
     case CSSPropertyID::kWebkitMaskSize:
+    case CSSPropertyID::kMaskSize:
       return &style.MaskLayers();
     default:
       NOTREACHED();
@@ -22,12 +23,13 @@ static const FillLayer* GetFillLayerForSize(const CSSProperty& property,
 }
 
 static FillLayer* AccessFillLayerForSize(const CSSProperty& property,
-                                         ComputedStyle& style) {
+                                         ComputedStyleBuilder& builder) {
   switch (property.PropertyID()) {
     case CSSPropertyID::kBackgroundSize:
-      return &style.AccessBackgroundLayers();
+      return &builder.AccessBackgroundLayers();
     case CSSPropertyID::kWebkitMaskSize:
-      return &style.AccessMaskLayers();
+    case CSSPropertyID::kMaskSize:
+      return &builder.AccessMaskLayers();
     default:
       NOTREACHED();
       return nullptr;
@@ -50,9 +52,9 @@ SizeList SizeListPropertyFunctions::GetSizeList(const CSSProperty& property,
 }
 
 void SizeListPropertyFunctions::SetSizeList(const CSSProperty& property,
-                                            ComputedStyle& style,
+                                            ComputedStyleBuilder& builder,
                                             const SizeList& size_list) {
-  FillLayer* fill_layer = AccessFillLayerForSize(property, style);
+  FillLayer* fill_layer = AccessFillLayerForSize(property, builder);
   FillLayer* prev = nullptr;
   for (const FillSize& size : size_list) {
     if (!fill_layer)

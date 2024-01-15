@@ -12,11 +12,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/eye_dropper.h"
+#include "content/public/browser/fullscreen_types.h"
 #include "content/public/browser/invalidate_type.h"
 #include "content/public/browser/media_stream_request.h"
 #include "content/public/browser/serial_chooser.h"
@@ -29,6 +30,7 @@
 #include "third_party/blink/public/mojom/frame/fullscreen.mojom-forward.h"
 #include "third_party/blink/public/mojom/manifest/display_mode.mojom.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/native_widget_types.h"
@@ -122,7 +124,8 @@ class CONTENT_EXPORT WebContentsDelegate {
   // OpenURL() for these cases which does it for you).
 
   // Returns the WebContents the URL is opened in, or nullptr if the URL wasn't
-  // opened immediately.
+  // opened immediately. Note that the URL might be opened in another context
+  // when a nullptr is returned.
   virtual WebContents* OpenURLFromTab(WebContents* source,
                                       const OpenURLParams& params);
 
@@ -246,7 +249,7 @@ class CONTENT_EXPORT WebContentsDelegate {
 
   // Returns whether the page should be focused when transitioning from crashed
   // to live. Default is true.
-  virtual bool ShouldFocusPageAfterCrash();
+  virtual bool ShouldFocusPageAfterCrash(WebContents* source);
 
   // Returns whether the page should resume accepting requests for the new
   // window. This is used when window creation is asynchronous
@@ -318,7 +321,7 @@ class CONTENT_EXPORT WebContentsDelegate {
   // CreateCustomWebContents() below to provide their own WebContents.
   virtual bool IsWebContentsCreationOverridden(
       SiteInstance* source_site_instance,
-      content::mojom::WindowContainerType window_container_type,
+      mojom::WindowContainerType window_container_type,
       const GURL& opener_url,
       const std::string& frame_name,
       const GURL& target_url);
@@ -351,22 +354,18 @@ class CONTENT_EXPORT WebContentsDelegate {
                                   const GURL& target_url,
                                   WebContents* new_contents) {}
 
-  // Notifies the embedder that a new WebContents has been created to contain
-  // the contents of a portal.
-  virtual void PortalWebContentsCreated(WebContents* portal_web_contents) {}
-
-  // Notifies the embedder that an existing WebContents that it manages (e.g., a
-  // browser tab) has become the contents of a portal.
+  // Notifies the embedder that a new WebContents dedicated for hosting a
+  // prerendered page has been created. `prerender_web_contents` will host an
+  // initial empty primary page and a prerendered page. The prerendered page
+  // will be activated as a primary page on prerender activation.
+  // `prerender_web_contents` is not visible until the activation.
   //
-  // During portal activation, WebContentsDelegate::ActivatePortalWebContents
-  // will be called to release the delegate's management of a WebContents.
-  // Shortly afterward, the portal will assume ownership of the contents and
-  // call this function to indicate that this is complete, passing the
-  // swapped-out contents as |portal_web_contents|.
-  //
-  // Implementations will likely want to apply changes analogous to those they
-  // would apply to a new WebContents in PortalWebContentsCreated.
-  virtual void WebContentsBecamePortal(WebContents* portal_web_contents) {}
+  // This function is called only when this delegate is
+  // PrerenderWebContentsDelegate. This delegate and `prerender_web_contents`
+  // are owned by a prerender handle. `prerender_web_contents` outlives this
+  // delegate.
+  virtual void PrerenderWebContentsCreated(
+      WebContents* prerender_web_contents) {}
 
   // Notification that one of the frames in the WebContents is hung. |source| is
   // the WebContents that is hung, and |render_widget_host| is the
@@ -392,23 +391,20 @@ class CONTENT_EXPORT WebContentsDelegate {
   virtual void RendererResponsive(WebContents* source,
                                   RenderWidgetHost* render_widget_host) {}
 
-  // Invoked when a primary main frame navigation occurs.
-  virtual void DidNavigatePrimaryMainFramePostCommit(WebContents* source) {}
-
   // Returns a pointer to a service to manage JavaScript dialogs. May return
   // nullptr in which case dialogs aren't shown.
   virtual JavaScriptDialogManager* GetJavaScriptDialogManager(
       WebContents* source);
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE)
   // Called when color chooser should open. Returns the opened color chooser.
   // Returns nullptr if we failed to open the color chooser. The color chooser
-  // is only supported/required for Android.
+  // is supported/required for Android or iOS.
   virtual std::unique_ptr<ColorChooser> OpenColorChooser(
       WebContents* web_contents,
       SkColor color,
       const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions);
-#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#endif
 
   // Called when an eye dropper should open. Returns the eye dropper window.
   // The eye dropper is responsible for calling listener->ColorSelected() or
@@ -441,6 +437,27 @@ class CONTENT_EXPORT WebContentsDelegate {
                                base::OnceCallback<void()> on_confirm,
                                base::OnceCallback<void()> on_cancel);
 
+  // Returns whether the RFH can use Additional Windowing Controls (AWC) APIs.
+  // https://github.com/ivansandrk/additional-windowing-controls/blob/main/awc-explainer.md
+  virtual bool CanUseWindowingControls(RenderFrameHost* requesting_frame);
+
+  // Notifies `BrowserView` about the resizable boolean having been set vith
+  // `window.setResizable(bool)` API.
+  virtual void OnCanResizeFromWebAPIChanged() {}
+  // Returns the overall resizability of the `BrowserView` when considering
+  // both the value set by the AWC API and browser's "native" resizability.
+  virtual bool GetCanResize();
+
+  // Additional Windowing Controls (AWC) APIs to change the state of the window
+  // without the browser's min/max/restore buttons.
+  virtual void MinimizeFromWebAPI() {}
+  virtual void MaximizeFromWebAPI() {}
+  virtual void RestoreFromWebAPI() {}
+
+  // This returns the current state of the window, mappable to display-state
+  // values: normal/minimized/maximized/fullscreen.
+  virtual ui::WindowShowState GetWindowShowState() const;
+
   // Returns whether entering fullscreen with |EnterFullscreenModeForTab()| is
   // allowed.
   virtual bool CanEnterFullscreenModeForTab(
@@ -461,16 +478,12 @@ class CONTENT_EXPORT WebContentsDelegate {
   // Called when the renderer puts a tab out of fullscreen mode.
   virtual void ExitFullscreenModeForTab(WebContents*) {}
 
-  // Returns true if the given `web_contents` is, or is transitioning to
-  // tab-fullscreen.
+  // Returns true if `web_contents` is, or is transitioning to, tab-fullscreen.
   virtual bool IsFullscreenForTabOrPending(const WebContents* web_contents);
 
-  // Overload of IsFullscreenForTabOrPending which also outputs the current or
-  // target display of the fullscreen tab. If the function returns true and
-  // `display_id` is not nullptr, the target display ID of the tab will be
-  // written to `display_id`.
-  virtual bool IsFullscreenForTabOrPending(const WebContents* web_contents,
-                                           int64_t* display_id);
+  // Returns fullscreen state information about the given `web_contents`.
+  virtual FullscreenState GetFullscreenState(
+      const WebContents* web_contents) const;
 
   // Returns the actual display mode of the top-level browsing context.
   // For example, it should return 'blink::mojom::DisplayModeFullscreen'
@@ -550,24 +563,16 @@ class CONTENT_EXPORT WebContentsDelegate {
   // request is denied, a call should be made to |callback| with an empty list
   // of devices. |request| has the details of the request (e.g. which of audio
   // and/or video devices are requested, and lists of available devices).
-  virtual void RequestMediaAccessPermission(
-      WebContents* web_contents,
-      const MediaStreamRequest& request,
-      content::MediaResponseCallback callback);
+  virtual void RequestMediaAccessPermission(WebContents* web_contents,
+                                            const MediaStreamRequest& request,
+                                            MediaResponseCallback callback);
 
   // Checks if we have permission to access the microphone or camera. Note that
   // this does not query the user. |type| must be MEDIA_DEVICE_AUDIO_CAPTURE
   // or MEDIA_DEVICE_VIDEO_CAPTURE.
   virtual bool CheckMediaAccessPermission(RenderFrameHost* render_frame_host,
-                                          const GURL& security_origin,
+                                          const url::Origin& security_origin,
                                           blink::mojom::MediaStreamType type);
-
-  // Returns the ID of the default device for the given media device |type|.
-  // If the returned value is an empty string, it means that there is no
-  // default device for the given |type|.
-  virtual std::string GetDefaultMediaDeviceID(
-      WebContents* web_contents,
-      blink::mojom::MediaStreamType type);
 
   // Returns the human-readable name for title in Media Controls.
   // If the returned value is an empty string, it means that there is no
@@ -612,7 +617,7 @@ class CONTENT_EXPORT WebContentsDelegate {
   // default behavior is suppressed.
   virtual bool SaveFrame(const GURL& url,
                          const Referrer& referrer,
-                         content::RenderFrameHost* rfh);
+                         RenderFrameHost* rfh);
 
   // Called when a suspicious navigation of the main frame has been blocked.
   // Allows the delegate to provide some UI to let the user know about the
@@ -644,13 +649,15 @@ class CONTENT_EXPORT WebContentsDelegate {
   // whether they will shrink the Blink's view size. Note that they are not
   // complete in the sense that there is no API to tell content to poll these
   // values again, except part of resize. But this is not needed by embedder
-  // because it's always accompanied by view size change.
+  // because it's always accompanied by view size change. The values returned
+  // by these APIs are in physical pixels (not DIPs).
   virtual int GetTopControlsHeight();
   virtual int GetTopControlsMinHeight();
   virtual int GetBottomControlsHeight();
   virtual int GetBottomControlsMinHeight();
   virtual bool ShouldAnimateBrowserControlsHeightChanges();
   virtual bool DoBrowserControlsShrinkRendererSize(WebContents* web_contents);
+  virtual int GetVirtualKeyboardHeight(WebContents* web_contents);
   // Returns true if the top controls should only expand at the top of the page,
   // so they'll only be visible if the page is scrolled to the top.
   virtual bool OnlyExpandTopControlsAtPageTop();
@@ -707,23 +714,19 @@ class CONTENT_EXPORT WebContentsDelegate {
   // indication that the cache will be used.
   virtual bool IsBackForwardCacheSupported();
 
-  // Returns true if Prerender2 (see
+  // Returns PreloadingEligibility::kEligible if Prerender2 (see
   // content/browser/preloading/prerender/README.md for details) is supported.
-  virtual bool IsPrerender2Supported(WebContents& web_contents);
-
-  // Requests the delegate to replace |predecessor_contents| with
-  // |portal_contents| in the container that holds |predecessor_contents|. If
-  // the delegate successfully replaces |predecessor_contents|, the return
-  // parameter passes ownership of |predecessor_contents|. Otherwise,
-  // |portal_contents| is returned.
-  virtual std::unique_ptr<WebContents> ActivatePortalWebContents(
-      WebContents* predecessor_contents,
-      std::unique_ptr<WebContents> portal_contents);
+  // If it is not supported, returns the reason.
+  virtual PreloadingEligibility IsPrerender2Supported(
+      WebContents& web_contents);
 
   // If |old_contents| is being inspected by a DevTools window, it updates the
   // window to inspect |new_contents| instead and calls |callback| after it
   // finishes asynchronously. If no window is present, or no update is
   // necessary, |callback| is run synchronously (immediately on the same stack).
+  //
+  // TODO(crbug.com/1498140): This has no remaining call sites and can be
+  // removed.
   virtual void UpdateInspectedWebContentsIfNecessary(
       WebContents* old_contents,
       WebContents* new_contents,
@@ -733,21 +736,6 @@ class CONTENT_EXPORT WebContentsDelegate {
   // eviction and displayed until a new frame is generated. If false, a white
   // solid color is displayed instead.
   virtual bool ShouldShowStaleContentOnEviction(WebContents* source);
-
-  // Returns the user-visible WebContents that is responsible for the activity
-  // in the provided WebContents. For example, this delegate may be aware that
-  // the contents is embedded in some other contents, or hosts background
-  // activity on behalf of a user-visible tab which should be used to display
-  // dialogs and similar affordances to the user.
-  //
-  // This may be distinct from the outer web contents (for example, the
-  // responsible contents may logically "own" a contents but not currently embed
-  // it for rendering).
-  //
-  // For most delegates (where the WebContents is a tab, window or other
-  // directly user-visible feature), simply returning the contents is
-  // appropriate.
-  virtual WebContents* GetResponsibleWebContents(WebContents* web_contents);
 
   // Invoked when media playback is interrupted or completed.
   virtual void MediaWatchTimeChanged(const MediaPlayerWatchTime& watch_time) {}
@@ -765,6 +753,34 @@ class CONTENT_EXPORT WebContentsDelegate {
   // It's used to prevent drag and drop between privileged and non-privileged
   // WebContents.
   virtual bool IsPrivileged();
+
+  // Initiates previewing the given `url` within the given `web_contents`.
+  virtual void InitiatePreview(WebContents& web_contents, const GURL& url) {}
+
+  // CloseWatcher web API support. If the currently focused frame has a
+  // CloseWatcher registered in JavaScript, the CloseWatcher should receive the
+  // next "close" operation, based on what the OS convention for closing is.
+  // This function is called when the focused frame changes or a CloseWatcher
+  // is registered/unregistered to update whether the CloseWatcher should
+  // intercept.
+  virtual void DidChangeCloseSignalInterceptStatus() {}
+
+  // Whether the WebContents is running in preview mode.
+  virtual bool IsInPreviewMode() const;
+
+  // Notify the page uses a forbidden powerful API and cannot be shown in
+  // preview mode.
+  virtual void CancelPreviewByMojoBinderPolicy(
+      const std::string& interface_name) {}
+
+  // Notify the previewed page is activated.
+  virtual void DidActivatePreviewedPage() {}
+
+#if !BUILDFLAG(IS_ANDROID)
+  // Whether the WebContents should use per PWA instanced
+  // system media controls.
+  virtual bool ShouldUseInstancedSystemMediaControls() const;
+#endif  // !BUILDFLAG(IS_ANDROID)
 
  protected:
   virtual ~WebContentsDelegate();

@@ -8,9 +8,9 @@
 #include <memory>
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/lazy_instance.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/extensions/api/preference/preference_api.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
@@ -22,8 +22,13 @@
 #include "components/search_engines/template_url_prepopulate_data.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_prefs_factory.h"
+#include "extensions/browser/extension_prefs_helper.h"
+#include "extensions/browser/extension_prefs_helper_factory.h"
+#include "extensions/common/api/types.h"
 #include "extensions/common/error_utils.h"
 #include "extensions/common/manifest_constants.h"
+
+using extensions::api::types::ChromeSettingScope;
 
 namespace extensions {
 
@@ -50,8 +55,15 @@ std::unique_ptr<TemplateURLData> ConvertSearchProvider(
     const std::string& install_parameter) {
   std::unique_ptr<TemplateURLData> data;
   if (search_provider.prepopulated_id) {
-    data = TemplateURLPrepopulateData::GetPrepopulatedEngine(
-        prefs, *search_provider.prepopulated_id);
+    if (base::FeatureList::IsEnabled(
+            kPrepopulatedSearchEngineOverrideRollout)) {
+      data = TemplateURLPrepopulateData::GetPrepopulatedEngineFromFullList(
+          prefs, *search_provider.prepopulated_id);
+    } else {
+      data = TemplateURLPrepopulateData::GetPrepopulatedEngine(
+          prefs, *search_provider.prepopulated_id);
+    }
+
     if (data) {
       // We need to override the prepopulate_id and Sync GUID of the generated
       // engine; otherwise, we will collide the original and also clone the
@@ -121,6 +133,13 @@ std::unique_ptr<TemplateURLData> ConvertSearchProvider(
 
 }  // namespace
 
+// Kill-switch for the updated logic to fetch the prepopulated search engine
+// for settings override.
+// Exposed for tests. To be removed in M122.
+BASE_FEATURE(kPrepopulatedSearchEngineOverrideRollout,
+             "PrepopulatedSearchEngineOverrideRollout",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 SettingsOverridesAPI::SettingsOverridesAPI(content::BrowserContext* context)
     : profile_(Profile::FromBrowserContext(context)),
       url_service_(TemplateURLServiceFactory::GetForProfile(profile_)) {
@@ -138,22 +157,25 @@ SettingsOverridesAPI::GetFactoryInstance() {
 void SettingsOverridesAPI::SetPref(const std::string& extension_id,
                                    const std::string& pref_key,
                                    base::Value value) const {
-  PreferenceAPI* prefs = PreferenceAPI::Get(profile_);
-  if (!prefs)
-    return;  // Expected in unit tests.
-  prefs->SetExtensionControlledPref(
-      extension_id, pref_key, kExtensionPrefsScopeRegular, std::move(value));
+  ExtensionPrefsHelper* prefs_helper = ExtensionPrefsHelper::Get(profile_);
+  // This is not instantiated in unit tests. Historically, the PreferenceAPI
+  // instance provided this functionality, and it was not instantiated during
+  // unit tests and some tests relied on that.
+  if (!prefs_helper)
+    return;
+
+  prefs_helper->SetExtensionControlledPref(
+      extension_id, pref_key, ChromeSettingScope::kRegular, std::move(value));
 }
 
 void SettingsOverridesAPI::UnsetPref(const std::string& extension_id,
                                      const std::string& pref_key) const {
-  PreferenceAPI* prefs = PreferenceAPI::Get(profile_);
-  if (!prefs)
-    return;  // Expected in unit tests.
-  prefs->RemoveExtensionControlledPref(
-      extension_id,
-      pref_key,
-      kExtensionPrefsScopeRegular);
+  ExtensionPrefsHelper* prefs_helper = ExtensionPrefsHelper::Get(profile_);
+  // Not instantiated in unit tests.
+  if (!prefs_helper)
+    return;
+  prefs_helper->RemoveExtensionControlledPref(extension_id, pref_key,
+                                              ChromeSettingScope::kRegular);
 }
 
 void SettingsOverridesAPI::OnExtensionLoaded(
@@ -240,17 +262,16 @@ void SettingsOverridesAPI::RegisterSearchProvider(
       profile_->GetPrefs(), *settings->search_engine, install_parameter);
   auto turl = std::make_unique<TemplateURL>(
       *data, TemplateURL::NORMAL_CONTROLLED_BY_EXTENSION, extension->id(),
-      prefs->GetInstallTime(extension->id()),
+      prefs->GetLastUpdateTime(extension->id()),
       settings->search_engine->is_default);
 
   url_service_->Add(std::move(turl));
 
   if (settings->search_engine->is_default) {
-    // Override current DSE pref to have extension overriden value.
-    SetPref(
-        extension->id(),
-        DefaultSearchManager::kDefaultSearchProviderDataPrefName,
-        base::Value::FromUniquePtrValue(TemplateURLDataToDictionary(*data)));
+    // Override current DSE pref to have extension overridden value.
+    SetPref(extension->id(),
+            DefaultSearchManager::kDefaultSearchProviderDataPrefName,
+            base::Value(TemplateURLDataToDictionary(*data)));
   }
 }
 
@@ -258,7 +279,7 @@ template <>
 void BrowserContextKeyedAPIFactory<
     SettingsOverridesAPI>::DeclareFactoryDependencies() {
   DependsOn(ExtensionPrefsFactory::GetInstance());
-  DependsOn(PreferenceAPI::GetFactoryInstance());
+  DependsOn(ExtensionPrefsHelperFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 

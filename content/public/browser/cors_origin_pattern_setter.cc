@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/barrier_closure.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/shared_cors_origin_access_list.h"
@@ -53,9 +53,10 @@ void CorsOriginPatternSetter::Set(
       base::MakeRefCounted<CorsOriginPatternSetter>(
           PassKey(), source_origin, mojo::Clone(allow_patterns),
           mojo::Clone(block_patterns), barrier_closure);
-  browser_context->ForEachStoragePartition(
-      base::BindRepeating(&CorsOriginPatternSetter::SetForStoragePartition,
-                          base::RetainedRef(setter)));
+  browser_context->ForEachLoadedStoragePartition(
+      [&](StoragePartition* partition) {
+        setter->SetForStoragePartition(partition);
+      });
 
   // Keep the per-profile access list up to date so that we can use this to
   // restore NetworkContext settings at anytime, e.g. on restarting the

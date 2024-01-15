@@ -10,7 +10,6 @@ import androidx.annotation.Nullable;
 
 import org.chromium.base.IntentUtils;
 import org.chromium.chrome.browser.IntentHandler;
-import org.chromium.url.Origin;
 
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -25,13 +24,9 @@ import java.util.Arrays;
  * launched intent will be invalidated if a new one comes.
  */
 public class IntentWithRequestMetadataHandler {
-    /**
-     * Extra to record the token associated with the URL request metadata.
-     */
+    /** Extra to record the token associated with the URL request metadata. */
     public static final String EXTRA_REQUEST_METADATA_TOKEN =
             "org.chromium.chrome.browser.request_metadata_token";
-
-    private static final String TAG = "MetadataHandler";
 
     private static final Object INSTANCE_LOCK = new Object();
     private static IntentWithRequestMetadataHandler sIntentWithRequestMetadataHandler;
@@ -40,19 +35,14 @@ public class IntentWithRequestMetadataHandler {
     private byte[] mIntentToken;
     private String mUri;
 
-    /**
-     * Class representing the URL request metadata that can be retrieved later.
-     */
+    /** Class representing the URL request metadata that can be retrieved later. */
     public static class RequestMetadata {
         private final boolean mHasUserGesture;
         private final boolean mIsRendererIntiated;
-        private final Origin mInitiatorOrigin;
 
-        public RequestMetadata(boolean hasUserGesture, boolean isRendererIntiated,
-                @Nullable Origin initiatorOrigin) {
+        public RequestMetadata(boolean hasUserGesture, boolean isRendererIntiated) {
             mHasUserGesture = hasUserGesture;
             mIsRendererIntiated = isRendererIntiated;
-            mInitiatorOrigin = initiatorOrigin;
         }
 
         public boolean isRendererInitiated() {
@@ -62,16 +52,9 @@ public class IntentWithRequestMetadataHandler {
         public boolean hasUserGesture() {
             return mHasUserGesture;
         }
+    }
 
-        @Nullable
-        public Origin getInitiatorOrigin() {
-            return mInitiatorOrigin;
-        }
-    };
-
-    /**
-     * Get the singleton instance of this object.
-     */
+    /** Get the singleton instance of this object. */
     public static IntentWithRequestMetadataHandler getInstance() {
         synchronized (INSTANCE_LOCK) {
             if (sIntentWithRequestMetadataHandler == null) {
@@ -103,12 +86,12 @@ public class IntentWithRequestMetadataHandler {
      * @param intent Intent that is used to launch chrome.
      * @return Request metadata from the intent if available, or null otherwise.
      */
-    @Nullable
-    public RequestMetadata getRequestMetadataAndClear(Intent intent) {
+    public @Nullable RequestMetadata getRequestMetadataAndClear(Intent intent) {
         if (mIntentToken == null || mUri == null) return null;
         byte[] bytes = IntentUtils.safeGetByteArrayExtra(intent, EXTRA_REQUEST_METADATA_TOKEN);
         RequestMetadata result = null;
-        if ((bytes != null) && Arrays.equals(bytes, mIntentToken)
+        if ((bytes != null)
+                && Arrays.equals(bytes, mIntentToken)
                 && mUri.equals(IntentHandler.getUrlFromIntent(intent))) {
             result = mRequestMetadata;
         }
@@ -116,9 +99,7 @@ public class IntentWithRequestMetadataHandler {
         return result;
     }
 
-    /**
-     * Clear the stored metadata.
-     */
+    /** Clear the stored metadata. */
     public void clear() {
         mIntentToken = null;
         mUri = null;

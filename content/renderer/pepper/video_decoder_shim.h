@@ -13,42 +13,47 @@
 #include <vector>
 
 #include "base/containers/queue.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "media/base/video_decoder_config.h"
+#include "media/renderers/paint_canvas_video_renderer.h"
 #include "media/video/video_decode_accelerator.h"
 #include "ppapi/c/pp_codecs.h"
-
-namespace viz {
-class ContextProviderCommandBuffer;
-}
+#include "services/viz/public/cpp/gpu/context_provider_command_buffer.h"
 
 namespace content {
 
 class PepperVideoDecoderHost;
 
 // This class is a shim to wrap a media::VideoDecoder so that it can be used
-// by PepperVideoDecoderHost in place of a media::VideoDecodeAccelerator.
-// This class should be constructed, used, and destructed on the main (render)
-// thread.
-class VideoDecoderShim : public media::VideoDecodeAccelerator {
+// by PepperVideoDecoderHost. This class should be constructed, used, and
+// destructed on the main (render) thread.
+class VideoDecoderShim {
  public:
-  VideoDecoderShim(PepperVideoDecoderHost* host, uint32_t texture_pool_size);
+  static std::unique_ptr<VideoDecoderShim> Create(PepperVideoDecoderHost* host,
+                                                  uint32_t texture_pool_size,
+                                                  bool use_hw_decoder,
+                                                  bool use_shared_images);
 
   VideoDecoderShim(const VideoDecoderShim&) = delete;
   VideoDecoderShim& operator=(const VideoDecoderShim&) = delete;
 
-  ~VideoDecoderShim() override;
+  ~VideoDecoderShim();
 
-  // media::VideoDecodeAccelerator implementation.
-  bool Initialize(const Config& config, Client* client) override;
-  void Decode(media::BitstreamBuffer bitstream_buffer) override;
-  void AssignPictureBuffers(
-      const std::vector<media::PictureBuffer>& buffers) override;
-  void ReusePictureBuffer(int32_t picture_buffer_id) override;
-  void Flush() override;
-  void Reset() override;
-  void Destroy() override;
+  bool Initialize(media::VideoCodecProfile profile);
+  void Decode(media::BitstreamBuffer bitstream_buffer);
+  void AssignPictureBuffers(const std::vector<media::PictureBuffer>& buffers);
+  void ReusePictureBuffer(int32_t picture_buffer_id);
+  void ReuseSharedImage(const gpu::Mailbox& mailbox, gfx::Size size);
+  void Flush();
+  void Reset();
+  void Destroy();
+
+  const scoped_refptr<viz::ContextProviderCommandBuffer>& context_provider()
+      const {
+    return shared_main_thread_context_provider_;
+  }
 
  private:
   enum State {
@@ -62,10 +67,20 @@ class VideoDecoderShim : public media::VideoDecodeAccelerator {
   struct PendingFrame;
   class DecoderImpl;
 
+  VideoDecoderShim(PepperVideoDecoderHost* host,
+                   uint32_t texture_pool_size,
+                   bool use_hw_decoder,
+                   bool use_shared_images,
+                   scoped_refptr<viz::ContextProviderCommandBuffer>
+                       shared_main_thread_context_provider,
+                   scoped_refptr<viz::ContextProviderCommandBuffer>
+                       pepper_video_decode_context_provider);
+
   void OnInitializeFailed();
-  void OnDecodeComplete(int32_t result, uint32_t decode_id);
+  void OnDecodeComplete(int32_t result, std::optional<uint32_t> decode_id);
   void OnOutputComplete(std::unique_ptr<PendingFrame> frame);
   void SendPictures();
+  void SendSharedImages();
   void OnResetComplete();
   void NotifyCompletedDecodes();
   void DismissTexture(uint32_t texture_id);
@@ -77,9 +92,12 @@ class VideoDecoderShim : public media::VideoDecodeAccelerator {
   std::unique_ptr<DecoderImpl> decoder_impl_;
   State state_;
 
-  PepperVideoDecoderHost* host_;
+  raw_ptr<PepperVideoDecoderHost, ExperimentalRenderer> host_;
   scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
-  scoped_refptr<viz::ContextProviderCommandBuffer> context_provider_;
+  scoped_refptr<viz::ContextProviderCommandBuffer>
+      shared_main_thread_context_provider_;
+  scoped_refptr<viz::ContextProviderCommandBuffer>
+      pepper_video_decode_context_provider_;
 
   // The current decoded frame size.
   gfx::Size texture_size_;
@@ -89,6 +107,8 @@ class VideoDecoderShim : public media::VideoDecodeAccelerator {
   // Available textures (these are plugin ids.)
   using TextureIdSet = std::unordered_set<uint32_t>;
   TextureIdSet available_textures_;
+  std::vector<gpu::Mailbox> available_shared_images_;
+
   // Track textures that are no longer needed (these are plugin ids.)
   TextureIdSet textures_to_dismiss_;
 
@@ -104,6 +124,12 @@ class VideoDecoderShim : public media::VideoDecodeAccelerator {
   uint32_t texture_pool_size_;
 
   uint32_t num_pending_decodes_;
+
+  const bool use_hw_decoder_;
+
+  std::unique_ptr<media::PaintCanvasVideoRenderer> video_renderer_;
+
+  const bool use_shared_images_;
 
   base::WeakPtrFactory<VideoDecoderShim> weak_ptr_factory_{this};
 };

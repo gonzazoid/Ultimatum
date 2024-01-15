@@ -4,8 +4,8 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/android/jni_headers/CookiesFetcher_jni.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -55,8 +55,7 @@ void OnCookiesFetchFinished(const net::CookieList& cookies) {
         i->LastAccessDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->LastUpdateDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->IsSecure(), i->IsHttpOnly(), static_cast<int>(i->SameSite()),
-        i->Priority(), i->IsSameParty(),
-        base::android::ConvertUTF8ToJavaString(env, pk),
+        i->Priority(), base::android::ConvertUTF8ToJavaString(env, pk),
         static_cast<int>(i->SourceScheme()), i->SourcePort());
     env->SetObjectArrayElement(joa.obj(), index++, java_cookie.obj());
   }
@@ -97,7 +96,6 @@ static void JNI_CookiesFetcher_RestoreCookies(
     jboolean httponly,
     jint same_site,
     jint priority,
-    jboolean same_party,
     const JavaParamRef<jstring>& partition_key,
     jint source_scheme,
     jint source_port) {
@@ -107,7 +105,7 @@ static void JNI_CookiesFetcher_RestoreCookies(
   std::string domain_str(base::android::ConvertJavaStringToUTF8(env, domain));
   std::string path_str(base::android::ConvertJavaStringToUTF8(env, path));
 
-  absl::optional<net::CookiePartitionKey> pk;
+  std::optional<net::CookiePartitionKey> pk;
   if (!net::CookiePartitionKey::Deserialize(
           base::android::ConvertJavaStringToUTF8(env, partition_key), pk)) {
     return;
@@ -126,7 +124,7 @@ static void JNI_CookiesFetcher_RestoreCookies(
           base::Time::FromDeltaSinceWindowsEpoch(
               base::Microseconds(last_update)),
           secure, httponly, static_cast<net::CookieSameSite>(same_site),
-          static_cast<net::CookiePriority>(priority), same_party, pk,
+          static_cast<net::CookiePriority>(priority), pk,
           static_cast<net::CookieSourceScheme>(source_scheme), source_port);
   // FromStorage() uses a less strict version of IsCanonical(), we need to check
   // the stricter version as well here. This is safe because this function is

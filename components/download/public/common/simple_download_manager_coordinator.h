@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -49,9 +49,9 @@ class COMPONENTS_DOWNLOAD_EXPORT SimpleDownloadManagerCoordinator
 
   using DownloadWhenFullManagerStartsCallBack =
       base::RepeatingCallback<void(std::unique_ptr<DownloadUrlParameters>)>;
-  SimpleDownloadManagerCoordinator(const DownloadWhenFullManagerStartsCallBack&
-                                       download_when_full_manager_starts_cb,
-                                   bool record_full_download_manager_delay);
+  explicit SimpleDownloadManagerCoordinator(
+      const DownloadWhenFullManagerStartsCallBack&
+          download_when_full_manager_starts_cb);
 
   SimpleDownloadManagerCoordinator(const SimpleDownloadManagerCoordinator&) =
       delete;
@@ -73,7 +73,8 @@ class COMPONENTS_DOWNLOAD_EXPORT SimpleDownloadManagerCoordinator
   // Gets all the downloads. Caller needs to call has_all_history_downloads() to
   // check if all downloads are initialized. If only active downloads are
   // initialized, this method will only return all active downloads.
-  void GetAllDownloads(std::vector<DownloadItem*>* downloads);
+  void GetAllDownloads(
+      std::vector<raw_ptr<DownloadItem, VectorExperimental>>* downloads);
 
   // Get the download item for |guid|.
   DownloadItem* GetDownloadByGuid(const std::string& guid);
@@ -117,9 +118,6 @@ class COMPONENTS_DOWNLOAD_EXPORT SimpleDownloadManagerCoordinator
 
   // Observers that want to be notified of changes to the set of downloads.
   base::ObserverList<Observer> observers_;
-
-  // Time when this object was created.
-  base::TimeTicks creation_time_ticks_;
 
   base::WeakPtrFactory<SimpleDownloadManagerCoordinator> weak_factory_{this};
 };

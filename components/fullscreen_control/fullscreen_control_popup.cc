@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/fullscreen_control/fullscreen_control_view.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/views/widget/widget.h"
@@ -28,6 +28,8 @@ std::unique_ptr<views::Widget> CreatePopupWidget(
   views::Widget::InitParams params(views::Widget::InitParams::TYPE_POPUP);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  params.z_order = ui::ZOrderLevel::kSecuritySurface;
+  params.shadow_type = views::Widget::InitParams::ShadowType::kNone;
   params.parent = parent_view;
   popup->Init(std::move(params));
   popup->SetContentsView(std::move(view));
@@ -103,9 +105,9 @@ FullscreenControlPopup::FullscreenControlPopup(
     std::unique_ptr<views::Widget> popup,
     const base::RepeatingClosure& on_visibility_changed)
     : AnimationDelegateViews(popup->GetRootView()),
-      control_view_(
-          static_cast<FullscreenControlView*>(popup->GetContentsView())),
       popup_(std::move(popup)),
+      control_view_(
+          static_cast<FullscreenControlView*>(popup_->GetContentsView())),
       animation_(std::make_unique<gfx::SlideAnimation>(this)),
       on_visibility_changed_(on_visibility_changed) {
   DCHECK(on_visibility_changed_);

@@ -2,15 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {AsyncUtil} from '../common/async_util.js';
 import {EventHandler} from '../common/event_handler.js';
+import {FlagName, Flags} from '../common/flags.js';
 
-import {Commands} from './commands.js';
 import {Navigator} from './navigator.js';
 import {KeyboardRootNode} from './nodes/keyboard_node.js';
-import {PreferenceManager} from './preference_manager.js';
-import {SAConstants} from './switch_access_constants.js';
+import {ErrorType, Mode} from './switch_access_constants.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const EventType = chrome.automation.EventType;
+const FindParams = chrome.automation.FindParams;
+const RoleType = chrome.automation.RoleType;
+
+let readyCallback;
+const readyPromise = new Promise(resolve => readyCallback = resolve);
 
 /**
  * The top-level class for the Switch Access accessibility feature. Handles
@@ -18,58 +24,32 @@ const AutomationNode = chrome.automation.AutomationNode;
  * codebase.
  */
 export class SwitchAccess {
-  static initialize() {
-    SwitchAccess.instance = new SwitchAccess();
-
-    chrome.automation.getDesktop(desktop => {
-      chrome.automation.getFocus(focus => {
-        // Focus is available. Finish init without waiting for further events.
-        // Disallow web view nodes, which indicate a root web area is still
-        // loading and pending focus.
-        if (focus && focus.role !== chrome.automation.RoleType.WEB_VIEW) {
-          SwitchAccess.finishInit_(desktop);
-          return;
-        }
-
-        // Wait for the focus to be sent. If |focus| was undefined, this is
-        // guaranteed. Otherwise, also set a timed callback to ensure we do
-        // eventually init.
-        let callbackId = 0;
-        const listener = maybeEvent => {
-          if (maybeEvent &&
-              maybeEvent.target.role === chrome.automation.RoleType.WEB_VIEW) {
-            return;
-          }
-
-          desktop.removeEventListener(
-              chrome.automation.EventType.FOCUS, listener, false);
-          clearTimeout(callbackId);
-
-          SwitchAccess.finishInit_(desktop);
-        };
-
-        desktop.addEventListener(
-            chrome.automation.EventType.FOCUS, listener, false);
-        callbackId = setTimeout(listener, 5000);
-      });
-    });
-  }
-
   /** @private */
   constructor() {
-    /**
-     * Feature flag controlling improvement of text input capabilities.
-     * @private {boolean}
-     */
-    this.enableImprovedTextInput_ = false;
+    /* @private {!Mode} */
+    this.mode_ = Mode.ITEM_SCAN;
+  }
 
-    chrome.commandLinePrivate.hasSwitch(
-        'enable-experimental-accessibility-switch-access-text', result => {
-          this.enableImprovedTextInput_ = result;
-        });
+  /** @param {!AutomationNode} desktop */
+  static async init(desktop) {
+    if (SwitchAccess.instance) {
+      throw new Error('Cannot create two SwitchAccess.instances');
+    }
+    SwitchAccess.instance = new SwitchAccess();
 
-    /* @private {!SAConstants.Mode} */
-    this.mode_ = SAConstants.Mode.ITEM_SCAN;
+    const currentFocus = await AsyncUtil.getFocus();
+    await SwitchAccess.instance.waitForFocus_(desktop, currentFocus);
+  }
+
+  /** Starts Switch Access behavior. */
+  static start() {
+    KeyboardRootNode.startWatchingVisibility();
+    readyCallback();
+  }
+
+  /** @return {!Promise} */
+  static async ready() {
+    return readyPromise;
   }
 
   /**
@@ -77,25 +57,25 @@ export class SwitchAccess {
    * for improved text input is enabled.
    * @return {boolean}
    */
-  improvedTextInputEnabled() {
-    return this.enableImprovedTextInput_;
+  static improvedTextInputEnabled() {
+    return Flags.isEnabled(FlagName.SWITCH_ACCESS_TEXT);
   }
 
-  /** @return {!SAConstants.Mode} */
-  get mode() {
-    return this.mode_;
+  /** @return {!Mode} */
+  static get mode() {
+    return SwitchAccess.instance.mode_;
   }
 
-  /** @param {!SAConstants.Mode} newMode */
-  set mode(newMode) {
-    this.mode_ = newMode;
+  /** @param {!Mode} newMode */
+  static set mode(newMode) {
+    SwitchAccess.instance.mode_ = newMode;
   }
 
   /**
    * Helper function to robustly find a node fitting a given FindParams, even if
    * that node has not yet been created.
    * Used to find the menu and back button.
-   * @param {!chrome.automation.FindParams} findParams
+   * @param {!FindParams} findParams
    * @param {!function(!AutomationNode): void} foundCallback
    */
   static findNodeMatching(findParams, foundCallback) {
@@ -109,8 +89,7 @@ export class SwitchAccess {
     // If it's not currently in the tree, listen for changes to the desktop
     // tree.
     const eventHandler = new EventHandler(
-        desktop, chrome.automation.EventType.CHILDREN_CHANGED,
-        null /** callback */);
+        desktop, EventType.CHILDREN_CHANGED, null /** callback */);
 
     const onEvent = event => {
       if (event.target.matches(findParams)) {
@@ -133,7 +112,7 @@ export class SwitchAccess {
 
   /**
    * Creates and records the specified error.
-   * @param {SAConstants.ErrorType} errorType
+   * @param {ErrorType} errorType
    * @param {string} errorString
    * @param {boolean} shouldRecover
    * @return {!Error}
@@ -142,7 +121,7 @@ export class SwitchAccess {
     if (shouldRecover) {
       setTimeout(Navigator.byItem.moveToValidNode.bind(Navigator.byItem), 0);
     }
-    const errorTypeCountForUMA = Object.keys(SAConstants.ErrorType).length;
+    const errorTypeCountForUMA = Object.keys(ErrorType).length;
     chrome.metricsPrivate.recordEnumerationValue(
         'Accessibility.CrosSwitchAccess.Error',
         /** @type {number} */ (errorType), errorTypeCountForUMA);
@@ -150,15 +129,40 @@ export class SwitchAccess {
   }
 
   /**
-   * @param {!chrome.automation.AutomationNode} desktop
+   * @param {!AutomationNode} desktop
+   * @param {AutomationNode} currentFocus
    * @private
    */
-  static finishInit_(desktop) {
-    // Navigator must be initialized first.
-    Navigator.initializeSingletonInstance(desktop);
+  async waitForFocus_(desktop, currentFocus) {
+    return new Promise(resolve => {
+      // Focus is available. Finish init without waiting for further events.
+      // Disallow web view nodes, which indicate a root web area is still
+      // loading and pending focus.
+      if (currentFocus && currentFocus.role !== RoleType.WEB_VIEW) {
+        resolve();
+        return;
+      }
 
-    Commands.initialize();
-    KeyboardRootNode.startWatchingVisibility();
-    PreferenceManager.initialize();
+      // Wait for the focus to be sent. If |currentFocus| was undefined, this is
+      // guaranteed. Otherwise, also set a timed callback to ensure we do
+      // eventually init.
+      let callbackId = 0;
+      const listener = maybeEvent => {
+        if (maybeEvent && maybeEvent.target.role === RoleType.WEB_VIEW) {
+          return;
+        }
+
+        desktop.removeEventListener(EventType.FOCUS, listener, false);
+        clearTimeout(callbackId);
+
+        resolve();
+      };
+
+      desktop.addEventListener(EventType.FOCUS, listener, false);
+      callbackId = setTimeout(listener, 5000);
+    });
   }
 }
+
+/** @type {SwitchAccess} */
+SwitchAccess.instance;

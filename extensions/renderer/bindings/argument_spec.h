@@ -7,18 +7,14 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/strings/string_piece.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/values.h"
 #include "v8/include/v8.h"
-
-namespace base {
-class DictionaryValue;
-class Value;
-}
 
 namespace extensions {
 class APITypeReferenceMap;
@@ -42,10 +38,10 @@ class ArgumentSpec {
  public:
   using PropertiesMap = std::map<std::string, std::unique_ptr<ArgumentSpec>>;
 
-  // Reads the description from |value| and sets associated fields.
+  // Reads the description from |dict| and sets associated fields.
   // TODO(devlin): We should strongly think about generating these instead of
   // populating them at runtime.
-  explicit ArgumentSpec(const base::Value& value);
+  explicit ArgumentSpec(const base::Value::Dict& dict);
   explicit ArgumentSpec(ArgumentType type);
 
   ArgumentSpec(const ArgumentSpec&) = delete;
@@ -86,9 +82,9 @@ class ArgumentSpec {
   ArgumentType type() const { return type_; }
   const std::set<std::string>& enum_values() const { return enum_values_; }
 
-  void set_name(base::StringPiece name) { name_ = std::string(name); }
+  void set_name(std::string_view name) { name_ = std::string(name); }
   void set_optional(bool optional) { optional_ = optional; }
-  void set_ref(base::StringPiece ref) { ref_ = std::string(ref); }
+  void set_ref(std::string_view ref) { ref_ = std::string(ref); }
   void set_minimum(int minimum) { minimum_ = minimum; }
   void set_properties(PropertiesMap properties) {
     properties_ = std::move(properties);
@@ -116,7 +112,7 @@ class ArgumentSpec {
 
  private:
   // Initializes this object according to |type_string| and |dict|.
-  void InitializeType(const base::DictionaryValue* dict);
+  void InitializeType(const base::Value::Dict& dict);
 
   // Conversion functions. These should only be used if the spec is of the given
   // type (otherwise, they will DCHECK).
@@ -173,22 +169,22 @@ class ArgumentSpec {
 
   // The reference the argument points to, if any. Note that if this is set,
   // none of the following fields describing the argument will be.
-  absl::optional<std::string> ref_;
+  std::optional<std::string> ref_;
 
   // The type of instance an object should be, if any. Only applicable for
   // ArgumentType::OBJECT. If specified, the argument must contain the instance
   // type in its prototype chain.
-  absl::optional<std::string> instance_of_;
+  std::optional<std::string> instance_of_;
 
   // A minimum and maximum for integer and double values, if any.
-  absl::optional<int> minimum_;
-  absl::optional<int> maximum_;
+  std::optional<int> minimum_;
+  std::optional<int> maximum_;
 
   // A minimium length for strings or arrays.
-  absl::optional<size_t> min_length_;
+  std::optional<size_t> min_length_;
 
   // A maximum length for strings or arrays.
-  absl::optional<size_t> max_length_;
+  std::optional<size_t> max_length_;
 
   // A map of required properties; present only for objects. Note that any
   // properties *not* defined in this map will be dropped during conversion.

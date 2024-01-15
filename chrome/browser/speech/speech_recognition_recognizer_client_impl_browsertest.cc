@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/speech/cros_speech_recognition_service_factory.h"
 #include "chrome/browser/speech/fake_speech_recognition_service.h"
@@ -143,6 +144,7 @@ class SpeechRecognitionRecognizerClientImplTest : public InProcessBrowserTest {
         .RetiresOnSaturation();
     recognizer_ = std::make_unique<SpeechRecognitionRecognizerClientImpl>(
         mock_speech_delegate_->GetWeakPtr(), browser()->profile(),
+        media::AudioDeviceDescription::kDefaultDeviceId,
         media::mojom::SpeechRecognitionOptions::New(
             media::mojom::SpeechRecognitionMode::kIme,
             /*enable_formatting=*/false,
@@ -168,7 +170,7 @@ class SpeechRecognitionRecognizerClientImplTest : public InProcessBrowserTest {
         std::make_unique<MockAudioSystem>();
     mock_audio_system->SetInputStreamParameters(
         media::AudioDeviceDescription::kDefaultDeviceId, params);
-    recognizer_->audio_system_ = std::move(mock_audio_system);
+    recognizer_->set_audio_system_for_testing(std::move(mock_audio_system));
     StartAndWaitForRecognizing();
   }
 
@@ -177,7 +179,8 @@ class SpeechRecognitionRecognizerClientImplTest : public InProcessBrowserTest {
   std::unique_ptr<SpeechRecognitionRecognizerClientImpl> recognizer_;
 
   // Unowned.
-  speech::FakeSpeechRecognitionService* fake_service_;
+  raw_ptr<speech::FakeSpeechRecognitionService, DanglingUntriaged>
+      fake_service_;
 
   base::test::ScopedFeatureList scoped_feature_list_;
 };

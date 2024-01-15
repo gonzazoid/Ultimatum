@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//media/gpu/args.gni")
 import("//media/media_options.gni")
@@ -59,6 +59,8 @@ component("services") {
     "mojo_video_encode_accelerator_provider.h",
     "mojo_video_encode_accelerator_service.cc",
     "mojo_video_encode_accelerator_service.h",
+    "mojo_video_encoder_metrics_provider_service.cc",
+    "mojo_video_encoder_metrics_provider_service.h",
     "test_mojo_media_client.cc",
     "test_mojo_media_client.h",
     "video_decode_perf_history.cc",
@@ -113,12 +115,16 @@ component("services") {
 
   if (is_android) {
     sources += [ "gpu_mojo_media_client_android.cc" ]
-  } else if (is_mac) {
+  } else if (is_apple) {
     sources += [ "gpu_mojo_media_client_mac.cc" ]
   } else if (is_win) {
     sources += [ "gpu_mojo_media_client_win.cc" ]
   } else if (use_vaapi || use_v4l2_codec) {
-    sources += [ "gpu_mojo_media_client_cros.cc" ]
+    if (is_linux) {
+      sources += [ "gpu_mojo_media_client_linux.cc" ]
+    } else {
+      sources += [ "gpu_mojo_media_client_cros.cc" ]
+    }
   } else {
     sources += [ "gpu_mojo_media_client_stubs.cc" ]
   }
@@ -126,6 +132,13 @@ component("services") {
   if (is_chromeos) {
     deps +=
         [ "//chromeos/components/cdm_factory_daemon:cdm_factory_daemon_gpu" ]
+  }
+
+  if (is_linux || is_chromeos) {
+    sources += [
+      "mojo_video_encode_accelerator_provider_factory.cc",
+      "mojo_video_encode_accelerator_provider_factory.h",
+    ]
   }
 
   if (is_android) {
@@ -177,6 +190,8 @@ component("services") {
       "media_foundation_gpu_info_monitor.h",
       "media_foundation_mojo_media_client.cc",
       "media_foundation_mojo_media_client.h",
+      "media_foundation_preferences.cc",
+      "media_foundation_preferences.h",
       "media_foundation_renderer_wrapper.cc",
       "media_foundation_renderer_wrapper.h",
       "media_foundation_service.cc",
@@ -184,14 +199,13 @@ component("services") {
       "media_foundation_service_broker.cc",
       "media_foundation_service_broker.h",
     ]
-    deps += [
-      "//media/base/win:media_foundation_util",
-      "//ui/gfx/mojom:dxgi_info",
-    ]
+    deps += [ "//ui/gfx/mojom:dxgi_info" ]
   }
 
   if ((is_chromeos_ash || is_linux) && (use_vaapi || use_v4l2_codec)) {
     sources += [
+      "stable_video_decoder_factory_process_service.cc",
+      "stable_video_decoder_factory_process_service.h",
       "stable_video_decoder_factory_service.cc",
       "stable_video_decoder_factory_service.h",
       "stable_video_decoder_service.cc",
@@ -205,6 +219,18 @@ component("services") {
       "//media/gpu/chromeos",
     ]
   }
+
+  if (is_fuchsia) {
+    sources += [
+      "fuchsia_cdm_manager.cc",
+      "fuchsia_cdm_manager.h",
+      "fuchsia_cdm_provisioning_fetcher_impl.cc",
+      "fuchsia_cdm_provisioning_fetcher_impl.h",
+    ]
+
+    public_deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media.drm:fuchsia.media.drm_hlcpp" ]
+    deps += [ "//third_party/fuchsia-sdk/sdk/pkg/fit-promise" ]
+  }
 }
 
 source_set("unit_tests") {
@@ -217,6 +243,7 @@ source_set("unit_tests") {
     "mojo_audio_input_stream_unittest.cc",
     "mojo_demuxer_stream_adapter_unittest.cc",
     "mojo_video_encode_accelerator_service_unittest.cc",
+    "mojo_video_encoder_metrics_provider_service_unittest.cc",
     "test_helpers.cc",
     "test_helpers.h",
     "video_decode_perf_history_unittest.cc",
@@ -274,6 +301,15 @@ source_set("unit_tests") {
   if ((is_chromeos_ash || is_linux) && (use_vaapi || use_v4l2_codec)) {
     sources += [ "stable_video_decoder_service_unittest.cc" ]
   }
+
+  if (is_fuchsia) {
+    sources += [
+      "fuchsia_cdm_manager_unittest.cc",
+      "fuchsia_cdm_provisioning_fetcher_impl_unittest.cc",
+    ]
+
+    deps += [ "//third_party/fuchsia-sdk/sdk/pkg/fit-promise" ]
+  }
 }
 
 mojolpm_fuzzer_test("webrtc_video_perf_mojolpm_fuzzer") {
@@ -293,9 +329,10 @@ mojolpm_fuzzer_test("webrtc_video_perf_mojolpm_fuzzer") {
     "//base",
     "//base/test:test_support",
     "//components/leveldb_proto:test_support",
-    "//content/public/browser",
     "//media",
     "//media/capabilities:webrtc_video_stats_proto",
+    "//third_party/blink/public:blink",
+    "//third_party/blink/public/common",
     "//third_party/libprotobuf-mutator",
   ]
 }

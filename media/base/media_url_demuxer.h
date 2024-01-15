@@ -7,9 +7,10 @@
 
 #include <stddef.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/demuxer.h"
 #include "url/gurl.h"
 
@@ -36,6 +37,7 @@ class MEDIA_EXPORT MediaUrlDemuxer : public Demuxer {
                   const GURL& media_url,
                   const net::SiteForCookies& site_for_cookies,
                   const url::Origin& top_frame_origin,
+                  bool has_storage_access,
                   bool allow_credentials,
                   bool is_hls);
 
@@ -45,10 +47,13 @@ class MEDIA_EXPORT MediaUrlDemuxer : public Demuxer {
   ~MediaUrlDemuxer() override;
 
   // MediaResource interface.
-  std::vector<DemuxerStream*> GetAllStreams() override;
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> GetAllStreams()
+      override;
   const MediaUrlParams& GetMediaUrlParams() const override;
   MediaResource::Type GetType() const override;
   void ForwardDurationChangeToDemuxerHost(base::TimeDelta duration) override;
+  void SetHeaders(
+      const base::flat_map<std::string, std::string>& headers) override;
 
   // Demuxer interface.
   std::string GetDisplayName() const override;
@@ -57,6 +62,7 @@ class MEDIA_EXPORT MediaUrlDemuxer : public Demuxer {
   void StartWaitingForSeek(base::TimeDelta seek_time) override;
   void CancelPendingSeek(base::TimeDelta seek_time) override;
   void Seek(base::TimeDelta time, PipelineStatusCallback status_cb) override;
+  bool IsSeekable() const override;
   void Stop() override;
   void AbortPendingReads() override;
   base::TimeDelta GetStartTime() const override;
@@ -70,6 +76,7 @@ class MEDIA_EXPORT MediaUrlDemuxer : public Demuxer {
   void OnSelectedVideoTrackChanged(const std::vector<MediaTrack::Id>& track_ids,
                                    base::TimeDelta curr_time,
                                    TrackChangeCB change_completed_cb) override;
+  void SetPlaybackRate(double rate) override {}
 
  private:
   MediaUrlParams params_;

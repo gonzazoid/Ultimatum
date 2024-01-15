@@ -4,16 +4,42 @@
 
 #include "chrome/updater/linux/ipc_constants.h"
 
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/strings/strcat.h"
 #include "chrome/updater/updater_branding.h"
+#include "chrome/updater/updater_scope.h"
+#include "chrome/updater/updater_version.h"
 
 namespace updater {
+namespace {
 
-// The name of the platform channel used to broker a Mojo connection between the
-// client and server.
-const char kUpdateServerChannelName[] = PRODUCT_FULLNAME_STRING "ServerChannel";
+constexpr base::FilePath::CharType kUserSocketsRelDir[] = FILE_PATH_LITERAL(
+    ".local/" COMPANY_SHORTNAME_STRING "/" PRODUCT_FULLNAME_STRING "/");
+constexpr base::FilePath::CharType kSystemSocketsDir[] = FILE_PATH_LITERAL(
+    "/run/" COMPANY_SHORTNAME_STRING "/" PRODUCT_FULLNAME_STRING "/");
 
-// The name of the the pipe attached to the Mojo invitation for transmitting an
-// UpdateService or UpdateServiceInternal PendingReceiver.
-const char kUpdateServerChannelPipeName[] = "UpdateServiceReceiverPipe";
+base::FilePath GetSocketsDir(UpdaterScope scope) {
+  return scope == UpdaterScope::kSystem
+             ? base::FilePath(kSystemSocketsDir)
+             : base::GetHomeDir().Append(kUserSocketsRelDir);
+}
+
+}  // namespace
+
+base::FilePath GetActiveDutySocketPath(UpdaterScope scope) {
+  return GetSocketsDir(scope).Append(
+      FILE_PATH_LITERAL(PRODUCT_FULLNAME_STRING ".sk"));
+}
+
+base::FilePath GetActiveDutyInternalSocketPath(UpdaterScope scope) {
+  return GetSocketsDir(scope).AppendASCII(
+      base::StrCat({PRODUCT_FULLNAME_STRING, kUpdaterVersion, ".sk"}));
+}
+
+base::FilePath GetActivationSocketPath(UpdaterScope scope) {
+  return GetSocketsDir(scope).Append(
+      FILE_PATH_LITERAL(PRODUCT_FULLNAME_STRING ".activation.sk"));
+}
 
 }  // namespace updater

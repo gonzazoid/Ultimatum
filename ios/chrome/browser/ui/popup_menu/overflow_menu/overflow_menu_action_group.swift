@@ -14,6 +14,9 @@ import SwiftUI
   /// The actions for this group.
   @Published public var actions: [OverflowMenuAction]
 
+  /// Whether the group can be reordered by the user.
+  @Published public var supportsReordering = false
+
   /// The footer at bottom.
   public var footer: OverflowMenuFooter?
 
@@ -21,6 +24,14 @@ import SwiftUI
     self.groupName = groupName
     self.actions = actions
     self.footer = footer
+  }
+
+  /// Sets the actions wrapped in a SwiftUI `withAnimation` block.
+  /// `withAnimation` is otherwise inaccessible to Objective-C.
+  public func setActionsWithAnimation(_ actions: [OverflowMenuAction]) {
+    withAnimation {
+      self.actions = actions
+    }
   }
 }
 

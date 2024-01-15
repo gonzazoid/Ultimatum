@@ -5,7 +5,6 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_AUDIO_CROS_AUDIO_CONFIG_H_
 #define CHROMEOS_ASH_COMPONENTS_AUDIO_CROS_AUDIO_CONFIG_H_
 
-#include "ash/constants/ash_features.h"
 #include "base/component_export.h"
 #include "chromeos/ash/components/audio/public/mojom/cros_audio_config.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -32,9 +31,12 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_AUDIO) CrosAudioConfig
   void NotifyObserversAudioSystemPropertiesChanged();
 
   virtual uint8_t GetOutputVolumePercent() const = 0;
+  virtual uint8_t GetInputGainPercent() const = 0;
   virtual mojom::MuteState GetOutputMuteState() const = 0;
   virtual void GetAudioDevices(
-      std::vector<mojom::AudioDevicePtr>* output_devices_out) const = 0;
+      std::vector<mojom::AudioDevicePtr>* output_devices_out,
+      std::vector<mojom::AudioDevicePtr>* input_devices_out) const = 0;
+  virtual mojom::MuteState GetInputMuteState() const = 0;
 
  private:
   // mojom::CrosAudioConfig:

@@ -10,10 +10,10 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/credential_provider/common/gcp_strings.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_value_map.h"
 #include "components/strings/grit/components_strings.h"
@@ -36,7 +36,7 @@ bool IncognitoModePolicyHandler::CheckPolicySettings(const PolicyMap& policies,
                        base::Value::GetTypeName(base::Value::Type::INTEGER));
       return false;
     }
-    IncognitoModePrefs::Availability availability_enum_value;
+    policy::IncognitoModeAvailability availability_enum_value;
     if (!IncognitoModePrefs::IntToAvailability(availability->GetInt(),
                                                &availability_enum_value)) {
       errors->AddError(key::kIncognitoModeAvailability,
@@ -77,20 +77,20 @@ void IncognitoModePolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
   const base::Value* deprecated_enabled =
       policies.GetValue(key::kIncognitoEnabled, base::Value::Type::BOOLEAN);
   if (availability) {
-    IncognitoModePrefs::Availability availability_enum_value;
+    policy::IncognitoModeAvailability availability_enum_value;
     if (IncognitoModePrefs::IntToAvailability(availability->GetInt(),
                                               &availability_enum_value)) {
-      prefs->SetInteger(prefs::kIncognitoModeAvailability,
+      prefs->SetInteger(policy::policy_prefs::kIncognitoModeAvailability,
                         static_cast<int>(availability_enum_value));
     }
   } else if (deprecated_enabled) {
     // If kIncognitoModeAvailability is not specified, check the obsolete
     // kIncognitoEnabled.
     prefs->SetInteger(
-        prefs::kIncognitoModeAvailability,
+        policy::policy_prefs::kIncognitoModeAvailability,
         static_cast<int>(deprecated_enabled->GetBool()
-                             ? IncognitoModePrefs::Availability::kEnabled
-                             : IncognitoModePrefs::Availability::kDisabled));
+                             ? policy::IncognitoModeAvailability::kEnabled
+                             : policy::IncognitoModeAvailability::kDisabled));
   }
 }
 

@@ -52,10 +52,16 @@ TCPWritableStreamWrapper::TCPWritableStreamWrapper(
       WTF::BindRepeating(&TCPWritableStreamWrapper::OnHandleReset,
                          WrapWeakPersistent(this)));
 
+  ScriptState::Scope scope(script_state);
+
+  auto* sink = WritableStreamWrapper::MakeForwardingUnderlyingSink(this);
+  SetSink(sink);
+
   // Set the CountQueueingStrategy's high water mark as 1 to make the logic of
-  // |WriteOrCacheData| much simpler
-  InitSinkAndWritable(/*sink=*/MakeGarbageCollected<UnderlyingSink>(this),
-                      /*high_water_mark=*/1);
+  // |WriteOrCacheData| much simpler.
+  auto* writable = WritableStream::CreateWithCountQueueingStrategy(
+      script_state, sink, /*high_water_mark=*/1);
+  SetWritable(writable);
 }
 
 bool TCPWritableStreamWrapper::HasPendingWrite() const {
@@ -224,13 +230,13 @@ void TCPWritableStreamWrapper::ErrorStream(int32_t error_code) {
                            ? write_promise_resolver_->GetScriptState()
                            : GetScriptState();
   // Scope is needed because there's no ScriptState* on the call stack for
-  // ScriptValue::From.
+  // ScriptValue.
   ScriptState::Scope scope{script_state};
 
-  auto exception = ScriptValue::From(
-      script_state, V8ThrowDOMException::CreateOrDie(
-                        script_state->GetIsolate(),
-                        DOMExceptionCode::kNetworkError, message));
+  auto exception = ScriptValue(script_state->GetIsolate(),
+                               V8ThrowDOMException::CreateOrDie(
+                                   script_state->GetIsolate(),
+                                   DOMExceptionCode::kNetworkError, message));
 
   // Can be already reset due to HandlePipeClosed() called previously.
   if (data_pipe_) {

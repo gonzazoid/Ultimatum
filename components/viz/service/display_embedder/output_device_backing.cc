@@ -25,8 +25,10 @@ constexpr size_t kMaxBitmapSizeBytes = 4 * (16384 * 8192);
 // bytes. If |viewport_size| is not a valid size then this will return false.
 bool GetViewportSizeInBytes(const gfx::Size& viewport_size, size_t* out_bytes) {
   size_t bytes;
-  if (!ResourceSizes::MaybeSizeInBytes(viewport_size, RGBA_8888, &bytes))
+  if (!ResourceSizes::MaybeSizeInBytes(viewport_size,
+                                       SinglePlaneFormat::kRGBA_8888, &bytes)) {
     return false;
+  }
   if (bytes > kMaxBitmapSizeBytes)
     return false;
   *out_bytes = bytes;
@@ -48,8 +50,9 @@ void OutputDeviceBacking::ClientResized() {
 
   // Otherwise we need to allocate a new shared memory region and clients
   // should re-request it.
-  for (auto* client : clients_)
+  for (OutputDeviceBacking::Client* client : clients_) {
     client->ReleaseCanvas();
+  }
 
   region_ = {};
   created_shm_bytes_ = 0;
@@ -96,7 +99,7 @@ base::UnsafeSharedMemoryRegion* OutputDeviceBacking::GetSharedMemoryRegion(
 size_t OutputDeviceBacking::GetMaxViewportBytes() {
   // Minimum byte size is 1 because creating a 0-byte-long SharedMemory fails.
   size_t max_bytes = 1;
-  for (auto* client : clients_) {
+  for (OutputDeviceBacking::Client* client : clients_) {
     size_t current_bytes;
     if (!GetViewportSizeInBytes(client->GetViewportPixelSize(), &current_bytes))
       continue;

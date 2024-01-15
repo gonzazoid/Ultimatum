@@ -4,7 +4,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
@@ -14,6 +14,7 @@
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/autofill/core/common/html_field_types.h"
 #include "components/autofill/core/common/mojom/test_autofill_types.mojom.h"
+#include "components/autofill/core/common/password_form_fill_data.h"
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/autofill/core/common/signatures.h"
 #include "components/autofill/core/common/unique_ids.h"
@@ -23,6 +24,13 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
+
+bool operator==(const PasswordAndMetadata& lhs,
+                const PasswordAndMetadata& rhs) {
+  return lhs.username_value == rhs.username_value &&
+         lhs.password_value == rhs.password_value && lhs.realm == rhs.realm &&
+         lhs.uses_account_store == rhs.uses_account_store;
+}
 
 const std::vector<const char*> kOptions = {"Option1", "Option2", "Option3",
                                            "Option4"};
@@ -34,34 +42,36 @@ void CreateTestFieldDataPredictions(const std::string& signature,
   field_predict->signature = signature;
   field_predict->heuristic_type = "TestHeuristicType";
   field_predict->server_type = "TestServerType";
+  field_predict->html_type = "TestHtmlType";
   field_predict->overall_type = "TestOverallType";
   field_predict->parseable_name = "TestParseableName";
   field_predict->section = "TestSection";
+  field_predict->rank = 0;
+  field_predict->rank_in_signature_group = 1;
+  field_predict->rank_in_host_form = 2;
+  field_predict->rank_in_host_form_signature_group = 3;
 }
 
 void CreateTestPasswordFormFillData(PasswordFormFillData* fill_data) {
   fill_data->form_renderer_id = autofill::FormRendererId(1234);
   fill_data->url = GURL("https://foo.com/");
-  fill_data->action = GURL("https://foo.com/login");
-  test::CreateTestSelectField("TestUsernameFieldLabel", "TestUsernameFieldName",
-                              "TestUsernameFieldValue", kOptions, kOptions, 4,
-                              &fill_data->username_field);
-  test::CreateTestSelectField("TestPasswordFieldLabel", "TestPasswordFieldName",
-                              "TestPasswordFieldValue", kOptions, kOptions, 4,
-                              &fill_data->password_field);
-  fill_data->preferred_realm = "https://foo.com/";
-  fill_data->uses_account_store = true;
+  fill_data->preferred_login.username_value = u"TestUsernameFieldValue";
+  fill_data->username_element_renderer_id = test::MakeFieldRendererId();
+  fill_data->preferred_login.password_value = u"TestPasswordFieldValue";
+  fill_data->password_element_renderer_id = test::MakeFieldRendererId();
+  fill_data->preferred_login.realm = "https://foo.com/";
+  fill_data->preferred_login.uses_account_store = true;
 
   PasswordAndMetadata pr;
-  pr.password = u"Tom_Password";
+  pr.password_value = u"Tom_Password";
   pr.realm = "https://foo.com/";
   pr.uses_account_store = false;
-  pr.username = u"Tom";
+  pr.username_value = u"Tom";
   fill_data->additional_logins.push_back(pr);
-  pr.password = u"Jerry_Password";
+  pr.password_value = u"Jerry_Password";
   pr.realm = "https://bar.com/";
   pr.uses_account_store = true;
-  pr.username = u"Jerry";
+  pr.username_value = u"Jerry";
   fill_data->additional_logins.push_back(pr);
 
   fill_data->wait_for_username = true;
@@ -74,39 +84,18 @@ void CreatePasswordGenerationUIData(
   data->generation_element = u"generation_element";
   data->text_direction = base::i18n::RIGHT_TO_LEFT;
   data->is_generation_element_password_type = false;
-  test::CreateTestAddressFormData(&data->form_data);
+  data->form_data = test::CreateTestAddressFormData();
 }
 
 void CheckEqualPasswordFormFillData(const PasswordFormFillData& expected,
                                     const PasswordFormFillData& actual) {
   EXPECT_EQ(expected.form_renderer_id, actual.form_renderer_id);
-  EXPECT_EQ(expected.action, actual.action);
-  EXPECT_TRUE(FormFieldData::DeepEqual(
-      test::WithoutUnserializedData(expected.username_field),
-      actual.username_field));
-  EXPECT_TRUE(FormFieldData::DeepEqual(
-      test::WithoutUnserializedData(expected.password_field),
-      actual.password_field));
-  EXPECT_EQ(expected.preferred_realm, actual.preferred_realm);
-  EXPECT_EQ(expected.uses_account_store, actual.uses_account_store);
-
-  {
-    EXPECT_EQ(expected.additional_logins.size(),
-              actual.additional_logins.size());
-    auto iter1 = expected.additional_logins.begin();
-    auto end1 = expected.additional_logins.end();
-    auto iter2 = actual.additional_logins.begin();
-    auto end2 = actual.additional_logins.end();
-    for (; iter1 != end1 && iter2 != end2; ++iter1, ++iter2) {
-      EXPECT_EQ(iter1->username, iter2->username);
-      EXPECT_EQ(iter1->password, iter2->password);
-      EXPECT_EQ(iter1->realm, iter2->realm);
-      EXPECT_EQ(iter1->uses_account_store, iter2->uses_account_store);
-    }
-    ASSERT_EQ(iter1, end1);
-    ASSERT_EQ(iter2, end2);
-  }
-
+  EXPECT_EQ(expected.username_element_renderer_id,
+            actual.username_element_renderer_id);
+  EXPECT_EQ(expected.password_element_renderer_id,
+            actual.password_element_renderer_id);
+  EXPECT_EQ(expected.preferred_login, actual.preferred_login);
+  EXPECT_EQ(expected.additional_logins, actual.additional_logins);
   EXPECT_EQ(expected.wait_for_username, actual.wait_for_username);
 }
 
@@ -182,7 +171,7 @@ class AutofillTypeTraitsTestImpl : public testing::Test,
 
  private:
   base::test::TaskEnvironment task_environment_;
-  test::AutofillEnvironment autofill_environment_;
+  test::AutofillUnitTestEnvironment autofill_test_environment_;
 
   mojo::ReceiverSet<TypeTraitsTest> receivers_;
 };
@@ -284,7 +273,10 @@ std::vector<Section> SectionTestCases() {
   base::flat_map<LocalFrameToken, size_t> frame_token_ids;
   FormFieldData field;
   field.name = u"from_field_name";
-  field.host_frame = test::MakeLocalFrameToken();
+  // Randomizing the LocalFrameToken requires an AutofillTestEnvironment, which
+  // doesn't exist yet because SectionTestCases() is called by
+  // INSTANTIATE_TEST_SUITE_P().
+  field.host_frame = test::MakeLocalFrameToken(test::RandomizeFrame(false));
   field.unique_renderer_id = FieldRendererId(123);
   s = Section::FromFieldIdentifier(field, frame_token_ids);
   test_cases.push_back(s);
@@ -297,14 +289,15 @@ INSTANTIATE_TEST_SUITE_P(All,
                          testing::ValuesIn(SectionTestCases()));
 
 TEST_F(AutofillTypeTraitsTestImpl, PassFormFieldData) {
-  FormFieldData input;
-  test::CreateTestSelectField("TestLabel", "TestName", "TestValue", kOptions,
-                              kOptions, 4, &input);
+  FormFieldData input = test::CreateTestSelectField(
+      "TestLabel", "TestName", "TestValue", kOptions, kOptions);
   // Set other attributes to check if they are passed correctly.
   input.host_frame = test::MakeLocalFrameToken();
-  input.unique_renderer_id = FieldRendererId(1234);
+  input.name = u"name";
   input.id_attribute = u"id";
   input.name_attribute = u"name";
+  input.value = u"value";
+  input.form_control_type = FormControlType::kInputText;
   input.autocomplete_attribute = "on";
   input.parsed_autocomplete =
       AutocompleteParsingResult{.section = "autocomplete_section",
@@ -314,8 +307,11 @@ TEST_F(AutofillTypeTraitsTestImpl, PassFormFieldData) {
   input.css_classes = u"class1";
   input.aria_label = u"aria label";
   input.aria_description = u"aria description";
+  input.unique_renderer_id = FieldRendererId(1234);
+  input.host_form_id = FormRendererId(123);
   input.max_length = 12345;
   input.is_autofilled = true;
+  input.is_user_edited = true;
   input.check_status = FormFieldData::CheckStatus::kChecked;
   input.should_autocomplete = true;
   input.role = FormFieldData::RoleAttribute::kPresentation;
@@ -337,22 +333,22 @@ TEST_F(AutofillTypeTraitsTestImpl, PassFormFieldData) {
 
 TEST_F(AutofillTypeTraitsTestImpl, PassDataListFormFieldData) {
   // Basically copied from PassFormFieldData and replaced Select with Datalist.
-  FormFieldData input;
-  test::CreateTestDatalistField("DatalistLabel", "DatalistName",
-                                "DatalistValue", kOptions, kOptions, &input);
+  FormFieldData input = test::CreateTestDatalistField(
+      "DatalistLabel", "DatalistName", "DatalistValue", kOptions, kOptions);
   // Set other attributes to check if they are passed correctly.
   input.host_frame = test::MakeLocalFrameToken();
   input.unique_renderer_id = FieldRendererId(1234);
   input.id_attribute = u"id";
   input.name_attribute = u"name";
   input.autocomplete_attribute = "on";
-  input.parsed_autocomplete = absl::nullopt;
+  input.parsed_autocomplete = std::nullopt;
   input.placeholder = u"placeholder";
   input.css_classes = u"class1";
   input.aria_label = u"aria label";
   input.aria_description = u"aria description";
   input.max_length = 12345;
   input.is_autofilled = true;
+  input.is_user_edited = true;
   input.check_status = FormFieldData::CheckStatus::kChecked;
   input.should_autocomplete = true;
   input.role = FormFieldData::RoleAttribute::kPresentation;
@@ -370,8 +366,7 @@ TEST_F(AutofillTypeTraitsTestImpl, PassDataListFormFieldData) {
 }
 
 TEST_F(AutofillTypeTraitsTestImpl, PassFormData) {
-  FormData input;
-  test::CreateTestAddressFormData(&input);
+  FormData input = test::CreateTestAddressFormData();
   input.username_predictions = {autofill::FieldRendererId(1),
                                 autofill::FieldRendererId(13),
                                 autofill::FieldRendererId(2)};
@@ -400,7 +395,7 @@ TEST_F(AutofillTypeTraitsTestImpl, PassFormFieldDataPredictions) {
 
 TEST_F(AutofillTypeTraitsTestImpl, PassFormDataPredictions) {
   FormDataPredictions input;
-  test::CreateTestAddressFormData(&input.data);
+  input.data = test::CreateTestAddressFormData();
   input.signature = "TestSignature";
 
   FormFieldDataPredictions field_predict;

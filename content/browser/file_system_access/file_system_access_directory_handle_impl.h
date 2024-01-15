@@ -16,6 +16,7 @@
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_directory_handle.mojom.h"
 
 namespace content {
+
 // This is the browser side implementation of the
 // FileSystemAccessDirectoryHandle mojom interface. Instances of this class are
 // owned by the FileSystemAccessManagerImpl instance passed in to the
@@ -26,6 +27,12 @@ namespace content {
 class CONTENT_EXPORT FileSystemAccessDirectoryHandleImpl
     : public FileSystemAccessHandleBase,
       public blink::mojom::FileSystemAccessDirectoryHandle {
+  // A struct holding FileSystemAccessDirectoryEntriesListener mojo remote.
+  // This mojo remote needs to be ref-counted and deleted on the right sequence
+  // via `base::RefCountedDeleteOnSequence`. Since mojo::Remote is move-only,
+  // a struct holding the mojo remote is used instead.
+  struct FileSystemAccessDirectoryEntriesListenerHolder;
+
  public:
   FileSystemAccessDirectoryHandleImpl(FileSystemAccessManagerImpl* manager,
                                       const BindingContext& context,
@@ -68,6 +75,7 @@ class CONTENT_EXPORT FileSystemAccessDirectoryHandleImpl
       mojo::PendingReceiver<blink::mojom::FileSystemAccessTransferToken> token)
       override;
   void GetUniqueId(GetUniqueIdCallback callback) override;
+  void GetCloudIdentifiers(GetCloudIdentifiersCallback callback) override;
 
   // Calculates a FileSystemURL for a (direct) child of this directory with the
   // given basename.  Returns an error when `basename` includes invalid input
@@ -82,13 +90,19 @@ class CONTENT_EXPORT FileSystemAccessDirectoryHandleImpl
   // to be exposed to the web.
   // TODO(https://crbug.com/1154757): Merge this with
   // net::IsSafePortablePathComponent.
-  static bool IsSafePathComponent(const std::string& name);
+  static bool IsSafePathComponent(storage::FileSystemType type,
+                                  const std::string& name);
 
  private:
   // This method creates the file if it does not currently exists. I.e. it is
   // the implementation for passing create=true to GetFile.
   void GetFileWithWritePermission(const storage::FileSystemURL& child_url,
                                   GetFileCallback callback);
+  void DoGetFile(bool create,
+                 storage::FileSystemURL url,
+                 GetFileCallback callback,
+                 FileSystemAccessPermissionContext::SensitiveEntryResult
+                     sensitive_entry_result);
   void DidGetFile(const storage::FileSystemURL& url,
                   GetFileCallback callback,
                   base::File::Error result);
@@ -100,14 +114,32 @@ class CONTENT_EXPORT FileSystemAccessDirectoryHandleImpl
                        GetDirectoryCallback callback,
                        base::File::Error result);
   void DidReadDirectory(
-      mojo::Remote<blink::mojom::FileSystemAccessDirectoryEntriesListener>*
-          listener,
+      scoped_refptr<FileSystemAccessDirectoryEntriesListenerHolder>
+          listener_holder,
       base::File::Error result,
       std::vector<filesystem::mojom::DirectoryEntry> file_list,
       bool has_more_entries);
+  void AllEntriesReady(
+      bool has_more_entries,
+      scoped_refptr<FileSystemAccessDirectoryEntriesListenerHolder>
+          listener_holder,
+      std::vector<blink::mojom::FileSystemAccessEntryPtr> entries);
 
   void ResolveImpl(ResolveCallback callback,
                    FileSystemAccessTransferTokenImpl* possible_child);
+
+  void DidVerifySensitiveAccessForFileEntry(
+      std::string basename,
+      storage::FileSystemURL child_url,
+      base::OnceCallback<void(blink::mojom::FileSystemAccessEntryPtr)>
+          barrier_callback,
+      FileSystemAccessPermissionContext::SensitiveEntryResult
+          sensitive_entry_result);
+
+  void MergeAllEntries(
+      base::OnceCallback<void(
+          std::vector<blink::mojom::FileSystemAccessEntryPtr>)> final_callback,
+      std::vector<blink::mojom::FileSystemAccessEntryPtr> entries);
 
   // Helper to create a blink::mojom::FileSystemAccessEntry struct.
   blink::mojom::FileSystemAccessEntryPtr CreateEntry(

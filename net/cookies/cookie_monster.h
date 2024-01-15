@@ -16,9 +16,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -208,6 +208,9 @@ class NET_EXPORT CookieMonster : public CookieStore {
   CookieChangeDispatcher& GetChangeDispatcher() override;
   void SetCookieableSchemes(const std::vector<std::string>& schemes,
                             SetCookieableSchemesCallback callback) override;
+  absl::optional<bool> SiteHasCookieInOtherPartition(
+      const net::SchemefulSite& site,
+      const absl::optional<CookiePartitionKey>& partition_key) const override;
 
   // Enables writing session cookies into the cookie database. If this this
   // method is called, it must be called before first use of the instance
@@ -231,21 +234,6 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Triggers immediate recording of stats that are typically reported
   // periodically.
   bool DoRecordPeriodicStatsForTesting() { return DoRecordPeriodicStats(); }
-
-  // Will convert a site's partitioned cookies into unpartitioned cookies. This
-  // may result in multiple cookies which have the same (partition_key, name,
-  // host_key, path), which violates the database's unique constraint. The
-  // algorithm we use to coalesce the cookies into a single unpartitioned cookie
-  // is the following:
-  //
-  // 1.  If one of the cookies has no partition key (i.e. it is unpartitioned)
-  //     choose this cookie.
-  //
-  // 2.  Choose the partitioned cookie with the most recent last_access_time.
-  //
-  // TODO(crbug.com/1296161): Delete this when the partitioned cookies Origin
-  // Trial ends.
-  void ConvertPartitionedCookiesToUnpartitioned(const GURL& url) override;
 
  private:
   // For garbage collection constants.
@@ -277,6 +265,22 @@ class NET_EXPORT CookieMonster : public CookieStore {
   FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
                            CookiePortReadDiffersFromSetHistogram);
   FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, IsCookieSentToSamePortThatSetIt);
+
+  // For FilterCookiesWithOptions domain shadowing.
+  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
+                           FilterCookiesWithOptionsExcludeShadowingDomains);
+  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
+                           FilterCookiesWithOptionsWarnShadowingDomains);
+
+  // For StoreLoadedCookies behavior with origin-bound cookies.
+  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest_StoreLoadedCookies,
+                           NoSchemeNoPort);
+  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest_StoreLoadedCookies,
+                           YesSchemeNoPort);
+  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest_StoreLoadedCookies,
+                           NoSchemeYesPort);
+  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest_StoreLoadedCookies,
+                           YesSchemeYesPort);
 
   // Internal reasons for deletion, used to populate informative histograms
   // and to provide a public cause for onCookieChange notifications.
@@ -715,12 +719,6 @@ class NET_EXPORT CookieMonster : public CookieStore {
       int source_port,
       CookieSourceScheme source_scheme);
 
-  // TODO(crbug.com/1296161): Delete this when the partitioned cookies Origin
-  // Trial ends.
-  void OnConvertPartitionedCookiesToUnpartitioned(const GURL& url);
-  void ConvertPartitionedCookie(const net::CanonicalCookie& cookie,
-                                const GURL& url);
-
   // Set of keys (eTLD+1's) for which non-expired cookies have
   // been evicted for hitting the per-domain max. The size of this set is
   // histogrammed periodically. The size is limited to |kMaxDomainPurgedKeys|.
@@ -737,8 +735,14 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Number of distinct partitioned cookies globally. This is used to enforce a
   // global maximum on the number of partitioned cookies.
   size_t num_partitioned_cookies_ = 0u;
+  // Number of partitioned cookies whose partition key has a nonce.
+  size_t num_nonced_partitioned_cookies_ = 0u;
 
-  bool same_party_attribute_enabled_ = false;
+  // Number of bytes used by the partitioned cookie jar.
+  size_t num_partitioned_cookies_bytes_ = 0u;
+  // Number of bytes used by partitioned cookies whose partition key has a
+  // nonce.
+  size_t num_nonced_partitioned_cookie_bytes_ = 0u;
 
   CookieMonsterChangeDispatcher change_dispatcher_;
 

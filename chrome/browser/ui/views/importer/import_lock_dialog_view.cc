@@ -4,16 +4,15 @@
 
 #include "chrome/browser/ui/views/importer/import_lock_dialog_view.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/importer/importer_lock_dialog.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/locale_settings.h"
 #include "ui/base/buildflags.h"
@@ -54,7 +53,7 @@ ImportLockDialogView::ImportLockDialogView(
 
   auto done_callback = [](ImportLockDialogView* dialog, bool accepted) {
     if (dialog->callback_) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(dialog->callback_), accepted));
     }
   };
@@ -82,5 +81,5 @@ ImportLockDialogView::ImportLockDialogView(
 
 ImportLockDialogView::~ImportLockDialogView() = default;
 
-BEGIN_METADATA(ImportLockDialogView, views::DialogDelegateView)
+BEGIN_METADATA(ImportLockDialogView)
 END_METADATA

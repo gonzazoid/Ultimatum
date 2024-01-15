@@ -6,14 +6,11 @@
 
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/style/ash_color_provider.h"
-#include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desk_preview_view.h"
-#include "ash/wm/desks/desks_bar_view.h"
-#include "base/bind.h"
-#include "ui/compositor/layer.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
+#include "base/functional/bind.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
-#include "ui/views/widget/widget.h"
 
 namespace {
 base::TimeDelta kScrollTimeInterval = base::Seconds(1);
@@ -23,16 +20,13 @@ namespace ash {
 
 ScrollArrowButton::ScrollArrowButton(base::RepeatingClosure on_scroll,
                                      bool is_left_arrow,
-                                     DesksBarView* bar_view)
+                                     DeskBarViewBase* bar_view)
     : on_scroll_(std::move(on_scroll)),
       state_change_subscription_(AddStateChangedCallback(
           base::BindRepeating(&ScrollArrowButton::OnStateChanged,
                               base::Unretained(this)))),
       is_left_arrow_(is_left_arrow),
       bar_view_(bar_view) {
-  SetPaintToLayer();
-  layer()->SetFillsBoundsOpaquely(false);
-
   SetAccessibleName(base::UTF8ToUTF16(GetClassName()));
 }
 
@@ -46,7 +40,7 @@ void ScrollArrowButton::PaintButtonContents(gfx::Canvas* canvas) {
           AshColorProvider::ContentLayerType::kIconColorPrimary));
 
   DCHECK(!bar_view_->mini_views().empty());
-  const auto* mini_view = bar_view_->mini_views()[0];
+  const auto* mini_view = bar_view_->mini_views()[0].get();
   canvas->DrawImageInt(
       img, (width() - img.width()) / 2,
       mini_view->bounds().y() +
@@ -56,10 +50,6 @@ void ScrollArrowButton::PaintButtonContents(gfx::Canvas* canvas) {
 void ScrollArrowButton::OnThemeChanged() {
   views::Button::OnThemeChanged();
   SchedulePaint();
-}
-
-const char* ScrollArrowButton::GetClassName() const {
-  return "ScrollArrowButton";
 }
 
 void ScrollArrowButton::OnDeskHoverStart() {
@@ -88,5 +78,8 @@ void ScrollArrowButton::OnStateChanged() {
     timer_.Stop();
   }
 }
+
+BEGIN_METADATA(ScrollArrowButton, views::Button)
+END_METADATA
 
 }  // namespace ash

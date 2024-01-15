@@ -10,9 +10,16 @@
 #include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/on_device_head_model.h"
+#include "components/optimization_guide/machine_learning_tflite_buildflags.h"
+
+// TODO(crbug.com/1372112): clean up this build flag guard later if possible.
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+#include "components/omnibox/browser/on_device_tail_model_executor.h"
+#endif
 
 class AutocompleteProviderListener;
 
@@ -23,8 +30,8 @@ class AutocompleteProviderListener;
 // greater than 99, such that its matches will not show before any other
 // providers; However the relevance can be changed to any arbitrary value by
 // Finch when the input is not classified as a URL.
-// TODO(crbug.com/925072): make some cleanups after removing |model_| and |this|
-// in task postings from this class.
+// TODO(crbug.com/1372112): rename this provider to "OnDeviceProvider" since it
+// will serve both head and tail suggestions.
 class OnDeviceHeadProvider : public AutocompleteProvider {
  public:
   static OnDeviceHeadProvider* Create(AutocompleteProviderClient* client,
@@ -51,38 +58,48 @@ class OnDeviceHeadProvider : public AutocompleteProvider {
 
   bool IsOnDeviceHeadProviderAllowed(const AutocompleteInput& input);
 
-  // Helper functions used for asynchronous search to the on device head model.
+  // Helper functions used for asynchronous search to the on device models.
   // The Autocomplete input and output from the model will be passed from
-  // DoSearch to SearchDone via the OnDeviceHeadProviderParams object.
-  // DoSearch: searches the on device model and returns the tops suggestions
+  // DoSearch to AllSearchDone via the OnDeviceHeadProviderParams object.
+  // DoSearch: searches the on device models and returns the tops suggestions
   // matches the given AutocompleteInput.
   void DoSearch(std::unique_ptr<OnDeviceHeadProviderParams> params);
-  // SearchDone: called after DoSearch, fills |matches_| with the suggestions
-  // fetches by DoSearch and then calls NotifyListeners.
-  void SearchDone(std::unique_ptr<OnDeviceHeadProviderParams> params);
+  // AllSearchDone: called after all searches are completed, fills |matches_|
+  // with the suggestions fetched by DoSearch and then calls NotifyListeners.
+  void AllSearchDone(std::unique_ptr<OnDeviceHeadProviderParams> params);
+  // Helper function to be called when searches to the head model is done.
+  void HeadModelSearchDone(std::unique_ptr<OnDeviceHeadProviderParams> params);
 
-  // Helper functions to read model filename from the static
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+  // Helper function to be called when searches to the tail model is done.
+  void TailModelSearchDone(
+      std::unique_ptr<OnDeviceHeadProviderParams> params,
+      std::vector<OnDeviceTailModelExecutor::Prediction> predictions);
+#endif
+
+  // Helper functions to read head model filename from the static
   // OnDeviceModelUpdateListener instance.
   std::string GetOnDeviceHeadModelFilename() const;
 
   // Fetches suggestions matching the params from the given on device head
   // model.
-  static std::unique_ptr<OnDeviceHeadProviderParams> GetSuggestionsFromModel(
+  static std::unique_ptr<OnDeviceHeadProviderParams>
+  GetSuggestionsFromHeadModel(
       const std::string& model_filename,
       const size_t provider_max_matches,
       std::unique_ptr<OnDeviceHeadProviderParams> params);
 
   raw_ptr<AutocompleteProviderClient> client_;
 
-  // The task runner dedicated for on device head model operations which is
-  // added to offload expensive operations out of the UI sequence.
+  // The task runner dedicated for on device model operations which is added to
+  // offload expensive operations out of the UI sequence.
   scoped_refptr<base::SequencedTaskRunner> worker_task_runner_;
 
   // Sequence checker that ensure autocomplete request handling will only happen
   // on main thread.
   SEQUENCE_CHECKER(main_sequence_checker_);
 
-  // The request id used to trace current request to the on device head model.
+  // The request id used to trace current request to the on device models.
   // The id will be increased whenever a new request is received from the
   // AutocompleteController.
   size_t on_device_search_request_id_;

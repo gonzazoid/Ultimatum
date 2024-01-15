@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -62,7 +62,7 @@ void ServiceWorkerHostInterceptor::FindRegistration(
     const GURL& scope,
     base::OnceClosure done) {
   context->FindRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(&ServiceWorkerHostInterceptor::OnFoundRegistration,
                      base::Unretained(this), std::move(done)));
 }

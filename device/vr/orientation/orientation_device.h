@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/threading/simple_thread.h"
 #include "build/build_config.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
@@ -49,6 +49,7 @@ class COMPONENT_EXPORT(VR_ORIENTATION) VROrientationDevice
   void RequestSession(
       mojom::XRRuntimeSessionOptionsPtr options,
       mojom::XRRuntime::RequestSessionCallback callback) override;
+  void ShutdownSession(mojom::XRRuntime::ShutdownSessionCallback) override;
 
   // Indicates whether the device was able to connect to orientation events.
   bool IsAvailable() const { return available_; }

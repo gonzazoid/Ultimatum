@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
@@ -73,7 +73,6 @@ class FormInteractionTabHelperTest : public ChromeRenderViewHostTestHarness {
              GetFrameNodeForRenderFrameHost(rfh)]() {
           auto* frame_node =
               performance_manager::FrameNodeImpl::FromNode(node.get());
-          frame_node->SetIsCurrent(true);
           frame_node->SetHadFormInteraction();
           std::move(quit_loop).Run();
         });
@@ -117,7 +116,6 @@ class FormInteractionTabHelperWithChildTest
     std::vector<base::test::FeatureRefAndParams> enabled;
     enabled.push_back(
         {blink::features::kFencedFrames, {{"implementation_type", "mparch"}}});
-    enabled.push_back({blink::features::kInitialNavigationEntry, {}});
     scoped_feature_list_.InitWithFeaturesAndParameters(
         enabled, std::vector<base::test::FeatureRef>());
   }

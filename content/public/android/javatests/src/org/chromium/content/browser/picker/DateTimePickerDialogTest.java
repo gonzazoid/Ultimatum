@@ -4,9 +4,9 @@
 
 package org.chromium.content.browser.picker;
 
-import android.support.test.InstrumentationRegistry;
 import android.widget.TimePicker;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -15,12 +15,10 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 
-/**
- * Tests for DateTimePickerDialog.
- */
+/** Tests for DateTimePickerDialog. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class DateTimePickerDialogTest {
-    //TODO(tkent): fix deprecation warnings crbug.com/537037
+    // TODO(tkent): fix deprecation warnings crbug.com/537037
     @Test
     @SuppressWarnings("deprecation")
     @SmallTest

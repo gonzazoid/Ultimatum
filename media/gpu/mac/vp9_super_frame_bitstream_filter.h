@@ -9,7 +9,7 @@
 
 #include <CoreMedia/CoreMedia.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "media/base/decoder_buffer.h"
 #include "media/gpu/media_gpu_export.h"
 
@@ -31,13 +31,18 @@ class MEDIA_GPU_EXPORT VP9SuperFrameBitstreamFilter {
   void Flush();
 
   // Releases any prepared buffer. Returns null if no buffers are available.
-  base::ScopedCFTypeRef<CMBlockBufferRef> take_buffer() {
+  base::apple::ScopedCFTypeRef<CMBlockBufferRef> take_buffer() {
     return std::move(data_);
   }
 
   bool has_buffers_for_testing() const {
     return data_ || !partial_buffers_.empty();
   }
+
+  // Creates a CMBlockBufferRef which points into `buffer` and owns a reference
+  // on it that will be released when the block buffer is destroyed.
+  static base::apple::ScopedCFTypeRef<CMBlockBufferRef> CreatePassthroughBuffer(
+      scoped_refptr<DecoderBuffer> buffer);
 
  private:
   bool ShouldShowFrame(Vp9RawBitsReader* reader);
@@ -48,7 +53,7 @@ class MEDIA_GPU_EXPORT VP9SuperFrameBitstreamFilter {
 
   // Prepared CMBlockBuffer -- either by assembling |partial_buffers_| or when
   // a super frame is unnecessary, just by passing through DecoderBuffer.
-  base::ScopedCFTypeRef<CMBlockBufferRef> data_;
+  base::apple::ScopedCFTypeRef<CMBlockBufferRef> data_;
 
   // Partial buffers which need to be assembled into a super frame.
   std::vector<scoped_refptr<DecoderBuffer>> partial_buffers_;

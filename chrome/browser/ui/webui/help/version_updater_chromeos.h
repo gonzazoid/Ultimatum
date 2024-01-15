@@ -5,9 +5,11 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_HELP_VERSION_UPDATER_CHROMEOS_H_
 #define CHROME_BROWSER_UI_WEBUI_HELP_VERSION_UPDATER_CHROMEOS_H_
 
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/help/version_updater.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -64,10 +66,10 @@ class VersionUpdaterCros : public VersionUpdater,
 
   // Callback from UpdateEngineClient::IsFeatureEnabled().
   void OnIsFeatureEnabled(IsFeatureEnabledCallback callback,
-                          absl::optional<bool> enabled);
+                          std::optional<bool> enabled);
 
   // BrowserContext in which the class was instantiated.
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext> context_;
 
   // Callback used to communicate update status to the client.
   StatusCallback callback_;

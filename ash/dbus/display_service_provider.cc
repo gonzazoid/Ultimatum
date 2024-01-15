@@ -8,8 +8,8 @@
 
 #include "ash/shell.h"
 #include "ash/wm/screen_dimmer.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "dbus/message.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/base/user_activity/user_activity_detector.h"
@@ -48,8 +48,7 @@ class DisplayServiceProvider::Impl {
 
 void DisplayServiceProvider::Impl::SetDimming(bool dimmed) {
   if (!screen_dimmer_) {
-    screen_dimmer_ =
-        std::make_unique<ScreenDimmer>(ScreenDimmer::Container::ROOT);
+    screen_dimmer_ = std::make_unique<ScreenDimmer>();
   }
   screen_dimmer_->SetDimming(dimmed);
 }

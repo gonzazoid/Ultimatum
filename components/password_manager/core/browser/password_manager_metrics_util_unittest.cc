@@ -29,42 +29,6 @@ LeakDialogMetricsRecorder CreateMetricsRecorder(LeakDialogType dialog_type) {
 
 }  // namespace
 
-TEST(PasswordManagerMetricsUtilLeakDialogMetricsRecorder,
-     AutomaticPasswordChangeClicked) {
-  base::test::TaskEnvironment task_environment_;
-  base::HistogramTester histogram_tester;
-  ukm::TestAutoSetUkmRecorder test_ukm_recorder;
-
-  LeakDialogMetricsRecorder recorder(
-      CreateMetricsRecorder(LeakDialogType::kChangeAutomatically));
-  recorder.SetSamplingRateForTesting(1.0);
-  recorder.LogLeakDialogTypeAndDismissalReason(
-      LeakDialogDismissalReason::kClickedChangePasswordAutomatically);
-
-  // Check that UMA logging is correct.
-  histogram_tester.ExpectUniqueSample(
-      "PasswordManager.LeakDetection.DialogDismissalReason",
-      LeakDialogDismissalReason::kClickedChangePasswordAutomatically, 1);
-  histogram_tester.ExpectUniqueSample(
-      "PasswordManager.LeakDetection.DialogDismissalReason.ChangeAutomatically",
-      LeakDialogDismissalReason::kClickedChangePasswordAutomatically, 1);
-
-  // Check that UKM logging is correct.
-  const auto& entries =
-      test_ukm_recorder.GetEntriesByName(UkmEntry::kEntryName);
-  EXPECT_EQ(1u, entries.size());
-  for (const auto* entry : entries) {
-    EXPECT_EQ(kTestSourceId, entry->source_id);
-    test_ukm_recorder.ExpectEntryMetric(
-        entry, UkmEntry::kPasswordLeakDetectionDialogTypeName,
-        static_cast<int64_t>(LeakDialogType::kChangeAutomatically));
-    test_ukm_recorder.ExpectEntryMetric(
-        entry, UkmEntry::kPasswordLeakDetectionDialogDismissalReasonName,
-        static_cast<int64_t>(
-            LeakDialogDismissalReason::kClickedChangePasswordAutomatically));
-  }
-}
-
 TEST(PasswordManagerMetricsUtilLeakDialogMetricsRecorder, CheckupIgnored) {
   base::test::TaskEnvironment task_environment_;
   base::HistogramTester histogram_tester;
@@ -88,7 +52,7 @@ TEST(PasswordManagerMetricsUtilLeakDialogMetricsRecorder, CheckupIgnored) {
   const auto& entries =
       test_ukm_recorder.GetEntriesByName(UkmEntry::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  for (const auto* entry : entries) {
+  for (const ukm::mojom::UkmEntry* entry : entries) {
     EXPECT_EQ(kTestSourceId, entry->source_id);
     test_ukm_recorder.ExpectEntryMetric(
         entry, UkmEntry::kPasswordLeakDetectionDialogTypeName,
@@ -106,7 +70,7 @@ TEST(PasswordManagerMetricsUtil, LogNewlySavedPasswordMetrics) {
   constexpr bool kIsUsernameEmpty = true;
   LogNewlySavedPasswordMetrics(
       /*is_generated_password=*/true, /*is_username_empty=*/true,
-      PasswordAccountStorageUsageLevel::kNotUsingAccountStorage);
+      features_util::PasswordAccountStorageUsageLevel::kNotUsingAccountStorage);
 
   histogram_tester.ExpectUniqueSample(
       "PasswordManager.NewlySavedPasswordIsGenerated", kIsGeneratedPassword, 1);
@@ -126,6 +90,16 @@ TEST(PasswordManagerMetricsUtil, LogNewlySavedPasswordMetrics) {
       kIsUsernameEmpty, 1);
   histogram_tester.ExpectTotalCount(
       "PasswordManager.NewlySavedPasswordHasEmptyUsername.UserCreated", 0);
+}
+
+TEST(PasswordManagerMetricsUtil, LogIsPasswordProtectedMetric) {
+  base::HistogramTester histogram_tester;
+
+  LogIsPasswordProtected(true);
+  LogIsPasswordProtected(false);
+
+  // Not testing individual bucket counts since we have 10% random noise
+  histogram_tester.ExpectTotalCount("PasswordManager.IsPasswordProtected2", 2);
 }
 
 }  // namespace password_manager::metrics_util

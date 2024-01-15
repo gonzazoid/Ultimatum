@@ -3,15 +3,17 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/toolbar/chrome_labs_item_view.h"
+
 #include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "build/build_config.h"
 #include "chrome/browser/flag_descriptions.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/chrome_pages.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view_model.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/flags_ui/feature_entry.h"
 #include "components/user_education/views/new_badge_label.h"
@@ -78,7 +80,7 @@ class LabsComboboxModel : public ui::ComboboxModel {
         size_t variation_index = index - 2;
         return l10n_util::GetStringFUTF16(
             IDS_CHROMELABS_ENABLED_WITH_VARIATION_NAME,
-            lab_.translated_feature_variation_descriptions[variation_index]);
+            lab_->translated_feature_variation_descriptions[variation_index]);
       } else {
         description_translation_id = IDS_CHROMELABS_DISABLED;
       }
@@ -93,12 +95,12 @@ class LabsComboboxModel : public ui::ComboboxModel {
     return l10n_util::GetStringUTF16(description_translation_id);
   }
 
-  absl::optional<size_t> GetDefaultIndex() const override {
+  std::optional<size_t> GetDefaultIndex() const override {
     return default_index_;
   }
 
  private:
-  const LabInfo& lab_;
+  const raw_ref<const LabInfo> lab_;
   raw_ptr<const flags_ui::FeatureEntry> feature_entry_;
   size_t default_index_;
 };
@@ -159,16 +161,16 @@ ChromeLabsItemView::ChromeLabsItemView(
   if (!lab.visible_name.empty())
     GetViewAccessibility().OverrideName(lab.visible_name);
 
-  // There is currently a MacOS VoiceOver screen reader bug where VoiceOver does
-  // not announce the accessible description for groups (crbug.com/1197159). The
-  // MacOS specific code here provides a temporary mitigation for screen reader
-  // users and moves announcing the description to when the user interacts with
-  // the combobox of that experiment. Don’t add an accessible description for
-  // now to prevent the screen reader from announcing the description twice in
-  // the time between when the VoiceOver bug is fixed and this code gets
-  // removed.
-  // TODO(elainechien): Remove MacOS specific code for experiment description
-  // when VoiceOver bug is fixed.
+    // There is currently a MacOS VoiceOver screen reader bug where VoiceOver
+    // does not announce the accessible description for groups
+    // (crbug.com/1197159). The MacOS specific code here provides a temporary
+    // mitigation for screen reader users and moves announcing the description
+    // to when the user interacts with the combobox of that experiment. Don’t
+    // add an accessible description for now to prevent the screen reader from
+    // announcing the description twice in the time between when the VoiceOver
+    // bug is fixed and this code gets removed.
+    // TODO(elainechien): Remove MacOS specific code for experiment description
+    // when VoiceOver bug is fixed.
 
 #if !BUILDFLAG(IS_MAC)
   if (!lab.visible_description.empty())
@@ -229,7 +231,7 @@ ChromeLabsItemView::ChromeLabsItemView(
 
 ChromeLabsItemView::~ChromeLabsItemView() = default;
 
-absl::optional<size_t> ChromeLabsItemView::GetSelectedIndex() const {
+std::optional<size_t> ChromeLabsItemView::GetSelectedIndex() const {
   return lab_state_combobox_->GetSelectedIndex();
 }
 
@@ -244,5 +246,5 @@ const flags_ui::FeatureEntry* ChromeLabsItemView::GetFeatureEntry() {
 }
 
 BEGIN_METADATA(ChromeLabsItemView, views::View)
-ADD_READONLY_PROPERTY_METADATA(absl::optional<size_t>, SelectedIndex)
+ADD_READONLY_PROPERTY_METADATA(std::optional<size_t>, SelectedIndex)
 END_METADATA

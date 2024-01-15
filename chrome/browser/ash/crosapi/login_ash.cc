@@ -4,6 +4,9 @@
 
 #include "chrome/browser/ash/crosapi/login_ash.h"
 
+#include <optional>
+
+#include "ash/system/session/guest_session_confirmation_dialog.h"
 #include "base/notreached.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -14,6 +17,7 @@
 #include "chrome/browser/chromeos/extensions/login_screen/login/shared_session_handler.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/login/auth/public/auth_types.h"
 #include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
 #include "chromeos/ash/components/login/auth/public/key.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
@@ -26,7 +30,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/user_activity/user_activity_detector.h"
 
 namespace crosapi {
@@ -39,11 +42,11 @@ void LoginAsh::BindReceiver(mojo::PendingReceiver<mojom::Login> receiver) {
 }
 
 void LoginAsh::LaunchManagedGuestSession(
-    const absl::optional<std::string>& password,
+    const std::optional<std::string>& password,
     OptionalErrorCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
 
-  absl::optional<std::string> error = CanLaunchSession();
+  std::optional<std::string> error = CanLaunchSession();
   if (error) {
     std::move(callback).Run(error);
     return;
@@ -56,14 +59,15 @@ void LoginAsh::LaunchManagedGuestSession(
     ash::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
                              user->GetAccountId());
     if (password) {
-      context.SetKey(chromeos::Key(*password));
+      context.SetKey(ash::Key(*password));
+      context.SetSamlPassword(ash::SamlPassword{*password});
       context.SetCanLockManagedGuestSession(true);
     }
 
-    chromeos::ExistingUserController* existing_user_controller =
-        chromeos::ExistingUserController::current_controller();
+    auto* existing_user_controller =
+        ash::ExistingUserController::current_controller();
     existing_user_controller->Login(context, ash::SigninSpecifics());
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
   std::move(callback).Run(
@@ -71,7 +75,7 @@ void LoginAsh::LaunchManagedGuestSession(
 }
 
 void LoginAsh::ExitCurrentSession(
-    const absl::optional<std::string>& data_for_next_login_attempt,
+    const std::optional<std::string>& data_for_next_login_attempt,
     ExitCurrentSessionCallback callback) {
   PrefService* local_state = g_browser_process->local_state();
   DCHECK(local_state);
@@ -84,7 +88,7 @@ void LoginAsh::ExitCurrentSession(
   }
 
   chrome::AttemptUserExit();
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void LoginAsh::FetchDataForNextLoginAttempt(
@@ -102,9 +106,9 @@ void LoginAsh::LockManagedGuestSession(
     LockManagedGuestSessionCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
 
-  absl::optional<std::string> error =
+  std::optional<std::string> error =
       LockSession(user_manager::USER_TYPE_PUBLIC_ACCOUNT);
-  // Error is absl::nullopt in case of no error.
+  // Error is std::nullopt in case of no error.
   std::move(callback).Run(error);
 }
 
@@ -112,7 +116,7 @@ void LoginAsh::UnlockManagedGuestSession(const std::string& password,
                                          OptionalErrorCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
 
-  absl::optional<std::string> error =
+  std::optional<std::string> error =
       CanUnlockSession(user_manager::USER_TYPE_PUBLIC_ACCOUNT);
   if (error) {
     std::move(callback).Run(error);
@@ -125,8 +129,8 @@ void LoginAsh::UnlockManagedGuestSession(const std::string& password,
 void LoginAsh::LockCurrentSession(LockCurrentSessionCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
 
-  absl::optional<std::string> error = LockSession();
-  // Error is absl::nullopt in case of no error.
+  std::optional<std::string> error = LockSession();
+  // Error is std::nullopt in case of no error.
   std::move(callback).Run(error);
 }
 
@@ -134,7 +138,7 @@ void LoginAsh::UnlockCurrentSession(const std::string& password,
                                     OptionalErrorCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
 
-  absl::optional<std::string> error = CanUnlockSession();
+  std::optional<std::string> error = CanUnlockSession();
   if (error) {
     std::move(callback).Run(error);
     return;
@@ -149,31 +153,32 @@ void LoginAsh::LaunchSamlUserSession(const std::string& email,
                                      const std::string& oauth_code,
                                      OptionalErrorCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
-  absl::optional<std::string> error = CanLaunchSession();
+  std::optional<std::string> error = CanLaunchSession();
   if (error) {
     std::move(callback).Run(error);
     return;
   }
 
-  chromeos::UserContext context(user_manager::USER_TYPE_REGULAR,
-                                AccountId::FromUserEmailGaiaId(email, gaia_id));
-  chromeos::Key key(password);
+  ash::UserContext context(user_manager::USER_TYPE_REGULAR,
+                           AccountId::FromUserEmailGaiaId(email, gaia_id));
+  ash::Key key(password);
   key.SetLabel(ash::kCryptohomeGaiaKeyLabel);
   context.SetKey(key);
-  context.SetPasswordKey(chromeos::Key(password));
-  context.SetAuthFlow(chromeos::UserContext::AUTH_FLOW_GAIA_WITH_SAML);
+  context.SetSamlPassword(ash::SamlPassword{password});
+  context.SetPasswordKey(ash::Key(password));
+  context.SetAuthFlow(ash::UserContext::AUTH_FLOW_GAIA_WITH_SAML);
   context.SetIsUsingSamlPrincipalsApi(false);
   context.SetAuthCode(oauth_code);
 
   ash::LoginDisplayHost::default_host()->CompleteLogin(context);
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void LoginAsh::LaunchSharedManagedGuestSession(const std::string& password,
                                                OptionalErrorCallback callback) {
   ui::UserActivityDetector::Get()->HandleExternalUserActivity();
 
-  absl::optional<std::string> error =
+  std::optional<std::string> error =
       chromeos::SharedSessionHandler::Get()->LaunchSharedManagedGuestSession(
           password);
   if (error) {
@@ -181,7 +186,7 @@ void LoginAsh::LaunchSharedManagedGuestSession(const std::string& password,
     return;
   }
 
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void LoginAsh::EnterSharedSession(const std::string& password,
@@ -272,7 +277,11 @@ void LoginAsh::NotifyOnExternalLogoutDone() {
   }
 }
 
-void LoginAsh::REMOVED_0(const absl::optional<std::string>& password,
+void LoginAsh::ShowGuestSessionConfirmationDialog() {
+  ash::GuestSessionConfirmationDialog::Show();
+}
+
+void LoginAsh::REMOVED_0(const std::optional<std::string>& password,
                          REMOVED_0Callback callback) {
   NOTIMPLEMENTED();
 }
@@ -315,31 +324,31 @@ void LoginAsh::OnScreenLockerAuthenticate(OptionalErrorCallback callback,
     return;
   }
 
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void LoginAsh::OnOptionalErrorCallbackComplete(
     OptionalErrorCallback callback,
-    const absl::optional<std::string>& error) {
+    const std::optional<std::string>& error) {
   std::move(callback).Run(error);
 }
 
-absl::optional<std::string> LoginAsh::CanLaunchSession() {
+std::optional<std::string> LoginAsh::CanLaunchSession() {
   if (session_manager::SessionManager::Get()->session_state() !=
       session_manager::SessionState::LOGIN_PRIMARY) {
     return extensions::login_api_errors::kAlreadyActiveSession;
   }
 
-  chromeos::ExistingUserController* existing_user_controller =
-      chromeos::ExistingUserController::current_controller();
+  auto* existing_user_controller =
+      ash::ExistingUserController::current_controller();
   if (existing_user_controller->IsSigninInProgress())
     return extensions::login_api_errors::kAnotherLoginAttemptInProgress;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<std::string> LoginAsh::LockSession(
-    absl::optional<user_manager::UserType> user_type) {
+std::optional<std::string> LoginAsh::LockSession(
+    std::optional<user_manager::UserType> user_type) {
   const user_manager::UserManager* user_manager =
       user_manager::UserManager::Get();
   const user_manager::User* active_user = user_manager->GetActiveUser();
@@ -354,11 +363,11 @@ absl::optional<std::string> LoginAsh::LockSession(
   }
 
   chromeos::LoginApiLockHandler::Get()->RequestLockScreen();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<std::string> LoginAsh::CanUnlockSession(
-    absl::optional<user_manager::UserType> user_type) {
+std::optional<std::string> LoginAsh::CanUnlockSession(
+    std::optional<user_manager::UserType> user_type) {
   const user_manager::UserManager* user_manager =
       user_manager::UserManager::Get();
   const user_manager::User* active_user = user_manager->GetActiveUser();
@@ -376,7 +385,7 @@ absl::optional<std::string> LoginAsh::CanUnlockSession(
   if (handler->IsUnlockInProgress())
     return extensions::login_api_errors::kAnotherUnlockAttemptInProgress;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void LoginAsh::UnlockSession(const std::string& password,
@@ -385,7 +394,7 @@ void LoginAsh::UnlockSession(const std::string& password,
       user_manager::UserManager::Get();
   const user_manager::User* active_user = user_manager->GetActiveUser();
   ash::UserContext context(active_user->GetType(), active_user->GetAccountId());
-  context.SetKey(chromeos::Key(password));
+  context.SetKey(ash::Key(password));
 
   chromeos::LoginApiLockHandler* handler = chromeos::LoginApiLockHandler::Get();
   handler->Authenticate(

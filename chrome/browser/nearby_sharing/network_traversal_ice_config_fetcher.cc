@@ -4,7 +4,7 @@
 
 #include "chrome/browser/nearby_sharing/network_traversal_ice_config_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/strings/strcat.h"
 #include "chrome/services/sharing/public/cpp/sharing_webrtc_metrics.h"
@@ -98,17 +98,19 @@ std::vector<sharing::mojom::IceServerPtr> ParseIceConfigJson(std::string json) {
   if (!response)
     return ice_servers;
 
-  base::Value* ice_servers_json = response->FindListKey("iceServers");
+  base::Value::List* ice_servers_json =
+      response->GetDict().FindList("iceServers");
   if (!ice_servers_json)
     return ice_servers;
 
-  for (base::Value& server : ice_servers_json->GetList()) {
-    const base::Value* urls_json = server.FindListKey("urls");
+  for (base::Value& server : *ice_servers_json) {
+    base::Value::Dict& server_dict = server.GetDict();
+    const base::Value::List* urls_json = server_dict.FindList("urls");
     if (!urls_json)
       continue;
 
     std::vector<GURL> urls;
-    for (const base::Value& url_json : urls_json->GetList()) {
+    for (const base::Value& url_json : *urls_json) {
       const std::string* url = url_json.GetIfString();
       if (!url)
         continue;
@@ -122,11 +124,11 @@ std::vector<sharing::mojom::IceServerPtr> ParseIceConfigJson(std::string json) {
     sharing::mojom::IceServerPtr ice_server(sharing::mojom::IceServer::New());
     ice_server->urls = std::move(urls);
 
-    std::string* retrieved_username = server.FindStringKey("username");
+    std::string* retrieved_username = server_dict.FindString("username");
     if (retrieved_username)
       ice_server->username.emplace(std::move(*retrieved_username));
 
-    std::string* retrieved_credential = server.FindStringKey("credential");
+    std::string* retrieved_credential = server_dict.FindString("credential");
     if (retrieved_credential)
       ice_server->credential.emplace(std::move(*retrieved_credential));
 

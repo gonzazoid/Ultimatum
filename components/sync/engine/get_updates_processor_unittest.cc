@@ -32,18 +32,13 @@ namespace {
 }  // namespace
 
 // A test fixture for tests exercising download updates functions.
-class GetUpdatesProcessorTest : public ::testing::Test {
+class GetUpdatesProcessorBaseTest : public ::testing::Test {
  public:
-  GetUpdatesProcessorTest() = default;
+  GetUpdatesProcessorBaseTest() = default;
 
-  GetUpdatesProcessorTest(const GetUpdatesProcessorTest&) = delete;
-  GetUpdatesProcessorTest& operator=(const GetUpdatesProcessorTest&) = delete;
-
-  void SetUp() override {
-    autofill_handler_ = AddUpdateHandler(AUTOFILL);
-    bookmarks_handler_ = AddUpdateHandler(BOOKMARKS);
-    preferences_handler_ = AddUpdateHandler(PREFERENCES);
-  }
+  GetUpdatesProcessorBaseTest(const GetUpdatesProcessorBaseTest&) = delete;
+  GetUpdatesProcessorBaseTest& operator=(const GetUpdatesProcessorBaseTest&) =
+      delete;
 
   ModelTypeSet enabled_types() { return enabled_types_; }
 
@@ -82,12 +77,6 @@ class GetUpdatesProcessorTest : public ::testing::Test {
     return handler_ptr;
   }
 
-  MockUpdateHandler* GetBookmarksHandler() { return bookmarks_handler_; }
-
-  MockUpdateHandler* GetAutofillHandler() { return autofill_handler_; }
-
-  MockUpdateHandler* GetPreferencesHandler() { return preferences_handler_; }
-
   const base::TimeTicks kTestStartTime = base::TimeTicks::Now();
 
  private:
@@ -95,16 +84,29 @@ class GetUpdatesProcessorTest : public ::testing::Test {
   std::set<std::unique_ptr<MockUpdateHandler>> update_handlers_;
   UpdateHandlerMap update_handler_map_;
   std::unique_ptr<GetUpdatesProcessor> get_updates_processor_;
+};
 
-  raw_ptr<MockUpdateHandler> bookmarks_handler_;
-  raw_ptr<MockUpdateHandler> autofill_handler_;
-  raw_ptr<MockUpdateHandler> preferences_handler_;
+class GetUpdatesProcessorTest : public GetUpdatesProcessorBaseTest {
+ public:
+  MockUpdateHandler* GetBookmarksHandler() { return bookmarks_handler_; }
+
+  MockUpdateHandler* GetAutofillHandler() { return autofill_handler_; }
+
+  MockUpdateHandler* GetPreferencesHandler() { return preferences_handler_; }
+
+ private:
+  const raw_ptr<MockUpdateHandler> bookmarks_handler_ =
+      AddUpdateHandler(BOOKMARKS);
+  const raw_ptr<MockUpdateHandler> autofill_handler_ =
+      AddUpdateHandler(AUTOFILL);
+  const raw_ptr<MockUpdateHandler> preferences_handler_ =
+      AddUpdateHandler(PREFERENCES);
 };
 
 // Basic test to make sure nudges are expressed properly in the request.
 TEST_F(GetUpdatesProcessorTest, BookmarkNudge) {
   NudgeTracker nudge_tracker;
-  nudge_tracker.RecordLocalChange(BOOKMARKS);
+  nudge_tracker.RecordLocalChange(BOOKMARKS, false);
 
   sync_pb::ClientToServerMessage message;
   NormalGetUpdatesDelegate normal_delegate(nudge_tracker);
@@ -137,8 +139,9 @@ TEST_F(GetUpdatesProcessorTest, BookmarkNudge) {
   }
 }
 
-// Basic test to ensure invalidation payloads are expressed in the request.
-TEST_F(GetUpdatesProcessorTest, NotifyMany) {
+// Basic test to ensure invalidation payloads are expressed in the
+// NormalDelegate requests.
+TEST_F(GetUpdatesProcessorTest, NotifyNormalDelegate) {
   MockUpdateHandler* autofill_handler = GetAutofillHandler();
   MockUpdateHandler* bookmarks_handler = GetBookmarksHandler();
   MockUpdateHandler* preferences_handler = GetPreferencesHandler();
@@ -160,9 +163,57 @@ TEST_F(GetUpdatesProcessorTest, NotifyMany) {
   EXPECT_EQ(sync_pb::GetUpdatesCallerInfo::UNKNOWN,
             gu_msg.caller_info().source());
   EXPECT_EQ(sync_pb::SyncEnums::GU_TRIGGER, gu_msg.get_updates_origin());
+
   EXPECT_EQ(1, autofill_handler->GetPrepareGetUpdatesCount());
   EXPECT_EQ(1, bookmarks_handler->GetPrepareGetUpdatesCount());
   EXPECT_EQ(1, preferences_handler->GetPrepareGetUpdatesCount());
+}
+
+// Basic test to ensure invalidation payloads are not expressed in
+// ConfigureDelegate requests.
+TEST_F(GetUpdatesProcessorTest, NotifyConfigureDelegate) {
+  MockUpdateHandler* autofill_handler = GetAutofillHandler();
+  MockUpdateHandler* bookmarks_handler = GetBookmarksHandler();
+  MockUpdateHandler* preferences_handler = GetPreferencesHandler();
+
+  ModelTypeSet notified_types;
+  notified_types.Put(AUTOFILL);
+  notified_types.Put(BOOKMARKS);
+  notified_types.Put(PREFERENCES);
+
+  sync_pb::ClientToServerMessage message;
+  ConfigureGetUpdatesDelegate configure_delegate(
+      sync_pb::SyncEnums::RECONFIGURATION);
+  std::unique_ptr<GetUpdatesProcessor> processor(
+      BuildGetUpdatesProcessor(configure_delegate));
+  processor->PrepareGetUpdates(enabled_types(), &message);
+
+  EXPECT_EQ(0, autofill_handler->GetPrepareGetUpdatesCount());
+  EXPECT_EQ(0, bookmarks_handler->GetPrepareGetUpdatesCount());
+  EXPECT_EQ(0, preferences_handler->GetPrepareGetUpdatesCount());
+}
+
+// Basic test to ensure invalidation payloads are not expressed in
+// PollGetUpdatesDelegate requests.
+TEST_F(GetUpdatesProcessorTest, NotifyPollGetUpdatesDelegate) {
+  MockUpdateHandler* autofill_handler = GetAutofillHandler();
+  MockUpdateHandler* bookmarks_handler = GetBookmarksHandler();
+  MockUpdateHandler* preferences_handler = GetPreferencesHandler();
+
+  ModelTypeSet notified_types;
+  notified_types.Put(AUTOFILL);
+  notified_types.Put(BOOKMARKS);
+  notified_types.Put(PREFERENCES);
+
+  sync_pb::ClientToServerMessage message;
+  PollGetUpdatesDelegate poll_delegate;
+  std::unique_ptr<GetUpdatesProcessor> processor(
+      BuildGetUpdatesProcessor(poll_delegate));
+  processor->PrepareGetUpdates(enabled_types(), &message);
+
+  EXPECT_EQ(0, autofill_handler->GetPrepareGetUpdatesCount());
+  EXPECT_EQ(0, bookmarks_handler->GetPrepareGetUpdatesCount());
+  EXPECT_EQ(0, preferences_handler->GetPrepareGetUpdatesCount());
 }
 
 // Basic test to ensure initial sync requests are expressed in the request.
@@ -171,7 +222,7 @@ TEST_F(GetUpdatesProcessorTest, InitialSyncRequest) {
   nudge_tracker.RecordInitialSyncRequired(AUTOFILL);
   nudge_tracker.RecordInitialSyncRequired(PREFERENCES);
 
-  ModelTypeSet initial_sync_types = ModelTypeSet(AUTOFILL, PREFERENCES);
+  const ModelTypeSet initial_sync_types = {AUTOFILL, PREFERENCES};
 
   sync_pb::ClientToServerMessage message;
   NormalGetUpdatesDelegate normal_delegate(nudge_tracker);
@@ -288,7 +339,7 @@ TEST_F(GetUpdatesProcessorTest, NudgeWithRetryTest) {
   nudge_tracker.SetSyncCycleStartTime(t1 + base::Seconds(1));
 
   // Record a local change, too.
-  nudge_tracker.RecordLocalChange(BOOKMARKS);
+  nudge_tracker.RecordLocalChange(BOOKMARKS, false);
 
   sync_pb::ClientToServerMessage message;
   NormalGetUpdatesDelegate normal_delegate(nudge_tracker);
@@ -320,7 +371,7 @@ TEST_F(GetUpdatesProcessorTest, InvalidResponse) {
       BuildGetUpdatesProcessor(normal_delegate));
   SyncerError error =
       processor->ProcessResponse(gu_response, enabled_types(), &status);
-  EXPECT_EQ(error.value(), SyncerError::SERVER_RESPONSE_VALIDATION_FAILED);
+  EXPECT_EQ(error.type(), SyncerError::Type::kProtocolViolationError);
 }
 
 // Verify that we correctly detect when there's more work to be done.
@@ -334,9 +385,8 @@ TEST_F(GetUpdatesProcessorTest, MoreToDownloadResponse) {
   StatusController status;
   std::unique_ptr<GetUpdatesProcessor> processor(
       BuildGetUpdatesProcessor(normal_delegate));
-  SyncerError error =
-      processor->ProcessResponse(gu_response, enabled_types(), &status);
-  EXPECT_EQ(error.value(), SyncerError::SERVER_MORE_TO_DOWNLOAD);
+  processor->ProcessResponse(gu_response, enabled_types(), &status);
+  EXPECT_TRUE(processor->HasMoreUpdatesToDownload());
 }
 
 // A simple scenario: No updates returned and nothing more to download.
@@ -352,32 +402,29 @@ TEST_F(GetUpdatesProcessorTest, NormalResponseTest) {
       BuildGetUpdatesProcessor(normal_delegate));
   SyncerError error =
       processor->ProcessResponse(gu_response, enabled_types(), &status);
-  EXPECT_EQ(error.value(), SyncerError::SYNCER_OK);
+  EXPECT_EQ(error.type(), SyncerError::Type::kSuccess);
 }
 
 // Variant of GetUpdatesProcessor test designed to test update application.
 //
 // Maintains two enabled types, but requests that updates be applied for only
 // one of them.
-class GetUpdatesProcessorApplyUpdatesTest : public GetUpdatesProcessorTest {
+class GetUpdatesProcessorApplyUpdatesTest : public GetUpdatesProcessorBaseTest {
  public:
   GetUpdatesProcessorApplyUpdatesTest() = default;
   ~GetUpdatesProcessorApplyUpdatesTest() override = default;
 
-  void SetUp() override {
-    bookmarks_handler_ = AddUpdateHandler(BOOKMARKS);
-    autofill_handler_ = AddUpdateHandler(AUTOFILL);
-  }
-
-  ModelTypeSet GetGuTypes() { return ModelTypeSet(AUTOFILL); }
+  ModelTypeSet GetGuTypes() { return {AUTOFILL}; }
 
   MockUpdateHandler* GetNonAppliedHandler() { return bookmarks_handler_; }
 
   MockUpdateHandler* GetAppliedHandler() { return autofill_handler_; }
 
  private:
-  raw_ptr<MockUpdateHandler> bookmarks_handler_;
-  raw_ptr<MockUpdateHandler> autofill_handler_;
+  const raw_ptr<MockUpdateHandler> bookmarks_handler_ =
+      AddUpdateHandler(BOOKMARKS);
+  const raw_ptr<MockUpdateHandler> autofill_handler_ =
+      AddUpdateHandler(AUTOFILL);
 };
 
 // Verify that a normal cycle applies updates to the specified types.
@@ -429,21 +476,5 @@ TEST_F(GetUpdatesProcessorApplyUpdatesTest, Poll) {
   EXPECT_EQ(0, GetNonAppliedHandler()->GetApplyUpdatesCount());
   EXPECT_EQ(1, GetAppliedHandler()->GetApplyUpdatesCount());
 }
-
-class DownloadUpdatesDebugInfoTest : public ::testing::Test {
- public:
-  DownloadUpdatesDebugInfoTest() = default;
-  ~DownloadUpdatesDebugInfoTest() override = default;
-
-  StatusController* status() { return &status_; }
-
-  DebugInfoGetter* debug_info_getter() { return &debug_info_getter_; }
-
-  void AddDebugEvent() { debug_info_getter_.AddDebugEvent(); }
-
- private:
-  StatusController status_;
-  MockDebugInfoGetter debug_info_getter_;
-};
 
 }  // namespace syncer

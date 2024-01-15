@@ -1,9 +1,16 @@
 <style include="cr-shared-style">
+  ::slotted([slot=bottom-nav-content-drawer]) {
+    position: absolute;
+  }
+
+  ::slotted([slot=bottom-nav-content-panel]) {
+    position: fixed;
+  }
+
   ::slotted([slot=bottom-nav-content-drawer]),
   ::slotted([slot=bottom-nav-content-panel]) {
     bottom: 24px;
     inset-inline-start: 16px;
-    position: fixed;
   }
 
   ::slotted([slot=banner]) {
@@ -14,10 +21,16 @@
     --left-aligned-top-offset: 120px;
   }
 
+  :host {
+    --navigation-view-panel-bg-color: var(--cros-bg-color);
+    --navigation-view-panel-toolbar-height: 56px;
+  }
+
   :host([show-banner][show-tool-bar]) #container {
     display: grid;
     grid-template-areas: var(--areas-nav-banner);
     grid-template-columns: var(--columns-nav);
+    grid-template-rows: auto auto 1fr;
     width: 100%;
   }
 
@@ -25,6 +38,7 @@
     display: grid;
     grid-template-areas: var(--areas-no-header-nav-banner);
     grid-template-columns: var(--columns-nav);
+    grid-template-rows: auto 1fr;
     width: 100%;
   }
 
@@ -32,6 +46,7 @@
     display: grid;
     grid-template-areas: var(--areas-nav);
     grid-template-columns: var(--columns-nav);
+    grid-template-rows: auto 1fr;
     width: 100%;
   }
 
@@ -55,8 +70,14 @@
     z-index: 3;
   }
 
+  #container {
+    height: 100%;
+    overflow: hidden;
+  }
+
   cr-drawer {
     --cr-separator-line: none;
+    --cr-drawer-background-color: var(--navigation-view-panel-bg-color);
     --cr-drawer-header-color: var(--cros-text-color-secondary);
     --cr-drawer-header-font-weight: 500;
     --cr-drawer-header-padding: 20px;
@@ -79,10 +100,13 @@
   }
 
   #navigationBody {
+    box-sizing: border-box;
     grid-area: main;
-    justify-self: center;
+    height: 100%;
     min-width: 0;
+    overflow: overlay;
     padding-inline: var(--container-padding-nav);
+    width: 100%;
   }
 
   .left-aligned {
@@ -103,11 +127,13 @@
   <iron-media-query query="(min-width: 769px)" query-matches="{{showNav}}">
   </iron-media-query>
   <template is="dom-if" if="[[showToolBar]]">
-    <div id="topNav">
+    <div id="topNav" part="top-nav">
       <page-toolbar
           title="[[title]]"
           is-narrow="[[!showNav]]"
+          has-search="[[hasSearch]]"
           exportparts="title">
+        <slot slot="toolbar-main" name="toolbar-main"></slot>
       </page-toolbar>
     </div>
   </template>
@@ -128,12 +154,13 @@
           selected-item="{{selectedItem}}"
           exportparts="navigation-item">
       </navigation-selector>
-    <slot name="bottom-nav-content-drawer"></slot>
+      <slot name="bottom-nav-content-drawer"></slot>
     </div>
   </cr-drawer>
   <template is="dom-if" if="[[showNav]]">
-    <div id="sideNav">
+    <div id="sideNav" part="side-nav">
       <div id="navigationSelector" class="left-aligned">
+        <div part="nav-spacer"></div>
         <navigation-selector selector-items={{selectorItems_}}
             selected-item="{{selectedItem}}" exportparts="navigation-item">
         </navigation-selector>
@@ -142,5 +169,7 @@
     </div>
   </template>
 
-  <div id="navigationBody" class="right-aligned"></div>
+  <div id="navigationBody" class="right-aligned" part="nav-body">
+    <slot name="top-navigation-body"></slot>
+  </div>
 </div>

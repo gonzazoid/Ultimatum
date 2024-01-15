@@ -10,12 +10,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "net/base/io_buffer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using net::IOBuffer;
+using net::IOBufferWithSize;
 
 namespace remoting {
 
@@ -36,7 +37,6 @@ const int kCropSizes[] = {1, -1};
 
 class CompoundBufferTest : public testing::Test {
  public:
-
   // Following 5 methods are used with IterateOverPieces().
   void Append(int pos, int size) {
     target_.Append(data_, data_->data() + pos, size);
@@ -64,21 +64,21 @@ class CompoundBufferTest : public testing::Test {
     CompoundBuffer cropped;
     cropped.CopyFrom(target_, 0, target_.total_bytes());
     cropped.CropFront(pos);
-    EXPECT_TRUE(CompareData(cropped, data_->data() + pos,
-                            target_.total_bytes() - pos));
+    EXPECT_TRUE(
+        CompareData(cropped, data_->data() + pos, target_.total_bytes() - pos));
   }
 
   void TestCropBack(int pos, int size) {
     CompoundBuffer cropped;
     cropped.CopyFrom(target_, 0, target_.total_bytes());
     cropped.CropBack(pos);
-    EXPECT_TRUE(CompareData(cropped, data_->data(),
-                            target_.total_bytes() - pos));
+    EXPECT_TRUE(
+        CompareData(cropped, data_->data(), target_.total_bytes() - pos));
   }
 
  protected:
   void SetUp() override {
-    data_ = base::MakeRefCounted<IOBuffer>(kDataSize);
+    data_ = base::MakeRefCounted<IOBufferWithSize>(kDataSize);
     for (int i = 0; i < kDataSize; ++i) {
       data_->data()[i] = i;
     }
@@ -96,8 +96,9 @@ class CompoundBufferTest : public testing::Test {
     while (pos < kDataSize) {
       int size = std::min(sizes[index], kDataSize - pos);
       ++index;
-      if (sizes[index] <= 0)
+      if (sizes[index] <= 0) {
         index = 0;
+      }
 
       function.Run(pos, size);
 
@@ -108,11 +109,12 @@ class CompoundBufferTest : public testing::Test {
   bool CompareData(const CompoundBuffer& buffer, char* data, int size) {
     scoped_refptr<IOBuffer> buffer_data = buffer.ToIOBufferWithSize();
     return buffer.total_bytes() == size &&
-        memcmp(buffer_data->data(), data, size) == 0;
+           memcmp(buffer_data->data(), data, size) == 0;
   }
 
   static size_t ReadFromInput(CompoundBufferInputStream* input,
-                              void* data, size_t size) {
+                              void* data,
+                              size_t size) {
     uint8_t* out = reinterpret_cast<uint8_t*>(data);
     int out_size = size;
 
@@ -161,17 +163,20 @@ class CompoundBufferTest : public testing::Test {
     int segments = (kTestData.length() / 3) * 2;
     int remaining_chars = kTestData.length() % 3;
     if (remaining_chars) {
-      if (remaining_chars == 1)
+      if (remaining_chars == 1) {
         ++segments;
-      else
+      } else {
         segments += 2;
+      }
     }
 
     CompoundBuffer* result = new CompoundBuffer();
     const char* data = kTestData.data();
     for (int i = 0; i < segments; ++i) {
-      int size = i % 2 == 0 ? 1 : 2;
-      result->Append(base::MakeRefCounted<net::WrappedIOBuffer>(data), size);
+      size_t size = i % 2 == 0 ? 1 : 2;
+      result->Append(base::MakeRefCounted<net::WrappedIOBuffer>(
+                         base::make_span(data, size)),
+                     size);
       data += size;
     }
     result->Lock();

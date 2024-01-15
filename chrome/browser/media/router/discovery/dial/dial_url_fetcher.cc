@@ -4,14 +4,13 @@
 
 #include "chrome/browser/media/router/discovery/dial/dial_url_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"  // nogncheck
 #include "components/version_info/version_info.h"
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -186,6 +185,7 @@ absl::optional<int> DialURLFetcher::GetHttpResponseCode() const {
 }
 
 void DialURLFetcher::ReportRedirectError(
+    const GURL& url_before_redirect,
     const net::RedirectInfo& redirect_info,
     const network::mojom::URLResponseHead& response_head,
     std::vector<std::string>* to_be_removed_headers) {
@@ -201,16 +201,10 @@ void DialURLFetcher::StartDownload() {
   // Currently this is the only way to guarantee a live URLLoaderFactory.
   // TOOD(mmenke): Figure out a way to do this transparently on IO thread.
   mojo::Remote<network::mojom::URLLoaderFactory> loader_factory;
-
-  // TODO(https://crbug.com/823869): Fix DeviceDescriptionServiceTest and remove
-  // this conditional.
   auto mojo_receiver = loader_factory.BindNewPipeAndPassReceiver();
-  if (content::BrowserThread::IsThreadInitialized(content::BrowserThread::UI)) {
-    content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&BindURLLoaderFactoryReceiverOnUIThread,
-                                  std::move(mojo_receiver)));
-  }
-
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&BindURLLoaderFactoryReceiverOnUIThread,
+                                std::move(mojo_receiver)));
   loader_->DownloadToString(
       loader_factory.get(),
       base::BindOnce(&DialURLFetcher::ProcessResponse, base::Unretained(this)),

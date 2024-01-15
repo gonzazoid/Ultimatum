@@ -4,10 +4,11 @@
 
 import './strings.m.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {addWebUIListener, isChromeOS, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {$} from 'chrome://resources/js/util.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {isChromeOS} from 'chrome://resources/js/platform.js';
+import {$, getRequiredElement} from 'chrome://resources/js/util.js';
 
 declare global {
   class JsEvalContext {
@@ -50,8 +51,9 @@ function renderTemplate(componentsData: ComponentsData) {
   const output =
       document.body.querySelector<HTMLElement>(
                        '#component-template')!.cloneNode(true) as HTMLElement;
-  $('component-placeholder').innerHTML = trustedTypes.emptyHTML;
-  $('component-placeholder').appendChild(output);
+  getRequiredElement('component-placeholder').innerHTML =
+      trustedTypes.emptyHTML;
+  getRequiredElement('component-placeholder').appendChild(output);
   jstProcess(input, output);
   output.removeAttribute('hidden');
 
@@ -87,7 +89,7 @@ function requestComponentsData() {
  * @param componentsData Detailed info about installed components.
  */
 function returnComponentsData(componentsData: ComponentsData) {
-  const bodyContainer = $('body-container');
+  const bodyContainer = getRequiredElement('body-container');
   const body = document.body;
 
   bodyContainer.style.visibility = 'hidden';
@@ -159,12 +161,12 @@ function onComponentEvent(event: ComponentEvent) {
   assert(component);
 
   const status = event.event;
-  $('status-' + id).textContent = status;
+  getRequiredElement('status-' + id).textContent = status;
   component.status = status;
 
   if (event.version) {
     const version = event.version;
-    $('version-' + id).textContent = version;
+    getRequiredElement('version-' + id).textContent = version;
     component.version = version;
   }
 }
@@ -175,7 +177,7 @@ function onComponentEvent(event: ComponentEvent) {
  *     update.
  */
 function handleCheckUpdate(node: HTMLElement) {
-  $('status-' + String(node.id)).textContent =
+  getRequiredElement('status-' + String(node.id)).textContent =
       loadTimeData.getString('checkingLabel');
 
   // Tell the C++ ComponentssDOMHandler to check for update.
@@ -184,6 +186,6 @@ function handleCheckUpdate(node: HTMLElement) {
 
 // Get data and have it displayed upon loading.
 document.addEventListener('DOMContentLoaded', function() {
-  addWebUIListener('component-event', onComponentEvent);
+  addWebUiListener('component-event', onComponentEvent);
   requestComponentsData();
 });

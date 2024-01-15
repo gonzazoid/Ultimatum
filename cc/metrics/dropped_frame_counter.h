@@ -11,15 +11,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include <optional>
 #include "base/containers/ring_buffer.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "cc/cc_export.h"
 #include "cc/metrics/frame_info.h"
 #include "cc/metrics/frame_sorter.h"
 #include "cc/metrics/ukm_smoothness_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cc {
 class TotalFrameCounter;
@@ -83,16 +83,17 @@ class CC_EXPORT DroppedFrameCounter {
   void SetSortedFrameCallback(SortedFrameCallback callback);
 
   typedef base::RingBuffer<FrameState, 180> RingBufferType;
-  RingBufferType::Iterator begin() const { return ring_buffer_.Begin(); }
-  RingBufferType::Iterator end() const { return ring_buffer_.End(); }
+  RingBufferType::Iterator Begin() const { return ring_buffer_.Begin(); }
+  // `End()` points to the last `FrameState`, not past it.
+  RingBufferType::Iterator End() const { return ring_buffer_.End(); }
 
   void AddGoodFrame();
   void AddPartialFrame();
   void AddDroppedFrame();
   void ReportFrames();
-  void ReportFramesForUI();
+  void ReportFramesOnEveryFrameForUI();
 
-  void OnBeginFrame(const viz::BeginFrameArgs& args, bool is_scroll_active);
+  void OnBeginFrame(const viz::BeginFrameArgs& args);
   void OnEndFrame(const viz::BeginFrameArgs& args, const FrameInfo& frame_info);
   void SetUkmSmoothnessDestination(UkmSmoothnessDataShared* smoothness_data);
   void OnFcpReceived();
@@ -123,15 +124,15 @@ class CC_EXPORT DroppedFrameCounter {
     return sliding_window_max_percent_dropped_;
   }
 
-  absl::optional<double> max_percent_dropped_After_1_sec() const {
+  std::optional<double> max_percent_dropped_After_1_sec() const {
     return sliding_window_max_percent_dropped_After_1_sec_;
   }
 
-  absl::optional<double> max_percent_dropped_After_2_sec() const {
+  std::optional<double> max_percent_dropped_After_2_sec() const {
     return sliding_window_max_percent_dropped_After_2_sec_;
   }
 
-  absl::optional<double> max_percent_dropped_After_5_sec() const {
+  std::optional<double> max_percent_dropped_After_5_sec() const {
     return sliding_window_max_percent_dropped_After_5_sec_;
   }
 
@@ -162,7 +163,7 @@ class CC_EXPORT DroppedFrameCounter {
   }
 
   double sliding_window_current_percent_dropped() const {
-    return sliding_window_current_percent_dropped_;
+    return sliding_window_current_percent_dropped_.value_or(0);
   }
 
  private:
@@ -194,9 +195,9 @@ class CC_EXPORT DroppedFrameCounter {
   size_t total_smoothness_dropped_ = 0;
   bool fcp_received_ = false;
   double sliding_window_max_percent_dropped_ = 0;
-  absl::optional<double> sliding_window_max_percent_dropped_After_1_sec_;
-  absl::optional<double> sliding_window_max_percent_dropped_After_2_sec_;
-  absl::optional<double> sliding_window_max_percent_dropped_After_5_sec_;
+  std::optional<double> sliding_window_max_percent_dropped_After_1_sec_;
+  std::optional<double> sliding_window_max_percent_dropped_After_2_sec_;
+  std::optional<double> sliding_window_max_percent_dropped_After_5_sec_;
   base::TimeTicks time_fcp_received_;
   raw_ptr<UkmSmoothnessDataShared> ukm_smoothness_data_ = nullptr;
   FrameSorter frame_sorter_;
@@ -207,20 +208,10 @@ class CC_EXPORT DroppedFrameCounter {
     double p95_window = 0;
   } last_reported_metrics_;
 
-  struct ScrollStartInfo {
-    // The timestamp of when the scroll started.
-    base::TimeTicks timestamp;
-
-    // The vsync corresponding to the scroll-start.
-    viz::BeginFrameId frame_id;
-  };
-  absl::optional<ScrollStartInfo> scroll_start_;
-  std::map<viz::BeginFrameId, ScrollStartInfo> scroll_start_per_frame_;
-
-  absl::optional<SortedFrameCallback> sorted_frame_callback_;
+  std::optional<SortedFrameCallback> sorted_frame_callback_;
 
   bool report_for_ui_ = false;
-  double sliding_window_current_percent_dropped_ = 0.0;
+  std::optional<double> sliding_window_current_percent_dropped_;
 
   // Sets to true on a newly dropped frame and stays true as long as the frames
   // that follow are dropped. Reset when a frame is presented. It is used to

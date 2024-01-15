@@ -1,10 +1,11 @@
 set noparent
 boliu@chromium.org
-michaelbai@chromium.org
 ntfschr@chromium.org
 torne@chromium.org
-nator@chromium.org
 peter@chromium.org
+
+# Coverage for peter@ during out of office time:
+peconn@chromium.org
 
 # Documentation changes:
 per-file *.md=file://android_webview/docs/OWNERS

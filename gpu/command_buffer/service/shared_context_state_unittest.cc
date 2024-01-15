@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
 #include "gpu/command_buffer/service/context_state_test_helpers.h"
@@ -87,7 +87,8 @@ TEST_F(SharedContextStateTest, InitFailsIfLostContext) {
 
     auto shared_context_state = base::MakeRefCounted<SharedContextState>(
         new gl::GLShareGroup(), surface, context,
-        false /* use_virtualized_gl_contexts */, base::DoNothing());
+        false /* use_virtualized_gl_contexts */, base::DoNothing(),
+        GrContextType::kGL);
 
     bool result =
         shared_context_state->InitializeGL(GpuPreferences(), feature_info);

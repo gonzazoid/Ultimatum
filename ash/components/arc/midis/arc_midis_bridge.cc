@@ -8,7 +8,7 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/singleton.h"
 #include "chromeos/ash/components/dbus/arc/arc_midis_client.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -112,6 +112,11 @@ void ArcMidisBridge::Connect(
 void ArcMidisBridge::OnMojoConnectionError() {
   LOG(ERROR) << "ArcMidisBridge Mojo connection lost.";
   midis_host_remote_.reset();
+}
+
+// static
+void ArcMidisBridge::EnsureFactoryBuilt() {
+  ArcMidisBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

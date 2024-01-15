@@ -2,14 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as WebAudioModule from 'devtools/panels/web_audio/web_audio.js';
+
 (async function() {
   TestRunner.addResult(`Tests the graph model.\n`);
 
   await TestRunner.showPanel('web-audio');
-  await TestRunner.loadLegacyModule('web_audio');
 
   const contextId = 'contextId';
-  const graph = new WebAudio.GraphVisualizer.GraphView(contextId);
+  const graph = new WebAudioModule.GraphView.GraphView(contextId);
 
   TestRunner.addResult('Original lengths');
   dumpNodeEdgeSize();

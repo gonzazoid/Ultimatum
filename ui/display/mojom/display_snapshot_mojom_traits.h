@@ -83,14 +83,14 @@ struct StructTraits<display::mojom::DisplaySnapshotDataView,
     return snapshot->privacy_screen_state();
   }
 
+  static bool has_content_protection_key(
+      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
+    return snapshot->has_content_protection_key();
+  }
+
   static bool has_color_correction_matrix(
       const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
     return snapshot->has_color_correction_matrix();
-  }
-
-  static bool color_correction_in_linear_space(
-      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
-    return snapshot->color_correction_in_linear_space();
   }
 
   static const gfx::ColorSpace& color_space(
@@ -155,6 +155,21 @@ struct StructTraits<display::mojom::DisplaySnapshotDataView,
   static const gfx::Size& maximum_cursor_size(
       const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
     return snapshot->maximum_cursor_size();
+  }
+
+  static display::VariableRefreshRateState variable_refresh_rate_state(
+      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
+    return snapshot->variable_refresh_rate_state();
+  }
+
+  static uint16_t vsync_rate_min(
+      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
+    return snapshot->vsync_rate_min().value_or(0);
+  }
+
+  static const display::DrmFormatsAndModifiers& drm_formats_and_modifiers(
+      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
+    return snapshot->GetDRMFormatsAndModifiers();
   }
 
   static bool Read(display::mojom::DisplaySnapshotDataView data,

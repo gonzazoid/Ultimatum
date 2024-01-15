@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/services/secure_channel/client_connection_parameters.h"
 #include "chromeos/ash/services/secure_channel/connection_details.h"
 #include "chromeos/ash/services/secure_channel/multiplexed_channel.h"
@@ -66,14 +66,14 @@ class FakeMultiplexedChannelDelegate : public MultiplexedChannel::Delegate {
 
   ~FakeMultiplexedChannelDelegate() override;
 
-  const absl::optional<ConnectionDetails>& disconnected_connection_details() {
+  const std::optional<ConnectionDetails>& disconnected_connection_details() {
     return disconnected_connection_details_;
   }
 
  private:
   void OnDisconnected(const ConnectionDetails& connection_details) override;
 
-  absl::optional<ConnectionDetails> disconnected_connection_details_;
+  std::optional<ConnectionDetails> disconnected_connection_details_;
 };
 
 }  // namespace ash::secure_channel

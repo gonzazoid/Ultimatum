@@ -10,16 +10,19 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 
 import static org.chromium.chrome.features.tasks.SingleTabViewProperties.CLICK_LISTENER;
 import static org.chromium.chrome.features.tasks.SingleTabViewProperties.FAVICON;
 import static org.chromium.chrome.features.tasks.SingleTabViewProperties.IS_VISIBLE;
+import static org.chromium.chrome.features.tasks.SingleTabViewProperties.LATERAL_MARGIN;
 import static org.chromium.chrome.features.tasks.SingleTabViewProperties.TITLE;
 
 import android.app.Activity;
 import android.graphics.drawable.BitmapDrawable;
 import android.view.View;
+import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -34,8 +37,14 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
 
+import org.chromium.base.ContextUtils;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.chrome.browser.tasks.tab_management.TabListFaviconProvider;
+import org.chromium.chrome.browser.tasks.tab_management.TabSwitcher;
+import org.chromium.chrome.browser.util.BrowserUiUtils.ModuleTypeOnStartAndNtp;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
@@ -45,6 +54,8 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 @Config(manifest = Config.NONE)
 public class SingleTabViewBinderUnitTest {
     private static final String TEST_TITLE = "test";
+    private final int mTabId = 1;
+    private static final String HISTOGRAM_START_SURFACE_MODULE_CLICK = "StartSurface.Module.Click";
 
     private Activity mActivity;
     private SingleTabView mSingleTabView;
@@ -52,21 +63,27 @@ public class SingleTabViewBinderUnitTest {
             mPropertyModelChangeProcessor;
     private PropertyModel mPropertyModel;
 
-    @Mock
-    private View.OnClickListener mClickListener;
+    @Mock private View.OnClickListener mClickListener;
+    @Mock private TabModelSelector mTabModelSelector;
+    @Mock private TabSwitcher.OnTabSelectingListener mOnTabSelectingListener;
+    @Mock private TabListFaviconProvider mTabListFaviconProvider;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
         mActivity = Robolectric.buildActivity(Activity.class).setup().get();
-        mSingleTabView = (SingleTabView) mActivity.getLayoutInflater().inflate(
-                R.layout.single_tab_view_layout, null);
+        mSingleTabView =
+                (SingleTabView)
+                        mActivity
+                                .getLayoutInflater()
+                                .inflate(R.layout.single_tab_view_layout, null);
         mActivity.setContentView(mSingleTabView);
 
         mPropertyModel = new PropertyModel(SingleTabViewProperties.ALL_KEYS);
-        mPropertyModelChangeProcessor = PropertyModelChangeProcessor.create(
-                mPropertyModel, mSingleTabView, SingleTabViewBinder::bind);
+        mPropertyModelChangeProcessor =
+                PropertyModelChangeProcessor.create(
+                        mPropertyModel, mSingleTabView, SingleTabViewBinder::bind);
     }
 
     @After
@@ -123,5 +140,41 @@ public class SingleTabViewBinderUnitTest {
 
         mPropertyModel.set(IS_VISIBLE, false);
         assertFalse(isViewVisible(R.id.single_tab_view));
+    }
+
+    @Test
+    @SmallTest
+    public void testRecordHistogramSingleTabCardClick_StartSurface() {
+        doReturn(mTabId).when(mTabModelSelector).getCurrentTabId();
+        doReturn(false).when(mTabModelSelector).isIncognitoSelected();
+        SingleTabSwitcherMediator mediator =
+                new SingleTabSwitcherMediator(
+                        ContextUtils.getApplicationContext(),
+                        mPropertyModel,
+                        mTabModelSelector,
+                        mTabListFaviconProvider,
+                        null,
+                        false);
+        mediator.setOnTabSelectingListener(mOnTabSelectingListener);
+        mSingleTabView.performClick();
+        assertEquals(
+                HISTOGRAM_START_SURFACE_MODULE_CLICK
+                        + " is not recorded correctly when clicking on the single tab card.",
+                1,
+                RecordHistogram.getHistogramValueCountForTesting(
+                        HISTOGRAM_START_SURFACE_MODULE_CLICK,
+                        ModuleTypeOnStartAndNtp.SINGLE_TAB_CARD));
+    }
+
+    @Test
+    @SmallTest
+    public void testStartMargin() {
+        int lateralMargin = 100;
+        MarginLayoutParams marginLayoutParams =
+                (MarginLayoutParams) mSingleTabView.getLayoutParams();
+        assertEquals(0, marginLayoutParams.getMarginStart());
+
+        mPropertyModel.set(LATERAL_MARGIN, lateralMargin);
+        assertEquals(100, marginLayoutParams.getMarginStart());
     }
 }

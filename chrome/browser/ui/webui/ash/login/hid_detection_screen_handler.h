@@ -10,11 +10,10 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // Interface between HID detection screen and its representation, either WebUI
-// or Views one. Note, do not forget to call OnViewDestroyed in the
-// dtor.
+// or Views one.
 class HIDDetectionView : public base::SupportsWeakPtr<HIDDetectionView> {
  public:
   inline constexpr static StaticOobeScreenId kScreenId{"hid-detection",
@@ -101,13 +100,6 @@ class HIDDetectionScreenHandler
   bool continue_button_enabled_ = false;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::HIDDetectionScreenHandler;
-using ::chromeos::HIDDetectionView;
 }  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_HID_DETECTION_SCREEN_HANDLER_H_

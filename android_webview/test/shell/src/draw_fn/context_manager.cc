@@ -6,7 +6,6 @@
 
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
-#include <android/native_window_jni.h>
 
 #include "android_webview/public/browser/draw_fn.h"
 #include "android_webview/test/draw_fn_impl_jni_headers/ContextManager_jni.h"
@@ -33,8 +32,13 @@
 #include "third_party/skia/include/gpu/GrBackendDrawableInfo.h"
 #include "third_party/skia/include/gpu/GrBackendSemaphore.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
-#include "third_party/skia/include/gpu/GrBackendSurfaceMutableState.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/GrTypes.h"
+#include "third_party/skia/include/gpu/MutableTextureState.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSemaphore.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkDirectContext.h"
 #include "third_party/skia/include/gpu/vk/GrVkBackendContext.h"
 #include "third_party/skia/include/gpu/vk/GrVkExtensions.h"
 #include "third_party/skia/include/gpu/vk/GrVkTypes.h"
@@ -324,9 +328,9 @@ void ContextManagerGL::DoCreateContext(JNIEnv* env, int width, int height) {
   {
     std::vector<EGLint> egl_window_attributes;
     egl_window_attributes.push_back(EGL_NONE);
-    gl_surface_ =
-        eglCreateWindowSurfaceFn(GetDisplay(), GetConfig(&use_es3),
-                                 native_window_, &egl_window_attributes[0]);
+    gl_surface_ = eglCreateWindowSurfaceFn(GetDisplay(), GetConfig(&use_es3),
+                                           native_window_.a_native_window(),
+                                           &egl_window_attributes[0]);
     CHECK(gl_surface_);
   }
 
@@ -346,8 +350,9 @@ void ContextManagerGL::DoCreateContext(JNIEnv* env, int width, int height) {
 }
 
 void ContextManagerGL::DestroyContext() {
-  if (java_surface_.is_null())
+  if (java_surface_.IsEmpty()) {
     return;
+  }
 
   if (current_functor_) {
     MakeCurrent();
@@ -364,9 +369,8 @@ void ContextManagerGL::DestroyContext() {
   CHECK(eglDestroySurfaceFn(GetDisplay(), gl_surface_));
   gl_surface_ = nullptr;
 
-  ANativeWindow_release(native_window_);
   native_window_ = nullptr;
-  java_surface_.Reset();
+  java_surface_ = nullptr;
 }
 
 void ContextManagerGL::MakeCurrent() {
@@ -566,29 +570,29 @@ base::android::ScopedJavaLocalRef<jintArray> ContextManagerVulkan::Draw(
       vk_image_info.fCurrentQueueFamily = VK_QUEUE_FAMILY_IGNORED;
       vk_image_info.fProtected = GrProtected::kNo;
       const auto& vk_image_size = vulkan_surface_->image_size();
-      GrBackendRenderTarget render_target(vk_image_size.width(),
-                                          vk_image_size.height(),
-                                          0 /* sample_cnt */, vk_image_info);
+      auto render_target = GrBackendRenderTargets::MakeVk(
+          vk_image_size.width(), vk_image_size.height(), vk_image_info);
 
       auto sk_color_type = surface_format == VK_FORMAT_B8G8R8A8_UNORM
                                ? kBGRA_8888_SkColorType
                                : kRGBA_8888_SkColorType;
-      sk_surface = SkSurface::MakeFromBackendRenderTarget(
+      sk_surface = SkSurfaces::WrapBackendRenderTarget(
           gr_context_.get(), render_target, kTopLeft_GrSurfaceOrigin,
           sk_color_type, gfx::ColorSpace::CreateSRGB().ToSkColorSpace(),
           &surface_props);
       CHECK(sk_surface);
     } else {
-      auto backend = sk_surface->getBackendRenderTarget(
-          SkSurface::kFlushRead_BackendHandleAccess);
-      backend.setVkImageLayout(scoped_write.image_layout());
+      auto backend = SkSurfaces::GetBackendRenderTarget(
+          sk_surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
+      GrBackendRenderTargets::SetVkImageLayout(&backend,
+                                               scoped_write.image_layout());
     }
 
     {
       VkSemaphore vk_semaphore = scoped_write.begin_semaphore();
       DCHECK(vk_semaphore != VK_NULL_HANDLE);
-      GrBackendSemaphore begin_semaphore;
-      begin_semaphore.initVulkan(vk_semaphore);
+      GrBackendSemaphore begin_semaphore =
+          GrBackendSemaphores::MakeVk(vk_semaphore);
       bool result = sk_surface->wait(1, &begin_semaphore,
                                      /*deleteSemaphoresAfterWait=*/false);
       CHECK(result);
@@ -618,19 +622,20 @@ base::android::ScopedJavaLocalRef<jintArray> ContextManagerVulkan::Draw(
     }
 
     {
-      GrBackendSemaphore end_semaphore;
-      end_semaphore.initVulkan(scoped_write.end_semaphore());
+      GrBackendSemaphore end_semaphore =
+          GrBackendSemaphores::MakeVk(scoped_write.end_semaphore());
       GrFlushInfo flush_info = {
           .fNumSemaphores = 1,
           .fSignalSemaphores = &end_semaphore,
       };
       uint32_t queue_index = device_queue_->GetVulkanQueueIndex();
-      GrBackendSurfaceMutableState state(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                         queue_index);
-      GrSemaphoresSubmitted submitted = sk_surface->flush(flush_info, &state);
+      skgpu::MutableTextureState state(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                       queue_index);
+      GrSemaphoresSubmitted submitted =
+          gr_context_->flush(sk_surface.get(), flush_info, &state);
       CHECK_EQ(GrSemaphoresSubmitted::kYes, submitted);
     }
-    CHECK(gr_context_->submit(/*sync_cpu=*/false));
+    CHECK(gr_context_->submit(GrSyncCpu::kNo));
   }
 
   gfx::SwapResult result = vulkan_surface_->SwapBuffers(
@@ -640,7 +645,8 @@ base::android::ScopedJavaLocalRef<jintArray> ContextManagerVulkan::Draw(
                             : nullptr;
 }
 void ContextManagerVulkan::DoCreateContext(JNIEnv* env, int width, int height) {
-  vulkan_surface_ = vulkan_implementation_->CreateViewSurface(native_window_);
+  vulkan_surface_ = vulkan_implementation_->CreateViewSurface(
+      native_window_.a_native_window());
   CHECK(vulkan_surface_);
   CHECK(vulkan_surface_->Initialize(device_queue_.get(),
                                     gpu::VulkanSurface::FORMAT_RGBA_32));
@@ -687,15 +693,16 @@ void ContextManagerVulkan::DoCreateContext(JNIEnv* env, int width, int height) {
   backend_context.fProtectedContext = GrProtected::kNo;
 
   GrContextOptions options;
-  gr_context_ = GrDirectContext::MakeVulkan(backend_context, options);
+  gr_context_ = GrDirectContexts::MakeVulkan(backend_context, options);
   CHECK(gr_context_);
 
   MaybeCallFunctorInitVk();
 }
 
 void ContextManagerVulkan::DestroyContext() {
-  if (java_surface_.is_null())
+  if (java_surface_.IsEmpty()) {
     return;
+  }
 
   if (current_functor_) {
     FunctorData& data = Allocator::Get()->get(current_functor_);
@@ -707,9 +714,8 @@ void ContextManagerVulkan::DestroyContext() {
   vulkan_surface_->Destroy();
   vulkan_surface_.reset();
 
-  ANativeWindow_release(native_window_);
   native_window_ = nullptr;
-  java_surface_.Reset();
+  java_surface_ = nullptr;
 }
 
 void ContextManagerVulkan::CurrentFunctorChanged() {
@@ -760,7 +766,7 @@ void ContextManager::SetSurface(JNIEnv* env,
                                 const base::android::JavaRef<jobject>& surface,
                                 int width,
                                 int height) {
-  if (!java_surface_.is_null()) {
+  if (!java_surface_.IsEmpty()) {
     DestroyContext();
   }
   if (!surface.is_null()) {
@@ -797,11 +803,12 @@ void ContextManager::CreateContext(
     const base::android::JavaRef<jobject>& surface,
     int width,
     int height) {
-  java_surface_.Reset(surface);
-  if (java_surface_.is_null())
+  java_surface_ = gl::ScopedJavaSurface(surface, /*auto_release=*/false);
+  if (!java_surface_.IsValid()) {
     return;
+  }
 
-  native_window_ = ANativeWindow_fromSurface(env, surface.obj());
+  native_window_ = gl::ScopedANativeWindow(java_surface_);
   CHECK(native_window_);
 
   DoCreateContext(env, width, height);

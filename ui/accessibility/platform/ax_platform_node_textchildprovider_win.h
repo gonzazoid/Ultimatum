@@ -7,12 +7,13 @@
 
 #include <wrl/client.h>
 
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
+#include "ui/accessibility/platform/sequence_affine_com_object_root_win.h"
 
 namespace ui {
-class AX_EXPORT AXPlatformNodeTextChildProviderWin
-    : public CComObjectRootEx<CComMultiThreadModel>,
+class COMPONENT_EXPORT(AX_PLATFORM) AXPlatformNodeTextChildProviderWin
+    : public SequenceAffineComObjectRoot,
       public ITextChildProvider {
  public:
   BEGIN_COM_MAP(AXPlatformNodeTextChildProviderWin)

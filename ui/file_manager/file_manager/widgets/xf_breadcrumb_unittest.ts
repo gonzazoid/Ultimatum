@@ -2,26 +2,23 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {assertEquals, assertFalse, assertGT, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
+import {assertEquals, assertFalse, assertGT, assertNotEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
 import {hasOverflowEllipsis} from '../common/js/dom_utils.js';
 import {waitUntil} from '../common/js/test_error_reporting.js';
 
-import {BreadcrumbClickedEvent, XfBreadcrumb} from './xf_breadcrumb.js';
+import {type BreadcrumbClickedEvent, XfBreadcrumb} from './xf_breadcrumb.js';
 
 /**
  * Creates new <xf-breadcrumb> element for each test. Asserts it has no initial
  * path using the element.path getter.
  */
 export function setUp() {
-  // mock string
-  loadTimeData.resetForTesting({
-    LOCATION_BREADCRUMB_ELIDER_BUTTON_LABEL: 'elider label',
-  });
-
-  document.body.innerHTML = '<xf-breadcrumb></xf-breadcrumb>';
+  document.body.innerHTML = getTrustedHTML`
+    <xf-breadcrumb></xf-breadcrumb>
+  `;
   const breadcrumb = document.querySelector('xf-breadcrumb');
   assertEquals('', breadcrumb!.path);
 }

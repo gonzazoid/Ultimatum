@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 
 class UndoManagerObserver;
@@ -124,7 +125,7 @@ class UndoManager {
   std::unique_ptr<UndoGroup> pending_grouped_action_;
 
   // The action that is in the process of being undone.
-  UndoGroup* undo_in_progress_action_;
+  raw_ptr<UndoGroup> undo_in_progress_action_;
 
   // Supports the suspension of undo tracking.
   int undo_suspended_count_;

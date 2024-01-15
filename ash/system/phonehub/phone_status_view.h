@@ -6,10 +6,11 @@
 #define ASH_SYSTEM_PHONEHUB_PHONE_STATUS_VIEW_H_
 
 #include "ash/ash_export.h"
-#include "ash/components/phonehub/phone_model.h"
 #include "ash/system/power/power_status.h"
 #include "ash/system/tray/tri_view.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/phone_model.h"
 
 namespace views {
 class ImageView;
@@ -53,7 +54,8 @@ class ASH_EXPORT PhoneStatusView : public TriView,
 
   void UpdateMobileStatus();
   void UpdateBatteryStatus();
-  PowerStatus::BatteryImageInfo CalculateBatteryInfo();
+  PowerStatus::BatteryImageInfo CalculateBatteryInfo(
+      const SkColor icon_fg_color);
   void SetBatteryTooltipText();
 
   // Clear the existing labels and icons for the phone status.
@@ -61,16 +63,16 @@ class ASH_EXPORT PhoneStatusView : public TriView,
 
   void ConfigureTriViewContainer(TriView::Container container);
 
-  phonehub::PhoneModel* phone_model_ = nullptr;
-  Delegate* delegate_ = nullptr;
+  raw_ptr<phonehub::PhoneModel> phone_model_ = nullptr;
+  raw_ptr<Delegate> delegate_ = nullptr;
 
   // Owned by views hierarchy.
-  views::Label* phone_name_label_ = nullptr;
-  views::ImageView* signal_icon_ = nullptr;
-  views::ImageView* battery_icon_ = nullptr;
-  views::Label* battery_label_ = nullptr;
-  views::Separator* separator_ = nullptr;
-  IconButton* settings_button_ = nullptr;
+  raw_ptr<views::Label> phone_name_label_ = nullptr;
+  raw_ptr<views::ImageView> signal_icon_ = nullptr;
+  raw_ptr<views::ImageView> battery_icon_ = nullptr;
+  raw_ptr<views::Label> battery_label_ = nullptr;
+  raw_ptr<views::Separator> separator_ = nullptr;
+  raw_ptr<IconButton> settings_button_ = nullptr;
 };
 
 }  // namespace ash

@@ -2,20 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/constants/ash_features.h"
+#include "base/test/gtest_tags.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_mixin.h"
 #include "chrome/browser/ash/policy/affiliation/affiliation_test_helper.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/force_installed_affiliated_extension_apitest.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
-#include "content/public/test/test_utils.h"
 #include "extensions/browser/extension_registry.h"
 #include "url/gurl.h"
 
@@ -33,20 +31,18 @@ constexpr char kExtensionPath[] =
 constexpr char kExtensionPemPath[] =
     "extensions/api_test/enterprise_device_attributes.pem";
 
-base::Value BuildCustomArg(const std::string& expected_directory_device_id,
-                           const std::string& expected_serial_number,
-                           const std::string& expected_asset_id,
-                           const std::string& expected_annotated_location,
-                           const std::string& expected_hostname) {
-  base::Value custom_arg(base::Value::Type::DICTIONARY);
-  custom_arg.SetKey("expectedDirectoryDeviceId",
-                    base::Value(expected_directory_device_id));
-  custom_arg.SetKey("expectedSerialNumber",
-                    base::Value(expected_serial_number));
-  custom_arg.SetKey("expectedAssetId", base::Value(expected_asset_id));
-  custom_arg.SetKey("expectedAnnotatedLocation",
-                    base::Value(expected_annotated_location));
-  custom_arg.SetKey("expectedHostname", base::Value(expected_hostname));
+base::Value::Dict BuildCustomArg(
+    const std::string& expected_directory_device_id,
+    const std::string& expected_serial_number,
+    const std::string& expected_asset_id,
+    const std::string& expected_annotated_location,
+    const std::string& expected_hostname) {
+  base::Value::Dict custom_arg;
+  custom_arg.Set("expectedDirectoryDeviceId", expected_directory_device_id);
+  custom_arg.Set("expectedSerialNumber", expected_serial_number);
+  custom_arg.Set("expectedAssetId", expected_asset_id);
+  custom_arg.Set("expectedAnnotatedLocation", expected_annotated_location);
+  custom_arg.Set("expectedHostname", expected_hostname);
   return custom_arg;
 }
 
@@ -56,13 +52,12 @@ namespace extensions {
 
 class EnterpriseDeviceAttributesTest
     : public ForceInstalledAffiliatedExtensionApiTest,
-      public ::testing::WithParamInterface<std::tuple<bool, bool>> {
+      public ::testing::WithParamInterface<bool> {
  public:
   EnterpriseDeviceAttributesTest()
-      : ForceInstalledAffiliatedExtensionApiTest(std::get<0>(GetParam()),
-                                                 std::get<1>(GetParam())) {
+      : ForceInstalledAffiliatedExtensionApiTest(GetParam()) {
     fake_statistics_provider_.SetMachineStatistic(
-        chromeos::system::kSerialNumberKeyForTest, kSerialNumber);
+        ash::system::kSerialNumberKeyForTest, kSerialNumber);
   }
 
  protected:
@@ -88,7 +83,7 @@ class EnterpriseDeviceAttributesTest
   }
 
  private:
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
 };
 
 IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, PRE_Success) {
@@ -96,7 +91,10 @@ IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, PRE_Success) {
 }
 
 IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, Success) {
-  const bool is_affiliated = std::get<0>(GetParam());
+  base::AddFeatureIdTagToTestResult(
+      "screenplay-be4e8241-2469-4b3f-969e-026494fb4ced");
+
+  const bool is_affiliated = GetParam();
   EXPECT_EQ(is_affiliated, user_manager::UserManager::Get()
                                ->FindUser(affiliation_mixin_.account_id())
                                ->IsAffiliated());
@@ -121,8 +119,7 @@ IN_PROC_BROWSER_TEST_P(EnterpriseDeviceAttributesTest, Success) {
 // Both cases of affiliated and non-affiliated users are tested.
 INSTANTIATE_TEST_SUITE_P(AffiliationCheck,
                          EnterpriseDeviceAttributesTest,
-                         ::testing::Combine(::testing::Bool(),
-                                            ::testing::Bool()));
+                         ::testing::Bool());
 
 // Ensure that extensions that are not pre-installed by policy throw an install
 // warning if they request the enterprise.deviceAttributes permission in the

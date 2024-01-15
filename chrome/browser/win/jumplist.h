@@ -27,8 +27,6 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -237,7 +235,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
       const base::FilePath& cmd_line_profile_dir,
       bool most_visited_should_update,
       bool recently_closed_should_update,
-      IncognitoModePrefs::Availability incognito_availability,
+      policy::IncognitoModeAvailability incognito_availability,
       UpdateTransaction* update_transaction);
 
   // Creates a new JumpList along with any icons that are not in the cache,
@@ -251,7 +249,7 @@ class JumpList : public sessions::TabRestoreServiceObserver,
       const base::FilePath& cmd_line_profile_dir,
       bool most_visited_should_update,
       bool recently_closed_should_update,
-      IncognitoModePrefs::Availability incognito_availability,
+      policy::IncognitoModeAvailability incognito_availability,
       UpdateTransaction* update_transaction);
 
   // Updates icon files for |item_list| in |icon_dir|, which consists of

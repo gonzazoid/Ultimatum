@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -22,7 +22,7 @@
 #include "chrome/browser/media/media_engagement_service.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
-#include "chrome/browser/preloading/prefetch/no_state_prefetch/prerender_test_utils.h"
+#include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_test_utils.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
@@ -37,6 +37,7 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/component_updater/component_updater_service.h"
+#include "components/content_settings/core/common/features.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_handle.h"
@@ -129,8 +130,8 @@ class MediaEngagementBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(http_server_.Start());
     ASSERT_TRUE(http_server_origin2_.Start());
 
-    scoped_feature_list_.InitAndEnableFeature(
-        media::kRecordMediaEngagementScores);
+    scoped_feature_list_.InitWithFeatures({media::kRecordMediaEngagementScores},
+                                          disabled_features_);
 
     InProcessBrowserTest::SetUp();
 
@@ -232,7 +233,7 @@ class MediaEngagementBrowserTest : public InProcessBrowserTest {
   }
 
   void ExecuteScript(const std::string& script) {
-    EXPECT_TRUE(content::ExecuteScript(GetWebContents(), script));
+    EXPECT_TRUE(content::ExecJs(GetWebContents(), script));
   }
 
   void OpenTabAsLink() {
@@ -243,7 +244,9 @@ class MediaEngagementBrowserTest : public InProcessBrowserTest {
   }
 
   void CloseTab() {
-    EXPECT_TRUE(browser()->tab_strip_model()->CloseWebContentsAt(0, 0));
+    const int previous_tab_count = browser()->tab_strip_model()->count();
+    browser()->tab_strip_model()->CloseWebContentsAt(0, 0);
+    EXPECT_EQ(previous_tab_count - 1, browser()->tab_strip_model()->count());
   }
 
   void LoadSubFrame(const GURL& url) {
@@ -296,6 +299,8 @@ class MediaEngagementBrowserTest : public InProcessBrowserTest {
     for (auto observer : service->contents_observers_)
       observer.second->SetTaskRunnerForTest(task_runner_);
   }
+
+  std::vector<base::test::FeatureRef> disabled_features_;
 
  private:
   void InjectTimerTaskRunner() {
@@ -635,7 +640,7 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest,
   ExpectScores(1, 0);
 }
 
-#if BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
+#if BUILDFLAG(IS_MAC)
 // https://crbug.com/1222896
 #define MAYBE_SessionNewTabNavigateSameURL DISABLED_SessionNewTabNavigateSameURL
 #else
@@ -677,7 +682,14 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest, MAYBE_SessionNewTabSameURL) {
   ExpectScores(1, 1);
 }
 
-IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest, SessionNewTabSameOrigin) {
+#if BUILDFLAG(IS_MAC)
+// https://crbug.com/1222896
+#define MAYBE_SessionNewTabSameOrigin DISABLED_SessionNewTabSameOrigin
+#else
+#define MAYBE_SessionNewTabSameOrigin SessionNewTabSameOrigin
+#endif
+IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest,
+                       MAYBE_SessionNewTabSameOrigin) {
   const GURL& url = http_server().GetURL("/engagement_test.html");
   const GURL& other_url = http_server().GetURL("/engagement_test_audio.html");
 
@@ -708,8 +720,15 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest, SessionNewTabCrossOrigin) {
   ExpectScores(http_server_origin2().base_url(), 1, 1);
 }
 
+#if BUILDFLAG(IS_MAC)
+// TODO(https://crbug.com/1498676) Flaky on Mac.
+#define MAYBE_SessionMultipleTabsClosingParent \
+  DISABLED_SessionMultipleTabsClosingParent
+#else
+#define MAYBE_SessionMultipleTabsClosingParent SessionMultipleTabsClosingParent
+#endif
 IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest,
-                       SessionMultipleTabsClosingParent) {
+                       MAYBE_SessionMultipleTabsClosingParent) {
   const GURL& url = http_server().GetURL("/engagement_test.html");
   const GURL& other_url = http_server().GetURL("/engagement_test_audio.html");
 
@@ -741,7 +760,7 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementPreloadBrowserTest,
   EXPECT_TRUE(MediaEngagementPreloadedList::GetInstance()->loaded());
 }
 
-#if BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
+#if BUILDFLAG(IS_MAC)
 // https://crbug.com/1222896
 #define MAYBE_SessionNewTabNavigateSameURLWithOpener_Typed \
   DISABLED_SessionNewTabNavigateSameURLWithOpener_Typed
@@ -768,12 +787,22 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest,
   ExpectScores(2, 2);
 }
 
+class MediaEngagementPreThirdPartyCookieDeprecationBrowserTest
+    : public MediaEngagementBrowserTest {
+ public:
+  MediaEngagementPreThirdPartyCookieDeprecationBrowserTest() {
+    disabled_features_.push_back(
+        content_settings::features::kTrackingProtection3pcd);
+  }
+};
+
 #if BUILDFLAG(IS_WIN)
 #define MAYBE_Ignored DISABLED_Ignored
 #else
 #define MAYBE_Ignored Ignored
 #endif
-IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest, MAYBE_Ignored) {
+IN_PROC_BROWSER_TEST_F(MediaEngagementPreThirdPartyCookieDeprecationBrowserTest,
+                       MAYBE_Ignored) {
   const GURL& url = http_server().GetURL("/engagement_test.html");
 
   prerender::NoStatePrefetchManager* no_state_prefetch_manager =
@@ -797,7 +826,7 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementBrowserTest, MAYBE_Ignored) {
 
   std::unique_ptr<prerender::NoStatePrefetchHandle> no_state_prefetch_handle =
       no_state_prefetch_manager->StartPrefetchingFromOmnibox(
-          url, storage_namespace, gfx::Size(640, 480));
+          url, storage_namespace, gfx::Size(640, 480), nullptr);
 
   ASSERT_EQ(no_state_prefetch_handle->contents(), test_prerender->contents());
 
@@ -948,7 +977,7 @@ class MediaEngagementContentsObserverPrerenderBrowserTest
   ~MediaEngagementContentsObserverPrerenderBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
-    prerender_helper_->SetUp(embedded_test_server());
+    prerender_helper_->RegisterServerRequestMonitor(embedded_test_server());
     MediaEngagementContentsObserverMPArchBrowserTest::SetUpOnMainThread();
   }
 
@@ -977,18 +1006,29 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementContentsObserverPrerenderBrowserTest,
                        DoNotSendEngagementLevelToRenderFrameInPrerendering) {
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  MockAutoplayConfigurationClient client;
-  OverrideInterface(GetWebContents()->GetPrimaryMainFrame(), &client);
-
   const GURL& initial_url = embedded_test_server()->GetURL("/empty.html");
   SetScores(url::Origin::Create(initial_url), 24, 20);
 
+  content::TestNavigationManager navigation_manager(GetWebContents(),
+                                                    initial_url);
+
+  content::NavigationController::LoadURLParams params(initial_url);
+  params.transition_type = ui::PAGE_TRANSITION_LINK;
+  params.frame_tree_node_id =
+      GetWebContents()->GetPrimaryMainFrame()->GetFrameTreeNodeId();
+  GetWebContents()->GetController().LoadURLWithParams(params);
+
+  EXPECT_TRUE(navigation_manager.WaitForResponse());
+
+  MockAutoplayConfigurationClient client;
+  OverrideInterface(
+      navigation_manager.GetNavigationHandle()->GetRenderFrameHost(), &client);
   // AddAutoplayFlags should be called once after navigating |initial_url| in
   // the main frame.
   EXPECT_CALL(client, AddAutoplayFlags(testing::_, testing::_)).Times(1);
 
-  // Navigate to an initial page.
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), initial_url));
+  navigation_manager.ResumeNavigation();
+  EXPECT_TRUE(navigation_manager.WaitForNavigationFinished());
 
   // Loads a page in a prerendered page.
   GURL prerender_url = embedded_test_server()->GetURL("/title1.html");
@@ -1045,18 +1085,29 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementContentsObserverFencedFrameBrowserTest,
                        SendEngagementLevelToRenderFrameOnFencedFrame) {
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  MockAutoplayConfigurationClient client;
-  OverrideInterface(GetWebContents()->GetPrimaryMainFrame(), &client);
-
   const GURL& initial_url =
       embedded_test_server()->GetURL("a.com", "/empty.html");
   SetScores(url::Origin::Create(initial_url), 24, 20);
+  content::TestNavigationManager navigation_manager(GetWebContents(),
+                                                    initial_url);
 
-  // AddAutoplayFlags should be called on the primary main frame.
+  content::NavigationController::LoadURLParams params(initial_url);
+  params.transition_type = ui::PAGE_TRANSITION_LINK;
+  params.frame_tree_node_id =
+      GetWebContents()->GetPrimaryMainFrame()->GetFrameTreeNodeId();
+  GetWebContents()->GetController().LoadURLWithParams(params);
+
+  EXPECT_TRUE(navigation_manager.WaitForResponse());
+
+  MockAutoplayConfigurationClient client;
+  OverrideInterface(
+      navigation_manager.GetNavigationHandle()->GetRenderFrameHost(), &client);
+  // AddAutoplayFlags should be called once after navigating |initial_url| in
+  // the main frame.
   EXPECT_CALL(client, AddAutoplayFlags(testing::_, testing::_)).Times(1);
 
-  // Navigate to an initial page.
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), initial_url));
+  navigation_manager.ResumeNavigation();
+  EXPECT_TRUE(navigation_manager.WaitForNavigationFinished());
 
   // Create a fenced frame.
   GURL fenced_frame_url =
@@ -1067,17 +1118,29 @@ IN_PROC_BROWSER_TEST_F(MediaEngagementContentsObserverFencedFrameBrowserTest,
   EXPECT_NE(nullptr, fenced_frame_host);
 
   // AddAutoplayFlags should be called on the fenced frame.
-  MockAutoplayConfigurationClient fenced_frame_client;
-  OverrideInterface(fenced_frame_host, &fenced_frame_client);
   GURL fenced_frame_navigate_url =
       embedded_test_server()->GetURL("b.com", "/fenced_frames/title2.html");
+  content::TestNavigationManager navigation_manager2(GetWebContents(),
+                                                     fenced_frame_navigate_url);
+  EXPECT_TRUE(ExecJs(
+      fenced_frame_host,
+      content::JsReplace("location.href = $1;", fenced_frame_navigate_url)));
+
+  EXPECT_TRUE(navigation_manager2.WaitForResponse());
+  MockAutoplayConfigurationClient fenced_frame_client;
+  OverrideInterface(
+      navigation_manager2.GetNavigationHandle()->GetRenderFrameHost(),
+      &fenced_frame_client);
+  // AddAutoplayFlags should be called once after navigating |initial_url| in
+  // the main frame.
   base::RunLoop run_loop;
   EXPECT_CALL(fenced_frame_client,
               AddAutoplayFlags(url::Origin::Create(fenced_frame_navigate_url),
                                testing::_))
       .Times(1)
       .WillOnce(base::test::RunClosure(run_loop.QuitClosure()));
-  fenced_frame_test_helper().NavigateFrameInFencedFrameTree(
-      fenced_frame_host, fenced_frame_navigate_url);
+
+  navigation_manager2.ResumeNavigation();
+  EXPECT_TRUE(navigation_manager2.WaitForNavigationFinished());
   run_loop.Run();
 }

@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/aura/window_tracker.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/events/event_dispatcher.h"
@@ -36,7 +36,7 @@ void PostPressedEvent(ui::KeyEvent* event) {
   std::unique_ptr<aura::WindowTracker> tracker(new aura::WindowTracker);
   tracker->Add(static_cast<aura::Window*>(event->target()));
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&DispatchPressedEvent, pressed_event, std::move(tracker)));
 }
@@ -57,7 +57,7 @@ void KeyHoldDetector::OnKeyEvent(ui::KeyEvent* event) {
       case INITIAL:
         // Pass through posted event.
         if (event->flags() & ui::EF_IS_SYNTHESIZED) {
-          event->set_flags(event->flags() & ~ui::EF_IS_SYNTHESIZED);
+          event->SetFlags(event->flags() & ~ui::EF_IS_SYNTHESIZED);
           return;
         }
         state_ = PRESSED;

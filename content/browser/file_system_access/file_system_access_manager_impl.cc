@@ -4,28 +4,30 @@
 
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
 
+#include <memory>
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/unguessable_token.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "components/services/storage/public/cpp/buckets/bucket_id.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
+#include "content/browser/file_system_access/features.h"
 #include "content/browser/file_system_access/file_system_access.pb.h"
 #include "content/browser/file_system_access/file_system_access_access_handle_host_impl.h"
 #include "content/browser/file_system_access/file_system_access_data_transfer_token_impl.h"
@@ -33,8 +35,9 @@
 #include "content/browser/file_system_access/file_system_access_error.h"
 #include "content/browser/file_system_access/file_system_access_file_handle_impl.h"
 #include "content/browser/file_system_access/file_system_access_file_writer_impl.h"
+#include "content/browser/file_system_access/file_system_access_lock_manager.h"
 #include "content/browser/file_system_access/file_system_access_transfer_token_impl.h"
-#include "content/browser/file_system_access/file_system_access_write_lock_manager.h"
+#include "content/browser/file_system_access/file_system_access_watcher_manager.h"
 #include "content/browser/file_system_access/file_system_chooser.h"
 #include "content/browser/file_system_access/fixed_file_system_access_permission_grant.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -45,6 +48,7 @@
 #include "content/public/common/content_switches.h"
 #include "crypto/secure_hash.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/filename_util.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "storage/browser/file_system/file_system_context.h"
@@ -53,7 +57,6 @@
 #include "storage/browser/file_system/file_system_util.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/common/file_system/file_system_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_capacity_allocation_host.mojom.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_data_transfer_token.mojom.h"
@@ -94,8 +97,6 @@ void ShowFilePickerOnUIThread(const url::Origin& requesting_origin,
 
   DCHECK(outermost_rfh->IsInPrimaryMainFrame());
 
-  // TODO(crbug.com/1249865): could check browsing contexts vs a fenced frame
-  // check with MPArch fenced frames.
   if (rfh->IsNestedWithinFencedFrame()) {
     std::move(callback).Run(
         file_system_access_error::FromStatus(
@@ -235,15 +236,18 @@ bool IsValidId(const std::string& id) {
 }
 
 ui::SelectFileDialog::Type GetSelectFileDialogType(
-    blink::mojom::FilePickerOptionsPtr& options) {
+    const blink::mojom::TypeSpecificFilePickerOptionsUnionPtr& options) {
   switch (options->which()) {
-    case blink::mojom::FilePickerOptions::Tag::kOpenFilePickerOptions:
+    case blink::mojom::TypeSpecificFilePickerOptionsUnion::Tag::
+        kOpenFilePickerOptions:
       return options->get_open_file_picker_options()->can_select_multiple_files
                  ? ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE
                  : ui::SelectFileDialog::SELECT_OPEN_FILE;
-    case blink::mojom::FilePickerOptions::Tag::kSaveFilePickerOptions:
+    case blink::mojom::TypeSpecificFilePickerOptionsUnion::Tag::
+        kSaveFilePickerOptions:
       return ui::SelectFileDialog::SELECT_SAVEAS_FILE;
-    case blink::mojom::FilePickerOptions::Tag::kDirectoryPickerOptions:
+    case blink::mojom::TypeSpecificFilePickerOptionsUnion::Tag::
+        kDirectoryPickerOptions:
       return ui::SelectFileDialog::SELECT_FOLDER;
   }
   NOTREACHED();
@@ -251,15 +255,18 @@ ui::SelectFileDialog::Type GetSelectFileDialogType(
 }
 
 blink::mojom::AcceptsTypesInfoPtr GetAndMoveAcceptsTypesInfo(
-    blink::mojom::FilePickerOptionsPtr& options) {
+    const blink::mojom::TypeSpecificFilePickerOptionsUnionPtr& options) {
   switch (options->which()) {
-    case blink::mojom::FilePickerOptions::Tag::kOpenFilePickerOptions:
+    case blink::mojom::TypeSpecificFilePickerOptionsUnion::Tag::
+        kOpenFilePickerOptions:
       return std::move(
           options->get_open_file_picker_options()->accepts_types_info);
-    case blink::mojom::FilePickerOptions::Tag::kSaveFilePickerOptions:
+    case blink::mojom::TypeSpecificFilePickerOptionsUnion::Tag::
+        kSaveFilePickerOptions:
       return std::move(
           options->get_save_file_picker_options()->accepts_types_info);
-    case blink::mojom::FilePickerOptions::Tag::kDirectoryPickerOptions:
+    case blink::mojom::TypeSpecificFilePickerOptionsUnion::Tag::
+        kDirectoryPickerOptions:
       return blink::mojom::AcceptsTypesInfo::New(
           /*accepts=*/std::vector<
               blink::mojom::ChooseFileSystemEntryAcceptsOptionPtr>(),
@@ -311,8 +318,8 @@ FileSystemAccessManagerImpl::FileSystemAccessManagerImpl(
     : context_(std::move(context)),
       blob_context_(std::move(blob_context)),
       permission_context_(permission_context),
-      write_lock_manager_(
-          std::make_unique<FileSystemAccessWriteLockManager>(PassKey())),
+      lock_manager_(std::make_unique<FileSystemAccessLockManager>(PassKey())),
+      watcher_manager_(this, PassKey()),
       off_the_record_(off_the_record) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(context_);
@@ -348,12 +355,12 @@ void FileSystemAccessManagerImpl::GetSandboxedFileSystem(
     GetSandboxedFileSystemCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   GetSandboxedFileSystem(receivers_.current_context(),
-                         /*bucket=*/absl::nullopt, std::move(callback));
+                         /*bucket=*/std::nullopt, std::move(callback));
 }
 
 void FileSystemAccessManagerImpl::GetSandboxedFileSystem(
     const BindingContext& binding_context,
-    const absl::optional<storage::BucketLocator>& bucket,
+    const std::optional<storage::BucketLocator>& bucket,
     GetSandboxedFileSystemCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -372,7 +379,7 @@ void FileSystemAccessManagerImpl::GetSandboxedFileSystem(
                 std::move(callback), root, fs_name, result));
       },
       weak_factory_.GetWeakPtr(), binding_context, std::move(callback),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&FileSystemContext::OpenFileSystem, context(),
@@ -384,20 +391,19 @@ void FileSystemAccessManagerImpl::GetSandboxedFileSystem(
 
 void FileSystemAccessManagerImpl::ChooseEntries(
     blink::mojom::FilePickerOptionsPtr options,
-    blink::mojom::CommonFilePickerOptionsPtr common_options,
     ChooseEntriesCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const BindingContext& context = receivers_.current_context();
 
   // ChooseEntries API is only available to windows, as we need a frame to
   // anchor the picker to.
-  if (context.is_worker()) {
+  if (context.is_worker) {
     receivers_.ReportBadMessage("ChooseEntries called from a worker");
     return;
   }
 
   // Non-compromised renderers shouldn't be able to send an invalid id.
-  if (!IsValidId(common_options->starting_directory_id)) {
+  if (!IsValidId(options->starting_directory_id)) {
     receivers_.ReportBadMessage("Invalid starting directory ID in browser");
     return;
   }
@@ -408,9 +414,10 @@ void FileSystemAccessManagerImpl::ChooseEntries(
     // a directory picker with `request_writable` true.
     if (!permission_context_->CanObtainReadPermission(
             context.storage_key.origin()) ||
-        ((options->is_save_file_picker_options() ||
-          (options->is_directory_picker_options() &&
-           options->get_directory_picker_options()->request_writable)) &&
+        ((options->type_specific_options->is_save_file_picker_options() ||
+          (options->type_specific_options->is_directory_picker_options() &&
+           options->type_specific_options->get_directory_picker_options()
+               ->request_writable)) &&
          !permission_context_->CanObtainWritePermission(
              context.storage_key.origin()))) {
       std::move(callback).Run(
@@ -434,7 +441,12 @@ void FileSystemAccessManagerImpl::ChooseEntries(
   // IPC, but just to be sure double check here as well. This is not treated
   // as a BadMessage because it is possible for the transient user activation
   // to expire between the renderer side check and this check.
-  if (!rfh->HasTransientUserActivation()) {
+  ContentBrowserClient* content_browser_client = GetContentClient()->browser();
+  WebContents* web_contents = WebContents::FromRenderFrameHost(rfh);
+  if (!rfh->HasTransientUserActivation() &&
+      content_browser_client
+          ->IsTransientActivationRequiredForShowFileOrDirectoryPicker(
+              web_contents)) {
     std::move(callback).Run(
         file_system_access_error::FromStatus(
             FileSystemAccessStatus::kPermissionDenied,
@@ -443,51 +455,52 @@ void FileSystemAccessManagerImpl::ChooseEntries(
     return;
   }
 
-  auto token = std::move(common_options->starting_directory_token);
-
-  auto resolve_default_directory_callback =
-      base::BindOnce(&FileSystemAccessManagerImpl::ResolveDefaultDirectory,
-                     weak_factory_.GetWeakPtr(), context, std::move(options),
-                     std::move(common_options), std::move(callback));
-
-  if (token.is_valid()) {
-    ResolveTransferToken(std::move(token),
-                         std::move(resolve_default_directory_callback));
+  if (!options->start_in_options.is_null() &&
+      options->start_in_options->is_directory_token() &&
+      options->start_in_options->get_directory_token().is_valid()) {
+    auto token = std::move(options->start_in_options->get_directory_token());
+    options->start_in_options->set_directory_token(mojo::NullRemote());
+    ResolveTransferToken(
+        std::move(token),
+        base::BindOnce(&FileSystemAccessManagerImpl::ResolveDefaultDirectory,
+                       weak_factory_.GetWeakPtr(), context, std::move(options),
+                       std::move(callback)));
     return;
   }
 
-  std::move(resolve_default_directory_callback).Run(/*token=*/nullptr);
+  ResolveDefaultDirectory(context, std::move(options), std::move(callback),
+                          /*resolved_directory_token=*/nullptr);
 }
 
 void FileSystemAccessManagerImpl::ResolveDefaultDirectory(
     const BindingContext& context,
     blink::mojom::FilePickerOptionsPtr options,
-    blink::mojom::CommonFilePickerOptionsPtr common_options,
     ChooseEntriesCallback callback,
-    FileSystemAccessTransferTokenImpl* resolved_starting_directory_token) {
+    FileSystemAccessTransferTokenImpl* resolved_directory_token) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   PathInfo path_info;
-  if (resolved_starting_directory_token)
-    HandleTransferTokenAsDefaultDirectory(resolved_starting_directory_token,
-                                          path_info);
+  if (resolved_directory_token) {
+    // Prioritize an explicitly stated directory handle to start in over an `id`
+    // or a well-known directory.
+    HandleTransferTokenAsDefaultDirectory(resolved_directory_token, path_info);
+  }
 
   if (path_info.path.empty() && permission_context_) {
-    if (!common_options->starting_directory_id.empty()) {
+    if (!options->starting_directory_id.empty()) {
       // Prioritize an `id` over a well-known directory.
       path_info = permission_context_->GetLastPickedDirectory(
-          context.storage_key.origin(), common_options->starting_directory_id);
+          context.storage_key.origin(), options->starting_directory_id);
     }
     if (path_info.path.empty()) {
-      if (common_options->well_known_starting_directory !=
-          blink::mojom::WellKnownDirectory::kDefault) {
+      if (!options->start_in_options.is_null() &&
+          options->start_in_options->is_well_known_directory()) {
         // Prioritize an explicitly stated well-known directory over an
         // implicitly remembered LastPicked directory.
         path_info.path = permission_context_->GetWellKnownDirectoryPath(
-            common_options->well_known_starting_directory,
+            options->start_in_options->get_well_known_directory(),
             context.storage_key.origin());
-      } else { /*well_known_starting_directory ==
-                  blink::mojom::WellKnownDirectory::kDefault*/
+      } else {
         // If `id` empty or unset, fall back to the default LastPickedDirectory.
         path_info = permission_context_->GetLastPickedDirectory(
             context.storage_key.origin(), std::string());
@@ -498,10 +511,10 @@ void FileSystemAccessManagerImpl::ResolveDefaultDirectory(
   auto fs_url = CreateFileSystemURLFromPath(path_info.type, path_info.path);
   base::FilePath default_directory = fs_url.path();
 
-  auto wrapped_callback = base::BindOnce(
-      &FileSystemAccessManagerImpl::SetDefaultPathAndShowPicker,
-      weak_factory_.GetWeakPtr(), context, std::move(options),
-      std::move(common_options), default_directory, std::move(callback));
+  auto wrapped_callback =
+      base::BindOnce(&FileSystemAccessManagerImpl::SetDefaultPathAndShowPicker,
+                     weak_factory_.GetWeakPtr(), context, std::move(options),
+                     default_directory, std::move(callback));
   DoFileSystemOperation(FROM_HERE,
                         &storage::FileSystemOperationRunner::DirectoryExists,
                         base::BindOnce(&DidCheckIfDefaultDirectoryExists,
@@ -518,7 +531,6 @@ void FileSystemAccessManagerImpl::Shutdown() {
 void FileSystemAccessManagerImpl::SetDefaultPathAndShowPicker(
     const BindingContext& context,
     blink::mojom::FilePickerOptionsPtr options,
-    blink::mojom::CommonFilePickerOptionsPtr common_options,
     base::FilePath default_directory,
     ChooseEntriesCallback callback,
     bool default_directory_exists) {
@@ -526,17 +538,19 @@ void FileSystemAccessManagerImpl::SetDefaultPathAndShowPicker(
 
   if (!default_directory_exists && permission_context_) {
     default_directory = permission_context_->GetWellKnownDirectoryPath(
-        blink::mojom::WellKnownDirectory::kDefault,
+        blink::mojom::WellKnownDirectory::kDirDocuments,
         context.storage_key.origin());
   }
 
   auto request_directory_write_access =
-      options->is_directory_picker_options() &&
-      options->get_directory_picker_options()->request_writable;
+      options->type_specific_options->is_directory_picker_options() &&
+      options->type_specific_options->get_directory_picker_options()
+          ->request_writable;
 
   auto suggested_name =
-      options->is_save_file_picker_options()
-          ? options->get_save_file_picker_options()->suggested_name
+      options->type_specific_options->is_save_file_picker_options()
+          ? options->type_specific_options->get_save_file_picker_options()
+                ->suggested_name
           : std::string();
 
   base::FilePath suggested_name_path;
@@ -562,16 +576,16 @@ void FileSystemAccessManagerImpl::SetDefaultPathAndShowPicker(
                              ? permission_context_->GetPickerTitle(options)
                              : std::u16string();
   FileSystemChooser::Options file_system_chooser_options(
-      GetSelectFileDialogType(options), GetAndMoveAcceptsTypesInfo(options),
+      GetSelectFileDialogType(options->type_specific_options),
+      GetAndMoveAcceptsTypesInfo(options->type_specific_options),
       std::move(title), std::move(default_directory),
       std::move(suggested_name_path));
 
   if (auto_file_picker_result_for_test_) {
-    DidChooseEntries(context, file_system_chooser_options,
-                     common_options->starting_directory_id,
-                     request_directory_write_access, std::move(callback),
-                     file_system_access_error::Ok(),
-                     {*auto_file_picker_result_for_test_});
+    DidChooseEntries(
+        context, file_system_chooser_options, options->starting_directory_id,
+        request_directory_write_access, std::move(callback),
+        file_system_access_error::Ok(), {*auto_file_picker_result_for_test_});
     return;
   }
 
@@ -581,7 +595,7 @@ void FileSystemAccessManagerImpl::SetDefaultPathAndShowPicker(
       base::BindOnce(&FileSystemAccessManagerImpl::DidChooseEntries,
                      weak_factory_.GetWeakPtr(), context,
                      file_system_chooser_options,
-                     common_options->starting_directory_id,
+                     options->starting_directory_id,
                      request_directory_write_access, std::move(callback)));
 }
 
@@ -664,7 +678,9 @@ void FileSystemAccessManagerImpl::ResolveDataTransferToken(
                                weak_factory_.GetWeakPtr(), binding_context,
                                data_transfer_token_impl->second->file_path(),
                                fs_url, std::move(token_resolved_callback))),
-      fs_url, storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY);
+      fs_url,
+      storage::FileSystemOperation::GetMetadataFieldSet(
+          {storage::FileSystemOperation::GetMetadataField::kIsDirectory}));
 }
 
 void FileSystemAccessManagerImpl::ResolveDataTransferTokenWithFileType(
@@ -675,7 +691,9 @@ void FileSystemAccessManagerImpl::ResolveDataTransferTokenWithFileType(
     HandleType file_type) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!permission_context_) {
+  if (!permission_context_ ||
+      !base::FeatureList::IsEnabled(
+          features::kFileSystemAccessDragAndDropCheckBlocklist)) {
     DidVerifySensitiveDirectoryAccessForDataTransfer(
         binding_context, file_path, url, file_type,
         std::move(token_resolved_callback), SensitiveEntryResult::kAllowed);
@@ -768,6 +786,15 @@ void FileSystemAccessManagerImpl::GetDirectoryHandleFromToken(
                      std::move(directory_handle_receiver)));
 }
 
+void FileSystemAccessManagerImpl::BindObserverHost(
+    mojo::PendingReceiver<blink::mojom::FileSystemAccessObserverHost>
+        host_receiver) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  const BindingContext& context = receivers_.current_context();
+  watcher_manager().BindObserverHost(context, std::move(host_receiver));
+}
+
 void FileSystemAccessManagerImpl::SerializeHandle(
     mojo::PendingRemote<blink::mojom::FileSystemAccessTransferToken> token,
     SerializeHandleCallback callback) {
@@ -813,8 +840,9 @@ std::string SerializeURLImpl(const storage::FileSystemURL& url,
         is_external ? data.mutable_external() : data.mutable_local();
 
     base::FilePath url_path = is_external ? url.virtual_path() : url.path();
-    if (root_permission_path.empty())
+    if (root_permission_path.empty()) {
       root_permission_path = url_path;
+    }
     file_data->set_root_path(SerializePath(root_permission_path));
 
     base::FilePath relative_path;
@@ -924,7 +952,7 @@ void FileSystemAccessManagerImpl::DeserializeHandle(
           [](storage::FileSystemURL url,
              base::OnceCallback<void(const storage::FileSystemURL&)> callback,
              storage::QuotaErrorOr<storage::BucketInfo> result) {
-            if (!result.ok()) {
+            if (!result.has_value()) {
               // Drop `token`, and directly return.
               return;
             }
@@ -939,11 +967,13 @@ void FileSystemAccessManagerImpl::DeserializeHandle(
         // Use the default storage bucket.
         context_->quota_manager_proxy()->UpdateOrCreateBucket(
             storage::BucketInitParams::ForDefaultBucket(storage_key),
-            base::SequencedTaskRunnerHandle::Get(), std::move(bucket_callback));
+            base::SequencedTaskRunner::GetCurrentDefault(),
+            std::move(bucket_callback));
       } else {
         context_->quota_manager_proxy()->GetBucketById(
             storage::BucketId::FromUnsafeValue(data.sandboxed().bucket_id()),
-            base::SequencedTaskRunnerHandle::Get(), std::move(bucket_callback));
+            base::SequencedTaskRunner::GetCurrentDefault(),
+            std::move(bucket_callback));
       }
       break;
     }
@@ -987,6 +1017,11 @@ void FileSystemAccessManagerImpl::DeserializeHandle(
     case FileSystemAccessHandleData::DATA_NOT_SET:
       NOTREACHED();
   }
+}
+
+void FileSystemAccessManagerImpl::Clone(
+    mojo::PendingReceiver<storage::mojom::FileSystemAccessContext> receiver) {
+  BindInternalsReceiver(std::move(receiver));
 }
 
 blink::mojom::FileSystemAccessEntryPtr
@@ -1058,12 +1093,50 @@ FileSystemAccessManagerImpl::CreateDirectoryHandle(
       result.InitWithNewPipeAndPassReceiver());
   return result;
 }
-scoped_refptr<FileSystemAccessWriteLockManager::WriteLock>
-FileSystemAccessManagerImpl::TakeWriteLock(
+void FileSystemAccessManagerImpl::TakeLock(
+    const BindingContext& binding_context,
     const storage::FileSystemURL& url,
-    FileSystemAccessWriteLockManager::WriteLockType lock_type) {
+    FileSystemAccessLockManager::LockType lock_type,
+    FileSystemAccessLockManager::TakeLockCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return write_lock_manager_->TakeLock(url, lock_type);
+  lock_manager_->TakeLock(binding_context.frame_id, url, lock_type,
+                          std::move(callback));
+}
+bool FileSystemAccessManagerImpl::IsContentious(
+    const storage::FileSystemURL& url,
+    FileSystemAccessLockManager::LockType lock_type) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return lock_manager_->IsContentious(url, lock_type);
+}
+FileSystemAccessLockManager::LockType
+FileSystemAccessManagerImpl::CreateSharedLockTypeForTesting() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return lock_manager_->CreateSharedLockType();
+}
+FileSystemAccessLockManager::LockType
+FileSystemAccessManagerImpl::GetExclusiveLockType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return lock_manager_->GetExclusiveLockType();
+}
+FileSystemAccessLockManager::LockType
+FileSystemAccessManagerImpl::GetSAHReadOnlyLockType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return sah_read_only_lock_type_;
+}
+FileSystemAccessLockManager::LockType
+FileSystemAccessManagerImpl::GetSAHReadwriteUnsafeLockType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return sah_readwrite_unsafe_lock_type_;
+}
+FileSystemAccessLockManager::LockType
+FileSystemAccessManagerImpl::GetWFSSiloedLockType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return wfs_siloed_lock_type_;
+}
+FileSystemAccessLockManager::LockType
+FileSystemAccessManagerImpl::GetAncestorLockTypeForTesting() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return lock_manager_->GetAncestorLockTypeForTesting();  // IN-TEST
 }
 
 mojo::PendingRemote<blink::mojom::FileSystemAccessFileWriter>
@@ -1071,12 +1144,11 @@ FileSystemAccessManagerImpl::CreateFileWriter(
     const BindingContext& binding_context,
     const storage::FileSystemURL& url,
     const storage::FileSystemURL& swap_url,
-    scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+    scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
+    scoped_refptr<FileSystemAccessLockManager::LockHandle> swap_lock,
     const SharedHandleState& handle_state,
     bool auto_close) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(lock->type() ==
-         FileSystemAccessWriteLockManager::WriteLockType::kShared);
 
   mojo::PendingRemote<blink::mojom::FileSystemAccessFileWriter> result;
 
@@ -1084,9 +1156,9 @@ FileSystemAccessManagerImpl::CreateFileWriter(
   bool has_transient_user_activation = rfh && rfh->HasTransientUserActivation();
 
   CreateFileWriter(
-      binding_context, url, swap_url, std::move(lock), handle_state,
-      result.InitWithNewPipeAndPassReceiver(), has_transient_user_activation,
-      auto_close,
+      binding_context, url, swap_url, std::move(lock), std::move(swap_lock),
+      handle_state, result.InitWithNewPipeAndPassReceiver(),
+      has_transient_user_activation, auto_close,
       GetContentClient()->browser()->GetQuarantineConnectionCallback());
   return result;
 }
@@ -1096,7 +1168,8 @@ FileSystemAccessManagerImpl::CreateFileWriter(
     const BindingContext& binding_context,
     const storage::FileSystemURL& url,
     const storage::FileSystemURL& swap_url,
-    scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+    scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
+    scoped_refptr<FileSystemAccessLockManager::LockHandle> swap_lock,
     const SharedHandleState& handle_state,
     mojo::PendingReceiver<blink::mojom::FileSystemAccessFileWriter> receiver,
     bool has_transient_user_activation,
@@ -1106,8 +1179,9 @@ FileSystemAccessManagerImpl::CreateFileWriter(
 
   auto writer = std::make_unique<FileSystemAccessFileWriterImpl>(
       this, PassKey(), binding_context, url, swap_url, std::move(lock),
-      handle_state, std::move(receiver), has_transient_user_activation,
-      auto_close, quarantine_connection_callback);
+      std::move(swap_lock), handle_state, std::move(receiver),
+      has_transient_user_activation, auto_close,
+      quarantine_connection_callback);
 
   base::WeakPtr<FileSystemAccessFileWriterImpl> writer_weak =
       writer->weak_ptr();
@@ -1123,11 +1197,9 @@ FileSystemAccessManagerImpl::CreateAccessHandleHost(
     mojo::PendingReceiver<blink::mojom::FileSystemAccessCapacityAllocationHost>
         capacity_allocation_host_receiver,
     int64_t file_size,
-    scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+    scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
     base::ScopedClosureRunner on_close_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(lock->type() ==
-         FileSystemAccessWriteLockManager::WriteLockType::kExclusive);
 
   mojo::PendingRemote<blink::mojom::FileSystemAccessAccessHandleHost> result;
   auto receiver = result.InitWithNewPipeAndPassReceiver();
@@ -1374,7 +1446,7 @@ void FileSystemAccessManagerImpl::DidVerifySensitiveDirectoryAccess(
         base::BindOnce(
             &FileSystemAccessManagerImpl::DidCreateAndTruncateSaveFile, this,
             binding_context, entries.front(), fs_url, std::move(callback)),
-        base::SequencedTaskRunnerHandle::Get()));
+        base::SequencedTaskRunner::GetCurrentDefault()));
     return;
   }
 
@@ -1406,6 +1478,11 @@ void FileSystemAccessManagerImpl::DidCreateAndTruncateSaveFile(
             "Failed to create or truncate file"),
         std::move(result_entries));
     return;
+  }
+
+  if (permission_context_) {
+    permission_context_->OnFileCreatedFromShowSaveFilePicker(
+        /*file_picker_binding_context=*/binding_context.url, url);
   }
 
   SharedHandleState shared_handle_state =
@@ -1557,20 +1634,25 @@ FileSystemAccessManagerImpl::GetSharedHandleStateForPath(
             ? PermissionStatus::GRANTED
             : PermissionStatus::DENIED,
         path);
-    if (user_action ==
-        FileSystemAccessPermissionContext::UserAction::kLoadFromStorage) {
-      read_grant = write_grant;
-    } else {
-      // Grant read permission even without a permission_context_, as the picker
-      // itself is enough UI to assume user intent.
-      read_grant = base::MakeRefCounted<FixedFileSystemAccessPermissionGrant>(
-          PermissionStatus::GRANTED, path);
+    switch (user_action) {
+      case FileSystemAccessPermissionContext::UserAction::kNone:
+      case FileSystemAccessPermissionContext::UserAction::kLoadFromStorage:
+        read_grant = write_grant;
+        break;
+      case FileSystemAccessPermissionContext::UserAction::kOpen:
+      case FileSystemAccessPermissionContext::UserAction::kSave:
+      case FileSystemAccessPermissionContext::UserAction::kDragAndDrop:
+        // Grant read permission even without a permission_context_, as the
+        // picker itself is enough UI to assume user intent.
+        read_grant = base::MakeRefCounted<FixedFileSystemAccessPermissionGrant>(
+            PermissionStatus::GRANTED, path);
+        break;
     }
   }
   return SharedHandleState(std::move(read_grant), std::move(write_grant));
 }
 
-base::GUID FileSystemAccessManagerImpl::GetUniqueId(
+base::Uuid FileSystemAccessManagerImpl::GetUniqueId(
     const FileSystemAccessFileHandleImpl& file) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // TODO(https://crbug.com/1342961): This is a temporary hack to put something
@@ -1582,13 +1664,13 @@ base::GUID FileSystemAccessManagerImpl::GetUniqueId(
     return it->second;
   }
 
-  // Generate and store a new guid for this file.
-  auto guid = base::GUID::GenerateRandomV4();
-  file_ids_[file.url()] = guid;
-  return guid;
+  // Generate and store a new uuid for this file.
+  auto uuid = base::Uuid::GenerateRandomV4();
+  file_ids_[file.url()] = uuid;
+  return uuid;
 }
 
-base::GUID FileSystemAccessManagerImpl::GetUniqueId(
+base::Uuid FileSystemAccessManagerImpl::GetUniqueId(
     const FileSystemAccessDirectoryHandleImpl& directory) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // TODO(https://crbug.com/1342961): This is a temporary hack to put something
@@ -1600,10 +1682,10 @@ base::GUID FileSystemAccessManagerImpl::GetUniqueId(
     return it->second;
   }
 
-  // Generate and store a new guid for this directory.
-  auto guid = base::GUID::GenerateRandomV4();
-  directory_ids_[directory.url()] = guid;
-  return guid;
+  // Generate and store a new uuid for this directory.
+  auto uuid = base::Uuid::GenerateRandomV4();
+  directory_ids_[directory.url()] = uuid;
+  return uuid;
 }
 
 void FileSystemAccessManagerImpl::CleanupAccessHandleCapacityAllocation(
@@ -1619,7 +1701,9 @@ void FileSystemAccessManagerImpl::CleanupAccessHandleCapacityAllocation(
                          CleanupAccessHandleCapacityAllocationImpl,
                      weak_factory_.GetWeakPtr(), url, allocated_file_size,
                      std::move(callback)),
-      url, storage::FileSystemOperation::GET_METADATA_FIELD_SIZE);
+      url,
+      storage::FileSystemOperation::GetMetadataFieldSet(
+          {storage::FileSystemOperation::GetMetadataField::kSize}));
 }
 
 void FileSystemAccessManagerImpl::CleanupAccessHandleCapacityAllocationImpl(
@@ -1629,12 +1713,14 @@ void FileSystemAccessManagerImpl::CleanupAccessHandleCapacityAllocationImpl(
     base::File::Error result,
     const base::File::Info& file_info) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (result != base::File::FILE_OK)
+  if (result != base::File::FILE_OK) {
     return;
+  }
   DCHECK_GE(file_info.size, 0);
   // if the QuotaManagerProxy is gone, no changes are possible.
-  if (!context_->quota_manager_proxy())
+  if (!context_->quota_manager_proxy()) {
     return;
+  }
   DCHECK_GE(allocated_file_size, 0);
 
   int64_t overallocation = allocated_file_size - file_info.size;
@@ -1645,9 +1731,9 @@ void FileSystemAccessManagerImpl::CleanupAccessHandleCapacityAllocationImpl(
       << "Capacity allocation is only relevant for sandboxed file systems, "
          "which should have an associated bucket.";
   context_->quota_manager_proxy()->NotifyBucketModified(
-      storage::QuotaClientType::kFileSystem, url.bucket()->id, -overallocation,
+      storage::QuotaClientType::kFileSystem, *url.bucket(), -overallocation,
       base::Time::Now(),
-      /*callback_task_runner=*/base::SequencedTaskRunnerHandle::Get(),
+      /*callback_task_runner=*/base::SequencedTaskRunner::GetCurrentDefault(),
       std::move(callback));
 }
 
@@ -1656,8 +1742,24 @@ void FileSystemAccessManagerImpl::DidCleanupAccessHandleCapacityAllocation(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(access_handle_host);
 
-  size_t count_removed =
-      access_handle_host_receivers_.erase(access_handle_host);
+  // We cannot destroy `access_handle_host` by erasing it from the
+  // `access_handle_host_receivers_` set.
+  //
+  // The destruction of a `FileSystemAccessAccessHandleHostImpl` can trigger the
+  // creation of another. This means that if we directly erase
+  // `access_handle_host` from the set, `access_handle_host_receivers_` `erase`
+  // could call into `access_handle_host_receivers_` `insert` (in
+  // `CreateAccessHandleHost`) which is undefined behavior. Instead, we'll move
+  // it out of the set before erasing and then destroying.
+  size_t initial_size = access_handle_host_receivers_.size();
+
+  auto iter = access_handle_host_receivers_.find(access_handle_host);
+  CHECK(iter != access_handle_host_receivers_.end());
+
+  auto access_handle_host_receiver = std::move(*iter);
+  access_handle_host_receivers_.erase(iter);
+
+  size_t count_removed = initial_size - access_handle_host_receivers_.size();
   DCHECK_EQ(1u, count_removed);
 }
 
@@ -1671,7 +1773,7 @@ void FileSystemAccessManagerImpl::ResolveTransferToken(
                            [](ResolveTransferTokenCallback callback,
                               FileSystemAccessTransferTokenImpl* token) {
                              if (!token) {
-                               std::move(callback).Run(absl::nullopt);
+                               std::move(callback).Run(std::nullopt);
                                return;
                              }
                              std::move(callback).Run(token->url());

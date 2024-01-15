@@ -83,9 +83,13 @@ class SVGFELightElement : public SVGElement {
   void SvgAttributeChanged(const SvgAttributeChangedParams&) final;
   void ChildrenChanged(const ChildrenChange&) final;
 
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override {
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override {
     return false;
   }
+
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
 
   Member<SVGAnimatedNumber> azimuth_;
   Member<SVGAnimatedNumber> elevation_;

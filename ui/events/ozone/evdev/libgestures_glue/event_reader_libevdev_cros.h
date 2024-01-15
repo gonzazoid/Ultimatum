@@ -8,10 +8,12 @@
 #include <libevdev/libevdev.h>
 
 #include <memory>
+#include <ostream>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "ui/events/ozone/evdev/event_converter_evdev.h"
 #include "ui/events/ozone/evdev/event_device_info.h"
 #include "ui/events/ozone/evdev/input_device_settings_evdev.h"
@@ -49,6 +51,16 @@ class EventReaderLibevdevCros : public EventConverterEvdev {
     // library determines that a physical click has occurred.
     virtual void SetupHapticButtonGeneration(
         const base::RepeatingCallback<void(bool)>& callback) = 0;
+
+    // For keyboard/pointer combo devices. Sets a callback that will be called
+    // whenever the device registers valid keyboard input.
+    virtual void SetReceivedValidKeyboardInputCallback(
+        base::RepeatingCallback<void(uint64_t)> callback) = 0;
+
+    // For keyboard/pointer combo devices. Sets a callback that will be called
+    // whenever the device registers valid mouse input.
+    virtual void SetReceivedValidMouseInputCallback(
+        base::RepeatingCallback<void(int)> callback) = 0;
   };
 
   EventReaderLibevdevCros(base::ScopedFD fd,
@@ -61,6 +73,14 @@ class EventReaderLibevdevCros : public EventConverterEvdev {
   EventReaderLibevdevCros& operator=(const EventReaderLibevdevCros&) = delete;
 
   ~EventReaderLibevdevCros() override;
+
+  // Used as a callback for `Delegate` to call when the device registers valid
+  // keyboard input.
+  void ReceivedKeyboardInput(uint64_t key);
+
+  // Used as a callback for `Delegate` to call when the device registers valid
+  // mouse input.
+  void ReceivedMouseInput(int rel_value);
 
   // EventConverterEvdev:
   void OnFileCanReadWithoutBlocking(int fd) override;
@@ -78,6 +98,10 @@ class EventReaderLibevdevCros : public EventConverterEvdev {
       HapticTouchpadEffect effect,
       HapticTouchpadEffectStrength strength) override;
   void ApplyDeviceSettings(const InputDeviceSettingsEvdev& settings) override;
+  void SetReceivedValidInputCallback(
+      ReceivedValidInputCallback callback) override;
+
+  std::ostream& DescribeForLog(std::ostream& os) const override;
 
  private:
   static void OnSynReport(void* data,
@@ -87,7 +111,7 @@ class EventReaderLibevdevCros : public EventConverterEvdev {
 
   // Returns true if this is a haptic touchpad, UI haptics are enabled, and it
   // is actively being touched.
-  bool CanHandleHapticFeedback();
+  bool CanHandleHapticFeedback() const;
 
   // Input modalities for this device.
   bool has_keyboard_;
@@ -119,6 +143,9 @@ class EventReaderLibevdevCros : public EventConverterEvdev {
 
   // Haptic effect handling for touchpads
   std::unique_ptr<HapticTouchpadHandler> haptic_touchpad_handler_;
+
+  // Callback to update keyboard devices when valid input is received.
+  ReceivedValidInputCallback received_valid_input_callback_;
 };
 
 }  // namespace ui

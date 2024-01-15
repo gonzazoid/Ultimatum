@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "net/socket/stream_socket.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/proto/video_stats.pb.h"
@@ -30,8 +30,9 @@ void ClientVideoStatsDispatcher::OnIncomingMessage(
     std::unique_ptr<CompoundBuffer> message) {
   std::unique_ptr<FrameStatsMessage> stats_proto =
       ParseMessage<FrameStatsMessage>(message.get());
-  if (!stats_proto)
+  if (!stats_proto) {
     return;
+  }
 
   if (!stats_proto->has_frame_id()) {
     LOG(ERROR) << "Received invalid FrameStatsMessage.";

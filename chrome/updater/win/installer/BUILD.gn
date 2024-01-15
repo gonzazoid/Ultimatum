@@ -7,14 +7,45 @@ import("//build/timestamp.gni")
 import("//chrome/process_version_rc_template.gni")
 import("//testing/test.gni")
 
+source_set("msi_custom_action_sources") {
+  sources = [
+    "msi_custom_action.cc",
+    "msi_custom_action.h",
+  ]
+
+  deps = [
+    "//base",
+    "//chrome/updater:public_sources",
+    "//chrome/updater:tagging",
+    "//third_party/abseil-cpp:absl",
+  ]
+
+  libs = [ "msi.lib" ]
+}
+
+shared_library("msi_custom_action") {
+  sources = [ "msi_custom_action.def" ]
+
+  deps = [
+    ":msi_custom_action_sources",
+    ":version",
+  ]
+
+  configs += [ "//build/config/win:windowed" ]
+}
+
 source_set("lib") {
+  visibility = [
+    ":lib_with_resources",
+    "//chrome/updater:updater_test_sources",
+    "//chrome/updater/test/test_installer:test_meta_installer",
+  ]
   sources = [
     "configuration.cc",
     "configuration.h",
     "exit_code.h",
     "installer.cc",
     "installer.h",
-    "installer.rc",
     "installer_constants.cc",
     "installer_constants.h",
     "installer_resource.h",
@@ -24,15 +55,22 @@ source_set("lib") {
     "string.h",
   ]
 
+  public_deps = [ "//base" ]
+
   deps = [
-    "//base",
     "//chrome/installer/util:constants",
     "//chrome/installer/util:metainstaller_utils",
     "//chrome/updater:base",
     "//chrome/updater:branding_header",
-    "//chrome/updater:constants_prod",
-    "//chrome/updater/win:tag_extractor",
+    "//chrome/updater:tagging",
+    "//third_party/abseil-cpp:absl",
   ]
+}
+
+source_set("lib_with_resources") {
+  visibility = [ ":*" ]
+  sources = [ "installer.rc" ]
+  public_deps = [ ":lib" ]
 }
 
 process_version_rc_template("version") {
@@ -114,12 +152,13 @@ template("generate_installer") {
     libs = [ "setupapi.lib" ]
 
     deps = [
-      ":$archive_name",
-      ":lib",
-      ":version",
-      "//build/win:default_exe_manifest",
-      "//chrome/updater:base",
-    ]
+             ":$archive_name",
+             ":lib_with_resources",
+             ":version",
+             "//build/win:default_exe_manifest",
+             "//chrome/updater:base",
+             "//third_party/abseil-cpp:absl",
+           ] + invoker.deps
   }
 }
 
@@ -130,6 +169,7 @@ generate_installer("installer") {
     ":updater_runtime_deps",
     "//chrome/updater/win:updater",
   ]
+  deps = [ "//chrome/updater:constants_prod" ]
   release_file = "updater.release"
   runtime_deps = updater_runtime_deps
 }
@@ -141,27 +181,7 @@ generate_installer("installer_test") {
     ":updater_test_runtime_deps",
     "//chrome/updater/win:updater_test",
   ]
+  deps = [ "//chrome/updater:constants_test" ]
   release_file = "updater_test.release"
   runtime_deps = updater_test_runtime_deps
-}
-
-test("installer_unittest") {
-  testonly = true
-
-  output_name = "updater_installer_unittest"
-
-  sources = [
-    "configuration_unittest.cc",
-    "installer_unittest.cc",
-    "run_all_unittests.cc",
-    "string_unittest.cc",
-  ]
-
-  public_deps = [ ":lib" ]
-  deps = [
-    "//base",
-    "//base/test:test_support",
-    "//chrome/updater:constants_header",
-    "//testing/gtest",
-  ]
 }

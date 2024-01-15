@@ -27,7 +27,7 @@ message BuyableProduct {
     MAIN_PRODUCT = 1;
   }
 
-  // The title of the product.
+  // One offer title of the product in the current page.
   optional string title = 1;
 
   // Direct link to the product image.
@@ -47,6 +47,11 @@ message BuyableProduct {
 
   // Country code of the offer.
   optional string country_code = 7;
+
+  // The title of the product cluster. This differs from above offer title in
+  // that it would exclude attributes (size, color, etc.) and instead describes
+  // a broader range of the same product.
+  optional string gpc_title = 8;
 }
 
 message ProductPriceUpdate {
@@ -66,4 +71,17 @@ message ProductPrice {
 
   // Price in micros.
   optional int64 amount_micros = 2;
+}
+
+// TODO(crbug.com/1403169) Remove PriceDropNotificationPayload
+// from chrome/browser/commerce/price_tracking/proto/notifications.proto
+// and migrate usages of PriceDropNotificationPayload from chrome/browser
+// to here in components.
+message PriceDropNotificationPayload {
+  optional string product_name = 1;
+  optional uint64 offer_id = 2;
+  optional string destination_url = 3;
+  optional ProductPrice current_price = 4;
+  optional ProductPrice previous_price = 5;
+  optional uint64 product_cluster_id = 6;
 }

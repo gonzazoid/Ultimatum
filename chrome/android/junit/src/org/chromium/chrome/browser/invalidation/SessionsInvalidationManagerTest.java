@@ -22,25 +22,20 @@ import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.ntp.ForeignSessionHelper;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.recent_tabs.ForeignSessionHelper;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Tests for the {@link SessionsInvalidationManager}.
- */
+/** Tests for the {@link SessionsInvalidationManager}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class SessionsInvalidationManagerTest {
-    @Mock
-    private ResumableDelayedTaskRunner mResumableDelayedTaskRunner;
+    @Mock private ResumableDelayedTaskRunner mResumableDelayedTaskRunner;
 
-    @Mock
-    private Profile mProfile;
+    @Mock private Profile mProfile;
 
-    @Mock
-    private ForeignSessionHelper mForeignSessionHelper;
+    @Mock private ForeignSessionHelper mForeignSessionHelper;
 
     private Activity mActivity;
 
@@ -74,9 +69,7 @@ public class SessionsInvalidationManagerTest {
         assertTrue(listenerCallbackCalled.get());
     }
 
-    /**
-     * Test that timer pauses when the application goes to the background.
-     */
+    /** Test that timer pauses when the application goes to the background. */
     @Test
     public void testTimerPausesWhenTheApplicationPauses() {
         SessionsInvalidationManager manager =

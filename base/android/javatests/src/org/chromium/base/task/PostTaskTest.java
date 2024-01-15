@@ -13,13 +13,11 @@ import androidx.test.filters.SmallTest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.task.SchedulerTestHelpers;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -38,15 +36,17 @@ public class PostTaskTest {
         // This test should not timeout.
         final Object lock = new Object();
         final AtomicBoolean taskExecuted = new AtomicBoolean();
-        PostTask.postTask(TaskTraits.USER_BLOCKING, new Runnable() {
-            @Override
-            public void run() {
-                synchronized (lock) {
-                    taskExecuted.set(true);
-                    lock.notify();
-                }
-            }
-        });
+        PostTask.postTask(
+                TaskTraits.USER_BLOCKING,
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        synchronized (lock) {
+                            taskExecuted.set(true);
+                            lock.notify();
+                        }
+                    }
+                });
         synchronized (lock) {
             try {
                 while (!taskExecuted.get()) {
@@ -87,37 +87,5 @@ public class PostTaskTest {
 
         // This should not timeout.
         SchedulerTestHelpers.postTaskAndBlockUntilRun(taskQueue);
-    }
-
-    @Test
-    @SmallTest
-    public void testChoreographerFrameTrait() throws Exception {
-        List<Integer> orderList = new ArrayList<>();
-        CountDownLatch latch = new CountDownLatch(2);
-        PostTask.postTask(TaskTraits.CHOREOGRAPHER_FRAME, new Runnable() {
-            @Override
-            public void run() {
-                ThreadUtils.assertOnUiThread();
-                synchronized (orderList) {
-                    orderList.add(1);
-                    latch.countDown();
-                }
-            }
-        });
-
-        PostTask.postTask(TaskTraits.CHOREOGRAPHER_FRAME, new Runnable() {
-            @Override
-            public void run() {
-                ThreadUtils.assertOnUiThread();
-                synchronized (orderList) {
-                    orderList.add(2);
-                    latch.countDown();
-                }
-            }
-        });
-
-        latch.await();
-
-        assertThat(orderList, contains(1, 2));
     }
 }

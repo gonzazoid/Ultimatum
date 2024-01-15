@@ -6,49 +6,37 @@ package org.chromium.chrome.browser.password_check;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.password_manager.PasswordCheckReferrer;
 
-/**
- * Helper class for recording password check metrics.
- */
+/** Helper class for recording password check metrics. */
 public final class PasswordCheckMetricsRecorder {
-    private PasswordCheckMetricsRecorder(){};
+    private PasswordCheckMetricsRecorder() {}
 
     public static void recordPasswordCheckReferrer(
             @PasswordCheckReferrer int passwordCheckReferrer) {
         RecordHistogram.recordEnumeratedHistogram(
-                "PasswordManager.BulkCheck.PasswordCheckReferrerAndroid2", passwordCheckReferrer,
+                "PasswordManager.BulkCheck.PasswordCheckReferrerAndroid2",
+                passwordCheckReferrer,
                 PasswordCheckReferrer.COUNT);
     }
 
     public static void recordUiUserAction(@PasswordCheckUserAction int userAction) {
-        RecordHistogram.recordEnumeratedHistogram("PasswordManager.BulkCheck.UserActionAndroid",
-                userAction, PasswordCheckUserAction.COUNT);
+        RecordHistogram.recordEnumeratedHistogram(
+                "PasswordManager.BulkCheck.UserActionAndroid",
+                userAction,
+                PasswordCheckUserAction.COUNT);
     }
 
-    public static void recordCompromisedCredentialsCountAfterCheck(
-            int countTotal, int countWithAutoChange) {
+    public static void recordCompromisedCredentialsCountAfterCheck(int count) {
         RecordHistogram.recordCount1000Histogram(
-                "PasswordManager.BulkCheck.CompromisedCredentialsCountAfterCheckAndroid",
-                countTotal);
-        RecordHistogram.recordCount1000Histogram("PasswordManager.BulkCheck."
-                        + "CompromisedCredentialsCountWithAutoChangeAfterCheckAndroid",
-                countWithAutoChange);
+                "PasswordManager.BulkCheck.CompromisedCredentialsCountAfterCheckAndroid", count);
     }
 
     public static void recordCheckResolutionAction(
             @PasswordCheckResolutionAction int action, CompromisedCredential credential) {
-        if (credential.hasStartableScript()) {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "PasswordManager.AutomaticChange.ForSitesWithScripts", action,
-                    PasswordCheckResolutionAction.COUNT);
-        }
-        if (credential.hasAutoChangeButton()) {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "PasswordManager.AutomaticChange.AcceptanceWithAutoButton", action,
-                    PasswordCheckResolutionAction.COUNT);
-        } else {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "PasswordManager.AutomaticChange.AcceptanceWithoutAutoButton", action,
-                    PasswordCheckResolutionAction.COUNT);
-        }
+        // This histogram's name was defined when automated password changes
+        // were offered by chrome. Today, it simply captures regular "manual" changes interactions.
+        RecordHistogram.recordEnumeratedHistogram(
+                "PasswordManager.AutomaticChange.AcceptanceWithoutAutoButton",
+                action,
+                PasswordCheckResolutionAction.COUNT);
     }
 }

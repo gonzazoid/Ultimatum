@@ -24,7 +24,7 @@ ParsedParams& ParsedParams::operator=(ParsedParams&& other) = default;
 
 ParsedParams::~ParsedParams() = default;
 
-absl::optional<ParsedParams> ParseWebPluginParams(
+std::optional<ParsedParams> ParseWebPluginParams(
     const blink::WebPluginParams& params) {
   ParsedParams result;
   for (size_t i = 0; i < params.attribute_names.size(); ++i) {
@@ -39,18 +39,20 @@ absl::optional<ParsedParams> ParseWebPluginParams(
     } else if (params.attribute_names[i] == "background-color") {
       if (!base::StringToUint(params.attribute_values[i].Utf8(),
                               &result.background_color)) {
-        return absl::nullopt;
+        return std::nullopt;
       }
     } else if (params.attribute_names[i] == "javascript") {
       if (params.attribute_values[i] != "allow")
         result.script_option = PDFiumFormFiller::ScriptOption::kNoJavaScript;
     } else if (params.attribute_names[i] == "has-edits") {
       result.has_edits = true;
+    } else if (params.attribute_names[i] == "use-skia") {
+      result.use_skia = true;
     }
   }
 
   if (result.src_url.empty())
-    return absl::nullopt;
+    return std::nullopt;
 
   if (result.original_url.empty())
     result.original_url = result.src_url;

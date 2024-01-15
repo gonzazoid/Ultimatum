@@ -7,8 +7,10 @@
 
 #include <stddef.h>
 
+#include <compare>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -54,6 +56,17 @@ enum FieldPropertiesFlags : uint32_t {
   kAutofilled = kAutofilledOnUserTrigger | kAutofilledOnPageLoad,
 };
 
+// Autofill supports assigning <label for=x> tags to inputs if x is id/name,
+// or the id/name of a shadow host element containing the input.
+// This enum is used to track how often each case occurs in practice.
+enum class AssignedLabelSource {
+  kId = 0,
+  kName = 1,
+  kShadowHostId = 2,
+  kShadowHostName = 3,
+  kMaxValue = kShadowHostName,
+};
+
 // FieldPropertiesMask is used to contain combinations of FieldPropertiesFlags
 // values.
 using FieldPropertiesMask = std::underlying_type_t<FieldPropertiesFlags>;
@@ -61,6 +74,9 @@ using FieldPropertiesMask = std::underlying_type_t<FieldPropertiesFlags>;
 // For the HTML snippet |<option value="US">United States</option>|, the
 // value is "US" and the contents is "United States".
 struct SelectOption {
+  friend bool operator==(const SelectOption& lhs,
+                         const SelectOption& rhs) = default;
+
   std::u16string value;
   std::u16string content;
 };
@@ -69,11 +85,16 @@ struct SelectOption {
 class Section {
  public:
   struct Autocomplete {
+    friend auto operator<=>(const Autocomplete& lhs,
+                            const Autocomplete& rhs) = default;
+    friend bool operator==(const Autocomplete& lhs,
+                           const Autocomplete& rhs) = default;
+
     std::string section;
     HtmlFieldMode mode = HtmlFieldMode::kNone;
   };
 
-  using Default = base::StrongAlias<struct DefaultTag, absl::monostate>;
+  using Default = absl::monostate;
 
   struct FieldIdentifier {
     FieldIdentifier() = default;
@@ -84,9 +105,10 @@ class Section {
           local_frame_id(local_frame_id),
           field_renderer_id(field_renderer_id) {}
 
-    friend bool operator==(const FieldIdentifier& a, const FieldIdentifier& b);
-    friend bool operator!=(const FieldIdentifier& a, const FieldIdentifier& b);
-    friend bool operator<(const FieldIdentifier& a, const FieldIdentifier& b);
+    friend auto operator<=>(const FieldIdentifier& lhs,
+                            const FieldIdentifier& rhs) = default;
+    friend bool operator==(const FieldIdentifier& lhs,
+                           const FieldIdentifier& rhs) = default;
 
     std::string field_name;
     size_t local_frame_id;
@@ -102,9 +124,12 @@ class Section {
   Section(const Section& section);
   ~Section();
 
-  friend bool operator==(const Section& a, const Section& b);
-  friend bool operator!=(const Section& a, const Section& b);
-  friend bool operator<(const Section& a, const Section& b);
+  // `absl::variant` does not implement `operator<=>` - therefore the ordering
+  // needs to be specified manually. Once `absl::variant` is `std::variant`,
+  // this return type can become `auto`.
+  friend std::strong_ordering operator<=>(const Section& lhs,
+                                          const Section& rhs) = default;
+  friend bool operator==(const Section& lhs, const Section& rhs) = default;
   explicit operator bool() const;
 
   bool is_from_autocomplete() const;
@@ -137,6 +162,10 @@ class Section {
 LogBuffer& operator<<(LogBuffer& buffer, const Section& section);
 std::ostream& operator<<(std::ostream& os, const Section& section);
 
+using FormControlType = mojom::FormControlType;
+
+LogBuffer& operator<<(LogBuffer& buffer, FormControlType type);
+
 // Stores information about a field in a form. Read more about forms and fields
 // at FormData.
 struct FormFieldData {
@@ -160,6 +189,7 @@ struct FormFieldData {
   // - FormFieldData::form_control_ax_id,
   // - FormFieldData::section,
   // - FormFieldData::is_autofilled,
+  // - FormFieldData::is_user_edited,
   // - FormFieldData::properties_mask,
   // - FormFieldData::is_enabled,
   // - FormFieldData::is_readonly,
@@ -167,8 +197,7 @@ struct FormFieldData {
   // - FormFieldData::options,
   // - FormFieldData::label_source,
   // - FormFieldData::bounds,
-  // - FormFieldData::datalist_values,
-  // - FormFieldData::datalist_labels.
+  // - FormFieldData::datalist_options.
   static bool DeepEqual(const FormFieldData& a, const FormFieldData& b);
 
   FormFieldData();
@@ -184,7 +213,7 @@ struct FormFieldData {
 
   // An identifier of the renderer form that contained this field.
   // This may be different from the browser form that contains this field in the
-  // case of a frame-transcending form. See ContentAutofillRouter and
+  // case of a frame-transcending form. See AutofillDriverRouter and
   // internal::FormForest for details on the distinction between renderer and
   // browser forms.
   FormGlobalId renderer_form_id() const { return {host_frame, host_form_id}; }
@@ -193,20 +222,7 @@ struct FormFieldData {
   // FormFieldData::DeepEqual() instead.
   // Returns true if both fields are identical, ignoring value- and
   // parsing related members.
-  // See also SimilarFieldAs(), DynamicallySameFieldAs().
   bool SameFieldAs(const FormFieldData& field) const;
-
-  // TODO(crbug/1211834): This function is deprecated.
-  // Returns true if both fields are identical, ignoring members that
-  // are typically changed dynamically.
-  // Strictly weaker than SameFieldAs().
-  bool SimilarFieldAs(const FormFieldData& field) const;
-
-  // TODO(crbug/1211834): This function is deprecated.
-  // Returns true if both forms are equivalent from the POV of dynamic refills.
-  // Strictly weaker than SameFieldAs(): replaces equality of |is_focusable| and
-  // |role| with equality of IsVisible().
-  bool DynamicallySameFieldAs(const FormFieldData& field) const;
 
   // Returns true for all of textfield-looking types: text, password,
   // search, email, url, and number. It must work the same way as Blink function
@@ -216,6 +232,21 @@ struct FormFieldData {
 
   bool IsPasswordInputElement() const;
 
+  // <select> and <selectlist> are treated the same in Autofill except that
+  // <select> gets special handling when it comes to unfocusable fields. The
+  // motivation for this exception is that synthetic select fields often come
+  // with an unfocusable <select> element.
+  //
+  // A synthetic select field is a combination of JavaScript-controlled DOM
+  // elements that provide a list of options. They're frequently associated with
+  // hidden (i.e., unfocusable) <select> element. JavaScript keeps the selected
+  // option in sync with the visible DOM elements of the select field. To
+  // support synthetic select fields, Autofill intentionally fills unfocusable
+  // <select> elements.
+  bool IsSelectElement() const;
+  bool IsSelectListElement() const;
+  bool IsSelectOrSelectListElement() const;
+
   // Returns true if the field is focusable to the user.
   // This is an approximation of visibility with false positives.
   bool IsFocusable() const {
@@ -224,11 +255,10 @@ struct FormFieldData {
 
   bool DidUserType() const;
   bool HadFocus() const;
-  bool WasAutofilled() const;
+  bool WasPasswordAutofilled() const;
 
-  // NOTE: update SameFieldAs()            if needed when adding new a member.
-  // NOTE: update SimilarFieldAs()         if needed when adding new a member.
-  // NOTE: update DynamicallySameFieldAs() if needed when adding new a member.
+  // NOTE: Update `SameFieldAs()` and `FormFieldDataAndroid::SimilarFieldAs()`
+  // if needed when adding new a member.
 
   // The name by which autofill knows this field. This is generally either the
   // name attribute or the id_attribute value, which-ever is non-empty with
@@ -240,10 +270,24 @@ struct FormFieldData {
   std::u16string id_attribute;
   std::u16string name_attribute;
   std::u16string label;
+
+  // The form control element's value or the contenteditable's text content,
+  // depending on the `form_control_type`.
+  // Truncated at `kMaxStringLength`.
+  // TODO(crbug.com/1501362): Extract the value of contenteditables on iOS.
   std::u16string value;
-  std::string form_control_type;
+
+  // The selected text, or the empty string if no text is selected.
+  // Truncated at `50 * kMaxStringLength`.
+  // This is not necessarily a substring of `value` because both strings are
+  // truncated, and because for rich-text contenteditables the selection and
+  // text content differ in whitespace.
+  // TODO(crbug.com/1501362): Extract on iOS.
+  std::u16string selected_text;
+
+  FormControlType form_control_type = FormControlType::kInputText;
   std::string autocomplete_attribute;
-  absl::optional<AutocompleteParsingResult> parsed_autocomplete;
+  std::optional<AutocompleteParsingResult> parsed_autocomplete;
   std::u16string placeholder;
   std::u16string css_classes;
   std::u16string aria_label;
@@ -266,7 +310,7 @@ struct FormFieldData {
 
   // The signature of the field's renderer form, that is, the signature of the
   // FormData that contained this field when it was received by the
-  // AutofillDriver (see ContentAutofillRouter and internal::FormForest
+  // AutofillDriver (see AutofillDriverRouter and internal::FormForest
   // for details on the distinction between renderer and browser forms).
   // Currently, the value is only set in ContentAutofillDriver; it's null on iOS
   // and in the Password Manager.
@@ -284,12 +328,52 @@ struct FormFieldData {
   // of this field.
   Section section;
 
-  // Note: we use uint64_t instead of size_t because this struct is sent over
-  // IPC which could span 32 & 64 bit processes. We chose uint64_t instead of
+  // The default value for text fields that have no maxlength attribute
+  // specified. We choose the maximum 32 bit, rather than 64 bit, number because
+  // so we don't need to worry about integer overflows when doing arithmetic
+  // with FormFieldData::max_length.
+  static constexpr size_t kDefaultMaxLength =
+      std::numeric_limits<uint32_t>::max();
+
+  // The maximum length of the FormFieldData::value as specified in the DOM. For
+  // fields that do not support free text input (e.g., <select> and <input
+  // type=month>), this is 0. For other fields (e.g., <input type=text>), this
+  // is `kDefaultMaxLength`, which means we don't need to worry about integer
+  // overflows when doing arithmetic with FormFieldData::max_length.
+  //
+  // Changes to the default value also must be reflected in
+  // form_autofill_util.cc's GetMaxLength() and
+  // FormFieldData::has_no_max_length().
+  //
+  // We use uint64_t instead of size_t because this struct is sent over IPC
+  // which could span 32 & 64 bit processes. We chose uint64_t instead of
   // uint32_t to maintain compatibility with old code which used size_t
   // (base::Pickle used to serialize that as 64 bit).
-  uint64_t max_length = 0;
+  uint64_t max_length = std::numeric_limits<uint32_t>::max();
+
   bool is_autofilled = false;
+
+  // Whether the user has edited this field since page load or resetting the
+  // field.
+  //
+  // Examples that count as edits:
+  // - Typing into a text control.
+  // - Pasting into a text control.
+  // - Clicking and selecting an option of a <select> counts.
+  // - Unfocusing a <select> using TAB (because of the keydown event).
+  //
+  // Examples that do not count as edits:
+  // - Autofill.
+  // - Typing into a contenteditable.
+  // - Setting the field's value directly in JavaScript.
+  // - Untrusted events (see JavaScript's Event.isTrusted).
+  //
+  // The property is sticky: a user-edited field becomes non-user-edited only
+  // when the form is reset (JavaScript's HTMLFormElement.reset()).
+  // TODO(crbug.com/1501627): On iOS, also non-trusted events reset the
+  // property.
+  bool is_user_edited = false;
+
   CheckStatus check_status = CheckStatus::kNotCheckable;
   bool is_focusable = true;
   bool is_visible = true;
@@ -302,8 +386,8 @@ struct FormFieldData {
   // serialised for storage.
   bool is_enabled = false;
   bool is_readonly = false;
-  // Contains value that was either manually typed or autofilled on user
-  // trigger.
+  // Contains password, username or credit card number value that was either
+  // manually typed or autofilled on user trigger into a text-mode input field.
   std::u16string user_input;
 
   // The options of a select box.
@@ -313,24 +397,41 @@ struct FormFieldData {
   // label_source isn't in serialize methods.
   LabelSource label_source = LabelSource::kUnknown;
 
-  // The bounds of this field in current frame coordinates at the parse time. It
-  // is valid if not empty, will not be synced to the server side or be used for
-  // field comparison and isn't in serialize methods.
+  // The bounds of this field in current frame coordinates at the
+  // form-extraction time. It is valid if not empty, will not be synced to the
+  // server side or be used for field comparison and isn't in serialize methods.
   gfx::RectF bounds;
 
-  // The datalist is associated with this field, if any. The following two
-  // vectors valid if not empty, will not be synced to the server side or be
-  // used for field comparison and aren't in serialize methods.
-  // The datalist option is intentionally separated from |options| because they
-  // are handled very differently in Autofill.
-  std::vector<std::u16string> datalist_values;
-  std::vector<std::u16string> datalist_labels;
+  // The datalist is associated with this field, if any. Will not be synced to
+  // the server side or be used for field comparison and aren't in serialize
+  // methods.
+  std::vector<SelectOption> datalist_options;
 
   // When sent from browser to renderer, this bit indicates whether a field
   // should be filled even though it is already considered autofilled OR
   // user modified.
   bool force_override = false;
 };
+
+// TODO(crbug.com/1482526): Eliminate references to this function where
+// possible.
+std::string_view FormControlTypeToString(FormControlType type);
+
+// Consider using the FormControlType enum instead.
+//
+// The fallback value is returned if `type_string` has no corresponding enum
+// value in `FormControlType`. Regular use-cases should not need to pass a
+// fallback value because `FormControlType` reflects all autofillable form
+// control types.
+//
+// An exception where a fallback is needed is deserialization code. For legacy
+// reasons, form control types are serialized as strings. The fallback value
+// handles cases where the serialized data is corrupted or perhaps refers to an
+// old form control type that has been removed from the HTML spec or from
+// Autofill since.
+FormControlType StringToFormControlTypeDiscouraged(
+    std::string_view type_string,
+    std::optional<FormControlType> fallback = std::nullopt);
 
 // Serialize and deserialize FormFieldData. These are used when FormData objects
 // are serialized and deserialized.
@@ -357,6 +458,7 @@ std::ostream& operator<<(std::ostream& os, const FormFieldData& field);
     EXPECT_EQ(expected.max_length, actual.max_length);                         \
     EXPECT_EQ(expected.css_classes, actual.css_classes);                       \
     EXPECT_EQ(expected.is_autofilled, actual.is_autofilled);                   \
+    EXPECT_EQ(expected.is_user_edited, actual.is_user_edited);                 \
     EXPECT_EQ(expected.section, actual.section);                               \
     EXPECT_EQ(expected.check_status, actual.check_status);                     \
     EXPECT_EQ(expected.properties_mask, actual.properties_mask);               \

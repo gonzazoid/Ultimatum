@@ -1,4 +1,25 @@
 <style>
+  :host-context(body.jelly-enabled) .help-content-label {
+    font: var(--cros-headline-1-font);
+  }
+
+  :host-context(body.jelly-enabled) .help-item a {
+    font: var(--cros-body-1-font);
+  }
+
+  :host-context(body.jelly-enabled) paper-tooltip::part(tooltip) {
+    font: var(--cros-annotation-2-font);
+  }
+
+  [class~='help-item']:last-of-type  {
+    padding-bottom: 3px;
+  }
+
+  /* Special attribute to hide elements. */
+  [hidden] {
+    display: none !important;
+  }
+
   .help-content-label {
     color: var(--cros-text-color-secondary);
     font-size: 15px;
@@ -26,7 +47,7 @@
     white-space: nowrap;
   }
 
-  .help-item a:focus {
+  .help-item a:focus-visible {
     outline: 2px solid var(--cros-focus-ring-color);
   }
 
@@ -34,7 +55,7 @@
     padding-inline-end: 12px;
   }
 
-  .help-content-offline-details {
+  .no-help-content-details {
     align-items: center;
     display: flex;
     flex-direction: column;
@@ -42,7 +63,7 @@
     padding-top: 16px;
   }
 
-  .help-content-offline-text {
+  .no-help-content-text {
     color: var(--cros-text-color-secondary);
     line-height: 18px;
     max-width: 200px;
@@ -59,7 +80,7 @@
     margin-inline-start: 6px;
   }
 
-  #helpContentIcon:focus {
+  #helpContentIcon:focus-visible {
     border-radius: 4px;
     outline: 2px solid var(--cros-focus-ring-color);
   }
@@ -90,15 +111,20 @@
     --paper-tooltip-delay-in: 100ms;
     --paper-tooltip-text-color: var(--cros-tooltip-label-color);
   }
+
+  svg {
+    /* Max height before SVG causes scrolling in page. */
+    height: 158px;
+  }
 </style>
 <iron-media-query query="(prefers-color-scheme: dark)"
-  query-matches="{{isDarkModeEnabled_}}">
+    query-matches="{{isDarkModeEnabled}}">
 </iron-media-query>
 <div id="helpContentContainer">
   <div id="helpContentLabelContainer">
-    <h2 class="help-content-label">[[getLabel_(searchResult, isOnline_)]]</h2>
+    <h2 class="help-content-label">[[getLabel(searchResult, isOnline)]]</h2>
     <iron-icon icon="os-feedback:info" id="helpContentIcon" tabindex="0"
-        hidden$="[[!hasSuggestedHelpContent_(searchResult, isOnline_)]]"
+        hidden$="[[!hasSuggestedHelpContent(searchResult, isOnline)]]"
         aria-labelledby="helpContentLabelTooltip">
     </iron-icon>
     <paper-tooltip for="helpContentIcon" position="right" offset="-20">
@@ -107,28 +133,62 @@
       </div>
     </paper-tooltip>
   </div>
-  <template is="dom-if" if="[[!isOnline_]]">
-    <div class="help-content-offline-details">
-      <img src="[[getOfflineIllustrationSrc_(isDarkModeEnabled_)]]"
-           alt="[[i18n('helpContentOfflineAltText')]]">
-      <div class="help-content-offline-text">
+  <template is="dom-if" if="[[!isOnline]]">
+    <div class="no-help-content-details">
+      <!-- TODO(b/276493287): After the Jelly experiment is launched, remove
+                              unused image elements and SVGs. -->
+      <template is="dom-if" if="[[isJellyEnabled]]">
+        <svg id="offlineSvg" preserveAspectRatio="xMidYMid meet" role="img"
+            viewBox="0 0 400 168">
+          <title>[[i18n('helpContentOfflineAltText')]]</title>
+          <use href=
+              "//os-feedback/illustrations/illo_network_unavailable.svg#offline">
+          </use>
+        </svg>
+      </template>
+      <template is="dom-if" if="[[!isJellyEnabled]]">
+        <img src="[[getOfflineIllustrationSrc(isDarkModeEnabled)]]"
+            alt="[[i18n('helpContentOfflineAltText')]]">
+      </template>
+      <div class="no-help-content-text">
         [[i18n('helpContentOfflineMessage')]]
       </div>
     </div>
   </template>
-  <template is="dom-if" if="[[isOnline_]]">
+  <template is="dom-if" if="[[isOnline]]">
     <dom-repeat items="[[searchResult.contentList]]">
       <template>
         <div class="help-item">
-          <a href="[[getUrl_(item)]]" target="_blank"
-              on-click="handleHelpContentClicked_">
-            <iron-icon icon="[[getIcon_(item.contentType)]]"
+          <a href="[[getUrl(item)]]" target="_blank"
+              on-click="handleHelpContentClicked">
+            <iron-icon icon="[[getIcon(item.contentType)]]"
                 class="help-item-icon">
             </iron-icon>
-            [[getTitle_(item)]]
+            [[getTitle(item)]]
           </a>
         </div>
       </template>
     </dom-repeat>
+    <div class="no-help-content-details"
+        hidden$="[[!showHelpContentNotAvailableMsg(searchResult)]]">
+      <!-- TODO(b/276493287): After the Jelly experiment is launched, remove
+                              unused image elements and SVGs. -->
+      <template is="dom-if" if="[[isJellyEnabled]]">
+        <svg id="noContentSvg" preserveAspectRatio="xMidYMid meet" role="img"
+            viewBox="0 0 400 168">
+          <title>[[i18n('helpContentNotAvailableAltText')]]</title>
+          <use href=
+              "//os-feedback/illustrations/illo_load_content_error.svg#error">
+          </use>
+        </svg>
+      </template>
+      <template is="dom-if" if="[[!isJellyEnabled]]">
+        <img src="[[getContentNotAvailableIllustrationSrc(isDarkModeEnabled)]]"
+            alt="[[i18n('helpContentNotAvailableAltText')]]">
+      </template>
+      <div class="no-help-content-text">
+        [[i18n('helpContentNotAvailableMessage')]]
+      </div>
+    </div>
   </template>
 </div>

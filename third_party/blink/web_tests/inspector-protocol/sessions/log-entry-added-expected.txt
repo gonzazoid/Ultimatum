@@ -12,7 +12,7 @@ From session1:
             stackTrace : {
                 callFrames : [
                     [0] : {
-                        columnNumber : 14
+                        columnNumber : 9
                         functionName : 
                         lineNumber : 0
                         scriptId : <string>
@@ -20,7 +20,7 @@ From session1:
                     }
                 ]
             }
-            text : Added synchronous DOM mutation listener to a 'DOMSubtreeModified' event. Consider using MutationObserver to make the page more responsive.
+            text : Avoid using document.write(). https://developers.google.com/web/updates/2016/08/removing-document-write
             timestamp : <number>
         }
     }
@@ -39,7 +39,7 @@ From session1:
             stackTrace : {
                 callFrames : [
                     [0] : {
-                        columnNumber : 14
+                        columnNumber : 9
                         functionName : 
                         lineNumber : 0
                         scriptId : <string>
@@ -47,7 +47,7 @@ From session1:
                     }
                 ]
             }
-            text : Added synchronous DOM mutation listener to a 'DOMSubtreeModified' event. Consider using MutationObserver to make the page more responsive.
+            text : Avoid using document.write(). https://developers.google.com/web/updates/2016/08/removing-document-write
             timestamp : <number>
         }
     }
@@ -64,7 +64,7 @@ From session2:
             stackTrace : {
                 callFrames : [
                     [0] : {
-                        columnNumber : 14
+                        columnNumber : 9
                         functionName : 
                         lineNumber : 0
                         scriptId : <string>
@@ -72,7 +72,7 @@ From session2:
                     }
                 ]
             }
-            text : Added synchronous DOM mutation listener to a 'DOMSubtreeModified' event. Consider using MutationObserver to make the page more responsive.
+            text : Avoid using document.write(). https://developers.google.com/web/updates/2016/08/removing-document-write
             timestamp : <number>
         }
     }
@@ -91,7 +91,7 @@ From session2:
             stackTrace : {
                 callFrames : [
                     [0] : {
-                        columnNumber : 14
+                        columnNumber : 9
                         functionName : 
                         lineNumber : 0
                         scriptId : <string>
@@ -99,7 +99,7 @@ From session2:
                     }
                 ]
             }
-            text : Added synchronous DOM mutation listener to a 'DOMSubtreeModified' event. Consider using MutationObserver to make the page more responsive.
+            text : Avoid using document.write(). https://developers.google.com/web/updates/2016/08/removing-document-write
             timestamp : <number>
         }
     }

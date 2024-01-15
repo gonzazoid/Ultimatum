@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_ASH_REMOTE_APPS_REMOTE_APPS_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_ASH_REMOTE_APPS_REMOTE_APPS_MANAGER_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ash/remote_apps/remote_apps_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class KeyedService;
 class Profile;
@@ -20,14 +20,14 @@ namespace ash {
 
 // Singleton that creates |RemoteAppsManager|s and associates them with a
 // |Profile|.
-class RemoteAppsManagerFactory : public BrowserContextKeyedServiceFactory {
+class RemoteAppsManagerFactory : public ProfileKeyedServiceFactory {
  public:
   static RemoteAppsManager* GetForProfile(Profile* profile);
 
   static RemoteAppsManagerFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<RemoteAppsManagerFactory>;
+  friend base::NoDestructor<RemoteAppsManagerFactory>;
 
   RemoteAppsManagerFactory();
   RemoteAppsManagerFactory(const RemoteAppsManagerFactory&) = delete;
@@ -35,11 +35,10 @@ class RemoteAppsManagerFactory : public BrowserContextKeyedServiceFactory {
   ~RemoteAppsManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
+  bool ServiceIsNULLWhileTesting() const override;
 };
 
 }  // namespace ash

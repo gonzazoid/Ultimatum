@@ -7,8 +7,8 @@
 #include <list>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
@@ -16,10 +16,11 @@
 #include "chrome/browser/ash/system_web_apps/test_support/system_web_app_browsertest_base.h"
 #include "chrome/browser/ash/system_web_apps/test_support/test_system_web_app_installation.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/defaults.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/sessions/session_restore_test_helper.h"
+#include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -30,7 +31,6 @@
 #include "chrome/test/base/test_launcher_utils.h"
 #include "components/prefs/pref_service.h"
 #include "components/sessions/core/serialized_navigation_entry_test_helper.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -143,7 +143,7 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, PRE_RestoreBrowserWindows) {
 IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, RestoreBrowserWindows) {
   size_t total_count = 0;
   size_t incognito_count = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     ++total_count;
     if (browser->profile()->IsOffTheRecord())
       ++incognito_count;
@@ -155,9 +155,8 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, RestoreBrowserWindows) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Assigns three browser windows to three different desks.
-// https://crbug.com/1337306
 IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS,
-                       DISABLED_PRE_RestoreBrowserWindowsToDesks) {
+                       PRE_RestoreBrowserWindowsToDesks) {
   // Create two more desks so we have three desks in total.
   ash::AutotestDesksApi().CreateNewDesk();
   ash::AutotestDesksApi().CreateNewDesk();
@@ -190,9 +189,8 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS,
 
 // Verifies that three windows restored to their right desk after restored. Also
 // verifies that the fourth window is visible on all desks after being restored.
-// https://crbug.com/1337306
 IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS,
-                       DISABLED_RestoreBrowserWindowsToDesks) {
+                       RestoreBrowserWindowsToDesks) {
   auto* browser_list = BrowserList::GetInstance();
   ASSERT_EQ(3u, browser_list->size());
 
@@ -296,7 +294,7 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, RestoreAppsV1) {
   size_t total_count = 0;
   size_t app1_count = 0;
   size_t app2_count = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     ++total_count;
     if (browser->app_name() == test_app_name1)
       ++app1_count;
@@ -324,7 +322,7 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, RestoreAppsPopup) {
   size_t total_count = 0;
   size_t app1_count = 0;
   size_t app2_count = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     ++total_count;
     if (browser->app_name() == test_app_name1)
       ++app1_count;
@@ -346,7 +344,7 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, PRE_RestoreNoDevtools) {
 IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, RestoreNoDevtools) {
   size_t total_count = 0;
   size_t devtools_count = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     ++total_count;
     if (browser->is_type_devtools())
       ++devtools_count;
@@ -393,7 +391,7 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, DISABLED_RestoreMaximized) {
   size_t app1_maximized_count = 0;
   size_t app2_maximized_count = 0;
   size_t total_maximized_count = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     ++total_count;
     if (browser->window()->IsMaximized()) {
       ++total_maximized_count;
@@ -429,7 +427,7 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, PRE_RestoreMinimized) {
 IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, DISABLED_RestoreMinimized) {
   size_t total_count = 0;
   size_t minimized_count = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     ++total_count;
     if (browser->window()->IsMinimized())
       ++minimized_count;
@@ -442,20 +440,20 @@ IN_PROC_BROWSER_TEST_F(SessionRestoreTestChromeOS, DISABLED_RestoreMinimized) {
 }
 
 class SystemWebAppSessionRestoreTestChromeOS
-    : public ash::SystemWebAppManagerBrowserTest {
+    : public TestProfileTypeMixin<ash::SystemWebAppBrowserTestBase> {
  public:
-  SystemWebAppSessionRestoreTestChromeOS()
-      : SystemWebAppManagerBrowserTest(/*install_mock=*/false) {
-    maybe_installation_ =
+  SystemWebAppSessionRestoreTestChromeOS() {
+    auto installation =
         ash::TestSystemWebAppInstallation::SetUpStandaloneSingleWindowApp();
-    maybe_installation_->set_update_policy(
+    installation->set_update_policy(
         ash::SystemWebAppManager::UpdatePolicy::kOnVersionChange);
+    SetSystemWebAppInstallation(std::move(installation));
   }
 
   ~SystemWebAppSessionRestoreTestChromeOS() override = default;
 
  protected:
-  size_t GetNumBrowsers() { return BrowserList::GetInstance()->size(); }
+  SessionRestoreTestHelper waiter_;
 };
 
 IN_PROC_BROWSER_TEST_P(SystemWebAppSessionRestoreTestChromeOS,
@@ -463,18 +461,11 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppSessionRestoreTestChromeOS,
   // Wait for the app to install, launch, and load, otherwise the app might not
   // be restored.
   WaitForTestSystemAppInstall();
-  LaunchApp(GetMockAppType());
+  LaunchApp(GetAppType());
 
-  auto app_params = Browser::CreateParams::CreateForApp(
-      test_app_name1, true, gfx::Rect(), browser()->profile(), true);
-  Browser* app_browser = Browser::Create(app_params);
-  AddBlankTabAndShow(app_browser);
-
-  // There should be three browsers:
-  //   1. The SWA browser
-  //   2. The |test_app_name1| browser
-  //   3. The main browser window
-  EXPECT_EQ(3u, GetNumBrowsers());
+  // Should have one SWA window and one default browser window.
+  EXPECT_TRUE(ash::FindSystemWebAppBrowser(browser()->profile(), GetAppType()));
+  EXPECT_EQ(2u, BrowserList::GetInstance()->size());
 
   SessionStartupPref::SetStartupPref(
       browser()->profile(), SessionStartupPref(SessionStartupPref::LAST));
@@ -482,14 +473,15 @@ IN_PROC_BROWSER_TEST_P(SystemWebAppSessionRestoreTestChromeOS,
 
 IN_PROC_BROWSER_TEST_P(SystemWebAppSessionRestoreTestChromeOS,
                        OmitSystemWebApps) {
-  // There should only be two browsers:
-  //  1. The |test_app_name1| browser
-  //  2. The main browser window
-  EXPECT_EQ(2u, GetNumBrowsers());
-  for (auto* browser : *BrowserList::GetInstance()) {
-    EXPECT_TRUE(browser->app_name().empty() ||
-                browser->app_name() == test_app_name1);
-  }
+  waiter_.Wait();
+
+  // Should have only one default browser window.
+  //
+  // Session restore doesn't go through system web app launch path, so system
+  // web app utils like `FindSystemWebAppBrowser` might not recognize such
+  // windows as a SWA browser window. Therefore we count the number of browser
+  // windows here instead of trying to find one.
+  EXPECT_EQ(1u, BrowserList::GetInstance()->size());
 }
 
 INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(

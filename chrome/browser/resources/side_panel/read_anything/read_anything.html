@@ -1,11 +1,14 @@
 <!doctype html>
-<html dir="$i18n{textdirection}" lang="$i18n{language}">
+<html dir="$i18n{textdirection}" lang="$i18n{language}"
+    $i18n{chromeRefresh2023Attribute}>
 <head>
   <meta charset="utf-8">
   <title>$i18n{readAnythingTabTitle}</title>
   <meta name="color-scheme" content="light dark">
-  <link rel="stylesheet" href="chrome://resources/css/text_defaults_md.css">
-  <link rel="stylesheet" href="chrome://resources/css/md_colors.css">
+  <link rel="stylesheet" href="//resources/css/text_defaults_md.css">
+  <link rel="stylesheet" href="//theme/colors.css?sets=ui,chrome">
+  <link rel="stylesheet" href="//resources/css/md_colors.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins|Comic+Neue|Lexend+Deca|EB+Garamond|STIX+Two+Text|Andika">
   <style>
     html,
     body {
@@ -14,17 +17,16 @@
       padding: 0;
       width: 100%;
     }
-
     body {
-      overflow-wrap: break-word;
-      overflow-x: hidden;
-      overflow-y: scroll;
+      overflow: hidden;
+    }
+    html[chrome-refresh-2023] body {
+      background: var(--color-side-panel-content-background);
     }
   </style>
 </head>
 <body>
   <read-anything-app></read-anything-app>
-  <script type="module" src="read_anything/app.js"></script>
-  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

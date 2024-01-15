@@ -4,62 +4,98 @@
 
 package org.chromium.chrome.browser.privacy_guide;
 
-import androidx.annotation.IntDef;
 import androidx.fragment.app.Fragment;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.util.ArrayList;
-import java.util.List;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 
-/**
- * Controls the behavior of the ViewPager to navigate between privacy guide steps.
- */
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/** Controls the behavior of the ViewPager to navigate between privacy guide steps. */
 public class PrivacyGuidePagerAdapter extends FragmentStateAdapter {
-    /**
-     * The types of fragments supported. Each fragment corresponds to a step in the privacy guide.
-     */
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({FragmentType.COOKIES, FragmentType.MSBB, FragmentType.SAFE_BROWSING,
-            FragmentType.SYNC})
-    private @interface FragmentType {
-        int MSBB = 0;
-        int SYNC = 1;
-        int SAFE_BROWSING = 2;
-        int COOKIES = 3;
+    private final List<Integer> mFragmentTypeList;
+
+    public PrivacyGuidePagerAdapter(
+            Fragment parent,
+            StepDisplayHandler displayHandler,
+            List<Integer> allFragmentTypesInOrder) {
+        super(parent);
+        Set<Integer> fragmentTypesToDisplay = getFragmentTypesToDisplay(displayHandler);
+        mFragmentTypeList =
+                getFragmentTypesToDisplayInOrder(fragmentTypesToDisplay, allFragmentTypesInOrder);
     }
 
-    private final List<Integer> mFragmentTypeList = new ArrayList<>();
+    private List<Integer> getFragmentTypesToDisplayInOrder(
+            Set<Integer> fragmentTypesToDisplay, List<Integer> allFragmentTypesInOrder) {
+        List<Integer> fragmentTypesToDisplayInOrder = new ArrayList<>();
 
-    public PrivacyGuidePagerAdapter(Fragment parent, StepDisplayHandler displayHandler) {
-        super(parent);
+        // Add the fragment types to display to |fragmentTypesToDisplayInOrder|
+        // in the order they are declared in FragmentType.
+        for (Integer fragmentType : allFragmentTypesInOrder) {
+            if (fragmentTypesToDisplay.contains(fragmentType)) {
+                fragmentTypesToDisplayInOrder.add(fragmentType);
+            }
+        }
 
-        mFragmentTypeList.add(FragmentType.MSBB);
-        if (displayHandler.shouldDisplaySync()) {
-            mFragmentTypeList.add(FragmentType.SYNC);
+        return fragmentTypesToDisplayInOrder;
+    }
+
+    private Set<Integer> getFragmentTypesToDisplay(StepDisplayHandler displayHandler) {
+        Set<Integer> fragmentTypesToDisplay = new HashSet<>();
+        fragmentTypesToDisplay.addAll(
+                Arrays.asList(
+                        PrivacyGuideFragment.FragmentType.WELCOME,
+                        PrivacyGuideFragment.FragmentType.MSBB,
+                        PrivacyGuideFragment.FragmentType.DONE));
+
+        if (ChromeFeatureList.sPrivacyGuideAndroid3.isEnabled()) {
+            // TODO(crbug.com/1215630): This fragment is always displayed and need to be added to
+            // the above list once the privacy guide android 3 is removed.
+            fragmentTypesToDisplay.add(PrivacyGuideFragment.FragmentType.SEARCH_SUGGESTIONS);
+        }
+        if (displayHandler.shouldDisplayHistorySync()) {
+            fragmentTypesToDisplay.add(PrivacyGuideFragment.FragmentType.HISTORY_SYNC);
         }
         if (displayHandler.shouldDisplaySafeBrowsing()) {
-            mFragmentTypeList.add(FragmentType.SAFE_BROWSING);
+            fragmentTypesToDisplay.add(PrivacyGuideFragment.FragmentType.SAFE_BROWSING);
         }
         if (displayHandler.shouldDisplayCookies()) {
-            mFragmentTypeList.add(FragmentType.COOKIES);
+            fragmentTypesToDisplay.add(PrivacyGuideFragment.FragmentType.COOKIES);
         }
+        if (ChromeFeatureList.sPrivacyGuideAndroid3.isEnabled()
+                && ChromeFeatureList.sPrivacyGuidePreloadAndroid.isEnabled()
+                && displayHandler.shouldDisplayPreload()) {
+            fragmentTypesToDisplay.add(PrivacyGuideFragment.FragmentType.PRELOAD);
+        }
+
+        return Collections.unmodifiableSet(fragmentTypesToDisplay);
     }
 
     @Override
     public Fragment createFragment(int position) {
-        @FragmentType
-        int fragmentType = mFragmentTypeList.get(position);
+        int fragmentType = getFragmentType(position);
         switch (fragmentType) {
-            case FragmentType.MSBB:
+            case PrivacyGuideFragment.FragmentType.WELCOME:
+                return new WelcomeFragment();
+            case PrivacyGuideFragment.FragmentType.MSBB:
                 return new MSBBFragment();
-            case FragmentType.SYNC:
-                return new SyncFragment();
-            case FragmentType.SAFE_BROWSING:
+            case PrivacyGuideFragment.FragmentType.HISTORY_SYNC:
+                return new HistorySyncFragment();
+            case PrivacyGuideFragment.FragmentType.SAFE_BROWSING:
                 return new SafeBrowsingFragment();
-            case FragmentType.COOKIES:
+            case PrivacyGuideFragment.FragmentType.COOKIES:
                 return new CookiesFragment();
+            case PrivacyGuideFragment.FragmentType.SEARCH_SUGGESTIONS:
+                return new SearchSuggestionsFragment();
+            case PrivacyGuideFragment.FragmentType.PRELOAD:
+                return new PreloadFragment();
+            case PrivacyGuideFragment.FragmentType.DONE:
+                return new DoneFragment();
         }
         return null;
     }
@@ -67,5 +103,15 @@ public class PrivacyGuidePagerAdapter extends FragmentStateAdapter {
     @Override
     public int getItemCount() {
         return mFragmentTypeList.size();
+    }
+
+    /**
+     * Returns a {@link PrivacyGuideFragment.FragmentType} at a specified position of Privacy Guide.
+     *
+     * @param position within |mFragmentTypeList|
+     * @return the {@link PrivacyGuideFragment.FragmentType} at the specified position.
+     */
+    public @PrivacyGuideFragment.FragmentType int getFragmentType(int position) {
+        return mFragmentTypeList.get(position);
     }
 }

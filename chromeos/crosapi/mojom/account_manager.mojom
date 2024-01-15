@@ -7,7 +7,7 @@
 // versioning. Bump this value before making a change to any of the following
 // interfaces / enums.
 //
-// Next MinVersion: 13
+// Next MinVersion: 15
 
 module crosapi.mojom;
 
@@ -61,10 +61,10 @@ struct Account {
 // google_apis/gaia/google_service_auth_error.h - which does not have an
 // "unknown" value.
 //
-// Next id: 4
+// Next id: 5
 [Stable]
 struct GoogleServiceAuthError {
-  // Next value: 15
+  // Next value: 16
   [Stable, Extensible]
   enum State {
     kNone = 0,
@@ -82,6 +82,7 @@ struct GoogleServiceAuthError {
     kServiceError = 12,
     // DEPRECATED kWebLoginRequired = 13,
     [MinVersion=10] kScopeLimitedUnrecoverableError = 14,
+    [MinVersion=14] kChallengeResponseRequired = 15,
   };
 
   // Next value: 4
@@ -99,6 +100,8 @@ struct GoogleServiceAuthError {
   int64 network_error@1;
   string error_message@2;
   InvalidGaiaCredentialsReason invalid_gaia_credentials_reason@3;
+  // Challenge is set only if `state` is set to `kChallengeResponseRequired`.
+  [MinVersion=14] string? token_binding_challenge@4;
 };
 
 // See components/account_manager_core/account_addition_options.h
@@ -111,9 +114,10 @@ struct AccountAdditionOptions {
 };
 
 // Next id: 3
-[Stable]
-struct AccountAdditionResult {
-  // The result of account addition request, sent from Ash to Lacros.
+[Stable, RenamedFrom="crosapi.mojom.AccountAdditionResult"]
+struct AccountUpsertionResult {
+  // The result of account addition or reauthentication request, sent from Ash
+  // to Lacros.
   // Note: The default value of this enum is `kUnexpectedResponse = 4`, not
   // `kSuccess = 0`. This was changed in MinVersion 11.
   //
@@ -129,7 +133,7 @@ struct AccountAdditionResult {
   };
 
   Status status@0;
-  // The account that was added.
+  // The account that was added or updated.
   Account? account@1;
   // The error is set only if `status` is set to `kNetworkError`.
   GoogleServiceAuthError? error@2;
@@ -233,11 +237,13 @@ interface AccountManager {
   [MinVersion = 3]
   ShowAddAccountDialog@3(
     [MinVersion=8] AccountAdditionOptions? add_account_options) =>
-    (AccountAdditionResult result);
+    (AccountUpsertionResult result);
 
-  // Launches account reauthentication dialog for provided `email`.
+  // Launches account reauthentication dialog for provided `email` and returns
+  // `result` with the reauthenticated/added account.
   [MinVersion = 3]
-  ShowReauthAccountDialog@4(string email) => ();
+  ShowReauthAccountDialog@4(string email) =>
+    ([MinVersion=13]AccountUpsertionResult? result);
 
   // Launches OS Settings > Accounts.
   [MinVersion = 4]

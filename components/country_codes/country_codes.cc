@@ -11,7 +11,6 @@
 #endif
 
 #include "base/strings/string_util.h"
-#include "build/build_config.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
@@ -19,7 +18,7 @@
 #include <windows.h>
 #undef IN  // On Windows, windef.h defines this, which screws up "India" cases.
 #elif BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
@@ -143,13 +142,22 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
 #if BUILDFLAG(IS_WIN)
 
 int GetCurrentCountryID() {
-  return GeoIDToCountryID(GetUserGeoID(GEOCLASS_NATION));
+  // Calls to GetCurrentCountryID occur fairly frequently and incur a heavy
+  // registry hit within the GetUserGeoID api call. Registry hits can be
+  // impactful to perf, particularly on virtualized systems.  To mitigate this
+  // we store the result of the first call in a static. The Id is only
+  // updated by calls to SetUserGeoID or the user manually updating the
+  // language and region settings.  It is expected that if it changes the user
+  // would need to restart applications to ensure the updated value is
+  // respected.
+  static int id = GeoIDToCountryID(GetUserGeoID(GEOCLASS_NATION));
+  return id;
 }
 
 #elif BUILDFLAG(IS_APPLE)
 
 int GetCurrentCountryID() {
-  base::ScopedCFTypeRef<CFLocaleRef> locale(CFLocaleCopyCurrent());
+  base::apple::ScopedCFTypeRef<CFLocaleRef> locale(CFLocaleCopyCurrent());
   CFStringRef country =
       (CFStringRef)CFLocaleGetValue(locale.get(), kCFLocaleCountryCode);
   if (!country)
@@ -193,5 +201,28 @@ int GetCurrentCountryID() {
 }
 
 #endif  // OS_*
+
+std::string CountryIDToCountryString(int country_id) {
+  // We only use the lowest 16 bits to build two ASCII characters. If there is
+  // more than that, the ID is invalid. The check for positive integers also
+  // handles the |kCountryIDUnknown| case.
+  if ((country_id & 0xFFFF) != country_id || country_id < 0)
+    return kCountryCodeUnknown;
+
+  // Decode the country code string from the provided integer. The first two
+  // bytes of the country ID represent two ASCII chars.
+  std::string country_code = {static_cast<char>(country_id >> 8),
+                              static_cast<char>(country_id)};
+  country_code = base::ToUpperASCII(country_code);
+
+  // Validate the code that was produced by feeding it back into the system.
+  return (CountryStringToCountryID(country_code) == country_id)
+             ? country_code
+             : kCountryCodeUnknown;
+}
+
+std::string GetCurrentCountryCode() {
+  return CountryIDToCountryString(GetCurrentCountryID());
+}
 
 }  // namespace country_codes

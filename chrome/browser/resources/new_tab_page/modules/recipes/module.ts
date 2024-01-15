@@ -69,6 +69,18 @@ export class RecipesModuleElement extends I18nMixin
         type: String,
         computed: 'computeInfo_()',
       },
+
+      overflowScroll_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('modulesOverflowScrollbarEnabled'),
+        reflectToAttribute: true,
+      },
+
+      wideModulesEnabled_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('wideModulesEnabled'),
+        reflectToAttribute: true,
+      },
     };
   }
 
@@ -78,7 +90,8 @@ export class RecipesModuleElement extends I18nMixin
   private dismissName_: string;
   private disableName_: string;
   private info_: string;
-
+  private overflowScroll_: boolean;
+  private wideModulesEnabled_: boolean;
   private intersectionObserver_: IntersectionObserver|null = null;
 
   private computeTitle_(): string {
@@ -99,10 +112,14 @@ export class RecipesModuleElement extends I18nMixin
         loadTimeData.getString('modulesRecipeTasksLower');
   }
 
-  private computeInfo_(): string {
+  private computeInfo_(): TrustedHTML {
     return loadTimeData.getBoolean('moduleRecipeExtendedExperimentEnabled') ?
-        loadTimeData.getString('modulesRecipeExtendedInfo') :
-        loadTimeData.getString('modulesRecipeInfo');
+        this.i18nAdvanced('modulesRecipeExtendedInfo') :
+        this.i18nAdvanced('modulesRecipeInfo');
+  }
+
+  private getRecipes_(): Recipe[] {
+    return this.task.recipes.slice(0, this.wideModulesEnabled_ ? 4 : 3);
   }
 
   private computeShowRelatedSearches_(): boolean {
@@ -157,15 +174,31 @@ export class RecipesModuleElement extends I18nMixin
     if (!this.intersectionObserver_) {
       this.intersectionObserver_ = new IntersectionObserver(entries => {
         entries.forEach(({intersectionRatio, target}) => {
-          (target as HTMLElement).style.visibility =
-              intersectionRatio < 1 ? 'hidden' : 'visible';
+          if (this.overflowScroll_) {
+            (target as HTMLElement).style.display =
+                (intersectionRatio < 1) ? 'none' : 'flex';
+          } else {
+            (target as HTMLElement).style.visibility =
+                intersectionRatio < 1 ? 'hidden' : 'visible';
+          }
         });
+
+        if (this.overflowScroll_) {
+          // Disconnect the intersection observer for a11y reasons so that
+          // subsequent viewport changes do not remove items from display.
+          this.intersectionObserver_!.disconnect();
+        }
         this.dispatchEvent(new Event('visibility-update'));
       }, {root: this, threshold: 1});
     } else {
       this.intersectionObserver_.disconnect();
     }
-    this.shadowRoot!.querySelectorAll('.recipe, .pill')
+
+    const observeClasses = ['.pill'];
+    if (!this.overflowScroll_) {
+      observeClasses.push('.recipe');
+    }
+    this.shadowRoot!.querySelectorAll(observeClasses.join(','))
         .forEach(el => this.intersectionObserver_!.observe(el));
   }
 }
@@ -177,15 +210,11 @@ async function createModule(): Promise<HTMLElement|null> {
   if (!task) {
     return null;
   }
+
   const element = new RecipesModuleElement();
   element.task = task;
   return element;
 }
 
-export const recipeTasksDescriptor: ModuleDescriptor = new ModuleDescriptor(
-    /*id=*/ 'recipe_tasks',
-    /*name=*/
-    loadTimeData.getBoolean('modulesRecipeHistoricalExperimentEnabled') ?
-        loadTimeData.getString('modulesRecipeViewedTasksSentence') :
-        loadTimeData.getString('modulesRecipeTasksSentence'),
-    createModule);
+export const recipeTasksDescriptor: ModuleDescriptor =
+    new ModuleDescriptor(/*id=*/ 'recipe_tasks', createModule);

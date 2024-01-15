@@ -13,7 +13,7 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/filename_util.h"
 #include "net/base/net_errors.h"
 #include "net/test/test_with_task_environment.h"
@@ -87,13 +87,6 @@ class TestURLRequestTestJobBackedByFile : public URLRequestTestJobBackedByFile {
   raw_ptr<bool> done_reading_;
   const raw_ptr<std::string> observed_content_;
 };
-
-// Helper function to create a file at |path| filled with |content|.
-// Returns true on success.
-bool CreateFileWithContent(const std::string& content,
-                           const base::FilePath& path) {
-  return base::WriteFile(path, content.c_str(), content.length()) != -1;
-}
 
 // A simple holder for start/end used in http range requests.
 struct Range {
@@ -180,7 +173,7 @@ void URLRequestTestJobBackedByFileEventsTest::RunSuccessfulRequestWithString(
   base::FilePath path = directory_.GetPath().Append(FILE_PATH_LITERAL("test"));
   if (!file_extension.empty())
     path = path.AddExtension(file_extension);
-  ASSERT_TRUE(CreateFileWithContent(raw_content, path));
+  ASSERT_TRUE(base::WriteFile(path, raw_content));
 
   std::string range_value;
   if (range) {
@@ -234,15 +227,15 @@ void URLRequestTestJobBackedByFileEventsTest::RunRequestWithPath(
       kUrl, DEFAULT_PRIORITY, &delegate_, TRAFFIC_ANNOTATION_FOR_TESTS));
   TestScopedURLInterceptor interceptor(
       kUrl, std::make_unique<TestURLRequestTestJobBackedByFile>(
-                request.get(), path, base::ThreadTaskRunnerHandle::Get(),
-                open_result, seek_position, done_reading, observed_content));
+                request.get(), path,
+                base::SingleThreadTaskRunner::GetCurrentDefault(), open_result,
+                seek_position, done_reading, observed_content));
   if (!range.empty()) {
     request->SetExtraRequestHeaderByName(HttpRequestHeaders::kRange, range,
                                          true /*overwrite*/);
   }
   request->Start();
-
-  base::RunLoop().Run();
+  delegate_.RunUntilComplete();
 }
 
 // Helper function to make a character array filled with |size| bytes of
@@ -296,7 +289,7 @@ TEST_F(URLRequestTestJobBackedByFileEventsTest, DecodeSvgzFile) {
 
 TEST_F(URLRequestTestJobBackedByFileEventsTest, OpenNonExistentFile) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.Append(
       FILE_PATH_LITERAL("net/data/url_request_unittest/non-existent.txt"));
 
@@ -314,7 +307,7 @@ TEST_F(URLRequestTestJobBackedByFileEventsTest, OpenNonExistentFile) {
 
 TEST_F(URLRequestTestJobBackedByFileEventsTest, MultiRangeRequestNotSupported) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.Append(
       FILE_PATH_LITERAL("net/data/url_request_unittest/BullRunSpeech.txt"));
 
@@ -333,7 +326,7 @@ TEST_F(URLRequestTestJobBackedByFileEventsTest, MultiRangeRequestNotSupported) {
 
 TEST_F(URLRequestTestJobBackedByFileEventsTest, RangeExceedingFileSize) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.Append(
       FILE_PATH_LITERAL("net/data/url_request_unittest/BullRunSpeech.txt"));
 
@@ -352,7 +345,7 @@ TEST_F(URLRequestTestJobBackedByFileEventsTest, RangeExceedingFileSize) {
 
 TEST_F(URLRequestTestJobBackedByFileEventsTest, IgnoreRangeParsingError) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.Append(
       FILE_PATH_LITERAL("net/data/url_request_unittest/simple.html"));
 

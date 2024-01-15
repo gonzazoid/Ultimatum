@@ -6,7 +6,6 @@
 
 #include <utility>
 
-#include "base/strings/abseil_string_conversions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
@@ -29,9 +28,7 @@ base::Value::List ElideHttp2HeaderBlockForNetLog(
     const spdy::Http2HeaderBlock& headers,
     NetLogCaptureMode capture_mode) {
   base::Value::List headers_list;
-  for (const auto& header : headers) {
-    base::StringPiece key = base::StringViewToStringPiece(header.first);
-    base::StringPiece value = base::StringViewToStringPiece(header.second);
+  for (const auto& [key, value] : headers) {
     headers_list.Append(NetLogStringValue(
         base::StrCat({key, ": ",
                       ElideHeaderValueForNetLog(capture_mode, std::string(key),
@@ -40,11 +37,11 @@ base::Value::List ElideHttp2HeaderBlockForNetLog(
   return headers_list;
 }
 
-base::Value Http2HeaderBlockNetLogParams(const spdy::Http2HeaderBlock* headers,
-                                         NetLogCaptureMode capture_mode) {
-  base::Value::Dict dict;
-  dict.Set("headers", ElideHttp2HeaderBlockForNetLog(*headers, capture_mode));
-  return base::Value(std::move(dict));
+base::Value::Dict Http2HeaderBlockNetLogParams(
+    const spdy::Http2HeaderBlock* headers,
+    NetLogCaptureMode capture_mode) {
+  return base::Value::Dict().Set(
+      "headers", ElideHttp2HeaderBlockForNetLog(*headers, capture_mode));
 }
 
 }  // namespace net

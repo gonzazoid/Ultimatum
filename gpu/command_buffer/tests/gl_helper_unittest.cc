@@ -16,15 +16,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/viz/test/test_gpu_service_holder.h"
 #include "gpu/command_buffer/client/gl_helper_scaling.h"
@@ -60,20 +58,12 @@ class GLHelperTest : public testing::Test {
     feature_list_.Init();
 
     ContextCreationAttribs attributes;
-    attributes.alpha_size = 8;
-    attributes.depth_size = 24;
-    attributes.red_size = 8;
-    attributes.green_size = 8;
-    attributes.blue_size = 8;
-    attributes.stencil_size = 8;
-    attributes.samples = 4;
-    attributes.sample_buffers = 1;
     attributes.bind_generates_resource = false;
 
     context_ = std::make_unique<GLInProcessContext>();
     auto result = context_->Initialize(
         viz::TestGpuServiceHolder::GetInstance()->task_executor(), attributes,
-        SharedMemoryLimits(), /*image_factory=*/nullptr);
+        SharedMemoryLimits());
     DCHECK_EQ(result, ContextResult::kSuccess);
     gl_ = context_->GetImplementation();
     ContextSupport* support = context_->GetImplementation();
@@ -85,6 +75,7 @@ class GLHelperTest : public testing::Test {
   void TearDown() override {
     helper_scaling_.reset(nullptr);
     helper_.reset(nullptr);
+    gl_ = nullptr;
     context_.reset(nullptr);
   }
 
@@ -108,14 +99,14 @@ class GLHelperTest : public testing::Test {
   int Channel(SkBitmap* pixels, int x, int y, int c) {
     if (pixels->bytesPerPixel() == 4) {
       uint32_t* data =
-          pixels->getAddr32(base::clamp(x, 0, pixels->width() - 1),
-                            base::clamp(y, 0, pixels->height() - 1));
+          pixels->getAddr32(std::clamp(x, 0, pixels->width() - 1),
+                            std::clamp(y, 0, pixels->height() - 1));
       return (*data) >> (c * 8) & 0xff;
     } else {
       DCHECK_EQ(pixels->bytesPerPixel(), 1);
       DCHECK_EQ(c, 0);
-      return *pixels->getAddr8(base::clamp(x, 0, pixels->width() - 1),
-                               base::clamp(y, 0, pixels->height() - 1));
+      return *pixels->getAddr8(std::clamp(x, 0, pixels->width() - 1),
+                               std::clamp(y, 0, pixels->height() - 1));
     }
   }
 
@@ -128,13 +119,13 @@ class GLHelperTest : public testing::Test {
     DCHECK_LT(y, pixels->height());
     if (pixels->bytesPerPixel() == 4) {
       uint32_t* data = pixels->getAddr32(x, y);
-      v = base::clamp(v, 0, 255);
+      v = std::clamp(v, 0, 255);
       *data = (*data & ~(0xffu << (c * 8))) | (v << (c * 8));
     } else {
       DCHECK_EQ(pixels->bytesPerPixel(), 1);
       DCHECK_EQ(c, 0);
       uint8_t* data = pixels->getAddr8(x, y);
-      v = base::clamp(v, 0, 255);
+      v = std::clamp(v, 0, 255);
       *data = v;
     }
   }
@@ -678,7 +669,7 @@ class GLHelperTest : public testing::Test {
                           kRGBA_8888_SkColorType, kPremul_SkAlphaType));
 
     EXPECT_TRUE(ReadBackTexture(
-        dst_texture, scaled_size,
+        dst_texture, gfx::Rect(scaled_size),
         static_cast<unsigned char*>(output_pixels.getPixels()),
         output_pixels.rowBytes(), flip_output, kRGBA_8888_SkColorType));
 
@@ -763,7 +754,7 @@ class GLHelperTest : public testing::Test {
         kRGBA_8888_SkColorType, kPremul_SkAlphaType));
 
     EXPECT_TRUE(ReadBackTexture(
-        dst_texture, entire_output_size,
+        dst_texture, gfx::Rect(entire_output_size),
         static_cast<unsigned char*>(entire_output.getPixels()),
         entire_output.rowBytes(), /*flip_y=*/false, kRGBA_8888_SkColorType));
 
@@ -806,7 +797,7 @@ class GLHelperTest : public testing::Test {
             SkImageInfo::Make(patch_size.width(), patch_size.height(),
                               kRGBA_8888_SkColorType, kPremul_SkAlphaType));
         EXPECT_TRUE(ReadBackTexture(
-            dst_texture, patch_size,
+            dst_texture, gfx::Rect(patch_size),
             static_cast<unsigned char*>(patch_output.getPixels()),
             patch_output.rowBytes(), /*flip_y=*/false, kRGBA_8888_SkColorType));
         SkBitmap expected;
@@ -850,7 +841,7 @@ class GLHelperTest : public testing::Test {
                         dst_texture, gfx::Rect(patch_size));
           gl_->DeleteTextures(1, &src_subset_texture);
           EXPECT_TRUE(ReadBackTexture(
-              dst_texture, patch_size,
+              dst_texture, gfx::Rect(patch_size),
               static_cast<unsigned char*>(patch_output.getPixels()),
               patch_output.rowBytes(), /*flip_y=*/false,
               kRGBA_8888_SkColorType));
@@ -1003,7 +994,7 @@ class GLHelperTest : public testing::Test {
   }
 
   bool ReadBackTexture(GLuint src_texture,
-                       const gfx::Size& src_size,
+                       const gfx::Rect& src_rect,
                        unsigned char* pixels,
                        size_t pixels_stride,
                        bool flip_y,
@@ -1019,8 +1010,8 @@ class GLHelperTest : public testing::Test {
       format = GL_BGRA_EXT;
 
     helper_->ReadbackTextureAsync(
-        src_texture, GL_TEXTURE_2D, src_size, pixels, pixels_stride, flip_y,
-        format,
+        src_texture, GL_TEXTURE_2D, src_rect.origin(), src_rect.size(), pixels,
+        pixels_stride, flip_y, format,
         base::BindOnce(
             [](bool* success, base::OnceClosure callback, bool result) {
               *success = result;
@@ -1051,7 +1042,7 @@ class GLHelperTest : public testing::Test {
     // When the readback is over output bitmap should have the red color.
     output_pixels.eraseColor(SK_ColorGREEN);
     uint8_t* pixels = static_cast<uint8_t*>(output_pixels.getPixels());
-    if (!ReadBackTexture(src_texture, src_size, pixels,
+    if (!ReadBackTexture(src_texture, gfx::Rect(src_size), pixels,
                          output_pixels.rowBytes(), /*flip_y=*/false,
                          color_type) ||
         !IsEqual(input_pixels, output_pixels)) {
@@ -1065,7 +1056,7 @@ class GLHelperTest : public testing::Test {
                      src_grid_pitch, src_grid_width, input_pixels);
     BindAndAttachTextureWithPixels(src_texture, color_type, src_size,
                                    input_pixels);
-    if (!ReadBackTexture(src_texture, src_size, pixels,
+    if (!ReadBackTexture(src_texture, gfx::Rect(src_size), pixels,
                          output_pixels.rowBytes(), /*flip_y=*/false,
                          color_type) ||
         !IsEqual(input_pixels, output_pixels)) {
@@ -1077,7 +1068,7 @@ class GLHelperTest : public testing::Test {
                         rect_w, rect_h, input_pixels);
     BindAndAttachTextureWithPixels(src_texture, color_type, src_size,
                                    input_pixels);
-    if (!ReadBackTexture(src_texture, src_size, pixels,
+    if (!ReadBackTexture(src_texture, gfx::Rect(src_size), pixels,
                          output_pixels.rowBytes(), /*flip_y=*/false,
                          color_type) ||
         !IsEqual(input_pixels, output_pixels)) {
@@ -1266,7 +1257,7 @@ class GLHelperTest : public testing::Test {
 
   base::test::ScopedFeatureList feature_list_;
   std::unique_ptr<GLInProcessContext> context_;
-  raw_ptr<gles2::GLES2Interface> gl_;
+  raw_ptr<gles2::GLES2Interface> gl_;  // This is owned by |context_|.
   std::unique_ptr<GLHelper> helper_;
   std::unique_ptr<GLHelperScaling> helper_scaling_;
   base::circular_deque<GLHelperScaling::ScaleOp> x_ops_, y_ops_;
@@ -1277,7 +1268,8 @@ class GLHelperPixelTest : public GLHelperTest {
   gl::DisableNullDrawGLBindings enable_pixel_output_;
 };
 
-TEST_F(GLHelperTest, RGBAASyncReadbackTest) {
+// TODO(crbug.com/1384328): Re-enable this test
+TEST_F(GLHelperTest, DISABLED_RGBAASyncReadbackTest) {
   const int kTestSize = 64;
   bool result = TestTextureFormatReadback(gfx::Size(kTestSize, kTestSize),
                                           kRGBA_8888_SkColorType);

@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_POLICY_HANDLERS_SYSTEM_PROXY_HANDLER_H_
 #define CHROME_BROWSER_ASH_POLICY_HANDLERS_SYSTEM_PROXY_HANDLER_H_
 
-#include "base/memory/weak_ptr.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 
 namespace ash {
@@ -19,7 +19,7 @@ namespace policy {
 // proxy credentials for system services connecting through System-proxy.
 class SystemProxyHandler {
  public:
-  explicit SystemProxyHandler(chromeos::CrosSettings* cros_settings);
+  explicit SystemProxyHandler(ash::CrosSettings* cros_settings);
 
   SystemProxyHandler(const SystemProxyHandler&) = delete;
   SystemProxyHandler& operator=(const SystemProxyHandler&) = delete;
@@ -35,8 +35,9 @@ class SystemProxyHandler {
   ash::SystemProxyManager* GetSystemProxyManager();
 
   // Owned by the test fixture.
-  ash::SystemProxyManager* system_proxy_manager_for_testing_ = nullptr;
-  chromeos::CrosSettings* cros_settings_;
+  raw_ptr<ash::SystemProxyManager, DanglingUntriaged>
+      system_proxy_manager_for_testing_ = nullptr;
+  raw_ptr<ash::CrosSettings> cros_settings_;
   base::CallbackListSubscription system_proxy_subscription_;
 };
 

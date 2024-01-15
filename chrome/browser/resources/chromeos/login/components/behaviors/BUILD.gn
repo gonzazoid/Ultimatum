@@ -3,72 +3,71 @@
 # found in the LICENSE file.
 
 import("//third_party/closure_compiler/compile_js.gni")
-import("//ui/webui/resources/tools/js_modulizer.gni")
-import("../../oobe_auto_imports.gni")
 
 js_type_check("closure_compile") {
   is_polymer3 = true
   deps = [
-    ":login_screen_behavior.m",
-    ":multi_step_behavior.m",
-    ":oobe_dialog_host_behavior.m",
-    ":oobe_focus_behavior.m",
-    ":oobe_i18n_behavior.m",
-    ":oobe_scrollable_behavior.m",
+    ":login_screen_behavior",
+    ":multi_step_behavior",
+    ":oobe_dialog_host_behavior",
+    ":oobe_focus_behavior",
+    ":oobe_i18n_behavior",
+    ":oobe_scrollable_behavior",
   ]
 }
 
-js_library("login_screen_behavior.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/login_screen_behavior.m.js" ]
+js_library("login_screen_behavior") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/login_screen_behavior.js" ]
   deps = [
-    "..:display_manager_types.m",
-    "..:oobe_types.m",
+    "..:display_manager_types",
+    "..:oobe_types",
   ]
-  extra_deps = [ ":modulize" ]
+  extra_deps = [ ":copy_js" ]
 }
 
-js_library("multi_step_behavior.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/multi_step_behavior.m.js" ]
+js_library("multi_step_behavior") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/multi_step_behavior.js" ]
   deps = []
-  extra_deps = [ ":modulize" ]
+  extra_deps = [ ":copy_js" ]
 }
 
-js_library("oobe_dialog_host_behavior.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_dialog_host_behavior.m.js" ]
+js_library("oobe_dialog_host_behavior") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_dialog_host_behavior.js" ]
   deps = [
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
-  extra_deps = [ ":modulize" ]
+  extra_deps = [ ":copy_js" ]
 }
 
-js_library("oobe_focus_behavior.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_focus_behavior.m.js" ]
+js_library("oobe_focus_behavior") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_focus_behavior.js" ]
   deps = [
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
-  extra_deps = [ ":modulize" ]
+  extra_deps = [ ":copy_js" ]
 }
 
-js_library("oobe_i18n_behavior.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_i18n_behavior.m.js" ]
+js_library("oobe_i18n_behavior") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_i18n_behavior.js" ]
   deps = [
     "//ash/webui/common/resources:i18n_behavior",
     "//ash/webui/common/resources:parse_html_subset",
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
-  extra_deps = [ ":modulize" ]
+  extra_deps = [ ":copy_js" ]
 }
 
-js_library("oobe_scrollable_behavior.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_scrollable_behavior.m.js" ]
+js_library("oobe_scrollable_behavior") {
+  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/components/behaviors/oobe_scrollable_behavior.js" ]
   deps = [
     "//third_party/polymer/v3_0/components-chromium/polymer:polymer_bundled",
   ]
-  extra_deps = [ ":modulize" ]
+  extra_deps = [ ":copy_js" ]
 }
 
-js_modulizer("modulize") {
-  input_files = [
+# Copy to target_gen_dir for closure compilation.
+copy("copy_js") {
+  sources = [
     "login_screen_behavior.js",
     "multi_step_behavior.js",
     "oobe_dialog_host_behavior.js",
@@ -76,5 +75,5 @@ js_modulizer("modulize") {
     "oobe_i18n_behavior.js",
     "oobe_scrollable_behavior.js",
   ]
-  namespace_rewrites = oobe_namespace_rewrites
+  outputs = [ "$target_gen_dir/{{source_file_part}}" ]
 }

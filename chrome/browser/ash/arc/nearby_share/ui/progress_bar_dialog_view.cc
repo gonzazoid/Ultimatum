@@ -8,10 +8,9 @@
 
 #include "ash/components/arc/compat_mode/style/arc_color_provider.h"
 #include "ash/style/ash_color_id.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/ash/arc/nearby_share/ui/nearby_share_overlay_view.h"
-#include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/color_palette.h"
@@ -59,10 +58,10 @@ ProgressBarDialogView::ProgressBarDialogView(bool is_multiple_files)
   message_label_->SetMultiLine(true);
   message_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   message_label_->SetVerticalAlignment(gfx::ALIGN_TOP);
-  AddChildView(message_label_);
+  AddChildView(message_label_.get());
 
-  progress_bar_ = AddChildView(std::make_unique<views::ProgressBar>(
-      /*preferred_height=*/kProgressBarHeight));
+  progress_bar_ = AddChildView(std::make_unique<views::ProgressBar>());
+  progress_bar_->SetPreferredHeight(kProgressBarHeight);
   progress_bar_->SetValue(0.01);  // set small initial value.
   progress_bar_->SetPreferredSize(
       gfx::Size(kProgressBarWidth, kProgressBarHeight));
@@ -83,15 +82,14 @@ gfx::Size ProgressBarDialogView::CalculatePreferredSize() const {
 }
 
 void ProgressBarDialogView::AddedToWidget() {
-  auto& view_ax = GetWidget()->GetRootView()->GetViewAccessibility();
-  view_ax.OverrideRole(ax::mojom::Role::kDialog);
   const std::u16string view_name =
       is_multiple_files_
           ? l10n_util::GetStringUTF16(
                 IDS_ASH_ARC_NEARBY_SHARE_FILES_PREPARATION_PROGRESS)
           : l10n_util::GetStringUTF16(
                 IDS_ASH_ARC_NEARBY_SHARE_FILE_PREPARATION_PROGRESS);
-  view_ax.OverrideName(view_name);
+  GetWidget()->GetRootView()->SetAccessibleRole(ax::mojom::Role::kDialog);
+  GetWidget()->GetRootView()->SetAccessibleName(view_name);
 }
 
 void ProgressBarDialogView::OnThemeChanged() {

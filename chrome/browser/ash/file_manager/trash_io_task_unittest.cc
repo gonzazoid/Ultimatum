@@ -16,12 +16,10 @@
 #include "base/test/mock_callback.h"
 #include "base/time/time_override.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
-#include "chrome/browser/ash/file_manager/fake_disk_mount_manager.h"
 #include "chrome/browser/ash/file_manager/trash_common_util.h"
 #include "chrome/browser/ash/file_manager/trash_unittest_base.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "components/account_id/account_id.h"
 #include "components/drive/drive_pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -55,7 +53,7 @@ MATCHER_P(EntryStatusUrls, matcher, "") {
 // `std::vector<EntryStatus>` ignoring the `url` field. The supplied `arg`
 // should be a `std::vector<base::File::Error>` to match against.
 MATCHER_P(EntryStatusErrors, matcher, "") {
-  std::vector<absl::optional<base::File::Error>> errors;
+  std::vector<std::optional<base::File::Error>> errors;
   for (const auto& status : arg) {
     errors.push_back(status.error);
   }
@@ -271,10 +269,11 @@ TEST_F(TrashIOTaskTest, OrphanedFilesAreOverwritten) {
       .WillOnce(RunClosure(run_loop.QuitClosure()));
 
   {
-    // Override the `base::Time::Now()` function to return 0 (i.e. base::Time())
-    // This ensures the DeletionDate is static in tests to verify file contents.
+    // Override the `base::Time::Now()` function to return
+    // base::Time::UnixEpoch(). This ensures the DeletionDate is static in tests
+    // to verify file contents.
     base::subtle::ScopedTimeClockOverrides mock_time_now(
-        []() { return base::Time(); }, nullptr, nullptr);
+        []() { return base::Time::UnixEpoch(); }, nullptr, nullptr);
     TrashIOTask task(source_urls, profile_.get(), file_system_context_,
                      temp_dir_.GetPath());
     task.Execute(progress_callback.Get(), complete_callback.Get());
@@ -357,7 +356,7 @@ TEST_F(TrashIOTaskTest, MultipleFilesInvokeProgress) {
 
   {
     base::subtle::ScopedTimeClockOverrides mock_time_now(
-        []() { return base::Time(); }, nullptr, nullptr);
+        []() { return base::Time::UnixEpoch(); }, nullptr, nullptr);
     TrashIOTask task(source_urls, profile_.get(), file_system_context_,
                      temp_dir_.GetPath());
     task.Execute(progress_callback.Get(), complete_callback.Get());

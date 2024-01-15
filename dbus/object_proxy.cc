@@ -7,20 +7,20 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/debug/alias.h"
 #include "base/debug/leak_annotations.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "dbus/bus.h"
 #include "dbus/dbus_statistics.h"
+#include "dbus/error.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
 #include "dbus/scoped_dbus_error.h"
@@ -34,9 +34,6 @@ constexpr char kErrorServiceUnknown[] =
     "org.freedesktop.DBus.Error.ServiceUnknown";
 constexpr char kErrorObjectUnknown[] =
     "org.freedesktop.DBus.Error.UnknownObject";
-
-// Used for success ratio histograms. 1 for success, 0 for failure.
-constexpr int kSuccessRatioHistogramMaxValue = 2;
 
 // The path of D-Bus Object sending NameOwnerChanged signal.
 constexpr char kDBusSystemObjectPath[] = "/org/freedesktop/DBus";
@@ -131,48 +128,26 @@ ObjectProxy::~ObjectProxy() {
 // Originally we tried to make |method_call| a const reference, but we
 // gave up as dbus_connection_send_with_reply_and_block() takes a
 // non-const pointer of DBusMessage as the second parameter.
-std::unique_ptr<Response> ObjectProxy::CallMethodAndBlockWithErrorDetails(
-    MethodCall* method_call,
-    int timeout_ms,
-    ScopedDBusError* error) {
+base::expected<std::unique_ptr<Response>, Error>
+ObjectProxy::CallMethodAndBlock(MethodCall* method_call, int timeout_ms) {
   bus_->AssertOnDBusThread();
 
   if (!bus_->Connect() || !method_call->SetDestination(service_name_) ||
       !method_call->SetPath(object_path_)) {
-    return nullptr;
+    // Not an error from libdbus, so returns invalid error.
+    return base::unexpected(Error());
   }
-
-  DBusMessage* request_message = method_call->raw_message();
 
   // Send the message synchronously.
-  const base::TimeTicks start_time = base::TimeTicks::Now();
-  DBusMessage* response_message =
-      bus_->SendWithReplyAndBlock(request_message, timeout_ms, error->get());
-  // Record if the method call is successful, or not. 1 if successful.
-  UMA_HISTOGRAM_ENUMERATION("DBus.SyncMethodCallSuccess",
-                            response_message ? 1 : 0,
-                            kSuccessRatioHistogramMaxValue);
+  auto result =
+      bus_->SendWithReplyAndBlock(method_call->raw_message(), timeout_ms);
   statistics::AddBlockingSentMethodCall(
       service_name_, method_call->GetInterface(), method_call->GetMember());
-
-  if (!response_message) {
+  if (!result.has_value()) {
     LogMethodCallFailure(method_call->GetInterface(), method_call->GetMember(),
-                         error->is_set() ? error->name() : "unknown error type",
-                         error->is_set() ? error->message() : "");
-    return nullptr;
+                         result.error().name(), result.error().message());
   }
-  // Record time spent for the method call. Don't include failures.
-  UMA_HISTOGRAM_TIMES("DBus.SyncMethodCallTime",
-                      base::TimeTicks::Now() - start_time);
-
-  return Response::FromRawMessage(response_message);
-}
-
-std::unique_ptr<Response> ObjectProxy::CallMethodAndBlock(
-    MethodCall* method_call,
-    int timeout_ms) {
-  ScopedDBusError error;
-  return CallMethodAndBlockWithErrorDetails(method_call, timeout_ms, &error);
+  return result;
 }
 
 void ObjectProxy::CallMethod(MethodCall* method_call,
@@ -192,8 +167,6 @@ void ObjectProxy::CallMethodWithErrorResponse(
     ResponseOrErrorCallback callback) {
   bus_->AssertOnOriginThread();
 
-  const base::TimeTicks start_time = base::TimeTicks::Now();
-
   ReplyCallbackHolder callback_holder(bus_->GetOriginTaskRunner(),
                                       std::move(callback));
 
@@ -202,8 +175,8 @@ void ObjectProxy::CallMethodWithErrorResponse(
     // In case of a failure, run the error callback with nullptr.
     base::OnceClosure task =
         base::BindOnce(&ObjectProxy::RunResponseOrErrorCallback, this,
-                       std::move(callback_holder), start_time,
-                       nullptr /* response */, nullptr /* error_response */);
+                       std::move(callback_holder), nullptr /* response */,
+                       nullptr /* error_response */);
     bus_->GetOriginTaskRunner()->PostTask(FROM_HERE, std::move(task));
     return;
   }
@@ -220,7 +193,7 @@ void ObjectProxy::CallMethodWithErrorResponse(
   // Wait for the response in the D-Bus thread.
   base::OnceClosure task =
       base::BindOnce(&ObjectProxy::StartAsyncMethodCall, this, timeout_ms,
-                     request_message, std::move(callback_holder), start_time);
+                     request_message, std::move(callback_holder));
   bus_->GetDBusTaskRunner()->PostTask(FROM_HERE, std::move(task));
 }
 
@@ -250,8 +223,8 @@ void ObjectProxy::ConnectToSignal(const std::string& interface_name,
   bus_->AssertOnOriginThread();
 
   if (bus_->HasDBusThread()) {
-    base::PostTaskAndReplyWithResult(
-        bus_->GetDBusTaskRunner(), FROM_HERE,
+    bus_->GetDBusTaskRunner()->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&ObjectProxy::ConnectToSignalAndBlock, this,
                        interface_name, signal_name, signal_callback),
         base::BindOnce(std::move(on_connected_callback), interface_name,
@@ -314,9 +287,9 @@ void ObjectProxy::Detach() {
     bus_->RemoveFilterFunction(&ObjectProxy::HandleMessageThunk, this);
 
   for (const auto& match_rule : match_rules_) {
-    ScopedDBusError error;
-    bus_->RemoveMatch(match_rule, error.get());
-    if (error.is_set()) {
+    Error error;
+    bus_->RemoveMatch(match_rule, &error);
+    if (error.IsValid()) {
       // There is nothing we can do to recover, so just print the error.
       LOG(ERROR) << "Failed to remove match rule: " << match_rule;
     }
@@ -335,8 +308,7 @@ void ObjectProxy::Detach() {
 
 void ObjectProxy::StartAsyncMethodCall(int timeout_ms,
                                        DBusMessage* request_message,
-                                       ReplyCallbackHolder callback_holder,
-                                       base::TimeTicks start_time) {
+                                       ReplyCallbackHolder callback_holder) {
   bus_->AssertOnDBusThread();
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
@@ -345,8 +317,8 @@ void ObjectProxy::StartAsyncMethodCall(int timeout_ms,
     // In case of a failure, run the error callback with nullptr.
     base::OnceClosure task =
         base::BindOnce(&ObjectProxy::RunResponseOrErrorCallback, this,
-                       std::move(callback_holder), start_time,
-                       nullptr /* response */, nullptr /* error_response */);
+                       std::move(callback_holder), nullptr /* response */,
+                       nullptr /* error_response */);
     bus_->GetOriginTaskRunner()->PostTask(FROM_HERE, std::move(task));
 
     dbus_message_unref(request_message);
@@ -366,8 +338,7 @@ void ObjectProxy::StartAsyncMethodCall(int timeout_ms,
       },
       // PendingCallback instance is owned by libdbus.
       new PendingCallback(base::BindOnce(&ObjectProxy::OnPendingCallIsComplete,
-                                         this, std::move(callback_holder),
-                                         start_time)),
+                                         this, std::move(callback_holder))),
       [](void* user_data) { delete static_cast<PendingCallback*>(user_data); });
   CHECK(success) << "Unable to allocate memory";
   pending_calls_.insert(dbus_pending_call);
@@ -377,7 +348,6 @@ void ObjectProxy::StartAsyncMethodCall(int timeout_ms,
 }
 
 void ObjectProxy::OnPendingCallIsComplete(ReplyCallbackHolder callback_holder,
-                                          base::TimeTicks start_time,
                                           DBusPendingCall* pending_call) {
   bus_->AssertOnDBusThread();
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
@@ -395,10 +365,9 @@ void ObjectProxy::OnPendingCallIsComplete(ReplyCallbackHolder callback_holder,
     response = Response::FromRawMessage(response_message);
   }
 
-  base::OnceClosure task =
-      base::BindOnce(&ObjectProxy::RunResponseOrErrorCallback, this,
-                     std::move(callback_holder), start_time, response.get(),
-                     error_response.get());
+  base::OnceClosure task = base::BindOnce(
+      &ObjectProxy::RunResponseOrErrorCallback, this,
+      std::move(callback_holder), response.get(), error_response.get());
 
   // The message should be deleted on the D-Bus thread for a complicated
   // reason:
@@ -433,20 +402,10 @@ void ObjectProxy::OnPendingCallIsComplete(ReplyCallbackHolder callback_holder,
 
 void ObjectProxy::RunResponseOrErrorCallback(
     ReplyCallbackHolder callback_holder,
-    base::TimeTicks start_time,
     Response* response,
     ErrorResponse* error_response) {
   bus_->AssertOnOriginThread();
   callback_holder.ReleaseCallback().Run(response, error_response);
-
-  if (response) {
-    // Record time spent for the method call. Don't include failures.
-    UMA_HISTOGRAM_TIMES("DBus.AsyncMethodCallTime",
-                        base::TimeTicks::Now() - start_time);
-  }
-  // Record if the method call is successful, or not. 1 if successful.
-  UMA_HISTOGRAM_ENUMERATION("DBus.AsyncMethodCallSuccess", response ? 1 : 0,
-                            kSuccessRatioHistogramMaxValue);
 }
 
 bool ObjectProxy::ConnectToNameOwnerChangedSignal() {
@@ -553,20 +512,19 @@ DBusHandlerResult ObjectProxy::HandleMessage(DBusConnection* connection,
   }
   VLOG(1) << "Signal received: " << signal->ToString();
 
-  const base::TimeTicks start_time = base::TimeTicks::Now();
   if (bus_->HasDBusThread()) {
     // Post a task to run the method in the origin thread.
     // Transfer the ownership of |signal| to RunMethod().
     // |released_signal| will be deleted in RunMethod().
     Signal* released_signal = signal.release();
     bus_->GetOriginTaskRunner()->PostTask(
-        FROM_HERE, base::BindOnce(&ObjectProxy::RunMethod, this, start_time,
-                                  iter->second, released_signal));
+        FROM_HERE, base::BindOnce(&ObjectProxy::RunMethod, this, iter->second,
+                                  released_signal));
   } else {
     // If the D-Bus thread is not used, just call the callback on the
     // current thread. Transfer the ownership of |signal| to RunMethod().
     Signal* released_signal = signal.release();
-    RunMethod(start_time, iter->second, released_signal);
+    RunMethod(iter->second, released_signal);
   }
 
   // We don't return DBUS_HANDLER_RESULT_HANDLED for signals because other
@@ -574,23 +532,18 @@ DBusHandlerResult ObjectProxy::HandleMessage(DBusConnection* connection,
   return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-void ObjectProxy::RunMethod(base::TimeTicks start_time,
-                            std::vector<SignalCallback> signal_callbacks,
+void ObjectProxy::RunMethod(std::vector<SignalCallback> signal_callbacks,
                             Signal* signal) {
   bus_->AssertOnOriginThread();
 
-  for (std::vector<SignalCallback>::iterator iter = signal_callbacks.begin();
-       iter != signal_callbacks.end(); ++iter)
-    iter->Run(signal);
+  for (auto& signal_callback : signal_callbacks) {
+    signal_callback.Run(signal);
+  }
 
   // Delete the message on the D-Bus thread. See comments in
   // RunResponseOrErrorCallback().
   bus_->GetDBusTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&base::DeletePointer<Signal>, signal));
-
-  // Record time spent for handling the signal.
-  UMA_HISTOGRAM_TIMES("DBus.SignalHandleTime",
-                      base::TimeTicks::Now() - start_time);
 }
 
 DBusHandlerResult ObjectProxy::HandleMessageThunk(DBusConnection* connection,
@@ -601,10 +554,10 @@ DBusHandlerResult ObjectProxy::HandleMessageThunk(DBusConnection* connection,
 }
 
 void ObjectProxy::LogMethodCallFailure(
-    const base::StringPiece& interface_name,
-    const base::StringPiece& method_name,
-    const base::StringPiece& error_name,
-    const base::StringPiece& error_message) const {
+    const std::string_view& interface_name,
+    const std::string_view& method_name,
+    const std::string_view& error_name,
+    const std::string_view& error_message) const {
   if (ignore_service_unknown_errors_ &&
       (error_name == kErrorServiceUnknown || error_name == kErrorObjectUnknown))
     return;
@@ -657,10 +610,10 @@ bool ObjectProxy::AddMatchRuleWithCallback(
   DCHECK(!absolute_signal_name.empty());
   bus_->AssertOnDBusThread();
 
-  if (match_rules_.find(match_rule) == match_rules_.end()) {
-    ScopedDBusError error;
-    bus_->AddMatch(match_rule, error.get());
-    if (error.is_set()) {
+  if (!base::Contains(match_rules_, match_rule)) {
+    dbus::Error error;
+    bus_->AddMatch(match_rule, &error);
+    if (error.IsValid()) {
       LOG(ERROR) << "Failed to add match rule \"" << match_rule << "\". Got "
                  << error.name() << ": " << error.message();
       return false;
@@ -671,11 +624,11 @@ bool ObjectProxy::AddMatchRuleWithCallback(
       method_table_[absolute_signal_name].push_back(signal_callback);
       return true;
     }
-  } else {
-    // We already have the match rule.
-    method_table_[absolute_signal_name].push_back(signal_callback);
-    return true;
   }
+
+  // We already have the match rule.
+  method_table_[absolute_signal_name].push_back(signal_callback);
+  return true;
 }
 
 bool ObjectProxy::AddMatchRuleWithoutCallback(
@@ -685,12 +638,13 @@ bool ObjectProxy::AddMatchRuleWithoutCallback(
   DCHECK(!absolute_signal_name.empty());
   bus_->AssertOnDBusThread();
 
-  if (match_rules_.find(match_rule) != match_rules_.end())
+  if (base::Contains(match_rules_, match_rule)) {
     return true;
+  }
 
-  ScopedDBusError error;
-  bus_->AddMatch(match_rule, error.get());
-  if (error.is_set()) {
+  Error error;
+  bus_->AddMatch(match_rule, &error);
+  if (error.IsValid()) {
     LOG(ERROR) << "Failed to add match rule \"" << match_rule << "\". Got "
                << error.name() << ": " << error.message();
     return false;
@@ -757,8 +711,9 @@ void ObjectProxy::RunWaitForServiceToBeAvailableCallbacks(
 
   std::vector<WaitForServiceToBeAvailableCallback> callbacks;
   callbacks.swap(wait_for_service_to_be_available_callbacks_);
-  for (size_t i = 0; i < callbacks.size(); ++i)
-    std::move(callbacks[i]).Run(service_is_available);
+  for (auto& callback : callbacks) {
+    std::move(callback).Run(service_is_available);
+  }
 }
 
 }  // namespace dbus

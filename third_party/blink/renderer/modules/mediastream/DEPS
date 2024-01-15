@@ -11,7 +11,7 @@ include_rules = [
     "+base/threading/sequenced_task_runner_handle.h",
     "+base/threading/thread_task_runner_handle.h",
 
-    # webmediaplayer_ms{_compositor}.cc includes.
+    # web_media_player_ms{_compositor}.cc includes.
     "+base/values.h",
     "+cc/layers/surface_layer.h",
     "+cc/layers/video_frame_provider_client_impl.h",
@@ -25,15 +25,11 @@ include_rules = [
     "+services/viz/public/cpp/gpu/context_provider_command_buffer.h",
     "+skia/ext/platform_canvas.h",
 
-    "+base/atomicops.h",
-    "+base/task/bind_post_task.h",
     "+base/files/file.h",
     "+base/metrics/field_trial.h",
 
-    "+base/guid.h",
-    "+base/token.h",
-    "+base/trace_event/trace_event.h",
     "+base/unguessable_token.h",
+    "+base/uuid.h",
     "+media/audio",
     "+media/base",
     "+media/capture",
@@ -51,15 +47,17 @@ include_rules = [
     "+third_party/blink/renderer/modules/mediastream",
     "+third_party/blink/renderer/modules/modules_export.h",
     "+third_party/blink/renderer/modules/peerconnection",
-    "+third_party/blink/renderer/modules/screen_enumeration/screen_detailed.h",
-    "+third_party/blink/renderer/modules/screen_enumeration/screen_details.h",
+    "+third_party/blink/renderer/modules/screen_details/screen_detailed.h",
+    "+third_party/blink/renderer/modules/screen_details/screen_details.h",
     "+third_party/blink/renderer/modules/webrtc",
+    "+ui/display/types/display_constants.h",
     "+ui/gfx/geometry/size.h",
 ]
 
 specific_include_rules = {
     ".*test\.cc" : [
         "+base/containers/circular_deque.h",
+        "+base/numerics/ranges.h",
         "+base/run_loop.h",
         "+cc/layers/layer.h",
         "+media/video/fake_gpu_memory_buffer.h",

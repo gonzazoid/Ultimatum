@@ -5,23 +5,24 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_BROADCASTCHANNEL_BROADCAST_CHANNEL_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_BROADCASTCHANNEL_BROADCAST_CHANNEL_H_
 
-#include "mojo/public/cpp/bindings/associated_receiver.h"
-#include "mojo/public/cpp/bindings/associated_remote.h"
 #include "third_party/blink/public/mojom/broadcastchannel/broadcast_channel.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_receiver.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_remote.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_or_worker_scheduler.h"
 
 namespace blink {
 
 class BroadcastChannelTester;
 class ScriptValue;
+class StorageAccessHandle;
 
 class MODULES_EXPORT BroadcastChannel final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<BroadcastChannel>,
       public ExecutionContextLifecycleObserver,
       public mojom::blink::BroadcastChannelClient {
@@ -34,6 +35,10 @@ class MODULES_EXPORT BroadcastChannel final
                                   ExceptionState&);
 
   BroadcastChannel(ExecutionContext*, const String& name);
+  BroadcastChannel(base::PassKey<StorageAccessHandle>,
+                   ExecutionContext* execution_context,
+                   const String& name,
+                   mojom::blink::BroadcastChannelProvider* provider);
   BroadcastChannel(
       base::PassKey<BroadcastChannelTester>,
       ExecutionContext*,
@@ -79,6 +84,8 @@ class MODULES_EXPORT BroadcastChannel final
       mojo::PendingAssociatedRemote<mojom::blink::BroadcastChannelClient>
           remote);
 
+  void SetupDisconnectHandlers();
+
   void PostMessageInternal(
       scoped_refptr<SerializedScriptValue> value,
       scoped_refptr<SecurityOrigin> sender_origin,
@@ -101,9 +108,10 @@ class MODULES_EXPORT BroadcastChannel final
   // BroadcastChannelClient receiver for messages sent from the browser to
   // this channel and BroadcastChannelClient remote for messages sent from
   // this channel to the browser.
-  mojo::AssociatedReceiver<mojom::blink::BroadcastChannelClient> receiver_{
-      this};
-  mojo::AssociatedRemote<mojom::blink::BroadcastChannelClient> remote_client_;
+  HeapMojoAssociatedReceiver<mojom::blink::BroadcastChannelClient,
+                             BroadcastChannel>
+      receiver_;
+  HeapMojoAssociatedRemote<mojom::blink::BroadcastChannelClient> remote_client_;
 
   // Notifies the scheduler that a broadcast channel is active.
   FrameOrWorkerScheduler::SchedulingAffectingFeatureHandle
@@ -114,7 +122,7 @@ class MODULES_EXPORT BroadcastChannel final
   // ConnectToChannel messages (with ordering preserved) to the
   // RenderFrameHostImpl associated with this frame. When a BroadcastChannel is
   // instantiated from a worker execution context, this member is not used.
-  mojo::AssociatedRemote<mojom::blink::BroadcastChannelProvider>
+  HeapMojoAssociatedRemote<mojom::blink::BroadcastChannelProvider>
       associated_remote_;
 };
 

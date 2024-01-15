@@ -2,21 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Application from 'devtools/panels/application/application.js';
+
 (async function() {
   TestRunner.addResult(
       `Tests that data is correctly loaded by IndexedDBModel from IndexedDB object store and index.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
     // Note: every test that uses a storage API must manually clean-up state from previous tests.
   await ApplicationTestRunner.resetState();
 
   var indexedDBModel = ApplicationTestRunner.createIndexedDBModel();
   var mainFrameId = TestRunner.resourceTreeModel.mainFrame.id;
-  var securityOrigin = 'http://127.0.0.1:8000';
+  var storageKey = 'http://127.0.0.1:8000/';
   var databaseName = 'testDatabase';
   var objectStoreName1 = 'testObjectStore1';
   var objectStoreName2 = 'testObjectStore2';
   var indexName = 'testIndexName';
-  var databaseId = new Resources.IndexedDBModel.DatabaseId(securityOrigin, /* storageKey */ undefined, databaseName);
+  var databaseId = new Application.IndexedDBModel.DatabaseId({storageKey}, databaseName);
 
   /**
    * @param {number} count
@@ -87,7 +92,7 @@
     }
   }
 
-  TestRunner.addSniffer(Resources.IndexedDBModel.prototype, 'updateOriginDatabaseNames', fillDatabase, false);
+  fillDatabase();
 
   function fillDatabase() {
     ApplicationTestRunner.createDatabase(mainFrameId, databaseName, step2);
@@ -118,7 +123,7 @@
           databaseId, {name: objectStoreName2, autoIncrement: true}).then(printMetadata);
         resolve();
       });
-      TestRunner.addSniffer(Resources.IndexedDBModel.prototype, 'updateOriginDatabaseNames', refreshDatabase, false);
+      TestRunner.addSniffer(Application.IndexedDBModel.IndexedDBModel.prototype, 'updateStorageKeyDatabaseNames', refreshDatabase, false);
       indexedDBModel.refreshDatabaseNames();
 
       function printMetadata(metadata) {
@@ -135,12 +140,12 @@
   }
 
   function refreshDatabase() {
-    indexedDBModel.addEventListener(Resources.IndexedDBModel.Events.DatabaseLoaded, runObjectStoreTests);
+    indexedDBModel.addEventListener(Application.IndexedDBModel.Events.DatabaseLoaded, runObjectStoreTests);
     indexedDBModel.refreshDatabase(databaseId);
   }
 
   function runObjectStoreTests() {
-    indexedDBModel.removeEventListener(Resources.IndexedDBModel.Events.DatabaseLoaded, runObjectStoreTests);
+    indexedDBModel.removeEventListener(Application.IndexedDBModel.Events.DatabaseLoaded, runObjectStoreTests);
     loadValuesAndDump(false, null, 0, 2, step2);
 
     function step2() {
@@ -205,11 +210,11 @@
     TestRunner.addResult('Cleared data from objectStore');
 
     function step1() {
-      indexedDBModel.addEventListener(Resources.IndexedDBModel.Events.DatabaseLoaded, step2);
+      indexedDBModel.addEventListener(Application.IndexedDBModel.Events.DatabaseLoaded, step2);
       indexedDBModel.refreshDatabase(databaseId);
     }
     function step2() {
-      indexedDBModel.removeEventListener(Resources.IndexedDBModel.Events.DatabaseLoaded, step2);
+      indexedDBModel.removeEventListener(Application.IndexedDBModel.Events.DatabaseLoaded, step2);
       loadValuesAndDump(false, null, 0, 10, step3);
     }
 

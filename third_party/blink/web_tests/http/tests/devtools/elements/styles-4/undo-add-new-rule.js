@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that adding a new rule can be undone.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <div class="foo" id="inspected" style="font-size: 12px">Text</div>
@@ -30,7 +34,7 @@
   }
 
   function step4() {
-    SDK.domModelUndoStack.undo();
+    SDK.DOMModel.DOMModelUndoStack.instance().undo();
     ElementsTestRunner.selectNodeAndWaitForStyles('other', step5);
   }
 
@@ -41,7 +45,7 @@
   }
 
   function step6() {
-    SDK.domModelUndoStack.redo();
+    SDK.DOMModel.DOMModelUndoStack.instance().redo();
     ElementsTestRunner.selectNodeAndWaitForStyles('inspected', step7);
   }
 

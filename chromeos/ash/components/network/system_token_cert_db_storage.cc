@@ -4,9 +4,9 @@
 
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -74,7 +74,7 @@ void SystemTokenCertDbStorage::GetDatabase(GetDatabaseCallback callback) {
   DCHECK(callback);
 
   if (system_token_cert_database_) {
-    std::move(callback).Run(system_token_cert_database_);
+    std::move(callback).Run(system_token_cert_database_.get());
   } else if (system_token_cert_db_retrieval_failed_) {
     std::move(callback).Run(/*nss_cert_database=*/nullptr);
   } else {

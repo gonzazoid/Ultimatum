@@ -8,12 +8,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
@@ -24,7 +24,10 @@
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 #include "chromeos/ash/components/dbus/cros_disks/fake_cros_disks_client.h"
 #include "chromeos/ash/components/drivefs/drivefs_util.h"
+#include "chromeos/ash/components/drivefs/mojom/drivefs.mojom-shared.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
+#include "chromeos/components/drivefs/mojom/drivefs_native_messaging.mojom.h"
+#include "components/drive/file_errors.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -32,6 +35,13 @@
 #include "url/gurl.h"
 
 namespace drivefs {
+
+FakeMetadata::FakeMetadata() = default;
+FakeMetadata::~FakeMetadata() = default;
+
+FakeMetadata::FakeMetadata(FakeMetadata&& other) = default;
+FakeMetadata& FakeMetadata::operator=(FakeMetadata&& other) = default;
+
 namespace {
 
 std::vector<std::pair<base::RepeatingCallback<std::string()>,
@@ -89,20 +99,6 @@ FakeDriveFsBootstrapListener::bootstrap() {
   return std::move(bootstrap_);
 }
 
-struct FakeDriveFs::FileMetadata {
-  std::string mime_type;
-  bool pinned = false;
-  bool hosted = false;
-  bool shared = false;
-  bool available_offline = false;
-  std::string original_name;
-  mojom::Capabilities capabilities;
-  mojom::FolderFeature folder_feature;
-  std::string doc_id;
-  int64_t stable_id = 0;
-  std::string alternate_url;
-};
-
 class FakeDriveFs::SearchQuery : public mojom::SearchQuery {
  public:
   SearchQuery(base::WeakPtr<FakeDriveFs> drive_fs,
@@ -116,6 +112,13 @@ class FakeDriveFs::SearchQuery : public mojom::SearchQuery {
   void GetNextPage(GetNextPageCallback callback) override {
     if (!drive_fs_) {
       std::move(callback).Run(drive::FileError::FILE_ERROR_ABORT, {});
+    } else if (next_page_called_) {
+      // If GetNextPage was previously called, on the next request send an empty
+      // array. This is the current way to identify if a query has no more
+      // results, however, this is slightly incorrect and b/277018122 tracks
+      // providing a more robust fix.
+      next_page_called_ = false;
+      std::move(callback).Run(drive::FILE_ERROR_OK, {});
     } else {
       // Default implementation: just search for a file name.
       callback_ = std::move(callback);
@@ -124,6 +127,7 @@ class FakeDriveFs::SearchQuery : public mojom::SearchQuery {
           base::BindOnce(&SearchQuery::SearchFiles, drive_fs_->mount_path()),
           base::BindOnce(&SearchQuery::GetMetadata,
                          weak_ptr_factory_.GetWeakPtr()));
+      next_page_called_ = true;
     }
   }
 
@@ -187,26 +191,65 @@ class FakeDriveFs::SearchQuery : public mojom::SearchQuery {
         const base::FilePath path = item_ptr->path;
         const drivefs::mojom::FileMetadata* metadata = item_ptr->metadata.get();
         if (!query.empty()) {
-          return !base::Contains(base::ToLowerASCII(path.BaseName().value()),
-                                 query);
+          if (!base::Contains(base::ToLowerASCII(path.BaseName().value()),
+                              query)) {
+            return true;
+          }
         }
         if (params_->available_offline) {
-          return !metadata->available_offline && IsLocal(metadata->type);
+          if (!metadata->available_offline && IsLocal(metadata->type)) {
+            return true;
+          }
         }
         if (params_->shared_with_me) {
-          return !metadata->shared;
+          if (!metadata->shared) {
+            return true;
+          }
+        }
+        if (params_->modified_time.has_value()) {
+          switch (params_->modified_time_operator) {
+            case mojom::QueryParameters::DateComparisonOperator::kLessThan:
+              if (metadata->modification_time >= *params_->modified_time) {
+                return true;
+              }
+              break;
+            case mojom::QueryParameters::DateComparisonOperator::kLessOrEqual:
+              if (metadata->modification_time > *params_->modified_time) {
+                return true;
+              }
+              break;
+            case mojom::QueryParameters::DateComparisonOperator::kEqual:
+              if (metadata->modification_time != *params_->modified_time) {
+                return true;
+              }
+              break;
+            case mojom::QueryParameters::DateComparisonOperator::
+                kGreaterOrEqual:
+              if (metadata->modification_time < *params_->modified_time) {
+                return true;
+              }
+              break;
+            case mojom::QueryParameters::DateComparisonOperator::kGreaterThan:
+              if (metadata->modification_time <= *params_->modified_time) {
+                return true;
+              }
+              break;
+            default:
+              break;
+          }
         }
         if (!mime_types.empty()) {
           std::string content_mime_type = metadata->content_mime_type;
-          if (content_mime_type.empty()) {
-            return true;
-          }
-          if (base::ranges::none_of(
-                  mime_types,
-                  [content_mime_type](const std::string& mime_type) {
-                    return net::MatchesMimeType(mime_type, content_mime_type);
-                  })) {
-            return true;
+          // If we do not know the MIME type the file may or may not match. Thus
+          // we only test MIME type match if we know the files MIME type.
+          if (!content_mime_type.empty()) {
+            if (base::ranges::none_of(
+                    mime_types,
+                    [content_mime_type](const std::string& mime_type) {
+                      return net::MatchesMimeType(mime_type, content_mime_type);
+                    })) {
+              return true;
+            }
           }
         }
         return false;
@@ -254,13 +297,32 @@ class FakeDriveFs::SearchQuery : public mojom::SearchQuery {
   std::vector<drivefs::mojom::QueryItemPtr> results_;
   size_t pending_callbacks_ = 0;
 
+  bool next_page_called_ = false;
+
   base::WeakPtrFactory<SearchQuery> weak_ptr_factory_{this};
 };
+
+FakeDriveFs::FileMetadata::FileMetadata() = default;
+FakeDriveFs::FileMetadata::FileMetadata(const FakeDriveFs::FileMetadata&) =
+    default;
+FakeDriveFs::FileMetadata& FakeDriveFs::FileMetadata::operator=(
+    const FakeDriveFs::FileMetadata&) = default;
+FakeDriveFs::FileMetadata::~FileMetadata() = default;
 
 FakeDriveFs::FakeDriveFs(const base::FilePath& mount_path)
     : mount_path_(mount_path) {
   CHECK(mount_path.IsAbsolute());
   CHECK(!mount_path.ReferencesParent());
+
+  ON_CALL(*this, StartSearchQuery)
+      .WillByDefault(
+          [this](mojo::PendingReceiver<drivefs::mojom::SearchQuery> receiver,
+                 drivefs::mojom::QueryParametersPtr query_params) {
+            auto search_query = std::make_unique<SearchQuery>(
+                weak_factory_.GetWeakPtr(), std::move(query_params));
+            mojo::MakeSelfOwnedReceiver(std::move(search_query),
+                                        std::move(receiver));
+          });
 }
 
 FakeDriveFs::~FakeDriveFs() = default;
@@ -285,33 +347,31 @@ FakeDriveFs::CreateMojoListener() {
       bootstrap_receiver_.BindNewPipeAndPassRemote());
 }
 
-void FakeDriveFs::SetMetadata(const base::FilePath& path,
-                              const std::string& mime_type,
-                              const std::string& original_name,
-                              bool pinned,
-                              bool available_offline,
-                              bool shared,
-                              const mojom::Capabilities& capabilities,
-                              const mojom::FolderFeature& folder_feature,
-                              const std::string& doc_id,
-                              const std::string& alternate_url) {
-  auto& stored_metadata = metadata_[path];
-  stored_metadata.mime_type = mime_type;
-  stored_metadata.original_name = original_name;
-  stored_metadata.hosted = (original_name != path.BaseName().value());
-  stored_metadata.capabilities = capabilities;
-  stored_metadata.folder_feature = folder_feature;
-  stored_metadata.doc_id = doc_id;
-  if (pinned) {
-    stored_metadata.pinned = true;
+void FakeDriveFs::SetMetadata(const FakeMetadata& metadata) {
+  auto& stored_metadata = metadata_[metadata.path];
+  stored_metadata.mime_type = metadata.mime_type;
+  stored_metadata.original_name = metadata.original_name;
+  stored_metadata.hosted =
+      (metadata.original_name != metadata.path.BaseName().value());
+  stored_metadata.capabilities = metadata.capabilities;
+  stored_metadata.folder_feature = metadata.folder_feature;
+  stored_metadata.doc_id = metadata.doc_id;
+  stored_metadata.pinned = metadata.pinned;
+  stored_metadata.dirty = metadata.dirty;
+  stored_metadata.available_offline = metadata.available_offline;
+  stored_metadata.shared = metadata.shared;
+  if (metadata.shortcut) {
+    drivefs::mojom::ShortcutDetails shortcut_details;
+    shortcut_details.target_lookup_status =
+        drivefs::mojom::ShortcutDetails::LookupStatus::kOk;
+    if (!metadata.shortcut_target_path.empty()) {
+      shortcut_details.target_path =
+          std::make_optional<base::FilePath>(metadata.shortcut_target_path);
+    }
+    stored_metadata.shortcut_details = std::move(shortcut_details);
   }
-  if (available_offline) {
-    stored_metadata.available_offline = true;
-  }
-  if (shared) {
-    stored_metadata.shared = true;
-  }
-  stored_metadata.alternate_url = alternate_url;
+  stored_metadata.alternate_url = metadata.alternate_url;
+  stored_metadata.can_pin = metadata.can_pin;
 }
 
 void FakeDriveFs::DisplayConfirmDialog(
@@ -319,6 +379,46 @@ void FakeDriveFs::DisplayConfirmDialog(
     drivefs::mojom::DriveFsDelegate::DisplayConfirmDialogCallback callback) {
   DCHECK(delegate_);
   delegate_->DisplayConfirmDialog(std::move(reason), std::move(callback));
+}
+
+std::optional<bool> FakeDriveFs::IsItemPinned(const std::string& path) {
+  for (const auto& metadata : metadata_) {
+    if (metadata.first.value() == path) {
+      return metadata.second.pinned;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<bool> FakeDriveFs::IsItemDirty(const std::string& path) {
+  for (const auto& metadata : metadata_) {
+    if (metadata.first.value() == path) {
+      return metadata.second.dirty;
+    }
+  }
+  return std::nullopt;
+}
+
+bool FakeDriveFs::SetCanPin(const std::string& path, bool can_pin) {
+  for (auto& metadata : metadata_) {
+    if (metadata.first.value() == path) {
+      metadata.second.can_pin = can_pin;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::optional<FakeDriveFs::FileMetadata> FakeDriveFs::GetItemMetadata(
+    const base::FilePath& path) {
+  const auto& metadata = metadata_.find(path);
+  if (metadata == metadata_.end()) {
+    return std::nullopt;
+  }
+  if (metadata->second.stable_id == 0) {
+    metadata->second.stable_id = next_stable_id_++;
+  }
+  return metadata->second;
 }
 
 void FakeDriveFs::Init(
@@ -352,7 +452,9 @@ void FakeDriveFs::GetMetadata(const base::FilePath& path,
   }
 
   const auto& stored_metadata = metadata_[path];
+  metadata->item_id = stored_metadata.doc_id;
   metadata->pinned = stored_metadata.pinned;
+  metadata->dirty = stored_metadata.dirty;
   metadata->available_offline =
       stored_metadata.pinned || stored_metadata.available_offline;
   metadata->shared = stored_metadata.shared;
@@ -381,11 +483,28 @@ void FakeDriveFs::GetMetadata(const base::FilePath& path,
 
   metadata->capabilities = stored_metadata.capabilities.Clone();
   metadata->stable_id = stored_metadata.stable_id;
+  using CanPinStatus = mojom::FileMetadata::CanPinStatus;
+  metadata->can_pin =
+      (stored_metadata.can_pin) ? CanPinStatus::kOk : CanPinStatus::kDisabled;
   if (stored_metadata.hosted) {
-    metadata->can_pin = mojom::FileMetadata::CanPinStatus::kDisabled;
+    metadata->can_pin = CanPinStatus::kDisabled;
+  }
+  if (stored_metadata.shortcut_details.has_value()) {
+    metadata->shortcut_details = stored_metadata.shortcut_details->Clone();
   }
 
   std::move(callback).Run(drive::FILE_ERROR_OK, std::move(metadata));
+}
+
+void FakeDriveFs::GetMetadataByStableId(int64_t stable_id,
+                                        GetMetadataCallback callback) {
+  for (const auto& [path, metadata] : metadata_) {
+    if (metadata.stable_id == stable_id) {
+      GetMetadata(path, std::move(callback));
+      return;
+    }
+  }
+  std::move(callback).Run(drive::FILE_ERROR_NOT_FOUND, nullptr);
 }
 
 void FakeDriveFs::SetPinned(const base::FilePath& path,
@@ -404,7 +523,7 @@ void FakeDriveFs::ResetCache(ResetCacheCallback callback) {
 void FakeDriveFs::GetThumbnail(const base::FilePath& path,
                                bool crop_to_square,
                                GetThumbnailCallback callback) {
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void FakeDriveFs::CopyFile(const base::FilePath& source,
@@ -449,14 +568,6 @@ void FakeDriveFs::CopyFile(const base::FilePath& source,
   metadata_[target_absolute_path] = metadata_[source_absolute_path];
   metadata_[target_absolute_path].stable_id = next_stable_id_++;
   std::move(callback).Run(drive::FILE_ERROR_OK);
-}
-
-void FakeDriveFs::StartSearchQuery(
-    mojo::PendingReceiver<drivefs::mojom::SearchQuery> receiver,
-    drivefs::mojom::QueryParametersPtr query_params) {
-  auto search_query = std::make_unique<SearchQuery>(weak_factory_.GetWeakPtr(),
-                                                    std::move(query_params));
-  mojo::MakeSelfOwnedReceiver(std::move(search_query), std::move(receiver));
 }
 
 void FakeDriveFs::FetchAllChangeLogs() {}
@@ -535,17 +646,39 @@ void FakeDriveFs::GetQuotaUsage(
                           mojom::QuotaUsage::New());
 }
 
+void FakeDriveFs::SetPooledStorageQuotaUsage(int64_t used_user_bytes,
+                                             int64_t total_user_bytes,
+                                             bool organization_limit_exceeded) {
+  pooled_quota_usage_.used_user_bytes = used_user_bytes;
+  pooled_quota_usage_.total_user_bytes = total_user_bytes;
+  pooled_quota_usage_.organization_limit_exceeded = organization_limit_exceeded;
+}
+
 void FakeDriveFs::GetPooledQuotaUsage(
     drivefs::mojom::DriveFs::GetPooledQuotaUsageCallback callback) {
   auto usage = mojom::PooledQuotaUsage::New();
 
-  usage->user_type = mojom::UserType::kUnmanaged;
-  usage->used_user_bytes = 1 * 1024 * 1024;
-  usage->total_user_bytes = 2 * 1024 * 1024;
-  usage->organization_limit_exceeded = false;
-  usage->organization_name = "Test Organization";
+  usage->user_type = pooled_quota_usage_.user_type;
+  usage->used_user_bytes = pooled_quota_usage_.used_user_bytes;
+  usage->total_user_bytes = pooled_quota_usage_.total_user_bytes;
+  usage->organization_limit_exceeded =
+      pooled_quota_usage_.organization_limit_exceeded;
+  usage->organization_name = "Test organization";
 
   std::move(callback).Run(drive::FileError::FILE_ERROR_OK, std::move(usage));
+}
+
+void FakeDriveFs::SetPinnedByStableId(int64_t stable_id,
+                                      bool pinned,
+                                      SetPinnedCallback callback) {
+  for (auto& [key, metadata] : metadata_) {
+    if (metadata.stable_id == stable_id) {
+      metadata.pinned = pinned;
+      std::move(callback).Run(drive::FILE_ERROR_OK);
+      return;
+    }
+  }
+  std::move(callback).Run(drive::FILE_ERROR_NOT_FOUND);
 }
 
 void FakeDriveFs::ToggleMirroring(
@@ -569,5 +702,23 @@ void FakeDriveFs::ToggleSyncForPath(
 }
 
 void FakeDriveFs::PollHostedFilePinStates() {}
+
+void FakeDriveFs::CancelUploadByPath(
+    const base::FilePath& path,
+    drivefs::mojom::DriveFs::CancelUploadMode cancel_mode) {}
+
+void FakeDriveFs::SetDocsOfflineEnabled(
+    bool enabled,
+    drivefs::mojom::DriveFs::SetDocsOfflineEnabledCallback callback) {
+  std::move(callback).Run(drive::FILE_ERROR_OK,
+                          drivefs::mojom::DocsOfflineEnableStatus::kSuccess);
+}
+
+void FakeDriveFs::GetDocsOfflineStats(
+    drivefs::mojom::DriveFs::GetDocsOfflineStatsCallback callback) {
+  drivefs::mojom::DocsOfflineStatsPtr stats =
+      drivefs::mojom::DocsOfflineStats::New();
+  std::move(callback).Run(drive::FILE_ERROR_OK, std::move(stats));
+}
 
 }  // namespace drivefs

@@ -19,10 +19,6 @@
 #include "ui/gfx/platform_font.h"
 #include "ui/gfx/test/font_fallback_test_data.h"
 
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
-
 namespace gfx {
 
 namespace {
@@ -71,9 +67,9 @@ class GetFallbackFontTest
       font_option += std::string("F") + base_font_option.family_name;
     if (base_font_option.delta || base_font_option.style ||
         base_font_option.style) {
-      font_option +=
-          base::StringPrintf("_d%ds%dw%d", base_font_option.delta,
-                             base_font_option.style, base_font_option.weight);
+      font_option += base::StringPrintf(
+          "_d%ds%dw%d", base_font_option.delta, base_font_option.style,
+          static_cast<int>(base_font_option.weight));
     }
 
     std::string language_tag = test_case.language_tag;
@@ -170,15 +166,6 @@ TEST_P(GetFallbackFontTest, GetFallbackFont) {
                          base_font_option_.weight);
   }
 
-#if BUILDFLAG(IS_WIN)
-  // Skip testing this call to GetFallbackFont on older windows versions. Some
-  // fonts only got introduced on windows 10 and the test will fail on previous
-  // versions.
-  const bool is_win10 = base::win::GetVersion() >= base::win::Version::WIN10;
-  if (test_case_.is_win10 && !is_win10)
-    return;
-#endif
-
   // Retrieve the name of the current script.
   script_name_ = uscript_getName(test_case_.script);
 
@@ -215,6 +202,14 @@ TEST_P(GetFallbackFontTest, GetFallbackFont) {
       return;
     }
   }
+
+#if BUILDFLAG(IS_IOS)
+  // TODO(crbug.com/1476170): font fallback does not appear to be working
+  // consistently.
+  if (fallback_font.GetFontName() == ".LastResort") {
+    GTEST_SKIP() << ".LastResort is not currently behaving correctly.";
+  }
+#endif
 
   // Ensure that glyphs exists in the fallback font.
   if (!DoesFontSupportCodePoints(fallback_font, test_case_.text)) {

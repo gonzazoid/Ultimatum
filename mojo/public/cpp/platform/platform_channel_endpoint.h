@@ -5,11 +5,13 @@
 #ifndef MOJO_PUBLIC_CPP_PLATFORM_PLATFORM_CHANNEL_ENDPOINT_H_
 #define MOJO_PUBLIC_CPP_PLATFORM_PLATFORM_CHANNEL_ENDPOINT_H_
 
+#include <string_view>
+
 #include "base/command_line.h"
 #include "base/component_export.h"
 #include "base/process/launch.h"
-#include "base/strings/string_piece.h"
 #include "build/build_config.h"
+#include "mojo/buildflags.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
 
 namespace mojo {
@@ -26,7 +28,7 @@ class COMPONENT_EXPORT(MOJO_CPP_PLATFORM) PlatformChannelEndpoint {
   using HandlePassingInfo = base::HandlesToInheritVector;
 #elif BUILDFLAG(IS_FUCHSIA)
   using HandlePassingInfo = base::HandlesToTransferVector;
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   using HandlePassingInfo = base::MachPortsForRendezvous;
 #elif BUILDFLAG(IS_POSIX)
   using HandlePassingInfo = base::FileHandleMappingVector;
@@ -81,7 +83,7 @@ class COMPONENT_EXPORT(MOJO_CPP_PLATFORM) PlatformChannelEndpoint {
   void ProcessLaunchAttempted();
 
   [[nodiscard]] static PlatformChannelEndpoint RecoverFromString(
-      base::StringPiece value);
+      std::string_view value);
 
  private:
   PlatformHandle handle_;

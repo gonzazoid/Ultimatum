@@ -37,6 +37,15 @@ class ContentAnalysisSdkManager {
     std::unique_ptr<content_analysis::sdk::Client> client_;
   };
 
+  // This comparator is required in order to use Config in sets or as keys in
+  // maps.
+  constexpr static auto CompareConfig =
+      [](const content_analysis::sdk::Client::Config& c1,
+         const content_analysis::sdk::Client::Config& c2) {
+        return (c1.name < c2.name) ||
+               (c1.name == c2.name && !c1.user_specific && c2.user_specific);
+      };
+
   static ContentAnalysisSdkManager* Get();
 
   ContentAnalysisSdkManager(const ContentAnalysisSdkManager& other) = delete;
@@ -61,6 +70,8 @@ class ContentAnalysisSdkManager {
   // Virtual to be overridden in tests.
   virtual void ResetClient(const content_analysis::sdk::Client::Config& config);
 
+  virtual void ResetAllClients();
+
   bool HasClientForTesting(
       const content_analysis::sdk::Client::Config& config) {
     return clients_.count(config) > 0;
@@ -79,15 +90,6 @@ class ContentAnalysisSdkManager {
   // Creates a new SDK client.  Virtual to be overridden in tests.
   virtual std::unique_ptr<content_analysis::sdk::Client> CreateClient(
       const content_analysis::sdk::Client::Config& config);
-
-  // This comparator is required in order to use Config as the key for the
-  // `clients_` map.
-  constexpr static auto CompareConfig =
-      [](const content_analysis::sdk::Client::Config& c1,
-         const content_analysis::sdk::Client::Config& c2) {
-        return (c1.name < c2.name) ||
-               (c1.name == c2.name && !c1.user_specific && c2.user_specific);
-      };
 
   std::map<content_analysis::sdk::Client::Config,
            scoped_refptr<WrappedClient>,

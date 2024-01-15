@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/containers/contains.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
@@ -20,12 +20,83 @@
 #include "device/fido/authenticator_make_credential_response.h"
 #include "device/fido/discoverable_credential_metadata.h"
 #include "device/fido/fido_transport_protocol.h"
+#include "device/fido/fido_types.h"
 #include "device/fido/get_assertion_request_handler.h"
 #include "device/fido/make_credential_request_handler.h"
 #include "device/fido/opaque_attestation_statement.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/microsoft_webauthn/webauthn.h"
 
 namespace device {
+
+namespace {
+
+absl::optional<std::vector<uint8_t>> HMACSecretOutputs(
+    const WEBAUTHN_HMAC_SECRET_SALT& salt) {
+  constexpr size_t kOutputLength = 32;
+  if (salt.cbFirst != kOutputLength ||
+      (salt.cbSecond != 0 && salt.cbSecond != kOutputLength)) {
+    FIDO_LOG(ERROR) << "Incorrect HMAC output lengths: " << salt.cbFirst << " "
+                    << salt.cbSecond;
+    return absl::nullopt;
+  }
+
+  std::vector<uint8_t> ret;
+  ret.insert(ret.end(), salt.pbFirst, salt.pbFirst + salt.cbFirst);
+  if (salt.cbSecond == kOutputLength) {
+    ret.insert(ret.end(), salt.pbSecond, salt.pbSecond + salt.cbSecond);
+  }
+  return ret;
+}
+
+}  // namespace
+
+absl::optional<FidoTransportProtocol> FromWinTransportsMask(
+    const DWORD transport) {
+  switch (transport) {
+    case WEBAUTHN_CTAP_TRANSPORT_USB:
+      return FidoTransportProtocol::kUsbHumanInterfaceDevice;
+    case WEBAUTHN_CTAP_TRANSPORT_NFC:
+      return FidoTransportProtocol::kNearFieldCommunication;
+    case WEBAUTHN_CTAP_TRANSPORT_BLE:
+      return FidoTransportProtocol::kBluetoothLowEnergy;
+    case WEBAUTHN_CTAP_TRANSPORT_INTERNAL:
+      return FidoTransportProtocol::kInternal;
+    case WEBAUTHN_CTAP_TRANSPORT_HYBRID:
+      return FidoTransportProtocol::kHybrid;
+    default:
+      // Ignore _TEST and possibly future others.
+      return absl::nullopt;
+  }
+}
+
+uint32_t ToWinTransportsMask(
+    const base::flat_set<FidoTransportProtocol>& transports) {
+  uint32_t result = 0;
+  for (const FidoTransportProtocol transport : transports) {
+    switch (transport) {
+      case FidoTransportProtocol::kUsbHumanInterfaceDevice:
+        result |= WEBAUTHN_CTAP_TRANSPORT_USB;
+        break;
+      case FidoTransportProtocol::kNearFieldCommunication:
+        result |= WEBAUTHN_CTAP_TRANSPORT_NFC;
+        break;
+      case FidoTransportProtocol::kBluetoothLowEnergy:
+        result |= WEBAUTHN_CTAP_TRANSPORT_BLE;
+        break;
+      case FidoTransportProtocol::kInternal:
+        result |= WEBAUTHN_CTAP_TRANSPORT_INTERNAL;
+        break;
+      case FidoTransportProtocol::kHybrid:
+        result |= WEBAUTHN_CTAP_TRANSPORT_HYBRID;
+        break;
+      case FidoTransportProtocol::kAndroidAccessory:
+        // AOA is unsupported by the Windows API.
+        break;
+    }
+  }
+  return result;
+}
 
 absl::optional<AuthenticatorMakeCredentialResponse>
 ToAuthenticatorMakeCredentialResponse(
@@ -54,23 +125,8 @@ ToAuthenticatorMakeCredentialResponse(
       WEBAUTHN_CREDENTIAL_ATTESTATION_VERSION_3) {
     // dwUsedTransport should have exactly one of the
     // WEBAUTHN_CTAP_TRANSPORT_* values set.
-    switch (credential_attestation.dwUsedTransport) {
-      case WEBAUTHN_CTAP_TRANSPORT_USB:
-        transport_used = FidoTransportProtocol::kUsbHumanInterfaceDevice;
-        break;
-      case WEBAUTHN_CTAP_TRANSPORT_NFC:
-        transport_used = FidoTransportProtocol::kNearFieldCommunication;
-        break;
-      case WEBAUTHN_CTAP_TRANSPORT_BLE:
-        transport_used = FidoTransportProtocol::kBluetoothLowEnergy;
-        break;
-      case WEBAUTHN_CTAP_TRANSPORT_INTERNAL:
-        transport_used = FidoTransportProtocol::kInternal;
-        break;
-      default:
-        // Ignore _TEST and possibly future others.
-        break;
-    }
+    transport_used =
+        FromWinTransportsMask(credential_attestation.dwUsedTransport);
   }
 
   AuthenticatorMakeCredentialResponse ret(
@@ -80,11 +136,24 @@ ToAuthenticatorMakeCredentialResponse(
           std::make_unique<OpaqueAttestationStatement>(
               base::WideToUTF8(credential_attestation.pwszFormatType),
               std::move(*cbor_attestation_statement))));
+  if (transport_used == FidoTransportProtocol::kInternal) {
+    // Windows platform credentials can't be used from other devices, so we can
+    // fill in the authenticator supported transports.
+    ret.transports = {*transport_used};
+  }
 
   if (credential_attestation.dwVersion >=
       WEBAUTHN_CREDENTIAL_ATTESTATION_VERSION_4) {
     ret.enterprise_attestation_returned = credential_attestation.bEpAtt;
     ret.is_resident_key = credential_attestation.bResidentKey;
+    if (credential_attestation.bLargeBlobSupported) {
+      ret.large_blob_type = LargeBlobSupportType::kKey;
+    }
+  }
+
+  if (credential_attestation.dwVersion >=
+      WEBAUTHN_CREDENTIAL_ATTESTATION_VERSION_5) {
+    ret.prf_enabled = credential_attestation.bPrfEnabled;
   }
 
   return ret;
@@ -93,7 +162,7 @@ ToAuthenticatorMakeCredentialResponse(
 absl::optional<AuthenticatorGetAssertionResponse>
 ToAuthenticatorGetAssertionResponse(
     const WEBAUTHN_ASSERTION& assertion,
-    const std::vector<PublicKeyCredentialDescriptor>& allow_list) {
+    const CtapGetAssertionOptions& request_options) {
   auto authenticator_data =
       AuthenticatorData::DecodeAuthenticatorData(base::span<const uint8_t>(
           assertion.pbAuthenticatorData, assertion.cbAuthenticatorData));
@@ -103,10 +172,15 @@ ToAuthenticatorGetAssertionResponse(
                                    assertion.cbAuthenticatorData);
     return absl::nullopt;
   }
+  absl::optional<FidoTransportProtocol> transport_used =
+      assertion.dwVersion >= WEBAUTHN_ASSERTION_VERSION_4
+          ? FromWinTransportsMask(assertion.dwUsedTransport)
+          : absl::nullopt;
   AuthenticatorGetAssertionResponse response(
       std::move(*authenticator_data),
       std::vector<uint8_t>(assertion.pbSignature,
-                           assertion.pbSignature + assertion.cbSignature));
+                           assertion.pbSignature + assertion.cbSignature),
+      transport_used);
   response.credential = PublicKeyCredentialDescriptor(
       CredentialType::kPublicKey,
       std::vector<uint8_t>(
@@ -115,6 +189,21 @@ ToAuthenticatorGetAssertionResponse(
   if (assertion.cbUserId > 0) {
     response.user_entity = PublicKeyCredentialUserEntity(std::vector<uint8_t>(
         assertion.pbUserId, assertion.pbUserId + assertion.cbUserId));
+  }
+  if (assertion.dwVersion >= WEBAUTHN_ASSERTION_VERSION_2 &&
+      assertion.dwCredLargeBlobStatus ==
+          WEBAUTHN_CRED_LARGE_BLOB_STATUS_SUCCESS) {
+    if (request_options.large_blob_read) {
+      response.large_blob = std::vector<uint8_t>(
+          assertion.pbCredLargeBlob,
+          assertion.pbCredLargeBlob + assertion.cbCredLargeBlob);
+    } else if (request_options.large_blob_write) {
+      response.large_blob_written = true;
+    }
+  }
+  if (assertion.dwVersion >= WEBAUTHN_ASSERTION_VERSION_3 &&
+      assertion.pHmacSecret) {
+    response.hmac_secret = HMACSecretOutputs(*assertion.pHmacSecret);
   }
   return response;
 }
@@ -145,32 +234,6 @@ uint32_t ToWinAuthenticatorAttachment(
   }
   NOTREACHED();
   return WEBAUTHN_AUTHENTICATOR_ATTACHMENT_ANY;
-}
-
-static uint32_t ToWinTransportsMask(
-    const base::flat_set<FidoTransportProtocol>& transports) {
-  uint32_t result = 0;
-  for (const FidoTransportProtocol transport : transports) {
-    switch (transport) {
-      case FidoTransportProtocol::kUsbHumanInterfaceDevice:
-        result |= WEBAUTHN_CTAP_TRANSPORT_USB;
-        break;
-      case FidoTransportProtocol::kNearFieldCommunication:
-        result |= WEBAUTHN_CTAP_TRANSPORT_NFC;
-        break;
-      case FidoTransportProtocol::kBluetoothLowEnergy:
-        result |= WEBAUTHN_CTAP_TRANSPORT_BLE;
-        break;
-      case FidoTransportProtocol::kHybrid:
-      case FidoTransportProtocol::kAndroidAccessory:
-        // caBLE is unsupported by the Windows API.
-        break;
-      case FidoTransportProtocol::kInternal:
-        result |= WEBAUTHN_CTAP_TRANSPORT_INTERNAL;
-        break;
-    }
-  }
-  return result;
 }
 
 std::vector<WEBAUTHN_CREDENTIAL> ToWinCredentialVector(
@@ -207,8 +270,19 @@ std::vector<WEBAUTHN_CREDENTIAL_EX> ToWinCredentialExVector(
   return result;
 }
 
+uint32_t ToWinLargeBlobSupport(LargeBlobSupport large_blob_support) {
+  switch (large_blob_support) {
+    case LargeBlobSupport::kNotRequested:
+      return WEBAUTHN_LARGE_BLOB_SUPPORT_NONE;
+    case LargeBlobSupport::kPreferred:
+      return WEBAUTHN_LARGE_BLOB_SUPPORT_PREFERRED;
+    case LargeBlobSupport::kRequired:
+      return WEBAUTHN_LARGE_BLOB_SUPPORT_REQUIRED;
+  }
+}
+
 CtapDeviceResponseCode WinErrorNameToCtapDeviceResponseCode(
-    const std::u16string& error_name) {
+    std::u16string_view error_name) {
   // See WebAuthNGetErrorName in <webauthn.h> for these string literals.
   //
   // Note that the set of errors that browser are allowed to return in a
@@ -217,8 +291,8 @@ CtapDeviceResponseCode WinErrorNameToCtapDeviceResponseCode(
   // permissible errors are "InvalidStateError" (aka CREDENTIAL_EXCLUDED in
   // Chromium code) and "NotAllowedError". Hence, we can collapse the set of
   // Windows errors to a smaller set of CtapDeviceResponseCodes.
-  static base::flat_map<std::u16string, CtapDeviceResponseCode>
-      kResponseCodeMap({
+  constexpr auto kResponseCodeMap =
+      base::MakeFixedFlatMap<std::u16string_view, CtapDeviceResponseCode>({
           {u"Success", CtapDeviceResponseCode::kSuccess},
           {u"InvalidStateError",
            CtapDeviceResponseCode::kCtap2ErrCredentialExcluded},
@@ -230,11 +304,12 @@ CtapDeviceResponseCode WinErrorNameToCtapDeviceResponseCode(
            CtapDeviceResponseCode::kCtap2ErrOperationDenied},
           {u"UnknownError", CtapDeviceResponseCode::kCtap2ErrOperationDenied},
       });
-  if (!base::Contains(kResponseCodeMap, error_name)) {
+  const auto* it = kResponseCodeMap.find(error_name);
+  if (it == kResponseCodeMap.end()) {
     FIDO_LOG(ERROR) << "Unexpected error name: " << error_name;
     return CtapDeviceResponseCode::kCtap2ErrOperationDenied;
   }
-  return kResponseCodeMap[error_name];
+  return it->second;
 }
 
 COMPONENT_EXPORT(DEVICE_FIDO)
@@ -309,7 +384,7 @@ WinCredentialDetailsListToCredentialMetadata(
     WEBAUTHN_USER_ENTITY_INFORMATION* user = credential->pUserInformation;
     WEBAUTHN_RP_ENTITY_INFORMATION* rp = credential->pRpInformation;
     DiscoverableCredentialMetadata metadata(
-        base::WideToUTF8(rp->pwszId),
+        AuthenticatorType::kWinNative, base::WideToUTF8(rp->pwszId),
         std::vector<uint8_t>(
             credential->pbCredentialID,
             credential->pbCredentialID + credential->cbCredentialID),

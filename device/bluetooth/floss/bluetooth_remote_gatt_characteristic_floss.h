@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_BLUETOOTH_FLOSS_BLUETOOTH_REMOTE_GATT_CHARACTERISTIC_FLOSS_H_
@@ -8,8 +8,9 @@
 
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
+#include "device/bluetooth/floss/bluetooth_gatt_characteristic_floss.h"
 #include "device/bluetooth/floss/floss_dbus_client.h"
-#include "device/bluetooth/floss/floss_gatt_client.h"
+#include "device/bluetooth/floss/floss_gatt_manager_client.h"
 
 namespace device {
 class BluetoothRemoteGattDescriptor;
@@ -20,7 +21,8 @@ namespace floss {
 class BluetoothRemoteGattServiceFloss;
 
 class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
-    : public device::BluetoothRemoteGattCharacteristic,
+    : public BluetoothGattCharacteristicFloss,
+      public device::BluetoothRemoteGattCharacteristic,
       public FlossGattClientObserver {
  public:
   // Construct remote characteristic.
@@ -44,7 +46,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
   // device::BluetoothRemoteGattCharacteristic overrides.
   const std::vector<uint8_t>& GetValue() const override;
   device::BluetoothRemoteGattService* GetService() const override;
-  bool IsNotifying() const override;
   void ReadRemoteCharacteristic(ValueCallback callback) override;
   void WriteRemoteCharacteristic(
       const std::vector<uint8_t>& value,
@@ -73,6 +74,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
   void GattCharacteristicWrite(std::string address,
                                GattStatus status,
                                int32_t handle) override;
+  void GattNotify(std::string address,
+                  int32_t handle,
+                  const std::vector<uint8_t>& data) override;
 
   // Authentication required to read this characteristic and its descriptors.
   AuthRequired GetAuthForRead() const;
@@ -112,7 +116,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
   void OnWriteCharacteristic(base::OnceClosure callback,
                              ErrorCallback error_callback,
                              std::vector<uint8_t> data,
-                             DBusResult<Void> result);
+                             DBusResult<GattWriteRequestStatus> result);
 
  private:
   friend class BluetoothRemoteGattServiceFloss;
@@ -120,6 +124,15 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
   BluetoothRemoteGattCharacteristicFloss(
       BluetoothRemoteGattServiceFloss* service,
       GattCharacteristic* characteristic);
+
+  // Handles response to |RegisterForNotification| and
+  // |UnregisterForNotification|.
+  void OnRegisterForNotification(
+      device::BluetoothRemoteGattDescriptor* ccc_descriptor,
+      const std::vector<uint8_t>& value,
+      base::OnceClosure callback,
+      ErrorCallback error_callback,
+      DBusResult<GattStatus> result);
 
   // Send notifications to observer on adapter.
   void NotifyValueChanged();
@@ -130,9 +143,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
   // Characteristic represented by this class. The contents are owned by the
   // |service_| so we keep a pointer to it only here.
   raw_ptr<GattCharacteristic> characteristic_;
-
-  // True if there exists a notify session on this handle.
-  bool has_notify_session_ = false;
 
   // Number of gatt read requests in progress.
   int num_of_reads_in_progress_ = 0;
@@ -148,6 +158,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicFloss
   // because the Service linked here owns a unique_ptr<> to this class instance
   // so the lifetime of the two objects are tied together.
   raw_ptr<BluetoothRemoteGattServiceFloss> service_;
+
+  // Address of the device this characteristic and parent service belongs to.
+  std::string device_address_;
 
   base::WeakPtrFactory<BluetoothRemoteGattCharacteristicFloss>
       weak_ptr_factory_{this};

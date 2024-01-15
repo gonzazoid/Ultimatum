@@ -4,15 +4,11 @@
 
 #import "ios/chrome/browser/ui/settings/cells/table_view_clear_browsing_data_item.h"
 
-#import "base/mac/foundation_util.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Autolayout constants.
@@ -37,7 +33,7 @@ const CGFloat kImageHeight = 30;
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:tableCell withStyler:styler];
   TableViewClearBrowsingDataCell* cell =
-      base::mac::ObjCCastStrict<TableViewClearBrowsingDataCell>(tableCell);
+      base::apple::ObjCCastStrict<TableViewClearBrowsingDataCell>(tableCell);
   [cell setImage:self.image];
   cell.textLabel.text = self.text;
   cell.detailTextLabel.text = self.detailText;
@@ -110,7 +106,7 @@ const CGFloat kImageHeight = 30;
     _detailTextLabel.numberOfLines = 0;
     _detailTextLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _detailTextLabel.font =
-        [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+        [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
     _detailTextLabel.adjustsFontForContentSizeCategory = YES;
     [self.contentView addSubview:_detailTextLabel];
 
@@ -119,7 +115,7 @@ const CGFloat kImageHeight = 30;
     _optionalTextLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
     _optionalTextLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _optionalTextLabel.font =
-        [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+        [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
     _optionalTextLabel.adjustsFontForContentSizeCategory = YES;
     [self.contentView addSubview:_optionalTextLabel];
 
@@ -293,6 +289,15 @@ const CGFloat kImageHeight = 30;
         stringWithFormat:@"%@.%@", value, self.optionalTextLabel.text];
   }
   return value;
+}
+
+- (UIAccessibilityTraits)accessibilityTraits {
+  UIAccessibilityTraits accessibilityTraits = super.accessibilityTraits;
+  accessibilityTraits |= UIAccessibilityTraitButton;
+  if (self.checked) {
+    accessibilityTraits |= UIAccessibilityTraitSelected;
+  }
+  return accessibilityTraits;
 }
 
 @end

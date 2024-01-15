@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "chrome/browser/notifications/notification_blocker.h"
@@ -59,6 +59,11 @@ class NotificationDisplayQueue : public NotificationBlocker::Observer {
 
   // Returns a set of the currently queued notification ids.
   std::set<std::string> GetQueuedNotificationIds() const;
+
+  // Returns a set of the currently queued notification ids associated with
+  // `origin`.
+  std::set<std::string> GetQueuedNotificationIdsForOrigin(
+      const GURL& origin) const;
 
   // Sets the list of |blockers| to be used and observes their state.
   void SetNotificationBlockers(NotificationBlockers blockers);

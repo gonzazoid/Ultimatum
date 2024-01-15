@@ -26,6 +26,8 @@ class TestURLLoaderNetworkObserver
     ignore_certificate_errors_ = ignore_certificate_errors;
   }
 
+  void FlushReceivers();
+
   // mojom::URLLoaderNetworkServiceObserver overrides:
   void OnSSLCertificateError(const GURL& url,
                              int net_error,
@@ -46,17 +48,28 @@ class TestURLLoaderNetworkObserver
       const scoped_refptr<net::HttpResponseHeaders>& head_headers,
       mojo::PendingRemote<mojom::AuthChallengeResponder>
           auth_challenge_responder) override;
+  void OnPrivateNetworkAccessPermissionRequired(
+      const GURL& url,
+      const net::IPAddress& ip_address,
+      const absl::optional<std::string>& private_network_device_id,
+      const absl::optional<std::string>& private_network_device_name,
+      OnPrivateNetworkAccessPermissionRequiredCallback callback) override;
   void OnClearSiteData(
       const GURL& url,
       const std::string& header_value,
       int32_t load_flags,
       const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+      bool partitioned_state_allowed_only,
       OnClearSiteDataCallback callback) override;
   void OnLoadingStateUpdate(mojom::LoadInfoPtr info,
                             OnLoadingStateUpdateCallback callback) override;
   void OnDataUseUpdate(int32_t network_traffic_annotation_id_hash,
                        int64_t recv_bytes,
                        int64_t sent_bytes) override;
+  void OnSharedStorageHeaderReceived(
+      const url::Origin& request_origin,
+      std::vector<network::mojom::SharedStorageOperationPtr> operations,
+      OnSharedStorageHeaderReceivedCallback callback) override;
   void Clone(
       mojo::PendingReceiver<URLLoaderNetworkServiceObserver> observer) override;
 

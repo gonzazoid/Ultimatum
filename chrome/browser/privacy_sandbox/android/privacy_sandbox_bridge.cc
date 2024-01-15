@@ -15,6 +15,7 @@
 #include "chrome/browser/privacy_sandbox/android/jni_headers/PrivacySandboxBridge_jni.h"
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service_factory.h"
+#include "chrome/browser/privacy_sandbox/privacy_sandbox_settings_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "components/privacy_sandbox/canonical_topic.h"
 #include "components/privacy_sandbox/privacy_sandbox_settings.h"
@@ -51,63 +52,14 @@ ScopedJavaLocalRef<jobjectArray> ToJavaTopicsArray(
 }
 }  // namespace
 
-static jboolean JNI_PrivacySandboxBridge_IsPrivacySandboxEnabled(JNIEnv* env) {
-  return GetPrivacySandboxService()->IsPrivacySandboxEnabled();
-}
-
-static jboolean JNI_PrivacySandboxBridge_IsPrivacySandboxManaged(JNIEnv* env) {
-  return GetPrivacySandboxService()->IsPrivacySandboxManaged();
-}
-
 static jboolean JNI_PrivacySandboxBridge_IsPrivacySandboxRestricted(
     JNIEnv* env) {
   return GetPrivacySandboxService()->IsPrivacySandboxRestricted();
 }
 
-static void JNI_PrivacySandboxBridge_SetPrivacySandboxEnabled(
-    JNIEnv* env,
-    jboolean enabled) {
-  GetPrivacySandboxService()->SetPrivacySandboxEnabled(enabled);
-}
-
-static ScopedJavaLocalRef<jstring> JNI_PrivacySandboxBridge_GetFlocStatusString(
+static jboolean JNI_PrivacySandboxBridge_IsRestrictedNoticeEnabled(
     JNIEnv* env) {
-  // FLoC always disabled while OT not active.
-  // TODO(crbug.com/1299720): Perform cleanup / adjustment as required.
-  return ConvertUTF16ToJavaString(
-      env,
-      l10n_util::GetStringUTF16(IDS_PRIVACY_SANDBOX_FLOC_STATUS_NOT_ACTIVE));
-}
-
-static ScopedJavaLocalRef<jstring> JNI_PrivacySandboxBridge_GetFlocGroupString(
-    JNIEnv* env) {
-  // TODO(crbug.com/1299720): Remove this and all the UI code which uses it.
-  return ConvertUTF16ToJavaString(
-      env, l10n_util::GetStringUTF16(IDS_PRIVACY_SANDBOX_FLOC_INVALID));
-}
-
-static ScopedJavaLocalRef<jstring> JNI_PrivacySandboxBridge_GetFlocUpdateString(
-    JNIEnv* env) {
-  // TODO(crbug.com/1299720): Remove this and all the UI code which uses it.
-  return ConvertUTF16ToJavaString(
-      env, l10n_util::GetStringUTF16(
-               IDS_PRIVACY_SANDBOX_FLOC_TIME_TO_NEXT_COMPUTE_INVALID));
-}
-
-static ScopedJavaLocalRef<jstring>
-JNI_PrivacySandboxBridge_GetFlocDescriptionString(JNIEnv* env) {
-  // TODO(crbug.com/1299720): Remove this and all the UI code which uses it.
-  return ConvertUTF16ToJavaString(env,
-                                  l10n_util::GetPluralStringFUTF16(
-                                      IDS_PRIVACY_SANDBOX_FLOC_DESCRIPTION, 7));
-}
-
-static ScopedJavaLocalRef<jstring>
-JNI_PrivacySandboxBridge_GetFlocResetExplanationString(JNIEnv* env) {
-  // TODO(crbug.com/1299720): Remove this and all the UI code which uses it.
-  return ConvertUTF16ToJavaString(
-      env, l10n_util::GetPluralStringFUTF16(
-               IDS_PRIVACY_SANDBOX_FLOC_RESET_EXPLANATION, 7));
+  return GetPrivacySandboxService()->IsRestrictedNoticeEnabled();
 }
 
 static ScopedJavaLocalRef<jobjectArray>
@@ -143,7 +95,7 @@ static void JNI_PrivacySandboxBridge_GetFledgeJoiningEtldPlusOneForDisplay(
             base::android::RunObjectCallbackAndroid(
                 j_callback, base::android::ToJavaArrayOfStrings(env, strings));
           },
-          base::android::ScopedJavaGlobalRef(j_callback)));
+          base::android::ScopedJavaGlobalRef<jobject>(j_callback)));
 }
 
 static base::android::ScopedJavaLocalRef<jobjectArray>
@@ -203,7 +155,7 @@ JNI_PrivacySandboxBridge_GetFirstPartySetOwner(
     JNIEnv* env,
     const JavaParamRef<jstring>& memberOrigin) {
   auto fpsOwner = GetPrivacySandboxService()->GetFirstPartySetOwner(
-      GURL(ConvertJavaStringToUTF8(env, memberOrigin)));
+      GURL(base::android::ConvertJavaStringToUTF8(env, memberOrigin)));
 
   if (!fpsOwner.has_value()) {
     return nullptr;
@@ -215,9 +167,22 @@ JNI_PrivacySandboxBridge_GetFirstPartySetOwner(
 static jboolean JNI_PrivacySandboxBridge_IsPartOfManagedFirstPartySet(
     JNIEnv* env,
     const JavaParamRef<jstring>& origin) {
-  auto schemefulSite =
-      net::SchemefulSite(GURL(ConvertJavaStringToUTF8(env, origin)));
+  auto schemefulSite = net::SchemefulSite(
+      GURL(base::android::ConvertJavaStringToUTF8(env, origin)));
 
   return GetPrivacySandboxService()->IsPartOfManagedFirstPartySet(
       schemefulSite);
+}
+
+static void JNI_PrivacySandboxBridge_TopicsToggleChanged(JNIEnv* env,
+                                                         jboolean new_value) {
+  GetPrivacySandboxService()->TopicsToggleChanged(new_value);
+}
+
+static void
+JNI_PrivacySandboxBridge_SetAllPrivacySandboxAllowedForTesting(  // IN-TEST
+    JNIEnv* env) {
+  PrivacySandboxSettingsFactory::GetForProfile(
+      ProfileManager::GetActiveUserProfile())
+      ->SetAllPrivacySandboxAllowedForTesting();  // IN-TEST
 }

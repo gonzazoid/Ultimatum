@@ -10,7 +10,7 @@
 
 #include "base/android/callback_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "components/offline_items_collection/core/android/offline_item_bridge.h"
 #include "components/offline_items_collection/core/android/offline_item_share_info_bridge.h"
@@ -78,14 +78,14 @@ void RenameItemCallback(ScopedJavaGlobalRef<jobject> j_callback,
 void RunGetAllItemsCallback(const base::android::JavaRef<jobject>& j_callback,
                             const std::vector<OfflineItem>& items) {
   JNIEnv* env = AttachCurrentThread();
-  RunObjectCallbackAndroid(
+  base::android::RunObjectCallbackAndroid(
       j_callback, OfflineItemBridge::CreateOfflineItemList(env, items));
 }
 
 void RunGetItemByIdCallback(const base::android::JavaRef<jobject>& j_callback,
                             const absl::optional<OfflineItem>& item) {
   JNIEnv* env = AttachCurrentThread();
-  RunObjectCallbackAndroid(
+  base::android::RunObjectCallbackAndroid(
       j_callback, item.has_value()
                       ? OfflineItemBridge::CreateOfflineItem(env, item.value())
                       : nullptr);
@@ -173,11 +173,9 @@ void OfflineContentAggregatorBridge::ResumeDownload(
     JNIEnv* env,
     const JavaParamRef<jobject>& jobj,
     const JavaParamRef<jstring>& j_namespace,
-    const JavaParamRef<jstring>& j_id,
-    jboolean j_has_user_gesture) {
+    const JavaParamRef<jstring>& j_id) {
   provider_->ResumeDownload(JNI_OfflineContentAggregatorBridge_CreateContentId(
-                                env, j_namespace, j_id),
-                            j_has_user_gesture);
+      env, j_namespace, j_id));
 }
 
 void OfflineContentAggregatorBridge::GetItemById(

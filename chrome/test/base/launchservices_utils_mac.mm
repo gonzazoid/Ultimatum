@@ -6,15 +6,27 @@
 
 #include <Foundation/Foundation.h>
 
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
 #include "base/base_paths.h"
 #include "base/files/file_path.h"
-#include "base/mac/foundation_util.h"
 #include "base/path_service.h"
 #include "build/branding_buildflags.h"
 
 namespace test {
 
 bool RegisterAppWithLaunchServices() {
+  NSURL* bundleURL = base::apple::FilePathToNSURL(GuessAppBundlePath());
+
+  if (![bundleURL checkResourceIsReachableAndReturnError:nil]) {
+    return false;
+  }
+
+  return LSRegisterURL(base::apple::NSToCFPtrCast(bundleURL),
+                       /*inUpdate=*/false) == noErr;
+}
+
+base::FilePath GuessAppBundlePath() {
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   const char kAppSuffix[] = "Google Chrome.app";
 #else
@@ -24,19 +36,16 @@ bool RegisterAppWithLaunchServices() {
   // Try to guess the path to the real org.chromium.Chromium and/or
   // org.google.Chrome bundle if the current main bundle's path isn't already a
   // .app directory:
-  NSURL* bundleURL = [[NSBundle mainBundle] bundleURL];
-  if (![bundleURL.lastPathComponent hasSuffix:@".app"]) {
-    base::FilePath bundle_path;
-    if (!base::PathService::Get(base::DIR_EXE, &bundle_path))
-      return false;
-    bundle_path = bundle_path.Append(kAppSuffix);
-    bundleURL = base::mac::FilePathToNSURL(bundle_path);
+  NSURL* bundleURL = NSBundle.mainBundle.bundleURL;
+  if ([bundleURL.lastPathComponent hasSuffix:@".app"]) {
+    return base::apple::NSURLToFilePath(bundleURL);
   }
 
-  if (![NSFileManager.defaultManager fileExistsAtPath:bundleURL.path])
-    return false;
-
-  return LSRegisterURL(base::mac::NSToCFCast(bundleURL), false) == noErr;
+  base::FilePath exe_path;
+  if (!base::PathService::Get(base::DIR_EXE, &exe_path)) {
+    return base::FilePath();
+  }
+  return exe_path.Append(kAppSuffix);
 }
 
 }  // namespace test

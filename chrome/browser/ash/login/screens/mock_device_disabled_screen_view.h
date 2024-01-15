@@ -15,19 +15,15 @@ class MockDeviceDisabledScreenView : public DeviceDisabledScreenView {
   MockDeviceDisabledScreenView();
   ~MockDeviceDisabledScreenView() override;
 
-  MOCK_METHOD3(Show,
-               void(const std::string&,
-                    const std::string&,
-                    const std::string&));
-  MOCK_METHOD1(UpdateMessage, void(const std::string& message));
+  MOCK_METHOD(
+      void,
+      Show,
+      (const std::string&, const std::string&, const std::string&, bool),
+      (override));
+
+  MOCK_METHOD(void, UpdateMessage, (const std::string&), (override));
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::MockDeviceDisabledScreenView;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_MOCK_DEVICE_DISABLED_SCREEN_VIEW_H_

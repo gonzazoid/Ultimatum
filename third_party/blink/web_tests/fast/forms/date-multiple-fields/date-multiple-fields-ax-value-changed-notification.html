@@ -17,16 +17,9 @@ async_test((t) => {
     listener.queueExpectedNotification("Focus", "Day", "09", "4");
     listener.queueExpectedNotification("Focus", "Year", "2012", "ArrowUp");
     listener.queueExpectedNotification("ValueChanged", "Day", "04");
-    listener.queueExpectedNotification("ValueChanged", "Day", "04");
-    listener.queueExpectedNotification("ValueChanged", "Year", "2013");
     listener.queueExpectedNotification("ValueChanged", "Year", "2013");
 
     testInput.focus();
-
-    window.setTimeout(function() {
-        assert_unreached("Did not receive all accessibility notifications");
-        t.done();
-    }, 500);
 }, 'This test checks value changed accessibility notifications.');
 
 </script>

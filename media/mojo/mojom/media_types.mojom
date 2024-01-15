@@ -122,12 +122,35 @@ enum SVCScalabilityMode {
   // kUnsupportedMode is used to handle the enum differ of C++ and Mojo
   // SVCScalabilityMode in ToMojom, should not be used in other place.
   kUnsupportedMode,
+  kL1T1,
   kL1T2,
   kL1T3,
+  kL2T1,
+  kL2T2,
+  kL2T3,
+  kL3T1,
+  kL3T2,
+  kL3T3,
+  kL2T1Key,
   kL2T2Key,
   kL2T3Key,
+  kL3T1Key,
   kL3T2Key,
   kL3T3Key,
+  kS2T1,
+  kS2T2,
+  kS2T3,
+  kS3T1,
+  kS3T2,
+  kS3T3,
+};
+
+// This mojo enum only list hardware codec supported scalability mode.
+// See media/base/svc_scalability_mode.h for description.
+enum SVCInterLayerPredMode {
+  kOff,
+  kOn,
+  kOnKeyPic
 };
 
 // This defines a mojo transport format for media::VideoColorSpace.
@@ -191,13 +214,14 @@ struct VideoDecoderConfig {
 [Native]
 struct SubsampleEntry;
 
-// Important events happened to the CDM.
+// Important events happened to the CDM. See media/cdm/cdm_document_service.h
+// for descriptions.
 [EnableIf=is_win]
 enum CdmEvent {
-  kSignificantPlayback,  // Significant (e.g. played >1 minute) successful
-                         // playback happened using the CDM.
-  kPlaybackError,  // Error happened during playback using the CDM.
-  kCdmError,       // Error happened in the CDM.
+  kSignificantPlayback,
+  kPlaybackError,
+  kCdmError,
+  kHardwareContextReset,
 };
 
 // See media::CdmSessionClosedReason for descriptions.
@@ -209,6 +233,14 @@ enum CdmSessionClosedReason {
   kResourceEvicted,
 };
 
+// This defines a mojo transport format for media::SharedImageFormatType.
+// See media/base/video_frame.h for descriptions.
+enum SharedImageFormatType {
+  kLegacy,
+  kSharedImageFormat,
+  kSharedImageFormatExternalSampler,
+};
+
 // This defines a mojo transport format for media::DecryptConfig.
 // See media/base/decrypt_config.h for descriptions.
 struct DecryptConfig {
@@ -217,6 +249,13 @@ struct DecryptConfig {
   string iv;
   array<SubsampleEntry> subsamples;
   EncryptionPattern? encryption_pattern;
+};
+
+// This defines a mojo transport format for media::DecoderBufferSideData.
+struct DecoderBufferSideData {
+  array<uint32> spatial_layers;
+  array<uint8> alpha_data;
+  uint64 secure_handle;
 };
 
 // This defines a mojo transport format for media::DecoderBuffer.
@@ -236,15 +275,14 @@ struct DecoderBuffer {
   // Indicates whether or not this buffer is a random access point.
   bool is_key_frame;
 
-  // Empty when |side_data| doesn't exist.
-  array<uint8> side_data;
-
   // DecryptConfig for a encrypted buffer. NULL if the buffer is not encrypted.
   DecryptConfig? decrypt_config;
 
   // These fields indicate the amount of data to discard after decoding.
   mojo_base.mojom.TimeDelta front_discard;
   mojo_base.mojom.TimeDelta back_discard;
+
+  DecoderBufferSideData? side_data;
 };
 
 // This defines a mojo transport format for media::AudioBuffer.
@@ -290,7 +328,7 @@ struct VideoFrameMetadata {
   gfx.mojom.Size? source_size;
 
   gfx.mojom.Rect? region_capture_rect;
-  uint32 crop_version;
+  uint32 sub_capture_target_version;
 
   bool copy_required;
 
@@ -351,6 +389,8 @@ struct VideoFrameMetadata {
   mojo_base.mojom.TimeTicks? receive_time;
 
   mojo_base.mojom.TimeDelta? wallclock_frame_duration;
+
+  uint64? frame_sequence;
 };
 
 // This defines a mojo transport format for media::VideoFrame.
@@ -378,6 +418,8 @@ struct VideoFrame {
 
   gfx.mojom.ColorSpace color_space;
   gfx.mojom.HDRMetadata? hdr_metadata;
+
+  media.mojom.SharedImageFormatType shared_image_format_type;
 };
 
 // Possible choices for storing VideoFrame data.
@@ -469,7 +511,7 @@ struct StatusData {
   string group;
   uint16 code;
   string message;
-  array<mojo_base.mojom.Value> frames;
+  mojo_base.mojom.ListValue frames;
   StatusData? cause;
   mojo_base.mojom.Value data;
   uint64 packed_root_cause;
@@ -507,9 +549,9 @@ enum InputStreamErrorCode {
   kDeviceInUse = 2,
 };
 
-// See media/base/renderer_factory_selector.h for description.
+// See media/base/renderer.h for description.
 enum RendererType {
-  kDefault = 0,          // DefaultRendererFactory
+  kRendererImpl = 0,     // RendererImplFactory
   kMojo = 1,             // MojoRendererFactory
   kMediaPlayer = 2,      // MediaPlayerRendererClientFactory
   kCourier = 3,          // CourierRendererFactory
@@ -520,4 +562,5 @@ enum RendererType {
   kRemoting = 8,         // RemotingRendererFactory for remoting::Receiver
   kCastStreaming = 9,    // CastStreamingRendererFactory
   kContentEmbedderDefined = 10,  // Defined by the content embedder
+  kTest= 11,             // Renderer implementations used in tests
 };

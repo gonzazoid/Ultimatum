@@ -7,8 +7,8 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/smb_client/discovery/host_locator.h"
@@ -51,8 +51,9 @@ void NetworkScanner::FindHostsInNetwork(FindHostsCallback callback) {
 
   const uint32_t request_id = AddNewRequest(std::move(callback));
   for (const auto& locator : locators_) {
-    locator->FindHosts(
-        base::BindOnce(&NetworkScanner::OnHostsFound, AsWeakPtr(), request_id));
+    locator->FindHosts(base::BindOnce(&NetworkScanner::OnHostsFound,
+                                      weak_ptr_factory_.GetWeakPtr(),
+                                      request_id));
   }
 }
 

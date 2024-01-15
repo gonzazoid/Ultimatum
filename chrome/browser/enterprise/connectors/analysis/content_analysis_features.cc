@@ -8,6 +8,14 @@ namespace enterprise_connectors {
 
 BASE_FEATURE(kLocalContentAnalysisEnabled,
              "LocalContentAnalysisEnabled",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kDialogCustomRuleMessageEnabled,
+             "DialogCustomRuleMessageEnabled",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+bool IsDialogCustomRuleMessageEnabled() {
+  return base::FeatureList::IsEnabled(kDialogCustomRuleMessageEnabled);
+}
 
 }  // namespace enterprise_connectors

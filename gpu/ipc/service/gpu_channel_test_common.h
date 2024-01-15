@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
@@ -57,7 +56,8 @@ class GpuChannelTestCommon : public testing::Test {
                            int32_t routing_id,
                            base::UnsafeSharedMemoryRegion shared_state,
                            ContextResult* out_result,
-                           Capabilities* out_capabilities);
+                           Capabilities* out_capabilities,
+                           GLCapabilities* out_gl_capabilities);
 
   base::UnsafeSharedMemoryRegion GetSharedMemoryRegion();
 

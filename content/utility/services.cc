@@ -7,10 +7,13 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/feature_list.h"
+#include "base/lazy_instance.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/services/storage/public/mojom/storage_service.mojom.h"
 #include "components/services/storage/storage_service_impl.h"
 #include "content/child/child_process.h"
@@ -28,14 +31,14 @@
 #include "services/audio/service_factory.h"
 #include "services/data_decoder/data_decoder_service.h"
 #include "services/network/network_service.h"
-#include "services/service_manager/public/cpp/binder_registry.h"
+#include "services/on_device_model/on_device_model_service.h"
 #include "services/tracing/public/mojom/tracing_service.mojom.h"
 #include "services/tracing/tracing_service.h"
 #include "services/video_capture/public/mojom/video_capture_service.mojom.h"
 #include "services/video_capture/video_capture_service_impl.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/mach_logging.h"
+#include "base/apple/mach_logging.h"
 #include "sandbox/mac/system_services.h"
 #include "sandbox/policy/sandbox.h"
 #endif
@@ -60,13 +63,12 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/scoped_com_initializer.h"
-#include "media/audio/win/audio_manager_win.h"
-#include "media/base/media_switches.h"
 #include "sandbox/win/src/sandbox.h"
 extern sandbox::TargetServices* g_utility_target_services;
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "media/mojo/services/mojo_video_encode_accelerator_provider_factory.h"
 #include "sandbox/linux/services/libc_interceptor.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/sandbox_type.h"
@@ -90,21 +92,30 @@ extern sandbox::TargetServices* g_utility_target_services;
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) && \
     (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
-#include "media/mojo/services/stable_video_decoder_factory_service.h"  // nogncheck
+#include "content/common/features.h"
+#include "media/mojo/services/stable_video_decoder_factory_process_service.h"  // nogncheck
 #endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) &&
         // (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
 
 #if BUILDFLAG(ENABLE_ACCESSIBILITY_SERVICE)
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "services/accessibility/accessibility_service_cros.h"  // nogncheck
-#elif  // !BUILDFLAG(IS_CHROMEOS_ASH)
-#include "services/accessibility/accessibility_service_chrome.h"  // nogncheck
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(SUPPORTS_OS_ACCESSIBILITY_SERVICE)
+#include "services/accessibility/os_accessibility_service.h"  // nogncheck
+#else  // BUILDFLAG(SUPPORTS_OS_ACCESSIBILITY_SERVICE)
+#include "services/accessibility/browser_accessibility_service.h"  // nogncheck
+#endif  // BUILDFLAG(SUPPORTS_OS_ACCESSIBILITY_SERVICE)
 #include "services/accessibility/public/mojom/accessibility_service.mojom.h"  // nogncheck
 #include "ui/accessibility/accessibility_features.h"
 #endif  // BUILDFLAG(ENABLE_ACCESSIBILITY_SERVICE)
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+#include "media/capture/capture_switches.h"
+#include "services/viz/public/cpp/gpu/gpu.h"
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) ||
+        // BUILDFLAG(IS_CHROMEOS_ASH)
+
 namespace content {
+base::LazyInstance<NetworkBinderCreationCallback>::Leaky
+    g_network_binder_creation_callback_for_testing = LAZY_INSTANCE_INITIALIZER;
 
 namespace {
 
@@ -156,7 +167,8 @@ class UtilityThreadVideoCaptureServiceImpl final
       mojo::PendingReceiver<video_capture::mojom::VideoCaptureService> receiver,
       scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner)
       : VideoCaptureServiceImpl(std::move(receiver),
-                                std::move(ui_task_runner)) {}
+                                std::move(ui_task_runner),
+                                /*create_system_monitor=*/true) {}
 
  private:
 #if BUILDFLAG(IS_WIN)
@@ -168,7 +180,10 @@ class UtilityThreadVideoCaptureServiceImpl final
 auto RunNetworkService(
     mojo::PendingReceiver<network::mojom::NetworkService> receiver) {
   auto binders = std::make_unique<service_manager::BinderRegistry>();
-  GetContentClient()->utility()->RegisterNetworkBinders(binders.get());
+  if (g_network_binder_creation_callback_for_testing.Get()) {
+    std::move(g_network_binder_creation_callback_for_testing.Get())
+        .Run(binders.get());
+  }
   return std::make_unique<network::NetworkService>(
       std::move(binders), std::move(receiver),
       /*delay_initialization_until_set_client=*/true);
@@ -228,19 +243,6 @@ auto RunAudio(mojo::PendingReceiver<audio::mojom::AudioService> receiver) {
         ::SetPriorityClass(::GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     DCHECK(success);
   }
-
-#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
-  // Codec Bitmask from main browser process is copied from AudioManagerWin
-  // to the command line when audio process is launched.  Set to the
-  // AudioManagerWin of the new audio process.
-  if (command_line->HasSwitch(switches::kAudioCodecsFromEDID)) {
-    uint32_t codec_bitmask = 0;
-    base::StringToUint(
-        command_line->GetSwitchValueASCII(switches::kAudioCodecsFromEDID),
-        &codec_bitmask);
-    media::AudioManagerWin::SetBitstreamPassthroughBitmask(codec_bitmask);
-  }
-#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 #endif  // BUILDFLAG(IS_WIN)
 
   return audio::CreateStandaloneService(std::move(receiver));
@@ -273,11 +275,11 @@ auto RunDataDecoder(
 #if BUILDFLAG(ENABLE_ACCESSIBILITY_SERVICE)
 auto RunAccessibilityService(
     mojo::PendingReceiver<ax::mojom::AccessibilityService> receiver) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  return std::make_unique<ax::AccessibilityServiceCros>(std::move(receiver));
-#elif   // !BUILDFLAG(IS_CHROMEOS_ASH)
-  return std::make_unique<ax::AccessibilityServiceChrome>(std::move(reciver));
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(SUPPORTS_OS_ACCESSIBILITY_SERVICE)
+  return std::make_unique<ax::OSAccessibilityService>(std::move(receiver));
+#else   // BUILDFLAG(SUPPORTS_OS_ACCESSIBILITY_SERVICE)
+  return std::make_unique<ax::BrowserAccessibilityService>(std::move(receiver));
+#endif  // BUILDFLAG(SUPPORTS_OS_ACCESSIBILITY_SERVICE)
 }
 #endif  // BUILDFLAG(ENABLE_ACCESSIBILITY_SERVICE)
 
@@ -304,8 +306,32 @@ auto RunTracing(
 
 auto RunVideoCapture(
     mojo::PendingReceiver<video_capture::mojom::VideoCaptureService> receiver) {
-  return std::make_unique<UtilityThreadVideoCaptureServiceImpl>(
-      std::move(receiver), base::ThreadTaskRunnerHandle::Get());
+  auto service = std::make_unique<UtilityThreadVideoCaptureServiceImpl>(
+      std::move(receiver), base::SingleThreadTaskRunner::GetCurrentDefault());
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  {
+#else
+  if (switches::IsVideoCaptureUseGpuMemoryBufferEnabled()) {
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+    mojo::PendingRemote<viz::mojom::Gpu> remote_gpu;
+    content::UtilityThread::Get()->BindHostReceiver(
+        remote_gpu.InitWithNewPipeAndPassReceiver());
+    std::unique_ptr<viz::Gpu> viz_gpu =
+        viz::Gpu::Create(std::move(remote_gpu),
+                         content::UtilityThread::Get()->GetIOTaskRunner());
+    service->SetVizGpu(std::move(viz_gpu));
+  }
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) ||
+        // BUILDFLAG(IS_CHROMEOS_ASH)
+  return service;
+}
+
+auto RunOnDeviceModel(
+    mojo::PendingReceiver<on_device_model::mojom::OnDeviceModelService>
+        receiver) {
+  return std::make_unique<on_device_model::OnDeviceModelService>(
+      std::move(receiver));
 }
 
 #if BUILDFLAG(ENABLE_VR) && !BUILDFLAG(IS_ANDROID)
@@ -328,22 +354,46 @@ auto RunOOPArcVideoAcceleratorFactoryService(
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) && \
     (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
-auto RunStableVideoDecoderFactoryService(
-    mojo::PendingReceiver<media::stable::mojom::StableVideoDecoderFactory>
-        receiver) {
-  auto factory = std::make_unique<media::StableVideoDecoderFactoryService>();
-  factory->BindReceiver(std::move(receiver));
-  return factory;
+auto RunStableVideoDecoderFactoryProcessService(
+    mojo::PendingReceiver<
+        media::stable::mojom::StableVideoDecoderFactoryProcess> receiver) {
+  return std::make_unique<media::StableVideoDecoderFactoryProcessService>(
+      std::move(receiver));
 }
 #endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) &&
         // (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+auto RunVideoEncodeAcceleratorProviderFactory(
+    mojo::PendingReceiver<media::mojom::VideoEncodeAcceleratorProviderFactory>
+        receiver) {
+  auto factory =
+      std::make_unique<media::MojoVideoEncodeAcceleratorProviderFactory>();
+  factory->BindReceiver(std::move(receiver));
+  return factory;
+}
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+
 }  // namespace
+
+void SetNetworkBinderCreationCallbackForTesting(  // IN-TEST
+    NetworkBinderCreationCallback callback) {
+  g_network_binder_creation_callback_for_testing.Get() = std::move(callback);
+}
 
 void RegisterIOThreadServices(mojo::ServiceFactory& services) {
   // The network service runs on the IO thread because it needs a message
   // loop of type IO that can get notified when pipes have data.
   services.Add(RunNetworkService);
+
+#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) && \
+    (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
+  if (base::FeatureList::IsEnabled(
+          features::kRunStableVideoDecoderFactoryProcessServiceOnIOThread)) {
+    services.Add(RunStableVideoDecoderFactoryProcessService);
+  }
+#endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) &&
+        // (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
 
   // Add new IO-thread services above this line.
   GetContentClient()->utility()->RegisterIOThreadServices(services);
@@ -357,6 +407,10 @@ void RegisterMainThreadServices(mojo::ServiceFactory& services) {
   services.Add(RunStorageService);
   services.Add(RunTracing);
   services.Add(RunVideoCapture);
+
+  if (optimization_guide::features::CanLaunchOnDeviceModelService()) {
+    services.Add(RunOnDeviceModel);
+  }
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING) && BUILDFLAG(IS_CHROMEOS)
   services.Add(RunShapeDetectionService);
@@ -382,9 +436,16 @@ void RegisterMainThreadServices(mojo::ServiceFactory& services) {
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) && \
     (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
-  services.Add(RunStableVideoDecoderFactoryService);
+  if (!base::FeatureList::IsEnabled(
+          features::kRunStableVideoDecoderFactoryProcessServiceOnIOThread)) {
+    services.Add(RunStableVideoDecoderFactoryProcessService);
+  }
 #endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)) &&
         // (BUILDFLAG(USE_VAAPI) || BUILDFLAG(USE_V4L2_CODEC))
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  services.Add(RunVideoEncodeAcceleratorProviderFactory);
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(ENABLE_ACCESSIBILITY_SERVICE)
   if (::features::IsAccessibilityServiceEnabled())

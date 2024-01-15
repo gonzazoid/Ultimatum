@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {NetworkTestRunner} from 'network_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   function getHTMLWithEncType(values, encType) {
     const encTypeAttribute = encType ? ` enctype="${encType}"` : '';
@@ -19,14 +24,14 @@
 
   async function runFormTest(values, encType) {
     await TestRunner.loadHTML(getHTMLWithEncType(values, encType));
-    const snifferPromise = TestRunner.addSnifferPromise(SDK.NetworkDispatcher.prototype, 'requestWillBeSent');
+    const snifferPromise = TestRunner.addSnifferPromise(SDK.NetworkManager.NetworkDispatcher.prototype, 'requestWillBeSent');
     TestRunner.evaluateInPage('document.querySelector("form").submit();');
     await snifferPromise;
 
     const networkRequests = NetworkTestRunner.networkRequests();
     var request = networkRequests[networkRequests.length - 1];
     if (request.url().endsWith('/')) {
-      await TestRunner.addSnifferPromise(SDK.NetworkDispatcher.prototype, 'requestWillBeSent');
+      await TestRunner.addSnifferPromise(SDK.NetworkManager.NetworkDispatcher.prototype, 'requestWillBeSent');
       request = NetworkTestRunner.networkRequests().pop();
     }
 
@@ -55,7 +60,6 @@
   ];
 
   TestRunner.addResult('Tests that form submissions appear and are parsed in the network panel');
-  await TestRunner.loadTestModule('network_test_runner');
   await TestRunner.showPanel('network');
 
   await runFormTest(formValues);
@@ -67,7 +71,7 @@
     `--${newBoundary}\r\nContent-Disposition: form-data; name=\"a\r\nb\"\r\n\r\na\r\nv\r\n` +
     `--${newBoundary}\r\nContent-Disposition: form-data; name=\"a\r\nc\"; filename="a.gif"\r\nContent-Type: application/octer-stream\r\n\r\na\r\nv\r\n` +
     `--${newBoundary}--\r\n\u0000`;
-  const nonURLEncodedNameFormData = SDK.NetworkRequest.prototype.parseMultipartFormDataParameters(nonURLEncodedNameRequestBody, newBoundary);
+  const nonURLEncodedNameFormData = SDK.NetworkRequest.NetworkRequest.prototype.parseMultipartFormDataParameters(nonURLEncodedNameRequestBody, newBoundary);
 
   TestRunner.addResult(JSON.stringify(nonURLEncodedNameFormData, ' ', 1));
 

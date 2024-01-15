@@ -47,13 +47,13 @@ float FloatValueForLength(const Length& length,
     case Length::kAuto:
       return static_cast<float>(maximum_value);
     case Length::kCalculated:
-      return length.NonNanCalculatedValue(LayoutUnit(maximum_value),
-                                          anchor_evaluator);
+      return length.NonNanCalculatedValue(maximum_value, anchor_evaluator);
     case Length::kMinContent:
     case Length::kMaxContent:
     case Length::kMinIntrinsic:
     case Length::kFitContent:
     case Length::kContent:
+    case Length::kFlex:
     case Length::kExtendToZoom:
     case Length::kDeviceWidth:
     case Length::kDeviceHeight:
@@ -87,6 +87,7 @@ LayoutUnit MinimumValueForLengthInternal(
     case Length::kMinIntrinsic:
     case Length::kFitContent:
     case Length::kContent:
+    case Length::kFlex:
     case Length::kExtendToZoom:
     case Length::kDeviceWidth:
     case Length::kDeviceHeight:
@@ -98,12 +99,14 @@ LayoutUnit MinimumValueForLengthInternal(
   return LayoutUnit();
 }
 
-LayoutUnit ValueForLength(const Length& length, LayoutUnit maximum_value) {
+LayoutUnit ValueForLength(const Length& length,
+                          LayoutUnit maximum_value,
+                          const Length::AnchorEvaluator* anchor_evaluator) {
   switch (length.GetType()) {
     case Length::kFixed:
     case Length::kPercent:
     case Length::kCalculated:
-      return MinimumValueForLength(length, maximum_value);
+      return MinimumValueForLength(length, maximum_value, anchor_evaluator);
     case Length::kFillAvailable:
     case Length::kAuto:
       return maximum_value;
@@ -112,6 +115,7 @@ LayoutUnit ValueForLength(const Length& length, LayoutUnit maximum_value) {
     case Length::kMinIntrinsic:
     case Length::kFitContent:
     case Length::kContent:
+    case Length::kFlex:
     case Length::kExtendToZoom:
     case Length::kDeviceWidth:
     case Length::kDeviceHeight:

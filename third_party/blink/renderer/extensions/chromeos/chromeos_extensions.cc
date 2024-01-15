@@ -9,7 +9,6 @@
 #include "third_party/blink/renderer/extensions/chromeos/event_interface_chromeos_names.h"
 #include "third_party/blink/renderer/extensions/chromeos/event_target_chromeos_names.h"
 #include "third_party/blink/renderer/extensions/chromeos/event_type_chromeos_names.h"
-#include "third_party/blink/renderer/extensions/chromeos/system_extensions/window_management/cros_window_management.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/extensions_registry.h"
 #include "third_party/blink/renderer/platform/bindings/v8_set_return_value.h"
@@ -25,10 +24,20 @@ void ChromeOSDataPropertyGetCallback(
                              info.Holder()->GetCreationContextChecked());
 }
 
+// Whether we should install ChromeOS extensions in `execution_context`.
+bool IsSupportedExecutionContext(ExecutionContext* execution_context) {
+  if (!execution_context) {
+    return false;
+  }
+  return execution_context->IsWindow() ||
+         execution_context->IsServiceWorkerGlobalScope();
+}
+
 void InstallChromeOSExtensions(ScriptState* script_state) {
   auto* execution_context = ExecutionContext::From(script_state);
-  if (!execution_context || !execution_context->IsServiceWorkerGlobalScope() ||
-      !RuntimeEnabledFeatures::BlinkExtensionChromeOSEnabled()) {
+  if (!IsSupportedExecutionContext(execution_context) ||
+      !RuntimeEnabledFeatures::BlinkExtensionChromeOSEnabled(
+          execution_context)) {
     return;
   }
 
@@ -41,12 +50,6 @@ void InstallChromeOSExtensions(ScriptState* script_state) {
                             v8::Local<v8::Value>(), v8::DontEnum,
                             v8::SideEffectType::kHasNoSideEffect)
       .ToChecked();
-
-  // Eagerly initialize objects. This is usually done so that they set up a
-  // connection to the browser to receive events.
-  if (RuntimeEnabledFeatures::BlinkExtensionChromeOSWindowManagementEnabled()) {
-    std::ignore = CrosWindowManagement::From(*execution_context);
-  }
 }
 
 }  // namespace

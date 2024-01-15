@@ -4,11 +4,7 @@
 
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_browser_observer.h"
 
-#import "ios/chrome/browser/main/browser.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/model/browser/browser.h"
 
 FullscreenBrowserObserver::FullscreenBrowserObserver(
     FullscreenWebStateListObserver* web_state_list_observer,

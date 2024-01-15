@@ -6,15 +6,14 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/thread_annotations.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace logging {
 
@@ -69,7 +68,7 @@ class AudioLogMessage::BufferManager {
       return;
     }
 
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
     dispose_callback_ = base::BindRepeating(
         &BufferManager::HandleDisposedBuffers, base::Unretained(this));
 

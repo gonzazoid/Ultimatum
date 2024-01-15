@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/raw_ptr.h"
@@ -23,17 +23,13 @@
 #include "chrome/browser/resource_coordinator/lifecycle_unit_source_observer.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom-forward.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_observer.h"
-#include "chrome/browser/resource_coordinator/tab_load_tracker.h"
 #include "chrome/browser/resource_coordinator/tab_manager_features.h"
 #include "chrome/browser/resource_coordinator/usage_clock.h"
 #include "chrome/browser/sessions/session_restore_observer.h"
-#include "chrome/browser/ui/browser_tab_strip_tracker.h"
-#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "content/public/browser/navigation_throttle.h"
 #include "ui/gfx/native_widget_types.h"
 
 class GURL;
-class TabStripModel;
 
 namespace content {
 class WebContents;
@@ -44,7 +40,6 @@ namespace resource_coordinator {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 class TabManagerDelegate;
 #endif
-class TabManagerStatsCollector;
 
 // TabManager is responsible for triggering tab lifecycle state transitions.
 //
@@ -58,18 +53,14 @@ class TabManagerStatsCollector;
 //
 // TODO(fdoray): Rename to LifecycleManager. https://crbug.com/775644
 class TabManager : public LifecycleUnitObserver,
-                   public LifecycleUnitSourceObserver,
-                   public TabLoadTracker::Observer,
-                   public TabStripModelObserver {
+                   public LifecycleUnitSourceObserver {
  public:
   // Forward declaration of resource coordinator signal observer.
   class ResourceCoordinatorSignalObserver;
 
-  class WebContentsData;
-
   using TabDiscardDoneCB = base::ScopedClosureRunner;
 
-  explicit TabManager(TabLoadTracker* tab_load_tracker);
+  TabManager();
 
   TabManager(const TabManager&) = delete;
   TabManager& operator=(const TabManager&) = delete;
@@ -109,31 +100,7 @@ class TabManager : public LifecycleUnitObserver,
   void AddObserver(TabLifecycleObserver* observer);
   void RemoveObserver(TabLifecycleObserver* observer);
 
-  // Notifies TabManager that one tab WebContents has been destroyed. TabManager
-  // needs to clean up data related to that tab.
-  void OnWebContentsDestroyed(content::WebContents* contents);
-
-  // Return whether tabs are being loaded during session restore.
-  bool IsSessionRestoreLoadingTabs() const {
-    return is_session_restore_loading_tabs_;
-  }
-
-  // Returns the number of tabs open in all browser instances.
-  int GetTabCount() const;
-
-  // Returns the number of restored tabs during session restore. This is
-  // non-zero only during session restore.
-  int restored_tab_count() const { return restored_tab_count_; }
-
   UsageClock* usage_clock() { return &usage_clock_; }
-
-  // Returns true if the tab was created by session restore and has not finished
-  // the first navigation.
-  static bool IsTabInSessionRestore(content::WebContents* web_contents);
-
-  // Returns true if the tab was created by session restore and initially in
-  // foreground.
-  static bool IsTabRestoredInForeground(content::WebContents* web_contents);
 
  private:
   friend class TabManagerStatsCollectorTest;
@@ -186,29 +153,6 @@ class TabManager : public LifecycleUnitObserver,
   void UnregisterMemoryPressureListener();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  // Called by OnTabStripModelChanged()
-  void OnActiveTabChanged(content::WebContents* old_contents,
-                          content::WebContents* new_contents);
-
-  // TabStripModelObserver:
-  void OnTabStripModelChanged(
-      TabStripModel* tab_strip_model,
-      const TabStripModelChange& change,
-      const TabStripSelectionChange& selection) override;
-
-  // TabLoadTracker::Observer:
-  void OnStartTracking(content::WebContents* web_contents,
-                       LoadingState loading_state) override;
-  void OnLoadingStateChange(content::WebContents* web_contents,
-                            LoadingState old_loading_state,
-                            LoadingState new_loading_state) override;
-  void OnStopTracking(content::WebContents* web_contents,
-                      LoadingState loading_state) override;
-
-  // Returns the WebContentsData associated with |contents|. Also takes care of
-  // creating one if needed.
-  static WebContentsData* GetWebContentsData(content::WebContents* contents);
-
   // Discards the less important LifecycleUnit that supports discarding under
   // |reason|.
   content::WebContents* DiscardTabImpl(
@@ -221,8 +165,6 @@ class TabManager : public LifecycleUnitObserver,
 
   // Returns the number of tabs that are not pending load or discarded.
   int GetNumAliveTabs() const;
-
-  TabManagerStatsCollector* stats_collector() { return stats_collector_.get(); }
 
   // LifecycleUnitObserver:
   void OnLifecycleUnitDestroyed(LifecycleUnit* lifecycle_unit) override;
@@ -240,25 +182,11 @@ class TabManager : public LifecycleUnitObserver,
   std::unique_ptr<TabManagerDelegate> delegate_;
 #endif
 
-  // Responsible for automatically registering this class as an observer of all
-  // TabStripModels. Automatically tracks browsers as they come and go.
-  BrowserTabStripTracker browser_tab_strip_tracker_;
-
-  bool is_session_restore_loading_tabs_;
-  size_t restored_tab_count_;
-
   class TabManagerSessionRestoreObserver;
   std::unique_ptr<TabManagerSessionRestoreObserver> session_restore_observer_;
 
-  // Records UMAs for tab and system-related events and properties during
-  // session restore.
-  std::unique_ptr<TabManagerStatsCollector> stats_collector_;
-
   // A clock that advances when Chrome is in use.
   UsageClock usage_clock_;
-
-  // The tab load tracker observed by this instance.
-  const raw_ptr<TabLoadTracker> tab_load_tracker_;
 
   // Weak pointer factory used for posting delayed tasks.
   base::WeakPtrFactory<TabManager> weak_ptr_factory_{this};

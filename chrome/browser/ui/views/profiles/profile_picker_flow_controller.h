@@ -5,45 +5,91 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_FLOW_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_FLOW_CONTROLLER_H_
 
-#include "chrome/browser/ui/profile_picker.h"
-#include "chrome/browser/ui/views/profiles/profile_management_flow_controller.h"
+#include <string>
+
+#include "base/memory/weak_ptr.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
+#include "chrome/browser/ui/views/profiles/profile_management_flow_controller_impl.h"
+#include "chrome/browser/ui/views/profiles/profile_management_types.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
 #include "components/signin/public/base/signin_buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/skia/include/core/SkColor.h"
 
+struct CoreAccountInfo;
+class Profile;
 class ProfilePickerSignedInFlowController;
+enum class ReauthUIError;
 
-class ProfilePickerFlowController : public ProfileManagementFlowController {
+class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
  public:
   ProfilePickerFlowController(ProfilePickerWebContentsHost* host,
                               ClearHostClosure clear_host_callback,
                               ProfilePicker::EntryPoint entry_point);
   ~ProfilePickerFlowController() override;
 
-  void SwitchToDiceSignIn(
-      absl::optional<SkColor> profile_color,
-      base::OnceCallback<void(bool)> switch_finished_callback);
+  void Init(StepSwitchFinishedCallback step_switch_finished_callback) override;
 
-  void SwitchToPostSignIn(Profile* signed_in_profile,
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
-                          bool is_saml,
-#endif
-                          std::unique_ptr<content::WebContents> contents);
+  void SwitchToDiceSignIn(ProfilePicker::ProfileInfo profile_info,
+                          StepSwitchFinishedCallback switch_finished_callback);
 
-  // Cancel the signed-in profile setup and returns back to the main picker
-  // screen (if the original EntryPoint was to open the picker).
-  void CancelPostSignInFlow();
+  void SwitchToReauth(
+      Profile* profile,
+      base::OnceCallback<void(ReauthUIError)> on_error_callback);
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void SwitchToPostSignIn(Profile* signed_in_profile,
+                          const CoreAccountInfo& account_info,
+                          std::optional<SkColor> profile_color,
+                          std::unique_ptr<content::WebContents> contents);
+#endif
+
+  void CancelPostSignInFlow() override;
+
+  std::u16string GetFallbackAccessibleWindowTitle() const override;
 
   base::FilePath GetSwitchProfilePathOrEmpty() const;
 
-  void set_profile_color(absl::optional<SkColor> profile_color) {
-    profile_color_ = profile_color;
-  }
+ protected:
+  // ProfileManagementFlowControllerImpl
+  base::queue<ProfileManagementFlowController::Step> RegisterPostIdentitySteps()
+      override;
 
  private:
-  ProfilePicker::EntryPoint entry_point_;
-  absl::optional<SkColor> profile_color_ = absl::nullopt;
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+  void OnReauthCompleted(
+      Profile* profile,
+      base::OnceCallback<void(ReauthUIError)> on_error_callback,
+      bool success,
+      ReauthUIError error);
+
+  void OnProfilePickerStepShownReauthError(
+      base::OnceCallback<void(ReauthUIError)> on_error_callback,
+      ReauthUIError error,
+      bool switch_step_success);
+#endif
+
+  std::unique_ptr<ProfilePickerSignedInFlowController>
+  CreateSignedInFlowController(
+      Profile* signed_in_profile,
+      const CoreAccountInfo& account_info,
+      std::unique_ptr<content::WebContents> contents) override;
+
+  // When `is_continue_callback` is true, the flow should finishing up
+  // immediately so that `post_host_cleared_callback` can be executed, without
+  // showing other steps.
+  void HandleIdentityStepsCompleted(
+      PostHostClearedCallback post_host_cleared_callback,
+      bool is_continue_callback);
+
+  const ProfilePicker::EntryPoint entry_point_;
+
+  // Color provided when a profile creation is initiated, that may be used to
+  // tint screens of the profile creation flow (currently this only affects the
+  // profile type choice screen, which is the one picking the color). It will
+  // also be passed to the finishing steps of the profile creation, as a default
+  // color choice that the user would be able to override.
+  std::optional<SkColor> suggested_profile_color_;
 
   // TODO(crbug.com/1359352): To be refactored out.
   // This is used for `ProfilePicker::GetSwitchProfilePath()`. The information
@@ -51,6 +97,9 @@ class ProfilePickerFlowController : public ProfileManagementFlowController {
   // its controller is created instead of relying on static calls.
   base::WeakPtr<ProfilePickerSignedInFlowController>
       weak_signed_in_flow_controller_;
+
+  base::WeakPtr<Profile> created_profile_;
+  PostHostClearedCallback post_host_cleared_callback_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_FLOW_CONTROLLER_H_

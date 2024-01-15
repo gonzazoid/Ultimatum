@@ -15,7 +15,7 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/controls/image_view.h"
 
 class CommandUpdater;
@@ -53,9 +53,9 @@ enum class PageActionPageEvent {
 // Represents an inbuilt (as opposed to an extension) page action icon that
 // shows a bubble when clicked.
 class PageActionIconView : public IconLabelBubbleView {
- public:
-  METADATA_HEADER(PageActionIconView);
+  METADATA_HEADER(PageActionIconView, IconLabelBubbleView)
 
+ public:
   class Delegate {
    public:
     // Gets the opacity to use for the ink highlight.
@@ -98,19 +98,14 @@ class PageActionIconView : public IconLabelBubbleView {
   virtual views::BubbleDialogDelegate* GetBubble() const = 0;
 
   // Retrieve the text to be used for a tooltip or accessible name.
-  virtual std::u16string GetTextForTooltipAndAccessibleName() const = 0;
+  // If this string never changes, subclasses should use `SetAccessibleName`
+  // in the constructor instead of overriding this function.
+  virtual std::u16string GetTextForTooltipAndAccessibleName() const;
 
   SkColor GetLabelColorForTesting() const;
 
   const char* name_for_histograms() const { return name_for_histograms_; }
   bool ephemeral() const { return ephemeral_; }
-
-  bool should_record_metrics_if_shown() const {
-    return should_record_metrics_if_shown_;
-  }
-  void set_should_record_metrics_if_shown(bool record) {
-    should_record_metrics_if_shown_ = record;
-  }
 
   void ExecuteForTesting();
 
@@ -149,17 +144,16 @@ class PageActionIconView : public IconLabelBubbleView {
   // Returns true if the command is enabled.
   bool SetCommandEnabled(bool enabled) const;
 
-  // Sets the tooltip text.
-  void SetTooltipText(const std::u16string& tooltip);
-
   // Invoked prior to executing the command.
   virtual void OnExecuting(ExecuteSource execute_source) = 0;
+
+  // Invoked after executing the command.
+  virtual void DidExecute(ExecuteSource execute_source) {}
 
   // Invoked after the icon is pressed.
   virtual void OnPressed(bool activated) {}
 
-  // views::IconLabelBubbleView:
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+  // IconLabelBubbleView:
   std::u16string GetTooltipText(const gfx::Point& p) const override;
   void ViewHierarchyChanged(
       const views::ViewHierarchyChangedDetails& details) override;
@@ -168,6 +162,7 @@ class PageActionIconView : public IconLabelBubbleView {
   void NotifyClick(const ui::Event& event) override;
   bool IsTriggerableEvent(const ui::Event& event) override;
   bool ShouldUpdateInkDropOnClickCanceled() const override;
+  void UpdateBorder() override;
 
  protected:
   // Calls OnExecuting and runs |command_id_| with a valid |command_updater_|.
@@ -204,15 +199,13 @@ class PageActionIconView : public IconLabelBubbleView {
   virtual void UpdateImpl() = 0;
 
  private:
-  void UpdateBorder();
-
   void InstallLoadingIndicator();
 
   // What color to paint the icon with.
   SkColor icon_color_ = gfx::kPlaceholderColor;
 
   // The CommandUpdater for the Browser object that owns the location bar.
-  const raw_ptr<CommandUpdater> command_updater_;
+  const raw_ptr<CommandUpdater, DanglingUntriaged> command_updater_;
 
   // Delegate for access to associated state.
   const raw_ptr<Delegate> delegate_;
@@ -230,9 +223,6 @@ class PageActionIconView : public IconLabelBubbleView {
   // subclass, but generally indicates that the associated feature is acting on
   // the web page.
   bool active_ = false;
-
-  // Whether metrics should be recorded when setting this to visible.
-  bool should_record_metrics_if_shown_ = false;
 
   // The loading indicator, showing a throbber animation on top of the icon.
   raw_ptr<PageActionIconLoadingIndicatorView> loading_indicator_ = nullptr;

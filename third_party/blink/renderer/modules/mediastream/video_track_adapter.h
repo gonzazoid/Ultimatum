@@ -7,9 +7,11 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "media/base/video_frame.h"
@@ -33,7 +35,7 @@ class VideoTrackAdapterSettings;
 // The constraints can be set as max width and height as well as max and min
 // aspect ratio.
 // Video frames are delivered to a track using a VideoCaptureDeliverFrameCB on
-// the IO-thread.
+// the video task runner.
 // Adaptations is done by wrapping the original media::VideoFrame in a new
 // media::VideoFrame with a new visible_rect and natural_size.
 class MODULES_EXPORT VideoTrackAdapter
@@ -42,7 +44,7 @@ class MODULES_EXPORT VideoTrackAdapter
   using OnMutedCallback = base::RepeatingCallback<void(bool mute_state)>;
 
   VideoTrackAdapter(
-      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> video_task_runner,
       base::WeakPtr<MediaStreamVideoSource> media_stream_video_source);
 
   VideoTrackAdapter(const VideoTrackAdapter&) = delete;
@@ -54,43 +56,51 @@ class MODULES_EXPORT VideoTrackAdapter
   // the main render thread. |source_frame_rate| is used to calculate a prudent
   // interval to check for passing frames and inform of the result via
   // |on_muted_state_callback|.
-  void AddTrack(const MediaStreamVideoTrack* track,
-                VideoCaptureDeliverFrameCB frame_callback,
-                VideoCaptureNotifyFrameDroppedCB notify_frame_dropped_callback,
-                EncodedVideoFrameCB encoded_frame_callback,
-                VideoCaptureCropVersionCB crop_version_callback,
-                VideoTrackSettingsCallback settings_callback,
-                VideoTrackFormatCallback track_callback,
-                const VideoTrackAdapterSettings& settings);
+  void AddTrack(
+      const MediaStreamVideoTrack* track,
+      VideoCaptureDeliverFrameCB frame_callback,
+      VideoCaptureNotifyFrameDroppedCB notify_frame_dropped_callback,
+      EncodedVideoFrameCB encoded_frame_callback,
+      VideoCaptureSubCaptureTargetVersionCB sub_capture_target_version_callback,
+      VideoTrackSettingsCallback settings_callback,
+      VideoTrackFormatCallback track_callback,
+      const VideoTrackAdapterSettings& settings);
   void RemoveTrack(const MediaStreamVideoTrack* track);
   void ReconfigureTrack(const MediaStreamVideoTrack* track,
                         const VideoTrackAdapterSettings& settings);
 
   // Delivers |frame| to all tracks that have registered a callback.
-  // Must be called on the IO-thread.
-  void DeliverFrameOnIO(
+  // Must be called on the video task runner.
+  void DeliverFrameOnVideoTaskRunner(
       scoped_refptr<media::VideoFrame> video_frame,
-      std::vector<scoped_refptr<media::VideoFrame>> scaled_video_frames,
       base::TimeTicks estimated_capture_time);
 
   // Delivers |encoded_frame| to all tracks that have registered a callback.
-  // Must be called on the IO-thread.
-  void DeliverEncodedVideoFrameOnIO(scoped_refptr<EncodedVideoFrame> frame,
-                                    base::TimeTicks estimated_capture_time);
+  // Must be called on the video task runner.
+  void DeliverEncodedVideoFrameOnVideoTaskRunner(
+      scoped_refptr<EncodedVideoFrame> frame,
+      base::TimeTicks estimated_capture_time);
+
+  // Called if a frame was dropped prior to delivery, i.e.
+  // DeliverFrameOnVideoTaskRunner() will not be called for this frame.
+  void OnFrameDroppedOnVideoTaskRunner(
+      media::VideoCaptureFrameDropReason reason);
 
   // Called when it is guaranteed that all subsequent frames delivered
-  // over DeliverFrameOnIO() will have a crop version that is
-  // equal-to-or-greater-than the given crop version.
-  void NewCropVersionOnIO(uint32_t crop_version);
+  // over DeliverFrameOnVideoTaskRunner() will have a sub-capture-target version
+  // that is equal-to-or-greater-than the given sub-capture-target version.
+  void NewSubCaptureTargetVersionOnVideoTaskRunner(
+      uint32_t sub_capture_target_version);
 
-  base::SingleThreadTaskRunner* io_task_runner() const {
-    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    return io_task_runner_.get();
+  base::SequencedTaskRunner* video_task_runner() const {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    return video_task_runner_.get();
   }
 
   // Start monitor that frames are delivered to this object. I.E, that
-  // |DeliverFrameOnIO| is called with a frame rate of |source_frame_rate|.
-  // |on_muted_callback| is triggered on the main render thread.
+  // |DeliverFrameOnVideoTaskRunner| is called with a frame rate of
+  // |source_frame_rate|. |on_muted_callback| is triggered on the main render
+  // thread.
   void StartFrameMonitoring(double source_frame_rate,
                             const OnMutedCallback& on_muted_callback);
   void StopFrameMonitoring();
@@ -121,50 +131,52 @@ class MODULES_EXPORT VideoTrackAdapter
   using VideoCaptureDeliverFrameInternalCallback =
       WTF::CrossThreadFunction<void(
           scoped_refptr<media::VideoFrame> video_frame,
-          std::vector<scoped_refptr<media::VideoFrame>> scaled_video_frames,
           base::TimeTicks estimated_capture_time)>;
   using VideoCaptureNotifyFrameDroppedInternalCallback =
-      WTF::CrossThreadFunction<void()>;
+      WTF::CrossThreadFunction<void(media::VideoCaptureFrameDropReason)>;
   using DeliverEncodedVideoFrameInternalCallback =
       WTF::CrossThreadFunction<void(
           scoped_refptr<EncodedVideoFrame> video_frame,
           base::TimeTicks estimated_capture_time)>;
-  using VideoCaptureCropVersionInternalCallback =
+  using VideoCaptureSubCaptureTargetVersionInternalCallback =
       WTF::CrossThreadFunction<void(uint32_t)>;
   using VideoTrackSettingsInternalCallback =
       WTF::CrossThreadFunction<void(gfx::Size frame_size, double frame_rate)>;
   using VideoTrackFormatInternalCallback =
       WTF::CrossThreadFunction<void(const media::VideoCaptureFormat&)>;
-  void AddTrackOnIO(
+  void AddTrackOnVideoTaskRunner(
       const MediaStreamVideoTrack* track,
       VideoCaptureDeliverFrameInternalCallback frame_callback,
       VideoCaptureNotifyFrameDroppedInternalCallback
           notify_frame_dropped_callback,
       DeliverEncodedVideoFrameInternalCallback encoded_frame_callback,
-      VideoCaptureCropVersionInternalCallback crop_version_callback,
+      VideoCaptureSubCaptureTargetVersionInternalCallback
+          sub_capture_target_version_callback,
       VideoTrackSettingsInternalCallback settings_callback,
       VideoTrackFormatInternalCallback track_callback,
       const VideoTrackAdapterSettings& settings);
 
-  void RemoveTrackOnIO(const MediaStreamVideoTrack* track);
-  void ReconfigureTrackOnIO(const MediaStreamVideoTrack* track,
-                            const VideoTrackAdapterSettings& settings);
+  void RemoveTrackOnVideoTaskRunner(const MediaStreamVideoTrack* track);
+  void ReconfigureTrackOnVideoTaskRunner(
+      const MediaStreamVideoTrack* track,
+      const VideoTrackAdapterSettings& settings);
 
   using OnMutedInternalCallback =
       WTF::CrossThreadFunction<void(bool mute_state)>;
-  void StartFrameMonitoringOnIO(OnMutedInternalCallback on_muted_state_callback,
-                                double source_frame_rate);
-  void StopFrameMonitoringOnIO();
-  void SetSourceFrameSizeOnIO(const gfx::Size& frame_size);
+  void StartFrameMonitoringOnVideoTaskRunner(
+      OnMutedInternalCallback on_muted_state_callback,
+      double source_frame_rate);
+  void StopFrameMonitoringOnVideoTaskRunner();
+  void SetSourceFrameSizeOnVideoTaskRunner(const gfx::Size& frame_size);
 
   // Compare |old_frame_counter_snapshot_| with the current |frame_counter_|,
   // and inform of the situation (muted, not muted) via |on_muted_callback_|.
-  void CheckFramesReceivedOnIO();
+  void CheckFramesReceivedOnVideoTaskRunner();
 
   // |thread_checker_| is bound to the main render thread.
-  THREAD_CHECKER(thread_checker_);
+  SEQUENCE_CHECKER(sequence_checker_);
 
-  const scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
+  const scoped_refptr<base::SequencedTaskRunner> video_task_runner_;
 
   base::WeakPtr<MediaStreamVideoSource> media_stream_video_source_;
 
@@ -172,29 +184,32 @@ class MODULES_EXPORT VideoTrackAdapter
   // VideoCaptureDeliverFrameCB is released on the main render thread.
   const scoped_refptr<base::SingleThreadTaskRunner> renderer_task_runner_;
 
-  // VideoFrameResolutionAdapter is an inner class that lives on the IO-thread.
-  // It does the resolution adaptation and delivers frames to all registered
-  // tracks.
+  // VideoFrameResolutionAdapter is an inner class that lives on the video task
+  // runner. It does the resolution adaptation and delivers frames to all
+  // registered tracks.
   class VideoFrameResolutionAdapter;
   using FrameAdapters = WTF::Vector<scoped_refptr<VideoFrameResolutionAdapter>>;
   FrameAdapters adapters_;
 
-  // Is non-null while frame monitoring. It is only accessed on the IO-thread.
+  // Is non-null while frame monitoring. It is only accessed on the video task
+  // runner.
   std::unique_ptr<LowPrecisionTimer> monitoring_frame_rate_timer_;
   OnMutedInternalCallback on_muted_callback_;
 
   // Keeps track of it frames have been received. It is only accessed on the
-  // IO-thread.
+  // video task runner.
   bool muted_state_;
 
-  // Running frame counter, accessed on the IO-thread.
+  // Running frame counter, accessed on the video task runner.
   uint64_t frame_counter_;
   uint64_t old_frame_counter_snapshot_;
 
-  // Frame rate configured on the video source, accessed on the IO-thread.
+  // Frame rate configured on the video source, accessed on the video task
+  // runner.
   float source_frame_rate_;
 
-  // Resolution configured on the video source, accessed on the IO-thread.
+  // Resolution configured on the video source, accessed on the video task
+  // runner.
   absl::optional<gfx::Size> source_frame_size_;
 };
 

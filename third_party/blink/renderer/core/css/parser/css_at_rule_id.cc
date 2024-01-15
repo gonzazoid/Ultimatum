@@ -13,61 +13,96 @@
 namespace blink {
 
 CSSAtRuleID CssAtRuleID(StringView name) {
-  if (EqualIgnoringASCIICase(name, "charset"))
-    return CSSAtRuleID::kCSSAtRuleCharset;
-  if (EqualIgnoringASCIICase(name, "font-face"))
-    return CSSAtRuleID::kCSSAtRuleFontFace;
-  if (EqualIgnoringASCIICase(name, "font-palette-values")) {
-    if (RuntimeEnabledFeatures::FontPaletteEnabled())
-      return CSSAtRuleID::kCSSAtRuleFontPaletteValues;
+  if (EqualIgnoringASCIICase(name, "view-transition")) {
+    if (RuntimeEnabledFeatures::ViewTransitionOnNavigationEnabled()) {
+      return CSSAtRuleID::kCSSAtRuleViewTransition;
+    }
     return CSSAtRuleID::kCSSAtRuleInvalid;
   }
-  if (EqualIgnoringASCIICase(name, "import"))
+  if (EqualIgnoringASCIICase(name, "charset")) {
+    return CSSAtRuleID::kCSSAtRuleCharset;
+  }
+  if (EqualIgnoringASCIICase(name, "font-face")) {
+    return CSSAtRuleID::kCSSAtRuleFontFace;
+  }
+  if (EqualIgnoringASCIICase(name, "font-palette-values")) {
+    return CSSAtRuleID::kCSSAtRuleFontPaletteValues;
+  }
+  if (EqualIgnoringASCIICase(name, "font-feature-values")) {
+    return CSSAtRuleID::kCSSAtRuleFontFeatureValues;
+  }
+  if (EqualIgnoringASCIICase(name, "stylistic")) {
+    return CSSAtRuleID::kCSSAtRuleStylistic;
+  }
+  if (EqualIgnoringASCIICase(name, "styleset")) {
+    return CSSAtRuleID::kCSSAtRuleStyleset;
+  }
+  if (EqualIgnoringASCIICase(name, "character-variant")) {
+    return CSSAtRuleID::kCSSAtRuleCharacterVariant;
+  }
+  if (EqualIgnoringASCIICase(name, "swash")) {
+    return CSSAtRuleID::kCSSAtRuleSwash;
+  }
+  if (EqualIgnoringASCIICase(name, "ornaments")) {
+    return CSSAtRuleID::kCSSAtRuleOrnaments;
+  }
+  if (EqualIgnoringASCIICase(name, "annotation")) {
+    return CSSAtRuleID::kCSSAtRuleAnnotation;
+  }
+  if (EqualIgnoringASCIICase(name, "import")) {
     return CSSAtRuleID::kCSSAtRuleImport;
-  if (EqualIgnoringASCIICase(name, "keyframes"))
+  }
+  if (EqualIgnoringASCIICase(name, "keyframes")) {
     return CSSAtRuleID::kCSSAtRuleKeyframes;
+  }
   if (EqualIgnoringASCIICase(name, "layer")) {
     return CSSAtRuleID::kCSSAtRuleLayer;
   }
-  if (EqualIgnoringASCIICase(name, "media"))
+  if (EqualIgnoringASCIICase(name, "media")) {
     return CSSAtRuleID::kCSSAtRuleMedia;
-  if (EqualIgnoringASCIICase(name, "namespace"))
+  }
+  if (EqualIgnoringASCIICase(name, "namespace")) {
     return CSSAtRuleID::kCSSAtRuleNamespace;
-  if (EqualIgnoringASCIICase(name, "page"))
+  }
+  if (EqualIgnoringASCIICase(name, "page")) {
     return CSSAtRuleID::kCSSAtRulePage;
+  }
   if (EqualIgnoringASCIICase(name, "position-fallback")) {
-    if (RuntimeEnabledFeatures::CSSAnchorPositioningEnabled())
+    if (RuntimeEnabledFeatures::CSSAnchorPositioningEnabled()) {
       return CSSAtRuleID::kCSSAtRulePositionFallback;
+    }
     return CSSAtRuleID::kCSSAtRuleInvalid;
   }
-  if (EqualIgnoringASCIICase(name, "property"))
+  if (EqualIgnoringASCIICase(name, "property")) {
     return CSSAtRuleID::kCSSAtRuleProperty;
-  if (EqualIgnoringASCIICase(name, "container")) {
-    if (RuntimeEnabledFeatures::CSSContainerQueriesEnabled())
-      return CSSAtRuleID::kCSSAtRuleContainer;
-    return CSSAtRuleID::kCSSAtRuleInvalid;
   }
-  if (EqualIgnoringASCIICase(name, "counter-style"))
+  if (EqualIgnoringASCIICase(name, "container")) {
+    return CSSAtRuleID::kCSSAtRuleContainer;
+  }
+  if (EqualIgnoringASCIICase(name, "counter-style")) {
     return CSSAtRuleID::kCSSAtRuleCounterStyle;
-  if (EqualIgnoringASCIICase(name, "scroll-timeline")) {
-    if (RuntimeEnabledFeatures::CSSScrollTimelineEnabled())
-      return CSSAtRuleID::kCSSAtRuleScrollTimeline;
-    return CSSAtRuleID::kCSSAtRuleInvalid;
   }
   if (EqualIgnoringASCIICase(name, "scope")) {
-    if (RuntimeEnabledFeatures::CSSScopeEnabled())
+    if (RuntimeEnabledFeatures::CSSScopeEnabled()) {
       return CSSAtRuleID::kCSSAtRuleScope;
+    }
     return CSSAtRuleID::kCSSAtRuleInvalid;
   }
-  if (EqualIgnoringASCIICase(name, "supports"))
+  if (EqualIgnoringASCIICase(name, "supports")) {
     return CSSAtRuleID::kCSSAtRuleSupports;
+  }
   if (EqualIgnoringASCIICase(name, "try")) {
-    if (RuntimeEnabledFeatures::CSSAnchorPositioningEnabled())
+    if (RuntimeEnabledFeatures::CSSAnchorPositioningEnabled()) {
       return CSSAtRuleID::kCSSAtRuleTry;
+    }
     return CSSAtRuleID::kCSSAtRuleInvalid;
   }
-  if (EqualIgnoringASCIICase(name, "-webkit-keyframes"))
+  if (EqualIgnoringASCIICase(name, "starting-style")) {
+    return CSSAtRuleID::kCSSAtRuleStartingStyle;
+  }
+  if (EqualIgnoringASCIICase(name, "-webkit-keyframes")) {
     return CSSAtRuleID::kCSSAtRuleWebkitKeyframes;
+  }
   return CSSAtRuleID::kCSSAtRuleInvalid;
 }
 
@@ -75,12 +110,20 @@ namespace {
 
 absl::optional<WebFeature> AtRuleFeature(CSSAtRuleID rule_id) {
   switch (rule_id) {
+    case CSSAtRuleID::kCSSAtRuleAnnotation:
+      return WebFeature::kCSSAtRuleAnnotation;
+    case CSSAtRuleID::kCSSAtRuleViewTransition:
+      return WebFeature::kCSSAtRuleViewTransition;
     case CSSAtRuleID::kCSSAtRuleCharset:
       return WebFeature::kCSSAtRuleCharset;
+    case CSSAtRuleID::kCSSAtRuleCharacterVariant:
+      return WebFeature::kCSSAtRuleCharacterVariant;
     case CSSAtRuleID::kCSSAtRuleFontFace:
       return WebFeature::kCSSAtRuleFontFace;
     case CSSAtRuleID::kCSSAtRuleFontPaletteValues:
       return WebFeature::kCSSAtRuleFontPaletteValues;
+    case CSSAtRuleID::kCSSAtRuleFontFeatureValues:
+      return WebFeature::kCSSAtRuleFontFeatureValues;
     case CSSAtRuleID::kCSSAtRuleImport:
       return WebFeature::kCSSAtRuleImport;
     case CSSAtRuleID::kCSSAtRuleKeyframes:
@@ -99,16 +142,23 @@ absl::optional<WebFeature> AtRuleFeature(CSSAtRuleID rule_id) {
       return WebFeature::kCSSAtRuleContainer;
     case CSSAtRuleID::kCSSAtRuleCounterStyle:
       return WebFeature::kCSSAtRuleCounterStyle;
+    case CSSAtRuleID::kCSSAtRuleOrnaments:
+      return WebFeature::kCSSAtRuleOrnaments;
     case CSSAtRuleID::kCSSAtRuleScope:
       return WebFeature::kCSSAtRuleScope;
-    case CSSAtRuleID::kCSSAtRuleScrollTimeline:
-      return WebFeature::kCSSAtRuleScrollTimeline;
+    case CSSAtRuleID::kCSSAtRuleStartingStyle:
+      return WebFeature::kCSSAtRuleStartingStyle;
+    case CSSAtRuleID::kCSSAtRuleStyleset:
+      return WebFeature::kCSSAtRuleStylistic;
+    case CSSAtRuleID::kCSSAtRuleStylistic:
+      return WebFeature::kCSSAtRuleStylistic;
+    case CSSAtRuleID::kCSSAtRuleSwash:
+      return WebFeature::kCSSAtRuleSwash;
     case CSSAtRuleID::kCSSAtRuleSupports:
       return WebFeature::kCSSAtRuleSupports;
     case CSSAtRuleID::kCSSAtRulePositionFallback:
     case CSSAtRuleID::kCSSAtRuleTry:
-      // TODO(crbug.com/1309178): Add use counter.
-      return absl::nullopt;
+      return WebFeature::kCSSAnchorPositioning;
     case CSSAtRuleID::kCSSAtRuleWebkitKeyframes:
       return WebFeature::kCSSAtRuleWebkitKeyframes;
     case CSSAtRuleID::kCSSAtRuleInvalid:
@@ -120,8 +170,9 @@ absl::optional<WebFeature> AtRuleFeature(CSSAtRuleID rule_id) {
 }  // namespace
 
 void CountAtRule(const CSSParserContext* context, CSSAtRuleID rule_id) {
-  if (absl::optional<WebFeature> feature = AtRuleFeature(rule_id))
+  if (absl::optional<WebFeature> feature = AtRuleFeature(rule_id)) {
     context->Count(*feature);
+  }
 }
 
 }  // namespace blink

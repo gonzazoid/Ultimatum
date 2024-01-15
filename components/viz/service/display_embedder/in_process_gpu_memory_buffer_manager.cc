@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
@@ -20,13 +20,11 @@ namespace viz {
 namespace {
 
 void DestroyOnThread(scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-                     gpu::GpuMemoryBufferImpl::DestructionCallback callback,
-                     const gpu::SyncToken& sync_token) {
+                     gpu::GpuMemoryBufferImpl::DestructionCallback callback) {
   if (task_runner->BelongsToCurrentThread()) {
-    std::move(callback).Run(sync_token);
+    std::move(callback).Run();
   } else {
-    task_runner->PostTask(FROM_HERE,
-                          base::BindOnce(std::move(callback), sync_token));
+    task_runner->PostTask(FROM_HERE, std::move(callback));
   }
 }
 
@@ -39,7 +37,7 @@ InProcessGpuMemoryBufferManager::InProcessGpuMemoryBufferManager(
       pool_(base::MakeRefCounted<base::UnsafeSharedMemoryPool>()),
       gpu_memory_buffer_factory_(gpu_memory_buffer_factory),
       sync_point_manager_(sync_point_manager),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
       this, "InProcessGpuMemoryBufferManager", task_runner_);
 
@@ -65,11 +63,10 @@ InProcessGpuMemoryBufferManager::CreateGpuMemoryBuffer(
           id, size, /*framebuffer_size=*/size, format, usage, client_id_,
           surface_handle);
 
-  AllocatedBufferInfo buffer_info(buffer_handle, size, format);
+  gpu::AllocatedBufferInfo buffer_info(buffer_handle, size, format);
 
   auto callback = base::BindOnce(
-      &InProcessGpuMemoryBufferManager::ShouldDestroyGpuMemoryBuffer, weak_ptr_,
-      id);
+      &InProcessGpuMemoryBufferManager::DestroyGpuMemoryBuffer, weak_ptr_, id);
   auto gmb = gpu_memory_buffer_support_.CreateGpuMemoryBufferImplFromHandle(
       std::move(buffer_handle), size, format, usage,
       base::BindOnce(&DestroyOnThread, task_runner_, std::move(callback)), this,
@@ -79,13 +76,6 @@ InProcessGpuMemoryBufferManager::CreateGpuMemoryBuffer(
     allocated_buffers_.insert(std::make_pair(id, buffer_info));
 
   return gmb;
-}
-
-void InProcessGpuMemoryBufferManager::SetDestructionSyncToken(
-    gfx::GpuMemoryBuffer* buffer,
-    const gpu::SyncToken& sync_token) {
-  static_cast<gpu::GpuMemoryBufferImpl*>(buffer)->set_destruction_sync_token(
-      sync_token);
 }
 
 void InProcessGpuMemoryBufferManager::CopyGpuMemoryBufferAsync(
@@ -116,25 +106,6 @@ bool InProcessGpuMemoryBufferManager::OnMemoryDump(
   }
 
   return true;
-}
-
-void InProcessGpuMemoryBufferManager::ShouldDestroyGpuMemoryBuffer(
-    gfx::GpuMemoryBufferId id,
-    const gpu::SyncToken& sync_token) {
-  DCHECK(task_runner_->BelongsToCurrentThread());
-
-  auto callback = base::BindOnce(
-      &InProcessGpuMemoryBufferManager::DestroyGpuMemoryBuffer, weak_ptr_, id);
-  // This is equivalent to calling SyncPointerManager::WaitOutOfOrder() except
-  // |callback| will be run on this thread instead of the thread where the sync
-  // point is released.
-  bool will_run = sync_point_manager_->WaitNonThreadSafe(
-      sync_token, gpu::SequenceId(), UINT32_MAX, task_runner_,
-      std::move(callback));
-
-  // No sync token or invalid sync token, destroy immediately.
-  if (!will_run)
-    DestroyGpuMemoryBuffer(id);
 }
 
 void InProcessGpuMemoryBufferManager::DestroyGpuMemoryBuffer(

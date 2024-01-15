@@ -17,6 +17,10 @@ namespace features {
 // The following features are declared alphabetically. The features should be
 // documented with descriptions of their behaviors in the .cc file.
 
+#if BUILDFLAG(IS_CHROMEOS)
+COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kEnableBorderlessPrinting);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 #if BUILDFLAG(IS_MAC)
 COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kCupsIppPrintingBackend);
 #endif  // BUILDFLAG(IS_MAC)
@@ -47,12 +51,11 @@ COMPONENT_EXPORT(PRINTING_BASE)
 extern const base::FeatureParam<bool> kEnableOopPrintDriversJobPrint;
 COMPONENT_EXPORT(PRINTING_BASE)
 extern const base::FeatureParam<bool> kEnableOopPrintDriversSandbox;
-#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
-
-#if BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
+#if BUILDFLAG(IS_WIN)
 COMPONENT_EXPORT(PRINTING_BASE)
-BASE_DECLARE_FEATURE(kEnablePrintContentAnalysis);
-#endif  // BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
+extern const base::FeatureParam<bool> kEnableOopPrintDriversSingleProcess;
+#endif
+#endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
 }  // namespace features
 }  // namespace printing

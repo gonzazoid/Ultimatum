@@ -6,13 +6,15 @@
 
 #include <limits.h>
 
+#include <algorithm>
 #include <climits>
+#include <utility>
 
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/i18n/break_iterator.h"
 #include "base/i18n/char_iterator.h"
+#include "base/i18n/rtl.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
@@ -38,13 +40,10 @@
 #include "ui/gfx/render_text_harfbuzz.h"
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/gfx/skia_paint_util.h"
+#include "ui/gfx/text_constants.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/gfx/text_utils.h"
 #include "ui/gfx/utf16_indexing.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
 
 namespace gfx {
 
@@ -257,25 +256,23 @@ UChar32 ReplaceControlCharacter(UChar32 codepoint) {
     // Support Microsoft defined PUA on Windows.
     // see:
     // https://docs.microsoft.com/en-us/windows/uwp/design/style/segoe-ui-symbol-font
-    if (base::win::GetVersion() >= base::win::Version::WIN10) {
-      switch (codepoint) {
-        case 0xF093:  // ButtonA
-        case 0xF094:  // ButtonB
-        case 0xF095:  // ButtonY
-        case 0xF096:  // ButtonX
-        case 0xF108:  // LeftStick
-        case 0xF109:  // RightStick
-        case 0xF10A:  // TriggerLeft
-        case 0xF10B:  // TriggerRight
-        case 0xF10C:  // BumperLeft
-        case 0xF10D:  // BumperRight
-        case 0xF10E:  // Dpad
-        case 0xEECA:  // ButtonView2
-        case 0xEDE3:  // ButtonMenu
-          return codepoint;
-        default:
-          break;
-      }
+    switch (codepoint) {
+      case 0xF093:  // ButtonA
+      case 0xF094:  // ButtonB
+      case 0xF095:  // ButtonY
+      case 0xF096:  // ButtonX
+      case 0xF108:  // LeftStick
+      case 0xF109:  // RightStick
+      case 0xF10A:  // TriggerLeft
+      case 0xF10B:  // TriggerRight
+      case 0xF10C:  // BumperLeft
+      case 0xF10D:  // BumperRight
+      case 0xF10E:  // Dpad
+      case 0xEECA:  // ButtonView2
+      case 0xEDE3:  // ButtonMenu
+        return codepoint;
+      default:
+        break;
     }
 #endif
     const int8_t codepoint_category = u_charType(codepoint);
@@ -389,7 +386,8 @@ void SkiaTextRenderer::DrawStrike(int x,
                                   int width,
                                   SkScalar thickness_factor) {
   const SkScalar text_size = font_.getSize();
-  const SkScalar height = text_size * thickness_factor;
+  // Strike should have a minimum height of 1.0f.
+  const SkScalar height = std::max(1.0f, text_size * thickness_factor);
   const SkScalar top = y - text_size * kStrikeThroughOffset - height / 2;
   SkScalar x_scalar = SkIntToScalar(x);
   const SkRect r =
@@ -509,11 +507,11 @@ std::unique_ptr<RenderText> RenderText::CreateInstanceOfSameStyle(
   return render_text;
 }
 
-void RenderText::SetText(const std::u16string& text) {
+void RenderText::SetText(std::u16string text) {
   DCHECK(!composition_range_.IsValid());
   if (text_ == text)
     return;
-  text_ = text;
+  text_ = std::move(text);
   UpdateStyleLengths();
 
   // Clear style ranges as they might break new text graphemes and apply
@@ -524,6 +522,7 @@ void RenderText::SetText(const std::u16string& text) {
   weights_.SetValue(weights_.breaks().front().second);
   for (auto& style : styles_)
     style.SetValue(style.breaks().front().second);
+  elidings_.SetValue(false);
   cached_bounds_and_offset_valid_ = false;
 
   // Reset selection model. SetText should always followed by SetSelectionModel
@@ -574,6 +573,7 @@ void RenderText::SetFontList(const FontList& font_list) {
   styles_[TEXT_STYLE_ITALIC].SetValue((font_style & Font::ITALIC) != 0);
   styles_[TEXT_STYLE_UNDERLINE].SetValue((font_style & Font::UNDERLINE) != 0);
   styles_[TEXT_STYLE_HEAVY_UNDERLINE].SetValue(false);
+  styles_[TEXT_STYLE_STRIKE].SetValue((font_style & Font::STRIKE_THROUGH) != 0);
   baseline_ = kInvalidBaseline;
   cached_bounds_and_offset_valid_ = false;
   OnLayoutTextAttributeChanged(false);
@@ -921,6 +921,16 @@ void RenderText::ApplyWeight(Font::Weight weight, const Range& range) {
     cached_bounds_and_offset_valid_ = false;
     OnLayoutTextAttributeChanged(false);
   }
+}
+
+void RenderText::SetEliding(bool value) {
+  elidings_.SetValue(value);
+  OnLayoutTextAttributeChanged(false);
+}
+
+void RenderText::ApplyEliding(bool value, const Range& range) {
+  elidings_.ApplyValue(value, range);
+  OnLayoutTextAttributeChanged(false);
 }
 
 bool RenderText::GetStyle(TextStyle style) const {
@@ -1285,12 +1295,12 @@ void RenderText::SetDisplayOffset(Vector2d offset) {
     }
   }
 
-  const int horizontal_offset = base::clamp(offset.x(), min_offset, max_offset);
+  const int horizontal_offset = std::clamp(offset.x(), min_offset, max_offset);
 
   // y-offset is set only when the vertical alignment is ALIGN_TOP.
   // TODO(jongkown.lee): Support other vertical alignments.
   DCHECK(vertical_alignment_ == ALIGN_TOP || offset.y() == 0);
-  const int vertical_offset = base::clamp(
+  const int vertical_offset = std::clamp(
       offset.y(),
       std::min(display_rect_.height() - GetStringSize().height(), 0), 0);
 
@@ -1316,7 +1326,7 @@ Vector2d RenderText::GetLineOffset(size_t line_number) {
 
 bool RenderText::GetWordLookupDataAtPoint(const Point& point,
                                           DecoratedText* decorated_word,
-                                          Point* baseline_point) {
+                                          Rect* rect) {
   if (obscured())
     return false;
 
@@ -1331,18 +1341,19 @@ bool RenderText::GetWordLookupDataAtPoint(const Point& point,
   DCHECK(!word_range.is_reversed());
   DCHECK(!word_range.is_empty());
 
-  return GetLookupDataForRange(word_range, decorated_word, baseline_point);
+  return GetLookupDataForRange(word_range, decorated_word, rect);
 }
 
 bool RenderText::GetLookupDataForRange(const Range& range,
                                        DecoratedText* decorated_text,
-                                       Point* baseline_point) {
+                                       Rect* rect) {
   const internal::ShapedText* shaped_text = GetShapedText();
 
   const std::vector<Rect> word_bounds = GetSubstringBounds(range);
-  if (word_bounds.empty() || !GetDecoratedTextForRange(range, decorated_text)) {
+  if (word_bounds.empty()) {
     return false;
   }
+  GetDecoratedTextForRange(range, decorated_text);
 
   // Retrieve the baseline origin of the left-most glyph.
   const auto left_rect = std::min_element(
@@ -1353,8 +1364,9 @@ bool RenderText::GetLookupDataForRange(const Range& range,
   if (line_index < 0 ||
       line_index >= static_cast<int>(shaped_text->lines().size()))
     return false;
-  *baseline_point = left_rect->origin() +
-                    Vector2d(0, shaped_text->lines()[line_index].baseline);
+  *rect = Rect(left_rect->origin() +
+                   Vector2d(0, shaped_text->lines()[line_index].baseline),
+               left_rect->size());
   return true;
 }
 
@@ -1375,6 +1387,46 @@ Range RenderText::ExpandRangeToGraphemeBoundary(const Range& range) const {
   const size_t max_index = snap_to_grapheme(range.GetMax(), CURSOR_FORWARD);
   return range.is_reversed() ? Range(max_index, min_index)
                              : Range(min_index, max_index);
+}
+
+Range RenderText::ExpandRangeToWordBoundary(const Range& range) const {
+  const size_t length = text().length();
+  DCHECK_LE(range.GetMax(), length);
+  if (obscured()) {
+    return range.is_reversed() ? Range(length, 0) : Range(0, length);
+  }
+
+  base::i18n::BreakIterator iter(text(), base::i18n::BreakIterator::BREAK_WORD);
+  const bool success = iter.Init();
+  DCHECK(success);
+  if (!success) {
+    return range;
+  }
+
+  size_t range_min = range.GetMin();
+  if (range_min == length && range_min != 0) {
+    --range_min;
+  }
+
+  for (; range_min != 0; --range_min) {
+    if (iter.IsStartOfWord(range_min) || iter.IsEndOfWord(range_min)) {
+      break;
+    }
+  }
+
+  size_t range_max = range.GetMax();
+  if (range_min == range_max && range_max != length) {
+    ++range_max;
+  }
+
+  for (; range_max < length; ++range_max) {
+    if (iter.IsEndOfWord(range_max) || iter.IsStartOfWord(range_max)) {
+      break;
+    }
+  }
+
+  return range.is_reversed() ? Range(range_max, range_min)
+                             : Range(range_min, range_max);
 }
 
 bool RenderText::IsNewlineSegment(const internal::LineSegment& segment) const {
@@ -1556,6 +1608,9 @@ void RenderText::EnsureLayoutTextUpdated() const {
       U16_SET_CP_START(text_.data(), 0, reveal_index);
   }
 
+  BreakList<bool>::const_iterator eliding_iterator = elidings_.breaks().begin();
+  bool previous_grapheme_elided = false;
+
   // Iterates through graphemes from |text_| and rewrite its codepoints to
   // |layout_text_|.
   base::i18n::UTF16CharIterator text_iter(text_);
@@ -1564,6 +1619,12 @@ void RenderText::EnsureLayoutTextUpdated() const {
   while (!text_iter.end() && !text_truncated) {
     std::vector<uint32_t> grapheme_codepoints;
     const size_t text_grapheme_start_position = text_iter.array_pos();
+    // We have not added the codepoints of the current grapheme to
+    // `layout_text_` yet. The rest of the loop will either add the codepoints
+    // of the current grapheme to `layout_text_` or skip the grapheme if it will
+    // not exist in `layout_text_`. Therefore, layout_text_.size() will either
+    // be the start of the current grapeheme or indicate that the grapheme does
+    // not exist in `layout_text_`.
     const size_t layout_grapheme_start_position = layout_text_.size();
 
     // Retrieve codepoints of the current grapheme.
@@ -1595,32 +1656,38 @@ void RenderText::EnsureLayoutTextUpdated() const {
       grapheme_codepoints.push_back(RenderText::kPasswordReplacementChar);
     }
 
-    // Rewrite each codepoint of the grapheme.
-    for (uint32_t codepoint : grapheme_codepoints) {
-      // Handle unicode control characters ISO 6429 (block C0). Range from 0 to
-      // 0x1F and 0x7F. The newline character should be kept as-is when
-      // rendertext is multiline.
-      if (!multiline_ || !is_newline_grapheme)
+    // Handle unicode control characters ISO 6429 (block C0). Range from 0 to
+    // 0x1F and 0x7F. The newline character should be kept as-is when
+    // rendertext is multiline.
+    if (!multiline_ || !is_newline_grapheme) {
+      for (uint32_t& codepoint : grapheme_codepoints)
         codepoint = ReplaceControlCharacter(codepoint);
+    }
 
-      // Truncate the remaining codepoints if appending the codepoint to
-      // |layout_text_| is making the text larger than |truncate_length_|.
-      size_t codepoint_length = U16_LENGTH(codepoint);
-      text_truncated =
-          (truncate_length_ != 0 &&
-           ((layout_text_.size() + codepoint_length > truncate_length_) ||
-            (!text_iter.end() &&
-             (layout_text_.size() + codepoint_length == truncate_length_))));
+    // Truncate text when the input text it above |truncate_length_|.
+    text_truncated = (truncate_length_ != 0 &&
+                      ((text_grapheme_end_position > truncate_length_) ||
+                       (!text_iter.end() &&
+                        (text_grapheme_end_position == truncate_length_))));
 
-      if (text_truncated) {
-        codepoint = kEllipsisCodepoint;
-        codepoint_length = U16_LENGTH(codepoint);
-        // On truncate, remove the whole current grapheme.
-        layout_text_.resize(layout_grapheme_start_position);
+    // If the text is elided, replace it by an ellipsis. Do not append an
+    // ellipsis if it was already inserted.
+    eliding_iterator = IncrementBreakListIteratorToPosition(
+        elidings_, eliding_iterator, text_grapheme_start_position);
+    const bool elided_grapheme = eliding_iterator->second;
+    if (elided_grapheme || text_truncated) {
+      grapheme_codepoints.clear();
+      // Append an ellipsis if not already done.
+      if (!previous_grapheme_elided) {
+        grapheme_codepoints.push_back(kEllipsisCodepoint);
       }
+    }
+    previous_grapheme_elided = elided_grapheme;
 
+    for (uint32_t codepoint : grapheme_codepoints) {
       // Append the codepoint to the layout text.
       const size_t current_layout_text_position = layout_text_.size();
+      const size_t codepoint_length = U16_LENGTH(codepoint);
       if (codepoint_length == 1) {
         layout_text_ += codepoint;
       } else {
@@ -1647,10 +1714,6 @@ void RenderText::EnsureLayoutTextUpdated() const {
                                        text_grapheme_start_position + 1);
       if (composition_range_.Contains(grapheme_start_range))
         layout_styles_[TEXT_STYLE_HEAVY_UNDERLINE].ApplyValue(true, range);
-
-      // Stop appending characters if the text is truncated.
-      if (text_truncated)
-        break;
     }
   }
 
@@ -1761,6 +1824,16 @@ Point RenderText::ToViewPoint(const PointF& point, size_t line) {
 HorizontalAlignment RenderText::GetCurrentHorizontalAlignment() {
   if (horizontal_alignment_ != ALIGN_TO_HEAD)
     return horizontal_alignment_;
+
+  if (directionality_mode_ == gfx::DIRECTIONALITY_FROM_TEXT) {
+    if (base::i18n::GetForcedTextDirection() == base::i18n::RIGHT_TO_LEFT) {
+      return ALIGN_RIGHT;
+    }
+    if (base::i18n::GetForcedTextDirection() == base::i18n::LEFT_TO_RIGHT) {
+      return ALIGN_LEFT;
+    }
+  }
+
   return GetDisplayTextDirection() == base::i18n::RIGHT_TO_LEFT ?
       ALIGN_RIGHT : ALIGN_LEFT;
 }
@@ -1852,9 +1925,6 @@ base::i18n::TextDirection RenderText::GetTextDirectionForGivenText(
       // Derive the direction from the display text, which differs from text()
       // in the case of obscured (password) textfields.
       return base::i18n::GetFirstStrongCharacterDirection(text);
-    case DIRECTIONALITY_FROM_UI:
-      return base::i18n::IsRTL() ? base::i18n::RIGHT_TO_LEFT
-                                 : base::i18n::LEFT_TO_RIGHT;
     case DIRECTIONALITY_FORCE_LTR:
       return base::i18n::LEFT_TO_RIGHT;
     case DIRECTIONALITY_FORCE_RTL:
@@ -1893,6 +1963,7 @@ void RenderText::UpdateStyleLengths() {
   weights_.SetMax(text_length);
   for (auto& style : styles_)
     style.SetMax(text_length);
+  elidings_.SetMax(text_length);
 }
 
 void RenderText::UpdateLayoutStyleLengths(size_t max_length) const {
@@ -1950,7 +2021,7 @@ int RenderText::DetermineBaselineCenteringText(const int display_height,
   const int space =
       display_height - ((internal_leading != 0) ? cap_height : font_height);
   const int baseline_shift = space / 2 - internal_leading;
-  return baseline + base::clamp(baseline_shift, min_shift, max_shift);
+  return baseline + std::clamp(baseline_shift, min_shift, max_shift);
 }
 
 // static
@@ -2065,7 +2136,7 @@ std::u16string RenderText::Elide(const std::u16string& text,
       guess = lo + base::ClampRound<size_t>((available_width - lo_width) *
                                             (hi - lo) / (hi_width - lo_width));
     }
-    guess = base::clamp(guess, lo, hi);
+    guess = std::clamp(guess, lo, hi);
     DCHECK_NE(last_guess, guess);
 
     // Restore colors. They will be truncated to size by SetText.
@@ -2109,7 +2180,7 @@ std::u16string RenderText::Elide(const std::u16string& text,
     // The elided text must be smaller in bytes. Otherwise, break-lists are not
     // consistent and the characters after the last range are not styled.
     DCHECK_LE(new_text.size(), text.size());
-    render_text->SetText(new_text);
+    render_text->SetText(std::move(new_text));
 
     // Restore styles and baselines without breaking multi-character graphemes.
     render_text->styles_ = styles_;
@@ -2267,8 +2338,8 @@ internal::GraphemeIterator RenderText::GetGraphemeIteratorAtIndex(
   if (index == text.length())
     return text_to_display_indices_.end();
 
-  DCHECK(layout_text_up_to_date_);
-  DCHECK(!text_to_display_indices_.empty());
+  CHECK(layout_text_up_to_date_);
+  CHECK(!text_to_display_indices_.empty());
 
   // The function std::lower_bound(...) finds the first not less than |index|.
   internal::GraphemeIterator iter = std::lower_bound(
@@ -2278,7 +2349,7 @@ internal::GraphemeIterator RenderText::GetGraphemeIteratorAtIndex(
       });
 
   if (iter == text_to_display_indices_.end() || *iter.*field != index) {
-    DCHECK(iter != text_to_display_indices_.begin());
+    CHECK(iter != text_to_display_indices_.begin());
     --iter;
   }
 
@@ -2320,38 +2391,6 @@ size_t RenderText::GetNearestWordStartBoundary(size_t index) const {
       return i;
 
   return length;
-}
-
-Range RenderText::ExpandRangeToWordBoundary(const Range& range) const {
-  const size_t length = text().length();
-  DCHECK_LE(range.GetMax(), length);
-  if (obscured())
-    return range.is_reversed() ? Range(length, 0) : Range(0, length);
-
-  base::i18n::BreakIterator iter(text(), base::i18n::BreakIterator::BREAK_WORD);
-  const bool success = iter.Init();
-  DCHECK(success);
-  if (!success)
-    return range;
-
-  size_t range_min = range.GetMin();
-  if (range_min == length && range_min != 0)
-    --range_min;
-
-  for (; range_min != 0; --range_min)
-    if (iter.IsStartOfWord(range_min) || iter.IsEndOfWord(range_min))
-      break;
-
-  size_t range_max = range.GetMax();
-  if (range_min == range_max && range_max != length)
-    ++range_max;
-
-  for (; range_max < length; ++range_max)
-    if (iter.IsEndOfWord(range_max) || iter.IsStartOfWord(range_max))
-      break;
-
-  return range.is_reversed() ? Range(range_max, range_min)
-                             : Range(range_min, range_max);
 }
 
 }  // namespace gfx

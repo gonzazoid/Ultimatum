@@ -6,7 +6,7 @@
 #define COMPONENTS_PAGE_LOAD_METRICS_BROWSER_OBSERVERS_PRERENDER_PAGE_LOAD_METRICS_OBSERVER_H_
 
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
-#include "content/public/browser/prerender_trigger_type.h"
+#include "content/public/browser/preloading_trigger_type.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace internal {
@@ -32,10 +32,56 @@ extern const char
 extern const char
     kHistogramPrerenderWorstUserInteractionLatencyMaxEventDuration[];
 
+extern const char kPageLoadPrerenderObserverEvent[];
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class PageLoadPrerenderObserverEvent {
+  kOnPrerenderStart = 0,
+  kDidActivatePrerenderedPage = 1,
+  kOnFirstPaintInPage = 2,
+  kOnFirstContentfulPaintInPage = 3,
+  kOnFirstInputInPage = 4,
+  kOnComplete = 5,
+  kFlushMetricsOnAppEnterBackground = 6,
+  kRecordSessionEndHistograms = 7,
+  kRecordLayoutShiftScoreMetrics = 8,
+  kRecordNormalizedResponsivenessMetrics = 9,
+  kMaxValue = kRecordNormalizedResponsivenessMetrics,
+};
+
+extern const char kPageLoadPrerenderForegroundCheckResult[];
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class PageLoadPrerenderForegroundCheckResult {
+  kActivatedInBackground = 0,
+  kNoEventTime = 1,
+  kBackgroundedBeforeEvent = 2,
+  kPassed = 3,
+  kMaxValue = kPassed
+};
+
+enum class PageLoadPrerenderForegroundCheckEvent {
+  kFirstPaint,
+  kFirstContentfulPaint,
+  kFirstInputDelay,
+  kLargestContentfulPaint
+};
+
 }  // namespace internal
 
+namespace page_load_metrics {
+struct ExtraRequestCompleteInfo;
+}  // namespace page_load_metrics
+
+namespace net {
+enum Error;
+}  // namespace net
+
 // Prerender2 (content/browser/preloading/prerender/README.md):
-// Records custom page load timing metrics for prerendered page loads.
+// Records custom page load timing and loading status metrics for prerendered
+// page loads.
 class PrerenderPageLoadMetricsObserver
     : public page_load_metrics::PageLoadMetricsObserver {
  public:
@@ -61,6 +107,8 @@ class PrerenderPageLoadMetricsObserver
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void OnComplete(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
+  void OnLoadedResource(const page_load_metrics::ExtraRequestCompleteInfo&
+                            extra_request_complete_info) override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
 
@@ -73,14 +121,26 @@ class PrerenderPageLoadMetricsObserver
   // Records Interaction to Next Paint (INP) to UMA and UKM.
   void RecordNormalizedResponsivenessMetrics();
 
+  // Records loading status for an activated and loaded page.
+  void MaybeRecordMainResourceLoadStatus();
+
   // Helper function to concatenate the histogram name, the trigger type and the
   // embedder histogram suffix when the trigger type is kEmbedder.
   std::string AppendSuffix(const std::string& histogram_name) const;
 
+  // Set to true if the activation navigation main frame resource has a
+  // 'Cache-control: no-store' response header and set to false otherwise. Not
+  // set if Chrome did not receive response headers or if the prerendered page
+  // load was not activated.
+  absl::optional<bool> main_frame_resource_has_no_store_;
+
+  // Set when the main resource of the main frame finishes loading.
+  absl::optional<net::Error> main_resource_load_status_;
+
   // The type to trigger prerendering.
-  absl::optional<content::PrerenderTriggerType> trigger_type_;
+  absl::optional<content::PreloadingTriggerType> trigger_type_;
   // The suffix of a prerender embedder. This value is valid only when
-  // PrerenderTriggerType is kEmbedder. Otherwise, it's an empty string.
+  // PreloadingTriggerType is kEmbedder. Otherwise, it's an empty string.
   std::string embedder_histogram_suffix_;
 };
 

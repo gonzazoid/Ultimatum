@@ -7,12 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
@@ -62,11 +62,11 @@ api::enterprise_reporting_private::SettingValue ToInfoSettingValue(
     enterprise_signals::SettingValue value) {
   switch (value) {
     case enterprise_signals::SettingValue::UNKNOWN:
-      return api::enterprise_reporting_private::SETTING_VALUE_UNKNOWN;
+      return api::enterprise_reporting_private::SettingValue::kUnknown;
     case enterprise_signals::SettingValue::DISABLED:
-      return api::enterprise_reporting_private::SETTING_VALUE_DISABLED;
+      return api::enterprise_reporting_private::SettingValue::kDisabled;
     case enterprise_signals::SettingValue::ENABLED:
-      return api::enterprise_reporting_private::SETTING_VALUE_ENABLED;
+      return api::enterprise_reporting_private::SettingValue::kEnabled;
   }
 }
 
@@ -86,7 +86,6 @@ api::enterprise_reporting_private::ContextInfo ToContextInfo(
   info.on_security_event_providers =
       std::move(signals.on_security_event_providers);
   info.site_isolation_enabled = signals.site_isolation_enabled;
-  info.chrome_cleanup_enabled = signals.chrome_cleanup_enabled;
   info.chrome_remote_desktop_app_blocked =
       signals.chrome_remote_desktop_app_blocked;
   info.third_party_blocking_enabled = signals.third_party_blocking_enabled;
@@ -95,50 +94,50 @@ api::enterprise_reporting_private::ContextInfo ToContextInfo(
   switch (signals.realtime_url_check_mode) {
     case safe_browsing::REAL_TIME_CHECK_DISABLED:
       info.realtime_url_check_mode = extensions::api::
-          enterprise_reporting_private::REALTIME_URL_CHECK_MODE_DISABLED;
+          enterprise_reporting_private::RealtimeUrlCheckMode::kDisabled;
       break;
     case safe_browsing::REAL_TIME_CHECK_FOR_MAINFRAME_ENABLED:
-      info.realtime_url_check_mode =
-          extensions::api::enterprise_reporting_private::
-              REALTIME_URL_CHECK_MODE_ENABLED_MAIN_FRAME;
+      info.realtime_url_check_mode = extensions::api::
+          enterprise_reporting_private::RealtimeUrlCheckMode::kEnabledMainFrame;
       break;
   }
   info.browser_version = std::move(signals.browser_version);
   info.built_in_dns_client_enabled = signals.built_in_dns_client_enabled;
+  info.enterprise_profile_id = signals.enterprise_profile_id;
 
   switch (signals.safe_browsing_protection_level) {
     case safe_browsing::SafeBrowsingState::NO_SAFE_BROWSING:
       info.safe_browsing_protection_level = extensions::api::
-          enterprise_reporting_private::SAFE_BROWSING_LEVEL_DISABLED;
+          enterprise_reporting_private::SafeBrowsingLevel::kDisabled;
       break;
     case safe_browsing::SafeBrowsingState::STANDARD_PROTECTION:
       info.safe_browsing_protection_level = extensions::api::
-          enterprise_reporting_private::SAFE_BROWSING_LEVEL_STANDARD;
+          enterprise_reporting_private::SafeBrowsingLevel::kStandard;
       break;
     case safe_browsing::SafeBrowsingState::ENHANCED_PROTECTION:
       info.safe_browsing_protection_level = extensions::api::
-          enterprise_reporting_private::SAFE_BROWSING_LEVEL_ENHANCED;
+          enterprise_reporting_private::SafeBrowsingLevel::kEnhanced;
       break;
   }
   if (!signals.password_protection_warning_trigger.has_value()) {
     info.password_protection_warning_trigger = extensions::api::
-        enterprise_reporting_private::PASSWORD_PROTECTION_TRIGGER_POLICY_UNSET;
+        enterprise_reporting_private::PasswordProtectionTrigger::kPolicyUnset;
   } else {
     switch (signals.password_protection_warning_trigger.value()) {
       case safe_browsing::PASSWORD_PROTECTION_OFF:
         info.password_protection_warning_trigger =
             extensions::api::enterprise_reporting_private::
-                PASSWORD_PROTECTION_TRIGGER_PASSWORD_PROTECTION_OFF;
+                PasswordProtectionTrigger::kPasswordProtectionOff;
         break;
       case safe_browsing::PASSWORD_REUSE:
         info.password_protection_warning_trigger =
             extensions::api::enterprise_reporting_private::
-                PASSWORD_PROTECTION_TRIGGER_PASSWORD_REUSE;
+                PasswordProtectionTrigger::kPasswordReuse;
         break;
       case safe_browsing::PHISHING_REUSE:
         info.password_protection_warning_trigger =
             extensions::api::enterprise_reporting_private::
-                PASSWORD_PROTECTION_TRIGGER_PHISHING_REUSE;
+                PasswordProtectionTrigger::kPhishingReuse;
         break;
       case safe_browsing::PASSWORD_PROTECTION_TRIGGER_MAX:
         NOTREACHED();
@@ -152,18 +151,14 @@ api::enterprise_reporting_private::ContextInfo ToContextInfo(
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
 device_signals::SignalsAggregationRequest CreateAggregationRequest(
-    const std::string& user_id,
     device_signals::SignalName signal_name) {
-  device_signals::UserContext user_context;
-  user_context.user_id = user_id;
-
   device_signals::SignalsAggregationRequest request;
-  request.user_context = std::move(user_context);
   request.signal_names.emplace(signal_name);
   return request;
 }
 
 void StartSignalCollection(
+    const std::string& user_id,
     device_signals::SignalsAggregationRequest request,
     content::BrowserContext* browser_context,
     base::OnceCallback<void(device_signals::SignalsAggregationResponse)>
@@ -174,7 +169,12 @@ void StartSignalCollection(
   auto* signals_aggregator =
       enterprise_signals::SignalsAggregatorFactory::GetForProfile(profile);
   DCHECK(signals_aggregator);
-  signals_aggregator->GetSignals(std::move(request), std::move(callback));
+
+  device_signals::UserContext user_context;
+  user_context.user_id = user_id;
+
+  signals_aggregator->GetSignalsForUser(
+      std::move(user_context), std::move(request), std::move(callback));
 }
 
 bool CanReturnResponse(content::BrowserContext* browser_context) {
@@ -218,11 +218,10 @@ EnterpriseReportingPrivateGetPersistentSecretFunction::
 
 ExtensionFunction::ResponseAction
 EnterpriseReportingPrivateGetPersistentSecretFunction::Run() {
-  std::unique_ptr<
-      api::enterprise_reporting_private::GetPersistentSecret::Params>
-      params(api::enterprise_reporting_private::GetPersistentSecret::Params::
-                 Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::GetPersistentSecret::Params>
+      params = api::enterprise_reporting_private::GetPersistentSecret::Params::
+          Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   bool force_create = params->reset_secret ? *params->reset_secret : false;
   base::ThreadPool::PostTask(
       FROM_HERE,
@@ -232,7 +231,7 @@ EnterpriseReportingPrivateGetPersistentSecretFunction::Run() {
           base::BindOnce(
               &EnterpriseReportingPrivateGetPersistentSecretFunction::
                   OnDataRetrieved,
-              this, base::ThreadTaskRunnerHandle::Get())));
+              this, base::SingleThreadTaskRunner::GetCurrentDefault())));
   return RespondLater();
 }
 
@@ -272,10 +271,10 @@ EnterpriseReportingPrivateGetDeviceDataFunction::
 
 ExtensionFunction::ResponseAction
 EnterpriseReportingPrivateGetDeviceDataFunction::Run() {
-  std::unique_ptr<api::enterprise_reporting_private::GetDeviceData::Params>
-      params(api::enterprise_reporting_private::GetDeviceData::Params::Create(
-          args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::GetDeviceData::Params>
+      params = api::enterprise_reporting_private::GetDeviceData::Params::Create(
+          args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   base::ThreadPool::PostTask(
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
@@ -283,7 +282,7 @@ EnterpriseReportingPrivateGetDeviceDataFunction::Run() {
           &RetrieveDeviceData, params->id,
           base::BindOnce(
               &EnterpriseReportingPrivateGetDeviceDataFunction::OnDataRetrieved,
-              this, base::ThreadTaskRunnerHandle::Get())));
+              this, base::SingleThreadTaskRunner::GetCurrentDefault())));
   return RespondLater();
 }
 
@@ -328,10 +327,10 @@ EnterpriseReportingPrivateSetDeviceDataFunction::
 
 ExtensionFunction::ResponseAction
 EnterpriseReportingPrivateSetDeviceDataFunction::Run() {
-  std::unique_ptr<api::enterprise_reporting_private::SetDeviceData::Params>
-      params(api::enterprise_reporting_private::SetDeviceData::Params::Create(
-          args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::SetDeviceData::Params>
+      params = api::enterprise_reporting_private::SetDeviceData::Params::Create(
+          args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   base::ThreadPool::PostTask(
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
@@ -339,7 +338,7 @@ EnterpriseReportingPrivateSetDeviceDataFunction::Run() {
           &StoreDeviceData, params->id, std::move(params->data),
           base::BindOnce(
               &EnterpriseReportingPrivateSetDeviceDataFunction::OnDataStored,
-              this, base::ThreadTaskRunnerHandle::Get())));
+              this, base::SingleThreadTaskRunner::GetCurrentDefault())));
   return RespondLater();
 }
 
@@ -401,21 +400,23 @@ EnterpriseReportingPrivateGetDeviceInfoFunction::ToDeviceInfo(
 ExtensionFunction::ResponseAction
 EnterpriseReportingPrivateGetDeviceInfoFunction::Run() {
 #if BUILDFLAG(IS_WIN)
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateCOMSTATaskRunner({}).get(), FROM_HERE,
+  base::ThreadPool::CreateCOMSTATaskRunner({})->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&enterprise_signals::DeviceInfoFetcher::Fetch,
                      enterprise_signals::DeviceInfoFetcher::CreateInstance()),
       base::BindOnce(&EnterpriseReportingPrivateGetDeviceInfoFunction::
                          OnDeviceInfoRetrieved,
                      this));
 #else
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateTaskRunner({base::MayBlock()}).get(), FROM_HERE,
-      base::BindOnce(&enterprise_signals::DeviceInfoFetcher::Fetch,
-                     enterprise_signals::DeviceInfoFetcher::CreateInstance()),
-      base::BindOnce(&EnterpriseReportingPrivateGetDeviceInfoFunction::
-                         OnDeviceInfoRetrieved,
-                     this));
+  base::ThreadPool::CreateTaskRunner({base::MayBlock()})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE,
+          base::BindOnce(
+              &enterprise_signals::DeviceInfoFetcher::Fetch,
+              enterprise_signals::DeviceInfoFetcher::CreateInstance()),
+          base::BindOnce(&EnterpriseReportingPrivateGetDeviceInfoFunction::
+                             OnDeviceInfoRetrieved,
+                         this));
 #endif  // BUILDFLAG(IS_WIN)
 
   return RespondLater();
@@ -466,10 +467,11 @@ EnterpriseReportingPrivateGetCertificateFunction::
 
 ExtensionFunction::ResponseAction
 EnterpriseReportingPrivateGetCertificateFunction::Run() {
-  std::unique_ptr<api::enterprise_reporting_private::GetCertificate::Params>
-      params(api::enterprise_reporting_private::GetCertificate::Params::Create(
-          args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::GetCertificate::Params>
+      params =
+          api::enterprise_reporting_private::GetCertificate::Params::Create(
+              args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   // If AutoSelectCertificateForUrl is not set at the machine level, this
   // operation is not supported and should return immediately with the
@@ -478,7 +480,7 @@ EnterpriseReportingPrivateGetCertificateFunction::Run() {
           prefs::kManagedAutoSelectCertificateForUrls)) {
     api::enterprise_reporting_private::Certificate ret;
     ret.status = extensions::api::enterprise_reporting_private::
-        CERTIFICATE_STATUS_POLICY_UNSET;
+        CertificateStatus::kPolicyUnset;
     return RespondNow(WithArguments(ret.ToValue()));
   }
 
@@ -500,7 +502,7 @@ void EnterpriseReportingPrivateGetCertificateFunction::OnClientCertFetched(
   // Getting here means the status is always OK, but the |encoded_certificate|
   // field is only set if there actually was a certificate selected.
   ret.status =
-      extensions::api::enterprise_reporting_private::CERTIFICATE_STATUS_OK;
+      extensions::api::enterprise_reporting_private::CertificateStatus::kOk;
   if (cert) {
     base::StringPiece der_cert = net::x509_util::CryptoBufferAsStringPiece(
         cert->certificate()->cert_buffer());
@@ -529,10 +531,10 @@ EnterpriseReportingPrivateEnqueueRecordFunction::Run() {
     return RespondNow(Error(kErrorProfileNotAffiliated));
   }
 
-  std::unique_ptr<api::enterprise_reporting_private::EnqueueRecord::Params>
-      params(api::enterprise_reporting_private::EnqueueRecord::Params::Create(
-          args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::EnqueueRecord::Params>
+      params = api::enterprise_reporting_private::EnqueueRecord::Params::Create(
+          args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   // Parse params
   const auto event_type = params->request.event_type;
@@ -558,7 +560,7 @@ EnterpriseReportingPrivateEnqueueRecordFunction::Run() {
 }
 
 bool EnterpriseReportingPrivateEnqueueRecordFunction::TryParseParams(
-    std::unique_ptr<api::enterprise_reporting_private::EnqueueRecord::Params>
+    absl::optional<api::enterprise_reporting_private::EnqueueRecord::Params>
         params,
     ::reporting::Record& record,
     ::reporting::Priority& priority) {
@@ -592,8 +594,7 @@ bool EnterpriseReportingPrivateEnqueueRecordFunction::TryParseParams(
 bool EnterpriseReportingPrivateEnqueueRecordFunction::TryAttachDMTokenToRecord(
     ::reporting::Record& record,
     api::enterprise_reporting_private::EventType event_type) {
-  if (event_type ==
-      api::enterprise_reporting_private::EventType::EVENT_TYPE_DEVICE) {
+  if (event_type == api::enterprise_reporting_private::EventType::kDevice) {
     // Device DM tokens are automatically appended during uploads, so we need
     // not specify them with the record.
     return true;
@@ -651,11 +652,11 @@ EnterpriseReportingPrivateGetFileSystemInfoFunction::Run() {
         device_signals::SignalCollectionError::kUnsupported)));
   }
 
-  std::unique_ptr<api::enterprise_reporting_private::GetFileSystemInfo::Params>
-      params(
+  absl::optional<api::enterprise_reporting_private::GetFileSystemInfo::Params>
+      params =
           api::enterprise_reporting_private::GetFileSystemInfo::Params::Create(
-              args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+              args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   // Verify that all file paths are UTF8.
   bool paths_are_all_utf8 = true;
@@ -667,8 +668,7 @@ EnterpriseReportingPrivateGetFileSystemInfoFunction::Run() {
   }
   EXTENSION_FUNCTION_VALIDATE(paths_are_all_utf8);
 
-  auto aggregation_request = CreateAggregationRequest(
-      params->request.user_context.user_id, signal_name());
+  auto aggregation_request = CreateAggregationRequest(signal_name());
   aggregation_request.file_system_signal_parameters =
       ConvertFileSystemInfoOptions(params->request.options);
 
@@ -677,7 +677,8 @@ EnterpriseReportingPrivateGetFileSystemInfoFunction::Run() {
   LogSignalCollectionRequestedWithItems(signal_name(), number_of_items);
 
   StartSignalCollection(
-      aggregation_request, browser_context(),
+      params->request.user_context.user_id, aggregation_request,
+      browser_context(),
       base::BindOnce(&EnterpriseReportingPrivateGetFileSystemInfoFunction::
                          OnSignalRetrieved,
                      this, base::TimeTicks::Now(), number_of_items));
@@ -731,10 +732,10 @@ EnterpriseReportingPrivateGetSettingsFunction::Run() {
         device_signals::SignalCollectionError::kUnsupported)));
   }
 
-  std::unique_ptr<api::enterprise_reporting_private::GetSettings::Params>
-      params(api::enterprise_reporting_private::GetSettings::Params::Create(
-          args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::GetSettings::Params>
+      params = api::enterprise_reporting_private::GetSettings::Params::Create(
+          args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   // Verify that all paths strings are UTF8.
   bool paths_are_all_utf8 = true;
@@ -746,8 +747,7 @@ EnterpriseReportingPrivateGetSettingsFunction::Run() {
   }
   EXTENSION_FUNCTION_VALIDATE(paths_are_all_utf8);
 
-  auto aggregation_request = CreateAggregationRequest(
-      params->request.user_context.user_id, signal_name());
+  auto aggregation_request = CreateAggregationRequest(signal_name());
   aggregation_request.settings_signal_parameters =
       ConvertSettingsOptions(params->request.options);
 
@@ -756,7 +756,8 @@ EnterpriseReportingPrivateGetSettingsFunction::Run() {
   LogSignalCollectionRequestedWithItems(signal_name(), number_of_items);
 
   StartSignalCollection(
-      aggregation_request, browser_context(),
+      params->request.user_context.user_id, aggregation_request,
+      browser_context(),
       base::BindOnce(
           &EnterpriseReportingPrivateGetSettingsFunction::OnSignalRetrieved,
           this, base::TimeTicks::Now(), number_of_items));
@@ -809,12 +810,12 @@ EnterpriseReportingPrivateGetAvInfoFunction::Run() {
         device_signals::SignalCollectionError::kUnsupported)));
   }
 
-  std::unique_ptr<api::enterprise_reporting_private::GetAvInfo::Params> params(
-      api::enterprise_reporting_private::GetAvInfo::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::GetAvInfo::Params> params =
+      api::enterprise_reporting_private::GetAvInfo::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   StartSignalCollection(
-      CreateAggregationRequest(params->user_context.user_id, signal_name()),
+      params->user_context.user_id, CreateAggregationRequest(signal_name()),
       browser_context(),
       base::BindOnce(
           &EnterpriseReportingPrivateGetAvInfoFunction::OnSignalRetrieved, this,
@@ -861,13 +862,13 @@ EnterpriseReportingPrivateGetHotfixesFunction::Run() {
         device_signals::SignalCollectionError::kUnsupported)));
   }
 
-  std::unique_ptr<api::enterprise_reporting_private::GetHotfixes::Params>
-      params(api::enterprise_reporting_private::GetHotfixes::Params::Create(
-          args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::enterprise_reporting_private::GetHotfixes::Params>
+      params = api::enterprise_reporting_private::GetHotfixes::Params::Create(
+          args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   StartSignalCollection(
-      CreateAggregationRequest(params->user_context.user_id, signal_name()),
+      params->user_context.user_id, CreateAggregationRequest(signal_name()),
       browser_context(),
       base::BindOnce(
           &EnterpriseReportingPrivateGetHotfixesFunction::OnSignalRetrieved,

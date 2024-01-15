@@ -53,7 +53,7 @@ bool IsListOf(const base::Value* v, bool (*predicate)(const base::Value&)) {
   if (!v->is_list()) {
     return false;
   }
-  auto contents = v->GetListDeprecated();
+  const auto& contents = v->GetList();
   return !contents.empty() && base::ranges::all_of(contents, predicate);
 }
 
@@ -63,28 +63,28 @@ std::vector<std::string> GetStringOrListOfStrings(const base::Value* v) {
   }
 
   std::vector<std::string> ret;
-  for (const auto& elem : v->GetListDeprecated()) {
+  for (const auto& elem : v->GetList()) {
     ret.push_back(elem.GetString());
   }
   return ret;
 }
 
-absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
+absl::optional<std::vector<FilterStep>> ParseJSON(std::string_view json) {
   absl::optional<base::Value> v =
       base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS);
   if (!v || !v->is_dict()) {
     return absl::nullopt;
   }
 
-  const base::Value* filters = v->FindKey("filters");
-  if (!filters || !filters->is_list()) {
+  const base::Value::List* filters = v->GetDict().FindList("filters");
+  if (!filters) {
     return absl::nullopt;
   }
 
   std::vector<FilterStep> ret;
-  const auto filter_list = filters->GetListDeprecated();
-  for (const auto& filter : filter_list) {
-    if (!filter.is_dict()) {
+  for (const auto& filter : *filters) {
+    const base::Value::Dict* filter_dict = filter.GetIfDict();
+    if (!filter_dict) {
       return absl::nullopt;
     }
 
@@ -98,8 +98,9 @@ absl::optional<std::vector<FilterStep>> ParseJSON(base::StringPiece json) {
     const base::Value* id_max_size = nullptr;
     const base::Value* action = nullptr;
 
-    // DictItems is used so that unknown keys in the dictionary can be rejected.
-    for (auto pair : filter.DictItems()) {
+    // Walk through all items in the dictionary so that dictionaries with
+    // unknown keys can be rejected.
+    for (auto pair : *filter_dict) {
       if (pair.first == "operation") {
         operation = &pair.second;
       } else if (pair.first == "rp_id") {
@@ -224,7 +225,7 @@ CurrentFilter* GetCurrentFilter() {
   return current_filter.get();
 }
 
-bool MaybeParseFilter(base::StringPiece json) {
+bool MaybeParseFilter(std::string_view json) {
   CurrentFilter* const current_filter = GetCurrentFilter();
   if (current_filter->json && json == *current_filter->json) {
     return true;
@@ -261,8 +262,8 @@ void MaybeInitialize() {
 
 Action Evaluate(
     Operation op,
-    base::StringPiece rp_id,
-    absl::optional<base::StringPiece> device,
+    std::string_view rp_id,
+    absl::optional<std::string_view> device,
     absl::optional<std::pair<IDType, base::span<const uint8_t>>> id) {
   CurrentFilter* const current_filter = GetCurrentFilter();
   if (!current_filter->steps) {
@@ -302,7 +303,7 @@ Action Evaluate(
   return Action::ALLOW;
 }
 
-ScopedFilterForTesting::ScopedFilterForTesting(base::StringPiece json)
+ScopedFilterForTesting::ScopedFilterForTesting(std::string_view json)
     : previous_json_(GetCurrentFilter()->json) {
   g_testing_depth++;
   CHECK(g_testing_depth != 0);
@@ -310,7 +311,7 @@ ScopedFilterForTesting::ScopedFilterForTesting(base::StringPiece json)
 }
 
 ScopedFilterForTesting::ScopedFilterForTesting(
-    base::StringPiece json,
+    std::string_view json,
     ScopedFilterForTesting::PermitInvalidJSON)
     : previous_json_(GetCurrentFilter()->json) {
   g_testing_depth++;
@@ -329,7 +330,7 @@ ScopedFilterForTesting::~ScopedFilterForTesting() {
   }
 }
 
-bool ParseForTesting(base::StringPiece json) {
+bool ParseForTesting(std::string_view json) {
   CHECK(base::JSONReader::Read(json, base::JSON_ALLOW_TRAILING_COMMAS)) << json;
   return MaybeParseFilter(json);
 }

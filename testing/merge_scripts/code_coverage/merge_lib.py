@@ -24,7 +24,8 @@ logging.basicConfig(
 def _call_profdata_tool(profile_input_file_paths,
                         profile_output_file_path,
                         profdata_tool_path,
-                        sparse=False):
+                        sparse=False,
+                        timeout=3600):
   """Calls the llvm-profdata tool.
 
   Args:
@@ -34,34 +35,52 @@ def _call_profdata_tool(profile_input_file_paths,
     profdata_tool_path: The path to the llvm-profdata executable.
     sparse (bool): flag to indicate whether to run llvm-profdata with --sparse.
       Doc: https://llvm.org/docs/CommandGuide/llvm-profdata.html#profdata-merge
-
-  Returns:
-    A list of paths to profiles that had to be excluded to get the merge to
-    succeed, suspected of being corrupted or malformed.
+    timeout (int): timeout (sec) for the call to merge profiles. This should
+      not take > 1 hr, and so defaults to 3600 seconds.
 
   Raises:
     CalledProcessError: An error occurred merging profiles.
   """
+  # There might be too many files in input and argument limit might be
+  # violated, so make the tool read a list of paths from a file.
+  output_dir = os.path.dirname(profile_output_file_path)
+  # Normalize to POSIX style paths for consistent results.
+  input_file = os.path.join(output_dir,
+                            'input-profdata-files.txt').replace('\\', '/')
+  with open(input_file, 'w') as fd:
+    logging.info("List of .profdata files...")
+    for file_path in profile_input_file_paths:
+      logging.info(file_path)
+      fd.write('%s\n' % file_path)
   try:
     subprocess_cmd = [
         profdata_tool_path, 'merge', '-o', profile_output_file_path,
     ]
     if sparse:
       subprocess_cmd += ['-sparse=true',]
-    subprocess_cmd.extend(profile_input_file_paths)
+    subprocess_cmd.extend(['-f', input_file])
     logging.info('profdata command: %r', subprocess_cmd)
 
     # Redirecting stderr is required because when error happens, llvm-profdata
     # writes the error output to stderr and our error handling logic relies on
-    # that output.
-    subprocess.check_call(subprocess_cmd, stderr=subprocess.STDOUT)
+    # that output. stdout=None should print to console.
+    # Timeout in seconds, set to 1 hr (60*60)
+    p = subprocess.run(subprocess_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
+                        check=True)
+    logging.info(p.stdout)
   except subprocess.CalledProcessError as error:
-    logging.error('Failed to merge profiles, return code (%d), output: %r' %
-                  (error.returncode, error.output))
+    logging.info('stdout: %s' % error.output)
+    logging.error('Failed to merge profiles, return code (%d), error: %r' %
+                  (error.returncode, error.stderr))
     raise error
+  except subprocess.TimeoutExpired as e:
+    logging.info('stdout: %s' % e.output)
+    raise e
 
   logging.info('Profile data is created as: "%r".', profile_output_file_path)
-  return []
 
 
 def _get_profile_paths(input_dir,
@@ -225,7 +244,8 @@ def merge_profiles(input_dir,
                    profdata_tool_path,
                    input_filename_pattern='.*',
                    sparse=False,
-                   skip_validation=False):
+                   skip_validation=False,
+                   merge_timeout=3600):
   """Merges the profiles produced by the shards using llvm-profdata.
 
   Args:
@@ -240,6 +260,8 @@ def merge_profiles(input_dir,
       Doc: https://llvm.org/docs/CommandGuide/llvm-profdata.html#profdata-merge
     skip_validation (bool): flag to skip the _validate_and_convert_profraws
         invocation. only applicable when input_extension is .profraw.
+    merge_timeout (int): timeout (sec) for the call to merge profiles. This
+      should not take > 1 hr, and so defaults to 3600 seconds.
 
   Returns:
     The list of profiles that had to be excluded to get the merge to
@@ -278,11 +300,12 @@ def merge_profiles(input_dir,
                  'invoking profdata tools.')
     return invalid_profraw_files, counter_overflows
 
-  invalid_profdata_files = _call_profdata_tool(
+  _call_profdata_tool(
       profile_input_file_paths=profile_input_file_paths,
       profile_output_file_path=output_file,
       profdata_tool_path=profdata_tool_path,
-      sparse=sparse)
+      sparse=sparse,
+      timeout=merge_timeout)
 
   # Remove inputs when merging profraws as they won't be needed and they can be
   # pretty large. If the inputs are profdata files, do not remove them as they
@@ -291,7 +314,7 @@ def merge_profiles(input_dir,
     for input_file in profile_input_file_paths:
       os.remove(input_file)
 
-  return invalid_profraw_files + invalid_profdata_files, counter_overflows
+  return invalid_profraw_files, counter_overflows
 
 # We want to retry shards that contain one or more profiles that cannot be
 # merged (typically due to corruption described in crbug.com/937521).

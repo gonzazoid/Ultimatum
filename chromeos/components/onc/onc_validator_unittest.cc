@@ -18,8 +18,7 @@
 #include "components/onc/onc_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace onc {
+namespace chromeos::onc {
 
 namespace {
 // A valid but empty (no networks and no certificates) and unencrypted
@@ -37,7 +36,7 @@ class ONCValidatorTest : public ::testing::Test {
   // validation is stored, so that expectations can be checked afterwards using
   // one of the Expect* functions below.
   void Validate(bool strict,
-                base::Value onc_object,
+                base::Value::Dict onc_object,
                 const OncValueSignature* signature,
                 bool managed_onc,
                 ::onc::ONCSource onc_source) {
@@ -67,23 +66,25 @@ class ONCValidatorTest : public ::testing::Test {
 
   void ExpectValid() {
     EXPECT_EQ(Validator::VALID, validation_result_);
-    EXPECT_TRUE(test_utils::Equals(&original_object_, &repaired_object_));
+    EXPECT_TRUE(
+        test_utils::Equals(&original_object_, &repaired_object_.value()));
   }
 
-  void ExpectRepairWithWarnings(const base::Value& expected_repaired) {
+  void ExpectRepairWithWarnings(const base::Value::Dict& expected_repaired) {
     EXPECT_EQ(Validator::VALID_WITH_WARNINGS, validation_result_);
-    EXPECT_TRUE(test_utils::Equals(&expected_repaired, &repaired_object_));
+    EXPECT_TRUE(
+        test_utils::Equals(&expected_repaired, &repaired_object_.value()));
   }
 
   void ExpectInvalid() {
     EXPECT_EQ(Validator::INVALID, validation_result_);
-    EXPECT_TRUE(repaired_object_.is_none());
+    EXPECT_FALSE(repaired_object_.has_value());
   }
 
  private:
   Validator::Result validation_result_;
-  base::Value original_object_;
-  base::Value repaired_object_;
+  base::Value::Dict original_object_;
+  std::optional<base::Value::Dict> repaired_object_;
 };
 
 namespace {
@@ -117,8 +118,11 @@ struct OncParams {
 // Ensure that the constant |kEmptyUnencryptedConfiguration| describes a valid
 // ONC toplevel object.
 TEST_F(ONCValidatorTest, EmptyUnencryptedConfiguration) {
-  Validate(true, ReadDictionaryFromJson(kEmptyUnencryptedConfiguration),
-           &kToplevelConfigurationSignature, false, ::onc::ONC_SOURCE_NONE);
+  std::optional<base::Value::Dict> dict =
+      ReadDictionaryFromJson(kEmptyUnencryptedConfiguration);
+  EXPECT_TRUE(dict.has_value());
+  Validate(true, std::move(dict.value()), &kToplevelConfigurationSignature,
+           false, ::onc::ONC_SOURCE_NONE);
   ExpectValid();
 }
 
@@ -130,15 +134,15 @@ class ONCValidatorValidTest : public ONCValidatorTest,
 
 TEST_P(ONCValidatorValidTest, StrictValidationValid) {
   OncParams onc = GetParam();
-  Validate(true, test_utils::ReadTestDictionaryValue(onc.location),
-           onc.signature, onc.is_managed, onc.onc_source);
+  Validate(true, test_utils::ReadTestDictionary(onc.location), onc.signature,
+           onc.is_managed, onc.onc_source);
   ExpectValid();
 }
 
 TEST_P(ONCValidatorValidTest, LiberalValidationValid) {
   OncParams onc = GetParam();
-  Validate(false, test_utils::ReadTestDictionaryValue(onc.location),
-           onc.signature, onc.is_managed, onc.onc_source);
+  Validate(false, test_utils::ReadTestDictionary(onc.location), onc.signature,
+           onc.is_managed, onc.onc_source);
   ExpectValid();
 }
 
@@ -182,6 +186,27 @@ INSTANTIATE_TEST_SUITE_P(
                   ::onc::ONC_SOURCE_DEVICE_POLICY),
         // AllowCellularSimLock is only allowed for device policies.
         OncParams("managed_toplevel_with_cellular_sim_lock.onc",
+                  &kToplevelConfigurationSignature,
+                  true,
+                  ::onc::ONC_SOURCE_DEVICE_POLICY),
+        // AllowTextMessages is only allowed for device policies.
+        OncParams("managed_toplevel_with_cellular_text_messages.onc",
+                  &kToplevelConfigurationSignature,
+                  true,
+                  ::onc::ONC_SOURCE_DEVICE_POLICY),
+        // RecommendedValuesAreEphemeral is only allowed for device policies.
+        OncParams("managed_toplevel_with_recommended_values_ephemeral.onc",
+                  &kToplevelConfigurationSignature,
+                  true,
+                  ::onc::ONC_SOURCE_DEVICE_POLICY),
+        // UserCreatedNetworkConfigurationsAreEphemeral is only allowed for
+        // device policies.
+        OncParams("managed_toplevel_with_user_created_configs_ephemeral.onc",
+                  &kToplevelConfigurationSignature,
+                  true,
+                  ::onc::ONC_SOURCE_DEVICE_POLICY),
+        // AllowModifyApns is only allowed for device policies.
+        OncParams("managed_toplevel_with_apns.onc",
                   &kToplevelConfigurationSignature,
                   true,
                   ::onc::ONC_SOURCE_DEVICE_POLICY),
@@ -235,6 +260,14 @@ INSTANTIATE_TEST_SUITE_P(
                   &kNetworkConfigurationSignature,
                   true),
         OncParams("cellular_with_smdp.onc",
+                  &kNetworkConfigurationSignature,
+                  true,
+                  ::onc::ONC_SOURCE_DEVICE_POLICY),
+        OncParams("cellular_with_smds.onc",
+                  &kNetworkConfigurationSignature,
+                  true,
+                  ::onc::ONC_SOURCE_DEVICE_POLICY),
+        OncParams("cellular_with_neither_smdp_nor_smds.onc",
                   &kNetworkConfigurationSignature,
                   true,
                   ::onc::ONC_SOURCE_DEVICE_POLICY),
@@ -313,12 +346,12 @@ class ONCValidatorTestRepairable
  public:
   // Load the common test data and return the dictionary at the field with
   // name |name|.
-  base::Value GetDictionaryFromTestFile(const std::string& name) {
-    base::Value dict = test_utils::ReadTestDictionaryValue(
-        "invalid_settings_with_repairs.json");
-    base::Value* result = dict.FindKey(name);
+  base::Value::Dict GetDictionaryFromTestFile(const std::string& name) {
+    base::Value::Dict dict =
+        test_utils::ReadTestDictionary("invalid_settings_with_repairs.json");
+    base::Value::Dict* result = dict.FindDict(name);
     EXPECT_TRUE(result);
-    return result ? std::move(*result) : base::Value();
+    return result ? std::move(*result) : base::Value::Dict();
   }
 };
 
@@ -328,10 +361,11 @@ TEST_P(ONCValidatorTestRepairable, StrictValidation) {
            onc.is_managed, onc.onc_source);
   std::string location_of_repaired =
       GetParam().second.location_of_strict_repaired;
-  if (location_of_repaired.empty())
+  if (location_of_repaired.empty()) {
     ExpectInvalid();
-  else
+  } else {
     ExpectRepairWithWarnings(GetDictionaryFromTestFile(location_of_repaired));
+  }
 }
 
 TEST_P(ONCValidatorTestRepairable, LiberalValidation) {
@@ -343,10 +377,11 @@ TEST_P(ONCValidatorTestRepairable, LiberalValidation) {
   } else {
     std::string location_of_repaired =
         GetParam().second.location_of_liberal_repaired;
-    if (location_of_repaired.empty())
+    if (location_of_repaired.empty()) {
       ExpectInvalid();
-    else
+    } else {
       ExpectRepairWithWarnings(GetDictionaryFromTestFile(location_of_repaired));
+    }
   }
 }
 
@@ -535,6 +570,11 @@ INSTANTIATE_TEST_SUITE_P(
     StrictAndLiberalInvalid,
     ONCValidatorTestRepairable,
     ::testing::Values(
+        std::make_pair(OncParams("global-allow-text-messages",
+                                 &kGlobalNetworkConfigurationSignature,
+                                 true,
+                                 ::onc::ONC_SOURCE_DEVICE_POLICY),
+                       ExpectBothNotValid("", "")),
         std::make_pair(OncParams("global-disabled-technologies",
                                  &kGlobalNetworkConfigurationSignature,
                                  false),
@@ -629,11 +669,15 @@ INSTANTIATE_TEST_SUITE_P(
                                  &kScopeSignature,
                                  true),
                        ExpectBothNotValid("", "")),
+        std::make_pair(OncParams("invalid-scope-due-to-missing-type",
+                                 &kScopeSignature,
+                                 true),
+                       ExpectBothNotValid("",
+                                          "invalid-scope-due-to-missing-type")),
         std::make_pair(
-            OncParams("invalid-scope-due-to-missing-type",
-                      &kScopeSignature,
+            OncParams("invalid-cellular-due-to-having-both-smdp-and-smds",
+                      &kCellularSignature,
                       true),
-            ExpectBothNotValid("", "invalid-scope-due-to-missing-type"))));
+            ExpectBothNotValid("", ""))));
 
-}  // namespace onc
-}  // namespace chromeos
+}  // namespace chromeos::onc

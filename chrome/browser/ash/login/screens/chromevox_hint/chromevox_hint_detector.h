@@ -7,15 +7,16 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chrome/browser/ash/idle_detector.h"
 
 namespace base {
 class TickClock;
 }  // namespace base
 
 namespace ash {
+
+class IdleDetector;
 
 // Helper for ChromeVox hint idle detection.
 class ChromeVoxHintDetector {
@@ -42,9 +43,9 @@ class ChromeVoxHintDetector {
 
   bool chromevox_hint_given_ = false;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
-  Observer* observer_;
+  raw_ptr<Observer> observer_;
 
   std::unique_ptr<IdleDetector> idle_detector_;
 

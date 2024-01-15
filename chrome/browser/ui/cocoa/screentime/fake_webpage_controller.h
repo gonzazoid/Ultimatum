@@ -7,7 +7,6 @@
 
 #include <vector>
 
-#include "base/mac/scoped_nsobject.h"
 #include "chrome/browser/ui/cocoa/screentime/webpage_controller.h"
 
 namespace screentime {
@@ -35,7 +34,7 @@ class FakeWebpageController : public WebpageController {
 
  private:
   bool enabled_ = false;
-  base::scoped_nsobject<NSView> view_;
+  NSView* __strong view_;
   BlockedChangedCallback blocked_changed_callback_;
 
   // For unit tests:

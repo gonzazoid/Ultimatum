@@ -4,21 +4,28 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/i18n/unicodestring.h"
 #include "base/memory/raw_ptr.h"
 #include "base/rand_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_callback_support.h"
+#include "base/test/mock_callback.h"
 #include "build/build_config.h"
+#include "components/file_access/scoped_file_access.h"
+#include "components/file_access/test/mock_scoped_file_access_delegate.h"
 #include "content/browser/file_system/file_system_url_loader_factory.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -42,6 +49,7 @@
 #include "storage/browser/file_system/file_system_operation_context.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/file_system_url.h"
+#include "storage/browser/file_system/sandbox_file_system_backend_delegate.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 #include "storage/browser/test/async_file_test_helper.h"
 #include "storage/browser/test/mock_quota_manager.h"
@@ -121,7 +129,7 @@ void ReadDataPipeInternal(mojo::DataPipeConsumerHandle handle,
         std::move(quit_closure).Run();
         return;
       case MOJO_RESULT_SHOULD_WAIT:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&ReadDataPipeInternal, handle, result,
                                       std::move(quit_closure)));
         return;
@@ -213,7 +221,7 @@ class FileSystemURLLoaderFactoryTest
         base::BindOnce(
             &FileSystemContext::OpenFileSystem, file_system_context_,
             blink::StorageKey::CreateFromStringForTesting("http://remote/"),
-            /*bucket=*/absl::nullopt, storage::kFileSystemTypeTemporary,
+            /*bucket=*/std::nullopt, storage::kFileSystemTypeTemporary,
             storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
             base::BindOnce(&FileSystemURLLoaderFactoryTest::OnOpenFileSystem,
                            loop.QuitClosure())));
@@ -246,7 +254,8 @@ class FileSystemURLLoaderFactoryTest
         additional_providers;
     additional_providers.push_back(
         std::make_unique<storage::TestFileSystemBackend>(
-            base::ThreadTaskRunnerHandle::Get().get(), mnt_point));
+            base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+            mnt_point));
 
     std::vector<storage::URLRequestAutoMountHandler> handlers = {
         base::BindRepeating(&TestAutoMountForURLRequest)};
@@ -382,7 +391,7 @@ class FileSystemURLLoaderFactoryTest
     UErrorCode parse_status = U_ZERO_ERROR;
     UDate udate = formatter->parse(date_ustr, parse_status);
     EXPECT_TRUE(U_SUCCESS(parse_status));
-    base::Time date = base::Time::FromJsTime(udate);
+    base::Time date = base::Time::FromMillisecondsSinceUnixEpoch(udate);
     EXPECT_FALSE(date.is_null());
   }
 
@@ -392,7 +401,17 @@ class FileSystemURLLoaderFactoryTest
 
   std::unique_ptr<network::TestURLLoaderClient> TestLoad(const GURL& url) {
     auto client =
-        TestLoadHelper(url, /*extra_headers=*/nullptr, file_system_context_);
+        TestLoadHelper(url, /*origin=*/std::nullopt, /*extra_headers=*/nullptr,
+                       file_system_context_);
+    client->RunUntilComplete();
+    return client;
+  }
+
+  std::unique_ptr<network::TestURLLoaderClient> TestLoadWithInitiator(
+      const GURL& url,
+      const url::Origin& origin) {
+    auto client = TestLoadHelper(url, origin, /*extra_headers=*/nullptr,
+                                 file_system_context_);
     client->RunUntilComplete();
     return client;
   }
@@ -401,7 +420,8 @@ class FileSystemURLLoaderFactoryTest
       const GURL& url,
       scoped_refptr<storage::FileSystemContext> file_system_context) {
     auto client =
-        TestLoadHelper(url, /*extra_headers=*/nullptr, file_system_context);
+        TestLoadHelper(url, /*origin=*/std::nullopt, /*extra_headers=*/nullptr,
+                       file_system_context);
     client->RunUntilComplete();
     return client;
   }
@@ -409,7 +429,8 @@ class FileSystemURLLoaderFactoryTest
   std::unique_ptr<network::TestURLLoaderClient> TestLoadWithHeaders(
       const GURL& url,
       const net::HttpRequestHeaders* extra_headers) {
-    auto client = TestLoadHelper(url, extra_headers, file_system_context_);
+    auto client = TestLoadHelper(url, /*origin=*/std::nullopt, extra_headers,
+                                 file_system_context_);
     client->RunUntilComplete();
     return client;
   }
@@ -417,7 +438,8 @@ class FileSystemURLLoaderFactoryTest
   std::unique_ptr<network::TestURLLoaderClient> TestLoadNoRun(
       const GURL& url,
       const net::HttpRequestHeaders* extra_headers = nullptr) {
-    return TestLoadHelper(url, extra_headers, file_system_context_);
+    return TestLoadHelper(url, /*origin=*/std::nullopt, extra_headers,
+                          file_system_context_);
   }
 
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner() {
@@ -476,10 +498,14 @@ class FileSystemURLLoaderFactoryTest
 
   std::unique_ptr<network::TestURLLoaderClient> TestLoadHelper(
       const GURL& url,
+      const std::optional<url::Origin>& origin,
       const net::HttpRequestHeaders* extra_headers,
       scoped_refptr<storage::FileSystemContext> file_system_context) {
     network::ResourceRequest request;
     request.url = url;
+    if (origin) {
+      request.request_initiator = origin;
+    }
     if (extra_headers)
       request.headers.MergeFrom(*extra_headers);
     const std::string storage_domain = url.DeprecatedGetOriginAsURL().host();
@@ -487,7 +513,8 @@ class FileSystemURLLoaderFactoryTest
         CreateFileSystemURLLoaderFactory(
             render_frame_host()->GetProcess()->GetID(),
             render_frame_host()->GetFrameTreeNodeId(), file_system_context,
-            storage_domain, blink::StorageKey(url::Origin::Create(url))));
+            storage_domain,
+            blink::StorageKey::CreateFirstParty(url::Origin::Create(url))));
 
     auto client = std::make_unique<network::TestURLLoaderClient>();
     loader_.reset();
@@ -506,7 +533,8 @@ class FileSystemURLLoaderFactoryTest
   scoped_refptr<storage::MockQuotaManager> quota_manager_;
   scoped_refptr<storage::MockQuotaManagerProxy> quota_manager_proxy_;
   // Owned by `file_system_context_` and only usable on `blocking_task_runner_`.
-  raw_ptr<storage::FileSystemFileUtil, DanglingUntriaged> file_util_ = nullptr;
+  raw_ptr<storage::FileSystemFileUtil, AcrossTasksDanglingUntriaged>
+      file_util_ = nullptr;
 };
 
 INSTANTIATE_TEST_SUITE_P(All,
@@ -688,6 +716,34 @@ IN_PROC_BROWSER_TEST_P(FileSystemURLLoaderFactoryTest, FileTest) {
   base::ScopedAllowBlockingForTesting allow_blocking;
   WriteFile("file1.dat", kTestFileData, std::size(kTestFileData) - 1);
   auto client = TestLoad(CreateFileSystemURL("file1.dat"));
+
+  EXPECT_TRUE(client->has_received_response());
+  EXPECT_TRUE(client->has_received_completion());
+  std::string response_text = ReadDataPipe(client->response_body_release());
+  EXPECT_EQ(kTestFileData, response_text);
+  ASSERT_TRUE(client->response_head()->headers) << "No response headers";
+  EXPECT_EQ(200, client->response_head()->headers->response_code());
+  std::string cache_control;
+  EXPECT_TRUE(client->response_head()->headers->GetNormalizedHeader(
+      "cache-control", &cache_control));
+  EXPECT_EQ("no-cache", cache_control);
+}
+
+IN_PROC_BROWSER_TEST_P(FileSystemURLLoaderFactoryTest, FileTestDlp) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+
+  base::MockRepeatingCallback<void(
+      const std::vector<base::FilePath>&,
+      base::OnceCallback<void(file_access::ScopedFileAccess)>)>
+      fileAccessCallback;
+  file_access::MockScopedFileAccessDelegate scoped_file_access_delegate;
+  EXPECT_CALL(scoped_file_access_delegate, CreateFileAccessCallback)
+      .WillOnce(::testing::Return(fileAccessCallback.Get()));
+
+  WriteFile("file1.dat", kTestFileData, std::size(kTestFileData) - 1);
+  auto client =
+      TestLoadWithInitiator(CreateFileSystemURL("file1.dat"),
+                            url::Origin::Create(GURL("https://example.com")));
 
   EXPECT_TRUE(client->has_received_response());
   EXPECT_TRUE(client->has_received_completion());

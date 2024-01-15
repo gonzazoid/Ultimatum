@@ -11,7 +11,8 @@
 
 #include "ash/components/arc/mojom/usb_host.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
@@ -62,7 +63,7 @@ class ArcUsbHostBridge : public KeyedService,
                          bool interactive,
                          RequestPermissionCallback callback) override;
   void OpenDevice(const std::string& guid,
-                  const absl::optional<std::string>& package,
+                  const std::optional<std::string>& package,
                   OpenDeviceCallback callback) override;
   void GetDeviceInfo(const std::string& guid,
                      GetDeviceInfoCallback callback) override;
@@ -75,6 +76,8 @@ class ArcUsbHostBridge : public KeyedService,
   void Shutdown() override;
 
   void SetUiDelegate(ArcUsbHostUiDelegate* ui_delegate);
+
+  static void EnsureFactoryBuilt();
 
  private:
   // Init |devices_| once the device list has been returned, so that we
@@ -95,7 +98,8 @@ class ArcUsbHostBridge : public KeyedService,
 
   SEQUENCE_CHECKER(sequence_);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // Connection to the DeviceService for usb manager.
   mojo::Remote<device::mojom::UsbDeviceManager> usb_manager_;
@@ -105,7 +109,7 @@ class ArcUsbHostBridge : public KeyedService,
   // A mapping from GUID -> UsbDeviceInfoPtr for each attached USB device.
   std::map<std::string, device::mojom::UsbDeviceInfoPtr> devices_;
 
-  ArcUsbHostUiDelegate* ui_delegate_ = nullptr;
+  raw_ptr<ArcUsbHostUiDelegate> ui_delegate_ = nullptr;
 
   // WeakPtrFactory to use for callbacks.
   base::WeakPtrFactory<ArcUsbHostBridge> weak_factory_{this};

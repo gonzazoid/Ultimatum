@@ -4,7 +4,9 @@
 
 #include "third_party/blink/renderer/platform/widget/compositing/queue_report_time_swap_promise.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -73,7 +75,8 @@ void QueueReportTimeSwapPromise::DidSwap() {
 }
 
 cc::SwapPromise::DidNotSwapAction QueueReportTimeSwapPromise::DidNotSwap(
-    DidNotSwapReason reason) {
+    DidNotSwapReason reason,
+    base::TimeTicks ts) {
   if (reason == cc::SwapPromise::COMMIT_FAILS)
     return DidNotSwapAction::KEEP_ACTIVE;
 

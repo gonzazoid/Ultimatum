@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
 
 namespace dbus {
@@ -36,8 +36,14 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ModemMessagingClient {
     virtual void ReceiveSms(const dbus::ObjectPath& object_path,
                             const dbus::ObjectPath& sms_path) = 0;
 
+    // Returns the SMS path of the SMS currently pending deletion.
+    virtual std::string GetPendingDeleteRequestSmsPath() const = 0;
+
+    // Completes the pending deletion.
+    virtual void CompletePendingDeleteRequest(bool success) = 0;
+
    protected:
-    virtual ~TestInterface() {}
+    virtual ~TestInterface() = default;
   };
 
   // Creates and initializes the global instance. |bus| must not be null.

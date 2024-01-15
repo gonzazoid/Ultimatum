@@ -6,21 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
-#include "chrome/browser/browsing_data/mock_browsing_data_quota_helper.h"
+#include "base/strings/string_piece.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/browsing_data/content/mock_cache_storage_helper.h"
+#include "components/browsing_data/content/mock_browsing_data_quota_helper.h"
 #include "components/browsing_data/content/mock_cookie_helper.h"
-#include "components/browsing_data/content/mock_database_helper.h"
-#include "components/browsing_data/content/mock_file_system_helper.h"
-#include "components/browsing_data/content/mock_indexed_db_helper.h"
 #include "components/browsing_data/content/mock_local_storage_helper.h"
-#include "components/browsing_data/content/mock_service_worker_helper.h"
 #include "content/public/common/content_constants.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -37,15 +33,18 @@ class SiteDataSizeCollectorTest : public testing::Test {
 
   void SetUp() override {
     profile_ = std::make_unique<TestingProfile>();
+    auto* storage_partition = profile_->GetDefaultStoragePartition();
     mock_browsing_data_cookie_helper_ =
-        base::MakeRefCounted<browsing_data::MockCookieHelper>(profile_.get());
+        base::MakeRefCounted<browsing_data::MockCookieHelper>(
+            storage_partition);
     mock_browsing_data_local_storage_helper_ =
         base::MakeRefCounted<browsing_data::MockLocalStorageHelper>(
-            profile_.get());
+            storage_partition);
     mock_browsing_data_quota_helper_ =
-        base::MakeRefCounted<MockBrowsingDataQuotaHelper>(profile_.get());
-    base::WriteFile(profile_->GetPath().Append(chrome::kCookieFilename),
-                    kCookieFileData, std::size(kCookieFileData));
+        base::MakeRefCounted<MockBrowsingDataQuotaHelper>();
+    base::WriteFile(
+        profile_->GetPath().Append(chrome::kCookieFilename),
+        base::StringPiece(kCookieFileData, std::size(kCookieFileData)));
     fetched_size_ = -1;
   }
 

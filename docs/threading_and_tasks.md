@@ -10,17 +10,9 @@ examples.
 Chrome has a [multi-process
 architecture](https://www.chromium.org/developers/design-documents/multi-process-architecture)
 and each process is heavily multi-threaded. In this document we will go over the
-basic threading system shared by each process. The main goal is to keep the main
-thread (a.k.a. "UI" thread in the browser process) and IO thread (each process's
-thread for receiving
-[IPC](https://en.wikipedia.org/wiki/Inter-process_communication))
-responsive.  This means offloading any blocking I/O or other expensive
-operations to other threads. Our approach is to use message passing as the way
-of communicating between threads. We discourage locking and thread-safe objects.
-Instead, objects live on only one (often virtual -- we'll get to that later!)
-thread and we pass messages between those threads for communication. Absent
-external requirements about latency or workload, Chrome attempts to be a [highly
-concurrent, but not necessarily
+basic threading system shared by each process. Our primary goal is to keep the
+browser highly responsive. Absent external requirements about latency or
+workload, Chrome attempts to be a [highly concurrent, but not necessarily
 parallel](https://stackoverflow.com/questions/1050222/what-is-the-difference-between-concurrency-and-parallelism#:~:text=Concurrency%20is%20when%20two%20or,e.g.%2C%20on%20a%20multicore%20processor.),
 system.
 
@@ -30,6 +22,32 @@ found
 
 This documentation assumes familiarity with computer science
 [threading concepts](https://en.wikipedia.org/wiki/Thread_(computing)).
+
+### Quick start guide
+
+ * Do not perform expensive computation or blocking IO on the main thread
+   (a.k.a. “UI” thread in the browser process) or IO thread (each
+   process's thread for receiving IPC). A busy UI / IO thread can cause
+   user-visible latency, so prefer running that work on the
+   [thread pool](#direct-posting-to-the-thread-pool).
+ * Always avoid reading/writing to the same place in memory from separate
+   threads or sequences. This will lead to
+   [data races](https://en.wikipedia.org/wiki/Race_condition#Data_race)!
+   Prefer passing messages across sequences instead. Alternatives to message
+   passing like using locks is discouraged.
+ * To prevent accidental data races, prefer for most classes to be used
+   exclusively on a single sequence. You should use utilities like
+   [SEQUENCE_CHECKER](https://source.chromium.org/chromium/chromium/src/+/main:base/sequence_checker.h)
+   or [base::SequenceBound](https://source.chromium.org/chromium/chromium/src/+/main:base/threading/sequence_bound.h)
+   to help enforce this constraint.
+ * If you need to orchestrate multiple objects that live on different
+   sequences, be careful about object lifetimes. For example,
+   using [base::Unretained](https://source.chromium.org/chromium/chromium/src/+/main:base/functional/bind.h;l=169;drc=ef1375f2c9fffa0d9cd664b43b0035c09fb70e99)
+   in posted tasks can often lead to use-after-free bugs without careful
+   analysis of object lifetimes. Consider whether you need to use
+   [weak pointers](https://source.chromium.org/chromium/chromium/src/+/main:base/memory/weak_ptr.h)
+   or [scoped refptrs](https://source.chromium.org/chromium/chromium/src/+/main:base/memory/scoped_refptr.h)
+   instead.
 
 ### Nomenclature
 
@@ -276,7 +294,7 @@ current virtual thread. On threads with multiple task queues (e.g.
 BrowserThread::UI) this can be a different queue than the one the current task
 belongs to. The "current" task runner is intentionally not exposed via a static
 getter. Either you know it already and can post to it directly or you don't and
-the only sensible destination is the default queue. See https://bit.ly/3JvCLsX 
+the only sensible destination is the default queue. See https://bit.ly/3JvCLsX
 for detailed discussion.
 
 ## Using Sequences Instead of Locks
@@ -462,6 +480,32 @@ com_sta_task_runner->PostTask(FROM_HERE, base::BindOnce(&TaskAUsingCOMSTA));
 com_sta_task_runner->PostTask(FROM_HERE, base::BindOnce(&TaskBUsingCOMSTA));
 ```
 
+## Memory ordering guarantees for posted Tasks
+
+This task system guarantees that all the memory effects of sequential execution
+before posting a task are _visible_ to the task when it starts running. More
+formally, a call to `PostTask()` and the execution of the posted task are in the
+[happens-before
+relationship](https://preshing.com/20130702/the-happens-before-relation/) with
+each other. This is true for all variants of posting a task in `::base`,
+including `PostTaskAndReply()`. Similarly the happens-before relationship is
+present for tasks running in a sequence as part of the same SequencedTaskRunner.
+
+This guarantee is important to know about because Chrome tasks commonly access
+memory beyond the immediate data copied into the `base::OnceCallback`, and this
+happens-before relationship allows to avoid additional synchronization within
+the tasks themselves. As a very specific example, consider a callback that binds
+a pointer to memory which was just initialized in the thread posting the task.
+
+A more constrained model is also worth noting. Execution can be split into tasks
+running on different task runners, where each task _exclusively_ accesses
+certain objects in memory without explicit synchronization. Posting another task
+transfers this 'ownership' (of the objects) to the next task. With this the
+notion of object ownership can often be extended to the level of task runners,
+which provides useful invariants to reason about. This model allows to avoid
+race conditions while also avoiding locks and atomic operations. Because of its
+simplicity this model is commonly used in Chrome.
+
 ## Annotating Tasks with TaskTraits
 
 [`base::TaskTraits`](https://cs.chromium.org/chromium/src/base/task/task_traits.h)
@@ -470,12 +514,14 @@ scheduling decisions.
 
 Methods that take `base::TaskTraits` can be be passed `{}` when default traits
 are sufficient. Default traits are appropriate for tasks that:
+
 - Don’t block (ref. MayBlock and WithBaseSyncPrimitives);
 - Pertain to user-blocking activity;
   (explicitly or implicitly by having an ordering dependency with a component
    that does)
 - Can either block shutdown or be skipped on shutdown (thread pool is free to
   choose a fitting default).
+
 Tasks that don’t match this description must be posted with explicit TaskTraits.
 
 [`base/task/task_traits.h`](https://cs.chromium.org/chromium/src/base/task/task_traits.h)
@@ -785,12 +831,12 @@ in the main function:
 
 ```cpp
 // This initializes and starts ThreadPoolInstance with default params.
-base::ThreadPoolInstance::CreateAndStartWithDefaultParams(“process_name”);
+base::ThreadPoolInstance::CreateAndStartWithDefaultParams("process_name");
 // The base/task/thread_pool.h API can now be used with base::ThreadPool trait.
 // Tasks will be scheduled as they are posted.
 
 // This initializes ThreadPoolInstance.
-base::ThreadPoolInstance::Create(“process_name”);
+base::ThreadPoolInstance::Create("process_name");
 // The base/task/thread_pool.h API can now be used with base::ThreadPool trait. No
 // threads will be created and no tasks will be scheduled until after Start() is
 // called.
@@ -903,7 +949,7 @@ with dialogs (DialogBox), common dialogs (GetOpenFileName), OLE functions
 Sample workaround when inner task processing is needed:
   HRESULT hr;
   {
-    CurrentThread::ScopedNestableTaskAllower allow;
+    CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
     hr = DoDragDrop(...); // Implicitly runs a modal message loop.
   }
   // Process |hr| (the result returned by DoDragDrop()).
@@ -911,7 +957,7 @@ Sample workaround when inner task processing is needed:
 
 Please be SURE your task is reentrant (nestable) and all global variables
 are stable and accessible before before using
-CurrentThread::ScopedNestableTaskAllower.
+CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop.
 
 ## APIs for general use
 

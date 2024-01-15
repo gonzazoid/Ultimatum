@@ -12,10 +12,11 @@ import org.chromium.chrome.browser.customtabs.content.CustomTabActivityTabContro
 import org.chromium.chrome.browser.customtabs.content.CustomTabActivityTabProvider;
 import org.chromium.chrome.browser.dependency_injection.ActivityScope;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
 import org.chromium.content_public.browser.NavigationController;
 import org.chromium.content_public.browser.NavigationHistory;
 import org.chromium.content_public.browser.WebContents;
+
+import java.util.function.Predicate;
 
 import javax.inject.Inject;
 
@@ -38,13 +39,14 @@ import javax.inject.Inject;
  */
 @ActivityScope
 public class CloseButtonNavigator {
-    @Nullable private PageCriteria mLandingPageCriteria;
+    @Nullable private Predicate<String> mLandingPagePredicate;
     private final CustomTabActivityTabController mTabController;
     private final CustomTabActivityTabProvider mTabProvider;
     private final boolean mButtonClosesChildTab;
 
     @Inject
-    public CloseButtonNavigator(CustomTabActivityTabController tabController,
+    public CloseButtonNavigator(
+            CustomTabActivityTabController tabController,
             CustomTabActivityTabProvider tabProvider,
             BrowserServicesIntentDataProvider intentDataProvider) {
         mTabController = tabController;
@@ -52,32 +54,26 @@ public class CloseButtonNavigator {
         mButtonClosesChildTab = intentDataProvider.isWebappOrWebApkActivity();
     }
 
-    // TODO(peconn): Replace with Predicate<T> when we can use Java 8 libraries.
-    /** An interface that allows specifying if a URL matches some criteria. */
-    public interface PageCriteria {
-        /** Whether the given |url| matches the criteria. */
-        boolean matches(String url);
-    }
+    /**
+     * Sets the criteria for the page to go back to.
+     * @param criteria A predicate that returns true when given the URL of a landing page.
+     */
+    public void setLandingPageCriteria(Predicate<String> criteria) {
+        assert mLandingPagePredicate == null : "Conflicting criteria for close button navigation.";
 
-    /** Sets the criteria for the page to go back to. */
-    public void setLandingPageCriteria(PageCriteria criteria) {
-        assert mLandingPageCriteria == null : "Conflicting criteria for close button navigation.";
-
-        mLandingPageCriteria = criteria;
+        mLandingPagePredicate = criteria;
     }
 
     private boolean isLandingPage(String url) {
-        return mLandingPageCriteria != null && mLandingPageCriteria.matches(url);
+        return mLandingPagePredicate != null && mLandingPagePredicate.test(url);
     }
 
-    /**
-     * Handles navigation and Tab closures that should occur when the close button is pressed.
-     */
+    /** Handles navigation and Tab closures that should occur when the close button is pressed. */
     public void navigateOnClose() {
         // If the tab is a child tab and |mButtonClosesChildTab| == true, close the child tab.
         Tab currentTab = mTabProvider.getTab();
-        boolean isFromChildTab = (currentTab != null
-                && CriticalPersistedTabData.from(currentTab).getParentId() != Tab.INVALID_TAB_ID);
+        boolean isFromChildTab =
+                (currentTab != null && currentTab.getParentId() != Tab.INVALID_TAB_ID);
         if (isFromChildTab && mButtonClosesChildTab) {
             mTabController.closeTab();
             return;
@@ -90,9 +86,6 @@ public class CloseButtonNavigator {
             // See if there's a close button navigation in our current Tab.
             NavigationController navigationController = getNavigationController();
             if (navigationController != null && navigateSingleTab(getNavigationController())) {
-                if (isFromChildTab) {
-                    recordChildTabScopeAlgorithmClosesOneTab(false);
-                }
                 return;
             }
 
@@ -105,11 +98,13 @@ public class CloseButtonNavigator {
             // we would not navigate at all.
             Tab nextTab = mTabProvider.getTab();
             if (nextTab != null && isLandingPage(nextTab.getUrl().getSpec())) {
-                if (isFromChildTab) {
-                    recordChildTabScopeAlgorithmClosesOneTab(numTabsClosed == 1);
-                }
                 return;
             }
+        }
+
+        if (numTabsClosed > 0) {
+            RecordHistogram.recordCount100Histogram(
+                    "CustomTabs.TabCounts.OnClosingAllTabs", numTabsClosed);
         }
     }
 
@@ -118,7 +113,7 @@ public class CloseButtonNavigator {
      * criteria for what is a landing page has been given or no such page can be found.
      */
     private boolean navigateSingleTab(@Nullable NavigationController controller) {
-        if (mLandingPageCriteria == null || controller == null) return false;
+        if (mLandingPagePredicate == null || controller == null) return false;
 
         NavigationHistory history = controller.getNavigationHistory();
         for (int i = history.getCurrentEntryIndex() - 1; i >= 0; i--) {
@@ -132,18 +127,7 @@ public class CloseButtonNavigator {
         return false;
     }
 
-    /**
-     * Records how often the "navigate to landing page" algorithm for child tabs for Custom Tabs and
-     * Trusted Web Activities produces the same behaviour as the webapp "close current tab"
-     * algorithm.
-     */
-    private void recordChildTabScopeAlgorithmClosesOneTab(boolean closesOneTab) {
-        RecordHistogram.recordBooleanHistogram(
-                "CustomTabs.CloseButton.ChildTab.ScopeAlgorithm.ClosesOneTab", closesOneTab);
-    }
-
-    @Nullable
-    private NavigationController getNavigationController() {
+    private @Nullable NavigationController getNavigationController() {
         Tab tab = mTabProvider.getTab();
         if (tab == null) return null;
         WebContents webContents = tab.getWebContents();

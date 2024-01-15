@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <optional>
+
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
 #include "chrome/browser/extensions/extension_apitest.h"
@@ -40,9 +41,20 @@ IN_PROC_BROWSER_TEST_F(SidePanelApiTest, PermissionMissing) {
   ASSERT_TRUE(RunExtensionTest("side_panel/permission_missing")) << message_;
 }
 
-// Verify chrome.sidePanel.get behavior without side_panel manifest key.
+// Verify chrome.sidePanel.getOptions behavior without side_panel manifest key.
 IN_PROC_BROWSER_TEST_F(SidePanelApiTest, MissingManifestKey) {
   ASSERT_TRUE(RunExtensionTest("side_panel/missing_manifest_key")) << message_;
+}
+
+// Verify chrome.sidePanel.get/setPanelBehavior behavior.
+IN_PROC_BROWSER_TEST_F(SidePanelApiTest, PanelBehavior) {
+  ASSERT_TRUE(RunExtensionTest("side_panel/panel_behavior")) << message_;
+}
+
+// Verify normal chrome.sidePanel functionality.
+IN_PROC_BROWSER_TEST_F(SidePanelApiTest, ApiOnly) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+  ASSERT_TRUE(RunExtensionTest("side_panel/api_only")) << message_;
 }
 
 class SidePanelApiWithExtensionTest : public SidePanelApiTest {
@@ -127,6 +139,10 @@ IN_PROC_BROWSER_TEST_F(SidePanelApiWithExtensionTest, ExtensionRegistry) {
     EXPECT_EQ("default_path.html", options.path.value());
     EXPECT_FALSE(service->HasExtensionPanelOptionsForTest(extension->id()));
   }
+}
+
+IN_PROC_BROWSER_TEST_F(SidePanelApiTest, OpenPanelErrors) {
+  ASSERT_TRUE(RunExtensionTest("side_panel/open_panel_errors"));
 }
 
 }  // namespace extensions

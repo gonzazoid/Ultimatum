@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/timing/performance_long_task_timing.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_object_builder.h"
 #include "third_party/blink/renderer/core/frame/dom_window.h"
 #include "third_party/blink/renderer/core/performance_entry_names.h"
@@ -20,17 +22,17 @@ PerformanceLongTaskTiming::PerformanceLongTaskTiming(
     const AtomicString& culprit_src,
     const AtomicString& culprit_id,
     const AtomicString& culprit_name,
-    const uint32_t navigation_id)
-    : PerformanceEntry(duration, name, start_time, navigation_id) {
+    DOMWindow* source)
+    : PerformanceEntry(duration, name, start_time, source) {
   auto* attribution_entry = MakeGarbageCollected<TaskAttributionTiming>(
-      "unknown", culprit_type, culprit_src, culprit_id, culprit_name,
-      navigation_id);
+      performance_entry_names::kUnknown, culprit_type, culprit_src, culprit_id,
+      culprit_name, source);
   attribution_.push_back(*attribution_entry);
 }
 
 PerformanceLongTaskTiming::~PerformanceLongTaskTiming() = default;
 
-AtomicString PerformanceLongTaskTiming::entryType() const {
+const AtomicString& PerformanceLongTaskTiming::entryType() const {
   return performance_entry_names::kLongtask;
 }
 
@@ -44,9 +46,10 @@ TaskAttributionVector PerformanceLongTaskTiming::attribution() const {
 
 void PerformanceLongTaskTiming::BuildJSONValue(V8ObjectBuilder& builder) const {
   PerformanceEntry::BuildJSONValue(builder);
-  ScriptState* script_state = builder.GetScriptState();
-  builder.Add("attribution", FreezeV8Object(ToV8(attribution_, script_state),
-                                            script_state->GetIsolate()));
+  builder.AddV8Value("attribution",
+                     ToV8Traits<IDLArray<TaskAttributionTiming>>::ToV8(
+                         builder.GetScriptState(), attribution_)
+                         .ToLocalChecked());
 }
 
 void PerformanceLongTaskTiming::Trace(Visitor* visitor) const {

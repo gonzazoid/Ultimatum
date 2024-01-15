@@ -7,29 +7,26 @@
 #import <ostream>
 
 #import "base/check_op.h"
+#import "base/feature_list.h"
 #import "base/ios/ns_range.h"
 #import "base/notreached.h"
 #import "components/google/core/common/google_util.h"
-#import "ios/chrome/browser/application_context/application_context.h"
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/authentication/authentication_constants.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_constants.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_view_controller_delegate.h"
 #import "ios/chrome/browser/ui/authentication/views/identity_button_control.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/text_view_util.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "net/base/mac/url_conversions.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -166,7 +163,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   // Title.
   UILabel* title =
       [self addLabelWithStringId:IDS_IOS_ACCOUNT_UNIFIED_CONSENT_TITLE
-                       fontStyle:kAuthenticationTitleFontStyle
+                       fontStyle:UIFontTextStyleTitle1
                        textColor:[UIColor colorNamed:kTextPrimaryColor]
                       parentView:container];
 
@@ -181,18 +178,19 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   [container addSubview:self.identityButtonControl];
 
   // Sync title and subtitle.
-  int stringId = self.delegate.unifiedConsentCoordinatorHasManagedSyncDataType
-                     ? IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_MANAGED_TITLE
-                     : IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_TITLE;
+  int stringId =
+      self.delegate.unifiedConsentCoordinatorHasManagedSyncDataType
+          ? IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_MANAGED_TITLE
+          : IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_TITLE_WITHOUT_PASSWORDS;
   UILabel* syncTitleLabel =
       [self addLabelWithStringId:stringId
-                       fontStyle:kAuthenticationTextFontStyle
+                       fontStyle:UIFontTextStyleSubheadline
                        textColor:[UIColor colorNamed:kTextPrimaryColor]
                       parentView:container];
 
   UILabel* syncSubtitleLabel =
       [self addLabelWithStringId:IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_SUBTITLE
-                       fontStyle:kAuthenticationTextFontStyle
+                       fontStyle:UIFontTextStyleSubheadline
                        textColor:[UIColor colorNamed:kTextSecondaryColor]
                       parentView:container];
 
@@ -209,7 +207,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   self.syncSettingsTextView.delegate = self;
   self.syncSettingsTextView.backgroundColor = UIColor.clearColor;
   self.syncSettingsTextView.font =
-      [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle];
+      [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
   self.syncSettingsTextView.adjustsFontForContentSizeCategory = YES;
   self.syncSettingsTextView.translatesAutoresizingMaskIntoConstraints = NO;
   [container addSubview:self.syncSettingsTextView];
@@ -391,13 +389,13 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   NSDictionary* textAttributes = @{
     NSForegroundColorAttributeName : [UIColor colorNamed:kTextSecondaryColor],
     NSFontAttributeName :
-        [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle]
+        [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline]
   };
   NSDictionary* linkAttributes = @{
     NSForegroundColorAttributeName : [UIColor colorNamed:kBlueColor],
     NSLinkAttributeName : net::NSURLWithGURL(GURL(kChromeUIManagementURL)),
     NSFontAttributeName :
-        [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle]
+        [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline]
   };
   _managementNoticeTextView.attributedText = AttributedStringFromStringWithLink(
       fullText, textAttributes, linkAttributes);
@@ -445,7 +443,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
   NSDictionary* textAttributes = @{
     NSForegroundColorAttributeName : [UIColor colorNamed:kTextSecondaryColor],
     NSFontAttributeName :
-        [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle]
+        [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline]
   };
 
   NSDictionary* linkAttributes = nil;
@@ -453,7 +451,7 @@ const char* const kSettingsSyncURL = "internal://settings-sync";
     linkAttributes = @{
       NSForegroundColorAttributeName : [UIColor colorNamed:kBlueColor],
       NSFontAttributeName :
-          [UIFont preferredFontForTextStyle:kAuthenticationTextFontStyle],
+          [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline],
       NSLinkAttributeName : net::NSURLWithGURL(GURL(kSettingsSyncURL)),
     };
   }

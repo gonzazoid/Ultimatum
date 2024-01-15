@@ -15,6 +15,8 @@
 
 class ExtensionsToolbarContainer;
 class ToolbarActionView;
+class ExtensionsToolbarButton;
+class ExtensionsMenuCoordinator;
 
 namespace extensions {
 class Extension;
@@ -97,15 +99,28 @@ class ExtensionsToolbarUITest : public DialogBrowserTest {
   // GetToolbarActionViews().
   std::vector<ToolbarActionView*> GetVisibleToolbarActionViews() const;
 
+  // Returns the extensions button in the toolbar.
+  ExtensionsToolbarButton* extensions_button();
+
+  // Returns the extensions menu coordinator.
+  ExtensionsMenuCoordinator* menu_coordinator();
+
   // Triggers the press and release event of the given `button`.
   void ClickButton(views::Button* button) const;
+
+  // Returns whether the extension injected a script by checking the document
+  // title. Extension must use 'extensions/blocked_actions/content_scripts'.
+  bool DidInjectScript(content::WebContents* web_contents);
+
+  // Navigate to `url` in the currently active web contents.
+  void NavigateTo(const GURL& url);
 
   // Waits for the extensions container to animate (on pin, unpin, pop-out,
   // etc.)
   void WaitForAnimation();
 
  private:
-  raw_ptr<Browser> incognito_browser_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> incognito_browser_ = nullptr;
   std::vector<scoped_refptr<const extensions::Extension>> extensions_;
 };
 

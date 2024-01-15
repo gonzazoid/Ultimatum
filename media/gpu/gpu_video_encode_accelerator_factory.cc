@@ -4,11 +4,15 @@
 
 #include "media/gpu/gpu_video_encode_accelerator_factory.h"
 
-#include "base/bind.h"
+#include <utility>
+#include <vector>
+
+#include "base/command_line.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_preferences.h"
@@ -18,10 +22,8 @@
 #include "media/gpu/buildflags.h"
 #include "media/gpu/gpu_video_accelerator_util.h"
 #include "media/gpu/macros.h"
+#include "media/video/video_encode_accelerator.h"
 
-#if BUILDFLAG(USE_V4L2_CODEC)
-#include "media/gpu/v4l2/v4l2_video_encode_accelerator.h"
-#endif
 #if BUILDFLAG(IS_ANDROID)
 #include "media/gpu/android/android_video_encode_accelerator.h"
 #include "media/gpu/android/ndk_video_encode_accelerator.h"
@@ -32,8 +34,13 @@
 #if BUILDFLAG(IS_WIN)
 #include "media/gpu/windows/media_foundation_video_encode_accelerator_win.h"
 #endif
-#if BUILDFLAG(USE_VAAPI)
+#if BUILDFLAG(USE_V4L2_CODEC)
+#include "media/gpu/v4l2/v4l2_video_encode_accelerator.h"
+#elif BUILDFLAG(USE_VAAPI)
 #include "media/gpu/vaapi/vaapi_video_encode_accelerator.h"
+#endif
+#if BUILDFLAG(IS_FUCHSIA)
+#include "media/fuchsia/video/fuchsia_video_encode_accelerator.h"
 #endif
 
 namespace media {
@@ -41,21 +48,16 @@ namespace media {
 namespace {
 #if BUILDFLAG(USE_V4L2_CODEC)
 std::unique_ptr<VideoEncodeAccelerator> CreateV4L2VEA() {
-  scoped_refptr<V4L2Device> device = V4L2Device::Create();
-  if (!device)
-    return nullptr;
 #if BUILDFLAG(IS_CHROMEOS)
   // TODO(crbug.com/901264): Encoders use hack for passing offset within
   // a DMA-buf, which is not supported upstream.
   return base::WrapUnique<VideoEncodeAccelerator>(
-      new V4L2VideoEncodeAccelerator(std::move(device)));
+      new V4L2VideoEncodeAccelerator(new V4L2Device()));
 #else
   return nullptr;
 #endif
 }
-#endif
-
-#if BUILDFLAG(USE_VAAPI)
+#elif BUILDFLAG(USE_VAAPI)
 std::unique_ptr<VideoEncodeAccelerator> CreateVaapiVEA() {
   return base::WrapUnique<VideoEncodeAccelerator>(
       new VaapiVideoEncodeAccelerator());
@@ -66,7 +68,8 @@ std::unique_ptr<VideoEncodeAccelerator> CreateVaapiVEA() {
 std::unique_ptr<VideoEncodeAccelerator> CreateAndroidVEA() {
   if (NdkVideoEncodeAccelerator::IsSupported()) {
     return base::WrapUnique<VideoEncodeAccelerator>(
-        new NdkVideoEncodeAccelerator(base::ThreadTaskRunnerHandle::Get()));
+        new NdkVideoEncodeAccelerator(
+            base::SequencedTaskRunner::GetCurrentDefault()));
   } else {
     return base::WrapUnique<VideoEncodeAccelerator>(
         new AndroidVideoEncodeAccelerator());
@@ -82,8 +85,6 @@ std::unique_ptr<VideoEncodeAccelerator> CreateVTVEA() {
 #endif
 
 #if BUILDFLAG(IS_WIN)
-// Creates a MediaFoundationVEA for Win 7 or later. If |compatible_with_win7| is
-// true, VEA is limited to a subset of features that is compatible with Win 7.
 std::unique_ptr<VideoEncodeAccelerator> CreateMediaFoundationVEA(
     const gpu::GpuPreferences& gpu_preferences,
     const gpu::GpuDriverBugWorkarounds& gpu_workarounds,
@@ -91,6 +92,13 @@ std::unique_ptr<VideoEncodeAccelerator> CreateMediaFoundationVEA(
   return base::WrapUnique<VideoEncodeAccelerator>(
       new MediaFoundationVideoEncodeAccelerator(
           gpu_preferences, gpu_workarounds, gpu_device.luid));
+}
+#endif
+
+#if BUILDFLAG(IS_FUCHSIA)
+std::unique_ptr<VideoEncodeAccelerator> CreateFuchsiaVEA() {
+  return base::WrapUnique<VideoEncodeAccelerator>(
+      new FuchsiaVideoEncodeAccelerator());
 }
 #endif
 
@@ -117,10 +125,10 @@ std::vector<VEAFactoryFunction> GetVEAFactoryFunctions(
 #else
   vea_factory_functions.push_back(base::BindRepeating(&CreateVaapiVEA));
 #endif
-#endif
-#if BUILDFLAG(USE_V4L2_CODEC)
+#elif BUILDFLAG(USE_V4L2_CODEC)
   vea_factory_functions.push_back(base::BindRepeating(&CreateV4L2VEA));
 #endif
+
 #if BUILDFLAG(IS_ANDROID)
   vea_factory_functions.push_back(base::BindRepeating(&CreateAndroidVEA));
 #endif
@@ -130,6 +138,11 @@ std::vector<VEAFactoryFunction> GetVEAFactoryFunctions(
 #if BUILDFLAG(IS_WIN)
   vea_factory_functions.push_back(base::BindRepeating(
       &CreateMediaFoundationVEA, gpu_preferences, gpu_workarounds, gpu_device));
+#endif
+#if BUILDFLAG(IS_FUCHSIA)
+  if (base::FeatureList::IsEnabled(kFuchsiaMediacodecVideoEncoder)) {
+    vea_factory_functions.push_back(base::BindRepeating(&CreateFuchsiaVEA));
+  }
 #endif
   return vea_factory_functions;
 }

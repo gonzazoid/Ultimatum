@@ -2,9 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {dispatchPropertyChange} from 'chrome://resources/js/cr.m.js';
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.js';
-import {getRequiredElement} from 'chrome://resources/js/util.js';
+import {assert} from 'chrome://resources/js/assert.js';
+
+function getRequiredElement(id) {
+  // Disable getElementById restriction here, because this UI uses non valid
+  // selectors that don't work with querySelector().
+  // eslint-disable-next-line no-restricted-properties
+  const el = document.getElementById(id);
+  assert(el instanceof HTMLElement);
+  return el;
+}
 
 /**
  * Finds a good place to set initial focus. Generally called when UI is shown.
@@ -148,7 +155,5 @@ export class Page extends EventTarget {
 
     this.pageDiv.page = this;
     this.pageDiv.hidden = !visible;
-
-    dispatchPropertyChange(this, 'visible', visible, !visible);
   }
 }

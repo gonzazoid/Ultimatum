@@ -9,7 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
@@ -34,15 +35,10 @@ class OwnerKeyUtil;
 
 namespace ash {
 
-enum class FeatureFlagsMigrationStatus {
-  kNoFeatureFlags,
-  kAlreadyMigrated,
-  kMigrationPerformed,
-  kMaxValue = kMigrationPerformed,
-};
+class OwnerKeyLoader;
 
-// The class is a profile-keyed service which holds public/private keypair
-// corresponds to a profile. The keypair is reloaded automatically when profile
+// The class is a profile-keyed service which holds public/private key pair
+// corresponds to a profile. The key pair is reloaded automatically when profile
 // is created and TPM token is ready. Note that the private part of a key can be
 // loaded only for the owner.
 //
@@ -118,6 +114,9 @@ class OwnerSettingsServiceAsh : public ownership::OwnerSettingsService,
       const base::Value& value,
       enterprise_management::ChromeDeviceSettingsProto& settings);
 
+  void SetPrivateKeyForTesting(
+      scoped_refptr<ownership::PrivateKey> private_key);
+
  protected:
   OwnerSettingsServiceAsh(
       DeviceSettingsService* device_settings_service,
@@ -144,21 +143,31 @@ class OwnerSettingsServiceAsh : public ownership::OwnerSettingsService,
                               scoped_refptr<ownership::PrivateKey> private_key)>
           callback) override;
 
-  // Possibly notifies DeviceSettingsService that owner's keypair is loaded.
+  void OnReloadedKeypairImpl(
+      base::OnceCallback<void(scoped_refptr<ownership::PublicKey>,
+                              scoped_refptr<ownership::PrivateKey>)> callback,
+      scoped_refptr<ownership::PublicKey> public_key,
+      scoped_refptr<ownership::PrivateKey> private_key);
+
+  // Possibly notifies DeviceSettingsService that owner's key pair is loaded.
   void OnPostKeypairLoadedActions() override;
 
   // Tries to apply recent changes to device settings proto, sign it and store.
   void StorePendingChanges();
 
-  // Called when current device settings are successfully signed.
-  // Sends signed settings for storage.
+  // Called when current device settings are successfully signed. |public_key|
+  // is the public part of the key that was used for signing. Sends signed
+  // settings for storage.
   void OnPolicyAssembledAndSigned(
+      scoped_refptr<ownership::PublicKey> public_key,
       std::unique_ptr<enterprise_management::PolicyFetchResponse>
           policy_response);
 
   // Called by DeviceSettingsService when modified and signed device
-  // settings are stored.
-  void OnSignedPolicyStored(bool success);
+  // settings are stored. |public_key| is the public part of the key that was
+  // used for signing.
+  void OnSignedPolicyStored(scoped_refptr<ownership::PublicKey> public_key,
+                            bool success);
 
   // Report status to observers and tries to continue storing pending chages to
   // device settings.
@@ -169,19 +178,16 @@ class OwnerSettingsServiceAsh : public ownership::OwnerSettingsService,
   void MigrateFeatureFlags(
       enterprise_management::ChromeDeviceSettingsProto* settings);
 
-  DeviceSettingsService* device_settings_service_;
+  raw_ptr<DeviceSettingsService> device_settings_service_;
 
   // Profile this service instance belongs to.
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // User ID this service instance belongs to.
   std::string user_id_;
 
   // Whether TPM token still needs to be initialized.
   bool waiting_for_tpm_token_ = true;
-
-  // Whether easy unlock operation is finished.
-  bool waiting_for_easy_unlock_operation_finshed_ = true;
 
   // True if local-owner policy fixups are still pending.
   bool has_pending_fixups_ = false;
@@ -194,6 +200,11 @@ class OwnerSettingsServiceAsh : public ownership::OwnerSettingsService,
   std::unique_ptr<enterprise_management::ChromeDeviceSettingsProto>
       tentative_settings_;
 
+  // A helper to load an existing owner key or generate a new one when
+  // necessary.
+  std::unique_ptr<OwnerKeyLoader> owner_key_loader_;
+  crypto::ScopedSECKEYPrivateKey old_owner_key_;
+
   base::ScopedObservation<ProfileManager, ProfileManagerObserver>
       profile_manager_observation_{this};
 
@@ -203,11 +214,5 @@ class OwnerSettingsServiceAsh : public ownership::OwnerSettingsService,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OwnerSettingsServiceAsh;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_OWNERSHIP_OWNER_SETTINGS_SERVICE_ASH_H_

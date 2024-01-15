@@ -7,9 +7,12 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "crypto/secure_hash.h"
+#include "crypto/sha2.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "net/base/completion_once_callback.h"
@@ -68,7 +71,7 @@ class ServiceWorkerCacheWriter::ReadResponseHeadCallbackAdapter
 
   void DidReadResponseHead(int result,
                            network::mojom::URLResponseHeadPtr response_head,
-                           absl::optional<mojo_base::BigBuffer>) {
+                           std::optional<mojo_base::BigBuffer>) {
     result_ = result;
     if (!owner_)
       return;
@@ -161,7 +164,8 @@ ServiceWorkerCacheWriter::ServiceWorkerCacheWriter(
     mojo::Remote<storage::mojom::ServiceWorkerResourceReader> copy_reader,
     mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer,
     int64_t writer_resource_id,
-    bool pause_when_not_identical)
+    bool pause_when_not_identical,
+    ChecksumUpdateTiming checksum_update_timing)
     : state_(STATE_START),
       io_pending_(false),
       comparing_(false),
@@ -169,7 +173,9 @@ ServiceWorkerCacheWriter::ServiceWorkerCacheWriter(
       compare_reader_(std::move(compare_reader)),
       copy_reader_(std::move(copy_reader)),
       writer_(std::move(writer)),
-      writer_resource_id_(writer_resource_id) {
+      writer_resource_id_(writer_resource_id),
+      checksum_update_timing_(checksum_update_timing),
+      checksum_(crypto::SecureHash::Create(crypto::SecureHash::SHA256)) {
   if (compare_reader_) {
     compare_reader_.set_disconnect_handler(
         base::BindOnce(&ServiceWorkerCacheWriter::OnRemoteDisconnected,
@@ -201,7 +207,8 @@ ServiceWorkerCacheWriter::CreateForCopy(
   return base::WrapUnique(new ServiceWorkerCacheWriter(
       std::move(null_remote) /* compare_reader */, std::move(copy_reader),
       std::move(writer), writer_resource_id,
-      false /* pause_when_not_identical*/));
+      /*pause_when_not_identical=*/false,
+      ChecksumUpdateTiming::kCacheMismatch));
 }
 
 std::unique_ptr<ServiceWorkerCacheWriter>
@@ -213,7 +220,8 @@ ServiceWorkerCacheWriter::CreateForWriteBack(
   return base::WrapUnique(new ServiceWorkerCacheWriter(
       /*compare_reader=*/{}, /*copy_reader=*/{}, std::move(writer),
       writer_resource_id,
-      /* pause_when_not_identical=*/false));
+      /*pause_when_not_identical=*/false,
+      ChecksumUpdateTiming::kCacheMismatch));
 }
 
 std::unique_ptr<ServiceWorkerCacheWriter>
@@ -222,7 +230,8 @@ ServiceWorkerCacheWriter::CreateForComparison(
     mojo::Remote<storage::mojom::ServiceWorkerResourceReader> copy_reader,
     mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer,
     int64_t writer_resource_id,
-    bool pause_when_not_identical) {
+    bool pause_when_not_identical,
+    ChecksumUpdateTiming checksum_update_timing) {
   // |compare_reader| reads data for the comparison. |copy_reader| reads
   // data for copy.
   DCHECK(compare_reader);
@@ -233,7 +242,7 @@ ServiceWorkerCacheWriter::CreateForComparison(
   DCHECK(writer.is_connected());
   return base::WrapUnique(new ServiceWorkerCacheWriter(
       std::move(compare_reader), std::move(copy_reader), std::move(writer),
-      writer_resource_id, pause_when_not_identical));
+      writer_resource_id, pause_when_not_identical, checksum_update_timing));
 }
 
 net::Error ServiceWorkerCacheWriter::MaybeWriteHeaders(
@@ -280,6 +289,11 @@ net::Error ServiceWorkerCacheWriter::MaybeWriteData(
   data_to_write_ = buf;
   len_to_write_ = buf_size;
   pending_callback_ = std::move(callback);
+
+  if (checksum_update_timing_ == ChecksumUpdateTiming::kAlways &&
+      len_to_write_ > 0) {
+    checksum_->Update(data_to_write_->data(), len_to_write_);
+  }
 
   if (comparing_)
     state_ = STATE_READ_DATA_FOR_COMPARE;
@@ -439,7 +453,7 @@ int ServiceWorkerCacheWriter::DoReadDataForCompare(int result) {
   DCHECK_GE(result, 0);
   DCHECK(data_to_write_);
 
-  data_to_read_ = base::MakeRefCounted<net::IOBuffer>(len_to_write_);
+  data_to_read_ = base::MakeRefCounted<net::IOBufferWithSize>(len_to_write_);
   len_to_read_ = len_to_write_;
   state_ = STATE_READ_DATA_FOR_COMPARE_DONE;
   compare_offset_ = 0;
@@ -480,8 +494,8 @@ int ServiceWorkerCacheWriter::DoReadDataForCompareDone(int result) {
 
   // Compare the data from the ServiceWorker script cache to the data from the
   // network.
-  if (memcmp(data_to_read_->data(), data_to_write_->data() + compare_offset_,
-             result)) {
+  if (!std::equal(data_to_read_->data(), data_to_read_->data() + result,
+                  data_to_write_->data() + compare_offset_)) {
     // Data mismatched. This method already validated that all the bytes through
     // |bytes_compared_| were identical, so copy the first |bytes_compared_|
     // over, then start writing network data back after the changed point.
@@ -535,7 +549,7 @@ int ServiceWorkerCacheWriter::DoReadHeadersForCopy(int result) {
   }
 
   bytes_copied_ = 0;
-  data_to_copy_ = base::MakeRefCounted<net::IOBuffer>(kCopyBufferSize);
+  data_to_copy_ = base::MakeRefCounted<net::IOBufferWithSize>(kCopyBufferSize);
   state_ = STATE_READ_HEADERS_FOR_COPY_DONE;
   return ReadResponseHead(copy_reader_.get());
 }
@@ -617,7 +631,7 @@ int ServiceWorkerCacheWriter::DoReadDataForCopyDone(int result) {
 
 int ServiceWorkerCacheWriter::DoWriteDataForCopy(int result) {
   state_ = STATE_WRITE_DATA_FOR_COPY_DONE;
-  DCHECK_GT(result, 0);
+  CHECK_GT(result, 0);
   return WriteData(data_to_copy_, result);
 }
 
@@ -786,7 +800,7 @@ int ServiceWorkerCacheWriter::ReadDataHelper(
     int buf_len) {
   if (!data_pipe_reader) {
     data_pipe_reader = std::make_unique<DataPipeReader>(
-        reader, this, base::SequencedTaskRunnerHandle::Get());
+        reader, this, base::SequencedTaskRunner::GetCurrentDefault());
   }
   data_pipe_reader->Read(buf, buf_len,
                          base::BindOnce(&ServiceWorkerCacheWriter::AsyncDoLoop,
@@ -831,7 +845,7 @@ int ServiceWorkerCacheWriter::WriteResponseHead(
 
 int ServiceWorkerCacheWriter::WriteDataToResponseWriter(
     scoped_refptr<net::IOBuffer> data,
-    int length) {
+    size_t length) {
   if (!writer_.is_connected()) {
     state_ = STATE_DONE;
     return net::ERR_FAILED;
@@ -841,6 +855,13 @@ int ServiceWorkerCacheWriter::WriteDataToResponseWriter(
       &ServiceWorkerCacheWriter::AsyncDoLoop, weak_factory_.GetWeakPtr());
   scoped_refptr<AsyncOnlyCompletionCallbackAdaptor> adaptor(
       new AsyncOnlyCompletionCallbackAdaptor(std::move(run_callback)));
+
+  // If |checksum_update_timing_| is kAlways, the checksum update should be
+  // handled in MaybeWriteData().
+  if (checksum_update_timing_ == ChecksumUpdateTiming::kCacheMismatch) {
+    checksum_->Update(data->data(), length);
+  }
+
   mojo_base::BigBuffer big_buffer(
       base::as_bytes(base::make_span(data->data(), length)));
   writer_->WriteData(
@@ -852,7 +873,7 @@ int ServiceWorkerCacheWriter::WriteDataToResponseWriter(
 }
 
 int ServiceWorkerCacheWriter::WriteData(scoped_refptr<net::IOBuffer> data,
-                                        int length) {
+                                        size_t length) {
   if (!write_observer_)
     return WriteDataToResponseWriter(std::move(data), length);
 
@@ -875,7 +896,7 @@ int ServiceWorkerCacheWriter::WriteData(scoped_refptr<net::IOBuffer> data,
 // AsyncDoLoop() may need to be called to continue the state machine.
 void ServiceWorkerCacheWriter::OnWillWriteDataCompleted(
     scoped_refptr<net::IOBuffer> data,
-    int length,
+    size_t length,
     net::Error error) {
   DCHECK_NE(error, net::ERR_IO_PENDING);
   io_pending_ = false;
@@ -919,6 +940,15 @@ void ServiceWorkerCacheWriter::AsyncDoLoop(int result) {
     OnWriteCompleteCallback callback = std::move(pending_callback_);
     std::move(callback).Run(net::ERR_IO_PENDING);
   }
+}
+
+std::string ServiceWorkerCacheWriter::GetSha256Checksum() {
+  DCHECK_EQ(STATE_DONE, state_);
+  DCHECK(checksum_);
+  uint8_t result[crypto::kSHA256Length];
+  checksum_->Finish(result, crypto::kSHA256Length);
+  checksum_ = nullptr;
+  return base::HexEncode(result);
 }
 
 }  // namespace content

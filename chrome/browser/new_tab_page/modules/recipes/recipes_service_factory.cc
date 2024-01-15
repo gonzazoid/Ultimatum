@@ -19,21 +19,30 @@ RecipesService* RecipesServiceFactory::GetForProfile(Profile* profile) {
 
 // static
 RecipesServiceFactory* RecipesServiceFactory::GetInstance() {
-  return base::Singleton<RecipesServiceFactory>::get();
+  static base::NoDestructor<RecipesServiceFactory> instance;
+  return instance.get();
 }
 
 RecipesServiceFactory::RecipesServiceFactory()
-    : ProfileKeyedServiceFactory("RecipesService") {
+    : ProfileKeyedServiceFactory(
+          "RecipesService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(CookieSettingsFactory::GetInstance());
 }
 
 RecipesServiceFactory::~RecipesServiceFactory() = default;
 
-KeyedService* RecipesServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RecipesServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   auto url_loader_factory = context->GetDefaultStoragePartition()
                                 ->GetURLLoaderFactoryForBrowserProcess();
-  return new RecipesService(url_loader_factory,
-                            Profile::FromBrowserContext(context),
-                            g_browser_process->GetApplicationLocale());
+  return std::make_unique<RecipesService>(
+      url_loader_factory, Profile::FromBrowserContext(context),
+      g_browser_process->GetApplicationLocale());
 }

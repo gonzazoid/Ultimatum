@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
@@ -15,13 +16,17 @@
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_notification_controller.h"
 #include "ash/public/cpp/session/session_controller.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "build/buildflag.h"
 #include "chromeos/ash/components/assistant/buildflags.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
@@ -36,6 +41,7 @@
 #include "chromeos/ash/services/libassistant/public/cpp/libassistant_loader.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
 #include "components/account_id/account_id.h"
+#include "components/prefs/pref_service.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
@@ -44,7 +50,14 @@
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+#if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
+#include "chromeos/ash/services/libassistant/constants.h"
+#endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
 
 namespace ash::assistant {
 
@@ -52,6 +65,8 @@ namespace {
 
 constexpr char kScopeAssistant[] =
     "https://www.googleapis.com/auth/assistant-sdk-prototype";
+
+constexpr char kServiceStateHistogram[] = "Assistant.ServiceState";
 
 constexpr base::TimeDelta kMinTokenRefreshDelay = base::Milliseconds(1000);
 constexpr base::TimeDelta kMaxTokenRefreshDelay = base::Milliseconds(60 * 1000);
@@ -62,6 +77,48 @@ const char* g_s3_server_uri_override = nullptr;
 // device.
 const char* g_device_id_override = nullptr;
 
+#if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+base::TaskTraits GetTaskTraits() {
+  return {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
+          base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN};
+}
+#endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+
+// The max number of tries to start service.
+// We decide whether to start service based on two counters:
+// 1. the backoff `failure_count`, and
+// 2. the pref value `kAssistantNumFailuresSinceLastServiceRun`.
+//
+// 1.   Will not restart service if the `failure_count` is larger than
+//      `kMaxStartServiceRetries`. Note that the `failure_count` will change:
+// 1.a. Increment by 1 for every service disconnected.
+// 1.b. Reset to 0 when explicitly re-enable the Assistant from the Settings.
+// 1.c. Reset to 0 when re-login the device.
+// 1.d. Decrement by 1 when it has been `kAutoRecoverTime`.
+//
+// 2.   Will not restart service if the pref value
+//      `kAssistantNumFailuresSinceLastServiceRun` is larger than
+//      `kMaxStartServiceRetries`, unless `failure_count` is 0, e.g. the first
+//      time login. Note that the `kAssistantNumFailuresSinceLastServiceRun`
+//      will change:
+// 2.a. Increment by 1 for every service disconnected.
+// 2.b. Reset to 0 when every service running.
+constexpr int kMaxStartServiceRetries = 1;
+
+// An interval used to gradually reduce the failure_count so that we could
+// restart.
+constexpr base::TimeDelta kAutoRecoverTime = base::Hours(24);
+
+constexpr net::BackoffEntry::Policy kRetryStartServiceBackoffPolicy = {
+    0,          // Number of initial errors to ignore.
+    1000,       // Initial delay in ms.
+    2.0,        // Factor by which the waiting time will be multiplied.
+    0.2,        // Fuzzing percentage.
+    60 * 1000,  // Maximum delay in ms.
+    -1,         // Never discard the entry.
+    true,       // Use initial delay.
+};
+
 AssistantStatus ToAssistantStatus(AssistantManagerService::State state) {
   using State = AssistantManagerService::State;
 
@@ -70,22 +127,23 @@ AssistantStatus ToAssistantStatus(AssistantManagerService::State state) {
     case State::STOPPING:
     case State::STARTING:
     case State::STARTED:
+    case State::DISCONNECTED:
       return AssistantStatus::NOT_READY;
     case State::RUNNING:
       return AssistantStatus::READY;
   }
 }
 
-absl::optional<std::string> GetS3ServerUriOverride() {
+std::optional<std::string> GetS3ServerUriOverride() {
   if (g_s3_server_uri_override)
     return g_s3_server_uri_override;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<std::string> GetDeviceIdOverride() {
+std::optional<std::string> GetDeviceIdOverride() {
   if (g_device_id_override)
     return g_device_id_override;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // In the signed-out mode, we are going to run Assistant service without
@@ -95,6 +153,10 @@ bool IsSignedOutMode() {
   // Assistant Tast tests.
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
       switches::kDisableGaiaServices);
+}
+
+void RecordServiceState(AssistantManagerService::State state) {
+  base::UmaHistogramEnumeration(kServiceStateHistogram, state);
 }
 
 }  // namespace
@@ -121,7 +183,7 @@ class ScopedAshSessionObserver {
  private:
   SessionController* controller() const { return SessionController::Get(); }
 
-  SessionActivationObserver* const observer_;
+  const raw_ptr<SessionActivationObserver> observer_;
   const AccountId account_id_;
 };
 
@@ -176,17 +238,21 @@ class Service::Context : public ServiceContext {
   }
 
  private:
-  Service* const parent_;  // |this| is owned by |parent_|.
+  const raw_ptr<Service> parent_;  // |this| is owned by |parent_|.
 };
 
 Service::Service(std::unique_ptr<network::PendingSharedURLLoaderFactory>
                      pending_url_loader_factory,
-                 signin::IdentityManager* identity_manager)
+                 signin::IdentityManager* identity_manager,
+                 PrefService* pref_service)
     : context_(std::make_unique<Context>(this)),
       identity_manager_(identity_manager),
+      pref_service_(pref_service),
       token_refresh_timer_(std::make_unique<base::OneShotTimer>()),
-      main_task_runner_(base::SequencedTaskRunnerHandle::Get()),
-      pending_url_loader_factory_(std::move(pending_url_loader_factory)) {
+      main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
+      pending_url_loader_factory_(std::move(pending_url_loader_factory)),
+      start_service_retry_backoff_(&kRetryStartServiceBackoffPolicy),
+      auto_service_recover_timer_(std::make_unique<base::OneShotTimer>()) {
   DCHECK(identity_manager_);
   chromeos::PowerManagerClient* power_manager_client =
       context_->power_manager_client();
@@ -301,6 +367,8 @@ void Service::OnAssistantHotwordAlwaysOn(bool hotword_always_on) {
 }
 
 void Service::OnAssistantSettingsEnabled(bool enabled) {
+  // Reset the failure count and backoff delay when the Settings is re-enabled.
+  start_service_retry_backoff_.Reset();
   UpdateAssistantManagerState();
 }
 
@@ -327,13 +395,29 @@ void Service::OnAuthenticationError() {
 void Service::OnStateChanged(AssistantManagerService::State new_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (new_state == AssistantManagerService::State::STARTED)
-    FinalizeAssistantManagerService();
-  if (new_state == AssistantManagerService::State::RUNNING)
-    DVLOG(1) << "Assistant is running";
+  switch (new_state) {
+    case AssistantManagerService::State::STARTED:
+      FinalizeAssistantManagerService();
+      break;
+    case AssistantManagerService::State::RUNNING:
+      OnLibassistantServiceRunning();
+      break;
+    case AssistantManagerService::State::STOPPED:
+      OnLibassistantServiceStopped();
+      break;
+    case AssistantManagerService::State::DISCONNECTED:
+      OnLibassistantServiceDisconnected();
+      break;
+    case AssistantManagerService::State::STARTING:
+    case AssistantManagerService::State::STOPPING:
+      // No action.
+      break;
+  }
 
+  RecordServiceState(new_state);
   AssistantBrowserDelegate::Get()->OnAssistantStatusChanged(
       ToAssistantStatus(new_state));
+
   UpdateListeningState();
 }
 
@@ -346,7 +430,7 @@ void Service::UpdateAssistantManagerState() {
       !assistant_state->locale().has_value() ||
       (!access_token_.has_value() && !IsSignedOutMode()) ||
       !assistant_state->arc_play_store_enabled().has_value() ||
-      !libassistant_loaded_) {
+      !libassistant_loaded_ || is_deleting_data_) {
     // Assistant state has not finished initialization, let's wait.
     return;
   }
@@ -354,7 +438,7 @@ void Service::UpdateAssistantManagerState() {
   if (IsSignedOutMode()) {
     // Clear |access_token_| in signed-out mode to keep it synced with what we
     // will pass to the |assistant_manager_service_|.
-    access_token_ = absl::nullopt;
+    access_token_ = std::nullopt;
   }
 
   if (!assistant_manager_service_)
@@ -363,8 +447,24 @@ void Service::UpdateAssistantManagerState() {
   auto state = assistant_manager_service_->GetState();
   switch (state) {
     case AssistantManagerService::State::STOPPED:
+    case AssistantManagerService::State::DISCONNECTED:
+      if (!CanStartService()) {
+        return;
+      }
+
       if (assistant_state->settings_enabled().value()) {
         assistant_manager_service_->Start(GetUserInfo(), ShouldEnableHotword());
+
+        // Re-add observers every time when starting.
+        assistant_manager_service_->AddAuthenticationStateObserver(this);
+        assistant_manager_service_->AddAndFireStateObserver(this);
+
+        if (AssistantInteractionLogger::IsLoggingEnabled()) {
+          interaction_logger_ = std::make_unique<AssistantInteractionLogger>();
+          assistant_manager_service_->AddAssistantInteractionSubscriber(
+              interaction_logger_.get());
+        }
+
         DVLOG(1) << "Request Assistant start";
       }
       break;
@@ -379,10 +479,10 @@ void Service::UpdateAssistantManagerState() {
         return;
       }
       // Wait if |assistant_manager_service_| is not at a stable state.
-      ScheduleUpdateAssistantManagerState();
+      ScheduleUpdateAssistantManagerState(/*should_backoff=*/false);
       break;
     case AssistantManagerService::State::STOPPING:
-      ScheduleUpdateAssistantManagerState();
+      ScheduleUpdateAssistantManagerState(/*should_backoff=*/false);
       break;
     case AssistantManagerService::State::RUNNING:
       if (assistant_state->settings_enabled().value()) {
@@ -399,13 +499,16 @@ void Service::UpdateAssistantManagerState() {
   }
 }
 
-void Service::ScheduleUpdateAssistantManagerState() {
+void Service::ScheduleUpdateAssistantManagerState(bool should_backoff) {
   update_assistant_manager_callback_.Cancel();
   update_assistant_manager_callback_.Reset(base::BindOnce(
       &Service::UpdateAssistantManagerState, weak_ptr_factory_.GetWeakPtr()));
+
+  base::TimeDelta delay =
+      should_backoff ? start_service_retry_backoff_.GetTimeUntilRelease()
+                     : kUpdateAssistantManagerDelay;
   main_task_runner_->PostDelayedTask(
-      FROM_HERE, update_assistant_manager_callback_.callback(),
-      kUpdateAssistantManagerDelay);
+      FROM_HERE, update_assistant_manager_callback_.callback(), delay);
 }
 
 CoreAccountInfo Service::RetrievePrimaryAccountInfo() const {
@@ -487,14 +590,6 @@ void Service::CreateAssistantManagerService() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   assistant_manager_service_ = CreateAndReturnAssistantManagerService();
-  assistant_manager_service_->AddAuthenticationStateObserver(this);
-  assistant_manager_service_->AddAndFireStateObserver(this);
-
-  if (AssistantInteractionLogger::IsLoggingEnabled()) {
-    interaction_logger_ = std::make_unique<AssistantInteractionLogger>();
-    assistant_manager_service_->AddAssistantInteractionSubscriber(
-        interaction_logger_.get());
-  }
 }
 
 std::unique_ptr<AssistantManagerService>
@@ -522,7 +617,6 @@ void Service::FinalizeAssistantManagerService() {
   is_assistant_manager_service_finalized_ = true;
 
   AddAshSessionObserver();
-
   AssistantController::Get()->SetAssistant(assistant_manager_service_.get());
 }
 
@@ -531,8 +625,43 @@ void Service::StopAssistantManagerService() {
 
   assistant_manager_service_->Stop();
   weak_ptr_factory_.InvalidateWeakPtrs();
-  AssistantBrowserDelegate::Get()->OnAssistantStatusChanged(
-      AssistantStatus::NOT_READY);
+}
+
+void Service::OnLibassistantServiceRunning() {
+  DVLOG(1) << "Assistant is running";
+  pref_service_->SetInteger(prefs::kAssistantNumFailuresSinceLastServiceRun, 0);
+}
+
+void Service::OnLibassistantServiceStopped() {
+  ClearAfterStop();
+}
+
+void Service::OnLibassistantServiceDisconnected() {
+  ClearAfterStop();
+
+  if (auto_service_recover_timer_->IsRunning()) {
+    auto_service_recover_timer_->Stop();
+  }
+
+  // Increase the failure count for both the backoff and pref.
+  start_service_retry_backoff_.InformOfRequest(/*succeeded=*/false);
+  int num_failures = pref_service_->GetInteger(
+      prefs::kAssistantNumFailuresSinceLastServiceRun);
+  pref_service_->SetInteger(prefs::kAssistantNumFailuresSinceLastServiceRun,
+                            num_failures + 1);
+  if (CanStartService()) {
+    LOG(WARNING) << "LibAssistant service disconnected. Re-starting...";
+
+    // Restarts LibassistantService.
+    ScheduleUpdateAssistantManagerState(/*should_backoff=*/true);
+  } else {
+    // Start auto recover timer.
+    auto delay = GetAutoRecoverTime();
+    auto_service_recover_timer_->Start(FROM_HERE, delay, this,
+                                       &Service::DecreaseStartServiceBackoff);
+    LOG(ERROR)
+        << "LibAssistant service keeps disconnected. All retries attempted.";
+  }
 }
 
 void Service::AddAshSessionObserver() {
@@ -563,12 +692,12 @@ void Service::UpdateListeningState() {
                                             ShouldEnableHotword());
 }
 
-absl::optional<AssistantManagerService::UserInfo> Service::GetUserInfo() const {
+std::optional<AssistantManagerService::UserInfo> Service::GetUserInfo() const {
   if (access_token_) {
     return AssistantManagerService::UserInfo(RetrievePrimaryAccountInfo().gaia,
                                              access_token_.value());
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool Service::ShouldEnableHotword() {
@@ -598,6 +727,82 @@ void Service::OnLibassistantLoaded(bool success) {
   if (success) {
     UpdateAssistantManagerState();
   }
+}
+
+void Service::ClearAfterStop() {
+  is_assistant_manager_service_finalized_ = false;
+  scoped_ash_session_observer_.reset();
+
+#if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+  // When user disables the Assistant, we also delete all data.
+  if (!AssistantState::Get()->settings_enabled().value()) {
+    is_deleting_data_ = true;
+    base::ThreadPool::CreateSequencedTaskRunner(GetTaskTraits())
+        ->PostTaskAndReply(
+            FROM_HERE, base::BindOnce([]() {
+              base::DeletePathRecursively(base::FilePath(
+                  FILE_PATH_LITERAL(libassistant::kAssistantBaseDirPath)));
+            }),
+            base::BindOnce(&Service::OnDataDeleted,
+                           weak_ptr_factory_.GetWeakPtr()));
+  }
+#endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+
+  ResetAuthenticationStateObserver();
+}
+
+void Service::DecreaseStartServiceBackoff() {
+  // Reduce the failure_count by one to allow restart.
+  start_service_retry_backoff_.InformOfRequest(/*succeeded=*/true);
+
+  // It is ok to try to reset service if the service is running.
+  ScheduleUpdateAssistantManagerState(/*should_backoff=*/true);
+
+  // Start auto recover timer.
+  if (start_service_retry_backoff_.failure_count() > 0) {
+    auto delay = GetAutoRecoverTime();
+    auto_service_recover_timer_->Start(FROM_HERE, delay, this,
+                                       &Service::DecreaseStartServiceBackoff);
+  }
+}
+
+base::TimeDelta Service::GetAutoRecoverTime() {
+  if (!auto_recover_time_for_testing_.is_zero()) {
+    return auto_recover_time_for_testing_;
+  }
+  return kAutoRecoverTime;
+}
+
+bool Service::CanStartService() const {
+  // Please see comments on `kMaxStartServiceRetries`.
+  // We can start service if the failure count is zero:
+  // 1.b. Reset to 0 when explicitly re-enable the Assistant from the Settings.
+  // 1.c. Reset to 0 when re-login the device.
+  // 1.d. Decrement by 1 when it has been `kAutoRecoverTime`.
+  if (start_service_retry_backoff_.failure_count() == 0) {
+    return true;
+  }
+
+  // Do not start service if it has retried `kMaxStartServiceRetries` times in
+  // one chrome session or since the last time enable in Settings.
+  if (start_service_retry_backoff_.failure_count() > kMaxStartServiceRetries) {
+    return false;
+  }
+
+  // Do not start service if `kAssistantNumFailuresSinceLastServiceRun` failed
+  // `kMaxStartServiceRetries` times.
+  int num_failures_since_last_service_run = pref_service_->GetInteger(
+      prefs::kAssistantNumFailuresSinceLastServiceRun);
+  if (num_failures_since_last_service_run > kMaxStartServiceRetries) {
+    return false;
+  }
+
+  return true;
+}
+
+void Service::OnDataDeleted() {
+  is_deleting_data_ = false;
+  UpdateAssistantManagerState();
 }
 
 }  // namespace ash::assistant

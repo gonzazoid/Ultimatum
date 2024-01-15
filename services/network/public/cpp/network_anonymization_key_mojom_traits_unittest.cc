@@ -16,95 +16,25 @@
 
 namespace mojo {
 
-TEST(NetworkAnonymizationKeyMojomTraitsTest, SerializeAndDeserializeTripleKey) {
-  // Enable triple keying.
-  base::test::ScopedFeatureList scoped_feature_list_;
-  std::vector<base::test::FeatureRef> enabled_features = {};
-  std::vector<base::test::FeatureRef> disabled_features = {
-      net::features::kEnableDoubleKeyNetworkAnonymizationKey,
-      net::features::kEnableCrossSiteFlagNetworkAnonymizationKey};
-  scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
-
-  base::UnguessableToken token = base::UnguessableToken::Create();
-  std::vector<net::NetworkAnonymizationKey> keys = {
-      net::NetworkAnonymizationKey(),
-      net::NetworkAnonymizationKey::CreateTransient(),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   net::SchemefulSite(GURL("http://b.test/")),
-                                   &token),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   net::SchemefulSite(GURL("http://b.test/")),
-                                   /*is_cross_site=*/false, token),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   net::SchemefulSite(GURL("http://b.test/")),
-                                   /*is_cross_site=*/true),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   net::SchemefulSite(GURL("http://b.test/")))};
-
-  for (auto& original : keys) {
-    SCOPED_TRACE(original.ToDebugString());
-    net::NetworkAnonymizationKey copied;
-    EXPECT_TRUE(mojo::test::SerializeAndDeserialize<
-                network::mojom::NetworkAnonymizationKey>(original, copied));
-    EXPECT_EQ(original, copied);
-  }
-}
-
-TEST(NetworkAnonymizationKeyMojomTraitsTest, SerializeAndDeserializeDoubleKey) {
-  // Enable double keying.
-  base::test::ScopedFeatureList scoped_feature_list_;
-  std::vector<base::test::FeatureRef> enabled_features = {
-      net::features::kEnableDoubleKeyNetworkAnonymizationKey};
-  std::vector<base::test::FeatureRef> disabled_features = {
-      net::features::kEnableCrossSiteFlagNetworkAnonymizationKey};
-  scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
-
-  base::UnguessableToken token = base::UnguessableToken::Create();
-  std::vector<net::NetworkAnonymizationKey> keys = {
-      net::NetworkAnonymizationKey(),
-      net::NetworkAnonymizationKey::CreateTransient(),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   net::SchemefulSite(GURL("http://b.test/")),
-                                   &token),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")))};
-
-  for (auto& original : keys) {
-    SCOPED_TRACE(original.ToDebugString());
-    net::NetworkAnonymizationKey copied;
-    EXPECT_TRUE(mojo::test::SerializeAndDeserialize<
-                network::mojom::NetworkAnonymizationKey>(original, copied));
-    EXPECT_EQ(original, copied);
-  }
-}
-
 // TODO(crbug.com/1371667): Test is failing.
 TEST(NetworkAnonymizationKeyMojomTraitsTest,
-     DISABLED_SerializeAndDeserializeDoubleKeyWithCrossSiteFlag) {
-  // Enable double keying with cross site flag.
-  base::test::ScopedFeatureList scoped_feature_list_;
-  std::vector<base::test::FeatureRef> enabled_features = {
-      net::features::kEnableCrossSiteFlagNetworkAnonymizationKey};
-  std::vector<base::test::FeatureRef> disabled_features = {
-      net::features::kEnableDoubleKeyNetworkAnonymizationKey};
-  scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
-
+     SerializeAndDeserializeDoubleKeyWithCrossSiteFlag) {
   base::UnguessableToken token = base::UnguessableToken::Create();
   std::vector<net::NetworkAnonymizationKey> keys = {
       net::NetworkAnonymizationKey(),
       net::NetworkAnonymizationKey::CreateTransient(),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   /*frame_site=*/absl::nullopt,
-                                   /*is_cross_site=*/true, token),
-      net::NetworkAnonymizationKey(net::SchemefulSite(GURL("http://a.test/")),
-                                   /*frame_site=*/absl::nullopt,
-                                   /*is_cross_site=*/true)};
+      net::NetworkAnonymizationKey::CreateFromParts(
+          net::SchemefulSite(GURL("http://a.test/")), /*is_cross_site=*/true,
+          token),
+      net::NetworkAnonymizationKey::CreateCrossSite(
+          net::SchemefulSite(GURL("http://a.test/"))),
+  };
   for (auto& original : keys) {
     SCOPED_TRACE(original.ToDebugString());
     net::NetworkAnonymizationKey copied;
     EXPECT_TRUE(mojo::test::SerializeAndDeserialize<
                 network::mojom::NetworkAnonymizationKey>(original, copied));
     SCOPED_TRACE(copied.ToDebugString());
-
     EXPECT_EQ(original, copied);
   }
 }

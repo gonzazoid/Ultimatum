@@ -19,6 +19,7 @@
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
 #include "chrome/browser/ash/login/screens/management_transition_screen.h"
+#include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
@@ -26,8 +27,8 @@
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/webui/ash/login/management_transition_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/management_transition_screen_handler.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
@@ -123,20 +124,23 @@ class ManagementTransitionScreenTest
 
   bool use_managed_account() { return GetParam().use_managed_account; }
 
-  absl::optional<AccountId> GetAccountId() {
+  std::optional<AccountId> GetAccountId() {
     if (use_managed_account()) {
       return AccountId::FromUserEmailGaiaId(
           FakeGaiaMixin::kEnterpriseUser1,
           FakeGaiaMixin::kEnterpriseUser1GaiaId);
     }
 
-    return absl::nullopt;
+    return std::nullopt;
   }
 
  protected:
   LoggedInUserMixin& logged_in_user_mixin() { return logged_in_user_mixin_; }
 
  private:
+  DeviceStateMixin device_state_{
+      &mixin_host_,
+      DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED};
   LoggedInUserMixin logged_in_user_mixin_{&mixin_host_,
                                           GetTargetUserType(),
                                           embedded_test_server(),

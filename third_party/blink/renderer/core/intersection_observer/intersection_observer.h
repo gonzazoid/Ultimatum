@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_INTERSECTION_OBSERVER_INTERSECTION_OBSERVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_INTERSECTION_OBSERVER_INTERSECTION_OBSERVER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
@@ -64,7 +64,8 @@ class CORE_EXPORT IntersectionObserver final
   // This value can be used to detect transitions between non-intersecting or
   // edge-adjacent (i.e., zero area) state, and intersecting by any non-zero
   // number of pixels.
-  static const float kMinimumThreshold;
+  static constexpr float kMinimumThreshold =
+      IntersectionGeometry::kMinimumThreshold;
 
   // Used to specify when callbacks should be invoked with new notifications.
   // Blink-internal users of IntersectionObserver will have their callbacks
@@ -106,6 +107,7 @@ class CORE_EXPORT IntersectionObserver final
   // should be used instead of the bounding box if appropriate.
   static IntersectionObserver* Create(
       const Vector<Length>& margin,
+      const Vector<Length>& scroll_margin,
       const Vector<float>& thresholds,
       Document* document,
       EventCallback callback,
@@ -117,13 +119,13 @@ class CORE_EXPORT IntersectionObserver final
       bool always_report_root_bounds = false,
       MarginTarget margin_target = kApplyMarginToRoot,
       bool use_overflow_clip_edge = false,
+      bool needs_initial_observation_with_detached_target = true,
       ExceptionState& = ASSERT_NO_EXCEPTION);
 
-  static void ResumeSuspendedObservers();
-
-  explicit IntersectionObserver(IntersectionObserverDelegate&,
-                                Node*,
+  explicit IntersectionObserver(IntersectionObserverDelegate& delegate,
+                                Node* root,
                                 const Vector<Length>& margin,
+                                const Vector<Length>& scroll_margin,
                                 const Vector<float>& thresholds,
                                 ThresholdInterpretation semantics,
                                 DOMHighResTimeStamp delay,
@@ -142,6 +144,7 @@ class CORE_EXPORT IntersectionObserver final
   // API attributes.
   Node* root() const { return root_.Get(); }
   String rootMargin() const;
+  String scrollMargin() const;
   const Vector<float>& thresholds() const { return thresholds_; }
   DOMHighResTimeStamp delay() const { return delay_; }
   bool trackVisibility() const { return track_visibility_; }
@@ -162,16 +165,23 @@ class CORE_EXPORT IntersectionObserver final
 
   DOMHighResTimeStamp GetTimeStamp(base::TimeTicks monotonic_time) const;
   DOMHighResTimeStamp GetEffectiveDelay() const;
+
   Vector<Length> RootMargin() const {
     return margin_target_ == kApplyMarginToRoot ? margin_ : Vector<Length>();
   }
+
   Vector<Length> TargetMargin() const {
     return margin_target_ == kApplyMarginToTarget ? margin_ : Vector<Length>();
   }
 
+  Vector<Length> ScrollMargin() const { return scroll_margin_; }
+
   // Returns the number of IntersectionObservations that recomputed geometry.
-  int64_t ComputeIntersections(unsigned flags,
-                               absl::optional<base::TimeTicks>& monotonic_time);
+  int64_t ComputeIntersections(
+      unsigned flags,
+      absl::optional<base::TimeTicks>& monotonic_time,
+      gfx::Vector2dF accumulated_scroll_delta_since_last_update);
+  gfx::Vector2dF MinScrollDeltaToUpdate() const;
 
   bool IsInternal() const;
   LocalFrameUkmAggregator::MetricId GetUkmMetricId() const;
@@ -183,8 +193,7 @@ class CORE_EXPORT IntersectionObserver final
   // Returns false if this observer has an explicit root node which has been
   // deleted; true otherwise.
   bool RootIsValid() const;
-  bool CanUseCachedRects() const { return can_use_cached_rects_; }
-  void InvalidateCachedRects() { can_use_cached_rects_ = 0; }
+  void InvalidateCachedRects();
 
   bool UseOverflowClipEdge() const { return use_overflow_clip_edge_ == 1; }
 
@@ -216,12 +225,13 @@ class CORE_EXPORT IntersectionObserver final
   Vector<float> thresholds_;
   DOMHighResTimeStamp delay_;
   Vector<Length> margin_;
+  Vector<Length> scroll_margin_;
   MarginTarget margin_target_;
+  gfx::Vector2dF accumulated_scroll_delta_since_last_update_;
   unsigned root_is_implicit_ : 1;
   unsigned track_visibility_ : 1;
   unsigned track_fraction_of_root_ : 1;
   unsigned always_report_root_bounds_ : 1;
-  unsigned can_use_cached_rects_ : 1;
   unsigned use_overflow_clip_edge_ : 1;
 };
 

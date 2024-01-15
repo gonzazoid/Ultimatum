@@ -6,8 +6,7 @@
 #define ASH_PUBLIC_CPP_IMAGE_DOWNLOADER_H_
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback_forward.h"
 
 class GURL;
 class AccountId;
@@ -38,15 +37,15 @@ class ASH_PUBLIC_EXPORT ImageDownloader {
   // download attempt fails, a nullptr image will be returned.
   virtual void Download(const GURL& url,
                         const net::NetworkTrafficAnnotationTag& annotation_tag,
+                        const AccountId& account_id,
                         DownloadCallback callback) = 0;
+
   // Additionally with this method, you can specify extra HTTP request headers
-  // sent with the download request, as well as include an `AccountId` to
-  // include credentials for downloading images where authentication is
-  // required.
+  // sent with the download request.
   virtual void Download(const GURL& url,
                         const net::NetworkTrafficAnnotationTag& annotation_tag,
+                        const AccountId& account_id,
                         const net::HttpRequestHeaders& additional_headers,
-                        absl::optional<AccountId> credentials_account_id,
                         DownloadCallback callback) = 0;
 
  protected:

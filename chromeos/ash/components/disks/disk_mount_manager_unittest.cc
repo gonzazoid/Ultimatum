@@ -12,12 +12,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 #include "chromeos/ash/components/dbus/cros_disks/fake_cros_disks_client.h"
 #include "chromeos/ash/components/disks/disk.h"
@@ -244,8 +246,9 @@ struct FormatEvent : public ObserverEvent {
   }
 
   std::string DebugString() const {
-    return StringPrintf("OnFormatEvent(%d, %d, %s, %s)", event, error_code,
-                        device_path.c_str(), device_label.c_str());
+    return StringPrintf("OnFormatEvent(%d, %d, %s, %s)", event,
+                        static_cast<int>(error_code), device_path.c_str(),
+                        device_label.c_str());
   }
 };
 
@@ -274,8 +277,9 @@ struct RenameEvent : public ObserverEvent {
   }
 
   std::string DebugString() const {
-    return StringPrintf("OnRenameEvent(%d, %d, %s, %s)", event, error_code,
-                        device_path.c_str(), device_label.c_str());
+    return StringPrintf("OnRenameEvent(%d, %d, %s, %s)", event,
+                        static_cast<int>(error_code), device_path.c_str(),
+                        device_label.c_str());
   }
 };
 
@@ -306,9 +310,11 @@ struct MountEvent : public ObserverEvent {
 
   std::string DebugString() const {
     return StringPrintf("OnMountEvent(%d, %d, %s, %s, %d, %d)", event,
-                        error_code, mount_point.source_path.c_str(),
-                        mount_point.mount_path.c_str(), mount_point.mount_type,
-                        mount_point.mount_error);
+                        static_cast<int>(error_code),
+                        mount_point.source_path.c_str(),
+                        mount_point.mount_path.c_str(),
+                        static_cast<int>(mount_point.mount_type),
+                        static_cast<int>(mount_point.mount_error));
   }
 };
 
@@ -463,7 +469,7 @@ class MockDiskMountManagerObserver : public DiskMountManager::Observer {
 
  private:
   // Pointer to the manager object to which this |Observer| is registered.
-  const DiskMountManager* manager_;
+  raw_ptr<const DiskMountManager, DanglingUntriaged> manager_;
 
   // Records all invocations.
   std::vector<std::unique_ptr<ObserverEvent>> events_;
@@ -573,7 +579,7 @@ class DiskMountManagerTest : public testing::Test {
   }
 
  protected:
-  FakeCrosDisksClient* fake_cros_disks_client_;
+  raw_ptr<FakeCrosDisksClient, DanglingUntriaged> fake_cros_disks_client_;
   std::unique_ptr<MockDiskMountManagerObserver> observer_;
 
  private:
@@ -703,7 +709,7 @@ TEST_F(DiskMountManagerTest, Format_ConcurrentFormatCalls) {
   fake_cros_disks_client_->set_unmount_listener(
       base::BindRepeating(&FakeCrosDisksClient::MakeUnmountFail,
                           base::Unretained(fake_cros_disks_client_),
-                          MountError::kInvalidUnmountOptions));
+                          MountError::kInsufficientPermissions));
   // Start the test.
   DiskMountManager::GetInstance()->FormatMountedDevice(
       kDevice1MountPath, kFormatFileSystemType1, kFormatLabel1);
@@ -1507,16 +1513,7 @@ TEST_F(DiskMountManagerTest, Rename_ConsecutiveRenameCalls) {
                                       MountError::kSuccess, kDevice1MountPath));
 }
 
-void SaveUnmountResult(MountError* save_error,
-                       base::OnceClosure done_callback,
-                       MountError error_code) {
-  *save_error = error_code;
-  std::move(done_callback).Run();
-}
-
 TEST_F(DiskMountManagerTest, UnmountDeviceRecursively) {
-  base::RunLoop run_loop;
-
   auto disk_sda =
       Disk::Builder().SetDevicePath("/dev/sda").SetIsParent(true).Build();
   EXPECT_TRUE(
@@ -1536,20 +1533,16 @@ TEST_F(DiskMountManagerTest, UnmountDeviceRecursively) {
   EXPECT_TRUE(
       DiskMountManager::GetInstance()->AddDiskForTest(std::move(disk_sda2)));
 
-  MountError error_code = MountError::kUnknownError;
+  base::test::TestFuture<MountError> future;
   DiskMountManager::GetInstance()->UnmountDeviceRecursively(
-      "/dev/sda",
-      base::BindOnce(&SaveUnmountResult, base::Unretained(&error_code),
-                     run_loop.QuitClosure()));
-  run_loop.Run();
+      "/dev/sda", future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 
   EXPECT_EQ(2, fake_cros_disks_client_->unmount_call_count());
-  EXPECT_EQ(MountError::kSuccess, error_code);
+  EXPECT_EQ(MountError::kSuccess, future.Get());
 }
 
 TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_NoMounted) {
-  base::RunLoop run_loop;
-
   auto disk_sda =
       Disk::Builder().SetDevicePath("/dev/sda").SetIsParent(true).Build();
   EXPECT_TRUE(
@@ -1559,15 +1552,13 @@ TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_NoMounted) {
   EXPECT_TRUE(
       DiskMountManager::GetInstance()->AddDiskForTest(std::move(disk_sda1)));
 
-  MountError error_code = MountError::kUnknownError;
+  base::test::TestFuture<MountError> future;
   DiskMountManager::GetInstance()->UnmountDeviceRecursively(
-      "/dev/sda",
-      base::BindOnce(&SaveUnmountResult, base::Unretained(&error_code),
-                     run_loop.QuitClosure()));
-  run_loop.Run();
+      "/dev/sda", future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 
   EXPECT_EQ(0, fake_cros_disks_client_->unmount_call_count());
-  EXPECT_EQ(MountError::kSuccess, error_code);
+  EXPECT_EQ(MountError::kSuccess, future.Get());
 }
 
 TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_NoDisk) {
@@ -1582,16 +1573,14 @@ TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_NoDisk) {
   EXPECT_TRUE(
       DiskMountManager::GetInstance()->AddDiskForTest(std::move(disk_sda1)));
 
-  MountError error_code = MountError::kUnknownError;
+  base::test::TestFuture<MountError> future;
   // Unmount sdB instead of sdA.
   DiskMountManager::GetInstance()->UnmountDeviceRecursively(
-      "/dev/sdb",
-      base::BindOnce(&SaveUnmountResult, base::Unretained(&error_code),
-                     run_loop.QuitClosure()));
-  run_loop.Run();
+      "/dev/sdb", future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 
   EXPECT_EQ(0, fake_cros_disks_client_->unmount_call_count());
-  EXPECT_EQ(MountError::kInvalidDevicePath, error_code);
+  EXPECT_EQ(MountError::kInvalidDevicePath, future.Get());
 }
 
 void SetUnmountError(FakeCrosDisksClient* client, MountError error_code) {
@@ -1599,8 +1588,6 @@ void SetUnmountError(FakeCrosDisksClient* client, MountError error_code) {
 }
 
 TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_FailFirst) {
-  base::RunLoop run_loop;
-
   auto disk_sda =
       Disk::Builder().SetDevicePath("/dev/sda").SetIsParent(true).Build();
   EXPECT_TRUE(
@@ -1621,25 +1608,22 @@ TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_FailFirst) {
       DiskMountManager::GetInstance()->AddDiskForTest(std::move(disk_sda2)));
 
   // Fail the first unmount, but make the second succeed.
-  fake_cros_disks_client_->MakeUnmountFail(MountError::kInvalidUnmountOptions);
+  fake_cros_disks_client_->MakeUnmountFail(
+      MountError::kInsufficientPermissions);
   fake_cros_disks_client_->set_unmount_listener(base::BindRepeating(
       &SetUnmountError, base::Unretained(fake_cros_disks_client_),
       MountError::kSuccess));
 
-  MountError error_code = MountError::kUnknownError;
+  base::test::TestFuture<MountError> future;
   DiskMountManager::GetInstance()->UnmountDeviceRecursively(
-      "/dev/sda",
-      base::BindOnce(&SaveUnmountResult, base::Unretained(&error_code),
-                     run_loop.QuitClosure()));
-  run_loop.Run();
+      "/dev/sda", future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 
   EXPECT_EQ(2, fake_cros_disks_client_->unmount_call_count());
-  EXPECT_EQ(MountError::kInvalidUnmountOptions, error_code);
+  EXPECT_EQ(MountError::kInsufficientPermissions, future.Get());
 }
 
 TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_AlreadyUnmounted) {
-  base::RunLoop run_loop;
-
   auto disk_sda =
       Disk::Builder().SetDevicePath("/dev/sda").SetIsParent(true).Build();
   EXPECT_TRUE(
@@ -1655,15 +1639,13 @@ TEST_F(DiskMountManagerTest, UnmountDeviceRecursively_AlreadyUnmounted) {
   // Fail the unmount with "not mounted".
   fake_cros_disks_client_->MakeUnmountFail(MountError::kPathNotMounted);
 
-  MountError error_code = MountError::kUnknownError;
+  base::test::TestFuture<MountError> future;
   DiskMountManager::GetInstance()->UnmountDeviceRecursively(
-      "/dev/sda",
-      base::BindOnce(&SaveUnmountResult, base::Unretained(&error_code),
-                     run_loop.QuitClosure()));
-  run_loop.Run();
+      "/dev/sda", future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 
   EXPECT_EQ(1, fake_cros_disks_client_->unmount_call_count());
-  EXPECT_EQ(MountError::kSuccess, error_code);
+  EXPECT_EQ(MountError::kSuccess, future.Get());
 }
 
 TEST_F(DiskMountManagerTest, Mount_MountUnsetsFirstMount) {

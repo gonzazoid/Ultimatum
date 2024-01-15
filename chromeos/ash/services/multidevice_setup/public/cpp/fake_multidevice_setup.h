@@ -36,7 +36,7 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
 
   void NotifyHostStatusChanged(
       mojom::HostStatus host_status,
-      const absl::optional<multidevice::RemoteDevice>& host_device);
+      const std::optional<multidevice::RemoteDevice>& host_device);
   void NotifyFeatureStateChanged(
       const base::flat_map<mojom::Feature, mojom::FeatureState>&
           feature_states);
@@ -60,7 +60,7 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
 
   std::vector<std::tuple<mojom::Feature,
                          bool,
-                         absl::optional<std::string>,
+                         std::optional<std::string>,
                          SetFeatureEnabledStateCallback>>&
   set_feature_enabled_args() {
     return set_feature_enabled_args_;
@@ -78,6 +78,15 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
                         TriggerEventForDebuggingCallback>>&
   triggered_debug_events() {
     return triggered_debug_events_;
+  }
+
+  std::vector<std::string>& set_qs_phone_instance_id_args() {
+    return set_qs_phone_instance_id_args_;
+  }
+
+  std::vector<GetQuickStartPhoneInstanceIDCallback>&
+  get_qs_phone_instance_id_args() {
+    return get_qs_phone_instance_id_args_;
   }
 
   std::vector<
@@ -106,13 +115,17 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
   void GetHostStatus(GetHostStatusCallback callback) override;
   void SetFeatureEnabledState(mojom::Feature feature,
                               bool enabled,
-                              const absl::optional<std::string>& auth_token,
+                              const std::optional<std::string>& auth_token,
                               SetFeatureEnabledStateCallback callback) override;
   void GetFeatureStates(GetFeatureStatesCallback callback) override;
   void RetrySetHostNow(RetrySetHostNowCallback callback) override;
   void TriggerEventForDebugging(
       mojom::EventTypeForDebugging type,
       TriggerEventForDebuggingCallback callback) override;
+  void SetQuickStartPhoneInstanceID(
+      const std::string& qs_phone_instance_id) override;
+  void GetQuickStartPhoneInstanceID(
+      GetQuickStartPhoneInstanceIDCallback callback) override;
 
   // MultiDeviceSetupBase:
   void SetHostDeviceWithoutAuthToken(
@@ -133,7 +146,7 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
   std::vector<GetHostStatusCallback> get_host_args_;
   std::vector<std::tuple<mojom::Feature,
                          bool,
-                         absl::optional<std::string>,
+                         std::optional<std::string>,
                          SetFeatureEnabledStateCallback>>
       set_feature_enabled_args_;
   std::vector<GetFeatureStatesCallback> get_feature_states_args_;
@@ -141,6 +154,9 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
   std::vector<
       std::pair<mojom::EventTypeForDebugging, TriggerEventForDebuggingCallback>>
       triggered_debug_events_;
+  std::vector<std::string> set_qs_phone_instance_id_args_;
+  std::vector<GetQuickStartPhoneInstanceIDCallback>
+      get_qs_phone_instance_id_args_;
   std::vector<
       std::pair<std::string,
                 mojom::PrivilegedHostDeviceSetter::SetHostDeviceCallback>>
@@ -150,10 +166,5 @@ class FakeMultiDeviceSetup : public MultiDeviceSetupBase {
 }  // namespace multidevice_setup
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::multidevice_setup {
-using ::ash::multidevice_setup::FakeMultiDeviceSetup;
-}
 
 #endif  // CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_PUBLIC_CPP_FAKE_MULTIDEVICE_SETUP_H_

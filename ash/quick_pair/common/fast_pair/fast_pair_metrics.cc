@@ -5,11 +5,32 @@
 #include "ash/quick_pair/common/fast_pair/fast_pair_metrics.h"
 
 #include "ash/quick_pair/common/device.h"
+#include "ash/quick_pair/common/protocol.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/sparse_histogram.h"
+#include "base/strings/string_number_conversions.h"
+#include "components/cross_device/logging/logging.h"
+#include "components/metrics/structured/structured_events.h"
+#include "components/metrics/structured/structured_metrics_features.h"
 
 namespace {
+
+const char kDeviceTypeHeadphones[] = "HeadphonesDeviceType";
+const char kDeviceTypeSpeaker[] = "SpeakerDeviceType";
+const char kDeviceTypeTrueWirelessHeadphones[] =
+    "TrueWirelessHeadphonesDeviceType";
+const char kDeviceTypeInputDevice[] = "InputDeviceDeviceType";
+const char kDeviceTypeUnspecified[] = "UnspecifiedDeviceType";
+
+const char kNotificationTypeFastPair[] = "FastPairNotificationType";
+const char kNotificationTypeFastPairOne[] = "FastPairOneNotificationType";
+const char kNotificationTypeUnspecified[] = "UnspecifiedNotificationType";
+
+// If RSSI or TxPower are unknown, we emit -129, which is out of range of
+// the real return values [-128, 127].
+const int kUnknownRSSI = -129;
+const int kUnknownTxPower = -129;
 
 // Error strings should be kept in sync with the strings reflected in
 // device/bluetooth/bluez/bluetooth_socket_bluez.cc.
@@ -19,10 +40,21 @@ const char kSocketNotListeningString[] = "Socket is not listening.";
 
 // Top Popular peripherals and first party devices. These device
 // model names should be kept in sync with the FastPairTrackedModelID
-// enum in src/tools/metrics/histograms/enums.xml. Devices may have multiple
-// Model IDs associated with the same device (for example, each Pixel Bud Pros
-// have different Model IDs for each different color) so we append '_*' to the
-// naming for subsequent Model IDs after the first one.
+// token in //tools/metrics/histograms/metadata/bluetooth/histograms.xml.
+// Devices may have multiple Model IDs associated with the same device
+// (for example, each Pixel Bud Pros have different Model IDs for each different
+// color) so we append '_*' to the naming for subsequent Model IDs after the
+// first one.
+const char kPopularPeripheral_BoatRockerz255Pro_ModelId[] = "CFF121";
+const char kPopularPeripheral_BoatRockerz255Pro_Name[] = "BoatRockerz255Pro";
+
+const char kPopularPeripheral_BoseQuietComfort35II_ModelId[] = "0100F0";
+const char kPopularPeripheral_BoseQuietComfort35II_Name[] =
+    "BoseQuietComfort35II";
+const char kPopularPeripheral_BoseQuietComfort35II_1_ModelId[] = "0000F0";
+const char kPopularPeripheral_BoseQuietComfort35II_1_Name[] =
+    "BoseQuietComfort35II_1";
+
 const char kPopularPeripheral_JBLLIVEPROTWS_ModelId[] = "461BB8";
 const char kPopularPeripheral_JBLLIVEPROTWS_Name[] = "JBLLIVEPROTWS";
 const char kPopularPeripheral_JBLLIVEPROTWS_1_ModelId[] = "C6936A";
@@ -69,6 +101,15 @@ const char kPopularPeripheral_JBLTUNE125TWS_4_Name[] = "JBLTUNE125TWS_4";
 const char kPopularPeripheral_JBLTUNE125TWS_5_ModelId[] = "BD193B";
 const char kPopularPeripheral_JBLTUNE125TWS_5_Name[] = "JBLTUNE125TWS_5";
 
+const char kPopularPeripheral_JBLTUNE130NCTWS_ModelId[] = "BDB433";
+const char kPopularPeripheral_JBLTUNE130NCTWS_Name[] = "JBLTUNE130NCTWS";
+const char kPopularPeripheral_JBLTUNE130NCTWS_1_ModelId[] = "1115E7";
+const char kPopularPeripheral_JBLTUNE130NCTWS_1_Name[] = "JBLTUNE130NCTWS_1";
+const char kPopularPeripheral_JBLTUNE130NCTWS_2_ModelId[] = "436FD1";
+const char kPopularPeripheral_JBLTUNE130NCTWS_2_Name[] = "JBLTUNE130NCTWS_2";
+const char kPopularPeripheral_JBLTUNE130NCTWS_3_ModelId[] = "B73DBA";
+const char kPopularPeripheral_JBLTUNE130NCTWS_3_Name[] = "JBLTUNE130NCTWS_3";
+
 const char kPopularPeripheral_JBLTUNE225TWS_ModelId[] = "5C0C84";
 const char kPopularPeripheral_JBLTUNE225TWS_Name[] = "JBLTUNE225TWS";
 const char kPopularPeripheral_JBLTUNE225TWS_1_ModelId[] = "FAA6C3";
@@ -82,19 +123,26 @@ const char kPopularPeripheral_JBLTUNE225TWS_4_Name[] = "JBLTUNE225TWS_4";
 const char kPopularPeripheral_JBLTUNE225TWS_5_ModelId[] = "9C98DB";
 const char kPopularPeripheral_JBLTUNE225TWS_5_Name[] = "JBLTUNE225TWS_5";
 
-const char kPopularPeripheral_JBLTUNE130NCTWS_ModelId[] = "BDB433";
-const char kPopularPeripheral_JBLTUNE130NCTWS_Name[] = "JBLTUNE130NCTWS";
-const char kPopularPeripheral_JBLTUNE130NCTWS_1_ModelId[] = "1115E7";
-const char kPopularPeripheral_JBLTUNE130NCTWS_1_Name[] = "JBLTUNE130NCTWS_1";
-const char kPopularPeripheral_JBLTUNE130NCTWS_2_ModelId[] = "436FD1";
-const char kPopularPeripheral_JBLTUNE130NCTWS_2_Name[] = "JBLTUNE130NCTWS_2";
-const char kPopularPeripheral_JBLTUNE130NCTWS_3_ModelId[] = "B73DBA";
-const char kPopularPeripheral_JBLTUNE130NCTWS_3_Name[] = "JBLTUNE130NCTWS_3";
+const char kPopularPeripheral_JBLTUNE230NCTWS_ModelId[] = "96C12E";
+const char kPopularPeripheral_JBLTUNE230NCTWS_Name[] = "JBLTUNE230NCTWS";
+const char kPopularPeripheral_JBLTUNE230NCTWS_1_ModelId[] = "71F20A";
+const char kPopularPeripheral_JBLTUNE230NCTWS_1_Name[] = "JBLTUNE230NCTWS_1";
+const char kPopularPeripheral_JBLTUNE230NCTWS_2_ModelId[] = "EB01C0";
+const char kPopularPeripheral_JBLTUNE230NCTWS_2_Name[] = "JBLTUNE230NCTWS_2";
+const char kPopularPeripheral_JBLTUNE230NCTWS_3_ModelId[] = "A9394A";
+const char kPopularPeripheral_JBLTUNE230NCTWS_3_Name[] = "JBLTUNE230NCTWS_3";
 
 const char kPopularPeripheral_NothingEar1_ModelId[] = "31D53D";
 const char kPopularPeripheral_NothingEar1_Name[] = "NOTHINGEAR1";
 const char kPopularPeripheral_NothingEar1_1_ModelId[] = "624011";
 const char kPopularPeripheral_NothingEar1_1_Name[] = "NOTHINGEAR1_1";
+
+const char kPopularPeripheral_OnePlusBuds_ModelId[] = "5F5806";
+const char kPopularPeripheral_OnePlusBuds_Name[] = "OnePlusBuds";
+const char kPopularPeripheral_OnePlusBuds_1_ModelId[] = "81B915";
+const char kPopularPeripheral_OnePlusBuds_1_Name[] = "OnePlusBuds_1";
+const char kPopularPeripheral_OnePlusBuds_2_ModelId[] = "6C73F1";
+const char kPopularPeripheral_OnePlusBuds_2_Name[] = "OnePlusBuds_2";
 
 const char kPopularPeripheral_OnePlusBudsZ_ModelId[] = "A41C91";
 const char kPopularPeripheral_OnePlusBudsZ_Name[] = "OnePlusBudsZ";
@@ -137,6 +185,19 @@ const char kPopularPeripheral_RealMeBudsAir2_Name[] = "RealMeBudsAir2";
 const char kPopularPeripheral_RealMeBudsAir2Neo_ModelId[] = "0B5374";
 const char kPopularPeripheral_RealMeBudsAir2Neo_Name[] = "RealMeBudsAir2Neo";
 
+const char kPopularPeripheral_RealMeBudsQ2TWS_ModelId[] = "72C415";
+const char kPopularPeripheral_RealMeBudsQ2TWS_Name[] = "RealMeBudsQ2TWS";
+
+const char kPopularPeripheral_RealMeTechLifeBudsT100_ModelId[] = "29C992";
+const char kPopularPeripheral_RealMeTechLifeBudsT100_Name[] =
+    "RealMeTechLifeBudsT100";
+const char kPopularPeripheral_RealMeTechLifeBudsT100_1_ModelId[] = "D5C6CE";
+const char kPopularPeripheral_RealMeTechLifeBudsT100_1_Name[] =
+    "RealMeTechLifeBudsT100_1";
+const char kPopularPeripheral_RealMeTechLifeBudsT100_2_ModelId[] = "62E69F";
+const char kPopularPeripheral_RealMeTechLifeBudsT100_2_Name[] =
+    "RealMeTechLifeBudsT100_2";
+
 const char kPopularPeripheral_SonyWF1000XM3_ModelId[] = "38C95C";
 const char kPopularPeripheral_SonyWF1000XM3_Name[] = "SonyWF1000XM3";
 const char kPopularPeripheral_SonyWF1000XM3_1_ModelId[] = "9C98DB";
@@ -158,6 +219,19 @@ const char kPopularPeripheral_SonyWH1000XM3_ModelId[] = "0BC95C";
 const char kPopularPeripheral_SonyWH1000XM3_Name[] = "SonyWH1000XM3";
 const char kPopularPeripheral_SonyWH1000XM3_1_ModelId[] = "AC95C";
 const char kPopularPeripheral_SonyWH1000XM3_1_Name[] = "SonyWH1000XM3_1";
+
+const char kPopularPeripheral_SRSXB13_ModelId[] = "741594";
+const char kPopularPeripheral_SRSXB13_Name[] = "SRSXB13";
+const char kPopularPeripheral_SRSXB13_1_ModelId[] = "DF4B02";
+const char kPopularPeripheral_SRSXB13_1_Name[] = "SRSXB13_1";
+const char kPopularPeripheral_SRSXB13_2_ModelId[] = "F5CEC7";
+const char kPopularPeripheral_SRSXB13_2_Name[] = "SRSXB13_2";
+const char kPopularPeripheral_SRSXB13_3_ModelId[] = "FFB35B";
+const char kPopularPeripheral_SRSXB13_3_Name[] = "SRSXB13_3";
+const char kPopularPeripheral_SRSXB13_4_ModelId[] = "36EFA5";
+const char kPopularPeripheral_SRSXB13_4_Name[] = "SRSXB13_4";
+const char kPopularPeripheral_SRSXB13_5_ModelId[] = "3E6B5B";
+const char kPopularPeripheral_SRSXB13_5_Name[] = "SRSXB13_5";
 
 const char kPopularPeripheral_SRSXB23_ModelId[] = "30D222";
 const char kPopularPeripheral_SRSXB23_Name[] = "SRSXB23";
@@ -182,161 +256,297 @@ const char kPopularPeripheral_SRSXB33_3_Name[] = "SRSXB33_3";
 const char kPopularPeripheral_Other_Name[] = "Other";
 
 const std::string GetFastPairTrackedModelId(const std::string& model_id) {
-  if (model_id == kPopularPeripheral_JBLLIVE300TWS_ModelId)
-    return kPopularPeripheral_JBLLIVE300TWS_Name;
-  if (model_id == kPopularPeripheral_JBLLIVE300TWS_1_ModelId)
-    return kPopularPeripheral_JBLLIVE300TWS_1_Name;
-  if (model_id == kPopularPeripheral_JBLLIVE300TWS_2_ModelId)
-    return kPopularPeripheral_JBLLIVE300TWS_2_Name;
+  if (model_id == kPopularPeripheral_BoatRockerz255Pro_ModelId) {
+    return kPopularPeripheral_BoatRockerz255Pro_Name;
+  }
 
-  if (model_id == kPopularPeripheral_JBLLIVE400BT_ModelId)
-    return kPopularPeripheral_JBLLIVE400BT_Name;
-  if (model_id == kPopularPeripheral_JBLLIVE400BT_1_ModelId)
-    return kPopularPeripheral_JBLLIVE400BT_1_Name;
-  if (model_id == kPopularPeripheral_JBLLIVE400BT_2_ModelId)
-    return kPopularPeripheral_JBLLIVE400BT_2_Name;
-  if (model_id == kPopularPeripheral_JBLLIVE400BT_3_ModelId)
-    return kPopularPeripheral_JBLLIVE400BT_3_Name;
-  if (model_id == kPopularPeripheral_JBLLIVE400BT_4_ModelId)
-    return kPopularPeripheral_JBLLIVE400BT_4_Name;
+  if (model_id == kPopularPeripheral_BoseQuietComfort35II_ModelId) {
+    return kPopularPeripheral_BoseQuietComfort35II_Name;
+  }
+  if (model_id == kPopularPeripheral_BoseQuietComfort35II_1_ModelId) {
+    return kPopularPeripheral_BoseQuietComfort35II_1_Name;
+  }
 
-  if (model_id == kPopularPeripheral_JBLTUNE125TWS_ModelId)
-    return kPopularPeripheral_JBLTUNE125TWS_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE125TWS_1_ModelId)
-    return kPopularPeripheral_JBLTUNE125TWS_1_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE125TWS_2_ModelId)
-    return kPopularPeripheral_JBLTUNE125TWS_2_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE125TWS_3_ModelId)
-    return kPopularPeripheral_JBLTUNE125TWS_3_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE125TWS_4_ModelId)
-    return kPopularPeripheral_JBLTUNE125TWS_4_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE125TWS_5_ModelId)
-    return kPopularPeripheral_JBLTUNE125TWS_5_Name;
-
-  if (model_id == kPopularPeripheral_JBLTUNE225TWS_ModelId)
-    return kPopularPeripheral_JBLTUNE225TWS_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE225TWS_1_ModelId)
-    return kPopularPeripheral_JBLTUNE225TWS_1_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE225TWS_2_ModelId)
-    return kPopularPeripheral_JBLTUNE225TWS_2_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE225TWS_3_ModelId)
-    return kPopularPeripheral_JBLTUNE225TWS_3_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE225TWS_4_ModelId)
-    return kPopularPeripheral_JBLTUNE225TWS_4_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE225TWS_5_ModelId)
-    return kPopularPeripheral_JBLTUNE225TWS_5_Name;
-
-  if (model_id == kPopularPeripheral_OnePlusBudsZ_ModelId)
-    return kPopularPeripheral_OnePlusBudsZ_Name;
-  if (model_id == kPopularPeripheral_OnePlusBudsZ_1_ModelId)
-    return kPopularPeripheral_OnePlusBudsZ_1_Name;
-  if (model_id == kPopularPeripheral_OnePlusBudsZ_2_ModelId)
-    return kPopularPeripheral_OnePlusBudsZ_2_Name;
-
-  if (model_id == kPopularPeripheral_PixelBuds_ModelId)
-    return kPopularPeripheral_PixelBuds_Name;
-
-  if (model_id == kPopularPeripheral_PixelBudsASeries_ModelId)
-    return kPopularPeripheral_PixelBudsASeries_Name;
-  if (model_id == kPopularPeripheral_PixelBudsASeries_1_ModelId)
-    return kPopularPeripheral_PixelBudsASeries_1_Name;
-  if (model_id == kPopularPeripheral_PixelBudsASeries_2_ModelId)
-    return kPopularPeripheral_PixelBudsASeries_2_Name;
-
-  if (model_id == kPopularPeripheral_PixelBudsPro_ModelId)
-    return kPopularPeripheral_PixelBudsPro_Name;
-  if (model_id == kPopularPeripheral_PixelBudsPro_1_ModelId)
-    return kPopularPeripheral_PixelBudsPro_1_Name;
-  if (model_id == kPopularPeripheral_PixelBudsPro_2_ModelId)
-    return kPopularPeripheral_PixelBudsPro_2_Name;
-  if (model_id == kPopularPeripheral_PixelBudsPro_3_ModelId)
-    return kPopularPeripheral_PixelBudsPro_3_Name;
-  if (model_id == kPopularPeripheral_PixelBudsPro_4_ModelId)
-    return kPopularPeripheral_PixelBudsPro_4_Name;
-
-  if (model_id == kPopularPeripheral_RealMeBudsAir2_ModelId)
-    return kPopularPeripheral_RealMeBudsAir2_Name;
-
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_1_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_1_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_2_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_2_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_3_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_3_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_4_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_4_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_5_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_5_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_6_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_6_Name;
-  if (model_id == kPopularPeripheral_SonyWF1000XM3_7_ModelId)
-    return kPopularPeripheral_SonyWF1000XM3_7_Name;
-
-  if (model_id == kPopularPeripheral_NothingEar1_ModelId)
-    return kPopularPeripheral_NothingEar1_Name;
-  if (model_id == kPopularPeripheral_NothingEar1_1_ModelId)
-    return kPopularPeripheral_NothingEar1_1_Name;
-
-  if (model_id == kPopularPeripheral_RealMeBudsAir2Neo_ModelId)
-    return kPopularPeripheral_RealMeBudsAir2Neo_Name;
-
-  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_ModelId)
-    return kPopularPeripheral_JBLTUNE130NCTWS_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_1_ModelId)
-    return kPopularPeripheral_JBLTUNE130NCTWS_1_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_2_ModelId)
-    return kPopularPeripheral_JBLTUNE130NCTWS_2_Name;
-  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_3_ModelId)
-    return kPopularPeripheral_JBLTUNE130NCTWS_3_Name;
-
-  if (model_id == kPopularPeripheral_SonyWH1000XM3_ModelId)
-    return kPopularPeripheral_SonyWH1000XM3_Name;
-  if (model_id == kPopularPeripheral_SonyWH1000XM3_1_ModelId)
-    return kPopularPeripheral_SonyWH1000XM3_1_Name;
-
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_ModelId)
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_Name;
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_1_ModelId)
+  }
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_1_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_1_Name;
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_2_ModelId)
+  }
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_2_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_2_Name;
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_3_ModelId)
+  }
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_3_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_3_Name;
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_4_ModelId)
+  }
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_4_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_4_Name;
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_5_ModelId)
+  }
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_5_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_5_Name;
-  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_6_ModelId)
+  }
+  if (model_id == kPopularPeripheral_JBLLIVEPROTWS_6_ModelId) {
     return kPopularPeripheral_JBLLIVEPROTWS_6_Name;
+  }
 
-  if (model_id == kPopularPeripheral_RealMeBudsAirPro_ModelId)
+  if (model_id == kPopularPeripheral_JBLLIVE300TWS_ModelId) {
+    return kPopularPeripheral_JBLLIVE300TWS_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLLIVE300TWS_1_ModelId) {
+    return kPopularPeripheral_JBLLIVE300TWS_1_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLLIVE300TWS_2_ModelId) {
+    return kPopularPeripheral_JBLLIVE300TWS_2_Name;
+  }
+
+  if (model_id == kPopularPeripheral_JBLLIVE400BT_ModelId) {
+    return kPopularPeripheral_JBLLIVE400BT_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLLIVE400BT_1_ModelId) {
+    return kPopularPeripheral_JBLLIVE400BT_1_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLLIVE400BT_2_ModelId) {
+    return kPopularPeripheral_JBLLIVE400BT_2_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLLIVE400BT_3_ModelId) {
+    return kPopularPeripheral_JBLLIVE400BT_3_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLLIVE400BT_4_ModelId) {
+    return kPopularPeripheral_JBLLIVE400BT_4_Name;
+  }
+
+  if (model_id == kPopularPeripheral_JBLTUNE125TWS_ModelId) {
+    return kPopularPeripheral_JBLTUNE125TWS_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE125TWS_1_ModelId) {
+    return kPopularPeripheral_JBLTUNE125TWS_1_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE125TWS_2_ModelId) {
+    return kPopularPeripheral_JBLTUNE125TWS_2_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE125TWS_3_ModelId) {
+    return kPopularPeripheral_JBLTUNE125TWS_3_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE125TWS_4_ModelId) {
+    return kPopularPeripheral_JBLTUNE125TWS_4_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE125TWS_5_ModelId) {
+    return kPopularPeripheral_JBLTUNE125TWS_5_Name;
+  }
+
+  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_ModelId) {
+    return kPopularPeripheral_JBLTUNE130NCTWS_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_1_ModelId) {
+    return kPopularPeripheral_JBLTUNE130NCTWS_1_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_2_ModelId) {
+    return kPopularPeripheral_JBLTUNE130NCTWS_2_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE130NCTWS_3_ModelId) {
+    return kPopularPeripheral_JBLTUNE130NCTWS_3_Name;
+  }
+
+  if (model_id == kPopularPeripheral_JBLTUNE225TWS_ModelId) {
+    return kPopularPeripheral_JBLTUNE225TWS_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE225TWS_1_ModelId) {
+    return kPopularPeripheral_JBLTUNE225TWS_1_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE225TWS_2_ModelId) {
+    return kPopularPeripheral_JBLTUNE225TWS_2_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE225TWS_3_ModelId) {
+    return kPopularPeripheral_JBLTUNE225TWS_3_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE225TWS_4_ModelId) {
+    return kPopularPeripheral_JBLTUNE225TWS_4_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE225TWS_5_ModelId) {
+    return kPopularPeripheral_JBLTUNE225TWS_5_Name;
+  }
+
+  if (model_id == kPopularPeripheral_JBLTUNE230NCTWS_ModelId) {
+    return kPopularPeripheral_JBLTUNE230NCTWS_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE230NCTWS_1_ModelId) {
+    return kPopularPeripheral_JBLTUNE230NCTWS_1_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE230NCTWS_2_ModelId) {
+    return kPopularPeripheral_JBLTUNE230NCTWS_2_Name;
+  }
+  if (model_id == kPopularPeripheral_JBLTUNE230NCTWS_3_ModelId) {
+    return kPopularPeripheral_JBLTUNE230NCTWS_3_Name;
+  }
+
+  if (model_id == kPopularPeripheral_NothingEar1_ModelId) {
+    return kPopularPeripheral_NothingEar1_Name;
+  }
+  if (model_id == kPopularPeripheral_NothingEar1_1_ModelId) {
+    return kPopularPeripheral_NothingEar1_1_Name;
+  }
+
+  if (model_id == kPopularPeripheral_OnePlusBuds_ModelId) {
+    return kPopularPeripheral_OnePlusBuds_Name;
+  }
+  if (model_id == kPopularPeripheral_OnePlusBuds_1_ModelId) {
+    return kPopularPeripheral_OnePlusBuds_1_Name;
+  }
+  if (model_id == kPopularPeripheral_OnePlusBuds_2_ModelId) {
+    return kPopularPeripheral_OnePlusBuds_2_Name;
+  }
+
+  if (model_id == kPopularPeripheral_OnePlusBudsZ_ModelId) {
+    return kPopularPeripheral_OnePlusBudsZ_Name;
+  }
+  if (model_id == kPopularPeripheral_OnePlusBudsZ_1_ModelId) {
+    return kPopularPeripheral_OnePlusBudsZ_1_Name;
+  }
+  if (model_id == kPopularPeripheral_OnePlusBudsZ_2_ModelId) {
+    return kPopularPeripheral_OnePlusBudsZ_2_Name;
+  }
+
+  if (model_id == kPopularPeripheral_PixelBuds_ModelId) {
+    return kPopularPeripheral_PixelBuds_Name;
+  }
+
+  if (model_id == kPopularPeripheral_PixelBudsASeries_ModelId) {
+    return kPopularPeripheral_PixelBudsASeries_Name;
+  }
+  if (model_id == kPopularPeripheral_PixelBudsASeries_1_ModelId) {
+    return kPopularPeripheral_PixelBudsASeries_1_Name;
+  }
+  if (model_id == kPopularPeripheral_PixelBudsASeries_2_ModelId) {
+    return kPopularPeripheral_PixelBudsASeries_2_Name;
+  }
+
+  if (model_id == kPopularPeripheral_PixelBudsPro_ModelId) {
+    return kPopularPeripheral_PixelBudsPro_Name;
+  }
+  if (model_id == kPopularPeripheral_PixelBudsPro_1_ModelId) {
+    return kPopularPeripheral_PixelBudsPro_1_Name;
+  }
+  if (model_id == kPopularPeripheral_PixelBudsPro_2_ModelId) {
+    return kPopularPeripheral_PixelBudsPro_2_Name;
+  }
+  if (model_id == kPopularPeripheral_PixelBudsPro_3_ModelId) {
+    return kPopularPeripheral_PixelBudsPro_3_Name;
+  }
+  if (model_id == kPopularPeripheral_PixelBudsPro_4_ModelId) {
+    return kPopularPeripheral_PixelBudsPro_4_Name;
+  }
+
+  if (model_id == kPopularPeripheral_RealMeBudsAir2_ModelId) {
+    return kPopularPeripheral_RealMeBudsAir2_Name;
+  }
+
+  if (model_id == kPopularPeripheral_RealMeBudsAir2Neo_ModelId) {
+    return kPopularPeripheral_RealMeBudsAir2Neo_Name;
+  }
+
+  if (model_id == kPopularPeripheral_RealMeBudsAirPro_ModelId) {
     return kPopularPeripheral_RealMeBudsAirPro_Name;
-  if (model_id == kPopularPeripheral_RealMeBudsAirPro_1_ModelId)
+  }
+  if (model_id == kPopularPeripheral_RealMeBudsAirPro_1_ModelId) {
     return kPopularPeripheral_RealMeBudsAirPro_1_Name;
-  if (model_id == kPopularPeripheral_RealMeBudsAirPro_2_ModelId)
+  }
+  if (model_id == kPopularPeripheral_RealMeBudsAirPro_2_ModelId) {
     return kPopularPeripheral_RealMeBudsAirPro_2_Name;
+  }
 
-  if (model_id == kPopularPeripheral_SRSXB33_ModelId)
+  if (model_id == kPopularPeripheral_RealMeBudsQ2TWS_ModelId) {
+    return kPopularPeripheral_RealMeBudsQ2TWS_Name;
+  }
+
+  if (model_id == kPopularPeripheral_RealMeTechLifeBudsT100_ModelId) {
+    return kPopularPeripheral_RealMeTechLifeBudsT100_Name;
+  }
+  if (model_id == kPopularPeripheral_RealMeTechLifeBudsT100_1_ModelId) {
+    return kPopularPeripheral_RealMeTechLifeBudsT100_1_Name;
+  }
+  if (model_id == kPopularPeripheral_RealMeTechLifeBudsT100_2_ModelId) {
+    return kPopularPeripheral_RealMeTechLifeBudsT100_2_Name;
+  }
+
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_1_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_1_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_2_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_2_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_3_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_3_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_4_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_4_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_5_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_5_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_6_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_6_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWF1000XM3_7_ModelId) {
+    return kPopularPeripheral_SonyWF1000XM3_7_Name;
+  }
+
+  if (model_id == kPopularPeripheral_SonyWH1000XM3_ModelId) {
+    return kPopularPeripheral_SonyWH1000XM3_Name;
+  }
+  if (model_id == kPopularPeripheral_SonyWH1000XM3_1_ModelId) {
+    return kPopularPeripheral_SonyWH1000XM3_1_Name;
+  }
+
+  if (model_id == kPopularPeripheral_SRSXB33_ModelId) {
     return kPopularPeripheral_SRSXB33_Name;
-  if (model_id == kPopularPeripheral_SRSXB33_1_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB33_1_ModelId) {
     return kPopularPeripheral_SRSXB33_1_Name;
-  if (model_id == kPopularPeripheral_SRSXB33_2_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB33_2_ModelId) {
     return kPopularPeripheral_SRSXB33_2_Name;
-  if (model_id == kPopularPeripheral_SRSXB33_3_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB33_3_ModelId) {
     return kPopularPeripheral_SRSXB33_3_Name;
+  }
 
-  if (model_id == kPopularPeripheral_SRSXB23_ModelId)
+  if (model_id == kPopularPeripheral_SRSXB23_ModelId) {
     return kPopularPeripheral_SRSXB23_Name;
-  if (model_id == kPopularPeripheral_SRSXB23_1_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB23_1_ModelId) {
     return kPopularPeripheral_SRSXB23_1_Name;
-  if (model_id == kPopularPeripheral_SRSXB23_2_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB23_2_ModelId) {
     return kPopularPeripheral_SRSXB23_2_Name;
-  if (model_id == kPopularPeripheral_SRSXB23_3_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB23_3_ModelId) {
     return kPopularPeripheral_SRSXB23_3_Name;
-  if (model_id == kPopularPeripheral_SRSXB23_4_ModelId)
+  }
+  if (model_id == kPopularPeripheral_SRSXB23_4_ModelId) {
     return kPopularPeripheral_SRSXB23_4_Name;
+  }
+
+  if (model_id == kPopularPeripheral_SRSXB13_ModelId) {
+    return kPopularPeripheral_SRSXB13_Name;
+  }
+  if (model_id == kPopularPeripheral_SRSXB13_1_ModelId) {
+    return kPopularPeripheral_SRSXB13_1_Name;
+  }
+  if (model_id == kPopularPeripheral_SRSXB13_2_ModelId) {
+    return kPopularPeripheral_SRSXB13_2_Name;
+  }
+  if (model_id == kPopularPeripheral_SRSXB13_3_ModelId) {
+    return kPopularPeripheral_SRSXB13_3_Name;
+  }
+  if (model_id == kPopularPeripheral_SRSXB13_4_ModelId) {
+    return kPopularPeripheral_SRSXB13_4_Name;
+  }
+  if (model_id == kPopularPeripheral_SRSXB13_5_ModelId) {
+    return kPopularPeripheral_SRSXB13_5_Name;
+  }
 
   return kPopularPeripheral_Other_Name;
 }
@@ -344,7 +554,7 @@ const std::string GetFastPairTrackedModelId(const std::string& model_id) {
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused. This enum should be kept in sync
 // with the BluetoothConnectToServiceError enum in
-// src/tools/metrics/histograms/enums.xml.
+// //tools/metrics/histograms/metadata/bluetooth/enums.xml.
 enum class ConnectToServiceError {
   kUnknownError = 0,
   kAcceptFailed = 1,
@@ -354,18 +564,74 @@ enum class ConnectToServiceError {
 };
 
 ConnectToServiceError GetConnectToServiceError(const std::string& error) {
-  if (error == kAcceptFailedString)
+  if (error == kAcceptFailedString) {
     return ConnectToServiceError::kAcceptFailed;
+  }
 
-  if (error == kInvalidUUIDString)
+  if (error == kInvalidUUIDString) {
     return ConnectToServiceError::kInvalidUUID;
+  }
 
-  if (error == kSocketNotListeningString)
+  if (error == kSocketNotListeningString) {
     return ConnectToServiceError::kSocketNotListening;
+  }
 
   DCHECK(error != kSocketNotListeningString && error != kInvalidUUIDString &&
          error != kAcceptFailedString);
   return ConnectToServiceError::kUnknownError;
+}
+
+std::optional<std::string> GetFastPairDeviceType(
+    const nearby::fastpair::Device& device_metadata) {
+  // Needs to stay up to date with `DeviceType` enum in
+  // ash/quick_pair/proto/enums.proto. We only expect these device
+  // types because of filtering in the scanning component. Always expected to
+  // be one of these values.
+  if (device_metadata.device_type() ==
+      nearby::fastpair::DeviceType::HEADPHONES) {
+    return kDeviceTypeHeadphones;
+  } else if (device_metadata.device_type() ==
+             nearby::fastpair::DeviceType::SPEAKER) {
+    return kDeviceTypeSpeaker;
+  } else if (device_metadata.device_type() ==
+             nearby::fastpair::DeviceType::TRUE_WIRELESS_HEADPHONES) {
+    return kDeviceTypeTrueWirelessHeadphones;
+  } else if (device_metadata.device_type() ==
+             nearby::fastpair::DeviceType::INPUT_DEVICE) {
+    return kDeviceTypeInputDevice;
+  } else if (device_metadata.device_type() ==
+             nearby::fastpair::DeviceType::DEVICE_TYPE_UNSPECIFIED) {
+    return kDeviceTypeUnspecified;
+  }
+
+  return std::nullopt;
+}
+
+std::optional<std::string> GetFastPairNotificationType(
+    const nearby::fastpair::Device& device_metadata) {
+  // Needs to stay up to date with `NotificationType` enum in
+  // ash/quick_pair/proto/enums.proto. We only expect these notification
+  // types because of filtering in the scanning component. Always expected to
+  // be one of these values.
+  DCHECK(device_metadata.notification_type() ==
+             nearby::fastpair::NotificationType::FAST_PAIR ||
+         device_metadata.notification_type() ==
+             nearby::fastpair::NotificationType::FAST_PAIR_ONE ||
+         device_metadata.notification_type() ==
+             nearby::fastpair::NotificationType::NOTIFICATION_TYPE_UNSPECIFIED);
+  if (device_metadata.notification_type() ==
+      nearby::fastpair::NotificationType::FAST_PAIR) {
+    return kNotificationTypeFastPair;
+  } else if (device_metadata.notification_type() ==
+             nearby::fastpair::NotificationType::FAST_PAIR_ONE) {
+    return kNotificationTypeFastPairOne;
+  } else if (device_metadata.notification_type() ==
+             nearby::fastpair::NotificationType::
+                 NOTIFICATION_TYPE_UNSPECIFIED) {
+    return kNotificationTypeUnspecified;
+  } else {
+    return std::nullopt;
+  }
 }
 
 const char kEngagementFlowInitialMetric[] =
@@ -388,6 +654,12 @@ const char kGattConnectionResult[] =
     "Bluetooth.ChromeOS.FastPair.GattConnection.Result";
 const char kGattConnectionErrorMetric[] =
     "Bluetooth.ChromeOS.FastPair.GattConnection.ErrorReason";
+const char kGattConnectionEffectiveSuccessRate[] =
+    "Bluetooth.ChromeOS.FastPair.GattConnection.EffectiveSuccessRate";
+const char kGattConnectionAttemptCount[] =
+    "Bluetooth.ChromeOS.FastPair.GattConnection.AttemptCount";
+const char kFastPairGattRetryFailureReason[] =
+    "Bluetooth.ChromeOS.FastPair.GattConnection.RetryFailureReason";
 const char kFastPairPairFailureInitialMetric[] =
     "Bluetooth.ChromeOS.FastPair.PairFailure.InitialPairingProtocol";
 const char kFastPairPairFailureSubsequentMetric[] =
@@ -532,23 +804,60 @@ const char kSavedDevicesTotalUxLoadTime[] =
     "Bluetooth.ChromeOS.FastPair.SavedDevices.TotalUxLoadTime";
 const char kSavedDevicesCount[] =
     "Bluetooth.ChromeOS.FastPair.SavedDevices.DeviceCount";
+constexpr char kFastPairGattConnectionStep[] = "FastPair.GattConnection";
+constexpr char kProtocolPairingStepInitial[] =
+    "FastPair.InitialPairing.Pairing";
+constexpr char kProtocolPairingStepSubsequent[] =
+    "FastPair.SubsequentPairing.Pairing";
+constexpr char kInitialSuccessFunnelMetric[] = "FastPair.InitialPairing";
+constexpr char kSubsequentSuccessFunnelMetric[] = "FastPair.SubsequentPairing";
+constexpr char kRetroactiveSuccessFunnelMetric[] =
+    "FastPair.RetroactivePairing";
+constexpr char kInitializePairingProcessInitial[] =
+    "FastPair.InitialPairing.Initialization";
+constexpr char kInitializePairingProcessSubsequent[] =
+    "FastPair.SubsequentPairing.Initialization";
+constexpr char kInitializePairingProcessRetroactive[] =
+    "FastPair.RetroactivePairing.Initialization";
+constexpr char kInitializePairingProcessFailureReasonInitial[] =
+    "FastPair.InitialPairing.Initialization.FailureReason";
+constexpr char kInitializePairingProcessFailureReasonSubsequent[] =
+    "FastPair.SubsequentPairing.Initialization.FailureReason";
+constexpr char kInitializePairingProcessFailureReasonRetroactive[] =
+    "FastPair.RetroactivePairing.Initialization.FailureReason";
+constexpr char kInitializePairingProcessRetriesBeforeSuccessInitial[] =
+    "FastPair.InitialPairing.Initialization.RetriesBeforeSuccess";
+constexpr char kInitializePairingProcessRetriesBeforeSuccessSubsequent[] =
+    "FastPair.SubsequentPairing.Initialization.RetriesBeforeSuccess";
+constexpr char kInitializePairingProcessRetriesBeforeSuccessRetroactive[] =
+    "FastPair.RetroactivePairing.Initialization.RetriesBeforeSuccess";
+const char kHandshakeEffectiveSuccessRate[] =
+    "FastPair.Handshake.EffectiveSuccessRate";
+const char kHandshakeAttemptCount[] = "FastPair.Handshake.AttemptCount";
+const char kGattServiceDiscoveryTime[] =
+    "FastPair.GattServiceDiscovery.Latency";
+const char kCreateBondTime[] = "FastPair.CreateBond.Latency";
+const char kPasskeyNotify[] = "FastPair.PasskeyNotify.Latency";
+const char kKeyBasedNotify[] = "FastPair.KeyBasedNotify.Latency";
+const char kPasskeyWriteRequest[] = "FastPair.PasskeyWriteRequest.Latency";
+const char kKeyBasedWriteRequest[] = "FastPair.KeyBasedWriteRequest.Latency";
 
 const std::string GetEngagementFlowInitialModelIdMetric(
     const ash::quick_pair::Device& device) {
   return std::string(kEngagementFlowInitialMetric) + "." +
-         GetFastPairTrackedModelId(device.metadata_id);
+         GetFastPairTrackedModelId(device.metadata_id());
 }
 
 const std::string GetEngagementFlowSubsequentModelIdMetric(
     const ash::quick_pair::Device& device) {
   return std::string(kEngagementFlowSubsequentMetric) + "." +
-         GetFastPairTrackedModelId(device.metadata_id);
+         GetFastPairTrackedModelId(device.metadata_id());
 }
 
 const std::string GetRetroactiveEngagementFlowModelIdMetric(
     const ash::quick_pair::Device& device) {
   return std::string(kRetroactiveEngagementFlowMetric) + "." +
-         GetFastPairTrackedModelId(device.metadata_id);
+         GetFastPairTrackedModelId(device.metadata_id());
 }
 
 // The retroactive engagement flow doesn't record retroactive successes
@@ -557,7 +866,55 @@ const std::string GetRetroactiveEngagementFlowModelIdMetric(
 const std::string GetAccountKeyWriteResultRetroactiveModelIdMetric(
     const ash::quick_pair::Device& device) {
   return std::string(kFastPairAccountKeyWriteResultRetroactiveMetric) + "." +
-         GetFastPairTrackedModelId(device.metadata_id);
+         GetFastPairTrackedModelId(device.metadata_id());
+}
+
+std::optional<std::string>
+GetEngagementFunnelInitialDeviceTypeNotificationTypeMetric(
+    const nearby::fastpair::Device& device_metadata) {
+  std::optional<std::string> device_type =
+      GetFastPairDeviceType(device_metadata);
+  std::optional<std::string> notification_type =
+      GetFastPairNotificationType(device_metadata);
+
+  if (!device_type || !notification_type) {
+    return std::nullopt;
+  }
+
+  return std::string(kEngagementFlowInitialMetric) + "." + device_type.value() +
+         "." + notification_type.value();
+}
+
+std::optional<std::string>
+GetEngagementFunnelSubsequentDeviceTypeNotificationTypeMetric(
+    const nearby::fastpair::Device& device_metadata) {
+  std::optional<std::string> device_type =
+      GetFastPairDeviceType(device_metadata);
+  std::optional<std::string> notification_type =
+      GetFastPairNotificationType(device_metadata);
+
+  if (!device_type || !notification_type) {
+    return std::nullopt;
+  }
+
+  return std::string(kEngagementFlowSubsequentMetric) + "." +
+         device_type.value() + "." + notification_type.value();
+}
+
+std::optional<std::string>
+GetEngagementFunnelRetroactiveDeviceTypeNotificationTypeMetric(
+    const nearby::fastpair::Device& device_metadata) {
+  std::optional<std::string> device_type =
+      GetFastPairDeviceType(device_metadata);
+  std::optional<std::string> notification_type =
+      GetFastPairNotificationType(device_metadata);
+
+  if (!device_type || !notification_type) {
+    return std::nullopt;
+  }
+
+  return std::string(kRetroactiveEngagementFlowMetric) + "." +
+         device_type.value() + "." + notification_type.value();
 }
 
 }  // namespace
@@ -565,9 +922,74 @@ const std::string GetAccountKeyWriteResultRetroactiveModelIdMetric(
 namespace ash {
 namespace quick_pair {
 
+void RecordFastPairDeviceAndNotificationSpecificEngagementFlow(
+    const Device& device,
+    const nearby::fastpair::Device& device_details,
+    FastPairEngagementFlowEvent event) {
+  std::optional<std::string> funnel_name;
+
+  switch (device.protocol()) {
+    case Protocol::kFastPairInitial:
+      funnel_name = GetEngagementFunnelInitialDeviceTypeNotificationTypeMetric(
+          device_details);
+
+      if (!funnel_name) {
+        break;
+      }
+
+      base::UmaHistogramSparse(funnel_name.value(), static_cast<int>(event));
+      break;
+    // The retroactive pairing flow is not included here because it does not
+    // involve a discovery notification or have an error notification on
+    // failures. It's flow is captured in `FastPairRetroactiveFlowEvent`.
+    case Protocol::kFastPairRetroactive:
+      break;
+    case Protocol::kFastPairSubsequent:
+      funnel_name =
+          GetEngagementFunnelSubsequentDeviceTypeNotificationTypeMetric(
+              device_details);
+      if (!funnel_name) {
+        break;
+      }
+
+      base::UmaHistogramSparse(funnel_name.value(), static_cast<int>(event));
+      break;
+  }
+}
+
+void RecordFastPairDeviceAndNotificationSpecificRetroactiveEngagementFlow(
+    const Device& device,
+    const nearby::fastpair::Device& device_details,
+    FastPairRetroactiveEngagementFlowEvent event) {
+  std::optional<std::string> funnel_name;
+
+  switch (device.protocol()) {
+    case Protocol::kFastPairInitial:
+      break;
+    // This is only implemented for the retroactive pairing scenario since it's
+    // flow is unique compared to the initial and subsequent flow : it shows
+    // an associate account notification to start the scenario, whereas initial
+    // and subsequent show a discovery notification, and there is no error
+    // notification if there is a failure.
+    case Protocol::kFastPairRetroactive:
+      funnel_name =
+          GetEngagementFunnelRetroactiveDeviceTypeNotificationTypeMetric(
+              device_details);
+
+      if (!funnel_name) {
+        break;
+      }
+
+      base::UmaHistogramSparse(funnel_name.value(), static_cast<int>(event));
+      break;
+    case Protocol::kFastPairSubsequent:
+      break;
+  }
+}
+
 void AttemptRecordingFastPairEngagementFlow(const Device& device,
                                             FastPairEngagementFlowEvent event) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramSparse(kEngagementFlowInitialMetric,
                                static_cast<int>(event));
@@ -587,9 +1009,82 @@ void AttemptRecordingFastPairEngagementFlow(const Device& device,
   }
 }
 
+void RecordInitialSuccessFunnelFlow(FastPairInitialSuccessFunnelEvent event) {
+  base::UmaHistogramEnumeration(kInitialSuccessFunnelMetric, event);
+}
+
+void RecordSubsequentSuccessFunnelFlow(
+    FastPairSubsequentSuccessFunnelEvent event) {
+  base::UmaHistogramEnumeration(kSubsequentSuccessFunnelMetric, event);
+}
+
+void RecordRetroactiveSuccessFunnelFlow(
+    FastPairRetroactiveSuccessFunnelEvent event) {
+  base::UmaHistogramEnumeration(kRetroactiveSuccessFunnelMetric, event);
+}
+
+void RecordFastPairInitializePairingProcessEvent(
+    const Device& device,
+    FastPairInitializePairingProcessEvent event) {
+  switch (device.protocol()) {
+    case Protocol::kFastPairInitial:
+      base::UmaHistogramEnumeration(kInitializePairingProcessInitial, event);
+      break;
+    case Protocol::kFastPairRetroactive:
+      base::UmaHistogramEnumeration(kInitializePairingProcessRetroactive,
+                                    event);
+      break;
+    case Protocol::kFastPairSubsequent:
+      base::UmaHistogramEnumeration(kInitializePairingProcessSubsequent, event);
+      break;
+  }
+}
+
+void RecordInitializationFailureReason(const Device& device,
+                                       PairFailure failure_reason) {
+  switch (device.protocol()) {
+    case Protocol::kFastPairInitial:
+      base::UmaHistogramEnumeration(
+          kInitializePairingProcessFailureReasonInitial, failure_reason);
+      break;
+    case Protocol::kFastPairRetroactive:
+      base::UmaHistogramEnumeration(
+          kInitializePairingProcessFailureReasonRetroactive, failure_reason);
+      break;
+    case Protocol::kFastPairSubsequent:
+      base::UmaHistogramEnumeration(
+          kInitializePairingProcessFailureReasonSubsequent, failure_reason);
+      break;
+  }
+}
+
+void RecordInitializationRetriesBeforeSuccess(const Device& device,
+                                              int num_retries_before_success) {
+  switch (device.protocol()) {
+    case Protocol::kFastPairInitial:
+      base::UmaHistogramExactLinear(
+          kInitializePairingProcessRetriesBeforeSuccessInitial,
+          num_retries_before_success,
+          /*exclusive_max=*/10);
+      break;
+    case Protocol::kFastPairRetroactive:
+      base::UmaHistogramExactLinear(
+          kInitializePairingProcessRetriesBeforeSuccessRetroactive,
+          num_retries_before_success,
+          /*exclusive_max=*/10);
+      break;
+    case Protocol::kFastPairSubsequent:
+      base::UmaHistogramExactLinear(
+          kInitializePairingProcessRetriesBeforeSuccessSubsequent,
+          num_retries_before_success,
+          /*exclusive_max=*/10);
+      break;
+  }
+}
+
 void AttemptRecordingTotalUxPairTime(const Device& device,
                                      base::TimeDelta total_pair_time) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramCustomTimes(kTotalUxPairTimeInitialMetric,
                                     total_pair_time, base::Milliseconds(1),
@@ -608,7 +1103,7 @@ void AttemptRecordingTotalUxPairTime(const Device& device,
 void AttemptRecordingFastPairRetroactiveEngagementFlow(
     const Device& device,
     FastPairRetroactiveEngagementFlowEvent event) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
     case Protocol::kFastPairSubsequent:
       break;
@@ -647,8 +1142,21 @@ void RecordGattConnectionErrorCode(
       device::BluetoothDevice::ConnectErrorCode::NUM_CONNECT_ERROR_CODES);
 }
 
+void RecordEffectiveGattConnectionSuccess(bool success) {
+  base::UmaHistogramBoolean(kGattConnectionEffectiveSuccessRate, success);
+}
+
+void RecordGattConnectionAttemptCount(int num_attempts) {
+  base::UmaHistogramExactLinear(kGattConnectionAttemptCount, num_attempts,
+                                /*exclusive_max=*/10);
+}
+
+void RecordGattRetryFailureReason(PairFailure failure) {
+  base::UmaHistogramEnumeration(kFastPairGattRetryFailureReason, failure);
+}
+
 void RecordPairingResult(const Device& device, bool success) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramBoolean(kFastPairPairResultInitialMetric, success);
       break;
@@ -662,7 +1170,7 @@ void RecordPairingResult(const Device& device, bool success) {
 }
 
 void RecordPairingFailureReason(const Device& device, PairFailure failure) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramEnumeration(kFastPairPairFailureInitialMetric, failure);
       break;
@@ -679,7 +1187,7 @@ void RecordPairingFailureReason(const Device& device, PairFailure failure) {
 
 void RecordAccountKeyFailureReason(const Device& device,
                                    AccountKeyFailure failure) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramEnumeration(
           kFastPairAccountKeyWriteFailureInitialMetric, failure);
@@ -694,7 +1202,7 @@ void RecordAccountKeyFailureReason(const Device& device,
 }
 
 void RecordAccountKeyResult(const Device& device, bool success) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramBoolean(kFastPairAccountKeyWriteResultInitialMetric,
                                 success);
@@ -874,6 +1382,21 @@ void RecordFastPairRepositoryCacheResult(bool success) {
   base::UmaHistogramBoolean(kFastPairRepositoryCacheResult, success);
 }
 
+void RecordGattInitializationStep(
+    FastPairGattConnectionSteps initialization_step) {
+  base::UmaHistogramEnumeration(kFastPairGattConnectionStep,
+                                initialization_step);
+}
+
+void RecordEffectiveHandshakeSuccess(bool success) {
+  base::UmaHistogramBoolean(kHandshakeEffectiveSuccessRate, success);
+}
+
+void RecordHandshakeAttemptCount(int num_attempts) {
+  base::UmaHistogramExactLinear(kHandshakeAttemptCount, num_attempts,
+                                /*exclusive_max=*/10);
+}
+
 void RecordHandshakeResult(bool success) {
   base::UmaHistogramBoolean(kHandshakeResult, success);
 }
@@ -882,9 +1405,24 @@ void RecordHandshakeFailureReason(HandshakeFailureReason failure_reason) {
   base::UmaHistogramEnumeration(kHandshakeFailureReason, failure_reason);
 }
 
+void RecordProtocolPairingStep(FastPairProtocolPairingSteps pairing_step,
+                               const Device& device) {
+  switch (device.protocol()) {
+    case Protocol::kFastPairInitial:
+      base::UmaHistogramEnumeration(kProtocolPairingStepInitial, pairing_step);
+      break;
+    case Protocol::kFastPairSubsequent:
+      base::UmaHistogramEnumeration(kProtocolPairingStepSubsequent,
+                                    pairing_step);
+      break;
+    case Protocol::kFastPairRetroactive:
+      break;
+  }
+}
+
 void RecordHandshakeStep(FastPairHandshakeSteps handshake_step,
                          const Device& device) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramEnumeration(kFastPairHandshakeStepInitial,
                                     handshake_step);
@@ -939,6 +1477,36 @@ void RecordConfirmPasskeyAskTime(base::TimeDelta total_ask_time) {
   base::UmaHistogramTimes(kConfirmPasskeyAskTime, total_ask_time);
 }
 
+void RecordGattServiceDiscoveryTime(
+    base::TimeDelta total_gatt_service_discovery_time) {
+  base::UmaHistogramTimes(kGattServiceDiscoveryTime,
+                          total_gatt_service_discovery_time);
+}
+
+void RecordCreateBondTime(base::TimeDelta total_create_bond_time) {
+  base::UmaHistogramTimes(kCreateBondTime, total_create_bond_time);
+}
+
+void RecordPasskeyNotifyTime(base::TimeDelta total_passkey_notify_time) {
+  base::UmaHistogramTimes(kPasskeyNotify, total_passkey_notify_time);
+}
+
+void RecordKeyBasedNotifyTime(base::TimeDelta total_key_based_notify_time) {
+  base::UmaHistogramTimes(kKeyBasedNotify, total_key_based_notify_time);
+}
+
+void RecordPasskeyWriteRequestTime(
+    base::TimeDelta total_passkey_write_request_time) {
+  base::UmaHistogramTimes(kPasskeyWriteRequest,
+                          total_passkey_write_request_time);
+}
+
+void RecordKeyBasedWriteRequestTime(
+    base::TimeDelta total_key_based_write_request_time) {
+  base::UmaHistogramTimes(kKeyBasedWriteRequest,
+                          total_key_based_write_request_time);
+}
+
 void RecordPairFailureRetry(int num_retries) {
   base::UmaHistogramExactLinear(kFastPairRetryCount, num_retries,
                                 /*exclusive_max=*/10);
@@ -950,7 +1518,7 @@ void RecordSavedDevicesRemoveResult(bool success) {
 
 void RecordSavedDevicesUpdatedOptInStatusResult(const Device& device,
                                                 bool success) {
-  switch (device.protocol) {
+  switch (device.protocol()) {
     case Protocol::kFastPairInitial:
       base::UmaHistogramBoolean(kSavedDeviceUpdateOptInStatusInitialResult,
                                 success);
@@ -977,6 +1545,138 @@ void RecordSavedDevicesTotalUxLoadTime(base::TimeDelta total_load_time) {
 
 void RecordSavedDevicesCount(int num_devices) {
   base::UmaHistogramCounts100(kSavedDevicesCount, num_devices);
+}
+
+int ConvertFastPairVersionToInt(std::optional<DeviceFastPairVersion> version) {
+  if (!version) {
+    return 0;
+  }
+
+  switch (version.value()) {
+    case DeviceFastPairVersion::kV1:
+      return 1;
+    case DeviceFastPairVersion::kHigherThanV1:
+      return 2;
+  }
+}
+
+int GetRSSI(const device::BluetoothDevice* bt_device) {
+  int rssi = kUnknownRSSI;
+  if (bt_device) {
+    if (bt_device->GetInquiryRSSI().has_value()) {
+      rssi = bt_device->GetInquiryRSSI().value();
+    }
+  }
+  return rssi;
+}
+
+int GetTxPower(const device::BluetoothDevice* bt_device) {
+  int tx_power = kUnknownTxPower;
+  if (bt_device) {
+    if (bt_device->GetInquiryTxPower().has_value()) {
+      tx_power = bt_device->GetInquiryTxPower().value();
+    }
+  }
+  return tx_power;
+}
+
+// TODO(b/266739400): There is currently no way to properly unittest these
+// changes. The metrics team plans on implementing a way to mock out the
+// structured metrics client in the near future. We should follow up and
+// implement proper tests for these functions once that is available.
+void RecordStructuredDiscoveryNotificationShown(
+    const Device& device,
+    const device::BluetoothDevice* bt_device) {
+  if (!base::FeatureList::IsEnabled(metrics::structured::kFastPairMetrics)) {
+    return;
+  }
+
+  CD_LOG(INFO, Feature::FP) << __func__;
+  int model_id;
+  if (!base::HexStringToInt(device.metadata_id(), &model_id)) {
+    return;
+  }
+  int version = ConvertFastPairVersionToInt(device.version());
+  int rssi = GetRSSI(bt_device);
+  int tx_power = GetTxPower(bt_device);
+  CD_LOG(VERBOSE, Feature::FP)
+      << __func__ << ": RSSI: " << rssi << ", TxPower: " << tx_power;
+  metrics::structured::events::v2::fast_pair::DiscoveryNotificationShown()
+      .SetProtocol(static_cast<int>(device.protocol()))
+      .SetModelId(model_id)
+      .SetFastPairVersion(version)
+      .SetRSSI(rssi)
+      .SetTxPower(tx_power)
+      .Record();
+}
+
+void RecordStructuredPairingStarted(const Device& device,
+                                    const device::BluetoothDevice* bt_device) {
+  if (!base::FeatureList::IsEnabled(metrics::structured::kFastPairMetrics)) {
+    return;
+  }
+
+  CD_LOG(INFO, Feature::FP) << __func__;
+  int model_id;
+  if (!base::HexStringToInt(device.metadata_id(), &model_id)) {
+    return;
+  }
+  int version = ConvertFastPairVersionToInt(device.version());
+  int rssi = GetRSSI(bt_device);
+  int tx_power = GetTxPower(bt_device);
+  CD_LOG(VERBOSE, Feature::FP)
+      << __func__ << ": RSSI: " << rssi << ", TxPower: " << tx_power;
+  metrics::structured::events::v2::fast_pair::PairingStart()
+      .SetProtocol(static_cast<int>(device.protocol()))
+      .SetModelId(model_id)
+      .SetFastPairVersion(version)
+      .SetRSSI(rssi)
+      .SetTxPower(tx_power)
+      .Record();
+}
+
+void RecordStructuredPairingComplete(const Device& device,
+                                     const device::BluetoothDevice* bt_device) {
+  if (!base::FeatureList::IsEnabled(metrics::structured::kFastPairMetrics)) {
+    return;
+  }
+
+  CD_LOG(INFO, Feature::FP) << __func__;
+  int model_id;
+  if (!base::HexStringToInt(device.metadata_id(), &model_id)) {
+    return;
+  }
+  int version = ConvertFastPairVersionToInt(device.version());
+  int rssi = GetRSSI(bt_device);
+  int tx_power = GetTxPower(bt_device);
+  CD_LOG(VERBOSE, Feature::FP)
+      << __func__ << ": RSSI: " << rssi << ", TxPower: " << tx_power;
+  metrics::structured::events::v2::fast_pair::PairingComplete()
+      .SetProtocol(static_cast<int>(device.protocol()))
+      .SetModelId(model_id)
+      .SetFastPairVersion(version)
+      .SetRSSI(rssi)
+      .SetTxPower(tx_power)
+      .Record();
+}
+
+void RecordStructuredPairFailure(const Device& device, PairFailure failure) {
+  if (!base::FeatureList::IsEnabled(metrics::structured::kFastPairMetrics)) {
+    return;
+  }
+
+  CD_LOG(INFO, Feature::FP) << __func__;
+  int model_id;
+  if (!base::HexStringToInt(device.metadata_id(), &model_id)) {
+    return;
+  }
+  int version = ConvertFastPairVersionToInt(device.version());
+  metrics::structured::events::v2::fast_pair::PairFailure()
+      .SetProtocol(static_cast<int>(device.protocol()))
+      .SetModelId(model_id)
+      .SetReason(static_cast<int>(failure))
+      .SetFastPairVersion(version)
+      .Record();
 }
 
 }  // namespace quick_pair

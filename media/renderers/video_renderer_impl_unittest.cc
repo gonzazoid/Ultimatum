@@ -7,10 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -22,7 +22,6 @@
 #include "base/test/gmock_callback_support.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "media/base/data_buffer.h"
 #include "media/base/limits.h"
@@ -85,21 +84,22 @@ class VideoRendererImplTest : public testing::Test {
         decoder_(nullptr),
         demuxer_stream_(DemuxerStream::VIDEO),
         simulate_decode_delay_(false),
-        expect_init_success_(true) {
+        expect_init_success_(true),
+        time_source_(&tick_clock_) {
     null_video_sink_ = std::make_unique<NullVideoSink>(
         false, base::Seconds(1.0 / 60),
         base::BindRepeating(&MockCB::FrameReceived,
                             base::Unretained(&mock_cb_)),
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     renderer_ = std::make_unique<VideoRendererImpl>(
-        base::ThreadTaskRunnerHandle::Get(), null_video_sink_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        null_video_sink_.get(),
         base::BindRepeating(&VideoRendererImplTest::CreateVideoDecodersForTest,
                             base::Unretained(this)),
         true, &media_log_, nullptr, 0);
     renderer_->SetTickClockForTesting(&tick_clock_);
     null_video_sink_->set_tick_clock_for_testing(&tick_clock_);
-    time_source_.SetTickClockForTesting(&tick_clock_);
 
     // Start wallclock time at a non-zero value.
     AdvanceWallclockTimeInMs(12345);
@@ -194,7 +194,7 @@ class VideoRendererImplTest : public testing::Test {
     // Test hook for to specify a custom buffer duration.
     decoder_buffer->set_duration(buffer_duration_);
 
-    std::move(read_cb).Run(DemuxerStream::kOk, decoder_buffer);
+    std::move(read_cb).Run(DemuxerStream::kOk, {std::move(decoder_buffer)});
   }
 
   bool IsDemuxerStalled() { return !!stalled_demixer_read_cb_; }
@@ -209,6 +209,8 @@ class VideoRendererImplTest : public testing::Test {
   //
   // Syntax:
   //   nn - Queue a decoder buffer with timestamp nn * 1000us
+  //   nndmm - Queue a decoder buffer with timestamp nn * 1000us
+  //           and mm * 1000us duration
   //   abort - Queue an aborted read
   //   error - Queue a decoder error
   //
@@ -216,9 +218,8 @@ class VideoRendererImplTest : public testing::Test {
   //   A clip that is four frames long: "0 10 20 30"
   //   A clip that has a decode error: "60 70 error"
   void QueueFrames(const std::string& str) {
-    for (const std::string& token :
-         base::SplitString(str, " ", base::TRIM_WHITESPACE,
-                           base::SPLIT_WANT_ALL)) {
+    for (base::StringPiece token : base::SplitString(
+             str, " ", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
       if (token == "abort") {
         scoped_refptr<VideoFrame> null_frame;
         QueueFrame(DecoderStatus::Codes::kAborted, null_frame);
@@ -231,12 +232,25 @@ class VideoRendererImplTest : public testing::Test {
         continue;
       }
 
+      auto ts_tokens = base::SplitStringPiece(token, "d", base::TRIM_WHITESPACE,
+                                              base::SPLIT_WANT_ALL);
+      if (ts_tokens.size() > 1) {
+        token = ts_tokens[0];
+      }
+
       int timestamp_in_ms = 0;
       if (base::StringToInt(token, &timestamp_in_ms)) {
         gfx::Size natural_size = TestVideoConfig::NormalCodedSize();
         scoped_refptr<VideoFrame> frame = VideoFrame::CreateFrame(
             PIXEL_FORMAT_I420, natural_size, gfx::Rect(natural_size),
             natural_size, base::Milliseconds(timestamp_in_ms));
+
+        int duration_in_ms = 0;
+        if (ts_tokens.size() > 1 &&
+            base::StringToInt(ts_tokens[1], &duration_in_ms)) {
+          frame->metadata().frame_duration = base::Milliseconds(duration_in_ms);
+        }
+
         QueueFrame(DecoderStatus::Codes::kOk, frame);
         continue;
       }
@@ -307,9 +321,10 @@ class VideoRendererImplTest : public testing::Test {
     DCHECK(decode_cb_);
 
     // Return EOS buffer to trigger EOS frame.
+    DemuxerStream::DecoderBufferVector buffers;
+    buffers.emplace_back(DecoderBuffer::CreateEOSBuffer());
     EXPECT_CALL(demuxer_stream_, OnRead(_))
-        .WillOnce(RunOnceCallback<0>(DemuxerStream::kOk,
-                                     DecoderBuffer::CreateEOSBuffer()));
+        .WillOnce(RunOnceCallback<0>(DemuxerStream::kOk, buffers));
 
     // Satify pending |decode_cb_| to trigger a new DemuxerStream::Read().
     task_environment_.GetMainThreadTaskRunner()->PostTask(
@@ -351,7 +366,8 @@ class VideoRendererImplTest : public testing::Test {
   // Fixture members.
   std::unique_ptr<VideoRendererImpl> renderer_;
   base::SimpleTestTickClock tick_clock_;
-  raw_ptr<NiceMock<MockVideoDecoder>> decoder_;  // Owned by |renderer_|.
+  raw_ptr<NiceMock<MockVideoDecoder>, DanglingUntriaged>
+      decoder_;  // Owned by |renderer_|.
   NiceMock<MockDemuxerStream> demuxer_stream_;
   bool simulate_decode_delay_;
 
@@ -452,9 +468,50 @@ TEST_F(VideoRendererImplTest, InitializeAndStartPlayingFrom) {
   Destroy();
 }
 
+TEST_F(VideoRendererImplTest, InitializeAndStartPlayingFromWithDuration) {
+  Initialize();
+  QueueFrames("0d10 10d10 20d10 30d10 40d10");
+  EXPECT_CALL(mock_cb_, FrameReceived(HasTimestampMatcher(10)));
+  EXPECT_CALL(mock_cb_, OnBufferingStateChange(BUFFERING_HAVE_ENOUGH, _));
+  EXPECT_CALL(mock_cb_, OnStatisticsUpdate(_)).Times(AnyNumber());
+  EXPECT_CALL(mock_cb_, OnVideoNaturalSizeChange(_)).Times(1);
+  EXPECT_CALL(mock_cb_, OnVideoOpacityChange(_)).Times(1);
+  EXPECT_CALL(mock_cb_, OnVideoFrameRateChange(absl::optional<int>(100)));
+  StartPlayingFrom(10);
+  Destroy();
+}
+
 TEST_F(VideoRendererImplTest, InitializeAndEndOfStream) {
   Initialize();
   StartPlayingFrom(0);
+  WaitForPendingDecode();
+  {
+    SCOPED_TRACE("Waiting for BUFFERING_HAVE_ENOUGH");
+    WaitableMessageLoopEvent event;
+    {
+      // Buffering state changes must happen before end of stream.
+      testing::InSequence in_sequence;
+      EXPECT_CALL(mock_cb_, OnBufferingStateChange(BUFFERING_HAVE_ENOUGH, _))
+          .WillOnce(RunOnceClosure(event.GetClosure()));
+      EXPECT_CALL(mock_cb_, OnEnded());
+    }
+    SatisfyPendingDecodeWithEndOfStream();
+    event.RunAndWait();
+  }
+  // Firing a time state changed to true should be ignored...
+  renderer_->OnTimeProgressing();
+  EXPECT_FALSE(null_video_sink_->is_started());
+  Destroy();
+}
+
+TEST_F(VideoRendererImplTest, StartPlayingAfterEndOfStream) {
+  Initialize();
+  QueueFrames("0d10 10d10 20d10 30d10 40d10");
+  EXPECT_CALL(mock_cb_, OnVideoNaturalSizeChange(_)).Times(1);
+  EXPECT_CALL(mock_cb_, FrameReceived(HasTimestampMatcher(40)));
+  EXPECT_CALL(mock_cb_, OnStatisticsUpdate(_)).Times(AnyNumber());
+  EXPECT_CALL(mock_cb_, OnVideoOpacityChange(_)).Times(1);
+  StartPlayingFrom(40);
   WaitForPendingDecode();
   {
     SCOPED_TRACE("Waiting for BUFFERING_HAVE_ENOUGH");
@@ -733,6 +790,33 @@ TEST_F(VideoRendererImplTest, RenderingStopsAfterFirstFrame) {
 
   Destroy();
 }
+// Verifies that the first frame is eventually painted even if its not the best.
+TEST_F(VideoRendererImplTest, PaintFirstFrameOnStall) {
+  Initialize();
+  QueueFrames("0d10");
+  ON_CALL(*decoder_, CanReadWithoutStalling()).WillByDefault(Return(false));
+
+  EXPECT_CALL(mock_cb_, OnBufferingStateChange(BUFFERING_HAVE_ENOUGH, _));
+  EXPECT_CALL(mock_cb_, OnStatisticsUpdate(_)).Times(AnyNumber());
+  EXPECT_CALL(mock_cb_, OnVideoNaturalSizeChange(_)).Times(1);
+  EXPECT_CALL(mock_cb_, OnVideoOpacityChange(_)).Times(1);
+  EXPECT_CALL(mock_cb_, OnEnded()).Times(0);
+
+  {
+    SCOPED_TRACE("Waiting for first frame to be painted.");
+    WaitableMessageLoopEvent event;
+
+    EXPECT_CALL(mock_cb_, FrameReceived(HasTimestampMatcher(0)))
+        .WillOnce(RunOnceClosure(event.GetClosure()));
+    StartPlayingFrom(10);
+
+    EXPECT_TRUE(IsDecodePending());
+
+    event.RunAndWait();
+  }
+
+  Destroy();
+}
 
 // Verifies that the sink is stopped after rendering the first frame if
 // playback has started.
@@ -996,8 +1080,9 @@ TEST_F(VideoRendererImplTest, VideoConfigChange) {
       .WillRepeatedly(Return(true));
 
   // Signal a config change at the next DemuxerStream::Read().
+  DemuxerStream::DecoderBufferVector buffers;
   EXPECT_CALL(demuxer_stream_, OnRead(_))
-      .WillOnce(RunOnceCallback<0>(DemuxerStream::kConfigChanged, nullptr));
+      .WillOnce(RunOnceCallback<0>(DemuxerStream::kConfigChanged, buffers));
 
   // Use LargeEncrypted config (non-default) to ensure its plumbed through to
   // callback.
@@ -1181,7 +1266,8 @@ class VideoRendererImplAsyncAddFrameReadyTest : public VideoRendererImplTest {
  public:
   void InitializeWithMockGpuMemoryBufferVideoFramePool() {
     renderer_ = std::make_unique<VideoRendererImpl>(
-        base::ThreadTaskRunnerHandle::Get(), null_video_sink_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        null_video_sink_.get(),
         base::BindRepeating(&VideoRendererImplAsyncAddFrameReadyTest::
                                 CreateVideoDecodersForTest,
                             base::Unretained(this)),
@@ -1343,6 +1429,7 @@ TEST_P(UnderflowTest, UnderflowAndEosTest) {
   {
     SCOPED_TRACE("Waiting for BUFFERING_HAVE_ENOUGH");
     WaitableMessageLoopEvent event;
+    EXPECT_CALL(mock_cb_, OnVideoNaturalSizeChange(_)).Times(AnyNumber());
     EXPECT_CALL(mock_cb_, OnStatisticsUpdate(_)).Times(AnyNumber());
     EXPECT_CALL(mock_cb_,
                 OnBufferingStateChange(BUFFERING_HAVE_ENOUGH,

@@ -10,10 +10,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_split.h"
@@ -26,6 +26,7 @@
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/switches.h"
 #include "url/origin.h"
 
 namespace content {
@@ -77,48 +78,6 @@ bool IsSiteIsolationDisabled(SiteIsolationMode site_isolation_mode) {
              site_isolation_mode);
 }
 
-url::Origin RemovePort(const url::Origin& origin) {
-  return url::Origin::CreateFromNormalizedTuple(origin.scheme(), origin.host(),
-                                                /*port=*/0);
-}
-
-base::flat_set<url::Origin> CreateIsolatedAppOriginSet() {
-  std::string cmdline_origins(
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kIsolatedAppOrigins));
-
-  std::vector<std::string> origin_strings = base::SplitString(
-      cmdline_origins, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-
-  base::flat_set<url::Origin> origin_set;
-  for (const std::string& origin_string : origin_strings) {
-    GURL allowed_url(origin_string);
-    url::Origin allowed_origin = url::Origin::Create(allowed_url);
-    if (!allowed_origin.opaque()) {
-      // Site isolation is currently based on Site URLs, which don't include
-      // ports. Ideally we'd use origin-based isolation for the origins in
-      // kIsolatedAppOrigins, but long term the origins used in the flag will
-      // be equivalent to their Site URL-ified version. Because of this, we
-      // just remove the port here instead of hooking up origin-based isolation
-      // that won't be needed long term.
-      if (allowed_url.has_port()) {
-        LOG(WARNING) << "Ignoring port number for Isolated App origin: "
-                     << allowed_origin;
-      }
-      origin_set.insert(RemovePort(allowed_origin));
-    } else {
-      LOG(ERROR) << "Error parsing Isolated App origin: " << origin_string;
-    }
-  }
-  return origin_set;
-}
-
-const base::flat_set<url::Origin>& GetIsolatedAppOriginSet() {
-  static base::NoDestructor<base::flat_set<url::Origin>> kIsolatedAppOrigins(
-      CreateIsolatedAppOriginSet());
-  return *kIsolatedAppOrigins;
-}
-
 }  // namespace
 
 // static
@@ -141,9 +100,17 @@ bool SiteIsolationPolicy::UseDedicatedProcessesForAllSites() {
 
 // static
 bool SiteIsolationPolicy::AreIsolatedSandboxedIframesEnabled() {
-  return !IsSiteIsolationDisabled(SiteIsolationMode::kPartialSiteIsolation) &&
-         base::FeatureList::IsEnabled(
-             blink::features::kIsolateSandboxedIframes);
+  // This feature is controlled by kIsolateSandboxedIframes, and depends on
+  // partial Site Isolation being enabled. It also requires new base URL
+  // behavior, so it implicitly causes
+  // blink::features::IsNewBaseUrlInheritanceBehaviorEnabled() to return true,
+  // and can't be enabled if the new base URL behavior has been disabled by
+  // enterprise policy.
+  return base::FeatureList::IsEnabled(
+             blink::features::kIsolateSandboxedIframes) &&
+         !IsSiteIsolationDisabled(SiteIsolationMode::kPartialSiteIsolation) &&
+         !base::CommandLine::ForCurrentProcess()->HasSwitch(
+             blink::switches::kDisableNewBaseUrlInheritanceBehavior);
 }
 
 // static
@@ -237,6 +204,25 @@ bool SiteIsolationPolicy::IsOriginAgentClusterEnabled() {
 }
 
 // static
+bool SiteIsolationPolicy::AreOriginAgentClustersEnabledByDefault(
+    BrowserContext* browser_context) {
+  // OriginAgentClusters are enabled by default if OriginAgentCluster and
+  // kOriginAgentClusterDefaultEnabled are enabled, and if there is no
+  // enterprise policy forbidding it.
+  // This also returns true if kOriginKeyedProcessesByDefault is enabled,
+  // because it depends on having OriginAgentClusters by default. This can be
+  // handled here because this function is the only place that
+  // kOriginAgentClusterDefaultEnabled is directly checked.
+  return IsOriginAgentClusterEnabled() &&
+         (base::FeatureList::IsEnabled(
+              blink::features::kOriginAgentClusterDefaultEnabled) ||
+          base::FeatureList::IsEnabled(
+              features::kOriginKeyedProcessesByDefault)) &&
+         !GetContentClient()->browser()->ShouldDisableOriginAgentClusterDefault(
+             browser_context);
+}
+
+// static
 bool SiteIsolationPolicy::IsSiteIsolationForCOOPEnabled() {
   // If the user has explicitly enabled site isolation for COOP sites from the
   // command line, honor this regardless of policies that may disable site
@@ -271,11 +257,6 @@ bool SiteIsolationPolicy::ShouldPersistIsolatedCOOPSites() {
 
   return features::kSiteIsolationForCrossOriginOpenerPolicyShouldPersistParam
       .Get();
-}
-
-// static
-bool SiteIsolationPolicy::IsSiteIsolationForGuestsEnabled() {
-  return base::FeatureList::IsEnabled(features::kSiteIsolationForGuests);
 }
 
 // static
@@ -333,13 +314,8 @@ bool SiteIsolationPolicy::ShouldUrlUseApplicationIsolationLevel(
     BrowserContext* browser_context,
     const GURL& url) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  url::Origin origin = RemovePort(url::Origin::Create(url));
-  bool origin_matches_flag = g_disable_flag_caching_for_tests
-                                 ? CreateIsolatedAppOriginSet().contains(origin)
-                                 : GetIsolatedAppOriginSet().contains(origin);
-  return origin_matches_flag &&
-         GetContentClient()->browser()->ShouldUrlUseApplicationIsolationLevel(
-             browser_context, url);
+  return GetContentClient()->browser()->ShouldUrlUseApplicationIsolationLevel(
+      browser_context, url);
 }
 
 // static

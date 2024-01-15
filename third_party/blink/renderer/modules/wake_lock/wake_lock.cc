@@ -25,7 +25,6 @@
 namespace blink {
 
 using mojom::blink::PermissionService;
-using mojom::blink::PermissionStatus;
 
 // static
 const char WakeLock::kSupplementName[] = "WakeLock";
@@ -129,17 +128,19 @@ ScriptPromise WakeLock::request(ScriptState* script_state,
       return ScriptPromise();
     }
 
-    // Measure calls without transient activation as proposed in
+    // Measure calls without sticky activation as proposed in
     // https://github.com/w3c/screen-wake-lock/pull/351.
     if (type == V8WakeLockType::Enum::kScreen &&
-        !LocalFrame::HasTransientUserActivation(window->GetFrame())) {
+        !window->GetFrame()->HasStickyUserActivation()) {
       UseCounter::Count(
-          context, WebFeature::kWakeLockAcquireScreenLockWithoutActivation);
+          context,
+          WebFeature::kWakeLockAcquireScreenLockWithoutStickyActivation);
     }
   }
 
   // 7. Let promise be a new promise.
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   switch (type.AsEnum()) {
@@ -183,18 +184,19 @@ void WakeLock::DoRequest(V8WakeLockType::Enum type,
                         WrapPersistent(this), type)));
 }
 
-void WakeLock::DidReceivePermissionResponse(V8WakeLockType::Enum type,
-                                            ScriptPromiseResolver* resolver,
-                                            PermissionStatus status) {
+void WakeLock::DidReceivePermissionResponse(
+    V8WakeLockType::Enum type,
+    ScriptPromiseResolver* resolver,
+    mojom::blink::PermissionStatus status) {
   // https://w3c.github.io/screen-wake-lock/#the-request-method
-  DCHECK(status == PermissionStatus::GRANTED ||
-         status == PermissionStatus::DENIED);
+  DCHECK(status == mojom::blink::PermissionStatus::GRANTED ||
+         status == mojom::blink::PermissionStatus::DENIED);
   // 8.2. If state is "denied", then:
   // 8.2.1. Queue a global task on the screen wake lock task source given
   //        document's relevant global object to reject promise with a
   //        "NotAllowedError" DOMException.
   // 8.2.2. Abort these steps.
-  if (status != PermissionStatus::GRANTED) {
+  if (status != mojom::blink::PermissionStatus::GRANTED) {
     resolver->Reject(V8ThrowDOMException::CreateOrDie(
         resolver->GetScriptState()->GetIsolate(),
         DOMExceptionCode::kNotAllowedError,

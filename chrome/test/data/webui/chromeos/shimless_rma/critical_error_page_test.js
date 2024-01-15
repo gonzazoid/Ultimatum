@@ -2,16 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import {PromiseResolver} from 'chrome://resources/ash/common/promise_resolver.js';
 import {CriticalErrorPage} from 'chrome://shimless-rma/critical_error_page.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
 import {setShimlessRmaServiceForTesting} from 'chrome://shimless-rma/mojo_interface_provider.js';
 import {ShimlessRma} from 'chrome://shimless-rma/shimless_rma.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertFalse, assertTrue} from '../../chai_assert.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-export function criticalErrorPageTest() {
+suite('criticalErrorPageTest', function() {
   /**
    * ShimlessRma is needed to handle the 'disable-all-buttons' event used by the
    * shutdown buttons.
@@ -26,7 +26,7 @@ export function criticalErrorPageTest() {
   let service = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
     service = new FakeShimlessRmaService();
     setShimlessRmaServiceForTesting(service);
   });
@@ -98,4 +98,4 @@ export function criticalErrorPageTest() {
     assertTrue(allButtonsDisabled);
     assertTrue(component.shadowRoot.querySelector('#rebootButton').disabled);
   });
-}
+});

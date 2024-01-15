@@ -6,14 +6,24 @@
  * @fileoverview Root element of the OOBE UI Debugger.
  */
 
-// #import {addSingletonGetter} from 'chrome://resources/js/cr.m.js';
-// #import {loadTimeData} from '../i18n_setup.js';
-// #import {Oobe} from '../cr_ui.m.js'
-// #import {$} from 'chrome://resources/js/util.js';
-// #import './debug_util.js';
-// #import {AssistantNativeIconType} from '../../assistant_optin/utils.m.js';
+import {MessageType, ProblemType} from '//resources/ash/common/quick_unlock/setup_pin_keyboard.js';
+import {$} from '//resources/ash/common/util.js';
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
 
-// #import {MessageType, ProblemType} from 'chrome://resources/ash/common/quick_unlock/setup_pin_keyboard.js';
+import {AssistantNativeIconType} from '../../assistant_optin/utils.js';
+import {Oobe} from '../cr_ui.js';
+import {loadTimeData} from '../i18n_setup.js';
+
+function createQuickStartQR() {
+  // Fake data extracted from the real flow.
+  const qrDataStr = '1111111000011000010010000001101111111100000100111100001001010011100100000110111010111011101001111010110010111011011101010100011110010001110001011101101110101101101100110111100010101110110000010100011001010100001010010000011111111010101010101010101010101111111000000001101010010001111101010000000010111110011000100101111000101011111001001100011111111111111111100111101010101100110001000001101110111110101101110001100111101101001111010100101010010110111010110000010001110111011110111110100000110010111110101010000010001000100111000111111100110001010111110111111010100000101000011001000100110001111010111010100110011110101011100011111111101111011010000110001001001011100000111100010101100000100111100111011100110011100000100001110101111101000110011011110010111100000001100110110000111000100010000000111110000100001010010100101101000101100100010111011100111001001011010111001111100010001100001101001101010010010001110110011000100111100000110011111101111001001110010010110111011001000010101001110110110111010100001100110100111001011010001011101100110011010001101111111011111010100000000101011111000111111011000110101111111001110111010000100100101010111100000101001001010100100000010001101110111010110000010000101001011111101011011101011001111011010011111111011011101110101100011110000000001010000111110000010000011110000110100001010100011111111011011110100010001111001010111';
+  // Screen expects an array of booleans representing the pixels.
+  const qrData = [];
+  for (const pixel of qrDataStr) {
+    qrData.push(pixel === '1' ? true : false);
+  }
+  return qrData;
+}
 
 const createAssistantData = (isMinor) => {
   const data = {};
@@ -78,7 +88,6 @@ const createAssistantZippy = (type, isMinor, isNativeIcons) => {
   return zippy;
 };
 
-cr.define('cr.ui.login.debug', function() {
   const DEBUG_BUTTON_STYLE = `
       height:20px;
       width:120px;
@@ -276,9 +285,9 @@ cr.define('cr.ui.login.debug', function() {
           id: 'success',
           trigger: (screen) => {
             screen.updateCountdownString(
-                'Your device will shut down in 60 seconds. Remove the USB \
-                 before turning your device back on. Then you can start using \
-                 ChromeOS Flex.');
+                'Your device will shut down in 60 seconds. Remove the USB' +
+                ' before turning your device back on. Then you can start' +
+                ' using ChromeOS Flex.');
             screen.showStep('success');
           },
         },
@@ -315,13 +324,6 @@ cr.define('cr.ui.login.debug', function() {
       ],
     },
     {
-      id: 'oobe-eula-md',
-      kind: ScreenKind.NORMAL,
-      // TODO: Current logic triggers switching screens in focus(), making
-      // it impossible to trigger  installation settings dialog.
-      skipScreenshots: true,
-    },
-    {
       id: 'demo-setup',
       kind: ScreenKind.OTHER,
       suffix: 'demo',
@@ -356,6 +358,10 @@ cr.define('cr.ui.login.debug', function() {
     },
     {
       id: 'oobe-update',
+      kind: ScreenKind.NORMAL,
+    },
+    {
+      id: 'consumer-update',
       kind: ScreenKind.NORMAL,
     },
     {
@@ -399,6 +405,10 @@ cr.define('cr.ui.login.debug', function() {
       kind: ScreenKind.NORMAL,
     },
     {
+      id: 'add-child',
+      kind: ScreenKind.NORMAL,
+    },
+    {
       id: 'offline-ad-login',
       kind: ScreenKind.NORMAL,
       // Remove this step from preview here, because it can only occur during
@@ -435,28 +445,17 @@ cr.define('cr.ui.login.debug', function() {
     {
       id: 'enterprise-enrollment',
       kind: ScreenKind.NORMAL,
-      defaultState: 'step-signin',
-      handledSteps: 'error,ad-join',
+      handledSteps: 'error',
       suffix: 'E',
+      data: {
+        gaiaPath: 'embedded/setup/v2/chromeos',
+        gaiaUrl: 'https://accounts.google.com/',
+      },
       states: [
         {
           id: 'error',
           trigger: (screen) => {
             screen.showError('Some error message', true);
-          },
-        },
-        {
-          id: 'ad-join-encrypted',
-          trigger: (screen) => {
-            screen.setAdJoinParams('machineName', 'userName', 0, true);
-            screen.showStep('ad-join');
-          },
-        },
-        {
-          id: 'ad-join',
-          trigger: (screen) => {
-            screen.setAdJoinParams('machineName', 'userName', 0, false);
-            screen.showStep('ad-join');
           },
         },
       ],
@@ -665,17 +664,32 @@ cr.define('cr.ui.login.debug', function() {
     {
       id: 'gaia-signin',
       kind: ScreenKind.NORMAL,
-      handledSteps: 'allowlist-error',
+      handledSteps: 'online-gaia,enrollment-nudge',
       states: [
         {
-          id: 'allowlist-customer',
+          id: 'online-gaia',
           trigger: (screen) => {
-            screen.showAllowlistCheckFailedError({
-              enterpriseManaged: false,
+            screen.loadAuthenticator({
+              chromeType: 'chromedevice',
+              enterpriseManagedDevice: false,
+              forceReload: true,
+              gaiaPath: 'embedded/setup/v2/chromeos',
+              gaiaUrl: 'https://accounts.google.com/',
+              hl: loadTimeData.getString('app_locale'),
             });
           },
         },
+        {
+          id: 'enrollment-nudge',
+          trigger: (screen) => {
+            screen.showEnrollmentNudge('example.com');
+          },
+        },
       ],
+    },
+    {
+      id: 'gaia-info',
+      kind: ScreenKind.NORMAL,
     },
     {
       id: 'offline-login',
@@ -842,6 +856,104 @@ cr.define('cr.ui.login.debug', function() {
       ],
     },
     {
+      id: 'apply-online-password',
+      kind: ScreenKind.NORMAL,
+    },
+    {
+      id: 'local-data-loss-warning',
+      kind: ScreenKind.NORMAL,
+      states: [
+        {
+          id: 'non-owner',
+          trigger: (screen) => {
+            screen.onBeforeShow({
+              isOwner: false,
+              email: 'someone@example.com',
+            });
+          },
+        },
+        {
+          id: 'owner',
+          trigger: (screen) => {
+            screen.onBeforeShow({
+              isOwner: true,
+              email: 'someone@example.com',
+            });
+          },
+        },
+      ],
+    },
+    {
+      id: 'enter-old-password',
+      kind: ScreenKind.NORMAL,
+      states: [
+        {
+          id: 'no-error',
+          trigger: (screen) => {
+            screen.onBeforeShow({
+              passwordInvalid: false,
+            });
+          },
+        },
+        {
+          id: 'wrong-password',
+          trigger: (screen) => {
+            screen.onBeforeShow({
+              passwordInvalid: true,
+            });
+          },
+        },
+      ],
+    },
+    {
+      id: 'local-password-setup',
+      kind: ScreenKind.NORMAL,
+      states: [
+        {
+          // Forced password setup
+          id: 'forced',
+          trigger: (screen) => {
+            screen.onBeforeShow({
+              showBackButton: false,
+            });
+          },
+        },
+        {
+          // Forced password setup
+          id: 'optional',
+          trigger: (screen) => {
+            screen.onBeforeShow({
+              showBackButton: true,
+            });
+          },
+        },
+      ],
+    },
+    {
+      id: 'osauth-error',
+      kind: ScreenKind.ERROR,
+    },
+    {
+      id: 'factor-setup-success',
+      kind: ScreenKind.NORMAL,
+      states: [
+        {
+          id: 'local-set',
+          data: {
+            modifiedFactors: 'local',
+            changeMode: 'set',
+          },
+        },
+        {
+          id: 'local-update',
+          data: {
+            modifiedFactors: 'local',
+            changeMode: 'update',
+          },
+        },
+      ],
+    },
+    {
       id: 'saml-confirm-password',
       kind: ScreenKind.OTHER,
       suffix: 'SAML',
@@ -979,23 +1091,61 @@ cr.define('cr.ui.login.debug', function() {
     {
       id: 'sync-consent',
       kind: ScreenKind.NORMAL,
-      defaultState: 'step-loaded',
+      handledSteps: 'ash-sync,lacros-overview',
       states: [
         {
-          id: 'minor-mode',
+          id: 'ash-sync',
+          data: {
+            isChildAccount: false,
+            isArcRestricted: false,
+          },
+          trigger: (screen) => {
+            screen.setIsMinorMode(false);
+            screen.showLoadedStep(/*os_sync_lacros=*/ false);
+          },
+        },
+        {
+          id: 'ash-sync-minor-mode',
           data: {
             isChildAccount: true,
             isArcRestricted: false,
           },
           trigger: (screen) => {
             screen.setIsMinorMode(true);
+            screen.showLoadedStep(/*os_sync_lacros=*/ false);
           },
         },
         {
-          id: 'arc-restricted',
+          id: 'ash-sync-arc-restricted',
           data: {
             isChildAccount: false,
             isArcRestricted: true,
+          },
+          trigger: (screen) => {
+            screen.setIsMinorMode(false);
+            screen.showLoadedStep(/*os_sync_lacros=*/ false);
+          },
+        },
+        {
+          id: 'lacros-overview',
+          data: {
+            isChildAccount: false,
+            isArcRestricted: false,
+          },
+          trigger: (screen) => {
+            screen.setIsMinorMode(false);
+            screen.showLoadedStep(/*os_sync_lacros=*/ true);
+          },
+        },
+        {
+          id: 'lacros-overview-minor',
+          data: {
+            isChildAccount: true,
+            isArcRestricted: false,
+          },
+          trigger: (screen) => {
+            screen.setIsMinorMode(true);
+            screen.showLoadedStep(/*os_sync_lacros=*/ true);
           },
         },
       ],
@@ -1003,7 +1153,8 @@ cr.define('cr.ui.login.debug', function() {
     {
       id: 'consolidated-consent',
       kind: ScreenKind.NORMAL,
-      handledSteps: 'loaded,loading,error,google-eula,cros-eula,arc,privacy',
+      handledSteps:
+          'loaded,loading,play-load-error,google-eula,cros-eula,arc,privacy',
       // TODO(crbug.com/1247174): Use localized URLs for eulaUrl and
       // additionalTosUrl.
       states: [
@@ -1019,7 +1170,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1036,7 +1188,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1053,7 +1206,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: true,
             recoveryOptionDefault: true,
           },
@@ -1070,7 +1224,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1087,7 +1242,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1101,7 +1257,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1118,7 +1275,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1135,7 +1293,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1154,16 +1313,16 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: true,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
         },
         {
-          id: 'error',
+          id: 'play-load-error',
           trigger: (screen) => {
-            screen.setUIStep('error');
-            screen.setUsageOptinHidden(false);
+            screen.setUIStep('play-load-error');
           },
           data: {
             isArcEnabled: true,
@@ -1172,7 +1331,8 @@ cr.define('cr.ui.login.debug', function() {
             isTosHidden: false,
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
             crosEulaUrl: 'https://www.google.com/intl/en/chrome/terms/',
-            countryCode: 'us',
+            arcTosUrl: 'https://play.google.com/about/play-terms/embedded/',
+            privacyPolicyUrl: 'https://policies.google.com/privacy/embedded',
             showRecoveryOption: false,
             recoveryOptionDefault: false,
           },
@@ -1181,16 +1341,20 @@ cr.define('cr.ui.login.debug', function() {
       ],
     },
     {
+      id: 'cryptohome-recovery-setup',
+      kind: ScreenKind.NORMAL,
+    },
+    {
       id: 'guest-tos',
       kind: ScreenKind.NORMAL,
-      handledSteps: 'loading,loaded,google-eula,cros-eula',
+      handledSteps: 'loading,overview,google-eula,cros-eula',
       // TODO(crbug.com/1247174): Use localized URLs for googleEulaURL and
       // crosEulaURL.
       states: [
         {
-          id: 'loaded',
+          id: 'overview',
           trigger: (screen) => {
-            screen.setUIStep('loaded');
+            screen.setUIStep('overview');
           },
           data: {
             googleEulaUrl: 'https://policies.google.com/terms/embedded?hl=en',
@@ -1299,24 +1463,12 @@ cr.define('cr.ui.login.debug', function() {
       ],
     },
     {
-      id: 'arc-tos',
+      id: 'password-selection',
       kind: ScreenKind.NORMAL,
-      states: [
-        {
-          id: 'us-terms-loaded',
-          trigger: (screen) => {
-            screen.clearDemoMode();
-            screen.reloadPlayStoreToS();
-          },
-        },
-        {
-          id: 'demo-mode',
-          trigger: (screen) => {
-            screen.setupForDemoMode();
-            screen.reloadPlayStoreToS();
-          },
-        },
-      ],
+    },
+    {
+      id: 'arc-vm-data-migration',
+      kind: ScreenKind.NORMAL,
     },
     {
       // TODO(https://crbug.com/1261902): update debug overlay
@@ -1327,36 +1479,40 @@ cr.define('cr.ui.login.debug', function() {
       // will append apps instead of replacing.
       states: [
         {
-          id: '2-apps',
+          id: '3-apps',
           trigger: (screen) => {
             screen.reset();
-            screen.setWebview(RECOMMENDED_APPS_CONTENT);
             screen.loadAppList([
               {
-                name: 'Test app 1',
-                package_name: 'test1.app',
+                title: 'gApp',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
               },
               {
-                name: 'Test app 2 with some really long name',
-                package_name: 'test2.app',
+                title: 'anotherGapp',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+                description: 'Short description',
+              },
+              {
+                title: 'anotherGapp',
+                icon_url: 'https://www.google.com/favicon.ico',
+                category: 'Games',
+                in_app_purchases: true,
+                was_installed: false,
+                content_rating: '',
+                // Current limitation is 80 characters.
+                description:
+                    'Lorem ipsum dolor sit amet, consectetur adipiscing elit,' +
+                    ' sed do eiusmod tempor',
               },
             ]);
-          },
-        },
-        {
-          id: '21-apps',
-          trigger: (screen) => {
-            // There can be up to 21 apps: see recommend_apps_fetcher_impl
-            screen.reset();
-            screen.setWebview(RECOMMENDED_APPS_CONTENT);
-            const apps = [];
-            for (let i = 1; i <= 21; i++) {
-              apps.push({
-                name: 'Test app ' + i,
-                package_name: 'app.test' + i,
-              });
-            }
-            screen.loadAppList(apps);
           },
         },
       ],
@@ -1536,6 +1692,65 @@ cr.define('cr.ui.login.debug', function() {
       kind: ScreenKind.NORMAL,
     },
     {
+      id: 'choobe',
+      kind: ScreenKind.NORMAL,
+      handledSteps: 'overview',
+      states: [
+        {
+          id: 'overview',
+          data: {
+            screens: [
+              {
+                screenID: 'screenID1',
+                icon: 'oobe-40:scroll-choobe',
+                title: 'choobeTouchpadScrollTitle',
+                subtitle: 'choobeTouchpadScrollSubtitleEnabled',
+                is_synced: true,
+                is_revisitable: true,
+                selected: false,
+                is_completed: false,
+              },
+              {
+                screenID: 'screenID2',
+                icon: 'oobe-40:drive-pinning-choobe',
+                title: 'choobeDrivePinningTitle',
+                is_synced: false,
+                is_revisitable: false,
+                selected: false,
+                is_completed: false,
+              },
+              {
+                screenID: 'screenID3',
+                icon: 'oobe-40:display-size-choobe',
+                title: 'choobeDisplaySizeTitle',
+                is_synced: false,
+                is_revisitable: false,
+                selected: false,
+                is_completed: false,
+              },
+              {
+                screenID: 'screenID4',
+                icon: 'oobe-40:theme-choobe',
+                title: 'choobeThemeSelectionTitle',
+                is_synced: false,
+                is_revisitable: false,
+                selected: false,
+                is_completed: false,
+              },
+            ],
+          },
+        },
+      ],
+    },
+    {
+      id: 'touchpad-scroll',
+      kind: ScreenKind.NORMAL,
+    },
+    {
+      id: 'drive-pinning',
+      kind: ScreenKind.NORMAL,
+    },
+    {
       id: 'marketing-opt-in',
       kind: ScreenKind.NORMAL,
       handledSteps: 'overview',
@@ -1595,7 +1810,93 @@ cr.define('cr.ui.login.debug', function() {
       ],
     },
     {
+      id: 'display-size',
+      kind: ScreenKind.NORMAL,
+      handledSteps: 'overview',
+      states: [
+        {
+          id: 'overview',
+          data: {
+            availableSizes: [
+              0.8999999761581421,
+              1,
+              1.0499999523162842,
+              1.100000023841858,
+              1.149999976158142,
+              1.2000000476837158,
+              1.25,
+              1.2999999523162842,
+              1.5,
+            ],
+            currentSize: 1,
+          },
+        },
+      ],
+    },
+    {
+      id: 'remote-activity-notification',
+      kind: ScreenKind.NORMAL,
+    },
+    {
       id: 'cryptohome-recovery',
+      kind: ScreenKind.NORMAL,
+    },
+    {
+      id: 'quick-start',
+      kind: ScreenKind.NORMAL,
+      handledSteps:
+          'verification,connecting_to_wifi,signing_in,setup_complete',
+      states: [
+        {
+          id: 'PinVerification',
+          trigger: (screen) => {
+            screen.setDiscoverableName('Chromebook (123)');
+            screen.setPin('1234');
+          },
+        },
+        {
+          id: 'QRVerification',
+          trigger: (screen) => {
+            screen.setQRCode(createQuickStartQR());
+          },
+        },
+        {
+          id: 'ConnectingToWifi',
+          trigger: (screen) => {
+            screen.showConnectingToWifi();
+          },
+        },
+        {
+          id: 'SigninInEmailOnly',
+          trigger: (screen) => {
+            screen.showSigningInStep();
+            screen.setUserEmail('test_email@gmail.com');
+          },
+        },
+        {
+          id: 'SigninInFullAvatar',
+          trigger: (screen) => {
+            screen.showSigningInStep();
+            screen.setUserEmail('test_email@gmail.com');
+            screen.setUserFullName('Test User');
+            screen.setUserAvatarUrl('https://lh3.googleusercontent.com/a/ACg8ocISjvU-p0Gz_kIBamP3jit_Y8PrQVU4AbIvQrUEZ04d=s96-c');
+          },
+        },
+        {
+          id: 'SetupComplete',
+          trigger: (screen) => {
+            screen.setUserEmail('test_email@gmail.com');
+            screen.showSetupCompleteStep();
+          },
+        },
+      ],
+    },
+    {
+      id: 'user-allowlist-check-screen',
+      kind: ScreenKind.NORMAL,
+    },
+    {
+      id: 'online-authentication-screen',
       kind: ScreenKind.NORMAL,
     },
   ];
@@ -1616,7 +1917,7 @@ cr.define('cr.ui.login.debug', function() {
       // change to OOBE UI. However, more complex scenarios might want to
       // override this behavior.
       this.postCallback_ = function() {
-        cr.ui.login.debug.DebuggerUI.getInstance().hideDebugUI();
+        DebuggerUI.getInstance().hideDebugUI();
       };
     }
 
@@ -1639,6 +1940,7 @@ cr.define('cr.ui.login.debug', function() {
       const panel = /** @type {!HTMLElement} */ (document.createElement('div'));
       panel.className = 'debug-tool-panel';
       panel.id = id;
+      panel.setAttribute('aria-hidden', true);
 
       parent.appendChild(this.titleDiv);
       parent.appendChild(panel);
@@ -1662,7 +1964,7 @@ cr.define('cr.ui.login.debug', function() {
     }
   }
 
-  /* #export */ class DebuggerUI {
+  export class DebuggerUI {
     constructor() {
       this.debuggerVisible_ = false;
       /** Element with Debugger UI */
@@ -1682,6 +1984,10 @@ cr.define('cr.ui.login.debug', function() {
       this.knownScreens = undefined;
       /** Iterator for making a series of screenshots */
       this.commandIterator_ = undefined;
+    }
+
+    get currentScreenId() {
+      return this.currentScreenId_;
     }
 
     showDebugUI() {
@@ -1707,7 +2013,7 @@ cr.define('cr.ui.login.debug', function() {
     }
 
     getScreenshotId() {
-      var result = 'unknown';
+      let result = 'unknown';
       if (this.currentScreenId_) {
         result = this.currentScreenId_;
       }
@@ -1898,7 +2204,7 @@ cr.define('cr.ui.login.debug', function() {
       ];
       LANGUAGES.forEach(function(pair) {
         new DebugButton(langPanel.content, pair[0], function(locale) {
-          chrome.send('WelcomeScreen.setLocaleId', [locale]);
+          chrome.send('login.WelcomeScreen.userActed', ['setLocaleId', locale]);
         }.bind(null, pair[1]));
       });
     }
@@ -1917,10 +2223,29 @@ cr.define('cr.ui.login.debug', function() {
       new DebugButton(panel.content, 'Toggle color mode', function() {
         chrome.send('debug.toggleColorMode');
       });
-      var button = new DebugButton(
+      const button = new DebugButton(
           panel.content, 'Toggle gaming mode', this.toggleGameMode.bind(this));
 
       button.element.classList.add('gametoggle-button');
+    }
+
+    createWallpaperPanel(parent) {
+      const wallpaperPanel = new ToolPanel(
+          this.debuggerOverlay_, 'Wallpaper', 'DebuggerPanelWallpaper');
+      const WALLPAPERS = [
+        ['Default', 'def'],
+        ['White', 'wh'],
+        ['Black', 'bk'],
+        ['Red', 'r'],
+        ['Blue', 'bl'],
+        ['Green', 'gn'],
+        ['Yellow', 'ye'],
+      ];
+      WALLPAPERS.forEach(function(pair) {
+        new DebugButton(wallpaperPanel.content, pair[0], function(color) {
+          chrome.send('debug.switchWallpaper', [color]);
+        }.bind(null, pair[1]));
+      });
     }
 
     createScreensPanel(parent) {
@@ -1944,16 +2269,18 @@ cr.define('cr.ui.login.debug', function() {
 
     triggerScreenState(screenId, stateId) {
       const screen = this.screenMap[screenId];
+      // Disable userActed from triggering chrome.send() and crashing.
+      document.getElementById(screenId).userActed = function(){};
       const state = screen.stateMap_[stateId];
-      var data = {};
+      let data = {};
       if (state.data) {
         data = state.data;
       }
       this.currentScreenId_ = screenId;
       this.lastScreenState_ = stateId;
       /** @suppress {visibility} */
-      const displayManager = cr.ui.Oobe.instance_;
-      cr.ui.Oobe.instance_.showScreen({id: screen.id, data: data});
+      const displayManager = Oobe.getInstance();
+      displayManager.showScreen({id: screen.id, data: data});
       if (state.trigger) {
         state.trigger(displayManager.currentScreen);
       }
@@ -1967,7 +2294,7 @@ cr.define('cr.ui.login.debug', function() {
       this.knownScreens = [];
       this.screenButtons = {};
       /** @suppress {visibility} */
-      for (var id of cr.ui.Oobe.instance_.screens_) {
+      for (const id of Oobe.getInstance().screens_) {
         if (id in this.screenMap) {
           const screenDef = this.screenMap[id];
           const screenElement = $(id);
@@ -2022,11 +2349,11 @@ cr.define('cr.ui.login.debug', function() {
       this.knownScreens = this.knownScreens.sort((a, b) => a.index - b.index);
       const content = this.screensPanel.content;
       this.knownScreens.forEach((screen) => {
-        var name = screen.id;
+        let name = screen.id;
         if (screen.suffix) {
           name = name + ' (' + screen.suffix + ')';
         }
-        var button = new DebugButton(
+        const button = new DebugButton(
             content, name, this.switchToScreen.bind(this, screen));
         button.element.classList.add('debug-button-' + screen.kind);
         this.screenButtons[screen.id] = button;
@@ -2038,7 +2365,7 @@ cr.define('cr.ui.login.debug', function() {
         this.createScreensList();
       }
       /** @suppress {visibility} */
-      const displayManager = cr.ui.Oobe.instance_;
+      const displayManager = Oobe.getInstance();
       if (this.stateCachedFor_) {
         this.screenButtons[this.stateCachedFor_].element.classList.remove(
             'debug-button-selected');
@@ -2079,9 +2406,9 @@ cr.define('cr.ui.login.debug', function() {
     }
 
     createCssStyle(name, styleSpec) {
-      var style = document.createElement('style');
+      const style = document.createElement('style');
       style.type = 'text/css';
-      style.innerHTML = '.' + name + ' {' + styleSpec + '}';
+      style.innerHTML = sanitizeInnerHtml('.' + name + ' {' + styleSpec + '}');
       document.getElementsByTagName('head')[0].appendChild(style);
     }
 
@@ -2119,6 +2446,7 @@ cr.define('cr.ui.login.debug', function() {
             /** @type {!HTMLElement} */ (document.createElement('div'));
         overlay.id = 'debuggerOverlay';
         overlay.className = 'debugger-overlay';
+        overlay.setAttribute('aria-label', 'OOBE debug overlay');
         overlay.setAttribute('hidden', true);
         this.debuggerOverlay_ = overlay;
       }
@@ -2126,17 +2454,17 @@ cr.define('cr.ui.login.debug', function() {
       this.createScreensPanel(this.debuggerOverlay_);
       this.createStatesPanel(this.debuggerOverlay_);
       this.createToolsPanel(this.debuggerOverlay_);
+      this.createWallpaperPanel(this.debuggerOverlay_);
 
       element.appendChild(this.debuggerButton_);
       element.appendChild(this.debuggerOverlay_);
     }
+
+    /** @return {!DebuggerUI} */
+    static getInstance() {
+      return instance || (instance = new DebuggerUI());
+    }
   }
 
-  cr.addSingletonGetter(DebuggerUI);
-
-  // #cr_define_end
-  // Export
-  return {
-    DebuggerUI: DebuggerUI,
-  };
-});
+  /** @type {?DebuggerUI} */
+  let instance = null;

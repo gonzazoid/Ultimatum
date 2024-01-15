@@ -13,33 +13,50 @@
 
 class PrefService;
 
-// Maintains a history of which items from the new overflow menu carousel the
-// user clicks and suggests a sorted order for carousel menu items (based on
-// usage frecency).
+// Tracks destination usage from the new overflow menu and implements a
+// frecency-based sorting algorithm (i.e. an algorithm that uses the data
+// frequency and data recency when determining sort order) to order destinations
+// shown in the overflow menu carousel. The algorithm, at a high-level, works as
+// follows:
+//
+// (1) Divide the destinations carousel into two groups: (A) visible
+// "above-the-fold" destinations and (B) non-visible "below-the-fold"
+// destinations; "below-the-fold" destinations are made visible to the user when
+// they scroll the carousel.
+//
+// (2) Get each destination's number of clicks.
+//
+// (3) Compare destination with highest number of clicks in [group B] to
+// destination with lowest number of clicks in [group A].
+//
+// (4) Swap (i.e. "promote") the [group B] destination with the [group A] one if
+// B's number of clicks exceeds A's.
+//
+// Destinations may optionally be displayed with one of three badge types (in
+// priority order):
+//
+//   1. Error badge
+//   2. Promo badge
+//   3. New badge
+//
+// Destinations with badges will ignore the ranking determined by the sorting
+// algorithm, and instead be inserted into the carousel starting at position
+// kNewDestinationsInsertionIndex.
+//
+// Destinations with badges of different type will order themselves according
+// to the priority order defined above.
+//
+// Expects `-start` to be called before any other method is invoked.
+//
+// Expects `visibleDestinationsCount` to be set to a non zero value before
+// calling `-sortedDestinationsFromCarouselDestinations:carouselDestinations`.
+//
+// Expects `-stop` to be called before deallocation.
 @interface DestinationUsageHistory : NSObject
 
-// Pref service to retrieve/store preference values.
-@property(nonatomic, assign) PrefService* prefService;
-
-// Records a destination click from the overflow menu carousel.
-- (void)trackDestinationClick:(overflow_menu::Destination)destination
-     numAboveFoldDestinations:(int)numAboveFoldDestinations;
-
-// Returns a frecency-sorted list of OverflowMenuDestination* given an unsorted
-// list `unrankedDestinations`.
-- (NSArray<OverflowMenuDestination*>*)generateDestinationsList:
-    (NSArray<OverflowMenuDestination*>*)unrankedDestinations;
-
-// [Publicly exposed for testing purposes only] Ingests given `ranking` and
-// `numAboveFoldDestinations` and returns new ranking by running frecency
-// algorithm on internally-managed destination usage history.
-// `numAboveFoldDestinations` represents the number of destinations immediately
-// visible to the user when opening the new overflow menu (i.e. the number of
-// "above-the-fold" destinations).
-- (std::vector<overflow_menu::Destination>)
-    updatedRankWithCurrentRanking:
-        (std::vector<overflow_menu::Destination>&)previousRanking
-         numAboveFoldDestinations:(int)numAboveFoldDestinations;
+// The number of destinations immediately visible in the carousel when the
+// overflow menu is opened.
+@property(nonatomic, assign) NSInteger visibleDestinationsCount;
 
 // Designated initializer. Initializes with `prefService`.
 - (instancetype)initWithPrefService:(PrefService*)prefService
@@ -47,8 +64,24 @@ class PrefService;
 
 - (instancetype)init NS_UNAVAILABLE;
 
-// Disconnect the Destination Usage History.
-- (void)disconnect;
+// Records a `destination` click from the overflow menu carousel.
+- (void)recordClickForDestination:(overflow_menu::Destination)destination;
+
+// Returns a new frecency-sorted list of overflow_menu::Destination given the
+// current ranking and a list of all available destinations.
+- (DestinationRanking)
+    sortedDestinationsFromCurrentRanking:(DestinationRanking)currentRanking
+                   availableDestinations:
+                       (DestinationRanking)availableDestinations;
+
+// Tells the object to clear any stored click data for all destinations.
+- (void)clearStoredClickData;
+
+// Stops the Destination Usage History.
+- (void)stop;
+
+// Starts the Destination Usage History.
+- (void)start;
 
 @end
 

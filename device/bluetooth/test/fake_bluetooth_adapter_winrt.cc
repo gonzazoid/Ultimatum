@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/win/async_operation.h"
 #include "device/bluetooth/test/bluetooth_test.h"
 
@@ -33,7 +32,7 @@ using Microsoft::WRL::Make;
 }  // namespace
 
 FakeBluetoothAdapterWinrt::FakeBluetoothAdapterWinrt(
-    base::StringPiece address,
+    std::string_view address,
     Microsoft::WRL::ComPtr<ABI::Windows::Devices::Radios::IRadio> radio)
     : raw_address_(ToRawBluetoothAddress(address)), radio_(std::move(radio)) {}
 
@@ -41,7 +40,7 @@ FakeBluetoothAdapterWinrt::~FakeBluetoothAdapterWinrt() = default;
 
 // static
 uint64_t FakeBluetoothAdapterWinrt::ToRawBluetoothAddress(
-    base::StringPiece address) {
+    std::string_view address) {
   uint64_t raw_address;
   const bool result = base::HexStringToUInt64(
       base::StrCat(base::SplitStringPiece(address, ":", base::TRIM_WHITESPACE,
@@ -88,7 +87,7 @@ HRESULT FakeBluetoothAdapterWinrt::get_IsAdvertisementOffloadSupported(
 HRESULT FakeBluetoothAdapterWinrt::GetRadioAsync(
     IAsyncOperation<Radio*>** operation) {
   auto async_op = Make<base::win::AsyncOperation<Radio*>>();
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(async_op->callback(), radio_));
   *operation = async_op.Detach();
   return S_OK;
@@ -116,7 +115,7 @@ HRESULT FakeBluetoothAdapterStaticsWinrt::GetDefaultAsync(
   // default adapter is present. Just as production code, the async operation
   // completes successfully and returns a nullptr as adapter in this case.
   auto async_op = Make<base::win::AsyncOperation<uwp::BluetoothAdapter*>>();
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(async_op->callback(), default_adapter_));
   *operation = async_op.Detach();
   return S_OK;

@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/message_pipe.h"
@@ -56,6 +56,7 @@ class WebrtcDataStreamAdapter : public MessagePipe,
   void OnStateChange() override;
   void OnMessage(const webrtc::DataBuffer& buffer) override;
   void OnBufferedAmountChange(uint64_t previous_amount) override;
+  bool IsOkToCallOnTheNetworkThread() override;
 
   // Helpers for calling EventHandler methods asynchronously.
   // webrtc::DataChannelObserver can be called synchronously mid-operation
@@ -75,6 +76,8 @@ class WebrtcDataStreamAdapter : public MessagePipe,
 
   // The data and done callbacks for queued but not yet sent messages.
   base::queue<PendingMessage> pending_messages_;
+
+  base::OnceClosure pending_open_callback_;
 
   base::WeakPtrFactory<WebrtcDataStreamAdapter> weak_ptr_factory_{this};
 };

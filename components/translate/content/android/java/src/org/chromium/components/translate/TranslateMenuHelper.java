@@ -6,7 +6,6 @@ package org.chromium.components.translate;
 
 import android.content.Context;
 import android.graphics.Rect;
-import android.os.Build;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,9 +23,7 @@ import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A Helper class for managing the Translate Overflow Menu.
- */
+/** A Helper class for managing the Translate Overflow Menu. */
 public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
     private final TranslateMenuListener mMenuListener;
     private final TranslateOptions mOptions;
@@ -38,17 +35,22 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
     private boolean mIsIncognito;
     private boolean mIsSourceLangUnknown;
 
-    /**
-     * Interface for receiving the click event of menu item.
-     */
+    /** Interface for receiving the click event of menu item. */
     public interface TranslateMenuListener {
         void onOverflowMenuItemClicked(int itemId);
+
         void onTargetMenuItemClicked(String code);
+
         void onSourceMenuItemClicked(String code);
     }
 
-    public TranslateMenuHelper(Context context, View anchorView, TranslateOptions options,
-            TranslateMenuListener itemListener, boolean isIncognito, boolean isSourceLangUnknown) {
+    public TranslateMenuHelper(
+            Context context,
+            View anchorView,
+            TranslateOptions options,
+            TranslateMenuListener itemListener,
+            boolean isIncognito,
+            boolean isSourceLangUnknown) {
         mContextWrapper = new ContextThemeWrapper(context, R.style.OverflowMenuThemeOverlay);
         mAnchorView = anchorView;
         mOptions = options;
@@ -72,6 +74,7 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
         }
         return false;
     }
+
     /**
      *
      * Build translate menu by menu type.
@@ -83,16 +86,18 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
             menuList.addAll(TranslateMenu.getOverflowMenu(mIsIncognito, mIsSourceLangUnknown));
         } else {
             int contentLanguagesCount = 0;
-            if (TranslateFeatureList.isEnabled(
-                        TranslateFeatureList.CONTENT_LANGUAGES_IN_LANGUAGE_PICKER)
+            if (TranslateFeatureMap.isEnabled(
+                            TranslateFeatureMap.CONTENT_LANGUAGES_IN_LANGUAGE_PICKER)
                     && menuType == TranslateMenu.MENU_TARGET_LANGUAGE
                     && mOptions.contentLanguages() != null) {
                 contentLanguagesCount = mOptions.contentLanguages().length;
                 // If false it means that the list is not empty and the last element should be
                 // skipped from the list, meaning the second to last should have a divider.
-                boolean lastHasDivider = contentLanguagesCount > 0
-                        && !(shouldBeSkippedFromList(
-                                menuType, mOptions.contentLanguages()[contentLanguagesCount - 1]));
+                boolean lastHasDivider =
+                        contentLanguagesCount > 0
+                                && !(shouldBeSkippedFromList(
+                                        menuType,
+                                        mOptions.contentLanguages()[contentLanguagesCount - 1]));
 
                 for (int i = 0; i < contentLanguagesCount; ++i) {
                     String code = mOptions.contentLanguages()[i];
@@ -100,7 +105,10 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
                         continue;
                     }
                     menuList.add(
-                            new TranslateMenu.MenuItem(TranslateMenu.ITEM_CONTENT_LANGUAGE, i, code,
+                            new TranslateMenu.MenuItem(
+                                    TranslateMenu.ITEM_CONTENT_LANGUAGE,
+                                    i,
+                                    code,
                                     (i == contentLanguagesCount - 1 && lastHasDivider
                                             || i == contentLanguagesCount - 2 && !lastHasDivider)));
                 }
@@ -119,9 +127,10 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
                     continue;
                 }
                 // Subtract 1 from item IDs if skipping the "Detected Language" option.
-                int itemID = menuType == TranslateMenu.MENU_TARGET_LANGUAGE
-                        ? contentLanguagesCount + i - 1
-                        : contentLanguagesCount + i;
+                int itemID =
+                        menuType == TranslateMenu.MENU_TARGET_LANGUAGE
+                                ? contentLanguagesCount + i - 1
+                                : contentLanguagesCount + i;
                 menuList.add(new TranslateMenu.MenuItem(TranslateMenu.ITEM_LANGUAGE, itemID, code));
             }
         }
@@ -160,14 +169,8 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
             // The menu must be shifted down by the height of the anchor view in order to be
             // displayed over and above it.
             int anchorHeight = mAnchorView.getHeight();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                // Setting a positive offset here shifts the menu down.
-                mPopup.setVerticalOffset(anchorHeight);
-            } else {
-                // The framework's PopupWindow positioning changed between N and M.  Setting
-                // a negative offset here shifts the menu down rather than up.
-                mPopup.setVerticalOffset(-anchorHeight);
-            }
+            // Setting a positive offset here shifts the menu down.
+            mPopup.setVerticalOffset(anchorHeight);
 
             mAdapter = new TranslateMenuAdapter(menuType);
             mPopup.setAdapter(mAdapter);
@@ -183,8 +186,10 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
             mPopup.setWidth((maxWidth > 0 && measuredWidth > maxWidth) ? maxWidth : measuredWidth);
         } else {
             // Use fixed width otherwise.
-            int popupWidth = mContextWrapper.getResources().getDimensionPixelSize(
-                    R.dimen.infobar_translate_menu_width);
+            int popupWidth =
+                    mContextWrapper
+                            .getResources()
+                            .getDimensionPixelSize(R.dimen.infobar_translate_menu_width);
             mPopup.setWidth(popupWidth);
         }
 
@@ -243,18 +248,14 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
         }
     }
 
-    /**
-     * Dismisses the translate option menu.
-     */
+    /** Dismisses the translate option menu. */
     public void dismiss() {
         if (isShowing()) {
             mPopup.dismiss();
         }
     }
 
-    /**
-     * @return Whether the menu is currently showing.
-     */
+    /** @return Whether the menu is currently showing. */
     public boolean isShowing() {
         if (mPopup == null) {
             return false;
@@ -262,9 +263,7 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
         return mPopup.isShowing();
     }
 
-    /**
-     * The provides the views of the menu items and dividers.
-     */
+    /** The provides the views of the menu items and dividers. */
     private final class TranslateMenuAdapter extends ArrayAdapter<TranslateMenu.MenuItem> {
         private final LayoutInflater mInflater;
         private int mMenuType;
@@ -355,8 +354,12 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
             View menuItemView = convertView;
             switch (getItemViewType(position)) {
                 case TranslateMenu.ITEM_CHECKBOX_OPTION:
-                    menuItemView = getItemView(
-                            menuItemView, position, parent, R.layout.translate_menu_item_checked);
+                    menuItemView =
+                            getItemView(
+                                    menuItemView,
+                                    position,
+                                    parent,
+                                    R.layout.translate_menu_item_checked);
 
                     ImageView checkboxIcon = menuItemView.findViewById(R.id.menu_item_icon);
                     if (getItem(position).mId == TranslateMenu.ID_OVERFLOW_ALWAYS_TRANSLATE
@@ -378,12 +381,17 @@ public class TranslateMenuHelper implements AdapterView.OnItemClickListener {
                     }
                     break;
                 case TranslateMenu.ITEM_CONTENT_LANGUAGE:
-                    menuItemView = getExtendedItemView(
-                            menuItemView, position, parent, R.layout.translate_menu_extended_item);
+                    menuItemView =
+                            getExtendedItemView(
+                                    menuItemView,
+                                    position,
+                                    parent,
+                                    R.layout.translate_menu_extended_item);
                     break;
                 case TranslateMenu.ITEM_LANGUAGE:
-                    menuItemView = getItemView(
-                            menuItemView, position, parent, R.layout.translate_menu_item);
+                    menuItemView =
+                            getItemView(
+                                    menuItemView, position, parent, R.layout.translate_menu_item);
                     break;
                 default:
                     assert false : "Unexpected MenuItem type";

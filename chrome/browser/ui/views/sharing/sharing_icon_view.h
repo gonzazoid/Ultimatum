@@ -18,9 +18,9 @@ class BubbleDialogDelegateView;
 
 // The location bar icon to show the sharing features bubble.
 class SharingIconView : public PageActionIconView {
- public:
-  METADATA_HEADER(SharingIconView);
+  METADATA_HEADER(SharingIconView, PageActionIconView)
 
+ public:
   using GetControllerCallback =
       base::RepeatingCallback<SharingUiController*(content::WebContents*)>;
 
@@ -46,7 +46,6 @@ class SharingIconView : public PageActionIconView {
   views::BubbleDialogDelegate* GetBubble() const override;
   void UpdateImpl() override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   // gfx::AnimationDelegate:
@@ -59,7 +58,8 @@ class SharingIconView : public PageActionIconView {
   void UpdateOpacity();
 
  private:
-  raw_ptr<SharingUiController, DanglingUntriaged> last_controller_ = nullptr;
+  raw_ptr<SharingUiController, AcrossTasksDanglingUntriaged> last_controller_ =
+      nullptr;
   bool loading_animation_ = false;
   bool should_show_error_ = false;
   GetControllerCallback get_controller_callback_;

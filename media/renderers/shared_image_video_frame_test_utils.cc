@@ -6,7 +6,9 @@
 
 #include "base/logging.h"
 #include "components/viz/common/gpu/context_provider.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/gles2_interface_stub.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/capabilities.h"
@@ -29,13 +31,15 @@ static constexpr const uint8_t kYuvColors[8][3] = {
 
 // Destroys a list of shared images after a sync token is passed. Also runs
 // |callback|.
-void DestroySharedImages(scoped_refptr<viz::ContextProvider> context_provider,
-                         std::vector<gpu::Mailbox> mailboxes,
-                         base::OnceClosure callback,
-                         const gpu::SyncToken& sync_token) {
+void DestroySharedImages(
+    scoped_refptr<viz::ContextProvider> context_provider,
+    std::vector<scoped_refptr<gpu::ClientSharedImage>> shared_images,
+    base::OnceClosure callback,
+    const gpu::SyncToken& sync_token) {
   auto* sii = context_provider->SharedImageInterface();
-  for (const auto& mailbox : mailboxes)
-    sii->DestroySharedImage(sync_token, mailbox);
+  for (auto& shared_image : shared_images) {
+    sii->DestroySharedImage(sync_token, std::move(shared_image));
+  }
   std::move(callback).Run();
 }
 
@@ -44,7 +48,7 @@ void DestroySharedImages(scoped_refptr<viz::ContextProvider> context_provider,
 scoped_refptr<VideoFrame> CreateSharedImageFrame(
     scoped_refptr<viz::ContextProvider> context_provider,
     VideoPixelFormat format,
-    std::vector<gpu::Mailbox> mailboxes,
+    std::vector<scoped_refptr<gpu::ClientSharedImage>> shared_images,
     const gpu::SyncToken& sync_token,
     GLenum texture_target,
     const gfx::Size& coded_size,
@@ -54,13 +58,13 @@ scoped_refptr<VideoFrame> CreateSharedImageFrame(
     base::OnceClosure destroyed_callback) {
   gpu::MailboxHolder mailboxes_for_frame[VideoFrame::kMaxPlanes] = {};
   size_t i = 0;
-  for (const auto& mailbox : mailboxes) {
+  for (const auto& shared_image : shared_images) {
     mailboxes_for_frame[i++] =
-        gpu::MailboxHolder(mailbox, sync_token, texture_target);
+        gpu::MailboxHolder(shared_image->mailbox(), sync_token, texture_target);
   }
   auto callback =
       base::BindOnce(&DestroySharedImages, std::move(context_provider),
-                     std::move(mailboxes), std::move(destroyed_callback));
+                     std::move(shared_images), std::move(destroyed_callback));
   return VideoFrame::WrapNativeTextures(format, mailboxes_for_frame,
                                         std::move(callback), coded_size,
                                         visible_rect, natural_size, timestamp);
@@ -91,14 +95,14 @@ scoped_refptr<VideoFrame> CreateSharedImageRGBAFrame(
   DCHECK_EQ(i, pixels_size);
 
   auto* sii = context_provider->SharedImageInterface();
-  gpu::Mailbox mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::RGBA_8888, coded_size, gfx::ColorSpace(),
+  auto shared_image = sii->CreateSharedImage(
+      viz::SinglePlaneFormat::kRGBA_8888, coded_size, gfx::ColorSpace(),
       kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, pixels);
+      gpu::SHARED_IMAGE_USAGE_GLES2_READ, "RGBAVideoFrame", pixels);
 
   return CreateSharedImageFrame(
       std::move(context_provider), VideoPixelFormat::PIXEL_FORMAT_ABGR,
-      {mailbox}, {}, GL_TEXTURE_2D, coded_size, visible_rect,
+      {shared_image}, {}, GL_TEXTURE_2D, coded_size, visible_rect,
       visible_rect.size(), base::Seconds(1), std::move(destroyed_callback));
 }
 
@@ -135,24 +139,27 @@ scoped_refptr<VideoFrame> CreateSharedImageI420Frame(
   DCHECK_EQ(y_i, y_pixels_size);
   DCHECK_EQ(uv_i, uv_pixels_size);
 
+  auto plane_format = context_provider->ContextCapabilities().texture_rg
+                          ? viz::SinglePlaneFormat::kR_8
+                          : viz::SinglePlaneFormat::kLUMINANCE_8;
   auto* sii = context_provider->SharedImageInterface();
-  gpu::Mailbox y_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, coded_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, y_pixels);
-  gpu::Mailbox u_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, uv_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, u_pixels);
-  gpu::Mailbox v_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, uv_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, v_pixels);
+  auto y_shared_image = sii->CreateSharedImage(
+      plane_format, coded_size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
+      kPremul_SkAlphaType, gpu::SHARED_IMAGE_USAGE_GLES2_READ, "I420Frame_Y",
+      y_pixels);
+  auto u_shared_image = sii->CreateSharedImage(
+      plane_format, uv_size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
+      kPremul_SkAlphaType, gpu::SHARED_IMAGE_USAGE_GLES2_READ, "I420Frame_U",
+      u_pixels);
+  auto v_shared_image = sii->CreateSharedImage(
+      plane_format, uv_size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
+      kPremul_SkAlphaType, gpu::SHARED_IMAGE_USAGE_GLES2_READ, "I420Frame_V",
+      v_pixels);
 
   return CreateSharedImageFrame(
       std::move(context_provider), VideoPixelFormat::PIXEL_FORMAT_I420,
-      {y_mailbox, u_mailbox, v_mailbox}, {}, GL_TEXTURE_2D, coded_size,
-      visible_rect, visible_rect.size(), base::Seconds(1),
+      {y_shared_image, u_shared_image, v_shared_image}, {}, GL_TEXTURE_2D,
+      coded_size, visible_rect, visible_rect.size(), base::Seconds(1),
       std::move(destroyed_callback));
 }
 
@@ -193,18 +200,19 @@ scoped_refptr<VideoFrame> CreateSharedImageNV12Frame(
   DCHECK_EQ(uv_i, uv_pixels_size);
 
   auto* sii = context_provider->SharedImageInterface();
-  gpu::Mailbox y_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, coded_size, gfx::ColorSpace(),
+  auto y_shared_image = sii->CreateSharedImage(
+      viz::SinglePlaneFormat::kR_8, coded_size, gfx::ColorSpace(),
       kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, y_pixels);
-  gpu::Mailbox uv_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::RG_88, uv_size, gfx::ColorSpace(),
+      gpu::SHARED_IMAGE_USAGE_GLES2_READ, "NV12Frame_Y", y_pixels);
+  auto uv_shared_image = sii->CreateSharedImage(
+      viz::SinglePlaneFormat::kRG_88, uv_size, gfx::ColorSpace(),
       kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, uv_pixels);
+      gpu::SHARED_IMAGE_USAGE_GLES2_READ, "NV12Frame_UV", uv_pixels);
   return CreateSharedImageFrame(
       std::move(context_provider), VideoPixelFormat::PIXEL_FORMAT_NV12,
-      {y_mailbox, uv_mailbox}, {}, GL_TEXTURE_2D, coded_size, visible_rect,
-      visible_rect.size(), base::Seconds(1), std::move(destroyed_callback));
+      {y_shared_image, uv_shared_image}, {}, GL_TEXTURE_2D, coded_size,
+      visible_rect, visible_rect.size(), base::Seconds(1),
+      std::move(destroyed_callback));
 }
 
 }  // namespace media

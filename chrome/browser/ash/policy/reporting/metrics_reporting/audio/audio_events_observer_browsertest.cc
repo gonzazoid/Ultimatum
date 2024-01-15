@@ -11,6 +11,7 @@
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
+#include "chrome/browser/policy/dm_token_utils.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
 #include "chromeos/dbus/missive/missive_client_test_observer.h"
@@ -27,6 +28,8 @@ using ::testing::Eq;
 namespace reporting {
 namespace {
 
+constexpr char kDMToken[] = "token";
+
 Record GetNextRecord(chromeos::MissiveClientTestObserver* observer) {
   const std::tuple<Priority, Record>& enqueued_record =
       observer->GetNextEnqueuedRecord();
@@ -41,6 +44,8 @@ class AudioEventsBrowserTest : public ::policy::DevicePolicyCrosBrowserTest {
  protected:
   AudioEventsBrowserTest() {
     crypto_home_mixin_.MarkUserAsExisting(affiliation_mixin_.account_id());
+    ::policy::SetDMTokenForTesting(
+        ::policy::DMToken::CreateValidToken(kDMToken));
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -91,10 +96,18 @@ IN_PROC_BROWSER_TEST_F(AudioEventsBrowserTest,
 
   EnablePolicy();
 
-  ash::cros_healthd::FakeCrosHealthd::Get()
-      ->EmitAudioSevereUnderrunEventForTesting();
+  ash::cros_healthd::mojom::AudioEventInfo info;
+  info.state = ash::cros_healthd::mojom::AudioEventInfo::State::kSevereUnderrun;
+  ash::cros_healthd::FakeCrosHealthd::Get()->EmitEventForCategory(
+      ash::cros_healthd::mojom::EventCategoryEnum::kAudio,
+      ash::cros_healthd::mojom::EventInfo::NewAudioEventInfo(info.Clone()));
 
-  const Record& record = GetNextRecord(&missive_observer_);
+  const auto record = GetNextRecord(&missive_observer_);
+  ASSERT_TRUE(record.has_dm_token());
+  EXPECT_THAT(record.dm_token(), ::testing::StrEq(kDMToken));
+  ASSERT_TRUE(record.has_source_info());
+  EXPECT_THAT(record.source_info().source(), Eq(SourceInfo::ASH));
+
   MetricData record_data;
   ASSERT_TRUE(record_data.ParseFromString(record.data()));
 

@@ -2,50 +2,55 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import <SystemConfiguration/SCDynamicStoreCopySpecific.h>
+#import <SystemConfiguration/SystemConfiguration.h>
 #include <stddef.h>
-#include <sys/sysctl.h>
 
 #include <string>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
+#include "base/system/sys_info.h"
 
 namespace syncer {
 
-// Returns the Hardware model name, without trailing numbers, if
-// possible.  See http://www.cocoadev.com/index.pl?MacintoshModels for
-// an example list of models. If an error occurs trying to read the
-// model, this simply returns "Unknown".
+// Returns the Hardware model name, without trailing numbers, if possible. See
+// https://everymac.com/systems/by_capability/mac-specs-by-machine-model-machine-id.html
+// for example. If an error occurs trying to read the model, this simply returns
+// "Unknown".
 std::string GetPersonalizableDeviceNameInternal() {
   // Do not use NSHost currentHost, as it's very slow. http://crbug.com/138570
-  SCDynamicStoreContext context = {0, NULL, NULL, NULL};
-  base::ScopedCFTypeRef<SCDynamicStoreRef> store(SCDynamicStoreCreate(
-      kCFAllocatorDefault, CFSTR("chrome_sync"), NULL, &context));
-  base::ScopedCFTypeRef<CFStringRef> machine_name(
+  SCDynamicStoreContext context = {0};
+  base::apple::ScopedCFTypeRef<SCDynamicStoreRef> store(
+      SCDynamicStoreCreate(kCFAllocatorDefault, CFSTR("chrome_sync"),
+                           /*callout=*/nullptr, &context));
+  base::apple::ScopedCFTypeRef<CFStringRef> machine_name(
       SCDynamicStoreCopyLocalHostName(store.get()));
-  if (machine_name.get())
+  if (machine_name) {
     return base::SysCFStringRefToUTF8(machine_name.get());
+  }
 
   // Fall back to get computer name.
-  base::ScopedCFTypeRef<CFStringRef> computer_name(
-      SCDynamicStoreCopyComputerName(store.get(), NULL));
-  if (computer_name.get())
+  base::apple::ScopedCFTypeRef<CFStringRef> computer_name(
+      SCDynamicStoreCopyComputerName(store.get(), /*nameEncoding=*/nullptr));
+  if (computer_name) {
     return base::SysCFStringRefToUTF8(computer_name.get());
-
-  // If all else fails, return to using a slightly nicer version of the
-  // hardware model.
-  char modelBuffer[256];
-  size_t length = sizeof(modelBuffer);
-  if (!sysctlbyname("hw.model", modelBuffer, &length, NULL, 0)) {
-    for (size_t i = 0; i < length; i++) {
-      if (base::IsAsciiDigit(modelBuffer[i]))
-        return std::string(modelBuffer, 0, i);
-    }
-    return std::string(modelBuffer, 0, length);
   }
-  return "Unknown";
+
+  // If all else fails, return to using a slightly nicer version of the hardware
+  // model. Warning: This will soon return just a useless "Mac" string.
+  std::string model = base::SysInfo::HardwareModelName();
+  absl::optional<base::SysInfo::HardwareModelNameSplit> split =
+      base::SysInfo::SplitHardwareModelNameDoNotUse(model);
+
+  if (!split) {
+    if (model.empty()) {
+      return "Unknown";
+    }
+    return model;
+  }
+
+  return split.value().category;
 }
 
 }  // namespace syncer

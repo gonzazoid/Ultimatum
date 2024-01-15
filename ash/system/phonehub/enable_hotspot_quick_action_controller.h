@@ -5,8 +5,9 @@
 #ifndef ASH_SYSTEM_PHONEHUB_ENABLE_HOTSPOT_QUICK_ACTION_CONTROLLER_H_
 #define ASH_SYSTEM_PHONEHUB_ENABLE_HOTSPOT_QUICK_ACTION_CONTROLLER_H_
 
-#include "ash/components/phonehub/tether_controller.h"
 #include "ash/system/phonehub/quick_action_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/tether_controller.h"
 
 namespace ash {
 
@@ -26,6 +27,7 @@ class EnableHotspotQuickActionController
   // QuickActionControllerBase:
   QuickActionItem* CreateItem() override;
   void OnButtonPressed(bool is_now_enabled) override;
+  void UpdateQuickActionItemUi() override;
 
   // phonehub::TetherController::Observer:
   void OnTetherStatusChanged() override;
@@ -38,8 +40,8 @@ class EnableHotspotQuickActionController
   // Set the item (including icon, label and tooltips) to a certain state.
   void SetState(ActionState state);
 
-  phonehub::TetherController* tether_controller_ = nullptr;
-  QuickActionItem* item_ = nullptr;
+  raw_ptr<phonehub::TetherController> tether_controller_ = nullptr;
+  raw_ptr<QuickActionItem> item_ = nullptr;
 };
 
 }  // namespace ash

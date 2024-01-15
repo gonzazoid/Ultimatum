@@ -14,9 +14,10 @@ class IdlTypesTest(unittest.TestCase):
         factory = IdlTypeFactory()
 
         self.assertTrue(factory.simple_type('any').is_any)
+        self.assertTrue(factory.simple_type('bigint').is_bigint)
         self.assertTrue(factory.simple_type('boolean').is_boolean)
         self.assertTrue(factory.simple_type('object').is_object)
-        self.assertTrue(factory.simple_type('void').is_void)
+        self.assertTrue(factory.simple_type('undefined').is_undefined)
         self.assertTrue(factory.simple_type('symbol').is_symbol)
 
         for x in ('byte', 'octet', 'short', 'unsigned short', 'long',
@@ -78,9 +79,10 @@ class IdlTypesTest(unittest.TestCase):
             'ByteString': 'ByteString',
             'USVString': 'USVString',
             'any': 'Any',
+            'bigint': 'Bigint',
             'boolean': 'Boolean',
             'object': 'Object',
-            'void': 'Void',
+            'undefined': 'Undefined',
             'symbol': 'Symbol',
         }
         for name, expect in type_names.items():

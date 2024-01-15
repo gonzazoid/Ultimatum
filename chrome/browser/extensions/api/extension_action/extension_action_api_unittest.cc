@@ -8,6 +8,7 @@
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_with_install.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/extension_test_util.h"
 #include "extensions/browser/extension_action.h"
 #include "extensions/browser/extension_action_manager.h"
@@ -44,7 +45,7 @@ TEST_P(ExtensionActionAPIUnitTest, MultiIcons) {
   TestExtensionDir test_extension_dir;
   test_extension_dir.WriteManifest(base::StringPrintf(
       kManifestTemplate, GetManifestVersionForActionType(GetParam()),
-      GetManifestKeyForActionType(GetParam())));
+      ActionInfo::GetManifestKeyForActionType(GetParam())));
 
   {
     std::string icon_file_content;
@@ -89,7 +90,7 @@ TEST_P(ExtensionActionAPIUnitTest, ActionLocalization) {
          })";
   test_dir.WriteManifest(
       base::StringPrintf(kManifest, GetManifestVersionForActionType(GetParam()),
-                         GetManifestKeyForActionType(GetParam())));
+                         ActionInfo::GetManifestKeyForActionType(GetParam())));
 
   constexpr char kMessages[] =
       R"({

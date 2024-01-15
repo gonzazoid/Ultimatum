@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_CACHE_STORAGE_CACHE_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-blink.h"
@@ -16,6 +17,7 @@
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -93,7 +95,7 @@ class MODULES_EXPORT Cache : public ScriptWrappable {
 
  protected:
   // Virtual for testing.
-  virtual AbortController* CreateAbortController(ExecutionContext* context);
+  virtual AbortController* CreateAbortController(ScriptState*);
 
  private:
   class BarrierCallbackForPutResponse;
@@ -104,17 +106,20 @@ class MODULES_EXPORT Cache : public ScriptWrappable {
 
   ScriptPromise MatchImpl(ScriptState*,
                           const Request*,
-                          const CacheQueryOptions*);
+                          const CacheQueryOptions*,
+                          ExceptionState&);
   ScriptPromise MatchAllImpl(ScriptState*,
                              const Request*,
-                             const CacheQueryOptions*);
+                             const CacheQueryOptions*,
+                             ExceptionState&);
   ScriptPromise AddAllImpl(ScriptState*,
                            const String& method_name,
                            const HeapVector<Member<Request>>&,
                            ExceptionState&);
   ScriptPromise DeleteImpl(ScriptState*,
                            const Request*,
-                           const CacheQueryOptions*);
+                           const CacheQueryOptions*,
+                           ExceptionState&);
   void PutImpl(ScriptPromiseResolver*,
                const String& method_name,
                const HeapVector<Member<Request>>&,
@@ -124,11 +129,13 @@ class MODULES_EXPORT Cache : public ScriptWrappable {
                int64_t trace_id);
   ScriptPromise KeysImpl(ScriptState*,
                          const Request*,
-                         const CacheQueryOptions*);
+                         const CacheQueryOptions*,
+                         ExceptionState&);
 
   Member<GlobalFetch::ScopedFetcher> scoped_fetcher_;
   Member<CacheStorageBlobClientList> blob_client_list_;
 
+  GC_PLUGIN_IGNORE("https://crbug.com/1381979")
   mojo::AssociatedRemote<mojom::blink::CacheStorageCache> cache_remote_;
 };
 

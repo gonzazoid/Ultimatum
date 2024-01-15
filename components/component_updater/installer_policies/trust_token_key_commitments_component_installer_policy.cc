@@ -9,15 +9,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/task/thread_pool.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "components/component_updater/component_updater_switches.h"
@@ -40,8 +41,9 @@ const char kTrustTokenKeyCommitmentsManifestName[] =
 // returning the loaded commitments on success and nullopt on failure.
 absl::optional<std::string> LoadKeyCommitmentsFromDisk(
     const base::FilePath& path) {
-  if (path.empty())
+  if (path.empty()) {
     return absl::nullopt;
+  }
 
   VLOG(1) << "Reading trust token key commitments from file: " << path.value();
 
@@ -83,7 +85,7 @@ bool TrustTokenKeyCommitmentsComponentInstallerPolicy::
 
 update_client::CrxInstaller::Result
 TrustTokenKeyCommitmentsComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -105,7 +107,7 @@ TrustTokenKeyCommitmentsComponentInstallerPolicy::GetInstalledPath(
 void TrustTokenKeyCommitmentsComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
 
@@ -116,7 +118,7 @@ void TrustTokenKeyCommitmentsComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool TrustTokenKeyCommitmentsComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the commitments here, since we'll do the
   // checking in NetworkService::SetTrustTokenKeyCommitments.

@@ -8,16 +8,12 @@
 #import "base/memory/ptr_util.h"
 #import "base/values.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 
 ScriptMessage::ScriptMessage(std::unique_ptr<base::Value> body,
                              bool is_user_interacting,
                              bool is_main_frame,
-                             absl::optional<GURL> request_url)
+                             std::optional<GURL> request_url)
     : body_(std::move(body)),
       is_user_interacting_(is_user_interacting),
       is_main_frame_(is_main_frame),

@@ -6,10 +6,6 @@
 
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // Margin on either side of the content.
@@ -98,6 +94,7 @@ const CGFloat kButtonSpacing = 8;
     [_textField addTarget:self
                    action:@selector(textFieldDidChange:)
          forControlEvents:UIControlEventEditingChanged];
+    _textField.autocorrectionType = UITextAutocorrectionTypeNo;
 
     _hidePasswordButton = [UIButton buttonWithType:UIButtonTypeSystem];
     _hidePasswordButton.translatesAutoresizingMaskIntoConstraints = NO;

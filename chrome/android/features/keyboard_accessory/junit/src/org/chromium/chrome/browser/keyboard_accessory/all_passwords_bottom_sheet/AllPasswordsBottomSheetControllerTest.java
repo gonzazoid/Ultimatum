@@ -4,9 +4,10 @@
 
 package org.chromium.chrome.browser.keyboard_accessory.all_passwords_bottom_sheet;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -30,6 +31,7 @@ import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.keyboard_accessory.all_passwords_bottom_sheet.AllPasswordsBottomSheetProperties.ItemType;
 import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.embedder_support.util.UrlUtilitiesJni;
@@ -37,11 +39,9 @@ import org.chromium.ui.modelutil.ListModel;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * Controller tests for the all passwords bottom sheet.
- */
+/** Controller tests for the all passwords bottom sheet. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Features.EnableFeatures(ChromeFeatureList.FILLING_PASSWORDS_FROM_ANY_ORIGIN)
+@EnableFeatures(ChromeFeatureList.FILLING_PASSWORDS_FROM_ANY_ORIGIN)
 public class AllPasswordsBottomSheetControllerTest {
     private static final Credential ANA =
             new Credential("Ana", "S3cr3t", "Ana", "https://m.domain.xyz/", false, "");
@@ -53,14 +53,10 @@ public class AllPasswordsBottomSheetControllerTest {
     private static final boolean IS_PASSWORD_FIELD = true;
     private static final String EXAMPLE_ORIGIN = "https://m.example.com/";
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
-    @Mock
-    private UrlUtilities.Natives mUrlUtilitiesJniMock;
-    @Mock
-    private AllPasswordsBottomSheetCoordinator.Delegate mMockDelegate;
+    @Rule public JniMocker mJniMocker = new JniMocker();
+    @Rule public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+    @Mock private UrlUtilities.Natives mUrlUtilitiesJniMock;
+    @Mock private AllPasswordsBottomSheetCoordinator.Delegate mMockDelegate;
 
     private AllPasswordsBottomSheetMediator mMediator;
     private PropertyModel mModel;
@@ -71,8 +67,9 @@ public class AllPasswordsBottomSheetControllerTest {
         MockitoAnnotations.initMocks(this);
         mJniMocker.mock(UrlUtilitiesJni.TEST_HOOKS, mUrlUtilitiesJniMock);
         mMediator = new AllPasswordsBottomSheetMediator();
-        mModel = AllPasswordsBottomSheetProperties.createDefaultModel(
-                EXAMPLE_ORIGIN, mMediator::onDismissed, mMediator::onQueryTextChange);
+        mModel =
+                AllPasswordsBottomSheetProperties.createDefaultModel(
+                        EXAMPLE_ORIGIN, mMediator::onDismissed, mMediator::onQueryTextChange);
         mMediator.initialize(mMockDelegate, mModel);
 
         when(mUrlUtilitiesJniMock.getDomainAndRegistry(anyString(), anyBoolean()))
@@ -104,9 +101,10 @@ public class AllPasswordsBottomSheetControllerTest {
     @Test
     public void testOnCredentialSelected() {
         mMediator.showCredentials(TEST_CREDENTIALS, IS_PASSWORD_FIELD);
-        mMediator.onCredentialSelected(TEST_CREDENTIALS[1]);
+        CredentialFillRequest request = new CredentialFillRequest(TEST_CREDENTIALS[1], true);
+        mMediator.onCredentialSelected(request);
         assertThat(mModel.get(VISIBLE), is(false));
-        verify(mMockDelegate).onCredentialSelected(TEST_CREDENTIALS[1]);
+        verify(mMockDelegate).onCredentialSelected(request);
     }
 
     @Test
@@ -143,9 +141,10 @@ public class AllPasswordsBottomSheetControllerTest {
     }
 
     /**
-     * Helper to get organization-identifying host from URLs. The real implementation calls
-     * {@link UrlUtilities}. It's not useful to actually reimplement it, so just return a string in
-     * a trivial way.
+     * Helper to get organization-identifying host from URLs. The real implementation calls {@link
+     * UrlUtilities}. It's not useful to actually reimplement it, so just return a string in a
+     * trivial way.
+     *
      * @param origin A URL.
      * @return The organization-identifying host from the given URL.
      */

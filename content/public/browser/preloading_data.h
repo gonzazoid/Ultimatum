@@ -5,7 +5,7 @@
 #ifndef CONTENT_PUBLIC_BROWSER_PRELOADING_DATA_H_
 #define CONTENT_PUBLIC_BROWSER_PRELOADING_DATA_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/preloading.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -14,7 +14,10 @@
 namespace content {
 
 class WebContents;
+class NavigationHandle;
 using PreloadingURLMatchCallback = base::RepeatingCallback<bool(const GURL&)>;
+using PredictorDomainCallback =
+    base::RepeatingCallback<bool(NavigationHandle*)>;
 
 // PreloadingPrediction and PreloadingAttempt are the preloading logging APIs
 // which allows us to set various metrics and log the values.
@@ -38,6 +41,17 @@ class CONTENT_EXPORT PreloadingAttempt {
   // Sets whether preloading is eligible to be triggered. This should only be
   // called once per preloading attempt.
   virtual void SetEligibility(PreloadingEligibility eligibility) = 0;
+
+  // Whether this preloading attempt should be held back in order to
+  // counterfactually evaluate how well this type of preloading is performing.
+  // This is controlled via field trial configuration. Users of preloading
+  // attempt should always call this before triggering an eligible preloading
+  // attempt. Note that individual features can also use their own field
+  // trial-controlled holdbacks, in which case preloading should be disabled if
+  // either the feature's holdback is enabled or if ShouldHoldback returns true.
+  // Features implementing their own holdback to should record held back
+  // preloading attempts by calling SetHoldbackStatus (declared below).
+  virtual bool ShouldHoldback() = 0;
 
   // Sets the outcome of the holdback check used to implement counterfactual
   // experiments. This is not part of eligibility status to clarify that this
@@ -90,10 +104,18 @@ class CONTENT_EXPORT PreloadingData {
   // Creates a new PreloadingAttempt and returns a pointer associated with the
   // PreloadingAttempt class. Here callers pass the `url_predicate_callback` to
   // verify if the navigated and triggered URLs match based on callers logic.
+  //
+  // `triggering_primary_page_source_id` is a UKM source ID of the page that
+  // triggered preloading. This is used for recording the metrics for user
+  // visible primary pages (Preloading_Attempt_PreviousPrimaryPage) to measure
+  // the impact of PreloadingAttempt on the page user is viewing.
+  // TODO(crbug.com/1330783): Extend this for non-primary page and inner
+  // WebContents preloading attempts.
   virtual PreloadingAttempt* AddPreloadingAttempt(
       PreloadingPredictor predictor,
       PreloadingType preloading_type,
-      PreloadingURLMatchCallback url_match_predicate) = 0;
+      PreloadingURLMatchCallback url_match_predicate,
+      ukm::SourceId triggering_primary_page_source_id) = 0;
 
   // Creates a new PreloadingPrediction. Same as above `url_predicate_callback`
   // is passed by the caller to verify that both predicted and navigated URLs
@@ -103,6 +125,20 @@ class CONTENT_EXPORT PreloadingData {
       PreloadingPredictor predictor,
       int64_t confidence,
       PreloadingURLMatchCallback url_match_predicate) = 0;
+
+  // To calculate the recall score of the `predictor`, we need to know if the
+  // `predictor` is potentially responsible for predicting the next navigation
+  // or not. Here, if caller provided `is_navigation_in_domain_callback`
+  // callback returns true for the navigation, it will be considered in the
+  // predictor's domain. The predictor's domain is the set of navigations a
+  // predictor is meant to handle (predict). For example, for Omnibox DUI, this
+  // is the set of navigations to history URLs started from the Omnibox
+  // (navigations where the user ends up choosing a Search query or where the
+  // user closes the Omnibox and clicks on a link in the page are not part of
+  // the domain of the Omnibox DUI predictor).
+  virtual void SetIsNavigationInDomainCallback(
+      PreloadingPredictor predictor,
+      PredictorDomainCallback is_navigation_in_domain_callback) = 0;
 
  protected:
   virtual ~PreloadingData() = default;

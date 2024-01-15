@@ -341,7 +341,6 @@
 #define glSetActiveURLCHROMIUM GLES2_GET_FUN(SetActiveURLCHROMIUM)
 #define glContextVisibilityHintCHROMIUM \
   GLES2_GET_FUN(ContextVisibilityHintCHROMIUM)
-#define glCoverageModulationCHROMIUM GLES2_GET_FUN(CoverageModulationCHROMIUM)
 #define glGetGraphicsResetStatusKHR GLES2_GET_FUN(GetGraphicsResetStatusKHR)
 #define glBlendBarrierKHR GLES2_GET_FUN(BlendBarrierKHR)
 #define glBindFragDataLocationIndexedEXT \
@@ -371,6 +370,18 @@
   GLES2_GET_FUN(BeginSharedImageAccessDirectCHROMIUM)
 #define glEndSharedImageAccessDirectCHROMIUM \
   GLES2_GET_FUN(EndSharedImageAccessDirectCHROMIUM)
+#define glConvertRGBAToYUVAMailboxesINTERNAL \
+  GLES2_GET_FUN(ConvertRGBAToYUVAMailboxesINTERNAL)
+#define glConvertYUVAMailboxesToRGBINTERNAL \
+  GLES2_GET_FUN(ConvertYUVAMailboxesToRGBINTERNAL)
+#define glConvertYUVAMailboxesToTextureINTERNAL \
+  GLES2_GET_FUN(ConvertYUVAMailboxesToTextureINTERNAL)
+#define glCopySharedImageINTERNAL GLES2_GET_FUN(CopySharedImageINTERNAL)
+#define glCopySharedImageToTextureINTERNAL \
+  GLES2_GET_FUN(CopySharedImageToTextureINTERNAL)
+#define glReadbackARGBImagePixelsINTERNAL \
+  GLES2_GET_FUN(ReadbackARGBImagePixelsINTERNAL)
+#define glWritePixelsYUVINTERNAL GLES2_GET_FUN(WritePixelsYUVINTERNAL)
 #define glEnableiOES GLES2_GET_FUN(EnableiOES)
 #define glDisableiOES GLES2_GET_FUN(DisableiOES)
 #define glBlendEquationiOES GLES2_GET_FUN(BlendEquationiOES)
@@ -379,5 +390,31 @@
 #define glBlendFuncSeparateiOES GLES2_GET_FUN(BlendFuncSeparateiOES)
 #define glColorMaskiOES GLES2_GET_FUN(ColorMaskiOES)
 #define glIsEnablediOES GLES2_GET_FUN(IsEnablediOES)
+#define glProvokingVertexANGLE GLES2_GET_FUN(ProvokingVertexANGLE)
+#define glFramebufferMemorylessPixelLocalStorageANGLE \
+  GLES2_GET_FUN(FramebufferMemorylessPixelLocalStorageANGLE)
+#define glFramebufferTexturePixelLocalStorageANGLE \
+  GLES2_GET_FUN(FramebufferTexturePixelLocalStorageANGLE)
+#define glFramebufferPixelLocalClearValuefvANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalClearValuefvANGLE)
+#define glFramebufferPixelLocalClearValueivANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalClearValueivANGLE)
+#define glFramebufferPixelLocalClearValueuivANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalClearValueuivANGLE)
+#define glBeginPixelLocalStorageANGLE GLES2_GET_FUN(BeginPixelLocalStorageANGLE)
+#define glEndPixelLocalStorageANGLE GLES2_GET_FUN(EndPixelLocalStorageANGLE)
+#define glPixelLocalStorageBarrierANGLE \
+  GLES2_GET_FUN(PixelLocalStorageBarrierANGLE)
+#define glFramebufferPixelLocalStorageInterruptANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalStorageInterruptANGLE)
+#define glFramebufferPixelLocalStorageRestoreANGLE \
+  GLES2_GET_FUN(FramebufferPixelLocalStorageRestoreANGLE)
+#define glGetFramebufferPixelLocalStorageParameterfvANGLE \
+  GLES2_GET_FUN(GetFramebufferPixelLocalStorageParameterfvANGLE)
+#define glGetFramebufferPixelLocalStorageParameterivANGLE \
+  GLES2_GET_FUN(GetFramebufferPixelLocalStorageParameterivANGLE)
+#define glClipControlEXT GLES2_GET_FUN(ClipControlEXT)
+#define glPolygonModeANGLE GLES2_GET_FUN(PolygonModeANGLE)
+#define glPolygonOffsetClampEXT GLES2_GET_FUN(PolygonOffsetClampEXT)
 
 #endif  // GPU_GLES2_GL2CHROMIUM_AUTOGEN_H_

@@ -7,26 +7,23 @@
 #import "base/strings/sys_string_conversions.h"
 #import "components/policy/core/common/policy_loader_ios_constants.h"
 #import "components/policy/policy_constants.h"
-#import "ios/chrome/browser/policy/policy_app_interface.h"
+#import "ios/chrome/browser/policy/model/policy_app_interface.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey_ui.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_ui_constants.h"
+#import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/app_launch_configuration.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using chrome_test_util::ContextBarCenterButtonWithLabel;
-using chrome_test_util::SearchIconButton;
 using chrome_test_util::BookmarksDeleteSwipeButton;
 using chrome_test_util::ButtonWithAccessibilityLabelId;
+using chrome_test_util::ContextBarCenterButtonWithLabel;
 using chrome_test_util::ContextBarLeadingButtonWithLabel;
 using chrome_test_util::ContextBarTrailingButtonWithLabel;
+using chrome_test_util::SearchIconButton;
 using chrome_test_util::TappableBookmarkNodeWithLabel;
 
 namespace {
@@ -77,7 +74,7 @@ void LongPressBookmarkNodeWithLabel(NSString* bookmark_node_label) {
 
 void VerifyBookmarkContextMenuNil() {
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kBookmarkHomeContextMenuIdentifier)]
+                                          kBookmarksHomeContextMenuIdentifier)]
       assertWithMatcher:grey_nil()];
 }
 
@@ -87,21 +84,10 @@ void VerifyBookmarkNodeWithLabelNotNil(NSString* bookmark_node_label) {
       assertWithMatcher:grey_notNil()];
 }
 
-void SwipeBookmarkNodeWithLabel(NSString* bookmark_node_label) {
-  [[EarlGrey selectElementWithMatcher:TappableBookmarkNodeWithLabel(
-                                          bookmark_node_label)]
-      performAction:grey_swipeFastInDirection(kGREYDirectionLeft)];
-}
-
-void VerifyDeleteSwipeButtonNil() {
-  [[EarlGrey selectElementWithMatcher:BookmarksDeleteSwipeButton()]
-      assertWithMatcher:grey_nil()];
-}
-
 void SearchBookmarksForText(NSString* search_text) {
   // Search and hide keyboard.
   [[EarlGrey selectElementWithMatcher:SearchIconButton()]
-      performAction:grey_typeText(search_text)];
+      performAction:grey_replaceText(search_text)];
 }
 
 }  // namespace
@@ -133,7 +119,7 @@ void SearchBookmarksForText(NSString* search_text) {
 
 - (void)setUp {
   [super setUp];
-  [ChromeEarlGrey waitForBookmarksToFinishLoading];
+  [BookmarkEarlGrey waitForBookmarkModelsLoaded];
 }
 
 // Tear down called once per test.
@@ -318,33 +304,37 @@ void SearchBookmarksForText(NSString* search_text) {
 
 // Tests that swipe is disabled in managed bookmarks top-level folder and
 // sub-folder.
-// TODO(crbug.com/1105526) On iOS14 the swipe above will trigger a tap
-// instead, and dismiss the bookmarks UI. This test should be
-// refactored to account for swipe-on-disabled-rows-trigger-a-tap.
-- (void)DISABLED_testSwipeDisabled {
+- (void)testSwipeDisabled {
   [BookmarkEarlGreyUI openBookmarks];
   [self openCustomManagedBookmarksFolder];
 
-  SwipeBookmarkNodeWithLabel(@"First_Managed_URL");
-  VerifyDeleteSwipeButtonNil();
+  [[EarlGrey selectElementWithMatcher:TappableBookmarkNodeWithLabel(
+                                          @"First_Managed_URL")]
+      assertWithMatcher:grey_not(
+                            chrome_test_util::CellCanBeSwipedToDismissed())];
 
-  SwipeBookmarkNodeWithLabel(@"Managed_Sub_Folder");
-  VerifyDeleteSwipeButtonNil();
+  [[EarlGrey selectElementWithMatcher:TappableBookmarkNodeWithLabel(
+                                          @"Managed_Sub_Folder")]
+      assertWithMatcher:grey_not(
+                            chrome_test_util::CellCanBeSwipedToDismissed())];
 
   [self openCustomManagedSubFolder];
 
-  SwipeBookmarkNodeWithLabel(@"Sub_Folder_First_URL");
-  VerifyDeleteSwipeButtonNil();
+  [[EarlGrey selectElementWithMatcher:TappableBookmarkNodeWithLabel(
+                                          @"Sub_Folder_First_URL")]
+      assertWithMatcher:grey_not(
+                            chrome_test_util::CellCanBeSwipedToDismissed())];
 }
 
 // Tests that swiping is disabled on managed bookmark items on search results.
-// TODO(crbug.com/1197279): Re-enable flaky test.
-- (void)DISABLED_testSwipeDisabledOnSearchResults {
+- (void)testSwipeDisabledOnSearchResults {
   [BookmarkEarlGreyUI openBookmarks];
   SearchBookmarksForText(@"URL\n");
 
-  SwipeBookmarkNodeWithLabel(@"First_Managed_URL");
-  VerifyDeleteSwipeButtonNil();
+  [[EarlGrey selectElementWithMatcher:TappableBookmarkNodeWithLabel(
+                                          @"First_Managed_URL")]
+      assertWithMatcher:grey_not(
+                            chrome_test_util::CellCanBeSwipedToDismissed())];
 }
 
 // Tests long presses on managed bookmark items in search results.
@@ -368,7 +358,7 @@ void SearchBookmarksForText(NSString* search_text) {
   // Change to edit mode, using context menu.
   [[EarlGrey
       selectElementWithMatcher:grey_accessibilityID(
-                                   kBookmarkHomeTrailingButtonIdentifier)]
+                                   kBookmarksHomeTrailingButtonIdentifier)]
       performAction:grey_tap()];
 
   // Select URL.

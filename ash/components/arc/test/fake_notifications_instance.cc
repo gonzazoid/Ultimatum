@@ -4,8 +4,8 @@
 
 #include "ash/components/arc/test/fake_notifications_instance.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 
 namespace arc {
 
@@ -17,6 +17,11 @@ void FakeNotificationsInstance::SendNotificationEventToAndroid(
     mojom::ArcNotificationEvent event) {
   events_.emplace_back(key, event);
 }
+
+void FakeNotificationsInstance::SendNotificationButtonClickToAndroid(
+    const std::string& key,
+    uint32_t button_index,
+    const std::string& input) {}
 
 void FakeNotificationsInstance::CreateNotificationWindow(
     const std::string& key) {}

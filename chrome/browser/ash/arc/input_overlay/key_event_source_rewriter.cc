@@ -7,8 +7,9 @@
 #include "ash/shell.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/events/event_source.h"
 
-namespace arc {
+namespace arc::input_overlay {
 
 KeyEventSourceRewriter::KeyEventSourceRewriter(aura::Window* top_level_window)
     : top_level_window_{top_level_window} {
@@ -21,10 +22,11 @@ KeyEventSourceRewriter::~KeyEventSourceRewriter() = default;
 ui::EventDispatchDetails KeyEventSourceRewriter::RewriteEvent(
     const ui::Event& event,
     const Continuation continuation) {
-  if (!event.IsKeyEvent())
+  if (!event.IsKeyEvent()) {
     return SendEvent(continuation, &event);
+  }
   auto* root_window = top_level_window_->GetRootWindow();
   return root_window->GetHost()->GetEventSource()->SendEventToSink(&event);
 }
 
-}  // namespace arc
+}  // namespace arc::input_overlay

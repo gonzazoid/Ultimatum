@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "components/component_updater/android/loader_policies/trust_token_key_commitments_component_loader_policy.h"
 #include "content/public/browser/network_service_instance.h"
@@ -22,8 +22,10 @@ namespace android_webview {
 // Tokens is enabled.
 void LoadTrustTokenKeyCommitmentsComponent(
     ComponentLoaderPolicyVector& policies) {
-  if (!base::FeatureList::IsEnabled(network::features::kTrustTokens))
+  if (!base::FeatureList::IsEnabled(network::features::kPrivateStateTokens) &&
+      !base::FeatureList::IsEnabled(network::features::kFledgePst)) {
     return;
+  }
 
   DVLOG(1)
       << "Registering Trust Token Key Commitments component for loading in "

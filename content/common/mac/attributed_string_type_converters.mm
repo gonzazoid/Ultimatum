@@ -6,8 +6,9 @@
 
 #include <AppKit/AppKit.h>
 
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
 #include "base/check.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/common/common_param_traits.h"
@@ -33,22 +34,22 @@ NSDictionary* ToAttributesDictionary(std::u16string name, float font_size) {
 
 }  // namespace
 
-NSAttributedString*
-TypeConverter<NSAttributedString*, ui::mojom::AttributedStringPtr>::Convert(
+CFAttributedStringRef
+TypeConverter<CFAttributedStringRef, ui::mojom::AttributedStringPtr>::Convert(
     const ui::mojom::AttributedStringPtr& mojo_attributed_string) {
   // Create the return value.
   NSString* plain_text =
       base::SysUTF16ToNSString(mojo_attributed_string->string);
-  base::scoped_nsobject<NSMutableAttributedString> decoded_string(
-      [[NSMutableAttributedString alloc] initWithString:plain_text]);
+  NSMutableAttributedString* decoded_string =
+      [[NSMutableAttributedString alloc] initWithString:plain_text];
   // Iterate over all the encoded attributes, attaching each to the string.
   const std::vector<ui::mojom::FontAttributePtr>& attributes =
       mojo_attributed_string->attributes;
   for (const auto& attribute : attributes) {
     // Protect against ranges that are outside the range of the string.
     const gfx::Range& range = attribute.get()->effective_range;
-    if (range.GetMin() > [plain_text length] ||
-        range.GetMax() > [plain_text length]) {
+    if (range.GetMin() > plain_text.length ||
+        range.GetMax() > plain_text.length) {
       continue;
     }
     [decoded_string
@@ -56,20 +57,25 @@ TypeConverter<NSAttributedString*, ui::mojom::AttributedStringPtr>::Convert(
                                              attribute.get()->font_point_size)
                 range:range.ToNSRange()];
   }
-  return decoded_string.autorelease();
+
+  return static_cast<CFAttributedStringRef>(
+      CFAutorelease(base::apple::NSToCFOwnershipCast(decoded_string)));
 }
 
 ui::mojom::AttributedStringPtr
-TypeConverter<ui::mojom::AttributedStringPtr, NSAttributedString*>::Convert(
-    const NSAttributedString* ns_attributed_string) {
+TypeConverter<ui::mojom::AttributedStringPtr, CFAttributedStringRef>::Convert(
+    const CFAttributedStringRef cf_attributed_string) {
+  NSAttributedString* ns_attributed_string =
+      base::apple::CFToNSPtrCast(cf_attributed_string);
+
   // Create the return value.
   ui::mojom::AttributedStringPtr attributed_string =
       ui::mojom::AttributedString::New();
   attributed_string->string =
-      base::SysNSStringToUTF16([ns_attributed_string string]);
+      base::SysNSStringToUTF16(ns_attributed_string.string);
 
   // Iterate over all the attributes in the string.
-  NSUInteger length = [ns_attributed_string length];
+  NSUInteger length = ns_attributed_string.length;
   for (NSUInteger i = 0; i < length;) {
     NSRange effective_range;
     NSDictionary* ns_attributes =
@@ -81,8 +87,8 @@ TypeConverter<ui::mojom::AttributedStringPtr, NSAttributedString*>::Convert(
     float font_point_size;
     // Only encode the attributes if the filtered set contains font information.
     if (font) {
-      font_name = base::SysNSStringToUTF16([font fontName]);
-      font_point_size = [font pointSize];
+      font_name = base::SysNSStringToUTF16(font.fontName);
+      font_point_size = font.pointSize;
       if (!font_name.empty()) {
         // Convert the attributes.
         ui::mojom::FontAttributePtr attrs = ui::mojom::FontAttribute::New(

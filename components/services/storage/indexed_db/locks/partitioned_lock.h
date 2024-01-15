@@ -7,13 +7,13 @@
 
 #include <iosfwd>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "components/services/storage/indexed_db/locks/partitioned_lock_id.h"
 
 namespace content {
 
-// Represents a granted lock in the PartitionedLockManager. When this object is
+// Represents a granted lock by the PartitionedLockManager. When this object is
 // destroyed, the lock is released. Since default construction is supported,
 // |is_locked()| can be used to inquire locked status. Also, |Release()| can
 // be called to manually release the lock, which appropriately updates the

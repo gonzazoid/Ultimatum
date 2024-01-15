@@ -3,37 +3,38 @@
 <meta name=timeout content=long>
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="resources/helpers.js"></script>
+<script src="/attribution-reporting/resources/helpers.js"></script>
 <script>
 attribution_reporting_promise_test(async t => {
-  const cookie = 'ar_debug=1;Secure;HttpOnly;SameSite=None;Path=/';
-  const source_debug_key = '246';
-  const trigger_debug_key = '357';
-  await registerAttributionSrc(t, {
-    source: {
-      destination: `https://{{host}}`,
-      debug_key: source_debug_key,
+  const expectedSourceDebugKey = '246';
+  const expectedTriggerDebugKey = '357';
+
+  registerAttributionSrcByImg(createRedirectChain([
+    {
+      cookie: attributionDebugCookie,
+      source: {
+        debug_key: expectedSourceDebugKey,
+        destination: 'https://{{host}}',
+      },
     },
-    cookie,
-  });
-  await registerAttributionSrc(t, {
-    trigger: {
-      event_trigger_data: [{}],
-      debug_key: trigger_debug_key,
+    {
+      trigger: {
+        debug_key: expectedTriggerDebugKey,
+        event_trigger_data: [{}],
+      },
     },
-    cookie,
-  });
+  ]));
 
   const payload = await pollEventLevelReports();
   assert_equals(payload.reports.length, 1);
   const report = JSON.parse(payload.reports[0].body);
-  assert_equals(report.source_debug_key, source_debug_key);
-  assert_equals(report.trigger_debug_key, trigger_debug_key);
+  assert_equals(report.source_debug_key, expectedSourceDebugKey);
+  assert_equals(report.trigger_debug_key, expectedTriggerDebugKey);
 
   const debugPayload = await pollEventLevelDebugReports();
   assert_equals(debugPayload.reports.length, 1);
   const debugReport = JSON.parse(debugPayload.reports[0].body);
-  assert_equals(debugReport.source_debug_key, source_debug_key);
-  assert_equals(debugReport.trigger_debug_key, trigger_debug_key);
+  assert_equals(debugReport.source_debug_key, expectedSourceDebugKey);
+  assert_equals(debugReport.trigger_debug_key, expectedTriggerDebugKey);
 }, 'Debug report is received if source and trigger debug keys are set.');
 </script>

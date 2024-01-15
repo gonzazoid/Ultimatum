@@ -11,8 +11,8 @@
 
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/accessibility/test_browser_accessibility_delegate.h"
-#include "content/public/browser/browser_accessibility_state.h"
 #include "content/public/test/browser_task_environment.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/platform/ax_platform_node_auralinux.h"
 
@@ -36,12 +36,12 @@ class BrowserAccessibilityAuraLinuxTest : public ::testing::Test {
  private:
   void SetUp() override;
 
-  content::BrowserTaskEnvironment task_environment_;
-  content::testing::ScopedContentAXModeSetter ax_mode_setter_;
+  BrowserTaskEnvironment task_environment_;
+  ScopedAccessibilityModeOverride ax_mode_override_;
 };
 
 BrowserAccessibilityAuraLinuxTest::BrowserAccessibilityAuraLinuxTest()
-    : ax_mode_setter_(ui::kAXModeComplete) {}
+    : ax_mode_override_(ui::kAXModeComplete) {}
 
 BrowserAccessibilityAuraLinuxTest::~BrowserAccessibilityAuraLinuxTest() =
     default;
@@ -378,7 +378,7 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
        TestTextAttributesInContentEditables) {
   auto has_attribute = [](AtkAttributeSet* attributes,
                           AtkTextAttribute text_attribute,
-                          absl::optional<const char*> expected_value) {
+                          std::optional<const char*> expected_value) {
     const char* name = atk_text_attribute_get_name(text_attribute);
     while (attributes) {
       const AtkAttribute* attribute =
@@ -539,9 +539,8 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
 
     ASSERT_TRUE(
         has_attribute(attributes, ATK_TEXT_ATTR_FAMILY_NAME, "Helvetica"));
-    ASSERT_FALSE(
-        has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, absl::nullopt));
-    ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_STYLE, absl::nullopt));
+    ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, std::nullopt));
+    ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_STYLE, std::nullopt));
     ASSERT_TRUE(has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, "single"));
     ASSERT_TRUE(has_attribute(attributes, ATK_TEXT_ATTR_LANGUAGE, "fr"));
 
@@ -563,13 +562,12 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
 
     ASSERT_TRUE(
         has_attribute(attributes, ATK_TEXT_ATTR_FAMILY_NAME, "Helvetica"));
+    ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, std::nullopt));
+    ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_STYLE, std::nullopt));
     ASSERT_FALSE(
-        has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, absl::nullopt));
-    ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_STYLE, absl::nullopt));
+        has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, std::nullopt));
     ASSERT_FALSE(
-        has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, absl::nullopt));
-    ASSERT_FALSE(
-        has_attribute(attributes, ATK_TEXT_ATTR_INVALID, absl::nullopt));
+        has_attribute(attributes, ATK_TEXT_ATTR_INVALID, std::nullopt));
 
     atk_attribute_set_free(attributes);
   }
@@ -587,8 +585,8 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
   ASSERT_TRUE(has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, "700"));
   ASSERT_TRUE(has_attribute(attributes, ATK_TEXT_ATTR_STYLE, "italic"));
   ASSERT_FALSE(
-      has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, absl::nullopt));
-  ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_INVALID, absl::nullopt));
+      has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, std::nullopt));
+  ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_INVALID, std::nullopt));
   atk_attribute_set_free(attributes);
 
   AtkObject* ax_after_atk_object =
@@ -599,10 +597,10 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
   EXPECT_EQ(7, end_offset);
   ASSERT_TRUE(
       has_attribute(attributes, ATK_TEXT_ATTR_FAMILY_NAME, "Helvetica"));
-  ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, absl::nullopt));
+  ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_WEIGHT, std::nullopt));
   ASSERT_FALSE(has_attribute(attributes, ATK_TEXT_ATTR_STYLE, "italic"));
   ASSERT_FALSE(
-      has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, absl::nullopt));
+      has_attribute(attributes, ATK_TEXT_ATTR_UNDERLINE, std::nullopt));
   atk_attribute_set_free(attributes);
 
   manager.reset();
@@ -663,7 +661,9 @@ TEST_F(BrowserAccessibilityAuraLinuxTest,
   // which won't modify this.
   container.SetName("container");
   ui::AXTree* tree = const_cast<ui::AXTree*>(manager->ax_tree());
-  ASSERT_TRUE(tree->Unserialize(MakeAXTreeUpdateForTesting(container)));
+  ui::AXTreeUpdate container_update = MakeAXTreeUpdateForTesting(container);
+  container_update.tree_data.tree_id = tree->GetAXTreeID();
+  ASSERT_TRUE(tree->Unserialize(container_update));
   ASSERT_FALSE(combo_box_node->IsChildOfLeaf());
   ASSERT_EQ(original_atk_object, combo_box_node->GetNativeViewAccessible());
 
@@ -824,7 +824,9 @@ TEST_F(BrowserAccessibilityAuraLinuxTest, TextAtkStaticTextChange) {
 
   text.SetName("Text2");
   ui::AXTree* tree = const_cast<ui::AXTree*>(manager->ax_tree());
-  ASSERT_TRUE(tree->Unserialize(MakeAXTreeUpdateForTesting(text)));
+  ui::AXTreeUpdate text_update = MakeAXTreeUpdateForTesting(text);
+  text_update.tree_data.tree_id = manager->GetTreeID();
+  ASSERT_TRUE(tree->Unserialize(text_update));
 
   // The change to the static text node should have triggered an update of the
   // containing div's hypertext.

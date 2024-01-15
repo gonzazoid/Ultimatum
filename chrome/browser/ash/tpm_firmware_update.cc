@@ -4,21 +4,20 @@
 
 #include "chrome/browser/ash/tpm_firmware_update.h"
 
+#include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_type_checker.h"
@@ -27,7 +26,8 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 
 namespace ash {
@@ -41,15 +41,15 @@ std::set<Mode> GetModesFromSetting(const base::Value* settings) {
   if (!settings)
     return modes;
 
-  const base::Value* const allow_powerwash = settings->FindKeyOfType(
-      kSettingsKeyAllowPowerwash, base::Value::Type::BOOLEAN);
-  if (allow_powerwash && allow_powerwash->GetBool()) {
+  const base::Value::Dict& settings_dict = settings->GetDict();
+  absl::optional<bool> allow_powerwash =
+      settings_dict.FindBool(kSettingsKeyAllowPowerwash);
+  if (allow_powerwash && *allow_powerwash) {
     modes.insert(Mode::kPowerwash);
   }
-  const base::Value* const allow_preserve_device_state =
-      settings->FindKeyOfType(kSettingsKeyAllowPreserveDeviceState,
-                              base::Value::Type::BOOLEAN);
-  if (allow_preserve_device_state && allow_preserve_device_state->GetBool()) {
+  absl::optional<bool> allow_preserve_device_state =
+      settings_dict.FindBool(kSettingsKeyAllowPreserveDeviceState);
+  if (allow_preserve_device_state && *allow_preserve_device_state) {
     modes.insert(Mode::kPreserveDeviceState);
   }
 
@@ -63,27 +63,24 @@ const char kSettingsKeyAllowPreserveDeviceState[] =
     "allow-user-initiated-preserve-device-state";
 const char kSettingsKeyAutoUpdateMode[] = "auto-update-mode";
 
-std::unique_ptr<base::DictionaryValue> DecodeSettingsProto(
+base::Value DecodeSettingsProto(
     const enterprise_management::TPMFirmwareUpdateSettingsProto& settings) {
-  std::unique_ptr<base::DictionaryValue> result =
-      std::make_unique<base::DictionaryValue>();
+  base::Value::Dict result;
 
   if (settings.has_allow_user_initiated_powerwash()) {
-    result->SetKey(kSettingsKeyAllowPowerwash,
-                   base::Value(settings.allow_user_initiated_powerwash()));
+    result.Set(kSettingsKeyAllowPowerwash,
+               settings.allow_user_initiated_powerwash());
   }
   if (settings.has_allow_user_initiated_preserve_device_state()) {
-    result->SetKey(
-        kSettingsKeyAllowPreserveDeviceState,
-        base::Value(settings.allow_user_initiated_preserve_device_state()));
+    result.Set(kSettingsKeyAllowPreserveDeviceState,
+               settings.allow_user_initiated_preserve_device_state());
   }
 
   if (settings.has_auto_update_mode()) {
-    result->SetKey(kSettingsKeyAutoUpdateMode,
-                   base::Value(settings.auto_update_mode()));
+    result.Set(kSettingsKeyAutoUpdateMode, settings.auto_update_mode());
   }
 
-  return result;
+  return base::Value(std::move(result));
 }
 
 // AvailabilityChecker tracks TPM firmware update availability information
@@ -111,7 +108,7 @@ class AvailabilityChecker {
   static void Start(ResponseCallback callback, base::TimeDelta timeout) {
     // Schedule a task to run when the timeout expires. The task also owns
     // |checker| and thus takes care of eventual deletion.
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(
             &AvailabilityChecker::OnTimeout,
@@ -125,9 +122,10 @@ class AvailabilityChecker {
         background_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
             {base::MayBlock(), base::TaskPriority::USER_VISIBLE})),
         watcher_(new base::FilePathWatcher()) {
-    auto watch_callback = base::BindRepeating(
-        &AvailabilityChecker::OnFilePathChanged,
-        base::SequencedTaskRunnerHandle::Get(), weak_ptr_factory_.GetWeakPtr());
+    auto watch_callback =
+        base::BindRepeating(&AvailabilityChecker::OnFilePathChanged,
+                            base::SequencedTaskRunner::GetCurrentDefault(),
+                            weak_ptr_factory_.GetWeakPtr());
     background_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&AvailabilityChecker::StartOnBackgroundThread,
                                   watcher_.get(), watch_callback));
@@ -199,13 +197,13 @@ class AvailabilityChecker {
     // this function terminates. Thus, the final check needs to run independent
     // of |this| and takes |callback_| ownership.
     if (callback_) {
-      base::PostTaskAndReplyWithResult(background_task_runner_.get(), FROM_HERE,
-                                       base::BindOnce([]() {
-                                         Status status;
-                                         CheckAvailabilityStatus(&status);
-                                         return status;
-                                       }),
-                                       std::move(callback_));
+      background_task_runner_->PostTaskAndReplyWithResult(
+          FROM_HERE, base::BindOnce([]() {
+            Status status;
+            CheckAvailabilityStatus(&status);
+            return status;
+          }),
+          std::move(callback_));
     }
   }
 
@@ -254,17 +252,20 @@ void GetAvailableUpdateModes(
         break;
     }
   } else {
-    // Consumer device or still in OOBE. If FRE is required, enterprise
-    // enrollment might still be pending, in which case TPM firmware updates are
-    // disallowed until FRE determines that the device is not remotely managed
-    // or it does get enrolled and the admin allows TPM firmware updates.
-    const auto requirement =
-        policy::AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
-            system::StatisticsProvider::GetInstance());
-    if (requirement == policy::AutoEnrollmentTypeChecker::FRERequirement::
-                           kExplicitlyRequired) {
-      std::move(completion).Run(std::set<Mode>());
-      return;
+    // Consumer device or still in OOBE.
+    if (!InstallAttributes::Get()->IsDeviceLocked()) {
+      // Device in OOBE. If FRE is required, enterprise enrollment might still
+      // be pending, in which case TPM firmware updates are disallowed until
+      // FRE determines that the device is not remotely managed or it does get
+      // enrolled and the admin allows TPM firmware updates.
+      const auto requirement =
+          policy::AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+              system::StatisticsProvider::GetInstance());
+      if (requirement == policy::AutoEnrollmentTypeChecker::FRERequirement::
+                             kExplicitlyRequired) {
+        std::move(completion).Run(std::set<Mode>());
+        return;
+      }
     }
 
     // All modes are available for consumer devices.

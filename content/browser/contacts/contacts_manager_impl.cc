@@ -8,10 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
-#include "content/public/browser/contacts_picker_properties_requested.h"
+#include "content/public/browser/contacts_picker_properties.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -38,10 +38,10 @@ std::unique_ptr<ContactsProvider> CreateProvider(
 void OnContactsSelected(
     blink::mojom::ContactsManager::SelectCallback callback,
     ukm::SourceId source_id,
-    absl::optional<std::vector<blink::mojom::ContactInfoPtr>> contacts,
+    std::optional<std::vector<blink::mojom::ContactInfoPtr>> contacts,
     int percentage_shared,
-    ContactsPickerPropertiesRequested properties_requested) {
-  if (contacts != absl::nullopt) {
+    ContactsPickerProperties properties_requested) {
+  if (contacts != std::nullopt) {
     int select_count = contacts.value().size();
     ukm::builders::ContactsPicker_ShareStatistics(source_id)
         .SetSelectCount(ukm::GetExponentialBucketMinForCounts1000(select_count))
@@ -58,8 +58,11 @@ ContactsManagerImpl::ContactsManagerImpl(
     RenderFrameHostImpl& render_frame_host,
     mojo::PendingReceiver<blink::mojom::ContactsManager> receiver)
     : DocumentService(render_frame_host, std::move(receiver)),
-      contacts_provider_(CreateProvider(render_frame_host)),
-      source_id_(render_frame_host.GetPageUkmSourceId()) {}
+      contacts_provider_(CreateProvider(render_frame_host)) {
+  CHECK(!render_frame_host.IsInLifecycleState(
+      RenderFrameHost::LifecycleState::kPrerendering));
+  source_id_ = render_frame_host.GetPageUkmSourceId();
+}
 
 ContactsManagerImpl::~ContactsManagerImpl() = default;
 
@@ -77,7 +80,7 @@ void ContactsManagerImpl::Select(bool multiple,
         base::BindOnce(&OnContactsSelected, std::move(mojom_callback),
                        source_id_));
   } else {
-    std::move(mojom_callback).Run(absl::nullopt);
+    std::move(mojom_callback).Run(std::nullopt);
   }
 }
 

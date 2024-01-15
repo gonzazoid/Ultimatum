@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,18 @@ class AccessibilityServiceRouter : public KeyedService {
       delete;
   ~AccessibilityServiceRouter() override;
 
-  virtual void BindAutomationWithClient(
-      mojo::PendingRemote<mojom::AutomationClient> automation_client_remote,
-      mojo::PendingReceiver<mojom::Automation> automation_receiver);
+  virtual void BindAccessibilityServiceClient(
+      mojo::PendingRemote<mojom::AccessibilityServiceClient>
+          accessibility_service_client);
 
   virtual void BindAssistiveTechnologyController(
       mojo::PendingReceiver<mojom::AssistiveTechnologyController>
           at_controller_receiver,
       const std::vector<mojom::AssistiveTechnologyType>& enabled_features);
+
+  virtual void ConnectDevToolsAgent(
+      ::mojo::PendingAssociatedReceiver<blink::mojom::DevToolsAgent> agent,
+      mojom::AssistiveTechnologyType type);
 
  private:
   void LaunchIfNotRunning();

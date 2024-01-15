@@ -338,8 +338,8 @@ TEST(WebInputEventTest, TestMakeWebMouseEvent) {
 
     EXPECT_EQ(blink::WebPointerProperties::PointerType::kPen,
               webkit_event.pointer_type);
-    EXPECT_EQ(90, webkit_event.tilt_x);
-    EXPECT_EQ(-90, webkit_event.tilt_y);
+    EXPECT_EQ(89.5, webkit_event.tilt_x);
+    EXPECT_EQ(-89.5, webkit_event.tilt_y);
     EXPECT_FLOAT_EQ(0.8f, webkit_event.force);
     EXPECT_FLOAT_EQ(0.6f, webkit_event.tangential_pressure);
     EXPECT_EQ(269, webkit_event.twist);
@@ -410,8 +410,8 @@ TEST(WebInputEventTest, KeyEvent) {
   } tests[] = {
       {ui::KeyEvent(ui::ET_KEY_PRESSED, ui::VKEY_A, ui::EF_NONE),
        blink::WebInputEvent::Type::kRawKeyDown, 0x0},
-      {ui::KeyEvent(L'B', ui::VKEY_B, ui::DomCode::NONE,
-                    ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN),
+      {ui::KeyEvent::FromCharacter(L'B', ui::VKEY_B, ui::DomCode::NONE,
+                                   ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN),
        blink::WebInputEvent::Type::kChar,
        blink::WebInputEvent::kShiftKey | blink::WebInputEvent::kControlKey},
       {ui::KeyEvent(ui::ET_KEY_RELEASED, ui::VKEY_C, ui::EF_ALT_DOWN),

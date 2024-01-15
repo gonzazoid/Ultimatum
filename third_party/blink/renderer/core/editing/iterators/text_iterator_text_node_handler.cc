@@ -5,14 +5,12 @@
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator_text_node_handler.h"
 
 #include <algorithm>
-#include "third_party/blink/renderer/core/dom/first_letter_pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator_text_state.h"
+#include "third_party/blink/renderer/core/layout/inline/offset_mapping.h"
+#include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/core/layout/layout_text_fragment.h"
-#include "third_party/blink/renderer/core/layout/line/inline_text_box.h"
-#include "third_party/blink/renderer/core/layout/line/root_inline_box.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_offset_mapping.h"
 
 namespace blink {
 
@@ -22,6 +20,21 @@ namespace {
 // proceed till the end of the text node. Can be removed when we can handle text
 // length differences due to text-transform correctly.
 const unsigned kMaxOffset = std::numeric_limits<unsigned>::max();
+
+// Resolves kMaxOffset to an actual number. Should simply return |dom_length|
+// when we can handle text-transform correctly.
+unsigned CalculateMaxOffset(const Text& text) {
+  DCHECK(text.GetLayoutObject());
+  unsigned dom_length = text.data().length();
+  unsigned layout_length;
+  if (const LayoutTextFragment* fragment =
+          DynamicTo<LayoutTextFragment>(text.GetLayoutObject())) {
+    layout_length = fragment->Start() + fragment->FragmentLength();
+  } else {
+    layout_length = text.GetLayoutObject()->TransformedTextLength();
+  }
+  return std::min(dom_length, layout_length);
+}
 
 bool ShouldSkipInvisibleTextAt(const Text& text,
                                unsigned offset,
@@ -43,18 +56,33 @@ struct StringAndOffsetRange {
 };
 
 StringAndOffsetRange ComputeTextAndOffsetsForEmission(
-    const NGOffsetMapping& mapping,
-    const NGOffsetMappingUnit& unit,
+    const OffsetMapping& mapping,
+    const OffsetMappingUnit& unit,
     const TextIteratorBehavior& behavior) {
-  // TODO(xiaochengh): Handle EmitsOriginalText.
-  if (behavior.EmitsSpaceForNbsp()) {
-    String string = mapping.GetText().Substring(
-        unit.TextContentStart(),
-        unit.TextContentEnd() - unit.TextContentStart());
-    string.Replace(kNoBreakSpaceCharacter, kSpaceCharacter);
-    return {string, 0, string.length()};
+  StringAndOffsetRange result{mapping.GetText(), unit.TextContentStart(),
+                              unit.TextContentEnd()};
+
+  if (behavior.EmitsOriginalText()) {
+    // This is ensured because |unit.GetLayoutObject()| must be the
+    // LayoutObject for TextIteratorTextNodeHandler's |text_node_|.
+    DCHECK(IsA<LayoutText>(unit.GetLayoutObject()));
+    result.string =
+        To<LayoutText>(unit.GetLayoutObject())
+            .OriginalText()
+            .Substring(unit.DOMStart(), unit.DOMEnd() - unit.DOMStart());
+    result.start = 0;
+    result.end = result.string.length();
   }
-  return {mapping.GetText(), unit.TextContentStart(), unit.TextContentEnd()};
+
+  if (behavior.EmitsSpaceForNbsp()) {
+    result.string =
+        result.string.Substring(result.start, result.end - result.start);
+    result.string.Replace(kNoBreakSpaceCharacter, kSpaceCharacter);
+    result.start = 0;
+    result.end = result.string.length();
+  }
+
+  return result;
 }
 
 }  // namespace
@@ -81,7 +109,7 @@ void TextIteratorTextNodeHandler::HandleTextNodeWithLayoutNG() {
 
     // We may go through multiple mappings, which happens when there is
     // ::first-letter and blockifying style.
-    auto* mapping = NGOffsetMapping::ForceGetFor(range_to_emit.StartPosition());
+    auto* mapping = OffsetMapping::ForceGetFor(range_to_emit.StartPosition());
     if (!mapping) {
       offset_ = end_offset_;
       return;
@@ -128,16 +156,6 @@ void TextIteratorTextNodeHandler::HandleTextNodeWithLayoutNG() {
   }
 }
 
-bool TextIteratorTextNodeHandler::ShouldHandleFirstLetter(
-    const LayoutText& layout_text) const {
-  if (handled_first_letter_)
-    return false;
-  if (!layout_text.IsTextFragment())
-    return false;
-  const auto& text_fragment = To<LayoutTextFragment>(layout_text);
-  return offset_ < text_fragment.TextStartOffset();
-}
-
 void TextIteratorTextNodeHandler::HandleTextNodeInRange(const Text* node,
                                                         unsigned start_offset,
                                                         unsigned end_offset) {
@@ -149,20 +167,19 @@ void TextIteratorTextNodeHandler::HandleTextNodeInRange(const Text* node,
   text_node_ = node;
   offset_ = start_offset;
   end_offset_ = end_offset;
-  handled_first_letter_ = false;
-  first_letter_text_ = nullptr;
   mapping_units_.clear();
 
-  const NGOffsetMapping* const mapping =
-      NGOffsetMapping::ForceGetFor(Position(node, offset_));
+  const OffsetMapping* const mapping =
+      OffsetMapping::ForceGetFor(Position(node, offset_));
   if (UNLIKELY(!mapping)) {
     NOTREACHED() << "We have LayoutText outside LayoutBlockFlow " << text_node_;
     return;
   }
 
   // Restore end offset from magic value.
-  if (end_offset_ == kMaxOffset)
-    end_offset_ = node->data().length();
+  if (end_offset_ == kMaxOffset) {
+    end_offset_ = CalculateMaxOffset(*node);
+  }
   mapping_units_ = mapping->GetMappingUnitsForDOMRange(
       EphemeralRange(Position(node, offset_), Position(node, end_offset_)));
   mapping_units_index_ = 0;
@@ -182,53 +199,6 @@ void TextIteratorTextNodeHandler::HandleTextNodeEndAt(const Text* node,
 
 void TextIteratorTextNodeHandler::HandleTextNodeWhole(const Text* node) {
   HandleTextNodeStartFrom(node, 0);
-}
-
-void TextIteratorTextNodeHandler::HandleTextNodeFirstLetter(
-    LayoutTextFragment* layout_object) {
-  handled_first_letter_ = true;
-
-  if (!layout_object->IsRemainingTextLayoutObject())
-    return;
-
-  FirstLetterPseudoElement* first_letter_element =
-      layout_object->GetFirstLetterPseudoElement();
-  if (!first_letter_element)
-    return;
-
-  LayoutObject* pseudo_layout_object = first_letter_element->GetLayoutObject();
-  if (pseudo_layout_object->Style()->Visibility() != EVisibility::kVisible &&
-      !IgnoresStyleVisibility())
-    return;
-
-  LayoutObject* first_letter = pseudo_layout_object->SlowFirstChild();
-
-  sorted_text_boxes_.clear();
-  CHECK(first_letter && first_letter->IsText());
-  first_letter_text_ = To<LayoutText>(first_letter);
-}
-
-void TextIteratorTextNodeHandler::EmitChar16Before(UChar code_unit,
-                                                   unsigned offset) {
-  text_state_.EmitChar16Before(code_unit, *text_node_, offset);
-}
-
-void TextIteratorTextNodeHandler::EmitReplacmentCodeUnit(UChar code_unit,
-                                                         unsigned offset) {
-  text_state_.EmitReplacmentCodeUnit(code_unit, *text_node_, offset);
-}
-
-void TextIteratorTextNodeHandler::EmitText(const LayoutText* layout_object,
-                                           unsigned text_start_offset,
-                                           unsigned text_end_offset) {
-  String string = behavior_.EmitsOriginalText() ? layout_object->OriginalText()
-                                                : layout_object->GetText();
-  if (behavior_.EmitsSpaceForNbsp())
-    string.Replace(kNoBreakSpaceCharacter, kSpaceCharacter);
-  text_state_.EmitText(*text_node_,
-                       text_start_offset + layout_object->TextStartOffset(),
-                       text_end_offset + layout_object->TextStartOffset(),
-                       string, text_start_offset, text_end_offset);
 }
 
 }  // namespace blink

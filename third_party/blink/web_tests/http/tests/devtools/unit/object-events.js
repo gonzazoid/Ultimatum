@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+
 (async function() {
   TestRunner.addResult(`The test verifies that DevTools events work.\n`);
-  var object = new Common.Object();
+  var object = new Common.ObjectWrapper.ObjectWrapper();
   var eventSymbol = Symbol('Event');
 
   addListener('original listener');

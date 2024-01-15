@@ -26,29 +26,22 @@
 
 // Define static storage for trace event categories (see
 // PERFETTO_DEFINE_CATEGORIES).
-PERFETTO_TRACK_EVENT_STATIC_STORAGE();
+PERFETTO_TRACK_EVENT_STATIC_STORAGE_IN_NAMESPACE_WITH_ATTRS(base, BASE_EXPORT);
 
 namespace perfetto {
 namespace legacy {
 
 template <>
 perfetto::ThreadTrack ConvertThreadId(const ::base::PlatformThreadId& thread) {
-  return perfetto::ThreadTrack::ForThread(static_cast<int32_t>(thread));
+  return perfetto::ThreadTrack::ForThread(thread);
 }
-
-#if BUILDFLAG(IS_WIN)
-template <>
-perfetto::ThreadTrack ConvertThreadId(const int& thread) {
-  return perfetto::ThreadTrack::ForThread(static_cast<int32_t>(thread));
-}
-#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace legacy
 
 TraceTimestamp
 TraceTimestampTraits<::base::TimeTicks>::ConvertTimestampToTraceTimeNs(
     const ::base::TimeTicks& ticks) {
-  return {TrackEvent::GetTraceClockId(),
+  return {static_cast<uint32_t>(::base::TrackEvent::GetTraceClockId()),
           static_cast<uint64_t>(ticks.since_origin().InNanoseconds())};
 }
 
@@ -72,7 +65,7 @@ void WriteDebugAnnotation(protos::pbzero::DebugAnnotation* annotation,
 namespace base {
 namespace trace_event {
 
-bool ConvertableToTraceFormat::AppendToProto(ProtoAppender* appender) {
+bool ConvertableToTraceFormat::AppendToProto(ProtoAppender* appender) const {
   return false;
 }
 

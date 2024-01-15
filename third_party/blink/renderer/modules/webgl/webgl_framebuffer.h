@@ -76,6 +76,7 @@ class WebGLFramebuffer final : public WebGLContextObject {
   // the browser and not inspectable or alterable via Javascript. This is
   // primarily used by the VRWebGLLayer interface.
   static WebGLFramebuffer* CreateOpaque(WebGLRenderingContextBase*,
+                                        bool has_depth,
                                         bool has_stencil);
 
   GLuint Object() const { return object_; }
@@ -106,6 +107,7 @@ class WebGLFramebuffer final : public WebGLContextObject {
 
   void SetHasEverBeenBound() { has_ever_been_bound_ = true; }
 
+  bool HasDepthBuffer() const;
   bool HasStencilBuffer() const;
 
   bool HaveContentsChanged() { return contents_changed_; }
@@ -113,6 +115,7 @@ class WebGLFramebuffer final : public WebGLContextObject {
 
   bool Opaque() const { return opaque_; }
   void MarkOpaqueBufferComplete(bool complete) { opaque_complete_ = complete; }
+  void SetOpaqueHasDepth(bool has_depth) { opaque_has_depth_ = has_depth; }
   void SetOpaqueHasStencil(bool has_stencil) {
     opaque_has_stencil_ = has_stencil;
   }
@@ -121,6 +124,10 @@ class WebGLFramebuffer final : public WebGLContextObject {
   void DrawBuffers(const Vector<GLenum>& bufs);
 
   GLenum GetDrawBuffer(GLenum);
+
+  // WEBGL_shader_pixel_local_storage.
+  void SetPLSTexture(GLint plane, WebGLTexture*);
+  WebGLTexture* GetPLSTexture(GLint plane) const;
 
   void ReadBuffer(const GLenum color_buffer) { read_buffer_ = color_buffer; }
 
@@ -168,11 +175,17 @@ class WebGLFramebuffer final : public WebGLContextObject {
   bool web_gl1_depth_stencil_consistent_;
   bool contents_changed_ = false;
   const bool opaque_;
+  bool opaque_has_depth_ = false;
   bool opaque_has_stencil_ = false;
   bool opaque_complete_ = false;
 
   Vector<GLenum> draw_buffers_;
   Vector<GLenum> filtered_draw_buffers_;
+
+  // WEBGL_shader_pixel_local_storage.
+  typedef HeapHashMap<GLint, Member<WebGLTexture>> PLSTextureMap;
+
+  PLSTextureMap pls_textures_;
 
   GLenum read_buffer_;
 };

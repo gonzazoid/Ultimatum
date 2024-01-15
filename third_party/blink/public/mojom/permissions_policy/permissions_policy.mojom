@@ -4,17 +4,17 @@
 
 module blink.mojom;
 
-import "url/mojom/origin.mojom";
 import "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom";
+import "url/mojom/origin.mojom";
 
-// This struct can represent an origin like https://foo.com/ or like
-// https://*.foo.com/. The wildcard can only represent a subdomain.
-// Note that https://*.foo.com/ matches domains like https://example.foo.com/
-// or https://test.example.foo.com/ but does not match https://foo.com/.
-// Origins that do have wildcards cannot be opaque.
+// This struct mirrors network.mojom.CSPSource, but excludes members not used
+// in permissions policies like `path`.
 struct OriginWithPossibleWildcards {
-  url.mojom.Origin origin;
-  bool has_subdomain_wildcard;
+  string scheme;
+  string host;
+  int32 port = -1;
+  bool is_host_wildcard = false;
+  bool is_port_wildcard = false;
 };
 
 // This struct holds permissions policy allowlist data that needs to be replicated
@@ -24,6 +24,8 @@ struct OriginWithPossibleWildcards {
 struct ParsedPermissionsPolicyDeclaration {
   PermissionsPolicyFeature feature;
   array<OriginWithPossibleWildcards> allowed_origins;
+  url.mojom.Origin? self_if_matches;
   bool matches_all_origins;
   bool matches_opaque_src;
+  string? reporting_endpoint;
 };

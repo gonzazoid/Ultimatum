@@ -6,14 +6,13 @@ package org.chromium.chrome.browser.services.gcm;
 
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
-import android.text.TextUtils;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.device.DeviceConditions;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
 import org.chromium.chrome.browser.init.ProcessInitializationHandler;
@@ -25,11 +24,8 @@ import org.chromium.components.gcm_driver.GCMMessage;
 import org.chromium.components.gcm_driver.InstanceIDFlags;
 import org.chromium.components.gcm_driver.LazySubscriptionsManager;
 import org.chromium.components.gcm_driver.SubscriptionFlagManager;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
-/**
- * Receives Downstream messages and status of upstream messages from GCM.
- */
+/** Receives Downstream messages and status of upstream messages from GCM. */
 public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl {
     private static final String TAG = "ChromeGcmListener";
 
@@ -41,44 +37,39 @@ public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl 
 
     @Override
     public void onMessageReceived(final String from, final Bundle data) {
-        boolean hasCollapseKey = !TextUtils.isEmpty(data.getString("collapse_key"));
-        GcmUma.recordDataMessageReceived(ContextUtils.getApplicationContext(), hasCollapseKey);
-
         // Dispatch the message to the GCM Driver for native features.
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-            GCMMessage message = null;
-            try {
-                message = new GCMMessage(from, data);
-            } catch (IllegalArgumentException e) {
-                Log.e(TAG, "Received an invalid GCM Message", e);
-                return;
-            }
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    GCMMessage message = null;
+                    try {
+                        message = new GCMMessage(from, data);
+                    } catch (IllegalArgumentException e) {
+                        Log.e(TAG, "Received an invalid GCM Message", e);
+                        return;
+                    }
 
-            scheduleOrDispatchMessageToDriver(message);
-        });
+                    scheduleOrDispatchMessageToDriver(message);
+                });
     }
 
     @Override
     public void onMessageSent(String msgId) {
         Log.d(TAG, "Message sent successfully. Message id: %s", msgId);
-        GcmUma.recordGcmUpstreamHistogram(
-                ContextUtils.getApplicationContext(), GcmUma.UMA_UPSTREAM_SUCCESS);
     }
 
     @Override
     public void onSendError(String msgId, Exception error) {
         Log.w(TAG, "Error in sending message. Message id: %s", msgId, error);
-        GcmUma.recordGcmUpstreamHistogram(
-                ContextUtils.getApplicationContext(), GcmUma.UMA_UPSTREAM_SEND_FAILED);
     }
 
     @Override
     public void onDeletedMessages() {
         // TODO(johnme): Ask GCM to include the subtype in this event.
-        Log.w(TAG,
+        Log.w(
+                TAG,
                 "Push messages were deleted, but we can't tell the Service Worker as we don't"
                         + "know what subtype (app ID) it occurred for.");
-        GcmUma.recordDeletedMessages(ContextUtils.getApplicationContext());
     }
 
     @Override
@@ -100,8 +91,9 @@ public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl 
             return false;
         }
 
-        final String subscriptionId = SubscriptionFlagManager.buildSubscriptionUniqueId(
-                message.getAppId(), message.getSenderId());
+        final String subscriptionId =
+                SubscriptionFlagManager.buildSubscriptionUniqueId(
+                        message.getAppId(), message.getSenderId());
         if (!SubscriptionFlagManager.hasFlags(subscriptionId, InstanceIDFlags.BYPASS_SCHEDULER)) {
             return false;
         }
@@ -129,8 +121,9 @@ public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl 
             return false;
         }
 
-        final String subscriptionId = LazySubscriptionsManager.buildSubscriptionUniqueId(
-                message.getAppId(), message.getSenderId());
+        final String subscriptionId =
+                LazySubscriptionsManager.buildSubscriptionUniqueId(
+                        message.getAppId(), message.getSenderId());
 
         boolean isSubscriptionLazy = LazySubscriptionsManager.isSubscriptionLazy(subscriptionId);
         boolean isHighPriority = message.getOriginalPriority() == GCMMessage.Priority.HIGH;
@@ -150,11 +143,11 @@ public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl 
     private static void scheduleBackgroundTask(GCMMessage message) {
         // TODO(peter): Add UMA for measuring latency introduced by the BackgroundTaskScheduler.
         TaskInfo backgroundTask =
-                TaskInfo.createOneOffTask(TaskIds.GCM_BACKGROUND_TASK_JOB_ID, 0 /* immediately */)
-                        .setExtras(message.toBundle())
+                TaskInfo.createOneOffTask(TaskIds.GCM_BACKGROUND_TASK_JOB_ID, /* immediately= */ 0)
+                        .setExtras(message.toPersistableBundle())
                         .build();
-        BackgroundTaskSchedulerFactory.getScheduler().schedule(
-                ContextUtils.getApplicationContext(), backgroundTask);
+        BackgroundTaskSchedulerFactory.getScheduler()
+                .schedule(ContextUtils.getApplicationContext(), backgroundTask);
     }
 
     private static void recordWebPushMetrics(GCMMessage message) {
@@ -162,14 +155,17 @@ public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl 
         boolean inIdleMode = DeviceConditions.isCurrentlyInIdleMode(context);
         boolean isHighPriority = message.getOriginalPriority() == GCMMessage.Priority.HIGH;
 
-        @GcmUma.WebPushDeviceState
-        int state;
+        @GcmUma.WebPushDeviceState int state;
         if (inIdleMode) {
-            state = isHighPriority ? GcmUma.WebPushDeviceState.IDLE_HIGH_PRIORITY
-                                   : GcmUma.WebPushDeviceState.IDLE_NOT_HIGH_PRIORITY;
+            state =
+                    isHighPriority
+                            ? GcmUma.WebPushDeviceState.IDLE_HIGH_PRIORITY
+                            : GcmUma.WebPushDeviceState.IDLE_NOT_HIGH_PRIORITY;
         } else {
-            state = isHighPriority ? GcmUma.WebPushDeviceState.NOT_IDLE_HIGH_PRIORITY
-                                   : GcmUma.WebPushDeviceState.NOT_IDLE_NOT_HIGH_PRIORITY;
+            state =
+                    isHighPriority
+                            ? GcmUma.WebPushDeviceState.NOT_IDLE_HIGH_PRIORITY
+                            : GcmUma.WebPushDeviceState.NOT_IDLE_NOT_HIGH_PRIORITY;
         }
         GcmUma.recordWebPushReceivedDeviceState(state);
     }
@@ -194,12 +190,6 @@ public class ChromeGcmListenerServiceImpl extends ChromeGcmListenerService.Impl 
 
         // Check if we should only persist the message for now.
         if (maybePersistLazyMessage(message)) {
-            return;
-        }
-
-        // Dispatch message immediately on pre N versions of Android.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            dispatchMessageToDriver(message);
             return;
         }
 

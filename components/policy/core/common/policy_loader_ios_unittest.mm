@@ -8,27 +8,28 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/json/json_string_value_serializer.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/task/sequenced_task_runner.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
+#import "base/time/time.h"
 #include "base/values.h"
 #include "components/policy/core/common/async_policy_provider.h"
 #include "components/policy/core/common/configuration_policy_provider_test.h"
 #include "components/policy/core/common/policy_bundle.h"
 #import "components/policy/core/common/policy_loader_ios_constants.h"
 #include "components/policy/core/common/policy_map.h"
+#import "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_test_utils.h"
 #include "components/policy/core/common/policy_types.h"
+#include "components/policy/core/common/schema.h"
+#include "components/policy/core/common/schema_registry.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace policy {
 
@@ -55,7 +56,7 @@ class TestHarness : public PolicyProviderTestHarness {
   void InstallBooleanPolicy(const std::string& policy_name,
                             bool policy_value) override;
   void InstallStringListPolicy(const std::string& policy_name,
-                               const base::ListValue* policy_value) override;
+                               const base::Value::List& policy_value) override;
   void InstallDictionaryPolicy(const std::string& policy_name,
                                const base::Value::Dict& policy_value) override;
 
@@ -127,17 +128,18 @@ void TestHarness::InstallBooleanPolicy(const std::string& policy_name,
   });
 }
 
-void TestHarness::InstallStringListPolicy(const std::string& policy_name,
-                                          const base::ListValue* policy_value) {
+void TestHarness::InstallStringListPolicy(
+    const std::string& policy_name,
+    const base::Value::List& policy_value) {
   NSString* key = base::SysUTF8ToNSString(policy_name);
-  base::ScopedCFTypeRef<CFPropertyListRef> value(
-      ValueToProperty(*policy_value));
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
+      ValueToProperty(base::Value(policy_value.Clone())));
 
   if (encode_complex_data_as_json_) {
     // Convert |policy_value| to a JSON-encoded string.
     std::string json_string;
     JSONStringValueSerializer serializer(&json_string);
-    ASSERT_TRUE(serializer.Serialize(*policy_value));
+    ASSERT_TRUE(serializer.Serialize(policy_value));
 
     AddPolicies(@{key : base::SysUTF8ToNSString(json_string)});
   } else {
@@ -158,7 +160,7 @@ void TestHarness::InstallDictionaryPolicy(
 
     AddPolicies(@{key : base::SysUTF8ToNSString(json_string)});
   } else {
-    base::ScopedCFTypeRef<CFPropertyListRef> value(
+    base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
         ValueToProperty(base::Value(policy_value.Clone())));
     AddPolicies(@{key : (__bridge NSDictionary*)(value.get())});
   }
@@ -199,5 +201,130 @@ INSTANTIATE_TEST_SUITE_P(PolicyProviderIOSChromePolicyTest,
 INSTANTIATE_TEST_SUITE_P(PolicyProviderIOSChromePolicyJSONTest,
                          ConfigurationPolicyProviderTest,
                          testing::Values(TestHarness::CreateWithJSONEncoding));
+
+const char kTestChromeSchema[] =
+    "{"
+    "  \"type\": \"object\","
+    "  \"properties\": {"
+    "    \"StringPolicy\": { \"type\": \"string\" },"
+    "  }"
+    "}";
+
+PolicyNamespace GetPolicyNamespace() {
+  return PolicyNamespace(POLICY_DOMAIN_CHROME, "");
+}
+
+// Tests cases not covered by the test harnest.
+class PolicyLoaderIosTest : public PlatformTest {
+ protected:
+  PolicyLoaderIosTest()
+      : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+
+  void SetUp() override {
+    std::string error = RegisterSchema(GetPolicyNamespace(), kTestChromeSchema);
+    ASSERT_TRUE(error.empty())
+        << "Registration of schema failed with error: " << error;
+  }
+
+  void TearDown() override {
+    task_environment_.RunUntilIdle();
+    provider_->Shutdown();
+    // Clear App Config.
+    [[NSUserDefaults standardUserDefaults]
+        removeObjectForKey:kPolicyLoaderIOSConfigurationKey];
+  }
+
+  void InitProvider() {
+    std::unique_ptr<PolicyLoaderIOS> loader = std::make_unique<PolicyLoaderIOS>(
+        &schema_registry_, task_environment_.GetMainThreadTaskRunner());
+    provider_ = std::make_unique<AsyncPolicyProvider>(&schema_registry_,
+                                                      std::move(loader));
+    provider_->Init(&schema_registry_);
+    task_environment_.RunUntilIdle();
+  }
+
+  base::test::TaskEnvironment task_environment_;
+  SchemaRegistry schema_registry_;
+  std::unique_ptr<AsyncPolicyProvider> provider_;
+
+ private:
+  std::string RegisterSchema(const PolicyNamespace& ns,
+                             const std::string& schema_string) {
+    std::string error;
+    Schema schema = Schema::Parse(schema_string, &error);
+    if (schema.valid()) {
+      schema_registry_.RegisterComponent(ns, schema);
+      return std::string();
+    }
+    return error;
+  }
+};
+
+TEST_F(PolicyLoaderIosTest, ReloadIntervalWhenBrowserManagedPostStartup) {
+  InitProvider();
+
+  // Verify that there are no policies loaded at startup.
+  EXPECT_TRUE(provider_->policies().Equals(PolicyBundle()));
+
+  // Set a policy in the App Config at runtime to replicate the situation where
+  // the browser is put under management after startup.
+  NSDictionary* policies = @{@"StringPolicy" : @"string_value"};
+  [[NSUserDefaults standardUserDefaults]
+      setObject:policies
+         forKey:kPolicyLoaderIOSConfigurationKey];
+
+  // Verify that the new policy changes aren't picked up after 10 minutes
+  // when the browser wasn't managed at startup. This is to make sure that the
+  // first reload was scheduled with an interval of 15 minutes.
+  task_environment_.FastForwardBy(base::Minutes(10));
+  EXPECT_TRUE(provider_->policies().Equals(PolicyBundle()));
+
+  // Verify that the new policy changes are picked up after 15 minutes +
+  // epsilon.
+  task_environment_.FastForwardBy(base::Minutes(5) + base::Seconds(1));
+  ASSERT_TRUE(task_environment_.MainThreadIsIdle());
+  PolicyBundle bundle;
+  bundle.Get(GetPolicyNamespace())
+      .Set("StringPolicy", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_MACHINE,
+           POLICY_SOURCE_PLATFORM, base::Value("string_value"), nullptr);
+  EXPECT_TRUE(provider_->policies().Equals(bundle));
+
+  // Simulate the situation where the App Config is updated with new values
+  // before the next reload.
+  NSDictionary* new_policies = @{@"StringPolicy" : @"string_value_new"};
+  [[NSUserDefaults standardUserDefaults]
+      setObject:new_policies
+         forKey:kPolicyLoaderIOSConfigurationKey];
+
+  // Verify that the interval was adjusted to 30 seconds after first reload.
+  task_environment_.FastForwardBy(base::Seconds(31));
+  ASSERT_TRUE(task_environment_.MainThreadIsIdle());
+  PolicyBundle new_bundle;
+  new_bundle.Get(GetPolicyNamespace())
+      .Set("StringPolicy", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_MACHINE,
+           POLICY_SOURCE_PLATFORM, base::Value("string_value_new"), nullptr);
+  EXPECT_TRUE(provider_->policies().Equals(new_bundle));
+}
+
+TEST_F(PolicyLoaderIosTest, ReloadIntervalWhenManagedByPlatformBeforeStartup) {
+  // Set a policy in the App Config to replicate the situation where the browser
+  // is put under management before startup.
+  NSDictionary* policies = @{@"StringPolicy" : @"string_value"};
+  [[NSUserDefaults standardUserDefaults]
+      setObject:policies
+         forKey:kPolicyLoaderIOSConfigurationKey];
+
+  InitProvider();
+
+  // Verify that the new policy changes are picked up after 30 seconds +
+  // epsilon.
+  task_environment_.FastForwardBy(base::Seconds(31));
+  ASSERT_TRUE(task_environment_.MainThreadIsIdle());
+  PolicyBundle bundle;
+  bundle.Get(GetPolicyNamespace())
+      .Set("StringPolicy", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_MACHINE,
+           POLICY_SOURCE_PLATFORM, base::Value("string_value"), nullptr);
+  EXPECT_TRUE(provider_->policies().Equals(bundle));
+}
 
 }  // namespace policy

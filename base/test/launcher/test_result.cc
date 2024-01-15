@@ -47,8 +47,6 @@ std::string TestResultPart::TypeAsString() const {
       return "fatal_failure";
     case kSkip:
       return "skip";
-    default:
-      NOTREACHED();
   }
   return "unknown";
 }
@@ -105,6 +103,10 @@ std::string TestResult::GetTestCaseName() const {
 void TestResult::AddLink(const std::string& name, const std::string& url) {
   auto [it, inserted] = links.insert({name, url});
   DCHECK(inserted) << name << " is already used as a link name. Ignoring...";
+}
+
+void TestResult::AddTag(const std::string& name, const std::string& value) {
+  tags[name].push_back(value);
 }
 
 void TestResult::AddProperty(const std::string& name,

@@ -6,7 +6,7 @@
 
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "build/chromeos_buildflags.h"
@@ -55,8 +55,6 @@ ForceInstalledMetrics::UserType ConvertUserType(
       return ForceInstalledMetrics::UserType::USER_TYPE_CHILD;
     case user_manager::USER_TYPE_ARC_KIOSK_APP:
       return ForceInstalledMetrics::UserType::USER_TYPE_ARC_KIOSK_APP;
-    case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
-      return ForceInstalledMetrics::UserType::USER_TYPE_ACTIVE_DIRECTORY;
     case user_manager::USER_TYPE_WEB_KIOSK_APP:
       return ForceInstalledMetrics::UserType::USER_TYPE_WEB_KIOSK_APP;
     default:
@@ -459,12 +457,13 @@ void ForceInstalledMetrics::ReportMetrics() {
   auto installed_extensions = registry_->GenerateInstalledExtensionsSet();
   auto blocklisted_extensions = registry_->GenerateInstalledExtensionsSet(
       ExtensionRegistry::IncludeFlag::BLOCKLISTED);
-  for (const auto& entry : *installed_extensions) {
+  for (const auto& entry : installed_extensions) {
     if (missing_forced_extensions.count(entry->id())) {
       missing_forced_extensions.erase(entry->id());
       ReportDisableReason(entry->id());
-      if (blocklisted_extensions->Contains(entry->id()))
+      if (blocklisted_extensions.Contains(entry->id())) {
         blocklisted_count++;
+      }
     }
   }
   size_t misconfigured_extensions = 0;

@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/editing/text_affinity.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
+#include "third_party/blink/renderer/modules/accessibility/ax_object_cache_impl.h"
 #include "third_party/blink/renderer/modules/accessibility/testing/accessibility_test.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
@@ -206,11 +207,12 @@ TEST_F(AccessibilityTest, PositionBeforeLineBreak) {
 
 TEST_F(AccessibilityTest, PositionAfterLineBreak) {
   SetBodyInnerHTML(R"HTML(Hello<br id="br">there)HTML");
+  GetAXRootObject()->LoadInlineTextBoxes();
   const AXObject* ax_br = GetAXObjectByElementId("br");
   ASSERT_NE(nullptr, ax_br);
   ASSERT_EQ(ax::mojom::Role::kLineBreak, ax_br->RoleValue());
   const AXObject* ax_static_text =
-      GetAXRootObject()->DeepestLastChildIncludingIgnored();
+      GetAXRootObject()->DeepestLastChildIncludingIgnored()->ParentObject();
   ASSERT_NE(nullptr, ax_static_text);
   ASSERT_EQ(ax::mojom::Role::kStaticText, ax_static_text->RoleValue());
 
@@ -235,8 +237,7 @@ TEST_F(AccessibilityTest, FirstPositionInDivContainer) {
   const AXObject* ax_div = GetAXObjectByElementId("div");
   ASSERT_NE(nullptr, ax_div);
   ASSERT_EQ(ax::mojom::Role::kGenericContainer, ax_div->RoleValue());
-  const AXObject* ax_static_text =
-      GetAXRootObject()->DeepestFirstChildIncludingIgnored();
+  const AXObject* ax_static_text = ax_div->FirstChildIncludingIgnored();
   ASSERT_NE(nullptr, ax_static_text);
   ASSERT_EQ(ax::mojom::Role::kStaticText, ax_static_text->RoleValue());
 
@@ -481,11 +482,12 @@ TEST_F(AccessibilityTest, PositionBeforeLineBreakWithWhiteSpace) {
 
 TEST_F(AccessibilityTest, PositionAfterLineBreakWithWhiteSpace) {
   SetBodyInnerHTML(R"HTML(Hello     <br id="br">     there)HTML");
+  GetAXRootObject()->LoadInlineTextBoxes();
   const AXObject* ax_br = GetAXObjectByElementId("br");
   ASSERT_NE(nullptr, ax_br);
   ASSERT_EQ(ax::mojom::Role::kLineBreak, ax_br->RoleValue());
   const AXObject* ax_static_text =
-      GetAXRootObject()->DeepestLastChildIncludingIgnored();
+      GetAXRootObject()->DeepestLastChildIncludingIgnored()->ParentObject();
   ASSERT_NE(nullptr, ax_static_text);
   ASSERT_EQ(ax::mojom::Role::kStaticText, ax_static_text->RoleValue());
 
@@ -511,8 +513,7 @@ TEST_F(AccessibilityTest, FirstPositionInDivContainerWithWhiteSpace) {
   const AXObject* ax_div = GetAXObjectByElementId("div");
   ASSERT_NE(nullptr, ax_div);
   ASSERT_EQ(ax::mojom::Role::kGenericContainer, ax_div->RoleValue());
-  const AXObject* ax_static_text =
-      GetAXRootObject()->DeepestFirstChildIncludingIgnored();
+  const AXObject* ax_static_text = ax_div->FirstChildIncludingIgnored();
   ASSERT_NE(nullptr, ax_static_text);
   ASSERT_EQ(ax::mojom::Role::kStaticText, ax_static_text->RoleValue());
 
@@ -638,6 +639,176 @@ TEST_F(AccessibilityTest, AXPositionFromDOMPositionWithWhiteSpace) {
   EXPECT_EQ(ax_static_text, ax_position_before_white_space.ContainerObject());
   EXPECT_EQ(5, ax_position_before_white_space.TextOffset());
   EXPECT_EQ(nullptr, ax_position_before_white_space.ChildAfterTreePosition());
+}
+
+TEST_F(AccessibilityTest, AXPositionsWithPreservedLeadingWhitespace) {
+  SetBodyInnerHTML(R"HTML(
+    <div id="div" style="white-space: pre-wrap;">   Bar</div>
+    )HTML");
+
+  const Node* text = GetElementById("div")->firstChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(6U, text->textContent().length());
+
+  const Position position_at_start(*text, 0);
+  const auto ax_position_at_start = AXPosition::FromPosition(position_at_start);
+  EXPECT_TRUE(ax_position_at_start.IsTextPosition());
+  EXPECT_EQ(0, ax_position_at_start.TextOffset());
+
+  // If we didn't adjust for the break opportunity, the accessible text offset
+  // would be 4 instead of 3.
+  const Position position_after_white_space(*text, 3);
+  const auto ax_position_after_white_space =
+      AXPosition::FromPosition(position_after_white_space);
+  EXPECT_TRUE(ax_position_after_white_space.IsTextPosition());
+  EXPECT_EQ(3, ax_position_after_white_space.TextOffset());
+
+  // If we didn't adjust for the break opportunity, the accessible text offset
+  // would be 7 instead of 6.
+  const Position position_at_end(*text, 6);
+  const auto ax_position_at_end = AXPosition::FromPosition(position_at_end);
+  EXPECT_TRUE(ax_position_at_end.IsTextPosition());
+  EXPECT_EQ(6, ax_position_at_end.TextOffset());
+}
+
+TEST_F(AccessibilityTest, AXPositionsWithPreservedLeadingWhitespaceAndBreak) {
+  SetBodyInnerHTML(R"HTML(
+    <div><span id="foo" style="white-space:pre-wrap;"> Foo</span>
+    <br>
+    <span id="bar" style="white-space:pre-wrap;">   Bar</span></div>
+    )HTML");
+
+  const Node* span = GetElementById("foo");
+  ASSERT_NE(nullptr, span);
+  EXPECT_EQ(4U, span->textContent().length());
+
+  const Node* text = span->firstChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(4U, text->textContent().length());
+
+  const Position position_at_start_1(*text, 0);
+  const auto ax_position_at_start_1 =
+      AXPosition::FromPosition(position_at_start_1);
+  EXPECT_TRUE(ax_position_at_start_1.IsTextPosition());
+  EXPECT_EQ(0, ax_position_at_start_1.TextOffset());
+
+  // If we didn't adjust for the break opportunity, the accessible text offset
+  // would be 2 instead of 1.
+  const Position position_after_white_space_1(*text, 1);
+  const auto ax_position_after_white_space_1 =
+      AXPosition::FromPosition(position_after_white_space_1);
+  EXPECT_TRUE(ax_position_after_white_space_1.IsTextPosition());
+  EXPECT_EQ(1, ax_position_after_white_space_1.TextOffset());
+
+  // If we didn't adjust for the break opportunity, the accessible text offset
+  // would be 5 instead of 4.
+  const Position position_at_end_1(*text, 4);
+  const auto ax_position_at_end_1 = AXPosition::FromPosition(position_at_end_1);
+  EXPECT_TRUE(ax_position_at_end_1.IsTextPosition());
+  EXPECT_EQ(4, ax_position_at_end_1.TextOffset());
+
+  span = GetElementById("bar");
+  ASSERT_NE(nullptr, span);
+  EXPECT_EQ(6U, span->textContent().length());
+
+  text = span->firstChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(6U, text->textContent().length());
+
+  const Position position_at_start_2(*text, 0);
+  const auto ax_position_at_start_2 =
+      AXPosition::FromPosition(position_at_start_2);
+  EXPECT_TRUE(ax_position_at_start_2.IsTextPosition());
+  EXPECT_EQ(0, ax_position_at_start_2.TextOffset());
+
+  // If we didn't adjust for the break opportunity, the accessible text offset
+  // would be 4 instead of 3.
+  const Position position_after_white_space_2(*text, 3);
+  const auto ax_position_after_white_space_2 =
+      AXPosition::FromPosition(position_after_white_space_2);
+  EXPECT_TRUE(ax_position_after_white_space_2.IsTextPosition());
+  EXPECT_EQ(3, ax_position_after_white_space_2.TextOffset());
+
+  // If we didn't adjust for the break opportunity, the accessible text offset
+  // would be 7 instead of 6.
+  const Position position_at_end_2(*text, 6);
+  const auto ax_position_at_end_2 = AXPosition::FromPosition(position_at_end_2);
+  EXPECT_TRUE(ax_position_at_end_2.IsTextPosition());
+  EXPECT_EQ(6, ax_position_at_end_2.TextOffset());
+}
+
+TEST_F(AccessibilityTest, AXPositionsInSVGTextWithXCoordinates) {
+  SetBodyInnerHTML(R"HTML(
+    <div>
+    <svg version="1.1" baseProfile="basic" xmlns="http://www.w3.org/2000/svg"
+         xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 160 120">
+    <text id="text" x="0 10 20 30 40 50 60 70 80 90 100 110">Hel<tspan>lo </tspan>
+      <tspan id="tspan">world</tspan>!</text>
+    </svg>
+    </div>
+    )HTML");
+
+  // Check the text node containing "Hel"
+  const Node* text = GetElementById("text")->firstChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(3U, text->textContent().length());
+  EXPECT_EQ("Hel", text->textContent().Utf8());
+
+  const Position position_at_h(*text, 0);
+  const auto ax_position_at_h = AXPosition::FromPosition(position_at_h);
+  EXPECT_TRUE(ax_position_at_h.IsTextPosition());
+  EXPECT_EQ(0, ax_position_at_h.TextOffset());
+
+  // If we didn't adjust for isolate characters, the accessible text offset
+  // would be 7 instead of 3.
+  const Position position_after_l(*text, 3);
+  const auto ax_position_after_l = AXPosition::FromPosition(position_after_l);
+  EXPECT_TRUE(ax_position_after_l.IsTextPosition());
+  EXPECT_EQ(3, ax_position_after_l.TextOffset());
+
+  // Check the text node child of the first tspan containing "lo "
+  text = text->nextSibling()->firstChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(3U, text->textContent().length());
+  EXPECT_EQ("lo ", text->textContent().Utf8());
+
+  // If we didn't adjust for isolate characters, the accessible text offset
+  // would be 3 instead of 1.
+  const Position position_at_o(*text, 1);
+  const auto ax_position_at_o = AXPosition::FromPosition(position_at_o);
+  EXPECT_TRUE(ax_position_at_o.IsTextPosition());
+  EXPECT_EQ(1, ax_position_at_o.TextOffset());
+
+  // Check the text node child of the second tspan containing "world"
+  text = GetElementById("tspan")->firstChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(5U, text->textContent().length());
+  EXPECT_EQ("world", text->textContent().Utf8());
+
+  // If we didn't adjust for isolate characters, the accessible text offset
+  // would be 12 instead of 4.
+  const Position position_at_d(*text, 4);
+  const auto ax_position_at_d = AXPosition::FromPosition(position_at_d);
+  EXPECT_TRUE(ax_position_at_d.IsTextPosition());
+  EXPECT_EQ(4, ax_position_at_d.TextOffset());
+
+  // Check the text node containing "!"
+  text = GetElementById("text")->lastChild();
+  ASSERT_NE(nullptr, text);
+  EXPECT_TRUE(text->IsTextNode());
+  EXPECT_EQ(1U, text->textContent().length());
+  EXPECT_EQ("!", text->textContent().Utf8());
+
+  const Position position_at_end(*text, 1);
+  const auto ax_position_at_end = AXPosition::FromPosition(position_at_end);
+  EXPECT_TRUE(ax_position_at_end.IsTextPosition());
+  EXPECT_EQ(1, ax_position_at_end.TextOffset());
 }
 
 //
@@ -1786,7 +1957,7 @@ TEST_F(AccessibilityTest, PositionInInvalidMapLayout) {
 
   // Create an invalid layout by appending a child to the <br>
   br->appendChild(map);
-  GetDocument().UpdateStyleAndLayoutTree();
+  GetAXObjectCache().UpdateAXForAllDocuments();
 
   ax_map = GetAXObjectByElementId("map");
   ASSERT_EQ(nullptr, ax_map);
@@ -1806,8 +1977,7 @@ TEST_F(AccessibilityTest, PositionInInvalidMapLayout) {
   EXPECT_EQ(0, position_after.GetPosition().OffsetInContainerNode());
 }
 
-TEST_P(ParameterizedAccessibilityTest,
-       ToPositionWithAffinityWithMultipleInlineTextBoxes) {
+TEST_F(AccessibilityTest, ToPositionWithAffinityWithMultipleInlineTextBoxes) {
   // This test expects the starting offset of the last InlineTextBox object to
   // equate the sum of the previous inline text boxes' length, without the
   // collapsed white-spaces.

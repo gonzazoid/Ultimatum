@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_set_sink_id_callbacks.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
@@ -110,6 +110,13 @@ void SetSinkIdResolver::Start() {
           WTF::BindOnce(&SetSinkIdResolver::Start, WrapWeakPersistent(this)));
       return;
     }
+  }
+
+  // Validate that sink_id_ is a valid UTF8 - see https://crbug.com/1420170.
+  if (sink_id_.Utf8(WTF::kStrictUTF8Conversion).empty() != sink_id_.empty()) {
+    Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidCharacterError, "Invalid sink id."));
+    return;
   }
 
   if (sink_id_ == HTMLMediaElementAudioOutputDevice::sinkId(*element_))

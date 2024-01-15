@@ -7,12 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/value_store/test_value_store_factory.h"
 #include "components/value_store/value_store_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -27,7 +27,8 @@ class ValueStoreFrontendTest : public testing::Test {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
 
     base::FilePath test_data_dir;
-    ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir));
+    ASSERT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir));
     base::FilePath src_db(
         test_data_dir.AppendASCII("components/test/data/value_store"));
     db_path_ = temp_dir_.GetPath().AppendASCII("temp_db");
@@ -47,7 +48,7 @@ class ValueStoreFrontendTest : public testing::Test {
   void ResetStorage() {
     storage_ = std::make_unique<ValueStoreFrontend>(
         factory_, base::FilePath(FILE_PATH_LITERAL("Test dir")),
-        "test_uma_name", base::ThreadTaskRunnerHandle::Get(),
+        "test_uma_name", base::SingleThreadTaskRunner::GetCurrentDefault(),
         value_store::GetValueStoreTaskRunner());
   }
 

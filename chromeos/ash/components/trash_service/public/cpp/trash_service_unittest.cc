@@ -19,14 +19,13 @@
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "base/time/time_to_iso8601.h"
 #include "chromeos/ash/components/trash_service/public/mojom/trash_service.mojom.h"
 #include "chromeos/ash/components/trash_service/trash_service_impl.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos::trash_service {
+namespace ash::trash_service {
 
 using ::base::test::RunClosure;
 using ::testing::_;
@@ -278,4 +277,4 @@ TEST_F(TrashServiceTest, ValidDeletionDateKeyValueScenarios) {
   }
 }
 
-}  // namespace chromeos::trash_service
+}  // namespace ash::trash_service

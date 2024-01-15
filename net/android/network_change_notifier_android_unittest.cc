@@ -8,9 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "net/android/network_change_notifier_delegate_android.h"
 #include "net/base/ip_address.h"
@@ -273,10 +273,6 @@ class BaseNetworkChangeNotifierAndroidTest : public TestWithTaskEnvironment {
     delegate_.FakePurgeActiveNetworkList(networks);
     // See comment above.
     base::RunLoop().RunUntilIdle();
-  }
-
-  bool is_default_network_active_api_supported() const {
-    return delegate_.is_default_network_active_api_supported_;
   }
 
   NetworkChangeNotifierDelegateAndroid delegate_;
@@ -565,51 +561,34 @@ TEST_F(NetworkChangeNotifierDelegateAndroidTest, DefaultNetworkActive) {
   FakeDefaultNetworkActive();
   EXPECT_EQ(0, delegate_observer_.default_network_active_notifications_count());
 
-  if (is_default_network_active_api_supported()) {
-    // Simulate calls to NetworkChangeNotifier::AddDefaultNetworkObserver().
-    // Notifications should be received now.
-    delegate_.DefaultNetworkActiveObserverAdded();
-    FakeDefaultNetworkActive();
-    EXPECT_EQ(1,
-              delegate_observer_.default_network_active_notifications_count());
-    delegate_.DefaultNetworkActiveObserverAdded();
-    FakeDefaultNetworkActive();
-    EXPECT_EQ(2,
-              delegate_observer_.default_network_active_notifications_count());
+  // Simulate calls to NetworkChangeNotifier::AddDefaultNetworkObserver().
+  // Notifications should be received now.
+  delegate_.DefaultNetworkActiveObserverAdded();
+  FakeDefaultNetworkActive();
+  EXPECT_EQ(1, delegate_observer_.default_network_active_notifications_count());
+  delegate_.DefaultNetworkActiveObserverAdded();
+  FakeDefaultNetworkActive();
+  EXPECT_EQ(2, delegate_observer_.default_network_active_notifications_count());
 
-    // Simulate call to NetworkChangeNotifier::AddDefaultNetworkObserver().
-    // Notifications should be received until the last observer has been
-    // removed.
-    delegate_.DefaultNetworkActiveObserverRemoved();
-    FakeDefaultNetworkActive();
-    EXPECT_EQ(3,
-              delegate_observer_.default_network_active_notifications_count());
-    delegate_.DefaultNetworkActiveObserverRemoved();
-    FakeDefaultNetworkActive();
-    EXPECT_EQ(3,
-              delegate_observer_.default_network_active_notifications_count());
+  // Simulate call to NetworkChangeNotifier::AddDefaultNetworkObserver().
+  // Notifications should be received until the last observer has been
+  // removed.
+  delegate_.DefaultNetworkActiveObserverRemoved();
+  FakeDefaultNetworkActive();
+  EXPECT_EQ(3, delegate_observer_.default_network_active_notifications_count());
+  delegate_.DefaultNetworkActiveObserverRemoved();
+  FakeDefaultNetworkActive();
+  EXPECT_EQ(3, delegate_observer_.default_network_active_notifications_count());
 
-    // Double check that things keep working as expected after re-adding an
-    // observer.
-    delegate_.DefaultNetworkActiveObserverAdded();
-    FakeDefaultNetworkActive();
-    EXPECT_EQ(4,
-              delegate_observer_.default_network_active_notifications_count());
+  // Double check that things keep working as expected after re-adding an
+  // observer.
+  delegate_.DefaultNetworkActiveObserverAdded();
+  FakeDefaultNetworkActive();
+  EXPECT_EQ(4, delegate_observer_.default_network_active_notifications_count());
 
-    // Cleanup: delegate destructor DCHECKS that all observers have been
-    // removed.
-    delegate_.DefaultNetworkActiveObserverRemoved();
-  } else {
-    // When the API is not supported no notification should be delivered.
-    delegate_.DefaultNetworkActiveObserverAdded();
-    FakeDefaultNetworkActive();
-    EXPECT_EQ(0,
-              delegate_observer_.default_network_active_notifications_count());
-
-    // Cleanup: delegate destructor DCHECKS that all observers have been
-    // removed.
-    delegate_.DefaultNetworkActiveObserverRemoved();
-  }
+  // Cleanup: delegate destructor DCHECKS that all observers have been
+  // removed.
+  delegate_.DefaultNetworkActiveObserverRemoved();
 }
 
 }  // namespace net

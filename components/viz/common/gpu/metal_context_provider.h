@@ -6,15 +6,22 @@
 #define COMPONENTS_VIZ_COMMON_GPU_METAL_CONTEXT_PROVIDER_H_
 
 #include <memory>
-#include "components/metal_util/types.h"
-#include "components/viz/common/viz_metal_context_provider_export.h"
-#include "third_party/skia/include/gpu/GrContextOptions.h"
 
-class GrDirectContext;
+#include "components/viz/common/viz_metal_context_provider_export.h"
+#include "third_party/skia/include/gpu/graphite/ContextOptions.h"
+#include "third_party/skia/include/gpu/graphite/mtl/MtlGraphiteTypes.h"
+
+#if __OBJC__
+@protocol MTLDevice;
+#endif  // __OBJC__
 
 namespace gl {
 class ProgressReporter;
 }  // namespace gl
+
+namespace skgpu::graphite {
+class Context;
+}  // namespace skgpu::graphite
 
 namespace viz {
 
@@ -23,17 +30,28 @@ class VIZ_METAL_CONTEXT_PROVIDER_EXPORT MetalContextProvider {
  public:
   // Create and return a MetalContextProvider if possible. May return nullptr
   // if no Metal devices exist.
-  static std::unique_ptr<MetalContextProvider> Create(
-      const GrContextOptions& context_options = GrContextOptions());
-  virtual ~MetalContextProvider() {}
+  static std::unique_ptr<MetalContextProvider> Create();
 
-  virtual GrDirectContext* GetGrContext() = 0;
-  virtual metal::MTLDevicePtr GetMTLDevice() = 0;
+  MetalContextProvider(const MetalContextProvider&) = delete;
+  MetalContextProvider& operator=(const MetalContextProvider&) = delete;
+  ~MetalContextProvider();
 
-  // Set the progress reported used to prevent watchdog timeouts during longer
-  // sequences of Metal API calls. It is guaranteed that no further calls to
-  // |progress_reporter| will be made after |this| is destroyed.
-  virtual void SetProgressReporter(gl::ProgressReporter* progress_reporter) = 0;
+  bool InitializeGraphiteContext(
+      const skgpu::graphite::ContextOptions& options);
+
+  skgpu::graphite::Context* GetGraphiteContext();
+
+#if __OBJC__
+  id<MTLDevice> GetMTLDevice();
+#endif  // __OBJC__
+
+ private:
+#if __OBJC__
+  explicit MetalContextProvider(id<MTLDevice> device);
+#endif  // __OBJC__
+
+  struct ObjCStorage;
+  std::unique_ptr<ObjCStorage> objc_storage_;
 };
 
 }  // namespace viz

@@ -23,11 +23,6 @@ class NET_EXPORT ParsedCookie {
   typedef std::pair<std::string, std::string> TokenValuePair;
   typedef std::vector<TokenValuePair> PairList;
 
-  // The maximum length of a cookie string we will try to parse.
-  // TODO(crbug.com/1243852) Remove this when kExtraCookieValidityChecks
-  // gets removed (assuming the associated changes cause no issues).
-  static const size_t kMaxCookieSize = 4096;
-
   // The maximum length allowed for a cookie string's name/value pair.
   static const size_t kMaxCookieNamePlusValueSize = 4096;
 
@@ -41,7 +36,10 @@ class NET_EXPORT ParsedCookie {
   // informative exclusion reasons if the resulting ParsedCookie is invalid.
   // The CookieInclusionStatus will not be altered if the resulting ParsedCookie
   // is valid.
+  // `block_truncated` indicates whether cookies containing '\00', '\r', or '\n'
+  // characters should be treated as invalid.
   explicit ParsedCookie(const std::string& cookie_line,
+                        bool block_truncated = true,
                         CookieInclusionStatus* status_out = nullptr);
 
   ParsedCookie(const ParsedCookie&) = delete;
@@ -87,9 +85,8 @@ class NET_EXPORT ParsedCookie {
   CookieSameSite SameSite(
       CookieSameSiteString* samesite_string = nullptr) const;
   CookiePriority Priority() const;
-  bool IsSameParty() const { return same_party_index_ != 0; }
   bool IsPartitioned() const { return partitioned_index_ != 0; }
-  bool HasTruncatedNameOrValue() const { return truncated_name_or_value_; }
+  bool HasInternalHtab() const { return internal_htab_; }
   TruncatingCharacterInCookieStringType
   GetTruncatingCharacterInCookieStringType() const {
     return truncating_char_in_cookie_string_type_;
@@ -118,7 +115,6 @@ class NET_EXPORT ParsedCookie {
   bool SetIsHttpOnly(bool is_http_only);
   bool SetSameSite(const std::string& same_site);
   bool SetPriority(const std::string& priority);
-  bool SetIsSameParty(bool is_same_party);
   bool SetIsPartitioned(bool is_partitioned);
 
   // Returns the cookie description as it appears in a HTML response header.
@@ -168,10 +164,6 @@ class NET_EXPORT ParsedCookie {
   // Is the string less than the size limits set for attribute values?
   static bool CookieAttributeValueHasValidSize(const std::string& value);
 
-  // Is the string valid as a cookie attribute value? (only checks the character
-  // set - no length checks performed)
-  static bool IsValidCookieAttributeValueLegacy(const std::string& value);
-
   // Returns `true` if the name and value combination are valid. Calls
   // IsValidCookieName() and IsValidCookieValue() on `name` and `value`
   // respectively, in addition to checking that the sum of the two doesn't
@@ -183,6 +175,7 @@ class NET_EXPORT ParsedCookie {
 
  private:
   void ParseTokenValuePairs(const std::string& cookie_line,
+                            bool block_truncated,
                             CookieInclusionStatus& status_out);
   void SetupAttributes();
 
@@ -218,13 +211,11 @@ class NET_EXPORT ParsedCookie {
   size_t httponly_index_ = 0;
   size_t same_site_index_ = 0;
   size_t priority_index_ = 0;
-  size_t same_party_index_ = 0;
   size_t partitioned_index_ = 0;
-  // For metrics on cookie name/value truncation. See usage at the bottom of
-  // `ParseTokenValuePairs()` for more details.
-  bool truncated_name_or_value_ = false;
   TruncatingCharacterInCookieStringType truncating_char_in_cookie_string_type_ =
       TruncatingCharacterInCookieStringType::kTruncatingCharNone;
+  // For metrics on cookie name/value internal HTABS
+  bool internal_htab_ = false;
 };
 
 }  // namespace net

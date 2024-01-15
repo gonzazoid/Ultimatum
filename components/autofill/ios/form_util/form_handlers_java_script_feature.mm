@@ -6,18 +6,19 @@
 
 #include "base/no_destructor.h"
 #include "base/values.h"
+#import "components/autofill/core/common/autofill_features.h"
+#import "components/autofill/ios/common/javascript_feature_util.h"
+#import "components/autofill/ios/form_util/child_frame_registrar.h"
 #include "components/autofill/ios/form_util/form_activity_tab_helper.h"
 #import "components/autofill/ios/form_util/form_util_java_script_feature.h"
 #import "components/password_manager/ios/password_manager_java_script_feature.h"
 #include "ios/web/public/js_messaging/java_script_feature_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/js_messaging/script_message.h"
 
 namespace {
 constexpr char kScriptName[] = "form_handlers";
 constexpr char kScriptMessageName[] = "FormHandlersMessage";
+constexpr char kChildFrameCommand[] = "registerAsChildFrame";
 }  // namespace
 
 namespace autofill {
@@ -30,9 +31,7 @@ FormHandlersJavaScriptFeature* FormHandlersJavaScriptFeature::GetInstance() {
 
 FormHandlersJavaScriptFeature::FormHandlersJavaScriptFeature()
     : web::JavaScriptFeature(
-          // TODO(crbug.com/1175793): Move autofill code to kAnyContentWorld
-          // once all scripts are converted to JavaScriptFeatures.
-          ContentWorld::kPageContentWorld,
+          ContentWorldForAutofillJavascriptFeatures(),
           {FeatureScript::CreateWithFilename(
               kScriptName,
               FeatureScript::InjectionTime::kDocumentStart,
@@ -49,18 +48,15 @@ FormHandlersJavaScriptFeature::~FormHandlersJavaScriptFeature() = default;
 void FormHandlersJavaScriptFeature::TrackFormMutations(
     web::WebFrame* frame,
     int mutation_tracking_delay) {
-  std::vector<base::Value> parameters;
-  parameters.push_back(base::Value(mutation_tracking_delay));
-  CallJavaScriptFunction(frame, "formHandlers.trackFormMutations", parameters);
+  CallJavaScriptFunction(frame, "formHandlers.trackFormMutations",
+                         base::Value::List().Append(mutation_tracking_delay));
 }
 
 void FormHandlersJavaScriptFeature::ToggleTrackingUserEditedFields(
     web::WebFrame* frame,
     bool track_user_edited_fields) {
-  std::vector<base::Value> parameters;
-  parameters.push_back(base::Value(track_user_edited_fields));
   CallJavaScriptFunction(frame, "formHandlers.toggleTrackingUserEditedFields",
-                         parameters);
+                         base::Value::List().Append(track_user_edited_fields));
 }
 
 absl::optional<std::string>
@@ -71,6 +67,24 @@ FormHandlersJavaScriptFeature::GetScriptMessageHandlerName() const {
 void FormHandlersJavaScriptFeature::ScriptMessageReceived(
     web::WebState* web_state,
     const web::ScriptMessage& message) {
+  // Delegate to ChildFrameRegistrar for kChildFrameCommand messages.
+  if (base::FeatureList::IsEnabled(
+          autofill::features::kAutofillAcrossIframesIos)) {
+    if (message.body() && message.body()->is_dict()) {
+      const std::string* command =
+          message.body()->GetDict().FindString("command");
+      if (command && *command == kChildFrameCommand) {
+        ChildFrameRegistrar* registrar =
+            ChildFrameRegistrar::GetOrCreateForWebState(web_state);
+        if (registrar) {
+          registrar->ProcessRegistrationMessage(message.body());
+        }
+        return;
+      }
+    }
+  }
+
+  // Delegate to FormActivityTabHelper for all other messages.
   FormActivityTabHelper* helper =
       FormActivityTabHelper::GetOrCreateForWebState(web_state);
   helper->OnFormMessageReceived(web_state, message);

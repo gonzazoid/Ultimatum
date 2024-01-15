@@ -10,6 +10,7 @@
 #include "base/unguessable_token.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
+#include "third_party/blink/public/mojom/serial/serial.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_serial_port_filter.h"
@@ -21,6 +22,8 @@
 #include "third_party/blink/renderer/core/execution_context/navigator_base.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/workers/worker_global_scope.h"
+#include "third_party/blink/renderer/modules/bluetooth/bluetooth_uuid.h"
 #include "third_party/blink/renderer/modules/event_target_modules_names.h"
 #include "third_party/blink/renderer/modules/serial/serial_port.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -39,6 +42,55 @@ String TokenToString(const base::UnguessableToken& token) {
   return String::Format("%016" PRIX64 "%016" PRIX64,
                         token.GetHighForSerialization(),
                         token.GetLowForSerialization());
+}
+
+// Carries out basic checks for the web-exposed APIs, to make sure the minimum
+// requirements for them to be served are met. Returns true if any conditions
+// fail to be met, generating an appropriate exception as well. Otherwise,
+// returns false to indicate the call should be allowed.
+bool ShouldBlockSerialServiceCall(LocalDOMWindow* window,
+                                  ExecutionContext* context,
+                                  ExceptionState* exception_state) {
+  if (!context) {
+    if (exception_state) {
+      exception_state->ThrowDOMException(DOMExceptionCode::kNotSupportedError,
+                                         kContextGone);
+    }
+
+    return true;
+  }
+
+  // Rejects if the top-level frame has an opaque origin.
+  const SecurityOrigin* security_origin = nullptr;
+  if (context->IsWindow()) {
+    security_origin =
+        window->GetFrame()->Top()->GetSecurityContext()->GetSecurityOrigin();
+  } else if (context->IsDedicatedWorkerGlobalScope()) {
+    security_origin = static_cast<WorkerGlobalScope*>(context)
+                          ->top_level_frame_security_origin();
+  } else {
+    NOTREACHED_NORETURN();
+  }
+
+  if (security_origin->IsOpaque()) {
+    if (exception_state) {
+      exception_state->ThrowSecurityError(
+          "Access to the Web Serial API is denied from contexts where the "
+          "top-level document has an opaque origin.");
+    }
+    return true;
+  }
+
+  if (!context->IsFeatureEnabled(
+          mojom::blink::PermissionsPolicyFeature::kSerial,
+          ReportOptions::kReportOnFailure)) {
+    if (exception_state) {
+      exception_state->ThrowSecurityError(kFeaturePolicyBlocked);
+    }
+    return true;
+  }
+
+  return false;
 }
 
 }  // namespace
@@ -85,21 +137,13 @@ void Serial::OnPortRemoved(mojom::blink::SerialPortInfoPtr port_info) {
 
 ScriptPromise Serial::getPorts(ScriptState* script_state,
                                ExceptionState& exception_state) {
-  auto* context = GetExecutionContext();
-  if (!context) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
-                                      kContextGone);
+  if (ShouldBlockSerialServiceCall(GetSupplementable()->DomWindow(),
+                                   GetExecutionContext(), &exception_state)) {
     return ScriptPromise();
   }
 
-  if (!context->IsFeatureEnabled(
-          mojom::blink::PermissionsPolicyFeature::kSerial,
-          ReportOptions::kReportOnFailure)) {
-    exception_state.ThrowSecurityError(kFeaturePolicyBlocked);
-    return ScriptPromise();
-  }
-
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   get_ports_promises_.insert(resolver);
 
   EnsureServiceConnection();
@@ -109,19 +153,58 @@ ScriptPromise Serial::getPorts(ScriptState* script_state,
   return resolver->Promise();
 }
 
+// static
+mojom::blink::SerialPortFilterPtr Serial::CreateMojoFilter(
+    const SerialPortFilter* filter,
+    ExceptionState& exception_state) {
+  auto mojo_filter = mojom::blink::SerialPortFilter::New();
+
+  if (filter->hasBluetoothServiceClassId()) {
+    if (filter->hasUsbVendorId() || filter->hasUsbProductId()) {
+      exception_state.ThrowTypeError(
+          "A filter cannot specify both bluetoothServiceClassId and "
+          "usbVendorId or usbProductId.");
+      return nullptr;
+    }
+    mojo_filter->bluetooth_service_class_id =
+        ::bluetooth::mojom::blink::UUID::New(
+            GetBluetoothUUIDFromV8Value(filter->bluetoothServiceClassId()));
+    if (mojo_filter->bluetooth_service_class_id->uuid.empty()) {
+      exception_state.ThrowTypeError(
+          "Invalid Bluetooth service class ID filter value.");
+      return nullptr;
+    }
+    return mojo_filter;
+  }
+
+  mojo_filter->has_product_id = filter->hasUsbProductId();
+  mojo_filter->has_vendor_id = filter->hasUsbVendorId();
+  if (mojo_filter->has_product_id) {
+    if (!mojo_filter->has_vendor_id) {
+      exception_state.ThrowTypeError(
+          "A filter containing a usbProductId must also specify a "
+          "usbVendorId.");
+      return nullptr;
+    }
+    mojo_filter->product_id = filter->usbProductId();
+  }
+
+  if (mojo_filter->has_vendor_id) {
+    mojo_filter->vendor_id = filter->usbVendorId();
+  } else {
+    exception_state.ThrowTypeError(
+        "A filter must provide a property to filter by.");
+    return nullptr;
+  }
+
+  return mojo_filter;
+}
+
 ScriptPromise Serial::requestPort(ScriptState* script_state,
                                   const SerialPortRequestOptions* options,
                                   ExceptionState& exception_state) {
-  if (!DomWindow()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
-                                      kContextGone);
-    return ScriptPromise();
-  }
-
-  if (!GetExecutionContext()->IsFeatureEnabled(
-          mojom::blink::PermissionsPolicyFeature::kSerial,
-          ReportOptions::kReportOnFailure)) {
-    exception_state.ThrowSecurityError(kFeaturePolicyBlocked);
+  if (ShouldBlockSerialServiceCall(GetSupplementable()->DomWindow(),
+                                   GetExecutionContext(), &exception_state)) {
     return ScriptPromise();
   }
 
@@ -134,29 +217,24 @@ ScriptPromise Serial::requestPort(ScriptState* script_state,
   Vector<mojom::blink::SerialPortFilterPtr> filters;
   if (options && options->hasFilters()) {
     for (const auto& filter : options->filters()) {
-      auto mojo_filter = mojom::blink::SerialPortFilter::New();
-
-      mojo_filter->has_vendor_id = filter->hasUsbVendorId();
-      if (mojo_filter->has_vendor_id) {
-        mojo_filter->vendor_id = filter->usbVendorId();
-      } else {
-        exception_state.ThrowTypeError(
-            "A filter must provide a property to filter by.");
+      auto mojo_filter = CreateMojoFilter(filter, exception_state);
+      if (!mojo_filter) {
+        CHECK(exception_state.HadException());
         return ScriptPromise();
       }
 
-      mojo_filter->has_product_id = filter->hasUsbProductId();
-      if (mojo_filter->has_product_id) {
-        if (!mojo_filter->has_vendor_id) {
-          exception_state.ThrowTypeError(
-              "A filter containing a usbProductId must also specify a "
-              "usbVendorId.");
-          return ScriptPromise();
-        }
-        mojo_filter->product_id = filter->usbProductId();
-      }
-
+      CHECK(!exception_state.HadException());
       filters.push_back(std::move(mojo_filter));
+    }
+  }
+
+  Vector<::bluetooth::mojom::blink::UUIDPtr>
+      allowed_bluetooth_service_class_ids;
+  if (options && options->hasAllowedBluetoothServiceClassIds()) {
+    for (const auto& id : options->allowedBluetoothServiceClassIds()) {
+      allowed_bluetooth_service_class_ids.push_back(
+          ::bluetooth::mojom::blink::UUID::New(
+              GetBluetoothUUIDFromV8Value(id)));
     }
   }
 
@@ -166,6 +244,7 @@ ScriptPromise Serial::requestPort(ScriptState* script_state,
 
   EnsureServiceConnection();
   service_->RequestPort(std::move(filters),
+                        std::move(allowed_bluetooth_service_class_ids),
                         resolver->WrapCallbackInScriptScope(WTF::BindOnce(
                             &Serial::OnRequestPort, WrapPersistent(this))));
 
@@ -195,24 +274,22 @@ void Serial::Trace(Visitor* visitor) const {
   visitor->Trace(get_ports_promises_);
   visitor->Trace(request_port_promises_);
   visitor->Trace(port_cache_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   Supplement<NavigatorBase>::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 
 void Serial::AddedEventListener(const AtomicString& event_type,
                                 RegisteredEventListener& listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type, listener);
+  EventTarget::AddedEventListener(event_type, listener);
 
   if (event_type != event_type_names::kConnect &&
       event_type != event_type_names::kDisconnect) {
     return;
   }
 
-  ExecutionContext* context = GetExecutionContext();
-  if (!context || !context->IsFeatureEnabled(
-                      mojom::blink::PermissionsPolicyFeature::kSerial,
-                      ReportOptions::kDoNotReport)) {
+  if (ShouldBlockSerialServiceCall(GetSupplementable()->DomWindow(),
+                                   GetExecutionContext(), nullptr)) {
     return;
   }
 
@@ -263,7 +340,7 @@ void Serial::OnServiceConnectionError() {
 SerialPort* Serial::GetOrCreatePort(mojom::blink::SerialPortInfoPtr info) {
   auto it = port_cache_.find(TokenToString(info->token));
   if (it != port_cache_.end()) {
-    return it->value;
+    return it->value.Get();
   }
 
   SerialPort* port = MakeGarbageCollected<SerialPort>(this, std::move(info));

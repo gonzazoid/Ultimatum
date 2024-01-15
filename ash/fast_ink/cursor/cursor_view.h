@@ -5,28 +5,20 @@
 #ifndef ASH_FAST_INK_CURSOR_CURSOR_VIEW_H_
 #define ASH_FAST_INK_CURSOR_CURSOR_VIEW_H_
 
+#include <memory>
+#include <optional>
+
 #include "ash/fast_ink/fast_ink_view.h"
-#include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "components/viz/common/frame_sinks/delay_based_time_source.h"
 #include "ui/events/ozone/chromeos/cursor_controller.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 
-namespace base {
-class SingleThreadTaskRunner;
-}  // namespace base
+namespace ash {
 
-namespace gfx {
-struct PresentationFeedback;
-}
-
-namespace cursor {
-
-// CursorView class can be used to display a cursor image with minimal
-// latency/jank and optional motion blur.
-class CursorView : public fast_ink::FastInkView,
-                   public viz::DelayBasedTimeSourceClient,
+// CursorView class can be used to display cursor images with minimal
+// latency/jank.
+class CursorView : public FastInkView,
                    public ui::CursorController::CursorObserver {
  public:
   CursorView(const CursorView&) = delete;
@@ -35,73 +27,71 @@ class CursorView : public fast_ink::FastInkView,
   ~CursorView() override;
 
   static views::UniqueWidgetPtr Create(const gfx::Point& initial_location,
-                                       bool is_motion_blur_enabled,
                                        aura::Window* container);
 
-  void SetCursorLocation(const gfx::Point& new_location);
-  void SetCursorImage(const gfx::ImageSkia& cursor_image,
-                      const gfx::Size& cursor_size,
-                      const gfx::Point& cursor_hotspot);
+  void SetCursorImages(const std::vector<gfx::ImageSkia>& cursor_image,
+                       const gfx::Size& cursor_size,
+                       const gfx::Point& cursor_hotspot);
+  void SetLocation(const gfx::Point& location);
 
   // ui::CursorController::CursorObserver overrides:
   void OnCursorLocationChanged(const gfx::PointF& location) override;
 
-  // viz::DelayBasedTimeSourceClient overrides:
-  void OnTimerTick() override;
-
-  // fast_ink::FastInkView override.
-  fast_ink::FastInkHost::PresentationCallback GetPresentationCallback()
-      override;
-
  private:
-  CursorView(const gfx::Point& initial_location, bool is_motion_blur_enabled);
+  CursorView(const gfx::Point& initial_location);
 
-  void StationaryOnPaintThread();
-  gfx::Rect CalculateCursorRectOnPaintThread() const;
-  void SetActiveOnPaintThread(bool active);
-  void SetTimebaseAndIntervalOnPaintThread(base::TimeTicks timebase,
-                                           base::TimeDelta interval);
-  void DidPresentCompositorFrame(const gfx::PresentationFeedback& feedback);
+  // Initialize CursorView after FaskInkHost is setup.
+  void Init();
 
-  // Constants that can be used on any thread.
-  const bool is_motion_blur_enabled_;
-  const scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
-  const scoped_refptr<base::SingleThreadTaskRunner> paint_task_runner_;
+  // Update cursor animation.
+  void UpdateAnimation();
+
+  // Advance `cursor_image_index_` to the next frame.
+  void AdvanceFrame();
+
+  // Draw the current cursor.
+  void Draw();
+
+  // Stop the `stationary_timer_`.
+  void OnStationary();
+
+  // Update `cursor_rect_` and `damage_rect_` and draw cursor.
+  void UpdateCursor();
+
   gfx::Transform buffer_to_screen_transform_;
+  float device_scale_factor_ = 1.0f;
 
-  base::Lock lock_;
-  // Shared state protected by |lock_|.
-  gfx::Point new_location_;
-  gfx::Size new_cursor_size_;
-  gfx::ImageSkia new_cursor_image_;
-  gfx::Point new_cursor_hotspot_;
+  gfx::Point cursor_location_;
+  std::vector<gfx::ImageSkia> cursor_images_;
+  int cursor_image_index_ = 0;
 
-  // Paint thread state.
-  gfx::Point location_;
-  gfx::ImageSkia cursor_image_;
-  gfx::Size cursor_size_;
+  // Cursor hotspot relative to the origin of cursor image in dp.
+  // It is the single point within the cursor image that is considered to be the
+  // cursor's point of interaction with other elements on the screen
   gfx::Point cursor_hotspot_;
-  gfx::Rect cursor_rect_;
-  base::TimeTicks next_tick_time_;
-  gfx::Vector2dF velocity_;
-  gfx::Vector2dF responsive_velocity_;
-  gfx::Vector2dF smooth_velocity_;
-  sk_sp<cc::PaintFilter> motion_blur_filter_;
-  gfx::Vector2dF motion_blur_offset_;
-  SkMatrix motion_blur_matrix_;
-  SkMatrix motion_blur_inverse_matrix_;
-  std::unique_ptr<viz::DelayBasedTimeSource> time_source_;
-  base::RetainingOneShotTimer stationary_timer_;
-  base::RepeatingCallback<void(const gfx::Rect&, const gfx::Rect&, bool)>
-      update_surface_callback_;
-  SEQUENCE_CHECKER(paint_sequence_checker_);
 
-  // UI thread state.
-  ui::Compositor* compositor_ = nullptr;
-  SEQUENCE_CHECKER(ui_sequence_checker_);
+  // Cursor size in dp.
+  gfx::Size cursor_size_;
+
+  // Cursor image bounds in root window coordinates.
+  gfx::Rect cursor_rect_;
+
+  // Damage rect in root window coordinates.
+  gfx::Rect damage_rect_;
+
+  scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
+
+  // Timer for cursor's stationary status. The cursor gets into stationary state
+  // after it is not moved for a certain period of time, which is tracked by
+  // this timer.
+  std::optional<base::RetainingOneShotTimer> stationary_timer_;
+
+  // Timer for animated cursor drawing.
+  base::RepeatingTimer animated_cursor_timer_;
+
   base::WeakPtrFactory<CursorView> weak_ptr_factory_{this};
 };
 
-}  // namespace cursor
+}  // namespace ash
 
 #endif  // ASH_FAST_INK_CURSOR_CURSOR_VIEW_H_

@@ -8,16 +8,13 @@
 #include "ash/assistant/ui/assistant_ui_constants.h"
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/ui/colors/assistant_colors.h"
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/feature_list.h"
-#include "base/test/scoped_feature_list.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "third_party/skia/include/core/SkColor.h"
-#include "ui/chromeos/styles/cros_styles.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/label.h"
@@ -29,8 +26,6 @@ namespace {
 using AssistantQueryViewUnittest = AssistantAshTestBase;
 
 TEST_F(AssistantQueryViewUnittest, ThemeDarkLightMode) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      chromeos::features::kDarkLightMode);
   auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
 
   dark_light_mode_controller->OnActiveUserPrefServiceChanged(
@@ -50,15 +45,12 @@ TEST_F(AssistantQueryViewUnittest, ThemeDarkLightMode) {
   EXPECT_FALSE(query_view->background());
   ASSERT_TRUE(query_view->layer());
   EXPECT_FALSE(query_view->layer()->fills_bounds_opaquely());
-  EXPECT_EQ(high_confidence_label->GetEnabledColor(),
-            cros_styles::ResolveColor(cros_styles::ColorName::kTextColorPrimary,
-                                      /*is_dark_mode=*/initial_dark_mode_status,
-                                      /*use_debug_colors=*/false));
+  EXPECT_EQ(
+      high_confidence_label->GetEnabledColor(),
+      query_view->GetColorProvider()->GetColor(cros_tokens::kTextColorPrimary));
   EXPECT_EQ(
       low_confidence_label->GetEnabledColor(),
-      cros_styles::ResolveColor(cros_styles::ColorName::kTextColorSecondary,
-                                /*is_dark_mode=*/initial_dark_mode_status,
-                                /*use_debug_colors=*/false));
+      query_view->GetColorProvider()->GetColor(cros_tokens::kColorSecondary));
 
   // Switch the color mode.
   dark_light_mode_controller->ToggleColorMode();
@@ -67,14 +59,10 @@ TEST_F(AssistantQueryViewUnittest, ThemeDarkLightMode) {
 
   EXPECT_EQ(
       high_confidence_label->GetEnabledColor(),
-      cros_styles::ResolveColor(cros_styles::ColorName::kTextColorPrimary,
-                                /*is_dark_mode=*/!initial_dark_mode_status,
-                                /*use_debug_colors=*/false));
+      query_view->GetColorProvider()->GetColor(cros_tokens::kTextColorPrimary));
   EXPECT_EQ(
       low_confidence_label->GetEnabledColor(),
-      cros_styles::ResolveColor(cros_styles::ColorName::kTextColorSecondary,
-                                /*is_dark_mode=*/!initial_dark_mode_status,
-                                /*use_debug_colors=*/false));
+      query_view->GetColorProvider()->GetColor(cros_tokens::kColorSecondary));
 }
 
 }  // namespace

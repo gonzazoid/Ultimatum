@@ -5,11 +5,13 @@
 #include "chrome/browser/ui/webui/signin/sync_confirmation_handler.h"
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -183,13 +185,14 @@ class SyncConfirmationHandlerTest : public BrowserWithTestWindowTest,
                                              false /* no_silhouette */)
             .spec();
     std::string passed_picture_url;
-    const base::Value* src = call_data.arg2()->FindKey("src");
+    const base::Value::Dict& dict = call_data.arg2()->GetDict();
+    const std::string* src = dict.FindString("src");
     EXPECT_NE(src, nullptr);
-    EXPECT_EQ(expected_picture_url, src->GetString());
-    const base::Value* show_enterprise_badge =
-        call_data.arg2()->FindKey("showEnterpriseBadge");
-    EXPECT_NE(show_enterprise_badge, nullptr);
-    EXPECT_EQ(primary_account.IsManaged(), show_enterprise_badge->GetBool());
+    EXPECT_EQ(expected_picture_url, *src);
+    const std::optional<bool> show_enterprise_badge =
+        dict.FindBool("showEnterpriseBadge");
+    EXPECT_TRUE(show_enterprise_badge.has_value());
+    EXPECT_EQ(primary_account.IsManaged(), show_enterprise_badge.value());
   }
 
  protected:
@@ -203,7 +206,8 @@ class SyncConfirmationHandlerTest : public BrowserWithTestWindowTest,
  private:
   std::unique_ptr<content::TestWebUI> web_ui_;
   std::unique_ptr<SyncConfirmationUI> sync_confirmation_ui_;
-  raw_ptr<TestingSyncConfirmationHandler> handler_;  // Not owned.
+  raw_ptr<TestingSyncConfirmationHandler, DanglingUntriaged>
+      handler_;  // Not owned.
   base::UserActionTester user_action_tester_;
   std::unordered_map<std::string, int> string_to_grd_id_map_;
   base::ScopedObservation<LoginUIService, LoginUIService::Observer>
@@ -309,13 +313,10 @@ TEST_F(SyncConfirmationHandlerTest, TestHandleUndo) {
 
 TEST_F(SyncConfirmationHandlerTest, TestHandleConfirm) {
   // The consent description consists of strings 1, 2, and 4.
-  base::ListValue consent_description;
-  consent_description.Append(
-      base::Value(SyncConfirmationHandlerTest::kConsentText1));
-  consent_description.Append(
-      base::Value(SyncConfirmationHandlerTest::kConsentText2));
-  consent_description.Append(
-      base::Value(SyncConfirmationHandlerTest::kConsentText4));
+  base::Value::List consent_description;
+  consent_description.Append(SyncConfirmationHandlerTest::kConsentText1);
+  consent_description.Append(SyncConfirmationHandlerTest::kConsentText2);
+  consent_description.Append(SyncConfirmationHandlerTest::kConsentText4);
 
   // The consent confirmation contains string 5.
   base::Value consent_confirmation(SyncConfirmationHandlerTest::kConsentText5);
@@ -350,13 +351,10 @@ TEST_F(SyncConfirmationHandlerTest, TestHandleConfirm) {
 
 TEST_F(SyncConfirmationHandlerTest, TestHandleConfirmWithAdvancedSyncSettings) {
   // The consent description consists of strings 2, 3, and 5.
-  base::ListValue consent_description;
-  consent_description.Append(
-      base::Value(SyncConfirmationHandlerTest::kConsentText2));
-  consent_description.Append(
-      base::Value(SyncConfirmationHandlerTest::kConsentText3));
-  consent_description.Append(
-      base::Value(SyncConfirmationHandlerTest::kConsentText5));
+  base::Value::List consent_description;
+  consent_description.Append(SyncConfirmationHandlerTest::kConsentText2);
+  consent_description.Append(SyncConfirmationHandlerTest::kConsentText3);
+  consent_description.Append(SyncConfirmationHandlerTest::kConsentText5);
 
   // The consent confirmation contains string 2.
   base::Value consent_confirmation(SyncConfirmationHandlerTest::kConsentText2);

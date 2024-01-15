@@ -7,11 +7,11 @@
 #include <string>
 
 #include "base/base64url.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
 #include "base/logging.h"
 #include "base/path_service.h"
@@ -22,7 +22,6 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/common/chrome_paths.h"
 
 namespace policy {
@@ -161,6 +160,10 @@ bool BrowserDMTokenStorageLinux::InitEnrollmentErrorOption() {
 
   return base::TrimWhitespaceASCII(options, base::TRIM_ALL) ==
          kEnrollmentMandatoryOption;
+}
+
+bool BrowserDMTokenStorageLinux::CanInitEnrollmentToken() const {
+  return true;
 }
 
 BrowserDMTokenStorage::StoreTask BrowserDMTokenStorageLinux::SaveDMTokenTask(

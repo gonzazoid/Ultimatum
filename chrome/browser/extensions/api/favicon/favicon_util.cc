@@ -4,8 +4,8 @@
 
 #include "chrome/browser/extensions/api/favicon/favicon_util.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -15,8 +15,8 @@
 #include "content/public/browser/browser_context.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/permissions/permissions_data.h"
-#include "ui/base/layout.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/resources/grit/ui_resources.h"
@@ -81,8 +81,8 @@ void GetFaviconForExtensionRequest(content::BrowserContext* browser_context,
     return;
   }
 
-  // Don't make requests to the favicon server if a favicon can't be found.
-  constexpr bool kAllowFaviconServerFallback = false;
+  // Use exact URL match instead of host match
+  constexpr bool kAllowFallbackToHost = false;
 
   int size_in_pixels = parsed.size_in_dip;
 
@@ -92,7 +92,7 @@ void GetFaviconForExtensionRequest(content::BrowserContext* browser_context,
                                            ServiceAccessType::EXPLICIT_ACCESS);
   favicon_service->GetRawFaviconForPageURL(
       GURL(parsed.page_url), {favicon_base::IconType::kFavicon}, size_in_pixels,
-      kAllowFaviconServerFallback,
+      kAllowFallbackToHost,
       base::BindOnce(&favicon_util::OnFaviconAvailable, std::move(callback),
                      size_in_pixels),
       tracker);

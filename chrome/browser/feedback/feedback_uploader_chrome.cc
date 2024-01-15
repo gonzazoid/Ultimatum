@@ -4,7 +4,7 @@
 
 #include "chrome/browser/feedback/feedback_uploader_chrome.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "build/chromeos_buildflags.h"
 #include "build/config/chromebox_for_meetings/buildflags.h"
@@ -71,10 +71,15 @@ FeedbackUploaderChrome::FeedbackUploaderChrome(content::BrowserContext* context)
       FROM_HERE,
       base::BindOnce(&FeedbackReport::LoadReportsAndQueue,
                      feedback_reports_path(),
-                     base::BindRepeating(&QueueSingleReport, AsWeakPtr())));
+                     base::BindRepeating(&QueueSingleReport,
+                                         weak_ptr_factory_.GetWeakPtr())));
 }
 
 FeedbackUploaderChrome::~FeedbackUploaderChrome() = default;
+
+base::WeakPtr<FeedbackUploader> FeedbackUploaderChrome::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
 
 void FeedbackUploaderChrome::PrimaryAccountAccessTokenAvailable(
     GoogleServiceAuthError error,

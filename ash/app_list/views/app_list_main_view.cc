@@ -17,6 +17,7 @@
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/views/app_list_folder_view.h"
 #include "ash/app_list/views/app_list_item_view.h"
+#include "ash/app_list/views/app_list_search_view.h"
 #include "ash/app_list/views/app_list_view.h"
 #include "ash/app_list/views/apps_container_view.h"
 #include "ash/app_list/views/apps_grid_view.h"
@@ -29,11 +30,12 @@
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/search_box/search_box_view_base.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "ui/aura/window.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/border.h"
@@ -77,8 +79,6 @@ void AppListMainView::AddContentsViews() {
   contents_view->SetPaintToLayer(ui::LAYER_NOT_DRAWN);
   contents_view->layer()->SetMasksToBounds(true);
   contents_view_ = AddChildView(std::move(contents_view));
-
-  search_box_view_->set_contents_view(contents_view_);
 }
 
 void AppListMainView::ShowAppListWhenReady() {
@@ -88,7 +88,7 @@ void AppListMainView::ShowAppListWhenReady() {
       wm::GetActivationClient(
           app_list_view_->GetWidget()->GetNativeView()->GetRootWindow())
           ->GetActiveWindow();
-  if (app_list_view_->is_tablet_mode() && active_window)
+  if (active_window)
     GetWidget()->ShowInactive();
   else
     GetWidget()->Show();
@@ -105,22 +105,11 @@ PaginationModel* AppListMainView::GetAppsPaginationModel() {
       ->pagination_model();
 }
 
-void AppListMainView::NotifySearchBoxVisibilityChanged() {
-  // Repaint the AppListView's background which will repaint the background for
-  // the search box. This is needed because this view paints to a layer and
-  // won't propagate paints upward.
-  if (parent())
-    parent()->SchedulePaint();
-}
-
-const char* AppListMainView::GetClassName() const {
-  return "AppListMainView";
-}
-
 void AppListMainView::Layout() {
   gfx::Rect rect = GetContentsBounds();
-  if (!rect.IsEmpty())
+  if (!rect.IsEmpty()) {
     contents_view_->SetBoundsRect(rect);
+  }
 }
 
 void AppListMainView::QueryChanged(const std::u16string& trimmed_query,
@@ -134,21 +123,17 @@ void AppListMainView::QueryChanged(const std::u16string& trimmed_query,
 
 void AppListMainView::ActiveChanged(SearchBoxViewBase* sender) {
   // Do not update views on closing.
-  if (app_list_view_->app_list_state() == AppListViewState::kClosed)
+  if (app_list_view_->app_list_state() == AppListViewState::kClosed) {
     return;
+  }
 
   if (search_box_view_->is_search_box_active()) {
     // Show zero state suggestions when search box is activated with an empty
     // query.
     const bool is_query_empty = sender->IsSearchBoxTrimmedQueryEmpty();
-    if (features::IsProductivityLauncherEnabled()) {
-      app_list_view_->SetStateFromSearchBoxView(
-          is_query_empty, true /*triggered_by_contents_change*/);
-      contents_view_->ShowSearchResults(true);
-    } else {
-      if (is_query_empty)
-        search_box_view_->ShowZeroStateSuggestions();
-    }
+    app_list_view_->SetStateFromSearchBoxView(
+        is_query_empty, true /*triggered_by_contents_change*/);
+    contents_view_->ShowSearchResults(true);
   } else {
     // Close the search results page if the search box is inactive.
     contents_view_->ShowSearchResults(false);
@@ -158,8 +143,9 @@ void AppListMainView::ActiveChanged(SearchBoxViewBase* sender) {
 void AppListMainView::OnSearchBoxKeyEvent(ui::KeyEvent* event) {
   app_list_view_->RedirectKeyEventToSearchBox(event);
 
-  if (!IsUnhandledUpDownKeyEvent(*event))
+  if (!IsUnhandledUpDownKeyEvent(*event)) {
     return;
+  }
 
   // Handles arrow key events from the search box while the search box is
   // inactive. This covers both folder traversal and apps grid traversal. Search
@@ -168,13 +154,15 @@ void AppListMainView::OnSearchBoxKeyEvent(ui::KeyEvent* event) {
       contents_view_->GetPageView(contents_view_->GetActivePageIndex());
   views::View* next_view = nullptr;
 
-  if (event->key_code() == ui::VKEY_UP)
+  if (event->key_code() == ui::VKEY_UP) {
     next_view = page->GetLastFocusableView();
-  else
+  } else {
     next_view = page->GetFirstFocusableView();
+  }
 
-  if (next_view)
+  if (next_view) {
     next_view->RequestFocus();
+  }
   event->SetHandled();
 }
 
@@ -183,8 +171,16 @@ bool AppListMainView::CanSelectSearchResults() {
   return !!contents_view_->search_result_page_view()->CanSelectSearchResults();
 }
 
+bool AppListMainView::HandleFocusMoveAboveSearchResults(
+    const ui::KeyEvent& key_event) {
+  return contents_view_->search_result_page_view()
+      ->search_view()
+      ->OverrideKeyNavigationAboveSearchResults(key_event);
+}
+
 void AppListMainView::AssistantButtonPressed() {
-  delegate_->StartAssistant();
+  delegate_->StartAssistant(
+      assistant::AssistantEntryPoint::kLauncherSearchBoxIcon);
 }
 
 void AppListMainView::CloseButtonPressed() {
@@ -192,5 +188,8 @@ void AppListMainView::CloseButtonPressed() {
   search_box_view_->SetSearchBoxActive(false, ui::ET_UNKNOWN);
   search_box_view_->ClearSearch();
 }
+
+BEGIN_METADATA(AppListMainView)
+END_METADATA
 
 }  // namespace ash

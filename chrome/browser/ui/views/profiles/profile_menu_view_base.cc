@@ -8,9 +8,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/scoped_observation.h"
 #include "build/build_config.h"
@@ -22,17 +23,19 @@
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/signin/profile_colors_util.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/profiles/profile_colors_util.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/themed_vector_icon.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/display/display.h"
@@ -44,6 +47,10 @@
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
+#include "ui/views/animation/ink_drop_highlight.h"
+#include "ui/views/animation/ink_drop_host.h"
+#include "ui/views/animation/ink_drop_impl.h"
+#include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/button/md_text_button.h"
@@ -54,18 +61,26 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/flex_layout.h"
 #include "ui/views/layout/flex_layout_types.h"
+#include "ui/views/layout/layout_manager.h"
 #include "ui/views/layout/table_layout.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
 
 namespace {
 
 // Helpers --------------------------------------------------------------------
 
-constexpr int kMenuWidth = 288;
+constexpr int kMenuWidth = 290;
 constexpr int kMaxImageSize = ProfileMenuViewBase::kIdentityImageSize;
 constexpr int kDefaultMargin = 8;
 constexpr int kBadgeSize = 16;
 constexpr int kCircularImageButtonSize = 28;
+constexpr int kCircularImageButtonRefreshSize = 32;
+constexpr int kCircularImageButtonTransparentRefreshSize = 24;
+constexpr float kShortcutIconToImageRatio = 9.0f / 16.0f;
+constexpr float kShortcutIconToImageRefreshRatio = 20.0f / 32.0f;
+constexpr float kShortcutIconToImageTransparentRefreshRatio = 16.0f / 24.0f;
 // TODO(crbug.com/1128499): Remove this constant by extracting art height from
 // |avatar_header_art|.
 constexpr int kHeaderArtHeight = 80;
@@ -83,6 +98,11 @@ constexpr int kMinimumScrollableContentHeight = 40;
 constexpr int kMenuEdgeMargin = 16;
 
 constexpr int kSyncInfoInsidePadding = 12;
+constexpr int kSyncInfoRefreshInsidePadding = 16;
+
+// The bottom background edge should match the center of the identity image.
+constexpr auto kBackgroundInsets =
+    gfx::Insets::TLBR(0, 0, kHalfOfAvatarImageViewSize, 0);
 
 gfx::ImageSkia SizeImage(const gfx::ImageSkia& image, int size) {
   return gfx::ImageSkiaOperations::CreateResizedImage(
@@ -174,69 +194,117 @@ ui::ImageModel SizeImageModel(const ui::ImageModel& image_model, int size) {
                                         size);
 }
 
-const gfx::ImageSkia ProfileManagementImageFromIcon(
+const ui::ImageModel ProfileManagementImageFromIcon(
     const gfx::VectorIcon& icon,
     const ui::ColorProvider* color_provider) {
   constexpr float kIconToImageRatio = 0.75f;
   constexpr int kIconSize = 20;
   const SkColor icon_color = color_provider->GetColor(ui::kColorIcon);
   gfx::ImageSkia image = ImageForMenu(icon, kIconToImageRatio, icon_color);
-  return SizeImage(image, kIconSize);
+  return ui::ImageModel::FromImageSkia(SizeImage(image, kIconSize));
 }
 
 // TODO(crbug.com/1146998): Adjust button size to be 16x16.
 class CircularImageButton : public views::ImageButton {
- public:
-  METADATA_HEADER(CircularImageButton);
+  METADATA_HEADER(CircularImageButton, views::ImageButton)
 
+ public:
   CircularImageButton(PressedCallback callback,
                       const gfx::VectorIcon& icon,
                       const std::u16string& text,
-                      SkColor background_profile_color = SK_ColorTRANSPARENT,
-                      bool show_border = false)
+                      int button_size = kCircularImageButtonSize,
+                      bool has_background_color = false,
+                      bool show_border = false,
+                      SkColor themed_icon_color = SK_ColorTRANSPARENT)
       : ImageButton(std::move(callback)),
         icon_(icon),
-        background_profile_color_(background_profile_color),
-        show_border_(show_border) {
+        button_size_(button_size),
+        has_background_color_(has_background_color),
+        show_border_(show_border),
+        themed_icon_color_(themed_icon_color) {
     SetTooltipText(text);
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
 
     InstallCircleHighlightPathGenerator(this);
+
+    const int kBorderThickness = show_border_ ? 1 : 0;
+    const SkScalar kButtonRadius = (button_size_ + 2 * kBorderThickness) / 2.0f;
+    if (features::IsChromeRefresh2023() && has_background_color_) {
+      SetBackground(views::CreateThemedRoundedRectBackground(
+          kColorProfileMenuIconButtonBackground, kButtonRadius));
+      views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(false);
+      views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnHover(true);
+      views::InkDrop::Get(this)->SetLayerRegion(views::LayerRegion::kAbove);
+      views::InkDrop::Get(this)->SetCreateHighlightCallback(base::BindRepeating(
+          [](CircularImageButton* host) {
+            const auto* color_provider = host->GetColorProvider();
+            const SkColor hover_color = color_provider->GetColor(
+                kColorProfileMenuIconButtonBackgroundHovered);
+            const float hover_alpha = SkColorGetA(hover_color);
+
+            auto ink_drop_highlight = std::make_unique<views::InkDropHighlight>(
+                host->size(), host->height() / 2,
+                gfx::PointF(host->GetLocalBounds().CenterPoint()),
+                SkColorSetA(hover_color, SK_AlphaOPAQUE));
+            ink_drop_highlight->set_visible_opacity(hover_alpha /
+                                                    SK_AlphaOPAQUE);
+            return ink_drop_highlight;
+          },
+          this));
+    }
+
+    // TODO(crbug.com/1422119): Remove border for Chrome Refresh 2023.
+    if (show_border_) {
+      SetBorder(views::CreateThemedRoundedRectBorder(
+          kBorderThickness, kButtonRadius, ui::kColorMenuSeparator));
+    }
   }
 
   // views::ImageButton:
   void OnThemeChanged() override {
     views::ImageButton::OnThemeChanged();
-    constexpr float kShortcutIconToImageRatio = 9.0f / 16.0f;
-    const int kBorderThickness = show_border_ ? 1 : 0;
-    const SkScalar kButtonRadius =
-        (kCircularImageButtonSize + 2 * kBorderThickness) / 2.0f;
 
     const auto* color_provider = GetColorProvider();
     SkColor icon_color = color_provider->GetColor(ui::kColorIcon);
-    if (background_profile_color_ != SK_ColorTRANSPARENT)
-      icon_color = GetProfileForegroundIconColor(background_profile_color_);
-    gfx::ImageSkia image =
-        ImageForMenu(icon_, kShortcutIconToImageRatio, icon_color);
-    SetImage(views::Button::STATE_NORMAL,
-             SizeImage(image, kCircularImageButtonSize));
-    views::InkDrop::Get(this)->SetBaseColor(icon_color);
-
-    if (show_border_) {
-      const SkColor separator_color =
-          color_provider->GetColor(ui::kColorMenuSeparator);
-      SetBorder(views::CreateRoundedRectBorder(kBorderThickness, kButtonRadius,
-                                               separator_color));
+    float shortcutIconToImageRatio = kShortcutIconToImageRatio;
+    if (features::IsChromeRefresh2023()) {
+      icon_color = color_provider->GetColor(kColorProfileMenuIconButton);
+      shortcutIconToImageRatio =
+          has_background_color_ ? kShortcutIconToImageRefreshRatio
+                                : kShortcutIconToImageTransparentRefreshRatio;
+    } else if (themed_icon_color_ != SK_ColorTRANSPARENT) {
+      icon_color = themed_icon_color_;
     }
+    gfx::ImageSkia image =
+        ImageForMenu(*icon_, shortcutIconToImageRatio, icon_color);
+    SetImageModel(
+        views::Button::STATE_NORMAL,
+        ui::ImageModel::FromImageSkia(SizeImage(image, button_size_)));
+    views::InkDrop::Get(this)->SetBaseColor(icon_color);
   }
 
  private:
-  const gfx::VectorIcon& icon_;
-  const SkColor background_profile_color_;
+  const raw_ref<const gfx::VectorIcon> icon_;
+  // In Chrome Refresh 2023, this kind of button could have different sizes in
+  // different sections of the Profile Menu, which is also different from the
+  // size in the previous version of the menu.
+  int button_size_;
+  // In Chrome Refresh 2023, some buttons on the Profile Menu have a background
+  // color that is based on the profile theme color and on light or dark mode,
+  // while other buttons have a transparent background. In the previous version
+  // of the menu, all backgrounds are transparent.
+  bool has_background_color_;
   bool show_border_;
+  // In the Profile Menu previous to Chrome Refresh 2023, icons that appears on
+  // top of a background with the profile theme color (e.g. edit button) have a
+  // different color than the default icon color. For the default icons, this is
+  // set to transparent and not used.
+  // TODO(crbug.com/1422119): Remove this parameter after Chrome Refresh 2023 is
+  // launched.
+  SkColor themed_icon_color_;
 };
 
-BEGIN_METADATA(CircularImageButton, views::ImageButton)
+BEGIN_METADATA(CircularImageButton)
 END_METADATA
 
 class FeatureButtonIconView : public views::ImageView {
@@ -251,18 +319,20 @@ class FeatureButtonIconView : public views::ImageView {
     constexpr int kIconSize = 16;
     const SkColor icon_color = GetColorProvider()->GetColor(ui::kColorIcon);
     gfx::ImageSkia image =
-        ImageForMenu(icon_, icon_to_image_ratio_, icon_color);
-    SetImage(SizeImage(ColorImage(image, icon_color), kIconSize));
+        ImageForMenu(*icon_, icon_to_image_ratio_, icon_color);
+    SetImage(ui::ImageModel::FromImageSkia(
+        SizeImage(ColorImage(image, icon_color), kIconSize)));
   }
 
  private:
-  const gfx::VectorIcon& icon_;
+  const raw_ref<const gfx::VectorIcon> icon_;
   const float icon_to_image_ratio_;
 };
 
 class ProfileManagementFeatureButton : public HoverButton {
+  METADATA_HEADER(ProfileManagementFeatureButton, HoverButton)
+
  public:
-  METADATA_HEADER(ProfileManagementFeatureButton);
   ProfileManagementFeatureButton(PressedCallback callback,
                                  const gfx::VectorIcon& icon,
                                  const std::u16string& clickable_text)
@@ -271,17 +341,19 @@ class ProfileManagementFeatureButton : public HoverButton {
   // HoverButton:
   void OnThemeChanged() override {
     HoverButton::OnThemeChanged();
-    SetImage(STATE_NORMAL,
-             ProfileManagementImageFromIcon(icon_, GetColorProvider()));
+    SetImageModel(Button::STATE_NORMAL,
+                  ProfileManagementImageFromIcon(*icon_, GetColorProvider()));
   }
 
  private:
-  const gfx::VectorIcon& icon_;
+  const raw_ref<const gfx::VectorIcon> icon_;
 };
-BEGIN_METADATA(ProfileManagementFeatureButton, HoverButton)
+BEGIN_METADATA(ProfileManagementFeatureButton)
 END_METADATA
 
 class ProfileManagementIconView : public views::ImageView {
+  METADATA_HEADER(ProfileManagementIconView, views::ImageView)
+
  public:
   explicit ProfileManagementIconView(const gfx::VectorIcon& icon)
       : icon_(icon) {}
@@ -290,16 +362,21 @@ class ProfileManagementIconView : public views::ImageView {
   // views::ImageView:
   void OnThemeChanged() override {
     views::ImageView::OnThemeChanged();
-    SetImage(ProfileManagementImageFromIcon(icon_, GetColorProvider()));
+    SetImage(ProfileManagementImageFromIcon(*icon_, GetColorProvider()));
   }
 
  private:
-  const gfx::VectorIcon& icon_;
+  const raw_ref<const gfx::VectorIcon> icon_;
 };
+
+BEGIN_METADATA(ProfileManagementIconView)
+END_METADATA
 
 // AvatarImageView is used to ensure avatar adornments are kept in sync with
 // current theme colors.
 class AvatarImageView : public views::ImageView {
+  METADATA_HEADER(AvatarImageView, views::ImageView)
+
  public:
   AvatarImageView(const ui::ImageModel& avatar_image,
                   const ProfileMenuViewBase* root_view)
@@ -323,17 +400,23 @@ class AvatarImageView : public views::ImageView {
             .Rasterize(GetColorProvider());
     sized_avatar_image = AddCircularBackground(
         sized_avatar_image, GetBackgroundColor(), kIdentityImageSizeInclBorder);
-    gfx::ImageSkia sized_badge = AddCircularBackground(
-        SizeImage(root_view_->GetSyncIcon(), kBadgeSize), GetBackgroundColor(),
-        kBadgeSize + 2 * kBadgePadding);
-    gfx::ImageSkia sized_badge_with_shadow =
-        gfx::ImageSkiaOperations::CreateImageWithDropShadow(
-            sized_badge, gfx::ShadowValue::MakeMdShadowValues(/*elevation=*/1,
-                                                              SK_ColorBLACK));
 
-    gfx::ImageSkia badged_image = gfx::ImageSkiaOperations::CreateIconWithBadge(
-        sized_avatar_image, sized_badge_with_shadow);
-    SetImage(badged_image);
+    if (features::IsChromeRefresh2023()) {
+      SetImage(ui::ImageModel::FromImageSkia(sized_avatar_image));
+    } else {
+      gfx::ImageSkia sized_badge = AddCircularBackground(
+          SizeImage(root_view_->GetSyncIcon(), kBadgeSize),
+          GetBackgroundColor(), kBadgeSize + 2 * kBadgePadding);
+      gfx::ImageSkia sized_badge_with_shadow =
+          gfx::ImageSkiaOperations::CreateImageWithDropShadow(
+              sized_badge, gfx::ShadowValue::MakeMdShadowValues(/*elevation=*/1,
+                                                                SK_ColorBLACK));
+
+      gfx::ImageSkia badged_image =
+          gfx::ImageSkiaOperations::CreateIconWithBadge(
+              sized_avatar_image, sized_badge_with_shadow);
+      SetImage(ui::ImageModel::FromImageSkia(badged_image));
+    }
   }
 
  private:
@@ -345,9 +428,13 @@ class AvatarImageView : public views::ImageView {
   raw_ptr<const ProfileMenuViewBase> root_view_;
 };
 
+BEGIN_METADATA(AvatarImageView)
+END_METADATA
+
 class SyncButton : public HoverButton {
+  METADATA_HEADER(SyncButton, HoverButton)
+
  public:
-  METADATA_HEADER(SyncButton);
   SyncButton(PressedCallback callback,
              ProfileMenuViewBase* root_view,
              const std::u16string& clickable_text)
@@ -357,17 +444,21 @@ class SyncButton : public HoverButton {
   // HoverButton:
   void OnThemeChanged() override {
     HoverButton::OnThemeChanged();
-    SetImage(STATE_NORMAL, SizeImage(root_view_->GetSyncIcon(), kBadgeSize));
+    SetImageModel(Button::STATE_NORMAL,
+                  ui::ImageModel::FromImageSkia(
+                      SizeImage(root_view_->GetSyncIcon(), kBadgeSize)));
   }
 
  private:
   raw_ptr<const ProfileMenuViewBase> root_view_;
 };
 
-BEGIN_METADATA(SyncButton, HoverButton)
+BEGIN_METADATA(SyncButton)
 END_METADATA
 
 class SyncImageView : public views::ImageView {
+  METADATA_HEADER(SyncImageView, views::ImageView)
+
  public:
   explicit SyncImageView(const ProfileMenuViewBase* root_view)
       : root_view_(root_view) {}
@@ -375,12 +466,16 @@ class SyncImageView : public views::ImageView {
   // views::ImageView:
   void OnThemeChanged() override {
     ImageView::OnThemeChanged();
-    SetImage(SizeImage(root_view_->GetSyncIcon(), kBadgeSize));
+    SetImage(ui::ImageModel::FromImageSkia(
+        SizeImage(root_view_->GetSyncIcon(), kBadgeSize)));
   }
 
  private:
   raw_ptr<const ProfileMenuViewBase> root_view_;
 };
+
+BEGIN_METADATA(SyncImageView)
+END_METADATA
 
 void BuildProfileTitleAndSubtitle(views::View* parent,
                                   const std::u16string& title,
@@ -394,105 +489,20 @@ void BuildProfileTitleAndSubtitle(views::View* parent,
                       gfx::Insets::TLBR(kDefaultMargin, 0, 0, 0)));
 
   if (!title.empty()) {
-    profile_titles_container->AddChildView(std::make_unique<views::Label>(
-        title, views::style::CONTEXT_DIALOG_TITLE));
+    profile_titles_container->AddChildView(
+        features::IsChromeRefresh2023()
+            ? std::make_unique<views::Label>(title,
+                                             views::style::CONTEXT_DIALOG_TITLE,
+                                             views::style::STYLE_HEADLINE_4)
+            : std::make_unique<views::Label>(
+                  title, views::style::CONTEXT_DIALOG_TITLE));
   }
 
   if (!subtitle.empty()) {
     profile_titles_container->AddChildView(std::make_unique<views::Label>(
-        subtitle, views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY));
-  }
-}
-
-// This function deals with the somewhat complicted layout to build the part of
-// the profile identity info that has a colored background.
-void BuildProfileBackgroundContainer(
-    views::View* parent,
-    std::unique_ptr<views::View> heading_label,
-    SkColor background_color,
-    std::unique_ptr<views::View> avatar_image_view,
-    std::unique_ptr<views::View> edit_button,
-    const ui::ThemedVectorIcon& avatar_header_art) {
-  views::View* profile_background_container =
-      parent->AddChildView(std::make_unique<views::View>());
-
-  auto background_container_insets = gfx::Insets::VH(0, kMenuEdgeMargin);
-  if (edit_button) {
-    // Compensate for the edit button on the right with an extra margin on the
-    // left so that the rest is centered.
-    background_container_insets.set_left(background_container_insets.left() +
-                                         kCircularImageButtonSize);
-  }
-  profile_background_container
-      ->SetLayoutManager(std::make_unique<views::FlexLayout>())
-      ->SetOrientation(views::LayoutOrientation::kHorizontal)
-      .SetCrossAxisAlignment(views::LayoutAlignment::kEnd)
-      .SetInteriorMargin(background_container_insets);
-
-  // Show a colored background iff there is no art.
-  if (avatar_header_art.empty()) {
-    // The bottom background edge should match the center of the identity image.
-    auto background_insets =
-        gfx::Insets::TLBR(0, 0, kHalfOfAvatarImageViewSize, 0);
-    // TODO(crbug.com/1147038): Remove the zero-radius rounded background.
-    profile_background_container->SetBackground(
-        views::CreateBackgroundFromPainter(
-            views::Painter::CreateSolidRoundRectPainter(
-                background_color, /*radius=*/0, background_insets)));
-  } else {
-    DCHECK_EQ(SK_ColorTRANSPARENT, background_color);
-    profile_background_container->SetBackground(
-        views::CreateThemedVectorIconBackground(avatar_header_art));
-  }
-
-  // |avatar_margin| is derived from |avatar_header_art| asset height, it
-  // increases margin for the avatar icon to make |avatar_header_art| visible
-  // above the center of the avatar icon.
-  const int avatar_margin = avatar_header_art.empty()
-                                ? kMenuEdgeMargin
-                                : kHeaderArtHeight - kHalfOfAvatarImageViewSize;
-
-  // The |heading_and_image_container| is on the left and it stretches almost
-  // the full width. It contains the profile heading and the avatar image.
-  views::View* heading_and_image_container =
-      profile_background_container->AddChildView(
-          std::make_unique<views::View>());
-  heading_and_image_container->SetProperty(
-      views::kFlexBehaviorKey,
-      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
-                               views::MaximumFlexSizeRule::kUnbounded)
-          .WithOrder(1));
-  heading_and_image_container
-      ->SetLayoutManager(std::make_unique<views::FlexLayout>())
-      ->SetOrientation(views::LayoutOrientation::kVertical)
-      .SetMainAxisAlignment(views::LayoutAlignment::kCenter)
-      .SetCrossAxisAlignment(views::LayoutAlignment::kCenter)
-      .SetInteriorMargin(gfx::Insets::TLBR(avatar_margin, 0, 0, 0));
-  if (heading_label) {
-    DCHECK(avatar_header_art.empty());
-    heading_label->SetBorder(
-        views::CreateEmptyBorder(gfx::Insets::VH(kDefaultMargin, 0)));
-    heading_and_image_container->AddChildView(std::move(heading_label));
-  }
-
-  heading_and_image_container->AddChildView(std::move(avatar_image_view));
-
-  // The |edit_button| is on the right and has fixed width.
-  if (edit_button) {
-    edit_button->SetProperty(
-        views::kFlexBehaviorKey,
-        views::FlexSpecification(views::MinimumFlexSizeRule::kPreferred,
-                                 views::MaximumFlexSizeRule::kPreferred)
-            .WithOrder(2));
-    views::View* edit_button_container =
-        profile_background_container->AddChildView(
-            std::make_unique<views::View>());
-    edit_button_container->SetLayoutManager(CreateBoxLayout(
-        views::BoxLayout::Orientation::kVertical,
-        views::BoxLayout::CrossAxisAlignment::kCenter,
-        gfx::Insets::TLBR(0, 0, kHalfOfAvatarImageViewSize + kDefaultMargin,
-                          0)));
-    edit_button_container->AddChildView(std::move(edit_button));
+        subtitle, views::style::CONTEXT_LABEL,
+        features::IsChromeRefresh2023() ? views::style::STYLE_BODY_3
+                                        : views::style::STYLE_SECONDARY));
   }
 }
 
@@ -531,7 +541,7 @@ ProfileMenuViewBase::ProfileMenuViewBase(views::Button* anchor_button,
 
   SetEnableArrowKeyTraversal(true);
 
-  // TODO(crbug.com/1341017): Using `SetAccessibleRole(kMenu)` here will
+  // TODO(crbug.com/1341017): Using `SetAccessibleWindowRole(kMenu)` here will
   // result in screenreader to announce the menu having only one item. This is
   // probably because this API sets the a11y role for the widget, but not root
   // view in it. This is confusing and prone to misuse. We should unify the two
@@ -548,10 +558,102 @@ gfx::ImageSkia ProfileMenuViewBase::GetSyncIcon() const {
   return gfx::ImageSkia();
 }
 
+// This function deals with the somewhat complicated layout to build the part of
+// the profile identity info that has a colored background.
+void ProfileMenuViewBase::BuildProfileBackgroundContainer(
+    std::unique_ptr<views::View> heading_label,
+    SkColor background_color,
+    std::unique_ptr<views::View> avatar_image_view,
+    std::unique_ptr<views::View> edit_button,
+    const ui::ThemedVectorIcon& avatar_header_art) {
+  profile_background_container_ = identity_info_container_->AddChildView(
+      std::make_unique<views::FlexLayoutView>());
+
+  auto background_container_insets = gfx::Insets::VH(0, kMenuEdgeMargin);
+  if (edit_button) {
+    // Compensate for the edit button on the right with an extra margin on the
+    // left so that the rest is centered.
+    background_container_insets.set_left(background_container_insets.left() +
+                                         kCircularImageButtonSize);
+  }
+  profile_background_container_->SetOrientation(
+      views::LayoutOrientation::kHorizontal);
+  profile_background_container_->SetCrossAxisAlignment(
+      views::LayoutAlignment::kEnd);
+  profile_background_container_->SetInteriorMargin(background_container_insets);
+
+  // Show a colored background iff there is no art.
+  if (features::IsChromeRefresh2023() && avatar_header_art.empty()) {
+    identity_info_color_callback_ = base::BindRepeating(
+        &ProfileMenuViewBase::BuildIdentityInfoColorCallback,
+        base::Unretained(this));
+  } else if (avatar_header_art.empty()) {
+    // TODO(crbug.com/1147038): Remove the zero-radius rounded background.
+    profile_background_container_->SetBackground(
+        views::CreateBackgroundFromPainter(
+            views::Painter::CreateSolidRoundRectPainter(
+                background_color, /*radius=*/0, kBackgroundInsets)));
+  } else {
+    DCHECK_EQ(SK_ColorTRANSPARENT, background_color);
+    profile_background_container_->SetBackground(
+        views::CreateThemedVectorIconBackground(avatar_header_art));
+  }
+
+  // |avatar_margin| is derived from |avatar_header_art| asset height, it
+  // increases margin for the avatar icon to make |avatar_header_art| visible
+  // above the center of the avatar icon.
+  const int avatar_margin = avatar_header_art.empty()
+                                ? kMenuEdgeMargin
+                                : kHeaderArtHeight - kHalfOfAvatarImageViewSize;
+
+  // The |heading_and_image_container| is on the left and it stretches almost
+  // the full width. It contains the profile heading and the avatar image.
+  views::FlexLayoutView* heading_and_image_container =
+      profile_background_container_->AddChildView(
+          std::make_unique<views::FlexLayoutView>());
+  heading_and_image_container->SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
+                               views::MaximumFlexSizeRule::kUnbounded)
+          .WithOrder(1));
+  heading_and_image_container->SetOrientation(
+      views::LayoutOrientation::kVertical);
+  heading_and_image_container->SetMainAxisAlignment(
+      views::LayoutAlignment::kCenter);
+  heading_and_image_container->SetCrossAxisAlignment(
+      views::LayoutAlignment::kCenter);
+  heading_and_image_container->SetInteriorMargin(
+      gfx::Insets::TLBR(avatar_margin, 0, 0, 0));
+  if (heading_label) {
+    DCHECK(avatar_header_art.empty());
+    heading_label->SetBorder(
+        views::CreateEmptyBorder(gfx::Insets::VH(kDefaultMargin, 0)));
+    heading_label_ = (views::Label*)heading_and_image_container->AddChildView(
+        std::move(heading_label));
+  }
+
+  heading_and_image_container->AddChildView(std::move(avatar_image_view));
+
+  // The |edit_button| is on the right and has fixed width.
+  if (edit_button) {
+    edit_button->SetProperty(views::kBoxLayoutFlexKey,
+                             views::BoxLayoutFlexSpecification());
+    views::View* edit_button_container =
+        profile_background_container_->AddChildView(
+            std::make_unique<views::View>());
+    edit_button_container->SetLayoutManager(CreateBoxLayout(
+        views::BoxLayout::Orientation::kVertical,
+        views::BoxLayout::CrossAxisAlignment::kCenter,
+        gfx::Insets::TLBR(0, 0, kHalfOfAvatarImageViewSize + kDefaultMargin,
+                          0)));
+    edit_button_container->AddChildView(std::move(edit_button));
+  }
+}
+
 void ProfileMenuViewBase::SetProfileIdentityInfo(
     const std::u16string& profile_name,
     SkColor profile_background_color,
-    absl::optional<EditButtonParams> edit_button_params,
+    std::optional<EditButtonParams> edit_button_params,
     const ui::ImageModel& image_model,
     const std::u16string& title,
     const std::u16string& subtitle,
@@ -579,11 +681,17 @@ void ProfileMenuViewBase::SetProfileIdentityInfo(
 
   std::unique_ptr<views::Label> heading_label;
   if (!profile_name.empty()) {
-    views::Label::CustomFont font = {
-        views::Label::GetDefaultFontList()
-            .DeriveWithSizeDelta(2)
-            .DeriveWithWeight(gfx::Font::Weight::BOLD)};
-    heading_label = std::make_unique<views::Label>(profile_name, font);
+    if (features::IsChromeRefresh2023()) {
+      heading_label = std::make_unique<views::Label>(
+          profile_name, views::style::CONTEXT_LABEL,
+          views::style::STYLE_HEADLINE_5);
+    } else {
+      views::Label::CustomFont font = {
+          views::Label::GetDefaultFontList()
+              .DeriveWithSizeDelta(2)
+              .DeriveWithWeight(gfx::Font::Weight::BOLD)};
+      heading_label = std::make_unique<views::Label>(profile_name, font);
+    }
     heading_label->SetElideBehavior(gfx::ELIDE_TAIL);
     heading_label->SetHorizontalAlignment(gfx::ALIGN_CENTER);
     heading_label->SetProperty(
@@ -599,19 +707,30 @@ void ProfileMenuViewBase::SetProfileIdentityInfo(
 
   std::unique_ptr<views::View> edit_button;
   if (edit_button_params.has_value()) {
-    edit_button = std::make_unique<CircularImageButton>(
-        base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
-                            base::Unretained(this),
-                            std::move(edit_button_params->edit_action)),
-        *edit_button_params->edit_icon, edit_button_params->edit_tooltip_text,
-        avatar_header_art.empty() ? profile_background_color
-                                  : SK_ColorTRANSPARENT);
+    if (features::IsChromeRefresh2023()) {
+      edit_button = std::make_unique<CircularImageButton>(
+          base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
+                              base::Unretained(this),
+                              std::move(edit_button_params->edit_action)),
+          *edit_button_params->edit_icon, edit_button_params->edit_tooltip_text,
+          kCircularImageButtonTransparentRefreshSize);
+    } else {
+      edit_button = std::make_unique<CircularImageButton>(
+          base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
+                              base::Unretained(this),
+                              std::move(edit_button_params->edit_action)),
+          *edit_button_params->edit_icon, edit_button_params->edit_tooltip_text,
+          kCircularImageButtonSize, /*has_background_color=*/false,
+          /*show_border=*/false,
+          avatar_header_art.empty()
+              ? GetProfileForegroundIconColor(profile_background_color)
+              : SK_ColorTRANSPARENT);
+    }
   }
 
   BuildProfileBackgroundContainer(
-      /*parent=*/identity_info_container_, std::move(heading_label),
-      profile_background_color, std::move(avatar_image_view),
-      std::move(edit_button), avatar_header_art);
+      std::move(heading_label), profile_background_color,
+      std::move(avatar_image_view), std::move(edit_button), avatar_header_art);
   BuildProfileTitleAndSubtitle(/*parent=*/identity_info_container_, title,
                                subtitle);
 }
@@ -668,7 +787,11 @@ void ProfileMenuViewBase::BuildSyncInfoWithCallToAction(
   }
 
   views::Label* label = description_container->AddChildView(
-      std::make_unique<views::Label>(description));
+      features::IsChromeRefresh2023()
+          ? std::make_unique<views::Label>(description,
+                                           views::style::CONTEXT_LABEL,
+                                           views::style::STYLE_BODY_3_EMPHASIS)
+          : std::make_unique<views::Label>(description));
   label->SetMultiLine(true);
   label->SetHandlesTooltips(false);
   label->SetProperty(
@@ -689,11 +812,15 @@ void ProfileMenuViewBase::BuildSyncInfoWithCallToAction(
           base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
                               base::Unretained(this), std::move(action)),
           button_text));
-  button->SetProminent(true);
+  button->SetStyle(ui::ButtonStyle::kProminent);
 
+  // TODO(crbug.com/1422119): Remove `background_color_id` parameter after
+  // Chrome Refresh 2023 is launched.
   sync_info_background_callback_ = base::BindRepeating(
       &ProfileMenuViewBase::BuildSyncInfoCallToActionBackground,
-      base::Unretained(this), background_color_id);
+      base::Unretained(this),
+      features::IsChromeRefresh2023() ? kColorProfileMenuSyncInfoBackground
+                                      : background_color_id);
 }
 
 void ProfileMenuViewBase::BuildSyncInfoWithoutCallToAction(
@@ -734,8 +861,11 @@ void ProfileMenuViewBase::AddShortcutFeatureButton(
       std::make_unique<CircularImageButton>(
           base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
                               base::Unretained(this), std::move(action)),
-          icon, text, SK_ColorTRANSPARENT,
-          /*show_border=*/true));
+          icon, text,
+          features::IsChromeRefresh2023() ? kCircularImageButtonRefreshSize
+                                          : kCircularImageButtonSize,
+          /*has_background_color=*/true,
+          /*show_border=*/!features::IsChromeRefresh2023()));
   button->SetFlipCanvasOnPaintForRTLUI(false);
 }
 
@@ -787,7 +917,9 @@ void ProfileMenuViewBase::SetProfileManagementHeading(
   // Add heading.
   views::Label* label = profile_mgmt_heading_container_->AddChildView(
       std::make_unique<views::Label>(heading, views::style::CONTEXT_LABEL,
-                                     views::style::STYLE_HINT));
+                                     features::IsChromeRefresh2023()
+                                         ? views::style::STYLE_BODY_3_EMPHASIS
+                                         : views::style::STYLE_HINT));
   label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   label->SetHandlesTooltips(false);
 }
@@ -838,11 +970,20 @@ void ProfileMenuViewBase::AddProfileManagementShortcutFeatureButton(
                         gfx::Insets::TLBR(0, 0, 0, kMenuEdgeMargin)));
   }
 
-  profile_mgmt_shortcut_features_container_->AddChildView(
-      std::make_unique<CircularImageButton>(
-          base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
-                              base::Unretained(this), std::move(action)),
-          icon, text));
+  if (features::IsChromeRefresh2023()) {
+    profile_mgmt_shortcut_features_container_->AddChildView(
+        views::ImageButton::CreateIconButton(
+            base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
+                                base::Unretained(this), std::move(action)),
+            icon, text, CircularImageButton::MaterialIconStyle::kSmall));
+
+  } else {
+    profile_mgmt_shortcut_features_container_->AddChildView(
+        std::make_unique<CircularImageButton>(
+            base::BindRepeating(&ProfileMenuViewBase::ButtonPressed,
+                                base::Unretained(this), std::move(action)),
+            icon, text));
+  }
 }
 
 void ProfileMenuViewBase::AddProfileManagementManagedHint(
@@ -871,6 +1012,8 @@ void ProfileMenuViewBase::AddProfileManagementFeatureButton(
     profile_mgmt_features_container_->SetLayoutManager(
         std::make_unique<views::BoxLayout>(
             views::BoxLayout::Orientation::kVertical));
+    profile_mgmt_features_container_->SetBorder(
+        views::CreateEmptyBorder(gfx::Insets::TLBR(0, 0, kDefaultMargin, 0)));
   }
 
   profile_mgmt_features_container_->AddChildView(
@@ -973,17 +1116,40 @@ void ProfileMenuViewBase::FocusFirstProfileButton() {
     first_profile_button_->RequestFocus();
 }
 
+void ProfileMenuViewBase::BuildIdentityInfoColorCallback(
+    const ui::ColorProvider* color_provider) {
+  profile_background_container_->SetBackground(
+      views::CreateBackgroundFromPainter(
+          views::Painter::CreateSolidRoundRectPainter(
+              color_provider->GetColor(kColorProfileMenuHeaderBackground),
+              /*radius=*/0, kBackgroundInsets)));
+  if (heading_label_) {
+    heading_label_->SetEnabledColor(
+        color_provider->GetColor(kColorProfileMenuHeaderLabel));
+  }
+}
+
 void ProfileMenuViewBase::BuildSyncInfoCallToActionBackground(
     ui::ColorId background_color_id,
     const ui::ColorProvider* color_provider) {
   const int radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
       views::Emphasis::kHigh);
-  sync_info_container_->SetBackground(views::CreateRoundedRectBackground(
-      color_provider->GetColor(background_color_id), radius, 1));
-  sync_info_container_->SetBorder(views::CreatePaddedBorder(
-      views::CreateRoundedRectBorder(
-          1, radius, color_provider->GetColor(ui::kColorMenuSeparator)),
-      gfx::Insets(kSyncInfoInsidePadding)));
+  if (features::IsChromeRefresh2023()) {
+    sync_info_container_->SetBackground(views::CreateRoundedRectBackground(
+        color_provider->GetColor(background_color_id), radius));
+    sync_info_container_->SetBorder(views::CreatePaddedBorder(
+        views::CreateRoundedRectBorder(
+            0, radius,
+            color_provider->GetColor(kColorProfileMenuSyncInfoBackground)),
+        gfx::Insets(kSyncInfoRefreshInsidePadding)));
+  } else {
+    sync_info_container_->SetBackground(views::CreateRoundedRectBackground(
+        color_provider->GetColor(background_color_id), radius, 1));
+    sync_info_container_->SetBorder(views::CreatePaddedBorder(
+        views::CreateRoundedRectBorder(
+            1, radius, color_provider->GetColor(ui::kColorMenuSeparator)),
+        gfx::Insets(kSyncInfoInsidePadding)));
+  }
 }
 
 void ProfileMenuViewBase::Init() {
@@ -995,7 +1161,10 @@ void ProfileMenuViewBase::OnThemeChanged() {
   views::BubbleDialogDelegateView::OnThemeChanged();
   const auto* color_provider = GetColorProvider();
   SetBackground(views::CreateSolidBackground(
-      color_provider->GetColor(ui::kColorDialogBackground)));
+      color_provider->GetColor(kColorProfileMenuBackground)));
+  if (features::IsChromeRefresh2023()) {
+    identity_info_color_callback_.Run(color_provider);
+  }
   sync_info_background_callback_.Run(color_provider);
 }
 
@@ -1053,3 +1222,7 @@ class ProfileMenuViewBase::AXMenuWidgetObserver : public views::WidgetObserver {
   base::ScopedObservation<views::Widget, views::WidgetObserver> observation_{
       this};
 };
+
+BEGIN_METADATA(ProfileMenuViewBase)
+ADD_READONLY_PROPERTY_METADATA(gfx::ImageSkia, SyncIcon)
+END_METADATA

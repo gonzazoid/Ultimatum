@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -18,9 +18,14 @@
 #include "chrome/browser/ui/webui/ash/add_supervision/add_supervision_handler_utils.h"
 #include "chrome/browser/ui/webui/ash/add_supervision/add_supervision_metrics_recorder.h"
 #include "chrome/browser/ui/webui/ash/add_supervision/confirm_signout_dialog.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
+#include "chrome/grit/add_supervision_resources.h"
+#include "chrome/grit/add_supervision_resources_map.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/grit/supervision_resources.h"
+#include "chrome/grit/supervision_resources_map.h"
 #include "components/google/core/common/google_util.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -188,9 +193,9 @@ void AddSupervisionUI::BindInterface(
 }
 
 void AddSupervisionUI::SetUpResources() {
-  Profile* profile = Profile::FromWebUI(web_ui());
-  std::unique_ptr<content::WebUIDataSource> source(
-      content::WebUIDataSource::Create(chrome::kChromeUIAddSupervisionHost));
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui()), chrome::kChromeUIAddSupervisionHost);
+  webui::EnableTrustedTypesCSP(source);
 
   // Initialize supervision URL from the command-line arguments (if provided).
   supervision_url_ = GetAddSupervisionURL();
@@ -198,32 +203,28 @@ void AddSupervisionUI::SetUpResources() {
     DCHECK(supervision_url_.DomainIs("google.com"));
   }
 
-  source->DisableTrustedTypesCSP();
   source->EnableReplaceI18nInJS();
 
   // Forward data to the WebUI.
-  source->AddResourcePath("add_supervision_api_server.js",
-                          IDR_ADD_SUPERVISION_API_SERVER_JS);
-  source->AddResourcePath("add_supervision_ui.js", IDR_ADD_SUPERVISION_UI_JS);
-  source->AddResourcePath("images/network_unavailable.svg",
-                          IDR_ADD_SUPERVISION_NETWORK_UNAVAILABLE_SVG);
+  source->AddResourcePaths(
+      base::make_span(kAddSupervisionResources, kAddSupervisionResourcesSize));
+  source->AddResourcePaths(
+      base::make_span(kSupervisionResources, kSupervisionResourcesSize));
 
   source->AddLocalizedString("pageTitle", IDS_ADD_SUPERVISION_PAGE_TITLE);
-  source->AddLocalizedString("networkDownHeading",
-                             IDS_ADD_SUPERVISION_NETWORK_DOWN_HEADING);
-  source->AddLocalizedString("networkDownDescription",
-                             IDS_ADD_SUPERVISION_NETWORK_DOWN_DESCRIPTION);
-  source->AddLocalizedString("networkDownButtonLabel",
-                             IDS_ADD_SUPERVISION_NETWORK_DOWN_BUTTON_LABEL);
-
-  // Full paths (relative to src) are important for Mojom generated files.
-  source->AddResourcePath(
-      "chrome/browser/ui/webui/ash/add_supervision/"
-      "add_supervision.mojom-lite.js",
-      IDR_ADD_SUPERVISION_MOJOM_LITE_JS);
+  source->AddLocalizedString("webviewLoadingMessage",
+                             IDS_ADD_SUPERVISION_WEBVIEW_LOADING_MESSAGE);
+  source->AddLocalizedString("supervisedUserErrorDescription",
+                             IDS_SUPERVISED_USER_ERROR_DESCRIPTION);
+  source->AddLocalizedString("supervisedUserErrorTitle",
+                             IDS_SUPERVISED_USER_ERROR_TITLE);
+  source->AddLocalizedString("supervisedUserOfflineDescription",
+                             IDS_SUPERVISED_USER_OFFLINE_DESCRIPTION);
+  source->AddLocalizedString("supervisedUserOfflineTitle",
+                             IDS_SUPERVISED_USER_OFFLINE_TITLE);
 
   source->UseStringsJs();
-  source->SetDefaultResource(IDR_ADD_SUPERVISION_HTML);
+  source->SetDefaultResource(IDR_ADD_SUPERVISION_ADD_SUPERVISION_HTML);
   source->AddString("webviewUrl", supervision_url_.spec());
   source->AddString("eventOriginFilter",
                     supervision_url_.DeprecatedGetOriginAsURL().spec());
@@ -234,8 +235,6 @@ void AddSupervisionUI::SetUpResources() {
   source->AddString(
       "languageCode",
       google_util::GetGoogleLocale(g_browser_process->GetApplicationLocale()));
-
-  content::WebUIDataSource::Add(profile, source.release());
 }
 
 // Returns the URL of the Add Supervision flow from the command-line switch,

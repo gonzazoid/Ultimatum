@@ -26,7 +26,13 @@ class WebFrame;
 - (void)fillFormData:(const autofill::FormData&)form
              inFrame:(web::WebFrame*)frame;
 
-- (void)handleParsedForms:(const std::vector<autofill::FormStructure*>&)forms
+- (void)fillSpecificFormField:(const autofill::FieldRendererId&)field
+                    withValue:(const std::u16string)value
+                      inFrame:(web::WebFrame*)frame;
+
+- (void)handleParsedForms:
+            (const std::vector<
+                raw_ptr<autofill::FormStructure, VectorExperimental>>&)forms
                   inFrame:(web::WebFrame*)frame;
 
 - (void)fillFormDataPredictions:

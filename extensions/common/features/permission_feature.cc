@@ -4,6 +4,7 @@
 
 #include "extensions/common/features/permission_feature.h"
 
+#include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/common/permissions/permission_set.h"
 #include "extensions/common/permissions/permissions_data.h"
 
@@ -17,13 +18,15 @@ PermissionFeature::~PermissionFeature() {
 
 Feature::Availability PermissionFeature::IsAvailableToContextImpl(
     const Extension* extension,
-    Feature::Context context,
+    mojom::ContextType context,
     const GURL& url,
     Feature::Platform platform,
     int context_id,
-    bool check_developer_mode) const {
+    bool check_developer_mode,
+    const ContextData& context_data) const {
   Availability availability = SimpleFeature::IsAvailableToContextImpl(
-      extension, context, url, platform, context_id, check_developer_mode);
+      extension, context, url, platform, context_id, check_developer_mode,
+      context_data);
   if (!availability.is_available())
     return availability;
 

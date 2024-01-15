@@ -10,6 +10,7 @@ class TestHarness {
   skipped = false;
   message = 'ok';
   logs = [];
+  logWindow = null;
 
   constructor() {}
 
@@ -17,6 +18,7 @@ class TestHarness {
     this.skipped = true;
     this.finished = true;
     this.message = message;
+    this.log('Test skipped: ' + message);
   }
 
   reportSuccess() {
@@ -37,6 +39,12 @@ class TestHarness {
       this.reportFailure("Assertion failed: " + msg);
   }
 
+  assert_eq(val1, val2, msg) {
+    if (val1 != val2) {
+      this.reportFailure(`Assertion failed: ${msg}. ${val1} != ${val2}.`);
+    }
+  }
+
   summary() {
     return this.message + "\n\n" + this.logs.join("\n");
   }
@@ -44,6 +52,10 @@ class TestHarness {
   log(msg) {
     this.logs.push(msg);
     console.log(msg);
+    if (this.logWindow === null)
+      this.logWindow = document.querySelector('textarea');
+    if (this.logWindow)
+      this.logWindow.value += msg + '\n';
   }
 
   run(arg) {
@@ -149,7 +161,7 @@ function validateBlackDots(frame, count) {
   const width = frame.displayWidth;
   const height = frame.displayHeight;
   let cnv = new OffscreenCanvas(width, height);
-  var ctx = cnv.getContext('2d');
+  var ctx = cnv.getContext('2d', { willReadFrequently : true });
   ctx.drawImage(frame, 0, 0);
   const dot_size = 10;
   const step = dot_size * 3;
@@ -186,7 +198,7 @@ class CanvasSource extends FrameSource {
     super();
     this.width = width;
     this.height = height;
-    this.canvas = new OffscreenCanvas(width, height);
+    this.canvas = new OffscreenCanvas(width, height, {colorSpace: 'srgb'});
     this.ctx = this.canvas.getContext('2d');
     this.timestamp = 0;
     this.duration = 16666;  // 1/60 s
@@ -227,25 +239,39 @@ class StreamSource extends FrameSource {
 class ArrayBufferSource extends FrameSource {
   constructor(width, height) {
     super();
-    this.inner_src = new CanvasSource(width, height);
     this.width = width;
     this.height = height;
+    this.canvas = new OffscreenCanvas(width, height);
+    this.ctx = this.canvas.getContext(
+        '2d', {willReadFrequently: true, colorSpace: 'srgb'});
+    this.timestamp = 0;
+    this.duration = 16666;  // 1/60 s
+    this.frame_index = 0;
   }
 
   async getNextFrame() {
-    let prototype_frame = await this.inner_src.getNextFrame();
-    let size = prototype_frame.allocationSize();
-    let buf = new ArrayBuffer(size);
-    let layout = await prototype_frame.copyTo(buf);
+    fourColorsFrame(
+        this.ctx, this.width, this.height, this.timestamp.toString());
+    putBlackDots(this.ctx, this.width, this.height, this.frame_index);
+    const imageData = this.ctx.getImageData(0, 0, this.width, this.height);
+    const buffer = imageData.data;
     let init = {
-        format: prototype_frame.format,
-        timestamp: prototype_frame.timestamp,
-        codedWidth: prototype_frame.codedWidth,
-        codedHeight: prototype_frame.codedHeight,
-        colorSpace: prototype_frame.colorSpace,
-        layout: layout
+      format: 'RGBA',
+      timestamp: this.timestamp,
+      codedWidth: this.width,
+      codedHeight: this.height,
+      // This describes sRGB color-space used by the canvas
+      colorSpace: {
+        fullRange: true,
+        matrix: 'rgb',
+        primaries: 'bt709',
+        transfer: 'iec61966-2-1'
+      },
+      transfer: [buffer.buffer]
     };
-    return new VideoFrame(buf, init);
+    this.timestamp += this.duration;
+    this.frame_index++;
+    return new VideoFrame(buffer, init);
   }
 }
 
@@ -335,12 +361,15 @@ async function prepareDecoderSource(
     codec: codec,
     width: width,
     height: height,
-    bitrate: 1000000,
+    bitrate: 10000000,
     framerate: 24
   };
 
-  if (codec.startsWith('avc1'))
+  if (codec.startsWith('avc1')) {
     encoder_config.avc = {format: 'annexb'};
+  } else if (codec.startsWith('hvc1')) {
+    encoder_config.hevc = {format: 'annexb'};
+  }
 
   let decoder_config = {
     codec: codec,
@@ -377,17 +406,17 @@ async function prepareDecoderSource(
 
   let encoder = new VideoEncoder(init);
   encoder.configure(encoder_config);
-  let canvasSource = new CanvasSource(width, height);
+  let innerSource = new ArrayBufferSource(width, height);
 
   for (let i = 0; i < frames_to_encode; i++) {
-    let frame = await canvasSource.getNextFrame();
+    let frame = await innerSource.getNextFrame();
     encoder.encode(frame, {keyFrame: false});
     frame.close();
   }
   try {
     await encoder.flush();
     encoder.close();
-    canvasSource.close();
+    innerSource.close();
   } catch (e) {
     errors++;
     TEST.log(e);
@@ -420,6 +449,9 @@ async function createFrameSource(type, width, height) {
           40, width, height, 'avc1.42001E', 'prefer-hardware');
       if (!src)
         src = await prepareDecoderSource(
+            40, width, height, 'hvc1.1.6.L123.00', 'prefer-hardware');
+      if (!src)
+        src = await prepareDecoderSource(
             40, width, height, 'vp8', 'prefer-hardware');
       if (!src) {
         src = await prepareDecoderSource(
@@ -438,4 +470,20 @@ async function createFrameSource(type, width, height) {
       return new ArrayBufferSource(width, height);
     }
   }
+}
+
+function addManualTestButton(configs) {
+  document.addEventListener('DOMContentLoaded', _ => {
+    configs.forEach(config => {
+      const btn = document.createElement('button');
+      const label = document.createTextNode(
+          'Run test with config: ' + JSON.stringify(config));
+      btn.onclick = function() {
+        main(config);
+      };
+      btn.appendChild(label);
+      btn.style.margin = '5px';
+      document.body.appendChild(btn);
+    });
+  }, true);
 }

@@ -6,9 +6,11 @@
 #define CHROME_BROWSER_ASH_CHILD_ACCOUNTS_TIME_LIMITS_APP_TIME_CONTROLLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
@@ -18,7 +20,6 @@
 #include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
 #include "chromeos/ash/components/settings/timezone_settings.h"
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 class PrefRegistrySimple;
@@ -63,7 +64,7 @@ class AppTimeController : public SystemClockClient::Observer,
     AppActivityRegistry* app_registry();
 
    private:
-    AppTimeController* const controller_;
+    const raw_ptr<AppTimeController, DanglingUntriaged> controller_;
   };
 
   // Registers preferences
@@ -83,7 +84,7 @@ class AppTimeController : public SystemClockClient::Observer,
   // Returns current time limit for the app identified by |app_service_id| and
   // |app_type|.Will return nullopt if there is no limit set or app is not
   // tracked.
-  absl::optional<base::TimeDelta> GetTimeLimitForApp(
+  std::optional<base::TimeDelta> GetTimeLimitForApp(
       const std::string& app_service_id,
       apps::AppType app_type) const;
 
@@ -99,7 +100,7 @@ class AppTimeController : public SystemClockClient::Observer,
   // AppTimeNotificationDelegate:
   void ShowAppTimeLimitNotification(
       const AppId& app_id,
-      const absl::optional<base::TimeDelta>& time_limit,
+      const std::optional<base::TimeDelta>& time_limit,
       AppNotification notification) override;
 
   // AppActivityRegistry::AppStateObserver:
@@ -138,10 +139,10 @@ class AppTimeController : public SystemClockClient::Observer,
 
   void ShowNotificationForApp(const std::string& app_name,
                               AppNotification notification,
-                              absl::optional<base::TimeDelta> time_limit,
-                              absl::optional<gfx::ImageSkia> icon);
+                              std::optional<base::TimeDelta> time_limit,
+                              std::optional<gfx::ImageSkia> icon);
   // Profile
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   // The time of the day when app time limits should be reset.
   // Defaults to 6am local time.

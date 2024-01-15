@@ -50,6 +50,9 @@ std::string GetHistogramNameSuffix(
     case JourneyLogger::COMPLETION_STATUS_OTHER_ABORTED:
       name_suffix += "OtherAborted";
       break;
+    case JourneyLogger::COMPLETION_STATUS_USER_OPTED_OUT:
+      name_suffix += "UserOptedOut";
+      break;
     default:
       break;
   }
@@ -139,6 +142,14 @@ void JourneyLogger::SetEvent2Occurred(Event2 event) {
   events2_ |= static_cast<int>(event);
 }
 
+void JourneyLogger::SetOptOutOffered() {
+  SetEvent2Occurred(Event2::kOptOutOffered);
+}
+
+void JourneyLogger::SetActivationlessShow() {
+  SetEvent2Occurred(Event2::kActivationlessShow);
+}
+
 void JourneyLogger::SetSkippedShow() {
   SetEventOccurred(EVENT_SKIPPED_SHOW);
   SetEvent2Occurred(Event2::kSkippedShow);
@@ -175,6 +186,8 @@ void JourneyLogger::SetSelectedMethod(PaymentMethodCategory category) {
       SetEventOccurred(EVENT_SELECTED_SECURE_PAYMENT_CONFIRMATION);
       SetEvent2Occurred(Event2::kSelectedSecurePaymentConfirmation);
       break;
+    case PaymentMethodCategory::kGooglePayAuthentication:  // Intentional
+                                                           // fallthrough.
     case PaymentMethodCategory::kOther:
       SetEventOccurred(EVENT_SELECTED_OTHER);
       SetEvent2Occurred(Event2::kSelectedOther);
@@ -192,6 +205,8 @@ void JourneyLogger::SetAvailableMethod(PaymentMethodCategory category) {
     case PaymentMethodCategory::kGoogle:
       SetEventOccurred(EVENT_AVAILABLE_METHOD_GOOGLE);
       break;
+    case PaymentMethodCategory::kGooglePayAuthentication:  // Intentional
+                                                           // fallthrough.
     case PaymentMethodCategory::kPlayBilling:  // Intentional fallthrough.
     case PaymentMethodCategory::kSecurePaymentConfirmation:
       NOTREACHED();
@@ -242,6 +257,9 @@ void JourneyLogger::SetRequestedPaymentMethods(
         SetEventOccurred(EVENT_REQUEST_METHOD_GOOGLE);
         SetEvent2Occurred(Event2::kRequestMethodGoogle);
         break;
+      case PaymentMethodCategory::kGooglePayAuthentication:
+        SetEvent2Occurred(Event2::kRequestMethodGooglePayAuthentication);
+        break;
       case PaymentMethodCategory::kPlayBilling:
         SetEvent2Occurred(Event2::kRequestMethodPlayBilling);
         break;
@@ -263,23 +281,23 @@ void JourneyLogger::SetCompleted() {
 }
 
 void JourneyLogger::SetAborted(AbortReason reason) {
-  // Always record the first abort reason regardless of whether the
-  // PaymentRequest.show() was triggered or not.
-  base::UmaHistogramEnumeration("PaymentRequest.CheckoutFunnel.Aborted", reason,
-                                ABORT_REASON_MAX);
-
   if (reason == ABORT_REASON_ABORTED_BY_USER ||
       reason == ABORT_REASON_USER_NAVIGATION)
     RecordJourneyStatsHistograms(COMPLETION_STATUS_USER_ABORTED);
+  else if (reason == ABORT_REASON_USER_OPTED_OUT)
+    RecordJourneyStatsHistograms(COMPLETION_STATUS_USER_OPTED_OUT);
   else
     RecordJourneyStatsHistograms(COMPLETION_STATUS_OTHER_ABORTED);
 }
 
-void JourneyLogger::SetNotShown(NotShownReason reason) {
+void JourneyLogger::SetNotShown() {
   DCHECK(!WasPaymentRequestTriggered());
   RecordJourneyStatsHistograms(COMPLETION_STATUS_COULD_NOT_SHOW);
-  base::UmaHistogramEnumeration("PaymentRequest.CheckoutFunnel.NoShow", reason,
-                                NOT_SHOWN_REASON_MAX);
+}
+
+void JourneyLogger::SetNoMatchingCredentialsShown() {
+  SetShown();
+  SetEvent2Occurred(Event2::kNoMatchingCredentials);
 }
 
 void JourneyLogger::RecordCheckoutStep(CheckoutFunnelStep step) {
@@ -305,6 +323,7 @@ void JourneyLogger::RecordJourneyStatsHistograms(
       break;
     case COMPLETION_STATUS_USER_ABORTED:
     case COMPLETION_STATUS_OTHER_ABORTED:
+    case COMPLETION_STATUS_USER_OPTED_OUT:
       RecordCheckoutStep(CheckoutFunnelStep::kPaymentRequestTriggered);
       break;
     case COMPLETION_STATUS_COULD_NOT_SHOW:
@@ -352,6 +371,9 @@ void JourneyLogger::RecordEventsMetric(CompletionStatus completion_status) {
     case COMPLETION_STATUS_COULD_NOT_SHOW:
       SetEventOccurred(EVENT_COULD_NOT_SHOW);
       SetEvent2Occurred(Event2::kCouldNotShow);
+      break;
+    case COMPLETION_STATUS_USER_OPTED_OUT:
+      SetEvent2Occurred(Event2::kUserOptedOut);
       break;
     default:
       NOTREACHED();
@@ -419,10 +441,11 @@ void JourneyLogger::ValidateEventBits() const {
   std::vector<bool> bit_vector;
 
   // Validate completion status.
-  bit_vector.push_back(events_ & EVENT_COMPLETED);
-  bit_vector.push_back(events_ & EVENT_OTHER_ABORTED);
-  bit_vector.push_back(events_ & EVENT_USER_ABORTED);
-  bit_vector.push_back(events_ & EVENT_COULD_NOT_SHOW);
+  bit_vector.push_back(WasOccurred(Event2::kCompleted));
+  bit_vector.push_back(WasOccurred(Event2::kOtherAborted));
+  bit_vector.push_back(WasOccurred(Event2::kUserAborted));
+  bit_vector.push_back(WasOccurred(Event2::kCouldNotShow));
+  bit_vector.push_back(WasOccurred(Event2::kUserOptedOut));
   DCHECK(ValidateExclusiveBitVector(bit_vector));
   bit_vector.clear();
   if (events_ & EVENT_COMPLETED)
@@ -451,7 +474,8 @@ void JourneyLogger::ValidateEventBits() const {
     // It is possible that a service worker based app responds to "basic-card"
     // request.
     DCHECK(events_ & EVENT_REQUEST_METHOD_OTHER ||
-           events_ & EVENT_REQUEST_METHOD_BASIC_CARD);
+           events_ & EVENT_REQUEST_METHOD_BASIC_CARD ||
+           WasOccurred(Event2::kRequestMethodGooglePayAuthentication));
   }
 
   // Validate UI SHOWN status.
@@ -469,6 +493,13 @@ void JourneyLogger::ValidateEventBits() const {
     // Internal secure payment confirmation payment handler should not skip UI
     // show.
     DCHECK(!(events_ & EVENT_SELECTED_SECURE_PAYMENT_CONFIRMATION));
+  }
+
+  // Validate activationless show.
+  if (WasOccurred(Event2::kActivationlessShow)) {
+    // Should not be able to record an activationless show without show itself
+    // being recorded.
+    DCHECK(WasOccurred(Event2::kShown) || WasOccurred(Event2::kSkippedShow));
   }
 
   // Check that the two bits are not set at the same time.

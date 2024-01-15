@@ -134,8 +134,9 @@ class CORE_EXPORT TextControlElement : public HTMLFormControlElementWithState {
       WebAutofillState = WebAutofillState::kNotFilled) = 0;
 
   TextControlInnerEditorElement* InnerEditorElement() const {
-    return inner_editor_;
+    return inner_editor_.Get();
   }
+  virtual TextControlInnerEditorElement* EnsureInnerEditorElement() const = 0;
   HTMLElement* CreateInnerEditorElement();
   void DropInnerEditorElement() { inner_editor_ = nullptr; }
 
@@ -147,6 +148,10 @@ class CORE_EXPORT TextControlElement : public HTMLFormControlElementWithState {
   Node* CreatePlaceholderBreakElement() const;
 
   String DirectionForFormData() const;
+  // https://html.spec.whatwg.org/#auto-directionality-form-associated-elements
+  // Check if, when dir=auto, we should use the value to define text direction.
+  // For example, when value contains a bidirectional character.
+  virtual bool IsAutoDirectionalityFormAssociated() const = 0;
 
   // Set the value trimmed to the max length of the field and dispatch the input
   // and change events. If |value| is empty, the autofill state is always
@@ -154,6 +159,7 @@ class CORE_EXPORT TextControlElement : public HTMLFormControlElementWithState {
   void SetAutofillValue(const String& value,
                         WebAutofillState = WebAutofillState::kAutofilled);
 
+  // A null value indicates that the suggested value should be hidden.
   virtual void SetSuggestedValue(const String& value);
   const String& SuggestedValue() const;
 
@@ -163,7 +169,6 @@ class CORE_EXPORT TextControlElement : public HTMLFormControlElementWithState {
 
  protected:
   TextControlElement(const QualifiedName&, Document&);
-  bool IsPlaceholderEmpty() const;
   virtual void UpdatePlaceholderText() = 0;
   virtual String GetPlaceholderValue() const = 0;
 
@@ -179,13 +184,27 @@ class CORE_EXPORT TextControlElement : public HTMLFormControlElementWithState {
   String ValueWithHardLineBreaks() const;
 
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
 
  private:
+  // Used by ComputeSelection() to specify which values are needed.
+  enum ComputeSelectionFlags {
+    kStart = 1 << 0,
+    kEnd = 1 << 1,
+    kDirection = 1 << 2,
+  };
+
+  struct ComputedSelection {
+    unsigned start = 0;
+    unsigned end = 0;
+    TextFieldSelectionDirection direction = kSelectionHasNoDirection;
+  };
+
   bool ShouldApplySelectionCache() const;
-  unsigned ComputeSelectionStart() const;
-  unsigned ComputeSelectionEnd() const;
-  TextFieldSelectionDirection ComputeSelectionDirection() const;
+  // Computes the selection. `flags` is a bitmask of ComputeSelectionFlags that
+  // indicates what values should be computed.
+  void ComputeSelection(uint32_t flags,
+                        ComputedSelection& computed_selection) const;
   // Returns true if cached values and arguments are not same.
   bool CacheSelection(unsigned start,
                       unsigned end,
@@ -201,12 +220,6 @@ class CORE_EXPORT TextControlElement : public HTMLFormControlElementWithState {
   void ScheduleSelectEvent();
   void DisabledOrReadonlyAttributeChanged(const QualifiedName&);
 
-  // Returns true if user-editable value is empty. Used to check placeholder
-  // visibility.
-  virtual bool IsEmptyValue() const = 0;
-  // Returns true if suggested value is empty. Used to check placeholder
-  // visibility.
-  bool IsEmptySuggestedValue() const { return SuggestedValue().empty(); }
   // Called in dispatchFocusEvent(), after placeholder process, before calling
   // parent's dispatchFocusEvent().
   virtual void HandleFocusEvent(Element* /* oldFocusedNode */,

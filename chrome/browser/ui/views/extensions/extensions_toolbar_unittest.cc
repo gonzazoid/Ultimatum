@@ -5,19 +5,21 @@
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_unittest.h"
 
 #include "base/command_line.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
+#include "base/test/to_vector.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/scripting_permissions_modifier.h"
+#include "chrome/browser/extensions/site_permissions_helper.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 #include "components/crx_file/id_util.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/test_utils.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions/common/value_builder.h"
+#include "extensions/common/mojom/manifest.mojom-shared.h"
 #include "extensions/test/permissions_manager_waiter.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/views/layout/animating_layout_manager_test_util.h"
@@ -25,15 +27,26 @@
 
 namespace {
 
-std::unique_ptr<base::ListValue> ToListValue(
-    const std::vector<std::string>& permissions) {
-  extensions::ListBuilder builder;
-  for (const std::string& permission : permissions)
+using PermissionsManager = extensions::PermissionsManager;
+using SitePermissionsHelper = extensions::SitePermissionsHelper;
+
+base::Value::List ToListValue(const std::vector<std::string>& permissions) {
+  base::Value::List builder;
+  for (const std::string& permission : permissions) {
     builder.Append(permission);
-  return builder.Build();
+  }
+  return builder;
 }
 
 }  // namespace
+
+ExtensionsToolbarUnitTest::ExtensionsToolbarUnitTest() = default;
+
+ExtensionsToolbarUnitTest::ExtensionsToolbarUnitTest(
+    base::test::TaskEnvironment::TimeSource time_source)
+    : TestWithBrowserView(time_source) {}
+
+ExtensionsToolbarUnitTest::~ExtensionsToolbarUnitTest() = default;
 
 void ExtensionsToolbarUnitTest::SetUp() {
   TestWithBrowserView::SetUp();
@@ -47,8 +60,18 @@ void ExtensionsToolbarUnitTest::SetUp() {
   extension_service_ =
       extensions::ExtensionSystem::Get(profile())->extension_service();
 
+  permissions_manager_ = PermissionsManager::Get(profile());
+  permissions_helper_ = std::make_unique<SitePermissionsHelper>(profile());
+
   // Shorten delay on animations so tests run faster.
   views::test::ReduceAnimationDuration(extensions_container());
+}
+
+void ExtensionsToolbarUnitTest::TearDown() {
+  // Avoid dangling pointer to profile.
+  permissions_helper_.reset(nullptr);
+
+  TestWithBrowserView::TearDown();
 }
 
 scoped_refptr<const extensions::Extension>
@@ -71,13 +94,23 @@ ExtensionsToolbarUnitTest::InstallExtensionWithPermissions(
 }
 
 scoped_refptr<const extensions::Extension>
+ExtensionsToolbarUnitTest::InstallEnterpriseExtension(
+    const std::string& name,
+    const std::vector<std::string>& host_permissions) {
+  return InstallExtension(name, {}, host_permissions,
+                          extensions::mojom::ManifestLocation::kExternalPolicy);
+}
+
+scoped_refptr<const extensions::Extension>
 ExtensionsToolbarUnitTest::InstallExtension(
     const std::string& name,
     const std::vector<std::string>& permissions,
-    const std::vector<std::string>& host_permissions) {
+    const std::vector<std::string>& host_permissions,
+    extensions::mojom::ManifestLocation location) {
   scoped_refptr<const extensions::Extension> extension =
       extensions::ExtensionBuilder(name)
           .SetManifestVersion(3)
+          .SetLocation(location)
           .AddPermissions(permissions)
           .SetManifestKey("host_permissions", ToListValue(host_permissions))
           .SetID(crx_file::id_util::GenerateId(name))
@@ -124,8 +157,7 @@ void ExtensionsToolbarUnitTest::DisableExtension(
 
 void ExtensionsToolbarUnitTest::WithholdHostPermissions(
     const extensions::Extension* extension) {
-  extensions::PermissionsManagerWaiter waiter(
-      extensions::PermissionsManager::Get(profile()));
+  extensions::PermissionsManagerWaiter waiter(permissions_manager_);
   extensions::ScriptingPermissionsModifier(profile(), extension)
       .RemoveAllGrantedHostPermissions();
   waiter.WaitForExtensionPermissionsUpdate();
@@ -142,10 +174,41 @@ void ExtensionsToolbarUnitTest::ClickButton(views::Button* button) const {
   button->OnMouseReleased(release_event);
 }
 
-extensions::PermissionsManager::UserSiteSetting
+void ExtensionsToolbarUnitTest::UpdateUserSiteAccess(
+    const extensions::Extension& extension,
+    content::WebContents* web_contents,
+    PermissionsManager::UserSiteAccess site_access) {
+  extensions::PermissionsManagerWaiter waiter(
+      PermissionsManager::Get(browser()->profile()));
+  permissions_helper_->UpdateSiteAccess(extension, web_contents, site_access);
+  waiter.WaitForExtensionPermissionsUpdate();
+}
+
+void ExtensionsToolbarUnitTest::UpdateUserSiteSetting(
+    extensions::PermissionsManager::UserSiteSetting site_setting,
+    const GURL& url) {
+  extensions::PermissionsManagerWaiter waiter(permissions_manager_);
+  permissions_manager_->UpdateUserSiteSetting(url::Origin::Create(url),
+                                              site_setting);
+  waiter.WaitForUserPermissionsSettingsChange();
+}
+
+PermissionsManager::UserSiteSetting
 ExtensionsToolbarUnitTest::GetUserSiteSetting(const GURL& url) {
-  return extensions::PermissionsManager::Get(browser()->profile())
-      ->GetUserSiteSetting(url::Origin::Create(url));
+  return permissions_manager_->GetUserSiteSetting(url::Origin::Create(url));
+}
+
+PermissionsManager::UserSiteAccess ExtensionsToolbarUnitTest::GetUserSiteAccess(
+    const extensions::Extension& extension,
+    const GURL& url) const {
+  return permissions_manager_->GetUserSiteAccess(extension, url);
+}
+
+SitePermissionsHelper::SiteInteraction
+ExtensionsToolbarUnitTest::GetSiteInteraction(
+    const extensions::Extension& extension,
+    content::WebContents* web_contents) const {
+  return permissions_helper_->GetSiteInteraction(extension, web_contents);
 }
 
 std::vector<ToolbarActionView*>
@@ -160,7 +223,7 @@ ExtensionsToolbarUnitTest::GetPinnedExtensionViews() {
       // queries the underlying model and not GetVisible(), as that relies on an
       // animation running, which is not reliable in unit tests on Mac.
       const bool is_visible = extensions_container()->IsActionVisibleOnToolbar(
-          action->view_controller());
+          action->view_controller()->GetId());
 #else
       const bool is_visible = action->GetVisible();
 #endif
@@ -172,14 +235,10 @@ ExtensionsToolbarUnitTest::GetPinnedExtensionViews() {
 }
 
 std::vector<std::string> ExtensionsToolbarUnitTest::GetPinnedExtensionNames() {
-  std::vector<ToolbarActionView*> views = GetPinnedExtensionViews();
-  std::vector<std::string> result;
-  result.resize(views.size());
-  std::transform(
-      views.begin(), views.end(), result.begin(), [](ToolbarActionView* view) {
+  return base::test::ToVector(
+      GetPinnedExtensionViews(), [](ToolbarActionView* view) {
         return base::UTF16ToUTF8(view->view_controller()->GetActionName());
       });
-  return result;
 }
 
 void ExtensionsToolbarUnitTest::WaitForAnimation() {

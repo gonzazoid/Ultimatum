@@ -7,6 +7,8 @@
 
 #include "base/containers/queue.h"
 #include "base/files/important_file_writer.h"
+#include "base/gtest_prod_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/browsing_topics/common/common_types.h"
 #include "components/browsing_topics/epoch_topics.h"
@@ -68,17 +70,16 @@ class BrowsingTopicsState
   // remove the entry from `epochs_`.
   void ClearOneEpoch(size_t epoch_index);
 
-  // Clear the topic and observing domains data for `topic` and
-  // `taxonomy_version`.
-  void ClearTopic(Topic topic, int taxonomy_version);
+  // Clear the topic and observing domains data for `topic`.
+  void ClearTopic(Topic topic);
 
   // Clear the observing domains data in `epochs_`  that match
   // `hashed_context_domain`.
   void ClearContextDomain(const HashedDomain& hashed_context_domain);
 
   // Append `epoch_topics` to `epochs_`. This is invoked at the end of each
-  // epoch calculation.
-  void AddEpoch(EpochTopics epoch_topics);
+  // epoch calculation. If an old EpochTopics is removed as a result, return it.
+  absl::optional<EpochTopics> AddEpoch(EpochTopics epoch_topics);
 
   // Set `next_scheduled_calculation_time_` to one epoch later from
   // base::Time::Now(). This is invoked at the end of each epoch calculation.
@@ -113,6 +114,8 @@ class BrowsingTopicsState
                            EpochsForSite_OneEpoch_SwitchTimeNotArrived);
   FRIEND_TEST_ALL_PREFIXES(BrowsingTopicsStateTest,
                            EpochsForSite_OneEpoch_SwitchTimeArrived);
+  FRIEND_TEST_ALL_PREFIXES(BrowsingTopicsStateTest,
+                           EpochsForSite_OneEpoch_ManuallyTriggered);
 
   base::TimeDelta CalculateSiteStickyTimeDelta(
       const std::string& top_domain) const;

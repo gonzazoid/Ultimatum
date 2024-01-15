@@ -62,22 +62,16 @@ class SideSearchBrowserTest : public InProcessBrowserTest {
   // Simulates a click on the reading list entrypoint.
   void NotifyReadLaterButtonClick(Browser* browser);
 
-  // Sets the side panel availability bit which is used to indicate service
-  // availability. This is typically set to true when testing.
-  void SetIsSidePanelSRPAvailableAt(Browser* browser,
-                                    int index,
-                                    bool is_available);
-
   // Helper for retrieving the BrowserView associated with `browser`.
   BrowserView* BrowserViewFor(Browser* browser);
 
   // Gets the side search entrypoint for `browser`. Returns null if the button
   // doesn't exist.
-  views::Button* GetSidePanelButtonFor(Browser* browser);
+  views::Button* GetSideSearchButtonFor(Browser* browser);
 
-  // Gets the reading list entrypoint for `browser`. Returns null if the button
+  // Gets the side panel entrypoint for `browser`. Returns null if the button
   // doesn't exist.
-  views::Button* GetReadLaterButtonFor(Browser* browser);
+  views::Button* GetSidePanelButtonFor(Browser* browser);
 
   // Extract the testing of the entrypoint when the side panel is open into its
   // own method as this will vary depending on whether or not the DSE support

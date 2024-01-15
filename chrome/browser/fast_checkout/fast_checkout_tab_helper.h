@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,8 @@ class FastCheckoutTabHelper
  private:
   explicit FastCheckoutTabHelper(content::WebContents* web_contents);
   friend class content::WebContentsUserData<FastCheckoutTabHelper>;
+
+  void FetchCapabilities(const GURL& url);
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

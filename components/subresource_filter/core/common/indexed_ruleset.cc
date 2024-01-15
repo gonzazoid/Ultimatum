@@ -5,6 +5,7 @@
 #include "components/subresource_filter/core/common/indexed_ruleset.h"
 
 #include "base/check.h"
+#include "base/hash/hash.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/trace_event/trace_event.h"
 #include "components/subresource_filter/core/common/first_party_origin.h"
@@ -54,12 +55,12 @@ VerifyStatus GetVerifyStatus(const uint8_t* buffer,
 
 // RulesetIndexer --------------------------------------------------------------
 
-const int RulesetIndexer::kIndexedFormatVersion = 35;
+const int RulesetIndexer::kIndexedFormatVersion = 36;
 
 // This static assert is meant to catch cases where
 // url_pattern_index::kUrlPatternIndexFormatVersion is incremented without
 // updating RulesetIndexer::kIndexedFormatVersion.
-static_assert(url_pattern_index::kUrlPatternIndexFormatVersion == 14,
+static_assert(url_pattern_index::kUrlPatternIndexFormatVersion == 15,
               "kUrlPatternIndexFormatVersion has changed, make sure you've "
               "also updated RulesetIndexer::kIndexedFormatVersion above.");
 
@@ -138,7 +139,8 @@ bool IndexedRulesetMatcher::ShouldDisableFilteringForDocument(
       document_url, parent_document_origin, proto::ELEMENT_TYPE_UNSPECIFIED,
       activation_type,
       FirstPartyOrigin::IsThirdParty(document_url, parent_document_origin),
-      false, EmbedderConditionsMatcher(), FindRuleStrategy::kAny);
+      false, EmbedderConditionsMatcher(), FindRuleStrategy::kAny,
+      {} /* disabled_rule_ids */);
 }
 
 LoadPolicy IndexedRulesetMatcher::GetLoadPolicyForResourceLoad(
@@ -167,11 +169,11 @@ const url_pattern_index::flat::UrlRule* IndexedRulesetMatcher::MatchedUrlRule(
 
   auto find_match =
       [&](const url_pattern_index::UrlPatternIndexMatcher& matcher) {
-        return matcher.FindMatch(url, first_party.origin(), element_type,
-                                 proto::ACTIVATION_TYPE_UNSPECIFIED,
-                                 is_third_party, disable_generic_rules,
-                                 embedder_conditions_matcher,
-                                 FindRuleStrategy::kAny);
+        return matcher.FindMatch(
+            url, first_party.origin(), element_type,
+            proto::ACTIVATION_TYPE_UNSPECIFIED, is_third_party,
+            disable_generic_rules, embedder_conditions_matcher,
+            FindRuleStrategy::kAny, {} /* disabled_rule_ids */);
       };
 
   // Always check the allowlist for subdocuments. For other forms of resources,

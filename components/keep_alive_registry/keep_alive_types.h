@@ -22,6 +22,9 @@ enum class KeepAliveOrigin {
   BROWSER_PROCESS_LACROS,
   SESSION_RESTORE,
 
+  // c/b/apps
+  APP_LAUNCH,
+
   // c/b/background
   BACKGROUND_MODE_MANAGER,
   BACKGROUND_MODE_MANAGER_STARTUP,
@@ -36,6 +39,7 @@ enum class KeepAliveOrigin {
   // c/b/chromeos
   LOGIN_DISPLAY_HOST_WEBUI,
   PIN_MIGRATION,
+  DRIVEFS_NATIVE_MESSAGE_HOST_LACROS,
 
   // c/b/devtools
   REMOTE_DEBUGGING,
@@ -71,9 +75,15 @@ enum class KeepAliveOrigin {
   APP_MANIFEST_UPDATE,
   APP_START_URL_MIGRATION,
   APP_GET_INFO,
+  WEB_APP_LAUNCH,
+  ISOLATED_WEB_APP_INSTALL,
+  ISOLATED_WEB_APP_UPDATE,
 
   // c/b/sessions
   SESSION_DATA_DELETER,
+
+  // components/metrics
+  UMA_LOG,
 };
 
 // Restart: Allow Chrome to restart when all the registered KeepAlives allow

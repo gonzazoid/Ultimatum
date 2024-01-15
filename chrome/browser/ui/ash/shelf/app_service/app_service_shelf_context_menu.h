@@ -13,7 +13,6 @@
 #include "chrome/browser/ui/ash/shelf/shelf_context_menu.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/menu.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "extensions/common/constants.h"
 
 class ChromeShelfController;
@@ -34,16 +33,17 @@ class AppServiceShelfContextMenu : public ShelfContextMenu {
       delete;
 
   // ShelfContextMenu:
+  ui::ImageModel GetIconForCommandId(int command_id) const override;
+  std::u16string GetLabelForCommandId(int command_id) const override;
   void GetMenuModel(GetMenuModelCallback callback) override;
   void ExecuteCommand(int command_id, int event_flags) override;
   bool IsCommandIdChecked(int command_id) const override;
   bool IsCommandIdEnabled(int command_id) const override;
+  bool IsItemForCommandIdDynamic(int command_id) const override;
 
  private:
   void OnGetMenuModel(GetMenuModelCallback callback,
                       apps::MenuItems menu_items);
-  void OnGetMojomMenuModel(GetMenuModelCallback callback,
-                           apps::mojom::MenuItemsPtr menu_items);
 
   // Build additional extension app menu items.
   void BuildExtensionAppShortcutsMenu(ui::SimpleMenuModel* menu_model);
@@ -78,8 +78,6 @@ class AppServiceShelfContextMenu : public ShelfContextMenu {
   // Helpers to get the launch type for the extension item.
   extensions::LaunchType GetExtensionLaunchType() const;
 
-  bool ShouldAddPinMenu();
-
   void ExecutePublisherContextMenuCommand(int command_id);
 
   apps::AppType app_type_;
@@ -91,6 +89,11 @@ class AppServiceShelfContextMenu : public ShelfContextMenu {
   std::unique_ptr<apps::AppShortcutItems> app_shortcut_items_;
 
   std::unique_ptr<extensions::ContextMenuMatcher> extension_menu_items_;
+
+  // String id for the `LAUNCH_NEW` menu item tracked so the menu icon and label
+  // can be changed dynamically after the app launch type changes using the
+  // launch new item submenu.
+  int launch_new_string_id_ = 0;
 
   base::WeakPtrFactory<AppServiceShelfContextMenu> weak_ptr_factory_{this};
 };

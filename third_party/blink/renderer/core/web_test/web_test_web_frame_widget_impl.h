@@ -8,6 +8,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/test/frame_widget_test_helper.h"
 #include "third_party/blink/renderer/core/frame/web_frame_widget_impl.h"
 
@@ -50,7 +51,7 @@ class WebTestWebFrameWidgetImpl : public WebFrameWidgetImpl,
   // FrameWidgetTestHelper overrides.
   void Reset() override;
   content::EventSender* GetEventSender() override;
-  void SynchronouslyCompositeAfterTest() override;
+  void SynchronouslyCompositeAfterTest(base::OnceClosure callback) override;
   void UpdateAllLifecyclePhasesAndComposite(
       base::OnceClosure completion_callback) override;
 
@@ -64,7 +65,8 @@ class WebTestWebFrameWidgetImpl : public WebFrameWidgetImpl,
  private:
   // WebFrameWidgetImpl overrides.
   void BindLocalRoot(WebLocalFrame&) override;
-  void StartDragging(const WebDragData& drag_data,
+  void StartDragging(LocalFrame* source_frame,
+                     const WebDragData& drag_data,
                      DragOperationsMask operations_allowed,
                      const SkBitmap& drag_image,
                      const gfx::Vector2d& cursor_offset,
@@ -76,28 +78,37 @@ class WebTestWebFrameWidgetImpl : public WebFrameWidgetImpl,
   void WillBeginMainFrame() override;
   void ScheduleAnimationForWebTests() override;
   bool AllowsScrollResampling() override { return false; }
+  void WasShown(bool was_evicted) override;
 
   content::TestRunner* GetTestRunner();
 
   void ScheduleAnimationInternal(bool do_raster);
   void AnimateNow();
+  bool RequestedMainFramePending() override;
 
   // When |do_raster| is false, only a main frame animation step is performed,
   // but when true, a full composite is performed and a frame submitted to the
   // display compositor if there is any damage.
   // Note that compositing has the potential to detach the current frame and
   // thus destroy |this| before returning.
-  void SynchronouslyComposite(bool do_raster);
+  void SynchronouslyComposite(base::OnceClosure callback, bool do_raster);
 
   // Perform the synchronous composite step for a given LayerTreeHost.
-  static void DoComposite(cc::LayerTreeHost* layer_tree_host, bool do_raster);
-
+  static void DoComposite(cc::LayerTreeHost* layer_tree_host,
+                          bool do_raster,
+                          base::OnceClosure callback);
   std::unique_ptr<content::EventSender> event_sender_;
 
   content::TestRunner* const test_runner_;
 
   // For collapsing multiple simulated ScheduleAnimation() calls.
   bool animation_scheduled_ = false;
+  // When using the single thread compositor, scheduling an animation will
+  // silently drop the BeginMainFrame if the widget isn't visible. This can
+  // lead to test waits racing with a visibility change event so this flag is
+  // used to defer requested animation frames to run after the widget comes out
+  // of being hidden.
+  bool animation_deferred_while_hidden_ = false;
   // When true, an AnimateNow() is scheduled that will perform a full composite.
   // Otherwise, any scheduled AnimateNow() calls will only perform the animation
   // step, which calls out to blink but doesn't composite for performance

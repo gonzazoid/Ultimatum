@@ -6,8 +6,8 @@
 #include <stdint.h>
 
 #include "base/command_line.h"
-#include "base/json/json_reader.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/values_test_util.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -142,19 +142,10 @@ class UserMediaRequestEntry {
   std::string video_constraints;
 };
 
-static const int64_t FAKE_TIME_STAMP = 3600000;
-
-#if BUILDFLAG(IS_WIN)
-// All tests are flaky on Windows: crbug.com/277322.
-#define MAYBE_WebRtcInternalsBrowserTest DISABLED_WebRtcInternalsBrowserTest
-#else
-#define MAYBE_WebRtcInternalsBrowserTest WebRtcInternalsBrowserTest
-#endif
-
-class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
+class WebRtcInternalsBrowserTest : public ContentBrowserTest {
  public:
-  MAYBE_WebRtcInternalsBrowserTest() {}
-  ~MAYBE_WebRtcInternalsBrowserTest() override {}
+  WebRtcInternalsBrowserTest() = default;
+  ~WebRtcInternalsBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kUseFakeUIForMediaStream);
@@ -167,7 +158,7 @@ class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
 
  protected:
   bool ExecuteJavascript(const string& javascript) {
-    return ExecuteScript(shell(), javascript);
+    return ExecJs(shell(), javascript);
   }
 
   void ExpectTitle(const std::string& expected_title) const {
@@ -195,103 +186,81 @@ class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
         ");"));
   }
 
-  // Execute the javascript of addGetUserMedia.
-  void ExecuteAddGetUserMediaJs(const UserMediaRequestEntry& request) {
+  // Execute the javascript of addMedia.
+  void ExecuteAddMediaJs(const UserMediaRequestEntry& request) {
     std::stringstream ss;
     ss << "{rid:" << request.rid << ", pid:" << request.pid << ", origin:'"
        << request.origin << "', audio:'" << request.audio_constraints
        << "', video:'" << request.video_constraints << "'}";
 
-    ASSERT_TRUE(ExecuteJavascript(
-        "cr.webUIListenerCallback('add-get-user-media', " + ss.str() + ");"));
+    ASSERT_TRUE(ExecuteJavascript("cr.webUIListenerCallback('add-media', " +
+                                  ss.str() + ");"));
   }
 
-  // Execute the javascript of removeGetUserMediaForRenderer.
-  void ExecuteRemoveGetUserMediaForRendererJs(int rid) {
+  // Execute the javascript of removeMediaForRenderer.
+  void ExecuteRemoveMediaForRendererJs(int rid) {
     std::stringstream ss;
     ss << "{rid:" << rid << "}";
     ASSERT_TRUE(ExecuteJavascript(
-        "cr.webUIListenerCallback('remove-get-user-media-for-renderer', " +
-        ss.str() + ");"));
+        "cr.webUIListenerCallback('remove-media-for-renderer', " + ss.str() +
+        ");"));
   }
 
   // Verifies that the DOM element with id |id| exists.
   void VerifyElementWithId(const string& id) {
-    bool result = false;
-    ASSERT_TRUE(ExecuteScriptAndExtractBool(
-        shell(),
-        "window.domAutomationController.send(document.getElementById('" + id +
-            "') != null);",
-        &result));
-    EXPECT_TRUE(result);
+    EXPECT_EQ(true, EvalJs(shell(),
+                           "document.getElementById('" + id + "') != null;"));
   }
 
   // Verifies that the DOM element with id |id| does not exist.
   void VerifyNoElementWithId(const string& id) {
-    bool result = false;
-    ASSERT_TRUE(ExecuteScriptAndExtractBool(
-        shell(),
-        "window.domAutomationController.send(document.getElementById('" + id +
-            "') == null);",
-        &result));
-    EXPECT_TRUE(result);
+    EXPECT_EQ(true, EvalJs(shell(),
+                           "document.getElementById('" + id + "') == null;"));
   }
 
   // Verifies the JS Array of userMediaRequests matches |requests|.
-  void VerifyUserMediaRequest(
-      const std::vector<UserMediaRequestEntry>& requests) {
-    string json_requests;
-    ASSERT_TRUE(
-        ExecuteScriptAndExtractString(shell(),
-                                      "window.domAutomationController.send("
-                                      "    JSON.stringify(userMediaRequests));",
-                                      &json_requests));
-    std::unique_ptr<base::Value> value_requests =
-        base::JSONReader::ReadDeprecated(json_requests);
+  void VerifyMediaRequest(const std::vector<UserMediaRequestEntry>& requests) {
+    string json_requests =
+        EvalJs(shell(), "JSON.stringify(userMediaRequests);").ExtractString();
+    base::Value::List list_request = base::test::ParseJsonList(json_requests);
 
-    EXPECT_EQ(base::Value::Type::LIST, value_requests->type());
-
-    base::ListValue* list_request =
-        static_cast<base::ListValue*>(value_requests.get());
-    EXPECT_EQ(requests.size(), list_request->GetList().size());
+    EXPECT_EQ(requests.size(), list_request.size());
 
     for (size_t i = 0; i < requests.size(); ++i) {
-      const base::Value& value = list_request->GetList()[i];
+      const base::Value& value = list_request[i];
       ASSERT_TRUE(value.is_dict());
-      absl::optional<int> rid = value.FindIntKey("rid");
-      absl::optional<int> pid = value.FindIntKey("pid");
-      std::string origin, audio, video;
+      const base::Value::Dict& dict = value.GetDict();
+      std::optional<int> rid = dict.FindInt("rid");
+      std::optional<int> pid = dict.FindInt("pid");
       ASSERT_TRUE(rid);
       ASSERT_TRUE(pid);
-      const base::DictionaryValue& dict = base::Value::AsDictionaryValue(value);
-      ASSERT_TRUE(dict.GetString("origin", &origin));
-      ASSERT_TRUE(dict.GetString("audio", &audio));
-      ASSERT_TRUE(dict.GetString("video", &video));
+      const std::string* origin = dict.FindString("origin");
+      const std::string* audio = dict.FindString("audio");
+      const std::string* video = dict.FindString("video");
+      ASSERT_TRUE(origin);
+      ASSERT_TRUE(audio);
+      ASSERT_TRUE(video);
       EXPECT_EQ(requests[i].rid, *rid);
       EXPECT_EQ(requests[i].pid, *pid);
-      EXPECT_EQ(requests[i].origin, origin);
-      EXPECT_EQ(requests[i].audio_constraints, audio);
-      EXPECT_EQ(requests[i].video_constraints, video);
+      EXPECT_EQ(requests[i].origin, *origin);
+      EXPECT_EQ(requests[i].audio_constraints, *audio);
+      EXPECT_EQ(requests[i].video_constraints, *video);
     }
 
-    bool user_media_tab_existed = false;
-    ASSERT_TRUE(
-        ExecuteScriptAndExtractBool(shell(),
-                                    "window.domAutomationController.send("
-                                    "    document.querySelector("
-                                    "    '#user-media-tab-id') != null);",
-                                    &user_media_tab_existed));
+    bool user_media_tab_existed =
+        EvalJs(shell(), "document.querySelector('#user-media-tab-id') != null;")
+            .ExtractBool();
     EXPECT_EQ(!requests.empty(), user_media_tab_existed);
 
     if (user_media_tab_existed) {
-      int user_media_request_count = -1;
-      ASSERT_TRUE(ExecuteScriptAndExtractInt(
-          shell(),
-          "window.domAutomationController.send("
-          "    document.querySelector('#user-media-tab-id')"
-          "        .childNodes.length);",
-          &user_media_request_count));
-      ASSERT_EQ(requests.size(), static_cast<size_t>(user_media_request_count));
+      int user_media_request_count =
+          EvalJs(shell(),
+                 "document.querySelector('#user-media-tab-id')"
+                 "    .childNodes.length")
+              .ExtractInt();
+      // The list of childnodes includes the input field and its label.
+      ASSERT_EQ(requests.size(),
+                static_cast<size_t>(user_media_request_count) - 2);
     }
   }
 
@@ -310,9 +279,9 @@ class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
          << (i + 1)
          << "];"
             "var cell = row.lastChild;"
-            "window.domAutomationController.send(cell.firstChild.textContent);";
-      ASSERT_TRUE(ExecuteScriptAndExtractString(shell(), ss.str(), &result));
-      EXPECT_EQ(pc.events_[i].type + pc.events_[i].value, result);
+            "cell.firstChild.textContent;";
+      EXPECT_EQ(pc.events_[i].type + pc.events_[i].value,
+                EvalJs(shell(), ss.str()));
     }
   }
 
@@ -330,29 +299,6 @@ class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
 
     VerifyPeerConnectionEntry(pc);
   }
-
-  // Execute addStats and verifies that the stats table has the right content.
-  void ExecuteAndVerifyAddStats(
-      PeerConnectionEntry& pc, const string& type, const string& id,
-      StatsUnit& stats) {
-    StatsEntry entry = {type, id, stats};
-
-    // Adds each new value to the map of stats history.
-    std::map<string, string>::iterator iter;
-    for (iter = stats.values.begin(); iter != stats.values.end(); iter++) {
-      pc.stats_[id][iter->first].push_back(iter->second);
-    }
-    std::stringstream ss;
-    ss << "(() => {\n";
-    ss << "  setCurrentGetStatsMethod(OPTION_GETSTATS_LEGACY);\n";
-    ss << "  cr.webUIListenerCallback('add-legacy-stats', "
-       << "{rid:" << pc.rid_ << ", lid:" << pc.lid_ << ", reports:[{id:'" << id
-       << "', type:'" << type << "', stats:" << stats.GetString() << "}]});\n";
-    ss << "})()";
-    ASSERT_TRUE(ExecuteJavascript(ss.str()));
-    VerifyStatsTable(pc, entry);
-  }
-
 
   // Verifies that the stats table has the right content.
   void VerifyStatsTable(const PeerConnectionEntry& pc,
@@ -375,16 +321,13 @@ class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
                            const string& value) {
     VerifyElementWithId(table_id + "-" + name);
 
-    string result;
-    ASSERT_TRUE(ExecuteScriptAndExtractString(
-        shell(),
-        "var row = document.getElementById('" + table_id + "-" + name +
-            "');"
-            "var name = row.cells[0].textContent;"
-            "var value = row.cells[1].textContent;"
-            "window.domAutomationController.send(name + ':' + value)",
-        &result));
-    EXPECT_EQ(name + ":" + value, result);
+    EXPECT_EQ(name + ":" + value,
+              EvalJs(shell(), "var row = document.getElementById('" + table_id +
+                                  "-" + name +
+                                  "');"
+                                  "var name = row.cells[0].textContent;"
+                                  "var value = row.cells[1].textContent;"
+                                  "name + ':' + value"));
   }
 
   // Verifies that the graph data series consistent with pc.stats_.
@@ -413,101 +356,37 @@ class MAYBE_WebRtcInternalsBrowserTest: public ContentBrowserTest {
   // Verifies that the graph data point at index |index| has value |value|.
   void VerifyGraphDataPoint(const string& pc_id, const string& graph_id,
                             int index, const string& value) {
-    bool result = false;
-    ASSERT_TRUE(ExecuteScriptAndExtractBool(
-        shell(),
-        "window.domAutomationController.send("
-           "graphViews['" + pc_id + "-" + graph_id + "'] != null)",
-        &result));
-    EXPECT_TRUE(result);
+    EXPECT_EQ(true, EvalJs(shell(), "graphViews['" + pc_id + "-" + graph_id +
+                                        "'] != null"));
 
     std::stringstream ss;
-    ss << "var dp = peerConnectionDataStore['" << pc_id << "']"
-          ".getDataSeries('" << graph_id << "').dataPoints_[" << index << "];"
-          "window.domAutomationController.send(dp.value.toString())";
-    string actual_value;
-    ASSERT_TRUE(
-        ExecuteScriptAndExtractString(shell(), ss.str(), &actual_value));
-    EXPECT_EQ(value, actual_value);
+    ss << "var dp = peerConnectionDataStore['" << pc_id
+       << "']"
+          ".getDataSeries('"
+       << graph_id << "').dataPoints_[" << index
+       << "];"
+          "dp.value.toString()";
+    EXPECT_EQ(value, EvalJs(shell(), ss.str()));
   }
 
   // Get the JSON string of the ssrc info from the page.
   string GetSsrcInfo(const string& ssrc_id) {
-    string result;
-    EXPECT_TRUE(ExecuteScriptAndExtractString(
-        shell(),
-        "window.domAutomationController.send(JSON.stringify("
-           "ssrcInfoManager.streamInfoContainer_['" + ssrc_id + "']))",
-        &result));
-    return result;
+    return EvalJs(shell(),
+                  "JSON.stringify("
+                  "ssrcInfoManager.streamInfoContainer_['" +
+                      ssrc_id + "'])")
+        .ExtractString();
   }
 
   int GetSsrcInfoBlockCount(Shell* shell) {
-    int count = 0;
-    EXPECT_TRUE(ExecuteScriptAndExtractInt(
-        shell,
-        "window.domAutomationController.send("
-        "    document.getElementsByClassName("
-        "        ssrcInfoManager.SSRC_INFO_BLOCK_CLASS).length);",
-        &count));
-    return count;
-  }
-
-  // Verifies |dump| contains |peer_connection_number| peer connection dumps,
-  // each containing |update_number| updates and |stats_number| stats tables.
-  void VerifyPageDumpStructure(base::Value* dump,
-                               int peer_connection_number,
-                               int update_number,
-                               int stats_number) {
-    EXPECT_NE((base::Value*)nullptr, dump);
-    ASSERT_EQ(base::Value::Type::DICTIONARY, dump->type());
-
-    EXPECT_EQ((size_t)peer_connection_number, dump->DictSize());
-    for (auto kv : dump->DictItems()) {
-      const base::Value& pc_dump = kv.second;
-      ASSERT_EQ(base::Value::Type::DICTIONARY, pc_dump.type());
-
-      // Verifies the number of updates.
-      const base::Value* value = pc_dump.FindListKey("updateLog");
-      ASSERT_TRUE(value);
-      EXPECT_EQ(static_cast<size_t>(update_number), value->GetList().size());
-
-      // Verifies the number of stats tables.
-      value = pc_dump.FindDictKey("stats");
-      ASSERT_TRUE(value);
-      EXPECT_EQ(static_cast<size_t>(stats_number), value->DictSize());
-    }
-  }
-
-  // Verifies |dump| contains the correct statsTable and statsDataSeries for
-  // |pc|.
-  void VerifyStatsDump(base::Value* dump,
-                       const PeerConnectionEntry& pc,
-                       const string& report_type,
-                       const string& report_id,
-                       const StatsUnit& stats) {
-    EXPECT_NE((base::Value*)nullptr, dump);
-    EXPECT_EQ(base::Value::Type::DICTIONARY, dump->type());
-
-    base::DictionaryValue* dict_dump =
-        static_cast<base::DictionaryValue*>(dump);
-    base::Value* value = nullptr;
-    dict_dump->Get(pc.getIdString(), &value);
-    base::DictionaryValue* pc_dump = static_cast<base::DictionaryValue*>(value);
-
-    // Verifies there is one data series per stats name.
-    value = nullptr;
-    pc_dump->Get("stats", &value);
-    EXPECT_EQ(base::Value::Type::DICTIONARY, value->type());
-
-    base::DictionaryValue* dataSeries =
-        static_cast<base::DictionaryValue*>(value);
-    EXPECT_EQ(stats.values.size(), dataSeries->DictSize());
+    return EvalJs(shell,
+                  "document.getElementsByClassName("
+                  "    ssrcInfoManager.SSRC_INFO_BLOCK_CLASS).length")
+        .ExtractInt();
   }
 };
 
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
-                       AddAndRemovePeerConnection) {
+IN_PROC_BROWSER_TEST_F(WebRtcInternalsBrowserTest, AddAndRemovePeerConnection) {
   GURL url("chrome://webrtc-internals");
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
@@ -528,8 +407,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
   VerifyNoElementWithId(pc_2.getIdString());
 }
 
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
-                       UpdateAllPeerConnections) {
+IN_PROC_BROWSER_TEST_F(WebRtcInternalsBrowserTest, UpdateAllPeerConnections) {
   GURL url("chrome://webrtc-internals");
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
@@ -548,160 +426,16 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
   VerifyPeerConnectionEntry(pc_1);
 }
 
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest, UpdatePeerConnection) {
-  GURL url("chrome://webrtc-internals");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  // Add one PeerConnection and send one update.
-  PeerConnectionEntry pc_1(1, 0);
-  ExecuteAddPeerConnectionJs(pc_1);
-
-  ExecuteAndVerifyUpdatePeerConnection(pc_1, "e1", "v1");
-
-  // Add another PeerConnection and send two updates.
-  PeerConnectionEntry pc_2(1, 1);
-  ExecuteAddPeerConnectionJs(pc_2);
-
-  SsrcEntry ssrc1, ssrc2;
-  ssrc1.id = "ssrcid1";
-  ssrc1.properties["msid"] = "mymsid";
-  ssrc2.id = "ssrcid2";
-  ssrc2.properties["label"] = "mylabel";
-  ssrc2.properties["cname"] = "mycname";
-
-  ExecuteAndVerifyUpdatePeerConnection(pc_2, "setRemoteDescription",
-      ssrc1.GetSsrcAttributeString());
-
-  ExecuteAndVerifyUpdatePeerConnection(pc_2, "createAnswerOnSuccess",
-                                       ssrc2.GetSsrcAttributeString());
-  ExecuteAndVerifyUpdatePeerConnection(pc_2, "setLocalDescription",
-      ssrc2.GetSsrcAttributeString());
-
-  EXPECT_EQ(ssrc1.GetAsJSON(), GetSsrcInfo(ssrc1.id));
-  EXPECT_EQ(ssrc2.GetAsJSON(), GetSsrcInfo(ssrc2.id));
-
-  StatsUnit stats = {FAKE_TIME_STAMP};
-  stats.values["ssrc"] = ssrc1.id;
-  ExecuteAndVerifyAddStats(pc_2, "ssrc", "dummyId", stats);
-  EXPECT_GT(GetSsrcInfoBlockCount(shell()), 0);
-}
-
-// Tests that adding random named stats updates the dataSeries and graphs.
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest, AddStats) {
-  GURL url("chrome://webrtc-internals");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  PeerConnectionEntry pc(1, 0);
-  ExecuteAddPeerConnectionJs(pc);
-
-  const string type = "ssrc";
-  const string id = "ssrc-1234";
-  StatsUnit stats = {FAKE_TIME_STAMP};
-  stats.values["trackId"] = "abcd";
-  stats.values["bitrate"] = "2000";
-  stats.values["framerate"] = "30";
-
-  // Add new stats and verify the stats table and graphs.
-  ExecuteAndVerifyAddStats(pc, type, id, stats);
-  VerifyStatsGraph(pc);
-
-  // Update existing stats and verify the stats table and graphs.
-  stats.values["bitrate"] = "2001";
-  stats.values["framerate"] = "31";
-  ExecuteAndVerifyAddStats(pc, type, id, stats);
-  VerifyStatsGraph(pc);
-}
-
-// Tests that the bandwidth estimation values are drawn on a single graph.
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest, BweCompoundGraph) {
-  GURL url("chrome://webrtc-internals");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  PeerConnectionEntry pc(1, 0);
-  ExecuteAddPeerConnectionJs(pc);
-
-  StatsUnit stats = {FAKE_TIME_STAMP};
-  stats.values["googAvailableSendBandwidth"] = "1000000";
-  stats.values["googTargetEncBitrate"] = "1000";
-  stats.values["googActualEncBitrate"] = "1000000";
-  stats.values["googRetransmitBitrate"] = "10";
-  stats.values["googTransmitBitrate"] = "1000000";
-  const string stats_type = "bwe";
-  const string stats_id = "videobwe";
-  ExecuteAndVerifyAddStats(pc, stats_type, stats_id, stats);
-
-  string graph_id =
-      pc.getIdString() + "-" + stats_id + "-bweCompound";
-  bool result = false;
-  // Verify that the bweCompound graph exists.
-  ASSERT_TRUE(ExecuteScriptAndExtractBool(
-        shell(),
-        "window.domAutomationController.send("
-        "   graphViews['" + graph_id + "'] != null)",
-        &result));
-  EXPECT_TRUE(result);
-
-  // Verify that the bweCompound graph contains multiple dataSeries.
-  int count = 0;
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-        shell(),
-        "window.domAutomationController.send("
-        "   graphViews['" + graph_id + "'].getDataSeriesCount())",
-        &count));
-  EXPECT_EQ((int)stats.values.size(), count);
-}
-
-// Tests that the total packet/byte count is converted to count per second,
-// and the converted data is drawn.
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest, ConvertedGraphs) {
-  GURL url("chrome://webrtc-internals");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  PeerConnectionEntry pc(1, 0);
-  ExecuteAddPeerConnectionJs(pc);
-
-  const string stats_type = "s";
-  const string stats_id = "1";
-  const int num_converted_stats = 4;
-  const string stats_names[] =
-      {"packetsSent", "bytesSent", "packetsReceived", "bytesReceived"};
-  const string converted_names[] =
-      {"packetsSentPerSecond", "bitsSentPerSecond",
-       "packetsReceivedPerSecond", "bitsReceivedPerSecond"};
-  const string first_value = "1000";
-  const string second_value = "2000";
-  const string converted_values[] = {"1000", "8000", "1000", "8000"};
-
-  // Send the first data point.
-  StatsUnit stats = {FAKE_TIME_STAMP};
-  for (int i = 0; i < num_converted_stats; ++i)
-    stats.values[stats_names[i]] = first_value;
-
-  ExecuteAndVerifyAddStats(pc, stats_type, stats_id, stats);
-
-  // Send the second data point at 1000ms after the first data point.
-  stats.timestamp += 1000;
-  for (int i = 0; i < num_converted_stats; ++i)
-    stats.values[stats_names[i]] = second_value;
-  ExecuteAndVerifyAddStats(pc, stats_type, stats_id, stats);
-
-  // Verifies the graph data matches converted_values.
-  for (int i = 0; i < num_converted_stats; ++i) {
-    VerifyGraphDataPoint(pc.getIdString(), stats_id + "-" + converted_names[i],
-                         1, converted_values[i]);
-  }
-}
-
 // Timing out on ARM linux bot: http://crbug.com/238490
 // Disabling due to failure on Linux, Mac, Win: http://crbug.com/272413
 // Sanity check of the page content under a real PeerConnection call.
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
+IN_PROC_BROWSER_TEST_F(WebRtcInternalsBrowserTest,
                        DISABLED_WithRealPeerConnectionCall) {
   // Start a peerconnection call in the first window.
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url(embedded_test_server()->GetURL("/media/peerconnection-call.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  ASSERT_TRUE(ExecuteJavascript("call({video:true});"));
+  ASSERT_EQ(true, EvalJs(shell(), "call({video:true});"));
   ExpectTitle("OK");
 
   // Open webrtc-internals in the second window.
@@ -712,194 +446,83 @@ IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
   const int NUMBER_OF_PEER_CONNECTIONS = 2;
 
   // Verifies the number of peerconnections.
-  int count = 0;
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-      shell2,
-      "window.domAutomationController.send("
-      "    document.querySelector('#peer-connections-list')"
-      "        .getElementsByTagName('li').length);",
-      &count));
-  EXPECT_EQ(NUMBER_OF_PEER_CONNECTIONS, count);
+  EXPECT_EQ(NUMBER_OF_PEER_CONNECTIONS,
+            EvalJs(shell2,
+                   "document.querySelector('#peer-connections-list')"
+                   "    .getElementsByTagName('li').length;"));
 
   // Verifies the the event tables.
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-      shell2,
-      "window.domAutomationController.send("
-      "    document.querySelector('#peer-connections-list')"
-      "        .getElementsByClassName('update-log-table').length);",
-      &count));
-  EXPECT_EQ(NUMBER_OF_PEER_CONNECTIONS, count);
+  EXPECT_EQ(NUMBER_OF_PEER_CONNECTIONS,
+            EvalJs(shell2,
+                   "document.querySelector('#peer-connections-list')"
+                   "    .getElementsByClassName('update-log-table').length;"));
 
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-      shell2,
-      "window.domAutomationController.send("
-      "    document.querySelector('#peer-connections-list')"
-      "        .getElementsByClassName('update-log-table')[0].rows.length);",
-      &count));
-  EXPECT_GT(count, 1);
+  EXPECT_GT(
+      EvalJs(shell2,
+             "document.querySelector('#peer-connections-list')"
+             "    .getElementsByClassName('update-log-table')[0].rows.length;"),
+      1);
 
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-      shell2,
-      "window.domAutomationController.send("
-      "    document.querySelector('#peer-connections-list')"
-      "        .getElementsByClassName('update-log-table')[1].rows.length);",
-      &count));
-  EXPECT_GT(count, 1);
+  EXPECT_GT(
+      EvalJs(shell2,
+             "document.querySelector('#peer-connections-list')"
+             "    .getElementsByClassName('update-log-table')[1].rows.length;"),
+      1);
 
   // Wait until the stats table containers are created.
-  count = 0;
+  int count = 0;
   while (count != NUMBER_OF_PEER_CONNECTIONS) {
-    ASSERT_TRUE(ExecuteScriptAndExtractInt(
-        shell2,
-        "window.domAutomationController.send("
-        "    document.querySelector('#peer-connections-list')"
-        "        .getElementsByClassName("
-        "        'stats-table-container').length);",
-        &count));
+    count = EvalJs(shell2,
+                   "document.querySelector('#peer-connections-list')"
+                   "    .getElementsByClassName("
+                   "    'stats-table-container').length;")
+                .ExtractInt();
   }
 
   // Verifies each stats table having more than one rows.
-  bool result = false;
-  ASSERT_TRUE(ExecuteScriptAndExtractBool(
-      shell2,
-      "var tableContainers = document.querySelector('#peer-connections-list')"
-      "    .getElementsByClassName('stats-table-container');"
-      "var result = true;"
-      "for (var i = 0; i < tableContainers.length && result; ++i) {"
-      "  var tables = tableContainers[i].getElementsByTagName('table');"
-      "  for (var j = 0; j < tables.length && result; ++j) {"
-      "    result = (tables[j].rows.length > 1);"
-      "  }"
-      "  if (!result) {"
-      "    console.log(tableContainers[i].innerHTML);"
-      "  }"
-      "}"
-      "window.domAutomationController.send(result);",
-      &result));
-
-  EXPECT_TRUE(result);
+  EXPECT_EQ(
+      true,
+      EvalJs(shell2,
+             "var tableContainers = "
+             "document.querySelector('#peer-connections-list')"
+             "    .getElementsByClassName('stats-table-container');"
+             "var result = true;"
+             "for (var i = 0; i < tableContainers.length && result; ++i) {"
+             "  var tables = tableContainers[i].getElementsByTagName('table');"
+             "  for (var j = 0; j < tables.length && result; ++j) {"
+             "    result = (tables[j].rows.length > 1);"
+             "  }"
+             "  if (!result) {"
+             "    console.log(tableContainers[i].innerHTML);"
+             "  }"
+             "}"
+             "result;"));
 
   count = GetSsrcInfoBlockCount(shell2);
   EXPECT_GT(count, 0);
 }
 
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest, CreatePageDump) {
-  GURL url("chrome://webrtc-internals");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  PeerConnectionEntry pc_0(1, 0);
-  pc_0.AddEvent("e1", "v1");
-  pc_0.AddEvent("e2", "v2");
-  PeerConnectionEntry pc_1(1, 1);
-  pc_1.AddEvent("e3", "v3");
-  pc_1.AddEvent("e4", "v4");
-  string pc_array =
-      "[" + pc_0.getAllUpdateString() + ", " + pc_1.getAllUpdateString() + "]";
-  EXPECT_TRUE(ExecuteJavascript(
-      "cr.webUIListenerCallback('update-all-peer-connections', " + pc_array +
-      ");"));
-
-  // Verifies the peer connection data store can be created without stats.
-  string dump_json;
-  ASSERT_TRUE(ExecuteScriptAndExtractString(
-      shell(),
-      "window.domAutomationController.send("
-      "    JSON.stringify(peerConnectionDataStore));",
-      &dump_json));
-  std::unique_ptr<base::Value> dump =
-      base::JSONReader::ReadDeprecated(dump_json);
-  VerifyPageDumpStructure(dump.get(),
-                          2 /*peer_connection_number*/,
-                          2 /*update_number*/,
-                          0 /*stats_number*/);
-
-  // Adds a stats report.
-  const string type = "dummy";
-  const string id = "1234";
-  StatsUnit stats = { FAKE_TIME_STAMP };
-  stats.values["bitrate"] = "2000";
-  stats.values["framerate"] = "30";
-  ExecuteAndVerifyAddStats(pc_0, type, id, stats);
-
-  ASSERT_TRUE(ExecuteScriptAndExtractString(
-      shell(),
-      "window.domAutomationController.send("
-      "    JSON.stringify(peerConnectionDataStore));",
-      &dump_json));
-  dump = base::JSONReader::ReadDeprecated(dump_json);
-  VerifyStatsDump(dump.get(), pc_0, type, id, stats);
-}
-
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest, UpdateGetUserMedia) {
+IN_PROC_BROWSER_TEST_F(WebRtcInternalsBrowserTest, UpdateMedia) {
   GURL url("chrome://webrtc-internals");
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
   UserMediaRequestEntry request1(1, 1, "origin", "ac", "vc");
   UserMediaRequestEntry request2(2, 2, "origin2", "ac2", "vc2");
-  ExecuteAddGetUserMediaJs(request1);
-  ExecuteAddGetUserMediaJs(request2);
+  ExecuteAddMediaJs(request1);
+  ExecuteAddMediaJs(request2);
 
   std::vector<UserMediaRequestEntry> list;
   list.push_back(request1);
   list.push_back(request2);
-  VerifyUserMediaRequest(list);
+  VerifyMediaRequest(list);
 
-  ExecuteRemoveGetUserMediaForRendererJs(1);
+  ExecuteRemoveMediaForRendererJs(1);
   list.erase(list.begin());
-  VerifyUserMediaRequest(list);
+  VerifyMediaRequest(list);
 
-  ExecuteRemoveGetUserMediaForRendererJs(2);
+  ExecuteRemoveMediaForRendererJs(2);
   list.erase(list.begin());
-  VerifyUserMediaRequest(list);
-}
-
-// Tests that the received propagation delta values are converted and drawn
-// correctly.
-IN_PROC_BROWSER_TEST_F(MAYBE_WebRtcInternalsBrowserTest,
-                       ReceivedPropagationDelta) {
-  GURL url("chrome://webrtc-internals");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  PeerConnectionEntry pc(1, 0);
-  ExecuteAddPeerConnectionJs(pc);
-
-  StatsUnit stats = {FAKE_TIME_STAMP};
-  stats.values["googReceivedPacketGroupArrivalTimeDebug"] =
-      "[1000, 1100, 1200]";
-  stats.values["googReceivedPacketGroupPropagationDeltaDebug"] =
-      "[10, 20, 30]";
-  const string stats_type = "bwe";
-  const string stats_id = "videobwe";
-  ExecuteAndVerifyAddStats(pc, stats_type, stats_id, stats);
-
-  string graph_id = pc.getIdString() + "-" + stats_id +
-      "-googReceivedPacketGroupPropagationDeltaDebug";
-  string data_series_id =
-      stats_id + "-googReceivedPacketGroupPropagationDeltaDebug";
-  bool result = false;
-  // Verify that the graph exists.
-  ASSERT_TRUE(ExecuteScriptAndExtractBool(
-      shell(),
-      "window.domAutomationController.send("
-      "   graphViews['" + graph_id + "'] != null)",
-      &result));
-  EXPECT_TRUE(result);
-
-  // Verify that the graph contains multiple data points.
-  int count = 0;
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-      shell(),
-      "window.domAutomationController.send("
-      "   graphViews['" + graph_id + "'].getDataSeriesCount())",
-      &count));
-  EXPECT_EQ(1, count);
-  ASSERT_TRUE(ExecuteScriptAndExtractInt(
-      shell(),
-      "window.domAutomationController.send("
-      "   peerConnectionDataStore['" + pc.getIdString() + "']" +
-      "       .getDataSeries('" + data_series_id + "').getCount())",
-      &count));
-  EXPECT_EQ(3, count);
+  VerifyMediaRequest(list);
 }
 
 }  // namespace content

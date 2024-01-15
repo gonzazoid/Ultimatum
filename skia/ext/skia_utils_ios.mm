@@ -9,9 +9,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/ios/ios_util.h"
 #include "base/logging.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "third_party/skia/include/utils/mac/SkCGUtils.h"
 
 namespace {
@@ -46,10 +46,10 @@ SkBitmap CGImageToSkBitmap(CGImageRef image, CGSize size, bool is_opaque) {
             (SK_A32_SHIFT == (a) && SK_R32_SHIFT == (r) \
              && SK_G32_SHIFT == (g) && SK_B32_SHIFT == (b))
 #if defined(SK_CPU_LENDIAN) && HAS_ARGB_SHIFTS(24, 16, 8, 0)
-  base::ScopedCFTypeRef<CGColorSpaceRef> color_space(
+  base::apple::ScopedCFTypeRef<CGColorSpaceRef> color_space(
       CGColorSpaceCreateDeviceRGB());
-  base::ScopedCFTypeRef<CGContextRef> context(CGBitmapContextCreate(
-      data, size.width, size.height, 8, size.width * 4, color_space,
+  base::apple::ScopedCFTypeRef<CGContextRef> context(CGBitmapContextCreate(
+      data, size.width, size.height, 8, size.width * 4, color_space.get(),
       uint32_t{kCGImageAlphaPremultipliedFirst} | kCGBitmapByteOrder32Host));
 #else
 #error We require that Skia's and CoreGraphics's recommended \
@@ -62,8 +62,8 @@ SkBitmap CGImageToSkBitmap(CGImageRef image, CGSize size, bool is_opaque) {
     return bitmap;
 
   CGRect imageRect = CGRectMake(0.0, 0.0, size.width, size.height);
-  CGContextSetBlendMode(context, kCGBlendModeCopy);
-  CGContextDrawImage(context, imageRect, image);
+  CGContextSetBlendMode(context.get(), kCGBlendModeCopy);
+  CGContextDrawImage(context.get(), imageRect, image);
 
   return bitmap;
 }
@@ -75,7 +75,7 @@ UIImage* SkBitmapToUIImageWithColorSpace(const SkBitmap& skia_bitmap,
     return nil;
 
   // First convert SkBitmap to CGImageRef.
-  base::ScopedCFTypeRef<CGImageRef> cg_image(
+  base::apple::ScopedCFTypeRef<CGImageRef> cg_image(
       SkCreateCGImageRefWithColorspace(skia_bitmap, color_space));
 
   // Now convert to UIImage.
@@ -97,26 +97,28 @@ std::vector<SkBitmap> ImageDataToSkBitmapsWithMaxSize(NSData* image_data,
   bool skip_images_88x88_or_larger =
       base::ios::IsRunningOnOrLater(8, 1, 1) && EncodesIcoImage(image_data);
 
-  base::ScopedCFTypeRef<CFDictionaryRef> empty_dictionary(
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> empty_dictionary(
       CFDictionaryCreate(NULL, NULL, NULL, 0, NULL, NULL));
   std::vector<SkBitmap> frames;
 
-  base::ScopedCFTypeRef<CGImageSourceRef> source(
-      CGImageSourceCreateWithData((CFDataRef)image_data, empty_dictionary));
+  base::apple::ScopedCFTypeRef<CGImageSourceRef> source(
+      CGImageSourceCreateWithData((CFDataRef)image_data,
+                                  empty_dictionary.get()));
 
-  size_t count = CGImageSourceGetCount(source);
+  size_t count = CGImageSourceGetCount(source.get());
   for (size_t index = 0; index < count; ++index) {
-    base::ScopedCFTypeRef<CGImageRef> cg_image(
-        CGImageSourceCreateImageAtIndex(source, index, empty_dictionary));
+    base::apple::ScopedCFTypeRef<CGImageRef> cg_image(
+        CGImageSourceCreateImageAtIndex(source.get(), index,
+                                        empty_dictionary.get()));
 
-    CGSize size = CGSizeMake(CGImageGetWidth(cg_image),
-                             CGImageGetHeight(cg_image));
+    CGSize size = CGSizeMake(CGImageGetWidth(cg_image.get()),
+                             CGImageGetHeight(cg_image.get()));
     if (size.width > max_size || size.height > max_size)
       continue;
     if (size.width >= 88 && size.height >= 88 && skip_images_88x88_or_larger)
       continue;
 
-    const SkBitmap bitmap = CGImageToSkBitmap(cg_image, size, false);
+    const SkBitmap bitmap = CGImageToSkBitmap(cg_image.get(), size, false);
     if (!bitmap.empty())
       frames.push_back(bitmap);
   }

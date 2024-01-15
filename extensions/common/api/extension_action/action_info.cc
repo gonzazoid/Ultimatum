@@ -37,7 +37,7 @@ struct ActionInfoData : public Extension::ManifestData {
 ActionInfoData::ActionInfoData(std::unique_ptr<ActionInfo> info)
     : action_info(std::move(info)) {}
 
-ActionInfoData::~ActionInfoData() {}
+ActionInfoData::~ActionInfoData() = default;
 
 }  // namespace
 
@@ -55,27 +55,28 @@ ActionInfo::ActionInfo(Type type) : type(type), synthesized(false) {
 
 ActionInfo::ActionInfo(const ActionInfo& other) = default;
 
-ActionInfo::~ActionInfo() {}
+ActionInfo::~ActionInfo() = default;
 
 // static
-std::unique_ptr<ActionInfo> ActionInfo::Load(const Extension* extension,
-                                             Type type,
-                                             const base::DictionaryValue* dict,
-                                             std::u16string* error) {
+std::unique_ptr<ActionInfo> ActionInfo::Load(
+    const Extension* extension,
+    Type type,
+    const base::Value::Dict& dict,
+    std::vector<InstallWarning>* install_warnings,
+    std::u16string* error) {
   auto result = std::make_unique<ActionInfo>(type);
 
   // Read the page action |default_icon| (optional).
   // The |default_icon| value can be either dictionary {icon size -> icon path}
   // or non empty string value.
-  if (const base::Value* default_icon =
-          dict->FindKey(keys::kActionDefaultIcon)) {
+  if (const base::Value* default_icon = dict.Find(keys::kActionDefaultIcon)) {
     std::string default_icon_str;
     if (default_icon->is_string())
       default_icon_str = default_icon->GetString();
 
     if (default_icon->is_dict()) {
       if (!manifest_handler_helpers::LoadIconsFromDictionary(
-              default_icon, &result->default_icon, error)) {
+              default_icon->GetDict(), &result->default_icon, error)) {
         return nullptr;
       }
     } else if (default_icon->is_string() &&
@@ -94,8 +95,7 @@ std::unique_ptr<ActionInfo> ActionInfo::Load(const Extension* extension,
 
   // Read the page action title from |default_title| if present, |name| if not
   // (both optional).
-  if (const base::Value* default_title =
-          dict->FindKey(keys::kActionDefaultTitle)) {
+  if (const base::Value* default_title = dict.Find(keys::kActionDefaultTitle)) {
     if (!default_title->is_string()) {
       *error = errors::kInvalidActionDefaultTitle;
       return nullptr;
@@ -104,8 +104,7 @@ std::unique_ptr<ActionInfo> ActionInfo::Load(const Extension* extension,
   }
 
   // Read the action's default popup (optional).
-  if (const base::Value* default_popup =
-          dict->FindKey(keys::kActionDefaultPopup)) {
+  if (const base::Value* default_popup = dict.Find(keys::kActionDefaultPopup)) {
     const std::string* url_str = default_popup->GetIfString();
     if (!url_str) {
       *error = errors::kInvalidActionDefaultPopup;
@@ -113,21 +112,29 @@ std::unique_ptr<ActionInfo> ActionInfo::Load(const Extension* extension,
     }
 
     if (!url_str->empty()) {
-      // An empty string is treated as having no popup.
-      result->default_popup_url =
-          Extension::GetResourceURL(extension->url(), *url_str);
-      if (!result->default_popup_url.is_valid()) {
+      GURL popup_url = Extension::GetResourceURL(extension->url(), *url_str);
+
+      if (!popup_url.is_valid()) {
         *error = errors::kInvalidActionDefaultPopup;
         return nullptr;
       }
+
+      // Check popup is only for this extension.
+      if (extension->origin().IsSameOriginWith(popup_url)) {
+        result->default_popup_url = popup_url;
+      } else {
+        install_warnings->push_back(extensions::InstallWarning(
+            extensions::manifest_errors::kInvalidExtensionOriginPopup,
+            GetManifestKeyForActionType(type),
+            extensions::manifest_keys::kActionDefaultPopup));
+      }
     } else {
-      DCHECK(result->default_popup_url.is_empty())
-          << "Shouldn't be possible for the popup to be set.";
+      // An empty string is treated as having no popup.
+      DCHECK(result->default_popup_url.is_empty());
     }
   }
 
-  if (const base::Value* default_state =
-          dict->FindKey(keys::kActionDefaultState)) {
+  if (const base::Value* default_state = dict.Find(keys::kActionDefaultState)) {
     // The default_state key is only valid for TYPE_ACTION; throw an error for
     // others.
     if (type != TYPE_ACTION) {
@@ -165,6 +172,24 @@ void ActionInfo::SetExtensionActionInfo(Extension* extension,
   // and most callers shouldn't care about the type.
   extension->SetManifestData(keys::kAction,
                              std::make_unique<ActionInfoData>(std::move(info)));
+}
+
+// static
+const char* ActionInfo::GetManifestKeyForActionType(ActionInfo::Type type) {
+  const char* action_key = nullptr;
+  switch (type) {
+    case ActionInfo::TYPE_BROWSER:
+      action_key = manifest_keys::kBrowserAction;
+      break;
+    case ActionInfo::TYPE_PAGE:
+      action_key = manifest_keys::kPageAction;
+      break;
+    case ActionInfo::TYPE_ACTION:
+      action_key = manifest_keys::kAction;
+      break;
+  }
+
+  return action_key;
 }
 
 }  // namespace extensions

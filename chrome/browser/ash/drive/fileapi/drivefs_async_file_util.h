@@ -7,13 +7,13 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "storage/browser/file_system/async_file_util_adapter.h"
 
 class Profile;
 
-namespace drive {
-namespace internal {
+namespace drive::internal {
 
 // The implementation of storage::AsyncFileUtil for DriveFS File System. This
 // forwards to a AsyncFileUtil for native files by default.
@@ -40,12 +40,11 @@ class DriveFsAsyncFileUtil : public storage::AsyncFileUtilAdapter {
       StatusCallback callback) override;
 
  private:
-  Profile* const profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   base::WeakPtrFactory<DriveFsAsyncFileUtil> weak_factory_{this};
 };
 
-}  // namespace internal
-}  // namespace drive
+}  // namespace drive::internal
 
 #endif  // CHROME_BROWSER_ASH_DRIVE_FILEAPI_DRIVEFS_ASYNC_FILE_UTIL_H_

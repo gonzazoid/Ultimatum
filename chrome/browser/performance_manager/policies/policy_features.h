@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/components/arc/session/arc_session.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
@@ -10,6 +9,7 @@
 #include "build/chromeos_buildflags.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/components/arc/session/arc_session.h"
 #include "base/allocator/buildflags.h"
 #endif
 
@@ -18,11 +18,6 @@
 
 namespace performance_manager {
 namespace features {
-
-#if BUILDFLAG(IS_WIN)
-// The EmptyWorkingSet feature as used on Windows.
-BASE_DECLARE_FEATURE(kEmptyWorkingSet);
-#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 

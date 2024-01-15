@@ -16,17 +16,21 @@
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/events/test/test_event_source.h"
+#include "ui/events/test/test_event_target.h"
 
 namespace ui {
 
 namespace {
+
+using test::TestEventTarget;
 
 // TestEventRewriteSink is set up with a sequence of event types,
 // and fails if the events received via OnEventFromSource() do not match
 // this sequence. These expected event types are consumed on receipt.
 class TestEventRewriteSink : public EventSink {
  public:
-  TestEventRewriteSink() {}
+  explicit TestEventRewriteSink(EventTarget* expected_target)
+      : expected_target_(expected_target) {}
 
   TestEventRewriteSink(const TestEventRewriteSink&) = delete;
   TestEventRewriteSink& operator=(const TestEventRewriteSink&) = delete;
@@ -42,11 +46,13 @@ class TestEventRewriteSink : public EventSink {
     EXPECT_FALSE(expected_events_.empty());
     EXPECT_EQ(expected_events_.front(), event->type());
     expected_events_.pop_front();
+    EXPECT_EQ(expected_target_, event->target());
     return EventDispatchDetails();
   }
 
  private:
   std::list<EventType> expected_events_;
+  const raw_ptr<EventTarget> expected_target_;
 };
 
 std::unique_ptr<Event> CreateEventForType(EventType type) {
@@ -73,11 +79,16 @@ std::unique_ptr<Event> CreateEventForType(EventType type) {
 
 class TestEventRewriteSource : public test::TestEventSource {
  public:
-  explicit TestEventRewriteSource(EventSink* sink) : TestEventSource(sink) {}
+  TestEventRewriteSource(EventSink* sink, EventTarget* target)
+      : TestEventSource(sink), target_(target) {}
   EventDispatchDetails Send(EventType type) {
-    auto event = CreateEventForType(type);
+    std::unique_ptr<Event> event = CreateEventForType(type);
+    Event::DispatcherApi(event.get()).set_target(target_);
     return TestEventSource::Send(event.get());
   }
+
+ private:
+  const raw_ptr<EventTarget> target_;
 };
 
 // This EventRewriter always returns the same status, and if rewriting, the
@@ -104,6 +115,7 @@ class TestConstantEventRewriterOld : public EventRewriter {
     NOTREACHED();
     return status_;
   }
+  bool SupportsNonRootLocation() const override { return true; }
 
  private:
   EventRewriteStatus status_;
@@ -114,8 +126,8 @@ class TestConstantEventRewriterOld : public EventRewriter {
 // EVENT_REWRITE_DISPATCH_ANOTHER.
 class TestStateMachineEventRewriterOld : public EventRewriter {
  public:
-  TestStateMachineEventRewriterOld()
-      : last_rewritten_event_(nullptr), state_(0) {}
+  TestStateMachineEventRewriterOld() = default;
+
   void AddRule(int from_state,
                EventType from_type,
                int to_state,
@@ -133,9 +145,9 @@ class TestStateMachineEventRewriterOld : public EventRewriter {
     if ((find->second.status == EVENT_REWRITE_REWRITTEN) ||
         (find->second.status == EVENT_REWRITE_DISPATCH_ANOTHER)) {
       *rewritten_event = CreateEventForType(find->second.type);
-      last_rewritten_event_ = rewritten_event->get();
+      has_rewritten_event_ = true;
     } else {
-      last_rewritten_event_ = nullptr;
+      has_rewritten_event_ = false;
     }
     state_ = find->second.state;
     return find->second.status;
@@ -143,11 +155,11 @@ class TestStateMachineEventRewriterOld : public EventRewriter {
   EventRewriteStatus NextDispatchEvent(
       const Event& last_event,
       std::unique_ptr<Event>* new_event) override {
-    EXPECT_TRUE(last_rewritten_event_);
-    EXPECT_EQ(last_rewritten_event_, &last_event);
+    EXPECT_TRUE(has_rewritten_event_);
     EXPECT_FALSE(new_event->get() && new_event->get() == &last_event);
     return RewriteEvent(last_event, new_event);
   }
+  bool SupportsNonRootLocation() const override { return true; }
 
  private:
   typedef std::pair<int, EventType> RewriteCase;
@@ -158,8 +170,8 @@ class TestStateMachineEventRewriterOld : public EventRewriter {
   };
   typedef std::map<RewriteCase, RewriteResult> RewriteRules;
   RewriteRules rules_;
-  raw_ptr<Event> last_rewritten_event_;
-  int state_;
+  bool has_rewritten_event_ = false;
+  int state_ = 0;
 };
 
 // This EventRewriter always accepts the original event. It is used to test
@@ -181,6 +193,7 @@ class TestConstantEventRewriter : public EventRewriter {
   EventDispatchDetails RewriteEvent(const Event& event,
                                     const Continuation continuation) override {
     std::unique_ptr<Event> replacement_event = CreateEventForType(type_);
+    SetEventTarget(*replacement_event, event.target());
     return SendEventFinally(continuation, replacement_event.get());
   }
 
@@ -220,8 +233,9 @@ class TestStateMachineEventRewriter : public EventRewriter {
         case DISCARD:
           break;
         case REPLACE:
-          details = SendEventFinally(
-              continuation, CreateEventForType(find->second.type).get());
+          auto rewritten_event = CreateEventForType(find->second.type);
+          SetEventTarget(*rewritten_event, event.target());
+          details = SendEventFinally(continuation, rewritten_event.get());
           break;
       }
       if (details.dispatcher_destroyed || find->second.state_action == RETURN)
@@ -265,8 +279,9 @@ TEST(EventRewriterTest, EventRewritingOld) {
   // rewritten events are not passed further down the chain.
   TestConstantEventRewriterOld r3(EVENT_REWRITE_REWRITTEN, ET_CANCEL_MODE);
 
-  TestEventRewriteSink p;
-  TestEventRewriteSource s(&p);
+  TestEventTarget t;
+  TestEventRewriteSink p(&t);
+  TestEventRewriteSource s(&p, &t);
   s.AddEventRewriter(&r0);
   s.AddEventRewriter(&r1);
   s.AddEventRewriter(&r2);
@@ -346,8 +361,9 @@ TEST(EventRewriterTest, EventRewriting) {
   // rewritten events are not passed further down the chain.
   TestConstantEventRewriter r3(ET_CANCEL_MODE);
 
-  TestEventRewriteSink p;
-  TestEventRewriteSource s(&p);
+  TestEventTarget t;
+  TestEventRewriteSink p(&t);
+  TestEventRewriteSource s(&p, &t);
   s.AddEventRewriter(&r0);
   s.AddEventRewriter(&r1);
   s.AddEventRewriter(&r2);

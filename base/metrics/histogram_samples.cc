@@ -37,7 +37,7 @@ class SampleCountPickleIterator : public SampleCountIterator {
   void Next() override;
   void Get(HistogramBase::Sample* min,
            int64_t* max,
-           HistogramBase::Count* count) const override;
+           HistogramBase::Count* count) override;
 
  private:
   const raw_ptr<PickleIterator> iter_;
@@ -68,7 +68,7 @@ void SampleCountPickleIterator::Next() {
 
 void SampleCountPickleIterator::Get(HistogramBase::Sample* min,
                                     int64_t* max,
-                                    HistogramBase::Count* count) const {
+                                    HistogramBase::Count* count) {
   DCHECK(!Done());
   *min = min_;
   *max = max_;
@@ -83,7 +83,7 @@ static_assert(sizeof(HistogramSamples::AtomicSingleSample) ==
 
 HistogramSamples::SingleSample HistogramSamples::AtomicSingleSample::Load()
     const {
-  AtomicSingleSample single_sample = subtle::Acquire_Load(&as_atomic);
+  AtomicSingleSample single_sample(subtle::Acquire_Load(&as_atomic));
 
   // If the sample was extracted/disabled, it's still zero to the outside.
   if (single_sample.as_atomic == kDisabledSingleSample)
@@ -93,12 +93,48 @@ HistogramSamples::SingleSample HistogramSamples::AtomicSingleSample::Load()
 }
 
 HistogramSamples::SingleSample HistogramSamples::AtomicSingleSample::Extract(
-    bool disable) {
-  AtomicSingleSample single_sample = subtle::NoBarrier_AtomicExchange(
-      &as_atomic, disable ? kDisabledSingleSample : 0);
-  if (single_sample.as_atomic == kDisabledSingleSample)
-    single_sample.as_atomic = 0;
-  return single_sample.as_parts;
+    AtomicSingleSample new_value) {
+  DCHECK(new_value.as_atomic != kDisabledSingleSample)
+      << "Disabling an AtomicSingleSample should be done through "
+         "ExtractAndDisable().";
+
+  AtomicSingleSample old_value;
+
+  // Because a concurrent call may modify and/or disable this object as we are
+  // trying to extract its value, a compare-and-swap loop must be done to ensure
+  // that the value was not changed between the reading and writing (and to
+  // prevent accidentally re-enabling this object).
+  while (true) {
+    old_value.as_atomic = subtle::Acquire_Load(&as_atomic);
+
+    // If this object was already disabled, return an empty sample and keep it
+    // disabled.
+    if (old_value.as_atomic == kDisabledSingleSample) {
+      old_value.as_atomic = 0;
+      return old_value.as_parts;
+    }
+
+    // Extract the single-sample from memory. |existing| is what was in that
+    // memory location at the time of the call; if it doesn't match |original|
+    // (i.e., the single-sample was concurrently modified during this
+    // iteration), then the swap did not happen, so try again.
+    subtle::Atomic32 existing = subtle::Release_CompareAndSwap(
+        &as_atomic, old_value.as_atomic, new_value.as_atomic);
+    if (existing == old_value.as_atomic) {
+      return old_value.as_parts;
+    }
+  }
+}
+
+HistogramSamples::SingleSample
+HistogramSamples::AtomicSingleSample::ExtractAndDisable() {
+  AtomicSingleSample old_value(
+      subtle::NoBarrier_AtomicExchange(&as_atomic, kDisabledSingleSample));
+  // If this object was already disabled, return an empty sample.
+  if (old_value.as_atomic == kDisabledSingleSample) {
+    old_value.as_atomic = 0;
+  }
+  return old_value.as_parts;
 }
 
 bool HistogramSamples::AtomicSingleSample::Accumulate(
@@ -221,6 +257,44 @@ void HistogramSamples::Subtract(const HistogramSamples& other) {
   std::unique_ptr<SampleCountIterator> it = other.Iterator();
   bool success = AddSubtractImpl(it.get(), SUBTRACT);
   DCHECK(success);
+}
+
+void HistogramSamples::Extract(HistogramSamples& other) {
+  static_assert(sizeof(other.meta_->sum) == 8);
+
+#ifdef ARCH_CPU_64_BITS
+  // NoBarrier_AtomicExchange() is only defined for 64-bit types if
+  // the ARCH_CPU_64_BITS macro is set.
+  subtle::Atomic64 other_sum =
+      subtle::NoBarrier_AtomicExchange(&other.meta_->sum, 0);
+#else
+  // |sum| is only atomic on 64 bit archs. Make |other_sum| volatile so that
+  // the following code is not optimized or rearranged to be something like:
+  //     IncreaseSumAndCount(other.meta_->sum, ...);
+  //     other.meta_->sum = 0;
+  // Or:
+  //     int64_t other_sum = other.meta_->sum;
+  //     other.meta_->sum = 0;
+  //     IncreaseSumAndCount(other_sum, ...);
+  // Which do not guarantee eventual consistency anymore (other.meta_->sum may
+  // be modified concurrently at any time). However, despite this, eventual
+  // consistency is still not guaranteed here because performing 64-bit
+  // operations (loading, storing, adding, etc.) on a 32-bit machine cannot be
+  // done atomically, but this at least reduces the odds of inconsistencies, at
+  // the cost of a few extra instructions.
+  volatile int64_t other_sum = other.meta_->sum;
+  other.meta_->sum -= other_sum;
+#endif  // ARCH_CPU_64_BITS
+  HistogramBase::AtomicCount other_redundant_count =
+      subtle::NoBarrier_AtomicExchange(&other.meta_->redundant_count, 0);
+  IncreaseSumAndCount(other_sum, other_redundant_count);
+  std::unique_ptr<SampleCountIterator> it = other.ExtractingIterator();
+  bool success = AddSubtractImpl(it.get(), ADD);
+  DCHECK(success);
+}
+
+bool HistogramSamples::IsDefinitelyEmpty() const {
+  return sum() == 0 && redundant_count() == 0;
 }
 
 void HistogramSamples::Serialize(Pickle* pickle) const {
@@ -375,16 +449,22 @@ bool SampleCountIterator::GetBucketIndex(size_t* index) const {
 
 SingleSampleIterator::SingleSampleIterator(HistogramBase::Sample min,
                                            int64_t max,
-                                           HistogramBase::Count count)
-    : SingleSampleIterator(min, max, count, kSizeMax) {}
-
-SingleSampleIterator::SingleSampleIterator(HistogramBase::Sample min,
-                                           int64_t max,
                                            HistogramBase::Count count,
-                                           size_t bucket_index)
-    : min_(min), max_(max), bucket_index_(bucket_index), count_(count) {}
+                                           size_t bucket_index,
+                                           bool value_was_extracted)
+    : min_(min),
+      max_(max),
+      bucket_index_(bucket_index),
+      count_(count),
+      value_was_extracted_(value_was_extracted) {}
 
-SingleSampleIterator::~SingleSampleIterator() = default;
+SingleSampleIterator::~SingleSampleIterator() {
+  // Because this object may have been instantiated in such a way that the
+  // samples it is holding were already extracted from the underlying data, we
+  // add a DCHECK to ensure that in those cases, users of this iterator read the
+  // samples, otherwise they may be lost.
+  DCHECK(!value_was_extracted_ || Done());
+}
 
 bool SingleSampleIterator::Done() const {
   return count_ == 0;
@@ -397,14 +477,11 @@ void SingleSampleIterator::Next() {
 
 void SingleSampleIterator::Get(HistogramBase::Sample* min,
                                int64_t* max,
-                               HistogramBase::Count* count) const {
+                               HistogramBase::Count* count) {
   DCHECK(!Done());
-  if (min != nullptr)
-    *min = min_;
-  if (max != nullptr)
-    *max = max_;
-  if (count != nullptr)
-    *count = count_;
+  *min = min_;
+  *max = max_;
+  *count = count_;
 }
 
 bool SingleSampleIterator::GetBucketIndex(size_t* index) const {

@@ -4,8 +4,9 @@
 
 #include "services/video_capture/video_source_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/metrics/histogram_functions.h"
 #include "services/video_capture/push_video_stream_subscription_impl.h"
 
 namespace video_capture {
@@ -43,15 +44,19 @@ void VideoSourceImpl::CreatePushSubscription(
         subscription_receiver,
     CreatePushSubscriptionCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (device_status_ == DeviceStatus::kNotStarted) {
+    device_startup_start_time_ = base::TimeTicks::Now();
+  }
+
   auto subscription = std::make_unique<PushVideoStreamSubscriptionImpl>(
       std::move(subscription_receiver), std::move(subscriber),
-      requested_settings, std::move(callback), &broadcaster_, &device_);
+      requested_settings, std::move(callback), &broadcaster_);
+  auto* subscription_ptr = subscription.get();
   subscription->SetOnClosedHandler(base::BindOnce(
       &VideoSourceImpl::OnPushSubscriptionClosedOrDisconnectedOrDiscarded,
-      weak_factory_.GetWeakPtr(), subscription.get()));
-  auto* subscription_ptr = subscription.get();
+      weak_factory_.GetWeakPtr(), subscription_ptr));
   push_subscriptions_.insert(
-      std::make_pair(subscription.get(), std::move(subscription)));
+      std::make_pair(subscription_ptr, std::move(subscription)));
   switch (device_status_) {
     case DeviceStatus::kNotStarted:
       StartDeviceWithSettings(requested_settings);
@@ -63,10 +68,11 @@ void VideoSourceImpl::CreatePushSubscription(
       // OnCreateDeviceResponse() gets called.
       return;
     case DeviceStatus::kStarted:
+      CHECK(device_);
       if (!force_reopen_with_new_settings ||
           requested_settings == device_start_settings_) {
         subscription_ptr->OnDeviceStartSucceededWithSettings(
-            device_start_settings_);
+            device_start_settings_, device_);
         return;
       }
       restart_device_once_when_stop_complete_ = true;
@@ -80,13 +86,30 @@ void VideoSourceImpl::CreatePushSubscription(
   }
 }
 
+void VideoSourceImpl::RegisterVideoEffectsManager(
+    mojo::PendingRemote<mojom::VideoEffectsManager> remote) {
+  pending_video_effects_manager_ = std::move(remote);
+}
+
 void VideoSourceImpl::OnClientDisconnected() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (receivers_.empty()) {
-    // Note: Invoking this callback may synchronously trigger the destruction of
-    // |this|, so no more member access should be done after it.
-    on_last_binding_closed_cb_.Run();
+  if (!receivers_.empty()) {
+    return;
   }
+
+  if (device_status_ != DeviceStatus::kStoppingAsynchronously &&
+      device_status_ != DeviceStatus::kNotStarted) {
+    // We need to stop devices when VideoSource remote discarded with active
+    // subscription.
+    // DeviceStatus::kNotStarted means no device has been created yet or
+    // no device has been successfully created. Therefore, StopDevice() does
+    // not need to be called in these two cases.
+    device_factory_->StopDevice(device_id_);
+  }
+
+  // Note: Invoking this callback may synchronously trigger the destruction of
+  // |this|, so no more member access should be done after it.
+  on_last_binding_closed_cb_.Run();
 }
 
 void VideoSourceImpl::StartDeviceWithSettings(
@@ -101,24 +124,31 @@ void VideoSourceImpl::StartDeviceWithSettings(
   device_start_settings_ = requested_settings;
   device_status_ = DeviceStatus::kStartingAsynchronously;
   device_factory_->CreateDevice(
-      device_id_, device_.BindNewPipeAndPassReceiver(),
+      device_id_,
       base::BindOnce(&VideoSourceImpl::OnCreateDeviceResponse,
                      weak_factory_.GetWeakPtr(), std::move(scoped_trace)));
 }
 
 void VideoSourceImpl::OnCreateDeviceResponse(
     std::unique_ptr<ScopedCaptureTrace> scoped_trace,
-    media::VideoCaptureError result_code) {
+    DeviceInfo info) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!device_);
 
-  if (result_code == media::VideoCaptureError::kNone) {
+  if (info.result_code == media::VideoCaptureError::kNone) {
+    UmaHistogramTimes("Media.VideoCapture.CreateDeviceSuccessLatency",
+                      base::TimeTicks::Now() - device_startup_start_time_);
+    device_ = info.device;
+
     if (scoped_trace)
       scoped_trace->AddStep("StartDevice");
 
     // Device was created successfully.
-    broadcaster_video_frame_handler_.reset();
-    device_->Start(device_start_settings_,
-                   broadcaster_video_frame_handler_.BindNewPipeAndPassRemote());
+    info.device->StartInProcess(device_start_settings_,
+                                broadcaster_.GetWeakPtr(),
+                                std::move(pending_video_effects_manager_));
+    UmaHistogramTimes("Media.VideoCapture.StartSourceSuccessLatency",
+                      base::TimeTicks::Now() - device_startup_start_time_);
     device_status_ = DeviceStatus::kStarted;
     if (push_subscriptions_.empty()) {
       StopDeviceAsynchronously();
@@ -126,13 +156,14 @@ void VideoSourceImpl::OnCreateDeviceResponse(
     }
     for (auto& entry : push_subscriptions_) {
       auto& subscription = entry.second;
-      subscription->OnDeviceStartSucceededWithSettings(device_start_settings_);
+      subscription->OnDeviceStartSucceededWithSettings(device_start_settings_,
+                                                       device_);
     }
     return;
   }
   for (auto& entry : push_subscriptions_) {
     auto& subscription = entry.second;
-    subscription->OnDeviceStartFailed(result_code);
+    subscription->OnDeviceStartFailed(info.result_code);
   }
   push_subscriptions_.clear();
   device_status_ = DeviceStatus::kNotStarted;
@@ -185,13 +216,14 @@ void VideoSourceImpl::StopDeviceAsynchronously() {
 
   // Stop the device by closing the connection to it. Stopping is complete when
   // OnStopDeviceComplete() gets invoked.
-  device_.reset();
+  device_factory_->StopDevice(device_id_);
   device_status_ = DeviceStatus::kStoppingAsynchronously;
 }
 
 void VideoSourceImpl::OnStopDeviceComplete() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   device_status_ = DeviceStatus::kNotStarted;
+  device_ = nullptr;
   if (!restart_device_once_when_stop_complete_)
     return;
   restart_device_once_when_stop_complete_ = false;

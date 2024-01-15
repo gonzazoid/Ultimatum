@@ -6,8 +6,7 @@
 
 #include <array>
 
-#include "base/metrics/field_trial_params.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/segmentation_platform/internal/metadata/metadata_writer.h"
 #include "components/segmentation_platform/public/config.h"
 #include "components/segmentation_platform/public/constants.h"
@@ -25,9 +24,7 @@ constexpr SegmentId kShoppingUserSegmentId =
     SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHOPPING_USER;
 constexpr int64_t kShoppingUserSignalStorageLength = 28;
 constexpr int64_t kShoppingUserMinSignalCollectionLength = 1;
-constexpr int64_t kModelVersion = 1;
-constexpr int kShoppingUserDefaultSelectionTTLDays = 7;
-constexpr int kShoppingUserDefaultUnknownSelectionTTLDays = 7;
+constexpr int64_t kModelVersion = 2;
 
 // InputFeatures.
 
@@ -42,16 +39,6 @@ constexpr std::array<MetadataWriter::UMAFeature, 2> kShoppingUserUMAFeatures = {
     MetadataWriter::UMAFeature::FromUserAction(
         "Autofill_PolledCreditCardSuggestions",
         7)};
-
-std::unique_ptr<ModelProvider> GetShoppingUserDefaultModel() {
-  if (!base::GetFieldTrialParamByFeatureAsBool(
-          features::kShoppingUserSegmentFeature, kDefaultModelEnabledParam,
-          true)) {
-    return nullptr;
-  }
-  return std::make_unique<ShoppingUserModel>();
-}
-
 }  // namespace
 
 // static
@@ -62,50 +49,48 @@ std::unique_ptr<Config> ShoppingUserModel::GetConfig() {
   auto config = std::make_unique<Config>();
   config->segmentation_key = kShoppingUserSegmentationKey;
   config->segmentation_uma_name = kShoppingUserUmaName;
+  config->auto_execute_and_cache = true;
   config->AddSegmentId(
       SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHOPPING_USER,
-      GetShoppingUserDefaultModel());
-  config->segment_selection_ttl =
-      base::Days(base::GetFieldTrialParamByFeatureAsInt(
-          features::kShoppingUserSegmentFeature,
-          kVariationsParamNameSegmentSelectionTTLDays,
-          kShoppingUserDefaultSelectionTTLDays));
-  config->unknown_selection_ttl =
-      base::Days(base::GetFieldTrialParamByFeatureAsInt(
-          features::kShoppingUserSegmentFeature,
-          kVariationsParamNameUnknownSelectionTTLDays,
-          kShoppingUserDefaultUnknownSelectionTTLDays));
+      std::make_unique<ShoppingUserModel>());
+  config->is_boolean_segment = true;
   return config;
 }
 
 ShoppingUserModel::ShoppingUserModel()
-    : ModelProvider(kShoppingUserSegmentId) {}
+    : DefaultModelProvider(kShoppingUserSegmentId) {}
 
-void ShoppingUserModel::InitAndFetchModel(
-    const ModelUpdatedCallback& model_updated_callback) {
+std::unique_ptr<DefaultModelProvider::ModelConfig>
+ShoppingUserModel::GetModelConfig() {
   proto::SegmentationModelMetadata shopping_user_metadata;
   MetadataWriter writer(&shopping_user_metadata);
   writer.SetDefaultSegmentationMetadataConfig(
       kShoppingUserMinSignalCollectionLength, kShoppingUserSignalStorageLength);
 
-  // Set discrete mapping.
-  writer.AddBooleanSegmentDiscreteMapping(kShoppingUserSegmentationKey);
-
   // Set features.
   writer.AddUmaFeatures(kShoppingUserUMAFeatures.data(),
                         kShoppingUserUMAFeatures.size());
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindRepeating(model_updated_callback, kShoppingUserSegmentId,
-                          std::move(shopping_user_metadata), kModelVersion));
+  // Set OutputConfig.
+  writer.AddOutputConfigForBinaryClassifier(
+      /*threshold=*/0.5f,
+      /*positive_label=*/kShoppingUserUmaName,
+      /*negative_label=*/kLegacyNegativeLabel);
+
+  writer.AddPredictedResultTTLInOutputConfig(
+      /*top_label_to_ttl_list=*/{}, /*default_ttl=*/7,
+      /*time_unit=*/proto::TimeUnit::DAY);
+
+  return std::make_unique<ModelConfig>(std::move(shopping_user_metadata),
+                                       kModelVersion);
 }
 
-void ShoppingUserModel::ExecuteModelWithInput(const std::vector<float>& inputs,
-                                              ExecutionCallback callback) {
+void ShoppingUserModel::ExecuteModelWithInput(
+    const ModelProvider::Request& inputs,
+    ExecutionCallback callback) {
   // Invalid inputs.
   if (inputs.size() != kShoppingUserUMAFeatures.size()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
@@ -118,12 +103,9 @@ void ShoppingUserModel::ExecuteModelWithInput(const std::vector<float>& inputs,
     result = 1;  // User classified as shopping user;
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), result));
-}
-
-bool ShoppingUserModel::ModelAvailable() {
-  return true;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), ModelProvider::Response(1, result)));
 }
 
 }  // namespace segmentation_platform

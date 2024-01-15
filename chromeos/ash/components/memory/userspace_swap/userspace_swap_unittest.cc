@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/page_allocator_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/rand_util.h"
 #include "build/build_config.h"
 #include "chromeos/ash/components/memory/userspace_swap/region.h"
@@ -16,15 +16,15 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
-#include "base/allocator/partition_allocator/page_allocator.h"
-#include "base/allocator/partition_allocator/partition_alloc_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/page_allocator.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h"
 #endif
 
 namespace ash {
 namespace memory {
 namespace userspace_swap {
 
-#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && defined(PA_HAS_64_BITS_POINTERS)
+#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && BUILDFLAG(HAS_64_BIT_POINTERS)
 // InRange matches if the range specified by [start,end] is in [address,
 // address+length] of a region.
 MATCHER_P2(InRange, start, end, "") {
@@ -92,7 +92,7 @@ TEST(UserspaceSwap, LimitSuperpagesReturned) {
   }
 }
 #endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) &&
-        // defined(PA_HAS_64_BITS_POINTERS)
+        // BUILDFLAG(HAS_64_BIT_POINTERS)
 
 }  // namespace userspace_swap
 }  // namespace memory

@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
@@ -15,6 +15,7 @@
 #include "media/base/test_helpers.h"
 #include "media/base/win/mf_helpers.h"
 #include "media/base/win/mf_mocks.h"
+#include "media/cdm/clear_key_cdm_common.h"
 #include "media/cdm/mock_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -31,7 +32,6 @@ using ::testing::StrictMock;
 
 namespace media {
 
-const char kClearKeyKeySystem[] = "org.w3.clearkey";
 const CdmConfig kClearKeyHardwareSecureCdmConfig = {kClearKeyKeySystem, true,
                                                     true, true};
 
@@ -91,7 +91,8 @@ class MediaFoundationCdmFactoryTest : public testing::Test {
   ComPtr<MockMFCdmFactory> mf_cdm_factory_;
   ComPtr<MockMFCdmAccess> mf_cdm_access_;
   ComPtr<MockMFCdm> mf_cdm_;
-  raw_ptr<StrictMock<MockCdmAuxiliaryHelper>> cdm_helper_ = nullptr;
+  raw_ptr<StrictMock<MockCdmAuxiliaryHelper>, DanglingUntriaged> cdm_helper_ =
+      nullptr;
   std::unique_ptr<MediaFoundationCdmFactory> cdm_factory_;
   base::MockCallback<CdmCreatedCB> cdm_created_cb_;
 };

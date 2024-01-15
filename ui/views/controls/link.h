@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/color_palette.h"
@@ -28,9 +28,9 @@ namespace views {
 //
 ////////////////////////////////////////////////////////////////////////////////
 class VIEWS_EXPORT Link : public Label {
- public:
-  METADATA_HEADER(Link);
+  METADATA_HEADER(Link, Label)
 
+ public:
   // A callback to be called when the link is clicked.  Closures are also
   // accepted; see below.
   using ClickedCallback = base::RepeatingCallback<void(const ui::Event& event)>;
@@ -75,7 +75,6 @@ class VIEWS_EXPORT Link : public Label {
   bool OnKeyPressed(const ui::KeyEvent& event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   bool SkipDefaultKeyEventProcessing(const ui::KeyEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnFocus() override;
   void OnBlur() override;
   void SetFontList(const gfx::FontList& font_list) override;

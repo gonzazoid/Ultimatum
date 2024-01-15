@@ -8,9 +8,13 @@
 #include <stdint.h>
 #include <array>
 
+#include "base/containers/flat_map.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
 namespace display {
+
+// 1 inch in mm.
+constexpr float kInchInMm = 25.4f;
 
 // Display ID that represents an invalid display. Often used as a default value
 // before display IDs are known.
@@ -25,6 +29,11 @@ constexpr int64_t kUnifiedDisplayId = -10;
 
 // Invalid year of manufacture of the display.
 constexpr int32_t kInvalidYearOfManufacture = -1;
+
+// Used to determine if the two scale factor values are considered the same.
+// TODO(crbug.com/1412420): Remove this when the scale factor precision issue
+// in lacros is fixed.
+constexpr float kDeviceScaleFactorErrorTolerance = 0.01f;
 
 // The minimum HDR headroom for an HDR capable display. On macOS, when a
 // display's brightness is set to maximum, it can report that there is no
@@ -142,6 +151,13 @@ enum ModesetFlag {
   // the submitted configuration can be completed without visual artifacts such
   // as blanking.
   kSeamlessModeset = 1 << 2,
+};
+
+enum VariableRefreshRateState {
+  kVrrDisabled = 0,
+  kVrrEnabled = 1,
+  kVrrNotCapable = 2,
+  kVrrLast = kVrrNotCapable,
 };
 
 // Defines the float values closest to repeating decimal scale factors.
@@ -287,6 +303,15 @@ constexpr struct Data {
 
     // clang-format on
 };
+
+// A map of DRM formats and modifiers that are supported by the hardware planes
+// of the display.
+// See third_party/libdrm/src/include/drm/drm_fourcc.h for the canonical list of
+// formats and modifiers
+using DrmFormatsAndModifiers = base::flat_map<uint32_t, std::vector<uint64_t>>;
+
+// Converts the display connection type from enum to string.
+std::string DisplayConnectionTypeString(DisplayConnectionType type);
 
 }  // namespace display
 

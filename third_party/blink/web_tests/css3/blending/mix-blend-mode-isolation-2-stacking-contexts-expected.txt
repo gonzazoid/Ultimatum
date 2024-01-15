@@ -7,7 +7,7 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='stacking-context'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='stacking-context'",
       "position": [8, 8],
       "bounds": [160, 90],
       "contentsOpaque": true,
@@ -16,11 +16,10 @@
     {
       "name": "LayoutImage IMG class='accelerated blended'",
       "bounds": [160, 90],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='stacking-context'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='stacking-context'",
       "bounds": [160, 90],
       "contentsOpaque": true,
       "backgroundColor": "#008000",
@@ -29,7 +28,6 @@
     {
       "name": "LayoutImage IMG class='accelerated blended'",
       "bounds": [160, 90],
-      "contentsOpaqueForText": true,
       "transform": 2
     },
     {

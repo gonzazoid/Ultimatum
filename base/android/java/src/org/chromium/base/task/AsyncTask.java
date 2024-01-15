@@ -64,6 +64,7 @@ public abstract class AsyncTask<Result> {
 
     private final AtomicBoolean mCancelled = new AtomicBoolean();
     private final AtomicBoolean mTaskInvoked = new AtomicBoolean();
+    private int mIterationIdForTesting = PostTask.sTestIterationForTesting;
 
     private static class StealRunnableHandler implements RejectedExecutionHandler {
         @Override
@@ -81,21 +82,16 @@ public abstract class AsyncTask<Result> {
     @IntDef({Status.PENDING, Status.RUNNING, Status.FINISHED})
     @Retention(RetentionPolicy.SOURCE)
     public @interface Status {
-        /**
-         * Indicates that the task has not been executed yet.
-         */
+        /** Indicates that the task has not been executed yet. */
         int PENDING = 0;
-        /**
-         * Indicates that the task is running.
-         */
+
+        /** Indicates that the task is running. */
         int RUNNING = 1;
-        /**
-         * Indicates that {@link AsyncTask#onPostExecute} has finished.
-         */
+
+        /** Indicates that {@link AsyncTask#onPostExecute} has finished. */
         int FINISHED = 2;
-        /**
-         * Just used for reporting this status to UMA.
-         */
+
+        /** Just used for reporting this status to UMA. */
         int NUM_ENTRIES = 3;
     }
 
@@ -106,27 +102,23 @@ public abstract class AsyncTask<Result> {
         exec.shutdown();
     }
 
-    /**
-     * Creates a new asynchronous task. This constructor must be invoked on the UI thread.
-     */
+    /** Creates a new asynchronous task. This constructor must be invoked on the UI thread. */
     public AsyncTask() {
-        mWorker = new Callable<Result>() {
-            @Override
-            public Result call() throws Exception {
-                mTaskInvoked.set(true);
-                Result result = null;
-                try {
-                    result = doInBackground();
-                    Binder.flushPendingCommands();
-                } catch (Throwable tr) {
-                    mCancelled.set(true);
-                    throw tr;
-                } finally {
-                    postResult(result);
-                }
-                return result;
-            }
-        };
+        mWorker =
+                () -> {
+                    mTaskInvoked.set(true);
+                    Result result = null;
+                    try {
+                        result = doInBackground();
+                        Binder.flushPendingCommands();
+                    } catch (Throwable tr) {
+                        mCancelled.set(true);
+                        throw tr;
+                    } finally {
+                        postResult(result);
+                    }
+                    return result;
+                };
 
         mFuture = new NamedFutureTask(mWorker);
     }
@@ -142,8 +134,11 @@ public abstract class AsyncTask<Result> {
         // We check if this task is of a type which does not require post-execution.
         if (this instanceof BackgroundOnlyAsyncTask) {
             mStatus = Status.FINISHED;
-        } else {
-            ThreadUtils.postOnUiThread(() -> { finish(result); });
+        } else if (mIterationIdForTesting == PostTask.sTestIterationForTesting) {
+            ThreadUtils.postOnUiThread(
+                    () -> {
+                        finish(result);
+                    });
         }
     }
 
@@ -369,12 +364,13 @@ public abstract class AsyncTask<Result> {
         if (mStatus != Status.PENDING) {
             switch (mStatus) {
                 case Status.RUNNING:
-                    throw new IllegalStateException("Cannot execute task:"
-                            + " the task is already running.");
+                    throw new IllegalStateException(
+                            "Cannot execute task:" + " the task is already running.");
                 case Status.FINISHED:
-                    throw new IllegalStateException("Cannot execute task:"
-                            + " the task has already been executed "
-                            + "(a task can be executed only once)");
+                    throw new IllegalStateException(
+                            "Cannot execute task:"
+                                    + " the task has already been executed "
+                                    + "(a task can be executed only once)");
             }
         }
 
@@ -441,7 +437,7 @@ public abstract class AsyncTask<Result> {
      * @return This instance of AsyncTask.
      */
     @MainThread
-    public final AsyncTask<Result> executeWithTaskTraits(TaskTraits taskTraits) {
+    public final AsyncTask<Result> executeWithTaskTraits(@TaskTraits int taskTraits) {
         executionPreamble();
         PostTask.postTask(taskTraits, mFuture);
         return this;
@@ -468,9 +464,20 @@ public abstract class AsyncTask<Result> {
         @Override
         @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
         public void run() {
-            try (TraceEvent e = TraceEvent.scoped(
-                         "AsyncTask.run: " + mFuture.getBlamedClass().getName())) {
+            try (TraceEvent e =
+                    TraceEvent.scoped("AsyncTask.run: " + mFuture.getBlamedClass().getName())) {
                 super.run();
+            } finally {
+                // Clear the interrupt on this background thread, if there is one, as it likely
+                // came from cancelling the FutureTask. It is possible this was already cleared
+                // in run() if something was listening for an interrupt; however, if it wasn't
+                // then the interrupt may still be around. By clearing it here the thread is in
+                // a clean state for the next task. See: crbug/1473731.
+
+                // This is safe and prevents future leaks because the state of the FutureTask
+                // should now be >= COMPLETING. Any future calls to cancel() will not trigger
+                // an interrupt.
+                Thread.interrupted();
             }
         }
 

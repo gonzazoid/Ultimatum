@@ -4,6 +4,7 @@
 
 package org.chromium.components.browser_ui.site_settings;
 
+import androidx.annotation.LayoutRes;
 import androidx.preference.Preference;
 
 import org.chromium.components.browser_ui.settings.ManagedPreferenceDelegate;
@@ -39,7 +40,11 @@ public class ForwardingManagedPreferenceDelegate implements ManagedPreferenceDel
     }
 
     @Override
-    public boolean isPreferenceClickDisabledByPolicy(Preference preference) {
-        return mBase.isPreferenceClickDisabledByPolicy(preference);
+    public @LayoutRes int defaultPreferenceLayoutResource() {
+        return mBase.defaultPreferenceLayoutResource();
     }
+
+    /* Do not override the 'isPreferenceClickDisabledByPolicy' method in this class as this causes
+     * the wrong version to be called for instances of `SingleCategoryManagedPreferenceDelegate`.
+     * Refer to crbug/1380613 for more details. */
 }

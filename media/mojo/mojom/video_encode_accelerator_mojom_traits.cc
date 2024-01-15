@@ -28,10 +28,11 @@ EnumTraits<media::mojom::VideoEncodeAcceleratorSupportedRateControlMode,
     case media::VideoEncodeAccelerator::kVariableMode:
       return media::mojom::VideoEncodeAcceleratorSupportedRateControlMode::
           kVariableMode;
+    case media::VideoEncodeAccelerator::kExternalMode:
+      return media::mojom::VideoEncodeAcceleratorSupportedRateControlMode::
+          kExternalMode;
   }
-  NOTREACHED();
-  return media::mojom::VideoEncodeAcceleratorSupportedRateControlMode::
-      kConstantMode;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -51,9 +52,12 @@ bool EnumTraits<media::mojom::VideoEncodeAcceleratorSupportedRateControlMode,
         kVariableMode:
       *out = media::VideoEncodeAccelerator::kVariableMode;
       return true;
+    case media::mojom::VideoEncodeAcceleratorSupportedRateControlMode::
+        kExternalMode:
+      *out = media::VideoEncodeAccelerator::kExternalMode;
+      return true;
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -82,44 +86,9 @@ bool StructTraits<media::mojom::VideoEncodeAcceleratorSupportedProfileDataView,
     return false;
   out->scalability_modes = std::move(scalability_modes);
 
+  out->is_software_codec = data.is_software_codec();
+
   return true;
-}
-
-// static
-media::mojom::VideoEncodeAccelerator_Error
-EnumTraits<media::mojom::VideoEncodeAccelerator_Error,
-           media::VideoEncodeAccelerator::Error>::
-    ToMojom(media::VideoEncodeAccelerator::Error error) {
-  switch (error) {
-    case media::VideoEncodeAccelerator::kIllegalStateError:
-      return media::mojom::VideoEncodeAccelerator_Error::ILLEGAL_STATE;
-    case media::VideoEncodeAccelerator::kInvalidArgumentError:
-      return media::mojom::VideoEncodeAccelerator_Error::INVALID_ARGUMENT;
-    case media::VideoEncodeAccelerator::kPlatformFailureError:
-      return media::mojom::VideoEncodeAccelerator_Error::PLATFORM_FAILURE;
-  }
-  NOTREACHED();
-  return media::mojom::VideoEncodeAccelerator_Error::INVALID_ARGUMENT;
-}
-
-// static
-bool EnumTraits<media::mojom::VideoEncodeAccelerator_Error,
-                media::VideoEncodeAccelerator::Error>::
-    FromMojom(media::mojom::VideoEncodeAccelerator_Error error,
-              media::VideoEncodeAccelerator::Error* out) {
-  switch (error) {
-    case media::mojom::VideoEncodeAccelerator_Error::ILLEGAL_STATE:
-      *out = media::VideoEncodeAccelerator::kIllegalStateError;
-      return true;
-    case media::mojom::VideoEncodeAccelerator_Error::INVALID_ARGUMENT:
-      *out = media::VideoEncodeAccelerator::kInvalidArgumentError;
-      return true;
-    case media::mojom::VideoEncodeAccelerator_Error::PLATFORM_FAILURE:
-      *out = media::VideoEncodeAccelerator::kPlatformFailureError;
-      return true;
-  }
-  NOTREACHED();
-  return false;
 }
 
 // static
@@ -197,6 +166,22 @@ bool StructTraits<media::mojom::VideoBitrateAllocationDataView,
 }
 
 // static
+bool StructTraits<media::mojom::VideoEncodeOptionsDataView,
+                  media::VideoEncoder::EncodeOptions>::
+    Read(media::mojom::VideoEncodeOptionsDataView data,
+         media::VideoEncoder::EncodeOptions* out_options) {
+  out_options->key_frame = data.force_keyframe();
+  int32_t quantizer = data.quantizer();
+  if (quantizer < 0) {
+    out_options->quantizer.reset();
+  } else {
+    out_options->quantizer = data.quantizer();
+  }
+
+  return true;
+}
+
+// static
 bool UnionTraits<media::mojom::CodecMetadataDataView,
                  media::BitstreamBufferMetadata>::
     Read(media::mojom::CodecMetadataDataView data,
@@ -218,8 +203,7 @@ bool UnionTraits<media::mojom::CodecMetadataDataView,
       return data.ReadH265(&out->h265);
     }
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -233,6 +217,12 @@ bool StructTraits<media::mojom::BitstreamBufferMetadataDataView,
     return false;
   }
   metadata->qp = data.qp();
+  if (!data.ReadEncodedSize(&metadata->encoded_size)) {
+    return false;
+  }
+  if (!data.ReadEncodedColorSpace(&metadata->encoded_color_space)) {
+    return false;
+  }
 
   return data.ReadCodecMetadata(metadata);
 }
@@ -251,8 +241,6 @@ bool StructTraits<media::mojom::H265MetadataDataView, media::H265Metadata>::
     Read(media::mojom::H265MetadataDataView data,
          media::H265Metadata* out_metadata) {
   out_metadata->temporal_idx = data.temporal_idx();
-  out_metadata->spatial_idx = data.spatial_idx();
-  out_metadata->layer_sync = data.layer_sync();
   return true;
 }
 
@@ -279,6 +267,10 @@ bool StructTraits<media::mojom::Vp9MetadataDataView, media::Vp9Metadata>::Read(
   out_metadata->end_of_picture = data.end_of_picture();
   out_metadata->temporal_idx = data.temporal_idx();
   out_metadata->spatial_idx = data.spatial_idx();
+  out_metadata->begin_active_spatial_layer_index =
+      data.begin_active_spatial_layer_index();
+  out_metadata->end_active_spatial_layer_index =
+      data.end_active_spatial_layer_index();
   return data.ReadSpatialLayerResolutions(
              &out_metadata->spatial_layer_resolutions) &&
          data.ReadPDiffs(&out_metadata->p_diffs);
@@ -288,14 +280,8 @@ bool StructTraits<media::mojom::Vp9MetadataDataView, media::Vp9Metadata>::Read(
 bool StructTraits<media::mojom::Av1MetadataDataView, media::Av1Metadata>::Read(
     media::mojom::Av1MetadataDataView data,
     media::Av1Metadata* out_metadata) {
-  out_metadata->inter_pic_predicted = data.inter_pic_predicted();
-  out_metadata->switch_frame = data.switch_frame();
-  out_metadata->end_of_picture = data.end_of_picture();
   out_metadata->temporal_idx = data.temporal_idx();
-  out_metadata->spatial_idx = data.spatial_idx();
-  return data.ReadSpatialLayerResolutions(
-             &out_metadata->spatial_layer_resolutions) &&
-         data.ReadFDiffs(&out_metadata->f_diffs);
+  return true;
 }
 
 // static
@@ -310,8 +296,7 @@ EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_StorageType,
     case media::VideoEncodeAccelerator::Config::StorageType::kShmem:
       return media::mojom::VideoEncodeAcceleratorConfig_StorageType::kShmem;
   }
-  NOTREACHED();
-  return media::mojom::VideoEncodeAcceleratorConfig_StorageType::kShmem;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -329,8 +314,44 @@ bool EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_StorageType,
           media::VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer;
       return true;
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
+}
+
+// static
+media::mojom::VideoEncodeAcceleratorConfig_EncoderType
+EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_EncoderType,
+           media::VideoEncodeAccelerator::Config::EncoderType>::
+    ToMojom(media::VideoEncodeAccelerator::Config::EncoderType input) {
+  switch (input) {
+    case media::VideoEncodeAccelerator::Config::EncoderType::kHardware:
+      return media::mojom::VideoEncodeAcceleratorConfig_EncoderType::kHardware;
+    case media::VideoEncodeAccelerator::Config::EncoderType::kSoftware:
+      return media::mojom::VideoEncodeAcceleratorConfig_EncoderType::kSoftware;
+    case media::VideoEncodeAccelerator::Config::EncoderType::kNoPreference:
+      return media::mojom::VideoEncodeAcceleratorConfig_EncoderType::
+          kNoPreference;
+  }
+  NOTREACHED_NORETURN();
+}
+
+// static
+bool EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_EncoderType,
+                media::VideoEncodeAccelerator::Config::EncoderType>::
+    FromMojom(media::mojom::VideoEncodeAcceleratorConfig_EncoderType input,
+              media::VideoEncodeAccelerator::Config::EncoderType* output) {
+  switch (input) {
+    case media::mojom::VideoEncodeAcceleratorConfig_EncoderType::kHardware:
+      *output = media::VideoEncodeAccelerator::Config::EncoderType::kHardware;
+      return true;
+    case media::mojom::VideoEncodeAcceleratorConfig_EncoderType::kSoftware:
+      *output = media::VideoEncodeAccelerator::Config::EncoderType::kSoftware;
+      return true;
+    case media::mojom::VideoEncodeAcceleratorConfig_EncoderType::kNoPreference:
+      *output =
+          media::VideoEncodeAccelerator::Config::EncoderType::kNoPreference;
+      return true;
+  }
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -344,8 +365,7 @@ EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_ContentType,
     case media::VideoEncodeAccelerator::Config::ContentType::kCamera:
       return media::mojom::VideoEncodeAcceleratorConfig_ContentType::kCamera;
   }
-  NOTREACHED();
-  return media::mojom::VideoEncodeAcceleratorConfig_ContentType::kCamera;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -361,50 +381,7 @@ bool EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_ContentType,
       *output = media::VideoEncodeAccelerator::Config::ContentType::kDisplay;
       return true;
   }
-  NOTREACHED();
-  return false;
-}
-
-// static
-media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode
-EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode,
-           media::VideoEncodeAccelerator::Config::InterLayerPredMode>::
-    ToMojom(media::VideoEncodeAccelerator::Config::InterLayerPredMode input) {
-  switch (input) {
-    case media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOff:
-      return media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::
-          kOff;
-    case media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOn:
-      return media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::kOn;
-    case media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOnKeyPic:
-      return media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::
-          kOnKeyPic;
-  }
-  NOTREACHED();
-  return media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::kOff;
-}
-
-// static
-bool EnumTraits<media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode,
-                media::VideoEncodeAccelerator::Config::InterLayerPredMode>::
-    FromMojom(
-        media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode input,
-        media::VideoEncodeAccelerator::Config::InterLayerPredMode* output) {
-  switch (input) {
-    case media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::kOff:
-      *output = media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOff;
-      return true;
-    case media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::kOn:
-      *output = media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOn;
-      return true;
-    case media::mojom::VideoEncodeAcceleratorConfig_InterLayerPredMode::
-        kOnKeyPic:
-      *output =
-          media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOnKeyPic;
-      return true;
-  }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -443,6 +420,14 @@ bool StructTraits<media::mojom::VariableBitrateDataView, media::Bitrate>::Read(
 }
 
 // static
+bool StructTraits<media::mojom::ExternalBitrateDataView, media::Bitrate>::Read(
+    media::mojom::ExternalBitrateDataView input,
+    media::Bitrate* output) {
+  *output = media::Bitrate::ExternalRateControl();
+  return true;
+}
+
+// static
 media::mojom::BitrateDataView::Tag
 UnionTraits<media::mojom::BitrateDataView, media::Bitrate>::GetTag(
     const media::Bitrate& input) {
@@ -451,9 +436,10 @@ UnionTraits<media::mojom::BitrateDataView, media::Bitrate>::GetTag(
       return media::mojom::BitrateDataView::Tag::kConstant;
     case media::Bitrate::Mode::kVariable:
       return media::mojom::BitrateDataView::Tag::kVariable;
+    case media::Bitrate::Mode::kExternal:
+      return media::mojom::BitrateDataView::Tag::kExternal;
   }
-  NOTREACHED();
-  return media::mojom::BitrateDataView::Tag::kConstant;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -465,10 +451,11 @@ bool UnionTraits<media::mojom::BitrateDataView, media::Bitrate>::Read(
       return input.ReadConstant(output);
     case media::mojom::BitrateDataView::Tag::kVariable:
       return input.ReadVariable(output);
+    case media::mojom::BitrateDataView::Tag::kExternal:
+      return input.ReadExternal(output);
   }
 
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -491,8 +478,6 @@ bool StructTraits<media::mojom::VideoEncodeAcceleratorConfigDataView,
   media::Bitrate bitrate;
   if (!input.ReadBitrate(&bitrate))
     return false;
-  DCHECK((bitrate.mode() == media::Bitrate::Mode::kConstant) ==
-         (bitrate.peak_bps() == 0u));
 
   absl::optional<uint32_t> initial_framerate;
   if (input.has_initial_framerate())
@@ -519,21 +504,62 @@ bool StructTraits<media::mojom::VideoEncodeAcceleratorConfigDataView,
   if (!input.ReadContentType(&content_type))
     return false;
 
+  uint8_t drop_frame_thresh_percentage = input.drop_frame_thresh_percentage();
+  if (drop_frame_thresh_percentage > 100) {
+    return false;
+  }
   std::vector<media::VideoEncodeAccelerator::Config::SpatialLayer>
       spatial_layers;
   if (!input.ReadSpatialLayers(&spatial_layers))
     return false;
 
-  media::VideoEncodeAccelerator::Config::InterLayerPredMode inter_layer_pred;
+  media::SVCInterLayerPredMode inter_layer_pred;
   if (!input.ReadInterLayerPred(&inter_layer_pred))
     return false;
 
-  *output = media::VideoEncodeAccelerator::Config(
-      input_format, input_visible_size, output_profile, bitrate,
-      initial_framerate, gop_length, h264_output_level, is_constrained_h264,
-      storage_type, content_type, spatial_layers, inter_layer_pred);
+  media::VideoEncodeAccelerator::Config::EncoderType required_encoder_type;
+  if (!input.ReadRequiredEncoderType(&required_encoder_type))
+    return false;
 
+  struct CheckVEAConfig {
+    // The variable declaration order must be the same as
+    // VideoEncodeAccelerator::Config.
+    media::VideoPixelFormat input_format;
+    gfx::Size input_visible_size;
+    media::VideoCodecProfile output_profile;
+    media::Bitrate bitrate;
+    absl::optional<uint32_t> initial_framerate;
+    absl::optional<uint32_t> gop_length;
+    absl::optional<uint8_t> h264_output_level;
+    bool is_constrained_h264;
+    absl::optional<media::VideoEncodeAccelerator::Config::StorageType>
+        storage_type;
+    media::VideoEncodeAccelerator::Config::ContentType content_type;
+    uint8_t drop_frame_thresh_percentage;
+    std::vector<media::VideoEncodeAccelerator::Config::SpatialLayer>
+        spatial_layers;
+    media::SVCInterLayerPredMode inter_layer_pred;
+    bool require_low_delay = true;
+    media::VideoEncodeAccelerator::Config::EncoderType required_encoder_type;
+  };
+  static_assert(
+      sizeof(CheckVEAConfig) == sizeof(media::VideoEncodeAccelerator::Config),
+      "Please apply removed/added values in VideoEncodeAccelerator::Config "
+      "to the following copy and then remove/add the values in CheckVEAConfig");
+
+  *output = media::VideoEncodeAccelerator::Config(
+      input_format, input_visible_size, output_profile, bitrate);
+  output->initial_framerate = initial_framerate;
+  output->gop_length = gop_length;
+  output->h264_output_level = h264_output_level;
+  output->is_constrained_h264 = is_constrained_h264;
+  output->storage_type = storage_type;
+  output->content_type = content_type;
+  output->drop_frame_thresh_percentage = drop_frame_thresh_percentage;
+  output->spatial_layers = spatial_layers;
+  output->inter_layer_pred = inter_layer_pred;
   output->require_low_delay = input.require_low_delay();
+  output->required_encoder_type = required_encoder_type;
 
   return true;
 }

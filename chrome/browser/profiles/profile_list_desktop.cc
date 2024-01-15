@@ -21,11 +21,6 @@ ProfileListDesktop::ProfileListDesktop(
 ProfileListDesktop::~ProfileListDesktop() {
 }
 
-// static
-ProfileList* ProfileList::Create(ProfileAttributesStorage* profile_storage) {
-  return new ProfileListDesktop(profile_storage);
-}
-
 size_t ProfileListDesktop::GetNumberOfItems() const {
   return items_.size();
 }
@@ -37,7 +32,7 @@ const AvatarMenu::Item& ProfileListDesktop::GetItemAt(size_t index) const {
 
 void ProfileListDesktop::RebuildMenu() {
   std::vector<ProfileAttributesEntry*> entries =
-      profile_storage_->GetAllProfilesAttributesSortedByName();
+      profile_storage_->GetAllProfilesAttributesSortedByNameWithCheck();
 
   items_.clear();
   for (ProfileAttributesEntry* entry : entries) {
@@ -60,8 +55,8 @@ void ProfileListDesktop::RebuildMenu() {
   }
 }
 
-size_t ProfileListDesktop::MenuIndexFromProfilePath(const base::FilePath& path)
-    const {
+absl::optional<size_t> ProfileListDesktop::MenuIndexFromProfilePath(
+    const base::FilePath& path) const {
   const size_t menu_count = GetNumberOfItems();
 
   for (size_t i = 0; i < menu_count; ++i) {
@@ -70,9 +65,7 @@ size_t ProfileListDesktop::MenuIndexFromProfilePath(const base::FilePath& path)
       return i;
   }
 
-  // The desired index was not found; return a fallback value.
-  NOTREACHED();
-  return 0;
+  return absl::nullopt;
 }
 
 void ProfileListDesktop::ActiveProfilePathChanged(

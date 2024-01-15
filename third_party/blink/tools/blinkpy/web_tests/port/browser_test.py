@@ -27,7 +27,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from blinkpy.common import exit_codes
-from blinkpy.web_tests.models import test_run_results
 from blinkpy.web_tests.port import browser_test_driver
 from blinkpy.web_tests.port import linux
 from blinkpy.web_tests.port import mac
@@ -82,8 +81,8 @@ class BrowserTestLinuxPort(BrowserTestPortOverrides, linux.LinuxPort):
 
 
 class BrowserTestMacPort(BrowserTestPortOverrides, mac.MacPort):
-    def _path_to_driver(self, target=None):
-        return self._build_path_with_target(target, self.driver_name())
+    def path_to_driver(self, target=None):
+        return self.build_path(self.driver_name(), target=target)
 
     def _default_timeout_ms(self):
         return 20000

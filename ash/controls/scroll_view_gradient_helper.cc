@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/animation/animation_builder.h"
@@ -62,8 +62,12 @@ void ScrollViewGradientHelper::UpdateGradientMask() {
 
   // Vertical linear gradient, from top to bottom.
   gfx::LinearGradient gradient_mask(/*angle=*/-90);
-  float fade_position =
-      static_cast<float>(gradient_height_) / scroll_view_->bounds().height();
+  // Clamp fade_position to the ~middle. If we don't do this, then in degenerate
+  // cases (where the gradients are larger than the scroll view itself) we would
+  // end up passing bogus values to the gradient mask.
+  const float fade_position = std::min(
+      static_cast<float>(gradient_height_) / scroll_view_->bounds().height(),
+      0.49f);
 
   // Top fade in section.
   if (show_top_gradient) {
@@ -111,7 +115,7 @@ void ScrollViewGradientHelper::AnimateMaskLayer(
 }
 
 void ScrollViewGradientHelper::RemoveMaskLayer() {
-  if (scroll_view_->layer()->gradient_mask().IsEmpty())
+  if (!scroll_view_->layer()->HasGradientMask())
     return;
 
   DVLOG(1) << "Removing gradient mask";

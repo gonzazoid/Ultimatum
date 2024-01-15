@@ -9,11 +9,11 @@
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_metadata_store.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/ash/components/sync_wifi/network_test_helper.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -94,7 +94,8 @@ class SyncedNetworkMetricsLoggerTest : public testing::Test {
 
   const NetworkState* CreateNetwork(bool from_sync) {
     std::string guid = network_test_helper()->ConfigureWiFiNetwork(
-        "ssid", /*is_secure=*/true, /*in_profile=*/true, /*has_connected=*/true,
+        "ssid", /*is_secure=*/true, network_test_helper()->primary_user(),
+        /*has_connected=*/true,
         /*owned_by_user=*/true, /*configured_by_sync=*/from_sync);
     return network_test_helper()
         ->network_state_helper()

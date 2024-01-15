@@ -1,10 +1,14 @@
-<style cr-shared-style>
+<style include="cr-shared-style">
   :host {
     align-items: center;
-    background: var(--cros-bg-color);
+    background: var(--navigation-view-panel-bg-color);
     display: flex;
-    height: 56px;
+    height: var(--navigation-view-panel-toolbar-height, 56px);
     width: 100%;
+  }
+
+  :host-context(body.jelly-enabled) #title {
+    font: var(--cros-title-1-font);
   }
 
   :host([is-narrow]) #leftContent {
@@ -19,6 +23,14 @@
     padding-inline-start: 20px;
   }
 
+  :host([has-search][is-narrow]) #container {
+    grid-template-columns: 0 1fr;
+  }
+
+  :host([has-search][is-narrow]) #mainContent {
+    margin-inline-start: 48px;
+  }
+
   #leftContent {
     align-items: center;
     display: flex;
@@ -31,6 +43,13 @@
     font-weight: 500;
     letter-spacing: 0.25px;
   }
+
+  #container {
+    display: grid;
+    grid-template-columns: var(--columns-nav);
+    margin-top:12px;
+    width: 100%;
+  }
 </style>
 <div id="container">
   <div id="leftContent">
@@ -41,6 +60,10 @@
           title="[[title]]">
       </cr-icon-button>
     </template>
-    <h1 id="title" part="title">[[title]]</h1>
+    <h1 id="title" part="title"
+        hidden="[[shouldHideTitle_(isNarrow, hasSearch)]]">
+      [[title]]
+    </h1>
   </div>
+  <div id="mainContent"><slot name="toolbar-main"></slot></div>
 </div>

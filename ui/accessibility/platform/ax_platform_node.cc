@@ -6,24 +6,20 @@
 
 #include "base/debug/crash_logging.h"
 #include "base/lazy_instance.h"
-#include "base/observer_list.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/platform/ax_platform.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/base/buildflags.h"
 
 namespace ui {
 
 // static
-base::LazyInstance<base::ObserverList<AXModeObserver>::Unchecked>::Leaky
-    AXPlatformNode::ax_mode_observers_ = LAZY_INSTANCE_INITIALIZER;
-
-// static
 base::LazyInstance<AXPlatformNode::NativeWindowHandlerCallback>::Leaky
     AXPlatformNode::native_window_handler_ = LAZY_INSTANCE_INITIALIZER;
 
 // static
-AXMode AXPlatformNode::ax_mode_;
+bool AXPlatformNode::disallow_ax_mode_changes_;
 
 // static
 gfx::NativeViewAccessible AXPlatformNode::popup_focus_override_ = nullptr;
@@ -50,6 +46,11 @@ void AXPlatformNode::RegisterNativeWindowHandler(
   native_window_handler_.Get() = handler;
 }
 
+// static
+void AXPlatformNode::DisallowAXModeChanges() {
+  disallow_ax_mode_changes_ = true;
+}
+
 AXPlatformNode::AXPlatformNode() = default;
 
 AXPlatformNode::~AXPlatformNode() = default;
@@ -59,15 +60,8 @@ void AXPlatformNode::Destroy() {
 
 int32_t AXPlatformNode::GetUniqueId() const {
   DCHECK(GetDelegate()) << "|GetUniqueId| must be called after |Init|.";
-  return GetDelegate() ? GetDelegate()->GetUniqueId().Get() : -1;
-}
-
-void AXPlatformNode::SetIsPrimaryWebContentsForWindow(bool is_primary) {
-  is_primary_web_contents_for_window_ = is_primary;
-}
-
-bool AXPlatformNode::IsPrimaryWebContentsForWindow() const {
-  return is_primary_web_contents_for_window_;
+  return GetDelegate() ? GetDelegate()->GetUniqueId().Get()
+                       : kInvalidAXUniqueId;
 }
 
 std::string AXPlatformNode::ToString() {
@@ -83,31 +77,29 @@ std::ostream& operator<<(std::ostream& stream, AXPlatformNode& node) {
 }
 
 // static
-void AXPlatformNode::AddAXModeObserver(AXModeObserver* observer) {
-  ax_mode_observers_.Get().AddObserver(observer);
-}
-
-// static
-void AXPlatformNode::RemoveAXModeObserver(AXModeObserver* observer) {
-  ax_mode_observers_.Get().RemoveObserver(observer);
+AXMode AXPlatformNode::GetAccessibilityMode() {
+  return AXPlatform::GetInstance().GetMode();
 }
 
 // static
 void AXPlatformNode::NotifyAddAXModeFlags(AXMode mode_flags) {
-  AXMode new_ax_mode(ax_mode_);
-  new_ax_mode |= mode_flags;
+  if (disallow_ax_mode_changes_) {
+    return;
+  }
 
-  if (new_ax_mode == ax_mode_)
+  auto& ax_platform = AXPlatform::GetInstance();
+  const AXMode old_ax_mode = ax_platform.GetMode();
+  const AXMode new_ax_mode = old_ax_mode | mode_flags;
+  if (new_ax_mode == old_ax_mode) {
     return;  // No change.
+  }
 
-  ax_mode_ = new_ax_mode;
-  for (auto& observer : ax_mode_observers_.Get())
-    observer.OnAXModeAdded(mode_flags);
+  ax_platform.SetMode(new_ax_mode);
 }
 
 // static
 void AXPlatformNode::SetAXMode(AXMode new_mode) {
-  ax_mode_ = new_mode;
+  AXPlatform::GetInstance().SetMode(new_mode);
 }
 
 // static

@@ -96,7 +96,7 @@ for message parameters.
 | `string`                      | UTF-8 encoded string.
 | `array<T>`                    | Array of any Mojom type *T*; for example, `array<uint8>` or `array<array<string>>`.
 | `array<T, N>`                 | Fixed-length array of any Mojom type *T*. The parameter *N* must be an integral constant.
-| `map<S, T>`                   | Associated array maping values of type *S* to values of type *T*. *S* may be a `string`, `enum`, or numeric type.
+| `map<S, T>`                   | Associated array mapping values of type *S* to values of type *T*. *S* may be a `string`, `enum`, or numeric type.
 | `handle`                      | Generic Mojo handle. May be any type of handle, including a wrapped native platform handle.
 | `handle<message_pipe>`        | Generic message pipe handle.
 | `handle<shared_buffer>`       | Shared buffer handle.
@@ -351,6 +351,37 @@ struct Employee {
 The effect of nested definitions on generated bindings varies depending on the
 target language. See [documentation for individual target languages](#Generated-Code-For-Target-Languages).
 
+### Features
+
+Features can be declared with a `name` and `default_state` and can be attached
+in mojo to interfaces or methods using the `RuntimeFeature` attribute. If the
+feature is disabled at runtime, the method will crash and the interface will
+refuse to be bound / instantiated. Features cannot be serialized to be sent over
+IPC at this time.
+
+```
+module experimental.mojom;
+
+feature kUseElevators {
+  const string name = "UseElevators";
+  const bool default_state = false;
+}
+
+[RuntimeFeature=kUseElevators]
+interface Elevator {
+  // This interface cannot be bound or called if the feature is disabled.
+}
+
+interface Building {
+  // This method cannot be called if the feature is disabled.
+  [RuntimeFeature=kUseElevators]
+  CallElevator(int floor);
+
+  // This method can be called.
+  RingDoorbell(int volume);
+}
+```
+
 ### Interfaces
 
 An **interface** is a logical bundle of parameterized request messages. Each
@@ -461,6 +492,16 @@ interesting attributes supported today.
   string representation as specified by RFC 4122. New UUIDs can be generated
   with common tools such as `uuidgen`.
 
+* **`[RuntimeFeature=feature]`**
+  The `RuntimeFeature` attribute should reference a mojo `feature`. If this
+  feature is enabled (e.g. using `--enable-features={feature.name}`) then the
+  interface behaves entirely as expected. If the feature is not enabled the
+  interface cannot be bound to a concrete receiver or remote - attempting to do
+  so will result in the receiver or remote being reset() to an unbound state.
+  Note that this is a different concept to the build-time `EnableIf` directive.
+  `RuntimeFeature` is currently only supported for C++ bindings and has no
+  effect for, say, Java or TypeScript bindings (see https://crbug.com/1278253).
+
 * **`[EnableIf=value]`**:
   The `EnableIf` attribute is used to conditionally enable definitions when the
   mojom is parsed. If the `mojom` target in the GN file does not include the
@@ -511,6 +552,13 @@ interesting attributes supported today.
   `AllowedContext` attribute to a method is a strong indication that you need
    a detailed security review of your design - please reach out to the security
    team.
+
+* **`[SupportsUrgent]`**:
+  The `SupportsUrgent` attribute is used in conjunction with
+  `mojo::UrgentMessageScope` in Chromium to tag messages as having high
+  priority. The IPC layer notifies the underlying scheduler upon both receiving
+  and processing an urgent message. At present, this attribute only affects
+  channel associated messages in the renderer process.
 
 ## Generated Code For Target Languages
 
@@ -720,6 +768,24 @@ There are two dimensions on which an interface can be extended
     that the version number is scoped to the whole interface rather than to any
     individual parameter list.
 
+``` cpp
+// Old version:
+interface HumanResourceDatabase {
+  QueryEmployee(uint64 id) => (Employee? employee);
+};
+
+// New version:
+interface HumanResourceDatabase {
+  QueryEmployee(uint64 id, [MinVersion=1] bool retrieve_finger_print)
+      => (Employee? employee,
+          [MinVersion=1] array<uint8>? finger_print);
+};
+```
+
+Similar to [versioned structs](#Versioned-Structs), when you pass the parameter
+list of a request or response method to a destination using an older version of
+an interface, unrecognized fields are silently discarded.
+
     Please note that adding a response to a message which did not previously
     expect a response is a not a backwards-compatible change.
 
@@ -732,17 +798,12 @@ For example:
 ``` cpp
 // Old version:
 interface HumanResourceDatabase {
-  AddEmployee(Employee employee) => (bool success);
   QueryEmployee(uint64 id) => (Employee? employee);
 };
 
 // New version:
 interface HumanResourceDatabase {
-  AddEmployee(Employee employee) => (bool success);
-
-  QueryEmployee(uint64 id, [MinVersion=1] bool retrieve_finger_print)
-      => (Employee? employee,
-          [MinVersion=1] array<uint8>? finger_print);
+  QueryEmployee(uint64 id) => (Employee? employee);
 
   [MinVersion=1]
   AttachFingerPrint(uint64 id, array<uint8> finger_print)
@@ -750,10 +811,7 @@ interface HumanResourceDatabase {
 };
 ```
 
-Similar to [versioned structs](#Versioned-Structs), when you pass the parameter
-list of a request or response method to a destination using an older version of
-an interface, unrecognized fields are silently discarded. However, if the method
-call itself is not recognized, it is considered a validation error and the
+If a method call is not recognized, it is considered a validation error and the
 receiver will close its end of the interface pipe. For example, if a client on
 version 1 of the above interface sends an `AttachFingerPrint` request to an
 implementation of version 0, the client will be disconnected.
@@ -850,7 +908,7 @@ Statement = ModuleStatement | ImportStatement | Definition
 
 ModuleStatement = AttributeSection "module" Identifier ";"
 ImportStatement = "import" StringLiteral ";"
-Definition = Struct Union Interface Enum Const
+Definition = Struct Union Interface Enum Feature Const
 
 AttributeSection = <empty> | "[" AttributeList "]"
 AttributeList = <empty> | NonEmptyAttributeList
@@ -877,7 +935,7 @@ InterfaceBody = <empty>
               | InterfaceBody Const
               | InterfaceBody Enum
               | InterfaceBody Method
-Method = AttributeSection Name Ordinal "(" ParamterList ")" Response ";"
+Method = AttributeSection Name Ordinal "(" ParameterList ")" Response ";"
 ParameterList = <empty> | NonEmptyParameterList
 NonEmptyParameterList = Parameter
                       | Parameter "," NonEmptyParameterList
@@ -914,6 +972,13 @@ NonEmptyEnumValueList = EnumValue | NonEmptyEnumValueList "," EnumValue
 EnumValue = AttributeSection Name
           | AttributeSection Name "=" Integer
           | AttributeSection Name "=" Identifier
+
+; Note: `feature` is a weak keyword and can appear as, say, a struct field name.
+Feature = AttributeSection "feature" Name "{" FeatureBody "}" ";"
+       | AttributeSection "feature" Name ";"
+FeatureBody = <empty>
+           | FeatureBody FeatureField
+FeatureField = AttributeSection TypeSpec Name Default ";"
 
 Const = "const" TypeSpec Name "=" Constant ";"
 

@@ -47,6 +47,8 @@ std::string GetHistogramVariant(SignalName signal_name) {
       return "FileSystemInfo";
     case SignalName::kSystemSettings:
       return "SystemSettings";
+    case SignalName::kAgent:
+      return "Agent";
   }
 }
 
@@ -118,6 +120,12 @@ void LogSignalCollectionSucceeded(SignalName signal_name,
           kMaxSampleValue);
     }
   }
+}
+
+void LogCrowdStrikeParsingError(SignalsParsingError error) {
+  static constexpr char kCrowdStrikeErrorHistogram[] =
+      "Enterprise.DeviceSignals.Collection.CrowdStrike.Error";
+  base::UmaHistogramEnumeration(kCrowdStrikeErrorHistogram, error);
 }
 
 }  // namespace device_signals

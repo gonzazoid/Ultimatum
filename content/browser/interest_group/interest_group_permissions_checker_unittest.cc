@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -441,7 +441,7 @@ TEST_P(InterestGroupPermissionsCheckerParamaterizedTest,
                                          MOJO_WRITE_DATA_FLAG_ALL_OR_NONE));
 
     pending_request.client->OnReceiveResponse(std::move(head), std::move(body),
-                                              absl::nullopt);
+                                              std::nullopt);
 
     auto status = network::URLLoaderCompletionStatus();
     status.decoded_body_length = response_body.size();

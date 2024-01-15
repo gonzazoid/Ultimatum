@@ -3,9 +3,13 @@
 // found in the LICENSE file.
 
 import {NavigatorDelegate, OpenPdfParamsParser, PdfNavigator, WindowOpenDisposition} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 import {getZoomableViewport, MockDocumentDimensions, MockElement, MockSizer, MockViewportChangedCallback} from './test_util.js';
+
+// URL allowed local file access.
+const ALLOWED_URL: string = 'https://test-allowed-domain.com/document.pdf';
 
 class MockNavigatorDelegate extends TestBrowserProxy implements
     NavigatorDelegate {
@@ -14,6 +18,7 @@ class MockNavigatorDelegate extends TestBrowserProxy implements
       'navigateInCurrentTab',
       'navigateInNewTab',
       'navigateInNewWindow',
+      'isAllowedLocalFileAccess',
     ]);
   }
 
@@ -27,6 +32,10 @@ class MockNavigatorDelegate extends TestBrowserProxy implements
 
   navigateInNewWindow(url: string) {
     this.methodCalled('navigateInNewWindow', url);
+  }
+
+  isAllowedLocalFileAccess(url: string): Promise<boolean> {
+    return Promise.resolve(url === ALLOWED_URL);
   }
 }
 
@@ -45,7 +54,25 @@ async function doNavigationUrlTest(
   navigatorDelegate.reset();
   await navigator.navigate(url, disposition);
   chrome.test.assertFalse(viewportChangedCallback.wasCalled);
+
   if (expectedResultUrl === undefined) {
+    // Navigation shouldn't occur.
+    switch (disposition) {
+      case WindowOpenDisposition.CURRENT_TAB:
+        chrome.test.assertEq(
+            0, navigatorDelegate.getCallCount('navigateInCurrentTab'));
+        break;
+      case WindowOpenDisposition.NEW_BACKGROUND_TAB:
+        chrome.test.assertEq(
+            0, navigatorDelegate.getCallCount('navigateInNewTab'));
+        break;
+      case WindowOpenDisposition.NEW_WINDOW:
+        chrome.test.assertEq(
+            0, navigatorDelegate.getCallCount('navigateInNewWindow'));
+        break;
+      default:
+        assertNotReached();
+    }
     return;
   }
 
@@ -79,10 +106,15 @@ async function doNavigationUrlTests(
   const viewport = getZoomableViewport(mockWindow, mockSizer, 0, 1);
   viewport.setViewportChangedCallback(mockViewportChangedCallback.callback);
 
-  const paramsParser = new OpenPdfParamsParser(function(_name) {
+  const getNamedDestinationCallback = function(_name: string) {
     return Promise.resolve(
         {messageId: 'getNamedDestination_1', pageNumber: -1});
-  });
+  };
+  const getPageBoundingBoxCallback = function(_page: number) {
+    return Promise.resolve({x: -1, y: -1, width: -1, height: -1});
+  };
+  const paramsParser = new OpenPdfParamsParser(
+      getNamedDestinationCallback, getPageBoundingBoxCallback);
 
   const navigatorDelegate = new MockNavigatorDelegate();
   const navigator =
@@ -111,7 +143,7 @@ chrome.test.runTests([
     const viewport = getZoomableViewport(mockWindow, mockSizer, 0, 1);
     viewport.setViewportChangedCallback(mockCallback.callback);
 
-    const paramsParser = new OpenPdfParamsParser(function(destination) {
+    const getNamedDestinationCallback = function(destination: string) {
       if (destination === 'US') {
         return Promise.resolve(
             {messageId: 'getNamedDestination_1', pageNumber: 0});
@@ -122,7 +154,12 @@ chrome.test.runTests([
         return Promise.resolve(
             {messageId: 'getNamedDestination_3', pageNumber: -1});
       }
-    });
+    };
+    const getPageBoundingBoxCallback = function(_page: number) {
+      return Promise.resolve({x: -1, y: -1, width: -1, height: -1});
+    };
+    const paramsParser = new OpenPdfParamsParser(
+        getNamedDestinationCallback, getPageBoundingBoxCallback);
     const url = 'http://xyz.pdf';
 
     const navigatorDelegate = new MockNavigatorDelegate();
@@ -255,4 +292,19 @@ chrome.test.runTests([
 
     chrome.test.succeed();
   },
+
+  /**
+   * Test domains and urls have access to file:/// urls when allowed.
+   */
+  async function testNavigateAllowedLocalFileAccess() {
+    await doNavigationUrlTests(
+        ALLOWED_URL, 'file:///bar.pdf', 'file:///bar.pdf');
+
+    const disallowedUrl = 'https://test-disallowed-domain.com/document.pdf';
+
+    await doNavigationUrlTests(disallowedUrl, 'file:///bar.pdf', undefined);
+
+    chrome.test.succeed();
+  },
+
 ]);

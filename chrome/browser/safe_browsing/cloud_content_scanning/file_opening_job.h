@@ -25,12 +25,14 @@ class FileOpeningJob {
     ~FileOpeningTask();
 
     // Non-owning pointer to the request corresponding to the file to open.
-    raw_ptr<safe_browsing::FileAnalysisRequest, DanglingUntriaged> request =
-        nullptr;
+    raw_ptr<safe_browsing::FileAnalysisRequest, AcrossTasksDanglingUntriaged>
+        request = nullptr;
 
     // Indicates if this task has been taken and is owned by a thread.
     std::atomic_bool taken{false};
   };
+
+  static size_t GetMaxFileOpeningThreads();
 
   // This constructor will call base::PostJob on the given tasks and only cancel
   // that job in the destructor. This means that if the result of the tasks is

@@ -2,19 +2,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/viz/service/debugger/viz_debugger.h"
+
 #include <algorithm>
 #include <atomic>
 #include <string>
 #include <utility>
 
+#include "base/base64.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
-#include "components/viz/service/debugger/viz_debugger.h"
+#include "third_party/skia/include/core/SkStream.h"
+#include "third_party/skia/include/core/SkSwizzle.h"
+#include "third_party/skia/include/encode/SkPngEncoder.h"
 
 #if VIZ_DEBUGGER_IS_ON()
 
 #include "base/threading/platform_thread.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_id_name_manager.h"
 
 namespace viz {
@@ -23,7 +28,7 @@ namespace viz {
 // support.
 static const int kVizDebuggerVersion = 1;
 
-std::atomic<bool> VizDebugger::enabled_;
+std::atomic<bool> VizDebugger::enabled_ = false;
 
 VizDebugger::BufferInfo::BufferInfo() = default;
 VizDebugger::BufferInfo::~BufferInfo() = default;
@@ -49,20 +54,16 @@ VizDebugger::FilterBlock::~FilterBlock() = default;
 
 VizDebugger::FilterBlock::FilterBlock(const FilterBlock& other) = default;
 
-base::DictionaryValue VizDebugger::CallSubmitCommon::GetDictionaryValue()
-    const {
-  base::DictionaryValue option_dict;
-  option_dict.SetString("color",
-                        base::StringPrintf("#%02x%02x%02x", option.color_r,
-                                           option.color_g, option.color_b));
-  option_dict.SetInteger("alpha", option.color_a);
-
-  base::DictionaryValue dict;
-  dict.SetInteger("drawindex", draw_index);
-  dict.SetInteger("source_index", source_index);
-  dict.SetInteger("thread_id", thread_id);
-  dict.SetKey("option", std::move(option_dict));
-  return dict;
+base::Value::Dict VizDebugger::CallSubmitCommon::GetDictionaryValue() const {
+  return base::Value::Dict()
+      .Set("drawindex", draw_index)
+      .Set("source_index", source_index)
+      .Set("thread_id", thread_id)
+      .Set("option",
+           base::Value::Dict()
+               .Set("color", base::StringPrintf("#%02x%02x%02x", option.color_r,
+                                                option.color_g, option.color_b))
+               .Set("alpha", option.color_a));
 }
 
 VizDebugger::StaticSource::StaticSource(const char* anno_name,
@@ -74,7 +75,7 @@ VizDebugger::StaticSource::StaticSource(const char* anno_name,
 }
 
 VizDebugger::VizDebugger()
-    : gpu_thread_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+    : gpu_thread_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   enabled_.store(false);
 }
 
@@ -97,144 +98,122 @@ base::Value VizDebugger::FrameAsJson(const uint64_t counter,
   // by having a lock around the |json_frame_output_| object.
   submission_count_ = 0;
 
-  base::DictionaryValue global_dict;
-  global_dict.SetInteger("version", kVizDebuggerVersion);
-  global_dict.SetString("frame", base::NumberToString(counter));
-  global_dict.SetInteger("windowx", window_pix.width());
-  global_dict.SetInteger("windowy", window_pix.height());
-  global_dict.SetString(
-      "time", base::NumberToString(time_ticks.since_origin().InMicroseconds()));
+  auto global_dict =
+      base::Value::Dict()
+          .Set("version", kVizDebuggerVersion)
+          .Set("frame", base::NumberToString(counter))
+          .Set("windowx", window_pix.width())
+          .Set("windowy", window_pix.height())
+          .Set("time", base::NumberToString(
+                           time_ticks.since_origin().InMicroseconds()));
 
-  base::ListValue new_sources;
+  base::Value::List new_sources;
   for (size_t i = last_sent_source_count_; i < sources_.size(); i++) {
     const StaticSource* each = sources_[i];
 
-    base::DictionaryValue dict;
-    dict.SetString("file", each->file);
-    dict.SetInteger("line", each->line);
-    dict.SetString("func", each->func);
-    dict.SetString("anno", each->anno);
-    dict.SetInteger("index", each->reg_index);
-    new_sources.Append(std::move(dict));
+    new_sources.Append(base::Value::Dict()
+                           .Set("file", each->file)
+                           .Set("line", each->line)
+                           .Set("func", each->func)
+                           .Set("anno", each->anno)
+                           .Set("index", each->reg_index));
   }
 
   // Remote connection will now have acknowledged all the new sources.
   last_sent_source_count_ = sources_.size();
-  global_dict.SetKey("new_sources", std::move(new_sources));
+  global_dict.Set("new_sources", std::move(new_sources));
 
   // We take the minimum between tail index and buffer size to make sure we
   // don't go out of bounds.
   size_t const max_rect_calls_index =
-      std::min(static_cast<int>(draw_rect_calls_tail_idx_),
+      std::min(static_cast<int>(draw_calls_tail_idx_),
                static_cast<int>(draw_rect_calls_.size()));
-  size_t const max_text_calls_index =
-      std::min(static_cast<int>(draw_text_calls_tail_idx_),
-               static_cast<int>(draw_text_calls_.size()));
+
   size_t const max_logs_index = std::min(static_cast<int>(logs_tail_idx_),
                                          static_cast<int>(logs_.size()));
 
-  base::ListValue draw_calls;
+  base::Value::List draw_calls;
 
   // Hash set to keep track of threads that have been registered already.
   base::flat_set<int> registered_threads;
   for (size_t i = 0; i < max_rect_calls_index; ++i) {
-    base::DictionaryValue dict = draw_rect_calls_[i].GetDictionaryValue();
-    base::DictionaryValue threads_dict;
-    {
-      base::ListValue list_xy;
-      list_xy.Append(draw_rect_calls_[i].obj_size.width());
-      list_xy.Append(draw_rect_calls_[i].obj_size.height());
-      dict.SetKey("size", std::move(list_xy));
+    base::Value::Dict dict = draw_rect_calls_[i].GetDictionaryValue();
+    dict.Set("size", base::Value::List()
+                         .Append(draw_rect_calls_[i].obj_size.width())
+                         .Append(draw_rect_calls_[i].obj_size.height()));
+    dict.Set("pos",
+             base::Value::List()
+                 .Append(static_cast<double>(draw_rect_calls_[i].pos.x()))
+                 .Append(static_cast<double>(draw_rect_calls_[i].pos.y())));
+    if (draw_rect_calls_[i].uv != DBG_DEFAULT_UV) {
+      dict.Set(
+          "uv_size",
+          base::Value::List()
+              .Append(static_cast<double>(draw_rect_calls_[i].uv.width()))
+              .Append(static_cast<double>(draw_rect_calls_[i].uv.height())));
+      dict.Set("uv_pos",
+               base::Value::List()
+                   .Append(static_cast<double>(draw_rect_calls_[i].uv.x()))
+                   .Append(static_cast<double>(draw_rect_calls_[i].uv.y())));
     }
-    {
-      base::ListValue list_xy;
-      list_xy.Append(static_cast<double>(draw_rect_calls_[i].pos.x()));
-      list_xy.Append(static_cast<double>(draw_rect_calls_[i].pos.y()));
-      dict.SetKey("pos", std::move(list_xy));
+    dict.Set("buff_id", std::move(draw_rect_calls_[i].buff_id));
+    if (!draw_rect_calls_[i].text.empty()) {
+      dict.Set("text", std::move(draw_rect_calls_[i].text));
     }
-    if (draw_rect_calls_[i].uv != DEFAULT_UV) {
-      {
-        base::ListValue list_xy;
-        list_xy.Append(static_cast<double>(draw_rect_calls_[i].uv.width()));
-        list_xy.Append(static_cast<double>(draw_rect_calls_[i].uv.height()));
-        dict.SetKey("uv_size", std::move(list_xy));
-      }
-      {
-        base::ListValue list_xy;
-        list_xy.Append(static_cast<double>(draw_rect_calls_[i].uv.x()));
-        list_xy.Append(static_cast<double>(draw_rect_calls_[i].uv.y()));
-        dict.SetKey("uv_pos", std::move(list_xy));
-      }
-    }
-    dict.SetInteger("buff_id", std::move(draw_rect_calls_[i].buff_id));
     registered_threads.insert(draw_rect_calls_[i].thread_id);
     draw_calls.Append(std::move(dict));
   }
 
-  global_dict.SetKey("drawcalls", std::move(draw_calls));
+  global_dict.Set("drawcalls", std::move(draw_calls));
 
-  base::DictionaryValue buff_map;
+  base::Value::Dict buff_map;
+
   for (auto&& each : buffers_) {
-    base::DictionaryValue dict;
-    dict.SetInteger("width", each.buffer_info.width);
-    dict.SetInteger("height", each.buffer_info.height);
-    base::ListValue lst;
-    for (auto& buffer : each.buffer_info.buffer) {
-      lst.Append(buffer.color_r);
-      lst.Append(buffer.color_g);
-      lst.Append(buffer.color_b);
-      lst.Append(buffer.color_a);
+    SkDynamicMemoryWStream stream;
+    bool result = SkPngEncoder::Encode(
+        &stream, each.buffer_info.bitmap.pixmap(), SkPngEncoder::Options());
+    if (!result) {
+      DLOG(ERROR) << "encode failed";
+      continue;
     }
-    dict.SetKey("buffer", std::move(lst));
-    buff_map.SetKey(base::NumberToString(each.id), std::move(dict));
+    sk_sp<SkData> data = stream.detachAsData();
+    std::string uri =
+        "data:image/png;base64," +
+        base::Base64Encode(base::span<const uint8_t>(
+            static_cast<const uint8_t*>(data->data()), data->size()));
+    buff_map.Set(base::NumberToString(each.id), std::move(uri));
   }
-  global_dict.SetKey("buff_map", std::move(buff_map));
 
-  base::ListValue logs;
+  global_dict.Set("buff_map", std::move(buff_map));
+
+  base::Value::List logs;
   for (size_t i = 0; i < max_logs_index; ++i) {
-    base::DictionaryValue dict = logs_[i].GetDictionaryValue();
-    dict.SetString("value", std::move(logs_[i].value));
+    base::Value::Dict dict = logs_[i].GetDictionaryValue();
+    dict.Set("value", std::move(logs_[i].value));
     logs.Append(std::move(dict));
     registered_threads.insert(logs_[i].thread_id);
   }
-  global_dict.SetKey("logs", std::move(logs));
-
-  base::ListValue texts;
-  for (size_t i = 0; i < max_text_calls_index; ++i) {
-    base::DictionaryValue dict = draw_text_calls_[i].GetDictionaryValue();
-    {
-      base::ListValue list_xy;
-      list_xy.Append(static_cast<double>(draw_text_calls_[i].pos.x()));
-      list_xy.Append(static_cast<double>(draw_text_calls_[i].pos.y()));
-      dict.SetKey("pos", std::move(list_xy));
-    }
-    dict.SetString("text", draw_text_calls_[i].text);
-    texts.Append(std::move(dict));
-    registered_threads.insert(draw_text_calls_[i].thread_id);
-  }
-  global_dict.SetKey("text", std::move(texts));
+  global_dict.Set("logs", std::move(logs));
 
   // Gather thread name:id for all active threads this frame.
-  base::ListValue new_threads;
+  base::Value::List new_threads;
   for (auto&& thread_id : registered_threads) {
     std::string cur_thread_name =
         base::ThreadIdNameManager::GetInstance()->GetName(thread_id);
-    base::DictionaryValue threads_dict;
-    threads_dict.SetInteger("thread_id", thread_id);
-    threads_dict.SetString("thread_name", cur_thread_name);
-    new_threads.Append(std::move(threads_dict));
+    new_threads.Append(base::Value::Dict()
+                           .Set("thread_id", thread_id)
+                           .Set("thread_name", cur_thread_name));
     registered_threads.insert(thread_id);
   }
 
-  global_dict.SetKey("threads", std::move(new_threads));
+  global_dict.Set("threads", std::move(new_threads));
 
   // Reset index counters for each buffer.
   buffers_.clear();
-  draw_rect_calls_tail_idx_ = 0;
-  draw_text_calls_tail_idx_ = 0;
+  draw_calls_tail_idx_ = 0;
   logs_tail_idx_ = 0;
 
-  return std::move(global_dict);
+  return base::Value(std::move(global_dict));
 }
 
 void VizDebugger::UpdateFilters() {
@@ -251,6 +230,9 @@ void VizDebugger::UpdateFilters() {
 void VizDebugger::CompleteFrame(uint64_t counter,
                                 const gfx::Size& window_pix,
                                 base::TimeTicks time_ticks) {
+  if (!enabled_) {
+    return;
+  }
   read_write_lock_.WriteLock();
   UpdateFilters();
   json_frame_output_ = FrameAsJson(counter, window_pix, time_ticks);
@@ -299,26 +281,18 @@ void VizDebugger::Draw(const gfx::SizeF& obj_size,
                        const VizDebugger::StaticSource* dcs,
                        VizDebugger::DrawOption option,
                        int* id,
-                       const gfx::RectF& uv) {
-  Draw(gfx::Size(obj_size.width(), obj_size.height()), pos, dcs, option, id,
-       uv);
+                       const gfx::RectF& uv,
+                       const std::string& text) {
+  DrawInternal(obj_size, pos, dcs, option, id, uv, text);
 }
 
-void VizDebugger::Draw(const gfx::Size& obj_size,
-                       const gfx::Vector2dF& pos,
-                       const VizDebugger::StaticSource* dcs,
-                       VizDebugger::DrawOption option,
-                       int* id,
-                       const gfx::RectF& uv) {
-  DrawInternal(obj_size, pos, dcs, option, id, uv);
-}
-
-void VizDebugger::DrawInternal(const gfx::Size& obj_size,
+void VizDebugger::DrawInternal(const gfx::SizeF& obj_size,
                                const gfx::Vector2dF& pos,
                                const VizDebugger::StaticSource* dcs,
                                VizDebugger::DrawOption option,
                                int* id,
-                               const gfx::RectF& uv) {
+                               const gfx::RectF& uv,
+                               const std::string& text) {
   int local_id_buffer = -1;
   if (id != nullptr) {
     local_id_buffer = buffer_id++;
@@ -332,7 +306,7 @@ void VizDebugger::DrawInternal(const gfx::Size& obj_size,
   for (;;) {
     read_write_lock_.ReadLock();
     // Get call insertion index.
-    insertion_index = draw_rect_calls_tail_idx_++;
+    insertion_index = draw_calls_tail_idx_++;
     // If the insertion index is within bounds, insert call into buffer.
     if (static_cast<size_t>(insertion_index) < draw_rect_calls_.size()) {
       int cur_thread_id = base::PlatformThread::CurrentId();
@@ -343,7 +317,8 @@ void VizDebugger::DrawInternal(const gfx::Size& obj_size,
                                                    obj_size,
                                                    pos,
                                                    local_id_buffer,
-                                                   uv};
+                                                   uv,
+                                                   text};
       // Return when call insertion is successful.
       read_write_lock_.ReadUnlock();
       return;
@@ -354,64 +329,9 @@ void VizDebugger::DrawInternal(const gfx::Size& obj_size,
     read_write_lock_.WriteLock();
     // If tail index is over buffer size, then resizing is definitely needed.
     // Also re-adjust tail index so it's at the start of the new buffer space.
-    if (static_cast<size_t>(draw_rect_calls_tail_idx_) >=
-        draw_rect_calls_.size()) {
-      draw_rect_calls_tail_idx_ = draw_rect_calls_.size();
+    if (static_cast<size_t>(draw_calls_tail_idx_) >= draw_rect_calls_.size()) {
+      draw_calls_tail_idx_ = draw_rect_calls_.size();
       draw_rect_calls_.resize(draw_rect_calls_.size() * 2);
-    }
-    read_write_lock_.WriteUnLock();
-  }
-}
-
-void VizDebugger::DrawText(const gfx::PointF& pos,
-                           const std::string& text,
-                           const VizDebugger::StaticSource* dcs,
-                           VizDebugger::DrawOption option) {
-  DrawText(gfx::Vector2dF(pos.OffsetFromOrigin()), text, dcs, option);
-}
-
-void VizDebugger::DrawText(const gfx::Point& pos,
-                           const std::string& text,
-                           const VizDebugger::StaticSource* dcs,
-                           VizDebugger::DrawOption option) {
-  DrawText(gfx::Vector2dF(pos.x(), pos.y()), text, dcs, option);
-}
-
-void VizDebugger::DrawText(const gfx::Vector2dF& pos,
-                           const std::string& text,
-                           const VizDebugger::StaticSource* dcs,
-                           VizDebugger::DrawOption option) {
-  //  Store atomic insertion index in local variable to use to insert into
-  //  buffer.
-  int insertion_index;
-
-  for (;;) {
-    read_write_lock_.ReadLock();
-    // Get call insertion index.
-    insertion_index = draw_text_calls_tail_idx_++;
-    // If the insertion index is within bounds, insert call into buffer.
-    if (static_cast<size_t>(insertion_index) < draw_text_calls_.size()) {
-      int cur_thread_id = base::PlatformThread::CurrentId();
-      draw_text_calls_[insertion_index] = DrawTextCall{submission_count_++,
-                                                       dcs->reg_index,
-                                                       cur_thread_id,
-                                                       option,
-                                                       pos,
-                                                       text};
-      // Return when call insertion is successful.
-      read_write_lock_.ReadUnlock();
-      return;
-    }
-    read_write_lock_.ReadUnlock();
-    // Take write lock to resize and re-adjust buffer tail index after buffer
-    // overflow.
-    read_write_lock_.WriteLock();
-    // If tail index is over buffer size, then resizing is definitely needed.
-    // Also re-adjust tail index so it's at the start of the new buffer space.
-    if (static_cast<size_t>(draw_text_calls_tail_idx_) >=
-        draw_text_calls_.size()) {
-      draw_text_calls_tail_idx_ = draw_text_calls_.size();
-      draw_text_calls_.resize(draw_text_calls_.size() * 2);
     }
     read_write_lock_.WriteUnLock();
   }
@@ -429,25 +349,24 @@ void VizDebugger::AddFrame() {
   read_write_lock_.WriteUnLock();
 }
 
-void VizDebugger::FilterDebugStream(base::Value json) {
+void VizDebugger::FilterDebugStream(base::Value::Dict json) {
   read_write_lock_.WriteLock();
   DCHECK(gpu_thread_task_runner_->RunsTasksInCurrentSequence());
-  const base::Value* value = &(json);
-  const base::Value* filterlist = value->FindPath("filters");
+  const base::Value::List* filters = json.FindList("filters");
 
-  if (!filterlist || !filterlist->is_list()) {
+  if (!filters) {
     LOG(ERROR) << "Missing filter list in json: " << json;
     return;
   }
 
   new_filters_.clear();
 
-  for (const auto& filter : filterlist->GetList()) {
-    const base::Value* file = filter.FindPath("selector.file");
-    const base::Value* func = filter.FindPath("selector.func");
-    const base::Value* anno = filter.FindPath("selector.anno");
-    const base::Value* active = filter.FindPath("active");
-    const base::Value* enabled = filter.FindPath("enabled");
+  for (const auto& entry : *filters) {
+    const auto& filter = entry.GetDict();
+    const base::Value* file = filter.FindByDottedPath("selector.file");
+    const base::Value* func = filter.FindByDottedPath("selector.func");
+    const base::Value* anno = filter.FindByDottedPath("selector.anno");
+    const base::Value* active = filter.Find("active");
 
     if (!active) {
       LOG(ERROR) << "Missing filter props in json: " << json;
@@ -464,9 +383,9 @@ void VizDebugger::FilterDebugStream(base::Value json) {
       return (filter_str ? filter_str->GetString() : std::string());
     };
 
-    new_filters_.emplace_back(
-        check_str(file), check_str(func), check_str(anno), active->GetBool(),
-        (enabled && enabled->is_bool()) ? enabled->GetBool() : true);
+    absl::optional<bool> enabled = filter.FindBool("enabled");
+    new_filters_.emplace_back(check_str(file), check_str(func), check_str(anno),
+                              active->GetBool(), enabled.value_or(true));
   }
 
   apply_new_filters_next_frame_ = true;
@@ -486,10 +405,8 @@ void VizDebugger::StartDebugStream(
   new_filters_.clear();
   apply_new_filters_next_frame_ = true;
 
-  base::DictionaryValue dict;
-  dict.SetString("connection", "ok");
-  debug_output_->LogFrame(std::move(dict));
-
+  debug_output_->LogFrame(
+      base::Value(base::Value::Dict().Set("connection", "ok")));
   enabled_.store(true);
   read_write_lock_.WriteUnLock();
 }
@@ -537,5 +454,25 @@ void VizDebugger::AddLogMessage(std::string log,
 }
 
 }  // namespace viz
+#else  // !VIZ_DEBUGGER_IS_ON()
+namespace viz {
+VizDebugger::BufferInfo::BufferInfo() = default;
+VizDebugger::BufferInfo::~BufferInfo() = default;
+VizDebugger::BufferInfo::BufferInfo(const BufferInfo& a) = default;
 
-#endif  // VIZ_DEBUGGER_IS_ON()
+std::unique_ptr<base::trace_event::ConvertableToTraceFormat>
+DrawRectToTraceValue(const gfx::Vector2dF& pos,
+                     const gfx::SizeF& size,
+                     const std::string& text) {
+  std::unique_ptr<base::trace_event::TracedValue> state(
+      new base::trace_event::TracedValue());
+  state->SetString("pos_x", base::NumberToString(pos.x()));
+  state->SetString("pos_y", base::NumberToString(pos.y()));
+  state->SetString("size_x", base::NumberToString(size.width()));
+  state->SetString("size_y", base::NumberToString(size.height()));
+  state->SetString("text", text);
+  return state;
+}
+
+}  // namespace viz
+#endif

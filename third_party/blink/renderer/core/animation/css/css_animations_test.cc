@@ -34,30 +34,27 @@ namespace blink {
 
 class CSSAnimationsTest : public RenderingTest, public PaintTestConfigurations {
  public:
-  CSSAnimationsTest() {
+  CSSAnimationsTest()
+      : RenderingTest(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
     EnablePlatform();
     platform()->SetThreadedAnimationEnabled(true);
   }
 
   void SetUp() override {
-    platform()->SetAutoAdvanceNowToPendingTasks(false);
     EnableCompositing();
     RenderingTest::SetUp();
     SetUpAnimationClockForTesting();
     // Advance timer to document time.
-    platform()->AdvanceClockSeconds(
-        GetDocument().Timeline().ZeroTime().InSecondsF());
+    AdvanceClock(
+        base::Seconds(GetDocument().Timeline().ZeroTime().InSecondsF()));
   }
 
   void TearDown() override {
-    platform()->SetAutoAdvanceNowToPendingTasks(true);
     platform()->RunUntilIdle();
     RenderingTest::TearDown();
   }
 
-  base::TimeTicks TimelineTime() {
-    return platform()->test_task_runner()->NowTicks();
-  }
+  base::TimeTicks TimelineTime() { return platform()->NowTicks(); }
 
   void StartAnimationOnCompositor(Animation* animation) {
     static_cast<CompositorAnimationDelegate*>(animation)
@@ -66,10 +63,9 @@ class CSSAnimationsTest : public RenderingTest, public PaintTestConfigurations {
   }
 
   void AdvanceClockSeconds(double seconds) {
-    platform()->AdvanceClockSeconds(seconds);
+    PageTestBase::AdvanceClock(base::Seconds(seconds));
     platform()->RunUntilIdle();
-    GetPage().Animator().ServiceScriptedAnimations(
-        platform()->test_task_runner()->NowTicks());
+    GetPage().Animator().ServiceScriptedAnimations(platform()->NowTicks());
   }
 
   double GetContrastFilterAmount(Element* element) {
@@ -106,9 +102,19 @@ class CSSAnimationsTest : public RenderingTest, public PaintTestConfigurations {
     DCHECK(!IsUseCounted(feature));
   }
 
+  wtf_size_t DeferredTimelinesCount(Element* element) const {
+    ElementAnimations* element_animations = element->GetElementAnimations();
+    if (!element_animations) {
+      return 0;
+    }
+    CSSAnimations& css_animations = element_animations->CssAnimations();
+    return css_animations.timeline_data_.GetDeferredTimelines().size();
+  }
+
  private:
   void SetUpAnimationClockForTesting() {
     GetPage().Animator().Clock().ResetTimeForTesting();
+    GetDocument().Timeline().ResetForTesting();
   }
 };
 
@@ -125,8 +131,8 @@ TEST_P(CSSAnimationsTest, RetargetedTransition) {
     </style>
     <div id='test'>TEST</div>
   )HTML");
-  Element* element = GetDocument().getElementById("test");
-  element->setAttribute(html_names::kClassAttr, "contrast1");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
+  element->setAttribute(html_names::kClassAttr, AtomicString("contrast1"));
   UpdateAllLifecyclePhasesForTest();
   ElementAnimations* animations = element->GetElementAnimations();
   EXPECT_EQ(1u, animations->Animations().size());
@@ -137,7 +143,7 @@ TEST_P(CSSAnimationsTest, RetargetedTransition) {
   AdvanceClockSeconds(0.8);
 
   // Starting the second transition should retarget the active transition.
-  element->setAttribute(html_names::kClassAttr, "contrast2");
+  element->setAttribute(html_names::kClassAttr, AtomicString("contrast2"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_NEAR(0.6, GetContrastFilterAmount(element), kTolerance);
 
@@ -159,8 +165,8 @@ TEST_P(CSSAnimationsTest, IncompatibleRetargetedTransition) {
     </style>
     <div id='test'>TEST</div>
   )HTML");
-  Element* element = GetDocument().getElementById("test");
-  element->setAttribute(html_names::kClassAttr, "saturate");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
+  element->setAttribute(html_names::kClassAttr, AtomicString("saturate"));
   UpdateAllLifecyclePhasesForTest();
   ElementAnimations* animations = element->GetElementAnimations();
   EXPECT_EQ(1u, animations->Animations().size());
@@ -177,8 +183,8 @@ TEST_P(CSSAnimationsTest, IncompatibleRetargetedTransition) {
 
   // Now we start a contrast filter. Since it will try to combine with
   // the in progress saturate filter, and be incompatible, there should
-  // be no transition and it should immediately apply on the next frame.
-  element->setAttribute(html_names::kClassAttr, "contrast");
+  // be no transition and should immediately apply on the next frame.
+  element->setAttribute(html_names::kClassAttr, AtomicString("contrast"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(0.2, GetContrastFilterAmount(element));
 }
@@ -198,11 +204,11 @@ TEST_P(CSSAnimationsTest, CompositedBackgroundColorSnapshot) {
     </style>
     <div id='test'></div>
   )HTML");
-  Element* element = GetDocument().getElementById("test");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
   ASSERT_TRUE(element);
   UpdateAllLifecyclePhasesForTest();
   ASSERT_TRUE(element->GetComputedStyle());
-  ASSERT_TRUE(element->parentNode());
+  ASSERT_TRUE(element->parentElement());
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentCompositableAnimation());
 
   ElementAnimations* animations = element->GetElementAnimations();
@@ -214,7 +220,7 @@ TEST_P(CSSAnimationsTest, CompositedBackgroundColorSnapshot) {
   CSSAnimationUpdate update;
   CSSAnimations::CalculateCompositorAnimationUpdate(
       update, *element, *element, element->ComputedStyleRef(),
-      element->parentNode()->GetComputedStyle(),
+      element->parentElement()->GetComputedStyle(),
       /* was_window_resized */ false, /* force update */ false);
 
   ASSERT_EQ(1u, update.UpdatedCompositorKeyframes().size());
@@ -237,21 +243,22 @@ TEST_P(CSSAnimationsTest, AnimationFlags_Transitions) {
     </style>
     <div id=test></div>
   )HTML");
-  Element* element = GetDocument().getElementById("test");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentFilterAnimation());
 
   // Newly created transition:
-  element->setAttribute(html_names::kClassAttr, "contrast30");
+  element->setAttribute(html_names::kClassAttr, AtomicString("contrast30"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentFilterAnimation());
 
   // Already running (and unmodified) transition:
-  element->setAttribute(html_names::kClassAttr, "contrast30 unrelated");
+  element->setAttribute(html_names::kClassAttr,
+                        AtomicString("contrast30 unrelated"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentFilterAnimation());
 
   // Cancelled transition:
-  element->setAttribute(html_names::kClassAttr, "cancel");
+  element->setAttribute(html_names::kClassAttr, AtomicString("cancel"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentFilterAnimation());
 }
@@ -273,18 +280,19 @@ TEST_P(CSSAnimationsTest, AnimationFlags_Animations) {
     </style>
     <div id=test></div>
   )HTML");
-  Element* element = GetDocument().getElementById("test");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentOpacityAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentTransformAnimation());
 
   // Newly created animation:
-  element->setAttribute(html_names::kClassAttr, "animate");
+  element->setAttribute(html_names::kClassAttr, AtomicString("animate"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentOpacityAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentTransformAnimation());
 
   // Already running (and unmodified) animation:
-  element->setAttribute(html_names::kClassAttr, "animate unrelated");
+  element->setAttribute(html_names::kClassAttr,
+                        AtomicString("animate unrelated"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentOpacityAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentTransformAnimation());
@@ -298,13 +306,14 @@ TEST_P(CSSAnimationsTest, AnimationFlags_Animations) {
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentTransformAnimation());
 
   // Update CSS animation:
-  element->setAttribute(html_names::kClassAttr, "animate newtiming");
+  element->setAttribute(html_names::kClassAttr,
+                        AtomicString("animate newtiming"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentOpacityAnimation());
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentTransformAnimation());
 
   // Cancel CSS animation:
-  element->setAttribute(html_names::kClassAttr, "cancel");
+  element->setAttribute(html_names::kClassAttr, AtomicString("cancel"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_FALSE(element->ComputedStyleRef().HasCurrentOpacityAnimation());
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentTransformAnimation());
@@ -435,11 +444,11 @@ TEST_P(CSSAnimationsTest, AllAnimationFlags_Transitions) {
     SCOPED_TRACE(html);
 
     SetBodyInnerHTML(html);
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     ASSERT_TRUE(element);
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
-    element->setAttribute(html_names::kClassAttr, "after");
+    element->setAttribute(html_names::kClassAttr, AtomicString("after"));
     UpdateAllLifecyclePhasesForTest();
     EXPECT_TRUE(data.get_flag(element->ComputedStyleRef()));
   }
@@ -452,11 +461,11 @@ TEST_P(CSSAnimationsTest, AllAnimationFlags_Transitions_Compositor) {
     SCOPED_TRACE(html);
 
     SetBodyInnerHTML(html);
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     ASSERT_TRUE(element);
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
-    element->setAttribute(html_names::kClassAttr, "after");
+    element->setAttribute(html_names::kClassAttr, AtomicString("after"));
     UpdateAllLifecyclePhasesForTest();
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
@@ -477,11 +486,11 @@ TEST_P(CSSAnimationsTest, AllAnimationFlags_CSSAnimations) {
     SCOPED_TRACE(html);
 
     SetBodyInnerHTML(html);
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     ASSERT_TRUE(element);
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
-    element->setAttribute(html_names::kClassAttr, "after");
+    element->setAttribute(html_names::kClassAttr, AtomicString("after"));
     UpdateAllLifecyclePhasesForTest();
     EXPECT_TRUE(data.get_flag(element->ComputedStyleRef()));
   }
@@ -494,11 +503,11 @@ TEST_P(CSSAnimationsTest, AllAnimationFlags_CSSAnimations_Compositor) {
     SCOPED_TRACE(html);
 
     SetBodyInnerHTML(html);
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     ASSERT_TRUE(element);
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
-    element->setAttribute(html_names::kClassAttr, "after");
+    element->setAttribute(html_names::kClassAttr, AtomicString("after"));
     UpdateAllLifecyclePhasesForTest();
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
@@ -518,7 +527,7 @@ TEST_P(CSSAnimationsTest, AllAnimationFlags_JSAnimations) {
     SCOPED_TRACE(data.property);
 
     SetBodyInnerHTML("<div id=test>Test</div>");
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     ASSERT_TRUE(element);
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
@@ -540,7 +549,7 @@ TEST_P(CSSAnimationsTest, AllAnimationFlags_JSAnimations_Compositor) {
     SCOPED_TRACE(data.property);
 
     SetBodyInnerHTML("<div id=test>Test</div>");
-    Element* element = GetDocument().getElementById("test");
+    Element* element = GetDocument().getElementById(AtomicString("test"));
     ASSERT_TRUE(element);
     EXPECT_FALSE(data.get_flag(element->ComputedStyleRef()));
 
@@ -577,7 +586,7 @@ TEST_P(CSSAnimationsTest, AnimationFlags_CompositablePaintAnimationChanged) {
     <div id=test>Test</div>
   )HTML");
 
-  Element* element = GetDocument().getElementById("test");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
   ASSERT_TRUE(element);
 
   // Not animating yet:
@@ -586,25 +595,25 @@ TEST_P(CSSAnimationsTest, AnimationFlags_CompositablePaintAnimationChanged) {
   EXPECT_FALSE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
 
   // Newly created CSS animation:
-  element->classList().Add("animate");
+  element->classList().Add(AtomicString("animate"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_TRUE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
 
   // Do an unrelated change to clear the flag.
-  element->classList().toggle("unrelated", ASSERT_NO_EXCEPTION);
+  element->classList().toggle(AtomicString("unrelated"), ASSERT_NO_EXCEPTION);
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
 
   // Updated CSS animation:
-  element->classList().Add("newtiming");
+  element->classList().Add(AtomicString("newtiming"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_TRUE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
 
   // Do an unrelated change to clear the flag.
-  element->classList().toggle("unrelated", ASSERT_NO_EXCEPTION);
+  element->classList().toggle(AtomicString("unrelated"), ASSERT_NO_EXCEPTION);
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
@@ -622,7 +631,7 @@ TEST_P(CSSAnimationsTest, AnimationFlags_CompositablePaintAnimationChanged) {
   EXPECT_FALSE(animation->CompositorPending());
 
   // Do an unrelated change to clear the flag.
-  element->classList().toggle("unrelated", ASSERT_NO_EXCEPTION);
+  element->classList().toggle(AtomicString("unrelated"), ASSERT_NO_EXCEPTION);
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
@@ -635,13 +644,13 @@ TEST_P(CSSAnimationsTest, AnimationFlags_CompositablePaintAnimationChanged) {
   // invalidated artificially.
   InvalidateCompositorKeyframesSnapshot(animation);
   // Also do an "unrelated" change, to avoid IsAnimationStyleChange()==true.
-  element->classList().toggle("unrelated", ASSERT_NO_EXCEPTION);
+  element->classList().toggle(AtomicString("unrelated"), ASSERT_NO_EXCEPTION);
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_TRUE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
 
   // Do an unrelated change to clear the flag.
-  element->classList().toggle("unrelated", ASSERT_NO_EXCEPTION);
+  element->classList().toggle(AtomicString("unrelated"), ASSERT_NO_EXCEPTION);
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_FALSE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
@@ -649,7 +658,7 @@ TEST_P(CSSAnimationsTest, AnimationFlags_CompositablePaintAnimationChanged) {
   // Verify that paint is invalidated by a forced style resolve.
   ASSERT_TRUE(element->GetLayoutObject());
   EXPECT_FALSE(element->GetLayoutObject()->ShouldCheckForPaintInvalidation());
-  element->classList().toggle("newtiming", ASSERT_NO_EXCEPTION);
+  element->classList().toggle(AtomicString("newtiming"), ASSERT_NO_EXCEPTION);
   GetDocument().UpdateStyleAndLayoutTree();
   EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
   EXPECT_TRUE(element->ComputedStyleRef().CompositablePaintAnimationChanged());
@@ -677,7 +686,7 @@ TEST_P(CSSAnimationsTest, UpdateAnimationFlags_AnimatingElement) {
     <div id=test>Test</div>
   )HTML");
 
-  Element* element = GetDocument().getElementById("test");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
   ASSERT_TRUE(element);
 
   Element* before = element->GetPseudoElement(kPseudoIdBefore);
@@ -712,7 +721,7 @@ TEST_P(CSSAnimationsTest, CSSTransitionBlockedByAnimationUseCounter) {
     <div id=test class=animate>Test</div>
   )HTML");
 
-  Element* element = GetDocument().getElementById("test");
+  Element* element = GetDocument().getElementById(AtomicString("test"));
   ASSERT_TRUE(element);
 
   // Verify that we see animation effects.
@@ -722,7 +731,7 @@ TEST_P(CSSAnimationsTest, CSSTransitionBlockedByAnimationUseCounter) {
 
   // Attempt to trigger transition. This should not work, because there's a
   // current animation on the same property.
-  element->classList().Add("change");
+  element->classList().Add(AtomicString("change"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(15, element->ComputedStyleRef().ZIndex());
   EXPECT_TRUE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
@@ -731,15 +740,15 @@ TEST_P(CSSAnimationsTest, CSSTransitionBlockedByAnimationUseCounter) {
   // Transition should still not trigger because of
   // |previous_active_interpolations_for_animations_|.
   ClearUseCounter(WebFeature::kCSSTransitionBlockedByAnimation);
-  element->classList().Remove("animate");
-  element->classList().Remove("change");
+  element->classList().Remove(AtomicString("animate"));
+  element->classList().Remove(AtomicString("change"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(0, element->ComputedStyleRef().ZIndex());
   EXPECT_TRUE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
 
   // Finally trigger the transition.
   ClearUseCounter(WebFeature::kCSSTransitionBlockedByAnimation);
-  element->classList().Add("change");
+  element->classList().Add(AtomicString("change"));
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(50, element->ComputedStyleRef().ZIndex());
   EXPECT_FALSE(IsUseCounted(WebFeature::kCSSTransitionBlockedByAnimation));
@@ -774,12 +783,12 @@ class CSSAnimationsCompositorSyncTest : public CSSAnimationsTest {
       <div id='test'>TEST</div>
     )HTML");
 
-    element_ = GetDocument().getElementById("test");
+    element_ = GetDocument().getElementById(AtomicString("test"));
     UpdateAllLifecyclePhasesForTest();
     ElementAnimations* animations = element_->GetElementAnimations();
     EXPECT_FALSE(animations);
 
-    element_->setAttribute(html_names::kClassAttr, "fade");
+    element_->setAttribute(html_names::kClassAttr, AtomicString("fade"));
     UpdateAllLifecyclePhasesForTest();
     SyncAnimationOnCompositor(/*needs_start_time*/ true);
 
@@ -805,7 +814,7 @@ class CSSAnimationsCompositorSyncTest : public CSSAnimationsTest {
     // persist the reference.
     ElementAnimations* element_animations = element_->GetElementAnimations();
     EXPECT_EQ(1u, element_animations->Animations().size());
-    return (*element_animations->Animations().begin()).key;
+    return (*element_animations->Animations().begin()).key.Get();
   }
 
   void NotifyStartTime() {
@@ -885,9 +894,9 @@ TEST_P(CSSAnimationsCompositorSyncTest, UpdatePlaybackRate) {
   animation->updatePlaybackRate(0.5, ASSERT_NO_EXCEPTION);
   UpdateAllLifecyclePhasesForTest();
 
-  // Compositor animation needs to restart and will have a new compositor group.
+  // Compositor animation needs to restart and will keep its compositor group.
   int post_update_compositor_group = animation->CompositorGroup();
-  EXPECT_NE(compositor_group, post_update_compositor_group);
+  EXPECT_EQ(compositor_group, post_update_compositor_group);
   SyncAnimationOnCompositor(/*needs_start_time*/ true);
 
   // No jump in opacity after changing the playback rate.
@@ -925,9 +934,9 @@ TEST_P(CSSAnimationsCompositorSyncTest, Reverse) {
   // Verify there is no jump in opacity after changing the play direction
   EXPECT_NEAR(0.5, element_->GetComputedStyle()->Opacity(), kTolerance);
 
-  // Compositor animation needs to restart and will have a new compositor group.
+  // Compositor animation needs to restart and will keep its compositor group.
   int post_update_compositor_group = animation->CompositorGroup();
-  EXPECT_NE(compositor_group, post_update_compositor_group);
+  EXPECT_EQ(compositor_group, post_update_compositor_group);
   SyncAnimationOnCompositor(/*needs_start_time*/ true);
 
   // Verify updates to cc Keyframe model.
@@ -968,9 +977,9 @@ TEST_P(CSSAnimationsCompositorSyncTest, SetStartTime) {
   EXPECT_NEAR(250, current_time->GetAsDouble(), kTimeToleranceMilliseconds);
   EXPECT_NEAR(0.75, element_->GetComputedStyle()->Opacity(), kTolerance);
 
-  // Compositor animation needs to restart and will have a new compositor group.
+  // Compositor animation needs to restart and will keep its compositor group.
   int post_update_compositor_group = animation->CompositorGroup();
-  EXPECT_NE(compositor_group, post_update_compositor_group);
+  EXPECT_EQ(compositor_group, post_update_compositor_group);
   SyncAnimationOnCompositor(/*needs_start_time*/ false);
 
   // Verify updates to cc Keyframe model.
@@ -1006,9 +1015,9 @@ TEST_P(CSSAnimationsCompositorSyncTest, SetCurrentTime) {
   EXPECT_NEAR(750, current_time->GetAsDouble(), kTimeToleranceMilliseconds);
   EXPECT_NEAR(0.25, element_->GetComputedStyle()->Opacity(), kTolerance);
 
-  // Compositor animation needs to restart and will have a new compositor group.
+  // Compositor animation needs to restart and will keep its compositor group.
   int post_update_compositor_group = animation->CompositorGroup();
-  EXPECT_NE(compositor_group, post_update_compositor_group);
+  EXPECT_EQ(compositor_group, post_update_compositor_group);
   SyncAnimationOnCompositor(/*needs_start_time*/ false);
 
   // Verify updates to cc Keyframe model.
@@ -1025,6 +1034,102 @@ TEST_P(CSSAnimationsCompositorSyncTest, SetCurrentTime) {
   EXPECT_EQ(post_update_compositor_group, animation->CompositorGroup());
   VerifyCompositorIterationTime(950);
   VerifyCompositorOpacity(0.05);
+}
+
+TEST_P(CSSAnimationsTest, LingeringTimelineAttachments) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      .scope {
+        timeline-scope: --t1;
+      }
+      #scroller {
+        overflow: auto;
+        width: 100px;
+        height: 100px;
+      }
+      #scroller > div {
+        width: 50px;
+        height: 200px;
+      }
+      .timeline {
+        scroll-timeline: --t1;
+      }
+    </style>
+    <div class=scope>
+      <div id=scroller class=timeline>
+        <div></div>
+      </div>
+    </div>
+  )HTML");
+
+  Element* scroller = GetDocument().getElementById(AtomicString("scroller"));
+  ASSERT_TRUE(scroller);
+
+  ElementAnimations* element_animations = scroller->GetElementAnimations();
+  ASSERT_TRUE(element_animations);
+
+  const CSSAnimations& css_animations = element_animations->CssAnimations();
+  EXPECT_TRUE(css_animations.HasTimelines());
+
+  scroller->classList().Remove(AtomicString("timeline"));
+  UpdateAllLifecyclePhasesForTest();
+
+  // No timeline data should linger on #scroller's CSSAnimations.
+  EXPECT_FALSE(css_animations.HasTimelines());
+}
+
+TEST_P(CSSAnimationsTest, DeferredTimelineUpdate) {
+  SetBodyInnerHTML(R"HTML(
+    <div id=target>Target</div>
+  )HTML");
+
+  Element* target = GetElementById("target");
+  ASSERT_TRUE(target);
+
+  EXPECT_EQ(0u, DeferredTimelinesCount(target));
+
+  target->SetInlineStyleProperty(CSSPropertyID::kTimelineScope, "--t1");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(1u, DeferredTimelinesCount(target));
+
+  target->SetInlineStyleProperty(CSSPropertyID::kTimelineScope, "--t1, --t2");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(2u, DeferredTimelinesCount(target));
+
+  target->SetInlineStyleProperty(CSSPropertyID::kTimelineScope, "none");
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(0u, DeferredTimelinesCount(target));
+}
+
+TEST_P(CSSAnimationsTest, OpacityUnchangedWhileDeferred) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      @keyframes fade {
+        to {
+          opacity: 0.5;
+        }
+      }
+      #target {
+          width: 100px;
+          height: 100px;
+          background-color: green;
+          animation-name: fade;
+          animation-duration: 3s;
+      }
+    </style>
+    <div id="target"></div>
+  )HTML");
+
+  Element* target = GetDocument().getElementById(AtomicString("target"));
+
+  // The animation must be waiting on a deferred start time.
+  ElementAnimations* animations = target->GetElementAnimations();
+  ASSERT_EQ(1u, animations->Animations().size());
+  Animation* animation = (*animations->Animations().begin()).key;
+  ASSERT_TRUE(animation->WaitingOnDeferredStartTime());
+
+  // Ensure the opacity doesn't change, since the animation hasn't started.
+  EXPECT_EQ(target->GetComputedStyle()->Opacity(), 1);
 }
 
 }  // namespace blink

@@ -23,7 +23,7 @@ import {RemoteCall} from './remote_call.js';
  */
 export function sendTestMessage(command) {
   if (typeof command.name === 'string') {
-    return new Promise(function(fulfill) {
+    return new Promise((fulfill) => {
       chrome.test.sendMessage(JSON.stringify(command), fulfill);
     });
   } else {
@@ -39,9 +39,7 @@ export function sendTestMessage(command) {
  *     has elapsed.
  */
 export function wait(time) {
-  return new Promise(function(resolve) {
-    setTimeout(resolve, time);
-  });
+  return new Promise(resolve => setTimeout(resolve, time));
 }
 
 /**
@@ -65,10 +63,11 @@ export async function checkIfNoErrorsOccuredOnApp(app, callback) {
  * @param {Array<!RemoteCall>} apps An array of RemoteCall interfaces.
  */
 export async function testPromiseAndApps(promise, apps) {
-  const finished = chrome.test.callbackPass(function() {
-    // The callbackPass is necessary to avoid prematurely finishing tests.
-    // Don't use chrome.test.succeed() here to avoid doubled success log.
-  });
+  const finished = chrome.test.callbackPass(
+      () => {
+          // The callbackPass is necessary to avoid prematurely finishing tests.
+          // Don't use chrome.test.succeed() here to avoid doubled success log.
+      });
   try {
     await promise;
     await Promise.all(apps.map(app => checkIfNoErrorsOccuredOnApp(app)));
@@ -117,17 +116,17 @@ export function getCaller() {
  *     it's the return of getCaller() function.
  * @param {string} message Pending reason including %s, %d, or %j markers. %j
  *     format an object as JSON.
- * @param {...*} var_args Values to be assigined to %x markers.
+ * @param {...*} _var_args Values to be assigined to %x markers.
  * @return {Object} Object which returns true for the expression: obj instanceof
  *     pending.
  */
-export function pending(caller, message, var_args) {
+export function pending(caller, message, ..._var_args) {
   // |index| is used to ignore caller and message arguments subsisting markers
   // (%s, %d and %j) within message with the remaining |arguments|.
   let index = 2;
   const args = arguments;
   message = String(message);
-  const formattedMessage = message.replace(/%[sdj]/g, function(pattern) {
+  const formattedMessage = message.replace(/%[sdj]/g, (pattern) => {
     const arg = args[index++];
     switch (pattern) {
       case '%s':
@@ -209,7 +208,7 @@ export async function sendBrowserTestCommand(command, callback, opt_debug) {
 export async function getBrowserWindows(expectedInitialCount = 0) {
   const caller = getCaller();
   return repeatUntil(async () => {
-    const result = await new Promise(function(fulfill) {
+    const result = await new Promise((fulfill) => {
       chrome.windows.getAll({'populate': true}, fulfill);
     });
     if (result.length === expectedInitialCount) {
@@ -221,6 +220,10 @@ export async function getBrowserWindows(expectedInitialCount = 0) {
 
 /**
  * Adds the given entries to the target volume(s).
+ *
+ * Note: passing 'local' as volume name will add entries to the "My
+ * Files/Downloads", instead of "My files".
+ *
  * @param {Array<string>} volumeNames Names of target volumes.
  * @param {Array<TestEntryInfo>} entries List of entries to be added.
  * @param {function(boolean)=} opt_callback Callback function to be passed the
@@ -228,11 +231,11 @@ export async function getBrowserWindows(expectedInitialCount = 0) {
  * @return {Promise} Promise to be fulfilled when the entries are added.
  */
 export async function addEntries(volumeNames, entries, opt_callback) {
-  if (volumeNames.length == 0) {
+  if (volumeNames.length === 0) {
     opt_callback && opt_callback(true);
     return;
   }
-  const volumeResultPromises = volumeNames.map(function(volume) {
+  const volumeResultPromises = volumeNames.map((volume) => {
     return sendTestMessage({
       name: 'addEntries',
       volume: volume,
@@ -265,15 +268,24 @@ export const EntryType = {
 Object.freeze(EntryType);
 
 /**
+ * Enumeration that determines the shared status of entries.
  * @enum {string}
  * @const
  */
-
 export const SharedOption = {
+  // Not shared.
   NONE: 'none',
+
+  // Shared but not visible in the 'Shared with me' view.
   SHARED: 'shared',
+
+  // Shared and appears in the 'Shared With Me' view.
   SHARED_WITH_ME: 'sharedWithMe',
-  NESTED_SHARED_WITH_ME: 'nestedSharedWithMe',
+
+  // Not directly shared, but belongs to a folder that is shared with me.
+  // Entries marked as indirectly shared do not have the 'shared' metadata
+  // field, and thus cannot be located via search for shared items.
+  INDIRECTLY_SHARED_WITH_ME: 'indirectlySharedWithMe',
 };
 Object.freeze(SharedOption);
 
@@ -281,6 +293,7 @@ Object.freeze(SharedOption);
 /**
  * @typedef {{
  *   downloads: string,
+ *   my_files: string,
  *   drive: string,
  *   android_files: string,
  * }}
@@ -291,12 +304,14 @@ export let getRootPathsResult;
 /**
  * @typedef {{
  *   DOWNLOADS: string,
+ *   MY_FILES: string,
  *   DRIVE: string,
  *   ANDROID_FILES: string,
  * }}
  */
 export const RootPath = {
   DOWNLOADS: '/must-be-filled-in-test-setup',
+  MY_FILES: '/must-be-filled-in-test-setup',
   DRIVE: '/must-be-filled-in-test-setup',
   ANDROID_FILES: '/must-be-filled-in-test-setup',
 };
@@ -370,6 +385,8 @@ export let TestEntryFolderFeature;
  *
  * alternateUrl: File's Drive alternate URL. Defaults to an empty string.
  *
+ * canPin: Whether the item can be pinned or not. Defaults to true.
+ *
  * @typedef {{
  *    type: EntryType,
  *    sourceFileName: (string|undefined),
@@ -385,8 +402,10 @@ export let TestEntryFolderFeature;
  *    capabilities: (TestEntryCapabilities|undefined),
  *    folderFeature: (TestEntryFolderFeature|undefined),
  *    pinned: (boolean|undefined),
+ *    dirty: (boolean|undefined),
  *    availableOffline: (boolean|undefined),
  *    alternateUrl: (string|undefined),
+ *    canPin: (boolean|undefined),
  * }}
  */
 export let TestEntryInfoOptions;
@@ -418,8 +437,10 @@ export class TestEntryInfo {
     this.capabilities = options.capabilities;
     this.folderFeature = options.folderFeature;
     this.pinned = !!options.pinned;
+    this.dirty = !!options.dirty;
     this.availableOffline = !!options.availableOffline;
     this.alternateUrl = options.alternateUrl || '';
+    this.canPin = options.canPin !== undefined ? !!options.canPin : true;
     Object.freeze(this);
   }
 
@@ -429,7 +450,7 @@ export class TestEntryInfo {
    * @return {!Array<!Array<string>>}
    */
   static getExpectedRows(entries) {
-    return entries.map(function(entry) {
+    return entries.map((entry) => {
       return entry.getExpectedRow();
     });
   }
@@ -443,6 +464,17 @@ export class TestEntryInfo {
   }
 
   /**
+   * Returns a new entry with modified attributes specified in the
+   * `newOptions` object.
+   * @param {!Object} newOptions  The options to be modified.
+   * @returns {!TestEntryInfo}
+   */
+  cloneWith(newOptions) {
+    return new TestEntryInfo(/** @type {TestEntryInfoOptions} */ (
+        Object.assign({}, this, newOptions)));
+  }
+
+  /**
    * Clone the existing TestEntryInfo object to a new TestEntryInfo object but
    * with modified lastModifiedTime field. This is especially useful for
    * constructing TestEntryInfo for Recents view.
@@ -451,11 +483,7 @@ export class TestEntryInfo {
    * @return {!TestEntryInfo}
    */
   cloneWithModifiedDate(newDate) {
-    const updatedOptions =
-        /** @type {TestEntryInfoOptions} */ (Object.assign({}, this, {
-          lastModifiedTime: newDate,
-        }));
-    return new TestEntryInfo(updatedOptions);
+    return this.cloneWith({lastModifiedTime: newDate});
   }
 
   /**
@@ -467,12 +495,10 @@ export class TestEntryInfo {
    * @return {!TestEntryInfo}
    */
   cloneWithNewName(newName) {
-    const updatedOptions =
-        /** @type {TestEntryInfoOptions} */ (Object.assign({}, this, {
-          targetPath: newName,
-          nameText: newName,
-        }));
-    return new TestEntryInfo(updatedOptions);
+    return this.cloneWith({
+      targetPath: newName,
+      nameText: newName,
+    });
   }
 }
 
@@ -497,6 +523,18 @@ export const ENTRIES = {
     typeText: 'Plain text',
   }),
 
+  dirty: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.txt',
+    targetPath: 'dirty.txt',
+    mimeType: 'text/plain',
+    lastModifiedTime: 'Sep 4, 1998, 12:34 PM',
+    nameText: 'dirty.txt',
+    sizeText: '51 bytes',
+    typeText: 'Plain text',
+    dirty: true,
+  }),
+
   world: new TestEntryInfo({
     type: EntryType.FILE,
     sourceFileName: 'video.ogv',
@@ -505,7 +543,7 @@ export const ENTRIES = {
     mimeType: 'video/ogg',
     lastModifiedTime: 'Jul 4, 2012, 10:35 AM',
     nameText: 'world.ogv',
-    sizeText: '59 KB',
+    sizeText: '56 KB',
     typeText: 'OGG video',
   }),
 
@@ -706,6 +744,48 @@ export const ENTRIES = {
     nameText: 'photos',
     sizeText: '--',
     typeText: 'Folder',
+  }),
+
+  testCSEDocument: new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'Test Encrypted Document',
+    mimeType: 'application/vnd.google-gsuite.encrypted; ' +
+        'content="application/vnd.google-apps.document"',
+    lastModifiedTime: 'Apr 10, 2013, 4:20 PM',
+    nameText: 'Test Encrypted Document.gdoc',
+    sizeText: '--',
+    typeText: 'Google document',
+  }),
+
+  testCSEFile: new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'test-encrypted.txt',
+    mimeType: 'application/vnd.google-gsuite.encrypted; content="text/plain"',
+    lastModifiedTime: 'Apr 10, 2013, 4:20 PM',
+    nameText: 'test-encrypted.txt',
+    sizeText: '--',
+    typeText: 'Plain text',
+  }),
+
+  // The directory itself is not encrypted, but will contain encrypted entries
+  // like testCSEFileInDirectory
+  testCSEDirectory: new TestEntryInfo({
+    type: EntryType.DIRECTORY,
+    targetPath: 'encrypted_files',
+    lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
+    nameText: 'encrypted_files',
+    sizeText: '--',
+    typeText: 'Folder',
+  }),
+
+  testCSEFileInDirectory: new TestEntryInfo({
+    type: EntryType.FILE,
+    targetPath: 'encrypted_files/test.txt',
+    mimeType: 'application/vnd.google-gsuite.encrypted; content="text/plain"',
+    lastModifiedTime: 'Apr 10, 2013, 4:20 PM',
+    nameText: 'test.txt',
+    sizeText: '--',
+    typeText: 'Plain text',
   }),
 
   testDocument: new TestEntryInfo({
@@ -1536,7 +1616,7 @@ export const ENTRIES = {
     sourceFileName: 'text.txt',
     targetPath: 'Shared Directory/file.txt',
     mimeType: 'text/plain',
-    sharedOption: SharedOption.NESTED_SHARED_WITH_ME,
+    sharedOption: SharedOption.INDIRECTLY_SHARED_WITH_ME,
     lastModifiedTime: 'Jan 1, 2000, 1:00 AM',
     nameText: 'file.txt',
     sizeText: '51 bytes',
@@ -1601,6 +1681,18 @@ export const ENTRIES = {
     sizeText: '64 bytes',
     typeText: 'TRASHINFO',
   }),
+
+  cantPinFile: new TestEntryInfo({
+    type: EntryType.FILE,
+    sourceFileName: 'text.txt',
+    targetPath: 'text.txt',
+    mimeType: 'text/plain',
+    lastModifiedTime: 'Mar 20, 2012, 11:40 PM',
+    nameText: 'text.txt',
+    sizeText: '51 bytes',
+    typeText: 'Plain text',
+    canPin: false,
+  }),
 };
 
 
@@ -1622,6 +1714,46 @@ export function createTestFile(path) {
     sourceFileName: 'text.txt',
     mimeType: 'text/plain',
   });
+}
+
+/**
+ * Creates a folder test entry from a folder |path|.
+ * @param {string} path The folder path.
+ * @return {!TestEntryInfo}
+ */
+export function createTestFolder(path) {
+  const name = path.split('/').pop();
+  return new TestEntryInfo({
+    targetPath: path,
+    nameText: name,
+    type: EntryType.DIRECTORY,
+    lastModifiedTime: 'Jan 1, 1980, 11:59 PM',
+    sizeText: '--',
+    typeText: 'Folder',
+  });
+}
+
+/**
+ * Returns an array of nested folder test entries, where |depth| controls
+ * the nesting. For example, a |depth| of 4 will return:
+ *
+ *   [0]: nested-folder0
+ *   [1]: nested-folder0/nested-folder1
+ *   [2]: nested-folder0/nested-folder1/nested-folder2
+ *   [3]: nested-folder0/nested-folder1/nested-folder2/nested-folder3
+ *
+ * @param {number} depth The nesting depth.
+ * @return {!Array<!TestEntryInfo>}
+ */
+export function createNestedTestFolders(depth) {
+  const nestedFolderTestEntries = [];
+
+  for (let path = 'nested-folder0', i = 0; i < depth; ++i) {
+    nestedFolderTestEntries.push(createTestFolder(path));
+    path += `/nested-folder${i + 1}`;
+  }
+
+  return nestedFolderTestEntries;
 }
 
 /**
@@ -1689,12 +1821,28 @@ export function getDateWithDayDiff(diffDays) {
   const nowDate = new Date();
   nowDate.setDate(nowDate.getDate() - diffDays);
   // Format: "May 2, 2021, 11:25 AM"
-  return nowDate.toLocaleString('default', {
+  return formatDate(nowDate);
+}
+
+/**
+ * Formats the date to be able to compare to Files app date.
+ */
+export function formatDate(date) {
+  return sanitizeDate(date.toLocaleString('default', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour12: true,
     hour: 'numeric',
     minute: 'numeric',
-  });
+  }));
+}
+
+/**
+ * Sanitizes the formatted date. Replaces unusual space with normal space.
+ * @param {string} strDate the date already in the string format.
+ * @return {string}
+ */
+export function sanitizeDate(strDate) {
+  return strDate.replace('\u202f', ' ');
 }

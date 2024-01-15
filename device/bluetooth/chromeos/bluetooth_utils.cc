@@ -20,8 +20,12 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include <string_view>
+
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
+#include "chromeos/ash/services/nearby/public/cpp/nearby_client_uuids.h"
+#include "chromeos/ash/services/secure_channel/public/cpp/shared/ble_constants.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -39,6 +43,9 @@ const char kHIDServiceUUID[] = "1812";
 const char kSecurityKeyServiceUUID[] = "FFFD";
 
 constexpr base::TimeDelta kMaxDeviceSelectionDuration = base::Seconds(30);
+
+constexpr uint8_t kLimitedDiscoveryFlag = 0x01;
+constexpr uint8_t kGeneralDiscoveryFlag = 0x02;
 
 // Get limited number of devices from |devices| and
 // prioritize paired/connecting devices over other devices.
@@ -149,22 +156,54 @@ std::string GetTransportName(BluetoothTransport transport) {
   }
 }
 
-bool IsPolyDevicePairingAllowed() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  return ash::features::IsPolyDevicePairingAllowed();
-#else
-  return false;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+void EmitFilteredFailureReason(ConnectionFailureReason failure_reason,
+                               const std::string& transport_name) {
+  switch (failure_reason) {
+    case ConnectionFailureReason::kAuthCanceled:
+      [[fallthrough]];
+    case ConnectionFailureReason::kAuthRejected:
+      return;
+    case ConnectionFailureReason::kUnknownError:
+      [[fallthrough]];
+    case ConnectionFailureReason::kAuthFailed:
+      [[fallthrough]];
+    case ConnectionFailureReason::kAuthTimeout:
+      [[fallthrough]];
+    case ConnectionFailureReason::kUnknownConnectionError:
+      [[fallthrough]];
+    case ConnectionFailureReason::kUnsupportedDevice:
+      [[fallthrough]];
+    case ConnectionFailureReason::kNotConnectable:
+      [[fallthrough]];
+    case ConnectionFailureReason::kSystemError:
+      [[fallthrough]];
+    case ConnectionFailureReason::kFailed:
+      [[fallthrough]];
+    case ConnectionFailureReason::kInprogress:
+      const std::string result_histogram_name_prefix =
+          "Bluetooth.ChromeOS.Pairing.Result";
+      base::UmaHistogramEnumeration(
+          result_histogram_name_prefix + ".FilteredFailureReason",
+          failure_reason);
+      base::UmaHistogramEnumeration(result_histogram_name_prefix +
+                                        ".FilteredFailureReason." +
+                                        transport_name,
+                                    failure_reason);
+      return;
+  }
+  NOTREACHED();
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 bool IsPolyDevice(const device::BluetoothDevice* device) {
   // OUI portions of Bluetooth addresses for devices manufactured by Poly. See
   // https://standards-oui.ieee.org/.
-  constexpr auto kPolyOuis = base::MakeFixedFlatSet<base::StringPiece>(
+  constexpr auto kPolyOuis = base::MakeFixedFlatSet<std::string_view>(
       {"64:16:7F", "48:25:67", "00:04:F2"});
 
   return base::Contains(kPolyOuis, device->GetOuiPortionOfBluetoothAddress());
 }
+#endif
 
 }  // namespace
 
@@ -180,8 +219,9 @@ device::BluetoothAdapter::DeviceList FilterBluetoothDeviceList(
 
 bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (ash::switches::IsUnfilteredBluetoothDevicesEnabled())
+  if (ash::switches::IsUnfilteredBluetoothDevicesEnabled()) {
     return false;
+  }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -191,16 +231,27 @@ bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Never filter out Poly devices; this requires a special case since these
   // devices often identify themselves as phones, which are disallowed below.
   // See b/228118615.
-  if (IsPolyDevicePairingAllowed() && IsPolyDevice(device))
+  if (IsPolyDevice(device)) {
     return false;
+  }
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Always allow bonded devices to appear in the UI.
+  if (device->IsBonded()) {
+    return false;
+  }
+#endif
 
   // Always filter out laptops, etc. There is no intended use case or
   // Bluetooth profile in this context.
-  if (device->GetDeviceType() == BluetoothDeviceType::COMPUTER)
+  if (device->GetDeviceType() == BluetoothDeviceType::COMPUTER) {
     return true;
+  }
 
   // Always filter out phones. There is no intended use case or Bluetooth
   // profile in this context.
@@ -209,17 +260,45 @@ bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
     return true;
   }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  const BluetoothDevice::UUIDSet& uuids = device->GetUUIDs();
+
+  // These UUIDs are specific to Nearby Share and Phone Hub and are used to
+  // identify devices that should be filtered from the UI that otherwise would
+  // not have been correctly identified. These devices should always be filtered
+  // from the UI. For more information see b/219627324.
+  for (const auto& uuid : ash::nearby::GetNearbyClientUuids()) {
+    if (uuids.contains(uuid)) {
+      return true;
+    }
+  }
+  if (uuids.contains(BluetoothUUID(ash::secure_channel::kGattServerUuid))) {
+    return true;
+  }
+#endif
+
+#if !BUILDFLAG(IS_CHROMEOS)
   // Allow paired devices which are not filtered above to appear in the UI.
-  if (device->IsPaired())
+  if (device->IsPaired()) {
     return false;
+  }
+#endif
 
   switch (device->GetType()) {
     // Device with invalid bluetooth transport is filtered out.
     case BLUETOOTH_TRANSPORT_INVALID:
       break;
-    // For LE devices, check the service UUID to determine if it supports HID
-    // or second factor authenticator (security key).
+    // For LE devices, check the discoverable flag and UUIDs.
     case BLUETOOTH_TRANSPORT_LE:
+      // Hide the LE device that mark itself as non-discoverble.
+      if (device->GetAdvertisingDataFlags().has_value()) {
+        if (!((kLimitedDiscoveryFlag | kGeneralDiscoveryFlag) &
+              device->GetAdvertisingDataFlags().value())) {
+          return true;
+        }
+      }
+      // Check the service UUID to determine if it supports HID or second factor
+      // authenticator (security key).
       if (base::Contains(device->GetUUIDs(),
                          device::BluetoothUUID(kHIDServiceUUID)) ||
           base::Contains(device->GetUUIDs(),
@@ -231,8 +310,9 @@ bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
     // the device could have an unknown or even known type and still also
     // provide audio/HID functionality.
     case BLUETOOTH_TRANSPORT_CLASSIC:
-      if (device->GetName())
+      if (device->GetName()) {
         return false;
+      }
       break;
     // For dual mode devices, a device::BluetoothDevice object without a name
     // and type/appearance most likely signals that it is truly only a LE
@@ -241,8 +321,9 @@ bool IsUnsupportedDevice(const device::BluetoothDevice* device) {
     // provide a type/appearance; this means they've become pairable. See
     // https://crbug.com/1656971 for more.
     case BLUETOOTH_TRANSPORT_DUAL:
-      if (device->GetName())
+      if (device->GetName()) {
         return device->GetDeviceType() == BluetoothDeviceType::UNKNOWN;
+      }
       break;
   }
 
@@ -282,6 +363,7 @@ void RecordPairingResult(absl::optional<ConnectionFailureReason> failure_reason,
     base::UmaHistogramEnumeration(
         result_histogram_name_prefix + ".FailureReason." + transport_name,
         *failure_reason);
+    EmitFilteredFailureReason(*failure_reason, transport_name);
   }
 }
 

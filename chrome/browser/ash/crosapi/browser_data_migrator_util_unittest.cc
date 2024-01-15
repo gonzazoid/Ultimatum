@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 
 #include <map>
+#include <optional>
 
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
@@ -19,7 +20,10 @@
 #include "base/system/sys_info.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/crosapi/fake_migration_progress_tracker.h"
+#include "chrome/browser/extensions/extension_keeplist_chromeos.h"
+#include "chrome/common/chrome_constants.h"
 #include "components/sync/base/model_type.h"
+#include "components/sync/base/storage_type.h"
 #include "components/sync/model/blocking_model_type_store_impl.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/leveldatabase/env_chromium.h"
@@ -36,9 +40,17 @@ constexpr char kCookiesPath[] = "Cookies";
 constexpr char kCachePath[] = "Cache";
 constexpr char kCodeCachePath[] = "Code Cache";
 constexpr char kCodeCacheUMAName[] = "CodeCache";
-constexpr char kTextFileContent[] = "Hello, World!";
-constexpr int kTextFileSize = sizeof(kTextFileContent);
+constexpr base::StringPiece kTextFileContent = "Hello, World!";
 constexpr char kMoveExtensionId[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+
+// ID of an extension that runs in both Lacros and Ash chrome.
+std::string_view GetBothChromesExtensionId() {
+  // Any id from the Ash allowlist works for tests. Pick the first
+  // element of the allowlist for convenience.
+  DCHECK(
+      !extensions::GetExtensionsAndAppsRunInOSAndStandaloneBrowser().empty());
+  return extensions::GetExtensionsAndAppsRunInOSAndStandaloneBrowser()[0];
+}
 
 constexpr syncer::ModelType kAshSyncDataType =
     browser_data_migrator_util::kAshOnlySyncDataTypes[0];
@@ -51,24 +63,6 @@ struct TargetItemComparator {
     return t1.path < t2.path;
   }
 };
-
-// Checks if the file paths point to the same inode.
-bool IsSameFile(const base::FilePath& file1, const base::FilePath& file2) {
-  struct stat st_1;
-  if (stat(file1.value().c_str(), &st_1) == -1) {
-    PLOG(ERROR) << "stat failed";
-    return false;
-  }
-
-  struct stat st_2;
-  if (stat(file2.value().c_str(), &st_2) == -1) {
-    PLOG(ERROR) << "stat failed";
-    return false;
-  }
-
-  // Make sure that they are indeed the same file.
-  return (st_1.st_ino == st_2.st_ino);
-}
 
 std::set<std::string> CollectDictKeys(const base::Value::Dict* dict) {
   std::set<std::string> result;
@@ -98,8 +92,7 @@ void SetUpLocalStorage(const base::FilePath& path,
   batch.Put("META:chrome-extension://" + keep_extension_id, "meta");
   batch.Put("_chrome-extension://" + keep_extension_id + "\x00key1"s, "value1");
 
-  std::string both_extension_id =
-      browser_data_migrator_util::kExtensionsBothChromes[0];
+  std::string both_extension_id = std::string(GetBothChromesExtensionId());
   batch.Put("META:chrome-extension://" + both_extension_id, "meta");
   batch.Put("_chrome-extension://" + both_extension_id + "\x00key1"s, "value1");
 
@@ -124,8 +117,7 @@ void SetUpStateStore(const base::FilePath& path,
   leveldb::WriteBatch batch;
   std::string keep_extension_id =
       browser_data_migrator_util::kExtensionsAshOnly[0];
-  std::string both_extension_id =
-      browser_data_migrator_util::kExtensionsBothChromes[0];
+  std::string both_extension_id = std::string(GetBothChromesExtensionId());
   batch.Put(keep_extension_id + ".key1", "value1");
   batch.Put(keep_extension_id + ".key2", "value2");
   batch.Put(both_extension_id + ".key1", "value1");
@@ -148,18 +140,28 @@ void SetUpSyncData(const base::FilePath& path,
   ASSERT_TRUE(status.ok());
 
   leveldb::WriteBatch batch;
-  batch.Put(syncer::FormatDataPrefix(kAshSyncDataType) + kMoveExtensionId,
+  batch.Put(syncer::FormatDataPrefix(kAshSyncDataType,
+                                     syncer::StorageType::kUnspecified) +
+                kMoveExtensionId,
             "ash_data");
-  batch.Put(syncer::FormatMetaPrefix(kAshSyncDataType) + kMoveExtensionId,
+  batch.Put(syncer::FormatMetaPrefix(kAshSyncDataType,
+                                     syncer::StorageType::kUnspecified) +
+                kMoveExtensionId,
             "ash_metadata");
-  batch.Put(syncer::FormatGlobalMetadataKey(kAshSyncDataType),
+  batch.Put(syncer::FormatGlobalMetadataKey(kAshSyncDataType,
+                                            syncer::StorageType::kUnspecified),
             "ash_globalmetadata");
 
-  batch.Put(syncer::FormatDataPrefix(kLacrosSyncDataType) + kMoveExtensionId,
+  batch.Put(syncer::FormatDataPrefix(kLacrosSyncDataType,
+                                     syncer::StorageType::kUnspecified) +
+                kMoveExtensionId,
             "lacros_data");
-  batch.Put(syncer::FormatMetaPrefix(kLacrosSyncDataType) + kMoveExtensionId,
+  batch.Put(syncer::FormatMetaPrefix(kLacrosSyncDataType,
+                                     syncer::StorageType::kUnspecified) +
+                kMoveExtensionId,
             "lacros_metadata");
-  batch.Put(syncer::FormatGlobalMetadataKey(kLacrosSyncDataType),
+  batch.Put(syncer::FormatGlobalMetadataKey(kLacrosSyncDataType,
+                                            syncer::StorageType::kUnspecified),
             "lacros_globalmetadata");
 
   leveldb::WriteOptions write_options;
@@ -230,26 +232,24 @@ TEST(BrowserDataMigratorUtilTest, ComputeDirectorySizeWithoutLinks) {
   base::ScopedTempDir dir_1;
   ASSERT_TRUE(dir_1.CreateUniqueTempDir());
 
-  ASSERT_TRUE(
-      base::WriteFile(dir_1.GetPath().Append(FILE_PATH_LITERAL("file1")),
-                      kTextFileContent, kTextFileSize));
+  ASSERT_TRUE(base::WriteFile(
+      dir_1.GetPath().Append(FILE_PATH_LITERAL("file1")), kTextFileContent));
   ASSERT_TRUE(
       base::CreateDirectory(dir_1.GetPath().Append(FILE_PATH_LITERAL("dir"))));
   ASSERT_TRUE(base::WriteFile(dir_1.GetPath()
                                   .Append(FILE_PATH_LITERAL("dir"))
                                   .Append(FILE_PATH_LITERAL("file2")),
-                              kTextFileContent, kTextFileSize));
+                              kTextFileContent));
 
   // Check that `ComputeDirectorySizeWithoutLinks` returns the sum of sizes of
   // the two files in the directory.
   EXPECT_EQ(ComputeDirectorySizeWithoutLinks(dir_1.GetPath()),
-            kTextFileSize * 2);
+            static_cast<int>(kTextFileContent.size() * 2));
 
   base::ScopedTempDir dir_2;
   ASSERT_TRUE(dir_2.CreateUniqueTempDir());
-  ASSERT_TRUE(
-      base::WriteFile(dir_2.GetPath().Append(FILE_PATH_LITERAL("file3")),
-                      kTextFileContent, kTextFileSize));
+  ASSERT_TRUE(base::WriteFile(
+      dir_2.GetPath().Append(FILE_PATH_LITERAL("file3")), kTextFileContent));
 
   ASSERT_TRUE(CreateSymbolicLink(
       dir_2.GetPath().Append(FILE_PATH_LITERAL("file3")),
@@ -258,7 +258,7 @@ TEST(BrowserDataMigratorUtilTest, ComputeDirectorySizeWithoutLinks) {
   // Check that `ComputeDirectorySizeWithoutLinks` does not follow symlinks from
   // `dir_1` to `dir_2`.
   EXPECT_EQ(ComputeDirectorySizeWithoutLinks(dir_1.GetPath()),
-            kTextFileSize * 2);
+            static_cast<int>(kTextFileContent.size() * 2));
 }
 
 TEST(BrowserDataMigratorUtilTest, GetUMAItemName) {
@@ -292,8 +292,7 @@ TEST(BrowserDataMigratorUtilTest, GetExtensionKeys) {
 
   std::string keep_extension_id =
       browser_data_migrator_util::kExtensionsAshOnly[0];
-  std::string both_extension_id =
-      browser_data_migrator_util::kExtensionsBothChromes[0];
+  std::string both_extension_id = std::string(GetBothChromesExtensionId());
   ExtensionKeys expected_keys = {
       {keep_extension_id,
        {
@@ -372,8 +371,7 @@ TEST(BrowserDataMigratorUtilTest, MigrateLevelDB) {
 
   std::string keep_extension_id =
       browser_data_migrator_util::kExtensionsAshOnly[0];
-  std::string both_extension_id =
-      browser_data_migrator_util::kExtensionsBothChromes[0];
+  std::string both_extension_id = std::string(GetBothChromesExtensionId());
   ExtensionKeys expected_keys = {
       {keep_extension_id,
        {
@@ -440,22 +438,33 @@ TEST(BrowserDataMigratorUtilTest, MigrateSyncDataLevelDB) {
   // Check resulting Ash database.
   auto ash_db_map = ReadLevelDB(ash_db_path);
   std::map<std::string, std::string> expected_ash_db_map = {
-      {syncer::FormatDataPrefix(kAshSyncDataType) + kMoveExtensionId,
+      {syncer::FormatDataPrefix(kAshSyncDataType,
+                                syncer::StorageType::kUnspecified) +
+           kMoveExtensionId,
        "ash_data"},
-      {syncer::FormatMetaPrefix(kAshSyncDataType) + kMoveExtensionId,
+      {syncer::FormatMetaPrefix(kAshSyncDataType,
+                                syncer::StorageType::kUnspecified) +
+           kMoveExtensionId,
        "ash_metadata"},
-      {syncer::FormatGlobalMetadataKey(kAshSyncDataType), "ash_globalmetadata"},
+      {syncer::FormatGlobalMetadataKey(kAshSyncDataType,
+                                       syncer::StorageType::kUnspecified),
+       "ash_globalmetadata"},
   };
   EXPECT_EQ(expected_ash_db_map, ash_db_map);
 
   // Check resulting Lacros database.
   auto lacros_db_map = ReadLevelDB(lacros_db_path);
   std::map<std::string, std::string> expected_lacros_db_map = {
-      {syncer::FormatDataPrefix(kLacrosSyncDataType) + kMoveExtensionId,
+      {syncer::FormatDataPrefix(kLacrosSyncDataType,
+                                syncer::StorageType::kUnspecified) +
+           kMoveExtensionId,
        "lacros_data"},
-      {syncer::FormatMetaPrefix(kLacrosSyncDataType) + kMoveExtensionId,
+      {syncer::FormatMetaPrefix(kLacrosSyncDataType,
+                                syncer::StorageType::kUnspecified) +
+           kMoveExtensionId,
        "lacros_metadata"},
-      {syncer::FormatGlobalMetadataKey(kLacrosSyncDataType),
+      {syncer::FormatGlobalMetadataKey(kLacrosSyncDataType,
+                                       syncer::StorageType::kUnspecified),
        "lacros_globalmetadata"},
   };
   EXPECT_EQ(expected_lacros_db_map, lacros_db_map);
@@ -474,24 +483,6 @@ TEST(BrowserDataMigratorUtilTest, RecordUserDataSize) {
 
   histogram_tester.ExpectTotalCount(uma_name, 1);
   histogram_tester.ExpectBucketCount(uma_name, size / 1024 / 1024, 1);
-}
-
-TEST(BrowserDataMigratorUtilTest, CreateHardLink) {
-  base::ScopedTempDir scoped_temp_dir;
-  ASSERT_TRUE(scoped_temp_dir.CreateUniqueTempDir());
-
-  const base::FilePath from_file =
-      scoped_temp_dir.GetPath().Append(FILE_PATH_LITERAL("from_file"));
-  const base::FilePath to_file =
-      scoped_temp_dir.GetPath().Append(FILE_PATH_LITERAL("to_file"));
-  base::WriteFile(from_file, "Hello, World", sizeof("Hello, World"));
-
-  ASSERT_TRUE(CreateHardLink(from_file, to_file));
-
-  EXPECT_TRUE(base::PathExists(to_file));
-
-  // Make sure that they are indeed the same file.
-  EXPECT_TRUE(IsSameFile(from_file, to_file));
 }
 
 TEST(BrowserDataMigratorUtilTest, CopyDirectory) {
@@ -515,24 +506,24 @@ TEST(BrowserDataMigratorUtilTest, CopyDirectory) {
   //         |- data
   //         |- Subdirectory/data
   //     |- symlink  /* symlink to original */
-
+  ASSERT_TRUE(
+      base::CreateDirectory(scoped_temp_dir.GetPath().Append(sensitive)));
   ASSERT_TRUE(base::WriteFile(
       scoped_temp_dir.GetPath().Append(sensitive).Append(original),
-      kTextFileContent, kTextFileSize));
+      kTextFileContent));
   ASSERT_TRUE(base::CreateDirectory(copy_from));
   ASSERT_TRUE(base::CreateDirectory(copy_from.Append(subdirectory)));
   ASSERT_TRUE(base::CreateDirectory(
       copy_from.Append(subdirectory).Append(subdirectory)));
-  ASSERT_TRUE(base::WriteFile(copy_from.Append(data_file), kTextFileContent,
-                              kTextFileSize));
+  ASSERT_TRUE(base::WriteFile(copy_from.Append(data_file), kTextFileContent));
   ASSERT_TRUE(base::WriteFile(copy_from.Append(subdirectory).Append(data_file),
-                              kTextFileContent, kTextFileSize));
+                              kTextFileContent));
   ASSERT_TRUE(base::WriteFile(
       copy_from.Append(subdirectory).Append(subdirectory).Append(data_file),
-      kTextFileContent, kTextFileSize));
-  base::CreateSymbolicLink(
+      kTextFileContent));
+  ASSERT_TRUE(base::CreateSymbolicLink(
       scoped_temp_dir.GetPath().Append(sensitive).Append(original),
-      copy_from.Append(symlink));
+      copy_from.Append(symlink)));
 
   // Test `CopyDirectory()`.
   scoped_refptr<CancelFlag> cancelled = base::MakeRefCounted<CancelFlag>();
@@ -555,67 +546,35 @@ TEST(BrowserDataMigratorUtilTest, CopyDirectory) {
   // Make sure that symlink is not copied.
   EXPECT_FALSE(base::PathExists(copy_to.Append(symlink)));
   EXPECT_FALSE(base::PathExists(copy_to.Append(original)));
-
-  // Test `CopyDirectoryByHardLinks()`.
-  const base::FilePath copy_to_hard =
-      scoped_temp_dir.GetPath().Append("copy_to_hard");
-  ASSERT_TRUE(CopyDirectoryByHardLinks(copy_from, copy_to_hard));
-
-  // Expected `copy_to_hard` structure after `CopyDirectoryByHardLinks()`.
-  // |- copy_to_hard/
-  //     |- data
-  //     |- Subdirectory/
-  //         |- data
-  //         |- Subdirectory/data
-  EXPECT_TRUE(base::PathExists(copy_to_hard));
-  EXPECT_TRUE(base::PathExists(copy_to_hard.Append(data_file)));
-  EXPECT_TRUE(
-      base::PathExists(copy_to_hard.Append(subdirectory).Append(data_file)));
-  EXPECT_TRUE(base::PathExists(copy_to_hard.Append(subdirectory)
-                                   .Append(subdirectory)
-                                   .Append(data_file)));
-  // Make sure that symlink is not copied.
-  EXPECT_FALSE(base::PathExists(copy_to_hard.Append(symlink)));
-  EXPECT_FALSE(base::PathExists(copy_to_hard.Append(original)));
-
-  // Make sure that they are indeed the same file.
-  EXPECT_TRUE(
-      IsSameFile(copy_from.Append(data_file), copy_to_hard.Append(data_file)));
-  EXPECT_TRUE(IsSameFile(copy_from.Append(subdirectory).Append(data_file),
-                         copy_to_hard.Append(subdirectory).Append(data_file)));
-  EXPECT_TRUE(IsSameFile(
-      copy_from.Append(subdirectory).Append(subdirectory).Append(data_file),
-      copy_to_hard.Append(subdirectory)
-          .Append(subdirectory)
-          .Append(data_file)));
 }
 
-TEST(BrowserDataMigratorUtilTest, HasEnoughDiskSpace) {
+TEST(BrowserDataMigratorUtilTest, EstimatedExtraBytesCreated) {
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
-  const int64_t free_disk_space =
-      base::SysInfo::AmountOfFreeDiskSpace(temp_dir.GetPath());
-  ASSERT_GE(free_disk_space, 0);
-  ASSERT_GE(static_cast<uint64_t>(free_disk_space), kBuffer);
+  // Set up the directory as below. 'Preferences' and 'Sync Data' are files that
+  // are split during the migration. 'shared_proto_db' is one of the
+  // need-to-copy items in `kNeedCopyForMoveDataPaths`.
+  // |- Preferences
+  // |- Sync Data/
+  //     |- data
+  // |- shared_proto_db
+  const std::string pref_text = "*";
+  const std::string sync_text(10, '*');
+  const std::string spdb_text(100, '*');
+  ASSERT_TRUE(CreateDirectory(temp_dir.GetPath().Append(kSyncDataFilePath)));
+  ASSERT_TRUE(base::WriteFile(temp_dir.GetPath()
+                                  .Append(kSyncDataFilePath)
+                                  .Append(FILE_PATH_LITERAL("data")),
+                              sync_text));
+  ASSERT_TRUE(base::WriteFile(temp_dir.GetPath().Append(kSharedProtoDBPath),
+                              spdb_text));
+  ASSERT_TRUE(base::WriteFile(
+      temp_dir.GetPath().Append(chrome::kPreferencesFilename), pref_text));
 
-  // If total copy size is the same as `free_disk_space` then the disk is
-  // exactly `kBuffer` bytes short of free space.
-  EXPECT_EQ(ExtraBytesRequiredToBeFreed(free_disk_space, temp_dir.GetPath()),
-            kBuffer);
-  EXPECT_FALSE(HasEnoughDiskSpace(free_disk_space, temp_dir.GetPath()));
-
-  // If total copy size is the same as `free_disk_space - kBuffer` then the disk
-  // has just enough space for the migration.
-  EXPECT_EQ(ExtraBytesRequiredToBeFreed(free_disk_space - kBuffer,
-                                        temp_dir.GetPath()),
-            0u);
-  EXPECT_TRUE(
-      HasEnoughDiskSpace(free_disk_space - kBuffer, temp_dir.GetPath()));
-
-  // If there is nothing to be copied then as long as `free_disk_space >=
-  // kBuffer`, there should be no extra space required to be freed.
-  EXPECT_EQ(ExtraBytesRequiredToBeFreed(0, temp_dir.GetPath()), 0u);
-  EXPECT_TRUE(HasEnoughDiskSpace(0, temp_dir.GetPath()));
+  // Expected size should be size(NeedToCopy) + size(Preferences) * 2 +
+  // size(Sync Data).
+  const int64_t expected_size = 1 * 2 + 10 + 100;
+  EXPECT_EQ(EstimatedExtraBytesCreated(temp_dir.GetPath()), expected_size);
 }
 
 TEST(BrowserDataMigratorUtilTest, IsAshOnlySyncDataType) {
@@ -685,31 +644,31 @@ class BrowserDataMigratorUtilWithTargetsTest : public ::testing::Test {
 
     // Lacros items.
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kBookmarksPath),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kCookiesPath),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
     // Remain in ash items.
     ASSERT_TRUE(
         base::CreateDirectory(profile_data_dir_.Append(kDownloadsPath)));
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kDownloadsPath)
                                     .Append(FILE_PATH_LITERAL("file")),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kDownloadsPath)
                                     .Append(FILE_PATH_LITERAL("file 2")),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
 
     // Need to copy items.
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kSharedProtoDBPath),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
 
     // Deletable items.
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kCachePath),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
     ASSERT_TRUE(
         base::CreateDirectory(profile_data_dir_.Append(kCodeCachePath)));
     ASSERT_TRUE(base::WriteFile(profile_data_dir_.Append(kCodeCachePath)
                                     .Append(FILE_PATH_LITERAL("file")),
-                                kTextFileContent, kTextFileSize));
+                                kTextFileContent));
   }
 
   void TearDown() override { EXPECT_TRUE(scoped_temp_dir_.Delete()); }
@@ -721,13 +680,14 @@ class BrowserDataMigratorUtilWithTargetsTest : public ::testing::Test {
 TEST_F(BrowserDataMigratorUtilWithTargetsTest, GetTargetItems) {
   // Check for lacros data.
   std::vector<TargetItem> expected_lacros_items = {
-      {profile_data_dir_.Append(kBookmarksPath), kTextFileSize,
+      {profile_data_dir_.Append(kBookmarksPath), kTextFileContent.size(),
        TargetItem::ItemType::kFile},
-      {profile_data_dir_.Append(kCookiesPath), kTextFileSize,
+      {profile_data_dir_.Append(kCookiesPath), kTextFileContent.size(),
        TargetItem::ItemType::kFile}};
   TargetItems lacros_items =
       GetTargetItems(profile_data_dir_, ItemType::kLacros);
-  EXPECT_EQ(lacros_items.total_size, kTextFileSize * 2);
+  EXPECT_EQ(lacros_items.total_size,
+            static_cast<int>(kTextFileContent.size() * 2));
   ASSERT_EQ(lacros_items.items.size(), expected_lacros_items.size());
   std::sort(lacros_items.items.begin(), lacros_items.items.end(),
             TargetItemComparator());
@@ -738,36 +698,39 @@ TEST_F(BrowserDataMigratorUtilWithTargetsTest, GetTargetItems) {
 
   // Check for remain in ash data.
   std::vector<TargetItem> expected_remain_in_ash_items = {
-      {profile_data_dir_.Append(kDownloadsPath), kTextFileSize * 2,
+      {profile_data_dir_.Append(kDownloadsPath), kTextFileContent.size() * 2,
        TargetItem::ItemType::kDirectory}};
   TargetItems remain_in_ash_items =
       GetTargetItems(profile_data_dir_, ItemType::kRemainInAsh);
-  EXPECT_EQ(remain_in_ash_items.total_size, kTextFileSize * 2);
+  EXPECT_EQ(remain_in_ash_items.total_size,
+            static_cast<int>(kTextFileContent.size() * 2));
   ASSERT_EQ(remain_in_ash_items.items.size(),
             expected_remain_in_ash_items.size());
   EXPECT_EQ(remain_in_ash_items.items[0], expected_remain_in_ash_items[0]);
 
   // Check for items that need copies in lacros.
   std::vector<TargetItem> expected_need_copy_items = {
-      {profile_data_dir_.Append(kSharedProtoDBPath), kTextFileSize,
+      {profile_data_dir_.Append(kSharedProtoDBPath), kTextFileContent.size(),
        TargetItem::ItemType::kFile}};
   TargetItems need_copy_items =
       GetTargetItems(profile_data_dir_, ItemType::kNeedCopyForMove);
-  EXPECT_EQ(need_copy_items.total_size, kTextFileSize);
+  EXPECT_EQ(need_copy_items.total_size,
+            static_cast<int>(kTextFileContent.size()));
   ASSERT_EQ(need_copy_items.items.size(), expected_need_copy_items.size());
   EXPECT_EQ(need_copy_items.items[0], expected_need_copy_items[0]);
 
   // Check for deletable items.
   std::vector<TargetItem> expected_deletable_items = {
-      {profile_data_dir_.Append(kCachePath), kTextFileSize,
+      {profile_data_dir_.Append(kCachePath), kTextFileContent.size(),
        TargetItem::ItemType::kFile},
-      {profile_data_dir_.Append(kCodeCachePath), kTextFileSize,
+      {profile_data_dir_.Append(kCodeCachePath), kTextFileContent.size(),
        TargetItem::ItemType::kDirectory}};
   TargetItems deletable_items =
       GetTargetItems(profile_data_dir_, ItemType::kDeletable);
   std::sort(deletable_items.items.begin(), deletable_items.items.end(),
             TargetItemComparator());
-  EXPECT_EQ(deletable_items.total_size, kTextFileSize * 2);
+  EXPECT_EQ(deletable_items.total_size,
+            static_cast<int>(kTextFileContent.size() * 2));
   ASSERT_EQ(deletable_items.items.size(), expected_deletable_items.size());
   for (size_t i = 0; i < deletable_items.items.size(); i++) {
     SCOPED_TRACE(deletable_items.items[i].path.value());
@@ -800,46 +763,44 @@ TEST_F(BrowserDataMigratorUtilWithTargetsTest, DryRunToCollectUMA) {
       "CodeCache";
 
   histogram_tester.ExpectBucketCount(uma_name_bookmarks,
-                                     kTextFileSize / 1024 / 1024, 1);
+                                     kTextFileContent.size() / 1024 / 1024, 1);
   histogram_tester.ExpectBucketCount(uma_name_cookies,
-                                     kTextFileSize / 1024 / 1024, 1);
-  histogram_tester.ExpectBucketCount(uma_name_downloads,
-                                     kTextFileSize * 2 / 1024 / 1024, 1);
+                                     kTextFileContent.size() / 1024 / 1024, 1);
+  histogram_tester.ExpectBucketCount(
+      uma_name_downloads, kTextFileContent.size() * 2 / 1024 / 1024, 1);
   histogram_tester.ExpectBucketCount(uma_name_shared_proto_db,
-                                     kTextFileSize / 1024 / 1024, 1);
+                                     kTextFileContent.size() / 1024 / 1024, 1);
   histogram_tester.ExpectBucketCount(uma_name_cache,
-                                     kTextFileSize / 1024 / 1024, 1);
+                                     kTextFileContent.size() / 1024 / 1024, 1);
   histogram_tester.ExpectBucketCount(uma_name_code_cache,
-                                     kTextFileSize / 1024 / 1024, 1);
+                                     kTextFileContent.size() / 1024 / 1024, 1);
 
-  histogram_tester.ExpectBucketCount(kDryRunLacrosDataSize,
-                                     kTextFileSize * 2 / 1024 / 1024, 1);
-  histogram_tester.ExpectBucketCount(kDryRunAshDataSize,
-                                     kTextFileSize * 2 / 1024 / 1024, 1);
+  histogram_tester.ExpectBucketCount(
+      kDryRunLacrosDataSize, kTextFileContent.size() * 2 / 1024 / 1024, 1);
+  histogram_tester.ExpectBucketCount(
+      kDryRunAshDataSize, kTextFileContent.size() * 2 / 1024 / 1024, 1);
   histogram_tester.ExpectBucketCount(kDryRunCommonDataSize,
-                                     kTextFileSize / 1024 / 1024, 1);
-  histogram_tester.ExpectBucketCount(kDryRunNoCopyDataSize,
-                                     kTextFileSize * 2 / 1024 / 1024, 1);
+                                     kTextFileContent.size() / 1024 / 1024, 1);
+  histogram_tester.ExpectBucketCount(
+      kDryRunNoCopyDataSize, kTextFileContent.size() * 2 / 1024 / 1024, 1);
 
-  histogram_tester.ExpectTotalCount(kDryRunCopyMigrationHasEnoughDiskSpace, 1);
-  histogram_tester.ExpectTotalCount(
-      kDryRunDeleteAndCopyMigrationHasEnoughDiskSpace, 1);
-  histogram_tester.ExpectTotalCount(kDryRunMoveMigrationHasEnoughDiskSpace, 1);
-  histogram_tester.ExpectTotalCount(
-      kDryRunDeleteAndCopyMigrationHasEnoughDiskSpace, 1);
+  histogram_tester.ExpectTotalCount(kDryRunExtraDiskSpaceOccupiedByMove, 1);
+  histogram_tester.ExpectTotalCount(kDryRunFreeDiskSpaceAfterDelete, 1);
+  histogram_tester.ExpectTotalCount(kDryRunFreeDiskSpaceAfterMigration, 1);
 }
 
 TEST(BrowserDataMigratorUtilTest, UpdatePreferencesKeyByType) {
   const std::string keep_extension_dict_key =
       std::string("extensions.settings.") + kExtensionsAshOnly[0];
   const std::string both_extension_dict_key =
-      std::string("extensions.settings.") + kExtensionsBothChromes[0];
+      std::string("extensions.settings.") +
+      std::string(GetBothChromesExtensionId());
   const std::string move_extension_dict_key =
       std::string("extensions.settings.") + kMoveExtensionId;
 
   base::Value::List extension_list;
   extension_list.Append(kExtensionsAshOnly[0]);
-  extension_list.Append(kExtensionsBothChromes[0]);
+  extension_list.Append(GetBothChromesExtensionId());
   extension_list.Append(kMoveExtensionId);
   const std::string extension_list_key = "extensions.pinned_extensions";
 
@@ -852,7 +813,7 @@ TEST(BrowserDataMigratorUtilTest, UpdatePreferencesKeyByType) {
   base::Value::Dict wrong_type_value1;
   wrong_type_value1.Set(kExtensionsAshOnly[0], "test1");
   base::Value::Dict wrong_type_value2;
-  wrong_type_value2.Set(kExtensionsBothChromes[0], "test2");
+  wrong_type_value2.Set(GetBothChromesExtensionId(), "test2");
   base::Value::Dict wrong_type_value3;
   wrong_type_value3.Set(kMoveExtensionId, "test3");
   base::Value::List wrong_type_list;
@@ -876,8 +837,8 @@ TEST(BrowserDataMigratorUtilTest, UpdatePreferencesKeyByType) {
 
   // Test Ash against expected results.
   base::Value::Dict* d = ash_dict.FindDictByDottedPath("extensions.settings");
-  std::set<std::string> expected_keys = {kExtensionsAshOnly[0],
-                                         kExtensionsBothChromes[0]};
+  std::set<std::string> expected_keys = {
+      kExtensionsAshOnly[0], std::string(GetBothChromesExtensionId())};
   EXPECT_EQ(expected_keys, CollectDictKeys(d));
   // If a type other than string is found in a list, it will be left unchanged.
   base::Value::List* l = ash_dict.FindListByDottedPath(wrong_type_key);
@@ -886,7 +847,7 @@ TEST(BrowserDataMigratorUtilTest, UpdatePreferencesKeyByType) {
 
   // Test Lacros against expected results.
   d = lacros_dict.FindDictByDottedPath("extensions.settings");
-  expected_keys = {kExtensionsBothChromes[0], kMoveExtensionId};
+  expected_keys = {std::string(GetBothChromesExtensionId()), kMoveExtensionId};
   EXPECT_EQ(expected_keys, CollectDictKeys(d));
   l = lacros_dict.FindListByDottedPath(wrong_type_key);
   EXPECT_NE(nullptr, l);
@@ -897,13 +858,14 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferencesContents) {
   const std::string keep_extension_dict_key =
       std::string("extensions.settings.") + kExtensionsAshOnly[0];
   const std::string both_extension_dict_key =
-      std::string("extensions.settings.") + kExtensionsBothChromes[0];
+      std::string("extensions.settings.") +
+      std::string(GetBothChromesExtensionId());
   const std::string move_extension_dict_key =
       std::string("extensions.settings.") + kMoveExtensionId;
 
   base::Value::List extension_list;
   extension_list.Append(kExtensionsAshOnly[0]);
-  extension_list.Append(kExtensionsBothChromes[0]);
+  extension_list.Append(GetBothChromesExtensionId());
   extension_list.Append(kMoveExtensionId);
   const std::string extension_list_key = "extensions.pinned_extensions";
 
@@ -920,7 +882,7 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferencesContents) {
   auto contents = MigratePreferencesContents(original_contents);
   EXPECT_TRUE(contents.has_value());
 
-  absl::optional<base::Value> ash_root = base::JSONReader::Read(contents->ash);
+  std::optional<base::Value> ash_root = base::JSONReader::Read(contents->ash);
   EXPECT_TRUE(ash_root.has_value());
   base::Value::Dict* ash_root_dict = ash_root->GetIfDict();
   EXPECT_NE(nullptr, ash_root_dict);
@@ -938,9 +900,9 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferencesContents) {
   EXPECT_NE(nullptr, ash_extension_list);
   EXPECT_EQ(2u, ash_extension_list->size());
   EXPECT_EQ(kExtensionsAshOnly[0], (*ash_extension_list)[0].GetString());
-  EXPECT_EQ(kExtensionsBothChromes[0], (*ash_extension_list)[1].GetString());
+  EXPECT_EQ(GetBothChromesExtensionId(), (*ash_extension_list)[1].GetString());
 
-  absl::optional<base::Value> lacros_root =
+  std::optional<base::Value> lacros_root =
       base::JSONReader::Read(contents->lacros);
   EXPECT_TRUE(lacros_root.has_value());
   base::Value::Dict* lacros_root_dict = lacros_root->GetIfDict();
@@ -959,7 +921,8 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferencesContents) {
       lacros_root_dict->FindListByDottedPath(extension_list_key);
   EXPECT_NE(nullptr, lacros_extension_list);
   EXPECT_EQ(2u, lacros_extension_list->size());
-  EXPECT_EQ(kExtensionsBothChromes[0], (*lacros_extension_list)[0].GetString());
+  EXPECT_EQ(GetBothChromesExtensionId(),
+            (*lacros_extension_list)[0].GetString());
   EXPECT_EQ(kMoveExtensionId, (*lacros_extension_list)[1].GetString());
 }
 
@@ -992,7 +955,7 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferences) {
   EXPECT_TRUE(
       base::ReadFileToString(lacros_preferences_path, &lacros_contents));
 
-  absl::optional<base::Value> ash_root = base::JSONReader::Read(ash_contents);
+  std::optional<base::Value> ash_root = base::JSONReader::Read(ash_contents);
   EXPECT_TRUE(ash_root.has_value());
   base::Value::Dict* ash_root_dict = ash_root->GetIfDict();
   EXPECT_NE(nullptr, ash_root_dict);
@@ -1002,7 +965,7 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferences) {
             *ash_root_dict->FindStringByDottedPath(kAshOnlyPreferencesKeys[0]));
   EXPECT_EQ("test3", *ash_root_dict->FindStringByDottedPath("unrelated.key"));
 
-  absl::optional<base::Value> lacros_root =
+  std::optional<base::Value> lacros_root =
       base::JSONReader::Read(lacros_contents);
   EXPECT_TRUE(lacros_root.has_value());
   base::Value::Dict* lacros_root_dict = lacros_root->GetIfDict();
@@ -1013,6 +976,12 @@ TEST(BrowserDataMigratorUtilTest, MigratePreferences) {
                          kLacrosOnlyPreferencesKeys[0]));
   EXPECT_EQ("test3",
             *lacros_root_dict->FindStringByDottedPath("unrelated.key"));
+
+  std::optional<bool> sync_feature_setup_completed =
+      lacros_root_dict->FindBoolByDottedPath(
+          kSyncInitialSyncFeatureSetupCompletePrefName);
+  ASSERT_NE(std::nullopt, sync_feature_setup_completed);
+  EXPECT_TRUE(*sync_feature_setup_completed);
 }
 
 }  // namespace ash::browser_data_migrator_util

@@ -42,21 +42,17 @@ IN_PROC_BROWSER_TEST_P(PaymentHandlerEnforceFullDelegationTest,
                        ShowPaymentSheetWhenOnlySomeAppsAreSkipped) {
   std::string expected = "success";
 
-  std::string method_name1 =
-      https_server()->GetURL("a.com", "/method_manifest.json").spec();
-  NavigateTo("a.com", "/enforce_full_delegation.com/index.html");
-  EXPECT_EQ(expected,
-            content::EvalJs(GetActiveWebContents(),
-                            content::JsReplace("install($1)", method_name1)));
+  std::string method_name1;
+  NavigateTo("a.com", "/enforce_full_delegation.test/index.html");
+  InstallPaymentApp("a.com", "/enforce_full_delegation.test/app.js",
+                    &method_name1);
   EXPECT_EQ(expected, content::EvalJs(GetActiveWebContents(),
                                       "enableDelegations(['payerName'])"));
 
-  std::string method_name2 =
-      https_server()->GetURL("b.com", "/method_manifest.json").spec();
-  NavigateTo("b.com", "/enforce_full_delegation.com/index.html");
-  EXPECT_EQ(expected,
-            content::EvalJs(GetActiveWebContents(),
-                            content::JsReplace("install($1)", method_name2)));
+  std::string method_name2;
+  NavigateTo("b.com", "/enforce_full_delegation.test/index.html");
+  InstallPaymentApp("b.com", "/enforce_full_delegation.test/app.js",
+                    &method_name2);
   EXPECT_EQ(expected,
             content::EvalJs(GetActiveWebContents(), "enableDelegations([])"));
 
@@ -85,14 +81,28 @@ IN_PROC_BROWSER_TEST_P(PaymentHandlerEnforceFullDelegationTest,
   }
 }
 
+// crbug.com/1468262: Flaky test on Android.
+// crbug.com/1473404: Flaky test on ChromeOS and Windows.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+#define MAYBE_WhenEnabled_ShowPaymentSheet_WhenDisabled_Reject \
+  DISABLED_WhenEnabled_ShowPaymentSheet_WhenDisabled_Reject
+#else
+#define MAYBE_WhenEnabled_ShowPaymentSheet_WhenDisabled_Reject \
+  WhenEnabled_ShowPaymentSheet_WhenDisabled_Reject
+#endif
 IN_PROC_BROWSER_TEST_P(PaymentHandlerEnforceFullDelegationTest,
-                       WhenEnabled_ShowPaymentSheet_WhenDisabled_Reject) {
-  NavigateTo("/enforce_full_delegation.com/index.html");
+                       MAYBE_WhenEnabled_ShowPaymentSheet_WhenDisabled_Reject) {
+  NavigateTo("a.com", "/enforce_full_delegation.test/index.html");
+
+  std::string method_name;
+  InstallPaymentApp("a.com", "/enforce_full_delegation.test/app.js",
+                    &method_name);
 
   std::string expected = "success";
-  EXPECT_EQ(expected, content::EvalJs(GetActiveWebContents(), "install()"));
-  EXPECT_EQ(expected, content::EvalJs(GetActiveWebContents(),
-                                      "addDefaultSupportedMethod()"));
+  EXPECT_EQ(expected,
+            content::EvalJs(
+                GetActiveWebContents(),
+                content::JsReplace("addSupportedMethods([$1])", method_name)));
   EXPECT_EQ(expected,
             content::EvalJs(GetActiveWebContents(), "enableDelegations([])"));
   EXPECT_EQ(expected,
@@ -112,7 +122,7 @@ IN_PROC_BROWSER_TEST_P(PaymentHandlerEnforceFullDelegationTest,
   if (GetParam() == ENABLED) {
     EXPECT_EQ(0u, test_controller()->app_descriptions().size());
     ExpectBodyContains(
-        "Skipping \"MaxPay\" for not providing all of the requested "
+        "Skipping \"Test App Name\" for not providing all of the requested "
         "PaymentOptions.");
   } else {
     EXPECT_EQ(1u, test_controller()->app_descriptions().size());

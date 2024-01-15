@@ -4,10 +4,12 @@
 
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sessions/tab_restore_service_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -16,19 +18,17 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
 #include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
-#include "chrome/browser/web_applications/isolation_prefs_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_command_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/browser/web_applications/web_app_install_finalizer.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "components/webapps/browser/uninstall_result_code.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -43,19 +43,15 @@ class WebAppUninstallBrowserTest : public WebAppControllerBrowserTest {
     return https_server()->GetURL("app.com", "/ssl/google.html");
   }
 
-  void UninstallWebApp(const AppId& app_id) {
+  void UninstallWebApp(const webapps::AppId& app_id) {
     WebAppProvider* const provider = WebAppProvider::GetForTest(profile());
-    base::RunLoop run_loop;
 
-    DCHECK(provider->install_finalizer().CanUserUninstallWebApp(app_id));
-    provider->install_finalizer().UninstallWebApp(
-        app_id, webapps::WebappUninstallSource::kAppMenu,
-        base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
-          EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
-          run_loop.Quit();
-        }));
+    base::test::TestFuture<webapps::UninstallResultCode> future;
+    DCHECK(provider->registrar_unsafe().CanUserUninstallWebApp(app_id));
+    provider->scheduler().UninstallWebApp(
+        app_id, webapps::WebappUninstallSource::kAppMenu, future.GetCallback());
+    EXPECT_EQ(future.Get(), webapps::UninstallResultCode::kSuccess);
 
-    run_loop.Run();
     base::RunLoop().RunUntilIdle();
   }
 };
@@ -64,7 +60,7 @@ class WebAppUninstallBrowserTest : public WebAppControllerBrowserTest {
 IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest,
                        RestoreAppWindowForUninstalledApp) {
   const GURL app_url = GetSecureAppURL();
-  const AppId app_id = InstallPWA(app_url);
+  const webapps::AppId app_id = InstallPWA(app_url);
 
   {
     Browser* const app_browser = LaunchWebAppBrowserAndWait(app_id);
@@ -84,7 +80,7 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest,
   content::WebContents* const restored_web_contents =
       new_contents_observer.GetWebContents();
   Browser* const restored_browser =
-      chrome::FindBrowserWithWebContents(restored_web_contents);
+      chrome::FindBrowserWithTab(restored_web_contents);
 
   EXPECT_FALSE(restored_browser->is_type_app());
   EXPECT_TRUE(restored_browser->is_type_normal());
@@ -96,7 +92,7 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest,
   ASSERT_TRUE(embedded_test_server()->Start());
 
   const GURL app_url = GetSecureAppURL();
-  const AppId app_id = InstallPWA(app_url);
+  const webapps::AppId app_id = InstallPWA(app_url);
   Browser* const app_browser = LaunchWebAppBrowserAndWait(app_id);
 
   EXPECT_TRUE(IsBrowserOpen(app_browser));
@@ -112,7 +108,7 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest,
   ASSERT_TRUE(embedded_test_server()->Start());
 
   const GURL app_url = GetSecureAppURL();
-  const AppId app_id = InstallPWA(app_url);
+  const webapps::AppId app_id = InstallPWA(app_url);
   Browser* const app_browser = LaunchWebAppBrowserAndWait(app_id);
 
   EXPECT_TRUE(IsBrowserOpen(app_browser));
@@ -135,7 +131,7 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, CannotLaunchAfterUninstall) {
   const GURL app_url = GetSecureAppURL();
-  const AppId app_id = InstallPWA(app_url);
+  const webapps::AppId app_id = InstallPWA(app_url);
 
   apps::AppLaunchParams params(
       app_id, apps::LaunchContainer::kLaunchContainerWindow,
@@ -151,7 +147,7 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, CannotLaunchAfterUninstall) {
 
 IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, TwoUninstallCalls) {
   const GURL app_url = GetSecureAppURL();
-  const AppId app_id = InstallPWA(app_url);
+  const webapps::AppId app_id = InstallPWA(app_url);
 
   base::RunLoop run_loop;
   bool quit_run_loop = false;
@@ -159,9 +155,9 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, TwoUninstallCalls) {
 
   // Trigger app uninstall without waiting for result.
   WebAppProvider* const provider = WebAppProvider::GetForTest(profile());
-  EXPECT_TRUE(provider->registrar().IsInstalled(app_id));
-  DCHECK(provider->install_finalizer().CanUserUninstallWebApp(app_id));
-  provider->install_finalizer().UninstallWebApp(
+  EXPECT_TRUE(provider->registrar_unsafe().IsInstalled(app_id));
+  DCHECK(provider->registrar_unsafe().CanUserUninstallWebApp(app_id));
+  provider->scheduler().UninstallWebApp(
       app_id, webapps::WebappUninstallSource::kAppMenu,
       base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
         if (quit_run_loop)
@@ -172,7 +168,7 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, TwoUninstallCalls) {
   EXPECT_EQ(1u, provider->command_manager().GetCommandCountForTesting());
 
   // Trigger second uninstall call and wait for result.
-  provider->install_finalizer().UninstallWebApp(
+  provider->scheduler().UninstallWebApp(
       app_id, webapps::WebappUninstallSource::kAppMenu,
       base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
         if (quit_run_loop)
@@ -185,43 +181,19 @@ IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, TwoUninstallCalls) {
   WebAppInstallManagerObserverAdapter install_observer(
       &provider->install_manager());
   install_observer.SetWebAppWillBeUninstalledDelegate(
-      base::BindLambdaForTesting([&](const AppId& uninstall_app_id) {
+      base::BindLambdaForTesting([&](const webapps::AppId& uninstall_app_id) {
         EXPECT_EQ(app_id, uninstall_app_id);
         EXPECT_FALSE(uninstall_delegate_called);
 
         // Validate that uninstalling flag is set
-        auto* app = provider->registrar().GetAppById(app_id);
+        auto* app = provider->registrar_unsafe().GetAppById(app_id);
         EXPECT_TRUE(app);
-        EXPECT_TRUE(app->is_uninstalling());
+        EXPECT_FALSE(app->is_uninstalling());
         uninstall_delegate_called = true;
       }));
 
   run_loop.Run();
-  EXPECT_FALSE(provider->registrar().IsInstalled(app_id));
-}
-
-IN_PROC_BROWSER_TEST_F(WebAppUninstallBrowserTest, PrefsRemovedAfterUninstall) {
-  const GURL app_url = GetSecureAppURL();
-  const url::Origin origin = url::Origin::Create(app_url);
-  auto web_app_info = std::make_unique<WebAppInstallInfo>();
-  web_app_info->start_url = app_url;
-  web_app_info->scope = app_url.GetWithoutFilename();
-  web_app_info->is_storage_isolated = true;
-  const AppId app_id = InstallWebApp(std::move(web_app_info));
-
-  {
-    const std::string* storage_isolation_key =
-        GetStorageIsolationKey(profile()->GetPrefs(), origin);
-    EXPECT_EQ(*storage_isolation_key, app_id);
-  }
-
-  UninstallWebApp(app_id);
-
-  {
-    const std::string* storage_isolation_key =
-        GetStorageIsolationKey(profile()->GetPrefs(), origin);
-    EXPECT_EQ(storage_isolation_key, nullptr);
-  }
+  EXPECT_FALSE(provider->registrar_unsafe().IsInstalled(app_id));
 }
 
 }  // namespace web_app

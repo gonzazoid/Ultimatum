@@ -5,7 +5,7 @@
 Chrome exposes a different set of configurations to administrators. These
 configurations are called policy and they give administrators more advanced
 controls than the normal users. With different device management tools,
-an administrator can deliver these polices to many users. Here is the
+an administrator can deliver these policies to many users. Here is the
 [help center article](https://support.google.com/chrome/a/answer/9037717?hl=en)
 that talks about Chrome policy and its deployment.
 
@@ -19,8 +19,11 @@ Usually you need a policy when
 -   Deprecating an old feature. Create a policy to give enterprise users more
     time to migrate away from the feature.
 
-**To read more about best practices for shipping enterprise friendly features
-read [this article](https://www.chromium.org/developers/enterprise-changes/).**
+**To read more about best practices for shipping enterprise friendly features,
+please read [this article](https://www.chromium.org/developers/enterprise-changes/).**
+
+**This article covers lots of technical details. More information about policy
+design can be found at [policy_design.md](./policy_design.md).**
 
 ## Adding a new policy
 
@@ -94,27 +97,27 @@ read [this article](https://www.chromium.org/developers/enterprise-changes/).**
         -  Declare the atomic group in the [policies.yaml](https://cs.chromium.org/chromium/src/components/policy/resources/templates/policies.yaml) file.
     -  Create a `policy_atomic_groups.yaml` file in the group where you added the
        policies if it does not already exist.
-       You may use [policy.yaml](https://cs.chromium.org/chromium/src/components/policy/resources/new_policy_templates/policy.yaml) as reference.
+       You may use [policy_atomic_groups.yaml](https://cs.chromium.org/chromium/src/components/policy/resources/new_policy_templates/policy_atomic_groups.yaml) as reference.
 6.  Create a preference and map the policy value to it.
     -   All policy values need to be mapped into a prefs value before being used
         unless the policy is needed before PrefService initialization.
     -   To map the policy:
-        1.  Create a prefs and register the prefs in **Local State** or
-            **Profile Prefs**. Please note that, this must match the
-            `per_profile` attribute in the `YourPolicyName.yaml`. We also
-            strongly encourage developers to register the prefs with **Profile
-            Prefs** if possible, because this gives admin more flexibility of
-            policy setup.
+        1.  [Create a prefs and register the prefs in **Local State** or
+            **Profile Prefs**.](../../chrome/browser/prefs/README.md)
+            Please note that, this must match the `per_profile` attribute in the
+            `YourPolicyName.yaml`. We also strongly encourage developers to
+            register the prefs with **Profile Prefs** if possible, because
+            this gives admin more flexibility of policy setup.
         2.  Most policies can be mapped to prefs with `kSimplePolicyMap` in
             [configuration_policy_handler_list_factory.cc](https://cs.chromium.org/chromium/src/chrome/browser/policy/configuration_policy_handler_list_factory.cc?type=cs&q=kSimplePolicyMap&g=0&l=150).
             If the policy needs additional verification or processing, please
             implement a `ConfigurationPolicyHandler` to do so.
-        3.  Test the mapping by adding policy to
-            [policy_test_cases.json](https://cs.chromium.org/chromium/src/chrome/test/data/policy/policy_test_cases.json?q=policy_test_case) (see [instructions](https://cs.chromium.org/chromium/src/docs/enterprise/policy_pref_mapping_test.md)).
+        3.  Test the mapping by adding PolicyName.json  under
+            [policy/test/data/pref_mapping](https://cs.chromium.org/chromium/src/components/policy/test/data/pref_mapping) (see [instructions](https://cs.chromium.org/chromium/src/docs/enterprise/policy_pref_mapping_test.md)).
         4.  iOS platform has its own
             [configuration_policy_handler_list_factory.mm](https://source.chromium.org/chromium/chromium/src/+/main:ios/chrome/browser/policy/configuration_policy_handler_list_factory.mm)
             and
-            [policy_test_cases.json](https://source.chromium.org/chromium/chromium/src/+/main:ios/chrome/test/data/policy/policy_test_cases.json)
+            [policy/pref_mapping](https://source.chromium.org/chromium/chromium/src/+/main:ios/chrome/test/data/policy/pref_mapping)
             file.
 7.  Disable the user setting UI when the policy is applied.
     -   If your feature can be controlled by GUI in `chrome://settings`, the
@@ -125,6 +128,7 @@ read [this article](https://www.chromium.org/developers/enterprise-changes/).**
         -   The setting needs an
             [indicator](https://cs.chromium.org/chromium/src/ui/webui/resources/images/business.svg)
             to tell users that the setting is enforced by the administrator.
+        -   There are more information and util functions can be found [here](https://source.chromium.org/chromium/chromium/src/+/main:ui/webui/resources/cr_elements/policy/).
 8.  Support `dynamic_refresh` if possible.
     -   We strongly encourage developers to make their policies support this
         attribute. It means the admin can change the policy value and Chrome
@@ -140,20 +144,23 @@ read [this article](https://www.chromium.org/developers/enterprise-changes/).**
     -   Most policies that are used by the browser can be shared between desktop
         and ChromeOS. However, you need a few additional steps for a device
         policy on ChromeOS.
-        -   Add a message for your policy in
+        -   Add a field for your policy in
             `components/policy/proto/chrome_device_policy.proto`. Please note
             that all proto fields are optional.
+        -   Update `components/policy/resources/templates/device_policy_proto_map.yaml`
+            with a mapping from the policy name to the `chrome_device_policy` proto
+            field you added.
         -   Update
             `chrome/browser/ash/policy/core/device_policy_decoder.{h,cc}`
             for the new policy.
-10.  Test the policy.
+10. Test the policy.
     -   Add a test to verify the policy. You can add a test in
         `chrome/browser/policy/<area>_policy_browsertest.cc` or with the policy
         implementation. For example, a network policy test can be put into
         `chrome/browser/net`. Ideally, your test would set the policy, fire up
         the browser, and interact with the browser just as a user would do to
         check whether the policy takes effect.
-11.  Manually testing your policy.
+11. Manually testing your policy.
     -   Windows: The simplest way to test is to write the registry keys manually
         to `Software\Policies\Chromium` (for Chromium builds) or
         `Software\Policies\Google\Chrome` (for Google Chrome branded builds). If
@@ -174,7 +181,7 @@ read [this article](https://www.chromium.org/developers/enterprise-changes/).**
         If you'd just like to do a quick test for ChromeOS, the Linux code is
         also functional on CrOS, see
         [Linux Quick Start](https://www.chromium.org/administrators/linux-quick-start).
-12.  If you are adding a new policy that supersedes an older one, verify that the
+12. If you are adding a new policy that supersedes an older one, verify that the
     new policy works as expected even if the old policy is set (allowing us to
     set both during the transition time when Chrome versions honoring the old
     and the new policies coexist).
@@ -201,12 +208,27 @@ read [this article](https://www.chromium.org/developers/enterprise-changes/).**
 5.  If the 'since_version' is set to a earlier milestone, you need to merge
     back all necessary commits.
 
-**Do not use finch to control policy launch process.**
+### Kill switch
 
-Policies are inherently switches that admins will turn on if they need. Getting
-inconsistent behavior based on factors outside of their control only causes
-confusion and is source for support requests. Use the step 3 above if the policy
-needs external testers before being officially announced.
+New browser features guarded by policy should also be behind a Finch based
+kill switch. This is a Finch configuration that allows to quickly disable a
+feature. **Do not use normal Finch experimentation and rollout process to
+control the policy launch process**.
+
+1.  Create a base::Feature flag.
+2.  Add the new feature and new policy handling behind the flag check.
+3.  After the feature launch, remove the flag (after 2-3 releases). In some
+cases, you may want to wait for the next Long Term Stable (LTS) release before
+removing the flag (see [go/chromeos-commercial-lts-chrome](http://go/chromeos-commercial-lts-chrome)).
+
+If you need to launch an emergency kill switch config due to a bug,
+please contact your TPM and the release owner (see
+[https://chromiumdash.appspot.com/schedule](https://chromiumdash.appspot.com/schedule)).
+
+For more information see [go/chrome-flag-guarding](http://go/chrome-flag-guarding)
+(internal doc, Googlers only).
+
+Kill switches are not required for **ChromeOS-specific** features.
 
 ## Deprecating a policy
 
@@ -246,28 +268,39 @@ If you want to remove support for another reason, please reach out to someone in
 to ensure this is okay. The general preference is to leave policies as
 deprecated, but still supported.
 
-When removing support for a policy, update `supported_on` to correctly list the
-last milestone the policy is supported on. Please also set 'deprecated' to True
-if the policy skipped past the deprecation state.
-
-### Steps
-1. Update `YourPolicyName.yaml`, marking the policy as no longer supported.
-   Also marking as deprecated if not previously done.
-1. Update the related test in the `policy_test_cases.json`.
-    - If the policy is going to be removed in the current milestone, remove the
-      the test at the same time.
-    - If the policy is going to be removed in the future milestone, remove the
-      test **after** policy support ended.
-1. Remove the policy handling code.
+When removing support for a policy:
+1. Update `YourPolicyName.yaml` to mark the poilcy as no longer supported.
+   - Update `supported_on` to correctly list the last milestone the policy is
+     supported on.
+   - Set 'deprecated' to True if the policy skipped past the deprecation state.
+1. If the last milestone lies in the future file a bug to clean up the policy
+   supporting code as soon as the milestone has been reached. Set its next action
+   date to a date shortly after the expected branch date for that version. Add a
+   comment in the yaml file with the bug number for reference.
+1. Lastly after the last supported version has been branched:
+   - remove all the code that implements the policy behavior as shown in the
+     [Examples](#examples) section below after the milestone has been reached.
+   - Update the related tests in the under `policy/test/data/pref_mapping` by removing all
+     test related to that policy and any resulting empty file.
 1. Notify chromium-enterprise@chromium.org to ensure this removal of support is
    mentioned in the enterprise release notes.
 
 ## Examples
 
-Here is an example based on the instructions above. It's a good, simple place to
-get started:
-[https://chromium-review.googlesource.com/c/chromium/src/+/1742209](https://chromium-review.googlesource.com/c/chromium/src/+/1742209)
-
+- Here is an example for adding a new policy. It's a good, simple place to
+  get started:
+  [https://chromium-review.googlesource.com/c/chromium/src/+/4004453](https://chromium-review.googlesource.com/c/chromium/src/+/4004453)
+- This is an example for the clean-up CL needed to remove a deprecated, escape
+  hatch policy. As mentioned in the section
+  [Removing support for a policy](#removing-support-for-a-policy).
+  [https://chromium-review.googlesource.com/c/chromium/src/+/3551442](https://chromium-review.googlesource.com/c/chromium/src/+/3551442)
+  (Note: The example above has been created prior to the policy_templates.json
+  to individual yaml files but it still shows clearly how to modify the policy
+  definition. We will update the document again as soon as we have a good clean
+  sample containing yaml file policy removal.)
+- This is an example of a CL that sets the expiration date of a policy in a
+  future milestone:
+  [https://chromium-review.googlesource.com/c/chromium/src/+/4022055](https://chromium-review.googlesource.com/c/chromium/src/+/4022055)
 
 ## Modifying existing policies
 
@@ -280,10 +313,15 @@ the code that handles existing policy settings, in particular:
 - Make sure the policy metadata is up-to-date, in particular `supported_on`, and
 the feature flags.
 - In general, don't change policy semantics in a way that is incompatible
-(as determined by user/admin-visible behavior) with previous semantics. **In
-particular, consider that existing policy deployments may affect both old and
-new browser versions, and both should behave according to the admin's
-intentions**.
+(as determined by user/admin-visible behavior) with previous semantics.
+    - **In particular, consider that existing policy deployments may affect**
+    **both old and new browser versions, and both should behave according to**
+    **the admin's intentions.**
+    - **Do not modify the behavior when the policy is not set**. To be more
+    specific: values `default`, `default_for_enterprise_users` and
+    `default_policy_level` must (likely) never change after the launch. Contact
+    cros-policy-muc-eng@google.com for guidance if you need to make such
+    changes.
 - **An important pitfall is that adding an additional allowed
 value to an enum policy may cause compatibility issues.** Specifically, an
 administrator may use the new policy value, which makes older Chrome versions

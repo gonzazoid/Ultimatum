@@ -5,13 +5,13 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_UI_ACCESSORY_SHEET_DATA_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_UI_ACCESSORY_SHEET_DATA_H_
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/types/strong_alias.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_enums.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace autofill {
@@ -119,6 +119,37 @@ class UserInfo {
 
 std::ostream& operator<<(std::ostream& out, const AccessorySheetField& field);
 std::ostream& operator<<(std::ostream& out, const UserInfo& user_info);
+
+// Represents a passkey entry shown in the password accessory.
+class PasskeySection {
+ public:
+  PasskeySection(std::string display_name, std::vector<uint8_t> passkey_id);
+  PasskeySection(const PasskeySection& passkey_section);
+  PasskeySection(PasskeySection&& passkey_section);
+
+  ~PasskeySection();
+
+  PasskeySection& operator=(const PasskeySection& passkey_section);
+  PasskeySection& operator=(PasskeySection&& passkey_section);
+
+  const std::string display_name() const { return display_name_; }
+
+  const std::vector<uint8_t> passkey_id() const { return passkey_id_; }
+
+  bool operator==(const PasskeySection& passkey_section) const;
+
+  // Estimates dynamic memory usage.
+  // See base/trace_event/memory_usage_estimator.h for more info.
+  size_t EstimateMemoryUsage() const;
+
+ private:
+  std::string display_name_;
+  std::vector<uint8_t> passkey_id_;
+  size_t estimated_dynamic_memory_use_ = 0;
+};
+
+std::ostream& operator<<(std::ostream& out,
+                         const PasskeySection& passkey_section);
 
 // Represents data pertaining to promo code offers to be shown on the Payments
 // tab of manual fallback UI.
@@ -249,7 +280,7 @@ class AccessorySheetData {
   void set_option_toggle(OptionToggle toggle) {
     option_toggle_ = std::move(toggle);
   }
-  const absl::optional<OptionToggle>& option_toggle() const {
+  const std::optional<OptionToggle>& option_toggle() const {
     return option_toggle_;
   }
 
@@ -257,8 +288,16 @@ class AccessorySheetData {
     user_info_list_.emplace_back(std::move(user_info));
   }
 
+  void add_passkey_section(PasskeySection passkey_section) {
+    passkey_section_list_.emplace_back(std::move(passkey_section));
+  }
+
   const std::vector<UserInfo>& user_info_list() const {
     return user_info_list_;
+  }
+
+  const std::vector<PasskeySection>& passkey_section_list() const {
+    return passkey_section_list_;
   }
 
   std::vector<UserInfo>& mutable_user_info_list() { return user_info_list_; }
@@ -289,7 +328,8 @@ class AccessorySheetData {
   AccessoryTabType sheet_type_;
   std::u16string title_;
   std::u16string warning_;
-  absl::optional<OptionToggle> option_toggle_;
+  std::optional<OptionToggle> option_toggle_;
+  std::vector<PasskeySection> passkey_section_list_;
   std::vector<UserInfo> user_info_list_;
   std::vector<PromoCodeInfo> promo_code_info_list_;
   std::vector<FooterCommand> footer_commands_;
@@ -364,6 +404,12 @@ class AccessorySheetData::Builder {
                        std::string id,
                        bool is_obfuscated,
                        bool selectable) &;
+
+  // Adds a new PasskeySection `accessory_sheet_data_`.
+  Builder&& AddPasskeySection(std::string username,
+                              std::vector<uint8_t> credential_id) &&;
+  Builder& AddPasskeySection(std::string username,
+                             std::vector<uint8_t> credential_id) &;
 
   // Adds a new PromoCodeInfo object to |accessory_sheet_data_|.
   Builder&& AddPromoCodeInfo(std::u16string promo_code,

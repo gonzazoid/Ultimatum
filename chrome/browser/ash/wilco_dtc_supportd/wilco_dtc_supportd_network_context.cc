@@ -109,11 +109,22 @@ void WilcoDtcSupportdNetworkContextImpl::OnAuthRequired(
   auth_challenge_responder_remote->OnAuthCredentials(absl::nullopt);
 }
 
+void WilcoDtcSupportdNetworkContextImpl::
+    OnPrivateNetworkAccessPermissionRequired(
+        const GURL& url,
+        const net::IPAddress& ip_address,
+        const absl::optional<std::string>& private_network_device_id,
+        const absl::optional<std::string>& private_network_device_name,
+        OnPrivateNetworkAccessPermissionRequiredCallback callback) {
+  std::move(callback).Run(false);
+}
+
 void WilcoDtcSupportdNetworkContextImpl::OnClearSiteData(
     const GURL& url,
     const std::string& header_value,
     int32_t load_flags,
     const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+    bool partitioned_state_allowed_only,
     OnClearSiteDataCallback callback) {
   std::move(callback).Run();
 }
@@ -128,6 +139,13 @@ void WilcoDtcSupportdNetworkContextImpl::OnDataUseUpdate(
     int32_t network_traffic_annotation_id_hash,
     int64_t recv_bytes,
     int64_t sent_bytes) {}
+
+void WilcoDtcSupportdNetworkContextImpl::OnSharedStorageHeaderReceived(
+    const url::Origin& request_origin,
+    std::vector<network::mojom::SharedStorageOperationPtr> operations,
+    OnSharedStorageHeaderReceivedCallback callback) {
+  std::move(callback).Run();
+}
 
 void WilcoDtcSupportdNetworkContextImpl::Clone(
     mojo::PendingReceiver<network::mojom::URLLoaderNetworkServiceObserver>

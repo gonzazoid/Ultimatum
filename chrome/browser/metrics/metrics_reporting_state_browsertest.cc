@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -311,6 +311,7 @@ INSTANTIATE_TEST_SUITE_P(
     testing::ValuesIn<ChangeMetricsReportingStateCalledFrom>(
         {ChangeMetricsReportingStateCalledFrom::kUnknown,
          ChangeMetricsReportingStateCalledFrom::kUiSettings,
+         ChangeMetricsReportingStateCalledFrom::kUiFirstRun,
          ChangeMetricsReportingStateCalledFrom::kCrosMetricsSettingsChange}));
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)

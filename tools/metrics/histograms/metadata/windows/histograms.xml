@@ -22,8 +22,19 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
+<histogram name="Windows.AcLayersLoaded" enum="BooleanLoaded"
+    expires_after="2024-07-15">
+  <owner>ajgo@chromium.org</owner>
+  <owner>brucedawson@chromium.org</owner>
+  <summary>
+    Records if AcLayers.dll is loaded in the browser process, indicating that
+    Chrome has been shimmed by Window's AppCompat mechanism. Reported once per
+    browser session, on startup.
+  </summary>
+</histogram>
+
 <histogram name="Windows.CetAvailable" enum="BooleanAvailable"
-    expires_after="2023-12-01">
+    expires_after="2024-12-01">
   <owner>ajgo@chromium.org</owner>
   <owner>wfh@chromium.org</owner>
   <summary>
@@ -34,7 +45,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Windows.CetEnabled" enum="BooleanEnabled"
-    expires_after="2023-04-16">
+    expires_after="2024-06-30">
   <owner>ajgo@chromium.org</owner>
   <owner>wfh@chromium.org</owner>
   <summary>
@@ -45,40 +56,32 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Windows.CreateOrUpdateShortcuts.Result"
-    enum="CreateOrUpdateShortcutsResult" expires_after="2022-11-26">
-  <owner>davidbienvenu@chromium.org</owner>
-  <owner>jessemckenna@google.com</owner>
+<histogram name="Windows.Enclave.{Type}.Available" enum="BooleanAvailable"
+    expires_after="2024-05-12">
+  <owner>ajgo@chromium.org</owner>
+  <owner>wfh@chromium.org</owner>
   <summary>
-    The result of creating or updating a Windows shortcut out of process.
-    Recorded when Chrome creates or updates a Windows shortcut using
-    shell_integration::win::CreateOrUpdateShortcuts, e.g., when a profile is
-    added.
+    Whether or not support for {Type} is/are available for use on the system, by
+    calling IsEnclaveTypeSupported. Reported once per browser session, on
+    startup.
   </summary>
-</histogram>
-
-<histogram name="Windows.DragEventsAfterPress" units="events"
-    expires_after="2022-08-01">
-  <obsolete>
-    We stopped emitting this stat on 07/14/22 in crrev.com/c/3761201.
-  </obsolete>
-  <owner>davidbienvenu@chromium.org</owner>
-  <owner>jessemckenna@google.com</owner>
-  <summary>
-    The number of drag events after a press event before we got a mouse move to
-    0, 0 that is more than 200 pixels away from the current cursor position.
-    This will be used to change the detection of spurious 0,0 move move events
-    to a much smaller value (e.g., 20 pixels) but with the addition of a check
-    that we've only received a few mouse move events, once we've determined the
-    distribution of the number of drag events we receive before the 0,0 mouse
-    move events. Recorded in HWNDMessageHandler::HandleMouseEventInternal when
-    we see a mouse drag to 0,0 that is more than 200 pixels from the cursor
-    position.
-  </summary>
+  <token key="Type">
+    <variant name="SGX"
+        summary="an enclave for the Intel Software Guard Extensions (SGX)
+                 architecture extension"/>
+    <variant name="SGX2"
+        summary="SGX2 and SGX1 enclaves (the platform and OS support SGX2
+                 instructions with EDMM on this platform - in addition to
+                 other SGX2 constructs)"/>
+    <variant name="VBS"
+        summary="a virtualization-based security (VBS) enclave"/>
+    <variant name="VBSBasic"
+        summary="a virtualization-based security (VBS) basic enclave"/>
+  </token>
 </histogram>
 
 <histogram name="Windows.HasHighResolutionTimeTicks" enum="Boolean"
-    expires_after="2023-12-19">
+    expires_after="2024-06-30">
   <owner>brucedawson@chromium.org</owner>
   <owner>gab@chromium.org</owner>
   <summary>
@@ -88,7 +91,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Windows.HighResolutionTimerUsage" units="%"
-    expires_after="2023-03-05">
+    expires_after="2024-05-19">
   <owner>olivierli@chromium.org</owner>
   <owner>catan-team@chromium.org</owner>
   <summary>
@@ -99,7 +102,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Windows.HypervPresent" enum="BooleanEnabled"
-    expires_after="2023-06-01">
+    expires_after="2024-06-01">
   <owner>rkc@chromium.org</owner>
   <owner>vnagarnaik@google.com</owner>
   <owner>rockot@chromium.org</owner>
@@ -110,7 +113,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Windows.InstallerPinUnpinned" enum="IsPinnedToTaskbarResult"
-    expires_after="2023-08-31">
+    expires_after="2023-11-12">
   <owner>davidbienvenu@chromium.org</owner>
   <owner>jessemckenna@chromium.org</owner>
   <summary>
@@ -136,18 +139,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Windows.IsPinnedToTaskbar.ProcessError" enum="BooleanError"
-    expires_after="M85">
-  <owner>pmonette@chromium.org</owner>
-  <summary>
-    Indicates whether a connection error occured between the browser and the
-    shell handler process. This is usually caused by a crash in the utility
-    process. This is logged every time the pinned state is queried.
-  </summary>
-</histogram>
-
 <histogram name="Windows.Launch.TaskbarInstallerPinned" enum="Boolean"
-    expires_after="2023-08-23">
+    expires_after="2024-04-28">
   <owner>davidbienvenu@chromium.org</owner>
   <owner>jessemckenna@google.com</owner>
   <summary>
@@ -155,51 +148,6 @@ chromium-metrics-reviews@google.com.
     the installer. Recorded when Chrome is launched from the taskbar, and the
     install was done after the installer started pinning Chrome to the taskbar
     for Windows 10+.
-  </summary>
-</histogram>
-
-<histogram name="Windows.MakeChromeDefaultDirectly.Result"
-    enum="DefaultDirectAttemptResult" expires_after="M109">
-  <owner>robliao@chromium.org</owner>
-  <owner>davidbienvenu@chromium.org</owner>
-  <summary>
-    Records the outcome of attempting to set the default directly. Recorded when
-    a request to make Chrome default is received and is eligible for the direct
-    path.
-  </summary>
-</histogram>
-
-<histogram name="Windows.Menu.Win11Style" enum="BooleanWin11MenuStyle"
-    expires_after="M97">
-  <owner>kylixrd@chromium.org</owner>
-  <owner>robliao@chromium.org</owner>
-  <summary>
-    Indicates whether Windows 11 style menus are used. Recorded on menu
-    configuration initialization.
-  </summary>
-</histogram>
-
-<histogram name="Windows.OnCurrentWorkspaceCached" enum="BooleanCacheHit"
-    expires_after="2023-04-16">
-  <owner>davidbienvenu@chromium.org</owner>
-  <owner>sky@chromium.org</owner>
-  <summary>
-    Indicates if the current workspace state of a window is cached or not. If
-    it's known that the window is on the current workspace or not, then we can
-    avoid the COM method call IsWindowOnCurrentVirtualDesktop. This is recorded
-    in BrowserView::IsOnCurrentWorkspace. In general, the state should almost
-    always be cached.
-  </summary>
-</histogram>
-
-<histogram name="Windows.OOPSelectFileDialog.ProcessError" enum="BooleanError"
-    expires_after="M82">
-  <owner>pmonette@chromium.org</owner>
-  <summary>
-    Indicates whether a connection error occured between the browser and the
-    shell handler process. This is usually caused by a crash in the utility
-    process. This is logged every time SelectFile() function is called and the
-    WinOOPSelectFileDialog feature is enabled.
   </summary>
 </histogram>
 
@@ -262,7 +210,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Windows.ProcessorFamily" enum="ProcessorFamily"
-    expires_after="2023-06-01">
+    expires_after="2024-06-01">
   <owner>rkc@chromium.org</owner>
   <owner>vnagarnaik@google.com</owner>
   <owner>rockot@chromium.org</owner>
@@ -275,40 +223,13 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Windows.ProcessorVirtualizationFirmwareEnabled"
-    enum="BooleanEnabled" expires_after="2023-06-01">
+    enum="BooleanEnabled" expires_after="2024-06-01">
   <owner>rkc@chromium.org</owner>
   <owner>vnagarnaik@google.com</owner>
   <owner>rockot@chromium.org</owner>
   <summary>
     Whether virtualization has been enabled in the system firmware. Logged
     shortly after startup. This metric will only be logged on Windows 10+.
-  </summary>
-</histogram>
-
-<histogram name="Windows.TouchDrag.Success" enum="BooleanSuccess"
-    expires_after="2021-12-01">
-  <owner>davidbienvenu@chromium.org</owner>
-  <owner>dfried@chromium.org</owner>
-  <summary>
-    Recorded each time the user starts a Windows touch drag drop of web
-    contents. This is currently only used by the WebUI tab strip, where touch
-    drag drop is enabled, to count the number of touch drags attempted.
-    ::DoDragDrop occasionally blocks waiting for a right mouse button down
-    followed by a move, which is detected by ::DoDragDrop not calling
-    QueryContinueDrag for more than a second. This will be recorded as false.
-    This stat will be used to determine how much of a real world problem this
-    is.
-  </summary>
-</histogram>
-
-<histogram name="Windows.UnpinShortcut.ProcessError" enum="BooleanError"
-    expires_after="2023-03-30">
-  <owner>davidbienvenu@chromium.org</owner>
-  <owner>grt@chromium.org</owner>
-  <summary>
-    Indicates whether a connection error occured between the browser and the
-    shell handler process. This is usually caused by a crash in the utility
-    process. This is logged every time shortcuts are unpinned from the taskbar.
   </summary>
 </histogram>
 

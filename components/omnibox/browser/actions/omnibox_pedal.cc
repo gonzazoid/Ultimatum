@@ -4,7 +4,7 @@
 
 #include "components/omnibox/browser/actions/omnibox_pedal.h"
 
-#include <cctype>
+#include <functional>
 #include <numeric>
 
 #include "base/metrics/histogram_functions.h"
@@ -14,7 +14,6 @@
 #include "build/build_config.h"
 #include "components/omnibox/browser/buildflags.h"
 #include "components/omnibox/browser/omnibox_client.h"
-#include "components/omnibox/browser/omnibox_edit_controller.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/resources/grit/omnibox_pedal_synonyms.h"
 #include "components/strings/grit/components_strings.h"
@@ -26,7 +25,7 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_android.h"
-#include "components/omnibox/browser/actions/omnibox_pedal_jni_wrapper.h"
+#include "components/omnibox/browser/actions/omnibox_action_factory_android.h"
 #endif
 
 OmniboxPedal::TokenSequence::TokenSequence(size_t reserve_size) {
@@ -187,7 +186,7 @@ bool OmniboxPedal::SynonymGroup::EraseMatchesIn(
   auto eraser = fully_erase ? &TokenSequence::Erase : &TokenSequence::Consume;
   bool changed = false;
   for (const auto& synonym : synonyms_) {
-    if (base::invoke(eraser, remaining, synonym, match_once_)) {
+    if (std::invoke(eraser, remaining, synonym, match_once_)) {
       changed = true;
       if (match_once_) {
         break;
@@ -231,10 +230,14 @@ bool OmniboxPedal::SynonymGroup::IsValid() const {
 OmniboxPedal::OmniboxPedal(OmniboxPedalId id, LabelStrings strings, GURL url)
     : OmniboxAction(strings, url),
       id_(id),
-      verbatim_synonym_group_(false, true, 0) {
-#if BUILDFLAG(IS_ANDROID)
-  CreateOrUpdateJavaObject();
-#endif
+      verbatim_synonym_group_(false, true, 0) {}
+
+/* static */ const OmniboxPedal* OmniboxPedal::FromAction(
+    const OmniboxAction* action) {
+  if (action && action->ActionId() == OmniboxActionId::PEDAL) {
+    return static_cast<const OmniboxPedal*>(action);
+  }
+  return nullptr;
 }
 
 OmniboxPedal::~OmniboxPedal() = default;
@@ -245,15 +248,14 @@ void OmniboxPedal::OnLoaded() {
 
 void OmniboxPedal::SetNavigationUrl(const GURL& url) {
   url_ = url;
-#if BUILDFLAG(IS_ANDROID)
-  CreateOrUpdateJavaObject();
-#endif
 }
 
 #if defined(SUPPORT_PEDALS_VECTOR_ICONS)
 // static
 const gfx::VectorIcon& OmniboxPedal::GetDefaultVectorIcon() {
-  return omnibox::kPedalIcon;
+  return OmniboxFieldTrial::IsChromeRefreshActionChipIconsEnabled()
+             ? omnibox::kProductChromeRefreshIcon
+             : omnibox::kPedalIcon;
 }
 
 const gfx::VectorIcon& OmniboxPedal::GetVectorIcon() const {
@@ -276,7 +278,7 @@ std::vector<OmniboxPedal::SynonymGroupSpec> OmniboxPedal::SpecifySynonymGroups(
 }
 
 OmniboxPedalId OmniboxPedal::GetMetricsId() const {
-  return id();
+  return PedalId();
 }
 
 bool OmniboxPedal::IsConceptMatch(TokenSequence& match_sequence) const {
@@ -294,12 +296,15 @@ bool OmniboxPedal::IsConceptMatch(TokenSequence& match_sequence) const {
 }
 
 void OmniboxPedal::RecordActionShown(size_t /*position*/, bool executed) const {
+  // Action metrics are recorded in the UI layer on iOS.
+#if !BUILDFLAG(IS_IOS)
   base::UmaHistogramEnumeration("Omnibox.PedalShown", GetMetricsId(),
                                 OmniboxPedalId::TOTAL_COUNT);
   if (executed) {
     base::UmaHistogramEnumeration("Omnibox.SuggestionUsed.Pedal",
                                   GetMetricsId(), OmniboxPedalId::TOTAL_COUNT);
   }
+#endif  // BUILDFLAG(IS_IOS)
 }
 
 size_t OmniboxPedal::EstimateMemoryUsage() const {
@@ -310,20 +315,19 @@ size_t OmniboxPedal::EstimateMemoryUsage() const {
   return total;
 }
 
-int32_t OmniboxPedal::GetID() const {
-  return static_cast<int32_t>(id());
+OmniboxActionId OmniboxPedal::ActionId() const {
+  return OmniboxActionId::PEDAL;
 }
 
 #if BUILDFLAG(IS_ANDROID)
-base::android::ScopedJavaGlobalRef<jobject> OmniboxPedal::GetJavaObject()
-    const {
-  return j_omnibox_action_;
-}
-
-void OmniboxPedal::CreateOrUpdateJavaObject() {
-  j_omnibox_action_.Reset(BuildOmniboxPedal(
-      GetID(), strings_.hint, strings_.suggestion_contents,
-      strings_.accessibility_suffix, strings_.accessibility_hint, url_));
+base::android::ScopedJavaLocalRef<jobject> OmniboxPedal::GetOrCreateJavaObject(
+    JNIEnv* env) const {
+  if (!j_omnibox_action_) {
+    j_omnibox_action_.Reset(
+        BuildOmniboxPedal(env, reinterpret_cast<intptr_t>(this), strings_.hint,
+                          strings_.accessibility_hint, PedalId()));
+  }
+  return base::android::ScopedJavaLocalRef<jobject>(j_omnibox_action_);
 }
 #endif
 

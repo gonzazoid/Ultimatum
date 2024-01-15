@@ -68,9 +68,9 @@
 // should be able to tell the difference.
 
 #include "base/base_export.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
@@ -83,17 +83,11 @@ namespace base {
 
 class TickClock;
 
-using ExactDeadline = base::StrongAlias<class ExactDeadlineTag, bool>;
-
 namespace internal {
 
 // This class wraps logic shared by all timers.
 class BASE_EXPORT TimerBase {
  public:
-  // Initializes the state of all the timer features. Must be invoked after
-  // FeatureList initialization and while Chrome is still single-threaded.
-  static void InitializeFeatures();
-
   TimerBase(const TimerBase&) = delete;
   TimerBase& operator=(const TimerBase&) = delete;
 
@@ -143,10 +137,6 @@ class BASE_EXPORT TimerBase {
   // Location in user code.
   Location posted_from_ GUARDED_BY_CONTEXT(sequence_checker_);
 
-  // If true, |user_task_| is scheduled to run sometime in the future.
-  // TODO(1262205): Remove once kAlwaysAbandonScheduledTask is gone.
-  bool is_running_ GUARDED_BY_CONTEXT(sequence_checker_) = false;
-
   // The handle to the posted delayed task.
   DelayedTaskHandle delayed_task_handle_ GUARDED_BY_CONTEXT(sequence_checker_);
 
@@ -172,12 +162,8 @@ class BASE_EXPORT DelayTimerBase : public TimerBase {
   // the timer is not running, this will start it by posting a task.
   virtual void Reset();
 
-  void Stop() override;
-
-  // Abandons the scheduled task (if any) and stops the timer (if running). Use
-  // this instead of Stop() only if the timer will need to be used or destroyed
-  // on another sequence.
-  // TODO(1262205): Remove once kAlwaysAbandonScheduledTask is gone.
+  // DEPRECATED. Call Stop() instead.
+  // TODO(1262205): Remove this method and all callers.
   void AbandonAndStop();
 
   TimeTicks desired_run_time() const {
@@ -201,8 +187,7 @@ class BASE_EXPORT DelayTimerBase : public TimerBase {
   virtual void RunUserTask() = 0;
 
   // Schedules |OnScheduledTaskInvoked()| to run on the current sequence with
-  // the given |delay|. |scheduled_run_time_| and |desired_run_time_| are reset
-  // to Now() + delay.
+  // the given |delay|. |desired_run_time_| is reset to Now() + delay.
   void ScheduleNewTask(TimeDelta delay);
 
   void StartInternal(const Location& posted_from, TimeDelta delay);
@@ -222,17 +207,9 @@ class BASE_EXPORT DelayTimerBase : public TimerBase {
   // Delay requested by user.
   TimeDelta delay_ GUARDED_BY_CONTEXT(sequence_checker_);
 
-  // The time at which the scheduled task is expected to fire. This time can be
-  // null if the task must be run immediately.
-  TimeTicks scheduled_run_time_ GUARDED_BY_CONTEXT(sequence_checker_);
-
   // The desired run time of |user_task_|. The user may update this at any time,
-  // even if their previous request has not run yet. If |desired_run_time_| is
-  // greater than |scheduled_run_time_|, a continuation task will be posted to
-  // wait for the remaining time. This allows us to reuse the pending task so as
-  // not to flood the delayed queues with orphaned tasks when the user code
-  // excessively Stops and Starts the timer. This time can be a "zero" TimeTicks
-  // if the task must be run immediately.
+  // even if their previous request has not run yet. This time can be a "zero"
+  // TimeTicks if the task must be run immediately.
   TimeTicks desired_run_time_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   // The tick clock used to calculate the run time for scheduled tasks.
@@ -273,7 +250,7 @@ class BASE_EXPORT OneShotTimer : public internal::DelayTimerBase {
 
   // Run the scheduled task immediately, and stop the timer. The timer needs to
   // be running.
-  void FireNow();
+  virtual void FireNow();
 
  private:
   void OnStop() final;
@@ -431,14 +408,14 @@ class BASE_EXPORT DeadlineTimer : public internal::TimerBase {
   DeadlineTimer(const DeadlineTimer&) = delete;
   DeadlineTimer& operator=(const DeadlineTimer&) = delete;
 
-  // Start the timer to run |user_task| near the specified |deadline|;
-  // preferably as close as possible to the specified time if |exact|, or
-  // preferably a little bit before than after otherwise. If the timer is
-  // already running, it will be replaced to call the given |user_task|.
+  // Start the timer to run |user_task| near the specified |deadline| following
+  // |delay_policy| If the timer is already running, it will be replaced to call
+  // the given |user_task|.
   void Start(const Location& posted_from,
              TimeTicks deadline,
              OnceClosure user_task,
-             ExactDeadline exact = ExactDeadline(false));
+             subtle::DelayPolicy delay_policy =
+                 subtle::DelayPolicy::kFlexiblePreferEarly);
 
   // Start the timer to run |user_task| near the specified |deadline|. If the
   // timer is already running, it will be replaced to call a task formed from
@@ -448,8 +425,10 @@ class BASE_EXPORT DeadlineTimer : public internal::TimerBase {
              TimeTicks deadline,
              Receiver* receiver,
              void (Receiver::*method)(),
-             ExactDeadline exact = ExactDeadline(false)) {
-    Start(posted_from, deadline, BindOnce(method, Unretained(receiver)), exact);
+             subtle::DelayPolicy delay_policy =
+                 subtle::DelayPolicy::kFlexiblePreferEarly) {
+    Start(posted_from, deadline, BindOnce(method, Unretained(receiver)),
+          delay_policy);
   }
 
  protected:
@@ -500,7 +479,8 @@ class BASE_EXPORT MetronomeTimer : public internal::TimerBase {
              Receiver* receiver,
              void (Receiver::*method)(),
              TimeTicks phase = TimeTicks()) {
-    Start(posted_from, interval, BindOnce(method, Unretained(receiver)), phase);
+    Start(posted_from, interval, BindRepeating(method, Unretained(receiver)),
+          phase);
   }
 
   // Call this method to reset the timer delay. The user task must be set. If

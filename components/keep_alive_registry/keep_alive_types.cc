@@ -20,6 +20,8 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
       return out << "BROWSER_PROCESS_LACROS";
     case KeepAliveOrigin::SESSION_RESTORE:
       return out << "SESSION_RESTORE";
+    case KeepAliveOrigin::APP_LAUNCH:
+      return out << "APP_LAUNCH";
     case KeepAliveOrigin::BACKGROUND_MODE_MANAGER:
       return out << "BACKGROUND_MODE_MANAGER";
     case KeepAliveOrigin::BACKGROUND_MODE_MANAGER_STARTUP:
@@ -34,6 +36,8 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
       return out << "LOGIN_DISPLAY_HOST_WEBUI";
     case KeepAliveOrigin::PIN_MIGRATION:
       return out << "PIN_MIGRATION";
+    case KeepAliveOrigin::DRIVEFS_NATIVE_MESSAGE_HOST_LACROS:
+      return out << "DRIVEFS_NATIVE_MESSAGE_HOST_LACROS";
     case KeepAliveOrigin::REMOTE_DEBUGGING:
       return out << "REMOTE_DEBUGGING";
     case KeepAliveOrigin::DEVTOOLS_WINDOW:
@@ -76,8 +80,16 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
       return out << "APP_START_URL_MIGRATION";
     case KeepAliveOrigin::APP_GET_INFO:
       return out << "APP_GET_INFO";
+    case KeepAliveOrigin::WEB_APP_LAUNCH:
+      return out << "WEB_APP_LAUNCH";
+    case KeepAliveOrigin::ISOLATED_WEB_APP_INSTALL:
+      return out << "ISOLATED_WEB_APP_INSTALL";
+    case KeepAliveOrigin::ISOLATED_WEB_APP_UPDATE:
+      return out << "ISOLATED_WEB_APP_UPDATE";
     case KeepAliveOrigin::SESSION_DATA_DELETER:
       return out << "SESSION_DATA_DELETER";
+    case KeepAliveOrigin::UMA_LOG:
+      return out << "UMA_LOG";
   }
 
   NOTREACHED();

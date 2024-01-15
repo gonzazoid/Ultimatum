@@ -6,14 +6,19 @@ package org.chromium.chrome.browser.signin.services;
 
 import android.accounts.Account;
 
+import androidx.annotation.IntDef;
 import androidx.annotation.MainThread;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.Callback;
 import org.chromium.components.signin.base.CoreAccountId;
+import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.metrics.SignoutReason;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
  * Android wrapper of the SigninManager which provides access from the Java layer.
@@ -26,18 +31,23 @@ import org.chromium.components.signin.metrics.SignoutReason;
  * See chrome/browser/android/signin/signin_manager_android.h for more details.
  */
 public interface SigninManager {
-    /**
-     * A SignInStateObserver is notified when the user signs in to or out of Chrome.
-     */
+    /** What type of data to delete when data deletion is requested. */
+    @IntDef({DataWipeOption.WIPE_SYNC_DATA, DataWipeOption.WIPE_ALL_PROFILE_DATA})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface DataWipeOption {
+        /* Delete all syncable data from the profile (history, passwords, form data, as well as */
+        /* cache and cookies. */
+        int WIPE_SYNC_DATA = 0;
+        /* Delete all data from the profile. */
+        int WIPE_ALL_PROFILE_DATA = 1;
+    }
+
+    /** A SignInStateObserver is notified when the user signs in to or out of Chrome. */
     interface SignInStateObserver {
-        /**
-         * Invoked when the user has signed in to Chrome.
-         */
+        /** Invoked when the user has signed in to Chrome. */
         default void onSignedIn() {}
 
-        /**
-         * Invoked when the user has signed out of Chrome.
-         */
+        /** Invoked when the user has signed out of Chrome. */
         default void onSignedOut() {}
 
         /**
@@ -49,39 +59,31 @@ public interface SigninManager {
         default void onSignOutAllowedChanged() {}
     }
 
-    /**
-     * Callbacks for the sign-in flow.
-     */
+    /** Callbacks for the sign-in flow. */
     interface SignInCallback {
         /**
-         * Invoked after sign-in is completed successfully.
+         * Invoked after sign-in is completed successfully. Sign-in preferences may not be committed
+         * yet.
          */
         void onSignInComplete();
 
-        /**
-         * Invoked if the sign-in processes does not complete for any reason.
-         */
+        /** Invoked after sign-in preferences are committed. */
+        default void onPrefsCommitted() {}
+
+        /** Invoked if the sign-in processes does not complete for any reason. */
         void onSignInAborted();
     }
 
-    /**
-     * Callbacks for the sign-out flow.
-     */
+    /** Callbacks for the sign-out flow. */
     interface SignOutCallback {
-        /**
-         * Called before the data wiping is started.
-         */
+        /** Called before the data wiping is started. */
         default void preWipeData() {}
 
-        /**
-         * Called after the data is wiped.
-         */
+        /** Called after the data is wiped. */
         void signOutComplete();
     }
 
-    /**
-     * Extracts the domain name of a given account's email.
-     */
+    /** Extracts the domain name of a given account's email. */
     String extractDomainName(String accountEmail);
 
     /**
@@ -89,26 +91,21 @@ public interface SigninManager {
      */
     IdentityManager getIdentityManager();
 
-    /**
-     * Returns true if sign in can be started now.
-     */
+    /** Returns true if sign in can be started now. */
     boolean isSigninAllowed();
 
-    /**
-     * Returns true if sync opt in can be started now.
-     */
+    /** Returns true if sync opt in can be started now. */
     boolean isSyncOptInAllowed();
 
-    /**
-     * Returns true if signin is disabled by policy.
-     */
+    /** Returns true if signin is disabled by policy. */
     boolean isSigninDisabledByPolicy();
 
     /**
-     * @return Whether true if the current user is not demo user and the user has a reasonable
-     *         Google Play Services installed.
+     * Returns whether the user can sign-in (maybe after an update to Google Play services).
+     * @param requireUpdatedPlayServices Indicates whether an updated version of play services is
+     *         required or not.
      */
-    boolean isSigninSupported();
+    boolean isSigninSupported(boolean requireUpdatedPlayServices);
 
     /**
      * @return Whether force sign-in is enabled by policy.
@@ -128,34 +125,70 @@ public interface SigninManager {
     /**
      * Starts the sign-in flow, and executes the callback when finished.
      *
-     * The sign-in flow goes through the following steps:
+     * <p>The sign-in flow goes through the following steps:
      *
-     *   - Wait for AccountTrackerService to be seeded.
-     *   - Complete sign-in with the native IdentityManager.
-     *   - Call the callback if provided.
+     * <p>- Wait for AccountTrackerService to be seeded. - Complete sign-in with the native
+     * IdentityManager. - Call the callback if provided.
      *
      * @param account The account to sign in to.
+     * @param accessPoint {@link SigninAccessPoint} that initiated the sign-in flow.
      * @param callback Optional callback for when the sign-in process is finished.
      */
-    void signin(Account account, @Nullable SignInCallback callback);
+    @Deprecated
+    void signin(
+            Account account, @SigninAccessPoint int accessPoint, @Nullable SignInCallback callback);
 
     /**
      * Starts the sign-in flow, and executes the callback when finished.
      *
-     * The sign-in flow goes through the following steps:
+     * <p>The sign-in flow goes through the following steps:
      *
-     *   - Wait for AccountTrackerService to be seeded.
-     *   - Wait for policy to be checked for the account.
-     *   - If managed, wait for the policy to be fetched.
-     *   - Complete sign-in with the native IdentityManager.
-     *   - Call the callback if provided.
+     * <p>- Wait for AccountTrackerService to be seeded. - Complete sign-in with the native
+     * IdentityManager. - Call the callback if provided.
      *
+     * @param coreAccountInfo The {@link CoreAccountInfo} to sign in to.
      * @param accessPoint {@link SigninAccessPoint} that initiated the sign-in flow.
+     * @param callback Optional callback for when the sign-in process is finished.
+     */
+    void signin(
+            CoreAccountInfo coreAccountInfo,
+            @SigninAccessPoint int accessPoint,
+            @Nullable SignInCallback callback);
+
+    /**
+     * Starts the sign-in flow, and executes the callback when finished.
+     *
+     * <p>The sign-in flow goes through the following steps:
+     *
+     * <p>- Wait for AccountTrackerService to be seeded. - Wait for policy to be checked for the
+     * account. - If managed, wait for the policy to be fetched. - Complete sign-in with the native
+     * IdentityManager. - Call the callback if provided.
+     *
      * @param account The account to sign in to.
+     * @param accessPoint {@link SigninAccessPoint} that initiated the sign-in flow.
+     * @param callback Optional callback for when the sign-in process is finished.
+     */
+    @Deprecated
+    void signinAndEnableSync(
+            Account account, @SigninAccessPoint int accessPoint, @Nullable SignInCallback callback);
+
+    /**
+     * Starts the sign-in flow, and executes the callback when finished.
+     *
+     * <p>The sign-in flow goes through the following steps:
+     *
+     * <p>- Wait for AccountTrackerService to be seeded. - Wait for policy to be checked for the
+     * account. - If managed, wait for the policy to be fetched. - Complete sign-in with the native
+     * IdentityManager. - Call the callback if provided.
+     *
+     * @param coreAccountInfo The {@link CoreAccountInfo} to sign in to.
+     * @param accessPoint {@link SigninAccessPoint} that initiated the sign-in flow.
      * @param callback Optional callback for when the sign-in process is finished.
      */
     void signinAndEnableSync(
-            @SigninAccessPoint int accessPoint, Account account, @Nullable SignInCallback callback);
+            CoreAccountInfo coreAccountInfo,
+            @SigninAccessPoint int accessPoint,
+            @Nullable SignInCallback callback);
 
     /**
      * Schedules the runnable to be invoked after all sign-in, sign-out, or sync data wipe operation
@@ -174,17 +207,15 @@ public interface SigninManager {
      * @param signOutCallback Callback to notify about progress.
      * @param forceWipeUserData Whether user selected to wipe all device data.
      */
-    void revokeSyncConsent(@SignoutReason int signoutSource, SignOutCallback signOutCallback,
+    void revokeSyncConsent(
+            @SignoutReason int signoutSource,
+            SignOutCallback signOutCallback,
             boolean forceWipeUserData);
 
-    /**
-     * Returns true if sign out can be started now.
-     */
+    /** Returns true if sign out can be started now. */
     boolean isSignOutAllowed();
 
-    /**
-     * Invokes signOut with no callback.
-     */
+    /** Invokes signOut with no callback. */
     default void signOut(@SignoutReason int signoutSource) {
         signOut(signoutSource, null, false);
     }
@@ -198,7 +229,9 @@ public interface SigninManager {
      * @param signOutCallback Callback to notify about the sign-out progress.
      * @param forceWipeUserData Whether user selected to wipe all device data.
      */
-    void signOut(@SignoutReason int signoutSource, SignOutCallback signOutCallback,
+    void signOut(
+            @SignoutReason int signoutSource,
+            SignOutCallback signOutCallback,
             boolean forceWipeUserData);
 
     /**
@@ -231,6 +264,7 @@ public interface SigninManager {
      * serialization of wipe operations.
      *
      * @param wipeDataCallback A callback which will be called once the data is wiped.
+     * @param dataWipeOption What kind of data to delete.
      */
-    void wipeSyncUserData(Runnable wipeDataCallback);
+    void wipeSyncUserData(Runnable wipeDataCallback, @DataWipeOption int dataWipeOption);
 }

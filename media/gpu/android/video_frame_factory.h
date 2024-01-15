@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "media/base/video_decoder.h"
@@ -69,6 +69,10 @@ class MEDIA_GPU_EXPORT VideoFrameFactory {
   // Runs |closure| on the calling sequence after all previous
   // CreateVideoFrame() calls have completed.
   virtual void RunAfterPendingVideoFrames(base::OnceClosure closure) = 0;
+
+  // Returns true if the VideoFrameFactory can't currently produce any more
+  // frames.
+  virtual bool IsStalled() const = 0;
 };
 
 }  // namespace media

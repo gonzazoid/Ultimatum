@@ -4,30 +4,20 @@
 
 import("//build/config/ios/asset_catalog.gni")
 
-imageset("grid_cell_close_button") {
+colorset("grid_background_color") {
+  sources = [ "grid_background_color.colorset/Contents.json" ]
+}
+
+imageset("tab_grid_incognito_tabs_empty") {
   sources = [
-    "grid_cell_close_button.imageset/Contents.json",
-    "grid_cell_close_button.imageset/grid_cell_close_button@2x.png",
-    "grid_cell_close_button.imageset/grid_cell_close_button@3x.png",
+    "tab_grid_incognito_tabs_empty.imageset/Contents.json",
+    "tab_grid_incognito_tabs_empty.imageset/tab_grid_incognito_tabs_empty.pdf",
   ]
 }
 
-imageset("grid_cell_plus_sign") {
+imageset("tab_grid_regular_tabs_empty") {
   sources = [
-    "grid_cell_plus_sign.imageset/Contents.json",
-    "grid_cell_plus_sign.imageset/grid_cell_plus_sign@2x.png",
-    "grid_cell_plus_sign.imageset/grid_cell_plus_sign@3x.png",
+    "tab_grid_regular_tabs_empty.imageset/Contents.json",
+    "tab_grid_regular_tabs_empty.imageset/tab_grid_regular_tabs_empty.pdf",
   ]
-}
-
-colorset("grid_theme_selection_tint_color") {
-  sources = [ "grid_theme_selection_tint_color.colorset/Contents.json" ]
-}
-
-colorset("grid_theme_dark_selection_tint_color") {
-  sources = [ "grid_theme_dark_selection_tint_color.colorset/Contents.json" ]
-}
-
-colorset("plus_sign_grid_cell_background_color") {
-  sources = [ "plus_sign_grid_cell_background_color.colorset/Contents.json" ]
 }

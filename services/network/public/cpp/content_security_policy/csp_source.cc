@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <sstream>
-
 #include "services/network/public/cpp/content_security_policy/csp_source.h"
+
+#include <sstream>
+#include <string_view>
 
 #include "base/check_op.h"
 #include "base/strings/string_util.h"
@@ -22,10 +23,9 @@ bool HasHost(const mojom::CSPSource& source) {
   return !source.host.empty() || source.is_host_wildcard;
 }
 
-bool DecodePath(const base::StringPiece& path, std::string* output) {
+bool DecodePath(const std::string_view& path, std::string* output) {
   url::RawCanonOutputT<char16_t> unescaped;
-  url::DecodeURLEscapeSequences(path.data(), path.size(),
-                                url::DecodeURLMode::kUTF8OrIsomorphic,
+  url::DecodeURLEscapeSequences(path, url::DecodeURLMode::kUTF8OrIsomorphic,
                                 &unescaped);
   return base::UTF16ToUTF8(unescaped.data(), unescaped.length(), output);
 }
@@ -159,21 +159,23 @@ bool SourceAllowPath(const mojom::CSPSource& source,
   return SourceAllowPath(source, url.path());
 }
 
-bool requiresUpgrade(const PortMatchingResult result) {
+bool requiresUpgrade(PortMatchingResult result) {
   return result == PortMatchingResult::MatchingUpgrade;
 }
 
-bool requiresUpgrade(const SchemeMatchingResult result) {
+bool requiresUpgrade(SchemeMatchingResult result) {
   return result == SchemeMatchingResult::MatchingUpgrade;
 }
 
-bool canUpgrade(const PortMatchingResult result) {
-  return result == PortMatchingResult::MatchingUpgrade ||
-         result == PortMatchingResult::MatchingWildcard;
+bool canUpgrade(PortMatchingResult result, CSPSourceContext context) {
+  return (result == PortMatchingResult::MatchingUpgrade ||
+          result == PortMatchingResult::MatchingWildcard) &&
+         context == CSPSourceContext::ContentSecurityPolicy;
 }
 
-bool canUpgrade(const SchemeMatchingResult result) {
-  return result == SchemeMatchingResult::MatchingUpgrade;
+bool canUpgrade(SchemeMatchingResult result, CSPSourceContext context) {
+  return result == SchemeMatchingResult::MatchingUpgrade &&
+         context == CSPSourceContext::ContentSecurityPolicy;
 }
 
 }  // namespace
@@ -185,6 +187,7 @@ bool CSPSourceIsSchemeOnly(const mojom::CSPSource& source) {
 bool CheckCSPSource(const mojom::CSPSource& source,
                     const GURL& url,
                     const mojom::CSPSource& self_source,
+                    CSPSourceContext context,
                     bool has_followed_redirect,
                     bool is_opaque_fenced_frame) {
   // Opaque fenced frames only allow https urls.
@@ -214,10 +217,12 @@ bool CheckCSPSource(const mojom::CSPSource& source,
   PortMatchingResult portResult = SourceAllowPort(source, url);
   SchemeMatchingResult schemeResult =
       SourceAllowScheme(source, url, self_source);
-  if (requiresUpgrade(schemeResult) && !canUpgrade(portResult))
+  if (requiresUpgrade(schemeResult) && !canUpgrade(portResult, context)) {
     return false;
-  if (requiresUpgrade(portResult) && !canUpgrade(schemeResult))
+  }
+  if (requiresUpgrade(portResult) && !canUpgrade(schemeResult, context)) {
     return false;
+  }
   return schemeResult != SchemeMatchingResult::NotMatching &&
          SourceAllowHost(source, url) &&
          portResult != PortMatchingResult::NotMatching &&

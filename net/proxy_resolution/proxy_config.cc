@@ -34,8 +34,8 @@ void AddProxyURIListToProxyList(std::string uri_list,
                                 ProxyServer::Scheme default_scheme) {
   base::StringTokenizer proxy_uri_list(uri_list, ",");
   while (proxy_uri_list.GetNext()) {
-    proxy_list->AddProxyServer(
-        ProxyUriToProxyServer(proxy_uri_list.token(), default_scheme));
+    proxy_list->AddProxyChain(
+        ProxyUriToProxyChain(proxy_uri_list.token(), default_scheme));
   }
 }
 
@@ -271,7 +271,7 @@ base::Value ProxyConfig::ToValue() const {
       if (proxy_rules_.reverse_bypass)
         dict.Set("reverse_bypass", true);
 
-      base::Value list(base::Value::Type::LIST);
+      base::Value::List list;
 
       for (const auto& bypass_rule : bypass.rules())
         list.Append(bypass_rule->ToString());

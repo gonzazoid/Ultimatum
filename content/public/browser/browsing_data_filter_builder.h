@@ -6,12 +6,15 @@
 #define CONTENT_PUBLIC_BROWSER_BROWSING_DATA_FILTER_BUILDER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/storage_partition.h"
+#include "content/public/browser/storage_partition_config.h"
 #include "net/cookies/cookie_partition_key_collection.h"
+#include "services/network/public/mojom/clear_data_filter.mojom-forward.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -24,15 +27,17 @@ class Origin;
 
 namespace content {
 
+class StoragePartitionConfig;
+
 // A class that builds Origin->bool predicates to filter browsing data. These
 // filters can be of two modes - a list of items to delete or a list of items to
 // preserve, deleting everything else. The filter entries can be origins or
 // registrable domains.
 //
 // This class defines interface to build filters for various kinds of browsing
-// data. |BuildOriginFilter()| is useful for most browsing data storage backends,
-// but some backends, such as website settings and cookies, use other formats of
-// filter.
+// data. |BuildStorageKeyFilter()| is useful for most browsing data storage
+// backends, but some backends, such as website settings and cookies, use other
+// formats of filter.
 class CONTENT_EXPORT BrowsingDataFilterBuilder {
  public:
   enum class Mode {
@@ -42,8 +47,30 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
     kPreserve
   };
 
+  // This determines how StorageKeys will be matched given an origin that was
+  // added to the filter.
+  enum class OriginMatchingMode {
+    // Default mode: StorageKeys are matched on origin in 1P context and on
+    // top-level-site in 3P contexts. For deletion that means that the origin
+    // and everything embedded on it is deleted, but the instances when the
+    // origin itself is embedded are left untouched.
+    kThirdPartiesIncluded,
+    // Second option: StorageKeys are matched on origin only in all contexts.
+    // For deletion that means that the origin is deleted in both 1P and 3P
+    // contexts, but anything embedded on it is left untouched.
+    kOriginInAllContexts
+  };
+
   // Constructs a filter with the given |mode|: delete or preserve.
+  // The |OriginMatchingMode| is |kThirdPartiesIncluded| in this case by
+  // default.
   static std::unique_ptr<BrowsingDataFilterBuilder> Create(Mode mode);
+
+  // Same as above, but also allows to choose how origins are matched with
+  // storage keys.
+  static std::unique_ptr<BrowsingDataFilterBuilder> Create(
+      Mode mode,
+      OriginMatchingMode origin_mode);
 
   virtual ~BrowsingDataFilterBuilder() = default;
 
@@ -72,6 +99,8 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
   // cross-site context. Only works for processing the Clear-Site-Data header
   // (which means the filter contains a single domain) when partitioned cookies
   // are enabled.
+  // TODO(crbug.com/1416655): Remove this method in favor of
+  //    SetPartitionedStateAllowedOnly.
   virtual bool IsCrossSiteClearSiteDataForCookies() const = 0;
 
   // Set the StorageKey for the filter.
@@ -79,7 +108,7 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
   // exactly will be deleted. Without the key, all storage that matches the
   // other criteria is deleted.
   virtual void SetStorageKey(
-      const absl::optional<blink::StorageKey>& storage_key) = 0;
+      const std::optional<blink::StorageKey>& storage_key) = 0;
 
   // Returns whether the StorageKey is set (e.g. using the method above).
   virtual bool HasStorageKey() const = 0;
@@ -92,7 +121,23 @@ class CONTENT_EXPORT BrowsingDataFilterBuilder {
   // Returns true if we're an empty preserve list, where we delete everything.
   virtual bool MatchesAllOriginsAndDomains() = 0;
 
-  // Deprecated: Prefer `BuildOriginFilter()` instead.
+  // Returns true if we're an empty delete list, where we delete nothing.
+  virtual bool MatchesNothing() = 0;
+
+  // When true, this filter will exclude unpartitioned cookies, i.e. cookies
+  // whose partition key is null. By default, the value is false.
+  // Partitioned cookies are unaffected by this setting.
+  virtual void SetPartitionedStateAllowedOnly(bool value) = 0;
+
+  // When set, only data from the given StoragePartition will be removed.
+  // By default, data from non-default StoragePartitions will not be removed.
+  // This should not be used when removing Profile-scoped data types.
+  virtual void SetStoragePartitionConfig(
+      const StoragePartitionConfig& storage_partition_config) = 0;
+
+  virtual std::optional<StoragePartitionConfig> GetStoragePartitionConfig() = 0;
+
+  // Deprecated: Prefer `BuildStorageKeyFilter()` instead.
   // Builds a filter that matches URLs that are in the list to delete, or aren't
   // in the list to preserve.
   virtual base::RepeatingCallback<bool(const GURL&)> BuildUrlFilter() = 0;

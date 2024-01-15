@@ -45,19 +45,19 @@ ConflictResolution ModelTypeSyncBridge::ResolveConflict(
   return ConflictResolution::kUseRemote;
 }
 
-void ModelTypeSyncBridge::ApplyStopSyncChanges(
+void ModelTypeSyncBridge::ApplyDisableSyncChanges(
     std::unique_ptr<MetadataChangeList> delete_metadata_change_list) {
-  if (delete_metadata_change_list) {
-    // Nothing to do if this fails, so just ignore the error it might return.
-    ApplySyncChanges(std::move(delete_metadata_change_list),
-                     EntityChangeList());
-  }
+  // Nothing to do if this fails, so just ignore the error it might return.
+  ApplyIncrementalSyncChanges(std::move(delete_metadata_change_list),
+                              EntityChangeList());
 }
 
 void ModelTypeSyncBridge::OnCommitAttemptErrors(
     const syncer::FailedCommitResponseDataList& error_response_list) {
   // By default the bridge just ignores failed commit items.
 }
+
+void ModelTypeSyncBridge::OnSyncPaused() {}
 
 ModelTypeSyncBridge::CommitAttemptFailedBehavior
 ModelTypeSyncBridge::OnCommitAttemptFailed(SyncCommitError commit_error) {
@@ -68,11 +68,17 @@ size_t ModelTypeSyncBridge::EstimateSyncOverheadMemoryUsage() const {
   return 0U;
 }
 
-sync_pb::EntitySpecifics ModelTypeSyncBridge::TrimRemoteSpecificsForCaching(
+sync_pb::EntitySpecifics
+ModelTypeSyncBridge::TrimAllSupportedFieldsFromRemoteSpecifics(
     const sync_pb::EntitySpecifics& entity_specifics) const {
   // Clears all fields by default to avoid the memory and I/O overhead of an
   // additional copy of the data.
   return sync_pb::EntitySpecifics();
+}
+
+bool ModelTypeSyncBridge::IsEntityDataValid(
+    const EntityData& entity_data) const {
+  return true;
 }
 
 ModelTypeChangeProcessor* ModelTypeSyncBridge::change_processor() {

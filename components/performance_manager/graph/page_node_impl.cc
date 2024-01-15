@@ -6,14 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/time/default_tick_clock.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/graph/graph_impl_operations.h"
 #include "components/performance_manager/graph/process_node_impl.h"
 #include "components/performance_manager/public/graph/graph_operations.h"
+#include "content/public/browser/browser_thread.h"
 
 namespace performance_manager {
 
@@ -52,21 +53,30 @@ bool IsValidPageStateTransition(PageState old_state, PageState new_state) {
 PageNodeImpl::PageNodeImpl(const WebContentsProxy& contents_proxy,
                            const std::string& browser_context_id,
                            const GURL& visible_url,
-                           bool is_visible,
-                           bool is_audible,
+                           PagePropertyFlags initial_properties,
                            base::TimeTicks visibility_change_time,
                            PageState page_state)
     : contents_proxy_(contents_proxy),
       visibility_change_time_(visibility_change_time),
       main_frame_url_(visible_url),
       browser_context_id_(browser_context_id),
-      is_visible_(is_visible),
-      is_audible_(is_audible),
+      is_visible_(initial_properties.Has(PagePropertyFlag::kIsVisible)),
+      is_audible_(initial_properties.Has(PagePropertyFlag::kIsAudible)),
+      has_picture_in_picture_(
+          initial_properties.Has(PagePropertyFlag::kHasPictureInPicture)),
       page_state_(page_state) {
-  DCHECK(IsValidInitialPageState(page_state));
+  // Nodes are created on the UI thread, then accessed on the PM sequence.
+  // `weak_this_` can be returned from GetWeakPtrOnUIThread() and dereferenced
+  // on the PM sequence.
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  DETACH_FROM_SEQUENCE(sequence_checker_);
   weak_this_ = weak_factory_.GetWeakPtr();
 
-  DETACH_FROM_SEQUENCE(sequence_checker_);
+  DCHECK(IsValidInitialPageState(page_state));
+
+  if (is_audible_.value()) {
+    audible_change_time_ = base::TimeTicks::Now();
+  }
 }
 
 PageNodeImpl::~PageNodeImpl() {
@@ -76,12 +86,187 @@ PageNodeImpl::~PageNodeImpl() {
   DCHECK_EQ(EmbeddingType::kInvalid, embedding_type_);
   DCHECK(!page_load_tracker_data_);
   DCHECK(!site_data_);
+  DCHECK(!tab_connectedness_data_);
   DCHECK(!frozen_frame_data_);
   DCHECK(!page_aggregator_data_);
 }
 
+const std::string& PageNodeImpl::GetBrowserContextID() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return browser_context_id_;
+}
+
+resource_attribution::PageContext PageNodeImpl::GetResourceContext() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return resource_attribution::PageContext::FromPageNode(this);
+}
+
+PageNodeImpl::EmbeddingType PageNodeImpl::GetEmbeddingType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(embedder_frame_node_ || embedding_type_ == EmbeddingType::kInvalid);
+  return embedding_type_;
+}
+
+PageType PageNodeImpl::GetType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return type_.value();
+}
+
+bool PageNodeImpl::IsFocused() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return is_focused_.value();
+}
+
+bool PageNodeImpl::IsVisible() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return is_visible_.value();
+}
+
+base::TimeDelta PageNodeImpl::GetTimeSinceLastVisibilityChange() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return base::TimeTicks::Now() - visibility_change_time_;
+}
+
+bool PageNodeImpl::IsAudible() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return is_audible_.value();
+}
+
+absl::optional<base::TimeDelta> PageNodeImpl::GetTimeSinceLastAudibleChange()
+    const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (audible_change_time_.has_value()) {
+    return base::TimeTicks::Now() - audible_change_time_.value();
+  }
+  return absl::nullopt;
+}
+
+bool PageNodeImpl::HasPictureInPicture() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return has_picture_in_picture_.value();
+}
+
+PageNode::LoadingState PageNodeImpl::GetLoadingState() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return loading_state_.value();
+}
+
+ukm::SourceId PageNodeImpl::GetUkmSourceID() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return ukm_source_id_.value();
+}
+
+PageNodeImpl::LifecycleState PageNodeImpl::GetLifecycleState() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return lifecycle_state_.value();
+}
+
+bool PageNodeImpl::IsHoldingWebLock() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return is_holding_weblock_.value();
+}
+
+bool PageNodeImpl::IsHoldingIndexedDBLock() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return is_holding_indexeddb_lock_.value();
+}
+
+int64_t PageNodeImpl::GetNavigationID() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return navigation_id_;
+}
+
+const std::string& PageNodeImpl::GetContentsMimeType() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return contents_mime_type_;
+}
+
+base::TimeDelta PageNodeImpl::GetTimeSinceLastNavigation() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (navigation_committed_time_.is_null()) {
+    return base::TimeDelta();
+  }
+  return base::TimeTicks::Now() - navigation_committed_time_;
+}
+
+const GURL& PageNodeImpl::GetMainFrameUrl() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return main_frame_url_.value();
+}
+
+uint64_t PageNodeImpl::EstimateMainFramePrivateFootprintSize() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  uint64_t total = 0;
+  FrameNodeImpl* main_frame = main_frame_node();
+  if (main_frame) {
+    performance_manager::GraphImplOperations::VisitFrameAndChildrenPreOrder(
+        main_frame, [&total](FrameNodeImpl* frame_node) {
+          total += frame_node->GetPrivateFootprintKbEstimate();
+          return true;
+        });
+  }
+  return total;
+}
+
+bool PageNodeImpl::HadFormInteraction() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return had_form_interaction_.value();
+}
+
+bool PageNodeImpl::HadUserEdits() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return had_user_edits_.value();
+}
+
+const WebContentsProxy& PageNodeImpl::GetContentsProxy() const {
+  return contents_proxy();
+}
+
+const absl::optional<freezing::FreezingVote>& PageNodeImpl::GetFreezingVote()
+    const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return freezing_vote_.value();
+}
+
+PageState PageNodeImpl::GetPageState() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return page_state_.value();
+}
+
+uint64_t PageNodeImpl::EstimateResidentSetSize() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  uint64_t total = 0;
+  performance_manager::GraphOperations::VisitFrameTreePreOrder(
+      this, [&total](const FrameNode* frame_node) {
+        total += frame_node->GetResidentSetKbEstimate();
+        return true;
+      });
+  return total;
+}
+
+uint64_t PageNodeImpl::EstimatePrivateFootprintSize() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  uint64_t total = 0;
+  performance_manager::GraphOperations::VisitFrameTreePreOrder(
+      this, [&total](const FrameNode* frame_node) {
+        total += frame_node->GetPrivateFootprintKbEstimate();
+        return true;
+      });
+  return total;
+}
+
 const WebContentsProxy& PageNodeImpl::contents_proxy() const {
   return contents_proxy_;
+}
+
+base::WeakPtr<PageNodeImpl> PageNodeImpl::GetWeakPtrOnUIThread() {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  return weak_this_;
+}
+
+base::WeakPtr<PageNodeImpl> PageNodeImpl::GetWeakPtr() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return weak_factory_.GetWeakPtr();
 }
 
 void PageNodeImpl::AddFrame(base::PassKey<FrameNodeImpl>,
@@ -120,6 +305,11 @@ void PageNodeImpl::SetType(PageType type) {
   type_.SetAndMaybeNotify(this, type);
 }
 
+void PageNodeImpl::SetIsFocused(bool is_focused) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  is_focused_.SetAndMaybeNotify(this, is_focused);
+}
+
 void PageNodeImpl::SetIsVisible(bool is_visible) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (is_visible_.SetAndMaybeNotify(this, is_visible)) {
@@ -133,7 +323,17 @@ void PageNodeImpl::SetIsVisible(bool is_visible) {
 
 void PageNodeImpl::SetIsAudible(bool is_audible) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  is_audible_.SetAndMaybeNotify(this, is_audible);
+  if (is_audible_.SetAndMaybeNotify(this, is_audible)) {
+    // The change time needs to be updated after observers are notified, as they
+    // use this to determine time passed since the *previous* state change. They
+    // can infer the current state change time themselves via NowTicks.
+    audible_change_time_ = base::TimeTicks::Now();
+  }
+}
+
+void PageNodeImpl::SetHasPictureInPicture(bool has_picture_in_picture) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  has_picture_in_picture_.SetAndMaybeNotify(this, has_picture_in_picture);
 }
 
 void PageNodeImpl::SetUkmSourceId(ukm::SourceId ukm_source_id) {
@@ -151,6 +351,18 @@ void PageNodeImpl::OnTitleUpdated() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (auto* observer : GetObservers())
     observer->OnTitleUpdated(this);
+}
+
+void PageNodeImpl::OnAboutToBeDiscarded(base::WeakPtr<PageNode> new_page_node) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!new_page_node) {
+    return;
+  }
+
+  for (auto* observer : GetObservers()) {
+    observer->OnAboutToBeDiscarded(this, new_page_node.get());
+  }
 }
 
 void PageNodeImpl::OnMainFrameNavigationCommitted(
@@ -177,34 +389,6 @@ void PageNodeImpl::OnMainFrameNavigationCommitted(
     observer->OnMainFrameDocumentChanged(this);
 }
 
-base::TimeDelta PageNodeImpl::TimeSinceLastNavigation() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (navigation_committed_time_.is_null())
-    return base::TimeDelta();
-  return base::TimeTicks::Now() - navigation_committed_time_;
-}
-
-base::TimeDelta PageNodeImpl::TimeSinceLastVisibilityChange() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return base::TimeTicks::Now() - visibility_change_time_;
-}
-
-FrameNodeImpl* PageNodeImpl::GetMainFrameNodeImpl() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (main_frame_nodes_.empty())
-    return nullptr;
-
-  // Return the current frame node if there is one. Iterating over this set is
-  // fine because it is almost always of length 1 or 2.
-  for (auto* frame : main_frame_nodes_) {
-    if (frame->is_current())
-      return frame;
-  }
-
-  // Otherwise, return any old main frame node.
-  return *main_frame_nodes_.begin();
-}
-
 FrameNodeImpl* PageNodeImpl::opener_frame_node() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return opener_frame_node_;
@@ -216,101 +400,26 @@ FrameNodeImpl* PageNodeImpl::embedder_frame_node() const {
   return embedder_frame_node_;
 }
 
-PageNodeImpl::EmbeddingType PageNodeImpl::embedding_type() const {
+FrameNodeImpl* PageNodeImpl::main_frame_node() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(embedder_frame_node_ || embedding_type_ == EmbeddingType::kInvalid);
-  return embedding_type_;
-}
+  if (main_frame_nodes_.empty())
+    return nullptr;
 
-PageType PageNodeImpl::type() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return type_.value();
-}
+  // Return the current frame node if there is one. Iterating over this set is
+  // fine because it is almost always of length 1 or 2.
+  for (auto* frame : main_frame_nodes_) {
+    if (frame->IsCurrent()) {
+      return frame;
+    }
+  }
 
-bool PageNodeImpl::is_visible() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_visible_.value();
-}
-
-bool PageNodeImpl::is_audible() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_audible_.value();
-}
-
-PageNode::LoadingState PageNodeImpl::loading_state() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return loading_state_.value();
-}
-
-ukm::SourceId PageNodeImpl::ukm_source_id() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return ukm_source_id_.value();
-}
-
-PageNodeImpl::LifecycleState PageNodeImpl::lifecycle_state() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return lifecycle_state_.value();
-}
-
-bool PageNodeImpl::is_holding_weblock() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_holding_weblock_.value();
-}
-
-bool PageNodeImpl::is_holding_indexeddb_lock() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_holding_indexeddb_lock_.value();
+  // Otherwise, return any old main frame node.
+  return *main_frame_nodes_.begin();
 }
 
 const base::flat_set<FrameNodeImpl*>& PageNodeImpl::main_frame_nodes() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return main_frame_nodes_;
-}
-
-base::TimeTicks PageNodeImpl::usage_estimate_time() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return usage_estimate_time_;
-}
-
-uint64_t PageNodeImpl::private_footprint_kb_estimate() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return private_footprint_kb_estimate_;
-}
-
-const std::string& PageNodeImpl::browser_context_id() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return browser_context_id_;
-}
-
-const GURL& PageNodeImpl::main_frame_url() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return main_frame_url_.value();
-}
-
-int64_t PageNodeImpl::navigation_id() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return navigation_id_;
-}
-
-const std::string& PageNodeImpl::contents_mime_type() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return contents_mime_type_;
-}
-
-bool PageNodeImpl::had_form_interaction() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return had_form_interaction_.value();
-}
-
-const absl::optional<freezing::FreezingVote>& PageNodeImpl::freezing_vote()
-    const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return freezing_vote_.value();
-}
-
-PageNode::PageState PageNodeImpl::page_state() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return page_state_.value();
 }
 
 void PageNodeImpl::SetOpenerFrameNode(FrameNodeImpl* opener) {
@@ -382,18 +491,6 @@ void PageNodeImpl::ClearEmbedderFrameNodeAndEmbeddingType() {
                                          previous_type);
 }
 
-void PageNodeImpl::set_usage_estimate_time(
-    base::TimeTicks usage_estimate_time) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  usage_estimate_time_ = usage_estimate_time;
-}
-
-void PageNodeImpl::set_private_footprint_kb_estimate(
-    uint64_t private_footprint_kb_estimate) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  private_footprint_kb_estimate_ = private_footprint_kb_estimate;
-}
-
 void PageNodeImpl::set_has_nonempty_beforeunload(
     bool has_nonempty_beforeunload) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -414,12 +511,18 @@ void PageNodeImpl::set_page_state(PageState page_state) {
 
 void PageNodeImpl::OnJoiningGraph() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-#if DCHECK_IS_ON()
-  // Dereferencing the WeakPtr associated with this node will bind it to the
-  // current sequence (all subsequent calls to |GetWeakPtr| will return the
-  // same WeakPtr).
-  GetWeakPtr()->GetImpl();
-#endif
+
+  // Make sure all weak pointers, even `weak_this_` that was created on the UI
+  // thread in the constructor, can only be dereferenced on the graph sequence.
+  //
+  // If this is the first pointer dereferenced, it will bind all pointers from
+  // `weak_factory_` to the current sequence. If not, get() will DCHECK.
+  // DCHECK'ing the return value of get() prevents the compiler from optimizing
+  // it away.
+  //
+  // TODO(crbug.com/1134162): Use WeakPtrFactory::BindToCurrentSequence for this
+  // (it's clearer but currently not exposed publicly).
+  DCHECK(GetWeakPtr().get());
 }
 
 void PageNodeImpl::OnBeforeLeavingGraph() {
@@ -440,13 +543,9 @@ void PageNodeImpl::RemoveNodeAttachedData() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   page_load_tracker_data_.reset();
   site_data_.reset();
+  tab_connectedness_data_.reset();
   frozen_frame_data_.Reset();
   page_aggregator_data_.Reset();
-}
-
-const std::string& PageNodeImpl::GetBrowserContextID() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return browser_context_id();
 }
 
 const FrameNode* PageNodeImpl::GetOpenerFrameNode() const {
@@ -459,81 +558,17 @@ const FrameNode* PageNodeImpl::GetEmbedderFrameNode() const {
   return embedder_frame_node();
 }
 
-PageNodeImpl::EmbeddingType PageNodeImpl::GetEmbeddingType() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return embedding_type();
-}
-
-PageType PageNodeImpl::GetType() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return type();
-}
-
-bool PageNodeImpl::IsVisible() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_visible();
-}
-
-base::TimeDelta PageNodeImpl::GetTimeSinceLastVisibilityChange() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return TimeSinceLastVisibilityChange();
-}
-
-bool PageNodeImpl::IsAudible() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_audible();
-}
-
-PageNode::LoadingState PageNodeImpl::GetLoadingState() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return loading_state();
-}
-
-ukm::SourceId PageNodeImpl::GetUkmSourceID() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return ukm_source_id();
-}
-
-PageNodeImpl::LifecycleState PageNodeImpl::GetLifecycleState() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return lifecycle_state();
-}
-
-bool PageNodeImpl::IsHoldingWebLock() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_holding_weblock();
-}
-
-bool PageNodeImpl::IsHoldingIndexedDBLock() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return is_holding_indexeddb_lock();
-}
-
-int64_t PageNodeImpl::GetNavigationID() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return navigation_id();
-}
-
-const std::string& PageNodeImpl::GetContentsMimeType() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return contents_mime_type();
-}
-
-base::TimeDelta PageNodeImpl::GetTimeSinceLastNavigation() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return TimeSinceLastNavigation();
-}
-
 const FrameNode* PageNodeImpl::GetMainFrameNode() const {
-  return GetMainFrameNodeImpl();
+  return main_frame_node();
 }
 
 bool PageNodeImpl::VisitMainFrameNodes(const FrameNodeVisitor& visitor) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (auto* frame_impl : main_frame_nodes_) {
     const FrameNode* frame = frame_impl;
-    if (!visitor.Run(frame))
+    if (!visitor(frame)) {
       return false;
+    }
   }
   return true;
 }
@@ -543,43 +578,6 @@ const base::flat_set<const FrameNode*> PageNodeImpl::GetMainFrameNodes() const {
   base::flat_set<const FrameNode*> main_frame_nodes(main_frame_nodes_.begin(),
                                                     main_frame_nodes_.end());
   return main_frame_nodes;
-}
-
-const GURL& PageNodeImpl::GetMainFrameUrl() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return main_frame_url();
-}
-
-bool PageNodeImpl::HadFormInteraction() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return had_form_interaction();
-}
-
-const WebContentsProxy& PageNodeImpl::GetContentsProxy() const {
-  return contents_proxy();
-}
-
-const absl::optional<freezing::FreezingVote>& PageNodeImpl::GetFreezingVote()
-    const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return freezing_vote();
-}
-
-PageState PageNodeImpl::GetPageState() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return page_state();
-}
-
-uint64_t PageNodeImpl::EstimateResidentSetSize() const {
-  uint64_t total = 0;
-  performance_manager::GraphOperations::VisitFrameTreePreOrder(
-      this, base::BindRepeating(
-                [](uint64_t* total, const FrameNode* frame_node) {
-                  *total += frame_node->GetResidentSetKbEstimate();
-                  return true;
-                },
-                &total));
-  return total;
 }
 
 void PageNodeImpl::SetLifecycleState(LifecycleState lifecycle_state) {
@@ -600,6 +598,11 @@ void PageNodeImpl::SetIsHoldingIndexedDBLock(bool is_holding_indexeddb_lock) {
 void PageNodeImpl::SetHadFormInteraction(bool had_form_interaction) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   had_form_interaction_.SetAndMaybeNotify(this, had_form_interaction);
+}
+
+void PageNodeImpl::SetHadUserEdits(bool had_user_edits) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  had_user_edits_.SetAndMaybeNotify(this, had_user_edits);
 }
 
 }  // namespace performance_manager

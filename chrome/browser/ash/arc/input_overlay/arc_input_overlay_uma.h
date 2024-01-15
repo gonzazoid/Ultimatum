@@ -5,8 +5,11 @@
 #ifndef CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_ARC_INPUT_OVERLAY_UMA_H_
 #define CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_ARC_INPUT_OVERLAY_UMA_H_
 
-namespace arc {
-namespace input_overlay {
+#include <string>
+
+#include "chrome/browser/ash/arc/input_overlay/constants.h"
+
+namespace arc::input_overlay {
 
 void RecordInputOverlayFeatureState(bool enable);
 
@@ -14,7 +17,23 @@ void RecordInputOverlayMappingHintState(bool enable);
 
 void RecordInputOverlayCustomizedUsage();
 
-}  // namespace input_overlay
-}  // namespace arc
+// Record when finishing action dragging or releasing arrow key.
+void RecordInputOverlayActionReposition(const std::string& package_name,
+                                        RepositionType reposition_type,
+                                        InputOverlayWindowStateType state_type);
+
+// Record when finishing menu entry dragging or releasing arrow key.
+void RecordInputOverlayMenuEntryReposition(
+    const std::string& package_name,
+    RepositionType reposition_type,
+    InputOverlayWindowStateType state_type);
+
+// Record when finishing button group dragging or releasing arrow key.
+void RecordInputOverlayButtonGroupReposition(
+    const std::string& package_name,
+    RepositionType reposition_type,
+    InputOverlayWindowStateType state_type);
+
+}  // namespace arc::input_overlay
 
 #endif  // CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_ARC_INPUT_OVERLAY_UMA_H_

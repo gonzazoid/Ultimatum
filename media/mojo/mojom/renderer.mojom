@@ -18,8 +18,10 @@ struct MediaUrlParams {
   url.mojom.Url media_url;
   network.mojom.SiteForCookies site_for_cookies;
   url.mojom.Origin top_frame_origin;
+  bool has_storage_access;
   bool allow_credentials;
   bool is_hls;
+  map<string, string> headers;
 };
 
 // A Mojo equivalent of media::Renderer. Used when audio and video decoding

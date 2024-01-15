@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from enum import Enum
 from optparse import OptionParser
 from selenium import webdriver
 
@@ -16,8 +17,18 @@ import traceback
 
 DEFAULT_STP_DRIVER_PATH = '/Applications/Safari Technology Preview.app/Contents/MacOS/safaridriver'
 
+WS_DISPLAY_LIST_PATH = '/Library/Preferences/com.apple.windowserver.displays.plist'
+
 # Maximum number of times the benchmark will be run before giving up.
 MAX_ATTEMPTS = 6
+
+
+class Channel(Enum):
+  UNKNOWN = 1
+  CANARY = 2
+  DEV = 3
+  BETA = 4
+  STABLE = 5
 
 
 class BrowserBench(object):
@@ -30,19 +41,43 @@ class BrowserBench(object):
     self._githash = None
     self._browser = None
     self._driver = None
+    self._is_120 = BrowserBench._IsDisplayRefreshRate120()
+    self._channel = Channel.UNKNOWN
 
   @staticmethod
-  def _CreateChromeDriver(optargs):
+  def _IsDisplayRefreshRate120():
+    # The current refresh rate is stored in
+    # /Library/Preferences/com.apple.windowserver.displays.plist . If it has the
+    # string Hz = 120 then display is at 120. This likely isn't right if there
+    # are multiple displays, but it's good enough for the lab where we only
+    # have devices with a single display.
+    try:
+      windowserver_output = subprocess.run(["defaults", "read",
+                                            WS_DISPLAY_LIST_PATH],
+                                           capture_output=True)
+      return windowserver_output.stdout.decode('utf-8').find('Hz = 120') != -1
+    except Exception as e:
+      logging.warning('Determining refresh rated generated exception, '
+                      'assuming 60hz and continuing', exc_info=True)
+      return False
+
+
+  @staticmethod
+  def _CreateChromeDriver(optargs, channel):
     options = webdriver.ChromeOptions()
-    options.add_argument('enable-benchmarking')
+    args = ['enable-benchmarking' , 'no-first-run']
     if optargs.arguments:
       for arg in optargs.arguments.split(','):
-        options.add_argument(arg)
-    else:
-      # If no arguments were given, enable field trial config and no first run.
-      # These ensure a consistent set of flags.
-      options.add_argument('--no-first-run')
-      options.add_argument('--enable-field-trial-config')
+        args.append(arg)
+
+    if channel != Channel.STABLE:
+      args.append('--enable-field-trial-config')
+      logging.info('Using field trial config for non-stable channel')
+
+    for arg in args:
+      options.add_argument(arg)
+
+    logging.info(f'Chrome arguments {args}')
 
     if optargs.chrome_path:
       options.binary_location = optargs.chrome_path
@@ -93,9 +128,9 @@ class BrowserBench(object):
     return version.strip()
 
   @staticmethod
-  def _CreateDriver(optargs):
+  def _CreateDriver(optargs, channel):
     if optargs.browser == 'chrome':
-      return BrowserBench._CreateChromeDriver(optargs)
+      return BrowserBench._CreateChromeDriver(optargs, channel)
     elif optargs.browser == 'safari' or optargs.browser == 'stp':
       for i in range(0, 10):
         try:
@@ -133,9 +168,9 @@ class BrowserBench(object):
     logging.warning('Not handling kill of chrome, if this is hit and test '
                     'fails, implement it')
 
-  def _CreateDriverAndRun(self, optargs):
+  def _CreateDriverAndRun(self, optargs, channel):
     logging.info('Creating Driver')
-    self._driver = BrowserBench._CreateDriver(optargs)
+    self._driver = BrowserBench._CreateDriver(optargs, channel)
     if not self._driver:
       raise Exception('failed to create driver')
     self._driver.set_window_size(900, 780)
@@ -184,6 +219,7 @@ class BrowserBench(object):
             'test': self._name,
             'version': self._version,
             'browser': self._browser,
+            'Refresh Rate': '120' if self._is_120 else '60',
         },
         'results': self._ConvertMeasurementsToSkiaFormat(measurements),
         'links': {
@@ -264,6 +300,17 @@ class BrowserBench(object):
       assert len(pairs) % 2 == 0
       for i in range(0, len(pairs), 2):
         extra_key_values[pairs[i]] = pairs[i + 1]
+    if 'channel' in extra_key_values:
+      if extra_key_values['channel'].lower() == 'canary':
+        self._channel = Channel.CANARY
+      elif extra_key_values['channel'].lower() == 'dev':
+        self._channel = Channel.DEV
+      elif extra_key_values['channel'].lower() == 'beta':
+        self._channel = Channel.BETA
+      elif extra_key_values['channel'].lower() == 'stable':
+        self._channel = Channel.STABLE
+      else:
+          logging.warning('Unknown channel')
 
     self.UpdateParseArgs(optargs)
 
@@ -275,7 +322,7 @@ class BrowserBench(object):
     while not measurements and run_count < MAX_ATTEMPTS:
       run_count += 1
       try:
-        measurements = self._CreateDriverAndRun(optargs)
+        measurements = self._CreateDriverAndRun(optargs, self._channel)
         break
       except Exception as e:
         if run_count < MAX_ATTEMPTS:

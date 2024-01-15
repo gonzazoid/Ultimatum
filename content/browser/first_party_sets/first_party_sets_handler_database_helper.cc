@@ -6,7 +6,6 @@
 
 #include "base/containers/contains.h"
 #include "base/logging.h"
-#include "base/version.h"
 #include "content/browser/first_party_sets/database/first_party_sets_database.h"
 #include "net/base/schemeful_site.h"
 #include "net/first_party_sets/first_party_set_entry.h"
@@ -18,7 +17,7 @@ namespace content {
 
 FirstPartySetsHandlerDatabaseHelper::FirstPartySetsHandlerDatabaseHelper(
     const base::FilePath& db_path) {
-  DCHECK(!db_path.empty());
+  CHECK(!db_path.empty());
   db_ = std::make_unique<FirstPartySetsDatabase>(db_path);
 }
 
@@ -40,28 +39,15 @@ FirstPartySetsHandlerDatabaseHelper::ComputeSetsDiff(
   }
 
   std::vector<net::SchemefulSite> result;
-  old_sets.ForEachPublicSetEntry(
-      [&](const net::SchemefulSite& old_member,
-          const net::FirstPartySetEntry& old_entry) -> bool {
-        if (!old_config.Contains(old_member)) {
-          absl::optional<net::FirstPartySetEntry> current_entry =
-              current_sets.FindEntry(old_member, current_config);
-          // Look for the removed sites and the ones have owner changed.
-          if (!current_entry.has_value() ||
-              current_entry.value().primary() != old_entry.primary()) {
-            result.push_back(old_member);
-          }
-        }
-        return true;
-      });
 
-  old_config.ForEachCustomizationEntry(
-      [&](const net::SchemefulSite& old_member,
-          const absl::optional<net::FirstPartySetEntry>& old_entry) -> bool {
-        const absl::optional<net::FirstPartySetEntry> current_entry =
+  old_sets.ForEachEffectiveSetEntry(
+      old_config, [&](const net::SchemefulSite& old_member,
+                      const net::FirstPartySetEntry& old_entry) {
+        std::optional<net::FirstPartySetEntry> current_entry =
             current_sets.FindEntry(old_member, current_config);
-        // Look for the ones have owner changed.
-        if (old_entry.has_value() && current_entry != old_entry) {
+        // Look for the removed sites and the ones whose primary has changed.
+        if (!current_entry.has_value() ||
+            current_entry.value().primary() != old_entry.primary()) {
           result.push_back(old_member);
         }
         return true;
@@ -76,10 +62,11 @@ FirstPartySetsHandlerDatabaseHelper::UpdateAndGetSitesToClearForContext(
     const net::GlobalFirstPartySets& current_sets,
     const net::FirstPartySetsContextConfig& current_config) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!browser_context_id.empty());
+  CHECK(!browser_context_id.empty());
+  std::pair<net::GlobalFirstPartySets, net::FirstPartySetsContextConfig>
+      old_sets_with_config = db_->GetGlobalSetsAndConfig(browser_context_id);
   base::flat_set<net::SchemefulSite> diff =
-      ComputeSetsDiff(db_->GetGlobalSets(browser_context_id),
-                      db_->FetchPolicyConfigurations(browser_context_id),
+      ComputeSetsDiff(old_sets_with_config.first, old_sets_with_config.second,
                       current_sets, current_config);
 
   if (!db_->InsertSitesToClear(browser_context_id, diff)) {
@@ -101,21 +88,20 @@ void FirstPartySetsHandlerDatabaseHelper::UpdateClearStatusForContext(
 
 void FirstPartySetsHandlerDatabaseHelper::PersistSets(
     const std::string& browser_context_id,
-    const base::Version& version,
     const net::GlobalFirstPartySets& sets,
     const net::FirstPartySetsContextConfig& config) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!browser_context_id.empty());
-  if (!db_->PersistSets(browser_context_id, version, sets, config))
+  CHECK(!browser_context_id.empty());
+  if (!db_->PersistSets(browser_context_id, sets, config))
     DVLOG(1) << "Failed to write sets into the database.";
 }
 
-net::GlobalFirstPartySets
-FirstPartySetsHandlerDatabaseHelper::GetPersistedGlobalSets(
+std::pair<net::GlobalFirstPartySets, net::FirstPartySetsContextConfig>
+FirstPartySetsHandlerDatabaseHelper::GetGlobalSetsAndConfigForTesting(
     const std::string& browser_context_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!browser_context_id.empty());
-  return db_->GetGlobalSets(browser_context_id);
+  CHECK(!browser_context_id.empty());
+  return db_->GetGlobalSetsAndConfig(browser_context_id);
 }
 
 // Wraps FirstPartySetsDatabase::HasEntryInBrowserContextsClearedForTesting.
@@ -123,7 +109,7 @@ bool FirstPartySetsHandlerDatabaseHelper::
     HasEntryInBrowserContextsClearedForTesting(
         const std::string& browser_context_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!browser_context_id.empty());
+  CHECK(!browser_context_id.empty());
   return db_->HasEntryInBrowserContextsClearedForTesting(  // IN-TEST
       browser_context_id);
 }

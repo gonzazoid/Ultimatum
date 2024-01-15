@@ -44,10 +44,10 @@ static_library("session") {
   deps = [
     ":arc_base_enums",
     ":connection_holder",
+    "//ash",
     "//ash/components/arc:arc_base_utils",
     "//ash/components/arc:arc_features",
     "//ash/components/arc:prefs",
-    "//ash/components/arc/enterprise",
     "//ash/components/arc/mojom",
     "//ash/constants:constants",
     "//ash/public/cpp",
@@ -61,11 +61,13 @@ static_library("session") {
     "//chromeos/ash/components/dbus/spaced:spaced",
     "//chromeos/ash/components/dbus/upstart",
     "//chromeos/ash/components/memory:memory",
-    "//chromeos/components/sensors:buildflags",
-    "//chromeos/system:system",
+    "//chromeos/ash/components/system",
+    "//chromeos/system",
     "//components/prefs:prefs",
     "//components/user_manager",
     "//components/version_info",
+    "//services/accessibility/android/public/mojom",
+    "//ui/display/manager",
   ]
 }
 
@@ -92,6 +94,8 @@ static_library("arc_base_enums") {
     "arc_management_transition.h",
     "arc_stop_reason.cc",
     "arc_stop_reason.h",
+    "arc_vm_data_migration_status.cc",
+    "arc_vm_data_migration_status.h",
   ]
 
   deps = [ "//base" ]
@@ -125,6 +129,7 @@ source_set("unit_tests") {
   deps = [
     ":arc_base_enums",
     ":session",
+    "//ash:test_support",
     "//ash/components/arc:arc_base",
     "//ash/components/arc:arc_test_support",
     "//ash/components/arc:prefs",
@@ -136,11 +141,13 @@ source_set("unit_tests") {
     "//chromeos/ash/components/dbus/dlcservice",
     "//chromeos/ash/components/dbus/session_manager",
     "//chromeos/ash/components/dbus/upstart",
-    "//chromeos/system:system",
+    "//chromeos/ash/components/system",
     "//components/account_id",
     "//components/prefs:test_support",
     "//components/user_manager",
+    "//components/user_manager:test_support",
     "//components/version_info",
     "//content/test:test_support",
+    "//ui/views:views",
   ]
 }

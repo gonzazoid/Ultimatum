@@ -30,11 +30,14 @@
 #include "third_party/blink/renderer/core/editing/serializers/serialization.h"
 
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/timer/elapsed_timer.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
-#include "third_party/blink/public/platform/web_url_loader_client.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
@@ -43,7 +46,6 @@
 #include "third_party/blink/renderer/core/dom/cdata_section.h"
 #include "third_party/blink/renderer/core/dom/child_list_mutation_scope.h"
 #include "third_party/blink/renderer/core/dom/comment.h"
-#include "third_party/blink/renderer/core/dom/context_features.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
@@ -57,6 +59,7 @@
 #include "third_party/blink/renderer/core/editing/serializers/styled_markup_serializer.h"
 #include "third_party/blink/renderer/core/editing/visible_selection.h"
 #include "third_party/blink/renderer/core/editing/visible_units.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/html_anchor_element.h"
@@ -78,21 +81,24 @@
 #include "third_party/blink/renderer/core/svg/svg_use_element.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/runtime_call_stats.h"
-#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader_client.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
-namespace blink {
+#if defined(USE_INNER_HTML_PARSER_FAST_PATH)
+#include "third_party/blink/renderer/core/html/parser/html_document_parser_fastpath.h"
+#endif
 
-using TaskRunnerHandle = scheduler::WebResourceLoadingTaskRunnerHandle;
+namespace blink {
 
 class AttributeChange {
   DISALLOW_NEW();
 
  public:
-  AttributeChange() : name_(g_null_atom, g_null_atom, g_null_atom) {}
+  AttributeChange() : name_(QualifiedName::Null()) {}
 
   AttributeChange(Element* element,
                   const QualifiedName& name,
@@ -117,112 +123,36 @@ namespace blink {
 
 namespace {
 
-class FailingLoader final : public WebURLLoader {
- public:
-  explicit FailingLoader(
-      std::unique_ptr<TaskRunnerHandle> freezable_task_runner_handle,
-      std::unique_ptr<TaskRunnerHandle> unfreezable_task_runner_handle)
-      : freezable_task_runner_handle_(std::move(freezable_task_runner_handle)),
-        unfreezable_task_runner_handle_(
-            std::move(unfreezable_task_runner_handle)) {}
-  ~FailingLoader() override = default;
-
-  // WebURLLoader implementation:
-  void LoadSynchronously(
-      std::unique_ptr<network::ResourceRequest> request,
-      scoped_refptr<WebURLRequestExtraData> url_request_extra_data,
-      bool pass_response_pipe_to_client,
-      bool no_mime_sniffing,
-      base::TimeDelta timeout_interval,
-      WebURLLoaderClient*,
-      WebURLResponse&,
-      absl::optional<WebURLError>& error,
-      WebData&,
-      int64_t& encoded_data_length,
-      int64_t& encoded_body_length,
-      WebBlobInfo& downloaded_blob,
-      std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
-          resource_load_info_notifier_wrapper) override {
-    error.emplace(ResourceError::Failure(KURL(request->url)));
-  }
-  void LoadAsynchronously(
-      std::unique_ptr<network::ResourceRequest> request,
-      scoped_refptr<WebURLRequestExtraData> url_request_extra_data,
-      bool no_mime_sniffing,
-      std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
-          resource_load_info_notifier_wrapper,
-      WebURLLoaderClient* client) override {
-    url_ = KURL(request->url);
-    client_ = client;
-    freezable_task_runner_handle_->GetTaskRunner()->PostTask(
-        FROM_HERE,
-        WTF::BindOnce(&FailingLoader::Fail, weak_ptr_factory_.GetWeakPtr()));
-  }
-  void Freeze(LoaderFreezeMode mode) override {
-    mode_ = mode;
-    if (mode_ != LoaderFreezeMode::kNone || !client_) {
-      return;
-    }
-    freezable_task_runner_handle_->GetTaskRunner()->PostTask(
-        FROM_HERE,
-        WTF::BindOnce(&FailingLoader::Fail, weak_ptr_factory_.GetWeakPtr()));
-  }
-  void DidChangePriority(WebURLRequest::Priority, int) override {}
-  scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunnerForBodyLoader()
-      override {
-    return freezable_task_runner_handle_->GetTaskRunner();
-  }
-
- private:
-  void Fail() {
-    if (mode_ != LoaderFreezeMode::kNone || !client_) {
-      return;
-    }
-
-    auto* client = client_;
-    client_ = nullptr;
-    client->DidFail(static_cast<WebURLError>(ResourceError::Failure(url_)),
-                    /*finish_time=*/base::TimeTicks::Now(),
-                    /*total_encoded_data_length=*/0,
-                    /*total_encoded_body_length=*/0,
-                    /*total_decoded_body_length=*/0);
-  }
-
-  KURL url_;
-  WebURLLoaderClient* client_ = nullptr;
-  LoaderFreezeMode mode_ = LoaderFreezeMode::kNone;
-
-  const std::unique_ptr<TaskRunnerHandle> freezable_task_runner_handle_;
-  const std::unique_ptr<TaskRunnerHandle> unfreezable_task_runner_handle_;
-
-  // This must be the last member.
-  base::WeakPtrFactory<FailingLoader> weak_ptr_factory_{this};
-};
-
-class FailingLoaderFactory final : public WebURLLoaderFactory {
- public:
-  // WebURLLoaderFactory implementation:
-  std::unique_ptr<WebURLLoader> CreateURLLoader(
-      const WebURLRequest&,
-      std::unique_ptr<TaskRunnerHandle> freezable_task_runner_handle,
-      std::unique_ptr<TaskRunnerHandle> unfreezable_task_runner_handle,
-      CrossVariantMojoRemote<mojom::KeepAliveHandleInterfaceBase>
-          keep_alive_handle,
-      WebBackForwardCacheLoaderHelper back_forward_cache_loader_helper)
-      override {
-    return std::make_unique<FailingLoader>(
-        std::move(freezable_task_runner_handle),
-        std::move(unfreezable_task_runner_handle));
-  }
-};
-
 class EmptyLocalFrameClientWithFailingLoaderFactory final
     : public EmptyLocalFrameClient {
  public:
-  std::unique_ptr<WebURLLoaderFactory> CreateURLLoaderFactory() override {
-    return std::make_unique<FailingLoaderFactory>();
+  scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
+      override {
+    // TODO(crbug.com/1413912): CreateSanitizedFragmentFromMarkupWithContext may
+    // call this method for data: URL resources. But ResourceLoader::Start()
+    // don't need to call GetURLLoaderFactory() for data: URL because
+    // ResourceLoader handles the data: URL resource load without the returned
+    // SharedURLLoaderFactory.
+    // Note: Non-data: URL resource can't be loaded because the CORS check in
+    // BaseFetchContext::CanRequestInternal fails for non-data: URL resources.
+    return base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
+        WTF::BindOnce(
+            [](const network::ResourceRequest& resource_request,
+               mojo::PendingReceiver<network::mojom::URLLoader> receiver,
+               mojo::PendingRemote<network::mojom::URLLoaderClient> client) {
+              NOTREACHED();
+            }));
   }
 };
+
+#if defined(USE_INNER_HTML_PARSER_FAST_PATH)
+void LogFastPathParserTotalTime(base::TimeDelta parse_time) {
+  // The time needed to parse is typically < 1ms (even at the 99%).
+  UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
+      "Blink.HTMLFastPathParser.TotalParseTime2", parse_time,
+      base::Microseconds(1), base::Milliseconds(10), 100);
+}
+#endif
 
 }  // namespace
 
@@ -534,7 +464,6 @@ DocumentFragment* CreateFragmentFromMarkupWithContext(
       DocumentInit::Create()
           .WithExecutionContext(document.GetExecutionContext())
           .WithAgent(document.GetAgent()));
-  tagged_document->SetContextFeatures(document.GetContextFeatures());
 
   auto* root =
       MakeGarbageCollected<Element>(QualifiedName::Null(), tagged_document);
@@ -646,12 +575,12 @@ bool IsPlainTextMarkup(Node* node) {
 static bool ShouldPreserveNewline(const EphemeralRange& range) {
   if (Node* node = range.StartPosition().NodeAsRangeFirstNode()) {
     if (LayoutObject* layout_object = node->GetLayoutObject())
-      return layout_object->Style()->PreserveNewline();
+      return layout_object->Style()->ShouldPreserveBreaks();
   }
 
   if (Node* node = range.StartPosition().AnchorNode()) {
     if (LayoutObject* layout_object = node->GetLayoutObject())
-      return layout_object->Style()->PreserveNewline();
+      return layout_object->Style()->ShouldPreserveBreaks();
   }
 
   return false;
@@ -677,7 +606,8 @@ DocumentFragment* CreateFragmentFromText(const EphemeralRange& context,
     fragment->AppendChild(document.createTextNode(string));
     if (string.EndsWith('\n')) {
       auto* element = MakeGarbageCollected<HTMLBRElement>(document);
-      element->setAttribute(html_names::kClassAttr, AppleInterchangeNewline);
+      element->setAttribute(html_names::kClassAttr,
+                            AtomicString(AppleInterchangeNewline));
       fragment->AppendChild(element);
     }
     return fragment;
@@ -707,7 +637,8 @@ DocumentFragment* CreateFragmentFromText(const EphemeralRange& context,
     if (s.empty() && i + 1 == num_lines) {
       // For last line, use the "magic BR" rather than a P.
       element = MakeGarbageCollected<HTMLBRElement>(document);
-      element->setAttribute(html_names::kClassAttr, AppleInterchangeNewline);
+      element->setAttribute(html_names::kClassAttr,
+                            AtomicString(AppleInterchangeNewline));
     } else {
       if (use_clones_of_enclosing_block)
         element = &block->CloneWithoutChildren();
@@ -724,8 +655,8 @@ DocumentFragment* CreateFragmentForInnerOuterHTML(
     const String& markup,
     Element* context_element,
     ParserContentPolicy parser_content_policy,
-    const char* method,
-    bool include_shadow_roots,
+    Element::IncludeShadowRoots include_shadow_roots,
+    Element::ForceHtml force_html,
     ExceptionState& exception_state) {
   DCHECK(context_element);
   const HTMLTemplateElement* template_element =
@@ -739,10 +670,42 @@ DocumentFragment* CreateFragmentForInnerOuterHTML(
           ? context_element->GetDocument().EnsureTemplateDocument()
           : context_element->GetDocument();
   DocumentFragment* fragment = DocumentFragment::Create(document);
-  document.setAllowDeclarativeShadowRoots(include_shadow_roots);
+  document.setAllowDeclarativeShadowRoots(
+      include_shadow_roots == Element::IncludeShadowRoots::kInclude);
 
-  if (IsA<HTMLDocument>(document)) {
+  if (IsA<HTMLDocument>(document) || force_html == Element::ForceHtml::kForce) {
+#if defined(USE_INNER_HTML_PARSER_FAST_PATH)
+    bool log_tag_stats = false;
+    base::ElapsedTimer parse_timer;
+    const bool parsed_fast_path = TryParsingHTMLFragment(
+        markup, document, *fragment, *context_element, parser_content_policy,
+        include_shadow_roots == Element::IncludeShadowRoots::kInclude,
+        &log_tag_stats);
+    if (parsed_fast_path) {
+      LogFastPathParserTotalTime(parse_timer.Elapsed());
+#if DCHECK_IS_ON()
+      // As a sanity check for the fast-path, create another fragment using
+      // the full parser and compare the results.
+      // See https://bugs.chromium.org/p/chromium/issues/detail?id=1407201
+      // for details.
+      DocumentFragment* fragment2 = DocumentFragment::Create(document);
+      fragment2->ParseHTML(markup, context_element, parser_content_policy);
+      DCHECK_EQ(CreateMarkup(fragment), CreateMarkup(fragment2))
+          << " supplied value " << markup;
+      DCHECK(fragment->isEqualNode(fragment2));
+#endif
+      return fragment;
+    }
+    fragment = DocumentFragment::Create(document);
+#endif
     fragment->ParseHTML(markup, context_element, parser_content_policy);
+#if defined(USE_INNER_HTML_PARSER_FAST_PATH)
+    LogFastPathParserTotalTime(parse_timer.Elapsed());
+    if (log_tag_stats &&
+        RuntimeEnabledFeatures::InnerHTMLParserFastpathLogFailureEnabled()) {
+      LogTagsForUnsupportedTagTypeFailure(*fragment);
+    }
+#endif
     return fragment;
   }
 
@@ -814,8 +777,9 @@ DocumentFragment* CreateContextualFragment(
   DCHECK(element);
 
   DocumentFragment* fragment = CreateFragmentForInnerOuterHTML(
-      markup, element, parser_content_policy, "createContextualFragment",
-      /*include_shadow_roots=*/false, exception_state);
+      markup, element, parser_content_policy,
+      Element::IncludeShadowRoots::kDontInclude, Element::ForceHtml::kDontForce,
+      exception_state);
   if (!fragment)
     return nullptr;
 
@@ -840,10 +804,10 @@ DocumentFragment* CreateContextualFragment(
 void ReplaceChildrenWithFragment(ContainerNode* container,
                                  DocumentFragment* fragment,
                                  ExceptionState& exception_state) {
-  RUNTIME_CALL_TIMER_SCOPE(
-      V8PerIsolateData::MainThreadIsolate(),
-      RuntimeCallStats::CounterId::kReplaceChildrenWithFragment);
   DCHECK(container);
+  RUNTIME_CALL_TIMER_SCOPE(
+      container->GetDocument().GetAgent().isolate(),
+      RuntimeCallStats::CounterId::kReplaceChildrenWithFragment);
   ContainerNode* container_node(container);
 
   ChildListMutationScope mutation(*container_node);
@@ -928,7 +892,8 @@ static Document* CreateStagingDocumentForMarkupSanitization(
   frame->SetView(frame_view);
   // TODO(https://crbug.com/1355751) Initialize `storage_key`.
   frame->Init(/*opener=*/nullptr, DocumentToken(), /*policy_container=*/nullptr,
-              StorageKey());
+              StorageKey(), /*document_ukm_source_id=*/ukm::kInvalidSourceId,
+              /*creator_base_url=*/KURL());
 
   Document* document = frame->GetDocument();
   DCHECK(document);
@@ -949,19 +914,22 @@ static bool ContainsStyleElements(const DocumentFragment& fragment) {
 }
 
 // Returns true if any svg <use> element is removed.
-static bool StripSVGUseDataURLs(Node& node) {
-  if (IsA<SVGUseElement>(node)) {
-    SVGUseElement& use = To<SVGUseElement>(node);
-    SVGURLReferenceResolver resolver(use.HrefString(), use.GetDocument());
-    if (resolver.AbsoluteUrl().ProtocolIsData())
+static bool StripSVGUseNonLocalHrefs(Node& node) {
+  if (auto* use = DynamicTo<SVGUseElement>(node)) {
+    SVGURLReferenceResolver resolver(use->HrefString(), use->GetDocument());
+    if ((RuntimeEnabledFeatures::PastingBlocksSVGUseNonLocalHrefsEnabled() &&
+         !resolver.IsLocal()) ||
+        resolver.AbsoluteUrl().ProtocolIsData()) {
       node.remove();
+    }
     return true;
   }
   bool stripped = false;
   for (Node* child = node.firstChild(); child;) {
     Node* next = child->nextSibling();
-    if (StripSVGUseDataURLs(*child))
+    if (StripSVGUseNonLocalHrefs(*child)) {
       stripped = true;
+    }
     child = next;
   }
   return stripped;
@@ -1008,8 +976,9 @@ String CreateSanitizedMarkupWithContext(Document& document,
     bool needs_sanitization = false;
     if (ContainsStyleElements(*fragment))
       needs_sanitization = true;
-    if (StripSVGUseDataURLs(*fragment))
+    if (StripSVGUseNonLocalHrefs(*fragment)) {
       needs_sanitization = true;
+    }
 
     if (!needs_sanitization) {
       markup = CreateMarkup(fragment);

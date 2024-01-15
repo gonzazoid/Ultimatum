@@ -108,7 +108,7 @@ bool SelectionEditor::ComputeAbsoluteBounds(gfx::Rect& anchor,
   return has_selection_bounds_;
 }
 
-SelectionInDOMTree SelectionEditor::GetSelectionInDOMTree() const {
+const SelectionInDOMTree& SelectionEditor::GetSelectionInDOMTree() const {
   AssertSelectionValid();
   return selection_;
 }
@@ -521,7 +521,7 @@ void SelectionEditor::CacheRangeOfDocument(Range* range) {
 }
 
 Range* SelectionEditor::DocumentCachedRange() const {
-  return cached_range_;
+  return cached_range_.Get();
 }
 
 void SelectionEditor::ClearDocumentCachedRange() {

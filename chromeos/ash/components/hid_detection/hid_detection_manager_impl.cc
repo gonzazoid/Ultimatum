@@ -15,15 +15,25 @@ namespace {
 using BluetoothHidType = BluetoothHidDetector::BluetoothHidType;
 using InputState = HidDetectionManager::InputState;
 
-// Global InputDeviceManagerBinder instance that can be overridden in tests.
-base::NoDestructor<HidDetectionManagerImpl::InputDeviceManagerBinder>
-    g_input_device_manager_binder;
+// In floss, a virtual device is created when a HID is bonded or paired.
+// We do not want to include this virtual device to our list of added devices.
+// (b/299955128)
+const char* kBlockedDeviceNames[] = {"VIRTUAL_SUSPEND_UHID"};
+
+HidDetectionManagerImpl::InputDeviceManagerBinder&
+GetInputDeviceManagerBinderOverride() {
+  // InputDeviceManagerBinder instance that can be overridden in tests.
+  static base::NoDestructor<HidDetectionManagerImpl::InputDeviceManagerBinder>
+      binder;
+  return *binder;
+}
+
 }  // namespace
 
 // static
 void HidDetectionManagerImpl::SetInputDeviceManagerBinderForTest(
     InputDeviceManagerBinder binder) {
-  *g_input_device_manager_binder = std::move(binder);
+  GetInputDeviceManagerBinderOverride() = std::move(binder);
 }
 
 HidDetectionManagerImpl::HidDetectionManagerImpl(
@@ -83,6 +93,12 @@ HidDetectionManagerImpl::ComputeHidDetectionStatus() const {
 
 void HidDetectionManagerImpl::InputDeviceAdded(
     device::mojom::InputDeviceInfoPtr info) {
+  // Special case where the added device is a blocked device.
+  if (std::find(std::begin(kBlockedDeviceNames), std::end(kBlockedDeviceNames),
+                info->name) != std::end(kBlockedDeviceNames)) {
+    return;
+  }
+
   HID_LOG(EVENT) << "Input device added, id: " << info->id
                  << ", name: " << info->name;
   const std::string& device_id = info->id;
@@ -144,8 +160,9 @@ void HidDetectionManagerImpl::BindToInputDeviceManagerIfNeeded() {
 
   mojo::PendingReceiver<device::mojom::InputDeviceManager> receiver =
       input_device_manager_.BindNewPipeAndPassReceiver();
-  if (*g_input_device_manager_binder) {
-    g_input_device_manager_binder->Run(std::move(receiver));
+  const auto& binder = GetInputDeviceManagerBinderOverride();
+  if (binder) {
+    binder.Run(std::move(receiver));
     return;
   }
 
@@ -240,9 +257,9 @@ bool HidDetectionManagerImpl::AttemptSetDeviceAsConnectedHid(
 }
 
 HidDetectionManager::InputMetadata HidDetectionManagerImpl::GetInputMetadata(
-    const absl::optional<std::string>& connected_device_id,
+    const std::optional<std::string>& connected_device_id,
     BluetoothHidType input_type,
-    const absl::optional<BluetoothHidDetector::BluetoothHidMetadata>&
+    const std::optional<BluetoothHidDetector::BluetoothHidMetadata>&
         current_pairing_device) const {
   if (connected_device_id.has_value()) {
     const device::mojom::InputDeviceInfoPtr& device =

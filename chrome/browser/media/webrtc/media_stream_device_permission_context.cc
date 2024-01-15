@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/media/webrtc/media_stream_device_permission_context.h"
+
+#include "base/command_line.h"
 #include "chrome/browser/media/webrtc/media_stream_device_permissions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
@@ -10,6 +12,7 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/permissions/permission_context_base.h"
 #include "content/public/common/content_features.h"
+#include "content/public/common/content_switches.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/common/constants.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom.h"
@@ -17,6 +20,7 @@
 #if BUILDFLAG(IS_ANDROID)
 #include "base/stl_util.h"
 #include "components/permissions/android/android_permission_util.h"
+#include "components/permissions/android/permissions_reprompt_controller_android.h"
 #include "components/permissions/permission_request_id.h"
 #include "components/permissions/permissions_client.h"
 #include "content/public/browser/web_contents.h"
@@ -65,6 +69,13 @@ ContentSetting MediaStreamDevicePermissionContext::GetPermissionStatusInternal(
     urls_policy_name = prefs::kVideoCaptureAllowedUrls;
   }
 
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kUseFakeUIForMediaStream)) {
+    bool blocked = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+                       switches::kUseFakeUIForMediaStream) == "deny";
+    return blocked ? CONTENT_SETTING_BLOCK : CONTENT_SETTING_ALLOW;
+  }
+
   MediaStreamDevicePolicy policy =
       GetDevicePolicy(Profile::FromBrowserContext(browser_context()),
                       requesting_origin, policy_name, urls_policy_name);
@@ -103,7 +114,10 @@ void MediaStreamDevicePermissionContext::NotifyPermissionSet(
     permissions::BrowserPermissionCallback callback,
     bool persist,
     ContentSetting content_setting,
-    bool is_one_time) {
+    bool is_one_time,
+    bool is_final_decision) {
+  DCHECK(is_final_decision);
+
   // For Android, we need to customize the PermissionContextBase's behavior if
   // the permission was granted. We will:
   // 1. Check if the permission was granted by the user - if not, we'll fall
@@ -137,7 +151,7 @@ void MediaStreamDevicePermissionContext::NotifyPermissionSet(
   if (content_setting != ContentSetting::CONTENT_SETTING_ALLOW) {
     PermissionContextBase::NotifyPermissionSet(
         id, requesting_origin, embedding_origin, std::move(callback), persist,
-        content_setting, is_one_time);
+        content_setting, is_one_time, is_final_decision);
     return;
   }
 
@@ -187,12 +201,17 @@ void MediaStreamDevicePermissionContext::NotifyPermissionSet(
 
     case permissions::PermissionRepromptState::kShow:
       // Otherwise, prompt the user that we need additional permissions.
-      permissions::PermissionsClient::Get()->RepromptForAndroidPermissions(
-          web_contents, permission_type,
-          base::BindOnce(
-              &MediaStreamDevicePermissionContext::OnAndroidPermissionDecided,
-              weak_ptr_factory_.GetWeakPtr(), id, requesting_origin,
-              embedding_origin, std::move(callback)));
+      permissions::PermissionsRepromptControllerAndroid::CreateForWebContents(
+          web_contents);
+      permissions::PermissionsRepromptControllerAndroid::FromWebContents(
+          web_contents)
+          ->RepromptPermissionRequest(
+              permission_type, content_settings_type_,
+              base::BindOnce(&MediaStreamDevicePermissionContext::
+                                 OnAndroidPermissionDecided,
+                             weak_ptr_factory_.GetWeakPtr(), id,
+                             requesting_origin, embedding_origin,
+                             std::move(callback)));
       return;
   }
 }
@@ -215,7 +234,8 @@ void MediaStreamDevicePermissionContext::OnAndroidPermissionDecided(
   // persisting permission.
   PermissionContextBase::NotifyPermissionSet(
       id, requesting_origin, embedding_origin, std::move(callback),
-      false /*persist*/, setting, /*is_one_time=*/false);
+      false /*persist*/, setting, /*is_one_time=*/false,
+      /*is_final_decision=*/true);
 }
 
 void MediaStreamDevicePermissionContext::UpdateTabContext(

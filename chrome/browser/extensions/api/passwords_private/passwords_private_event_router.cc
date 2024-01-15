@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate.h"
@@ -71,10 +71,12 @@ void PasswordsPrivateEventRouter::SendPasswordExceptionListToListeners() {
 
 void PasswordsPrivateEventRouter::OnPasswordsExportProgress(
     api::passwords_private::ExportProgressStatus status,
+    const std::string& file_path,
     const std::string& folder_name) {
   api::passwords_private::PasswordExportProgress params;
   params.status = status;
-  params.folder_name = std::move(folder_name);
+  params.file_path = file_path;
+  params.folder_name = folder_name;
 
   base::Value::List event_value;
   event_value.Append(params.ToValue());
@@ -120,11 +122,6 @@ void PasswordsPrivateEventRouter::OnPasswordManagerAuthTimeout() {
       events::PASSWORDS_PRIVATE_ON_PASSWORD_MANAGER_AUTH_TIMEOUT,
       api::passwords_private::OnPasswordManagerAuthTimeout::kEventName,
       api::passwords_private::OnPasswordManagerAuthTimeout::Create()));
-}
-
-PasswordsPrivateEventRouter* PasswordsPrivateEventRouter::Create(
-    content::BrowserContext* context) {
-  return new PasswordsPrivateEventRouter(context);
 }
 
 }  // namespace extensions

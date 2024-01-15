@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/animation/property_handle.h"
 
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/svg_names.h"
 
 namespace blink {
@@ -15,8 +16,8 @@ using svg_names::kExponentAttr;
 class PropertyHandleTest : public testing::Test {};
 
 TEST_F(PropertyHandleTest, Equality) {
-  AtomicString name_a = "--a";
-  AtomicString name_b = "--b";
+  AtomicString name_a("--a");
+  AtomicString name_b("--b");
 
   EXPECT_TRUE(PropertyHandle(GetCSSPropertyOpacity()) ==
               PropertyHandle(GetCSSPropertyOpacity()));
@@ -64,8 +65,8 @@ TEST_F(PropertyHandleTest, Equality) {
 }
 
 TEST_F(PropertyHandleTest, Hash) {
-  AtomicString name_a = "--a";
-  AtomicString name_b = "--b";
+  AtomicString name_a("--a");
+  AtomicString name_b("--b");
 
   EXPECT_TRUE(PropertyHandle(GetCSSPropertyOpacity()).GetHash() ==
               PropertyHandle(GetCSSPropertyOpacity()).GetHash());
@@ -96,7 +97,7 @@ TEST_F(PropertyHandleTest, Hash) {
 }
 
 TEST_F(PropertyHandleTest, Accessors) {
-  AtomicString name = "--x";
+  AtomicString name("--x");
 
   EXPECT_TRUE(PropertyHandle(GetCSSPropertyOpacity()).IsCSSProperty());
   EXPECT_TRUE(PropertyHandle(name).IsCSSProperty());

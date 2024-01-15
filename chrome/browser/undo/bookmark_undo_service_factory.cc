@@ -9,10 +9,6 @@
 #include "chrome/browser/profiles/profile_selections.h"
 #include "components/undo/bookmark_undo_service.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#endif
-
 // static
 BookmarkUndoService* BookmarkUndoServiceFactory::GetForProfile(
     Profile* profile) {
@@ -29,7 +25,8 @@ BookmarkUndoService* BookmarkUndoServiceFactory::GetForProfileIfExists(
 
 // static
 BookmarkUndoServiceFactory* BookmarkUndoServiceFactory::GetInstance() {
-  return base::Singleton<BookmarkUndoServiceFactory>::get();
+  static base::NoDestructor<BookmarkUndoServiceFactory> instance;
+  return instance.get();
 }
 
 BookmarkUndoServiceFactory::BookmarkUndoServiceFactory()
@@ -43,19 +40,14 @@ BookmarkUndoServiceFactory::BookmarkUndoServiceFactory()
               .WithGuest(ProfileSelection::kRedirectedToOriginal)
               // No service for system profile.
               .WithSystem(ProfileSelection::kNone)
+              // ChromeOS creates various profiles (login, lock screen...) that
+              // do not have/need access to bookmarks.
+              .WithAshInternals(ProfileSelection::kNone)
               .Build()) {}
 
-BookmarkUndoServiceFactory::~BookmarkUndoServiceFactory() {
-}
+BookmarkUndoServiceFactory::~BookmarkUndoServiceFactory() = default;
 
 KeyedService* BookmarkUndoServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // ChromeOS creates various profiles (login, lock screen...) that do
-  // not have/need access to bookmarks.
-  Profile* profile = Profile::FromBrowserContext(context);
-  if (!chromeos::ProfileHelper::IsUserProfile(profile))
-    return nullptr;
-#endif
   return new BookmarkUndoService;
 }

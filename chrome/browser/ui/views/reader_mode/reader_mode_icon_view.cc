@@ -10,6 +10,7 @@
 #include "components/dom_distiller/content/browser/uma_helper.h"
 #include "components/dom_distiller/core/dom_distiller_features.h"
 #include "components/dom_distiller/core/url_utils.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/navigation_details.h"
 #include "content/public/browser/navigation_handle.h"
@@ -31,7 +32,7 @@ UMAHelper::ReaderModePageType GetPageType(content::WebContents* contents) {
   if (IsDistilledPage(contents->GetLastCommittedURL())) {
     page_type = UMAHelper::ReaderModePageType::kDistilled;
   } else {
-    absl::optional<dom_distiller::DistillabilityResult> distillability =
+    std::optional<dom_distiller::DistillabilityResult> distillability =
         dom_distiller::GetLatestResult(contents);
     if (distillability && distillability.value().is_distillable)
       page_type = UMAHelper::ReaderModePageType::kDistillable;
@@ -51,7 +52,12 @@ ReaderModeIconView::ReaderModeIconView(
                          icon_label_bubble_delegate,
                          page_action_icon_delegate,
                          "ReaderMode"),
-      pref_service_(pref_service) {}
+      pref_service_(pref_service) {
+  SetAccessibilityProperties(
+      /*role*/ std::nullopt,
+      l10n_util::GetStringUTF16(GetActive() ? IDS_EXIT_DISTILLED_PAGE
+                                            : IDS_DISTILL_PAGE));
+}
 
 ReaderModeIconView::~ReaderModeIconView() {
   content::WebContents* contents = web_contents();
@@ -123,18 +129,21 @@ void ReaderModeIconView::UpdateImpl() {
     SetActive(false);
   }
 
+  SetAccessibleName(l10n_util::GetStringUTF16(
+      GetActive() ? IDS_EXIT_DISTILLED_PAGE : IDS_DISTILL_PAGE));
+
   // Notify the icon when navigation to and from a distilled page occurs so that
   // it can hide the inkdrop.
   Observe(contents);
 }
 
 const gfx::VectorIcon& ReaderModeIconView::GetVectorIcon() const {
-  return GetActive() ? kReaderModeIcon : kReaderModeDisabledIcon;
-}
+  if (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+    return GetActive() ? kReaderModeRefreshIcon
+                       : kReaderModeDisabledRefreshIcon;
+  }
 
-std::u16string ReaderModeIconView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(GetActive() ? IDS_EXIT_DISTILLED_PAGE
-                                               : IDS_DISTILL_PAGE);
+  return GetActive() ? kReaderModeIcon : kReaderModeDisabledIcon;
 }
 
 // TODO(gilmanmh): Consider displaying a bubble the first time a user
@@ -187,5 +196,5 @@ void ReaderModeIconView::OnResult(
   UMAHelper::StartTimerIfNeeded(web_contents, page_type);
 }
 
-BEGIN_METADATA(ReaderModeIconView, PageActionIconView)
+BEGIN_METADATA(ReaderModeIconView)
 END_METADATA

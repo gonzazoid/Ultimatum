@@ -6,16 +6,13 @@
 
 #import <MaterialComponents/MaterialSnackbar.h>
 
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/snackbar_commands.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/public/provider/chrome/browser/material/material_branding_api.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-@interface SnackbarCoordinator ()
+@interface SnackbarCoordinator () <MDCSnackbarManagerDelegate>
 
 @property(nonatomic, weak) id<SnackbarCoordinatorDelegate> delegate;
 
@@ -38,6 +35,12 @@
 
 - (void)start {
   DCHECK(self.browser);
+
+  MDCSnackbarManager* manager = [MDCSnackbarManager defaultManager];
+  manager.delegate = self;
+
+  ios::provider::ApplyBrandingToSnackbarManager(manager);
+
   CommandDispatcher* dispatcher = self.browser->GetCommandDispatcher();
   [dispatcher startDispatchingToTarget:self
                            forProtocol:@protocol(SnackbarCommands)];
@@ -52,7 +55,16 @@
 #pragma mark - SnackbarCommands
 
 - (void)showSnackbarMessage:(MDCSnackbarMessage*)message {
-  CGFloat offset = [self.delegate bottomOffsetForCurrentlyPresentedView];
+  CGFloat offset = [self.delegate
+      snackbarCoordinatorBottomOffsetForCurrentlyPresentedView:self
+                                           forceBrowserToolbar:NO];
+  [self showSnackbarMessage:message bottomOffset:offset];
+}
+
+- (void)showSnackbarMessageOverBrowserToolbar:(MDCSnackbarMessage*)message {
+  CGFloat offset = [self.delegate
+      snackbarCoordinatorBottomOffsetForCurrentlyPresentedView:self
+                                           forceBrowserToolbar:YES];
   [self showSnackbarMessage:message bottomOffset:offset];
 }
 
@@ -84,6 +96,13 @@
   message.completionHandler = completionAction;
 
   [self showSnackbarMessage:message];
+}
+
+#pragma mark - MDCSnackbarManagerDelegate
+
+- (void)snackbarManager:(MDCSnackbarManager*)snackbarManager
+    willPresentSnackbarWithMessageView:(MDCSnackbarMessageView*)messageView {
+  ios::provider::ApplyBrandingToSnackbarMessageView(messageView);
 }
 
 @end

@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_URL_LOADER_SYNC_LOAD_CONTEXT_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_URL_LOADER_SYNC_LOAD_CONTEXT_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event_watcher.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/timer/timer.h"
@@ -13,12 +14,12 @@
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/blink/public/mojom/blob/blob_registry.mojom.h"
+#include "third_party/blink/public/mojom/blob/blob_registry.mojom-blink.h"
 #include "third_party/blink/public/platform/web_common.h"
-#include "third_party/blink/public/platform/web_request_peer.h"
-#include "third_party/blink/public/platform/web_resource_request_sender.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_vector.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/resource_request_client.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/resource_request_sender.h"
 
 namespace base {
 class WaitableEvent;
@@ -41,7 +42,7 @@ struct SyncLoadResponse;
 //   2) kBlob: body is received on a data pipe passed on
 //      OnStartLoadingResponseBody(), and wraps the data pipe with a
 //      SerializedBlobPtr.
-class BLINK_PLATFORM_EXPORT SyncLoadContext : public WebRequestPeer {
+class BLINK_PLATFORM_EXPORT SyncLoadContext : public ResourceRequestClient {
  public:
   // Begins a new asynchronous request on whatever sequence this method is
   // called on. |completed_event| will be signalled when the request is complete
@@ -68,8 +69,8 @@ class BLINK_PLATFORM_EXPORT SyncLoadContext : public WebRequestPeer {
       base::WaitableEvent* completed_event,
       base::WaitableEvent* abort_event,
       base::TimeDelta timeout,
-      mojo::PendingRemote<mojom::BlobRegistry> download_to_blob_registry,
-      const WebVector<WebString>& cors_exempt_header_list,
+      mojo::PendingRemote<mojom::blink::BlobRegistry> download_to_blob_registry,
+      const Vector<String>& cors_exempt_header_list,
       std::unique_ptr<ResourceLoadInfoNotifierWrapper>
           resource_load_info_notifier_wrapper);
 
@@ -77,7 +78,8 @@ class BLINK_PLATFORM_EXPORT SyncLoadContext : public WebRequestPeer {
   SyncLoadContext& operator=(const SyncLoadContext&) = delete;
   ~SyncLoadContext() override;
 
-  void FollowRedirect();
+  void FollowRedirect(std::vector<std::string> removed_headers,
+                      net::HttpRequestHeaders modified_headers);
   void CancelRedirect();
 
  private:
@@ -92,22 +94,22 @@ class BLINK_PLATFORM_EXPORT SyncLoadContext : public WebRequestPeer {
       base::WaitableEvent* completed_event,
       base::WaitableEvent* abort_event,
       base::TimeDelta timeout,
-      mojo::PendingRemote<mojom::BlobRegistry> download_to_blob_registry,
+      mojo::PendingRemote<mojom::blink::BlobRegistry> download_to_blob_registry,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
-  // WebRequestPeer implementation:
+  // ResourceRequestClient implementation:
   void OnUploadProgress(uint64_t position, uint64_t size) override;
-  bool OnReceivedRedirect(const net::RedirectInfo& redirect_info,
-                          network::mojom::URLResponseHeadPtr head,
-                          std::vector<std::string>*) override;
+  void OnReceivedRedirect(
+      const net::RedirectInfo& redirect_info,
+      network::mojom::URLResponseHeadPtr head,
+      FollowRedirectCallback follow_redirect_callback) override;
   void OnReceivedResponse(
       network::mojom::URLResponseHeadPtr head,
-      base::TimeTicks response_arrival_at_renderer) override;
-  void OnStartLoadingResponseBody(
-      mojo::ScopedDataPipeConsumerHandle body) override;
+      mojo::ScopedDataPipeConsumerHandle body,
+      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnTransferSizeUpdated(int transfer_size_diff) override;
   void OnCompletedRequest(
       const network::URLLoaderCompletionStatus& status) override;
-  void OnFinishCreatingBlob(mojom::SerializedBlobPtr blob);
+  void OnFinishCreatingBlob(const scoped_refptr<BlobDataHandle>& blob);
 
   void OnBodyReadable(MojoResult, const mojo::HandleSignalsState&);
 
@@ -120,13 +122,17 @@ class BLINK_PLATFORM_EXPORT SyncLoadContext : public WebRequestPeer {
   // This raw pointer will remain valid for the lifetime of this object because
   // it remains on the stack until |event_| is signaled.
   // Set to null after CompleteRequest() is called.
-  SyncLoadResponse* response_;
+  raw_ptr<SyncLoadResponse, ExperimentalRenderer> response_;
+
+  // Used when handling a redirect. It is set in OnReceivedRedirect(), and
+  // called when FollowRedirect() is called from the original thread.
+  FollowRedirectCallback follow_redirect_callback_;
 
   // This raw pointer will be set to `this` when receiving redirects on
   // independent thread and set to nullptr in `FollowRedirect()` or
   // `CancelRedirect()` on the same thread after `redirect_or_response_event_`
   // is signaled, which protects it against race condition.
-  SyncLoadContext** context_for_redirect_;
+  raw_ptr<SyncLoadContext*, ExperimentalRenderer> context_for_redirect_;
 
   enum class Mode { kInitial, kDataPipe, kBlob };
   Mode mode_ = Mode::kInitial;
@@ -137,13 +143,18 @@ class BLINK_PLATFORM_EXPORT SyncLoadContext : public WebRequestPeer {
 
   // State necessary to run a request on an independent thread.
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  std::unique_ptr<WebResourceRequestSender> resource_request_sender_;
+  std::unique_ptr<ResourceRequestSender> resource_request_sender_;
 
   // State for downloading to a blob.
-  mojo::Remote<mojom::BlobRegistry> download_to_blob_registry_;
+  mojo::Remote<mojom::blink::BlobRegistry> download_to_blob_registry_;
   bool blob_response_started_ = false;
   bool blob_finished_ = false;
   bool request_completed_ = false;
+
+  // True when the request contains Authorization header.
+  // TODO(https://crbug.com/1393520): Remove this field once we get enough
+  // stats to make a decision.
+  bool has_authorization_header_ = false;
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 

@@ -161,7 +161,7 @@ class QueryResultManager {
   // A nullopt for the MediaSource indicates that the observer is
   // listening for all MediaSink updates regardless of the MediaSource
   // associated with them.
-  std::map<absl::optional<MediaSource>,
+  std::map<std::optional<MediaSource>,
            std::unique_ptr<MediaSinksObserver>,
            MediaSource::Cmp>
       sinks_observers_;
@@ -181,7 +181,7 @@ class QueryResultManager {
   std::vector<MediaSink> all_sinks_;
 
   // Registered observers.
-  base::ObserverList<MediaSinkWithCastModesObserver>::Unchecked observers_;
+  base::ObserverList<MediaSinkWithCastModesObserver> observers_;
 
   // Not owned by this object.
   const raw_ptr<MediaRouter> router_;

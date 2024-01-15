@@ -13,6 +13,7 @@
 #include "base/time/time.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/metrics/app_platform_metrics_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
 #include "components/user_manager/user_manager.h"
@@ -48,13 +49,14 @@ constexpr char kCrostiniAppsCountHistogramName[] =
 constexpr char kExtensionAppsCountHistogramName[] =
     "FamilyUser.ExtensionAppsCount2";
 constexpr char kWebAppsCountHistogramName[] = "FamilyUser.WebAppsCount2";
-constexpr char kMacOsAppsCountHistogramName[] = "FamilyUser.MacOsAppsCount2";
 constexpr char kPluginVmAppsCountHistogramName[] =
     "FamilyUser.PluginVmAppsCount2";
 constexpr char kStandaloneBrowserAppsCountHistogramName[] = "FamilyUser.LacrosAppsCount2";
 constexpr char kRemoteAppsCountHistogramName[] = "FamilyUser.RemoteAppsCount2";
 constexpr char kBorealisAppsCountHistogramName[] =
     "FamilyUser.BorealisAppsCount2";
+constexpr char kBruschettaAppsCountHistogramName[] =
+    "FamilyUser.BruschettaAppsCount2";
 constexpr char kSystemWebAppsCountHistogramName[] =
     "FamilyUser.SystemWebAppsCount2";
 constexpr char kStandaloneBrowserChromeAppCountHistogramName[] =
@@ -81,8 +83,6 @@ const char* GetAppsCountHistogramName(apps::AppType app_type) {
       return kExtensionAppsCountHistogramName;
     case apps::AppType::kWeb:
       return kWebAppsCountHistogramName;
-    case apps::AppType::kMacOs:
-      return kMacOsAppsCountHistogramName;
     case apps::AppType::kPluginVm:
       return kPluginVmAppsCountHistogramName;
     case apps::AppType::kStandaloneBrowser:
@@ -91,6 +91,8 @@ const char* GetAppsCountHistogramName(apps::AppType app_type) {
       return kRemoteAppsCountHistogramName;
     case apps::AppType::kBorealis:
       return kBorealisAppsCountHistogramName;
+    case apps::AppType::kBruschetta:
+      return kBruschettaAppsCountHistogramName;
     case apps::AppType::kSystemWeb:
       return kSystemWebAppsCountHistogramName;
     case apps::AppType::kStandaloneBrowserChromeApp:
@@ -118,7 +120,7 @@ FamilyUserAppMetrics::FamilyUserAppMetrics(Profile* profile)
           user_manager::UserManager::Get()->IsCurrentUserNew()) {
   DCHECK(extension_registry_);
   DCHECK(app_registry_);
-  Observe(app_registry_);
+  app_registry_cache_observer_.Observe(app_registry_);
   DCHECK(instance_registry_);
 }
 
@@ -176,7 +178,7 @@ void FamilyUserAppMetrics::OnAppTypeInitialized(apps::AppType app_type) {
 void FamilyUserAppMetrics::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
   DCHECK_EQ(cache, app_registry_);
-  Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void FamilyUserAppMetrics::OnAppUpdate(const apps::AppUpdate& update) {}
@@ -187,9 +189,9 @@ bool FamilyUserAppMetrics::IsAppTypeReady(apps::AppType app_type) const {
 
 void FamilyUserAppMetrics::RecordInstalledExtensionsCount() {
   int extensions_count = 0;
-  std::unique_ptr<extensions::ExtensionSet> all_installed_extensions =
+  const extensions::ExtensionSet all_installed_extensions =
       extension_registry_->GenerateInstalledExtensionsSet();
-  for (const auto& extension : *all_installed_extensions) {
+  for (const auto& extension : all_installed_extensions) {
     if (extensions::Manifest::IsComponentLocation(extension->location()))
       continue;
     if (extension->is_extension() || extension->is_theme())

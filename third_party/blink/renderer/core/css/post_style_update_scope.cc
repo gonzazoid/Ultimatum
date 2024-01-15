@@ -21,21 +21,54 @@ PostStyleUpdateScope::CurrentAnimationData() {
   return current_ ? &current_->animation_data_ : nullptr;
 }
 
+PostStyleUpdateScope::PseudoData* PostStyleUpdateScope::CurrentPseudoData() {
+  return current_ ? current_->GetPseudoData() : nullptr;
+}
+
 PostStyleUpdateScope::PostStyleUpdateScope(Document& document)
     : document_(document) {
-  if (!current_)
+  if (!current_) {
     current_ = this;
+  }
 }
 
 PostStyleUpdateScope::~PostStyleUpdateScope() {
   if (current_ == this) {
-    Apply();
-    document_.ClearFocusedElementIfNeeded();
     current_ = nullptr;
   }
+  DCHECK(animation_data_.elements_with_pending_updates_.empty())
+      << "Missing Apply (animations)";
+  DCHECK(pseudo_data_.pending_backdrops_.empty())
+      << "Missing Apply (::backdrop)";
 }
 
-void PostStyleUpdateScope::Apply() {
+bool PostStyleUpdateScope::Apply() {
+  if (ApplyPseudo()) {
+    return true;
+  }
+  ApplyAnimations();
+  document_.RemoveFinishedTopLayerElements();
+  return false;
+}
+
+bool PostStyleUpdateScope::ApplyPseudo() {
+  nullify_pseudo_data_ = true;
+
+  if (pseudo_data_.pending_backdrops_.empty()) {
+    return false;
+  }
+
+  HeapVector<Member<Element>> pending_backdrops;
+  std::swap(pending_backdrops, pseudo_data_.pending_backdrops_);
+
+  for (Member<Element>& element : pending_backdrops) {
+    element->ApplyPendingBackdropPseudoElementUpdate();
+  }
+
+  return true;
+}
+
+void PostStyleUpdateScope::ApplyAnimations() {
   StyleEngine::InApplyAnimationUpdateScope in_apply_animation_update_scope(
       document_.GetStyleEngine());
 
@@ -44,8 +77,9 @@ void PostStyleUpdateScope::Apply() {
 
   for (auto& element : pending) {
     ElementAnimations* element_animations = element->GetElementAnimations();
-    if (!element_animations)
+    if (!element_animations) {
       continue;
+    }
     element_animations->CssAnimations().MaybeApplyPendingUpdate(element.Get());
   }
 
@@ -62,16 +96,30 @@ void PostStyleUpdateScope::AnimationData::SetPendingUpdate(
 
 void PostStyleUpdateScope::AnimationData::StoreOldStyleIfNeeded(
     Element& element) {
-  old_styles_.insert(
-      &element, scoped_refptr<const ComputedStyle>(element.GetComputedStyle()));
+  old_styles_.insert(&element,
+                     ComputedStyle::NullifyEnsured(element.GetComputedStyle()));
 }
 
 const ComputedStyle* PostStyleUpdateScope::AnimationData::GetOldStyle(
-    Element& element) const {
+    const Element& element) const {
   auto iter = old_styles_.find(&element);
-  if (iter == old_styles_.end())
-    return element.GetComputedStyle();
-  return iter->value.get();
+  if (iter == old_styles_.end()) {
+    return ComputedStyle::NullifyEnsured(element.GetComputedStyle());
+  }
+  return iter->value.Get();
+}
+
+void PostStyleUpdateScope::PseudoData::AddPendingBackdrop(
+    Element& originating_element) {
+  pending_backdrops_.push_back(&originating_element);
+}
+
+const ComputedStyle* PostStyleUpdateScope::GetOldStyle(const Element& element) {
+  if (PostStyleUpdateScope::AnimationData* data =
+          PostStyleUpdateScope::CurrentAnimationData()) {
+    return data->GetOldStyle(element);
+  }
+  return ComputedStyle::NullifyEnsured(element.GetComputedStyle());
 }
 
 }  // namespace blink

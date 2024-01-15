@@ -11,13 +11,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/component_export.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "ipc/ipc.mojom-forward.h"
 #include "ipc/ipc_channel_handle.h"
@@ -35,6 +34,7 @@
 namespace IPC {
 
 class Listener;
+class UrgentMessageObserver;
 
 //------------------------------------------------------------------------------
 // See
@@ -228,6 +228,12 @@ class COMPONENT_EXPORT(IPC) Channel : public Sender {
   // |message| must be allocated using operator new.  This object will be
   // deleted once the contents of the Message have been sent.
   bool Send(Message* message) override = 0;
+
+  // Sets the UrgentMessageObserver for this channel. `observer` must outlive
+  // the channel.
+  //
+  // Only channel associated mojo interfaces support urgent messages.
+  virtual void SetUrgentMessageObserver(UrgentMessageObserver* observer);
 
 #if !BUILDFLAG(IS_NACL)
   // Generates a channel ID that's non-predictable and unique.

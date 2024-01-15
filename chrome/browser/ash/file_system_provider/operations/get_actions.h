@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_GET_ACTIONS_H_
 #define CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_GET_ACTIONS_H_
 
-#include <memory>
 #include <vector>
 
 #include "base/files/file.h"
@@ -19,19 +18,13 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace extensions {
-class EventRouter;
-}  // namespace extensions
-
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
 // Bridge between fileapi get actions operation and providing extension's get
 // actions request. Created per request.
 class GetActions : public Operation {
  public:
-  GetActions(extensions::EventRouter* event_router,
+  GetActions(RequestDispatcher* dispatcher,
              const ProvidedFileSystemInfo& file_system_info,
              const std::vector<base::FilePath>& entry_paths,
              ProvidedFileSystemInterface::GetActionsCallback callback);
@@ -44,10 +37,10 @@ class GetActions : public Operation {
   // Operation overrides.
   bool Execute(int request_id) override;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override;
 
  private:
@@ -55,8 +48,6 @@ class GetActions : public Operation {
   ProvidedFileSystemInterface::GetActionsCallback callback_;
 };
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_GET_ACTIONS_H_

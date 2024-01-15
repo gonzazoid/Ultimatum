@@ -10,13 +10,15 @@
 #import <Foundation/Foundation.h>
 
 #import <map>
+#import <optional>
 #import <set>
 
 #import "base/containers/small_map.h"
+#import "base/time/time.h"
 #import "ios/chrome/browser/promos_manager/constants.h"
 #import "ios/chrome/browser/promos_manager/impression_limit.h"
+#import "ios/chrome/browser/promos_manager/promo_config.h"
 #import "testing/gmock/include/gmock/gmock.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
 
 // Mock version of PromosManager.
 class MockPromosManager : public PromosManager {
@@ -27,19 +29,17 @@ class MockPromosManager : public PromosManager {
   // PromosManager implementation.
   MOCK_METHOD(void, Init, (), (override));
   MOCK_METHOD(void,
-              InitializePromoImpressionLimits,
-              ((base::small_map<
-                  std::map<promos_manager::Promo, NSArray<ImpressionLimit*>*>>
-                    promo_impression_limits)),
+              InitializePromoConfigs,
+              ((PromoConfigsSet promo_impression_limits)),
               (override));
   MOCK_METHOD(void,
               RecordImpression,
               (promos_manager::Promo promo),
               (override));
-  MOCK_METHOD(absl::optional<promos_manager::Promo>,
+  MOCK_METHOD(std::optional<promos_manager::Promo>,
               NextPromoForDisplay,
               (),
-              (const, override));
+              (override));
   MOCK_METHOD(void,
               RegisterPromoForContinuousDisplay,
               (promos_manager::Promo promo),
@@ -47,6 +47,11 @@ class MockPromosManager : public PromosManager {
   MOCK_METHOD(void,
               RegisterPromoForSingleDisplay,
               (promos_manager::Promo promo),
+              (override));
+  MOCK_METHOD(void,
+              RegisterPromoForSingleDisplay,
+              (promos_manager::Promo promo,
+               base::TimeDelta becomes_active_after_period),
               (override));
   MOCK_METHOD(void, DeregisterPromo, (promos_manager::Promo promo), (override));
 };

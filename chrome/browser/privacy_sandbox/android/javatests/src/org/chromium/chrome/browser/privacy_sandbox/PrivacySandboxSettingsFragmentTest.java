@@ -1,120 +1,204 @@
-// Copyright 2021 The Chromium Authors
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
 package org.chromium.chrome.browser.privacy_sandbox;
 
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
-import static androidx.test.espresso.matcher.ViewMatchers.hasDescendant;
-import static androidx.test.espresso.matcher.ViewMatchers.isChecked;
-import static androidx.test.espresso.matcher.ViewMatchers.withId;
-import static androidx.test.espresso.matcher.ViewMatchers.withParent;
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.Matchers.hasItems;
+
+import static org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxTestUtils.getRootViewSanitized;
+import static org.chromium.chrome.browser.privacy_sandbox.AdMeasurementFragment.setAdMeasurementPrefEnabled;
+import static org.chromium.chrome.browser.privacy_sandbox.FledgeFragment.setFledgePrefEnabled;
+import static org.chromium.chrome.browser.privacy_sandbox.TopicsFragment.setTopicsPrefEnabled;
+import static org.chromium.content_public.browser.test.util.TestThreadUtils.runOnUiThreadBlocking;
+import static org.chromium.ui.test.util.ViewUtils.onViewWaiting;
 
 import android.os.Bundle;
-import android.view.View;
 
 import androidx.test.filters.SmallTest;
 
-import org.hamcrest.Matcher;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.test.metrics.HistogramTestRule;
 import org.chromium.base.test.util.Batch;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.UserActionTester;
+import org.chromium.chrome.browser.flags.ChromeSwitches;
+import org.chromium.chrome.browser.preferences.Pref;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
+import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.content_public.browser.test.NativeLibraryTestUtils;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.chrome.test.util.ChromeRenderTestRule;
+import org.chromium.components.prefs.PrefService;
+import org.chromium.components.user_prefs.UserPrefs;
+import org.chromium.ui.test.util.RenderTestRule;
 
-import java.util.concurrent.ExecutionException;
+import java.io.IOException;
 
-/** Tests {@link PrivacySandboxSettingsFragment}. */
+/** Tests {@link PrivacySandboxSettingsFragment} */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
-@Features.DisableFeatures(ChromeFeatureList.PRIVACY_SANDBOX_SETTINGS_3)
+@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public final class PrivacySandboxSettingsFragmentTest {
-    private static final String REFERRER_HISTOGRAM =
-            "Settings.PrivacySandbox.PrivacySandboxReferrer";
+    @Rule public ChromeBrowserTestRule mChromeBrowserTestRule = new ChromeBrowserTestRule();
+
+    @Rule
+    public ChromeRenderTestRule mRenderTestRule =
+            ChromeRenderTestRule.Builder.withPublicCorpus()
+                    .setBugComponent(RenderTestRule.Component.UI_SETTINGS_PRIVACY)
+                    .build();
 
     @Rule
     public SettingsActivityTestRule<PrivacySandboxSettingsFragment> mSettingsActivityTestRule =
             new SettingsActivityTestRule<>(PrivacySandboxSettingsFragment.class);
 
-    @Rule
-    public HistogramTestRule mHistogramTestRule = new HistogramTestRule();
+    public UserActionTester mUserActionTester;
 
-    @BeforeClass
-    public static void beforeClass() {
-        // Only needs to be loaded once and needs to be loaded before HistogramTestRule.
-        NativeLibraryTestUtils.loadNativeLibraryNoBrowserProcess();
+    @Before
+    public void setUp() {
+        mUserActionTester = new UserActionTester();
     }
 
-    private void openPrivacySandboxSettings(int privacySettings) {
+    @After
+    public void tearDown() {
+        runOnUiThreadBlocking(
+                () -> {
+                    PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
+                    prefService.clearPref(Pref.PRIVACY_SANDBOX_M1_TOPICS_ENABLED);
+                    prefService.clearPref(Pref.PRIVACY_SANDBOX_M1_FLEDGE_ENABLED);
+                    prefService.clearPref(Pref.PRIVACY_SANDBOX_M1_AD_MEASUREMENT_ENABLED);
+                });
+
+        mUserActionTester.tearDown();
+    }
+
+    private void startPrivacySandboxSettingsV4() {
         Bundle fragmentArgs = new Bundle();
         fragmentArgs.putInt(
-                PrivacySandboxSettingsFragment.PRIVACY_SANDBOX_REFERRER, privacySettings);
+                PrivacySandboxSettingsFragment.PRIVACY_SANDBOX_REFERRER,
+                PrivacySandboxReferrer.PRIVACY_SETTINGS);
         mSettingsActivityTestRule.startSettingsActivity(fragmentArgs);
-    }
-
-    private boolean isPrivacySandboxEnabled() throws ExecutionException {
-        return TestThreadUtils.runOnUiThreadBlocking(PrivacySandboxBridge::isPrivacySandboxEnabled);
+        onViewWaiting(withText(R.string.ad_privacy_page_title));
     }
 
     @Test
     @SmallTest
-    public void testChangeSetting() throws ExecutionException {
-        Matcher<View> sandboxCheckboxMatcher = allOf(withId(R.id.switchWidget),
-                withParent(withParent(hasDescendant(withText(R.string.privacy_sandbox_toggle)))));
-        // Initially setting is on.
-        openPrivacySandboxSettings(PrivacySandboxReferrer.PRIVACY_SETTINGS);
-        onView(sandboxCheckboxMatcher).check(matches(isChecked()));
-        assertTrue(isPrivacySandboxEnabled());
-
-        // Turn sandbox off.
-        onView(withText(R.string.privacy_sandbox_toggle)).perform(click());
-        onView(sandboxCheckboxMatcher).check(matches(not(isChecked())));
-        assertFalse(isPrivacySandboxEnabled());
-
-        // Turn sandbox on.
-        onView(withText(R.string.privacy_sandbox_toggle)).perform(click());
-        onView(sandboxCheckboxMatcher).check(matches(isChecked()));
-        assertTrue(isPrivacySandboxEnabled());
+    @Feature({"RenderTest"})
+    public void testRenderPrivacySandboxSettingsV4() throws IOException {
+        startPrivacySandboxSettingsV4();
+        mRenderTestRule.render(
+                getRootViewSanitized(R.string.ad_privacy_page_title),
+                "privacy_sandbox_settings_v4");
     }
 
     @Test
     @SmallTest
-    public void testCreateActivityFromPrivacySettings() {
-        openPrivacySandboxSettings(PrivacySandboxReferrer.PRIVACY_SETTINGS);
+    public void testTopicsPrefDisabledDescription() {
+        runOnUiThreadBlocking(
+                () -> setTopicsPrefEnabled(Profile.getLastUsedRegularProfile(), false));
+        startPrivacySandboxSettingsV4();
 
-        assertEquals("Total histogram count wrong", 1,
-                mHistogramTestRule.getHistogramTotalCount(REFERRER_HISTOGRAM));
-        assertEquals("Privacy referrer histogram count", 1,
-                mHistogramTestRule.getHistogramValueCount(
-                        REFERRER_HISTOGRAM, PrivacySandboxReferrer.PRIVACY_SETTINGS));
+        onView(withText(R.string.ad_privacy_page_topics_link_row_sub_label_disabled))
+                .check(matches(isDisplayed()));
     }
 
     @Test
     @SmallTest
-    public void testCreateActivityFromCookiesSnackbar() {
-        openPrivacySandboxSettings(PrivacySandboxReferrer.COOKIES_SNACKBAR);
+    public void testTopicsPrefEnabledDescription() {
+        runOnUiThreadBlocking(
+                () -> setTopicsPrefEnabled(Profile.getLastUsedRegularProfile(), true));
+        startPrivacySandboxSettingsV4();
 
-        assertEquals("Total histogram count", 1,
-                mHistogramTestRule.getHistogramTotalCount(REFERRER_HISTOGRAM));
-        assertEquals("Cookies snackbar referrer histogram count wrong", 1,
-                mHistogramTestRule.getHistogramValueCount(
-                        REFERRER_HISTOGRAM, PrivacySandboxReferrer.COOKIES_SNACKBAR));
+        onView(withText(R.string.ad_privacy_page_topics_link_row_sub_label_enabled))
+                .check(matches(isDisplayed()));
+    }
+
+    @Test
+    @SmallTest
+    public void testFledgePrefDisabledDescription() {
+        runOnUiThreadBlocking(
+                () -> setFledgePrefEnabled(Profile.getLastUsedRegularProfile(), false));
+        startPrivacySandboxSettingsV4();
+
+        onView(withText(R.string.ad_privacy_page_fledge_link_row_sub_label_disabled))
+                .check(matches(isDisplayed()));
+    }
+
+    @Test
+    @SmallTest
+    public void testFledgePrefEnabledDescription() {
+        runOnUiThreadBlocking(
+                () -> setFledgePrefEnabled(Profile.getLastUsedRegularProfile(), true));
+        startPrivacySandboxSettingsV4();
+
+        onView(withText(R.string.ad_privacy_page_fledge_link_row_sub_label_enabled))
+                .check(matches(isDisplayed()));
+    }
+
+    @Test
+    @SmallTest
+    public void testAdMeasurementPrefDisabledDescription() {
+        runOnUiThreadBlocking(
+                () -> setAdMeasurementPrefEnabled(Profile.getLastUsedRegularProfile(), false));
+        startPrivacySandboxSettingsV4();
+
+        onView(withText(R.string.ad_privacy_page_ad_measurement_link_row_sub_label_disabled))
+                .check(matches(isDisplayed()));
+    }
+
+    @Test
+    @SmallTest
+    public void testAdMeasurementPrefEnabledDescription() {
+        runOnUiThreadBlocking(
+                () -> setAdMeasurementPrefEnabled(Profile.getLastUsedRegularProfile(), true));
+        startPrivacySandboxSettingsV4();
+
+        onView(withText(R.string.ad_privacy_page_ad_measurement_link_row_sub_label_enabled))
+                .check(matches(isDisplayed()));
+    }
+
+    @Test
+    @SmallTest
+    public void testNavigateToTopicsPage() {
+        startPrivacySandboxSettingsV4();
+        onView(withText(R.string.ad_privacy_page_topics_link_row_label)).perform(click());
+
+        onViewWaiting(withText(R.string.settings_topics_page_toggle_sub_label));
+        assertThat(
+                mUserActionTester.getActions(), hasItems("Settings.PrivacySandbox.Topics.Opened"));
+    }
+
+    @Test
+    @SmallTest
+    public void testNavigateToFledgePage() {
+        startPrivacySandboxSettingsV4();
+        onView(withText(R.string.ad_privacy_page_fledge_link_row_label)).perform(click());
+
+        onViewWaiting(withText(R.string.settings_fledge_page_toggle_sub_label));
+        assertThat(
+                mUserActionTester.getActions(), hasItems("Settings.PrivacySandbox.Fledge.Opened"));
+    }
+
+    @Test
+    @SmallTest
+    public void testNavigateToAdMeasurementPage() {
+        startPrivacySandboxSettingsV4();
+        onView(withText(R.string.ad_privacy_page_ad_measurement_link_row_label)).perform(click());
+
+        onViewWaiting(withText(R.string.settings_ad_measurement_page_toggle_sub_label));
+        assertThat(
+                mUserActionTester.getActions(),
+                hasItems("Settings.PrivacySandbox.AdMeasurement.Opened"));
     }
 }

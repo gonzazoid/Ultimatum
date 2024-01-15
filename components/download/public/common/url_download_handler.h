@@ -5,7 +5,6 @@
 #ifndef COMPONENTS_DOWNLOAD_PUBLIC_COMMON_URL_DOWNLOAD_HANDLER_H_
 #define COMPONENTS_DOWNLOAD_PUBLIC_COMMON_URL_DOWNLOAD_HANDLER_H_
 
-#include "base/memory/weak_ptr.h"
 #include "components/download/public/common/download_export.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "components/download/public/common/url_loader_factory_provider.h"
@@ -13,6 +12,13 @@
 namespace download {
 struct DownloadCreateInfo;
 class InputStream;
+
+// Identifier for a UrlDownloadHandler to scope the lifetime of references.
+// UrlDownloadHandlerID are derived from UrlDownloadHandler*, used in
+// comparison only, and are never dereferenced. We use an std::uintptr_t here to
+// match the size of a pointer, and to prevent dereferencing. Also, our
+// tooling complains about dangling pointers if we pass around a raw ptr.
+using UrlDownloadHandlerID = std::uintptr_t;
 
 // Class for handling the download of a url. Implemented by child classes.
 class COMPONENTS_DOWNLOAD_EXPORT UrlDownloadHandler {
@@ -27,11 +33,11 @@ class COMPONENTS_DOWNLOAD_EXPORT UrlDownloadHandler {
         std::unique_ptr<InputStream> input_stream,
         URLLoaderFactoryProvider::URLLoaderFactoryProviderPtr
             url_loader_factory_provider,
-        UrlDownloadHandler* downloader,
+        UrlDownloadHandlerID downloader,
         DownloadUrlParameters::OnStartedCallback callback) = 0;
 
     // Called after the connection is cancelled or finished.
-    virtual void OnUrlDownloadStopped(UrlDownloadHandler* downloader) = 0;
+    virtual void OnUrlDownloadStopped(UrlDownloadHandlerID downloader) = 0;
 
     // Called when a UrlDownloadHandler is created.
     virtual void OnUrlDownloadHandlerCreated(

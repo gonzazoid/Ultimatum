@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -66,7 +66,6 @@ class MouseLockController : public ExclusiveAccessControllerBase {
 
   void ExitExclusiveAccessIfNecessary() override;
   void NotifyTabExclusiveAccessLost() override;
-  void RecordBubbleReshowsHistogram(int bubble_reshow_count) override;
 
   void OnBubbleHidden(content::WebContents*, ExclusiveAccessBubbleHideReason);
 
@@ -78,7 +77,7 @@ class MouseLockController : public ExclusiveAccessControllerBase {
   // lock the mouse. This is granted only if the WebContents instance has
   // previously locked and displayed the permission bubble until the bubble
   // time out has expired. https://crbug.com/725370
-  raw_ptr<content::WebContents, DanglingUntriaged>
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
       web_contents_granted_silent_mouse_lock_permission_ = nullptr;
 
   // If true, does not call into the WebContents to lock the mouse. Just assumes

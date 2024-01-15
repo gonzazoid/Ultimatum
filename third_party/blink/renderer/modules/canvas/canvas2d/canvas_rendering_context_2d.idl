@@ -44,6 +44,12 @@ typedef (CSSImageValue or
 
 enum CanvasFillRule { "nonzero", "evenodd" };
 enum ImageSmoothingQuality {"low", "medium", "high"};
+enum CanvasTextRendering {"auto", "optimizeSpeed", "optimizeLegibility", "geometricPrecision"};
+enum CanvasFontStretch {"ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "normal", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"};
+
+dictionary BeginLayerOptions {
+  CanvasFilterInput? filter = null;
+};
 
 [
     ActiveScriptWrappable,
@@ -55,56 +61,56 @@ interface CanvasRenderingContext2D {
 
     // state
     void save(); // push state on state stack
-    [NoAllocDirectCall] void restore(); // pop state stack if top state was pushed by save, and restore state
-    [RuntimeEnabled=Canvas2dLayers] void beginLayer(); // push state on state stack and creates bitmap for subsequent draw ops
-    [RuntimeEnabled=Canvas2dLayers] void endLayer(); // pop state stack if top state was pushed by beginLayer, restore state and draw the bitmap
+    [NoAllocDirectCall, RaisesException] void restore(); // pop state stack if top state was pushed by save, and restore state
+    [RuntimeEnabled=Canvas2dLayers, CallWith=ScriptState, RaisesException] void beginLayer(optional BeginLayerOptions options = {}); // push state on state stack and creates bitmap for subsequent draw ops
+    [NoAllocDirectCall, RuntimeEnabled=Canvas2dLayers, RaisesException] void endLayer(); // pop state stack if top state was pushed by beginLayer, restore state and draw the bitmap
     // Clear the canvas and reset the path
     void reset();
 
     // transformations (default transform is the identity matrix)
-    void scale(unrestricted double x, unrestricted double y);
-    [NoAllocDirectCall] void rotate(unrestricted double angle);
-    void translate(unrestricted double x, unrestricted double y);
-    void transform(unrestricted double a, unrestricted double b, unrestricted double c, unrestricted double d, unrestricted double e, unrestricted double f);
-    void setTransform(unrestricted double a, unrestricted double b, unrestricted double c, unrestricted double d, unrestricted double e, unrestricted double f);
+    [HighEntropy] void scale(unrestricted double x, unrestricted double y);
+    [HighEntropy, NoAllocDirectCall] void rotate(unrestricted double angle);
+    [HighEntropy] void translate(unrestricted double x, unrestricted double y);
+    [HighEntropy] void transform(unrestricted double a, unrestricted double b, unrestricted double c, unrestricted double d, unrestricted double e, unrestricted double f);
+    [HighEntropy] void setTransform(unrestricted double a, unrestricted double b, unrestricted double c, unrestricted double d, unrestricted double e, unrestricted double f);
     [RaisesException] void setTransform(optional DOMMatrixInit transform = {});
     DOMMatrix getTransform();
     [NoAllocDirectCall] void resetTransform();
 
     // compositing
     attribute unrestricted double globalAlpha; // (default 1.0)
-    attribute DOMString globalCompositeOperation; // (default source-over)
-    [MeasureAs=Canvas2DFilter, SetterCallWith=ExecutionContext] attribute (DOMString or CanvasFilter)? filter; // (default 'none')
+    [HighEntropy] attribute DOMString globalCompositeOperation; // (default source-over)
+    [MeasureAs=Canvas2DFilter, SetterCallWith=ScriptState] attribute (DOMString or CanvasFilter)? filter; // (default 'none')
 
     // image smoothing
     attribute boolean imageSmoothingEnabled; // (default True)
     [MeasureAs=Canvas2DImageSmoothingQuality]attribute ImageSmoothingQuality imageSmoothingQuality; // (default "low")
 
     // colors and styles (see also the CanvasDrawingStyles interface)
-    attribute (DOMString or CanvasGradient or CanvasPattern or CSSColorValue) strokeStyle; // (default black)
-    attribute (DOMString or CanvasGradient or CanvasPattern or CSSColorValue) fillStyle; // (default black)
+    [HighEntropy, SetterCallWith=Isolate, RaisesException=Setter, GetterCallWith=ScriptState] attribute any strokeStyle; // (default black)
+    [HighEntropy, SetterCallWith=Isolate, RaisesException=Setter, GetterCallWith=ScriptState] attribute any fillStyle; // (default black)
     CanvasGradient createLinearGradient(double x0, double y0, double x1, double y1);
     [RaisesException] CanvasGradient createRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1);
     CanvasGradient createConicGradient(double startAngle, double cx, double cy);
-    [RaisesException] CanvasPattern? createPattern(CanvasImageSource image, [TreatNullAs=EmptyString] DOMString repetitionType);
+    [RaisesException] CanvasPattern? createPattern(CanvasImageSource image, [LegacyNullToEmptyString] DOMString repetitionType);
 
     // shadows
-    attribute unrestricted double shadowOffsetX;
-    attribute unrestricted double shadowOffsetY;
-    attribute unrestricted double shadowBlur;
-    attribute DOMString shadowColor;
+    [HighEntropy] attribute unrestricted double shadowOffsetX;
+    [HighEntropy] attribute unrestricted double shadowOffsetY;
+    [HighEntropy] attribute unrestricted double shadowBlur;
+    [HighEntropy] attribute DOMString shadowColor;
 
     // rects
-    [NoAllocDirectCall] void clearRect(unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
-    [NoAllocDirectCall] void fillRect(unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
-    [NoAllocDirectCall] void strokeRect(unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
+    [HighEntropy, NoAllocDirectCall] void clearRect(unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
+    [HighEntropy, NoAllocDirectCall] void fillRect(unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
+    [HighEntropy, NoAllocDirectCall] void strokeRect(unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
 
     // path API (see also CanvasPath)
-    [NoAllocDirectCall] void beginPath();
-    void fill(optional CanvasFillRule winding);
-    void fill(Path2D path, optional CanvasFillRule winding);
-    void stroke();
-    void stroke(Path2D path);
+    [HighEntropy, NoAllocDirectCall] void beginPath();
+    [HighEntropy] void fill(optional CanvasFillRule winding);
+    [HighEntropy] void fill(Path2D path, optional CanvasFillRule winding);
+    [HighEntropy] void stroke();
+    [HighEntropy] void stroke(Path2D path);
     // Focus rings
     void drawFocusIfNeeded(Element element);
     void drawFocusIfNeeded(Path2D path, Element element);
@@ -119,7 +125,7 @@ interface CanvasRenderingContext2D {
 
     // text (see also the CanvasDrawingStyles interface)
     [HighEntropy] void fillText(DOMString text, unrestricted double x, unrestricted double y, optional unrestricted double maxWidth);
-    void strokeText(DOMString text, unrestricted double x, unrestricted double y, optional unrestricted double maxWidth);
+    [HighEntropy] void strokeText(DOMString text, unrestricted double x, unrestricted double y, optional unrestricted double maxWidth);
     [HighEntropy] TextMetrics measureText(DOMString text);
 
     // Render entire FormattedText with line wrapping (one-shot)
@@ -129,6 +135,15 @@ interface CanvasRenderingContext2D {
     [RaisesException] void drawImage(CanvasImageSource image, unrestricted double x, unrestricted double y);
     [RaisesException] void drawImage(CanvasImageSource image, unrestricted double x, unrestricted double y, unrestricted double width, unrestricted double height);
     [RaisesException] void drawImage(CanvasImageSource image, unrestricted double sx, unrestricted double sy, unrestricted double sw, unrestricted double sh, unrestricted double dx, unrestricted double dy, unrestricted double dw, unrestricted double dh);
+
+    // triangle mesh API
+    [RuntimeEnabled=Canvas2dMesh, RaisesException] Mesh2DVertexBuffer createMesh2DVertexBuffer(Float32Array buffer);
+    [RuntimeEnabled=Canvas2dMesh, RaisesException] Mesh2DUVBuffer createMesh2DUVBuffer(Float32Array buffer);
+    [RuntimeEnabled=Canvas2dMesh, RaisesException] Mesh2DIndexBuffer createMesh2DIndexBuffer(Uint16Array buffer);
+    [RuntimeEnabled=Canvas2dMesh, HighEntropy, RaisesException] void drawMesh(Mesh2DVertexBuffer vertex_buffer,
+                                                                              Mesh2DUVBuffer uv_buffer,
+                                                                              Mesh2DIndexBuffer index_buffer,
+                                                                              CanvasImageSource image);
 
     // pixel manipulation
     [RaisesException] ImageData createImageData(ImageData imagedata);
@@ -158,15 +173,15 @@ interface CanvasRenderingContext2D {
     attribute unrestricted double lineDashOffset;
 
     // text
-    attribute DOMString font; // (default 10px sans-serif)
+    [HighEntropy] attribute DOMString font; // (default 10px sans-serif)
     attribute DOMString textAlign; // "start", "end", "left", "right", "center" (default: "start")
     attribute DOMString textBaseline; // "top", "hanging", "middle", "alphabetic", "ideographic", "bottom" (default: "alphabetic")
     attribute DOMString direction; // "inherit", "rtl", "ltr" (default: "inherit")
     attribute DOMString fontKerning; // "auto", "normal", "none" (default: "auto")
-    attribute DOMString fontStretch; // "ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "normal", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded" (default: normal)
+    attribute CanvasFontStretch fontStretch; // "ultra-condensed", "extra-condensed", "condensed", "semi-condensed", "normal", "semi-expanded", "expanded", "extra-expanded", "ultra-expanded" (default: normal)
     attribute DOMString fontVariantCaps; // "normal", "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase", "titling-caps" (default: "normal")
     attribute DOMString letterSpacing; // length in pixel (default: "0px")
-    attribute DOMString textRendering; // "auto", "optimizeSpeed", "optimizeLegibility", "geometricPrecision" (default: auto)
+    attribute CanvasTextRendering textRendering; // "auto", "optimizeSpeed", "optimizeLegibility", "geometricPrecision" (default: "auto")
     attribute DOMString wordSpacing; // length in pixel (default: "0px")
 };
 

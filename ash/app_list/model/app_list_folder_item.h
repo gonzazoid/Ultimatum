@@ -19,6 +19,7 @@
 #include "ash/app_list/model/folder_image.h"
 #include "ash/public/cpp/app_list/app_list_config_provider.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 
 namespace gfx {
@@ -76,6 +77,7 @@ class APP_LIST_MODEL_EXPORT AppListFolderItem
   FolderType folder_type() const { return folder_type_; }
 
   // AppListItem overrides:
+  AppListFolderItem* AsFolderItem() override;
   const char* GetItemType() const override;
   AppListItem* FindChildItem(const std::string& id) override;
   AppListItem* GetChildItemAt(size_t index) override;
@@ -97,10 +99,6 @@ class APP_LIST_MODEL_EXPORT AppListFolderItem
   // OEM folder.
   bool IsSystemFolder() const;
   void SetIsSystemFolder(bool is_system_folder);
-
-  // Returns true if this folder is a candidate for auto-removal (based on its
-  // type and the number of children it has).
-  bool ShouldAutoRemove() const;
 
   // Returns an id for a new folder.
   static std::string GenerateId();
@@ -141,7 +139,7 @@ class APP_LIST_MODEL_EXPORT AppListFolderItem
   std::map<AppListConfigType, std::unique_ptr<FolderImage>> folder_images_;
 
   // Set when a folder item is being dragged.
-  AppListItem* dragged_item_ = nullptr;
+  raw_ptr<AppListItem> dragged_item_ = nullptr;
 
   base::ScopedObservation<AppListConfigProvider,
                           AppListConfigProvider::Observer>

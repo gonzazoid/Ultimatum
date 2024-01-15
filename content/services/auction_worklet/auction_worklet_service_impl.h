@@ -8,6 +8,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "content/common/content_export.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
+#include "content/services/auction_worklet/public/mojom/auction_network_events_handler.mojom.h"
 #include "content/services/auction_worklet/public/mojom/auction_worklet_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -48,28 +49,42 @@ class CONTENT_EXPORT AuctionWorkletServiceImpl
   static std::unique_ptr<AuctionWorkletServiceImpl> CreateForService(
       mojo::PendingReceiver<mojom::AuctionWorkletService> receiver);
 
-  scoped_refptr<AuctionV8Helper> AuctionV8HelperForTesting();
+  std::vector<scoped_refptr<AuctionV8Helper>> AuctionV8HelpersForTesting();
+
+  int NumBidderWorkletsForTesting() const { return bidder_worklets_.size(); }
+  int NumSellerWorkletsForTesting() const { return seller_worklets_.size(); }
 
   // mojom::AuctionWorkletService implementation:
   void LoadBidderWorklet(
       mojo::PendingReceiver<mojom::BidderWorklet> bidder_worklet_receiver,
+      mojo::PendingRemote<mojom::AuctionSharedStorageHost>
+          shared_storage_host_remote,
       bool pause_for_debugger_on_start,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           pending_url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       const GURL& script_source_url,
-      const absl::optional<GURL>& wasm_helper_url,
-      const absl::optional<GURL>& trusted_bidding_signals_url,
+      const std::optional<GURL>& wasm_helper_url,
+      const std::optional<GURL>& trusted_bidding_signals_url,
+      const std::string& trusted_bidding_signals_slot_size_param,
       const url::Origin& top_window_origin,
+      mojom::AuctionWorkletPermissionsPolicyStatePtr permissions_policy_state,
       bool has_experiment_group_id,
       uint16_t experiment_group_id) override;
   void LoadSellerWorklet(
       mojo::PendingReceiver<mojom::SellerWorklet> seller_worklet_receiver,
+      mojo::PendingRemote<mojom::AuctionSharedStorageHost>
+          shared_storage_host_remote,
       bool pause_for_debugger_on_start,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           pending_url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       const GURL& decision_logic_url,
-      const absl::optional<GURL>& trusted_scoring_signals_url,
+      const std::optional<GURL>& trusted_scoring_signals_url,
       const url::Origin& top_window_origin,
+      mojom::AuctionWorkletPermissionsPolicyStatePtr permissions_policy_state,
       bool has_experiment_group_id,
       uint16_t experiment_group_id) override;
 
@@ -87,11 +102,12 @@ class CONTENT_EXPORT AuctionWorkletServiceImpl
   void DisconnectBidderWorklet(mojo::ReceiverId receiver_id,
                                const std::string& reason);
 
-  // This should be before `bidder_worklets_` and `seller_worklets_` as it needs
-  // to be destroyed after them, as the actual destruction of V8HelperHolder
-  // may need to block to get V8 shutdown cleanly, which is helped by worklets
-  // not being around to produce more work.
-  scoped_refptr<V8HelperHolder> auction_v8_helper_holder_;
+  // These should be before `bidder_worklets_` and `seller_worklets_` as they
+  // need to be destroyed after them, as the actual destruction of
+  // V8HelperHolder may need to block to get V8 shutdown cleanly, which is
+  // helped by worklets not being around to produce more work.
+  scoped_refptr<V8HelperHolder> auction_bidder_v8_helper_holder_;
+  scoped_refptr<V8HelperHolder> auction_seller_v8_helper_holder_;
 
   // This is bound when created via CreateForService(); in case of
   // CreateForRenderer() an external SelfOwnedReceiver is used instead.

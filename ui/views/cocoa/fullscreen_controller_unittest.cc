@@ -8,8 +8,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace remote_cocoa {
-namespace test {
+namespace remote_cocoa::test {
 
 using testing::_;
 using testing::Invoke;
@@ -239,7 +238,7 @@ TEST_F(MacFullscreenControllerTest, FailExitFullscreen) {
 
 // A simple cross-screen transition.
 TEST_F(MacFullscreenControllerTest, SimpleCrossScreen) {
-  // Enter fullscreen to display 0, from display 0.
+  // Enter fullscreen on display 1, from display 0.
   EXPECT_CALL(mock_client_, FullscreenControllerGetFrame())
       .Times(1)
       .WillOnce(Return(kWindowRect));
@@ -249,7 +248,7 @@ TEST_F(MacFullscreenControllerTest, SimpleCrossScreen) {
 
   // This will trigger a call to MoveToTargetDisplayThenToggleFullscreen, even
   // though we are not actually moving displays. It will also then post a task
-  // To ToggleFullscreen (because RunUntilIdle will pick up that posted task).
+  // to ToggleFullscreen (because RunUntilIdle will pick up that posted task).
   EXPECT_CALL(mock_client_, FullscreenControllerGetFrameForDisplay(kDisplay1Id))
       .Times(1)
       .WillOnce(Return(kDisplay1Frame));
@@ -648,7 +647,7 @@ TEST_F(MacFullscreenControllerTest, EnterCrossScreenWhileEntering) {
 
   // Complete the original fullscreen transition. This will check to see if
   // the display we are on is the display we wanted to be on. Seeing that it
-  // isn't it will post a task to exit fullscreen to move to the correct
+  // isn't, it will post a task to exit fullscreen before moving to the correct
   // display.
   EXPECT_CALL(mock_client_, FullscreenControllerGetDisplayId())
       .WillOnce(Return(kDisplay0Id));
@@ -662,8 +661,11 @@ TEST_F(MacFullscreenControllerTest, EnterCrossScreenWhileEntering) {
                                          OnWindowWillExitFullscreen));
   task_environment_.RunUntilIdle();
 
-  // Complete the transition to windowed mode. This will then move the window
-  // and toggle fullscreen.
+  // Complete the transition to windowed mode. This will once again check to see
+  // if the display we are on is the display we wanted to be on. Seeing that it
+  // isn't, it will move to the correct display and toggle fullscreen.
+  EXPECT_CALL(mock_client_, FullscreenControllerGetDisplayId())
+      .WillOnce(Return(kDisplay0Id));
   controller_.OnWindowDidExitFullscreen();
   EXPECT_CALL(mock_client_, FullscreenControllerGetFrameForDisplay(kDisplay1Id))
       .Times(1)
@@ -704,5 +706,108 @@ TEST_F(MacFullscreenControllerTest, EnterCrossScreenWhileEntering) {
   EXPECT_FALSE(controller_.GetTargetFullscreenState());
 }
 
-}  // namespace test
-}  // namespace remote_cocoa
+// Be instructed to enter fullscreen while restoring the windowed frame.
+TEST_F(MacFullscreenControllerTest, EnterCrossScreenWhileRestoring) {
+  // Enter fullscreen on display 1, from display 0.
+  EXPECT_CALL(mock_client_, FullscreenControllerGetFrame())
+      .WillOnce(Return(kWindowRect));
+  EXPECT_CALL(mock_client_, FullscreenControllerTransitionStart(true)).Times(1);
+  controller_.EnterFullscreen(kDisplay1Id);
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_TRUE(controller_.GetTargetFullscreenState());
+
+  // This will trigger a call to MoveToTargetDisplayThenToggleFullscreen, even
+  // though we are not actually moving displays. It will also then post a task
+  // to ToggleFullscreen (because RunUntilIdle will pick up that posted task).
+  EXPECT_CALL(mock_client_, FullscreenControllerGetFrameForDisplay(kDisplay1Id))
+      .WillOnce(Return(kDisplay1Frame));
+  EXPECT_CALL(mock_client_,
+              FullscreenControllerSetFrame(kDisplay1Frame, true, _))
+      .WillOnce(FullscreenControllerSetFrameFake);
+  EXPECT_CALL(mock_client_, FullscreenControllerToggleFullscreen())
+      .WillOnce(Invoke(&controller_, &NativeWidgetNSWindowFullscreenController::
+                                         OnWindowWillEnterFullscreen));
+  task_environment_.RunUntilIdle();
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_TRUE(controller_.GetTargetFullscreenState());
+
+  // Complete the transition to fullscreen on the new display.
+  EXPECT_CALL(mock_client_, FullscreenControllerTransitionComplete(true))
+      .Times(1);
+  controller_.OnWindowDidEnterFullscreen();
+  EXPECT_FALSE(controller_.IsInFullscreenTransition());
+  EXPECT_TRUE(controller_.GetTargetFullscreenState());
+
+  // Exit fullscreen. This will post a task to restore the windowed frame.
+  EXPECT_CALL(mock_client_, FullscreenControllerTransitionStart(false))
+      .Times(1);
+  controller_.OnWindowWillExitFullscreen();
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_FALSE(controller_.GetTargetFullscreenState());
+  task_environment_.RunUntilIdle();
+  controller_.OnWindowDidExitFullscreen();
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_FALSE(controller_.GetTargetFullscreenState());
+
+  // Enter fullscreen on display 1 again, while restoring the windowed frame.
+  // This does not call FullscreenControllerGetFrame() to update the cached
+  // windowed frame, since the window is still in transition. It also will not
+  // call FullscreenControllerTransitionComplete(false) to signal the successful
+  // exit, since that might ambiguously signal that entering fullscreen failed.
+  // It also will not call FullscreenControllerTransitionStart(true), since the
+  // window is already in a transition.
+  controller_.EnterFullscreen(kDisplay1Id);
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_TRUE(controller_.GetTargetFullscreenState());
+
+  // Let the run loop run, the task to restore the windowed frame will execute
+  // before handling the new pending state from EnterFullscreen.
+  EXPECT_CALL(mock_client_, FullscreenControllerSetFrame(kWindowRect, true, _))
+      .WillOnce(FullscreenControllerSetFrameFake);
+  // This will trigger a call to MoveToTargetDisplayThenToggleFullscreen, even
+  // though we are not actually moving displays. It will also then post a task
+  // to ToggleFullscreen (because RunUntilIdle will pick up that posted task).
+  EXPECT_CALL(mock_client_, FullscreenControllerGetFrameForDisplay(kDisplay1Id))
+      .WillOnce(Return(kDisplay1Frame));
+  EXPECT_CALL(mock_client_,
+              FullscreenControllerSetFrame(kDisplay1Frame, true, _))
+      .WillOnce(FullscreenControllerSetFrameFake);
+  EXPECT_CALL(mock_client_, FullscreenControllerToggleFullscreen())
+      .WillOnce(Invoke(&controller_, &NativeWidgetNSWindowFullscreenController::
+                                         OnWindowWillEnterFullscreen));
+  task_environment_.RunUntilIdle();
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_TRUE(controller_.GetTargetFullscreenState());
+
+  // Complete the transition to fullscreen on the new display.
+  EXPECT_CALL(mock_client_, FullscreenControllerTransitionComplete(true))
+      .Times(1);
+  controller_.OnWindowDidEnterFullscreen();
+  EXPECT_FALSE(controller_.IsInFullscreenTransition());
+  EXPECT_TRUE(controller_.GetTargetFullscreenState());
+
+  // Exit fullscreen. This will post a task to restore bounds.
+  EXPECT_CALL(mock_client_, FullscreenControllerTransitionStart(false))
+      .Times(1);
+  controller_.OnWindowWillExitFullscreen();
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_FALSE(controller_.GetTargetFullscreenState());
+  task_environment_.RunUntilIdle();
+  controller_.OnWindowDidExitFullscreen();
+  EXPECT_TRUE(controller_.IsInFullscreenTransition());
+  EXPECT_FALSE(controller_.GetTargetFullscreenState());
+
+  // Let the run loop run, it will restore the bounds (and not crash).
+  // The original bounds should still be stored, even though they were
+  // previously restored, since the second fullscreen transition begun while
+  // already in a transition to restore bounds after exiting fullscreen.
+  EXPECT_CALL(mock_client_, FullscreenControllerSetFrame(kWindowRect, true, _))
+      .WillOnce(FullscreenControllerSetFrameFake);
+  EXPECT_CALL(mock_client_, FullscreenControllerTransitionComplete(false))
+      .Times(1);
+  task_environment_.RunUntilIdle();
+  EXPECT_FALSE(controller_.IsInFullscreenTransition());
+  EXPECT_FALSE(controller_.GetTargetFullscreenState());
+}
+
+}  // namespace remote_cocoa::test

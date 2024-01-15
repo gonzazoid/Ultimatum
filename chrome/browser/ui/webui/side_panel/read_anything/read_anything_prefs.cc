@@ -4,54 +4,64 @@
 
 #include "chrome/browser/ui/webui/side_panel/read_anything/read_anything_prefs.h"
 
-#include "chrome/browser/ui/views/side_panel/read_anything/read_anything_constants.h"
+#include "base/values.h"
 #include "chrome/common/accessibility/read_anything.mojom.h"
+#include "chrome/common/accessibility/read_anything_constants.h"
 #include "components/pref_registry/pref_registry_syncable.h"
-
-namespace prefs {
+#include "ui/accessibility/accessibility_features.h"
 
 #if !BUILDFLAG(IS_ANDROID)
-// String to represent the user's preferred font name for the read anything UI.
-const char kAccessibilityReadAnythingFontName[] =
-    "settings.a11y.read_anything.font_name";
-
-// Double to represent the user's preferred font size scaling factor.
-const char kAccessibilityReadAnythingFontScale[] =
-    "settings.a11y.read_anything.font_scale";
-
-// Int value to represent the user's preferred color settings.
-const char kAccessibilityReadAnythingColorInfo[] =
-    "settings.a11y.read_anything.color_info";
-
-// Int value to represent the user's preferred line spacing setting.
-const char kAccessibilityReadAnythingLineSpacing[] =
-    "settings.a11y.read_anything.line_spacing";
-
-// Int value to represent the user's preferred letter spacing setting.
-const char kAccessibilityReadAnythingLetterSpacing[] =
-    "settings.a11y.read_anything.letter_spacing";
-
-}  // namespace prefs
 
 void RegisterReadAnythingProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterStringPref(prefs::kAccessibilityReadAnythingFontName,
-                               kReadAnythingDefaultFontName,
-                               user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterStringPref(
+      prefs::kAccessibilityReadAnythingFontName,
+      string_constants::kReadAnythingPlaceholderFontName,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterDoublePref(prefs::kAccessibilityReadAnythingFontScale,
                                kReadAnythingDefaultFontScale,
                                user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(
       prefs::kAccessibilityReadAnythingColorInfo,
-      (int)read_anything::mojom::Colors::kDefaultValue,
+      static_cast<int>(read_anything::mojom::Colors::kDefaultValue),
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(
       prefs::kAccessibilityReadAnythingLineSpacing,
-      (int)read_anything::mojom::Spacing::kDefault,
+      static_cast<int>(read_anything::mojom::LineSpacing::kDefaultValue),
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(
       prefs::kAccessibilityReadAnythingLetterSpacing,
-      (int)read_anything::mojom::Spacing::kDefault,
+      static_cast<int>(read_anything::mojom::LetterSpacing::kDefaultValue),
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  if (features::IsReadAnythingReadAloudEnabled()) {
+    // TODO(crbug.com/1474951): When we release on multiple platforms, add
+    // separate prefs for voices on each platform since they're not always
+    // the same on every platform.
+    registry->RegisterDictionaryPref(
+        prefs::kAccessibilityReadAnythingVoiceName, base::Value::Dict(),
+        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+    registry->RegisterDoublePref(
+        prefs::kAccessibilityReadAnythingSpeechRate,
+        kReadAnythingDefaultSpeechRate,
+        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+    registry->RegisterIntegerPref(
+        prefs::kAccessibilityReadAnythingHighlightGranularity,
+        static_cast<int>(
+            read_anything::mojom::HighlightGranularity::kDefaultValue),
+        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+    // TODO(crbug.com/1474951): Update the default value for this integer
+    // pref to be an enum value, like the ones above
+    registry->RegisterIntegerPref(
+        prefs::kAccessibilityReadAnythingHighlightColor, 0,
+        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  }
+  if (features::IsReadAnythingOmniboxIconEnabled()) {
+    registry->RegisterIntegerPref(
+        prefs::kAccessibilityReadAnythingOmniboxIconLabelShownCount, 0,
+        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  }
+  registry->RegisterBooleanPref(
+      prefs::kAccessibilityReadAnythingLinksEnabled, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 }
 

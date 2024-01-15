@@ -13,8 +13,10 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_data.h"
 #include "third_party/blink/renderer/core/fileapi/file.h"
 #include "third_party/blink/renderer/core/html/canvas/image_data.h"
+#include "third_party/blink/renderer/core/testing/file_backed_blob_factory_test_helper.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
@@ -22,6 +24,7 @@
 namespace blink {
 
 TEST(SerializedScriptValueTest, WireFormatRoundTrip) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   v8::Local<v8::Value> v8OriginalTrue = v8::True(scope.GetIsolate());
@@ -41,6 +44,7 @@ TEST(SerializedScriptValueTest, WireFormatRoundTrip) {
 }
 
 TEST(SerializedScriptValueTest, WireFormatVersion17NoByteSwapping) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   const uint8_t data[] = {0xFF, 0x11, 0xFF, 0x0D, 0x54, 0x00};
@@ -52,6 +56,7 @@ TEST(SerializedScriptValueTest, WireFormatVersion17NoByteSwapping) {
 }
 
 TEST(SerializedScriptValueTest, WireFormatVersion16ByteSwapping) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   // Using UChar instead of uint8_t to get ntohs() byte swapping.
@@ -64,6 +69,7 @@ TEST(SerializedScriptValueTest, WireFormatVersion16ByteSwapping) {
 }
 
 TEST(SerializedScriptValueTest, WireFormatVersion13ByteSwapping) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   // Using UChar instead of uint8_t to get ntohs() byte swapping.
@@ -76,6 +82,7 @@ TEST(SerializedScriptValueTest, WireFormatVersion13ByteSwapping) {
 }
 
 TEST(SerializedScriptValueTest, WireFormatVersion0ByteSwapping) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   // Using UChar instead of uint8_t to get ntohs() byte swapping.
@@ -88,6 +95,7 @@ TEST(SerializedScriptValueTest, WireFormatVersion0ByteSwapping) {
 }
 
 TEST(SerializedScriptValueTest, WireFormatVersion0ImageData) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   v8::Isolate* isolate = scope.GetIsolate();
 
@@ -112,18 +120,23 @@ TEST(SerializedScriptValueTest, WireFormatVersion0ImageData) {
       serializedScriptValue->Deserialize(isolate);
   ASSERT_TRUE(deserialized->IsObject());
   v8::Local<v8::Object> deserializedObject = deserialized.As<v8::Object>();
-  ASSERT_TRUE(V8ImageData::HasInstance(deserializedObject, isolate));
-  ImageData* imageData = V8ImageData::ToImpl(deserializedObject);
+  ImageData* imageData = V8ImageData::ToWrappable(isolate, deserializedObject);
+  ASSERT_NE(imageData, nullptr);
   EXPECT_EQ(imageData->width(), 127);
   EXPECT_EQ(imageData->height(), 1);
 }
 
 TEST(SerializedScriptValueTest, UserSelectedFile) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
+  FileBackedBlobFactoryTestHelper file_factory_helper(
+      scope.GetExecutionContext());
   String file_path = test::BlinkRootDir() +
                      "/renderer/bindings/core/v8/serialization/"
                      "serialized_script_value_test.cc";
-  auto* original_file = MakeGarbageCollected<File>(file_path);
+  auto* original_file =
+      MakeGarbageCollected<File>(scope.GetExecutionContext(), file_path);
+  file_factory_helper.FlushForTesting();
   ASSERT_TRUE(original_file->HasBackingFile());
   ASSERT_EQ(File::kIsUserVisible, original_file->GetUserVisibility());
   ASSERT_EQ(file_path, original_file->GetPath());
@@ -138,18 +151,20 @@ TEST(SerializedScriptValueTest, UserSelectedFile) {
   v8::Local<v8::Value> v8_file =
       serialized_script_value->Deserialize(scope.GetIsolate());
 
-  ASSERT_TRUE(V8File::HasInstance(v8_file, scope.GetIsolate()));
-  File* file = V8File::ToImpl(v8::Local<v8::Object>::Cast(v8_file));
+  File* file = V8File::ToWrappable(scope.GetIsolate(), v8_file);
+  ASSERT_NE(file, nullptr);
   EXPECT_TRUE(file->HasBackingFile());
   EXPECT_EQ(File::kIsUserVisible, file->GetUserVisibility());
   EXPECT_EQ(file_path, file->GetPath());
 }
 
 TEST(SerializedScriptValueTest, FileConstructorFile) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   scoped_refptr<BlobDataHandle> blob_data_handle = BlobDataHandle::Create();
   auto* original_file = MakeGarbageCollected<File>(
-      "hello.txt", base::Time::FromJsTime(12345678.0), blob_data_handle);
+      "hello.txt", base::Time::FromMillisecondsSinceUnixEpoch(12345678.0),
+      blob_data_handle);
   ASSERT_FALSE(original_file->HasBackingFile());
   ASSERT_EQ(File::kIsNotUserVisible, original_file->GetUserVisibility());
   ASSERT_EQ("hello.txt", original_file->name());
@@ -164,8 +179,8 @@ TEST(SerializedScriptValueTest, FileConstructorFile) {
   v8::Local<v8::Value> v8_file =
       serialized_script_value->Deserialize(scope.GetIsolate());
 
-  ASSERT_TRUE(V8File::HasInstance(v8_file, scope.GetIsolate()));
-  File* file = V8File::ToImpl(v8::Local<v8::Object>::Cast(v8_file));
+  File* file = V8File::ToWrappable(scope.GetIsolate(), v8_file);
+  ASSERT_NE(file, nullptr);
   EXPECT_FALSE(file->HasBackingFile());
   EXPECT_EQ(File::kIsNotUserVisible, file->GetUserVisibility());
   EXPECT_EQ("hello.txt", file->name());

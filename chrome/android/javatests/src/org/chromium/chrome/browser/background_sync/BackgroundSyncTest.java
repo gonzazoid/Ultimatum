@@ -6,9 +6,8 @@ package org.chromium.chrome.browser.background_sync;
 
 import static org.chromium.base.test.util.ScalableTimeout.scaleTimeout;
 
-import android.support.test.InstrumentationRegistry;
-
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -38,9 +37,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Instrumentation test for Background Sync.
- */
+/** Instrumentation test for Background Sync. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public final class BackgroundSyncTest {
@@ -83,17 +80,19 @@ public final class BackgroundSyncTest {
         mActivityTestRule.startMainActivityOnBlankPage();
 
         // BackgroundSync only works with HTTPS.
-        mTestServer = EmbeddedTestServer.createAndStartHTTPSServer(
-                InstrumentationRegistry.getInstrumentation().getContext(),
-                ServerCertificate.CERT_OK);
+        mTestServer =
+                EmbeddedTestServer.createAndStartHTTPSServer(
+                        InstrumentationRegistry.getInstrumentation().getContext(),
+                        ServerCertificate.CERT_OK);
     }
 
     @After
     public void tearDown() {
-        if (mTestServer != null) mTestServer.stopAndDestroyServer();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BackgroundSyncBackgroundTaskScheduler.getInstance().removeObserver(mSchedulerObserver);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BackgroundSyncBackgroundTaskScheduler.getInstance()
+                            .removeObserver(mSchedulerObserver);
+                });
     }
 
     @Test
@@ -137,9 +136,7 @@ public final class BackgroundSyncTest {
         Assert.assertFalse(mCancelLatch.await(WAIT_TIME_MS, TimeUnit.MILLISECONDS));
     }
 
-    /**
-     * Helper methods.
-     */
+    /** Helper methods. */
     private String runJavaScript(String code) throws TimeoutException {
         return mActivityTestRule.runJavaScriptCodeInCurrentTab(code);
     }
@@ -158,38 +155,44 @@ public final class BackgroundSyncTest {
 
     private void forceConnectionType(int connectionType) {
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { BackgroundSyncNetworkUtils.setConnectionTypeForTesting(connectionType); });
+                () -> {
+                    BackgroundSyncNetworkUtils.setConnectionTypeForTesting(connectionType);
+                });
     }
 
     private void disableGooglePlayServicesVersionCheck() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BackgroundSyncBackgroundTaskSchedulerJni.get()
-                    .setPlayServicesVersionCheckDisabledForTests(
-                            /* disabled= */ true);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BackgroundSyncBackgroundTaskSchedulerJni.get()
+                            .setPlayServicesVersionCheckDisabledForTests(/* disabled= */ true);
+                });
     }
 
     private void addSchedulerObserver() {
         mScheduleLatch = new CountDownLatch(1);
         mCancelLatch = new CountDownLatch(1);
-        mSchedulerObserver = new BackgroundSyncBackgroundTaskScheduler.Observer() {
-            @Override
-            public void oneOffTaskScheduledFor(@BackgroundSyncTask int taskType, long delay) {
-                if (taskType == BackgroundSyncTask.ONE_SHOT_SYNC_CHROME_WAKE_UP) {
-                    mScheduleLatch.countDown();
-                }
-            }
+        mSchedulerObserver =
+                new BackgroundSyncBackgroundTaskScheduler.Observer() {
+                    @Override
+                    public void oneOffTaskScheduledFor(
+                            @BackgroundSyncTask int taskType, long delay) {
+                        if (taskType == BackgroundSyncTask.ONE_SHOT_SYNC_CHROME_WAKE_UP) {
+                            mScheduleLatch.countDown();
+                        }
+                    }
 
-            @Override
-            public void oneOffTaskCanceledFor(@BackgroundSyncTask int taskType) {
-                if (taskType == BackgroundSyncTask.ONE_SHOT_SYNC_CHROME_WAKE_UP) {
-                    mCancelLatch.countDown();
-                }
-            }
-        };
+                    @Override
+                    public void oneOffTaskCanceledFor(@BackgroundSyncTask int taskType) {
+                        if (taskType == BackgroundSyncTask.ONE_SHOT_SYNC_CHROME_WAKE_UP) {
+                            mCancelLatch.countDown();
+                        }
+                    }
+                };
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BackgroundSyncBackgroundTaskScheduler.getInstance().addObserver(mSchedulerObserver);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BackgroundSyncBackgroundTaskScheduler.getInstance()
+                            .addObserver(mSchedulerObserver);
+                });
     }
 }

@@ -5,13 +5,16 @@
 #include "chromeos/ash/components/dbus/shill/modem_messaging_client.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "dbus/message.h"
 #include "dbus/mock_bus.h"
@@ -20,7 +23,6 @@
 #include "dbus/values_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 using ::testing::_;
@@ -46,7 +48,7 @@ const char kObjectPath[] = "/object/path";
 
 class ModemMessagingClientTest : public testing::Test {
  public:
-  ModemMessagingClientTest() : response_(NULL) {}
+  ModemMessagingClientTest() = default;
 
   void SetUp() override {
     // Create a mock bus.
@@ -118,7 +120,8 @@ class ModemMessagingClientTest : public testing::Test {
   }
 
  protected:
-  ModemMessagingClient* client_ = nullptr;  // Unowned convenience pointer.
+  raw_ptr<ModemMessagingClient, DanglingUntriaged> client_ =
+      nullptr;  // Unowned convenience pointer.
   // A message loop to emulate asynchronous behavior.
   base::test::SingleThreadTaskEnvironment task_environment_;
   // The mock bus.
@@ -130,7 +133,7 @@ class ModemMessagingClientTest : public testing::Test {
   // Expected argument for Delete method.
   dbus::ObjectPath expected_sms_path_;
   // Response returned by mock methods.
-  dbus::Response* response_;
+  raw_ptr<dbus::Response, DanglingUntriaged> response_ = nullptr;
 
  private:
   // Used to implement the mock proxy.
@@ -187,15 +190,11 @@ TEST_F(ModemMessagingClientTest, Delete) {
   std::unique_ptr<dbus::Response> response(dbus::Response::CreateEmpty());
   response_ = response.get();
   // Call Delete.
-  bool success = false;
+  base::test::TestFuture<bool> delete_result_future;
   client_->Delete(kServiceName, dbus::ObjectPath(kObjectPath), kSmsPath,
-                  base::BindOnce([](bool* success_out,
-                                    bool success) { *success_out = true; },
-                                 &success));
+                  delete_result_future.GetCallback());
 
-  // Run the message loop.
-  base::RunLoop().RunUntilIdle();
-  EXPECT_TRUE(success);
+  EXPECT_TRUE(delete_result_future.Get());
 }
 
 TEST_F(ModemMessagingClientTest, List) {
@@ -213,19 +212,15 @@ TEST_F(ModemMessagingClientTest, List) {
   response_ = response.get();
 
   // Call List.
-  absl::optional<std::vector<dbus::ObjectPath>> result;
-  client_->List(
-      kServiceName, dbus::ObjectPath(kObjectPath),
-      base::BindOnce(
-          [](absl::optional<std::vector<dbus::ObjectPath>>* result_out,
-             absl::optional<std::vector<dbus::ObjectPath>> result) {
-            *result_out = std::move(result);
-          },
-          &result));
+  base::test::TestFuture<std::optional<std::vector<dbus::ObjectPath>>>
+      list_result_future;
+  client_->List(kServiceName, dbus::ObjectPath(kObjectPath),
+                list_result_future.GetCallback());
 
-  // Run the message loop.
-  base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(kExpectedResult, result);
+  std::optional<std::vector<dbus::ObjectPath>> result =
+      list_result_future.Take();
+  EXPECT_TRUE(result);
+  EXPECT_EQ(kExpectedResult, result.value());
 }
 
 }  // namespace ash

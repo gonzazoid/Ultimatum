@@ -36,14 +36,17 @@ ResultExpr ScreenAIProcessPolicy::EvaluateSyscall(
     {
       const Arg<int> op(1);
       return Switch(op & FUTEX_CMD_MASK)
-          .SANDBOX_BPF_DSL_CASES(
-              (FUTEX_CMP_REQUEUE, FUTEX_LOCK_PI, FUTEX_UNLOCK_PI, FUTEX_WAIT,
-               FUTEX_WAIT_BITSET, FUTEX_WAKE),
+          .Cases(
+              {FUTEX_CMP_REQUEUE, FUTEX_LOCK_PI, FUTEX_UNLOCK_PI, FUTEX_WAIT,
+               FUTEX_WAIT_BITSET, FUTEX_WAKE},
               Allow())
           // Sending ENOSYS tells the Futex backend to use another approach if
           // this fails.
           .Default(Error(ENOSYS));
     }
+
+    case __NR_getcpu:
+      return Allow();
 
     case __NR_get_mempolicy: {
       const Arg<unsigned long> which(4);
@@ -52,6 +55,9 @@ ResultExpr ScreenAIProcessPolicy::EvaluateSyscall(
 
     case __NR_prlimit64:
       return RestrictPrlimitToGetrlimit(GetPolicyPid());
+
+    case __NR_sysinfo:
+      return Allow();
 
     default:
       if (SyscallSets::IsGoogle3Threading(system_call_number)) {

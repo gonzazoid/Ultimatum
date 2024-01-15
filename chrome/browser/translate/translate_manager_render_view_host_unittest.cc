@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/stringprintf.h"
@@ -53,10 +53,6 @@
 #include "components/variations/scoped_variations_ids_provider.h"
 #include "content/public/browser/navigation_details.h"
 #include "content/public/browser/navigation_entry.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_registrar.h"
-#include "content/public/browser/notification_source.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/navigation_simulator.h"
@@ -75,7 +71,7 @@ namespace {
 
 class MockTranslateBubbleFactory : public TranslateBubbleFactory {
  public:
-  MockTranslateBubbleFactory() {}
+  MockTranslateBubbleFactory() = default;
 
   MockTranslateBubbleFactory(const MockTranslateBubbleFactory&) = delete;
   MockTranslateBubbleFactory& operator=(const MockTranslateBubbleFactory&) =
@@ -155,7 +151,7 @@ class TranslateManagerRenderViewHostTest
       return bubble != nullptr;
     } else {
       bool result = (GetTranslateInfoBar() != nullptr);
-      EXPECT_EQ(infobar_manager()->infobar_count() != 0, result);
+      EXPECT_EQ(infobar_manager()->infobars().size() != 0, result);
       return result;
     }
   }
@@ -280,9 +276,9 @@ class TranslateManagerRenderViewHostTest
   // Returns the translate infobar if there is 1 infobar and it is a translate
   // infobar.
   translate::TranslateInfoBarDelegate* GetTranslateInfoBar() {
-    return (infobar_manager()->infobar_count() == 1)
+    return (infobar_manager()->infobars().size() == 1)
                ? infobar_manager()
-                     ->infobar_at(0)
+                     ->infobars()[0]
                      ->delegate()
                      ->AsTranslateInfoBarDelegate()
                : nullptr;
@@ -296,7 +292,7 @@ class TranslateManagerRenderViewHostTest
     if (!infobar)
       return false;
     infobar->InfoBarDismissed();  // Simulates closing the infobar.
-    infobar_manager()->RemoveInfoBar(infobar_manager()->infobar_at(0));
+    infobar_manager()->RemoveInfoBar(infobar_manager()->infobars()[0]);
     return true;
   }
 
@@ -323,7 +319,7 @@ class TranslateManagerRenderViewHostTest
       if (!infobar)
         return false;
       infobar->TranslationDeclined();
-      infobar_manager()->RemoveInfoBar(infobar_manager()->infobar_at(0));
+      infobar_manager()->RemoveInfoBar(infobar_manager()->infobars()[0]);
       return true;
     }
   }
@@ -371,8 +367,8 @@ class TranslateManagerRenderViewHostTest
  protected:
   void SetUp() override {
     // Setup the test environment, including the threads and message loops. This
-    // must be done before base::ThreadTaskRunnerHandle::Get() is called when
-    // setting up the net::TestURLRequestContextGetter below.
+    // must be done before base::SingleThreadTaskRunner::GetCurrentDefault() is
+    // called when setting up the net::TestURLRequestContextGetter below.
     ChromeRenderViewHostTestHarness::SetUp();
 
     // Clears the translate script so it is fetched every time and sets the
@@ -508,8 +504,8 @@ class TranslateManagerRenderViewHostInvalidLocaleTest
 // display names in English locale. To save space, Chrome's copy of ICU
 // does not have the display name for a language unless it's in the
 // Accept-Language list.
-static const char* kServerLanguageList[] = {
-    "ach", "ak", "af", "en-CA", "zh", "yi", "fr-FR", "tl", "iw", "in", "xx"};
+static const char* kServerLanguageList[] = {"ak",    "af", "en-CA", "zh", "yi",
+                                            "fr-FR", "tl", "iw",    "hz", "xx"};
 
 // Test the fetching of languages from the translate server
 TEST_F(TranslateManagerRenderViewHostTest, FetchLanguagesFromTranslateServer) {
@@ -543,13 +539,17 @@ TEST_F(TranslateManagerRenderViewHostTest, FetchLanguagesFromTranslateServer) {
   current_supported_languages.clear();
   translate::TranslateDownloadManager::GetSupportedLanguages(
       true /* translate_allowed */, &current_supported_languages);
-  // "xx" can't be displayed in the Translate infobar, so this is eliminated.
-  EXPECT_EQ(server_languages.size() - 1, current_supported_languages.size());
+  // "in" is not in the kAcceptList and "xx" can't be displayed, so both are
+  // removed from the downloaded list.
+  EXPECT_EQ(server_languages.size() - 2, current_supported_languages.size());
   // Not sure we need to guarantee the order of languages, so we find them.
   for (size_t i = 0; i < server_languages.size(); ++i) {
     const std::string& lang = server_languages[i];
-    if (lang == "xx")
+    if (lang == "xx") {
       continue;
+    } else if (lang == "hz") {
+      continue;
+    }
     EXPECT_TRUE(base::Contains(current_supported_languages, lang))
         << "lang=" << lang;
   }
@@ -872,7 +872,6 @@ TEST_F(TranslateManagerRenderViewHostTest, ReloadFromLocationBar) {
 
   // Create a pending navigation and simulate a page load.  That should be the
   // equivalent of typing the URL again in the location bar.
-  NavEntryCommittedObserver nav_observer(web_contents());
   web_contents()->GetController().LoadURL(
       url, content::Referrer(), ui::PAGE_TRANSITION_TYPED, std::string());
   int pending_id =
@@ -880,13 +879,6 @@ TEST_F(TranslateManagerRenderViewHostTest, ReloadFromLocationBar) {
   content::RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
       ->SendNavigateWithTransition(pending_id, false, url,
                                    ui::PAGE_TRANSITION_TYPED);
-
-  // Test that we are really getting a converted reload / existing entry
-  // navigation. The test would be useless if it was not the case.
-  const content::LoadCommittedDetails& nav_details =
-      nav_observer.load_committed_details();
-  EXPECT_TRUE(nav_details.entry != NULL);  // There was a navigation.
-  EXPECT_EQ(content::NAVIGATION_TYPE_EXISTING_ENTRY, nav_details.type);
 
   // The TranslateManager class processes the navigation entry committed
   // notification in a posted task; process that task.

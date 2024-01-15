@@ -27,6 +27,8 @@ enum AssistantViewID {
   kMainStage,
   kFooterView,
   kGreetingLabel,
+  kLearnMoreToast,
+  kLauncherSearchIph,
   kOptInView,
   kProgressIndicator,
   kQueryView,

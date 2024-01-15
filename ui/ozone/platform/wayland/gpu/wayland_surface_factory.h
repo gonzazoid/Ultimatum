@@ -8,11 +8,11 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "ui/gl/gl_surface.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
+#include "ui/ozone/public/drm_modifiers_filter.h"
 #include "ui/ozone/public/surface_factory_ozone.h"
 
 namespace ui {
@@ -42,13 +42,13 @@ class WaylandSurfaceFactory : public SurfaceFactoryOzone {
       gfx::AcceleratedWidget widget) override;
   scoped_refptr<gfx::NativePixmap> CreateNativePixmap(
       gfx::AcceleratedWidget widget,
-      VkDevice vk_device,
+      gpu::VulkanDeviceQueue* device_queue,
       gfx::Size size,
       gfx::BufferFormat format,
       gfx::BufferUsage usage,
       absl::optional<gfx::Size> framebuffer_size = absl::nullopt) override;
   void CreateNativePixmapAsync(gfx::AcceleratedWidget widget,
-                               VkDevice vk_device,
+                               gpu::VulkanDeviceQueue* device_queue,
                                gfx::Size size,
                                gfx::BufferFormat format,
                                gfx::BufferUsage usage,
@@ -58,12 +58,21 @@ class WaylandSurfaceFactory : public SurfaceFactoryOzone {
       gfx::Size size,
       gfx::BufferFormat format,
       gfx::NativePixmapHandle handle) override;
+  absl::optional<gfx::BufferFormat> GetPreferredFormatForSolidColor()
+      const override;
+  bool SupportsDrmModifiersFilter() const override;
+  void SetDrmModifiersFilter(
+      std::unique_ptr<DrmModifiersFilter> filter) override;
 
   bool SupportsNativePixmaps() const;
 
+  std::vector<gfx::BufferFormat> GetSupportedFormatsForTexturing()
+      const override;
+
  private:
-  const raw_ptr<WaylandConnection> connection_;
-  const raw_ptr<WaylandBufferManagerGpu> buffer_manager_;
+  const raw_ptr<WaylandConnection, AcrossTasksDanglingUntriaged> connection_;
+  const raw_ptr<WaylandBufferManagerGpu, AcrossTasksDanglingUntriaged>
+      buffer_manager_;
   std::unique_ptr<GLOzone> egl_implementation_;
 };
 

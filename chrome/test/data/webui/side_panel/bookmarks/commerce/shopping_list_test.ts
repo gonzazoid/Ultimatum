@@ -2,29 +2,28 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-import 'chrome://read-later.top-chrome/bookmarks/commerce/shopping_list.js';
-import 'chrome://read-later.top-chrome/bookmarks/bookmarks_list.js';
+import 'chrome://bookmarks-side-panel.top-chrome/commerce/shopping_list.js';
+import 'chrome://bookmarks-side-panel.top-chrome/power_bookmarks_list.js';
 
-import {ActionSource} from 'chrome://read-later.top-chrome/bookmarks/bookmarks.mojom-webui.js';
-import {BookmarksApiProxyImpl} from 'chrome://read-later.top-chrome/bookmarks/bookmarks_api_proxy.js';
-import {ACTION_BUTTON_TRACK_IMAGE, ACTION_BUTTON_UNTRACK_IMAGE, LOCAL_STORAGE_EXPAND_STATUS_KEY, ShoppingListElement} from 'chrome://read-later.top-chrome/bookmarks/commerce/shopping_list.js';
-import {BookmarkProductInfo} from 'chrome://read-later.top-chrome/bookmarks/commerce/shopping_list.mojom-webui.js';
-import {ShoppingListApiProxyImpl} from 'chrome://read-later.top-chrome/bookmarks/commerce/shopping_list_api_proxy.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {ActionSource} from 'chrome://bookmarks-side-panel.top-chrome/bookmarks.mojom-webui.js';
+import {BookmarksApiProxyImpl} from 'chrome://bookmarks-side-panel.top-chrome/bookmarks_api_proxy.js';
+import {ACTION_BUTTON_TRACK_IMAGE, ACTION_BUTTON_UNTRACK_IMAGE, LOCAL_STORAGE_EXPAND_STATUS_KEY, ShoppingListElement} from 'chrome://bookmarks-side-panel.top-chrome/commerce/shopping_list.js';
+import {ShoppingServiceApiProxyImpl} from 'chrome://bookmarks-side-panel.top-chrome/shared/commerce/shopping_service_api_proxy.js';
+import {BookmarkProductInfo} from 'chrome://bookmarks-side-panel.top-chrome/shared/shopping_list.mojom-webui.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
 
-import {fakeMetricsPrivate, MetricsTracker} from '../../metrics_test_support.js';
 import {TestBookmarksApiProxy} from '../test_bookmarks_api_proxy.js';
 
-import {TestShoppingListApiProxy} from './test_shopping_list_api_proxy.js';
+import {TestShoppingServiceApiProxy} from './test_shopping_service_api_proxy.js';
 
 suite('SidePanelShoppingListTest', () => {
   let shoppingList: ShoppingListElement;
   let bookmarksApi: TestBookmarksApiProxy;
-  let shoppingListApi: TestShoppingListApiProxy;
+  let shoppingServiceApi: TestShoppingServiceApiProxy;
   let metrics: MetricsTracker;
 
   const products: BookmarkProductInfo[] = [
@@ -32,22 +31,26 @@ suite('SidePanelShoppingListTest', () => {
       bookmarkId: BigInt(3),
       info: {
         title: 'Product Foo',
+        clusterTitle: 'Product Cluster Foo',
         domain: 'foo.com',
         imageUrl: {url: 'chrome://resources/images/error.svg'},
         productUrl: {url: 'https://foo.com/product'},
         currentPrice: '$12',
         previousPrice: '$34',
+        clusterId: BigInt(12345),
       },
     },
     {
       bookmarkId: BigInt(4),
       info: {
         title: 'Product bar',
+        clusterTitle: 'Product Cluster bar',
         domain: 'bar.com',
         imageUrl: {url: ''},
         productUrl: {url: 'https://foo.com/product'},
         currentPrice: '$15',
         previousPrice: '',
+        clusterId: BigInt(12345),
       },
     },
   ];
@@ -122,8 +125,8 @@ suite('SidePanelShoppingListTest', () => {
     bookmarksApi = new TestBookmarksApiProxy();
     BookmarksApiProxyImpl.setInstance(bookmarksApi);
 
-    shoppingListApi = new TestShoppingListApiProxy();
-    ShoppingListApiProxyImpl.setInstance(shoppingListApi);
+    shoppingServiceApi = new TestShoppingServiceApiProxy();
+    ShoppingServiceApiProxyImpl.setInstance(shoppingServiceApi);
 
     shoppingList = document.createElement('shopping-list');
     shoppingList.productInfos = products.slice();
@@ -259,7 +262,7 @@ suite('SidePanelShoppingListTest', () => {
     const actionButton = getProductElements(shoppingList)[0]!.querySelector(
                              '.action-button')! as HTMLElement;
     actionButton.click();
-    let id = await shoppingListApi.whenCalled('untrackPriceForBookmark');
+    let id = await shoppingServiceApi.whenCalled('untrackPriceForBookmark');
     assertEquals(id, products[0]!.bookmarkId);
     checkActionButtonStatus(actionButton, false);
     assertEquals(
@@ -269,7 +272,7 @@ suite('SidePanelShoppingListTest', () => {
         metrics.count('Commerce.PriceTracking.SidePanel.Untrack.BellButton'));
 
     actionButton.click();
-    id = await shoppingListApi.whenCalled('trackPriceForBookmark');
+    id = await shoppingServiceApi.whenCalled('trackPriceForBookmark');
     assertEquals(id, products[0]!.bookmarkId);
     checkActionButtonStatus(actionButton, true);
     assertEquals(
@@ -284,15 +287,17 @@ suite('SidePanelShoppingListTest', () => {
       bookmarkId: BigInt(5),
       info: {
         title: 'Product Baz',
+        clusterTitle: 'Product Cluster Baz',
         domain: 'baz.com',
         imageUrl: {url: 'https://baz.com/image'},
         productUrl: {url: 'https://baz.com/product'},
         currentPrice: '$56',
         previousPrice: '$78',
+        clusterId: BigInt(12345),
       },
     };
 
-    shoppingListApi.getCallbackRouterRemote().priceTrackedForBookmark(
+    shoppingServiceApi.getCallbackRouterRemote().priceTrackedForBookmark(
         newProduct);
     await flushTasks();
     const productElements = getProductElements(shoppingList);
@@ -306,8 +311,8 @@ suite('SidePanelShoppingListTest', () => {
       checkActionButtonStatus(actionButtons[i]!, true);
     }
 
-    shoppingListApi.getCallbackRouterRemote().priceUntrackedForBookmark(
-        newProduct.bookmarkId);
+    shoppingServiceApi.getCallbackRouterRemote().priceUntrackedForBookmark(
+        newProduct);
     await flushTasks();
     checkActionButtonStatus(actionButtons[0]!, true);
     checkActionButtonStatus(actionButtons[1]!, true);
@@ -321,20 +326,20 @@ suite('SidePanelShoppingListTest', () => {
     const actionButtonA = getProductElements(shoppingList)[0]!.querySelector(
                               '.action-button')! as HTMLElement;
     actionButtonA.click();
-    const id = await shoppingListApi.whenCalled('untrackPriceForBookmark');
+    const id = await shoppingServiceApi.whenCalled('untrackPriceForBookmark');
     assertEquals(id, products[0]!.bookmarkId);
     checkActionButtonStatus(actionButtonA, false);
 
-    shoppingListApi.getCallbackRouterRemote().priceTrackedForBookmark(product);
+    shoppingServiceApi.getCallbackRouterRemote().priceTrackedForBookmark(product);
     await flushTasks();
     checkActionButtonStatus(actionButtonA, true);
 
-    shoppingListApi.getCallbackRouterRemote().priceUntrackedForBookmark(
-        product.bookmarkId);
+    shoppingServiceApi.getCallbackRouterRemote().priceUntrackedForBookmark(
+        product);
     await flushTasks();
     checkActionButtonStatus(actionButtonA, false);
 
-    shoppingListApi.getCallbackRouterRemote().priceTrackedForBookmark(product);
+    shoppingServiceApi.getCallbackRouterRemote().priceTrackedForBookmark(product);
     await flushTasks();
     checkActionButtonStatus(actionButtonA, true);
   });
@@ -351,14 +356,16 @@ suite('SidePanelShoppingListTest', () => {
       bookmarkId: BigInt(3),
       info: {
         title: 'Product Baz',
+        clusterTitle: 'Product Cluster Baz',
         domain: 'baz.com',
         imageUrl: {url: 'chrome://resources/images/error.svg'},
         productUrl: {url: 'https://baz.com/product'},
         currentPrice: '$56',
         previousPrice: '$78',
+        clusterId: BigInt(12345),
       },
     };
-    shoppingListApi.getCallbackRouterRemote().priceTrackedForBookmark(
+    shoppingServiceApi.getCallbackRouterRemote().priceTrackedForBookmark(
         updatedProduct);
     await flushTasks();
 
@@ -373,7 +380,7 @@ suite('SidePanelShoppingListTest', () => {
     let actionButton = getProductElements(shoppingList)[0]!.querySelector(
                            '.action-button')! as HTMLElement;
     actionButton.click();
-    const id = await shoppingListApi.whenCalled('untrackPriceForBookmark');
+    const id = await shoppingServiceApi.whenCalled('untrackPriceForBookmark');
     assertEquals(id, products[0]!.bookmarkId);
     checkActionButtonStatus(actionButton, false);
 
@@ -385,5 +392,27 @@ suite('SidePanelShoppingListTest', () => {
     actionButton = getProductElements(shoppingList)[0]!.querySelector(
                        '.action-button')! as HTMLElement;
     checkActionButtonStatus(actionButton, true);
+  });
+
+  test('ShowErrorToastWhenTrackAndUntrackFailed', async () => {
+    shoppingServiceApi.getCallbackRouterRemote().operationFailedForBookmark(
+        products[0]!, true);
+    await flushTasks();
+
+    assertTrue(shoppingList.$.errorToast.open);
+    shoppingList.$.errorToast.querySelector('cr-button')!.click();
+    let id = await shoppingServiceApi.whenCalled('trackPriceForBookmark');
+    assertEquals(id, products[0]!.bookmarkId);
+    assertFalse(shoppingList.$.errorToast.open);
+
+    shoppingServiceApi.getCallbackRouterRemote().operationFailedForBookmark(
+        products[1]!, false);
+    await flushTasks();
+
+    assertTrue(shoppingList.$.errorToast.open);
+    shoppingList.$.errorToast.querySelector('cr-button')!.click();
+    id = await shoppingServiceApi.whenCalled('untrackPriceForBookmark');
+    assertEquals(id, products[1]!.bookmarkId);
+    assertFalse(shoppingList.$.errorToast.open);
   });
 });

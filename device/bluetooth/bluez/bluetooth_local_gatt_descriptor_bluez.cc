@@ -11,27 +11,20 @@
 #include "device/bluetooth/bluez/bluetooth_local_gatt_characteristic_bluez.h"
 #include "device/bluetooth/bluez/bluetooth_local_gatt_service_bluez.h"
 
-namespace device {
+namespace bluez {
 
 // static
-base::WeakPtr<BluetoothLocalGattDescriptor>
-BluetoothLocalGattDescriptor::Create(
-    const BluetoothUUID& uuid,
-    BluetoothGattCharacteristic::Permissions permissions,
-    BluetoothLocalGattCharacteristic* characteristic) {
-  DCHECK(characteristic);
-  bluez::BluetoothLocalGattCharacteristicBlueZ* characteristic_bluez =
-      static_cast<bluez::BluetoothLocalGattCharacteristicBlueZ*>(
-          characteristic);
-  bluez::BluetoothLocalGattDescriptorBlueZ* descriptor =
-      new bluez::BluetoothLocalGattDescriptorBlueZ(uuid, permissions,
-                                                   characteristic_bluez);
-  return descriptor->weak_ptr_factory_.GetWeakPtr();
+base::WeakPtr<BluetoothLocalGattDescriptorBlueZ>
+BluetoothLocalGattDescriptorBlueZ::Create(
+    const device::BluetoothUUID& uuid,
+    device::BluetoothGattCharacteristic::Permissions permissions,
+    BluetoothLocalGattCharacteristicBlueZ* characteristic) {
+  auto* descriptor =
+      new BluetoothLocalGattDescriptorBlueZ(uuid, permissions, characteristic);
+  auto weak_ptr = descriptor->weak_ptr_factory_.GetWeakPtr();
+  characteristic->AddDescriptor(base::WrapUnique(descriptor));
+  return weak_ptr;
 }
-
-}  // namespace device
-
-namespace bluez {
 
 BluetoothLocalGattDescriptorBlueZ::BluetoothLocalGattDescriptorBlueZ(
     const device::BluetoothUUID& uuid,
@@ -46,7 +39,6 @@ BluetoothLocalGattDescriptorBlueZ::BluetoothLocalGattDescriptorBlueZ(
   DCHECK(characteristic->GetService());
   DVLOG(1) << "Creating local GATT descriptor with identifier: "
            << GetIdentifier();
-  characteristic->AddDescriptor(base::WrapUnique(this));
 }
 
 BluetoothLocalGattDescriptorBlueZ::~BluetoothLocalGattDescriptorBlueZ() =

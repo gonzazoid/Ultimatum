@@ -6,17 +6,22 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/time_formatting.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
+#include "chrome/browser/ash/crosapi/crosapi_ash.h"
+#include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/policy/dlp/dlp_content_manager_ash.h"
+#include "chrome/browser/ash/video_conference/video_conference_manager_ash.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/platform_util.h"
@@ -27,8 +32,8 @@
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/services/recording/public/mojom/recording_service.mojom.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "components/drive/file_errors.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
@@ -38,6 +43,7 @@
 #include "content/public/browser/video_capture_service.h"
 #include "services/video_capture/public/mojom/video_capture_service.mojom.h"
 #include "ui/aura/window.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/window_open_disposition.h"
 
 namespace {
@@ -90,7 +96,7 @@ bool ChromeCaptureModeDelegate::InterruptVideoRecordingIfAny() {
 
 base::FilePath ChromeCaptureModeDelegate::GetUserDefaultDownloadsFolder()
     const {
-  DCHECK(chromeos::LoginState::Get()->IsUserLoggedIn());
+  DCHECK(ash::LoginState::Get()->IsUserLoggedIn());
 
   auto* profile = ProfileManager::GetActiveUserProfile();
   DCHECK(profile);
@@ -205,7 +211,7 @@ void ChromeCaptureModeDelegate::OnServiceRemoteReset() {}
 
 bool ChromeCaptureModeDelegate::GetDriveFsMountPointPath(
     base::FilePath* result) const {
-  if (!chromeos::LoginState::Get()->IsUserLoggedIn())
+  if (!ash::LoginState::Get()->IsUserLoggedIn())
     return false;
 
   drive::DriveIntegrationService* integration_service =
@@ -241,7 +247,7 @@ void ChromeCaptureModeDelegate::ConnectToVideoSourceProvider(
 
 void ChromeCaptureModeDelegate::GetDriveFsFreeSpaceBytes(
     ash::OnGotDriveFsFreeSpace callback) {
-  DCHECK(chromeos::LoginState::Get()->IsUserLoggedIn());
+  DCHECK(ash::LoginState::Get()->IsUserLoggedIn());
 
   drive::DriveIntegrationService* integration_service =
       drive::DriveIntegrationServiceFactory::FindForProfile(
@@ -265,6 +271,42 @@ bool ChromeCaptureModeDelegate::IsCameraDisabledByPolicy() const {
 bool ChromeCaptureModeDelegate::IsAudioCaptureDisabledByPolicy() const {
   return !ProfileManager::GetActiveUserProfile()->GetPrefs()->GetBoolean(
       prefs::kAudioCaptureAllowed);
+}
+
+void ChromeCaptureModeDelegate::RegisterVideoConferenceManagerClient(
+    crosapi::mojom::VideoConferenceManagerClient* client,
+    const base::UnguessableToken& client_id) {
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->video_conference_manager_ash()
+      ->RegisterCppClient(client, client_id);
+}
+
+void ChromeCaptureModeDelegate::UnregisterVideoConferenceManagerClient(
+    const base::UnguessableToken& client_id) {
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->video_conference_manager_ash()
+      ->UnregisterClient(client_id);
+}
+
+void ChromeCaptureModeDelegate::UpdateVideoConferenceManager(
+    crosapi::mojom::VideoConferenceMediaUsageStatusPtr status) {
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->video_conference_manager_ash()
+      ->NotifyMediaUsageUpdate(std::move(status), base::DoNothing());
+}
+
+void ChromeCaptureModeDelegate::NotifyDeviceUsedWhileDisabled(
+    crosapi::mojom::VideoConferenceMediaDevice device) {
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->video_conference_manager_ash()
+      ->NotifyDeviceUsedWhileDisabled(
+          device,
+          l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_DISPLAY_SOURCE),
+          base::DoNothing());
 }
 
 void ChromeCaptureModeDelegate::OnGetDriveQuotaUsage(

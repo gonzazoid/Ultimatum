@@ -8,12 +8,12 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
@@ -22,10 +22,10 @@
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/proxy_resolution/proxy_config.h"
 #include "net/proxy_resolution/proxy_config_service_common_unittest.h"
@@ -311,8 +311,8 @@ class SyncConfigGetter : public ProxyConfigService::Observer {
   // default glib main loop, which is the glib thread).
   void SetupAndInitialFetch() {
     config_service_->SetupAndFetchInitialConfig(
-        base::ThreadTaskRunnerHandle::Get(), main_thread_.task_runner(),
-        TRAFFIC_ANNOTATION_FOR_TESTS);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        main_thread_.task_runner(), TRAFFIC_ANNOTATION_FOR_TESTS);
   }
   // Synchronously gets the proxy config.
   ProxyConfigService::ConfigAvailability SyncGetLatestProxyConfig(
@@ -1725,8 +1725,7 @@ TEST_F(ProxyConfigServiceLinuxTest, KDEConfigParser) {
             std::move(env), TRAFFIC_ANNOTATION_FOR_TESTS));
     ProxyConfigWithAnnotation config;
     // Overwrite the kioslaverc file.
-    base::WriteFile(kioslaverc_, tests[i].kioslaverc.c_str(),
-                    tests[i].kioslaverc.length());
+    base::WriteFile(kioslaverc_, tests[i].kioslaverc);
     sync_config_getter.SetupAndInitialFetch();
     ProxyConfigService::ConfigAvailability availability =
         sync_config_getter.SyncGetLatestProxyConfig(&config);
@@ -1758,7 +1757,7 @@ TEST_F(ProxyConfigServiceLinuxTest, KDEHomePicker) {
                                        "");                  // bypass rules
 
   // Overwrite the .kde kioslaverc file.
-  base::WriteFile(kioslaverc_, slaverc3.c_str(), slaverc3.length());
+  base::WriteFile(kioslaverc_, slaverc3);
 
   // If .kde4 exists it will mess up the first test. It should not, as
   // we created the directory for $HOME in the test setup.
@@ -1783,7 +1782,7 @@ TEST_F(ProxyConfigServiceLinuxTest, KDEHomePicker) {
   // Now create .kde4 and put a kioslaverc in the config directory.
   // Note that its timestamp will be at least as new as the .kde one.
   base::CreateDirectory(kde4_config_);
-  base::WriteFile(kioslaverc4_, slaverc4.c_str(), slaverc4.length());
+  base::WriteFile(kioslaverc4_, slaverc4);
   CHECK(base::PathExists(kioslaverc4_));
 
   {
@@ -1857,7 +1856,7 @@ TEST_F(ProxyConfigServiceLinuxTest, KDEHomePicker) {
 
   // For KDE 5 create ${HOME}/.config and put a kioslaverc in the directory.
   base::CreateDirectory(config_home_);
-  base::WriteFile(kioslaverc5_, slaverc5.c_str(), slaverc5.length());
+  base::WriteFile(kioslaverc5_, slaverc5);
   CHECK(base::PathExists(kioslaverc5_));
 
   {

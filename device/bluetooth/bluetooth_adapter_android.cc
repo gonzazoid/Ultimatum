@@ -10,11 +10,11 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "device/bluetooth/android/wrappers.h"
 #include "device/bluetooth/bluetooth_advertisement.h"
 #include "device/bluetooth/bluetooth_device.h"
@@ -62,7 +62,7 @@ scoped_refptr<BluetoothAdapterAndroid> BluetoothAdapterAndroid::Create(
       AttachCurrentThread(), reinterpret_cast<intptr_t>(adapter.get()),
       bluetooth_adapter_wrapper));
 
-  adapter->ui_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  adapter->ui_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
   return adapter;
 }

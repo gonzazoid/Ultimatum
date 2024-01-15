@@ -10,7 +10,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
-#include "base/timer/timer.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_observer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/events/event_handler.h"
@@ -140,6 +141,14 @@ class ASH_EXPORT FullscreenMagnifierController
   // Returns true if magnifier is still on animation for moving viewport.
   bool IsOnAnimationForTesting() const { return is_on_animation_; }
 
+  // Returns the current number of touch points.
+  int32_t GetTouchPointsForTesting() const { return touch_points_; }
+
+  void set_cursor_moved_callback_for_testing(
+      base::RepeatingCallback<void(const gfx::Point&)> callback) {
+    cursor_moved_callback_for_testing_ = std::move(callback);
+  }
+
  private:
   class GestureProviderClient;
 
@@ -222,17 +231,16 @@ class ASH_EXPORT FullscreenMagnifierController
   bool ProcessGestures();
 
   // Moves the viewport when |point| is located within
-  // |x_panning_margin| and |y_panning_margin| to the edge of the visible
+  // |x_margin| and |y_margin| to the edge of the visible
   // window region. The viewport will be moved so that the |point| will be
-  // moved to the point where it has |x_target_margin| and |y_target_margin|
-  // to the edge of the visible region. If |reduce_bottom_margin| is true,
-  // then a reduced value will be used as the |y_panning_margin| and
+  // moved to the point where it has |x_margin| and |y_margin|
+  // to the edge of the visible region if possible (less if the mouse is closer
+  // to the edge of the screen). If |reduce_bottom_margin| is true,
+  // then a reduced value will be used as the |y_margin| and
   // |y_target_margin| for the bottom edge.
   void MoveMagnifierWindowFollowPoint(const gfx::Point& point,
-                                      int x_panning_margin,
-                                      int y_panning_margin,
-                                      int x_target_margin,
-                                      int y_target_margin,
+                                      int x_margin,
+                                      int y_margin,
                                       bool reduce_bottom_margin);
 
   // Moves the viewport to center |point| in magnifier screen.
@@ -243,12 +251,11 @@ class ASH_EXPORT FullscreenMagnifierController
   // to center the |rect| in that dimension.
   void MoveMagnifierWindowFollowRect(const gfx::Rect& rect);
 
-  // Invoked when |move_magnifier_timer_| fires to move the magnifier window to
-  // follow the caret.
-  void OnMoveMagnifierTimer();
+  // Moves the cursor to the given location in the root window.
+  void MoveCursorTo(const gfx::Point& root_location);
 
   // Target root window. This must not be NULL.
-  aura::Window* root_window_;
+  raw_ptr<aura::Window> root_window_;
 
   // True if the magnified window is currently animating a change. Otherwise,
   // false.
@@ -303,15 +310,16 @@ class ASH_EXPORT FullscreenMagnifierController
   // reacts to gestures.
   std::unique_ptr<ui::GestureProviderAura> gesture_provider_;
 
-  // Timer for moving magnifier window when it fires.
-  base::OneShotTimer move_magnifier_timer_;
-
   // Most recent caret position in |root_window_| coordinates.
   gfx::Point caret_point_;
 
   // Flag to draw a preview box around magnifier viewport area instead of
   // magnifying the screen for debugging.
   bool magnifier_debug_draw_rect_ = false;
+
+  // Called every time MoveCursorTo is called, when set in tests.
+  base::RepeatingCallback<void(const gfx::Point&)>
+      cursor_moved_callback_for_testing_;
 };
 
 }  // namespace ash

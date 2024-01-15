@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/smb_client/discovery/host_locator.h"
 #include "chrome/browser/ash/smb_client/discovery/network_scanner.h"
@@ -23,7 +24,7 @@ using HostDiscoveryResponse = base::OnceClosure;
 
 // This class is responsible for finding hosts in a network and getting the
 // available shares for each host found.
-class SmbShareFinder : public base::SupportsWeakPtr<SmbShareFinder> {
+class SmbShareFinder final {
  public:
   // The callback that will be passed to GatherSharesInNetwork.
   using GatherSharesInNetworkResponse =
@@ -96,7 +97,7 @@ class SmbShareFinder : public base::SupportsWeakPtr<SmbShareFinder> {
 
   NetworkScanner scanner_;
 
-  SmbProviderClient* client_;  // Not owned.
+  raw_ptr<SmbProviderClient, DanglingUntriaged> client_;  // Not owned.
 
   uint32_t host_counter_ = 0u;
 
@@ -104,6 +105,7 @@ class SmbShareFinder : public base::SupportsWeakPtr<SmbShareFinder> {
   std::vector<GatherSharesInNetworkResponse> share_callbacks_;
 
   std::vector<SmbUrl> shares_;
+  base::WeakPtrFactory<SmbShareFinder> weak_ptr_factory_{this};
 };
 
 }  // namespace smb_client

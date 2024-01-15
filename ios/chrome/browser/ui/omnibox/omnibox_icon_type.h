@@ -9,15 +9,18 @@
 
 // All available icons for security states.
 enum LocationBarSecurityIconType {
-  INFO = 0,
+  // Don't display an icon.
+  NONE = 0,
+  // Show "Info" icon.
+  INFO,
+  // Show a lock icon.
   SECURE,
+  // Show a "not secure" warning.
   NOT_SECURE_WARNING,
+  // Show a "dangerous" warning.
+  DANGEROUS,
   LOCATION_BAR_SECURITY_ICON_TYPE_COUNT,
 };
-
-// Returns the asset name (to be used in -[UIImage imageNamed:]).
-NSString* GetLocationBarSecurityIconTypeAssetName(
-    LocationBarSecurityIconType icon);
 
 // Returns the symbol name corresponding to the given iconType.
 NSString* GetLocationBarSecuritySymbolName(

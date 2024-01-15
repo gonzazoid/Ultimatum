@@ -15,7 +15,7 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:gpu_plugin",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:gpu_plugin",
     ],
     alwayslink = 1,  # For registration to always run.
 )
@@ -26,7 +26,7 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:nnapi_plugin",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:nnapi_plugin",
     ],
     alwayslink = 1,  # For registration to always run.
 )
@@ -37,7 +37,7 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:hexagon_plugin",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:hexagon_plugin",
     ],
     alwayslink = 1,  # For registration to always run.
 )
@@ -48,7 +48,7 @@ cc_library(
         "//visibility:public",
     ],
     deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:xnnpack_plugin",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:xnnpack_plugin",
     ],
     alwayslink = 1,  # For registration to always run.
 )
@@ -68,8 +68,8 @@ cc_library(
         "@com_google_glog//:glog",
         "@libedgetpu//tflite/public:edgetpu_c",
         "@libedgetpu//tflite/public:oss_edgetpu_direct_all",  # buildcleaner: keep
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_fbs",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:delegate_registry",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_fbs",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:delegate_registry",
     ],
     alwayslink = 1,  # For registration to always run.
 )
@@ -92,9 +92,9 @@ cc_test(
         "//tensorflow_lite_support/cc/task/vision/utils:image_utils",
         "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/lite:framework",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_fbs",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:delegate_registry",
         "@org_tensorflow//tensorflow/lite/c:common",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_fbs",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:delegate_registry",
         "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
     ],
 )
@@ -107,7 +107,7 @@ tflite_jni_binary(
     linkscript = "//tensorflow_lite_support/java:default_version_script.lds",
     visibility = ["//visibility:private"],
     deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration/c:gpu_plugin",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration/c:gpu_plugin",
     ],
 )
 

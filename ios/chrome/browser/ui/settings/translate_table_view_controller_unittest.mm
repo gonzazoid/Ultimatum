@@ -6,10 +6,10 @@
 
 #import <memory>
 
-#import "base/compiler_specific.h"
+#import "base/apple/foundation_util.h"
 #import "base/files/file_path.h"
+#import "base/task/single_thread_task_runner.h"
 #import "base/test/task_environment.h"
-#import "base/threading/thread_task_runner_handle.h"
 #import "components/language/core/browser/language_prefs.h"
 #import "components/pref_registry/pref_registry_syncable.h"
 #import "components/prefs/pref_member.h"
@@ -18,18 +18,14 @@
 #import "components/sync_preferences/pref_service_mock_factory.h"
 #import "components/translate/core/browser/translate_pref_names.h"
 #import "components/translate/core/browser/translate_prefs.h"
-#import "ios/chrome/browser/translate/chrome_ios_translate_client.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/translate/model/chrome_ios_translate_client.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using user_prefs::PrefRegistrySyncable;
 
@@ -39,17 +35,18 @@ const char kBlockedSite[] = "http://blockedsite.com";
 const char kLanguage1[] = "klingon";
 const char kLanguage2[] = "pirate";
 
-class TranslateTableViewControllerTest : public ChromeTableViewControllerTest {
+class TranslateTableViewControllerTest
+    : public LegacyChromeTableViewControllerTest {
  protected:
   TranslateTableViewControllerTest()
       : task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {}
 
   void SetUp() override {
-    ChromeTableViewControllerTest::SetUp();
+    LegacyChromeTableViewControllerTest::SetUp();
     pref_service_ = CreateLocalState();
   }
 
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[TranslateTableViewController alloc]
         initWithPrefs:pref_service_.get()];
   }
@@ -62,8 +59,15 @@ class TranslateTableViewControllerTest : public ChromeTableViewControllerTest {
     translate::TranslatePrefs::RegisterProfilePrefs(registry.get());
     base::FilePath path("TranslateTableViewControllerTest.pref");
     sync_preferences::PrefServiceMockFactory factory;
-    factory.SetUserPrefsFile(path, base::ThreadTaskRunnerHandle::Get().get());
+    factory.SetUserPrefsFile(
+        path, base::SingleThreadTaskRunner::GetCurrentDefault().get());
     return factory.Create(registry.get());
+  }
+
+  void TearDown() override {
+    [base::apple::ObjCCastStrict<TranslateTableViewController>(controller())
+        settingsWillBeDismissed];
+    LegacyChromeTableViewControllerTest::TearDown();
   }
 
   base::test::TaskEnvironment task_environment_;

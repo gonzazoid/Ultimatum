@@ -5,10 +5,11 @@
 #ifndef CHROME_UPDATER_CHECK_FOR_UPDATES_TASK_H_
 #define CHROME_UPDATER_CHECK_FOR_UPDATES_TASK_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/update_service.h"
+#include "chrome/updater/updater_scope.h"
 
 namespace update_client {
 class UpdateClient;
@@ -24,6 +25,7 @@ class CheckForUpdatesTask
  public:
   CheckForUpdatesTask(
       scoped_refptr<Configurator> config,
+      UpdaterScope scope,
       base::OnceCallback<void(UpdateService::Callback)> update_checker);
   void Run(base::OnceClosure callback);
 

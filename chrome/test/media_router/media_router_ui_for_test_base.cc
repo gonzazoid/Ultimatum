@@ -10,6 +10,7 @@
 #include "components/media_router/browser/media_router_factory.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/types/event_type.h"
+#include "ui/views/view.h"
 
 namespace media_router {
 
@@ -31,70 +32,17 @@ ui::MouseEvent CreateMouseReleasedEvent() {
 }  // namespace
 
 void MediaRouterUiForTestBase::TearDown() {
-  if (IsDialogShown())
+  if (IsDialogShown()) {
     HideDialog();
-}
-
-void MediaRouterUiForTestBase::StartCasting(const std::string& sink_name) {
-  StartCasting(GetSinkButton(sink_name));
-}
-
-void MediaRouterUiForTestBase::StopCasting(const std::string& sink_name) {
-  StopCasting(GetSinkButton(sink_name));
-}
-
-MediaRoute::Id MediaRouterUiForTestBase::GetRouteIdForSink(
-    const std::string& sink_name) const {
-  CastDialogSinkButton* sink_button = GetSinkButton(sink_name);
-  if (!sink_button->sink().route) {
-    return "";
   }
-  return sink_button->sink().route->media_route_id();
-}
-
-std::string MediaRouterUiForTestBase::GetStatusTextForSink(
-    const std::string& sink_name) const {
-  CastDialogSinkButton* sink_button = GetSinkButton(sink_name);
-  return base::UTF16ToUTF8(sink_button->sink().status_text);
-}
-
-std::string MediaRouterUiForTestBase::GetIssueTextForSink(
-    const std::string& sink_name) const {
-  CastDialogSinkButton* sink_button = GetSinkButton(sink_name);
-  if (!sink_button->sink().issue) {
-    NOTREACHED() << "Issue not found for sink " << sink_name;
-    return "";
-  }
-  return sink_button->sink().issue->info().title;
-}
-
-void MediaRouterUiForTestBase::StartCasting(CastDialogSinkButton* sink_button) {
-  CHECK(sink_button->GetEnabled());
-  sink_button->OnMousePressed(CreateMousePressedEvent());
-  sink_button->OnMouseReleased(CreateMouseReleasedEvent());
-  base::RunLoop().RunUntilIdle();
-}
-
-void MediaRouterUiForTestBase::StopCasting(CastDialogSinkButton* sink_button) {
-  sink_button->OnMousePressed(CreateMousePressedEvent());
-  sink_button->OnMouseReleased(CreateMouseReleasedEvent());
-  base::RunLoop().RunUntilIdle();
+  torn_down_ = true;
 }
 
 // static
-CastDialogSinkButton* MediaRouterUiForTestBase::GetSinkButtonWithName(
-    const std::vector<CastDialogSinkButton*>& sink_buttons,
-    const std::string& sink_name) {
-  auto it = base::ranges::find(sink_buttons, base::UTF8ToUTF16(sink_name),
-                               [](CastDialogSinkButton* sink_button) {
-                                 return sink_button->sink().friendly_name;
-                               });
-  if (it == sink_buttons.end()) {
-    NOTREACHED() << "Sink button not found for sink: " << sink_name;
-    return nullptr;
-  } else {
-    return *it;
-  }
+void MediaRouterUiForTestBase::ClickOnView(views::View* view) {
+  view->OnMousePressed(CreateMousePressedEvent());
+  view->OnMouseReleased(CreateMouseReleasedEvent());
+  base::RunLoop().RunUntilIdle();
 }
 
 void MediaRouterUiForTestBase::OnDialogCreated() {
@@ -103,6 +51,10 @@ void MediaRouterUiForTestBase::OnDialogCreated() {
     watch_callback_.reset();
     watch_type_ = WatchType::kNone;
   }
+}
+
+MediaRouterUiForTestBase::~MediaRouterUiForTestBase() {
+  DCHECK(torn_down_);
 }
 
 MediaRouterUiForTestBase::MediaRouterUiForTestBase(
@@ -114,8 +66,6 @@ MediaRouterUiForTestBase::MediaRouterUiForTestBase(
   dialog_controller_->SetDialogCreationCallbackForTesting(base::BindRepeating(
       &MediaRouterUiForTestBase::OnDialogCreated, weak_factory_.GetWeakPtr()));
 }
-
-MediaRouterUiForTestBase::~MediaRouterUiForTestBase() = default;
 
 void MediaRouterUiForTestBase::WaitForAnyDialogShown() {
   base::RunLoop run_loop;

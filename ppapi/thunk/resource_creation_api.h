@@ -39,12 +39,13 @@ struct PP_Size;
 
 namespace gpu {
 struct Capabilities;
-struct ContextCreationAttribs;
+struct GLCapabilities;
 }
 
 namespace ppapi {
 
 struct FileRefCreateInfo;
+struct Graphics3DContextAttribs;
 
 namespace thunk {
 
@@ -138,8 +139,9 @@ class ResourceCreationAPI {
   virtual PP_Resource CreateGraphics3DRaw(
       PP_Instance instance,
       PP_Resource share_context,
-      const gpu::ContextCreationAttribs& attrib_helper,
+      const Graphics3DContextAttribs& attrib_helper,
       gpu::Capabilities* capabilities,
+      gpu::GLCapabilities* gl_capabilities,
       const base::UnsafeSharedMemoryRegion** shared_state,
       gpu::CommandBufferId* command_buffer_id) = 0;
   virtual PP_Resource CreateHostResolver(PP_Instance instance) = 0;

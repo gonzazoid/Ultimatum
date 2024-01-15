@@ -20,6 +20,8 @@ if (is_chromeos_device) {
     } else {
       deploy_lacros = true
       skip_generating_board_args = true
+    }
+    if (!is_chromeos_ash || also_build_lacros_chrome_for_architecture != "") {
       data = [
         # A script needed to launch Lacros in testing environment.
         "//build/lacros/mojo_connection_lacros_launcher.py",
@@ -37,7 +39,7 @@ group("telemetry_chrome_test") {
   ]
   data = []
 
-  if (!is_fuchsia && !is_android && !is_castos) {
+  if (!is_fuchsia && !is_android && !is_castos && !is_ios) {
     data_deps += [ "//chrome" ]
   }
 
@@ -93,6 +95,12 @@ group("telemetry_chrome_test") {
 # overhead. A new one should be added each time a new type of APK is supported
 # and its suffix added to android_browser_types.gni.
 if (is_android) {
+  _bitness_if_needed = ""
+  _webview_bitness_if_needed = ""
+  if (android_64bit_target_cpu && !skip_secondary_abi_for_cq) {
+    _bitness_if_needed = "_64_32"
+    _webview_bitness_if_needed = "_32_64"
+  }
   group("telemetry_chrome_test_android_chrome") {
     testonly = true
 
@@ -107,7 +115,7 @@ if (is_android) {
 
     data_deps = [
       ":telemetry_chrome_test",
-      "//chrome/android:monochrome_public_apk",
+      "//chrome/android:monochrome${_bitness_if_needed}_public_apk",
     ]
   }
 
@@ -116,7 +124,7 @@ if (is_android) {
 
     data_deps = [
       ":telemetry_chrome_test",
-      "//chrome/android:monochrome_public_bundle",
+      "//chrome/android:monochrome${_bitness_if_needed}_public_bundle",
     ]
   }
 
@@ -125,7 +133,7 @@ if (is_android) {
 
     data_deps = [
       ":telemetry_chrome_test",
-      "//android_webview:system_webview_apk",
+      "//android_webview:system_webview${_webview_bitness_if_needed}_apk",
       "//android_webview/test:webview_instrumentation_apk",
       "//android_webview/tools/system_webview_shell:system_webview_shell_apk",
     ]
@@ -149,22 +157,6 @@ if (is_android) {
       telemetry_chrome_test_clank_template(
           "telemetry_chrome_test${_target_suffix}") {
         telemetry_target_suffix = _target_suffix
-      }
-    }
-  }
-
-  # This group exists solely for performance testing. Ideally, perf testing
-  # would use the same split targets as other Telemetry-based tests, but
-  # switching has proven to be very difficult due to interactions with Pinpoint.
-  group("all_chrome_android_targets_for_perf_testing") {
-    testonly = true
-    data_deps = [ "//chrome/android/webapk/shell_apk:maps_go_webapk" ]
-    foreach(_target_suffix, telemetry_android_browser_target_suffixes) {
-      data_deps += [ ":telemetry_chrome_test${_target_suffix}" ]
-    }
-    if (enable_chrome_android_internal) {
-      foreach(_target_suffix, telemetry_clank_browser_target_suffixes) {
-        data_deps += [ ":telemetry_chrome_test${_target_suffix}" ]
       }
     }
   }
@@ -199,6 +191,14 @@ group("telemetry_chrome_test_without_chrome") {
     ]
   }
 
+  if (is_win) {
+    data_deps += [
+      # This is a stand-in for minidump_stackwalk on Windows since
+      # minidump_stackwalk is not defined on Windows.
+      "//third_party/crashpad/crashpad/tools:dump_minidump_annotations",
+    ]
+  }
+
   if (is_mac) {
     data += [
       # Required for the hermetic otool binary, which is required for
@@ -217,7 +217,7 @@ group("telemetry_chrome_test_without_chrome") {
 
       # These dependencies are necessary for running Telemetry tests in an
       # Android emulator.
-      "//third_party/android_ndk/simpleperf/",
+      "//third_party/android_toolchain/ndk/simpleperf/",
       "//third_party/android_sdk/public/",
       "//tools/android/avd/proto/",
     ]

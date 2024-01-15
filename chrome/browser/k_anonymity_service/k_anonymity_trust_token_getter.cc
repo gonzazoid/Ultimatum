@@ -6,7 +6,6 @@
 
 #include "base/json/json_writer.h"
 #include "base/json/values_util.h"
-#include "base/sequence_checker.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/k_anonymity_service/k_anonymity_service_metrics.h"
@@ -66,27 +65,15 @@ KAnonymityTrustTokenGetter::PendingRequest&
 KAnonymityTrustTokenGetter::PendingRequest::operator=(
     KAnonymityTrustTokenGetter::PendingRequest&&) noexcept = default;
 
-KAnonymityTrustTokenGetter::CallbackNonce
-KAnonymityTrustTokenGetter::CallbackNonce::Pass() {
-  // Increment value so we pass a unique ID.
-  value_++;
-  return CallbackNonce(value_);
-}
-
-void KAnonymityTrustTokenGetter::CallbackNonce::Check(
-    const CallbackNonce& other) {
-  CHECK_EQ(value_, other.value_);
-  // Increment after check so that value_ is no longer valid.
-  value_++;
-}
-
 KAnonymityTrustTokenGetter::KAnonymityTrustTokenGetter(
     signin::IdentityManager* identity_manager,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    network::mojom::TrustTokenQueryAnswerer* answerer)
+    network::mojom::TrustTokenQueryAnswerer* answerer,
+    KAnonymityServiceStorage* storage)
     : identity_manager_(identity_manager),
       url_loader_factory_(std::move(url_loader_factory)),
-      trust_token_query_answerer_(answerer) {
+      trust_token_query_answerer_(answerer),
+      storage_(storage) {
   auth_origin_ =
       url::Origin::Create(GURL(features::kKAnonymityServiceAuthServer.Get()));
   isolation_info_ = net::IsolationInfo::Create(
@@ -98,8 +85,9 @@ KAnonymityTrustTokenGetter::~KAnonymityTrustTokenGetter() = default;
 
 void KAnonymityTrustTokenGetter::TryGetTrustTokenAndKey(
     TryGetTrustTokenAndKeyCallback callback) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!base::FeatureList::IsEnabled(network::features::kTrustTokens) ||
+  if ((!base::FeatureList::IsEnabled(network::features::kPrivateStateTokens) &&
+       !base::FeatureList::IsEnabled(network::features::kFledgePst)) ||
+      !identity_manager_ ||
       !identity_manager_->HasPrimaryAccount(signin::ConsentLevel::kSignin)) {
     std::move(callback).Run(absl::nullopt);
     return;
@@ -120,7 +108,6 @@ void KAnonymityTrustTokenGetter::TryGetTrustTokenAndKeyInternal() {
 }
 
 void KAnonymityTrustTokenGetter::CheckAccessToken() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (access_token_.expiration_time <= base::Time::Now() + kRequestMargin) {
     RequestAccessToken();
     return;
@@ -130,7 +117,6 @@ void KAnonymityTrustTokenGetter::CheckAccessToken() {
 
 void KAnonymityTrustTokenGetter::RequestAccessToken() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   RecordTrustTokenGetterAction(
       KAnonymityTrustTokenGetterAction::kRequestAccessToken);
@@ -150,16 +136,13 @@ void KAnonymityTrustTokenGetter::RequestAccessToken() {
           /*consumer_name=*/"KAnonymityService", identity_manager_, scopes,
           base::BindOnce(
               &KAnonymityTrustTokenGetter::OnAccessTokenRequestCompleted,
-              weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass()),
+              weak_ptr_factory_.GetWeakPtr()),
           mode, signin::ConsentLevel::kSignin);
 }
 
 void KAnonymityTrustTokenGetter::OnAccessTokenRequestCompleted(
-    CallbackNonce call_id,
     GoogleServiceAuthError error,
     signin::AccessTokenInfo access_token_info) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   access_token_fetcher_.reset();
   if (error.state() != GoogleServiceAuthError::NONE) {
     RecordTrustTokenGetterAction(
@@ -168,21 +151,15 @@ void KAnonymityTrustTokenGetter::OnAccessTokenRequestCompleted(
     return;
   }
 
-  if (access_token_info.expiration_time <= base::Time::Now()) {
-    // Token we got has already expired.
-    RecordTrustTokenGetterAction(
-        KAnonymityTrustTokenGetterAction::kAccessTokenRequestFailed);
-    FailAllCallbacks();
-  }
-
   access_token_ = access_token_info;
   CheckTrustTokenKeyCommitment();
 }
 
 void KAnonymityTrustTokenGetter::CheckTrustTokenKeyCommitment() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (key_and_non_unique_user_id_with_expiration_.expiration <=
-      base::Time::Now() + kRequestMargin) {
+  absl::optional<KeyAndNonUniqueUserIdWithExpiration> key_commitment =
+      storage_->GetKeyAndNonUniqueUserId();
+  if (!key_commitment ||
+      key_commitment->expiration <= base::Time::Now() + kRequestMargin) {
     FetchNonUniqueUserId();
     return;
   }
@@ -190,7 +167,6 @@ void KAnonymityTrustTokenGetter::CheckTrustTokenKeyCommitment() {
 }
 
 void KAnonymityTrustTokenGetter::FetchNonUniqueUserId() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   RecordTrustTokenGetterAction(
       KAnonymityTrustTokenGetterAction::kFetchNonUniqueClientID);
   auto resource_request = std::make_unique<network::ResourceRequest>();
@@ -209,15 +185,12 @@ void KAnonymityTrustTokenGetter::FetchNonUniqueUserId() {
   url_loader_->DownloadToString(
       url_loader_factory_.get(),
       base::BindOnce(&KAnonymityTrustTokenGetter::OnFetchedNonUniqueUserId,
-                     weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass()),
+                     weak_ptr_factory_.GetWeakPtr()),
       /*max_body_size=*/1024);
 }
 
 void KAnonymityTrustTokenGetter::OnFetchedNonUniqueUserId(
-    CallbackNonce call_id,
     std::unique_ptr<std::string> response) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   url_loader_.reset();
   if (!response) {
     RecordTrustTokenGetterAction(
@@ -229,14 +202,11 @@ void KAnonymityTrustTokenGetter::OnFetchedNonUniqueUserId(
   data_decoder::DataDecoder::ParseJsonIsolated(
       *response,
       base::BindOnce(&KAnonymityTrustTokenGetter::OnParsedNonUniqueUserId,
-                     weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass()));
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void KAnonymityTrustTokenGetter::OnParsedNonUniqueUserId(
-    CallbackNonce call_id,
     data_decoder::DataDecoder::ValueOrError result) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   if (!result.has_value()) {
     RecordTrustTokenGetterAction(
         KAnonymityTrustTokenGetterAction::kFetchNonUniqueClientIDParseError);
@@ -266,7 +236,6 @@ void KAnonymityTrustTokenGetter::OnParsedNonUniqueUserId(
 
 void KAnonymityTrustTokenGetter::FetchTrustTokenKeyCommitment(
     int non_unique_user_id) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   RecordTrustTokenGetterAction(
       KAnonymityTrustTokenGetterAction::kFetchTrustTokenKey);
   auto resource_request = std::make_unique<network::ResourceRequest>();
@@ -284,17 +253,13 @@ void KAnonymityTrustTokenGetter::FetchTrustTokenKeyCommitment(
       url_loader_factory_.get(),
       base::BindOnce(
           &KAnonymityTrustTokenGetter::OnFetchedTrustTokenKeyCommitment,
-          weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass(),
-          non_unique_user_id),
+          weak_ptr_factory_.GetWeakPtr(), non_unique_user_id),
       /*max_body_size=*/4096);
 }
 
 void KAnonymityTrustTokenGetter::OnFetchedTrustTokenKeyCommitment(
-    CallbackNonce call_id,
     int non_unique_user_id,
     std::unique_ptr<std::string> response) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   if (url_loader_->NetError() != net::OK) {
     url_loader_.reset();
     RecordTrustTokenGetterAction(
@@ -308,8 +273,7 @@ void KAnonymityTrustTokenGetter::OnFetchedTrustTokenKeyCommitment(
       *response,
       base::BindOnce(
           &KAnonymityTrustTokenGetter::OnParsedTrustTokenKeyCommitment,
-          weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass(),
-          non_unique_user_id));
+          weak_ptr_factory_.GetWeakPtr(), non_unique_user_id));
 }
 
 // The server sends the key commitment in a custom message format. We have to
@@ -317,11 +281,8 @@ void KAnonymityTrustTokenGetter::OnFetchedTrustTokenKeyCommitment(
 // (V3 trust token key commitment). See the explainer here:
 // https://github.com/WICG/trust-token-api/blob/main/ISSUER_PROTOCOL.md
 void KAnonymityTrustTokenGetter::OnParsedTrustTokenKeyCommitment(
-    CallbackNonce call_id,
     int non_unique_user_id,
     data_decoder::DataDecoder::ValueOrError result) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   if (!result.has_value()) {
     RecordTrustTokenGetterAction(
         KAnonymityTrustTokenGetterAction::kFetchTrustTokenKeyParseError);
@@ -432,27 +393,23 @@ void KAnonymityTrustTokenGetter::OnParsedTrustTokenKeyCommitment(
   std::string key_commitment_str;
   base::JSONWriter::Write(outer_commitment, &key_commitment_str);
 
-  key_and_non_unique_user_id_with_expiration_ =
-      KeyAndNonUniqueUserIdWithExpiration{
-          KeyAndNonUniqueUserId{key_commitment_str, non_unique_user_id},
-          base::Time::UnixEpoch() + base::Microseconds(max_expiry)};
+  KeyAndNonUniqueUserIdWithExpiration key_commitment{
+      KeyAndNonUniqueUserId{key_commitment_str, non_unique_user_id},
+      base::Time::UnixEpoch() + base::Microseconds(max_expiry)};
+  storage_->UpdateKeyAndNonUniqueUserId(key_commitment);
 
   CheckTrustTokens();
 }
 
 void KAnonymityTrustTokenGetter::CheckTrustTokens() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   trust_token_query_answerer_->HasTrustTokens(
       auth_origin_,
       base::BindOnce(&KAnonymityTrustTokenGetter::OnHasTrustTokensComplete,
-                     weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass()));
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void KAnonymityTrustTokenGetter::OnHasTrustTokensComplete(
-    CallbackNonce call_id,
     network::mojom::HasTrustTokensResultPtr result) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   if (!result ||
       result->status != network::mojom::TrustTokenOperationStatus::kOk) {
     DLOG(ERROR) << "Failed checking trust tokens " << result->status;
@@ -468,13 +425,14 @@ void KAnonymityTrustTokenGetter::OnHasTrustTokensComplete(
 }
 
 void KAnonymityTrustTokenGetter::FetchTrustToken() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  auto key_commitment = storage_->GetKeyAndNonUniqueUserId();
+  DCHECK(key_commitment);
+
   RecordTrustTokenGetterAction(
       KAnonymityTrustTokenGetterAction::kFetchTrustToken);
   auto resource_request = std::make_unique<network::ResourceRequest>();
   resource_request->url = auth_origin_.GetURL().Resolve(base::StringPrintf(
-      kIssueTrustTokenPathFmt, key_and_non_unique_user_id_with_expiration_
-                                   .key_and_id.non_unique_user_id));
+      kIssueTrustTokenPathFmt, key_commitment->key_and_id.non_unique_user_id));
   resource_request->method = net::HttpRequestHeaders::kPostMethod;
   resource_request->headers.SetHeader(
       net::HttpRequestHeaders::kAuthorization,
@@ -489,9 +447,8 @@ void KAnonymityTrustTokenGetter::FetchTrustToken() {
 
   network::mojom::TrustTokenParamsPtr params =
       network::mojom::TrustTokenParams::New();
-  params->type = network::mojom::TrustTokenOperationType::kIssuance;
-  params->custom_key_commitment =
-      key_and_non_unique_user_id_with_expiration_.key_and_id.key_commitment;
+  params->operation = network::mojom::TrustTokenOperationType::kIssuance;
+  params->custom_key_commitment = key_commitment->key_and_id.key_commitment;
   resource_request->trust_token_params = *params;
   url_loader_ = network::SimpleURLLoader::Create(
       std::move(resource_request), kKAnonymityServiceGetTokenTrafficAnnotation);
@@ -499,14 +456,11 @@ void KAnonymityTrustTokenGetter::FetchTrustToken() {
   url_loader_->DownloadHeadersOnly(
       url_loader_factory_.get(),
       base::BindOnce(&KAnonymityTrustTokenGetter::OnFetchedTrustToken,
-                     weak_ptr_factory_.GetWeakPtr(), callback_nonce_.Pass()));
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void KAnonymityTrustTokenGetter::OnFetchedTrustToken(
-    CallbackNonce call_id,
     scoped_refptr<net::HttpResponseHeaders> headers) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_nonce_.Check(call_id);
   if (url_loader_->NetError() != net::OK) {
     DLOG(ERROR) << "Couldn't get trust token: " << url_loader_->NetError();
     url_loader_.reset();
@@ -524,47 +478,35 @@ void KAnonymityTrustTokenGetter::OnFetchedTrustToken(
 }
 
 void KAnonymityTrustTokenGetter::FailAllCallbacks() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   while (!pending_callbacks_.empty())
     DoCallback(false);
 }
 
 void KAnonymityTrustTokenGetter::CompleteOneRequest() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  CHECK(!pending_callbacks_.empty());
   RecordTrustTokenGetterAction(
       KAnonymityTrustTokenGetterAction::kGetTrustTokenSuccess);
   // Only record timing UMA when we actually fetched a token.
   RecordTrustTokenGet(pending_callbacks_.front().request_start,
                       base::TimeTicks::Now());
   DoCallback(true);
-  if (!pending_callbacks_.empty()) {
+  if (!pending_callbacks_.empty())
     TryGetTrustTokenAndKeyInternal();
-  }
 }
 
 void KAnonymityTrustTokenGetter::DoCallback(bool status) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // TODO(behamilton): Change this back to a DCHECK once we have resolved
-  // https://crbug.com/1376858
-  CHECK(!pending_callbacks_.empty());
+  DCHECK(!pending_callbacks_.empty());
 
   absl::optional<KeyAndNonUniqueUserId> result;
   if (status) {
-    result = key_and_non_unique_user_id_with_expiration_.key_and_id;
+    auto key_commitment = storage_->GetKeyAndNonUniqueUserId();
+    DCHECK(key_commitment);
+    result = key_commitment->key_and_id;
   }
-
-  // This is not a callback, but calling our caller's callback synchronously may
-  // cause them to call TryGetTrustTokenAndKey. This is to make sure we are
-  // handling reentrancy correctly.
-  CallbackNonce kept_nonce = callback_nonce_.Pass();
 
   // We call the callback *before* removing the current request from the list.
   // It is possible that the callback may synchronously enqueue another request.
   // If we remove the current request first then enqueuing the request would
   // start another thread of execution since there was an empty queue.
   std::move(pending_callbacks_.front().callback).Run(result);
-
-  callback_nonce_.Check(kept_nonce);  // Check for reentrancy issues.
   pending_callbacks_.pop_front();
 }

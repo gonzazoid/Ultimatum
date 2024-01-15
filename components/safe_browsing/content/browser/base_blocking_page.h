@@ -48,7 +48,7 @@ class BaseBlockingPage
 
   // Returns true if the passed |unsafe_resources| is blocking the load of
   // the main page.
-  static bool IsMainPageLoadBlocked(const UnsafeResourceList& unsafe_resources);
+  static bool IsMainPageLoadPending(const UnsafeResourceList& unsafe_resources);
 
   // SecurityInterstitialPage method:
   void CommandReceived(const std::string& command) override;
@@ -76,6 +76,8 @@ class BaseBlockingPage
   // page.
   virtual void CreatedPostCommitErrorPageNavigation(
       content::NavigationHandle* error_page_navigation_handle) {}
+
+  BaseSafeBrowsingErrorUI* sb_error_ui() const;
 
  protected:
   // Don't instantiate this class directly, use ShowBlockingPage instead.
@@ -125,8 +127,6 @@ class BaseBlockingPage
   bool proceeded() const;
 
   int64_t threat_details_proceed_delay() const;
-
-  BaseSafeBrowsingErrorUI* sb_error_ui() const;
 
   void set_proceeded(bool proceeded);
 

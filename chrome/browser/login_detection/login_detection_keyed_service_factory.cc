@@ -7,9 +7,6 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/login_detection/login_detection_keyed_service.h"
 #include "chrome/browser/login_detection/login_detection_util.h"
-#include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
-#include "chrome/browser/password_manager/account_password_store_factory.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
 
@@ -21,7 +18,11 @@ ProfileSelections BuildLoginDetectionProfileSelection() {
     return ProfileSelections::BuildNoProfilesSelected();
   }
 
-  return ProfileSelections::BuildDefault();
+  return ProfileSelections::Builder()
+      .WithRegular(ProfileSelection::kOriginalOnly)
+      // TODO(crbug.com/1418376): Check if this service is needed in Guest mode.
+      .WithGuest(ProfileSelection::kOriginalOnly)
+      .Build();
 }
 
 }  // namespace
@@ -42,11 +43,7 @@ LoginDetectionKeyedServiceFactory::GetInstance() {
 
 LoginDetectionKeyedServiceFactory::LoginDetectionKeyedServiceFactory()
     : ProfileKeyedServiceFactory("LoginDetectionKeyedService",
-                                 BuildLoginDetectionProfileSelection()) {
-  DependsOn(AccountPasswordStoreFactory::GetInstance());
-  DependsOn(PasswordStoreFactory::GetInstance());
-  DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
-}
+                                 BuildLoginDetectionProfileSelection()) {}
 
 LoginDetectionKeyedServiceFactory::~LoginDetectionKeyedServiceFactory() =
     default;

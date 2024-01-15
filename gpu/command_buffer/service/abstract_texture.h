@@ -5,7 +5,8 @@
 #ifndef GPU_COMMAND_BUFFER_SERVICE_ABSTRACT_TEXTURE_H_
 #define GPU_COMMAND_BUFFER_SERVICE_ABSTRACT_TEXTURE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "build/build_config.h"
 #include "gpu/command_buffer/service/texture_base.h"
 #include "gpu/gpu_gles2_export.h"
 
@@ -15,11 +16,8 @@ typedef int GLsizei;
 typedef int GLint;
 typedef unsigned int GLuint;
 
-namespace gl {
-class GLImage;
-}  // namespace gl
-
 namespace gpu {
+
 namespace gles2 {
 
 // An AbstractTexture enables access to GL textures from the GPU process, for
@@ -53,31 +51,6 @@ class GPU_GLES2_EXPORT AbstractTexture {
 
   // Set a texture parameter.  The GL context must be current.
   virtual void SetParameteri(GLenum pname, GLint param) = 0;
-
-  // Set |image| to be our stream texture image, using |service_id| in place
-  // of our real service id when the client tries to bind us.  This must also
-  // guarantee that CopyTexImage() is called before drawing, so that |image|
-  // may update the stream texture.  This will do nothing if the texture has
-  // been destroyed.
-  //
-  // It is not required to SetCleared() if one binds an image.
-  //
-  // The context must be current.
-  virtual void BindStreamTextureImage(gl::GLImage* image,
-                                      GLuint service_id) = 0;
-
-  // Attaches |image| to the AbstractTexture.  If |client_managed| is true, then
-  // the decoder does not call GLImage::Copy/Bind.  Further, the decoder
-  // guarantees that ScheduleOverlayPlane will be called if the texture is ever
-  // promoted to an overlay.
-  //
-  // It is not required to SetCleared() if one binds an image.
-  //
-  // The context must be current.
-  virtual void BindImage(gl::GLImage* image, bool client_managed) = 0;
-
-  // Return the image, if any, for testing purposes.
-  virtual gl::GLImage* GetImageForTesting() const = 0;
 
   // Marks the texture as cleared, to help prevent sending an uninitialized
   // texture to the (untrusted) renderer.  One should call this only when one

@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_io_thread.h"
@@ -59,7 +59,7 @@ class ExtensionsTestSuite : public content::ContentTestSuiteBase {
 ExtensionsTestSuite::ExtensionsTestSuite(int argc, char** argv)
     : content::ContentTestSuiteBase(argc, argv) {}
 
-ExtensionsTestSuite::~ExtensionsTestSuite() {}
+ExtensionsTestSuite::~ExtensionsTestSuite() = default;
 
 void ExtensionsTestSuite::Initialize() {
   content::ContentTestSuiteBase::Initialize();

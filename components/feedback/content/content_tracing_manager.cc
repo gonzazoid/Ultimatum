@@ -4,13 +4,12 @@
 
 #include "components/feedback/content/content_tracing_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_config.h"
 #include "components/feedback/feedback_util.h"
 #include "content/public/browser/browser_thread.h"
@@ -84,7 +83,7 @@ bool ContentTracingManager::GetTraceData(int id, TraceDataCallback callback) {
       return false;
 
     // Always return the data asynchronously, so the behavior is consistent.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), data->second));
     return true;
   }
@@ -102,6 +101,10 @@ void ContentTracingManager::DiscardTraceData(int id) {
     if (trace_callback_)
       std::move(trace_callback_).Run(scoped_refptr<base::RefCountedString>());
   }
+}
+
+base::WeakPtr<TracingManager> ContentTracingManager::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void ContentTracingManager::StartTracing() {
@@ -139,7 +142,7 @@ void ContentTracingManager::OnTraceDataCompressed(
 
   // Tracing has to be restarted asynchronous, so the ContentTracingManager can
   // clean up.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&ContentTracingManager::StartTracing,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

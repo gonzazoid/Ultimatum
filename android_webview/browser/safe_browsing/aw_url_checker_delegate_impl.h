@@ -18,6 +18,7 @@ class AwSafeBrowsingUIManager;
 class AwSafeBrowsingAllowlistManager;
 struct AwWebResourceRequest;
 
+// Lifetime: Singleton
 class AwUrlCheckerDelegateImpl : public safe_browsing::UrlCheckerDelegate {
  public:
   // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.android_webview
@@ -54,11 +55,12 @@ class AwUrlCheckerDelegateImpl : public safe_browsing::UrlCheckerDelegate {
   bool IsUrlAllowlisted(const GURL& url) override;
   void SetPolicyAllowlistDomains(
       const std::vector<std::string>& allowlist_domains) override;
-  bool ShouldSkipRequestCheck(const GURL& original_url,
-                              int frame_tree_node_id,
-                              int render_process_id,
-                              int render_frame_id,
-                              bool originated_from_service_worker) override;
+  bool ShouldSkipRequestCheck(
+      const GURL& original_url,
+      int frame_tree_node_id,
+      int child_id,
+      base::optional_ref<const base::UnguessableToken> render_frame_token,
+      bool originated_from_service_worker) override;
   void NotifySuspiciousSiteDetected(
       const base::RepeatingCallback<content::WebContents*()>&
           web_contents_getter) override;

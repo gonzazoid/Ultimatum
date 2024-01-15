@@ -25,6 +25,7 @@
 #include "storage/browser/quota/quota_manager.h"
 #include "storage/browser/quota/special_storage_policy.h"
 #include "storage/browser/test/mock_special_storage_policy.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom-mojolpm.h"
 #include "third_party/libprotobuf-mutator/src/src/libfuzzer/libfuzzer_macro.h"
 #include "url/origin.h"
@@ -84,8 +85,8 @@ class CodeCacheHostTestcase
   void AddCodeCacheHostImpl(
       uint32_t id,
       int renderer_id,
-      const Origin& origin,
       const net::NetworkIsolationKey& key,
+      const blink::StorageKey& storage_key,
       mojo::PendingReceiver<::blink::mojom::CodeCacheHost>&& receiver);
 
   // Create and bind a new instance for fuzzing. This ensures that the new
@@ -247,16 +248,17 @@ void CodeCacheHostTestcase::RunAction(const ProtoAction& action,
 void CodeCacheHostTestcase::AddCodeCacheHostImpl(
     uint32_t id,
     int renderer_id,
-    const Origin& origin,
     const net::NetworkIsolationKey& nik,
+    const blink::StorageKey& storage_key,
     mojo::PendingReceiver<::blink::mojom::CodeCacheHost>&& receiver) {
   auto code_cache_host = std::make_unique<content::CodeCacheHostImpl>(
-      renderer_id, generated_code_cache_context_, nik);
+      renderer_id, generated_code_cache_context_, nik, storage_key);
   code_cache_host->SetCacheStorageControlForTesting(
       cache_storage_control_wrapper_.get());
   UniqueCodeCacheReceiverSet receivers(
       new mojo::UniqueReceiverSet<blink::mojom::CodeCacheHost>(),
-      base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+      base::OnTaskRunnerDeleter(
+          base::SequencedTaskRunner::GetCurrentDefault()));
   receivers->Add(std::move(code_cache_host), std::move(receiver));
   code_cache_host_receivers_.insert({renderer_id, std::move(receivers)});
 }
@@ -295,6 +297,7 @@ void CodeCacheHostTestcase::AddCodeCacheHost(
   } else if (origin_id == OriginId_EMPTY) {
     origin = &origin_empty_;
   }
+  auto storage_key = blink::StorageKey::CreateFirstParty(*origin);
 
   // Use of Unretained is safe since `this` is guaranteed to live at least until
   // `run_closure` is invoked.
@@ -303,8 +306,9 @@ void CodeCacheHostTestcase::AddCodeCacheHost(
       ->PostTaskAndReply(
           FROM_HERE,
           base::BindOnce(&CodeCacheHostTestcase::AddCodeCacheHostImpl,
-                         base::Unretained(this), id, renderer_id, *origin,
-                         net::NetworkIsolationKey(), std::move(receiver)),
+                         base::Unretained(this), id, renderer_id,
+                         net::NetworkIsolationKey(), storage_key,
+                         std::move(receiver)),
           base::BindOnce(AddCodeCacheHostInstance, id, std::move(remote),
                          std::move(run_closure)));
 }

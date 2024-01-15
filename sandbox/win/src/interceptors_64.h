@@ -39,7 +39,7 @@ SANDBOX_INTERCEPT NTSTATUS WINAPI TargetNtUnmapViewOfSection64(HANDLE process,
 // Interception of NtSetInformationThread on the child process.
 SANDBOX_INTERCEPT NTSTATUS WINAPI
 TargetNtSetInformationThread64(HANDLE thread,
-                               NT_THREAD_INFORMATION_CLASS thread_info_class,
+                               THREADINFOCLASS thread_info_class,
                                PVOID thread_information,
                                ULONG thread_information_bytes);
 
@@ -101,20 +101,6 @@ TargetNtSetInformationFile64(HANDLE file,
                              PVOID file_information,
                              ULONG length,
                              FILE_INFORMATION_CLASS file_information_class);
-
-// -----------------------------------------------------------------------
-// Interceptors handled by the named pipe dispatcher.
-
-// Interception of CreateNamedPipeW in kernel32.dll
-SANDBOX_INTERCEPT HANDLE WINAPI
-TargetCreateNamedPipeW64(LPCWSTR pipe_name,
-                         DWORD open_mode,
-                         DWORD pipe_mode,
-                         DWORD max_instance,
-                         DWORD out_buffer_size,
-                         DWORD in_buffer_size,
-                         DWORD default_timeout,
-                         LPSECURITY_ATTRIBUTES security_attributes);
 
 // -----------------------------------------------------------------------
 // Interceptors handled by the process-thread dispatcher.

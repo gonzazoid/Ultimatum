@@ -8,11 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "base/values.h"
 #include "extensions/common/permissions/base_set_operators.h"
-
-namespace base {
-class ListValue;
-}  // namespace base
 
 namespace extensions {
 
@@ -21,8 +18,8 @@ class ManifestPermissionSet;
 
 template<>
 struct BaseSetOperatorsTraits<ManifestPermissionSet> {
-  typedef ManifestPermission ElementType;
-  typedef std::string ElementIDType;
+  using ElementType = ManifestPermission;
+  using ElementIDType = std::string;
 };
 
 class ManifestPermissionSet : public BaseSetOperators<ManifestPermissionSet> {
@@ -33,7 +30,7 @@ class ManifestPermissionSet : public BaseSetOperators<ManifestPermissionSet> {
   // If |error| is NULL, parsing will continue with the next permission if
   // invalid data is detected. If |error| is not NULL, it will be set to an
   // error message and false is returned when an invalid permission is found.
-  static bool ParseFromJSON(const base::ListValue* permissions,
+  static bool ParseFromJSON(const base::Value::List& permissions,
                             ManifestPermissionSet* manifest_permissions,
                             std::u16string* error,
                             std::vector<std::string>* unhandled_permissions);

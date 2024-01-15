@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_util.h"
@@ -24,7 +26,6 @@
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -54,7 +55,7 @@ class LoggingObserver : public SyncedPrintersManager::Observer {
   base::ScopedObservation<SyncedPrintersManager,
                           SyncedPrintersManager::Observer>
       observation_{this};
-  SyncedPrintersManager* manager_;
+  raw_ptr<SyncedPrintersManager> manager_;
 };
 
 class SyncedPrintersManagerTest : public testing::Test {

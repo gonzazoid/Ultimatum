@@ -5,23 +5,27 @@
 #include "chrome/browser/ash/attestation/enrollment_certificate_uploader_impl.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/attestation/attestation_ca_client.h"
-#include "chrome/browser/ash/attestation/certificate_util.h"
+#include "chromeos/ash/components/attestation/attestation_features.h"
 #include "chromeos/ash/components/attestation/attestation_flow.h"
 #include "chromeos/ash/components/attestation/attestation_flow_adaptive.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/constants/attestation_constants.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+
+namespace ash::attestation {
 
 namespace {
 
@@ -31,15 +35,14 @@ const int kRetryLimit = 100;
 
 void DBusPrivacyCACallback(
     const base::RepeatingCallback<void(const std::string&)> on_success,
-    const base::RepeatingCallback<void(ash::attestation::AttestationStatus)>
-        on_failure,
+    const base::RepeatingCallback<void(AttestationStatus)> on_failure,
     const base::Location& from_here,
-    ash::attestation::AttestationStatus status,
+    AttestationStatus status,
     const std::string& data) {
   DCHECK(on_success);
   DCHECK(on_failure);
 
-  if (status == ash::attestation::ATTESTATION_SUCCESS) {
+  if (status == ATTESTATION_SUCCESS) {
     on_success.Run(data);
     return;
   }
@@ -50,9 +53,6 @@ void DBusPrivacyCACallback(
 }
 
 }  // namespace
-
-namespace ash {
-namespace attestation {
 
 EnrollmentCertificateUploaderImpl::EnrollmentCertificateUploaderImpl(
     policy::CloudPolicyClient* policy_client)
@@ -88,38 +88,73 @@ void EnrollmentCertificateUploaderImpl::Start() {
     attestation_flow_ = default_attestation_flow_.get();
   }
 
-  GetCertificate(/*force_new_key=*/false);
+  GetCertificate();
 }
 
-void EnrollmentCertificateUploaderImpl::GetCertificate(bool force_new_key) {
+void EnrollmentCertificateUploaderImpl::GetCertificate() {
   if (!policy_client_->is_registered()) {
     LOG(ERROR) << "CloudPolicyClient not registered.";
     RunCallbacks(Status::kInvalidClient);
     return;
   }
+  auto callback = base::BindOnce(
+      [](base::RepeatingCallback<void(const std::string&)> on_success,
+         base::RepeatingCallback<void(AttestationStatus)> on_failure,
+         const base::Location& from_here, AttestationStatus status,
+         const std::string& data) {
+        DBusPrivacyCACallback(on_success, on_failure, from_here, status, data);
+      },
+      base::BindRepeating(
+          &EnrollmentCertificateUploaderImpl::UploadCertificateIfNeeded,
+          weak_factory_.GetWeakPtr()),
+      base::BindRepeating(
+          &EnrollmentCertificateUploaderImpl::HandleGetCertificateFailure,
+          weak_factory_.GetWeakPtr()),
+      FROM_HERE);
+  AttestationFeatures::GetFeatures(
+      base::BindOnce(&EnrollmentCertificateUploaderImpl::OnGetFeaturesReady,
+                     weak_factory_.GetWeakPtr(), std::move(callback)));
+}
 
-  VLOG_IF(1, force_new_key) << "Fetching certificate with new key";
+void EnrollmentCertificateUploaderImpl::OnGetFeaturesReady(
+    AttestationFlow::CertificateCallback callback,
+    const AttestationFeatures* features) {
+  if (!features) {
+    LOG(ERROR) << "Failed to get AttestationFeatures.";
+    std::move(callback).Run(ATTESTATION_UNSPECIFIED_FAILURE, "");
+    return;
+  }
+  if (!features->IsAttestationAvailable()) {
+    LOG(ERROR) << "The Attestation is not available.";
+    std::move(callback).Run(ATTESTATION_UNSPECIFIED_FAILURE, "");
+    return;
+  }
+
+  // prefers ECC certificate if available
+  ::attestation::KeyType key_crypto_type;
+  if (features->IsEccSupported()) {
+    key_crypto_type = ::attestation::KEY_TYPE_ECC;
+  } else if (features->IsRsaSupported()) {
+    key_crypto_type = ::attestation::KEY_TYPE_RSA;
+  } else {
+    LOG(ERROR) << "No appropriate crypto key type supported.";
+    std::move(callback).Run(ATTESTATION_UNSPECIFIED_FAILURE, "");
+    return;
+  }
+
+  // Always force a new key to obtain a fresh certificate.
+  // Expired certificates are rejected by the server. It is easier to force
+  // the certificate refresh rather than ensure certificate expiry status, since
+  // the certificate upload is not expected to happen too often. See b/163817801
+  // and b/216220722 for the context.
   attestation_flow_->GetCertificate(
-      PROFILE_ENTERPRISE_ENROLLMENT_CERTIFICATE,
-      EmptyAccountId(),  // Not used.
-      std::string(),     // Not used.
-      force_new_key, ::attestation::KEY_TYPE_ECC,
-      std::string(),  // Leave key name empty to generate a default name.
-      base::BindOnce(
-          [](const base::RepeatingCallback<void(const std::string&)> on_success,
-             const base::RepeatingCallback<void(AttestationStatus)> on_failure,
-             const base::Location& from_here, AttestationStatus status,
-             const std::string& data) {
-            DBusPrivacyCACallback(on_success, on_failure, from_here, status,
-                                  std::move(data));
-          },
-          base::BindRepeating(
-              &EnrollmentCertificateUploaderImpl::CheckCertificateExpiry,
-              weak_factory_.GetWeakPtr()),
-          base::BindRepeating(
-              &EnrollmentCertificateUploaderImpl::HandleGetCertificateFailure,
-              weak_factory_.GetWeakPtr()),
-          FROM_HERE));
+      /*certificate_profile=*/PROFILE_ENTERPRISE_ENROLLMENT_CERTIFICATE,
+      /*account_id=*/EmptyAccountId(),   // Not used.
+      /*request_origin=*/std::string(),  // Not used.
+      /*force_new_key=*/true, key_crypto_type,
+      /*key_name=*/kEnterpriseEnrollmentKey,
+      /*profile_specific_data=*/std::nullopt,
+      /*callback=*/std::move(callback));
 }
 
 void EnrollmentCertificateUploaderImpl::HandleGetCertificateFailure(
@@ -136,40 +171,6 @@ void EnrollmentCertificateUploaderImpl::HandleGetCertificateFailure(
   if (!Reschedule()) {
     RunCallbacks(Status::kFailedToFetch);
   }
-}
-
-void EnrollmentCertificateUploaderImpl::CheckCertificateExpiry(
-    const std::string& pem_certificate_chain) {
-  // Expiry threshold is 0 so no expiring soon certificates. The reason is that
-  // enrollmen certificates expire in 1 day so there's no anyhow optimal
-  // threshold to catch expiring certificates. Worst case scenario: upload
-  // expring certificate on start-up and re-upload new one on demand.
-  const CertificateExpiryStatus cert_status =
-      ::ash::attestation::CheckCertificateExpiry(
-          pem_certificate_chain,
-          /*expiry_threshold=*/base::TimeDelta());
-  switch (cert_status) {
-    case CertificateExpiryStatus::kExpiringSoon:
-    case CertificateExpiryStatus::kExpired:
-      LOG(WARNING) << "Existing certificate has expired.";
-      has_already_uploaded_ = false;
-      GetCertificate(/*force_new_key=*/true);
-      return;
-    case CertificateExpiryStatus::kValid:
-    case CertificateExpiryStatus::kInvalidPemChain:
-    case CertificateExpiryStatus::kInvalidX509:
-      // kInvalidPemChain and kInvalidX509 are not handled intentionally.
-      // Renewal is expensive so we only renew certificates with good evidence
-      // that they have expired or will soon expire; if we don't know, we don't
-      // renew.
-      LOG_IF(ERROR, cert_status != CertificateExpiryStatus::kValid)
-          << "Failed to parse certificate, cannot check expiry: "
-          << CertificateExpiryStatusToString(cert_status);
-      UploadCertificateIfNeeded(pem_certificate_chain);
-      return;
-  }
-
-  NOTREACHED() << "Unknown certificate status";
 }
 
 void EnrollmentCertificateUploaderImpl::UploadCertificateIfNeeded(
@@ -191,8 +192,9 @@ void EnrollmentCertificateUploaderImpl::UploadCertificateIfNeeded(
                      weak_factory_.GetWeakPtr()));
 }
 
-void EnrollmentCertificateUploaderImpl::OnUploadComplete(bool status) {
-  if (status) {
+void EnrollmentCertificateUploaderImpl::OnUploadComplete(
+    policy::CloudPolicyClient::Result result) {
+  if (result.IsSuccess()) {
     has_already_uploaded_ = true;
     if (num_retries_ != 0) {
       LOG(WARNING) << "Enterprise Enrollment Certificate uploaded to DMServer "
@@ -236,5 +238,4 @@ void EnrollmentCertificateUploaderImpl::RunCallbacks(Status status) {
     std::move(callbacks.front()).Run(status);
 }
 
-}  // namespace attestation
-}  // namespace ash
+}  // namespace ash::attestation

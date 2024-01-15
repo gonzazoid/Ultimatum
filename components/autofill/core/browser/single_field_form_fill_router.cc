@@ -4,6 +4,7 @@
 
 #include "components/autofill/core/browser/single_field_form_fill_router.h"
 
+#include "base/check_deref.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/suggestions_context.h"
 
@@ -11,14 +12,11 @@ namespace autofill {
 
 SingleFieldFormFillRouter::SingleFieldFormFillRouter(
     AutocompleteHistoryManager* autocomplete_history_manager,
-    IBANManager* iban_manager,
+    IbanManager* iban_manager,
     MerchantPromoCodeManager* merchant_promo_code_manager)
-    : autocomplete_history_manager_(autocomplete_history_manager->GetWeakPtr()),
-      iban_manager_(iban_manager ? iban_manager->GetWeakPtr() : nullptr),
-      merchant_promo_code_manager_(
-          merchant_promo_code_manager
-              ? merchant_promo_code_manager->GetWeakPtr()
-              : nullptr) {}
+    : autocomplete_history_manager_(CHECK_DEREF(autocomplete_history_manager)),
+      iban_manager_(iban_manager),
+      merchant_promo_code_manager_(merchant_promo_code_manager) {}
 
 SingleFieldFormFillRouter::~SingleFieldFormFillRouter() = default;
 
@@ -62,76 +60,68 @@ void SingleFieldFormFillRouter::OnWillSubmitForm(
 }
 
 bool SingleFieldFormFillRouter::OnGetSingleFieldSuggestions(
-    int query_id,
-    AutoselectFirstSuggestion autoselect_first_suggestion,
     const FormFieldData& field,
     const AutofillClient& client,
-    base::WeakPtr<SingleFieldFormFiller::SuggestionsHandler> handler,
+    OnSuggestionsReturnedCallback on_suggestions_returned,
     const SuggestionsContext& context) {
   // Retrieving suggestions for a new field; select the appropriate filler.
   if (merchant_promo_code_manager_ &&
       merchant_promo_code_manager_->OnGetSingleFieldSuggestions(
-          query_id, autoselect_first_suggestion, field, client, handler,
-          context)) {
+          field, client, on_suggestions_returned, context)) {
     return true;
   }
   if (iban_manager_ && iban_manager_->OnGetSingleFieldSuggestions(
-                           query_id, autoselect_first_suggestion, field, client,
-                           handler, context)) {
+                           field, client, on_suggestions_returned, context)) {
     return true;
   }
-  if (autocomplete_history_manager_->OnGetSingleFieldSuggestions(
-          query_id, autoselect_first_suggestion, field, client, handler,
-          context)) {
-    return true;
-  }
-  return false;
+  return autocomplete_history_manager_->OnGetSingleFieldSuggestions(
+      field, client, std::move(on_suggestions_returned), context);
 }
 
 void SingleFieldFormFillRouter::OnWillSubmitFormWithFields(
     const std::vector<FormFieldData>& fields,
     bool is_autocomplete_enabled) {}
 
-void SingleFieldFormFillRouter::CancelPendingQueries(
-    const SingleFieldFormFiller::SuggestionsHandler* handler) {
-  if (autocomplete_history_manager_)
-    autocomplete_history_manager_->CancelPendingQueries(handler);
-  if (merchant_promo_code_manager_)
-    merchant_promo_code_manager_->CancelPendingQueries(handler);
-  if (iban_manager_)
-    iban_manager_->CancelPendingQueries(handler);
+void SingleFieldFormFillRouter::CancelPendingQueries() {
+  autocomplete_history_manager_->CancelPendingQueries();
+  if (merchant_promo_code_manager_) {
+    merchant_promo_code_manager_->CancelPendingQueries();
+  }
+  if (iban_manager_) {
+    iban_manager_->CancelPendingQueries();
+  }
 }
 
 void SingleFieldFormFillRouter::OnRemoveCurrentSingleFieldSuggestion(
     const std::u16string& field_name,
     const std::u16string& value,
-    int frontend_id) {
+    PopupItemId popup_item_id) {
   if (merchant_promo_code_manager_ &&
-      frontend_id == POPUP_ITEM_ID_MERCHANT_PROMO_CODE_ENTRY) {
+      popup_item_id == PopupItemId::kMerchantPromoCodeEntry) {
     merchant_promo_code_manager_->OnRemoveCurrentSingleFieldSuggestion(
-        field_name, value, frontend_id);
-  } else if (iban_manager_ && frontend_id == POPUP_ITEM_ID_IBAN_ENTRY) {
+        field_name, value, popup_item_id);
+  } else if (iban_manager_ && popup_item_id == PopupItemId::kIbanEntry) {
     iban_manager_->OnRemoveCurrentSingleFieldSuggestion(field_name, value,
-                                                        frontend_id);
+                                                        popup_item_id);
   } else {
     autocomplete_history_manager_->OnRemoveCurrentSingleFieldSuggestion(
-        field_name, value, frontend_id);
+        field_name, value, popup_item_id);
   }
 }
 
 void SingleFieldFormFillRouter::OnSingleFieldSuggestionSelected(
     const std::u16string& value,
-    int frontend_id) {
+    PopupItemId popup_item_id) {
   if (merchant_promo_code_manager_ &&
-      (frontend_id == POPUP_ITEM_ID_MERCHANT_PROMO_CODE_ENTRY ||
-       frontend_id == POPUP_ITEM_ID_SEE_PROMO_CODE_DETAILS)) {
-    merchant_promo_code_manager_->OnSingleFieldSuggestionSelected(value,
-                                                                  frontend_id);
-  } else if (iban_manager_ && frontend_id == POPUP_ITEM_ID_IBAN_ENTRY) {
-    iban_manager_->OnSingleFieldSuggestionSelected(value, frontend_id);
+      (popup_item_id == PopupItemId::kMerchantPromoCodeEntry ||
+       popup_item_id == PopupItemId::kSeePromoCodeDetails)) {
+    merchant_promo_code_manager_->OnSingleFieldSuggestionSelected(
+        value, popup_item_id);
+  } else if (iban_manager_ && popup_item_id == PopupItemId::kIbanEntry) {
+    iban_manager_->OnSingleFieldSuggestionSelected(value, popup_item_id);
   } else {
-    autocomplete_history_manager_->OnSingleFieldSuggestionSelected(value,
-                                                                   frontend_id);
+    autocomplete_history_manager_->OnSingleFieldSuggestionSelected(
+        value, popup_item_id);
   }
 }
 

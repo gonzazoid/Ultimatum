@@ -7,9 +7,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "net/base/io_buffer.h"
@@ -30,7 +29,7 @@ const uint32_t kMaxPacketSize = kMaxReadSize - 1;
 int ClampUDPBufferSize(int requested_buffer_size) {
   constexpr int kMinBufferSize = 0;
   constexpr int kMaxBufferSize = 128 * 1024;
-  return base::clamp(requested_buffer_size, kMinBufferSize, kMaxBufferSize);
+  return std::clamp(requested_buffer_size, kMinBufferSize, kMaxBufferSize);
 }
 
 class SocketWrapperImpl : public UDPSocket::SocketWrapper {
@@ -141,6 +140,18 @@ class SocketWrapperImpl : public UDPSocket::SocketWrapper {
     if (result == net::OK && options->send_buffer_size != 0) {
       result = socket_.SetSendBufferSize(
           ClampUDPBufferSize(options->send_buffer_size));
+    }
+    if (result == net::OK) {
+      switch (options->ipv6_only) {
+        case mojom::OptionalBool::kTrue:
+          result = socket_.SetIPv6Only(true);
+          break;
+        case mojom::OptionalBool::kFalse:
+          result = socket_.SetIPv6Only(false);
+          break;
+        default:
+          break;
+      }
     }
     return result;
   }
@@ -338,8 +349,8 @@ void UDPSocket::DoRecvFrom(uint32_t buffer_size) {
   DCHECK_GT(remaining_recv_slots_, 0u);
   DCHECK_GE(kMaxReadSize, buffer_size);
 
-  recvfrom_buffer_ =
-      base::MakeRefCounted<net::IOBuffer>(static_cast<size_t>(buffer_size));
+  recvfrom_buffer_ = base::MakeRefCounted<net::IOBufferWithSize>(
+      static_cast<size_t>(buffer_size));
 
   // base::Unretained(this) is safe because socket is owned by |this|.
   int net_result = wrapped_socket_->RecvFrom(

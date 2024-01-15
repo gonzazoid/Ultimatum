@@ -4,7 +4,7 @@
 
 #include "chrome/browser/performance_manager/decorators/page_aggregator.h"
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "components/performance_manager/graph/node_attached_data_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
@@ -45,6 +45,10 @@ class PageAggregatorAccess {
   static void SetPageHadFormInteraction(PageNodeImpl* page_node, bool value) {
     page_node->SetHadFormInteraction(base::PassKey<PageAggregatorAccess>(),
                                      value);
+  }
+
+  static void SetPageHadUserEdits(PageNodeImpl* page_node, bool value) {
+    page_node->SetHadUserEdits(base::PassKey<PageAggregatorAccess>(), value);
   }
 };
 
@@ -90,6 +94,14 @@ class PageAggregator::Data : public NodeAttachedDataImpl<Data> {
       PageNodeImpl* page_node,
       const FrameNode* frame_node_being_removed);
 
+  // Updates the counter of frames with user-initiated edits and sets the
+  // corresponding page-level property.  |frame_node_being_removed| indicates
+  // if this function is called while removing a frame node.
+  void UpdateCurrentFrameCountForUserEdits(
+      bool frame_had_user_edits,
+      PageNodeImpl* page_node,
+      const FrameNode* frame_node_being_removed);
+
  private:
   friend class PageAggregator;
 
@@ -100,6 +112,9 @@ class PageAggregator::Data : public NodeAttachedDataImpl<Data> {
 
   // The number of current frames which have received some form interaction.
   uint32_t num_current_frames_with_form_interaction_ = 0;
+
+  // The number of current frames which have some user-initiated edits.
+  uint32_t num_current_frames_with_user_edits_ = 0;
 };
 #pragma pack(pop)
 
@@ -160,23 +175,62 @@ void PageAggregator::Data::UpdateCurrentFrameCountForFormInteraction(
       page_node, num_current_frames_with_form_interaction_ > 0);
 }
 
+void PageAggregator::Data::UpdateCurrentFrameCountForUserEdits(
+    bool frame_had_user_edits,
+    PageNodeImpl* page_node,
+    const FrameNode* frame_node_being_removed) {
+  if (frame_had_user_edits) {
+    ++num_current_frames_with_user_edits_;
+  } else {
+    DCHECK_GT(num_current_frames_with_user_edits_, 0U);
+    --num_current_frames_with_user_edits_;
+  }
+  // DCHECK that the |num_current_frames_with_user_edits_| accounting is
+  // correct.
+  DCHECK_EQ(
+      [&]() {
+        const auto frame_nodes = GraphOperations::GetFrameNodes(page_node);
+        size_t num_current_frames_with_user_edits = 0;
+        for (const auto* node : frame_nodes) {
+          if (node != frame_node_being_removed && node->IsCurrent() &&
+              node->HadUserEdits()) {
+            ++num_current_frames_with_user_edits;
+          }
+        }
+        return num_current_frames_with_user_edits;
+      }(),
+      num_current_frames_with_user_edits_);
+
+  PageAggregatorAccess::SetPageHadUserEdits(
+      page_node, num_current_frames_with_user_edits_ > 0);
+}
+
 PageAggregator::PageAggregator() = default;
 PageAggregator::~PageAggregator() = default;
 
 void PageAggregator::OnFrameNodeAdded(const FrameNode* frame_node) {
-  DCHECK(!frame_node->IsCurrent());
+  CHECK(!frame_node->HadFormInteraction());
+  CHECK(!frame_node->HadUserEdits());
+  CHECK(!frame_node->IsHoldingWebLock());
+  CHECK(!frame_node->IsHoldingIndexedDBLock());
 }
 
 void PageAggregator::OnBeforeFrameNodeRemoved(const FrameNode* frame_node) {
   auto* page_node = PageNodeImpl::FromNode(frame_node->GetPageNode());
   Data* data = Data::Get(page_node);
+  if (!data) {
+    return;
+  }
+
   if (frame_node->IsCurrent()) {
-    // Data should have been created when the frame became current.
-    DCHECK(data);
+    // Decrement the form interaction and user edits counters for this page if
+    // needed.
     if (frame_node->HadFormInteraction()) {
-      // Decrement the form interaction counter for this page.
       data->UpdateCurrentFrameCountForFormInteraction(false, page_node,
                                                       frame_node);
+    }
+    if (frame_node->HadUserEdits()) {
+      data->UpdateCurrentFrameCountForUserEdits(false, page_node, frame_node);
     }
   }
 
@@ -192,8 +246,8 @@ void PageAggregator::OnIsCurrentChanged(const FrameNode* frame_node) {
   auto* page_node = PageNodeImpl::FromNode(frame_node->GetPageNode());
   Data* data = Data::GetOrCreate(page_node);
 
-  // Check if the frame node had some form interaction, in this case there's two
-  // possibilities:
+  // Check if the frame node had some form interaction or user edit, in this
+  // case there's two possibilities:
   //   - The frame became current: The counter of current frames with form
   //     interactions should be increased.
   //   - The frame became non current: The counter of current frames with form
@@ -201,6 +255,10 @@ void PageAggregator::OnIsCurrentChanged(const FrameNode* frame_node) {
   if (frame_node->HadFormInteraction()) {
     data->UpdateCurrentFrameCountForFormInteraction(frame_node->IsCurrent(),
                                                     page_node, nullptr);
+  }
+  if (frame_node->HadUserEdits()) {
+    data->UpdateCurrentFrameCountForUserEdits(frame_node->IsCurrent(),
+                                              page_node, nullptr);
   }
 }
 
@@ -229,6 +287,15 @@ void PageAggregator::OnHadFormInteractionChanged(const FrameNode* frame_node) {
   }
 }
 
+void PageAggregator::OnHadUserEditsChanged(const FrameNode* frame_node) {
+  if (frame_node->IsCurrent()) {
+    auto* page_node = PageNodeImpl::FromNode(frame_node->GetPageNode());
+    Data* data = Data::GetOrCreate(page_node);
+    data->UpdateCurrentFrameCountForUserEdits(frame_node->HadUserEdits(),
+                                              page_node, nullptr);
+  }
+}
+
 void PageAggregator::OnPassedToGraph(Graph* graph) {
   // This observer presumes that it's been added before any frame nodes exist in
   // the graph.
@@ -243,18 +310,19 @@ void PageAggregator::OnTakenFromGraph(Graph* graph) {
   graph->RemoveFrameNodeObserver(this);
 }
 
-base::Value PageAggregator::DescribePageNodeData(const PageNode* node) const {
+base::Value::Dict PageAggregator::DescribePageNodeData(
+    const PageNode* node) const {
   Data* data = Data::Get(PageNodeImpl::FromNode(node));
   if (data == nullptr)
-    return base::Value();
+    return base::Value::Dict();
 
-  base::Value ret(base::Value::Type::DICTIONARY);
-  ret.SetIntKey("num_frames_holding_web_lock",
-                data->num_frames_holding_web_lock_);
-  ret.SetIntKey("num_frames_holding_indexeddb_lock",
-                data->num_frames_holding_web_lock_);
-  ret.SetIntKey("num_current_frames_with_form_interaction",
-                data->num_current_frames_with_form_interaction_);
+  base::Value::Dict ret;
+  ret.Set("num_frames_holding_web_lock",
+          static_cast<int>(data->num_frames_holding_web_lock_));
+  ret.Set("num_frames_holding_indexeddb_lock",
+          static_cast<int>(data->num_frames_holding_indexeddb_lock_));
+  ret.Set("num_current_frames_with_form_interaction",
+          static_cast<int>(data->num_current_frames_with_form_interaction_));
   return ret;
 }
 

@@ -8,11 +8,12 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/time/time.h"
+#include "components/browsing_topics/annotator.h"
 #include "components/browsing_topics/common/common_types.h"
 #include "components/browsing_topics/epoch_topics.h"
 #include "components/history/core/browser/history_types.h"
@@ -29,11 +30,6 @@ namespace content {
 class BrowsingTopicsSiteDataManager;
 }  // namespace content
 
-namespace optimization_guide {
-class PageContentAnnotationsService;
-class BatchAnnotationResult;
-}  // namespace optimization_guide
-
 namespace browsing_topics {
 
 // Responsible for doing a one-off browsing topics calculation. It will:
@@ -42,8 +38,8 @@ namespace browsing_topics {
 // Topics API was called on.
 // 3) Query the `HistoryService` for the hosts of the pages the API was called
 // on.
-// 4) Query the `PageContentAnnotationsService` with a set of hosts, to get the
-// corresponding topics.
+// 4) Query the `Annotator` with a set of hosts, to get the corresponding
+// topics.
 // 5) Derive `EpochTopics` (i.e. the top topics and the their observed-by
 // contexts), and return it as the final result.
 class BrowsingTopicsCalculator {
@@ -66,8 +62,9 @@ class BrowsingTopicsCalculator {
       privacy_sandbox::PrivacySandboxSettings* privacy_sandbox_settings,
       history::HistoryService* history_service,
       content::BrowsingTopicsSiteDataManager* site_data_manager,
-      optimization_guide::PageContentAnnotationsService* annotations_service,
+      Annotator* annotator,
       const base::circular_deque<EpochTopics>& epochs,
+      bool is_manually_triggered,
       CalculateCompletedCallback callback);
 
   BrowsingTopicsCalculator(const BrowsingTopicsCalculator&) = delete;
@@ -76,6 +73,8 @@ class BrowsingTopicsCalculator {
   BrowsingTopicsCalculator& operator=(BrowsingTopicsCalculator&&) = delete;
 
   virtual ~BrowsingTopicsCalculator();
+
+  bool is_manually_triggered() const { return is_manually_triggered_; }
 
  protected:
   // This method exists for the purposes of overriding in tests.
@@ -91,7 +90,6 @@ class BrowsingTopicsCalculator {
   void DeriveTopTopics(
       const std::map<HashedHost, size_t>& history_hosts_count,
       const std::map<HashedHost, std::set<Topic>>& host_topics_map,
-      size_t taxonomy_size,
       std::vector<Topic>& top_topics,
       size_t& padded_top_topics_start_index,
       size_t& history_topics_count);
@@ -101,11 +99,9 @@ class BrowsingTopicsCalculator {
 
   void OnGetRecentlyVisitedURLsCompleted(history::QueryResults results);
 
-  void OnRequestModelCompleted(std::vector<std::string> raw_hosts,
-                               bool successful);
+  void OnRequestModelCompleted(std::vector<std::string> raw_hosts);
 
-  void OnGetTopicsForHostsCompleted(
-      const std::vector<optimization_guide::BatchAnnotationResult>& results);
+  void OnGetTopicsForHostsCompleted(const std::vector<Annotation>& results);
 
   void OnCalculateCompleted(CalculatorResultStatus status,
                             EpochTopics epoch_topics);
@@ -115,8 +111,7 @@ class BrowsingTopicsCalculator {
   raw_ptr<privacy_sandbox::PrivacySandboxSettings> privacy_sandbox_settings_;
   raw_ptr<history::HistoryService> history_service_;
   raw_ptr<content::BrowsingTopicsSiteDataManager> site_data_manager_;
-  raw_ptr<optimization_guide::PageContentAnnotationsService>
-      annotations_service_;
+  raw_ptr<Annotator> annotator_;
 
   CalculateCompletedCallback calculate_completed_callback_;
 
@@ -137,6 +132,10 @@ class BrowsingTopicsCalculator {
 
   // Used for the async tasks querying the HistoryService.
   base::CancelableTaskTracker history_task_tracker_;
+
+  // Whether this calculator was generated via the topics-internals page rather
+  // than via a scheduled task.
+  bool is_manually_triggered_;
 
   base::WeakPtrFactory<BrowsingTopicsCalculator> weak_ptr_factory_{this};
 };

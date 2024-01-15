@@ -22,8 +22,6 @@ class IntersectionObserverEntry;
 class LazyLoadImageObserver final
     : public GarbageCollected<LazyLoadImageObserver> {
  public:
-  enum class DeferralMessage { kNone, kMissingDimensionForLazy };
-
   struct VisibleLoadTimeMetrics {
     // Keeps track of whether the image was initially intersecting the viewport.
     bool is_initially_intersecting = false;
@@ -38,7 +36,7 @@ class LazyLoadImageObserver final
 
   LazyLoadImageObserver(const Document&);
 
-  void StartMonitoringNearViewport(Document*, Element*, DeferralMessage);
+  void StartMonitoringNearViewport(Document*, Element*);
   void StopMonitoring(Element*);
 
   void StartMonitoringVisibility(Document*, HTMLImageElement*);
@@ -48,13 +46,15 @@ class LazyLoadImageObserver final
 
   // Loads all currently known lazy-loaded images. Returns whether any
   // resources started loading as a result.
-  bool LoadAllImagesAndBlockLoadEvent();
+  bool LoadAllImagesAndBlockLoadEvent(Document& for_document);
 
  private:
   void LoadIfNearViewport(const HeapVector<Member<IntersectionObserverEntry>>&);
 
   void OnVisibilityChanged(
       const HeapVector<Member<IntersectionObserverEntry>>&);
+
+  int GetLazyLoadingImageMarginPx(const Document& document);
 
   // The intersection observer responsible for loading the image once it's near
   // the viewport.

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "components/sync/base/sync_invalidation.h"
-#include "components/sync/base/syncer_error.h"
+#include "components/sync/engine/syncer_error.h"
 
 namespace sync_pb {
 class DataTypeContext;
@@ -45,7 +45,7 @@ class UpdateHandler {
       std::unique_ptr<SyncInvalidation> incoming) = 0;
 
   // Fill invalidation related fields in GetUpdates request.
-  virtual void PrepareGetUpdates(sync_pb::GetUpdateTriggers* msg) = 0;
+  virtual void CollectPendingInvalidations(sync_pb::GetUpdateTriggers* msg) = 0;
   // Returns true if |pending_invalidations_| vector is not empty.
   virtual bool HasPendingInvalidations() const = 0;
 
@@ -64,8 +64,11 @@ class UpdateHandler {
       const SyncEntityList& applicable_updates,
       StatusController* status) = 0;
 
-  // Called at the end of a GetUpdates loop to apply any unapplied updates.
-  virtual void ApplyUpdates(StatusController* status) = 0;
+  // Called whenever any unapplied updates should be applied. This is usually
+  // at the end of a sync cycle, but for data types in
+  // ApplyUpdatesImmediatelyTypes() it already happens while the download loop
+  // is still ongoing.
+  virtual void ApplyUpdates(StatusController* status, bool cycle_done) = 0;
 };
 
 }  // namespace syncer

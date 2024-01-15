@@ -4,7 +4,7 @@
 
 #include "chrome/browser/media/router/providers/wired_display/wired_display_media_route_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/media/router/providers/wired_display/wired_display_presentation_receiver.h"
@@ -110,7 +110,7 @@ class MockReceiverCreator {
 
   // Retains a reference to |unique_receiver_| even after |this| loses its
   // ownership.
-  const raw_ptr<MockPresentationReceiver> receiver_;
+  const raw_ptr<MockPresentationReceiver, DanglingUntriaged> receiver_;
 };
 
 const char kPresentationSource[] = "https://www.example.com/presentation";
@@ -334,7 +334,7 @@ TEST_F(WiredDisplayMediaRouteProviderTest, CreateAndTerminateRoute) {
   provider_remote_->CreateRoute(
       kPresentationSource, GetSinkId(secondary_display1_), presentation_id,
       url::Origin::Create(GURL(kPresentationSource)), kFrameTreeNodeId,
-      base::Seconds(100), false,
+      base::Seconds(100),
       base::BindOnce(&MockCallback::CreateRoute, base::Unretained(&callback)));
   base::RunLoop().RunUntilIdle();
 
@@ -370,7 +370,7 @@ TEST_F(WiredDisplayMediaRouteProviderTest, SendMediaStatusUpdate) {
   provider_remote_->CreateRoute(
       kPresentationSource, GetSinkId(secondary_display1_), presentation_id,
       url::Origin::Create(GURL(kPresentationSource)), kFrameTreeNodeId,
-      base::Seconds(100), false,
+      base::Seconds(100),
       base::BindOnce(&MockCallback::CreateRoute, base::Unretained(&callback)));
   base::RunLoop().RunUntilIdle();
 
@@ -378,7 +378,7 @@ TEST_F(WiredDisplayMediaRouteProviderTest, SendMediaStatusUpdate) {
   mojo::PendingRemote<mojom::MediaStatusObserver> status_observer_remote;
   MockMediaStatusObserver status_observer(
       status_observer_remote.InitWithNewPipeAndPassReceiver());
-  provider_remote_->CreateMediaRouteController(
+  provider_remote_->BindMediaController(
       presentation_id, media_controller_remote.BindNewPipeAndPassReceiver(),
       std::move(status_observer_remote), base::BindOnce([](bool success) {}));
 
@@ -399,7 +399,7 @@ TEST_F(WiredDisplayMediaRouteProviderTest, ExitFullscreenOnDisplayRemoved) {
   provider_remote_->CreateRoute(
       kPresentationSource, GetSinkId(secondary_display1_), "presentationId",
       url::Origin::Create(GURL(kPresentationSource)), kFrameTreeNodeId,
-      base::Seconds(100), false,
+      base::Seconds(100),
       base::BindOnce(&MockCallback::CreateRoute, base::Unretained(&callback)));
   base::RunLoop().RunUntilIdle();
 

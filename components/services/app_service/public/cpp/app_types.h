@@ -11,13 +11,12 @@
 
 #include "base/component_export.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/services/app_service/public/cpp/intent_filter.h"
 #include "components/services/app_service/public/cpp/macros.h"
 #include "components/services/app_service/public/cpp/permission.h"
 #include "components/services/app_service/public/cpp/run_on_os_login_types.h"
-#include "components/services/app_service/public/cpp/shortcut.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/services/app_service/public/protos/app_types.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -34,7 +33,6 @@ ENUM(AppType,
      kCrostini,                    // Linux (via Crostini) app.
      kChromeApp,                   // Chrome app.
      kWeb,                         // Web app.
-     kMacOs,                       // Mac OS app.
      kPluginVm,                    // Plugin VM app, see go/pluginvm.
      kStandaloneBrowser,           // Lacros browser app, see //docs/lacros.md.
      kRemote,                      // Remote app.
@@ -42,7 +40,8 @@ ENUM(AppType,
      kSystemWeb,                   // System web app.
      kStandaloneBrowserChromeApp,  // Chrome app hosted in Lacros.
      kExtension,                   // Browser extension.
-     kStandaloneBrowserExtension   // Extension hosted in Lacros.
+     kStandaloneBrowserExtension,  // Extension hosted in Lacros.
+     kBruschetta                   // Bruschetta app, see go/bruschetta.
 )
 
 // Whether an app is ready to launch, i.e. installed.
@@ -61,7 +60,8 @@ ENUM(Readiness,
      // apps, so publishers must set the app as uninstalled before
      // removing it.
      kRemoved,
-     kUninstalledByMigration)
+     // This is used for all non-user initiated uninstallation.
+     kUninstalledByNonUser)
 
 // How the app was installed.
 // This should be kept in sync with histograms.xml, InstallReason in
@@ -132,13 +132,36 @@ struct COMPONENT_EXPORT(APP_TYPES) App {
 
   ~App();
 
+  bool operator==(const App& other) const;
+  bool operator!=(const App& other) const;
+
   std::unique_ptr<App> Clone() const;
+
+  // Adds a new field for `extra`. The type `T` can be any type, e.g. int,
+  // double, string, base::Value::Dict, base::Value::List, base::Value, etc. The
+  // value is saved in base::Value::Dict `extra`. If the type `T` can't be
+  // converted to base::Value, an explicit convert function can be added to
+  // convert `value` to base::Value.
+  template <typename T>
+  void SetExtraField(const std::string& field_name, T&& value) {
+    if (!extra.has_value()) {
+      extra = base::Value::Dict();
+    }
+    extra->Set(field_name, value);
+  }
 
   AppType app_type;
   std::string app_id;
 
   Readiness readiness = Readiness::kUnknown;
+
+  // The full name of the app. Will be used in most UIs.
   absl::optional<std::string> name;
+  // A shortened version of the app name. May omit branding (e.g.
+  // "Google" prefixes) or rely on abbreviations (e.g. "YT Music"). If no
+  // `short_name` is supplied, the `name` will be used instead.
+  // The `short_name` may be used in UIs where space is limited and/or we want
+  // to optimize for scannability.
   absl::optional<std::string> short_name;
 
   // An optional, publisher-specific ID for this app, e.g. for Android apps,
@@ -162,11 +185,13 @@ struct COMPONENT_EXPORT(APP_TYPES) App {
   // There is no guarantee that this is sorted by any criteria.
   Permissions permissions;
 
-  // Whether the app was installed by sync, policy or as a default app.
+  // The main reason why this app is currently installed on the device (e.g.
+  // because it is required by Policy). This may change over time and is not
+  // necessarily the reason why the app was originally installed.
   InstallReason install_reason = InstallReason::kUnknown;
 
-  // Where the app was installed from, e.g. from Play Store, from Chrome Web
-  // Store, etc.
+  // How installation of the app was triggered on this device. Either a UI
+  // surface (e.g. Play Store), or a system component (e.g. Sync).
   InstallSource install_source = InstallSource::kUnknown;
 
   // IDs used for policy to identify the app.
@@ -214,23 +239,39 @@ struct COMPONENT_EXPORT(APP_TYPES) App {
   // Whether the app runs on os login in a new window or not.
   absl::optional<RunOnOsLogin> run_on_os_login;
 
-  // Shortcuts help users perform specific actions easily.
-  // This vector must be treated atomically, if there is a shortcut
-  // change, the publisher must send through the entire list of shortcuts.
-  // Should contain no duplicate IDs.
-  // If empty during updates, Subscriber can assume no changes.
-  // There is no guarantee that this is sorted by any criteria.
-  Shortcuts shortcuts;
+  // Whether the app can be closed by the user.
+  absl::optional<bool> allow_close;
 
   // Storage space size for app and associated data.
   absl::optional<uint64_t> app_size_in_bytes;
   absl::optional<uint64_t> data_size_in_bytes;
 
-  // When adding new fields to the App type, the `Clone` function and the
-  // `AppUpdate` class should also be updated.
+  // App-specified supported locales.
+  std::vector<std::string> supported_locales;
+  // Currently selected locale, empty string means system language is used.
+  // ARC-specific note: Based on Android implementation, `selected_locale`
+  //  is not necessarily part of `supported_locales`.
+  absl::optional<std::string> selected_locale;
+
+  // The extra information used by the app platform(e.g. ARC, GuestOS) for an
+  // app. `extra` needs to be modified as a whole, and we can't only modify part
+  // of `extra`. AppService doesn't use the fields saved in `extra`. App
+  // publishers modify the content saved in `extra`.
+  absl::optional<base::Value::Dict> extra;
+
+  // When adding new fields to the App type, the `Clone` function, the
+  // `operator==` function, and the `AppUpdate` class should also be updated. If
+  // the new fields should be saved, below functions should be updated:
+  // `AppStorage::IsAppChanged`
+  // `AppStorageFileHandler::ConvertAppsToValue`
+  // `AppStorageFileHandler::ConvertValueToApps`
 };
 
 using AppPtr = std::unique_ptr<App>;
+
+COMPONENT_EXPORT(APP_TYPES)
+bool IsEqual(const std::vector<AppPtr>& source,
+             const std::vector<AppPtr>& target);
 
 COMPONENT_EXPORT(APP_TYPES)
 ApplicationType ConvertAppTypeToProtoApplicationType(AppType app_type);
@@ -247,63 +288,6 @@ COMPONENT_EXPORT(APP_TYPES)
 ApplicationUninstallSource
 ConvertUninstallSourceToProtoApplicationUninstallSource(
     UninstallSource uninstall_source);
-
-// TODO(crbug.com/1253250): Remove these functions after migrating to non-mojo
-// AppService.
-COMPONENT_EXPORT(APP_TYPES)
-AppType ConvertMojomAppTypToAppType(apps::mojom::AppType mojom_app_type);
-
-COMPONENT_EXPORT(APP_TYPES)
-mojom::AppType ConvertAppTypeToMojomAppType(AppType app_type);
-
-COMPONENT_EXPORT(APP_TYPES)
-Readiness ConvertMojomReadinessToReadiness(
-    apps::mojom::Readiness mojom_readiness);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::Readiness ConvertReadinessToMojomReadiness(Readiness readiness);
-
-COMPONENT_EXPORT(APP_TYPES)
-InstallReason ConvertMojomInstallReasonToInstallReason(
-    apps::mojom::InstallReason mojom_install_reason);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::InstallReason ConvertInstallReasonToMojomInstallReason(
-    InstallReason install_reason);
-
-COMPONENT_EXPORT(APP_TYPES)
-InstallSource ConvertMojomInstallSourceToInstallSource(
-    apps::mojom::InstallSource mojom_install_source);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::InstallSource ConvertInstallSourceToMojomInstallSource(
-    InstallSource install_source);
-
-COMPONENT_EXPORT(APP_TYPES)
-WindowMode ConvertMojomWindowModeToWindowMode(
-    apps::mojom::WindowMode mojom_window_mode);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::WindowMode ConvertWindowModeToMojomWindowMode(
-    WindowMode mojom_window_mode);
-
-COMPONENT_EXPORT(APP_TYPES)
-absl::optional<bool> GetOptionalBool(
-    const apps::mojom::OptionalBool& mojom_optional_bool);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::OptionalBool GetMojomOptionalBool(
-    const absl::optional<bool>& mojom_optional_bool);
-
-COMPONENT_EXPORT(APP_TYPES)
-AppPtr ConvertMojomAppToApp(const apps::mojom::AppPtr& mojom_app);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::AppPtr ConvertAppToMojomApp(const AppPtr& app);
-
-COMPONENT_EXPORT(APP_TYPES)
-std::vector<base::FilePath> ConvertMojomFilePathsToFilePaths(
-    apps::mojom::FilePathsPtr mojom_file_paths);
 
 }  // namespace apps
 

@@ -5,13 +5,14 @@
 #include "chrome/browser/accessibility/accessibility_ui.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/notreached.h"
 #include "base/strings/escape.h"
@@ -24,7 +25,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/dev_ui_browser_resources.h"
+#include "chrome/grit/accessibility_resources.h"
+#include "chrome/grit/accessibility_resources_map.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/ax_event_notification_details.h"
@@ -40,7 +42,6 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_ui_data_source.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
@@ -125,7 +126,7 @@ base::Value::Dict BuildTargetDescriptor(
   target_data.Set(kPidField, static_cast<int>(base::GetProcId(handle)));
   target_data.Set(kFaviconUrlField, favicon_url.spec());
   target_data.Set(kAccessibilityModeField,
-                  static_cast<int>(accessibility_mode.mode()));
+                  static_cast<int>(accessibility_mode.flags()));
   target_data.Set(kTypeField, kPage);
   return target_data;
 }
@@ -340,21 +341,22 @@ AccessibilityUI::AccessibilityUI(content::WebUI* web_ui)
     : WebUIController(web_ui) {
   // Set up the chrome://accessibility source.
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUIAccessibilityHost);
+      content::WebUIDataSource::CreateAndAdd(
+          web_ui->GetWebContents()->GetBrowserContext(),
+          chrome::kChromeUIAccessibilityHost);
 
   // Add required resources.
   html_source->UseStringsJs();
-  html_source->AddResourcePath("accessibility.css", IDR_ACCESSIBILITY_CSS);
-  html_source->AddResourcePath("accessibility.js", IDR_ACCESSIBILITY_JS);
-  html_source->SetDefaultResource(IDR_ACCESSIBILITY_HTML);
+  html_source->AddResourcePaths(
+      base::make_span(kAccessibilityResources, kAccessibilityResourcesSize));
+  html_source->SetDefaultResource(IDR_ACCESSIBILITY_ACCESSIBILITY_HTML);
   html_source->SetRequestFilter(
       base::BindRepeating(&ShouldHandleAccessibilityRequestCallback),
       base::BindRepeating(&HandleAccessibilityRequestCallback,
                           web_ui->GetWebContents()->GetBrowserContext()));
-
-  content::BrowserContext* browser_context =
-      web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, html_source);
+  html_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::TrustedTypes,
+      "trusted-types parse-html-subset sanitize-inner-html;");
 
   web_ui->AddMessageHandler(std::make_unique<AccessibilityUIMessageHandler>());
 }
@@ -689,7 +691,7 @@ void AccessibilityUIMessageHandler::Callback(const std::string& str) {
 
 void AccessibilityUIMessageHandler::StopRecording(
     content::WebContents* web_contents) {
-  web_contents->RecordAccessibilityEvents(false, absl::nullopt);
+  web_contents->RecordAccessibilityEvents(false, std::nullopt);
   observer_.reset(nullptr);
 }
 

@@ -15,9 +15,9 @@
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_backup_settings_instance.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
@@ -867,8 +867,7 @@ IN_PROC_BROWSER_TEST_F(ArcSettingsServiceTest, WebProxyAutoDiscovery) {
   wpad_config.Set(shill::kWebProxyAutoDiscoveryUrlProperty,
                   base::Value(kWebProxyAutodetectionUrl));
   const std::string kIPConfigPath = "test_ip_config";
-  ip_config_client->AddIPConfig(kIPConfigPath,
-                                base::Value(std::move(wpad_config)));
+  ip_config_client->AddIPConfig(kIPConfigPath, std::move(wpad_config));
 
   ash::ShillServiceClient::TestInterface* service_test =
       ash::ShillServiceClient::Get()->GetTestInterface();

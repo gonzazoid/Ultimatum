@@ -4,7 +4,7 @@
 
 #include "content/browser/xr/service/isolated_device_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/xr/service/xr_device_service.h"
 #include "content/browser/xr/xr_utils.h"
 #include "content/public/browser/xr_integration_client.h"
@@ -16,7 +16,8 @@ constexpr int kMaxRetries = 3;
 namespace content {
 
 void IsolatedVRDeviceProvider::Initialize(
-    device::VRDeviceProviderClient* client) {
+    device::VRDeviceProviderClient* client,
+    content::WebContents* initializing_web_contents) {
   client_ = client;
   SetupDeviceProvider();
 }

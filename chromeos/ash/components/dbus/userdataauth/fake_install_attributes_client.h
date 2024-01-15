@@ -5,10 +5,12 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_FAKE_INSTALL_ATTRIBUTES_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_FAKE_INSTALL_ATTRIBUTES_CLIENT_H_
 
-#include "chromeos/ash/components/dbus/userdataauth/install_attributes_client.h"
+#include <cstdint>
+#include <optional>
 
 #include "base/component_export.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/userdataauth/install_attributes_client.h"
 
 namespace ash {
 
@@ -46,17 +48,20 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeInstallAttributesClient
   void SetFirmwareManagementParameters(
       const ::user_data_auth::SetFirmwareManagementParametersRequest& request,
       SetFirmwareManagementParametersCallback callback) override;
-  absl::optional<::user_data_auth::InstallAttributesGetReply>
+  void GetFirmwareManagementParameters(
+      const ::user_data_auth::GetFirmwareManagementParametersRequest& request,
+      GetFirmwareManagementParametersCallback callback) override;
+  std::optional<::user_data_auth::InstallAttributesGetReply>
   BlockingInstallAttributesGet(
       const ::user_data_auth::InstallAttributesGetRequest& request) override;
-  absl::optional<::user_data_auth::InstallAttributesSetReply>
+  std::optional<::user_data_auth::InstallAttributesSetReply>
   BlockingInstallAttributesSet(
       const ::user_data_auth::InstallAttributesSetRequest& request) override;
-  absl::optional<::user_data_auth::InstallAttributesFinalizeReply>
+  std::optional<::user_data_auth::InstallAttributesFinalizeReply>
   BlockingInstallAttributesFinalize(
       const ::user_data_auth::InstallAttributesFinalizeRequest& request)
       override;
-  absl::optional<::user_data_auth::InstallAttributesGetStatusReply>
+  std::optional<::user_data_auth::InstallAttributesGetStatusReply>
   BlockingInstallAttributesGetStatus(
       const ::user_data_auth::InstallAttributesGetStatusRequest& request)
       override;
@@ -89,6 +94,9 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeInstallAttributesClient
   bool LoadInstallAttributes();
 
   // FWMP related:
+
+  // Firmware management parameters.
+  std::optional<uint32_t> fwmp_flags_;
 
   // Number of times RemoveFirmwareManagementParameters() is called.
   int remove_firmware_management_parameters_from_tpm_call_count_ = 0;

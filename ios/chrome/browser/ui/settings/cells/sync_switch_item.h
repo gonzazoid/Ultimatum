@@ -7,7 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
 
 // SyncSwitchItem is a model class that uses TableViewSwitchCell.
 @interface SyncSwitchItem : TableViewItem
@@ -25,7 +25,7 @@
 // drawn as in the "off" state, with dimmed text.
 @property(nonatomic, assign, getter=isEnabled) BOOL enabled;
 
-// SyncSetupService::SyncableDatatype value for the item.
+// UserSelectableType for the item.
 @property(nonatomic, assign) NSInteger dataType;
 
 @end

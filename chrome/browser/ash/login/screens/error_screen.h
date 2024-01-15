@@ -12,21 +12,18 @@
 #include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ash/login/screens/network_error.h"
-#include "chromeos/ash/components/login/auth/login_performer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/ui/captive_portal_window_proxy.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_state_informer.h"
+#include "chrome/browser/ui/webui/ash/login/network_state_informer.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
 
 namespace ash {
 
+class CaptivePortalWindowProxy;
+class ErrorScreenView;
+
 // Controller for the error screen.
 class ErrorScreen : public BaseScreen,
-                    public LoginPerformer::Delegate,
                     public NetworkConnectionObserver {
  public:
   explicit ErrorScreen(base::WeakPtr<ErrorScreenView> view);
@@ -56,8 +53,7 @@ class ErrorScreen : public BaseScreen,
   NetworkError::ErrorState GetErrorState() const;
 
   // Returns id of the screen behind error screen ("caller" screen).
-  // Returns ash::OOBE_SCREEN_UNKNOWN if error screen isn't the current
-  // screen.
+  // Returns `OOBE_SCREEN_UNKNOWN` if error screen isn't the current screen.
   OobeScreenId GetParentScreen() const;
 
   // Called when we're asked to hide captive portal dialog.
@@ -78,13 +74,10 @@ class ErrorScreen : public BaseScreen,
   // Sets callback that is called on hide.
   void SetHideCallback(base::OnceClosure on_hide);
 
-  // Shows captive portal dialog.
-  void ShowCaptivePortal();
-
   // Toggles the connection pending indicator.
   void ShowConnectingIndicator(bool show);
 
-  // Makes error persistent (e.g. non-closable).
+  // Makes error persistent (e.g. non-closeable).
   void SetIsPersistentError(bool is_persistent);
 
   // Register a callback to be invoked when the user indicates that an attempt
@@ -106,13 +99,8 @@ class ErrorScreen : public BaseScreen,
   void OnUserAction(const base::Value::List& args) override;
 
  private:
-  // LoginPerformer::Delegate overrides:
-  void OnAuthFailure(const AuthFailure& error) override;
-  void OnAuthSuccess(const UserContext& user_context) override;
-  void OnOffTheRecordAuthSuccess() override;
-  void OnPasswordChangeDetected(const UserContext& user_context) override;
-  void AllowlistCheckFailed(const std::string& email) override;
-  void PolicyLoadFailed() override;
+  // Handle user action to open captive portal page.
+  void ShowCaptivePortal();
 
   // NetworkConnectionObserver overrides:
   void ConnectToNetworkRequested(const std::string& service_path) override;
@@ -155,14 +143,9 @@ class ErrorScreen : public BaseScreen,
   void StartGuestSessionAfterOwnershipCheck(
       DeviceSettingsService::OwnershipStatus ownership_status);
 
-  base::WeakPtr<ErrorScreenView> view_;
+  bool is_persistent_ = false;
 
-  // We have the guest login logic in this screen because it might be required
-  // quite early during OOBE. When Login screen is not yet shown and existing
-  // user controller not created. At this point even Guest button is not shown
-  // on the shelf. But we let user enter the guest session from the error screen
-  // to be able to look into the logs, etc.
-  std::unique_ptr<LoginPerformer> guest_login_performer_;
+  base::WeakPtr<ErrorScreenView> view_;
 
   // Proxy which manages showing of the window for captive portal entering.
   std::unique_ptr<CaptivePortalWindowProxy> captive_portal_window_proxy_;
@@ -173,7 +156,7 @@ class ErrorScreen : public BaseScreen,
   NetworkError::UIState ui_state_ = NetworkError::UI_STATE_UNKNOWN;
   NetworkError::ErrorState error_state_ = NetworkError::ERROR_STATE_UNKNOWN;
 
-  OobeScreenId parent_screen_ = ash::OOBE_SCREEN_UNKNOWN;
+  OobeScreenId parent_screen_ = OOBE_SCREEN_UNKNOWN;
 
   // Optional callback that is called when NetworkError screen is hidden.
   base::OnceClosure on_hide_callback_;
@@ -188,11 +171,5 @@ class ErrorScreen : public BaseScreen,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::ErrorScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_ERROR_SCREEN_H_

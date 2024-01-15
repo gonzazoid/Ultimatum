@@ -5,6 +5,7 @@
 #include "content/browser/web_contents/web_contents_view_android.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/android/build_info.h"
@@ -14,6 +15,7 @@
 #include "base/feature_list.h"
 #include "base/notreached.h"
 #include "cc/layers/layer.h"
+#include "cc/slim/layer.h"
 #include "content/browser/accessibility/browser_accessibility_manager_android.h"
 #include "content/browser/android/content_ui_event_handler.h"
 #include "content/browser/android/drop_data_android.h"
@@ -31,7 +33,6 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/drop_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/android/overscroll_refresh_handler.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_constants.h"
@@ -106,7 +107,7 @@ void SynchronousCompositor::SetClientForWebContents(
 std::unique_ptr<WebContentsView> CreateWebContentsView(
     WebContentsImpl* web_contents,
     std::unique_ptr<WebContentsViewDelegate> delegate,
-    RenderViewHostDelegateView** render_view_host_delegate_view) {
+    raw_ptr<RenderViewHostDelegateView>* render_view_host_delegate_view) {
   auto rv = std::make_unique<WebContentsViewAndroid>(web_contents,
                                                      std::move(delegate));
   *render_view_host_delegate_view = rv.get();
@@ -120,11 +121,19 @@ WebContentsViewAndroid::WebContentsViewAndroid(
       delegate_(std::move(delegate)),
       view_(ui::ViewAndroid::LayoutType::NORMAL),
       synchronous_compositor_client_(nullptr) {
-  view_.SetLayer(cc::Layer::Create());
+  view_.SetLayer(cc::slim::Layer::Create());
   view_.set_event_handler(this);
+
+  // `rwhva_parent_` is a child layer of `view_`.
+  parent_for_web_page_widgets_ = cc::slim::Layer::Create();
+  view_.GetLayer()->AddChild(parent_for_web_page_widgets_);
 }
 
 WebContentsViewAndroid::~WebContentsViewAndroid() {
+  // Opposite to the construction order - disconnect the child first.
+  parent_for_web_page_widgets_->RemoveFromParent();
+  parent_for_web_page_widgets_.reset();
+
   if (view_.GetLayer())
     view_.GetLayer()->RemoveFromParent();
   view_.set_event_handler(nullptr);
@@ -212,6 +221,11 @@ DropData* WebContentsViewAndroid::GetDropData() const {
   return NULL;
 }
 
+// TODO(crbug.com/1488620): Implement this.
+void WebContentsViewAndroid::TransferDragSecurityInfo(WebContentsView*) {
+  NOTIMPLEMENTED();
+}
+
 gfx::Rect WebContentsViewAndroid::GetViewBounds() const {
   return gfx::Rect(view_.GetSize());
 }
@@ -235,7 +249,8 @@ RenderWidgetHostViewBase* WebContentsViewAndroid::CreateViewForWidget(
   // native view (i.e. ContentView) how to obtain a reference to this widget in
   // order to paint it.
   RenderWidgetHostImpl* rwhi = RenderWidgetHostImpl::From(render_widget_host);
-  auto* rwhv = new RenderWidgetHostViewAndroid(rwhi, &view_);
+  auto* rwhv = new RenderWidgetHostViewAndroid(
+      rwhi, &view_, parent_for_web_page_widgets_.get());
   rwhv->SetSynchronousCompositorClient(synchronous_compositor_client_);
   return rwhv;
 }
@@ -243,7 +258,8 @@ RenderWidgetHostViewBase* WebContentsViewAndroid::CreateViewForWidget(
 RenderWidgetHostViewBase* WebContentsViewAndroid::CreateViewForChildWidget(
     RenderWidgetHost* render_widget_host) {
   RenderWidgetHostImpl* rwhi = RenderWidgetHostImpl::From(render_widget_host);
-  return new RenderWidgetHostViewAndroid(rwhi, nullptr);
+  return new RenderWidgetHostViewAndroid(rwhi, /*parent_native_view=*/nullptr,
+                                         /*parent_layer=*/nullptr);
 }
 
 void WebContentsViewAndroid::RenderViewReady() {
@@ -262,14 +278,14 @@ void WebContentsViewAndroid::RenderViewHostChanged(RenderViewHost* old_host,
     auto* rwhv = old_host->GetWidget()->GetView();
     if (rwhv && rwhv->GetNativeView()) {
       static_cast<RenderWidgetHostViewAndroid*>(rwhv)->UpdateNativeViewTree(
-          nullptr);
+          /*parent_native_view=*/nullptr, /*parent_layer=*/nullptr);
     }
   }
 
   auto* rwhv = new_host->GetWidget()->GetView();
   if (rwhv && rwhv->GetNativeView()) {
     static_cast<RenderWidgetHostViewAndroid*>(rwhv)->UpdateNativeViewTree(
-        GetNativeView());
+        &view_, parent_for_web_page_widgets_.get());
     SetFocus(view_.HasFocus());
   }
 }
@@ -290,9 +306,12 @@ void WebContentsViewAndroid::SetOverscrollControllerEnabled(bool enabled) {
 void WebContentsViewAndroid::OnCapturerCountChanged() {}
 
 void WebContentsViewAndroid::FullscreenStateChanged(bool is_fullscreen) {
-  if (select_popup_)
+  if (is_fullscreen && select_popup_)
     select_popup_->HideMenu();
 }
+
+void WebContentsViewAndroid::UpdateWindowControlsOverlay(
+    const gfx::Rect& bounding_rect) {}
 
 void WebContentsViewAndroid::ShowContextMenu(RenderFrameHost& render_frame_host,
                                              const ContextMenuParams& params) {
@@ -317,6 +336,15 @@ SelectPopup* WebContentsViewAndroid::GetSelectPopup() {
   return select_popup_.get();
 }
 
+SelectionPopupController*
+WebContentsViewAndroid::GetSelectionPopupController() {
+  SelectionPopupController* controller = nullptr;
+  if (auto* rwhva = GetRenderWidgetHostViewAndroid()) {
+    controller = rwhva->selection_popup_controller();
+  }
+  return controller;
+}
+
 void WebContentsViewAndroid::ShowPopupMenu(
     RenderFrameHost* render_frame_host,
     mojo::PendingRemote<blink::mojom::PopupMenuClient> popup_client,
@@ -334,6 +362,7 @@ void WebContentsViewAndroid::ShowPopupMenu(
 
 void WebContentsViewAndroid::StartDragging(
     const DropData& drop_data,
+    const url::Origin& source_origin,
     blink::DragOperationsMask allowed_ops,
     const gfx::ImageSkia& image,
     const gfx::Vector2d& cursor_offset,
@@ -366,19 +395,20 @@ void WebContentsViewAndroid::StartDragging(
     bitmap = &dummy_bitmap;
   }
 
-  // TODO(crbug.com/1302094): The params `cursor_offset` and `drag_obj_rect`
-  // are unused.
+  // TODO(crbug.com/1405120): Consolidate cursor_offset and drag_obj_rect with
+  // drop_data.
 
   ScopedJavaLocalRef<jobject> jdrop_data = ToJavaDropData(drop_data);
-  if (!native_view->StartDragAndDrop(gfx::ConvertToJavaBitmap(*bitmap),
-                                     jdrop_data)) {
+  if (!native_view->StartDragAndDrop(
+          gfx::ConvertToJavaBitmap(*bitmap), jdrop_data, cursor_offset.x(),
+          cursor_offset.y(), drag_obj_rect.width(), drag_obj_rect.height())) {
     // Need to clear drag and drop state in blink.
     OnSystemDragEnded();
     return;
   }
 
-  if (selection_popup_controller_) {
-    selection_popup_controller_->HidePopupsAndPreserveSelection();
+  if (auto* selection_popup_controller = GetSelectionPopupController()) {
+    selection_popup_controller->HidePopupsAndPreserveSelection();
     // Hide the handles temporarily.
     auto* rwhva = GetRenderWidgetHostViewAndroid();
     if (rwhva)
@@ -386,8 +416,12 @@ void WebContentsViewAndroid::StartDragging(
   }
 }
 
-void WebContentsViewAndroid::UpdateDragCursor(ui::mojom::DragOperation op) {
-  // Intentional no-op because Android does not have cursor.
+void WebContentsViewAndroid::UpdateDragOperation(
+    ui::mojom::DragOperation op,
+    bool document_is_handling_drag) {
+  // Intentional not storing `op` because Android does not support drag and
+  // drop cursor yet.
+  document_is_handling_drag_ = document_is_handling_drag;
 }
 
 bool WebContentsViewAndroid::OnDragEvent(const ui::DragEventAndroid& event) {
@@ -407,6 +441,7 @@ bool WebContentsViewAndroid::OnDragEvent(const ui::DragEventAndroid& event) {
     case JNI_DragEvent::ACTION_DROP: {
       DropData drop_data;
       drop_data.did_originate_from_renderer = false;
+      drop_data.document_is_handling_drag = document_is_handling_drag_;
       JNIEnv* env = AttachCurrentThread();
       std::u16string drop_content =
           ConvertJavaStringToUTF16(env, event.GetJavaContent());
@@ -501,8 +536,8 @@ void WebContentsViewAndroid::OnSystemDragEnded() {
   web_contents_->GetRenderViewHost()->GetWidget()->DragSourceSystemDragEnded();
 
   // Restore the selection popups and the text handles if necessary.
-  if (selection_popup_controller_) {
-    selection_popup_controller_->RestoreSelectionPopupsIfNecessary();
+  if (auto* selection_popup_controller = GetSelectionPopupController()) {
+    selection_popup_controller->RestoreSelectionPopupsIfNecessary();
     auto* rwhva = GetRenderWidgetHostViewAndroid();
     if (rwhva)
       rwhva->SetTextHandlesTemporarilyHidden(false);
@@ -635,12 +670,12 @@ void WebContentsViewAndroid::OnSizeChanged() {
   if (rwhv) {
     web_contents_->SendScreenRects();
     rwhv->SynchronizeVisualProperties(cc::DeadlinePolicy::UseDefaultDeadline(),
-                                      absl::nullopt);
+                                      std::nullopt);
   }
 }
 
 void WebContentsViewAndroid::OnPhysicalBackingSizeChanged(
-    absl::optional<base::TimeDelta> deadline_override) {
+    std::optional<base::TimeDelta> deadline_override) {
   if (web_contents_->GetRenderWidgetHostView())
     web_contents_->SendScreenRects();
 }
@@ -649,14 +684,14 @@ void WebContentsViewAndroid::OnBrowserControlsHeightChanged() {
   auto* rwhv = GetRenderWidgetHostViewAndroid();
   if (rwhv)
     rwhv->SynchronizeVisualProperties(cc::DeadlinePolicy::UseDefaultDeadline(),
-                                      absl::nullopt);
+                                      std::nullopt);
 }
 
 void WebContentsViewAndroid::OnControlsResizeViewChanged() {
   auto* rwhv = GetRenderWidgetHostViewAndroid();
   if (rwhv)
     rwhv->SynchronizeVisualProperties(cc::DeadlinePolicy::UseDefaultDeadline(),
-                                      absl::nullopt);
+                                      std::nullopt);
 }
 
 void WebContentsViewAndroid::NotifyVirtualKeyboardOverlayRect(
@@ -664,6 +699,27 @@ void WebContentsViewAndroid::NotifyVirtualKeyboardOverlayRect(
   auto* rwhv = GetRenderWidgetHostViewAndroid();
   if (rwhv)
     rwhv->NotifyVirtualKeyboardOverlayRect(keyboard_rect);
+}
+
+void WebContentsViewAndroid::AddScreenshotLayerForNavigationTransitions(
+    scoped_refptr<cc::slim::Layer> screenshot_layer,
+    bool screenshot_layer_on_top) {
+  CHECK_EQ(view_.GetLayer(), parent_for_web_page_widgets_->parent());
+
+  const auto& children = view_.GetLayer()->children();
+  auto itor = base::ranges::find(children, parent_for_web_page_widgets_);
+  CHECK(itor != children.end());
+
+  int index = std::distance(children.begin(), itor);
+  if (screenshot_layer_on_top) {
+    ++index;
+  }
+
+  CHECK_GE(index, 0);
+  CHECK_LE(index, static_cast<int>(children.size()));
+
+  view_.GetLayer()->InsertChild(std::move(screenshot_layer),
+                                static_cast<size_t>(index));
 }
 
 } // namespace content

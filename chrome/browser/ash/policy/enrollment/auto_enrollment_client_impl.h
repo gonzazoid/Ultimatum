@@ -9,20 +9,20 @@
 #include <string>
 
 #include "base/memory/scoped_refptr.h"
-#include "base/scoped_observation.h"
+#include "base/types/expected.h"
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_client.h"
-#include "services/network/public/cpp/network_connection_tracker.h"
+#include "chrome/browser/ash/policy/enrollment/auto_enrollment_state.h"
 
 class PrefRegistrySimple;
 class PrefService;
 
 namespace network {
 class SharedURLLoaderFactory;
-}
+}  // namespace network
 
 namespace policy::psm {
 class RlweDmserverClient;
-}
+}  // namespace policy::psm
 
 namespace policy {
 
@@ -31,9 +31,7 @@ class DeviceManagementService;
 // Interacts with the device management service and determines whether this
 // machine should automatically enter the Enterprise Enrollment screen during
 // OOBE.
-class AutoEnrollmentClientImpl final
-    : public AutoEnrollmentClient,
-      public network::NetworkConnectionTracker::NetworkConnectionObserver {
+class AutoEnrollmentClientImpl final : public AutoEnrollmentClient {
  public:
   class FactoryImpl : public Factory {
    public:
@@ -60,8 +58,6 @@ class AutoEnrollmentClientImpl final
         scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
         const std::string& device_serial_number,
         const std::string& device_brand_code,
-        int power_initial,
-        int power_limit,
         std::unique_ptr<psm::RlweDmserverClient> psm_rlwe_dmserver_client)
         override;
   };
@@ -78,9 +74,6 @@ class AutoEnrollmentClientImpl final
   void Start() override;
   void Retry() override;
 
-  // network::NetworkConnectionTracker::NetworkConnectionObserver:
-  void OnConnectionChanged(network::mojom::ConnectionType type) override;
-
  private:
   // Base class to handle server state availability requests.
   class ServerStateAvailabilityRequester;
@@ -92,12 +85,15 @@ class AutoEnrollmentClientImpl final
   // Responsible for resolving server state availability status via private
   // membership check requests for initial enrollment.
   class InitialServerStateAvailabilityRequester;
-  enum class ServerStateAvailabilityResult;
+
+  enum class ServerStateAvailabilitySuccess;
+  using ServerStateAvailabilityResult =
+      base::expected<ServerStateAvailabilitySuccess, AutoEnrollmentError>;
 
   // Responsible for resolving server state status for both Forced Re-Enrollment
   // (FRE) and Initial Enrollment.
   class ServerStateRetriever;
-  enum class ServerStateRetrievalResult;
+  using ServerStateRetrievalResult = base::expected<void, AutoEnrollmentError>;
 
   enum class State {
     // Initial state until `Start` or `Retry` are called. Resolves into
@@ -106,13 +102,10 @@ class AutoEnrollmentClientImpl final
     // Indicates server state availability request is in progress.
     // Reached from:
     // * `kIdle` after `Start`.
-    // * `kRequestServerStateAvailabilityConnectionError` on `Retry`.
-    // * `kRequestServerStateAvailabilityServerError` on `Retry`.
+    // * `kRequestServerStateAvailabilityError` on `Retry`.
     // Resolves into:
     // * `kRequestServerStateAvailabilitySuccess` if valid response.
-    // * `kRequestServerStateAvailabilityConnectionError` if request fails due
-    //    to connection error.
-    // * `kRequestServerStateAvailabilityServerError` if response is invalid.
+    // * `kRequestServerStateAvailabilityError` otherwise.
     // * `kFinished` if response is valid and server state is not available.
     kRequestingServerStateAvailability,
     // Indicate connection or server errors during server state availability
@@ -121,8 +114,7 @@ class AutoEnrollmentClientImpl final
     // * `kRequestingServerStateAvailability` if request fails.
     // Resolves into:
     // * `kRequestingServerStateAvailability` on `Retry`.
-    kRequestServerStateAvailabilityConnectionError,
-    kRequestServerStateAvailabilityServerError,
+    kRequestServerStateAvailabilityError,
     // Indicates success of state availability request.
     // Reached from:
     // * `kRequestingServerStateAvailability` if request is successful and
@@ -134,12 +126,10 @@ class AutoEnrollmentClientImpl final
     // Reached from:
     // * `kRequestServerStateAvailabilitySuccess` after server state
     // availability request succeeded the state is available.
-    // * `kRequestStateRetrievalConnectionError` on `Retry`.
-    // * `kRequestStateRetrievalServerError` on `Retry`.
+    // * `kRequestStateRetrievalError` on `Retry`.
     // Resolves into:
-    // * `kRequestStateRetrievalConnectionError` if request fails due to
-    // connection error.
-    // * `kRequestStateRetrievalServerError` if response is invalid.
+    // * `kRequestStateRetrievalError` if request fails due to
+    // connection error or invalid response.
     // * `kFinished` if response is valid and state is retrieved.
     kRequestingStateRetrieval,
     // Indicate connection or server errors during state retrieval request.
@@ -147,8 +137,7 @@ class AutoEnrollmentClientImpl final
     // * `kRequestingStateRetrieval` if request fails.
     // Resolves into:
     // * `kRequestingStateRetrieval` on `Retry`.
-    kRequestStateRetrievalConnectionError,
-    kRequestStateRetrievalServerError,
+    kRequestStateRetrievalError,
     // Indicates the client has finished its requests and has the answer for
     // final `AutoEnrollmentState` status.
     // Reached from:
@@ -184,13 +173,6 @@ class AutoEnrollmentClientImpl final
   void ReportFinished() const;
 
   State state_ = State::kIdle;
-
-  base::ScopedObservation<
-      network::NetworkConnectionTracker,
-      network::NetworkConnectionTracker::NetworkConnectionObserver,
-      &network::NetworkConnectionTracker::AddNetworkConnectionObserver,
-      &network::NetworkConnectionTracker::RemoveNetworkConnectionObserver>
-      network_connection_observer_{this};
 
   // Callback to invoke when the protocol generates a relevant event. This can
   // be either successful completion or an error that requires external action.

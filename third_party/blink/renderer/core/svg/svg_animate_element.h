@@ -104,7 +104,9 @@ class CORE_EXPORT SVGAnimateElement : public SVGAnimationElement {
   void WillChangeAnimatedType();
   void DidChangeAnimatedType();
 
+  virtual SVGPropertyBase* CreateUnderlyingValueForAnimation() const;
   virtual SVGPropertyBase* ParseValue(const String&) const;
+  SVGPropertyBase* CreateUnderlyingValueForAttributeAnimation() const;
   SVGPropertyBase* CreatePropertyForAttributeAnimation(const String&) const;
   SVGPropertyBase* CreatePropertyForCSSAnimation(const String&) const;
 
@@ -121,7 +123,7 @@ class CORE_EXPORT SVGAnimateElement : public SVGAnimationElement {
   AnimatedPropertyType type_;
   CSSPropertyID css_property_id_;
 
-  bool IsAnimatingSVGDom() const { return target_property_; }
+  bool IsAnimatingSVGDom() const { return target_property_ != nullptr; }
   bool IsAnimatingCSSProperty() const {
     return css_property_id_ != CSSPropertyID::kInvalid;
   }

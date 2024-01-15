@@ -24,16 +24,16 @@
 }
 
 .name {
-  border-inline-end: 1px solid rgba(0, 0, 0, .06);
-  flex: 0 0 15%;
+  border-inline-end: 1px solid var(--table-border);
+  flex: 0 0 25%;
 }
 
 .value {
-  flex: 0 0 35%;
+  flex: 0 0 25%;
 }
 
 .precedence.row:hover {
-  background-color: rgb(250, 250, 250);
+  background-color: var(--element-hover);
 }
 
 .precedence.row .value {
@@ -67,6 +67,9 @@
 .precedence.row .value {
   display: block;
   flex: 1;
+}
+.precedence.row .name {
+  white-space: pre-wrap;
 }
 </if>
 </style>

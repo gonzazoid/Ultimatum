@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/strcat.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/border.h"
@@ -31,7 +31,7 @@ Textfield* AddFormRow(LoginBubbleDialogView* bubble,
                       const std::u16string& label_text) {
   Label* label = bubble->AddChildView(std::make_unique<Label>(label_text));
   Textfield* textfield = bubble->AddChildView(std::make_unique<Textfield>());
-  textfield->SetAssociatedLabel(label);
+  textfield->SetAccessibleName(label);
   textfield->set_controller(bubble);
   constexpr int kDefaultTextfieldWidth = 30;
   constexpr int kMinimumTextfieldWidth = 5;

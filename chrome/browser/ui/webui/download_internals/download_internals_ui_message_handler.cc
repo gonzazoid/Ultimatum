@@ -4,16 +4,19 @@
 
 #include "chrome/browser/ui/webui/download_internals/download_internals_ui_message_handler.h"
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "chrome/browser/download/background_download_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_key.h"
 #include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/download_params.h"
+#include "components/policy/content/policy_blocklist_service.h"
 #include "content/public/browser/web_ui.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+
+using policy::URLBlocklist;
 
 namespace download_internals {
 
@@ -113,8 +116,18 @@ void DownloadInternalsUIMessageHandler::HandleStartDownload(
     return;
   }
 
+  Profile* profile = Profile::FromWebUI(web_ui());
+  PolicyBlocklistService* service =
+      PolicyBlocklistFactory::GetForBrowserContext(profile);
+  URLBlocklist::URLBlocklistState blocklist_state =
+      service->GetURLBlocklistState(url);
+  if (blocklist_state == URLBlocklist::URLBlocklistState::URL_IN_BLOCKLIST) {
+    LOG(WARNING) << "URL is blocked by a policy.";
+    return;
+  }
+
   download::DownloadParams params;
-  params.guid = base::GenerateGUID();
+  params.guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   params.client = download::DownloadClient::DEBUGGING;
   params.request_params.method = "GET";
   params.request_params.url = url;

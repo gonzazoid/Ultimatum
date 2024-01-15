@@ -4,12 +4,8 @@
 
 #import "ios/chrome/browser/ui/bookmarks/bookmark_ui_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-NSString* const kBookmarkHomeViewContainerIdentifier =
-    @"kBookmarkHomeViewContainerIdentifier";
+NSString* const kBookmarksHomeViewContainerIdentifier =
+    @"kBookmarksHomeViewContainerIdentifier";
 NSString* const kBookmarkEditViewContainerIdentifier =
     @"kBookmarkEditViewContainerIdentifier";
 NSString* const kBookmarkFolderEditViewContainerIdentifier =
@@ -19,15 +15,15 @@ NSString* const kBookmarkFolderCreateViewContainerIdentifier =
 NSString* const kBookmarkFolderPickerViewContainerIdentifier =
     @"kBookmarkFolderPickerViewContainerIdentifier";
 
-NSString* const kBookmarkHomeTableViewIdentifier =
-    @"kBookmarkHomeTableViewIdentifier";
-NSString* const kBookmarkHomeContextMenuIdentifier =
-    @"kBookmarkHomeContextMenuIdentifier";
+NSString* const kBookmarksHomeTableViewIdentifier =
+    @"kBookmarksHomeTableViewIdentifier";
+NSString* const kBookmarksHomeContextMenuIdentifier =
+    @"kBookmarksHomeContextMenuIdentifier";
 
 NSString* const kBookmarkNavigationBarIdentifier =
     @"kBookmarkNavigationBarIdentifier";
-NSString* const kBookmarkHomeNavigationBarDoneButtonIdentifier =
-    @"kBookmarkHomeNavigationBarDoneButtonIdentifier";
+NSString* const kBookmarksHomeNavigationBarDoneButtonIdentifier =
+    @"kBookmarksHomeNavigationBarDoneButtonIdentifier";
 NSString* const kBookmarkEditNavigationBarDoneButtonIdentifier =
     @"kBookmarkEditNavigationBarDoneButtonIdentifier";
 NSString* const kBookmarkFolderEditNavigationBarDoneButtonIdentifier =
@@ -37,27 +33,37 @@ NSString* const kBookmarkEditDeleteButtonIdentifier =
     @"kBookmarkEditDeleteButtonIdentifier";
 NSString* const kBookmarkFolderEditorDeleteButtonIdentifier =
     @"kBookmarkFolderEditorDeleteButtonIdentifier";
-NSString* const kBookmarkHomeLeadingButtonIdentifier =
-    @"kBookmarkHomeLeadingButtonIdentifier";
-NSString* const kBookmarkHomeCenterButtonIdentifier =
-    @"kBookmarkHomeCenterButtonIdentifier";
-NSString* const kBookmarkHomeTrailingButtonIdentifier =
-    @"kBookmarkHomeTrailingButtonIdentifier";
-NSString* const kBookmarkHomeUIToolbarIdentifier =
-    @"kBookmarkHomeUIToolbarIdentifier";
-NSString* const kBookmarkHomeSearchBarIdentifier =
-    @"kBookmarkHomeSearchBarIdentifier";
-NSString* const kBookmarkHomeSearchScrimIdentifier =
-    @"kBookmarkHomeSearchScrimIdentifier";
+NSString* const kBookmarksHomeLeadingButtonIdentifier =
+    @"kBookmarksHomeLeadingButtonIdentifier";
+NSString* const kBookmarksHomeCenterButtonIdentifier =
+    @"kBookmarksHomeCenterButtonIdentifier";
+NSString* const kBookmarksHomeTrailingButtonIdentifier =
+    @"kBookmarksHomeTrailingButtonIdentifier";
+NSString* const kBookmarksHomeUIToolbarIdentifier =
+    @"kBookmarksHomeUIToolbarIdentifier";
+NSString* const kBookmarksHomeSearchBarIdentifier =
+    @"kBookmarksHomeSearchBarIdentifier";
+NSString* const kBookmarksHomeSearchScrimIdentifier =
+    @"kBookmarksHomeSearchScrimIdentifier";
 
-const CGFloat kBookmarkCellViewSpacing = 10.0f;
+const CGFloat kBookmarkCellViewSpacing = 16.0f;
 const CGFloat kBookmarkCellVerticalInset = 11.0f;
 const CGFloat kBookmarkCellHorizontalLeadingInset = 16.0f;
 const CGFloat kBookmarkCellHorizontalTrailingInset = 24.0f;
 const CGFloat kBookmarkCellHorizontalAccessoryViewSpacing = 11.0f;
 
-NSString* const kBookmarkCreateNewFolderCellIdentifier =
-    @"kBookmarkCreateNewFolderCellIdentifier";
+NSString* const kBookmarkCreateNewLocalOrSyncableFolderCellIdentifier =
+    @"kBookmarkCreateNewLocalOrSyncableFolderCellIdentifier";
+
+NSString* const kBookmarkCreateNewAccountFolderCellIdentifier =
+    @"kBookmarkCreateNewAccountFolderCellIdentifier";
 
 NSString* const kBookmarkEmptyStateExplanatoryLabelIdentifier =
     @"kBookmarkEmptyStateExplanatoryLabelIdentifier";
+
+NSString* const kBookmarksHomeBatchUploadRecommendationItemIdentifier =
+    @"kBookmarksHomeBatchUploadRecommendationItemIdentifier";
+NSString* const kBookmarksHomeBatchUploadButtonIdentifier =
+    @"kBookmarksHomeBatchUploadButtonIdentifier";
+NSString* const kBookmarksHomeBatchUploadAlertIdentifier =
+    @"kBookmarksHomeBatchUploadAlertIdentifier";

@@ -30,6 +30,10 @@ using blink::WebString;
 
 namespace autofill {
 
+using form_util::ExtractOption;
+using form_util::UnownedFormElementsToFormData;
+using form_util::WebFormElementToFormData;
+
 namespace {
 
 const char kPasswordSiteUrlRegex[] =
@@ -87,8 +91,10 @@ bool IsGaiaReauthenticationForm(const blink::WebFormElement& form) {
     // We're only interested in the presence
     // of <input type="hidden" /> elements.
     const WebInputElement input = element.DynamicTo<WebInputElement>();
-    if (input.IsNull() || input.FormControlTypeForAutofill() != "hidden")
+    if (input.IsNull() || input.FormControlTypeForAutofill() !=
+                              blink::mojom::FormControlType::kInputHidden) {
       continue;
+    }
 
     // There must be a hidden input named "rart".
     if (input.FormControlName() == "rart")
@@ -118,65 +124,57 @@ bool IsGaiaWithSkipSavePasswordForm(const blink::WebFormElement& form) {
 
 std::unique_ptr<FormData> CreateFormDataFromWebForm(
     const WebFormElement& web_form,
-    const FieldDataManager* field_data_manager,
+    const FieldDataManager& field_data_manager,
     UsernameDetectorCache* username_detector_cache,
     form_util::ButtonTitlesCache* button_titles_cache) {
-  if (web_form.IsNull())
+  if (web_form.IsNull()) {
     return nullptr;
-
-  auto form_data = std::make_unique<FormData>();
+  }
+  std::optional<FormData> form = WebFormElementToFormData(
+      web_form, WebFormControlElement(), field_data_manager,
+      {ExtractOption::kValue}, /*field=*/nullptr);
+  if (!form) {
+    return nullptr;
+  }
+  auto form_data = std::make_unique<FormData>(std::move(*form));
   form_data->is_gaia_with_skip_save_password_form =
       IsGaiaWithSkipSavePasswordForm(web_form) ||
       IsGaiaReauthenticationForm(web_form);
 
   blink::WebVector<WebFormControlElement> control_elements =
       web_form.GetFormControlElements();
-  if (control_elements.empty())
-    return nullptr;
-
-  if (!WebFormElementToFormData(web_form, WebFormControlElement(),
-                                field_data_manager, form_util::EXTRACT_VALUE,
-                                form_data.get(), nullptr /* FormFieldData */)) {
+  if (control_elements.empty()) {
     return nullptr;
   }
   form_data->username_predictions =
       GetUsernamePredictions(control_elements.ReleaseVector(), *form_data,
                              username_detector_cache, web_form);
-  form_data->button_titles = form_util::GetButtonTitles(
-      web_form, web_form.GetDocument(), button_titles_cache);
+  form_data->button_titles =
+      form_util::GetButtonTitles(web_form, button_titles_cache);
 
   return form_data;
 }
 
 std::unique_ptr<FormData> CreateFormDataFromUnownedInputElements(
     const WebLocalFrame& frame,
-    const FieldDataManager* field_data_manager,
+    const FieldDataManager& field_data_manager,
     UsernameDetectorCache* username_detector_cache,
     form_util::ButtonTitlesCache* button_titles_cache) {
-  std::vector<WebElement> fieldsets;
-
   std::vector<WebFormControlElement> control_elements =
-      form_util::GetUnownedFormFieldElements(frame.GetDocument(), &fieldsets);
-  if (control_elements.empty())
-    return nullptr;
-
-  // Password manager does not merge forms across iframes and therefore does not
-  // need to extract unowned iframes.
-  std::vector<WebElement> iframe_elements;
-
-  auto form_data = std::make_unique<FormData>();
-  if (!UnownedFormElementsAndFieldSetsToFormData(
-          fieldsets, control_elements, iframe_elements, nullptr,
-          frame.GetDocument(), field_data_manager, form_util::EXTRACT_VALUE,
-          form_data.get(), nullptr /* FormFieldData */)) {
+      form_util::GetUnownedFormFieldElements(frame.GetDocument());
+  if (control_elements.empty()) {
     return nullptr;
   }
-
+  std::optional<FormData> form = UnownedFormElementsToFormData(
+      control_elements, /*iframe_elements=*/{}, nullptr, frame.GetDocument(),
+      field_data_manager, {ExtractOption::kValue},
+      /*field=*/nullptr);
+  if (!form) {
+    return nullptr;
+  }
+  auto form_data = std::make_unique<FormData>(std::move(*form));
   form_data->username_predictions = GetUsernamePredictions(
       control_elements, *form_data, username_detector_cache, WebFormElement());
-  form_data->button_titles = form_util::GetButtonTitles(
-      WebFormElement(), frame.GetDocument(), button_titles_cache);
-
   return form_data;
 }
 

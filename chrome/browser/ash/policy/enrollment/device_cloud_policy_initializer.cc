@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_client_factory_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.h"
@@ -18,7 +18,8 @@
 #include "chrome/common/chrome_content_client.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/install_attributes/install_attributes.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
+#include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 
@@ -30,7 +31,7 @@ DeviceCloudPolicyInitializer::DeviceCloudPolicyInitializer(
     ServerBackedStateKeysBroker* state_keys_broker,
     DeviceCloudPolicyStoreAsh* policy_store,
     DeviceCloudPolicyManagerAsh* policy_manager,
-    chromeos::system::StatisticsProvider* statistics_provider)
+    ash::system::StatisticsProvider* statistics_provider)
     : enterprise_service_(enterprise_service),
       install_attributes_(install_attributes),
       state_keys_broker_(state_keys_broker),
@@ -55,7 +56,7 @@ void DeviceCloudPolicyInitializer::Init() {
   state_keys_update_subscription_ = state_keys_broker_->RegisterUpdateCallback(
       base::BindRepeating(&DeviceCloudPolicyInitializer::TryToStartConnection,
                           base::Unretained(this)));
-  policy_manager_observer_.Observe(policy_manager_);
+  policy_manager_observer_.Observe(policy_manager_.get());
 
   TryToStartConnection();
 }
@@ -80,9 +81,6 @@ void DeviceCloudPolicyInitializer::OnStoreError(CloudPolicyStore* store) {
 void DeviceCloudPolicyInitializer::OnDeviceCloudPolicyManagerConnected() {
   // Do nothing.
 }
-void DeviceCloudPolicyInitializer::OnDeviceCloudPolicyManagerDisconnected() {
-  // Do nothing.
-}
 void DeviceCloudPolicyInitializer::OnDeviceCloudPolicyManagerGotRegistry() {
   // `policy_manager_->HasSchemaRegistry()` is one of requirements for
   // StartConnection. Make another attempt when `policy_manager_` gets its
@@ -104,11 +102,6 @@ std::unique_ptr<CloudPolicyClient> DeviceCloudPolicyInitializer::CreateClient(
 }
 
 void DeviceCloudPolicyInitializer::TryToStartConnection() {
-  if (install_attributes_->IsActiveDirectoryManaged()) {
-    // This will go away once ChromeAd deprecation is completed.
-    return;
-  }
-
   if (!policy_store_->is_initialized() || !policy_store_->has_policy()) {
     return;
   }
@@ -129,7 +122,7 @@ void DeviceCloudPolicyInitializer::TryToStartConnection() {
     return;
   }
 
-  // Currently reven devices don't support sever-backed state keys, but they
+  // Currently reven devices don't support server-backed state keys, but they
   // also don't support FRE/AutoRE so don't block initialization of device
   // policy on state keys being available on reven.
   // TODO(b/208705225): Remove this special case when reven supports state keys.

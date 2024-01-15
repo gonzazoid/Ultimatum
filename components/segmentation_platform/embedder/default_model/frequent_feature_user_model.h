@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,23 +11,22 @@
 namespace segmentation_platform {
 
 // Provides a default model and metadata for the frequent feature user segment.
-class FrequentFeatureUserModel : public ModelProvider {
+class FrequentFeatureUserModel : public DefaultModelProvider {
  public:
   FrequentFeatureUserModel();
   ~FrequentFeatureUserModel() override = default;
 
   // Disallow copy/assign.
-  FrequentFeatureUserModel(FrequentFeatureUserModel&) = delete;
-  FrequentFeatureUserModel& operator=(FrequentFeatureUserModel&) = delete;
+  FrequentFeatureUserModel(const FrequentFeatureUserModel&) = delete;
+  FrequentFeatureUserModel& operator=(const FrequentFeatureUserModel&) = delete;
 
   static std::unique_ptr<Config> GetConfig();
 
   // ModelProvider implementation.
-  void InitAndFetchModel(
-      const ModelUpdatedCallback& model_updated_callback) override;
-  void ExecuteModelWithInput(const std::vector<float>& inputs,
+  std::unique_ptr<ModelConfig> GetModelConfig() override;
+
+  void ExecuteModelWithInput(const ModelProvider::Request& inputs,
                              ExecutionCallback callback) override;
-  bool ModelAvailable() override;
 };
 
 }  // namespace segmentation_platform

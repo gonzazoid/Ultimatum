@@ -10,8 +10,8 @@ import './network_info.js';
 import './routine_section.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './connectivity_card.html.js';
@@ -30,15 +30,15 @@ import {RoutineSectionElement} from './routine_section.js';
 const ConnectivityCardElementBase = I18nMixin(PolymerElement);
 
 export class ConnectivityCardElement extends ConnectivityCardElementBase {
-  static get is() {
+  static get is(): string {
     return 'connectivity-card';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       testSuiteStatus: {
         type: Number,
@@ -46,7 +46,7 @@ export class ConnectivityCardElement extends ConnectivityCardElementBase {
         notify: true,
       },
 
-      routineGroups_: {
+      routineGroups: {
         type: Array,
         value: () => [],
       },
@@ -54,29 +54,29 @@ export class ConnectivityCardElement extends ConnectivityCardElementBase {
       activeGuid: {
         type: String,
         value: '',
-        observer: 'activeGuidChanged_',
+        observer: ConnectivityCardElement.prototype.activeGuidChanged,
       },
 
       isActive: {
         type: Boolean,
-        observer: 'isActiveChanged_',
+        observer: ConnectivityCardElement.prototype.isActiveChanged,
       },
 
       network: {
         type: Object,
       },
 
-      networkType_: {
+      networkType: {
         type: String,
         value: '',
       },
 
-      networkState_: {
+      networkState: {
         type: String,
         value: '',
       },
 
-      macAddress_: {
+      macAddress: {
         type: String,
         value: '',
       },
@@ -88,41 +88,41 @@ export class ConnectivityCardElement extends ConnectivityCardElementBase {
   activeGuid: string;
   isActive: boolean;
   network: Network;
-  protected macAddress_: string;
-  private networkType_: string;
-  private networkState_: string;
-  private routineGroups_: RoutineGroup[];
-  private networkHealthProvider_: NetworkHealthProviderInterface =
+  protected macAddress: string;
+  private networkType: string;
+  private networkState: string;
+  private routineGroups: RoutineGroup[];
+  private networkHealthProvider: NetworkHealthProviderInterface =
       getNetworkHealthProvider();
-  private networkStateObserverReceiver_: NetworkStateObserverReceiver|null =
+  private networkStateObserverReceiver: NetworkStateObserverReceiver|null =
       null;
 
-  private getRoutineSectionElem_(): RoutineSectionElement {
+  private getRoutineSectionElem(): RoutineSectionElement {
     const routineSection = this.shadowRoot!.querySelector('routine-section');
     assert(routineSection);
     return routineSection;
   }
 
-  override disconnectedCallback() {
+  override disconnectedCallback(): void {
     super.disconnectedCallback();
 
-    this.getRoutineSectionElem_().stopTests();
+    this.getRoutineSectionElem().stopTests();
   }
 
-  protected hasRoutines_(): boolean {
-    return this.routineGroups_ && this.routineGroups_.length > 0;
+  protected hasRoutines(): boolean {
+    return this.routineGroups && this.routineGroups.length > 0;
   }
 
-  private observeNetwork_(): void {
-    if (this.networkStateObserverReceiver_) {
-      this.networkStateObserverReceiver_.$.close();
-      this.networkStateObserverReceiver_ = null;
+  private observeNetwork(): void {
+    if (this.networkStateObserverReceiver) {
+      this.networkStateObserverReceiver.$.close();
+      this.networkStateObserverReceiver = null;
     }
 
-    this.networkStateObserverReceiver_ = new NetworkStateObserverReceiver(this);
+    this.networkStateObserverReceiver = new NetworkStateObserverReceiver(this);
 
-    this.networkHealthProvider_.observeNetwork(
-        this.networkStateObserverReceiver_.$.bindNewPipeAndPassRemote(),
+    this.networkHealthProvider.observeNetwork(
+        this.networkStateObserverReceiver.$.bindNewPipeAndPassRemote(),
         this.activeGuid);
   }
 
@@ -130,15 +130,13 @@ export class ConnectivityCardElement extends ConnectivityCardElementBase {
    * Implements NetworkStateObserver.onNetworkStateChanged
    */
   onNetworkStateChanged(network: Network): void {
-    this.networkType_ = getNetworkType(network.type);
-    this.networkState_ = getNetworkState(network.state);
-    this.macAddress_ = network.macAddress || '';
+    this.networkType = getNetworkType(network.type);
+    this.networkState = getNetworkState(network.state);
+    this.macAddress = network.macAddress || '';
 
     if (this.testSuiteStatus === TestSuiteStatus.NOT_RUNNING) {
-      const isArcEnabled =
-          loadTimeData.getBoolean('enableArcNetworkDiagnostics');
-      this.routineGroups_ = getRoutineGroups(network.type, isArcEnabled);
-      this.getRoutineSectionElem_().runTests();
+      this.routineGroups = getRoutineGroups(network.type);
+      this.getRoutineSectionElem().runTests();
     }
 
     // Remove '0.0.0.0' (if present) from list of name servers.
@@ -146,16 +144,16 @@ export class ConnectivityCardElement extends ConnectivityCardElementBase {
     this.set('network', network);
   }
 
-  protected getEstimateRuntimeInMinutes_(): 1 {
+  protected getEstimateRuntimeInMinutes(): 1 {
     // Connectivity routines will always last <= 1 minute.
     return 1;
   }
 
-  protected getNetworkCardTitle_(): string {
-    return getNetworkCardTitle(this.networkType_, this.networkState_);
+  protected getNetworkCardTitle(): string {
+    return getNetworkCardTitle(this.networkType, this.networkState);
   }
 
-  protected activeGuidChanged_(activeGuid: string): void {
+  protected activeGuidChanged(activeGuid: string): void {
     if (this.testSuiteStatus === TestSuiteStatus.COMPLETED) {
       this.testSuiteStatus = TestSuiteStatus.NOT_RUNNING;
     }
@@ -163,25 +161,25 @@ export class ConnectivityCardElement extends ConnectivityCardElementBase {
     if (!activeGuid) {
       return;
     }
-    this.getRoutineSectionElem_().stopTests();
-    this.observeNetwork_();
+    this.getRoutineSectionElem().stopTests();
+    this.observeNetwork();
   }
 
-  protected isActiveChanged_(active: boolean): void {
+  protected isActiveChanged(active: boolean): void {
     if (!active) {
       return;
     }
 
-    if (this.routineGroups_.length > 0) {
-      this.getRoutineSectionElem_().runTests();
+    if (this.routineGroups.length > 0) {
+      this.getRoutineSectionElem().runTests();
     }
   }
 
-  protected getMacAddress_(): string {
-    if (!this.macAddress_) {
+  protected getMacAddress(): string {
+    if (!this.macAddress) {
       return '';
     }
-    return formatMacAddress(this.macAddress_);
+    return formatMacAddress(this.macAddress);
   }
 }
 

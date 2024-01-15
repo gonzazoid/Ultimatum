@@ -35,14 +35,15 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
                                GrVkBackendMemory* backend_memory) override {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("gpu.vulkan.vma"),
                  "GrVkMemoryAllocatorImpl::allocateMemoryForImage");
-    VmaAllocationCreateInfo info;
-    info.flags = 0;
-    info.usage = VMA_MEMORY_USAGE_UNKNOWN;
-    info.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    info.preferredFlags = 0;
-    info.memoryTypeBits = 0;
-    info.pool = VK_NULL_HANDLE;
-    info.pUserData = nullptr;
+    VmaAllocationCreateInfo info = {
+        .flags = 0,
+        .usage = VMA_MEMORY_USAGE_UNKNOWN,
+        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .preferredFlags = 0,
+        .memoryTypeBits = 0,
+        .pool = VK_NULL_HANDLE,
+        .pUserData = nullptr,
+    };
 
     if (kDedicatedAllocation_AllocationPropertyFlag & flags) {
       info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
@@ -145,7 +146,7 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
     if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & mem_flags) {
       flags |= GrVkAlloc::kMappable_Flag;
     }
-    if (!SkToBool(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & mem_flags)) {
+    if (!(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & mem_flags)) {
       flags |= GrVkAlloc::kNoncoherent_Flag;
     }
     if (VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT & mem_flags) {
@@ -195,16 +196,19 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
     return vma::InvalidateAllocation(allocator_, allocation, offset, size);
   }
 
-  uint64_t totalUsedMemory() const override {
-    VmaStats stats;
-    vma::CalculateStats(allocator_, &stats);
-    return stats.total.usedBytes;
-  }
-
-  uint64_t totalAllocatedMemory() const override {
-    VmaStats stats;
-    vma::CalculateStats(allocator_, &stats);
-    return stats.total.usedBytes + stats.total.unusedBytes;
+  std::pair<uint64_t, uint64_t> totalAllocatedAndUsedMemory() const override {
+    uint64_t total_allocated_memory = 0, total_used_memory = 0;
+    VmaBudget budget[VK_MAX_MEMORY_HEAPS];
+    vma::GetBudget(allocator_, budget);
+    const VkPhysicalDeviceMemoryProperties* physical_device_memory_properties;
+    vmaGetMemoryProperties(allocator_, &physical_device_memory_properties);
+    for (uint32_t i = 0; i < physical_device_memory_properties->memoryHeapCount;
+         ++i) {
+      total_allocated_memory += budget[i].statistics.blockBytes;
+      total_used_memory += budget[i].statistics.allocationBytes;
+    }
+    DCHECK_LE(total_used_memory, total_allocated_memory);
+    return {total_allocated_memory, total_used_memory};
   }
 
   const VmaAllocator allocator_;

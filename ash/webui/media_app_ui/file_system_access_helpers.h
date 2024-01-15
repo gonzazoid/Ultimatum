@@ -5,7 +5,7 @@
 #ifndef ASH_WEBUI_MEDIA_APP_UI_FILE_SYSTEM_ACCESS_HELPERS_H_
 #define ASH_WEBUI_MEDIA_APP_UI_FILE_SYSTEM_ACCESS_HELPERS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "storage/browser/file_system/file_system_url.h"
@@ -18,7 +18,7 @@ namespace ash {
 void ResolveTransferToken(
     mojo::PendingRemote<blink::mojom::FileSystemAccessTransferToken> token,
     content::WebContents* web_contents,
-    base::OnceCallback<void(absl::optional<storage::FileSystemURL>)> callback);
+    base::OnceCallback<void(std::optional<storage::FileSystemURL>)> callback);
 
 }  // namespace ash
 

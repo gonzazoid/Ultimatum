@@ -8,6 +8,7 @@
 #include "base/feature_list.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/policy_container_host.h"
+#include "content/common/features.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
@@ -19,61 +20,100 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace content {
+namespace {
 
 using Policy = network::mojom::PrivateNetworkRequestPolicy;
+using AddressSpace = network::mojom::IPAddressSpace;
+using RequestContext = PrivateNetworkRequestContext;
 
-Policy DerivePrivateNetworkRequestPolicy(
-    const PolicyContainerPolicies& policies) {
-  return DerivePrivateNetworkRequestPolicy(policies.ip_address_space,
-                                           policies.is_web_secure_context);
+// Represents the state of feature flags for a given `RequestContext`.
+enum class FeatureState {
+  kDisabled,
+  kWarningOnly,
+  kEnabled,
+};
+
+FeatureState FeatureStateForContext(RequestContext request_context) {
+  switch (request_context) {
+    case RequestContext::kSubresource:
+      return FeatureState::kEnabled;
+    case RequestContext::kWorker:
+      if (!base::FeatureList::IsEnabled(
+              features::kPrivateNetworkAccessForWorkers)) {
+        return FeatureState::kDisabled;
+      }
+
+      if (base::FeatureList::IsEnabled(
+              features::kPrivateNetworkAccessForWorkersWarningOnly)) {
+        return FeatureState::kWarningOnly;
+      }
+
+      return FeatureState::kEnabled;
+    case RequestContext::kNavigation:
+      if (!base::FeatureList::IsEnabled(
+              features::kPrivateNetworkAccessForNavigations)) {
+        return FeatureState::kDisabled;
+      }
+
+      if (base::FeatureList::IsEnabled(
+              features::kPrivateNetworkAccessForNavigationsWarningOnly)) {
+        return FeatureState::kWarningOnly;
+      }
+
+      return FeatureState::kEnabled;
+  }
 }
 
+}  // namespace
+
 Policy DerivePrivateNetworkRequestPolicy(
-    const network::mojom::IPAddressSpace ip_address_space,
-    bool is_web_secure_context) {
-  // Disable PNA checks entirely when running with --disable-web-security`.
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableWebSecurity)) {
-    return Policy::kAllow;
-  }
+    const PolicyContainerPolicies& policies,
+    RequestContext private_network_request_context) {
+  return DerivePrivateNetworkRequestPolicy(policies.ip_address_space,
+                                           policies.is_web_secure_context,
+                                           private_network_request_context);
+}
 
-  // The goal is to eliminate occurrences of this case as much as possible,
-  // before removing this special case.
-  if (ip_address_space == network::mojom::IPAddressSpace::kUnknown) {
-    if (!is_web_secure_context &&
-        base::FeatureList::IsEnabled(
-            features::kBlockInsecurePrivateNetworkRequestsFromUnknown)) {
-      return Policy::kBlock;
-    }
-
-    return Policy::kAllow;
-  }
-
-  // The rest of this function enumerates cases from the strictest policy
-  // (`kBlock`) to the least strict (`kAllow`).
-
-  // Apply the secure context restriction, if enabled.
-  if (!is_web_secure_context) {
-    if (ip_address_space == network::mojom::IPAddressSpace::kPrivate) {
-      // Requests from the `private` address space to localhost are blocked if
-      // the right feature is enabled and the initiating context is not secure.
+Policy DerivePolicyForNonSecureContext(AddressSpace ip_address_space) {
+  switch (ip_address_space) {
+    case AddressSpace::kUnknown:
+      // Requests from the `unknown` address space are controlled separately
+      // because it is unclear why they happen in the first place. The goal is
+      // to reduce instances of this happening before enabling this feature.
+      return base::FeatureList::IsEnabled(
+                 features::kBlockInsecurePrivateNetworkRequestsFromUnknown)
+                 ? Policy::kBlock
+                 : Policy::kAllow;
+    case AddressSpace::kPrivate:
+      // Requests from the non secure contexts in the `private` address space
+      // to localhost are blocked only if the right feature is enabled.
       // This is controlled separately because private network websites face
       // additional hurdles compared to public websites. See crbug.com/1234044.
-      if (base::FeatureList::IsEnabled(
-              features::kBlockInsecurePrivateNetworkRequestsFromPrivate)) {
-        return Policy::kBlock;
-      }
-    } else if (base::FeatureList::IsEnabled(
-                   features::kBlockInsecurePrivateNetworkRequests)) {
-      // Private network requests from the `public` address space are blocked if
-      // the right feature is enabled and the initiating context is not secure.
+      return base::FeatureList::IsEnabled(
+                 features::kBlockInsecurePrivateNetworkRequestsFromPrivate)
+                 ? Policy::kBlock
+                 : Policy::kWarn;
+    case AddressSpace::kPublic:
+    case AddressSpace::kLocal:
+      // Private network requests from non secure contexts are blocked if the
+      // secure context restriction is enabled in general.
       //
-      // NOTE: We also set this when `policies.ip_address_space` is `kLocal`,
-      // but that has no effect. Indeed, requests initiated from the local
-      // address space are never considered private network requests - they
-      // cannot target more-private address spaces.
-      return Policy::kBlock;
-    }
+      // NOTE: We also set this when `ip_address_space` is `kLocal`, but that
+      // has no effect. Indeed, requests initiated from the local address space
+      // are never considered private network requests - they cannot target
+      // more-private address spaces.
+      return base::FeatureList::IsEnabled(
+                 features::kBlockInsecurePrivateNetworkRequests)
+                 ? Policy::kBlock
+                 : Policy::kWarn;
+  }
+}
+
+Policy DerivePolicyForSecureContext(AddressSpace ip_address_space) {
+  // The goal is to eliminate occurrences of this case as much as possible,
+  // before removing this special case.
+  if (ip_address_space == AddressSpace::kUnknown) {
+    return Policy::kAllow;
   }
 
   if (base::FeatureList::IsEnabled(
@@ -86,11 +126,60 @@ Policy DerivePrivateNetworkRequestPolicy(
     return Policy::kPreflightWarn;
   }
 
-  if (!is_web_secure_context) {
-    return Policy::kWarn;
+  return Policy::kAllow;
+}
+
+Policy ApplyFeatureStateToPolicy(FeatureState feature_state, Policy policy) {
+  switch (feature_state) {
+    // Feature disabled: allow all requests.
+    case FeatureState::kDisabled:
+      return Policy::kAllow;
+
+    // Feature enabled in warning-only mode. Downgrade `k*Block` to `k*Warn`.
+    case FeatureState::kWarningOnly:
+      switch (policy) {
+        case Policy::kBlock:
+          return Policy::kWarn;
+        case Policy::kPreflightBlock:
+          return Policy::kPreflightWarn;
+        default:
+          return policy;
+      }
+
+    // Fully enabled. Use `policy` as is.
+    case FeatureState::kEnabled:
+      return policy;
+  }
+}
+
+Policy DerivePrivateNetworkRequestPolicy(
+    AddressSpace ip_address_space,
+    bool is_web_secure_context,
+    RequestContext private_network_request_context) {
+  // Disable PNA checks entirely when running with `--disable-web-security`.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableWebSecurity)) {
+    return Policy::kAllow;
   }
 
-  return Policy::kAllow;
+  FeatureState feature_state =
+      FeatureStateForContext(private_network_request_context);
+
+  Policy policy = is_web_secure_context
+                      ? DerivePolicyForSecureContext(ip_address_space)
+                      : DerivePolicyForNonSecureContext(ip_address_space);
+
+  return ApplyFeatureStateToPolicy(feature_state, policy);
+}
+
+network::mojom::ClientSecurityStatePtr DeriveClientSecurityState(
+    const PolicyContainerPolicies& policies,
+    PrivateNetworkRequestContext private_network_request_context) {
+  return network::mojom::ClientSecurityState::New(
+      policies.cross_origin_embedder_policy, policies.is_web_secure_context,
+      policies.ip_address_space,
+      DerivePrivateNetworkRequestPolicy(policies,
+                                        private_network_request_context));
 }
 
 // Special chrome schemes cannot directly be categorized in public/private/local
@@ -108,9 +197,8 @@ Policy DerivePrivateNetworkRequestPolicy(
 // TODO(titouan): It might be better to have these schemes (and in general
 // other schemes such as data: or blob:) handled directly by the URLLoaders.
 // Investigate on whether this is worth doing.
-network::mojom::IPAddressSpace IPAddressSpaceForSpecialScheme(
-    const GURL& url,
-    ContentBrowserClient* client) {
+AddressSpace IPAddressSpaceForSpecialScheme(const GURL& url,
+                                            ContentBrowserClient* client) {
   // This only handles schemes that are known to the content/ layer.
   // List here: content/public/common/url_constants.cc.
   const char* special_content_schemes[] = {
@@ -123,40 +211,53 @@ network::mojom::IPAddressSpace IPAddressSpaceForSpecialScheme(
   };
 
   for (auto* scheme : special_content_schemes) {
-    if (url.SchemeIs(scheme))
-      return network::mojom::IPAddressSpace::kLocal;
+    if (url.SchemeIs(scheme)) {
+      return AddressSpace::kLocal;
+    }
   }
 
   // Some of these schemes are only known to the embedder. Query the embedder
   // for these.
   if (!client) {
-    return network::mojom::IPAddressSpace::kUnknown;
+    return AddressSpace::kUnknown;
   }
 
   return client->DetermineAddressSpaceFromURL(url);
 }
 
-network::mojom::IPAddressSpace CalculateIPAddressSpace(
+AddressSpace CalculateIPAddressSpace(
     const GURL& url,
     network::mojom::URLResponseHead* response_head,
     ContentBrowserClient* client) {
   // Determine the IPAddressSpace, based on the IP address and the response
   // headers received.
-  absl::optional<network::CalculateClientAddressSpaceParams> params =
-      absl::nullopt;
+  std::optional<network::CalculateClientAddressSpaceParams> params =
+      std::nullopt;
   if (response_head) {
     params.emplace(response_head->url_list_via_service_worker,
                    response_head->parsed_headers,
                    response_head->remote_endpoint);
   }
-  network::mojom::IPAddressSpace computed_ip_address_space =
+  AddressSpace computed_ip_address_space =
       network::CalculateClientAddressSpace(url, params);
 
-  if (computed_ip_address_space != network::mojom::IPAddressSpace::kUnknown) {
+  if (computed_ip_address_space != AddressSpace::kUnknown) {
     return computed_ip_address_space;
   }
 
   return IPAddressSpaceForSpecialScheme(url, client);
+}
+
+network::mojom::PrivateNetworkRequestPolicy OverrideBlockWithWarn(
+    network::mojom::PrivateNetworkRequestPolicy policy) {
+  switch (policy) {
+    case network::mojom::PrivateNetworkRequestPolicy::kWarn:
+      return network::mojom::PrivateNetworkRequestPolicy::kBlock;
+    case network::mojom::PrivateNetworkRequestPolicy::kPreflightWarn:
+      return network::mojom::PrivateNetworkRequestPolicy::kPreflightBlock;
+    default:
+      return policy;
+  }
 }
 
 }  // namespace content

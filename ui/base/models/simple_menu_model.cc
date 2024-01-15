@@ -7,10 +7,9 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
 #include "ui/gfx/image/image.h"
@@ -19,10 +18,6 @@
 namespace ui {
 
 const int kSeparatorId = -1;
-
-// TYPE_TITLE should be rendered as enabled but is non-interactive and cannot be
-// highlighted.
-const int kTitleId = -2;
 
 ////////////////////////////////////////////////////////////////////////////////
 // SimpleMenuModel::Delegate, public:
@@ -40,6 +35,11 @@ bool SimpleMenuModel::Delegate::IsCommandIdVisible(int command_id) const {
 }
 
 bool SimpleMenuModel::Delegate::IsCommandIdAlerted(int command_id) const {
+  return false;
+}
+
+bool SimpleMenuModel::Delegate::IsElementIdAlerted(
+    ui::ElementIdentifier element_id) const {
   return false;
 }
 
@@ -139,10 +139,14 @@ void SimpleMenuModel::AddHighlightedItemWithIcon(int command_id,
 }
 
 void SimpleMenuModel::AddTitle(const std::u16string& label) {
-  // Title items are non-interactive and should not be enabled.
-  Item title_item = Item(kTitleId, TYPE_TITLE, label);
-  title_item.enabled = false;
-  AppendItem(std::move(title_item));
+  Item item(kTitleId, TYPE_TITLE, label);
+  // Titles are non-interactive and should not be enabled.
+  item.enabled = false;
+  AppendItem(std::move(item));
+}
+
+void SimpleMenuModel::AddTitleWithStringId(int string_id) {
+  AddTitle(l10n_util::GetStringUTF16(string_id));
 }
 
 void SimpleMenuModel::AddSeparator(MenuSeparatorType separator_type) {
@@ -151,10 +155,26 @@ void SimpleMenuModel::AddSeparator(MenuSeparatorType separator_type) {
       return;
     }
     DCHECK_EQ(SPACING_SEPARATOR, separator_type);
-  } else if (items_.back().type == TYPE_SEPARATOR) {
-    DCHECK_EQ(NORMAL_SEPARATOR, separator_type);
-    DCHECK_EQ(NORMAL_SEPARATOR, items_.back().separator_type);
-    return;
+  } else {
+    size_t last_visible_item = items_.size();
+    for (auto i = items_.size(); i > 0; i--) {
+      if (IsVisibleAt(i - 1)) {
+        last_visible_item = i - 1;
+        break;
+      }
+    }
+
+    if (last_visible_item == items_.size()) {
+      // No visible items. Don't add a separator.
+      return;
+    }
+
+    if (items_.at(last_visible_item).type == TYPE_SEPARATOR) {
+      DCHECK_EQ(NORMAL_SEPARATOR, separator_type);
+      DCHECK_EQ(NORMAL_SEPARATOR, items_.at(last_visible_item).separator_type);
+      // The last item is already a separator. Don't add another.
+      return;
+    }
   }
 #if !defined(USE_AURA)
   if (separator_type == SPACING_SEPARATOR)
@@ -237,18 +257,6 @@ void SimpleMenuModel::InsertItemWithStringIdAt(size_t index,
   InsertItemAt(index, command_id, l10n_util::GetStringUTF16(string_id));
 }
 
-void SimpleMenuModel::InsertSeparatorAt(size_t index,
-                                        MenuSeparatorType separator_type) {
-#if !defined(USE_AURA)
-  if (separator_type != NORMAL_SEPARATOR) {
-    NOTIMPLEMENTED();
-  }
-#endif
-  Item item(kSeparatorId, TYPE_SEPARATOR, std::u16string());
-  item.separator_type = separator_type;
-  InsertItemAtIndex(std::move(item), index);
-}
-
 void SimpleMenuModel::InsertCheckItemAt(size_t index,
                                         int command_id,
                                         const std::u16string& label) {
@@ -276,6 +284,25 @@ void SimpleMenuModel::InsertRadioItemWithStringIdAt(size_t index,
                                                     int group_id) {
   InsertRadioItemAt(
       index, command_id, l10n_util::GetStringUTF16(string_id), group_id);
+}
+
+void SimpleMenuModel::InsertTitleWithStringIdAt(size_t index, int string_id) {
+  Item item(kTitleId, TYPE_TITLE, l10n_util::GetStringUTF16(string_id));
+  // Titles are non-interactive and should not be enabled.
+  item.enabled = false;
+  InsertItemAtIndex(std::move(item), index);
+}
+
+void SimpleMenuModel::InsertSeparatorAt(size_t index,
+                                        MenuSeparatorType separator_type) {
+#if !defined(USE_AURA)
+  if (separator_type != NORMAL_SEPARATOR) {
+    NOTIMPLEMENTED();
+  }
+#endif
+  Item item(kSeparatorId, TYPE_SEPARATOR, std::u16string());
+  item.separator_type = separator_type;
+  InsertItemAtIndex(std::move(item), index);
 }
 
 void SimpleMenuModel::InsertSubMenuAt(size_t index,
@@ -356,6 +383,12 @@ void SimpleMenuModel::SetElementIdentifierAt(size_t index,
   items_[ValidateItemIndex(index)].unique_id = unique_id;
 }
 
+void SimpleMenuModel::SetExecuteCallbackAt(
+    size_t index,
+    base::RepeatingCallback<void(int)> callback) {
+  items_[ValidateItemIndex(index)].on_execute_callback = callback;
+}
+
 void SimpleMenuModel::Clear() {
   items_.clear();
   MenuItemsChanged();
@@ -372,15 +405,6 @@ absl::optional<size_t> SimpleMenuModel::GetIndexOfCommandId(
 
 ////////////////////////////////////////////////////////////////////////////////
 // SimpleMenuModel, MenuModel implementation:
-
-bool SimpleMenuModel::HasIcons() const {
-  for (size_t i = 0; i < GetItemCount(); ++i) {
-    if (!GetIconAt(i).IsEmpty())
-      return true;
-  }
-
-  return false;
-}
 
 size_t SimpleMenuModel::GetItemCount() const {
   return items_.size();
@@ -448,8 +472,10 @@ ButtonMenuItemModel* SimpleMenuModel::GetButtonMenuItemAt(size_t index) const {
 bool SimpleMenuModel::IsEnabledAt(size_t index) const {
   int command_id = GetCommandIdAt(index);
 
-  if (!delegate_ || command_id == kSeparatorId || GetButtonMenuItemAt(index))
+  if (!delegate_ || command_id == kSeparatorId || command_id == kTitleId ||
+      GetButtonMenuItemAt(index)) {
     return items_[ValidateItemIndex(index)].enabled;
+  }
 
   return delegate_->IsCommandIdEnabled(command_id) &&
          items_[ValidateItemIndex(index)].enabled;
@@ -480,6 +506,14 @@ bool SimpleMenuModel::IsAlertedAt(size_t index) const {
     }
   }
 
+  // A submenu may assign element identifiers to menu items. This
+  // information needs to be shared with the delegate which may want to
+  // highlight specific elements keyed by identifier.
+  const ui::ElementIdentifier element_id = GetElementIdentifierAt(index);
+  if (element_id && delegate_->IsElementIdAlerted(element_id)) {
+    return true;
+  }
+
   return delegate_->IsCommandIdAlerted(command_id);
 }
 
@@ -504,8 +538,18 @@ void SimpleMenuModel::ActivatedAt(size_t index) {
 }
 
 void SimpleMenuModel::ActivatedAt(size_t index, int event_flags) {
-  if (delegate_)
-    delegate_->ExecuteCommand(GetCommandIdAt(index), event_flags);
+  if (!delegate_) {
+    return;
+  }
+  // The delegate might be destroyed after executing the command. Hence the
+  // callback is temporarily copied. The delegate destruction is tested in
+  // MenuControllerTest.OwningDelegate.
+  const base::RepeatingCallback<void(int)> on_execute_callback =
+      items_[ValidateItemIndex(index)].on_execute_callback;
+  delegate_->ExecuteCommand(GetCommandIdAt(index), event_flags);
+  if (on_execute_callback) {
+    on_execute_callback.Run(event_flags);
+  }
 }
 
 MenuModel* SimpleMenuModel::GetSubmenuModelAt(size_t index) const {
@@ -521,7 +565,7 @@ void SimpleMenuModel::MenuWillClose() {
   // Due to how menus work on the different platforms, ActivatedAt will be
   // called after this.  It's more convenient for the delegate to be called
   // afterwards though, so post a task.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SimpleMenuModel::OnMenuClosed,
                                 method_factory_.GetWeakPtr()));
 }

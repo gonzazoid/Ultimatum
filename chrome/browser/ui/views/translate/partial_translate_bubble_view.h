@@ -21,6 +21,7 @@
 #include "components/translate/core/common/translate_errors.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "ui/base/interaction/element_identifier.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -39,6 +40,8 @@ class View;
 class PartialTranslateBubbleView : public LocationBarBubbleDelegateView,
                                    public ui::SimpleMenuModel::Delegate,
                                    public views::TabbedPaneListener {
+  METADATA_HEADER(PartialTranslateBubbleView, LocationBarBubbleDelegateView)
+
  public:
   // Item IDs for the option button's menu.
   enum OptionsMenuItem { CHANGE_TARGET_LANGUAGE, CHANGE_SOURCE_LANGUAGE };
@@ -89,6 +92,12 @@ class PartialTranslateBubbleView : public LocationBarBubbleDelegateView,
   // Initialize the bubble in the correct view state when it is shown.
   void SetViewState(PartialTranslateBubbleModel::ViewState view_state,
                     translate::TranslateErrors error_type);
+
+  // Update the source language combobox's selected index to match the current
+  // index in the model. These values desynchronize when a request does not
+  // specify a source language, such as with initial translations from the menu,
+  // or when "Detected Language" is used.
+  void MaybeUpdateSourceLanguageCombobox();
 
   // LocationBarBubbleDelegateView:
   void CloseBubble() override;
@@ -146,7 +155,7 @@ class PartialTranslateBubbleView : public LocationBarBubbleDelegateView,
 
   // Creates the 'error' view skeleton UI with no title.
   std::unique_ptr<views::View> CreateViewErrorNoTitle(
-      std::unique_ptr<views::Button> advanced_button);
+      std::unique_ptr<views::Button> button);
 
   // Creates the 'waiting' view that shows an empty bubble with a throbber.
   std::unique_ptr<views::View> CreateViewWaiting();
@@ -180,6 +189,12 @@ class PartialTranslateBubbleView : public LocationBarBubbleDelegateView,
   // Sets the window title. The window title still needs to be set, even when it
   // is not shown, for accessibility purposes.
   void SetWindowTitle(PartialTranslateBubbleModel::ViewState view_state);
+
+  // Finds and saves the width of the bubble's largest child view, excluding
+  // |translate_view_|. This value is needed to properly resize
+  // |partial_text_label_| as the width of the tabbed pane changes with changes
+  // in selected languages.
+  void ComputeLargestViewStateWidth();
 
   // Updates the view state. Whenever the view state is updated, the title needs
   // to be updated for accessibility.
@@ -241,7 +256,7 @@ class PartialTranslateBubbleView : public LocationBarBubbleDelegateView,
   raw_ptr<views::View, DanglingUntriaged> advanced_view_source_ = nullptr;
   raw_ptr<views::View, DanglingUntriaged> advanced_view_target_ = nullptr;
 
-  views::Throbber* throbber_;
+  raw_ptr<views::Throbber, DanglingUntriaged> throbber_;
 
   raw_ptr<views::Combobox, DanglingUntriaged> source_language_combobox_ =
       nullptr;
@@ -279,6 +294,25 @@ class PartialTranslateBubbleView : public LocationBarBubbleDelegateView,
   std::unique_ptr<WebContentMouseHandler> mouse_handler_;
 
   std::u16string text_selection_;
+
+  // The width of the largest non-|translate_view_| child view at
+  // initialization. The default minimum width is set to 300dp to provide a more
+  // consistent experience between different UI languages - for high density
+  // languages the width would otherwise be very narrow.
+  int largest_view_state_width_ = 300;
+
+  // The threshold for character volume of |partial_text_label_|. If the volume
+  // is larger than the threshold, use the preset maximum width allowable for
+  // the bubble. Otherwise, resize normally.
+  const size_t char_threshold_for_max_width_ = 1300;
+
+  // The max allowable width for the bubble, used when the character volume of
+  // |partial_text_label_| exceeds |char_threshold_for_max_width_|. This is
+  // necessary to accommodate the size of the label in cases of largest possible
+  // character volume. It follows that this is based off of
+  // translate::kDesktopPartialTranslateTextSelectionMaxCharacters and should be
+  // updated alongside it.
+  const int bubble_max_width_ = 550;
 
   base::OnceClosure on_closing_;
 

@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/deferred_sequenced_task_runner.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
 #include "components/sync/engine/cancelation_signal.h"
 #include "components/sync/engine/data_type_activation_response.h"
+#include "components/sync/engine/model_type_worker.h"
 #include "components/sync/protocol/model_type_state.pb.h"
 #include "components/sync/test/fake_model_type_processor.h"
 #include "components/sync/test/fake_sync_encryption_handler.h"
@@ -63,15 +64,15 @@ TEST_F(ModelTypeRegistryTest, ConnectDataTypes) {
 
   registry()->ConnectDataType(THEMES, MakeDataTypeActivationResponse(
                                           MakeInitialModelTypeState(THEMES)));
-  EXPECT_EQ(ModelTypeSet(THEMES), registry()->GetConnectedTypes());
+  EXPECT_EQ(ModelTypeSet({THEMES}), registry()->GetConnectedTypes());
 
   registry()->ConnectDataType(
       SESSIONS,
       MakeDataTypeActivationResponse(MakeInitialModelTypeState(SESSIONS)));
-  EXPECT_EQ(ModelTypeSet(THEMES, SESSIONS), registry()->GetConnectedTypes());
+  EXPECT_EQ(ModelTypeSet({THEMES, SESSIONS}), registry()->GetConnectedTypes());
 
   registry()->DisconnectDataType(THEMES);
-  EXPECT_EQ(ModelTypeSet(SESSIONS), registry()->GetConnectedTypes());
+  EXPECT_EQ(ModelTypeSet({SESSIONS}), registry()->GetConnectedTypes());
 
   // Allow ModelTypeRegistry destruction to delete the
   // Sessions' ModelTypeSyncWorker.
@@ -81,7 +82,8 @@ TEST_F(ModelTypeRegistryTest, ConnectDataTypes) {
 TEST_F(ModelTypeRegistryTest, GetInitialSyncEndedTypes) {
   // Themes has finished initial sync.
   sync_pb::ModelTypeState model_type_state = MakeInitialModelTypeState(THEMES);
-  model_type_state.set_initial_sync_done(true);
+  model_type_state.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
   registry()->ConnectDataType(THEMES,
                               MakeDataTypeActivationResponse(model_type_state));
 
@@ -90,7 +92,28 @@ TEST_F(ModelTypeRegistryTest, GetInitialSyncEndedTypes) {
       SESSIONS,
       MakeDataTypeActivationResponse(MakeInitialModelTypeState(SESSIONS)));
 
-  EXPECT_EQ(ModelTypeSet(THEMES), registry()->GetInitialSyncEndedTypes());
+  EXPECT_EQ(ModelTypeSet({THEMES}), registry()->GetInitialSyncEndedTypes());
+}
+
+TEST_F(ModelTypeRegistryTest, GetTypesWithUnsyncedData) {
+  // Create workers for PREFERENCES and BOOKMARKS.
+  registry()->ConnectDataType(
+      PREFERENCES,
+      MakeDataTypeActivationResponse(MakeInitialModelTypeState(PREFERENCES)));
+  registry()->ConnectDataType(
+      BOOKMARKS,
+      MakeDataTypeActivationResponse(MakeInitialModelTypeState(BOOKMARKS)));
+
+  // Simulate a local BOOKMARKS change. In production, the ModelTypeProcessor
+  // would call NudgeForCommit() on the worker.
+  for (const std::unique_ptr<ModelTypeWorker>& worker :
+       registry()->GetConnectedModelTypeWorkersForTest()) {
+    if (worker->GetModelType() == BOOKMARKS) {
+      worker->NudgeForCommit();
+    }
+  }
+
+  EXPECT_EQ(ModelTypeSet({BOOKMARKS}), registry()->GetTypesWithUnsyncedData());
 }
 
 }  // namespace

@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_SAFE_BROWSING_ADVANCED_PROTECTION_STATUS_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_SAFE_BROWSING_ADVANCED_PROTECTION_STATUS_MANAGER_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
@@ -23,20 +23,22 @@ class AdvancedProtectionStatusManagerFactory
 
   static AdvancedProtectionStatusManagerFactory* GetInstance();
 
+  // Returns the default factory, useful in tests where it's null by default.
+  static TestingFactory GetDefaultFactoryForTesting();
+
   AdvancedProtectionStatusManagerFactory(
       const AdvancedProtectionStatusManagerFactory&) = delete;
   AdvancedProtectionStatusManagerFactory& operator=(
       const AdvancedProtectionStatusManagerFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      AdvancedProtectionStatusManagerFactory>;
+  friend base::NoDestructor<AdvancedProtectionStatusManagerFactory>;
 
   AdvancedProtectionStatusManagerFactory();
   ~AdvancedProtectionStatusManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

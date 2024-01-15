@@ -7,6 +7,7 @@
 #include "base/containers/cxx20_erase.h"
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
+#include "chrome/browser/extensions/browsertest_util.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/profiles/profile.h"
@@ -15,6 +16,9 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/common/chrome_paths.h"
+#include "chrome/test/base/ui_test_utils.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/test/test_navigation_observer.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/test/test_extension_dir.h"
@@ -158,7 +162,7 @@ std::vector<ToolbarActionView*>
 ExtensionsToolbarUITest::GetToolbarActionViewsForBrowser(
     Browser* browser) const {
   std::vector<ToolbarActionView*> views;
-  for (auto* view :
+  for (views::View* view :
        GetExtensionsToolbarContainerForBrowser(browser)->children()) {
     if (views::IsViewClass<ToolbarActionView>(view))
       views.push_back(static_cast<ToolbarActionView*>(view));
@@ -171,6 +175,29 @@ ExtensionsToolbarUITest::GetVisibleToolbarActionViews() const {
   auto views = GetToolbarActionViews();
   base::EraseIf(views, [](views::View* view) { return !view->GetVisible(); });
   return views;
+}
+
+ExtensionsToolbarButton* ExtensionsToolbarUITest::extensions_button() {
+  return GetExtensionsToolbarContainer()->GetExtensionsButton();
+}
+
+ExtensionsMenuCoordinator* ExtensionsToolbarUITest::menu_coordinator() {
+  return GetExtensionsToolbarContainer()
+      ->GetExtensionsMenuCoordinatorForTesting();
+}
+
+bool ExtensionsToolbarUITest::DidInjectScript(
+    content::WebContents* web_contents) {
+  return extensions::browsertest_util::DidChangeTitle(
+      *web_contents, /*original_title=*/u"OK",
+      /*changed_title=*/u"success");
+}
+
+void ExtensionsToolbarUITest::NavigateTo(const GURL& url) {
+  content::TestNavigationObserver observer(
+      browser()->tab_strip_model()->GetActiveWebContents());
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+  EXPECT_TRUE(observer.last_navigation_succeeded());
 }
 
 void ExtensionsToolbarUITest::ClickButton(views::Button* button) const {

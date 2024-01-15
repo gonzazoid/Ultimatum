@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
@@ -133,7 +133,7 @@ TEST_F(SecurityInterstitialTabHelperTest, SingleBlockingPage) {
 
 // Tests that the helper properly handles the lifetime of multiple blocking
 // pages, committed in a different order than they are created.
-TEST_F(SecurityInterstitialTabHelperTest, DISABLED_MultipleBlockingPages) {
+TEST_F(SecurityInterstitialTabHelperTest, MultipleBlockingPages) {
   // Simulate associating the first interstitial.
   std::unique_ptr<content::NavigationHandle> handle1 =
       CreateHandle(true, false);

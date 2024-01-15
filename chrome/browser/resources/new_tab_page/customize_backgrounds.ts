@@ -96,8 +96,7 @@ export class CustomizeBackgroundsElement extends PolymerElement {
   private getNoBackgroundClass_(): string {
     return this.theme &&
             (this.theme.backgroundImage && !this.theme.isCustomBackground ||
-             !this.theme.backgroundImage &&
-                 !this.theme.dailyRefreshCollectionId) ?
+             !this.theme.backgroundImage && !this.theme.dailyRefreshEnabled) ?
         'selected' :
         '';
   }
@@ -106,7 +105,7 @@ export class CustomizeBackgroundsElement extends PolymerElement {
     const {url} = this.images_[index].imageUrl;
     return this.theme && this.theme.backgroundImage &&
             this.theme.backgroundImage.url.url === url &&
-            !this.theme.dailyRefreshCollectionId ?
+            !this.theme.dailyRefreshEnabled ?
         'selected' :
         '';
   }
@@ -143,9 +142,17 @@ export class CustomizeBackgroundsElement extends PolymerElement {
       this.pageHandler_.onCustomizeDialogAction(
           CustomizeDialogAction.kBackgroundsImageSelected);
     }
-    const {attribution1, attribution2, attributionUrl, imageUrl} = image;
+    const {
+      attribution1,
+      attribution2,
+      attributionUrl,
+      imageUrl,
+      previewImageUrl,
+      collectionId,
+    } = image;
     this.pageHandler_.setBackgroundImage(
-        attribution1, attribution2, attributionUrl, imageUrl);
+        attribution1, attribution2, attributionUrl, imageUrl, previewImageUrl,
+        collectionId);
   }
 
   private async onSelectedCollectionChange_() {
@@ -165,11 +172,15 @@ export class CustomizeBackgroundsElement extends PolymerElement {
   }
 
   revertBackgroundChanges() {
-    this.pageHandler_.revertBackgroundChanges();
+    if (!this.customBackgroundDisabledByPolicy_) {
+      this.pageHandler_.revertBackgroundChanges();
+    }
   }
 
   confirmBackgroundChanges() {
-    this.pageHandler_.confirmBackgroundChanges();
+    if (!this.customBackgroundDisabledByPolicy_) {
+      this.pageHandler_.confirmBackgroundChanges();
+    }
   }
 }
 

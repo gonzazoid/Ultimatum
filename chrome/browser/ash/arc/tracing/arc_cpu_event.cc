@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/arc/tracing/arc_cpu_event.h"
 
 #include "base/logging.h"
+#include "base/types/cxx23_to_underlying.h"
 
 namespace arc {
 
@@ -120,10 +121,10 @@ bool AddAllCpuEvent(AllCpuEvents* all_cpu_events,
   return AddCpuEvent(&(*all_cpu_events)[cpu_id], timestamp, type, tid);
 }
 
-base::ListValue SerializeCpuEvents(const CpuEvents& cpu_events) {
-  base::ListValue list;
+base::Value::List SerializeCpuEvents(const CpuEvents& cpu_events) {
+  base::Value::List list;
   for (const auto& event : cpu_events) {
-    base::ListValue event_value;
+    base::Value::List event_value;
     event_value.Append(base::Value(static_cast<int>(event.type)));
     event_value.Append(base::Value(static_cast<double>(event.timestamp)));
     event_value.Append(base::Value(static_cast<int>(event.tid)));
@@ -132,8 +133,8 @@ base::ListValue SerializeCpuEvents(const CpuEvents& cpu_events) {
   return list;
 }
 
-base::ListValue SerializeAllCpuEvents(const AllCpuEvents& all_cpu_events) {
-  base::ListValue list;
+base::Value::List SerializeAllCpuEvents(const AllCpuEvents& all_cpu_events) {
+  base::Value::List list;
   for (const auto& cpu_events : all_cpu_events)
     list.Append(SerializeCpuEvents(cpu_events));
   return list;
@@ -190,9 +191,7 @@ bool LoadAllCpuEvents(const base::Value* value, AllCpuEvents* all_cpu_events) {
 }
 
 std::ostream& operator<<(std::ostream& os, ArcCpuEvent::Type event_type) {
-  return os
-         << static_cast<typename std::underlying_type<ArcCpuEvent::Type>::type>(
-                event_type);
+  return os << base::to_underlying(event_type);
 }
 
 }  // namespace arc

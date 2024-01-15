@@ -6,18 +6,20 @@
 #define CONTENT_BROWSER_SCHEDULER_RESPONSIVENESS_JANK_MONITOR_IMPL_H_
 
 #include <atomic>
+#include <optional>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "content/browser/scheduler/responsiveness/metric_source.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/jank_monitor.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 namespace responsiveness {
@@ -71,8 +73,8 @@ class CONTENT_EXPORT JankMonitorImpl : public content::JankMonitor,
     void DidRunTaskOrEvent(const void* opaque_identifier);
 
     // Checks the jankiness of the target thread. Returns the opaque identifier
-    // of the janky task or absl::nullopt if the current task is not janky.
-    absl::optional<const void*> CheckJankiness();
+    // of the janky task or std::nullopt if the current task is not janky.
+    std::optional<const void*> CheckJankiness();
     void AssertOnTargetThread();
 
    private:
@@ -86,7 +88,11 @@ class CONTENT_EXPORT JankMonitorImpl : public content::JankMonitor,
       ~TaskMetadata();
 
       base::TimeTicks execution_start_time;
-      const void* identifier;
+      // Not a raw_ptr<...> for performance reasons: based on analysis of
+      // sampling profiler data (JankMonitorImpl::WillRunTaskOrEvent ->
+      // JankMonitorImpl::ThreadExecutionState::WillRunTaskOrEvent -> emplaces
+      // TaskMetadata in a vector).
+      RAW_PTR_EXCLUSION const void* identifier;
     };
     std::vector<TaskMetadata> task_execution_metadata_;
 
@@ -112,7 +118,7 @@ class CONTENT_EXPORT JankMonitorImpl : public content::JankMonitor,
 
   // Sends out notifications.
   void OnJankStarted(const void* opaque_identifier);
-  void OnJankStopped(const void* opaque_identifier);
+  void OnJankStopped(MayBeDangling<const void> opaque_identifier);
 
   // Call in DidRunTaskOrEvent() to for notification of jank stops.
   void NotifyJankStopIfNecessary(const void* opaque_identifier);

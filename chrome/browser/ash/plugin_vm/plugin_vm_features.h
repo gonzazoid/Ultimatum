@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 class Profile;
 
@@ -38,6 +38,7 @@ class PluginVmFeatures {
     kErrorNotAllowedByDevicePolicy,
     kErrorNotAllowedByUserPolicy,
     kErrorLicenseNotSetUp,
+    kErrorVirtualMachinesNotAllowed,
   };
 
   // Remember to update `plugin_vm::GetDiagnostics()` when this struct or the

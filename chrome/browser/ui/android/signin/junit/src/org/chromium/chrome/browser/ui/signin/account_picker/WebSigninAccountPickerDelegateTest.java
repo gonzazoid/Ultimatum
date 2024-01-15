@@ -38,17 +38,15 @@ import org.chromium.chrome.browser.signin.services.SigninManager;
 import org.chromium.chrome.browser.signin.services.WebSigninBridge;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
-import org.chromium.components.signin.AccountUtils;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.base.GoogleServiceAuthError;
 import org.chromium.components.signin.base.GoogleServiceAuthError.State;
 import org.chromium.components.signin.identitymanager.IdentityManager;
+import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.test.util.FakeAccountManagerFacade;
 import org.chromium.content_public.browser.LoadUrlParams;
 
-/**
- * This class tests the {@link WebSigninAccountPickerDelegate}.
- */
+/** This class tests the {@link WebSigninAccountPickerDelegate}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class WebSigninAccountPickerDelegateTest {
@@ -65,29 +63,21 @@ public class WebSigninAccountPickerDelegateTest {
     @Rule
     public final MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
-    @Mock
-    private WebSigninBridge.Factory mWebSigninBridgeFactoryMock;
+    @Mock private WebSigninBridge.Factory mWebSigninBridgeFactoryMock;
 
-    @Mock
-    private WebSigninBridge mWebSigninBridgeMock;
+    @Mock private WebSigninBridge mWebSigninBridgeMock;
 
-    @Mock
-    private SigninManager mSigninManagerMock;
+    @Mock private SigninManager mSigninManagerMock;
 
-    @Mock
-    private IdentityManager mIdentityManagerMock;
+    @Mock private IdentityManager mIdentityManagerMock;
 
-    @Mock
-    private Profile mProfileMock;
+    @Mock private Profile mProfileMock;
 
-    @Mock
-    private Tab mTabMock;
+    @Mock private Tab mTabMock;
 
-    @Captor
-    private ArgumentCaptor<LoadUrlParams> mLoadUrlParamsCaptor;
+    @Captor private ArgumentCaptor<LoadUrlParams> mLoadUrlParamsCaptor;
 
-    @Captor
-    private ArgumentCaptor<WebSigninBridge.Listener> mWebSigninBridgeListenerCaptor;
+    @Captor private ArgumentCaptor<WebSigninBridge.Listener> mWebSigninBridgeListenerCaptor;
 
     private WebSigninAccountPickerDelegate mDelegate;
 
@@ -103,8 +93,9 @@ public class WebSigninAccountPickerDelegateTest {
 
         mCoreAccountInfo = mAccountManagerTestRule.addAccount(TEST_EMAIL);
 
-        mDelegate = new WebSigninAccountPickerDelegate(
-                mTabMock, mWebSigninBridgeFactoryMock, CONTINUE_URL);
+        mDelegate =
+                new WebSigninAccountPickerDelegate(
+                        mTabMock, mWebSigninBridgeFactoryMock, CONTINUE_URL);
         when(mWebSigninBridgeFactoryMock.create(eq(mProfileMock), any(), any()))
                 .thenReturn(mWebSigninBridgeMock);
     }
@@ -116,13 +107,17 @@ public class WebSigninAccountPickerDelegateTest {
 
     @Test
     public void testSignInSucceeded() {
-        mDelegate.signIn(TEST_EMAIL, error -> {});
+        mDelegate.signIn(mCoreAccountInfo, error -> {});
         InOrder calledInOrder = inOrder(mWebSigninBridgeFactoryMock, mSigninManagerMock);
-        calledInOrder.verify(mWebSigninBridgeFactoryMock)
-                .create(eq(mProfileMock), eq(mCoreAccountInfo),
+        calledInOrder
+                .verify(mWebSigninBridgeFactoryMock)
+                .create(
+                        eq(mProfileMock),
+                        eq(mCoreAccountInfo),
                         mWebSigninBridgeListenerCaptor.capture());
-        calledInOrder.verify(mSigninManagerMock)
-                .signin(eq(AccountUtils.createAccountFromName(TEST_EMAIL)), any());
+        calledInOrder
+                .verify(mSigninManagerMock)
+                .signin(eq(mCoreAccountInfo), eq(SigninAccessPoint.WEB_SIGNIN), any());
         mWebSigninBridgeListenerCaptor.getValue().onSigninSucceeded();
         verify(mTabMock).loadUrl(mLoadUrlParamsCaptor.capture());
         LoadUrlParams loadUrlParams = mLoadUrlParamsCaptor.getValue();
@@ -131,14 +126,15 @@ public class WebSigninAccountPickerDelegateTest {
 
     @Test
     public void testSignInAborted() {
-        doAnswer(invocation -> {
-            SigninManager.SignInCallback callback = invocation.getArgument(1);
-            callback.onSignInAborted();
-            return null;
-        })
+        doAnswer(
+                        invocation -> {
+                            SigninManager.SignInCallback callback = invocation.getArgument(2);
+                            callback.onSignInAborted();
+                            return null;
+                        })
                 .when(mSigninManagerMock)
-                .signin(eq(AccountUtils.createAccountFromName(TEST_EMAIL)), any());
-        mDelegate.signIn(TEST_EMAIL, error -> {});
+                .signin(eq(mCoreAccountInfo), eq(SigninAccessPoint.WEB_SIGNIN), any());
+        mDelegate.signIn(mCoreAccountInfo, error -> {});
         verify(mWebSigninBridgeMock).destroy();
     }
 
@@ -147,27 +143,35 @@ public class WebSigninAccountPickerDelegateTest {
         // In case an error is fired because cookies are taking longer to generate than usual,
         // if user retries the sign-in from the error screen, we need to sign out the user
         // first before signing in again.
-        mDelegate.signIn(TEST_EMAIL, error -> {});
+        mDelegate.signIn(mCoreAccountInfo, error -> {});
         when(mIdentityManagerMock.hasPrimaryAccount(anyInt())).thenReturn(true);
 
-        mDelegate.signIn(TEST_EMAIL, error -> {});
-        InOrder calledInOrder = inOrder(mWebSigninBridgeMock, mSigninManagerMock,
-                mWebSigninBridgeFactoryMock, mSigninManagerMock);
+        mDelegate.signIn(mCoreAccountInfo, error -> {});
+        InOrder calledInOrder =
+                inOrder(
+                        mWebSigninBridgeMock,
+                        mSigninManagerMock,
+                        mWebSigninBridgeFactoryMock,
+                        mSigninManagerMock);
         calledInOrder.verify(mWebSigninBridgeMock).destroy();
         calledInOrder.verify(mSigninManagerMock).signOut(anyInt());
-        calledInOrder.verify(mWebSigninBridgeFactoryMock)
+        calledInOrder
+                .verify(mWebSigninBridgeFactoryMock)
                 .create(eq(mProfileMock), eq(mCoreAccountInfo), any());
-        calledInOrder.verify(mSigninManagerMock)
-                .signin(eq(AccountUtils.createAccountFromName(TEST_EMAIL)), any());
+        calledInOrder
+                .verify(mSigninManagerMock)
+                .signin(eq(mCoreAccountInfo), eq(SigninAccessPoint.WEB_SIGNIN), any());
     }
 
     @Test
     public void testSignInFailedWithConnectionError() {
         Callback<GoogleServiceAuthError> mockCallback = mock(Callback.class);
         GoogleServiceAuthError error = new GoogleServiceAuthError(State.CONNECTION_FAILED);
-        mDelegate.signIn(TEST_EMAIL, mockCallback);
+        mDelegate.signIn(mCoreAccountInfo, mockCallback);
         verify(mWebSigninBridgeFactoryMock)
-                .create(eq(mProfileMock), eq(mCoreAccountInfo),
+                .create(
+                        eq(mProfileMock),
+                        eq(mCoreAccountInfo),
                         mWebSigninBridgeListenerCaptor.capture());
         mWebSigninBridgeListenerCaptor.getValue().onSigninFailed(error);
         verify(mockCallback).onResult(error);

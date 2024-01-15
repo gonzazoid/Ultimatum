@@ -7,8 +7,8 @@
 #include <cstdint>
 #include <string>
 
+#include "base/apple/foundation_util.h"
 #include "base/check_op.h"
-#include "base/mac/foundation_util.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/events/keycodes/dom/dom_keyboard_layout_map_base.h"
@@ -51,7 +51,7 @@ ui::DomKey DomKeyboardLayoutMapMac::GetDomKeyFromDomCodeForLayout(
 
   UInt32 dead_key_state = 0;
   uint16_t key_code = ui::KeycodeConverter::DomCodeToNativeKeycode(dom_code);
-  base::ScopedCFTypeRef<TISInputSourceRef> input_source(
+  base::apple::ScopedCFTypeRef<TISInputSourceRef> input_source(
       TISCopyCurrentASCIICapableKeyboardLayoutInputSource());
   UniChar char_value = ui::TranslatedUnicodeCharFromKeyCode(
       input_source.get(), key_code, kUCKeyActionDisplay, 0, LMGetKbdType(),

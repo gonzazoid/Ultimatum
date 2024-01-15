@@ -5,7 +5,7 @@
 #include "ash/assistant/util/animation_util.h"
 
 #include "ash/public/cpp/metrics_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
@@ -117,13 +117,13 @@ void StartLayerAnimationSequence(
     ::ui::LayerAnimator* layer_animator,
     ::ui::LayerAnimationSequence* layer_animation_sequence,
     ::ui::LayerAnimationObserver* observer,
-    absl::optional<AnimationSmoothnessCallback> smoothness_callback) {
+    std::optional<AnimationSmoothnessCallback> smoothness_callback) {
   if (observer)
     layer_animation_sequence->AddObserver(observer);
 
-  absl::optional<ui::AnimationThroughputReporter> reporter;
+  std::optional<ui::AnimationThroughputReporter> reporter;
   if (smoothness_callback) {
-    reporter.emplace(layer_animator, ash::metrics_util::ForSmoothness(
+    reporter.emplace(layer_animator, ash::metrics_util::ForSmoothnessV3(
                                          smoothness_callback.value()));
   }
   layer_animator->StartAnimation(layer_animation_sequence);
@@ -133,7 +133,7 @@ void StartLayerAnimationSequence(
     views::View* view,
     ::ui::LayerAnimationSequence* layer_animation_sequence,
     ::ui::LayerAnimationObserver* observer,
-    absl::optional<AnimationSmoothnessCallback> smoothness_callback) {
+    std::optional<AnimationSmoothnessCallback> smoothness_callback) {
   DCHECK(view->layer());
   StartLayerAnimationSequence(view->layer()->GetAnimator(),
                               layer_animation_sequence, observer,

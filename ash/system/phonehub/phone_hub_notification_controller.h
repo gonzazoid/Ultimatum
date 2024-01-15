@@ -12,11 +12,12 @@
 #include <unordered_set>
 
 #include "ash/ash_export.h"
-#include "ash/components/phonehub/camera_roll_manager.h"
-#include "ash/components/phonehub/feature_status_provider.h"
-#include "ash/components/phonehub/notification_manager.h"
-#include "ash/components/phonehub/tether_controller.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/camera_roll_manager.h"
+#include "chromeos/ash/components/phonehub/feature_status_provider.h"
+#include "chromeos/ash/components/phonehub/notification_manager.h"
+#include "chromeos/ash/components/phonehub/tether_controller.h"
 
 namespace message_center {
 class MessageView;
@@ -135,12 +136,12 @@ class ASH_EXPORT PhoneHubNotificationController
       const message_center::Notification& notification,
       bool shown_in_popup);
 
-  phonehub::NotificationInteractionHandler* notification_interaction_handler_ =
-      nullptr;
-  phonehub::NotificationManager* manager_ = nullptr;
-  phonehub::TetherController* tether_controller_ = nullptr;
-  phonehub::CameraRollManager* camera_roll_manager_ = nullptr;
-  phonehub::PhoneModel* phone_model_ = nullptr;
+  raw_ptr<phonehub::NotificationInteractionHandler>
+      notification_interaction_handler_ = nullptr;
+  raw_ptr<phonehub::NotificationManager> manager_ = nullptr;
+  raw_ptr<phonehub::TetherController> tether_controller_ = nullptr;
+  raw_ptr<phonehub::CameraRollManager> camera_roll_manager_ = nullptr;
+  raw_ptr<phonehub::PhoneModel> phone_model_ = nullptr;
   std::unordered_map<int64_t, std::unique_ptr<NotificationDelegate>>
       notification_map_;
 

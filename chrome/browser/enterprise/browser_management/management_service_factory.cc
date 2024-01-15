@@ -4,7 +4,6 @@
 
 #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 
-#include "base/memory/singleton.h"
 #include "base/no_destructor.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/enterprise/browser_management/browser_management_service.h"
@@ -57,13 +56,20 @@ ManagementService* ManagementServiceFactory::GetForProfile(Profile* profile) {
 ManagementServiceFactory::ManagementServiceFactory()
     : ProfileKeyedServiceFactory(
           "EnterpriseManagementService",
-          ProfileSelections::BuildForRegularAndIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 ManagementServiceFactory::~ManagementServiceFactory() = default;
 
-KeyedService* ManagementServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ManagementServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new BrowserManagementService(Profile::FromBrowserContext(context));
+  return std::make_unique<BrowserManagementService>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace policy

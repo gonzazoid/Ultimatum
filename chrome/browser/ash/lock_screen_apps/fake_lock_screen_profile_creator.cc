@@ -4,13 +4,13 @@
 
 #include "chrome/browser/ash/lock_screen_apps/fake_lock_screen_profile_creator.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_types.h"
 
 namespace lock_screen_apps {
 
@@ -24,7 +24,7 @@ void FakeLockScreenProfileCreator::CreateProfile() {
   OnLockScreenProfileCreateStarted();
 
   Profile* profile = profile_manager_->CreateTestingProfile(
-      ash::ProfileHelper::GetLockScreenAppProfileName());
+      ash::kLockScreenAppBrowserContextBaseName);
 
   extensions::TestExtensionSystem* extension_system =
       static_cast<extensions::TestExtensionSystem*>(

@@ -6,26 +6,30 @@
 #define CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_DISPLAY_HOST_COMMON_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/public/cpp/login_accelerators.h"
-// TODO(https://crbug.com/1164001): use forward declaration.
 #include "base/callback_list.h"
-#include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
 #include "chrome/browser/ash/login/oobe_quick_start/target_device_bootstrap_controller.h"
 #include "chrome/browser/ash/login/ui/kiosk_app_menu_controller.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
+#include "chrome/browser/ash/login/ui/login_ui_pref_controller.h"
 #include "chrome/browser/ash/login/ui/signin_ui.h"
+#include "chrome/browser/ash/tpm_firmware_update.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/user_manager/user_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class AccountId;
 
 namespace ash {
+
+class KioskLaunchController;
 class LoginFeedback;
+class OobeMetricsHelper;
+class OobeCrosEventsMetrics;
 
 // LoginDisplayHostCommon contains code which is not specific to a particular UI
 // implementation - the goal is to reduce code duplication between
@@ -54,35 +58,35 @@ class LoginDisplayHostCommon : public LoginDisplayHost,
   void CompleteLogin(const UserContext& user_context) final;
   void OnGaiaScreenReady() final;
   void SetDisplayEmail(const std::string& email) final;
-  void SetDisplayAndGivenName(const std::string& display_name,
-                              const std::string& given_name) final;
   void ShowAllowlistCheckFailedError() final;
-  void LoadWallpaper(const AccountId& account_id) final;
-  void LoadSigninWallpaper() final;
+  void UpdateWallpaper(const AccountId& prefilled_account) final;
   bool IsUserAllowlisted(
       const AccountId& account_id,
-      const absl::optional<user_manager::UserType>& user_type) final;
+      const std::optional<user_manager::UserType>& user_type) final;
   void CancelPasswordChangedFlow() final;
   void MigrateUserData(const std::string& old_password) final;
   void ResyncUserData() final;
-  bool HandleAccelerator(LoginAcceleratorAction action) final;
   void AddWizardCreatedObserverForTests(
       base::RepeatingClosure on_created) final;
   base::WeakPtr<quick_start::TargetDeviceBootstrapController>
   GetQuickStartBootstrapController() final;
+  // Most of the accelerators are handled in a same way, but not all.
+  bool HandleAccelerator(LoginAcceleratorAction action) override;
 
   // SigninUI:
   void SetAuthSessionForOnboarding(const UserContext& user_context) final;
   void ClearOnboardingAuthSession() final;
   void StartUserOnboarding() final;
-  void ResumeUserOnboarding(OobeScreenId screen_id) final;
+  void ResumeUserOnboarding(const PrefService& prefs,
+                            OobeScreenId screen_id) final;
   void StartManagementTransition() final;
   void ShowTosForExistingUser() final;
   void ShowNewTermsForFlexUsers() final;
   void StartEncryptionMigration(
-      const UserContext& user_context,
+      std::unique_ptr<UserContext> user_context,
       EncryptionMigrationMode migration_mode,
-      base::OnceCallback<void(const UserContext&)> on_skip_migration) final;
+      base::OnceCallback<void(std::unique_ptr<UserContext>)> on_skip_migration)
+      final;
   void ShowSigninError(SigninError error, const std::string& details) final;
   void SAMLConfirmPassword(::login::StringList scraped_passwords,
                            std::unique_ptr<UserContext> user_context) final;
@@ -92,6 +96,8 @@ class LoginDisplayHostCommon : public LoginDisplayHost,
   void OnBrowserAdded(Browser* browser) override;
 
   WizardContext* GetWizardContext() override;
+
+  OobeMetricsHelper* GetOobeMetricsHelper() override;
 
  protected:
   virtual void OnStartSignInScreen() = 0;
@@ -128,7 +134,7 @@ class LoginDisplayHostCommon : public LoginDisplayHost,
 
   void OnPowerwashAllowedCallback(
       bool is_reset_allowed,
-      absl::optional<tpm_firmware_update::Mode> tpm_firmware_update_mode);
+      std::optional<tpm_firmware_update::Mode> tpm_firmware_update_mode);
 
   void OnAppTerminating();
 
@@ -146,12 +152,11 @@ class LoginDisplayHostCommon : public LoginDisplayHost,
   // Make sure chrome won't exit while we are at login/oobe screen.
   ScopedKeepAlive keep_alive_;
 
-  // Called after host deletion.
-  std::vector<base::OnceClosure> completion_callbacks_;
-
   KioskAppMenuController kiosk_app_menu_controller_;
 
   std::unique_ptr<LoginFeedback> login_feedback_;
+
+  std::unique_ptr<LoginUIPrefController> login_ui_pref_controller_;
 
   std::unique_ptr<WizardContext> wizard_context_;
 
@@ -162,6 +167,10 @@ class LoginDisplayHostCommon : public LoginDisplayHost,
       bootstrap_controller_;
 
   base::CallbackListSubscription app_terminating_subscription_;
+
+  std::unique_ptr<OobeMetricsHelper> oobe_metrics_helper_;
+
+  std::unique_ptr<OobeCrosEventsMetrics> oobe_cros_events_metrics_;
 
   base::WeakPtrFactory<LoginDisplayHostCommon> weak_factory_{this};
 };

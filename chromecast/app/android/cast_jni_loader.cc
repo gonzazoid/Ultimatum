@@ -4,8 +4,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/library_loader/library_loader_hooks.h"
-#include "base/bind.h"
-#include "chromecast/android/cast_shell_jni_registration.h"
+#include "base/functional/bind.h"
 #include "chromecast/app/cast_main_delegate.h"
 #include "content/public/app/content_jni_onload.h"
 #include "content/public/app/content_main.h"
@@ -14,11 +13,6 @@
 // This is called by the VM when the shared library is first loaded.
 JNI_EXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   base::android::InitVM(vm);
-  JNIEnv* env = base::android::AttachCurrentThread();
-  if (!RegisterMainDexNatives(env) || !RegisterNonMainDexNatives(env)) {
-    return -1;
-  }
-
   if (!content::android::OnJNIOnLoadInit())
     return false;
 

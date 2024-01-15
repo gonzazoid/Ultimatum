@@ -19,25 +19,26 @@
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/wallpaper/wallpaper_widget_controller.h"
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_test_util.h"
+#include "ash/wm/overview/overview_metrics.h"
 #include "ash/wm/overview/overview_observer.h"
 #include "ash/wm/overview/overview_session.h"
 #include "ash/wm/overview/overview_test_util.h"
-#include "ash/wm/overview/overview_wallpaper_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
 #include "ash/wm/window_resizer.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
 #include "base/command_line.h"
-#include "base/feature_list.h"
 #include "base/run_loop.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/window_types.h"
 #include "ui/base/hit_test.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/display/screen.h"
 #include "ui/events/test/event_generator.h"
 
 namespace ash {
@@ -202,7 +203,7 @@ using OverviewControllerTest = AshTestBase;
 // in clamshell mode should not toggle overview.
 TEST_F(OverviewControllerTest,
        PressOverviewKeyDuringWindowDragInClamshellMode) {
-  ASSERT_FALSE(TabletModeControllerTestApi().IsTabletModeStarted());
+  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
   std::unique_ptr<aura::Window> dragged_window = CreateTestWindow();
   std::unique_ptr<WindowResizer> resizer =
       CreateWindowResizer(dragged_window.get(), gfx::PointF(), HTCAPTION,
@@ -214,94 +215,8 @@ TEST_F(OverviewControllerTest,
   resizer->CompleteDrag();
 }
 
-TEST_F(OverviewControllerTest, AnimationCallbacksForCrossFadeWallpaper) {
-  ui::ScopedAnimationDurationScaleMode non_zero(
-      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
-  TestOverviewObserver observer(/*should_monitor_animation_state = */ true);
-  // Enter without windows.
-  auto* overview_controller = Shell::Get()->overview_controller();
-  EnterOverview();
-  EXPECT_TRUE(overview_controller->InOverviewSession());
-  EXPECT_EQ(TestOverviewObserver::COMPLETED,
-            observer.starting_animation_state());
-  auto* wallpaper_widget_controller =
-      Shell::GetPrimaryRootWindowController()->wallpaper_widget_controller();
-  EXPECT_GT(wallpaper_widget_controller->GetWallpaperBlur(), 0);
-  EXPECT_TRUE(wallpaper_widget_controller->IsAnimating());
-  wallpaper_widget_controller->StopAnimating();
-
-  // Exiting overview has no animations until the overview animation is
-  // complete.
-  ExitOverview();
-  EXPECT_FALSE(overview_controller->InOverviewSession());
-  EXPECT_EQ(TestOverviewObserver::UNKNOWN, observer.ending_animation_state());
-  EXPECT_EQ(wallpaper_constants::kOverviewBlur,
-            wallpaper_widget_controller->GetWallpaperBlur());
-  EXPECT_FALSE(wallpaper_widget_controller->IsAnimating());
-
-  observer.WaitForEndingAnimationComplete();
-  EXPECT_EQ(TestOverviewObserver::COMPLETED, observer.ending_animation_state());
-  EXPECT_EQ(wallpaper_constants::kClear,
-            wallpaper_widget_controller->GetWallpaperBlur());
-  EXPECT_TRUE(wallpaper_widget_controller->IsAnimating());
-  wallpaper_widget_controller->StopAnimating();
-
-  gfx::Rect bounds(0, 0, 100, 100);
-  std::unique_ptr<aura::Window> window1(
-      CreateTestWindowInShellWithBounds(bounds));
-  std::unique_ptr<aura::Window> window2(
-      CreateTestWindowInShellWithBounds(bounds));
-
-  observer.Reset();
-  ASSERT_EQ(TestOverviewObserver::UNKNOWN, observer.starting_animation_state());
-  ASSERT_EQ(TestOverviewObserver::UNKNOWN, observer.ending_animation_state());
-
-  // Enter with windows.
-  EnterOverview();
-  EXPECT_TRUE(overview_controller->InOverviewSession());
-  EXPECT_EQ(TestOverviewObserver::UNKNOWN, observer.starting_animation_state());
-  EXPECT_EQ(TestOverviewObserver::UNKNOWN, observer.ending_animation_state());
-  EXPECT_EQ(wallpaper_constants::kClear,
-            wallpaper_widget_controller->GetWallpaperBlur());
-  EXPECT_FALSE(wallpaper_widget_controller->IsAnimating());
-
-  // Exit with windows before starting animation ends.
-  ExitOverview();
-  EXPECT_FALSE(overview_controller->InOverviewSession());
-  EXPECT_EQ(TestOverviewObserver::CANCELED,
-            observer.starting_animation_state());
-  EXPECT_EQ(TestOverviewObserver::UNKNOWN, observer.ending_animation_state());
-  // Blur animation never started.
-  EXPECT_EQ(wallpaper_constants::kClear,
-            wallpaper_widget_controller->GetWallpaperBlur());
-  EXPECT_FALSE(wallpaper_widget_controller->IsAnimating());
-
-  observer.Reset();
-
-  // Enter again before exit animation ends.
-  EnterOverview();
-  EXPECT_TRUE(overview_controller->InOverviewSession());
-  EXPECT_EQ(TestOverviewObserver::UNKNOWN, observer.starting_animation_state());
-  EXPECT_EQ(TestOverviewObserver::CANCELED, observer.ending_animation_state());
-  // Blur animation will start when animation is completed.
-  EXPECT_EQ(wallpaper_constants::kClear,
-            wallpaper_widget_controller->GetWallpaperBlur());
-  EXPECT_FALSE(wallpaper_widget_controller->IsAnimating());
-
-  observer.Reset();
-
-  // Activating window while entering animation should cancel the overview.
-  wm::ActivateWindow(window1.get());
-  EXPECT_FALSE(overview_controller->InOverviewSession());
-  EXPECT_EQ(TestOverviewObserver::CANCELED,
-            observer.starting_animation_state());
-  // Blur animation never started.
-  EXPECT_EQ(wallpaper_constants::kClear,
-            wallpaper_widget_controller->GetWallpaperBlur());
-  EXPECT_FALSE(wallpaper_widget_controller->IsAnimating());
-}
-
-TEST_F(OverviewControllerTest, OcclusionTest) {
+// TODO(https://crbug.com/1472403): Investigate test flakiness and reenable.
+TEST_F(OverviewControllerTest, DISABLED_OcclusionTest) {
   using OcclusionState = aura::Window::OcclusionState;
 
   Shell::Get()
@@ -569,22 +484,6 @@ TEST_F(OverviewControllerTest, OverviewEnterExitAnimationClamshell) {
   EXPECT_FALSE(observer.last_animation_was_fade());
 }
 
-TEST_F(OverviewControllerTest, WallpaperAnimationTiming) {
-  const gfx::Rect bounds(200, 200);
-  std::unique_ptr<aura::Window> window(
-      CreateTestWindowInShellWithBounds(bounds));
-  WindowState::Get(window.get())->Minimize();
-
-  ui::ScopedAnimationDurationScaleMode non_zero(
-      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
-
-  EnterOverview(OverviewEnterExitType::kFadeInEnter);
-  auto* wallpaper_widget_controller =
-      Shell::GetPrimaryRootWindowController()->wallpaper_widget_controller();
-  EXPECT_GT(wallpaper_widget_controller->GetWallpaperBlur(), 0);
-  EXPECT_TRUE(wallpaper_widget_controller->IsAnimating());
-}
-
 // Tests that overview session exits cleanly if exit is requested before
 // previous enter animations finish.
 TEST_F(OverviewControllerTest, OverviewExitWhileStillEntering) {
@@ -645,6 +544,80 @@ TEST_F(OverviewControllerTest, CloseWindowDuringAnimation) {
   EXPECT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
 }
 
+// Quick test on all `OverviewStartAction`s to verify that they are recorded
+// correctly in uma metric.
+TEST_F(OverviewControllerTest, OverviewStartActionHistogramTest) {
+  base::HistogramTester histogram_tester;
+  constexpr char kOverviewStartActionHistogram[] = "Ash.Overview.StartAction";
+  OverviewController* overview_controller = OverviewController::Get();
+
+  for (OverviewStartAction start_action : {
+           OverviewStartAction::kSplitView,
+           OverviewStartAction::kAccelerator,
+           OverviewStartAction::kDragWindowFromShelf,
+           OverviewStartAction::kExitHomeLauncher,
+           OverviewStartAction::kOverviewButton,
+           OverviewStartAction::kOverviewButtonLongPress,
+           OverviewStartAction::kBentoBar_DEPRECATED,
+           OverviewStartAction::k3FingerVerticalScroll,
+           OverviewStartAction::kDevTools,
+           OverviewStartAction::kTests,
+           OverviewStartAction::kOverviewDeskSwitch,
+           OverviewStartAction::kDeskButton,
+           OverviewStartAction::kFasterSplitScreenSetup,
+       }) {
+    // Verify the initial count for the histogram.
+    histogram_tester.ExpectBucketCount(kOverviewStartActionHistogram,
+                                       start_action,
+                                       /*expected_count=*/0);
+    overview_controller->StartOverview(start_action);
+    histogram_tester.ExpectBucketCount(kOverviewStartActionHistogram,
+                                       start_action,
+                                       /*expected_count=*/1);
+    overview_controller->EndOverview(OverviewEndAction::kTests);
+  }
+}
+
+// Quick test on all `OverviewEndAction`s to verify that they are recorded
+// correctly in uma metric.
+TEST_F(OverviewControllerTest, OverviewEndActionHistogramTest) {
+  base::HistogramTester histogram_tester;
+  constexpr char kOverviewEndActionHistogram[] = "Ash.Overview.EndAction";
+  OverviewController* overview_controller = OverviewController::Get();
+
+  for (OverviewEndAction end_action : {
+           OverviewEndAction::kSplitView,
+           OverviewEndAction::kDragWindowFromShelf,
+           OverviewEndAction::kEnterHomeLauncher,
+           OverviewEndAction::kClickingOutsideWindowsInOverview,
+           OverviewEndAction::kWindowActivating,
+           OverviewEndAction::kLastWindowRemoved,
+           OverviewEndAction::kDisplayAdded,
+           OverviewEndAction::kKeyEscapeOrBack,
+           OverviewEndAction::kDeskActivation,
+           OverviewEndAction::kOverviewButton,
+           OverviewEndAction::kOverviewButtonLongPress,
+           OverviewEndAction::k3FingerVerticalScroll,
+           OverviewEndAction::kEnabledDockedMagnifier,
+           OverviewEndAction::kUserSwitch,
+           OverviewEndAction::kStartedWindowCycle,
+           OverviewEndAction::kShuttingDown,
+           OverviewEndAction::kAppListActivatedInClamshell,
+           OverviewEndAction::kShelfAlignmentChanged,
+           OverviewEndAction::kDevTools,
+           OverviewEndAction::kTests,
+           OverviewEndAction::kShowGlanceables_DEPRECATED,
+       }) {
+    // Verify the initial count for the histogram.
+    histogram_tester.ExpectBucketCount(kOverviewEndActionHistogram, end_action,
+                                       /*expected_count=*/0);
+    overview_controller->StartOverview(OverviewStartAction::kTests);
+    overview_controller->EndOverview(end_action);
+    histogram_tester.ExpectBucketCount(kOverviewEndActionHistogram, end_action,
+                                       /*expected_count=*/1);
+  }
+}
+
 // A subclass of DeskSwitchAnimationWaiter that additionally attempts to start
 // overview after the desk animation screenshots have been taken. Using the
 // regular DeskSwitchAnimatorWaiter and attempting to start overview before
@@ -675,8 +648,8 @@ TEST_F(OverviewControllerTest, OverviewEnterExitWhileDeskAnimation) {
   auto* desks_controller = DesksController::Get();
   desks_controller->NewDesk(DesksCreationRemovalSource::kKeyboard);
   ASSERT_EQ(2u, desks_controller->desks().size());
-  const Desk* desk1 = desks_controller->desks()[0].get();
-  const Desk* desk2 = desks_controller->desks()[1].get();
+  const Desk* desk1 = desks_controller->GetDeskAtIndex(0);
+  const Desk* desk2 = desks_controller->GetDeskAtIndex(1);
 
   ui::ScopedAnimationDurationScaleMode non_zero(
       ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);

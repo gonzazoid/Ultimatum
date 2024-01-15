@@ -55,8 +55,7 @@ public class ChromePaymentRequestService
     // Null-check is necessary because retainers of ChromePaymentRequestService could still
     // reference ChromePaymentRequestService after mPaymentRequestService is set null, e.g.,
     // crbug.com/1122148.
-    @Nullable
-    private PaymentRequestService mPaymentRequestService;
+    @Nullable private PaymentRequestService mPaymentRequestService;
 
     private final RenderFrameHost mRenderFrameHost;
     private final Delegate mDelegate;
@@ -90,11 +89,20 @@ public class ChromePaymentRequestService
          * @param journeyLogger The logger of the user journey.
          * @param topLevelOrigin The last committed url of webContents.
          */
-        default PaymentUiService createPaymentUiService(PaymentUiService.Delegate delegate,
-                PaymentRequestParams params, WebContents webContents, boolean isOffTheRecord,
-                JourneyLogger journeyLogger, String topLevelOrigin) {
-            return new PaymentUiService(/*delegate=*/delegate,
-                    /*params=*/params, webContents, isOffTheRecord, journeyLogger, topLevelOrigin);
+        default PaymentUiService createPaymentUiService(
+                PaymentUiService.Delegate delegate,
+                PaymentRequestParams params,
+                WebContents webContents,
+                boolean isOffTheRecord,
+                JourneyLogger journeyLogger,
+                String topLevelOrigin) {
+            return new PaymentUiService(
+                    /* delegate= */ delegate,
+                    /* params= */ params,
+                    webContents,
+                    isOffTheRecord,
+                    journeyLogger,
+                    topLevelOrigin);
         }
 
         /**
@@ -105,8 +113,7 @@ public class ChromePaymentRequestService
          * @param webContents The web contents for which to lookup the Android activity.
          * @return Possibly null Android activity that should never be cached.
          */
-        @Nullable
-        default Activity getActivity(WebContents webContents) {
+        default @Nullable Activity getActivity(WebContents webContents) {
             return ChromeActivity.fromWebContents(webContents);
         }
 
@@ -134,8 +141,7 @@ public class ChromePaymentRequestService
          * @param webContents Any WebContents.
          * @return The TabModelSelector of the given WebContents.
          */
-        @Nullable
-        default TabModelSelector getTabModelSelector(WebContents webContents) {
+        default @Nullable TabModelSelector getTabModelSelector(WebContents webContents) {
             ChromeActivity activity = ChromeActivity.fromWebContents(webContents);
             return activity == null ? null : activity.getTabModelSelector();
         }
@@ -144,8 +150,7 @@ public class ChromePaymentRequestService
          * @param webContents Any WebContents.
          * @return The TabModel of the given WebContents.
          */
-        @Nullable
-        default TabModel getTabModel(WebContents webContents) {
+        default @Nullable TabModel getTabModel(WebContents webContents) {
             ChromeActivity activity = ChromeActivity.fromWebContents(webContents);
             return activity == null ? null : activity.getCurrentTabModel();
         }
@@ -155,8 +160,7 @@ public class ChromePaymentRequestService
          * @return The ActivityLifecycleDispatcher of the ChromeActivity that contains the given
          *         WebContents.
          */
-        @Nullable
-        default ActivityLifecycleDispatcher getActivityLifecycleDispatcher(
+        default @Nullable ActivityLifecycleDispatcher getActivityLifecycleDispatcher(
                 WebContents webContents) {
             ChromeActivity activity = ChromeActivity.fromWebContents(webContents);
             return activity == null ? null : activity.getLifecycleDispatcher();
@@ -182,12 +186,17 @@ public class ChromePaymentRequestService
         mJourneyLogger = paymentRequestService.getJourneyLogger();
         String topLevelOrigin = paymentRequestService.getTopLevelOrigin();
         assert topLevelOrigin != null;
-        mPaymentUiService = mDelegate.createPaymentUiService(/*delegate=*/this,
-                /*params=*/paymentRequestService, mWebContents,
-                paymentRequestService.isOffTheRecord(), mJourneyLogger, topLevelOrigin);
+        mPaymentUiService =
+                mDelegate.createPaymentUiService(
+                        /* delegate= */ this,
+                        /* params= */ paymentRequestService,
+                        mWebContents,
+                        paymentRequestService.isOffTheRecord(),
+                        mJourneyLogger,
+                        topLevelOrigin);
         if (PaymentRequestService.getNativeObserverForTest() != null) {
-            PaymentRequestService.getNativeObserverForTest().onPaymentUiServiceCreated(
-                    mPaymentUiService);
+            PaymentRequestService.getNativeObserverForTest()
+                    .onPaymentUiServiceCreated(mPaymentUiService);
         }
     }
 
@@ -218,8 +227,10 @@ public class ChromePaymentRequestService
 
     // Implements BrowserPaymentRequest:
     @Override
-    public boolean disconnectIfExtraValidationFails(WebContents webContents,
-            Map<String, PaymentMethodData> methodData, PaymentDetails details,
+    public boolean disconnectIfExtraValidationFails(
+            WebContents webContents,
+            Map<String, PaymentMethodData> methodData,
+            PaymentDetails details,
             PaymentOptions options) {
         assert methodData != null;
         assert details != null;
@@ -234,7 +245,9 @@ public class ChromePaymentRequestService
 
     // Implements BrowserPaymentRequest:
     @Override
-    public String showOrSkipAppSelector(boolean isShowWaitingForUpdatedDetails, PaymentItem total,
+    public String showOrSkipAppSelector(
+            boolean isShowWaitingForUpdatedDetails,
+            PaymentItem total,
             boolean shouldSkipAppSelector) {
         Activity activity = mDelegate.getActivity(mWebContents);
         if (activity == null) return ErrorStrings.ACTIVITY_NOT_FOUND;
@@ -242,9 +255,12 @@ public class ChromePaymentRequestService
         if (tabModelSelector == null) return ErrorStrings.TAB_NOT_FOUND;
         TabModel tabModel = mDelegate.getTabModel(mWebContents);
         if (tabModel == null) return ErrorStrings.TAB_NOT_FOUND;
-        String error = mPaymentUiService.buildPaymentRequestUI(
-                /*isWebContentsActive=*/mDelegate.isWebContentsActive(mRenderFrameHost), activity,
-                tabModelSelector, tabModel);
+        String error =
+                mPaymentUiService.buildPaymentRequestUI(
+                        /* isWebContentsActive= */ mDelegate.isWebContentsActive(mRenderFrameHost),
+                        activity,
+                        tabModelSelector,
+                        tabModel);
         if (error != null) return error;
         // Calculate skip ui and build ui only after all payment apps are ready and
         // request.show() is called.
@@ -292,7 +308,9 @@ public class ChromePaymentRequestService
             PaymentApp selectedApp = mPaymentUiService.getSelectedPaymentApp();
             dimBackgroundIfNotPaymentHandler(selectedApp);
             mJourneyLogger.setSkippedShow();
-            invokePaymentApp(null /* selectedShippingAddress */, null /* selectedShippingOption */,
+            invokePaymentApp(
+                    /* selectedShippingAddress= */ null,
+                    /* selectedShippingOption= */ null,
                     selectedApp);
         } else {
             mPaymentUiService.createShippingSectionIfNeeded(context);
@@ -302,16 +320,13 @@ public class ChromePaymentRequestService
 
     // Implements BrowserPaymentRequest:
     @Override
-    @Nullable
-    public WebContents openPaymentHandlerWindow(
-            GURL url, boolean isOffTheRecord, long ukmSourceId) {
+    public @Nullable WebContents openPaymentHandlerWindow(GURL url, long ukmSourceId) {
         @Nullable
-        WebContents paymentHandlerWebContents =
-                mPaymentUiService.showPaymentHandlerUI(url, isOffTheRecord);
+        WebContents paymentHandlerWebContents = mPaymentUiService.showPaymentHandlerUI(url);
         if (paymentHandlerWebContents != null) {
             ServiceWorkerPaymentAppBridge.onOpeningPaymentAppWindow(
-                    /*paymentRequestWebContents=*/mWebContents,
-                    /*paymentHandlerWebContents=*/paymentHandlerWebContents);
+                    /* paymentRequestWebContents= */ mWebContents,
+                    /* paymentHandlerWebContents= */ paymentHandlerWebContents);
 
             // UKM for payment app origin should get recorded only when the origin of the invoked
             // payment app is shown to the user.
@@ -354,22 +369,20 @@ public class ChromePaymentRequestService
         mPaymentUiService.enableAndUpdatePaymentRequestUIWithPaymentInfo();
     }
 
-    // Implements BrowserPaymentRequest:
-    @Override
-    public void onInstrumentDetailsLoading() {
-        assert mPaymentUiService.getSelectedPaymentApp() == null;
-        mPaymentUiService.showProcessingMessage();
-    }
-
     // Implements PaymentUiService.Delegate:
     @Override
-    public boolean invokePaymentApp(EditableOption selectedShippingAddress,
-            EditableOption selectedShippingOption, PaymentApp selectedPaymentApp) {
+    public boolean invokePaymentApp(
+            EditableOption selectedShippingAddress,
+            EditableOption selectedShippingOption,
+            PaymentApp selectedPaymentApp) {
         if (mPaymentRequestService == null || mSpec == null || mSpec.isDestroyed()) return false;
         selectedPaymentApp.setPaymentHandlerHost(getPaymentHandlerHost());
         PaymentResponseHelperInterface paymentResponseHelper =
-                new ChromePaymentResponseHelper(selectedShippingAddress, selectedShippingOption,
-                        mPaymentUiService.getSelectedContact(), selectedPaymentApp,
+                new ChromePaymentResponseHelper(
+                        selectedShippingAddress,
+                        selectedShippingOption,
+                        mPaymentUiService.getSelectedContact(),
+                        selectedPaymentApp,
                         mSpec.getPaymentOptions());
         mPaymentRequestService.invokePaymentApp(selectedPaymentApp, paymentResponseHelper);
         return true;
@@ -377,8 +390,9 @@ public class ChromePaymentRequestService
 
     private PaymentHandlerHost getPaymentHandlerHost() {
         if (mPaymentHandlerHost == null) {
-            mPaymentHandlerHost = mDelegate.createPaymentHandlerHost(
-                    mWebContents, /*listener=*/mPaymentRequestService);
+            mPaymentHandlerHost =
+                    mDelegate.createPaymentHandlerHost(
+                            mWebContents, /* listener= */ mPaymentRequestService);
         }
         return mPaymentHandlerHost;
     }
@@ -466,13 +480,6 @@ public class ChromePaymentRequestService
 
     // Implements BrowserPaymentRequest:
     @Override
-    public boolean isPaymentSheetBasedPaymentAppSupported() {
-        // TODO(crbug.com/1209835): Remove this method entirely.
-        return false;
-    }
-
-    // Implements BrowserPaymentRequest:
-    @Override
     public void onInstrumentDetailsReady() {
         // Showing the app selector UI if we were previously skipping it so the loading
         // spinner shows up until the merchant notifies that payment was completed.
@@ -491,6 +498,18 @@ public class ChromePaymentRequestService
     @Override
     public void showAppSelectorAfterPaymentAppInvokeFailed() {
         mPaymentUiService.onPayButtonProcessingCancelled();
+    }
+
+    // Implements BrowserPaymentRequest:
+    @Override
+    public boolean isShippingSectionVisible() {
+        return mPaymentUiService.shouldShowShippingSection();
+    }
+
+    // Implements BrowserPaymentRequest:
+    @Override
+    public boolean isContactSectionVisible() {
+        return mPaymentUiService.shouldShowContactSection();
     }
 
     // Implement PaymentUiService.Delegate:
@@ -541,15 +560,13 @@ public class ChromePaymentRequestService
 
     // Implement PaymentUiService.Delegate:
     @Override
-    @Nullable
-    public Context getContext() {
+    public @Nullable Context getContext() {
         return mDelegate.getContext(mRenderFrameHost);
     }
 
     // Implement PaymentUiService.Delegate:
     @Override
-    @Nullable
-    public ActivityLifecycleDispatcher getActivityLifecycleDispatcher() {
+    public @Nullable ActivityLifecycleDispatcher getActivityLifecycleDispatcher() {
         return mDelegate.getActivityLifecycleDispatcher(mWebContents);
     }
 }

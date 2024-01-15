@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/containers/contains.h"
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/path_service.h"
@@ -11,7 +13,6 @@
 #include "build/build_config.h"
 #include "components/services/quarantine/test_support.h"
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
-#include "content/browser/file_system_access/file_system_chooser_test_helpers.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/storage_partition.h"
@@ -20,6 +21,7 @@
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/file_system_chooser_test_helpers.h"
 #include "content/shell/browser/shell.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
@@ -66,7 +68,8 @@ class FileSystemAccessFileWriterBrowserTest : public ContentBrowserTest {
     EXPECT_TRUE(base::WriteFile(test_file, contents));
 
     ui::SelectFileDialog::SetFactory(
-        new FakeSelectFileDialogFactory({test_file}));
+        std::make_unique<FakeSelectFileDialogFactory>(
+            std::vector<base::FilePath>{test_file}));
     EXPECT_TRUE(NavigateToURL(shell(), test_url_));
     EXPECT_EQ(test_file.BaseName().AsUTF8Unsafe(),
               EvalJs(shell(),
@@ -90,7 +93,8 @@ class FileSystemAccessFileWriterBrowserTest : public ContentBrowserTest {
     EXPECT_TRUE(base::WriteFile(test_file, file_data));
 
     ui::SelectFileDialog::SetFactory(
-        new FakeSelectFileDialogFactory({test_file}));
+        std::make_unique<FakeSelectFileDialogFactory>(
+            std::vector<base::FilePath>{test_file}));
     EXPECT_TRUE(NavigateToURL(shell(), test_url_));
     EXPECT_EQ(test_file.BaseName().AsUTF8Unsafe(),
               EvalJs(shell(),
@@ -275,6 +279,99 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessFileWriterBrowserTest,
   }
 }
 
+IN_PROC_BROWSER_TEST_F(FileSystemAccessFileWriterBrowserTest,
+                       EachWriterHasUniqueSwapFileRacyKeepExistingData) {
+  auto [test_file, base_swap_file] = CreateTestFilesAndEntry("");
+
+  int num_writers = 5;
+  for (int index = 0; index < num_writers; index++) {
+    EXPECT_EQ(
+        nullptr,
+        EvalJs(shell(), JsReplace("(async () => {"
+                                  "  for(let i = 0; i < $1; i++ ) {"
+                                  "self.writers.push(self.entry.createWritable("
+                                  "{keepExistingData: true}));"
+                                  "  }"
+                                  "  await Promise.all(self.writers);"
+                                  "})()",
+                                  num_writers)));
+  }
+
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    for (int index = 0; index < num_writers; index++) {
+      base::FilePath swap_file = base_swap_file;
+      if (index != 0) {
+        swap_file = base::FilePath(test_file).AddExtensionASCII(
+            base::StringPrintf(".%d.crswap", index));
+      }
+      EXPECT_TRUE(base::PathExists(swap_file));
+    }
+  }
+}
+
+IN_PROC_BROWSER_TEST_F(FileSystemAccessFileWriterBrowserTest,
+                       WriteOffsetAndSeekInSameWritable) {
+  // Performing a second write operation with a valid offset, after performing
+  // a seek operation occurs at the expected index (https://crbug.com/1427819).
+  auto [test_file, base_swap_file] = CreateTestFilesAndEntry("");
+  EXPECT_EQ("abc1234h",
+            EvalJs(shell(),
+                   "(async () => {"
+                   "const w = await self.entry.createWritable();"
+                   "await w.write('abcdefgh');"
+                   "await w.seek(0);"
+                   "await w.write({type:'write',data:'123',position:3});"
+                   "await w.write('4');"
+                   "await w.close();"
+                   "return (await (await self.entry.getFile()).text());"
+                   "})()"));
+}
+
+// Ideally this would be tested by WPTs, but the location of the swap file is
+// not specified and not easily accessible.
+IN_PROC_BROWSER_TEST_F(FileSystemAccessFileWriterBrowserTest,
+                       CannotCreateWritableToSwapFile) {
+  {
+    base::FilePath test_dir;
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    EXPECT_TRUE(base::CreateTemporaryDirInDir(
+        temp_dir_.GetPath(), FILE_PATH_LITERAL("parent"), &test_dir));
+
+    ui::SelectFileDialog::SetFactory(
+        std::make_unique<FakeSelectFileDialogFactory>(
+            std::vector<base::FilePath>{test_dir}));
+    EXPECT_TRUE(NavigateToURL(shell(), test_url_));
+    EXPECT_EQ(test_dir.BaseName().AsUTF8Unsafe(),
+              EvalJs(shell(),
+                     "(async () => {"
+                     "  let dir = await self.showDirectoryPicker();"
+                     "  self.parent = dir;"
+                     "  return dir.name; })()"));
+  }
+
+  // Unsuccessfully attempt to create a writer to the swap file, which is
+  // locked.
+  auto result = EvalJs(
+      shell(),
+      "(async () => {"
+      "const file = await self.parent.getFileHandle('file.txt', {create:true});"
+      "self.writer = await file.createWritable();"
+      "await self.writer.write('abcdefgh');"
+      "self.swapFile = await self.parent.getFileHandle('file.txt.crswap', "
+      "{create:false});"
+      "return (await self.swapFile.createWritable());"
+      "})()");
+  EXPECT_TRUE(base::Contains(result.error, "modifications are not allowed."))
+      << result.error;
+
+  auto close_result = EvalJs(shell(),
+                             "(async () => {"
+                             "await self.writer.close();"
+                             "})()");
+  EXPECT_TRUE(close_result.error.empty()) << close_result.error;
+}
+
 // TODO(https://crbug.com/992089): Files are only quarantined on windows in
 // browsertests unfortunately. Change this when more platforms are enabled.
 #if BUILDFLAG(IS_WIN)
@@ -321,11 +418,10 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessFileWriterBrowserTest,
 #endif  // BUILDFLAG(IS_POSIX)
   }
 
-  auto result = EvalJs(
-      shell(), JsReplace("(async () => {"
-                         "  return (await self.entry.createWritable()); })()"));
-  EXPECT_TRUE(result.error.find("Cannot write to a read-only file.") !=
-              std::string::npos)
+  auto result = EvalJs(shell(),
+                       "(async () => {"
+                       "  return (await self.entry.createWritable()); })()");
+  EXPECT_TRUE(base::Contains(result.error, "Cannot write to a read-only file."))
       << result.error;
 }
 #endif  // BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_WIN)

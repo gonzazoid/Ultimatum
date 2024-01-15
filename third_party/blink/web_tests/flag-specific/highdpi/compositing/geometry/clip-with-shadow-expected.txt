@@ -10,14 +10,12 @@
       "name": "LayoutNGBlockFlow (positioned) DIV class='composited box'",
       "position": [-7, -7],
       "bounds": [165, 165],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#666666",
       "transform": 2
     },
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV class='composited inner'",
       "bounds": [180, 180],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#00000033",
       "transform": 4
     }

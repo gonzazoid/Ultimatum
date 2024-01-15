@@ -8,7 +8,10 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
+#include "components/autofill/core/browser/country_type.h"
+#include "components/autofill/core/browser/data_model/autofill_i18n_api.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/payments/content/payment_app.h"
 #include "third_party/blink/public/mojom/payments/payment_request.mojom.h"
@@ -19,9 +22,7 @@ class PaymentRequestDelegate;
 class PaymentRequestSpec;
 
 // A helper class to facilitate the creation of the PaymentResponse.
-class PaymentResponseHelper
-    : public PaymentApp::Delegate,
-      public base::SupportsWeakPtr<PaymentResponseHelper> {
+class PaymentResponseHelper final : public PaymentApp::Delegate {
  public:
   class Delegate {
    public:
@@ -35,7 +36,7 @@ class PaymentResponseHelper
 
   // The spec, selected_app and delegate cannot be null.
   PaymentResponseHelper(
-      const std::string& app_locale,
+      std::string app_locale,
       base::WeakPtr<PaymentRequestSpec> spec,
       base::WeakPtr<PaymentApp> selected_app,
       base::WeakPtr<PaymentRequestDelegate> payment_request_delegate,
@@ -65,7 +66,7 @@ class PaymentResponseHelper
   void OnAddressNormalized(bool success,
                            const autofill::AutofillProfile& normalized_profile);
 
-  const std::string& app_locale_;
+  const std::string app_locale_;
   bool is_waiting_for_shipping_address_normalization_;
   bool is_waiting_for_instrument_details_;
 
@@ -79,7 +80,8 @@ class PaymentResponseHelper
 
   // A normalized copy of the shipping address, which will be included in the
   // PaymentResponse.
-  autofill::AutofillProfile shipping_address_;
+  autofill::AutofillProfile shipping_address_{
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode};
 
   // Instrument Details.
   std::string method_name_;

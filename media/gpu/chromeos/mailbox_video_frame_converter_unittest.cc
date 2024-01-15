@@ -4,16 +4,20 @@
 
 #include "media/gpu/chromeos/mailbox_video_frame_converter.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
 #include "gpu/command_buffer/common/sync_token.h"
+#include "media/base/media_switches.h"
 #include "media/base/simple_sync_token_client.h"
 #include "media/video/fake_gpu_memory_buffer.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
@@ -36,18 +40,28 @@ namespace {
 class MockGpuDelegate : public MailboxVideoFrameConverter::GpuDelegate {
  public:
   MOCK_METHOD0(Initialize, bool());
-  MOCK_METHOD10(CreateSharedImage,
-                gpu::SharedImageStub::SharedImageDestructionCallback(
-                    const gpu::Mailbox& mailbox,
-                    gfx::GpuMemoryBufferHandle handle,
-                    gfx::BufferFormat format,
-                    gfx::BufferPlane plane,
-                    gpu::SurfaceHandle surface_handle,
-                    const gfx::Size& size,
-                    const gfx::ColorSpace& color_space,
-                    GrSurfaceOrigin surface_origin,
-                    SkAlphaType alpha_type,
-                    uint32_t usage));
+  MOCK_METHOD0(GetCapabilities, absl::optional<gpu::SharedImageCapabilities>());
+  MOCK_METHOD9(CreateSharedImage,
+               gpu::SharedImageStub::SharedImageDestructionCallback(
+                   const gpu::Mailbox& mailbox,
+                   gfx::GpuMemoryBufferHandle handle,
+                   gfx::BufferFormat format,
+                   gfx::BufferPlane plane,
+                   const gfx::Size& size,
+                   const gfx::ColorSpace& color_space,
+                   GrSurfaceOrigin surface_origin,
+                   SkAlphaType alpha_type,
+                   uint32_t usage));
+  MOCK_METHOD8(CreateSharedImage,
+               gpu::SharedImageStub::SharedImageDestructionCallback(
+                   const gpu::Mailbox& mailbox,
+                   gfx::GpuMemoryBufferHandle handle,
+                   viz::SharedImageFormat format,
+                   const gfx::Size& size,
+                   const gfx::ColorSpace& color_space,
+                   GrSurfaceOrigin surface_origin,
+                   SkAlphaType alpha_type,
+                   uint32_t usage));
   MOCK_METHOD2(UpdateSharedImage,
                bool(const gpu::Mailbox& mailbox,
                     gfx::GpuFenceHandle in_fence_handle));
@@ -104,7 +118,7 @@ class MailboxVideoFrameConverterTest : public ::testing::Test {
  protected:
   base::test::TaskEnvironment task_environment_;
 
-  StrictMock<MockGpuDelegate>* mock_gpu_delegate_;
+  raw_ptr<StrictMock<MockGpuDelegate>> mock_gpu_delegate_;
 
   // Note: we intentionally make all the mock callbacks members of the test
   // fixture instead of limiting their lifetime to each test. The reason is that
@@ -124,7 +138,7 @@ class MailboxVideoFrameConverterTest : public ::testing::Test {
   std::vector<std::unique_ptr<StrictMock<base::MockOnceCallback<void()>>>>
       mock_frame_destruction_cbs_;
 
-  std::unique_ptr<VideoFrameConverter> converter_;
+  std::unique_ptr<MailboxVideoFrameConverter> converter_;
 };
 
 class MailboxVideoFrameConverterWithUnwrappedFramesTest
@@ -133,14 +147,12 @@ class MailboxVideoFrameConverterWithUnwrappedFramesTest
   MailboxVideoFrameConverterWithUnwrappedFramesTest() {
     auto mock_gpu_delegate = std::make_unique<StrictMock<MockGpuDelegate>>();
     mock_gpu_delegate_ = mock_gpu_delegate.get();
-    converter_ = base::WrapUnique<
-        VideoFrameConverter>(new MailboxVideoFrameConverter(
-        /*unwrap_frame_cb=*/base::NullCallback(),
+    converter_ = base::WrapUnique(new MailboxVideoFrameConverter(
         /*gpu_task_runner=*/base::ThreadPool::CreateSingleThreadTaskRunner({}),
-        std::move(mock_gpu_delegate),
-        /*enable_unsafe_webgpu=*/false));
+        std::move(mock_gpu_delegate)));
     converter_->Initialize(
-        /*parent_task_runner=*/base::ThreadTaskRunnerHandle::Get(),
+        /*parent_task_runner=*/base::SingleThreadTaskRunner::
+            GetCurrentDefault(),
         mock_output_cb_.Get());
   }
   MailboxVideoFrameConverterWithUnwrappedFramesTest(
@@ -210,20 +222,37 @@ TEST_F(MailboxVideoFrameConverterWithUnwrappedFramesTest,
     {
       InSequence sequence;
       EXPECT_CALL(*mock_gpu_delegate_, Initialize()).WillOnce(Return(true));
-      EXPECT_CALL(
-          *mock_gpu_delegate_,
-          CreateSharedImage(
-              /*mailbox=*/_, /*handle=*/_, kBufferFormat,
-              gfx::BufferPlane::DEFAULT, gpu::kNullSurfaceHandle,
-              /*size=*/kVisibleRect.size(), /*color_space=*/_,
-              kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, /*usage=*/_))
-          .WillOnce(
-              DoAll(SaveArg<0>(&mailboxes_seen_by_gpu_delegate[i]),
-                    Return(ByMove(mock_destroy_shared_image_cbs_[i]->Get()))));
+      if (IsMultiPlaneFormatForHardwareVideoEnabled()) {
+        viz::SharedImageFormat shared_image_format =
+            viz::MultiPlaneFormat::kNV12;
+        shared_image_format.SetPrefersExternalSampler();
+        EXPECT_CALL(
+            *mock_gpu_delegate_,
+            CreateSharedImage(
+                /*mailbox=*/_, /*handle=*/_, shared_image_format,
+                /*size=*/kVisibleRect.size(), /*color_space=*/_,
+                kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, /*usage=*/_))
+            .WillOnce(DoAll(
+                SaveArg<0>(&mailboxes_seen_by_gpu_delegate[i]),
+                Return(ByMove(mock_destroy_shared_image_cbs_[i]->Get()))));
+      } else {
+        EXPECT_CALL(
+            *mock_gpu_delegate_,
+            CreateSharedImage(
+                /*mailbox=*/_, /*handle=*/_, kBufferFormat,
+                gfx::BufferPlane::DEFAULT,
+                /*size=*/kVisibleRect.size(), /*color_space=*/_,
+                kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, /*usage=*/_))
+            .WillOnce(DoAll(
+                SaveArg<0>(&mailboxes_seen_by_gpu_delegate[i]),
+                Return(ByMove(mock_destroy_shared_image_cbs_[i]->Get()))));
+      }
       EXPECT_CALL(mock_output_cb_, Run(_))
           .WillOnce(SaveArg<0>(&converted_frames[i]));
     }
 
+    EXPECT_CALL(*mock_gpu_delegate_, GetCapabilities())
+        .WillRepeatedly(Return(gpu::SharedImageCapabilities()));
     // Note: after this, the MailboxVideoFrameConverter should have full
     // ownership of the *|gmb_frame|.
     converter_->ConvertFrame(std::move(gmb_frame));

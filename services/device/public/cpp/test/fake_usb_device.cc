@@ -8,10 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/ranges/algorithm.h"
 #include "services/device/public/cpp/test/mock_usb_mojo_device.h"
@@ -72,7 +72,8 @@ void FakeUsbDevice::CloseHandle() {
 // Device implementation:
 void FakeUsbDevice::Open(OpenCallback callback) {
   if (is_opened_) {
-    std::move(callback).Run(mojom::UsbOpenDeviceError::ALREADY_OPEN);
+    std::move(callback).Run(mojom::UsbOpenDeviceResult::NewError(
+        mojom::UsbOpenDeviceError::ALREADY_OPEN));
     return;
   }
 
@@ -85,17 +86,18 @@ void FakeUsbDevice::Open(OpenCallback callback) {
     return;
   }
 
-  FinishOpen(std::move(callback), mojom::UsbOpenDeviceError::OK);
+  FinishOpen(std::move(callback), mojom::UsbOpenDeviceResult::NewSuccess(
+                                      mojom::UsbOpenDeviceSuccess::OK));
 }
 
 void FakeUsbDevice::FinishOpen(OpenCallback callback,
-                               mojom::UsbOpenDeviceError error) {
+                               mojom::UsbOpenDeviceResultPtr result) {
   DCHECK(!is_opened_);
   is_opened_ = true;
   if (client_)
     client_->OnDeviceOpened();
 
-  std::move(callback).Run(error);
+  std::move(callback).Run(std::move(result));
 }
 
 void FakeUsbDevice::Close(CloseCallback callback) {

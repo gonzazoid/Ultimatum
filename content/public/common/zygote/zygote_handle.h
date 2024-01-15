@@ -5,29 +5,28 @@
 #ifndef CONTENT_PUBLIC_COMMON_ZYGOTE_ZYGOTE_HANDLE_H_
 #define CONTENT_PUBLIC_COMMON_ZYGOTE_ZYGOTE_HANDLE_H_
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/common/zygote/zygote_buildflags.h"
 
-#if !BUILDFLAG(USE_ZYGOTE_HANDLE)
-#error "Can not use zygote handles without USE_ZYGOTE_HANDLE"
+#if !BUILDFLAG(USE_ZYGOTE)
+#error "Can not use zygote without USE_ZYGOTE"
 #endif
 
 namespace content {
 
 #if BUILDFLAG(IS_POSIX)
 class ZygoteCommunication;
-using ZygoteHandle = ZygoteCommunication*;
 #else
-// Perhaps other ports may USE_ZYGOTE_HANDLE here somdeday.
-#error "Can not use zygote handles on this platform"
+// Perhaps other ports may USE_ZYGOTE here somdeday.
+#error "Can not use zygote on this platform"
 #endif  // BUILDFLAG(IS_POSIX)
 
 // Gets the generic global zygote used to launch sandboxed children.
-CONTENT_EXPORT ZygoteHandle GetGenericZygote();
+CONTENT_EXPORT ZygoteCommunication* GetGenericZygote();
 
 }  // namespace content
 

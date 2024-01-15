@@ -7,17 +7,20 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/uuid.h"
 #include "chrome/browser/ash/scanning/lorgnette_scanner_manager_util.h"
 #include "chrome/browser/ash/scanning/zeroconf_scanner_detector.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
@@ -32,11 +35,26 @@ namespace ash {
 
 namespace {
 
+// Used as the client ID when calling ListScanners to retrieve scanner names.
+constexpr char kListScannersDiscoveryClientId[] = "GetScannerNames";
+// Used as the client ID when verifying scanner connectivity.
+constexpr char kVerifyScannerClientId[] = "ZeroconfScannerChecker";
+
 // A list of Epson models that do not rotate alternating ADF scanned pages
 // to be excluded in IsRotateAlternate().
 constexpr char kEpsonNoFlipModels[] =
     "\\b("
-    "DS-790WN"
+    "AM-C4000"
+    "|AM-C5000"
+    "|AM-C6000"
+    "|DS-790WN"
+    "|DS-C420W"
+    "|DS-C480W"
+    "|ES-C320W"
+    "|ES-C380W"
+    "|LM-C4000"
+    "|LM-C5000"
+    "|LM-C6000"
     "|LP-M8180A"
     "|LP-M8180F"
     "|LX-10020M"
@@ -44,6 +62,7 @@ constexpr char kEpsonNoFlipModels[] =
     "|LX-10050MF"
     "|LX-6050MF"
     "|LX-7550MF"
+    "|PX-M382F"
     "|PX-M7070FX"
     "|PX-M7080FX"
     "|PX-M7090FX"
@@ -51,6 +70,7 @@ constexpr char kEpsonNoFlipModels[] =
     "|PX-M7110FP"
     "|PX-M860F"
     "|PX-M880FX"
+    "|RR-400W"
     "|WF-6530"
     "|WF-6590"
     "|WF-6593"
@@ -74,6 +94,7 @@ constexpr char kEpsonNoFlipModels[] =
     "|WF-C878Ra"
     "|WF-C879R"
     "|WF-C879Ra"
+    "|WF-M5899"
     "|WF-M21000"
     "|WF-M21000a"
     "|WF-M21000c"
@@ -142,6 +163,17 @@ std::string ScannerCapabilitiesToString(
   return base::JoinString(sources, ", ");
 }
 
+// Create a unique ID for a scanner based off the scanner's UUID and its
+// connection string.  A single scanner can have multiple ways to connect to it
+// (http and https, for example), and the UUID will be the same between these
+// two connection strings (since the UUID should identify a unique device and
+// not the connection protocol).  So, UUID itself is not unique.  UUID combined
+// with the connection string should be unique.
+std::string CreateScannerId(std::string_view uuid,
+                            std::string_view connection_string) {
+  return base::StrCat({uuid, ":", connection_string});
+}
+
 class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
  public:
   LorgnetteScannerManagerImpl(
@@ -162,8 +194,23 @@ class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
   void GetScannerNames(GetScannerNamesCallback callback) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_);
     GetLorgnetteManagerClient()->ListScanners(
-        base::BindOnce(&LorgnetteScannerManagerImpl::OnListScannersResponse,
+        kListScannersDiscoveryClientId,
+        /*local_only=*/false,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnListScannerNamesResponse,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  // LorgnetteScannerManager:
+  void GetScannerInfoList(const std::string& client_id,
+                          LocalScannerFilter local_only,
+                          SecureScannerFilter secure_only,
+                          GetScannerInfoListCallback callback) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_);
+    GetLorgnetteManagerClient()->ListScanners(
+        client_id, (local_only == LocalScannerFilter::kLocalScannersOnly),
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnListScannerInfoResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback),
+                       local_only, secure_only));
   }
 
   // LorgnetteScannerManager:
@@ -183,6 +230,60 @@ class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
             &LorgnetteScannerManagerImpl::OnScannerCapabilitiesResponse,
             weak_ptr_factory_.GetWeakPtr(), std::move(callback), scanner_name,
             device_name, protocol));
+  }
+
+  // LorgnetteScannerManager:
+  void OpenScanner(const lorgnette::OpenScannerRequest& request,
+                   OpenScannerCallback callback) override {
+    GetLorgnetteManagerClient()->OpenScanner(
+        request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnOpenScannerResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  // LorgnetteScannerManager:
+  void CloseScanner(const lorgnette::CloseScannerRequest& request,
+                    CloseScannerCallback callback) override {
+    GetLorgnetteManagerClient()->CloseScanner(
+        request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnCloseScannerResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  // LorgnetteScannerManager:
+  void SetOptions(const lorgnette::SetOptionsRequest& request,
+                  SetOptionsCallback callback) override {
+    GetLorgnetteManagerClient()->SetOptions(
+        request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnSetOptionsResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  // LorgnetteScannerManager:
+  void GetCurrentConfig(const lorgnette::GetCurrentConfigRequest& request,
+                        GetCurrentConfigCallback callback) override {
+    GetLorgnetteManagerClient()->GetCurrentConfig(
+        request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnGetCurrentConfigResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  // LorgnetteScannerManager:
+  void StartPreparedScan(const lorgnette::StartPreparedScanRequest& request,
+                         StartPreparedScanCallback callback) override {
+    GetLorgnetteManagerClient()->StartPreparedScan(
+        request, base::BindOnce(
+                     &LorgnetteScannerManagerImpl::OnStartPreparedScanResponse,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  // LorgnetteScannerManager:
+  void ReadScanData(const lorgnette::ReadScanDataRequest& request,
+                    ReadScanDataCallback callback) override {
+    GetLorgnetteManagerClient()->ReadScanData(
+        request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnReadScanDataResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
   // LorgnetteScannerManager:
@@ -230,6 +331,15 @@ class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
   // LorgnetteScannerManager:
   void CancelScan(CancelCallback cancel_callback) override {
     GetLorgnetteManagerClient()->CancelScan(std::move(cancel_callback));
+  }
+
+  // LorgnetteScannerManager:
+  void CancelScan(const lorgnette::CancelScanRequest& request,
+                  CancelScanCallback callback) override {
+    GetLorgnetteManagerClient()->CancelScan(
+        request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnCancelScanResponse,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
  private:
@@ -292,13 +402,133 @@ class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
     }
   }
 
-  // Handles the result of calling LorgnetteManagerClient::ListScanners().
-  void OnListScannersResponse(
+  // Handles the result of calling LorgnetteManagerClient::ListScanners() for
+  // GetScannerNames.
+  void OnListScannerNamesResponse(
       GetScannerNamesCallback callback,
       absl::optional<lorgnette::ListScannersResponse> response) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_);
     RebuildDedupedScanners(response);
     FilterScannersAndRespond(std::move(callback));
+  }
+
+  // `scanners_to_verify` is a (potentially empty) list of scanners that need to
+  // be verified before being passed back to the caller.  If there are some
+  // scanners in this list, this will send an `OpenScanner` request to see if
+  // the scanner is responsive.  The callback to that request will update the
+  // list of scanners that still need to be verified as well as update
+  // `response`, and then call this method again to verify the remaining
+  // scanners.  When the list is empty, this will simply call `callback` with
+  // `response`.
+  void VerifyScanners(std::vector<lorgnette::ScannerInfo> scanners_to_verify,
+                      lorgnette::ListScannersResponse response,
+                      GetScannerInfoListCallback callback) {
+    if (scanners_to_verify.empty()) {
+      // TODO(nmuggli): Figure out how to associate a lorgnette scanner to a
+      // zeroconf scanner.  If they represent the same physical scanner, the
+      // ScannerInfo objects should have the same device_uuid.  For now, just
+      // ensure each ScannerInfo has a device_uuid (the lorgnette backend is not
+      // yet populating the device_uuid).
+      for (lorgnette::ScannerInfo& info : *response.mutable_scanners()) {
+        if (info.device_uuid().empty()) {
+          info.set_device_uuid(
+              base::Uuid::GenerateRandomV4().AsLowercaseString());
+        }
+      }
+
+      std::move(callback).Run(response);
+      return;
+    }
+
+    lorgnette::OpenScannerRequest open_request;
+    open_request.mutable_scanner_id()->set_connection_string(
+        scanners_to_verify.back().name());
+    // Just use a hard-coded client ID for this.  The scanner, if successfully
+    // opened, will get closed right away anyhow.
+    open_request.set_client_id(kVerifyScannerClientId);
+    GetLorgnetteManagerClient()->OpenScanner(
+        open_request,
+        base::BindOnce(&LorgnetteScannerManagerImpl::OnVerifyScanner,
+                       weak_ptr_factory_.GetWeakPtr(),
+                       std::move(scanners_to_verify), std::move(response),
+                       std::move(callback)));
+  }
+
+  // Called in response to an `OpenScanner` request while checking if a scanner
+  // is responsive.  This works in conjunction with `VerifyScanners` and will
+  // update the list of scanners still left to verify.  This will populate
+  // `list_response` based on `open_response` and will call `VerifyScanners`
+  // once that has happened to verify any remaining scanners.
+  void OnVerifyScanner(
+      std::vector<lorgnette::ScannerInfo> scanners_to_verify,
+      lorgnette::ListScannersResponse list_response,
+      GetScannerInfoListCallback callback,
+      absl::optional<lorgnette::OpenScannerResponse> open_response) {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_);
+    // This should only get called when there are scanners that need to be
+    // verified.
+    CHECK(!scanners_to_verify.empty());
+    lorgnette::ScannerInfo scanner = std::move(scanners_to_verify.back());
+    scanners_to_verify.pop_back();
+
+    if (!open_response) {
+      LOG(WARNING) << "Unable to open '" << scanner.name()
+                   << "' while attempting to verify connectivity." << std::endl;
+      VerifyScanners(std::move(scanners_to_verify), std::move(list_response),
+                     std::move(callback));
+      return;
+    }
+
+    // If the scanner was opened, close it.
+    if (open_response->has_config()) {
+      lorgnette::CloseScannerRequest close_request;
+      *close_request.mutable_scanner() = open_response->config().scanner();
+      GetLorgnetteManagerClient()->CloseScanner(
+          close_request,
+          base::BindOnce(&LorgnetteScannerManagerImpl::OnVerifyScannerClose,
+                         weak_ptr_factory_.GetWeakPtr(), scanner.name()));
+    }
+
+    // If the result is success or busy (busy means the device is reachable but
+    // another client is using it), insert this scanner into the response of
+    // available scanners.
+    if (open_response->result() == lorgnette::OPERATION_RESULT_SUCCESS ||
+        open_response->result() == lorgnette::OPERATION_RESULT_DEVICE_BUSY) {
+      verified_scanners_.insert(
+          CreateScannerId(scanner.device_uuid(), scanner.name()));
+      *list_response.add_scanners() = std::move(scanner);
+    }
+
+    VerifyScanners(std::move(scanners_to_verify), std::move(list_response),
+                   std::move(callback));
+  }
+
+  // While verifying connectivity for a scanner, an open request is sent to the
+  // scanner.  If that succeeds, a close request is sent to the scanner.  This
+  // method is called in response to that close request.
+  void OnVerifyScannerClose(
+      const std::string& connection_string,
+      absl::optional<lorgnette::CloseScannerResponse> response) {
+    if (!response ||
+        response->result() != lorgnette::OPERATION_RESULT_SUCCESS) {
+      LOG(WARNING) << "Unable to close scanner '" << connection_string
+                   << "' while attempting to verify connectivity." << std::endl;
+    }
+  }
+
+  // Handles the result of calling LorgnetteManagerClient::ListScanners() for
+  // GetScannerInfoList.
+  void OnListScannerInfoResponse(
+      GetScannerInfoListCallback callback,
+      LocalScannerFilter local_only,
+      SecureScannerFilter secure_only,
+      absl::optional<lorgnette::ListScannersResponse> response) {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_);
+
+    // Combine zeroconf scanners and lorgnette scanners and send in callback.
+    CreateCombinedScanners(local_only, secure_only,
+                           response.value_or(lorgnette::ListScannersResponse()),
+                           std::move(callback));
   }
 
   // Handles the result of calling
@@ -328,6 +558,182 @@ class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
                        << ScannerCapabilitiesToString(capabilities.value());
 
     std::move(callback).Run(capabilities);
+  }
+
+  void OnOpenScannerResponse(
+      OpenScannerCallback callback,
+      absl::optional<lorgnette::OpenScannerResponse> response) {
+    std::move(callback).Run(response);
+  }
+
+  void OnCloseScannerResponse(
+      CloseScannerCallback callback,
+      absl::optional<lorgnette::CloseScannerResponse> response) {
+    std::move(callback).Run(response);
+  }
+
+  void OnSetOptionsResponse(
+      SetOptionsCallback callback,
+      absl::optional<lorgnette::SetOptionsResponse> response) {
+    std::move(callback).Run(response);
+  }
+
+  void OnGetCurrentConfigResponse(
+      GetCurrentConfigCallback callback,
+      absl::optional<lorgnette::GetCurrentConfigResponse> response) {
+    std::move(callback).Run(response);
+  }
+
+  void OnStartPreparedScanResponse(
+      StartPreparedScanCallback callback,
+      absl::optional<lorgnette::StartPreparedScanResponse> response) {
+    std::move(callback).Run(response);
+  }
+
+  // Return true if |scanner| should be included in the results based on
+  // |local_only| and |secure_only|, false if not.
+  bool ShouldIncludeScanner(const lorgnette::ScannerInfo& scanner,
+                            LocalScannerFilter local_only,
+                            SecureScannerFilter secure_only) {
+    if (local_only == LocalScannerFilter::kLocalScannersOnly &&
+        scanner.connection_type() != lorgnette::CONNECTION_USB) {
+      return false;
+    }
+
+    if (secure_only == SecureScannerFilter::kSecureScannersOnly &&
+        !scanner.secure()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // For a given `scanner` return a list of ScannerInfo objects.  One `scanner`
+  // may have multiple device_names where each one corresponds to a new
+  // ScannerInfo object.  `scanners_to_verify` is a list owned and provided by
+  // the caller.  If a scanner needs to be verified for connectivity before
+  // being returned to the caller, it will get inserted in this list instead of
+  // the returned list.
+  std::vector<lorgnette::ScannerInfo> CreateScannerInfosFromScanner(
+      const Scanner& scanner,
+      LocalScannerFilter local_only,
+      SecureScannerFilter secure_only,
+      std::vector<lorgnette::ScannerInfo>* scanners_to_verify) {
+    CHECK(scanners_to_verify);
+    std::vector<lorgnette::ScannerInfo> retval;
+
+    // All ScannerInfo objects created from this scanner need to have the same
+    // UUID.  If the scanner does not have a UUID, generate one to use.
+    const std::string uuid =
+        scanner.uuid.empty()
+            ? base::Uuid::GenerateRandomV4().AsLowercaseString()
+            : scanner.uuid;
+
+    for (const auto& [protocol, device_names] : scanner.device_names) {
+      for (const ScannerDeviceName& device_name : device_names) {
+        if (!device_name.usable) {
+          continue;
+        }
+        lorgnette::ConnectionType connection_type =
+            lorgnette::CONNECTION_UNSPECIFIED;
+        bool secure = false;
+        bool need_to_verify = false;
+        switch (protocol) {
+          case (ScanProtocol::kEscl):
+            connection_type = lorgnette::CONNECTION_NETWORK;
+            secure = false;
+            break;
+          case (ScanProtocol::kEscls):
+            connection_type = lorgnette::CONNECTION_NETWORK;
+            secure = true;
+            break;
+          case (ScanProtocol::kLegacyNetwork):
+            // These types of scanners need to have their connectivity verified
+            // before they are returned to a client.
+            connection_type = lorgnette::CONNECTION_NETWORK;
+            secure = false;
+            need_to_verify = !verified_scanners_.contains(
+                CreateScannerId(uuid, device_name.device_name));
+            break;
+          case (ScanProtocol::kLegacyUsb):
+            connection_type = lorgnette::CONNECTION_USB;
+            secure = true;
+            break;
+          default:
+            // Use defaults from above.
+            break;
+        }
+
+        lorgnette::ScannerInfo info;
+        info.set_name(device_name.device_name);
+        info.set_manufacturer(scanner.manufacturer);
+        info.set_model(scanner.model);
+        info.set_display_name(scanner.display_name);
+        // TODO(nmuggli): See if there's a way to determine the type of scanner.
+        info.set_type("multi-function peripheral");
+        info.set_device_uuid(uuid);
+        info.set_connection_type(connection_type);
+        info.set_secure(secure);
+        // TODO(b/308191406): SANE backend only supports JPG and PNG, so
+        // hardcode those for now.
+        info.add_image_format("image/jpeg");
+        info.add_image_format("image/png");
+        if (ShouldIncludeScanner(info, local_only, secure_only)) {
+          if (need_to_verify) {
+            scanners_to_verify->emplace_back(std::move(info));
+          } else {
+            retval.emplace_back(std::move(info));
+          }
+        }
+      }
+    }
+
+    return retval;
+  }
+
+  // Use |response| and |zeroconf_scanners_| to build a combined
+  // ListScannersResponse that will be sent in |callback|.  |local_only| and
+  // |secure_only| are used to filter out network scanners and/or non-secure
+  // scanners.
+  void CreateCombinedScanners(LocalScannerFilter local_only,
+                              SecureScannerFilter secure_only,
+                              const lorgnette::ListScannersResponse& response,
+                              GetScannerInfoListCallback callback) {
+    lorgnette::ListScannersResponse combined_results;
+    combined_results.set_result(response.result());
+
+    for (const auto& scanner : response.scanners()) {
+      if (ShouldIncludeScanner(scanner, local_only, secure_only)) {
+        *combined_results.add_scanners() = scanner;
+      }
+    }
+
+    // Some of the zeroconf scanners may need to be verified before they can be
+    // returned to the caller.  Keep track of those here.
+    std::vector<lorgnette::ScannerInfo> scanners_to_verify;
+    for (const Scanner& scanner : zeroconf_scanners_) {
+      for (auto& info : CreateScannerInfosFromScanner(
+               scanner, local_only, secure_only, &scanners_to_verify)) {
+        *combined_results.add_scanners() = std::move(info);
+      }
+    }
+
+    // For any of the non-escl network zeroconf scanners, make sure the scanner
+    // is reachable before returning it to the user.
+    VerifyScanners(std::move(scanners_to_verify), std::move(combined_results),
+                   std::move(callback));
+  }
+
+  void OnReadScanDataResponse(
+      ReadScanDataCallback callback,
+      absl::optional<lorgnette::ReadScanDataResponse> response) {
+    std::move(callback).Run(response);
+  }
+
+  void OnCancelScanResponse(
+      CancelScanCallback callback,
+      absl::optional<lorgnette::CancelScanResponse> response) {
+    std::move(callback).Run(response);
   }
 
   // Uses |response| and zeroconf_scanners_ to rebuild deduped_scanners_.
@@ -486,6 +892,9 @@ class LorgnetteScannerManagerImpl final : public LorgnetteScannerManager {
 
   // Stores a list of scanner display names to check while filtering.
   std::vector<std::string> scanners_to_filter_;
+
+  // Stores the UUID for zeroconf scanners that have already been verified.
+  std::set<std::string> verified_scanners_;
 
   SEQUENCE_CHECKER(sequence_);
 

@@ -11,27 +11,24 @@
 #import "components/shared_highlighting/core/common/fragment_directives_utils.h"
 #import "components/shared_highlighting/core/common/text_fragment.h"
 #import "components/shared_highlighting/ios/shared_highlighting_constants.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
-#import "ios/chrome/browser/ui/commands/activity_service_commands.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/share_highlight_command.h"
+#import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/web_state_list/active_web_state_observation_forwarder.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/activity_service_commands.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/share_highlight_command.h"
 #import "ios/chrome/browser/ui/text_fragments/text_fragments_mediator.h"
-#import "ios/chrome/browser/web_state_list/active_web_state_observation_forwarder.h"
-#import "ios/chrome/browser/web_state_list/web_state_dependency_installer_bridge.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_dependency_installer_bridge.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/text_fragments/text_fragments_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 #import "ui/base/l10n/l10n_util.h"
+#import "ui/strings/grit/ui_strings.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface TextFragmentsCoordinator () <DependencyInstalling,
                                         TextFragmentsDelegate,
@@ -98,6 +95,7 @@
                   base::RecordAction(
                       base::UserMetricsAction("TextFragments.Menu.Removed"));
                   [weakSelf.mediator removeTextFragmentsInWebState:webState];
+                  [weakSelf dismissActionSheet];
                 }
                  style:UIAlertActionStyleDestructive];
   [self.actionSheet
@@ -130,6 +128,7 @@
                             sourceRect:rect];
 
                   [handler shareHighlight:command];
+                  [weakSelf dismissActionSheet];
                 }
                  style:UIAlertActionStyleDefault];
   [self.actionSheet
@@ -145,8 +144,14 @@
                                                commandWithURLFromChrome:
                                                    GURL(shared_highlighting::
                                                             kLearnMoreUrl)]];
+                  [weakSelf dismissActionSheet];
                 }
                  style:UIAlertActionStyleDefault];
+  [self.actionSheet addItemWithTitle:l10n_util::GetNSString(IDS_APP_CANCEL)
+                              action:^{
+                                [weakSelf dismissActionSheet];
+                              }
+                               style:UIAlertActionStyleCancel];
   [self.actionSheet start];
 }
 
@@ -159,9 +164,7 @@
 #pragma mark - ChromeCoordinator methods
 
 - (void)stop {
-  if ([self.actionSheet isVisible]) {
-    [self.actionSheet stop];
-  }
+  [self dismissActionSheet];
   // Reset this observer manually. We want this to go out of scope now, ensuring
   // it detaches before `browser` and its WebStateList get destroyed.
   _dependencyInstallerBridge.reset();
@@ -171,9 +174,14 @@
 
 - (void)webState:(web::WebState*)webState
     didStartNavigation:(web::NavigationContext*)navigationContext {
-  if ([self.actionSheet isVisible]) {
-    [self.actionSheet stop];
-  }
+  [self dismissActionSheet];
+}
+
+#pragma mark - Private
+
+- (void)dismissActionSheet {
+  [self.actionSheet stop];
+  self.actionSheet = nil;
 }
 
 @end

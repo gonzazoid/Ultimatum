@@ -11,8 +11,11 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+#include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/native_pixmap_handle.h"
 
 namespace media {
 
@@ -36,11 +39,13 @@ static_assert(
 
 // A structure to hold generic image decodes in planar format.
 struct DecodedImage {
+  virtual ~DecodedImage();
+
   uint32_t fourcc;
   uint32_t number_of_planes;  // Can not be greater than kMaxNumberPlanes.
   gfx::Size size;
   struct {
-    uint8_t* data;
+    raw_ptr<uint8_t> data;
     int stride;
   } planes[kMaxNumberPlanes];
 };
@@ -48,6 +53,13 @@ struct DecodedImage {
 // Takes a ScopedVAImage and returns a DecodedImage object that represents
 // the same decoded result.
 DecodedImage ScopedVAImageToDecodedImage(const ScopedVAImage* scoped_va_image);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+std::unique_ptr<DecodedImage> NativePixmapToDecodedImage(
+    gfx::NativePixmapHandle& handle,
+    const gfx::Size& size,
+    const gfx::BufferFormat& format);
+#endif
 
 // Compares the result of sw decoding |reference_image| with |hw_decoded_image|
 // using SSIM. Returns true if all conversions work and SSIM is at least

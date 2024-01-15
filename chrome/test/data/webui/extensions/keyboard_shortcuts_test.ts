@@ -5,28 +5,14 @@
 /** @fileoverview Suite of tests for extension-keyboard-shortcuts. */
 
 import {ExtensionsKeyboardShortcutsElement, isValidKeyCode, Key, keystrokeToString} from 'chrome://extensions/extensions.js';
-import {assert} from 'chrome://resources/js/assert.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
 
 import {TestService} from './test_service.js';
 import {createExtensionInfo} from './test_util.js';
 
-const extension_shortcut_tests = {
-  suiteName: 'ExtensionShortcutTest',
-  TestNames: {
-    IsValidKeyCode: 'isValidKeyCode',
-    KeyStrokeToString: 'keystrokeToString',
-    Layout: 'Layout',
-    ScopeChange: 'ScopeChange',
-  },
-};
-
-Object.assign(window, {extension_shortcut_tests});
-
-suite(extension_shortcut_tests.suiteName, function() {
+suite('ExtensionShortcutTest', function() {
   let keyboardShortcuts: ExtensionsKeyboardShortcutsElement;
   let noCommands: chrome.developerPrivate.ExtensionInfo;
   let oneCommand: chrome.developerPrivate.ExtensionInfo;
@@ -80,7 +66,7 @@ suite(extension_shortcut_tests.suiteName, function() {
     flush();
   });
 
-  test(assert(extension_shortcut_tests.TestNames.Layout), function() {
+  test('Layout', function() {
     function isVisibleOnCard(e: HTMLElement, s: string): boolean {
       // We check the light DOM in the card because it's a regular old div,
       // rather than a fancy-schmancy custom element.
@@ -104,7 +90,7 @@ suite(extension_shortcut_tests.suiteName, function() {
     assertEquals(2, commands.length);
   });
 
-  test(extension_shortcut_tests.TestNames.IsValidKeyCode, function() {
+  test('IsValidKeyCode', function() {
     assertTrue(isValidKeyCode('A'.charCodeAt(0)));
     assertTrue(isValidKeyCode('F'.charCodeAt(0)));
     assertTrue(isValidKeyCode('Z'.charCodeAt(0)));
@@ -121,7 +107,7 @@ suite(extension_shortcut_tests.suiteName, function() {
     assertFalse(isValidKeyCode(27));   // Escape
   });
 
-  test(extension_shortcut_tests.TestNames.KeyStrokeToString, function() {
+  test('KeyStrokeToString', function() {
     const charCodeA = 'A'.charCodeAt(0);
     let e = new KeyboardEvent('keydown', {keyCode: charCodeA});
     assertEquals('A', keystrokeToString(e));
@@ -132,7 +118,7 @@ suite(extension_shortcut_tests.suiteName, function() {
     assertEquals('Ctrl+Shift+A', keystrokeToString(e));
   });
 
-  test(extension_shortcut_tests.TestNames.ScopeChange, async function() {
+  test('ScopeChange', async function() {
     const selectElement = keyboardShortcuts.shadowRoot!.querySelector('select');
     assertTrue(!!selectElement);
     selectElement.value = 'GLOBAL';

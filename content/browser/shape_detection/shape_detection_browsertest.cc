@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_tokenizer.h"
 #include "build/build_config.h"
 #include "content/public/common/content_switches.h"
@@ -23,7 +24,10 @@ const char kShapeDetectionTestHtml[] = "/media/shape_detection_test.html";
 struct TestParameters {
   const std::string detector_name;
   const std::string image_path;
-  const std::vector<std::vector<float>>& expected_bounding_boxes;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer, global-scope
+  RAW_PTR_EXCLUSION const std::vector<std::vector<float>>&
+      expected_bounding_boxes;
 } const kTestParameters[] = {
     {"FaceDetector", "/blank.jpg", std::vector<std::vector<float>>{}},
     {"FaceDetector",
@@ -69,9 +73,7 @@ class ShapeDetectionBrowserTest
     EXPECT_TRUE(NavigateToURL(shell(), html_url));
     const std::string js_command = "detectShapesOnImageUrl('" + detector_name +
                                    "', '" + image_url.spec() + "')";
-    std::string response_string =
-        EvalJs(shell(), js_command, EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-            .ExtractString();
+    std::string response_string = EvalJs(shell(), js_command).ExtractString();
 
     base::StringTokenizer outer_tokenizer(response_string, "#");
     std::vector<std::vector<float>> detected_bounding_boxes;

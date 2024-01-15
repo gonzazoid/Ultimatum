@@ -15,10 +15,15 @@
 #include "components/viz/service/display/output_surface.h"
 #include "components/viz/service/display/overlay_candidate.h"
 #include "components/viz/service/viz_service_export.h"
+#include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/service/gpu_task_scheduler_helper.h"
 #include "gpu/ipc/common/surface_handle.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/buffer_types.h"
 #include "ui/gfx/ca_layer_result.h"
+#include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/rrect_f.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/overlay_priority_hint.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -43,30 +48,20 @@ class OutputSurface;
 class RendererSettings;
 
 // This class is called inside the DirectRenderer to separate the contents that
-// should be send into the overlay system and the contents that requires
+// should be sent into the overlay system and the contents that requires
 // compositing from the DirectRenderer. This class has different subclass
 // implemented by different platforms. This class defines the minimal interface
 // for overlay processing that each platform needs to implement.
 class VIZ_SERVICE_EXPORT OverlayProcessorInterface {
  public:
-#if BUILDFLAG(IS_APPLE)
-  using PlatformOverlayCandidate = CALayerOverlay;
-  using CandidateList = CALayerOverlayList;
-#elif BUILDFLAG(IS_WIN)
-  using PlatformOverlayCandidate = DCLayerOverlay;
-  using CandidateList = DCLayerOverlayList;
-#else
-  // Default.
   using PlatformOverlayCandidate = OverlayCandidate;
   using CandidateList = OverlayCandidateList;
-#endif
-
   using FilterOperationsMap =
       base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>;
 
   virtual bool DisableSplittingQuads() const;
 
-  // Used by Window's DCLayerOverlay system and OverlayProcessorUsingStrategy.
+  // Used by DCLayerOverlayProcessor and OverlayProcessorUsingStrategy.
   static void RecordOverlayDamageRectHistograms(
       bool is_overlay,
       bool has_occluding_surface_damage,
@@ -149,7 +144,7 @@ class VIZ_SERVICE_EXPORT OverlayProcessorInterface {
   // processor.
   virtual bool NeedsSurfaceDamageRectList() const = 0;
 
-  // Attempt to replace quads from the specified root render pass with overlays
+  // Attempts to replace quads from the specified root render pass with overlays
   // or CALayers. This must be called every frame.
   virtual void ProcessForOverlays(
       DisplayResourceProvider* resource_provider,
@@ -197,13 +192,14 @@ class VIZ_SERVICE_EXPORT OverlayProcessorInterface {
   // benefits of individual overlay candidates.
   virtual void SetFrameSequenceNumber(uint64_t frame_sequence_number) {}
 
-  // If true, video capture is enabled for this frame.
-  virtual void SetIsVideoCaptureEnabled(bool enabled) {}
-
   // If true, page fullscreen mode is enabled for this frame.
   virtual void SetIsPageFullscreen(bool enabled) {}
 
   virtual gfx::CALayerResult GetCALayerErrorCode() const;
+
+  // For Lacros, get damage that was not assigned to any overlay candidates
+  // during ProcessForOverlays.
+  virtual gfx::RectF GetUnassignedDamage() const;
 
  protected:
   OverlayProcessorInterface() = default;

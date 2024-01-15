@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_ASH_CLIPBOARD_HISTORY_TEST_UTIL_H_
 
 #include "ash/public/cpp/clipboard_history_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/ash/clipboard_image_model_request.h"
@@ -29,7 +30,7 @@ class ClipboardImageModelRequestWaiter {
   void OnRequestStop(bool use_auto_resize_mode);
 
  private:
-  ClipboardImageModelRequest::TestParams* const test_params_;
+  const raw_ptr<ClipboardImageModelRequest::TestParams> test_params_;
   const bool expect_auto_resize_;
 
   base::RunLoop run_loop_;
@@ -47,7 +48,7 @@ class ScopedClipboardHistoryListUpdateWaiter
   ~ScopedClipboardHistoryListUpdateWaiter() override;
 
   // ash::ClipboardHistoryController::Observer:
-  void OnClipboardHistoryItemListAddedOrRemoved() override;
+  void OnClipboardHistoryItemsUpdated() override;
 
  private:
   base::RunLoop run_loop_;

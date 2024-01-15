@@ -15,8 +15,11 @@ import java.lang.annotation.RetentionPolicy;
 /** Centralizes UMA data collection for Android-specific MediaSession features. */
 public class MediaSessionUma {
     // MediaSessionAction defined in tools/metrics/histograms/histograms.xml.
-    @IntDef({MediaSessionActionSource.MEDIA_NOTIFICATION, MediaSessionActionSource.MEDIA_SESSION,
-            MediaSessionActionSource.HEADSET_UNPLUG})
+    @IntDef({
+        MediaSessionActionSource.MEDIA_NOTIFICATION,
+        MediaSessionActionSource.MEDIA_SESSION,
+        MediaSessionActionSource.HEADSET_UNPLUG
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface MediaSessionActionSource {
         int MEDIA_NOTIFICATION = 0;
@@ -30,20 +33,6 @@ public class MediaSessionUma {
         if (action != null) {
             RecordHistogram.recordEnumeratedHistogram(
                     "Media.Session.Play", action, MediaSessionActionSource.NUM_ENTRIES);
-        }
-    }
-
-    public static void recordPause(@Nullable @MediaSessionActionSource Integer action) {
-        if (action != null) {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "Media.Session.Pause", action, MediaSessionActionSource.NUM_ENTRIES);
-        }
-    }
-
-    public static void recordStop(@Nullable @MediaSessionActionSource Integer action) {
-        if (action != null) {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "Media.Session.Stop", action, MediaSessionActionSource.NUM_ENTRIES);
         }
     }
 }

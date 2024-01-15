@@ -10,7 +10,6 @@
       "name": "LayoutNGBlockFlow (positioned) DIV id='fixedOverlapping'",
       "position": [8, 88],
       "bounds": [792, 512],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [142, 62, 100, 100],
         [0, 0, 100, 100]

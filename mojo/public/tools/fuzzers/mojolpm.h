@@ -12,6 +12,7 @@
 
 #include "base/check.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -632,7 +633,7 @@ template <typename ProtoTestcase,
 bool Testcase<ProtoTestcase, ProtoAction, kMaxActionCount, kMaxActionSize>::
     IsFinished() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!proto_testcase_.actions_size()) {
+  if (!proto_testcase_.actions_size() || !proto_testcase_.sequences_size()) {
     return true;
   }
 

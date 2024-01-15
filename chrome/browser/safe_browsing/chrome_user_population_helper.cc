@@ -7,17 +7,20 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
+#include "chrome/browser/safe_browsing/verdict_cache_manager_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/core/browser/sync/sync_utils.h"
 #include "components/safe_browsing/core/browser/user_population.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/safe_browsing/core/browser/verdict_cache_manager.h"
+#include "components/sync/service/sync_service.h"
 
 namespace safe_browsing {
 
@@ -47,20 +50,8 @@ void ComparePopulationWithCache(Profile* profile,
   const absl::optional<ChromeUserPopulation>& cached_population =
       GetCachedUserPopulation(profile);
   if (!cached_population) {
-    base::UmaHistogramEnumeration("SafeBrowsing.NoCachedPopulationReason",
-                                  GetNoCachedPopulationReason(profile));
     return;
   }
-
-  base::UmaHistogramBoolean(
-      "SafeBrowsing.PopulationMatchesCachedValue.Population",
-      cached_population->user_population() == population.user_population());
-  base::UmaHistogramBoolean(
-      "SafeBrowsing.PopulationMatchesCachedValue.UserAgent",
-      cached_population->user_agent() == population.user_agent());
-  base::UmaHistogramBoolean(
-      "SafeBrowsing.PopulationMatchesCachedValue.Mbb",
-      cached_population->is_mbb_enabled() == population.is_mbb_enabled());
 }
 
 }  // namespace
@@ -77,8 +68,8 @@ ChromeUserPopulation GetUserPopulationForProfile(Profile* profile) {
     return ChromeUserPopulation();
 
   syncer::SyncService* sync = SyncServiceFactory::GetForProfile(profile);
-  bool is_history_sync_enabled =
-      sync && sync->IsSyncFeatureActive() && !sync->IsLocalSyncEnabled() &&
+  bool is_history_sync_active =
+      sync && !sync->IsLocalSyncEnabled() &&
       sync->GetActiveDataTypes().Has(syncer::HISTORY_DELETE_DIRECTIVES);
   signin::IdentityManager* identity_manager =
       IdentityManagerFactory::GetForProfile(profile);
@@ -113,7 +104,7 @@ ChromeUserPopulation GetUserPopulationForProfile(Profile* profile) {
   }
 
   ChromeUserPopulation population = GetUserPopulation(
-      profile->GetPrefs(), profile->IsOffTheRecord(), is_history_sync_enabled,
+      profile->GetPrefs(), profile->IsOffTheRecord(), is_history_sync_active,
       is_signed_in, is_under_advanced_protection,
       g_browser_process->browser_policy_connector(), std::move(num_profiles),
       std::move(num_loaded_profiles), std::move(num_open_profiles));
@@ -122,6 +113,44 @@ ChromeUserPopulation GetUserPopulationForProfile(Profile* profile) {
   GetCachedUserPopulation(profile) = population;
 
   return population;
+}
+
+ChromeUserPopulation GetUserPopulationForProfileWithCookieTheftExperiments(
+    Profile* profile) {
+  ChromeUserPopulation population = GetUserPopulationForProfile(profile);
+
+  if (population.user_population() ==
+      ChromeUserPopulation::ENHANCED_PROTECTION) {
+    static const base::NoDestructor<std::vector<const base::Feature*>>
+        kCookieTheftExperiments{{
+#if BUILDFLAG(IS_WIN)
+            &features::kLockProfileCookieDatabase
+#endif
+        }};
+
+    GetExperimentStatus(*kCookieTheftExperiments, &population);
+  }
+
+  return population;
+}
+
+ChromeUserPopulation::PageLoadToken GetPageLoadTokenForURL(Profile* profile,
+                                                           GURL url) {
+  if (!profile) {
+    return ChromeUserPopulation::PageLoadToken();
+  }
+  VerdictCacheManager* cache_manager =
+      VerdictCacheManagerFactory::GetForProfile(profile);
+  if (!cache_manager) {
+    return ChromeUserPopulation::PageLoadToken();
+  }
+
+  ChromeUserPopulation::PageLoadToken token =
+      cache_manager->GetPageLoadToken(url);
+  if (token.has_token_value()) {
+    return token;
+  }
+  return cache_manager->CreatePageLoadToken(url);
 }
 
 }  // namespace safe_browsing

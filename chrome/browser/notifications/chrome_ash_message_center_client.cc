@@ -8,19 +8,20 @@
 #include "ash/public/cpp/notifier_settings_observer.h"
 #include "base/feature_list.h"
 #include "base/i18n/string_compare.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/notifications/arc_application_notifier_controller.h"
 #include "chrome/browser/notifications/extension_notifier_controller.h"
 #include "chrome/browser/notifications/pwa_notifier_controller.h"
 #include "chrome/browser/notifications/web_page_notifier_controller.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
+#include "url/origin.h"
 
 using message_center::MessageCenter;
 using message_center::NotifierId;
@@ -54,7 +55,7 @@ class NotifierComparator {
   }
 
  private:
-  icu::Collator* collator_;
+  raw_ptr<icu::Collator> collator_;
 };
 
 // This delegate forwards NotificationDelegate methods to their equivalent in
@@ -99,7 +100,7 @@ class ForwardingNotificationDelegate
   // The ID of the notification.
   const std::string notification_id_;
 
-  NotificationPlatformBridgeDelegate* delegate_;
+  raw_ptr<NotificationPlatformBridgeDelegate> delegate_;
 };
 
 }  // namespace
@@ -170,8 +171,26 @@ void ChromeAshMessageCenterClient::GetDisplayed(
       MessageCenter::Get()->GetNotifications();
 
   std::set<std::string> notification_ids;
-  for (message_center::Notification* notification : notifications)
+  for (message_center::Notification* notification : notifications) {
     notification_ids.insert(notification->id());
+  }
+
+  std::move(callback).Run(std::move(notification_ids), /*supports_sync=*/true);
+}
+
+void ChromeAshMessageCenterClient::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
+    GetDisplayedNotificationsCallback callback) const {
+  message_center::NotificationList::Notifications notifications =
+      MessageCenter::Get()->GetNotifications();
+
+  std::set<std::string> notification_ids;
+  for (message_center::Notification* notification : notifications) {
+    if (url::IsSameOriginWith(notification->origin_url(), origin)) {
+      notification_ids.insert(notification->id());
+    }
+  }
 
   std::move(callback).Run(std::move(notification_ids), /*supports_sync=*/true);
 }

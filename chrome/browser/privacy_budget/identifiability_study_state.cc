@@ -18,15 +18,12 @@
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_tree.h"
-#include "base/cxx17_backports.h"
 #include "base/dcheck_is_on.h"
-#include "base/functional/identity.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/privacy_budget/identifiability_study_group_settings.h"
 #include "chrome/browser/privacy_budget/privacy_budget_prefs.h"
-#include "chrome/browser/privacy_budget/privacy_budget_reid_score_estimator.h"
 #include "chrome/browser/privacy_budget/representative_surface_set.h"
 #include "chrome/browser/privacy_budget/surface_set_equivalence.h"
 #include "chrome/common/privacy_budget/field_trial_param_conversions.h"
@@ -42,7 +39,7 @@
 namespace {
 
 int GetStudyGenerationFromFieldTrial() {
-  return base::clamp(features::kIdentifiabilityStudyGeneration.Get(), 0,
+  return std::clamp(features::kIdentifiabilityStudyGeneration.Get(), 0,
                      std::numeric_limits<int>::max());
 }
 
@@ -65,9 +62,8 @@ IdentifiabilityStudyState::IdentifiabilityStudyState(PrefService* pref_service)
               // However, `MesaDistribution` needs a `pivot_point` parameter
               // bigger than 0.
               : 1,
-          kMesaDistributionRatio),
-      reid_estimator_(
-          PrivacyBudgetReidScoreEstimator(&settings_, pref_service)) {
+          kMesaDistributionRatio,
+          kMesaDistributionGeometricDistributionParam) {
   InitializeGlobalStudySettings();
   InitFromPrefs();
 }
@@ -87,11 +83,6 @@ bool IdentifiabilityStudyState::ShouldRecordSurface(
   // We always record surfaces of type zero.
   if (surface.GetType() == blink::IdentifiableSurface::Type::kReservedInternal)
     return true;
-
-  if (surface.GetType() ==
-      blink::IdentifiableSurface::Type::kReidScoreEstimator) {
-    return settings_.IsUsingReidScoreEstimator();
-  }
 
   // All other surfaces should be recorded only when sampling.
   if (!settings_.IsUsingSamplingOfSurfaces())
@@ -343,7 +334,6 @@ void IdentifiabilityStudyState::ResetInMemoryState() {
 
 void IdentifiabilityStudyState::ResetPersistedState() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  reid_estimator_.ResetPersistedState();
 
   ResetInMemoryState();
 
@@ -508,8 +498,6 @@ void IdentifiabilityStudyState::InitFromPrefs() {
     return;
   }
 
-  reid_estimator_.Init();
-
   if (settings_.IsUsingAssignedBlockSampling()) {
     InitStateForAssignedBlockSampling();
   }
@@ -519,14 +507,6 @@ void IdentifiabilityStudyState::InitFromPrefs() {
   }
 
   CheckInvariants();
-}
-
-void IdentifiabilityStudyState::MaybeStoreValueForComputingReidScore(
-    blink::IdentifiableSurface surface,
-    blink::IdentifiableToken token) {
-  if (!settings_.IsUsingReidScoreEstimator())
-    return;
-  reid_estimator_.ProcessForReidScore(surface, token);
 }
 
 void IdentifiabilityStudyState::InitStateForRandomSurfaceSampling() {
@@ -621,12 +601,6 @@ bool IdentifiabilityStudyState::ShouldReportEncounteredSurface(
 
   if (surface.GetType() ==
       blink::IdentifiableSurface::Type::kReservedInternal) {
-    return false;
-  }
-
-  // Don't report actively sampled surfaces as encountered surfaces.
-  if (ukm::SourceIdObj::FromInt64(source_id).GetType() ==
-      ukm::SourceIdType::NO_URL_ID) {
     return false;
   }
 

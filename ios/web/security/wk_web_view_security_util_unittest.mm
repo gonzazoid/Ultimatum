@@ -9,8 +9,9 @@
 
 #import <memory>
 
-#import "base/mac/bridging.h"
-#import "base/mac/scoped_cftyperef.h"
+#import "base/apple/bridging.h"
+#import "base/apple/foundation_util.h"
+#import "base/apple/scoped_cftyperef.h"
 #import "crypto/rsa_private_key.h"
 #import "net/cert/x509_certificate.h"
 #import "net/cert/x509_util.h"
@@ -19,10 +20,6 @@
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 namespace {
@@ -40,7 +37,7 @@ NSArray* MakeTestCertChain(const std::string& subject) {
       "CN=" + subject, 1, base::Time::Now(), base::Time::Now() + base::Days(1),
       &private_key, &der_cert);
 
-  base::ScopedCFTypeRef<SecCertificateRef> cert(
+  base::apple::ScopedCFTypeRef<SecCertificateRef> cert(
       net::x509_util::CreateSecCertificateFromBytes(
           reinterpret_cast<const uint8_t*>(der_cert.data()), der_cert.size()));
   if (!cert)
@@ -57,12 +54,12 @@ NSDictionary* MakeTestSSLCertErrorUserInfo() {
 }
 
 // Returns SecTrustRef object for testing.
-base::ScopedCFTypeRef<SecTrustRef> CreateTestTrust(NSArray* cert_chain) {
-  base::ScopedCFTypeRef<SecPolicyRef> policy(SecPolicyCreateBasicX509());
+base::apple::ScopedCFTypeRef<SecTrustRef> CreateTestTrust(NSArray* cert_chain) {
+  base::apple::ScopedCFTypeRef<SecPolicyRef> policy(SecPolicyCreateBasicX509());
   SecTrustRef trust = nullptr;
-  SecTrustCreateWithCertificates(base::mac::NSToCFPtrCast(cert_chain), policy,
-                                 &trust);
-  return base::ScopedCFTypeRef<SecTrustRef>(trust);
+  SecTrustCreateWithCertificates(base::apple::NSToCFPtrCast(cert_chain),
+                                 policy.get(), &trust);
+  return base::apple::ScopedCFTypeRef<SecTrustRef>(trust);
 }
 
 }  // namespace
@@ -91,25 +88,25 @@ TEST_F(WKWebViewSecurityUtilTest, CreationCertFromEmptyChain) {
 // Tests MakeTrustValid with self-signed cert.
 TEST_F(WKWebViewSecurityUtilTest, MakingTrustValid) {
   // Create invalid trust object.
-  base::ScopedCFTypeRef<SecTrustRef> trust =
+  base::apple::ScopedCFTypeRef<SecTrustRef> trust =
       CreateTestTrust(MakeTestCertChain(kTestSubject));
 
   CFErrorRef error;
-  BOOL trusted = SecTrustEvaluateWithError(trust, &error);
+  BOOL trusted = SecTrustEvaluateWithError(trust.get(), &error);
   EXPECT_TRUE(!trusted && error);
 
   // Make sure that trust becomes valid after
   // `EnsureFutureTrustEvaluationSucceeds` call.
-  EnsureFutureTrustEvaluationSucceeds(trust);
-  trusted = SecTrustEvaluateWithError(trust, &error);
+  EnsureFutureTrustEvaluationSucceeds(trust.get());
+  trusted = SecTrustEvaluateWithError(trust.get(), &error);
   EXPECT_TRUE(trusted && !error);
 }
 
 // Tests CreateCertFromTrust.
 TEST_F(WKWebViewSecurityUtilTest, CreationCertFromTrust) {
-  base::ScopedCFTypeRef<SecTrustRef> trust =
+  base::apple::ScopedCFTypeRef<SecTrustRef> trust =
       CreateTestTrust(MakeTestCertChain(kTestSubject));
-  scoped_refptr<net::X509Certificate> cert = CreateCertFromTrust(trust);
+  scoped_refptr<net::X509Certificate> cert = CreateCertFromTrust(trust.get());
   ASSERT_TRUE(cert);
   EXPECT_TRUE(cert->subject().GetDisplayName() == kTestSubject);
 }
@@ -123,30 +120,35 @@ TEST_F(WKWebViewSecurityUtilTest, CreationCertFromNilTrust) {
 TEST_F(WKWebViewSecurityUtilTest, CreationServerTrust) {
   // Create server trust.
   NSArray* chain = MakeTestCertChain(kTestSubject);
-  base::ScopedCFTypeRef<SecTrustRef> server_trust(
+  base::apple::ScopedCFTypeRef<SecTrustRef> server_trust(
       CreateServerTrustFromChain(chain, kTestHost));
   EXPECT_TRUE(server_trust);
 
   // Verify chain.
   EXPECT_EQ(static_cast<CFIndex>(chain.count),
-            SecTrustGetCertificateCount(server_trust));
+            SecTrustGetCertificateCount(server_trust.get()));
   [chain enumerateObjectsUsingBlock:^(id expected_cert, NSUInteger i, BOOL*) {
-    id actual_cert = static_cast<id>(SecTrustGetCertificateAtIndex(
-        server_trust.get(), static_cast<CFIndex>(i)));
-    EXPECT_EQ(expected_cert, actual_cert);
+    base::apple::ScopedCFTypeRef<CFArrayRef> certificateChain(
+        SecTrustCopyCertificateChain(server_trust.get()));
+    SecCertificateRef secCertificate =
+        base::apple::CFCastStrict<SecCertificateRef>(CFArrayGetValueAtIndex(
+            certificateChain.get(), static_cast<CFIndex>(i)));
+
+    id actual_cert = static_cast<id>((__bridge id)secCertificate);
+    EXPECT_NSEQ(expected_cert, actual_cert);
   }];
 
   // Verify policies.
-  CFArrayRef policies = nullptr;
-  EXPECT_EQ(errSecSuccess, SecTrustCopyPolicies(server_trust.get(), &policies));
-  EXPECT_EQ(1, CFArrayGetCount(policies));
-  SecPolicyRef policy = (SecPolicyRef)CFArrayGetValueAtIndex(policies, 0);
-  base::ScopedCFTypeRef<CFDictionaryRef> properties(
+  base::apple::ScopedCFTypeRef<CFArrayRef> policies;
+  EXPECT_EQ(errSecSuccess, SecTrustCopyPolicies(server_trust.get(),
+                                                policies.InitializeInto()));
+  EXPECT_EQ(1, CFArrayGetCount(policies.get()));
+  SecPolicyRef policy = (SecPolicyRef)CFArrayGetValueAtIndex(policies.get(), 0);
+  base::apple::ScopedCFTypeRef<CFDictionaryRef> properties(
       SecPolicyCopyProperties(policy));
   NSString* name = static_cast<NSString*>(
       CFDictionaryGetValue(properties.get(), kSecPolicyName));
   EXPECT_NSEQ(kTestHost, name);
-  CFRelease(policies);
 }
 
 // Tests CreateServerTrustFromChain with nil chain.

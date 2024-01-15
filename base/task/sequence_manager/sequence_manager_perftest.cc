@@ -8,17 +8,16 @@
 #include <stddef.h>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_default.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/condition_variable.h"
-#include "base/task/sequence_manager/task_queue_impl.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/test/mock_time_domain.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
-#include "base/task/sequence_manager/test/test_task_queue.h"
 #include "base/task/sequence_manager/test/test_task_time_observer.h"
 #include "base/task/sequence_manager/thread_controller_with_message_pump_impl.h"
 #include "base/task/single_thread_task_runner.h"
@@ -27,7 +26,6 @@
 #include "base/task/thread_pool/thread_pool_impl.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -112,11 +110,9 @@ class BaseSequenceManagerPerfTestDelegate : public PerfTestDelegate {
   bool MultipleQueuesSupported() const override { return true; }
 
   scoped_refptr<TaskRunner> CreateTaskRunner() override {
-    scoped_refptr<TestTaskQueue> task_queue =
-        manager_->CreateTaskQueueWithType<TestTaskQueue>(
-            TaskQueue::Spec(QueueName::TEST_TQ));
-    owned_task_queues_.push_back(task_queue);
-    return task_queue->task_runner();
+    owned_task_queues_.push_back(
+        manager_->CreateTaskQueue(TaskQueue::Spec(QueueName::TEST_TQ)));
+    return owned_task_queues_.back()->task_runner();
   }
 
   void WaitUntilDone() override {
@@ -144,7 +140,7 @@ class BaseSequenceManagerPerfTestDelegate : public PerfTestDelegate {
   std::unique_ptr<SequenceManager> manager_;
   std::unique_ptr<TimeDomain> time_domain_;
   std::unique_ptr<RunLoop> run_loop_;
-  std::vector<scoped_refptr<TestTaskQueue>> owned_task_queues_;
+  std::vector<TaskQueue::Handle> owned_task_queues_;
 };
 
 class SequenceManagerWithMessagePumpPerfTestDelegate
@@ -166,10 +162,9 @@ class SequenceManagerWithMessagePumpPerfTestDelegate
 
     // ThreadControllerWithMessagePumpImpl doesn't provide a default task
     // runner.
-    scoped_refptr<TaskQueue> default_task_queue =
-        GetManager()->template CreateTaskQueueWithType<TestTaskQueue>(
-            TaskQueue::Spec(QueueName::DEFAULT_TQ));
-    GetManager()->SetDefaultTaskRunner(default_task_queue->task_runner());
+    default_task_queue_ =
+        GetManager()->CreateTaskQueue(TaskQueue::Spec(QueueName::DEFAULT_TQ));
+    GetManager()->SetDefaultTaskRunner(default_task_queue_->task_runner());
   }
 
   ~SequenceManagerWithMessagePumpPerfTestDelegate() override { ShutDown(); }
@@ -178,6 +173,7 @@ class SequenceManagerWithMessagePumpPerfTestDelegate
 
  private:
   const char* const name_;
+  TaskQueue::Handle default_task_queue_;
 };
 
 class SingleThreadInThreadPoolPerfTestDelegate : public PerfTestDelegate {

@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace chromeos {
 namespace {
@@ -19,7 +19,7 @@ namespace {
 template <class ReplyType>
 void PostProtoResponse(base::OnceCallback<void(const ReplyType&)> callback,
                        const ReplyType& reply) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), reply));
 }
 
@@ -80,6 +80,13 @@ void FakeTpmManagerClient::ClearStoredOwnerPassword(
                     ::tpm_manager::ClearStoredOwnerPasswordReply());
 }
 
+void FakeTpmManagerClient::ClearTpm(
+    const ::tpm_manager::ClearTpmRequest& request,
+    ClearTpmCallback callback) {
+  ++clear_tpm_count_;
+  PostProtoResponse(std::move(callback), ::tpm_manager::ClearTpmReply());
+}
+
 void FakeTpmManagerClient::AddObserver(Observer* observer) {
   observer_list_.AddObserver(observer);
 }
@@ -122,6 +129,10 @@ int FakeTpmManagerClient::take_ownership_count() const {
 
 int FakeTpmManagerClient::clear_stored_owner_password_count() const {
   return clear_stored_owner_password_count_;
+}
+
+int FakeTpmManagerClient::clear_tpm_count() const {
+  return clear_tpm_count_;
 }
 
 void FakeTpmManagerClient::EmitOwnershipTakenSignal() {

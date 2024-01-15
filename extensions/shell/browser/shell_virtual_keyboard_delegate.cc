@@ -12,8 +12,6 @@
 
 namespace extensions {
 
-ShellVirtualKeyboardDelegate::ShellVirtualKeyboardDelegate() {}
-
 void ShellVirtualKeyboardDelegate::GetKeyboardConfig(
     OnKeyboardSettingsCallback on_settings_callback) {
   base::Value::Dict settings;
@@ -66,7 +64,7 @@ bool ShellVirtualKeyboardDelegate::IsSettingsEnabled() {
 }
 
 bool ShellVirtualKeyboardDelegate::SetVirtualKeyboardMode(
-    int mode_enum,
+    api::virtual_keyboard_private::KeyboardMode mode,
     gfx::Rect target_bounds,
     OnSetModeCallback on_set_mode_callback) {
   return false;
@@ -77,7 +75,8 @@ bool ShellVirtualKeyboardDelegate::SetDraggableArea(
   return false;
 }
 
-bool ShellVirtualKeyboardDelegate::SetRequestedKeyboardState(int state_enum) {
+bool ShellVirtualKeyboardDelegate::SetRequestedKeyboardState(
+    api::virtual_keyboard_private::KeyboardState state) {
   return false;
 }
 
@@ -102,7 +101,6 @@ bool ShellVirtualKeyboardDelegate::SetWindowBoundsInScreen(
 }
 
 void ShellVirtualKeyboardDelegate::GetClipboardHistory(
-    const std::set<std::string>& item_ids_filter,
     OnGetClipboardHistoryCallback get_history_callback) {
   NOTIMPLEMENTED();
 }

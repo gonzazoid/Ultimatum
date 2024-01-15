@@ -18,10 +18,8 @@
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_settings.h"
 #include "components/sync/protocol/user_consent_types.pb.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
 
-namespace chromeos {
+namespace ash {
 
 // Interface for dependency injection between AssistantOptInFlowScreen
 // and its WebUI representation.
@@ -46,8 +44,8 @@ class AssistantOptInFlowScreenView
 class AssistantOptInFlowScreenHandler
     : public BaseScreenHandler,
       public AssistantOptInFlowScreenView,
-      public ash::AssistantStateObserver,
-      public chromeos::assistant::SpeakerIdEnrollmentClient {
+      public AssistantStateObserver,
+      public assistant::SpeakerIdEnrollmentClient {
  public:
   struct ConsentData {
     // Consent token used to complete the opt-in.
@@ -75,7 +73,7 @@ class AssistantOptInFlowScreenHandler
   // BaseScreenHandler:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-  void RegisterMessages() override;
+  void DeclareJSCallbacks() override;
   void GetAdditionalParameters(base::Value::Dict* dict) override;
 
   // AssistantOptInFlowScreenView:
@@ -101,10 +99,9 @@ class AssistantOptInFlowScreenHandler
   void OnDialogClosed();
 
  private:
-  // ash::AssistantStateObserver:
+  // AssistantStateObserver:
   void OnAssistantSettingsEnabled(bool enabled) override;
-  void OnAssistantStatusChanged(
-      chromeos::assistant::AssistantStatus status) override;
+  void OnAssistantStatusChanged(assistant::AssistantStatus status) override;
 
   // Send GetSettings request for the opt-in UI.
   void SendGetSettingsRequest();
@@ -150,7 +147,7 @@ class AssistantOptInFlowScreenHandler
   bool voice_match_enrollment_error_ = false;
 
   // Assistant optin flow type.
-  ash::FlowType flow_type_ = ash::FlowType::kConsentFlow;
+  FlowType flow_type_ = FlowType::kConsentFlow;
 
   // Time that get settings request is sent.
   base::TimeTicks send_request_time_;
@@ -175,13 +172,6 @@ class AssistantOptInFlowScreenHandler
   base::WeakPtrFactory<AssistantOptInFlowScreenHandler> weak_factory_{this};
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::AssistantOptInFlowScreenHandler;
-using ::chromeos::AssistantOptInFlowScreenView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_ASSISTANT_OPTIN_FLOW_SCREEN_HANDLER_H_

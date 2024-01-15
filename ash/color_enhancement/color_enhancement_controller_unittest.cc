@@ -29,14 +29,6 @@ class ColorEnhancementControllerTest : public AshTestBase {
 
   ~ColorEnhancementControllerTest() override = default;
 
-  // AshTestBase:
-  void SetUp() override {
-    scoped_feature_list_.InitWithFeatureState(
-        ::features::kExperimentalAccessibilityColorEnhancementSettings, true);
-
-    AshTestBase::SetUp();
-  }
-
   bool IsCursorCompositingEnabled() const {
     return Shell::Get()
         ->window_tree_host_manager()
@@ -56,11 +48,11 @@ TEST_F(ColorEnhancementControllerTest, HighContrast) {
   PrefService* prefs = GetPrefs();
   prefs->SetBoolean(prefs::kAccessibilityHighContrastEnabled, true);
   EXPECT_TRUE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_TRUE(root_window->layer()->layer_inverted());
   }
   prefs->SetBoolean(prefs::kAccessibilityHighContrastEnabled, false);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_FALSE(root_window->layer()->layer_inverted());
   }
   EXPECT_FALSE(IsCursorCompositingEnabled());
@@ -68,123 +60,124 @@ TEST_F(ColorEnhancementControllerTest, HighContrast) {
 
 TEST_F(ColorEnhancementControllerTest, Greyscale) {
   PrefService* prefs = GetPrefs();
-  prefs->SetInteger(prefs::kAccessibilityGreyscaleAmount, 0);
+  prefs->SetBoolean(prefs::kAccessibilityColorCorrectionEnabled, true);
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 0);
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionType,
+                    ColorVisionCorrectionType::kGrayscale);
   EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_FLOAT_EQ(0.f, root_window->layer()->layer_grayscale());
+    // No other color filters were set.
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 
-  prefs->SetInteger(prefs::kAccessibilityGreyscaleAmount, 100);
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 100);
   EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_FLOAT_EQ(1, root_window->layer()->layer_grayscale());
+    // No other color filters were set.
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 
-  prefs->SetInteger(prefs::kAccessibilityGreyscaleAmount, 50);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 50);
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_FLOAT_EQ(0.5f, root_window->layer()->layer_grayscale());
+    // No other color filters were set.
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 
   // Greyscale larger than 100% or smaller than 0% does nothing.
-  prefs->SetInteger(prefs::kAccessibilityGreyscaleAmount, 500);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 500);
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_FLOAT_EQ(0.5f, root_window->layer()->layer_grayscale());
+    // No other color filters were set.
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 
-  prefs->SetInteger(prefs::kAccessibilityGreyscaleAmount, -10);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, -10);
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
     EXPECT_FLOAT_EQ(0.5f, root_window->layer()->layer_grayscale());
+    // No other color filters were set.
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 }
 
-TEST_F(ColorEnhancementControllerTest, Saturation) {
+TEST_F(ColorEnhancementControllerTest, ColorVisionCorrectionFilters) {
   PrefService* prefs = GetPrefs();
-  prefs->SetInteger(prefs::kAccessibilitySaturationAmount, 50);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.5f, root_window->layer()->layer_saturation());
-  }
+  prefs->SetBoolean(prefs::kAccessibilityColorCorrectionEnabled, true);
 
-  prefs->SetInteger(prefs::kAccessibilitySaturationAmount, 500);
-  EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(5.f, root_window->layer()->layer_saturation());
-  }
+  // Try for each of the color correction types.
+  for (int i = 0; i < 3; i++) {
+    prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionType, i);
 
-  // Saturation smaller than 0% does nothing.
-  prefs->SetInteger(prefs::kAccessibilityGreyscaleAmount, -100);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(5.f, root_window->layer()->layer_saturation());
+    // With severity at 0, no matrix should be applied.
+    prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 0);
+    for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+      EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
+      EXPECT_FLOAT_EQ(0.f, root_window->layer()->layer_grayscale());
+    }
+
+    // With a non-zero severity, a matrix should be applied.
+    prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 50);
+    for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+      EXPECT_TRUE(root_window->layer()->LayerHasCustomColorMatrix());
+      // Grayscale was not impacted.
+      EXPECT_FLOAT_EQ(0.f, root_window->layer()->layer_grayscale());
+    }
+    prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 100);
+    for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+      const cc::FilterOperation::Matrix* matrix =
+          root_window->layer()->GetLayerCustomColorMatrix();
+      EXPECT_TRUE(matrix);
+      // For protanopes (i == 1), the first row in the resulting matrix should
+      // have a 1 for red and a zero for the other colors. Similarly with
+      // deuteranopes (i == 2) and tritanopes (i == 3). This ensures we are
+      // correcting around the right axis.
+      for (int j = 0; j < 3; j++) {
+        if (i == j) {
+          EXPECT_EQ(1, matrix->at(i * 5 + j));
+        } else {
+          EXPECT_EQ(0, matrix->at(i * 5 + j));
+        }
+      }
+    }
   }
 }
 
-TEST_F(ColorEnhancementControllerTest, HueRotation) {
+TEST_F(ColorEnhancementControllerTest, GrayscaleBehindColorCorrectionOption) {
   PrefService* prefs = GetPrefs();
-  prefs->SetInteger(prefs::kAccessibilityHueRotationAmount, 42);
-  EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(42.f, root_window->layer()->layer_hue_rotation());
+  // Color filtering off.
+  prefs->SetBoolean(prefs::kAccessibilityColorCorrectionEnabled, false);
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionAmount, 50);
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionType,
+                    ColorVisionCorrectionType::kGrayscale);
+
+  // Default values.
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+    EXPECT_FLOAT_EQ(0.0f, root_window->layer()->layer_grayscale());
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 
-  prefs->SetInteger(prefs::kAccessibilityHueRotationAmount, 180);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(180.f, root_window->layer()->layer_hue_rotation());
+  // Turn on color filtering, values should now be from prefs.
+  prefs->SetBoolean(prefs::kAccessibilityColorCorrectionEnabled, true);
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+    EXPECT_FLOAT_EQ(0.5f, root_window->layer()->layer_grayscale());
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 
-  // Hue rotation greater than 359 or smaller than 0 does nothing.
-  prefs->SetInteger(prefs::kAccessibilityHueRotationAmount, 1972);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(180.f, root_window->layer()->layer_hue_rotation());
+  prefs->SetInteger(prefs::kAccessibilityColorVisionCorrectionType,
+                    ColorVisionCorrectionType::kDeuteranomaly);
+  prefs->SetBoolean(prefs::kAccessibilityColorCorrectionEnabled, true);
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+    EXPECT_FLOAT_EQ(0.0f, root_window->layer()->layer_grayscale());
+    EXPECT_TRUE(root_window->layer()->LayerHasCustomColorMatrix());
   }
-  prefs->SetInteger(prefs::kAccessibilityHueRotationAmount, -10);
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(180.f, root_window->layer()->layer_hue_rotation());
+
+  // Turn it off again, expect defaults to be restored.
+  prefs->SetBoolean(prefs::kAccessibilityColorCorrectionEnabled, false);
+  for (aura::Window* root_window : Shell::GetAllRootWindows()) {
+    EXPECT_FLOAT_EQ(0.0f, root_window->layer()->layer_grayscale());
+    EXPECT_FALSE(root_window->layer()->LayerHasCustomColorMatrix());
   }
 }
-
-TEST_F(ColorEnhancementControllerTest, Sepia) {
-  PrefService* prefs = GetPrefs();
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, 10);
-  EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.1f, root_window->layer()->layer_sepia());
-  }
-
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, 99);
-  EXPECT_TRUE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.99f, root_window->layer()->layer_sepia());
-  }
-
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, 100);
-  EXPECT_TRUE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(1.0f, root_window->layer()->layer_sepia());
-  }
-
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, 50);
-  EXPECT_TRUE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.5f, root_window->layer()->layer_sepia());
-  }
-
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, 0);
-  EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.0f, root_window->layer()->layer_sepia());
-  }
-
-  // Sepia smaller than 0 or lareger than 100% does nothing.
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, -10);
-  EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.0f, root_window->layer()->layer_sepia());
-  }
-
-  prefs->SetInteger(prefs::kAccessibilitySepiaAmount, 150);
-  EXPECT_FALSE(IsCursorCompositingEnabled());
-  for (auto* root_window : Shell::GetAllRootWindows()) {
-    EXPECT_FLOAT_EQ(0.0f, root_window->layer()->layer_sepia());
-  }
-}
-
 }  // namespace ash

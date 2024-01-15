@@ -5,7 +5,7 @@
 #include "fuchsia_web/webengine/browser/content_directory_loader_factory.h"
 
 #include <lib/fdio/directory.h>
-#include <lib/fdio/fdio.h>
+#include <lib/fdio/fd.h>
 
 #include <algorithm>
 #include <memory>
@@ -53,7 +53,7 @@ constexpr char kFallbackMimeType[] = "application/octet-stream";
 //            will assume the charset to be "text/plain" by default.
 scoped_refptr<net::HttpResponseHeaders> CreateHeaders(
     base::StringPiece mime_type,
-    const absl::optional<std::string>& charset) {
+    const std::optional<std::string>& charset) {
   constexpr char kXFrameOptions[] = "X-Frame-Options";
   constexpr char kXFrameOptionsValue[] = "DENY";
   constexpr char kCacheControl[] = "Cache-Control";
@@ -121,32 +121,22 @@ class ContentDirectoryURLLoader final : public network::mojom::URLLoader {
   // Creates a read-only MemoryMappedFile view to |file|.
   bool MapFile(fidl::InterfaceHandle<fuchsia::io::Node> file,
                base::MemoryMappedFile* mmap) {
-    // Bind the file channel to a FDIO entry and then a file descriptor so that
-    // we can use it for reading.
-    fdio_t* fdio = nullptr;
-    zx_status_t status = fdio_create(file.TakeChannel().release(), &fdio);
-    if (status == ZX_ERR_PEER_CLOSED) {
+    // Bind the file channel to a file descriptor so that we can use it for
+    // reading.
+    base::ScopedFD fd;
+    if (zx_status_t status = fdio_fd_create(file.TakeChannel().release(),
+                                            base::ScopedFD::Receiver(fd).get());
+        status != ZX_OK) {
       // File-not-found errors are expected in some cases, so handle this result
       // w/o logging error text.
-      return false;
-    } else if (status != ZX_OK) {
-      ZX_DLOG_IF(WARNING, status != ZX_OK, status) << "fdio_create";
-      return false;
-    }
-
-    base::ScopedFD fd(fdio_bind_to_fd(fdio, -1, 0));
-    if (!fd.is_valid()) {
-      LOG(ERROR) << "fdio_bind_to_fd returned an invalid FD.";
+      ZX_DLOG_IF(WARNING, status != ZX_ERR_PEER_CLOSED, status)
+          << "fdio_fd_create";
       return false;
     }
 
     // Map the file into memory.
-    if (!mmap->Initialize(base::File(std::move(fd)),
-                          base::MemoryMappedFile::READ_ONLY)) {
-      return false;
-    }
-
-    return true;
+    return mmap->Initialize(base::File(std::move(fd)),
+                            base::MemoryMappedFile::READ_ONLY);
   }
 
   // Initiates data transfer from |file_channel| to |client_remote|.
@@ -184,11 +174,11 @@ class ContentDirectoryURLLoader final : public network::mojom::URLLoader {
     auto response = network::mojom::URLResponseHead::New();
 
     // Read the charset and MIME type from the optional _metadata file.
-    absl::optional<std::string> charset;
-    absl::optional<std::string> mime_type;
+    std::optional<std::string> charset;
+    std::optional<std::string> mime_type;
     base::MemoryMappedFile metadata_mmap;
     if (MapFile(std::move(metadata_channel), &metadata_mmap)) {
-      absl::optional<base::Value> metadata_parsed = base::JSONReader::Read(
+      std::optional<base::Value> metadata_parsed = base::JSONReader::Read(
           base::StringPiece(reinterpret_cast<char*>(metadata_mmap.data()),
                             metadata_mmap.length()));
 
@@ -246,7 +236,7 @@ class ContentDirectoryURLLoader final : public network::mojom::URLLoader {
     }
 
     client_->OnReceiveResponse(std::move(response), std::move(consumer_handle),
-                               absl::nullopt);
+                               std::nullopt);
 
     // Start reading the contents of |mmap_| into the response DataPipe.
     body_writer_ =
@@ -267,7 +257,7 @@ class ContentDirectoryURLLoader final : public network::mojom::URLLoader {
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_request_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_request_headers,
-      const absl::optional<GURL>& new_url) override {}
+      const std::optional<GURL>& new_url) override {}
   void SetPriority(net::RequestPriority priority,
                    int32_t intra_priority_value) override {}
   void PauseReadingBodyFromNet() override {}

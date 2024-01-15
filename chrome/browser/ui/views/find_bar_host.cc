@@ -129,7 +129,7 @@ FindBarHost::FindBarHost(BrowserView* browser_view)
   DropdownBarHostDelegate* find_bar_delegate = find_bar_view.get();
   Init(browser_view->find_bar_host_view(), std::move(find_bar_view),
        find_bar_delegate);
-  SetAccessibleRole(ax::mojom::Role::kDialog);
+  SetAccessibleWindowRole(ax::mojom::Role::kDialog);
 }
 
 FindBarHost::~FindBarHost() {
@@ -297,18 +297,15 @@ bool FindBarHost::AcceleratorPressed(const ui::Accelerator& accelerator) {
         find_in_page::SelectionAction::kActivate,
         find_in_page::ResultAction::kClear);
     return true;
-  } else if (key == ui::VKEY_ESCAPE) {
-    // This will end the Find session and hide the window, causing it to loose
-    // focus and in the process unregister us as the handler for the Escape
-    // accelerator through the OnWillChangeFocus event.
-    find_bar_controller_->EndFindSession(find_in_page::SelectionAction::kKeep,
-                                         find_in_page::ResultAction::kKeep);
-    return true;
-  } else {
-    NOTREACHED() << "Unknown accelerator";
   }
 
-  return false;
+  CHECK_EQ(key, ui::VKEY_ESCAPE);
+  // This will end the Find session and hide the window, causing it to loose
+  // focus and in the process unregister us as the handler for the Escape
+  // accelerator through the OnWillChangeFocus event.
+  find_bar_controller_->EndFindSession(find_in_page::SelectionAction::kKeep,
+                                       find_in_page::ResultAction::kKeep);
+  return true;
 }
 
 bool FindBarHost::CanHandleAccelerators() const {
@@ -433,6 +430,12 @@ void FindBarHost::UnregisterAccelerators() {
 
   DropdownBarHost::UnregisterAccelerators();
 }
+
+#if BUILDFLAG(IS_MAC)
+views::Widget* FindBarHost::GetHostWidget() {
+  return host();
+}
+#endif
 
 void FindBarHost::OnVisibilityChanged() {
   // Tell the immersive mode controller about the find bar's bounds. The

@@ -13,8 +13,8 @@
 #include "chrome/common/extensions/api/accessibility_private.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/common/constants.h"
@@ -28,14 +28,14 @@ std::string ToString(SwitchAccessCommand command) {
   switch (command) {
     case SwitchAccessCommand::kSelect:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::SWITCH_ACCESS_COMMAND_SELECT);
+          extensions::api::accessibility_private::SwitchAccessCommand::kSelect);
     case SwitchAccessCommand::kNext:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::SWITCH_ACCESS_COMMAND_NEXT);
+          extensions::api::accessibility_private::SwitchAccessCommand::kNext);
     case SwitchAccessCommand::kPrevious:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::
-              SWITCH_ACCESS_COMMAND_PREVIOUS);
+          extensions::api::accessibility_private::SwitchAccessCommand::
+              kPrevious);
     case SwitchAccessCommand::kNone:
       NOTREACHED();
       return "";
@@ -46,19 +46,19 @@ std::string ToString(MagnifierCommand command) {
   switch (command) {
     case MagnifierCommand::kMoveStop:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVESTOP);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveStop);
     case MagnifierCommand::kMoveUp:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVEUP);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveUp);
     case MagnifierCommand::kMoveDown:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVEDOWN);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveDown);
     case MagnifierCommand::kMoveLeft:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVELEFT);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveLeft);
     case MagnifierCommand::kMoveRight:
       return extensions::api::accessibility_private::ToString(
-          extensions::api::accessibility_private::MAGNIFIER_COMMAND_MOVERIGHT);
+          extensions::api::accessibility_private::MagnifierCommand::kMoveRight);
   }
 
   return "";
@@ -129,9 +129,9 @@ void AccessibilityEventRewriterDelegateImpl::SendPointScanPoint(
   extensions::EventRouter* event_router =
       extensions::EventRouter::Get(AccessibilityManager::Get()->profile());
 
-  base::Value point_dict(base::Value::Type::DICTIONARY);
-  point_dict.SetDoubleKey("x", point.x());
-  point_dict.SetDoubleKey("y", point.y());
+  base::Value::Dict point_dict;
+  point_dict.Set("x", point.x());
+  point_dict.Set("y", point.y());
 
   base::Value::List event_args;
   event_args.Append(std::move(point_dict));

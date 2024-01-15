@@ -7,11 +7,10 @@
 #include <cstdlib>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/renderer/pepper/pepper_plugin_instance_impl.h"
 #include "content/renderer/pepper/pepper_try_catch.h"
 #include "content/renderer/pepper/plugin_module.h"
@@ -288,7 +287,7 @@ void MessageChannel::PostMessageToNative(gin::Arguments* args) {
     NOTREACHED();
   }
 
-  EnqueuePluginMessage(message_data);
+  EnqueuePluginMessage(args->isolate(), message_data);
   DrainCompletedPluginMessages();
 }
 
@@ -378,7 +377,8 @@ PluginObject* MessageChannel::GetPluginObject(v8::Isolate* isolate) {
       v8::Local<v8::Object>::New(isolate, passthrough_object_));
 }
 
-void MessageChannel::EnqueuePluginMessage(v8::Local<v8::Value> v8_value) {
+void MessageChannel::EnqueuePluginMessage(v8::Isolate* isolate,
+                                          v8::Local<v8::Value> v8_value) {
   plugin_message_queue_.push_back(VarConversionResult());
   // Convert the v8 value in to an appropriate PP_Var like Dictionary,
   // Array, etc. (We explicitly don't want an "Object" PP_Var, which we don't
@@ -386,7 +386,7 @@ void MessageChannel::EnqueuePluginMessage(v8::Local<v8::Value> v8_value) {
   // TODO(raymes): Possibly change this to use TryCatch to do the conversion and
   // throw an exception if necessary.
   V8VarConverter::VarResult conversion_result = var_converter_.FromV8Value(
-      v8_value, v8::Isolate::GetCurrent()->GetCurrentContext(),
+      v8_value, isolate->GetCurrentContext(),
       base::BindOnce(&MessageChannel::FromV8ValueComplete,
                      weak_ptr_factory_.GetWeakPtr(),
                      &plugin_message_queue_.back()));
@@ -438,7 +438,7 @@ void MessageChannel::DrainJSMessageQueue() {
   // Take a reference on the PluginInstance. This is because JavaScript code
   // may delete the plugin, which would destroy the PluginInstance and its
   // corresponding MessageChannel.
-  scoped_refptr<PepperPluginInstanceImpl> instance_ref(instance_);
+  scoped_refptr<PepperPluginInstanceImpl> instance_ref(instance_.get());
   while (!js_message_queue_.empty()) {
     PostMessageToJavaScriptImpl(js_message_queue_.front());
     js_message_queue_.pop_front();
@@ -450,7 +450,7 @@ void MessageChannel::DrainJSMessageQueueSoon() {
   if (drain_js_message_queue_scheduled_)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&MessageChannel::DrainJSMessageQueue,
                                 weak_ptr_factory_.GetWeakPtr()));
   drain_js_message_queue_scheduled_ = true;

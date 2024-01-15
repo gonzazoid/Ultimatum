@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/updater/external_constants_override.h"
+
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,22 +24,23 @@
 #include "chrome/updater/constants.h"
 #include "chrome/updater/external_constants.h"
 #include "chrome/updater/external_constants_default.h"
-#include "chrome/updater/external_constants_override.h"
 #include "chrome/updater/updater_branding.h"
 #include "chrome/updater/updater_scope.h"
 #include "chrome/updater/updater_version.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/util.h"
 #include "components/crx_file/crx_verifier.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #elif BUILDFLAG(IS_WIN)
 #include "base/path_service.h"
 #endif
 
 namespace {
+
+// Developer override file name, relative to app data directory.
+const char kDevOverrideFileName[] = "overrides.json";
 
 std::vector<GURL> GURLVectorFromStringList(
     const base::Value::List& update_url_list) {
@@ -52,6 +56,14 @@ std::vector<GURL> GURLVectorFromStringList(
 }  // anonymous namespace
 
 namespace updater {
+
+std::optional<base::FilePath> GetOverrideFilePath(UpdaterScope scope) {
+  std::optional<base::FilePath> base = GetInstallDirectory(scope);
+  if (!base) {
+    return std::nullopt;
+  }
+  return base->DirName().AppendASCII(kDevOverrideFileName);
+}
 
 ExternalConstantsOverrider::ExternalConstantsOverrider(
     base::Value::Dict override_values,
@@ -81,6 +93,30 @@ std::vector<GURL> ExternalConstantsOverrider::UpdateURL() const {
   return {};
 }
 
+GURL ExternalConstantsOverrider::CrashUploadURL() const {
+  if (!override_values_.contains(kDevOverrideKeyCrashUploadUrl)) {
+    return next_provider_->CrashUploadURL();
+  }
+  const base::Value* crash_upload_url_value =
+      override_values_.Find(kDevOverrideKeyCrashUploadUrl);
+  CHECK(crash_upload_url_value->is_string())
+      << "Unexpected type of override[" << kDevOverrideKeyCrashUploadUrl
+      << "]: " << base::Value::GetTypeName(crash_upload_url_value->type());
+  return {GURL(crash_upload_url_value->GetString())};
+}
+
+GURL ExternalConstantsOverrider::DeviceManagementURL() const {
+  if (!override_values_.contains(kDevOverrideKeyDeviceManagementUrl)) {
+    return next_provider_->DeviceManagementURL();
+  }
+  const base::Value* device_management_url_value =
+      override_values_.Find(kDevOverrideKeyDeviceManagementUrl);
+  CHECK(device_management_url_value->is_string())
+      << "Unexpected type of override[" << kDevOverrideKeyDeviceManagementUrl
+      << "]: " << base::Value::GetTypeName(device_management_url_value->type());
+  return {GURL(device_management_url_value->GetString())};
+}
+
 bool ExternalConstantsOverrider::UseCUP() const {
   if (!override_values_.contains(kDevOverrideKeyUseCUP)) {
     return next_provider_->UseCUP();
@@ -94,7 +130,7 @@ bool ExternalConstantsOverrider::UseCUP() const {
   return use_cup_value->GetBool();
 }
 
-double ExternalConstantsOverrider::InitialDelay() const {
+base::TimeDelta ExternalConstantsOverrider::InitialDelay() const {
   if (!override_values_.contains(kDevOverrideKeyInitialDelay)) {
     return next_provider_->InitialDelay();
   }
@@ -104,12 +140,12 @@ double ExternalConstantsOverrider::InitialDelay() const {
   CHECK(initial_delay_value->is_double())
       << "Unexpected type of override[" << kDevOverrideKeyInitialDelay
       << "]: " << base::Value::GetTypeName(initial_delay_value->type());
-  return initial_delay_value->GetDouble();
+  return base::Seconds(initial_delay_value->GetDouble());
 }
 
-int ExternalConstantsOverrider::ServerKeepAliveSeconds() const {
+base::TimeDelta ExternalConstantsOverrider::ServerKeepAliveTime() const {
   if (!override_values_.contains(kDevOverrideKeyServerKeepAliveSeconds)) {
-    return next_provider_->ServerKeepAliveSeconds();
+    return next_provider_->ServerKeepAliveTime();
   }
 
   const base::Value* server_keep_alive_seconds_value =
@@ -118,7 +154,7 @@ int ExternalConstantsOverrider::ServerKeepAliveSeconds() const {
       << "Unexpected type of override[" << kDevOverrideKeyServerKeepAliveSeconds
       << "]: "
       << base::Value::GetTypeName(server_keep_alive_seconds_value->type());
-  return server_keep_alive_seconds_value->GetInt();
+  return base::Seconds(server_keep_alive_seconds_value->GetInt());
 }
 
 crx_file::VerifierFormat ExternalConstantsOverrider::CrxVerifierFormat() const {
@@ -161,20 +197,56 @@ base::TimeDelta ExternalConstantsOverrider::OverinstallTimeout() const {
   return base::Seconds(value->GetInt());
 }
 
+base::TimeDelta ExternalConstantsOverrider::IdleCheckPeriod() const {
+  if (!override_values_.contains(kDevOverrideKeyIdleCheckPeriodSeconds)) {
+    return next_provider_->IdleCheckPeriod();
+  }
+
+  const base::Value* value =
+      override_values_.Find(kDevOverrideKeyIdleCheckPeriodSeconds);
+  CHECK(value->is_int()) << "Unexpected type of override["
+                         << kDevOverrideKeyIdleCheckPeriodSeconds
+                         << "]: " << base::Value::GetTypeName(value->type());
+  return base::Seconds(value->GetInt());
+}
+
+std::optional<bool> ExternalConstantsOverrider::IsMachineManaged() const {
+  if (!override_values_.contains(kDevOverrideKeyManagedDevice)) {
+    return next_provider_->IsMachineManaged();
+  }
+  const base::Value* is_managed =
+      override_values_.Find(kDevOverrideKeyManagedDevice);
+  CHECK(is_managed->is_bool())
+      << "Unexpected type of override[" << kDevOverrideKeyManagedDevice
+      << "]: " << base::Value::GetTypeName(is_managed->type());
+
+  return std::make_optional(is_managed->GetBool());
+}
+
+bool ExternalConstantsOverrider::EnableDiffUpdates() const {
+  if (!override_values_.contains(kDevOverrideKeyEnableDiffUpdates)) {
+    return next_provider_->EnableDiffUpdates();
+  }
+  const base::Value* value =
+      override_values_.Find(kDevOverrideKeyEnableDiffUpdates);
+  CHECK(value->is_bool()) << "Unexpected type of override["
+                          << kDevOverrideKeyEnableDiffUpdates
+                          << "]: " << base::Value::GetTypeName(value->type());
+  return value->GetBool();
+}
+
 // static
 scoped_refptr<ExternalConstantsOverrider>
 ExternalConstantsOverrider::FromDefaultJSONFile(
     scoped_refptr<ExternalConstants> next_provider) {
-  const absl::optional<base::FilePath> data_dir_path =
-      GetBaseDataDirectory(GetUpdaterScope());
-  if (!data_dir_path) {
-    LOG(ERROR) << "Cannot find app data path.";
+  const std::optional<base::FilePath> override_file_path =
+      GetOverrideFilePath(GetUpdaterScope());
+  if (!override_file_path) {
+    LOG(ERROR) << "Cannot find override file path.";
     return nullptr;
   }
-  const base::FilePath override_file_path =
-      data_dir_path->AppendASCII(kDevOverrideFileName);
 
-  JSONFileValueDeserializer parser(override_file_path,
+  JSONFileValueDeserializer parser(*override_file_path,
                                    base::JSON_ALLOW_TRAILING_COMMAS);
   int error_code = 0;
   std::string error_message;

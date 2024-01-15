@@ -10,10 +10,6 @@
 #import "base/test/ios/wait_util.h"
 #import "testing/gtest/include/gtest/gtest.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForJSCompletionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -42,6 +38,34 @@ id ExecuteJavaScript(WKWebView* web_view,
   EXPECT_TRUE(success)
       << base::SysNSStringToUTF8(block_error.description)
       << "\nWKWebView failed to complete javascript execution.\n"
+      << base::SysNSStringToUTF8(
+             [[NSThread callStackSymbols] componentsJoinedByString:@"\n"]);
+  return result;
+}
+
+id ExecuteAsyncJavaScript(WKWebView* web_view,
+                          WKContentWorld* content_world,
+                          NSString* script) {
+  __block id result;
+  __block bool completed = false;
+  __block NSError* block_error = nil;
+  SCOPED_TRACE(base::SysNSStringToUTF8(script));
+  [web_view callAsyncJavaScript:script
+                      arguments:nil
+                        inFrame:nil
+                 inContentWorld:content_world
+              completionHandler:^(id script_result, NSError* script_error) {
+                result = [script_result copy];
+                block_error = [script_error copy];
+                completed = true;
+              }];
+  BOOL success = WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
+    return completed;
+  });
+  // Log stack trace to provide some context.
+  EXPECT_TRUE(success)
+      << base::SysNSStringToUTF8(block_error.description)
+      << "\nWKWebView failed to complete async javascript execution.\n"
       << base::SysNSStringToUTF8(
              [[NSThread callStackSymbols] componentsJoinedByString:@"\n"]);
   return result;

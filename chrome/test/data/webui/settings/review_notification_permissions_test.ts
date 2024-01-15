@@ -3,16 +3,19 @@
 // found in the LICENSE file.
 
 // clang-format off
+import {keyDownOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {SettingsReviewNotificationPermissionsElement, SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
-import {CrActionMenuElement} from 'chrome://settings/settings.js';
+import {SettingsReviewNotificationPermissionsElement, SafetyHubBrowserProxyImpl, SafetyHubEvent} from 'chrome://settings/lazy_load.js';
+import {CrActionMenuElement, MetricsBrowserProxyImpl, Router, routes, SafetyCheckNotificationsModuleInteractions, SettingsRoutes} from 'chrome://settings/settings.js';
 import {isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {isMac} from 'chrome://resources/js/platform.js';
 import {PluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 
-import {TestSiteSettingsPrefsBrowserProxy} from './test_site_settings_prefs_browser_proxy.js';
+import {TestMetricsBrowserProxy} from './test_metrics_browser_proxy.js';
+import {TestSafetyHubBrowserProxy} from './test_safety_hub_browser_proxy.js';
 
 // clang-format on
 
@@ -20,9 +23,11 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
   /**
    * The mock proxy object to use during test.
    */
-  let browserProxy: TestSiteSettingsPrefsBrowserProxy;
+  let browserProxy: TestSafetyHubBrowserProxy;
+  let metricsBrowserProxy: TestMetricsBrowserProxy;
 
   let testElement: SettingsReviewNotificationPermissionsElement;
+  let testRoutes: SettingsRoutes;
 
   const origin1 = 'https://www.example1.com:443';
   const detail1 = 'About 4 notifications a day';
@@ -82,22 +87,41 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
     }
   }
 
-  setup(function() {
-    browserProxy = new TestSiteSettingsPrefsBrowserProxy();
-    browserProxy.setNotificationPermissionReview(mockData);
-    SiteSettingsPrefsBrowserProxyImpl.setInstance(browserProxy);
+  async function assertMetricsInteraction(
+      interaction: SafetyCheckNotificationsModuleInteractions) {
+    const result = await metricsBrowserProxy.whenCalled(
+        'recordSafetyCheckNotificationsModuleInteractionsHistogram');
+    assertEquals(interaction, result);
+    metricsBrowserProxy.resetResolver(
+        'recordSafetyCheckNotificationsModuleInteractionsHistogram');
+  }
 
+  async function createPage() {
     document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testElement = document.createElement('review-notification-permissions');
-    document.body.appendChild(testElement);
-
-    // The model update delay exists to allow animations to finish before
-    // the list is updated. As most of the test cases are not dependent on
-    // animation visuals and this delay would slow down test execution,
-    // set it to zero.
     testElement.setModelUpdateDelayMsForTesting(0);
-
+    Router.getInstance().navigateTo(testRoutes.SITE_SETTINGS_NOTIFICATIONS);
+    document.body.appendChild(testElement);
+    // Wait until the element has asked for the list of revoked permissions
+    // that will be shown for review.
+    await browserProxy.whenCalled('getNotificationPermissionReview');
     flush();
+  }
+
+  setup(async function() {
+    browserProxy = new TestSafetyHubBrowserProxy();
+    browserProxy.setNotificationPermissionReview(mockData);
+    SafetyHubBrowserProxyImpl.setInstance(browserProxy);
+    metricsBrowserProxy = new TestMetricsBrowserProxy();
+    MetricsBrowserProxyImpl.setInstance(metricsBrowserProxy);
+    testRoutes = {
+      SITE_SETTINGS_NOTIFICATIONS: routes.SITE_SETTINGS_NOTIFICATIONS,
+    } as unknown as SettingsRoutes;
+    Router.resetInstanceForTesting(new Router(routes));
+    await createPage();
+    // Clear the metrics that were recorded as part of the initial creation of
+    // the page.
+    metricsBrowserProxy.reset();
   });
 
   teardown(function() {
@@ -123,14 +147,18 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
   }
 
   function getEntries() {
-    return testElement.shadowRoot!.querySelectorAll(
-        '.notification-permissions-list .site-entry');
+    return testElement.shadowRoot!.querySelectorAll('.site-list .site-entry');
   }
 
-  test('Notification Permission strings', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
+  test('Capture metrics on visit', async function() {
+    await createPage();
+    const result = await metricsBrowserProxy.whenCalled(
+        'recordSafetyCheckNotificationsModuleInteractionsHistogram');
+    assertEquals(
+        SafetyCheckNotificationsModuleInteractions.OPEN_REVIEW_UI, result);
+  });
 
+  test('Notification Permission strings', async function() {
     const entries = getEntries();
     assertEquals(2, entries.length);
 
@@ -154,9 +182,6 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * browser proxy call and shows the notification toast element.
    */
   test('Dont Allow Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     const entries = getEntries();
     assertEquals(2, entries.length);
 
@@ -178,6 +203,8 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
         testElement.i18n(
             'safetyCheckNotificationPermissionReviewBlockedToastLabel',
             expectedOrigin));
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.BLOCK);
   });
 
   /**
@@ -186,9 +213,6 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * notification toast element.
    */
   test('Ignore Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     const entries = getEntries();
     assertEquals(2, entries.length);
 
@@ -212,6 +236,8 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
         testElement.i18n(
             'safetyCheckNotificationPermissionReviewIgnoredToastLabel',
             expectedOrigin));
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.IGNORE);
     // Ensure the action menu is closed.
     const menu = testElement.shadowRoot!.querySelector('cr-action-menu')! as
         CrActionMenuElement;
@@ -225,9 +251,6 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * notification toast element.
    */
   test('Reset Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     const entries = getEntries();
     assertEquals(2, entries.length);
 
@@ -250,6 +273,8 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
         testElement.i18n(
             'safetyCheckNotificationPermissionReviewResetToastLabel',
             expectedOrigin));
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.RESET);
     // Ensure the action menu is closed.
     const menu = testElement.shadowRoot!.querySelector('cr-action-menu')! as
         CrActionMenuElement;
@@ -263,18 +288,19 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * disappear.
    */
   test('Undo Block Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     // User blocks the site.
     testElement.shadowRoot!.querySelector<HTMLElement>(
                                '.site-entry #block')!.click();
     assertAnimation([true, false]);
+    metricsBrowserProxy.resetResolver(
+        'recordSafetyCheckNotificationsModuleInteractionsHistogram');
 
     await assertUndo('allowNotificationPermissionForOrigins', 0);
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', mockData);
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, mockData);
     assertAnimation([false, false]);
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.UNDO_BLOCK);
   });
 
   /**
@@ -283,18 +309,19 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * and makes the toast element disappear.
    */
   test('Undo Ignore Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     openActionMenu(0);
     // User ignores notifications for the site.
     testElement.shadowRoot!.querySelector<HTMLElement>('#ignore')!.click();
     assertAnimation([true, false]);
+    metricsBrowserProxy.resetResolver(
+        'recordSafetyCheckNotificationsModuleInteractionsHistogram');
 
     await assertUndo('undoIgnoreNotificationPermissionForOrigins', 0);
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', mockData);
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, mockData);
     assertAnimation([false, false]);
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.UNDO_IGNORE);
   });
 
   /**
@@ -303,18 +330,19 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * and makes the toast element disappear.
    */
   test('Undo Reset Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     openActionMenu(0);
     // User resets permissions for the site.
     testElement.shadowRoot!.querySelector<HTMLElement>('#reset')!.click();
     assertAnimation([true, false]);
+    metricsBrowserProxy.resetResolver(
+        'recordSafetyCheckNotificationsModuleInteractionsHistogram');
 
     await assertUndo('allowNotificationPermissionForOrigins', 0);
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', mockData);
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, mockData);
     assertAnimation([false, false]);
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.UNDO_RESET);
   });
 
   /**
@@ -323,8 +351,6 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
    * will allow the notifications for that same list.
    */
   test('Block All Click', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
     testElement.shadowRoot!.querySelector<HTMLElement>(
                                '#blockAllButton')!.click();
     const origins1 =
@@ -336,6 +362,8 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
         await PluralStringProxyImpl.getInstance().getPluralString(
             'safetyCheckNotificationPermissionReviewBlockAllToastLabel', 2);
     assertNotification(true, notificationText);
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.BLOCK_ALL);
 
     // Click undo button.
     testElement.shadowRoot!.querySelector<HTMLElement>(
@@ -345,14 +373,44 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
     assertEquals(2, origins2.length);
     assertEquals(
         JSON.stringify(origins2.sort()), JSON.stringify([origin1, origin2]));
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.UNDO_BLOCK);
+  });
+
+  /**
+   * Tests whether pressing the ctrl+z key combination correctly undoes the last
+   * user action.
+   */
+  test('Undo Block via Ctrl+Z', async function() {
+    // User blocks the site.
+    testElement.shadowRoot!.querySelector<HTMLElement>(
+                               '.site-entry #block')!.click();
+    assertAnimation([true, false]);
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.BLOCK);
+
+    const entries = getEntries();
+    const expectedOrigin =
+        entries[0]!.querySelector('.site-representation')!.textContent!.trim();
+    browserProxy.resetResolver('allowNotificationPermissionForOrigins');
+    const notificationText = testElement.i18n(
+        'safetyCheckNotificationPermissionReviewBlockedToastLabel',
+        expectedOrigin);
+    assertNotification(true, notificationText);
+
+    keyDownOn(document.documentElement, 0, isMac ? 'meta' : 'ctrl', 'z');
+
+    const origins =
+        await browserProxy.whenCalled('allowNotificationPermissionForOrigins');
+    assertEquals(origins[0], expectedOrigin);
+    assertNotification(false);
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.UNDO_BLOCK);
   });
 
   test('Block All Click single entry', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', [{
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, [{
           origin: origin1,
           notificationInfoString: detail1,
         }]);
@@ -372,33 +430,32 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
         testElement.i18n(
             'safetyCheckNotificationPermissionReviewBlockedToastLabel',
             origin1));
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.BLOCK_ALL);
   });
 
   test('Completion State', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    flush();
-
     // Before review, header and list of permissions are visible.
     assertTrue(isChildVisible(testElement, '#review-header'));
-    assertTrue(isChildVisible(testElement, '.notification-permissions-list'));
+    assertTrue(isChildVisible(testElement, '.site-list'));
     assertFalse(isChildVisible(testElement, '#done-header'));
 
     // Through reviewing permissions the permission list is empty and only the
     // completion info is visible.
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', []);
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, []);
     await flushTasks();
     assertFalse(isChildVisible(testElement, '#review-header'));
-    assertFalse(isChildVisible(testElement, '.notification-permissions-list'));
+    assertFalse(isChildVisible(testElement, '.site-list'));
     assertTrue(isChildVisible(testElement, '#done-header'));
 
     // The element returns to showing the list of permissions when new items are
     // added while the completion state is visible.
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', mockData);
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, mockData);
     await flushTasks();
     assertTrue(isChildVisible(testElement, '#review-header'));
-    assertTrue(isChildVisible(testElement, '.notification-permissions-list'));
+    assertTrue(isChildVisible(testElement, '.site-list'));
     assertFalse(isChildVisible(testElement, '#done-header'));
   });
 
@@ -418,6 +475,8 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
     // User collapses the list.
     expandButton.click();
     flush();
+    await assertMetricsInteraction(
+        SafetyCheckNotificationsModuleInteractions.MINIMIZE);
 
     // Button and list are collapsed.
     assertFalse(expandButton.expanded);
@@ -433,30 +492,26 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
   });
 
   /**
-   * TODO(crbug/1374908): Re-enable the commented parts. This is failing on
-   * buildbots.
-   *
    * Tests whether header string updated based on the notification permission
    * list size for plural and singular case.
    */
   test('Header String', async function() {
-    await browserProxy.whenCalled('getNotificationPermissionReview');
-    await flushTasks();
-
     // Check header string for plural case.
     let entries = getEntries();
     assertEquals(2, entries.length);
 
     const headerElement =
-        testElement.shadowRoot!.querySelector('#expandButton h2');
+        testElement.shadowRoot!.querySelector('#review-header h2');
     assertTrue(headerElement !== null);
-    // assertEquals(
-    //     'Review 2 sites that recently sent a lot of notifications',
-    //     headerElement.textContent!.trim());
+
+    const headerStringTwo =
+        await PluralStringProxyImpl.getInstance().getPluralString(
+            'safetyCheckNotificationPermissionReviewPrimaryLabel', 2);
+    assertEquals(headerStringTwo, headerElement.textContent!.trim());
 
     // Check header string for singular case.
     webUIListenerCallback(
-        'notification-permission-review-list-maybe-changed', [{
+        SafetyHubEvent.NOTIFICATION_PERMISSIONS_MAYBE_CHANGED, [{
           origin: origin1,
           notificationInfoString: detail1,
         }]);
@@ -465,8 +520,26 @@ suite('CrSettingsReviewNotificationPermissionsTest', function() {
     entries = getEntries();
     assertEquals(1, entries.length);
 
-    // assertEquals(
-    //     'Review 1 site that recently sent a lot of notifications',
-    //     headerElement.textContent!.trim());
+    const headerStringOne =
+        await PluralStringProxyImpl.getInstance().getPluralString(
+            'safetyCheckNotificationPermissionReviewPrimaryLabel', 1);
+    assertEquals(headerStringOne, headerElement.textContent!.trim());
+  });
+
+  test('Review list size record metrics', async function() {
+    browserProxy.setNotificationPermissionReview(mockData);
+    await createPage();
+    const resultNumSites = await metricsBrowserProxy.whenCalled(
+        'recordSafetyCheckNotificationsListCountHistogram');
+    assertEquals(mockData.length, resultNumSites);
+
+    metricsBrowserProxy.resetResolver(
+        'recordSafetyCheckNotificationsListCountHistogram');
+
+    browserProxy.setNotificationPermissionReview([]);
+    await createPage();
+    const resultEmpty = await metricsBrowserProxy.whenCalled(
+        'recordSafetyCheckNotificationsListCountHistogram');
+    assertEquals(0, resultEmpty);
   });
 });

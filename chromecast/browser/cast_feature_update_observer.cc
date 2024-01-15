@@ -4,8 +4,8 @@
 
 #include "chromecast/browser/cast_feature_update_observer.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "chromecast/base/pref_names.h"
 #include "chromecast/common/mojom/constants.mojom.h"
 #include "chromecast/external_mojo/external_service_support/external_connector.h"
@@ -44,8 +44,8 @@ void CastFeatureUpdateObserver::BindFeatureUpdateService() {
                      base::Unretained(this)));
 }
 
-void CastFeatureUpdateObserver::OnFeaturesUpdated(base::Value features) {
-  pref_service_->Set(prefs::kLatestDCSFeatures, std::move(features));
+void CastFeatureUpdateObserver::OnFeaturesUpdated(base::Value::Dict features) {
+  pref_service_->SetDict(prefs::kLatestDCSFeatures, std::move(features));
   pref_service_->CommitPendingWrite();
 }
 

@@ -5,15 +5,14 @@
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
+#include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/profiles/profile.h"
@@ -24,6 +23,7 @@
 #include "chrome/browser/ui/status_bubble.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_switches.h"
+#include "content/public/browser/fullscreen_types.h"
 #include "content/public/browser/navigation_details.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/permission_controller.h"
@@ -45,18 +45,17 @@ using content::WebContents;
 
 namespace {
 
-const char kFullscreenBubbleReshowsHistogramName[] =
-    "ExclusiveAccess.BubbleReshowsPerSession.Fullscreen";
-
 int64_t GetDisplayId(const WebContents& web_contents) {
-  auto* screen = display::Screen::GetScreen();
-  // crbug.com/1347558 WebContents::GetNativeView is const-incorrect.
-  // const_cast is used to access GetNativeView(). Also GetDisplayNearestView
-  // should accept const gfx::NativeView, but there is other const incorrectness
-  // down the call chain in some implementations.
-  auto display = screen->GetDisplayNearestView(
-      const_cast<WebContents&>(web_contents).GetNativeView());
-  return display.id();
+  if (auto* screen = display::Screen::GetScreen()) {
+    // crbug.com/1347558 WebContents::GetNativeView is const-incorrect.
+    // const_cast is used to access GetNativeView(). Also GetDisplayNearestView
+    // should accept const gfx::NativeView, but there is other const
+    // incorrectness down the call chain in some implementations.
+    auto display = screen->GetDisplayNearestView(
+        const_cast<WebContents&>(web_contents).GetNativeView());
+    return display.id();
+  }
+  return display::kInvalidDisplayId;
 }
 
 bool IsAnotherScreen(const WebContents& web_contents,
@@ -115,32 +114,30 @@ bool FullscreenController::IsTabFullscreen() const {
   return tab_fullscreen_ || is_tab_fullscreen_for_testing_;
 }
 
-bool FullscreenController::IsFullscreenForTabOrPending(
-    const content::WebContents* web_contents,
-    int64_t* display_id) const {
-  bool is_fullscreen = IsFullscreenWithinTab(web_contents);
-  if (!is_fullscreen && web_contents == exclusive_access_tab()) {
-    // If we're handling OnTabDeactivated(), |web_contents| is the
-    // deactivated contents. On the other hand,
-    // exclusive_access_manager()->context()->GetActiveWebContents() returns
-    // newly activated contents. That's because deactivation of tab is notified
-    // after TabStripModel's internal state is consistent.
-    DCHECK(web_contents ==
-               exclusive_access_manager()->context()->GetActiveWebContents() ||
-           web_contents == deactivated_contents_);
-    is_fullscreen = true;
+content::FullscreenState FullscreenController::GetFullscreenState(
+    const content::WebContents* web_contents) const {
+  content::FullscreenState state;
+  CHECK(web_contents) << "Null web_contents passed to GetFullscreenState";
+
+  // Handle screen-captured tab fullscreen and `is_tab_fullscreen_for_testing_`.
+  if (IsFullscreenWithinTab(web_contents)) {
+    state.target_mode = content::FullscreenMode::kPseudoContent;
+    return state;
   }
-  if (is_fullscreen && display_id) {
-    if (started_fullscreen_transition_) {
-      DCHECK_NE(tab_fullscreen_target_display_id_, display::kInvalidDisplayId);
-      *display_id = tab_fullscreen_target_display_id_;
-    } else {
-      DCHECK(web_contents);
-      *display_id = web_contents ? GetDisplayId(*web_contents)
-                                 : display::kInvalidDisplayId;
-    }
+
+  // Handle not fullscreen, browser fullscreen, and exiting tab fullscreen.
+  if (!tab_fullscreen_ || web_contents != exclusive_access_tab()) {
+    state.target_mode = content::FullscreenMode::kWindowed;
+    return state;
   }
-  return is_fullscreen;
+
+  // Handle tab fullscreen and entering tab fullscreen.
+  state.target_mode = content::FullscreenMode::kContent;
+  state.target_display_id =
+      (tab_fullscreen_target_display_id_ != display::kInvalidDisplayId)
+          ? tab_fullscreen_target_display_id_
+          : GetDisplayId(*web_contents);
+  return state;
 }
 
 bool FullscreenController::IsFullscreenCausedByTab() const {
@@ -192,6 +189,13 @@ void FullscreenController::EnterFullscreenModeForTab(
   const bool was_window_fullscreen_for_tab_or_pending =
       !requesting_another_screen && IsWindowFullscreenForTabOrPending();
 
+  if (exclusive_access_tab() && exclusive_access_tab() != web_contents) {
+    // This unexpected condition may be hit in practice; see crbug.com/1456875.
+    // In known circumstances it is safe to just clear the exclusive_access_tab,
+    // but behavior and assumptions should be rectified; see crbug.com/1244121.
+    NOTIMPLEMENTED() << "Conflicting exclusive access tab assignment detected";
+    SetTabWithExclusiveAccess(nullptr);
+  }
   SetTabWithExclusiveAccess(web_contents);
   requesting_origin_ =
       requesting_frame->GetLastCommittedURL().DeprecatedGetOriginAsURL();
@@ -295,8 +299,11 @@ void FullscreenController::ExitFullscreenModeForTab(WebContents* web_contents) {
 void FullscreenController::FullscreenTabOpeningPopup(
     content::WebContents* opener,
     content::WebContents* popup) {
+  if (!popunder_preventer_) {
+    return;
+  }
+
   DCHECK_EQ(exclusive_access_tab(), opener);
-  DCHECK(popunder_preventer_);
   popunder_preventer_->AddPotentialPopunder(popup);
 }
 
@@ -359,19 +366,26 @@ void FullscreenController::WindowFullscreenStateChanged() {
           ExclusiveAccessBubbleHideCallback(),
           /*force_update=*/true);
     }
+    if (IsFullscreenCausedByTab()) {
+      exclusive_access_manager()->RecordLockStateOnEnteringApiFullscreen();
+    } else {
+      exclusive_access_manager()->RecordLockStateOnEnteringBrowserFullscreen();
+    }
   }
 }
 
-void FullscreenController::FullscreenTransititionCompleted() {
+void FullscreenController::FullscreenTransitionCompleted() {
   if (fullscreen_transition_complete_callback_)
     std::move(fullscreen_transition_complete_callback_).Run();
-  started_fullscreen_transition_ = false;
-  if (IsTabFullscreen()) {
+#if DCHECK_IS_ON()
+  if (started_fullscreen_transition_ && IsTabFullscreen()) {
     DCHECK(exclusive_access_tab());
     DCHECK_EQ(tab_fullscreen_target_display_id_,
               GetDisplayId(*exclusive_access_tab()));
   }
+#endif  // DCHECK_IS_ON()
   tab_fullscreen_target_display_id_ = display::kInvalidDisplayId;
+  started_fullscreen_transition_ = false;
 }
 
 void FullscreenController::RunOrDeferUntilTransitionIsComplete(
@@ -395,6 +409,7 @@ bool FullscreenController::HandleUserPressedEscape() {
     return false;
 
   ExitExclusiveAccessIfNecessary();
+  base::RecordAction(base::UserMetricsAction("ExitFullscreen_Esc"));
   return true;
 }
 
@@ -419,7 +434,7 @@ void FullscreenController::ExitExclusiveAccessIfNecessary() {
 }
 
 void FullscreenController::PostFullscreenChangeNotification() {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FullscreenController::NotifyFullscreenChange,
                                 ptr_factory_.GetWeakPtr()));
 }
@@ -441,12 +456,6 @@ void FullscreenController::NotifyTabExclusiveAccessLost() {
     exclusive_access_manager()->UpdateExclusiveAccessExitBubbleContent(
         ExclusiveAccessBubbleHideCallback());
   }
-}
-
-void FullscreenController::RecordBubbleReshowsHistogram(
-    int bubble_reshow_count) {
-  UMA_HISTOGRAM_COUNTS_100(kFullscreenBubbleReshowsHistogramName,
-                           bubble_reshow_count);
 }
 
 void FullscreenController::ToggleFullscreenModeInternal(
@@ -505,9 +514,9 @@ void FullscreenController::EnterFullscreenModeInternal(
                       requesting_frame) !=
               blink::mojom::PermissionStatus::GRANTED) {
         display_id = display::kInvalidDisplayId;
-      }
-      if (entering_tab_fullscreen)
+      } else if (entering_tab_fullscreen) {
         display_id_prior_to_tab_fullscreen_ = current_display;
+      }
     }
     tab_fullscreen_target_display_id_ =
         display_id == display::kInvalidDisplayId ? current_display : display_id;
@@ -533,7 +542,6 @@ void FullscreenController::ExitFullscreenModeInternal() {
   if (chrome::IsRunningInAppMode())
     return;
 
-  RecordExitingUMA();
   toggled_into_fullscreen_ = false;
   started_fullscreen_transition_ = true;
 #if BUILDFLAG(IS_MAC)

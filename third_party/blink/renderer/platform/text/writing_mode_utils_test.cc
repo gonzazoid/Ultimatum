@@ -13,14 +13,6 @@ namespace {
 
 enum { kTop, kRight, kBottom, kLeft };
 
-template <typename PhysicalToLogicalConverter>
-void CheckLegacyLogicalDirections(const PhysicalToLogicalConverter& converter) {
-  EXPECT_EQ(converter.InlineStart(), converter.Start());
-  EXPECT_EQ(converter.InlineEnd(), converter.End());
-  EXPECT_EQ(converter.BlockStart(), converter.Before());
-  EXPECT_EQ(converter.BlockEnd(), converter.After());
-}
-
 TEST(WritingModeUtilsTest, PhysicalToLogicalHorizontalLtr) {
   PhysicalToLogical<int> converter(
       {WritingMode::kHorizontalTb, TextDirection::kLtr}, kTop, kRight, kBottom,
@@ -29,11 +21,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalHorizontalLtr) {
   EXPECT_EQ(kRight, converter.InlineEnd());
   EXPECT_EQ(kTop, converter.BlockStart());
   EXPECT_EQ(kBottom, converter.BlockEnd());
-  EXPECT_EQ(kLeft, converter.LineLeft());
-  EXPECT_EQ(kRight, converter.LineRight());
-  EXPECT_EQ(kTop, converter.Over());
-  EXPECT_EQ(kBottom, converter.Under());
-  CheckLegacyLogicalDirections(converter);
 }
 
 TEST(WritingModeUtilsTest, PhysicalToLogicalHorizontalRtl) {
@@ -44,11 +31,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalHorizontalRtl) {
   EXPECT_EQ(kLeft, converter.InlineEnd());
   EXPECT_EQ(kTop, converter.BlockStart());
   EXPECT_EQ(kBottom, converter.BlockEnd());
-  EXPECT_EQ(kLeft, converter.LineLeft());
-  EXPECT_EQ(kRight, converter.LineRight());
-  EXPECT_EQ(kTop, converter.Over());
-  EXPECT_EQ(kBottom, converter.Under());
-  CheckLegacyLogicalDirections(converter);
 }
 
 TEST(WritingModeUtilsTest, PhysicalToLogicalVlrLtr) {
@@ -59,11 +41,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalVlrLtr) {
   EXPECT_EQ(kBottom, converter.InlineEnd());
   EXPECT_EQ(kLeft, converter.BlockStart());
   EXPECT_EQ(kRight, converter.BlockEnd());
-  EXPECT_EQ(kTop, converter.LineLeft());
-  EXPECT_EQ(kBottom, converter.LineRight());
-  EXPECT_EQ(kRight, converter.Over());
-  EXPECT_EQ(kLeft, converter.Under());
-  CheckLegacyLogicalDirections(converter);
 }
 
 TEST(WritingModeUtilsTest, PhysicalToLogicalVlrRtl) {
@@ -74,11 +51,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalVlrRtl) {
   EXPECT_EQ(kTop, converter.InlineEnd());
   EXPECT_EQ(kLeft, converter.BlockStart());
   EXPECT_EQ(kRight, converter.BlockEnd());
-  EXPECT_EQ(kTop, converter.LineLeft());
-  EXPECT_EQ(kBottom, converter.LineRight());
-  EXPECT_EQ(kRight, converter.Over());
-  EXPECT_EQ(kLeft, converter.Under());
-  CheckLegacyLogicalDirections(converter);
 }
 
 TEST(WritingModeUtilsTest, PhysicalToLogicalVrlLtr) {
@@ -89,11 +61,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalVrlLtr) {
   EXPECT_EQ(kBottom, converter.InlineEnd());
   EXPECT_EQ(kRight, converter.BlockStart());
   EXPECT_EQ(kLeft, converter.BlockEnd());
-  EXPECT_EQ(kTop, converter.LineLeft());
-  EXPECT_EQ(kBottom, converter.LineRight());
-  EXPECT_EQ(kRight, converter.Over());
-  EXPECT_EQ(kLeft, converter.Under());
-  CheckLegacyLogicalDirections(converter);
 }
 
 TEST(WritingModeUtilsTest, PhysicalToLogicalVrlRtl) {
@@ -104,11 +71,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalVrlRtl) {
   EXPECT_EQ(kTop, converter.InlineEnd());
   EXPECT_EQ(kRight, converter.BlockStart());
   EXPECT_EQ(kLeft, converter.BlockEnd());
-  EXPECT_EQ(kTop, converter.LineLeft());
-  EXPECT_EQ(kBottom, converter.LineRight());
-  EXPECT_EQ(kRight, converter.Over());
-  EXPECT_EQ(kLeft, converter.Under());
-  CheckLegacyLogicalDirections(converter);
 }
 
 enum { kInlineStart = 1000, kInlineEnd, kBlockStart, kBlockEnd };
@@ -204,11 +166,6 @@ TEST(WritingModeUtilsTest, PhysicalToLogicalGetter) {
   EXPECT_EQ(kTop, getter.InlineEnd());
   EXPECT_EQ(kRight, getter.BlockStart());
   EXPECT_EQ(kLeft, getter.BlockEnd());
-  EXPECT_EQ(kTop, getter.LineLeft());
-  EXPECT_EQ(kBottom, getter.LineRight());
-  EXPECT_EQ(kRight, getter.Over());
-  EXPECT_EQ(kLeft, getter.Under());
-  CheckLegacyLogicalDirections(getter);
 }
 
 TEST(WritingModeUtilsTest, LogicalToPhysicalSetter) {
@@ -221,26 +178,6 @@ TEST(WritingModeUtilsTest, LogicalToPhysicalSetter) {
   setter.SetInlineEnd(kInlineEnd);
   setter.SetBlockStart(kBlockStart);
   setter.SetBlockEnd(kBlockEnd);
-
-  EXPECT_EQ(kBlockEnd, physical_values.Left());
-  EXPECT_EQ(kBlockStart, physical_values.Right());
-  EXPECT_EQ(kInlineEnd, physical_values.Top());
-  EXPECT_EQ(kInlineStart, physical_values.Bottom());
-
-  setter.SetStart(kInlineStart);
-  setter.SetEnd(kInlineEnd);
-  setter.SetBefore(kBlockStart);
-  setter.SetAfter(kBlockEnd);
-
-  EXPECT_EQ(kBlockEnd, physical_values.Left());
-  EXPECT_EQ(kBlockStart, physical_values.Right());
-  EXPECT_EQ(kInlineEnd, physical_values.Top());
-  EXPECT_EQ(kInlineStart, physical_values.Bottom());
-
-  setter.SetLineRight(kInlineStart);
-  setter.SetLineLeft(kInlineEnd);
-  setter.SetOver(kBlockStart);
-  setter.SetUnder(kBlockEnd);
 
   EXPECT_EQ(kBlockEnd, physical_values.Left());
   EXPECT_EQ(kBlockStart, physical_values.Right());
@@ -281,21 +218,23 @@ TEST(WritingModeUtilsTest, LogicalToPhysicalGetter) {
   EXPECT_EQ(kInlineStart, getter.Bottom());
 }
 
-TEST(WritingModeUtilsTest, PhysicalToLogicalSetter) {
-  LogicalValues logical_values;
-  PhysicalToLogicalSetter<int, LogicalValues> setter(
-      {WritingMode::kVerticalRl, TextDirection::kRtl}, logical_values,
-      &LogicalValues::SetInlineStart, &LogicalValues::SetInlineEnd,
-      &LogicalValues::SetBlockStart, &LogicalValues::SetBlockEnd);
-  setter.SetTop(kTop);
-  setter.SetRight(kRight);
-  setter.SetBottom(kBottom);
-  setter.SetLeft(kLeft);
-
-  EXPECT_EQ(kBottom, logical_values.InlineStart());
-  EXPECT_EQ(kTop, logical_values.InlineEnd());
-  EXPECT_EQ(kRight, logical_values.BlockStart());
-  EXPECT_EQ(kLeft, logical_values.BlockEnd());
+TEST(WritingModeUtilsTest, IsFlippedXY) {
+  struct TestData {
+    WritingDirectionMode writing_direction;
+    bool is_flipped_x;
+    bool is_flipped_y;
+  } test_data_list[] = {
+      {{WritingMode::kHorizontalTb, TextDirection::kLtr}, false, false},
+      {{WritingMode::kHorizontalTb, TextDirection::kRtl}, true, false},
+      {{WritingMode::kVerticalRl, TextDirection::kLtr}, true, false},
+      {{WritingMode::kVerticalRl, TextDirection::kRtl}, true, true},
+      {{WritingMode::kVerticalLr, TextDirection::kLtr}, false, false},
+      {{WritingMode::kVerticalLr, TextDirection::kRtl}, false, true},
+  };
+  for (const TestData& data : test_data_list) {
+    EXPECT_EQ(data.writing_direction.IsFlippedX(), data.is_flipped_x);
+    EXPECT_EQ(data.writing_direction.IsFlippedY(), data.is_flipped_y);
+  }
 }
 
 }  // namespace

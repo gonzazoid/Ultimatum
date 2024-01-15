@@ -11,7 +11,9 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/permissions/permission_prompt.h"
+#include "content/public/browser/permission_result.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-forward.h"
 
 namespace blink {
 enum class PermissionType;
@@ -42,6 +44,12 @@ enum class PermissionAction {
   NUM,
 };
 
+enum PermissionPromptViewID {
+  VIEW_ID_PERMISSION_PROMPT_NONE = 0,
+  VIEW_ID_PERMISSION_PROMPT_EXTRA_TEXT,
+  VIEW_ID_PERMISSION_PROMPT_LINK,
+};
+
 // A utility class for permissions.
 class PermissionUtil {
  public:
@@ -63,6 +71,11 @@ class PermissionUtil {
   // histogram value to count permission request metrics.
   static bool GetPermissionType(ContentSettingsType type,
                                 blink::PermissionType* out);
+
+  // Returns the corresponding permissions policy feature to the given content
+  // settings type, or nullopt if there is none.
+  static absl::optional<blink::mojom::PermissionsPolicyFeature>
+  GetPermissionsPolicyFeature(ContentSettingsType type);
 
   // Checks whether the given ContentSettingsType is a permission. Use this
   // to determine whether a specific ContentSettingsType is supported by the
@@ -111,11 +124,6 @@ class PermissionUtil {
   static blink::mojom::PermissionStatus ContentSettingToPermissionStatus(
       ContentSetting setting);
 
-  static content::PermissionResult ToContentPermissionResult(
-      PermissionResult result);
-
-  static PermissionResult ToPermissionResult(content::PermissionResult result);
-
   // If an iframed document/worker inherits a different StoragePartition from
   // its embedder than it would use if it were a main frame, we should block
   // undelegated permissions. Because permissions are scoped to BrowserContext
@@ -145,6 +153,13 @@ class PermissionUtil {
   // Returns `true` if at least one of the `delegate->Requests()` was requested
   // with a user gesture.
   static bool HasUserGesture(PermissionPrompt::Delegate* delegate);
+
+  static bool CanPermissionRequestIgnoreStatus(
+      const PermissionRequestData& request,
+      content::PermissionStatusSource source);
+
+  // Returns `true` if the current platform support permission chips.
+  static bool DoesPlatformSupportChip();
 };
 
 }  // namespace permissions

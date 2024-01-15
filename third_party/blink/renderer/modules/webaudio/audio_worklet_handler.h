@@ -7,6 +7,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_worklet_node_options.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_param_map.h"
@@ -58,6 +59,9 @@ class AudioWorkletHandler final
 
   void NotifyProcessorError(AudioWorkletProcessorErrorState);
 
+  void MarkProcessorInactiveOnMainThread();
+  bool IsProcessorActive() { return is_processor_active_; }
+
  private:
   AudioWorkletHandler(
       AudioNode&,
@@ -81,14 +85,20 @@ class AudioWorkletHandler final
   HashMap<String, scoped_refptr<AudioParamHandler>> param_handler_map_;
   HashMap<String, std::unique_ptr<AudioFloatArray>> param_value_map_;
 
-  // TODO(): Adjust this if needed based on the result of the process
-  // method or the value of `tail_time_`.
+  // TODO(crbug.com/1447088): The tail time of AudioWorkletNode is decided by
+  // the active processing flag. So it doesn't need an automatic tail time
+  // management from the renderer.
   bool RequiresTailProcessing() const override { return true; }
 
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
 
   // Used only if number of inputs and outputs are 1.
   bool is_output_channel_count_given_ = false;
+
+  // The active flag of the AudioWorkletProcessor is used to decide the
+  // lifecycle of an AudioWorkletNode and its handler. This flag becomes false
+  // when a processor stops invoking the user-defined `process()` callback.
+  bool is_processor_active_ = true;
 };
 
 }  // namespace blink

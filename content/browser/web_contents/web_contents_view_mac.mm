@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import <Carbon/Carbon.h>
-
 #import "content/browser/web_contents/web_contents_view_mac.h"
+
+#import <Carbon/Carbon.h>
 
 #include <memory>
 #include <string>
@@ -12,7 +12,7 @@
 
 #import "base/mac/mac_util.h"
 #import "base/mac/scoped_sending_event.h"
-#import "base/message_loop/message_pump_mac.h"
+#import "base/message_loop/message_pump_apple.h"
 #include "base/task/current_thread.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
@@ -33,7 +33,6 @@
 #include "content/public/browser/web_contents_view_delegate.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
-#include "ui/base/cocoa/cocoa_base_utils.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/display/display_util.h"
 #include "ui/gfx/mac/coordinate_conversion.h"
@@ -80,7 +79,7 @@ void WebContentsViewMac::InstallCreateHookForTests(
 std::unique_ptr<WebContentsView> CreateWebContentsView(
     WebContentsImpl* web_contents,
     std::unique_ptr<WebContentsViewDelegate> delegate,
-    RenderViewHostDelegateView** render_view_host_delegate_view) {
+    raw_ptr<RenderViewHostDelegateView>* render_view_host_delegate_view) {
   auto rv =
       std::make_unique<WebContentsViewMac>(web_contents, std::move(delegate));
   *render_view_host_delegate_view = rv.get();
@@ -145,8 +144,19 @@ void WebContentsViewMac::OnCapturerCountChanged() {}
 
 void WebContentsViewMac::FullscreenStateChanged(bool is_fullscreen) {}
 
+void WebContentsViewMac::UpdateWindowControlsOverlay(
+    const gfx::Rect& bounding_rect) {
+  window_controls_overlay_bounding_rect_ = bounding_rect;
+  if (remote_ns_view_) {
+    remote_ns_view_->UpdateWindowControlsOverlay(bounding_rect);
+  } else {
+    in_process_ns_view_bridge_->UpdateWindowControlsOverlay(bounding_rect);
+  }
+}
+
 void WebContentsViewMac::StartDragging(
     const DropData& drop_data,
+    const url::Origin& source_origin,
     DragOperationsMask allowed_operations,
     const gfx::ImageSkia& image,
     const gfx::Vector2d& cursor_offset,
@@ -162,21 +172,24 @@ void WebContentsViewMac::StartDragging(
 
   // The drag invokes a nested event loop, arrange to continue
   // processing events.
-  base::CurrentThread::ScopedNestableTaskAllower allow;
+  base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
   NSDragOperation mask = static_cast<NSDragOperation>(allowed_operations);
-  [drag_dest_ setDragStartTrackersForProcess:source_rwh->GetProcess()->GetID()];
+
+  [drag_dest_ initiateDragWithRenderWidgetHost:source_rwh dropData:drop_data];
   drag_source_start_rwh_ = source_rwh->GetWeakPtr();
+
+  WebContentsDelegate* contents_delegate = web_contents_->GetDelegate();
+  bool is_privileged =
+      contents_delegate ? contents_delegate->IsPrivileged() : false;
 
   // TODO(crbug.com/1302094): The param `drag_obj_rect` is unused.
 
   if (remote_ns_view_) {
-    // TODO(https://crbug.com/898608): Non-trivial gfx::ImageSkias fail to
-    // serialize.
-    remote_ns_view_->StartDrag(drop_data, mask, gfx::ImageSkia(),
-                               cursor_offset);
+    remote_ns_view_->StartDrag(drop_data, source_origin, mask, image,
+                               cursor_offset, is_privileged);
   } else {
-    in_process_ns_view_bridge_->StartDrag(drop_data, mask, image,
-                                          cursor_offset);
+    in_process_ns_view_bridge_->StartDrag(drop_data, source_origin, mask, image,
+                                          cursor_offset, is_privileged);
   }
 }
 
@@ -232,8 +245,15 @@ DropData* WebContentsViewMac::GetDropData() const {
   return [drag_dest_ currentDropData];
 }
 
-void WebContentsViewMac::UpdateDragCursor(ui::mojom::DragOperation operation) {
-  [drag_dest_ setCurrentOperation:static_cast<NSDragOperation>(operation)];
+void WebContentsViewMac::TransferDragSecurityInfo(WebContentsView* view) {
+  WebContentsViewMac* view_mac = static_cast<WebContentsViewMac*>(view);
+  [drag_dest_ setDragSecurityInfo:[view_mac->drag_dest_ dragSecurityInfo]];
+}
+
+void WebContentsViewMac::UpdateDragOperation(ui::mojom::DragOperation operation,
+                                             bool document_is_handling_drag) {
+  [drag_dest_ setCurrentOperation:operation
+           documentIsHandlingDrag:document_is_handling_drag];
 }
 
 void WebContentsViewMac::GotFocus(RenderWidgetHostImpl* render_widget_host) {
@@ -296,10 +316,9 @@ void WebContentsViewMac::OnMenuClosed() {
 
 gfx::Rect WebContentsViewMac::GetViewBounds() const {
   NSRect window_bounds =
-      [GetInProcessNSView() convertRect:[GetInProcessNSView() bounds]
-                                 toView:nil];
-  window_bounds.origin = ui::ConvertPointFromWindowToScreen(
-      [GetInProcessNSView() window], window_bounds.origin);
+      [GetInProcessNSView() convertRect:GetInProcessNSView().bounds toView:nil];
+  window_bounds.origin =
+      [GetInProcessNSView().window convertPointToScreen:window_bounds.origin];
   return gfx::ScreenRectFromNSRect(window_bounds);
 }
 
@@ -308,7 +327,7 @@ void WebContentsViewMac::CreateView(gfx::NativeView context) {
       std::make_unique<remote_cocoa::WebContentsNSViewBridge>(ns_view_id_,
                                                               this);
 
-  drag_dest_.reset([[WebDragDest alloc] initWithWebContentsImpl:web_contents_]);
+  drag_dest_ = [[WebDragDest alloc] initWithWebContentsImpl:web_contents_];
   if (delegate_)
     [drag_dest_ setDragDelegate:delegate_->GetDragDestDelegate()];
 }
@@ -331,14 +350,11 @@ RenderWidgetHostViewBase* WebContentsViewMac::CreateViewForWidget(
           ? g_create_render_widget_host_view(render_widget_host)
           : new RenderWidgetHostViewMac(render_widget_host);
   if (delegate()) {
-    base::scoped_nsobject<NSObject<RenderWidgetHostViewMacDelegate>>
-        rw_delegate(delegate()->CreateRenderWidgetHostViewDelegate(
-            render_widget_host, false));
-
-    view->SetDelegate(rw_delegate.get());
+    view->SetDelegate(
+        delegate()->GetDelegateForHost(render_widget_host, /*is_popup=*/false));
   }
 
-  // Add the RenderWidgetHostView to the ui::Layer heirarchy.
+  // Add the RenderWidgetHostView to the ui::Layer hierarchy.
   child_views_.push_back(view->GetWeakPtr());
   if (views_host_) {
     auto* remote_cocoa_application = views_host_->GetRemoteCocoaApplication();
@@ -378,10 +394,8 @@ RenderWidgetHostViewBase* WebContentsViewMac::CreateViewForChildWidget(
   }
 
   if (delegate()) {
-    base::scoped_nsobject<NSObject<RenderWidgetHostViewMacDelegate>>
-        rw_delegate(delegate()->CreateRenderWidgetHostViewDelegate(
-            render_widget_host, true));
-    view->SetDelegate(rw_delegate.get());
+    view->SetDelegate(
+        delegate()->GetDelegateForHost(render_widget_host, /*is_popup=*/true));
   }
   return view;
 }
@@ -403,8 +417,9 @@ void WebContentsViewMac::SetOverscrollControllerEnabled(bool enabled) {
 // would fire when the event-tracking loop polls for events.  So we need to
 // bounce the message via Cocoa, instead.
 bool WebContentsViewMac::CloseTabAfterEventTrackingIfNeeded() {
-  if (!base::MessagePumpMac::IsHandlingSendEvent())
+  if (!base::message_pump_apple::IsHandlingSendEvent()) {
     return false;
+  }
 
   deferred_close_weak_ptr_factory_.InvalidateWeakPtrs();
   auto weak_ptr = deferred_close_weak_ptr_factory_.GetWeakPtr();
@@ -416,7 +431,7 @@ bool WebContentsViewMac::CloseTabAfterEventTrackingIfNeeded() {
 }
 
 void WebContentsViewMac::CloseTab() {
-  web_contents_->Close(web_contents_->GetRenderViewHost());
+  web_contents_->Close();
 }
 
 std::list<RenderWidgetHostViewMac*> WebContentsViewMac::GetChildViews() {
@@ -547,6 +562,8 @@ bool WebContentsViewMac::DragPromisedFileTo(const base::FilePath& file_path,
 void WebContentsViewMac::EndDrag(uint32_t drag_operation,
                                  const gfx::PointF& local_point,
                                  const gfx::PointF& screen_point) {
+  [drag_dest_ endDrag];
+
   web_contents_->SystemDragEnded(drag_source_start_rwh_.get());
 
   // |localPoint| and |screenPoint| are in the root coordinate space, for
@@ -634,6 +651,10 @@ void WebContentsViewMac::ViewsHostableAttach(
     remote_cocoa_application->CreateWebContentsNSView(
         ns_view_id_, std::move(stub_host), std::move(stub_ns_view_receiver));
     remote_ns_view_->SetParentNSView(views_host_->GetNSViewId());
+    if (!window_controls_overlay_bounding_rect_.IsEmpty()) {
+      remote_ns_view_->UpdateWindowControlsOverlay(
+          window_controls_overlay_bounding_rect_);
+    }
 
     // Because this view is being displayed from a remote process, reset the
     // in-process NSView's client pointer, so that the in-process NSView will

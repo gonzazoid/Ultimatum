@@ -23,7 +23,9 @@ class FakeScrollbar : public Scrollbar {
   ScrollbarOrientation Orientation() const override;
   bool IsLeftSideVerticalScrollbar() const override;
   bool IsSolidColor() const override;
+  SkColor4f GetSolidColor() const override;
   bool IsOverlay() const override;
+  bool IsFluentOverlayScrollbarMinimalMode() const override;
   bool HasThumb() const override;
   gfx::Rect ThumbRect() const override;
   gfx::Rect BackButtonRect() const override;
@@ -33,6 +35,8 @@ class FakeScrollbar : public Scrollbar {
   gfx::Rect TrackRect() const override;
   float Opacity() const override;
   bool NeedsRepaintPart(ScrollbarPart part) const override;
+  bool NeedsUpdateDisplay() const override;
+  void ClearNeedsUpdateDisplay() override;
   bool HasTickmarks() const override;
   void PaintPart(PaintCanvas* canvas,
                  ScrollbarPart part,
@@ -40,6 +44,9 @@ class FakeScrollbar : public Scrollbar {
   bool UsesNinePatchThumbResource() const override;
   gfx::Size NinePatchThumbCanvasSize() const override;
   gfx::Rect NinePatchThumbAperture() const override;
+  gfx::Rect ShrinkMainThreadedMinimalModeThumbRect(
+      gfx::Rect& rect) const override;
+  bool IsOpaque() const override;
 
   void set_should_paint(bool b) { should_paint_ = b; }
   void set_has_thumb(bool b) { has_thumb_ = b; }
@@ -64,6 +71,8 @@ class FakeScrollbar : public Scrollbar {
   void set_needs_repaint_track(bool needs_repaint) {
     needs_repaint_track_ = needs_repaint;
   }
+  void set_is_opaque(bool b) { is_opaque_ = b; }
+  void set_solid_color(SkColor4f color) { solid_color_ = color; }
 
  protected:
   ~FakeScrollbar() override;
@@ -72,19 +81,22 @@ class FakeScrollbar : public Scrollbar {
   bool should_paint_ = false;
   bool has_thumb_ = false;
   bool has_tickmarks_ = false;
-  ScrollbarOrientation orientation_ = ScrollbarOrientation::HORIZONTAL;
+  ScrollbarOrientation orientation_ = ScrollbarOrientation::kHorizontal;
   bool is_left_side_vertical_scrollbar_ = false;
   bool is_solid_color_ = false;
+  SkColor4f solid_color_ = SkColors::kWhite;
   bool is_overlay_ = false;
   bool uses_nine_patch_thumb_resource_ = false;
   gfx::Size thumb_size_{5, 10};
   float thumb_opacity_ = 1;
   bool needs_repaint_thumb_ = true;
   bool needs_repaint_track_ = true;
+  bool needs_update_display_ = true;
   gfx::Rect track_rect_{0, 0, 100, 10};
   gfx::Rect back_button_rect_;
   gfx::Rect forward_button_rect_;
   SkColor fill_color_ = SK_ColorGREEN;
+  bool is_opaque_ = true;
 };
 
 }  // namespace cc

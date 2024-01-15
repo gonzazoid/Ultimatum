@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -35,7 +35,9 @@ struct CTLogInfo {
   // The current operator of the log.
   const char* const current_operator;
   // Previous operators (if any) of the log, ordered in chronological order.
-  const PreviousOperatorEntry* previous_operators;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const PreviousOperatorEntry* previous_operators;
   const size_t previous_operators_length;
 };
 
@@ -48,11 +50,6 @@ COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY) base::Time GetLogListTimestamp();
 // (via its log ID), use |GetDisqualifiedLogs()|.
 COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY)
 std::vector<CTLogInfo> GetKnownLogs();
-
-// Returns the log IDs of all logs that are operated by Google, sorted.  The log
-// ID is the SHA-256 hash of the log's |log_key|.
-COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY)
-std::vector<std::string> GetLogsOperatedByGoogle();
 
 // Returns pairs of (log ID, disqualification date) for all disqualified logs,
 // where the log ID is the SHA-256 hash of the log's |log_key|).  The list is

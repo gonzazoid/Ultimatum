@@ -33,8 +33,7 @@
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/html/track/cue_timeline.h"
 #include "third_party/blink/renderer/core/html/track/text_track.h"
-#include "third_party/blink/renderer/core/layout/layout_block_flow.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
+#include "third_party/blink/renderer/core/layout/layout_ng_block_flow.h"
 #include "third_party/blink/renderer/core/layout/layout_video.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_entry.h"
@@ -104,9 +103,9 @@ void TextTrackContainer::RemovedFrom(ContainerNode& insertion_point) {
   }
 }
 
-LayoutObject* TextTrackContainer::CreateLayoutObject(const ComputedStyle& style,
-                                                     LegacyLayout legacy) {
-  return LayoutObjectFactory::CreateBlockFlow(*this, style, legacy);
+LayoutObject* TextTrackContainer::CreateLayoutObject(
+    const ComputedStyle& style) {
+  return MakeGarbageCollected<LayoutNGBlockFlow>(this);
 }
 
 void TextTrackContainer::ObserveSizeChanges(Element& element) {
@@ -124,9 +123,8 @@ void TextTrackContainer::UpdateDefaultFontSize(
   // for lack of per-spec vh/vw support) but the whole media element is used
   // for cue rendering. This is inconsistent. See also the somewhat related
   // spec bug: https://www.w3.org/Bugs/Public/show_bug.cgi?id=28105
-  LayoutSize video_size = To<LayoutBox>(media_layout_object)->ContentSize();
-  LayoutUnit smallest_dimension =
-      std::min(video_size.Height(), video_size.Width());
+  PhysicalSize video_size = To<LayoutBox>(media_layout_object)->ContentSize();
+  LayoutUnit smallest_dimension = std::min(video_size.height, video_size.width);
   float font_size = smallest_dimension * 0.05f;
   if (media_layout_object->GetFrame())
     font_size /= media_layout_object->GetFrame()->PageZoomFactor();

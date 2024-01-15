@@ -9,8 +9,10 @@
 #include "ash/public/cpp/ambient/ambient_backend_controller.h"
 #include "ash/public/cpp/ambient/ambient_client.h"
 #include "ash/public/cpp/ambient/proto/photo_cache_entry.pb.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/utility/lottie_util.h"
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "third_party/re2/src/re2/re2.h"
@@ -28,26 +30,22 @@ bool IsShowing(LockScreen::ScreenType type) {
   return LockScreen::HasInstance() && LockScreen::Get()->screen_type() == type;
 }
 
-SkColor GetContentLayerColor(
-    AshColorProvider::ContentLayerType content_layer_type) {
-  return GetContentLayerColor(
-      content_layer_type,
-      DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
+SkColor GetColor(const ui::ColorProvider* color_provider,
+                 ui::ColorId color_id) {
+  return GetColor(color_provider, color_id,
+                  DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
 }
 
-SkColor GetContentLayerColor(
-    AshColorProvider::ContentLayerType content_layer_type,
-    bool dark_mode_enable) {
-  auto* ash_color_provider = AshColorProvider::Get();
-
-  switch (content_layer_type) {
-    case AshColorProvider::ContentLayerType::kTextColorPrimary:
-    case AshColorProvider::ContentLayerType::kTextColorSecondary:
-    case AshColorProvider::ContentLayerType::kIconColorPrimary:
-    case AshColorProvider::ContentLayerType::kIconColorSecondary:
-      return dark_mode_enable
-                 ? ash_color_provider->GetContentLayerColor(content_layer_type)
-                 : SK_ColorWHITE;
+SkColor GetColor(const ui::ColorProvider* color_provider,
+                 ui::ColorId color_id,
+                 bool dark_mode_enabled) {
+  switch (color_id) {
+    case kColorAshTextColorPrimary:
+    case kColorAshTextColorSecondary:
+    case kColorAshIconColorPrimary:
+    case kColorAshIconColorSecondary:
+      return dark_mode_enabled ? color_provider->GetColor(color_id)
+                               : SK_ColorWHITE;
     default:
       NOTREACHED() << "Unsupported content layer type";
       // Return a very bright color so it's obvious there is a mistake.
@@ -79,21 +77,14 @@ gfx::ShadowValues GetTextShadowValues(const ui::ColorProvider* color_provider,
 
 bool IsAmbientModeTopicTypeAllowed(::ambient::TopicType topic_type) {
   switch (topic_type) {
-    case ::ambient::TopicType::kCurated:
-      return chromeos::features::kAmbientModeDefaultFeedEnabled.Get();
-    case ::ambient::TopicType::kCapturedOnPixel:
-      return chromeos::features::kAmbientModeCapturedOnPixelPhotosEnabled.Get();
-    case ::ambient::TopicType::kCulturalInstitute:
-      return chromeos::features::kAmbientModeCulturalInstitutePhotosEnabled
-          .Get();
     case ::ambient::TopicType::kFeatured:
-      return chromeos::features::kAmbientModeFeaturedPhotosEnabled.Get();
     case ::ambient::TopicType::kGeo:
-      return chromeos::features::kAmbientModeGeoPhotosEnabled.Get();
     case ::ambient::TopicType::kPersonal:
-      return chromeos::features::kAmbientModePersonalPhotosEnabled.Get();
+      return true;
+    case ::ambient::TopicType::kCurated:
+    case ::ambient::TopicType::kCapturedOnPixel:
+    case ::ambient::TopicType::kCulturalInstitute:
     case ::ambient::TopicType::kRss:
-      return chromeos::features::kAmbientModeRssPhotosEnabled.Get();
     case ::ambient::TopicType::kOther:
       return false;
   }
@@ -108,10 +99,26 @@ bool ParseDynamicLottieAssetId(base::StringPiece asset_id,
   static const base::NoDestructor<std::string> kAssetIdPatternStr(
       base::StrCat({kLottieCustomizableIdPrefix,
                     R"(_Photo_Position([[:alnum:]]+)_([[:digit:]]+).*)"}));
-  static const base::NoDestructor<RE2> kAssetIdPattern(
-      kAssetIdPatternStr->data());
-  return RE2::FullMatch(asset_id.data(), *kAssetIdPattern,
-                        &parsed_output.position_id, &parsed_output.idx);
+  static const base::NoDestructor<RE2> kAssetIdPattern(*kAssetIdPatternStr);
+  return RE2::FullMatch(asset_id, *kAssetIdPattern, &parsed_output.position_id,
+                        &parsed_output.idx);
+}
+
+base::StringPiece AmbientThemeToString(
+    personalization_app::mojom::AmbientTheme theme) {
+  // See the "AmbientModeThemes" <variants> tag in histograms.xml. These names
+  // are currently used for metrics purposes, so they cannot be arbitrarily
+  // renamed.
+  switch (theme) {
+    case personalization_app::mojom::AmbientTheme::kSlideshow:
+      return "SlideShow";
+    case personalization_app::mojom::AmbientTheme::kFeelTheBreeze:
+      return "FeelTheBreeze";
+    case personalization_app::mojom::AmbientTheme::kFloatOnBy:
+      return "FloatOnBy";
+    case personalization_app::mojom::AmbientTheme::kVideo:
+      return "Video";
+  }
 }
 
 }  // namespace util

@@ -12,10 +12,7 @@
 
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
-
-namespace base {
-class Value;
-}  // namespace base
+#include "base/values.h"
 
 namespace ash {
 
@@ -67,15 +64,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedState {
 
   // Called by NetworkStateHandler after all calls to PropertyChanged for the
   // initial set of properties. Used to update state requiring multiple
-  // properties, e.g. name from hex_ssid in NetworkState. |properties| must be
-  // of type DICTIONARY and contain the complete set of initial properties.
-  // Returns true if any additional properties are updated.
-  virtual bool InitialPropertiesReceived(const base::Value& properties);
+  // properties, e.g. name from hex_ssid in NetworkState. |properties| must
+  // contain the complete set of initial properties. Returns true if any
+  // additional properties are updated.
+  virtual bool InitialPropertiesReceived(const base::Value::Dict& properties);
 
-  // Fills |dictionary|, which must be of type DICTIONARY, with a minimal set of
-  // state properties for the network type. See implementations for which
-  // properties are included.
-  virtual void GetStateProperties(base::Value* dictionary) const;
+  // Fills |dictionary| with a minimal set of state properties for the network
+  // type. See implementations for which properties are included.
+  virtual void GetStateProperties(base::Value::Dict* dictionary) const;
 
   // Returns true if a state is "Active". For networks that means connected,
   // connecting, or activating. Devices are always "active".

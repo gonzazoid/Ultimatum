@@ -17,9 +17,6 @@ void HeuristicStylusPalmDetectionFilter::Filter(
     std::bitset<kNumTouchEvdevSlots>* slots_to_suppress) {
   slots_to_hold->reset();
   slots_to_suppress->reset();
-  base::TimeTicks latest_stylus_time =
-      shared_palm_state_->latest_stylus_touch_time;
-  uint32_t active_touches = 0;
   const size_t events_size =
       std::min(touches.size(), static_cast<size_t>(kNumTouchEvdevSlots));
   DCHECK_LE(touches.size(), static_cast<size_t>(kNumTouchEvdevSlots))
@@ -29,10 +26,6 @@ void HeuristicStylusPalmDetectionFilter::Filter(
   for (size_t i = 0; i < events_size; ++i) {
     const auto& touch = touches[i];
     if (touch.tool_code == BTN_TOOL_PEN) {
-      // We detect BTN_TOOL_PEN whenever a pen is even hovering. This is
-      // mutually exclusive with finger touches, which is what we're interested
-      // in. So we update latest_time.
-      shared_palm_state_->latest_stylus_touch_time = time;
       return;
     }
     if (!touch.touching) {
@@ -42,23 +35,17 @@ void HeuristicStylusPalmDetectionFilter::Filter(
     if (stroke_length_[i] == 0) {
       // new touch!
       touch_started_time_[i] = time;
-      // It's a new finger!
-      shared_palm_state_->latest_finger_touch_time = time;
     }
     stroke_length_[i]++;
     base::TimeDelta time_since_stylus_for_touch_start =
-        touch_started_time_[i] - latest_stylus_time;
+        touch_started_time_[i] - shared_palm_state_->latest_stylus_touch_time;
     if (time_since_stylus_for_touch_start < time_after_stylus_to_cancel_) {
       slots_to_suppress->set(i, true);
     } else if (time_since_stylus_for_touch_start < time_after_stylus_to_hold_ &&
                stroke_length_[i] <= hold_stroke_count_) {
       slots_to_hold->set(i, true);
-    } else {
-      active_touches++;
     }
   }
-  // We never mark anything as a palm.
-  shared_palm_state_->active_finger_touches = active_touches;
 }
 
 HeuristicStylusPalmDetectionFilter::HeuristicStylusPalmDetectionFilter(

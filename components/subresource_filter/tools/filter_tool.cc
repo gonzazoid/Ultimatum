@@ -8,6 +8,7 @@
 #include <istream>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -28,19 +29,19 @@ namespace subresource_filter {
 
 namespace {
 
-url::Origin ParseOrigin(base::StringPiece arg) {
+url::Origin ParseOrigin(std::string_view arg) {
   GURL origin_url(arg);
   LOG_IF(FATAL, !origin_url.is_valid()) << "Invalid origin";
   return url::Origin::Create(origin_url);
 }
 
-GURL ParseRequestUrl(base::StringPiece arg) {
+GURL ParseRequestUrl(std::string_view arg) {
   GURL request_url(arg);
   LOG_IF(FATAL, !request_url.is_valid());
   return request_url;
 }
 
-url_pattern_index::proto::ElementType ParseType(base::StringPiece type) {
+url_pattern_index::proto::ElementType ParseType(std::string_view type) {
   // If the user provided a resource type, use it. Else if it's the empty string
   // it will default to ELEMENT_TYPE_OTHER.
   if (type == "other")
@@ -86,13 +87,12 @@ const url_pattern_index::flat::UrlRule* FindMatchingUrlRule(
   return filter.FindMatchingUrlRule(request_url, type);
 }
 
-const std::string& ExtractStringFromDictionary(base::Value* dictionary,
-                                               const std::string& key) {
-  DCHECK(dictionary->is_dict());
-
-  const base::Value* found = dictionary->FindKey(key);
+const std::string& ExtractStringFromDictionary(
+    const base::Value::Dict& dictionary,
+    const std::string& key) {
+  const std::string* found = dictionary.FindString(key);
   CHECK(found);
-  return found->GetString();
+  return *found;
 }
 
 }  // namespace
@@ -124,9 +124,9 @@ void FilterTool::MatchRules(std::istream* request_stream, int min_match_count) {
 
 void FilterTool::PrintResult(bool blocked,
                              const url_pattern_index::flat::UrlRule* rule,
-                             base::StringPiece document_origin,
-                             base::StringPiece url,
-                             base::StringPiece type) {
+                             std::string_view document_origin,
+                             std::string_view url,
+                             std::string_view type) {
   *output_ << (blocked ? "BLOCKED " : "ALLOWED ");
   if (rule) {
     *output_ << url_pattern_index::FlatUrlRuleToFilterlistString(rule) << " ";
@@ -135,9 +135,9 @@ void FilterTool::PrintResult(bool blocked,
 }
 
 const url_pattern_index::flat::UrlRule* FilterTool::MatchImpl(
-    base::StringPiece document_origin,
-    base::StringPiece url,
-    base::StringPiece type,
+    std::string_view document_origin,
+    std::string_view url,
+    std::string_view type,
     bool* blocked) {
   const url_pattern_index::flat::UrlRule* rule =
       FindMatchingUrlRule(ruleset_.get(), ParseOrigin(document_origin),
@@ -162,16 +162,16 @@ void FilterTool::MatchBatchImpl(std::istream* request_stream,
     if (line.empty())
       continue;
 
-    std::unique_ptr<base::Value> dictionary =
-        base::JSONReader::ReadDeprecated(line);
+    absl::optional<base::Value> dictionary = base::JSONReader::Read(line);
     CHECK(dictionary);
 
+    DCHECK(dictionary->is_dict());
     const std::string& origin =
-        ExtractStringFromDictionary(dictionary.get(), "origin");
+        ExtractStringFromDictionary(dictionary->GetDict(), "origin");
     const std::string& request_url =
-        ExtractStringFromDictionary(dictionary.get(), "request_url");
+        ExtractStringFromDictionary(dictionary->GetDict(), "request_url");
     const std::string& request_type =
-        ExtractStringFromDictionary(dictionary.get(), "request_type");
+        ExtractStringFromDictionary(dictionary->GetDict(), "request_type");
 
     bool blocked;
     const url_pattern_index::flat::UrlRule* rule =

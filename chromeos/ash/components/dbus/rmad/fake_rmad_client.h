@@ -8,8 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/rmad/rmad.pb.h"
 #include "chromeos/ash/components/dbus/rmad/rmad_client.h"
@@ -36,21 +37,26 @@ class COMPONENT_EXPORT(RMAD) FakeRmadClient : public RmadClient {
       chromeos::DBusMethodCallback<rmad::GetStateReply> callback) override;
   void TransitionPreviousState(
       chromeos::DBusMethodCallback<rmad::GetStateReply> callback) override;
-
   void AbortRma(
       chromeos::DBusMethodCallback<rmad::AbortRmaReply> callback) override;
-
   void GetLog(
       chromeos::DBusMethodCallback<rmad::GetLogReply> callback) override;
-
   void SaveLog(
+      const std::string& diagnostics_log_text,
       chromeos::DBusMethodCallback<rmad::SaveLogReply> callback) override;
-
   void RecordBrowserActionMetric(
       const rmad::RecordBrowserActionMetricRequest request,
       chromeos::DBusMethodCallback<rmad::RecordBrowserActionMetricReply>
           callback) override;
-
+  void ExtractExternalDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::ExtractExternalDiagnosticsAppReply>
+          callback) override;
+  void InstallExtractedDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::InstallExtractedDiagnosticsAppReply>
+          callback) override;
+  void GetInstalledDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::GetInstalledDiagnosticsAppReply>
+          callback) override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
   bool HasObserver(const Observer* observer) const override;
@@ -62,6 +68,11 @@ class COMPONENT_EXPORT(RMAD) FakeRmadClient : public RmadClient {
   void SetGetLogReply(const std::string& log, rmad::RmadErrorCode error);
   void SetSaveLogReply(const std::string& save_path, rmad::RmadErrorCode error);
   void SetRecordBrowserActionMetricReply(rmad::RmadErrorCode error);
+
+  std::string GetDiagnosticsLogsText() const;
+
+  base::FilePath& external_diag_app_path() { return external_diag_app_path_; }
+  base::FilePath& installed_diag_app_path() { return installed_diag_app_path_; }
 
   void TriggerErrorObservation(rmad::RmadErrorCode error);
   void TriggerCalibrationProgressObservation(
@@ -101,6 +112,10 @@ class COMPONENT_EXPORT(RMAD) FakeRmadClient : public RmadClient {
   rmad::RecordBrowserActionMetricReply record_browser_action_metric_reply_;
   base::ObserverList<Observer, /*check_empty=*/true, /*allow_reentrancy=*/false>
       observers_;
+  std::string diagnostics_logs_text_;
+
+  base::FilePath external_diag_app_path_;
+  base::FilePath installed_diag_app_path_;
 };
 
 }  // namespace ash

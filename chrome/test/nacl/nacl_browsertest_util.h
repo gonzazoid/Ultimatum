@@ -8,6 +8,8 @@
 #include <memory>
 
 #include "base/files/file_path.h"
+#include "base/test/scoped_feature_list.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/javascript_test_observer.h"
@@ -27,7 +29,7 @@ class StructuredMessageHandler : public content::TestMessageHandler {
   // a "type" field that indicates the nature of message.
   virtual MessageResponse HandleStructuredMessage(
       const std::string& type,
-      base::DictionaryValue* msg) = 0;
+      const base::Value::Dict& msg) = 0;
 
  protected:
   // The structured message is missing an expected field.
@@ -48,8 +50,9 @@ class LoadTestMessageHandler : public StructuredMessageHandler {
 
   void Log(const std::string& type, const std::string& message);
 
-  MessageResponse HandleStructuredMessage(const std::string& type,
-                                          base::DictionaryValue* msg) override;
+  MessageResponse HandleStructuredMessage(
+      const std::string& type,
+      const base::Value::Dict& msg) override;
 
   bool test_passed() const {
     return test_passed_;
@@ -106,6 +109,7 @@ class NaClBrowserTestBase : public InProcessBrowserTest {
  private:
   bool StartTestServer();
 
+  base::test::ScopedFeatureList feature_list_;
   std::unique_ptr<net::EmbeddedTestServer> test_server_;
 };
 
@@ -124,6 +128,11 @@ class NaClBrowserTestPnacl : public NaClBrowserTestBase {
   base::FilePath::StringType Variant() override;
 
   bool IsAPnaclTest() override;
+};
+
+class NaClBrowserTestIrt : public NaClBrowserTestBase {
+ public:
+  base::FilePath::StringType Variant() override;
 };
 
 // TODO(jvoung): We can remove this and test the Subzero translator
@@ -154,12 +163,7 @@ class NaClBrowserTestGLibcExtension : public NaClBrowserTestGLibc {
   void SetUpCommandLine(base::CommandLine* command_line) override;
 };
 
-// PNaCl tests take a long time on windows debug builds
-// and sometimes time out.  Disable until it is made faster:
-// https://code.google.com/p/chromium/issues/detail?id=177555
-#if (BUILDFLAG(IS_WIN) && !defined(NDEBUG))
-#  define MAYBE_PNACL(test_name) DISABLED_##test_name
-#elif (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && \
+#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && \
     defined(ADDRESS_SANITIZER)
 // NaClBrowserTestPnacl tests are very flaky on ASan, see crbug.com/1003259.
 #  define MAYBE_PNACL(test_name) DISABLED_##test_name
@@ -168,9 +172,7 @@ class NaClBrowserTestGLibcExtension : public NaClBrowserTestGLibc {
 #endif
 
 // NaCl glibc toolchain is not available on MIPS
-// It also no longer runs on recent versions of MacOS, and is flaky on Windows
-// due to use of cygwin.
-#if defined(ARCH_CPU_MIPS_FAMILY) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+#if defined(ARCH_CPU_MIPS_FAMILY)
 #  define MAYBE_GLIBC(test_name) DISABLED_##test_name
 #else
 #  define MAYBE_GLIBC(test_name) test_name

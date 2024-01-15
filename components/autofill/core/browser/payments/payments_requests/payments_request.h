@@ -11,6 +11,7 @@
 #include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/payments/client_behavior_constants.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 
 namespace autofill::payments {
@@ -30,7 +31,7 @@ class PaymentsRequest {
   virtual std::string GetRequestContent() = 0;
 
   // Parses the required elements of the HTTP response.
-  virtual void ParseResponse(const base::Value& response) = 0;
+  virtual void ParseResponse(const base::Value::Dict& response) = 0;
 
   // Returns true if all of the required elements were successfully retrieved by
   // a call to ParseResponse.
@@ -53,11 +54,11 @@ class PaymentsRequest {
   base::Value::Dict BuildCustomerContextDictionary(
       int64_t external_customer_id);
 
-  // Shared helper function that populates the list of active experiments that
-  // affect either the data sent in payments RPCs or whether the RPCs are sent
-  // or not.
-  void SetActiveExperiments(const std::vector<const char*>& active_experiments,
-                            base::Value::Dict& request_dict);
+  // Shared helper function that builds the Chrome user context which is then
+  // set in the payment requests.
+  base::Value::Dict BuildChromeUserContext(
+      const std::vector<ClientBehaviorConstants>& client_behavior_signals,
+      bool full_sync_enabled);
 
   // Shared helper functoin that returns a dictionary with the structure
   // expected by Payments RPCs, containing each of the fields in |profile|,
@@ -79,11 +80,11 @@ class PaymentsRequest {
 
   // Shared helper functions for string operations.
   static void AppendStringIfNotEmpty(const AutofillProfile& profile,
-                                     const ServerFieldType& type,
+                                     const FieldType& type,
                                      const std::string& app_locale,
                                      base::Value::List& list);
   static void SetStringIfNotEmpty(const AutofillDataModel& profile,
-                                  const ServerFieldType& type,
+                                  const FieldType& type,
                                   const std::string& app_locale,
                                   const std::string& path,
                                   base::Value::Dict& dictionary);

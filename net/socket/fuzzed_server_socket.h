@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/ip_endpoint.h"
@@ -37,7 +38,9 @@ class FuzzedServerSocket : public ServerSocket {
 
   ~FuzzedServerSocket() override;
 
-  int Listen(const IPEndPoint& address, int backlog) override;
+  int Listen(const IPEndPoint& address,
+             int backlog,
+             absl::optional<bool> ipv6_only) override;
   int GetLocalAddress(IPEndPoint* address) const override;
 
   int Accept(std::unique_ptr<StreamSocket>* socket,
@@ -47,8 +50,8 @@ class FuzzedServerSocket : public ServerSocket {
   void DispatchAccept(std::unique_ptr<StreamSocket>* socket,
                       CompletionOnceCallback callback);
 
-  FuzzedDataProvider* data_provider_;
-  net::NetLog* net_log_;
+  raw_ptr<FuzzedDataProvider> data_provider_;
+  raw_ptr<net::NetLog> net_log_;
 
   IPEndPoint listening_on_;
   bool first_accept_ = true;

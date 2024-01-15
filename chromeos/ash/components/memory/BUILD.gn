@@ -13,8 +13,8 @@ component("memory") {
   deps = [
     "//base",
     "//chromeos/ash/components/dbus",
-    "//chromeos/ash/components/dbus/debug_daemon",
     "//chromeos/ash/components/dbus/resourced:resourced",
+    "//chromeos/ash/components/dbus/swap_management",
     "//chromeos/dbus/constants",
     "//components/memory_pressure",
     "//crypto",
@@ -23,22 +23,16 @@ component("memory") {
   ]
   sources = [
     "aligned_memory.h",
-    "kstaled.cc",
-    "kstaled.h",
     "memory.cc",
     "memory.h",
+    "mglru.cc",
+    "mglru.h",
     "pagemap.cc",
     "pagemap.h",
     "pressure/system_memory_pressure_evaluator.cc",
     "pressure/system_memory_pressure_evaluator.h",
     "swap_configuration.cc",
     "swap_configuration.h",
-    "zram_writeback_backend.cc",
-    "zram_writeback_backend.h",
-    "zram_writeback_controller.cc",
-    "zram_writeback_controller.h",
-    "zram_writeback_policy.cc",
-    "zram_writeback_policy.h",
   ]
 }
 
@@ -48,6 +42,7 @@ source_set("unit_tests") {
     ":memory",
     "//base/test:test_support",
     "//build:chromeos_buildflags",
+    "//chromeos/ash/components/dbus/resourced",
     "//components/memory_pressure",
     "//mojo/core/embedder",
     "//services/resource_coordinator/public/cpp/memory_instrumentation",
@@ -58,6 +53,6 @@ source_set("unit_tests") {
     "memory_unittest.cc",
     "pagemap_unittest.cc",
     "pressure/system_memory_pressure_evaluator_unittest.cc",
-    "zram_writeback_controller_unittest.cc",
+    "swap_configuration_unittest.cc",
   ]
 }

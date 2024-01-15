@@ -40,7 +40,7 @@ class ArcKioskAppManager : public KioskAppManagerBase {
   const ArcKioskAppData* GetAppByAccountId(const AccountId& account_id);
 
   // KioskAppManagerBase:
-  void GetApps(std::vector<App>* apps) const override;
+  std::vector<App> GetApps() const override;
 
   void UpdateNameAndIcon(const AccountId& account_id,
                          const std::string& name,
@@ -56,14 +56,12 @@ class ArcKioskAppManager : public KioskAppManagerBase {
   // returns empty account id.
   const AccountId& GetAutoLaunchAccountId() const;
 
- private:
-  friend class ArcKioskAppManagerTest;
   // Returns the list of all apps in their internal representation.
-  void GetAppsForTesting(
-      std::vector<const ArcKioskAppData*>* apps_internal) const;
+  std::vector<const ArcKioskAppData*> GetAppsForTesting() const;
 
+ private:
   // KioskAppmanagerBase:
-  // Updates |apps_| based on CrosSettings.
+  // Updates `apps_` based on CrosSettings.
   void UpdateAppsFromPolicy() override;
 
   std::vector<std::unique_ptr<ArcKioskAppData>> apps_;
@@ -71,11 +69,5 @@ class ArcKioskAppManager : public KioskAppManagerBase {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the //chrome/browser/chromeos
-// source code migration is finished.
-namespace chromeos {
-using ::ash::ArcKioskAppManager;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_MANAGER_H_

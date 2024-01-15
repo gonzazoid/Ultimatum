@@ -146,8 +146,7 @@ Response* Response::Create(ScriptState* script_state,
   if (body_value.IsUndefined() || body_value.IsNull()) {
     // Note: The IDL processor cannot handle this situation. See
     // https://crbug.com/335871.
-  } else if (V8Blob::HasInstance(body, isolate)) {
-    Blob* blob = V8Blob::ToImpl(body.As<v8::Object>());
+  } else if (Blob* blob = V8Blob::ToWrappable(isolate, body)) {
     body_buffer = BodyStreamBuffer::Create(
         script_state,
         MakeGarbageCollected<BlobBytesConsumer>(execution_context,
@@ -193,9 +192,8 @@ Response* Response::Create(ScriptState* script_state,
           MakeGarbageCollected<FormDataBytesConsumer>(array_buffer_view),
           nullptr /* AbortSignal */, /*cached_metadata_handler=*/nullptr);
     }
-  } else if (V8FormData::HasInstance(body, isolate)) {
-    scoped_refptr<EncodedFormData> form_data =
-        V8FormData::ToImpl(body.As<v8::Object>())->EncodeMultiPartFormData();
+  } else if (FormData* form = V8FormData::ToWrappable(isolate, body)) {
+    scoped_refptr<EncodedFormData> form_data = form->EncodeMultiPartFormData();
     // Here we handle formData->boundary() as a C-style string. See
     // FormDataEncoder::generateUniqueBoundaryString.
     content_type = AtomicString("multipart/form-data; boundary=") +
@@ -205,21 +203,22 @@ Response* Response::Create(ScriptState* script_state,
         MakeGarbageCollected<FormDataBytesConsumer>(execution_context,
                                                     std::move(form_data)),
         nullptr /* AbortSignal */, /*cached_metadata_handler=*/nullptr);
-  } else if (V8URLSearchParams::HasInstance(body, isolate)) {
+  } else if (URLSearchParams* url_search_params =
+                 V8URLSearchParams::ToWrappable(isolate, body)) {
     scoped_refptr<EncodedFormData> form_data =
-        V8URLSearchParams::ToImpl(body.As<v8::Object>())->ToEncodedFormData();
+        url_search_params->ToEncodedFormData();
     body_buffer = BodyStreamBuffer::Create(
         script_state,
         MakeGarbageCollected<FormDataBytesConsumer>(execution_context,
                                                     std::move(form_data)),
         nullptr /* AbortSignal */, /*cached_metadata_handler=*/nullptr);
     content_type = "application/x-www-form-urlencoded;charset=UTF-8";
-  } else if (V8ReadableStream::HasInstance(body, isolate)) {
+  } else if (ReadableStream* stream =
+                 V8ReadableStream::ToWrappable(isolate, body)) {
     UseCounter::Count(execution_context,
                       WebFeature::kFetchResponseConstructionWithStream);
     body_buffer = MakeGarbageCollected<BodyStreamBuffer>(
-        script_state, V8ReadableStream::ToImpl(body.As<v8::Object>()),
-        /*cached_metadata_handler=*/nullptr);
+        script_state, stream, /*cached_metadata_handler=*/nullptr);
   } else {
     String string = NativeValueTraits<IDLUSVString>::NativeValue(
         isolate, body, exception_state);
@@ -389,7 +388,8 @@ Response* Response::staticJson(ScriptState* script_state,
     return nullptr;
   }
 
-  String string = ToBlinkString<String>(v8_string, kDoNotExternalize);
+  String string = ToBlinkString<String>(script_state->GetIsolate(), v8_string,
+                                        kDoNotExternalize);
 
   // JSON.stringify can fail to produce a string value in one of two ways: it
   // can throw an exception (as with unserializable objects), or it can return
@@ -514,7 +514,7 @@ String Response::statusText() const {
 
 Headers* Response::headers() const {
   // "The headers attribute's getter must return the associated Headers object."
-  return headers_;
+  return headers_.Get();
 }
 
 Response* Response::clone(ScriptState* script_state,
@@ -531,16 +531,6 @@ Response* Response::clone(ScriptState* script_state,
   headers->SetGuard(headers_->GetGuard());
   return MakeGarbageCollected<Response>(GetExecutionContext(), response,
                                         headers);
-}
-
-bool Response::HasPendingActivity() const {
-  if (!GetExecutionContext() || GetExecutionContext()->IsContextDestroyed())
-    return false;
-  if (!InternalBodyBuffer())
-    return false;
-  if (InternalBodyBuffer()->HasPendingActivity())
-    return true;
-  return Body::HasPendingActivity();
 }
 
 mojom::blink::FetchAPIResponsePtr Response::PopulateFetchAPIResponse(
@@ -594,7 +584,6 @@ FetchHeaderList* Response::InternalHeaderList() const {
 
 void Response::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
-  ActiveScriptWrappable<Response>::Trace(visitor);
   Body::Trace(visitor);
   visitor->Trace(response_);
   visitor->Trace(headers_);

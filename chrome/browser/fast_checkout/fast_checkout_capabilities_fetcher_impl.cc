@@ -6,162 +6,208 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/notreached.h"
-#include "base/ranges/algorithm.h"
-#include "base/time/time.h"
-#include "chrome/browser/fast_checkout/fast_checkout_features.h"
-#include "components/autofill/core/common/signatures.h"
-#include "components/autofill_assistant/browser/public/autofill_assistant.h"
-#include "components/keyed_service/core/keyed_service.h"
-#include "net/http/http_status_code.h"
-#include "url/gurl.h"
+#include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/origin.h"
 
-using autofill_assistant::AutofillAssistant;
-using CapabilitiesInfo =
-    autofill_assistant::AutofillAssistant::CapabilitiesInfo;
-using BundleCapabilitiesInformation =
-    autofill_assistant::AutofillAssistant::BundleCapabilitiesInformation;
-
 namespace {
-
-constexpr uint32_t kFastCheckoutHashPrefixSize = 10u;
-constexpr char kFastCheckoutIntent[] = "CHROME_FAST_CHECKOUT";
+constexpr int kMaxDownloadSizeInBytes = 10 * 1024;
+constexpr char kFastCheckoutFunnelsUrl[] =
+    "https://www.gstatic.com/autofill/fast_checkout/funnels.binarypb";
+constexpr base::TimeDelta kCacheTimeout(base::Minutes(10));
+constexpr base::TimeDelta kFetchTimeout(base::Seconds(3));
 constexpr char kUmaKeyCacheStateIsTriggerFormSupported[] =
     "Autofill.FastCheckout.CapabilitiesFetcher."
     "CacheStateForIsTriggerFormSupported";
-constexpr char kUmaKeyHttpCode[] =
-    "Autofill.FastCheckout.CapabilitiesFetcher.HttpResponseCode";
+constexpr char kUmaKeyParsingResult[] =
+    "Autofill.FastCheckout.CapabilitiesFetcher.ParsingResult";
+constexpr char kUmaKeyResponseAndNetErrorCode[] =
+    "Autofill.FastCheckout.CapabilitiesFetcher.HttpResponseAndNetErrorCode";
 constexpr char kUmaKeyResponseTime[] =
     "Autofill.FastCheckout.CapabilitiesFetcher.ResponseTime";
-
 }  // namespace
 
+FastCheckoutCapabilitiesFetcherImpl::FastCheckoutFunnel::FastCheckoutFunnel() =
+    default;
+
+FastCheckoutCapabilitiesFetcherImpl::FastCheckoutFunnel::~FastCheckoutFunnel() =
+    default;
+
+FastCheckoutCapabilitiesFetcherImpl::FastCheckoutFunnel::FastCheckoutFunnel(
+    const FastCheckoutFunnel&) = default;
+
 FastCheckoutCapabilitiesFetcherImpl::FastCheckoutCapabilitiesFetcherImpl(
-    std::unique_ptr<AutofillAssistant> autofill_assistant)
-    : autofill_assistant_(std::move(autofill_assistant)) {}
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
+    : url_loader_factory_(url_loader_factory) {}
 
 FastCheckoutCapabilitiesFetcherImpl::~FastCheckoutCapabilitiesFetcherImpl() =
     default;
 
-void FastCheckoutCapabilitiesFetcherImpl::FetchAvailability(
-    const url::Origin& origin,
-    Callback callback) {
-  // If `origin` is already cached, no request needs to be made.
-  if (cache_.ContainsOrigin(origin)) {
-    std::move(callback).Run(/*success=*/true);
+void FastCheckoutCapabilitiesFetcherImpl::FetchCapabilities() {
+  if (url_loader_) {
+    // There is an ongoing request.
+    return;
+  }
+  if (!IsCacheStale()) {
+    return;
+  }
+  cache_.clear();
+  auto resource_request = std::make_unique<network::ResourceRequest>();
+  resource_request->url = GURL(kFastCheckoutFunnelsUrl);
+  resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  net::NetworkTrafficAnnotationTag traffic_annotation =
+      net::DefineNetworkTrafficAnnotation("gstatic_fast_checkout_funnels",
+                                          R"(
+        semantics {
+          sender: "Fast Checkout Tab Helper"
+          description:
+            "A binary proto string containing all funnels supported by Fast "
+            "Checkout."
+          trigger:
+            "When the user visits a checkout page."
+          data:
+            "The request body is empty. No user data is included."
+          destination: GOOGLE_OWNED_SERVICE
+        }
+        policy {
+          cookies_allowed: NO
+          setting:
+            "The user can enable or disable this feature via 'Save and fill "
+            "payment methods' and 'Save and fill addresses' in Chromium's "
+            "settings under 'Payment methods' and 'Addresses and more' "
+            "respectively. The feature is enabled by default."
+          chrome_policy {
+            AutofillCreditCardEnabled {
+                policy_options {mode: MANDATORY}
+                AutofillCreditCardEnabled: true
+            }
+          }
+          chrome_policy {
+            AutofillAddressEnabled {
+                policy_options {mode: MANDATORY}
+                AutofillAddressEnabled: true
+            }
+          }
+        })");
+  url_loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
+                                                 traffic_annotation);
+  url_loader_->SetTimeoutDuration(kFetchTimeout);
+  url_loader_->DownloadToString(
+      url_loader_factory_.get(),
+      base::BindOnce(&FastCheckoutCapabilitiesFetcherImpl::OnFetchComplete,
+                     base::Unretained(this), base::TimeTicks::Now()),
+      kMaxDownloadSizeInBytes);
+}
+
+bool FastCheckoutCapabilitiesFetcherImpl::IsCacheStale() const {
+  return last_fetch_timestamp_.is_null() ||
+         base::TimeTicks::Now() - last_fetch_timestamp_ >= kCacheTimeout;
+}
+
+void FastCheckoutCapabilitiesFetcherImpl::OnFetchComplete(
+    base::TimeTicks start_time,
+    std::unique_ptr<std::string> response_body) {
+  base::UmaHistogramTimes(kUmaKeyResponseTime,
+                          base::TimeTicks::Now() - start_time);
+
+  int net_error = url_loader_->NetError();
+  bool report_http_response_code =
+      (net_error == net::OK ||
+       net_error == net::ERR_HTTP_RESPONSE_CODE_FAILURE) &&
+      url_loader_->ResponseInfo() && url_loader_->ResponseInfo()->headers;
+  base::UmaHistogramSparse(
+      kUmaKeyResponseAndNetErrorCode,
+      report_http_response_code
+          ? url_loader_->ResponseInfo()->headers->response_code()
+          : net_error);
+
+  // Reset `url_loader_` so that another request could be made.
+  url_loader_.reset();
+  last_fetch_timestamp_ = base::TimeTicks::Now();
+
+  if (net_error != net::OK) {
     return;
   }
 
-  // Check whether there is an ongoing request. If so, queue up the callback
-  // and return.
-  if (RequestMap::iterator it = ongoing_requests_.find(origin);
-      it != ongoing_requests_.end()) {
-    it->second.emplace_back(std::move(callback));
+  if (!response_body) {
+    base::UmaHistogramEnumeration(kUmaKeyParsingResult,
+                                  ParsingResult::kNullResponse);
     return;
   }
 
-  // Create a new request.
-  uint64_t hash_prefix =
-      AutofillAssistant::GetHashPrefix(kFastCheckoutHashPrefixSize, origin);
-  ongoing_requests_[origin].emplace_back(std::move(callback));
-  // Since `this` owns `autofill_assistant_` and `autofill_assistant_`,
-  // callbacks are only executed while `this` is alive.
-  autofill_assistant_->GetCapabilitiesByHashPrefix(
-      kFastCheckoutHashPrefixSize, {hash_prefix}, kFastCheckoutIntent,
-      base::BindOnce(&FastCheckoutCapabilitiesFetcherImpl::
-                         OnGetCapabilitiesInformationReceived,
-                     base::Unretained(this), origin, base::TimeTicks::Now()));
+  ::fast_checkout::FastCheckoutFunnels funnels;
+  if (!funnels.ParseFromString(*response_body)) {
+    base::UmaHistogramEnumeration(kUmaKeyParsingResult,
+                                  ParsingResult::kParsingError);
+    return;
+  }
+
+  base::UmaHistogramEnumeration(kUmaKeyParsingResult, ParsingResult::kSuccess);
+
+  for (const ::fast_checkout::FastCheckoutFunnels_FastCheckoutFunnel&
+           funnel_proto : funnels.funnels()) {
+    AddFunnelToCache(funnel_proto);
+  }
+}
+
+void FastCheckoutCapabilitiesFetcherImpl::AddFunnelToCache(
+    const ::fast_checkout::FastCheckoutFunnels_FastCheckoutFunnel&
+        funnel_proto) {
+  // There has to be at least one trigger form signature for a funnel. Otherwise
+  // a run could never be triggered successfully.
+  if (funnel_proto.trigger().empty()) {
+    return;
+  }
+
+  FastCheckoutFunnel funnel;
+  for (uint64_t form_signature : funnel_proto.trigger()) {
+    funnel.trigger.emplace(form_signature);
+  }
+  for (uint64_t form_signature : funnel_proto.fill()) {
+    funnel.fill.emplace(form_signature);
+  }
+
+  for (const std::string& domain : funnel_proto.domains()) {
+    GURL url = GURL(domain);
+    if (url.is_valid() && url.SchemeIsHTTPOrHTTPS()) {
+      cache_.emplace(url::Origin::Create(url), funnel);
+    }
+  }
 }
 
 bool FastCheckoutCapabilitiesFetcherImpl::IsTriggerFormSupported(
     const url::Origin& origin,
     autofill::FormSignature form_signature) {
-  if (base::FeatureList::IsEnabled(
-          features::kForceEnableFastCheckoutCapabilities)) {
-    return true;
-  }
-  if (cache_.ContainsTriggerForm(origin, form_signature)) {
+  if (!cache_.contains(origin)) {
     base::UmaHistogramEnumeration(
         kUmaKeyCacheStateIsTriggerFormSupported,
-        CacheStateForIsTriggerFormSupported::kEntryAvailableAndFormSupported);
-    return true;
+        url_loader_ ? CacheStateForIsTriggerFormSupported::kFetchOngoing
+                    : CacheStateForIsTriggerFormSupported::kEntryNotAvailable);
+    return false;
   }
 
-  // Analyze why the result is `false` to record the correct metric.
-  if (cache_.ContainsOrigin(origin)) {
-    base::UmaHistogramEnumeration(kUmaKeyCacheStateIsTriggerFormSupported,
-                                  CacheStateForIsTriggerFormSupported::
-                                      kEntryAvailableAndFormNotSupported);
-  } else {
-    base::UmaHistogramEnumeration(
-        kUmaKeyCacheStateIsTriggerFormSupported,
-        ongoing_requests_.contains(origin)
-            ? CacheStateForIsTriggerFormSupported::kFetchOngoing
-            : CacheStateForIsTriggerFormSupported::kNeverFetched);
-  }
-  return false;
+  bool is_supported = cache_.at(origin).trigger.contains(form_signature);
+  base::UmaHistogramEnumeration(
+      kUmaKeyCacheStateIsTriggerFormSupported,
+      is_supported
+          ? CacheStateForIsTriggerFormSupported::kEntryAvailableAndFormSupported
+          : CacheStateForIsTriggerFormSupported::
+                kEntryAvailableAndFormNotSupported);
+  return is_supported;
 }
 
-void FastCheckoutCapabilitiesFetcherImpl::OnGetCapabilitiesInformationReceived(
-    const url::Origin& origin,
-    base::TimeTicks start_time,
-    int http_status,
-    const std::vector<CapabilitiesInfo>& capabilities) {
-  RequestMap::iterator request = ongoing_requests_.find(origin);
-  if (request == ongoing_requests_.end()) {
-    // There should always be exactly one ongoing request per origin.
-    NOTREACHED();
-    return;
+base::flat_set<autofill::FormSignature>
+FastCheckoutCapabilitiesFetcherImpl::GetFormsToFill(const url::Origin& origin) {
+  if (!cache_.contains(origin)) {
+    return {};
   }
-
-  base::UmaHistogramSparse(kUmaKeyHttpCode, http_status);
-  base::UmaHistogramMediumTimes(kUmaKeyResponseTime,
-                                base::TimeTicks::Now() - start_time);
-
-  // Short-hand for executing all callbacks.
-  auto inform_callers = [request](bool outcome) {
-    for (Callback& callback : request->second) {
-      std::move(callback).Run(outcome);
-    }
-  };
-
-  // If the request was unsuccessful, inform the callers, but do not update
-  // the cache.
-  if (http_status != net::HTTP_OK) {
-    inform_callers(false);
-    ongoing_requests_.erase(request);
-    return;
-  }
-
-  std::vector<CapabilitiesInfo>::const_iterator request_capabilities =
-      base::ranges::find(capabilities, origin,
-                         [](const CapabilitiesInfo& info) {
-                           return url::Origin::Create(GURL(info.url));
-                         });
-
-  if (request_capabilities != capabilities.end() &&
-      request_capabilities->bundle_capabilities_information.has_value()) {
-    BundleCapabilitiesInformation bundle_capabilities_information =
-        request_capabilities->bundle_capabilities_information.value();
-    cache_.AddToCache(
-        origin,
-        FastCheckoutCapabilitiesResult(
-            bundle_capabilities_information.trigger_form_signatures,
-            bundle_capabilities_information.supports_consentless_execution));
-  } else {
-    // If no form signatures are supported, save that into the cache, too.
-    cache_.AddToCache(origin, FastCheckoutCapabilitiesResult());
-  }
-
-  inform_callers(true);
-  ongoing_requests_.erase(request);
-}
-
-bool FastCheckoutCapabilitiesFetcherImpl::SupportsConsentlessExecution(
-    const url::Origin& origin) {
-  return cache_.SupportsConsentlessExecution(origin);
+  const FastCheckoutFunnel& funnel = cache_.at(origin);
+  // All `FastCheckoutFunnel::trigger` and `FastCheckoutFunnel::fill` forms
+  // should be attempted to be filled, in any order. For that reason, merge the
+  // two sets into one set (`forms_to_fill`) and return it.
+  base::flat_set<autofill::FormSignature> forms_to_fill = funnel.trigger;
+  forms_to_fill.insert(funnel.fill.begin(), funnel.fill.end());
+  return forms_to_fill;
 }

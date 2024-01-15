@@ -19,7 +19,6 @@ body {
   color: rgb(48, 57, 66);
   display: flex;
   flex-direction: column;
-  font-family: Roboto, sans-serif;
   font-size: 13px;
   height: 100%;
   margin: 15px;
@@ -130,7 +129,8 @@ button:disabled {
 .hosts-classification-result-div,
 .hosts-classification-input-validation-error-div,
 .features-and-parameters-div,
-.classification-input-div {
+.classification-input-div,
+.consent-info-div {
   font-size: 1rem;
   line-height: 1.5;
   padding: 10px;
@@ -181,4 +181,8 @@ tr {
   padding-inline-end: 5px;
   padding-inline-start: 5px;
   white-space: nowrap;
+}
+
+#consent-info:not(:target) {
+  display: none;
 }

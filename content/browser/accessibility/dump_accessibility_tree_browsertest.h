@@ -8,6 +8,7 @@
 #include "content/browser/accessibility/dump_accessibility_browsertest_base.h"
 
 #include "base/command_line.h"
+#include "content/public/common/content_switches.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/accessibility_switches.h"
 
@@ -16,9 +17,11 @@ namespace content {
 constexpr const char kARIA[]{"aria"};
 constexpr const char kAOM[]{"aom"};
 constexpr const char kCSS[]{"css"};
+constexpr const char kFormControls[]{"form-controls"};
 constexpr const char kHTML[]{"html"};
 constexpr const char kMathML[]{"mathml"};
 constexpr const char kDisplayLocking[]{"display-locking"};
+constexpr const char kRelations[]{"relations"};
 constexpr const char kRegression[]{"regression"};
 constexpr const char kTestHarness[]{"test-harness"};
 
@@ -40,7 +43,8 @@ class DumpAccessibilityTreeTest : public DumpAccessibilityTestBase {
   std::vector<ui::AXPropertyFilter> DefaultFilters() const override;
 
   void SetUpCommandLine(base::CommandLine* command_line) override;
-  std::vector<std::string> Dump() override;
+
+  std::vector<std::string> Dump(ui::AXMode mode) override;
 
   void RunAccNameTest(const base::FilePath::CharType* file_path) {
     base::FilePath test_path = GetTestFilePath("accessibility", "accname");
@@ -49,7 +53,8 @@ class DumpAccessibilityTreeTest : public DumpAccessibilityTestBase {
       ASSERT_TRUE(base::PathExists(test_path)) << test_path.LossyDisplayName();
     }
     base::FilePath accname_file = test_path.Append(base::FilePath(file_path));
-    RunTest(accname_file, "accessibility/accname", FILE_PATH_LITERAL("tree"));
+    RunTest(ui::kAXModeComplete, accname_file, "accessibility/accname",
+            FILE_PATH_LITERAL("tree"));
   }
 
   void RunAriaTest(const base::FilePath::CharType* file_path) {
@@ -64,7 +69,19 @@ class DumpAccessibilityTreeTest : public DumpAccessibilityTestBase {
     RunTypedTest<kCSS>(file_path);
   }
 
+  void RunFormControlsTest(const base::FilePath::CharType* file_path) {
+    RunTypedTest<kFormControls>(file_path, ui::kAXModeFormControls);
+  }
+
   void RunHtmlTest(const base::FilePath::CharType* file_path) {
+    RunTypedTest<kHTML>(file_path);
+  }
+
+  // TODO(accessibility): Replace all tests using RunPopoverHintTest to just
+  // RunHtmlTest when Popover hints are enabled by default.
+  void RunPopoverHintTest(const base::FilePath::CharType* file_path) {
+    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+        switches::kEnableBlinkFeatures, "HTMLPopoverHint");
     RunTypedTest<kHTML>(file_path);
   }
 
@@ -74,6 +91,10 @@ class DumpAccessibilityTreeTest : public DumpAccessibilityTestBase {
 
   void RunDisplayLockingTest(const base::FilePath::CharType* file_path) {
     RunTypedTest<kDisplayLocking>(file_path);
+  }
+
+  void RunRelationsTest(const base::FilePath::CharType* file_path) {
+    RunTypedTest<kRelations>(file_path);
   }
 
   void RunRegressionTest(const base::FilePath::CharType* file_path) {
@@ -96,7 +117,8 @@ class DumpAccessibilityTreeTest : public DumpAccessibilityTestBase {
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         ::switches::kEnableExperimentalAccessibilityLanguageDetectionDynamic);
 
-    RunTest(language_detection_file, "accessibility/language-detection");
+    RunTest(ui::kAXModeComplete, language_detection_file,
+            "accessibility/language-detection");
   }
 
   // Testing of the Test Harness itself.

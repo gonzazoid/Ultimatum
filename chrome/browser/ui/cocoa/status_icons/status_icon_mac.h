@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/mac/scoped_nsobject.h"
 #include "chrome/browser/status_icons/desktop_notification_balloon.h"
 #include "chrome/browser/status_icons/status_icon.h"
 
@@ -45,23 +44,23 @@ class StatusIconMac : public StatusIcon {
   FRIEND_TEST_ALL_PREFIXES(StatusIconMacTest, CreateMenu);
   FRIEND_TEST_ALL_PREFIXES(StatusIconMacTest, MenuToolTip);
 
-  void SetToolTip(NSString* toolTip);
-  void CreateMenu(ui::MenuModel* model, NSString* toolTip);
+  void SetToolTip(NSString* tool_tip);
+  void CreateMenu(ui::MenuModel* model, NSString* tool_tip);
 
   // Getter for item_ that allows lazy initialization.
   NSStatusItem* item();
-  base::scoped_nsobject<NSStatusItem> item_;
+  NSStatusItem* __strong item_;
 
-  base::scoped_nsobject<StatusItemController> controller_;
+  StatusItemController* __strong controller_;
 
   // Notification balloon.
   DesktopNotificationBalloon notification_;
 
-  base::scoped_nsobject<NSString> toolTip_;
+  NSString* __strong tool_tip_;
 
   // Status menu shown when right-clicking the system icon, if it has been
   // created by |UpdatePlatformContextMenu|.
-  base::scoped_nsobject<MenuControllerCocoa> menu_;
+  MenuControllerCocoa* __strong menu_;
 };
 
 #endif // CHROME_BROWSER_UI_COCOA_STATUS_ICONS_STATUS_ICON_MAC_H_

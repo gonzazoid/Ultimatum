@@ -5,16 +5,19 @@
 #ifndef MOJO_PUBLIC_CPP_BINDINGS_LIB_BINDING_STATE_H_
 #define MOJO_PUBLIC_CPP_BINDINGS_LIB_BINDING_STATE_H_
 
+#include <stdint.h>
+
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/component_export.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
-#include "base/memory/ref_counted.h"
-#include "base/strings/string_piece.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/async_flusher.h"
 #include "mojo/public/cpp/bindings/connection_error_callback.h"
@@ -23,6 +26,7 @@
 #include "mojo/public/cpp/bindings/interface_id.h"
 #include "mojo/public/cpp/bindings/lib/multiplex_router.h"
 #include "mojo/public/cpp/bindings/lib/pending_receiver_state.h"
+#include "mojo/public/cpp/bindings/lib/sync_method_traits.h"
 #include "mojo/public/cpp/bindings/message_header_validator.h"
 #include "mojo/public/cpp/bindings/pending_flush.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -50,7 +54,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) BindingStateBase {
   void FlushAsync(AsyncFlusher flusher);
 
   void Close();
-  void CloseWithReason(uint32_t custom_reason, base::StringPiece description);
+  void CloseWithReason(uint32_t custom_reason, std::string_view description);
 
   void RaiseError() { endpoint_client_->RaiseError(); }
 
@@ -89,7 +93,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) BindingStateBase {
                     const char* interface_name,
                     std::unique_ptr<MessageReceiver> request_validator,
                     bool passes_associated_kinds,
-                    bool has_sync_methods,
+                    base::span<const uint32_t> sync_method_ordinals,
                     MessageReceiverWithResponderStatus* stub,
                     uint32_t interface_version,
                     MessageToMethodInfoCallback method_info_callback,
@@ -120,9 +124,9 @@ class BindingState : public BindingStateBase {
     BindingStateBase::BindInternal(
         std::move(receiver_state), runner, Interface::Name_,
         std::make_unique<typename Interface::RequestValidator_>(),
-        Interface::PassesAssociatedKinds_, Interface::HasSyncMethods_, &stub_,
-        Interface::Version_, Interface::MessageToMethodInfo_,
-        Interface::MessageToMethodName_);
+        Interface::PassesAssociatedKinds_,
+        SyncMethodTraits<Interface>::GetOrdinals(), &stub_, Interface::Version_,
+        Interface::MessageToMethodInfo_, Interface::MessageToMethodName_);
   }
 
   PendingReceiver<Interface> Unbind() {

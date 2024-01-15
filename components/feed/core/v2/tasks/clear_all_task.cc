@@ -4,8 +4,8 @@
 
 #include "components/feed/core/v2/tasks/clear_all_task.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 
 #include "components/feed/core/v2/feed_store.h"
@@ -18,15 +18,15 @@ ClearAllTask::ClearAllTask(FeedStream* stream) : stream_(*stream) {}
 ClearAllTask::~ClearAllTask() = default;
 
 void ClearAllTask::Run() {
-  stream_.UnloadModels();
-  stream_.GetPersistentKeyValueStore().ClearAll(base::DoNothing());
-  stream_.GetStore().ClearAll(
+  stream_->UnloadModels();
+  stream_->GetPersistentKeyValueStore().ClearAll(base::DoNothing());
+  stream_->GetStore().ClearAll(
       base::BindOnce(&ClearAllTask::StoreClearComplete, GetWeakPtr()));
 }
 
 void ClearAllTask::StoreClearComplete(bool ok) {
   DLOG_IF(ERROR, !ok) << "FeedStore::ClearAll failed";
-  stream_.FinishClearAll();
+  stream_->FinishClearAll();
   TaskComplete();
 }
 

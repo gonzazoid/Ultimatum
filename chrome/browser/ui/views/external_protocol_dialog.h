@@ -7,7 +7,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/weak_document_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -27,13 +26,14 @@ class MessageBoxView;
 }
 
 class ExternalProtocolDialog : public views::DialogDelegateView {
+  METADATA_HEADER(ExternalProtocolDialog, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(ExternalProtocolDialog);
   // Show by calling ExternalProtocolHandler::RunExternalProtocolDialog().
   ExternalProtocolDialog(content::WebContents* web_contents,
                          const GURL& url,
                          const std::u16string& program_name,
-                         const absl::optional<url::Origin>& initiating_origin,
+                         const std::optional<url::Origin>& initiating_origin,
                          content::WeakDocumentPtr initiator_document);
   ExternalProtocolDialog(const ExternalProtocolDialog&) = delete;
   ExternalProtocolDialog& operator=(const ExternalProtocolDialog&) = delete;
@@ -57,7 +57,7 @@ class ExternalProtocolDialog : public views::DialogDelegateView {
 
   const GURL url_;
   const std::u16string program_name_;
-  const absl::optional<url::Origin> initiating_origin_;
+  const std::optional<url::Origin> initiating_origin_;
   const content::WeakDocumentPtr initiator_document_;
 
   // The message box whose commands we handle.

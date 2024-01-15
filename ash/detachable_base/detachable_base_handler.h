@@ -6,18 +6,19 @@
 #define ASH_DETACHABLE_BASE_DETACHABLE_BASE_HANDLER_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/ash_export.h"
 #include "ash/detachable_base/detachable_base_pairing_status.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/components/dbus/hammerd/hammerd_client.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/account_id/account_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -107,7 +108,7 @@ class ASH_EXPORT DetachableBaseHandler
   // Callback for getting initial power manager switches - used to determine
   // whether the tablet mode is on when the DetachableBaseHandler is created.
   void OnGotPowerManagerSwitchStates(
-      absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
+      std::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
 
   // Updates the tracked tablet mode state, and notifies observers about pairing
   // status change if required.
@@ -124,11 +125,11 @@ class ASH_EXPORT DetachableBaseHandler
   // update.
   void NotifyBaseRequiresFirmwareUpdate(bool requires_update);
 
-  PrefService* local_state_ = nullptr;
+  raw_ptr<PrefService> local_state_ = nullptr;
 
   // Tablet mode state currently reported by power manager - tablet mode getting
   // turned on is used as a signal that the base is detached.
-  absl::optional<chromeos::PowerManagerClient::TabletMode> tablet_mode_;
+  std::optional<chromeos::PowerManagerClient::TabletMode> tablet_mode_;
 
   // The HEX encoded ID of the authenticated paired base device. This will
   // be non empty iff pairing_status_ is kAuthenticated.

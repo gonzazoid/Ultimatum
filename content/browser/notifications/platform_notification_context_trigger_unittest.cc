@@ -4,8 +4,9 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -49,7 +50,7 @@ class PlatformNotificationContextTriggerTest : public ::testing::Test {
         base::MakeRefCounted<PlatformNotificationContextImpl>(
             base::FilePath(), &browser_context_, nullptr);
     platform_notification_context_->SetTaskRunnerForTesting(
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     platform_notification_context_->Initialize();
     base::RunLoop().RunUntilIdle();
   }
@@ -69,14 +70,14 @@ class PlatformNotificationContextTriggerTest : public ::testing::Test {
 
  protected:
   void WriteNotificationData(const std::string& tag,
-                             absl::optional<base::Time> timestamp) {
+                             std::optional<base::Time> timestamp) {
     ASSERT_TRUE(
         TryWriteNotificationData("https://example.com", tag, timestamp));
   }
 
   bool TryWriteNotificationData(const std::string& url,
                                 const std::string& tag,
-                                absl::optional<base::Time> timestamp) {
+                                std::optional<base::Time> timestamp) {
     GURL origin(url);
     NotificationDatabaseData notification_database_data;
     notification_database_data.origin = origin;
@@ -255,7 +256,7 @@ TEST_F(PlatformNotificationContextTriggerTest, EnforcesLimitOnUpdate) {
   ASSERT_TRUE(TryWriteNotificationData(
       "https://example.com",
       std::to_string(kMaximumScheduledNotificationsPerOrigin + 1),
-      absl::nullopt));
+      std::nullopt));
 
   ASSERT_FALSE(TryWriteNotificationData(
       "https://example.com",
@@ -277,9 +278,6 @@ TEST_F(PlatformNotificationContextTriggerTest, RecordDisplayDelay) {
 
   // Trigger notification |display_delay| after it should have been displayed.
   TriggerNotifications();
-
-  histogram_tester.ExpectUniqueSample("Notifications.Triggers.DisplayDelay",
-                                      display_delay.InMilliseconds(), 1);
 }
 
 }  // namespace content

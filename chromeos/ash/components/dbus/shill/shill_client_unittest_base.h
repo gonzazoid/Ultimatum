@@ -8,9 +8,11 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/dbus/shill/shill_client_helper.h"
@@ -21,7 +23,6 @@
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_proxy.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using ::testing::MakeMatcher;
 using ::testing::Matcher;
@@ -93,7 +94,7 @@ class ShillClientUnittestBase : public testing::Test {
   void SendPlatformMessageSignal(dbus::Signal* signal);
 
   // Sends packet received signal to the tested client.
-  void SendPacketReceievedSignal(dbus::Signal* signal);
+  void SendPacketReceivedSignal(dbus::Signal* signal);
 
   // Sends property changed signal to the tested client.
   void SendPropertyChangedSignal(dbus::Signal* signal);
@@ -134,33 +135,12 @@ class ShillClientUnittestBase : public testing::Test {
 
   // Expects the reader to have a string-to-variant dictionary.
   static void ExpectValueDictionaryArgument(
-      const base::Value* expected_dictionary,
+      const base::Value::Dict* expected_dictionary,
       bool string_valued,
       dbus::MessageReader* reader);
 
-  // Creates a dictionary Value with example Service properties.
-  static base::Value CreateExampleServiceProperties();
-
-  // Expects the call status to be SUCCESS.
-  static void ExpectNoResultValue(bool result);
-
-  static void ExpectObjectPathResultWithoutStatus(
-      const dbus::ObjectPath& expected_result,
-      const dbus::ObjectPath& result);
-
-  static void ExpectBoolResultWithoutStatus(bool expected_result, bool result);
-
-  static void ExpectStringResultWithoutStatus(
-      const std::string& expected_result,
-      const std::string& result);
-
-  // Checks the result and expects the call status to be SUCCESS.
-  static void ExpectValueResult(const base::Value* expected_result,
-                                absl::optional<base::Value> result);
-
-  // Expects the |expected_result| to match the |result|.
-  static void ExpectValueResultWithoutStatus(const base::Value* expected_result,
-                                             base::Value result);
+  // Creates a dictionary with example Service properties.
+  static base::Value::Dict CreateExampleServiceProperties();
 
   // A message loop to emulate asynchronous behavior.
   base::test::SingleThreadTaskEnvironment task_environment_;
@@ -222,7 +202,7 @@ class ShillClientUnittestBase : public testing::Test {
   // The name of the method which is expected to be called.
   std::string expected_method_name_;
   // The response which the mock object proxy returns.
-  dbus::Response* response_;
+  raw_ptr<dbus::Response, DanglingUntriaged> response_;
   // A callback to intercept and check the method call arguments.
   ArgumentCheckCallback argument_checker_;
 };

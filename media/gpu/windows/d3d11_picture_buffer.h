@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "base/memory/ref_counted_delete_on_sequence.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/texture_manager.h"
@@ -29,6 +31,8 @@
 namespace media {
 
 class Texture2DWrapper;
+using PictureBufferGPUResourceInitDoneCB =
+    base::OnceCallback<void(scoped_refptr<media::D3D11PictureBuffer>)>;
 
 // PictureBuffer that owns Chrome Textures to display it, and keep a reference
 // to the D3D texture that backs the image.
@@ -65,7 +69,9 @@ class MEDIA_GPU_EXPORT D3D11PictureBuffer
                    GetCommandBufferHelperCB get_helper_cb,
                    ComD3D11VideoDevice video_device,
                    const GUID& decoder_guid,
-                   std::unique_ptr<MediaLog> media_log);
+                   std::unique_ptr<MediaLog> media_log,
+                   PictureBufferGPUResourceInitDoneCB
+                       picture_buffer_gpu_resource_init_done_cb);
 
   D3D11PictureBuffer(const D3D11PictureBuffer&) = delete;
   D3D11PictureBuffer& operator=(const D3D11PictureBuffer&) = delete;
@@ -98,6 +104,8 @@ class MEDIA_GPU_EXPORT D3D11PictureBuffer
     in_client_use_--;
   }
   void set_in_picture_use(bool use) { in_picture_use_ = use; }
+
+  uint32_t array_slice() const { return array_slice_; }
 
   Texture2DWrapper* texture_wrapper() const { return texture_wrapper_.get(); }
 

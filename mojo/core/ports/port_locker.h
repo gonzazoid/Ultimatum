@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/auto_reset.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "mojo/core/ports/port_ref.h"
 
@@ -62,6 +63,10 @@ class PortLocker {
 #endif
 
  private:
+#if DCHECK_IS_ON()
+  const base::AutoReset<const PortLocker*> resetter_;
+#endif
+
   // `port_refs_` is not a raw_ptr<T> for performance reasons: PortLocker is
   // usually short-lived (e.g. allocated on the stack) + the stack (not on the
   // heap).
@@ -82,7 +87,9 @@ class COMPONENT_EXPORT(MOJO_CORE_PORTS) SinglePortLocker {
   Port* port() const { return locker_.GetPort(*port_ref_); }
 
  private:
-  const PortRef* port_ref_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const PortRef* port_ref_;
   PortLocker locker_;
 };
 

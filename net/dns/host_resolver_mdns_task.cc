@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/dns/dns_util.h"
@@ -134,13 +134,15 @@ HostResolverMdnsTask::HostResolverMdnsTask(MDnsClient* mdns_client,
                                            std::string hostname,
                                            DnsQueryTypeSet query_types)
     : mdns_client_(mdns_client), hostname_(std::move(hostname)) {
-  DCHECK(!query_types.Empty());
+  CHECK(!query_types.Empty());
   DCHECK(!query_types.Has(DnsQueryType::UNSPECIFIED));
 
-  static constexpr DnsQueryTypeSet kUnwantedQueries(DnsQueryType::HTTPS);
+  static constexpr DnsQueryTypeSet kUnwantedQueries = {DnsQueryType::HTTPS};
 
-  for (DnsQueryType query_type : Difference(query_types, kUnwantedQueries))
+  for (DnsQueryType query_type : Difference(query_types, kUnwantedQueries)) {
     transactions_.emplace_back(query_type, this);
+  }
+  CHECK(!transactions_.empty()) << "Only unwanted query types supplied.";
 }
 
 HostResolverMdnsTask::~HostResolverMdnsTask() {
@@ -257,7 +259,7 @@ void HostResolverMdnsTask::Complete(bool post_needed) {
   }
 
   if (post_needed) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(
                        [](base::WeakPtr<HostResolverMdnsTask> task) {
                          if (task)

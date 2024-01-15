@@ -4,9 +4,10 @@
 
 #include "content/browser/media/capture/web_contents_video_capture_device.h"
 
+#include <optional>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
@@ -14,7 +15,6 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/test/pixel_test_utils.h"
-#include "components/viz/common/features.h"
 #include "content/browser/media/capture/content_capture_device_browsertest_base.h"
 #include "content/browser/media/capture/fake_video_capture_stack.h"
 #include "content/browser/media/capture/frame_test_util.h"
@@ -27,16 +27,17 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/shell/browser/shell.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_types.h"
 #include "media/base/video_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gl/gl_switches.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "ui/aura/test/aura_test_utils.h"
@@ -45,42 +46,17 @@
 #include "ui/base/ui_base_features.h"
 #endif
 
-#if BUILDFLAG(IS_MAC) || defined(USE_AURA)
-#include "content/browser/compositor/image_transport_factory.h"
-#endif
-
 namespace content {
 namespace {
-
-scoped_refptr<viz::ContextProvider> GetContextProvider() {
-#if BUILDFLAG(IS_MAC) || defined(USE_AURA)
-  auto* image_transport_factory = ImageTransportFactory::GetInstance();
-  DCHECK(image_transport_factory);
-
-  auto* ui_context_factory = image_transport_factory->GetContextFactory();
-  if (!ui_context_factory) {
-    return nullptr;
-  }
-
-  return ui_context_factory->SharedMainThreadContextProvider();
-#else
-  return nullptr;
-#endif
-}
-
-bool IsGpuRastrizationEnabled() {
-  auto context_provider = GetContextProvider();
-  if (!context_provider)
-    return false;
-
-  return context_provider->ContextCapabilities().gpu_rasterization;
-}
 
 class WebContentsVideoCaptureDeviceBrowserTest
     : public ContentCaptureDeviceBrowserTestBase,
       public FrameTestUtil {
  public:
-  WebContentsVideoCaptureDeviceBrowserTest() = default;
+  WebContentsVideoCaptureDeviceBrowserTest() {
+    // TODO(https://crbug.com/1324757): tests should work with HiDPI enabled.
+    scoped_feature_list_.InitAndDisableFeature(media::kWebContentsCaptureHiDpi);
+  }
 
   WebContentsVideoCaptureDeviceBrowserTest(
       const WebContentsVideoCaptureDeviceBrowserTest&) = delete;
@@ -98,7 +74,7 @@ class WebContentsVideoCaptureDeviceBrowserTest
   // test to fail in case we encounter something else).
   void WaitForFrameWithColor(
       SkColor color,
-      absl::optional<SkColor> tolerate_color = absl::nullopt) {
+      std::optional<SkColor> tolerate_color = std::nullopt) {
     const std::string color_string =
         base::StringPrintf("red=%d, green=%d, blue=%d", SkColorGetR(color),
                            SkColorGetG(color), SkColorGetB(color));
@@ -112,11 +88,11 @@ class WebContentsVideoCaptureDeviceBrowserTest
             << color_string << ", tolerated color: " << tolerated_color_string;
 
     while (!testing::Test::HasFailure()) {
-      EXPECT_TRUE(capture_stack()->started());
-      EXPECT_FALSE(capture_stack()->error_occurred());
+      EXPECT_TRUE(capture_stack()->Started());
+      EXPECT_FALSE(capture_stack()->ErrorOccurred());
       capture_stack()->ExpectNoLogMessages();
 
-      while (capture_stack()->has_captured_frames() &&
+      while (capture_stack()->HasCapturedFrames() &&
              !testing::Test::HasFailure()) {
         // Pop the next frame from the front of the queue and convert to a RGB
         // bitmap for analysis.
@@ -151,10 +127,9 @@ class WebContentsVideoCaptureDeviceBrowserTest
 
         // viz::SoftwareRenderer does not do color space management. Otherwise
         // (normal case), be strict about color differences.
-        const int max_color_diff =
-            (IsSoftwareCompositingTest() || !IsGpuRastrizationEnabled())
-                ? kVeryLooseMaxColorDifference
-                : kMaxColorDifference;
+        const int max_color_diff = (IsSoftwareCompositingTest())
+                                       ? kVeryLooseMaxColorDifference
+                                       : kMaxColorDifference;
 
         // Determine the average RGB color in the three regions-of-interest in
         // the frame.
@@ -281,6 +256,9 @@ class WebContentsVideoCaptureDeviceBrowserTest
   }
 
   void WaitForFirstFrame() final { WaitForFrameWithColor(SK_ColorBLACK); }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Tests that the device refuses to start if the WebContents target was
@@ -309,8 +287,10 @@ IN_PROC_BROWSER_TEST_F(WebContentsVideoCaptureDeviceBrowserTest,
   // been notified of the error.
   device->AllocateAndStartWithReceiver(capture_params,
                                        capture_stack()->CreateFrameReceiver());
-  EXPECT_FALSE(capture_stack()->started());
-  EXPECT_TRUE(capture_stack()->error_occurred());
+  RunUntilIdle();
+
+  EXPECT_FALSE(capture_stack()->Started());
+  EXPECT_TRUE(capture_stack()->ErrorOccurred());
   capture_stack()->ExpectHasLogMessages();
 
   device->StopAndDeAllocate();
@@ -334,7 +314,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsVideoCaptureDeviceBrowserTest,
   // permanently lost" error to propagate to the video capture stack.
   shell()->web_contents()->Close();
   RunUntilIdle();
-  EXPECT_TRUE(capture_stack()->error_occurred());
+  EXPECT_TRUE(capture_stack()->ErrorOccurred());
   capture_stack()->ExpectHasLogMessages();
 
   StopAndDeAllocate();
@@ -520,6 +500,24 @@ class WebContentsVideoCaptureDeviceBrowserTestP
     return std::get<3>(GetParam());
   }
 
+#if BUILDFLAG(IS_WIN)
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    WebContentsVideoCaptureDeviceBrowserTest::SetUpCommandLine(command_line);
+
+    if (!IsSoftwareCompositingTest()) {
+      // In order to test the NV12 code-path, we need to use hardware GPU in the
+      // tests as the product code checks whether hardware when deciding whether
+      // NV12 is used.
+      // NOTE: Pre-existing comment in `ContentCaptureDeviceBrowserTestBase`
+      // suggested that this can cause the tests to take 12+ seconds just to
+      // spin up a render process on debug builds. It can also cause test
+      // failures in MSAN builds, or exacerbate OOM situations on highly-loaded
+      // machines.
+      command_line->AppendSwitch(switches::kUseGpuInTests);
+    }
+  }
+#endif
+
   // Returns human-readable description of the test based on test parameters.
   // Currently unused due to CQ treating the tests as new and applying higher
   // flakiness bar for them, which makes it impossible to land them (they
@@ -551,7 +549,7 @@ INSTANTIATE_TEST_SUITE_P(
                         true /* page contains a cross-site iframe */),
         testing::Values(media::VideoPixelFormat::PIXEL_FORMAT_I420)),
     &WebContentsVideoCaptureDeviceBrowserTestP::GetDescription);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 // On MacOS, there is a newly added support for NV12-in-GMB. It relies on GPU
 // acceleration, but has a feature detection built-in if the format is
 // specified as media::VideoPixelFormat::PIXEL_FORMAT_UNKNOWN.
@@ -591,8 +589,9 @@ IN_PROC_BROWSER_TEST_P(WebContentsVideoCaptureDeviceBrowserTestP,
                        CapturesContentChanges) {
   media::VideoPixelFormat specified_format = GetVideoPixelFormat();
   media::VideoPixelFormat expected_format = specified_format;
+
   if (specified_format == media::VideoPixelFormat::PIXEL_FORMAT_UNKNOWN) {
-    if (IsSoftwareCompositingTest() || !IsGpuRastrizationEnabled()) {
+    if (IsSoftwareCompositingTest()) {
       expected_format = media::VideoPixelFormat::PIXEL_FORMAT_I420;
     } else {
       expected_format = media::VideoPixelFormat::PIXEL_FORMAT_NV12;
@@ -620,7 +619,7 @@ IN_PROC_BROWSER_TEST_P(WebContentsVideoCaptureDeviceBrowserTestP,
   EXPECT_TRUE(shell()->web_contents()->IsBeingCaptured());
 
   // First frame is supposed to be black, store this as a previous color:
-  absl::optional<SkColor> previous_color = SK_ColorBLACK;
+  std::optional<SkColor> previous_color = SK_ColorBLACK;
 
   for (int visibility_case = 0; visibility_case < 3; ++visibility_case) {
     switch (visibility_case) {

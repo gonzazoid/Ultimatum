@@ -87,6 +87,12 @@ class HistoryTabHelperTest : public ChromeRenderViewHostTestHarness {
         ->SetForceEligibleTabForTesting(true);
   }
 
+  void TearDown() override {
+    // Drop unowned reference before destroying object that owns it.
+    history_service_ = nullptr;
+    ChromeRenderViewHostTestHarness::TearDown();
+  }
+
   TestingProfile::TestingFactories GetTestingFactories() const override {
     return {{HistoryServiceFactory::GetInstance(),
              HistoryServiceFactory::GetDefaultFactory()}};
@@ -471,11 +477,10 @@ class HistoryTabHelperMPArchTest
             {{"implementation_type", "mparch"}});
         break;
       case MPArchType::kPrerender:
-        scoped_feature_list_.InitWithFeatures(
-            {blink::features::kPrerender2},
+        scoped_feature_list_.InitAndDisableFeature(
             // Disable the memory requirement of Prerender2 so the test can run
             // on any bot.
-            {blink::features::kPrerender2MemoryControls});
+            blink::features::kPrerender2MemoryControls);
         break;
     }
   }

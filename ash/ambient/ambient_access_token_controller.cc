@@ -6,7 +6,7 @@
 
 #include "ash/login/ui/lock_screen.h"
 #include "ash/public/cpp/ambient/ambient_client.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
 #include "base/time/time.h"
@@ -66,6 +66,11 @@ void AmbientAccessTokenController::RequestAccessToken(
     return;
 
   RefreshAccessToken();
+}
+
+base::WeakPtr<AmbientAccessTokenController>
+AmbientAccessTokenController::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 void AmbientAccessTokenController::RefreshAccessToken() {

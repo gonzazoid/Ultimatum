@@ -23,29 +23,16 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SVG_LAYOUT_SVG_INLINE_TEXT_H_
 
 #include "third_party/blink/renderer/core/layout/layout_text.h"
-#include "third_party/blink/renderer/core/layout/svg/svg_character_data.h"
-#include "third_party/blink/renderer/core/layout/svg/svg_text_metrics.h"
-#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
 class LayoutSVGInlineText final : public LayoutText {
  public:
-  LayoutSVGInlineText(Node*, scoped_refptr<StringImpl>);
+  LayoutSVGInlineText(Node*, String);
 
-  bool CharacterStartsNewTextChunk(int position) const;
-  SVGCharacterDataMap& CharacterDataMap() {
-    NOT_DESTROYED();
-    return character_data_map_;
-  }
-  const SVGCharacterDataMap& CharacterDataMap() const {
-    NOT_DESTROYED();
-    return character_data_map_;
-  }
-
-  const Vector<SVGTextMetrics>& MetricsList() const {
-    NOT_DESTROYED();
-    return metrics_;
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(scaled_font_);
+    LayoutText::Trace(visitor);
   }
 
   float ScalingFactor() const {
@@ -57,14 +44,9 @@ class LayoutSVGInlineText final : public LayoutText {
     return scaled_font_;
   }
   void UpdateScaledFont();
-  void UpdateMetricsList(bool& last_character_was_white_space);
   static void ComputeNewScaledFontForStyle(const LayoutObject&,
                                            float& scaling_factor,
                                            Font& scaled_font);
-
-  // Preserves floating point precision for the use in DRT. It knows how to
-  // round and does a better job than enclosingIntRect.
-  gfx::RectF FloatLinesBoundingBox() const;
 
   const char* GetName() const override {
     NOT_DESTROYED();
@@ -78,30 +60,24 @@ class LayoutSVGInlineText final : public LayoutText {
   bool IsFontFallbackValid() const override;
   void InvalidateSubtreeLayoutForFontUpdates() override;
 
-  void AddMetricsFromRun(const TextRun&, bool& last_character_was_white_space);
-
   gfx::RectF ObjectBoundingBox() const override;
 
-  bool IsOfType(LayoutObjectType type) const override {
+  bool IsSVG() const final {
     NOT_DESTROYED();
-    return type == kLayoutObjectSVG || type == kLayoutObjectSVGInlineText ||
-           LayoutText::IsOfType(type);
+    return true;
+  }
+  bool IsSVGInlineText() const final {
+    NOT_DESTROYED();
+    return true;
   }
 
-  LayoutRect LocalCaretRect(
-      const InlineBox*,
-      int caret_offset,
-      LayoutUnit* extra_width_to_end_of_line = nullptr) const override;
   PhysicalRect PhysicalLinesBoundingBox() const override;
-  InlineTextBox* CreateTextBox(int start, uint16_t length) override;
 
   PhysicalRect VisualRectInDocument(VisualRectFlags) const final;
   gfx::RectF VisualRectInLocalSVGCoordinates() const final;
 
   float scaling_factor_;
   Font scaled_font_;
-  SVGCharacterDataMap character_data_map_;
-  Vector<SVGTextMetrics> metrics_;
 };
 
 template <>

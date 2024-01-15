@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/tick_clock.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
@@ -66,9 +67,9 @@ void ScrollBarButton::PaintButtonContents(gfx::Canvas* canvas) {
 }
 
 ui::NativeTheme::ExtraParams ScrollBarButton::GetNativeThemeParams() const {
-  ui::NativeTheme::ExtraParams params;
-  params.scrollbar_arrow.is_hovering = GetState() == Button::STATE_HOVERED;
-  return params;
+  ui::NativeTheme::ScrollbarArrowExtraParams scrollbar_arrow;
+  scrollbar_arrow.is_hovering = GetState() == Button::STATE_HOVERED;
+  return ui::NativeTheme::ExtraParams(scrollbar_arrow);
 }
 
 ui::NativeTheme::Part ScrollBarButton::GetNativeThemePart() const {
@@ -83,8 +84,7 @@ ui::NativeTheme::Part ScrollBarButton::GetNativeThemePart() const {
       return ui::NativeTheme::kScrollbarRightArrow;
   }
 
-  NOTREACHED();
-  return ui::NativeTheme::kScrollbarUpArrow;
+  NOTREACHED_NORETURN();
 }
 
 ui::NativeTheme::State ScrollBarButton::GetNativeThemeState() const {
@@ -101,8 +101,7 @@ ui::NativeTheme::State ScrollBarButton::GetNativeThemeState() const {
       break;
   }
 
-  NOTREACHED();
-  return ui::NativeTheme::kNormal;
+  NOTREACHED_NORETURN();
 }
 
 void ScrollBarButton::RepeaterNotifyClick() {
@@ -114,7 +113,7 @@ void ScrollBarButton::RepeaterNotifyClick() {
   Button::NotifyClick(event);
 }
 
-BEGIN_METADATA(ScrollBarButton, Button)
+BEGIN_METADATA(ScrollBarButton)
 END_METADATA
 
 }  // namespace views

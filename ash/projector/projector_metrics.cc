@@ -34,8 +34,15 @@ constexpr char kProjectorPendingScreencastBatchIOTaskDurationHistogramName[] =
 constexpr char kProjectorPendingScreencastChangeIntervalHistogramName[] =
     "Ash.Projector.PendingScreencastChangeInterval";
 
-constexpr char kProjectorPolicyChangeHandlingErrorHistogramName[] =
-    "Ash.Projector.PolicyChangeHandlingError";
+constexpr char
+    kProjectorOnDeviceToServerSpeechRecognitionFallbackReasonHistogramName[] =
+        "Ash.Projector.OnDeviceToServerSpeechRecognitionFallbackReason";
+
+constexpr char kSpeechRecognitionEndStateOnDevice[] =
+    "Ash.Projector.SpeechRecognitionEndState.OnDevice";
+
+constexpr char kSpeechRecognitionEndStateServerBased[] =
+    "Ash.Projector.SpeechRecognitionEndState.ServerBased";
 
 // Appends the proper suffix to |prefix| based on whether the user is in tablet
 // mode or not.
@@ -43,6 +50,11 @@ std::string GetHistogramName(const std::string& prefix) {
   std::string mode =
       Shell::Get()->IsInTabletMode() ? ".TabletMode" : ".ClamshellMode";
   return prefix + mode;
+}
+
+inline std::string GetSpeechRecognitionHistogramName(bool is_on_device) {
+  return is_on_device ? kSpeechRecognitionEndStateOnDevice
+                      : kSpeechRecognitionEndStateServerBased;
 }
 
 }  // namespace
@@ -89,13 +101,6 @@ void RecordCreationFlowError(int message_id) {
       GetHistogramName(kProjectorCreationFlowErrorHistogramName), error);
 }
 
-ASH_EXPORT void RecordPolicyChangeHandlingError(
-    ProjectorPolicyChangeHandlingError error) {
-  base::UmaHistogramEnumeration(
-      GetHistogramName(kProjectorPolicyChangeHandlingErrorHistogramName),
-      error);
-}
-
 ASH_EXPORT void RecordPendingScreencastBatchIOTaskDuration(
     const base::TimeDelta duration) {
   // We don't normally expect the duration is longer than 10s. If this limit is
@@ -112,6 +117,20 @@ ASH_EXPORT void RecordPendingScreencastChangeInterval(
   // bucket.
   base::UmaHistogramTimes(
       kProjectorPendingScreencastChangeIntervalHistogramName, interval);
+}
+
+ASH_EXPORT void RecordOnDeviceToServerSpeechRecognitionFallbackReason(
+    OnDeviceToServerSpeechRecognitionFallbackReason reason) {
+  base::UmaHistogramEnumeration(
+      kProjectorOnDeviceToServerSpeechRecognitionFallbackReasonHistogramName,
+      reason);
+}
+
+ASH_EXPORT void RecordSpeechRecognitionEndState(
+    SpeechRecognitionEndState end_state,
+    bool is_on_device) {
+  base::UmaHistogramEnumeration(GetSpeechRecognitionHistogramName(is_on_device),
+                                end_state);
 }
 
 }  // namespace ash

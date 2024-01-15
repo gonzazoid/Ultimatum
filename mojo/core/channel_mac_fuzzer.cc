@@ -4,11 +4,12 @@
 
 #include <list>
 
+#include "base/apple/mach_logging.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/core/channel.h"
 #include "mojo/core/entrypoints.h"
 #include "mojo/core/test/data/channel_mac/channel_mac.pb.h"
@@ -23,7 +24,7 @@ class ChannelMacFuzzer {
   ChannelMacFuzzer() {
     mojo::core::InitializeCore();
 
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
   }
 
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner() {

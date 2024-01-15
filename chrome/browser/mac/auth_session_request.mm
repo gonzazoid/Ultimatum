@@ -17,6 +17,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
@@ -86,7 +87,7 @@ class AuthNavigationThrottle : public content::NavigationThrottle {
 }  // namespace
 
 AuthSessionRequest::~AuthSessionRequest() {
-  std::string uuid = base::SysNSStringToUTF8(request_.get().UUID.UUIDString);
+  std::string uuid = base::SysNSStringToUTF8(request_.UUID.UUIDString);
 
   auto iter = GetMap().find(uuid);
   if (iter == GetMap().end())
@@ -210,7 +211,7 @@ AuthSessionRequest::AuthSessionRequest(
     : content::WebContentsObserver(web_contents),
       content::WebContentsUserData<AuthSessionRequest>(*web_contents),
       browser_(browser),
-      request_(request, base::scoped_policy::RETAIN),
+      request_(request),
       scheme_(scheme) {
   std::string uuid = base::SysNSStringToUTF8(request.UUID.UUIDString);
   GetMap()[uuid] = this;
@@ -225,7 +226,7 @@ Browser* AuthSessionRequest::CreateBrowser(
 
   bool ephemeral_sessions_allowed_by_policy =
       IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
-      IncognitoModePrefs::Availability::kDisabled;
+      policy::IncognitoModeAvailability::kDisabled;
 
   // As per the documentation for `shouldUseEphemeralSession`: "Whether the
   // request is honored depends on the user’s default web browser." If policy
@@ -295,37 +296,43 @@ void AuthSessionRequest::CancelAuthSession() {
   // macOS has requested that this authentication session be canceled. Close the
   // browser window and call it a day.
 
-  perform_cancellation_callback_ = false;
-
   DestroyWebContents();
   // `DestroyWebContents` triggered the death of this object; perform no more
   // work.
 }
 
 void AuthSessionRequest::SchemeWasNavigatedTo(const GURL& url) {
-  perform_cancellation_callback_ = false;
-
+  // Notify the OS that the authentication was successful, and provide the URL
+  // that was navigated to.
   [request_ completeWithCallbackURL:net::NSURLWithGURL(url)];
 
+  // This is a success, so no cancellation callback is needed.
+  perform_cancellation_callback_ = false;
+
+  // The authentication session is now complete, so close the browser window.
   DestroyWebContents();
   // `DestroyWebContents` triggered the death of this object; perform no more
   // work.
 }
 
 void AuthSessionRequest::WebContentsDestroyed() {
-  // This function can be called through one of three code paths:
+  // This function can be called through one of three code paths: one of a
+  // successful login, and two of cancellation.
   //
-  // 1. The user closed the window, in which case the "user canceled" callback
-  //    must be made.
-  // 2. The user successfully logged in, in which case the closure of the page
-  //    was triggered above in SchemeWasNavigatedTo().
-  // 3. The OS asked for cancellation, in which case the closure of the page was
-  //    triggered above in CancelAuthSession().
+  // Success code path:
   //
-  // In case 2, the success callback was already made; in case 3, no callback
-  // should be made. `perform_cancellation_callback_` is set to false in those
-  // cases. If `perform_cancellation_callback_` is true, then it was never
-  // changed after initialization, and that distinguishes case 1.
+  // - The user successfully logged in, in which case the closure of the page
+  //   was triggered above in `SchemeWasNavigatedTo()`.
+  //
+  // Cancellation code paths:
+  //
+  // - The user closed the window without successfully logging in.
+  // - The OS asked for cancellation, in which case the closure of the page was
+  //   triggered above in `CancelAuthSession()`.
+  //
+  // In both cancellation cases, the OS must receive a cancellation callback.
+  // (This is an undocumented requirement in the case that the OS asked for the
+  // cancellation; see https://crbug.com/1400714.)
 
   if (perform_cancellation_callback_) {
     NSError* error = [NSError
@@ -339,7 +346,7 @@ void AuthSessionRequest::WebContentsDestroyed() {
 WEB_CONTENTS_USER_DATA_KEY_IMPL(AuthSessionRequest);
 
 std::unique_ptr<content::NavigationThrottle> MaybeCreateAuthSessionThrottleFor(
-    content::NavigationHandle* handle) API_AVAILABLE(macos(10.15)) {
+    content::NavigationHandle* handle) {
   AuthSessionRequest* request =
       AuthSessionRequest::FromWebContents(handle->GetWebContents());
   if (!request)

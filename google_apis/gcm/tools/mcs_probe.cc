@@ -16,11 +16,11 @@
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -28,9 +28,9 @@
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -66,7 +66,7 @@
 #include "url/scheme_host_port.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif
 
 // This is a simple utility that initializes an mcs client and
@@ -163,6 +163,8 @@ class MyTestCertVerifier : public net::CertVerifier {
     return net::OK;
   }
   void SetConfig(const Config& config) override {}
+  void AddObserver(Observer* observer) override {}
+  void RemoveObserver(Observer* observer) override {}
 };
 
 class MCSProbeAuthPreferences : public net::HttpAuthPreferences {
@@ -293,15 +295,15 @@ void MCSProbe::Start() {
       endpoints, kDefaultBackoffPolicy,
       base::BindRepeating(&MCSProbe::RequestProxyResolvingSocketFactory,
                           base::Unretained(this)),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_,
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_,
       network_connection_tracker_.get());
   gcm_store_ = std::make_unique<GCMStoreImpl>(
-      gcm_store_path_, /*remove_account_mappings_with_email_key=*/true,
-      file_thread_.task_runner(), std::make_unique<FakeEncryptor>());
+      gcm_store_path_, file_thread_.task_runner(),
+      std::make_unique<FakeEncryptor>());
 
   mcs_client_ = std::make_unique<MCSClient>(
       "probe", &clock_, connection_factory_.get(), gcm_store_.get(),
-      base::ThreadTaskRunnerHandle::Get(), &recorder_);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_);
   run_loop_ = std::make_unique<base::RunLoop>();
   gcm_store_->Load(
       GCMStore::CREATE_IF_MISSING,
@@ -411,8 +413,8 @@ void MCSProbe::CheckIn() {
   checkin_request_ = std::make_unique<CheckinRequest>(
       GServicesSettings().GetCheckinURL(), request_info, kDefaultBackoffPolicy,
       base::BindOnce(&MCSProbe::OnCheckInCompleted, base::Unretained(this)),
-      shared_url_loader_factory_, base::ThreadTaskRunnerHandle::Get(),
-      &recorder_);
+      shared_url_loader_factory_,
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &recorder_);
   checkin_request_->Start();
 }
 

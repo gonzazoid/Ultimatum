@@ -5,13 +5,16 @@
 #include "content/public/browser/webui_config_map.h"
 
 #include "base/containers/contains.h"
+#include "base/memory/raw_ref.h"
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
+#include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_controller.h"
 #include "content/public/browser/web_ui_controller_factory.h"
 #include "content/public/browser/webui_config.h"
+#include "content/public/common/content_client.h"
 #include "content/public/common/url_constants.h"
 #include "url/gurl.h"
 
@@ -28,8 +31,7 @@ class WebUIConfigMapWebUIControllerFactory : public WebUIControllerFactory {
 
   WebUI::TypeID GetWebUIType(BrowserContext* browser_context,
                              const GURL& url) override {
-    auto* config =
-        config_map_.GetConfig(browser_context, url::Origin::Create(url));
+    auto* config = config_map_->GetConfig(browser_context, url);
     if (!config)
       return WebUI::kNoWebUI;
 
@@ -38,25 +40,26 @@ class WebUIConfigMapWebUIControllerFactory : public WebUIControllerFactory {
 
   bool UseWebUIForURL(BrowserContext* browser_context,
                       const GURL& url) override {
-    return config_map_.GetConfig(browser_context, url::Origin::Create(url));
+    return config_map_->GetConfig(browser_context, url);
   }
 
   std::unique_ptr<WebUIController> CreateWebUIControllerForURL(
       WebUI* web_ui,
       const GURL& url) override {
     auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-    auto* config =
-        config_map_.GetConfig(browser_context, url::Origin::Create(url));
+    auto* config = config_map_->GetConfig(browser_context, url);
     if (!config)
       return nullptr;
 
-    return config->CreateWebUIController(web_ui);
+    GetContentClient()->browser()->LogWebUIUrl(url);
+
+    return config->CreateWebUIController(web_ui, url);
   }
 
  private:
   // Keeping a reference should be safe since this class is owned by
   // WebUIConfigMap.
-  WebUIConfigMap& config_map_;
+  const raw_ref<WebUIConfigMap> config_map_;
 };
 
 }  // namespace
@@ -94,27 +97,55 @@ void WebUIConfigMap::AddWebUIConfigImpl(std::unique_ptr<WebUIConfig> config) {
 }
 
 WebUIConfig* WebUIConfigMap::GetConfig(BrowserContext* browser_context,
-                                       const url::Origin& origin) {
-  auto origin_and_config = configs_map_.find(origin);
+                                       const GURL& url) {
+  // "filesystem:" and "blob:" get dropped by url::Origin::Create() below. We
+  // don't want navigations to these URLs to have WebUI bindings, e.g.
+  // chrome.send() or Mojo.bindInterface(), since some WebUIs currently expose
+  // untrusted content via these schemes.
+  if (url.scheme() != kChromeUIScheme &&
+      url.scheme() != kChromeUIUntrustedScheme) {
+    return nullptr;
+  }
+
+  auto origin_and_config = configs_map_.find(url::Origin::Create(url));
   if (origin_and_config == configs_map_.end())
     return nullptr;
   auto& config = origin_and_config->second;
 
-  if (!config->IsWebUIEnabled(browser_context))
+  if (!config->IsWebUIEnabled(browser_context) ||
+      !config->ShouldHandleURL(url)) {
     return nullptr;
+  }
 
   return config.get();
 }
 
-std::unique_ptr<WebUIConfig> WebUIConfigMap::RemoveConfig(
-    const url::Origin& origin) {
-  auto it = configs_map_.find(origin);
+std::unique_ptr<WebUIConfig> WebUIConfigMap::RemoveConfig(const GURL& url) {
+  CHECK(url.scheme() == kChromeUIScheme ||
+        url.scheme() == kChromeUIUntrustedScheme);
+
+  auto it = configs_map_.find(url::Origin::Create(url));
   if (it == configs_map_.end())
     return nullptr;
 
   auto webui_config = std::move(it->second);
   configs_map_.erase(it);
   return webui_config;
+}
+
+std::vector<WebUIConfigInfo> WebUIConfigMap::GetWebUIConfigList(
+    BrowserContext* browser_context) {
+  std::vector<WebUIConfigInfo> origins;
+  for (auto& it : configs_map_) {
+    auto& webui_config = it.second;
+    origins.push_back({
+        .origin = it.first,
+        .enabled = browser_context == nullptr
+                       ? false
+                       : webui_config->IsWebUIEnabled(browser_context),
+    });
+  }
+  return origins;
 }
 
 }  // namespace content

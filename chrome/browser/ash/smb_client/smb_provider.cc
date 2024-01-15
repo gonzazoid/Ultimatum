@@ -22,10 +22,10 @@ namespace smb_client {
 
 SmbProvider::SmbProvider()
     : provider_id_(file_system_provider::ProviderId::CreateFromNativeId("smb")),
-      capabilities_(false /* configurable */,
-                    false /* watchable */,
-                    true /* multiple_mounts */,
-                    extensions::SOURCE_NETWORK),
+      capabilities_{.configurable = false,
+                    .watchable = false,
+                    .multiple_mounts = true,
+                    .source = extensions::SOURCE_NETWORK},
       name_(l10n_util::GetStringUTF8(IDS_SMB_SHARES_ADD_SERVICE_MENU_OPTION)) {}
 
 SmbProvider::~SmbProvider() = default;
@@ -55,7 +55,17 @@ const file_system_provider::IconSet& SmbProvider::GetIconSet() const {
   return icon_set_;
 }
 
-bool SmbProvider::RequestMount(Profile* profile) {
+file_system_provider::RequestManager* SmbProvider::GetRequestManager() {
+  NOTREACHED();
+  return nullptr;
+}
+
+bool SmbProvider::RequestMount(
+    Profile* profile,
+    ash::file_system_provider::RequestMountCallback callback) {
+  // Mount requests for SMB are handled by the SMB dialog. The callback
+  // isn't expected to be used.
+  std::move(callback).Run(base::File::Error::FILE_OK);
   smb_dialog::SmbShareDialog::Show();
   return true;
 }

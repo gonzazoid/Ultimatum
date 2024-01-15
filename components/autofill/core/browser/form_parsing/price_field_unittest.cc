@@ -19,11 +19,9 @@ class PriceFieldTest
   PriceFieldTest& operator=(const PriceFieldTest&) = delete;
 
  protected:
-  std::unique_ptr<FormField> Parse(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language = LanguageCode("en")) override {
-    return PriceField::Parse(scanner, page_language, GetActivePatternSource(),
-                             /*log_manager=*/nullptr);
+  std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                   AutofillScanner* scanner) override {
+    return PriceField::Parse(context, scanner);
   }
 };
 

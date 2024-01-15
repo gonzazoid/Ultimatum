@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_VIZ_COMMON_RESOURCES_RELEASE_CALLBACK_H_
 #define COMPONENTS_VIZ_COMMON_RESOURCES_RELEASE_CALLBACK_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace gpu {
 struct SyncToken;
@@ -23,6 +23,14 @@ namespace viz {
 // resource when |is_lost| is set.
 using ReleaseCallback =
     base::OnceCallback<void(const gpu::SyncToken& sync_token, bool is_lost)>;
+
+// The callback type used to denote the eviction of a Surface for which a
+// resource is referenced. When invoked the receiver of this callback should
+// remove the resource, and no longer attempt to reuse it. However it is not
+// safe to delete the resource at this time. A subsequent notification of
+// `ReleaseCallback` will be sent once all references have been removed, at
+// which point it will be safe to delete.
+using ResourceEvictedCallback = base::OnceClosure;
 
 }  // namespace viz
 

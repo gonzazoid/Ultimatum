@@ -10,10 +10,9 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/sequence_checker.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/commands/key_rotation_command.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/key_rotation_launcher.h"
-
-class PrefService;
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -31,8 +30,7 @@ class KeyRotationLauncherImpl : public KeyRotationLauncher {
   KeyRotationLauncherImpl(
       policy::BrowserDMTokenStorage* dm_token_storage,
       policy::DeviceManagementService* device_management_service,
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      PrefService* local_prefs);
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
   ~KeyRotationLauncherImpl() override;
 
   // KeyRotationLauncher:
@@ -43,8 +41,12 @@ class KeyRotationLauncherImpl : public KeyRotationLauncher {
   raw_ptr<policy::BrowserDMTokenStorage> dm_token_storage_;
   raw_ptr<policy::DeviceManagementService> device_management_service_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  base::raw_ptr<PrefService> local_prefs_;
+
   std::unique_ptr<KeyRotationCommand> command_;
+
+  // Checker used to validate that non-background tasks should be
+  // running on the original sequence.
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 }  // namespace enterprise_connectors

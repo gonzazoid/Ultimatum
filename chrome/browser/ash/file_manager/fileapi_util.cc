@@ -9,15 +9,16 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/webui/file_manager/url_constants.h"
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/file_manager/filesystem_api_util.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -151,8 +152,8 @@ void FileDefinitionListConverter::ConvertNextIterator(
   }
 
   storage::FileSystemURL url = file_system_context_->CreateCrackedFileSystemURL(
-      blink::StorageKey(origin_), storage::kFileSystemTypeExternal,
-      iterator->virtual_path);
+      blink::StorageKey::CreateFirstParty(origin_),
+      storage::kFileSystemTypeExternal, iterator->virtual_path);
 
   if (!url.is_valid()) {
     OnIteratorConverted(
@@ -241,15 +242,18 @@ void OnConvertFileDefinitionDone(
 bool IsUnderNonNativeLocalPath(const storage::FileSystemContext& context,
                                const base::FilePath& file_path) {
   base::FilePath virtual_path;
-  if (!context.external_backend()->GetVirtualPath(file_path, &virtual_path))
+  if (!ash::FileSystemBackend::Get(context)->GetVirtualPath(file_path,
+                                                            &virtual_path)) {
     return false;
+  }
 
   const storage::FileSystemURL url = context.CreateCrackedFileSystemURL(
       blink::StorageKey(), storage::kFileSystemTypeExternal, virtual_path);
-  if (!url.is_valid())
+  if (!url.is_valid()) {
     return false;
+  }
 
-  return IsNonNativeFileSystemType(url.type());
+  return !url.TypeImpliesPathIsReal();
 }
 
 // Helper class to convert SelectedFileInfoList into ChooserFileInfoList.
@@ -295,7 +299,7 @@ class ConvertSelectedFileInfoListToFileChooserFileInfoListImpl {
 
       // Non-native file without a snapshot file.
       base::FilePath virtual_path;
-      if (!context->external_backend()->GetVirtualPath(
+      if (!ash::FileSystemBackend::Get(*context)->GetVirtualPath(
               selected_info_list[i].file_path, &virtual_path)) {
         NotifyError(std::move(lifetime));
         return;
@@ -376,9 +380,9 @@ class ConvertSelectedFileInfoListToFileChooserFileInfoListImpl {
 
     context_->operation_runner()->GetMetadata(
         context_->CrackURLInFirstPartyContext((*it)->get_file_system()->url),
-        storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-            storage::FileSystemOperation::GET_METADATA_FIELD_SIZE |
-            storage::FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED,
+        {storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+         storage::FileSystemOperation::GetMetadataField::kSize,
+         storage::FileSystemOperation::GetMetadataField::kLastModified},
         base::BindOnce(
             &ConvertSelectedFileInfoListToFileChooserFileInfoListImpl::
                 OnGotMetadataOnIOThread,
@@ -439,7 +443,7 @@ void CheckIfDirectoryExistsOnIoThread(
 void GetMetadataForPathOnIoThread(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const storage::FileSystemURL& internal_url,
-    int fields,
+    storage::FileSystemOperationRunner::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   file_system_context->operation_runner()->GetMetadata(internal_url, fields,
@@ -551,14 +555,16 @@ bool ConvertAbsoluteFilePathToRelativeFileSystemPath(
     const GURL& source_url,
     const base::FilePath& absolute_path,
     base::FilePath* virtual_path) {
-  storage::ExternalFileSystemBackend* backend =
-      GetFileSystemContextForSourceURL(profile, source_url)->external_backend();
-  if (!backend)
+  auto* backend = ash::FileSystemBackend::Get(
+      *GetFileSystemContextForSourceURL(profile, source_url));
+  if (!backend) {
     return false;
+  }
 
   // Find if this file path is managed by the external backend.
-  if (!backend->GetVirtualPath(absolute_path, virtual_path))
+  if (!backend->GetVirtualPath(absolute_path, virtual_path)) {
     return false;
+  }
 
   return true;
 }
@@ -626,8 +632,7 @@ void CheckIfDirectoryExists(
     storage::FileSystemOperationRunner::StatusCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  storage::ExternalFileSystemBackend* const backend =
-      file_system_context->external_backend();
+  auto* const backend = ash::FileSystemBackend::Get(*file_system_context);
   DCHECK(backend);
   const storage::FileSystemURL internal_url =
       backend->CreateInternalURL(file_system_context.get(), directory_path);
@@ -642,12 +647,11 @@ void CheckIfDirectoryExists(
 void GetMetadataForPath(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const base::FilePath& entry_path,
-    int fields,
+    storage::FileSystemOperationRunner::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  storage::ExternalFileSystemBackend* const backend =
-      file_system_context->external_backend();
+  auto* const backend = ash::FileSystemBackend::Get(*file_system_context);
   DCHECK(backend);
   const storage::FileSystemURL internal_url =
       backend->CreateInternalURL(file_system_context.get(), entry_path);
@@ -664,9 +668,9 @@ FileSystemURLAndHandle CreateIsolatedURLFromVirtualPath(
     const url::Origin& origin,
     const base::FilePath& virtual_path) {
   const storage::FileSystemURL original_url =
-      context.CreateCrackedFileSystemURL(blink::StorageKey(origin),
-                                         storage::kFileSystemTypeExternal,
-                                         virtual_path);
+      context.CreateCrackedFileSystemURL(
+          blink::StorageKey::CreateFirstParty(origin),
+          storage::kFileSystemTypeExternal, virtual_path);
 
   std::string register_name;
   storage::IsolatedContext::ScopedFSHandle file_system =
@@ -674,7 +678,8 @@ FileSystemURLAndHandle CreateIsolatedURLFromVirtualPath(
           original_url.type(), original_url.filesystem_id(),
           original_url.path(), &register_name);
   storage::FileSystemURL isolated_url = context.CreateCrackedFileSystemURL(
-      blink::StorageKey(origin), storage::kFileSystemTypeIsolated,
+      blink::StorageKey::CreateFirstParty(origin),
+      storage::kFileSystemTypeIsolated,
       base::FilePath(file_system.id()).Append(register_name));
   return {isolated_url, file_system};
 }

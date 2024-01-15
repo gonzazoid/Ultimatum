@@ -11,11 +11,8 @@ var ChromeWebViewSchema =
 var CreateEvent = require('guestViewEvents').CreateEvent;
 var GuestViewInternalNatives = requireNative('guest_view_internal');
 var idGeneratorNatives = requireNative('id_generator');
-var registerElement = require('guestViewContainerElement').registerElement;
 var utils = require('utils');
-var WebViewElement = require('webViewElement').WebViewElement;
 var WebViewImpl = require('webView').WebViewImpl;
-var WebViewAttributeNames = require('webViewConstants').WebViewAttributeNames;
 
 // This is the only "webViewInternal.onClicked" named event for this renderer.
 //
@@ -144,6 +141,10 @@ class ChromeWebViewImpl extends WebViewImpl {
   }
 }
 
+ChromeWebViewImpl.prototype.createWebViewContextMenus = function () {
+  return new WebViewContextMenus(this.viewInstanceId);
+}
+
 ChromeWebViewImpl.prototype.setupContextMenus = function() {
   if (!this.contextMenusOnContextMenuEvent_) {
     var eventName = 'chromeWebViewInternal.onContextMenuShow';
@@ -160,7 +161,7 @@ ChromeWebViewImpl.prototype.setupContextMenus = function() {
         return this.contextMenus_;
       }
 
-      this.contextMenus_ = new WebViewContextMenus(this.viewInstanceId);
+      this.contextMenus_ = this.createWebViewContextMenus();
 
       // Define 'onClicked' event property on |this.contextMenus_|.
       var getOnClickedEvent = $Function.bind(function() {
@@ -206,15 +207,5 @@ ChromeWebViewImpl.prototype.setupContextMenus = function() {
       });
 };
 
-class ChromeWebViewElement extends WebViewElement {
-  static get observedAttributes() {
-    return WebViewAttributeNames;
-  }
-
-  constructor() {
-    super();
-    privates(this).internal = new ChromeWebViewImpl(this);
-  }
-}
-
-registerElement('WebView', ChromeWebViewElement);
+exports.$set('WebViewContextMenusImpl', WebViewContextMenusImpl);
+exports.$set('ChromeWebViewImpl', ChromeWebViewImpl);

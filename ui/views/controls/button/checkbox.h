@@ -23,9 +23,9 @@ namespace views {
 // A native themed class representing a checkbox.  This class does not use
 // platform specific objects to replicate the native platforms looks and feel.
 class VIEWS_EXPORT Checkbox : public LabelButton {
- public:
-  METADATA_HEADER(Checkbox);
+  METADATA_HEADER(Checkbox, LabelButton)
 
+ public:
   explicit Checkbox(const std::u16string& label = std::u16string(),
                     PressedCallback callback = PressedCallback(),
                     int button_context = style::CONTEXT_BUTTON);
@@ -45,12 +45,6 @@ class VIEWS_EXPORT Checkbox : public LabelButton {
   void SetMultiLine(bool multi_line);
   bool GetMultiLine() const;
 
-  // If the accessible name should be the same as the labelling view's text,
-  // use this. It will set the accessible label relationship and copy the
-  // accessible name from the labelling views's accessible name. Any view with
-  // an accessible name can be used, e.g. a Label, StyledLabel or Link.
-  void SetAssociatedLabel(View* labelling_view);
-
   void SetCheckedIconImageColor(SkColor color);
 
   // LabelButton:
@@ -69,7 +63,13 @@ class VIEWS_EXPORT Checkbox : public LabelButton {
   virtual SkPath GetFocusRingPath() const;
 
   // |icon_state| is a bitmask using the IconState enum.
+  // Returns a color for the container portion of the icon.
   virtual SkColor GetIconImageColor(int icon_state) const;
+  // Returns a color for the check portion of the icon.
+  virtual SkColor GetIconCheckColor(int icon_state) const;
+
+  // Returns a bitmask using the IconState enum.
+  int GetIconState(ButtonState for_state) const;
 
   // Gets the vector icon to use based on the current state of |checked_|.
   virtual const gfx::VectorIcon& GetVectorIcon() const;

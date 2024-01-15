@@ -12,6 +12,9 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_ref.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
@@ -23,8 +26,8 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/common/frame.mojom.h"
 #include "content/common/frame_messages.mojom.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/common/alternative_error_page_override_info.mojom.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/test/policy_container_utils.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -84,21 +87,26 @@ class FakeNavigationClient : public mojom::NavigationClient {
       network::mojom::URLLoaderClientEndpointsPtr url_loader_client_endpoints,
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle>
           subresource_loader_factories,
-      absl::optional<std::vector<blink::mojom::TransferrableURLLoaderPtr>>
+      std::optional<std::vector<blink::mojom::TransferrableURLLoaderPtr>>
           subresource_overrides,
       blink::mojom::ControllerServiceWorkerInfoPtr
           controller_service_worker_info,
       blink::mojom::ServiceWorkerContainerInfoForClientPtr container_info,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
-          prefetch_loader_factory,
+          subresource_proxying_loader_factory,
+      mojo::PendingRemote<network::mojom::URLLoaderFactory>
+          keep_alive_loader_factory,
+      mojo::PendingAssociatedRemote<blink::mojom::FetchLaterLoaderFactory>
+          fetch_later_loader_factory,
       const blink::DocumentToken& document_token,
       const base::UnguessableToken& devtools_navigation_token,
-      const absl::optional<blink::ParsedPermissionsPolicy>& permissions_policy,
+      const std::optional<blink::ParsedPermissionsPolicy>& permissions_policy,
       blink::mojom::PolicyContainerPtr policy_container,
       mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host,
+      mojo::PendingRemote<blink::mojom::CodeCacheHost>
+          code_cache_host_for_background,
       mojom::CookieManagerInfoPtr cookie_manager_info,
       mojom::StorageInfoPtr storage_info,
-      blink::mojom::BackForwardCacheNotRestoredReasonsPtr not_restored_reasons,
       CommitNavigationCallback callback) override {
     std::move(on_received_callback_).Run(std::move(container_info));
     std::move(callback).Run(MinimalDidCommitNavigationLoadParams(), nullptr);
@@ -110,7 +118,7 @@ class FakeNavigationClient : public mojom::NavigationClient {
       int error_code,
       int extended_error_code,
       const net::ResolveErrorInfo& resolve_error_info,
-      const absl::optional<std::string>& error_page_content,
+      const std::optional<std::string>& error_page_content,
       std::unique_ptr<blink::PendingURLLoaderFactoryBundle> subresource_loaders,
       const blink::DocumentToken& document_token,
       blink::mojom::PolicyContainerPtr policy_container,
@@ -137,28 +145,28 @@ class ResourceWriter {
         meta_data_(meta_data) {}
 
   void Start(WriteToDiskCacheCallback callback) {
-    DCHECK(storage_.is_connected());
+    DCHECK(storage_->is_connected());
     callback_ = std::move(callback);
-    storage_->GetNewResourceId(base::BindOnce(&ResourceWriter::DidGetResourceId,
-                                              base::Unretained(this)));
+    (*storage_)->GetNewResourceId(base::BindOnce(
+        &ResourceWriter::DidGetResourceId, base::Unretained(this)));
   }
 
   void StartWithResourceId(int64_t resource_id,
                            WriteToDiskCacheCallback callback) {
-    DCHECK(storage_.is_connected());
+    DCHECK(storage_->is_connected());
     callback_ = std::move(callback);
     DidGetResourceId(resource_id);
   }
 
  private:
   void DidGetResourceId(int64_t resource_id) {
-    DCHECK(storage_.is_connected());
+    DCHECK(storage_->is_connected());
     DCHECK_NE(resource_id, blink::mojom::kInvalidServiceWorkerResourceId);
 
     resource_id_ = resource_id;
-    storage_->CreateResourceWriter(resource_id,
-                                   body_writer_.BindNewPipeAndPassReceiver());
-    storage_->CreateResourceMetadataWriter(
+    (*storage_)->CreateResourceWriter(
+        resource_id, body_writer_.BindNewPipeAndPassReceiver());
+    (*storage_)->CreateResourceMetadataWriter(
         resource_id, metadata_writer_.BindNewPipeAndPassReceiver());
 
     auto response_head = network::mojom::URLResponseHead::New();
@@ -195,10 +203,11 @@ class ResourceWriter {
   void DidWriteMetadata(int result) {
     DCHECK_EQ(result, static_cast<int>(meta_data_.size()));
     std::move(callback_).Run(storage::mojom::ServiceWorkerResourceRecord::New(
-        resource_id_, script_url_, body_.size()));
+        resource_id_, script_url_, body_.size(), /*sha256_checksum=*/""));
   }
 
-  const mojo::Remote<storage::mojom::ServiceWorkerStorageControl>& storage_;
+  const raw_ref<const mojo::Remote<storage::mojom::ServiceWorkerStorageControl>>
+      storage_;
   const GURL script_url_;
   const std::vector<std::pair<std::string, std::string>> headers_;
   const std::string body_;
@@ -256,12 +265,20 @@ void ServiceWorkerRemoteContainerEndpoint::BindForWindow(
       blink::CreateCommonNavigationParams(),
       blink::CreateCommitNavigationParams(),
       network::mojom::URLResponseHead::New(),
-      mojo::ScopedDataPipeConsumerHandle(), nullptr, nullptr, absl::nullopt,
-      nullptr, std::move(info), mojo::NullRemote(), blink::DocumentToken(),
-      base::UnguessableToken::Create(),
+      mojo::ScopedDataPipeConsumerHandle(),
+      /*url_loader_client_endpoints=*/nullptr,
+      /*subresource_loader_factories=*/nullptr,
+      /*subresource_overrides=*/std::nullopt,
+      /*controller_service_worker_info=*/nullptr, std::move(info),
+      /*subresource_proxying_loader_factory=*/mojo::NullRemote(),
+      /*keep_alive_loader_factory=*/mojo::NullRemote(),
+      /*fetch_later_loader_factory=*/mojo::NullAssociatedRemote(),
+      blink::DocumentToken(), base::UnguessableToken::Create(),
       std::vector<blink::ParsedPermissionsPolicyDeclaration>(),
-      CreateStubPolicyContainer(), mojo::NullRemote(), nullptr, nullptr,
-      /*not_restored_reasons=*/nullptr,
+      CreateStubPolicyContainer(), /*code_cache_host=*/mojo::NullRemote(),
+      /*code_cache_host_for_background=*/mojo::NullRemote(),
+      /*cookie_manager_info=*/nullptr,
+      /*storage_info=*/nullptr,
       base::BindOnce(
           [](mojom::DidCommitProvisionalLoadParamsPtr validated_params,
              mojom::DidCommitProvisionalLoadInterfaceParamsPtr
@@ -328,16 +345,30 @@ CreateContainerHostAndInfoForWindow(
 }
 
 base::OnceCallback<void(blink::ServiceWorkerStatusCode)>
-ReceiveServiceWorkerStatus(absl::optional<blink::ServiceWorkerStatusCode>* out,
+ReceiveServiceWorkerStatus(std::optional<blink::ServiceWorkerStatusCode>* out,
                            base::OnceClosure quit_closure) {
   return base::BindOnce(
       [](base::OnceClosure quit_closure,
-         absl::optional<blink::ServiceWorkerStatusCode>* out,
+         std::optional<blink::ServiceWorkerStatusCode>* out,
          blink::ServiceWorkerStatusCode result) {
         *out = result;
         std::move(quit_closure).Run();
       },
       std::move(quit_closure), out);
+}
+
+blink::ServiceWorkerStatusCode WarmUpServiceWorker(
+    ServiceWorkerVersion* version) {
+  blink::ServiceWorkerStatusCode status;
+  base::RunLoop run_loop;
+  version->StartWorker(ServiceWorkerMetrics::EventType::WARM_UP,
+                       base::BindLambdaForTesting(
+                           [&](blink::ServiceWorkerStatusCode result_status) {
+                             status = result_status;
+                             run_loop.Quit();
+                           }));
+  run_loop.Run();
+  return status;
 }
 
 blink::ServiceWorkerStatusCode StartServiceWorker(
@@ -428,8 +459,6 @@ scoped_refptr<ServiceWorkerVersion> CreateNewServiceWorkerVersion(
           }));
   run_loop.Run();
   DCHECK(version);
-  version->set_policy_container_host(
-      base::MakeRefCounted<PolicyContainerHost>(PolicyContainerPolicies()));
   return version;
 }
 
@@ -448,9 +477,9 @@ CreateServiceWorkerRegistrationAndVersion(ServiceWorkerContextCore* context,
       CreateNewServiceWorkerVersion(context->registry(), registration.get(),
                                     script, blink::mojom::ScriptType::kClassic);
   std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> records;
-  records.push_back(
-      storage::mojom::ServiceWorkerResourceRecord::New(resource_id, script,
-                                                       /*size_bytes=*/100));
+  records.push_back(storage::mojom::ServiceWorkerResourceRecord::New(
+      resource_id, script,
+      /*size_bytes=*/100, /*sha256_checksum=*/""));
   version->script_cache_map()->SetResources(records);
   version->set_fetch_handler_type(
       ServiceWorkerVersion::FetchHandlerType::kNotSkippable);
@@ -612,7 +641,7 @@ void MockServiceWorkerResourceReader::CompletePendingRead() {
     response_head->content_length = expected.len;
     std::move(pending_read_response_head_callback_)
         .Run(expected.result, std::move(response_head),
-             /*metadata=*/absl::nullopt);
+             /*metadata=*/std::nullopt);
   } else {
     if (expected.len == 0) {
       body_.reset();
@@ -736,7 +765,8 @@ ServiceWorkerUpdateCheckTestUtils::CreatePausedCacheWriter(
 
   auto cache_writer = ServiceWorkerCacheWriter::CreateForComparison(
       std::move(compare_reader), std::move(copy_reader), std::move(writer),
-      new_resource_id, true /* pause_when_not_identical */);
+      new_resource_id, /*pause_when_not_identical=*/true,
+      ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch);
   cache_writer->response_head_to_write_ =
       network::mojom::URLResponseHead::New();
   cache_writer->response_head_to_write_->request_time = base::Time::Now();
@@ -744,8 +774,10 @@ ServiceWorkerUpdateCheckTestUtils::CreatePausedCacheWriter(
   cache_writer->response_head_to_write_->headers =
       base::MakeRefCounted<net::HttpResponseHeaders>(new_headers);
   cache_writer->bytes_compared_ = bytes_compared;
-  cache_writer->data_to_write_ = base::MakeRefCounted<net::WrappedIOBuffer>(
-      pending_network_buffer ? pending_network_buffer->buffer() : nullptr);
+  cache_writer->data_to_write_ =
+      base::MakeRefCounted<net::WrappedIOBuffer>(base::make_span(
+          pending_network_buffer ? pending_network_buffer->buffer() : nullptr,
+          pending_network_buffer ? pending_network_buffer->size() : 0));
   cache_writer->len_to_write_ = consumed_size;
   cache_writer->bytes_written_ = 0;
   cache_writer->io_pending_ = true;
@@ -790,8 +822,7 @@ void ServiceWorkerUpdateCheckTestUtils::SetComparedScriptInfoForVersion(
        ServiceWorkerSingleScriptUpdateChecker::Result::kDifferent)
           ? script_url
           : GURL(),
-      base::MakeRefCounted<PolicyContainerHost>(),
-      network::CrossOriginEmbedderPolicy());
+      base::MakeRefCounted<PolicyContainerHost>());
 }
 
 void ServiceWorkerUpdateCheckTestUtils::
@@ -824,9 +855,9 @@ void ServiceWorkerUpdateCheckTestUtils::
     base::RunLoop().RunUntilIdle();
 
     // Read the data to make a pending buffer.
-    ASSERT_EQ(MOJO_RESULT_OK,
-              network::MojoToNetPendingBuffer::BeginRead(
-                  &network_consumer, &pending_buffer, &bytes_available));
+    ASSERT_EQ(MOJO_RESULT_OK, network::MojoToNetPendingBuffer::BeginRead(
+                                  &network_consumer, &pending_buffer));
+    bytes_available = pending_buffer->size();
     ASSERT_EQ(diff_data_block.size(), bytes_available);
   }
 
@@ -860,7 +891,7 @@ bool ServiceWorkerUpdateCheckTestUtils::VerifyStoredResponse(
     base::RunLoop loop;
     reader->ReadResponseHead(base::BindLambdaForTesting(
         [&](int status, network::mojom::URLResponseHeadPtr response_head,
-            absl::optional<mojo_base::BigBuffer> metadata) {
+            std::optional<mojo_base::BigBuffer> metadata) {
           rv = status;
           status_text = response_head->headers->GetStatusText();
           response_data_size = response_head->content_length;
@@ -921,7 +952,7 @@ void ReadDataPipeInternal(mojo::DataPipeConsumerHandle handle,
         std::move(quit_closure).Run();
         return;
       case MOJO_RESULT_SHOULD_WAIT:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&ReadDataPipeInternal, handle, result,
                                       std::move(quit_closure)));
         return;

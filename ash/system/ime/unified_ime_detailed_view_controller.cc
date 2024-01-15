@@ -4,7 +4,7 @@
 
 #include "ash/system/ime/unified_ime_detailed_view_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/ime/ime_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
@@ -40,12 +40,13 @@ UnifiedIMEDetailedViewController::~UnifiedIMEDetailedViewController() {
   Shell::Get()->accessibility_controller()->RemoveObserver(this);
 }
 
-views::View* UnifiedIMEDetailedViewController::CreateView() {
+std::unique_ptr<views::View> UnifiedIMEDetailedViewController::CreateView() {
   DCHECK(!view_);
-  view_ = new IMEDetailedView(detailed_view_delegate_.get(),
-                              Shell::Get()->ime_controller());
+  auto view = std::make_unique<IMEDetailedView>(detailed_view_delegate_.get(),
+                                                Shell::Get()->ime_controller());
+  view_ = view.get();
   view_->Init(ShouldShowKeyboardToggle(), GetSingleImeBehavior());
-  return view_;
+  return view;
 }
 
 std::u16string UnifiedIMEDetailedViewController::GetAccessibleName() const {

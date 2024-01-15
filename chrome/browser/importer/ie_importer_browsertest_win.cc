@@ -19,10 +19,10 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -205,9 +205,10 @@ bool CreateUrlFileWithFavicon(const base::FilePath& file,
     return false;
 
   // Write dummy favicon image data in NTFS alternate data stream.
-  return favicon_url.empty() || (base::WriteFile(
-      file.ReplaceExtension(kFaviconStreamSuffix), kDummyFaviconImageData,
-      sizeof kDummyFaviconImageData) != -1);
+  return favicon_url.empty() ||
+         base::WriteFile(file.ReplaceExtension(kFaviconStreamSuffix),
+                         base::StringPiece(kDummyFaviconImageData,
+                                           sizeof kDummyFaviconImageData));
 }
 
 bool CreateUrlFile(const base::FilePath& file, const std::wstring& url) {
@@ -425,8 +426,8 @@ IN_PROC_BROWSER_TEST_F(IEImporterBrowserTest, IEImporter) {
       L"http://www.links-sublink.com/"));
   ASSERT_TRUE(CreateUrlFile(path.AppendASCII("IEDefaultLink.url"),
                             L"http://go.microsoft.com/fwlink/?linkid=140813"));
-  base::WriteFile(path.AppendASCII("InvalidUrlFile.url"), "x", 1);
-  base::WriteFile(path.AppendASCII("PlainTextFile.txt"), "x", 1);
+  base::WriteFile(path.AppendASCII("InvalidUrlFile.url"), "x");
+  base::WriteFile(path.AppendASCII("PlainTextFile.txt"), "x");
 
   const wchar_t* root_links[] = {
       L"Links",         L"Google Home Page.url", L"TheLink.url",

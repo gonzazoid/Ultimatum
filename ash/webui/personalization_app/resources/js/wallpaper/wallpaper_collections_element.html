@@ -1,40 +1,18 @@
 <style include="common wallpaper">
-  .photo-inner-container.photo-loading-failure {
-    cursor: default;
+  wallpaper-grid-item[aria-disabled='true'][data-online]::part(image) {
     filter: grayscale(100%);
     opacity: 0.3;
   }
 
-  .photo-inner-container.google-photos-empty:not([selectable]),
-  .photo-inner-container.photo-empty:not([selectable]) {
-    cursor: default;
-  }
-
-  .photo-images-container.photo-images-container-0 {
-    align-items: flex-start;
-    background-color: var(--cros-highlight-color);
-    justify-content: center;
-  }
-
-  .google-photos-empty .photo-images-container.photo-images-container-0 {
-    /* Background color should stay light even in dark mode. */
-    background-color: white;
-  }
-
-  .google-photos-empty[managed] .photo-images-container.photo-images-container-0 {
-    /* Background color should stay light even in dark mode. */
-    background-color: var(--google-grey-200);
-  }
-
-  .photo-images-container.photo-images-container-0 img {
-    flex: none;
+  wallpaper-grid-item[data-google-photos]::part(image) {
     height: 64px;
     margin: 12px;
-    min-width: initial;
-    width: initial;
+    position: absolute;
+    top: 0;
+    width: 64px;
   }
 
-  .google-photos-empty[managed] .photo-images-container.photo-images-container-0 img {
+  wallpaper-grid-item[data-google-photos][aria-disabled='true']::part(image) {
     /* Background color should stay light even in dark mode. */
     background-color: white;
     border-radius: 100%;
@@ -42,29 +20,22 @@
     filter: grayscale(100%);
     height: 54px;
     padding: 4px;
+    width: 54px;
   }
 
-  .photo-images-container.photo-images-container-3 img,
-  .photo-images-container.photo-images-container-4 img {
-    height: 50%;
+  wallpaper-grid-item[data-google-photos][aria-disabled='true']::part(textShadow) {
+    display: none;
   }
 
-  .photo-text-container {
-    bottom: 8px;
-    box-sizing: border-box;
-    position: absolute;
-    width: 100%;
-    z-index: 2;
-  }
-
-  .photo-text-container div {
+  wallpaper-grid-item[data-google-photos] .primary-text {
     align-items: center;
+    bottom: calc(8px + var(--cros-annotation-2-line-height));
     display: flex;
     flex-direction: row;
     justify-content: center;
   }
 
-  .photo-text-container iron-icon[icon='personalization:managed'] {
+  wallpaper-grid-item[data-google-photos] iron-icon[icon^='personalization:managed'] {
     --iron-icon-fill-color: var(--cros-icon-color-secondary);
     --iron-icon-height: 16px;
     --iron-icon-width: 16px;
@@ -73,161 +44,233 @@
     margin-inline-end: 8px;
   }
 
-  .google-photos-empty[managed] iron-icon[icon='personalization:managed'] {
-    /* Icon color should stay light even in dark mode. */
+  wallpaper-grid-item[data-google-photos][aria-disabled='true'] iron-icon[icon^='personalization:managed'] {
+    /* Icon color should stay light even in dark mode.
+     * All of the google photos tile is always light.
+     */
     --iron-icon-fill-color: var(--cros-icon-color-secondary-light);
-  }
-
-  .photo-inner-container[managed] iron-icon[icon='personalization:managed'] {
     display: block;
   }
 
-  .photo-text-container p {
-    color: white;
-    font: var(--cros-annotation-2-font);
-    margin: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-align: center;
-    text-overflow: ellipsis;
-    text-shadow: var(--personalization-app-text-shadow-elevation-1);
-    white-space: nowrap;
-  }
-
-  .photo-text-container p:empty {
-    /* Take layout space but be otherwise hidden to the user and ChromeVox. */
-    display: inline-block;
-    visibility: hidden;
-  }
-
-  .photo-text-container iron-icon[icon='personalization:managed']+p,
-  .photo-text-container p:first-child {
-    font: var(--cros-headline-1-font);
-  }
-
-  .google-photos-empty[managed] .photo-text-container p {
-    /* Text color should stay light even in dark mode. */
+  wallpaper-grid-item[data-google-photos][aria-disabled='true'] p {
+    /* Text color should stay light even in dark mode.
+     * All of the google photos tile is always light.
+     */
     color: var(--cros-text-color-secondary-light);
     text-shadow: none;
   }
 
-  .photo-empty .photo-text-container p {
-    color: var(--cros-button-label-color-secondary);
-    text-shadow: none;
+  .outer-container {
+    height: calc(var(--personalization-app-grid-item-height) +
+      var(--personalization-app-grid-item-spacing));
+    /* Media queries in trusted and untrusted code will resize to 25% at
+     * correct widths.  Subtract 0.34px to fix subpixel rounding issues with
+     * iron-list. This makes sure all photo containers on a row add up to at
+     * least 1px smaller than the parent width.*/
+    width: calc(100% / 3 - 0.34px);
   }
 
-  .photo-gradient-mask {
-    background: linear-gradient(
-      rgba(var(--google-grey-900-rgb), 0),
-      rgba(var(--google-grey-900-rgb), 55%));
-    border-radius: 0 0 12px 12px;
-    height: 50%;
-    left: 0;
-    position: absolute;
-    top: 50%;
-    width: 100%;
-    z-index: 1;
+  #promoted .outer-container {
+    width: calc(100% / 2 - .5px);
   }
 
-  .google-photos-empty[managed] .photo-gradient-mask,
-  .photo-empty .photo-gradient-mask {
+  @media(min-width: 720px) {
+    .outer-container {
+      width: calc(100% / 4 - 0.25px);
+    }
+  }
+
+  wallpaper-grid-item {
+    --wallpaper-grid-item-width: 100%;
+  }
+
+  wallpaper-grid-item[data-google-photos]:not([aria-disabled='true']):not([placeholder]) {
+    /* Always white, even in dark mode.
+     * All of the google photos tile is always light.
+     */
+    --personalization-app-grid-item-background-color: white;
+  }
+
+  wallpaper-grid-item[data-google-photos][aria-disabled='true']:not([placeholder]) {
+    /* Disabled background color should stay light even in dark mode.
+     * All of the google photos tile is always light.
+     */
+    --personalization-app-grid-item-background-color: var(--google-grey-200);
+  }
+
+  :host-context(body.jelly-enabled) wallpaper-grid-item[is-local-no-images]::part(item) {
+    background: linear-gradient(var(--cros-sys-primary), var(--cros-sys-primary_container));
+  }
+
+  :host-context(body.jelly-enabled) wallpaper-grid-item[is-local-no-images]::part(image) {
     display: none;
+  }
+
+  #promoted wallpaper-grid-item,
+  wallpaper-grid-item[data-is-time-of-day-collection] {
+    --personalization-app-grid-item-border-radius: 80px;
+  }
+
+  #promoted {
+    padding: 10px 0;
+  }
+
+  wallpaper-grid-item[data-is-time-of-day-collection]::part(info-icon) {
+    right: 20px;
+    top: 20px;
+  }
+
+  #experimentTag {
+    animation: gradient-animation 1200ms linear infinite reverse;
+    background: linear-gradient(135deg, #c1fee3, #b5c4ff, #bfc2ff, #c1fee3, #b5c4ff, #bfc2ff);
+    background-size: 250% 250%;
+    border-radius: 36px;
+    color: var(--cros-sys-on_primary-dark);
+    font: var(--cros-label-1-font);
+    left: 50%;
+    padding: 4px 8px;
+    pointer-events: none;
+    position: absolute;
+    text-align: center;
+    top: 32px;
+    transform: translate(-50%, 0);
+  }
+
+  @keyframes gradient-animation {
+    0%{background-position: 0% 0%}
+    100%{background-position: 100% 100%}
   }
 </style>
 <template is="dom-if" if="[[hasError_]]">
   <wallpaper-error></wallpaper-error>
 </template>
 <main aria-label="$i18n{wallpaperCollections}" hidden$="[[hasError_]]">
-  <iron-list items="[[tiles_]]"
-      grid
-      role="listbox"
-      aria-setsize$="[[tiles_.length]]">
-    <template>
-      <div class="photo-container">
-        <template is="dom-if" if="[[isLoadingTile_(item)]]">
-          <div tabindex$="[[tabIndex]]"
-              role="option"
-              class="photo-inner-container placeholder"
-              style$="[[getLoadingPlaceholderAnimationDelay(index)]]"
-              aria-posinset$="[[getAriaIndex_(index)]]"
-              aria-label$="[[geti18n_('ariaLabelLoading')]]"
-              aria-disabled="true">
-          </div>
-        </template>
-        <template is="dom-if" if="[[isFailureTile_(item)]]">
-          <div tabindex$="[[tabIndex]]"
-              role="button"
-              aria-posinset$="[[getAriaIndex_(index)]]"
-              aria-disabled="true"
-              class="photo-inner-container photo-loading-failure">
-            <div class$="[[getClassForImagesContainer_(item)]]">
-              <div class="photo-images-border"></div>
-              <template is="dom-repeat" items="[[item.preview]]" as="preview">
-                <img is="cr-auto-img" auto-src="[[preview.url]]"
-                    aria-hidden="true" clear-src>
-              </template>
-            </div>
-            <div class="photo-text-container">
-              <p title$="[[item.name]]">[[item.name]]</p>
-              <p title$="[[geti18n_('zeroImages')]]">
-                [[geti18n_('zeroImages')]]
-              </p>
-            </div>
+  <template is="dom-if" if="[[isSeaPenEnabled_]]" restamp>
+    <h2 class="wallpaper-collections-heading">$i18n{seaPenExclusiveWallpapersHeading}</h2>
+    <iron-list aria-setsize$="[[promotedTiles_.length]]"
+        id="promoted"
+        grid
+        items="[[promotedTiles_]]"
+        role="listbox">
+      <template>
+        <div class="outer-container">
+          <template is="dom-if" if="[[isLoadingTile_(item)]]" restamp>
+            <wallpaper-grid-item
+                aria-label="$i18n{ariaLabelLoading}"
+                aria-posinset$="[[getAriaIndex_(index)]]"
+                data-is-promoted-tile
+                disabled
+                index="[[index]]"
+                role="option"
+                tabindex$="[[tabIndex]]">
+            </wallpaper-grid-item>
+          </template>
+          <template is="dom-if" if="[[isSeaPenTile_(item)]]">
+            <wallpaper-grid-item
+                data-sea-pen
+                data-is-promoted-tile
+                aria-posinset$="[[getAriaIndex_(index)]]"
+                disabled="[[!isSelectableTile_(item)]]"
+                index="[[index]]"
+                on-wallpaper-grid-item-selected="onCollectionSelected_"
+                primary-text="$i18n{seaPenLabel}"
+                primary-text="[[item.name]]"
+                secondary-text="$i18n{seaPenPoweredByGoogle}"
+                role="option"
+                src="[[item.preview]]"
+                tabindex$="[[tabIndex]]">
+            </wallpaper-grid-item>
+            <!-- TODO(b/317403518): verify the correct color for Experiment tag. -->
+            <div id="experimentTag">$i18n{seaPenExperimentLabel}</div>
+          </template>
+          <template is="dom-if" if="[[isOnlineTile_(item)]]">
+            <wallpaper-grid-item aria-posinset$="[[getAriaIndex_(index)]]"
+                data-online
+                data-is-promoted-tile
+                data-is-time-of-day-collection$="[[isTimeOfDayCollection_(item)]]"
+                disabled="[[!isSelectableTile_(item)]]"
+                index="[[index]]"
+                info-text="[[item.info]]"
+                on-wallpaper-grid-item-selected="onCollectionSelected_"
+                primary-text="[[item.name]]"
+                role="option"
+                secondary-text="[[getOnlineTileSecondaryText_(item)]]"
+                src="[[item.preview]]"
+                tabindex$="[[tabIndex]]">
+            </wallpaper-grid-item>
+          </template>
         </div>
-        </template>
-        <template is="dom-if" if="[[isEmptyTile_(item)]]">
-          <div tabindex$="[[tabIndex]]"
-              role="option"
+      </template>
+    </iron-list>
+    <h2 class="wallpaper-collections-heading">$i18n{seaPenChooseAWallpaperHeading}</h2>
+  </template>
+  <iron-list aria-setsize$="[[tiles_.length]]"
+      id="grid"
+      grid
+      items="[[tiles_]]"
+      role="listbox">
+    <template>
+      <div class="outer-container">
+        <template is="dom-if" if="[[isLoadingTile_(item)]]" restamp>
+          <wallpaper-grid-item
+              aria-label="$i18n{ariaLabelLoading}"
               aria-posinset$="[[getAriaIndex_(index)]]"
-              aria-disabled$="[[getTileAriaDisabled_(item)]]"
-              class$="[[getClassForEmptyTile_(item)]]"
-              managed$="[[isManagedTile_(item)]]"
-              selectable$="[[isSelectableTile_(item)]]"
-              on-click="onCollectionSelected_"
-              on-keypress="onCollectionSelected_">
-            <div class$="[[getClassForImagesContainer_(item)]]">
-              <div class="photo-images-border"></div>
-              <img is="cr-auto-img" auto-src="[[getImageUrlForEmptyTile_(item)]]"
-                  aria-hidden="true" clear-src>
-            </div>
-            <div class="photo-text-container">
-              <div>
+              disabled
+              index="[[index]]"
+              role="option"
+              tabindex$="[[tabIndex]]">
+          </wallpaper-grid-item>
+        </template>
+        <template is="dom-if" if="[[isGooglePhotosTile_(item)]]">
+          <wallpaper-grid-item
+              data-google-photos
+              aria-posinset$="[[getAriaIndex_(index)]]"
+              disabled="[[!isSelectableTile_(item)]]"
+              index="[[index]]"
+              primary-text="[[item.name]]"
+              on-wallpaper-grid-item-selected="onCollectionSelected_"
+              role="option"
+              src="[[item.preview]]"
+              tabindex$="[[tabIndex]]">
+            <template is="dom-if" if="[[!isSelectableTile_(item)]]" restamp>
+              <div slot="text" class="primary-text">
                 <iron-icon icon="personalization:managed"
-                  title$="[[geti18n_('managedSetting')]]">
+                    title$="$i18n{managedSetting}">
                 </iron-icon>
                 <p title$="[[item.name]]">[[item.name]]</p>
               </div>
-              <p title$="[[item.count]]">[[item.count]]</p>
-            </div>
-            <div class="photo-gradient-mask"></div>
-          </div>
+            </template>
+          </wallpaper-grid-item>
         </template>
-        <template is="dom-if" if="[[isImageTile_(item)]]">
-          <div class="photo-inner-container"
-              role="option"
+        <template is="dom-if" if="[[isLocalTile_(item)]]">
+          <wallpaper-grid-item
               aria-posinset$="[[getAriaIndex_(index)]]"
-              on-click="onCollectionSelected_"
-              on-keypress="onCollectionSelected_"
+              collage
+              disabled="[[!isSelectableTile_(item)]]"
+              index="[[index]]"
+              is-local-no-images$="[[isLocalNoImagesTile_(item)]]"
+              on-wallpaper-grid-item-selected="onCollectionSelected_"
+              primary-text="[[item.name]]"
+              role="option"
+              secondary-text="[[item.count]]"
+              src="[[item.preview]]"
               tabindex$="[[tabIndex]]">
-            <div class$="[[getClassForImagesContainer_(item)]]">
-              <div class="photo-images-border"></div>
-              <template is="dom-repeat" items="[[item.preview]]" as="preview">
-                <img is="cr-auto-img" auto-src="[[preview.url]]"
-                    data-collection-id$="[[item.id]]"
-                    class$="[[getClassForImg_(index, item)]]"
-                    aria-hidden="true" on-load="onImgLoad_" on-error="onImgLoad_"
-                    is-google-photos="[[isGooglePhotosTile_(item)]]" clear-src>
-              </template>
-            </div>
-            <div class="photo-text-container"
-                hidden$="[[isPhotoTextHidden_(item, loadedCollectionIdPhotos_)]]">
-              <p title$="[[item.name]]">[[item.name]]</p>
-              <p title$="[[item.count]]">[[item.count]]</p>
-            </div>
-            <div class="photo-gradient-mask"
-                hidden$="[[isPhotoTextHidden_(item, loadedCollectionIdPhotos_)]]">
-            </div>
-          </div>
+          </wallpaper-grid-item>
+        </template>
+        <template is="dom-if" if="[[isOnlineTile_(item)]]">
+          <wallpaper-grid-item aria-posinset$="[[getAriaIndex_(index)]]"
+              data-online
+              data-is-time-of-day-collection$="[[isTimeOfDayCollection_(item)]]"
+              disabled="[[!isSelectableTile_(item)]]"
+              index="[[index]]"
+              info-text="[[item.info]]"
+              on-wallpaper-grid-item-selected="onCollectionSelected_"
+              primary-text="[[item.name]]"
+              role="option"
+              secondary-text="[[getOnlineTileSecondaryText_(item)]]"
+              src="[[item.preview]]"
+              tabindex$="[[tabIndex]]">
+          </wallpaper-grid-item>
         </template>
       </div>
     </template>

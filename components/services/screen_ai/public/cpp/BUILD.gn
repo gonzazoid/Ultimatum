@@ -2,40 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-source_set("screen_ai_install_state") {
-  sources = [
-    "screen_ai_install_state.cc",
-    "screen_ai_install_state.h",
-  ]
-
-  deps = [
-    ":utilities",
-    "//base/",
-    "//content/public/browser",
-  ]
-}
-
-source_set("screen_ai_service_router_factory") {
-  sources = [
-    "screen_ai_service_router.cc",
-    "screen_ai_service_router.h",
-    "screen_ai_service_router_factory.cc",
-    "screen_ai_service_router_factory.h",
-  ]
-
-  deps = [
-    ":screen_ai_install_state",
-    "//components/keyed_service/content",
-    "//components/keyed_service/core",
-    "//components/services/screen_ai/public/mojom",
-    "//content/public/browser",
-  ]
-}
-
 source_set("utilities") {
   sources = [
-    "pref_names.cc",
-    "pref_names.h",
     "utilities.cc",
     "utilities.h",
   ]
@@ -43,6 +11,8 @@ source_set("utilities") {
   deps = [
     "//base",
     "//components/component_updater",
-    "//components/prefs",
+    "//ui/accessibility:ax_base",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }

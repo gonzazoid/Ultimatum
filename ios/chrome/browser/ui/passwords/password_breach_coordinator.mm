@@ -5,28 +5,25 @@
 #import "ios/chrome/browser/ui/passwords/password_breach_coordinator.h"
 
 #import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
 #import "components/password_manager/core/browser/leak_detection_dialog_utils.h"
 #import "components/password_manager/core/browser/manage_passwords_referrer.h"
 #import "components/password_manager/core/browser/password_manager_metrics_util.h"
 #import "components/password_manager/core/browser/ui/password_check_referrer.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/ukm/ios/ukm_url_recorder.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/password_breach_commands.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/password_breach_commands.h"
 #import "ios/chrome/browser/ui/passwords/password_breach_mediator.h"
 #import "ios/chrome/browser/ui/passwords/password_breach_presenter.h"
 #import "ios/chrome/browser/ui/passwords/password_breach_view_controller.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/chrome/common/ui/elements/popover_label_view_controller.h"
 #import "ios/web/public/web_state.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using password_manager::CredentialLeakType;
 
@@ -114,7 +111,7 @@ using password_manager::CredentialLeakType;
       .permittedArrowDirections = UIPopoverArrowDirectionUp;
 }
 
-- (void)startPasswordCheck {
+- (void)openSavedPasswordsSettings {
   id<ApplicationCommands> handler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), ApplicationCommands);
   password_manager::LogPasswordCheckReferrer(
@@ -122,8 +119,11 @@ using password_manager::CredentialLeakType;
   UMA_HISTOGRAM_ENUMERATION(
       "PasswordManager.ManagePasswordsReferrer",
       password_manager::ManagePasswordsReferrer::kPasswordBreachDialog);
-  [handler showSavedPasswordsSettingsAndStartPasswordCheckFromViewController:
-               self.baseViewController];
+  base::RecordAction(
+      base::UserMetricsAction("MobilePasswordBreachOpenPasswordManager"));
+
+  [handler showSavedPasswordsSettingsFromViewController:self.baseViewController
+                                       showCancelButton:NO];
 }
 
 @end

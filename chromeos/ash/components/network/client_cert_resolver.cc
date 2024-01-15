@@ -9,17 +9,17 @@
 #include <pk11pub.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
 #include "base/time/clock.h"
 #include "base/values.h"
@@ -37,7 +37,6 @@
 #include "net/cert/scoped_nss_types.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util_nss.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/constants/pkcs11_custom_attributes.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -109,7 +108,7 @@ base::flat_map<std::string, std::string> GetSubstitutionsForCert(
   return substitutions;
 }
 
-absl::optional<ResolvedCert> GetResolvedCert(CERTCertificate* cert) {
+std::optional<ResolvedCert> GetResolvedCert(CERTCertificate* cert) {
   int slot_id = -1;
   std::string pkcs11_id =
       NetworkCertLoader::GetPkcs11IdAndSlotForCert(cert, &slot_id);
@@ -162,15 +161,15 @@ namespace {
 // Returns the nickname of the private key for certificate |cert|, if such a
 // private key is installed. Note that this is not a cheap operation: it
 // iterates all tokens and attempts to look up the private key.
-// A return value of |absl::nullopt| means that no private key could be found
+// A return value of |std::nullopt| means that no private key could be found
 // for |cert|.
 // If a private key could be found for |cert| but it did not have a nickname,
 // will return the empty string.
-absl::optional<std::string> GetPrivateKeyNickname(CERTCertificate* cert) {
+std::optional<std::string> GetPrivateKeyNickname(CERTCertificate* cert) {
   crypto::ScopedSECKEYPrivateKey key(
       PK11_FindKeyByAnyCert(cert, /*wincx=*/nullptr));
   if (!key)
-    return absl::nullopt;
+    return std::nullopt;
 
   std::string key_nickname;
   char* nss_key_nickname = PK11_GetPrivateKeyNickname(key.get());
@@ -342,7 +341,7 @@ void CreateSortedCertAndIssuerList(
     }
     // GetPrivateKeyNickname should be invoked after the checks above for
     // performance reasons.
-    absl::optional<std::string> private_key_nickname =
+    std::optional<std::string> private_key_nickname =
         GetPrivateKeyNickname(cert);
     if (!private_key_nickname.has_value()) {
       // No private key has been found for this certificate.
@@ -409,7 +408,7 @@ std::vector<NetworkAndMatchingCert> FindCertificateMatches(
       continue;
     }
 
-    absl::optional<ResolvedCert> resolved_cert =
+    std::optional<ResolvedCert> resolved_cert =
         GetResolvedCert(cert_it->cert.get());
     if (!resolved_cert) {
       LOG(ERROR) << "Couldn't determine PKCS#11 ID.";
@@ -457,7 +456,7 @@ void ClientCertResolver::Init(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(network_state_handler);
   network_state_handler_ = network_state_handler;
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 
   DCHECK(managed_network_config_handler);
   managed_network_config_handler_ = managed_network_config_handler;
@@ -485,7 +484,7 @@ bool ClientCertResolver::IsAnyResolveTaskRunning() const {
 bool ClientCertResolver::ResolveClientCertificateSync(
     const client_cert::ConfigType client_cert_type,
     const client_cert::ClientCertConfig& client_cert_config,
-    base::Value* shill_properties) {
+    base::Value::Dict* shill_properties) {
   if (!ShouldResolveCert(client_cert_config))
     return false;
 
@@ -511,8 +510,7 @@ bool ClientCertResolver::ResolveClientCertificateSync(
 
   if (cert_it == client_cert_and_issuers.end()) {
     VLOG(1) << "Couldn't find a matching client cert";
-    client_cert::SetEmptyShillProperties(client_cert_type,
-                                         shill_properties->GetDict());
+    client_cert::SetEmptyShillProperties(client_cert_type, *shill_properties);
     return false;
   }
 
@@ -526,7 +524,7 @@ bool ClientCertResolver::ResolveClientCertificateSync(
     return false;
   }
   client_cert::SetShillProperties(client_cert_type, slot_id, pkcs11_id,
-                                  shill_properties->GetDict());
+                                  *shill_properties);
   return true;
 }
 
@@ -643,7 +641,7 @@ void ClientCertResolver::ResolveNetworks(
 
     ::onc::ONCSource onc_source = ::onc::ONC_SOURCE_NONE;
     std::string userhash;
-    const base::Value* policy =
+    const base::Value::Dict* policy =
         managed_network_config_handler_->FindPolicyByGuidAndProfile(
             network->guid(), network->profile_path(),
             ManagedNetworkConfigurationHandler::PolicyType::kOriginal,
@@ -659,7 +657,7 @@ void ClientCertResolver::ResolveNetworks(
 
     VLOG(2) << "Inspecting network " << network->path();
     client_cert::ClientCertConfig cert_config;
-    OncToClientCertConfig(onc_source, policy->GetDict(), &cert_config);
+    OncToClientCertConfig(onc_source, *policy, &cert_config);
 
     // Skip networks that don't have a ClientCertPattern or ClientCertRef.
     if (!ShouldResolveCert(cert_config))

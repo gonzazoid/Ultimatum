@@ -11,16 +11,18 @@
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shelf/shelf.h"
+#include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/holding_space/holding_space_tray_icon_preview.h"
 #include "ash/system/tray/tray_constants.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/compositor.h"
@@ -119,7 +121,7 @@ class HoldingSpaceTrayIcon::ResizeAnimation
 
   void Start() {
     animation_throughput_tracker_.Start(
-        metrics_util::ForSmoothness(base::BindRepeating(
+        metrics_util::ForSmoothnessV3(base::BindRepeating(
             holding_space_metrics::RecordPodResizeAnimationSmoothness)));
 
     animation_.Show();
@@ -129,8 +131,8 @@ class HoldingSpaceTrayIcon::ResizeAnimation
   void AdvanceToEnd() { animation_.End(); }
 
  private:
-  HoldingSpaceTrayIcon* const icon_;
-  views::View* const previews_container_;
+  const raw_ptr<HoldingSpaceTrayIcon> icon_;
+  const raw_ptr<views::View> previews_container_;
   const gfx::Size initial_size_;
   const gfx::Size target_size_;
 

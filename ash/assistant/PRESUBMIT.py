@@ -9,18 +9,7 @@ for more details about the presubmit API built into depot_tools.
 """
 PRESUBMIT_VERSION = '2.0.0'
 
-USE_PYTHON3 = True
-
-_BANNED_CPP_FUNCTIONS = (
-    (
-      'ScopedLightModeAsDefault',
-      (
-       'Assistant code should use ScopedAssistantLightModeAsDefault instead of',
-       'ScopedLightModeAsDefault.',
-       'See //ash/public/cpp/scoped_light_mode_as_default.h for details.',
-      ),
-    ),
-)
+_BANNED_CPP_FUNCTIONS = ()
 
 
 def CheckNoBannedFunctions(input_api, output_api):

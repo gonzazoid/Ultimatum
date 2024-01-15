@@ -7,6 +7,8 @@
 #include "base/containers/cxx20_erase.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/ui/hats/hats_service.h"
 #include "chrome/browser/ui/hats/hats_service_factory.h"
@@ -22,6 +24,7 @@
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_prefs.h"
+#include "components/privacy_sandbox/tracking_protection_prefs.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/unified_consent/pref_names.h"
@@ -30,107 +33,39 @@
 namespace {
 
 base::TimeDelta GetMinTimeToPrompt() {
-  return features::kTrustSafetySentimentSurveyMinTimeToPrompt.Get();
+  return base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)
+             ? features::kTrustSafetySentimentSurveyV2MinTimeToPrompt.Get()
+             : features::kTrustSafetySentimentSurveyMinTimeToPrompt.Get();
 }
 
 base::TimeDelta GetMaxTimeToPrompt() {
-  return features::kTrustSafetySentimentSurveyMaxTimeToPrompt.Get();
+  return base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)
+             ? features::kTrustSafetySentimentSurveyV2MaxTimeToPrompt.Get()
+             : features::kTrustSafetySentimentSurveyMaxTimeToPrompt.Get();
+}
+
+base::TimeDelta GetMinSessionTime() {
+  DCHECK(base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2));
+  return features::kTrustSafetySentimentSurveyV2MinSessionTime.Get();
 }
 
 int GetRequiredNtpCount() {
-  return base::RandInt(
-      features::kTrustSafetySentimentSurveyNtpVisitsMinRange.Get(),
-      features::kTrustSafetySentimentSurveyNtpVisitsMaxRange.Get());
+  return base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)
+             ? base::RandInt(
+                   features::kTrustSafetySentimentSurveyV2NtpVisitsMinRange
+                       .Get(),
+                   features::kTrustSafetySentimentSurveyV2NtpVisitsMaxRange
+                       .Get())
+             : base::RandInt(
+                   features::kTrustSafetySentimentSurveyNtpVisitsMinRange.Get(),
+                   features::kTrustSafetySentimentSurveyNtpVisitsMaxRange
+                       .Get());
 }
 
 int GetMaxRequiredNtpCount() {
-  return features::kTrustSafetySentimentSurveyNtpVisitsMaxRange.Get();
-}
-
-std::string GetHatsTriggerForFeatureArea(
-    TrustSafetySentimentService::FeatureArea feature_area) {
-  switch (feature_area) {
-    case (TrustSafetySentimentService::FeatureArea::kPrivacySettings):
-      return kHatsSurveyTriggerTrustSafetyPrivacySettings;
-    case (TrustSafetySentimentService::FeatureArea::kTrustedSurface):
-      return kHatsSurveyTriggerTrustSafetyTrustedSurface;
-    case (TrustSafetySentimentService::FeatureArea::kTransactions):
-      return kHatsSurveyTriggerTrustSafetyTransactions;
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3ConsentAccept):
-      return kHatsSurveyTriggerTrustSafetyPrivacySandbox3ConsentAccept;
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3ConsentDecline):
-      return kHatsSurveyTriggerTrustSafetyPrivacySandbox3ConsentDecline;
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3NoticeDismiss):
-      return kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeDismiss;
-    case (TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeOk):
-      return kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeOk;
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3NoticeSettings):
-      return kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeSettings;
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3NoticeLearnMore):
-      return kHatsSurveyTriggerTrustSafetyPrivacySandbox3NoticeLearnMore;
-    default:
-      NOTREACHED();
-      return "";
-  }
-}
-
-bool ProbabilityCheck(TrustSafetySentimentService::FeatureArea feature_area) {
-  switch (feature_area) {
-    case (TrustSafetySentimentService::FeatureArea::kPrivacySettings):
-      return base::RandDouble() <
-             features::kTrustSafetySentimentSurveyPrivacySettingsProbability
-                 .Get();
-    case (TrustSafetySentimentService::FeatureArea::kTrustedSurface):
-      return base::RandDouble() <
-             features::kTrustSafetySentimentSurveyTrustedSurfaceProbability
-                 .Get();
-    case (TrustSafetySentimentService::FeatureArea::kTransactions):
-      return base::RandDouble() <
-             features::kTrustSafetySentimentSurveyTransactionsProbability.Get();
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3ConsentAccept):
-      return base::RandDouble() <
-             features::
-                 kTrustSafetySentimentSurveyPrivacySandbox3ConsentAcceptProbability
-                     .Get();
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3ConsentDecline):
-      return base::RandDouble() <
-             features::
-                 kTrustSafetySentimentSurveyPrivacySandbox3ConsentDeclineProbability
-                     .Get();
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3NoticeDismiss):
-      return base::RandDouble() <
-             features::
-                 kTrustSafetySentimentSurveyPrivacySandbox3NoticeDismissProbability
-                     .Get();
-    case (TrustSafetySentimentService::FeatureArea::kPrivacySandbox3NoticeOk):
-      return base::RandDouble() <
-             features::
-                 kTrustSafetySentimentSurveyPrivacySandbox3NoticeOkProbability
-                     .Get();
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3NoticeSettings):
-      return base::RandDouble() <
-             features::
-                 kTrustSafetySentimentSurveyPrivacySandbox3NoticeSettingsProbability
-                     .Get();
-    case (TrustSafetySentimentService::FeatureArea::
-              kPrivacySandbox3NoticeLearnMore):
-      return base::RandDouble() <
-             features::
-                 kTrustSafetySentimentSurveyPrivacySandbox3NoticeLearnMoreProbability
-                     .Get();
-    default:
-      NOTREACHED();
-      return false;
-  }
+  return base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)
+             ? features::kTrustSafetySentimentSurveyV2NtpVisitsMaxRange.Get()
+             : features::kTrustSafetySentimentSurveyNtpVisitsMaxRange.Get();
 }
 
 bool HasNonDefaultPrivacySetting(Profile* profile) {
@@ -216,6 +151,67 @@ std::map<std::string, bool> GetPrivacySettingsProductSpecificData(
   return product_specific_data;
 }
 
+// Returns true if the threat_type is not in the phishing, malware, unwanted
+// software, or billing threat categories.
+bool IsOtherSBInterstitialCategory(safe_browsing::SBThreatType threat_type) {
+  switch (threat_type) {
+    case safe_browsing::SB_THREAT_TYPE_URL_PHISHING:
+    case safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING:
+    case safe_browsing::SB_THREAT_TYPE_URL_MALWARE:
+    case safe_browsing::SB_THREAT_TYPE_URL_UNWANTED:
+    case safe_browsing::SB_THREAT_TYPE_BILLING:
+      return false;
+    default:
+      return true;
+  }
+}
+
+// Generates the Product Specific Data which accompanies survey results for the
+// Password Protection UI product area.
+std::map<std::string, bool> BuildProductSpecificDataForPasswordProtection(
+    Profile* profile,
+    PasswordProtectionUIType ui_type,
+    PasswordProtectionUIAction action) {
+  std::map<std::string, bool> product_specific_data;
+  product_specific_data["Enhanced protection enabled"] =
+      safe_browsing::IsEnhancedProtectionEnabled(*profile->GetPrefs());
+  product_specific_data["Is page info UI"] = false;
+  product_specific_data["Is modal dialog UI"] = false;
+  product_specific_data["Is interstitial UI"] = false;
+  switch (ui_type) {
+    case PasswordProtectionUIType::PAGE_INFO:
+      product_specific_data["Is page info UI"] = true;
+      break;
+    case PasswordProtectionUIType::MODAL_DIALOG:
+      product_specific_data["Is modal dialog UI"] = true;
+      break;
+    case PasswordProtectionUIType::INTERSTITIAL:
+      product_specific_data["Is interstitial UI"] = true;
+      break;
+    default:
+      NOTREACHED();
+  }
+  product_specific_data["User completed password change"] = false;
+  product_specific_data["User clicked change password"] = false;
+  product_specific_data["User ignored warning"] = false;
+  product_specific_data["User marked as legitimate"] = false;
+  switch (action) {
+    case PasswordProtectionUIAction::CHANGE_PASSWORD:
+      product_specific_data["User clicked change password"] = true;
+      break;
+    case PasswordProtectionUIAction::IGNORE_WARNING:
+    case PasswordProtectionUIAction::CLOSE:
+      product_specific_data["User ignored warning"] = true;
+      break;
+    case PasswordProtectionUIAction::MARK_AS_LEGITIMATE:
+      product_specific_data["User marked as legitimate"] = true;
+      break;
+    default:
+      NOTREACHED();
+  }
+  return product_specific_data;
+}
+
 }  // namespace
 
 TrustSafetySentimentService::TrustSafetySentimentService(Profile* profile)
@@ -229,9 +225,18 @@ TrustSafetySentimentService::TrustSafetySentimentService(Profile* profile)
           profile->GetPrimaryOTRProfile(/*create_if_needed=*/false)) {
     observed_profiles_.AddObservation(primary_otr);
   }
+
+  if (base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)) {
+    metrics::DesktopSessionDurationTracker::Get()->AddObserver(this);
+    performed_control_group_dice_roll_ = false;
+  }
 }
 
-TrustSafetySentimentService::~TrustSafetySentimentService() = default;
+TrustSafetySentimentService::~TrustSafetySentimentService() {
+  if (base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)) {
+    metrics::DesktopSessionDurationTracker::Get()->RemoveObserver(this);
+  }
+}
 
 void TrustSafetySentimentService::OpenedNewTabPage() {
   // Explicit early exit for the common path, where the user has not performed
@@ -322,6 +327,10 @@ void TrustSafetySentimentService::InteractedWithPrivacySettings(
 }
 
 void TrustSafetySentimentService::RanSafetyCheck() {
+  // Since we have logic to block a trigger for an incorrect version, we can
+  // call both of these and only the appropriate trigger and probability will be
+  // recorded.
+  TriggerOccurred(FeatureArea::kSafetyCheck, {});
   TriggerOccurred(FeatureArea::kPrivacySettings,
                   GetPrivacySettingsProductSpecificData(
                       profile_, /*ran_safety_check=*/true));
@@ -341,10 +350,13 @@ void TrustSafetySentimentService::InteractedWithPageInfo() {
 void TrustSafetySentimentService::PageInfoClosed() {
   DCHECK(page_info_state_);
 
+  base::TimeDelta threshold =
+      base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)
+          ? features::kTrustSafetySentimentSurveyV2TrustedSurfaceTime.Get()
+          : features::kTrustSafetySentimentSurveyTrustedSurfaceTime.Get();
   // Record a trigger if either the user had page info open for the required
   // time, or if they interacted with it.
-  if (base::Time::Now() - page_info_state_->opened_time >=
-          features::kTrustSafetySentimentSurveyTrustedSurfaceTime.Get() ||
+  if (base::Time::Now() - page_info_state_->opened_time >= threshold ||
       page_info_state_->interacted) {
     TriggerOccurred(
         FeatureArea::kTrustedSurface,
@@ -381,27 +393,133 @@ void TrustSafetySentimentService::SavedCard() {
   TriggerOccurred(FeatureArea::kTransactions, {{"Saved password", false}});
 }
 
-void TrustSafetySentimentService::InteractedWithPrivacySandbox3(
+void TrustSafetySentimentService::RanPasswordCheck() {
+  TriggerOccurred(FeatureArea::kPasswordCheck, {});
+}
+
+void TrustSafetySentimentService::ClearedBrowsingData(
+    browsing_data::BrowsingDataType datatype) {
+  // We are only interested in history, downloads, and autofill.
+  switch (datatype) {
+    case (browsing_data::BrowsingDataType::HISTORY):
+    case (browsing_data::BrowsingDataType::DOWNLOADS):
+    case (browsing_data::BrowsingDataType::FORM_DATA):
+      break;
+    default:
+      return;
+  }
+  return TriggerOccurred(
+      FeatureArea::kBrowsingData,
+      {{"Deleted history",
+        datatype == browsing_data::BrowsingDataType::HISTORY},
+       {"Deleted downloads",
+        datatype == browsing_data::BrowsingDataType::DOWNLOADS},
+       {"Deleted autofill form data",
+        datatype == browsing_data::BrowsingDataType::FORM_DATA}});
+  ;
+}
+
+void TrustSafetySentimentService::FinishedPrivacyGuide() {
+  TriggerOccurred(FeatureArea::kPrivacyGuide, {});
+}
+
+void TrustSafetySentimentService::InteractedWithPrivacySandbox4(
     FeatureArea feature_area) {
+  TriggerOccurred(feature_area, {});
+}
+
+void TrustSafetySentimentService::InteractedWithSafeBrowsingInterstitial(
+    bool did_proceed,
+    safe_browsing::SBThreatType threat_type) {
   std::map<std::string, bool> product_specific_data;
-  product_specific_data["Stable channel"] =
-      (chrome::GetChannel() == version_info::Channel::STABLE) ? true : false;
-  bool blockCookies =
-      HostContentSettingsMapFactory::GetForProfile(profile_)
-          ->GetDefaultContentSetting(ContentSettingsType::COOKIES,
-                                     /*provider_id=*/nullptr) ==
-      ContentSetting::CONTENT_SETTING_BLOCK;
-  blockCookies =
-      blockCookies ||
-      (static_cast<content_settings::CookieControlsMode>(
-           profile_->GetPrefs()->GetInteger(prefs::kCookieControlsMode)) ==
-       content_settings::CookieControlsMode::kBlockThirdParty);
-  product_specific_data["3P cookies blocked"] = blockCookies ? true : false;
-  product_specific_data["Privacy Sandbox enabled"] =
-      profile_->GetPrefs()->GetBoolean(prefs::kPrivacySandboxApisEnabledV2)
-          ? true
-          : false;
-  TriggerOccurred(feature_area, product_specific_data);
+  product_specific_data["User proceeded past interstitial"] = did_proceed;
+  product_specific_data["Enhanced protection enabled"] =
+      safe_browsing::IsEnhancedProtectionEnabled(*profile_->GetPrefs());
+  product_specific_data["Threat is phishing"] =
+      threat_type == safe_browsing::SB_THREAT_TYPE_URL_PHISHING ||
+      threat_type == safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING;
+  product_specific_data["Threat is malware"] =
+      threat_type == safe_browsing::SB_THREAT_TYPE_URL_MALWARE;
+  product_specific_data["Threat is unwanted software"] =
+      threat_type == safe_browsing::SB_THREAT_TYPE_URL_UNWANTED;
+  product_specific_data["Threat is billing"] =
+      threat_type == safe_browsing::SB_THREAT_TYPE_BILLING;
+  DCHECK(!IsOtherSBInterstitialCategory(threat_type));
+  TriggerOccurred(FeatureArea::kSafeBrowsingInterstitial,
+                  product_specific_data);
+}
+
+void TrustSafetySentimentService::InteractedWithDownloadWarningUI(
+    DownloadItemWarningData::WarningSurface surface,
+    DownloadItemWarningData::WarningAction action) {
+  std::map<std::string, bool> product_specific_data;
+  product_specific_data["Enhanced protection enabled"] =
+      safe_browsing::IsEnhancedProtectionEnabled(*profile_->GetPrefs());
+  product_specific_data["Is mainpage UI"] = false;
+  product_specific_data["Is downloads page UI"] = false;
+  product_specific_data["Is download prompt UI"] = false;
+  product_specific_data["User proceeded past warning"] = false;
+  product_specific_data["Is subpage UI"] = false;
+  switch (surface) {
+    case DownloadItemWarningData::WarningSurface::BUBBLE_MAINPAGE:
+      product_specific_data["Is mainpage UI"] = true;
+      break;
+    case DownloadItemWarningData::WarningSurface::BUBBLE_SUBPAGE:
+      product_specific_data["Is subpage UI"] = true;
+      break;
+    case DownloadItemWarningData::WarningSurface::DOWNLOADS_PAGE:
+      product_specific_data["Is downloads page UI"] = true;
+      break;
+    case DownloadItemWarningData::WarningSurface::DOWNLOAD_PROMPT:
+      product_specific_data["Is download prompt UI"] = true;
+      break;
+    default:
+      NOTREACHED();
+  }
+  switch (action) {
+    case DownloadItemWarningData::WarningAction::PROCEED:
+      product_specific_data["User proceeded past warning"] = true;
+      break;
+    case DownloadItemWarningData::WarningAction::DISCARD:
+      product_specific_data["User proceeded past warning"] = false;
+      break;
+    default:
+      NOTREACHED();
+  }
+  TriggerOccurred(FeatureArea::kDownloadWarningUI, product_specific_data);
+}
+
+void TrustSafetySentimentService::ProtectResetOrCheckPasswordClicked(
+    PasswordProtectionUIType ui_type) {
+  // Only one Phished Password Change should ever be open.
+  DCHECK(!phished_password_change_state_);
+  phished_password_change_state_ =
+      std::make_unique<PhishedPasswordChangeState>();
+  phished_password_change_state_->ui_type_ = ui_type;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(
+          &TrustSafetySentimentService::MaybeTriggerPasswordProtectionSurvey,
+          weak_ptr_factory_.GetWeakPtr(), ui_type,
+          PasswordProtectionUIAction::CHANGE_PASSWORD),
+      kPasswordChangeInactivity);
+}
+
+void TrustSafetySentimentService::PhishedPasswordUpdateNotClicked(
+    PasswordProtectionUIType ui_type,
+    PasswordProtectionUIAction action) {
+  DCHECK(action != PasswordProtectionUIAction::CHANGE_PASSWORD);
+  MaybeTriggerPasswordProtectionSurvey(ui_type, action);
+}
+
+void TrustSafetySentimentService::PhishedPasswordUpdateFinished() {
+  if (!phished_password_change_state_) {
+    return;
+  }
+  phished_password_change_state_->finished_action = true;
+  MaybeTriggerPasswordProtectionSurvey(
+      phished_password_change_state_->ui_type_,
+      PasswordProtectionUIAction::CHANGE_PASSWORD);
 }
 
 void TrustSafetySentimentService::OnOffTheRecordProfileCreated(
@@ -420,6 +538,17 @@ void TrustSafetySentimentService::OnProfileWillBeDestroyed(Profile* profile) {
     // Closing the incognito profile, which is the only OTR profie observed by
     // this class, is an ileligible action.
     PerformedIneligibleAction();
+  }
+}
+
+void TrustSafetySentimentService::OnSessionEnded(base::TimeDelta session_length,
+                                                 base::TimeTicks session_end) {
+  DCHECK(base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2));
+  // Check if the user is eligible for the control group.
+  if (!performed_control_group_dice_roll_ &&
+      session_length > GetMinSessionTime()) {
+    performed_control_group_dice_roll_ = true;
+    TriggerOccurred(FeatureArea::kControlGroup, {});
   }
 }
 
@@ -448,7 +577,7 @@ TrustSafetySentimentService::SettingsWatcher::SettingsWatcher(
     : web_contents_(web_contents),
       success_callback_(std::move(success_callback)),
       complete_callback_(std::move(complete_callback)) {
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(
           &TrustSafetySentimentService::SettingsWatcher::TimerComplete,
@@ -478,6 +607,11 @@ void TrustSafetySentimentService::SettingsWatcher::TimerComplete() {
 TrustSafetySentimentService::PageInfoState::PageInfoState()
     : opened_time(base::Time::Now()) {}
 
+TrustSafetySentimentService::PhishedPasswordChangeState::
+    PhishedPasswordChangeState()
+    : password_change_click_ts_(base::Time::Now()),
+      ui_type_(PasswordProtectionUIType::NOT_USED) {}
+
 void TrustSafetySentimentService::SettingsWatcherComplete() {
   settings_watcher_.reset();
 }
@@ -485,6 +619,9 @@ void TrustSafetySentimentService::SettingsWatcherComplete() {
 void TrustSafetySentimentService::TriggerOccurred(
     FeatureArea feature_area,
     const std::map<std::string, bool>& product_specific_data) {
+  // Log histogram that verifies infrastructure works as intended.
+  base::UmaHistogramEnumeration(
+      "Feedback.TrustSafetySentiment.CallTriggerOccurred", feature_area);
   if (!ProbabilityCheck(feature_area))
     return;
 
@@ -509,4 +646,232 @@ void TrustSafetySentimentService::PerformedIneligibleAction() {
     const PendingTrigger& trigger) {
   return base::Time::Now() - trigger.occurred_time < GetMinTimeToPrompt() ||
          trigger.remaining_ntps_to_open > 0;
+}
+
+// Checks inactivity delay and finished_action (change psd field to true)
+void TrustSafetySentimentService::MaybeTriggerPasswordProtectionSurvey(
+    PasswordProtectionUIType ui_type,
+    PasswordProtectionUIAction action) {
+  DCHECK(ui_type != PasswordProtectionUIType::NOT_USED);
+  std::map<std::string, bool> product_specific_data =
+      BuildProductSpecificDataForPasswordProtection(profile_, ui_type, action);
+  if (action == PasswordProtectionUIAction::CHANGE_PASSWORD) {
+    if (!phished_password_change_state_) {
+      return;
+    }
+    if (!phished_password_change_state_->finished_action &&
+        base::Time::Now() -
+                phished_password_change_state_->password_change_click_ts_ <
+            kPasswordChangeInactivity) {
+      return;
+    }
+    if (phished_password_change_state_->finished_action) {
+      product_specific_data["User completed password change"] = true;
+    }
+    phished_password_change_state_.reset();
+  }
+  TriggerOccurred(FeatureArea::kPasswordProtectionUI, product_specific_data);
+}
+
+// static
+bool TrustSafetySentimentService::VersionCheck(FeatureArea feature_area) {
+  bool isV2 =
+      base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2);
+  switch (feature_area) {
+    // Version 1 only
+    case (FeatureArea::kPrivacySettings):
+    case (FeatureArea::kTransactions):
+      return isV2 == false;
+    // Version 2 only
+    case (FeatureArea::kSafetyCheck):
+    case (FeatureArea::kPasswordCheck):
+    case (FeatureArea::kBrowsingData):
+    case (FeatureArea::kPrivacyGuide):
+    case (FeatureArea::kControlGroup):
+    case (FeatureArea::kSafeBrowsingInterstitial):
+    case (FeatureArea::kDownloadWarningUI):
+    case (FeatureArea::kPasswordProtectionUI):
+      return isV2 == true;
+    // Both Versions
+    case (FeatureArea::kTrustedSurface):
+    case (FeatureArea::kPrivacySandbox4ConsentAccept):
+    case (FeatureArea::kPrivacySandbox4ConsentDecline):
+    case (FeatureArea::kPrivacySandbox4NoticeOk):
+    case (FeatureArea::kPrivacySandbox4NoticeSettings):
+      return true;
+    // None
+    case (FeatureArea::kIneligible):
+      return false;
+    default:
+      NOTREACHED();
+      return false;
+  }
+}
+
+// static
+std::string TrustSafetySentimentService::GetHatsTriggerForFeatureArea(
+    FeatureArea feature_area) {
+  if (base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)) {
+    switch (feature_area) {
+      case (FeatureArea::kTrustedSurface):
+        return kHatsSurveyTriggerTrustSafetyV2TrustedSurface;
+      case (FeatureArea::kSafetyCheck):
+        return kHatsSurveyTriggerTrustSafetyV2SafetyCheck;
+      case (FeatureArea::kPasswordCheck):
+        return kHatsSurveyTriggerTrustSafetyV2PasswordCheck;
+      case (FeatureArea::kBrowsingData):
+        return kHatsSurveyTriggerTrustSafetyV2BrowsingData;
+      case (FeatureArea::kPrivacyGuide):
+        return kHatsSurveyTriggerTrustSafetyV2PrivacyGuide;
+      case (FeatureArea::kControlGroup):
+        return kHatsSurveyTriggerTrustSafetyV2ControlGroup;
+      case (FeatureArea::kPrivacySandbox4ConsentAccept):
+        return kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4ConsentAccept;
+      case (FeatureArea::kPrivacySandbox4ConsentDecline):
+        return kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4ConsentDecline;
+      case (FeatureArea::kPrivacySandbox4NoticeOk):
+        return kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4NoticeOk;
+      case (FeatureArea::kPrivacySandbox4NoticeSettings):
+        return kHatsSurveyTriggerTrustSafetyV2PrivacySandbox4NoticeSettings;
+      case (FeatureArea::kSafeBrowsingInterstitial):
+        return kHatsSurveyTriggerTrustSafetyV2SafeBrowsingInterstitial;
+      case (FeatureArea::kDownloadWarningUI):
+        return kHatsSurveyTriggerTrustSafetyV2DownloadWarningUI;
+      case (FeatureArea::kPasswordProtectionUI):
+        return kHatsSurveyTriggerTrustSafetyV2PasswordProtectionUI;
+      default:
+        NOTREACHED();
+        return "";
+    }
+  }
+  switch (feature_area) {
+    case (FeatureArea::kPrivacySettings):
+      return kHatsSurveyTriggerTrustSafetyPrivacySettings;
+    case (FeatureArea::kTrustedSurface):
+      return kHatsSurveyTriggerTrustSafetyTrustedSurface;
+    case (FeatureArea::kTransactions):
+      return kHatsSurveyTriggerTrustSafetyTransactions;
+    case (FeatureArea::kPrivacySandbox4ConsentAccept):
+      return kHatsSurveyTriggerTrustSafetyPrivacySandbox4ConsentAccept;
+    case (FeatureArea::kPrivacySandbox4ConsentDecline):
+      return kHatsSurveyTriggerTrustSafetyPrivacySandbox4ConsentDecline;
+    case (FeatureArea::kPrivacySandbox4NoticeOk):
+      return kHatsSurveyTriggerTrustSafetyPrivacySandbox4NoticeOk;
+    case (FeatureArea::kPrivacySandbox4NoticeSettings):
+      return kHatsSurveyTriggerTrustSafetyPrivacySandbox4NoticeSettings;
+    default:
+      NOTREACHED();
+      return "";
+  }
+}
+
+// static
+bool TrustSafetySentimentService::ProbabilityCheck(FeatureArea feature_area) {
+  if (!TrustSafetySentimentService::VersionCheck(feature_area)) {
+    return false;
+  }
+
+  if (base::FeatureList::IsEnabled(features::kTrustSafetySentimentSurveyV2)) {
+    switch (feature_area) {
+      case (FeatureArea::kTrustedSurface):
+        return base::RandDouble() <
+               features::kTrustSafetySentimentSurveyV2TrustedSurfaceProbability
+                   .Get();
+      case (FeatureArea::kSafetyCheck):
+        return base::RandDouble() <
+               features::kTrustSafetySentimentSurveyV2SafetyCheckProbability
+                   .Get();
+      case (FeatureArea::kPasswordCheck):
+        return base::RandDouble() <
+               features::kTrustSafetySentimentSurveyV2PasswordCheckProbability
+                   .Get();
+      case (FeatureArea::kBrowsingData):
+        return base::RandDouble() <
+               features::kTrustSafetySentimentSurveyV2BrowsingDataProbability
+                   .Get();
+      case (FeatureArea::kPrivacyGuide):
+        return base::RandDouble() <
+               features::kTrustSafetySentimentSurveyV2PrivacyGuideProbability
+                   .Get();
+      case (FeatureArea::kControlGroup):
+        return base::RandDouble() <
+               features::kTrustSafetySentimentSurveyV2ControlGroupProbability
+                   .Get();
+      case (FeatureArea::kPrivacySandbox4ConsentAccept):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2PrivacySandbox4ConsentAcceptProbability
+                       .Get();
+      case (FeatureArea::kPrivacySandbox4ConsentDecline):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2PrivacySandbox4ConsentDeclineProbability
+                       .Get();
+      case (FeatureArea::kPrivacySandbox4NoticeOk):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2PrivacySandbox4NoticeOkProbability
+                       .Get();
+      case (FeatureArea::kPrivacySandbox4NoticeSettings):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2PrivacySandbox4NoticeSettingsProbability
+                       .Get();
+      case (FeatureArea::kSafeBrowsingInterstitial):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2SafeBrowsingInterstitialProbability
+                       .Get();
+      case (FeatureArea::kDownloadWarningUI):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2DownloadWarningUIProbability
+                       .Get();
+      case (FeatureArea::kPasswordProtectionUI):
+        return base::RandDouble() <
+               features::
+                   kTrustSafetySentimentSurveyV2PasswordProtectionUIProbability
+                       .Get();
+      default:
+        NOTREACHED();
+        return false;
+    }
+  }
+
+  switch (feature_area) {
+    case (FeatureArea::kPrivacySettings):
+      return base::RandDouble() <
+             features::kTrustSafetySentimentSurveyPrivacySettingsProbability
+                 .Get();
+    case (FeatureArea::kTrustedSurface):
+      return base::RandDouble() <
+             features::kTrustSafetySentimentSurveyTrustedSurfaceProbability
+                 .Get();
+    case (FeatureArea::kTransactions):
+      return base::RandDouble() <
+             features::kTrustSafetySentimentSurveyTransactionsProbability.Get();
+    case (FeatureArea::kPrivacySandbox4ConsentAccept):
+      return base::RandDouble() <
+             features::
+                 kTrustSafetySentimentSurveyPrivacySandbox4ConsentAcceptProbability
+                     .Get();
+    case (FeatureArea::kPrivacySandbox4ConsentDecline):
+      return base::RandDouble() <
+             features::
+                 kTrustSafetySentimentSurveyPrivacySandbox4ConsentDeclineProbability
+                     .Get();
+    case (FeatureArea::kPrivacySandbox4NoticeOk):
+      return base::RandDouble() <
+             features::
+                 kTrustSafetySentimentSurveyPrivacySandbox4NoticeOkProbability
+                     .Get();
+    case (FeatureArea::kPrivacySandbox4NoticeSettings):
+      return base::RandDouble() <
+             features::
+                 kTrustSafetySentimentSurveyPrivacySandbox4NoticeSettingsProbability
+                     .Get();
+    default:
+      NOTREACHED();
+      return false;
+  }
 }

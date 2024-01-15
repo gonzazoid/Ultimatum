@@ -5,6 +5,7 @@
 #ifndef CONTENT_BROWSER_INDEXED_DB_INDEXED_DB_CONTROL_WRAPPER_H_
 #define CONTENT_BROWSER_INDEXED_DB_INDEXED_DB_CONTROL_WRAPPER_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
 #include "components/services/storage/privileged/mojom/indexed_db_control.mojom.h"
 #include "components/services/storage/public/mojom/storage_policy_update.mojom.h"
@@ -17,14 +18,19 @@ class StorageKey;
 
 namespace content {
 
-// All functions should be called on the UI thread.
+// This wrapper is created, destroyed, and operated on the UI thread in the
+// browser process. It owns `IndexedDBContextImpl` and forwards all
+// `IndexedDBControl` calls to that context. It observes the
+// `special_storage_policy` and forwards policy updates to the context. In the
+// theoretical world where IndexedDBContextImpl lives in a separate process,
+// this class is necessary because `special_storage_policy` lives in the browser
+// process.
 class IndexedDBControlWrapper : public storage::mojom::IndexedDBControl {
  public:
   explicit IndexedDBControlWrapper(
       const base::FilePath& data_path,
       scoped_refptr<storage::SpecialStoragePolicy> special_storage_policy,
       scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy,
-      base::Clock* clock,
       mojo::PendingRemote<storage::mojom::BlobStorageContext>
           blob_storage_context,
       mojo::PendingRemote<storage::mojom::FileSystemAccessContext>
@@ -39,19 +45,15 @@ class IndexedDBControlWrapper : public storage::mojom::IndexedDBControl {
 
   // mojom::IndexedDBControl implementation:
   void BindIndexedDB(
-      const blink::StorageKey& storage_key,
-      mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) override;
-  void BindIndexedDBForBucket(
       const storage::BucketLocator& bucket_locator,
+      mojo::PendingRemote<storage::mojom::IndexedDBClientStateChecker>
+          client_state_checker_remote,
       mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) override;
-  void GetUsage(GetUsageCallback usage_callback) override;
   void DeleteForStorageKey(const blink::StorageKey& storage_key,
                            DeleteForStorageKeyCallback callback) override;
   void ForceClose(storage::BucketId bucket_id,
                   storage::mojom::ForceCloseReason reason,
                   base::OnceClosure callback) override;
-  void GetConnectionCount(storage::BucketId bucket_id,
-                          GetConnectionCountCallback callback) override;
   void DownloadBucketData(storage::BucketId bucket_id,
                           DownloadBucketDataCallback callback) override;
   void GetAllBucketsDetails(GetAllBucketsDetailsCallback callback) override;
@@ -64,16 +66,13 @@ class IndexedDBControlWrapper : public storage::mojom::IndexedDBControl {
   void AddObserver(
       mojo::PendingRemote<storage::mojom::IndexedDBObserver> observer) override;
 
-  // TODO(enne): remove this once IndexedDB moves to storage service.
-  IndexedDBContextImpl* GetIndexedDBContextInternal() { return context_.get(); }
-
  private:
   void BindRemoteIfNeeded();
 
-  absl::optional<storage::StoragePolicyObserver> storage_policy_observer_;
+  std::optional<storage::StoragePolicyObserver> storage_policy_observer_;
 
   mojo::Remote<storage::mojom::IndexedDBControl> indexed_db_control_;
-  scoped_refptr<IndexedDBContextImpl> context_;
+  std::unique_ptr<IndexedDBContextImpl> context_;
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<IndexedDBControlWrapper> weak_factory_{this};

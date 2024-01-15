@@ -6,7 +6,8 @@
 #define MEDIA_GPU_V4L2_V4L2_DEVICE_POLLER_H_
 
 #include <atomic>
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
@@ -67,7 +68,7 @@ class V4L2DevicePoller {
   void DevicePollTask();
 
   // V4L2 device we are polling.
-  V4L2Device* const device_;
+  raw_ptr<V4L2Device> const device_;
   // Thread on which polling is done.
   base::Thread poll_thread_;
   // Callback to post to the client's sequence when an event occurs.

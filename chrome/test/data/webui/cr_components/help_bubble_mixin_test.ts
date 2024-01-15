@@ -2,16 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
 import 'chrome://resources/cr_components/help_bubble/help_bubble.js';
 
 import {IronIconElement} from '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import {HelpBubbleElement} from 'chrome://resources/cr_components/help_bubble/help_bubble.js';
 import {HelpBubbleArrowPosition, HelpBubbleClientCallbackRouter, HelpBubbleClientRemote, HelpBubbleClosedReason, HelpBubbleHandlerInterface, HelpBubbleParams} from 'chrome://resources/cr_components/help_bubble/help_bubble.mojom-webui.js';
+import {ANCHOR_HIGHLIGHT_CLASS, HelpBubbleController} from 'chrome://resources/cr_components/help_bubble/help_bubble_controller.js';
 import {HelpBubbleMixin, HelpBubbleMixinInterface} from 'chrome://resources/cr_components/help_bubble/help_bubble_mixin.js';
 import {HelpBubbleProxy, HelpBubbleProxyImpl} from 'chrome://resources/cr_components/help_bubble/help_bubble_proxy.js';
 import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertThrows, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
@@ -19,6 +19,9 @@ import {isVisible} from 'chrome://webui-test/test_util.js';
 const TITLE_NATIVE_ID: string = 'kHelpBubbleMixinTestTitleElementId';
 const PARAGRAPH_NATIVE_ID: string = 'kHelpBubbleMixinTestParagraphElementId';
 const LIST_NATIVE_ID: string = 'kHelpBubbleMixinTestListElementId';
+const SPAN_NATIVE_ID: string = 'kHelpBubbleMixinTestSpanElementId';
+const LIST_ITEM_NATIVE_ID: string = 'kHelpBubbleMixinTestListItemElementId';
+const NESTED_CHILD_NATIVE_ID: string = 'kHelpBubbleMixinTestChildElementId';
 const EVENT1_NAME: string = 'kFirstExampleCustomEvent';
 const EVENT2_NAME: string = 'kSecondExampleCustomEvent';
 const CLOSE_BUTTON_ALT_TEXT: string = 'Close help bubble.';
@@ -38,6 +41,13 @@ export interface HelpBubbleMixinTestElement {
   };
 }
 
+let titleBubble: HelpBubbleController;
+let p1Bubble: HelpBubbleController;
+let bulletListBubble: HelpBubbleController;
+let spanBubble: HelpBubbleController;
+let nestedChildBubble: HelpBubbleController;
+
+// HelpBubbleMixinTestElement
 export class HelpBubbleMixinTestElement extends HelpBubbleMixinTestElementBase {
   static get is() {
     return 'help-bubble-mixin-test-element';
@@ -49,37 +59,67 @@ export class HelpBubbleMixinTestElement extends HelpBubbleMixinTestElementBase {
       <h1 id='title'>This is the title</h1>
       <p id='p1'>Some paragraph text</p>
       <ul id='bulletList'>
-        <li>List item 1</li>
+        <li id='list-item'>List item 1</li>
         <li>List item 2</li>
       </ul>
+      <span style='display: block;'>Span text</span>
+      <container-element id='container-element'></container-element>
     </div>`;
   }
 
   override connectedCallback() {
     super.connectedCallback();
-    this.registerHelpBubbleIdentifier(TITLE_NATIVE_ID, 'title');
-    this.registerHelpBubbleIdentifier(PARAGRAPH_NATIVE_ID, 'p1');
-    this.registerHelpBubbleIdentifier(LIST_NATIVE_ID, 'bulletList');
-  }
 
+    const spanEl = this.shadowRoot!.querySelector('span');
+    assertTrue(spanEl !== null, 'connectedCallback: span element exists');
 
-  getHelpBubbleFor(anchorId: string): HelpBubbleElement|null {
-    return this.shadowRoot!.querySelector(
-        `help-bubble[anchor-id='${anchorId}']`);
-  }
-}
+    titleBubble = this.registerHelpBubble(TITLE_NATIVE_ID, '#title')!;
+    p1Bubble = this.registerHelpBubble(PARAGRAPH_NATIVE_ID, '#p1')!;
+    bulletListBubble = this.registerHelpBubble(LIST_NATIVE_ID, '#bulletList')!;
+    spanBubble = this.registerHelpBubble(SPAN_NATIVE_ID, spanEl)!;
 
-declare global {
-  interface HTMLElementTagNameMap {
-    'help-bubble-mixin-test-element': HelpBubbleMixinTestElement;
+    // using different types of selectors to test query mechanism
+    nestedChildBubble = this.registerHelpBubble(
+        NESTED_CHILD_NATIVE_ID, ['#container-element', '.child-element'])!;
   }
 }
 
 customElements.define(
     HelpBubbleMixinTestElement.is, HelpBubbleMixinTestElement);
 
+// HelpBubbleMixinTestContainerElement
+export class HelpBubbleMixinTestContainerElement extends PolymerElement {
+  static get is() {
+    return 'container-element';
+  }
+
+  static get template() {
+    return html`
+    <div>
+      <div class='child-element'>ABCDE</div>
+    </div>`;
+  }
+}
+
+customElements.define(
+    HelpBubbleMixinTestContainerElement.is,
+    HelpBubbleMixinTestContainerElement);
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'help-bubble-mixin-test-element': HelpBubbleMixinTestElement;
+    'container-element': HelpBubbleMixinTestContainerElement;
+  }
+}
+
 class TestHelpBubbleHandler extends TestBrowserProxy implements
     HelpBubbleHandlerInterface {
+  // Records the current visibility of all known elements.
+  // Simply looking at the call logs can produce extraneous results, as
+  // visible=true may be generated multiple times if an element e.g. changes
+  // position on the page.
+  visibility: Map<string, boolean> = new Map();
+
   constructor() {
     super([
       'helpBubbleAnchorVisibilityChanged',
@@ -92,6 +132,7 @@ class TestHelpBubbleHandler extends TestBrowserProxy implements
 
   helpBubbleAnchorVisibilityChanged(
       nativeIdentifier: string, visible: boolean) {
+    this.visibility.set(nativeIdentifier, visible);
     this.methodCalled(
         'helpBubbleAnchorVisibilityChanged', nativeIdentifier, visible);
   }
@@ -224,61 +265,102 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     assertFalse(container.isHelpBubbleShowing());
   });
 
-  const defaultParams: HelpBubbleParams = new HelpBubbleParams();
-  defaultParams.nativeIdentifier = PARAGRAPH_NATIVE_ID;
-  defaultParams.closeButtonAltText = CLOSE_BUTTON_ALT_TEXT;
-  defaultParams.position = HelpBubbleArrowPosition.BOTTOM_CENTER;
-  defaultParams.bodyText = 'This is a help bubble.';
-  defaultParams.bodyIconName = 'lightbulb_outline';
-  defaultParams.bodyIconAltText = BODY_ICON_ALT_TEXT;
-  defaultParams.buttons = [];
+  const defaultParams: HelpBubbleParams = {
+    nativeIdentifier: PARAGRAPH_NATIVE_ID,
+    closeButtonAltText: CLOSE_BUTTON_ALT_TEXT,
+    position: HelpBubbleArrowPosition.BOTTOM_CENTER,
+    bodyText: 'This is a help bubble.',
+    bodyIconName: 'lightbulb_outline',
+    bodyIconAltText: BODY_ICON_ALT_TEXT,
+    buttons: [],
+  };
 
   test('help bubble mixin shows bubble when called directly', () => {
     assertFalse(container.isHelpBubbleShowing());
-    assertFalse(container.isHelpBubbleShowingFor('p1'));
-    container.showHelpBubble('p1', defaultParams);
+    assertFalse(container.isHelpBubbleShowingForTesting('p1'));
+    container.showHelpBubble(p1Bubble, defaultParams);
     assertTrue(container.isHelpBubbleShowing());
-    assertTrue(container.isHelpBubbleShowingFor('p1'));
+    assertTrue(container.isHelpBubbleShowingForTesting('p1'));
   });
+
+  test(
+      'help bubble mixin shows bubble anchored to arbitrary HTMLElment', () => {
+        assertFalse(container.isHelpBubbleShowing());
+        assertFalse(spanBubble.isBubbleShowing());
+        container.showHelpBubble(spanBubble, defaultParams);
+        assertTrue(container.isHelpBubbleShowing());
+        assertTrue(spanBubble.isBubbleShowing());
+      });
+
+  test(
+      'help bubble mixin can pierce shadow dom to anchor to deep query', () => {
+        const containerElement =
+            container.shadowRoot!.querySelector('#container-element');
+        let childElement =
+            container.shadowRoot!.querySelector('.child-element');
+
+        assertTrue(containerElement !== null, 'container element is found');
+        assertTrue(
+            childElement === null, 'child element is isolated from container');
+
+        childElement =
+            containerElement.shadowRoot!.querySelector('.child-element');
+        assertTrue(
+            childElement !== null, 'child element is rendered in shadow dom');
+
+        assertTrue(
+            childElement === nestedChildBubble.getAnchor(),
+            'help bubble anchors to correct element in shadow dom');
+
+        assertFalse(container.isHelpBubbleShowing());
+        assertFalse(nestedChildBubble.isBubbleShowing());
+        container.showHelpBubble(nestedChildBubble, defaultParams);
+        assertTrue(container.isHelpBubbleShowing());
+        assertTrue(nestedChildBubble.isBubbleShowing());
+      });
 
   test('help bubble mixin reports not open for other elements', () => {
     // Valid but not open.
-    assertFalse(container.isHelpBubbleShowingFor('title'));
+    assertFalse(container.isHelpBubbleShowingForTesting('title'));
     // Not valid (and not open).
-    assertFalse(container.isHelpBubbleShowingFor('foo'));
+    assertFalse(container.isHelpBubbleShowingForTesting('foo'));
   });
 
   test('help bubble mixin hides bubble when called directly', () => {
-    container.showHelpBubble('p1', defaultParams);
-    assertTrue(container.hideHelpBubble('p1'));
+    container.showHelpBubble(p1Bubble, defaultParams);
+    // @ts-ignore - accessing private member for test
+    assertTrue(container.hideHelpBubble(p1Bubble.nativeId_));
     assertFalse(container.isHelpBubbleShowing());
   });
 
   test('help bubble mixin called directly doesn\'t hide wrong bubble', () => {
-    container.showHelpBubble('p1', defaultParams);
-    assertFalse(container.hideHelpBubble('title'));
+    container.showHelpBubble(p1Bubble, defaultParams);
+    // @ts-ignore - accessing private member for test
+    assertFalse(container.hideHelpBubble(titleBubble.nativeId_));
     assertTrue(container.isHelpBubbleShowing());
   });
 
   test('help bubble mixin show and hide multiple bubbles directly', () => {
-    container.showHelpBubble('p1', defaultParams);
-    assertTrue(container.isHelpBubbleShowingFor('p1'));
-    assertFalse(container.isHelpBubbleShowingFor('title'));
+    container.showHelpBubble(p1Bubble, defaultParams);
+    assertTrue(container.isHelpBubbleShowingForTesting('p1'));
+    assertFalse(container.isHelpBubbleShowingForTesting('title'));
     assertTrue(container.isHelpBubbleShowing());
 
-    container.showHelpBubble('title', defaultParams);
-    assertTrue(container.isHelpBubbleShowingFor('p1'));
-    assertTrue(container.isHelpBubbleShowingFor('title'));
+    container.showHelpBubble(titleBubble, defaultParams);
+    assertTrue(container.isHelpBubbleShowingForTesting('p1'));
+    assertTrue(container.isHelpBubbleShowingForTesting('title'));
     assertTrue(container.isHelpBubbleShowing());
 
-    container.hideHelpBubble('p1');
-    assertFalse(container.isHelpBubbleShowingFor('p1'));
-    assertTrue(container.isHelpBubbleShowingFor('title'));
+    // @ts-ignore - accessing private member for test
+    container.hideHelpBubble(p1Bubble.nativeId_);
+    assertFalse(container.isHelpBubbleShowingForTesting('p1'));
+    assertTrue(container.isHelpBubbleShowingForTesting('title'));
     assertTrue(container.isHelpBubbleShowing());
 
-    container.hideHelpBubble('title');
-    assertFalse(container.isHelpBubbleShowingFor('p1'));
-    assertFalse(container.isHelpBubbleShowingFor('title'));
+    // @ts-ignore - accessing private member for test
+    container.hideHelpBubble(titleBubble.nativeId_);
+    assertFalse(container.isHelpBubbleShowingForTesting('p1'));
+    assertFalse(container.isHelpBubbleShowingForTesting('title'));
     assertFalse(container.isHelpBubbleShowing());
   });
 
@@ -286,18 +368,20 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
       'help bubble mixin shows help bubble when called via proxy', async () => {
         testProxy.getCallbackRouterRemote().showHelpBubble(defaultParams);
         await waitAfterNextRender(container);
-        assertTrue(container.isHelpBubbleShowing());
-        const bubble = container.getHelpBubbleFor('p1');
-        assertTrue(!!bubble);
-        assertEquals(container.$.p1, bubble.getAnchorElement());
-        assertTrue(isVisible(bubble));
+        assertTrue(container.isHelpBubbleShowing(), 'a bubble is showing');
+        const bubble = container.getHelpBubbleForTesting('p1');
+        assertTrue(!!bubble, 'bubble exists');
+        assertEquals(
+            container.$.p1, bubble.getAnchorElement(),
+            'bubble has correct anchor');
+        assertTrue(isVisible(bubble), 'bubble is visible');
       });
 
   test('help bubble mixin uses close button alt text', async () => {
     testProxy.getCallbackRouterRemote().showHelpBubble(defaultParams);
     await waitAfterNextRender(container);
     assertTrue(container.isHelpBubbleShowing());
-    const bubble = container.getHelpBubbleFor('p1')!;
+    const bubble = container.getHelpBubbleForTesting('p1')!;
     const closeButton = bubble.shadowRoot!.querySelector<HTMLElement>('#close');
     assertTrue(!!closeButton);
     assertEquals(CLOSE_BUTTON_ALT_TEXT, closeButton.getAttribute('aria-label'));
@@ -307,7 +391,7 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     testProxy.getCallbackRouterRemote().showHelpBubble(defaultParams);
     await waitAfterNextRender(container);
     assertTrue(container.isHelpBubbleShowing());
-    const bubble = container.getHelpBubbleFor('p1')!;
+    const bubble = container.getHelpBubbleForTesting('p1')!;
     assertEquals(bubble.bodyIconName, defaultParams.bodyIconName);
     const bodyIcon = bubble.shadowRoot!.querySelector<HTMLElement>('#bodyIcon');
     assertTrue(!!bodyIcon);
@@ -322,7 +406,7 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
         testProxy.getCallbackRouterRemote().showHelpBubble(noIconParams);
         await waitAfterNextRender(container);
         assertTrue(container.isHelpBubbleShowing());
-        const bubble = container.getHelpBubbleFor('p1')!;
+        const bubble = container.getHelpBubbleForTesting('p1')!;
         assertEquals(bubble.bodyIconName, null);
         const bodyIcon =
             bubble.shadowRoot!.querySelector<HTMLElement>('#bodyIcon');
@@ -341,6 +425,21 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
       });
 
   test(
+      'help bubble adds class to element on external help bubble shown',
+      async () => {
+        testProxy.getCallbackRouterRemote().externalHelpBubbleUpdated(
+            TITLE_NATIVE_ID, true);
+        await waitAfterNextRender(container);
+        assertTrue(
+            container.$.title.classList.contains(ANCHOR_HIGHLIGHT_CLASS));
+        testProxy.getCallbackRouterRemote().externalHelpBubbleUpdated(
+            TITLE_NATIVE_ID, false);
+        await waitAfterNextRender(container);
+        assertFalse(
+            container.$.title.classList.contains(ANCHOR_HIGHLIGHT_CLASS));
+      });
+
+  test(
       'help bubble mixin doesn\'t hide help bubble when called with wrong id',
       async () => {
         testProxy.getCallbackRouterRemote().showHelpBubble(defaultParams);
@@ -353,13 +452,14 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
   test(
       'help bubble ignores unregistered ID in ShowHelpBubble call',
       async () => {
-        const params: HelpBubbleParams = new HelpBubbleParams();
-        params.nativeIdentifier = 'This is an unregistered identifier';
-        params.closeButtonAltText = CLOSE_BUTTON_ALT_TEXT;
-        params.bodyIconAltText = BODY_ICON_ALT_TEXT;
-        params.position = HelpBubbleArrowPosition.BOTTOM_CENTER;
-        params.bodyText = 'This is a help bubble.';
-        params.buttons = [];
+        const params: HelpBubbleParams = {
+          nativeIdentifier: 'This is an unregistered identifier',
+          closeButtonAltText: CLOSE_BUTTON_ALT_TEXT,
+          bodyIconAltText: BODY_ICON_ALT_TEXT,
+          position: HelpBubbleArrowPosition.BOTTOM_CENTER,
+          bodyText: 'This is a help bubble.',
+          buttons: [],
+        };
 
         testProxy.getCallbackRouterRemote().showHelpBubble(params);
         await waitAfterNextRender(container);
@@ -388,43 +488,40 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
 
   test('help bubble mixin sends events on initially visible', async () => {
     await waitAfterNextRender(container);
-    // Since we're watching three elements, we get events for all three.
-    assertEquals(
-        3,
-        testProxy.getHandler().getCallCount(
-            'helpBubbleAnchorVisibilityChanged'));
     assertDeepEquals(
-        [
+        new Map<string, boolean>([
           [TITLE_NATIVE_ID, true],
           [PARAGRAPH_NATIVE_ID, true],
           [LIST_NATIVE_ID, true],
-        ],
-        testProxy.getHandler().getArgs('helpBubbleAnchorVisibilityChanged'));
+          [SPAN_NATIVE_ID, true],
+          [NESTED_CHILD_NATIVE_ID, true],
+        ]),
+        testProxy.getHandler().visibility);
   });
 
   test('help bubble mixin sends event on lost visibility', async () => {
+    await waitAfterNextRender(container);
     container.style.display = 'none';
     await waitForVisibilityEvents();
-    assertEquals(
-        6,
-        testProxy.getHandler().getCallCount(
-            'helpBubbleAnchorVisibilityChanged'));
     assertDeepEquals(
-        [
-          [TITLE_NATIVE_ID, true],
-          [PARAGRAPH_NATIVE_ID, true],
-          [LIST_NATIVE_ID, true],
+        new Map<string, boolean>([
           [TITLE_NATIVE_ID, false],
           [PARAGRAPH_NATIVE_ID, false],
           [LIST_NATIVE_ID, false],
-        ],
-        testProxy.getHandler().getArgs('helpBubbleAnchorVisibilityChanged'));
+          [SPAN_NATIVE_ID, false],
+          [NESTED_CHILD_NATIVE_ID, false],
+        ]),
+        testProxy.getHandler().visibility);
   });
 
   test('help bubble mixin sends event on element activated', async () => {
+    container.showHelpBubble(titleBubble, defaultParams);
+    container.showHelpBubble(bulletListBubble, defaultParams);
     await waitAfterNextRender(container);
-    container.notifyHelpBubbleAnchorActivated('bulletList');
-    container.notifyHelpBubbleAnchorActivated('title');
+    // @ts-ignore - accessing private member for test
+    container.notifyHelpBubbleAnchorActivated(bulletListBubble.nativeId_);
+    // @ts-ignore - accessing private member for test
+    container.notifyHelpBubbleAnchorActivated(titleBubble.nativeId_);
     assertEquals(
         2, testProxy.getHandler().getCallCount('helpBubbleAnchorActivated'));
     assertDeepEquals(
@@ -433,9 +530,15 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
   });
 
   test('help bubble mixin sends custom events', async () => {
+    container.showHelpBubble(p1Bubble, defaultParams);
+    container.showHelpBubble(titleBubble, defaultParams);
     await waitAfterNextRender(container);
-    container.notifyHelpBubbleAnchorCustomEvent('p1', EVENT1_NAME);
-    container.notifyHelpBubbleAnchorCustomEvent('title', EVENT2_NAME);
+    container.notifyHelpBubbleAnchorCustomEvent(
+        // @ts-ignore - accessing private member for test
+        p1Bubble.nativeId_, EVENT1_NAME);
+    container.notifyHelpBubbleAnchorCustomEvent(
+        // @ts-ignore - accessing private member for test
+        titleBubble.nativeId_, EVENT2_NAME);
     assertEquals(
         2, testProxy.getHandler().getCallCount('helpBubbleAnchorCustomEvent'));
     assertDeepEquals(
@@ -449,7 +552,7 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
   test(
       'help bubble mixin sends event on closed due to anchor losing visibility',
       async () => {
-        container.showHelpBubble('p1', defaultParams);
+        container.showHelpBubble(p1Bubble, defaultParams);
 
         // Hiding the container will cause the bubble to be closed.
         container.$.p1.style.display = 'none';
@@ -466,7 +569,7 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
   test(
       'help bubble mixin does not send event when non-anchor loses visibility',
       async () => {
-        container.showHelpBubble('p1', defaultParams);
+        container.showHelpBubble(p1Bubble, defaultParams);
 
         // This is not the current bubble anchor, so should not send an event.
         container.$.title.style.display = 'none';
@@ -477,7 +580,7 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
       });
 
   test('help bubble mixin does not timeout by default', async () => {
-    container.showHelpBubble('p1', defaultParams);
+    container.showHelpBubble(p1Bubble, defaultParams);
 
     // This is not the current bubble anchor, so should not send an event.
     container.$.title.style.display = 'none';
@@ -500,20 +603,21 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     testProxy.getCallbackRouterRemote().showHelpBubble(defaultParams);
     await waitAfterNextRender(container);
     assertTrue(container.isHelpBubbleShowing());
-    const bubble = container.getHelpBubbleFor('p1');
+    const bubble = container.getHelpBubbleForTesting('p1');
     assertTrue(!!bubble);
     assertEquals(container.$.p1, bubble.getAnchorElement());
     assertTrue(isVisible(bubble));
   });
 
-  const paramsWithTitle: HelpBubbleParams = new HelpBubbleParams();
-  paramsWithTitle.nativeIdentifier = TITLE_NATIVE_ID;
-  paramsWithTitle.closeButtonAltText = CLOSE_BUTTON_ALT_TEXT;
-  paramsWithTitle.bodyIconAltText = BODY_ICON_ALT_TEXT;
-  paramsWithTitle.position = HelpBubbleArrowPosition.TOP_CENTER;
-  paramsWithTitle.bodyText = 'This is another help bubble.';
-  paramsWithTitle.titleText = 'This is a title';
-  paramsWithTitle.buttons = [];
+  const paramsWithTitle: HelpBubbleParams = {
+    nativeIdentifier: TITLE_NATIVE_ID,
+    closeButtonAltText: CLOSE_BUTTON_ALT_TEXT,
+    bodyIconAltText: BODY_ICON_ALT_TEXT,
+    position: HelpBubbleArrowPosition.TOP_CENTER,
+    bodyText: 'This is another help bubble.',
+    titleText: 'This is a title',
+    buttons: [],
+  };
 
   test('help bubble mixin shows multiple bubbles', async () => {
     testProxy.getCallbackRouterRemote().showHelpBubble(defaultParams);
@@ -521,8 +625,8 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     testProxy.getCallbackRouterRemote().showHelpBubble(paramsWithTitle);
     await waitAfterNextRender(container);
     assertTrue(container.isHelpBubbleShowing());
-    const bubble1 = container.getHelpBubbleFor('title');
-    const bubble2 = container.getHelpBubbleFor('p1');
+    const bubble1 = container.getHelpBubbleForTesting('title');
+    const bubble2 = container.getHelpBubbleForTesting('p1');
     assertTrue(!!bubble1);
     assertTrue(!!bubble2);
     assertEquals(container.$.title, bubble1!.getAnchorElement());
@@ -537,8 +641,8 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     testProxy.getCallbackRouterRemote().showHelpBubble(paramsWithTitle);
     await waitAfterNextRender(container);
     assertTrue(container.isHelpBubbleShowing());
-    const titleBubble = container.getHelpBubbleFor('title')!;
-    const paragraphBubble = container.getHelpBubbleFor('p1')!;
+    const titleBubble = container.getHelpBubbleForTesting('title')!;
+    const paragraphBubble = container.getHelpBubbleForTesting('p1')!;
     // Testing that setting `titleText` will cause the title to display
     // correctly is present in help_bubble_test.ts, so it is sufficient to
     // verify that the property is set correctly.
@@ -546,14 +650,15 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     assertEquals(paramsWithTitle.titleText, titleBubble.titleText);
   });
 
-  const paramsWithProgress: HelpBubbleParams = new HelpBubbleParams();
-  paramsWithProgress.nativeIdentifier = LIST_NATIVE_ID;
-  paramsWithProgress.closeButtonAltText = CLOSE_BUTTON_ALT_TEXT;
-  paramsWithProgress.bodyIconAltText = BODY_ICON_ALT_TEXT;
-  paramsWithProgress.position = HelpBubbleArrowPosition.TOP_CENTER;
-  paramsWithProgress.bodyText = 'This is another help bubble.';
-  paramsWithProgress.progress = {current: 1, total: 3};
-  paramsWithProgress.buttons = [];
+  const paramsWithProgress: HelpBubbleParams = {
+    nativeIdentifier: LIST_NATIVE_ID,
+    closeButtonAltText: CLOSE_BUTTON_ALT_TEXT,
+    bodyIconAltText: BODY_ICON_ALT_TEXT,
+    position: HelpBubbleArrowPosition.TOP_CENTER,
+    bodyText: 'This is another help bubble.',
+    progress: {current: 1, total: 3},
+    buttons: [],
+  };
 
   test(
       'help bubble mixin shows bubbles with and without progress', async () => {
@@ -562,8 +667,8 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
         testProxy.getCallbackRouterRemote().showHelpBubble(paramsWithProgress);
         await waitAfterNextRender(container);
         assertTrue(container.isHelpBubbleShowing());
-        const paragraphBubble = container.getHelpBubbleFor('p1')!;
-        const progressBubble = container.getHelpBubbleFor('bulletList')!;
+        const paragraphBubble = container.getHelpBubbleForTesting('p1')!;
+        const progressBubble = container.getHelpBubbleForTesting('bulletList')!;
         // Testing that setting `progress` will cause the progress to display
         // correctly is present in help_bubble_test.ts, so it is sufficient to
         // verify that the property is set correctly.
@@ -583,19 +688,19 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     assertTrue(container.isHelpBubbleShowing());
     assertEquals(
         container.$.title,
-        container.getHelpBubbleFor('title')?.getAnchorElement());
-    assertEquals(null, container.getHelpBubbleFor('p1'));
+        container.getHelpBubbleForTesting('title')?.getAnchorElement());
+    assertEquals(null, container.getHelpBubbleForTesting('p1'));
 
     testProxy.getCallbackRouterRemote().hideHelpBubble(
         paramsWithTitle.nativeIdentifier);
     await waitAfterNextRender(container);
     assertFalse(container.isHelpBubbleShowing());
-    assertEquals(null, container.getHelpBubbleFor('title'));
-    assertEquals(null, container.getHelpBubbleFor('p1'));
+    assertEquals(null, container.getHelpBubbleForTesting('title'));
+    assertEquals(null, container.getHelpBubbleForTesting('p1'));
   });
 
   test('help bubble mixin sends event on closed via button', async () => {
-    container.showHelpBubble('p1', defaultParams);
+    container.showHelpBubble(p1Bubble, defaultParams);
 
     // Click the close button.
     container.shadowRoot!.querySelector('help-bubble')!.$.close.click();
@@ -607,26 +712,27 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     assertFalse(container.isHelpBubbleShowing());
   });
 
-  const buttonParams: HelpBubbleParams = new HelpBubbleParams();
-  buttonParams.nativeIdentifier = PARAGRAPH_NATIVE_ID;
-  buttonParams.closeButtonAltText = CLOSE_BUTTON_ALT_TEXT;
-  buttonParams.bodyIconAltText = BODY_ICON_ALT_TEXT;
-  buttonParams.position = HelpBubbleArrowPosition.TOP_CENTER;
-  buttonParams.bodyText = 'This is another help bubble.';
-  buttonParams.titleText = 'This is a title';
-  buttonParams.buttons = [
-    {
-      text: 'button1',
-      isDefault: false,
-    },
-    {
-      text: 'button2',
-      isDefault: true,
-    },
-  ];
+  const buttonParams: HelpBubbleParams = {
+    nativeIdentifier: PARAGRAPH_NATIVE_ID,
+    closeButtonAltText: CLOSE_BUTTON_ALT_TEXT,
+    bodyIconAltText: BODY_ICON_ALT_TEXT,
+    position: HelpBubbleArrowPosition.TOP_CENTER,
+    bodyText: 'This is another help bubble.',
+    titleText: 'This is a title',
+    buttons: [
+      {
+        text: 'button1',
+        isDefault: false,
+      },
+      {
+        text: 'button2',
+        isDefault: true,
+      },
+    ],
+  };
 
   test('help bubble mixin sends action button clicked event', async () => {
-    container.showHelpBubble('p1', buttonParams);
+    container.showHelpBubble(p1Bubble, buttonParams);
     await waitAfterNextRender(container);
 
     // Click one of the action buttons.
@@ -644,14 +750,15 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
     assertFalse(container.isHelpBubbleShowing());
   });
 
-  const timeoutParams: HelpBubbleParams = new HelpBubbleParams();
-  timeoutParams.nativeIdentifier = PARAGRAPH_NATIVE_ID;
-  timeoutParams.closeButtonAltText = CLOSE_BUTTON_ALT_TEXT;
-  timeoutParams.bodyIconAltText = BODY_ICON_ALT_TEXT;
-  timeoutParams.position = HelpBubbleArrowPosition.TOP_CENTER;
-  timeoutParams.bodyText = 'This is another help bubble.';
-  timeoutParams.titleText = 'This is a title';
-  timeoutParams.buttons = [];
+  const timeoutParams: HelpBubbleParams = {
+    nativeIdentifier: PARAGRAPH_NATIVE_ID,
+    closeButtonAltText: CLOSE_BUTTON_ALT_TEXT,
+    bodyIconAltText: BODY_ICON_ALT_TEXT,
+    position: HelpBubbleArrowPosition.TOP_CENTER,
+    bodyText: 'This is another help bubble.',
+    titleText: 'This is a title',
+    buttons: [],
+  };
 
   // It is hard to guarantee the correct timing on various test systems,
   // so the 'before timeout' and 'after timeout' tests are split
@@ -668,11 +775,11 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
       },
     };
 
-    container.showHelpBubble('p1', longTimeoutParams);
+    container.showHelpBubble(p1Bubble, longTimeoutParams);
     await waitAfterNextRender(container);
     assertEquals(
         0, testProxy.getHandler().getCallCount('helpBubbleClosed'),
-        'helpBubbleClosed should not be called');
+        'helpBubbleClosed has not be called');
     assertTrue(container.isHelpBubbleShowing());
   });
 
@@ -687,18 +794,80 @@ suite('CrComponentsHelpBubbleMixinTest', () => {
       },
     };
 
-    container.showHelpBubble('p1', shortTimeoutParams);
+    container.showHelpBubble(p1Bubble, shortTimeoutParams);
     await waitAfterNextRender(container);
     await waitForSuccess({
       retryIntervalMs: 50,
       totalMs: 1500,
       assertionFn: () => assertEquals(
           1, testProxy.getHandler().getCallCount('helpBubbleClosed'),
-          'helpBubbleClosed should be called called'),
+          'helpBubbleClosed has been called'),
     }) as number;
     assertDeepEquals(
         [[PARAGRAPH_NATIVE_ID, HelpBubbleClosedReason.kTimedOut]],
-        testProxy.getHandler().getArgs('helpBubbleClosed'));
+        testProxy.getHandler().getArgs('helpBubbleClosed'),
+        'helpBubbleClosed is called with correct arguments');
+    assertFalse(container.isHelpBubbleShowing(), 'no bubbles are showing');
+  });
+
+  test('help bubble mixin can unregister', () => {
+    let listItemBubble =
+        container.registerHelpBubble(LIST_ITEM_NATIVE_ID, '#bulletList');
+    assertTrue(listItemBubble !== null, 'help bubble is registered');
+    assertTrue(
+        container.canShowHelpBubble(listItemBubble!),
+        'help bubble can be shown');
+
+    // re-register when help bubble is not showing
+    listItemBubble =
+        container.registerHelpBubble(LIST_ITEM_NATIVE_ID, '#list-item');
+    assertTrue(
+        listItemBubble !== null,
+        'help bubble can be re-registered with same nativeId');
+    assertTrue(
+        container.canShowHelpBubble(listItemBubble!),
+        'help bubble can be shown after re-registering');
+
+    // un-register directly when help bubble is not showing
+    container.unregisterHelpBubble(LIST_ITEM_NATIVE_ID);
+    assertFalse(
+        container.canShowHelpBubble(listItemBubble!),
+        'help bubble cannot be shown');
+    // unregisterHelpBubble clears out the nativeIds
+    assertThrows(
+        () => container.showHelpBubble(listItemBubble!, defaultParams),
+        'Can\'t show help bubble',
+    );
+  });
+
+  test('help bubble mixin can unregister when bubble is showing', () => {
+    const listItemBubble =
+        container.registerHelpBubble(LIST_ITEM_NATIVE_ID, '#list-item');
+    assertTrue(listItemBubble !== null, 'help bubble is registered');
+    assertTrue(
+        container.canShowHelpBubble(listItemBubble!),
+        'help bubble can be shown');
     assertFalse(container.isHelpBubbleShowing());
+    assertFalse(container.isHelpBubbleShowingForTesting('list-item'));
+
+    container.showHelpBubble(listItemBubble!, defaultParams);
+    assertTrue(container.isHelpBubbleShowing());
+    assertTrue(container.isHelpBubbleShowingForTesting('list-item'));
+
+    // re-register when help bubble is shown
+    const result =
+        container.registerHelpBubble(LIST_ITEM_NATIVE_ID, '#list-item');
+    assertTrue(
+        result === null, 'registerHelpBubble fails when help bubble is shown');
+    assertTrue(
+        container.isHelpBubbleShowing(),
+        're-registering does not hide help bubble');
+    assertTrue(container.isHelpBubbleShowingForTesting('list-item'));
+
+    // unregister directly when help bubble is shown
+    container.unregisterHelpBubble(LIST_ITEM_NATIVE_ID);
+    assertFalse(
+        container.isHelpBubbleShowing(), 'unregister hides help bubble');
+    assertFalse(container.isHelpBubbleShowingForTesting('list-item'));
   });
 });

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "chrome/browser/safe_browsing/extension_telemetry/extension_telemetry_service.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/password_reuse_signal.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/remote_host_contacted_signal.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "crypto/sha2.h"
 
@@ -28,6 +29,10 @@ void PotentialPasswordTheftSignalProcessor::ProcessSignal(
     const ExtensionSignal& signal) {
   DCHECK(signal.GetType() == ExtensionSignalType::kRemoteHostContacted ||
          signal.GetType() == ExtensionSignalType::kPasswordReuse);
+  if (!base::FeatureList::IsEnabled(
+          safe_browsing::kExtensionTelemetryPotentialPasswordTheft)) {
+    return;
+  }
   base::Time signal_creation_time = base::Time::NowFromSystemTime();
   extensions::ExtensionId extension_id;
   // Process remote host contacted signal.
@@ -194,8 +199,9 @@ PotentialPasswordTheftSignalProcessor::GetSignalInfoForReport(
             reuse_info.reused_password_account_type);
   }
   for (auto& remote_host_url_w_count_it : remote_host_url_store_it->second) {
-    ExtensionTelemetryReportRequest_SignalInfo_PotentialPasswordTheftInfo_RemoteHostInfo*
-        remote_host_url_pb = potential_password_theft_info->add_remote_hosts();
+    ExtensionTelemetryReportRequest_SignalInfo_PotentialPasswordTheftInfo_RemoteHostData*
+        remote_host_url_pb =
+            potential_password_theft_info->add_remote_hosts_data();
     remote_host_url_pb->set_remote_host_url(
         std::move(remote_host_url_w_count_it.first));
     remote_host_url_pb->set_count(remote_host_url_w_count_it.second);

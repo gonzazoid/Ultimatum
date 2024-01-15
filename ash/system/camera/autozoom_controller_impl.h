@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_CAMERA_AUTOZOOM_CONTROLLER_IMPL_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/camera/autozoom_nudge_controller.h"
@@ -49,7 +50,13 @@ class ASH_EXPORT AutozoomControllerImpl
   // SessionObserver:
   void OnActiveUserPrefServiceChanged(PrefService* pref_service) override;
 
+  void set_autozoom_supported_for_test(bool value) {
+    autozoom_supported_for_test_ = value;
+  }
+
  private:
+  friend class CameraEffectsControllerTest;
+
   void InitFromUserPrefs();
 
   void Refresh();
@@ -69,7 +76,7 @@ class ASH_EXPORT AutozoomControllerImpl
 
   // The pref service of the currently active user. Can be null in
   // ash_unittests.
-  PrefService* active_user_pref_service_ = nullptr;
+  raw_ptr<PrefService> active_user_pref_service_ = nullptr;
 
   // The registrar used to watch Autozoom prefs changes in the above
   // |active_user_pref_service_| from outside ash.
@@ -89,6 +96,9 @@ class ASH_EXPORT AutozoomControllerImpl
   // The number of current active camera clients. Autozoom control should only
   // be shown when there's at least one active camera client.
   int active_camera_client_count_ = 0;
+
+  // Allows tests to force autozoom support.
+  bool autozoom_supported_for_test_ = false;
 
   // All methods of this class should be run on the same sequence.
   SEQUENCE_CHECKER(sequence_checker_);

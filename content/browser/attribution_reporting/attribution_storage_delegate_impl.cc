@@ -4,58 +4,96 @@
 
 #include "content/browser/attribution_reporting/attribution_storage_delegate_impl.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include <cstdlib>
+#include <iterator>
+#include <optional>
 #include <utility>
+#include <vector>
 
-#include "base/check_op.h"
-#include "base/guid.h"
+#include "base/check.h"
+#include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
 #include "base/rand_util.h"
 #include "base/time/time.h"
-#include "content/browser/attribution_reporting/attribution_default_random_generator.h"
-#include "content/browser/attribution_reporting/attribution_random_generator.h"
+#include "base/uuid.h"
+#include "components/attribution_reporting/aggregatable_trigger_config.h"
+#include "components/attribution_reporting/constants.h"
+#include "components/attribution_reporting/event_level_epsilon.h"
+#include "components/attribution_reporting/event_report_windows.h"
+#include "components/attribution_reporting/features.h"
+#include "components/attribution_reporting/max_event_level_reports.h"
+#include "components/attribution_reporting/source_registration_time_config.mojom.h"
+#include "components/attribution_reporting/source_type.mojom.h"
+#include "components/attribution_reporting/trigger_config.h"
+#include "components/attribution_reporting/trigger_registration.h"
+#include "content/browser/attribution_reporting/aggregatable_attribution_utils.h"
+#include "content/browser/attribution_reporting/attribution_config.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
-#include "content/browser/attribution_reporting/attribution_utils.h"
-#include "content/browser/attribution_reporting/combinatorics.h"
-#include "content/browser/attribution_reporting/common_source_info.h"
-#include "content/public/browser/attribution_config.h"
-#include "content/public/browser/attribution_reporting.h"
+#include "content/browser/attribution_reporting/attribution_trigger.h"
+#include "content/browser/attribution_reporting/privacy_math.h"
+#include "content/browser/attribution_reporting/stored_source.h"
+#include "services/network/public/cpp/trigger_verification.h"
 
 namespace content {
+
+namespace {
+
+using ::attribution_reporting::mojom::SourceType;
+
+std::vector<AttributionStorageDelegate::NullAggregatableReport>
+GetNullAggregatableReportsForLookback(
+    const AttributionTrigger& trigger,
+    base::Time trigger_time,
+    std::optional<base::Time> attributed_source_time,
+    int days_lookback,
+    double rate) {
+  std::vector<AttributionStorageDelegate::NullAggregatableReport> reports;
+  for (int i = 0; i <= days_lookback; i++) {
+    base::Time fake_source_time = trigger_time - base::Days(i);
+    if (attributed_source_time &&
+        RoundDownToWholeDaySinceUnixEpoch(fake_source_time) ==
+            *attributed_source_time) {
+      continue;
+    }
+
+    if (GenerateWithRate(rate)) {
+      reports.push_back(AttributionStorageDelegate::NullAggregatableReport{
+          .fake_source_time = fake_source_time,
+      });
+    }
+  }
+  return reports;
+}
+
+}  // namespace
 
 // static
 std::unique_ptr<AttributionStorageDelegate>
 AttributionStorageDelegateImpl::CreateForTesting(
     AttributionNoiseMode noise_mode,
     AttributionDelayMode delay_mode,
-    const AttributionConfig& config,
-    std::unique_ptr<AttributionRandomGenerator> rng) {
-  return base::WrapUnique(new AttributionStorageDelegateImpl(
-      noise_mode, delay_mode, config, std::move(rng)));
+    const AttributionConfig& config) {
+  return base::WrapUnique(
+      new AttributionStorageDelegateImpl(noise_mode, delay_mode, config));
 }
 
 AttributionStorageDelegateImpl::AttributionStorageDelegateImpl(
     AttributionNoiseMode noise_mode,
     AttributionDelayMode delay_mode)
-    : AttributionStorageDelegateImpl(
-          noise_mode,
-          delay_mode,
-          AttributionConfig(),
-          std::make_unique<AttributionDefaultRandomGenerator>()) {}
+    : AttributionStorageDelegateImpl(noise_mode,
+                                     delay_mode,
+                                     AttributionConfig()) {}
 
 AttributionStorageDelegateImpl::AttributionStorageDelegateImpl(
     AttributionNoiseMode noise_mode,
     AttributionDelayMode delay_mode,
-    const AttributionConfig& config,
-    std::unique_ptr<AttributionRandomGenerator> rng)
+    const AttributionConfig& config)
     : AttributionStorageDelegate(config),
       noise_mode_(noise_mode),
-      delay_mode_(delay_mode),
-      rng_(std::move(rng)) {
-  DCHECK(rng_);
-
+      delay_mode_(delay_mode) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -74,13 +112,14 @@ AttributionStorageDelegateImpl::GetDeleteExpiredRateLimitsFrequency() const {
 }
 
 base::Time AttributionStorageDelegateImpl::GetEventLevelReportTime(
-    const CommonSourceInfo& source,
+    const attribution_reporting::EventReportWindows& event_report_windows,
+    base::Time source_time,
     base::Time trigger_time) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   switch (delay_mode_) {
     case AttributionDelayMode::kDefault:
-      return ComputeReportTime(source, trigger_time);
+      return event_report_windows.ComputeReportTime(source_time, trigger_time);
     case AttributionDelayMode::kNone:
       return trigger_time;
   }
@@ -95,7 +134,7 @@ base::Time AttributionStorageDelegateImpl::GetAggregatableReportTime(
       switch (noise_mode_) {
         case AttributionNoiseMode::kDefault:
           return trigger_time + config_.aggregate_limit.min_delay +
-                 rng_->RandDouble() * config_.aggregate_limit.delay_span;
+                 base::RandDouble() * config_.aggregate_limit.delay_span;
         case AttributionNoiseMode::kNone:
           return trigger_time + config_.aggregate_limit.min_delay +
                  config_.aggregate_limit.delay_span;
@@ -106,12 +145,12 @@ base::Time AttributionStorageDelegateImpl::GetAggregatableReportTime(
   }
 }
 
-base::GUID AttributionStorageDelegateImpl::NewReportID() const {
+base::Uuid AttributionStorageDelegateImpl::NewReportID() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return base::GUID::GenerateRandomV4();
+  return base::Uuid::GenerateRandomV4();
 }
 
-absl::optional<AttributionStorageDelegate::OfflineReportDelayConfig>
+std::optional<AttributionStorageDelegate::OfflineReportDelayConfig>
 AttributionStorageDelegateImpl::GetOfflineReportDelayConfig() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -129,7 +168,7 @@ AttributionStorageDelegateImpl::GetOfflineReportDelayConfig() const {
     };
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void AttributionStorageDelegateImpl::ShuffleReports(
@@ -138,91 +177,125 @@ void AttributionStorageDelegateImpl::ShuffleReports(
 
   switch (noise_mode_) {
     case AttributionNoiseMode::kDefault:
-      rng_->RandomShuffle(reports);
+      base::RandomShuffle(reports.begin(), reports.end());
       break;
     case AttributionNoiseMode::kNone:
       break;
   }
 }
 
-AttributionStorageDelegate::RandomizedResponse
-AttributionStorageDelegateImpl::GetRandomizedResponse(
-    const CommonSourceInfo& source) {
+void AttributionStorageDelegateImpl::ShuffleTriggerVerifications(
+    std::vector<network::TriggerVerification>& verifications) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   switch (noise_mode_) {
-    case AttributionNoiseMode::kDefault: {
-      double randomized_trigger_rate =
-          GetRandomizedResponseRate(source.source_type());
-      DCHECK_GE(randomized_trigger_rate, 0);
-      DCHECK_LE(randomized_trigger_rate, 1);
-
-      return rng_->RandDouble() < randomized_trigger_rate
-                 ? absl::make_optional(GetRandomFakeReports(source))
-                 : absl::nullopt;
-    }
+    case AttributionNoiseMode::kDefault:
+      base::RandomShuffle(verifications.begin(), verifications.end());
+      break;
     case AttributionNoiseMode::kNone:
-      return absl::nullopt;
+      break;
   }
 }
 
-std::vector<AttributionStorageDelegate::FakeReport>
-AttributionStorageDelegateImpl::GetRandomFakeReports(
-    const CommonSourceInfo& source) {
+double AttributionStorageDelegateImpl::GetRandomizedResponseRate(
+    const attribution_reporting::TriggerSpecs& trigger_specs,
+    attribution_reporting::MaxEventLevelReports max_event_level_reports,
+    attribution_reporting::EventLevelEpsilon epsilon) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(noise_mode_, AttributionNoiseMode::kDefault);
-
-  const int num_combinations = GetNumberOfStarsAndBarsSequences(
-      /*num_stars=*/GetMaxAttributionsPerSource(source.source_type()),
-      /*num_bars=*/TriggerDataCardinality(source.source_type()) *
-          NumReportWindows(source.source_type()));
-
-  // Subtract 1 because `AttributionRandomGenerator::RandInt()` is inclusive.
-  const int sequence_index = rng_->RandInt(0, num_combinations - 1);
-
-  return GetFakeReportsForSequenceIndex(source, sequence_index);
+  return content::GetRandomizedResponseRate(
+      GetNumStates(trigger_specs, max_event_level_reports), epsilon);
 }
 
-std::vector<AttributionStorageDelegate::FakeReport>
-AttributionStorageDelegateImpl::GetFakeReportsForSequenceIndex(
-    const CommonSourceInfo& source,
-    int random_stars_and_bars_sequence_index) const {
+AttributionStorageDelegate::GetRandomizedResponseResult
+AttributionStorageDelegateImpl::GetRandomizedResponse(
+    SourceType source_type,
+    const attribution_reporting::TriggerSpecs& trigger_specs,
+    attribution_reporting::MaxEventLevelReports max_event_level_reports,
+    attribution_reporting::EventLevelEpsilon epsilon,
+    base::Time source_time) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(noise_mode_, AttributionNoiseMode::kDefault);
+  RandomizedResponseData response =
+      DoRandomizedResponse(trigger_specs, max_event_level_reports, epsilon);
 
-  const int trigger_data_cardinality =
-      TriggerDataCardinality(source.source_type());
-
-  const std::vector<int> bars_preceding_each_star =
-      GetBarsPrecedingEachStar(GetStarIndices(
-          /*num_stars=*/GetMaxAttributionsPerSource(source.source_type()),
-          /*num_bars=*/trigger_data_cardinality *
-              NumReportWindows(source.source_type()),
-          /*sequence_index=*/random_stars_and_bars_sequence_index));
-
-  std::vector<FakeReport> fake_reports;
-
-  // an output state is uniquely determined by an ordering of c stars and w*d
-  // bars, where:
-  // w = the number of reporting windows
-  // c = the maximum number of reports for a source
-  // d = the trigger data cardinality for a source
-  for (int num_bars : bars_preceding_each_star) {
-    if (num_bars == 0)
-      continue;
-
-    auto result = std::div(num_bars - 1, trigger_data_cardinality);
-
-    const int trigger_data = result.rem;
-    DCHECK_GE(trigger_data, 0);
-    DCHECK_LT(trigger_data, trigger_data_cardinality);
-
-    fake_reports.push_back({
-        .trigger_data = static_cast<uint64_t>(trigger_data),
-        .report_time = ReportTimeAtWindow(source, /*window_index=*/result.quot),
-    });
+  if (response.channel_capacity() > GetMaxChannelCapacity(source_type)) {
+    return base::unexpected(ExceedsChannelCapacityLimit());
   }
-  return fake_reports;
+
+  switch (noise_mode_) {
+    case AttributionNoiseMode::kDefault:
+      return response;
+    case AttributionNoiseMode::kNone:
+      return RandomizedResponseData(response.rate(),
+                                    response.channel_capacity(), std::nullopt);
+  }
+}
+
+std::vector<AttributionStorageDelegate::NullAggregatableReport>
+AttributionStorageDelegateImpl::GetNullAggregatableReports(
+    const AttributionTrigger& trigger,
+    base::Time trigger_time,
+    std::optional<base::Time> attributed_source_time) const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  switch (noise_mode_) {
+    case AttributionNoiseMode::kDefault:
+      return GetNullAggregatableReportsImpl(trigger, trigger_time,
+                                            attributed_source_time);
+    case AttributionNoiseMode::kNone:
+      return {};
+  }
+}
+
+std::vector<AttributionStorageDelegate::NullAggregatableReport>
+AttributionStorageDelegateImpl::GetNullAggregatableReportsImpl(
+    const AttributionTrigger& trigger,
+    base::Time trigger_time,
+    std::optional<base::Time> attributed_source_time) const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // See spec
+  // https://wicg.github.io/attribution-reporting-api/#generate-null-reports.
+
+  bool has_trigger_context_id =
+      trigger.registration()
+          .aggregatable_trigger_config.trigger_context_id()
+          .has_value();
+
+  switch (trigger.registration()
+              .aggregatable_trigger_config.source_registration_time_config()) {
+    case attribution_reporting::mojom::SourceRegistrationTimeConfig::kInclude: {
+      std::optional<base::Time> rounded_attributed_source_time;
+      if (attributed_source_time) {
+        rounded_attributed_source_time =
+            RoundDownToWholeDaySinceUnixEpoch(*attributed_source_time);
+      }
+
+      static_assert(attribution_reporting::kMaxSourceExpiry == base::Days(30),
+                    "update null reports rate");
+
+      CHECK(!has_trigger_context_id);
+
+      return GetNullAggregatableReportsForLookback(
+          trigger, trigger_time, rounded_attributed_source_time,
+          /*days_lookback=*/
+          attribution_reporting::kMaxSourceExpiry.InDays(),
+          config_.aggregate_limit
+              .null_reports_rate_include_source_registration_time);
+    }
+    case attribution_reporting::mojom::SourceRegistrationTimeConfig::kExclude: {
+      const bool has_real_report = attributed_source_time.has_value();
+      if (has_real_report) {
+        return {};
+      }
+
+      return GetNullAggregatableReportsForLookback(
+          trigger, trigger_time, attributed_source_time, /*days_lookback=*/0,
+          has_trigger_context_id
+              ? 1.
+              : config_.aggregate_limit
+                    .null_reports_rate_exclude_source_registration_time);
+    }
+  }
 }
 
 }  // namespace content

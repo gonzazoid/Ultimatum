@@ -15,11 +15,15 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/password_manager/core/browser/test_password_store.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/password_manager/core/browser/password_store/test_password_store.h"
+#include "components/sync/service/sync_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/buildflags/buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/flags/android/chrome_feature_list.h"
+#endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "base/strings/string_split.h"
@@ -34,12 +38,19 @@ class BrowsingDataCounterUtilsTest : public testing::Test {
 
   TestingProfile* GetProfile() { return &profile_; }
 
+  base::test::ScopedFeatureList scoped_feature_list_;
+
  private:
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
 };
 
 TEST_F(BrowsingDataCounterUtilsTest, CacheCounterResult) {
+#if BUILDFLAG(IS_ANDROID)
+  scoped_feature_list_.InitAndDisableFeature(
+      chrome::android::kQuickDeleteForAndroid);
+#endif
+
   // This test assumes that the strings are served exactly as defined,
   // i.e. that the locale is set to the default "en".
   ASSERT_EQ("en", TestingBrowserProcess::GetGlobal()->GetApplicationLocale());
@@ -88,6 +99,51 @@ TEST_F(BrowsingDataCounterUtilsTest, CacheCounterResult) {
   }
 }
 
+#if BUILDFLAG(IS_ANDROID)
+// Tests the output of the hosted apps counter.
+TEST_F(BrowsingDataCounterUtilsTest, QuickDeleteAdvancedCacheCounterResult) {
+  scoped_feature_list_.InitAndEnableFeature(
+      chrome::android::kQuickDeleteForAndroid);
+
+  // This test assumes that the strings are served exactly as defined,
+  // i.e. that the locale is set to the default "en".
+  ASSERT_EQ("en", TestingBrowserProcess::GetGlobal()->GetApplicationLocale());
+  const int kBytesInAMegabyte = 1024 * 1024;
+
+  // Test the output for various forms of CacheResults.
+  const struct TestCase {
+    int bytes;
+    bool is_upper_limit;
+    std::string expected_output;
+  } kTestCases[] = {
+      {42, false,
+       "Less than 1 MB. Some sites may load more slowly on your next "
+       "visit."},
+      {static_cast<int>(2.312 * kBytesInAMegabyte), false,
+       "2.3 MB. Some sites may load more slowly on your next "
+       "visit."},
+      {static_cast<int>(2.312 * kBytesInAMegabyte), true,
+       "Less than 2.3 MB. Some sites may load more slowly on your next "
+       "visit."}};
+
+  for (const TestCase& test_case : kTestCases) {
+    CacheCounter counter(GetProfile());
+    browsing_data::ClearBrowsingDataTab tab =
+        browsing_data::ClearBrowsingDataTab::ADVANCED;
+    counter.Init(GetProfile()->GetPrefs(), tab,
+                 browsing_data::BrowsingDataCounter::ResultCallback());
+    CacheCounter::CacheResult result(&counter, test_case.bytes,
+                                     test_case.is_upper_limit);
+    SCOPED_TRACE(base::StringPrintf("Test params: %d bytes, %d is_upper_limit",
+                                    test_case.bytes, test_case.is_upper_limit));
+
+    std::u16string output =
+        GetChromeCounterTextFromResult(&result, GetProfile());
+    EXPECT_EQ(output, base::ASCIIToUTF16(test_case.expected_output));
+  }
+}
+#endif
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 // Tests the complex output of the hosted apps counter.
 TEST_F(BrowsingDataCounterUtilsTest, HostedAppsCounterResult) {
@@ -130,7 +186,7 @@ TEST_F(BrowsingDataCounterUtilsTest, HostedAppsCounterResult) {
 }
 #endif
 
-// Tests the output for "Passwords and other sign-in data" on the advanced tab.
+// Tests the output for "Passwords and passkeys" on the advanced tab.
 TEST_F(BrowsingDataCounterUtilsTest, DeletePasswordsAndSigninData) {
   // This test assumes that the strings are served exactly as defined,
   // i.e. that the locale is set to the default "en".
@@ -157,6 +213,16 @@ TEST_F(BrowsingDataCounterUtilsTest, DeletePasswordsAndSigninData) {
     std::vector<std::string> domain_examples;
     std::vector<std::string> account_domain_examples;
   };
+  // Sign-in data is referred to as passkeys on macOS only currently.
+  auto signin_data_str = [](size_t n) {
+    DCHECK(n > 0);
+#if BUILDFLAG(IS_MAC)
+    return n == 1 ? "1 passkey" : base::StringPrintf("%zu passkeys", n);
+#else
+    return n == 1 ? "sign-in data for 1 account"
+                  : base::StringPrintf("sign-in data for %zu accounts", n);
+#endif
+  };
   const struct TestCase {
     TestInput input;
     std::string expected_output;
@@ -172,25 +238,24 @@ TEST_F(BrowsingDataCounterUtilsTest, DeletePasswordsAndSigninData) {
        "2 passwords (for a.com, b.com, synced)"},
       {{0, 2, 0, false, {}, {"x.com", "y.com"}},
        "2 passwords in your account (for x.com, y.com)"},
-      {{0, 0, 1, false, {}, {}}, "sign-in data for 1 account"},
-      {{0, 0, 1, true, {}, {}}, "sign-in data for 1 account"},
-      {{0, 0, 2, false, {}, {}}, "sign-in data for 2 accounts"},
-      {{0, 0, 2, true, {}, {}}, "sign-in data for 2 accounts"},
+      {{0, 0, 1, false, {}, {}}, signin_data_str(1)},
+      {{0, 0, 1, true, {}, {}}, signin_data_str(1)},
+      {{0, 0, 2, false, {}, {}}, signin_data_str(2)},
+      {{0, 0, 2, true, {}, {}}, signin_data_str(2)},
       {{1, 0, 2, false, {"a.de"}, {}},
-       "1 password (for a.de); sign-in data for 2 accounts"},
+       "1 password (for a.de); " + signin_data_str(2)},
       {{2, 0, 1, false, {"a.de", "b.de"}, {}},
-       "2 passwords (for a.de, b.de); sign-in data for 1 account"},
+       "2 passwords (for a.de, b.de); " + signin_data_str(1)},
       {{2, 0, 3, true, {"a.de", "b.de"}, {}},
-       "2 passwords (for a.de, b.de, synced); sign-in data for 3 "
-       "accounts"},
+       "2 passwords (for a.de, b.de, synced); " + signin_data_str(3)},
       {{4, 0, 2, false, {"a.de", "b.de"}, {}},
-       "4 passwords (for a.de, b.de, and 2 more); sign-in data for 2 "
-       "accounts"},
+       "4 passwords (for a.de, b.de, and 2 more); " + signin_data_str(2)},
       {{6, 0, 0, true, {"a.de", "b.de", "c.de", "d.de", "e.de", "f.de"}, {}},
        "6 passwords (for a.de, b.de, and 4 more, synced)"},
       {{2, 1, 1, false, {"a.de", "b.de"}, {"c.de"}},
-       "2 passwords (for a.de, b.de); 1 password in your account (for c.de); "
-       "sign-in data for 1 account"},
+       "2 passwords (for a.de, b.de); 1 password in your account (for "
+       "c.de); " +
+           signin_data_str(1)},
   };
   for (const auto& test_case : kTestCases) {
     auto& input = test_case.input;

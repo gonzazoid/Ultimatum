@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -32,9 +32,8 @@ class PrefRegistrySimple;
 class OAuth2AccessTokenConsumer;
 class ProfileOAuth2TokenServiceDelegate;
 
-// ProfileOAuth2TokenService is a KeyedService that retrieves
-// OAuth2 access tokens for a given set of scopes using the OAuth2 login
-// refresh tokens.
+// ProfileOAuth2TokenService retrieves OAuth2 access tokens for a given set of
+// scopes using the OAuth2 login refresh tokens.
 //
 // To use this service, call StartRequest() with a given set of scopes and a
 // consumer of the request results. The consumer is required to outlive the
@@ -85,7 +84,8 @@ class ProfileOAuth2TokenService : public OAuth2AccessTokenManager::Delegate,
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const CoreAccountId& account_id,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      OAuth2AccessTokenConsumer* consumer) override;
+      OAuth2AccessTokenConsumer* consumer,
+      const std::string& token_binding_challenge) override;
   bool HasRefreshToken(const CoreAccountId& account_id) const override;
   bool FixRequestErrorIfPossible() override;
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
@@ -200,7 +200,12 @@ class ProfileOAuth2TokenService : public OAuth2AccessTokenManager::Delegate,
       const CoreAccountId& account_id,
       const std::string& refresh_token,
       signin_metrics::SourceForRefreshTokenOperation source =
-          signin_metrics::SourceForRefreshTokenOperation::kUnknown);
+          signin_metrics::SourceForRefreshTokenOperation::kUnknown
+#if BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+      ,
+      const std::vector<uint8_t>& wrapped_binding_key = std::vector<uint8_t>()
+#endif  // BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+  );
 
   void RevokeCredentials(
       const CoreAccountId& account_id,

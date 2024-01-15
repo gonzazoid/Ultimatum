@@ -5,8 +5,10 @@
 #ifndef SERVICES_NETWORK_TRUST_TOKENS_TRUST_TOKEN_KEY_COMMITMENTS_H_
 #define SERVICES_NETWORK_TRUST_TOKENS_TRUST_TOKEN_KEY_COMMITMENTS_H_
 
-#include "base/callback.h"
+#include <string_view>
+
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/trust_tokens/suitable_trust_token_origin.h"
 #include "services/network/trust_tokens/trust_token_key_commitment_getter.h"
@@ -37,7 +39,7 @@ class TrustTokenKeyCommitments
   // of a collection of issuers' key commitments according to the format
   // specified, for now, in the Trust Tokens design doc:
   // https://docs.google.com/document/d/1TNnya6B8pyomDK2F1R9CL3dY10OAmqWlnCxsWyOBDVQ/edit#heading=h.z52drgpfgulz.
-  void ParseAndSet(base::StringPiece raw_commitments);
+  void ParseAndSet(std::string_view raw_commitments);
 
   // TrustTokenKeyCommitmentGetter implementation:
   //
@@ -51,8 +53,9 @@ class TrustTokenKeyCommitments
   // of keys allowed for the protocol version, none of which has yet expired.
   //
   // If commitments for |origin| were passed both through a prior call to |Set|
-  // and through the --additional-trust-token-key-commitments command-line
-  // switch, the commitments passed through the switch take precedence.
+  // and through the --additional-private-state-token-key-commitments
+  // command-line switch, the commitments passed through the switch take
+  // precedence.
   //
   // Implementation note: this is a thin wrapper around GetSync.
   void Get(const url::Origin& origin,

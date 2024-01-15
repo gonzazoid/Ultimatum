@@ -12,6 +12,7 @@
 #include "media/capture/mojom/video_capture_buffer.mojom.h"
 #include "media/capture/mojom/video_capture_types.mojom.h"
 #include "media/capture/video/video_capture_buffer_handle.h"
+#include "media/capture/video/video_capture_device.h"
 #include "media/capture/video_capture_types.h"
 #include "mojo/public/cpp/system/buffer.h"
 
@@ -57,8 +58,14 @@ class CAPTURE_EXPORT VideoCaptureBufferTracker {
   virtual std::unique_ptr<VideoCaptureBufferHandle> GetMemoryMappedAccess() = 0;
 
   virtual base::UnsafeSharedMemoryRegion DuplicateAsUnsafeRegion() = 0;
-  virtual mojo::ScopedSharedBufferHandle DuplicateAsMojoBuffer() = 0;
   virtual gfx::GpuMemoryBufferHandle GetGpuMemoryBufferHandle() = 0;
+
+  // Returns buffer type of the underlying resource. If the result of calling
+  // this method is `kGpuMemoryBuffer`, attempting to call
+  // `GetGpuMemoryBufferHandle()` on this tracker is allowed. If the result of
+  // calling this method is `kSharedMemory`, attempting to call
+  // `DuplicateAsUnsafeRegion()` is allowed.
+  virtual VideoCaptureBufferType GetBufferType() = 0;
 
   // This is called when the number of consumers goes from zero to non-zero (in
   // which case |is_held_by_consumers| is true) or from non-zero to zero (in
@@ -70,6 +77,9 @@ class CAPTURE_EXPORT VideoCaptureBufferTracker {
   uint64_t LastCustomerUseSequenceNumber() const {
     return last_customer_use_sequence_number_;
   }
+
+  // This is called when the a tracker is reused or created.
+  virtual void UpdateExternalData(CapturedExternalVideoBuffer buffer) {}
 
  private:
   // Indicates whether this VideoCaptureBufferTracker is currently referenced by

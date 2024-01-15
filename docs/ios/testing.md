@@ -87,11 +87,7 @@ tests that use the app interface.
 ```objc
 #import "ios_internal/chrome/test/earl_grey2/my_test_app_interface.h"
 
-#import <TestLib/EarlGreyImpl/EarlGrey.h>
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/testing/earl_grey/earl_grey_test.h"
 
 GREY_STUB_CLASS_IN_APP_MAIN_QUEUE(MyTestAppInterface)
 
@@ -110,7 +106,6 @@ correctly build the test module. The skeleton of the target:
 ```
 source_set("eg2_tests") {
   configs += [
-    "//build/config/compiler:enable_arc",
     "//build/config/ios:xctest_config",
   ]
   testonly = true
@@ -120,7 +115,6 @@ source_set("eg2_tests") {
   deps = [
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
   ]
   frameworks = [ "UIKit.framework" ]
 }
@@ -145,11 +139,14 @@ EarlGrey tests are based on Apple's [XCUITest].
 
 1. If you added a new test file / suite, run `gclient runhooks` to sync for the
 list of tests in Xcode.
-2. Change the scheme to "ios_chrome_eg2test". Create and select the simulator
-you wish to use.
-3. You may run a test suite(module), TestCase or testMethod in test navigator.
+2. Run a test suite(module), TestCase or testMethod in test navigator.
 Xcode will build the targets and run the test(s) you choose. Alternatively, 
 use ⌘+U to run all the tests. See Apple's [Running Tests and Viewing Results].
+3. You can pass extra arguments to the app process with `--extra-app-args`, e.g.
+`--extra-app-args='--enable-features=Foo'`.
+    * This might not work consistently as tests can re-launch the app with
+    arbitrary command-line arguments.
+
 
 #### Running from the command-line
 
@@ -208,7 +205,7 @@ beginning of stdout from an infra test shard if the above doesn't work.
 [EarlGrey]: https://github.com/google/EarlGrey/tree/earlgrey2
 [EarlGrey APIs]: https://github.com/google/EarlGrey/blob/master/docs/api.md
 [eDO]: https://github.com/google/eDistantObject
-[Example of App Interface]: https://cs.chromium.org/chromium/src/ios/chrome/browser/metrics/metrics_app_interface.h
+[Example of App Interface]: https://cs.chromium.org/chromium/src/ios/chrome/browser/metrics/model/metrics_app_interface.h
 [Example CL adding App Interface]: https://chromium-review.googlesource.com/c/chromium/src/+/1919147
 [instructions]: ./build_instructions.md
 [Running Tests and Viewing Results]: https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/testing_with_xcode/chapters/05-running_tests.html

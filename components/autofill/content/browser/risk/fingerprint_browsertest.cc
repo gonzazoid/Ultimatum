@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "components/autofill/content/browser/risk/proto/fingerprint.pb.h"
@@ -84,7 +84,7 @@ class AutofillRiskFingerprintTest : public content::ContentBrowserTest {
 
     geolocation_overrider_ =
         std::make_unique<device::ScopedGeolocationOverrider>(
-            std::move(position));
+            device::mojom::GeopositionResult::NewPosition(std::move(position)));
   }
 
   void GetFingerprintTestCallback(base::OnceClosure continuation_callback,

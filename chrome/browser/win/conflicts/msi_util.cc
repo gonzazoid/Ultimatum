@@ -6,6 +6,8 @@
 
 #include <windows.h>
 
+#include <string_view>
+
 // By default msi.h includes wincrypt.h which clashes with OpenSSL
 // (both define X509_NAME) so to be able to include
 // third_party/openssl (indirectly) in the same translation unit we
@@ -16,10 +18,10 @@
 
 #include <utility>
 
-#include "base/guid.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/threading/scoped_blocking_call.h"
+#include "base/uuid.h"
 #include "base/win/registry.h"
 #include "chrome/installer/util/install_util.h"
 
@@ -112,24 +114,24 @@ bool GetMsiComponentGuids(const std::wstring& msi_database_path,
 // but without directly calling it. This is because that function can trigger
 // the configuration of a product in some rare cases.
 // See https://crbug.com/860537.
-bool GetMsiComponentPath(base::WStringPiece product_guid,
-                         base::WStringPiece component_guid,
+bool GetMsiComponentPath(std::wstring_view product_guid,
+                         std::wstring_view component_guid,
                          const std::wstring& user_sid,
                          std::wstring* path) {
-  constexpr wchar_t kRegistryKeyPathFormat[] =
-      L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\"
-      L"%ls\\Components\\%ls";
-
   // Internally, the Microsoft Installer uses a special formatting of the guids
   // to store the information in the registry.
   product_guid = product_guid.substr(1, 36);
-  if (!base::IsValidGUID(base::AsStringPiece16(product_guid)))
+  if (!base::Uuid::ParseCaseInsensitive(base::AsStringPiece16(product_guid))
+           .is_valid()) {
     return false;
+  }
   std::wstring product_squid = InstallUtil::GuidToSquid(product_guid);
 
   component_guid = component_guid.substr(1, 36);
-  if (!base::IsValidGUID(base::AsStringPiece16(component_guid)))
+  if (!base::Uuid::ParseCaseInsensitive(base::AsStringPiece16(component_guid))
+           .is_valid()) {
     return false;
+  }
   std::wstring component_squid = InstallUtil::GuidToSquid(component_guid);
 
   std::vector<std::wstring> sids = {
@@ -142,8 +144,9 @@ bool GetMsiComponentPath(base::WStringPiece product_guid,
     std::wstring value;
     base::win::RegKey registry_key(
         HKEY_LOCAL_MACHINE,
-        base::StringPrintf(kRegistryKeyPathFormat, sid.c_str(),
-                           component_squid.c_str())
+        base::StrCat({L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer"
+                      L"\\UserData\\",
+                      sid, L"\\Components\\", component_squid})
             .c_str(),
         KEY_QUERY_VALUE | KEY_WOW64_64KEY);
     if (registry_key.Valid() &&

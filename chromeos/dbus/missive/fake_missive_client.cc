@@ -4,11 +4,10 @@
 
 #include "chromeos/dbus/missive/fake_missive_client.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/util/status.h"
@@ -20,8 +19,10 @@ FakeMissiveClient::FakeMissiveClient() = default;
 FakeMissiveClient::~FakeMissiveClient() = default;
 
 void FakeMissiveClient::Init() {
-  DCHECK(base::SequencedTaskRunnerHandle::IsSet());
-  origin_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
+  origin_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
+  is_initialized_ = true;
 }
 
 void FakeMissiveClient::EnqueueRecord(
@@ -44,6 +45,11 @@ void FakeMissiveClient::Flush(
 void FakeMissiveClient::ReportSuccess(
     const reporting::SequenceInformation& sequence_information,
     bool force_confirm) {
+  return;
+}
+
+void FakeMissiveClient::UpdateConfigInMissive(
+    const reporting::ListOfBlockedDestinations& destinations) {
   return;
 }
 

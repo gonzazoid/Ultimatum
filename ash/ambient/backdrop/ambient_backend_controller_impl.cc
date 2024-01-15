@@ -5,16 +5,18 @@
 #include "ash/ambient/backdrop/ambient_backend_controller_impl.h"
 
 #include <array>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "ash/ambient/ambient_controller.h"
+#include "ash/ambient/ambient_photo_cache.h"
+#include "ash/ambient/metrics/ambient_metrics.h"
 #include "ash/ambient/util/ambient_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/ambient/ambient_backend_controller.h"
 #include "ash/public/cpp/ambient/ambient_client.h"
-#include "ash/public/cpp/ambient/ambient_metrics.h"
 #include "ash/public/cpp/ambient/ambient_prefs.h"
 #include "ash/public/cpp/ambient/common/ambient_settings.h"
 #include "ash/public/cpp/ambient/proto/photo_cache_entry.pb.h"
@@ -23,13 +25,14 @@
 #include "ash/wallpaper/wallpaper_utils/wallpaper_language.h"
 #include "base/barrier_closure.h"
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/logging.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "chromeos/assistant/internal/ambient/backdrop_client_config.h"
+#include "chromeos/assistant/internal/ambient/utils.h"
 #include "chromeos/assistant/internal/proto/backdrop/backdrop.pb.h"
-#include "chromeos/assistant/internal/proto/backdrop/imax_service.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
 #include "net/base/load_flags.h"
@@ -41,7 +44,7 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 
 namespace ash {
@@ -52,8 +55,40 @@ using BackdropClientConfig = chromeos::ambient::BackdropClientConfig;
 
 constexpr char kProtoMimeType[] = "application/protobuf";
 
+constexpr int kMaxPreviewImages = 4;
+
 // Max body size in bytes to download.
 constexpr int kMaxBodySizeBytes = 1 * 1024 * 1024;  // 1 MiB
+
+constexpr net::NetworkTrafficAnnotationTag kAmbientBackendControllerNetworkTag =
+    net::DefineNetworkTrafficAnnotation("ambient_backend_controller", R"(
+        semantics {
+          sender: "Ambient photo"
+          description:
+            "Download ambient image weather icon from Google."
+          trigger:
+            "Triggered periodically when the battery is charged and the user "
+            "is idle."
+          data: "None."
+          destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts {
+              email: "assistive-eng@google.com"
+            }
+          }
+          user_data {
+            type: NONE
+          }
+          last_reviewed: "2023-01-13"
+        }
+        policy {
+         cookies_allowed: NO
+         setting:
+           "This feature is off by default and can be overridden by user."
+         policy_exception_justification:
+           "This feature is set by user settings.ambient_mode.enabled pref. "
+           "The user setting is per device and cannot be overriden by admin."
+        })");
 
 std::string GetClientId() {
   PrefService* prefs =
@@ -63,7 +98,7 @@ std::string GetClientId() {
   std::string client_id =
       prefs->GetString(ambient::prefs::kAmbientBackdropClientId);
   if (client_id.empty()) {
-    client_id = base::GenerateGUID();
+    client_id = base::Uuid::GenerateRandomV4().AsLowercaseString();
     prefs->SetString(ambient::prefs::kAmbientBackdropClientId, client_id);
   }
 
@@ -83,7 +118,7 @@ std::unique_ptr<network::ResourceRequest> CreateResourceRequest(
   for (const auto& header : request.headers) {
     std::string encoded_value;
     if (header.needs_base_64_encoded)
-      base::Base64Encode(header.value, &encoded_value);
+      encoded_value = base::Base64Encode(header.value);
     else
       encoded_value = header.value;
 
@@ -138,34 +173,34 @@ std::string BuildBackdropTopicDetails(
   }
 }
 
-absl::optional<std::string> GetStringValue(const base::Value::List& values,
-                                           size_t field_number) {
+std::optional<std::string> GetStringValue(const base::Value::List& values,
+                                          size_t field_number) {
   if (values.empty() || values.size() < field_number)
-    return absl::nullopt;
+    return std::nullopt;
 
   const base::Value& v = values[field_number - 1];
   if (!v.is_string())
-    return absl::nullopt;
+    return std::nullopt;
 
   return v.GetString();
 }
 
-absl::optional<double> GetDoubleValue(const base::Value::List& values,
-                                      size_t field_number) {
+std::optional<double> GetDoubleValue(const base::Value::List& values,
+                                     size_t field_number) {
   if (values.empty() || values.size() < field_number)
-    return absl::nullopt;
+    return std::nullopt;
 
   const base::Value& v = values[field_number - 1];
   if (!v.is_double() && !v.is_int())
-    return absl::nullopt;
+    return std::nullopt;
 
   return v.GetDouble();
 }
 
-absl::optional<bool> GetBoolValue(const base::Value::List& values,
-                                  size_t field_number) {
+std::optional<bool> GetBoolValue(const base::Value::List& values,
+                                 size_t field_number) {
   if (values.empty() || values.size() < field_number)
-    return absl::nullopt;
+    return std::nullopt;
 
   const base::Value& v = values[field_number - 1];
   if (v.is_bool())
@@ -174,13 +209,13 @@ absl::optional<bool> GetBoolValue(const base::Value::List& values,
   if (v.is_int())
     return v.GetInt() > 0;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<WeatherInfo> ToWeatherInfo(const base::Value& result) {
+std::optional<WeatherInfo> ToWeatherInfo(const base::Value& result) {
   DCHECK(result.is_list());
   if (!result.is_list())
-    return absl::nullopt;
+    return std::nullopt;
 
   WeatherInfo weather_info;
   const auto& list_result = result.GetList();
@@ -202,44 +237,40 @@ ScreenUpdate ToScreenUpdate(
     const backdrop::ScreenUpdate& backdrop_screen_update) {
   ScreenUpdate screen_update;
   // Parse |AmbientModeTopic|.
-  int topics_size = backdrop_screen_update.next_topics_size();
-  if (topics_size > 0) {
-    for (auto& backdrop_topic : backdrop_screen_update.next_topics()) {
-      DCHECK(backdrop_topic.has_url());
+  for (const auto& backdrop_topic : backdrop_screen_update.next_topics()) {
+    DCHECK(backdrop_topic.has_url());
 
-      auto topic_type = ToAmbientModeTopicType(backdrop_topic);
-      if (!ambient::util::IsAmbientModeTopicTypeAllowed(topic_type)) {
-        DVLOG(3) << "Filtering topic_type: "
-                 << backdrop::TopicSource_Name(backdrop_topic.topic_type());
-        continue;
-      }
-
-      AmbientModeTopic ambient_topic;
-      ambient_topic.topic_type = topic_type;
-
-      // If the |portrait_image_url| field is not empty, we assume the image is
-      // portrait.
-      if (backdrop_topic.has_portrait_image_url()) {
-        ambient_topic.url = backdrop_topic.portrait_image_url();
-        ambient_topic.is_portrait = true;
-      } else {
-        ambient_topic.url = backdrop_topic.url();
-      }
-
-      if (backdrop_topic.has_related_topic()) {
-        if (backdrop_topic.related_topic().has_portrait_image_url()) {
-          ambient_topic.related_image_url =
-              backdrop_topic.related_topic().portrait_image_url();
-        } else {
-          ambient_topic.related_image_url =
-              backdrop_topic.related_topic().url();
-        }
-      }
-      ambient_topic.details = BuildBackdropTopicDetails(backdrop_topic);
-      ambient_topic.related_details =
-          BuildBackdropTopicDetails(backdrop_topic.related_topic());
-      screen_update.next_topics.emplace_back(ambient_topic);
+    auto topic_type = ToAmbientModeTopicType(backdrop_topic);
+    if (!ambient::util::IsAmbientModeTopicTypeAllowed(topic_type)) {
+      DVLOG(3) << "Filtering topic_type: "
+               << backdrop::TopicSource_Name(backdrop_topic.topic_type());
+      continue;
     }
+
+    AmbientModeTopic ambient_topic;
+    ambient_topic.topic_type = topic_type;
+
+    // If the |portrait_image_url| field is not empty, we assume the image is
+    // portrait.
+    if (backdrop_topic.has_portrait_image_url()) {
+      ambient_topic.url = backdrop_topic.portrait_image_url();
+      ambient_topic.is_portrait = true;
+    } else {
+      ambient_topic.url = backdrop_topic.url();
+    }
+
+    if (backdrop_topic.has_related_topic()) {
+      if (backdrop_topic.related_topic().has_portrait_image_url()) {
+        ambient_topic.related_image_url =
+            backdrop_topic.related_topic().portrait_image_url();
+      } else {
+        ambient_topic.related_image_url = backdrop_topic.related_topic().url();
+      }
+    }
+    ambient_topic.details = BuildBackdropTopicDetails(backdrop_topic);
+    ambient_topic.related_details =
+        BuildBackdropTopicDetails(backdrop_topic.related_topic());
+    screen_update.next_topics.emplace_back(ambient_topic);
   }
 
   // Parse |WeatherInfo|.
@@ -263,25 +294,24 @@ ScreenUpdate ToScreenUpdate(
   return screen_update;
 }
 
+// Helper function to extract image URLs from screen update response for
+// screen saver preview.
+std::vector<GURL> ToPreviewUrls(const ScreenUpdate& screen_update) {
+  std::vector<GURL> preview_urls;
+  for (const auto& topic : screen_update.next_topics) {
+    preview_urls.emplace_back(topic.url);
+    if (preview_urls.size() == kMaxPreviewImages) {
+      break;
+    }
+  }
+  return preview_urls;
+}
+
 bool IsArtSettingVisible(const ArtSetting& art_setting) {
   const auto& album_id = art_setting.album_id;
 
-  if (album_id == kAmbientModeStreetArtAlbumId)
-    return chromeos::features::kAmbientModeStreetArtAlbumEnabled.Get();
-
-  if (album_id == kAmbientModeCapturedOnPixelAlbumId)
-    return chromeos::features::kAmbientModeCapturedOnPixelAlbumEnabled.Get();
-
-  if (album_id == kAmbientModeEarthAndSpaceAlbumId)
-    return chromeos::features::kAmbientModeEarthAndSpaceAlbumEnabled.Get();
-
-  if (album_id == kAmbientModeFeaturedPhotoAlbumId)
-    return chromeos::features::kAmbientModeFeaturedPhotoAlbumEnabled.Get();
-
-  if (album_id == kAmbientModeFineArtAlbumId)
-    return chromeos::features::kAmbientModeFineArtAlbumEnabled.Get();
-
-  return false;
+  return album_id == kAmbientModeEarthAndSpaceAlbumId ||
+         album_id == kAmbientModeFeaturedPhotoAlbumId;
 }
 
 }  // namespace
@@ -296,10 +326,11 @@ class BackdropURLLoader {
 
   // Starts downloading the proto. |request_body| is a serialized proto and
   // will be used as the upload body if it is a POST request.
-  void Start(std::unique_ptr<network::ResourceRequest> resource_request,
-             const absl::optional<std::string>& request_body,
-             const net::NetworkTrafficAnnotationTag& traffic_annotation,
-             network::SimpleURLLoader::BodyAsStringCallback callback) {
+  void Start(
+      std::unique_ptr<network::ResourceRequest> resource_request,
+      const std::optional<std::string>& request_body,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
+      network::SimpleURLLoader::BodyAsStringCallbackDeprecated callback) {
     // No ongoing downloading task.
     DCHECK(!simple_loader_);
 
@@ -320,8 +351,9 @@ class BackdropURLLoader {
 
  private:
   // Called when the download completes.
-  void OnUrlDownloaded(network::SimpleURLLoader::BodyAsStringCallback callback,
-                       std::unique_ptr<std::string> response_body) {
+  void OnUrlDownloaded(
+      network::SimpleURLLoader::BodyAsStringCallbackDeprecated callback,
+      std::unique_ptr<std::string> response_body) {
     loader_factory_.reset();
 
     if (simple_loader_->NetError() == net::OK && response_body) {
@@ -365,6 +397,18 @@ void AmbientBackendControllerImpl::FetchScreenUpdateInfo(
       screen_size, std::move(callback)));
 }
 
+void AmbientBackendControllerImpl::FetchPreviewImages(
+    const gfx::Size& preview_size,
+    OnPreviewImagesFetchedCallback callback) {
+  constexpr int num_topics = kMaxPreviewImages;
+  OnScreenUpdateInfoFetchedCallback combined_callback =
+      base::BindOnce(&ToPreviewUrls).Then(std::move(callback));
+  Shell::Get()->ambient_controller()->RequestAccessToken(base::BindOnce(
+      &AmbientBackendControllerImpl::FetchScreenUpdateInfoInternal,
+      weak_factory_.GetWeakPtr(), num_topics, false, preview_size,
+      std::move(combined_callback)));
+}
+
 void AmbientBackendControllerImpl::GetSettings(GetSettingsCallback callback) {
   Shell::Get()->ambient_controller()->RequestAccessToken(
       base::BindOnce(&AmbientBackendControllerImpl::StartToGetSettings,
@@ -372,19 +416,15 @@ void AmbientBackendControllerImpl::GetSettings(GetSettingsCallback callback) {
 }
 
 void AmbientBackendControllerImpl::UpdateSettings(
-    const AmbientSettings& settings,
+    const AmbientSettings settings,
     UpdateSettingsCallback callback) {
   auto* ambient_controller = Shell::Get()->ambient_controller();
 
   // Clear disk cache when Settings changes.
   // TODO(wutao): Use observer pattern. Need to future narrow down
   // the clear up only on albums changes, not on temperature unit
-  // changes. Do this synchronously and not in |OnUpdateSettings| to avoid
-  // race condition with |AmbientPhotoController| possibly being destructed if
-  // |kAmbientModeEnabled| pref is toggled off.
-  auto* photo_controller = ambient_controller->ambient_photo_controller();
-  CHECK(photo_controller) << "Photo controller is required to update settings";
-  photo_controller->ClearCache();
+  // changes.
+  ambient_photo_cache::Clear(ambient_photo_cache::Store::kPrimary);
 
   ambient_controller->RequestAccessToken(base::BindOnce(
       &AmbientBackendControllerImpl::StartToUpdateSettings,
@@ -418,7 +458,7 @@ void AmbientBackendControllerImpl::FetchWeather(FetchWeatherCallback callback) {
                   std::move(callback).Run(ToWeatherInfo(*result));
                 } else {
                   DVLOG(1) << "Failed to parse weather json.";
-                  std::move(callback).Run(absl::nullopt);
+                  std::move(callback).Run(std::nullopt);
                 }
               };
 
@@ -426,7 +466,7 @@ void AmbientBackendControllerImpl::FetchWeather(FetchWeatherCallback callback) {
               response->substr(strlen(kJsonPrefix)),
               base::BindOnce(json_handler, std::move(callback)));
         } else {
-          std::move(callback).Run(absl::nullopt);
+          std::move(callback).Run(std::nullopt);
         }
       };
 
@@ -439,8 +479,8 @@ void AmbientBackendControllerImpl::FetchWeather(FetchWeatherCallback callback) {
       CreateResourceRequest(request);
   auto backdrop_url_loader = std::make_unique<BackdropURLLoader>();
   auto* loader_ptr = backdrop_url_loader.get();
-  loader_ptr->Start(std::move(resource_request), /*request_body=*/absl::nullopt,
-                    NO_TRAFFIC_ANNOTATION_YET,
+  loader_ptr->Start(std::move(resource_request), /*request_body=*/std::nullopt,
+                    kAmbientBackendControllerNetworkTag,
                     base::BindOnce(response_handler, std::move(callback),
                                    std::move(backdrop_url_loader)));
 }
@@ -448,6 +488,20 @@ void AmbientBackendControllerImpl::FetchWeather(FetchWeatherCallback callback) {
 const std::array<const char*, 2>&
 AmbientBackendControllerImpl::GetBackupPhotoUrls() const {
   return chromeos::ambient::kBackupPhotoUrls;
+}
+
+std::array<const char*, 2>
+AmbientBackendControllerImpl::GetTimeOfDayVideoPreviewImageUrls(
+    AmbientVideo video) const {
+  return chromeos::ambient::GetTimeOfDayVideoPreviewImageUrls(video);
+}
+
+const char* AmbientBackendControllerImpl::GetPromoBannerUrl() const {
+  return chromeos::ambient::kTimeOfDayBannerImageUrl;
+}
+
+const char* AmbientBackendControllerImpl::GetTimeOfDayProductName() const {
+  return chromeos::ambient::kTimeOfDayProductName;
 }
 
 void AmbientBackendControllerImpl::FetchScreenUpdateInfoInternal(
@@ -459,7 +513,6 @@ void AmbientBackendControllerImpl::FetchScreenUpdateInfoInternal(
     const std::string& access_token) {
   if (gaia_id.empty() || access_token.empty()) {
     LOG(ERROR) << "Failed to fetch access token for ScreenUpdate";
-    // Returns an empty instance to indicate the failure.
     std::move(callback).Run(ash::ScreenUpdate());
     return;
   }
@@ -485,7 +538,8 @@ void AmbientBackendControllerImpl::FetchScreenUpdateInfoInternal(
   auto backdrop_url_loader = std::make_unique<BackdropURLLoader>();
   auto* loader_ptr = backdrop_url_loader.get();
   loader_ptr->Start(
-      std::move(resource_request), request.body, NO_TRAFFIC_ANNOTATION_YET,
+      std::move(resource_request), request.body,
+      kAmbientBackendControllerNetworkTag,
       base::BindOnce(&AmbientBackendControllerImpl::OnScreenUpdateInfoFetched,
                      weak_factory_.GetWeakPtr(), std::move(callback),
                      std::move(backdrop_url_loader)));
@@ -513,7 +567,7 @@ void AmbientBackendControllerImpl::StartToGetSettings(
     const std::string& gaia_id,
     const std::string& access_token) {
   if (gaia_id.empty() || access_token.empty()) {
-    std::move(callback).Run(/*topic_source=*/absl::nullopt);
+    std::move(callback).Run(/*topic_source=*/std::nullopt);
     return;
   }
 
@@ -526,7 +580,8 @@ void AmbientBackendControllerImpl::StartToGetSettings(
   auto backdrop_url_loader = std::make_unique<BackdropURLLoader>();
   auto* loader_ptr = backdrop_url_loader.get();
   loader_ptr->Start(
-      std::move(resource_request), request.body, NO_TRAFFIC_ANNOTATION_YET,
+      std::move(resource_request), request.body,
+      kAmbientBackendControllerNetworkTag,
       base::BindOnce(&AmbientBackendControllerImpl::OnGetSettings,
                      weak_factory_.GetWeakPtr(), std::move(callback),
                      std::move(backdrop_url_loader)));
@@ -541,7 +596,7 @@ void AmbientBackendControllerImpl::OnGetSettings(
   auto settings = BackdropClientConfig::ParseGetSettingsResponse(*response);
   // |art_settings| should not be empty if parsed successfully.
   if (settings.art_settings.empty()) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
   } else {
     for (auto& art_setting : settings.art_settings) {
       art_setting.visible = IsArtSettingVisible(art_setting);
@@ -557,7 +612,7 @@ void AmbientBackendControllerImpl::StartToUpdateSettings(
     const std::string& gaia_id,
     const std::string& access_token) {
   if (gaia_id.empty() || access_token.empty()) {
-    std::move(callback).Run(/*success=*/false);
+    std::move(callback).Run(/*success=*/false, settings);
     return;
   }
 
@@ -570,7 +625,8 @@ void AmbientBackendControllerImpl::StartToUpdateSettings(
   auto backdrop_url_loader = std::make_unique<BackdropURLLoader>();
   auto* loader_ptr = backdrop_url_loader.get();
   loader_ptr->Start(
-      std::move(resource_request), request.body, NO_TRAFFIC_ANNOTATION_YET,
+      std::move(resource_request), request.body,
+      kAmbientBackendControllerNetworkTag,
       base::BindOnce(&AmbientBackendControllerImpl::OnUpdateSettings,
                      weak_factory_.GetWeakPtr(), std::move(callback), settings,
                      std::move(backdrop_url_loader)));
@@ -594,7 +650,7 @@ void AmbientBackendControllerImpl::OnUpdateSettings(
         static_cast<int>(ambient::AmbientSettingsToPhotoSource(settings)));
   }
 
-  std::move(callback).Run(success);
+  std::move(callback).Run(success, settings);
 }
 
 void AmbientBackendControllerImpl::FetchPersonalAlbumsInternal(
@@ -621,8 +677,8 @@ void AmbientBackendControllerImpl::FetchPersonalAlbumsInternal(
   auto backdrop_url_loader = std::make_unique<BackdropURLLoader>();
   auto* loader_ptr = backdrop_url_loader.get();
   loader_ptr->Start(
-      std::move(resource_request), /*request_body=*/absl::nullopt,
-      NO_TRAFFIC_ANNOTATION_YET,
+      std::move(resource_request), /*request_body=*/std::nullopt,
+      kAmbientBackendControllerNetworkTag,
       base::BindOnce(&AmbientBackendControllerImpl::OnPersonalAlbumsFetched,
                      weak_factory_.GetWeakPtr(), std::move(callback),
                      std::move(backdrop_url_loader)));
@@ -661,45 +717,9 @@ void AmbientBackendControllerImpl::FetchSettingsAndAlbums(
                      weak_factory_.GetWeakPtr(), on_done));
 }
 
-void AmbientBackendControllerImpl::StartToGetGooglePhotosAlbumsPreview(
-    const std::vector<std::string>& album_ids,
-    int preview_width,
-    int preview_height,
-    int num_previews,
-    GetGooglePhotosAlbumsPreviewCallback callback,
-    const std::string& gaia_id,
-    const std::string& access_token) {
-  BackdropClientConfig::Request request =
-      backdrop_client_config_.CreateGetGooglePhotosAlbumsPreviewRequest(
-          gaia_id, access_token, album_ids, preview_width, preview_height,
-          num_previews);
-  std::unique_ptr<network::ResourceRequest> resource_request =
-      CreateResourceRequest(request);
-  auto backdrop_url_loader = std::make_unique<BackdropURLLoader>();
-  auto* loader_ptr = backdrop_url_loader.get();
-  loader_ptr->Start(
-      std::move(resource_request), request.body, NO_TRAFFIC_ANNOTATION_YET,
-      base::BindOnce(
-          &AmbientBackendControllerImpl::OnGetGooglePhotosAlbumsPreview,
-          weak_factory_.GetWeakPtr(), std::move(callback),
-          std::move(backdrop_url_loader)));
-}
-
-void AmbientBackendControllerImpl::GetGooglePhotosAlbumsPreview(
-    const std::vector<std::string>& album_ids,
-    int preview_width,
-    int preview_height,
-    int num_previews,
-    GetGooglePhotosAlbumsPreviewCallback callback) {
-  Shell::Get()->ambient_controller()->RequestAccessToken(base::BindOnce(
-      &AmbientBackendControllerImpl::StartToGetGooglePhotosAlbumsPreview,
-      weak_factory_.GetWeakPtr(), album_ids, preview_width, preview_height,
-      num_previews, std::move(callback)));
-}
-
 void AmbientBackendControllerImpl::OnSettingsFetched(
     base::RepeatingClosure on_done,
-    const absl::optional<ash::AmbientSettings>& settings) {
+    const std::optional<ash::AmbientSettings>& settings) {
   settings_ = settings;
   std::move(on_done).Run();
 }
@@ -714,25 +734,6 @@ void AmbientBackendControllerImpl::OnAlbumsFetched(
 void AmbientBackendControllerImpl::OnSettingsAndAlbumsFetched(
     OnSettingsAndAlbumsFetchedCallback callback) {
   std::move(callback).Run(settings_, std::move(personal_albums_));
-}
-
-void AmbientBackendControllerImpl::OnGetGooglePhotosAlbumsPreview(
-    GetGooglePhotosAlbumsPreviewCallback callback,
-    std::unique_ptr<BackdropURLLoader> backdrop_url_loader,
-    std::unique_ptr<std::string> response) {
-  DCHECK(backdrop_url_loader);
-
-  backdrop::GetGooglePhotosAlbumsPreviewResponse
-      get_google_photos_albums_preview_response;
-  if (!get_google_photos_albums_preview_response.ParseFromString(*response))
-    std::move(callback).Run(std::vector<GURL>());
-
-  std::vector<GURL> preview_urls;
-  for (const std::string& preview_url :
-       get_google_photos_albums_preview_response.preview_url()) {
-    preview_urls.emplace_back(preview_url);
-  }
-  std::move(callback).Run(preview_urls);
 }
 
 }  // namespace ash

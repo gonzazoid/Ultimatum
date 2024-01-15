@@ -4,8 +4,9 @@
 
 #include "mojo/public/cpp/bindings/service_factory.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include <optional>
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -15,7 +16,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/tests/service_factory_unittest.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 namespace test {
@@ -170,7 +170,7 @@ TEST_F(ServiceFactoryTest, DestroyInstanceOnServiceDisconnect) {
 }
 
 TEST_F(ServiceFactoryTest, DestroyInstancesOnFactoryDestruction) {
-  absl::optional<ServiceFactory> factory{absl::in_place};
+  std::optional<ServiceFactory> factory{std::in_place};
   factory->Add(RunTestService1);
 
   Remote<mojom::TestService1> remote1;

@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
@@ -18,10 +18,11 @@
 #include "media/base/audio_processing.h"
 #include "media/base/audio_push_fifo.h"
 #include "media/webrtc/audio_delay_stats_reporter.h"
+#include "media/webrtc/webrtc_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/webrtc/api/task_queue/task_queue_base.h"
 #include "third_party/webrtc/modules/audio_processing/include/audio_processing.h"
 #include "third_party/webrtc/modules/audio_processing/include/audio_processing_statistics.h"
-#include "third_party/webrtc/rtc_base/task_queue.h"
 
 namespace media {
 class AudioBus;
@@ -83,7 +84,8 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
       const media::AudioParameters& input_format,
       const media::AudioParameters& output_format,
       rtc::scoped_refptr<webrtc::AudioProcessing> webrtc_audio_processing,
-      bool stereo_mirroring);
+      bool stereo_mirroring,
+      bool needs_playout_reference);
 
   ~AudioProcessor();
 
@@ -162,6 +164,9 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
       const AudioParameters& input_format,
       const AudioProcessingSettings& settings);
 
+  // Returns true if `OnPlayoutData()` should be called.
+  bool needs_playout_reference() const { return needs_playout_reference_; }
+
  private:
   friend class AudioProcessorTest;
 
@@ -201,6 +206,9 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
   // captured stereo audio.
   const bool stereo_mirroring_;
 
+  // If true, `OnPlayoutData()` should be called.
+  const bool needs_playout_reference_;
+
   // Members accessed only by the owning sequence:
 
   // Used by SendLogMessage.
@@ -209,7 +217,7 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
   // Low-priority task queue for doing AEC dump recordings. It has to
   // created/destroyed on the same sequence and it must outlive
   // any aecdump recording in |webrtc_audio_processing_|.
-  std::unique_ptr<rtc::TaskQueue> worker_queue_
+  std::unique_ptr<webrtc::TaskQueueBase, webrtc::TaskQueueDeleter> worker_queue_
       GUARDED_BY_CONTEXT(owning_sequence_);
 
   // Cached value for the playout delay latency. Updated on the playout thread

@@ -25,7 +25,8 @@ class NavigationControllerImpl final
       public content::WebContentsObserver,
       public favicon::FaviconDriverObserver {
  public:
-  explicit NavigationControllerImpl(content::WebContents* web_contents);
+  NavigationControllerImpl(content::WebContents* web_contents,
+                           void* parent_for_trace_flow);
 
   NavigationControllerImpl(const NavigationControllerImpl&) = delete;
   NavigationControllerImpl& operator=(const NavigationControllerImpl&) = delete;
@@ -61,7 +62,6 @@ class NavigationControllerImpl final
   void GoForward() override;
   void Stop() override;
   void Reload(fuchsia::web::ReloadType type) override;
-  void GetVisibleEntry(GetVisibleEntryCallback callback) override;
 
   // content::WebContentsObserver implementation.
   void TitleWasSet(content::NavigationEntry*) override;
@@ -82,6 +82,7 @@ class NavigationControllerImpl final
                         bool icon_url_changed,
                         const gfx::Image& image) override;
 
+  const raw_ptr<void> parent_for_trace_flow_;
   content::WebContents* const web_contents_;
 
   // NavigationController client bindings.

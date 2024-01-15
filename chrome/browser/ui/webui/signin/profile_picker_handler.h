@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_SIGNIN_PROFILE_PICKER_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_PROFILE_PICKER_HANDLER_H_
 
+#include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "base/files/file_path.h"
@@ -15,23 +17,29 @@
 #include "base/values.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_statistics_common.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_ui_message_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/browser/lacros/account_manager/account_profile_mapper.h"
 #include "chrome/browser/lacros/account_manager/get_account_information_helper.h"
+#include "chrome/browser/lacros/identity_manager_lacros.h"
+#include "chrome/browser/ui/webui/signin/profile_picker_lacros_sign_in_provider.h"
 
 class ProfilePickerLacrosSignInProvider;
 
 namespace account_manager {
 struct Account;
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
+class Browser;
+
+enum class ReauthUIError;
 
 // The handler for Javascript messages related to the profile picker main view.
 class ProfilePickerHandler : public content::WebUIMessageHandler,
@@ -62,12 +70,14 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
   friend class ProfilePickerHandlerInUserProfileTest;
   friend class ProfilePickerCreationFlowBrowserTest;
   friend class ProfilePickerEnterpriseCreationFlowBrowserTest;
-  friend class ProfilePickerLocalProfileCreationDialogBrowserTest;
   friend class StartupBrowserCreatorPickerInfobarTest;
   FRIEND_TEST_ALL_PREFIXES(ProfilePickerHandlerInUserProfileTest,
                            HandleExtendedAccountInformation);
   FRIEND_TEST_ALL_PREFIXES(ProfilePickerCreationFlowBrowserTest,
                            CloseBrowserBeforeCreatingNewProfile);
+  FRIEND_TEST_ALL_PREFIXES(ProfilePickerCreationFlowBrowserTest, DeleteProfile);
+  FRIEND_TEST_ALL_PREFIXES(ProfilePickerCreationFlowBrowserTest,
+                           DeleteProfileFromOwnTab);
   FRIEND_TEST_ALL_PREFIXES(
       ProfilePickerEnterpriseCreationFlowBrowserTest,
       CreateSignedInProfileSigninAlreadyExists_ConfirmSwitch);
@@ -82,7 +92,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
   void HandleAskOnStartupChanged(const base::Value::List& args);
   void HandleRemoveProfile(const base::Value::List& args);
   void HandleGetProfileStatistics(const base::Value::List& args);
+  void HandleCloseProfileStatistics(const base::Value::List& args);
   void HandleSetProfileName(const base::Value::List& args);
+  void HandleUpdateProfileOrder(const base::Value::List& args);
 
   void HandleSelectNewAccount(const base::Value::List& args);
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -92,7 +104,6 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
   void HandleGetNewProfileSuggestedThemeInfo(const base::Value::List& args);
   void HandleGetProfileThemeInfo(const base::Value::List& args);
   void HandleGetAvailableIcons(const base::Value::List& args);
-  void HandleCreateProfile(const base::Value::List& args);
   // This function creates a new local profile and opens the profile
   // customization in a modal dialog.
   void HandleCreateProfileAndOpenCustomizationDialog(
@@ -112,12 +123,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
                                    profiles::ProfileCategoryStats result);
   void OnSwitchToProfileComplete(bool new_profile,
                                  bool open_settings,
-                                 Profile* profile);
-  void OnSwitchToProfileCompleteOpenCustomization(Profile* profile);
-  void OnProfileInitialized(absl::optional<SkColor> profile_color,
-                            bool create_shortcut,
-                            Profile* profile);
-  void OnLocalProfileInitialized(absl::optional<SkColor> profile_color,
+                                 Browser* browser);
+  void OnSwitchToProfileCompleteOpenCustomization(Browser* browser);
+  void OnLocalProfileInitialized(std::optional<SkColor> profile_color,
                                  Profile* profile);
   void PushProfilesList();
   base::Value::List GetProfilesList();
@@ -151,10 +159,27 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
   // Displays either a sign-in or an error dialog within the profile picker
   // using `profile`.
   void OnProfileForDialogLoaded(Profile* profile);
+  // Displays an error dialog on top of the profile picker based on the error
+  // enum.
+  // Empty `profile_path` will not show an additional "Sign in"
+  // button that allows to reach reauth step.
+  // The `email` value is only used when the error is
+  // `ReauthUIError::kWrongAccount` in order to show the expected email address.
+  void DisplayForceSigninErrorDialog(const base::FilePath& profile_path,
+                                     const std::string& email,
+                                     ReauthUIError error);
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // GaiaId as input string.
+  using AddAccountCallback = base::OnceCallback<void(const std::string&)>;
+
   // Opens the Ash account settings page in a new window.
   void HandleOpenAshAccountSettingsPage(const base::Value::List& args);
+
+  // Called when the user clicks the "use device guest" link in the account
+  // selection dialog. Opens a dialog in Ash (through mojo), offering a switch
+  // to device guest mode.
+  void HandleOpenDeviceGuestLinkLacros(const base::Value::List& args);
 
   // List of available accounts used by the profile choice and the account
   // selection screens.
@@ -174,8 +199,42 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
 
   // Called when a new Lacros signed-in profile is created. The profile is
   // omitted, ephemeral, and has a primary kSignin account.
-  void OnLacrosSignedInProfileCreated(absl::optional<SkColor> profile_color,
+  void OnLacrosSignedInProfileCreated(std::optional<SkColor> profile_color,
                                       Profile* profile);
+
+  // `AddAccountCallback` used with `ResultAccountInPersistentError`.
+  void AddExistingAccountToNewProfile(
+      ProfilePickerLacrosSignInProvider::SignedInCallback signed_in_callback,
+      const std::string& gaia_id);
+
+  // `AddAccountCallback` used with `ResultAccountInPersistentError`.
+  void AddExistingAccountToExistingProfile(
+      AccountProfileMapper* mapper,
+      AccountProfileMapper::AddAccountCallback add_account_callback,
+      const std::string& gaia_id);
+
+  // Callback result of IdentityManagerLacros to check if the input account is
+  // in persistent error. Shows reauth screen on account in error, or calls
+  // `add_account_callback` on success.
+  // - `gaia_id`: id of account to check.
+  // - `add_account_callback`: callback on success.
+  // - `source`: Reauth screen source.
+  // - `persistent_error`: account check result.
+  void ResultAccountInPersistentError(
+      const std::string& gaia_id,
+      AddAccountCallback add_account_callback,
+      account_manager::AccountManagerFacade::AccountAdditionSource source,
+      bool persistent_error);
+
+  // Displays the reauth screen with the given email and source.
+  void ShowReauthWithEmail(
+      account_manager::AccountManagerFacade::AccountAdditionSource source,
+      const std::string& email);
+
+  // Resets account_selected state through JS to allow another account to be
+  // selected, also resets `lacros_sign_in_provider_`.
+  void OnReauthDialogClosed(
+      const account_manager::AccountUpsertionResult& result);
 
   // AccountProfileMapper::Observer:
   void OnAccountUpserted(const base::FilePath& profile_path,
@@ -186,7 +245,7 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
   // Adds an existing account (if gaia_id has a value) or initiates the
   // signin flow to add a new account in a new/existing profile.
   void SelectAccountLacrosInternal(const std::string& gaia_id,
-                                   absl::optional<SkColor> profile_color);
+                                   std::optional<SkColor> profile_color);
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   // Returns the list of profiles in the same order as when the picker
@@ -208,6 +267,13 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
 
   bool main_view_initialized_ = false;
 
+  // Keep alive used when displaying the profile statistics in the profile
+  // deletion dialog. Released when the dialog or the Picker is closed, which
+  // will unload the respective profile if this was the only keep alive. Since
+  // the dialog and the statistics can be shown only for one single profile at
+  // a time, only one ScopedProfileKeepAlive is needed for the Profile Picker.
+  std::unique_ptr<ScopedProfileKeepAlive> profile_statistics_keep_alive_;
+
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // Takes care of getting a signed-in profile.
   std::unique_ptr<ProfilePickerLacrosSignInProvider> lacros_sign_in_provider_;
@@ -218,6 +284,8 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
   // Observes AccountProfileMapper to react to changes in available accounts.
   base::ScopedObservation<AccountProfileMapper, AccountProfileMapper::Observer>
       account_profile_mapper_observation_{this};
+
+  std::unique_ptr<IdentityManagerLacros> identity_manager_lacros_;
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   // The order of the profiles when the picker was first shown. This is used

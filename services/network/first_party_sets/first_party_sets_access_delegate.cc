@@ -6,9 +6,11 @@
 
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "base/types/optional_util.h"
+#include "net/base/features.h"
 #include "net/base/schemeful_site.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/first_party_sets/first_party_sets_cache_filter.h"
@@ -31,12 +33,14 @@ FirstPartySetsAccessDelegate::FirstPartySetsAccessDelegate(
     FirstPartySetsManager* const manager)
     : manager_(manager),
       enabled_(IsEnabled(params)),
+      wait_for_init_(base::FeatureList::IsEnabled(
+          net::features::kWaitForFirstPartySetsInit)),
       ready_event_(receiver.is_valid() && manager->is_enabled()
                        ? absl::nullopt
                        : absl::make_optional(
                              network::mojom::FirstPartySetsReadyEvent::New())),
       pending_queries_(
-          ready_event_.has_value()
+          ready_event_.has_value() || !wait_for_init_
               ? nullptr
               : std::make_unique<base::circular_deque<base::OnceClosure>>()) {
   if (receiver.is_valid())
@@ -61,30 +65,54 @@ void FirstPartySetsAccessDelegate::SetEnabled(bool enabled) {
   enabled_ = enabled;
 }
 
-absl::optional<net::FirstPartySetMetadata>
+absl::optional<std::pair<net::FirstPartySetMetadata,
+                         net::FirstPartySetsCacheFilter::MatchInfo>>
 FirstPartySetsAccessDelegate::ComputeMetadata(
     const net::SchemefulSite& site,
     const net::SchemefulSite* top_frame_site,
-    const std::set<net::SchemefulSite>& party_context,
-    base::OnceCallback<void(net::FirstPartySetMetadata)> callback) {
+    base::OnceCallback<void(net::FirstPartySetMetadata,
+                            net::FirstPartySetsCacheFilter::MatchInfo)>
+        callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!enabled_) {
-    return {net::FirstPartySetMetadata()};
+    return std::make_pair(net::FirstPartySetMetadata(),
+                          net::FirstPartySetsCacheFilter::MatchInfo());
   }
   if (!ready_event_.has_value()) {
+    if (!wait_for_init_) {
+      return std::make_pair(net::FirstPartySetMetadata(),
+                            net::FirstPartySetsCacheFilter::MatchInfo());
+    }
     // base::Unretained() is safe because `this` owns `pending_queries_` and
     // `pending_queries_` will not run the enqueued callbacks after `this` is
     // destroyed.
     EnqueuePendingQuery(base::BindOnce(
         &FirstPartySetsAccessDelegate::ComputeMetadataAndInvoke,
         base::Unretained(this), site, base::OptionalFromPtr(top_frame_site),
-        party_context, std::move(callback)));
+        std::move(callback)));
     return absl::nullopt;
   }
 
-  return manager_->ComputeMetadata(site, top_frame_site, party_context,
-                                   *context_config(), std::move(callback));
+  net::FirstPartySetsCacheFilter::MatchInfo match_info(
+      cache_filter()->GetMatchInfo(site));
+
+  absl::optional<net::FirstPartySetMetadata> metadata =
+      manager_->ComputeMetadata(
+          site, top_frame_site, *context_config(),
+          base::BindOnce(
+              [](base::OnceCallback<void(
+                     net::FirstPartySetMetadata,
+                     net::FirstPartySetsCacheFilter::MatchInfo)> callback,
+                 net::FirstPartySetsCacheFilter::MatchInfo info,
+                 net::FirstPartySetMetadata metadata) {
+                std::move(callback).Run(std::move(metadata), std::move(info));
+              },
+              std::move(callback), match_info));
+
+  return metadata.has_value() ? absl::make_optional(std::make_pair(
+                                    std::move(metadata).value(), match_info))
+                              : absl::nullopt;
 }
 
 absl::optional<FirstPartySetsAccessDelegate::EntriesResult>
@@ -95,9 +123,12 @@ FirstPartySetsAccessDelegate::FindEntries(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!enabled_)
-    return {{}};
+    return FirstPartySetsAccessDelegate::EntriesResult();
 
   if (!ready_event_.has_value()) {
+    if (!wait_for_init_) {
+      return FirstPartySetsAccessDelegate::EntriesResult();
+    }
     // base::Unretained() is safe because `this` owns `pending_queries_` and
     // `pending_queries_` will not run the enqueued callbacks after `this` is
     // destroyed.
@@ -110,52 +141,40 @@ FirstPartySetsAccessDelegate::FindEntries(
   return manager_->FindEntries(sites, *context_config(), std::move(callback));
 }
 
-absl::optional<net::FirstPartySetsCacheFilter::MatchInfo>
-FirstPartySetsAccessDelegate::GetCacheFilterMatchInfo(
-    const net::SchemefulSite& site,
-    base::OnceCallback<void(net::FirstPartySetsCacheFilter::MatchInfo)>
-        callback) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (!enabled_)
-    return {net::FirstPartySetsCacheFilter::MatchInfo()};
-
-  if (!ready_event_.has_value()) {
-    // base::Unretained() is safe because `this` owns `pending_queries_` and
-    // `pending_queries_` will not run the enqueued callbacks after `this` is
-    // destroyed.
-    EnqueuePendingQuery(base::BindOnce(
-        &FirstPartySetsAccessDelegate::GetCacheFilterMatchInfoAndInvoke,
-        base::Unretained(this), site, std::move(callback)));
-    return absl::nullopt;
-  }
-
-  return cache_filter()->GetMatchInfo(site);
-}
-
 void FirstPartySetsAccessDelegate::ComputeMetadataAndInvoke(
     const net::SchemefulSite& site,
     const absl::optional<net::SchemefulSite> top_frame_site,
-    const std::set<net::SchemefulSite>& party_context,
-    base::OnceCallback<void(net::FirstPartySetMetadata)> callback) const {
+    base::OnceCallback<void(net::FirstPartySetMetadata,
+                            net::FirstPartySetsCacheFilter::MatchInfo)>
+        callback) const {
+  using CallbackType = decltype(callback);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(context_config());
+  CHECK(context_config());
   // NB: since `ComputeMetadata` returns early if the delegate is disabled,
   // we're guaranteed that for any queued query, the delegate must have been
   // enabled when the query was received. However, the delegate may have been
   // disabled between then and now, so we have no guarantees re: `enabled_` now.
 
-  std::pair<base::OnceCallback<void(net::FirstPartySetMetadata)>,
-            base::OnceCallback<void(net::FirstPartySetMetadata)>>
-      callbacks = base::SplitOnceCallback(std::move(callback));
+  std::pair<CallbackType, CallbackType> callbacks =
+      base::SplitOnceCallback(std::move(callback));
+
+  net::FirstPartySetsCacheFilter::MatchInfo match_info(
+      cache_filter()->GetMatchInfo(site));
 
   absl::optional<net::FirstPartySetMetadata> sync_result =
-      manager_->ComputeMetadata(site, base::OptionalToPtr(top_frame_site),
-                                party_context, *context_config(),
-                                std::move(callbacks.first));
+      manager_->ComputeMetadata(
+          site, base::OptionalToPtr(top_frame_site), *context_config(),
+          base::BindOnce(
+              [](CallbackType callback,
+                 net::FirstPartySetsCacheFilter::MatchInfo match_info,
+                 net::FirstPartySetMetadata metadata) {
+                std::move(callback).Run(std::move(metadata), match_info);
+              },
+              std::move(callbacks.first), match_info));
 
-  if (sync_result.has_value())
-    std::move(callbacks.second).Run(std::move(sync_result.value()));
+  if (sync_result.has_value()) {
+    std::move(callbacks.second).Run(std::move(sync_result.value()), match_info);
+  }
 }
 
 void FirstPartySetsAccessDelegate::FindEntriesAndInvoke(
@@ -163,7 +182,7 @@ void FirstPartySetsAccessDelegate::FindEntriesAndInvoke(
     base::OnceCallback<void(FirstPartySetsAccessDelegate::EntriesResult)>
         callback) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(context_config());
+  CHECK(context_config());
   // NB: since `FindEntries` returns early if the delegate is disabled,
   // we're guaranteed that for any queued query, the delegate must have been
   // enabled when the query was received. However, the delegate may have been
@@ -182,24 +201,13 @@ void FirstPartySetsAccessDelegate::FindEntriesAndInvoke(
     std::move(callbacks.second).Run(sync_result.value());
 }
 
-void FirstPartySetsAccessDelegate::GetCacheFilterMatchInfoAndInvoke(
-    const net::SchemefulSite& site,
-    base::OnceCallback<void(net::FirstPartySetsCacheFilter::MatchInfo)>
-        callback) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(cache_filter());
-  // NB: since `GetCacheFilterMatchInfo` returns early if the delegate is
-  // disabled, we're guaranteed that for any queued query, the delegate must
-  // have been enabled when the query was received. However, the delegate may
-  // have been disabled between then and now, so we have no guarantees re:
-  // `enabled_` now.
-  std::move(callback).Run(cache_filter()->GetMatchInfo(site));
-}
-
 void FirstPartySetsAccessDelegate::InvokePendingQueries() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(ready_event_.has_value());
-  DCHECK(pending_queries_);
+  CHECK(ready_event_.has_value());
+  // !wait_for_init_ implies (pending_queries == nullptr).
+  CHECK(wait_for_init_ || pending_queries_ == nullptr);
+  // !wait_for_init_ implies !first_async_query_timer_.has_value().
+  CHECK(wait_for_init_ || !first_async_query_timer_.has_value());
 
   UmaHistogramTimes(
       "Cookie.FirstPartySets.InitializationDuration."
@@ -215,6 +223,10 @@ void FirstPartySetsAccessDelegate::InvokePendingQueries() {
                               ? first_async_query_timer_->Elapsed()
                               : base::TimeDelta());
 
+  if (!pending_queries_) {
+    return;
+  }
+
   std::unique_ptr<base::circular_deque<base::OnceClosure>> queries;
   queries.swap(pending_queries_);
   while (!queries->empty()) {
@@ -227,8 +239,9 @@ void FirstPartySetsAccessDelegate::InvokePendingQueries() {
 void FirstPartySetsAccessDelegate::EnqueuePendingQuery(
     base::OnceClosure run_query) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(pending_queries_);
-  DCHECK(!ready_event_.has_value());
+  CHECK(pending_queries_);
+  CHECK(!ready_event_.has_value());
+  CHECK(wait_for_init_);
 
   if (!first_async_query_timer_.has_value())
     first_async_query_timer_ = {base::ElapsedTimer()};

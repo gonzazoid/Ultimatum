@@ -21,8 +21,12 @@ BUILD_CONFIG_TITLE = 'title'
 BUILD_CONFIG_URL = 'url'
 BUILD_CONFIG_OUT_DIRECTORY = 'out_directory'
 
+METRICS_COUNT = 'COUNT'
+METRICS_COUNT_RELOCATIONS = 'Relocations'
+METRICS_SIZE = 'SIZE'
+METRICS_SIZE_APK_FILE = 'APK File'
+
 METADATA_APK_FILENAME = 'apk_file_name'  # Path relative to output_directory.
-METADATA_APK_SIZE = 'apk_size'  # File size of apk in bytes.
 METADATA_APK_SPLIT_NAME = 'apk_split_name'  # Name of the split if applicable.
 METADATA_ZIPALIGN_OVERHEAD = 'zipalign_padding'  # Overhead from zipalign.
 METADATA_SIGNING_BLOCK_SIZE = 'apk_signature_block_size'  # Size in bytes.
@@ -33,10 +37,10 @@ METADATA_ELF_ARCHITECTURE = 'elf_arch'  # "arm", "arm64", "x86", or "x64".
 METADATA_ELF_FILENAME = 'elf_file_name'  # Path relative to output_directory.
 METADATA_ELF_MTIME = 'elf_mtime'  # int timestamp in utc.
 METADATA_ELF_BUILD_ID = 'elf_build_id'
-METADATA_ELF_RELOCATIONS_COUNT = 'elf_relocations_count'
 METADATA_PROGUARD_MAPPING_FILENAME = 'proguard_mapping_file_name'
 
 # New sections should also be added to the SuperSize UI.
+SECTION_ARSC = '.arsc'
 SECTION_BSS = '.bss'
 SECTION_BSS_REL_RO = '.bss.rel.ro'
 SECTION_DATA = '.data'
@@ -48,6 +52,7 @@ SECTION_OTHER = '.other'
 SECTION_PAK_NONTRANSLATED = '.pak.nontranslated'
 SECTION_PAK_TRANSLATIONS = '.pak.translations'
 SECTION_PART_END = '.part.end'
+SECTION_RELRO_PADDING = '.relro_padding'
 SECTION_RODATA = '.rodata'
 SECTION_TEXT = '.text'
 # Used by SymbolGroup when they contain a mix of sections.
@@ -75,6 +80,7 @@ BSS_SECTIONS = (
     SECTION_BSS,
     SECTION_BSS_REL_RO,
     SECTION_PART_END,
+    SECTION_RELRO_PADDING,
 )
 PAK_SECTIONS = (
     SECTION_PAK_NONTRANSLATED,
@@ -82,8 +88,10 @@ PAK_SECTIONS = (
 )
 
 CONTAINER_MULTIPLE = '*'
+CONTAINER_NAME_EMPTY = '(empty)'
 
 SECTION_NAME_TO_SECTION = {
+    SECTION_ARSC: 'a',
     SECTION_BSS: 'b',
     SECTION_BSS_REL_RO: 'b',
     SECTION_DATA: 'd',
@@ -95,12 +103,14 @@ SECTION_NAME_TO_SECTION = {
     SECTION_PART_END: 'b',
     SECTION_PAK_NONTRANSLATED: 'P',
     SECTION_PAK_TRANSLATIONS: 'p',
+    SECTION_RELRO_PADDING: 'b',
     SECTION_RODATA: 'r',
     SECTION_TEXT: 't',
     SECTION_MULTIPLE: '*',
 }
 
 SECTION_TO_SECTION_NAME = collections.OrderedDict((
+    ('a', SECTION_ARSC),
     ('t', SECTION_TEXT),
     ('r', SECTION_RODATA),
     ('R', SECTION_DATA_REL_RO),
@@ -185,21 +195,18 @@ class BaseContainer:
   """Base class for BaseContainer and DeltaContainer.
 
   Fields:
-    name: Container name. Must be unique among (non-Diff) Containers.
     short_name: Short container name for compact display. This, also needs to be
         unique among containers in the same SizeInfo, and can be ''.
     classified_sections: Cache for ClassifySections().
   """
   __slots__ = (
-      'name',
       'short_name',
       '_classified_sections',
   )
 
-  def __init__(self, name):
+  def __init__(self):
     # name == '' hints that only one container exists, and there's no need to
     # distinguish them. This can affect console output.
-    self.name = name
     self.short_name = None  # Assigned by AssignShortNames().
     self._classified_sections = None
 
@@ -221,6 +228,10 @@ class BaseContainer:
       c.short_name = str(i) if c.name else ''
 
   @property
+  def name(self):
+    pass
+
+  @property
   def section_sizes(self):
     pass
 
@@ -230,17 +241,25 @@ class Container(BaseContainer):
 
   Fields:
     metadata: A dict.
+    name: Container name. Must be unique among (non-Diff) Containers.
     section_sizes: A dict of section_name -> size.
   """
   __slots__ = (
       'metadata',
+      'name',
       'section_sizes',
+      'metrics_by_file',
   )
 
-  def __init__(self, name, metadata, section_sizes):
-    super().__init__(name)
+  def __init__(self, name, metadata, section_sizes, metrics_by_file):
+    super().__init__()
+    self.name = name
     self.metadata = metadata or {}
     self.section_sizes = section_sizes  # E.g. {SECTION_TEXT: 0}
+    self.metrics_by_file = metrics_by_file
+
+  def IsEmpty(self):
+    return self.name == CONTAINER_NAME_EMPTY
 
   @staticmethod
   def Empty():
@@ -250,7 +269,10 @@ class Container(BaseContainer):
     exist, unfortunately). Creating a new instance instead of using a global
     singleton for robustness.
     """
-    return Container(name='(empty)', metadata={}, section_sizes={})
+    return Container(name=CONTAINER_NAME_EMPTY,
+                     metadata={},
+                     section_sizes={},
+                     metrics_by_file={})
 
 
 class DeltaContainer(BaseContainer):
@@ -260,10 +282,14 @@ class DeltaContainer(BaseContainer):
       'after',
   )
 
-  def __init__(self, name, before, after):
-    super().__init__(name)
+  def __init__(self, before, after):
+    super().__init__()
     self.before = before
     self.after = after
+
+  @property
+  def name(self):
+    return self.after.name if self.before.IsEmpty() else self.before.name
 
   @property
   def section_sizes(self):
@@ -271,12 +297,24 @@ class DeltaContainer(BaseContainer):
     ret.update({k: -v for k, v in self.before.section_sizes.items()})
     return dict(ret)
 
+  @property
+  def metrics_by_file(self):
+    keys = (set(self.before.metrics_by_file.keys())
+            | set(self.after.metrics_by_file.keys()))
+    ret = {}
+    for key in keys:
+      before_contents = self.before.metrics_by_file.get(key, {})
+      after_contents = self.after.metrics_by_file.get(key, {})
+      delta_contents = collections.Counter(after_contents)
+      delta_contents.update({k: -v for k, v in before_contents.items()})
+      ret[key] = dict(delta_contents)
+    return ret
+
 
 class BaseSizeInfo:
   """Base class for SizeInfo and DeltaSizeInfo.
 
   Fields:
-    build_config: A dict of build configurations.
     containers: A list of Containers.
     raw_symbols: A SymbolGroup containing all top-level symbols (no groups).
     symbols: A SymbolGroup of all symbols, where symbols have been
@@ -286,7 +324,6 @@ class BaseSizeInfo:
     pak_symbols: Subset of |symbols| that are from pak files.
   """
   __slots__ = (
-      'build_config',
       'containers',
       'raw_symbols',
       '_symbols',
@@ -294,10 +331,9 @@ class BaseSizeInfo:
       '_pak_symbols',
   )
 
-  def __init__(self, build_config, containers, raw_symbols, symbols=None):
+  def __init__(self, containers, raw_symbols, symbols=None):
     if isinstance(raw_symbols, list):
       raw_symbols = SymbolGroup(raw_symbols)
-    self.build_config = build_config
     self.containers = containers
     self.raw_symbols = raw_symbols
     self._symbols = symbols
@@ -347,9 +383,13 @@ class SizeInfo(BaseSizeInfo):
 
   Fields:
     size_path: Path to .size file this was loaded from (or None).
+    is_sparse: Whether the list of symbols is sparse.
+    build_config: A dict of build configurations.
   """
   __slots__ = (
+      'build_config',
       'size_path',
+      'is_sparse',
   )
 
   def __init__(self,
@@ -357,9 +397,12 @@ class SizeInfo(BaseSizeInfo):
                containers,
                raw_symbols,
                symbols=None,
-               size_path=None):
-    super().__init__(build_config, containers, raw_symbols, symbols=symbols)
+               size_path=None,
+               is_sparse=False):
+    super().__init__(containers, raw_symbols, symbols=symbols)
+    self.build_config = build_config
     self.size_path = size_path
+    self.is_sparse = is_sparse
 
   @property
   def metadata_legacy(self):
@@ -374,6 +417,31 @@ class SizeInfo(BaseSizeInfo):
       metadata[k] = v
     return metadata
 
+  def MakeSparse(self, filtered_symbols):
+    """Make this SizeInfo contain only a subset of symbols.
+
+    Args:
+      filtered_symbols: Which symbols to include.
+    """
+    self.is_sparse = True
+
+    # Any aliases of sparse symbols must also be included, or else file
+    # parsing will attribute symbols that happen to follow an incomplete alias
+    # group to that alias group.
+    representative_symbols = set()
+    raw_symbols = []
+    logging.debug('Expanding filtered_symbols aliases')
+    for sym in filtered_symbols:
+      if sym.aliases:
+        num_syms = len(representative_symbols)
+        representative_symbols.add(sym.aliases[0])
+        if num_syms < len(representative_symbols):
+          raw_symbols.extend(sym.aliases)
+      else:
+        raw_symbols.append(sym)
+    logging.debug('Done expanding filtered_symbols')
+    self.raw_symbols = SymbolGroup(raw_symbols)
+
 
 class DeltaSizeInfo(BaseSizeInfo):
   """What you get when you Diff() two SizeInfo objects.
@@ -381,16 +449,96 @@ class DeltaSizeInfo(BaseSizeInfo):
   Fields:
     before: SizeInfo for "before".
     after: SizeInfo for "after".
+    removed_sources: List of removed source files from "before".
+    added_sources: List of added source files from "after".
   """
   __slots__ = (
       'before',
       'after',
+      'removed_sources',
+      'added_sources',
   )
 
-  def __init__(self, before, after, containers, raw_symbols):
-    super().__init__(None, containers, raw_symbols)
+  def __init__(self,
+               before,
+               after,
+               containers,
+               raw_symbols,
+               removed_sources=None,
+               added_sources=None):
+    super().__init__(containers, raw_symbols)
     self.before = before
     self.after = after
+    self.removed_sources = removed_sources or []
+    self.added_sources = added_sources or []
+
+  @property
+  def is_sparse(self):
+    return self.before.is_sparse or self.after.is_sparse
+
+  def MergeDeltaSizeInfo(self, other):
+    assert isinstance(other, DeltaSizeInfo), 'Found ' + type(other)
+    # The list of adds/removes might not be accurate anymore, so remove them.
+    # They could be re-computed if the need arises.
+    self.removed_sources = []
+    self.added_sources = []
+
+    # Assumes BUILD_CONFIG_GIT_REVISION is always present.
+    i = 1
+    while f'Merged{i}_{BUILD_CONFIG_GIT_REVISION}' in self.after.build_config:
+      i += 1
+    prefix = f'Merged{i}'
+
+    # TODO(agrieve): Merge container metadata & metrics_by_file.
+    for k, v in other.before.build_config.items():
+      self.before.build_config[f'{prefix}_{k}'] = v
+    for k, v in other.after.build_config.items():
+      self.after.build_config[f'{prefix}_{k}'] = v
+
+    for other_c in other.containers:
+      match = self.ContainerForName(other_c.name)
+      if match is None:
+        match = other_c
+        self.containers.append(other_c)
+      else:
+        if match.before.IsEmpty() and not other_c.before.IsEmpty():
+          match.before = other_c.before
+        if match.after.IsEmpty() and not other_c.after.IsEmpty():
+          match.after = other_c.after
+      if match.before not in self.before.containers:
+        self.before.containers.append(match.before)
+      if match.after and match.after not in self.after.containers:
+        self.after.containers.append(match.after)
+
+    BaseContainer.AssignShortNames(self.before.containers)
+    BaseContainer.AssignShortNames(self.after.containers)
+    BaseContainer.AssignShortNames(self.containers)
+
+    # Not updating symbol container references because doing so is not currently
+    # necessary.
+
+    self.raw_symbols += other.raw_symbols
+    self.before.raw_symbols += other.before.raw_symbols
+    self.after.raw_symbols += other.after.raw_symbols
+
+  def MakeSparse(self, filtered_symbols=None):
+    """Make this DeltaSizeInfo contain only a subset of symbols.
+
+    Args:
+      filtered_symbols: Which symbols to include. Defaults to changed symbols.
+    """
+    logging.info('Converting to sparse diff')
+    if filtered_symbols is None:
+      filtered_symbols = self.raw_symbols.WhereDiffStatusIs(
+          DIFF_STATUS_UNCHANGED).Inverted()
+    self.raw_symbols = filtered_symbols
+    self.before.MakeSparse(
+        SymbolGroup([
+            sym.before_symbol for sym in filtered_symbols if sym.before_symbol
+        ]))
+    self.after.MakeSparse(
+        SymbolGroup(
+            [sym.after_symbol for sym in filtered_symbols if sym.after_symbol]))
 
 
 class BaseSymbol:
@@ -500,6 +648,9 @@ class BaseSymbol:
     if flags & FLAG_UNCOMPRESSED:
       parts.append('uncompressed')
     return '{%s}' % ','.join(parts)
+
+  def IsArsc(self):
+    return self.section_name == SECTION_ARSC
 
   def IsBss(self):
     return self.section_name in BSS_SECTIONS
@@ -1441,6 +1592,16 @@ class DeltaSymbolGroup(SymbolGroup):
 
   def WhereDiffStatusIs(self, diff_status):
     return self.Filter(lambda s: s.diff_status == diff_status)
+
+  def GetEntireAddOrRemoveSources(self):
+    """Return source paths with entirely added or removed symbols."""
+    source_flags = collections.defaultdict(int)
+    for sym in self:
+      source_flags[sym.source_path] |= 1 << sym.diff_status
+    add_flag = 1 << DIFF_STATUS_ADDED
+    remove_flag = 1 << DIFF_STATUS_REMOVED
+    return (sorted(k for k, v in source_flags.items() if v == remove_flag),
+            sorted(k for k, v in source_flags.items() if v == add_flag))
 
 
 def _ExtractPrefixBeforeSeparator(string, separator, count):

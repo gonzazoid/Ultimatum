@@ -54,6 +54,8 @@ class ASH_EXPORT AppListTestApi {
   // bubble apps page animation, the bubble view animation and apps grid
   // animation).
   void WaitForBubbleWindow(bool wait_for_opening_animation);
+  void WaitForBubbleWindowInRootWindow(aura::Window* root_window,
+                                       bool wait_for_opening_animation);
 
   // Waits until all the animations to show the app list become idle. No
   // operations if the app list is already idle.
@@ -99,9 +101,6 @@ class ASH_EXPORT AppListTestApi {
 
   // Returns the pagination model.
   PaginationModel* GetPaginationModel();
-
-  // Updates the paged view structure.
-  void UpdatePagedViewStructure();
 
   // Returns the top level apps grid view. Could be ScrollableAppsGridView if
   // bubble launcher is enabled or PagedAppsGridView otherwise.
@@ -173,6 +172,10 @@ class ASH_EXPORT AppListTestApi {
 
   // Returns the recent app item item specified by `index`.
   views::View* GetRecentAppAt(int index);
+
+  // Returns the list of app IDs shown in recent apps view, in order they appear
+  // in the  UI.
+  std::vector<std::string> GetRecentAppIds();
 
   // Updates launcher search box content, and triggers search.
   void SimulateSearch(const std::u16string& query);
@@ -246,7 +249,8 @@ class ASH_EXPORT AppListTestApi {
       ReorderAnimationEndState* actual_state);
 
   // Called at the end of the reorder animation.
-  void OnReorderAnimationDone(ReorderAnimationEndState* result,
+  void OnReorderAnimationDone(bool for_bubble_app_list,
+                              ReorderAnimationEndState* result,
                               bool abort,
                               AppListGridAnimationStatus status);
 

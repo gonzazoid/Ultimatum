@@ -6,9 +6,9 @@
 
 #include "third_party/blink/renderer/modules/xr/xr_view.h"
 
+#include <algorithm>
 #include <cmath>
 
-#include "base/cxx17_backports.h"
 #include "third_party/blink/renderer/modules/xr/xr_camera.h"
 #include "third_party/blink/renderer/modules/xr/xr_frame.h"
 #include "third_party/blink/renderer/modules/xr/xr_session.h"
@@ -21,10 +21,10 @@ namespace {
 
 // Arbitrary minimum size multiplier for dynamic viewport scaling,
 // where 1.0 is full framebuffer size (which may in turn be adjusted
-// by framebufferScaleFactor). TODO(klausw): a value around 0.2 would
-// be more reasonable. Intentionally allow extreme viewport scaling
-// to make the effect more obvious in initial testing.
-constexpr double kMinViewportScale = 0.05;
+// by framebufferScaleFactor). This should be less than or equal to
+// kMinScale in xr_session_viewport_scaler.cc to allow use of the full
+// dynamic viewport scaling range.
+constexpr double kMinViewportScale = 0.125;
 
 const double kDegToRad = M_PI / 180.0;
 
@@ -32,7 +32,7 @@ const double kDegToRad = M_PI / 180.0;
 
 XRView::XRView(XRFrame* frame,
                XRViewData* view_data,
-               const TransformationMatrix& ref_space_from_mojo)
+               const gfx::Transform& ref_space_from_mojo)
     : eye_(view_data->Eye()), frame_(frame), view_data_(view_data) {
   switch (eye_) {
     case device::mojom::blink::XREye::kLeft:
@@ -60,11 +60,11 @@ XRViewport* XRView::Viewport(double framebuffer_scale) {
         viewport.height() * scale);
   }
 
-  return viewport_;
+  return viewport_.Get();
 }
 
 XRFrame* XRView::frame() const {
-  return frame_;
+  return frame_.Get();
 }
 
 XRSession* XRView::session() const {
@@ -79,7 +79,7 @@ DOMFloat32Array* XRView::projectionMatrix() const {
     return nullptr;
   }
 
-  return projection_matrix_;
+  return projection_matrix_.Get();
 }
 
 XRViewData::XRViewData(const device::mojom::blink::XRViewPtr& view,
@@ -100,7 +100,7 @@ void XRViewData::UpdateView(const device::mojom::blink::XRViewPtr& view,
       fov->left_degrees * kDegToRad, fov->right_degrees * kDegToRad, depth_near,
       depth_far);
 
-  mojo_from_view_ = TransformationMatrix(view->mojo_from_view);
+  mojo_from_view_ = view->mojo_from_view;
 
   viewport_ = view->viewport;
   is_first_person_observer_ = view->is_first_person_observer;
@@ -120,7 +120,7 @@ void XRViewData::UpdateProjectionMatrixFromFoV(float up_rad,
   float y_scale = 2.0f / (up_tan + down_tan);
   float inv_nf = 1.0f / (near_depth - far_depth);
 
-  projection_matrix_ = TransformationMatrix::ColMajor(
+  projection_matrix_ = gfx::Transform::ColMajor(
       x_scale, 0.0f, 0.0f, 0.0f, 0.0f, y_scale, 0.0f, 0.0f,
       -((left_tan - right_tan) * x_scale * 0.5),
       ((up_tan - down_tan) * y_scale * 0.5), (near_depth + far_depth) * inv_nf,
@@ -134,7 +134,7 @@ void XRViewData::UpdateProjectionMatrixFromAspect(float fovy,
   float f = 1.0f / tanf(fovy / 2);
   float inv_nf = 1.0f / (near_depth - far_depth);
 
-  projection_matrix_ = TransformationMatrix::ColMajor(
+  projection_matrix_ = gfx::Transform::ColMajor(
       f / aspect, 0.0f, 0.0f, 0.0f, 0.0f, f, 0.0f, 0.0f, 0.0f, 0.0f,
       (far_depth + near_depth) * inv_nf, -1.0f, 0.0f, 0.0f,
       (2.0f * far_depth * near_depth) * inv_nf, 0.0f);
@@ -142,13 +142,13 @@ void XRViewData::UpdateProjectionMatrixFromAspect(float fovy,
   inv_projection_dirty_ = true;
 }
 
-TransformationMatrix XRViewData::UnprojectPointer(double x,
-                                                  double y,
-                                                  double canvas_width,
-                                                  double canvas_height) {
+gfx::Transform XRViewData::UnprojectPointer(double x,
+                                            double y,
+                                            double canvas_width,
+                                            double canvas_height) {
   // Recompute the inverse projection matrix if needed.
   if (inv_projection_dirty_) {
-    inv_projection_ = projection_matrix_.Inverse();
+    inv_projection_ = projection_matrix_.InverseOrIdentity();
     inv_projection_dirty_ = false;
   }
 
@@ -175,7 +175,7 @@ TransformationMatrix XRViewData::UnprojectPointer(double x,
   y_axis.GetNormalized(&y_axis);
 
   // TODO(bajones): There's probably a more efficient way to do this?
-  auto inv_pointer = TransformationMatrix::ColMajor(
+  auto inv_pointer = gfx::Transform::ColMajor(
       x_axis.x(), y_axis.x(), z_axis.x(), 0.0, x_axis.y(), y_axis.y(),
       z_axis.y(), 0.0, x_axis.z(), y_axis.z(), z_axis.z(), 0.0, 0.0, 0.0, 0.0,
       1.0);
@@ -183,11 +183,15 @@ TransformationMatrix XRViewData::UnprojectPointer(double x,
                           -point_in_view_space.z());
 
   // LookAt matrices are view matrices (inverted), so invert before returning.
-  return inv_pointer.Inverse();
+  return inv_pointer.InverseOrIdentity();
+}
+
+void XRViewData::SetMojoFromView(const gfx::Transform& mojo_from_view) {
+  mojo_from_view_ = mojo_from_view;
 }
 
 XRRigidTransform* XRView::refSpaceFromView() const {
-  return ref_space_from_view_;
+  return ref_space_from_view_.Get();
 }
 
 absl::optional<double> XRView::recommendedViewportScale() const {
@@ -246,7 +250,7 @@ void XRViewData::requestViewportScale(absl::optional<double> scale) {
   if (!scale)
     return;
 
-  requested_viewport_scale_ = base::clamp(*scale, kMinViewportScale, 1.0);
+  requested_viewport_scale_ = std::clamp(*scale, kMinViewportScale, 1.0);
 }
 
 }  // namespace blink

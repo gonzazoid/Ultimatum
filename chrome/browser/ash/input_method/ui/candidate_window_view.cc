@@ -3,15 +3,20 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/input_method/ui/candidate_window_view.h"
+#include "base/memory/raw_ptr.h"
 
 #include <stddef.h>
 
 #include <string>
 
+#include "ash/constants/ash_features.h"
+#include "base/feature_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/input_method/ui/candidate_view.h"
 #include "chrome/browser/ash/input_method/ui/candidate_window_constants.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/ime/ash/extension_ime_util.h"
+#include "ui/base/ime/ash/input_method_manager.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
@@ -96,6 +101,15 @@ int ComputePageIndex(const ui::CandidateWindow& candidate_window) {
   return -1;
 }
 
+// Returns 0-indexed cursor position in a page. See also |ComputePageIndex|.
+// Returns -1 on error.
+int ComputeIndexInPage(const ui::CandidateWindow& candidate_window) {
+  if (candidate_window.page_size() > 0) {
+    return candidate_window.cursor_position() % candidate_window.page_size();
+  }
+  return -1;
+}
+
 }  // namespace
 
 class InformationTextArea : public views::View {
@@ -114,7 +128,7 @@ class InformationTextArea : public views::View {
     label_->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(2, 2, 2, 4)));
 
     SetLayoutManager(std::make_unique<views::FillLayout>());
-    AddChildView(label_);
+    AddChildView(label_.get());
   }
 
   InformationTextArea(const InformationTextArea&) = delete;
@@ -160,7 +174,7 @@ class InformationTextArea : public views::View {
   }
 
  private:
-  views::Label* label_;
+  raw_ptr<views::Label> label_;
   int min_width_;
   absl::optional<BorderPosition> position_;
 };
@@ -176,7 +190,7 @@ CandidateWindowView::CandidateWindowView(gfx::NativeView parent)
   set_parent_window(parent);
   set_margins(gfx::Insets());
   // Ignore this role for accessibility purposes.
-  SetAccessibleRole(ax::mojom::Role::kNone);
+  SetAccessibleWindowRole(ax::mojom::Role::kNone);
 
   // When BubbleDialogDelegateView creates its frame view it will create a
   // bubble border with a non-zero corner radius by default.
@@ -197,16 +211,16 @@ CandidateWindowView::CandidateWindowView(gfx::NativeView parent)
   candidate_area_->SetVisible(false);
   preedit_->SetBorderFromPosition(InformationTextArea::BOTTOM);
   if (candidate_window_.orientation() == ui::CandidateWindow::VERTICAL) {
-    AddChildView(preedit_);
-    AddChildView(candidate_area_);
-    AddChildView(auxiliary_text_);
+    AddChildView(preedit_.get());
+    AddChildView(candidate_area_.get());
+    AddChildView(auxiliary_text_.get());
     auxiliary_text_->SetBorderFromPosition(InformationTextArea::TOP);
     candidate_area_->SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical));
   } else {
-    AddChildView(preedit_);
-    AddChildView(auxiliary_text_);
-    AddChildView(candidate_area_);
+    AddChildView(preedit_.get());
+    AddChildView(auxiliary_text_.get());
+    AddChildView(candidate_area_.get());
     auxiliary_text_->SetAlignment(gfx::ALIGN_LEFT);
     auxiliary_text_->SetBorderFromPosition(InformationTextArea::BOTTOM);
     candidate_area_->SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -332,8 +346,9 @@ void CandidateWindowView::UpdateCandidates(
       }
     }
     if (new_candidate_window.orientation() == ui::CandidateWindow::VERTICAL) {
-      for (auto* view : candidate_views_)
+      for (ui::ime::CandidateView* view : candidate_views_) {
         view->SetWidths(max_shortcut_width, max_candidate_width);
+      }
     }
 
     std::unique_ptr<CandidateWindowBorder> border =
@@ -345,6 +360,21 @@ void CandidateWindowView::UpdateCandidates(
     GetBubbleFrameView()->SetBubbleBorder(std::move(border));
     GetBubbleFrameView()->OnThemeChanged();
   }
+
+  const int new_candidate_index_in_page =
+      ComputeIndexInPage(new_candidate_window);
+  // Notify accessibility if selection changes.
+  // Don't notify while showing suggestions, because it interrupts user typing.
+  if (new_candidate_window.is_user_selecting()) {
+    // Notify when index changes, or when candidate window type changes.
+    if (!candidate_window_.is_user_selecting() ||
+        (selected_candidate_index_in_page_ != new_candidate_index_in_page &&
+         new_candidate_index_in_page != -1)) {
+      candidate_views_[new_candidate_index_in_page]->NotifyAccessibilityEvent(
+          ax::mojom::Event::kSelection, false);
+    }
+  }
+
   // Update the current candidate window. We'll use candidate_window_ from here.
   // Note that SelectCandidateAt() uses candidate_window_.
   candidate_window_.CopyFrom(new_candidate_window);
@@ -352,9 +382,7 @@ void CandidateWindowView::UpdateCandidates(
   // Select the current candidate in the page.
   if (candidate_window_.is_cursor_visible()) {
     if (candidate_window_.page_size()) {
-      const int current_candidate_in_page =
-          candidate_window_.cursor_position() % candidate_window_.page_size();
-      SelectCandidateAt(current_candidate_in_page);
+      SelectCandidateAt(new_candidate_index_in_page);
     }
   } else {
     // Unselect the currently selected candidate.
@@ -373,12 +401,50 @@ void CandidateWindowView::UpdateCandidates(
       base::UTF8ToUTF16(candidate_window_.auxiliary_text()));
 }
 
-void CandidateWindowView::SetCursorBounds(const gfx::Rect& cursor_bounds,
-                                          const gfx::Rect& composition_head) {
+void CandidateWindowView::SetCursorAndCompositionBounds(
+    const gfx::Rect& cursor_bounds,
+    const gfx::Rect& composition_bounds) {
+  if (base::FeatureList::IsEnabled(ash::features::kImeKoreanModeSwitchDebug)) {
+    auto* input_method_manager = ash::input_method::InputMethodManager::Get();
+
+    if (input_method_manager) {
+      const std::string& current_input_method_id =
+          input_method_manager->GetActiveIMEState()
+              ->GetCurrentInputMethod()
+              .id();
+
+      if (ash::extension_ime_util::IsCros1pKorean(current_input_method_id)) {
+        pending_anchor_rect_ = candidate_window_.show_window_at_composition()
+                                   ? composition_bounds
+                                   : cursor_bounds;
+        ash::input_method::GetTextFieldContextualInfo(base::BindOnce(
+            &CandidateWindowView::OnTextFieldContextualInfoAvailable,
+            base::Unretained(this)));
+        return;
+      }
+    }
+  }
+
   if (candidate_window_.show_window_at_composition())
-    SetAnchorRect(composition_head);
+    SetAnchorRect(composition_bounds);
   else
     SetAnchorRect(cursor_bounds);
+}
+
+void CandidateWindowView::OnTextFieldContextualInfoAvailable(
+    const ash::input_method::TextFieldContextualInfo& info) {
+  if (!base::FeatureList::IsEnabled(ash::features::kImeKoreanModeSwitchDebug)) {
+    return;
+  }
+
+  if (!info.tab_url.DomainIs("docs.google.com")) {
+    SetAnchorRect(pending_anchor_rect_);
+    return;
+  }
+
+  const gfx::Rect& display_bounds =
+      display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
+  SetAnchorRect(gfx::Rect(80, display_bounds.height() - 60, 0, 0));
 }
 
 void CandidateWindowView::MaybeInitializeCandidateViews(

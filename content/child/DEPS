@@ -1,7 +1,7 @@
 include_rules = [
   # Allow inclusion of specific components that we depend on.
   # See comment in content/DEPS for which components are allowed.
-  "+components/autofill/core/common",
+  "+components/ml/webnn/features.mojom-features.h",
   "+components/tracing",
   "+components/webcrypto",
   "+components/services/font/public",
@@ -10,6 +10,8 @@ include_rules = [
   "+device/base/features.h",
   "+device/fido/features.h",
   "+device/gamepad/public/cpp/gamepad_features.h",
+  "+device/vr/buildflags/buildflags.h",
+  "+device/vr/public/cpp/features.h",
   "+services/device/public/cpp/device_features.h",
   "+services/device/public/cpp/power_monitor",
   "+services/device/public/mojom",
@@ -23,5 +25,8 @@ include_rules = [
 specific_include_rules = {
   "child_thread_impl_browsertest\.*": [
     "+components/discardable_memory/service",
+  ],
+  "runtime_features.cc": [
+    "+components/permissions/features.h",
   ],
 }

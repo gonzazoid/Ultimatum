@@ -8,18 +8,20 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "chromeos/ash/components/quick_start/quick_start_metrics.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_advertisement.h"
 
 namespace ash::quick_start {
 
-class RandomSessionId;
+class AdvertisingId;
 
 // FastPairAdvertiser broadcasts advertisements with the service UUID
-// 0xFE2C and model ID 0x41C0D9. When the remote device detects this
-// advertisement it will trigger a prompt to begin Quick Start.
+// 0xFE2C and a model ID specific to the device form factor (Chromebook,
+// Chromebox, etc). When the remote device detects this advertisement it will
+// trigger a prompt to begin Quick Start.
 class FastPairAdvertiser : public device::BluetoothAdvertisement::Observer {
  public:
   class Factory {
@@ -50,7 +52,8 @@ class FastPairAdvertiser : public device::BluetoothAdvertisement::Observer {
   // Begin broadcasting Fast Pair advertisement.
   virtual void StartAdvertising(base::OnceClosure callback,
                                 base::OnceClosure error_callback,
-                                const RandomSessionId& random_session_id);
+                                const AdvertisingId& advertising_id,
+                                bool use_pin_authentication);
 
   // Stop broadcasting Fast Pair advertisement.
   virtual void StopAdvertising(base::OnceClosure callback);
@@ -64,7 +67,7 @@ class FastPairAdvertiser : public device::BluetoothAdvertisement::Observer {
 
   void RegisterAdvertisement(base::OnceClosure callback,
                              base::OnceClosure error_callback,
-                             const RandomSessionId& random_session_id);
+                             const AdvertisingId& advertising_id);
   void OnRegisterAdvertisement(
       base::OnceClosure callback,
       scoped_refptr<device::BluetoothAdvertisement> advertisement);
@@ -76,13 +79,14 @@ class FastPairAdvertiser : public device::BluetoothAdvertisement::Observer {
   void OnUnregisterAdvertisementError(
       device::BluetoothAdvertisement::ErrorCode error_code);
 
-  // Returns metadata in format [ random_session_id (16 bytes) ].
+  // Returns metadata in format [ advertising_id (16 bytes) ].
   std::vector<uint8_t> GenerateManufacturerMetadata(
-      const RandomSessionId& random_session_id);
+      const AdvertisingId& advertising_id);
 
   scoped_refptr<device::BluetoothAdapter> adapter_;
   scoped_refptr<device::BluetoothAdvertisement> advertisement_;
   base::OnceClosure stop_callback_;
+  QuickStartMetrics quick_start_metrics_;
   base::WeakPtrFactory<FastPairAdvertiser> weak_ptr_factory_{this};
 };
 

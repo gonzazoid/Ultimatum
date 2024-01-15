@@ -4,6 +4,8 @@
 
 #include "components/sync/base/command_line_switches.h"
 
+#include <string>
+
 #include "base/command_line.h"
 
 namespace syncer {

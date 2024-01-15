@@ -2,16 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ui/app_list/arc/arc_app_dialog.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_dialog.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ash/app_list/app_list_controller_delegate.h"
+#include "chrome/browser/ash/app_list/app_service/app_service_app_icon_loader.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/arc/arc_usb_host_permission_manager.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_controller_delegate.h"
-#include "chrome/browser/ui/app_list/app_service/app_service_app_icon_loader.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/arc/arc_usb_host_permission_manager.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -40,8 +41,9 @@ using ArcAppConfirmCallback = base::OnceCallback<void(bool accept)>;
 
 class ArcAppDialogView : public views::DialogDelegateView,
                          public AppIconLoaderDelegate {
+  METADATA_HEADER(ArcAppDialogView, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(ArcAppDialogView);
   ArcAppDialogView(Profile* profile,
                    AppListControllerDelegate* controller,
                    const std::string& app_id,
@@ -60,19 +62,22 @@ class ArcAppDialogView : public views::DialogDelegateView,
 
  private:
   // AppIconLoaderDelegate:
-  void OnAppImageUpdated(const std::string& app_id,
-                         const gfx::ImageSkia& image) override;
+  void OnAppImageUpdated(
+      const std::string& app_id,
+      const gfx::ImageSkia& image,
+      bool is_placeholder_icon,
+      const std::optional<gfx::ImageSkia>& badge_image) override;
 
   void AddMultiLineLabel(views::View* parent, const std::u16string& label_text);
 
   void OnDialogAccepted();
   void OnDialogCancelled();
 
-  views::ImageView* icon_view_ = nullptr;
+  raw_ptr<views::ImageView> icon_view_ = nullptr;
 
   std::unique_ptr<AppServiceAppIconLoader> icon_loader_;
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   const std::string app_id_;
   ArcAppConfirmCallback confirm_callback_;
@@ -130,8 +135,9 @@ ArcAppDialogView::ArcAppDialogView(Profile* profile,
   auto* text_container_ptr = AddChildView(std::move(text_container));
   DCHECK(!heading_text.empty());
   AddMultiLineLabel(text_container_ptr, heading_text);
-  if (!subheading_text.empty())
+  if (!subheading_text.empty()) {
     AddMultiLineLabel(text_container_ptr, subheading_text);
+  }
 
   // The icon should be loaded asynchronously.
   icon_loader_ = std::make_unique<AppServiceAppIconLoader>(
@@ -145,8 +151,9 @@ ArcAppDialogView::ArcAppDialogView(Profile* profile,
 }
 
 ArcAppDialogView::~ArcAppDialogView() {
-  if (g_current_arc_app_dialog_view == this)
+  if (g_current_arc_app_dialog_view == this) {
     g_current_arc_app_dialog_view = nullptr;
+  }
 }
 
 void ArcAppDialogView::AddMultiLineLabel(views::View* parent,
@@ -178,8 +185,11 @@ void ArcAppDialogView::OnDialogCancelled() {
   std::move(confirm_callback_).Run(false);
 }
 
-void ArcAppDialogView::OnAppImageUpdated(const std::string& app_id,
-                                         const gfx::ImageSkia& image) {
+void ArcAppDialogView::OnAppImageUpdated(
+    const std::string& app_id,
+    const gfx::ImageSkia& image,
+    bool is_placeholder_icon,
+    const std::optional<gfx::ImageSkia>& badge_image) {
   DCHECK_EQ(app_id, app_id_);
   DCHECK(!image.isNull());
   DCHECK_EQ(image.width(), kIconSourceSize);
@@ -188,7 +198,7 @@ void ArcAppDialogView::OnAppImageUpdated(const std::string& app_id,
   icon_view_->SetImage(image);
 }
 
-BEGIN_METADATA(ArcAppDialogView, views::DialogDelegateView)
+BEGIN_METADATA(ArcAppDialogView)
 END_METADATA
 
 std::unique_ptr<ArcAppListPrefs::AppInfo> GetArcAppInfo(
@@ -261,8 +271,9 @@ bool IsArcAppDialogViewAliveForTest() {
 }
 
 bool CloseAppDialogViewAndConfirmForTest(bool confirm) {
-  if (!g_current_arc_app_dialog_view)
+  if (!g_current_arc_app_dialog_view) {
     return false;
+  }
 
   g_current_arc_app_dialog_view->ConfirmOrCancelForTest(confirm);
   return true;

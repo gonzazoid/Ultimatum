@@ -127,14 +127,12 @@ struct DownloadRow {
   std::string by_ext_id;
   std::string by_ext_name;
 
+  // The id of the web app that created this download.
+  std::string by_web_app_id;
+
   // Data slices that have been downloaded so far. The slices must be ordered
   // by their offset.
   std::vector<DownloadSliceInfo> download_slice_info;
-
-  // The serialized string of the download's |reroute_info| proto.
-  // TODO(b/234867373): delete reroute_info_serialized once FileSystem Connector
-  // code is removed.
-  std::string reroute_info_serialized;
 };
 
 }  // namespace history

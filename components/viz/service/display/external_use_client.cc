@@ -12,12 +12,12 @@ namespace viz {
 ExternalUseClient::ImageContext::ImageContext(
     const gpu::MailboxHolder& mailbox_holder,
     const gfx::Size& size,
-    ResourceFormat resource_format,
+    SharedImageFormat format,
     const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
     sk_sp<SkColorSpace> color_space)
     : mailbox_holder_(mailbox_holder),
       size_(size),
-      resource_format_(resource_format),
+      format_(format),
       color_space_(std::move(color_space)),
       ycbcr_info_(ycbcr_info) {}
 
@@ -31,11 +31,20 @@ void ExternalUseClient::ImageContext::OnContextLost() {
   NOTREACHED();
 }
 
-void ExternalUseClient::ImageContext::SetImage(sk_sp<SkImage> image,
-                                               GrBackendFormat backend_format) {
-  DCHECK(!image_);
+void ExternalUseClient::ImageContext::SetImage(
+    sk_sp<SkImage> image,
+    std::vector<GrBackendFormat> backend_formats) {
+  CHECK(!image_);
   image_ = std::move(image);
-  backend_format_ = backend_format;
+  backend_formats_ = std::move(backend_formats);
+}
+
+void ExternalUseClient::ImageContext::SetImage(
+    sk_sp<SkImage> image,
+    std::vector<skgpu::graphite::TextureInfo> texture_infos) {
+  CHECK(!image_);
+  image_ = std::move(image);
+  texture_infos_ = std::move(texture_infos);
 }
 
 }  // namespace viz

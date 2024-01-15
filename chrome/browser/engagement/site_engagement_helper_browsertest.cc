@@ -17,7 +17,6 @@
 #include "components/site_engagement/content/site_engagement_metrics.h"
 #include "components/site_engagement/content/site_engagement_observer.h"
 #include "content/public/browser/navigation_controller.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -105,8 +104,8 @@ class SiteEngagementHelperBrowserTest : public InProcessBrowserTest {
   content::test::PrerenderTestHelper prerender_helper_;
   net::test_server::EmbeddedTestServerHandle test_server_handle_;
   base::HistogramTester histogram_tester_;
-  raw_ptr<TestOneShotTimer, DanglingUntriaged> input_tracker_timer_;
-  raw_ptr<TestOneShotTimer, DanglingUntriaged> media_tracker_timer_;
+  raw_ptr<TestOneShotTimer, AcrossTasksDanglingUntriaged> input_tracker_timer_;
+  raw_ptr<TestOneShotTimer, AcrossTasksDanglingUntriaged> media_tracker_timer_;
 };
 
 // Tests if SiteEngagementHelper checks the primary main frame in the
@@ -220,9 +219,9 @@ IN_PROC_BROWSER_TEST_F(SiteEngagementHelperBrowserTest,
   // Since the prerendered page couldn't have a user gesture, it runs JS with
   // EXECUTE_SCRIPT_NO_USER_GESTURE. Requesting playing video without a user
   // gesture results in the promise rejected.
-  EXPECT_FALSE(
-      content::ExecJs(prerendered_frame_host, "attemptPlay();",
-                      content::EvalJsOptions::EXECUTE_SCRIPT_NO_USER_GESTURE));
+  EXPECT_EQ(false, content::EvalJs(
+                       prerendered_frame_host, "attemptPlay();",
+                       content::EvalJsOptions::EXECUTE_SCRIPT_NO_USER_GESTURE));
 
   EXPECT_EQ(tester.last_updated_type(), EngagementType::kNavigation);
   EXPECT_EQ(tester.last_updated_url(), url);
@@ -233,7 +232,8 @@ IN_PROC_BROWSER_TEST_F(SiteEngagementHelperBrowserTest,
   EXPECT_TRUE(host_observer.was_activated());
 
   EXPECT_TRUE(
-      content::ExecJs(web_contents()->GetPrimaryMainFrame(), "attemptPlay();"));
+      content::EvalJs(web_contents()->GetPrimaryMainFrame(), "attemptPlay();")
+          .ExtractBool());
 
   tester.WaitForEngagementEvent(EngagementType::kMediaVisible);
   EXPECT_EQ(tester.last_updated_type(), EngagementType::kMediaVisible);

@@ -9,7 +9,8 @@
 #include "components/keyed_service/core/service_access_type.h"
 
 namespace base {
-template <typename T> struct DefaultSingletonTraits;
+template <typename T>
+class NoDestructor;
 }
 
 class Profile;
@@ -38,13 +39,13 @@ class FaviconServiceFactory : public ProfileKeyedServiceFactory {
   static TestingFactory GetDefaultFactory();
 
  private:
-  friend struct base::DefaultSingletonTraits<FaviconServiceFactory>;
+  friend base::NoDestructor<FaviconServiceFactory>;
 
   FaviconServiceFactory();
   ~FaviconServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/media_router/browser/media_router.h"
 #include "components/media_router/browser/route_message_util.h"
 
@@ -20,7 +20,7 @@ BrowserPresentationConnectionProxy::BrowserPresentationConnectionProxy(
         receiver_connection_receiver,
     mojo::PendingRemote<blink::mojom::PresentationConnection>
         controller_connection_remote)
-    : RouteMessageObserver(router, route_id),
+    : PresentationConnectionMessageObserver(router, route_id),
       router_(router),
       route_id_(route_id),
       target_connection_remote_(std::move(controller_connection_remote)) {

@@ -17,8 +17,10 @@ source_set("bluetooth_socket") {
     "bluetooth_socket_event_dispatcher.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
-    "//extensions/browser/api",
+    "//content/public/browser",
     "//extensions/common",
     "//extensions/common/api",
   ]

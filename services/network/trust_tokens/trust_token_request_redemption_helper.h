@@ -7,11 +7,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "net/log/net_log_with_source.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/trust_tokens/proto/public.pb.h"
@@ -21,16 +21,8 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
-namespace net {
-class URLRequest;
-}  // namespace net
-
 namespace network {
 class TrustTokenStore;
-
-namespace mojom {
-class URLResponseHead;
-}  // namespace mojom
 
 // Class TrustTokenRequestRedemptionHelper performs a single trust token
 // redemption operation (https://github.com/wicg/trust-token-api): it attaches a
@@ -82,9 +74,9 @@ class TrustTokenRequestRedemptionHelper : public TrustTokenRequestHelper {
 
     // Given a trust token to redeem and parameters to encode in the redemption
     // request, returns a base64-encoded string suitable for attachment in the
-    // Sec-Trust-Token header, or nullopt on error. The exact format of the
-    // redemption request is currently considered an implementation detail of
-    // the underlying cryptographic code.
+    // Sec-Private-State-Token header, or nullopt on error. The exact format of
+    // the redemption request is currently considered an implementation detail
+    // of the underlying cryptographic code.
     //
     // Some representation of  |top_level_origin| is embedded in the redemption
     // request so that a token redemption can be bound to a particular top-level
@@ -93,14 +85,14 @@ class TrustTokenRequestRedemptionHelper : public TrustTokenRequestHelper {
         TrustToken token,
         const url::Origin& top_level_origin) = 0;
 
-    // Given a base64-encoded Sec-Trust-Token redemption response header,
-    // validates and extracts the redemption record (RR) contained in the
-    // header. If successful, returns the RR. Otherwise, returns nullopt.
+    // Given a Sec-Private-State-Token redemption response
+    // header, validates and extracts the redemption record (RR) contained in
+    // the header. If successful, returns the RR. Otherwise, returns nullopt.
     //
     // The Trust Tokens design doc is currently the normative source for the
     // RR's format.
     virtual absl::optional<std::string> ConfirmRedemption(
-        base::StringPiece response_header) = 0;
+        std::string_view response_header) = 0;
   };
 
   // Creates a new redemption helper.
@@ -133,11 +125,11 @@ class TrustTokenRequestRedemptionHelper : public TrustTokenRequestHelper {
   ~TrustTokenRequestRedemptionHelper() override;
 
   // Executes the outbound part of a Trust Tokens redemption operation,
-  // interpreting |request|'s URL's origin as the token issuance origin;
+  // interpreting |url|'s origin as the token issuance origin;
   // 1. Checks preconditions (see "Returns" below); if unsuccessful, fails.
   // 2. Executes a Trust Tokens key commitment request against the issuer; if
   //    unsuccessful, fails.
-  // 3. In a request header, adds a signed, unblinded token along with
+  // 3. Returns a header with a signed, unblinded token along with
   //    associated metadata provided by |cryptographer_|.
   //
   // Returns:
@@ -147,29 +139,31 @@ class TrustTokenRequestRedemptionHelper : public TrustTokenRequestHelper {
   //   or if the (issuer, top-level) pair has no tokens to redeem
   // * kAlreadyExists if the (issuer, top-level) pair already has a current
   //   RR and this helper was not parameterized with |kRefresh|.
+  // * kMissingIssuerKeys if there are no valid keys for the issuer.
   // * kFailedPrecondition if preconditions fail, including receiving a
   //   malformed or otherwise invalid key commitment record from the issuer,
   //   or if |kRefresh| was provided and the request was not initiated
   //   from an issuer context.
   //
-  // |request|'s initiator, and its destination URL's origin, must be both (1)
-  // HTTP or HTTPS and (2) "potentially trustworthy" in the sense of
+  // The |top_level_origin_|, and its destination |url|'s origin, must be both
+  // (1) HTTP or HTTPS and (2) "potentially trustworthy" in the sense of
   // network::IsOriginPotentiallyTrustworthy. (See the justification in the
   // constructor's comment.)
   void Begin(
-      net::URLRequest* request,
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done) override;
+      const GURL& url,
+      base::OnceCallback<void(absl::optional<net::HttpRequestHeaders>,
+                              mojom::TrustTokenOperationStatus)> done) override;
 
-  // Performs the second half of Trust Token issuance's client side:
-  // 1. Checks |response| for an issuance response header.
-  // 2. If the header is present, strips it from the response and passes its
-  // value to an underlying cryptographic library, which parses and validates
-  // the response and splits it into a number of signed, unblinded tokens.
+  // Performs the second half of Trust Token redemption's client side:
+  // 1. Checks |response_headers| for an redemption response header.
+  // 2. If the header is present, strips it from |response_headers| and passes
+  // its value to an underlying cryptographic library, which parses and
+  // validates the response.
   //
-  // If both of these steps are successful, stores the tokens in |token_store_|
-  // and returns kOk. Otherwise, returns kBadResponse.
+  // If both of these steps are successful, stores the redemption record in
+  // |token_store_| and returns kOk. Otherwise, returns kBadResponse.
   void Finalize(
-      mojom::URLResponseHead* response,
+      net::HttpResponseHeaders& response_headers,
       base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done) override;
 
   mojom::TrustTokenOperationResultPtr CollectOperationResultWithStatus(
@@ -179,8 +173,8 @@ class TrustTokenRequestRedemptionHelper : public TrustTokenRequestHelper {
   // Continuation of |Begin| after asynchronous key commitment fetching
   // concludes.
   void OnGotKeyCommitment(
-      net::URLRequest* request,
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done,
+      base::OnceCallback<void(absl::optional<net::HttpRequestHeaders>,
+                              mojom::TrustTokenOperationStatus)> done,
       mojom::TrustTokenKeyCommitmentResultPtr commitment_result);
 
   // Helper method: searches |token_store_| for a single trust token and returns

@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_util.h"
 
 namespace policy {
@@ -43,7 +43,7 @@ void FakeScheduledTaskExecutor::Start(
   // only be one outstanding task to start the timer. If there is a failure
   // the wake lock is released and acquired again when this task runs.
   base::Time cur_time = GetCurrentTime();
-  absl::optional<base::TimeDelta> delay_to_next_schedule =
+  std::optional<base::TimeDelta> delay_to_next_schedule =
       scheduled_task_util::CalculateNextScheduledTaskTimerDelay(
           *scheduled_task_data, cur_time, GetTimeZone());
   if (simulate_calculate_next_update_check_failure_ ||
@@ -55,7 +55,7 @@ void FakeScheduledTaskExecutor::Start(
   scheduled_task_time_ =
       cur_time + delay_to_next_schedule.value() + external_delay;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(result_cb), true));
   timer_.Start(FROM_HERE, delay_to_next_schedule.value() + external_delay,
                std::move(timer_expired_cb));

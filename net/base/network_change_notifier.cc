@@ -5,6 +5,7 @@
 #include "net/base/network_change_notifier.h"
 
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -28,7 +29,6 @@
 #include "net/dns/dns_config_service.h"
 #include "net/dns/system_dns_config_change_notifier.h"
 #include "net/url_request/url_request.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -38,7 +38,7 @@
 #elif BUILDFLAG(IS_APPLE)
 #include "net/base/network_change_notifier_mac.h"
 #elif BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
-#include "net/base/network_change_notifier_posix.h"
+#include "net/base/network_change_notifier_passive.h"
 #elif BUILDFLAG(IS_FUCHSIA)
 #include "net/base/network_change_notifier_fuchsia.h"
 #endif
@@ -72,7 +72,8 @@ class MockNetworkChangeNotifier : public NetworkChangeNotifier {
             NetworkChangeCalculatorParams(),
             dns_config_notifier.get(),
             // Omit adding observers from the constructor as that would prevent
-            // construction when SequencedTaskRunnerHandle isn't set.
+            // construction when SingleThreadTaskRunner::CurrentDefaultHandle
+            // isn't set.
             /* omit_observers_in_constructor_for_testing=*/true),
         dns_config_notifier_(std::move(dns_config_notifier)) {}
 
@@ -248,6 +249,11 @@ class NetworkChangeNotifier::ObserverList {
   const scoped_refptr<
       base::ObserverListThreadSafe<DefaultNetworkActiveObserver>>
       default_network_active_observer_list_;
+
+  // Indicates if connection cost observer was added before
+  // network_change_notifier was initialized, if so ConnectionCostObserverAdded
+  // is invoked from constructor.
+  std::atomic_bool connection_cost_observers_added_ = false;
 };
 
 class NetworkChangeNotifier::SystemDnsConfigObserver
@@ -255,7 +261,7 @@ class NetworkChangeNotifier::SystemDnsConfigObserver
  public:
   virtual ~SystemDnsConfigObserver() = default;
 
-  void OnSystemDnsConfigChanged(absl::optional<DnsConfig> config) override {
+  void OnSystemDnsConfigChanged(std::optional<DnsConfig> config) override {
     NotifyObserversOfDNSChange();
   }
 };
@@ -296,8 +302,10 @@ std::unique_ptr<NetworkChangeNotifier> NetworkChangeNotifier::CreateIfNeeded(
       return nullptr;
   }
 
-  if (g_network_change_notifier_factory)
-    return g_network_change_notifier_factory->CreateInstance();
+  if (g_network_change_notifier_factory) {
+    return g_network_change_notifier_factory->CreateInstanceWithInitialTypes(
+        initial_type, initial_subtype);
+  }
 
 #if BUILDFLAG(IS_WIN)
   std::unique_ptr<NetworkChangeNotifierWin> network_change_notifier =
@@ -305,14 +313,14 @@ std::unique_ptr<NetworkChangeNotifier> NetworkChangeNotifier::CreateIfNeeded(
   network_change_notifier->WatchForAddressChange();
   return network_change_notifier;
 #elif BUILDFLAG(IS_ANDROID)
-  // Fallback to use NetworkChangeNotifierPosix if NetworkChangeNotifierFactory
-  // is not set. Currently used for tests and when running network
-  // service in a separate process.
-  return std::make_unique<NetworkChangeNotifierPosix>(initial_type,
-                                                      initial_subtype);
+  // Fallback to use NetworkChangeNotifierPassive if
+  // NetworkChangeNotifierFactory is not set. Currently used for tests and when
+  // running network service in a separate process.
+  return std::make_unique<NetworkChangeNotifierPassive>(initial_type,
+                                                        initial_subtype);
 #elif BUILDFLAG(IS_CHROMEOS)
-  return std::make_unique<NetworkChangeNotifierPosix>(initial_type,
-                                                      initial_subtype);
+  return std::make_unique<NetworkChangeNotifierPassive>(initial_type,
+                                                        initial_subtype);
 #elif BUILDFLAG(IS_LINUX)
   return std::make_unique<NetworkChangeNotifierLinux>(
       std::unordered_set<std::string>());
@@ -514,13 +522,22 @@ const char* NetworkChangeNotifier::ConnectionTypeToString(
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 // static
-const internal::AddressTrackerLinux*
-NetworkChangeNotifier::GetAddressTracker() {
+AddressMapOwnerLinux* NetworkChangeNotifier::GetAddressMapOwner() {
   return g_network_change_notifier
-             ? g_network_change_notifier->GetAddressTrackerInternal()
+             ? g_network_change_notifier->GetAddressMapOwnerInternal()
              : nullptr;
 }
-#endif
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_FUCHSIA)
+// static
+const internal::NetworkInterfaceCache*
+NetworkChangeNotifier::GetNetworkInterfaceCache() {
+  return g_network_change_notifier
+             ? g_network_change_notifier->GetNetworkInterfaceCacheInternal()
+             : nullptr;
+}
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
 // static
 bool NetworkChangeNotifier::IsOffline() {
@@ -682,8 +699,13 @@ void NetworkChangeNotifier::AddNetworkObserver(NetworkObserver* observer) {
 void NetworkChangeNotifier::AddConnectionCostObserver(
     ConnectionCostObserver* observer) {
   DCHECK(!observer->observer_list_);
+  GetObserverList().connection_cost_observers_added_ = true;
   observer->observer_list_ = GetObserverList().connection_cost_observer_list_;
   observer->observer_list_->AddObserver(observer);
+  base::AutoLock auto_lock(NetworkChangeNotifierCreationLock());
+  if (g_network_change_notifier) {
+    g_network_change_notifier->ConnectionCostObserverAdded();
+  }
 }
 
 void NetworkChangeNotifier::AddDefaultNetworkActiveObserver(
@@ -842,6 +864,9 @@ NetworkChangeNotifier::NetworkChangeNotifier(
     g_network_change_notifier = this;
 
     system_dns_config_notifier_->AddObserver(system_dns_config_observer_.get());
+    if (GetObserverList().connection_cost_observers_added_) {
+      g_network_change_notifier->ConnectionCostObserverAdded();
+    }
   }
   if (!omit_observers_in_constructor_for_testing) {
     network_change_calculator_ =
@@ -850,8 +875,14 @@ NetworkChangeNotifier::NetworkChangeNotifier(
 }
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-const internal::AddressTrackerLinux*
-NetworkChangeNotifier::GetAddressTrackerInternal() const {
+AddressMapOwnerLinux* NetworkChangeNotifier::GetAddressMapOwnerInternal() {
+  return nullptr;
+}
+#endif
+
+#if BUILDFLAG(IS_FUCHSIA)
+const internal::NetworkInterfaceCache*
+NetworkChangeNotifier::GetNetworkInterfaceCacheInternal() const {
   return nullptr;
 }
 #endif

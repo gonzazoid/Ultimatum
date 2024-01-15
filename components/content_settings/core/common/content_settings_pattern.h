@@ -11,7 +11,7 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 
 class GURL;
@@ -22,7 +22,7 @@ class PatternParser;
 namespace mojom {
 class ContentSettingsPatternDataView;
 }
-}
+}  // namespace content_settings
 
 // A pattern used in content setting rules. See |IsValid| for a description of
 // possible patterns.
@@ -88,6 +88,8 @@ class ContentSettingsPattern {
     PatternParts& operator=(const PatternParts& other);
     PatternParts& operator=(PatternParts&& other);
 
+    bool operator==(const PatternParts& other) const;
+
     // Lowercase string of the URL scheme to match. This string is empty if the
     // |is_scheme_wildcard| flag is set.
     std::string scheme;
@@ -123,7 +125,7 @@ class ContentSettingsPattern {
 
   class BuilderInterface {
    public:
-    virtual ~BuilderInterface() {}
+    virtual ~BuilderInterface() = default;
 
     virtual BuilderInterface* WithPort(const std::string& port) = 0;
 
@@ -163,6 +165,10 @@ class ContentSettingsPattern {
 
   // Returns a pattern that matches exactly this URL.
   static ContentSettingsPattern FromURLNoWildcard(const GURL& url);
+
+  // Converts a given url to a ContentSettingsPattern that represents a site,
+  // i.e. with domain, path, and port wildcards.
+  static ContentSettingsPattern FromURLToSchemefulSitePattern(const GURL& url);
 
   // Returns a pattern that matches the given pattern specification.
   // Valid patterns specifications are:
@@ -221,15 +227,16 @@ class ContentSettingsPattern {
   // Returns a std::string representation of this pattern.
   std::string ToString() const;
 
+  // Returns a valid URL that matches the pattern if a host part is specified.
+  // If the pattern matches a file:// scheme, the path needs to be specified.
+  // Returns GURL() otherwise.
+  GURL ToRepresentativeUrl() const;
+
   // Returns scheme type of pattern.
   ContentSettingsPattern::SchemeType GetScheme() const;
 
   // Returns the host of a pattern.
   const std::string& GetHost() const;
-
-  // True if this pattern has a non-empty path.  Can only be used for patterns
-  // with file: schemes.
-  bool HasPath() const;
 
   // Compares the pattern with a given |other| pattern and returns the
   // |Relation| of the two patterns.
@@ -246,6 +253,11 @@ class ContentSettingsPattern {
 
   // Returns true if the pattern has a higher priority than the |other| pattern.
   bool operator>(const ContentSettingsPattern& other) const;
+
+  // Formatter method for Google Test
+  friend void PrintTo(const ContentSettingsPattern& pattern, std::ostream* os) {
+    *os << pattern.ToString();
+  }
 
  private:
   friend class content_settings::PatternParser;

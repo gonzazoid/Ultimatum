@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/scoped_refptr.h"
@@ -18,6 +18,7 @@
 #include "base/time/time.h"
 #include "media/base/media_export.h"
 #include "media/base/video_encoder.h"
+#include "media/media_buildflags.h"
 #include "media/video/video_encode_accelerator.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/color_space.h"
@@ -49,7 +50,9 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
   VideoEncodeAcceleratorAdapter(
       GpuVideoAcceleratorFactories* gpu_factories,
       std::unique_ptr<MediaLog> media_log,
-      scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
+      VideoEncodeAccelerator::Config::EncoderType required_encoder_type =
+          VideoEncodeAccelerator::Config::EncoderType::kHardware);
   ~VideoEncodeAcceleratorAdapter() override;
 
   enum class InputBufferKind { Any, GpuMemBuf, CpuMemBuf };
@@ -59,10 +62,11 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
   // VideoEncoder implementation.
   void Initialize(VideoCodecProfile profile,
                   const Options& options,
+                  EncoderInfoCB info_cb,
                   OutputCB output_cb,
                   EncoderStatusCB done_cb) override;
   void Encode(scoped_refptr<VideoFrame> frame,
-              bool key_frame,
+              const EncodeOptions& encode_options,
               EncoderStatusCB done_cb) override;
   void ChangeOptions(const Options& options,
                      OutputCB output_cb,
@@ -77,7 +81,7 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
   void BitstreamBufferReady(int32_t buffer_id,
                             const BitstreamBufferMetadata& metadata) override;
 
-  void NotifyError(VideoEncodeAccelerator::Error error) override;
+  void NotifyErrorStatus(const EncoderStatus& status) override;
 
   void NotifyEncoderInfoChange(const VideoEncoderInfo& info) override;
 
@@ -92,7 +96,8 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
     kWaitingForFirstFrame,
     kInitializing,
     kReadyToEncode,
-    kFlushing
+    kFlushing,
+    kReconfiguring
   };
   struct PendingOp {
     PendingOp();
@@ -107,11 +112,12 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
   void InitCompleted(EncoderStatus status);
   void InitializeOnAcceleratorThread(VideoCodecProfile profile,
                                      const Options& options,
+                                     EncoderInfoCB info_cb,
                                      OutputCB output_cb,
                                      EncoderStatusCB done_cb);
   void InitializeInternalOnAcceleratorThread();
   void EncodeOnAcceleratorThread(scoped_refptr<VideoFrame> frame,
-                                 bool key_frame,
+                                 EncodeOptions encode_options,
                                  EncoderStatusCB done_cb);
   void FlushOnAcceleratorThread(EncoderStatusCB done_cb);
   void ChangeOptionsOnAcceleratorThread(const Options options,
@@ -121,15 +127,14 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
   template <class T>
   T WrapCallback(T cb);
   EncoderStatus::Or<scoped_refptr<VideoFrame>> PrepareGpuFrame(
-      const gfx::Size& size,
       scoped_refptr<VideoFrame> src_frame);
   EncoderStatus::Or<scoped_refptr<VideoFrame>> PrepareCpuFrame(
-      const gfx::Size& size,
       scoped_refptr<VideoFrame> src_frame);
 
   scoped_refptr<ReadOnlyRegionPool> input_pool_;
   scoped_refptr<base::UnsafeSharedMemoryPool> output_pool_;
-  std::unique_ptr<base::UnsafeSharedMemoryPool::Handle> output_handle_holder_;
+  std::vector<std::unique_ptr<base::UnsafeSharedMemoryPool::Handle>>
+      output_buffer_handles_;
   scoped_refptr<GpuMemoryBufferVideoFramePool> gmb_frame_pool_;
 
   std::unique_ptr<VideoEncodeAccelerator> accelerator_;
@@ -183,9 +188,15 @@ class MEDIA_EXPORT VideoEncodeAcceleratorAdapter
   VideoEncodeAccelerator::SupportedRateControlMode supported_rc_modes_ =
       VideoEncodeAccelerator::kNoMode;
   Options options_;
+  EncoderInfoCB info_cb_;
   OutputCB output_cb_;
+  EncoderStatusCB reconfigure_cb_;
 
   gfx::Size input_coded_size_;
+
+  VideoEncodeAccelerator::Config::EncoderType required_encoder_type_ =
+      VideoEncodeAccelerator::Config::EncoderType::kHardware;
+  bool supports_frame_size_change_ = false;
 };
 
 }  // namespace media

@@ -5,13 +5,20 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_BOREALIS_BOREALIS_SPLASH_SCREEN_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_BOREALIS_BOREALIS_SPLASH_SCREEN_VIEW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/borealis/borealis_util.h"
 #include "chrome/browser/ash/borealis/borealis_window_manager.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
+class Profile;
+
 // A splash screen for borealis, displays when borealis is clicked and closed
 // when the first borealis window shows.
 namespace borealis {
+
+void ShowBorealisSplashScreenView(Profile* profile);
+void CloseBorealisSplashScreenView();
+
 class BorealisSplashScreenView
     : public views::DialogDelegateView,
       public borealis::BorealisWindowManager::AppWindowLifetimeObserver {
@@ -24,6 +31,7 @@ class BorealisSplashScreenView
 
   // views::DialogDelegateView:
   void OnThemeChanged() override;
+  bool ShouldShowWindowTitle() const override;
 
   // Overrides for AppWindowLifetimeObserver
   void OnWindowManagerDeleted(
@@ -33,8 +41,11 @@ class BorealisSplashScreenView
   void OnGetRootPath(const std::string& path);
 
  private:
-  Profile* profile_ = nullptr;
-  base::raw_ptr<views::Label> starting_label_;
+  void UpdateColors();
+
+  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<views::Label> title_label_;
+  raw_ptr<views::Label> starting_label_;
   base::WeakPtrFactory<BorealisSplashScreenView> weak_factory_;
 };
 

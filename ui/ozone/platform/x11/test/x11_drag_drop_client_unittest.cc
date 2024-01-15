@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -18,7 +18,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkPath.h"
@@ -33,9 +32,9 @@
 #include "ui/base/x/x11_util.h"
 #include "ui/events/event_utils.h"
 #include "ui/events/platform/x11/x11_event_source.h"
-#include "ui/gfx/x/x11_atom_cache.h"
+#include "ui/gfx/x/atom_cache.h"
+#include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
 #include "ui/ozone/platform/x11/os_exchange_data_provider_x11.h"
 #include "ui/ozone/platform/x11/x11_window.h"
 #include "ui/platform_window/platform_window_init_properties.h"
@@ -150,13 +149,11 @@ class SimpleTestDragDropClient : public XDragDropClient,
   void OnMouseReleased() override;
   void OnMoveLoopEnded() override;
 
-  std::unique_ptr<X11MoveLoop> CreateMoveLoop(X11MoveLoopDelegate* delegate);
-
   // The x11::Window of the window which is simulated to be the topmost window.
   x11::Window target_window_ = x11::Window::None;
 
-  // The move loop. Not owned.
-  raw_ptr<TestMoveLoop> loop_ = nullptr;
+  // The move loop.
+  std::unique_ptr<TestMoveLoop> loop_;
 
   base::OnceClosure quit_closure_;
 };
@@ -294,12 +291,6 @@ bool SimpleTestDragDropClient::IsMoveLoopRunning() {
   return loop_->IsRunning();
 }
 
-std::unique_ptr<X11MoveLoop> SimpleTestDragDropClient::CreateMoveLoop(
-    X11MoveLoopDelegate* delegate) {
-  loop_ = new TestMoveLoop(delegate);
-  return base::WrapUnique(loop_.get());
-}
-
 DragOperation SimpleTestDragDropClient::StartDragAndDrop(
     std::unique_ptr<OSExchangeData> data,
     X11Window* source_window,
@@ -307,13 +298,14 @@ DragOperation SimpleTestDragDropClient::StartDragAndDrop(
     mojom::DragEventSource source) {
   InitDrag(allowed_operations, data.get());
 
-  auto loop = CreateMoveLoop(this);
+  loop_ = std::make_unique<TestMoveLoop>(this);
 
   // Cursors are not set. Thus, pass nothing.
   loop_->RunMoveLoop(!source_window->HasCapture(), {}, {});
 
   auto resulting_operation = negotiated_operation();
   CleanupDrag();
+  loop_.reset();
   return resulting_operation;
 }
 
@@ -545,8 +537,8 @@ void BasicStep2(TestDragDropClient* client, x11::Window toplevel) {
             static_cast<x11::Window>(events[0].data.data32[0]));
   EXPECT_EQ(1u, events[0].data.data32[1] & 1);
   std::vector<x11::Atom> targets;
-  GetArrayProperty(client->source_xwindow(), x11::GetAtom("XdndTypeList"),
-                   &targets);
+  x11::Connection::Get()->GetArrayProperty(
+      client->source_xwindow(), x11::GetAtom("XdndTypeList"), &targets);
   EXPECT_FALSE(targets.empty());
 
   EXPECT_TRUE(client->MessageHasType(events[1], "XdndPosition"));
@@ -615,14 +607,14 @@ void BasicStep3(TestDragDropClient* client, x11::Window toplevel) {
 TEST_F(X11DragDropClientTest, Basic) {
   x11::Window toplevel = static_cast<x11::Window>(1);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BasicStep2, client(), toplevel));
   DragOperation result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kCopy, result);
 
   // Do another drag and drop to test that the data is properly cleaned up as a
   // result of the XdndFinished message.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BasicStep3, client(), toplevel));
   result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kCopy, result);
@@ -656,7 +648,7 @@ void TargetDoesNotRespondStep2(TestDragDropClient* client) {
 // DNDCollectionWindow is an example of an XdndAware target which does not
 // respond to XdndPosition messages at all.
 TEST_F(X11DragDropClientTest, TargetDoesNotRespond) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TargetDoesNotRespondStep2, client()));
   DragOperation result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kNone, result);
@@ -701,7 +693,7 @@ void QueuePositionStep2(TestDragDropClient* client) {
 // Test that XdndPosition messages are queued till the pending XdndPosition
 // message is acked via an XdndStatus message.
 TEST_F(X11DragDropClientTest, QueuePosition) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&QueuePositionStep2, client()));
   DragOperation result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kCopy, result);
@@ -753,7 +745,7 @@ void TargetChangesStep2(TestDragDropClient* client) {
 
 // Test the behavior when the target changes during a drag.
 TEST_F(X11DragDropClientTest, TargetChanges) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TargetChangesStep2, client()));
   DragOperation result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kCopy, result);
@@ -822,13 +814,13 @@ void RejectAfterMouseReleaseStep3(TestDragDropClient* client) {
 // Test that the source sends XdndLeave instead of XdndDrop if the drag
 // operation is rejected after the mouse is released.
 TEST_F(X11DragDropClientTest, RejectAfterMouseRelease) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&RejectAfterMouseReleaseStep2, client()));
   DragOperation result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kNone, result);
 
   // Repeat the test but reject the drop in the XdndFinished message instead.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&RejectAfterMouseReleaseStep3, client()));
   result = StartDragAndDrop();
   EXPECT_EQ(DragOperation::kNone, result);

@@ -6,8 +6,8 @@
 
 #include <map>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chrome/browser/apps/platform_apps/api/sync_file_system/sync_file_system_api_helpers.h"
@@ -90,8 +90,8 @@ void FileMetadataHandler::DidGetExtensions(std::string callback_id,
 }
 
 void FileMetadataHandler::DidGetFileMetadata(std::string callback_id,
-                                             const base::ListValue& files) {
-  ResolveJavascriptCallback(base::Value(callback_id), files);
+                                             base::Value::List files) {
+  ResolveJavascriptCallback(base::Value(callback_id), std::move(files));
 }
 
 }  // namespace syncfs_internals

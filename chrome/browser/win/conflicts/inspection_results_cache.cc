@@ -208,9 +208,6 @@ ReadCacheResult ReadInspectionResultsCache(
     const base::FilePath& file_path,
     uint32_t min_time_stamp,
     InspectionResultsCache* inspection_results_cache) {
-  if (!base::FeatureList::IsEnabled(kInspectionResultsCache))
-    return ReadCacheResult::kSuccess;
-
   std::string contents;
   if (!ReadFileToString(file_path, &contents))
     return ReadCacheResult::kFailReadFile;
@@ -230,15 +227,11 @@ ReadCacheResult ReadInspectionResultsCache(
 bool WriteInspectionResultsCache(
     const base::FilePath& file_path,
     const InspectionResultsCache& inspection_results_cache) {
-  if (!base::FeatureList::IsEnabled(kInspectionResultsCache))
-    return true;
-
   base::Pickle pickle =
       SerializeInspectionResultsCache(inspection_results_cache);
 
   // TODO(1022041): Investigate if using WriteFileAtomically() in a
   // CONTINUE_ON_SHUTDOWN sequence can cause too many corrupted caches.
   return base::ImportantFileWriter::WriteFileAtomically(
-      file_path, base::StringPiece(static_cast<const char*>(pickle.data()),
-                                   pickle.size()));
+      file_path, base::StringPiece(pickle.data_as_char(), pickle.size()));
 }

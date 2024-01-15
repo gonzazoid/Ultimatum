@@ -5,10 +5,10 @@
 #include "chrome/browser/ash/policy/reporting/app_install_event_log_manager_wrapper.h"
 
 #include "ash/components/arc/arc_prefs.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -80,9 +80,10 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
     event.set_event_type(em::AppInstallReportLogEvent::SUCCESS);
     log.Add(kPackageName, event);
     log.Store();
-    profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsRequested,
-                             app_list_);
-    profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsPending, app_list_);
+    profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsRequested,
+                                 app_list_.Clone());
+    profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsPending,
+                                 app_list_.Clone());
   }
 
   void FlushPendingTasks() {
@@ -133,7 +134,7 @@ class AppInstallEventLogManagerWrapperTest : public testing::Test {
   TestingProfile profile_;
 
   const base::FilePath log_file_path_;
-  base::ListValue app_list_;
+  base::Value::List app_list_;
 
   std::unique_ptr<AppInstallEventLogManagerWrapperTestable> wrapper_;
 

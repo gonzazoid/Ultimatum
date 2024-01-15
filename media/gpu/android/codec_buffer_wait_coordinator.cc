@@ -6,7 +6,7 @@
 
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace media {
 
@@ -32,7 +32,7 @@ CodecBufferWaitCoordinator::CodecBufferWaitCoordinator(
     : RefCountedLockHelperDrDc(std::move(drdc_lock)),
       texture_owner_(std::move(texture_owner)),
       frame_available_event_(new FrameAvailableEvent()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DCHECK(texture_owner_);
   texture_owner_->SetFrameAvailableCallback(base::BindRepeating(
       &FrameAvailableEvent::Signal, frame_available_event_));
@@ -60,29 +60,22 @@ void CodecBufferWaitCoordinator::WaitForFrameAvailable() {
   const base::TimeDelta elapsed = call_time - release_time_;
   const base::TimeDelta remaining = max_wait_.value() - elapsed;
   release_time_ = base::TimeTicks();
-  bool timed_out = false;
 
   if (remaining <= base::TimeDelta()) {
     if (!frame_available_event_->event.IsSignaled()) {
       DVLOG(1) << "Deferred WaitForFrameAvailable() timed out, elapsed: "
                << elapsed.InMillisecondsF() << "ms";
-      timed_out = true;
     }
   } else {
     DCHECK_LE(remaining, max_wait_.value());
-    SCOPED_UMA_HISTOGRAM_TIMER(
-        "Media.CodecImage.CodecBufferWaitCoordinator.WaitTimeForFrame");
     if (!frame_available_event_->event.TimedWait(remaining)) {
       DVLOG(1) << "WaitForFrameAvailable() timed out, elapsed: "
                << elapsed.InMillisecondsF()
                << "ms, additionally waited: " << remaining.InMillisecondsF()
                << "ms, total: " << (elapsed + remaining).InMillisecondsF()
                << "ms";
-      timed_out = true;
     }
   }
-  UMA_HISTOGRAM_BOOLEAN(
-      "Media.CodecImage.CodecBufferWaitCoordinator.FrameTimedOut", timed_out);
 }
 
 }  // namespace media

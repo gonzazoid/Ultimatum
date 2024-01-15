@@ -9,20 +9,15 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/ash/components/network/network_state_handler_observer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/error_screens_histogram_helper.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
 #include "chrome/browser/ash/login/version_updater/version_updater.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/update_required_screen_handler.h"
-#include "components/user_manager/remove_user_delegate.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 
 namespace base {
 class Clock;
@@ -30,11 +25,14 @@ class Clock;
 
 namespace ash {
 
+class ErrorScreensHistogramHelper;
+class NetworkStateHandler;
+class UpdateRequiredView;
+
 // Controller for the update required screen.
 class UpdateRequiredScreen : public BaseScreen,
                              public VersionUpdater::Delegate,
-                             public NetworkStateHandlerObserver,
-                             public user_manager::RemoveUserDelegate {
+                             public NetworkStateHandlerObserver {
  public:
   using TView = UpdateRequiredView;
 
@@ -86,10 +84,6 @@ class UpdateRequiredScreen : public BaseScreen,
   // NetworkStateHandlerObserver:
   void DefaultNetworkChanged(const NetworkState* network) override;
 
-  // user_manager::RemoveUserDelegate:
-  void OnBeforeUserRemoved(const AccountId& account_id) override;
-  void OnUserRemoved(const AccountId& account_id) override;
-
   void RefreshNetworkState();
   void RefreshView(const VersionUpdater::UpdateInfo& update_info);
 
@@ -116,7 +110,7 @@ class UpdateRequiredScreen : public BaseScreen,
   bool is_first_portal_notification_ = true;
 
   base::WeakPtr<UpdateRequiredView> view_;
-  ErrorScreen* error_screen_;
+  raw_ptr<ErrorScreen> error_screen_;
   base::RepeatingClosure exit_callback_;
   std::unique_ptr<ErrorScreensHistogramHelper> histogram_helper_;
 
@@ -144,7 +138,7 @@ class UpdateRequiredScreen : public BaseScreen,
   base::OneShotTimer error_message_timer_;
 
   // Overridden for testing EOL by setting the current time.
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
 
   base::TimeDelta error_message_delay_;
 
@@ -156,11 +150,5 @@ class UpdateRequiredScreen : public BaseScreen,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::UpdateRequiredScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_UPDATE_REQUIRED_SCREEN_H_

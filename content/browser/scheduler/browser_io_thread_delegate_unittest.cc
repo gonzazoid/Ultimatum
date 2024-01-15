@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread.h"
 #include "content/browser/scheduler/browser_task_executor.h"
@@ -29,7 +29,7 @@ TEST(BrowserIOThreadDelegateTest, CanPostTasksToThread) {
   thread.StartWithOptions(std::move(options));
 
   auto runner =
-      handle->GetBrowserTaskRunner(BrowserTaskQueues::QueueType::kDefault);
+      handle->GetBrowserTaskRunner(BrowserTaskQueues::QueueType::kUserBlocking);
 
   base::WaitableEvent event;
   runner->PostTask(FROM_HERE, base::BindOnce(&base::WaitableEvent::Signal,

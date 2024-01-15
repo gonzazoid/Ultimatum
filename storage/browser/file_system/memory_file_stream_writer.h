@@ -5,9 +5,9 @@
 #ifndef STORAGE_BROWSER_FILE_SYSTEM_MEMORY_FILE_STREAM_WRITER_H_
 #define STORAGE_BROWSER_FILE_SYSTEM_MEMORY_FILE_STREAM_WRITER_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "storage/browser/file_system/file_stream_writer.h"
 #include "storage/browser/file_system/obfuscated_file_util_memory_delegate.h"
@@ -34,7 +34,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) MemoryFileStreamWriter
             int buf_len,
             net::CompletionOnceCallback callback) override;
   int Cancel(net::CompletionOnceCallback callback) override;
-  int Flush(net::CompletionOnceCallback callback) override;
+  int Flush(FlushMode flush_mode,
+            net::CompletionOnceCallback callback) override;
 
  private:
   void OnWriteCompleted(net::CompletionOnceCallback callback, int result);

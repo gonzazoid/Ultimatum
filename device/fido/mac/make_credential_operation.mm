@@ -8,12 +8,11 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/bind.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/containers/contains.h"
-#include "base/feature_list.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/mac_logging.h"
-#include "base/mac/scoped_cftyperef.h"
+#include "base/functional/bind.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/device_event_log/device_event_log.h"
@@ -31,9 +30,7 @@
 #include "device/fido/strings/grit/fido_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 MakeCredentialOperation::MakeCredentialOperation(
     CtapMakeCredentialRequest request,
@@ -46,24 +43,29 @@ MakeCredentialOperation::MakeCredentialOperation(
 MakeCredentialOperation::~MakeCredentialOperation() = default;
 
 void MakeCredentialOperation::Run() {
-  // Verify pubKeyCredParams contains ES-256, which is the only algorithm we
-  // support.
   if (!base::Contains(
           request_.public_key_credential_params.public_key_credential_params(),
           static_cast<int>(CoseAlgorithmIdentifier::kEs256),
           &PublicKeyCredentialParams::CredentialInfo::algorithm)) {
-    DVLOG(1) << "No supported algorithm found.";
+    FIDO_LOG(ERROR) << "No supported algorithm found";
     std::move(callback_).Run(
         CtapDeviceResponseCode::kCtap2ErrUnsupportedAlgorithm, absl::nullopt);
     return;
   }
 
-  // Display the macOS Touch ID prompt.
-  touch_id_context_->PromptTouchId(
-      l10n_util::GetStringFUTF16(IDS_WEBAUTHN_TOUCH_ID_PROMPT_REASON,
-                                 base::UTF8ToUTF16(request_.rp.id)),
-      base::BindOnce(&MakeCredentialOperation::PromptTouchIdDone,
-                     base::Unretained(this)));
+  const bool require_uv =
+      DeviceHasBiometricsAvailable() ||
+      request_.user_verification == UserVerificationRequirement::kRequired;
+  if (require_uv) {
+    touch_id_context_->PromptTouchId(
+        l10n_util::GetStringFUTF16(IDS_WEBAUTHN_TOUCH_ID_PROMPT_REASON,
+                                   base::UTF8ToUTF16(request_.rp.id)),
+        base::BindOnce(&MakeCredentialOperation::PromptTouchIdDone,
+                       base::Unretained(this)));
+    return;
+  }
+
+  CreateCredential(/*has_uv=*/false);
 }
 
 void MakeCredentialOperation::PromptTouchIdDone(bool success) {
@@ -76,9 +78,13 @@ void MakeCredentialOperation::PromptTouchIdDone(bool success) {
   // Setting an authentication context authorizes credentials returned from the
   // credential store for signing without triggering yet another Touch ID
   // prompt.
-  credential_store_->set_authentication_context(
+  credential_store_->SetAuthenticationContext(
       touch_id_context_->authentication_context());
 
+  CreateCredential(/*has_uv=*/true);
+}
+
+void MakeCredentialOperation::CreateCredential(bool has_uv) {
   if (!request_.exclude_list.empty()) {
     absl::optional<std::list<Credential>> credentials =
         credential_store_->FindCredentialsFromCredentialDescriptorList(
@@ -105,19 +111,13 @@ void MakeCredentialOperation::PromptTouchIdDone(bool success) {
     return;
   }
 
+  // Generate the new key pair.
+  //
   // New credentials are always discoverable. But older non-discoverable
   // credentials may exist.
-  const bool resident_key =
-      base::FeatureList::IsEnabled(kWebAuthnNewDiscoverableCredentialsUi)
-          ? true
-          : request_.resident_key_required;
-
-  // Generate the new key pair.
-  absl::optional<std::pair<Credential, base::ScopedCFTypeRef<SecKeyRef>>>
+  absl::optional<std::pair<Credential, base::apple::ScopedCFTypeRef<SecKeyRef>>>
       credential_result = credential_store_->CreateCredential(
-          request_.rp.id, request_.user,
-          resident_key ? TouchIdCredentialStore::kDiscoverable
-                       : TouchIdCredentialStore::kNonDiscoverable);
+          request_.rp.id, request_.user, TouchIdCredentialStore::kDiscoverable);
   if (!credential_result) {
     FIDO_LOG(ERROR) << "CreateCredential() failed";
     std::move(callback_).Run(CtapDeviceResponseCode::kCtap2ErrOther,
@@ -130,7 +130,7 @@ void MakeCredentialOperation::PromptTouchIdDone(bool success) {
   // we perform self-attestation.
   absl::optional<AttestedCredentialData> attested_credential_data =
       MakeAttestedCredentialData(credential.credential_id,
-                                 SecKeyRefToECPublicKey(sec_key_ref));
+                                 SecKeyRefToECPublicKey(sec_key_ref.get()));
   if (!attested_credential_data) {
     FIDO_LOG(ERROR) << "MakeAttestedCredentialData failed";
     std::move(callback_).Run(CtapDeviceResponseCode::kCtap2ErrOther,
@@ -139,9 +139,10 @@ void MakeCredentialOperation::PromptTouchIdDone(bool success) {
   }
   AuthenticatorData authenticator_data = MakeAuthenticatorData(
       credential.metadata.sign_counter_type, request_.rp.id,
-      std::move(*attested_credential_data));
-  absl::optional<std::vector<uint8_t>> signature = GenerateSignature(
-      authenticator_data, request_.client_data_hash, credential.private_key);
+      std::move(*attested_credential_data), has_uv);
+  absl::optional<std::vector<uint8_t>> signature =
+      GenerateSignature(authenticator_data, request_.client_data_hash,
+                        credential.private_key.get());
   if (!signature) {
     FIDO_LOG(ERROR) << "MakeSignature failed";
     std::move(callback_).Run(CtapDeviceResponseCode::kCtap2ErrOther,
@@ -155,13 +156,12 @@ void MakeCredentialOperation::PromptTouchIdDone(bool success) {
           std::make_unique<PackedAttestationStatement>(
               CoseAlgorithmIdentifier::kEs256, std::move(*signature),
               /*x509_certificates=*/std::vector<std::vector<uint8_t>>())));
-  response.is_resident_key = resident_key;
+  // New credentials are always discoverable.
+  response.is_resident_key = true;
   response.transports.emplace();
   response.transports->insert(FidoTransportProtocol::kInternal);
   std::move(callback_).Run(CtapDeviceResponseCode::kSuccess,
                            std::move(response));
 }
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac

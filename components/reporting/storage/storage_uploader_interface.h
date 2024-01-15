@@ -8,11 +8,11 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
-#include "components/reporting/resources/resource_interface.h"
+#include "components/reporting/resources/resource_manager.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
 
@@ -28,15 +28,18 @@ class UploaderInterface {
  public:
   // Reason upload is instantiated.
   enum class UploadReason : uint32_t {
-    UNKNOWN = 0,
-    MANUAL = 1,
-    KEY_DELIVERY = 2,
-    PERIODIC = 3,
-    IMMEDIATE_FLUSH = 4,
-    FAILURE_RETRY = 5,
-    INCOMPLETE_RETRY = 6,
-    INIT_RESUME = 7,
-    MAX_REASON = 8,  // Anything beyond this is illegal.
+    UNKNOWN = 0,           // Dummy value, should not be attached to any upload
+    MANUAL = 1,            // Upload triggered by manual Flush call
+    KEY_DELIVERY = 2,      // Upload requesting encryption key delivery/update
+    PERIODIC = 3,          // Upload triggered by periodic queue timer
+    IMMEDIATE_FLUSH = 4,   // Upload after IMMEDIATE/SECURITY event is enqueued
+    FAILURE_RETRY = 5,     // Retry after any upload failure
+    INCOMPLETE_RETRY = 6,  // Retry when some time after upload the events
+                           // are still not confirmed by the server
+    INIT_RESUME = 7,       // Automatic upload when queue initialization found
+                           // the queue is not empty (some events remained after
+                           // shutdown and restart)
+    MAX_REASON = 8,        // Anything beyond this is illegal
   };
 
   // using AsyncStartUploaderCb =
@@ -78,7 +81,7 @@ class UploaderInterface {
   // response). Called always, regardless of whether there were errors.
   virtual void Completed(Status final_status) = 0;
 
-  static base::StringPiece ReasonToString(UploadReason);
+  static std::string_view ReasonToString(UploadReason);
 
  protected:
   UploaderInterface();

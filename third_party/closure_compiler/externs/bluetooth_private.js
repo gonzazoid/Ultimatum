@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-// IMPORTANT NOTE: Work-around for crbug.com/543822
+// TODO(crbug.com/543822): Disable automatic extern generation until fixed.
 // s/chrome.bluetoothPrivate.bluetooth.Device/chrome.bluetooth.Device/
 // s/chrome.bluetoothPrivate.bluetooth.Transport/chrome.bluetooth.Transport/
 
@@ -49,6 +49,11 @@ chrome.bluetoothPrivate.ConnectResultType = {
   SUCCESS: 'success',
   UNKNOWN_ERROR: 'unknownError',
   UNSUPPORTED_DEVICE: 'unsupportedDevice',
+  NOT_READY: 'notReady',
+  ALREADY_EXISTS: 'alreadyExists',
+  NOT_CONNECTED: 'notConnected',
+  DOES_NOT_EXIST: 'doesNotExist',
+  INVALID_ARGS: 'invalidArgs',
 };
 
 /**

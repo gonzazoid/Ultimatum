@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
@@ -43,7 +43,7 @@ namespace {
 
 ACTION_P(ReturnBuffer, buffer) {
   std::move(arg0).Run(
-      buffer.get() ? DemuxerStream::kOk : DemuxerStream::kAborted, buffer);
+      buffer.get() ? DemuxerStream::kOk : DemuxerStream::kAborted, {buffer});
 }
 
 }  // namespace
@@ -76,7 +76,8 @@ class DecryptingMediaResourceTest : public testing::Test {
   }
 
   bool HasEncryptedStream() {
-    for (auto* stream : decrypting_media_resource_->GetAllStreams()) {
+    for (media::DemuxerStream* stream :
+         decrypting_media_resource_->GetAllStreams()) {
       if ((stream->type() == DemuxerStream::AUDIO &&
            stream->audio_decoder_config().is_encrypted()) ||
           (stream->type() == DemuxerStream::VIDEO &&
@@ -91,8 +92,8 @@ class DecryptingMediaResourceTest : public testing::Test {
     streams_.push_back(CreateMockDemuxerStream(type, encrypted));
   }
 
-  std::vector<DemuxerStream*> GetAllStreams() {
-    std::vector<DemuxerStream*> streams;
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> GetAllStreams() {
+    std::vector<raw_ptr<DemuxerStream, VectorExperimental>> streams;
 
     for (auto& stream : streams_) {
       streams.push_back(stream.get());
@@ -102,7 +103,7 @@ class DecryptingMediaResourceTest : public testing::Test {
   }
 
   MOCK_METHOD2(BufferReady,
-               void(DemuxerStream::Status, scoped_refptr<DecoderBuffer>));
+               void(DemuxerStream::Status, DemuxerStream::DecoderBufferVector));
 
  protected:
   base::test::TaskEnvironment task_environment_;
@@ -211,15 +212,16 @@ TEST_F(DecryptingMediaResourceTest, WaitingCallback) {
   EXPECT_CALL(*streams_.front(), OnRead(_))
       .WillRepeatedly(ReturnBuffer(encrypted_buffer_));
   EXPECT_CALL(decryptor_, Decrypt(_, encrypted_buffer_, _))
-      .WillRepeatedly(RunOnceCallback<2>(Decryptor::kNoKey,
-                                         scoped_refptr<DecoderBuffer>()));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<2>(
+          Decryptor::kNoKey, scoped_refptr<DecoderBuffer>()));
   EXPECT_CALL(decrypting_media_resource_init_cb_, Run(true));
   EXPECT_CALL(waiting_cb_, Run(WaitingReason::kNoDecryptionKey));
 
   decrypting_media_resource_->Initialize(
       decrypting_media_resource_init_cb_.Get(), waiting_cb_.Get());
-  decrypting_media_resource_->GetAllStreams().front()->Read(base::BindOnce(
-      &DecryptingMediaResourceTest::BufferReady, base::Unretained(this)));
+  decrypting_media_resource_->GetAllStreams().front()->Read(
+      1, base::BindOnce(&DecryptingMediaResourceTest::BufferReady,
+                        base::Unretained(this)));
   task_environment_.RunUntilIdle();
 }
 

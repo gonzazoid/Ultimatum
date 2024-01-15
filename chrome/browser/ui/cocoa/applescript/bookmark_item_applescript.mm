@@ -4,10 +4,9 @@
 
 #import "chrome/browser/ui/cocoa/applescript/bookmark_item_applescript.h"
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #import "chrome/browser/app_controller_mac.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #import "chrome/browser/ui/cocoa/applescript/apple_event_util.h"
 #import "chrome/browser/ui/cocoa/applescript/error_applescript.h"
 #include "components/bookmarks/browser/bookmark_model.h"
@@ -16,8 +15,14 @@
 using bookmarks::BookmarkModel;
 using bookmarks::BookmarkNode;
 
-@interface BookmarkItemAppleScript()
-@property (nonatomic, copy) NSString* tempURL;
+@interface BookmarkItemAppleScript ()
+
+// Contains the temporary URL when a user creates a new item with the URL
+// specified like:
+//
+//   make new bookmarks item with properties {URL:"foo"}
+@property(nonatomic, copy) NSString* tempURL;
+
 @end
 
 @implementation BookmarkItemAppleScript
@@ -26,56 +31,51 @@ using bookmarks::BookmarkNode;
 
 - (instancetype)init {
   if ((self = [super init])) {
-    [self setTempURL:@""];
+    self.tempURL = @"";
   }
   return self;
 }
 
-- (void)dealloc {
-  [_tempURL release];
-  [super dealloc];
-}
-
-- (void)setBookmarkNode:(const BookmarkNode*)aBookmarkNode {
-  [super setBookmarkNode:aBookmarkNode];
-  [self setURL:[self tempURL]];
+- (void)didCreateBookmarkNode:(const bookmarks::BookmarkNode*)bookmarkNode {
+  [super didCreateBookmarkNode:bookmarkNode];
+  self.URL = self.tempURL;
 }
 
 - (NSString*)URL {
-  if (!_bookmarkNode)
+  if (!self.bookmarkNode) {
     return _tempURL;
+  }
 
-  return base::SysUTF8ToNSString(_bookmarkNode->url().spec());
+  return base::SysUTF8ToNSString(self.bookmarkNode->url().spec());
 }
 
-- (void)setURL:(NSString*)aURL {
-  GURL url(base::SysNSStringToUTF8(aURL));
-
-  AppController* appDelegate =
-      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
-  if (!chrome::mac::IsJavaScriptEnabledForProfile([appDelegate lastProfile]) &&
-      url.SchemeIs(url::kJavaScriptScheme)) {
-    AppleScript::SetError(AppleScript::errJavaScriptUnsupported);
-    return;
-  }
-
-  // If a scripter sets a URL before the node is added, URL is saved at a
+- (void)setURL:(NSString*)url {
+  // If a scripter sets a URL before the node is added, the URL is saved at a
   // temporary location.
-  if (!_bookmarkNode) {
-    [self setTempURL:aURL];
+  if (!self.bookmarkNode) {
+    self.tempURL = url;
     return;
   }
 
-  BookmarkModel* model = [self bookmarkModel];
-  if (!model)
-    return;
-
-  if (!url.is_valid()) {
-    AppleScript::SetError(AppleScript::errInvalidURL);
+  GURL gurl(base::SysNSStringToUTF8(url));
+  if (!gurl.is_valid()) {
+    AppleScript::SetError(AppleScript::Error::kInvalidURL);
     return;
   }
 
-  model->SetURL(_bookmarkNode, url,
+  if (!chrome::mac::IsJavaScriptEnabledForProfile(
+          AppController.sharedController.lastProfile) &&
+      gurl.SchemeIs(url::kJavaScriptScheme)) {
+    AppleScript::SetError(AppleScript::Error::kJavaScriptUnsupported);
+    return;
+  }
+
+  BookmarkModel* model = self.bookmarkModel;
+  if (!model) {
+    return;
+  }
+
+  model->SetURL(self.bookmarkNode, gurl,
                 bookmarks::metrics::BookmarkEditSource::kOther);
 }
 

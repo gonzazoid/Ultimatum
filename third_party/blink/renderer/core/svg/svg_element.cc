@@ -33,6 +33,7 @@
 #include "third_party/blink/renderer/core/animation/keyframe_effect.h"
 #include "third_party/blink/renderer/core/animation/svg_interpolation_environment.h"
 #include "third_party/blink/renderer/core/animation/svg_interpolation_types_map.h"
+#include "third_party/blink/renderer/core/css/post_style_update_scope.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -58,8 +59,10 @@
 #include "third_party/blink/renderer/core/svg/svg_document_extensions.h"
 #include "third_party/blink/renderer/core/svg/svg_element_rare_data.h"
 #include "third_party/blink/renderer/core/svg/svg_graphics_element.h"
+#include "third_party/blink/renderer/core/svg/svg_resource.h"
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/core/svg/svg_title_element.h"
+#include "third_party/blink/renderer/core/svg/svg_tree_scope_resources.h"
 #include "third_party/blink/renderer/core/svg/svg_use_element.h"
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/xml_names.h"
@@ -76,7 +79,6 @@ SVGElement::SVGElement(const QualifiedName& tag_name,
       class_name_(
           MakeGarbageCollected<SVGAnimatedString>(this,
                                                   html_names::kClassAttr)) {
-  AddToPropertyMap(class_name_);
   SetHasCustomStyleCallbacks();
 }
 
@@ -265,7 +267,7 @@ void SVGElement::ClearAnimatedAttribute(const QualifiedName& attribute) {
   ForSelfAndInstances(this, [&params](SVGElement* element) {
     if (SVGAnimatedPropertyBase* animated_property =
             element->PropertyFromAttribute(params.name)) {
-      animated_property->AnimationEnded();
+      animated_property->SetAnimatedValue(nullptr);
       element->SvgAttributeChanged(params);
     }
   });
@@ -299,33 +301,42 @@ bool SVGElement::HasNonCSSPropertyAnimations() const {
 }
 
 AffineTransform SVGElement::LocalCoordinateSpaceTransform(CTMScope) const {
-  // To be overriden by SVGGraphicsElement (or as special case SVGTextElement
-  // and SVGPatternElement)
+  // To be overridden by SVGTransformableElement (or as special case
+  // SVGTextElement and SVGPatternElement)
   return AffineTransform();
 }
 
 bool SVGElement::HasTransform(
-    ApplyMotionTransform apply_motion_transform) const {
+    ApplyMotionTransformTag apply_motion_transform) const {
   return (GetLayoutObject() && GetLayoutObject()->HasTransform()) ||
          (apply_motion_transform == kIncludeMotionTransform &&
-          HasSVGRareData());
+          HasMotionTransform());
 }
 
 AffineTransform SVGElement::CalculateTransform(
-    ApplyMotionTransform apply_motion_transform) const {
+    ApplyMotionTransformTag apply_motion_transform) const {
   const LayoutObject* layout_object = GetLayoutObject();
 
   AffineTransform matrix;
   if (layout_object && layout_object->HasTransform()) {
+    const gfx::RectF reference_box =
+        TransformHelper::ComputeReferenceBox(*layout_object);
     matrix = TransformHelper::ComputeTransform(
-        *layout_object, ComputedStyle::kIncludeTransformOrigin);
+        GetDocument(), layout_object->StyleRef(), reference_box,
+        ComputedStyle::kIncludeTransformOrigin);
   }
 
   // Apply any "motion transform" contribution if requested (and existing.)
-  if (apply_motion_transform == kIncludeMotionTransform && HasSVGRareData())
-    matrix.PostConcat(*SvgRareData()->AnimateMotionTransform());
-
+  if (apply_motion_transform == kIncludeMotionTransform) {
+    ApplyMotionTransform(matrix);
+  }
   return matrix;
+}
+
+void SVGElement::ApplyMotionTransform(AffineTransform& matrix) const {
+  if (HasSVGRareData()) {
+    matrix.PostConcat(*SvgRareData()->AnimateMotionTransform());
+  }
 }
 
 Node::InsertionNotificationRequest SVGElement::InsertedInto(
@@ -369,7 +380,6 @@ void SVGElement::RemovedFrom(ContainerNode& root_parent) {
       corresponding_element->RemoveInstance(this);
       SvgRareData()->SetCorrespondingElement(nullptr);
     }
-    RebuildAllIncomingReferences();
     RemoveAllIncomingReferences();
   }
 
@@ -526,8 +536,7 @@ void SVGElement::UpdateRelativeLengthsInformation(
   }
 }
 
-void SVGElement::InvalidateRelativeLengthClients(
-    SubtreeLayoutScope* layout_scope) {
+void SVGElement::InvalidateRelativeLengthClients() {
   if (!isConnected())
     return;
 
@@ -539,19 +548,19 @@ void SVGElement::InvalidateRelativeLengthClients(
 
   if (LayoutObject* layout_object = GetLayoutObject()) {
     if (HasRelativeLengths() && layout_object->IsSVGResourceContainer()) {
-      To<LayoutSVGResourceContainer>(layout_object)
-          ->InvalidateCacheAndMarkForLayout(
-              layout_invalidation_reason::kSizeChanged, layout_scope);
+      auto* resource_container = To<LayoutSVGResourceContainer>(layout_object);
+      resource_container->SetNeedsLayoutAndFullPaintInvalidation(
+          layout_invalidation_reason::kSizeChanged);
+      resource_container->InvalidateCache();
     } else if (SelfHasRelativeLengths()) {
       layout_object->SetNeedsLayoutAndFullPaintInvalidation(
-          layout_invalidation_reason::kUnknown, kMarkContainerChain,
-          layout_scope);
+          layout_invalidation_reason::kUnknown, kMarkContainerChain);
     }
   }
 
   for (SVGElement* element : elements_with_relative_lengths_) {
     if (element != this)
-      element->InvalidateRelativeLengthClients(layout_scope);
+      element->InvalidateRelativeLengthClients();
   }
 }
 
@@ -658,10 +667,8 @@ void SVGElement::ParseAttribute(const AttributeModificationParams& params) {
   if (params.name == html_names::kNonceAttr) {
     if (params.new_value != g_empty_atom)
       setNonce(params.new_value);
-  } else if (params.name.Matches(xml_names::kLangAttr)) {
-    PseudoStateChanged(CSSSelector::kPseudoLang);
   } else if (params.name == svg_names::kLangAttr) {
-    PseudoStateChanged(CSSSelector::kPseudoLang);
+    LangAttributeChanged();
   }
 
   const AtomicString& event_name =
@@ -676,18 +683,7 @@ void SVGElement::ParseAttribute(const AttributeModificationParams& params) {
   Element::ParseAttribute(params);
 }
 
-// If the attribute is not present in the map, the map will return the "empty
-// value" - which is kAnimatedUnknown.
-struct AnimatedPropertyTypeHashTraits : HashTraits<AnimatedPropertyType> {
-  static const bool kEmptyValueIsZero = true;
-  static AnimatedPropertyType EmptyValue() { return kAnimatedUnknown; }
-};
-
-using AttributeToPropertyTypeMap = HashMap<QualifiedName,
-                                           AnimatedPropertyType,
-                                           DefaultHash<QualifiedName>,
-                                           HashTraits<QualifiedName>,
-                                           AnimatedPropertyTypeHashTraits>;
+using AttributeToPropertyTypeMap = HashMap<QualifiedName, AnimatedPropertyType>;
 AnimatedPropertyType SVGElement::AnimatedPropertyTypeForCSSAttribute(
     const QualifiedName& attribute_name) {
   DEFINE_STATIC_LOCAL(AttributeToPropertyTypeMap, css_property_map, ());
@@ -762,19 +758,13 @@ AnimatedPropertyType SVGElement::AnimatedPropertyTypeForCSSAttribute(
   return it->value;
 }
 
-void SVGElement::AddToPropertyMap(SVGAnimatedPropertyBase* property) {
-  attribute_to_property_map_.Set(property->AttributeName(), property);
-}
-
 SVGAnimatedPropertyBase* SVGElement::PropertyFromAttribute(
     const QualifiedName& attribute_name) const {
-  AttributeToPropertyMap::const_iterator it =
-      attribute_to_property_map_.Find<SVGAttributeHashTranslator>(
-          attribute_name);
-  if (it == attribute_to_property_map_.end())
+  if (attribute_name == html_names::kClassAttr) {
+    return class_name_.Get();
+  } else {
     return nullptr;
-
-  return it->value.Get();
+  }
 }
 
 bool SVGElement::IsAnimatableCSSProperty(const QualifiedName& attr_name) {
@@ -784,8 +774,7 @@ bool SVGElement::IsAnimatableCSSProperty(const QualifiedName& attr_name) {
 bool SVGElement::IsPresentationAttribute(const QualifiedName& name) const {
   if (const SVGAnimatedPropertyBase* property = PropertyFromAttribute(name))
     return property->HasPresentationAttributeMapping();
-  if (RuntimeEnabledFeatures::LangAttributeAwareSvgTextEnabled() &&
-      (name.Matches(xml_names::kLangAttr) || name == svg_names::kLangAttr)) {
+  if (name.Matches(xml_names::kLangAttr) || name == svg_names::kLangAttr) {
     return true;
   }
   return CssPropertyIdForSVGAttributeName(GetExecutionContext(), name) >
@@ -839,11 +828,9 @@ void SVGElement::CollectStyleForPresentationAttribute(
       AddPropertyToPresentationAttributeStyle(style, property_id, value);
     }
   } else if (name.Matches(xml_names::kLangAttr)) {
-    if (RuntimeEnabledFeatures::LangAttributeAwareSvgTextEnabled())
-      MapLanguageAttributeToLocale(value, style);
+    MapLanguageAttributeToLocale(value, style);
   } else if (name == svg_names::kLangAttr) {
-    if (RuntimeEnabledFeatures::LangAttributeAwareSvgTextEnabled() &&
-        !FastHasAttribute(xml_names::kLangAttr)) {
+    if (!FastHasAttribute(xml_names::kLangAttr)) {
       MapLanguageAttributeToLocale(value, style);
     }
   }
@@ -916,9 +903,10 @@ static bool HasLoadListener(Element* element) {
         element->GetEventListeners(event_type_names::kLoad);
     if (!entry)
       continue;
-    for (wtf_size_t i = 0; i < entry->size(); ++i) {
-      if (entry->at(i).Capture())
+    for (auto& registered_event_listener : *entry) {
+      if (registered_event_listener->Capture()) {
         return true;
+      }
     }
   }
 
@@ -962,7 +950,6 @@ void SVGElement::AttributeChanged(const AttributeModificationParams& params) {
   Element::AttributeChanged(params);
 
   if (params.name == html_names::kIdAttr) {
-    RebuildAllIncomingReferences();
     InvalidateInstances();
     return;
   }
@@ -973,19 +960,19 @@ void SVGElement::AttributeChanged(const AttributeModificationParams& params) {
   if (params.name == html_names::kStyleAttr)
     return;
 
+  CSSPropertyID prop_id =
+      CssPropertyIdForSVGAttributeName(GetExecutionContext(), params.name);
+  if (prop_id > CSSPropertyID::kInvalid) {
+    InvalidateInstances();
+    return;
+  }
+
   SvgAttributeChanged({params.name, params.reason});
   UpdateWebAnimatedAttributeOnBaseValChange(params.name);
 }
 
 void SVGElement::SvgAttributeChanged(const SvgAttributeChangedParams& params) {
   const QualifiedName& attr_name = params.name;
-  CSSPropertyID prop_id = SVGElement::CssPropertyIdForSVGAttributeName(
-      GetExecutionContext(), attr_name);
-  if (prop_id > CSSPropertyID::kInvalid) {
-    InvalidateInstances();
-    return;
-  }
-
   if (attr_name == html_names::kClassAttr) {
     ClassAttributeChanged(AtomicString(class_name_->CurrentValue()->Value()));
     InvalidateInstances();
@@ -1031,20 +1018,21 @@ void SVGElement::EnsureAttributeAnimValUpdated() {
 }
 
 void SVGElement::SynchronizeSVGAttribute(const QualifiedName& name) const {
-  DCHECK(GetElementData());
+  DCHECK(HasElementData());
   DCHECK(GetElementData()->svg_attributes_are_dirty());
-  if (name == AnyQName()) {
-    for (SVGAnimatedPropertyBase* property :
-         attribute_to_property_map_.Values()) {
-      if (property->NeedsSynchronizeAttribute())
-        property->SynchronizeAttribute();
-    }
-    GetElementData()->SetSvgAttributesAreDirty(false);
-  } else {
-    SVGAnimatedPropertyBase* property = PropertyFromAttribute(name);
-    if (property && property->NeedsSynchronizeAttribute())
-      property->SynchronizeAttribute();
+  SVGAnimatedPropertyBase* property = PropertyFromAttribute(name);
+  if (property && property->NeedsSynchronizeAttribute()) {
+    property->SynchronizeAttribute();
   }
+}
+
+void SVGElement::SynchronizeAllSVGAttributes() const {
+  DCHECK(HasElementData());
+  DCHECK(GetElementData()->svg_attributes_are_dirty());
+  if (class_name_->NeedsSynchronizeAttribute()) {
+    class_name_->SynchronizeAttribute();
+  }
+  GetElementData()->SetSvgAttributesAreDirty(false);
 }
 
 void SVGElement::CollectExtraStyleForPresentationAttribute(
@@ -1061,17 +1049,9 @@ void SVGElement::CollectExtraStyleForPresentationAttribute(
   // Maintaining the presentation attribute style "manually" also seems like a
   // reasonable scheme since that means we can avoid reparsing the presentation
   // attributes that didn't change.
-  for (SVGAnimatedPropertyBase* property :
-       attribute_to_property_map_.Values()) {
-    if (!property->HasPresentationAttributeMapping() ||
-        !property->IsAnimating())
-      continue;
-    CollectStyleForPresentationAttribute(property->AttributeName(),
-                                         g_empty_atom, style);
-  }
 }
 
-scoped_refptr<ComputedStyle> SVGElement::CustomStyleForLayoutObject(
+const ComputedStyle* SVGElement::CustomStyleForLayoutObject(
     const StyleRecalcContext& style_recalc_context) {
   SVGElement* corresponding_element = CorrespondingElement();
   if (!corresponding_element) {
@@ -1086,11 +1066,15 @@ scoped_refptr<ComputedStyle> SVGElement::CustomStyleForLayoutObject(
   StyleRequest style_request;
   style_request.parent_override = style;
   style_request.layout_parent_override = style;
+  style_request.styled_element = this;
+  StyleRecalcContext corresponding_recalc_context(style_recalc_context);
+  corresponding_recalc_context.old_style =
+      PostStyleUpdateScope::GetOldStyle(*this);
   return GetDocument().GetStyleResolver().ResolveStyle(
-      corresponding_element, style_recalc_context, style_request);
+      corresponding_element, corresponding_recalc_context, style_request);
 }
 
-bool SVGElement::LayoutObjectIsNeeded(const ComputedStyle& style) const {
+bool SVGElement::LayoutObjectIsNeeded(const DisplayStyle& style) const {
   return IsValid() && HasSVGParent() && Element::LayoutObjectIsNeeded(style);
 }
 
@@ -1113,8 +1097,9 @@ const ComputedStyle* SVGElement::BaseComputedStyleForSMIL() {
   if (!HasSVGRareData())
     return EnsureComputedStyle();
   const ComputedStyle* parent_style = nullptr;
-  if (ContainerNode* parent = LayoutTreeBuilderTraversal::Parent(*this))
+  if (Element* parent = LayoutTreeBuilderTraversal::ParentElement(*this)) {
     parent_style = parent->EnsureComputedStyle();
+  }
   return SvgRareData()->OverrideComputedStyle(this, parent_style);
 }
 
@@ -1129,6 +1114,16 @@ void SVGElement::MarkForLayoutAndParentResourceInvalidation(
     LayoutObject& layout_object) {
   LayoutSVGResourceContainer::MarkForLayoutAndParentResourceInvalidation(
       layout_object, true);
+}
+
+void SVGElement::NotifyResourceClients() const {
+  LocalSVGResource* resource =
+      GetTreeScope().EnsureSVGTreeScopedResources().ExistingResourceForId(
+          GetIdAttribute());
+  if (!resource || resource->Target() != this) {
+    return;
+  }
+  resource->NotifyContentChanged();
 }
 
 void SVGElement::InvalidateInstances() {
@@ -1302,28 +1297,6 @@ SVGElementSet& SVGElement::GetDependencyTraversalVisitedSet() {
   return *invalidating_dependencies;
 }
 
-void SVGElement::RebuildAllIncomingReferences() {
-  if (!HasSVGRareData())
-    return;
-
-  const SVGElementSet& incoming_references =
-      SvgRareData()->IncomingReferences();
-
-  // Iterate on a snapshot as |incoming_references| may be altered inside loop.
-  HeapVector<Member<SVGElement>> incoming_references_snapshot(
-      incoming_references);
-
-  // Force rebuilding the |source_element| so it knows about this change.
-  const SvgAttributeChangedParams params(
-      svg_names::kHrefAttr, AttributeModificationReason::kDirectly);
-  for (SVGElement* source_element : incoming_references_snapshot) {
-    // Before rebuilding |source_element| ensure it was not removed from under
-    // us.
-    if (incoming_references.Contains(source_element))
-      source_element->SvgAttributeChanged(params);
-  }
-}
-
 void SVGElement::RemoveAllIncomingReferences() {
   if (!HasSVGRareData())
     return;
@@ -1360,7 +1333,6 @@ SVGElementResourceClient& SVGElement::EnsureSVGResourceClient() {
 
 void SVGElement::Trace(Visitor* visitor) const {
   visitor->Trace(elements_with_relative_lengths_);
-  visitor->Trace(attribute_to_property_map_);
   visitor->Trace(svg_rare_data_);
   visitor->Trace(class_name_);
   Element::Trace(visitor);
@@ -1368,6 +1340,32 @@ void SVGElement::Trace(Visitor* visitor) const {
 
 void SVGElement::AccessKeyAction(SimulatedClickCreationScope creation_scope) {
   DispatchSimulatedClick(nullptr, creation_scope);
+}
+
+void SVGElement::SynchronizeListOfSVGAttributes(
+    const base::span<SVGAnimatedPropertyBase*> attributes) {
+  for (SVGAnimatedPropertyBase* attr : attributes) {
+    if (attr->NeedsSynchronizeAttribute()) {
+      attr->SynchronizeAttribute();
+    }
+  }
+}
+
+void SVGElement::AttachLayoutTree(AttachContext& context) {
+  Element::AttachLayoutTree(context);
+
+  if (!context.performing_reattach && GetLayoutObject() &&
+      GetSMILAnimations()) {
+    GetTimeContainer()->DidAttachLayoutObject();
+  }
+}
+
+SMILTimeContainer* SVGElement::GetTimeContainer() const {
+  if (auto* svg_root = DynamicTo<SVGSVGElement>(*this)) {
+    return svg_root->TimeContainer();
+  }
+
+  return ownerSVGElement()->TimeContainer();
 }
 
 }  // namespace blink

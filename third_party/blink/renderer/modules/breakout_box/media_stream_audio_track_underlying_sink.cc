@@ -6,6 +6,7 @@
 
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_data.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/streams/writable_stream_transferring_optimizer.h"
 #include "third_party/blink/renderer/modules/breakout_box/metrics.h"
 #include "third_party/blink/renderer/modules/breakout_box/pushable_media_stream_audio_source.h"
@@ -27,6 +28,9 @@ class TransferringOptimizer : public WritableStreamTransferringOptimizer {
   UnderlyingSinkBase* PerformInProcessOptimization(
       ScriptState* script_state) override {
     RecordBreakoutBoxUsage(BreakoutBoxUsage::kWritableAudioWorker);
+    if (ExecutionContext::From(script_state)->IsWorkerGlobalScope()) {
+      source_broker_->SetShouldDeliverAudioOnAudioTaskRunner(false);
+    }
     return MakeGarbageCollected<MediaStreamAudioTrackUnderlyingSink>(
         source_broker_);
   }
@@ -60,8 +64,8 @@ ScriptPromise MediaStreamAudioTrackUnderlyingSink::write(
     WritableStreamDefaultController* controller,
     ExceptionState& exception_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  AudioData* audio_data = V8AudioData::ToImplWithTypeCheck(
-      script_state->GetIsolate(), chunk.V8Value());
+  AudioData* audio_data =
+      V8AudioData::ToWrappable(script_state->GetIsolate(), chunk.V8Value());
   if (!audio_data) {
     exception_state.ThrowTypeError("Null audio data.");
     return ScriptPromise();
@@ -75,6 +79,18 @@ ScriptPromise MediaStreamAudioTrackUnderlyingSink::write(
   if (!source_broker_->IsRunning()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Stream closed");
+    return ScriptPromise();
+  }
+
+  const auto& data = audio_data->data();
+  media::AudioParameters params(
+      media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
+      media::ChannelLayoutConfig::Guess(data->channel_count()),
+      data->sample_rate(), data->frame_count());
+  if (!params.IsValid()) {
+    audio_data->close();
+    exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
+                                      "Invalid audio data");
     return ScriptPromise();
   }
 

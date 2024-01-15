@@ -7,16 +7,11 @@
 #include <memory>
 #include <string>
 
-#include "base/base64.h"
-#include "base/containers/contains.h"
 #include "base/run_loop.h"
-#include "base/strings/escape.h"
-#include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/network_service_instance.h"
@@ -28,17 +23,13 @@
 #include "content/public/test/url_loader_interceptor.h"
 #include "content/public/test/url_loader_monitor.h"
 #include "content/shell/browser/shell.h"
-#include "crypto/sha2.h"
-#include "net/base/filename_util.h"
 #include "net/dns/mock_host_resolver.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/trust_token_http_headers.h"
 #include "services/network/public/cpp/trust_token_parameterization.h"
-#include "services/network/public/mojom/trust_tokens.mojom.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/test/trust_token_request_handler.h"
 #include "services/network/test/trust_token_test_server_handler_registration.h"
 #include "services/network/test/trust_token_test_util.h"
@@ -106,7 +97,7 @@ TrustTokenBrowsertest::TrustTokenBrowsertest() {
   auto& field_trial_param =
       network::features::kTrustTokenOperationsRequiringOriginTrial;
   features_.InitAndEnableFeatureWithParameters(
-      network::features::kTrustTokens,
+      network::features::kPrivateStateTokens,
       {{field_trial_param.name,
         field_trial_param.GetName(network::features::TrustTokenOriginTrialSpec::
                                       kOriginTrialNotRequired)}});
@@ -123,6 +114,8 @@ void TrustTokenBrowsertest::SetUpOnMainThread() {
   SetupCrossSiteRedirector(&server_);
 
   network::test::RegisterTrustTokenTestHandlers(&server_, &request_handler_);
+
+  TrustTokenBrowsertest::Observe(shell()->web_contents());
 
   ASSERT_TRUE(server_.Start());
 }
@@ -161,6 +154,18 @@ std::string TrustTokenBrowsertest::IssuanceOriginFromHost(
   return ret;
 }
 
+void TrustTokenBrowsertest::OnTrustTokensAccessed(
+    RenderFrameHost* render_frame_host,
+    const TrustTokenAccessDetails& details) {
+  access_count_++;
+}
+
+void TrustTokenBrowsertest::OnTrustTokensAccessed(
+    NavigationHandle* navigation_handle,
+    const TrustTokenAccessDetails& details) {
+  access_count_++;
+}
+
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEnd) {
   ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
 
@@ -169,10 +174,13 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEnd) {
 
   std::string command = R"(
   (async () => {
-    await fetch("/issue", {trustToken: {type: 'token-request'}});
-    await fetch("/redeem", {trustToken: {type: 'token-redemption'}});
-    await fetch("/sign", {trustToken: {type: 'send-redemption-record',
-                                  issuers: [$1]}});
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch("/redeem", {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    await fetch("/sign", {privateToken: {version: 1,
+                                       operation: 'send-redemption-record',
+                                       issuers: [$1]}});
     return "Success"; })(); )";
 
   // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
@@ -186,6 +194,49 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEnd) {
       Optional(AllOf(
           HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
           HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
+}
+
+// Fetch is called directly from top level (a.test), issuer origin (b.test)
+// is different from top frame origin.
+IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndThirdParty) {
+  ProvideRequestHandlerKeyCommitmentsToNetworkService({"b.test"});
+
+  const GURL start_url = server_.GetURL("a.test", "/title1.html");
+  ASSERT_TRUE(NavigateToURL(shell(), start_url));
+
+  std::string command = R"(
+  (async () => {
+    await fetch($1, {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch($2, {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    await fetch($3, {privateToken: {version: 1,
+                                       operation: 'send-redemption-record',
+                                       issuers: [$4]}});
+    return "Success"; })(); )";
+
+  const std::string issuer_origin = IssuanceOriginFromHost("b.test");
+  const std::string issuance_url = server_.GetURL("b.test", "/issue").spec();
+  const std::string redemption_url = server_.GetURL("b.test", "/redeem").spec();
+  const std::string signature_url = server_.GetURL("b.test", "/sign").spec();
+
+  // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
+  // resolve.
+  EXPECT_EQ("Success",
+            EvalJs(shell(), JsReplace(command, issuance_url, redemption_url,
+                                      signature_url, issuer_origin)));
+
+  EXPECT_THAT(
+      request_handler_.last_incoming_signed_request(),
+      Optional(AllOf(
+          HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
+          HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, XhrEndToEnd) {
@@ -199,8 +250,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, XhrEndToEnd) {
   (async () => {
     let request = new XMLHttpRequest();
     request.open('GET', '/issue');
-    request.setTrustToken({
-      type: 'token-request'
+    request.setPrivateToken({
+      version: 1,
+      operation: 'token-request'
     });
     let promise = new Promise((res, rej) => {
       request.onload = res; request.onerror = rej;
@@ -210,8 +262,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, XhrEndToEnd) {
 
     request = new XMLHttpRequest();
     request.open('GET', '/redeem');
-    request.setTrustToken({
-      type: 'token-redemption'
+    request.setPrivateToken({
+      version: 1,
+      operation: 'token-redemption'
     });
     promise = new Promise((res, rej) => {
       request.onload = res; request.onerror = rej;
@@ -221,8 +274,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, XhrEndToEnd) {
 
     request = new XMLHttpRequest();
     request.open('GET', '/sign');
-    request.setTrustToken({
-      type: 'send-redemption-record',
+    request.setPrivateToken({
+      version: 1,
+      operation: 'send-redemption-record',
       issuers: [$1]
     });
     promise = new Promise((res, rej) => {
@@ -244,16 +298,67 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, XhrEndToEnd) {
       Optional(AllOf(
           HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
           HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
 }
 
-IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, IframeEndToEnd) {
+IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, IframeSendRedemptionRecord) {
+  ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
+
+  std::string command = R"(
+  (async () => {
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch("/redeem", {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    return "Success";
+  })())";
+
+  GURL start_url = server_.GetURL("a.test", "/page_with_iframe.html");
+  ASSERT_TRUE(NavigateToURL(shell(), start_url));
+
+  EXPECT_EQ("Success", EvalJs(shell(), command));
+
+  auto execute_op_via_iframe = [&](base::StringPiece path,
+                                   base::StringPiece trust_token) {
+    // It's important to set the trust token arguments before updating src, as
+    // the latter triggers a load.
+    EXPECT_TRUE(ExecJs(
+        shell(), JsReplace(
+                     R"( const myFrame = document.getElementById("test_iframe");
+                         myFrame.privateToken = $1;
+                         myFrame.src = $2;)",
+                     trust_token, path)));
+    TestNavigationObserver load_observer(shell()->web_contents());
+    load_observer.WaitForNavigationFinished();
+  };
+
+  execute_op_via_iframe("/sign", JsReplace(
+                                     R"({"version": 1,
+              "operation": "send-redemption-record",
+              "issuers": [$1]})",
+                                     IssuanceOriginFromHost("a.test")));
+
+  EXPECT_THAT(
+      request_handler_.last_incoming_signed_request(),
+      Optional(AllOf(
+          HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
+          HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
+}
+
+IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
+                       IframeCanOnlySendRedemptionRecord) {
   ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
 
   GURL start_url = server_.GetURL("a.test", "/page_with_iframe.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
-  auto execute_op_via_iframe = [&](base::StringPiece path,
-                                   base::StringPiece trust_token) {
+  auto fail_to_execute_op_via_iframe = [&](base::StringPiece path,
+                                           base::StringPiece trust_token) {
     // It's important to set the trust token arguments before updating src, as
     // the latter triggers a load.
     EXPECT_TRUE(ExecJs(
@@ -266,18 +371,34 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, IframeEndToEnd) {
     load_observer.WaitForNavigationFinished();
   };
 
-  execute_op_via_iframe("/issue", R"({"type": "token-request"})");
-  execute_op_via_iframe("/redeem", R"({"type": "token-redemption"})");
-  execute_op_via_iframe("/sign", JsReplace(
-                                     R"({"type": "send-redemption-record",
-              "issuers": [$1]})",
-                                     IssuanceOriginFromHost("a.test")));
+  fail_to_execute_op_via_iframe("/issue", R"({"type": "token-request"})");
+  std::string command = JsReplace(R"(
+  (async () => {
+    return await document.hasPrivateToken($1);
+  })();)",
+                                  IssuanceOriginFromHost("a.test"));
 
-  EXPECT_THAT(
-      request_handler_.last_incoming_signed_request(),
-      Optional(AllOf(
-          HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
-          HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+  EXPECT_EQ(false, EvalJs(shell(), command));
+
+  fail_to_execute_op_via_iframe("/redeem", R"({"type": "token-redemption"})");
+  command = JsReplace(R"(
+  (async () => {
+    return document.hasRedemptionRecord($1);
+  })();)",
+                      IssuanceOriginFromHost("a.test"));
+  EXPECT_EQ(false, EvalJs(shell(), command));
+
+  fail_to_execute_op_via_iframe("/bad", R"({"type": "bad-type"})");
+  command = JsReplace(R"(
+  (async () => {
+    return await document.hasPrivateToken($1)
+    || document.hasRedemptionRecord($1);
+  })();)",
+                      IssuanceOriginFromHost("a.test"));
+  EXPECT_EQ(false, EvalJs(shell(), command));
+
+  // Expect zero accesses.
+  EXPECT_EQ(0, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, HasTrustTokenAfterIssuance) {
@@ -288,8 +409,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, HasTrustTokenAfterIssuance) {
 
   std::string command = JsReplace(R"(
   (async () => {
-    await fetch("/issue", {trustToken: {type: 'token-request'}});
-    return await document.hasTrustToken($1);
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    return await document.hasPrivateToken($1);
   })();)",
                                   IssuanceOriginFromHost("a.test"));
 
@@ -299,6 +421,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, HasTrustTokenAfterIssuance) {
   // Note: EvalJs's EXPECT_EQ type-conversion magic only supports the
   // "Yoda-style" EXPECT_EQ(expected, actual).
   EXPECT_EQ(true, EvalJs(shell(), command));
+
+  // Expect one access for issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
@@ -312,7 +437,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   // This sign operation will fail, because we don't have a redemption record in
   // storage, a prerequisite. However, the failure shouldn't be fatal.
   std::string command = JsReplace(R"((async () => {
-      await fetch("/sign", {trustToken: {type: 'send-redemption-record',
+      await fetch("/sign", {privateToken: {version: 1,
+                                         operation: 'send-redemption-record',
                                          issuers: [$1]}});
       return "Success";
       })(); )",
@@ -324,6 +450,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_THAT(request_handler_.last_incoming_signed_request(),
               Optional(ReflectsSigningFailure()));
+
+  // Expect one access for sign.
+  EXPECT_EQ(1, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndInIsolatedWorld) {
@@ -339,9 +468,12 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndInIsolatedWorld) {
 
   std::string command = R"(
   (async () => {
-    await fetch("/issue", {trustToken: {type: 'token-request'}});
-    await fetch("/redeem", {trustToken: {type: 'token-redemption'}});
-    await fetch("/sign", {trustToken: {type: 'send-redemption-record',
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch("/redeem", {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    await fetch("/sign", {privateToken: {version: 1,
+                                       operation: 'send-redemption-record',
                                   issuers: [$1]}});
     return "Success"; })(); )";
 
@@ -358,6 +490,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndInIsolatedWorld) {
       Optional(AllOf(
           HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
           HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsTimers) {
@@ -394,9 +529,12 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsTimers) {
 
   std::string command = R"(
   (async () => {
-    await fetch("/issue", {trustToken: {type: 'token-request'}});
-    await fetch("/redeem", {trustToken: {type: 'token-redemption'}});
-    await fetch("/sign", {trustToken: {type: 'send-redemption-record',
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch("/redeem", {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    await fetch("/sign", {privateToken: {version: 1,
+                                       operation: 'send-redemption-record',
                                   issuers: [$1]}});
     return "Success"; })(); )";
 
@@ -425,6 +563,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsTimers) {
         "Net.TrustTokens.NetErrorForTrustTokenOperation.Success." + op, net::OK,
         1);
   }
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsNetErrorCodes) {
@@ -442,7 +583,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsNetErrorCodes) {
 
   EXPECT_THAT(
       EvalJs(shell(), JsReplace(
-                          R"(fetch($1, {trustToken: {type: 'token-request'}})
+                          R"(fetch($1, {privateToken: {
+                                            version: 1,
+                                            operation: 'token-request'}})
                    .then(() => "Unexpected success!")
                    .catch(err => err.message);)",
                           IssuanceOriginFromHost("no-cert-for-this.domain")))
@@ -450,13 +593,14 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsNetErrorCodes) {
       HasSubstr("Failed to fetch"));
 
   EXPECT_THAT(
-      EvalJs(shell(),
-             JsReplace(
-                 R"(fetch($1, {trustToken: {type: 'send-redemption-record',
+      EvalJs(shell(), JsReplace(
+                          R"(fetch($1, {privateToken: {
+                                         version: 1,
+                                         operation: 'send-redemption-record',
                  issuers: ['https://nonexistent-issuer.example']}})
                    .then(() => "Unexpected success!")
                    .catch(err => err.message);)",
-                 IssuanceOriginFromHost("no-cert-for-this.domain")))
+                          IssuanceOriginFromHost("no-cert-for-this.domain")))
           .ExtractString(),
       HasSubstr("Failed to fetch"));
 
@@ -475,19 +619,23 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsNetErrorCodes) {
 
   // Attempt a redemption against 'a.test'; we don't have a token for this
   // domain, so it should fail.
-  EXPECT_EQ(
-      "InvalidStateError",
-      EvalJs(shell(), JsReplace(
-                          R"(fetch($1, {trustToken: {type: 'token-redemption'}})
+  EXPECT_EQ("InvalidStateError",
+            EvalJs(shell(), JsReplace(
+                                R"(fetch($1, {privateToken: {
+                                            version: 1,
+                                            operation: 'token-redemption'}})
                    .then(() => "Unexpected success!")
                    .catch(err => err.name);)",
-                          IssuanceOriginFromHost("a.test"))));
+                                IssuanceOriginFromHost("a.test"))));
 
   content::FetchHistogramsFromChildProcesses();
 
   histograms.ExpectUniqueSample(
       "Net.TrustTokens.NetErrorForTrustTokenOperation.Failure.Redemption",
       net::ERR_TRUST_TOKEN_OPERATION_FAILED, 1);
+
+  // Expect three accesses, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsFetchFailureReasons) {
@@ -507,7 +655,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsFetchFailureReasons) {
   EXPECT_EQ("TypeError", EvalJs(shell(),
                                 R"(fetch("/cross-site/b.test/issue", {
                                      redirect: 'error',
-                                     trustToken: {type: 'token-request'}
+                                     privateToken: {version: 1,
+                                                  operation: 'token-request'}
                                    })
                                    .then(() => "Unexpected success!")
                                    .catch(err => err.name);)"));
@@ -519,9 +668,10 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsFetchFailureReasons) {
 
   // Since issuance failed, there should be no tokens to redeem, so redemption
   // should fail:
-  EXPECT_EQ("OperationError",
-            EvalJs(shell(),
-                   R"(fetch("/redeem", {trustToken: {type: 'token-redemption'}})
+  EXPECT_EQ("OperationError", EvalJs(shell(),
+                                     R"(fetch("/redeem", {privateToken: {
+                                            version: 1,
+                                            operation: 'token-redemption'}})
                    .then(() => "Unexpected success!")
                    .catch(err => err.name);)"));
 
@@ -542,7 +692,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsFetchFailureReasons) {
       GURL(IssuanceOriginFromHost("a.test")).Resolve("/issue");
   EXPECT_THAT(EvalJs(shell(), JsReplace(R"(fetch($1, {
   mode: 'no-cors',
-                  trustToken: {type: 'token-request'}})
+                  privateToken: {version: 1,
+                               operation: 'token-request'}})
                    .then(() => "Unexpected success!")
                    .catch(err => err.message);)",
                                         site_a_issuance_url))
@@ -554,6 +705,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RecordsFetchFailureReasons) {
       "Net.TrustTokens.NetErrorForFetchFailure.Issuance",
       net::ERR_BLOCKED_BY_RESPONSE,
       /*expected_count=*/1);
+
+  // Expect three accesses, two for issue and one for redeem.
+  EXPECT_EQ(3, access_count_);
 }
 
 // Trust Tokens should require that their executing contexts be secure.
@@ -569,7 +723,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, OperationsRequireSecureContext) {
 
   // 1. Confirm that the Fetch interface doesn't work:
   std::string command =
-      R"(fetch("/issue", {trustToken: {type: 'token-request'}})
+      R"(fetch("/issue", {privateToken: {version: 1,
+                                       operation: 'token-request'}})
            .catch(error => error.message);)";
   EXPECT_THAT(EvalJs(shell(), command).ExtractString(),
               HasSubstr("secure context"));
@@ -588,11 +743,14 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, OperationsRequireSecureContext) {
                    R"( const myFrame = document.getElementById("test_iframe");
                        myFrame.trustToken = $1;
                        myFrame.src = $2;)",
-                   R"({"type": "token-request"})", issuance_url)));
+                   R"({"operation": "token-request"})", issuance_url)));
   monitor.WaitForUrls();
   EXPECT_THAT(monitor.GetRequestInfo(issuance_url),
               Optional(Field(&network::ResourceRequest::trust_token_params,
                              IsFalse())));
+
+  // Expect zero accesses.
+  EXPECT_EQ(0, access_count_);
 }
 
 // Issuance should fail if we don't have keys for the issuer at hand.
@@ -604,12 +762,16 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, IssuanceRequiresKeys) {
   EXPECT_TRUE(NavigateToURL(shell(), start_url));
 
   std::string command = R"(
-    fetch('/issue', {trustToken: {type: 'token-request'}})
+    fetch('/issue', {privateToken: {version: 1,
+                                  operation: 'token-request'}})
     .then(() => 'Success').catch(err => err.name); )";
 
   // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
   // resolve.
   EXPECT_EQ("InvalidStateError", EvalJs(shell(), command));
+
+  // Expect one access of issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // When the server rejects issuance, the client-side issuance operation should
@@ -627,8 +789,11 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
   EXPECT_EQ("OperationError", EvalJs(shell(), R"(fetch('/issue',
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1, operation: 'token-request' } })
         .then(()=>'Success').catch(err => err.name); )"));
+
+  // Expect one access of issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, CrossOriginIssuanceWorks) {
@@ -642,9 +807,13 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, CrossOriginIssuanceWorks) {
   EXPECT_EQ(
       "Success",
       EvalJs(shell(), JsReplace(R"(
-            fetch($1, { trustToken: { type: 'token-request' } })
+            fetch($1, { privateToken: { version: 1,
+                                      operation: 'token-request' } })
             .then(()=>'Success'); )",
                                 server_.GetURL("sub1.b.test", "/issue"))));
+
+  // Expect one access of issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, CrossSiteIssuanceWorks) {
@@ -657,9 +826,13 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, CrossSiteIssuanceWorks) {
   // because it sets the port correctly.
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(
-            fetch($1, { trustToken: { type: 'token-request' } })
+            fetch($1, { privateToken: { version: 1,
+                                      operation: 'token-request' } })
             .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/issue"))));
+
+  // Expect one access of issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // Issuance should succeed only if the number of issuers associated with the
@@ -677,18 +850,22 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
       "Consider rewriting this test for performance's sake if the "
       "number-of-issuers limit gets too large.");
 
-  // Each hasTrustToken call adds the provided issuer to the calling context's
-  // list of associated issuers.
+  // Each hasPrivateStateToken call adds the provided issuer to the calling
+  // context's list of associated issuers.
   for (int i = 0;
        i < network::kTrustTokenPerToplevelMaxNumberOfAssociatedIssuers; ++i) {
-    ASSERT_EQ("Success", EvalJs(shell(), "document.hasTrustToken('https://a" +
+    ASSERT_EQ("Success", EvalJs(shell(), "document.hasPrivateToken('https://a" +
                                              base::NumberToString(i) +
                                              ".test').then(()=>'Success');"));
   }
 
   EXPECT_EQ("OperationError", EvalJs(shell(), R"(
-            fetch('/issue', { trustToken: { type: 'token-request' } })
+            fetch('/issue', { privateToken: { version: 1,
+                                            operation: 'token-request' } })
             .then(() => 'Success').catch(error => error.name); )"));
+
+  // Expect one access for issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // When an issuance request is made in cors mode, a cross-origin redirect from
@@ -706,7 +883,9 @@ IN_PROC_BROWSER_TEST_F(
   GURL start_url = server_.GetURL("a.test", "/title1.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
-  std::string command = R"(fetch($1, {trustToken: {type: 'token-request'}})
+  std::string command = R"(fetch($1, {privateToken: {
+                                          version: 1,
+                                          operation: 'token-request'}})
                              .then(() => "Success")
                              .catch(error => error.name);)";
 
@@ -716,11 +895,14 @@ IN_PROC_BROWSER_TEST_F(
              JsReplace(command,
                        server_.GetURL("a.test", "/cross-site/b.test/issue"))));
 
-  EXPECT_EQ(true, EvalJs(shell(), JsReplace("document.hasTrustToken($1);",
+  EXPECT_EQ(true, EvalJs(shell(), JsReplace("document.hasPrivateToken($1);",
                                             IssuanceOriginFromHost("b.test"))));
   EXPECT_EQ(false,
-            EvalJs(shell(), JsReplace("document.hasTrustToken($1);",
+            EvalJs(shell(), JsReplace("document.hasPrivateToken($1);",
                                       IssuanceOriginFromHost("a.test"))));
+
+  // Expect two accesses for issues.
+  EXPECT_EQ(2, access_count_);
 }
 
 // When an issuance request is made in no-cors mode, a cross-origin redirect
@@ -739,7 +921,9 @@ IN_PROC_BROWSER_TEST_F(
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
   std::string command = R"(fetch($1, {mode: 'no-cors',
-                                      trustToken: {type: 'token-request'}})
+                                      privateToken: {
+                                          version: 1,
+                                          operation: 'token-request'}})
                              .then(() => "Success")
                              .catch(error => error.name);)";
 
@@ -749,11 +933,14 @@ IN_PROC_BROWSER_TEST_F(
              JsReplace(command,
                        server_.GetURL("a.test", "/cross-site/b.test/issue"))));
 
-  EXPECT_EQ(true, EvalJs(shell(), JsReplace("document.hasTrustToken($1);",
+  EXPECT_EQ(true, EvalJs(shell(), JsReplace("document.hasPrivateToken($1);",
                                             IssuanceOriginFromHost("a.test"))));
   EXPECT_EQ(false,
-            EvalJs(shell(), JsReplace("document.hasTrustToken($1);",
+            EvalJs(shell(), JsReplace("document.hasPrivateToken($1);",
                                       IssuanceOriginFromHost("b.test"))));
+
+  // Expect one access for issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // Issuance from a context with a secure-but-non-HTTP/S top frame origin
@@ -768,7 +955,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   ASSERT_TRUE(NavigateToURL(shell(), file_url));
 
   std::string command =
-      R"(fetch($1, {trustToken: {type: 'token-request'}})
+      R"(fetch($1, {privateToken: {version: 1,
+                                 operation: 'token-request'}})
            .catch(error => error.name);)";
 
   // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
@@ -780,8 +968,11 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   EXPECT_EQ(
       false,
       EvalJs(shell(),
-             JsReplace("document.hasTrustToken($1);",
+             JsReplace("document.hasPrivateToken($1);",
                        url::Origin::Create(server_.base_url()).Serialize())));
+
+  // Expect one access for issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // Redemption from a secure-but-non-HTTP(S) top frame origin should fail.
@@ -793,7 +984,8 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
   std::string command =
-      R"(fetch("/issue", {trustToken: {type: 'token-request'}})
+      R"(fetch("/issue", {privateToken: {version: 1,
+                                       operation: 'token-request'}})
                              .then(() => "Success")
                              .catch(error => error.name);)";
 
@@ -806,15 +998,19 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   ASSERT_TRUE(NavigateToURL(shell(), file_url));
 
   // Redemption from a page with a file:// top frame origin should fail.
-  command = R"(fetch($1, {trustToken: {type: 'token-redemption'}})
+  command = R"(fetch($1, {privateToken: {version: 1,
+                                       operation: 'token-redemption'}})
                  .catch(error => error.name);)";
   EXPECT_EQ(
       "InvalidStateError",
       EvalJs(shell(), JsReplace(command, server_.GetURL("a.test", "/redeem"))));
+
+  // Expect two accesses, one for issue and one for redemption.
+  EXPECT_EQ(2, access_count_);
 }
 
-// hasTrustToken from a context with a secure-but-non-HTTP/S top frame origin
-// should fail.
+// hasPrivateToken from a context with a secure-but-non-HTTP/S top frame
+// origin should fail.
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
                        HasTrustTokenRequiresSuitableTopFrameOrigin) {
   GURL file_url = GetTestUrl(/*dir=*/nullptr, "title1.html");
@@ -823,12 +1019,15 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_EQ("NotAllowedError",
             EvalJs(shell(),
-                   R"(document.hasTrustToken('https://issuer.example')
+                   R"(document.hasPrivateToken('https://issuer.example')
                               .catch(error => error.name);)"));
+
+  EXPECT_EQ(0, access_count_);
 }
 
-// A hasTrustToken call initiated from a secure context should succeed even if
-// the initiating frame's origin is opaque (e.g. from a sandboxed iframe).
+// A hasPrivateToken call initiated from a secure context should succeed
+// even if the initiating frame's origin is opaque (e.g. from a sandboxed
+// iframe).
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
                        HasTrustTokenFromSecureSubframeWithOpaqueOrigin) {
   ASSERT_TRUE(NavigateToURL(
@@ -840,13 +1039,15 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_EQ("Success",
             EvalJs(root->child_at(0)->current_frame_host(),
-                   R"(document.hasTrustToken('https://davids.website')
+                   R"(document.hasPrivateToken('https://davids.website')
                               .then(()=>'Success');)"));
+
+  EXPECT_EQ(0, access_count_);
 }
 
 // An operation initiated from a secure context should succeed even if the
 // operation's associated request's initiator is opaque (e.g. from a sandboxed
-// iframe).
+// iframe with the right Permissions Policy).
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
                        OperationFromSecureSubframeWithOpaqueOrigin) {
   ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
@@ -861,9 +1062,14 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   EXPECT_EQ("Success", EvalJs(root->child_at(0)->current_frame_host(),
                               JsReplace(R"(
                               fetch($1, {mode: 'no-cors',
-                                         trustToken: {type: 'token-request'}
+                                         privateToken: {
+                                             version: 1,
+                                             operation: 'token-request'}
                                          }).then(()=>'Success');)",
                                         server_.GetURL("a.test", "/issue"))));
+
+  // Expect one access for issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // If a server issues with a key not present in the client's collection of key
@@ -879,12 +1085,17 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, IssuanceWithAbsentKeyFails) {
   GURL start_url = server_.GetURL("a.test", "/title1.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
-  std::string command = R"(fetch($1, {trustToken: {type: 'token-request'}})
+  std::string command =
+      R"(fetch($1, {privateToken: {version: 1,
+                                                   operation: 'token-request'}})
                              .then(() => "Success")
                              .catch(error => error.name);)";
   EXPECT_EQ(
       "OperationError",
       EvalJs(shell(), JsReplace(command, server_.GetURL("a.test", "/issue"))));
+
+  // Expect one access for issue.
+  EXPECT_EQ(1, access_count_);
 }
 
 // This regression test for crbug.com/1111735 ensures it's possible to execute
@@ -915,13 +1126,17 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   EXPECT_EQ("Success", EvalJs(root->child_at(0)->current_frame_host(),
                               JsReplace(R"(
                               fetch($1, {mode: 'no-cors',
-                                         trustToken: {
-                                             type: 'send-redemption-record',
+                                         privateToken: {
+                                             version: 1,
+                                             operation: 'send-redemption-record',
                                              issuers: [
                                                  'https://issuer.example'
                                              ]}
                                          }).then(()=>'Success');)",
                                         server_.GetURL("a.test", "/issue"))));
+
+  // Expect one access for sign.
+  EXPECT_EQ(1, access_count_);
 }
 
 // Redemption should fail when there are no keys for the issuer.
@@ -930,10 +1145,14 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RedemptionRequiresKeys) {
 
   EXPECT_EQ("InvalidStateError",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(() => 'Success')
         .catch(err => err.name); )",
                                       server_.GetURL("a.test", "/redeem"))));
+
+  // Expect one access for redemption.
+  EXPECT_EQ(1, access_count_);
 }
 
 // Redemption should fail when there are no tokens to redeem.
@@ -944,10 +1163,14 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RedemptionRequiresTokens) {
 
   EXPECT_EQ("OperationError",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(() => 'Success')
         .catch(err => err.name); )",
                                       server_.GetURL("a.test", "/redeem"))));
+
+  // Expect one access for redemption.
+  EXPECT_EQ(1, access_count_);
 }
 
 // When we have tokens for one issuer A, redemption against a different issuer B
@@ -960,16 +1183,21 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/issue"))));
 
   EXPECT_EQ("OperationError",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(() => 'Success')
         .catch(err => err.name); )",
                                       server_.GetURL("b.test", "/redeem"))));
+
+  // Expect two accesses, one for issuance and one for redemption.
+  EXPECT_EQ(2, access_count_);
 }
 
 // When the server rejects redemption, the client-side redemption operation
@@ -982,15 +1210,20 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
   EXPECT_EQ("Success", EvalJs(shell(), R"(fetch('/issue',
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )"));
 
   // Send a redemption request to the issuance endpoint, which should error out
   // for the obvious reason that it isn't an issuance request:
   EXPECT_EQ("OperationError", EvalJs(shell(), R"(fetch('/issue',
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(() => 'Success')
         .catch(err => err.name); )"));
+
+  // Expect two accesses, one for issuance and one for redemption.
+  EXPECT_EQ(2, access_count_);
 }
 
 // After a successful issuance and redemption, a subsequent redemption against
@@ -1003,21 +1236,27 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/issue"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/redeem"))));
 
   EXPECT_EQ("NoModificationAllowedError",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .catch(err => err.name); )",
                                       server_.GetURL("a.test", "/redeem"))));
+
+  // Expect three accesses, one for issuance and two for redemption.
+  EXPECT_EQ(3, access_count_);
 }
 
 // Redemption with `refresh-policy: 'refresh'` from an issuer context should
@@ -1030,22 +1269,28 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/issue"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/redeem"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption',
+        { privateToken: { version: 1,
+                        operation: 'token-redemption',
                         refreshPolicy: 'refresh' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/redeem"))));
+
+  // Expect three accesses, one for issuance and two for redemption.
+  EXPECT_EQ(3, access_count_);
 }
 
 // Redemption with `refresh-policy: 'refresh'` from a non-issuer context should
@@ -1061,22 +1306,28 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   // succeed.
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("b.test", "/issue"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("b.test", "/redeem"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption',
+        { privateToken: { version: 1,
+                        operation: 'token-redemption',
                         refreshPolicy: 'refresh' } })
         .then(()=>'Success').catch(err => err.name); )",
                                       server_.GetURL("b.test", "/redeem"))));
+
+  // Expect three accesses, one for issuance and two for redemption.
+  EXPECT_EQ(3, access_count_);
 }
 
 // When a redemption request is made in cors mode, a cross-origin redirect from
@@ -1099,13 +1350,15 @@ IN_PROC_BROWSER_TEST_F(
   // https://b.test:<PORT>.
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/issue"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("b.test", "/issue"))));
 
@@ -1113,13 +1366,17 @@ IN_PROC_BROWSER_TEST_F(
   // that redirecting a request will renew the request's Trust Tokens state.
   EXPECT_EQ("Success", EvalJs(shell(), R"(
       fetch('/cross-site/b.test/redeem',
-        { trustToken: { mode: 'cors', type: 'token-redemption' } })
+        { privateToken: { mode: 'cors',
+                        version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )"));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(
       fetch('/sign',
-        { trustToken: { type: 'send-redemption-record', issuers: [$1],
+        { privateToken: { version: 1,
+                        operation: 'send-redemption-record',
+                        issuers: [$1],
         } }).then(()=>'Success');)",
                                       IssuanceOriginFromHost("b.test"))));
 
@@ -1134,7 +1391,9 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(
       fetch('/sign',
-        { trustToken: { type: 'send-redemption-record', issuers: [$1],
+        { privateToken: { version: 1,
+                        operation: 'send-redemption-record',
+                        issuers: [$1],
         } }).then(()=>'Success');)",
                                       IssuanceOriginFromHost("a.test"))));
 
@@ -1142,6 +1401,9 @@ IN_PROC_BROWSER_TEST_F(
   // request.
   EXPECT_THAT(request_handler_.last_incoming_signed_request(),
               Optional(ReflectsSigningFailure()));
+
+  // Expect six accesses, four for issuance and two for redemption.
+  EXPECT_EQ(6, access_count_);
 }
 
 // When a redemption request is made in no-cors mode, a cross-origin redirect
@@ -1162,7 +1424,8 @@ IN_PROC_BROWSER_TEST_F(
 
   EXPECT_EQ("Success", EvalJs(shell(), R"(
       fetch('/issue',
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )"));
 
   // `mode: 'no-cors'` on redemption has the effect that that redirecting a
@@ -1170,13 +1433,16 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ("Success", EvalJs(shell(), R"(
       fetch('/cross-site/b.test/redeem',
         { mode: 'no-cors',
-          trustToken: { type: 'token-redemption' } })
+          privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )"));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(
       fetch('/sign',
-        { trustToken: { type: 'send-redemption-record', issuers: [$1]
+        { privateToken: { version: 1,
+                        operation: 'send-redemption-record',
+                        issuers: [$1]
         } })
         .then(()=>'Success'); )",
                                       IssuanceOriginFromHost("a.test"))));
@@ -1192,7 +1458,9 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(
       fetch('/sign',
-        { trustToken: { type: 'send-redemption-record', issuers: [$1]
+        { privateToken: { version: 1,
+                        operation: 'send-redemption-record',
+                        issuers: [$1]
         } })
             .then(()=>'Success'); )",
                                       IssuanceOriginFromHost("b.test"))));
@@ -1201,6 +1469,9 @@ IN_PROC_BROWSER_TEST_F(
   // request.
   EXPECT_THAT(request_handler_.last_incoming_signed_request(),
               Optional(ReflectsSigningFailure()));
+
+  // Expect four accesses, two for issuance and two for redemption.
+  EXPECT_EQ(4, access_count_);
 }
 
 // When a redemption request is made in no-cors mode, a cross-origin redirect
@@ -1224,7 +1495,8 @@ IN_PROC_BROWSER_TEST_F(
 
   EXPECT_EQ("Success", EvalJs(shell(), R"(
       fetch('/issue',
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )"));
 
   // The redemption should succeed after the redirect, yielding an a.test
@@ -1233,8 +1505,12 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ("Success", EvalJs(shell(), R"(
       fetch('/cross-site/b.test/redeem',
         { mode: 'no-cors',
-          trustToken: { type: 'token-redemption' } })
+          privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )"));
+
+  // Expect two accesses, one for issuance and one for redemption.
+  EXPECT_EQ(2, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
@@ -1247,10 +1523,13 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
   std::string command = R"(
   (async () => {
     try {
-      await fetch("/issue", {trustToken: {type: 'token-request'}});
-      await fetch("/redeem", {trustToken: {type: 'token-redemption'}});
-      await fetch("/sign", {trustToken: {
-        type: 'send-redemption-record',
+      await fetch("/issue", {privateToken: {version: 1,
+                                          operation: 'token-request'}});
+      await fetch("/redeem", {privateToken: {version: 1,
+                                           operation: 'token-redemption'}});
+      await fetch("/sign", {privateToken: {
+        version: 1,
+        operation: 'send-redemption-record',
         issuers: [$1]}  // b.test, set below
       });
       return "Requests succeeded";
@@ -1270,6 +1549,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
 
   EXPECT_THAT(request_handler_.last_incoming_signed_request(),
               Optional(ReflectsSigningFailure()));
+
+  // Expect three access, one for issue, redeem, and sign.
+  EXPECT_EQ(3, access_count_);
 }
 
 IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndWithServiceWorker) {
@@ -1293,9 +1575,12 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndWithServiceWorker) {
   const std::string trust_token_fetch_snippet = R"(
   (async () => {
     if (navigator.serviceWorker.controller === null) return "NotServiceWorker";
-    await fetch("/issue", {trustToken: {type: 'token-request'}});
-    await fetch("/redeem", {trustToken: {type: 'token-redemption'}});
-    await fetch("/sign", {trustToken: {type: 'send-redemption-record',
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch("/redeem", {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    await fetch("/sign", {privateToken: {version: 1,
+                                       operation: 'send-redemption-record',
                                   issuers: [$1]}});
     return "TTSuccess"; })(); )";
 
@@ -1307,6 +1592,9 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, FetchEndToEndWithServiceWorker) {
       Optional(AllOf(
           HasHeader(network::kTrustTokensRequestHeaderSecRedemptionRecord),
           HasHeader(network::kTrustTokensSecTrustTokenVersionHeader))));
+
+  // Expect three accesses, one for issue and one for redeem and one for sign.
+  EXPECT_EQ(3, access_count_);
 }
 
 // Test redemption limit. Make three refreshing redemption calls back to back
@@ -1325,279 +1613,87 @@ IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, RedemptionLimit) {
   // issue options.batch_size many tokens
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-request' } })
+        { privateToken: { version: 1,
+                        operation: 'token-request' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/issue"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption' } })
+        { privateToken: { version: 1,
+                        operation: 'token-redemption' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/redeem"))));
 
   EXPECT_EQ("Success",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption',
+        { privateToken: { version: 1,
+                        operation: 'token-redemption',
                         refreshPolicy: 'refresh' } })
         .then(()=>'Success'); )",
                                       server_.GetURL("a.test", "/redeem"))));
   // third redemption should fail
   EXPECT_EQ("Error",
             EvalJs(shell(), JsReplace(R"(fetch($1,
-        { trustToken: { type: 'token-redemption',
+        { privateToken: { version: 1,
+                        operation: 'token-redemption',
                         refreshPolicy: 'refresh' } })
         .then(()=>'Success')
         .catch(()=>'Error'); )",
                                       server_.GetURL("a.test", "/redeem"))));
+
+  // Expect four accesses, one for issuance, one for redemption, and two for
+  // sign.
+  EXPECT_EQ(4, access_count_);
 }
 
-class TrustTokenBrowsertestWithPlatformIssuance : public TrustTokenBrowsertest {
- public:
-  TrustTokenBrowsertestWithPlatformIssuance() {
-    // This assertion helps guard against the brittleness of deserializing
-    // "true", in case we refactor the parameter's type.
-    static_assert(
-        std::is_same<
-            decltype(network::features::kPlatformProvidedTrustTokenIssuance
-                         .default_value),
-            const bool>::value,
-        "Need to update this initialization logic if the type of the param "
-        "changes.");
-    features_.InitAndEnableFeatureWithParameters(
-        network::features::kTrustTokens,
-        {{network::features::kPlatformProvidedTrustTokenIssuance.name,
-          "true"}});
-  }
-
- private:
-  base::test::ScopedFeatureList features_;
-};
-
-#if BUILDFLAG(IS_ANDROID)
-HandlerWrappingLocalTrustTokenFulfiller::
-    HandlerWrappingLocalTrustTokenFulfiller(TrustTokenRequestHandler& handler)
-    : handler_(handler) {
-  interface_overrider_.SetBinderForName(
-      mojom::LocalTrustTokenFulfiller::Name_,
-      base::BindRepeating(&HandlerWrappingLocalTrustTokenFulfiller::Bind,
-                          base::Unretained(this)));
-}
-HandlerWrappingLocalTrustTokenFulfiller::
-    ~HandlerWrappingLocalTrustTokenFulfiller() = default;
-
-void HandlerWrappingLocalTrustTokenFulfiller::FulfillTrustTokenIssuance(
-    network::mojom::FulfillTrustTokenIssuanceRequestPtr request,
-    FulfillTrustTokenIssuanceCallback callback) {
-  absl::optional<std::string> maybe_result =
-      handler_.Issue(std::move(request->request));
-  if (maybe_result) {
-    std::move(callback).Run(
-        network::mojom::FulfillTrustTokenIssuanceAnswer::New(
-            network::mojom::FulfillTrustTokenIssuanceAnswer::Status::kOk,
-            std::move(*maybe_result)));
-    return;
-  }
-  std::move(callback).Run(network::mojom::FulfillTrustTokenIssuanceAnswer::New(
-      network::mojom::FulfillTrustTokenIssuanceAnswer::Status::kUnknownError,
-      ""));
-}
-
-void HandlerWrappingLocalTrustTokenFulfiller::Bind(
-    mojo::ScopedMessagePipeHandle handle) {
-  receiver_.Bind(
-      mojo::PendingReceiver<content::mojom::LocalTrustTokenFulfiller>(
-          std::move(handle)));
-}
-
-IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertestWithPlatformIssuance,
-                       EndToEndAndroidPlatformIssuance) {
-  base::HistogramTester histograms;
-
-  TrustTokenRequestHandler::Options options;
-  options.specify_platform_issuance_on = {
-      network::mojom::TrustTokenKeyCommitmentResult::Os::kAndroid};
-  request_handler_.UpdateOptions(std::move(options));
-
-  HandlerWrappingLocalTrustTokenFulfiller fulfiller(request_handler_);
-
+// Check whether depreciated fetch API where 'type' refers to operation
+// type fails.
+IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest, CheckDepreciatedTypeField) {
   ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
 
   GURL start_url = server_.GetURL("a.test", "/title1.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
-  // Issuance operations successfully answered locally result in
-  // NoModificationAllowedError.
-  std::string command = R"(
-  (async () => {
-    try {
-      await fetch("/issue", {trustToken: {type: 'token-request'}});
-      return "Unexpected success";
-    } catch (e) {
-      if (e.name !== "NoModificationAllowedError") {
-        return "Unexpected exception";
-      }
-      const hasToken = await document.hasTrustToken($1);
-      if (!hasToken)
-        return "Unexpectedly absent token";
-      return "Success";
-    }})(); )";
+  std::string command = R"(fetch(
+    "/issue", {privateToken: {type: 'token-request'}})
+    .then(()=>'Success')
+    .catch(error => error.message); )";
 
-  // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
-  // resolve.
-  EXPECT_EQ(
-      "Success",
-      EvalJs(shell(), JsReplace(command, IssuanceOriginFromHost("a.test"))));
-
-  content::FetchHistogramsFromChildProcesses();
-  histograms.ExpectTotalCount(
-      base::StrCat({"Net.TrustTokens.OperationBeginTime.Success.Issuance."
-                    "PlatformProvided"}),
-      1);
+  EXPECT_THAT(EvalJs(shell(), command).ExtractString(),
+              HasSubstr("Failed to read the 'operation'\
+ property from 'PrivateToken': Required member is undefined."));
 }
 
-IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertestWithPlatformIssuance,
-                       PlatformIssuanceWithoutEmbedderSupport) {
-  base::HistogramTester histograms;
-
-  TrustTokenRequestHandler::Options options;
-  options.specify_platform_issuance_on = {
-      network::mojom::TrustTokenKeyCommitmentResult::Os::kAndroid};
-  options.unavailable_local_operation_fallback =
-      network::mojom::TrustTokenKeyCommitmentResult::
-          UnavailableLocalOperationFallback::kReturnWithError;
-  request_handler_.UpdateOptions(std::move(options));
-
-  service_manager::InterfaceProvider::TestApi interface_overrider(
-      content::GetGlobalJavaInterfaces());
-  // Instead of using interface_overrider.ClearBinder(name), it's necessary to
-  // provide a callback that explicitly closes the pipe, since
-  // InterfaceProvider's contract requires that it either bind or close pipes
-  // it's given (see its comments in interface_provider.mojom).
-  interface_overrider.SetBinderForName(
-      mojom::LocalTrustTokenFulfiller::Name_,
-      base::BindRepeating([](mojo::ScopedMessagePipeHandle handle) {
-        mojo::Close(std::move(handle));
-      }));
-
+IN_PROC_BROWSER_TEST_F(TrustTokenBrowsertest,
+                       SendRedemptionRequestWithEmptyIssuers) {
   ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
 
   GURL start_url = server_.GetURL("a.test", "/title1.html");
   ASSERT_TRUE(NavigateToURL(shell(), start_url));
 
-  // Issuance operations diverted locally without embedder support, with
-  // "return_with_error" specified in the issuer's key commitments, should
-  // result in OperationError.
   std::string command = R"(
   (async () => {
-    try {
-      await fetch("/issue", {trustToken: {type: 'token-request'}});
-      return "Unexpected success";
-    } catch (e) {
-      return e.name;
-    }})(); )";
+    await fetch("/issue", {privateToken: {version: 1,
+                                        operation: 'token-request'}});
+    await fetch("/redeem", {privateToken: {version: 1,
+                                         operation: 'token-redemption'}});
+    return "Success"; })(); )";
+  ASSERT_EQ("Success", EvalJs(shell(), command));
 
-  // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
-  // resolve.
-  EXPECT_EQ("OperationError", EvalJs(shell(), command));
+  command = R"(
+    fetch("/sign", {privateToken: {version: 1,
+                                 operation: 'send-redemption-record',
+                                 issuers: []}})
+    .then(() => 'Success')
+    .catch(error => error.message); )";
 
-  content::FetchHistogramsFromChildProcesses();
-  histograms.ExpectTotalCount(
-      base::StrCat({"Net.TrustTokens.OperationBeginTime.Failure.Issuance."
-                    "PlatformProvided"}),
-      1);
+  // fetch should throw due to empty issuer field
+  EXPECT_THAT(EvalJs(shell(), command).ExtractString(),
+              HasSubstr("Failed to execute 'fetch' on 'Window':\
+ privateToken: operation type 'send-redemption-record' requires that\
+ the 'issuers' field be present and contain at least one secure,\
+ HTTP(S) URL, but it was missing or empty."));
 }
-#endif  // BUILDFLAG(IS_ANDROID)
-#if !BUILDFLAG(IS_ANDROID)
-IN_PROC_BROWSER_TEST_F(
-    TrustTokenBrowsertestWithPlatformIssuance,
-    IssuanceOnOsNotSpecifiedInKeyCommitmentsReturnsErrorIfConfiguredToDoSo) {
-  TrustTokenRequestHandler::Options options;
-  options.specify_platform_issuance_on = {
-      network::mojom::TrustTokenKeyCommitmentResult::Os::kAndroid};
-  // Since we're not on Android, if the issuer
-  // 1) configures that, on Android, we should attempt platform-provided token
-  //    issuance,
-  // 2) specifies "return_with_error" as the fallback behavior for other OSes,
-  // issuance against the host configured for platform-provided issuance should
-  // fail.
-  options.unavailable_local_operation_fallback =
-      network::mojom::TrustTokenKeyCommitmentResult::
-          UnavailableLocalOperationFallback::kReturnWithError;
-  request_handler_.UpdateOptions(std::move(options));
-
-  ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
-
-  GURL start_url = server_.GetURL("a.test", "/title1.html");
-  ASSERT_TRUE(NavigateToURL(shell(), start_url));
-
-  // Issuance operations attempted on OSes other than those specified in
-  // the key commitment's "request_issuance_locally_on" field should result in
-  // OperationError returns if the issuer specified "return_with_error" as the
-  // fallback behavior.
-  std::string command = R"(
-  (async () => {
-    try {
-      await fetch("/issue", {trustToken: {type: 'token-request'}});
-      return "Unexpected success";
-    } catch (e) {
-      return e.name;
-    }})(); )";
-
-  // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
-  // resolve.
-  EXPECT_EQ("OperationError", EvalJs(shell(), command));
-}
-
-IN_PROC_BROWSER_TEST_F(
-    TrustTokenBrowsertestWithPlatformIssuance,
-    IssuanceOnOsNotSpecifiedInKeyCommitmentsFallsBackToWebIssuanceIfSpecified) {
-  base::HistogramTester histograms;
-
-  TrustTokenRequestHandler::Options options;
-  options.specify_platform_issuance_on = {
-      network::mojom::TrustTokenKeyCommitmentResult::Os::kAndroid};
-  // Since we're not on Android, if the issuer
-  // 1) configures that, on Android, we should attempt platform-provided token
-  //    issuance,
-  // 2) specifies "web_issuance" as fallback behavior for other OSes,
-  // we should see issuance succeed.
-  options.unavailable_local_operation_fallback =
-      network::mojom::TrustTokenKeyCommitmentResult::
-          UnavailableLocalOperationFallback::kWebIssuance;
-  request_handler_.UpdateOptions(std::move(options));
-
-  ProvideRequestHandlerKeyCommitmentsToNetworkService({"a.test"});
-
-  GURL start_url = server_.GetURL("a.test", "/title1.html");
-  ASSERT_TRUE(NavigateToURL(shell(), start_url));
-
-  // Issuance operations attempted on OSes other than those specified in
-  // the key commitment's "request_issuance_locally_on" field should result in
-  // OperationError returns if the issuer specified "return_with_error" as the
-  // fallback behavior.
-  std::string command = R"(
-  (async () => {
-    try {
-      await fetch("/issue", {trustToken: {type: 'token-request'}});
-      if (await document.hasTrustToken($1))
-        return "Success";
-      return "Issuance failed unexpectedly";
-    } catch (e) {
-      return e.name;
-    }})(); )";
-
-  // We use EvalJs here, not ExecJs, because EvalJs waits for promises to
-  // resolve.
-  EXPECT_EQ(
-      "Success",
-      EvalJs(shell(), JsReplace(command, IssuanceOriginFromHost("a.test"))));
-
-  content::FetchHistogramsFromChildProcesses();
-  histograms.ExpectTotalCount(
-      base::StrCat({"Net.TrustTokens.OperationBeginTime.Failure.Issuance."
-                    "PlatformProvided"}),
-      0);  // No platform-provided operation was attempted.
-}
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace content

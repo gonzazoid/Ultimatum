@@ -23,7 +23,7 @@ extern const CGFloat kNTPBackgroundColorBrightnessIncognito;
 
 // Stackview constraints.
 extern const CGFloat kTopButtonsBottomMargin;
-extern const CGFloat kBottomButtonsBottomMargin;
+extern const CGFloat kBottomButtonsTopMargin;
 extern const CGFloat kAdaptiveToolbarMargin;
 extern const CGFloat kAdaptiveToolbarStackViewSpacing;
 
@@ -39,7 +39,6 @@ extern const CGFloat kAdaptiveToolbarButtonHeight;
 extern const CGFloat kAdaptiveToolbarButtonWidth;
 extern const CGFloat kSearchButtonWidth;
 extern const CGFloat kCancelButtonHorizontalInset;
-extern const CGFloat kToolbarDimmedButtonAlpha;
 
 // Background color of the blur view.
 extern const CGFloat kBlurBackgroundGrayscaleComponent;
@@ -57,25 +56,28 @@ extern const CGFloat kDimmedToolbarSpotlightAlpha;
 // Adaptive toolbar position constants.
 extern const CGFloat kExpandedLocationBarHorizontalMargin;
 extern const CGFloat kContractedLocationBarHorizontalMargin;
-// Location bar leading margin with kIOSOmniboxUpdatedPopupUI flag. Should be
-// used instead of kExpandedLocationBarHorizontalMargin.
-extern const CGFloat kExpandedLocationBarLeadingMarginRefreshedPopup;
 
-// Adaptive Location bar constants.
-extern const CGFloat kAdaptiveLocationBarBackgroundAlpha;
-extern const CGFloat kAdaptiveLocationBarBackgroundAlphaIncognito;
+// Top adaptive Location bar constants.
 extern const CGFloat kAdaptiveLocationBarVerticalMargin;
 extern const CGFloat kAdaptiveLocationBarVerticalMarginFullscreen;
+
+// Bottom adaptive location bar constants.
+extern const CGFloat kBottomAdaptiveLocationBarTopMargin;
+extern const CGFloat kBottomAdaptiveLocationBarBottomMargin;
+extern const CGFloat kBottomAdaptiveLocationBarVerticalMarginFullscreen;
+
 // Additional margin, which should grow only when the preferred content size is
 // non-default.
 extern const CGFloat kLocationBarVerticalMarginDynamicType;
 
 // Top margin of the top toolbar when the adaptive toolbar is unsplit.
 extern const CGFloat kTopToolbarUnsplitMargin;
-// Height of the primary toolbar with default font size.
-extern const CGFloat kPrimaryToolbarHeight;
-// Height of the secondary toolbar with default font size.
-extern const CGFloat kSecondaryToolbarHeight;
+// Height of the omnibox in the toolbar. Used for both toolbars.
+extern const CGFloat kToolbarOmniboxHeight;
+// Height of the primary toolbar with omnibox with default font size.
+extern const CGFloat kPrimaryToolbarWithOmniboxHeight;
+// Height of the secondary toolbar without the omnibox with default font size.
+extern const CGFloat kSecondaryToolbarWithoutOmniboxHeight;
 // Height of the part of the toolbar not scaling up when the user changes the
 // preferred font size.
 extern const CGFloat kNonDynamicToolbarHeight;
@@ -95,10 +97,6 @@ extern NSString* const kToolbarShareButtonIdentifier;
 extern NSString* const kToolbarNewTabButtonIdentifier;
 // Accessibility identifier of the cancel omnibox edit button.
 extern NSString* const kToolbarCancelOmniboxEditButtonIdentifier;
-
-// Round corner radius for top-left and top-right corners when thumb strip is
-// visible.
-extern const CGFloat kTopCornerRadius;
 
 // Font size for the TabGrid button containing the tab count.
 extern const NSInteger kTabGridButtonFontSize;

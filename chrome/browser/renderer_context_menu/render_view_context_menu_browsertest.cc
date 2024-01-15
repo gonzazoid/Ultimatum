@@ -8,19 +8,24 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/base64.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
+#include "base/test/repeating_test_future.h"
+#include "base/test/with_feature_override.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -29,9 +34,11 @@
 #include "chrome/browser/accessibility/accessibility_state_utils.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
+#include "chrome/browser/chrome_content_browser_client.h"
+#include "chrome/browser/pdf/pdf_extension_test_base.h"
 #include "chrome/browser/pdf/pdf_extension_test_util.h"
 #include "chrome/browser/pdf/pdf_frame_util.h"
+#include "chrome/browser/pdf/test_pdf_viewer_stream_manager.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -39,6 +46,8 @@
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_browsertest_util.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "chrome/browser/sessions/session_restore.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -49,42 +58,51 @@
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/web_app_install_finalizer.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_render_frame.mojom.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chrome/test/base/search_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/compose/buildflags.h"
 #include "components/guest_view/browser/guest_view_manager_delegate.h"
 #include "components/guest_view/browser/test_guest_view_manager.h"
+#include "components/lens/buildflags.h"
 #include "components/lens/lens_features.h"
 #include "components/lens/lens_metadata.mojom.h"
+#include "components/lens/lens_testing_utils.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/privacy_sandbox/privacy_sandbox_attestations/privacy_sandbox_attestations.h"
+#include "components/privacy_sandbox/privacy_sandbox_attestations/scoped_privacy_sandbox_attestations.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_service.h"
+#include "components/supervised_user/core/common/buildflags.h"
+#include "components/supervised_user/core/common/pref_names.h"
+#include "components/supervised_user/test_support/kids_management_api_server_mock.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "components/webapps/browser/uninstall_result_code.h"
-#include "content/public/browser/browser_message_filter.h"
 #include "content/public/browser/browser_plugin_guest_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/hit_test_region_observer.h"
+#include "content/public/test/test_frame_navigation_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api/extensions_api_client.h"
@@ -95,20 +113,27 @@
 #include "net/base/load_flags.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/http/http_util.h"
+#include "net/test/embedded_test_server/controllable_http_response.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "pdf/buildflags.h"
+#include "pdf/pdf_features.h"
+#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/context_menu_data/context_menu_data.h"
 #include "third_party/blink/public/common/context_menu_data/edit_flags.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
+#include "third_party/blink/public/common/page_state/page_state.h"
+#include "third_party/blink/public/common/page_state/page_state_serialization.h"
 #include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
+#include "third_party/libwebp/src/src/webp/decode.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/base/emoji/emoji_panel_helper.h"
@@ -116,19 +141,27 @@
 #include "ui/gfx/codec/jpeg_codec.h"
 #include "ui/gfx/codec/png_codec.h"
 
+#if BUILDFLAG(ENABLE_COMPOSE)
+#include "chrome/browser/compose/mock_chrome_compose_client.h"
+#endif
+
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
-#include "chrome/browser/supervised_user/supervised_user_url_filter.h"
+#include "chrome/test/supervised_user/embedded_test_server_setup_mixin.h"
+#include "chrome/test/supervised_user/supervision_mixin.h"
+#include "components/supervised_user/core/browser/supervised_user_preferences.h"
+#include "components/supervised_user/core/browser/supervised_user_service.h"
+#include "components/supervised_user/core/browser/supervised_user_url_filter.h"
+#include "components/supervised_user/core/common/features.h"
+#include "components/supervised_user/core/common/supervised_user_constants.h"
 #endif
 
 #if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
-#include "components/services/screen_ai/public/cpp/screen_ai_install_state.h"
+#include "chrome/browser/screen_ai/screen_ai_install_state.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/ash/window_pin_util.h"
+#include "chrome/browser/ui/chromeos/window_pin_util.h"
 #include "ui/aura/window.h"
 #endif
 
@@ -136,7 +169,7 @@
 #include "ui/aura/window.h"
 #endif
 
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
 #include "chrome/browser/ui/lens/lens_side_panel_helper.h"
 #include "ui/events/test/event_generator.h"
 #endif
@@ -144,17 +177,27 @@
 using content::WebContents;
 using extensions::MimeHandlerViewGuest;
 using extensions::TestMimeHandlerViewGuest;
-using web_app::AppId;
 using web_app::WebAppProvider;
+using webapps::AppId;
+
+using ::testing::_;
+using ::testing::Return;
+using ::testing::TestWithParam;
 
 namespace {
 
 const char kAppUrl1[] = "https://www.google.com/";
 const char kAppUrl2[] = "https://docs.google.com/";
 
-class ContextMenuBrowserTest : public InProcessBrowserTest {
+class AllowPreCommitInputFlagMixin : public InProcessBrowserTestMixin {
  public:
-  ContextMenuBrowserTest() {}
+  AllowPreCommitInputFlagMixin() = delete;
+  explicit AllowPreCommitInputFlagMixin(InProcessBrowserTestMixinHost& host)
+      : InProcessBrowserTestMixin(&host) {}
+  AllowPreCommitInputFlagMixin(const AllowPreCommitInputFlagMixin&) = delete;
+  AllowPreCommitInputFlagMixin& operator=(const AllowPreCommitInputFlagMixin&) =
+      delete;
+  ~AllowPreCommitInputFlagMixin() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     // Tests in this suite make use of documents with no significant
@@ -162,8 +205,17 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
     // unless we allow it.
     command_line->AppendSwitch(blink::switches::kAllowPreCommitInput);
   }
+};
 
+class ContextMenuBrowserTestBase : public MixinBasedInProcessBrowserTest {
  protected:
+  ContextMenuBrowserTestBase() {
+    scoped_feature_list_.InitWithFeatures(
+        {features::kReadAnything, media::kContextMenuSaveVideoFrameAs,
+         media::kContextMenuSearchForVideoFrame},
+        {});
+  }
+
   std::unique_ptr<TestRenderViewContextMenu> CreateContextMenuMediaTypeNone(
       const GURL& unfiltered_url,
       const GURL& url) {
@@ -219,6 +271,18 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
         url, link_text, media_type, source_type);
   }
 
+  std::unique_ptr<TestRenderViewContextMenu> CreateContextMenuFromParams(
+      const content::ContextMenuParams& params) {
+    auto menu = std::make_unique<TestRenderViewContextMenu>(
+        *browser()
+             ->tab_strip_model()
+             ->GetActiveWebContents()
+             ->GetPrimaryMainFrame(),
+        params);
+    menu->Init();
+    return menu;
+  }
+
   std::unique_ptr<TestRenderViewContextMenu> CreateContextMenuInWebContents(
       WebContents* web_contents,
       const GURL& unfiltered_url,
@@ -245,7 +309,7 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
     return menu;
   }
 
-  // Does not work on ChromeOS.
+  // Does not work on ChromeOS Ash where there's only one profile.
   Profile* CreateSecondaryProfile(int profile_num) {
     base::ScopedAllowBlockingForTesting allow_blocking;
     ProfileManager* profile_manager = g_browser_process->profile_manager();
@@ -255,15 +319,15 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
     return profile_manager->GetProfile(profile_path);
   }
 
-  AppId InstallTestWebApp(const GURL& start_url, bool open_as_window = true) {
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+  AppId InstallTestWebApp(const GURL& start_url,
+                          web_app::mojom::UserDisplayMode display_mode =
+                              web_app::mojom::UserDisplayMode::kStandalone) {
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_info->start_url = start_url;
     web_app_info->scope = start_url;
     web_app_info->title = u"Test app 🐐";
     web_app_info->description = u"Test description 🐐";
-    web_app_info->user_display_mode =
-        open_as_window ? web_app::UserDisplayMode::kStandalone
-                       : web_app::UserDisplayMode::kBrowser;
+    web_app_info->user_display_mode = display_mode;
 
     return web_app::test::InstallWebApp(browser()->profile(),
                                         std::move(web_app_info));
@@ -306,13 +370,16 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
     auto callback =
         [](std::vector<uint8_t>* response_image_data,
            gfx::Size* response_original_size,
+           gfx::Size* response_downscaled_size,
            std::string* response_file_extension,
            std::vector<lens::mojom::LatencyLogPtr>* response_log_data,
            base::OnceClosure quit, const std::vector<uint8_t>& image_data,
-           const gfx::Size& original_size, const std::string& file_extension,
+           const gfx::Size& original_size, const gfx::Size& downscaled_size,
+           const std::string& file_extension,
            std::vector<lens::mojom::LatencyLogPtr> log_data) {
           *response_image_data = image_data;
           *response_original_size = original_size;
+          *response_downscaled_size = downscaled_size;
           *response_file_extension = file_extension;
           *response_log_data = std::move(log_data);
           std::move(quit).Run();
@@ -321,17 +388,20 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
     base::RunLoop run_loop;
     std::vector<uint8_t> response_image_data;
     gfx::Size response_original_size;
+    gfx::Size response_downscaled_size;
     std::string response_file_extension;
     std::vector<lens::mojom::LatencyLogPtr> response_log_data;
     chrome_render_frame->RequestImageForContextNode(
-        0, request_size, request_image_format,
+        0, request_size, request_image_format, chrome::mojom::kDefaultQuality,
         base::BindOnce(callback, &response_image_data, &response_original_size,
-                       &response_file_extension, &response_log_data,
-                       run_loop.QuitClosure()));
+                       &response_downscaled_size, &response_file_extension,
+                       &response_log_data, run_loop.QuitClosure()));
     run_loop.Run();
 
     ASSERT_EQ(expected_original_size.width(), response_original_size.width());
     ASSERT_EQ(expected_original_size.height(), response_original_size.height());
+    ASSERT_EQ(expected_size.width(), response_downscaled_size.width());
+    ASSERT_EQ(expected_size.height(), response_downscaled_size.height());
     ASSERT_EQ(expected_extension, response_file_extension);
 
     SkBitmap decoded_bitmap;
@@ -347,22 +417,62 @@ class ContextMenuBrowserTest : public InProcessBrowserTest {
                             .get();
       ASSERT_EQ(expected_size.width(), decoded_bitmap.width());
       ASSERT_EQ(expected_size.height(), decoded_bitmap.height());
+    } else if (response_file_extension == ".webp") {
+      int width;
+      int height;
+      EXPECT_TRUE(WebPGetInfo(&response_image_data.front(),
+                              response_image_data.size(), &width, &height));
+      ASSERT_EQ(expected_size.width(), width);
+      ASSERT_EQ(expected_size.height(), height);
     }
   }
 
  private:
   web_app::OsIntegrationManager::ScopedSuppressForTesting os_hooks_suppress_;
-  base::test::ScopedFeatureList scoped_feature_list_{features::kReadAnything};
+  base::test::ScopedFeatureList scoped_feature_list_;
+  AllowPreCommitInputFlagMixin allow_pre_commit_input_flag_mixin_{mixin_host_};
 };
 
-class ContextMenuWithProfileLinksBrowserTest : public ContextMenuBrowserTest {
- public:
+class ContextMenuBrowserTest
+    : public ContextMenuBrowserTestBase,
+      public ::testing::WithParamInterface</*is_preview_enabled*/ bool> {
+ protected:
+  ContextMenuBrowserTest() {
+    if (IsPreviewEnabled()) {
+      scoped_feature_list_.InitWithFeatures(
+          {blink::features::kLinkPreview, features::kReadAnything,
+           media::kContextMenuSaveVideoFrameAs,
+           media::kContextMenuSearchForVideoFrame},
+          {});
+    } else {
+      scoped_feature_list_.InitWithFeatures(
+          {features::kReadAnything, media::kContextMenuSaveVideoFrameAs,
+           media::kContextMenuSearchForVideoFrame},
+          {blink::features::kLinkPreview});
+    }
+  }
+
+  bool IsPreviewEnabled() {
+#if BUILDFLAG(IS_ANDROID)
+    return false;
+#else
+    return GetParam();
+#endif
+  }
+
  private:
-  base::test::ScopedFeatureList scoped_feature_list_{
-      features::kDisplayOpenLinkAsProfile};
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-class PdfPluginContextMenuBrowserTest : public InProcessBrowserTest {
+INSTANTIATE_TEST_SUITE_P(All,
+                         ContextMenuBrowserTest,
+                         testing::Bool(),
+                         [](const testing::TestParamInfo<bool>& info) {
+                           return info.param ? "LinkPreviewEnabled"
+                                             : "LinkPreviewDisabled";
+                         });
+
+class PdfPluginContextMenuBrowserTest : public PDFExtensionTestBase {
  public:
   PdfPluginContextMenuBrowserTest() = default;
 
@@ -374,12 +484,13 @@ class PdfPluginContextMenuBrowserTest : public InProcessBrowserTest {
   ~PdfPluginContextMenuBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
-    guest_view::GuestViewManager::set_factory_for_testing(&factory_);
-    test_guest_view_manager_ = static_cast<guest_view::TestGuestViewManager*>(
-        guest_view::GuestViewManager::CreateWithDelegate(
-            browser()->profile(),
-            extensions::ExtensionsAPIClient::Get()
-                ->CreateGuestViewManagerDelegate(browser()->profile())));
+    PDFExtensionTestBase::SetUpOnMainThread();
+
+    if (!UseOopif()) {
+      test_guest_view_manager_ = factory_.GetOrCreateTestGuestViewManager(
+          browser()->profile(), extensions::ExtensionsAPIClient::Get()
+                                    ->CreateGuestViewManagerDelegate());
+    }
   }
 
  protected:
@@ -402,22 +513,30 @@ class PdfPluginContextMenuBrowserTest : public InProcessBrowserTest {
     GURL page_url = ui_test_utils::GetTestUrl(
         base::FilePath(FILE_PATH_LITERAL("pdf")),
         base::FilePath(FILE_PATH_LITERAL("test.pdf")));
-    EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), page_url));
+    EXPECT_TRUE(LoadPdf(page_url));
 
-    WebContents* web_contents =
-        browser()->tab_strip_model()->GetActiveWebContents();
-    // Wait for the PDF plugin to load.
-    EXPECT_TRUE(pdf_extension_test_util::EnsurePDFHasLoaded(web_contents));
-    content::BrowserPluginGuestManager* guest_manager =
-        web_contents->GetBrowserContext()->GetGuestManager();
-    WebContents* guest_contents = guest_manager->GetFullPageGuest(web_contents);
-    EXPECT_TRUE(guest_contents);
+    WebContents* web_contents = GetActiveWebContents();
 
-    // Get the PDF extension main frame. The context menu will be created inside
-    // this frame.
-    extension_frame_ = guest_contents->GetPrimaryMainFrame();
-    EXPECT_TRUE(extension_frame_);
+    // The context menu will be created inside the extension frame.
+    extension_frame_ =
+        pdf_extension_test_util::GetOnlyPdfExtensionHost(web_contents);
+    if (!extension_frame_) {
+      ADD_FAILURE() << "Failed to get PDF extension frame.";
+      return nullptr;
+    }
     EXPECT_NE(extension_frame_, web_contents->GetPrimaryMainFrame());
+
+    if (!UseOopif()) {
+      content::BrowserPluginGuestManager* guest_manager =
+          web_contents->GetBrowserContext()->GetGuestManager();
+      WebContents* guest_contents =
+          guest_manager->GetFullPageGuest(web_contents);
+      if (!guest_contents) {
+        ADD_FAILURE() << "Failed to get guest WebContents.";
+        return nullptr;
+      }
+      EXPECT_EQ(extension_frame_, guest_contents->GetPrimaryMainFrame());
+    }
 
     content::ContextMenuParams params;
     params.page_url = page_url;
@@ -448,28 +567,41 @@ class PdfPluginContextMenuBrowserTest : public InProcessBrowserTest {
         base::FilePath(FILE_PATH_LITERAL("pdf")), base::FilePath(file_name));
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), page_url));
 
-    WebContents* web_contents =
-        browser()->tab_strip_model()->GetActiveWebContents();
-    // Prepare to load a pdf plugin inside.
-    TestMimeHandlerViewGuest::RegisterTestGuestViewType(
-        test_guest_view_manager_);
-    ASSERT_TRUE(
-        content::ExecuteScript(web_contents,
-                               "var l = document.getElementById('link1');"
-                               "l.click();"));
+    WebContents* web_contents = GetActiveWebContents();
 
-    // Wait for the guest view of the PDF plugin to be created.
-    auto* guest_view =
-        test_guest_view_manager_->WaitForSingleGuestViewCreated();
-    ASSERT_TRUE(guest_view);
-    TestMimeHandlerViewGuest* guest =
-        static_cast<TestMimeHandlerViewGuest*>(guest_view);
+    // `test_pdf_viewer_stream_manager` is used only if `UseOopif()` is true.
+    pdf::TestPdfViewerStreamManager* test_pdf_viewer_stream_manager = nullptr;
+    if (UseOopif()) {
+      test_pdf_viewer_stream_manager =
+          pdf::TestPdfViewerStreamManager::CreateForWebContents(web_contents);
+    } else {
+      // Prepare to load a pdf plugin inside.
+      TestMimeHandlerViewGuest::RegisterTestGuestViewType(
+          test_guest_view_manager_);
+    }
 
-    // Wait for the guest to be attached to the embedder.
-    guest->WaitForGuestAttached();
+    ASSERT_TRUE(content::ExecJs(web_contents,
+                                "var l = document.getElementById('link1');"
+                                "l.click();"));
 
-    // Get the pdf plugin's main frame.
-    content::RenderFrameHost* frame = guest_view->GetGuestMainFrame();
+    // Wait for the pdf content frame to be created and get the pdf extension
+    // frame.
+    content::RenderFrameHost* frame;
+    if (UseOopif()) {
+      test_pdf_viewer_stream_manager->WaitUntilPdfLoaded();
+      frame = pdf_extension_test_util::GetOnlyPdfExtensionHost(web_contents);
+    } else {
+      auto* guest_view =
+          test_guest_view_manager_->WaitForSingleGuestViewCreated();
+      ASSERT_TRUE(guest_view);
+      TestMimeHandlerViewGuest* guest =
+          static_cast<TestMimeHandlerViewGuest*>(guest_view);
+
+      // Wait for the guest to be attached to the embedder.
+      guest->WaitForGuestAttached();
+      frame = guest_view->GetGuestMainFrame();
+    }
+
     ASSERT_TRUE(frame);
     ASSERT_NE(web_contents->GetPrimaryMainFrame(), frame);
 
@@ -487,14 +619,24 @@ class PdfPluginContextMenuBrowserTest : public InProcessBrowserTest {
   content::RenderFrameHost* extension_frame() { return extension_frame_; }
 
  private:
-  raw_ptr<content::RenderFrameHost, DanglingUntriaged> extension_frame_ =
-      nullptr;
+  raw_ptr<content::RenderFrameHost, AcrossTasksDanglingUntriaged>
+      extension_frame_ = nullptr;
   guest_view::TestGuestViewManagerFactory factory_;
-  raw_ptr<guest_view::TestGuestViewManager, DanglingUntriaged>
+  raw_ptr<guest_view::TestGuestViewManager, AcrossTasksDanglingUntriaged>
       test_guest_view_manager_;
 };
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+class PdfPluginContextMenuBrowserTestWithOopifOverride
+    : public base::test::WithFeatureOverride,
+      public PdfPluginContextMenuBrowserTest {
+ public:
+  PdfPluginContextMenuBrowserTestWithOopifOverride()
+      : base::test::WithFeatureOverride(chrome_pdf::features::kPdfOopif) {}
+
+  bool UseOopif() const override { return GetParam(); }
+};
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        NonExtensionMenuItemsAlwaysVisible) {
   std::unique_ptr<TestRenderViewContextMenu> menu1 =
       CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
@@ -521,12 +663,12 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 }
 
 // Verifies "Save link as" is not enabled for links blocked via policy.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        SaveLinkAsEntryIsDisabledForBlockedUrls) {
-  base::Value value(base::Value::Type::LIST);
-  value.Append(base::Value("google.com"));
-  browser()->profile()->GetPrefs()->Set(policy::policy_prefs::kUrlBlocklist,
-                                        std::move(value));
+  base::Value::List list;
+  list.Append("google.com");
+  browser()->profile()->GetPrefs()->SetList(policy::policy_prefs::kUrlBlocklist,
+                                            std::move(list));
   base::RunLoop().RunUntilIdle();
 
   std::unique_ptr<TestRenderViewContextMenu> menu =
@@ -538,17 +680,186 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 }
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+class ContextMenuForSupervisedUsersBrowserTest
+    : public ContextMenuBrowserTestBase {
+ protected:
+  supervised_user::SupervisedUserService* GetSupervisedUserService() {
+    return SupervisedUserServiceFactory::GetForProfile(browser()->profile());
+  }
+
+  supervised_user::KidsManagementApiServerMock& kids_management_api_mock() {
+    return supervision_mixin_.api_mock_setup_mixin().api_mock();
+  }
+
+ private:
+  // Supervision mixin hooks kids management api (including ClassifyUrl) onto
+  // given embedded test server. This server is run in separate process and is
+  // responding to all requests as configured in this mixin.
+  // MUST be declared after scoped_feature_list_ due to Init/dtor order.
+  supervised_user::SupervisionMixin supervision_mixin_{
+      mixin_host_,
+      this,
+      embedded_test_server(),
+      {
+          .sign_in_mode =
+              supervised_user::SupervisionMixin::SignInMode::kSupervised,
+      }};
+};
+
+class ContextMenuWithoutFilteringForSupervisedUsersBrowserTest
+    : public ContextMenuForSupervisedUsersBrowserTest {
+ public:
+  ContextMenuWithoutFilteringForSupervisedUsersBrowserTest() {
+    scoped_feature_list_.InitAndDisableFeature(
+        supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(ContextMenuWithoutFilteringForSupervisedUsersBrowserTest,
                        SaveLinkAsEntryIsDisabledForUrlsNotAccessibleForChild) {
+  // Block access to http://www.google.com/ in the URL filter.
+  std::map<std::string, bool> hosts;
+  hosts["www.google.com"] = false;
+  GetSupervisedUserService()->GetURLFilter()->SetManualHosts(std::move(hosts));
+
+  base::RunLoop().RunUntilIdle();
+
+  std::unique_ptr<TestRenderViewContextMenu> menu =
+      CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
+                                     GURL("http://www.google.com/"));
+
+  ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_SAVELINKAS));
+
+  // The entry is only disabled for platforms on which URL filtering is enabled.
+  if (supervised_user::IsUrlFilteringEnabled(
+          *browser()->profile()->GetPrefs())) {
+    EXPECT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SAVELINKAS));
+  } else {
+    EXPECT_TRUE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SAVELINKAS));
+  }
+}
+
+IN_PROC_BROWSER_TEST_F(
+    ContextMenuWithoutFilteringForSupervisedUsersBrowserTest,
+    SaveLinkAsEntryIsDisabledForUrlsBlockedByAsyncCheckerForChild) {
+  ContextMenuWaiter menu_observer;
+
+  base::RunLoop().RunUntilIdle();
+
+  if (supervised_user::IsUrlFilteringEnabled(
+          *browser()->profile()->GetPrefs())) {
+    kids_management_api_mock().RestrictSubsequentClassifyUrl();
+    EXPECT_CALL(kids_management_api_mock().classify_url_mock(), ClassifyUrl)
+        .Times(1);
+  }
+
+  ASSERT_TRUE(embedded_test_server()->Started());
+  GURL url(embedded_test_server()->GetURL("/download-anchor-same-origin.html"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // Open a context menu.
+  blink::WebMouseEvent mouse_event(
+      blink::WebInputEvent::Type::kMouseDown,
+      blink::WebInputEvent::kNoModifiers,
+      blink::WebInputEvent::GetStaticTimeStampForTests());
+  mouse_event.button = blink::WebMouseEvent::Button::kRight;
+  mouse_event.SetPositionInWidget(15, 15);
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+  mouse_event.SetType(blink::WebInputEvent::Type::kMouseUp);
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+
+  // Wait for context menu to be visible.
+  menu_observer.WaitForMenuOpenAndClose();
+
+  std::u16string suggested_filename = menu_observer.params().suggested_filename;
+  // The save link as action is only blocked for platforms on which URL
+  // filtering is enabled.
+  if (supervised_user::IsUrlFilteringEnabled(
+          *browser()->profile()->GetPrefs())) {
+    const std::string kSuggestedFilename("");
+    ASSERT_EQ(kSuggestedFilename,
+              base::UTF16ToUTF8(suggested_filename).c_str());
+  } else {
+    const std::string kSuggestedFilename("test_filename.png");
+    ASSERT_EQ(kSuggestedFilename,
+              base::UTF16ToUTF8(suggested_filename).c_str());
+  }
+}
+
+IN_PROC_BROWSER_TEST_F(
+    ContextMenuWithoutFilteringForSupervisedUsersBrowserTest,
+    SaveLinkAsEntryIsEnabledForUrlsAllowedByAsyncCheckerForChild) {
+  ContextMenuWaiter menu_observer;
+
+  if (supervised_user::IsUrlFilteringEnabled(
+          *browser()->profile()->GetPrefs())) {
+    kids_management_api_mock().AllowSubsequentClassifyUrl();
+    EXPECT_CALL(kids_management_api_mock().classify_url_mock(), ClassifyUrl)
+        .Times(1);
+  }
+
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(embedded_test_server()->Started());
+  GURL url(embedded_test_server()->GetURL("/download-anchor-same-origin.html"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // Open a context menu.
+  blink::WebMouseEvent mouse_event(
+      blink::WebInputEvent::Type::kMouseDown,
+      blink::WebInputEvent::kNoModifiers,
+      blink::WebInputEvent::GetStaticTimeStampForTests());
+  mouse_event.button = blink::WebMouseEvent::Button::kRight;
+  mouse_event.SetPositionInWidget(15, 15);
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+  mouse_event.SetType(blink::WebInputEvent::Type::kMouseUp);
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+
+  // Wait for context menu to be visible.
+  menu_observer.WaitForMenuOpenAndClose();
+
+  const std::string kSuggestedFilename("test_filename.png");
+  std::u16string suggested_filename = menu_observer.params().suggested_filename;
+  ASSERT_EQ(kSuggestedFilename, base::UTF16ToUTF8(suggested_filename).c_str());
+}
+
+class ContextMenuWithFilteringForSupervisedUsersBrowserTest
+    : public ContextMenuForSupervisedUsersBrowserTest {
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{
+      supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS};
+};
+
+IN_PROC_BROWSER_TEST_F(
+    ContextMenuWithFilteringForSupervisedUsersBrowserTest,
+    SaveLinkAsEntryIsDisabledForUrlsNotAccessibleForChildWithFiltering) {
   // Set up child user profile.
   Profile* profile = browser()->profile();
-  browser()->profile()->GetPrefs()->SetString(
-      prefs::kSupervisedUserId, supervised_users::kChildAccountSUID);
 
   // Block access to http://www.google.com/ in the URL filter.
-  SupervisedUserService* supervised_user_service =
+  supervised_user::SupervisedUserService* supervised_user_service =
       SupervisedUserServiceFactory::GetForProfile(profile);
-  SupervisedUserURLFilter* url_filter = supervised_user_service->GetURLFilter();
+  supervised_user::SupervisedUserURLFilter* url_filter =
+      supervised_user_service->GetURLFilter();
   std::map<std::string, bool> hosts;
   hosts["www.google.com"] = false;
   url_filter->SetManualHosts(std::move(hosts));
@@ -563,10 +874,93 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   EXPECT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SAVELINKAS));
 }
 
-#endif
+IN_PROC_BROWSER_TEST_F(
+    ContextMenuWithFilteringForSupervisedUsersBrowserTest,
+    SaveLinkAsEntryIsDisabledForUrlsBlockedByAsyncCheckerForChild) {
+  ContextMenuWaiter menu_observer;
+
+  kids_management_api_mock().RestrictSubsequentClassifyUrl();
+  EXPECT_CALL(kids_management_api_mock().classify_url_mock(), ClassifyUrl)
+      .Times(1);
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(embedded_test_server()->Started());
+  GURL url(embedded_test_server()->GetURL("/download-anchor-same-origin.html"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // Open a context menu.
+  blink::WebMouseEvent mouse_event(
+      blink::WebInputEvent::Type::kMouseDown,
+      blink::WebInputEvent::kNoModifiers,
+      blink::WebInputEvent::GetStaticTimeStampForTests());
+  mouse_event.button = blink::WebMouseEvent::Button::kRight;
+  mouse_event.SetPositionInWidget(15, 15);
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+  mouse_event.SetType(blink::WebInputEvent::Type::kMouseUp);
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+
+  // Wait for context menu to be visible.
+  menu_observer.WaitForMenuOpenAndClose();
+
+  const std::string kSuggestedFilename("");
+  std::u16string suggested_filename = menu_observer.params().suggested_filename;
+  ASSERT_EQ(kSuggestedFilename, base::UTF16ToUTF8(suggested_filename).c_str());
+}
+
+IN_PROC_BROWSER_TEST_F(
+    ContextMenuWithFilteringForSupervisedUsersBrowserTest,
+    SaveLinkAsEntryIsEnabledForUrlsAllowedByAsyncCheckerForChild) {
+  ContextMenuWaiter menu_observer;
+
+  kids_management_api_mock().AllowSubsequentClassifyUrl();
+  EXPECT_CALL(kids_management_api_mock().classify_url_mock(), ClassifyUrl)
+      .Times(1);
+
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(embedded_test_server()->Started());
+  GURL url(embedded_test_server()->GetURL("/download-anchor-same-origin.html"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // Open a context menu.
+  blink::WebMouseEvent mouse_event(
+      blink::WebInputEvent::Type::kMouseDown,
+      blink::WebInputEvent::kNoModifiers,
+      blink::WebInputEvent::GetStaticTimeStampForTests());
+  mouse_event.button = blink::WebMouseEvent::Button::kRight;
+  mouse_event.SetPositionInWidget(15, 15);
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+  mouse_event.SetType(blink::WebInputEvent::Type::kMouseUp);
+  tab->GetPrimaryMainFrame()
+      ->GetRenderViewHost()
+      ->GetWidget()
+      ->ForwardMouseEvent(mouse_event);
+
+  // Wait for context menu to be visible.
+  menu_observer.WaitForMenuOpenAndClose();
+
+  const std::string kSuggestedFilename("test_filename.png");
+  std::u16string suggested_filename = menu_observer.params().suggested_filename;
+  ASSERT_EQ(kSuggestedFilename, base::UTF16ToUTF8(suggested_filename).c_str());
+}
+
+#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuEntriesAreDisabledInLockedFullscreen) {
   int entries_to_test[] = {
       IDC_VIEW_SOURCE,
@@ -590,7 +984,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenEntryPresentForNormalURLs) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenEntryPresentForNormalURLs) {
   std::unique_ptr<TestRenderViewContextMenu> menu =
       CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
                                      GURL("http://www.google.com/"));
@@ -602,9 +996,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenEntryPresentForNormalURLs) {
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        OpenInAppPresentForURLsInScopeOfWebApp) {
   InstallTestWebApp(GURL(kAppUrl1));
 
@@ -618,11 +1014,13 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        OpenInAppAbsentForURLsInScopeOfNonWindowedWebApp) {
-  InstallTestWebApp(GURL(kAppUrl1), /*open_as_window=*/false);
+  InstallTestWebApp(GURL(kAppUrl1), web_app::mojom::UserDisplayMode::kBrowser);
 
   std::unique_ptr<TestRenderViewContextMenu> menu =
       CreateContextMenuMediaTypeNone(GURL(kAppUrl1), GURL(kAppUrl1));
@@ -634,9 +1032,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        OpenEntryInAppAbsentForURLsOutOfScopeOfWebApp) {
   InstallTestWebApp(GURL(kAppUrl1));
 
@@ -651,9 +1051,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        OpenInAppAbsentForURLsInNonLocallyInstalledApp) {
   const AppId app_id = InstallTestWebApp(GURL(kAppUrl1));
 
@@ -662,8 +1064,8 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
         WebAppProvider::GetForTest(browser()->profile());
     base::RunLoop run_loop;
 
-    ASSERT_TRUE(provider->install_finalizer().CanUserUninstallWebApp(app_id));
-    provider->install_finalizer().UninstallWebApp(
+    ASSERT_TRUE(provider->registrar_unsafe().CanUserUninstallWebApp(app_id));
+    provider->scheduler().UninstallWebApp(
         app_id, webapps::WebappUninstallSource::kAppMenu,
         base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
           EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
@@ -683,9 +1085,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        InAppOpenEntryPresentForRegularURLs) {
   const AppId app_id = InstallTestWebApp(GURL(kAppUrl1));
   Browser* app_window = OpenTestWebApp(app_id);
@@ -702,9 +1106,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenInAppAbsentForIncognito) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenInAppAbsentForIncognito) {
   InstallTestWebApp(GURL(kAppUrl1));
   Browser* incognito_browser = CreateIncognitoBrowser();
 
@@ -720,9 +1126,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenInAppAbsentForIncognito) {
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        InAppOpenEntryPresentForSameAppURLs) {
   const AppId app_id = InstallTestWebApp(GURL(kAppUrl1));
   Browser* app_window = OpenTestWebApp(app_id);
@@ -739,9 +1147,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        InAppOpenEntryPresentForOtherAppURLs) {
   const AppId app_id = InstallTestWebApp(GURL(kAppUrl1));
   InstallTestWebApp(GURL(kAppUrl2));
@@ -760,9 +1170,11 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_EQ(IsPreviewEnabled(),
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenEntryAbsentForFilteredURLs) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenEntryAbsentForFilteredURLs) {
   std::unique_ptr<TestRenderViewContextMenu> menu =
       CreateContextMenuMediaTypeNone(GURL("chrome://history"), GURL());
 
@@ -772,57 +1184,43 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenEntryAbsentForFilteredURLs) {
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
   ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                           IDC_OPEN_LINK_IN_PROFILE_LAST));
+  ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, ContextMenuForCanvas) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, ContextMenuForCanvas) {
   content::ContextMenuParams params;
   params.media_type = blink::mojom::ContextMenuDataMediaType::kCanvas;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
-  ASSERT_TRUE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_SAVEIMAGEAS));
-  ASSERT_TRUE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_COPYIMAGE));
+  ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_SAVEIMAGEAS));
+  ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYIMAGE));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_Editable) {
   content::ContextMenuParams params;
   params.is_editable = true;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
   EXPECT_EQ(ui::IsEmojiPanelSupported(),
-            menu.IsItemPresent(IDC_CONTENT_CONTEXT_EMOJI));
+            menu->IsItemPresent(IDC_CONTENT_CONTEXT_EMOJI));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_NonEditable) {
   content::ContextMenuParams params;
   params.is_editable = false;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
   // Emoji context menu item should never be present on a non-editable field.
-  EXPECT_FALSE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_EMOJI));
+  EXPECT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_EMOJI));
 }
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Executing the emoji panel item with no associated browser should not crash.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_NullBrowserCrash) {
   ui::SetShowEmojiKeyboardCallback(
       base::BindRepeating(ui::ShowTabletModeEmojiPanel));
@@ -836,7 +1234,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 }
 #else
 // Executing the emoji panel item with no associated browser should not crash.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_NullBrowserCrash) {
   std::unique_ptr<content::WebContents> detached_web_contents =
       content::WebContents::Create(
@@ -850,7 +1248,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 
 // Only Chrome OS supports emoji panel callbacks.
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForEmojiPanel_NoCallback) {
   // Reset the emoji callback.
   ui::SetShowEmojiKeyboardCallback(base::RepeatingClosure());
@@ -858,19 +1256,75 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   content::ContextMenuParams params;
   params.is_editable = true;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
   // If there's no callback, the emoji context menu should not be present.
-  EXPECT_FALSE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_EMOJI));
+  EXPECT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_EMOJI));
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextMouse) {
+#if BUILDFLAG(ENABLE_COMPOSE)
+struct ContextMenuForComposeTestCase {
+  std::string test_name;
+  bool is_editable;
+  std::optional<blink::mojom::FormControlType> form_control_type;
+  uint64_t form_renderer_id;
+  uint64_t field_renderer_id;
+  bool should_trigger_compose_context_menu;
+  bool expected;
+};
+
+class ContextMenuForComposeBrowserTest
+    : public ContextMenuBrowserTestBase,
+      public ::testing::WithParamInterface<ContextMenuForComposeTestCase> {};
+
+IN_PROC_BROWSER_TEST_P(ContextMenuForComposeBrowserTest,
+                       TestComposeItemPresent) {
+  const ContextMenuForComposeTestCase& test_case = GetParam();
+
+  content::ContextMenuParams params;
+  params.is_editable = test_case.is_editable;
+  MockChromeComposeClient compose_client(
+      browser()->tab_strip_model()->GetActiveWebContents());
+  ON_CALL(compose_client, ShouldTriggerContextMenu(_, _))
+      .WillByDefault(Return(test_case.should_trigger_compose_context_menu));
+
+  auto menu =
+      std::make_unique<TestRenderViewContextMenu>(*browser()
+                                                       ->tab_strip_model()
+                                                       ->GetActiveWebContents()
+                                                       ->GetPrimaryMainFrame(),
+                                                  params);
+  menu->SetChromeComposeClient(&compose_client);
+  menu->Init();
+
+  ASSERT_EQ(menu->IsItemPresent(IDC_CONTEXT_COMPOSE), test_case.expected);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ContextMenuBrowserTests,
+    ContextMenuForComposeBrowserTest,
+    ::testing::ValuesIn<ContextMenuForComposeTestCase>({
+        {.test_name = "Enabled",
+         .is_editable = true,
+         .should_trigger_compose_context_menu = true,
+         .expected = true},
+        {.test_name = "NotEditable",
+         .is_editable = false,
+         .should_trigger_compose_context_menu = true,
+         .expected = false},
+        {.test_name = "ShouldNotOffer",
+         .is_editable = true,
+         .should_trigger_compose_context_menu = false,
+         .expected = false},
+    }),
+    [](const testing::TestParamInfo<
+        ContextMenuForComposeBrowserTest::ParamType>& info) {
+      return info.param.test_name;
+    });
+#endif  // BUILDFLAG(ENABLE_COMPOSE)
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, CopyLinkTextMouse) {
   std::unique_ptr<TestRenderViewContextMenu> menu = CreateContextMenu(
       GURL("http://www.google.com/"), GURL("http://www.google.com/"), u"Google",
       blink::mojom::ContextMenuDataMediaType::kNone, ui::MENU_SOURCE_MOUSE);
@@ -878,7 +1332,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextMouse) {
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKTEXT));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextTouchNoText) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, CopyLinkTextTouchNoText) {
   std::unique_ptr<TestRenderViewContextMenu> menu = CreateContextMenu(
       GURL("http://www.google.com/"), GURL("http://www.google.com/"), u"",
       blink::mojom::ContextMenuDataMediaType::kNone, ui::MENU_SOURCE_TOUCH);
@@ -886,7 +1340,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextTouchNoText) {
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKTEXT));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextTouchTextOnly) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, CopyLinkTextTouchTextOnly) {
   std::unique_ptr<TestRenderViewContextMenu> menu = CreateContextMenu(
       GURL("http://www.google.com/"), GURL("http://www.google.com/"), u"Google",
       blink::mojom::ContextMenuDataMediaType::kNone, ui::MENU_SOURCE_TOUCH);
@@ -894,7 +1348,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextTouchTextOnly) {
   ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKTEXT));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextTouchTextImage) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, CopyLinkTextTouchTextImage) {
   std::unique_ptr<TestRenderViewContextMenu> menu = CreateContextMenu(
       GURL("http://www.google.com/"), GURL("http://www.google.com/"), u"Google",
       blink::mojom::ContextMenuDataMediaType::kImage, ui::MENU_SOURCE_TOUCH);
@@ -903,7 +1357,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, CopyLinkTextTouchTextImage) {
 }
 
 // Opens a link in a new tab via a "real" context menu.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, RealMenu) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, RealMenu) {
   ContextMenuNotificationObserver menu_observer(
       IDC_CONTENT_CONTEXT_OPENLINKNEWTAB);
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
@@ -943,9 +1397,99 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, RealMenu) {
   EXPECT_EQ(GURL("about:blank"), tab->GetLastCommittedURL());
 }
 
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
+                       OpenNewTabInChromeFromWebAppWithAnOpenBrowser) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  GURL title1(embedded_test_server()->GetURL("/title1.html"));
+  GURL title2(embedded_test_server()->GetURL("/title2.html"));
+
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), title1));
+  TabStripModel* tab_strip_model = browser()->tab_strip_model();
+
+  EXPECT_EQ(tab_strip_model->count(), 1);
+
+  const AppId app_id = InstallTestWebApp(
+      GURL(kAppUrl1), web_app::mojom::UserDisplayMode::kTabbed);
+
+  EXPECT_EQ(chrome::GetTotalBrowserCount(), 1u);
+  Browser* app_browser = OpenTestWebApp(app_id);
+  EXPECT_EQ(chrome::GetTotalBrowserCount(), 2u);
+
+  TabStripModel* app_tab_strip_model = app_browser->tab_strip_model();
+  EXPECT_EQ(app_tab_strip_model->count(), 1);
+
+  // Set up menu with link URL.
+  content::ContextMenuParams params;
+  params.link_url = title2;
+  params.page_url = title1;
+
+  // Select "Open Link in New Tab" and wait for the new tab to be added.
+  TestRenderViewContextMenu menu(*app_browser->tab_strip_model()
+                                      ->GetActiveWebContents()
+                                      ->GetPrimaryMainFrame(),
+                                 params);
+  menu.Init();
+
+  ui_test_utils::AllBrowserTabAddedWaiter add_tab;
+  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
+  content::WebContents* tab = add_tab.Wait();
+  EXPECT_TRUE(content::WaitForLoadStop(tab));
+
+  EXPECT_EQ(title2, tab->GetLastCommittedURL());
+  EXPECT_EQ(tab_strip_model->count(), 2);
+  EXPECT_EQ(app_tab_strip_model->count(), 1);
+  EXPECT_TRUE(chrome::FindBrowserWithTab(tab)->is_type_normal());
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
+                       OpenNewTabInChromeFromWebAppWithoutAnOpenBrowser) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  GURL title1(embedded_test_server()->GetURL("/title1.html"));
+
+  const AppId app_id = InstallTestWebApp(
+      GURL(kAppUrl1), web_app::mojom::UserDisplayMode::kTabbed);
+  Browser* app_browser = OpenTestWebApp(app_id);
+
+  browser()->tab_strip_model()->CloseWebContentsAt(/*index=*/0,
+                                                   TabCloseTypes::CLOSE_NONE);
+  web_app::CloseAndWait(browser());
+  EXPECT_FALSE(web_app::IsBrowserOpen(browser()));
+  EXPECT_EQ(chrome::GetTotalBrowserCount(), 1u);
+
+  TabStripModel* app_tab_strip_model = app_browser->tab_strip_model();
+  EXPECT_EQ(app_tab_strip_model->count(), 1);
+
+  // Set up menu with link URL.
+  content::ContextMenuParams params;
+  params.link_url = title1;
+  params.page_url =
+      app_browser->tab_strip_model()->GetActiveWebContents()->GetVisibleURL();
+
+  // Select "Open Link in New Tab" and wait for the new tab to be added.
+  TestRenderViewContextMenu menu(*app_browser->tab_strip_model()
+                                      ->GetActiveWebContents()
+                                      ->GetPrimaryMainFrame(),
+                                 params);
+  menu.Init();
+
+  ui_test_utils::AllBrowserTabAddedWaiter add_tab;
+  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
+  content::WebContents* tab = add_tab.Wait();
+  EXPECT_TRUE(content::WaitForLoadStop(tab));
+
+  EXPECT_EQ(title1, tab->GetLastCommittedURL());
+  EXPECT_EQ(chrome::GetTotalBrowserCount(), 2u);
+  EXPECT_TRUE(chrome::FindBrowserWithTab(tab)->is_type_normal());
+
+  TabStripModel* tab_strip_model =
+      chrome::FindBrowserWithTab(tab)->tab_strip_model();
+  EXPECT_EQ(app_tab_strip_model->count(), 1);
+  EXPECT_EQ(tab_strip_model->count(), 1);
+}
+
 // Verify that "Open Link in New Tab" doesn't crash for about:blank.
 // This is a regression test for https://crbug.com/1197027.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenAboutBlankInNewTab) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenAboutBlankInNewTab) {
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
 
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -954,18 +1498,13 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenAboutBlankInNewTab) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), page));
 
   // Set up menu with link URL.
-  content::ContextMenuParams context_menu_params;
-  context_menu_params.link_url = GURL("about:blank");
-  context_menu_params.page_url = page;
+  content::ContextMenuParams params;
+  params.link_url = GURL("about:blank");
+  params.page_url = page;
 
   // Select "Open Link in New Tab" and wait for the new tab to be added.
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 context_menu_params);
-  menu.Init();
-  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
+  auto menu = CreateContextMenuFromParams(params);
+  menu->ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
 
   content::WebContents* tab = add_tab.Wait();
   EXPECT_TRUE(content::WaitForLoadStop(tab));
@@ -976,7 +1515,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenAboutBlankInNewTab) {
 
 // Verify that "Open Link in New Tab" doesn't crash for data: URLs.
 // This is a regression test for https://crbug.com/1197027.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenDataURLInNewTab) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenDataURLInNewTab) {
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
 
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -985,18 +1524,13 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenDataURLInNewTab) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), page));
 
   // Set up menu with link URL.
-  content::ContextMenuParams context_menu_params;
-  context_menu_params.link_url = GURL("data:text/html,hello");
-  context_menu_params.page_url = page;
+  content::ContextMenuParams params;
+  params.link_url = GURL("data:text/html,hello");
+  params.page_url = page;
 
   // Select "Open Link in New Tab" and wait for the new tab to be added.
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 context_menu_params);
-  menu.Init();
-  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
+  auto menu = CreateContextMenuFromParams(params);
+  menu->ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
 
   content::WebContents* tab = add_tab.Wait();
   EXPECT_TRUE(content::WaitForLoadStop(tab));
@@ -1006,7 +1540,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenDataURLInNewTab) {
 }
 
 // Verify that "Open Link in New Tab" doesn't send URL fragment as referrer.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenInNewTabReferrer) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenInNewTabReferrer) {
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
 
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -1021,18 +1555,14 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenInNewTabReferrer) {
   const std::string kCorrectReferrer("http://foo.com/");
 
   // Set up menu with link URL.
-  content::ContextMenuParams context_menu_params;
-  context_menu_params.page_url = kReferrerWithFragment;
-  context_menu_params.link_url = echoheader;
+  content::ContextMenuParams params;
+  params.page_url = kReferrerWithFragment;
+  params.frame_url = params.page_url;
+  params.link_url = echoheader;
 
   // Select "Open Link in New Tab" and wait for the new tab to be added.
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 context_menu_params);
-  menu.Init();
-  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
+  auto menu = CreateContextMenuFromParams(params);
+  menu->ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
 
   content::WebContents* tab = add_tab.Wait();
   EXPECT_TRUE(content::WaitForLoadStop(tab));
@@ -1040,23 +1570,16 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenInNewTabReferrer) {
   // Verify that it's the correct tab.
   ASSERT_EQ(echoheader, tab->GetLastCommittedURL());
   // Verify that the text on the page matches |kCorrectReferrer|.
-  std::string actual_referrer;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab,
-      "window.domAutomationController.send(window.document.body.textContent);",
-      &actual_referrer));
-  ASSERT_EQ(kCorrectReferrer, actual_referrer);
+  ASSERT_EQ(kCorrectReferrer,
+            content::EvalJs(tab, "window.document.body.textContent;"));
 
   // Verify that the referrer on the page matches |kCorrectReferrer|.
-  std::string page_referrer;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab, "window.domAutomationController.send(window.document.referrer);",
-      &page_referrer));
-  ASSERT_EQ(kCorrectReferrer, page_referrer);
+  ASSERT_EQ(kCorrectReferrer,
+            content::EvalJs(tab, "window.document.referrer;"));
 }
 
 // Verify that "Open Link in Incognito Window " doesn't send referrer URL.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenIncognitoNoneReferrer) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenIncognitoNoneReferrer) {
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
 
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -1068,46 +1591,30 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenIncognitoNoneReferrer) {
 
   // Set up referrer URL with fragment.
   const GURL kReferrerWithFragment("http://foo.com/test#fragment");
-  const std::string kNoneReferrer("None");
-  const std::string kEmptyReferrer("");
 
   // Set up menu with link URL.
-  content::ContextMenuParams context_menu_params;
-  context_menu_params.page_url = kReferrerWithFragment;
-  context_menu_params.link_url = echoheader;
+  content::ContextMenuParams params;
+  params.page_url = kReferrerWithFragment;
+  params.link_url = echoheader;
 
   // Select "Open Link in Incognito Window" and wait for window to be added.
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 context_menu_params);
-  menu.Init();
-  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKOFFTHERECORD, 0);
+  auto menu = CreateContextMenuFromParams(params);
+  menu->ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKOFFTHERECORD, 0);
 
   content::WebContents* tab = add_tab.Wait();
   EXPECT_TRUE(content::WaitForLoadStop(tab));
 
   // Verify that it's the correct tab.
   ASSERT_EQ(echoheader, tab->GetLastCommittedURL());
-  // Verify that the text on the page matches |kNoneReferrer|.
-  std::string actual_referrer;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab,
-      "window.domAutomationController.send(window.document.body.textContent);",
-      &actual_referrer));
-  ASSERT_EQ(kNoneReferrer, actual_referrer);
+  // Verify that the text on the page is "None".
+  ASSERT_EQ("None", content::EvalJs(tab, "window.document.body.textContent;"));
 
-  // Verify that the referrer on the page matches |kEmptyReferrer|.
-  std::string page_referrer;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab, "window.domAutomationController.send(window.document.referrer);",
-      &page_referrer));
-  ASSERT_EQ(kEmptyReferrer, page_referrer);
+  // Verify that the referrer on the page is "".
+  ASSERT_EQ("", content::EvalJs(tab, "window.document.referrer;"));
 }
 
 // Check filename on clicking "Save Link As" via a "real" context menu.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, SuggestedFileName) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, SuggestedFileName) {
   // Register observer.
   ContextMenuWaiter menu_observer;
 
@@ -1147,7 +1654,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, SuggestedFileName) {
 
 // Check which commands are present after opening the context menu for the main
 // frame.  This is a regression test for https://crbug.com/1085040.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        MenuContentsVerification_MainFrame) {
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url(embedded_test_server()->GetURL("/iframe.html"));
@@ -1195,7 +1702,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 
 // Check which commands are present after opening the context menu for a
 // subframe.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        MenuContentsVerification_Subframe) {
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url(embedded_test_server()->GetURL("/iframe.html"));
@@ -1254,7 +1761,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 #if !BUILDFLAG(IS_MAC)
 // Check whether correct non-located context menu shows up for image element
 // with height more than visual viewport bounds.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        NonLocatedContextMenuOnLargeImageElement) {
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL image_url(
@@ -1294,7 +1801,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 
 // Check whether correct non-located context menu shows up for anchor element
 // inside an editable element.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        NonLocatedContextMenuOnAnchorElement) {
   const char kDataURIPrefix[] = "data:text/html;charset=utf-8,";
   const char kAnchorHtml[] =
@@ -1307,22 +1814,16 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   ContextMenuWaiter menu_observer;
   content::WebContents* tab =
       browser()->tab_strip_model()->GetActiveWebContents();
-  int x;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractInt(
-      tab,
-      "var bounds = document.getElementById('anchor1')"
-      ".getBoundingClientRect();"
-      "domAutomationController.send("
-      "    Math.floor(bounds.left + bounds.width / 2));",
-      &x));
-  int y;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractInt(
-      tab,
-      "var bounds = document.getElementById('anchor1')"
-      ".getBoundingClientRect();"
-      "domAutomationController.send("
-      "    Math.floor(bounds.top + bounds.height / 2));",
-      &y));
+  int x = content::EvalJs(tab,
+                          "var bounds = document.getElementById('anchor1')"
+                          ".getBoundingClientRect();"
+                          "Math.floor(bounds.left + bounds.width / 2);")
+              .ExtractInt();
+  int y = content::EvalJs(tab,
+                          "var bounds = document.getElementById('anchor1')"
+                          ".getBoundingClientRect();"
+                          "Math.floor(bounds.top + bounds.height / 2);")
+              .ExtractInt();
 
   // Focus in the middle of an anchor element.
   content::SimulateMouseClickAt(tab, /*modifiers=*/0,
@@ -1343,7 +1844,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
 #endif
 
 // Check filename on clicking "Save Link As" is ignored for cross origin.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, SuggestedFileNameCrossOrigin) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, SuggestedFileNameCrossOrigin) {
   // Register observer.
   ContextMenuWaiter menu_observer;
 
@@ -1381,7 +1882,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, SuggestedFileNameCrossOrigin) {
   ASSERT_TRUE(suggested_filename.empty());
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenImageInNewTab) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenImageInNewTab) {
   std::unique_ptr<TestRenderViewContextMenu> menu =
       CreateContextMenuMediaTypeImage(GURL("http://url.com/image.png"));
   ASSERT_FALSE(
@@ -1391,11 +1892,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenImageInNewTab) {
 
 // Functionality is not present on ChromeOS.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-// TODO(https://crbug.com/1246393): delete this test when
-// `features::kDisplayOpenLinkAsProfile` is launched, as it is superseded by
-// `ContextMenuWithProfileLinksBrowserTest`.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
-                       DISABLED_OpenLinkInProfileEntryPresent) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenLinkInProfileEntryPresent) {
   {
     std::unique_ptr<TestRenderViewContextMenu> menu(
         CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
@@ -1409,10 +1906,18 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
     ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
     ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                             IDC_OPEN_LINK_IN_PROFILE_LAST));
+    ASSERT_EQ(IsPreviewEnabled(),
+              menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
   }
 
-  // Create one additional profile, but do not yet open windows in it.
+  // Create one additional profile, but do not yet open windows in it. This
+  // profile is not yet active.
   Profile* profile = CreateSecondaryProfile(1);
+  const ProfileAttributesEntry* entry =
+      g_browser_process->profile_manager()
+          ->GetProfileAttributesStorage()
+          .GetProfileAttributesWithPath(profile->GetPath());
+  ASSERT_FALSE(ProfileMetrics::IsProfileActive(entry));
 
   {
     std::unique_ptr<TestRenderViewContextMenu> menu(
@@ -1422,14 +1927,28 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // With the second profile not open, no entry is created.
+    // With the second profile not yet open and thus not active, an inline entry
+    // to open the link with the secondary profile is not displayed.
     ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
     ASSERT_FALSE(menu->IsItemPresent(IDC_OPEN_LINK_IN_PROFILE_FIRST));
   }
 
+  // Open new window for the additional profile. This profile becomes active.
   profiles::FindOrCreateNewWindowForProfile(
       profile, chrome::startup::IsProcessStartup::kNo,
       chrome::startup::IsFirstRun::kNo, false);
+
+  // On Lacros SessionStartupPref::ShouldRestoreLastSession() returns true for
+  // the new profile. The session is then restored before the browser is shown
+  // and the profile set to active. If the session is restoring, then wait for
+  // it to finish so the profile can be active.
+  if (SessionRestore::IsRestoring(profile)) {
+    base::test::RepeatingTestFuture<Profile*, int> future;
+    auto subscription =
+        SessionRestore::RegisterOnSessionRestoredCallback(future.GetCallback());
+    ASSERT_TRUE(future.Wait()) << "Could not restore the session";
+  }
+  ASSERT_TRUE(ProfileMetrics::IsProfileActive(entry));
 
   {
     std::unique_ptr<TestRenderViewContextMenu> menu(
@@ -1439,9 +1958,31 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // With the second profile open, an inline menu entry is created.
+    // With the second profile open, an inline entry to open the link with the
+    // secondary profile is displayed.
     ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
     ASSERT_TRUE(menu->IsItemPresent(IDC_OPEN_LINK_IN_PROFILE_FIRST));
+    ASSERT_EQ(IsPreviewEnabled(),
+              menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
+  }
+
+  // Close all windows for the additional profile. The profile is still active.
+  profiles::CloseProfileWindows(profile);
+
+  {
+    std::unique_ptr<TestRenderViewContextMenu> menu(
+        CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
+                                       GURL("http://www.google.com/")));
+
+    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
+    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
+    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
+    // With the second profile closed but active, an inline entry to open the
+    // link with the secondary profile is displayed.
+    ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
+    ASSERT_TRUE(menu->IsItemPresent(IDC_OPEN_LINK_IN_PROFILE_FIRST));
+    ASSERT_EQ(IsPreviewEnabled(),
+              menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
   }
 
   CreateSecondaryProfile(2);
@@ -1454,8 +1995,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
     ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // As soon as at least three profiles exist, we show all profiles in a
-    // submenu.
+    // With at least two secondary profiles, they are displayed in a submenu.
     ui::MenuModel* model = nullptr;
     size_t index = 0;
     ASSERT_TRUE(menu->GetMenuModelAndItemIndex(IDC_OPEN_LINK_IN_PROFILE_FIRST,
@@ -1463,16 +2003,18 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
     ASSERT_EQ(2u, model->GetItemCount());
     ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
                                             IDC_OPEN_LINK_IN_PROFILE_LAST));
+    ASSERT_EQ(IsPreviewEnabled(),
+              menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKPREVIEW));
   }
 }
 
-// Test is flaky on Win and Mac dbg: crbug.com/1121731
-#if BUILDFLAG(IS_WIN) || (BUILDFLAG(IS_MAC) && !defined(NDEBUG))
+// Flaky on Lacros and Linux. https://crbug.com/1453315.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
 #define MAYBE_OpenLinkInProfile DISABLED_OpenLinkInProfile
 #else
 #define MAYBE_OpenLinkInProfile OpenLinkInProfile
 #endif
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, MAYBE_OpenLinkInProfile) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_OpenLinkInProfile) {
   signin_util::ScopedForceSigninSetterForTesting force_signin_setter(true);
   // Create |num_profiles| extra profiles for testing.
   const int num_profiles = 8;
@@ -1510,9 +2052,15 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, MAYBE_OpenLinkInProfile) {
                                   profiles_signin_required.end(), i)) {
       entry->LockForceSigninProfile(true);
     } else {
+      // In order for the profile to be counted as active, it needs to have a
+      // created browser window. The profile isn't marked active until the
+      // browser is actually open, which we need.
+      ui_test_utils::BrowserChangeObserver observer(
+          nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
       profiles::FindOrCreateNewWindowForProfile(
           profile, chrome::startup::IsProcessStartup::kNo,
           chrome::startup::IsFirstRun::kNo, false);
+      observer.Wait();
       profiles_in_menu.push_back(profile);
     }
   }
@@ -1548,7 +2096,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, MAYBE_OpenLinkInProfile) {
 }
 
 // Verify that "Open Link as <profile>" doesn't send referrer URL.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenProfileNoneReferrer) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenProfileNoneReferrer) {
   signin_util::ScopedForceSigninSetterForTesting force_signin_setter(true);
 
   // Create the profile.
@@ -1572,30 +2120,25 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenProfileNoneReferrer) {
 
   // Set up referrer URL.
   const GURL kReferrer("http://foo.com/test");
-  content::ContextMenuParams context_menu_params;
-  context_menu_params.page_url = kReferrer;
-  context_menu_params.link_url = echoheader;
-  context_menu_params.unfiltered_link_url = echoheader;
-  context_menu_params.link_url = echoheader;
-  context_menu_params.src_url = echoheader;
+  content::ContextMenuParams params;
+  params.page_url = kReferrer;
+  params.link_url = echoheader;
+  params.unfiltered_link_url = echoheader;
+  params.link_url = echoheader;
+  params.src_url = echoheader;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 context_menu_params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
   // Verify that the Open in Profile option is shown.
   ui::MenuModel* model = nullptr;
   size_t index = 0;
-  ASSERT_TRUE(menu.GetMenuModelAndItemIndex(IDC_OPEN_LINK_IN_PROFILE_FIRST,
-                                            &model, &index));
+  ASSERT_TRUE(menu->GetMenuModelAndItemIndex(IDC_OPEN_LINK_IN_PROFILE_FIRST,
+                                             &model, &index));
 
   ui_test_utils::AllBrowserTabAddedWaiter add_tab;
-  int command_id = menu.GetCommandIDByProfilePath(profile->GetPath());
+  int command_id = menu->GetCommandIDByProfilePath(profile->GetPath());
   ASSERT_NE(-1, command_id);
-  menu.ExecuteCommand(command_id, 0);
+  menu->ExecuteCommand(command_id, 0);
 
   content::WebContents* tab = add_tab.Wait();
   content::WaitForLoadStop(tab);
@@ -1605,32 +2148,58 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenProfileNoneReferrer) {
   ASSERT_EQ(echoheader, tab->GetLastCommittedURL());
 
   // Verify that the header text echoed on the page doesn't reveal `kReferrer`.
-  const std::string kNoneReferrer("None");
-  std::string actual_referrer;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab,
-      "window.domAutomationController.send(window.document.body.textContent);",
-      &actual_referrer));
-  ASSERT_EQ(kNoneReferrer, actual_referrer);
+  ASSERT_EQ("None", content::EvalJs(tab, "window.document.body.textContent;"));
 
   // Verify that the javascript referrer is empty.
-  std::string page_referrer;
-  const std::string kEmptyReferrer("");
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab, "window.domAutomationController.send(window.document.referrer);",
-      &page_referrer));
-  ASSERT_EQ(kEmptyReferrer, page_referrer);
+  ASSERT_EQ("", content::EvalJs(tab, "window.document.referrer;"));
 }
-
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
-class ContextMenuFencedFrameTest : public ContextMenuBrowserTest {
+class InterestGroupContentBrowserClient : public ChromeContentBrowserClient {
  public:
-  ContextMenuFencedFrameTest() = default;
-  ~ContextMenuFencedFrameTest() override = default;
+  InterestGroupContentBrowserClient() = default;
+  InterestGroupContentBrowserClient(const InterestGroupContentBrowserClient&) =
+      delete;
+  InterestGroupContentBrowserClient& operator=(
+      const InterestGroupContentBrowserClient&) = delete;
+
+  // ChromeContentBrowserClient overrides:
+  // This is needed so that the interest group related APIs can run without
+  // failing with the result AuctionResult::kSellerRejected.
+  bool IsInterestGroupAPIAllowed(content::RenderFrameHost* render_frame_host,
+                                 content::InterestGroupApiOperation operation,
+                                 const url::Origin& top_frame_origin,
+                                 const url::Origin& api_origin) override {
+    return true;
+  }
+};
+
+class ContextMenuFencedFrameTest : public ContextMenuBrowserTestBase {
+ public:
+  ContextMenuFencedFrameTest()
+      : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {}
+  ~ContextMenuFencedFrameTest() override {
+    content::SetBrowserClientForTesting(original_client_);
+  }
   ContextMenuFencedFrameTest(const ContextMenuFencedFrameTest&) = delete;
   ContextMenuFencedFrameTest& operator=(const ContextMenuFencedFrameTest&) =
       delete;
+
+  // Defines the skeleton of set up method.
+  void SetUpOnMainThread() override {
+    host_resolver()->AddRule("*", "127.0.0.1");
+
+    https_server()->AddDefaultHandlers(GetChromeTestDataDir());
+    https_server()->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
+    content::SetupCrossSiteRedirector(https_server());
+
+    content_browser_client_ =
+        std::make_unique<InterestGroupContentBrowserClient>();
+    original_client_ =
+        content::SetBrowserClientForTesting(content_browser_client_.get());
+
+    ContextMenuBrowserTestBase::SetUpOnMainThread();
+  }
 
   content::RenderFrameHost* primary_main_frame_host() {
     return browser()
@@ -1643,14 +2212,27 @@ class ContextMenuFencedFrameTest : public ContextMenuBrowserTest {
     return fenced_frame_test_helper_;
   }
 
+  net::EmbeddedTestServer* https_server() { return &https_server_; }
+
  private:
   content::test::FencedFrameTestHelper fenced_frame_test_helper_;
+  net::EmbeddedTestServer https_server_;
+  std::unique_ptr<InterestGroupContentBrowserClient> content_browser_client_;
+  raw_ptr<content::ContentBrowserClient> original_client_;
 };
 
 // Check which commands are present after opening the context menu for a
 // fencedframe.
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_MenuContentsVerification_Fencedframe \
+  DISABLED_MenuContentsVerification_Fencedframe
+#else
+#define MAYBE_MenuContentsVerification_Fencedframe \
+  MenuContentsVerification_Fencedframe
+#endif
 IN_PROC_BROWSER_TEST_F(ContextMenuFencedFrameTest,
-                       MenuContentsVerification_Fencedframe) {
+                       MAYBE_MenuContentsVerification_Fencedframe) {
   ASSERT_TRUE(embedded_test_server()->Start());
 
   auto initial_url = embedded_test_server()->GetURL("/empty.html");
@@ -1691,7 +2273,88 @@ IN_PROC_BROWSER_TEST_F(ContextMenuFencedFrameTest,
                              IDC_CONTENT_CONTEXT_INSPECTELEMENT}));
 }
 
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+// TODO(crbug.com/1491942): This fails with the field trial testing config.
+class ContextMenuFencedFrameTestNoTestingConfig
+    : public ContextMenuFencedFrameTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    ContextMenuFencedFrameTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
+};
+
+// Test that automatic beacons are sent after clicking "Open Link in New Tab"
+// from a contextual menu inside of a fenced frame.
+IN_PROC_BROWSER_TEST_F(ContextMenuFencedFrameTestNoTestingConfig,
+                       AutomaticBeaconSentAfterContextMenuNavigation) {
+  privacy_sandbox::ScopedPrivacySandboxAttestations scoped_attestations(
+      privacy_sandbox::PrivacySandboxAttestations::CreateForTesting());
+  // Mark all Privacy Sandbox APIs as attested since the test case is testing
+  // behaviors not related to attestations.
+  privacy_sandbox::PrivacySandboxAttestations::GetInstance()
+      ->SetAllPrivacySandboxAttestedForTesting(true);
+
+  constexpr char kReportingURL[] = "/_report_event_server.html";
+  constexpr char kBeaconMessage[] = "this is the message";
+
+  // In order to check events reported over the network, we register an HTTP
+  // response interceptor for each successful reportEvent request we expect.
+  net::test_server::ControllableHttpResponse response(https_server(),
+                                                      kReportingURL);
+
+  ASSERT_TRUE(https_server()->Start());
+
+  auto initial_url = https_server()->GetURL("a.test", "/empty.html");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), initial_url));
+
+  // Load a fenced frame.
+  GURL fenced_frame_url(
+      https_server()->GetURL("a.test", "/fenced_frames/title1.html"));
+  GURL new_tab_url(https_server()->GetURL("a.test", "/title2.html"));
+  EXPECT_TRUE(ExecJs(primary_main_frame_host(),
+                     "var fenced_frame = document.createElement('fencedframe');"
+                     "fenced_frame.id = 'fenced_frame';"
+                     "document.body.appendChild(fenced_frame);"));
+  auto* fenced_frame_node =
+      fenced_frame_test_helper().GetMostRecentlyAddedFencedFrame(
+          primary_main_frame_host());
+  content::TestFrameNavigationObserver observer(fenced_frame_node);
+  fenced_frame_test_helper().NavigateFencedFrameUsingFledge(
+      primary_main_frame_host(), fenced_frame_url, "fenced_frame");
+  observer.Wait();
+
+  // Set the automatic beacon
+  EXPECT_TRUE(ExecJs(
+      fenced_frame_node,
+      content::JsReplace(R"(
+      window.fence.setReportEventDataForAutomaticBeacons({
+        eventType: $1,
+        eventData: $2,
+        destination: ['seller', 'buyer']
+      });
+    )",
+                         "reserved.top_navigation_commit", kBeaconMessage)));
+
+  // This simulates the conditions when right clicking on a link.
+  content::ContextMenuParams params;
+  params.is_editable = false;
+  params.media_type = blink::mojom::ContextMenuDataMediaType::kNone;
+  params.page_url = fenced_frame_url;
+  params.link_url = new_tab_url;
+
+  ui_test_utils::TabAddedWaiter tab_add(browser());
+
+  // Open the contextual menu and click "Open Link in New Tab".
+  TestRenderViewContextMenu menu(*fenced_frame_node, params);
+  menu.Init();
+  menu.ExecuteCommand(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB, 0);
+
+  // Verify the automatic beacon was sent and has the correct data.
+  response.WaitForRequest();
+  EXPECT_EQ(response.http_request()->content, kBeaconMessage);
+}
+
+#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
 // Maintains region search test state. In particular, note that |menu_observer_|
 // must live until the right-click completes asynchronously. Used as a base
 // class for common logic shared by the side panel and unified side panel tests
@@ -1822,9 +2485,21 @@ class SearchByRegionBrowserBaseTest : public InProcessBrowserTest {
     EXPECT_THAT(content,
                 testing::MatchesRegex(
                     expected_content.substr(0, query_start_pos) +
-                    ".*ep=crs&re=dcsp&s=csp&st=\\d+&sideimagesearch=1"));
+                    ".*ep=crs&re=dcsp&s=4&st=\\d+&lm=.+&sideimagesearch=1"));
     if (quit_closure_)
       quit_closure_.Run();
+  }
+
+  // Ensures the last request seen by |web_contents| contained encoded image
+  // data
+  void ExpectThatRequestContainsImageData(content::WebContents* web_contents) {
+    auto* last_entry = web_contents->GetController().GetLastCommittedEntry();
+    EXPECT_TRUE(last_entry);
+    EXPECT_TRUE(last_entry->GetHasPostData());
+
+    std::string post_data = last_entry->GetPageState().ToEncodedData();
+    std::string image_bytes = lens::GetImageBytesFromEncodedPostData(post_data);
+    EXPECT_FALSE(image_bytes.empty());
   }
 
   // Sets up a custom test default search engine in order to test region search
@@ -1866,96 +2541,6 @@ class SearchByRegionBrowserBaseTest : public InProcessBrowserTest {
   base::RepeatingClosure quit_closure_;
 };
 
-class SearchByRegionWithSidePanelBrowserTest
-    : public SearchByRegionBrowserBaseTest {
- protected:
-  void SetUp() override {
-    // The test server must start first, so that we know the port that the test
-    // server is using.
-    ASSERT_TRUE(embedded_test_server()->Start());
-    base::test::ScopedFeatureList feature_list;
-    // This test is for the Lens V1 side panel, so we explicitly disable the
-    // unified side panel.
-    feature_list.InitWithFeaturesAndParameters(
-        /*enabled_features=*/{{lens::features::kLensStandalone,
-                               {{lens::features::kEnableSidePanelForLens.name,
-                                 "true"}}}},
-        /*disabled_features=*/{features::kUnifiedSidePanel});
-
-    // This does not use SearchByRegionBrowserTest::SetUp because that function
-    // does its own conflicting initialization of a FeatureList.
-    InProcessBrowserTest::SetUp();
-  }
-
-  void SimulateDragAndVerifyLensUrl(RenderViewContextMenu* menu) {
-    // Create the Lens side panel controller if it does not exist. This allows
-    // us to get the side panel web contents without waiting for it to be
-    // created post-drag on a first time start up.
-    lens::CreateLensSidePanelControllerForTesting(browser());
-    SearchByRegionBrowserBaseTest::SimulateDragAndVerifyOverlayUI(menu);
-
-    // We need to verify the contents after the drag is finished.
-    content::WebContents* contents =
-        lens::GetLensSidePanelWebContentsForTesting(browser());
-    EXPECT_TRUE(contents);
-
-    // Wait for the drag to commence a navigation upon the side panel web
-    // contents.
-    content::TestNavigationObserver nav_observer(contents);
-    nav_observer.Wait();
-
-    std::string expected_content = GetLensRegionSearchURL().GetContent();
-    std::string side_panel_content =
-        contents->GetLastCommittedURL().GetContent();
-    VerifyLensUrl(side_panel_content, expected_content);
-  }
-
-  void AttemptLensRegionSearchWithSidePanel() {
-    // |menu_observer_| will cause the search lens for image menu item to be
-    // clicked. Sets a callback to simulate dragging a region on the screen once
-    // the region search UI has been set up.
-    menu_observer_ = std::make_unique<ContextMenuNotificationObserver>(
-        IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH, ui::EF_MOUSE_BUTTON,
-        base::BindOnce(&SearchByRegionWithSidePanelBrowserTest::
-                           SimulateDragAndVerifyLensUrl,
-                       base::Unretained(this)));
-    RightClickToOpenContextMenu();
-  }
-};
-
-IN_PROC_BROWSER_TEST_F(SearchByRegionWithSidePanelBrowserTest,
-                       LensRegionSearchWithValidRegionSidePanel) {
-  SetupAndLoadPage("/empty.html");
-  // We need a base::RunLoop to ensure that our test does not finish until the
-  // side panel has opened and we have verified the URL.
-  base::RunLoop loop;
-  quit_closure_ = base::BindRepeating(loop.QuitClosure());
-  // The browser should open a draggable UI for a region search.
-  AttemptLensRegionSearchWithSidePanel();
-  loop.Run();
-}
-
-// While this test is under the SearchByRegionWithSidePanelBrowserTest, this is
-// only to confirm that when the UnifiedSidePanel is disabled and the Lens side
-// panel is enabled, that non Google region searches still are redirected to a
-// new tab.
-IN_PROC_BROWSER_TEST_F(SearchByRegionWithSidePanelBrowserTest,
-                       NonGoogleRegionSearchWithValidRegionAndSideImageSearch) {
-  SetupAndLoadPage("/empty.html");
-  SetupNonGoogleRegionSearchEngine();
-  // The browser should open a draggable UI for a region search. The result
-  // should open in a new tab.
-  ui_test_utils::AllBrowserTabAddedWaiter add_tab;
-  AttemptNonGoogleRegionSearch();
-
-  // Get the result URL in the new tab and verify.
-  content::WebContents* new_tab = add_tab.Wait();
-  content::WaitForLoadStop(new_tab);
-  std::string new_tab_content = new_tab->GetLastCommittedURL().GetContent();
-  std::string expected_content = GetNonGoogleRegionSearchURL().GetContent();
-  EXPECT_EQ(new_tab_content, expected_content);
-}
-
 class SearchByRegionWithUnifiedSidePanelBrowserTest
     : public SearchByRegionBrowserBaseTest {
  protected:
@@ -1965,11 +2550,11 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
     ASSERT_TRUE(embedded_test_server()->Start());
     base::test::ScopedFeatureList feature_list;
     feature_list.InitWithFeaturesAndParameters(
-        {{lens::features::kLensStandalone,
-          {{lens::features::kEnableSidePanelForLens.name, "true"},
-           {lens::features::kHomepageURLForLens.name,
-            GetLensRegionSearchURL().spec()}}},
-         {features::kUnifiedSidePanel, {{}}}},
+        {
+            {lens::features::kLensStandalone,
+             {{lens::features::kHomepageURLForLens.name,
+               GetLensRegionSearchURL().spec()}}},
+        },
         {});
 
     // This does not use SearchByRegionBrowserBaseTest::SetUp because that
@@ -1988,7 +2573,7 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
     VerifyLensUrl(side_panel_content, expected_content);
   }
 
-  void SimulateDragAndVerifyLensUrl(RenderViewContextMenu* menu) {
+  void SimulateDragAndVerifyLensRequest(RenderViewContextMenu* menu) {
     SearchByRegionBrowserBaseTest::SimulateDragAndVerifyOverlayUI(menu);
     content::WebContents* contents =
         GetLensUnifiedSidePanelWebContentsAfterNavigation();
@@ -1997,9 +2582,11 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
     std::string side_panel_content =
         contents->GetLastCommittedURL().GetContent();
     VerifyLensUrl(side_panel_content, expected_content);
+    ExpectThatRequestContainsImageData(contents);
   }
 
-  void SimulateDragAndVerifyNonGoogleUrl(RenderViewContextMenu* menu) {
+  void SimulateDragAndVerifyNonGoogleUrlForSidePanel(
+      RenderViewContextMenu* menu) {
     SearchByRegionBrowserBaseTest::SimulateDragAndVerifyOverlayUI(menu);
     content::WebContents* contents =
         GetLensUnifiedSidePanelWebContentsAfterNavigation();
@@ -2013,7 +2600,8 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
     EXPECT_THAT(
         side_panel_content,
         testing::MatchesRegex(expected_content.substr(0, query_start_pos) +
-                              ".*sideimagesearch=1"));
+                              ".*sideimagesearch=1&vpw=\\d+&vph=\\d+"));
+    ExpectThatRequestContainsImageData(contents);
     quit_closure_.Run();
   }
 
@@ -2037,7 +2625,7 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
     menu_observer_ = std::make_unique<ContextMenuNotificationObserver>(
         IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH, ui::EF_MOUSE_BUTTON,
         base::BindOnce(&SearchByRegionWithUnifiedSidePanelBrowserTest::
-                           SimulateDragAndVerifyLensUrl,
+                           SimulateDragAndVerifyLensRequest,
                        base::Unretained(this)));
     RightClickToOpenContextMenu();
   }
@@ -2049,7 +2637,7 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
     menu_observer_ = std::make_unique<ContextMenuNotificationObserver>(
         IDC_CONTENT_CONTEXT_WEB_REGION_SEARCH, ui::EF_MOUSE_BUTTON,
         base::BindOnce(&SearchByRegionWithUnifiedSidePanelBrowserTest::
-                           SimulateDragAndVerifyNonGoogleUrl,
+                           SimulateDragAndVerifyNonGoogleUrlForSidePanel,
                        base::Unretained(this)));
     RightClickToOpenContextMenu();
   }
@@ -2086,8 +2674,16 @@ class SearchByRegionWithUnifiedSidePanelBrowserTest
   }
 };
 
+// https://crbug.com/1444953
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+#define MAYBE_ValidLensRegionSearchWithUnifiedSidePanel \
+  DISABLED_ValidLensRegionSearchWithUnifiedSidePanel
+#else
+#define MAYBE_ValidLensRegionSearchWithUnifiedSidePanel \
+  ValidLensRegionSearchWithUnifiedSidePanel
+#endif
 IN_PROC_BROWSER_TEST_F(SearchByRegionWithUnifiedSidePanelBrowserTest,
-                       ValidLensRegionSearchWithUnifiedSidePanel) {
+                       MAYBE_ValidLensRegionSearchWithUnifiedSidePanel) {
   SetupUnifiedSidePanel();
   // We need a base::RunLoop to ensure that our test does not finish until the
   // side panel has opened and we have verified the URL.
@@ -2128,11 +2724,20 @@ IN_PROC_BROWSER_TEST_F(SearchByRegionWithUnifiedSidePanelBrowserTest,
   // Match the query parameters, without the value of start_time.
   EXPECT_THAT(new_tab_content, testing::MatchesRegex(
                                    expected_content.substr(0, query_start_pos) +
-                                   ".*ep=crs&re=df&s=&st=\\d+"));
+                                   ".*ep=crs&re=df&s=4&st=\\d+&lm=.+"));
 }
 
-IN_PROC_BROWSER_TEST_F(SearchByRegionWithUnifiedSidePanelBrowserTest,
-                       ValidFullscreenLensRegionSearchWithUnifiedSidePanel) {
+// https://crbug.com/1444953
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+#define MAYBE_ValidFullscreenLensRegionSearchWithUnifiedSidePanel \
+  DISABLED_ValidFullscreenLensRegionSearchWithUnifiedSidePanel
+#else
+#define MAYBE_ValidFullscreenLensRegionSearchWithUnifiedSidePanel \
+  ValidFullscreenLensRegionSearchWithUnifiedSidePanel
+#endif
+IN_PROC_BROWSER_TEST_F(
+    SearchByRegionWithUnifiedSidePanelBrowserTest,
+    MAYBE_ValidFullscreenLensRegionSearchWithUnifiedSidePanel) {
   SetupUnifiedSidePanel();
   // We need a base::RunLoop to ensure that our test does not finish until the
   // side panel has opened and we have verified the URL.
@@ -2175,234 +2780,22 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(new_tab_content, expected_content);
 }
 
-#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
-
-// Maintains image search test state. In particular, note that |menu_observer_|
-// must live until the right-click completes asynchronously.
-class SearchByImageBrowserTest : public InProcessBrowserTest {
- protected:
-  void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        lens::features::kLensStandalone,
-        std::map<std::string, std::string>{
-            {lens::features::kEnableSidePanelForLens.name, "true"}});
-    InProcessBrowserTest::SetUp();
-  }
-
-  void SetupAndLoadValidImagePage() {
-    constexpr char kValidImage[] = "/image_search/valid.png";
-    SetupAndLoadImagePage(kValidImage);
-  }
-
-  void SetupAndLoadCorruptImagePage() {
-    constexpr char kCorruptImage[] = "/image_search/corrupt.png";
-    SetupAndLoadImagePage(kCorruptImage);
-  }
-
-  void SetupAndLoadImagePage(const std::string& image_path) {
-    // The test server must start first, so that we know the port that the test
-    // server is using.
-    ASSERT_TRUE(embedded_test_server()->Start());
-    SetupImageSearchEngine();
-
-    // Go to a page with an image in it. The test server doesn't serve the image
-    // with the right MIME type, so use a data URL to make a page containing it.
-    GURL image_url(embedded_test_server()->GetURL(image_path));
-    GURL page("data:text/html,<img src='" + image_url.spec() + "'>");
-    ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), page));
-  }
-
-  void AttemptImageSearch() {
-    // |menu_observer_| will cause the search-by-image menu item to be clicked.
-    menu_observer_ = std::make_unique<ContextMenuNotificationObserver>(
-        IDC_CONTENT_CONTEXT_SEARCHWEBFORIMAGE);
-    RightClickImage();
-  }
-
-  void AttemptLensImageSearch() {
-    // |menu_observer_| will cause the search lens for image menu item to be
-    // clicked.
-    menu_observer_ = std::make_unique<ContextMenuNotificationObserver>(
-        IDC_CONTENT_CONTEXT_SEARCHLENSFORIMAGE);
-    RightClickImage();
-  }
-
-  // Right-click where the image should be.
-  void RightClickImage() {
-    content::WebContents* tab =
-        browser()->tab_strip_model()->GetActiveWebContents();
-    content::SimulateMouseClickAt(tab, 0, blink::WebMouseEvent::Button::kRight,
-                                  gfx::Point(15, 15));
-  }
-
-  GURL GetImageSearchURL() {
-    static const char kImageSearchURL[] = "/imagesearch";
-    return embedded_test_server()->GetURL(kImageSearchURL);
-  }
-
-  GURL GetLensImageSearchURL() {
-    static const char kLensImageSearchURL[] = "/imagesearch?ep=ccm";
-    return embedded_test_server()->GetURL(kLensImageSearchURL);
-  }
-
- private:
-  void SetupImageSearchEngine() {
-    static const char16_t kShortName[] = u"test";
-    static const char kSearchURL[] = "/search?q={searchTerms}";
-    static const char kImageSearchPostParams[] =
-        "thumb={google:imageThumbnail}";
-    static const char kSideImageSearchParam[] = "sideimagesearch";
-
-    TemplateURLService* model =
-        TemplateURLServiceFactory::GetForProfile(browser()->profile());
-    ASSERT_TRUE(model);
-    search_test_utils::WaitForTemplateURLServiceToLoad(model);
-    ASSERT_TRUE(model->loaded());
-
-    TemplateURLData data;
-    data.SetShortName(kShortName);
-    data.SetKeyword(data.short_name());
-    data.SetURL(embedded_test_server()->GetURL(kSearchURL).spec());
-    data.image_url = GetImageSearchURL().spec();
-    data.image_url_post_params = kImageSearchPostParams;
-    data.side_image_search_param = kSideImageSearchParam;
-
-    TemplateURL* template_url = model->Add(std::make_unique<TemplateURL>(data));
-    ASSERT_TRUE(template_url);
-    model->SetUserSelectedDefaultSearchProvider(template_url);
-  }
-
-  void TearDownInProcessBrowserTestFixture() override {
-    menu_observer_.reset();
-  }
-
-  std::unique_ptr<ContextMenuNotificationObserver> menu_observer_;
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(SearchByImageBrowserTest, ImageSearchWithValidImage) {
-  SetupAndLoadValidImagePage();
-
-  ui_test_utils::AllBrowserTabAddedWaiter add_tab;
-  AttemptImageSearch();
-
-  // The browser should open a new tab for an image search.
-  content::WebContents* new_tab = add_tab.Wait();
-  content::WaitForLoadStop(new_tab);
-  EXPECT_EQ(GetImageSearchURL(), new_tab->GetLastCommittedURL());
-}
-
-IN_PROC_BROWSER_TEST_F(SearchByImageBrowserTest, ImageSearchWithCorruptImage) {
-  SetupAndLoadCorruptImagePage();
-
-  // Open and close a context menu.
-  ContextMenuWaiter waiter;
-  RightClickImage();
-  waiter.WaitForMenuOpenAndClose();
-
-  mojo::AssociatedRemote<chrome::mojom::ChromeRenderFrame> chrome_render_frame;
-  browser()
-      ->tab_strip_model()
-      ->GetActiveWebContents()
-      ->GetPrimaryMainFrame()
-      ->GetRemoteAssociatedInterfaces()
-      ->GetInterface(&chrome_render_frame);
-
-  auto callback = [](bool* response_received, base::OnceClosure quit,
-                     const std::vector<uint8_t>& thumbnail_data,
-                     const gfx::Size& original_size,
-                     const std::string& file_extension,
-                     std::vector<lens::mojom::LatencyLogPtr> log_data) {
-    *response_received = true;
-    std::move(quit).Run();
-  };
-
-  base::RunLoop run_loop;
-  bool response_received = false;
-  chrome_render_frame->RequestImageForContextNode(
-      0, gfx::Size(2048, 2048), chrome::mojom::ImageFormat::JPEG,
-      base::BindOnce(callback, &response_received, run_loop.QuitClosure()));
-  run_loop.Run();
-
-  // The browser should receive a response from the renderer, because the
-  // renderer should not crash.
-  ASSERT_TRUE(response_received);
-}
-
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-IN_PROC_BROWSER_TEST_F(SearchByImageBrowserTest,
-                       LensImageSearchWithValidImage) {
-  lens::CreateLensSidePanelControllerForTesting(browser());
-  SetupAndLoadValidImagePage();
-
-  content::WebContents* side_panel_contents =
-      lens::GetLensSidePanelWebContentsForTesting(browser());
-  EXPECT_TRUE(side_panel_contents);
-
-  AttemptLensImageSearch();
-
-  // Wait for the image search to commence a navigation upon the side panel web
-  // contents.
-  content::TestNavigationObserver nav_observer(side_panel_contents);
-  nav_observer.Wait();
-
-  std::string expected_content = GetLensImageSearchURL().GetContent();
-  std::string side_panel_content =
-      side_panel_contents->GetLastCommittedURL().GetContent();
-
-  // Match strings up to the query.
-  std::size_t query_start_pos = side_panel_content.find("?");
-  EXPECT_EQ(expected_content.substr(0, query_start_pos),
-            side_panel_content.substr(0, query_start_pos));
-  // Match the query parameters, without the value of start_time.
-  EXPECT_THAT(side_panel_content,
-              testing::MatchesRegex(
-                  ".*ep=ccm&re=dcsp&s=csp&st=\\d+&sideimagesearch=1"));
-}
-#endif
-
-IN_PROC_BROWSER_TEST_F(SearchByImageBrowserTest,
-                       LensImageSearchWithValidImageInProgressiveWebApp) {
-  // Creates a Progressive Web App and set it to the default browser
-  Browser* pwa_browser = InProcessBrowserTest::CreateBrowserForApp(
-      "test_app", browser()->profile());
-  CloseBrowserSynchronously(browser());
-  SelectFirstBrowser();
-  ASSERT_EQ(pwa_browser, browser());
-
-  SetupAndLoadValidImagePage();
-
-  ui_test_utils::AllBrowserTabAddedWaiter add_tab;
-  AttemptLensImageSearch();
-
-  // The browser should open a new tab for an image search.
-  content::WebContents* new_tab = add_tab.Wait();
-  content::WaitForLoadStop(new_tab);
-
-  std::string expected_content = GetLensImageSearchURL().GetContent();
-  std::string new_tab_content = new_tab->GetLastCommittedURL().GetContent();
-
-  // Match strings up to the query.
-  std::size_t query_start_pos = new_tab_content.find("?");
-  EXPECT_EQ(expected_content.substr(0, query_start_pos),
-            new_tab_content.substr(0, query_start_pos));
-  // Match the query parameters, without the value of start_time.
-  EXPECT_THAT(new_tab_content,
-              testing::MatchesRegex(".*ep=ccm&re=df&s=&st=\\d+"));
-}
+#endif  // BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
 
 #if BUILDFLAG(ENABLE_PDF)
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
                        FullPagePdfHasPageItems) {
   std::unique_ptr<TestRenderViewContextMenu> menu = SetupAndCreateMenu();
+  ASSERT_TRUE(menu);
 
   // The full page related items such as 'reload' should be there.
   ASSERT_TRUE(menu->IsItemPresent(IDC_RELOAD));
 }
 
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
                        FullPagePdfFullscreenItems) {
   std::unique_ptr<TestRenderViewContextMenu> menu = SetupAndCreateMenu();
+  ASSERT_TRUE(menu);
 
   // Test that the 'Rotate' items exist and are enabled.
   ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_ROTATECW));
@@ -2419,41 +2812,48 @@ IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest,
   ASSERT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_ROTATECCW));
 }
 
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest, CopyWithoutText) {
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
+                       CopyWithoutText) {
   std::unique_ptr<TestRenderViewContextMenu> menu = SetupAndCreateMenu();
+  ASSERT_TRUE(menu);
 
   // Test that 'Copy' doesn't exist.
   ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPY));
 }
 
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest, CopyText) {
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
+                       CopyText) {
   std::unique_ptr<TestRenderViewContextMenu> menu =
       SetupAndCreateMenuWithPdfInfo(
           {/*selection_text=*/u"text", /*can_copy=*/true});
+  ASSERT_TRUE(menu);
 
   // Test that 'Copy' exists and it is enabled.
   ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPY));
   ASSERT_TRUE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPY));
 }
 
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
                        CopyTextWithRestriction) {
   std::unique_ptr<TestRenderViewContextMenu> menu =
       SetupAndCreateMenuWithPdfInfo(
           {/*selection_text=*/u"text", /*can_copy=*/false});
+  ASSERT_TRUE(menu);
 
   // Test that 'Copy' exists and it is disabled.
   ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPY));
   ASSERT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPY));
 }
 
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
                        IframedPdfHasNoPageItems) {
   TestContextMenuOfPdfInsideWebPage(FILE_PATH_LITERAL("test-iframe-pdf.html"));
 }
 
-IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest, Rotate) {
+IN_PROC_BROWSER_TEST_P(PdfPluginContextMenuBrowserTestWithOopifOverride,
+                       Rotate) {
   std::unique_ptr<TestRenderViewContextMenu> menu = SetupAndCreateMenu();
+  ASSERT_TRUE(menu);
   content::RenderFrameHost* target_rfh =
       pdf_frame_util::FindPdfChildFrame(extension_frame());
   auto cb = [](base::OnceClosure quit_loop,
@@ -2487,20 +2887,27 @@ IN_PROC_BROWSER_TEST_F(PdfPluginContextMenuBrowserTest, Rotate) {
   }
 }
 
+// TODO(crbug.com/1445746): Stop testing both modes after OOPIF PDF viewer
+// launches.
+INSTANTIATE_FEATURE_OVERRIDE_TEST_SUITE(
+    PdfPluginContextMenuBrowserTestWithOopifOverride);
+
 #if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
-class PdfOcrContextMenuBrowserTest : public PdfPluginContextMenuBrowserTest,
-                                     public ::testing::WithParamInterface<int> {
+class PdfOcrContextMenuBrowserTest
+    : public PdfPluginContextMenuBrowserTest,
+      public ::testing::WithParamInterface<std::tuple<int, bool>> {
  public:
   PdfOcrContextMenuBrowserTest() {
-    if (IsPdfOcrEnabled())
+    if (IsPdfOcrEnabled()) {
       scoped_feature_list_.InitAndEnableFeature(features::kPdfOcr);
-    else
+    } else {
       scoped_feature_list_.InitAndDisableFeature(features::kPdfOcr);
+    }
     accessibility_state_utils::OverrideIsScreenReaderEnabledForTesting(
         IsScreenReaderEnabled());
     if (IsComponentReady()) {
       screen_ai::ScreenAIInstallState::GetInstance()
-          ->set_component_ready_for_testing();
+          ->SetComponentReadyForTesting();
     }
   }
 
@@ -2510,11 +2917,15 @@ class PdfOcrContextMenuBrowserTest : public PdfPluginContextMenuBrowserTest,
 
   ~PdfOcrContextMenuBrowserTest() override = default;
 
-  bool IsScreenReaderEnabled() { return GetParam() & 1; }
+  int ocr_params() { return std::get<0>(GetParam()); }
 
-  bool IsPdfOcrEnabled() { return GetParam() & 2; }
+  bool UseOopif() const override { return std::get<1>(GetParam()); }
 
-  bool IsComponentReady() { return GetParam() & 4; }
+  bool IsScreenReaderEnabled() { return ocr_params() & 1; }
+
+  bool IsPdfOcrEnabled() { return ocr_params() & 2; }
+
+  bool IsComponentReady() { return ocr_params() & 4; }
 
   void SetUpOnMainThread() override {
     PdfPluginContextMenuBrowserTest::SetUpOnMainThread();
@@ -2524,15 +2935,27 @@ class PdfOcrContextMenuBrowserTest : public PdfPluginContextMenuBrowserTest,
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_P(PdfOcrContextMenuBrowserTest, PdfOcr) {
+// TODO(crbug.com/1443346): Re-enable this test.
+IN_PROC_BROWSER_TEST_P(PdfOcrContextMenuBrowserTest, DISABLED_PdfOcr) {
   std::unique_ptr<TestRenderViewContextMenu> menu = SetupAndCreateMenu();
-  ASSERT_EQ(menu->IsItemPresent(IDC_CONTENT_CONTEXT_RUN_PDF_OCR),
+  ASSERT_TRUE(menu);
+  ASSERT_EQ(menu->IsItemPresent(IDC_CONTENT_CONTEXT_PDF_OCR),
             IsPdfOcrEnabled() && IsScreenReaderEnabled() && IsComponentReady());
 }
 
+struct PdfOcrContextMenuBrowserTestPassToString {
+  std::string operator()(
+      const ::testing::TestParamInfo<std::tuple<int, bool>>& i) const {
+    return (std::get<1>(i.param) ? "OOPIF_" : "GUESTVIEW_") +
+           base::NumberToString(std::get<0>(i.param));
+  }
+};
+
 INSTANTIATE_TEST_SUITE_P(All,
                          PdfOcrContextMenuBrowserTest,
-                         ::testing::Range(0, 8));
+                         ::testing::Combine(::testing::Range(0, 8),
+                                            ::testing::Bool()),
+                         PdfOcrContextMenuBrowserTestPassToString());
 
 #endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
@@ -2637,7 +3060,7 @@ IN_PROC_BROWSER_TEST_F(LoadImageBrowserTest, LoadImageWithMap) {
   AttemptLoadImage();
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, ContextMenuForVideo) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, ContextMenuForVideo) {
   std::unique_ptr<TestRenderViewContextMenu> menu = CreateContextMenu(
       GURL("http://www.example.com/"), GURL("http://www.example.com/foo.mp4"),
       u"", blink::mojom::ContextMenuDataMediaType::kVideo,
@@ -2645,7 +3068,7 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, ContextMenuForVideo) {
   EXPECT_TRUE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPYAVLOCATION));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForVideoWithBlobLink) {
   std::unique_ptr<TestRenderViewContextMenu> menu = CreateContextMenu(
       GURL("http://www.example.com/"),
@@ -2654,44 +3077,78 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   EXPECT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPYAVLOCATION));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
+                       ContextMenuForVideoWithReadableFrame) {
+  content::ContextMenuParams params;
+  params.media_type = blink::mojom::ContextMenuDataMediaType::kVideo;
+  params.media_flags |= blink::ContextMenuData::kMediaHasReadableVideoFrame;
+
+  auto menu = CreateContextMenuFromParams(params);
+
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_SAVEVIDEOFRAMEAS));
+  EXPECT_TRUE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SAVEVIDEOFRAMEAS));
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYVIDEOFRAME));
+  EXPECT_TRUE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPYVIDEOFRAME));
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_SEARCHLENSFORVIDEOFRAME));
+  EXPECT_TRUE(
+      menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SEARCHLENSFORVIDEOFRAME));
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
+                       ContextMenuForVideoWithoutReadableFrame) {
+  content::ContextMenuParams params;
+  params.media_type = blink::mojom::ContextMenuDataMediaType::kVideo;
+
+  auto menu = CreateContextMenuFromParams(params);
+
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_SAVEVIDEOFRAMEAS));
+  EXPECT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SAVEVIDEOFRAMEAS));
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYVIDEOFRAME));
+  EXPECT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPYVIDEOFRAME));
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_SEARCHLENSFORVIDEOFRAME));
+  EXPECT_FALSE(
+      menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_SEARCHLENSFORVIDEOFRAME));
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, ContextMenuForEncryptedVideo) {
+  content::ContextMenuParams params;
+  params.media_type = blink::mojom::ContextMenuDataMediaType::kVideo;
+  params.media_flags |= blink::ContextMenuData::kMediaEncrypted;
+
+  auto menu = CreateContextMenuFromParams(params);
+
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYVIDEOFRAME));
+  EXPECT_FALSE(menu->IsCommandIdEnabled(IDC_CONTENT_CONTEXT_COPYVIDEOFRAME));
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForVideoNotInPictureInPicture) {
   content::ContextMenuParams params;
   params.media_type = blink::mojom::ContextMenuDataMediaType::kVideo;
   params.media_flags |= blink::ContextMenuData::kMediaCanPictureInPicture;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
-  EXPECT_TRUE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
-  EXPECT_FALSE(menu.IsItemChecked(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
+  EXPECT_FALSE(menu->IsItemChecked(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        ContextMenuForVideoInPictureInPicture) {
   content::ContextMenuParams params;
   params.media_type = blink::mojom::ContextMenuDataMediaType::kVideo;
   params.media_flags |= blink::ContextMenuData::kMediaCanPictureInPicture;
   params.media_flags |= blink::ContextMenuData::kMediaPictureInPicture;
 
-  TestRenderViewContextMenu menu(*browser()
-                                      ->tab_strip_model()
-                                      ->GetActiveWebContents()
-                                      ->GetPrimaryMainFrame(),
-                                 params);
-  menu.Init();
+  auto menu = CreateContextMenuFromParams(params);
 
-  EXPECT_TRUE(menu.IsItemPresent(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
-  EXPECT_TRUE(menu.IsItemChecked(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
+  EXPECT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
+  EXPECT_TRUE(menu->IsItemChecked(IDC_CONTENT_CONTEXT_PICTUREINPICTURE));
 }
 
 // This test checks that we don't crash when creating a context menu for a
 // WebContents with no Browser.
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, BrowserlessWebContentsCrash) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, BrowserlessWebContentsCrash) {
   std::unique_ptr<content::WebContents> web_contents =
       content::WebContents::Create(
           content::WebContents::CreateParams(browser()->profile()));
@@ -2701,49 +3158,115 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, BrowserlessWebContentsCrash) {
       blink::mojom::ContextMenuDataMediaType::kNone, ui::MENU_SOURCE_MOUSE);
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, GifImageShare) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, GifImageShare) {
   OpenImagePageAndContextMenu("/google/logo.gif");
   RequestImageAndVerifyResponse(
       gfx::Size(2048, 2048), chrome::mojom::ImageFormat::ORIGINAL,
       gfx::Size(276, 110), gfx::Size(276, 110), ".gif");
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, GifImageDownscaleToJpeg) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, GifImageDownscaleToJpeg) {
   OpenImagePageAndContextMenu("/google/logo.gif");
   RequestImageAndVerifyResponse(
       gfx::Size(100, 100), chrome::mojom::ImageFormat::ORIGINAL,
       gfx::Size(276, 110), gfx::Size(100, /* 100 / 480 * 320 =  */ 39), ".jpg");
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, RequestPngForGifImage) {
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_RequestPngForGifImage DISABLED_RequestPngForGifImage
+#else
+#define MAYBE_RequestPngForGifImage RequestPngForGifImage
+#endif
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_RequestPngForGifImage) {
   OpenImagePageAndContextMenu("/google/logo.gif");
   RequestImageAndVerifyResponse(
       gfx::Size(2048, 2048), chrome::mojom::ImageFormat::PNG,
       gfx::Size(276, 110), gfx::Size(276, 110), ".png");
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, PngImageDownscaleToPng) {
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_PngImageDownscaleToPng DISABLED_PngImageDownscaleToPng
+#else
+#define MAYBE_PngImageDownscaleToPng PngImageDownscaleToPng
+#endif
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_PngImageDownscaleToPng) {
   OpenImagePageAndContextMenu("/image_search/valid.png");
   RequestImageAndVerifyResponse(
       gfx::Size(100, 100), chrome::mojom::ImageFormat::PNG, gfx::Size(200, 100),
       gfx::Size(100, 50), ".png");
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, PngImageOriginalDownscaleToPng) {
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, PngImageOriginalDownscaleToPng) {
   OpenImagePageAndContextMenu("/image_search/valid.png");
   RequestImageAndVerifyResponse(
       gfx::Size(100, 100), chrome::mojom::ImageFormat::ORIGINAL,
       gfx::Size(200, 100), gfx::Size(100, 50), ".png");
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, JpgImageDownscaleToJpg) {
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_JpgImageDownscaleToJpg DISABLED_JpgImageDownscaleToJpg
+#else
+#define MAYBE_JpgImageDownscaleToJpg JpgImageDownscaleToJpg
+#endif
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_JpgImageDownscaleToJpg) {
   OpenImagePageAndContextMenu("/android/watch.jpg");
   RequestImageAndVerifyResponse(
       gfx::Size(100, 100), chrome::mojom::ImageFormat::ORIGINAL,
       gfx::Size(480, 320), gfx::Size(100, /* 100 / 480 * 320 =  */ 66), ".jpg");
 }
 
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, JpgImageDownscaleToWebp) {
+  OpenImagePageAndContextMenu("/android/watch.jpg");
+  RequestImageAndVerifyResponse(
+      gfx::Size(100, 100), chrome::mojom::ImageFormat::WEBP,
+      gfx::Size(480, 320), gfx::Size(100, /* 100 / 480 * 320 =  */ 66),
+      ".webp");
+}
+
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_PngImageDownscaleToWebp DISABLED_PngImageDownscaleToWebp
+#else
+#define MAYBE_PngImageDownscaleToWebp PngImageDownscaleToWebp
+#endif
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_PngImageDownscaleToWebp) {
+  OpenImagePageAndContextMenu("/image_search/valid.png");
+  RequestImageAndVerifyResponse(
+      gfx::Size(100, 100), chrome::mojom::ImageFormat::WEBP,
+      gfx::Size(200, 100), gfx::Size(100, 50), ".webp");
+}
+
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_GifImageDownscaleToWebp DISABLED_GifImageDownscaleToWebp
+#else
+#define MAYBE_GifImageDownscaleToWebp GifImageDownscaleToWebp
+#endif
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_GifImageDownscaleToWebp) {
+  OpenImagePageAndContextMenu("/google/logo.gif");
+  RequestImageAndVerifyResponse(
+      gfx::Size(100, 100), chrome::mojom::ImageFormat::WEBP,
+      gfx::Size(276, 110), gfx::Size(100, /* 100 / 275 * 110 =  */ 39),
+      ".webp");
+}
+
+// TODO(crbug.com/1457589): Enable the test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_WebpImageDownscaleToWebp DISABLED_WebpImageDownscaleToWebp
+#else
+#define MAYBE_WebpImageDownscaleToWebp WebpImageDownscaleToWebp
+#endif
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_WebpImageDownscaleToWebp) {
+  OpenImagePageAndContextMenu("/banners/webp-icon.webp");
+  RequestImageAndVerifyResponse(
+      gfx::Size(100, 100), chrome::mojom::ImageFormat::WEBP,
+      gfx::Size(192, 192), gfx::Size(100, 100), ".webp");
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,
                        CopyLinkToTextDisabledWithScrollToTextPolicyDisabled) {
   browser()->profile()->GetPrefs()->SetBoolean(
       prefs::kScrollToTextFragmentEnabled, false);
@@ -2755,106 +3278,197 @@ IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest,
   EXPECT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKTOTEXT));
 }
 
-// Functionality is not present on ChromeOS.
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-IN_PROC_BROWSER_TEST_F(ContextMenuWithProfileLinksBrowserTest,
-                       OpenLinkInProfileEntryPresent) {
-  {
-    std::unique_ptr<TestRenderViewContextMenu> menu(
-        CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
-                                       GURL("http://www.google.com/")));
-
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // With only one profile exists, we don't add any items to the context menu
-    // for opening links in other profiles.
-    ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
-    ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
-                                            IDC_OPEN_LINK_IN_PROFILE_LAST));
-  }
-
-  // Create one additional profile, but do not yet open windows in it.
-  Profile* profile = CreateSecondaryProfile(1);
-
-  {
-    std::unique_ptr<TestRenderViewContextMenu> menu(
-        CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
-                                       GURL("http://www.google.com/")));
-
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // With the second profile not open, an inline entry to open the link with
-    // the secondary profile is displayed.
-    ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_OPEN_LINK_IN_PROFILE_FIRST));
-  }
-
-  profiles::FindOrCreateNewWindowForProfile(
-      profile, chrome::startup::IsProcessStartup::kNo,
-      chrome::startup::IsFirstRun::kNo, false);
-
-  {
-    std::unique_ptr<TestRenderViewContextMenu> menu(
-        CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
-                                       GURL("http://www.google.com/")));
-
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // With the second profile open, an inline entry to open the link with the
-    // secondary profile is displayed.
-    ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKINPROFILE));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_OPEN_LINK_IN_PROFILE_FIRST));
-  }
-
-  CreateSecondaryProfile(2);
-
-  {
-    std::unique_ptr<TestRenderViewContextMenu> menu(
-        CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
-                                       GURL("http://www.google.com/")));
-
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
-    ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_COPYLINKLOCATION));
-    // With at least two secondary profiles, they are displayed in a submenu.
-    ui::MenuModel* model = nullptr;
-    size_t index = 0;
-    ASSERT_TRUE(menu->GetMenuModelAndItemIndex(IDC_OPEN_LINK_IN_PROFILE_FIRST,
-                                               &model, &index));
-    ASSERT_EQ(2u, model->GetItemCount());
-    ASSERT_FALSE(menu->IsItemInRangePresent(IDC_OPEN_LINK_IN_PROFILE_FIRST,
-                                            IDC_OPEN_LINK_IN_PROFILE_LAST));
-  }
-}
-
-#endif
-
-IN_PROC_BROWSER_TEST_F(ContextMenuBrowserTest, OpenReadAnything) {
-  // Open in Reader is not an option when text is unselected.
-  std::unique_ptr<TestRenderViewContextMenu> menu1 =
-      CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
-                                     GURL("http://www.google.com/"));
-  ASSERT_FALSE(menu1->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READ_ANYTHING));
-
-  // Open in Reader is an option when non-editable text is selected.
-  std::unique_ptr<TestRenderViewContextMenu> menu2 =
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenInReadingMode) {
+  // Open in reading mode is an option when non-editable text is selected.
+  std::unique_ptr<TestRenderViewContextMenu> menu =
       CreateContextMenuForTextInWebContents(u"selection text");
-  ASSERT_TRUE(menu2->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READ_ANYTHING));
+  ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE));
 
-  // Open in Reader is an option when editable text is selected.
+  // Open in reading mode is an option for editables.
   content::ContextMenuParams params;
   params.is_editable = true;
-  std::unique_ptr<TestRenderViewContextMenu> menu3 =
+  menu =
       std::make_unique<TestRenderViewContextMenu>(*browser()
                                                        ->tab_strip_model()
                                                        ->GetActiveWebContents()
                                                        ->GetPrimaryMainFrame(),
                                                   params);
-  menu3->Init();
-  ASSERT_TRUE(menu3->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READ_ANYTHING));
+  menu->Init();
+  ASSERT_TRUE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE));
+
+  // Open in reading mode is NOT an option for links.
+  menu = CreateContextMenuMediaTypeNone(GURL("http://www.google.com/"),
+                                        GURL("http://www.google.com/"));
+  ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE));
+
+  // Open in reading mode is NOT an option for <image>.
+  menu = CreateContextMenuMediaTypeImage(GURL("http://url.com/image.png"));
+  ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE));
+
+  // Open in reading mode is NOT an option for <video>.
+  menu = CreateContextMenu(GURL("http://www.example.com/"),
+                           GURL("http://www.example.com/foo.mp4"), u"",
+                           blink::mojom::ContextMenuDataMediaType::kVideo,
+                           ui::MENU_SOURCE_MOUSE);
+  ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE));
+
+  // Open in reading mode is NOT an option for <canvas>.
+  params = content::ContextMenuParams();
+  params.media_type = blink::mojom::ContextMenuDataMediaType::kCanvas;
+  menu = CreateContextMenuFromParams(params);
+  ASSERT_FALSE(menu->IsItemPresent(IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE));
+}
+
+// Ensure that the context menu can tolerate changes to session history that
+// happen between menu initialization and command execution.
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, BackAfterBackEntryRemoved) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  content::NavigationController& controller = web_contents->GetController();
+
+  GURL url(embedded_test_server()->GetURL("/title1.html"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // At the time the context menu is created, it is possible to navigate back,
+  // so the back menu item is enabled. While the context menu is open, we
+  // navigate back to the first entry. This will make it so that there is no
+  // back entry to navigate to when clicking the back menu item.
+  base::OnceClosure nav_to_first_entry = base::BindLambdaForTesting([&]() {
+    content::TestNavigationObserver back_nav_observer(web_contents);
+    EXPECT_TRUE(controller.CanGoBack());
+    controller.GoBack();
+    back_nav_observer.Wait();
+    EXPECT_FALSE(controller.CanGoBack());
+  });
+
+  ContextMenuWaiter menu_observer(IDC_BACK, std::move(nav_to_first_entry));
+  content::SimulateMouseClickAt(web_contents, 0,
+                                blink::WebMouseEvent::Button::kRight,
+                                gfx::Point(15, 15));
+  menu_observer.WaitForMenuOpenAndClose();
+}
+
+// Given a URL, produces an HTML document which contains a cross-origin child
+// iframe which contains a link to that URL. Both the cross-origin child iframe
+// and the link inside that iframe fill the entire size of the parent frame so
+// they are easy to target with clicks.
+static std::string BuildCrossOriginChildFrameHTML(const GURL& link) {
+  constexpr char kMainFrameSource[] = R"(
+      <html>
+        <!-- This document looks like:
+          -
+          - outer frame (origin localhost:whatever)
+          -   inner frame (opaque origin, base origin localhost:whatever)
+          -     link to "/danger"
+          -
+          - where the inner frame fills 100% of the outer frame, and the link
+          - fills 100% of the inner frame.
+          -->
+        <head>
+          <title>subframe opaque origin propagation test</title>
+          <style>
+            /* have the iframe fill the entire parent frame with no margin, to
+             * make it easier to hit with click events. */
+            body { margin: 0; }
+            iframe { display: block; height: 100%; width: 100%; border: 0; }
+          </style>
+        </head>
+        <body>
+        </body>
+        <script>
+          const frame = document.createElement("iframe");
+          // construct a subframe containing a link which fills 100% of the
+          // viewport, to make it easier to hit with a generated click in the
+          // test.
+          frame.src = "data:text/html;base64,$1";
+          document.body.appendChild(frame);
+        </script>
+      </html>
+  )";
+
+  constexpr char kCrossOriginChildFrameSource[] = R"(
+    <html>
+      <head>
+        <style>
+          html { height: 100%; width: 100%; }
+          body { height: 100%; width: 100%; }
+          a { display: block; height: 100%; width: 100%; }
+        </style>
+      </head>
+      <body>
+        <a href="$1">danger!</a>
+      </body>
+    </html>
+  )";
+
+  std::string encoded_payload =
+      base::Base64Encode(base::ReplaceStringPlaceholders(
+          kCrossOriginChildFrameSource, {link.spec()}, nullptr));
+  return base::ReplaceStringPlaceholders(kMainFrameSource, {encoded_payload},
+                                         nullptr);
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, SubframeNewTabInitiator) {
+  // If a frame on example.com opens a subframe with a different opaque origin,
+  // the subframe origin should be passed through to a context menu on that
+  // initiator, so:
+  // 1. A request back to example.com from the subframe should be cross-origin
+  //    (which is what this test checks), and
+  // 2. The context menu on the subframe should have the initiator as an opaque
+  //    origin whose precursor origin is example.com (not tested here)
+  using BasicHttpResponse = net::test_server::BasicHttpResponse;
+  using HttpRequest = net::test_server::HttpRequest;
+  using HttpResponse = net::test_server::HttpResponse;
+  HttpRequest::HeaderMap logged_headers;
+
+  base::RunLoop danger_request_wait_loop;
+  embedded_test_server()->RegisterRequestHandler(base::BindLambdaForTesting(
+      [&](const HttpRequest& req) -> std::unique_ptr<HttpResponse> {
+        if (req.relative_url == "/danger") {
+          logged_headers = req.headers;
+          danger_request_wait_loop.Quit();
+          return nullptr;
+        } else if (req.relative_url == "/main") {
+          auto response = std::make_unique<BasicHttpResponse>();
+          response->set_code(net::HTTP_OK);
+          response->set_content_type("text/html");
+          response->set_content(BuildCrossOriginChildFrameHTML(
+              embedded_test_server()->GetURL("/danger")));
+          return response;
+        } else {
+          return nullptr;
+        }
+      }));
+
+  auto handle = embedded_test_server()->StartAndReturnHandle();
+  ASSERT_TRUE(handle);
+
+  WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  GURL url(embedded_test_server()->GetURL("/main"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  content::RenderFrameHost* main_frame = ConvertToRenderFrameHost(web_contents);
+  content::RenderFrameHost* child_frame = ChildFrameAt(main_frame, 0);
+
+  EXPECT_FALSE(main_frame->GetLastCommittedOrigin().IsSameOriginWith(
+      child_frame->GetLastCommittedOrigin()));
+
+  ContextMenuWaiter menu_observer(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB);
+  content::SimulateMouseClickAt(web_contents, 0,
+                                blink::WebMouseEvent::Button::kRight,
+                                gfx::Point(15, 15));
+  menu_observer.WaitForMenuOpenAndClose();
+
+  // Wait for the request to "/danger" to be issued by the context menu click
+  // and handled by the EmbeddedTestServer, which logs the request headers as a
+  // side effect. Since that request is issued by a click on a link in a
+  // cross-origin iframe but is back to the same origin as "/main" was served
+  // from, it should be marked as cross-origin.
+  danger_request_wait_loop.Run();
+  EXPECT_EQ(logged_headers.at("sec-fetch-site"), "cross-site");
 }
 
 }  // namespace

@@ -35,15 +35,12 @@ BirthdateField::BirthdateField(const AutofillField* day,
     : day_(day), month_(month), year_(year) {}
 
 // static
-std::unique_ptr<FormField> BirthdateField::Parse(
-    AutofillScanner* scanner,
-    const LanguageCode& page_language,
-    PatternSource pattern_source,
-    LogManager* log_manager) {
+std::unique_ptr<FormField> BirthdateField::Parse(ParsingContext& context,
+                                                 AutofillScanner* scanner) {
   // Currently only <select> elements are considered.
-  AutofillField* day = nullptr;
-  AutofillField* month = nullptr;
-  AutofillField* year = nullptr;
+  raw_ptr<AutofillField> day = nullptr;
+  raw_ptr<AutofillField> month = nullptr;
+  raw_ptr<AutofillField> year = nullptr;
   // Expect at most 31 days/12 months plus one placeholder.
   if (FormField::ParseInAnyOrder(
           scanner,
@@ -63,8 +60,9 @@ bool BirthdateField::IsSelectWithIncreasingValues(AutofillScanner* scanner,
                                                   int max_value,
                                                   size_t max_options) {
   AutofillField* field = scanner->Cursor();
-  if (!MatchesFormControlType(field->form_control_type,
-                              {MatchFieldType::kSelect})) {
+  if (!MatchesFormControlType(
+          field->form_control_type,
+          {FormControlType::kSelectOne, FormControlType::kSelectList})) {
     return false;
   }
   auto options = field->options;
@@ -89,8 +87,9 @@ bool BirthdateField::IsSelectWithIncreasingValues(AutofillScanner* scanner,
 bool BirthdateField::IsLikelyBirthdateYearSelectField(
     AutofillScanner* scanner) {
   AutofillField* field = scanner->Cursor();
-  if (!MatchesFormControlType(field->form_control_type,
-                              {MatchFieldType::kSelect})) {
+  if (!MatchesFormControlType(
+          field->form_control_type,
+          {FormControlType::kSelectOne, FormControlType::kSelectList})) {
     return false;
   }
   auto options = field->options;

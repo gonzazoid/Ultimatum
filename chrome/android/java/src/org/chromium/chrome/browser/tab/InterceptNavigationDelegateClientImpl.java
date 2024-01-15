@@ -14,6 +14,7 @@ import org.chromium.components.external_intents.ExternalNavigationHandler.Overri
 import org.chromium.components.external_intents.InterceptNavigationDelegateClient;
 import org.chromium.components.external_intents.InterceptNavigationDelegateImpl;
 import org.chromium.components.external_intents.RedirectHandler;
+import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
@@ -27,38 +28,40 @@ public class InterceptNavigationDelegateClientImpl implements InterceptNavigatio
     private final TabObserver mTabObserver;
     private InterceptNavigationDelegateImpl mInterceptNavigationDelegate;
 
+    public static InterceptNavigationDelegateClientImpl createForTesting(Tab tab) {
+        return new InterceptNavigationDelegateClientImpl(tab);
+    }
+
     InterceptNavigationDelegateClientImpl(Tab tab) {
         mTab = (TabImpl) tab;
-        mTabObserver = new EmptyTabObserver() {
-            @Override
-            public void onContentChanged(Tab tab) {
-                mInterceptNavigationDelegate.associateWithWebContents(tab.getWebContents());
-            }
+        mTabObserver =
+                new EmptyTabObserver() {
+                    @Override
+                    public void onContentChanged(Tab tab) {
+                        mInterceptNavigationDelegate.associateWithWebContents(tab.getWebContents());
+                    }
 
-            @Override
-            public void onActivityAttachmentChanged(Tab tab, @Nullable WindowAndroid window) {
-                if (window != null) {
-                    mInterceptNavigationDelegate.setExternalNavigationHandler(
-                            createExternalNavigationHandler());
-                }
-            }
+                    @Override
+                    public void onActivityAttachmentChanged(
+                            Tab tab, @Nullable WindowAndroid window) {
+                        if (window != null) {
+                            mInterceptNavigationDelegate.setExternalNavigationHandler(
+                                    createExternalNavigationHandler());
+                        }
+                    }
 
-            @Override
-            public void onDidFinishNavigationInPrimaryMainFrame(
-                    Tab tab, NavigationHandle navigation) {
-                mInterceptNavigationDelegate.onNavigationFinishedInPrimaryMainFrame(navigation);
-            }
+                    @Override
+                    public void onDidFinishNavigationInPrimaryMainFrame(
+                            Tab tab, NavigationHandle navigation) {
+                        mInterceptNavigationDelegate.onNavigationFinishedInPrimaryMainFrame(
+                                navigation);
+                    }
 
-            @Override
-            public void onDidFinishNavigationNoop(Tab tab, NavigationHandle navigation) {
-                mInterceptNavigationDelegate.onNavigationFinishedNoop(navigation);
-            }
-
-            @Override
-            public void onDestroyed(Tab tab) {
-                mInterceptNavigationDelegate.associateWithWebContents(null);
-            }
-        };
+                    @Override
+                    public void onDestroyed(Tab tab) {
+                        mInterceptNavigationDelegate.associateWithWebContents(null);
+                    }
+                };
     }
 
     @Override
@@ -85,11 +88,6 @@ public class InterceptNavigationDelegateClientImpl implements InterceptNavigatio
     @Override
     public boolean isIncognito() {
         return mTab.isIncognito();
-    }
-
-    @Override
-    public boolean isHidden() {
-        return mTab.isHidden();
     }
 
     @Override
@@ -134,5 +132,11 @@ public class InterceptNavigationDelegateClientImpl implements InterceptNavigatio
         assert mInterceptNavigationDelegate != null;
         mTab.removeObserver(mTabObserver);
         mInterceptNavigationDelegate = null;
+    }
+
+    @Override
+    public void loadUrlIfPossible(LoadUrlParams loadUrlParams) {
+        if (mTab.isDestroyed() || mTab.isClosing()) return;
+        mTab.loadUrl(loadUrlParams);
     }
 }

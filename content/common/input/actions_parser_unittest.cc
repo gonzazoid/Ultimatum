@@ -12,7 +12,7 @@
 namespace content {
 
 TEST(ActionsParserTest, ParseMousePointerActionSequence) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "mouse", "id": 0,
                 "actions": [{"name": "pointerDown", "x": 2, "y": 3,
                              "button": 0},
@@ -22,8 +22,7 @@ TEST(ActionsParserTest, ParseMousePointerActionSequence) {
   ActionsParser actions_parser(std::move(value.value()));
   EXPECT_TRUE(actions_parser.Parse());
   SyntheticPointerActionListParams action_list_params =
-      static_cast<const SyntheticPointerActionListParams&>(
-          actions_parser.gesture_params());
+      actions_parser.pointer_action_params();
   EXPECT_EQ(content::mojom::GestureSourceType::kMouseInput,
             action_list_params.gesture_source_type);
   EXPECT_EQ(2U, action_list_params.params.size());
@@ -38,7 +37,7 @@ TEST(ActionsParserTest, ParseMousePointerActionSequence) {
 }
 
 TEST(ActionsParserTest, ParseTouchPointerActionSequence1) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "touch", "id": 1,
                 "actions": [{"name": "pointerDown", "x": 3, "y": 5},
                             {"name": "pointerMove", "x": 30, "y": 30},
@@ -51,8 +50,7 @@ TEST(ActionsParserTest, ParseTouchPointerActionSequence1) {
   ActionsParser actions_parser(std::move(value.value()));
   EXPECT_TRUE(actions_parser.Parse());
   SyntheticPointerActionListParams action_list_params =
-      static_cast<const SyntheticPointerActionListParams&>(
-          actions_parser.gesture_params());
+      actions_parser.pointer_action_params();
   EXPECT_EQ(content::mojom::GestureSourceType::kTouchInput,
             action_list_params.gesture_source_type);
   EXPECT_EQ(3U, action_list_params.params.size());
@@ -68,7 +66,7 @@ TEST(ActionsParserTest, ParseTouchPointerActionSequence1) {
 }
 
 TEST(ActionsParserTest, ParseTouchPointerActionSequenceWithoutId) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "touch", "id": 0,
                 "actions": [{"name": "pointerDown", "x": 3, "y": 5},
                             {"name": "pointerMove", "x": 30, "y": 30},
@@ -81,8 +79,7 @@ TEST(ActionsParserTest, ParseTouchPointerActionSequenceWithoutId) {
   ActionsParser actions_parser(std::move(value.value()));
   EXPECT_TRUE(actions_parser.Parse());
   SyntheticPointerActionListParams action_list_params =
-      static_cast<const SyntheticPointerActionListParams&>(
-          actions_parser.gesture_params());
+      actions_parser.pointer_action_params();
   EXPECT_EQ(content::mojom::GestureSourceType::kTouchInput,
             action_list_params.gesture_source_type);
   EXPECT_EQ(3U, action_list_params.params.size());
@@ -98,7 +95,7 @@ TEST(ActionsParserTest, ParseTouchPointerActionSequenceWithoutId) {
 }
 
 TEST(ActionsParserTest, ParseMousePointerActionSequenceNoSource) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"id": 0,
                 "actions": [{"name": "pointerDown", "x": 2, "y": 3,
                              "button": 0},
@@ -112,7 +109,7 @@ TEST(ActionsParserTest, ParseMousePointerActionSequenceNoSource) {
 }
 
 TEST(ActionsParserTest, ParseMousePointerActionSequenceNoAction) {
-  absl::optional<base::Value> value =
+  std::optional<base::Value> value =
       base::JSONReader::Read(R"JSON( [{"source": "mouse", "id": 0}] )JSON");
 
   ActionsParser actions_parser(std::move(value.value()));
@@ -122,7 +119,7 @@ TEST(ActionsParserTest, ParseMousePointerActionSequenceNoAction) {
 }
 
 TEST(ActionsParserTest, ParseMousePointerActionSequenceUnsupportedButton) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "mouse", "id": 0,
                 "actions": [{"name": "pointerDown", "x": 2, "y": 3,
                              "button": -1},
@@ -136,7 +133,7 @@ TEST(ActionsParserTest, ParseMousePointerActionSequenceUnsupportedButton) {
 }
 
 TEST(ActionsParserTest, ParseTouchPointerActionSequenceMultiSource) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "touch", "id": 1,
                 "actions": [{"name": "pointerDown", "x": 3, "y": 5},
                             {"name": "pointerMove", "x": 30, "y": 30},
@@ -153,7 +150,7 @@ TEST(ActionsParserTest, ParseTouchPointerActionSequenceMultiSource) {
 }
 
 TEST(ActionsParserTest, ParseTouchPointerActionSequenceMultiMouse) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "mouse", "id": 1,
                 "actions": [{"name": "pointerDown", "x": 3, "y": 5},
                             {"name": "pointerMove", "x": 30, "y": 30},
@@ -172,7 +169,7 @@ TEST(ActionsParserTest, ParseTouchPointerActionSequenceMultiMouse) {
 }
 
 TEST(ActionsParserTest, ParsePointerActionSequenceInvalidKey) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "mouse", "id": 0,
                 "actions": [{"name": "pointerDown", "x": 3, "y": 5,
                              "keys": "Ctrl"} ]}] )JSON");
@@ -184,7 +181,7 @@ TEST(ActionsParserTest, ParsePointerActionSequenceInvalidKey) {
 }
 
 TEST(ActionsParserTest, ParsePointerActionSequenceEmptyActionList) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "mouse", "id": 0,
                 "actions": []}] )JSON");
 
@@ -195,7 +192,7 @@ TEST(ActionsParserTest, ParsePointerActionSequenceEmptyActionList) {
 }
 
 TEST(ActionsParserTest, ParsePointerActionSequenceInvalidPointerType) {
-  absl::optional<base::Value> value = base::JSONReader::Read(
+  std::optional<base::Value> value = base::JSONReader::Read(
       R"JSON( [{"source": "wheel", "id": 0,
                 "actions": [{"name": "pointerDown", "x": 3, "y": 5,
                              "keys": "Ctrl"} ]}] )JSON");

@@ -6,13 +6,14 @@
 
 #include <memory>
 
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/mock_timer.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/tether/message_wrapper.h"
 #include "chromeos/ash/components/tether/proto_test_util.h"
 #include "chromeos/ash/components/tether/test_timer_factory.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_client_channel.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_connection_attempt.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_secure_channel_client.h"
@@ -109,7 +110,7 @@ class TestOperation : public MessageTransferOperation {
 
   bool has_operation_finished() { return has_operation_finished_; }
 
-  absl::optional<int> last_sequence_number() { return last_sequence_number_; }
+  std::optional<int> last_sequence_number() { return last_sequence_number_; }
 
  private:
   base::flat_map<multidevice::RemoteDeviceRef, bool> device_authenticated_map_;
@@ -121,7 +122,7 @@ class TestOperation : public MessageTransferOperation {
   bool should_unregister_device_on_message_received_ = false;
   bool has_operation_started_ = false;
   bool has_operation_finished_ = false;
-  absl::optional<int> last_sequence_number_;
+  std::optional<int> last_sequence_number_;
 };
 
 TetherAvailabilityResponse CreateTetherAvailabilityResponse() {
@@ -178,7 +179,8 @@ class MessageTransferOperationTest : public testing::Test {
     operation_ = base::WrapUnique(
         new TestOperation(remote_devices, fake_device_sync_client_.get(),
                           fake_secure_channel_client_.get()));
-    operation_->SetTimerFactoryForTest(base::WrapUnique(test_timer_factory_));
+    operation_->SetTimerFactoryForTest(
+        base::WrapUnique(test_timer_factory_.get()));
     VerifyOperationStartedAndFinished(false /* has_started */,
                                       false /* has_finished */);
   }
@@ -262,7 +264,7 @@ class MessageTransferOperationTest : public testing::Test {
   std::unique_ptr<device_sync::FakeDeviceSyncClient> fake_device_sync_client_;
   std::unique_ptr<secure_channel::FakeSecureChannelClient>
       fake_secure_channel_client_;
-  TestTimerFactory* test_timer_factory_;
+  raw_ptr<TestTimerFactory, DanglingUntriaged> test_timer_factory_;
   std::unique_ptr<TestOperation> operation_;
 };
 

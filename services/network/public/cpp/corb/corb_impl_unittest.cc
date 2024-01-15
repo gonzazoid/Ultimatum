@@ -9,11 +9,10 @@
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/strings/string_piece.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "net/base/mime_sniffer.h"
 #include "net/http/http_util.h"
@@ -28,7 +27,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
-using base::StringPiece;
 using CorbResponseAnalyzer =
     network::corb::CrossOriginReadBlocking::CorbResponseAnalyzer;
 using CrossOriginProtectionDecision =
@@ -2021,8 +2019,9 @@ class ResponseAnalyzerTest : public testing::Test,
     // Note that the `analyzer` will be destructed when `analyzer` goes out of
     // scope (the destructor may trigger logging of UMAs that some callers of
     // RunAnalyzerOnScenario attempt to verify).
-    ResponseAnalyzer::Decision decision = analyzer->Init(
-        request->url(), request->initiator(), request_mode, response);
+    ResponseAnalyzer::Decision decision =
+        analyzer->Init(request->url(), request->initiator(), request_mode,
+                       mojom::RequestDestination::kEmpty, response);
 
     // This vector holds the packets to be delivered.
     std::vector<const char*> packets_vector(scenario.packets);
@@ -2137,7 +2136,6 @@ TEST_P(ResponseAnalyzerTest, ResponseBlocking) {
   const TestScenario scenario = GetParam();
   SCOPED_TRACE(testing::Message()
                << "\nScenario at " << __FILE__ << ":" << scenario.source_line);
-  base::HistogramTester histograms;
   // Initialize |response| from the parameters.
   //
   // TODO(krstnmnlsn): The response is constructed outside of
@@ -2152,201 +2150,6 @@ TEST_P(ResponseAnalyzerTest, ResponseBlocking) {
   // Run the analyzer and confirm it allows/blocks correctly.
   RunAnalyzerOnScenario(scenario, *response,
                         std::make_unique<CorbResponseAnalyzer>());
-
-  // Verify that histograms are correctly incremented.
-  base::HistogramTester::CountsMap expected_counts;
-  std::string histogram_base = "SiteIsolation.XSD.Browser";
-  switch (scenario.canonical_mime_type) {
-    case MimeType::kHtml:
-    case MimeType::kXml:
-    case MimeType::kJson:
-    case MimeType::kPlain:
-    case MimeType::kOthers:
-      break;
-    case MimeType::kNeverSniffed:
-      DCHECK_EQ(Verdict::kBlock, scenario.verdict);
-      DCHECK_EQ(kVerdictPacketForHeadersBasedVerdict, scenario.verdict_packet);
-      break;
-    case MimeType::kInvalidMimeType:
-      DCHECK_EQ(Verdict::kAllow, scenario.verdict);
-      DCHECK_EQ(kVerdictPacketForHeadersBasedVerdict, scenario.verdict_packet);
-      break;
-  }
-  // We don't expect to see a start action because that is triggered in the
-  // URLLoader.
-  bool should_be_blocked = scenario.verdict == Verdict::kBlock;
-  bool expected_to_sniff =
-      scenario.verdict_packet != kVerdictPacketForHeadersBasedVerdict;
-  int end_action = -1;
-  if (should_be_blocked && expected_to_sniff) {
-    end_action = static_cast<int>(
-        CrossOriginReadBlocking::Action::kBlockedAfterSniffing);
-  } else if (should_be_blocked && !expected_to_sniff) {
-    end_action = static_cast<int>(
-        CrossOriginReadBlocking::Action::kBlockedWithoutSniffing);
-  } else if (!should_be_blocked && expected_to_sniff) {
-    end_action = static_cast<int>(
-        CrossOriginReadBlocking::Action::kAllowedAfterSniffing);
-  } else if (!should_be_blocked && !expected_to_sniff) {
-    end_action = static_cast<int>(
-        CrossOriginReadBlocking::Action::kAllowedWithoutSniffing);
-  } else {
-    NOTREACHED();
-  }
-
-  // Expecting two actions:
-  // 1. kResponseStarted
-  // 2. The action recording CORB's actual decision (`end_action`).
-  expected_counts[histogram_base + ".Action"] = 2;
-  const auto kResponseStarted = static_cast<base::HistogramBase::Sample>(
-      CrossOriginReadBlocking::Action::kResponseStarted);
-  EXPECT_THAT(histograms.GetAllSamples(histogram_base + ".Action"),
-              testing::ElementsAre(base::Bucket(kResponseStarted, 1),
-                                   base::Bucket(end_action, 1)))
-      << "Should have incremented the right actions.";
-
-  if (should_be_blocked)
-    expected_counts[histogram_base + ".Blocked.CanonicalMimeType"] = 1;
-
-  // Make sure that the expected metrics, and only those metrics, were
-  // incremented.
-  EXPECT_THAT(histograms.GetTotalCountsForPrefix("SiteIsolation.XSD.Browser"),
-              testing::ContainerEq(expected_counts));
-}
-
-// Runs a particular TestScenario (passed as the test's parameter) through the
-// ResponseAnalyzer, verifying that the expected CORB Protection UMA Histogram
-// values are reported.
-TEST_P(ResponseAnalyzerTest, CORBProtectionLogging) {
-  const TestScenario scenario = GetParam();
-  SCOPED_TRACE(testing::Message()
-               << "\nScenario at " << __FILE__ << ":" << scenario.source_line);
-  base::HistogramTester histograms;
-  // Initialize |response| from the parameters and record if it looks sensitive
-  // or supports range requests. These values are saved because the analyzer
-  // will clear the response headers in the event it decides to block.
-  auto response =
-      CreateResponse(scenario.response_content_type, scenario.response_headers,
-                     scenario.initiator_origin);
-  const bool seems_sensitive_from_cors_heuristic = CrossOriginReadBlocking::
-      CorbResponseAnalyzer::SeemsSensitiveFromCORSHeuristic(*response);
-  const bool seems_sensitive_from_cache_heuristic = CrossOriginReadBlocking::
-      CorbResponseAnalyzer::SeemsSensitiveFromCacheHeuristic(*response);
-  const bool supports_range_requests =
-      CorbResponseAnalyzer::SupportsRangeRequests(*response);
-  const bool expect_nosniff = CorbResponseAnalyzer::HasNoSniff(*response);
-
-  // Run the analyzer and confirm it allows/blocks correctly.
-  RunAnalyzerOnScenario(scenario, *response,
-                        std::make_unique<CorbResponseAnalyzer>());
-
-  base::HistogramTester::CountsMap expected_counts;
-  expected_counts["SiteIsolation.CORBProtection.SensitiveResource"] = 1;
-  if (scenario.resource_is_sensitive) {
-    // Check that we reported correctly if the server supports range
-    // requests.
-    EXPECT_THAT(histograms.GetAllSamples(
-                    "SiteIsolation.CORBProtection.SensitiveWithRangeSupport"),
-                testing::ElementsAre(base::Bucket(supports_range_requests, 1)));
-    expected_counts["SiteIsolation.CORBProtection.SensitiveWithRangeSupport"] =
-        1;
-
-    std::string mime_type_bucket;
-    switch (scenario.mime_type_bucket) {
-      case MimeTypeBucket::kProtected:
-        mime_type_bucket = ".ProtectedMimeType";
-        break;
-      case MimeTypeBucket::kPublic:
-        mime_type_bucket = ".PublicMimeType";
-        break;
-      case MimeTypeBucket::kOther:
-        mime_type_bucket = ".OtherMimeType";
-        break;
-    }
-    std::string blocked_with_range_support;
-    switch (scenario.protection_decision) {
-      case CrossOriginProtectionDecision::kBlock:
-        blocked_with_range_support = ".BlockedWithRangeSupport";
-        break;
-      case CrossOriginProtectionDecision::kBlockedAfterSniffing:
-        blocked_with_range_support = ".BlockedAfterSniffingWithRangeSupport";
-        break;
-      default:
-        blocked_with_range_support = "This value should not be used.";
-    }
-    bool expect_range_support_histograms =
-        scenario.mime_type_bucket == MimeTypeBucket::kProtected &&
-        (scenario.protection_decision ==
-             CrossOriginProtectionDecision::kBlock ||
-         scenario.protection_decision ==
-             CrossOriginProtectionDecision::kBlockedAfterSniffing);
-    // In this scenario the file seemed sensitive so we expect a report. Note
-    // there may be two reports if the resource satisfied both the CORS
-    // heuristic and the Cache heuristic.
-    std::string cors_base = "SiteIsolation.CORBProtection.CORSHeuristic";
-    std::string cache_base = "SiteIsolation.CORBProtection.CacheHeuristic";
-    std::string cors_protected = cors_base + ".ProtectedMimeType";
-    std::string cache_protected = cache_base + ".ProtectedMimeType";
-    std::string blocked_nosniff = ".BlockedWithoutSniffing.HasNoSniff";
-    if (seems_sensitive_from_cors_heuristic) {
-      expected_counts[cors_base + mime_type_bucket] = 1;
-      EXPECT_THAT(histograms.GetAllSamples(cors_base + mime_type_bucket),
-                  testing::ElementsAre(base::Bucket(
-                      static_cast<int>(scenario.protection_decision), 1)))
-          << "CORB should have reported the right protection decision.";
-      if (expect_range_support_histograms) {
-        EXPECT_THAT(
-            histograms.GetAllSamples(cors_protected +
-                                     blocked_with_range_support),
-            testing::ElementsAre(base::Bucket(supports_range_requests, 1)));
-        expected_counts[cors_protected + blocked_with_range_support] = 1;
-      }
-      if (scenario.mime_type_bucket == MimeTypeBucket::kProtected &&
-          scenario.protection_decision ==
-              CrossOriginProtectionDecision::kBlock) {
-        EXPECT_THAT(histograms.GetAllSamples(cors_protected + blocked_nosniff),
-                    testing::ElementsAre(base::Bucket(expect_nosniff, 1)));
-        expected_counts[cors_protected + blocked_nosniff] = 1;
-      }
-    }
-    if (seems_sensitive_from_cache_heuristic) {
-      expected_counts[cache_base + mime_type_bucket] = 1;
-      EXPECT_THAT(histograms.GetAllSamples(cache_base + mime_type_bucket),
-                  testing::ElementsAre(base::Bucket(
-                      static_cast<int>(scenario.protection_decision), 1)))
-          << "CORB should have reported the right protection decision.";
-      if (expect_range_support_histograms) {
-        EXPECT_THAT(
-            histograms.GetAllSamples(cache_protected +
-                                     blocked_with_range_support),
-            testing::ElementsAre(base::Bucket(supports_range_requests, 1)));
-        expected_counts[cache_protected + blocked_with_range_support] = 1;
-      }
-      if (scenario.mime_type_bucket == MimeTypeBucket::kProtected &&
-          scenario.protection_decision ==
-              CrossOriginProtectionDecision::kBlock) {
-        EXPECT_THAT(histograms.GetAllSamples(cache_protected + blocked_nosniff),
-                    testing::ElementsAre(base::Bucket(expect_nosniff, 1)));
-        expected_counts[cache_protected + blocked_nosniff] = 1;
-      }
-    }
-
-    EXPECT_THAT(
-        histograms.GetTotalCountsForPrefix("SiteIsolation.CORBProtection"),
-        testing::ContainerEq(expected_counts));
-    EXPECT_THAT(histograms.GetAllSamples(
-                    "SiteIsolation.CORBProtection.SensitiveResource"),
-                testing::ElementsAre(base::Bucket(true, 1)));
-  } else {
-    // In this scenario the file should not have appeared sensitive, so only the
-    // SensitiveResource boolean should have been reported (as false).
-    EXPECT_THAT(
-        histograms.GetTotalCountsForPrefix("SiteIsolation.CORBProtection"),
-        testing::ContainerEq(expected_counts));
-    EXPECT_THAT(histograms.GetAllSamples(
-                    "SiteIsolation.CORBProtection.SensitiveResource"),
-                testing::ElementsAre(base::Bucket(false, 1)));
-  }
 }
 
 TEST_P(ResponseAnalyzerTest, OpaqueResponseBlocking) {
@@ -2357,7 +2160,7 @@ TEST_P(ResponseAnalyzerTest, OpaqueResponseBlocking) {
   // Unlike CORB, ORB blocks all 206 responses, unless there was an earlier
   // request to the same URL and that earlier request was classified (based on
   // the MIME type or sniffing) as an audio-or-video response.
-  base::StringPiece description = scenario.description;
+  std::string_view description = scenario.description;
   if (description == "Blocked-by-ORB: text/plain 206 media" ||
       description == "Blocked-by-ORB: Javascript 206" ||
       description == "Blocked-by-ORB: application/octet-stream 206 (middle)") {
@@ -2470,13 +2273,14 @@ TEST(CrossOriginReadBlockingTest, SniffForHTML) {
   EXPECT_EQ(SniffingResult::kYes, CORB::SniffForHTML("<!-- --> \x80 \n<b"));
 
   // Commented out html tag followed by non-html (" x").
-  StringPiece commented_out_html_tag_data("<!-- <html> <?xml> \n<html>-->\nx");
+  std::string_view commented_out_html_tag_data(
+      "<!-- <html> <?xml> \n<html>-->\nx");
   EXPECT_EQ(SniffingResult::kNo,
             CORB::SniffForHTML(commented_out_html_tag_data));
 
   // Prefixes of |commented_out_html_tag_data| should be indeterminate.
   // This covers testing "<!-" as well as "<!-- not terminated yet...".
-  StringPiece almost_html = commented_out_html_tag_data;
+  std::string_view almost_html = commented_out_html_tag_data;
   while (!almost_html.empty()) {
     almost_html.remove_suffix(1);
     EXPECT_EQ(SniffingResult::kMaybe, CORB::SniffForHTML(almost_html))
@@ -2493,9 +2297,10 @@ TEST(CrossOriginReadBlockingTest, SniffForHTML) {
 }
 
 TEST(CrossOriginReadBlockingTest, SniffForXML) {
-  StringPiece xml_data("   \t \r \n     <?xml version=\"1.0\"?>\n <catalog");
-  StringPiece non_xml_data("        var name=window.location;\nadfadf");
-  StringPiece empty_data("");
+  std::string_view xml_data(
+      "   \t \r \n     <?xml version=\"1.0\"?>\n <catalog");
+  std::string_view non_xml_data("        var name=window.location;\nadfadf");
+  std::string_view empty_data("");
 
   EXPECT_EQ(SniffingResult::kYes,
             CrossOriginReadBlocking::SniffForXML(xml_data));
@@ -2508,12 +2313,12 @@ TEST(CrossOriginReadBlockingTest, SniffForXML) {
 }
 
 TEST(CrossOriginReadBlockingTest, SniffForJSON) {
-  StringPiece json_data("\t\t\r\n   { \"name\" : \"chrome\", ");
-  StringPiece json_corrupt_after_first_key(
+  std::string_view json_data("\t\t\r\n   { \"name\" : \"chrome\", ");
+  std::string_view json_corrupt_after_first_key(
       "\t\t\r\n   { \"name\" :^^^^!!@#\1\", ");
-  StringPiece json_data2("{ \"key   \\\"  \"          \t\t\r\n:");
-  StringPiece non_json_data0("\t\t\r\n   { name : \"chrome\", ");
-  StringPiece non_json_data1("\t\t\r\n   foo({ \"name\" : \"chrome\", ");
+  std::string_view json_data2("{ \"key   \\\"  \"          \t\t\r\n:");
+  std::string_view non_json_data0("\t\t\r\n   { name : \"chrome\", ");
+  std::string_view non_json_data1("\t\t\r\n   foo({ \"name\" : \"chrome\", ");
 
   EXPECT_EQ(SniffingResult::kYes,
             CrossOriginReadBlocking::SniffForJSON(json_data));
@@ -2524,7 +2329,7 @@ TEST(CrossOriginReadBlockingTest, SniffForJSON) {
             CrossOriginReadBlocking::SniffForJSON(json_data2));
 
   // All prefixes prefixes of |json_data2| ought to be indeterminate.
-  StringPiece almost_json = json_data2;
+  std::string_view almost_json = json_data2;
   while (!almost_json.empty()) {
     almost_json.remove_suffix(1);
     EXPECT_EQ(SniffingResult::kMaybe,

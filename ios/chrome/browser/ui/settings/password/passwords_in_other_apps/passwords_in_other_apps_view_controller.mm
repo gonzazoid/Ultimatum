@@ -5,30 +5,27 @@
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_view_controller.h"
 
 #import "base/ios/ios_util.h"
-#import "components/password_manager/core/common/password_manager_features.h"
-#import "ios/chrome/browser/ui/elements/instruction_view.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/elements/instruction_view.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/constants.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_view_controller_delegate.h"
 #import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
 #import "ios/chrome/browser/ui/settings/utils/password_auto_fill_status_manager.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/elements/highlight_button.h"
 #import "ios/chrome/common/ui/util/button_util.h"
 #import "ios/chrome/common/ui/util/image_util.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
+#import "ios/chrome/common/ui/util/sdk_forward_declares.h"
 #import "ios/chrome/common/ui/util/text_view_util.h"
-#import "ios/chrome/grit/ios_google_chrome_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/password_auto_fill/password_auto_fill_api.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 CGFloat const kCaptionTextViewOffset = 16;
@@ -40,11 +37,6 @@ CGFloat const kContentWidthMultiplier = 0.65;
 CGFloat const kBottomMargin = 10;
 CGFloat const kButtonHorizontalMargin = 4;
 CGFloat const kContentOptimalWidth = 327;
-
-BOOL IsPasswordManagerBrandingUpdateEnabled() {
-  return base::FeatureList::IsEnabled(
-      password_manager::features::kIOSEnablePasswordManagerBrandingUpdate);
-}
 }  // namespace
 
 @interface PasswordsInOtherAppsViewController ()
@@ -100,23 +92,18 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
     _titleText =
         l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS);
     _actionString = l10n_util::GetNSString(IDS_IOS_OPEN_SETTINGS);
-    if (IsPasswordManagerBrandingUpdateEnabled()) {
-      UIUserInterfaceIdiom idiom =
-          [[UIDevice currentDevice] userInterfaceIdiom];
-      if (idiom == UIUserInterfaceIdiomPad) {
-        _subtitleText = l10n_util::GetNSString(
-            IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPAD);
-      } else {
-        _subtitleText = l10n_util::GetNSString(
-            IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPHONE);
-      }
 
-      _bannerName = @"settings_passwords_in_other_apps_banner";
+    UIUserInterfaceIdiom idiom = [[UIDevice currentDevice] userInterfaceIdiom];
+    if (idiom == UIUserInterfaceIdiomPad) {
+      _subtitleText = l10n_util::GetNSString(
+          IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPAD);
     } else {
       _subtitleText = l10n_util::GetNSString(
-          IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE);
-      _bannerName = @"legacy_settings_passwords_in_other_apps_banner";
+          IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPHONE);
     }
+
+    _bannerName = @"settings_passwords_in_other_apps_banner";
+
     self.bannerStyle = UIUserInterfaceStyleUnspecified;
   }
   return self;
@@ -276,16 +263,6 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
                              forBarMetrics:UIBarMetricsDefault];
     self.navigationBar.shadowImage = nil;
     self.navigationBar.translucent = NO;
-
-    // Revert navigation bar style for iOS 14 and under to workaround bug that
-    // navigation bar height not adjusting consistently across subviews. Should
-    // be removed once iOS 14 is deprecated.
-    if (!base::ios::IsRunningOnIOS15OrLater()) {
-      self.navigationBar.standardAppearance = self.defaultAppearance;
-      self.navigationBar.compactAppearance = self.defaultAppearance;
-      self.navigationBar.scrollEdgeAppearance = self.defaultAppearance;
-    }
-
     self.navigationBar = nil;
   }
 }
@@ -301,20 +278,6 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
     self.navigationItem.rightBarButtonItem = doneButton;
 
     self.navigationBar = self.navigationController.navigationBar;
-
-    // Set navigation bar to transparent for iOS 14 and under to workaround bug
-    // that navigation bar height not adjusting consistently across subviews.
-    // Should be removed once iOS 14 is deprecated.
-    if (!base::ios::IsRunningOnIOS15OrLater()) {
-      UINavigationBarAppearance* transparentAppearance =
-          [[UINavigationBarAppearance alloc] init];
-      [transparentAppearance configureWithTransparentBackground];
-      self.defaultAppearance = self.navigationBar.standardAppearance;
-      self.navigationBar.standardAppearance = transparentAppearance;
-      self.navigationBar.compactAppearance = transparentAppearance;
-      self.navigationBar.scrollEdgeAppearance = transparentAppearance;
-    }
-
     [self.navigationBar setBackgroundImage:[[UIImage alloc] init]
                              forBarMetrics:UIBarMetricsDefault];
     self.navigationBar.shadowImage = [[UIImage alloc] init];
@@ -444,29 +407,32 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
 - (UIButton*)actionButton {
   if (!_actionButton) {
     _actionButton = [[HighlightButton alloc] initWithFrame:CGRectZero];
-    _actionButton.contentEdgeInsets =
-        UIEdgeInsetsMake(kButtonVerticalInsets, 0, kButtonVerticalInsets, 0);
-    [_actionButton
-        setBackgroundColor:[UIColor
-                               colorNamed:kGroupedSecondaryBackgroundColor]];
-    UIColor* titleColor = [UIColor colorNamed:kBlueColor];
-    [_actionButton setTitleColor:titleColor forState:UIControlStateNormal];
-    _actionButton.titleLabel.font =
-        [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+
+    UIButtonConfiguration* buttonConfiguration =
+        [UIButtonConfiguration plainButtonConfiguration];
+    buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(
+        kButtonVerticalInsets, kButtonHorizontalMargin, kButtonVerticalInsets,
+        kButtonHorizontalMargin);
+    buttonConfiguration.background.backgroundColor =
+        [UIColor colorNamed:kGroupedSecondaryBackgroundColor];
+    buttonConfiguration.baseForegroundColor = [UIColor colorNamed:kBlueColor];
+
+    UIFont* font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    NSAttributedString* attributedTitle = [[NSAttributedString alloc]
+        initWithString:self.actionString
+            attributes:@{NSFontAttributeName : font}];
+    buttonConfiguration.attributedTitle = attributedTitle;
+    buttonConfiguration.titleLineBreakMode = NSLineBreakByTruncatingTail;
+    _actionButton.configuration = buttonConfiguration;
+
     _actionButton.layer.cornerRadius = kPrimaryButtonCornerRadius;
     _actionButton.translatesAutoresizingMaskIntoConstraints = NO;
-
     _actionButton.pointerInteractionEnabled = YES;
     _actionButton.pointerStyleProvider =
         CreateOpaqueButtonPointerStyleProvider();
-
-    [_actionButton setTitle:self.actionString forState:UIControlStateNormal];
-    _actionButton.titleLabel.adjustsFontForContentSizeCategory = YES;
     _actionButton.accessibilityIdentifier =
         kPasswordsInOtherAppsActionAccessibilityIdentifier;
-    _actionButton.titleEdgeInsets = UIEdgeInsetsMake(
-        0, kButtonHorizontalMargin, 0, kButtonHorizontalMargin);
-    _actionButton.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+
     [_actionButton addTarget:self
                       action:@selector(didTapActionButton)
             forControlEvents:UIControlEventTouchUpInside];
@@ -648,10 +614,16 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
 }
 
 - (NSArray<NSString*>*)steps {
+  BOOL isIOS16AndAbove = NO;
+  if (@available(iOS 16, *)) {
+    isIOS16AndAbove = YES;
+  }
   if (self.useShortInstruction) {
     return @[
       l10n_util::GetNSString(
-          IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_1),
+          isIOS16AndAbove
+              ? IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_1_IOS16
+              : IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_1),
       l10n_util::GetNSString(
           IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_2)
     ];
@@ -663,7 +635,9 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
         : l10n_util::GetNSString(
               IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_1_IPHONE),
     l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_2),
-    l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3),
+    l10n_util::GetNSString(
+        isIOS16AndAbove ? IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3_IOS16
+                        : IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3),
     l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_4)
   ];
 }
@@ -689,8 +663,14 @@ BOOL IsPasswordManagerBrandingUpdateEnabled() {
 
 // Returns caption text that shows below the subtitle in turnOffInstructions.
 - (UITextView*)drawCaptionTextView {
-  NSString* text =
-      l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_CAPTION);
+  NSString* text;
+  if (@available(iOS 16, *)) {
+    text = l10n_util::GetNSString(
+        IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_CAPTION_IOS16);
+  } else {
+    text = l10n_util::GetNSString(
+        IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_CAPTION);
+  }
   NSDictionary* textAttributes = @{
     NSForegroundColorAttributeName : [UIColor colorNamed:kGrey600Color],
     NSFontAttributeName :

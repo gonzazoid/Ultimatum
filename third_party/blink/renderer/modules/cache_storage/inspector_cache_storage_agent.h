@@ -7,11 +7,15 @@
 
 #include <memory>
 
+#include "base/types/expected.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-blink.h"
 #include "third_party/blink/renderer/core/inspector/inspector_base_agent.h"
 #include "third_party/blink/renderer/core/inspector/protocol/cache_storage.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -21,7 +25,9 @@ class InspectedFrames;
 class MODULES_EXPORT InspectorCacheStorageAgent final
     : public InspectorBaseAgent<protocol::CacheStorage::Metainfo> {
  public:
-  using CachesMap = HashMap<String, mojo::Remote<mojom::blink::CacheStorage>>;
+  using CachesMap = HeapHashMap<
+      String,
+      Member<DisallowNewWrapper<HeapMojoRemote<mojom::blink::CacheStorage>>>>;
 
   explicit InspectorCacheStorageAgent(InspectedFrames*);
 
@@ -32,8 +38,11 @@ class MODULES_EXPORT InspectorCacheStorageAgent final
   ~InspectorCacheStorageAgent() override;
   void Trace(Visitor*) const override;
 
-  void requestCacheNames(const String& security_origin,
-                         std::unique_ptr<RequestCacheNamesCallback>) override;
+  void requestCacheNames(
+      protocol::Maybe<String> maybe_security_origin,
+      protocol::Maybe<String> maybe_storage_key,
+      protocol::Maybe<protocol::Storage::StorageBucket> maybe_storage_bucket,
+      std::unique_ptr<RequestCacheNamesCallback>) override;
   void requestEntries(const String& cache_id,
                       protocol::Maybe<int> skip_count,
                       protocol::Maybe<int> page_size,
@@ -52,8 +61,17 @@ class MODULES_EXPORT InspectorCacheStorageAgent final
       std::unique_ptr<RequestCachedResponseCallback>) override;
 
  private:
+  base::expected<mojom::blink::CacheStorage*, protocol::Response>
+  GetCacheStorageRemote(
+      const String& storage_key,
+      const absl::optional<String>& storage_bucket_name,
+      base::OnceCallback<void(protocol::Response)> on_failure_callback);
+  base::expected<mojom::blink::CacheStorage*, protocol::Response>
+  GetCacheStorageRemoteForId(
+      const String& cache_id,
+      String& cache_name,
+      base::OnceCallback<void(protocol::Response)> on_failure_callback);
   Member<InspectedFrames> frames_;
-
   CachesMap caches_;
 };
 

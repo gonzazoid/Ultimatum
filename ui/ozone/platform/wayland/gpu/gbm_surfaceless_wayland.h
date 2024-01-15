@@ -8,14 +8,21 @@
 #include <memory>
 #include <vector>
 
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/gl/gl_surface_egl.h"
+#include "ui/gl/presenter.h"
 #include "ui/ozone/platform/wayland/common/wayland_overlay_config.h"
 #include "ui/ozone/platform/wayland/gpu/wayland_surface_gpu.h"
 #include "ui/ozone/public/swap_completion_callback.h"
+
+namespace gl {
+class GLDisplayEGL;
+}
 
 namespace ui {
 
@@ -27,8 +34,7 @@ using BufferId = uint32_t;
 // and displaying happens directly through NativePixmap buffers. CC would call
 // into SurfaceFactoryOzone to allocate the buffers and then call
 // ScheduleOverlayPlane(..) to schedule the buffer for presentation.
-class GbmSurfacelessWayland : public gl::SurfacelessEGL,
-                              public WaylandSurfaceGpu {
+class GbmSurfacelessWayland : public gl::Presenter, public WaylandSurfaceGpu {
  public:
   GbmSurfacelessWayland(gl::GLDisplayEGL* display,
                         WaylandBufferManagerGpu* buffer_manager,
@@ -41,41 +47,22 @@ class GbmSurfacelessWayland : public gl::SurfacelessEGL,
 
   void QueueWaylandOverlayConfig(wl::WaylandOverlayConfig config);
 
-  // gl::GLSurface:
+  // gl::Presenter:
   bool ScheduleOverlayPlane(
       gl::OverlayImage image,
       std::unique_ptr<gfx::GpuFence> gpu_fence,
       const gfx::OverlayPlaneData& overlay_plane_data) override;
-  bool IsOffscreen() override;
-  bool SupportsAsyncSwap() override;
-  bool SupportsPostSubBuffer() override;
-  gfx::SwapResult PostSubBuffer(int x,
-                                int y,
-                                int width,
-                                int height,
-                                PresentationCallback callback,
-                                gl::FrameData data) override;
-  void SwapBuffersAsync(SwapCompletionCallback completion_callback,
-                        PresentationCallback presentation_callback,
-                        gl::FrameData data) override;
-  void PostSubBufferAsync(int x,
-                          int y,
-                          int width,
-                          int height,
-                          SwapCompletionCallback completion_callback,
-                          PresentationCallback presentation_callback,
-                          gl::FrameData data) override;
-  EGLConfig GetConfig() override;
+  void Present(SwapCompletionCallback completion_callback,
+               PresentationCallback presentation_callback,
+               gfx::FrameData data) override;
   void SetRelyOnImplicitSync() override;
   bool SupportsPlaneGpuFences() const override;
   bool SupportsOverridePlatformSize() const override;
   bool SupportsViewporter() const override;
-  gfx::SurfaceOrigin GetOrigin() const override;
   bool Resize(const gfx::Size& size,
               float scale_factor,
               const gfx::ColorSpace& color_space,
               bool has_alpha) override;
-  void SetForceGlFlushOnSwapBuffers() override;
 
   BufferId GetOrCreateSolidColorBuffer(SkColor4f color, const gfx::Size& size);
 
@@ -134,6 +121,8 @@ class GbmSurfacelessWayland : public gl::SurfacelessEGL,
   void OnPresentation(uint32_t frame_id,
                       const gfx::PresentationFeedback& feedback) override;
 
+  EGLDisplay GetEGLDisplay();
+
   // PendingFrame here is a post-SkiaRenderer struct that contains overlays +
   // primary plane informations. It is a "compositor frame" on AcceleratedWidget
   // level. This information gets into browser process and overlays are
@@ -150,7 +139,7 @@ class GbmSurfacelessWayland : public gl::SurfacelessEGL,
 
     SwapCompletionCallback completion_callback;
     PresentationCallback presentation_callback;
-    gl::FrameData data;
+    gfx::FrameData data;
 
     // Says if scheduling succeeded.
     bool schedule_planes_succeeded = true;
@@ -188,13 +177,14 @@ class GbmSurfacelessWayland : public gl::SurfacelessEGL,
   bool use_egl_fence_sync_ = true;
 
   bool no_gl_flush_for_tests_ = false;
-  bool requires_gl_flush_on_swap_buffers_ = false;
 
   // Scale factor of the current surface.
   float surface_scale_factor_ = 1.f;
 
   // Holds gpu side reference (buffer_ids) for solid color wl_buffers.
   std::unique_ptr<SolidColorBufferHolder> solid_color_buffers_holder_;
+
+  const raw_ptr<gl::GLDisplayEGL> display_;
 
   base::WeakPtrFactory<GbmSurfacelessWayland> weak_factory_;
 };

@@ -13,7 +13,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "media/audio/audio_features.h"
@@ -70,7 +69,7 @@ class MainThread final : public media::AudioThread {
 };
 
 MainThread::MainThread()
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       worker_thread_("AudioWorkerThread", kReatimeThreadPeriod),
       hang_monitor_(media::AudioThreadHangMonitor::Create(
           GetAudioThreadHangAction(),
@@ -107,7 +106,6 @@ base::SingleThreadTaskRunner* MainThread::GetWorkerTaskRunner() {
       (worker_task_runner_ && worker_task_runner_->BelongsToCurrentThread()));
   if (!worker_task_runner_) {
     base::Thread::Options options;
-    options.timer_slack = base::TIMER_SLACK_NONE;
     options.thread_type = base::ThreadType::kRealtimeAudio;
     CHECK(worker_thread_.StartWithOptions(std::move(options)));
     worker_task_runner_ = worker_thread_.task_runner();

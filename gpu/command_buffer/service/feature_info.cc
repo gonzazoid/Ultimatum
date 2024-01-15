@@ -20,6 +20,7 @@
 #include "build/chromecast_buildflags.h"
 #include "build/chromeos_buildflags.h"
 #include "gpu/command_buffer/service/gpu_switches.h"
+#include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_switches.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_fence.h"
@@ -193,20 +194,24 @@ FeatureInfo::FeatureInfo(
           .status_values[GPU_FEATURE_TYPE_ANDROID_SURFACE_CONTROL] ==
       gpu::kGpuFeatureStatusEnabled;
 
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_CAST_ANDROID)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_CAST_ANDROID) || \
+    BUILDFLAG(IS_FUCHSIA)
   feature_flags_.chromium_image_ycbcr_420v = base::Contains(
       gpu_feature_info.supported_buffer_formats_for_allocation_and_texturing,
       gfx::BufferFormat::YUV_420_BIPLANAR);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   feature_flags_.chromium_image_ycbcr_420v = true;
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
   feature_flags_.chromium_image_ycbcr_p010 = base::Contains(
       gpu_feature_info.supported_buffer_formats_for_allocation_and_texturing,
       gfx::BufferFormat::P010);
 #elif BUILDFLAG(IS_MAC)
-  feature_flags_.chromium_image_ycbcr_p010 = base::mac::IsAtLeastOS11();
+  feature_flags_.chromium_image_ycbcr_p010 =
+      base::mac::MacOSMajorVersion() >= 11;
+#elif BUILDFLAG(IS_IOS)
+  feature_flags_.chromium_image_ycbcr_p010 = true;
 #endif
 }
 
@@ -277,6 +282,14 @@ bool IsGL_REDSupportedOnFBOs() {
   // really needed to workaround a Mesa issue. See https://crbug.com/1158744.
   return true;
 #else
+
+#if BUILDFLAG(IS_ANDROID)
+  if (base::FeatureList::IsEnabled(
+          features::kCmdDecoderSkipGLRedMesaWorkaroundOnAndroid)) {
+    return true;
+  }
+#endif
+
   DCHECK(glGetError() == GL_NO_ERROR);
   // Skia uses GL_RED with frame buffers, unfortunately, Mesa claims to support
   // GL_EXT_texture_rg, but it doesn't support it on frame buffers.  To fix
@@ -289,9 +302,15 @@ bool IsGL_REDSupportedOnFBOs() {
   GLuint textureId = 0;
   glGenTextures(1, &textureId);
   glBindTexture(GL_TEXTURE_2D, textureId);
-  GLubyte data[1] = {0};
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED_EXT, 1, 1, 0, GL_RED_EXT,
-               GL_UNSIGNED_BYTE, data);
+  // Attach an 8x8 texture to the framebuffer to try to work around
+  // crashes in MediaTek and PowerVR drivers on Android, presumably
+  // because of implicit minimum framebuffer sizes. crbug.com/1406096
+  //
+  // Also, don't pass data in, to avoid having to set/reset
+  // GL_UNPACK_ALIGNMENT and other state. The contents of the
+  // framebuffer are unimportant for the completeness check.
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED_EXT, 8, 8, 0, GL_RED_EXT,
+               GL_UNSIGNED_BYTE, nullptr);
   GLuint textureFBOID = 0;
   glGenFramebuffersEXT(1, &textureFBOID);
   glBindFramebufferEXT(GL_FRAMEBUFFER, textureFBOID);
@@ -309,12 +328,6 @@ bool IsGL_REDSupportedOnFBOs() {
 
   return result;
 #endif  // BUILDFLAG(IS_MAC)
-}
-
-void FeatureInfo::EnableTextureStorageImage() {
-  if (!feature_flags_.texture_storage_image) {
-    feature_flags_.texture_storage_image = true;
-  }
 }
 
 void FeatureInfo::EnableEXTFloatBlend() {
@@ -433,7 +446,7 @@ void FeatureInfo::EnableOESTextureHalfFloatLinear() {
   // IOSurfaces.
   if (workarounds_.disable_half_float_for_gmb)
     return;
-  feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::RGBA_F16);
+  feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::RGBA_F16);
 }
 
 void FeatureInfo::EnableANGLEInstancedArrayIfPossible(
@@ -499,7 +512,6 @@ void FeatureInfo::InitializeFeatures() {
   AddExtensionString("GL_CHROMIUM_async_pixel_transfers");
   AddExtensionString("GL_CHROMIUM_bind_uniform_location");
   AddExtensionString("GL_CHROMIUM_command_buffer_query");
-  AddExtensionString("GL_CHROMIUM_command_buffer_latency_query");
   AddExtensionString("GL_CHROMIUM_copy_texture");
   AddExtensionString("GL_CHROMIUM_deschedule");
   AddExtensionString("GL_CHROMIUM_get_error_query");
@@ -792,8 +804,7 @@ void FeatureInfo::InitializeFeatures() {
   }
 
   if (gl_version_info_->is_es3 ||
-      gfx::HasExtension(extensions, "GL_OES_element_index_uint") ||
-      gl::HasDesktopGLFeatures()) {
+      gfx::HasExtension(extensions, "GL_OES_element_index_uint")) {
     AddExtensionString("GL_OES_element_index_uint");
     validators_.index_type.AddValue(GL_UNSIGNED_INT);
   }
@@ -984,8 +995,8 @@ void FeatureInfo::InitializeFeatures() {
         GL_BGRA8_EXT);
     validators_.texture_sized_texture_filterable_internal_format.AddValue(
         GL_BGRA8_EXT);
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::BGRA_8888);
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::BGRX_8888);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::BGRA_8888);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::BGRX_8888);
   }
 
 #if BUILDFLAG(IS_MAC)
@@ -1008,7 +1019,12 @@ void FeatureInfo::InitializeFeatures() {
   // For ES, there is no extension that exposes BGRA renderbuffers, however
   // Angle does support these.
   bool enable_render_buffer_bgra =
+#if BUILDFLAG(IS_IOS)
+      // BGRA is not supported on iOS with ANGLE + GL.
+      gl_version_info_->is_angle_metal || !gl_version_info_->is_es;
+#else
       gl_version_info_->is_angle || !gl_version_info_->is_es;
+#endif  // BUILDFLAG(IS_IOS)
 
   if (enable_render_buffer_bgra) {
     feature_flags_.ext_render_buffer_format_bgra8888 = true;
@@ -1049,8 +1065,7 @@ void FeatureInfo::InitializeFeatures() {
     AddExtensionString("GL_EXT_disjoint_timer_query");
   }
 
-  if (gfx::HasExtension(extensions, "GL_OES_rgb8_rgba8") ||
-      gl::HasDesktopGLFeatures()) {
+  if (gfx::HasExtension(extensions, "GL_OES_rgb8_rgba8")) {
     AddExtensionString("GL_OES_rgb8_rgba8");
     validators_.render_buffer_format.AddValue(GL_RGB8_OES);
     validators_.render_buffer_format.AddValue(GL_RGBA8_OES);
@@ -1113,26 +1128,18 @@ void FeatureInfo::InitializeFeatures() {
   }
 
   if (gfx::HasExtension(extensions, "GL_OES_depth24") ||
-      gl::HasDesktopGLFeatures() || gl_version_info_->is_es3) {
+      gl_version_info_->is_es3) {
     AddExtensionString("GL_OES_depth24");
     feature_flags_.oes_depth24 = true;
     validators_.render_buffer_format.AddValue(GL_DEPTH_COMPONENT24);
   }
 
   if (gl_version_info_->is_es3 ||
-      gfx::HasExtension(extensions, "GL_OES_standard_derivatives") ||
-      gl::HasDesktopGLFeatures()) {
+      gfx::HasExtension(extensions, "GL_OES_standard_derivatives")) {
     AddExtensionString("GL_OES_standard_derivatives");
     feature_flags_.oes_standard_derivatives = true;
     validators_.hint_target.AddValue(GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES);
     validators_.g_l_state.AddValue(GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES);
-  }
-
-  if (gfx::HasExtension(extensions, "GL_CHROMIUM_texture_filtering_hint")) {
-    AddExtensionString("GL_CHROMIUM_texture_filtering_hint");
-    feature_flags_.chromium_texture_filtering_hint = true;
-    validators_.hint_target.AddValue(GL_TEXTURE_FILTERING_HINT_CHROMIUM);
-    validators_.g_l_state.AddValue(GL_TEXTURE_FILTERING_HINT_CHROMIUM);
   }
 
   if (gfx::HasExtension(extensions, "GL_OES_EGL_image_external")) {
@@ -1170,6 +1177,7 @@ void FeatureInfo::InitializeFeatures() {
   // GL_ETC1_RGB8 format.
   if (gfx::HasExtension(extensions, "GL_OES_compressed_ETC1_RGB8_texture")) {
     AddExtensionString("GL_OES_compressed_ETC1_RGB8_texture");
+    feature_flags_.oes_compressed_etc1_rgb8_texture = true;
     validators_.compressed_texture_format.AddValue(GL_ETC1_RGB8_OES);
     validators_.texture_internal_format_storage.AddValue(GL_ETC1_RGB8_OES);
   }
@@ -1240,13 +1248,13 @@ void FeatureInfo::InitializeFeatures() {
 
   if (feature_flags_.chromium_image_ycbcr_420v) {
     AddExtensionString("GL_CHROMIUM_ycbcr_420v_image");
-    feature_flags_.gpu_memory_buffer_formats.Add(
+    feature_flags_.gpu_memory_buffer_formats.Put(
         gfx::BufferFormat::YUV_420_BIPLANAR);
   }
 
-#if BUILDFLAG(IS_MAC)
-  // Mac can create GLImages out of AR30 IOSurfaces only after 10.13 which is
-  // required for Chromium.
+#if BUILDFLAG(IS_APPLE)
+  // Macs can create SharedImages out of AR30 IOSurfaces. iOS based devices seem
+  // to handle well also.
   feature_flags_.chromium_image_ar30 = true;
 #elif !BUILDFLAG(IS_WIN)
   // TODO(mcasas): connect in Windows, https://crbug.com/803451
@@ -1265,22 +1273,22 @@ void FeatureInfo::InitializeFeatures() {
     validators_.pixel_type.AddValue(GL_UNSIGNED_INT_2_10_10_10_REV);
   }
   if (feature_flags_.chromium_image_ar30) {
-    feature_flags_.gpu_memory_buffer_formats.Add(
+    feature_flags_.gpu_memory_buffer_formats.Put(
         gfx::BufferFormat::BGRA_1010102);
   }
   if (feature_flags_.chromium_image_ab30) {
-    feature_flags_.gpu_memory_buffer_formats.Add(
+    feature_flags_.gpu_memory_buffer_formats.Put(
         gfx::BufferFormat::RGBA_1010102);
   }
 
   if (feature_flags_.chromium_image_ycbcr_p010) {
     AddExtensionString("GL_CHROMIUM_ycbcr_p010_image");
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::P010);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::P010);
   }
 
 #if BUILDFLAG(IS_MAC)
-  if (base::mac::IsAtLeastOS11()) {
-    feature_flags_.gpu_memory_buffer_formats.Add(
+  if (base::mac::MacOSMajorVersion() >= 11) {
+    feature_flags_.gpu_memory_buffer_formats.Put(
         gfx::BufferFormat::YUVA_420_TRIPLANAR);
   }
 #endif  // BUILDFLAG(IS_MAC)
@@ -1289,6 +1297,7 @@ void FeatureInfo::InitializeFeatures() {
   //     GL_OES_depth32
 
   if (gfx::HasExtension(extensions, "GL_ANGLE_texture_usage")) {
+    feature_flags_.angle_texture_usage = true;
     AddExtensionString("GL_ANGLE_texture_usage");
     validators_.texture_parameter.AddValue(GL_TEXTURE_USAGE_ANGLE);
   }
@@ -1332,7 +1341,6 @@ void FeatureInfo::InitializeFeatures() {
   bool is_webgl_compatibility_context =
       gfx::HasExtension(extensions, "GL_ANGLE_webgl_compatibility");
   bool have_es2_draw_buffers =
-      !workarounds_.disable_ext_draw_buffers &&
       (have_es2_draw_buffers_vendor_agnostic ||
        can_emulate_es2_draw_buffers_on_es3_nv) &&
       (context_type_ == CONTEXT_TYPE_OPENGLES2 ||
@@ -1379,8 +1387,7 @@ void FeatureInfo::InitializeFeatures() {
   }
 
   if (gl_version_info_->is_es3 ||
-      gfx::HasExtension(extensions, "GL_EXT_blend_minmax") ||
-      gl::HasDesktopGLFeatures()) {
+      gfx::HasExtension(extensions, "GL_EXT_blend_minmax")) {
     AddExtensionString("GL_EXT_blend_minmax");
     validators_.equation.AddValue(GL_MIN_EXT);
     validators_.equation.AddValue(GL_MAX_EXT);
@@ -1389,20 +1396,17 @@ void FeatureInfo::InitializeFeatures() {
   }
 
   // TODO(dshwang): GLES3 supports gl_FragDepth, not gl_FragDepthEXT.
-  if (gfx::HasExtension(extensions, "GL_EXT_frag_depth") ||
-      gl::HasDesktopGLFeatures()) {
+  if (gfx::HasExtension(extensions, "GL_EXT_frag_depth")) {
     AddExtensionString("GL_EXT_frag_depth");
     feature_flags_.ext_frag_depth = true;
   }
 
-  if (gfx::HasExtension(extensions, "GL_EXT_shader_texture_lod") ||
-      gl::HasDesktopGLFeatures()) {
+  if (gfx::HasExtension(extensions, "GL_EXT_shader_texture_lod")) {
     AddExtensionString("GL_EXT_shader_texture_lod");
     feature_flags_.ext_shader_texture_lod = true;
   }
 
   bool ui_gl_fence_works = gl::GLFence::IsSupported();
-  UMA_HISTOGRAM_BOOLEAN("GPU.FenceSupport", ui_gl_fence_works);
 
   feature_flags_.map_buffer_range =
       gl_version_info_->is_es3 || gl_version_info_->is_desktop_core_profile ||
@@ -1464,12 +1468,6 @@ void FeatureInfo::InitializeFeatures() {
     }
   }
 
-  if (gfx::HasExtension(extensions, "GL_NV_framebuffer_mixed_samples")) {
-    AddExtensionString("GL_CHROMIUM_framebuffer_mixed_samples");
-    feature_flags_.chromium_framebuffer_mixed_samples = true;
-    validators_.g_l_state.AddValue(GL_COVERAGE_MODULATION_CHROMIUM);
-  }
-
   if ((gl_version_info_->is_es3 || gl_version_info_->is_desktop_core_profile ||
        gfx::HasExtension(extensions, "GL_EXT_texture_rg") ||
        gfx::HasExtension(extensions, "GL_ARB_texture_rg")) &&
@@ -1497,16 +1495,21 @@ void FeatureInfo::InitializeFeatures() {
     validators_.texture_internal_format_storage.AddValue(GL_R8_EXT);
     validators_.texture_internal_format_storage.AddValue(GL_RG8_EXT);
 
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::R_8);
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::RG_88);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::R_8);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::RG_88);
   }
-  UMA_HISTOGRAM_BOOLEAN("GPU.TextureRG", feature_flags_.ext_texture_rg);
 
-  if (IsWebGL2OrES3OrHigherContext() &&
+  const bool is_texture_norm16_supported_for_webgl2_or_es3 =
+      IsWebGL2OrES3OrHigherContext() &&
       (gl_version_info_->is_desktop_core_profile ||
        (gl_version_info_->IsAtLeastGL(2, 1) &&
         gfx::HasExtension(extensions, "GL_ARB_texture_rg")) ||
-       gfx::HasExtension(extensions, "GL_EXT_texture_norm16"))) {
+       gfx::HasExtension(extensions, "GL_EXT_texture_norm16"));
+  const bool is_texture_norm16_supported_for_angle_es2 =
+      is_passthrough_cmd_decoder_ && context_type_ == CONTEXT_TYPE_OPENGLES2 &&
+      gfx::HasExtension(extensions, "GL_EXT_texture_norm16");
+  if (is_texture_norm16_supported_for_webgl2_or_es3 ||
+      is_texture_norm16_supported_for_angle_es2) {
     AddExtensionString("GL_EXT_texture_norm16");
     feature_flags_.ext_texture_norm16 = true;
 
@@ -1555,8 +1558,8 @@ void FeatureInfo::InitializeFeatures() {
 
     // TODO(shrekshao): gpu_memory_buffer_formats is not used by WebGL
     // So didn't expose all buffer formats here.
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::R_16);
-    feature_flags_.gpu_memory_buffer_formats.Add(gfx::BufferFormat::RG_1616);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::R_16);
+    feature_flags_.gpu_memory_buffer_formats.Put(gfx::BufferFormat::RG_1616);
   }
 
   if (enable_es3 && gfx::HasExtension(extensions, "GL_EXT_window_rectangles")) {
@@ -1572,7 +1575,7 @@ void FeatureInfo::InitializeFeatures() {
       gl_version_info_->IsAtLeastGL(3, 3) ||
       (gl_version_info_->IsAtLeastGL(3, 2) &&
        gfx::HasExtension(extensions, "GL_ARB_blend_func_extended"));
-  if (!disable_shader_translator_ && !workarounds_.get_frag_data_info_bug &&
+  if (!disable_shader_translator_ &&
       ((gl_version_info_->IsAtLeastGL(3, 2) &&
         has_opengl_dual_source_blending) ||
        (gl_version_info_->IsAtLeastGLES(3, 0) &&
@@ -1731,10 +1734,100 @@ void FeatureInfo::InitializeFeatures() {
     AddExtensionString("GL_AMD_framebuffer_multisample_advanced");
   }
 
+  if (gfx::HasExtension(extensions, "GL_ANGLE_shader_pixel_local_storage")) {
+    feature_flags_.angle_shader_pixel_local_storage = true;
+    AddExtensionString("GL_ANGLE_shader_pixel_local_storage");
+  }
+
+  if (gfx::HasExtension(extensions,
+                        "GL_ANGLE_shader_pixel_local_storage_coherent")) {
+    AddExtensionString("GL_ANGLE_shader_pixel_local_storage_coherent");
+  }
+
   if (gfx::HasExtension(extensions, "GL_ANGLE_rgbx_internal_format")) {
     feature_flags_.angle_rgbx_internal_format = true;
     AddExtensionString("GL_ANGLE_rgbx_internal_format");
     validators_.texture_internal_format_storage.AddValue(GL_RGBX8_ANGLE);
+  }
+
+  if (gfx::HasExtension(extensions, "GL_ANGLE_provoking_vertex")) {
+    feature_flags_.angle_provoking_vertex = true;
+    AddExtensionString("GL_ANGLE_provoking_vertex");
+  }
+
+  if (gfx::HasExtension(extensions, "GL_ANGLE_clip_cull_distance")) {
+    feature_flags_.angle_clip_cull_distance = true;
+    AddExtensionString("GL_ANGLE_clip_cull_distance");
+  }
+
+  if (gfx::HasExtension(extensions, "GL_ANGLE_polygon_mode")) {
+    feature_flags_.angle_polygon_mode = true;
+    AddExtensionString("GL_ANGLE_polygon_mode");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_ANGLE_stencil_texturing")) {
+    AddExtensionString("GL_ANGLE_stencil_texturing");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_blend_func_extended")) {
+    feature_flags_.ext_blend_func_extended = true;
+    AddExtensionString("GL_EXT_blend_func_extended");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_clip_control")) {
+    feature_flags_.ext_clip_control = true;
+    AddExtensionString("GL_EXT_clip_control");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_conservative_depth")) {
+    AddExtensionString("GL_EXT_conservative_depth");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_depth_clamp")) {
+    AddExtensionString("GL_EXT_depth_clamp");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_polygon_offset_clamp")) {
+    feature_flags_.ext_polygon_offset_clamp = true;
+    AddExtensionString("GL_EXT_polygon_offset_clamp");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_render_snorm")) {
+    AddExtensionString("GL_EXT_render_snorm");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_EXT_texture_mirror_clamp_to_edge")) {
+    AddExtensionString("GL_EXT_texture_mirror_clamp_to_edge");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions,
+                        "GL_NV_shader_noperspective_interpolation")) {
+    AddExtensionString("GL_NV_shader_noperspective_interpolation");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_OES_sample_variables")) {
+    AddExtensionString("GL_OES_sample_variables");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions,
+                        "GL_OES_shader_multisample_interpolation")) {
+    AddExtensionString("GL_OES_shader_multisample_interpolation");
+  }
+
+  if (is_passthrough_cmd_decoder_ &&
+      gfx::HasExtension(extensions, "GL_QCOM_render_shared_exponent")) {
+    AddExtensionString("GL_QCOM_render_shared_exponent");
   }
 }
 
@@ -1811,6 +1904,7 @@ void FeatureInfo::InitializeFloatAndHalfFloatFeatures(
   }
 
   if (enable_texture_half_float) {
+    oes_texture_float_available_ = true;
     validators_.pixel_type.AddValue(GL_HALF_FLOAT_OES);
     validators_.read_pixel_type.AddValue(GL_HALF_FLOAT_OES);
     AddExtensionString("GL_OES_texture_half_float");
@@ -1901,10 +1995,6 @@ void FeatureInfo::InitializeFloatAndHalfFloatFeatures(
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, width, width, 0, GL_RGB,
                    GL_FLOAT, nullptr);
       GLenum status_rgb = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER);
-      base::UmaHistogramBoolean("GPU.RenderableFormat.RGBA32F.FLOAT",
-                                status_rgba == GL_FRAMEBUFFER_COMPLETE);
-      base::UmaHistogramBoolean("GPU.RenderableFormat.RGB32F.FLOAT",
-                                status_rgb == GL_FRAMEBUFFER_COMPLETE);
 
       // For desktop systems, check to see if we support rendering to the full
       // range of formats supported by EXT_color_buffer_float
@@ -1916,22 +2006,12 @@ void FeatureInfo::InitializeFloatAndHalfFloatFeatures(
         const GLenum kFormats[] = {
             GL_RED, GL_RG, GL_RGBA, GL_RED, GL_RG, GL_RGB,
         };
-        const char* kInternalFormatHistogramNames[] = {
-            "GPU.RenderableFormat.R16F.FLOAT",
-            "GPU.RenderableFormat.RG16F.FLOAT",
-            "GPU.RenderableFormat.RGBA16F.FLOAT",
-            "GPU.RenderableFormat.R32F.FLOAT",
-            "GPU.RenderableFormat.RG32F.FLOAT",
-            "GPU.RenderableFormat.R11F_G11F_B10F.FLOAT",
-        };
         DCHECK_EQ(std::size(kInternalFormats), std::size(kFormats));
         for (size_t i = 0; i < std::size(kFormats); ++i) {
           glTexImage2D(GL_TEXTURE_2D, 0, kInternalFormats[i], width, width, 0,
                        kFormats[i], GL_FLOAT, nullptr);
           bool supported = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER) ==
                            GL_FRAMEBUFFER_COMPLETE;
-          base::UmaHistogramBoolean(kInternalFormatHistogramNames[i],
-                                    supported);
           full_float_support &= supported;
         }
         enable_ext_color_buffer_float = full_float_support;
@@ -1952,8 +2032,6 @@ void FeatureInfo::InitializeFloatAndHalfFloatFeatures(
                      data_type, nullptr);
         bool supported = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER) ==
                          GL_FRAMEBUFFER_COMPLETE;
-        base::UmaHistogramBoolean("GPU.RenderableFormat.RGBA16F.HALF_FLOAT",
-                                  supported);
         enable_ext_color_buffer_half_float = supported;
       }
 

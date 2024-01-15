@@ -11,7 +11,6 @@
 #include <xmmintrin.h>
 #endif
 
-#include "base/cxx17_backports.h"
 #include "base/trace_event/traced_value.h"
 #include "base/values.h"
 #include "ui/gfx/geometry/angle_conversions.h"
@@ -330,11 +329,9 @@ gfx::RectF MathUtil::ProjectClippedRect(const gfx::Transform& transform,
 gfx::QuadF MathUtil::InverseMapQuadToLocalSpace(
     const gfx::Transform& device_transform,
     const gfx::QuadF& device_quad) {
-  gfx::Transform inverse_device_transform(gfx::Transform::kSkipInitialization);
-  DCHECK(device_transform.IsInvertible());
   DCHECK(device_transform.IsFlat());
-  bool did_invert = device_transform.GetInverse(&inverse_device_transform);
-  DCHECK(did_invert);
+  gfx::Transform inverse_device_transform =
+      device_transform.GetCheckedInverse();
   bool clipped = false;
   gfx::QuadF local_quad =
       MathUtil::MapQuad(inverse_device_transform, device_quad, &clipped);
@@ -568,14 +565,14 @@ bool MathUtil::MapClippedQuad3d(const gfx::Transform& transform,
       for (int i = 0; i < *num_vertices_in_clipped_quad; ++i) {
         gfx::Point3F& point = clipped_quad[i];
         point.set_x(
-            base::clamp(point.x(), -HomogeneousCoordinate::kInfiniteCoordinate,
-                        float{HomogeneousCoordinate::kInfiniteCoordinate}));
+            std::clamp(point.x(), -HomogeneousCoordinate::kInfiniteCoordinate,
+                       float{HomogeneousCoordinate::kInfiniteCoordinate}));
         point.set_y(
-            base::clamp(point.y(), -HomogeneousCoordinate::kInfiniteCoordinate,
-                        float{HomogeneousCoordinate::kInfiniteCoordinate}));
+            std::clamp(point.y(), -HomogeneousCoordinate::kInfiniteCoordinate,
+                       float{HomogeneousCoordinate::kInfiniteCoordinate}));
         point.set_z(
-            base::clamp(point.z(), -HomogeneousCoordinate::kInfiniteCoordinate,
-                        float{HomogeneousCoordinate::kInfiniteCoordinate}));
+            std::clamp(point.z(), -HomogeneousCoordinate::kInfiniteCoordinate,
+                       float{HomogeneousCoordinate::kInfiniteCoordinate}));
       }
     }
   }
@@ -768,7 +765,7 @@ float MathUtil::SmallestAngleBetweenVectors(const gfx::Vector2dF& v1,
                                             const gfx::Vector2dF& v2) {
   double dot_product = gfx::DotProduct(v1, v2) / v1.Length() / v2.Length();
   // Clamp to compensate for rounding errors.
-  dot_product = base::clamp(dot_product, -1.0, 1.0);
+  dot_product = std::clamp(dot_product, -1.0, 1.0);
   return static_cast<float>(gfx::RadToDeg(std::acos(dot_product)));
 }
 
@@ -784,21 +781,21 @@ bool MathUtil::FromValue(const base::Value* raw_value, gfx::Rect* out_rect) {
   if (!raw_value->is_list())
     return false;
 
-  base::Value::ConstListView list_view = raw_value->GetListDeprecated();
+  const base::Value::List& list = raw_value->GetList();
 
-  if (list_view.size() != 4)
+  if (list.size() != 4)
     return false;
 
-  for (const auto& val : list_view) {
+  for (const auto& val : list) {
     if (!val.is_int()) {
       return false;
     }
   }
 
-  int x = list_view[0].GetInt();
-  int y = list_view[1].GetInt();
-  int w = list_view[2].GetInt();
-  int h = list_view[3].GetInt();
+  int x = list[0].GetInt();
+  int y = list[1].GetInt();
+  int w = list[2].GetInt();
+  int h = list[3].GetInt();
 
   *out_rect = gfx::Rect(x, y, w, h);
   return true;
@@ -986,11 +983,18 @@ float MathUtil::AsFloatSafely(float value) {
 }
 
 gfx::Vector3dF MathUtil::GetXAxis(const gfx::Transform& transform) {
+  if (transform.IsScaleOrTranslation()) {
+    return gfx::Vector3dF(transform.To2dScale().x(), 0, 0);
+  }
+
   return gfx::Vector3dF(transform.rc(0, 0), transform.rc(1, 0),
                         transform.rc(2, 0));
 }
 
 gfx::Vector3dF MathUtil::GetYAxis(const gfx::Transform& transform) {
+  if (transform.IsScaleOrTranslation()) {
+    return gfx::Vector3dF(0, transform.To2dScale().y(), 0);
+  }
   return gfx::Vector3dF(transform.rc(0, 1), transform.rc(1, 1),
                         transform.rc(2, 1));
 }

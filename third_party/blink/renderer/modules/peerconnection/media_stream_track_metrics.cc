@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/hash/md5.h"
+#include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_checker.h"
@@ -54,7 +55,7 @@ class MediaStreamTrackMetricsObserver {
   std::string track_id_;
 
   // Non-owning.
-  MediaStreamTrackMetrics* owner_;
+  raw_ptr<MediaStreamTrackMetrics, ExperimentalRenderer> owner_;
   base::ThreadChecker thread_checker_;
 };
 
@@ -134,7 +135,7 @@ void MediaStreamTrackMetrics::RemoveTrack(Direction direction,
                                           Kind kind,
                                           const std::string& track_id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  auto it = base::ranges::find_if(
+  auto* it = base::ranges::find_if(
       observers_,
       [&](const std::unique_ptr<MediaStreamTrackMetricsObserver>& observer) {
         return direction == observer->direction() && kind == observer->kind() &&

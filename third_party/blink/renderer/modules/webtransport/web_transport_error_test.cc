@@ -10,10 +10,12 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_error_init.h"
 #include "third_party/blink/renderer/modules/webtransport/web_transport_error.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 TEST(WebTransportErrorTest, DefaultConstruct) {
+  test::TaskEnvironment task_environment;
   auto* error = WebTransportError::Create(WebTransportErrorInit::Create());
 
   EXPECT_EQ(error->code(), 0);
@@ -23,15 +25,17 @@ TEST(WebTransportErrorTest, DefaultConstruct) {
 }
 
 TEST(WebTransportErrorTest, ConstructWithStreamErrorCode) {
+  test::TaskEnvironment task_environment;
   auto* init = WebTransportErrorInit::Create();
   init->setStreamErrorCode(11);
   auto* error = WebTransportError::Create(init);
 
   ASSERT_TRUE(error->streamErrorCode().has_value());
-  EXPECT_EQ(error->streamErrorCode().value(), 11);
+  EXPECT_EQ(error->streamErrorCode().value(), 11u);
 }
 
 TEST(WebTransportErrorTest, ConstructWithMessage) {
+  test::TaskEnvironment task_environment;
   auto* init = WebTransportErrorInit::Create();
   init->setMessage("wow");
   auto* error = WebTransportError::Create(init);
@@ -40,6 +44,7 @@ TEST(WebTransportErrorTest, ConstructWithMessage) {
 }
 
 TEST(WebTransportErrorTest, InternalCreate) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* isolate = scope.GetIsolate();
   auto context = scope.GetContext();
@@ -55,14 +60,14 @@ TEST(WebTransportErrorTest, InternalCreate) {
   // Explicitly convert it to a string just in case.
   v8::Local<v8::String> stack_as_v8string;
   ASSERT_TRUE(stack->ToString(context).ToLocal(&stack_as_v8string));
-  String stack_string = ToCoreString(stack_as_v8string);
+  String stack_string = ToCoreString(isolate, stack_as_v8string);
   EXPECT_TRUE(stack_string.Contains("badness"));
 
   WebTransportError* error = V8WebTransportError::ToWrappable(isolate, v8value);
   ASSERT_TRUE(error);
   EXPECT_EQ(error->code(), 0);
   ASSERT_TRUE(error->streamErrorCode().has_value());
-  EXPECT_EQ(error->streamErrorCode().value(), 27);
+  EXPECT_EQ(error->streamErrorCode().value(), 27u);
   EXPECT_EQ(error->message(), "badness");
   EXPECT_EQ(error->source(), "session");
 }

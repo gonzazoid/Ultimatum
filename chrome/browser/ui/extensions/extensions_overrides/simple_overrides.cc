@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,7 @@ namespace simple_overrides {
 bool IsSimpleOverrideExtension(const extensions::Extension& extension) {
   // Return true only if the extension has exclusively allowlisted keys in the
   // manifest.
-  for (const auto [key, value] :
-       extension.manifest()->available_values().GetDict()) {
+  for (const auto [key, value] : extension.manifest()->available_values()) {
     if (base::ranges::find(kAllowlistedManifestKeys, key) ==
         std::end(kAllowlistedManifestKeys)) {
       return false;

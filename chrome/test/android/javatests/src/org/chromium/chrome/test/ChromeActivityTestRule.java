@@ -9,8 +9,10 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.internal.runner.listener.InstrumentationResultPrinter;
+
+import androidx.test.core.app.ApplicationProvider;
+import androidx.test.internal.runner.listener.InstrumentationResultPrinter;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -30,11 +32,12 @@ import org.chromium.base.test.util.ScalableTimeout;
 import org.chromium.chrome.browser.DeferredStartupHandler;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.document.ChromeLauncherActivity;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.infobar.InfoBarContainer;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
 import org.chromium.chrome.browser.prefetch.settings.PreloadPagesSettingsBridge;
 import org.chromium.chrome.browser.prefetch.settings.PreloadPagesState;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuCoordinator;
@@ -69,18 +72,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @param <T> The {@link Activity} class under test.
  */
 public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivityTestRule<T> {
-    private static final String TAG = "ChromeATR";
-
     // The number of ms to wait for the rendering activity to be started.
     private static final int ACTIVITY_START_TIMEOUT_MS = 1000;
-
-    private static final long OMNIBOX_FIND_SUGGESTION_TIMEOUT_MS = 10 * 1000;
 
     private Thread.UncaughtExceptionHandler mDefaultUncaughtExceptionHandler;
     private String mCurrentTestName;
 
-    @Rule
-    private EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
+    @Rule private EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
 
     protected ChromeActivityTestRule(Class<T> activityClass) {
         super(activityClass);
@@ -89,47 +87,49 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     @Override
     public Statement apply(final Statement base, Description description) {
         mCurrentTestName = description.getMethodName();
-        Statement chromeActivityStatement = new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                mDefaultUncaughtExceptionHandler = Thread.getDefaultUncaughtExceptionHandler();
-                Thread.setDefaultUncaughtExceptionHandler(new ChromeUncaughtExceptionHandler());
-                ChromeApplicationTestUtils.setUp(InstrumentationRegistry.getTargetContext());
-                // Instrumentation infrastructure and tests often access variables from the
-                // instrumentation thread for asserts. See crbug.com/1173814 for more details.
-                ObservableSupplierImpl.setIgnoreThreadChecksForTesting(true);
+        Statement chromeActivityStatement =
+                new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        mDefaultUncaughtExceptionHandler =
+                                Thread.getDefaultUncaughtExceptionHandler();
+                        Thread.setDefaultUncaughtExceptionHandler(
+                                new ChromeUncaughtExceptionHandler());
+                        ChromeApplicationTestUtils.setUp(
+                                ApplicationProvider.getApplicationContext());
+                        // Instrumentation infrastructure and tests often access variables from the
+                        // instrumentation thread for asserts. See crbug.com/1173814 for more
+                        // details.
+                        ObservableSupplierImpl.setIgnoreThreadChecksForTesting(true);
 
-                // Preload Calendar so that it does not trigger ReadFromDisk Strict mode violations
-                // if called on the UI Thread. See https://crbug.com/705477 and
-                // https://crbug.com/577185
-                Calendar.getInstance();
+                        // Preload Calendar so that it does not trigger ReadFromDisk Strict mode
+                        // violations if called on the UI Thread. See https://crbug.com/705477 and
+                        // https://crbug.com/577185
+                        Calendar.getInstance();
 
-                // Disable offline indicator UI to prevent it from popping up to obstruct other UI
-                // views that may make tests flaky.
-                Features.getInstance().disable(ChromeFeatureList.OFFLINE_INDICATOR);
-                // Tests are run on bots that are offline by default. This might cause offline UI
-                // to show and cause flakiness or failures in tests. Using this switch will prevent
-                // that.
-                // TODO(crbug.com/1093085): Remove this once we disable the offline indicator for
-                // specific tests.
-                CommandLine.getInstance().appendSwitch(
-                        ContentSwitches.FORCE_ONLINE_CONNECTION_STATE_FOR_INDICATOR);
+                        // Tests are run on bots that are offline by default. This might cause
+                        // offline UI to show and cause flakiness or failures in tests. Using this
+                        // switch will prevent that.
+                        // TODO(crbug.com/1093085): Remove this once we disable the offline
+                        // indicator for specific tests.
+                        CommandLine.getInstance()
+                                .appendSwitch(
+                                        ContentSwitches
+                                                .FORCE_ONLINE_CONNECTION_STATE_FOR_INDICATOR);
 
-                try {
-                    base.evaluate();
-                } finally {
-                    Thread.setDefaultUncaughtExceptionHandler(mDefaultUncaughtExceptionHandler);
-                    ObservableSupplierImpl.setIgnoreThreadChecksForTesting(false);
-                }
-            }
-        };
+                        try {
+                            base.evaluate();
+                        } finally {
+                            Thread.setDefaultUncaughtExceptionHandler(
+                                    mDefaultUncaughtExceptionHandler);
+                        }
+                    }
+                };
         Statement testServerStatement = mTestServerRule.apply(chromeActivityStatement, description);
         return super.apply(testServerStatement, description);
     }
 
-    /**
-     * Return the timeout limit for Chrome activty start in tests
-     */
+    /** Return the timeout limit for Chrome activty start in tests */
     public static int getActivityStartTimeoutMs() {
         return ACTIVITY_START_TIMEOUT_MS;
     }
@@ -177,26 +177,22 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
      */
     public static void waitForActivityNativeInitializationComplete(ChromeActivity activity) {
         CriteriaHelper.pollUiThread(
-                ()
-                        -> ChromeBrowserInitializer.getInstance().isFullBrowserInitialized(),
+                () -> ChromeBrowserInitializer.getInstance().isFullBrowserInitialized(),
                 "Native initialization never finished",
                 20 * CriteriaHelper.DEFAULT_MAX_TIME_TO_POLL,
                 CriteriaHelper.DEFAULT_POLLING_INTERVAL);
 
-        CriteriaHelper.pollUiThread(() -> activity.didFinishNativeInitialization(),
+        CriteriaHelper.pollUiThread(
+                () -> activity.didFinishNativeInitialization(),
                 "Native initialization (of Activity) never finished");
     }
 
-    /**
-     * Waits for the activity to fully finish its native initialization.
-     */
+    /** Waits for the activity to fully finish its native initialization. */
     public void waitForActivityNativeInitializationComplete() {
         waitForActivityNativeInitializationComplete(getActivity());
     }
 
-    /**
-     * Similar to #launchActivity(Intent), but waits for the Activity tab to be initialized.
-     */
+    /** Similar to #launchActivity(Intent), but waits for the Activity tab to be initialized. */
     public void startActivityCompletely(Intent intent) {
         launchActivity(intent);
         waitForActivityNativeInitializationComplete();
@@ -207,11 +203,14 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     public void waitForActivityCompletelyLoaded() {
         CriteriaHelper.pollUiThread(
                 () -> getActivity().getActivityTab() != null, "Tab never selected/initialized.");
-        Tab tab = getActivity().getActivityTab();
+        Tab tab =
+                TestThreadUtils.runOnUiThreadBlockingNoException(
+                        () -> getActivity().getActivityTab());
 
         ChromeTabUtils.waitForTabPageLoaded(tab, (String) null);
 
-        if (tab != null && UrlUtilities.isNTPUrl(ChromeTabUtils.getUrlStringOnUiThread(tab))
+        if (tab != null
+                && UrlUtilities.isNtpUrl(ChromeTabUtils.getUrlStringOnUiThread(tab))
                 && !getActivity().isInOverviewMode()) {
             NewTabPageTestUtils.waitForNtpLoaded(tab);
         }
@@ -223,9 +222,12 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     }
 
     public boolean waitForDeferredStartup() {
-        CriteriaHelper.pollUiThread(() -> {
-            getActivity().deferredStartupPostedForTesting();
-        }, 20000L, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    getActivity().deferredStartupPostedForTesting();
+                },
+                20000L,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
         return DeferredStartupHandler.waitForDeferredStartupCompleteForTesting(
                 ScalableTimeout.scaleTimeout(CriteriaHelper.DEFAULT_MAX_TIME_TO_POLL));
     }
@@ -244,16 +246,20 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
      * etc. Network predictions are enabled by default.
      */
     public void setNetworkPredictionEnabled(final boolean enabled) {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
-            @Override
-            public void run() {
-                if (enabled) {
-                    PreloadPagesSettingsBridge.setState(PreloadPagesState.STANDARD_PRELOADING);
-                } else {
-                    PreloadPagesSettingsBridge.setState(PreloadPagesState.NO_PRELOADING);
-                }
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                if (enabled) {
+                                    PreloadPagesSettingsBridge.setState(
+                                            PreloadPagesState.STANDARD_PRELOADING);
+                                } else {
+                                    PreloadPagesSettingsBridge.setState(
+                                            PreloadPagesState.NO_PRELOADING);
+                                }
+                            }
+                        });
     }
 
     /**
@@ -264,8 +270,11 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
      * @return PAGE_LOAD_FAILED if the URL could not be loaded, otherwise DEFAULT_PAGE_LOAD.
      */
     public int loadUrl(String url, long secondsToWait) throws IllegalArgumentException {
-        return loadUrlInTab(url, PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
-                getActivity().getActivityTab(), secondsToWait);
+        return loadUrlInTab(
+                url,
+                PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
+                getActivity().getActivityTab(),
+                secondsToWait);
     }
 
     /**
@@ -275,7 +284,9 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
      * @return PAGE_LOAD_FAILED if the URL could not be loaded, otherwise DEFAULT_PAGE_LOAD.
      */
     public int loadUrl(String url) throws IllegalArgumentException {
-        return loadUrlInTab(url, PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
+        return loadUrlInTab(
+                url,
+                PageTransition.TYPED | PageTransition.FROM_ADDRESS_BAR,
                 getActivity().getActivityTab());
     }
 
@@ -298,13 +309,19 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
         Assert.assertNotNull("Cannot load the URL in a null tab", tab);
         final AtomicInteger result = new AtomicInteger();
 
-        ChromeTabUtils.waitForTabPageLoaded(tab, url, new Runnable() {
-            @Override
-            public void run() {
-                TestThreadUtils.runOnUiThreadBlocking(
-                        () -> { result.set(tab.loadUrl(new LoadUrlParams(url, pageTransition))); });
-            }
-        }, secondsToWait);
+        ChromeTabUtils.waitForTabPageLoaded(
+                tab,
+                url,
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        TestThreadUtils.runOnUiThreadBlocking(
+                                () -> {
+                                    result.set(tab.loadUrl(new LoadUrlParams(url, pageTransition)));
+                                });
+                    }
+                },
+                secondsToWait);
         ChromeTabUtils.waitForInteractable(tab);
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         return result.get();
@@ -350,12 +367,16 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
             final String url, final boolean incognito, final @TabLaunchType int launchType) {
         Tab tab = null;
         try {
-            tab = TestThreadUtils.runOnUiThreadBlocking(new Callable<Tab>() {
-                @Override
-                public Tab call() {
-                    return getActivity().getTabCreator(incognito).launchUrl(url, launchType);
-                }
-            });
+            tab =
+                    TestThreadUtils.runOnUiThreadBlocking(
+                            new Callable<Tab>() {
+                                @Override
+                                public Tab call() {
+                                    return getActivity()
+                                            .getTabCreator(incognito)
+                                            .launchUrl(url, launchType);
+                                }
+                            });
         } catch (ExecutionException e) {
             throw new AssertionError("Failed to create new tab", e);
         }
@@ -373,8 +394,10 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     public Intent prepareUrlIntent(Intent intent, String url) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         if (intent.getComponent() == null) {
-            intent.setComponent(new ComponentName(
-                    InstrumentationRegistry.getTargetContext(), ChromeLauncherActivity.class));
+            intent.setComponent(
+                    new ComponentName(
+                            ApplicationProvider.getApplicationContext(),
+                            ChromeLauncherActivity.class));
         }
 
         if (url != null) {
@@ -383,31 +406,39 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
         return intent;
     }
 
+    public Profile getProfile(boolean incognito) {
+        return TestThreadUtils.runOnUiThreadBlockingNoException(
+                () -> {
+                    return ProfileProvider.getOrCreateProfile(
+                            getActivity().getProfileProviderSupplier().get(), incognito);
+                });
+    }
+
     /**
      * @return The number of tabs currently open.
      */
     public int tabsCount(boolean incognito) {
-        return TestThreadUtils.runOnUiThreadBlockingNoException(new Callable<Integer>() {
-            @Override
-            public Integer call() {
-                return getActivity().getTabModelSelector().getModel(incognito).getCount();
-            }
-        });
+        return TestThreadUtils.runOnUiThreadBlockingNoException(
+                new Callable<Integer>() {
+                    @Override
+                    public Integer call() {
+                        return getActivity().getTabModelSelector().getModel(incognito).getCount();
+                    }
+                });
     }
 
-    /**
-     * Returns the infobars being displayed by the current tab, or null if they don't exist.
-     */
+    /** Returns the infobars being displayed by the current tab, or null if they don't exist. */
     public List<InfoBar> getInfoBars() {
-        return TestThreadUtils.runOnUiThreadBlockingNoException(new Callable<List<InfoBar>>() {
-            @Override
-            public List<InfoBar> call() {
-                Tab currentTab = getActivity().getActivityTab();
-                Assert.assertNotNull(currentTab);
-                Assert.assertNotNull(InfoBarContainer.get(currentTab));
-                return InfoBarContainer.get(currentTab).getInfoBarsForTesting();
-            }
-        });
+        return TestThreadUtils.runOnUiThreadBlockingNoException(
+                new Callable<List<InfoBar>>() {
+                    @Override
+                    public List<InfoBar> call() {
+                        Tab currentTab = getActivity().getActivityTab();
+                        Assert.assertNotNull(currentTab);
+                        Assert.assertNotNull(InfoBarContainer.get(currentTab));
+                        return InfoBarContainer.get(currentTab).getInfoBarsForTesting();
+                    }
+                });
     }
 
     /**
@@ -459,30 +490,26 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
      */
     public InfoBarContainer getInfoBarContainer() {
         return TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> getActivity().getActivityTab() != null
-                        ? InfoBarContainer.get(getActivity().getActivityTab())
-                        : null);
+                () ->
+                        getActivity().getActivityTab() != null
+                                ? InfoBarContainer.get(getActivity().getActivityTab())
+                                : null);
     }
 
-    /**
-     * Gets the ChromeActivityTestRule's EmbeddedTestServer instance if it has one.
-     */
+    /** Gets the ChromeActivityTestRule's EmbeddedTestServer instance if it has one. */
     public EmbeddedTestServer getTestServer() {
         return mTestServerRule.getServer();
     }
 
-    /**
-     * Gets the underlying EmbeddedTestServerRule for getTestServer().
-     */
+    /** Gets the underlying EmbeddedTestServerRule for getTestServer(). */
     public EmbeddedTestServerRule getEmbeddedTestServerRule() {
         return mTestServerRule;
     }
 
-    /**
-     * @return {@link WebContents} of the active tab of the activity.
-     */
+    /** Returns the {@link WebContents} of the active tab of the activity. */
     public WebContents getWebContents() {
-        return getActivity().getActivityTab().getWebContents();
+        return TestThreadUtils.runOnUiThreadBlockingNoException(
+                () -> getActivity().getActivityTab().getWebContents());
     }
 
     /**
@@ -514,13 +541,17 @@ public class ChromeActivityTestRule<T extends ChromeActivity> extends BaseActivi
     public static <T extends ChromeActivity> T waitFor(
             final Class<T> expectedClass, long maxTimeToPoll) {
         final Activity[] holder = new Activity[1];
-        CriteriaHelper.pollUiThread(() -> {
-            holder[0] = ApplicationStatus.getLastTrackedFocusedActivity();
-            Criteria.checkThat(holder[0], Matchers.notNullValue());
-            Criteria.checkThat(holder[0].getClass(), Matchers.typeCompatibleWith(expectedClass));
-            Criteria.checkThat(
-                    ((ChromeActivity) holder[0]).getActivityTab(), Matchers.notNullValue());
-        }, maxTimeToPoll, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    holder[0] = ApplicationStatus.getLastTrackedFocusedActivity();
+                    Criteria.checkThat(holder[0], Matchers.notNullValue());
+                    Criteria.checkThat(
+                            holder[0].getClass(), Matchers.typeCompatibleWith(expectedClass));
+                    Criteria.checkThat(
+                            ((ChromeActivity) holder[0]).getActivityTab(), Matchers.notNullValue());
+                },
+                maxTimeToPoll,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
         return (T) holder[0];
     }
 

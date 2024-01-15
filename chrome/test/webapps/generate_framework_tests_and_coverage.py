@@ -55,7 +55,9 @@ def generate_framework_tests_and_coverage(
         default_partition: TestPartitionDescription,
         coverage_output_dir: str,
         graph_output_dir: Optional[str],
-        delete_in_place: bool = False):
+        delete_in_place: bool = False,
+        add_to_file: bool = False,
+        suppress_coverage: bool = False):
     for partition_a in custom_partitions:
         check_partition_prefixes(partition_a, default_partition)
         for partition_b in custom_partitions:
@@ -133,22 +135,27 @@ def generate_framework_tests_and_coverage(
     all_partitions = [default_partition]
     all_partitions.extend(custom_partitions)
 
-    (existing_tests_ids_by_platform_set,
-     disabled_test_ids_by_platform) = find_existing_and_disabled_tests(
+    (existing_tests_ids_names_by_platform_set,
+     disabled_test_ids_names_by_platform) = find_existing_and_disabled_tests(
          all_partitions, required_coverage_by_platform_set, delete_in_place)
 
     # Print all diffs that are required.
     compare_and_print_tests_to_remove_and_add(
-        existing_tests_ids_by_platform_set, required_coverage_by_platform_set,
-        custom_partitions, default_partition)
+        existing_tests_ids_names_by_platform_set,
+        required_coverage_by_platform_set, custom_partitions,
+        default_partition, add_to_file)
+
+    if suppress_coverage:
+        return
 
     # To calculate coverage we need to incorporate any disabled tests.
     # Remove any disabled tests from the generated tests per platform.
     for platform, tests in generated_tests_by_platform.items():
-        disabled_tests = disabled_test_ids_by_platform.get(platform, [])
+        disabled_tests = disabled_test_ids_names_by_platform.get(platform, [])
+        disabled_test_ids = set([test_id for (test_id, _) in disabled_tests])
         tests_minus_disabled: List[CoverageTest] = []
         for test in tests:
-            if test.id not in disabled_tests:
+            if test.id not in disabled_test_ids:
                 tests_minus_disabled.append(test)
             else:
                 logging.info("Removing disabled test from coverage: " +
@@ -169,7 +176,7 @@ def generate_framework_tests_and_coverage(
     return
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description='WebApp Test List Processor')
     parser.add_argument('-v',
                         dest='v',
@@ -189,7 +196,19 @@ def main():
                         help='Delete test cases no longer needed in place',
                         required=False)
 
-    options = parser.parse_args()
+    parser.add_argument('--add-to-file',
+                        dest='add_to_file',
+                        action='store_true',
+                        help='Add test cases to existing test file',
+                        required=False)
+
+    parser.add_argument('--suppress-coverage',
+                        dest='suppress_coverage',
+                        action='store_true',
+                        help='Do not write coverage information.',
+                        required=False)
+
+    options = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO if options.v else logging.WARN,
                         format='[%(asctime)s %(levelname)s] %(message)s',
                         datefmt='%H:%M:%S')
@@ -236,7 +255,8 @@ def main():
         generate_framework_tests_and_coverage(
             supported_actions, enums_file, actions_file, coverage_file,
             custom_partitions, default_partition, coverage_output_dir,
-            graph_output_dir, options.delete_in_place)
+            graph_output_dir, options.delete_in_place, options.add_to_file,
+            options.suppress_coverage)
 
 
 if __name__ == '__main__':

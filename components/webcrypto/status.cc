@@ -4,7 +4,8 @@
 
 #include "components/webcrypto/status.h"
 
-#include "base/format_macros.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 
 namespace webcrypto {
@@ -21,6 +22,12 @@ Status Status::Success() {
   return Status(TYPE_SUCCESS);
 }
 
+Status Status::SuccessDeriveBitsTruncation() {
+  Status status(TYPE_SUCCESS);
+  status.warning_type_ = blink::kWebCryptoWarningTypeDeriveBitsTruncated;
+  return status;
+}
+
 Status Status::OperationError() {
   return Status(blink::kWebCryptoErrorTypeOperation, "");
 }
@@ -34,22 +41,24 @@ Status Status::ErrorJwkNotDictionary() {
                 "JWK input could not be parsed to a JSON dictionary");
 }
 
-Status Status::ErrorJwkMemberMissing(const std::string& member_name) {
+Status Status::ErrorJwkMemberMissing(std::string_view member_name) {
   return Status(blink::kWebCryptoErrorTypeData,
-                "The required JWK member \"" + member_name + "\" was missing");
+                base::StrCat({"The required JWK member \"", member_name,
+                              "\" was missing"}));
 }
 
-Status Status::ErrorJwkMemberWrongType(const std::string& member_name,
-                                       const std::string& expected_type) {
+Status Status::ErrorJwkMemberWrongType(std::string_view member_name,
+                                       std::string_view expected_type) {
+  return Status(blink::kWebCryptoErrorTypeData,
+                base::StrCat({"The JWK member \"", member_name, "\" must be a ",
+                              expected_type}));
+}
+
+Status Status::ErrorJwkBase64Decode(std::string_view member_name) {
   return Status(
       blink::kWebCryptoErrorTypeData,
-      "The JWK member \"" + member_name + "\" must be a " + expected_type);
-}
-
-Status Status::ErrorJwkBase64Decode(const std::string& member_name) {
-  return Status(blink::kWebCryptoErrorTypeData,
-                "The JWK member \"" + member_name +
-                    "\" could not be base64url decoded or contained padding");
+      base::StrCat({"The JWK member \"", member_name,
+                    "\" could not be base64url decoded or contained padding"}));
 }
 
 Status Status::ErrorJwkExtInconsistent() {
@@ -95,9 +104,10 @@ Status Status::ErrorJwkUseAndKeyopsInconsistent() {
                 "but are inconsistent with each other.");
 }
 
-Status Status::ErrorJwkUnexpectedKty(const std::string& expected) {
-  return Status(blink::kWebCryptoErrorTypeData,
-                "The JWK \"kty\" member was not \"" + expected + "\"");
+Status Status::ErrorJwkUnexpectedKty(std::string_view expected) {
+  return Status(
+      blink::kWebCryptoErrorTypeData,
+      base::StrCat({"The JWK \"kty\" member was not \"", expected, "\""}));
 }
 
 Status Status::ErrorJwkIncorrectKeyLength() {
@@ -106,16 +116,16 @@ Status Status::ErrorJwkIncorrectKeyLength() {
                 "of key data for the given algorithm.");
 }
 
-Status Status::ErrorJwkEmptyBigInteger(const std::string& member_name) {
-  return Status(blink::kWebCryptoErrorTypeData,
-                "The JWK \"" + member_name + "\" member was empty.");
-}
-
-Status Status::ErrorJwkBigIntegerHasLeadingZero(
-    const std::string& member_name) {
+Status Status::ErrorJwkEmptyBigInteger(std::string_view member_name) {
   return Status(
       blink::kWebCryptoErrorTypeData,
-      "The JWK \"" + member_name + "\" member contained a leading zero.");
+      base::StrCat({"The JWK \"", member_name, "\" member was empty."}));
+}
+
+Status Status::ErrorJwkBigIntegerHasLeadingZero(std::string_view member_name) {
+  return Status(blink::kWebCryptoErrorTypeData,
+                base::StrCat({"The JWK \"", member_name,
+                              "\" member contained a leading zero."}));
 }
 
 Status Status::ErrorJwkDuplicateKeyOps() {
@@ -179,6 +189,33 @@ Status Status::ErrorAesCtrInputTooLongCounterRepeated() {
                 "The input is too large for the counter length.");
 }
 
+Status Status::ErrorImportEd25519KeyLength() {
+  return Status(blink::kWebCryptoErrorTypeData,
+                "Ed25519 key data must be 256 bits");
+}
+
+Status Status::ErrorX25519WrongAlgorithm() {
+  return Status(blink::kWebCryptoErrorTypeInvalidAccess,
+                "The algorithm for X25519 key derivation must be X25519");
+}
+
+Status Status::ErrorX25519PublicKeyWrongType() {
+  return Status(
+      blink::kWebCryptoErrorTypeInvalidAccess,
+      "The public parameter for X25519 key derivation is not a public key");
+}
+
+Status Status::ErrorX25519PublicKeyWrongAlgorithm() {
+  return Status(
+      blink::kWebCryptoErrorTypeInvalidAccess,
+      "The public parameter for X25519 key derivation must be for X25519");
+}
+
+Status Status::ErrorImportX25519KeyLength() {
+  return Status(blink::kWebCryptoErrorTypeData,
+                "X25519 key data must be 256 bits");
+}
+
 Status Status::ErrorDataTooLarge() {
   return Status(blink::kWebCryptoErrorTypeOperation,
                 "The provided data is too large");
@@ -193,7 +230,7 @@ Status Status::ErrorUnsupported() {
   return ErrorUnsupported("The requested operation is unsupported");
 }
 
-Status Status::ErrorUnsupported(const std::string& message) {
+Status Status::ErrorUnsupported(std::string_view message) {
   return Status(blink::kWebCryptoErrorTypeNotSupported, message);
 }
 
@@ -289,15 +326,15 @@ Status Status::ErrorEcKeyInvalid() {
                 "The imported EC key is invalid");
 }
 
-Status Status::JwkOctetStringWrongLength(const std::string& member_name,
+Status Status::JwkOctetStringWrongLength(std::string_view member_name,
                                          size_t expected_length,
                                          size_t actual_length) {
   return Status(
       blink::kWebCryptoErrorTypeData,
-      base::StringPrintf(
-          "The JWK's \"%s\" member defines an octet string of length %" PRIuS
-          " bytes but should be %" PRIuS,
-          member_name.c_str(), actual_length, expected_length));
+      base::StringPrintf("The JWK's \"%.*s\" member defines an octet string of "
+                         "length %zu bytes but should be %zu",
+                         base::checked_cast<int>(member_name.size()),
+                         member_name.data(), actual_length, expected_length));
 }
 
 Status Status::ErrorEcdhPublicKeyWrongType() {
@@ -372,12 +409,16 @@ Status Status::ErrorImportExtractableKdfKey() {
                 "KDF keys must set extractable=false");
 }
 
+Status Status::ErrorX25519LengthTooLong() {
+  return Status(blink::kWebCryptoErrorTypeOperation,
+                "The length provided for X25519 is too large.");
+}
+
 Status::Status(blink::WebCryptoErrorType error_type,
-               const std::string& error_details_utf8)
+               std::string_view error_details_utf8)
     : type_(TYPE_ERROR),
       error_type_(error_type),
-      error_details_(error_details_utf8) {
-}
+      error_details_(error_details_utf8) {}
 
 Status::Status(Type type) : type_(type) {
 }

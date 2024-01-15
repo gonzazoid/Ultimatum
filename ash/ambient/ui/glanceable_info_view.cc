@@ -22,6 +22,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/insets.h"
@@ -75,12 +76,15 @@ int GetTemperatureFontDescent() {
 
 }  // namespace
 
-GlanceableInfoView::GlanceableInfoView(AmbientViewDelegate* delegate,
-                                       int time_font_size_dip,
-                                       SkColor time_temperature_font_color)
+GlanceableInfoView::GlanceableInfoView(
+    AmbientViewDelegate* delegate,
+    GlanceableInfoView::Delegate* glanceable_info_view_delegate,
+    int time_font_size_dip,
+    bool add_text_shadow)
     : delegate_(delegate),
+      glanceable_info_view_delegate_(glanceable_info_view_delegate),
       time_font_size_dip_(time_font_size_dip),
-      time_temperature_font_color_(time_temperature_font_color) {
+      add_text_shadow_(add_text_shadow) {
   DCHECK(delegate);
   DCHECK_GT(time_font_size_dip_, 0);
   SetID(AmbientViewID::kAmbientGlanceableInfoView);
@@ -103,10 +107,17 @@ void GlanceableInfoView::OnWeatherInfoUpdated() {
 
 void GlanceableInfoView::OnThemeChanged() {
   views::View::OnThemeChanged();
-  gfx::ShadowValues text_shadow_values =
-      ambient::util::GetTextShadowValues(GetColorProvider());
-  time_view_->SetTextShadowValues(text_shadow_values);
-  temperature_->SetShadows(text_shadow_values);
+  time_view_->SetTextColor(
+      glanceable_info_view_delegate_->GetTimeTemperatureFontColor(),
+      /*auto_color_readability_enabled=*/false);
+  temperature_->SetEnabledColor(
+      glanceable_info_view_delegate_->GetTimeTemperatureFontColor());
+  if (add_text_shadow_) {
+    gfx::ShadowValues text_shadow_values =
+        ambient::util::GetTextShadowValues(GetColorProvider());
+    time_view_->SetTextShadowValues(text_shadow_values);
+    temperature_->SetShadows(text_shadow_values);
+  }
 }
 
 void GlanceableInfoView::Show() {
@@ -149,8 +160,11 @@ void GlanceableInfoView::InitLayout() {
   layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kStart);
   layout->set_cross_axis_alignment(views::BoxLayout::CrossAxisAlignment::kEnd);
 
-  gfx::Insets shadow_insets =
-      gfx::ShadowValue::GetMargin(ambient::util::GetTextShadowValues(nullptr));
+  gfx::Insets shadow_insets;
+  if (add_text_shadow_) {
+    shadow_insets = gfx::ShadowValue::GetMargin(
+        ambient::util::GetTextShadowValues(nullptr));
+  }
 
   // Inits the time view.
   time_view_ = AddChildView(
@@ -158,8 +172,6 @@ void GlanceableInfoView::InitLayout() {
                                  Shell::Get()->system_tray_model()->clock()));
   gfx::FontList time_font_list = GetTimeFontList(time_font_size_dip_);
   time_view_->SetTextFont(time_font_list);
-  time_view_->SetTextColor(time_temperature_font_color_,
-                           /*auto_color_readability_enabled=*/false);
   // Remove the internal spacing in `time_view_` and adjust spacing for shadows.
   time_view_->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
       -kUnifiedTrayTextTopPadding, -kUnifiedTrayTimeLeftPadding, 0,
@@ -180,10 +192,13 @@ void GlanceableInfoView::InitLayout() {
   // Inits the temp view.
   temperature_ = AddChildView(std::make_unique<views::Label>());
   temperature_->SetAutoColorReadabilityEnabled(false);
-  temperature_->SetEnabledColor(time_temperature_font_color_);
   temperature_->SetFontList(GetWeatherTemperatureFontList());
   temperature_->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
       0, 0, GetFontDescent(time_font_list) - GetTemperatureFontDescent(), 0)));
+}
+
+int GlanceableInfoView::GetTimeFontDescent() {
+  return GetFontDescent(GetTimeFontList(time_font_size_dip_));
 }
 
 BEGIN_METADATA(GlanceableInfoView, views::View)

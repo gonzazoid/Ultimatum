@@ -7,9 +7,10 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/views/view.h"
 #include "ui/views/views_export.h"
 
@@ -35,9 +36,10 @@ class VIEWS_EXPORT DropHelper {
  public:
   // This is expected to match the signature of
   // aura::client::DragDropDelegate::DropCallback.
-  using DropCallback =
-      base::OnceCallback<void(std::unique_ptr<ui::OSExchangeData> data,
-                              ui::mojom::DragOperation& output_drag_op)>;
+  using DropCallback = base::OnceCallback<void(
+      std::unique_ptr<ui::OSExchangeData> data,
+      ui::mojom::DragOperation& output_drag_op,
+      std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner)>;
 
   explicit DropHelper(View* root_view);
 
@@ -85,9 +87,12 @@ class VIEWS_EXPORT DropHelper {
 
   // Invoked when the user drops data on the root view during a drag and drop
   // operation, but the drop is held because of DataTransferPolicController.
+  // To fetch the correct callback, callers should invoke
   DropCallback GetDropCallback(const OSExchangeData& data,
                                const gfx::Point& root_view_location,
                                int drag_operation);
+
+  bool WillAnimateDragImageForDrop();
 
   // Calculates the target view for a drop given the specified location in
   // the coordinate system of the rootview. This tries to avoid continually
@@ -104,7 +109,7 @@ class VIEWS_EXPORT DropHelper {
   View* CalculateTargetViewImpl(const gfx::Point& root_view_location,
                                 const OSExchangeData& data,
                                 bool check_can_drop,
-                                View** deepest_view);
+                                raw_ptr<View>* deepest_view);
 
   // Methods to send the appropriate drop notification to the targeted view.
   // These do nothing if the target view is NULL.
@@ -117,13 +122,13 @@ class VIEWS_EXPORT DropHelper {
   void NotifyDragExit();
 
   // RootView we were created for.
-  raw_ptr<View> root_view_;
+  raw_ptr<View, DanglingUntriaged> root_view_;
 
   // View we're targeting events at.
-  raw_ptr<View> target_view_;
+  raw_ptr<View> target_view_ = nullptr;
 
   // The deepest view under the current drop coordinate.
-  View* deepest_view_;
+  raw_ptr<View> deepest_view_ = nullptr;
 };
 
 }  // namespace views

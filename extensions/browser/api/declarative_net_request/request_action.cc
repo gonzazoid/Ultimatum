@@ -22,11 +22,11 @@ dnr_api::HeaderOperation ConvertFlatHeaderOperation(
     flat::HeaderOperation operation) {
   switch (operation) {
     case flat::HeaderOperation_append:
-      return dnr_api::HEADER_OPERATION_APPEND;
+      return dnr_api::HeaderOperation::kAppend;
     case flat::HeaderOperation_set:
-      return dnr_api::HEADER_OPERATION_SET;
+      return dnr_api::HeaderOperation::kSet;
     case flat::HeaderOperation_remove:
-      return dnr_api::HEADER_OPERATION_REMOVE;
+      return dnr_api::HeaderOperation::kRemove;
   }
 }
 
@@ -34,7 +34,7 @@ dnr_api::HeaderOperation ConvertFlatHeaderOperation(
 
 RequestAction::HeaderInfo::HeaderInfo(std::string header,
                                       dnr_api::HeaderOperation operation,
-                                      absl::optional<std::string> value)
+                                      std::optional<std::string> value)
     : header(std::move(header)),
       operation(operation),
       value(std::move(value)) {}
@@ -86,9 +86,9 @@ bool operator>(const RequestAction& lhs, const RequestAction& rhs) {
          std::tie(rhs.index_priority, rhs.ruleset_id, rhs.rule_id);
 }
 
-absl::optional<RequestAction> GetMaxPriorityAction(
-    absl::optional<RequestAction> lhs,
-    absl::optional<RequestAction> rhs) {
+std::optional<RequestAction> GetMaxPriorityAction(
+    std::optional<RequestAction> lhs,
+    std::optional<RequestAction> rhs) {
   if (!lhs)
     return rhs;
   if (!rhs)

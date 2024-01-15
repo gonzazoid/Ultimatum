@@ -8,10 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/fake_sms_client.h"
 #include "dbus/bus.h"
@@ -34,7 +35,7 @@ class SMSReceiveHandler {
  public:
   SMSReceiveHandler(dbus::ObjectProxy* object_proxy,
                     SMSClient::GetAllCallback callback)
-      : callback_(std::move(callback)), sms_received_(false) {
+      : callback_(std::move(callback)) {
     property_set_ = std::make_unique<dbus::PropertySet>(
         object_proxy, modemmanager::kModemManager1SmsInterface,
         base::BindRepeating(&SMSReceiveHandler::OnPropertyChanged,
@@ -62,14 +63,14 @@ class SMSReceiveHandler {
       return;
 
     if (number_.is_valid() && text_.is_valid() && timestamp_.is_valid()) {
-      base::Value sms(base::Value::Type::DICTIONARY);
-      sms.SetStringKey(SMSClient::kSMSPropertyNumber, number_.value());
-      sms.SetStringKey(SMSClient::kSMSPropertyText, text_.value());
-      sms.SetStringKey(SMSClient::kSMSPropertyTimestamp, timestamp_.value());
+      base::Value::Dict sms;
+      sms.Set(SMSClient::kSMSPropertyNumber, number_.value());
+      sms.Set(SMSClient::kSMSPropertyText, text_.value());
+      sms.Set(SMSClient::kSMSPropertyTimestamp, timestamp_.value());
       // Move |callback_| to the task to ensure that |callback_| is only called
       // once. Since |callback_| may destruct this object, schedule it to the
       // task runner to run after this method returns.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback_), std::move(sms)));
       return;
     }
@@ -86,7 +87,7 @@ class SMSReceiveHandler {
   }
 
   SMSClient::GetAllCallback callback_;
-  bool sms_received_;
+  bool sms_received_ = false;
   dbus::Property<uint32_t> state_;
   dbus::Property<std::string> number_;
   dbus::Property<std::string> text_;
@@ -122,12 +123,12 @@ class SMSClientImpl : public SMSClient {
  private:
   void OnSMSReceived(const dbus::ObjectPath& object_path,
                      GetAllCallback callback,
-                     const base::Value& sms) {
+                     const base::Value::Dict& sms) {
     sms_receive_handlers_.erase(object_path);
     std::move(callback).Run(sms);
   }
 
-  dbus::Bus* bus_;
+  raw_ptr<dbus::Bus> bus_;
 
   std::map<dbus::ObjectPath, std::unique_ptr<SMSReceiveHandler>>
       sms_receive_handlers_;

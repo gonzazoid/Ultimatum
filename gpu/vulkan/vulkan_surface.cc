@@ -9,16 +9,12 @@
 #include <algorithm>
 
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
 #include "gpu/vulkan/vulkan_swap_chain.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include <android/native_window_jni.h>
-#endif
 
 namespace gpu {
 
@@ -41,11 +37,11 @@ VkSurfaceTransformFlagBitsKHR ToVkSurfaceTransformFlag(
       return VK_SURFACE_TRANSFORM_HORIZONTAL_MIRROR_BIT_KHR;
     case gfx::OVERLAY_TRANSFORM_FLIP_VERTICAL:
       return VK_SURFACE_TRANSFORM_HORIZONTAL_MIRROR_ROTATE_180_BIT_KHR;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_90:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90:
       return VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_180:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_180:
       return VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_270:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270:
       return VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR;
     default:
       NOTREACHED() << "transform:" << transform;
@@ -63,11 +59,11 @@ gfx::OverlayTransform FromVkSurfaceTransformFlag(
     case VK_SURFACE_TRANSFORM_HORIZONTAL_MIRROR_ROTATE_180_BIT_KHR:
       return gfx::OVERLAY_TRANSFORM_FLIP_VERTICAL;
     case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
-      return gfx::OVERLAY_TRANSFORM_ROTATE_90;
+      return gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90;
     case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
-      return gfx::OVERLAY_TRANSFORM_ROTATE_180;
+      return gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_180;
     case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
-      return gfx::OVERLAY_TRANSFORM_ROTATE_270;
+      return gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270;
     default:
       NOTREACHED() << "transform:" << transform;
       return gfx::OVERLAY_TRANSFORM_INVALID;
@@ -81,10 +77,6 @@ uint32_t kMinImageCount = 3u;
 
 VulkanSurface::~VulkanSurface() {
   DCHECK_EQ(static_cast<VkSurfaceKHR>(VK_NULL_HANDLE), surface_);
-#if BUILDFLAG(IS_ANDROID)
-  if (accelerated_widget_)
-    ANativeWindow_release(accelerated_widget_);
-#endif
 }
 
 VulkanSurface::VulkanSurface(VkInstance vk_instance,
@@ -93,6 +85,9 @@ VulkanSurface::VulkanSurface(VkInstance vk_instance,
                              uint64_t acquire_next_image_timeout_ns,
                              std::unique_ptr<gfx::VSyncProvider> vsync_provider)
     : vk_instance_(vk_instance),
+#if BUILDFLAG(IS_ANDROID)
+      a_native_window_(gl::ScopedANativeWindow::Wrap(accelerated_widget)),
+#endif
       accelerated_widget_(accelerated_widget),
       surface_(surface),
       acquire_next_image_timeout_ns_(acquire_next_image_timeout_ns),
@@ -102,11 +97,6 @@ VulkanSurface::VulkanSurface(VkInstance vk_instance,
     vsync_provider_ = std::make_unique<gfx::FixedVSyncProvider>(
         base::TimeTicks(), base::Seconds(1) / 60);
   }
-
-#if BUILDFLAG(IS_ANDROID)
-  if (accelerated_widget_)
-    ANativeWindow_acquire(accelerated_widget_);
-#endif
 }
 
 bool VulkanSurface::Initialize(VulkanDeviceQueue* device_queue,
@@ -295,8 +285,8 @@ bool VulkanSurface::CreateSwapChain(const gfx::Size& size,
       image_size.SetSize(surface_caps.currentExtent.width,
                          surface_caps.currentExtent.height);
     }
-    if (transform == gfx::OVERLAY_TRANSFORM_ROTATE_90 ||
-        transform == gfx::OVERLAY_TRANSFORM_ROTATE_270) {
+    if (transform == gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90 ||
+        transform == gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270) {
       image_size.SetSize(image_size.height(), image_size.width());
     }
   }
@@ -370,12 +360,13 @@ void VulkanSurface::PostSubBufferCompleted(
     feedback = gfx::PresentationFeedback(timestamp, interval, /*flags=*/0);
   }
 
-  if (base::ThreadTaskRunnerHandle::IsSet()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(presentation_callback), feedback));
   } else {
-    // For webview_instrumentation_test, ThreadTaskRunnerHandle is not set, so
-    // we have to call the callback directly.
+    // For webview_instrumentation_test,
+    // SingleThreadTaskRunner::CurrentDefaultHandle is not set, so we have to
+    // call the callback directly.
     std::move(presentation_callback).Run(feedback);
   }
 }

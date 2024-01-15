@@ -7,46 +7,30 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "ash/constants/ash_pref_names.h"
 #include "base/feature_list.h"
-#include "base/i18n/i18n_constants.h"
-#include "base/i18n/icu_string_conversions.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/metrics/user_metrics.h"
-#include "base/strings/strcat.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_offset_string_conversions.h"
-#include "base/strings/utf_string_conversion_utils.h"
-#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/input_method/assistive_suggester_client_filter.h"
-#include "chrome/browser/ash/input_method/assistive_suggester_prefs.h"
 #include "chrome/browser/ash/input_method/assistive_suggester_switch.h"
 #include "chrome/browser/ash/input_method/autocorrect_manager.h"
-#include "chrome/browser/ash/input_method/diacritics_checker.h"
+#include "chrome/browser/ash/input_method/editor_mediator_factory.h"
 #include "chrome/browser/ash/input_method/get_current_window_properties.h"
 #include "chrome/browser/ash/input_method/grammar_service_client.h"
-#include "chrome/browser/ash/input_method/input_method_quick_settings_helpers.h"
-#include "chrome/browser/ash/input_method/input_method_settings.h"
 #include "chrome/browser/ash/input_method/native_input_method_engine_observer.h"
 #include "chrome/browser/ash/input_method/suggestions_service_client.h"
 #include "chrome/browser/ash/input_method/ui/input_method_menu_manager.h"
-#include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
-#include "chrome/common/pref_names.h"
-#include "chromeos/ash/services/ime/public/mojom/input_method.mojom.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/prefs/pref_service.h"
-#include "ui/base/ime/ash/extension_ime_util.h"
-#include "ui/base/ime/ash/ime_bridge.h"
-#include "ui/base/ime/ash/ime_keyboard.h"
 #include "ui/base/ime/ash/input_method_manager.h"
-#include "ui/base/ime/ash/input_method_ukm.h"
-#include "ui/events/keycodes/dom/keycode_converter.h"
 
 namespace ash {
 
 namespace input_method {
+namespace {
+bool ShouldRouteToFirstPartyVietnameseInput(std::string_view engine_id) {
+  return base::FeatureList::IsEnabled(features::kFirstPartyVietnameseInput) &&
+         (engine_id == "vkd_vi_vni" || engine_id == "vkd_vi_telex");
+}
+}  // namespace
 
 NativeInputMethodEngine::NativeInputMethodEngine()
     : NativeInputMethodEngine(/*use_ime_service=*/true) {}
@@ -79,22 +63,26 @@ void NativeInputMethodEngine::Initialize(
               ? std::move(suggester_switch_)
               : std::make_unique<AssistiveSuggesterClientFilter>(
                     base::BindRepeating(&GetFocusedTabUrl),
-                    base::BindRepeating(&GetFocusedWindowProperties)),
-          nullptr);
+                    base::BindRepeating(&GetFocusedWindowProperties)));
   assistive_suggester_ = assistive_suggester.get();
   std::unique_ptr<AutocorrectManager> autocorrect_manager =
-      std::make_unique<AutocorrectManager>(this);
+      std::make_unique<AutocorrectManager>(this, profile);
   autocorrect_manager_ = autocorrect_manager.get();
 
   auto suggestions_service_client =
-      features::IsAssistiveMultiWordEnabled()
+      base::FeatureList::IsEnabled(features::kAssistMultiWord)
           ? std::make_unique<SuggestionsServiceClient>()
           : nullptr;
 
   auto suggestions_collector =
-      features::IsAssistiveMultiWordEnabled()
+      base::FeatureList::IsEnabled(features::kAssistMultiWord)
           ? std::make_unique<SuggestionsCollector>(
                 assistive_suggester_, std::move(suggestions_service_client))
+          : nullptr;
+
+  EditorMediator* editor_event_sink =
+      chromeos::features::IsOrcaEnabled()
+          ? EditorMediatorFactory::GetInstance()->GetForProfile(profile)
           : nullptr;
 
   chrome_keyboard_controller_client_observer_.Observe(
@@ -103,8 +91,9 @@ void NativeInputMethodEngine::Initialize(
   // Wrap the given observer in our observer that will decide whether to call
   // Mojo directly or forward to the extension.
   auto native_observer = std::make_unique<NativeInputMethodEngineObserver>(
-      profile->GetPrefs(), std::move(observer), std::move(assistive_suggester),
-      std::move(autocorrect_manager), std::move(suggestions_collector),
+      profile->GetPrefs(), editor_event_sink, std::move(observer),
+      std::move(assistive_suggester), std::move(autocorrect_manager),
+      std::move(suggestions_collector),
       std::make_unique<GrammarManager>(
           profile, std::make_unique<GrammarServiceClient>(), this),
       use_ime_service_);
@@ -186,7 +175,8 @@ bool NativeInputMethodEngine::UpdateMenuItems(
 }
 
 void NativeInputMethodEngine::OnInputMethodOptionsChanged() {
-  if (ShouldRouteToNativeMojoEngine(GetActiveComponentId())) {
+  if (ShouldRouteToNativeMojoEngine(GetActiveComponentId()) ||
+      ShouldRouteToFirstPartyVietnameseInput(GetActiveComponentId())) {
     Enable(GetActiveComponentId());
   } else {
     InputMethodEngine::OnInputMethodOptionsChanged();

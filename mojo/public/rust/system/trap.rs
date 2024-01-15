@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::system::ffi::{self, raw_ffi, types::MojoTriggerCondition};
-use crate::system::handle::*;
-use crate::system::mojo_types::*;
+use crate::ffi::{self, raw_ffi, types::MojoTriggerCondition};
+use crate::handle::*;
+use crate::mojo_types::*;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -102,10 +102,10 @@ impl UnsafeTrap {
         let mut handle = UntypedHandle::invalid();
         let result = unsafe {
             // SAFETY:
-            // * MojoCreateTrap is given a valid function pointer (type checked
-            //   thanks to bindgen)
-            // * `handle`'s pointer cast is OK since `UntypedHandle` is
-            //   repr(transparent) for MojoHandle
+            // * MojoCreateTrap is given a valid function pointer (type checked thanks to
+            //   bindgen)
+            // * `handle`'s pointer cast is OK since `UntypedHandle` is repr(transparent)
+            //   for MojoHandle
             MojoResult::from_code(ffi::MojoCreateTrap(
                 Some(handler_ptr),
                 ffi::MojoCreateTrapOptions::new(0).inner_ptr(),
@@ -336,8 +336,10 @@ mod asserts {
 
 impl<Context, EventHandler> Trap<Context, EventHandler>
 where
-    // Context: Sync because it is shared by reference through `raw_handler`
-    // calls (from any thread) and Send because it is transitively owned by a
+    // Context: Sync because it is shared by
+    // reference through `raw_handler`
+    // calls (from any thread) and Send because
+    // it is transitively owned by a
     // Mutex that must be Sync.
     Context: Send + Sync,
     // EventHandler: Send because it is shared by value through `raw_handler`

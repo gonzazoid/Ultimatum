@@ -4,12 +4,13 @@
 
 #include "chrome/updater/auto_run_on_os_upgrade_task.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/process/launch.h"
@@ -22,15 +23,14 @@
 #include "base/task/thread_pool.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/persisted_data.h"
-#include "chrome/updater/util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/updater/util/util.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
 
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/app_command_runner.h"
 #include "chrome/updater/win/win_constants.h"
-#include "chrome/updater/win/win_util.h"
 #endif
 
 namespace updater {
@@ -94,8 +94,9 @@ size_t AutoRunOnOsUpgradeTask::RunOnOsUpgradeForApp(const std::string& app_id) {
       [&](const auto& app_command_runner) {
         base::Process process;
         if (FAILED(app_command_runner.Run(
-                {base::SysUTF8ToWide(os_upgrade_string_)}, process)))
+                {base::SysUTF8ToWide(os_upgrade_string_)}, process))) {
           return;
+        }
 
         VLOG(1) << "Successfully launched OS upgrade task with PID: "
                 << process.Pid() << ": " << os_upgrade_string_;
@@ -108,7 +109,7 @@ size_t AutoRunOnOsUpgradeTask::RunOnOsUpgradeForApp(const std::string& app_id) {
 bool AutoRunOnOsUpgradeTask::HasOSUpgraded() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  const absl::optional<OSVERSIONINFOEX> previous_os_version =
+  const std::optional<OSVERSIONINFOEX> previous_os_version =
       persisted_data_->GetLastOSVersion();
   if (!previous_os_version) {
     // Initialize the OS version.
@@ -116,10 +117,11 @@ bool AutoRunOnOsUpgradeTask::HasOSUpgraded() {
     return false;
   }
 
-  if (!CompareOSVersions(previous_os_version.value(), VER_GREATER))
+  if (!CompareOSVersions(previous_os_version.value(), VER_GREATER)) {
     return false;
+  }
 
-  if (const absl::optional<OSVERSIONINFOEX> current_os_version = GetOSVersion();
+  if (const std::optional<OSVERSIONINFOEX> current_os_version = GetOSVersion();
       current_os_version) {
     os_upgrade_string_ = GetOSUpgradeVersionsString(previous_os_version.value(),
                                                     current_os_version.value());

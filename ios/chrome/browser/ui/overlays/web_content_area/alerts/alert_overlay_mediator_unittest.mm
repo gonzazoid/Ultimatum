@@ -4,22 +4,18 @@
 
 #import "ios/chrome/browser/ui/overlays/web_content_area/alerts/alert_overlay_mediator.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/test/metrics/user_action_tester.h"
-#import "ios/chrome/browser/overlays/public/overlay_callback_manager.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/overlay_response_info.h"
-#import "ios/chrome/browser/overlays/public/web_content_area/alert_overlay.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_callback_manager.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_response_info.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/alert_overlay.h"
+#import "ios/chrome/browser/shared/ui/elements/text_field_configuration.h"
 #import "ios/chrome/browser/ui/alert_view/alert_action.h"
 #import "ios/chrome/browser/ui/alert_view/test/fake_alert_consumer.h"
-#import "ios/chrome/browser/ui/elements/text_field_configuration.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using alert_overlays::AlertRequest;
 using alert_overlays::AlertResponse;
@@ -27,7 +23,8 @@ using alert_overlays::ButtonConfig;
 
 namespace {
 // Alert setup consts.
-const size_t kButtonIndexOk = 0;
+const size_t kButtonIndexOkRow = 1;
+const size_t kButtonIndexOkCol = 0;
 const size_t kTextFieldIndex = 0;
 
 // Recorded when OK button is tapped.
@@ -59,7 +56,8 @@ std::unique_ptr<OverlayResponse> CreateFakeResponse(
     std::unique_ptr<OverlayResponse> alert_response) {
   AlertResponse* alert_info = alert_response->GetInfo<AlertResponse>();
   return OverlayResponse::CreateWithInfo<FakeResponseInfo>(
-      alert_info->tapped_button_index() == kButtonIndexOk,
+      alert_info->tapped_button_row_index() == kButtonIndexOkRow &&
+          alert_info->tapped_button_column_index() == kButtonIndexOkCol,
       alert_info->text_field_values()[kTextFieldIndex]);
 }
 
@@ -83,9 +81,10 @@ class FakeRequestConfig : public OverlayResponseInfo<FakeRequestConfig> {
            autocapitalizationType:UITextAutocapitalizationTypeSentences
                   secureTextEntry:NO],
     ];
-    const std::vector<ButtonConfig> button_configs{
-        ButtonConfig(@"OK", kOKTappedUserActionName),
-        ButtonConfig(@"Cancel", UIAlertActionStyleCancel)};
+    const std::vector<std::vector<ButtonConfig>> button_configs{
+        {ButtonConfig(@"First Row")},
+        {ButtonConfig(@"OK", kOKTappedUserActionName),
+         ButtonConfig(@"Cancel", UIAlertActionStyleCancel)}};
     AlertRequest::CreateForUserData(user_data, @"title", @"message",
                                     @"accessibility_identifier",
                                     text_field_configs, button_configs,
@@ -139,11 +138,18 @@ TEST_F(AlertOverlayMediatorTest, SetUpConsumer) {
               consumer_.alertAccessibilityIdentifier);
   EXPECT_NSEQ(alert_request->text_field_configs(),
               consumer_.textFieldConfigurations);
-  for (size_t i = 0; i < alert_request->button_configs().size(); ++i) {
-    AlertAction* consumer_action = consumer_.actions[i];
-    const ButtonConfig& button_config = alert_request->button_configs()[i];
-    EXPECT_NSEQ(button_config.title, consumer_action.title);
-    EXPECT_EQ(button_config.style, consumer_action.style);
+  ASSERT_EQ(2U, alert_request->button_configs().size());
+  ASSERT_EQ(1U, alert_request->button_configs()[0].size());
+  ASSERT_EQ(2U, alert_request->button_configs()[1].size());
+  size_t rows_count = alert_request->button_configs().size();
+  for (size_t i = 0; i < rows_count; ++i) {
+    NSArray<AlertAction*>* actions = consumer_.actions[i];
+    for (size_t j = 0; j < [actions count]; ++j) {
+      AlertAction* consumer_action = actions[j];
+      const ButtonConfig& button_config = alert_request->button_configs()[i][j];
+      EXPECT_NSEQ(button_config.title, consumer_action.title);
+      EXPECT_EQ(button_config.style, consumer_action.style);
+    }
   }
 }
 
@@ -157,7 +163,8 @@ TEST_F(AlertOverlayMediatorTest, ResponseConversion) {
   mediator_.dataSource = data_source;
 
   // Simulate a tap on the OK button.
-  AlertAction* ok_button_action = consumer_.actions[kButtonIndexOk];
+  AlertAction* ok_button_action =
+      consumer_.actions[kButtonIndexOkRow][kButtonIndexOkCol];
   ASSERT_TRUE(ok_button_action.handler);
   ok_button_action.handler(ok_button_action);
 
@@ -175,7 +182,8 @@ TEST_F(AlertOverlayMediatorTest, ResponseConversion) {
 // Tests UMA user action recording.
 TEST_F(AlertOverlayMediatorTest, UserActionRecording) {
   // Tapping OK button records User Action.
-  AlertAction* ok_button_action = consumer_.actions[kButtonIndexOk];
+  AlertAction* ok_button_action =
+      consumer_.actions[kButtonIndexOkRow][kButtonIndexOkCol];
   base::UserActionTester user_action_tester;
   EXPECT_EQ(0, user_action_tester.GetActionCount(kOKTappedUserActionName));
   ok_button_action.handler(ok_button_action);

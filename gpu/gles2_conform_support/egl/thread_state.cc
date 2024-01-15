@@ -27,7 +27,7 @@
 #include "ui/gl/gl_switches.h"
 #include "ui/gl/init/gl_factory.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -86,12 +86,12 @@ egl::ThreadState* ThreadState::Get() {
       // Need to call both Init and InitFromArgv, since Windows does not use
       // argc, argv in CommandLine::Init(argc, argv).
       command_line->InitFromArgv(argv);
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
       ui::OzonePlatform::InitializeForGPU(ui::OzonePlatform::InitParams());
 #endif
-      gl::GLDisplay* display =
-          gl::init::InitializeGLNoExtensionsOneOff(/*init_bindings=*/true,
-                                                   /*system_device_id=*/0);
+      gl::GLDisplay* display = gl::init::InitializeGLNoExtensionsOneOff(
+          /*init_bindings=*/true,
+          /*gpu_preference=*/gl::GpuPreference::kDefault);
       gpu::GpuFeatureInfo gpu_feature_info;
       if (!command_line->HasSwitch(switches::kDisableGpuDriverBugWorkarounds)) {
         gpu::GPUInfo gpu_info;

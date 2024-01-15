@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
@@ -18,17 +19,17 @@
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_encrypted_metadata_key.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_private_certificate.h"
-#include "chrome/browser/nearby_sharing/common/nearby_share_http_result.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_manager.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/components/nearby/common/client/nearby_http_result.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 class NearbyShareClient;
 class NearbyShareClientFactory;
 class NearbyShareLocalDeviceDataManager;
-class NearbyShareScheduler;
+class NearbyShareProfileInfoProvider;
 class PrefService;
 
 namespace device {
@@ -39,11 +40,13 @@ namespace leveldb_proto {
 class ProtoDatabaseProvider;
 }  // namespace leveldb_proto
 
-namespace nearbyshare {
-namespace proto {
+namespace ash::nearby {
+class NearbyScheduler;
+}  // namespace ash::nearby
+
+namespace nearby::sharing::proto {
 class ListPublicCertificatesResponse;
-}  // namespace proto
-}  // namespace nearbyshare
+}  // namespace nearby::sharing::proto
 
 // An implementation of the NearbyShareCertificateManager that handles
 //   1) creating, storing, and uploading local device certificates, as well as
@@ -64,6 +67,7 @@ class NearbyShareCertificateManagerImpl
     static std::unique_ptr<NearbyShareCertificateManager> Create(
         NearbyShareLocalDeviceDataManager* local_device_data_manager,
         NearbyShareContactManager* contact_manager,
+        NearbyShareProfileInfoProvider* profile_info_provider,
         PrefService* pref_service,
         leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
         const base::FilePath& profile_path,
@@ -76,6 +80,7 @@ class NearbyShareCertificateManagerImpl
     virtual std::unique_ptr<NearbyShareCertificateManager> CreateInstance(
         NearbyShareLocalDeviceDataManager* local_device_data_manager,
         NearbyShareContactManager* contact_manager,
+        NearbyShareProfileInfoProvider* profile_info_provider,
         PrefService* pref_service,
         leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
         const base::FilePath& profile_path,
@@ -92,6 +97,7 @@ class NearbyShareCertificateManagerImpl
   NearbyShareCertificateManagerImpl(
       NearbyShareLocalDeviceDataManager* local_device_data_manager,
       NearbyShareContactManager* contact_manager,
+      NearbyShareProfileInfoProvider* profile_info_provider,
       PrefService* pref_service,
       leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
       const base::FilePath& profile_path,
@@ -99,7 +105,7 @@ class NearbyShareCertificateManagerImpl
       const base::Clock* clock);
 
   // NearbyShareCertificateManager:
-  std::vector<nearbyshare::proto::PublicCertificate>
+  std::vector<nearby::sharing::proto::PublicCertificate>
   GetPrivateCertificatesAsPublicCertificates(
       nearby_share::mojom::Visibility visibility) override;
   void GetDecryptedPublicCertificate(
@@ -116,7 +122,7 @@ class NearbyShareCertificateManagerImpl
   // NearbyShareContactManager::Observer:
   void OnContactsDownloaded(
       const std::set<std::string>& allowed_contact_ids,
-      const std::vector<nearbyshare::proto::ContactRecord>& contacts,
+      const std::vector<nearby::sharing::proto::ContactRecord>& contacts,
       uint32_t num_unreachable_contacts_filtered_out) override;
   void OnContactsUploaded(bool did_contacts_change_since_last_upload) override;
 
@@ -168,10 +174,10 @@ class NearbyShareCertificateManagerImpl
   void OnListPublicCertificatesSuccess(
       size_t page_number,
       size_t certificate_count,
-      const nearbyshare::proto::ListPublicCertificatesResponse& response);
+      const nearby::sharing::proto::ListPublicCertificatesResponse& response);
   void OnListPublicCertificatesFailure(size_t page_number,
                                        size_t certificate_count,
-                                       NearbyShareHttpError error);
+                                       ash::nearby::NearbyHttpError error);
   void OnListPublicCertificatesTimeout(size_t page_number,
                                        size_t certificate_count);
   void OnPublicCertificatesAddedToStorage(
@@ -179,25 +185,29 @@ class NearbyShareCertificateManagerImpl
       size_t page_number,
       size_t certificate_count,
       bool success);
-  void FinishDownloadPublicCertificates(bool success,
-                                        NearbyShareHttpResult http_result,
-                                        size_t page_number,
-                                        size_t certificate_count);
+  void FinishDownloadPublicCertificates(
+      bool success,
+      ash::nearby::NearbyHttpResult http_result,
+      size_t page_number,
+      size_t certificate_count);
 
   base::OneShotTimer timer_;
-  NearbyShareLocalDeviceDataManager* local_device_data_manager_ = nullptr;
-  NearbyShareContactManager* contact_manager_ = nullptr;
-  PrefService* pref_service_ = nullptr;
-  NearbyShareClientFactory* client_factory_ = nullptr;
-  const base::Clock* clock_;
+  raw_ptr<NearbyShareLocalDeviceDataManager> local_device_data_manager_ =
+      nullptr;
+  raw_ptr<NearbyShareContactManager> contact_manager_ = nullptr;
+  raw_ptr<NearbyShareProfileInfoProvider> profile_info_provider_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<NearbyShareClientFactory> client_factory_ = nullptr;
+  raw_ptr<const base::Clock> clock_;
   std::unique_ptr<NearbyShareCertificateStorage> certificate_storage_;
-  std::unique_ptr<NearbyShareScheduler>
+  std::unique_ptr<ash::nearby::NearbyScheduler>
       private_certificate_expiration_scheduler_;
-  std::unique_ptr<NearbyShareScheduler>
+  std::unique_ptr<ash::nearby::NearbyScheduler>
       public_certificate_expiration_scheduler_;
-  std::unique_ptr<NearbyShareScheduler>
+  std::unique_ptr<ash::nearby::NearbyScheduler>
       upload_local_device_certificates_scheduler_;
-  std::unique_ptr<NearbyShareScheduler> download_public_certificates_scheduler_;
+  std::unique_ptr<ash::nearby::NearbyScheduler>
+      download_public_certificates_scheduler_;
   std::unique_ptr<NearbyShareClient> client_;
   base::WeakPtrFactory<NearbyShareCertificateManagerImpl> weak_ptr_factory_{
       this};

@@ -11,7 +11,7 @@
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_client_thread.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_state.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_util.h"
@@ -58,8 +58,7 @@ class GrpcHttpConnectionClient {
   void OnRpcExited(grpc::ClientContext* context, const grpc::Status& status);
 
   // `http_connection_factory_` must outlive this class.
-  base::raw_ptr<assistant_client::HttpConnectionFactory>
-      http_connection_factory_;
+  raw_ptr<assistant_client::HttpConnectionFactory> http_connection_factory_;
 
   // The following section is only accessed by the constructor thread.
   // Thread running the completion queue.  CQ has to be shutdown before we
@@ -84,10 +83,12 @@ class GrpcHttpConnectionClient {
   // concurrency issue. No lock needed.
   bool init_request_sent_ = false;
 
-  // |write_queue_| methods are thread safe.
+  // Lock for |write_queue_| which could be accessed from the different threads.
+  base::Lock write_queue_lock_;
   std::unique_ptr<chromeos::libassistant::StreamingWriteQueue<
       ::assistant::api::StreamHttpConnectionRequest>>
-      write_queue_;
+      write_queue_ GUARDED_BY(write_queue_lock_);
+  bool is_shutting_down_ GUARDED_BY(write_queue_lock_) = false;
 
   // `http_connection` owns itself and will be deleted when `Close()` is called.
   // When clean up `http_connections_`, will call `Close()` on the elements.

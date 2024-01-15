@@ -9,6 +9,9 @@
 #ifndef MEDIA_CAPTURE_VIDEO_WIN_VIDEO_CAPTURE_DEVICE_MF_WIN_H_
 #define MEDIA_CAPTURE_VIDEO_WIN_VIDEO_CAPTURE_DEVICE_MF_WIN_H_
 
+#include <d3d11_4.h>
+#include <ks.h>
+#include <ksmedia.h>
 #include <mfcaptureengine.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -16,10 +19,12 @@
 #include <strmif.h>
 #include <wrl/client.h>
 
+#include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
@@ -81,6 +86,10 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
                        SetPhotoOptionsCallback callback) override;
   void OnUtilizationReport(media::VideoCaptureFeedback feedback) override;
 
+  // Captured configuration changes.
+  void OnCameraControlChange(REFGUID control_set, UINT32 id);
+  void OnCameraControlError(HRESULT status) const;
+
   // Captured new video data.
   void OnIncomingCapturedData(Microsoft::WRL::ComPtr<IMFMediaBuffer> buffer,
                               base::TimeTicks reference_time,
@@ -117,6 +126,11 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
   absl::optional<int> camera_rotation() const { return camera_rotation_; }
 
  private:
+  class MFVideoCallback;
+  class MFActivitiesReportCallback;
+
+  bool CreateMFCameraControlMonitor();
+  void DeinitVideoCallbacksControlsAndMonitors();
   HRESULT ExecuteHresultCallbackWithRetries(
       base::RepeatingCallback<HRESULT()> callback,
       MediaFoundationFunctionRequiringRetry which_function);
@@ -133,6 +147,15 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
   HRESULT FillCapabilities(IMFCaptureSource* source,
                            bool photo,
                            CapabilityList* capabilities);
+  HRESULT SetAndCommitExtendedCameraControlFlags(
+      KSPROPERTY_CAMERACONTROL_EXTENDED_PROPERTY property_id,
+      ULONGLONG flags);
+  HRESULT SetCameraControlProperty(CameraControlProperty property,
+                                   long value,
+                                   long flags);
+  HRESULT SetVideoControlProperty(VideoProcAmpProperty property,
+                                  long value,
+                                  long flags);
   void OnError(VideoCaptureError error,
                const base::Location& from_here,
                HRESULT hr);
@@ -141,20 +164,30 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
                const char* message);
   void SendOnStartedIfNotYetSent();
   HRESULT WaitOnCaptureEvent(GUID capture_event_guid);
-  HRESULT DeliverTextureToClient(ID3D11Texture2D* texture,
-                                 base::TimeTicks reference_time,
-                                 base::TimeDelta timestamp);
-  void OnIncomingCapturedDataInternal(
-      Microsoft::WRL::ComPtr<IMFMediaBuffer> buffer,
+  HRESULT DeliverTextureToClient(
+      Microsoft::WRL::ComPtr<IMFMediaBuffer> imf_buffer,
+      ID3D11Texture2D* texture,
       base::TimeTicks reference_time,
       base::TimeDelta timestamp);
+  HRESULT DeliverExternalBufferToClient(
+      Microsoft::WRL::ComPtr<IMFMediaBuffer> imf_buffer,
+      ID3D11Texture2D* texture,
+      const gfx::Size& texture_size,
+      const VideoPixelFormat& pixel_format,
+      base::TimeTicks reference_time,
+      base::TimeDelta timestamp);
+  void OnCameraControlChangeInternal(REFGUID control_set, UINT32 id);
+  void OnIncomingCapturedDataInternal();
   bool RecreateMFSource();
   void OnFrameDroppedInternal(VideoCaptureFrameDropReason reason);
   void ProcessEventError(HRESULT hr);
+  void OnCameraInUseReport(bool in_use, bool is_default_action);
 
   VideoCaptureDeviceDescriptor device_descriptor_;
   CreateMFPhotoCallbackCB create_mf_photo_callback_;
   scoped_refptr<MFVideoCallback> video_callback_;
+  scoped_refptr<MFActivitiesReportCallback> activities_report_callback_;
+  bool activity_report_pending_ = false;
   bool is_initialized_;
   int max_retry_count_;
   int retry_delay_in_ms_;
@@ -163,10 +196,13 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
   Microsoft::WRL::ComPtr<IMFMediaSource> source_;
   Microsoft::WRL::ComPtr<IAMCameraControl> camera_control_;
   Microsoft::WRL::ComPtr<IAMVideoProcAmp> video_control_;
+  Microsoft::WRL::ComPtr<IMFCameraControlMonitor> camera_control_monitor_;
   Microsoft::WRL::ComPtr<IMFExtendedCameraController>
       extended_camera_controller_;
+  Microsoft::WRL::ComPtr<IMFSensorActivityMonitor> activity_monitor_;
   Microsoft::WRL::ComPtr<IMFCaptureEngine> engine_;
   std::unique_ptr<CapabilityWin> selected_video_capability_;
+  gfx::ColorSpace color_space_;
   CapabilityList photo_capabilities_;
   std::unique_ptr<CapabilityWin> selected_photo_capability_;
   bool is_started_;
@@ -186,6 +222,15 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
   VideoCaptureParams params_;
   int num_restarts_ = 0;
 
+  struct ValueAndFlags {
+    long value;
+    long flags;
+  };
+
+  base::flat_map<UINT32, ValueAndFlags> set_camera_control_properties_;
+  base::flat_map<UINT32, ULONGLONG> set_extended_camera_control_flags_;
+  base::flat_map<UINT32, ValueAndFlags> set_video_control_properties_;
+
   // Main thread task runner, used to serialize work triggered by
   // IMFCaptureEngine callbacks (OnEvent, OnSample) and work triggered
   // by video capture service API calls (Init, AllocateAndStart,
@@ -197,8 +242,25 @@ class CAPTURE_EXPORT VideoCaptureDeviceMFWin : public VideoCaptureDevice {
 
   SEQUENCE_CHECKER(sequence_checker_);
 
+  base::Lock queueing_lock_;
+  // Last input for the posted task OnIncomingCapturedDataInternal.
+  // If new input arrives while the task is pending, the input will be
+  // overridden. So only 2 IMFSampleBuffer would be used at any time.
+  Microsoft::WRL::ComPtr<IMFMediaBuffer> input_buffer_
+      GUARDED_BY(queueing_lock_);
+  base::TimeTicks input_reference_time_ GUARDED_BY(queueing_lock_);
+  base::TimeDelta input_timestamp_ GUARDED_BY(queueing_lock_);
+
   base::WeakPtrFactory<VideoCaptureDeviceMFWin> weak_factory_{this};
 };
+
+// Creates a new sensor activity monitor and returns it on `monitor`.
+// The monitor will execute `report_callback` every time a new activity report
+// becomes available.
+// This function return `true` on success and `false` on failure.
+bool CreateMFSensorActivityMonitor(
+    IMFSensorActivitiesReportCallback* report_callback,
+    IMFSensorActivityMonitor** monitor);
 
 }  // namespace media
 

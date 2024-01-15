@@ -8,6 +8,10 @@
   <link rel="stylesheet" href="../css/common.css">
   <link rel="stylesheet" href="../css/feedback.css">
   <link rel="stylesheet" href="../css/feedback_shared_styles.css">
+  <if expr="chromeos_ash">
+    <link rel="stylesheet" href="chrome://theme/colors.css?sets=sys">
+    <link rel="stylesheet" href="//theme/typography.css">
+  </if>
 
   <script type="module" src="../js/feedback.js"></script>
 </head>
@@ -51,10 +55,22 @@
     </div>
     <div id="attach-file-note" aria-hidden="true">$i18n{attachFileNote}</div>
     <!-- User Consent -->
-    <div id="consent-container" class="checkbox-field-container">
+    <div id="consent-container" class="checkbox-field-container" hidden>
       <input id="consent-checkbox" type="checkbox"
           aria-labelledby="consent-chk-label">
       <label id="consent-chk-label">$i18n{consentCheckboxLabel}</label>
+    </div>
+    <!-- Offensive or unsafe -->
+    <div id="offensive-container" class="checkbox-field-container" hidden>
+      <input id="offensive-checkbox" type="checkbox"
+          aria-labelledby="offensive-checkbox-label">
+      <label id="offensive-checkbox-label">$i18n{offensiveCheckboxLabel}</label>
+    </div>
+    <!-- Show log id -->
+    <div id="log-id-container" class="checkbox-field-container" hidden>
+      <input id="log-id-checkbox" type="checkbox"
+          aria-labelledby="log-id-checkbox-label" checked>
+      <label id="log-id-checkbox-label">$i18n{logIdCheckboxLabel}</label>
     </div>
     <!-- Screenshot -->
     <div class="checkbox-field-container">
@@ -62,6 +78,12 @@
              aria-labelledby="screenshot-chk-label">
       <label id="screenshot-chk-label">$i18n{screenshot}</label>
       <img id="screenshot-image" aria-label="$i18n{screenshotA11y}">
+    </div>
+    <!-- Autofill Metadata (Googler Internal Only) -->
+    <div id="autofill-checkbox-container"
+         class="checkbox-field-container" hidden>
+      <input id="autofill-metadata-checkbox" type="checkbox" checked>
+      <label id="autofill-metadata-label">$i18nRaw{autofillMetadataInfo}</label>
     </div>
     <!-- System Information -->
     <div id="sys-info-container" class="checkbox-field-container">
@@ -91,17 +113,28 @@
     </div>
 </if>
     <!-- Privacy note -->
-    <div id="privacy-note">$i18nRaw{privacyNote}</div>
+    <div id="privacy-note" class="privacy-note">$i18nRaw{privacyNote}</div>
+<if expr="chromeos_ash">
+    <div id="share-privacy-note" class="privacy-note">
+      $i18n{mayBeSharedWithPartnerNote}
+    </div>
+</if>
   </div>
   <!-- Buttons -->
   <div id="bottom-buttons-container" class="content">
     <div class="buttons-pane bottom-buttons">
-      <button id="cancel-button" type="submit"
-          class="white-button">$i18n{cancel}
+      <button id="cancel-button" type="submit" class="white-button">
+        $i18n{cancel}
+        <if expr="chromeos_ash">
+          <div id="cancel-button-hover-bg"></div>
+        </if>
       </button>
       <button id="send-report-button" type="submit"
           class="blue-button" aria-describedby="questionnaire-notification">
         $i18n{sendReport}
+        <if expr="chromeos_ash">
+          <div id="send-button-hover-bg"></div>
+        </if>
       </button>
     </div>
   </div>

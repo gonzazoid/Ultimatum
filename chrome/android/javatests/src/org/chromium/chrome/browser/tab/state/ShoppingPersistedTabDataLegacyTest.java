@@ -25,7 +25,8 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.optimization_guide.OptimizationGuideBridge;
 import org.chromium.chrome.browser.optimization_guide.OptimizationGuideBridgeJni;
-import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.price_tracking.PriceTrackingFeatures;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
@@ -33,7 +34,6 @@ import org.chromium.components.optimization_guide.OptimizationGuideDecision;
 import org.chromium.components.optimization_guide.proto.HintsProto;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -42,20 +42,18 @@ import java.util.concurrent.TimeUnit;
  */
 @RunWith(BaseJUnit4ClassRunner.class)
 @EnableFeatures({ChromeFeatureList.COMMERCE_PRICE_TRACKING + "<Study"})
-@CommandLineFlags.
-Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE, "force-fieldtrials=Study/Group"})
+@CommandLineFlags.Add({
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    "force-fieldtrials=Study/Group"
+})
 public class ShoppingPersistedTabDataLegacyTest {
-    @Rule
-    public final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
+    @Rule public final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
 
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+    @Rule public JniMocker mMocker = new JniMocker();
 
-    @Rule
-    public TestRule mProcessor = new Features.InstrumentationProcessor();
+    @Rule public TestRule mProcessor = new Features.InstrumentationProcessor();
 
-    @Mock
-    protected OptimizationGuideBridge.Natives mOptimizationGuideBridgeJniMock;
+    @Mock protected OptimizationGuideBridge.Natives mOptimizationGuideBridgeJniMock;
 
     @Before
     public void setUp() {
@@ -66,157 +64,14 @@ public class ShoppingPersistedTabDataLegacyTest {
         ShoppingPersistedTabDataTestUtils.mockOptimizationGuideResponse(
                 mOptimizationGuideBridgeJniMock,
                 HintsProto.OptimizationType.SHOPPING_PAGE_PREDICTOR.getNumber(),
-                OptimizationGuideDecision.TRUE, null);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShoppingPersistedTabData.onDeferredStartup();
-            PersistedTabDataConfiguration.setUseTestConfig(true);
-        });
-    }
-
-    @SmallTest
-    @Test
-    @CommandLineFlags.
-    Add({"force-fieldtrial-params=Study.Group:price_tracking_time_to_live_ms/-1000/"
-            + "price_tracking_with_optimization_guide/true"})
-    public void
-    testShoppingPriceChange() {
-        shoppingPriceChange(ShoppingPersistedTabDataTestUtils.createTabOnUiThread(
-                ShoppingPersistedTabDataTestUtils.TAB_ID,
-                ShoppingPersistedTabDataTestUtils.IS_INCOGNITO));
-    }
-
-    @SmallTest
-    @Test
-    @CommandLineFlags.
-    Add({"force-fieldtrial-params=Study.Group:price_tracking_time_to_live_ms/-1000/"
-            + "price_tracking_with_optimization_guide/true"})
-    public void
-    testShoppingPriceChangeExtraFetchAfterChange() {
-        Tab tab = ShoppingPersistedTabDataTestUtils.createTabOnUiThread(
-                ShoppingPersistedTabDataTestUtils.TAB_ID,
-                ShoppingPersistedTabDataTestUtils.IS_INCOGNITO);
-        long mLastPriceChangeTimeMs = shoppingPriceChange(tab);
-        final Semaphore semaphore = new Semaphore(0);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShoppingPersistedTabData.from(tab, (shoppingPersistedTabData) -> {
-                ShoppingPersistedTabDataTestUtils.verifyPriceTrackingOptimizationTypeCalled(
-                        mOptimizationGuideBridgeJniMock, 3);
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.UPDATED_PRICE_MICROS,
-                        shoppingPersistedTabData.getPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.PRICE_MICROS,
-                        shoppingPersistedTabData.getPreviousPriceMicros());
-                Assert.assertEquals(mLastPriceChangeTimeMs,
-                        shoppingPersistedTabData.getLastPriceChangeTimeMs());
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.UNITED_STATES_CURRENCY_CODE,
-                        shoppingPersistedTabData.getCurrencyCode());
-                semaphore.release();
-            });
-        });
-        ShoppingPersistedTabDataTestUtils.acquireSemaphore(semaphore);
-    }
-
-    private long shoppingPriceChange(Tab tab) {
-        final Semaphore initialSemaphore = new Semaphore(0);
-        final Semaphore updateSemaphore = new Semaphore(0);
-        ShoppingPersistedTabDataTestUtils.mockOptimizationGuideResponse(
-                mOptimizationGuideBridgeJniMock,
-                HintsProto.OptimizationType.PRICE_TRACKING.getNumber(),
-                ShoppingPersistedTabDataTestUtils.MockPriceTrackingResponse
-                        .BUYABLE_PRODUCT_INITIAL);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShoppingPersistedTabData.from(tab, (shoppingPersistedTabData) -> {
-                ShoppingPersistedTabDataTestUtils.verifyPriceTrackingOptimizationTypeCalled(
-                        mOptimizationGuideBridgeJniMock, 1);
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.PRICE_MICROS,
-                        shoppingPersistedTabData.getPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.UNITED_STATES_CURRENCY_CODE,
-                        shoppingPersistedTabData.getCurrencyCode());
-                Assert.assertEquals(ShoppingPersistedTabData.NO_PRICE_KNOWN,
-                        shoppingPersistedTabData.getPreviousPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabData.NO_TRANSITIONS_OCCURRED,
-                        shoppingPersistedTabData.getLastPriceChangeTimeMs());
-                initialSemaphore.release();
-            });
-        });
-        ShoppingPersistedTabDataTestUtils.acquireSemaphore(initialSemaphore);
-        long firstUpdateTime = ShoppingPersistedTabDataTestUtils.getTimeLastUpdatedOnUiThread(tab);
-        ShoppingPersistedTabDataTestUtils.mockOptimizationGuideResponse(
-                mOptimizationGuideBridgeJniMock,
-                HintsProto.OptimizationType.PRICE_TRACKING.getNumber(),
-                ShoppingPersistedTabDataTestUtils.MockPriceTrackingResponse
-                        .BUYABLE_PRODUCT_PRICE_UPDATED);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShoppingPersistedTabData.from(tab, (updatedShoppingPersistedTabData) -> {
-                ShoppingPersistedTabDataTestUtils.verifyPriceTrackingOptimizationTypeCalled(
-                        mOptimizationGuideBridgeJniMock, 2);
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.UPDATED_PRICE_MICROS,
-                        updatedShoppingPersistedTabData.getPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.PRICE_MICROS,
-                        updatedShoppingPersistedTabData.getPreviousPriceMicros());
-                Assert.assertTrue(firstUpdateTime
-                        < updatedShoppingPersistedTabData.getLastPriceChangeTimeMs());
-                updateSemaphore.release();
-            });
-        });
-        ShoppingPersistedTabDataTestUtils.acquireSemaphore(updateSemaphore);
-        return ShoppingPersistedTabDataTestUtils.getTimeLastUpdatedOnUiThread(tab);
-    }
-
-    @SmallTest
-    @Test
-    @CommandLineFlags.
-    Add({"force-fieldtrial-params=Study.Group:price_tracking_with_optimization_guide/true"})
-    public void testNoRefetch() {
-        final Semaphore initialSemaphore = new Semaphore(0);
-        final Semaphore updateSemaphore = new Semaphore(0);
-        Tab tab = ShoppingPersistedTabDataTestUtils.createTabOnUiThread(
-                ShoppingPersistedTabDataTestUtils.TAB_ID,
-                ShoppingPersistedTabDataTestUtils.IS_INCOGNITO);
-        // Mock annotations response.
-        ShoppingPersistedTabDataTestUtils.mockOptimizationGuideResponse(
-                mOptimizationGuideBridgeJniMock,
-                HintsProto.OptimizationType.PRICE_TRACKING.getNumber(),
-                ShoppingPersistedTabDataTestUtils.MockPriceTrackingResponse
-                        .BUYABLE_PRODUCT_INITIAL);
-
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShoppingPersistedTabData.from(tab, (shoppingPersistedTabData) -> {
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.PRICE_MICROS,
-                        shoppingPersistedTabData.getPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabData.NO_PRICE_KNOWN,
-                        shoppingPersistedTabData.getPreviousPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.UNITED_STATES_CURRENCY_CODE,
-                        shoppingPersistedTabData.getCurrencyCode());
-                // By setting time to live to be a negative number, an update
-                // will be forced in the subsequent call
-                initialSemaphore.release();
-            });
-        });
-        ShoppingPersistedTabDataTestUtils.acquireSemaphore(initialSemaphore);
-        ShoppingPersistedTabDataTestUtils.verifyPriceTrackingOptimizationTypeCalled(
-                mOptimizationGuideBridgeJniMock, 1);
-        ShoppingPersistedTabDataTestUtils.mockOptimizationGuideResponse(
-                mOptimizationGuideBridgeJniMock,
-                HintsProto.OptimizationType.PRICE_TRACKING.getNumber(),
-                ShoppingPersistedTabDataTestUtils.MockPriceTrackingResponse
-                        .BUYABLE_PRODUCT_PRICE_UPDATED);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShoppingPersistedTabData.from(tab, (shoppingPersistedTabData) -> {
-                Assert.assertEquals(ShoppingPersistedTabDataTestUtils.PRICE_MICROS,
-                        shoppingPersistedTabData.getPriceMicros());
-                Assert.assertEquals(ShoppingPersistedTabData.NO_PRICE_KNOWN,
-                        shoppingPersistedTabData.getPreviousPriceMicros());
-
-                // By setting time to live to be a negative number, an update
-                // will be forced in the subsequent call
-                updateSemaphore.release();
-            });
-        });
-        ShoppingPersistedTabDataTestUtils.acquireSemaphore(updateSemaphore);
-        // PageAnnotationsService should not have been called a second time - because we haven't
-        // passed the time to live
-        ShoppingPersistedTabDataTestUtils.verifyPriceTrackingOptimizationTypeCalled(
-                mOptimizationGuideBridgeJniMock, 1);
+                OptimizationGuideDecision.TRUE,
+                null);
+        PriceTrackingFeatures.setPriceTrackingEnabledForTesting(false);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ShoppingPersistedTabData.onDeferredStartup();
+                    PersistedTabDataConfiguration.setUseTestConfig(true);
+                });
     }
 
     @UiThreadTest
@@ -224,28 +79,28 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacy() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         // Prices unknown is not a price drop
         Assert.assertNull(shoppingPersistedTabData.getPriceDropLegacy());
 
         // Same price is not a price drop
         shoppingPersistedTabData.setPriceMicros(
-                ShoppingPersistedTabDataTestUtils.HIGH_PRICE_MICROS, null);
+                ShoppingPersistedTabDataTestUtils.HIGH_PRICE_MICROS);
         shoppingPersistedTabData.setPreviousPriceMicros(
                 ShoppingPersistedTabDataTestUtils.HIGH_PRICE_MICROS);
         Assert.assertNull(shoppingPersistedTabData.getPriceDropLegacy());
 
         // Lower -> Higher price is not a price drop
         shoppingPersistedTabData.setPriceMicros(
-                ShoppingPersistedTabDataTestUtils.HIGH_PRICE_MICROS, null);
+                ShoppingPersistedTabDataTestUtils.HIGH_PRICE_MICROS);
         shoppingPersistedTabData.setPreviousPriceMicros(
                 ShoppingPersistedTabDataTestUtils.LOW_PRICE_MICROS);
         Assert.assertNull(shoppingPersistedTabData.getPriceDropLegacy());
 
         // Actual price drop (Higher -> Lower)
-        shoppingPersistedTabData.setPriceMicros(
-                ShoppingPersistedTabDataTestUtils.LOW_PRICE_MICROS, null);
+        shoppingPersistedTabData.setPriceMicros(ShoppingPersistedTabDataTestUtils.LOW_PRICE_MICROS);
         shoppingPersistedTabData.setPreviousPriceMicros(
                 ShoppingPersistedTabDataTestUtils.HIGH_PRICE_MICROS);
         ShoppingPersistedTabData.PriceDrop priceDrop =
@@ -260,7 +115,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterSamePrice() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $10 -> $10 is not a price drop (same price)
@@ -274,7 +130,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterNoFormattedPriceDifference() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $10.40 -> $10 (which would be displayed $10 -> $10 is not a price drop)
@@ -288,7 +145,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAbsoluteDifferenceTooSmall() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $2 -> $1 ($1 price drop - less than $2. Not big enough)
@@ -302,7 +160,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterPriceIncrease() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $9.33 -> $9.66 price increase is not a price drop
@@ -316,7 +175,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterPercentageDropNotEnough() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $50 -> $46 (8% price drop (less than 10%) not big enough)
@@ -330,7 +190,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop1() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $10 -> $7 (30% and $3 price drop is big enough)
@@ -346,7 +207,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop2() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $15.72 -> $4.80 (70% and $10.92 price drop is big enough)
@@ -362,7 +224,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop3() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $20 -> $10 (50% and $10 price drop is big enough)
@@ -378,7 +241,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop4() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $30 -> $27 (10% and $3 price drop is big enough)
@@ -394,7 +258,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop5() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $30.65 -> $25.50 (17% and $5.15 price drop is big enough)
@@ -410,7 +275,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop6() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
 
         // $9.65 -> $3.80 (40% and $5.85 price drop is big enough)
@@ -426,7 +292,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop7() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         // $9.33 -> $0.90 (96% price drop and $8.43 price drop is big enough)
         shoppingPersistedTabData.setPreviousPriceMicrosForTesting(9_330_000L);
@@ -441,7 +308,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop8() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         // $20 -> $18 (10% price drop and $2 price drop is big enough)
         shoppingPersistedTabData.setPreviousPriceMicrosForTesting(20_000_000L);
@@ -456,7 +324,8 @@ public class ShoppingPersistedTabDataLegacyTest {
     @Test
     public void testPriceDropLegacyFilterAllowedPriceDrop9() {
         ShoppingPersistedTabData shoppingPersistedTabData =
-                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults();
+                ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithDefaults(
+                        Profile.getLastUsedRegularProfile());
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         // $2 -> $0 ($2 price drop is big enough)
         shoppingPersistedTabData.setPreviousPriceMicrosForTesting(2_000_000L);
@@ -473,7 +342,7 @@ public class ShoppingPersistedTabDataLegacyTest {
         ShoppingPersistedTabData shoppingPersistedTabData =
                 ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithCurrencyCode(
                         ShoppingPersistedTabDataTestUtils.TAB_ID,
-                        ShoppingPersistedTabDataTestUtils.IS_INCOGNITO,
+                        Profile.getLastUsedRegularProfile(),
                         ShoppingPersistedTabDataTestUtils.GREAT_BRITAIN_CURRENCY_CODE);
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         shoppingPersistedTabData.setPreviousPriceMicrosForTesting(15_000_000L);
@@ -490,7 +359,7 @@ public class ShoppingPersistedTabDataLegacyTest {
         ShoppingPersistedTabData shoppingPersistedTabData =
                 ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithCurrencyCode(
                         ShoppingPersistedTabDataTestUtils.TAB_ID,
-                        ShoppingPersistedTabDataTestUtils.IS_INCOGNITO,
+                        Profile.getLastUsedRegularProfile(),
                         ShoppingPersistedTabDataTestUtils.JAPAN_CURRENCY_CODE);
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         shoppingPersistedTabData.setPreviousPriceMicrosForTesting(3_140_000_000_000L);
@@ -508,7 +377,7 @@ public class ShoppingPersistedTabDataLegacyTest {
         ShoppingPersistedTabData shoppingPersistedTabData =
                 ShoppingPersistedTabDataTestUtils.createShoppingPersistedTabDataWithCurrencyCode(
                         ShoppingPersistedTabDataTestUtils.TAB_ID,
-                        ShoppingPersistedTabDataTestUtils.IS_INCOGNITO,
+                        Profile.getLastUsedRegularProfile(),
                         ShoppingPersistedTabDataTestUtils.UNITED_STATES_CURRENCY_CODE);
         shoppingPersistedTabData.mPriceDropMethod = ShoppingPersistedTabData.PriceDropMethod.LEGACY;
         // $10 -> $5 (50% and $5 price drop is big enough)

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_conversions.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -42,18 +42,24 @@ TCPServerSocket::TCPServerSocket(
 
 TCPServerSocket::~TCPServerSocket() {}
 
-int TCPServerSocket::Listen(const net::IPEndPoint& local_addr,
-                            int backlog,
-                            net::IPEndPoint* local_addr_out) {
+base::expected<net::IPEndPoint, int32_t> TCPServerSocket::Listen(
+    const net::IPEndPoint& local_addr,
+    int backlog,
+    absl::optional<bool> ipv6_only) {
   if (backlog == 0) {
     // SocketPosix::Listen and TCPSocketWin::Listen DCHECKs on backlog > 0.
-    return net::ERR_INVALID_ARGUMENT;
+    return base::unexpected(net::ERR_INVALID_ARGUMENT);
   }
   backlog_ = backlog;
-  int net_error = socket_->Listen(local_addr, backlog);
-  if (net_error == net::OK)
-    net_error = socket_->GetLocalAddress(local_addr_out);
-  return net_error;
+  int net_error = socket_->Listen(local_addr, backlog, ipv6_only);
+  net::IPEndPoint local_addr_out;
+  if (net_error == net::OK) {
+    net_error = socket_->GetLocalAddress(&local_addr_out);
+  }
+  if (net_error == net::OK) {
+    return local_addr_out;
+  }
+  return base::unexpected(net_error);
 }
 
 void TCPServerSocket::Accept(
@@ -72,6 +78,13 @@ void TCPServerSocket::Accept(
   if (pending_accepts_queue_.size() == 1)
     ProcessNextAccept();
 }
+
+#if BUILDFLAG(IS_CHROMEOS)
+void TCPServerSocket::AttachConnectionTracker(
+    mojo::PendingRemote<mojom::SocketConnectionTracker> connection_tracker) {
+  connection_tracker_ = std::move(connection_tracker);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void TCPServerSocket::SetSocketForTest(
     std::unique_ptr<net::ServerSocket> socket) {

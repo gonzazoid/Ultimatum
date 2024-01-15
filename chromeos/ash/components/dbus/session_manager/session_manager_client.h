@@ -6,15 +6,16 @@
 #define CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_SESSION_MANAGER_CLIENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "third_party/cros_system_api/dbus/login_manager/dbus-constants.h"
 
 namespace arc {
@@ -105,6 +106,12 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
 
     // Called when screen lock state is updated.
     virtual void ScreenLockedStateUpdated() {}
+
+    // Called when a powerwash is requested.
+    virtual void PowerwashRequested(bool admin_requested) {}
+
+    // Called when session stopping signal is received
+    virtual void SessionStopping() {}
   };
 
   // Interface for performing actions on behalf of the stub implementation.
@@ -197,8 +204,8 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // returned by the session manager. |error| contains an error message if an
   // error occurred, otherwise empty.
   using LoginScreenStorageRetrieveCallback =
-      base::OnceCallback<void(absl::optional<std::string> /* data */,
-                              absl::optional<std::string> /* error */)>;
+      base::OnceCallback<void(std::optional<std::string> /* data */,
+                              std::optional<std::string> /* error */)>;
 
   // Retrieve data stored earlier with the |LoginScreenStorageStore()| method.
   virtual void LoginScreenStorageRetrieve(
@@ -210,7 +217,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // |keys| is empty and |error| contains the error message.
   using LoginScreenStorageListKeysCallback =
       base::OnceCallback<void(std::vector<std::string> /* keys */,
-                              absl::optional<std::string> /* error */)>;
+                              std::optional<std::string> /* error */)>;
 
   // List all keys currently stored in the login screen storage.
   virtual void LoginScreenStorageListKeys(
@@ -223,6 +230,11 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // Starts the session for the user.
   virtual void StartSession(
       const cryptohome::AccountIdentifier& cryptohome_id) = 0;
+  // Same as |StartSession|, but also tells session_manager whether Chrome will
+  // handle owner key generation or not (based on |chrome_side_key_generation|).
+  virtual void StartSessionEx(
+      const cryptohome::AccountIdentifier& cryptohome_id,
+      bool chrome_side_key_generation) = 0;
 
   // Stops the current session. Don't call directly unless there's no user on
   // the device. Use SessionTerminationManager::StopSession instead.
@@ -233,10 +245,11 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
       const cryptohome::AccountIdentifier& cryptohome_id) = 0;
 
   // Starts the factory reset.
-  virtual void StartDeviceWipe() = 0;
+  virtual void StartDeviceWipe(chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Starts a remotely initiated factory reset, similar to |StartDeviceWipe|
   // above, but also performs additional checks on Chrome OS side.
+  // session_manager validates |signed_command| against SHA256_RSA.
   virtual void StartRemoteDeviceWipe(
       const enterprise_management::SignedData& signed_command) = 0;
 
@@ -525,10 +538,5 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ash::SessionManagerClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_SESSION_MANAGER_CLIENT_H_

@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "components/sync/model/metadata_batch.h"
+#include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/model_type_state.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -69,12 +70,15 @@ MATCHER_P(HasEncryptionKeyName, expected_key_name, "") {
 
 // Matcher for sync_pb::ModelTypeState: verifies that initial sync is done.
 MATCHER(HasInitialSyncDone, "") {
-  return arg.initial_sync_done();
+  return arg.initial_sync_state() ==
+         sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE;
 }
 
 // Matcher for sync_pb::ModelTypeState: verifies that initial sync is not done.
 MATCHER(HasNotInitialSyncDone, "") {
-  return !arg.initial_sync_done();
+  return arg.initial_sync_state() ==
+         sync_pb::
+             ModelTypeState_InitialSyncState_INITIAL_SYNC_STATE_UNSPECIFIED;
 }
 
 }  // namespace syncer

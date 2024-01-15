@@ -8,15 +8,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -70,8 +71,10 @@ bool ServiceNameHasOwner(dbus::Bus* bus, const char* service_name) {
   dbus::MessageWriter writer(&name_has_owner_call);
   writer.AppendString(service_name);
   std::unique_ptr<dbus::Response> name_has_owner_response =
-      dbus_proxy->CallMethodAndBlock(&name_has_owner_call,
-                                     dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+      dbus_proxy
+          ->CallMethodAndBlock(&name_has_owner_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr);
   dbus::MessageReader reader(name_has_owner_response.get());
   bool owned = false;
   return name_has_owner_response && reader.PopBool(&owned) && owned;
@@ -321,8 +324,11 @@ bool PowerSaveBlocker::Delegate::Inhibit(DBusAPI api) {
       break;
   }
 
-  std::unique_ptr<dbus::Response> response = object_proxy->CallMethodAndBlock(
-      method_call.get(), dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+  std::unique_ptr<dbus::Response> response =
+      object_proxy
+          ->CallMethodAndBlock(method_call.get(),
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr);
 
   uint32_t cookie;
   if (response) {
@@ -360,8 +366,11 @@ void PowerSaveBlocker::Delegate::Uninhibit(
   auto message_writer =
       std::make_unique<dbus::MessageWriter>(method_call.get());
   message_writer->AppendUint32(inhibit_cookie.cookie);
-  std::unique_ptr<dbus::Response> response = object_proxy->CallMethodAndBlock(
-      method_call.get(), dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+  std::unique_ptr<dbus::Response> response =
+      object_proxy
+          ->CallMethodAndBlock(method_call.get(),
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr);
 
   // We don't care about checking the result. We assume it works; we can't
   // really do anything about it anyway if it fails.

@@ -4,27 +4,21 @@
 
 #include "net/nqe/socket_watcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
-#include "net/base/address_list.h"
 #include "net/base/ip_address.h"
 
 namespace net::nqe::internal {
 
 namespace {
 
-// Generate a compact representation for the first IP in |address_list|. For
-// IPv4, all 32 bits are used and for IPv6, the first 64 bits are used as the
-// remote host identifier.
-absl::optional<IPHash> CalculateIPHash(const AddressList& address_list) {
-  if (address_list.empty())
-    return absl::nullopt;
-
-  const IPAddress& ip_addr = address_list.front().address();
-
+// Generate a compact representation for |ip_addr|. For IPv4, all 32 bits
+// are used and for IPv6, the first 64 bits are used as the remote host
+// identifier.
+absl::optional<IPHash> CalculateIPHash(const IPAddress& ip_addr) {
   IPAddressBytes bytes = ip_addr.bytes();
 
   // For IPv4, the first four bytes are taken. For IPv6, the first 8 bytes are
@@ -51,7 +45,7 @@ absl::optional<IPHash> CalculateIPHash(const AddressList& address_list) {
 
 SocketWatcher::SocketWatcher(
     SocketPerformanceWatcherFactory::Protocol protocol,
-    const AddressList& address_list,
+    const IPAddress& address,
     base::TimeDelta min_notification_interval,
     bool allow_rtt_private_address,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
@@ -63,11 +57,11 @@ SocketWatcher::SocketWatcher(
       updated_rtt_observation_callback_(updated_rtt_observation_callback),
       should_notify_rtt_callback_(should_notify_rtt_callback),
       rtt_notifications_minimum_interval_(min_notification_interval),
+      allow_rtt_private_address_(allow_rtt_private_address),
       run_rtt_callback_(allow_rtt_private_address ||
-                        (!address_list.empty() &&
-                         address_list.front().address().IsPubliclyRoutable())),
+                        address.IsPubliclyRoutable()),
       tick_clock_(tick_clock),
-      host_(CalculateIPHash(address_list)) {
+      host_(CalculateIPHash(address)) {
   DCHECK(tick_clock_);
   DCHECK(last_rtt_notification_.is_null());
 }
@@ -104,8 +98,11 @@ void SocketWatcher::OnUpdatedRTTAvailable(const base::TimeDelta& rtt) {
   // tcp_socket_posix may sometimes report RTT as 1 microsecond when the RTT was
   // actually invalid. See:
   // https://cs.chromium.org/chromium/src/net/socket/tcp_socket_posix.cc?rcl=7ad660e34f2a996e381a85b2a515263003b0c171&l=106.
-  if (rtt <= base::Microseconds(1))
+  // Connections to private address eg localhost because they typically have
+  // small rtt.
+  if (!allow_rtt_private_address_ && rtt <= base::Microseconds(1)) {
     return;
+  }
 
   if (!first_quic_rtt_notification_received_ &&
       protocol_ == SocketPerformanceWatcherFactory::PROTOCOL_QUIC) {

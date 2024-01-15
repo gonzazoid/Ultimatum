@@ -4,10 +4,11 @@
 
 #include "content/browser/android/battery_metrics.h"
 
+#include <optional>
+
 #include "base/android/application_status_listener.h"
-#include "base/android/radio_utils.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_base.h"
@@ -24,22 +25,7 @@
 #include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_thread.h"
-#include "net/android/network_library.h"
-#include "net/android/traffic_stats.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom.h"
-
-BASE_FEATURE(kForegroundRadioStateCountWakeups,
-             "ForegroundRadioStateCountWakeups",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Keeps reporting of the battery metrics on the UI thread, where it may cause
-// jank. This is used for a holdback experiment to estimate the jank reduction
-// won by moving reporting to the thread pool.
-// TODO(eseckler): Remove once holdback experiment is complete.
-BASE_FEATURE(kAndroidBatteryMetricsReportOnUIThread,
-             "AndroidBatteryMetricsReportOnUIThread",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 
 namespace content {
 namespace {
@@ -57,67 +43,6 @@ perfetto::protos::pbzero::DeviceThermalState ToTraceEnum(
       return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_SERIOUS;
     case base::PowerThermalObserver::DeviceThermalState::kCritical:
       return perfetto::protos::pbzero::DEVICE_THERMAL_STATE_CRITICAL;
-  }
-}
-
-void Report30SecondRadioUsage(int64_t tx_bytes, int64_t rx_bytes, int wakeups) {
-  if (!base::android::RadioUtils::IsSupported())
-    return;
-
-  if (base::android::RadioUtils::GetConnectionType() ==
-      base::android::RadioConnectionType::kWifi) {
-    absl::optional<int32_t> maybe_level = net::android::GetWifiSignalLevel();
-    if (!maybe_level.has_value())
-      return;
-
-    base::android::RadioSignalLevel wifi_level =
-        static_cast<base::android::RadioSignalLevel>(*maybe_level);
-    UMA_HISTOGRAM_ENUMERATION("Power.ForegroundRadio.SignalLevel.Wifi",
-                              wifi_level);
-
-    // Traffic sent over network during the last 30 seconds in kibibytes.
-    UMA_HISTOGRAM_SCALED_ENUMERATION(
-        "Power.ForegroundRadio.SentKiB.Wifi.30Seconds", wifi_level, tx_bytes,
-        1024);
-
-    // Traffic received over network during the last 30 seconds in kibibytes.
-    UMA_HISTOGRAM_SCALED_ENUMERATION(
-        "Power.ForegroundRadio.ReceivedKiB.Wifi.30Seconds", wifi_level,
-        rx_bytes, 1024);
-  } else {
-    absl::optional<base::android::RadioSignalLevel> maybe_level =
-        base::android::RadioUtils::GetCellSignalLevel();
-    if (!maybe_level.has_value())
-      return;
-
-    base::android::RadioSignalLevel cell_level = *maybe_level;
-    UMA_HISTOGRAM_ENUMERATION("Power.ForegroundRadio.SignalLevel.Cell",
-                              cell_level);
-
-    // Traffic sent over network during the last 30 seconds in kibibytes.
-    UMA_HISTOGRAM_SCALED_ENUMERATION(
-        "Power.ForegroundRadio.SentKiB.Cell.30Seconds", cell_level, tx_bytes,
-        1024);
-
-    // Traffic received over network during the last 30 seconds in kibibytes.
-    UMA_HISTOGRAM_SCALED_ENUMERATION(
-        "Power.ForegroundRadio.ReceivedKiB.Cell.30Seconds", cell_level,
-        rx_bytes, 1024);
-
-    // Number of radio wakeups during the last 30 seconds.
-    if (base::FeatureList::IsEnabled(kForegroundRadioStateCountWakeups) &&
-        wakeups > 0) {
-      static const int kMaxLevel =
-          static_cast<int>(base::android::RadioSignalLevel::kMaxValue);
-      static const char kWakeupsHistogramName[] =
-          "Power.ForegroundRadio.Wakeups.Cell.30Seconds";
-      STATIC_HISTOGRAM_POINTER_BLOCK(
-          kWakeupsHistogramName,
-          AddCount(static_cast<int>(cell_level), wakeups),
-          base::Histogram::FactoryGet(
-              kWakeupsHistogramName, 0, kMaxLevel, kMaxLevel + 1,
-              base::HistogramBase::kUmaTargetedHistogramFlag));
-    }
   }
 }
 
@@ -225,22 +150,17 @@ void ReportAveragedDrain(int capacity_consumed,
         ->AddCount(capacity_consumed_avg, num_sampling_periods);
   }
 
-  // TODO(eseckler): Remove conditional once
-  // kAndroidBatteryMetricsReportOnUIThread is gone.
-  if (!BrowserThread::CurrentlyOn(BrowserThread::UI)) {
-    GetUIThreadTaskRunner({base::TaskPriority::BEST_EFFORT})
-        ->PostTask(
-            FROM_HERE,
-            base::BindOnce(&ReportDarkModeDrains, capacity_consumed_avg,
-                           is_exclusive_measurement, num_sampling_periods));
-  }
+  GetUIThreadTaskRunner({base::TaskPriority::BEST_EFFORT})
+      ->PostTask(
+          FROM_HERE,
+          base::BindOnce(&ReportDarkModeDrains, capacity_consumed_avg,
+                         is_exclusive_measurement, num_sampling_periods));
 }
 
 }  // namespace
 
 // static
 constexpr base::TimeDelta AndroidBatteryMetrics::kMetricsInterval;
-constexpr base::TimeDelta AndroidBatteryMetrics::kRadioStateInterval;
 
 // static
 void AndroidBatteryMetrics::CreateInstance() {
@@ -252,18 +172,9 @@ AndroidBatteryMetrics::AndroidBatteryMetrics()
           {base::TaskPriority::BEST_EFFORT,
            base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
-  // TODO(eseckler): Remove conditional once
-  // kAndroidBatteryMetricsReportOnUIThread is gone.
-  if (base::FeatureList::IsEnabled(kAndroidBatteryMetricsReportOnUIThread)) {
-    // Initializing on the current (UI) thread registers all observers on the UI
-    // thread, such that all notifications will be received on the UI thread,
-    // too.
-    InitializeOnSequence();
-  } else {
-    task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&AndroidBatteryMetrics::InitializeOnSequence,
-                                  base::Unretained(this)));
-  }
+  task_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&AndroidBatteryMetrics::InitializeOnSequence,
+                                base::Unretained(this)));
 }
 
 AndroidBatteryMetrics::~AndroidBatteryMetrics() {
@@ -324,10 +235,6 @@ void AndroidBatteryMetrics::UpdateMetricsEnabled() {
     // Capture first capacity measurement and enable the repeating timer.
     last_remaining_capacity_uah_ =
         base::PowerMonitor::GetRemainingBatteryCapacity();
-    if (!net::android::traffic_stats::GetTotalTxBytes(&last_tx_bytes_))
-      last_tx_bytes_ = -1;
-    if (!net::android::traffic_stats::GetTotalRxBytes(&last_rx_bytes_))
-      last_rx_bytes_ = -1;
     skipped_timers_ = 0;
     observed_capacity_drops_ = 0;
 
@@ -336,53 +243,11 @@ void AndroidBatteryMetrics::UpdateMetricsEnabled() {
         base::BindRepeating(&AndroidBatteryMetrics::CaptureAndReportMetrics,
                             base::Unretained(this),
                             /*disabling=*/false));
-    if (base::FeatureList::IsEnabled(kForegroundRadioStateCountWakeups)) {
-      radio_state_timer_.Start(FROM_HERE, kRadioStateInterval, this,
-                               &AndroidBatteryMetrics::MonitorRadioState);
-    }
   } else if (!should_be_enabled && metrics_timer_.IsRunning()) {
     // Capture one last measurement before disabling the timer.
     CaptureAndReportMetrics(/*disabling=*/true);
     metrics_timer_.Stop();
-    if (base::FeatureList::IsEnabled(kForegroundRadioStateCountWakeups)) {
-      radio_state_timer_.Stop();
-    }
   }
-}
-
-void AndroidBatteryMetrics::MonitorRadioState() {
-  auto maybe_activity = base::android::RadioUtils::GetCellDataActivity();
-  if (!maybe_activity.has_value())
-    return;
-
-  if (last_activity_ == base::android::RadioDataActivity::kDormant &&
-      *maybe_activity != base::android::RadioDataActivity::kDormant) {
-    TRACE_EVENT_INSTANT0("power", "RadioWakeup", TRACE_EVENT_SCOPE_GLOBAL);
-    ++radio_wakeups_;
-  }
-  if (last_activity_ != base::android::RadioDataActivity::kDormant &&
-      *maybe_activity == base::android::RadioDataActivity::kDormant) {
-    TRACE_EVENT_INSTANT0("power", "RadioDormant", TRACE_EVENT_SCOPE_GLOBAL);
-  }
-  last_activity_ = *maybe_activity;
-}
-
-void AndroidBatteryMetrics::UpdateAndReportRadio() {
-  int64_t tx_bytes;
-  int64_t rx_bytes;
-  if (!net::android::traffic_stats::GetTotalTxBytes(&tx_bytes))
-    tx_bytes = -1;
-  if (!net::android::traffic_stats::GetTotalRxBytes(&rx_bytes))
-    rx_bytes = -1;
-
-  if (last_tx_bytes_ > 0 && tx_bytes > 0 && last_rx_bytes_ > 0 &&
-      rx_bytes > 0) {
-    Report30SecondRadioUsage(tx_bytes - last_tx_bytes_,
-                             rx_bytes - last_rx_bytes_, radio_wakeups_);
-  }
-  last_tx_bytes_ = tx_bytes;
-  last_rx_bytes_ = rx_bytes;
-  radio_wakeups_ = 0;
 }
 
 void AndroidBatteryMetrics::CaptureAndReportMetrics(bool disabling) {
@@ -396,7 +261,6 @@ void AndroidBatteryMetrics::CaptureAndReportMetrics(bool disabling) {
     // here to avoid overreporting in case of fluctuating values.
     skipped_timers_++;
     Report30SecondDrain(0, IsMeasuringDrainExclusively());
-    UpdateAndReportRadio();
 
     if (disabling) {
       // Disabling the timer, but without a change in capacity counter -- We
@@ -416,7 +280,6 @@ void AndroidBatteryMetrics::CaptureAndReportMetrics(bool disabling) {
   // Report the consumed capacity delta over the last 30 seconds.
   int capacity_consumed = last_remaining_capacity_uah_ - remaining_capacity_uah;
   Report30SecondDrain(capacity_consumed, IsMeasuringDrainExclusively());
-  UpdateAndReportRadio();
 
   // Also record drain over 30 second intervals, but averaged since the last
   // time we recorded an increase (or started recording samples). Because the

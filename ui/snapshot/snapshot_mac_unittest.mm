@@ -9,8 +9,8 @@
 #include <memory>
 
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "testing/platform_test.h"
 #import "ui/base/test/cocoa_helper.h"
 #import "ui/base/test/windowed_nsnotification_observer.h"
@@ -27,11 +27,6 @@ class GrabWindowSnapshotTest : public CocoaTest {
 };
 
 TEST_F(GrabWindowSnapshotTest, TestGrabWindowSnapshot) {
-  // Flaky only on the 10.13 bot yet not on any subsequent macOS bot.
-  // https://crbug.com/1359153
-  if (base::mac::IsOS10_13())
-    GTEST_SKIP() << "flaky on macOS 10.13 bot";
-
   // The window snapshot code uses `CGWindowListCreateImage` which requires
   // going to the windowserver. By default, unittests are run with the
   // `NSApplicationActivationPolicyProhibited` policy which prohibits
@@ -43,20 +38,23 @@ TEST_F(GrabWindowSnapshotTest, TestGrabWindowSnapshot) {
   const NSUInteger window_size = 400;
   NSRect frame = NSMakeRect(0, 0, window_size, window_size);
   NSWindow* window = test_window();
-  base::scoped_nsobject<WindowedNSNotificationObserver> waiter(
+  WindowedNSNotificationObserver* waiter =
       [[WindowedNSNotificationObserver alloc]
           initForNotification:NSWindowDidUpdateNotification
-                       object:window]);
+                       object:window];
   [window setFrame:frame display:false];
-  [window setBackgroundColor:NSColor.blueColor];
+  window.backgroundColor = NSColor.blueColor;
   [window makeKeyAndOrderFront:nil];
   [window display];
   EXPECT_TRUE([waiter wait]);
 
   // Take the snapshot.
-  gfx::Image image;
+  base::test::TestFuture<gfx::Image> future;
   gfx::Rect bounds = gfx::Rect(0, 0, window_size, window_size);
-  EXPECT_TRUE(ui::GrabWindowSnapshot(window, bounds, &image));
+  ui::GrabWindowSnapshotAsync(window, bounds, future.GetCallback());
+
+  gfx::Image image = future.Take();
+  ASSERT_TRUE(!image.IsEmpty());
 
   // The call to `CGWindowListCreateImage` returned a `CGImageRef` that is
   // wrapped in an `NSImage` (inside the returned `gfx::Image`). The image rep

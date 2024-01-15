@@ -7,6 +7,7 @@
 #include "cc/layers/layer.h"
 #include "third_party/blink/renderer/platform/geometry/geometry_as_json.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
+#include "third_party/blink/renderer/platform/graphics/compositing/content_layer_client_impl.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/paint/transform_paint_property_node.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
@@ -26,7 +27,7 @@ double RoundCloseToZero(double number) {
   return std::abs(number) < 1e-7 ? 0 : number;
 }
 
-std::unique_ptr<JSONArray> TransformAsJSONArray(const TransformationMatrix& t) {
+std::unique_ptr<JSONArray> TransformAsJSONArray(const gfx::Transform& t) {
   auto array = std::make_unique<JSONArray>();
   for (int c = 0; c < 4; c++) {
     auto col = std::make_unique<JSONArray>();
@@ -72,7 +73,7 @@ std::unique_ptr<JSONObject> CCLayerAsJSON(const cc::Layer& layer,
   if (layer.should_check_backface_visibility())
     json->SetString("backfaceVisibility", "hidden");
 
-  if (Color::FromSkColor4f(layer.background_color()).Alpha() &&
+  if (!Color::FromSkColor4f(layer.background_color()).IsFullyTransparent() &&
       ((flags & kLayerTreeIncludesDebugInfo) ||
        // Omit backgroundColor for these layers because it's not interesting
        // and we want to avoid platform differences and changes with CLs
@@ -91,6 +92,13 @@ std::unique_ptr<JSONObject> CCLayerAsJSON(const cc::Layer& layer,
         compositing_reasons_json->PushString(name);
       json->SetArray("compositingReasons", std::move(compositing_reasons_json));
     }
+  }
+
+  if (RuntimeEnabledFeatures::HitTestOpaquenessEnabled() &&
+      (flags & kLayerTreeIncludesDebugInfo) &&
+      layer.hit_test_opaqueness() != cc::HitTestOpaqueness::kOpaque) {
+    json->SetString("hitTestOpaqueness",
+                    cc::HitTestOpaquenessToString(layer.hit_test_opaqueness()));
   }
 
   return json;
@@ -125,11 +133,10 @@ int LayersAsJSON::AddTransformJSON(
 
   if (!transform.IsIdentity()) {
     transform_json->SetArray("transform",
-                             TransformAsJSONArray(transform.SlowMatrix()));
+                             TransformAsJSONArray(transform.Matrix()));
   }
 
-  if (!transform.IsIdentityOr2DTranslation() &&
-      !transform.Matrix().IsIdentityOrTranslation()) {
+  if (!transform.Matrix().IsIdentityOrTranslation()) {
     transform_json->SetArray("origin", Point3AsJSONArray(transform.Origin()));
   }
 
@@ -153,19 +160,19 @@ int LayersAsJSON::AddTransformJSON(
 
 void LayersAsJSON::AddLayer(const cc::Layer& layer,
                             const TransformPaintPropertyNode& transform,
-                            const LayerAsJSONClient* json_client) {
+                            const ContentLayerClientImpl* layer_client) {
   if (!(flags_ & kLayerTreeIncludesAllLayers) && !layer.draws_content()) {
     std::string debug_name = layer.DebugName();
-    if (debug_name == "LayoutNGView #document" ||
-        debug_name == "LayoutView #document" ||
+    if (debug_name == "LayoutView #document" ||
         debug_name == "Inner Viewport Scroll Layer" ||
-        debug_name == "Scrolling Contents Layer")
+        debug_name == "Scrolling Contents Layer") {
       return;
+    }
   }
 
   auto layer_json = CCLayerAsJSON(layer, flags_);
-  if (json_client) {
-    json_client->AppendAdditionalInfoAsJSON(flags_, layer, *(layer_json.get()));
+  if (layer_client) {
+    layer_client->AppendAdditionalInfoAsJSON(flags_, layer, *layer_json);
   }
   int transform_id = AddTransformJSON(transform);
   if (transform_id)

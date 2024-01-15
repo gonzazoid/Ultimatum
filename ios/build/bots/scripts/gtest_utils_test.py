@@ -4,6 +4,7 @@
 # found in the LICENSE file.
 """Unit tests for classes in gtest_utils.py."""
 
+import os
 import unittest
 
 import gtest_utils
@@ -481,12 +482,84 @@ End output from shard index 0 (machine tag: swarm12.c, id: swarm12). Return 1
 ================================================================
 
 """
+
+TEST_DATA_COMPILED_FILE = """
+
+Testing started
+Wrote compiled tests to file: test_data/compiled_tests.json
+
+[----------] 1 tests from test1
+[ RUN      ] test1.test_method1
+[       OK ] test1.test_method1 (5 ms)
+[----------] 1 tests from test1 (5 ms total)
+
+"""
+
+COMPILED_FILE_PATH = 'test_data/compiled_tests.json'
+
+TEST_DATA_LAUNCHER_SPAWN = """
+[03:12:19:INFO] Using 8 parallel jobs.
+[03:12:19:INFO] [1/2] TestFix.TestCase (8 ms)
+[04:20:17:INFO] [ RUN      ] TextPaintTimingDetectorTest.LargestTextPaint
+[04:20:17:INFO] ../../third_party/blink/renderer/core/paint/timing/text_paint_timing_detector_test.cc:361: Failure
+[04:20:17:INFO] Expected equality of these values:
+[04:20:17:INFO]   1u
+[04:20:17:INFO]     Which is: 1
+[04:20:17:INFO]   events.size()
+[04:20:17:INFO]     Which is: 8
+[04:20:17:INFO]
+[04:20:17:INFO] [  FAILED  ] TextPaintTimingDetectorTest.LargestTextPaint (567 ms)
+[04:22:58:INFO] Retrying 1 test (retry #0)
+[04:23:01:INFO] [3/3] TextPaintTimingDetectorTest.LargestTextPaint (138 ms)
+[03:12:19:INFO] SUCCESS: all tests passed.
+[03:12:20:INFO] Tests took 46 seconds.
+
+"""
+
+TEST_DATA_LAUNCHER_SPAWN_CRASH = """
+
+IMPORTANT DEBUGGING NOTE: batches of tests are run inside their
+own process. For debugging a test inside a debugger, use the
+--gtest_filter=<your_test_name> flag along with
+--single-process-tests.
+Using sharding settings from environment. This is shard 0/1
+Using 1 parallel jobs.
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from LoggingTest
+[ RUN      ] LoggingTest.FailedTest
+../../base/logging_unittest.cc:143: Failure
+Value of: (::logging::ShouldCreateLogMessage(::logging::LOGGING_INFO))
+  Actual: true
+Expected: false
+Stack trace:
+#0 0x560c1971de44 logging::(anonymous namespace)::LoggingTest_LogIsOn_Test::TestBody()
+
+[  FAILED  ] LoggingTest.FailedTest (1 ms)
+[ RUN      ] LoggingTest.StreamingWstringFindsCorrectOperator
+[       OK ] LoggingTest.StreamingWstringFindsCorrectOperator (0 ms)
+[ RUN      ] LoggingTest.CrashedTest
+[1309853:1309853:FATAL:logging_unittest.cc(145)] Check failed: false.
+#0 0x7f151e295152 base::debug::CollectStackTrace()
+
+[1/3] LoggingTest.FailedTest (1 ms)
+[2/3] LoggingTest.StreamingWstringFindsCorrectOperator (1 ms)
+[3/3] LoggingTest.CrashedTest (CRASHED)
+1 test failed:
+    LoggingTest.FailedTest (../../base/logging_unittest.cc:141)
+1 test crashed:
+    LoggingTest.CrashedTest (../../base/logging_unittest.cc:141)
+Tests took 0 seconds.
+
+"""
+
+TEST_REPO = 'https://test'
 # pylint: enable=line-too-long
 
 
 class TestGTestLogParserTests(unittest.TestCase):
 
-  def testGTestLogParserNoSharing(self):
+  def testGTestLogParserNoSharding(self):
     # Tests for log parsing without sharding.
     parser = gtest_utils.GTestLogParser()
     for line in TEST_DATA.splitlines():
@@ -628,7 +701,7 @@ class TestGTestLogParserTests(unittest.TestCase):
         self.assertEqual(TestStatus.CRASH, result.status)
     self.assertTrue(covered)
 
-  def testGTestLogParserSharing(self):
+  def testGTestLogParserSharding(self):
     # Same tests for log parsing with sharding_supervisor.
     parser = gtest_utils.GTestLogParser()
     test_data_shard = TEST_DATA_SHARD_0 + TEST_DATA_SHARD_1
@@ -963,6 +1036,135 @@ class TestGTestLogParserTests(unittest.TestCase):
         self.assertEqual(TestStatus.ABORT, test_result.status)
 
     self.assertTrue(covered)
+
+  def testParseCompiledFileLocation(self):
+    parser = gtest_utils.GTestLogParser()
+    for line in TEST_DATA_COMPILED_FILE.splitlines():
+      parser.ProcessLine(line)
+    parser.Finalize()
+    self.assertEqual(COMPILED_FILE_PATH, parser.compiled_tests_file_path)
+
+    # Just a hack so that we can point the compiled file path to right place
+    parser.compiled_tests_file_path = os.path.join(
+        os.getcwd(), parser.compiled_tests_file_path)
+    parser.ParseAndPopulateTestResultLocations(TEST_REPO, False)
+    collection = parser.GetResultCollection()
+
+    covered = False
+    for test_result in collection.test_results:
+      if test_result.name == 'test1.test_method1':
+        covered = True
+        self.assertEqual(TestStatus.PASS, test_result.status)
+        test_loc = {'repo': TEST_REPO, 'fileName': '//random/path/test1.cc'}
+        self.assertEqual(test_loc, test_result.test_loc)
+    self.assertTrue(covered)
+
+    disabled_tests_covered = True
+    # disabled tests shouldn't be included in the result
+    # because output_disabled_tests is false
+    for test_result in collection.test_results:
+      if test_result.name == 'test2.DISABLED_test_method1':
+        covered = False
+    self.assertTrue(disabled_tests_covered)
+
+  def testParseCompiledFileLocationWithCustomPath(self):
+    parser = gtest_utils.GTestLogParser()
+    for line in TEST_DATA_COMPILED_FILE.splitlines():
+      parser.ProcessLine(line)
+    parser.Finalize()
+    self.assertEqual(COMPILED_FILE_PATH, parser.compiled_tests_file_path)
+
+    # Just a hack so that we can point the compiled file path to right place
+    parser.compiled_tests_file_path = os.path.join(
+        os.getcwd(), parser.compiled_tests_file_path)
+
+    host_file_path = parser.compiled_tests_file_path
+    # setting it to None to make sure overriding the path arg really works
+    parser.compiled_tests_file_path = None
+
+    parser.ParseAndPopulateTestResultLocations(TEST_REPO, False, host_file_path)
+    collection = parser.GetResultCollection()
+
+    covered = False
+    for test_result in collection.test_results:
+      if test_result.name == 'test1.test_method1':
+        covered = True
+        self.assertEqual(TestStatus.PASS, test_result.status)
+        test_loc = {'repo': TEST_REPO, 'fileName': '//random/path/test1.cc'}
+        self.assertEqual(test_loc, test_result.test_loc)
+    self.assertTrue(covered)
+
+    disabled_tests_covered = True
+    # disabled tests shouldn't be included in the result
+    # because output_disabled_tests is false
+    for test_result in collection.test_results:
+      if test_result.name == 'test2.DISABLED_test_method1':
+        covered = False
+    self.assertTrue(disabled_tests_covered)
+
+  def testParseCompiledFileLocationOutputDisabledTests(self):
+    parser = gtest_utils.GTestLogParser()
+    for line in TEST_DATA_COMPILED_FILE.splitlines():
+      parser.ProcessLine(line)
+    parser.Finalize()
+    self.assertEqual(COMPILED_FILE_PATH, parser.compiled_tests_file_path)
+
+    # Just a hack so that we can point the compiled file path to right place
+    parser.compiled_tests_file_path = os.path.join(
+        os.getcwd(), parser.compiled_tests_file_path)
+    parser.ParseAndPopulateTestResultLocations(TEST_REPO, True)
+    collection = parser.GetResultCollection()
+
+    covered = False
+    for test_result in collection.test_results:
+      if test_result.name == 'test1.test_method1':
+        covered = True
+        self.assertEqual(TestStatus.PASS, test_result.status)
+        test_loc = {'repo': TEST_REPO, 'fileName': '//random/path/test1.cc'}
+        self.assertEqual(test_loc, test_result.test_loc)
+
+    covered = False
+    for test_result in collection.test_results:
+      if test_result.name == 'test2.DISABLED_test_method1':
+        covered = True
+        self.assertEqual(TestStatus.SKIP, test_result.status)
+        test_loc = {'repo': TEST_REPO, 'fileName': '//random/path/test2.cc'}
+        self.assertEqual(test_loc, test_result.test_loc)
+    self.assertTrue(covered)
+
+  def testGTestLogLauncherSpawn(self):
+    parser = gtest_utils.GTestLogParser()
+    for line in TEST_DATA_LAUNCHER_SPAWN.splitlines():
+      parser.ProcessLine(line)
+    parser.Finalize()
+
+    self.assertEqual([], parser.ParsingErrors())
+    self.assertEqual([], parser.RunningTests())
+    self.assertEqual([], parser.FailedTests())
+    self.assertEqual(0, parser.DisabledTests())
+    self.assertEqual(0, parser.FlakyTests())
+    self.assertEqual(
+        ['TestFix.TestCase', 'TextPaintTimingDetectorTest.LargestTextPaint'],
+        parser.PassedTests())
+    collection = parser.GetResultCollection()
+    self.assertFalse(collection.crashed)
+
+  def testGTestLogLauncherSpawnCrash(self):
+    parser = gtest_utils.GTestLogParser()
+    for line in TEST_DATA_LAUNCHER_SPAWN_CRASH.splitlines():
+      parser.ProcessLine(line)
+    parser.Finalize()
+
+    self.assertEqual([], parser.ParsingErrors())
+    self.assertEqual(['LoggingTest.CrashedTest'], parser.RunningTests())
+    self.assertEqual(['LoggingTest.FailedTest', 'LoggingTest.CrashedTest'],
+                     parser.FailedTests())
+    self.assertEqual(0, parser.DisabledTests())
+    self.assertEqual(0, parser.FlakyTests())
+    self.assertEqual(['LoggingTest.StreamingWstringFindsCorrectOperator'],
+                     parser.PassedTests())
+    collection = parser.GetResultCollection()
+    self.assertTrue(collection.crashed)
 
 
 if __name__ == '__main__':

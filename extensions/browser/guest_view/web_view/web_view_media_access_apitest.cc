@@ -37,7 +37,7 @@ class MockWebContentsDelegate : public content::WebContentsDelegate {
   }
 
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override {
     checked_ = true;
     if (check_message_loop_runner_.get())
@@ -78,7 +78,7 @@ class WebViewMediaAccessAPITest : public WebViewAPITest {
   void RunTest(const std::string& test_name) {
     ExtensionTestMessageListener test_run_listener("TEST_PASSED");
     test_run_listener.set_failure_message("TEST_FAILED");
-    EXPECT_TRUE(content::ExecuteScript(
+    EXPECT_TRUE(content::ExecJs(
         embedder_web_contents_.get(),
         base::StringPrintf("runTest('%s');", test_name.c_str())));
     ASSERT_TRUE(test_run_listener.WaitUntilSatisfied());

@@ -5,10 +5,10 @@
 #ifndef REMOTING_PROTOCOL_CLIPBOARD_FILTER_H_
 #define REMOTING_PROTOCOL_CLIPBOARD_FILTER_H_
 
+#include <optional>
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
 #include "remoting/protocol/clipboard_stub.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace remoting::protocol {
 
@@ -40,9 +40,9 @@ class ClipboardFilter : public ClipboardStub {
   void InjectClipboardEvent(const ClipboardEvent& event) override;
 
  private:
-  raw_ptr<ClipboardStub> clipboard_stub_ = nullptr;
+  raw_ptr<ClipboardStub, DanglingUntriaged> clipboard_stub_ = nullptr;
   bool enabled_ = true;
-  absl::optional<size_t> max_size_;
+  std::optional<size_t> max_size_;
 };
 
 }  // namespace remoting::protocol

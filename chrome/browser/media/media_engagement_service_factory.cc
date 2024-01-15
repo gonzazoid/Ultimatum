@@ -18,18 +18,24 @@ MediaEngagementService* MediaEngagementServiceFactory::GetForProfile(
 
 // static
 MediaEngagementServiceFactory* MediaEngagementServiceFactory::GetInstance() {
-  return base::Singleton<MediaEngagementServiceFactory>::get();
+  static base::NoDestructor<MediaEngagementServiceFactory> instance;
+  return instance.get();
 }
 
 MediaEngagementServiceFactory::MediaEngagementServiceFactory()
     : ProfileKeyedServiceFactory(
           "MediaEngagementServiceFactory",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
-MediaEngagementServiceFactory::~MediaEngagementServiceFactory() {}
+MediaEngagementServiceFactory::~MediaEngagementServiceFactory() = default;
 
 KeyedService* MediaEngagementServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {

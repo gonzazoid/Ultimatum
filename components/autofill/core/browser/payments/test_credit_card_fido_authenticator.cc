@@ -13,50 +13,52 @@
 
 namespace autofill {
 
-TestCreditCardFIDOAuthenticator::TestCreditCardFIDOAuthenticator(
+TestCreditCardFidoAuthenticator::TestCreditCardFidoAuthenticator(
     AutofillDriver* driver,
     AutofillClient* client)
-    : CreditCardFIDOAuthenticator(driver, client) {}
+    : CreditCardFidoAuthenticator(driver, client) {}
 
-TestCreditCardFIDOAuthenticator::~TestCreditCardFIDOAuthenticator() = default;
+TestCreditCardFidoAuthenticator::~TestCreditCardFidoAuthenticator() = default;
 
-void TestCreditCardFIDOAuthenticator::Authenticate(
-    const CreditCard* card,
+void TestCreditCardFidoAuthenticator::Authenticate(
+    CreditCard card,
     base::WeakPtr<Requester> requester,
-    base::Value request_options,
-    absl::optional<std::string> context_token) {
+    base::Value::Dict request_options,
+    std::optional<std::string> context_token) {
   authenticate_invoked_ = true;
-  card_ = *card;
+  card_ = std::move(card);
   context_token_ = context_token;
-  CreditCardFIDOAuthenticator::Authenticate(
-      card, requester, std::move(request_options), context_token);
+  CreditCardFidoAuthenticator::Authenticate(
+      *card_, requester, std::move(request_options), context_token);
 }
 
-void TestCreditCardFIDOAuthenticator::GetAssertion(
+void TestCreditCardFidoAuthenticator::GetAssertion(
     blink::mojom::PublicKeyCredentialRequestOptionsPtr request_options) {
   request_options_ = request_options->Clone();
-  CreditCardFIDOAuthenticator::GetAssertion(std::move(request_options));
+  CreditCardFidoAuthenticator::GetAssertion(std::move(request_options));
 }
 
-void TestCreditCardFIDOAuthenticator::MakeCredential(
+void TestCreditCardFidoAuthenticator::MakeCredential(
     blink::mojom::PublicKeyCredentialCreationOptionsPtr creation_options) {
   creation_options_ = creation_options->Clone();
-  CreditCardFIDOAuthenticator::MakeCredential(std::move(creation_options));
+  CreditCardFidoAuthenticator::MakeCredential(std::move(creation_options));
 }
 
-void TestCreditCardFIDOAuthenticator::OptOut() {
+void TestCreditCardFidoAuthenticator::OptOut() {
   opt_out_called_ = true;
-  CreditCardFIDOAuthenticator::OptOut();
+  CreditCardFidoAuthenticator::OptOut();
 }
 
 // static
-void TestCreditCardFIDOAuthenticator::GetAssertion(
-    CreditCardFIDOAuthenticator* fido_authenticator,
+void TestCreditCardFidoAuthenticator::GetAssertion(
+    CreditCardFidoAuthenticator* fido_authenticator,
     bool did_succeed) {
   if (did_succeed) {
     blink::mojom::GetAssertionAuthenticatorResponsePtr response =
         blink::mojom::GetAssertionAuthenticatorResponse::New();
     response->info = blink::mojom::CommonCredentialInfo::New();
+    response->extensions =
+        blink::mojom::AuthenticationExtensionsClientOutputs::New();
     fido_authenticator->OnDidGetAssertion(
         blink::mojom::AuthenticatorStatus::SUCCESS, std::move(response),
         /*dom_exception_details=*/nullptr);
@@ -68,8 +70,8 @@ void TestCreditCardFIDOAuthenticator::GetAssertion(
 }
 
 // static
-void TestCreditCardFIDOAuthenticator::MakeCredential(
-    CreditCardFIDOAuthenticator* fido_authenticator,
+void TestCreditCardFidoAuthenticator::MakeCredential(
+    CreditCardFidoAuthenticator* fido_authenticator,
     bool did_succeed) {
   if (did_succeed) {
     blink::mojom::MakeCredentialAuthenticatorResponsePtr response =
@@ -85,12 +87,12 @@ void TestCreditCardFIDOAuthenticator::MakeCredential(
   }
 }
 
-std::vector<uint8_t> TestCreditCardFIDOAuthenticator::GetCredentialId() {
+std::vector<uint8_t> TestCreditCardFidoAuthenticator::GetCredentialId() {
   DCHECK(!request_options_->allow_credentials.empty());
   return request_options_->allow_credentials.front().id;
 }
 
-std::vector<uint8_t> TestCreditCardFIDOAuthenticator::GetChallenge() {
+std::vector<uint8_t> TestCreditCardFidoAuthenticator::GetChallenge() {
   if (request_options_) {
     return request_options_->challenge;
   } else {
@@ -99,7 +101,7 @@ std::vector<uint8_t> TestCreditCardFIDOAuthenticator::GetChallenge() {
   }
 }
 
-std::string TestCreditCardFIDOAuthenticator::GetRelyingPartyId() {
+std::string TestCreditCardFidoAuthenticator::GetRelyingPartyId() {
   if (request_options_) {
     return request_options_->relying_party_id;
   } else {
@@ -108,21 +110,21 @@ std::string TestCreditCardFIDOAuthenticator::GetRelyingPartyId() {
   }
 }
 
-void TestCreditCardFIDOAuthenticator::IsUserVerifiable(
+void TestCreditCardFidoAuthenticator::IsUserVerifiable(
     base::OnceCallback<void(bool)> callback) {
   return std::move(callback).Run(is_user_verifiable_);
 }
 
-bool TestCreditCardFIDOAuthenticator::IsUserOptedIn() {
+bool TestCreditCardFidoAuthenticator::IsUserOptedIn() {
   if (is_user_opted_in_.has_value())
     return is_user_opted_in_.value();
 
-  return CreditCardFIDOAuthenticator::IsUserOptedIn();
+  return CreditCardFidoAuthenticator::IsUserOptedIn();
 }
 
-void TestCreditCardFIDOAuthenticator::Reset() {
+void TestCreditCardFidoAuthenticator::Reset() {
   is_user_verifiable_ = false;
-  is_user_opted_in_ = absl::nullopt;
+  is_user_opted_in_ = std::nullopt;
   opt_out_called_ = false;
   authenticate_invoked_ = false;
   card_ = CreditCard();

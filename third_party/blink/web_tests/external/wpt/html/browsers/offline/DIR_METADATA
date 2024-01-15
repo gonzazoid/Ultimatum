@@ -1,0 +1,7 @@
+monorail {
+  component: "Blink>Storage>AppCache"
+}
+team_email: "dom-dev@chromium.org"
+wpt {
+  notify: YES
+}

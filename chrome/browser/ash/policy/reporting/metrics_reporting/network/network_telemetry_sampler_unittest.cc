@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/network/network_telemetry_sampler.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -11,24 +12,27 @@
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/reporting/metrics_reporting/metric_reporting_manager.h"
 #include "chromeos/ash/components/dbus/shill/shill_ipconfig_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/tether_constants.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "components/reporting/metrics/fake_sampler.h"
+#include "components/reporting/metrics/fakes/fake_sampler.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
 #include "components/reporting/util/test_support_callbacks.h"
+#include "components/user_manager/fake_user_manager.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user.h"
+#include "components/user_manager/user_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace reporting {
@@ -88,11 +92,22 @@ std::string DevicePath(const std::string& interface_name) {
 class NetworkTelemetrySamplerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    ::chromeos::LoginState::Initialize();
-    ::chromeos::LoginState::Get()->SetLoggedInStateAndPrimaryUser(
-        ::chromeos::LoginState::LOGGED_IN_ACTIVE,
-        ::chromeos::LoginState::LOGGED_IN_USER_REGULAR,
-        network_handler_test_helper_.UserHash());
+    // TODO(b/278643115) Remove LoginState dependency.
+    ash::LoginState::Initialize();
+
+    const AccountId account_id = AccountId::FromUserEmail("test@test");
+    auto fake_user_manager = std::make_unique<user_manager::FakeUserManager>();
+    fake_user_manager->AddUser(account_id);
+    fake_user_manager->UserLoggedIn(account_id,
+                                    network_handler_test_helper_.UserHash(),
+                                    /*browser_restart=*/false,
+                                    /*is_child=*/false);
+    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
+        std::move(fake_user_manager));
+
+    ash::LoginState::Get()->SetLoggedInState(
+        ash::LoginState::LOGGED_IN_ACTIVE,
+        ash::LoginState::LOGGED_IN_USER_REGULAR);
 
     network_handler_test_helper_.AddDefaultProfiles();
     network_handler_test_helper_.ResetDevicesAndServices();
@@ -102,7 +117,8 @@ class NetworkTelemetrySamplerTest : public ::testing::Test {
   }
 
   void TearDown() override {
-    ::chromeos::LoginState::Shutdown();
+    scoped_user_manager_.reset();
+    ash::LoginState::Shutdown();
     ash::cros_healthd::FakeCrosHealthd::Shutdown();
   }
 
@@ -134,14 +150,14 @@ class NetworkTelemetrySamplerTest : public ::testing::Test {
           base::Value(network_data.signal_strength));
       service_client->SetServiceProperty(service_path, shill::kDeviceProperty,
                                          base::Value(device_path));
-      base::DictionaryValue ip_config_properties;
-      ip_config_properties.SetKey(shill::kAddressProperty,
-                                  base::Value(network_data.ip_address));
-      ip_config_properties.SetKey(shill::kGatewayProperty,
-                                  base::Value(network_data.gateway));
+      base::Value::Dict ip_config_properties;
+      ip_config_properties.Set(shill::kAddressProperty,
+                               network_data.ip_address);
+      ip_config_properties.Set(shill::kGatewayProperty, network_data.gateway);
       const std::string kIPConfigPath =
           base::StrCat({"test_ip_config", network_data.guid});
-      ip_config_client->AddIPConfig(kIPConfigPath, ip_config_properties);
+      ip_config_client->AddIPConfig(kIPConfigPath,
+                                    std::move(ip_config_properties));
       service_client->SetServiceProperty(service_path, shill::kIPConfigProperty,
                                          base::Value(kIPConfigPath));
       if (network_data.type == shill::kTypeCellular) {
@@ -158,10 +174,11 @@ class NetworkTelemetrySamplerTest : public ::testing::Test {
   }
 
   base::test::TaskEnvironment task_environment_;
+  ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
+
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 
   ::ash::NetworkHandlerTestHelper network_handler_test_helper_;
-
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(NetworkTelemetrySamplerTest, CellularConnected) {
@@ -173,9 +190,9 @@ TEST_F(NetworkTelemetrySamplerTest, CellularConnected) {
 
   SetNetworkData(networks_data);
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());
@@ -219,9 +236,9 @@ TEST_F(NetworkTelemetrySamplerTest, NoNetworkData) {
   SetNetworkData({});
 
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> result = metric_collect_event.result();
+  const std::optional<MetricData> result = metric_collect_event.result();
 
   ASSERT_FALSE(result.has_value());
 }
@@ -235,9 +252,9 @@ TEST_F(NetworkTelemetrySamplerTest, CellularNotConnected) {
 
   SetNetworkData(networks_data);
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> result = metric_collect_event.result();
+  const std::optional<MetricData> result = metric_collect_event.result();
 
   ASSERT_FALSE(result.has_value());
 }
@@ -250,9 +267,9 @@ TEST_F(NetworkTelemetrySamplerTest, WifiNotConnected_NoSignalStrength) {
 
   SetNetworkData(networks_data);
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> result = metric_collect_event.result();
+  const std::optional<MetricData> result = metric_collect_event.result();
 
   ASSERT_FALSE(result.has_value());
 }
@@ -266,9 +283,9 @@ TEST_F(NetworkTelemetrySamplerTest, EthernetPortal) {
 
   SetNetworkData(networks_data);
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());
@@ -319,9 +336,9 @@ TEST_F(NetworkTelemetrySamplerTest, EmptyLatencyData) {
   SetNetworkData(networks_data);
 
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());
@@ -386,9 +403,9 @@ TEST_F(NetworkTelemetrySamplerTest, MixTypesAndConfigurations) {
             "WiFi.SignalStrengthRssi": -60})");
 
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());
@@ -477,9 +494,9 @@ TEST_F(NetworkTelemetrySamplerTest, WifiNotConnected) {
       R"({"GUID": "guid1", "Type": "wifi", "State": "idle",
             "WiFi.SignalStrengthRssi": -70})");
   NetworkTelemetrySampler network_telemetry_sampler;
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   network_telemetry_sampler.MaybeCollect(metric_collect_event.cb());
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());

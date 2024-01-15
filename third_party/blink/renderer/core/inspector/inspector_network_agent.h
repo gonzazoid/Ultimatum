@@ -103,7 +103,8 @@ class CORE_EXPORT InspectorNetworkAgent final
                       ResourceRequest&,
                       ResourceLoaderOptions&,
                       ResourceType);
-  void WillSendRequest(DocumentLoader*,
+  void WillSendRequest(ExecutionContext*,
+                       DocumentLoader*,
                        const KURL& fetch_context_url,
                        const ResourceRequest&,
                        const ResourceResponse& redirect_response,
@@ -135,8 +136,7 @@ class CORE_EXPORT InspectorNetworkAgent final
                         DocumentLoader*,
                         base::TimeTicks monotonic_finish_time,
                         int64_t encoded_data_length,
-                        int64_t decoded_body_length,
-                        bool should_report_corb_blocking);
+                        int64_t decoded_body_length);
   void DidReceiveCorsRedirectResponse(uint64_t identifier,
                                       DocumentLoader*,
                                       const ResourceResponse&,
@@ -233,6 +233,9 @@ class CORE_EXPORT InspectorNetworkAgent final
   protocol::Response setBlockedURLs(
       std::unique_ptr<protocol::Array<String>> urls) override;
   protocol::Response replayXHR(const String& request_id) override;
+  protocol::Response streamResourceContent(
+      const String& request_id,
+      protocol::Binary* buffered_data) override;
   protocol::Response canClearBrowserCache(bool* result) override;
   protocol::Response canClearBrowserCookies(bool* result) override;
   protocol::Response emulateNetworkConditions(
@@ -263,7 +266,8 @@ class CORE_EXPORT InspectorNetworkAgent final
   bool FetchResourceContent(Document*,
                             const KURL&,
                             String* content,
-                            bool* base64_encoded);
+                            bool* base64_encoded,
+                            bool* loadingFailed);
   String NavigationInitiatorInfo(LocalFrame*);
 
  private:
@@ -305,6 +309,8 @@ class CORE_EXPORT InspectorNetworkAgent final
 
   HashMap<String, std::unique_ptr<protocol::Network::Initiator>>
       frame_navigation_initiator_map_;
+
+  HashSet<String> streaming_request_ids_;
 
   HeapHashSet<Member<XMLHttpRequest>> replay_xhrs_;
   InspectorAgentState::Boolean enabled_;

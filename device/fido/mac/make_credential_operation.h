@@ -7,8 +7,8 @@
 
 #include <os/availability.h>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "device/fido/authenticator_make_credential_response.h"
 #include "device/fido/ctap_make_credential_request.h"
@@ -16,9 +16,7 @@
 #include "device/fido/mac/operation.h"
 #include "device/fido/mac/touch_id_context.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 // MakeCredentialOperation implements the authenticatorMakeCredential operation.
 // The operation can be invoked via its |Run| method, which must only be called
@@ -45,6 +43,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialOperation : public Operation {
 
  private:
   void PromptTouchIdDone(bool success);
+  void CreateCredential(bool has_uv);
 
   const std::unique_ptr<TouchIdContext> touch_id_context_ =
       TouchIdContext::Create();
@@ -54,8 +53,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialOperation : public Operation {
   Callback callback_;
 };
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac
 
 #endif  // DEVICE_FIDO_MAC_MAKE_CREDENTIAL_OPERATION_H_

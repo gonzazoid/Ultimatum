@@ -11,7 +11,6 @@ import("//third_party/tflite/features.gni")
 extra_configs = [
   "//build/config/compiler:wexit_time_destructors",
   "//content:content_implementation",
-  "//tools/v8_context_snapshot:use_v8_context_snapshot",
   "//v8:external_startup_data",
 ]
 
@@ -47,7 +46,7 @@ if (is_win) {
     "//media/midi",
     "//net",
     "//skia",
-    "//third_party/android_ndk:cpu_features",
+    "//third_party/cpu_features:ndk_compat",
     "//ui/android",
     "//ui/events",
     "//ui/shell_dialogs",
@@ -75,7 +74,7 @@ source_set("content_main_runner_app") {
   configs += extra_configs
   deps = content_app_deps + [
            "//components/optimization_guide:machine_learning_tflite_buildflags",
-           "//components/power_scheduler",
+           "//components/power_monitor",
            "//content/browser",
            "//content/gpu:gpu_sources",
            "//content/public/browser:browser_sources",
@@ -85,6 +84,7 @@ source_set("content_main_runner_app") {
            "//content/renderer",
            "//content/utility",
            "//content/zygote",
+           "//tools/v8_context_snapshot:buildflags",
          ]
   if (is_chromeos_lacros) {
     deps += [

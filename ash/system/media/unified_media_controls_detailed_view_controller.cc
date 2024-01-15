@@ -4,6 +4,8 @@
 
 #include "ash/system/media/unified_media_controls_detailed_view_controller.h"
 
+#include <memory>
+
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/system/media/media_notification_provider.h"
@@ -11,6 +13,7 @@
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ash/system/tray/tray_constants.h"
 #include "base/metrics/histogram_functions.h"
+#include "components/global_media_controls/public/constants.h"
 #include "components/media_message_center/notification_theme.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -22,9 +25,13 @@ bool UnifiedMediaControlsDetailedViewController::detailed_view_has_shown_ =
 
 UnifiedMediaControlsDetailedViewController::
     UnifiedMediaControlsDetailedViewController(
-        UnifiedSystemTrayController* tray_controller)
+        UnifiedSystemTrayController* tray_controller,
+        global_media_controls::GlobalMediaControlsEntryPoint entry_point,
+        const std::string& show_devices_for_item_id)
     : detailed_view_delegate_(
-          std::make_unique<DetailedViewDelegate>(tray_controller)) {}
+          std::make_unique<DetailedViewDelegate>(tray_controller)),
+      entry_point_(entry_point),
+      show_devices_for_item_id_(show_devices_for_item_id) {}
 
 UnifiedMediaControlsDetailedViewController::
     ~UnifiedMediaControlsDetailedViewController() {
@@ -34,7 +41,8 @@ UnifiedMediaControlsDetailedViewController::
   MediaNotificationProvider::Get()->OnBubbleClosing();
 }
 
-views::View* UnifiedMediaControlsDetailedViewController::CreateView() {
+std::unique_ptr<views::View>
+UnifiedMediaControlsDetailedViewController::CreateView() {
   DCHECK(MediaNotificationProvider::Get());
 
   media_message_center::NotificationTheme theme;
@@ -48,17 +56,19 @@ views::View* UnifiedMediaControlsDetailedViewController::CreateView() {
       AshColorProvider::ContentLayerType::kIconColorSecondary);
   theme.separator_color = AshColorProvider::Get()->GetContentLayerColor(
       AshColorProvider::ContentLayerType::kSeparatorColor);
+  theme.background_color = AshColorProvider::Get()->GetControlsLayerColor(
+      AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive);
   MediaNotificationProvider::Get()->SetColorTheme(theme);
 
   base::UmaHistogramBoolean(
       "Media.CrosGlobalMediaControls.RepeatUsageInQuickSetting",
       detailed_view_has_shown_);
   detailed_view_has_shown_ = true;
-
-  return new UnifiedMediaControlsDetailedView(
+  return std::make_unique<UnifiedMediaControlsDetailedView>(
       detailed_view_delegate_.get(),
       MediaNotificationProvider::Get()->GetMediaNotificationListView(
-          kMenuSeparatorWidth));
+          kMenuSeparatorWidth, /*should_clip_height=*/false, entry_point_,
+          show_devices_for_item_id_));
 }
 
 std::u16string UnifiedMediaControlsDetailedViewController::GetAccessibleName()

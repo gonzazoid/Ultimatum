@@ -5,18 +5,14 @@
 #include <memory>
 
 #import <ChromeWebView/ChromeWebView.h>
-#import <EarlGrey/EarlGrey.h>
 #import <XCTest/XCTest.h>
+#import "ios/testing/earl_grey/earl_grey_test.h"
 
 #include "base/strings/sys_string_conversions.h"
 #import "ios/web_view/shell/shell_view_controller.h"
 #import "ios/web_view/shell/test/earl_grey/web_view_shell_matchers.h"
 #import "ios/web_view/test/web_view_test_util.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -79,7 +75,7 @@ void WaitForWebViewContainingText(NSString* text) {
   std::string URLSpec = _testServer->GetURL("/destination.html").spec();
 
   [[EarlGrey selectElementWithMatcher:ios_web_view::AddressField()]
-      performAction:grey_typeText(base::SysUTF8ToNSString(URLSpec))];
+      performAction:grey_replaceText(base::SysUTF8ToNSString(URLSpec))];
 
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(@"Go")]
       performAction:grey_tap()];

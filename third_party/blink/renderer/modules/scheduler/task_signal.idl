@@ -7,6 +7,11 @@
     Exposed=(Window,Worker),
     ImplementedAs=DOMTaskSignal
 ] interface TaskSignal : AbortSignal {
+  [
+      CallWith=ScriptState,
+      NewObject
+  ] static TaskSignal _any(sequence<AbortSignal> signals, optional TaskSignalAnyInit init = {});
+
   [MeasureAs=TaskSignalPriority] readonly attribute TaskPriority priority;
     attribute EventHandler onprioritychange;
 };

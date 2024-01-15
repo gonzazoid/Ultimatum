@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,17 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
+#include "components/device_event_log/device_event_log.h"
 #include "device/bluetooth/floss/bluetooth_adapter_floss.h"
 #include "device/bluetooth/floss/bluetooth_remote_gatt_characteristic_floss.h"
 #include "device/bluetooth/floss/bluetooth_remote_gatt_service_floss.h"
 #include "device/bluetooth/floss/floss_dbus_manager.h"
-#include "device/bluetooth/floss/floss_gatt_client.h"
+#include "device/bluetooth/floss/floss_gatt_manager_client.h"
 
 namespace floss {
+
+const int kGattTimeoutMs = 2000;
 
 // static
 std::unique_ptr<BluetoothRemoteGattDescriptorFloss>
@@ -45,7 +49,7 @@ BluetoothRemoteGattDescriptorFloss::~BluetoothRemoteGattDescriptorFloss() {
 }
 
 std::string BluetoothRemoteGattDescriptorFloss::GetIdentifier() const {
-  return base::StringPrintf("%s/%d", characteristic_->GetIdentifier().c_str(),
+  return base::StringPrintf("%s/%04x", characteristic_->GetIdentifier().c_str(),
                             descriptor_->instance_id);
 }
 
@@ -66,7 +70,10 @@ BluetoothRemoteGattDescriptorFloss::GetCharacteristic() const {
 
 device::BluetoothRemoteGattCharacteristic::Permissions
 BluetoothRemoteGattDescriptorFloss::GetPermissions() const {
-  return descriptor_->permissions;
+  const auto& [props, perms] =
+      BluetoothGattCharacteristicFloss::ConvertPropsAndPermsFromFloss(
+          /*properties=*/0, descriptor_->permissions);
+  return perms;
 }
 
 void BluetoothRemoteGattDescriptorFloss::ReadRemoteDescriptor(
@@ -76,7 +83,7 @@ void BluetoothRemoteGattDescriptorFloss::ReadRemoteDescriptor(
 
   AuthRequired auth = characteristic_->GetAuthForRead();
 
-  FlossDBusManager::Get()->GetGattClient()->ReadDescriptor(
+  FlossDBusManager::Get()->GetGattManagerClient()->ReadDescriptor(
       base::BindOnce(&BluetoothRemoteGattDescriptorFloss::OnReadDescriptor,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)),
       service_->GetDevice()->GetAddress(), descriptor_->instance_id, auth);
@@ -88,7 +95,7 @@ void BluetoothRemoteGattDescriptorFloss::WriteRemoteDescriptor(
     ErrorCallback error_callback) {
   AuthRequired auth = characteristic_->GetAuthForWrite();
 
-  FlossDBusManager::Get()->GetGattClient()->WriteDescriptor(
+  FlossDBusManager::Get()->GetGattManagerClient()->WriteDescriptor(
       base::BindOnce(&BluetoothRemoteGattDescriptorFloss::OnWriteDescriptor,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback),
                      std::move(error_callback), new_value),
@@ -114,7 +121,6 @@ void BluetoothRemoteGattDescriptorFloss::GattDescriptorRead(
 
     std::move(pending_read_callback_)
         .Run(/*error_code=*/absl::nullopt, cached_data_);
-    NotifyValueChanged();
   } else {
     std::move(pending_read_callback_)
         .Run(BluetoothGattServiceFloss::GattStatusToServiceError(status), {});
@@ -130,13 +136,16 @@ void BluetoothRemoteGattDescriptorFloss::GattDescriptorWrite(
     return;
   }
 
+  // Only handle if there is a write callback pending.
   auto [callback, error_callback, data] = std::move(pending_write_callbacks_);
+  if (!callback) {
+    return;
+  }
 
   if (status == GattStatus::kSuccess) {
     cached_data_ = data;
 
     std::move(callback).Run();
-    NotifyValueChanged();
   } else {
     std::move(error_callback)
         .Run(BluetoothGattServiceFloss::GattStatusToServiceError(status));
@@ -154,28 +163,6 @@ void BluetoothRemoteGattDescriptorFloss::GattNotify(
 
   cached_data_ = data;
   NotifyValueChanged();
-}
-
-void BluetoothRemoteGattDescriptorFloss::RegisterForNotification(
-    base::OnceClosure callback,
-    ErrorCallback error_callback) {
-  FlossDBusManager::Get()->GetGattClient()->RegisterForNotification(
-      base::BindOnce(
-          &BluetoothRemoteGattDescriptorFloss::OnRegisterForNotification,
-          weak_ptr_factory_.GetWeakPtr(), std::move(callback),
-          std::move(error_callback)),
-      service_->GetDevice()->GetAddress(), descriptor_->instance_id);
-}
-
-void BluetoothRemoteGattDescriptorFloss::UnregisterForNotification(
-    base::OnceClosure callback,
-    ErrorCallback error_callback) {
-  FlossDBusManager::Get()->GetGattClient()->UnregisterNotification(
-      base::BindOnce(
-          &BluetoothRemoteGattDescriptorFloss::OnRegisterForNotification,
-          weak_ptr_factory_.GetWeakPtr(), std::move(callback),
-          std::move(error_callback)),
-      service_->GetDevice()->GetAddress(), descriptor_->instance_id);
 }
 
 void BluetoothRemoteGattDescriptorFloss::OnReadDescriptor(
@@ -206,24 +193,22 @@ void BluetoothRemoteGattDescriptorFloss::OnWriteDescriptor(
 
   pending_write_callbacks_ = std::make_tuple(
       std::move(callback), std::move(error_callback), std::move(data));
+
+  // Ensure callbacks don't get dropped if no |GattDescriptorWrite| received.
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&BluetoothRemoteGattDescriptorFloss::OnWriteTimeout,
+                     weak_ptr_factory_.GetWeakPtr()),
+      base::Milliseconds(kGattTimeoutMs));
 }
 
-void BluetoothRemoteGattDescriptorFloss::OnRegisterForNotification(
-    base::OnceClosure callback,
-    ErrorCallback error_callback,
-    DBusResult<GattStatus> result) {
-  if (!result.has_value()) {
-    std::move(error_callback)
-        .Run(BluetoothGattServiceFloss::GattErrorCode::kFailed);
-    return;
-  }
-
-  if (result.value() == GattStatus::kSuccess) {
-    std::move(callback).Run();
-  } else {
-    std::move(error_callback)
-        .Run(/*error_code=*/BluetoothGattServiceFloss::GattStatusToServiceError(
-            result.value()));
+void BluetoothRemoteGattDescriptorFloss::OnWriteTimeout() {
+  if (std::get<0>(pending_write_callbacks_)) {
+    BLUETOOTH_LOG(ERROR)
+        << "Timeout waiting for GattDescriptorWrite for Device "
+        << service_->GetDevice()->GetAddress();
+    GattDescriptorWrite(service_->GetDevice()->GetAddress(), GattStatus::kError,
+                        descriptor_->instance_id);
   }
 }
 

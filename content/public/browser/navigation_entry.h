@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/ref_counted_memory.h"
@@ -17,7 +18,6 @@
 #include "content/common/content_export.h"
 #include "content/public/common/page_type.h"
 #include "content/public/common/referrer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/page_transition_types.h"
 
 class GURL;
@@ -110,6 +110,12 @@ class NavigationEntry : public base::SupportsUserData {
   virtual void SetTitle(const std::u16string& title) = 0;
   virtual const std::u16string& GetTitle() = 0;
 
+  // The app title as set by the page. This will be empty if there is no app
+  // title set. This information is provided by an experimental meta tag. See:
+  // https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/DocumentSubtitle/explainer.md
+  virtual void SetAppTitle(const std::u16string& app_title) = 0;
+  virtual const std::u16string& GetAppTitle() = 0;
+
   // Page state is an opaque blob created by Blink that represents the state of
   // the page. This includes form entries and scroll position for each frame.
   // We store it so that we can supply it back to Blink to restore form state
@@ -127,7 +133,7 @@ class NavigationEntry : public base::SupportsUserData {
   // Page-related helpers ------------------------------------------------------
 
   // Returns the title to be displayed on the tab. This could be the title of
-  // the page if it is available or the URL.
+  // the page if it is available or the simplified URL.
   virtual const std::u16string& GetTitleForDisplay() = 0;
 
   // Returns true if the current tab is in view source mode. This will be false
@@ -228,7 +234,7 @@ class NavigationEntry : public base::SupportsUserData {
   // contains some information about the entry prior to being replaced. Even if
   // an entry is replaced multiple times, it represents data prior to the
   // *first* replace.
-  virtual const absl::optional<ReplacedNavigationEntryData>&
+  virtual const std::optional<ReplacedNavigationEntryData>&
   GetReplacedEntryData() = 0;
 
   // True if this entry is restored and hasn't been loaded.

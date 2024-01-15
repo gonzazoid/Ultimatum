@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_auth_challenge_tokenizer.h"
 #include "net/log/net_log.h"
@@ -40,7 +40,7 @@ bool HttpAuthHandler::InitFromChallenge(
     base::Value::Dict params;
     params.Set("succeeded", ok);
     params.Set("allows_default_credentials", AllowsDefaultCredentials());
-    return base::Value(std::move(params));
+    return params;
   });
 
   // Init() is expected to set the scheme, realm, score, and properties.  The

@@ -4,12 +4,15 @@
 
 #include "chrome/browser/ash/printing/zeroconf_printer_detector.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/containers/fixed_flat_set.h"
 #include "base/hash/md5.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -27,6 +30,7 @@ const char ZeroconfPrinterDetector::kIppServiceName[] = "_ipp._tcp.local";
 const char ZeroconfPrinterDetector::kIppsServiceName[] = "_ipps._tcp.local";
 const char ZeroconfPrinterDetector::kSocketServiceName[] =
     "_pdl-datastream._tcp.local";
+const char ZeroconfPrinterDetector::kLpdServiceName[] = "_printer._tcp.local";
 
 // IppEverywhere printers are also required to advertise these services.
 const char ZeroconfPrinterDetector::kIppEverywhereServiceName[] =
@@ -36,13 +40,30 @@ const char ZeroconfPrinterDetector::kIppsEverywhereServiceName[] =
 
 // These service names are ordered in priority. In other words, earlier
 // service types in this list will be used preferentially over later ones.
-constexpr std::array<const char*, 5> kServiceNames = {
+constexpr std::array<const char*, 6> kServiceNames = {
     ZeroconfPrinterDetector::kIppsEverywhereServiceName,
     ZeroconfPrinterDetector::kIppEverywhereServiceName,
     ZeroconfPrinterDetector::kIppsServiceName,
     ZeroconfPrinterDetector::kIppServiceName,
     ZeroconfPrinterDetector::kSocketServiceName,
+    ZeroconfPrinterDetector::kLpdServiceName,
 };
+
+// Certain printers advertise IPP/IPPS but are known not to work with that
+// protocol.  Don't allow IPP/IPPS connections for printers in this list.
+// Printers in this list should be all lowercase.  See b/268531843 for more
+// context.
+constexpr auto kIppRejectList = base::MakeFixedFlatSet<base::StringPiece>({
+    "brother mfc-9340cdw",
+    "canon e480 series",
+    "canon ib4000 series",
+    "canon mb2000 series",
+    "canon mb2300 series",
+    "canon mb5000 series",
+    "canon mb5300 series",
+    "canon mg3000 series",
+    "canon mx490 series",
+});
 
 namespace {
 
@@ -186,6 +207,8 @@ bool ConvertToPrinter(const std::string& service_type,
     // If the "rp" key is present in a Socket TXT record, the key/value MUST
     // be ignored.
     rp.clear();
+  } else if (service_type == ZeroconfPrinterDetector::kLpdServiceName) {
+    uri.SetScheme("lpd");
   } else {
     // Since we only register for these services, we should never get back
     // a service other than the ones above.
@@ -228,14 +251,14 @@ bool ConvertToPrinter(const std::string& service_type,
   if (!metadata.pdl.empty()) {
     // Per Bonjour Printer Spec v1.2 section 9.2.8, it is invalid for the pdl to
     // end with a comma.
-    auto media_types = base::SplitString(
+    auto media_types = base::SplitStringPiece(
         metadata.pdl, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
     if (!media_types.empty() && !media_types.back().empty()) {
       // Prune any empty splits.
       base::EraseIf(media_types, [](base::StringPiece s) { return s.empty(); });
 
-      std::transform(
-          media_types.begin(), media_types.end(),
+      base::ranges::transform(
+          media_types,
           std::back_inserter(
               detected_printer->ppd_search_data.supported_document_formats),
           [](base::StringPiece s) { return base::ToLowerASCII(s); });
@@ -252,7 +275,8 @@ class ZeroconfPrinterDetectorImpl : public ZeroconfPrinterDetector {
  public:
   // Normal constructor, connects to service discovery.
   ZeroconfPrinterDetectorImpl()
-      : discovery_client_(ServiceDiscoverySharedClient::GetInstance()) {
+      : discovery_client_(ServiceDiscoverySharedClient::GetInstance()),
+        reject_ipp_printers_(kIppRejectList.begin(), kIppRejectList.end()) {
     for (const char* service_type : kServiceNames) {
       CreateDeviceLister(service_type);
     }
@@ -261,7 +285,9 @@ class ZeroconfPrinterDetectorImpl : public ZeroconfPrinterDetector {
   // Testing constructor, uses injected backends.
   explicit ZeroconfPrinterDetectorImpl(
       std::map<std::string, std::unique_ptr<ServiceDiscoveryDeviceLister>>*
-          device_listers) {
+          device_listers,
+      base::flat_set<std::string> ipp_reject_list)
+      : reject_ipp_printers_(std::move(ipp_reject_list)) {
     device_listers_.swap(*device_listers);
     for (auto& entry : device_listers_) {
       entry.second->Start();
@@ -295,6 +321,15 @@ class ZeroconfPrinterDetectorImpl : public ZeroconfPrinterDetector {
     if (!ConvertToPrinter(service_type, service_description, metadata,
                           &printer)) {
       return;
+    }
+    if ((service_type == kIppServiceName || service_type == kIppsServiceName)) {
+      const std::string lowercase_key =
+          base::ToLowerASCII(printer.printer.make_and_model());
+      if (reject_ipp_printers_.contains(lowercase_key)) {
+        PRINTER_LOG(EVENT) << "Rejecting " << lowercase_key
+                           << " for service type " << service_type;
+        return;
+      }
     }
     base::AutoLock auto_lock(printers_lock_);
     printers_[service_type][service_description.instance_name()] = printer;
@@ -412,6 +447,9 @@ class ZeroconfPrinterDetectorImpl : public ZeroconfPrinterDetector {
       device_listers_;
 
   OnPrintersFoundCallback on_printers_found_callback_;
+
+  // A set of printers known not to work with IPP/IPPS protocol.
+  const base::flat_set<std::string> reject_ipp_printers_;
 };
 
 }  // namespace
@@ -425,8 +463,10 @@ std::unique_ptr<ZeroconfPrinterDetector> ZeroconfPrinterDetector::Create() {
 std::unique_ptr<ZeroconfPrinterDetector>
 ZeroconfPrinterDetector::CreateForTesting(
     std::map<std::string, std::unique_ptr<ServiceDiscoveryDeviceLister>>*
-        device_listers) {
-  return std::make_unique<ZeroconfPrinterDetectorImpl>(device_listers);
+        device_listers,
+    base::flat_set<std::string> ipp_reject_list) {
+  return std::make_unique<ZeroconfPrinterDetectorImpl>(
+      device_listers, std::move(ipp_reject_list));
 }
 
 }  // namespace ash

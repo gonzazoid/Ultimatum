@@ -6,8 +6,8 @@
 #define IOS_CHROME_BROWSER_UI_INCOGNITO_INTERSTITIAL_INCOGNITO_INTERSTITIAL_COORDINATOR_H_
 
 #import "base/ios/block_types.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
 
 @protocol IncognitoInterstitialCoordinatorDelegate;
 @protocol TabOpening;

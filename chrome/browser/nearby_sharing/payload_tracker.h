@@ -5,11 +5,11 @@
 #ifndef CHROME_BROWSER_NEARBY_SHARING_PAYLOAD_TRACKER_H_
 #define CHROME_BROWSER_NEARBY_SHARING_PAYLOAD_TRACKER_H_
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/attachment_info.h"
-#include "chrome/browser/nearby_sharing/nearby_connections_manager.h"
+#include "chrome/browser/nearby_sharing/public/cpp/nearby_connections_manager.h"
 #include "chrome/browser/nearby_sharing/share_target.h"
 #include "chrome/browser/nearby_sharing/transfer_metadata.h"
 #include "chromeos/ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
@@ -37,8 +37,8 @@ class PayloadTracker : public NearbyConnectionsManager::PayloadStatusListener {
 
     uint64_t amount_transferred = 0;
     const uint64_t total_size;
-    location::nearby::connections::mojom::PayloadStatus status =
-        location::nearby::connections::mojom::PayloadStatus::kInProgress;
+    nearby::connections::mojom::PayloadStatus status =
+        nearby::connections::mojom::PayloadStatus::kInProgress;
   };
 
   void OnTransferUpdate();
@@ -50,8 +50,7 @@ class PayloadTracker : public NearbyConnectionsManager::PayloadStatusListener {
   uint64_t GetTotalTransferred() const;
   double CalculateProgressPercent() const;
 
-  void EmitFinalMetrics(
-      location::nearby::connections::mojom::PayloadStatus status) const;
+  void EmitFinalMetrics(nearby::connections::mojom::PayloadStatus status) const;
 
   ShareTarget share_target_;
   base::RepeatingCallback<void(ShareTarget, TransferMetadata)> update_callback_;

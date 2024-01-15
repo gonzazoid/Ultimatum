@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,9 +18,12 @@
 #include "build/build_config.h"
 #include "components/gwp_asan/common/allocator_state.h"
 #include "components/gwp_asan/common/crash_key_name.h"
+#include "components/gwp_asan/common/lightweight_detector_state.h"
 #include "components/gwp_asan/common/pack_stack_trace.h"
 #include "components/gwp_asan/crash_handler/crash.pb.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/crashpad/crashpad/client/annotation.h"
+#include "third_party/crashpad/crashpad/snapshot/cpu_architecture.h"
 #include "third_party/crashpad/crashpad/snapshot/cpu_context.h"
 #include "third_party/crashpad/crashpad/snapshot/exception_snapshot.h"
 #include "third_party/crashpad/crashpad/snapshot/module_snapshot.h"
@@ -46,12 +50,13 @@ void ReportHistogram(Crash_Allocator allocator,
 
   switch (allocator) {
     case Crash_Allocator_MALLOC:
-      UMA_HISTOGRAM_ENUMERATION("GwpAsan.CrashAnalysisResult.Malloc", result);
+      UMA_HISTOGRAM_ENUMERATION("Security.GwpAsan.CrashAnalysisResult.Malloc",
+                                result);
       break;
 
     case Crash_Allocator_PARTITIONALLOC:
-      UMA_HISTOGRAM_ENUMERATION("GwpAsan.CrashAnalysisResult.PartitionAlloc",
-                                result);
+      UMA_HISTOGRAM_ENUMERATION(
+          "Security.GwpAsan.CrashAnalysisResult.PartitionAlloc", result);
       break;
 
     default:
@@ -73,6 +78,10 @@ bool CrashAnalyzer::GetExceptionInfo(
 
   if (AnalyzeCrashedAllocator(process_snapshot, kPartitionAllocCrashKey,
                               Crash_Allocator_PARTITIONALLOC, proto)) {
+    return true;
+  }
+
+  if (AnalyzeLightweightDetectorCrash(process_snapshot, proto)) {
     return true;
   }
 
@@ -102,7 +111,7 @@ crashpad::VMAddress CrashAnalyzer::GetAccessAddress(
   return 0;
 }
 
-crashpad::VMAddress CrashAnalyzer::GetAllocatorAddress(
+crashpad::VMAddress CrashAnalyzer::GetStateAddress(
     const crashpad::ProcessSnapshot& process_snapshot,
     const char* annotation_name) {
   for (auto* module : process_snapshot.Modules()) {
@@ -128,17 +137,17 @@ crashpad::VMAddress CrashAnalyzer::GetAllocatorAddress(
   return 0;
 }
 
-bool CrashAnalyzer::GetAllocatorState(
-    const crashpad::ProcessSnapshot& process_snapshot,
-    const char* crash_key,
-    Crash_Allocator allocator,
-    AllocatorState* state) {
-  crashpad::VMAddress gpa_addr =
-      GetAllocatorAddress(process_snapshot, crash_key);
+template <typename T>
+bool CrashAnalyzer::GetState(const crashpad::ProcessSnapshot& process_snapshot,
+                             const char* crash_key,
+                             Crash_Allocator allocator,
+                             T* state) {
+  crashpad::VMAddress state_addr = GetStateAddress(process_snapshot, crash_key);
   // If the annotation isn't present, GWP-ASan wasn't enabled for this
   // allocator.
-  if (!gpa_addr)
+  if (!state_addr) {
     return false;
+  }
 
   const crashpad::ExceptionSnapshot* exception = process_snapshot.Exception();
   if (!exception)
@@ -174,7 +183,7 @@ bool CrashAnalyzer::GetAllocatorState(
     return false;
   }
 
-  if (!memory->Read(gpa_addr, sizeof(*state), state)) {
+  if (!memory->Read(state_addr, sizeof(*state), state)) {
     DLOG(ERROR) << "Failed to read AllocatorState from process.";
     ReportHistogram(allocator,
                     GwpAsanCrashAnalysisResult::kErrorFailedToReadAllocator);
@@ -192,14 +201,148 @@ bool CrashAnalyzer::GetAllocatorState(
   return true;
 }
 
+bool CrashAnalyzer::AnalyzeLightweightDetectorCrash(
+    const crashpad::ProcessSnapshot& process_snapshot,
+    gwp_asan::Crash* proto) {
+  LightweightDetectorState valid_state;
+  // TODO(glazunov): Add LUD to the `Allocator` enum. It is no longer
+  // bound to PartitionAlloc.
+  if (!GetState(process_snapshot, kLightweightDetectorCrashKey,
+                Crash_Allocator_PARTITIONALLOC, &valid_state)) {
+    return false;
+  }
+
+  auto* exception = process_snapshot.Exception();
+  if (!exception->Context()->Is64Bit()) {
+    // The lightweight detector isn't used on 32-bit platforms.
+    return false;
+  }
+
+  size_t slot_count = valid_state.num_metadata;
+  auto metadata_arr =
+      std::make_unique<LightweightDetectorState::SlotMetadata[]>(slot_count);
+  if (!process_snapshot.Memory()->Read(
+          valid_state.metadata_addr,
+          sizeof(LightweightDetectorState::SlotMetadata) * slot_count,
+          metadata_arr.get())) {
+    ReportHistogram(
+        Crash_Allocator_PARTITIONALLOC,
+        GwpAsanCrashAnalysisResult::kErrorFailedToReadLightweightSlotMetadata);
+    proto->set_missing_metadata(true);
+    proto->set_internal_error("Failed to read lightweight metadata.");
+    return true;
+  }
+
+  bool seen_candidate_id = false;
+  absl::optional<LightweightDetectorState::MetadataId> metadata_id;
+  std::vector<uint64_t> candidate_addresses;
+
+#if defined(ARCH_CPU_X86_64)
+  if (exception->Context()->architecture != crashpad::kCPUArchitectureX86_64) {
+    ReportHistogram(
+        Crash_Allocator_PARTITIONALLOC,
+        GwpAsanCrashAnalysisResult::kErrorMismatchedCpuArchitecture);
+    DLOG(ERROR) << "Mismatched CPU architecture.";
+    return false;
+  }
+
+  // x86-64 CPUs won't report the exact access address if it's non-canonical.
+  // Use a set of platform-specific hints to detect when it's the case
+  // and attempt to extract the ID from the register values at the time of the
+  // crash. See also "Intel 64 and IA-32 Architectures Software Developer’s
+  // Manual", Volume 1, Section 3.3.7.1.
+  if (
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+      // https://elixir.bootlin.com/linux/v6.2.2/source/arch/x86/kernel/traps.c#L719
+      exception->Exception() == SIGSEGV &&
+      exception->ExceptionInfo() == SI_KERNEL
+#elif BUILDFLAG(IS_MAC)
+      // https://opensource.apple.com/source/xnu/xnu-1699.24.8/osfmk/i386/trap.c
+      exception->Exception() == EXC_BAD_ACCESS &&
+      exception->ExceptionInfo() == EXC_I386_GPFLT
+#elif BUILDFLAG(IS_WIN)
+      // Verified experimentally.
+      GetAccessAddress(*exception) == std::numeric_limits<uint64_t>::max()
+#endif  // BUILDFLAG(IS_WIN)
+  ) {
+    auto& context = *exception->Context()->x86_64;
+    candidate_addresses = {context.rax, context.rbx, context.rcx, context.rdx,
+                           context.rdi, context.rsi, context.rbp, context.rsp,
+                           context.r8,  context.r9,  context.r10, context.r11,
+                           context.r12, context.r13, context.r14, context.r15,
+                           context.rip};
+  }
+#else   // defined(ARCH_CPU_X86_64)
+  candidate_addresses = {GetAccessAddress(*exception)};
+#endif  // defined(ARCH_CPU_X86_64)
+
+  for (auto candidate_address : candidate_addresses) {
+    auto candidate_id =
+        LightweightDetectorState::ExtractMetadataId(candidate_address);
+    if (!candidate_id.has_value()) {
+      continue;
+    }
+    seen_candidate_id = true;
+
+    if (valid_state.HasMetadataForId(*candidate_id, metadata_arr.get())) {
+      if (!metadata_id.has_value()) {
+        // It's the first time we see an ID with a matching valid slot.
+        metadata_id = candidate_id;
+      } else if (metadata_id != candidate_id) {
+        ReportHistogram(Crash_Allocator_PARTITIONALLOC,
+                        GwpAsanCrashAnalysisResult::
+                            kErrorConflictingLightweightMetadataIds);
+        proto->set_missing_metadata(true);
+        proto->set_internal_error(
+            "Found conflicting lightweight metadata IDs.");
+        return true;
+      }
+    }
+  }
+
+  if (!seen_candidate_id) {
+    return false;
+  }
+
+  if (!metadata_id.has_value()) {
+    ReportHistogram(Crash_Allocator_PARTITIONALLOC,
+                    GwpAsanCrashAnalysisResult::
+                        kErrorInvalidOrOutdatedLightweightMetadataIndex);
+    proto->set_missing_metadata(true);
+    proto->set_internal_error(
+        "The computed lightweight metadata index was invalid or outdated.");
+    return true;
+  }
+
+  auto& metadata =
+      valid_state.GetSlotMetadataById(*metadata_id, metadata_arr.get());
+
+  proto->set_missing_metadata(false);
+  proto->set_allocator(Crash_Allocator_PARTITIONALLOC);
+  proto->set_error_type(Crash_ErrorType_LIGHTWEIGHT_USE_AFTER_FREE);
+  proto->set_allocation_address(metadata.alloc_ptr);
+  proto->set_allocation_size(metadata.alloc_size);
+  if (metadata.dealloc.tid != base::kInvalidThreadId ||
+      metadata.dealloc.trace_len) {
+    ReadAllocationInfo(metadata.deallocation_stack_trace,
+                       /* stack_trace_offset = */ 0, metadata.dealloc,
+                       proto->mutable_deallocation());
+  }
+
+  ReportHistogram(Crash_Allocator_PARTITIONALLOC,
+                  GwpAsanCrashAnalysisResult::kLightweightDetectorCrash);
+  return true;
+}
+
 bool CrashAnalyzer::AnalyzeCrashedAllocator(
     const crashpad::ProcessSnapshot& process_snapshot,
     const char* crash_key,
     Crash_Allocator allocator,
     gwp_asan::Crash* proto) {
   AllocatorState valid_state;
-  if (!GetAllocatorState(process_snapshot, crash_key, allocator, &valid_state))
+  if (!GetState(process_snapshot, crash_key, allocator, &valid_state)) {
     return false;
+  }
 
   crashpad::VMAddress exception_addr =
       GetAccessAddress(*process_snapshot.Exception());
@@ -255,21 +398,24 @@ bool CrashAnalyzer::AnalyzeCrashedAllocator(
   auto ret = valid_state.GetMetadataForAddress(
       exception_addr, metadata_arr.get(), slot_to_metadata.get(), &metadata_idx,
       &error);
-  if (ret == GetMetadataReturnType::kErrorBadSlot)
+  if (ret == GetMetadataReturnType::kErrorBadSlot) {
     ReportHistogram(allocator, GwpAsanCrashAnalysisResult::kErrorBadSlot);
-  if (ret == GetMetadataReturnType::kErrorBadMetadataIndex)
+  }
+  if (ret == GetMetadataReturnType::kErrorBadMetadataIndex) {
     ReportHistogram(allocator,
                     GwpAsanCrashAnalysisResult::kErrorBadMetadataIndex);
-  if (ret == GetMetadataReturnType::kErrorOutdatedMetadataIndex)
+  }
+  if (ret == GetMetadataReturnType::kErrorOutdatedMetadataIndex) {
     ReportHistogram(allocator,
                     GwpAsanCrashAnalysisResult::kErrorOutdatedMetadataIndex);
+  }
   if (!error.empty()) {
     proto->set_internal_error(error);
     return true;
   }
 
   if (ret == GetMetadataReturnType::kGwpAsanCrash) {
-    SlotMetadata& metadata = metadata_arr[metadata_idx];
+    AllocatorState::SlotMetadata& metadata = metadata_arr[metadata_idx];
     AllocatorState::ErrorType error_type =
         valid_state.GetErrorType(exception_addr, metadata.alloc.trace_collected,
                                  metadata.dealloc.trace_collected);
@@ -294,7 +440,7 @@ bool CrashAnalyzer::AnalyzeCrashedAllocator(
 void CrashAnalyzer::ReadAllocationInfo(
     const uint8_t* stack_trace,
     size_t stack_trace_offset,
-    const SlotMetadata::AllocationInfo& slot_info,
+    const AllocationInfo& slot_info,
     gwp_asan::Crash_AllocationInfo* proto_info) {
   if (slot_info.tid != base::kInvalidThreadId)
     proto_info->set_thread_id(slot_info.tid);

@@ -54,11 +54,15 @@ class SVGComponentTransferFunctionElement : public SVGElement {
 
   void SvgAttributeChanged(const SvgAttributeChangedParams&) final;
 
-  bool LayoutObjectIsNeeded(const ComputedStyle& style) const final {
+  bool LayoutObjectIsNeeded(const DisplayStyle& style) const final {
     return false;
   }
 
  private:
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+
   Member<SVGAnimatedNumberList> table_values_;
   Member<SVGAnimatedNumber> slope_;
   Member<SVGAnimatedNumber> intercept_;

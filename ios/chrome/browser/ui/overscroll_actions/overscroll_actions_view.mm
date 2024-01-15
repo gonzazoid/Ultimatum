@@ -11,26 +11,18 @@
 #import "base/numerics/math_constants.h"
 #import "base/task/sequenced_task_runner.h"
 #import "base/time/time.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_constant.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/grit/ios_theme_resources.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-
-// Actions images.
-NSString* const kNewTabActionImage = @"ptr_new_tab";
-NSString* const kReloadActionImage = @"ptr_reload";
-NSString* const kCloseActionImage = @"ptr_close";
 
 // The size of overscroll symbol images.
 const CGFloat kOverScrollSymbolPointSize = 22.;
@@ -258,45 +250,23 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
     [_selectionCircleCroppingLayer addSublayer:_selectionCircleLayer];
 
     _addTabActionImageView = [[UIImageView alloc] init];
-    if (UseSymbols()) {
-      _addTabActionImageView.image = DefaultSymbolTemplateWithPointSize(
-          kPlusSymbol, kOverScrollSymbolPointSize);
-      _addTabActionImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
-    } else {
-      _addTabActionImageView.image = [[UIImage imageNamed:kNewTabActionImage]
-          imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-      _addTabActionImageView.tintColor =
-          [UIColor colorNamed:kToolbarButtonColor];
-    }
+    _addTabActionImageView.image = DefaultSymbolTemplateWithPointSize(
+        kPlusSymbol, kOverScrollSymbolPointSize);
+    _addTabActionImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
     [_addTabActionImageView sizeToFit];
     [self addSubview:_addTabActionImageView];
+
     _reloadActionImageView = [[UIImageView alloc] init];
-    if (UseSymbols()) {
-      _reloadActionImageView.image = CustomSymbolTemplateWithPointSize(
-          kArrowClockWiseSymbol, kOverScrollSymbolPointSize);
-      _reloadActionImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
-    } else {
-      _reloadActionImageView.image = [[UIImage imageNamed:kReloadActionImage]
-          imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-      _reloadActionImageView.tintColor =
-          [UIColor colorNamed:kToolbarButtonColor];
-    }
+    _reloadActionImageView.image = CustomSymbolTemplateWithPointSize(
+        kArrowClockWiseSymbol, kOverScrollSymbolPointSize);
+    _reloadActionImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
     [_reloadActionImageView sizeToFit];
-    if (UseRTLLayout())
-      [_reloadActionImageView setTransform:CGAffineTransformMakeScale(-1, 1)];
     [self addSubview:_reloadActionImageView];
+
     _closeTabActionImageView = [[UIImageView alloc] init];
-    if (UseSymbols()) {
-      _closeTabActionImageView.image = DefaultSymbolTemplateWithPointSize(
-          kXMarkSymbol, kOverScrollSymbolPointSize);
-      _closeTabActionImageView.tintColor =
-          [UIColor colorNamed:kTextPrimaryColor];
-    } else {
-      _closeTabActionImageView.image = [[UIImage imageNamed:kCloseActionImage]
-          imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-      _closeTabActionImageView.tintColor =
-          [UIColor colorNamed:kToolbarButtonColor];
-    }
+    _closeTabActionImageView.image = DefaultSymbolTemplateWithPointSize(
+        kXMarkSymbol, kOverScrollSymbolPointSize);
+    _closeTabActionImageView.tintColor = [UIColor colorNamed:kTextPrimaryColor];
     [_closeTabActionImageView sizeToFit];
     [self addSubview:_closeTabActionImageView];
 
@@ -312,6 +282,7 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
     _addTabLabel.text =
         l10n_util::GetNSString(IDS_IOS_OVERSCROLL_NEW_TAB_LABEL);
     [self addSubview:_addTabLabel];
+
     _reloadLabel = [[UILabel alloc] init];
     _reloadLabel.numberOfLines = 0;
     _reloadLabel.lineBreakMode = NSLineBreakByWordWrapping;
@@ -323,6 +294,7 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
     _reloadLabel.textColor = [UIColor colorNamed:kToolbarButtonColor];
     _reloadLabel.text = l10n_util::GetNSString(IDS_IOS_OVERSCROLL_RELOAD_LABEL);
     [self addSubview:_reloadLabel];
+
     _closeTabLabel = [[UILabel alloc] init];
     _closeTabLabel.numberOfLines = 0;
     _closeTabLabel.lineBreakMode = NSLineBreakByWordWrapping;
@@ -927,7 +899,9 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
   _style = style;
   switch (self.style) {
     case OverscrollStyle::NTP_NON_INCOGNITO:
-      self.backgroundColor = ntp_home::NTPBackgroundColor();
+      self.backgroundColor = IsMagicStackEnabled()
+                                 ? [UIColor clearColor]
+                                 : ntp_home::NTPBackgroundColor();
       break;
     case OverscrollStyle::NTP_INCOGNITO:
       self.backgroundColor = [UIColor colorWithWhite:0 alpha:0];
@@ -947,8 +921,11 @@ const CGFloat kActionViewBackgroundColorBrightnessIncognito = 80.0 / 256.0;
 // support iOS 13 dynamic colors, so those must be resolved more often.
 - (void)updateLayerColors {
   [self.traitCollection performAsCurrentTraitCollection:^{
+    BOOL darkModeEnabled =
+        (self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark);
     _selectionCircleLayer.fillColor =
-        [UIColor colorNamed:kTextfieldBackgroundColor].CGColor;
+        darkModeEnabled ? [UIColor colorWithWhite:0.7 alpha:0.2].CGColor
+                        : [UIColor colorWithWhite:0.3 alpha:0.125].CGColor;
   }];
 }
 

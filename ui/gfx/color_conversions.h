@@ -31,9 +31,7 @@ GFX_EXPORT std::tuple<float, float, float> XYZD65ToOklab(float x,
                                                          float y,
                                                          float z);
 
-GFX_EXPORT std::tuple<float, float, float> LchToLab(float l,
-                                                    float c,
-                                                    absl::optional<float> h);
+GFX_EXPORT std::tuple<float, float, float> LchToLab(float l, float c, float h);
 
 GFX_EXPORT std::tuple<float, float, float> LabToLch(float l, float a, float b);
 
@@ -81,6 +79,10 @@ GFX_EXPORT std::tuple<float, float, float> XYZD65TosRGBLinear(float x,
                                                               float y,
                                                               float z);
 
+GFX_EXPORT std::tuple<float, float, float> XYZD50TosRGB(float x,
+                                                        float y,
+                                                        float z);
+
 GFX_EXPORT std::tuple<float, float, float> XYZD50TosRGBLinear(float x,
                                                               float y,
                                                               float z);
@@ -93,8 +95,10 @@ GFX_EXPORT std::tuple<float, float, float> SRGBToXYZD50(float r,
                                                         float g,
                                                         float b);
 
+GFX_EXPORT std::tuple<float, float, float> HSLToSRGB(float h, float s, float l);
 GFX_EXPORT std::tuple<float, float, float> SRGBToHSL(float r, float g, float b);
 
+GFX_EXPORT std::tuple<float, float, float> HWBToSRGB(float h, float w, float b);
 GFX_EXPORT std::tuple<float, float, float> SRGBToHWB(float r, float g, float b);
 
 GFX_EXPORT SkColor4f XYZD50ToSkColor4f(float x, float y, float z, float alpha);
@@ -105,15 +109,9 @@ GFX_EXPORT SkColor4f LabToSkColor4f(float l, float a, float b, float alpha);
 
 GFX_EXPORT SkColor4f OklabToSkColor4f(float l, float a, float b, float alpha);
 
-GFX_EXPORT SkColor4f LchToSkColor4f(float l,
-                                    float a,
-                                    absl::optional<float> b,
-                                    float alpha);
+GFX_EXPORT SkColor4f LchToSkColor4f(float l, float a, float b, float alpha);
 
-GFX_EXPORT SkColor4f OklchToSkColor4f(float l,
-                                      float a,
-                                      absl::optional<float> b,
-                                      float alpha);
+GFX_EXPORT SkColor4f OklchToSkColor4f(float l, float a, float h, float alpha);
 
 GFX_EXPORT SkColor4f SRGBLinearToSkColor4f(float r,
                                            float g,
@@ -137,12 +135,8 @@ GFX_EXPORT SkColor4f AdobeRGBToSkColor4f(float r,
 
 GFX_EXPORT SkColor4f Rec2020ToSkColor4f(float r, float g, float b, float alpha);
 
-// Hue is in the range of 0.0 to 6.0, the rest of the parameters are in the
-// range 0.0 to 1.0.
 GFX_EXPORT SkColor4f HSLToSkColor4f(float h, float s, float l, float alpha);
 
-// Hue is in the range of 0.0 to 6.0, the rest of the parameters are in the
-// range 0.0 to 1.0.
 GFX_EXPORT SkColor4f HWBToSkColor4f(float h, float w, float b, float alpha);
 
 }  // namespace gfx

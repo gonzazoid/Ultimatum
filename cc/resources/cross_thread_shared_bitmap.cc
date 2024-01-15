@@ -4,12 +4,13 @@
 
 #include "cc/resources/cross_thread_shared_bitmap.h"
 
+#include <utility>
 namespace cc {
 
 CrossThreadSharedBitmap::CrossThreadSharedBitmap(const viz::SharedBitmapId& id,
                                                  base::MappedReadOnlyRegion shm,
                                                  const gfx::Size& size,
-                                                 viz::ResourceFormat format)
+                                                 viz::SharedImageFormat format)
     : id_(id),
       region_(std::move(shm.region)),
       mapping_(std::move(shm.mapping)),

@@ -4,12 +4,11 @@
 
 #include "content/browser/renderer_host/pepper/pepper_proxy_lookup_helper.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -28,7 +27,7 @@ class PepperProxyLookupHelper::UIThreadHelper
                  LookUpProxyForURLCallback look_up_proxy_for_url_callback,
                  LookUpCompleteCallback look_up_complete_callback)
       : look_up_complete_callback_(std::move(look_up_complete_callback)),
-        callback_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+        callback_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
     GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(&UIThreadHelper::StartLookup, base::Unretained(this),
@@ -47,18 +46,18 @@ class PepperProxyLookupHelper::UIThreadHelper
 
     mojo::PendingRemote<network::mojom::ProxyLookupClient> proxy_lookup_client =
         receiver_.BindNewPipeAndPassRemote();
-    receiver_.set_disconnect_handler(base::BindOnce(
-        &UIThreadHelper::OnProxyLookupComplete, base::Unretained(this),
-        net::ERR_ABORTED, absl::nullopt));
+    receiver_.set_disconnect_handler(
+        base::BindOnce(&UIThreadHelper::OnProxyLookupComplete,
+                       base::Unretained(this), net::ERR_ABORTED, std::nullopt));
     if (!std::move(look_up_proxy_for_url_callback)
              .Run(url, std::move(proxy_lookup_client))) {
-      OnProxyLookupComplete(net::ERR_FAILED, absl::nullopt);
+      OnProxyLookupComplete(net::ERR_FAILED, std::nullopt);
     }
   }
 
   void OnProxyLookupComplete(
       int32_t net_error,
-      const absl::optional<net::ProxyInfo>& proxy_info) override {
+      const std::optional<net::ProxyInfo>& proxy_info) override {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
     receiver_.reset();
@@ -99,7 +98,7 @@ void PepperProxyLookupHelper::Start(
 }
 
 void PepperProxyLookupHelper::OnProxyLookupComplete(
-    absl::optional<net::ProxyInfo> proxy_info) {
+    std::optional<net::ProxyInfo> proxy_info) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   std::move(look_up_complete_callback_).Run(std::move(proxy_info));

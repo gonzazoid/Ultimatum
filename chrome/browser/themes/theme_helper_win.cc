@@ -4,15 +4,20 @@
 
 #include "chrome/browser/themes/theme_helper_win.h"
 
+#include "chrome/browser/themes/custom_theme_supplier.h"
+#include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/win/titlebar_config.h"
 #include "chrome/grit/theme_resources.h"
-#include "skia/ext/skia_utils_win.h"
-#include "ui/base/win/shell.h"
+
+int ThemeHelperWin::GetDefaultDisplayProperty(int id) const {
+  if (id == ThemeProperties::SHOULD_FILL_BACKGROUND_TAB_COLOR) {
+    return !ShouldDefaultThemeUseMicaTitlebar();
+  }
+
+  return ThemeHelper::GetDefaultDisplayProperty(id);
+}
 
 bool ThemeHelperWin::ShouldUseNativeFrame(
     const CustomThemeSupplier* theme_supplier) const {
-  const bool use_native_frame_if_enabled =
-      ShouldCustomDrawSystemTitlebar() ||
-      !HasCustomImage(IDR_THEME_FRAME, theme_supplier);
-  return use_native_frame_if_enabled && ui::win::IsAeroGlassEnabled();
+  return true;
 }

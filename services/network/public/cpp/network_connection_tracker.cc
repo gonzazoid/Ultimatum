@@ -6,10 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/notreached.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/network_change_manager.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
@@ -40,7 +42,7 @@ static const int32_t kConnectionTypeInvalid = -1;
 
 NetworkConnectionTracker::NetworkConnectionTracker(BindingCallback callback)
     : bind_receiver_callback_(callback),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       connection_type_(kConnectionTypeInvalid),
       network_change_observer_list_(
           new base::ObserverListThreadSafe<NetworkConnectionObserver>(
@@ -58,7 +60,7 @@ NetworkConnectionTracker::~NetworkConnectionTracker() {
 }
 
 bool NetworkConnectionTracker::GetConnectionType(
-    network::mojom::ConnectionType* type,
+    network::mojom::ConnectionType* const type,
     ConnectionTypeCallback callback) {
   // |connection_type_| is initialized when NetworkService starts up. In most
   // cases, it won't be kConnectionTypeInvalid and code will return early.
@@ -78,7 +80,7 @@ bool NetworkConnectionTracker::GetConnectionType(
   }
   if (!task_runner_->RunsTasksInCurrentSequence()) {
     connection_type_callbacks_.push_back(base::BindOnce(
-        &OnGetConnectionType, base::SequencedTaskRunnerHandle::Get(),
+        &OnGetConnectionType, base::SequencedTaskRunner::GetCurrentDefault(),
         std::move(callback)));
   } else {
     connection_type_callbacks_.push_back(std::move(callback));
@@ -86,7 +88,7 @@ bool NetworkConnectionTracker::GetConnectionType(
   return false;
 }
 
-bool NetworkConnectionTracker::IsOffline() {
+bool NetworkConnectionTracker::IsOffline() const {
   base::subtle::Atomic32 type_value =
       base::subtle::NoBarrier_Load(&connection_type_);
   if (type_value != kConnectionTypeInvalid) {
@@ -98,24 +100,23 @@ bool NetworkConnectionTracker::IsOffline() {
 
 // static
 bool NetworkConnectionTracker::IsConnectionCellular(
-    network::mojom::ConnectionType type) {
-  bool is_cellular = false;
+    const network::mojom::ConnectionType type) {
   switch (type) {
     case network::mojom::ConnectionType::CONNECTION_2G:
     case network::mojom::ConnectionType::CONNECTION_3G:
     case network::mojom::ConnectionType::CONNECTION_4G:
     case network::mojom::ConnectionType::CONNECTION_5G:
-      is_cellular = true;
-      break;
+      return true;
+
     case network::mojom::ConnectionType::CONNECTION_UNKNOWN:
     case network::mojom::ConnectionType::CONNECTION_ETHERNET:
     case network::mojom::ConnectionType::CONNECTION_WIFI:
     case network::mojom::ConnectionType::CONNECTION_NONE:
     case network::mojom::ConnectionType::CONNECTION_BLUETOOTH:
-      is_cellular = false;
-      break;
+      return false;
   }
-  return is_cellular;
+
+  NOTREACHED_NORETURN() << "Unexpected connection type " << type;
 }
 
 void NetworkConnectionTracker::AddNetworkConnectionObserver(

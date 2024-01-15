@@ -94,15 +94,16 @@ void RenderViewContextMenuMac::AppendPlatformEditableItems() {
 }
 
 void RenderViewContextMenuMac::InitToolkitMenu() {
-  if (params_.input_field_type ==
-      blink::mojom::ContextMenuDataInputFieldType::kPassword)
+  if (params_.form_control_type ==
+      blink::mojom::FormControlType::kInputPassword) {
     return;
+  }
 
   if (!params_.selection_text.empty() && params_.link_url.is_empty()) {
     // In case the user has selected a word that triggers spelling suggestions,
     // show the dictionary lookup under the group that contains the command to
     // “Add to Dictionary.”
-    const absl::optional<size_t> index_opt =
+    const std::optional<size_t> index_opt =
         menu_model_.GetIndexOfCommandId(IDC_SPELLCHECK_ADD_TO_DICTIONARY);
     size_t index = index_opt.value_or(0);
     if (index_opt.has_value()) {

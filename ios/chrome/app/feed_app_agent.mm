@@ -7,17 +7,17 @@
 #import <BackgroundTasks/BackgroundTasks.h>
 #import <UserNotifications/UserNotifications.h>
 
+#import "components/metrics/metrics_service.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
-#import "ios/chrome/browser/discover_feed/discover_feed_service.h"
-#import "ios/chrome/browser/discover_feed/discover_feed_service_factory.h"
-#import "ios/chrome/browser/discover_feed/feed_constants.h"
-#import "ios/chrome/browser/ntp/features.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/discover_feed/model/discover_feed_service.h"
+#import "ios/chrome/browser/discover_feed/model/discover_feed_service_factory.h"
+#import "ios/chrome/browser/discover_feed/model/feed_constants.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/ui/ntp/metrics/feed_metrics_constants.h"
+#import "ios/chrome/browser/ui/ntp/metrics/feed_metrics_recorder.h"
 
 namespace {
 // NSUserDefaults key for the last time background refresh was called.
@@ -25,7 +25,10 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
     @"FeedLastBackgroundRefreshTimestamp";
 }  // namespace
 
-@implementation FeedAppAgent
+@implementation FeedAppAgent {
+  // Set to YES when the app is foregrounded.
+  BOOL _wasForegroundedAtLeastOnce;
+}
 
 #pragma mark - AppStateObserver
 
@@ -43,12 +46,12 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
              InitStageBrowserObjectsForBackgroundHandlers) {
     // Save the value of the feature flag now since 'base::FeatureList' was
     // not available in `InitStageBrowserBasic`.
-    // IsFeedBackgroundRefreshEnabled() simply reads the saved value saved by
-    // SaveFeedBackgroundRefreshEnabledForNextColdStart(). Do not wrap this in
-    // IsFeedBackgroundRefreshEnabled() -- in this case, a new value would
-    // never be saved again once we save NO, since the NO codepath would not
-    // execute saving a new value.
-    SaveFeedBackgroundRefreshEnabledForNextColdStart();
+    // IsFeedBackgroundRefreshCapabilityEnabled() simply reads the saved value
+    // saved by SaveFeedBackgroundRefreshCapabilityEnabledForNextColdStart(). Do
+    // not wrap this in IsFeedBackgroundRefreshCapabilityEnabled() -- in this
+    // case, a new value would never be saved again once we save NO, since the
+    // NO codepath would not execute saving a new value.
+    SaveFeedBackgroundRefreshCapabilityEnabledForNextColdStart();
   } else if (appState.initStage == InitStageNormalUI &&
              IsWebChannelsEnabled() && IsDiscoverFeedServiceCreatedEarly()) {
     // Starting the DiscoverFeedService is required before users are able to
@@ -74,11 +77,15 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
 - (void)appDidEnterBackground {
   if (IsFeedBackgroundRefreshEnabled()) {
     [self scheduleBackgroundRefresh];
+  } else if ([self feedServiceIfCreated]) {
+    [self feedServiceIfCreated]->RefreshFeed(
+        FeedRefreshTrigger::kForegroundAppClose);
   }
 }
 
 - (void)appDidEnterForeground {
-  if (IsFeedBackgroundRefreshEnabled()) {
+  _wasForegroundedAtLeastOnce = YES;
+  if (IsFeedBackgroundRefreshCapabilityEnabled()) {
     // This is not strictly necessary, but it makes it more explicit. The OS
     // limits to 1 refresh task at any time, and a new request will replace a
     // previous request. Tasks are only executed in the background.
@@ -95,14 +102,25 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
   // should create background objects before this method is called. This line is
   // intended to crash if DiscoverFeedService is not available.
   return DiscoverFeedServiceFactory::GetForBrowserState(
-      self.appState.mainBrowserState);
+      self.appState.mainBrowserState, /*create=*/true);
+}
+
+// Returns the DiscoverFeedService if created.
+- (DiscoverFeedService*)feedServiceIfCreated {
+  return DiscoverFeedServiceFactory::GetForBrowserState(
+      self.appState.mainBrowserState, /*create=*/false);
+}
+
+// Returns the FeedMetricsRecorder.
+- (FeedMetricsRecorder*)feedMetricsRecorder {
+  return self.feedService->GetFeedMetricsRecorder();
 }
 
 // Registers handler for the background refresh task. According to
 // documentation, this must complete before the end of
 // `applicationDidFinishLaunching`.
 - (void)maybeRegisterBackgroundRefreshTask {
-  if (!IsFeedBackgroundRefreshEnabled()) {
+  if (!IsFeedBackgroundRefreshCapabilityEnabled()) {
     return;
   }
   __weak FeedAppAgent* weakSelf = self;
@@ -124,9 +142,9 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
 // including other files. The OS only allows one fetch task at a time.
 // Eventually, background fetches should be managed by a central manager.
 - (void)scheduleBackgroundRefresh {
-  // Do not DCHECK IsFeedBackgroundRefreshEnabled() because this is also called
-  // from the background task handler, and the value could have changed during a
-  // cold start.
+  // Do not DCHECK whether background refreshes were enabled at startup because
+  // this is also called from the background task handler, and the value could
+  // have changed during a cold start.
   if (!IsFeedBackgroundRefreshEnabled()) {
     return;
   }
@@ -157,10 +175,16 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
 
 // This method is called when the app is in the background.
 - (void)handleBackgroundRefreshTask:(BGTask*)task {
-  // Do not DCHECK IsFeedBackgroundRefreshEnabled() because the value could have
-  // changed during a cold start.
+  // Do not DCHECK whether background refreshes were enabled at startup because
+  // the value could have changed during a cold start.
   if (!IsFeedBackgroundRefreshEnabled()) {
     return;
+  }
+
+  // TODO(crbug.com/1396459): Kill the app if in a cold start because currently
+  // there are issues with background cold starts.
+  if (!_wasForegroundedAtLeastOnce) {
+    [self handleColdStartAndKillApp];
   }
   if (IsRecurringBackgroundRefreshScheduleEnabled()) {
     [self scheduleBackgroundRefresh];
@@ -172,11 +196,34 @@ NSString* const kFeedLastBackgroundRefreshTimestamp =
       [self maybeNotifyRefreshSuccess:NO];
     });
   };
+
+  // Cold starts are killed earlier in this method, so warm and cold starts
+  // cannot be recorded at the same time.
+  [self recordWarmStartMetrics];
+
   // This is expected to crash if FeedService is not available.
   [self feedService]->PerformBackgroundRefreshes(^(BOOL success) {
     [self maybeNotifyRefreshSuccess:success];
     [task setTaskCompletedWithSuccess:success];
   });
+}
+
+// Records cold start histogram and kills app.
+- (void)handleColdStartAndKillApp {
+  [FeedMetricsRecorder
+      recordFeedRefreshTrigger:FeedRefreshTrigger::kBackgroundColdStart];
+
+  // TODO(crbug.com/1396459): Remove this workaround and enable background
+  // cold starts.
+  [self maybeNotifyRefreshSuccess:NO];
+  GetApplicationContext()->GetMetricsService()->OnAppEnterBackground();
+  exit(0);
+}
+
+// Record refresh trigger for warm start.
+- (void)recordWarmStartMetrics {
+    [FeedMetricsRecorder
+        recordFeedRefreshTrigger:FeedRefreshTrigger::kBackgroundWarmStart];
 }
 
 #pragma mark - Refresh Completion Notifications (only enabled by Experimental Settings)

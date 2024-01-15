@@ -8,19 +8,28 @@
 #include <memory>
 
 #include "ash/ash_export.h"
-#include "ash/wm/splitview/split_view_controller.h"
+#include "ash/wm/splitview/split_view_types.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
+#include "base/timer/timer.h"
 #include "ui/gfx/geometry/point_f.h"
+#include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/size_f.h"
+
+namespace aura {
+class Window;
+}  // namespace aura
 
 namespace ui {
 class PresentationTimeRecorder;
-}
+}  // namespace ui
 
 namespace ash {
 
 class OverviewGrid;
-class OverviewItem;
+class OverviewItemBase;
 class OverviewSession;
+class SplitViewController;
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -91,14 +100,19 @@ class ASH_EXPORT OverviewWindowDragController {
   };
 
   OverviewWindowDragController(OverviewSession* overview_session,
-                               OverviewItem* item,
-                               bool is_touch_dragging);
+                               OverviewItemBase* item,
+                               bool is_touch_dragging,
+                               OverviewItemBase* event_source_item);
 
   OverviewWindowDragController(const OverviewWindowDragController&) = delete;
   OverviewWindowDragController& operator=(const OverviewWindowDragController&) =
       delete;
 
   ~OverviewWindowDragController();
+
+  OverviewItemBase* item() { return item_; }
+
+  bool is_touch_dragging() const { return is_touch_dragging_; }
 
   void InitiateDrag(const gfx::PointF& location_in_screen);
   void Drag(const gfx::PointF& location_in_screen);
@@ -108,6 +122,9 @@ class ASH_EXPORT OverviewWindowDragController {
                    float velocity_x,
                    float velocity_y);
   void ActivateDraggedWindow();
+
+  // Called when a gesture event is reset or when the dragged window is being
+  // destroyed.
   void ResetGesture();
 
   // Resets |overview_session_| to nullptr. It's needed since we defer the
@@ -116,17 +133,19 @@ class ASH_EXPORT OverviewWindowDragController {
   // dereference.
   void ResetOverviewSession();
 
-  OverviewItem* item() { return item_; }
-
-  bool is_touch_dragging() const { return is_touch_dragging_; }
+  // Called by `float_drag_helper_` to destroy itself as it may need to live
+  // after a gesture is completed if there is an animation.
+  void DestroyFloatDragHelper();
 
   DragBehavior current_drag_behavior_for_testing() const {
     return current_drag_behavior_;
   }
 
- private:
-  class ScopedFloatDragHelper;
+  base::OneShotTimer* new_desk_button_scale_up_timer_for_test() {
+    return &new_desk_button_scale_up_timer_;
+  }
 
+ private:
   enum NormalDragAction {
     kToGrid = 0,
     kToDesk = 1,
@@ -158,14 +177,13 @@ class ASH_EXPORT OverviewWindowDragController {
 
   aura::Window* GetRootWindowBeingDraggedIn() const;
 
-  SplitViewController::SnapPosition GetSnapPosition(
-      const gfx::PointF& location_in_screen) const;
+  SnapPosition GetSnapPosition(const gfx::PointF& location_in_screen) const;
 
   // Snaps and activates the window. Uses the divider spawn animation (see
   // |SplitViewController::SnapWindow|). Sets |item_| to null because the
   // overview item is destroyed.
   void SnapWindow(SplitViewController* split_view_controller,
-                  SplitViewController::SnapPosition snap_position);
+                  SnapPosition snap_position);
 
   // Returns the item's overview grid, or the grid in which the item is being
   // dragged if the multi display overview and split view feature is enabled.
@@ -176,14 +194,24 @@ class ASH_EXPORT OverviewWindowDragController {
                         bool is_dragged_to_other_display) const;
   void RecordDragToClose(DragToCloseAction action) const;
 
-  // Called by `float_drag_helper_` to destroy itself as it may need to live
-  // after a gesture is completed if there is an animation.
-  void DestroyFloatDragHelper();
+  // Creates `float_drag_helper_` if needed. The helper will temporarily stack
+  // the float container under the active desk container, so that dragging
+  // regular windows appear above overview items of floated windows.
+  void MaybeCreateFloatDragHelper();
 
-  OverviewSession* overview_session_;
+  // Scale up the new desk button on the desks bar from expanded state to active
+  // state to make the new desk button a drop target for the window being
+  // dragged. It's triggered by `new_desk_button_scale_up_timer_`. Refer to
+  // `new_desk_button_scale_up_timer_` for more information.
+  void MaybeScaleUpNewDeskButton();
 
-  // The drag target window in the overview mode.
-  OverviewItem* item_ = nullptr;
+  raw_ptr<OverviewSession> overview_session_;
+
+  // The drag target item in the overview mode.
+  raw_ptr<OverviewItemBase, DanglingUntriaged> item_ = nullptr;
+
+  // The source item of the drag event.
+  raw_ptr<OverviewItemBase, DanglingUntriaged> event_source_item_ = nullptr;
 
   DragBehavior current_drag_behavior_ = DragBehavior::kNoDrag;
 
@@ -196,15 +224,15 @@ class ASH_EXPORT OverviewWindowDragController {
 
   // The original size of the dragged item after we scale it up when we start
   // dragging it. The item is restored to this size once it no longer intersects
-  // with the DesksBarView.
+  // with the LegacyDeskBarView.
   gfx::SizeF original_scaled_size_;
 
   // Track the per-overview-grid desks bar data used to perform the window
   // sizing operations when it is moved towards or on the desks bar.
   struct GridDesksBarData {
     // The scaled-down size of the dragged item once the drag location is on the
-    // DesksBarView of the corresponding grid. We size the item down so that it
-    // fits inside the desks' preview view.
+    // LegacyDeskBarView of the corresponding grid. We size the item down so
+    // that it fits inside the desks' preview view.
     gfx::SizeF on_desks_bar_item_size;
 
     // Cached values related to dragging items while the desks bar is shown.
@@ -229,8 +257,8 @@ class ASH_EXPORT OverviewWindowDragController {
   // mode is only allowed when |is_touch_dragging_| is true.
   const bool is_touch_dragging_;
 
-  // True if SplitView is enabled.
-  const bool should_allow_split_view_;
+  // True if the `item_` can be snapped by dragging.
+  const bool is_eligible_for_drag_to_snap_;
 
   // True if the Virtual Desks bar is created and dragging to desks is enabled.
   const bool virtual_desks_bar_enabled_;
@@ -246,14 +274,12 @@ class ASH_EXPORT OverviewWindowDragController {
   // Records the presentation time of window drag operation in overview mode.
   std::unique_ptr<ui::PresentationTimeRecorder> presentation_time_recorder_;
 
-  SplitViewController::SnapPosition snap_position_ =
-      SplitViewController::SnapPosition::kNone;
+  SnapPosition snap_position_ = SnapPosition::kNone;
 
-  // Helper class that encapsulates the logic needed to alter the floated
-  // windows' container during a drag. May stay alive shortly after a drag is
-  // completed to keep the float container stacked below for the drag end
-  // animation.
-  std::unique_ptr<ScopedFloatDragHelper> float_drag_helper_;
+  // A timer used to scale up the new desk button to make it a drop target for
+  // the window being dragged if the window is hovered on the button over a
+  // period of time.
+  base::OneShotTimer new_desk_button_scale_up_timer_;
 };
 
 }  // namespace ash

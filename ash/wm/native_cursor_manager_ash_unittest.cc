@@ -24,46 +24,19 @@
 
 namespace ash {
 
-namespace {
-
-// A delegate for recording a mouse event location.
-class MouseEventLocationDelegate : public aura::test::TestWindowDelegate {
- public:
-  MouseEventLocationDelegate() = default;
-
-  MouseEventLocationDelegate(const MouseEventLocationDelegate&) = delete;
-  MouseEventLocationDelegate& operator=(const MouseEventLocationDelegate&) =
-      delete;
-
-  ~MouseEventLocationDelegate() override = default;
-
-  gfx::Point GetMouseEventLocationAndReset() {
-    gfx::Point p = mouse_event_location_;
-    mouse_event_location_.SetPoint(-100, -100);
-    return p;
-  }
-
-  void OnMouseEvent(ui::MouseEvent* event) override {
-    mouse_event_location_ = event->location();
-    event->SetHandled();
-  }
-
- private:
-  gfx::Point mouse_event_location_;
-};
-
-}  // namespace
-
 using NativeCursorManagerAshTest = AshTestBase;
 
 TEST_F(NativeCursorManagerAshTest, LockCursor) {
   ::wm::CursorManager* cursor_manager = Shell::Get()->cursor_manager();
+  const auto& cursor_shape_client = aura::client::GetCursorShapeClient();
   CursorManagerTestApi test_api;
 
   cursor_manager->SetCursor(ui::mojom::CursorType::kCopy);
   EXPECT_EQ(ui::mojom::CursorType::kCopy, cursor_manager->GetCursor().type());
   UpdateDisplay("800x700*2/r");
-  EXPECT_EQ(2.0f, cursor_manager->GetCursor().image_scale_factor());
+  EXPECT_EQ(2.0f,
+            cursor_shape_client.GetCursorData(cursor_manager->GetCursor())
+                ->scale_factor);
   EXPECT_EQ(ui::CursorSize::kNormal, cursor_manager->GetCursorSize());
   EXPECT_EQ(display::Display::ROTATE_90, test_api.GetCurrentCursorRotation());
   EXPECT_TRUE(cursor_manager->GetCursor().platform());
@@ -86,7 +59,9 @@ TEST_F(NativeCursorManagerAshTest, LockCursor) {
 
   // Device scale factor and rotation do change even while cursor is locked.
   UpdateDisplay("800x700/u");
-  EXPECT_EQ(1.0f, cursor_manager->GetCursor().image_scale_factor());
+  EXPECT_EQ(1.0f,
+            cursor_shape_client.GetCursorData(cursor_manager->GetCursor())
+                ->scale_factor);
   EXPECT_EQ(display::Display::ROTATE_180, test_api.GetCurrentCursorRotation());
 
   cursor_manager->UnlockCursor();
@@ -95,7 +70,9 @@ TEST_F(NativeCursorManagerAshTest, LockCursor) {
   // Cursor type changes to the one specified while cursor is locked.
   EXPECT_EQ(ui::mojom::CursorType::kPointer,
             cursor_manager->GetCursor().type());
-  EXPECT_EQ(1.0f, cursor_manager->GetCursor().image_scale_factor());
+  EXPECT_EQ(1.0f,
+            cursor_shape_client.GetCursorData(cursor_manager->GetCursor())
+                ->scale_factor);
   EXPECT_TRUE(cursor_manager->GetCursor().platform());
 }
 
@@ -127,13 +104,18 @@ TEST_F(NativeCursorManagerAshTest, SetCursorSize) {
 
 TEST_F(NativeCursorManagerAshTest, SetDeviceScaleFactorAndRotation) {
   ::wm::CursorManager* cursor_manager = Shell::Get()->cursor_manager();
+  const auto& cursor_shape_client = aura::client::GetCursorShapeClient();
   CursorManagerTestApi test_api;
   UpdateDisplay("800x100*2");
-  EXPECT_EQ(2.0f, cursor_manager->GetCursor().image_scale_factor());
+  EXPECT_EQ(2.0f,
+            cursor_shape_client.GetCursorData(cursor_manager->GetCursor())
+                ->scale_factor);
   EXPECT_EQ(display::Display::ROTATE_0, test_api.GetCurrentCursorRotation());
 
   UpdateDisplay("800x100/l");
-  EXPECT_EQ(1.0f, cursor_manager->GetCursor().image_scale_factor());
+  EXPECT_EQ(1.0f,
+            cursor_shape_client.GetCursorData(cursor_manager->GetCursor())
+                ->scale_factor);
   EXPECT_EQ(display::Display::ROTATE_270, test_api.GetCurrentCursorRotation());
 }
 
@@ -160,9 +142,12 @@ TEST_F(NativeCursorManagerAshTest, RotationWithPanelOrientation) {
 
 TEST_F(NativeCursorManagerAshTest, FractionalScale) {
   ::wm::CursorManager* cursor_manager = Shell::Get()->cursor_manager();
+  const auto& cursor_shape_client = aura::client::GetCursorShapeClient();
   // Cursor should use the resource scale factor.
   UpdateDisplay("800x100*1.25");
-  EXPECT_EQ(1.0f, cursor_manager->GetCursor().image_scale_factor());
+  EXPECT_EQ(1.0f,
+            cursor_shape_client.GetCursorData(cursor_manager->GetCursor())
+                ->scale_factor);
 }
 
 }  // namespace ash

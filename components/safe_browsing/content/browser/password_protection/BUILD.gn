@@ -18,6 +18,8 @@ source_set("password_protection") {
       "request_canceler_content.h",
     ]
 
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
     public_deps = [ "//google_apis:google_apis" ]
 
     deps = [
@@ -25,6 +27,7 @@ source_set("password_protection") {
       "//components/content_settings/core/browser:browser",
       "//components/history/core/browser:browser",
       "//components/password_manager/core/browser:browser",
+      "//components/safe_browsing/content/browser:client_side_detection_images_cache",
       "//components/safe_browsing/content/browser/web_ui:web_ui",
       "//components/safe_browsing/content/common:interfaces",
       "//components/safe_browsing/content/common:visual_utils",
@@ -38,6 +41,7 @@ source_set("password_protection") {
       "//components/safe_browsing/core/common:common",
       "//components/safe_browsing/core/common:interfaces",
       "//components/safe_browsing/core/common:safe_browsing_prefs",
+      "//components/safe_browsing/core/common/fbs:client_model",
       "//components/safe_browsing/core/common/proto:client_model_proto",
       "//components/safe_browsing/core/common/proto:csd_proto",
       "//components/sessions",

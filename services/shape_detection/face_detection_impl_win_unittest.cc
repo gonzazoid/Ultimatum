@@ -7,14 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/windows_version.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/shape_detection/face_detection_provider_win.h"
 #include "services/shape_detection/public/mojom/facedetection_provider.mojom.h"
@@ -63,7 +62,8 @@ class FaceDetectionImplWinTest : public testing::Test {
   std::unique_ptr<SkBitmap> LoadTestImage() {
     // Load image data from test directory.
     base::FilePath image_path;
-    EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &image_path));
+    EXPECT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &image_path));
     image_path = image_path.Append(FILE_PATH_LITERAL("services"))
                      .Append(FILE_PATH_LITERAL("test"))
                      .Append(FILE_PATH_LITERAL("data"))
@@ -90,10 +90,6 @@ class FaceDetectionImplWinTest : public testing::Test {
 };
 
 TEST_F(FaceDetectionImplWinTest, ScanOneFace) {
-  // FaceDetector not supported before Windows 10
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return;
-
   mojo::Remote<mojom::FaceDetection> face_detector = ConnectToFaceDetector();
   std::unique_ptr<SkBitmap> image = LoadTestImage();
   ASSERT_TRUE(image);

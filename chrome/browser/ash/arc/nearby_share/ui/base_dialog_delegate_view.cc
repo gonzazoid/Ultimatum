@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 
-#include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/views/controls/label.h"
@@ -24,11 +23,11 @@ BaseDialogDelegateView::BaseDialogDelegateView(views::View* anchor_view)
   set_adjust_if_offscreen(true);
   set_close_on_deactivate(false);
   SetModalType(ui::MODAL_TYPE_CHILD);
-  SetAccessibleRole(ax::mojom::Role::kDialog);
+  SetAccessibleWindowRole(ax::mojom::Role::kDialog);
   SetLayoutManager(std::make_unique<views::FlexLayout>())
       ->SetOrientation(views::LayoutOrientation::kVertical)
       .SetInteriorMargin(
-          ChromeLayoutProvider::Get()->GetInsetsMetric(views::INSETS_DIALOG))
+          views::LayoutProvider::Get()->GetInsetsMetric(views::INSETS_DIALOG))
       .SetDefault(
           views::kFlexBehaviorKey,
           views::FlexSpecification(views::MinimumFlexSizeRule::kPreferred,

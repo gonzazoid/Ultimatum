@@ -4,16 +4,22 @@
     flex-direction: column;
     height: 100%;
     width: 100%;
-    --discount-chip-background: rgb(230, 244, 234);
-    --discount-chip-text-color: var(--google-green-700);
+    --discount-chip-background:
+        var(--color-new-tab-page-cart-module-discount-chip-background);
+    --discount-chip-text-color:
+        var(--color-new-tab-page-cart-module-discount-chip-foreground);
   }
 
   @media (prefers-color-scheme: dark) {
     :host {
       --discount-chip-background: linear-gradient(0deg,
           rgba(129, 201, 149, 0.12), rgba(129, 201, 149, 0.12)), #202124;
-      --discount-chip-text-color: rgb(129,201,149);
+      --discount-chip-text-color: var(--google-green-300);
     }
+  }
+
+  a:focus-visible {
+    outline: var(--color-new-tab-page-focus-ring);
   }
 
   #module:hover .side-scroll-button {
@@ -59,11 +65,16 @@
   .cart-container {
     background-color: var(--color-new-tab-page-module-item-background);
     border: 1px solid var(--color-new-tab-page-border);
-    border-radius: 4px;
+    border-radius: var(--ntp-module-item-border-radius);
     display: inline-flex;
     flex-direction: column;
     height: 140px;
     margin: 0 4px;
+  }
+
+  :host-context([chrome-refresh-2023]) #consentCard,
+  :host-context([chrome-refresh-2023]) .cart-container {
+    background-color: var(--color-sys-base-container-elevated);
   }
 
   .cart-container {
@@ -99,7 +110,7 @@
 
   #consentIconContainer {
     background: var(--discount-chip-background);
-    border-radius: 4px;
+    border-radius: var(--ntp-module-item-border-radius);
     height: 24px;
     margin-inline-end: auto;
     margin-inline-start: auto;
@@ -179,7 +190,6 @@
     font-weight: 400;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: var(--ntp-theme-text-shadow);
     white-space: nowrap;
   }
 
@@ -215,7 +225,7 @@
   }
 
   .thumbnail-img {
-    border: 2px solid var(--color-new-tab-page-background-override);
+    border: 2px solid var(--color-new-tab-page-module-item-background);
     border-radius: 50%;
     height: 44px;
     object-fit: cover;
@@ -223,10 +233,20 @@
   }
 
   .thumbnail-fallback {
-    height: 48px;
-    margin-top: 8px;
+    background: white;
+    border: 2px solid var(--color-new-tab-page-module-item-background);
+    border-radius: 50%;
+    display: inline-block;
+    height: 44px;
+    margin-top: 10px;
     position: relative;
-    width: 102px;
+    width: 44px;
+  }
+
+  .thumbnail-fallback-img {
+    height: 28px;
+    margin-top: inherit;
+    width: 28px;
   }
 
   .cart-container cr-icon-button {
@@ -322,9 +342,13 @@
       disable-text="[[i18nRecursive('',
                                     'modulesDisableButtonText',
                                     'modulesCartLower')]]"
+      more-actions-text="[[i18nRecursive('',
+                                         'modulesMoreActions',
+                                         'modulesCartLowerYour')]]"
       show-info-button on-info-button-click="onInfoButtonClick_"
       show-dismiss-button on-dismiss-button-click="onDismissButtonClick_"
-      on-disable-button-click="onDisableButtonClick_">
+      on-disable-button-click="onDisableButtonClick_"
+      icon-src="modules/cart/icons/shopping_cart.svg">
     $i18n{modulesCartSentence}
   </ntp-module-header>
   <div id="moduleContent">
@@ -408,20 +432,25 @@
                       items="[[getImagesToShow_(item.productImageUrls)]]">
                     <li>
                       <img class="thumbnail-img" is="cr-auto-img"
-                          auto-src="[[item.url]]"></img>
+                          auto-src="[[item.url]]"
+                          on-error="onProductImageLoadError_">
+                      </img>
                     </li>
                   </template>
                 </ul>
               </template>
               <template id="thumbnailFallback" is="dom-if"
                   if="[[!item.productImageUrls.length]]">
-                <img class="thumbnail-fallback"
-                    src="modules/cart/icons/cart_fallback.svg">
+                <div class="thumbnail-fallback">
+                  <img class="thumbnail-fallback-img"
+                      src="modules/cart/icons/cart_fallback.svg">
+                </div>
               </template>
             </div>
           </a>
           <cr-icon-button class="icon-more-vert"
-              title="$i18n{moreActions}" on-click="onCartMenuButtonClick_">
+              title="[[i18n('modulesMoreActions', item.merchant)]]"
+              on-click="onCartMenuButtonClick_">
           </cr-icon-button>
         </div>
       </template>

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ACCESSIBILITY_SERVICE_ACCESSIBILITY_SERVICE_ROUTER_FACTORY_H_
 
 #include "base/no_destructor.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -17,9 +17,7 @@ class AccessibilityServiceRouter;
 
 // Used to get the AccessibilityServiceRouter for a BrowserContext. This allows
 // a different AccessibilityService per profile.
-// TODO(crbug.com/1355633): Should this be a ProfileKeyedServiceFactory?
-class AccessibilityServiceRouterFactory
-    : public BrowserContextKeyedServiceFactory {
+class AccessibilityServiceRouterFactory : public ProfileKeyedServiceFactory {
  public:
   static AccessibilityServiceRouter* GetForBrowserContext(
       content::BrowserContext* context);
@@ -27,6 +25,8 @@ class AccessibilityServiceRouterFactory
   static AccessibilityServiceRouterFactory* GetInstanceForTest() {
     return GetInstance();
   }
+
+  static void EnsureFactoryBuilt();
 
  private:
   friend class base::NoDestructor<AccessibilityServiceRouterFactory>;
@@ -36,7 +36,7 @@ class AccessibilityServiceRouterFactory
   ~AccessibilityServiceRouterFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

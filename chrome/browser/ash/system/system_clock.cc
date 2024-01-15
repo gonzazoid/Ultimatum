@@ -6,22 +6,20 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/system/system_clock_observer.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
-#include "content/public/browser/notification_service.h"
 
 namespace ash {
 namespace system {
@@ -50,15 +48,15 @@ SystemClock::SystemClock() {
       base::BindRepeating(&SystemClock::OnSystemPrefChanged,
                           weak_ptr_factory_.GetWeakPtr()));
 
-  if (chromeos::LoginState::IsInitialized())
-    chromeos::LoginState::Get()->AddObserver(this);
+  if (LoginState::IsInitialized())
+    LoginState::Get()->AddObserver(this);
 
   user_manager::UserManager::Get()->AddSessionStateObserver(this);
 }
 
 SystemClock::~SystemClock() {
-  if (chromeos::LoginState::IsInitialized())
-    chromeos::LoginState::Get()->RemoveObserver(this);
+  if (LoginState::IsInitialized())
+    LoginState::Get()->RemoveObserver(this);
 
   if (user_manager::UserManager::IsInitialized())
     user_manager::UserManager::Get()->RemoveSessionStateObserver(this);
@@ -152,10 +150,9 @@ bool SystemClock::ShouldUse24HourClock() const {
     return scoped_hour_clock_type_ == base::k24HourClock;
   // default is used for kUse24HourClock preference on login screen and whenever
   // set so in user's preference
-  const chromeos::LoginState::LoggedInUserType status =
-      chromeos::LoginState::IsInitialized()
-          ? chromeos::LoginState::Get()->GetLoggedInUserType()
-          : chromeos::LoginState::LOGGED_IN_USER_NONE;
+  const LoginState::LoggedInUserType status =
+      LoginState::IsInitialized() ? LoginState::Get()->GetLoggedInUserType()
+                                  : LoginState::LOGGED_IN_USER_NONE;
 
   const CrosSettings* const cros_settings = CrosSettings::Get();
   bool system_use_24_hour_clock = true;
@@ -165,14 +162,12 @@ bool SystemClock::ShouldUse24HourClock() const {
       system_value_found ? system_use_24_hour_clock
                          : (base::GetHourClockType() == base::k24HourClock);
 
-  if ((status == chromeos::LoginState::LOGGED_IN_USER_NONE) ||
-      !user_pref_registrar_)
+  if ((status == LoginState::LOGGED_IN_USER_NONE) || !user_pref_registrar_)
     return default_value;
 
   const PrefService::Preference* user_pref =
       user_pref_registrar_->prefs()->FindPreference(prefs::kUse24HourClock);
-  if (status == chromeos::LoginState::LOGGED_IN_USER_GUEST &&
-      user_pref->IsDefaultValue())
+  if (status == LoginState::LOGGED_IN_USER_GUEST && user_pref->IsDefaultValue())
     return default_value;
 
   user_manager::User* active_user =
@@ -184,7 +179,7 @@ bool SystemClock::ShouldUse24HourClock() const {
           user_profile->GetPrefs()->FindPreference(prefs::kUse24HourClock);
     }
   }
-  if (status != chromeos::LoginState::LOGGED_IN_USER_REGULAR &&
+  if (status != LoginState::LOGGED_IN_USER_REGULAR &&
       user_pref->IsDefaultValue()) {
     return default_value;
   }

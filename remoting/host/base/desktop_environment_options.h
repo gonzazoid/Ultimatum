@@ -5,9 +5,9 @@
 #ifndef REMOTING_HOST_BASE_DESKTOP_ENVIRONMENT_OPTIONS_H_
 #define REMOTING_HOST_BASE_DESKTOP_ENVIRONMENT_OPTIONS_H_
 
+#include <optional>
 #include "base/memory/weak_ptr.h"
 #include "remoting/base/session_options.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_options.h"
 
 namespace remoting {
@@ -50,11 +50,14 @@ class DesktopEnvironmentOptions final {
   bool enable_remote_webauthn() const;
   void set_enable_remote_webauthn(bool enabled);
 
-  const absl::optional<size_t>& clipboard_size() const;
-  void set_clipboard_size(absl::optional<size_t> clipboard_size);
+  const std::optional<size_t>& clipboard_size() const;
+  void set_clipboard_size(std::optional<size_t> clipboard_size);
 
   const webrtc::DesktopCaptureOptions* desktop_capture_options() const;
   webrtc::DesktopCaptureOptions* desktop_capture_options();
+
+  bool capture_video_on_dedicated_thread() const;
+  void set_capture_video_on_dedicated_thread(bool use_dedicated_thread);
 
   // Reads configurations from a SessionOptions instance.
   void ApplySessionOptions(const SessionOptions& options);
@@ -90,7 +93,10 @@ class DesktopEnvironmentOptions final {
   // If set, this value is used to constrain the amount of data that can be
   // transferred using ClipboardEvents. A value of 0 will effectively disable
   // clipboard sharing.
-  absl::optional<size_t> clipboard_size_;
+  std::optional<size_t> clipboard_size_;
+
+  // True if the video capturer should be run on a dedicated thread.
+  bool capture_video_on_dedicated_thread_ = false;
 
   // The DesktopCaptureOptions to initialize DesktopCapturer.
   webrtc::DesktopCaptureOptions desktop_capture_options_;

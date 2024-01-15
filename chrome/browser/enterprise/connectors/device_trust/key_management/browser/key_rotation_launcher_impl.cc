@@ -9,12 +9,9 @@
 
 #include "base/check.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/commands/key_rotation_command_factory.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/key_utils.h"
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
-#include "components/policy/core/common/cloud/dm_auth.h"
-#include "components/policy/core/common/cloud/dmserver_job_configurations.h"
-#include "components/prefs/pref_service.h"
-#include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace enterprise_connectors {
@@ -22,54 +19,54 @@ namespace enterprise_connectors {
 KeyRotationLauncherImpl::KeyRotationLauncherImpl(
     policy::BrowserDMTokenStorage* dm_token_storage,
     policy::DeviceManagementService* device_management_service,
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    PrefService* local_prefs)
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : dm_token_storage_(dm_token_storage),
       device_management_service_(device_management_service),
-      url_loader_factory_(std::move(url_loader_factory)),
-      local_prefs_(local_prefs) {
-  DCHECK(dm_token_storage_);
-  DCHECK(device_management_service_);
-  DCHECK(url_loader_factory_);
-  DCHECK(local_prefs_);
+      url_loader_factory_(std::move(url_loader_factory)) {
+  CHECK(url_loader_factory_);
 }
+
 KeyRotationLauncherImpl::~KeyRotationLauncherImpl() = default;
 
 void KeyRotationLauncherImpl::LaunchKeyRotation(
     const std::string& nonce,
     KeyRotationCommand::Callback callback) {
-  if (!dm_token_storage_ || !device_management_service_) {
-    std::move(callback).Run(KeyRotationCommand::Status::FAILED);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!dm_token_storage_) {
+    std::move(callback).Run(
+        KeyRotationCommand::Status::FAILED_INVALID_DMTOKEN_STORAGE);
     return;
   }
 
-  // Get the CBCM DM token.  This will be needed later to send the new key's
-  // public part to the server.
-  auto client_id = dm_token_storage_->RetrieveClientId();
   auto dm_token = dm_token_storage_->RetrieveDMToken();
-
   if (!dm_token.is_valid()) {
-    std::move(callback).Run(KeyRotationCommand::Status::FAILED);
+    std::move(callback).Run(KeyRotationCommand::Status::FAILED_INVALID_DMTOKEN);
     return;
   }
 
-  // Get the DM server URL to upload the public key.  Reuse
-  // DMServerJobConfiguration to reuse the URL building steps.
-  policy::DMServerJobConfiguration config(
-      device_management_service_,
-      policy::DeviceManagementService::JobConfiguration::
-          TYPE_BROWSER_UPLOAD_PUBLIC_KEY,
-      client_id, true, policy::DMAuth::FromDMToken(dm_token.value()),
-      absl::nullopt, nullptr, base::DoNothing());
-  std::string dm_server_url = config.GetResourceRequest(false, 0)->url.spec();
+  if (!device_management_service_) {
+    std::move(callback).Run(
+        KeyRotationCommand::Status::FAILED_INVALID_MANAGEMENT_SERVICE);
+    return;
+  }
 
-  KeyRotationCommand::Params params{dm_token.value(), dm_server_url, nonce};
+  auto dm_server_url = GetUploadBrowserPublicKeyUrl(
+      dm_token_storage_->RetrieveClientId(), dm_token.value(),
+      device_management_service_);
+  if (!dm_server_url) {
+    std::move(callback).Run(
+        KeyRotationCommand::Status::FAILED_INVALID_DMSERVER_URL);
+    return;
+  }
+
+  KeyRotationCommand::Params params{dm_token.value(), dm_server_url.value(),
+                                    nonce};
   command_ = KeyRotationCommandFactory::GetInstance()->CreateCommand(
-      url_loader_factory_, local_prefs_);
+      url_loader_factory_);
   if (!command_) {
     // Command can be nullptr if trying to create a key on a unsupported
     // platform.
-    std::move(callback).Run(KeyRotationCommand::Status::FAILED);
+    std::move(callback).Run(KeyRotationCommand::Status::FAILED_INVALID_COMMAND);
     return;
   }
 

@@ -4,7 +4,7 @@
 
 #include "storage/browser/blob/blob_url_registry.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -107,8 +107,10 @@ TEST_P(BlobUrlRegistryTestP, URLRegistration) {
       net::SchemefulSite(GURL("https://example.com"));
   net::SchemefulSite kTopLevelSite2 =
       net::SchemefulSite(GURL("https://foobar.com"));
-  blink::StorageKey storageKey1 = blink::StorageKey(url::Origin::Create(kURL1));
-  blink::StorageKey storageKey2 = blink::StorageKey(url::Origin::Create(kURL2));
+  const blink::StorageKey storageKey1 =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kURL1));
+  const blink::StorageKey storageKey2 =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kURL2));
 
   base::test::SingleThreadTaskEnvironment task_environment_;
 
@@ -140,8 +142,8 @@ TEST_P(BlobUrlRegistryTestP, URLRegistration) {
   EXPECT_EQ(2u, registry.url_count());
   EXPECT_TRUE(registry.RemoveUrlMapping(kURL2, storageKey2));
   EXPECT_FALSE(registry.IsUrlMapped(kURL2, storageKey2));
-  EXPECT_EQ(absl::nullopt, registry.GetUnsafeAgentClusterID(kURL2));
-  EXPECT_EQ(absl::nullopt, registry.GetUnsafeTopLevelSite(kURL2));
+  EXPECT_EQ(std::nullopt, registry.GetUnsafeAgentClusterID(kURL2));
+  EXPECT_EQ(std::nullopt, registry.GetUnsafeTopLevelSite(kURL2));
 
   // Both urls point to the same blob.
   EXPECT_TRUE(registry.AddUrlMapping(kURL2, blob1.Clone(), storageKey2,
@@ -172,11 +174,11 @@ TEST_P(BlobUrlRegistryTestP, URLRegistration) {
   // Now do some tests with third-party storage keys>
   if (StoragePartitioningEnabled()) {
     blink::StorageKey partitionedStorageKey1 =
-        blink::StorageKey::CreateForTesting(url::Origin::Create(kURL1),
-                                            kTopLevelSite1);
+        blink::StorageKey::Create(url::Origin::Create(kURL1), kTopLevelSite1,
+                                  blink::mojom::AncestorChainBit::kCrossSite);
     blink::StorageKey partitionedStorageKey2 =
-        blink::StorageKey::CreateForTesting(url::Origin::Create(kURL1),
-                                            kTopLevelSite2);
+        blink::StorageKey::Create(url::Origin::Create(kURL1), kTopLevelSite2,
+                                  blink::mojom::AncestorChainBit::kCrossSite);
 
     EXPECT_TRUE(registry.AddUrlMapping(kURL1, blob1.Clone(),
                                        partitionedStorageKey1, kTokenId1,

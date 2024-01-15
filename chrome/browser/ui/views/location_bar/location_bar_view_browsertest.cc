@@ -4,14 +4,17 @@
 
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/run_until.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -31,6 +34,7 @@
 #include "components/zoom/zoom_controller.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "net/cert/ct_policy_status.h"
 #include "net/dns/mock_host_resolver.h"
@@ -65,6 +69,15 @@ class LocationBarViewBrowserTest : public InProcessBrowserTest {
     return BrowserView::GetBrowserViewForBrowser(browser())
         ->toolbar_button_provider()
         ->GetPageActionIconView(PageActionIconType::kZoom);
+  }
+
+  ContentSettingImageView& GetContentSettingImageView(
+      ContentSettingImageModel::ImageType image_type) {
+    LocationBarView* location_bar_view =
+        BrowserView::GetBrowserViewForBrowser(browser())->GetLocationBarView();
+    return **base::ranges::find(
+        location_bar_view->GetContentSettingViewsForTest(), image_type,
+        &ContentSettingImageView::GetType);
   }
 };
 
@@ -134,6 +147,39 @@ IN_PROC_BROWSER_TEST_F(LocationBarViewBrowserTest, BubblesCloseOnHide) {
 
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(ZoomBubbleView::GetZoomBubble());
+}
+
+// Check that the script blocked icon shows up when user disables javascript.
+// Regression test for http://crbug.com/35011
+IN_PROC_BROWSER_TEST_F(LocationBarViewBrowserTest, ScriptBlockedIcon) {
+  const char kHtml[] =
+      "<html>"
+      "<head>"
+      "<script>document.createElement('div');</script>"
+      "</head>"
+      "<body>"
+      "</body>"
+      "</html>";
+
+  GURL url(std::string("data:text/html,") + kHtml);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+
+  // Get the script blocked icon on the omnibox. It should be hidden.
+  ContentSettingImageView& script_blocked_icon = GetContentSettingImageView(
+      ContentSettingImageModel::ImageType::JAVASCRIPT);
+  EXPECT_FALSE(script_blocked_icon.GetVisible());
+
+  // Disable javascript.
+  HostContentSettingsMapFactory::GetForProfile(browser()->profile())
+      ->SetDefaultContentSetting(ContentSettingsType::JAVASCRIPT,
+                                 CONTENT_SETTING_BLOCK);
+  // Reload the page
+  chrome::Reload(browser(), WindowOpenDisposition::CURRENT_TAB);
+
+  // Waits until the geolocation icon is visible, or aborts the tests otherwise.
+  ASSERT_TRUE(base::test::RunUntil([&]() {
+    return script_blocked_icon.GetVisible();
+  })) << "Timeout waiting for the script blocked icon to become visible.";
 }
 
 class TouchLocationBarViewBrowserTest : public LocationBarViewBrowserTest {
@@ -245,15 +291,15 @@ IN_PROC_BROWSER_TEST_F(SecurityIndicatorTest, CheckIndicatorText) {
 }
 
 class LocationBarViewGeolocationBackForwardCacheBrowserTest
-    : public InProcessBrowserTest {
+    : public LocationBarViewBrowserTest {
  public:
   LocationBarViewGeolocationBackForwardCacheBrowserTest()
       : geo_override_(0.0, 0.0) {
     feature_list_.InitWithFeaturesAndParameters(
-        {{features::kBackForwardCache,
-          {{"TimeToLiveInBackForwardCacheInSeconds", "3600"}}},
-         {blink::features::kLoadingTasksUnfreezable, {}},
-         {features::kBackForwardCacheMemoryControls, {}}},
+        content::GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            {{blink::features::kLoadingTasksUnfreezable, {}},
+             {features::kBackForwardCacheMemoryControls, {}}},
+            /*ignore_outstanding_network_request=*/false),
         {});
   }
 
@@ -264,15 +310,6 @@ class LocationBarViewGeolocationBackForwardCacheBrowserTest
 
   content::WebContents* web_contents() const {
     return browser()->tab_strip_model()->GetActiveWebContents();
-  }
-
-  ContentSettingImageView& GetContentSettingImageView(
-      ContentSettingImageModel::ImageType image_type) {
-    LocationBarView* location_bar_view =
-        BrowserView::GetBrowserViewForBrowser(browser())->GetLocationBarView();
-    return **base::ranges::find(
-        location_bar_view->GetContentSettingViewsForTest(), image_type,
-        &ContentSettingImageView::GetTypeForTesting);
   }
 
  private:
@@ -334,10 +371,10 @@ IN_PROC_BROWSER_TEST_F(LocationBarViewGeolocationBackForwardCacheBrowserTest,
             content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
   // 3) Navigate back to A. |RenderFrameHost| have to be restored from
-  // BackForwardCache. And |RenderFrameHost| have to be matched with |rfh_a|.
+  // BackForwardCache and be the primary main frame.
   web_contents()->GetController().GoBack();
   EXPECT_TRUE(content::WaitForLoadStop(web_contents()));
-  EXPECT_EQ(web_contents()->GetPrimaryMainFrame(), rfh_a);
+  EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
   EXPECT_EQ(rfh_b->GetLifecycleState(),
             content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -345,10 +382,10 @@ IN_PROC_BROWSER_TEST_F(LocationBarViewGeolocationBackForwardCacheBrowserTest,
   EXPECT_TRUE(geolocation_icon.GetVisible());
 
   // 4) Navigate forward to B. |RenderFrameHost| have to be restored from
-  // BackForwardCache. And |RenderFrameHost| have to be matched with |rfh_b|.
+  // BackForwardCache and be the primary main frame.
   web_contents()->GetController().GoForward();
   EXPECT_TRUE(content::WaitForLoadStop(web_contents()));
-  EXPECT_EQ(web_contents()->GetPrimaryMainFrame(), rfh_b);
+  EXPECT_TRUE(rfh_b->IsInPrimaryMainFrame());
 
   // Geolocation icon should be off.
   EXPECT_FALSE(geolocation_icon.GetVisible());

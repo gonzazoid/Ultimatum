@@ -12,14 +12,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/media_galleries/fileapi/media_file_system_backend.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -145,7 +145,7 @@ class NativeMediaFileUtilTest : public testing::Test {
 
     file_system_context_ = storage::FileSystemContext::Create(
         content::GetIOThreadTaskRunner({}),
-        base::SequencedTaskRunnerHandle::Get(),
+        base::SequencedTaskRunner::GetCurrentDefault(),
         storage::ExternalMountPoints::CreateRefCounted(),
         std::move(storage_policy),
         /* quota_manager_proxy=*/nullptr, std::move(additional_providers),
@@ -167,7 +167,7 @@ class NativeMediaFileUtilTest : public testing::Test {
 
   FileSystemURL CreateURL(const base::FilePath::CharType* test_case_path) {
     return file_system_context_->CreateCrackedFileSystemURL(
-        blink::StorageKey(url::Origin::Create(origin())),
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(origin())),
         storage::kFileSystemTypeIsolated, GetVirtualPath(test_case_path));
   }
 
@@ -497,7 +497,7 @@ TEST_F(NativeMediaFileUtilTest, GetMetadataFiltering) {
         expectation = base::File::FILE_ERROR_NOT_FOUND;
       }
       operation_runner()->GetMetadata(
-          url, storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+          url, {storage::FileSystemOperation::GetMetadataField::kIsDirectory},
           base::BindOnce(&ExpectMetadataEqHelper, test_name, expectation,
                          kFilteringTestCases[i].is_directory));
       content::RunAllTasksUntilIdle();

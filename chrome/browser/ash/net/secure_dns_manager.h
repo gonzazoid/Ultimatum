@@ -8,6 +8,9 @@
 #include <string>
 
 #include "base/containers/flat_map.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/net/dns_over_https/templates_uri_resolver.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "net/dns/public/dns_over_https_server_config.h"
@@ -24,6 +27,10 @@ class SecureDnsManager {
   SecureDnsManager& operator=(const SecureDnsManager&) = delete;
   ~SecureDnsManager();
 
+  void SetDoHTemplatesUriResolverForTesting(
+      std::unique_ptr<dns_over_https::TemplatesUriResolver>
+          doh_templates_uri_resolver);
+
  private:
   // Retrieves the list of secure DNS providers, preprocesses and caches it for
   // later use. This is safe since the list is embedded in code and will not
@@ -32,20 +39,24 @@ class SecureDnsManager {
 
   // Computes a collection of secure DNS providers to use based on the |mode|
   // and |templates| prefs applied to |local_doh_providers_|.
-  base::Value GetProviders(const std::string& mode,
-                           const std::string& templates);
+  base::Value::Dict GetProviders(const std::string& mode,
+                                 const std::string& templates);
 
   // Callback for the registrar. Evaluates the current settings and publishes
   // the result to shill.
   void OnPrefChanged();
 
   PrefChangeRegistrar registrar_;
+  raw_ptr<PrefService> pref_service_;
 
   // Maps secure DNS provider URL templates to their corresponding standard DNS
   // name servers. Providers that are either disabled or not applicable for the
   // country have been pre-filtered.
   base::flat_map<net::DnsOverHttpsServerConfig, std::string>
       local_doh_providers_;
+
+  std::unique_ptr<dns_over_https::TemplatesUriResolver>
+      doh_templates_uri_resolver_;
 };
 
 }  // namespace ash

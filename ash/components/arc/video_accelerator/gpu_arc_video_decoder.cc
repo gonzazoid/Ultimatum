@@ -10,13 +10,13 @@
 #include "ash/components/arc/video_accelerator/arc_video_accelerator_util.h"
 #include "ash/components/arc/video_accelerator/gpu_arc_video_frame_pool.h"
 #include "ash/components/arc/video_accelerator/protected_buffer_manager.h"
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
@@ -27,7 +27,6 @@
 #include "media/base/video_types.h"
 #include "media/gpu/buffer_validation.h"
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
-#include "media/gpu/chromeos/video_frame_converter.h"
 #include "media/gpu/macros.h"
 
 namespace arc {
@@ -82,7 +81,7 @@ void GpuArcVideoDecoder::Initialize(
   DCHECK(!error_state_);
   DCHECK(!client_ && !init_callback_ && !video_frame_pool_);
 
-  client_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  client_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   client_.Bind(std::move(client));
   init_callback_ = std::move(callback);
   video_frame_pool_ = std::make_unique<GpuArcVideoFramePool>(
@@ -109,9 +108,12 @@ void GpuArcVideoDecoder::Initialize(
       gpu::GpuDriverBugWorkarounds(), client_task_runner_,
       std::make_unique<media::VdaVideoFramePool>(video_frame_pool_->WeakThis(),
                                                  client_task_runner_),
-      std::make_unique<media::VideoFrameConverter>(),
+      /*frame_converter=*/nullptr,
+      media::VideoDecoderPipeline::DefaultPreferredRenderableFourccs(),
       std::make_unique<media::NullMediaLog>(),
-      /*oop_video_decoder=*/{});
+      /*oop_video_decoder=*/{},
+      // TODO(b/195769334): Set this to true once OOP-VD is enabled for ARC.
+      /*in_video_decoder_process=*/false);
 
   if (!decoder_) {
     VLOGF(1) << "Failed to create video decoder";
@@ -131,8 +133,11 @@ void GpuArcVideoDecoder::Initialize(
   auto output_cb =
       base::BindRepeating(&GpuArcVideoDecoder::OnFrameReady, weak_this_);
 
-  decoder_->Initialize(std::move(vd_config), false, nullptr, std::move(init_cb),
-                       std::move(output_cb), media::WaitingCB());
+  // Decoded video frames are sent "quickly" (i.e. without much buffering)
+  // to SurfaceFlinger, so we consider it a |low_delay| pipeline.
+  decoder_->Initialize(std::move(vd_config), true /* low_delay */, nullptr,
+                       std::move(init_cb), std::move(output_cb),
+                       media::WaitingCB());
   VLOGF(2) << "Number of concurrent decoder instances: " << num_instances_;
 }
 
@@ -264,7 +269,7 @@ void GpuArcVideoDecoder::OnFrameReady(scoped_refptr<media::VideoFrame> frame) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(frame);
 
-  absl::optional<int32_t> video_frame_id =
+  std::optional<int32_t> video_frame_id =
       video_frame_pool_->GetVideoFrameId(frame.get());
   if (!video_frame_id) {
     VLOGF(1) << "Failed to get video frame id.";

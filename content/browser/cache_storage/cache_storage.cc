@@ -13,28 +13,25 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/files/memory_mapped_file.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "content/browser/cache_storage/cache_storage.pb.h"
@@ -72,7 +69,7 @@ std::string HexedHash(const std::string& value) {
 
 void SizeRetrievedFromAllCaches(std::unique_ptr<int64_t> accumulator,
                                 CacheStorage::SizeCallback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), *accumulator));
 }
 
@@ -274,8 +271,8 @@ class CacheStorage::SimpleCacheLoader : public CacheStorage::CacheLoader {
                                   CacheAndErrorCallback callback) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-    PostTaskAndReplyWithResult(
-        cache_task_runner_.get(), FROM_HERE,
+    cache_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&SimpleCacheLoader::PrepareNewCacheDirectoryInPool,
                        directory_path_),
         base::BindOnce(&SimpleCacheLoader::PrepareNewCacheCreateCache,
@@ -289,7 +286,7 @@ class CacheStorage::SimpleCacheLoader : public CacheStorage::CacheLoader {
     std::string cache_dir;
     base::FilePath cache_path;
     do {
-      cache_dir = base::GenerateGUID();
+      cache_dir = base::Uuid::GenerateRandomV4().AsLowercaseString();
       cache_path = directory_path.AppendASCII(cache_dir);
     } while (base::PathExists(cache_path));
 
@@ -387,8 +384,8 @@ class CacheStorage::SimpleCacheLoader : public CacheStorage::CacheLoader {
     base::FilePath index_path =
         directory_path_.AppendASCII(CacheStorage::kIndexFileName);
 
-    PostTaskAndReplyWithResult(
-        cache_task_runner_.get(), FROM_HERE,
+    cache_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&SimpleCacheLoader::WriteIndexWriteToFileInPool,
                        tmp_path, index_path, serialized, quota_manager_proxy_,
                        bucket_locator_),
@@ -401,10 +398,9 @@ class CacheStorage::SimpleCacheLoader : public CacheStorage::CacheLoader {
       const std::string& data,
       scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy,
       const storage::BucketLocator& bucket_locator) {
-    int bytes_written = base::WriteFile(tmp_path, data.c_str(), data.size());
-    if (bytes_written != base::checked_cast<int>(data.size())) {
+    if (!base::WriteFile(tmp_path, data)) {
       base::DeleteFile(tmp_path);
-      quota_manager_proxy->NotifyWriteFailed(bucket_locator.storage_key);
+      quota_manager_proxy->OnClientWriteFailed(bucket_locator.storage_key);
       return false;
     }
 
@@ -415,8 +411,8 @@ class CacheStorage::SimpleCacheLoader : public CacheStorage::CacheLoader {
   void LoadIndex(CacheStorageIndexLoadCallback callback) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-    PostTaskAndReplyWithResult(
-        cache_task_runner_.get(), FROM_HERE,
+    cache_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&SimpleCacheLoader::ReadAndMigrateIndexInPool,
                        directory_path_, quota_manager_proxy_, bucket_locator_),
         base::BindOnce(&SimpleCacheLoader::LoadIndexDidReadIndex,
@@ -544,7 +540,7 @@ class CacheStorage::SimpleCacheLoader : public CacheStorage::CacheLoader {
         std::string cache_dir;
         base::FilePath cache_path;
         do {
-          cache_dir = base::GenerateGUID();
+          cache_dir = base::Uuid::GenerateRandomV4().AsLowercaseString();
           cache_path = directory_path.AppendASCII(cache_dir);
         } while (base::PathExists(cache_path));
 
@@ -673,7 +669,7 @@ void CacheStorage::OpenCache(const std::string& cache_name,
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   // TODO: Hold a handle to this CacheStorage instance while executing
@@ -698,7 +694,7 @@ void CacheStorage::HasCache(const std::string& cache_name,
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   auto id = scheduler_->CreateId();
@@ -719,7 +715,7 @@ void CacheStorage::DoomCache(const std::string& cache_name,
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   auto id = scheduler_->CreateId();
@@ -739,7 +735,7 @@ void CacheStorage::EnumerateCaches(int64_t trace_id,
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   auto id = scheduler_->CreateId();
@@ -763,7 +759,7 @@ void CacheStorage::MatchCache(const std::string& cache_name,
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   auto id = scheduler_->CreateId();
@@ -787,7 +783,7 @@ void CacheStorage::MatchAllCaches(
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   auto id = scheduler_->CreateId();
@@ -811,7 +807,7 @@ void CacheStorage::WriteToCache(const std::string& cache_name,
   if (!initialized_)
     LazyInit();
 
-  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_.id,
+  quota_manager_proxy_->NotifyBucketAccessed(bucket_locator_,
                                              base::Time::Now());
 
   // Note, this is a shared operation since it only reads CacheStorage data.
@@ -883,7 +879,7 @@ void CacheStorage::ScheduleWriteIndex() {
   index_write_task_.Reset(base::BindOnce(&CacheStorage::WriteIndex,
                                          weak_factory_.GetWeakPtr(),
                                          base::DoNothing()));
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, index_write_task_.callback(), base::Milliseconds(delay_ms));
 }
 
@@ -1062,9 +1058,6 @@ void CacheStorage::CreateCacheDidCreateCache(
                          TRACE_ID_GLOBAL(trace_id),
                          TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
 
-  UMA_HISTOGRAM_BOOLEAN("ServiceWorkerCache.CreateCacheStorageResult",
-                        static_cast<bool>(cache));
-
   if (status != CacheStorageError::kSuccess) {
     std::move(callback).Run(CacheStorageCacheHandle(), status);
     return;
@@ -1127,7 +1120,7 @@ void CacheStorage::DoomCacheImpl(const std::string& cache_name,
                          "cache_name", cache_name);
   CacheStorageCacheHandle cache_handle = GetLoadedCache(cache_name);
   if (!cache_handle.value()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), CacheStorageError::kErrorNotFound));
     return;
@@ -1193,9 +1186,9 @@ void CacheStorage::DeleteCacheFinalize(CacheStorageCache* doomed_cache) {
 void CacheStorage::DeleteCacheDidGetSize(CacheStorageCache* doomed_cache,
                                          int64_t cache_size) {
   quota_manager_proxy_->NotifyBucketModified(
-      CacheStorageQuotaClient::GetClientTypeFromOwner(owner_),
-      bucket_locator_.id, -cache_size, base::Time::Now(),
-      base::SequencedTaskRunnerHandle::Get(), base::DoNothing());
+      CacheStorageQuotaClient::GetClientTypeFromOwner(owner_), bucket_locator_,
+      -cache_size, base::Time::Now(),
+      base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
 
   cache_loader_->CleanUpDeletedCache(doomed_cache);
   auto doomed_caches_iter = doomed_caches_.find(doomed_cache);
@@ -1425,7 +1418,7 @@ void CacheStorage::SizeImpl(SizeCallback callback) {
   DCHECK(initialized_);
 
   if (cache_index_->GetPaddedStorageSize() != kSizeUnknown) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   cache_index_->GetPaddedStorageSize()));
     return;

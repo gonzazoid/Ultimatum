@@ -9,6 +9,18 @@
 
 namespace web {
 
+// Enum based on `WKPermissionDecision` to specify the possible permission
+// decisions for device resource access.
+typedef NS_ENUM(NSInteger, PermissionDecision) {
+  PermissionDecisionShowDefaultPrompt,
+  PermissionDecisionGrant,
+  PermissionDecisionDeny,
+};
+
+// Callback that processes user's permission for a web state to asks the user
+// the decision to access certain permissions on the device.
+using WebStatePermissionDecisionHandler = void (^)(PermissionDecision decision);
+
 // Enum specifying different data or device hardwares that the app/site needs
 // access permissions to.
 typedef NS_ENUM(NSUInteger, Permission) {

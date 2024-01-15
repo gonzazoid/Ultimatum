@@ -6,6 +6,7 @@ import {getHistogramCount, RootPath, sendTestMessage} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
 import {IGNORE_APP_ERRORS, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 
 /**
  * Returns provider name of the given testing provider manifest viz., the
@@ -67,22 +68,14 @@ async function showProvidersMenu(appId) {
  * Confirms that a provided volume is mounted.
  */
 async function confirmVolume(appId, ejectExpected) {
-  await remoteCall.waitForElement(
-      appId, '.tree-row .icon[volume-type-icon="provided"]');
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId,
-          ['.tree-row .icon[volume-type-icon="provided"]']),
-      'fakeMouseClick failed');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('provided');
 
-
-  await remoteCall.waitForElement(
-      appId, '.tree-row[selected] .icon[volume-type-icon="provided"]');
+  await directoryTree.waitForFocusedItemByType('provided');
   if (ejectExpected) {
-    await remoteCall.waitForElement(appId, '.tree-row[selected] .root-eject');
+    await directoryTree.waitForItemEjectButtonByType('provided');
   } else {
-    await remoteCall.waitForElementLost(
-        appId, '.tree-row[selected] .root-eject');
+    await directoryTree.waitForItemEjectButtonLostByType('provided');
   }
 }
 
@@ -169,28 +162,26 @@ async function requestMountNotInMenuInternal(manifest) {
     return;
   }
 
-  const isDevtoolsCoverageActive =
-      await sendTestMessage({name: 'isDevtoolsCoverageActive'});
-  const expectedServicesText = isDevtoolsCoverageActive === 'true' ?
-      '$i18n{SHOW_PROVIDERS_BUTTON_LABEL}' :
-      'Services';
-
   // Since a provider is installed (here isSmbEnabled), we need to test that
   // 'providers-menu' sub-menu does not contain the |manifest| provider.
   chrome.test.assertTrue(isSmbEnabled);
-  chrome.test.assertEq(expectedServicesText, element.text);
+  chrome.test.assertEq(element.text, 'Services');
   chrome.test.assertEq(
       '#show-providers-submenu', element.attributes['command']);
   chrome.test.assertEq('#providers-menu', element.attributes['sub-menu']);
 
+  // Open the providers submenu by hovering over the menu item.
+  chrome.test.assertTrue(
+      !!await remoteCall.callRemoteTestUtil(
+          'fakeMouseOver', appId, ['#gear-menu-providers']),
+      'fakeMouseOver failed');
+
   // Extract 'providers-menu' sub-menu items.
-  const selector = ['#providers-menu[hidden] cr-menu-item'];
-  const submenu =
-      await remoteCall.callRemoteTestUtil('queryAllElements', appId, selector);
+  const selector = ['#providers-menu:not([hidden]) cr-menu-item'];
+  const submenu = await remoteCall.waitForElement(appId, selector);
 
   // Check the sub-menu do not contain the |manifest| provider.
-  chrome.test.assertEq(1, submenu.length);
-  chrome.test.assertEq('SMB file share', submenu[0].text);
+  chrome.test.assertEq('SMB file share', submenu.innerText);
 }
 
 /**
@@ -232,11 +223,8 @@ testcase.providerEject = async () => {
   const appId = await setUpProvider(manifest);
 
   // Click to eject Test (1) provider/volume.
-  const ejectQuery =
-      ['#directory-tree [volume-type-for-testing="provided"] .root-eject'];
-  chrome.test.assertTrue(
-      await remoteCall.callRemoteTestUtil('fakeMouseClick', appId, ejectQuery),
-      'click eject failed');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.ejectItemByType('provided');
 
   // Wait a11y-msg to have some text.
   await remoteCall.waitForElement(appId, '#a11y-msg:not(:empty)');

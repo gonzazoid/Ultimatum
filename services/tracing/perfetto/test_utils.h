@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/test/trace_test_utils.h"
@@ -59,7 +59,8 @@ class TestDataSource : public PerfettoTracedProcess::DataSourceBase {
   TestDataSource(const std::string& data_source_name, size_t send_packet_count);
 
   size_t send_packet_count_;
-  raw_ptr<tracing::PerfettoProducer> producer_ = nullptr;
+  raw_ptr<tracing::PerfettoProducer, AcrossTasksDanglingUntriaged> producer_ =
+      nullptr;
   perfetto::DataSourceConfig config_;
   base::OnceClosure start_tracing_callback_ = base::OnceClosure();
 };
@@ -77,7 +78,7 @@ class MockProducerClient : public ProducerClient {
     MockProducerClient* operator*() { return client_; }
 
    private:
-    const raw_ptr<MockProducerClient> client_;
+    const raw_ptr<MockProducerClient, AcrossTasksDanglingUntriaged> client_;
   };
 
   ~MockProducerClient() override;
@@ -152,8 +153,9 @@ class MockConsumer : public perfetto::Consumer {
   void OnDetach(bool success) override;
   void OnAttach(bool success, const perfetto::TraceConfig&) override;
   void OnTraceStats(bool success, const perfetto::TraceStats&) override;
-
   void OnObservableEvents(const perfetto::ObservableEvents&) override;
+  void OnSessionCloned(const OnSessionClonedArgs&) override;
+
   void WaitForAllDataSourcesStarted();
   void WaitForAllDataSourcesStopped();
 

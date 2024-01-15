@@ -4,15 +4,12 @@
 
 #import "ios/chrome/browser/ui/ntp/feed_management/feed_management_view_controller.h"
 
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/feed_management_follow_delegate.h"
 #import "ios/chrome/browser/ui/ntp/feed_management/feed_management_navigation_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -70,6 +67,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [[TableViewDetailTextItem alloc] initWithType:FollowingItemType];
   followingItem.text =
       l10n_util::GetNSString(IDS_IOS_FEED_MANAGEMENT_FOLLOWING_TEXT);
+  followingItem.detailText =
+      l10n_util::GetNSString(IDS_IOS_FEED_MANAGEMENT_FOLLOWING_DETAIL);
   followingItem.accessorySymbol = TableViewDetailTextCellAccessorySymbolChevron;
   [model addItem:followingItem
       toSectionWithIdentifier:FollowingSectionIdentifier];
@@ -81,7 +80,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
   interestsItem.text =
       l10n_util::GetNSString(IDS_IOS_FEED_MANAGEMENT_INTERESTS_TEXT);
   interestsItem.detailText =
-      l10n_util::GetNSString(IDS_IOS_FEED_MANAGEMENT_INTERESTS_DETAIL);
+      IsFollowUIUpdateEnabled()
+          ? l10n_util::GetNSString(
+                IDS_IOS_FEED_MANAGEMENT_INTERESTS_DETAIL_UI_UPDATE)
+          : l10n_util::GetNSString(IDS_IOS_FEED_MANAGEMENT_INTERESTS_DETAIL);
   interestsItem.accessorySymbol =
       TableViewDetailTextCellAccessorySymbolExternalLink;
   interestsItem.allowMultilineDetailText = YES;

@@ -6,14 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/memory/ref_counted.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/task/thread_pool.h"
@@ -22,6 +21,7 @@
 #include "components/component_updater/component_updater_paths.h"
 #include "content/public/browser/first_party_sets_handler.h"
 #include "content/public/common/content_features.h"
+#include "net/base/features.h"
 #include "net/cookies/cookie_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -42,7 +42,7 @@ constexpr uint8_t kFirstPartySetsPublicKeySHA256[32] = {
     0xff, 0x1c, 0x65, 0x66, 0x14, 0xa8, 0x46, 0x37, 0xe6, 0xeb, 0x80,
     0x8b, 0x8f, 0xb0, 0xb6, 0x18, 0xa7, 0xcd, 0x3d, 0xbb, 0xfb};
 
-constexpr char kFirstPartySetsManifestName[] = "First-Party Sets";
+constexpr char kFirstPartySetsManifestName[] = "Related Website Sets";
 
 constexpr base::FilePath::CharType kFirstPartySetsRelativeInstallDir[] =
     FILE_PATH_LITERAL("FirstPartySetsPreloaded");
@@ -63,7 +63,11 @@ GetConfigPathInstance() {
 }
 
 base::TaskPriority GetTaskPriority() {
-  return content::FirstPartySetsHandler::GetInstance()->IsEnabled()
+  // We may use USER_BLOCKING here since First-Party Set initialization can
+  // block network requests at startup.
+  return content::FirstPartySetsHandler::GetInstance()->IsEnabled() &&
+                 base::FeatureList::IsEnabled(
+                     net::features::kWaitForFirstPartySetsInit)
              ? base::TaskPriority::USER_BLOCKING
              : base::TaskPriority::BEST_EFFORT;
 }
@@ -91,21 +95,15 @@ void SetFirstPartySetsConfig(SetsReadyOnceCallback on_sets_ready) {
 
   if (instance_path->first.empty()) {
     // Registration is complete, but no component version exists on disk.
-    DCHECK(!instance_path->second.IsValid());
+    CHECK(!instance_path->second.IsValid());
     std::move(on_sets_ready).Run(base::Version(), base::File());
     return;
   }
 
-  // We use USER_BLOCKING here since First-Party Set initialization blocks
-  // network navigations at startup.
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), GetTaskPriority()},
       base::BindOnce(&OpenFile, instance_path->first),
       base::BindOnce(std::move(on_sets_ready), instance_path->second));
-}
-
-std::string BoolToString(bool b) {
-  return b ? "true" : "false";
 }
 
 }  // namespace
@@ -113,8 +111,9 @@ std::string BoolToString(bool b) {
 namespace component_updater {
 
 void FirstPartySetsComponentInstallerPolicy::OnRegistrationComplete() {
-  if (!GetConfigPathInstance().has_value())
+  if (!GetConfigPathInstance().has_value()) {
     GetConfigPathInstance() = std::make_pair(base::FilePath(), base::Version());
+  }
   SetFirstPartySetsConfig(std::move(on_sets_ready_));
 }
 
@@ -124,10 +123,6 @@ FirstPartySetsComponentInstallerPolicy::FirstPartySetsComponentInstallerPolicy(
 
 FirstPartySetsComponentInstallerPolicy::
     ~FirstPartySetsComponentInstallerPolicy() = default;
-
-const char
-    FirstPartySetsComponentInstallerPolicy::kDogfoodInstallerAttributeName[] =
-        "_internal_experimental_sets";
 
 bool FirstPartySetsComponentInstallerPolicy::
     SupportsGroupPolicyEnabledComponentUpdates() const {
@@ -142,7 +137,7 @@ bool FirstPartySetsComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 FirstPartySetsComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -157,12 +152,13 @@ base::FilePath FirstPartySetsComponentInstallerPolicy::GetInstalledPath(
 void FirstPartySetsComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
-  if (install_dir.empty() || GetConfigPathInstance().has_value())
+    base::Value::Dict manifest) {
+  if (install_dir.empty() || GetConfigPathInstance().has_value()) {
     return;
+  }
 
-  VLOG(1) << "First-Party Sets Component ready, version " << version.GetString()
-          << " in " << install_dir.value();
+  VLOG(1) << "Related Website Sets Component ready, version "
+          << version.GetString() << " in " << install_dir.value();
 
   GetConfigPathInstance() =
       std::make_pair(GetInstalledPath(install_dir), version);
@@ -172,7 +168,7 @@ void FirstPartySetsComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool FirstPartySetsComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the sets here, since we'll do the validation
   // in the Network Service.
@@ -197,12 +193,7 @@ std::string FirstPartySetsComponentInstallerPolicy::GetName() const {
 
 update_client::InstallerAttributes
 FirstPartySetsComponentInstallerPolicy::GetInstallerAttributes() const {
-  return {
-      {
-          kDogfoodInstallerAttributeName,
-          BoolToString(features::kFirstPartySetsIsDogfooder.Get()),
-      },
-  };
+  return {};
 }
 
 // static
@@ -211,12 +202,12 @@ void FirstPartySetsComponentInstallerPolicy::ResetForTesting() {
 }
 
 void RegisterFirstPartySetsComponent(ComponentUpdateService* cus) {
-  VLOG(1) << "Registering First-Party Sets component.";
+  VLOG(1) << "Registering Related Website Sets component.";
 
   auto policy = std::make_unique<FirstPartySetsComponentInstallerPolicy>(
       /*on_sets_ready=*/base::BindOnce([](base::Version version,
                                           base::File sets_file) {
-        VLOG(1) << "Received First-Party Sets";
+        VLOG(1) << "Received Related Website Sets";
         content::FirstPartySetsHandler::GetInstance()->SetPublicFirstPartySets(
             version, std::move(sets_file));
       }));
@@ -226,24 +217,24 @@ void RegisterFirstPartySetsComponent(ComponentUpdateService* cus) {
   // by the ComponentInstaller instance, which owns `policy` (so they have the
   // same lifetime). Therefore if/when the closure is invoked, `policy` is still
   // alive.
-  base::MakeRefCounted<ComponentInstaller>(std::move(policy))
-      ->Register(cus,
-                 base::BindOnce(
-                     [](FirstPartySetsComponentInstallerPolicy* policy) {
-                       policy->OnRegistrationComplete();
-                     },
-                     raw_policy),
-                 GetTaskPriority());
+  base::MakeRefCounted<ComponentInstaller>(
+      std::move(policy), /*action_handler=*/nullptr, GetTaskPriority())
+      ->Register(cus, base::BindOnce(
+                          [](FirstPartySetsComponentInstallerPolicy* policy) {
+                            policy->OnRegistrationComplete();
+                          },
+                          raw_policy));
 }
 
 // static
 void FirstPartySetsComponentInstallerPolicy::WriteComponentForTesting(
+    base::Version version,
     const base::FilePath& install_dir,
     base::StringPiece contents) {
   CHECK(base::WriteFile(GetInstalledPath(install_dir), contents));
 
   GetConfigPathInstance() =
-      std::make_pair(GetInstalledPath(install_dir), base::Version());
+      std::make_pair(GetInstalledPath(install_dir), std::move(version));
 }
 
 }  // namespace component_updater

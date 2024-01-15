@@ -80,18 +80,20 @@ AndroidSessionDurationsServiceFactory::AndroidSessionDurationsServiceFactory()
 AndroidSessionDurationsServiceFactory::
     ~AndroidSessionDurationsServiceFactory() = default;
 
-KeyedService* AndroidSessionDurationsServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AndroidSessionDurationsServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   if (profile->IsOffTheRecord() && !profile->IsIncognitoProfile())
     return nullptr;
 
-  auto* service = new AndroidSessionDurationsService();
+  std::unique_ptr<AndroidSessionDurationsService> service =
+      std::make_unique<AndroidSessionDurationsService>();
   if (profile->IsIncognitoProfile()) {
     service->InitializeForIncognitoProfile();
   } else {
     service->InitializeForRegularProfile(
-        SyncServiceFactory::GetForProfile(profile),
+        profile->GetPrefs(), SyncServiceFactory::GetForProfile(profile),
         IdentityManagerFactory::GetForProfile(profile));
   }
   return service;

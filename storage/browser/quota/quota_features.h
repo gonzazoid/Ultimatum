@@ -13,6 +13,12 @@ namespace storage {
 
 namespace features {
 
+COMPONENT_EXPORT(STORAGE_BROWSER)
+BASE_DECLARE_FEATURE(kDisableQuotaDbFullFSync);
+
+COMPONENT_EXPORT(STORAGE_BROWSER)
+BASE_DECLARE_FEATURE(kNewQuotaEvictionRoutine);
+
 COMPONENT_EXPORT(STORAGE_BROWSER) BASE_DECLARE_FEATURE(kStoragePressureEvent);
 
 COMPONENT_EXPORT(STORAGE_BROWSER) BASE_DECLARE_FEATURE(kStorageQuotaSettings);
@@ -22,9 +28,6 @@ extern const base::FeatureParam<double> kPoolSizeBytes;
 extern const base::FeatureParam<double> kPoolSizeRatio;
 extern const base::FeatureParam<double> kShouldRemainAvailableBytes;
 extern const base::FeatureParam<double> kShouldRemainAvailableRatio;
-
-COMPONENT_EXPORT(STORAGE_BROWSER)
-BASE_DECLARE_FEATURE(kOnlySendStoragePolicyUpdatesForModifiedOrigins);
 
 }  // namespace features
 

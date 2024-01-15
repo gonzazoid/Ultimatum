@@ -13,6 +13,7 @@
 #include "base/files/file_path.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -20,10 +21,9 @@
 #include "build/build_config.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/autofill_type.h"
-#include "components/autofill/core/browser/data_model/autofill_profile_comparator.h"
 #include "components/autofill/core/browser/form_data_importer.h"
+#include "components/autofill/core/browser/form_data_importer_test_api.h"
 #include "components/autofill/core/browser/form_structure.h"
-#include "components/autofill/core/browser/geo/country_names.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/test_autofill_client.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -33,7 +33,7 @@
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 namespace autofill {
@@ -46,23 +46,23 @@ const base::FilePath::CharType kFileNamePattern[] = FILE_PATH_LITERAL("*.in");
 const char kFieldSeparator[] = ":";
 const char kProfileSeparator[] = "---";
 
-const ServerFieldType kProfileFieldTypes[] = {NAME_FIRST,
-                                              NAME_MIDDLE,
-                                              NAME_LAST,
-                                              NAME_FULL,
-                                              EMAIL_ADDRESS,
-                                              COMPANY_NAME,
-                                              ADDRESS_HOME_STREET_ADDRESS,
-                                              ADDRESS_HOME_CITY,
-                                              ADDRESS_HOME_STATE,
-                                              ADDRESS_HOME_ZIP,
-                                              ADDRESS_HOME_COUNTRY,
-                                              PHONE_HOME_WHOLE_NUMBER};
+const FieldType kProfileFieldTypes[] = {NAME_FIRST,
+                                        NAME_MIDDLE,
+                                        NAME_LAST,
+                                        NAME_FULL,
+                                        EMAIL_ADDRESS,
+                                        COMPANY_NAME,
+                                        ADDRESS_HOME_STREET_ADDRESS,
+                                        ADDRESS_HOME_CITY,
+                                        ADDRESS_HOME_STATE,
+                                        ADDRESS_HOME_ZIP,
+                                        ADDRESS_HOME_COUNTRY,
+                                        PHONE_HOME_WHOLE_NUMBER};
 
 const base::FilePath& GetTestDataDir() {
   static base::NoDestructor<base::FilePath> dir([]() {
     base::FilePath dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &dir);
     return dir.AppendASCII("components")
         .AppendASCII("test")
         .AppendASCII("data");
@@ -84,7 +84,7 @@ const std::vector<base::FilePath> GetTestFiles() {
   std::sort(files.begin(), files.end());
 
 #if BUILDFLAG(IS_APPLE)
-  base::mac::ClearAmIBundledCache();
+  base::apple::ClearAmIBundledCache();
 #endif  // BUILDFLAG(IS_APPLE)
 
   return files;
@@ -96,9 +96,9 @@ std::string SerializeProfiles(const std::vector<AutofillProfile*>& profiles) {
   for (auto* profile : profiles) {
     result += kProfileSeparator;
     result += "\n";
-    for (const ServerFieldType& type : kProfileFieldTypes) {
+    for (const FieldType& type : kProfileFieldTypes) {
       std::u16string value = profile->GetRawInfo(type);
-      result += AutofillType::ServerFieldTypeToString(type);
+      result += FieldTypeToStringView(type);
       result += kFieldSeparator;
       if (!value.empty()) {
         base::ReplaceFirstSubstringAfterOffset(&value, 0, u"\\n", u"\n");
@@ -109,55 +109,6 @@ std::string SerializeProfiles(const std::vector<AutofillProfile*>& profiles) {
     }
   }
 
-  return result;
-}
-
-class PersonalDataManagerMock : public PersonalDataManager {
- public:
-  PersonalDataManagerMock();
-
-  PersonalDataManagerMock(const PersonalDataManagerMock&) = delete;
-  PersonalDataManagerMock& operator=(const PersonalDataManagerMock&) = delete;
-
-  ~PersonalDataManagerMock() override;
-
-  // Reset the saved profiles.
-  void Reset();
-
-  // PersonalDataManager:
-  std::string SaveImportedProfile(const AutofillProfile& profile) override;
-  std::vector<AutofillProfile*> GetProfiles() const override;
-
- private:
-  std::vector<std::unique_ptr<AutofillProfile>> profiles_;
-};
-
-PersonalDataManagerMock::PersonalDataManagerMock()
-    : PersonalDataManager("en-US", "US") {}
-
-PersonalDataManagerMock::~PersonalDataManagerMock() = default;
-
-void PersonalDataManagerMock::Reset() {
-  profiles_.clear();
-}
-
-std::string PersonalDataManagerMock::SaveImportedProfile(
-    const AutofillProfile& profile) {
-  std::vector<AutofillProfile> new_profiles;
-  std::string merged_guid = AutofillProfileComparator::MergeProfile(
-      profile, profiles_, "en-US", &new_profiles);
-
-  profiles_.clear();
-  for (const AutofillProfile& it : new_profiles) {
-    profiles_.push_back(std::make_unique<AutofillProfile>(it));
-  }
-  return merged_guid;
-}
-
-std::vector<AutofillProfile*> PersonalDataManagerMock::GetProfiles() const {
-  std::vector<AutofillProfile*> result;
-  for (const auto& profile : profiles_)
-    result.push_back(profile.get());
   return result;
 }
 
@@ -190,29 +141,14 @@ class AutofillMergeTest : public testing::DataDrivenTest,
   // sequentially, and fills |merged_profiles| with the serialized result.
   void MergeProfiles(const std::string& profiles, std::string* merged_profiles);
 
-  // Deserializes |str| into a field type.
-  ServerFieldType StringToFieldType(const std::string& str);
-
   base::test::TaskEnvironment task_environment_;
   TestAutofillClient autofill_client_;
-  PersonalDataManagerMock personal_data_;
+  TestPersonalDataManager personal_data_;
   std::unique_ptr<FormDataImporter> form_data_importer_;
-
- private:
-  std::map<std::string, ServerFieldType> string_to_field_type_map_;
 };
 
 AutofillMergeTest::AutofillMergeTest()
-    : testing::DataDrivenTest(GetTestDataDir(), kFeatureName, kTestName) {
-  CountryNames::SetLocaleString("en-US");
-  for (size_t i = NO_SERVER_DATA; i < MAX_VALID_FIELD_TYPE; ++i) {
-    ServerFieldType field_type = ToSafeServerFieldType(i, MAX_VALID_FIELD_TYPE);
-    if (field_type == MAX_VALID_FIELD_TYPE)
-      continue;
-    string_to_field_type_map_[AutofillType::ServerFieldTypeToString(
-        field_type)] = field_type;
-  }
-}
+    : testing::DataDrivenTest(GetTestDataDir(), kFeatureName, kTestName) {}
 
 AutofillMergeTest::~AutofillMergeTest() = default;
 
@@ -220,8 +156,7 @@ void AutofillMergeTest::SetUp() {
   test::DisableSystemServices(nullptr);
   personal_data_.set_auto_accept_address_imports_for_testing(true);
   form_data_importer_ = std::make_unique<FormDataImporter>(
-      &autofill_client_,
-      /*payments::PaymentsClient=*/nullptr, &personal_data_, "en");
+      &autofill_client_, &personal_data_, "en");
 }
 
 void AutofillMergeTest::TearDown() {
@@ -236,7 +171,7 @@ void AutofillMergeTest::GenerateResults(const std::string& input,
 void AutofillMergeTest::MergeProfiles(const std::string& profiles,
                                       std::string* merged_profiles) {
   // Start with no saved profiles.
-  personal_data_.Reset();
+  personal_data_.ClearAllLocalData();
 
   // Create a test form.
   FormData form;
@@ -266,7 +201,7 @@ void AutofillMergeTest::MergeProfiles(const std::string& profiles,
       field.label = field_type;
       field.name = field_type;
       field.value = value;
-      field.form_control_type = "text";
+      field.form_control_type = FormControlType::kInputText;
       field.is_focusable = true;
       form.fields.push_back(field);
     }
@@ -281,34 +216,37 @@ void AutofillMergeTest::MergeProfiles(const std::string& profiles,
         // into the field's name.
         AutofillField* field =
             const_cast<AutofillField*>(form_structure.field(j));
-        ServerFieldType type =
-            StringToFieldType(base::UTF16ToUTF8(field->name));
-        field->set_heuristic_type(GetActivePatternSource(), type);
+        FieldType type = TypeNameToFieldType(base::UTF16ToUTF8(field->name));
+        field->set_heuristic_type(GetActiveHeuristicSource(), type);
       }
 
-      // Import the profile.
-      FormDataImporter::ImportFormDataResult imported_data;
-      form_data_importer_->ImportFormData(
-          form_structure,
-          /*profile_autofill_enabled=*/true,
-          /*payment_methods_autofill_enabled=*/true,
-          /*should_return_local_card=*/false, &imported_data);
-      form_data_importer_->ProcessAddressProfileImportCandidates(
-          imported_data.address_profile_import_candidates,
-          /*allow_prompt=*/true);
-      EXPECT_FALSE(imported_data.credit_card_import_candidate);
-      EXPECT_FALSE(imported_data.imported_upi_id.has_value());
+      // Extract the profile.
+      auto extracted_data =
+          test_api(*form_data_importer_)
+              .ExtractFormData(form_structure,
+                               /*profile_autofill_enabled=*/true,
+                               /*payment_methods_autofill_enabled=*/true);
+      test_api(*form_data_importer_)
+          .ProcessAddressProfileImportCandidates(
+              extracted_data.address_profile_import_candidates,
+              /*allow_prompt=*/true);
+      EXPECT_FALSE(extracted_data.extracted_credit_card);
 
       // Clear the |form| to start a new profile.
       form.fields.clear();
     }
   }
 
-  *merged_profiles = SerializeProfiles(personal_data_.GetProfiles());
-}
-
-ServerFieldType AutofillMergeTest::StringToFieldType(const std::string& str) {
-  return string_to_field_type_map_[str];
+  std::vector<AutofillProfile*> imported_profiles =
+      personal_data_.GetProfiles();
+  // To ensure a consistent order with the output files, sort the profiles by
+  // modification date. This corresponds to the order in which the profiles
+  // were imported (or updated).
+  base::ranges::sort(imported_profiles,
+                     [](AutofillProfile* a, AutofillProfile* b) {
+                       return a->modification_date() < b->modification_date();
+                     });
+  *merged_profiles = SerializeProfiles(imported_profiles);
 }
 
 TEST_P(AutofillMergeTest, DataDrivenMergeProfiles) {

@@ -1,9 +1,13 @@
 # Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+import("//components/optimization_guide/features.gni")
+import("//testing/libfuzzer/fuzzer_test.gni")
 
 source_set("browsing_topics") {
   sources = [
+    "annotator.cc",
+    "annotator.h",
     "browsing_topics_calculator.cc",
     "browsing_topics_calculator.h",
     "browsing_topics_page_load_data_tracker.cc",
@@ -23,15 +27,27 @@ source_set("browsing_topics") {
     "util.h",
   ]
 
+  if (build_with_tflite_lib) {
+    sources += [
+      "annotator_impl.cc",
+      "annotator_impl.h",
+    ]
+  } else {
+    sources += [
+      "annotator_noop.cc",
+      "annotator_noop.h",
+    ]
+  }
+
   deps = [
     "//base",
     "//components/browsing_topics/common:common",
     "//components/browsing_topics/mojom:mojo_bindings",
-    "//components/content_settings/browser:browser",
     "//components/history/content/browser",
     "//components/history/core/browser",
     "//components/keyed_service/core",
-    "//components/optimization_guide/content/browser",
+    "//components/optimization_guide/core",
+    "//components/optimization_guide/proto:optimization_guide_proto",
     "//components/privacy_sandbox",
     "//content/public/browser",
     "//content/public/common:common",
@@ -72,8 +88,11 @@ source_set("unit_tests") {
     "browsing_topics_state_unittest.cc",
     "epoch_topics_unittest.cc",
     "topic_and_domains_unittest.cc",
-    "util_unittest.cc",
   ]
+
+  if (build_with_tflite_lib) {
+    sources += [ "annotator_impl_unittest.cc" ]
+  }
 
   deps = [
     ":browsing_topics",
@@ -86,17 +105,35 @@ source_set("unit_tests") {
     "//components/history/content/browser:browser",
     "//components/history/core/browser:browser",
     "//components/history/core/test",
-    "//components/optimization_guide/content/browser:browser",
-    "//components/optimization_guide/content/browser:test_support",
+    "//components/optimization_guide/core:core",
+    "//components/optimization_guide/core:features",
     "//components/optimization_guide/core:test_support",
+    "//components/optimization_guide/proto:optimization_guide_proto",
     "//components/prefs:test_support",
     "//components/privacy_sandbox:privacy_sandbox",
     "//components/privacy_sandbox:privacy_sandbox_prefs",
     "//components/privacy_sandbox:test_support",
+    "//components/privacy_sandbox:tracking_protection_settings",
+    "//components/privacy_sandbox/privacy_sandbox_attestations",
+    "//components/privacy_sandbox/privacy_sandbox_attestations:test_support",
     "//components/sync_preferences:test_support",
     "//components/ukm:test_support",
     "//content/test:test_support",
     "//testing/gtest",
     "//third_party/blink/public/common",
+    "//third_party/zlib/google:compression_utils",
+  ]
+}
+
+fuzzer_test("browsing_topics_annotator_fuzzer") {
+  sources = [ "annotator_fuzzer.cc" ]
+  deps = [
+    ":browsing_topics",
+    "//base:base",
+    "//base/test:test_support",
+    "//components/optimization_guide/core:core",
+    "//components/optimization_guide/core:features",
+    "//components/optimization_guide/core:test_support",
+    "//components/optimization_guide/proto:optimization_guide_proto",
   ]
 }

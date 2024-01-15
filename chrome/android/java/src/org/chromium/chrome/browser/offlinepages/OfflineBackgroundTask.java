@@ -5,7 +5,7 @@
 package org.chromium.chrome.browser.offlinepages;
 
 import android.content.Context;
-import android.os.Bundle;
+import android.os.PersistableBundle;
 import android.text.format.DateUtils;
 
 import androidx.annotation.VisibleForTesting;
@@ -27,8 +27,7 @@ public class OfflineBackgroundTask extends NativeBackgroundTask {
     private static final String TAG = "OfflineBkgrndTask";
 
     @Override
-    @StartBeforeNativeResult
-    protected int onStartTaskBeforeNativeLoaded(
+    protected @StartBeforeNativeResult int onStartTaskBeforeNativeLoaded(
             Context context, TaskParameters taskParameters, TaskFinishedCallback callback) {
         assert taskParameters.getTaskId() == TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID;
 
@@ -44,17 +43,22 @@ public class OfflineBackgroundTask extends NativeBackgroundTask {
             Context context, TaskParameters taskParameters, TaskFinishedCallback callback) {
         assert taskParameters.getTaskId() == TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID;
 
-        if (!startScheduledProcessing(BackgroundSchedulerProcessor.getInstance(), context,
-                    taskParameters.getExtras(), wrapCallback(callback))) {
+        if (!startScheduledProcessing(
+                BackgroundSchedulerProcessor.getInstance(),
+                context,
+                taskParameters.getExtras(),
+                wrapCallback(callback))) {
             callback.taskFinished(true);
             return;
         }
 
         // Set up backup scheduled task in case processing is killed before RequestCoordinator
         // has a chance to reschedule base on remaining work.
-        BackgroundScheduler.getInstance().scheduleBackup(
-                TaskExtrasPacker.unpackTriggerConditionsFromBundle(taskParameters.getExtras()),
-                DateUtils.MINUTE_IN_MILLIS * 5);
+        BackgroundScheduler.getInstance()
+                .scheduleBackup(
+                        TaskExtrasPacker.unpackTriggerConditionsFromBundle(
+                                taskParameters.getExtras()),
+                        DateUtils.MINUTE_IN_MILLIS * 5);
     }
 
     @Override
@@ -70,11 +74,6 @@ public class OfflineBackgroundTask extends NativeBackgroundTask {
         assert taskParameters.getTaskId() == TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID;
 
         return BackgroundSchedulerProcessor.getInstance().stopScheduledProcessing();
-    }
-
-    @Override
-    public void reschedule(Context context) {
-        BackgroundScheduler.getInstance().reschedule();
     }
 
     /** Wraps the callback for code reuse */
@@ -96,8 +95,11 @@ public class OfflineBackgroundTask extends NativeBackgroundTask {
      *     callback.
      */
     @VisibleForTesting
-    static boolean startScheduledProcessing(BackgroundSchedulerProcessor bridge, Context context,
-            Bundle taskExtras, Callback<Boolean> callback) {
+    static boolean startScheduledProcessing(
+            BackgroundSchedulerProcessor bridge,
+            Context context,
+            PersistableBundle taskExtras,
+            Callback<Boolean> callback) {
         // Gather UMA data to measure how often the user's machine is amenable to background
         // loading when we wake to do a task.
         DeviceConditions deviceConditions = DeviceConditions.getCurrent(context);
@@ -106,7 +108,7 @@ public class OfflineBackgroundTask extends NativeBackgroundTask {
 
     /** @returns Whether conditions for running the tasks are met. */
     @VisibleForTesting
-    static boolean checkConditions(Context context, Bundle taskExtras) {
+    static boolean checkConditions(Context context, PersistableBundle taskExtras) {
         TriggerConditions triggerConditions =
                 TaskExtrasPacker.unpackTriggerConditionsFromBundle(taskExtras);
 
@@ -129,7 +131,7 @@ public class OfflineBackgroundTask extends NativeBackgroundTask {
             DeviceConditions deviceConditions, TriggerConditions triggerConditions) {
         return deviceConditions.isPowerConnected()
                 || (deviceConditions.getBatteryPercentage()
-                           >= triggerConditions.getMinimumBatteryPercentage());
+                        >= triggerConditions.getMinimumBatteryPercentage());
     }
 
     /** Whether there are no visible activities when on Svelte. */

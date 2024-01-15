@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process_handle.h"
 #include "chrome/browser/ash/power/renderer_freezer.h"
@@ -44,10 +44,5 @@ class FreezerCgroupProcessManager : public RendererFreezer::Delegate {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::FreezerCgroupProcessManager;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_POWER_FREEZER_CGROUP_PROCESS_MANAGER_H_

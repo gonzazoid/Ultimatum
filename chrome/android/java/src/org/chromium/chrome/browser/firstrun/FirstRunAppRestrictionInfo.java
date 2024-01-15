@@ -9,14 +9,12 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import android.os.UserManager;
 
-import androidx.annotation.VisibleForTesting;
-
 import org.chromium.base.Callback;
 import org.chromium.base.CommandLine;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.components.policy.AbstractAppRestrictionsProvider;
@@ -130,9 +128,7 @@ class FirstRunAppRestrictionInfo {
         }
     }
 
-    /**
-     * Start fetching app restriction on an async thread.
-     */
+    /** Start fetching app restriction on an async thread. */
     private void initialize() {
         ThreadUtils.assertOnUiThread();
         long startTime = SystemClock.elapsedRealtime();
@@ -152,22 +148,24 @@ class FirstRunAppRestrictionInfo {
 
         Context appContext = ContextUtils.getApplicationContext();
         try {
-            mFetchAppRestrictionAsyncTask = new AsyncTask<Boolean>() {
-                @Override
-                protected Boolean doInBackground() {
-                    UserManager userManager =
-                            (UserManager) appContext.getSystemService(Context.USER_SERVICE);
-                    Bundle bundle =
-                            AppRestrictionsProvider.getApplicationRestrictionsFromUserManager(
-                                    userManager, appContext.getPackageName());
-                    return !bundle.isEmpty();
-                }
+            mFetchAppRestrictionAsyncTask =
+                    new AsyncTask<Boolean>() {
+                        @Override
+                        protected Boolean doInBackground() {
+                            UserManager userManager =
+                                    (UserManager) appContext.getSystemService(Context.USER_SERVICE);
+                            Bundle bundle =
+                                    AppRestrictionsProvider
+                                            .getApplicationRestrictionsFromUserManager(
+                                                    userManager, appContext.getPackageName());
+                            return bundle != null && !bundle.isEmpty();
+                        }
 
-                @Override
-                protected void onPostExecute(Boolean isAppRestricted) {
-                    onRestrictionDetected(isAppRestricted, startTime);
-                }
-            };
+                        @Override
+                        protected void onPostExecute(Boolean isAppRestricted) {
+                            onRestrictionDetected(isAppRestricted, startTime);
+                        }
+                    };
             mFetchAppRestrictionAsyncTask.executeWithTaskTraits(TaskTraits.USER_BLOCKING_MAY_BLOCK);
         } catch (RejectedExecutionException e) {
             // Though unlikely, if the task is rejected, we assume no restriction exists.
@@ -183,13 +181,13 @@ class FirstRunAppRestrictionInfo {
         if (startTime > 0) {
             mCompletionElapsedRealtimeMs = SystemClock.elapsedRealtime();
             long runTime = mCompletionElapsedRealtimeMs - startTime;
-            RecordHistogram.recordTimesHistogram(
-                    "Enterprise.FirstRun.AppRestrictionLoadTime", runTime);
-            RecordHistogram.recordMediumTimesHistogram(
-                    "Enterprise.FirstRun.AppRestrictionLoadTime.Medium", runTime);
-            Log.d(TAG,
-                    String.format(Locale.US, "Policy received. Runtime: [%d], result: [%s]",
-                            runTime, isAppRestricted));
+            Log.i(
+                    TAG,
+                    String.format(
+                            Locale.US,
+                            "Policy received. Runtime: [%d], result: [%s]",
+                            runTime,
+                            isAppRestricted));
         }
 
         while (!mCallbacks.isEmpty()) {
@@ -200,9 +198,10 @@ class FirstRunAppRestrictionInfo {
         }
     }
 
-    @VisibleForTesting
     static void setInitializedInstanceForTest(
             FirstRunAppRestrictionInfo firstRunAppRestrictionInfo) {
+        var oldValue = sInitializedInstance;
         sInitializedInstance = firstRunAppRestrictionInfo;
+        ResettersForTesting.register(() -> sInitializedInstance = oldValue);
     }
 }

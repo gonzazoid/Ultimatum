@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
 
@@ -52,12 +53,12 @@ class ASH_EXPORT RecordingOverlayController {
   void Start();
   void Stop();
 
-  // Updates the z-order of the |overlay_widget_|'s native window.
+  // Updates the z-order of the `overlay_widget_`'s native window.
   void UpdateWidgetStacking();
 
   // The overlay widget and its contents view.
   views::UniqueWidgetPtr overlay_widget_ = std::make_unique<views::Widget>();
-  RecordingOverlayView* recording_overlay_view_ = nullptr;
+  raw_ptr<RecordingOverlayView> recording_overlay_view_ = nullptr;
 
   // Whether the overlay is currently enabled and showing on top of the recorded
   // surface.

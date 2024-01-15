@@ -12,7 +12,9 @@
 
 #include "ash/components/arc/mojom/nearby_share.mojom.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/nearby_share/share_info_file_stream_adapter.h"
 #include "content/public/browser/browser_thread.h"
@@ -54,7 +56,7 @@ class ShareInfoFileHandler
 
   // |result| signifies state of shared files after streaming has completed.
   using CompletedCallback =
-      base::OnceCallback<void(absl::optional<base::File::Error> result)>;
+      base::OnceCallback<void(std::optional<base::File::Error> result)>;
 
   // |value| is a percentage from 0 to 1 in double format (e.g. 0.50 for 50%).
   using ProgressBarUpdateCallback = base::RepeatingCallback<void(double value)>;
@@ -174,7 +176,7 @@ class ShareInfoFileHandler
   bool file_sharing_started_ = false;
 
   // Unowned pointer to profile.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   // Runner for tasks that may require disk IO.
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;

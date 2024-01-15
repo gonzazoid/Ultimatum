@@ -5,10 +5,11 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_H_
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/sequence_checker.h"
@@ -100,7 +101,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) SystemTokenCertDbStorage {
 
   // Global NSSCertDatabase which sees the system token. Owned by
   // SystemTokenCertDbInitializer.
-  net::NSSCertDatabase* system_token_cert_database_ = nullptr;
+  raw_ptr<net::NSSCertDatabase> system_token_cert_database_ = nullptr;
 
   bool system_token_cert_db_retrieval_failed_ = false;
 
@@ -110,10 +111,5 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) SystemTokenCertDbStorage {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::SystemTokenCertDbStorage;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_H_

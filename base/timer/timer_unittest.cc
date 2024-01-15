@@ -8,9 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -18,7 +18,6 @@
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -78,7 +77,8 @@ void RunTest_OneShotTimers_Cancel(
   auto* timer_ptr = timer.get();
 
   // This should run before the timer expires.
-  SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, std::move(timer));
+  SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                       std::move(timer));
 
   timer_ptr->Start(FROM_HERE, kTestDelay,
                    BindOnce(&Receiver::OnCalled, Unretained(&receiver)));
@@ -135,7 +135,8 @@ void RunTest_RepeatingTimer_Cancel(
   auto* timer_ptr = timer.get();
 
   // This should run before the timer expires.
-  SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, std::move(timer));
+  SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                       std::move(timer));
 
   timer_ptr->Start(FROM_HERE, delay,
                    BindRepeating(&Receiver::OnCalled, Unretained(&receiver)));
@@ -536,6 +537,19 @@ TEST(TimerTest, DeadlineTimerTaskDestructed) {
   EXPECT_CALL(destructed, Run());
   timer.Stop();
   testing::Mock::VerifyAndClearExpectations(&destructed);
+}
+
+TEST(TimerTest, DeadlineTimerStartTwice) {
+  test::TaskEnvironment task_environment(
+      test::TaskEnvironment::TimeSource::MOCK_TIME);
+  DeadlineTimer timer;
+  TimeTicks start = TimeTicks::Now();
+
+  RunLoop run_loop;
+  timer.Start(FROM_HERE, start + Seconds(5), run_loop.QuitClosure());
+  timer.Start(FROM_HERE, start + Seconds(10), run_loop.QuitClosure());
+  run_loop.Run();
+  EXPECT_EQ(start + Seconds(10), TimeTicks::Now());
 }
 
 TEST(TimerTest, MetronomeTimer) {

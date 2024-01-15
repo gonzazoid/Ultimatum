@@ -30,8 +30,13 @@ class SearchResponseParserTest : public testing::Test {
     run_loop_ = std::make_unique<base::RunLoop>();
   }
 
-  void SearchResponseParserCallback(std::unique_ptr<QuickAnswer> quick_answer) {
-    quick_answer_ = std::move(quick_answer);
+  void SearchResponseParserCallback(
+      std::unique_ptr<QuickAnswersSession> quick_answers_session) {
+    if (quick_answers_session) {
+      quick_answer_ = std::move(quick_answers_session->quick_answer);
+    } else {
+      quick_answer_ = nullptr;
+    }
     run_loop_->Quit();
   }
 
@@ -40,7 +45,7 @@ class SearchResponseParserTest : public testing::Test {
  protected:
   std::unique_ptr<SearchResponseParser> search_result_parser_;
   std::unique_ptr<QuickAnswer> quick_answer_;
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::TaskEnvironment task_environment_;
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
   std::unique_ptr<base::RunLoop> run_loop_;
 };

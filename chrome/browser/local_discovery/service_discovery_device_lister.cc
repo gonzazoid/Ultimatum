@@ -7,14 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace local_discovery {
 
@@ -106,6 +105,7 @@ class ServiceDiscoveryDeviceListerImpl : public ServiceDiscoveryDeviceLister {
         base::BindRepeating(&ServiceDiscoveryDeviceListerImpl::OnServiceUpdated,
                             weak_factory_.GetWeakPtr()));
     service_watcher_->Start();
+    service_watcher_->SetActivelyRefreshServices(true);
   }
 
   const raw_ptr<Delegate> delegate_;

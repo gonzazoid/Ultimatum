@@ -17,7 +17,8 @@ CookieControlsService* CookieControlsServiceFactory::GetForProfile(
 
 // static
 CookieControlsServiceFactory* CookieControlsServiceFactory::GetInstance() {
-  return base::Singleton<CookieControlsServiceFactory>::get();
+  static base::NoDestructor<CookieControlsServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -30,7 +31,12 @@ CookieControlsServiceFactory::CookieControlsServiceFactory()
           "CookieControlsService",
           // The incognito profile has its own CookieSettings. Therefore, it
           // should get its own CookieControlsService.
-          ProfileSelections::BuildForRegularAndIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 CookieControlsServiceFactory::~CookieControlsServiceFactory() = default;
 

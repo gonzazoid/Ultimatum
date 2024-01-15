@@ -5,13 +5,12 @@
 #ifndef ASH_PUBLIC_CPP_WALLPAPER_WALLPAPER_CONTROLLER_CLIENT_H_
 #define ASH_PUBLIC_CPP_WALLPAPER_WALLPAPER_CONTROLLER_CLIENT_H_
 
+#include <optional>
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "ash/public/cpp/wallpaper/online_wallpaper_variant.h"
 #include "ash/webui/personalization_app/proto/backdrop_wallpaper.pb.h"
-#include "base/callback.h"
-#include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/bindings/struct_ptr.h"
 
 class AccountId;
@@ -28,12 +27,6 @@ class ASH_PUBLIC_EXPORT WallpaperControllerClient {
   // Opens the wallpaper picker window.
   virtual void OpenWallpaperPicker() = 0;
 
-  // Sets the default wallpaper and removes the file for the previous wallpaper.
-  virtual void SetDefaultWallpaper(
-      const AccountId& account_id,
-      bool show_wallpaper,
-      base::OnceCallback<void(bool success)> callback) = 0;
-
   // Downloads and sets a new random wallpaper from the collection of the
   // specified collection_id.
   using DailyWallpaperUrlFetchedCallback =
@@ -41,14 +34,6 @@ class ASH_PUBLIC_EXPORT WallpaperControllerClient {
   virtual void FetchDailyRefreshWallpaper(
       const std::string& collection_id,
       DailyWallpaperUrlFetchedCallback callback) = 0;
-
-  virtual void SaveWallpaperToDriveFs(
-      const AccountId& account_id,
-      const base::FilePath& origin,
-      base::OnceCallback<void(bool)> wallpaper_saved_callback) = 0;
-
-  virtual base::FilePath GetWallpaperPathFromDriveFs(
-      const AccountId& account_id) = 0;
 
   virtual void GetFilesId(
       const AccountId& account_id,
@@ -76,7 +61,7 @@ class ASH_PUBLIC_EXPORT WallpaperControllerClient {
       FetchGooglePhotosPhotoCallback callback) = 0;
 
   using FetchGooglePhotosAccessTokenCallback =
-      base::OnceCallback<void(const absl::optional<std::string>& token)>;
+      base::OnceCallback<void(const std::optional<std::string>& token)>;
   virtual void FetchGooglePhotosAccessToken(
       const AccountId& account_id,
       FetchGooglePhotosAccessTokenCallback callback) = 0;

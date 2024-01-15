@@ -23,11 +23,6 @@ const char kAssistantConsentStatus[] =
 // VoiceInteractionContextEnabled administrator policy.
 const char kAssistantContextEnabled[] =
     "settings.voice_interaction.context.enabled";
-// A preference that indicates that the user has already triggered metalayer
-// mode while it is deprecated and been shown a toast that the what's on my
-// screen feature has been deprecated.
-const char kAssistantDeprecateStylusToast[] =
-    "settings.assistant.deprecate_stylus_toast";
 // A preference that indicates the Assistant has been disabled by domain policy.
 // If true, the Assistant will always been disabled and user cannot enable it.
 // This preference should only be changed in browser.
@@ -62,12 +57,15 @@ const char kAssistantOnboardingMode[] = "settings.assistant.onboarding_mode";
 // This preference should only be changed via policy.
 const char kAssistantVoiceMatchEnabledDuringOobe[] =
     "settings.voice_interaction.oobe_voice_match.enabled";
+// A preference that stores the number of failures since the last successful run
+// of Assistant service.
+extern const char kAssistantNumFailuresSinceLastServiceRun[] =
+    "ash.assistant.num_failures_since_last_service_run";
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(kAssistantConsentStatus,
                                 ConsentStatus::kUnknown);
   registry->RegisterBooleanPref(kAssistantContextEnabled, false);
-  registry->RegisterBooleanPref(kAssistantDeprecateStylusToast, false);
   registry->RegisterBooleanPref(kAssistantDisabledByPolicy, false);
   registry->RegisterBooleanPref(kAssistantEnabled, false);
   registry->RegisterBooleanPref(kAssistantHotwordAlwaysOn, false);
@@ -77,6 +75,8 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(kAssistantVoiceMatchEnabledDuringOobe, true);
   registry->RegisterStringPref(kAssistantOnboardingMode,
                                kAssistantOnboardingModeDefault);
+  registry->RegisterIntegerPref(prefs::kAssistantNumFailuresSinceLastServiceRun,
+                                0);
 }
 
 AssistantOnboardingMode ToOnboardingMode(const std::string& onboarding_mode) {

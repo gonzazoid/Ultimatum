@@ -10,7 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/services/cups_proxy/cups_proxy_service_delegate.h"
 
@@ -45,7 +46,7 @@ class PrinterInstaller {
   void Finish(InstallPrinterCallback cb, InstallPrinterResult res);
 
   // Unowned delegate granting access to printing stack dependencies.
-  CupsProxyServiceDelegate* const delegate_;
+  const raw_ptr<CupsProxyServiceDelegate> delegate_;
 
   SEQUENCE_CHECKER(sequence_checker_);
   base::WeakPtrFactory<PrinterInstaller> weak_factory_{this};

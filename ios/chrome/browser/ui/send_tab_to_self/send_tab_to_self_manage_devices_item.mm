@@ -4,21 +4,17 @@
 
 #import "ios/chrome/browser/ui/send_tab_to_self/send_tab_to_self_manage_devices_item.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_cell.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/send_tab_to_self/send_tab_to_self_modal_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_cell.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/common/ui/util/text_view_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -60,7 +56,7 @@ const CGFloat kAvatarSize = 24;
   _linkAndEmailTextView.scrollEnabled = NO;
   _linkAndEmailTextView.editable = NO;
   _linkAndEmailTextView.font =
-      [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+      [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
   _linkAndEmailTextView.textColor = [UIColor colorNamed:kTextSecondaryColor];
   _linkAndEmailTextView.backgroundColor = [UIColor clearColor];
   // Remove built-in padding.
@@ -136,7 +132,7 @@ const CGFloat kAvatarSize = 24;
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:cell withStyler:styler];
   SendTabtoSelfManageDevicesCell* accountCell =
-      base::mac::ObjCCastStrict<SendTabtoSelfManageDevicesCell>(cell);
+      base::apple::ObjCCastStrict<SendTabtoSelfManageDevicesCell>(cell);
 
   if (self.showManageDevicesLink) {
     NSString* text =

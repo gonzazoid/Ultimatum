@@ -6,7 +6,8 @@ import("//build/config/features.gni")
 import("//device/bluetooth/cast_bluetooth.gni")
 
 if (is_android) {
-  import("//build/config/android/rules.gni")  # For generate_jni().
+  import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 config("bluetooth_config") {
@@ -66,6 +67,7 @@ source_set("deprecated_experimental_mojo") {
     # Approved clients:
     "//chrome/browser/ash/nearby:*",
     "//chrome/browser/ui/webui/bluetooth_internals:*",
+    "//chrome/services/sharing/nearby/platform:*",
 
     # Implementation tests
     # Ideally only device_unittests, however android & fushia generate
@@ -200,27 +202,21 @@ component("bluetooth") {
   }
 
   if (is_chromeos_ash) {
-    deps += [ "//ash/constants" ]
+    deps += [
+      "//ash/constants",
+      "//chromeos/ash/services/nearby/public/cpp/",
+      "//chromeos/ash/services/secure_channel/public/cpp/shared",
+    ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
-      "bluetooth_adapter_mac.h",
-      "bluetooth_adapter_mac.mm",
-      "bluetooth_adapter_mac_metrics.h",
-      "bluetooth_adapter_mac_metrics.mm",
       "bluetooth_advertisement_mac.h",
       "bluetooth_advertisement_mac.mm",
-      "bluetooth_channel_mac.h",
-      "bluetooth_channel_mac.mm",
-      "bluetooth_classic_device_mac.h",
-      "bluetooth_classic_device_mac.mm",
       "bluetooth_device_mac.h",
       "bluetooth_device_mac.mm",
-      "bluetooth_discovery_manager_mac.h",
-      "bluetooth_discovery_manager_mac.mm",
-      "bluetooth_l2cap_channel_mac.h",
-      "bluetooth_l2cap_channel_mac.mm",
+      "bluetooth_low_energy_adapter_apple.h",
+      "bluetooth_low_energy_adapter_apple.mm",
       "bluetooth_low_energy_advertisement_manager_mac.h",
       "bluetooth_low_energy_advertisement_manager_mac.mm",
       "bluetooth_low_energy_central_manager_delegate.h",
@@ -241,15 +237,38 @@ component("bluetooth") {
       "bluetooth_remote_gatt_descriptor_mac.mm",
       "bluetooth_remote_gatt_service_mac.h",
       "bluetooth_remote_gatt_service_mac.mm",
+    ]
+    frameworks = [
+      "CoreBluetooth.framework",
+      "IOKit.framework",
+      "Foundation.framework",
+    ]
+  }
+
+  if (is_mac) {
+    sources += [
+      "bluetooth_adapter_mac.h",
+      "bluetooth_adapter_mac.mm",
+      "bluetooth_channel_mac.h",
+      "bluetooth_channel_mac.mm",
+      "bluetooth_classic_device_mac.h",
+      "bluetooth_classic_device_mac.mm",
+      "bluetooth_discovery_manager_mac.h",
+      "bluetooth_discovery_manager_mac.mm",
+      "bluetooth_l2cap_channel_mac.h",
+      "bluetooth_l2cap_channel_mac.mm",
       "bluetooth_rfcomm_channel_mac.h",
       "bluetooth_rfcomm_channel_mac.mm",
       "bluetooth_socket_mac.h",
       "bluetooth_socket_mac.mm",
     ]
-    frameworks = [
-      "IOBluetooth.framework",
-      "IOKit.framework",
-      "Foundation.framework",
+    frameworks += [ "IOBluetooth.framework" ]
+  }
+
+  if (is_ios) {
+    sources += [
+      "bluetooth_adapter_ios.h",
+      "bluetooth_adapter_ios.mm",
     ]
   }
 
@@ -271,22 +290,12 @@ component("bluetooth") {
       "bluetooth_gatt_discoverer_winrt.h",
       "bluetooth_init_win.cc",
       "bluetooth_init_win.h",
-      "bluetooth_low_energy_defs_win.cc",
-      "bluetooth_low_energy_defs_win.h",
-      "bluetooth_low_energy_win.cc",
-      "bluetooth_low_energy_win.h",
       "bluetooth_pairing_winrt.cc",
       "bluetooth_pairing_winrt.h",
-      "bluetooth_remote_gatt_characteristic_win.cc",
-      "bluetooth_remote_gatt_characteristic_win.h",
       "bluetooth_remote_gatt_characteristic_winrt.cc",
       "bluetooth_remote_gatt_characteristic_winrt.h",
-      "bluetooth_remote_gatt_descriptor_win.cc",
-      "bluetooth_remote_gatt_descriptor_win.h",
       "bluetooth_remote_gatt_descriptor_winrt.cc",
       "bluetooth_remote_gatt_descriptor_winrt.h",
-      "bluetooth_remote_gatt_service_win.cc",
-      "bluetooth_remote_gatt_service_win.h",
       "bluetooth_remote_gatt_service_winrt.cc",
       "bluetooth_remote_gatt_service_winrt.h",
       "bluetooth_service_record_win.cc",
@@ -432,16 +441,70 @@ component("bluetooth") {
         "dbus/bluez_dbus_thread_manager.h",
         "dbus/dbus_bluez_manager_wrapper_linux.cc",
         "dbus/dbus_bluez_manager_wrapper_linux.h",
+        "dbus/fake_bluetooth_adapter_client.cc",
+        "dbus/fake_bluetooth_adapter_client.h",
+        "dbus/fake_bluetooth_admin_policy_client.cc",
+        "dbus/fake_bluetooth_admin_policy_client.h",
+        "dbus/fake_bluetooth_advertisement_monitor_application_service_provider.cc",
+        "dbus/fake_bluetooth_advertisement_monitor_application_service_provider.h",
+        "dbus/fake_bluetooth_advertisement_monitor_manager_client.cc",
+        "dbus/fake_bluetooth_advertisement_monitor_manager_client.h",
+        "dbus/fake_bluetooth_advertisement_monitor_service_provider.cc",
+        "dbus/fake_bluetooth_advertisement_monitor_service_provider.h",
+        "dbus/fake_bluetooth_agent_manager_client.cc",
+        "dbus/fake_bluetooth_agent_manager_client.h",
+        "dbus/fake_bluetooth_agent_service_provider.cc",
+        "dbus/fake_bluetooth_agent_service_provider.h",
+        "dbus/fake_bluetooth_battery_client.cc",
+        "dbus/fake_bluetooth_battery_client.h",
+        "dbus/fake_bluetooth_debug_manager_client.cc",
+        "dbus/fake_bluetooth_debug_manager_client.h",
+        "dbus/fake_bluetooth_device_client.cc",
+        "dbus/fake_bluetooth_device_client.h",
+        "dbus/fake_bluetooth_gatt_application_service_provider.cc",
+        "dbus/fake_bluetooth_gatt_application_service_provider.h",
+        "dbus/fake_bluetooth_gatt_characteristic_client.cc",
+        "dbus/fake_bluetooth_gatt_characteristic_client.h",
+        "dbus/fake_bluetooth_gatt_characteristic_service_provider.cc",
+        "dbus/fake_bluetooth_gatt_characteristic_service_provider.h",
+        "dbus/fake_bluetooth_gatt_descriptor_client.cc",
+        "dbus/fake_bluetooth_gatt_descriptor_client.h",
+        "dbus/fake_bluetooth_gatt_descriptor_service_provider.cc",
+        "dbus/fake_bluetooth_gatt_descriptor_service_provider.h",
+        "dbus/fake_bluetooth_gatt_manager_client.cc",
+        "dbus/fake_bluetooth_gatt_manager_client.h",
+        "dbus/fake_bluetooth_gatt_service_client.cc",
+        "dbus/fake_bluetooth_gatt_service_client.h",
+        "dbus/fake_bluetooth_gatt_service_service_provider.cc",
+        "dbus/fake_bluetooth_gatt_service_service_provider.h",
+        "dbus/fake_bluetooth_input_client.cc",
+        "dbus/fake_bluetooth_input_client.h",
+        "dbus/fake_bluetooth_le_advertisement_service_provider.cc",
+        "dbus/fake_bluetooth_le_advertisement_service_provider.h",
+        "dbus/fake_bluetooth_le_advertising_manager_client.cc",
+        "dbus/fake_bluetooth_le_advertising_manager_client.h",
+        "dbus/fake_bluetooth_profile_manager_client.cc",
+        "dbus/fake_bluetooth_profile_manager_client.h",
+        "dbus/fake_bluetooth_profile_service_provider.cc",
+        "dbus/fake_bluetooth_profile_service_provider.h",
         "floss/bluetooth_adapter_floss.cc",
         "floss/bluetooth_adapter_floss.h",
         "floss/bluetooth_advertisement_floss.cc",
         "floss/bluetooth_advertisement_floss.h",
         "floss/bluetooth_device_floss.cc",
         "floss/bluetooth_device_floss.h",
+        "floss/bluetooth_gatt_characteristic_floss.cc",
+        "floss/bluetooth_gatt_characteristic_floss.h",
         "floss/bluetooth_gatt_connection_floss.cc",
         "floss/bluetooth_gatt_connection_floss.h",
         "floss/bluetooth_gatt_service_floss.cc",
         "floss/bluetooth_gatt_service_floss.h",
+        "floss/bluetooth_local_gatt_characteristic_floss.cc",
+        "floss/bluetooth_local_gatt_characteristic_floss.h",
+        "floss/bluetooth_local_gatt_descriptor_floss.cc",
+        "floss/bluetooth_local_gatt_descriptor_floss.h",
+        "floss/bluetooth_local_gatt_service_floss.cc",
+        "floss/bluetooth_local_gatt_service_floss.h",
         "floss/bluetooth_low_energy_scan_session_floss.cc",
         "floss/bluetooth_low_energy_scan_session_floss.h",
         "floss/bluetooth_pairing_floss.cc",
@@ -455,24 +518,56 @@ component("bluetooth") {
         "floss/bluetooth_socket_floss.cc",
         "floss/bluetooth_socket_floss.h",
         "floss/exported_callback_manager.h",
+        "floss/fake_floss_adapter_client.cc",
+        "floss/fake_floss_adapter_client.h",
+        "floss/fake_floss_admin_client.cc",
+        "floss/fake_floss_admin_client.h",
+        "floss/fake_floss_advertiser_client.cc",
+        "floss/fake_floss_advertiser_client.h",
+        "floss/fake_floss_battery_manager_client.cc",
+        "floss/fake_floss_battery_manager_client.h",
+        "floss/fake_floss_bluetooth_telephony_client.cc",
+        "floss/fake_floss_bluetooth_telephony_client.h",
+        "floss/fake_floss_gatt_manager_client.cc",
+        "floss/fake_floss_gatt_manager_client.h",
+        "floss/fake_floss_lescan_client.cc",
+        "floss/fake_floss_lescan_client.h",
+        "floss/fake_floss_logging_client.cc",
+        "floss/fake_floss_logging_client.h",
+        "floss/fake_floss_manager_client.cc",
+        "floss/fake_floss_manager_client.h",
+        "floss/fake_floss_socket_manager.cc",
+        "floss/fake_floss_socket_manager.h",
         "floss/floss_adapter_client.cc",
         "floss/floss_adapter_client.h",
+        "floss/floss_admin_client.cc",
+        "floss/floss_admin_client.h",
         "floss/floss_advertiser_client.cc",
         "floss/floss_advertiser_client.h",
+        "floss/floss_battery_manager_client.cc",
+        "floss/floss_battery_manager_client.h",
+        "floss/floss_bluetooth_telephony_client.cc",
+        "floss/floss_bluetooth_telephony_client.h",
         "floss/floss_dbus_client.cc",
         "floss/floss_dbus_client.h",
         "floss/floss_dbus_manager.cc",
         "floss/floss_dbus_manager.h",
         "floss/floss_features.cc",
         "floss/floss_features.h",
-        "floss/floss_gatt_client.cc",
-        "floss/floss_gatt_client.h",
+        "floss/floss_gatt_manager_client.cc",
+        "floss/floss_gatt_manager_client.h",
         "floss/floss_lescan_client.cc",
         "floss/floss_lescan_client.h",
+        "floss/floss_logging_client.cc",
+        "floss/floss_logging_client.h",
         "floss/floss_manager_client.cc",
         "floss/floss_manager_client.h",
+        "floss/floss_sdp_types.cc",
+        "floss/floss_sdp_types.h",
         "floss/floss_socket_manager.cc",
         "floss/floss_socket_manager.h",
+        "floss/floss_version.cc",
+        "floss/floss_version.h",
         "floss/test_helpers.h",
       ]
       if (is_chromeos) {
@@ -493,74 +588,9 @@ component("bluetooth") {
             "//chromeos/startup",
           ]
         }
-      } else {
-        use_real_dbus_clients = false
-      }
-      if (!use_real_dbus_clients) {
-        # Use fake D-Bus clients instead of real ones.
-        sources += [
-          "dbus/fake_bluetooth_adapter_client.cc",
-          "dbus/fake_bluetooth_adapter_client.h",
-          "dbus/fake_bluetooth_admin_policy_client.cc",
-          "dbus/fake_bluetooth_admin_policy_client.h",
-          "dbus/fake_bluetooth_advertisement_monitor_application_service_provider.cc",
-          "dbus/fake_bluetooth_advertisement_monitor_application_service_provider.h",
-          "dbus/fake_bluetooth_advertisement_monitor_manager_client.cc",
-          "dbus/fake_bluetooth_advertisement_monitor_manager_client.h",
-          "dbus/fake_bluetooth_advertisement_monitor_service_provider.cc",
-          "dbus/fake_bluetooth_advertisement_monitor_service_provider.h",
-          "dbus/fake_bluetooth_agent_manager_client.cc",
-          "dbus/fake_bluetooth_agent_manager_client.h",
-          "dbus/fake_bluetooth_agent_service_provider.cc",
-          "dbus/fake_bluetooth_agent_service_provider.h",
-          "dbus/fake_bluetooth_battery_client.cc",
-          "dbus/fake_bluetooth_battery_client.h",
-          "dbus/fake_bluetooth_debug_manager_client.cc",
-          "dbus/fake_bluetooth_debug_manager_client.h",
-          "dbus/fake_bluetooth_device_client.cc",
-          "dbus/fake_bluetooth_device_client.h",
-          "dbus/fake_bluetooth_gatt_application_service_provider.cc",
-          "dbus/fake_bluetooth_gatt_application_service_provider.h",
-          "dbus/fake_bluetooth_gatt_characteristic_client.cc",
-          "dbus/fake_bluetooth_gatt_characteristic_client.h",
-          "dbus/fake_bluetooth_gatt_characteristic_service_provider.cc",
-          "dbus/fake_bluetooth_gatt_characteristic_service_provider.h",
-          "dbus/fake_bluetooth_gatt_descriptor_client.cc",
-          "dbus/fake_bluetooth_gatt_descriptor_client.h",
-          "dbus/fake_bluetooth_gatt_descriptor_service_provider.cc",
-          "dbus/fake_bluetooth_gatt_descriptor_service_provider.h",
-          "dbus/fake_bluetooth_gatt_manager_client.cc",
-          "dbus/fake_bluetooth_gatt_manager_client.h",
-          "dbus/fake_bluetooth_gatt_service_client.cc",
-          "dbus/fake_bluetooth_gatt_service_client.h",
-          "dbus/fake_bluetooth_gatt_service_service_provider.cc",
-          "dbus/fake_bluetooth_gatt_service_service_provider.h",
-          "dbus/fake_bluetooth_input_client.cc",
-          "dbus/fake_bluetooth_input_client.h",
-          "dbus/fake_bluetooth_le_advertisement_service_provider.cc",
-          "dbus/fake_bluetooth_le_advertisement_service_provider.h",
-          "dbus/fake_bluetooth_le_advertising_manager_client.cc",
-          "dbus/fake_bluetooth_le_advertising_manager_client.h",
-          "dbus/fake_bluetooth_profile_manager_client.cc",
-          "dbus/fake_bluetooth_profile_manager_client.h",
-          "dbus/fake_bluetooth_profile_service_provider.cc",
-          "dbus/fake_bluetooth_profile_service_provider.h",
-          "floss/fake_floss_adapter_client.cc",
-          "floss/fake_floss_adapter_client.h",
-          "floss/fake_floss_advertiser_client.cc",
-          "floss/fake_floss_advertiser_client.h",
-          "floss/fake_floss_gatt_client.cc",
-          "floss/fake_floss_gatt_client.h",
-          "floss/fake_floss_lescan_client.cc",
-          "floss/fake_floss_lescan_client.h",
-          "floss/fake_floss_manager_client.cc",
-          "floss/fake_floss_manager_client.h",
-          "floss/fake_floss_socket_manager.cc",
-          "floss/fake_floss_socket_manager.h",
-        ]
       }
       if (use_dbus) {
-        deps += [ "//dbus" ]
+        public_deps += [ "//dbus" ]
       }
     } else {  # !use_bluez
       defines += [ "LINUX_WITHOUT_DBUS" ]
@@ -660,14 +690,14 @@ if (is_android) {
   }
 
   android_library("java") {
+    srcjar_deps = [ ":jni_headers" ]
     sources = java_sources_needing_jni
     deps = [
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//components/location/android:location_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   }
 }

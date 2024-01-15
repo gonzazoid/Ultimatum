@@ -8,9 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -140,9 +140,9 @@ class CdmAdapterTestBase : public testing::Test,
   // or generates an error.
   void InitializeWithCdmConfigAndExpect(const CdmConfig& cdm_config,
                                         ExpectedResult expected_result) {
-    std::unique_ptr<CdmAllocator> allocator(new SimpleCdmAllocator());
-    std::unique_ptr<StrictMock<MockCdmAuxiliaryHelper>> cdm_helper(
-        new StrictMock<MockCdmAuxiliaryHelper>(std::move(allocator)));
+    auto allocator = std::make_unique<SimpleCdmAllocator>();
+    auto cdm_helper = std::make_unique<StrictMock<MockCdmAuxiliaryHelper>>(
+        std::move(allocator));
     cdm_helper_ = cdm_helper.get();
     CdmAdapter::Create(
         cdm_config, GetCreateCdmFunc(), std::move(cdm_helper),
@@ -182,7 +182,8 @@ class CdmAdapterTestBase : public testing::Test,
   void RunUntilIdle() { task_environment_.RunUntilIdle(); }
 
   StrictMock<MockCdmClient> cdm_client_;
-  raw_ptr<StrictMock<MockCdmAuxiliaryHelper>> cdm_helper_ = nullptr;
+  raw_ptr<StrictMock<MockCdmAuxiliaryHelper>, DanglingUntriaged> cdm_helper_ =
+      nullptr;
 
   // Keep track of the loaded CDM.
   scoped_refptr<ContentDecryptionModule> cdm_;
@@ -291,11 +292,11 @@ class CdmAdapterTestWithClearKeyCdm : public CdmAdapterTestBase {
       EXPECT_CALL(*this, OnReject(_, _, IsNotEmpty()));
     }
 
-    std::unique_ptr<SimpleCdmPromise> promise(new CdmCallbackPromise<>(
+    auto promise = std::make_unique<CdmCallbackPromise<>>(
         base::BindOnce(&CdmAdapterTestWithClearKeyCdm::OnResolve,
                        base::Unretained(this)),
         base::BindOnce(&CdmAdapterTestWithClearKeyCdm::OnReject,
-                       base::Unretained(this))));
+                       base::Unretained(this)));
     return promise;
   }
 
@@ -310,12 +311,11 @@ class CdmAdapterTestWithClearKeyCdm : public CdmAdapterTestBase {
       EXPECT_CALL(*this, OnReject(_, _, IsNotEmpty()));
     }
 
-    std::unique_ptr<NewSessionCdmPromise> promise(
-        new CdmCallbackPromise<std::string>(
-            base::BindOnce(&CdmAdapterTestWithClearKeyCdm::OnResolveWithSession,
-                           base::Unretained(this)),
-            base::BindOnce(&CdmAdapterTestWithClearKeyCdm::OnReject,
-                           base::Unretained(this))));
+    auto promise = std::make_unique<CdmCallbackPromise<std::string>>(
+        base::BindOnce(&CdmAdapterTestWithClearKeyCdm::OnResolveWithSession,
+                       base::Unretained(this)),
+        base::BindOnce(&CdmAdapterTestWithClearKeyCdm::OnReject,
+                       base::Unretained(this)));
     return promise;
   }
 
@@ -355,8 +355,8 @@ class CdmAdapterTestWithMockCdm : public CdmAdapterTestBase {
     ASSERT_TRUE(cdm_host_proxy_);
   }
 
-  raw_ptr<MockLibraryCdm> mock_library_cdm_ = nullptr;
-  raw_ptr<CdmHostProxy> cdm_host_proxy_ = nullptr;
+  raw_ptr<MockLibraryCdm, DanglingUntriaged> mock_library_cdm_ = nullptr;
+  raw_ptr<CdmHostProxy, DanglingUntriaged> cdm_host_proxy_ = nullptr;
 };
 
 // Instantiate test cases

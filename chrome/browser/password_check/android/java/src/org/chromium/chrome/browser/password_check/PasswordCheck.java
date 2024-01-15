@@ -50,9 +50,7 @@ public interface PasswordCheck extends PasswordCheckComponentUi.Delegate {
      */
     void showUi(Context context, @PasswordCheckReferrer int passwordCheckReferrer);
 
-    /**
-     * Cleans up the C++ part, thus removing the compromised credentials from memory.
-     */
+    /** Cleans up the C++ part, thus removing the compromised credentials from memory. */
     void destroy();
 
     /**
@@ -108,28 +106,12 @@ public interface PasswordCheck extends PasswordCheckComponentUi.Delegate {
      */
     int getSavedPasswordsCount();
 
-    /**
-     * Launch the password check in the Google Account.
-     */
+    /** Launch the password check in the Google Account. */
     void launchCheckupInAccount(Activity activity);
 
-    /**
-     * Starts the password check, if one is not running already.
-     */
+    /** Starts the password check, if one is not running already. */
     void startCheck();
 
-    /**
-     * Stops the password check, if one is running. Otherwise, does nothing.
-     */
+    /** Stops the password check, if one is running. Otherwise, does nothing. */
     void stopCheck();
-
-    /**
-     * Checks if scripts refreshment is finished.
-     */
-    boolean areScriptsRefreshed();
-
-    /**
-     *  Fetches scripts for automated passwords changes.
-     */
-    void fetchScripts();
 }

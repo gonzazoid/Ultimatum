@@ -8,15 +8,16 @@
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/process/process_metrics.h"
 #include "base/run_loop.h"
+#include "base/sampling_heap_profiler/poisson_allocation_sampler.h"
 #include "base/strings/string_util.h"
 #include "base/test/allow_check_is_test_for_testing.h"
 #include "base/test/task_environment.h"
@@ -26,11 +27,13 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/chrome_content_browser_client.h"
+#include "chrome/browser/metrics/chrome_feature_list_creator.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/profiler/main_thread_stack_sampling_profiler.h"
 #include "chrome/install_static/test/scoped_install_details.h"
 #include "chrome/test/base/chrome_test_suite.h"
+#include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/utility/chrome_content_utility_client.h"
 #include "components/crash/core/app/crashpad.h"
 #include "content/public/app/content_main.h"
@@ -41,17 +44,11 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/service_factory.h"
 #include "services/test/echo/echo_service.h"
-#include "ui/base/test/ui_controls.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/bundle_locations.h"
+#include "base/apple/bundle_locations.h"
 #include "chrome/browser/chrome_browser_application_mac.h"
 #endif  // BUILDFLAG(IS_MAC)
-
-#if defined(USE_AURA)
-#include "ui/aura/test/ui_controls_factory_aura.h"
-#include "ui/base/test/ui_controls_aura.h"
-#endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
 #include "chrome/app/chrome_crash_reporter_client.h"
@@ -191,6 +188,25 @@ ChromeTestChromeMainDelegate::CreateContentUtilityClient() {
   return chrome_content_utility_client_.get();
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+absl::optional<int> ChromeTestChromeMainDelegate::PostEarlyInitialization(
+    InvokedIn invoked_in) {
+  auto result = ChromeMainDelegate::PostEarlyInitialization(invoked_in);
+  if (absl::get_if<InvokedInBrowserProcess>(&invoked_in)) {
+    // If servicing an `InProcessBrowserTest`, give the test an opportunity to
+    // prepopulate Local State with preferences.
+    ChromeFeatureListCreator* chrome_feature_list_creator =
+        chrome_content_browser_client_->startup_data()
+            ->chrome_feature_list_creator();
+    PrefService* const local_state = chrome_feature_list_creator->local_state();
+    if (auto* test_instance = InProcessBrowserTest::GetCurrent()) {
+      test_instance->SetUpLocalStatePrefService(local_state);
+    }
+  }
+  return result;
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
+
 #if BUILDFLAG(IS_WIN)
 bool ChromeTestChromeMainDelegate::ShouldHandleConsoleControlEvents() {
   // Allow Ctrl-C and friends to terminate the test processes forthwith.
@@ -253,7 +269,7 @@ int LaunchChromeTests(size_t parallel_jobs,
   base::FilePath path;
   CHECK(base::PathService::Get(base::DIR_EXE, &path));
   path = path.Append(chrome::kFrameworkName);
-  base::mac::SetOverrideFrameworkBundlePath(path);
+  base::apple::SetOverrideFrameworkBundlePath(path);
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -265,6 +281,15 @@ int LaunchChromeTests(size_t parallel_jobs,
 #endif  // BUILDFLAG(IS_WIN)
 
   const auto& command_line = *base::CommandLine::ForCurrentProcess();
+
+  // PoissonAllocationSampler's TLS slots need to be set up before
+  // MainThreadStackSamplingProfiler, which can allocate TLS slots of its own.
+  // On some platforms pthreads can malloc internally to access higher-numbered
+  // TLS slots, which can cause reentry in the heap profiler. (See the comment
+  // on ReentryGuard::InitTLSSlot().)
+  // TODO(https://crbug.com/1411454): Clean up other paths that call this Init()
+  // function, which are now redundant.
+  base::PoissonAllocationSampler::Init();
 
   // Initialize sampling profiler for tests that relaunching a browser. This
   // mimics the behavior in standalone Chrome, where this is done in
@@ -287,18 +312,7 @@ int LaunchChromeTests(size_t parallel_jobs,
   // Only create this object in the utility process, so that its members don't
   // interfere with other test objects in the browser process.
   std::unique_ptr<content::NetworkServiceTestHelper>
-      network_service_test_helper;
-  if (command_line.GetSwitchValueASCII(switches::kProcessType) ==
-      switches::kUtilityProcess) {
-    network_service_test_helper =
-        std::make_unique<content::NetworkServiceTestHelper>();
-    ChromeContentUtilityClient::SetNetworkBinderCreationCallback(base::BindOnce(
-        [](content::NetworkServiceTestHelper* helper,
-           service_manager::BinderRegistry* registry) {
-          helper->RegisterNetworkBinders(registry);
-        },
-        network_service_test_helper.get()));
-  }
+      network_service_test_helper = content::NetworkServiceTestHelper::Create();
 
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.

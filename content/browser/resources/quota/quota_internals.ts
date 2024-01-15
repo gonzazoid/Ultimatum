@@ -6,7 +6,8 @@ import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
 import {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 
-import {BucketTableEntry, QuotaInternalsBrowserProxy, RetrieveBucketsTableResult, StorageType} from './quota_internals_browser_proxy.js';
+import {BucketTableEntry} from './quota_internals.mojom-webui.js';
+import {QuotaInternalsBrowserProxy, RetrieveBucketsTableResult, StorageType} from './quota_internals_browser_proxy.js';
 
 // Object for constructing the bucket row in the usage table.
 interface StorageTypeBucketTableEntry {
@@ -251,7 +252,7 @@ async function renderUsageAndQuotaStats() {
           usageAndQuotaRow.querySelector('.storage-key')!.remove();
         }
 
-        /* If the current storage type (temporary, persistent, syncable) is not
+        /* If the current storage type (temporary, syncable) is not
          * the first of its kind for a given storage key and storage type,
          * remove the Storage Type cells from the row before
          * appending the row to the table body.
@@ -265,11 +266,25 @@ async function renderUsageAndQuotaStats() {
   }
 }
 
+async function renderSimulateStoragePressureButton() {
+  getProxy().isSimulateStoragePressureAvailable().then(result => {
+    if (!result.available) {
+      document.body
+          .querySelector('#simulate-storage-pressure-activation-message')
+          ?.removeAttribute('hidden');
+      document.body.querySelector('#trigger-notification')!.setAttribute(
+          'disabled', '');
+    }
+  });
+
+  document.body.querySelector('#trigger-notification')!.addEventListener(
+      'click', () => getProxy().simulateStoragePressure());
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderDiskAvailabilityAndTempPoolSize();
   renderEvictionStats();
   renderGlobalUsage();
   renderUsageAndQuotaStats();
-  document.body.querySelector('#trigger-notification')!.addEventListener(
-      'click', () => getProxy().simulateStoragePressure());
+  renderSimulateStoragePressureButton();
 });

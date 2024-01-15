@@ -120,7 +120,8 @@ class NativeAppWindowViews : public extensions::NativeAppWindow,
   void UpdateWindowIcon() override;
   void UpdateWindowTitle() override;
   void UpdateDraggableRegions(
-      const std::vector<extensions::DraggableRegion>& regions) override;
+      const std::vector<extensions::mojom::DraggableRegionPtr>& regions)
+      override;
   SkRegion* GetDraggableRegion() override;
   void UpdateShape(std::unique_ptr<ShapeRects> rects) override;
   bool HandleKeyboardEvent(
@@ -156,7 +157,7 @@ class NativeAppWindowViews : public extensions::NativeAppWindow,
 
   raw_ptr<extensions::AppWindow> app_window_ = nullptr;  // Not owned.
   raw_ptr<views::WebView> web_view_ = nullptr;
-  raw_ptr<views::Widget> widget_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged> widget_ = nullptr;
 
   std::unique_ptr<SkRegion> draggable_region_;
 

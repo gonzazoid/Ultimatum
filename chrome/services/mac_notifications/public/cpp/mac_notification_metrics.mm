@@ -6,33 +6,30 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/mac/bundle_locations.h"
+#include "base/apple/bundle_locations.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/notreached.h"
 #include "base/strings/strcat.h"
 
 namespace mac_notifications {
 
-bool IsAppBundleAlertStyle() {
-  NSDictionary* infoDictionary = [base::mac::MainBundle() infoDictionary];
-  NSString* alertStyle = infoDictionary[@"NSUserNotificationAlertStyle"];
-  return [alertStyle isEqualToString:@"alert"];
+std::string MacNotificationStyleSuffix(NotificationStyle notification_style) {
+  switch (notification_style) {
+    case NotificationStyle::kBanner:
+      return "Banner";
+    case NotificationStyle::kAlert:
+      return "Alert";
+    case NotificationStyle::kAppShim:
+      return "AppShim";
+  }
+  NOTREACHED();
 }
 
-std::string MacNotificationStyleSuffix(bool is_alert) {
-  return is_alert ? "Alert" : "Banner";
-}
-
-void LogMacNotificationDelivered(bool is_alert, bool success) {
-  base::UmaHistogramBoolean(
-      base::StrCat({"Notifications.macOS.Delivered.",
-                    MacNotificationStyleSuffix(is_alert)}),
-      success);
-}
-
-void LogMacNotificationActionReceived(bool is_alert, bool is_valid) {
+void LogMacNotificationActionReceived(NotificationStyle notification_style,
+                                      bool is_valid) {
   base::UmaHistogramBoolean(
       base::StrCat({"Notifications.macOS.ActionReceived.",
-                    MacNotificationStyleSuffix(is_alert)}),
+                    MacNotificationStyleSuffix(notification_style)}),
       is_valid);
 }
 

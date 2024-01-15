@@ -9,19 +9,19 @@
 
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/file_manager/io_task.h"
-#include "chrome/browser/ash/file_manager/speedometer.h"
 #include "chrome/services/file_util/public/cpp/zip_file_creator.h"
+#include "chromeos/ash/components/file_manager/speedometer.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_url.h"
 
 class Profile;
 
-namespace file_manager {
-namespace io_task {
+namespace file_manager::io_task {
 
 class ZipIOTask : public IOTask {
  public:
@@ -49,7 +49,7 @@ class ZipIOTask : public IOTask {
   void OnZipProgress();
   void OnZipComplete();
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   scoped_refptr<storage::FileSystemContext> file_system_context_;
 
   size_t files_preprocessed_ = 0;
@@ -75,7 +75,6 @@ class ZipIOTask : public IOTask {
   base::WeakPtrFactory<ZipIOTask> weak_ptr_factory_{this};
 };
 
-}  // namespace io_task
-}  // namespace file_manager
+}  // namespace file_manager::io_task
 
 #endif  // CHROME_BROWSER_ASH_FILE_MANAGER_ZIP_IO_TASK_H_

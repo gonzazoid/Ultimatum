@@ -5,18 +5,26 @@
 #include "chrome/browser/media/webrtc/capture_policy_utils.h"
 
 #include "base/containers/cxx20_erase_vector.h"
+#include "base/feature_list.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
+#include "chrome/browser/policy/policy_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
+#include "components/content_settings/core/common/pref_names.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_contents.h"
+#include "media/base/media_switches.h"
+#include "third_party/blink/public/common/features_generated.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -28,6 +36,15 @@
 #endif
 
 namespace capture_policy {
+
+// This pref connects to the GetDisplayMediaSetSelectAllScreensAllowedForUrls
+// policy. To avoid dynamic refresh, this pref will not be read directly, but
+// the value will be copied manually to the
+// kManagedAccessToGetAllScreensMediaInSessionAllowedForUrls pref, which is then
+// consumed by content settings to check if access to `getAllScreensMedia` shall
+// be permitted for a given origin.
+const char kManagedAccessToGetAllScreensMediaAllowedForUrls[] =
+    "profile.managed_access_to_get_all_screens_media_allowed_for_urls";
 
 namespace {
 
@@ -44,12 +61,14 @@ bool IsOriginInList(const GURL& request_origin,
   // aligns better than URLMatcher with the rules from:
   // https://chromeenterprise.google/policies/url-patterns/.
   for (const auto& value : allowed_origins) {
-    if (!value.is_string())
+    if (!value.is_string()) {
       continue;
+    }
     ContentSettingsPattern pattern =
         ContentSettingsPattern::FromString(value.GetString());
-    if (pattern.IsValid() && pattern.Matches(request_origin))
+    if (pattern.IsValid() && pattern.Matches(request_origin)) {
       return true;
+    }
   }
 
   return false;
@@ -58,15 +77,27 @@ bool IsOriginInList(const GURL& request_origin,
 AllowedScreenCaptureLevel GetAllowedCaptureLevel(
     const GURL& request_origin,
     content::WebContents* capturer_web_contents) {
+  // Since the UI for capture doesn't clip against picture in picture windows
+  // properly on all platforms, and since it's not clear that we actually want
+  // to support this anyway, turn it off for now.  Note that direct calls into
+  // `GetAllowedCaptureLevel(..., PrefService)` will miss this check.
+  if (!base::FeatureList::IsEnabled(media::kDocumentPictureInPictureCapture) &&
+      PictureInPictureWindowManager::IsChildWebContents(
+          capturer_web_contents)) {
+    return AllowedScreenCaptureLevel::kDisallowed;
+  }
+
   // If we can't get the PrefService, then we won't apply any restrictions.
   Profile* profile =
       Profile::FromBrowserContext(capturer_web_contents->GetBrowserContext());
-  if (!profile)
+  if (!profile) {
     return AllowedScreenCaptureLevel::kUnrestricted;
+  }
 
   const PrefService* prefs = profile->GetPrefs();
-  if (!prefs)
+  if (!prefs) {
     return AllowedScreenCaptureLevel::kUnrestricted;
+  }
 
   return GetAllowedCaptureLevel(request_origin, *prefs);
 }
@@ -104,29 +135,103 @@ AllowedScreenCaptureLevel GetAllowedCaptureLevel(const GURL& request_origin,
   return AllowedScreenCaptureLevel::kDisallowed;
 }
 
-bool IsGetDisplayMediaSetSelectAllScreensAllowed(
-    content::BrowserContext* context,
-    const GURL& url) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_CHROMEOS_ASH)
+void RegisterProfilePrefs(PrefRegistrySimple* registry) {
+  registry->RegisterListPref(kManagedAccessToGetAllScreensMediaAllowedForUrls);
+}
+
+bool IsGetAllScreensMediaAllowedForAnySite(content::BrowserContext* context) {
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
   Profile* profile = Profile::FromBrowserContext(context);
-  if (!profile)
+  if (!profile) {
     return false;
+  }
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // To ensure that a user is informed at login time that capturing of all
+  // screens can happen (for privacy reasons), this API is only available on
+  // primary profiles.
+  if (!profile->IsMainProfile()) {
+    return false;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
   HostContentSettingsMap* host_content_settings_map =
       HostContentSettingsMapFactory::GetForProfile(profile);
-  if (!host_content_settings_map)
+  if (!host_content_settings_map) {
     return false;
-  const base::Value auto_accept_enabled =
-      host_content_settings_map->GetWebsiteSetting(
-          url, url,
-          ContentSettingsType::GET_DISPLAY_MEDIA_SET_SELECT_ALL_SCREENS,
-          /*info=*/nullptr);
-  return auto_accept_enabled.is_int() &&
-         auto_accept_enabled.GetInt() == ContentSetting::CONTENT_SETTING_ALLOW;
+  }
+  ContentSettingsForOneType content_settings =
+      host_content_settings_map->GetSettingsForOneType(
+          ContentSettingsType::ALL_SCREEN_CAPTURE);
+  return base::ranges::any_of(content_settings,
+                              [](const ContentSettingPatternSource& source) {
+                                return source.GetContentSetting() ==
+                                       ContentSetting::CONTENT_SETTING_ALLOW;
+                              });
 #else
-  // This API is currently only available on ChromeOS.
   return false;
 #endif
 }
+
+bool IsGetAllScreensMediaAllowed(content::BrowserContext* context,
+                                 const GURL& url) {
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+  Profile* profile = Profile::FromBrowserContext(context);
+  if (!profile) {
+    return false;
+  }
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // To ensure that a user is informed at login time that capturing of all
+  // screens can happen (for privacy reasons), this API is only available on
+  // primary profiles.
+  if (!profile->IsMainProfile()) {
+    return false;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
+  HostContentSettingsMap* host_content_settings_map =
+      HostContentSettingsMapFactory::GetForProfile(profile);
+  if (!host_content_settings_map) {
+    return false;
+  }
+  ContentSetting auto_accept_enabled =
+      host_content_settings_map->GetContentSetting(
+          url, url, ContentSettingsType::ALL_SCREEN_CAPTURE);
+  return auto_accept_enabled == ContentSetting::CONTENT_SETTING_ALLOW;
+#else
+  // This API is currently only available on ChromeOS and Linux.
+  return false;
+#endif
+}
+
+#if !BUILDFLAG(IS_ANDROID)
+bool IsTransientActivationRequiredForGetDisplayMedia(
+    content::WebContents* contents) {
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kGetDisplayMediaRequiresUserActivation)) {
+    return false;
+  }
+
+  if (!contents) {
+    return true;
+  }
+
+  Profile* profile = Profile::FromBrowserContext(contents->GetBrowserContext());
+  if (!profile) {
+    return true;
+  }
+
+  PrefService* prefs = profile->GetPrefs();
+  if (!prefs) {
+    return true;
+  }
+
+  return !policy::IsOriginInAllowlist(
+      contents->GetURL(), prefs,
+      prefs::kScreenCaptureWithoutGestureAllowedForOrigins);
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 DesktopMediaList::WebContentsFilter GetIncludableWebContentsFilter(
     const GURL& request_origin,
@@ -139,13 +244,18 @@ DesktopMediaList::WebContentsFilter GetIncludableWebContentsFilter(
       return base::BindRepeating(
           [](const GURL& request_origin, content::WebContents* web_contents) {
             DCHECK(web_contents);
-            return url::IsSameOriginWith(
-                request_origin,
-                web_contents->GetLastCommittedURL().DeprecatedGetOriginAsURL());
+            return !PictureInPictureWindowManager::IsChildWebContents(
+                       web_contents) &&
+                   url::IsSameOriginWith(request_origin,
+                                         web_contents->GetLastCommittedURL()
+                                             .DeprecatedGetOriginAsURL());
           },
           request_origin);
     default:
-      return base::BindRepeating([](content::WebContents* wc) { return true; });
+      return base::BindRepeating([](content::WebContents* web_contents) {
+        DCHECK(web_contents);
+        return !PictureInPictureWindowManager::IsChildWebContents(web_contents);
+      });
   }
 }
 
@@ -155,8 +265,7 @@ void FilterMediaList(std::vector<DesktopMediaList::Type>& media_types,
       media_types, [capture_level](const DesktopMediaList::Type& type) {
         switch (type) {
           case DesktopMediaList::Type::kNone:
-            NOTREACHED();
-            return false;
+            NOTREACHED_NORETURN();
           // SameOrigin is more restrictive than just Tabs, so as long as
           // at least SameOrigin is allowed, these entries should stay.
           // They should be filtered later by the caller.

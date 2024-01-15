@@ -4,11 +4,14 @@
 
 #include "ash/wm/wm_event.h"
 
+#include "ash/wm/window_positioning_utils.h"
+#include "ash/wm/wm_metrics.h"
+
 namespace ash {
 
 WMEvent::WMEvent(WMEventType type) : type_(type) {
-  DCHECK(IsWorkspaceEvent() || IsCompoundEvent() || IsBoundsEvent() ||
-         IsTransitionEvent());
+  CHECK(IsWorkspaceEvent() || IsCompoundEvent() || IsBoundsEvent() ||
+        IsTransitionEvent());
 }
 
 WMEvent::~WMEvent() = default;
@@ -16,9 +19,7 @@ WMEvent::~WMEvent() = default;
 bool WMEvent::IsWorkspaceEvent() const {
   switch (type_) {
     case WM_EVENT_ADDED_TO_WORKSPACE:
-    case WM_EVENT_WORKAREA_BOUNDS_CHANGED:
-    case WM_EVENT_DISPLAY_BOUNDS_CHANGED:
-    case WM_EVENT_SYSTEM_UI_AREA_CHANGED:
+    case WM_EVENT_DISPLAY_METRICS_CHANGED:
       return true;
     default:
       break;
@@ -54,14 +55,7 @@ bool WMEvent::IsPinEvent() const {
 }
 
 bool WMEvent::IsBoundsEvent() const {
-  switch (type_) {
-    case WM_EVENT_SET_BOUNDS:
-    case WM_EVENT_CENTER:
-      return true;
-    default:
-      break;
-  }
-  return false;
+  return type_ == WM_EVENT_SET_BOUNDS;
 }
 
 bool WMEvent::IsTransitionEvent() const {
@@ -98,14 +92,22 @@ bool WMEvent::IsSnapEvent() const {
   return false;
 }
 
-bool WMEvent::IsSnapInfoAvailable() const {
-  return false;
+const SetBoundsWMEvent* WMEvent::AsSetBoundsWMEvent() const {
+  return nullptr;
 }
 
 const DisplayMetricsChangedWMEvent* WMEvent::AsDisplayMetricsChangedWMEvent()
     const {
-  DCHECK_EQ(type(), WM_EVENT_DISPLAY_BOUNDS_CHANGED);
+  CHECK_EQ(type(), WM_EVENT_DISPLAY_METRICS_CHANGED);
   return static_cast<const DisplayMetricsChangedWMEvent*>(this);
+}
+
+const WindowFloatWMEvent* WMEvent::AsFloatEvent() const {
+  return nullptr;
+}
+
+const WindowSnapWMEvent* WMEvent::AsSnapEvent() const {
+  return nullptr;
 }
 
 SetBoundsWMEvent::SetBoundsWMEvent(const gfx::Rect& bounds,
@@ -125,40 +127,54 @@ SetBoundsWMEvent::SetBoundsWMEvent(const gfx::Rect& requested_bounds,
 
 SetBoundsWMEvent::~SetBoundsWMEvent() = default;
 
-WindowSnapWMEvent::WindowSnapWMEvent(WMEventType type) : WMEvent(type) {
-  DCHECK(IsSnapEvent());
+const SetBoundsWMEvent* SetBoundsWMEvent::AsSetBoundsWMEvent() const {
+  return this;
+}
+
+DisplayMetricsChangedWMEvent::DisplayMetricsChangedWMEvent(int changed_metrics)
+    : WMEvent(WM_EVENT_DISPLAY_METRICS_CHANGED),
+      changed_metrics_(changed_metrics) {}
+
+DisplayMetricsChangedWMEvent::~DisplayMetricsChangedWMEvent() = default;
+
+WindowFloatWMEvent::WindowFloatWMEvent(
+    chromeos::FloatStartLocation float_start_location)
+    : WMEvent(WM_EVENT_FLOAT), float_start_location_(float_start_location) {}
+
+WindowFloatWMEvent::~WindowFloatWMEvent() = default;
+
+const WindowFloatWMEvent* WindowFloatWMEvent::AsFloatEvent() const {
+  return this;
+}
+
+WindowSnapWMEvent::WindowSnapWMEvent(WMEventType type)
+    : WindowSnapWMEvent(type,
+                        chromeos::kDefaultSnapRatio,
+                        WindowSnapActionSource::kNotSpecified) {}
+
+WindowSnapWMEvent::WindowSnapWMEvent(WMEventType type, float snap_ratio)
+    : WindowSnapWMEvent(type,
+                        snap_ratio,
+                        WindowSnapActionSource::kNotSpecified) {}
+
+WindowSnapWMEvent::WindowSnapWMEvent(WMEventType type,
+                                     WindowSnapActionSource snap_action_source)
+    : WindowSnapWMEvent(type, chromeos::kDefaultSnapRatio, snap_action_source) {
 }
 
 WindowSnapWMEvent::WindowSnapWMEvent(WMEventType type,
-                                     WindowSnapWMEvent::SnapRatio snap_ratio)
-    : WMEvent(type), snap_ratio_(snap_ratio) {
-  DCHECK(IsSnapEvent());
+                                     float snap_ratio,
+                                     WindowSnapActionSource snap_action_source)
+    : WMEvent(type),
+      snap_ratio_(snap_ratio),
+      snap_action_source_(snap_action_source) {
+  CHECK(IsSnapEvent());
 }
 
 WindowSnapWMEvent::~WindowSnapWMEvent() = default;
 
-float WindowSnapWMEvent::GetFloatValueForSnapRatio(
-    WindowSnapWMEvent::SnapRatio snap_ratio) {
-  switch (snap_ratio) {
-    case WindowSnapWMEvent::SnapRatio::kOneThirdSnapRatio:
-      return kOneThirdPositionRatio;
-    case WindowSnapWMEvent::SnapRatio::kDefaultSnapRatio:
-      return kDefaultPositionRatio;
-    case WindowSnapWMEvent::SnapRatio::kTwoThirdSnapRatio:
-      return kTwoThirdPositionRatio;
-    default:
-      return kDefaultPositionRatio;
-  }
+const WindowSnapWMEvent* WindowSnapWMEvent::AsSnapEvent() const {
+  return this;
 }
-
-bool WindowSnapWMEvent::IsSnapInfoAvailable() const {
-  return true;
-}
-
-DisplayMetricsChangedWMEvent::DisplayMetricsChangedWMEvent(int changed_metrics)
-    : WMEvent(WM_EVENT_DISPLAY_BOUNDS_CHANGED),
-      changed_metrics_(changed_metrics) {}
-
-DisplayMetricsChangedWMEvent::~DisplayMetricsChangedWMEvent() = default;
 
 }  // namespace ash

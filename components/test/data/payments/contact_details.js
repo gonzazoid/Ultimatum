@@ -9,11 +9,7 @@
  */
 function buy() {
   buyWithMethods([
-    {supportedMethods: 'https://bobpay.com'},
-    {
-      supportedMethods: 'basic-card',
-      data: {supportedNetworks: ['amex', 'visa']},
-    },
+    {supportedMethods: 'https://bobpay.test'},
   ]);
 }
 

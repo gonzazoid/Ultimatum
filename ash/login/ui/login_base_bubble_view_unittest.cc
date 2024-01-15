@@ -4,9 +4,15 @@
 
 #include "ash/login/ui/login_base_bubble_view.h"
 #include "ash/login/ui/login_test_base.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
@@ -14,8 +20,24 @@
 namespace ash {
 
 namespace {
+
 // Total width of the bubble view.
 constexpr int kBubbleTotalWidthDp = 192;
+
+class AnchorView : public views::View {
+ public:
+  base::WeakPtr<AnchorView> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  METADATA_HEADER(AnchorView, views::View)
+  base::WeakPtrFactory<AnchorView> weak_ptr_factory_{this};
+};
+
+BEGIN_METADATA(AnchorView)
+END_METADATA
+
 }  // namespace
 
 class LoginBaseBubbleViewTest : public LoginTestBase {
@@ -31,28 +53,29 @@ class LoginBaseBubbleViewTest : public LoginTestBase {
   void SetUp() override {
     LoginTestBase::SetUp();
 
-    anchor_ = new views::View();
+    anchor_ = new AnchorView();
     anchor_->SetSize(gfx::Size(0, 25));
     container_ = new views::View();
     container_->SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical));
-    container_->AddChildView(anchor_);
+    container_->AddChildView(anchor_.get());
 
     SetWidget(CreateWidgetWithContent(container_));
 
-    bubble_ = new LoginBaseBubbleView(anchor_, widget()->GetNativeView());
+    bubble_ = new LoginBaseBubbleView(anchor_->AsWeakPtr(),
+                                      widget()->GetNativeView());
     auto* label = new views::Label(u"A message", views::style::CONTEXT_LABEL,
                                    views::style::STYLE_PRIMARY);
     bubble_->SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical));
     bubble_->AddChildView(label);
 
-    container_->AddChildView(bubble_);
+    container_->AddChildView(bubble_.get());
   }
 
-  LoginBaseBubbleView* bubble_;
-  views::View* container_;
-  views::View* anchor_;
+  raw_ptr<LoginBaseBubbleView, DanglingUntriaged> bubble_;
+  raw_ptr<views::View, DanglingUntriaged> container_;
+  raw_ptr<AnchorView, DanglingUntriaged> anchor_;
 };
 
 TEST_F(LoginBaseBubbleViewTest, BasicProperties) {
@@ -62,8 +85,8 @@ TEST_F(LoginBaseBubbleViewTest, BasicProperties) {
   EXPECT_TRUE(bubble_->GetVisible());
 
   EXPECT_EQ(bubble_->width(), kBubbleTotalWidthDp);
-  SkColor background_color = AshColorProvider::Get()->GetBaseLayerColor(
-      AshColorProvider::BaseLayerType::kTransparent80);
+  SkColor background_color = bubble_->GetColorProvider()->GetColor(
+      cros_tokens::kCrosSysSystemBaseElevated);
   EXPECT_EQ(bubble_->background()->get_color(), background_color);
 
   bubble_->Hide();

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "cc/animation/keyframe_model.h"
 #include "chrome/browser/vr/databinding/binding.h"
 #include "chrome/browser/vr/test/animation_utils.h"
@@ -257,10 +257,10 @@ TEST(UiElement, AnimateSize) {
   UiElement* rect_ptr = rect.get();
   scene.AddUiElement(kRoot, std::move(rect));
   base::TimeTicks start_time = gfx::MicrosecondsToTicks(1);
-  EXPECT_TRUE(scene.OnBeginFrame(start_time, StartHeadPose()));
+  EXPECT_TRUE(scene.OnBeginFrame(start_time, kStartHeadPose));
   EXPECT_SIZEF_EQ(gfx::SizeF(10, 100), rect_ptr->size());
   EXPECT_TRUE(scene.OnBeginFrame(start_time + gfx::MicrosecondsToDelta(10000),
-                                 StartHeadPose()));
+                                 kStartHeadPose));
   EXPECT_SIZEF_EQ(gfx::SizeF(20, 200), rect_ptr->size());
 }
 
@@ -280,11 +280,11 @@ TEST(UiElement, AnimationAffectsInheritableTransform) {
       gfx::MicrosecondsToDelta(10000)));
 
   base::TimeTicks start_time = gfx::MicrosecondsToTicks(1);
-  EXPECT_TRUE(scene.OnBeginFrame(start_time, StartHeadPose()));
+  EXPECT_TRUE(scene.OnBeginFrame(start_time, kStartHeadPose));
   EXPECT_POINT3F_EQ(gfx::Point3F(10, 100, 1000),
                     rect_ptr->LocalTransform().MapPoint(gfx::Point3F()));
   EXPECT_TRUE(scene.OnBeginFrame(start_time + gfx::MicrosecondsToDelta(10000),
-                                 StartHeadPose()));
+                                 kStartHeadPose));
   EXPECT_POINT3F_EQ(gfx::Point3F(20, 200, 2000),
                     rect_ptr->LocalTransform().MapPoint(gfx::Point3F()));
 }
@@ -389,14 +389,8 @@ class ElementEventHandlers {
     EventHandlers event_handlers;
     event_handlers.hover_enter = base::BindRepeating(
         &ElementEventHandlers::HandleHoverEnter, base::Unretained(this));
-    event_handlers.hover_move = base::BindRepeating(
-        &ElementEventHandlers::HandleHoverMove, base::Unretained(this));
     event_handlers.hover_leave = base::BindRepeating(
         &ElementEventHandlers::HandleHoverLeave, base::Unretained(this));
-    event_handlers.button_down = base::BindRepeating(
-        &ElementEventHandlers::HandleButtonDown, base::Unretained(this));
-    event_handlers.button_up = base::BindRepeating(
-        &ElementEventHandlers::HandleButtonUp, base::Unretained(this));
     element->set_event_handlers(event_handlers);
   }
 
@@ -406,32 +400,17 @@ class ElementEventHandlers {
   void HandleHoverEnter() { hover_enter_ = true; }
   bool hover_enter_called() { return hover_enter_; }
 
-  void HandleHoverMove(const gfx::PointF& position) { hover_move_ = true; }
-  bool hover_move_called() { return hover_move_; }
-
   void HandleHoverLeave() { hover_leave_ = true; }
   bool hover_leave_called() { return hover_leave_; }
 
-  void HandleButtonDown() { button_down_ = true; }
-  bool button_down_called() { return button_down_; }
-
-  void HandleButtonUp() { button_up_ = true; }
-  bool button_up_called() { return button_up_; }
-
   void ExpectCalled(bool called) {
     EXPECT_EQ(hover_enter_called(), called);
-    EXPECT_EQ(hover_move_called(), called);
     EXPECT_EQ(hover_leave_called(), called);
-    EXPECT_EQ(button_down_called(), called);
-    EXPECT_EQ(button_up_called(), called);
   }
 
  private:
   bool hover_enter_ = false;
-  bool hover_move_ = false;
   bool hover_leave_ = false;
-  bool button_up_ = false;
-  bool button_down_ = false;
 };
 
 TEST(UiElement, CoordinatedVisibilityTransitions) {
@@ -463,11 +442,11 @@ TEST(UiElement, CoordinatedVisibilityTransitions) {
   parent->AddChild(std::move(child));
   scene.AddUiElement(kRoot, std::move(parent));
 
-  scene.OnBeginFrame(gfx::MsToTicks(0), StartHeadPose());
+  scene.OnBeginFrame(gfx::MsToTicks(0), kStartHeadPose);
 
   value = true;
 
-  scene.OnBeginFrame(gfx::MsToTicks(16), StartHeadPose());
+  scene.OnBeginFrame(gfx::MsToTicks(16), kStartHeadPose);
 
   // We should have started animating both, and they should both be at opacity
   // zero given that this is the first frame. This does not guarantee that
@@ -478,7 +457,7 @@ TEST(UiElement, CoordinatedVisibilityTransitions) {
   EXPECT_TRUE(child_ptr->IsAnimatingProperty(OPACITY));
   EXPECT_EQ(child_ptr->opacity(), parent_ptr->opacity());
 
-  scene.OnBeginFrame(gfx::MsToTicks(32), StartHeadPose());
+  scene.OnBeginFrame(gfx::MsToTicks(32), kStartHeadPose);
   EXPECT_EQ(child_ptr->opacity(), parent_ptr->opacity());
   EXPECT_LT(0.0f, child_ptr->opacity());
 }
@@ -498,20 +477,14 @@ TEST(UiElement, EventBubbling) {
 
   // Events on grand_child don't bubble up the parent chain.
   grand_child_ptr->OnHoverEnter(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnHoverMove(gfx::PointF(), base::TimeTicks());
   grand_child_ptr->OnHoverLeave(base::TimeTicks());
-  grand_child_ptr->OnButtonDown(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnButtonUp(gfx::PointF(), base::TimeTicks());
   child_handlers.ExpectCalled(false);
   element_handlers.ExpectCalled(false);
 
   // Events on grand_child bubble up the parent chain.
   grand_child_ptr->set_bubble_events(true);
   grand_child_ptr->OnHoverEnter(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnHoverMove(gfx::PointF(), base::TimeTicks());
   grand_child_ptr->OnHoverLeave(base::TimeTicks());
-  grand_child_ptr->OnButtonDown(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnButtonUp(gfx::PointF(), base::TimeTicks());
   child_handlers.ExpectCalled(true);
   // Events don't bubble to element since it doesn't have the bubble_events bit
   // set.

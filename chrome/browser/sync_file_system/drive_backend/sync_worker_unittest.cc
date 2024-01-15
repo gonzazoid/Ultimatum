@@ -7,13 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/values.h"
 #include "chrome/browser/extensions/test_extension_service.h"
 #include "chrome/browser/sync_file_system/drive_backend/metadata_database.h"
 #include "chrome/browser/sync_file_system/drive_backend/metadata_database.pb.h"
@@ -28,7 +28,6 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_set.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/leveldatabase/leveldb_chrome.h"
 
@@ -40,7 +39,7 @@ namespace {
 const char kAppID[] = "app_id";
 
 void EmptyTask(SyncStatusCode status, SyncStatusCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), status));
 }
 
@@ -99,8 +98,7 @@ class MockExtensionService : public TestExtensionService {
   extensions::ExtensionRegistry registry_;
 };
 
-class SyncWorkerTest : public testing::Test,
-                       public base::SupportsWeakPtr<SyncWorkerTest> {
+class SyncWorkerTest : public testing::Test {
  public:
   SyncWorkerTest() {}
 
@@ -121,8 +119,10 @@ class SyncWorkerTest : public testing::Test,
         new SyncEngineContext(
             std::move(fake_drive_service), nullptr /* drive_uploader */,
             nullptr /* task_logger */,
-            base::ThreadTaskRunnerHandle::Get() /* ui_task_runner */,
-            base::ThreadTaskRunnerHandle::Get() /* worker_task_runner */));
+            base::SingleThreadTaskRunner::
+                GetCurrentDefault() /* ui_task_runner */,
+            base::SingleThreadTaskRunner::
+                GetCurrentDefault() /* worker_task_runner */));
 
     sync_worker_ = std::make_unique<SyncWorker>(
         profile_dir_.GetPath(), extension_service_->AsWeakPtr(),
@@ -161,6 +161,10 @@ class SyncWorkerTest : public testing::Test,
     return sync_worker_->GetMetadataDatabase();
   }
 
+  base::WeakPtr<SyncWorkerTest> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   content::BrowserTaskEnvironment task_environment_;
   base::ScopedTempDir profile_dir_;
@@ -168,6 +172,7 @@ class SyncWorkerTest : public testing::Test,
 
   std::unique_ptr<MockExtensionService> extension_service_;
   std::unique_ptr<SyncWorker> sync_worker_;
+  base::WeakPtrFactory<SyncWorkerTest> weak_ptr_factory_{this};
 };
 
 TEST_F(SyncWorkerTest, EnableOrigin) {
@@ -207,11 +212,10 @@ TEST_F(SyncWorkerTest, UpdateRegisteredApps) {
   for (int i = 0; i < 3; i++) {
     scoped_refptr<const extensions::Extension> extension =
         extensions::ExtensionBuilder()
-            .SetManifest(extensions::DictionaryBuilder()
+            .SetManifest(base::Value::Dict()
                              .Set("name", "foo")
                              .Set("version", "1.0")
-                             .Set("manifest_version", 2)
-                             .Build())
+                             .Set("manifest_version", 2))
             .SetID(base::StringPrintf("app_%d", i))
             .Build();
     extension_service()->AddExtension(extension.get());

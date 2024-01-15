@@ -5,10 +5,13 @@
 #ifndef ASH_APP_LIST_VIEWS_FOLDER_HEADER_VIEW_H_
 #define ASH_APP_LIST_VIEWS_FOLDER_HEADER_VIEW_H_
 
+#include <memory>
 #include <string>
 
 #include "ash/app_list/model/app_list_item_observer.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/view.h"
@@ -22,8 +25,10 @@ class FolderHeaderViewDelegate;
 class ASH_EXPORT FolderHeaderView : public views::View,
                                     public views::TextfieldController,
                                     public AppListItemObserver {
+  METADATA_HEADER(FolderHeaderView, views::View)
+
  public:
-  explicit FolderHeaderView(FolderHeaderViewDelegate* delegate);
+  FolderHeaderView(FolderHeaderViewDelegate* delegate, bool tablet_mode);
 
   FolderHeaderView(const FolderHeaderView&) = delete;
   FolderHeaderView& operator=(const FolderHeaderView&) = delete;
@@ -35,19 +40,21 @@ class ASH_EXPORT FolderHeaderView : public views::View,
   bool HasTextFocus() const;
   void SetTextFocus();
   bool is_tablet_mode() const { return is_tablet_mode_; }
-  void set_tablet_mode(bool started) { is_tablet_mode_ = started; }
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
-  const char* GetClassName() const override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
   views::Textfield* GetFolderNameViewForTest() const;
+  bool IsFolderNameViewActiveForTest() const;
 
   int GetMaxFolderNameCharLengthForTest() const;
 
  private:
   class FolderNameView;
+  class FolderNameJellyView;
+  class FolderNameViewController;
+
   friend class FolderHeaderViewTest;
   friend class PopulatedAppListTest;
 
@@ -83,20 +90,25 @@ class ASH_EXPORT FolderHeaderView : public views::View,
   bool HandleKeyEvent(views::Textfield* sender,
                       const ui::KeyEvent& key_event) override;
 
+  // Updates the backing folder item name in response to folder name textfield
+  // change.
+  void UpdateFolderName(const std::u16string& textfield_contents);
+
   // AppListItemObserver overrides:
   void ItemNameChanged() override;
 
-  AppListFolderItem* folder_item_;  // Not owned.
+  raw_ptr<AppListFolderItem> folder_item_;  // Not owned.
 
-  FolderNameView* folder_name_view_;  // Owned by views hierarchy.
+  raw_ptr<views::Textfield> folder_name_view_;
+  std::unique_ptr<FolderNameViewController> folder_name_controller_;
 
   const std::u16string folder_name_placeholder_text_;
 
-  FolderHeaderViewDelegate* delegate_;
+  raw_ptr<FolderHeaderViewDelegate> delegate_;
 
   bool folder_name_visible_;
 
-  bool is_tablet_mode_;
+  const bool is_tablet_mode_;
 
   // Used to restore the folder name when the user presses the escape key.
   std::u16string previous_folder_name_;

@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/ios/ios_util.h"
 #include "base/test/bind.h"
 #import "base/test/ios/wait_util.h"
@@ -39,10 +39,6 @@
 #include "testing/platform_test.h"
 #include "third_party/ocmock/OCMock/OCMock.h"
 #include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using testing::NiceMock;
 
@@ -178,13 +174,13 @@ class AccountConsistencyServiceTest : public PlatformTest {
     signin_client_.reset(
         new TestSigninClient(&prefs_, &test_url_loader_factory_));
     identity_test_env_.reset(new signin::IdentityTestEnvironment(
-        /*test_url_loader_factory=*/nullptr, &prefs_,
-        signin::AccountConsistencyMethod::kDisabled, signin_client_.get()));
+        /*test_url_loader_factory=*/nullptr, &prefs_, signin_client_.get()));
     settings_map_ = new HostContentSettingsMap(
         &prefs_, false /* is_off_the_record */, false /* store_last_modified */,
         false /* restore_session */, false /* should_record_metrics */);
-    cookie_settings_ = new content_settings::CookieSettings(settings_map_.get(),
-                                                            &prefs_, false, "");
+    cookie_settings_ = new content_settings::CookieSettings(
+        settings_map_.get(), &prefs_, /*tracking_protection_settings=*/nullptr,
+        false, "");
     // Use a NiceMock here to suppress "uninteresting call" warnings.
     account_reconcilor_ =
         std::make_unique<NiceMock<MockAccountReconcilor>>(signin_client_.get());

@@ -12,7 +12,7 @@
 
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/gpu/codec_picture.h"
 #include "media/gpu/media_gpu_export.h"
 #include "media/video/h264_parser.h"
@@ -103,7 +103,7 @@ class MEDIA_GPU_EXPORT H264Picture : public CodecPicture {
 // DPB - Decoded Picture Buffer.
 // Stores decoded pictures that will be used for future display
 // and/or reference.
-class H264DPB {
+class MEDIA_GPU_EXPORT H264DPB {
  public:
   H264DPB();
 
@@ -139,6 +139,9 @@ class H264DPB {
 
   // Return a long-term reference picture by its long_term_pic_num.
   scoped_refptr<H264Picture> GetLongRefPicByLongTermPicNum(int pic_num);
+
+  // Return a long-term reference picture by its long term reference index.
+  scoped_refptr<H264Picture> GetLongRefPicByLongTermIdx(int idx);
 
   // Return the short reference picture with lowest frame_num. Used for sliding
   // window memory management.

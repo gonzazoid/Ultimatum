@@ -10,16 +10,18 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/touch_selection/touch_handle.h"
 
-namespace cc {
+namespace cc::slim {
+class Layer;
 class UIResourceLayer;
-}  // namespace cc
+}  // namespace cc::slim
 
 namespace content {
 
 // Touch handle drawable implementation backed by a cc layer.
 class CompositedTouchHandleDrawable : public ui::TouchHandleDrawable {
  public:
-  CompositedTouchHandleDrawable(gfx::NativeView view,
+  CompositedTouchHandleDrawable(gfx::NativeView parent_native_view,
+                                cc::slim::Layer* parent_layer,
                                 const base::android::JavaRef<jobject>& context);
 
   CompositedTouchHandleDrawable(const CompositedTouchHandleDrawable&) = delete;
@@ -46,7 +48,7 @@ class CompositedTouchHandleDrawable : public ui::TouchHandleDrawable {
   float drawable_horizontal_padding_ratio_;
   ui::TouchHandleOrientation orientation_;
   gfx::PointF origin_position_;
-  scoped_refptr<cc::UIResourceLayer> layer_;
+  scoped_refptr<cc::slim::UIResourceLayer> layer_;
 };
 
 }  // namespace content

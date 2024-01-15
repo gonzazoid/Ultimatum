@@ -55,7 +55,7 @@ BackgroundTracingConfigImpl::BackgroundTracingConfigImpl(
     : BackgroundTracingConfig(tracing_mode),
       category_preset_(BackgroundTracingConfigImpl::BENCHMARK_STARTUP) {}
 
-BackgroundTracingConfigImpl::~BackgroundTracingConfigImpl() {}
+BackgroundTracingConfigImpl::~BackgroundTracingConfigImpl() = default;
 
 // static
 std::string BackgroundTracingConfigImpl::CategoryPresetToString(
@@ -91,7 +91,7 @@ base::Value::Dict BackgroundTracingConfigImpl::ToDict() {
   if (category_preset_ == CUSTOM_CATEGORY_PRESET) {
     dict.Set(kConfigCustomCategoriesKey, custom_categories_);
   } else if (category_preset_ == CUSTOM_TRACE_CONFIG) {
-    absl::optional<base::Value> trace_config =
+    std::optional<base::Value> trace_config =
         base::JSONReader::Read(trace_config_.ToString());
     if (trace_config) {
       dict.Set(kConfigTraceConfigKey, std::move(*trace_config));
@@ -114,7 +114,7 @@ base::Value::Dict BackgroundTracingConfigImpl::ToDict() {
       break;
   }
 
-  base::ListValue configs_list;
+  base::Value::List configs_list;
   for (const auto& rule : rules_) {
     DCHECK(rule);
     configs_list.Append(rule->ToDict());
@@ -138,12 +138,8 @@ void BackgroundTracingConfigImpl::AddPreemptiveRule(
 }
 
 void BackgroundTracingConfigImpl::AddReactiveRule(
-    const base::Value::Dict& dict,
-    BackgroundTracingConfigImpl::CategoryPreset category_preset) {
-  BackgroundTracingRule* rule = AddRule(dict);
-  if (rule) {
-    rule->set_category_preset(category_preset);
-  }
+    const base::Value::Dict& dict) {
+  AddRule(dict);
 }
 
 void BackgroundTracingConfigImpl::AddSystemRule(const base::Value::Dict& dict) {
@@ -185,19 +181,6 @@ TraceConfig BackgroundTracingConfigImpl::GetTraceConfig() const {
   return chrome_config;
 }
 
-size_t BackgroundTracingConfigImpl::GetTraceUploadLimitKb() const {
-#if BUILDFLAG(IS_ANDROID)
-  auto type = net::NetworkChangeNotifier::GetConnectionType();
-  UMA_HISTOGRAM_ENUMERATION(
-      "Tracing.Background.NetworkConnectionTypeWhenUploaded", type,
-      net::NetworkChangeNotifier::CONNECTION_LAST + 1);
-  if (net::NetworkChangeNotifier::IsConnectionCellular(type)) {
-    return upload_limit_network_kb_;
-  }
-#endif
-  return upload_limit_kb_;
-}
-
 // static
 std::unique_ptr<BackgroundTracingConfigImpl>
 BackgroundTracingConfigImpl::FromDict(base::Value::Dict&& dict) {
@@ -235,7 +218,7 @@ BackgroundTracingConfigImpl::PreemptiveFromDict(const base::Value::Dict& dict) {
 
   if (const base::Value::Dict* trace_config =
           dict.FindDict(kConfigTraceConfigKey)) {
-    config->trace_config_ = TraceConfig(base::Value(trace_config->Clone()));
+    config->trace_config_ = TraceConfig(trace_config->Clone());
     config->category_preset_ = CUSTOM_TRACE_CONFIG;
   } else if (const std::string* categories =
                  dict.FindString(kConfigCustomCategoriesKey)) {
@@ -283,7 +266,7 @@ BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value::Dict& dict) {
   bool has_global_categories = false;
   if (const base::Value::Dict* trace_config =
           dict.FindDict(kConfigTraceConfigKey)) {
-    config->trace_config_ = TraceConfig(base::Value(trace_config->Clone()));
+    config->trace_config_ = TraceConfig(trace_config->Clone());
     config->category_preset_ = CUSTOM_TRACE_CONFIG;
     has_global_categories = true;
   } else if (const std::string* categories =
@@ -325,7 +308,7 @@ BackgroundTracingConfigImpl::ReactiveFromDict(const base::Value::Dict& dict) {
       }
     }
 
-    config->AddReactiveRule(config_dict.GetDict(), config->category_preset_);
+    config->AddReactiveRule(config_dict.GetDict());
   }
 
   if (config->rules().empty())
@@ -363,8 +346,12 @@ TraceConfig BackgroundTracingConfigImpl::GetConfigForCategoryPreset(
     base::trace_event::TraceRecordMode record_mode) {
   switch (preset) {
     case BackgroundTracingConfigImpl::CategoryPreset::BENCHMARK_STARTUP: {
+      // This config should match exactly the one set in
+      // TraceStartupConfig::EnableFromBackgroundTracing, otherwise the
+      // startup session will not be adopted.
       auto config =
           tracing::TraceStartupConfig::GetDefaultBrowserStartupConfig();
+      config.EnableArgumentFilter();
       config.SetTraceRecordMode(record_mode);
       return config;
     }
@@ -422,9 +409,6 @@ int BackgroundTracingConfigImpl::GetMaximumTraceBufferSizeKb() const {
   }
 #if BUILDFLAG(IS_ANDROID)
   auto type = net::NetworkChangeNotifier::GetConnectionType();
-  UMA_HISTOGRAM_ENUMERATION(
-      "Tracing.Background.NetworkConnectionTypeWhenStarted", type,
-      net::NetworkChangeNotifier::CONNECTION_LAST + 1);
   if (net::NetworkChangeNotifier::IsConnectionCellular(type)) {
     return mobile_network_buffer_size_kb_;
   }

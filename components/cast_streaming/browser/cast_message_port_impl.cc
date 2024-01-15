@@ -1,8 +1,6 @@
 // Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-//
-// TODO(crbug.com/1207718): Delete this file.
 
 #include "components/cast_streaming/browser/cast_message_port_impl.h"
 
@@ -10,6 +8,7 @@
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/values.h"
+#include "components/cast_streaming/browser/cast_message_port_converter.h"
 #include "components/cast_streaming/common/message_serialization.h"
 #include "third_party/openscreen/src/platform/base/error.h"
 
@@ -31,25 +30,58 @@ const char kValuePlaying[] = "PLAYING";
 const char kValueLive[] = "LIVE";
 const char kValueVideoWebm[] = "video/webm";
 
-base::Value GetMediaCurrentStatusValue() {
-  base::Value media(base::Value::Type::DICTIONARY);
-  media.SetKey(kKeyContentId, base::Value(""));
-  media.SetKey(kKeyStreamType, base::Value(kValueLive));
-  media.SetKey(kKeyContentType, base::Value(kValueVideoWebm));
+base::Value::Dict GetMediaCurrentStatusValue() {
+  base::Value::Dict media;
+  media.Set(kKeyContentId, "");
+  media.Set(kKeyStreamType, kValueLive);
+  media.Set(kKeyContentType, kValueVideoWebm);
 
-  base::Value media_current_status(base::Value::Type::DICTIONARY);
-  media_current_status.SetKey(kKeyMediaSessionId, base::Value(0));
-  media_current_status.SetKey(kKeyPlaybackRate, base::Value(1.0));
-  media_current_status.SetKey(kKeyPlayerState, base::Value(kValuePlaying));
-  media_current_status.SetKey(kKeyCurrentTime, base::Value(0));
-  media_current_status.SetKey(kKeySupportedMediaCommands, base::Value(0));
-  media_current_status.SetKey(kKeyDisableStreamGrouping, base::Value(true));
-  media_current_status.SetKey(kKeyMedia, std::move(media));
+  base::Value::Dict media_current_status;
+  media_current_status.Set(kKeyMediaSessionId, 0);
+  media_current_status.Set(kKeyPlaybackRate, 1.0);
+  media_current_status.Set(kKeyPlayerState, kValuePlaying);
+  media_current_status.Set(kKeyCurrentTime, 0);
+  media_current_status.Set(kKeySupportedMediaCommands, 0);
+  media_current_status.Set(kKeyDisableStreamGrouping, true);
+  media_current_status.Set(kKeyMedia, std::move(media));
 
   return media_current_status;
 }
 
+// Implementation of CastMessagePortConverter using CastMessagePortImpl.
+class CastMessagePortConverterImpl : public CastMessagePortConverter {
+ public:
+  CastMessagePortConverterImpl(
+      ReceiverSession::MessagePortProvider message_port_provider,
+      base::OnceClosure on_close)
+      : message_port_(std::move(message_port_provider).Run()),
+        on_close_(std::move(on_close)) {}
+  ~CastMessagePortConverterImpl() override = default;
+
+  openscreen::cast::MessagePort& GetMessagePort() override {
+    if (!openscreen_port_) {
+      DCHECK(message_port_);
+      openscreen_port_ = std::make_unique<CastMessagePortImpl>(
+          std::move(message_port_), std::move(on_close_));
+    }
+    return *openscreen_port_;
+  }
+
+ private:
+  std::unique_ptr<cast_api_bindings::MessagePort> message_port_;
+  base::OnceClosure on_close_;
+
+  std::unique_ptr<openscreen::cast::MessagePort> openscreen_port_;
+};
+
 }  // namespace
+
+std::unique_ptr<CastMessagePortConverter> CastMessagePortConverter::Create(
+    ReceiverSession::MessagePortProvider message_port_provider,
+    base::OnceClosure on_close) {
+  return std::make_unique<CastMessagePortConverterImpl>(
+      std::move(message_port_provider), std::move(on_close));
+}
 
 CastMessagePortImpl::CastMessagePortImpl(
     std::unique_ptr<cast_api_bindings::MessagePort> message_port,
@@ -105,7 +137,7 @@ void CastMessagePortImpl::SendInjectResponse(const std::string& sender_id,
     return;
   }
 
-  const std::string* type = value->FindStringKey(kKeyType);
+  const std::string* type = value->GetDict().FindString(kKeyType);
   if (!type) {
     LOG(ERROR) << "Malformed message from sender " << sender_id
                << ": no message type: " << message;
@@ -117,7 +149,7 @@ void CastMessagePortImpl::SendInjectResponse(const std::string& sender_id,
     return;
   }
 
-  absl::optional<int> request_id = value->FindIntKey(kKeyRequestId);
+  absl::optional<int> request_id = value->GetDict().FindInt(kKeyRequestId);
   if (!request_id) {
     LOG(ERROR) << "Malformed message from sender " << sender_id
                << ": no request id: " << message;
@@ -125,11 +157,11 @@ void CastMessagePortImpl::SendInjectResponse(const std::string& sender_id,
   }
 
   // Build the response message.
-  base::Value response_value(base::Value::Type::DICTIONARY);
-  response_value.SetKey(kKeyType, base::Value(kValueError));
-  response_value.SetKey(kKeyRequestId, base::Value(request_id.value()));
-  response_value.SetKey(kKeyData, base::Value(kValueInjectNotSupportedError));
-  response_value.SetKey(kKeyCode, base::Value(kValueWrappedError));
+  base::Value::Dict response_value;
+  response_value.Set(kKeyType, kValueError);
+  response_value.Set(kKeyRequestId, request_id.value());
+  response_value.Set(kKeyData, kValueInjectNotSupportedError);
+  response_value.Set(kKeyCode, kValueWrappedError);
 
   std::string json_message;
   CHECK(base::JSONWriter::Write(response_value, &json_message));
@@ -151,7 +183,7 @@ void CastMessagePortImpl::HandleMediaMessage(const std::string& sender_id,
     return;
   }
 
-  const std::string* type = value->FindStringKey(kKeyType);
+  const std::string* type = value->GetDict().FindString(kKeyType);
   if (!type) {
     LOG(ERROR) << "Malformed message from sender " << sender_id
                << ": no message type: " << message;
@@ -169,20 +201,20 @@ void CastMessagePortImpl::HandleMediaMessage(const std::string& sender_id,
     return;
   }
 
-  absl::optional<int> request_id = value->FindIntKey(kKeyRequestId);
+  absl::optional<int> request_id = value->GetDict().FindInt(kKeyRequestId);
   if (!request_id.has_value()) {
     LOG(ERROR) << "Malformed message from sender " << sender_id
                << ": no request id: " << message;
     return;
   }
 
-  base::Value message_status_list(base::Value::Type::LIST);
+  base::Value::List message_status_list;
   message_status_list.Append(GetMediaCurrentStatusValue());
 
-  base::Value response_value(base::Value::Type::DICTIONARY);
-  response_value.SetKey(kKeyRequestId, base::Value(request_id.value()));
-  response_value.SetKey(kKeyType, base::Value(kValueMediaStatus));
-  response_value.SetKey(kKeyStatus, std::move(message_status_list));
+  base::Value::Dict response_value;
+  response_value.Set(kKeyRequestId, request_id.value());
+  response_value.Set(kKeyType, kValueMediaStatus);
+  response_value.Set(kKeyStatus, std::move(message_status_list));
 
   std::string json_message;
   CHECK(base::JSONWriter::Write(response_value, &json_message));
@@ -203,7 +235,7 @@ void CastMessagePortImpl::PostMessage(const std::string& sender_id,
 }
 
 bool CastMessagePortImpl::OnMessage(
-    base::StringPiece message,
+    std::string_view message,
     std::vector<std::unique_ptr<cast_api_bindings::MessagePort>> ports) {
   DVLOG(3) << __func__;
 

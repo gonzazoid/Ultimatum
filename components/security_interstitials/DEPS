@@ -1,5 +1,6 @@
 include_rules = [
   "+components/content_settings/core/browser",
+  "+components/content_settings/core/common",
   "+components/google/core",
   "+components/history/core/browser",
   "+components/metrics",
@@ -14,6 +15,7 @@ include_rules = [
   "+net/base",
   "+net/cert",
   "+net/ssl",
+  "+services/network/public/cpp/is_potentially_trustworthy.h",
   "+services/network/public/mojom",
   "+ui/base"
 ]

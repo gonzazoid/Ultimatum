@@ -55,8 +55,6 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstaller {
   SodaInstaller(const SodaInstaller&) = delete;
   SodaInstaller& operator=(const SodaInstaller&) = delete;
 
-  // Implemented in the platform-specific subclass to get the SodaInstaller
-  // instance.
   static SodaInstaller* GetInstance();
 
   // Registers user preferences related to the Speech On-Device API (SODA)
@@ -92,6 +90,11 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstaller {
   virtual void InstallLanguage(const std::string& language,
                                PrefService* global_prefs) = 0;
 
+  // Uninstalls the language pack given a localized language code in BCP-47
+  // (e.g. "en-US");
+  virtual void UninstallLanguage(const std::string& language,
+                                 PrefService* global_prefs) = 0;
+
   // Gets all installed and installable language codes supported by SODA
   // (in BCP-47 format).
   virtual std::vector<std::string> GetAvailableLanguages() const = 0;
@@ -110,6 +113,11 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstaller {
   // Method for checking in-progress downloads.
   bool IsSodaDownloading(LanguageCode language_code) const;
 
+  // Returns the error encountered while installing soda for the language code
+  // or soda binary.
+  absl::optional<ErrorCode> GetSodaInstallErrorCode(
+      LanguageCode language_code) const;
+
   // TODO(crbug.com/1237462): Consider creating a MockSodaInstaller class that
   // implements these test-specific methods.
   void NeverDownloadSodaForTesting() {
@@ -127,6 +135,8 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstaller {
       int progress,
       LanguageCode language_code = LanguageCode::kNone);
   bool IsAnyLanguagePackInstalledForTesting() const;
+
+  const std::set<LanguageCode> InstalledLanguages() const;
 
  protected:
   // Registers the preference tracking the installed SODA language packs.
@@ -163,6 +173,9 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstaller {
   // installed SODA language packs.
   void UnregisterLanguages(PrefService* global_prefs);
 
+  void UnregisterLanguage(const std::string& language,
+                          PrefService* global_prefs);
+
   // Returns whether or not the language pack for a given language is
   // installed. The language should be localized in BCP-47, e.g. "en-US".
   bool IsLanguageInstalled(LanguageCode language_code) const;
@@ -177,6 +190,9 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstaller {
   std::set<LanguageCode> installed_languages_;
   // Maps language codes to their install progress.
   base::flat_map<LanguageCode, double> language_pack_progress_;
+
+  // The error state for the language code.
+  base::flat_map<LanguageCode, ErrorCode> error_codes_;
 
  private:
   friend class SodaInstallerImplChromeOSTest;

@@ -4,10 +4,10 @@
 
 #include "chrome/browser/performance_manager/mechanisms/page_discarder.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/task_traits.h"
 #include "build/build_config.h"
-#include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom.h"
+#include "chrome/browser/performance_manager/public/user_tuning/user_tuning_utils.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -30,15 +30,17 @@ bool disabled_for_testing = false;
 // TODO(crbug/1241049): Returns the remaining reclaim target so
 // UrgentlyDiscardMultiplePages can keep reclaiming until the reclaim target is
 // met or there is no discardable page.
-bool DiscardPagesOnUIThread(
-    const std::vector<std::pair<WebContentsProxy, uint64_t>>& proxies_and_rss) {
+std::vector<PageDiscarder::DiscardEvent> DiscardPagesOnUIThread(
+    const std::vector<std::pair<WebContentsProxy, uint64_t>>& proxies_and_pmf,
+    resource_coordinator::LifecycleUnitDiscardReason discard_reason) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  if (disabled_for_testing)
-    return false;
+  std::vector<PageDiscarder::DiscardEvent> discard_events;
 
-  bool result = false;
-  for (auto proxy : proxies_and_rss) {
+  if (disabled_for_testing)
+    return discard_events;
+
+  for (auto proxy : proxies_and_pmf) {
     content::WebContents* const contents = proxy.first.Get();
     if (!contents)
       continue;
@@ -49,12 +51,12 @@ bool DiscardPagesOnUIThread(
       continue;
 
     if (lifecycle_unit->DiscardTab(
-            resource_coordinator::LifecycleUnitDiscardReason::URGENT,
-            /*resident_set_size_estimate=*/proxy.second)) {
-      result = true;
+            discard_reason,
+            /*memory_footprint_estimate=*/proxy.second)) {
+      discard_events.emplace_back(base::TimeTicks::Now(), proxy.second);
     }
   }
-  return result;
+  return discard_events;
 }
 
 }  // namespace
@@ -67,16 +69,20 @@ void PageDiscarder::DisableForTesting() {
 
 void PageDiscarder::DiscardPageNodes(
     const std::vector<const PageNode*>& page_nodes,
-    base::OnceCallback<void(bool)> post_discard_cb) {
-  std::vector<std::pair<WebContentsProxy, uint64_t>> proxies_and_rss;
-  proxies_and_rss.reserve(page_nodes.size());
-  for (auto* page_node : page_nodes) {
-    proxies_and_rss.emplace_back(page_node->GetContentsProxy(),
-                                 page_node->EstimateResidentSetSize());
+    resource_coordinator::LifecycleUnitDiscardReason discard_reason,
+    base::OnceCallback<void(const std::vector<DiscardEvent>&)>
+        post_discard_cb) {
+  std::vector<std::pair<WebContentsProxy, uint64_t>> proxies_and_pmf;
+  proxies_and_pmf.reserve(page_nodes.size());
+  for (const auto* page_node : page_nodes) {
+    proxies_and_pmf.emplace_back(
+        page_node->GetContentsProxy(),
+        user_tuning::GetDiscardedMemoryEstimateForPage(page_node));
   }
   content::GetUIThreadTaskRunner({})->PostTaskAndReplyWithResult(
       FROM_HERE,
-      base::BindOnce(&DiscardPagesOnUIThread, std::move(proxies_and_rss)),
+      base::BindOnce(&DiscardPagesOnUIThread, std::move(proxies_and_pmf),
+                     discard_reason),
       std::move(post_discard_cb));
 }
 

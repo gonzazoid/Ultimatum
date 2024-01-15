@@ -37,14 +37,22 @@ class TestImageBacking : public SharedImageBacking {
 
   bool GetUploadFromMemoryCalledAndReset();
   bool GetReadbackToMemoryCalledAndReset();
+  using PurgeableCallback = base::RepeatingCallback<void(const gpu::Mailbox&)>;
+  void SetPurgeableCallbacks(
+      const PurgeableCallback& set_purgeable_callback,
+      const PurgeableCallback& set_not_purgeable_callback) {
+    set_purgeable_callback_ = set_purgeable_callback;
+    set_not_purgeable_callback_ = set_not_purgeable_callback;
+  }
 
   // SharedImageBacking implementation.
   SharedImageBackingType GetType() const override;
   gfx::Rect ClearedRect() const override;
   void SetClearedRect(const gfx::Rect& cleared_rect) override;
+  void SetPurgeable(bool purgeable) override;
   void Update(std::unique_ptr<gfx::GpuFence> in_fence) override {}
-  bool UploadFromMemory(const SkPixmap& pixmap) override;
-  bool ReadbackToMemory(SkPixmap& pixmap) override;
+  bool UploadFromMemory(const std::vector<SkPixmap>& pixmap) override;
+  bool ReadbackToMemory(const std::vector<SkPixmap>& pixmaps) override;
 
   // Helper functions
   GLuint service_id() const { return service_id_; }
@@ -59,9 +67,13 @@ class TestImageBacking : public SharedImageBacking {
   ProduceGLTexturePassthrough(SharedImageManager* manager,
                               MemoryTypeTracker* tracker) override;
 
-  // ProduceSkia creates a representation that is backed by |texture_|, which
-  // allows for the creation of SkImages from the representation.
-  std::unique_ptr<SkiaImageRepresentation> ProduceSkia(
+  // ProduceSkiaGanesh creates a representation that is backed by |texture_|,
+  // which allows for the creation of SkImages from the representation.
+  std::unique_ptr<SkiaGaneshImageRepresentation> ProduceSkiaGanesh(
+      SharedImageManager* manager,
+      MemoryTypeTracker* tracker,
+      scoped_refptr<SharedContextState> context_state) override;
+  std::unique_ptr<SkiaGraphiteImageRepresentation> ProduceSkiaGraphite(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       scoped_refptr<SharedContextState> context_state) override;
@@ -70,8 +82,9 @@ class TestImageBacking : public SharedImageBacking {
   std::unique_ptr<DawnImageRepresentation> ProduceDawn(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
-      WGPUDevice device,
-      WGPUBackendType backend_type) override;
+      const wgpu::Device& device,
+      wgpu::BackendType backend_type,
+      std::vector<wgpu::TextureFormat> view_formats) override;
   std::unique_ptr<OverlayImageRepresentation> ProduceOverlay(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker) override;
@@ -84,6 +97,8 @@ class TestImageBacking : public SharedImageBacking {
 
   bool upload_from_memory_called_ = false;
   bool readback_to_memory_called_ = true;
+  PurgeableCallback set_purgeable_callback_;
+  PurgeableCallback set_not_purgeable_callback_;
 };
 
 }  // namespace gpu

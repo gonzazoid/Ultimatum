@@ -112,18 +112,14 @@ bool PendingExtensionManager::AddFromSync(
   // it is listed as a syncable app (because its values need to be synced) it
   // should already be installed on every instance.
   if (id == extensions::kWebStoreAppId) {
-    NOTREACHED();
     return false;
   }
 
-  if (base::FeatureList::IsEnabled(
-          features::kBlockMigratedDefaultChromeAppSync)) {
-    EnsureMigratedDefaultChromeAppIdsCachePopulated();
-    if (migrating_default_chrome_app_ids_cache_->contains(id)) {
-      base::UmaHistogramBoolean(
-          "Extensions.SyncBlockedByDefaultWebAppMigration", true);
-      return false;
-    }
+  EnsureMigratedDefaultChromeAppIdsCachePopulated();
+  if (migrating_default_chrome_app_ids_cache_->contains(id)) {
+    base::UmaHistogramBoolean("Extensions.SyncBlockedByDefaultWebAppMigration",
+                              true);
+    return false;
   }
 
   static const bool kIsFromSync = true;

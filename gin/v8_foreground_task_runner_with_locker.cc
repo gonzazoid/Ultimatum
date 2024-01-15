@@ -4,12 +4,12 @@
 
 #include "gin/v8_foreground_task_runner_with_locker.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "v8/include/v8-isolate.h"
 #include "v8/include/v8-locker.h"
 
 namespace gin {
@@ -27,6 +27,7 @@ namespace {
 
 void RunWithLocker(v8::Isolate* isolate, std::unique_ptr<v8::Task> task) {
   v8::Locker lock(isolate);
+  v8::Isolate::Scope isolate_scope(isolate);
   task->Run();
 }
 
@@ -41,6 +42,7 @@ class IdleTaskWithLocker : public v8::IdleTask {
   // v8::IdleTask implementation.
   void Run(double deadline_in_seconds) override {
     v8::Locker lock(isolate_);
+    v8::Isolate::Scope isolate_scope(isolate_);
     task_->Run(deadline_in_seconds);
   }
 

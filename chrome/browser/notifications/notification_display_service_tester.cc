@@ -4,7 +4,8 @@
 
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/singleton.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/notifications/stub_notification_display_service.h"
@@ -154,4 +155,9 @@ void NotificationDisplayServiceTester::SetProcessNotificationOperationDelegate(
 void NotificationDisplayServiceTester::OnProfileShutdown() {
   profile_ = nullptr;
   profile_shutdown_subscription_ = {};
+}
+
+// static
+void NotificationDisplayServiceTester::EnsureFactoryBuilt() {
+  NotificationDisplayServiceShutdownNotifierFactory::GetInstance();
 }

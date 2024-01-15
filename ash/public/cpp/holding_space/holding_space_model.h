@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -15,10 +16,10 @@
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "url/gurl.h"
+#include "ui/color/color_id.h"
 
 namespace base {
 class FilePath;
@@ -55,11 +56,10 @@ class ASH_PUBLIC_EXPORT HoldingSpaceModel {
     // Sets the accessible name that should be used for the item and returns a
     // reference to `this`.
     ScopedItemUpdate& SetAccessibleName(
-        const absl::optional<std::u16string>& accessible_name);
+        const std::optional<std::u16string>& accessible_name);
 
     // Sets the backing file for the item and returns a reference to `this`.
-    ScopedItemUpdate& SetBackingFile(const base::FilePath& file_path,
-                                     const GURL& file_system_url);
+    ScopedItemUpdate& SetBackingFile(const HoldingSpaceFile& file);
 
     // Sets the commands for an in-progress item which are shown in the item's
     // context menu and possibly, in the case of cancel/pause/resume, as
@@ -78,35 +78,33 @@ class ASH_PUBLIC_EXPORT HoldingSpaceModel {
     // Sets the secondary text that should be shown for the item and returns a
     // reference to `this`.
     ScopedItemUpdate& SetSecondaryText(
-        const absl::optional<std::u16string>& secondary_text);
+        const std::optional<std::u16string>& secondary_text);
 
-    // Sets the color for the secondary text that should be shown for the item
-    // and returns a reference to `this`.
-    ScopedItemUpdate& SetSecondaryTextColor(
-        const absl::optional<cros_styles::ColorName>& secondary_text_color);
+    // Sets the color id for the secondary text that should be shown for the
+    // item and returns a reference to `this`.
+    ScopedItemUpdate& SetSecondaryTextColorId(
+        const std::optional<ui::ColorId>& secondary_text_color);
 
     // Sets the text that should be shown for the item and returns a reference
     // to `this`. If absent, the lossy display name of the backing file will be
     // used.
-    ScopedItemUpdate& SetText(const absl::optional<std::u16string>& text);
+    ScopedItemUpdate& SetText(const std::optional<std::u16string>& text);
 
    private:
     friend class HoldingSpaceModel;
     ScopedItemUpdate(HoldingSpaceModel* model, HoldingSpaceItem* item);
 
-    HoldingSpaceModel* const model_;
-    HoldingSpaceItem* const item_;
+    const raw_ptr<HoldingSpaceModel> model_;
+    const raw_ptr<HoldingSpaceItem> item_;
 
-    absl::optional<absl::optional<std::u16string>> accessible_name_;
-    absl::optional<base::FilePath> file_path_;
-    absl::optional<GURL> file_system_url_;
-    absl::optional<std::vector<HoldingSpaceItem::InProgressCommand>>
+    std::optional<std::optional<std::u16string>> accessible_name_;
+    std::optional<HoldingSpaceFile> file_;
+    std::optional<std::vector<HoldingSpaceItem::InProgressCommand>>
         in_progress_commands_;
-    absl::optional<HoldingSpaceProgress> progress_;
-    absl::optional<absl::optional<std::u16string>> secondary_text_;
-    absl::optional<absl::optional<cros_styles::ColorName>>
-        secondary_text_color_;
-    absl::optional<absl::optional<std::u16string>> text_;
+    std::optional<HoldingSpaceProgress> progress_;
+    std::optional<std::optional<std::u16string>> secondary_text_;
+    std::optional<std::optional<ui::ColorId>> secondary_text_color_id_;
+    std::optional<std::optional<std::u16string>> text_;
     bool invalidate_image_ = false;
   };
 
@@ -132,10 +130,9 @@ class ASH_PUBLIC_EXPORT HoldingSpaceModel {
   std::unique_ptr<HoldingSpaceItem> TakeItem(const std::string& id);
 
   // Fully initializes a partially initialized holding space item using the
-  // provided `file_system_url`. The item will be removed if `file_system_url`
-  // is empty.
+  // provided `file`. The item will be removed if `file` system URL is empty.
   void InitializeOrRemoveItem(const std::string& id,
-                              const GURL& file_system_url);
+                              const HoldingSpaceFile& file);
 
   // Returns an object which, upon its destruction, performs an atomic update to
   // the holding space item associated with the specified `id`.

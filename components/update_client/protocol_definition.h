@@ -16,18 +16,23 @@
 #include "components/update_client/activity_data_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace update_client {
+namespace update_client::protocol_request {
 
 // The protocol versions so far are:
 // * Version 3.1: it changes how the run actions are serialized.
 // * Version 3.0: it is the version implemented by the desktop updaters.
-constexpr char kProtocolVersion[] = "3.1";
+extern const char kProtocolVersion[];
 
 // Due to implementation constraints of the JSON parser and serializer,
 // precision of integer numbers greater than 2^53 is lost.
-constexpr int64_t kProtocolMaxInt = 1LL << 53;
+inline constexpr int64_t kProtocolMaxInt = 1LL << 53;
 
-namespace protocol_request {
+// Event type codes as described in //docs/updater/protocol_3_1.md.
+inline constexpr int kEventInstall = 2;
+inline constexpr int kEventUpdate = 3;
+inline constexpr int kEventUninstall = 4;
+inline constexpr int kEventDownload = 14;
+inline constexpr int kEventAction = 42;
 
 struct HW {
   uint32_t physmemory = 0;  // Physical memory rounded down to the closest GB.
@@ -150,7 +155,7 @@ struct App {
   absl::optional<Ping> ping;
 
   // Progress/result pings.
-  absl::optional<std::vector<base::Value>> events;
+  absl::optional<std::vector<base::Value::Dict>> events;
 };
 
 struct Request {
@@ -205,8 +210,6 @@ struct Request {
   std::vector<App> apps;
 };
 
-}  // namespace protocol_request
-
-}  // namespace update_client
+}  // namespace update_client::protocol_request
 
 #endif  // COMPONENTS_UPDATE_CLIENT_PROTOCOL_DEFINITION_H_

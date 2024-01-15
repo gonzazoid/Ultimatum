@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
 #include "content/renderer/pepper/pepper_file_system_host.h"
 #include "content/renderer/pepper/pepper_media_stream_audio_track_host.h"
@@ -144,8 +144,7 @@ bool ResourceHostToDOMFileSystem(
   blink::WebDOMFileSystem web_dom_file_system = blink::WebDOMFileSystem::Create(
       frame, blink_type, blink::WebString::FromUTF8(name), root_url,
       blink::WebDOMFileSystem::kSerializableTypeSerializable);
-  *dom_file_system =
-      web_dom_file_system.ToV8Value(context->Global(), context->GetIsolate());
+  *dom_file_system = web_dom_file_system.ToV8Value(context->GetIsolate());
   return true;
 }
 
@@ -219,7 +218,7 @@ bool ResourceConverterImpl::FromV8Value(v8::Local<v8::Object> val,
   *was_resource = false;
 
   blink::WebDOMFileSystem dom_file_system =
-      blink::WebDOMFileSystem::FromV8Value(val);
+      blink::WebDOMFileSystem::FromV8Value(context->GetIsolate(), val);
   if (!dom_file_system.IsNull()) {
     int pending_renderer_id;
     std::unique_ptr<IPC::Message> create_message;
@@ -243,7 +242,7 @@ bool ResourceConverterImpl::FromV8Value(v8::Local<v8::Object> val,
   }
 
   blink::WebDOMMediaStreamTrack dom_media_stream_track =
-      blink::WebDOMMediaStreamTrack::FromV8Value(val);
+      blink::WebDOMMediaStreamTrack::FromV8Value(context->GetIsolate(), val);
   if (!dom_media_stream_track.IsNull()) {
     int pending_renderer_id;
     std::unique_ptr<IPC::Message> create_message;

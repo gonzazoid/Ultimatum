@@ -29,7 +29,10 @@ SavedState* saved_state = nullptr;
 }  // namespace
 
 ToplevelWindow::CreateParams::CreateParams()
-    : can_resize(false), can_maximize(false), use_saved_placement(true) {}
+    : can_resize(false),
+      can_maximize(false),
+      can_fullscreen(false),
+      use_saved_placement(true) {}
 
 // static
 views::Widget* ToplevelWindow::CreateToplevelWindow(
@@ -51,6 +54,7 @@ void ToplevelWindow::ClearSavedStateForTest() {
 
 ToplevelWindow::ToplevelWindow(const CreateParams& params)
     : use_saved_placement_(params.use_saved_placement) {
+  SetCanFullscreen(params.can_fullscreen);
   SetCanMaximize(params.can_maximize);
   SetCanMinimize(params.can_maximize);
   SetCanResize(params.can_resize);
@@ -87,7 +91,7 @@ bool ToplevelWindow::GetSavedWindowPlacement(
     // Initial default bounds.
     bounds->SetRect(10, 150, 300, 300);
   }
-  WindowPositioner::GetBoundsAndShowStateForNewWindow(
+  window_positioner::GetBoundsAndShowStateForNewWindow(
       is_saved_bounds, *show_state, bounds, show_state);
   return true;
 }

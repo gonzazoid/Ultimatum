@@ -7,8 +7,12 @@
 #include <memory>
 #include <string>
 
+#include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
+#include "ash/test/ash_test_helper.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/exo/buffer.h"
 #include "components/exo/seat.h"
 #include "components/exo/shell_surface.h"
@@ -20,10 +24,11 @@
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/ime/ash/input_method_manager.h"
-#include "ui/base/ime/ash/mock_input_method_manager.h"
+#include "ui/base/ime/ash/mock_input_method_manager_impl.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/base/ime/input_method_observer.h"
 #include "ui/events/keycodes/dom/dom_code.h"
+#include "ui/events/ozone/events_ozone.h"
 #include "ui/views/widget/widget.h"
 
 using testing::_;
@@ -97,6 +102,10 @@ class MockTextInputDelegate : public TextInput::Delegate {
               SetAutocorrectRange,
               (base::StringPiece16, const gfx::Range&),
               (override));
+  MOCK_METHOD(bool, ConfirmComposition, (bool), (override));
+  MOCK_METHOD(bool, SupportsConfirmPreedit, (), (override));
+  MOCK_METHOD(bool, HasImageInsertSupport, (), (override));
+  MOCK_METHOD(void, InsertImage, (const GURL& src), (override));
 };
 
 class TestingInputMethodObserver : public ui::InputMethodObserver {
@@ -135,7 +144,7 @@ class TestingInputMethodObserver : public ui::InputMethodObserver {
               (override));
 
  private:
-  ui::InputMethod* input_method_ = nullptr;
+  raw_ptr<ui::InputMethod> input_method_ = nullptr;
 };
 
 class TextInputTest : public test::ExoTestBase {
@@ -226,7 +235,8 @@ TEST_F(TextInputTest, Activate) {
   EXPECT_EQ(ui::TEXT_INPUT_MODE_DEFAULT, text_input()->GetTextInputMode());
 
   EXPECT_CALL(*delegate(), Activated).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
   EXPECT_EQ(ui::TEXT_INPUT_TYPE_TEXT, text_input()->GetTextInputType());
@@ -250,7 +260,8 @@ TEST_F(TextInputTest, ActivationRequiresFocus) {
   focus_client->FocusWindow(nullptr);
   EXPECT_CALL(observer, OnTextInputStateChanged(_)).Times(0);
   EXPECT_CALL(*delegate(), Activated).Times(0);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
@@ -285,19 +296,22 @@ TEST_F(TextInputTest, MultipleActivations) {
   focus_client->FocusWindow(surface()->window());
   EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
   EXPECT_CALL(*delegate(), Activated).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
   // Attempting to activate the same surface is a no-op.
   EXPECT_CALL(*delegate(), Activated).Times(0);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
   // Activating a non-focused surface causes deactivation until focus.
   EXPECT_CALL(observer, OnTextInputStateChanged(nullptr)).Times(1);
   EXPECT_CALL(*delegate(), Deactivated).Times(1);
-  text_input()->Activate(seat(), surface2.surface());
+  text_input()->Activate(seat(), surface2.surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
@@ -313,7 +327,8 @@ TEST_F(TextInputTest, ShowVirtualKeyboardIfEnabled) {
 
   EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
   EXPECT_CALL(*delegate(), Activated).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
@@ -363,7 +378,8 @@ TEST_F(TextInputTest, ShowVirtualKeyboardIfEnabledBeforeActivated) {
       }));
   EXPECT_CALL(*delegate(), Activated).Times(1);
   EXPECT_CALL(*delegate(), OnVirtualKeyboardVisibilityChanged(true)).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
@@ -375,15 +391,9 @@ TEST_F(TextInputTest, VirtualKeyboardObserver) {
   EXPECT_EQ(ui::TEXT_INPUT_MODE_DEFAULT, text_input()->GetTextInputMode());
 
   EXPECT_CALL(*delegate(), Activated).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(delegate());
-
-  // Disable virtual keyboard so that GetVirtualKeyboardController() starts
-  // to return nullptr.
-  auto* input_method_manager =
-      static_cast<ash::input_method::MockInputMethodManager*>(
-          ash::input_method::InputMethodManager::Get());
-  input_method_manager->SetVirtualKeyboardEnabled(false);
 
   EXPECT_EQ(ui::TEXT_INPUT_TYPE_TEXT, text_input()->GetTextInputType());
   EXPECT_EQ(ui::TEXT_INPUT_MODE_TEXT, text_input()->GetTextInputMode());
@@ -397,11 +407,7 @@ TEST_F(TextInputTest, VirtualKeyboardObserver) {
   EXPECT_EQ(ui::TEXT_INPUT_MODE_DEFAULT, text_input()->GetTextInputMode());
 
   // Destroy the text_input.
-  // Because text_input used not to be removed from VirtualKeyboardController
-  // as its observer, this used to cause a dangling pointer problem, so
-  // caused the crash in the following DismissVirtualKeyboard.
   DestroyTextInput();
-  input_method_manager->DismissVirtualKeyboard();
 }
 
 TEST_F(TextInputTest, SetTypeModeFlag) {
@@ -409,7 +415,8 @@ TEST_F(TextInputTest, SetTypeModeFlag) {
 
   EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
   EXPECT_CALL(*delegate(), Activated).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
@@ -417,18 +424,49 @@ TEST_F(TextInputTest, SetTypeModeFlag) {
   EXPECT_EQ(ui::TEXT_INPUT_MODE_TEXT, text_input()->GetTextInputMode());
   EXPECT_EQ(0, text_input()->GetTextInputFlags());
   EXPECT_TRUE(text_input()->ShouldDoLearning());
+  EXPECT_TRUE(text_input()->CanComposeInline());
 
   int flags = ui::TEXT_INPUT_FLAG_AUTOCOMPLETE_OFF |
               ui::TEXT_INPUT_FLAG_AUTOCAPITALIZE_NONE;
   EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
-  text_input()->SetTypeModeFlags(ui::TEXT_INPUT_TYPE_URL,
-                                 ui::TEXT_INPUT_MODE_URL, flags, false);
+  text_input()->SetTypeModeFlags(
+      ui::TEXT_INPUT_TYPE_URL, ui::TEXT_INPUT_MODE_URL, flags,
+      /*should_do_learning=*/false, /*can_compose_inline=*/false,
+      /*surrounding_text_supported=*/true);
   testing::Mock::VerifyAndClearExpectations(&observer);
 
   EXPECT_EQ(ui::TEXT_INPUT_TYPE_URL, text_input()->GetTextInputType());
   EXPECT_EQ(ui::TEXT_INPUT_MODE_URL, text_input()->GetTextInputMode());
   EXPECT_EQ(flags, text_input()->GetTextInputFlags());
   EXPECT_FALSE(text_input()->ShouldDoLearning());
+  EXPECT_FALSE(text_input()->CanComposeInline());
+
+  EXPECT_CALL(*delegate(), Deactivated).Times(1);
+}
+
+TEST_F(TextInputTest, FocusReason) {
+  EXPECT_EQ(ui::TextInputClient::FOCUS_REASON_NONE,
+            text_input()->GetFocusReason());
+
+  EXPECT_CALL(*delegate(), Activated).Times(1);
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
+  testing::Mock::VerifyAndClearExpectations(delegate());
+
+  EXPECT_EQ(ui::TextInputClient::FOCUS_REASON_OTHER,
+            text_input()->GetFocusReason());
+
+  EXPECT_CALL(*delegate(), Deactivated).Times(1);
+  text_input()->Deactivate();
+  testing::Mock::VerifyAndClearExpectations(delegate());
+
+  EXPECT_CALL(*delegate(), Activated).Times(1);
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_PEN);
+  testing::Mock::VerifyAndClearExpectations(delegate());
+
+  EXPECT_EQ(ui::TextInputClient::FOCUS_REASON_PEN,
+            text_input()->GetFocusReason());
 
   EXPECT_CALL(*delegate(), Deactivated).Times(1);
 }
@@ -438,7 +476,8 @@ TEST_F(TextInputTest, CaretBounds) {
 
   EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
   EXPECT_CALL(*delegate(), Activated).Times(1);
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate());
 
@@ -475,11 +514,12 @@ TEST_F(TextInputTest, CompositionTextEmpty) {
   text_input()->ClearCompositionText();
 }
 
-TEST_F(TextInputTest, ConfirmCompositionText) {
+TEST_F(TextInputTest, ConfirmCompositionTextDontKeepSelection) {
   SetCompositionText(u"composition");
 
-  EXPECT_CALL(*delegate(), Commit(base::StringPiece16(u"composition")))
+  EXPECT_CALL(*delegate(), ConfirmComposition(/*keep_selection=*/false))
       .Times(1);
+
   const size_t composition_text_length =
       text_input()->ConfirmCompositionText(/*keep_selection=*/false);
   EXPECT_EQ(composition_text_length, 11u);
@@ -494,13 +534,12 @@ TEST_F(TextInputTest, ConfirmCompositionTextKeepSelection) {
   constexpr char16_t kCompositionText[] = u"composition";
   SetCompositionText(kCompositionText);
   text_input()->SetEditableSelectionRange(gfx::Range(2, 3));
-  text_input()->SetSurroundingText(kCompositionText, gfx::Range(2, 3));
+  text_input()->SetSurroundingText(kCompositionText, 0u, gfx::Range(2, 3),
+                                   absl::nullopt, absl::nullopt);
 
-  EXPECT_CALL(*delegate(), SetCursor(base::StringPiece16(kCompositionText),
-                                     gfx::Range(2, 3)))
+  EXPECT_CALL(*delegate(), ConfirmComposition(/*keep_selection=*/true))
       .Times(1);
-  EXPECT_CALL(*delegate(), Commit(base::StringPiece16(kCompositionText)))
-      .Times(1);
+
   const uint32_t composition_text_length =
       text_input()->ConfirmCompositionText(/*keep_selection=*/true);
   EXPECT_EQ(composition_text_length, static_cast<uint32_t>(11));
@@ -529,16 +568,19 @@ TEST_F(TextInputTest, Commit) {
 }
 
 TEST_F(TextInputTest, InsertChar) {
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
 
   ui::KeyEvent ev(ui::ET_KEY_PRESSED, ui::VKEY_RETURN, 0);
+  ui::SetKeyboardImeFlags(&ev, ui::kPropertyKeyboardImeHandledFlag);
 
   EXPECT_CALL(*delegate(), SendKey(testing::Ref(ev))).Times(1);
   text_input()->InsertChar(ev);
 }
 
 TEST_F(TextInputTest, InsertCharCtrlV) {
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
 
   // CTRL+V is interpreted as non-IME consumed KeyEvent, so should
   // not be sent.
@@ -548,13 +590,34 @@ TEST_F(TextInputTest, InsertCharCtrlV) {
 }
 
 TEST_F(TextInputTest, InsertCharNormalKey) {
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
 
   char16_t ch = 'x';
-  ui::KeyEvent ev(ch, ui::VKEY_X, ui::DomCode::NONE, 0);
+  ui::KeyEvent ev =
+      ui::KeyEvent::FromCharacter(ch, ui::VKEY_X, ui::DomCode::US_X, 0);
+  ui::SetKeyboardImeFlags(&ev, ui::kPropertyKeyboardImeHandledFlag);
 
   EXPECT_CALL(*delegate(), SendKey(testing::Ref(ev))).Times(1);
   text_input()->InsertChar(ev);
+}
+
+TEST_F(TextInputTest, InsertCharNumpadEqual) {
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
+
+  // NUMPAD_EQUAL is set key_code to VKEY_UNKNOWN, but code t- NUMPAD_EQUAL.
+  ui::KeyEvent ev(ui::ET_KEY_PRESSED, ui::VKEY_UNKNOWN,
+                  ui::DomCode::NUMPAD_EQUAL, /*flags=*/0, /*key=*/0,
+                  base::TimeTicks());
+  ev.set_character(u'=');
+
+  // InsertChar should ignore it (because it is not consumed by IME),
+  // and exo::Keyboard is expected to handle the case.
+  EXPECT_CALL(*delegate(), SendKey(_)).Times(0);
+  EXPECT_CALL(*delegate(), Commit(_)).Times(0);
+  text_input()->InsertChar(ev);
+  testing::Mock::VerifyAndClearExpectations(delegate());
 }
 
 TEST_F(TextInputTest, SurroundingText) {
@@ -569,11 +632,13 @@ TEST_F(TextInputTest, SurroundingText) {
   std::u16string got_text;
   EXPECT_FALSE(text_input()->GetTextFromRange(gfx::Range(0, 1), &got_text));
 
-  text_input()->Activate(seat(), surface());
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
 
   EXPECT_CALL(observer, OnCaretBoundsChanged(text_input())).Times(1);
   std::u16string text = u"surrounding\u3000text";
-  text_input()->SetSurroundingText(text, gfx::Range(11, 12));
+  text_input()->SetSurroundingText(text, 0u, gfx::Range(11, 12), absl::nullopt,
+                                   absl::nullopt);
   testing::Mock::VerifyAndClearExpectations(&observer);
 
   EXPECT_TRUE(text_input()->GetTextRange(&range));
@@ -601,7 +666,8 @@ TEST_F(TextInputTest, SurroundingText) {
 
 TEST_F(TextInputTest, SetEditableSelectionRange) {
   SetCompositionText(u"text");
-  text_input()->SetSurroundingText(u"text", gfx::Range(4, 4));
+  text_input()->SetSurroundingText(u"text", 0u, gfx::Range(4, 4), absl::nullopt,
+                                   absl::nullopt);
 
   // Should commit composition text and set selection range.
   EXPECT_CALL(*delegate(),
@@ -615,7 +681,8 @@ TEST_F(TextInputTest, SetEditableSelectionRange) {
 TEST_F(TextInputTest, GetTextFromRange) {
   std::u16string text = u"surrounding text";
   text_input()->SetEditableSelectionRange(gfx::Range(11, 12));
-  text_input()->SetSurroundingText(text, gfx::Range(11, 12));
+  text_input()->SetSurroundingText(text, 0u, gfx::Range(11, 12), absl::nullopt,
+                                   absl::nullopt);
 
   const struct {
     gfx::Range range;
@@ -624,6 +691,32 @@ TEST_F(TextInputTest, GetTextFromRange) {
       {gfx::Range(0, 3), u"sur"},
       {gfx::Range(10, 16), u"g text"},
       {gfx::Range(6, 9), u"ndi"},
+  };
+  for (auto& c : kTestCases) {
+    std::u16string result;
+    EXPECT_TRUE(text_input()->GetTextFromRange(c.range, &result))
+        << c.range.ToString();
+    EXPECT_EQ(c.expected, result) << c.range.ToString();
+  }
+}
+
+TEST_F(TextInputTest, GetTextFromRangeWithOffset) {
+  std::u16string text = u"surrounding text";
+  text_input()->SetEditableSelectionRange(gfx::Range(11, 12));
+  text_input()->SetSurroundingText(text, 5u, gfx::Range(11, 12), absl::nullopt,
+                                   absl::nullopt);
+
+  gfx::Range text_range;
+  ASSERT_TRUE(text_input()->GetTextRange(&text_range));
+  EXPECT_EQ(gfx::Range(5, 21), text_range);
+
+  const struct {
+    gfx::Range range;
+    std::u16string expected;
+  } kTestCases[] = {
+      {gfx::Range(5, 8), u"sur"},
+      {gfx::Range(15, 21), u"g text"},
+      {gfx::Range(11, 14), u"ndi"},
   };
   for (auto& c : kTestCases) {
     std::u16string result;
@@ -643,7 +736,8 @@ TEST_F(TextInputTest, SetCompositionFromExistingText) {
   EXPECT_FALSE(
       text_input()->SetCompositionFromExistingText(gfx::Range(0, 1), {}));
 
-  text_input()->SetSurroundingText(u"surrounding text", gfx::Range(5, 5));
+  text_input()->SetSurroundingText(u"surrounding text", 0u, gfx::Range(5, 5),
+                                   absl::nullopt, absl::nullopt);
 
   // Invalid range.
   EXPECT_FALSE(text_input()->SetCompositionFromExistingText(
@@ -682,7 +776,8 @@ TEST_F(TextInputTest, SetCompositionFromExistingText) {
 
 TEST_F(TextInputTest,
        CompositionRangeSetFromCursorWhenSetCompositionTextCalled) {
-  text_input()->SetSurroundingText(u"surrounding text", gfx::Range(5, 5));
+  text_input()->SetSurroundingText(u"surrounding text", 0u, gfx::Range(5, 5),
+                                   absl::nullopt, absl::nullopt);
 
   std::u16string composition_text = u"composing";
   SetCompositionText(composition_text);
@@ -695,7 +790,8 @@ TEST_F(TextInputTest,
 
 TEST_F(TextInputTest,
        CompositionRangeSetWhenSetCompositionFromExistingTextCalled) {
-  text_input()->SetSurroundingText(u"surrounding text", gfx::Range(5, 5));
+  text_input()->SetSurroundingText(u"surrounding text", 0u, gfx::Range(5, 5),
+                                   absl::nullopt, absl::nullopt);
 
   text_input()->SetCompositionFromExistingText(gfx::Range(3, 6),
                                                std::vector<ui::ImeTextSpan>{});
@@ -714,7 +810,8 @@ TEST_F(TextInputTest, CorrectTextReturnedAfterSetCompositionTextCalled) {
   ui::CompositionText t = GenerateCompositionText(composition_text);
   EXPECT_CALL(*delegate(), SetCompositionText(_)).Times(1);
 
-  text_input()->SetSurroundingText(surrounding_text, cursor_pos);
+  text_input()->SetSurroundingText(surrounding_text, 0u, cursor_pos,
+                                   absl::nullopt, absl::nullopt);
   text_input()->SetCompositionText(t);
 
   // Simulate surrounding text update from wayland.
@@ -722,8 +819,9 @@ TEST_F(TextInputTest, CorrectTextReturnedAfterSetCompositionTextCalled) {
   auto after = surrounding_text.substr(cursor_pos.GetMin());
   auto new_surrounding = before + t.text + after;
   auto new_cursor_pos = cursor_pos.GetMin() + t.text.length();
-  text_input()->SetSurroundingText(new_surrounding,
-                                   gfx::Range(new_cursor_pos, new_cursor_pos));
+  text_input()->SetSurroundingText(new_surrounding, 0u,
+                                   gfx::Range(new_cursor_pos, new_cursor_pos),
+                                   absl::nullopt, absl::nullopt);
 
   gfx::Range text_range;
   std::u16string text;
@@ -743,18 +841,17 @@ TEST_F(TextInputTest, CorrectTextReturnedAfterSetCompositionTextCalled) {
 TEST_F(TextInputTest, SetsAndGetsGrammarFragmentAtCursor) {
   ui::GrammarFragment sample_fragment(gfx::Range(1, 5), "sample-suggestion");
 
-  text_input()->SetGrammarFragmentAtCursor(absl::nullopt);
   EXPECT_EQ(text_input()->GetGrammarFragmentAtCursor(), absl::nullopt);
-
-  text_input()->SetGrammarFragmentAtCursor(sample_fragment);
-  text_input()->SetSurroundingText(u"Sample surrouding text.",
-                                   gfx::Range(2, 2));
+  text_input()->SetSurroundingText(u"Sample surrouding text.", 0u,
+                                   gfx::Range(2, 2), sample_fragment,
+                                   absl::nullopt);
   EXPECT_EQ(text_input()->GetGrammarFragmentAtCursor(), sample_fragment);
 }
 
 TEST_F(TextInputTest, ClearGrammarFragments) {
   std::u16string surrounding_text = u"Sample surrouding text.";
-  text_input()->SetSurroundingText(surrounding_text, gfx::Range(2, 2));
+  text_input()->SetSurroundingText(surrounding_text, 0u, gfx::Range(2, 2),
+                                   absl::nullopt, absl::nullopt);
   gfx::Range range(3, 8);
   EXPECT_CALL(*delegate(), ClearGrammarFragments(
                                base::StringPiece16(surrounding_text), range))
@@ -764,7 +861,8 @@ TEST_F(TextInputTest, ClearGrammarFragments) {
 
 TEST_F(TextInputTest, AddGrammarFragments) {
   std::u16string surrounding_text = u"Sample surrouding text.";
-  text_input()->SetSurroundingText(surrounding_text, gfx::Range(2, 2));
+  text_input()->SetSurroundingText(surrounding_text, 0u, gfx::Range(2, 2),
+                                   absl::nullopt, absl::nullopt);
   std::vector<ui::GrammarFragment> fragments = {
       ui::GrammarFragment(gfx::Range(0, 5), "one"),
       ui::GrammarFragment(gfx::Range(10, 16), "two"),
@@ -782,7 +880,8 @@ TEST_F(TextInputTest, AddGrammarFragments) {
 
 TEST_F(TextInputTest, GetAutocorrect) {
   std::u16string surrounding_text = u"Sample surrouding text.";
-  text_input()->SetSurroundingText(surrounding_text, gfx::Range(2, 2));
+  text_input()->SetSurroundingText(surrounding_text, 0u, gfx::Range(2, 2),
+                                   absl::nullopt, absl::nullopt);
   std::vector<ui::GrammarFragment> fragments = {
       ui::GrammarFragment(gfx::Range(0, 5), "one"),
       ui::GrammarFragment(gfx::Range(10, 16), "two"),
@@ -915,6 +1014,70 @@ TEST_F(TextInputTest, FinalizeVirtualKeyboardChangesDoesntSendStaleBounds) {
   EXPECT_CALL(*delegate(), OnVirtualKeyboardVisibilityChanged).Times(0);
   EXPECT_CALL(*delegate(), OnVirtualKeyboardOccludedBoundsChanged(kBounds2));
   text_input()->EnsureCaretNotInRect(kBounds2);
+}
+
+TEST_F(TextInputTest, SetSurroundingTextSupport) {
+  testing::NiceMock<TestingInputMethodObserver> observer(GetInputMethod());
+
+  constexpr bool kShouldDoLearning = true;
+  constexpr bool kCanComposeInline = true;
+
+  ash::input_method::MockInputMethodManagerImpl* input_method_manager =
+      ash_test_helper()->input_method_manager();
+
+  constexpr char kEnglishId[] =
+      "_comp_ime_jkghodnilhceideoidjikpgommlajknkxkb:us::eng";
+  constexpr char kJapaneseId[] =
+      "_comp_ime_jkghodnilhceideoidjikpgommlajknknacl_mozc_jp";
+
+  input_method_manager->SetCurrentInputMethodId(kEnglishId);
+
+  EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
+  EXPECT_CALL(*delegate(), Activated).Times(1);
+  text_input()->Activate(seat(), surface(),
+                         ui::TextInputClient::FOCUS_REASON_OTHER);
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  testing::Mock::VerifyAndClearExpectations(delegate());
+
+  // When a client does not support surrounding text, we force a NULL input type
+  // for xkb input methods like English.
+
+  text_input()->SetTypeModeFlags(
+      ui::TEXT_INPUT_TYPE_SEARCH, ui::TEXT_INPUT_MODE_SEARCH,
+      ui::TEXT_INPUT_FLAG_NONE, kShouldDoLearning, kCanComposeInline,
+      /*surrounding_text_supported=*/false);
+
+  EXPECT_EQ(ui::TEXT_INPUT_TYPE_NULL, text_input()->GetTextInputType());
+
+  // When switching to a non-xkb input method, we restore the original input
+  // type requested.
+
+  EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
+  input_method_manager->SetCurrentInputMethodId(kJapaneseId);
+  // The MockInputMethodManagerImpl doesn't currently fire this observer
+  // callback, so do it explicitly.
+  text_input()->InputMethodChanged(nullptr, nullptr, false);
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  EXPECT_EQ(ui::TEXT_INPUT_TYPE_SEARCH, text_input()->GetTextInputType());
+
+  EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
+  input_method_manager->SetCurrentInputMethodId(kEnglishId);
+  text_input()->InputMethodChanged(nullptr, nullptr, false);
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  EXPECT_EQ(ui::TEXT_INPUT_TYPE_NULL, text_input()->GetTextInputType());
+
+  // When surrounding text is supported, the requested input type is left
+  // untouched.
+
+  EXPECT_CALL(observer, OnTextInputStateChanged(text_input())).Times(1);
+  text_input()->SetTypeModeFlags(
+      ui::TEXT_INPUT_TYPE_TEXT, ui::TEXT_INPUT_MODE_TEXT,
+      ui::TEXT_INPUT_FLAG_NONE, kShouldDoLearning, kCanComposeInline,
+      /*surrounding_text_supported=*/true);
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  EXPECT_EQ(ui::TEXT_INPUT_TYPE_TEXT, text_input()->GetTextInputType());
+
+  EXPECT_CALL(*delegate(), Deactivated).Times(1);
 }
 
 }  // anonymous namespace

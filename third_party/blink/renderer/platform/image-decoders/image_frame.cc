@@ -26,7 +26,6 @@
 
 #include "third_party/blink/renderer/platform/image-decoders/image_frame.h"
 
-#include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
@@ -38,9 +37,16 @@ namespace blink {
 
 ImageFrame::ImageFrame() = default;
 
+ImageFrame::~ImageFrame() = default;
+
+ImageFrame::ImageFrame(const ImageFrame& other) : has_alpha_(false) {
+  operator=(other);
+}
+
 ImageFrame& ImageFrame::operator=(const ImageFrame& other) {
-  if (this == &other)
+  if (this == &other) {
     return *this;
+  }
 
   bitmap_ = other.bitmap_;
   // Be sure to assign this before calling SetStatus(), since SetStatus() may
@@ -49,10 +55,11 @@ ImageFrame& ImageFrame::operator=(const ImageFrame& other) {
   SetMemoryAllocator(other.GetAllocator());
   SetOriginalFrameRect(other.OriginalFrameRect());
   SetStatus(other.GetStatus());
-  if (other.Timestamp())
+  if (other.Timestamp()) {
     SetTimestamp(*other.Timestamp());
-  else
+  } else {
     timestamp_.reset();
+  }
   SetDuration(other.Duration());
   SetDisposalMethod(other.GetDisposalMethod());
   SetAlphaBlendSource(other.GetAlphaBlendSource());
@@ -90,8 +97,9 @@ bool ImageFrame::CopyBitmapData(const ImageFrame& other) {
   }
 
   if (!other.bitmap_.readPixels(info, bitmap_.getPixels(), bitmap_.rowBytes(),
-                                0, 0))
+                                0, 0)) {
     return false;
+  }
 
   status_ = kFrameInitialized;
   return true;
@@ -102,8 +110,9 @@ bool ImageFrame::TakeBitmapDataIfWritable(ImageFrame* other) {
   DCHECK_EQ(kFrameComplete, other->status_);
   DCHECK_EQ(kFrameEmpty, status_);
   DCHECK_NE(this, other);
-  if (other->bitmap_.isImmutable())
+  if (other->bitmap_.isImmutable()) {
     return false;
+  }
   has_alpha_ = other->has_alpha_;
   pixel_format_ = other->pixel_format_;
   bitmap_.reset();
@@ -119,21 +128,24 @@ bool ImageFrame::AllocatePixelData(int new_width,
   // AllocatePixelData() should only be called once.
   DCHECK(!Width() && !Height());
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-  if (new_width > 1000 || new_height > 1000)
+  if (new_width > 1000 || new_height > 1000) {
     return false;
+  }
 #endif
 
   SkImageInfo info = SkImageInfo::MakeN32(
       new_width, new_height,
       premultiply_alpha_ ? kPremul_SkAlphaType : kUnpremul_SkAlphaType,
       std::move(color_space));
-  if (pixel_format_ == kRGBA_F16)
+  if (pixel_format_ == kRGBA_F16) {
     info = info.makeColorType(kRGBA_F16_SkColorType);
+  }
   bool success = bitmap_.setInfo(info);
   DCHECK(success);
   success = bitmap_.tryAllocPixels(allocator_);
-  if (success)
+  if (success) {
     status_ = kFrameInitialized;
+  }
 
   return success;
 }
@@ -141,7 +153,7 @@ bool ImageFrame::AllocatePixelData(int new_width,
 sk_sp<SkImage> ImageFrame::FinalizePixelsAndGetImage() {
   DCHECK_EQ(kFrameComplete, status_);
   bitmap_.setImmutable();
-  return SkImage::MakeFromBitmap(bitmap_);
+  return SkImages::RasterFromBitmap(bitmap_);
 }
 
 void ImageFrame::SetHasAlpha(bool alpha) {
@@ -165,8 +177,9 @@ void ImageFrame::SetStatus(Status status) {
 }
 
 void ImageFrame::ZeroFillFrameRect(const gfx::Rect& rect) {
-  if (rect.IsEmpty())
+  if (rect.IsEmpty()) {
     return;
+  }
 
   bitmap_.eraseArea(gfx::RectToSkIRect(rect), SkColorSetARGB(0, 0, 0, 0));
   SetHasAlpha(true);
@@ -183,15 +196,14 @@ static void BlendRGBAF16Buffer(ImageFrame::PixelDataF16* dst,
                                        kRGBA_F16_SkColorType, dst_alpha_type,
                                        SkColorSpace::MakeSRGBLinear());
   sk_sp<SkSurface> surface =
-      SkSurface::MakeRasterDirect(info, dst, info.minRowBytes());
+      SkSurfaces::WrapPixels(info, dst, info.minRowBytes());
 
   SkPixmap src_pixmap(info.makeAlphaType(kUnpremul_SkAlphaType), src,
                       info.minRowBytes());
   sk_sp<SkImage> src_image =
-      SkImage::MakeFromRaster(src_pixmap, nullptr, nullptr);
+      SkImages::RasterFromPixmap(src_pixmap, nullptr, nullptr);
 
   surface->getCanvas()->drawImage(src_image, 0, 0);
-  surface->flushAndSubmit();
 }
 
 void ImageFrame::BlendRGBARawF16Buffer(PixelDataF16* dst,
@@ -218,8 +230,9 @@ static uint8_t BlendChannel(uint8_t src,
 
 static uint32_t BlendSrcOverDstNonPremultiplied(uint32_t src, uint32_t dst) {
   uint8_t src_a = SkGetPackedA32(src);
-  if (src_a == 0)
+  if (src_a == 0) {
     return dst;
+  }
 
   uint8_t dst_a = SkGetPackedA32(dst);
   uint8_t dst_factor_a = (dst_a * SkAlpha255To256(255 - src_a)) >> 8;
@@ -254,8 +267,9 @@ SkAlphaType ImageFrame::ComputeAlphaType() const {
   // If the frame is not fully loaded, there will be transparent pixels,
   // so we can't tell skia we're opaque, even for image types that logically
   // always are (e.g. jpeg).
-  if (!has_alpha_ && status_ == kFrameComplete)
+  if (!has_alpha_ && status_ == kFrameComplete) {
     return kOpaque_SkAlphaType;
+  }
 
   return premultiply_alpha_ ? kPremul_SkAlphaType : kUnpremul_SkAlphaType;
 }

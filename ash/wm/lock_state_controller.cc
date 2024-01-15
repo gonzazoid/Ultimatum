@@ -5,11 +5,10 @@
 #include "ash/wm/lock_state_controller.h"
 
 #include <algorithm>
-#include <memory>
 #include <string>
 #include <utility>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/cancel_mode.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/shell_window_ids.h"
@@ -18,16 +17,14 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
-#include "ash/shutdown_reason.h"
 #include "ash/utility/occlusion_tracker_pauser.h"
+#include "ash/wallpaper/views/wallpaper_widget_controller.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
-#include "ash/wallpaper/wallpaper_widget_controller.h"
-#include "ash/wm/session_state_animator.h"
 #include "ash/wm/session_state_animator_impl.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/values_util.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -38,9 +35,6 @@
 #include "base/system/sys_info.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
-#include "base/timer/timer.h"
-#include "components/prefs/pref_registry_simple.h"
-#include "components/prefs/pref_service.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/views/controls/menu/menu_controller.h"
 #include "ui/wm/core/compound_event_filter.h"
@@ -75,6 +69,10 @@ constexpr int kMaxShutdownSoundDurationMs = 1500;
 // Amount of time to wait for our lock requests to be honored before giving up.
 constexpr base::TimeDelta kLockFailTimeout =
     base::Seconds(8 * kTimeoutMultiplier);
+
+// Amount of time to wait for our post lock animation before giving up.
+constexpr base::TimeDelta kPostLockFailTimeout =
+    base::Seconds(2 * kTimeoutMultiplier);
 
 // Additional time to wait after starting the fast-close shutdown animation
 // before actually requesting shutdown, to give the animation time to finish.
@@ -168,6 +166,9 @@ void LockStateController::StartShutdownAnimation(ShutdownReason reason) {
 }
 
 void LockStateController::LockWithoutAnimation() {
+  VLOG(1) << "LockWithoutAnimation : "
+          << "animating_unlock_: " << static_cast<int>(animating_unlock_)
+          << ", animating_lock_: " << static_cast<int>(animating_lock_);
   if (animating_unlock_) {
     CancelUnlockAnimation();
     // One would expect a call to
@@ -336,7 +337,9 @@ void LockStateController::OnLockStateChanged(bool locked) {
   VLOG(1) << "OnLockStateChanged called with locked: " << locked
           << ", shutting_down_: " << shutting_down_
           << ", system_is_locked_: " << system_is_locked_
-          << ", lock_fail_timer_.IsRunning(): " << lock_fail_timer_.IsRunning();
+          << ", lock_fail_timer_.IsRunning(): " << lock_fail_timer_.IsRunning()
+          << ", animating_unlock_: " << static_cast<int>(animating_unlock_)
+          << ", animating_lock_: " << static_cast<int>(animating_lock_);
 
   if (shutting_down_ || (system_is_locked_ == locked))
     return;
@@ -469,6 +472,8 @@ void LockStateController::StartPostLockAnimation() {
           ? SessionStateAnimator::ANIMATION_SPEED_IMMEDIATE
           : SessionStateAnimator::ANIMATION_SPEED_MOVE_WINDOWS);
   animation_sequence->EndSequence();
+  post_lock_fail_timer_.Start(FROM_HERE, kPostLockFailTimeout, this,
+                              &LockStateController::OnPostLockFailTimeout);
 }
 
 void LockStateController::StartUnlockAnimationBeforeLockUIDestroyed(
@@ -510,13 +515,13 @@ void LockStateController::StartUnlockAnimationAfterLockUIDestroyed() {
 }
 
 void LockStateController::LockAnimationCancelled(bool aborted) {
-  DVLOG(1) << "LockAnimationCancelled: aborted=" << aborted;
+  VLOG(1) << "LockAnimationCancelled: aborted=" << aborted;
   RestoreUnlockedProperties();
 }
 
 void LockStateController::PreLockAnimationFinished(bool request_lock,
                                                    bool aborted) {
-  DVLOG(1) << "PreLockAnimationFinished: aborted=" << aborted;
+  VLOG(1) << "PreLockAnimationFinished: aborted=" << aborted;
   // Aborted in this stage means the locking animation was cancelled by
   // `CancelLockAnimation()`, triggered by releasing a lock button before
   // finishing animation.
@@ -543,9 +548,18 @@ void LockStateController::PreLockAnimationFinished(bool request_lock,
   lock_duration_timer_ = std::make_unique<base::ElapsedTimer>();
 }
 
+void LockStateController::OnPostLockFailTimeout() {
+  VLOG(1) << "OnPostLockFailTimeout";
+  PostLockAnimationFinished(true);
+}
+
 void LockStateController::PostLockAnimationFinished(bool aborted) {
-  DVLOG(1) << "PostLockAnimationFinished: aborted=" << aborted;
+  VLOG(1) << "PostLockAnimationFinished: aborted=" << aborted;
+  if (!animating_lock_)
+    return;
   animating_lock_ = false;
+  post_lock_immediate_animation_ = false;
+  post_lock_fail_timer_.Stop();
   OnLockStateEvent(LockStateObserver::EVENT_LOCK_ANIMATION_FINISHED);
   if (!lock_screen_displayed_callback_.is_null())
     std::move(lock_screen_displayed_callback_).Run();
@@ -555,8 +569,7 @@ void LockStateController::PostLockAnimationFinished(bool aborted) {
 
 void LockStateController::UnlockAnimationAfterLockUIDestroyedFinished(
     bool aborted) {
-  DVLOG(1) << "UnlockAnimationAfterLockUIDestroyedFinished: aborted="
-           << aborted;
+  VLOG(1) << "UnlockAnimationAfterLockUIDestroyedFinished: aborted=" << aborted;
   animating_unlock_ = false;
   if (pb_pressed_during_unlock_) {
     Shell::Get()->session_controller()->LockScreen();

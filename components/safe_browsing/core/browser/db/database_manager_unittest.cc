@@ -17,7 +17,6 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/safe_browsing/core/browser/db/test_database_manager.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #include "components/safe_browsing/core/browser/db/v4_test_util.h"
@@ -72,21 +71,21 @@ class SafeBrowsingDatabaseManagerTest : public testing::Test {
             &test_url_loader_factory_);
 
     db_manager_ = new TestSafeBrowsingDatabaseManager(
-        base::SequencedTaskRunnerHandle::Get(),
-        base::SequencedTaskRunnerHandle::Get());
-    db_manager_->StartOnIOThread(test_shared_loader_factory_,
+        base::SequencedTaskRunner::GetCurrentDefault(),
+        base::SequencedTaskRunner::GetCurrentDefault());
+    db_manager_->StartOnSBThread(test_shared_loader_factory_,
                                  GetTestV4ProtocolConfig());
   }
 
   void TearDown() override {
-    db_manager_->StopOnIOThread(false);
+    db_manager_->StopOnSBThread(false);
     db_manager_ = nullptr;
     base::RunLoop().RunUntilIdle();
   }
 
   std::string GetStockV4GetHashResponse() {
     ListIdentifier list_id = GetChromeUrlApiId();
-    FullHash full_hash = crypto::SHA256HashString("example.com/");
+    FullHashStr full_hash = crypto::SHA256HashString("example.com/");
 
     FindFullHashesResponse response;
     response.mutable_negative_cache_duration()->set_seconds(600);

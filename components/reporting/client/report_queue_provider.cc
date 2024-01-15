@@ -7,9 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
@@ -18,6 +18,8 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/types/expected.h"
+#include "base/types/expected_macros.h"
 #include "components/reporting/client/report_queue.h"
 #include "components/reporting/client/report_queue_configuration.h"
 #include "components/reporting/client/report_queue_impl.h"
@@ -38,8 +40,7 @@ class ReportQueueProvider::CreateReportQueueRequest {
   static void New(std::unique_ptr<ReportQueueConfiguration> config,
                   CreateReportQueueCallback create_cb) {
     auto* const provider = GetInstance();
-    DCHECK(provider)
-        << "Provider must exist, otherwise it is an internal error";
+    CHECK(provider) << "Provider must exist, otherwise it is an internal error";
     auto request = base::WrapUnique(
         new CreateReportQueueRequest(std::move(config), std::move(create_cb)));
     provider->sequenced_task_runner_->PostTask(
@@ -49,8 +50,8 @@ class ReportQueueProvider::CreateReportQueueRequest {
                std::unique_ptr<CreateReportQueueRequest> request) {
               if (!provider) {
                 std::move(request->release_create_cb())
-                    .Run(Status(error::UNAVAILABLE,
-                                "Provider has been shut down"));
+                    .Run(base::unexpected(Status(
+                        error::UNAVAILABLE, "Provider has been shut down")));
                 return;
               }
               DCHECK_CALLED_ON_VALID_SEQUENCE(provider->sequence_checker_);
@@ -66,12 +67,12 @@ class ReportQueueProvider::CreateReportQueueRequest {
   ~CreateReportQueueRequest() = default;
 
   std::unique_ptr<ReportQueueConfiguration> release_config() {
-    DCHECK(config_) << "Can only be released once";
+    CHECK(config_) << "Can only be released once";
     return std::move(config_);
   }
 
   ReportQueueProvider::CreateReportQueueCallback release_create_cb() {
-    DCHECK(create_cb_) << "Can only be released once";
+    CHECK(create_cb_) << "Can only be released once";
     return std::move(create_cb_);
   }
 
@@ -109,7 +110,8 @@ ReportQueueProvider::~ReportQueueProvider() {
   while (!create_request_queue_.empty()) {
     auto& report_queue_request = create_request_queue_.front();
     std::move(report_queue_request->release_create_cb())
-        .Run(Status(error::UNAVAILABLE, "ReportQueueProvider shut down"));
+        .Run(base::unexpected(
+            Status(error::UNAVAILABLE, "ReportQueueProvider shut down")));
     create_request_queue_.pop();
   }
 }
@@ -138,8 +140,8 @@ void ReportQueueProvider::CreateNewQueue(
              std::unique_ptr<ReportQueueConfiguration> config,
              CreateReportQueueCallback cb) {
             if (!provider) {
-              std::move(cb).Run(
-                  Status(error::UNAVAILABLE, "Provider has been shut down"));
+              std::move(cb).Run(base::unexpected(
+                  Status(error::UNAVAILABLE, "Provider has been shut down")));
               return;
             }
             // Configure report queue config with an appropriate DM token and
@@ -152,8 +154,9 @@ void ReportQueueProvider::CreateNewQueue(
                        config_result) {
                   // If configuration hit an error, we abort and
                   // report this through the callback
-                  if (!config_result.ok()) {
-                    std::move(cb).Run(config_result.status());
+                  if (!config_result.has_value()) {
+                    std::move(cb).Run(
+                        base::unexpected(std::move(config_result).error()));
                     return;
                   }
 
@@ -161,8 +164,8 @@ void ReportQueueProvider::CreateNewQueue(
                   base::ThreadPool::PostTask(
                       FROM_HERE,
                       base::BindOnce(&ReportQueueImpl::Create,
-                                     std::move(config_result.ValueOrDie()),
-                                     storage, std::move(cb)));
+                                     std::move(config_result.value()), storage,
+                                     std::move(cb)));
                 },
                 provider->storage_, std::move(cb));
 
@@ -173,8 +176,9 @@ void ReportQueueProvider::CreateNewQueue(
 }
 
 StatusOr<std::unique_ptr<ReportQueue, base::OnTaskRunnerDeleter>>
-ReportQueueProvider::CreateNewSpeculativeQueue() {
-  return SpeculativeReportQueueImpl::Create();
+ReportQueueProvider::CreateNewSpeculativeQueue(
+    const ReportQueue::SpeculativeConfigSettings& config_settings) {
+  return SpeculativeReportQueueImpl::Create(config_settings);
 }
 
 void ReportQueueProvider::OnInitCompleted() {}
@@ -189,7 +193,7 @@ void ReportQueueProvider::CreateQueue(
         "The Encrypted Reporting Pipeline is not enabled. Please enable it on "
         "the command line using --enable-features=EncryptedReportingPipeline");
     VLOG(1) << not_enabled;
-    std::move(create_cb).Run(not_enabled);
+    std::move(create_cb).Run(base::unexpected(not_enabled));
     return;
   }
   CreateReportQueueRequest::New(std::move(config), std::move(create_cb));
@@ -205,11 +209,13 @@ ReportQueueProvider::CreateSpeculativeQueue(
         "The Encrypted Reporting Pipeline is not enabled. Please enable it on "
         "the command line using --enable-features=EncryptedReportingPipeline");
     VLOG(1) << not_enabled;
-    return not_enabled;
+    return base::unexpected(std::move(not_enabled));
   }
   // Instantiate speculative queue, bail out in case of an error.
+  CHECK(config);
   ASSIGN_OR_RETURN(auto speculative_queue,
-                   GetInstance()->CreateNewSpeculativeQueue());
+                   GetInstance()->CreateNewSpeculativeQueue(
+                       {.destination = config->destination()}));
   // Initiate underlying queue creation.
   CreateReportQueueRequest::New(
       std::move(config), speculative_queue->PrepareToAttachActualQueue());
@@ -220,7 +226,7 @@ void ReportQueueProvider::CheckInitializationState() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!storage_) {
     // Provider not ready.
-    DCHECK(!create_request_queue_.empty()) << "Request queue cannot be empty";
+    CHECK(!create_request_queue_.empty()) << "Request queue cannot be empty";
     if (create_request_queue_.size() > 1) {
       // More than one request in the queue - it means Storage creation has
       // already been started.
@@ -256,12 +262,13 @@ void ReportQueueProvider::CheckInitializationState() {
 void ReportQueueProvider::OnStorageModuleConfigured(
     StatusOr<scoped_refptr<StorageModuleInterface>> storage_result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!storage_result.ok()) {
+  if (!storage_result.has_value()) {
     // Storage creation failed, kill all requests.
     while (!create_request_queue_.empty()) {
       auto& report_queue_request = create_request_queue_.front();
       std::move(report_queue_request->release_create_cb())
-          .Run(Status(error::UNAVAILABLE, "Unable to build a ReportQueue"));
+          .Run(base::unexpected(
+              Status(error::UNAVAILABLE, "Unable to build a ReportQueue")));
       create_request_queue_.pop();
     }
     return;
@@ -269,9 +276,9 @@ void ReportQueueProvider::OnStorageModuleConfigured(
 
   // Storage ready, create all report queues that were submitted.
   // Note that `CreateNewQueue` call offsets heavy work to arbitrary threads.
-  DCHECK(!storage_) << "Storage module already recorded";
+  CHECK(!storage_) << "Storage module already recorded";
   OnInitCompleted();
-  storage_ = storage_result.ValueOrDie();
+  storage_ = storage_result.value();
   while (!create_request_queue_.empty()) {
     auto& report_queue_request = create_request_queue_.front();
     CreateNewQueue(report_queue_request->release_config(),

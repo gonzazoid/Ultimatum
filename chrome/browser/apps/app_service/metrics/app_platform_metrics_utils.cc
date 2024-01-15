@@ -10,7 +10,8 @@
 #include "base/strings/string_piece.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
-#include "chrome/browser/ash/crostini/crostini_shelf_utils.h"
+#include "chrome/browser/ash/guest_os/guest_os_shelf_utils.h"
+#include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
@@ -26,13 +27,18 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#include "chromeos/components/mgs/managed_guest_session_utils.h"
 #include "components/app_constants/constants.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
 #include "components/services/app_service/public/cpp/instance_update.h"
 #include "components/sync/base/model_type.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_utils.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_utils.h"
+#include "components/user_manager/user.h"
+#include "components/user_manager/user_manager.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension.h"
@@ -48,7 +54,6 @@ constexpr auto kAppTypeNameMap =
         {apps::kCrostiniHistogramName, apps::AppTypeName::kCrostini},
         {apps::kChromeAppHistogramName, apps::AppTypeName::kChromeApp},
         {apps::kWebAppHistogramName, apps::AppTypeName::kWeb},
-        {apps::kMacOsHistogramName, apps::AppTypeName::kMacOs},
         {apps::kPluginVmHistogramName, apps::AppTypeName::kPluginVm},
         {apps::kStandaloneBrowserHistogramName,
          apps::AppTypeName::kStandaloneBrowser},
@@ -110,6 +115,21 @@ apps::AppTypeName GetWebAppTypeName() {
   return web_app::IsWebAppsCrosapiEnabled()
              ? apps::AppTypeName::kStandaloneBrowserWebApp
              : apps::AppTypeName::kWeb;
+}
+
+bool UkmReportingIsAllowedForAppInManagedGuestSession(
+    const std::string& app_id,
+    const apps::AppRegistryCache& cache) {
+  CHECK(chromeos::IsManagedGuestSession());
+
+  bool is_allowed = false;
+  cache.ForOneApp(app_id, [&is_allowed](const apps::AppUpdate& app) {
+    is_allowed = app.InstallReason() == apps::InstallReason::kSystem ||
+                 app.InstallReason() == apps::InstallReason::kPolicy ||
+                 app.InstallReason() == apps::InstallReason::kOem ||
+                 app.InstallReason() == apps::InstallReason::kDefault;
+  });
+  return is_allowed;
 }
 
 }  // namespace
@@ -295,8 +315,6 @@ AppTypeName GetAppTypeNameForWindow(Profile* profile,
                                         : apps::AppTypeName::kChromeApp;
     case AppType::kWeb:
       return GetAppTypeNameForWebAppWindow(profile, app_id, window);
-    case AppType::kMacOs:
-      return apps::AppTypeName::kMacOs;
     case AppType::kPluginVm:
       return apps::AppTypeName::kPluginVm;
     case AppType::kStandaloneBrowser:
@@ -315,6 +333,8 @@ AppTypeName GetAppTypeNameForWindow(Profile* profile,
       return apps::AppTypeName::kExtension;
     case AppType::kStandaloneBrowserExtension:
       return apps::AppTypeName::kStandaloneBrowserExtension;
+    case AppType::kBruschetta:
+      return apps::AppTypeName::kBruschetta;
   }
 }
 
@@ -332,8 +352,6 @@ std::string GetAppTypeHistogramName(apps::AppTypeName app_type_name) {
       return kChromeAppHistogramName;
     case apps::AppTypeName::kWeb:
       return kWebAppHistogramName;
-    case apps::AppTypeName::kMacOs:
-      return kMacOsHistogramName;
     case apps::AppTypeName::kPluginVm:
       return kPluginVmHistogramName;
     case apps::AppTypeName::kStandaloneBrowser:
@@ -354,6 +372,8 @@ std::string GetAppTypeHistogramName(apps::AppTypeName app_type_name) {
       return kStandaloneBrowserExtensionHistogramName;
     case apps::AppTypeName::kStandaloneBrowserWebApp:
       return kStandaloneBrowserWebAppHistogramName;
+    case apps::AppTypeName::kBruschetta:
+      return kBruschettaHistogramName;
   }
 }
 
@@ -363,6 +383,16 @@ AppTypeName GetAppTypeNameFromString(const std::string& app_type_name) {
 }
 
 bool ShouldRecordUkm(Profile* profile) {
+  // Bypass AppKM App Sync check for Demo Mode devices to collect app metrics.
+  if (ash::DemoSession::IsDeviceInDemoMode()) {
+    return true;
+  }
+
+  // Bypass AppKM App Sync check in Kiosk and MGS to collect app metrics.
+  if (chromeos::IsKioskSession() || chromeos::IsManagedGuestSession()) {
+    return true;
+  }
+
   switch (syncer::GetUploadToGoogleState(
       SyncServiceFactory::GetForProfile(profile), syncer::ModelType::APPS)) {
     case syncer::UploadState::NOT_ACTIVE:
@@ -373,6 +403,15 @@ bool ShouldRecordUkm(Profile* profile) {
     case syncer::UploadState::ACTIVE:
       return true;
   }
+}
+
+bool ShouldRecordUkmForAppId(const std::string& app_id,
+                             const apps::AppRegistryCache& cache) {
+  if (chromeos::IsManagedGuestSession() &&
+      !UkmReportingIsAllowedForAppInManagedGuestSession(app_id, cache)) {
+    return false;
+  }
+  return true;
 }
 
 bool ShouldRecordUkmForAppTypeName(AppType app_type) {
@@ -389,8 +428,8 @@ bool ShouldRecordUkmForAppTypeName(AppType app_type) {
     case AppType::kStandaloneBrowserChromeApp:
     case AppType::kStandaloneBrowserExtension:
       return true;
+    case AppType::kBruschetta:
     case AppType::kUnknown:
-    case AppType::kMacOs:
     case AppType::kPluginVm:
     case AppType::kRemote:
       return false;
@@ -401,12 +440,17 @@ int GetUserTypeByDeviceTypeMetrics() {
   const user_manager::User* primary_user =
       user_manager::UserManager::Get()->GetPrimaryUser();
   DCHECK(primary_user);
-  DCHECK(primary_user->is_profile_created());
-  Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(primary_user);
-  DCHECK(profile);
-
   UserTypeByDeviceTypeMetricsProvider::UserSegment user_segment =
-      UserTypeByDeviceTypeMetricsProvider::GetUserSegment(profile);
+      UserTypeByDeviceTypeMetricsProvider::UserSegment::kUnmanaged;
+  // In some tast tests, primary_user->is_profile_created() might return false
+  // for some unknown reasons.
+  if (primary_user->is_profile_created()) {
+    Profile* profile =
+        ash::ProfileHelper::Get()->GetProfileByUser(primary_user);
+    DCHECK(profile);
+
+    user_segment = UserTypeByDeviceTypeMetricsProvider::GetUserSegment(profile);
+  }
 
   policy::BrowserPolicyConnectorAsh* connector =
       g_browser_process->platform_part()->browser_policy_connector_ash();
@@ -434,8 +478,6 @@ AppTypeName GetAppTypeName(Profile* profile,
       return GetAppTypeNameForChromeApp(profile, app_id, container);
     case AppType::kWeb:
       return GetAppTypeNameForWebApp(profile, app_id, container);
-    case AppType::kMacOs:
-      return apps::AppTypeName::kMacOs;
     case AppType::kPluginVm:
       return apps::AppTypeName::kPluginVm;
     case AppType::kStandaloneBrowser:
@@ -453,6 +495,8 @@ AppTypeName GetAppTypeName(Profile* profile,
       return apps::AppTypeName::kExtension;
     case AppType::kStandaloneBrowserExtension:
       return apps::AppTypeName::kStandaloneBrowserExtension;
+    case AppType::kBruschetta:
+      return apps::AppTypeName::kBruschetta;
   }
 }
 
@@ -464,10 +508,24 @@ AppType GetAppType(Profile* profile, const std::string& app_id) {
   if (type != AppType::kUnknown) {
     return type;
   }
-  if (crostini::IsCrostiniShelfAppId(profile, app_id)) {
+  if (guest_os::IsCrostiniShelfAppId(profile, app_id)) {
     return AppType::kCrostini;
   }
   return AppType::kUnknown;
+}
+
+bool IsSystemWebApp(Profile* profile, const std::string& app_id) {
+  AppType app_type = GetAppType(profile, app_id);
+
+  InstallReason install_reason;
+  apps::AppServiceProxyFactory::GetForProfile(profile)
+      ->AppRegistryCache()
+      .ForOneApp(app_id, [&install_reason](const apps::AppUpdate& update) {
+        install_reason = update.InstallReason();
+      });
+
+  return app_type == AppType::kSystemWeb ||
+         install_reason == apps::InstallReason::kSystem;
 }
 
 }  // namespace apps

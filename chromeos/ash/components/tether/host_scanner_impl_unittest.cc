@@ -8,8 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
@@ -28,6 +29,7 @@
 #include "chromeos/ash/components/tether/mock_tether_host_response_recorder.h"
 #include "chromeos/ash/components/tether/proto_test_util.h"
 #include "chromeos/ash/components/tether/top_level_host_scan_cache.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_secure_channel_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
 #include "components/session_manager/core/session_manager.h"
@@ -94,7 +96,8 @@ class FakeHostScannerOperationFactory : public HostScannerOperation::Factory {
       : expected_devices_(test_devices) {}
   ~FakeHostScannerOperationFactory() override = default;
 
-  std::vector<FakeHostScannerOperation*>& created_operations() {
+  std::vector<raw_ptr<FakeHostScannerOperation, VectorExperimental>>&
+  created_operations() {
     return created_operations_;
   }
 
@@ -107,7 +110,7 @@ class FakeHostScannerOperationFactory : public HostScannerOperation::Factory {
       HostScanDevicePrioritizer* host_scan_device_prioritizer,
       TetherHostResponseRecorder* tether_host_response_recorder,
       ConnectionPreserver* connection_preserver) override {
-    EXPECT_EQ(expected_devices_, devices_to_connect);
+    EXPECT_EQ(*expected_devices_, devices_to_connect);
     FakeHostScannerOperation* operation = new FakeHostScannerOperation(
         devices_to_connect, device_sync_client, secure_channel_client,
         host_scan_device_prioritizer, tether_host_response_recorder,
@@ -117,8 +120,9 @@ class FakeHostScannerOperationFactory : public HostScannerOperation::Factory {
   }
 
  private:
-  const multidevice::RemoteDeviceRefList& expected_devices_;
-  std::vector<FakeHostScannerOperation*> created_operations_;
+  const raw_ref<const multidevice::RemoteDeviceRefList> expected_devices_;
+  std::vector<raw_ptr<FakeHostScannerOperation, VectorExperimental>>
+      created_operations_;
 };
 
 std::string GenerateCellProviderForDevice(

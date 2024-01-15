@@ -6,10 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
 #include "base/containers/flat_tree.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/system/sys_info.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_util.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/guest_os_session_tracker_factory.h"
 #include "chrome/browser/ash/guest_os/public/types.h"
@@ -68,8 +70,10 @@ GuestOsSessionTracker::~GuestOsSessionTracker() {
 void GuestOsSessionTracker::OnListVms(
     absl::optional<vm_tools::concierge::ListVmsResponse> response) {
   if (!response) {
-    LOG(ERROR)
-        << "Failed to list VMs, assuming there aren't any already running";
+    if (base::SysInfo::IsRunningOnChromeOS()) {
+      LOG(ERROR)
+          << "Failed to list VMs, assuming there aren't any already running";
+    }
     return;
   }
   for (const auto& vm : response->vms()) {
@@ -101,13 +105,14 @@ void GuestOsSessionTracker::OnListRunningContainers(
     ash::CiceroneClient::Get()->GetGarconSessionInfo(
         req, base::BindOnce(&GuestOsSessionTracker::OnGetGarconSessionInfo,
                             weak_ptr_factory_.GetWeakPtr(), container.vm_name(),
-                            container.container_name()));
+                            container.container_name(), container.container_token()));
   }
 }
 
 void GuestOsSessionTracker::OnGetGarconSessionInfo(
     std::string vm_name,
     std::string container_name,
+    std::string container_token,
     absl::optional<vm_tools::cicerone::GetGarconSessionInfoResponse> response) {
   if (!response ||
       response->status() !=
@@ -117,8 +122,8 @@ void GuestOsSessionTracker::OnGetGarconSessionInfo(
   }
   // Don't need ipv4 address yet so haven't plumbed it through. Once we get
   // around to port forwarding or similar we'll need it though.
-  HandleNewGuest(vm_name, container_name, response->container_username(),
-                 response->container_homedir(), "",
+  HandleNewGuest(vm_name, container_name,
+                 container_token, response->container_username(), response->container_homedir(), "",
                  response->sftp_vsock_port());
 }
 
@@ -141,8 +146,25 @@ absl::optional<vm_tools::concierge::VmInfo> GuestOsSessionTracker::GetVmInfo(
   return iter->second;
 }
 
+absl::optional<GuestId> GuestOsSessionTracker::GetGuestIdForToken(
+    const std::string& container_token) {
+  if (container_token.empty()) {
+    return absl::nullopt;
+  }
+
+  auto iter = tokens_to_guests_.find(container_token);
+  if (iter == tokens_to_guests_.end()) {
+    return absl::nullopt;
+  }
+  return iter->second;
+}
+
 bool GuestOsSessionTracker::IsRunning(const GuestId& id) {
   return guests_.contains(id);
+}
+
+bool GuestOsSessionTracker::IsVmStopping(const std::string& vm_name) {
+  return stopping_vms_.contains(vm_name);
 }
 
 // ash::ConciergeClient::VmObserver overrides.
@@ -162,6 +184,7 @@ void GuestOsSessionTracker::OnVmStopped(
     return;
   }
   vms_.erase(signal.name());
+  stopping_vms_.erase(signal.name());
   std::vector<GuestId> ids;
   for (const auto& pair : guests_) {
     if (pair.first.vm_name != signal.name()) {
@@ -170,12 +193,13 @@ void GuestOsSessionTracker::OnVmStopped(
     ids.push_back(pair.first);
   }
   for (const auto& id : ids) {
-    guests_.erase(id);
-    auto cb_list = container_shutdown_callbacks_.find(id);
-    if (cb_list != container_shutdown_callbacks_.end()) {
-      cb_list->second->Notify();
-    }
+    HandleContainerShutdown(id.vm_name, id.container_name);
   }
+}
+
+void GuestOsSessionTracker::OnVmStopping(
+    const vm_tools::concierge::VmStoppingSignal& signal) {
+  stopping_vms_.insert(signal.name());
 }
 
 // ash::CiceroneClient::Observer overrides.
@@ -186,27 +210,42 @@ void GuestOsSessionTracker::OnContainerStarted(
     return;
   }
   HandleNewGuest(signal.vm_name(), signal.container_name(),
-                 signal.container_username(), signal.container_homedir(),
-                 signal.ipv4_address(), signal.sftp_vsock_port());
+                 signal.container_token(), signal.container_username(),
+                 signal.container_homedir(), signal.ipv4_address(),
+                 signal.sftp_vsock_port());
 }
 
 void GuestOsSessionTracker::HandleNewGuest(const std::string& vm_name,
                                            const std::string& container_name,
+                                           const std::string& container_token,
                                            const std::string& username,
                                            const std::string& homedir,
                                            const std::string& ipv4_address,
-                                           uint32_t sftp_vsock_port) {
+                                           const uint32_t& sftp_vsock_port) {
   auto iter = vms_.find(vm_name);
   if (iter == vms_.end()) {
     LOG(ERROR)
-        << "Received ContainerStarted signal for an unexpected VM, ignoring";
+        << "Received ContainerStarted signal for an unexpected VM, ignoring.";
     return;
   }
-  GuestId id{VmType::UNKNOWN, vm_name, container_name};
+  vm_tools::apps::VmType vm_type = ToVmType(iter->second.vm_type());
+  // TODO(b/294316866): Special-case Bruschetta VMs until cicerone is updated to
+  // use the correct vm_type.
+  if (vm_name == bruschetta::kBruschettaVmName) {
+    vm_type = vm_tools::apps::VmType::BRUSCHETTA;
+  }
+  GuestId id{vm_type, vm_name, container_name};
   GuestInfo info{id,           iter->second.cid(),
                  username,     base::FilePath(homedir),
                  ipv4_address, sftp_vsock_port};
   guests_.insert_or_assign(id, info);
+
+  if (container_token.length() == 0) {
+    LOG(ERROR)
+        << "Received ContainerStarted signal with no container token specified.";
+  } else {
+    tokens_to_guests_.emplace(container_token, id);
+  }
 
   // If there're any pending container start callbacks for this guest run them.
   auto cb_list = container_start_callbacks_.find(id);
@@ -245,6 +284,16 @@ void GuestOsSessionTracker::HandleContainerShutdown(
     const std::string& container_name) {
   GuestId id{VmType::UNKNOWN, vm_name, container_name};
   guests_.erase(id);
+
+  auto iter = std::find_if(tokens_to_guests_.begin(), tokens_to_guests_.end(),
+                           [&id](const auto& it) { return it.second == id; });
+  if (iter == tokens_to_guests_.end()) {
+    LOG(ERROR) << "Attempted to remove token from the map which does not "
+                  "exist, ignoring";
+  } else {
+    tokens_to_guests_.erase(iter);
+  }
+
   auto cb_list = container_shutdown_callbacks_.find(id);
   if (cb_list != container_shutdown_callbacks_.end()) {
     cb_list->second->Notify();
@@ -269,11 +318,13 @@ base::CallbackListSubscription GuestOsSessionTracker::RunOnceContainerStarted(
 
 void GuestOsSessionTracker::AddGuestForTesting(const GuestId& id,
                                                const GuestInfo& info,
-                                               bool notify) {
+                                               bool notify,
+                                               const std::string& token) {
   vm_tools::concierge::VmInfo vm_info;
   vm_info.set_cid(info.cid);
   vms_.insert_or_assign(id.vm_name, vm_info);
   guests_.insert_or_assign(id, info);
+  tokens_to_guests_.insert_or_assign(token, id);
   if (notify) {
     for (auto& observer : container_started_observers_) {
       observer.OnContainerStarted(id);
@@ -281,8 +332,9 @@ void GuestOsSessionTracker::AddGuestForTesting(const GuestId& id,
   }
 }
 
-void GuestOsSessionTracker::AddGuestForTesting(const GuestId& id) {
-  AddGuestForTesting(id, GuestInfo{id, {}, {}, {}, {}, {}});
+void GuestOsSessionTracker::AddGuestForTesting(const GuestId& id,
+                                               const std::string& token) {
+  AddGuestForTesting(id, GuestInfo{id, {}, {}, {}, {}, {}}, false, token);
 }
 
 base::CallbackListSubscription GuestOsSessionTracker::RunOnShutdown(

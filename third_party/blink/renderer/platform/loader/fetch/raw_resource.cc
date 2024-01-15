@@ -27,6 +27,7 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/request_context_frame_type.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -343,7 +344,8 @@ NOINLINE void RawResourceClientStateChecker::DataSent() {
 }
 
 NOINLINE void RawResourceClientStateChecker::ResponseReceived() {
-  SECURITY_CHECK(state_ == kStarted);
+  // TODO(crbug.com/1431421): remove |state_| dump when the cause is clarified.
+  SECURITY_CHECK(state_ == kStarted) << " state_ was " << state_;
   state_ = kResponseReceived;
 }
 

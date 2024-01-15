@@ -37,7 +37,8 @@ using BrowserSwitcherServiceImpl = BrowserSwitcherService;
 
 // static
 BrowserSwitcherServiceFactory* BrowserSwitcherServiceFactory::GetInstance() {
-  return base::Singleton<BrowserSwitcherServiceFactory>::get();
+  static base::NoDestructor<BrowserSwitcherServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -53,12 +54,13 @@ BrowserSwitcherServiceFactory::BrowserSwitcherServiceFactory()
                                  // regular, non-Incognito profiles.
                                  ProfileSelections::BuildForRegularProfile()) {}
 
-BrowserSwitcherServiceFactory::~BrowserSwitcherServiceFactory() {}
+BrowserSwitcherServiceFactory::~BrowserSwitcherServiceFactory() = default;
 
-KeyedService* BrowserSwitcherServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+BrowserSwitcherServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  auto* instance =
-      new BrowserSwitcherServiceImpl(Profile::FromBrowserContext(context));
+  std::unique_ptr<BrowserSwitcherServiceImpl> instance =
+      std::make_unique<BrowserSwitcherServiceImpl>(Profile::FromBrowserContext(context));
   instance->Init();
   return instance;
 }

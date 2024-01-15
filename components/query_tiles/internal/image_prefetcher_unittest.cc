@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "components/query_tiles/internal/image_loader.h"
@@ -102,8 +102,8 @@ class ImagePrefetcherTest : public testing::Test {
 
  private:
   base::test::TaskEnvironment task_environment_;
-  raw_ptr<MockImageLoader> image_loader_;
   std::unique_ptr<ImagePrefetcher> image_prefetcher_;
+  raw_ptr<MockImageLoader> image_loader_;
 };
 
 // All images should be fetched for ImagePrefetchMode::kAll.

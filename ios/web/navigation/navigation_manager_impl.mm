@@ -5,16 +5,19 @@
 #import "ios/web/navigation/navigation_manager_impl.h"
 
 #import <Foundation/Foundation.h>
+
 #import <algorithm>
 #import <memory>
 #import <utility>
 
-#import "base/bind.h"
-#import "base/callback.h"
+#import "base/containers/span.h"
+#import "base/feature_list.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
 #import "base/ios/ios_util.h"
 #import "base/logging.h"
-#import "base/mac/bundle_locations.h"
 #import "base/memory/ptr_util.h"
+#import "base/metrics/histogram_functions.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/numerics/checked_math.h"
 #import "base/strings/string_util.h"
@@ -26,15 +29,12 @@
 #import "ios/web/navigation/wk_navigation_util.h"
 #import "ios/web/public/browser_state.h"
 #import "ios/web/public/navigation/navigation_item.h"
+#import "ios/web/public/session/proto/navigation.pb.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/web_state/ui/crw_web_view_navigation_proxy.h"
 #import "net/base/mac/url_conversions.h"
 #import "ui/base/page_transition_types.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -54,6 +54,45 @@ web::NavigationItemImpl* GetNavigationItemFromWKItem(
       navigationItem];
 }
 
+void RecordSessionRestorationHasFetchers(bool has_fetchers) {
+  base::UmaHistogramBoolean("Session.WebStates.NativeRestoreHasFetchers",
+                            has_fetchers);
+}
+
+// Records metrics about session restoration `success` from `source`.
+void RecordSessionRestorationResultForSource(
+    bool success,
+    web::NavigationManagerImpl::SessionDataBlobSource source) {
+  switch (source) {
+    case web::NavigationManagerImpl::SessionDataBlobSource::kSessionCache:
+      base::UmaHistogramBoolean(
+          "Session.WebStates.NativeRestoreSessionFromCache", success);
+      break;
+
+    case web::NavigationManagerImpl::SessionDataBlobSource::kSynthesized:
+      base::UmaHistogramBoolean("Session.WebStates.NativeRestoreSession",
+                                success);
+      break;
+  }
+}
+
+void RecordSessionRestorationFetcherHasDataForSource(
+    web::NavigationManagerImpl::SessionDataBlobSource source,
+    bool fetcher_has_data) {
+  switch (source) {
+    case web::NavigationManagerImpl::SessionDataBlobSource::kSessionCache:
+      base::UmaHistogramBoolean(
+          "Session.WebStates.NativeRestoreSessionFromCacheHasData",
+          fetcher_has_data);
+      break;
+
+    case web::NavigationManagerImpl::SessionDataBlobSource::kSynthesized:
+      base::UmaHistogramBoolean("Session.WebStates.NativeRestoreSessionHasData",
+                                fetcher_has_data);
+      break;
+  }
+}
+
 }  // namespace
 
 namespace web {
@@ -61,54 +100,116 @@ namespace web {
 const char kRestoreNavigationItemCount[] = "IOS.RestoreNavigationItemCount";
 const char kRestoreNavigationTime[] = "IOS.RestoreNavigationTime";
 
-NavigationManager::WebLoadParams::WebLoadParams(const GURL& url)
-    : url(url),
-      transition_type(ui::PAGE_TRANSITION_LINK),
-      is_renderer_initiated(false),
-      post_data(nil),
-      https_upgrade_type(HttpsUpgradeType::kNone) {}
+NavigationManager::WebLoadParams::WebLoadParams(const GURL& url) : url(url) {}
 
-NavigationManager::WebLoadParams::~WebLoadParams() {}
+NavigationManager::WebLoadParams::~WebLoadParams() = default;
 
-NavigationManager::WebLoadParams::WebLoadParams(const WebLoadParams& other)
-    : url(other.url),
-      virtual_url(other.virtual_url),
-      referrer(other.referrer),
-      transition_type(other.transition_type),
-      is_renderer_initiated(other.is_renderer_initiated),
-      extra_headers([other.extra_headers copy]),
-      post_data([other.post_data copy]),
-      https_upgrade_type(other.https_upgrade_type) {}
+NavigationManager::WebLoadParams::WebLoadParams(const WebLoadParams& other) =
+    default;
 
 NavigationManager::WebLoadParams& NavigationManager::WebLoadParams::operator=(
-    const WebLoadParams& other) {
-  url = other.url;
-  virtual_url = other.virtual_url;
-  referrer = other.referrer;
-  is_renderer_initiated = other.is_renderer_initiated;
-  transition_type = other.transition_type;
-  extra_headers = [other.extra_headers copy];
-  post_data = [other.post_data copy];
-  https_upgrade_type = other.https_upgrade_type;
+    const WebLoadParams& other) = default;
 
-  return *this;
+NavigationManagerImpl::NavigationManagerImpl(
+    BrowserState* browser_state,
+    NavigationManagerDelegate* delegate)
+    : delegate_(delegate), browser_state_(browser_state) {
+  CHECK(browser_state_);
+  CHECK(delegate_);
 }
-
-NavigationManagerImpl::NavigationManagerImpl()
-    : delegate_(nullptr),
-      browser_state_(nullptr),
-      pending_item_index_(-1),
-      last_committed_item_index_(-1),
-      web_view_cache_(this) {}
 
 NavigationManagerImpl::~NavigationManagerImpl() = default;
 
-void NavigationManagerImpl::SetDelegate(NavigationManagerDelegate* delegate) {
-  delegate_ = delegate;
+void NavigationManagerImpl::RestoreFromProto(
+    const proto::NavigationStorage& storage) {
+  std::vector<std::unique_ptr<NavigationItem>> items;
+  items.reserve(storage.items_size());
+
+  for (const auto& item_storage : storage.items()) {
+    auto item = std::make_unique<NavigationItemImpl>(item_storage);
+    RewriteItemURLIfNecessary(item.get());
+    items.push_back(std::move(item));
+  }
+
+  Restore(storage.last_committed_item_index(), std::move(items));
 }
 
-void NavigationManagerImpl::SetBrowserState(BrowserState* browser_state) {
-  browser_state_ = browser_state;
+void NavigationManagerImpl::SerializeToProto(
+    proto::NavigationStorage& storage) const {
+  const int count = GetItemCount();
+
+  // The last committed item index may be equal to -1 if a session is saved
+  // during restoration. In that case use GetItemCount() - 1.
+  int last_committed_item_index = GetLastCommittedItemIndex();
+  if (last_committed_item_index == -1) {
+    last_committed_item_index = count - 1;
+  }
+
+  DCHECK_LT(last_committed_item_index, count);
+
+  // As some items may be skipped during serialization (e.g. because their
+  // URL is too large, or they were marked "to skip during serialisation")
+  // collect the items that will be serialized in a first pass.
+  std::vector<const NavigationItemImpl*> items;
+  items.reserve(static_cast<size_t>(count));
+
+  const int original_last_committed_item_index = last_committed_item_index;
+  for (int index = 0; index < count; ++index) {
+    const NavigationItemImpl* item =
+        GetNavigationItemImplAtIndex(static_cast<size_t>(index));
+
+    if (item->ShouldSkipSerialization()) {
+      // Update the index of the last committed item if necessary when
+      // skipping an item.
+      if (index <= original_last_committed_item_index) {
+        --last_committed_item_index;
+      }
+      continue;
+    }
+
+    items.push_back(item);
+  }
+
+  // Ensure that the last committed item index is still in range.
+  const int items_size = static_cast<int>(items.size());
+  DCHECK_LE(items_size, count);
+  DCHECK_LT(last_committed_item_index, items_size);
+
+  // Limit the number of navigation item that are serialised to prevent
+  // the storage required to grow indefinitely.
+  int offset_int = 0;
+  int length_int = 0;
+  last_committed_item_index = wk_navigation_util::GetSafeItemRange(
+      last_committed_item_index, items_size, &offset_int, &length_int);
+
+  DCHECK_GE(offset_int, 0);
+  DCHECK_GE(length_int, 0);
+  DCHECK_LT(last_committed_item_index, length_int);
+
+  const size_t offset = static_cast<size_t>(offset_int);
+  const size_t length = static_cast<size_t>(length_int);
+
+  DCHECK_LE(offset, items.size());
+  DCHECK_LE(length + offset, items.size());
+
+  storage.set_last_committed_item_index(last_committed_item_index);
+  for (const auto* item : base::make_span(items.begin() + offset, length)) {
+    item->SerializeToProto(*storage.add_items());
+  }
+}
+
+void NavigationManagerImpl::SetNativeSessionFetcher(
+    SessionDataBlobFetcher native_session_fetcher) {
+  CHECK(session_data_blob_fetchers_.empty());
+  if (base::FeatureList::IsEnabled(features::kForceSynthesizedRestoreSession)) {
+    // If the use of synthesized native WKWebView session is force, then drop
+    // the `native_session_fetcher`. This simulate a missing native session
+    // and force the synthese of a native WKWebView session.
+    return;
+  }
+
+  AppendSessionDataBlobFetcher(std::move(native_session_fetcher),
+                               SessionDataBlobSource::kSessionCache);
 }
 
 void NavigationManagerImpl::OnNavigationItemCommitted() {
@@ -116,6 +217,9 @@ void NavigationManagerImpl::OnNavigationItemCommitted() {
   DCHECK(item);
   delegate_->OnNavigationItemCommitted(item);
 
+  if (native_restore_in_progress_) {
+    native_restore_in_progress_ = false;
+  }
   if (!wk_navigation_util::IsRestoreSessionUrl(item->GetURL())) {
     restored_visible_item_.reset();
     if (is_restore_session_in_progress_) {
@@ -179,6 +283,7 @@ void NavigationManagerImpl::AddPendingItem(
     ui::PageTransition navigation_type,
     NavigationInitiationType initiation_type,
     bool is_post_navigation,
+    bool is_error_navigation,
     HttpsUpgradeType https_upgrade_type) {
   DiscardNonCommittedItems();
 
@@ -250,7 +355,7 @@ void NavigationManagerImpl::AddPendingItem(
       is_post_navigation &&
       (navigation_type & ui::PageTransition::PAGE_TRANSITION_FORM_SUBMIT);
   if (proxy.backForwardList.currentItem && isCurrentURLSameAsPending &&
-      !is_form_post) {
+      !is_form_post && !is_error_navigation) {
     pending_item_index_ = web_view_cache_.GetCurrentItemIndex();
 
     // If `currentItem` is not already associated with a NavigationItemImpl,
@@ -425,18 +530,31 @@ void NavigationManagerImpl::SetWKWebViewNextPendingUrlNotSerializable(
   next_pending_url_should_skip_serialization_ = url;
 }
 
-bool NavigationManagerImpl::RestoreNativeSession(const GURL& url) {
-  DCHECK(is_restore_session_in_progress_);
+void NavigationManagerImpl::RestoreNativeSession() {
+  if (!base::FeatureList::IsEnabled(features::kRemoveOldWebStateRestoration)) {
+    DCHECK(is_restore_session_in_progress_);
+  }
+  RecordSessionRestorationHasFetchers(!session_data_blob_fetchers_.empty());
 
-  GURL targetURL;
-  if (!web::wk_navigation_util::IsRestoreSessionUrl(url) ||
-      web::wk_navigation_util::ExtractTargetURL(url, &targetURL)) {
-    return false;
+  // Try to load session data blob from each registered source in order,
+  // stopping at the first that is successfully loaded.
+  bool success = false;
+  for (auto& [fetcher, source] : session_data_blob_fetchers_) {
+    NSData* data = std::move(fetcher).Run();
+
+    bool fetcher_has_data = data.length != 0;
+    RecordSessionRestorationFetcherHasDataForSource(source, fetcher_has_data);
+    if (fetcher_has_data) {
+      success = GetWebState()->SetSessionStateData(data);
+      RecordSessionRestorationResultForSource(success, source);
+      if (success) {
+        break;
+      }
+    }
   }
 
-  if (!web::GetWebClient()->RestoreSessionFromCache(GetWebState()) &&
-      !synthesized_restore_helper_.Restore(GetWebState())) {
-    return false;
+  if (!success) {
+    return;
   }
 
   // Native restore worked, abort unsafe restore.
@@ -453,7 +571,6 @@ bool NavigationManagerImpl::RestoreNativeSession(const GURL& url) {
   }
   restored_visible_item_.reset();
   FinalizeSessionRestore();
-  return true;
 }
 
 void NavigationManagerImpl::RemoveTransientURLRewriters() {
@@ -517,7 +634,9 @@ void NavigationManagerImpl::GoToIndex(int index,
                                       NavigationInitiationType initiation_type,
                                       bool has_user_gesture) {
   if (index < 0 || index >= GetItemCount()) {
-    NOTREACHED();
+    // Button actions are executed asynchronously, so it is possible for the
+    // client to call this with an invalid index if the user quickly taps the
+    // back or foward button mulitple times. See crbug.com/1407244.
     return;
   }
 
@@ -657,7 +776,7 @@ void NavigationManagerImpl::LoadURLWithParams(
           : NavigationInitiationType::BROWSER_INITIATED;
   AddPendingItem(params.url, params.referrer, params.transition_type,
                  initiation_type, /*is_post_navigation=*/false,
-                 params.https_upgrade_type);
+                 /*is_error_navigation=*/false, params.https_upgrade_type);
 
   // Mark pending item as created from hash change if necessary. This is needed
   // because window.hashchange message may not arrive on time.
@@ -726,7 +845,9 @@ void NavigationManagerImpl::LoadIfNecessary() {
     Restore(web_view_cache_.GetCurrentItemIndex(),
             web_view_cache_.ReleaseCachedItems());
     DCHECK(web_view_cache_.IsAttachedToWebView());
-  } else {
+  } else if (!base::FeatureList::IsEnabled(
+                 features::kRemoveOldWebStateRestoration) ||
+             !native_restore_in_progress_) {
     delegate_->LoadIfNecessary();
   }
 }
@@ -922,10 +1043,54 @@ void NavigationManagerImpl::Restore(
   if (GetItemCount() > 0) {
     delegate_->RemoveWebView();
   }
-  DCHECK_EQ(0, GetItemCount());
-  DCHECK_EQ(-1, pending_item_index_);
-  last_committed_item_index_ = -1;
-  UnsafeRestore(last_committed_item_index, std::move(items));
+
+  if (base::FeatureList::IsEnabled(features::kRemoveOldWebStateRestoration) &&
+      !web_view_cache_.IsAttachedToWebView()) {
+    web_view_cache_.ResetToAttached();
+  }
+
+  for (size_t index = 0; index < items.size(); ++index) {
+    RewriteItemURLIfNecessary(items[index].get());
+  }
+
+  NSData* synthesized_data = SynthesizedSessionRestore(
+      last_committed_item_index, items, browser_state_->IsOffTheRecord());
+  if (synthesized_data != nil) {
+    AppendSessionDataBlobFetcher(
+        base::BindOnce([](NSData* data) { return data; }, synthesized_data),
+        SessionDataBlobSource::kSynthesized);
+  }
+
+  if (!base::FeatureList::IsEnabled(features::kRemoveOldWebStateRestoration)) {
+    DCHECK_EQ(0, GetItemCount());
+    DCHECK_EQ(-1, pending_item_index_);
+    last_committed_item_index_ = -1;
+    UnsafeRestore(last_committed_item_index, std::move(items));
+    return;
+  }
+
+  native_restore_in_progress_ = true;
+
+  // Ordering is important. Cache the visible item of the restored session
+  // before starting the new navigation, which may trigger client lookup of
+  // visible item. The visible item of the restored session is the last
+  // committed item, because a restored session has no pending item.
+  if (last_committed_item_index > -1) {
+    restored_visible_item_ = std::move(items[last_committed_item_index]);
+  }
+
+  std::vector<std::unique_ptr<NavigationItem>> back_items;
+  for (int index = 0; index < last_committed_item_index; index++) {
+    back_items.push_back(std::move(items[index]));
+  }
+
+  std::vector<std::unique_ptr<NavigationItem>> forward_items;
+  for (size_t index = last_committed_item_index + 1; index < items.size();
+       index++) {
+    forward_items.push_back(std::move(items[index]));
+  }
+
+  RestoreNativeSession();
 }
 
 bool NavigationManagerImpl::IsRestoreSessionInProgress() const {
@@ -971,7 +1136,7 @@ NavigationManagerImpl::GetLastCommittedItemInCurrentOrRestoredSession() const {
     // Don't check trust level here, as at this point it's expected
     // the _documentURL and the last_commited_item URL have an origin
     // mismatch.
-    GURL document_url = GetWebState()->GetCurrentURL(/*trust_level=*/nullptr);
+    GURL document_url = delegate_->GetCurrentURL();
     if (!last_committed_web_view_item_) {
       last_committed_web_view_item_ = CreateNavigationItemWithRewriters(
           /*url=*/GURL::EmptyGURL(), Referrer(),
@@ -1029,6 +1194,13 @@ NavigationItemImpl* NavigationManagerImpl::GetNavigationItemImplAtIndex(
       index, true /* create_if_missing */);
 }
 
+void NavigationManagerImpl::AppendSessionDataBlobFetcher(
+    SessionDataBlobFetcher fetcher,
+    SessionDataBlobSource source) {
+  session_data_blob_fetchers_.push_back(
+      std::make_pair(std::move(fetcher), source));
+}
+
 void NavigationManagerImpl::RestoreItemsState(
     RestoreItemListType list_type,
     std::vector<std::unique_ptr<NavigationItem>> items_restored) {
@@ -1070,27 +1242,18 @@ void NavigationManagerImpl::RestoreItemsState(
   }
 }
 
+// This function restores session history by loading a magic local file
+// (restore_session.html) into the web view. The session history is encoded
+// in the query parameter. When loaded, restore_session.html parses the
+// session history and replays them into the web view using History API.
 void NavigationManagerImpl::UnsafeRestore(
     int last_committed_item_index,
     std::vector<std::unique_ptr<NavigationItem>> items) {
-  // This function restores session history by loading a magic local file
-  // (restore_session.html) into the web view. The session history is encoded
-  // in the query parameter. When loaded, restore_session.html parses the
-  // session history and replays them into the web view using History API.
-  for (size_t index = 0; index < items.size(); ++index) {
-    RewriteItemURLIfNecessary(items[index].get());
-  }
-
   // TODO(crbug.com/771200): Retain these original NavigationItems restored from
   // storage and associate them with new WKBackForwardListItems created after
   // history restore so information such as scroll position is restored.
-  int first_index = -1;
   GURL url;
-
-  bool off_the_record = browser_state_->IsOffTheRecord();
-  synthesized_restore_helper_.Init(last_committed_item_index, items,
-                                   off_the_record);
-
+  int first_index = -1;
   wk_navigation_util::CreateRestoreSessionUrl(last_committed_item_index, items,
                                               &url, &first_index);
   DCHECK_GE(first_index, 0);
@@ -1236,15 +1399,6 @@ bool NavigationManagerImpl::CanTrustLastCommittedItem(
   if (!web_view_cache_.IsAttachedToWebView())
     return true;
 
-  // Only compare origins, as any mismatch between `web_view_url` and
-  // `last_committed_url` with the same origin are safe to return as
-  // visible.
-  GURL web_view_url = web_view_cache_.GetVisibleWebViewURL();
-  GURL last_committed_url = last_committed_item->GetURL();
-  if (web_view_url.DeprecatedGetOriginAsURL() ==
-      last_committed_url.DeprecatedGetOriginAsURL())
-    return true;
-
   // Fast back-forward navigations can be performed synchronously, with the
   // WKWebView.URL updated before enough callbacks occur to update the
   // last committed item.  As a result, any calls to
@@ -1256,14 +1410,30 @@ bool NavigationManagerImpl::CanTrustLastCommittedItem(
   if (going_to_back_forward_list_item_)
     return true;
 
+  const GURL& last_committed_url = last_committed_item->GetURL();
   // WKWebView.URL will update immediately when navigating to and from
   // about, file or chrome scheme URLs.
-  if (web_view_url.SchemeIs(url::kAboutScheme) ||
-      last_committed_url.SchemeIs(url::kAboutScheme) ||
-      web_view_url.SchemeIs(url::kFileScheme) ||
+  // Checks `last_committed_url` in advance to reduce the calling to
+  // `web_view_cache_.GetVisibleWebViewOriginURL()` for better performance.
+  if (last_committed_url.SchemeIs(url::kAboutScheme) ||
       last_committed_url.SchemeIs(url::kFileScheme) ||
-      web::GetWebClient()->IsAppSpecificURL(web_view_url) ||
       web::GetWebClient()->IsAppSpecificURL(last_committed_url)) {
+    return true;
+  }
+
+  // Only compare origins, as any mismatch between `web_view_url` and
+  // `last_committed_url` with the same origin are safe to return as
+  // visible.
+  const GURL& web_view_origin_url =
+      web_view_cache_.GetVisibleWebViewOriginURL();
+  if (web_view_origin_url == last_committed_url.DeprecatedGetOriginAsURL())
+    return true;
+
+  // WKWebView.URL will update immediately when navigating to and from
+  // about, file or chrome scheme URLs.
+  if (web_view_origin_url.SchemeIs(url::kAboutScheme) ||
+      web_view_origin_url.SchemeIs(url::kFileScheme) ||
+      web::GetWebClient()->IsAppSpecificURL(web_view_origin_url)) {
     return true;
   }
 
@@ -1272,7 +1442,7 @@ bool NavigationManagerImpl::CanTrustLastCommittedItem(
 
 void NavigationManagerImpl::FinalizeSessionRestore() {
   is_restore_session_in_progress_ = false;
-  synthesized_restore_helper_.Clear();
+  session_data_blob_fetchers_.clear();
 
   for (base::OnceClosure& callback : restore_session_completion_callbacks_) {
     std::move(callback).Run();
@@ -1294,17 +1464,21 @@ bool NavigationManagerImpl::WKWebViewCache::IsAttachedToWebView() const {
 void NavigationManagerImpl::WKWebViewCache::DetachFromWebView() {
   if (IsAttachedToWebView()) {
     cached_current_item_index_ = GetCurrentItemIndex();
-    cached_items_.resize(GetBackForwardListItemCount());
+    cached_items_.reserve(GetBackForwardListItemCount());
     for (size_t index = 0; index < GetBackForwardListItemCount(); index++) {
-      cached_items_[index].reset(new NavigationItemImpl(
-          *GetNavigationItemImplAtIndex(index, true /* create_if_missing */)));
+      std::unique_ptr<NavigationItemImpl> clone =
+          GetNavigationItemImplAtIndex(index, /* create_if_missing = */ true)
+              ->Clone();
+
       // Don't put restore URL's into `cached_items`, extract them first.
-      GURL url = cached_items_[index]->GetURL();
+      const GURL& url = clone->GetURL();
       if (wk_navigation_util::IsRestoreSessionUrl(url)) {
         GURL extracted_url;
         if (wk_navigation_util::ExtractTargetURL(url, &extracted_url))
-          cached_items_[index]->SetURL(extracted_url);
+          clone->SetURL(extracted_url);
       }
+
+      cached_items_.push_back(std::move(clone));
     }
   }
   attached_to_web_view_ = false;
@@ -1329,8 +1503,9 @@ NavigationManagerImpl::WKWebViewCache::ReleaseCachedItems() {
 
 size_t NavigationManagerImpl::WKWebViewCache::GetBackForwardListItemCount()
     const {
-  if (!IsAttachedToWebView())
+  if (!IsAttachedToWebView()) {
     return cached_items_.size();
+  }
 
   id<CRWWebViewNavigationProxy> proxy =
       navigation_manager_->delegate_->GetWebViewNavigationProxy();
@@ -1344,15 +1519,27 @@ size_t NavigationManagerImpl::WKWebViewCache::GetBackForwardListItemCount()
   return 0;
 }
 
-GURL NavigationManagerImpl::WKWebViewCache::GetVisibleWebViewURL() const {
+const GURL& NavigationManagerImpl::WKWebViewCache::GetVisibleWebViewOriginURL()
+    const {
   if (!IsAttachedToWebView())
-    return GURL();
+    return GURL::EmptyGURL();
 
   id<CRWWebViewNavigationProxy> proxy =
       navigation_manager_->delegate_->GetWebViewNavigationProxy();
-  if (proxy)
-    return net::GURLWithNSURL(proxy.URL);
-  return GURL();
+  if (proxy) {
+    // Retain the url to reduce the number of calls to `proxy.URL` which may be
+    // very expensive after being called hundreds of time for one navigation.
+    NSURL* url = proxy.URL;
+    if (![cached_visible_host_nsstring_ isEqualToString:url.host] ||
+        ![cached_visible_scheme_nsstring_ isEqualToString:url.scheme]) {
+      cached_visible_origin_url_ =
+          net::GURLWithNSURL(url).DeprecatedGetOriginAsURL();
+      cached_visible_host_nsstring_ = url.host;
+      cached_visible_scheme_nsstring_ = url.scheme;
+    }
+    return cached_visible_origin_url_;
+  }
+  return GURL::EmptyGURL();
 }
 
 int NavigationManagerImpl::WKWebViewCache::GetCurrentItemIndex() const {

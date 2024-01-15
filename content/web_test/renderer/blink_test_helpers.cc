@@ -19,8 +19,8 @@
 #include "ui/display/display.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/bundle_locations.h"
-#include "base/mac/foundation_util.h"
+#include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 using blink::WebURL;
@@ -33,7 +33,8 @@ base::FilePath GetWebTestsFilePath() {
   static base::FilePath path;
   if (path.empty()) {
     base::FilePath root_path;
-    bool success = base::PathService::Get(base::DIR_SOURCE_ROOT, &root_path);
+    bool success =
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_path);
     CHECK(success);
     path = root_path.Append(FILE_PATH_LITERAL("third_party/blink/web_tests/"));
   }
@@ -44,7 +45,8 @@ base::FilePath GetExternalWPTFilePath() {
   static base::FilePath path;
   if (path.empty()) {
     base::FilePath root_path;
-    bool success = base::PathService::Get(base::DIR_SOURCE_ROOT, &root_path);
+    bool success =
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_path);
     CHECK(success);
     path = root_path.Append(
         FILE_PATH_LITERAL("third_party/blink/web_tests/external/wpt"));
@@ -110,10 +112,10 @@ void ExportWebTestSpecificPreferences(const TestPreferences& from,
 
 static base::FilePath GetBuildDirectory() {
 #if BUILDFLAG(IS_MAC)
-  if (base::mac::AmIBundled()) {
+  if (base::apple::AmIBundled()) {
     // If this is a bundled Content Shell.app, go up one from the outer bundle
     // directory.
-    return base::mac::OuterBundlePath().DirName();
+    return base::apple::OuterBundlePath().DirName();
   }
 #endif
 
@@ -136,7 +138,7 @@ WebURL RewriteWebTestsURL(base::StringPiece utf8_url, bool is_wpt_mode) {
         GetBuildDirectory().Append(FILE_PATH_LITERAL("gen/"));
     std::string new_url("file://");
     new_url.append(gen_directory_path.AsUTF8Unsafe());
-    new_url.append(utf8_url.substr(kGenPrefix.size()).data());
+    new_url.append(utf8_url.substr(kGenPrefix.size()));
     return WebURL(GURL(new_url));
   }
 
@@ -147,7 +149,7 @@ WebURL RewriteWebTestsURL(base::StringPiece utf8_url, bool is_wpt_mode) {
 
   std::string new_url("file://");
   new_url.append(GetWebTestsFilePath().AsUTF8Unsafe());
-  new_url.append(utf8_url.substr(kPrefix.size()).data());
+  new_url.append(utf8_url.substr(kPrefix.size()));
   return WebURL(GURL(new_url));
 }
 

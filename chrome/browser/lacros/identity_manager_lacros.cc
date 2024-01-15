@@ -4,8 +4,8 @@
 
 #include "chrome/browser/lacros/identity_manager_lacros.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chromeos/lacros/lacros_service.h"
 
 namespace {
@@ -18,7 +18,7 @@ chromeos::LacrosService* GetLacrosService(int min_version,
   if (!service)
     return nullptr;
   int interface_version =
-      service->GetInterfaceVersion(crosapi::mojom::IdentityManager::Uuid_);
+      service->GetInterfaceVersion<crosapi::mojom::IdentityManager>();
   if (interface_version < min_version) {
     DLOG(ERROR) << "Unsupported ash version for " << function_name;
     return nullptr;
@@ -81,6 +81,25 @@ void IdentityManagerLacros::GetAccountEmail(
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
+void IdentityManagerLacros::HasAccountWithPersistentError(
+    const std::string& gaia_id,
+    crosapi::mojom::IdentityManager::HasAccountWithPersistentErrorCallback
+        callback) {
+  chromeos::LacrosService* service = GetLacrosService(
+      RemoteMinVersions::kHasAccountWithPersistentErrorMinVersion,
+      "HasAccountWithPersistentError");
+  if (!service) {
+    std::move(callback).Run(false);
+    return;
+  }
+
+  service->GetRemote<crosapi::mojom::IdentityManager>()
+      ->HasAccountWithPersistentError(
+          gaia_id,
+          base::BindOnce(&IdentityManagerLacros::RunPersistentErrorCallback,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
 void IdentityManagerLacros::RunFullNameCallback(
     crosapi::mojom::IdentityManager::GetAccountFullNameCallback callback,
     const std::string& name) {
@@ -97,4 +116,11 @@ void IdentityManagerLacros::RunEmailCallback(
     crosapi::mojom::IdentityManager::GetAccountEmailCallback callback,
     const std::string& email) {
   std::move(callback).Run(email);
+}
+
+void IdentityManagerLacros::RunPersistentErrorCallback(
+    crosapi::mojom::IdentityManager::HasAccountWithPersistentErrorCallback
+        callback,
+    bool persistent_error) {
+  std::move(callback).Run(persistent_error);
 }

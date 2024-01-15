@@ -12,10 +12,10 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/task/updateable_sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/paint_preview/common/proto/paint_preview.pb.h"
 #include "components/paint_preview/common/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -39,7 +39,7 @@ class FileManagerTest : public ::testing::Test {
   const base::FilePath& Dir() const { return temp_dir.GetPath(); }
 
   scoped_refptr<base::SequencedTaskRunner> MainTaskRunner() {
-    return base::SequencedTaskRunnerHandle::Get();
+    return base::SequencedTaskRunner::GetCurrentDefault();
   }
 
   scoped_refptr<base::UpdateableSequencedTaskRunner> SecondaryTaskRunner() {
@@ -69,8 +69,7 @@ TEST_F(FileManagerTest, TestStats) {
 
   base::FilePath file_path = out.AppendASCII("test");
   std::string test_str = "Hello World!";
-  EXPECT_EQ(static_cast<int>(test_str.length()),
-            base::WriteFile(file_path, test_str.data(), test_str.length()));
+  EXPECT_TRUE(base::WriteFile(file_path, test_str));
 
   EXPECT_EQ(manager->GetSizeOfArtifacts(valid_key), test_str.length());
 }
@@ -92,9 +91,7 @@ TEST_F(FileManagerTest, TestCreateOrGetDirectory) {
             EXPECT_FALSE(directory.empty());
             base::FilePath test_file = directory.AppendASCII("test");
             std::string test_str = "Hello World!";
-            EXPECT_EQ(
-                static_cast<int>(test_str.length()),
-                base::WriteFile(test_file, test_str.data(), test_str.length()));
+            EXPECT_TRUE(base::WriteFile(test_file, test_str));
 
             // Open an existing directory and don't clear.
             base::FilePath existing_directory =
@@ -126,8 +123,7 @@ TEST_F(FileManagerTest, TestCompression) {
   // A file needs to exist for compression to work.
   base::FilePath test_file = directory.AppendASCII("test");
   std::string test_str = "Hello World!";
-  EXPECT_EQ(static_cast<int>(test_str.length()),
-            base::WriteFile(test_file, test_str.data(), test_str.length()));
+  EXPECT_TRUE(base::WriteFile(test_file, test_str));
   EXPECT_TRUE(base::PathExists(test_file));
   base::FilePath test_file_empty = directory.AppendASCII("foo.txt");
   {

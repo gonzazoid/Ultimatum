@@ -8,6 +8,8 @@
 #include <string>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/views/view.h"
 
@@ -19,9 +21,16 @@ class Label;
 namespace ash {
 
 // Displays a rounded rect bubble containing styled text xor a vector icon.
+// Setting `use_modified_styling` to `true` changes the style of iconified text
+// for modifier keys like 'ctrl' and 'alt'. Setting `is_first_key` to `true`
+// changes the left margin of the view to 0 so it can be left-aligned with other
+// elements.
 class ASH_EXPORT SearchResultInlineIconView : public views::View {
+  METADATA_HEADER(SearchResultInlineIconView, views::View)
+
  public:
-  SearchResultInlineIconView();
+  SearchResultInlineIconView(bool use_modified_styling,
+                             bool is_first_key = false);
   SearchResultInlineIconView(const SearchResultInlineIconView&) = delete;
   SearchResultInlineIconView& operator=(const SearchResultInlineIconView&) =
       delete;
@@ -32,19 +41,24 @@ class ASH_EXPORT SearchResultInlineIconView : public views::View {
   void SetIcon(const gfx::VectorIcon& icon);
   void SetText(const std::u16string& text);
 
+  // Sets the tooltip text on `icon_image_`.
+  void SetTooltipTextForImageView(const std::u16string& text);
+
  private:
   class SizedLabel;
 
   // views::View:
   void OnPaint(gfx::Canvas* canvas) override;
-  void OnThemeChanged() override;
+
+  // Style iconified text for modifier keys like 'ctrl' and 'alt' differently.
+  const bool use_modified_styling_;
 
   // Cached icon used to recolor icon_image_ when OnThemeChanged() is called.
-  const gfx::VectorIcon* icon_ = nullptr;
+  raw_ptr<const gfx::VectorIcon> icon_ = nullptr;
 
-  views::ImageView* icon_image_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::ImageView> icon_image_ = nullptr;  // Owned by views hierarchy.
 
-  views::Label* label_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<views::Label> label_ = nullptr;  // Owned by views hierarchy.
 };
 
 }  // namespace ash

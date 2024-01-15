@@ -11,6 +11,7 @@
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -192,7 +193,9 @@ void DeprecatedAppsDialogView::InitDialog() {
   SetAcceptCallback(base::BindOnce(&DeprecatedAppsDialogView::OnAccept,
                                    base::Unretained(this)));
 
-  if (launched_extension_name_) {
+  bool hide_launch_anyways =
+      features::kChromeAppsDeprecationHideLaunchAnyways.Get();
+  if (launched_extension_name_ && !hide_launch_anyways) {
     SetButtonLabel(
         ui::DIALOG_BUTTON_CANCEL,
         l10n_util::GetStringUTF16(IDS_DEPRECATED_APPS_LAUNCH_ANYWAY_LABEL));
@@ -231,7 +234,8 @@ void DeprecatedAppsDialogView::InitDialog() {
   columns.emplace_back(ui::TableColumn());
 
   auto table = std::make_unique<views::TableView>(
-      deprecated_apps_table_model_.get(), columns, views::ICON_AND_TEXT,
+      deprecated_apps_table_model_.get(), columns,
+      views::TableType::kIconAndText,
       /*single_selection=*/true);
   deprecated_apps_table_view_ = table.get();
   table->SetID(DEPRECATED_APPS_TABLE);
@@ -265,9 +269,13 @@ void DeprecatedAppsDialogView::OnAccept() {
 }
 
 void DeprecatedAppsDialogView::OnCancel() {
-  std::move(launch_anyways_).Run();
+  bool hide_launch_anyways =
+      features::kChromeAppsDeprecationHideLaunchAnyways.Get();
+  if (!hide_launch_anyways) {
+    std::move(launch_anyways_).Run();
+  }
   CloseDialog();
 }
 
-BEGIN_METADATA(DeprecatedAppsDialogView, views::DialogDelegateView)
+BEGIN_METADATA(DeprecatedAppsDialogView)
 END_METADATA

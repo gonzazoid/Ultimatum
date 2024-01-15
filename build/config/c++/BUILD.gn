@@ -44,6 +44,15 @@ config("runtime_library") {
 
   defines += [ "CR_LIBCXX_REVISION=$libcxx_revision" ]
 
+  # Temporarily add a define to force a rebuild when changing
+  # buildtools/third_party/libc++/__config_site which isn't picked up by
+  # dependency tracking (because it's an #include of headers included via
+  # -isysroot).
+  # TODO(thakis): Remove this after a few days.
+  if (is_asan) {
+    defines += [ "TEMP_REBUILD_HACK" ]
+  }
+
   if (is_win) {
     # Intentionally not using libc++abi on Windows because libc++abi only
     # implements the Itanium C++ ABI, and not the Microsoft ABI which we use on
@@ -94,19 +103,11 @@ config("runtime_library") {
       ]
     }
   }
-  if (enable_safe_libcxx) {
-    defines += [
-      "_LIBCPP_ENABLE_ASSERTIONS_DEFAULT=1",
 
-      # The following macro is a kind of a misnomer in that it only controls the
-      # default verbose abort handler in the header <__verbose_abort> and not
-      # the default libc++ verbose abort handler in verbose_abort.cpp. We
-      # define this macro so that the <__verbose_abort> header only includes
-      # the declaration for the handler function and not the definition as we
-      # rely on the handler in //base:nodebug_assertion for nondebug executables
-      # that include base and the default handler in verbose_abort.cpp
-      # elsewhere.
-      "_LIBCPP_AVAILABILITY_CUSTOM_VERBOSE_ABORT_PROVIDED=1",
-    ]
-  }
+  # In a world without NaCl, the `runtime_library` config would also configure
+  # the `_LIBCPP_ENABLE_ASSERTIONS` define to enable hardening when using the
+  # custom hermetic libc++. However, this is currently added by the `compiler`
+  # config instead, since this hardening define should also be used by the NaCl
+  # saigo toolchain, which uses a prebuilt libc++ that is distinct from the
+  # custom hermetic libc++.
 }

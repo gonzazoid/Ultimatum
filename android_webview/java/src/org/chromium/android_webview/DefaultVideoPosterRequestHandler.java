@@ -7,10 +7,10 @@ package org.chromium.android_webview;
 import android.graphics.Bitmap;
 import android.util.Log;
 
+import org.chromium.android_webview.common.Lifetime;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.components.embedder_support.util.WebResourceResponseInfo;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,6 +26,7 @@ import java.util.Random;
  * The shouldInterceptRequest is used to get the default video poster, if the url is
  * the mDefaultVideoPosterURL.
  */
+@Lifetime.WebView
 public class DefaultVideoPosterRequestHandler {
     private static InputStream getInputStream(final AwContentsClient contentClient)
             throws IOException {
@@ -35,24 +36,28 @@ public class DefaultVideoPosterRequestHandler {
         // Send the request to UI thread to callback to the client, and if it provides a
         // valid bitmap bounce on to the worker thread pool to compress it into the piped
         // input/output stream.
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-            final Bitmap defaultVideoPoster = contentClient.getDefaultVideoPoster();
-            if (defaultVideoPoster == null) {
-                closeOutputStream(outputStream);
-                return;
-            }
-            PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, () -> {
-                try {
-                    defaultVideoPoster.compress(Bitmap.CompressFormat.PNG, 100,
-                            outputStream);
-                    outputStream.flush();
-                } catch (IOException e) {
-                    Log.e(TAG, null, e);
-                } finally {
-                    closeOutputStream(outputStream);
-                }
-            });
-        });
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    final Bitmap defaultVideoPoster = contentClient.getDefaultVideoPoster();
+                    if (defaultVideoPoster == null) {
+                        closeOutputStream(outputStream);
+                        return;
+                    }
+                    PostTask.postTask(
+                            TaskTraits.BEST_EFFORT_MAY_BLOCK,
+                            () -> {
+                                try {
+                                    defaultVideoPoster.compress(
+                                            Bitmap.CompressFormat.PNG, 100, outputStream);
+                                    outputStream.flush();
+                                } catch (IOException e) {
+                                    Log.e(TAG, null, e);
+                                } finally {
+                                    closeOutputStream(outputStream);
+                                }
+                            });
+                });
         return inputStream;
     }
 
@@ -95,9 +100,7 @@ public class DefaultVideoPosterRequestHandler {
         return mDefaultVideoPosterURL;
     }
 
-    /**
-     * @return a unique URL which has little chance to be used by application.
-     */
+    /** @return a unique URL which has little chance to be used by application. */
     private static String generateDefaulVideoPosterURL() {
         Random randomGenerator = new Random();
         String path = String.valueOf(randomGenerator.nextLong());

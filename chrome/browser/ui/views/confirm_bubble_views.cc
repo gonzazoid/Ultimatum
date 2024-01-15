@@ -17,7 +17,6 @@
 #include "ui/base/buildflags.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/image_button_factory.h"
 #include "ui/views/controls/label.h"
@@ -74,11 +73,10 @@ bool ConfirmBubbleViews::ShouldShowCloseButton() const {
 }
 
 void ConfirmBubbleViews::OnWidgetInitialized() {
-  GetWidget()->GetRootView()->GetViewAccessibility().OverrideDescribedBy(
-      label_);
+  GetWidget()->GetRootView()->SetAccessibleDescription(label_);
 }
 
-BEGIN_METADATA(ConfirmBubbleViews, views::DialogDelegateView)
+BEGIN_METADATA(ConfirmBubbleViews)
 END_METADATA
 
 namespace chrome {

@@ -75,7 +75,7 @@ class TestRunnerTest(unittest.TestCase):
                      return_value=['wayland-exo', 'wayland-exo.lock'])
   @mock.patch.object(tempfile,
                      'mkdtemp',
-                     side_effect=['/tmp/xdg', '/tmp/ash-data'])
+                     side_effect=['/tmp/xdg', '/tmp/ash-data', '/tmp/unique'])
   @mock.patch.object(os.environ, 'copy', side_effect=[{}, {}])
   @mock.patch.object(os.path, 'exists', return_value=True)
   @mock.patch.object(os.path, 'isfile', return_value=True)
@@ -103,8 +103,11 @@ class TestRunnerTest(unittest.TestCase):
           '--user-data-dir=/tmp/ash-data',
           '--enable-wayland-server',
           '--no-startup-window',
+          '--disable-input-event-activation-protection',
           '--disable-lacros-keep-alive',
           '--disable-login-lacros-opening',
+          '--enable-field-trial-config',
+          '--enable-logging=stderr',
           '--enable-features=LacrosSupport,LacrosPrimary,LacrosOnly',
           '--ash-ready-file-path=/tmp/ash-data/ash_ready.txt',
           '--wayland-server-socket=wayland-exo',
@@ -121,9 +124,10 @@ class TestRunnerTest(unittest.TestCase):
       test_args = mock_popen.call_args_list[1][0][0]
       if command == 'lacros_chrome_browsertests':
         self.assertListEqual([
-            command,
-            '--test-launcher-filter-file=/a/b/filter',
+            command, '--test-launcher-filter-file=/a/b/filter',
             '--lacros-mojo-socket-for-testing=/tmp/ash-data/lacros.sock',
+            '--ash-chrome-path=' + ash_chrome_args[0],
+            '--unique-ash-dir=/tmp/unique'
         ], test_args)
       else:
         self.assertListEqual(test_args[:len(command_parts)], command_parts)
@@ -222,7 +226,7 @@ class TestRunnerTest(unittest.TestCase):
                      return_value=['wayland-exo', 'wayland-exo.lock'])
   @mock.patch.object(tempfile,
                      'mkdtemp',
-                     side_effect=['/tmp/xdg', '/tmp/ash-data'])
+                     side_effect=['/tmp/xdg', '/tmp/ash-data', '/tmp/unique'])
   @mock.patch.object(os.environ, 'copy', side_effect=[{}, {}])
   @mock.patch.object(os.path, 'exists', return_value=True)
   @mock.patch.object(os.path, 'isfile', return_value=True)

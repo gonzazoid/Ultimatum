@@ -6,6 +6,9 @@
 #define ASH_SHORTCUT_VIEWER_VIEWS_KEYBOARD_SHORTCUT_ITEM_VIEW_H_
 
 #include "ash/public/cpp/keyboard_shortcut_item.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+
 #include "ui/views/view.h"
 
 namespace views {
@@ -17,6 +20,7 @@ namespace keyboard_shortcut_viewer {
 // A view that displays a shortcut metadata.
 class KeyboardShortcutItemView : public views::View {
  public:
+  METADATA_HEADER(KeyboardShortcutItemView);
   KeyboardShortcutItemView(const ash::KeyboardShortcutItem& item,
                            ash::ShortcutCategory category);
 
@@ -26,7 +30,6 @@ class KeyboardShortcutItemView : public views::View {
   ~KeyboardShortcutItemView() override = default;
 
   // views::View:
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   int GetHeightForWidth(int w) const override;
   void Layout() override;
 
@@ -59,24 +62,21 @@ class KeyboardShortcutItemView : public views::View {
   void CalculateLayout(int width) const;
 
   // Not owned. Pointer to the keyboard shortcut item.
-  const ash::KeyboardShortcutItem* shortcut_item_;
+  raw_ptr<const ash::KeyboardShortcutItem> shortcut_item_;
 
   const ash::ShortcutCategory category_;
 
   // View of the text describing what action the shortcut performs.
-  views::StyledLabel* description_label_view_;
+  raw_ptr<views::StyledLabel> description_label_view_;
 
   // View of the text listing the keys making up the shortcut.
-  views::StyledLabel* shortcut_label_view_;
+  raw_ptr<views::StyledLabel> shortcut_label_view_;
 
   // Saves the results of the last CalculateLayout() call to avoid repeated
   // calculation.
   mutable gfx::Rect description_bounds_;
   mutable gfx::Rect shortcut_bounds_;
   mutable gfx::Size calculated_size_;
-
-  // Accessibility data.
-  std::u16string accessible_name_;
 };
 
 }  // namespace keyboard_shortcut_viewer

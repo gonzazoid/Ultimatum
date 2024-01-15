@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "printing/printer_query_result.h"
 
 namespace chromeos {
@@ -28,8 +28,8 @@ namespace ash {
 // |auth_info| holds the information about authentication required by the
 // printer.
 using PrinterInfoCallback = base::OnceCallback<void(
-    printing::PrinterQueryResult result,
-    const printing::PrinterStatus& status,
+    ::printing::PrinterQueryResult result,
+    const ::printing::PrinterStatus& status,
     const std::string& make_and_model,
     const std::vector<std::string>& document_formats,
     bool autoconf,
@@ -44,11 +44,5 @@ void QueryIppPrinter(const std::string& host,
                      PrinterInfoCallback callback);
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::PrinterInfoCallback;
-using ::ash::QueryIppPrinter;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_PRINTER_INFO_H_

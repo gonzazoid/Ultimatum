@@ -8,13 +8,13 @@
 #include <memory>
 
 #include "base/no_destructor.h"
+#include "build/chromeos_buildflags.h"
 #include "components/metrics/structured/event.h"
 #include "components/metrics/structured/structured_events.h"
 #include "components/metrics/structured/structured_metrics_client.h"
 #include "components/prefs/pref_registry_simple.h"
 
-namespace metrics {
-namespace structured {
+namespace metrics::structured {
 
 namespace {
 using RecordingDelegate = StructuredMetricsClient::RecordingDelegate;
@@ -28,14 +28,20 @@ using RecordingDelegate = StructuredMetricsClient::RecordingDelegate;
 // This class delegates to a Recorder that will be created on ctor.
 // |Initialize()| should be called ASAP. When |Initialize()| should be called is
 // platform specific.
+// TODO(andrewbregger): change name to ChromeStructuredMetricsDelegate to
+// align with the other delegates.
 class ChromeStructuredMetricsRecorder : public RecordingDelegate {
  public:
   // Pointer to singleton.
   static ChromeStructuredMetricsRecorder* Get();
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Registers prefs.
+  //
+  // TODO(crbug/1350322): Once reset counter is available to use from platform2,
+  // remove this and use the more relaible reset counter.
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
-  static void RegisterUserProfilePrefs(PrefRegistrySimple* registry);
+#endif
 
   ChromeStructuredMetricsRecorder(
       const ChromeStructuredMetricsRecorder& recorder) = delete;
@@ -61,13 +67,12 @@ class ChromeStructuredMetricsRecorder : public RecordingDelegate {
   ~ChromeStructuredMetricsRecorder() override;
 
   friend class base::NoDestructor<ChromeStructuredMetricsRecorder>;
-  friend class LacrosStructuredMetricsRecorderTest;
+  friend class LacrosStructuredMetricsDelegateTest;
 
   std::unique_ptr<RecordingDelegate> delegate_;
   bool is_initialized_ = false;
 };
 
-}  // namespace structured
-}  // namespace metrics
+}  // namespace metrics::structured
 
 #endif  // CHROME_BROWSER_METRICS_STRUCTURED_CHROME_STRUCTURED_METRICS_RECORDER_H_

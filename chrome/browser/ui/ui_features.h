@@ -25,41 +25,46 @@ namespace features {
 // interactive_ui_tests pass on Wayland.
 BASE_DECLARE_FEATURE(kAllowWindowDragUsingSystemDragDrop);
 
-#if !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_ANDROID)
-BASE_DECLARE_FEATURE(kDesktopPWAsAppHomePage);
-#endif  // !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kAllowEyeDropperWGCScreenCapture);
+
+BASE_DECLARE_FEATURE(kWebAppIconInTitlebar);
 
 BASE_DECLARE_FEATURE(kChromeLabs);
+extern const char kChromeLabsActivationParameterName[];
+extern const base::FeatureParam<int> kChromeLabsActivationPercentage;
 
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-BASE_DECLARE_FEATURE(kChromeTipsInMainMenu);
+BASE_DECLARE_FEATURE(kCloseOmniboxPopupOnInactiveAreaClick);
 
-BASE_DECLARE_FEATURE(kChromeTipsInMainMenuNewBadge);
-#endif
-
-BASE_DECLARE_FEATURE(kChromeWhatsNewUI);
-
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-BASE_DECLARE_FEATURE(kChromeWhatsNewInMainMenuNewBadge);
-#endif
+BASE_DECLARE_FEATURE(kExtensionsMenuInAppMenu);
+bool IsExtensionMenuInRootAppMenu();
 
 #if !defined(ANDROID)
 BASE_DECLARE_FEATURE(kAccessCodeCastUI);
+#endif
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_FUCHSIA)
+BASE_DECLARE_FEATURE(kCameraMicPreview);
 #endif
 
 BASE_DECLARE_FEATURE(kDisplayOpenLinkAsProfile);
 
 BASE_DECLARE_FEATURE(kEvDetailsInPageInfo);
 
+#if !BUILDFLAG(IS_ANDROID) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+BASE_DECLARE_FEATURE(kGetTheMostOutOfChrome);
+#endif
+
+#if !BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kHaTSWebUI);
+#endif
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 BASE_DECLARE_FEATURE(kLightweightExtensionOverrideConfirmations);
 #endif
 
-BASE_DECLARE_FEATURE(kPowerBookmarksSidePanel);
-
-BASE_DECLARE_FEATURE(kProminentDarkModeActiveTabTitle);
-
 BASE_DECLARE_FEATURE(kQuickCommands);
+
+BASE_DECLARE_FEATURE(kResponsiveToolbar);
 
 BASE_DECLARE_FEATURE(kScrollableTabStrip);
 extern const char kMinimumTabWidthFeatureParameterName[];
@@ -72,28 +77,38 @@ BASE_DECLARE_FEATURE(kSplitTabStrip);
 BASE_DECLARE_FEATURE(kTabScrollingButtonPosition);
 extern const char kTabScrollingButtonPositionParameterName[];
 
-// TODO(pbos): Once kReadLater is cleaned up on Desktop, move definition into
-// ui_features.cc. This is currently temporarily in reading_list_switches.h.
-BASE_DECLARE_FEATURE(kSidePanelImprovedClobbering);
+BASE_DECLARE_FEATURE(kScrollableTabStripOverflow);
+extern const char kScrollableTabStripOverflowModeName[];
 
 BASE_DECLARE_FEATURE(kSidePanelWebView);
 
-BASE_DECLARE_FEATURE(kSidePanelJourneys);
-extern const base::FeatureParam<bool> kSidePanelJourneysOpensFromOmnibox;
+#if !defined(ANDROID)
+BASE_DECLARE_FEATURE(kSidePanelCompanionDefaultPinned);
+
+BASE_DECLARE_FEATURE(kSidePanelPinning);
+
+bool IsSidePanelPinningEnabled();
+
+BASE_DECLARE_FEATURE(kSidePanelMinimumWidth);
+extern const base::FeatureParam<int> kSidePanelMinimumWidthParameter;
+int GetSidePanelMinimumWidth();
+#endif
+
 BASE_DECLARE_FEATURE(kSidePanelJourneysQueryless);
+BASE_DECLARE_FEATURE(kSidePanelSearchCompanion);
 
 BASE_DECLARE_FEATURE(kSideSearch);
 BASE_DECLARE_FEATURE(kSideSearchFeedback);
-BASE_DECLARE_FEATURE(kSideSearchDSESupport);
 BASE_DECLARE_FEATURE(kSearchWebInSidePanel);
-BASE_DECLARE_FEATURE(kClobberAllSideSearchSidePanels);
 
 BASE_DECLARE_FEATURE(kSideSearchAutoTriggering);
 extern const base::FeatureParam<int> kSideSearchAutoTriggeringReturnCount;
 
-BASE_DECLARE_FEATURE(kTabGroupsNewBadgePromo);
+BASE_DECLARE_FEATURE(kTabGroupsCollapseFreezing);
 
 BASE_DECLARE_FEATURE(kTabGroupsSave);
+
+BASE_DECLARE_FEATURE(kTabHoverCardImageSettings);
 
 BASE_DECLARE_FEATURE(kTabHoverCardImages);
 
@@ -119,12 +134,28 @@ extern const char kTabHoverCardImagesCrossfadePreviewAtParameterName[];
 // typically when there are less than 5 or 6 tabs in a browser window.
 extern const char kTabHoverCardAdditionalMaxWidthDelay[];
 
-// When set to 1, reverses the order of elements in the hover card, so that
-// the title and site are on bottom and the tab status and preview image are
-// on top. 0 is the default layout.
-extern const char kTabHoverCardAlternateFormat[];
+BASE_DECLARE_FEATURE(kTabOrganization);
+bool IsTabOrganization();
 
-BASE_DECLARE_FEATURE(kTabOutlinesInLowContrastThemes);
+// The target (and minimum) interval between proactive nudge triggers. Measured
+// against a clock that only runs while Chrome is in the foreground.
+extern const base::FeatureParam<base::TimeDelta> kTabOrganizationTriggerPeriod;
+
+// The base to use for the trigger logic's exponential backoff.
+extern const base::FeatureParam<double> kTabOrganizationTriggerBackoffBase;
+
+// The minimum score threshold for proactive nudge triggering to occur.
+extern const base::FeatureParam<double> kTabOrganizationTriggerThreshold;
+
+// The maximum sensitivity score for a tab to contribute to trigger scoring.
+extern const base::FeatureParam<double>
+    kTabOrganizationTriggerSensitivityThreshold;
+
+// Enable 'demo mode' for Tab Organization triggering, which triggers much more
+// predictably and frequently.
+extern const base::FeatureParam<bool> KTabOrganizationTriggerDemoMode;
+
+BASE_DECLARE_FEATURE(kTabOrganizationRefreshButton);
 
 BASE_DECLARE_FEATURE(kTabSearchChevronIcon);
 
@@ -184,13 +215,18 @@ extern const base::FeatureParam<int> kTabSearchRecentlyClosedTabCountThreshold;
 
 BASE_DECLARE_FEATURE(kTabSearchUseMetricsReporter);
 
+BASE_DECLARE_FEATURE(kTearOffWebAppTabOpensWebAppWindow);
+
 // Determines how screenshots of the toolbar uses Software or Hardware drawing.
 // Works on Android 10+.
 BASE_DECLARE_FEATURE(kToolbarUseHardwareBitmapDraw);
 
 BASE_DECLARE_FEATURE(kTopChromeWebUIUsesSpareRenderer);
 
-BASE_DECLARE_FEATURE(kUnifiedSidePanel);
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+BASE_DECLARE_FEATURE(kUpdateTextOptions);
+extern const base::FeatureParam<int> kUpdateTextOptionNumber;
+#endif
 
 BASE_DECLARE_FEATURE(kWebUIBubblePerProfilePersistence);
 
@@ -214,10 +250,6 @@ BASE_DECLARE_FEATURE(kViewsJSAppModalDialog);
 
 int GetLocationPermissionsExperimentBubblePromptLimit();
 int GetLocationPermissionsExperimentLabelPromptLimit();
-#endif
-
-#if BUILDFLAG(IS_WIN)
-BASE_DECLARE_FEATURE(kWin10TabSearchCaptionButton);
 #endif
 
 BASE_DECLARE_FEATURE(kStopLoadingAnimationForHiddenWindow);

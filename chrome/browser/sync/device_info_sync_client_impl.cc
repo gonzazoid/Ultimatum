@@ -15,9 +15,8 @@
 #include "chrome/browser/sharing/sharing_sync_preference.h"
 #include "chrome/browser/signin/chrome_device_id_helper.h"
 #include "chrome/browser/sync/sync_invalidations_service_factory.h"
-#include "components/send_tab_to_self/features.h"
-#include "components/sync/base/sync_prefs.h"
 #include "components/sync/invalidations/sync_invalidations_service.h"
+#include "components/sync/service/sync_prefs.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/webauthn/android/cable_module_android.h"
@@ -60,7 +59,7 @@ bool DeviceInfoSyncClientImpl::GetSendTabToSelfReceivingEnabled() const {
   // for Lacros-Primary. Once Lacros-Only is the only available option, this
   // should simply check whether SendTabToSelf datatype is enabled.
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  return !crosapi::browser_util::IsLacrosPrimaryBrowser();
+  return !crosapi::browser_util::IsLacrosEnabled();
 #else
   return true;
 #endif
@@ -76,37 +75,23 @@ DeviceInfoSyncClientImpl::GetLocalSharingInfo() const {
 // syncer::DeviceInfoSyncClient:
 absl::optional<std::string> DeviceInfoSyncClientImpl::GetFCMRegistrationToken()
     const {
-  syncer::SyncInvalidationsService* service =
-      SyncInvalidationsServiceFactory::GetForProfile(profile_);
-  if (service) {
-    return service->GetFCMRegistrationToken();
-  }
-  // If the service is not enabled, then the registration token must be empty,
-  // not unknown (absl::nullopt). This is needed to reset previous token if
-  // the invalidations have been turned off.
-  return std::string();
+  return SyncInvalidationsServiceFactory::GetForProfile(profile_)
+      ->GetFCMRegistrationToken();
 }
 
 // syncer::DeviceInfoSyncClient:
 absl::optional<syncer::ModelTypeSet>
 DeviceInfoSyncClientImpl::GetInterestedDataTypes() const {
-  syncer::SyncInvalidationsService* service =
-      SyncInvalidationsServiceFactory::GetForProfile(profile_);
-  if (service) {
-    return service->GetInterestedDataTypes();
-  }
-  // If the service is not enabled, then the list of types must be empty, not
-  // unknown (absl::nullopt). This is needed to reset previous types if the
-  // invalidations have been turned off.
-  return syncer::ModelTypeSet();
+  return SyncInvalidationsServiceFactory::GetForProfile(profile_)
+      ->GetInterestedDataTypes();
 }
 
-absl::optional<syncer::DeviceInfo::PhoneAsASecurityKeyInfo>
+syncer::DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo
 DeviceInfoSyncClientImpl::GetPhoneAsASecurityKeyInfo() const {
 #if BUILDFLAG(IS_ANDROID)
   return webauthn::authenticator::GetSyncDataIfRegistered();
 #else
-  return absl::nullopt;
+  return syncer::DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport();
 #endif
 }
 

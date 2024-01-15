@@ -10,6 +10,7 @@
 #include "content/browser/service_worker/service_worker_new_script_loader.h"
 #include "content/public/browser/global_request_id.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -81,22 +82,21 @@ ServiceWorkerNewScriptFetcher::~ServiceWorkerNewScriptFetcher() = default;
 void ServiceWorkerNewScriptFetcher::Start(StartCallback callback) {
   callback_ = std::move(callback);
 
-  context_.GetStorageControl()->GetNewResourceId(base::BindOnce(
+  context_->GetStorageControl()->GetNewResourceId(base::BindOnce(
       &ServiceWorkerNewScriptFetcher::StartScriptLoadingWithNewResourceID,
       weak_factory_.GetWeakPtr()));
 }
 
 void ServiceWorkerNewScriptFetcher::StartScriptLoadingWithNewResourceID(
     int64_t resource_id) {
-  BrowserContext* browser_context =
-      context_.process_manager()->browser_context();
+  BrowserContext* browser_context = context_->wrapper()->browser_context();
   if (!browser_context) {
     std::move(callback_).Run(/*main_script_load_params=*/nullptr);
     return;
   }
   network::ResourceRequest request =
       service_worker_loader_helpers::CreateRequestForServiceWorkerScript(
-          version_->script_url(), version_->key().origin(),
+          version_->script_url(), version_->key(),
           /*is_main_script=*/true, version_->script_type(),
           *fetch_client_settings_object_, *browser_context);
   // Request SSLInfo. It will be persisted in service worker storage and may be
@@ -107,7 +107,7 @@ void ServiceWorkerNewScriptFetcher::StartScriptLoadingWithNewResourceID(
   // Notify to DevTools that the request for fetching the service worker script
   // is about to start. It fires `Network.onRequestWillBeSent` event.
   devtools_instrumentation::OnServiceWorkerMainScriptRequestWillBeSent(
-      requesting_frame_id_, context_.wrapper(), version_->version_id(),
+      requesting_frame_id_, context_->wrapper(), version_->version_id(),
       request);
 
   mojo::MakeSelfOwnedReceiver(
@@ -127,7 +127,7 @@ void ServiceWorkerNewScriptFetcher::OnReceiveEarlyHints(
 void ServiceWorkerNewScriptFetcher::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr response_head,
     mojo::ScopedDataPipeConsumerHandle response_body,
-    absl::optional<mojo_base::BigBuffer> cached_metadata) {
+    std::optional<mojo_base::BigBuffer> cached_metadata) {
   if (!response_body)
     return;
 
@@ -149,22 +149,25 @@ void ServiceWorkerNewScriptFetcher::OnReceiveRedirect(
   // ServiceWorkerNewScriptFetcher doesn't receive redirects because
   // ServiceWorkerNewScriptLoader disallows it and completes the network request
   // with an error.
-  mojo::ReportBadMessage("SWNSF_BAD_MSG");
+  url_loader_client_receiver_.ReportBadMessage("SWNSF_BAD_MSG");
 }
 void ServiceWorkerNewScriptFetcher::OnUploadProgress(int64_t,
                                                      int64_t,
                                                      OnUploadProgressCallback) {
-  mojo::ReportBadMessage("SWNSF_BAD_MSG");
+  url_loader_client_receiver_.ReportBadMessage("SWNSF_BAD_MSG");
 }
 void ServiceWorkerNewScriptFetcher::OnTransferSizeUpdated(int32_t) {
-  mojo::ReportBadMessage("SWNSF_BAD_MSG");
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kServiceWorkerNewScriptFetcher);
+
+  url_loader_client_receiver_.ReportBadMessage("SWNSF_BAD_MSG");
 }
 void ServiceWorkerNewScriptFetcher::OnComplete(
     const network::URLLoaderCompletionStatus& status) {
   // OnComplete can be called only when loading fails before receiving the
   // header and the body.
   if (status.error_code == net::OK) {
-    mojo::ReportBadMessage("SWNSF_BAD_OK");
+    url_loader_client_receiver_.ReportBadMessage("SWNSF_BAD_OK");
     // Do not continue with further script processing, but let the |callback_|
     // hang. This renderer process would be killed soon anyways.
     return;

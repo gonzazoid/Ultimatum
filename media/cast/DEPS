@@ -7,7 +7,16 @@ include_rules = [
   "+third_party/libaom",
   "+third_party/openscreen/src/cast/streaming",
   "+third_party/openscreen/src/platform/api",
+  "+third_party/openscreen/src/platform/base",
   "+third_party/zlib",
   "+ui/base",
   "+ui/gfx",
 ]
+
+specific_include_rules = {
+  ".*unittest.cc": [
+    # TODO(https://crbug.com/1442745): there should be a test support class
+    # for this component.
+    "+components/openscreen_platform",
+  ],
+}

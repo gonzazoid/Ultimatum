@@ -24,13 +24,19 @@ ToolbarActionsModel* ToolbarActionsModelFactory::GetForProfile(
 
 // static
 ToolbarActionsModelFactory* ToolbarActionsModelFactory::GetInstance() {
-  return base::Singleton<ToolbarActionsModelFactory>::get();
+  static base::NoDestructor<ToolbarActionsModelFactory> instance;
+  return instance.get();
 }
 
 ToolbarActionsModelFactory::ToolbarActionsModelFactory()
     : ProfileKeyedServiceFactory(
           "ToolbarActionsModel",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(extensions::ExtensionActionAPI::GetFactoryInstance());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
@@ -39,11 +45,12 @@ ToolbarActionsModelFactory::ToolbarActionsModelFactory()
   DependsOn(extensions::PermissionsManager::GetFactory());
 }
 
-ToolbarActionsModelFactory::~ToolbarActionsModelFactory() {}
+ToolbarActionsModelFactory::~ToolbarActionsModelFactory() = default;
 
-KeyedService* ToolbarActionsModelFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ToolbarActionsModelFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ToolbarActionsModel(
+  return std::make_unique<ToolbarActionsModel>(
       Profile::FromBrowserContext(context),
       extensions::ExtensionPrefsFactory::GetForBrowserContext(context));
 }

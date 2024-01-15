@@ -4,20 +4,25 @@
 
 #include "base/mac/mach_port_rendezvous.h"
 
-#include <bsm/libbsm.h>
 #include <mach/mig.h>
-#include <servers/bootstrap.h>
 #include <unistd.h>
 
 #include <utility>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/mach_logging.h"
 #include "base/containers/buffer_iterator.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/mach_logging.h"
 #include "base/mac/scoped_mach_msg_destroy.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
+
+#if BUILDFLAG(IS_IOS)
+#include "base/ios/sim_header_shims.h"
+#else
+#include <bsm/libbsm.h>
+#include <servers/bootstrap.h>
+#endif
 
 namespace base {
 
@@ -54,11 +59,11 @@ MachRendezvousPort::MachRendezvousPort(mach_port_t name,
          disposition == MACH_MSG_TYPE_MAKE_SEND_ONCE);
 }
 
-MachRendezvousPort::MachRendezvousPort(mac::ScopedMachSendRight send_right)
+MachRendezvousPort::MachRendezvousPort(apple::ScopedMachSendRight send_right)
     : name_(send_right.release()), disposition_(MACH_MSG_TYPE_MOVE_SEND) {}
 
 MachRendezvousPort::MachRendezvousPort(
-    mac::ScopedMachReceiveRight receive_right)
+    apple::ScopedMachReceiveRight receive_right)
     : name_(receive_right.release()),
       disposition_(MACH_MSG_TYPE_MOVE_RECEIVE) {}
 
@@ -111,13 +116,14 @@ void MachPortRendezvousServer::RegisterPortsForPid(
   DCHECK_LT(ports.size(), kMaximumRendezvousPorts);
   DCHECK(!ports.empty());
 
-  ScopedDispatchObject<dispatch_source_t> exit_watcher(dispatch_source_create(
-      DISPATCH_SOURCE_TYPE_PROC, static_cast<uintptr_t>(pid),
-      DISPATCH_PROC_EXIT, dispatch_source_->queue()));
-  dispatch_source_set_event_handler(exit_watcher, ^{
+  apple::ScopedDispatchObject<dispatch_source_t> exit_watcher(
+      dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC,
+                             static_cast<uintptr_t>(pid), DISPATCH_PROC_EXIT,
+                             dispatch_source_->Queue()));
+  dispatch_source_set_event_handler(exit_watcher.get(), ^{
     OnClientExited(pid);
   });
-  dispatch_resume(exit_watcher);
+  dispatch_resume(exit_watcher.get());
 
   auto it =
       client_data_.emplace(pid, ClientData{std::move(exit_watcher), ports});
@@ -125,7 +131,7 @@ void MachPortRendezvousServer::RegisterPortsForPid(
 }
 
 MachPortRendezvousServer::ClientData::ClientData(
-    ScopedDispatchObject<dispatch_source_t> exit_watcher,
+    apple::ScopedDispatchObject<dispatch_source_t> exit_watcher,
     MachPortsForRendezvous ports)
     : exit_watcher(exit_watcher), ports(ports) {}
 
@@ -135,14 +141,14 @@ MachPortRendezvousServer::ClientData::~ClientData() = default;
 
 MachPortRendezvousServer::MachPortRendezvousServer() {
   std::string bootstrap_name =
-      StringPrintf(kBootstrapNameFormat, mac::BaseBundleID(), getpid());
+      StringPrintf(kBootstrapNameFormat, apple::BaseBundleID(), getpid());
   kern_return_t kr = bootstrap_check_in(
       bootstrap_port, bootstrap_name.c_str(),
-      mac::ScopedMachReceiveRight::Receiver(server_port_).get());
+      apple::ScopedMachReceiveRight::Receiver(server_port_).get());
   BOOTSTRAP_CHECK(kr == KERN_SUCCESS, kr)
       << "bootstrap_check_in " << bootstrap_name;
 
-  dispatch_source_ = std::make_unique<DispatchSourceMach>(
+  dispatch_source_ = std::make_unique<apple::DispatchSourceMach>(
       bootstrap_name.c_str(), server_port_.get(), ^{
         HandleRequest();
       });
@@ -272,21 +278,21 @@ MachPortRendezvousClient* MachPortRendezvousClient::GetInstance() {
   return client;
 }
 
-mac::ScopedMachSendRight MachPortRendezvousClient::TakeSendRight(
+apple::ScopedMachSendRight MachPortRendezvousClient::TakeSendRight(
     MachPortsForRendezvous::key_type key) {
   MachRendezvousPort port = PortForKey(key);
   DCHECK(port.disposition() == 0 ||
          port.disposition() == MACH_MSG_TYPE_PORT_SEND ||
          port.disposition() == MACH_MSG_TYPE_PORT_SEND_ONCE);
-  return mac::ScopedMachSendRight(port.name());
+  return apple::ScopedMachSendRight(port.name());
 }
 
-mac::ScopedMachReceiveRight MachPortRendezvousClient::TakeReceiveRight(
+apple::ScopedMachReceiveRight MachPortRendezvousClient::TakeReceiveRight(
     MachPortsForRendezvous::key_type key) {
   MachRendezvousPort port = PortForKey(key);
   DCHECK(port.disposition() == 0 ||
          port.disposition() == MACH_MSG_TYPE_PORT_RECEIVE);
-  return mac::ScopedMachReceiveRight(port.name());
+  return apple::ScopedMachReceiveRight(port.name());
 }
 
 size_t MachPortRendezvousClient::GetPortCount() {
@@ -296,17 +302,17 @@ size_t MachPortRendezvousClient::GetPortCount() {
 
 // static
 std::string MachPortRendezvousClient::GetBootstrapName() {
-  return StringPrintf(kBootstrapNameFormat, mac::BaseBundleID(), getppid());
+  return StringPrintf(kBootstrapNameFormat, apple::BaseBundleID(), getppid());
 }
 
 bool MachPortRendezvousClient::AcquirePorts() {
   AutoLock lock(lock_);
 
-  mac::ScopedMachSendRight server_port;
+  apple::ScopedMachSendRight server_port;
   std::string bootstrap_name = GetBootstrapName();
   kern_return_t kr = bootstrap_look_up(
       bootstrap_port, const_cast<char*>(bootstrap_name.c_str()),
-      mac::ScopedMachSendRight::Receiver(server_port).get());
+      apple::ScopedMachSendRight::Receiver(server_port).get());
   if (kr != KERN_SUCCESS) {
     BOOTSTRAP_LOG(ERROR, kr) << "bootstrap_look_up " << bootstrap_name;
     return false;
@@ -316,7 +322,7 @@ bool MachPortRendezvousClient::AcquirePorts() {
 }
 
 bool MachPortRendezvousClient::SendRequest(
-    mac::ScopedMachSendRight server_port) {
+    apple::ScopedMachSendRight server_port) {
   const size_t buffer_size = CalculateResponseSize(kMaximumRendezvousPorts) +
                              sizeof(mach_msg_trailer_t);
   auto buffer = std::make_unique<uint8_t[]>(buffer_size);

@@ -7,11 +7,12 @@
 #include <array>
 
 #include "base/metrics/field_trial_params.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/ui/android/start_surface/start_surface_android.h"
 #include "components/segmentation_platform/internal/metadata/metadata_writer.h"
 #include "components/segmentation_platform/public/config.h"
+#include "components/segmentation_platform/public/constants.h"
 #include "components/segmentation_platform/public/model_provider.h"
 #include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 
@@ -21,6 +22,7 @@ namespace {
 using proto::SegmentId;
 
 // Default parameters for Chrome Start model.
+constexpr int kModelVersion = 2;
 constexpr SegmentId kChromeStartSegmentId =
     SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID_V2;
 constexpr int64_t kChromeStartSignalStorageLength = 28;
@@ -36,63 +38,60 @@ constexpr std::array<MetadataWriter::UMAFeature, 3> kChromeStartUMAFeatures = {
     MetadataWriter::UMAFeature::FromUserAction("MobileNTPMostVisited", 7),
 };
 
-std::unique_ptr<ModelProvider> GetChromeStartAndroidModelV2() {
+}  // namespace
+
+// static
+std::unique_ptr<Config> ChromeStartModelV2::GetConfig() {
   if (!base::GetFieldTrialParamByFeatureAsBool(
           chrome::android::kStartSurfaceReturnTime, kDefaultModelEnabledParam,
           true)) {
     return nullptr;
   }
-  return std::make_unique<ChromeStartModelV2>();
-}
-
-}  // namespace
-
-// static
-std::unique_ptr<Config> ChromeStartModelV2::GetConfig() {
   auto config = std::make_unique<Config>();
   config->segmentation_key = kChromeStartAndroidV2SegmentationKey;
   config->segmentation_uma_name = kChromeStartAndroidV2UmaName;
   config->AddSegmentId(
       SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_CHROME_START_ANDROID_V2,
-      GetChromeStartAndroidModelV2());
-
-  constexpr int kChromeStartV2DefaultSelectionTTLDays = 30;
-  int segment_selection_ttl_days = base::GetFieldTrialParamByFeatureAsInt(
-      chrome::android::kStartSurfaceReturnTime,
-      kVariationsParamNameSegmentSelectionTTLDays,
-      kChromeStartV2DefaultSelectionTTLDays);
-  config->segment_selection_ttl = base::Days(segment_selection_ttl_days);
-  config->unknown_selection_ttl = config->segment_selection_ttl;
-
+      std::make_unique<ChromeStartModelV2>());
+  config->auto_execute_and_cache = true;
   return config;
 }
 
 ChromeStartModelV2::ChromeStartModelV2()
-    : ModelProvider(kChromeStartSegmentId) {}
+    : DefaultModelProvider(kChromeStartSegmentId) {}
 
-void ChromeStartModelV2::InitAndFetchModel(
-    const ModelUpdatedCallback& model_updated_callback) {
+std::unique_ptr<DefaultModelProvider::ModelConfig>
+ChromeStartModelV2::GetModelConfig() {
   proto::SegmentationModelMetadata chrome_start_metadata;
   MetadataWriter writer(&chrome_start_metadata);
   writer.SetDefaultSegmentationMetadataConfig(
       kChromeStartMinSignalCollectionLength, kChromeStartSignalStorageLength);
 
+  // Set OutputConfig.
+  writer.AddOutputConfigForBinnedClassifier(
+      /*bins=*/{{3600, kChromeStartAndroidV2Label1HourInMs},
+                {7200, kChromeStartAndroidV2Label2HourInMs},
+                {14400, kChromeStartAndroidV2Label4HourInMs},
+                {28800, kChromeStartAndroidV2Label8HourInMs}},
+      /*underflow_label=*/kChromeStartAndroidV2LabelNone);
+  writer.AddPredictedResultTTLInOutputConfig(
+      /*top_label_to_ttl_list=*/{}, /*default_ttl=*/30,
+      /*time_unit=*/proto::TimeUnit::DAY);
+
   // Set features.
   writer.AddUmaFeatures(kChromeStartUMAFeatures.data(),
                         kChromeStartUMAFeatures.size());
 
-  constexpr int kModelVersion = 1;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindRepeating(model_updated_callback, kChromeStartSegmentId,
-                          std::move(chrome_start_metadata), kModelVersion));
+  return std::make_unique<ModelConfig>(std::move(chrome_start_metadata),
+                                       kModelVersion);
 }
 
-void ChromeStartModelV2::ExecuteModelWithInput(const std::vector<float>& inputs,
-                                               ExecutionCallback callback) {
+void ChromeStartModelV2::ExecuteModelWithInput(
+    const ModelProvider::Request& inputs,
+    ExecutionCallback callback) {
   // Invalid inputs.
   if (inputs.size() != kChromeStartUMAFeatures.size()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
@@ -102,12 +101,10 @@ void ChromeStartModelV2::ExecuteModelWithInput(const std::vector<float>& inputs,
   // TODO(ssid): Consider getting the param value from field trials and use it
   // here instead.
   float return_time_in_seconds = 28800;  // 8 hours
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), return_time_in_seconds));
-}
-
-bool ChromeStartModelV2::ModelAvailable() {
-  return true;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback),
+                     ModelProvider::Response(1, return_time_in_seconds)));
 }
 
 }  // namespace segmentation_platform

@@ -5,26 +5,35 @@
 #ifndef ASH_WEBUI_ECHE_APP_UI_ECHE_NOTIFICATION_CLICK_HANDLER_H_
 #define ASH_WEBUI_ECHE_APP_UI_ECHE_NOTIFICATION_CLICK_HANDLER_H_
 
-#include "ash/components/phonehub/notification.h"
-#include "ash/components/phonehub/notification_click_handler.h"
-#include "ash/components/phonehub/notification_interaction_handler.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "ash/components/phonehub/phone_hub_manager.h"
 #include "ash/webui/eche_app_ui/feature_status_provider.h"
-#include "base/callback.h"
+#include "ash/webui/eche_app_ui/mojom/eche_app.mojom.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/notification.h"
+#include "chromeos/ash/components/phonehub/notification_click_handler.h"
+#include "chromeos/ash/components/phonehub/notification_interaction_handler.h"
+#include "chromeos/ash/components/phonehub/phone_model.h"
 
 namespace ash {
+
+namespace phonehub {
+class PhoneHubManager;
+}
+
 namespace eche_app {
 
 class LaunchAppHelper;
+class AppsLaunchInfoProvider;
 
 // Handles notification clicks originating from Phone Hub notifications.
 class EcheNotificationClickHandler : public phonehub::NotificationClickHandler,
                                      public FeatureStatusProvider::Observer {
  public:
-  EcheNotificationClickHandler(phonehub::PhoneHubManager* phone_hub_manager,
-                               FeatureStatusProvider* feature_status_provider,
-                               LaunchAppHelper* launch_app_helper);
+  EcheNotificationClickHandler(
+      phonehub::PhoneHubManager* phone_hub_manager,
+      FeatureStatusProvider* feature_status_provider,
+      LaunchAppHelper* launch_app_helper,
+      AppsLaunchInfoProvider* apps_launch_info_provider);
   ~EcheNotificationClickHandler() override;
 
   EcheNotificationClickHandler(const EcheNotificationClickHandler&) = delete;
@@ -42,9 +51,11 @@ class EcheNotificationClickHandler : public phonehub::NotificationClickHandler,
  private:
   bool IsClickable(FeatureStatus status);
 
-  phonehub::NotificationInteractionHandler* handler_;
-  FeatureStatusProvider* feature_status_provider_;
-  LaunchAppHelper* launch_app_helper_;
+  raw_ptr<phonehub::NotificationInteractionHandler> handler_;
+  raw_ptr<phonehub::PhoneModel> phone_model_;
+  raw_ptr<FeatureStatusProvider> feature_status_provider_;
+  raw_ptr<LaunchAppHelper, DanglingUntriaged> launch_app_helper_;
+  raw_ptr<AppsLaunchInfoProvider, DanglingUntriaged> apps_launch_info_provider_;
   bool is_click_handler_set_ = false;
 };
 

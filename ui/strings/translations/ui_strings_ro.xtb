@@ -6,6 +6,7 @@
 <translation id="1127811143501539442">{DAYS,plural, =1{Acum o zi}few{Acum # zile}other{Acum # de zile}}</translation>
 <translation id="1156623771253174079">{SECONDS,plural, =1{Acum 1 minut}few{Acum # minute}other{Acum # de minute}}</translation>
 <translation id="1169783199079129864">{MINUTES,plural, =1{1 min.}few{# min.}other{# min.}}</translation>
+<translation id="1178017578188974117">{DAYS,plural, =1{Acum o zi}few{acum # zile}other{acum # de zile}}</translation>
 <translation id="1181037720776840403">Elimină</translation>
 <translation id="1243314992276662751">Încărcați</translation>
 <translation id="1266864766717917324">Nu s-a trimis <ph name="CONTENT_TYPE" /></translation>
@@ -15,7 +16,9 @@
 <translation id="1368832886055348810">De la stânga la dreapta</translation>
 <translation id="1383876407941801731">Caută</translation>
 <translation id="1398853756734560583">Maximizează</translation>
+<translation id="1432724887402139994">{SECONDS,plural, =1{Acum un minut}few{Acum # minute}other{Acum # de minute}}</translation>
 <translation id="1450753235335490080">Nu se poate trimite <ph name="CONTENT_TYPE" /></translation>
+<translation id="1523230076022876491">{MONTHS,plural, =1{Acum o lună}few{Acum # luni}other{Acum # de luni}}</translation>
 <translation id="1591184457164800433">{MINUTES,plural, =1{Un minut și  }few{# minute și  }other{# de minute și  }}</translation>
 <translation id="1643823602425662293">Notificare</translation>
 <translation id="169515659049020177">Shift</translation>
@@ -26,18 +29,17 @@
 <translation id="1803208670097017349">{MONTHS,plural, =1{1 lună}few{# luni}other{# de luni}}</translation>
 <translation id="1809410197924942083"><ph name="QUANTITY" /> MB/s</translation>
 <translation id="1830179671306812954">{HOURS,plural, =1{O oră și  }few{# ore și  }other{# de ore și  }}</translation>
+<translation id="185013357618350178">&amp;Selectează</translation>
 <translation id="1859234291848436338">Direcție de scriere</translation>
 <translation id="1860796786778352021">Buton de închidere a notificării</translation>
 <translation id="186476001994626254">Conținut cu inserare inteligentă de pe web</translation>
 <translation id="1871244248791675517">Ins</translation>
-<translation id="1884435127456172652"><ph name="NUMBER" />%</translation>
 <translation id="1901303067676059328">Select&amp;ează tot</translation>
 <translation id="19085484004813472">Aceasta este o funcție nouă</translation>
 <translation id="2006524834898217237">Verifică dacă dispozitivul este conectat la internet.</translation>
 <translation id="208586643495776849">Încearcă din nou</translation>
 <translation id="2141853158323869627">{DAYS,plural, =1{1 zi}few{# zile}other{# zile}}</translation>
 <translation id="2148716181193084225">Astăzi</translation>
-<translation id="2161656808144014275">Text</translation>
 <translation id="2168039046890040389">O pagină mai sus</translation>
 <translation id="2190355936436201913">(gol)</translation>
 <translation id="2192232475740621500">Folosește densitatea joasă</translation>
@@ -53,7 +55,6 @@
 <translation id="2445449901874883781">Folosește densitatea ridicată</translation>
 <translation id="2482878487686419369">Notificări</translation>
 <translation id="2497284189126895209">Toate fișierele</translation>
-<translation id="2498950423397131220">Flotant</translation>
 <translation id="2515586267016047495">Alt</translation>
 <translation id="2522350507219695259">Calibrarea este finalizată</translation>
 <translation id="252373100621549798">Afișaj necunoscut</translation>
@@ -61,6 +62,7 @@
 <translation id="2573731672208488250">{HOURS,plural, =1{în 1 h}few{în # h}other{în # h}}</translation>
 <translation id="2583543531130364912">Calibrează ecranul tactil</translation>
 <translation id="2586657967955657006">Clipboard</translation>
+<translation id="2653844658857826081">NOU</translation>
 <translation id="2666092431469916601">Sus</translation>
 <translation id="2701330563083355633">Trimis de <ph name="DEVICE_NAME" /></translation>
 <translation id="271033894570825754">Nou</translation>
@@ -75,6 +77,7 @@
 <translation id="3157931365184549694">Restabilește</translation>
 <translation id="3183922693828471536">Derulează până aici</translation>
 <translation id="3234408098842461169">Săgeată în jos</translation>
+<translation id="3240426699337459095">Linkul a fost copiat</translation>
 <translation id="3291688615589870984">{DAYS,plural, =1{O zi}few{# zile}other{# de zile}}</translation>
 <translation id="3295886253693811851">Apelează de pe</translation>
 <translation id="3306688585798492231">Ecran încorporat</translation>
@@ -88,7 +91,6 @@
 <translation id="3622035490309591977">Istoricul clipboardului</translation>
 <translation id="364720409959344976">Selectați un dosar de încărcat</translation>
 <translation id="3660179305079774227">Săgeată în sus</translation>
-<translation id="3670030362669914947">Număr</translation>
 <translation id="3740362395218339114"><ph name="QUANTITY" /> GB/s</translation>
 <translation id="3757388668994797779"><ph name="QUANTITY" /> GB</translation>
 <translation id="3804247818991980532"><ph name="TYPE_1" />. <ph name="TYPE_2" />.</translation>
@@ -103,27 +105,27 @@
 <translation id="4266252015790371705">{MONTHS,plural, =1{Acum 1 lună}few{Acum # luni}other{Acum # de luni}}</translation>
 <translation id="4289300219472526559">Începeți să vorbiți</translation>
 <translation id="4289540628985791613">Prezentare generală</translation>
-<translation id="4306392492252714209">Elimină din clipboard.</translation>
-<translation id="4311195029067684288">Maxim</translation>
 <translation id="4491109536499578614">Imagine</translation>
 <translation id="4565377596337484307">Ascunde parola</translation>
 <translation id="4588090240171750605">Derulează spre dreapta</translation>
+<translation id="4689010477870442157">{YEARS,plural, =1{Acum un an}few{Acum # ani}other{Acum # de ani}}</translation>
 <translation id="4724120544754982507">Centrul de notificări, <ph name="UNREAD_NOTIFICATION_COUNT" /> notificări necitite</translation>
+<translation id="4729257764711776855">număr</translation>
 <translation id="4746179598275229723">Fixarea extensiei a fost anulată</translation>
 <translation id="4788285488841504513">{MONTHS,plural, =1{1 lună rămasă}few{# luni rămase}other{# de luni rămase}}</translation>
 <translation id="4888938634149558681">Apelează</translation>
-<translation id="4937657825850660613">Jumătate</translation>
+<translation id="4895877746940133817"><ph name="TYPE_1" />, <ph name="TYPE_2" />, <ph name="TYPE_3" /></translation>
 <translation id="4968171027979920686">{SECONDS,plural, =1{o secundă}few{# secunde}other{# de secunde}}</translation>
 <translation id="4971687151119236543">Melodia anterioară din conținutul media</translation>
-<translation id="4971925105143343452">Parțial</translation>
 <translation id="5046499563572181734">Atinge aici</translation>
 <translation id="5076340679995252485">&amp;Inserează</translation>
-<translation id="5123162024343028706">Fixează deasupra</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> PB</translation>
 <translation id="5278860589123563674">Nu s-a trimis</translation>
 <translation id="528468243742722775">Oprește</translation>
 <translation id="5329858601952122676">&amp;Șterge</translation>
+<translation id="5361107212971249203">text</translation>
 <translation id="5463830097259460683">Emoji și simboluri</translation>
+<translation id="5505748296268090374">Elimină <ph name="ITEM_TEXT" />.</translation>
 <translation id="5528053674512161860">Pagina nu s-a încărcat, deoarece modulul IU pentru dezvoltatori (dev_ui) nu este instalat</translation>
 <translation id="5574202486608032840"><ph name="IDS_SHORT_PRODUCT_OS_NAME" /></translation>
 <translation id="5583640892426849032">Backspace</translation>
@@ -146,6 +148,7 @@
 <translation id="6142413573757616983"><ph name="QUANTITY" /> B/s</translation>
 <translation id="6237461503717005873">S-a selectat <ph name="ROW_NAME" />.</translation>
 <translation id="6264365405983206840">Select&amp;ează tot</translation>
+<translation id="6346952829206698721">Inserează din clipboard</translation>
 <translation id="6364916375976753737">Derulează spre stânga</translation>
 <translation id="6394627529324717982">Virgulă</translation>
 <translation id="6397363302884558537">Opriți-vă din vorbit</translation>
@@ -172,6 +175,7 @@
 <translation id="7170202025028120564">Setările de afișare ale aplicației vor fi aplicate la următoarea repornire.</translation>
 <translation id="7222373446505536781">F11</translation>
 <translation id="7238427729722629793">{MINUTES,plural, =1{Un min. rămas}few{# min. rămase}other{# min. rămase}}</translation>
+<translation id="7363164521834647158">Trimite răspunsul</translation>
 <translation id="7365057348334984696">{MINUTES,plural, =1{Acum un min.}few{Acum # min.}other{Acum # min.}}</translation>
 <translation id="7389409599945284130">– <ph name="MESSAGE" /></translation>
 <translation id="7410957453383678442">{MINUTES,plural, =1{Un minut rămas}few{# minute rămase}other{# de minute rămase}}</translation>
@@ -204,6 +208,7 @@
 <translation id="8393700583063109961">Trimite un mesaj</translation>
 <translation id="8394908167088220973">Redați/întrerupeți conținutul media</translation>
 <translation id="8458811141851741261">{YEARS,plural, =1{1 an}few{# ani}other{# ani}}</translation>
+<translation id="8598144894266192959"><ph name="NUMBER" /> %</translation>
 <translation id="8602707065186045623">Fișier <ph name="SAVEAS_EXTENSION_TYPE" /> (.<ph name="SAVEAS_EXTENSION_NAME" />)</translation>
 <translation id="8677655579646609597"><ph name="QUANTITY" /> KO/s</translation>
 <translation id="8725488761726303204">Peste <ph name="NUMBER" /></translation>
@@ -214,10 +219,12 @@
 <translation id="8867568208303837180">Se trimite...</translation>
 <translation id="8876215549894133151">Format:</translation>
 <translation id="8901569739625249689"><ph name="QUANTITY" /> KO</translation>
+<translation id="8927924178504495502">{HOURS,plural, =1{Acum o oră}few{Acum # ore}other{Acum # de ore}}</translation>
 <translation id="8996630695507351249">Asigură-te că dispozitivul <ph name="TARGET_DEVICE_NAME" /> este conectat la internet.</translation>
 <translation id="9044832324875206639">{SECONDS,plural, =1{O sec.}few{# sec.}other{# sec.}}</translation>
 <translation id="9059834730836941392">Restrânge notificarea</translation>
 <translation id="9170848237812810038">&amp;Anulează</translation>
 <translation id="932327136139879170">Pagina de pornire</translation>
 <translation id="944069440740578670">Notificări necitite</translation>
+<translation id="966963601246348639">{SECONDS,plural, =1{Acum o secundă}few{Acum # secunde}other{Acum # de secunde}}</translation>
 </translationbundle>

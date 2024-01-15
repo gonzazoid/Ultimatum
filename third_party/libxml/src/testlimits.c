@@ -10,15 +10,10 @@
  * daniel@veillard.com
  */
 
-#include "libxml.h"
 #include <stdio.h>
-
-#if !defined(_WIN32)
-#include <unistd.h>
-#endif
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <time.h>
 
 #include <libxml/parser.h>
@@ -401,7 +396,7 @@ testExternalEntityLoader(const char *URL, const char *ID,
 static char testErrors[32769];
 static int testErrorsSize = 0;
 
-static void XMLCDECL
+static void
 channel(void *ctx  ATTRIBUTE_UNUSED, const char *msg, ...) {
     va_list args;
     int res;
@@ -480,7 +475,7 @@ xmlParserPrintFileContextInternal(xmlParserInputPtr input ,
 }
 
 static void
-testStructuredErrorHandler(void *ctx  ATTRIBUTE_UNUSED, xmlErrorPtr err) {
+testStructuredErrorHandler(void *ctx ATTRIBUTE_UNUSED, const xmlError *err) {
     char *file = NULL;
     int line = 0;
     int code = -1;
@@ -663,9 +658,6 @@ testStructuredErrorHandler(void *ctx  ATTRIBUTE_UNUSED, xmlErrorPtr err) {
 
 static void
 initializeLibxml2(void) {
-    xmlGetWarningsDefaultValue = 0;
-    xmlPedanticParserDefault(0);
-
     xmlMemSetup(xmlMemFree, xmlMemMalloc, xmlMemRealloc, xmlMemoryStrdup);
     xmlInitParser();
     xmlSetExternalEntityLoader(testExternalEntityLoader);
@@ -1116,7 +1108,7 @@ commentCallback(void *ctx ATTRIBUTE_UNUSED,
  * Display and format a warning messages, gives file, line, position and
  * extra parameters.
  */
-static void XMLCDECL
+static void
 warningCallback(void *ctx ATTRIBUTE_UNUSED,
                 const char *msg ATTRIBUTE_UNUSED, ...)
 {
@@ -1133,7 +1125,7 @@ warningCallback(void *ctx ATTRIBUTE_UNUSED,
  * Display and format a error messages, gives file, line, position and
  * extra parameters.
  */
-static void XMLCDECL
+static void
 errorCallback(void *ctx ATTRIBUTE_UNUSED, const char *msg ATTRIBUTE_UNUSED,
               ...)
 {
@@ -1150,7 +1142,7 @@ errorCallback(void *ctx ATTRIBUTE_UNUSED, const char *msg ATTRIBUTE_UNUSED,
  * Display and format a fatalError messages, gives file, line, position and
  * extra parameters.
  */
-static void XMLCDECL
+static void
 fatalErrorCallback(void *ctx ATTRIBUTE_UNUSED,
                    const char *msg ATTRIBUTE_UNUSED, ...)
 {
@@ -1626,7 +1618,6 @@ main(int argc ATTRIBUTE_UNUSED, char **argv ATTRIBUTE_UNUSED) {
 	       nb_tests, nb_errors, nb_leaks);
     }
     xmlCleanupParser();
-    xmlMemoryDump();
 
     return(ret);
 }

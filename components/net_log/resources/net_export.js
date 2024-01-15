@@ -5,9 +5,10 @@
 
 // <if expr="is_ios">
 import 'chrome://resources/js/ios/web_ui.js';
+
 // </if>
 
-import {addSingletonGetter, addWebUIListener} from 'chrome://resources/js/cr.m.js';
+import {addWebUiListener} from 'chrome://resources/js/cr.js';
 import {$} from 'chrome://resources/js/util.js';
 
 /**
@@ -51,7 +52,7 @@ class NetExportView {
   initialize() {
     // Tell NetExportMessageHandler to notify the UI of future state changes
     // from this point on and listen for net-log-info-changed events.
-    addWebUIListener(
+    addWebUiListener(
         'net-log-info-changed', info => this.onExportNetLogInfoChanged_(info));
     chrome.send('enableNotifyUIWithState');
   }
@@ -301,6 +302,11 @@ class NetExportView {
   setFavicon_(dataUrl) {
     document.getElementById('fav-icon').href = dataUrl;
   }
+
+  static getInstance() {
+    return instance || (instance = new NetExportView());
+  }
 }
 
-addSingletonGetter(NetExportView);
+/** @type {?NetExportView} */
+let instance = null;

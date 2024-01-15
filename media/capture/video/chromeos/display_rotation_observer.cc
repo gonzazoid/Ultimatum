@@ -6,17 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace media {
 
 // static
 scoped_refptr<ScreenObserverDelegate> ScreenObserverDelegate::Create(
-    DisplayRotationObserver* observer,
+    base::WeakPtr<DisplayRotationObserver> observer,
     scoped_refptr<base::SingleThreadTaskRunner> display_task_runner) {
   auto delegate = base::WrapRefCounted(
-      new ScreenObserverDelegate(observer, display_task_runner));
+      new ScreenObserverDelegate(std::move(observer), display_task_runner));
   display_task_runner->PostTask(
       FROM_HERE,
       base::BindOnce(&ScreenObserverDelegate::AddObserverOnDisplayThread,
@@ -25,15 +25,16 @@ scoped_refptr<ScreenObserverDelegate> ScreenObserverDelegate::Create(
 }
 
 ScreenObserverDelegate::ScreenObserverDelegate(
-    DisplayRotationObserver* observer,
+    base::WeakPtr<DisplayRotationObserver> observer,
     scoped_refptr<base::SingleThreadTaskRunner> display_task_runner)
-    : observer_(observer),
+    : observer_(std::move(observer)),
       display_task_runner_(std::move(display_task_runner)),
-      delegate_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      delegate_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
+}
 
 void ScreenObserverDelegate::RemoveObserver() {
   DCHECK(delegate_task_runner_->BelongsToCurrentThread());
-  observer_ = NULL;
+  observer_ = nullptr;
   display_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&ScreenObserverDelegate::RemoveObserverOnDisplayThread,
@@ -50,15 +51,23 @@ void ScreenObserverDelegate::OnDisplayMetricsChanged(
   DCHECK(display_task_runner_->BelongsToCurrentThread());
   if (!(metrics & DISPLAY_METRIC_ROTATION))
     return;
-  SendDisplayRotation(display);
+  if (display.IsInternal()) {
+    SendInternalDisplayRotation(display.rotation() * 90);
+  }
 }
 
 void ScreenObserverDelegate::AddObserverOnDisplayThread() {
   DCHECK(display_task_runner_->BelongsToCurrentThread());
   display::Screen* screen = display::Screen::GetScreen();
-  if (screen) {
-    display_observer_.emplace(this);
-    SendDisplayRotation(screen->GetPrimaryDisplay());
+  if (!screen) {
+    return;
+  }
+  display_observer_.emplace(this);
+  for (const auto& display : screen->GetAllDisplays()) {
+    if (display.IsInternal()) {
+      SendInternalDisplayRotation(display.rotation() * 90);
+      break;
+    }
   }
 }
 
@@ -68,21 +77,20 @@ void ScreenObserverDelegate::RemoveObserverOnDisplayThread() {
 }
 
 // Post the screen rotation change from the UI thread to capture thread
-void ScreenObserverDelegate::SendDisplayRotation(
-    const display::Display& display) {
+void ScreenObserverDelegate::SendInternalDisplayRotation(int rotation) {
   DCHECK(display_task_runner_->BelongsToCurrentThread());
   delegate_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(
-          &ScreenObserverDelegate::SendDisplayRotationOnCaptureThread, this,
-          display));
+          &ScreenObserverDelegate::SendInternalDisplayRotationOnCaptureThread,
+          this, rotation));
 }
 
-void ScreenObserverDelegate::SendDisplayRotationOnCaptureThread(
-    const display::Display& display) {
+void ScreenObserverDelegate::SendInternalDisplayRotationOnCaptureThread(
+    int rotation) {
   DCHECK(delegate_task_runner_->BelongsToCurrentThread());
   if (observer_)
-    observer_->SetDisplayRotation(display);
+    observer_->SetInternalDisplayRotation(rotation);
 }
 
 }  // namespace media

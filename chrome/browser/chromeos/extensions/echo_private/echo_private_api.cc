@@ -4,14 +4,12 @@
 
 #include "chrome/browser/chromeos/extensions/echo_private/echo_private_api.h"
 
-#include <memory>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -86,7 +84,7 @@ EchoPrivateGetRegistrationCodeFunction::
 
 ExtensionFunction::ResponseAction
 EchoPrivateGetRegistrationCodeFunction::Run() {
-  std::unique_ptr<echo_api::GetRegistrationCode::Params> params =
+  absl::optional<echo_api::GetRegistrationCode::Params> params =
       echo_api::GetRegistrationCode::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -115,8 +113,8 @@ EchoPrivateGetRegistrationCodeFunction::Run() {
 #else
   auto* lacros_service = chromeos::LacrosService::Get();
   if (lacros_service->IsAvailable<crosapi::mojom::EchoPrivate>() &&
-      static_cast<uint32_t>(lacros_service->GetInterfaceVersion(
-          crosapi::mojom::EchoPrivate::Uuid_)) >=
+      static_cast<uint32_t>(
+          lacros_service->GetInterfaceVersion<crosapi::mojom::EchoPrivate>()) >=
           crosapi::mojom::EchoPrivate::kGetRegistrationCodeMinVersion) {
     lacros_service->GetRemote<crosapi::mojom::EchoPrivate>()
         ->GetRegistrationCode(type.value(), std::move(callback));
@@ -137,7 +135,7 @@ EchoPrivateSetOfferInfoFunction::EchoPrivateSetOfferInfoFunction() {}
 EchoPrivateSetOfferInfoFunction::~EchoPrivateSetOfferInfoFunction() {}
 
 ExtensionFunction::ResponseAction EchoPrivateSetOfferInfoFunction::Run() {
-  std::unique_ptr<echo_api::SetOfferInfo::Params> params =
+  absl::optional<echo_api::SetOfferInfo::Params> params =
       echo_api::SetOfferInfo::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -156,7 +154,7 @@ EchoPrivateGetOfferInfoFunction::EchoPrivateGetOfferInfoFunction() {}
 EchoPrivateGetOfferInfoFunction::~EchoPrivateGetOfferInfoFunction() {}
 
 ExtensionFunction::ResponseAction EchoPrivateGetOfferInfoFunction::Run() {
-  std::unique_ptr<echo_api::GetOfferInfo::Params> params =
+  absl::optional<echo_api::GetOfferInfo::Params> params =
       echo_api::GetOfferInfo::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -193,8 +191,8 @@ ExtensionFunction::ResponseAction EchoPrivateGetOobeTimestampFunction::Run() {
 #else
   auto* lacros_service = chromeos::LacrosService::Get();
   if (lacros_service->IsAvailable<crosapi::mojom::EchoPrivate>() &&
-      static_cast<uint32_t>(lacros_service->GetInterfaceVersion(
-          crosapi::mojom::EchoPrivate::Uuid_)) >=
+      static_cast<uint32_t>(
+          lacros_service->GetInterfaceVersion<crosapi::mojom::EchoPrivate>()) >=
           crosapi::mojom::EchoPrivate::kGetOobeTimestampMinVersion) {
     lacros_service->GetRemote<crosapi::mojom::EchoPrivate>()->GetOobeTimestamp(
         std::move(callback));
@@ -217,7 +215,7 @@ EchoPrivateGetUserConsentFunction::~EchoPrivateGetUserConsentFunction() =
     default;
 
 ExtensionFunction::ResponseAction EchoPrivateGetUserConsentFunction::Run() {
-  std::unique_ptr<echo_api::GetUserConsent::Params> params =
+  absl::optional<echo_api::GetUserConsent::Params> params =
       echo_api::GetUserConsent::Params::Create(args());
 
   // Verify that the passed origin URL is valid.

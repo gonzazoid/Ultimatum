@@ -21,6 +21,7 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/metrics/client_info.h"
+#include "components/metrics/content/subprocess_metrics_provider.h"
 #include "components/metrics/file_metrics_provider.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/metrics_state_manager.h"
@@ -39,8 +40,13 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "components/metrics/structured/structured_metrics_features.h"  // nogncheck
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/lacros/lacros_test_helper.h"
 #endif
 
 class TestChromeMetricsServiceClient : public ChromeMetricsServiceClient {
@@ -48,6 +54,9 @@ class TestChromeMetricsServiceClient : public ChromeMetricsServiceClient {
   // Equivalent to ChromeMetricsServiceClient::Create
   static std::unique_ptr<TestChromeMetricsServiceClient> Create(
       metrics::MetricsStateManager* metrics_state_manager) {
+    // Needed because RegisterMetricsServiceProviders() checks for this.
+    metrics::SubprocessMetricsProvider::CreateInstance();
+
     std::unique_ptr<TestChromeMetricsServiceClient> client(
         new TestChromeMetricsServiceClient(metrics_state_manager));
     client->Initialize();
@@ -88,13 +97,13 @@ class ChromeMetricsServiceClientTest : public testing::Test {
     // ChromeOs Metrics Provider require g_login_state and power manager client
     // initialized before they can be instantiated.
     chromeos::PowerManagerClient::InitializeFake();
-    chromeos::LoginState::Initialize();
+    ash::LoginState::Initialize();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   }
 
   void TearDown() override {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    chromeos::LoginState::Shutdown();
+    ash::LoginState::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     // ChromeMetricsServiceClient::Initialize() initializes
@@ -111,6 +120,9 @@ class ChromeMetricsServiceClientTest : public testing::Test {
   std::unique_ptr<metrics::MetricsStateManager> metrics_state_manager_;
   metrics::TestEnabledStateProvider enabled_state_provider_;
   base::test::ScopedFeatureList scoped_feature_list_;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  chromeos::ScopedLacrosServiceTestHelper lacros_test_helper_;
+#endif
 };
 
 namespace {
@@ -150,15 +162,20 @@ TEST_F(ChromeMetricsServiceClientTest, FilterFiles) {
 
 TEST_F(ChromeMetricsServiceClientTest, TestRegisterUKMProviders) {
   // Test that UKM service has initialized its metrics providers. Currently
-  // there are 7 providers for all platform except ChromeOS.
+  // there are 8 providers for all platform except ChromeOS.
   // NetworkMetricsProvider, GPUMetricsProvider, CPUMetricsProvider
   // ScreenInfoMetricsProvider, FormFactorMetricsProvider, FieldTrialsProvider,
-  // and PrivacyBudgetMetricsProvider.
+  // PrivacyBudgetMetricsProvider, and ComponentMetricsProvider.
+  size_t expected_providers = 8;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  const size_t expected_providers = 8;  // ChromeOSMetricsProvider
-#else
-  const size_t expected_providers = 7;
+  // ChromeOSMetricsProvider
+  expected_providers++;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // LacrosMetricsProvider
+  expected_providers++;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   std::unique_ptr<ChromeMetricsServiceClient> chrome_metrics_service_client =
       TestChromeMetricsServiceClient::Create(metrics_state_manager_.get());
@@ -178,7 +195,7 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
   size_t expected_providers = 2;
 
   // This is the number of metrics providers that are outside any #if macros.
-  expected_providers += 23;
+  expected_providers += 21;
 
   int sample_rate;
   if (ChromeMetricsServicesManagerClient::GetSamplingRatePerMille(
@@ -198,7 +215,7 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
 
 #if BUILDFLAG(IS_ANDROID)
   // AndroidMetricsProvider, ChromeAndroidMetricsProvider,
-  // FamilyLinkUserMetricsProvider, and PageLoadMetricsProvider.
+  // PageLoadMetricsProvider, GmsMetricsProvider.
   expected_providers += 4;
 #else
   // performance_manager::MetricsProvider
@@ -218,11 +235,19 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // AmbientModeMetricsProvider, AssistantServiceMetricsProvider,
   // CrosHealthdMetricsProvider, ChromeOSMetricsProvider,
-  // KeyboardBacklightColorMetricsProvider, PrinterMetricsProvider,
-  // HashedLoggingMetricsProvider, FamilyUserMetricsProvider,
-  // FamilyLinkUserMetricsProvider, UpdateEngineMetricsProvider,
+  // ChromeOSHistogramMetricsProvider,
+  // KeyboardBacklightColorMetricsProvider,
+  // PersonalizationAppThemeMetricsProvider, PrinterMetricsProvider,
+  // FamilyUserMetricsProvider, FamilyLinkUserMetricsProvider,
+  // UpdateEngineMetricsProvider, OsSettingsMetricsProvider,
   // and UserTypeByDeviceTypeMetricsProvider.
-  expected_providers += 11;
+  expected_providers += 13;
+
+  // StructuredMetricsProvider.
+  if (!base::FeatureList::IsEnabled(
+          metrics::structured::kEnabledStructuredMetricsService)) {
+    expected_providers++;
+  }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -230,10 +255,6 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
   // AccessibilityMetricsProvider
   expected_providers += 2;
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
-
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
-  expected_providers++;  // UpgradeMetricsProvider
-#endif  //! BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_MAC)
   expected_providers++;  // PowerMetricsProvider
@@ -251,6 +272,15 @@ TEST_F(ChromeMetricsServiceClientTest, TestRegisterMetricsServiceProviders) {
   // DesktopSessionMetricsProvider
   expected_providers += 1;
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_LINUX)
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  // BluetoothMetricsProvider
+  expected_providers += 1;
+#endif
+
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
+  expected_providers++;  // FamilyLinkUserMetricsProvider
+#endif
 
   std::unique_ptr<TestChromeMetricsServiceClient>
       chrome_metrics_service_client =

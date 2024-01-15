@@ -26,19 +26,18 @@ const int RTCEncodedAudioUnderlyingSource::kMinQueueDesiredSize = -60;
 
 RTCEncodedAudioUnderlyingSource::RTCEncodedAudioUnderlyingSource(
     ScriptState* script_state,
-    WTF::CrossThreadOnceClosure disconnect_callback,
-    bool is_receiver)
+    WTF::CrossThreadOnceClosure disconnect_callback)
     : UnderlyingSourceBase(script_state),
       script_state_(script_state),
-      disconnect_callback_(std::move(disconnect_callback)),
-      is_receiver_(is_receiver) {
+      disconnect_callback_(std::move(disconnect_callback)) {
   DCHECK(disconnect_callback_);
 
   ExecutionContext* context = ExecutionContext::From(script_state);
   task_runner_ = context->GetTaskRunner(TaskType::kInternalMediaRealTime);
 }
 
-ScriptPromise RTCEncodedAudioUnderlyingSource::pull(ScriptState* script_state) {
+ScriptPromise RTCEncodedAudioUnderlyingSource::Pull(ScriptState* script_state,
+                                                    ExceptionState&) {
   DCHECK(task_runner_->BelongsToCurrentThread());
   // WebRTC is a push source without backpressure support, so nothing to do
   // here.
@@ -46,7 +45,8 @@ ScriptPromise RTCEncodedAudioUnderlyingSource::pull(ScriptState* script_state) {
 }
 
 ScriptPromise RTCEncodedAudioUnderlyingSource::Cancel(ScriptState* script_state,
-                                                      ScriptValue reason) {
+                                                      ScriptValue reason,
+                                                      ExceptionState&) {
   DCHECK(task_runner_->BelongsToCurrentThread());
   if (disconnect_callback_)
     std::move(disconnect_callback_).Run();
@@ -59,8 +59,16 @@ void RTCEncodedAudioUnderlyingSource::Trace(Visitor* visitor) const {
 }
 
 void RTCEncodedAudioUnderlyingSource::OnFrameFromSource(
-    std::unique_ptr<webrtc::TransformableFrameInterface> webrtc_frame) {
-  DCHECK(task_runner_->BelongsToCurrentThread());
+    std::unique_ptr<webrtc::TransformableAudioFrameInterface> webrtc_frame) {
+  // It can happen that a frame is posted to the task runner of the old
+  // execution context during a stream transfer to a new context.
+  // TODO(https://crbug.com/1506631): Make the state updates related to the
+  // transfer atomic and turn this into a DCHECK.
+  if (!task_runner_->BelongsToCurrentThread()) {
+    DVLOG(1) << "Dropped frame posted to incorrect task runner. This can "
+                "happen during transfer.";
+    return;
+  }
   // If the source is canceled or there are too many queued frames,
   // drop the new frame.
   if (!disconnect_callback_ || !GetExecutionContext()) {
@@ -80,20 +88,8 @@ void RTCEncodedAudioUnderlyingSource::OnFrameFromSource(
     return;
   }
 
-  RTCEncodedAudioFrame* encoded_frame = nullptr;
-  if (is_receiver_) {
-    // Receivers produce frames as webrtc::TransformableAudioFrameInterface,
-    // which allows exposing the CSRCs.
-    std::unique_ptr<webrtc::TransformableAudioFrameInterface> audio_frame =
-        base::WrapUnique(static_cast<webrtc::TransformableAudioFrameInterface*>(
-            webrtc_frame.release()));
-    encoded_frame =
-        MakeGarbageCollected<RTCEncodedAudioFrame>(std::move(audio_frame));
-  } else {
-    encoded_frame =
-        MakeGarbageCollected<RTCEncodedAudioFrame>(std::move(webrtc_frame));
-  }
-  Controller()->Enqueue(encoded_frame);
+  Controller()->Enqueue(
+      MakeGarbageCollected<RTCEncodedAudioFrame>(std::move(webrtc_frame)));
 }
 
 void RTCEncodedAudioUnderlyingSource::Close() {

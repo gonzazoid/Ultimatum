@@ -9,11 +9,11 @@
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
+#include "components/feedback/feedback_common.h"
 #include "extensions/browser/api/feedback_private/feedback_private_api_unittest_base_chromeos.h"
 #include "extensions/browser/api/feedback_private/feedback_service.h"
 #include "extensions/browser/api/feedback_private/log_source_access_manager.h"
 #include "extensions/browser/api/feedback_private/mock_feedback_service.h"
-#include "extensions/common/value_builder.h"
 
 namespace extensions {
 
@@ -33,7 +33,7 @@ using testing::SaveArg;
 // list.
 template <typename T>
 std::string ParamsToJSON(const T& params) {
-  base::ListValue params_value;
+  base::Value::List params_value;
   params_value.Append(base::Value(params.ToValue()));
   std::string params_json_string;
   EXPECT_TRUE(base::JSONWriter::Write(params_value, &params_json_string));
@@ -86,25 +86,25 @@ class FeedbackPrivateApiUnittest : public FeedbackPrivateApiUnittestBase {
     scoped_refptr<FeedbackPrivateReadLogSourceFunction> function =
         base::MakeRefCounted<FeedbackPrivateReadLogSourceFunction>();
 
-    std::unique_ptr<base::Value> result_value =
+    std::optional<base::Value> result_value =
         RunFunctionAndReturnValue(function.get(), ParamsToJSON(params));
     if (!result_value)
       return testing::AssertionFailure() << "No result";
 
-    ReadLogSourceResult result;
-    if (!ReadLogSourceResult::Populate(*result_value, &result)) {
+    auto result = ReadLogSourceResult::FromValue(*result_value);
+    if (!result) {
       return testing::AssertionFailure()
              << "Unable to parse a valid result from " << *result_value;
     }
 
-    if (result.log_lines.size() != 1) {
+    if (result->log_lines.size() != 1) {
       return testing::AssertionFailure()
              << "Expected |log_lines| to contain 1 string, actual number: "
-             << result.log_lines.size();
+             << result->log_lines.size();
     }
 
-    *result_reader_id = result.reader_id;
-    *result_string = result.log_lines[0];
+    *result_reader_id = result->reader_id;
+    *result_string = result->log_lines[0];
 
     return testing::AssertionSuccess();
   }
@@ -128,7 +128,7 @@ class FeedbackPrivateApiUnittest : public FeedbackPrivateApiUnittestBase {
     base::Value values = base::test::ParseJson(args);
     EXPECT_TRUE(values.is_list());
 
-    std::unique_ptr<api::feedback_private::SendFeedback::Params> params =
+    std::optional<api::feedback_private::SendFeedback::Params> params =
         api::feedback_private::SendFeedback::Params::Create(values.GetList());
     EXPECT_TRUE(params);
 
@@ -137,7 +137,7 @@ class FeedbackPrivateApiUnittest : public FeedbackPrivateApiUnittestBase {
 
     auto function = base::MakeRefCounted<FeedbackPrivateSendFeedbackFunction>();
 
-    std::unique_ptr<base::Value> result_value =
+    std::optional<base::Value> result_value =
         RunFunctionAndReturnValue(function.get(), args);
     EXPECT_TRUE(result_value);
 
@@ -150,7 +150,7 @@ class FeedbackPrivateApiUnittest : public FeedbackPrivateApiUnittestBase {
     auto mock = base::MakeRefCounted<MockFeedbackService>(browser_context());
 
     // scoped_refptr<FeedbackData> actual_feedback_data;
-    EXPECT_CALL(*mock, SendFeedback(_, _, _))
+    EXPECT_CALL(*mock, RedactThenSendFeedback(_, _, _))
         .WillOnce([&](const FeedbackParams& params,
                       scoped_refptr<FeedbackData> feedback_data,
                       SendFeedbackCallback callback) {
@@ -164,6 +164,8 @@ class FeedbackPrivateApiUnittest : public FeedbackPrivateApiUnittestBase {
           EXPECT_EQ(expected_params.send_histograms, params.send_histograms);
           EXPECT_EQ(expected_params.send_bluetooth_logs,
                     params.send_bluetooth_logs);
+          EXPECT_EQ(expected_params.send_autofill_metadata,
+                    params.send_autofill_metadata);
 
           std::move(callback).Run(true);
         });
@@ -180,7 +182,7 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceInvalidId) {
   LogSourceAccessManager::SetRateLimitingTimeoutForTesting(&timeout);
 
   ReadLogSourceParams params;
-  params.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params.source = api::feedback_private::LogSource::kMessages;
   params.incremental = true;
   params.reader_id = 9999;
 
@@ -192,7 +194,7 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceNonIncremental) {
   LogSourceAccessManager::SetRateLimitingTimeoutForTesting(&timeout);
 
   ReadLogSourceParams params;
-  params.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params.source = api::feedback_private::LogSource::kMessages;
   params.incremental = false;
 
   // Test multiple non-incremental reads.
@@ -223,7 +225,7 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceIncremental) {
   LogSourceAccessManager::SetRateLimitingTimeoutForTesting(&timeout);
 
   ReadLogSourceParams params;
-  params.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params.source = api::feedback_private::LogSource::kMessages;
   params.incremental = true;
 
   int result_reader_id = 0;
@@ -261,7 +263,7 @@ TEST_F(FeedbackPrivateApiUnittest, Redact) {
   LogSourceAccessManager::SetRateLimitingTimeoutForTesting(&timeout);
 
   ReadLogSourceParams params;
-  params.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params.source = api::feedback_private::LogSource::kMessages;
   params.incremental = true;
 
   int result_reader_id = 0;
@@ -278,7 +280,7 @@ TEST_F(FeedbackPrivateApiUnittest, Redact) {
   EXPECT_TRUE(
       RunReadLogSourceFunction(params, &result_reader_id, &result_string));
   EXPECT_EQ(*params.reader_id, result_reader_id);
-  EXPECT_EQ("[MAC OUI=11:22:33 IFACE=1]", result_string);
+  EXPECT_EQ("(MAC OUI=11:22:33 IFACE=1)", result_string);
 }
 
 TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceMultipleSources) {
@@ -290,7 +292,7 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceMultipleSources) {
 
   // Attempt to open LOG_SOURCE_MESSAGES twice.
   ReadLogSourceParams params_1st_read;
-  params_1st_read.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params_1st_read.source = api::feedback_private::LogSource::kMessages;
   params_1st_read.incremental = true;
   EXPECT_TRUE(RunReadLogSourceFunction(params_1st_read, &result_reader_id,
                                        &result_string));
@@ -300,14 +302,14 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceMultipleSources) {
 
   // Create a second reader from the same log source.
   ReadLogSourceParams params_1st_read_repeated;
-  params_1st_read_repeated.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params_1st_read_repeated.source = api::feedback_private::LogSource::kMessages;
   params_1st_read_repeated.incremental = true;
   EXPECT_TRUE(RunReadLogSourceFunction(params_1st_read_repeated,
                                        &result_reader_id, &result_string));
 
   // Attempt to open LOG_SOURCE_UI_LATEST twice.
   ReadLogSourceParams params_2nd_read;
-  params_2nd_read.source = api::feedback_private::LOG_SOURCE_UILATEST;
+  params_2nd_read.source = api::feedback_private::LogSource::kUiLatest;
   params_2nd_read.incremental = true;
   result_reader_id = -1;
   EXPECT_TRUE(RunReadLogSourceFunction(params_2nd_read, &result_reader_id,
@@ -319,7 +321,7 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceMultipleSources) {
 
   // Create a second reader from the same log source.
   ReadLogSourceParams params_2nd_read_repeated;
-  params_2nd_read_repeated.source = api::feedback_private::LOG_SOURCE_UILATEST;
+  params_2nd_read_repeated.source = api::feedback_private::LogSource::kUiLatest;
   params_2nd_read_repeated.incremental = true;
   EXPECT_TRUE(RunReadLogSourceFunction(params_2nd_read_repeated,
                                        &result_reader_id, &result_string));
@@ -361,7 +363,7 @@ TEST_F(FeedbackPrivateApiUnittest, ReadLogSourceWithAccessTimeouts) {
       ->SetTickClockForTesting(&test_clock);
 
   ReadLogSourceParams params;
-  params.source = api::feedback_private::LOG_SOURCE_MESSAGES;
+  params.source = api::feedback_private::LogSource::kMessages;
   params.incremental = true;
   int result_reader_id = 0;
   std::string result_string;
@@ -419,18 +421,22 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackWithSysInfo) {
     },
     "assistantDebugInfoAllowed": true,
     "attachedFileBlobUuid": "2e3996de-db9e-4c3d-b62c-80d19b6418b9",
+    "autofillMetadata": "",
     "categoryTag": "test-tag",
     "description": "test-desc",
     "descriptionPlaceholder": "",
     "email": "tester@test.com",
     "flow": "regular",
     "fromAssistant": true,
+    "fromAutofill": false,
     "includeBluetoothLogs": true,
     "pageUrl": "https://test.com",
     "productId": 1122,
     "screenshot": {},
     "screenshotBlobUuid": "3e72cc3c-550f-49f0-b5d2-bf21f3fbab15",
+    "sendAutofillMetadata": false,
     "sendBluetoothLogs": true,
+    "sendWifiDebugLogs": false,
     "sendHistograms": true,
     "sendTabTitles": true,
     "systemInformation": [
@@ -445,7 +451,9 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackWithSysInfo) {
                                        /*load_system_info=*/false,
                                        /*send_tab_titles=*/true,
                                        /*send_histograms=*/true,
-                                       /*send_bluetooth_logs=*/true};
+                                       /*send_bluetooth_logs=*/true,
+                                       /*send_wifi_debug_logs=*/false,
+                                       /*send_autofill_metadata=*/false};
   auto feedback_data = RunSendFeedbackFunction(args, expected_params);
 
   EXPECT_EQ(9966, feedback_data->trace_id());
@@ -474,17 +482,21 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackWithoutSysInfo) {
       "name":""
     },
     "assistantDebugInfoAllowed": false,
+    "autofillMetadata": "",
     "categoryTag": "",
     "description": "test-desc",
     "descriptionPlaceholder": "",
     "email": "",
     "flow": "regular",
     "fromAssistant": false,
+    "fromAutofill": false,
     "includeBluetoothLogs": false,
     "pageUrl": "",
     "screenshot": {},
     "screenshotBlobUuid": "",
+    "sendAutofillMetadata": false,
     "sendBluetoothLogs": false,
+    "sendWifiDebugLogs": false,
     "sendHistograms": false,
     "sendTabTitles": false,
     "systemInformation": [],
@@ -496,7 +508,9 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackWithoutSysInfo) {
                                        /*load_system_info=*/false,
                                        /*send_tab_titles=*/false,
                                        /*send_histograms=*/false,
-                                       /*send_bluetooth_logs=*/false};
+                                       /*send_bluetooth_logs=*/false,
+                                       /*send_wifi_debug_logs=*/false,
+                                       /*send_autofill_metadata=*/false};
   auto feedback_data = RunSendFeedbackFunction(args, expected_params);
 
   EXPECT_EQ(0, feedback_data->trace_id());
@@ -524,18 +538,22 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackV2WithOptionsTrue) {
     },
     "assistantDebugInfoAllowed": true,
     "attachedFileBlobUuid": "2e3996de-db9e-4c3d-b62c-80d19b6418b9",
+    "autofillMetadata": "",
     "categoryTag": "test-tag",
     "description": "test-desc",
     "descriptionPlaceholder": "",
     "email": "tester@test.com",
     "flow": "regular",
     "fromAssistant": true,
+    "fromAutofill": false,
     "includeBluetoothLogs": true,
     "pageUrl": "https://test.com",
     "productId": 1122,
     "screenshot": {},
     "screenshotBlobUuid": "3e72cc3c-550f-49f0-b5d2-bf21f3fbab15",
+    "sendAutofillMetadata": false,
     "sendBluetoothLogs": true,
+    "sendWifiDebugLogs": false,
     "sendHistograms": true,
     "sendTabTitles": true,
     "systemInformation": [],
@@ -550,7 +568,9 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackV2WithOptionsTrue) {
                                        /*load_system_info=*/true,
                                        /*send_tab_titles=*/true,
                                        /*send_histograms=*/true,
-                                       /*send_bluetooth_logs=*/true};
+                                       /*send_bluetooth_logs=*/true,
+                                       /*send_wifi_debug_logs=*/false,
+                                       /*send_autofill_metadata=*/false};
   auto feedback_data = RunSendFeedbackFunction(args, expected_params);
 
   EXPECT_EQ(9966, feedback_data->trace_id());
@@ -579,17 +599,21 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackV2WithOptionsFalse) {
       "name":""
     },
     "assistantDebugInfoAllowed": false,
+    "autofillMetadata": "",
     "categoryTag": "",
     "description": "test-desc",
     "descriptionPlaceholder": "",
     "email": "",
     "flow": "regular",
     "fromAssistant": false,
+    "fromAutofill": false,
     "includeBluetoothLogs": false,
     "pageUrl": "",
     "screenshot": {},
     "screenshotBlobUuid": "",
+    "sendAutofillMetadata": false,
     "sendBluetoothLogs": false,
+    "sendWifiDebugLogs": false,
     "sendHistograms": false,
     "sendTabTitles": false,
     "systemInformation": [],
@@ -603,7 +627,9 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackV2WithOptionsFalse) {
                                        /*load_system_info=*/false,
                                        /*send_tab_titles=*/false,
                                        /*send_histograms=*/false,
-                                       /*send_bluetooth_logs=*/false};
+                                       /*send_bluetooth_logs=*/false,
+                                       /*send_wifi_debug_logs=*/false,
+                                       /*send_autofill_metadata=*/false};
   auto feedback_data = RunSendFeedbackFunction(args, expected_params);
 
   EXPECT_EQ(0, feedback_data->trace_id());
@@ -620,6 +646,112 @@ TEST_F(FeedbackPrivateApiUnittest, SendFeedbackV2WithOptionsFalse) {
   EXPECT_FALSE(feedback_data->assistant_debug_info_allowed());
   EXPECT_TRUE(feedback_data->sys_info());
   EXPECT_TRUE(feedback_data->sys_info()->size() == 0);
+}
+
+TEST_F(FeedbackPrivateApiUnittest, SendFeedbackWithAutofillInfo) {
+  const std::string args = R"([
+  {
+    "attachedFile": {
+      "data": {},
+      "name": "C:\\fakepath\\chrome_40px.svg"
+    },
+    "assistantDebugInfoAllowed": true,
+    "attachedFileBlobUuid": "2e3996de-db9e-4c3d-b62c-80d19b6418b9",
+    "autofillMetadata": "test-metadata",
+    "categoryTag": "test-tag",
+    "description": "test-desc",
+    "descriptionPlaceholder": "",
+    "email": "tester@test.com",
+    "flow": "regular",
+    "fromAssistant": false,
+    "fromAutofill": true,
+    "includeBluetoothLogs": true,
+    "pageUrl": "https://test.com",
+    "productId": 1122,
+    "screenshot": {},
+    "screenshotBlobUuid": "3e72cc3c-550f-49f0-b5d2-bf21f3fbab15",
+    "sendAutofillMetadata": true,
+    "sendBluetoothLogs": true,
+    "sendWifiDebugLogs": false,
+    "sendHistograms": true,
+    "sendTabTitles": true,
+    "systemInformation": [],
+    "traceId": 9966,
+    "useSystemWindowFrame": false
+  }
+])";
+
+  const FeedbackParams expected_params{/*is_internal_email=*/false,
+                                       /*load_system_info=*/false,
+                                       /*send_tab_titles=*/true,
+                                       /*send_histograms=*/true,
+                                       /*send_bluetooth_logs=*/true,
+                                       /*send_wifi_debug_logs=*/false,
+                                       /*send_autofill_metadata=*/true};
+  auto feedback_data = RunSendFeedbackFunction(args, expected_params);
+
+  EXPECT_EQ(9966, feedback_data->trace_id());
+  EXPECT_EQ(1122, feedback_data->product_id());
+  EXPECT_EQ("chrome_40px.svg", feedback_data->attached_filename());
+  EXPECT_EQ("test-desc", feedback_data->description());
+  EXPECT_EQ("test-tag", feedback_data->category_tag());
+  EXPECT_EQ("tester@test.com", feedback_data->user_email());
+  EXPECT_EQ("2e3996de-db9e-4c3d-b62c-80d19b6418b9",
+            feedback_data->attached_file_uuid());
+  EXPECT_EQ("3e72cc3c-550f-49f0-b5d2-bf21f3fbab15",
+            feedback_data->screenshot_uuid());
+  EXPECT_EQ("https://test.com", feedback_data->page_url());
+  EXPECT_EQ("test-metadata", feedback_data->autofill_metadata());
+
+  EXPECT_FALSE(feedback_data->from_assistant());
+  EXPECT_TRUE(feedback_data->assistant_debug_info_allowed());
+  EXPECT_TRUE(feedback_data->sys_info());
+}
+
+TEST_F(FeedbackPrivateApiUnittest, SendFeedbackAiFlow) {
+  const std::string args = R"([
+  {
+    "aiMetadata": "test-ai-metadata",
+    "categoryTag": "test-category",
+    "description": "test-desc",
+    "descriptionPlaceholder": "",
+    "email": "",
+    "flow": "ai",
+  }
+])";
+
+  const FeedbackParams expected_params{/*is_internal_email=*/false,
+                                       /*load_system_info=*/false,
+                                       /*send_tab_titles=*/false,
+                                       /*send_histograms=*/false,
+                                       /*send_bluetooth_logs=*/false,
+                                       /*send_wifi_debug_logs=*/false,
+                                       /*send_autofill_metadata=*/false};
+  auto feedback_data = RunSendFeedbackFunction(args, expected_params);
+
+  EXPECT_EQ(-1, feedback_data->product_id());
+  EXPECT_EQ("test-desc", feedback_data->description());
+  EXPECT_EQ("test-category", feedback_data->category_tag());
+  EXPECT_EQ("test-ai-metadata", feedback_data->ai_metadata());
+}
+
+TEST_F(FeedbackPrivateApiUnittest, SendFeedbackInfoAiFlow) {
+  extensions::FeedbackPrivateAPI* api =
+      FeedbackPrivateAPI::GetFactoryInstance()->Get(browser_context());
+
+  std::string unused;
+  auto feedback_info = api->CreateFeedbackInfo(
+      /*description_template=*/unused, /*description_placeholder_text=*/unused,
+      /*category_tag=*/unused, /*extra_diagnostics=*/unused,
+      /*page_url=*/GURL(),
+      /*flow=*/api::feedback_private::FeedbackFlow::kAi,
+      /*from_assistant=*/false, /*include_bluetooth_logs=*/false,
+      /*show_questionnaire=*/false, /*from_chrome_labs_or_kaleidoscope=*/false,
+      /*from_autofill=*/false, /*autofill_metadata=*/base::Value::Dict(),
+      /*ai_metadata=*/base::Value::Dict());
+
+  EXPECT_EQ(FeedbackCommon::GetChromeBrowserProductId(),
+            feedback_info->product_id);
 }
 
 }  // namespace extensions

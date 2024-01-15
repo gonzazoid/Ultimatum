@@ -26,16 +26,24 @@ class CellularNetworkMetricsLogger;
 class CellularPolicyHandler;
 class ClientCertResolver;
 class ConnectionInfoMetricsLogger;
+class EnterpriseManagedMetadataStore;
+class EphemeralNetworkConfigurationHandler;
+class EphemeralNetworkPoliciesEnablementHandler;
 class ESimPolicyLoginMetricsLogger;
 class GeolocationHandler;
 class HiddenNetworkHandler;
+class HotspotAllowedFlagHandler;
+class HotspotCapabilitiesProvider;
+class HotspotConfigurationHandler;
 class HotspotController;
+class HotspotFeatureUsageMetrics;
+class HotspotMetricsHelper;
 class HotspotStateHandler;
+class HotspotEnabledStateNotifier;
 class ManagedCellularPrefHandler;
 class ManagedNetworkConfigurationHandler;
 class ManagedNetworkConfigurationHandlerImpl;
 class NetworkActivationHandler;
-class NetworkCertMigrator;
 class NetworkCertificateHandler;
 class NetworkConfigurationHandler;
 class NetworkConnectionHandler;
@@ -45,10 +53,12 @@ class NetworkMetadataStore;
 class NetworkProfileHandler;
 class NetworkStateHandler;
 class NetworkSmsHandler;
+class Network3gppHandler;
 class ProhibitedTechnologiesHandler;
 class StubCellularNetworksProvider;
+class TechnologyStateController;
+class TextMessageProvider;
 class UIProxyConfigService;
-class HiddenNetworkMetricsHelper;
 class VpnNetworkMetricsHelper;
 
 // Class for handling initialization and access to chromeos network handlers.
@@ -109,8 +119,11 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
   CellularInhibitor* cellular_inhibitor();
   CellularPolicyHandler* cellular_policy_handler();
   HiddenNetworkHandler* hidden_network_handler();
+  HotspotCapabilitiesProvider* hotspot_capabilities_provider();
   HotspotController* hotspot_controller();
+  HotspotConfigurationHandler* hotspot_configuration_handler();
   HotspotStateHandler* hotspot_state_handler();
+  HotspotEnabledStateNotifier* hotspot_enabled_state_notifier();
   NetworkStateHandler* network_state_handler();
   NetworkDeviceHandler* network_device_handler();
   NetworkProfileHandler* network_profile_handler();
@@ -122,8 +135,11 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
   NetworkConnectionHandler* network_connection_handler();
   NetworkMetadataStore* network_metadata_store();
   NetworkSmsHandler* network_sms_handler();
+  Network3gppHandler* network_3gpp_handler();
   GeolocationHandler* geolocation_handler();
   ProhibitedTechnologiesHandler* prohibited_technologies_handler();
+  TechnologyStateController* technology_state_controller();
+  TextMessageProvider* text_message_provider();
 
  private:
   friend class ConnectionInfoMetricsLoggerTest;
@@ -133,14 +149,23 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
 
   void Init();
 
+  // Called when ephemeral network policies become enabled.
+  void OnEphemeralNetworkPoliciesEnabled();
+
+  // True when the device was manged by device policy at initialization time.
+  // TODO: b/302726243 - Introduce
+  // InstallAttributes::WasEnterpriseManagedAtStartup to avoid this.
+  const bool was_enterprise_managed_at_startup_;
+
   // The order of these determines the (inverse) destruction order.
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
-  std::unique_ptr<NetworkStateHandler> network_state_handler_;
+  const std::unique_ptr<NetworkStateHandler> network_state_handler_;
   std::unique_ptr<NetworkDeviceHandlerImpl> network_device_handler_;
   std::unique_ptr<CellularInhibitor> cellular_inhibitor_;
   std::unique_ptr<CellularESimProfileHandler> cellular_esim_profile_handler_;
   std::unique_ptr<StubCellularNetworksProvider>
       stub_cellular_networks_provider_;
+  std::unique_ptr<TechnologyStateController> technology_state_controller_;
   std::unique_ptr<CellularConnectionHandler> cellular_connection_handler_;
   std::unique_ptr<NetworkProfileHandler> network_profile_handler_;
   std::unique_ptr<NetworkConfigurationHandler> network_configuration_handler_;
@@ -155,15 +180,21 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
   std::unique_ptr<CellularMetricsLogger> cellular_metrics_logger_;
   std::unique_ptr<ConnectionInfoMetricsLogger> connection_info_metrics_logger_;
   std::unique_ptr<HiddenNetworkHandler> hidden_network_handler_;
+  std::unique_ptr<EnterpriseManagedMetadataStore>
+      enterprise_managed_metadata_store_;
+  std::unique_ptr<HotspotAllowedFlagHandler> hotspot_allowed_flag_handler_;
+  std::unique_ptr<HotspotCapabilitiesProvider> hotspot_capabilities_provider_;
+  std::unique_ptr<HotspotFeatureUsageMetrics> hotspot_feature_usage_metrics_;
   std::unique_ptr<HotspotStateHandler> hotspot_state_handler_;
   std::unique_ptr<HotspotController> hotspot_controller_;
+  std::unique_ptr<HotspotConfigurationHandler> hotspot_configuration_handler_;
+  std::unique_ptr<HotspotEnabledStateNotifier> hotspot_enabled_state_notifier_;
+  std::unique_ptr<HotspotMetricsHelper> hotspot_metrics_helper_;
   std::unique_ptr<ESimPolicyLoginMetricsLogger>
       esim_policy_login_metrics_logger_;
-  std::unique_ptr<HiddenNetworkMetricsHelper> hidden_network_metrics_helper_;
   std::unique_ptr<VpnNetworkMetricsHelper> vpn_network_metrics_helper_;
   std::unique_ptr<CellularNetworkMetricsLogger>
       cellular_network_metrics_logger_;
-  std::unique_ptr<NetworkCertMigrator> network_cert_migrator_;
   std::unique_ptr<ClientCertResolver> client_cert_resolver_;
   std::unique_ptr<AutoConnectHandler> auto_connect_handler_;
   std::unique_ptr<NetworkCertificateHandler> network_certificate_handler_;
@@ -171,19 +202,20 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
   std::unique_ptr<ProhibitedTechnologiesHandler>
       prohibited_technologies_handler_;
   std::unique_ptr<NetworkSmsHandler> network_sms_handler_;
+  std::unique_ptr<Network3gppHandler> network_3gpp_handler_;
+  std::unique_ptr<TextMessageProvider> text_message_provider_;
   std::unique_ptr<GeolocationHandler> geolocation_handler_;
   std::unique_ptr<UIProxyConfigService> ui_proxy_config_service_;
   std::unique_ptr<NetworkMetadataStore> network_metadata_store_;
+  std::unique_ptr<EphemeralNetworkPoliciesEnablementHandler>
+      ephemeral_network_policies_enablement_handler_;
+  std::unique_ptr<EphemeralNetworkConfigurationHandler>
+      ephemeral_network_configuration_handler_;
 
   // True when the device is managed by policy.
   bool is_enterprise_managed_ = false;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::NetworkHandler;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_HANDLER_H_

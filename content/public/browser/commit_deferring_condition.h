@@ -5,7 +5,7 @@
 #ifndef CONTENT_PUBLIC_BROWSER_COMMIT_DEFERRING_CONDITION_H_
 #define CONTENT_PUBLIC_BROWSER_COMMIT_DEFERRING_CONDITION_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 #include "base/memory/safe_ref.h"
 #include "content/common/content_export.h"
@@ -35,7 +35,10 @@ class CONTENT_EXPORT CommitDeferringCondition {
     // Returned when the condition needs to asynchronously wait before allowing
     // a commit. If this is returned, the condition will invoke the passed in
     // |resume| closure when it is ready.
-    kDefer
+    kDefer,
+    // Returned when it is known that the navigation has been cancelled and we
+    // should not proceed to commit it to avoid user-after-free.
+    kCancelled,
   };
 
   CommitDeferringCondition() = delete;

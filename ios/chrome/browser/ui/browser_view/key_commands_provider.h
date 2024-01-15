@@ -7,11 +7,10 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
-#import "ios/chrome/browser/ui/commands/find_in_page_commands.h"
-#import "ios/chrome/browser/ui/commands/omnibox_commands.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/public/commands/find_in_page_commands.h"
+#import "ios/chrome/browser/shared/public/commands/omnibox_commands.h"
 #import "ios/chrome/browser/ui/keyboard/key_command_actions.h"
 
 @protocol BookmarksCommands;
@@ -23,17 +22,12 @@ class Browser;
 
 // Key command actions are converted to Chrome commands and sent to these
 // handlers.
-@property(nonatomic, weak)
-    id<ApplicationCommands, BrowserCommands, FindInPageCommands>
-        dispatcher;
+@property(nonatomic, weak) id<ApplicationCommands, FindInPageCommands>
+    dispatcher;
 @property(nonatomic, weak) id<BookmarksCommands> bookmarksCommandsHandler;
 @property(nonatomic, weak) id<BrowserCoordinatorCommands>
     browserCoordinatorCommandsHandler;
 @property(nonatomic, weak) id<OmniboxCommands> omniboxHandler;
-
-// Set this flag to YES when the keyboard command bound to the Escape key should
-// dismiss modals.
-@property(nonatomic, assign) BOOL canDismissModals;
 
 - (instancetype)initWithBrowser:(Browser*)browser NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;

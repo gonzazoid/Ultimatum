@@ -5,13 +5,13 @@
 package org.chromium.chrome.browser.customtabs;
 
 import org.chromium.base.UnownedUserData;
-import org.chromium.base.supplier.BooleanSupplier;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.lifecycle.DestroyObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TrustedCdn.PublisherUrlVisibility;
 import org.chromium.ui.base.WindowAndroid;
+
+import java.util.function.BooleanSupplier;
 
 /**
  * Implementation of {@link TrustedCdn.PublisherUrlVisibility} to provide Tab with
@@ -22,7 +22,8 @@ class CustomTabTrustedCdnPublisherUrlVisibility
     private WindowAndroid mWindowAndroid;
     private BooleanSupplier mIsPublisherPackageForSession;
 
-    CustomTabTrustedCdnPublisherUrlVisibility(WindowAndroid windowAndroid,
+    CustomTabTrustedCdnPublisherUrlVisibility(
+            WindowAndroid windowAndroid,
             ActivityLifecycleDispatcher lifecycleDispatcher,
             BooleanSupplier isPublisherPackageForSession) {
         mWindowAndroid = windowAndroid;
@@ -33,10 +34,6 @@ class CustomTabTrustedCdnPublisherUrlVisibility
 
     @Override
     public boolean canShowPublisherUrl(Tab tab) {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.SHOW_TRUSTED_PUBLISHER_URL)) {
-            return false;
-        }
-
         return mIsPublisherPackageForSession.getAsBoolean();
     }
 

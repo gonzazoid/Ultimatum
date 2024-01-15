@@ -5,12 +5,13 @@
 #include "content/browser/aggregation_service/aggregation_service_network_fetcher_impl.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -26,7 +27,6 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -83,19 +83,18 @@ void AggregationServiceNetworkFetcherImpl::FetchPublicKeys(
   resource_request->load_flags =
       net::LOAD_DISABLE_CACHE | net::LOAD_BYPASS_CACHE;
 
-  // TODO(crbug.com/1238343): Update the "policy" field in the traffic
-  // annotation when a setting to disable the API is properly
-  // surfaced/implemented.
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("aggregation_service_helper_keys", R"(
         semantics {
           sender: "Aggregation Service"
           description:
             "Downloads public keys for helper servers requested by APIs that "
-            "rely on private, secure aggregation (e.g. Attribution Reporting "
-            "API, see https://github.com/WICG/attribution-reporting-api). "
-            "Keys are requested prior to aggregate reports being sent and are "
-            "used to encrypt payloads for the helper servers."
+            "rely on private, secure aggregation (i.e. the Attribution "
+            "Reporting and Private Aggregation APIs, see "
+            "https://github.com/WICG/attribution-reporting-api and "
+            "https://github.com/patcg-individual-drafts/private-aggregation-api"
+            "). Keys are requested prior to aggregate reports being sent and "
+            "are used to encrypt payloads for the helper servers."
           trigger:
             "When an aggregatable report is about to be assembled and sent."
           data:
@@ -103,10 +102,15 @@ void AggregationServiceNetworkFetcherImpl::FetchPublicKeys(
           destination: OTHER
         }
         policy {
-            cookies_allowed: NO
-            setting:
-              "This feature cannot be disabled by settings."
-            policy_exception_justification: "Not implemented yet."
+          cookies_allowed: NO
+          setting:
+            "This feature can be controlled via the 'Ad measurement' setting "
+            "in the 'Ad privacy' section of 'Privacy and Security'."
+          chrome_policy {
+            PrivacySandboxAdMeasurementEnabled {
+              PrivacySandboxAdMeasurementEnabled: false
+            }
+          }
         })");
 
   auto simple_url_loader = network::SimpleURLLoader::Create(
@@ -148,7 +152,7 @@ void AggregationServiceNetworkFetcherImpl::OnSimpleLoaderComplete(
   std::unique_ptr<network::SimpleURLLoader> loader = std::move(*it);
   loaders_in_progress_.erase(it);
 
-  absl::optional<int> http_response_code;
+  std::optional<int> http_response_code;
   if (loader->ResponseInfo() && loader->ResponseInfo()->headers)
     http_response_code = loader->ResponseInfo()->headers->response_code();
 
@@ -178,7 +182,7 @@ void AggregationServiceNetworkFetcherImpl::OnSimpleLoaderComplete(
   base::Time response_time;
   // `expiry_time` will be null if the freshness lifetime is zero.
   base::Time expiry_time;
-  base::Time current_time = clock_.Now();
+  base::Time current_time = clock_->Now();
   if (const network::mojom::URLResponseHead* response_info =
           loader->ResponseInfo()) {
     response_time = response_info->response_time;
@@ -214,8 +218,6 @@ void AggregationServiceNetworkFetcherImpl::OnSimpleLoaderComplete(
       base::BindOnce(&AggregationServiceNetworkFetcherImpl::OnJsonParse,
                      weak_factory_.GetWeakPtr(), url, std::move(callback),
                      std::move(response_time), std::move(expiry_time)));
-
-  // TODO(crbug.com/1232599): Add performance metrics for key fetching.
 }
 
 void AggregationServiceNetworkFetcherImpl::OnJsonParse(
@@ -258,7 +260,7 @@ void AggregationServiceNetworkFetcherImpl::OnError(
     LOG(ERROR) << error_msg;
   }
 
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void AggregationServiceNetworkFetcherImpl::RecordFetchStatus(

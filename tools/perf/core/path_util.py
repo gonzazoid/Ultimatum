@@ -27,7 +27,7 @@ def GetChromiumSrcDir():
       os.path.dirname(__file__), '..', '..', '..'))
 
 
-def GetDeviceInteractionDir():
+def GetAndroidDeviceInteractionToPath():
   return os.path.join(GetChromiumSrcDir(), 'third_party', 'catapult', 'devil')
 
 
@@ -44,6 +44,10 @@ def GetTracingDir():
 def GetPyUtilsDir():
   return os.path.join(
       GetChromiumSrcDir(), 'third_party', 'catapult', 'common', 'py_utils')
+
+
+def GetCrossBenchDir():
+  return os.path.join(GetChromiumSrcDir(), 'third_party', 'crossbench')
 
 
 def GetPerfDir():
@@ -70,8 +74,8 @@ def GetVariationsDir():
   return os.path.join(GetChromiumSrcDir(), 'tools', 'variations')
 
 
-def AddDeviceInteractionToPath():
-  device_interaction_path = GetDeviceInteractionDir()
+def AddAndroidDeviceInteractionToPath():
+  device_interaction_path = GetAndroidDeviceInteractionToPath()
   if device_interaction_path not in sys.path:
     sys.path.insert(1, device_interaction_path)
 
@@ -98,6 +102,12 @@ def AddAndroidPylibToPath():
   android_pylib_path = GetAndroidPylibDir()
   if android_pylib_path not in sys.path:
     sys.path.insert(1, android_pylib_path)
+
+
+def AddCrossBenchToPath():
+  crossbench_path = GetCrossBenchDir()
+  if crossbench_path not in sys.path:
+    sys.path.insert(1, crossbench_path)
 
 
 def GetExpectationsPath():

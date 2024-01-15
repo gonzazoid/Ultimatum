@@ -8,9 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -125,10 +125,6 @@ class MEDIA_EXPORT DecoderSelector {
   // calls to SelectDecoder() will select from the full list of decoders.
   void FinalizeDecoderSelection();
 
-  // Signals that a config change has started being processed.
-  // Currently only for metric collection.
-  void NotifyConfigChanged();
-
   // Adds an additional decoder candidate to be considered when selecting a
   // decoder. This decoder is inserted ahead of the decoders returned by
   // |CreateDecodersCB| to give it priority over the default set, though it
@@ -160,8 +156,8 @@ class MEDIA_EXPORT DecoderSelector {
   DecoderPriorityCB decoder_priority_cb_;
   raw_ptr<MediaLog> media_log_;
 
-  raw_ptr<StreamTraits> traits_ = nullptr;
-  raw_ptr<DemuxerStream> stream_ = nullptr;
+  raw_ptr<StreamTraits, AcrossTasksDanglingUntriaged> traits_ = nullptr;
+  raw_ptr<DemuxerStream, AcrossTasksDanglingUntriaged> stream_ = nullptr;
   raw_ptr<CdmContext> cdm_context_ = nullptr;
   WaitingCB waiting_cb_;
 
@@ -174,13 +170,6 @@ class MEDIA_EXPORT DecoderSelector {
   typename Decoder::OutputCB output_cb_;
   std::unique_ptr<Decoder> decoder_;
   std::unique_ptr<DecryptingDemuxerStream> decrypting_demuxer_stream_;
-
-  // Metrics.
-  bool is_platform_decoder_ = false;
-  bool is_codec_changing_ = false;
-  bool is_selecting_for_config_change_ = false;
-  base::TimeTicks decoder_selection_start_;
-  base::TimeTicks codec_change_start_;
 
   // Used to keep track of the original failure-to-decode reason so that if
   // playback fails entirely, we have a root cause to point to, rather than

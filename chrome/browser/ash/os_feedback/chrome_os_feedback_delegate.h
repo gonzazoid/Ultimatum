@@ -14,10 +14,12 @@
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/feedback/system_logs/system_logs_source.h"
+#include "content/public/browser/web_ui.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class Profile;
+class PrefService;
 
 namespace extensions {
 class FeedbackService;
@@ -27,19 +29,30 @@ namespace ash {
 
 class ChromeOsFeedbackDelegate : public OsFeedbackDelegate {
  public:
-  explicit ChromeOsFeedbackDelegate(Profile* profile);
-  ChromeOsFeedbackDelegate(
-      Profile* profile,
-      scoped_refptr<extensions::FeedbackService> feedback_service);
+  explicit ChromeOsFeedbackDelegate(content::WebUI* web_ui);
   ~ChromeOsFeedbackDelegate() override;
 
   ChromeOsFeedbackDelegate(const ChromeOsFeedbackDelegate&) = delete;
   ChromeOsFeedbackDelegate& operator=(const ChromeOsFeedbackDelegate&) = delete;
 
+  // Return true if the kUserFeedbackWithLowLevelDebugDataAllowed policy
+  // contains
+  // - "all" or
+  // - "wifi"
+  static bool IsWifiDebugLogsAllowed(const PrefService* prefs);
+
+  static ChromeOsFeedbackDelegate CreateForTesting(Profile* profile);
+
+  static ChromeOsFeedbackDelegate CreateForTesting(
+      Profile* profile,
+      scoped_refptr<extensions::FeedbackService> feedback_service);
+
   // OsFeedbackDelegate:
   std::string GetApplicationLocale() override;
   absl::optional<GURL> GetLastActivePageUrl() override;
   absl::optional<std::string> GetSignedInUserEmail() const override;
+  absl::optional<std::string> GetLinkedPhoneMacAddress() override;
+  bool IsWifiDebugLogsAllowed() const override;
   int GetPerformanceTraceId() override;
   void GetScreenshotPng(GetScreenshotPngCallback callback) override;
   void SendReport(os_feedback_ui::mojom::ReportPtr report,
@@ -48,10 +61,17 @@ class ChromeOsFeedbackDelegate : public OsFeedbackDelegate {
   void OpenExploreApp() override;
   void OpenMetricsDialog() override;
   void OpenSystemInfoDialog() override;
+  void OpenAutofillMetadataDialog(
+      const std::string& autofill_metadata) override;
+  bool IsChildAccount() override;
 
  private:
+  explicit ChromeOsFeedbackDelegate(Profile* profile);
+  ChromeOsFeedbackDelegate(
+      Profile* profile,
+      scoped_refptr<extensions::FeedbackService> feedback_service);
   void OnSendFeedbackDone(SendReportCallback callback, bool status);
-  void OpenWebDialog(GURL url);
+  void OpenWebDialog(GURL url, const std::string& args);
   // Loading system logs could be slow. Preload them to reduce potential user
   // wait time when sending reports.
   void PreloadSystemLogs();

@@ -7,26 +7,17 @@
 #include <memory>
 
 #include "base/containers/contains.h"
-#include "base/i18n/char_iterator.h"
+#include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "third_party/blink/public/common/input/web_gesture_event.h"
 #include "third_party/blink/public/common/input/web_keyboard_event.h"
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
+#include "ui/events/mojom/event_latency_metadata_mojom_traits.h"
 #include "ui/latency/mojom/latency_info_mojom_traits.h"
 
 namespace mojo {
 namespace {
-
-void CopyString(char16_t* dst, const std::u16string& text) {
-  size_t pos = 0;
-  for (base::i18n::UTF16CharIterator iter(text);
-       !iter.end() && pos < blink::WebKeyboardEvent::kTextLengthCap - 1;
-       iter.Advance()) {
-    dst[pos++] = iter.get();
-  }
-  dst[pos] = '\0';
-}
 
 blink::mojom::PointerDataPtr PointerDataFromPointerProperties(
     const blink::WebPointerProperties& pointer,
@@ -36,7 +27,7 @@ blink::mojom::PointerDataPtr PointerDataFromPointerProperties(
       pointer.tangential_pressure, pointer.twist, pointer.button,
       pointer.pointer_type, pointer.movement_x, pointer.movement_y,
       pointer.is_raw_movement_event, pointer.PositionInWidget(),
-      pointer.PositionInScreen(), std::move(mouse_data));
+      pointer.PositionInScreen(), std::move(mouse_data), pointer.device_id);
 }
 
 void PointerPropertiesFromPointerData(
@@ -54,6 +45,7 @@ void PointerPropertiesFromPointerData(
   pointer_properties->movement_y = pointer_data->movement_y;
   pointer_properties->is_raw_movement_event =
       pointer_data->is_raw_movement_event;
+  pointer_properties->device_id = pointer_data->device_id;
 }
 
 void TouchPointPropertiesFromPointerData(
@@ -116,8 +108,11 @@ bool StructTraits<blink::mojom::EventDataView,
     key_event->dom_key = key_data->dom_key;
     key_event->is_system_key = key_data->is_system_key;
     key_event->is_browser_shortcut = key_data->is_browser_shortcut;
-    CopyString(key_event->text, key_data->text);
-    CopyString(key_event->unmodified_text, key_data->unmodified_text);
+    base::u16cstrlcpy(key_event->text, key_data->text.c_str(),
+                      blink::WebKeyboardEvent::kTextLengthCap);
+    base::u16cstrlcpy(key_event->unmodified_text,
+                      key_data->unmodified_text.c_str(),
+                      blink::WebKeyboardEvent::kTextLengthCap);
   } else if (blink::WebInputEvent::IsGestureEventType(type)) {
     blink::mojom::GestureDataPtr gesture_data;
     if (!event.ReadGestureData<blink::mojom::GestureDataPtr>(&gesture_data))
@@ -261,6 +256,12 @@ bool StructTraits<blink::mojom::EventDataView,
       }
     }
 
+    if (gesture_data->tap_down_data &&
+        type == blink::WebInputEvent::Type::kGestureTapDown) {
+      gesture_event->data.tap_down.tap_down_count =
+          gesture_data->tap_down_data->tap_down_count;
+    }
+
     if (gesture_data->fling_data) {
       switch (type) {
         default:
@@ -360,6 +361,12 @@ bool StructTraits<blink::mojom::EventDataView,
     return false;
   }
 
+  ui::EventLatencyMetadata event_latency_metadata;
+  if (!event.ReadEventLatencyMetadata(&event_latency_metadata)) {
+    return false;
+  };
+  input_event->GetModifiableEventLatencyMetadata() =
+      std::move(event_latency_metadata);
   ui::LatencyInfo latency_info;
   if (!event.ReadLatency(&latency_info))
     return false;
@@ -446,6 +453,8 @@ StructTraits<blink::mojom::EventDataView,
       gesture_data->contact_size =
           gfx::Size(gesture_event->data.tap_down.width,
                     gesture_event->data.tap_down.height);
+      gesture_data->tap_down_data = blink::mojom::TapDownData::New(
+          gesture_event->data.tap_down.tap_down_count);
       break;
     case blink::WebInputEvent::Type::kGestureShowPress:
       gesture_data->contact_size =

@@ -4,6 +4,7 @@
 
 #include "chrome/browser/component_updater/recovery_improved_component_installer.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 
@@ -14,11 +15,11 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/launch.h"
@@ -28,10 +29,18 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
+#include "base/values.h"
+#include "build/build_config.h"
 #include "chrome/browser/component_updater/component_updater_utils.h"
 #include "components/services/unzip/content/unzip_service.h"
 #include "components/update_client/patcher.h"
+#include "components/update_client/unpacker.h"
 #include "components/update_client/unzip/unzip_impl.h"
+
+#if BUILDFLAG(IS_POSIX)
+#include <errno.h>
+#endif
 
 namespace component_updater {
 
@@ -69,15 +78,13 @@ void RecoveryComponentActionHandler::Unpack() {
   auto unzipper = base::MakeRefCounted<update_client::UnzipChromiumFactory>(
                       base::BindRepeating(&unzip::LaunchUnzipper))
                       ->Create();
-  auto unpacker = base::MakeRefCounted<update_client::ComponentUnpacker>(
-      key_hash_, crx_path_, nullptr, std::move(unzipper), nullptr,
-      verifier_format_);
-  unpacker->Unpack(
+  update_client::Unpacker::Unpack(
+      key_hash_, crx_path_, std::move(unzipper), verifier_format_,
       base::BindOnce(&RecoveryComponentActionHandler::UnpackComplete, this));
 }
 
 void RecoveryComponentActionHandler::UnpackComplete(
-    const update_client::ComponentUnpacker::Result& result) {
+    const update_client::Unpacker::Result& result) {
   if (result.error != update_client::UnpackerError::kNone) {
     DCHECK(!base::DirectoryExists(result.unpack_path));
     main_task_runner_->PostTask(
@@ -88,38 +95,56 @@ void RecoveryComponentActionHandler::UnpackComplete(
   }
 
   unpack_path_ = result.unpack_path;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&RecoveryComponentActionHandler::RunCommand,
                                 this, MakeCommandLine(result.unpack_path)));
 }
 
 void RecoveryComponentActionHandler::RunCommand(
     const base::CommandLine& cmdline) {
+  PrepareFiles(unpack_path_);
   VLOG(1) << "run command: " << cmdline.GetCommandLineString();
-  base::LaunchOptions options;
+  auto process_or_error = [&cmdline]() -> base::expected<base::Process, int> {
+    base::LaunchOptions options;
 #if BUILDFLAG(IS_WIN)
-  options.start_hidden = true;
+    options.start_hidden = true;
 #endif
-  base::Process process = base::LaunchProcess(cmdline, options);
+    base::Process process = base::LaunchProcess(cmdline, options);
+    if (!process.IsValid()) {
+#if BUILDFLAG(IS_WIN)
+      return base::unexpected(::GetLastError());
+#elif BUILDFLAG(IS_POSIX)
+      return base::unexpected(errno);
+#else
+      return base::unexpected(0);
+#endif
+    }
+    return std::move(process);
+  }();
   base::ThreadPool::PostTask(
       FROM_HERE, kThreadPoolTaskTraitsRunCommand,
       base::BindOnce(&RecoveryComponentActionHandler::WaitForCommand, this,
-                     std::move(process)));
+                     std::move(process_or_error)));
 }
 
-void RecoveryComponentActionHandler::WaitForCommand(base::Process process) {
+void RecoveryComponentActionHandler::WaitForCommand(
+    base::expected<base::Process, int> process_or_error) {
   int exit_code = 0;
-  const base::TimeDelta kMaxWaitTime = base::Seconds(600);
+  int extra_code1 = 0;
   bool succeeded = false;
-  if (!process.IsValid()) {
+  constexpr base::TimeDelta kMaxWaitTime = base::Seconds(600);
+  if (process_or_error.has_value()) {
+    succeeded =
+        process_or_error->WaitForExitWithTimeout(kMaxWaitTime, &exit_code);
+  } else {
     exit_code =
         static_cast<int>(update_client::InstallError::LAUNCH_PROCESS_FAILED);
-  } else {
-    succeeded = process.WaitForExitWithTimeout(kMaxWaitTime, &exit_code);
+    extra_code1 = process_or_error.error();
   }
   base::DeletePathRecursively(unpack_path_);
   main_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback_), succeeded, exit_code, 0));
+      FROM_HERE,
+      base::BindOnce(std::move(callback_), succeeded, exit_code, extra_code1));
 }
 
 // The SHA256 of the SubjectPublicKeyInfo used to sign the component CRX.
@@ -140,7 +165,7 @@ bool RecoveryImprovedInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 RecoveryImprovedInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);
 }
@@ -150,13 +175,13 @@ void RecoveryImprovedInstallerPolicy::OnCustomUninstall() {}
 void RecoveryImprovedInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   DVLOG(1) << "RecoveryImproved component is ready.";
 }
 
 // Called during startup and installation before ComponentReady().
 bool RecoveryImprovedInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   return true;
 }

@@ -15,12 +15,12 @@
 #include "chrome/browser/ash/customization/customization_document.h"
 #include "chrome/browser/ash/input_method/input_method_configuration.h"
 #include "chrome/browser/ui/webui/ash/login/l10n_util_test_util.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/ime/ash/component_extension_ime_manager.h"
 #include "ui/base/ime/ash/mock_component_extension_ime_manager_delegate.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -105,9 +105,7 @@ TEST_F(L10nUtilTest, GetUILanguageList) {
 TEST_F(L10nUtilTest, FindMostRelevantLocale) {
   base::Value::List available_locales;
   for (const char* locale : {"de", "fr", "en-GB"}) {
-    base::Value::Dict dict;
-    dict.Set("value", locale);
-    available_locales.Append(std::move(dict));
+    available_locales.Append(base::Value::Dict().Set("value", locale));
   }
 
   std::vector<std::string> most_relevant_language_codes;
@@ -134,7 +132,7 @@ TEST_F(L10nUtilTest, FindMostRelevantLocale) {
 void InitStartupCustomizationDocumentForTesting(const std::string& manifest) {
   StartupCustomizationDocument::GetInstance()->LoadManifestFromString(manifest);
   StartupCustomizationDocument::GetInstance()->Init(
-      chromeos::system::StatisticsProvider::GetInstance());
+      system::StatisticsProvider::GetInstance());
 }
 
 const char kStartupManifest[] =
@@ -190,4 +188,4 @@ TEST_F(L10nUtilTest, GetUILanguageListWithMostRelevant) {
   VerifyLanguageCode(list, 2, kMostRelevantLanguagesDivider);
 }
 
-}  // namespace chromeos
+}  // namespace ash

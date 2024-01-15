@@ -4,7 +4,7 @@
 
 #include "content/browser/service_worker/service_worker_script_loader_factory.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
@@ -41,7 +41,8 @@ class ServiceWorkerScriptLoaderFactoryTest : public testing::Test {
     blink::mojom::ServiceWorkerRegistrationOptions options;
     options.scope = scope_;
     registration_ = base::MakeRefCounted<ServiceWorkerRegistration>(
-        options, blink::StorageKey(url::Origin::Create(scope_)),
+        options,
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_)),
         1L /* registration_id */, context->AsWeakPtr(),
         blink::mojom::AncestorFrameType::kNormalFrame);
     version_ = CreateNewServiceWorkerVersion(

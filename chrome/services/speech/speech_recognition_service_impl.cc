@@ -1,9 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/speech/speech_recognition_service_impl.h"
 
+#include <string>
+
+#include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/weak_ptr.h"
@@ -43,11 +46,26 @@ void SpeechRecognitionServiceImpl::BindSpeechRecognitionContext(
   speech_recognition_contexts_.Add(this, std::move(context));
 }
 
-void SpeechRecognitionServiceImpl::SetSodaPath(
+void SpeechRecognitionServiceImpl::SetSodaPaths(
     const base::FilePath& binary_path,
-    const base::FilePath& config_path) {
+    const base::flat_map<std::string, base::FilePath>& config_paths,
+    const std::string& primary_language_name) {
   binary_path_ = binary_path;
-  config_path_ = config_path;
+  config_paths_ = config_paths;
+  primary_language_name_ = primary_language_name;
+}
+
+void SpeechRecognitionServiceImpl::SetSodaParams(
+    const bool mask_offensive_words) {
+  mask_offensive_words_ = mask_offensive_words;
+}
+
+void SpeechRecognitionServiceImpl::SetSodaConfigPaths(
+    const base::flat_map<std::string, base::FilePath>& config_paths) {
+  config_paths_ = config_paths;
+  for (Observer& observer : observers_) {
+    observer.OnLanguagePackInstalled(config_paths_);
+  }
 }
 
 void SpeechRecognitionServiceImpl::BindRecognizer(
@@ -66,15 +84,16 @@ void SpeechRecognitionServiceImpl::BindRecognizer(
 
   // Destroy the speech recognition service if the SODA files haven't been
   // downloaded yet.
-  if (!base::PathExists(binary_path_) || !base::PathExists(config_path_)) {
+  if (!FilePathsExist()) {
     speech_recognition_contexts_.Clear();
     receiver_.reset();
     return;
   }
 
-  SpeechRecognitionRecognizerImpl::Create(std::move(receiver),
-                                          std::move(client), std::move(options),
-                                          binary_path_, config_path_);
+  SpeechRecognitionRecognizerImpl::Create(
+      std::move(receiver), std::move(client), std::move(options), binary_path_,
+      config_paths_, primary_language_name_, mask_offensive_words_,
+      weak_factory_.GetWeakPtr());
   std::move(callback).Run(
       SpeechRecognitionRecognizerImpl::IsMultichannelSupported());
 }
@@ -84,28 +103,53 @@ void SpeechRecognitionServiceImpl::BindAudioSourceFetcher(
     mojo::PendingRemote<media::mojom::SpeechRecognitionRecognizerClient> client,
     media::mojom::SpeechRecognitionOptionsPtr options,
     BindRecognizerCallback callback) {
+  const bool is_server_based = options->is_server_based;
   // TODO(b/249867435): Remove SpeechRecognitionServiceImpl's implementation of
   // AudioSourceSpeechRecognitionContext should be removed. AudioSourceFetcher
   // is only ever used from ChromeOS and it should be accessed
   // from CrosSpeechRecognitionService.
-  if (options->is_server_based) {
+  if (is_server_based) {
     mojo::ReportBadMessage(kInvalidSpeechRecogntionOptions);
     return;
   }
 
   // Destroy the speech recognition service if the SODA files haven't been
   // downloaded yet.
-  if (!base::PathExists(binary_path_) || !base::PathExists(config_path_)) {
+  if (!FilePathsExist()) {
     speech_recognition_contexts_.Clear();
     receiver_.reset();
     return;
   }
+  const bool is_multi_channel_supported =
+      SpeechRecognitionRecognizerImpl::IsMultichannelSupported();
   AudioSourceFetcherImpl::Create(
       std::move(fetcher_receiver),
       std::make_unique<SpeechRecognitionRecognizerImpl>(
-          std::move(client), std::move(options), binary_path_, config_path_));
-  std::move(callback).Run(
-      SpeechRecognitionRecognizerImpl::IsMultichannelSupported());
+          std::move(client), std::move(options), binary_path_, config_paths_,
+          primary_language_name_, mask_offensive_words_,
+          weak_factory_.GetWeakPtr()),
+      is_multi_channel_supported, is_server_based);
+  std::move(callback).Run(is_multi_channel_supported);
+}
+
+void SpeechRecognitionServiceImpl::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void SpeechRecognitionServiceImpl::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+bool SpeechRecognitionServiceImpl::FilePathsExist() {
+  if (!base::PathExists(binary_path_))
+    return false;
+
+  for (const auto& config : config_paths_) {
+    if (!base::PathExists(config.second))
+      return false;
+  }
+
+  return true;
 }
 
 }  // namespace speech

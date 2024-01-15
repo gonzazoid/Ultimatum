@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/i18n/char_iterator.h"
 #include "content/browser/accessibility/browser_accessibility_android.h"
 #include "content/browser/accessibility/web_ax_platform_tree_manager_delegate.h"
@@ -74,27 +75,29 @@ ui::AXTreeUpdate BrowserAccessibilityManagerAndroid::GetEmptyDocument() {
   return update;
 }
 
+void BrowserAccessibilityManagerAndroid::ResetWebContentsAccessibility() {
+  web_contents_accessibility_.reset();
+}
+
 bool BrowserAccessibilityManagerAndroid::ShouldAllowImageDescriptions() {
   WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
   return (wcax && wcax->should_allow_image_descriptions()) ||
          allow_image_descriptions_for_testing_;
 }
 
-bool BrowserAccessibilityManagerAndroid::ShouldRespectDisplayedPasswordText() {
-  WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
-  return wcax ? wcax->should_respect_displayed_password_text() : false;
-}
-
-bool BrowserAccessibilityManagerAndroid::ShouldExposePasswordText() {
-  WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
-  return wcax ? wcax->should_expose_password_text() : false;
-}
-
 BrowserAccessibility* BrowserAccessibilityManagerAndroid::GetFocus() const {
-  BrowserAccessibility* focus = BrowserAccessibilityManager::GetFocus();
-  if (focus && !focus->IsAtomicTextField())
-    return GetActiveDescendant(focus);
-  return focus;
+  // On Android, don't follow active descendant when focus is in a textfield,
+  // otherwise editable comboboxes such as the search field on google.com do
+  // not work with Talkback. See crbug.com/761501.
+  // TODO(accessibility) How does Talkback then read the active item?
+  // This fix came in crrev.com/c/647339 but said that a more comprehensive fix
+  // was landing in in crrev.com/c/642056, so is this override still necessary?
+  ui::AXNodeID focus_id = GetTreeData().focus_id;
+  BrowserAccessibility* focus = GetFromID(focus_id);
+  if (focus && focus->IsAtomicTextField())
+    return focus;
+
+  return BrowserAccessibilityManager::GetFocus();
 }
 
 ui::AXNode* BrowserAccessibilityManagerAndroid::RetargetForEvents(
@@ -337,6 +340,7 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::ATK_TEXT_OBJECT_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::ATOMIC_CHANGED:
     case ui::AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
+    case ui::AXEventGenerator::Event::AUTOFILL_AVAILABILITY_CHANGED:
     case ui::AXEventGenerator::Event::BUSY_CHANGED:
     case ui::AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
     case ui::AXEventGenerator::Event::CHECKED_STATE_DESCRIPTION_CHANGED:
@@ -374,6 +378,7 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::MULTILINE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::MULTISELECTABLE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
+    case ui::AXEventGenerator::Event::ORIENTATION_CHANGED:
     case ui::AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::PARENT_CHANGED:
     case ui::AXEventGenerator::Event::PLACEHOLDER_CHANGED:
@@ -518,8 +523,9 @@ void BrowserAccessibilityManagerAndroid::ClearNodeInfoCacheForGivenId(
     return;
 
   // We do not need to clear a node more than once per atomic update.
-  if (nodes_already_cleared_.find(unique_id) != nodes_already_cleared_.end())
+  if (base::Contains(nodes_already_cleared_, unique_id)) {
     return;
+  }
 
   nodes_already_cleared_.emplace(unique_id);
   wcax->ClearNodeInfoCacheForGivenId(unique_id);
@@ -596,40 +602,6 @@ void BrowserAccessibilityManagerAndroid::OnAtomicUpdateFinished(
 
   // Update the maximum number of nodes in the cache after each atomic update.
   wcax->UpdateMaxNodesInCache();
-}
-
-void BrowserAccessibilityManagerAndroid::OnNodeCreated(ui::AXTree* tree,
-                                                       ui::AXNode* node) {
-  BrowserAccessibilityManager::OnNodeCreated(tree, node);
-  if (node->data().GetBoolAttribute(
-          ax::mojom::BoolAttribute::kTouchPassthrough)) {
-    auto* root = static_cast<BrowserAccessibilityManagerAndroid*>(
-        GetManagerForRootFrame());
-    if (root)
-      root->EnableTouchPassthrough();
-    else
-      EnableTouchPassthrough();
-  }
-}
-
-void BrowserAccessibilityManagerAndroid::OnBoolAttributeChanged(
-    ui::AXTree* tree,
-    ui::AXNode* node,
-    ax::mojom::BoolAttribute attr,
-    bool new_value) {
-  BrowserAccessibilityManager::OnBoolAttributeChanged(tree, node, attr,
-                                                      new_value);
-  if (new_value && attr == ax::mojom::BoolAttribute::kTouchPassthrough) {
-    // TODO(accessibility): there's a tiny chance we could get this
-    // called on an iframe before it's attached to the root frame manager.
-    // If this ever becomes an issue in practice, make this more robust.
-    auto* root = static_cast<BrowserAccessibilityManagerAndroid*>(
-        GetManagerForRootFrame());
-    if (root)
-      root->EnableTouchPassthrough();
-    else
-      EnableTouchPassthrough();
-  }
 }
 
 WebContentsAccessibilityAndroid*

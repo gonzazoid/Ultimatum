@@ -36,8 +36,6 @@ class SVGRadialGradientElement final : public SVGGradientElement {
  public:
   explicit SVGRadialGradientElement(Document&);
 
-  void CollectGradientAttributes(RadialGradientAttributes&) const;
-
   SVGAnimatedLength* cx() const { return cx_.Get(); }
   SVGAnimatedLength* cy() const { return cy_.Get(); }
   SVGAnimatedLength* r() const { return r_.Get(); }
@@ -45,14 +43,20 @@ class SVGRadialGradientElement final : public SVGGradientElement {
   SVGAnimatedLength* fy() const { return fy_.Get(); }
   SVGAnimatedLength* fr() const { return fr_.Get(); }
 
+  RadialGradientAttributes CollectGradientAttributes() const;
+
   void Trace(Visitor*) const override;
 
  private:
   void SvgAttributeChanged(const SvgAttributeChangedParams&) override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
   bool SelfHasRelativeLengths() const override;
+
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
 
   Member<SVGAnimatedLength> cx_;
   Member<SVGAnimatedLength> cy_;

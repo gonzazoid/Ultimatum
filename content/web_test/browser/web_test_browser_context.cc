@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -32,8 +32,8 @@
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "base/nix/xdg_util.h"
 #elif BUILDFLAG(IS_MAC)
+#include "base/apple/foundation_util.h"
 #include "base/base_paths_mac.h"
-#include "base/mac/foundation_util.h"
 #endif
 
 namespace content {
@@ -79,7 +79,7 @@ PushMessagingService* WebTestBrowserContext::GetPushMessagingService() {
 PermissionControllerDelegate*
 WebTestBrowserContext::GetPermissionControllerDelegate() {
   if (!permission_manager_.get())
-    permission_manager_ = std::make_unique<WebTestPermissionManager>();
+    permission_manager_ = std::make_unique<WebTestPermissionManager>(*this);
   return permission_manager_.get();
 }
 

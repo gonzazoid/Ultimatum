@@ -7,9 +7,27 @@
 
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_view_controller.h"
 
-// ViewController for the secondary part of the adaptive toolbar. It is the part
-// containing the controls displayed only on specific size classes.
+class FullscreenController;
+
+@protocol SecondaryToolbarKeyboardStateProvider;
+@protocol ToolbarHeightDelegate;
+
+/// View controller for the secondary part of the adaptive toolbar. It is the
+/// one at the bottom of the screen. Displayed only on specific size classes.
 @interface SecondaryToolbarViewController : AdaptiveToolbarViewController
+
+/// Protocol to retrieve the keyboard state on the active web state.
+@property(nonatomic, weak) id<SecondaryToolbarKeyboardStateProvider>
+    keyboardStateProvider;
+
+/// Delegate that handles the toolbars height.
+@property(nonatomic, weak) id<ToolbarHeightDelegate> toolbarHeightDelegate;
+
+/// Fullscreen controller used for collapsing the view above the keyboard.
+@property(nonatomic, assign) FullscreenController* fullscreenController;
+
+/// Disconnects observations and references.
+- (void)disconnect;
 
 @end
 

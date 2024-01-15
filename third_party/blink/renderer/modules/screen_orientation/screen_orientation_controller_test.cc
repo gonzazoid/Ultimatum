@@ -7,6 +7,7 @@
 #include <memory>
 #include <tuple>
 
+#include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -56,7 +57,7 @@ class MockLockOrientationCallback : public blink::WebLockOrientationCallback {
   }
 
  private:
-  LockOrientationResultHolder* results_;
+  raw_ptr<LockOrientationResultHolder, ExperimentalRenderer> results_;
 };
 
 class ScreenOrientationControllerTest : public PageTestBase {
@@ -133,8 +134,7 @@ TEST_F(ScreenOrientationControllerTest, CancelPending_DoubleLock) {
 // Test that when a LockError message is received, the request is set as failed
 // with the correct values.
 TEST_F(ScreenOrientationControllerTest, LockRequest_Error) {
-  HashMap<LockResult, blink::WebLockOrientationError, WTF::IntHash<LockResult>>
-      errors;
+  HashMap<LockResult, blink::WebLockOrientationError> errors;
   errors.insert(LockResult::SCREEN_ORIENTATION_LOCK_RESULT_ERROR_NOT_AVAILABLE,
                 blink::kWebLockOrientationErrorNotAvailable);
   errors.insert(
@@ -231,7 +231,7 @@ TEST_F(ScreenOrientationControllerTest, PageVisibilityCrash) {
       WebString::FromUTF8("visible_iframe.html"));
 
   frame_test_helpers::CreateTestWebFrameWidgetCallback create_widget_callback =
-      base::BindRepeating(
+      WTF::BindRepeating(
           &frame_test_helpers::WebViewHelper::CreateTestWebFrameWidget<
               ScreenInfoWebFrameWidget>);
   frame_test_helpers::WebViewHelper web_view_helper(create_widget_callback);

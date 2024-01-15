@@ -4,12 +4,17 @@
 
 #include "components/profile_metrics/browser_profile_type.h"
 
+#include <memory>
+
+#include "base/supports_user_data.h"
+
+namespace profile_metrics {
+
 namespace {
 
 class ProfileTypeUserData : public base::SupportsUserData::Data {
  public:
-  explicit ProfileTypeUserData(
-      profile_metrics::BrowserProfileType browser_context_type)
+  explicit ProfileTypeUserData(BrowserProfileType browser_context_type)
       : browser_context_type_(browser_context_type) {}
 
   ProfileTypeUserData(const ProfileTypeUserData&) = delete;
@@ -17,19 +22,17 @@ class ProfileTypeUserData : public base::SupportsUserData::Data {
 
   static const void* const kKey;
 
-  profile_metrics::BrowserProfileType browser_context_type() const {
+  BrowserProfileType browser_context_type() const {
     return browser_context_type_;
   }
 
  private:
-  const profile_metrics::BrowserProfileType browser_context_type_;
+  const BrowserProfileType browser_context_type_;
 };
 
 const void* const ProfileTypeUserData::kKey = &ProfileTypeUserData::kKey;
 
 }  // namespace
-
-namespace profile_metrics {
 
 void SetBrowserProfileType(base::SupportsUserData* browser_context,
                            BrowserProfileType type) {
@@ -39,9 +42,13 @@ void SetBrowserProfileType(base::SupportsUserData* browser_context,
 
 BrowserProfileType GetBrowserProfileType(
     const base::SupportsUserData* browser_context) {
-  base::SupportsUserData::Data* data =
-      browser_context->GetUserData(ProfileTypeUserData::kKey);
-  return static_cast<ProfileTypeUserData*>(data)->browser_context_type();
+  auto* profile_type_user_data = static_cast<ProfileTypeUserData*>(
+      browser_context->GetUserData(ProfileTypeUserData::kKey));
+  // We deliberately don't want to gracefully handle this data missing as all
+  // `browser_context`s are supposed to be assigned a type as soon as they are
+  // created.
+  CHECK(profile_type_user_data);
+  return profile_type_user_data->browser_context_type();
 }
 
 }  // namespace profile_metrics

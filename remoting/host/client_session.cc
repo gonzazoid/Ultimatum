@@ -8,14 +8,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include <optional>
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "remoting/base/capabilities.h"
 #include "remoting/base/constants.h"
@@ -23,6 +24,7 @@
 #include "remoting/base/session_options.h"
 #include "remoting/host/action_executor.h"
 #include "remoting/host/action_message_handler.h"
+#include "remoting/host/active_display_monitor.h"
 #include "remoting/host/audio_capturer.h"
 #include "remoting/host/base/screen_controls.h"
 #include "remoting/host/base/screen_resolution.h"
@@ -38,6 +40,8 @@
 #include "remoting/host/remote_open_url/remote_open_url_message_handler.h"
 #include "remoting/host/remote_open_url/url_forwarder_configurator.h"
 #include "remoting/host/remote_open_url/url_forwarder_control_message_handler.h"
+#include "remoting/host/security_key/security_key_extension.h"
+#include "remoting/host/security_key/security_key_extension_session.h"
 #include "remoting/host/webauthn/remote_webauthn_constants.h"
 #include "remoting/host/webauthn/remote_webauthn_message_handler.h"
 #include "remoting/host/webauthn/remote_webauthn_state_change_notifier.h"
@@ -52,17 +56,19 @@
 #include "remoting/protocol/session.h"
 #include "remoting/protocol/session_config.h"
 #include "remoting/protocol/video_frame_pump.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 
 #if defined(WEBRTC_USE_GIO)
-#include "third_party/webrtc/modules/desktop_capture/linux/wayland/xdg_desktop_portal_utils.h"
+#include "third_party/webrtc/modules/portal/xdg_desktop_portal_utils.h"
 #endif
 
 namespace {
 
 constexpr char kRtcLogTransferDataChannelPrefix[] = "rtc-log-transfer-";
 constexpr char kStreamName[] = "screen_stream";
+
+constexpr base::TimeDelta kDefaultBoostCaptureInterval = base::Milliseconds(5);
+constexpr base::TimeDelta kDefaultBoostDuration = base::Milliseconds(50);
 
 std::string StreamNameForId(webrtc::ScreenId id) {
   return std::string(kStreamName) + "_" + base::NumberToString(id);
@@ -81,14 +87,15 @@ ClientSession::ClientSession(
     const DesktopEnvironmentOptions& desktop_environment_options,
     const base::TimeDelta& max_duration,
     scoped_refptr<protocol::PairingRegistry> pairing_registry,
-    const std::vector<HostExtension*>& extensions)
+    const std::vector<raw_ptr<HostExtension, VectorExperimental>>& extensions)
     : event_handler_(event_handler),
       desktop_environment_factory_(desktop_environment_factory),
       desktop_environment_options_(desktop_environment_options),
-      input_tracker_(&host_input_filter_),
       remote_input_filter_(&input_tracker_),
-      mouse_clamping_filter_(&remote_input_filter_),
-      desktop_and_cursor_composer_notifier_(&mouse_clamping_filter_, this),
+      fractional_input_filter_(&remote_input_filter_),
+      mouse_clamping_filter_(&fractional_input_filter_),
+      observing_input_filter_(&mouse_clamping_filter_),
+      desktop_and_cursor_composer_notifier_(&observing_input_filter_, this),
       disable_input_filter_(&desktop_and_cursor_composer_notifier_),
       host_clipboard_filter_(clipboard_echo_filter_.host_filter()),
       client_clipboard_filter_(clipboard_echo_filter_.client_filter()),
@@ -123,15 +130,18 @@ ClientSession::~ClientSession() {
 void ClientSession::NotifyClientResolution(
     const protocol::ClientResolution& resolution) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(resolution.dips_width() >= 0 && resolution.dips_height() >= 0);
-  VLOG(1) << "Received ClientResolution (dips_width=" << resolution.dips_width()
-          << ", dips_height=" << resolution.dips_height() << ")";
+  DCHECK(resolution.width_pixels() >= 0 && resolution.height_pixels() >= 0);
+  VLOG(1) << "Received ClientResolution (width=" << resolution.width_pixels()
+          << ", height=" << resolution.height_pixels()
+          << ", x_dpi=" << resolution.x_dpi()
+          << ", y_dpi=" << resolution.y_dpi() << ")";
 
-  if (!screen_controls_)
+  if (!screen_controls_) {
     return;
+  }
 
-  webrtc::DesktopSize client_size(resolution.dips_width(),
-                                  resolution.dips_height());
+  webrtc::DesktopSize client_size(resolution.width_pixels(),
+                                  resolution.height_pixels());
   if (connection_->session()->config().protocol() ==
       protocol::SessionConfig::Protocol::WEBRTC) {
     // When using WebRTC round down the dimensions to multiple of 2. Otherwise
@@ -143,13 +153,23 @@ void ClientSession::NotifyClientResolution(
     client_size.set(client_size.width() & (~1), client_size.height() & (~1));
   }
 
+  // TODO(joedow): Determine if other platforms support desktop scaling.
+  webrtc::DesktopVector dpi_vector{kDefaultDpi, kDefaultDpi};
+#if BUILDFLAG(IS_WIN)
+  // Matching the client DPI is only supported on Windows when curtained.
+  if (desktop_environment_options_.enable_curtaining()) {
+    dpi_vector.set(resolution.x_dpi(), resolution.y_dpi());
+  }
+#elif BUILDFLAG(IS_LINUX)
+  dpi_vector.set(resolution.x_dpi(), resolution.y_dpi());
+#endif
+
   // Try to match the client's resolution.
-  // TODO(sergeyu): Pass clients DPI to the resizer.
-  ScreenResolution screen_resolution(
-      client_size, webrtc::DesktopVector(kDefaultDpi, kDefaultDpi));
-  absl::optional<webrtc::ScreenId> screen_id;
-  if (resolution.has_screen_id())
+  ScreenResolution screen_resolution(client_size, dpi_vector);
+  std::optional<webrtc::ScreenId> screen_id;
+  if (resolution.has_screen_id()) {
     screen_id = resolution.screen_id();
+  }
   screen_controls_->SetScreenResolution(screen_resolution, screen_id);
 }
 
@@ -166,20 +186,47 @@ void ClientSession::ControlVideo(const protocol::VideoControl& video_control) {
       video_stream->Pause(pause_video_);
     }
   }
-  if (video_control.has_lossless_encode()) {
-    VLOG(1) << "Received VideoControl (lossless_encode="
-            << video_control.lossless_encode() << ")";
-    lossless_video_encode_ = video_control.lossless_encode();
+
+  if (video_control.has_target_framerate()) {
+    target_framerate_ = video_control.target_framerate();
+    LOG(INFO) << "Received target framerate: " << target_framerate_;
     for (const auto& [_, video_stream] : video_streams_) {
-      video_stream->SetLosslessEncode(lossless_video_encode_);
+      video_stream->SetTargetFramerate(target_framerate_);
+    }
+    if (mouse_shape_pump_) {
+      mouse_shape_pump_->SetCursorCaptureInterval(
+          base::Hertz(target_framerate_));
     }
   }
-  if (video_control.has_lossless_color()) {
-    VLOG(1) << "Received VideoControl (lossless_color="
-            << video_control.lossless_color() << ")";
-    lossless_video_color_ = video_control.lossless_color();
-    for (const auto& [_, video_stream] : video_streams_) {
-      video_stream->SetLosslessColor(lossless_video_color_);
+
+  if (video_control.has_framerate_boost()) {
+    auto framerate_boost = video_control.framerate_boost();
+    DCHECK(framerate_boost.has_enabled());
+
+    if (!framerate_boost.enabled()) {
+      LOG(INFO) << "FramerateBoost disabled.";
+      observing_input_filter_.ClearInputEventCallback();
+    } else {
+      base::TimeDelta capture_interval =
+          framerate_boost.has_capture_interval_ms()
+              ? std::clamp(
+                    base::Milliseconds(framerate_boost.capture_interval_ms()),
+                    base::Milliseconds(1), base::Milliseconds(1000))
+              : kDefaultBoostCaptureInterval;
+      base::TimeDelta boost_duration =
+          framerate_boost.has_boost_duration_ms()
+              ? std::clamp(
+                    base::Milliseconds(framerate_boost.boost_duration_ms()),
+                    base::Milliseconds(1), base::Milliseconds(1000))
+              : kDefaultBoostDuration;
+      LOG(INFO) << "FramerateBoost enabled (interval: "
+                << capture_interval.InMilliseconds()
+                << "ms, duration: " << boost_duration.InMilliseconds() << "ms)";
+
+      // Unretained is sound as this instance owns |observing_input_filter_|.
+      observing_input_filter_.SetInputEventCallback(base::BindRepeating(
+          &ClientSession::BoostFramerateOnInput, base::Unretained(this),
+          capture_interval, boost_duration, base::OwnedRef(false)));
     }
   }
 }
@@ -190,8 +237,9 @@ void ClientSession::ControlAudio(const protocol::AudioControl& audio_control) {
   if (audio_control.has_enable()) {
     VLOG(1) << "Received AudioControl (enable=" << audio_control.enable()
             << ")";
-    if (audio_stream_)
+    if (audio_stream_) {
       audio_stream_->Pause(!audio_control.enable());
+    }
   }
 }
 
@@ -207,8 +255,9 @@ void ClientSession::SetCapabilities(
 
   // Compute the set of capabilities supported by both client and host.
   client_capabilities_ = std::make_unique<std::string>();
-  if (capabilities.has_capabilities())
+  if (capabilities.has_capabilities()) {
     *client_capabilities_ = capabilities.capabilities();
+  }
   capabilities_ =
       IntersectCapabilities(*client_capabilities_, host_capabilities_);
   extension_manager_->OnNegotiatedCapabilities(connection_->client_stub(),
@@ -248,10 +297,12 @@ void ClientSession::SetCapabilities(
   }
 
   std::vector<ActionRequest::Action> supported_actions;
-  if (HasCapability(capabilities_, protocol::kSendAttentionSequenceAction))
+  if (HasCapability(capabilities_, protocol::kSendAttentionSequenceAction)) {
     supported_actions.push_back(ActionRequest::SEND_ATTENTION_SEQUENCE);
-  if (HasCapability(capabilities_, protocol::kLockWorkstationAction))
+  }
+  if (HasCapability(capabilities_, protocol::kLockWorkstationAction)) {
     supported_actions.push_back(ActionRequest::LOCK_WORKSTATION);
+  }
 
   if (supported_actions.size() > 0) {
     // Register the action message handler.
@@ -282,6 +333,10 @@ void ClientSession::SetCapabilities(
       monitor->Start();
     }
 
+    active_display_monitor_ =
+        desktop_environment_->CreateActiveDisplayMonitor(base::BindRepeating(
+            &ClientSession::OnActiveDisplayChanged, base::Unretained(this)));
+
     // Re-send the extended layout information so the client has information
     // needed to identify each stream.
     if (desktop_display_info_.NumDisplays() != 0) {
@@ -311,8 +366,9 @@ void ClientSession::RequestPairing(
 void ClientSession::DeliverClientMessage(
     const protocol::ExtensionMessage& message) {
   if (message.has_type()) {
-    if (extension_manager_->OnExtensionMessage(message))
+    if (extension_manager_->OnExtensionMessage(message)) {
       return;
+    }
 
     DLOG(INFO) << "Unexpected message received: " << message.type() << ": "
                << message.data();
@@ -398,6 +454,7 @@ void ClientSession::SelectDesktopDisplay(
   if (oldGeo != nullptr && newGeo != nullptr) {
     if (oldGeo->width == newGeo->width && oldGeo->height == newGeo->height) {
       UpdateMouseClampingFilterOffset();
+      UpdateFractionalFilterFallback();
     }
   }
 }
@@ -407,8 +464,8 @@ void ClientSession::ControlPeerConnection(
   if (!connection_->peer_connection_controls()) {
     return;
   }
-  absl::optional<int> min_bitrate_bps;
-  absl::optional<int> max_bitrate_bps;
+  std::optional<int> min_bitrate_bps;
+  std::optional<int> max_bitrate_bps;
   bool set_preferred_bitrates = false;
   if (parameters.has_preferred_min_bitrate_bps()) {
     min_bitrate_bps = parameters.preferred_min_bitrate_bps();
@@ -484,14 +541,18 @@ void ClientSession::OnConnectionAuthenticated() {
 
   // Collate the set of capabilities to offer the client, if it supports them.
   host_capabilities_ = desktop_environment_->GetCapabilities();
-  if (!host_capabilities_.empty())
+  if (!host_capabilities_.empty()) {
     host_capabilities_.append(" ");
+  }
   host_capabilities_.append(extension_manager_->GetCapabilities());
-  if (!host_capabilities_.empty())
+  if (!host_capabilities_.empty()) {
     host_capabilities_.append(" ");
+  }
   host_capabilities_.append(protocol::kRtcLogTransferCapability);
   host_capabilities_.append(" ");
   host_capabilities_.append(protocol::kWebrtcIceSdpRestartAction);
+  host_capabilities_.append(" ");
+  host_capabilities_.append(protocol::kFractionalCoordinatesCapability);
 
   // Create the object that controls the screen resolution.
   screen_controls_ = desktop_environment_->CreateScreenControls();
@@ -501,7 +562,7 @@ void ClientSession::OnConnectionAuthenticated() {
 
   // Connect the host input stubs.
   connection_->set_input_stub(&disable_input_filter_);
-  host_input_filter_.set_input_stub(input_injector_.get());
+  input_tracker_.set_input_stub(input_injector_.get());
 
   if (desktop_environment_options_.clipboard_size().has_value()) {
     int max_size = desktop_environment_options_.clipboard_size().value();
@@ -534,12 +595,11 @@ void ClientSession::CreateMediaStreams() {
 
   video_stream->SetObserver(this);
 
-  // Apply video-control parameters to the new stream.
-  video_stream->SetLosslessEncode(lossless_video_encode_);
-  video_stream->SetLosslessColor(lossless_video_color_);
-
   // Pause capturing if necessary.
   video_stream->Pause(pause_video_);
+
+  // Set the current target framerate.
+  video_stream->SetTargetFramerate(target_framerate_);
 
   if (event_timestamp_source_for_tests_) {
     video_stream->SetEventTimestampsSource(event_timestamp_source_for_tests_);
@@ -552,6 +612,10 @@ void ClientSession::CreateMediaStreams() {
 }
 
 void ClientSession::CreatePerMonitorVideoStreams() {
+  // Undo any previously-set fallback. When there are multiple streams, all
+  // fractional coordinates must specify a screen_id.
+  fractional_input_filter_.set_fallback_geometry({});
+
   // Create new streams for any monitors that don't already have streams.
   for (int i = 0; i < desktop_display_info_.NumDisplays(); i++) {
     auto id = desktop_display_info_.GetDisplayInfo(i)->id;
@@ -577,6 +641,9 @@ void ClientSession::CreatePerMonitorVideoStreams() {
 
     // Pause capturing if necessary.
     video_stream->Pause(pause_video_);
+
+    // Set the current target framerate.
+    video_stream->SetTargetFramerate(target_framerate_);
 
     if (event_timestamp_source_for_tests_) {
       video_stream->SetEventTimestampsSource(event_timestamp_source_for_tests_);
@@ -620,6 +687,7 @@ void ClientSession::OnConnectionChannelsConnected() {
       desktop_environment_->CreateMouseCursorMonitor(),
       connection_->client_stub());
   mouse_shape_pump_->SetMouseCursorMonitorCallback(this);
+  mouse_shape_pump_->SetCursorCaptureInterval(base::Hertz(target_framerate_));
 
   // Create KeyboardLayoutMonitor to send keyboard layout.
   // Unretained is sound because callback will never be called after
@@ -657,11 +725,20 @@ void ClientSession::OnConnectionClosed(protocol::ErrorCode error) {
   client_session_events_weak_factory_.InvalidateWeakPtrs();
 
   // If the client never authenticated then the session failed.
-  if (!is_authenticated_)
+  if (!is_authenticated_) {
     event_handler_->OnSessionAuthenticationFailed(this);
+  }
 
-  // Ensure that any pressed keys or buttons are released.
-  input_tracker_.ReleaseAll();
+  // ReleaseAll() requires an InputInjector, which might not be present if a
+  // connection wasn't established.
+  if (input_injector_) {
+    // Ensure that any pressed keys or buttons are released.
+    input_tracker_.ReleaseAll();
+
+    // Avoid dangling raw_ptr in `input_tracker_` after deleting
+    // `input_injector_` below.
+    input_tracker_.set_input_stub(nullptr);
+  }
 
   // Stop components access the client, audio or video stubs, which are no
   // longer valid once ConnectionToClient calls OnConnectionClosed().
@@ -741,8 +818,9 @@ void ClientSession::OnLocalPointerMoved(const webrtc::DesktopVector& position,
 void ClientSession::SetDisableInputs(bool disable_inputs) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (disable_inputs)
+  if (disable_inputs) {
     input_tracker_.ReleaseAll();
+  }
 
   disable_input_filter_.set_enabled(!disable_inputs);
   host_clipboard_filter_.set_enabled(!disable_inputs);
@@ -816,6 +894,23 @@ void ClientSession::BindRemoteUrlOpener(
   remote_open_url_message_handler_->AddReceiver(std::move(receiver));
 }
 
+#if BUILDFLAG(IS_WIN)
+void ClientSession::BindSecurityKeyForwarder(
+    mojo::PendingReceiver<mojom::SecurityKeyForwarder> receiver) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  auto* extension_session = reinterpret_cast<SecurityKeyExtensionSession*>(
+      extension_manager_->FindExtensionSession(
+          SecurityKeyExtension::kCapability));
+  if (!extension_session) {
+    LOG(WARNING) << "Security key extension not found. "
+                 << "Binding request rejected.";
+    return;
+  }
+  extension_session->BindSecurityKeyForwarder(std::move(receiver));
+}
+#endif
+
 void ClientSession::RegisterCreateHandlerCallbackForTesting(
     const std::string& prefix,
     protocol::DataChannelManager::CreateHandlerCallback constructor) {
@@ -837,7 +932,7 @@ std::unique_ptr<protocol::ClipboardStub> ClientSession::CreateClipboardProxy() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return std::make_unique<protocol::ClipboardThreadProxy>(
       client_clipboard_factory_.GetWeakPtr(),
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void ClientSession::SetMouseClampingFilter(const DisplaySize& size) {
@@ -874,8 +969,9 @@ void ClientSession::SetMouseClampingFilter(const DisplaySize& size) {
 }
 
 void ClientSession::UpdateMouseClampingFilterOffset() {
-  if (selected_display_index_ == webrtc::kInvalidScreenId)
+  if (selected_display_index_ == webrtc::kInvalidScreenId) {
     return;
+  }
 
   webrtc::DesktopVector origin;
   origin = desktop_display_info_.CalcDisplayOffset(selected_display_index_);
@@ -905,6 +1001,7 @@ void ClientSession::OnVideoSizeChanged(protocol::VideoStream* video_stream,
   webrtc_capture_size_ = size;
 
   SetMouseClampingFilter(size);
+  UpdateFractionalFilterFallback();
 
   // Record default DPI in case a display reports 0 for DPI.
   default_x_dpi_ = dpi.x();
@@ -961,10 +1058,12 @@ void ClientSession::OnDesktopDisplayChanged(
               << track.position_y() << " " << track.width() << "x"
               << track.height() << " [" << track.x_dpi() << "," << track.y_dpi()
               << "], screen_id=" << track.screen_id();
-    if (dpi_x == 0)
+    if (dpi_x == 0) {
       dpi_x = track.x_dpi();
-    if (dpi_y == 0)
+    }
+    if (dpi_y == 0) {
       dpi_y = track.y_dpi();
+    }
 
     int x = track.position_x();
     int y = track.position_y();
@@ -975,10 +1074,12 @@ void ClientSession::OnDesktopDisplayChanged(
   }
 
   // TODO(garykac): Investigate why these DPI values are 0 for some users.
-  if (dpi_x == 0)
+  if (dpi_x == 0) {
     dpi_x = default_x_dpi_;
-  if (dpi_y == 0)
+  }
+  if (dpi_y == 0) {
     dpi_y = default_y_dpi_;
+  }
 
   // Calc desktop scaled geometry (in DIPs)
   // See comment in OnVideoSizeChanged() for details.
@@ -1082,6 +1183,8 @@ void ClientSession::OnDesktopDisplayChanged(
   }
 
   // We need to update the input filters whenever the displays change.
+  fractional_input_filter_.set_video_layout(*displays);
+  UpdateFractionalFilterFallback();
   DisplaySize display_size =
       DisplaySize::FromPixels(size.width(), size.height(), default_x_dpi_);
   SetMouseClampingFilter(display_size);
@@ -1145,8 +1248,9 @@ void ClientSession::CreateActionMessageHandler(
     std::unique_ptr<protocol::MessagePipe> pipe) {
   std::unique_ptr<ActionExecutor> action_executor =
       desktop_environment_->CreateActionExecutor();
-  if (!action_executor)
+  if (!action_executor) {
     return;
+  }
 
   // ActionMessageHandler manages its own lifetime and is tied to the lifetime
   // of |pipe|. Once |pipe| is closed, this instance will be cleaned up.
@@ -1191,6 +1295,98 @@ void ClientSession::CreateRemoteWebAuthnMessageHandler(
 bool ClientSession::IsValidDisplayIndex(webrtc::ScreenId index) const {
   return index == webrtc::kFullDesktopScreenId ||
          desktop_display_info_.GetDisplayInfo(index) != nullptr;
+}
+
+void ClientSession::BoostFramerateOnInput(
+    base::TimeDelta capture_interval,
+    base::TimeDelta boost_duration,
+    bool& mouse_button_down,
+    protocol::ObservingInputFilter::Event event) {
+  // Boost the framerate when we see input which is likely to trigger a change
+  // on the screen. This includes key, text, and touch events as well as mouse
+  // scroll or mouse moves when a button is down.
+  auto* mouse_event_ptr =
+      absl::get_if<std::reference_wrapper<const protocol::MouseEvent>>(&event);
+  if (mouse_event_ptr) {
+    const protocol::MouseEvent& mouse_event = mouse_event_ptr->get();
+    if (!mouse_button_down && !mouse_event.has_button() &&
+        !mouse_event.has_wheel_delta_x() && !mouse_event.has_wheel_delta_y()) {
+      return;
+    }
+
+    if (mouse_event.has_button()) {
+      // The |button| field is only set when the state changes so we must store
+      // the current value so we know whether to boost the framerate when we see
+      // a mouse move event.
+      mouse_button_down = mouse_event.button_down();
+    }
+  }
+
+  for (const auto& [_, video_stream] : video_streams_) {
+    // TODO(joedow): Consider boosting the capture rate for the active desktop
+    // instead of all desktops in multi-stream mode.
+    video_stream->BoostFramerate(capture_interval, boost_duration);
+  }
+}
+
+void ClientSession::OnActiveDisplayChanged(webrtc::ScreenId display) {
+  protocol::ActiveDisplay active_display;
+  active_display.set_screen_id(display);
+  connection_->client_stub()->SetActiveDisplay(active_display);
+}
+
+void ClientSession::UpdateFractionalFilterFallback() {
+  if (!IsValidDisplayIndex(selected_display_index_)) {
+    return;
+  }
+
+  webrtc::DesktopSize new_size;
+  if (selected_display_index_ == webrtc::kFullDesktopScreenId) {
+#if BUILDFLAG(IS_APPLE)
+    // On macOS, for full-desktop capture, the capturer's current frame size
+    // should be used. This is because the capturer may revert to capturing from
+    // the default display instead of the full desktop. This could happen if all
+    // monitors had matching DPIs and full-desktop-capture was previously
+    // supported, but a monitor mode was changed such that the DPIs no longer
+    // match.
+    new_size = {webrtc_capture_size_.WidthAsDips(),
+                webrtc_capture_size_.HeightAsDips()};
+#else
+    // For other platforms, use the video-layout, as the rectangles are already
+    // in the correct units (pixels/DIPs) for input-injection.
+    webrtc::DesktopRect rect;
+    for (int i = 0; i < desktop_display_info_.NumDisplays(); i++) {
+      const DisplayGeometry* geo = desktop_display_info_.GetDisplayInfo(i);
+      rect.UnionWith(webrtc::DesktopRect::MakeXYWH(geo->x, geo->y, geo->width,
+                                                   geo->height));
+    }
+    new_size = rect.size();
+#endif  // BUILDFLAG(IS_APPLE)
+  } else {
+    const DisplayGeometry* geo =
+        desktop_display_info_.GetDisplayInfo(selected_display_index_);
+
+#if BUILDFLAG(IS_CHROMEOS)
+    // The input-injector on ChromeOS currently uses DIPs, but the video-layout
+    // sizes are reported in pixels on this platform. Although the offset
+    // calculation below gives correct results, the fallback geometry needs to
+    // account for the DIPs/pixels scaling - see crbug.com/1507189 and also the
+    // ChromeOS-specific behavior in SetMouseClampingFilter().
+    DisplaySize size_converter =
+        DisplaySize::FromPixels(geo->width, geo->height, geo->dpi);
+    new_size = webrtc::DesktopSize(size_converter.WidthAsDips(),
+                                   size_converter.HeightAsDips());
+#else
+    new_size = webrtc::DesktopSize(geo->width, geo->height);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+  }
+
+  // The logic for input-injection offsets is dependent on the OS, and is
+  // implemented in DesktopDisplayInfo::CalcDisplayOffset().
+  webrtc::DesktopVector offset =
+      desktop_display_info_.CalcDisplayOffset(selected_display_index_);
+  fractional_input_filter_.set_fallback_geometry(
+      webrtc::DesktopRect::MakeOriginSize(offset, new_size));
 }
 
 }  // namespace remoting

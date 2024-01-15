@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/crostini/crostini_ansible_software_config_view.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
@@ -198,7 +198,6 @@ void CrostiniAnsibleSoftwareConfigView::OnStateChanged() {
     GetWidget()->SetSize(GetWidget()->non_client_view()->GetPreferredSize());
 }
 
-BEGIN_METADATA(CrostiniAnsibleSoftwareConfigView,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(CrostiniAnsibleSoftwareConfigView)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, SubtextLabel)
 END_METADATA

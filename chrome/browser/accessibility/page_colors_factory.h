@@ -6,14 +6,14 @@
 #define CHROME_BROWSER_ACCESSIBILITY_PAGE_COLORS_FACTORY_H_
 
 #include "base/no_destructor.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 
 class Profile;
 class PageColors;
 
 // Factory to get or create an instance of PageColors from a Profile.
-class PageColorsFactory : public BrowserContextKeyedServiceFactory {
+class PageColorsFactory : public ProfileKeyedServiceFactory {
  public:
   static PageColorsFactory* GetInstance();
 
@@ -26,10 +26,8 @@ class PageColorsFactory : public BrowserContextKeyedServiceFactory {
   ~PageColorsFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* profile) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;

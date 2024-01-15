@@ -1,24 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/authentication/tangible_sync/tangible_sync_view_controller.h"
 
+#import "base/feature_list.h"
 #import "base/metrics/histogram_functions.h"
 #import "base/notreached.h"
-#import "components/signin/public/base/signin_metrics.h"
-#import "ios/chrome/browser/ui/elements/instruction_view.h"
-#import "ios/chrome/browser/ui/first_run/fre_field_trial.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "ios/chrome/browser/shared/ui/elements/instruction_view.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
+#import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "net/base/mac/url_conversions.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -44,7 +42,7 @@ UIView* IconViewWithImage(NSString* image_name, BOOL custom_symbol) {
   UIImageView* icon_view = [[UIImageView alloc] initWithImage:icon_image];
   icon_view.translatesAutoresizingMaskIntoConstraints = NO;
   UIView* full_view = [[UIView alloc] init];
-  full_view.backgroundColor = UIColor.whiteColor;
+  full_view.backgroundColor = [UIColor colorNamed:kSolidWhiteColor];
   full_view.layer.cornerRadius = kIconSquareCornerRadius;
   full_view.layer.masksToBounds = YES;
   [full_view addSubview:icon_view];
@@ -69,40 +67,25 @@ UIView* IconViewWithImage(NSString* image_name, BOOL custom_symbol) {
 #pragma mark - UIViewController
 
 - (void)viewDidLoad {
+  self.view.accessibilityIdentifier = kTangibleSyncViewAccessibilityIdentifier;
   self.shouldHideBanner = YES;
-  self.hasAvatarImage = YES;
+  self.headerImageType = PromoStyleImageType::kAvatar;
   self.scrollToEndMandatory = YES;
   self.readMoreString =
       l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SCREEN_READ_MORE);
-  self.avatarImage = self.primaryIdentityAvatarImage;
-  self.avatarAccessibilityLabel = self.primaryIdentityAvatarAccessibilityLabel;
+  self.headerImage = self.primaryIdentityAvatarImage;
+  self.headerAccessibilityLabel = self.primaryIdentityAvatarAccessibilityLabel;
   int titleStringID = 0;
   int subtitleStringID = 0;
-  switch (fre_field_trial::GetNewMobileIdentityConsistencyFRE()) {
-    case NewMobileIdentityConsistencyFRE::kTangibleSyncA:
-      titleStringID = IDS_IOS_TANGIBLE_SYNC_TITLE_TURN_ON_SYNC;
-      subtitleStringID = IDS_IOS_TANGIBLE_SYNC_SUBTITLE_BACK_UP;
-      break;
-    case NewMobileIdentityConsistencyFRE::kTangibleSyncB:
-      titleStringID = IDS_IOS_TANGIBLE_SYNC_TITLE_SYNC;
-      subtitleStringID = IDS_IOS_TANGIBLE_SYNC_SUBTITLE_BACK_UP;
-      break;
-    case NewMobileIdentityConsistencyFRE::kTangibleSyncC:
-      titleStringID = IDS_IOS_TANGIBLE_SYNC_TITLE_TURN_ON_SYNC;
-      subtitleStringID = IDS_IOS_TANGIBLE_SYNC_SUBTITLE_SYNC;
-      break;
-    case NewMobileIdentityConsistencyFRE::kTwoSteps:
-    case NewMobileIdentityConsistencyFRE::kOld:
-      NOTREACHED();
-      break;
-  }
+  titleStringID = IDS_IOS_TANGIBLE_SYNC_TITLE_TURN_ON_SYNC;
+  subtitleStringID = IDS_IOS_TANGIBLE_SYNC_SUBTITLE_BACK_UP;
+  _activateSyncButtonID = IDS_IOS_ACCOUNT_UNIFIED_CONSENT_OK_BUTTON;
   DCHECK_NE(0, titleStringID);
   DCHECK_NE(0, subtitleStringID);
   [self.delegate addConsentStringID:titleStringID];
   self.titleText = l10n_util::GetNSString(titleStringID);
   [self.delegate addConsentStringID:subtitleStringID];
   self.subtitleText = l10n_util::GetNSString(subtitleStringID);
-  _activateSyncButtonID = IDS_IOS_ACCOUNT_UNIFIED_CONSENT_OK_BUTTON;
   [self.delegate addConsentStringID:_activateSyncButtonID];
   self.primaryActionString = l10n_util::GetNSString(_activateSyncButtonID);
   [self.delegate addConsentStringID:
@@ -121,30 +104,15 @@ UIView* IconViewWithImage(NSString* image_name, BOOL custom_symbol) {
     l10n_util::GetNSString(IDS_IOS_TANGIBLE_SYNC_DATA_TYPE_AUTOFILL),
     l10n_util::GetNSString(IDS_IOS_TANGIBLE_SYNC_DATA_TYPE_HISTORY),
   ];
-  InstructionView* instructionView = nil;
-  if (UseSymbols()) {
-    NSArray<UIView*>* imageViews = @[
-      IconViewWithImage(kBookmarksSymbol, /*custom_symbol=*/NO),
-      IconViewWithImage(kPasswordSymbol, /*custom_symbol=*/YES),
-      IconViewWithImage(kRecentTabsSymbol, /*custom_symbol=*/YES),
-    ];
-    instructionView =
-        [[InstructionView alloc] initWithList:dataTypeNames
-                                        style:InstructionViewStyleDefault
-                                    iconViews:imageViews];
-  } else {
-    NSArray<UIImage*>* dataTypeIcons = @[
-      [UIImage imageNamed:@"tangible_sync_bookmarks"],
-      [UIImage imageNamed:@"tangible_sync_autofill"],
-      [UIImage imageNamed:@"tangible_sync_history"],
-    ];
-    instructionView =
-        [[InstructionView alloc] initWithList:dataTypeNames
-                                        style:InstructionViewStyleDefault
-                                        icons:dataTypeIcons];
-  }
-  DCHECK(instructionView);
-  instructionView.tapListener = self;
+  NSArray<UIView*>* imageViews = @[
+    IconViewWithImage(kBookmarksSymbol, /*custom_symbol=*/NO),
+    IconViewWithImage(kDocPlaintextSymbol, /*custom_symbol=*/NO),
+    IconViewWithImage(kRecentTabsSymbol, /*custom_symbol=*/YES),
+  ];
+  InstructionView* instructionView =
+      [[InstructionView alloc] initWithList:dataTypeNames
+                                      style:InstructionViewStyleDefault
+                                  iconViews:imageViews];
   instructionView.translatesAutoresizingMaskIntoConstraints = NO;
   [self.specificContentView addSubview:instructionView];
   [NSLayoutConstraint activateConstraints:@[
@@ -161,17 +129,12 @@ UIView* IconViewWithImage(NSString* image_name, BOOL custom_symbol) {
   [super viewDidLoad];
 }
 
-- (void)viewDidAppear:(BOOL)animated {
-  [super viewDidAppear:animated];
-  [self.delegate logScrollButtonVisible:!self.didReachBottom];
-}
-
 #pragma mark - TangibleSyncConsumer
 
 - (void)setPrimaryIdentityAvatarImage:(UIImage*)primaryIdentityAvatarImage {
   if (_primaryIdentityAvatarImage != primaryIdentityAvatarImage) {
     _primaryIdentityAvatarImage = primaryIdentityAvatarImage;
-    self.avatarImage = primaryIdentityAvatarImage;
+    self.headerImage = primaryIdentityAvatarImage;
   }
 }
 
@@ -181,32 +144,8 @@ UIView* IconViewWithImage(NSString* image_name, BOOL custom_symbol) {
       primaryIdentityAvatarAccessibilityLabel) {
     _primaryIdentityAvatarAccessibilityLabel =
         primaryIdentityAvatarAccessibilityLabel;
-    self.avatarAccessibilityLabel = primaryIdentityAvatarAccessibilityLabel;
+    self.headerAccessibilityLabel = primaryIdentityAvatarAccessibilityLabel;
   }
-}
-
-#pragma mark - InstructionLineTappedListener
-
-// Sends histogram indicating that a line is tapped.
-- (void)tappedOnLineNumber:(NSInteger)index {
-  // TODO(crbug.com/1371062) Potentially open the settings menu
-  signin_metrics::SigninSyncConsentDataRow enumIndex =
-      signin_metrics::SigninSyncConsentDataRow::kBookmarksRowTapped;
-  switch (index) {
-    case 0:
-      enumIndex = signin_metrics::SigninSyncConsentDataRow::kBookmarksRowTapped;
-      break;
-    case 1:
-      enumIndex = signin_metrics::SigninSyncConsentDataRow::kAutofillRowTapped;
-      break;
-    case 2:
-      enumIndex = signin_metrics::SigninSyncConsentDataRow::kHistoryRowTapped;
-      break;
-    default:
-      NOTREACHED();
-  }
-  base::UmaHistogramEnumeration("Signin.SyncConsentScreen.DataRowClicked",
-                                enumIndex);
 }
 
 @end

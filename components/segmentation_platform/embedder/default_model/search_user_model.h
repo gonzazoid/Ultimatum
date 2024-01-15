@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,28 +14,22 @@ struct Config;
 
 // Segmentation search user model provider. Provides a default model and
 // metadata for the search user optimization target.
-class SearchUserModel : public ModelProvider {
+class SearchUserModel : public DefaultModelProvider {
  public:
   SearchUserModel();
   ~SearchUserModel() override = default;
 
   // Disallow copy/assign.
-  SearchUserModel(SearchUserModel&) = delete;
-  SearchUserModel& operator=(SearchUserModel&) = delete;
+  SearchUserModel(const SearchUserModel&) = delete;
+  SearchUserModel& operator=(const SearchUserModel&) = delete;
 
   static std::unique_ptr<Config> GetConfig();
 
-  // Returns the name of the subsegment for the given segment and the
-  // `subsegment_rank`. The `subsegment_rank` should be computed based on the
-  // subsegment discrete mapping in the model metadata.
-  static absl::optional<std::string> GetSubsegmentName(int subsegment_rank);
-
   // ModelProvider implementation.
-  void InitAndFetchModel(
-      const ModelUpdatedCallback& model_updated_callback) override;
-  void ExecuteModelWithInput(const std::vector<float>& inputs,
+  std::unique_ptr<ModelConfig> GetModelConfig() override;
+
+  void ExecuteModelWithInput(const ModelProvider::Request& inputs,
                              ExecutionCallback callback) override;
-  bool ModelAvailable() override;
 };
 
 }  // namespace segmentation_platform

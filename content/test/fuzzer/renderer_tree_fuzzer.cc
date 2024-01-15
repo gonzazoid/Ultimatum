@@ -13,6 +13,8 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
 #include "base/values.h"
 #include "content/test/fuzzer/fuzzer_support.h"
 #include "testing/libfuzzer/libfuzzer_exports.h"
@@ -42,7 +44,7 @@ class ReservoirSampler {
   }
 
  private:
-  Random* const rnd_;
+  const raw_ptr<Random> rnd_;
   T t_;
   int n_;
 };
@@ -88,13 +90,13 @@ class Node {
  protected:
   Node() {}
 
-  virtual std::unique_ptr<base::Value> ToJson() = 0;
-  virtual void ParseJson(const base::DictionaryValue& dict) = 0;
+  virtual base::Value ToJson() = 0;
+  virtual void ParseJson(const base::Value::Dict& dict) = 0;
   virtual void WriteHtml(std::string* out) = 0;
 
  private:
   friend class NodeList;
-  static std::unique_ptr<Node> ParseJson(const base::Value& value);
+  static std::unique_ptr<Node> FromValue(const base::Value& value);
 };
 
 using Attrs = std::map<std::string, std::string>;
@@ -114,26 +116,25 @@ class NodeList : public std::vector<std::unique_ptr<Node>> {
                                                    size_t size) {
     auto nodes = std::make_unique<NodeList>();
 
-    absl::optional<base::Value> value(base::JSONReader::Read(
+    std::optional<base::Value> value(base::JSONReader::Read(
         std::string(reinterpret_cast<const char*>(data), size)));
-    if (value)
-      nodes->ParseJson(*value);
+    if (value && value->is_list())
+      nodes->ParseJsonList(value->GetList());
 
     return nodes;
   }
 
-  std::unique_ptr<base::Value> ToJson() const {
-    std::unique_ptr<base::ListValue> result(new base::ListValue());
+  base::Value ToJson() const {
+    base::Value::List result;
     for (const auto& node : *this) {
-      result->GetList().Append(base::Value::FromUniquePtrValue(node->ToJson()));
+      result.Append(node->ToJson());
     }
-    return std::move(result);
+    return base::Value(std::move(result));
   }
 
   void ToJsonString(std::string* out) const {
-    auto json = ToJson();
-    CHECK(json);
-    bool succ = base::JSONWriter::Write(*json, out);
+    base::Value json = ToJson();
+    bool succ = base::JSONWriter::Write(json, out);
     CHECK(succ);
   }
 
@@ -152,13 +153,9 @@ class NodeList : public std::vector<std::unique_ptr<Node>> {
 
   AttrPosition PickRandomAttribute(Random* rnd);
 
-  void ParseJson(const base::Value& value) {
-    if (!value.is_list()) {
-      return;
-    }
-
-    for (const auto& listItem : value.GetList()) {
-      std::unique_ptr<Node> node(Node::ParseJson(listItem));
+  void ParseJsonList(const base::Value::List& list) {
+    for (const auto& item : list) {
+      std::unique_ptr<Node> node(Node::FromValue(item));
       if (node) {
         push_back(std::move(node));
       }
@@ -230,36 +227,39 @@ class Element : public Node {
     *out += "</" + tag_name_ + ">";
   }
 
-  std::unique_ptr<base::Value> ToJson() override {
-    std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
+  base::Value ToJson() override {
+    base::Value::Dict dict;
 
-    dict->SetString("e", tag_name_);
+    dict.Set("e", tag_name_);
     if (!children_.empty())
-      dict->Set("c", children_.ToJson());
+      dict.Set("c", children_.ToJson());
     if (!attrs_.empty()) {
-      auto attrsDict =
-          std::unique_ptr<base::DictionaryValue>(new base::DictionaryValue());
+      base::Value::Dict attrs_dict;
       for (const auto& pair : attrs_) {
-        attrsDict->SetString(pair.first, pair.second);
+        attrs_dict.Set(pair.first, pair.second);
       }
-      dict->Set("a", std::move(attrsDict));
+      dict.Set("a", std::move(attrs_dict));
     }
 
-    return std::move(dict);
+    return base::Value(std::move(dict));
   }
 
  protected:
-  void ParseJson(const base::DictionaryValue& dict) override {
-    CHECK(dict.FindKey("e"));
-    dict.GetString("e", &tag_name_);
+  void ParseJson(const base::Value::Dict& dict) override {
+    const base::Value* e_value = dict.Find("e");
+    CHECK(e_value);
+    const std::string* e_str = e_value->GetIfString();
+    if (e_str) {
+      tag_name_ = *e_str;
+    }
 
-    const base::ListValue* list;
-    if (dict.GetList("c", &list))
-      children_.ParseJson(*list);
+    const base::Value::List* c_list = dict.FindList("c");
+    if (c_list)
+      children_.ParseJsonList(*c_list);
 
-    const base::DictionaryValue* attrsDict;
-    if (dict.GetDictionary("a", &attrsDict)) {
-      for (const auto item : attrsDict->GetDict()) {
+    const base::Value::Dict* a_dict = dict.FindDict("a");
+    if (a_dict) {
+      for (const auto item : *a_dict) {
         if (item.second.is_string())
           attrs_[item.first] = item.second.GetString();
       }
@@ -295,15 +295,19 @@ class Text : public Node {
  protected:
   void WriteHtml(std::string* out) override { *out += text_; }
 
-  std::unique_ptr<base::Value> ToJson() override {
-    base::DictionaryValue* result = new base::DictionaryValue();
-    result->SetString("t", text_);
-    return std::unique_ptr<base::Value>(result);
+  base::Value ToJson() override {
+    base::Value::Dict result;
+    result.Set("t", text_);
+    return base::Value(std::move(result));
   }
 
-  void ParseJson(const base::DictionaryValue& dict) override {
-    CHECK(dict.FindKey("t"));
-    dict.GetString("t", &text_);
+  void ParseJson(const base::Value::Dict& dict) override {
+    const base::Value* t_value = dict.Find("t");
+    CHECK(t_value);
+    const std::string* t_str = t_value->GetIfString();
+    if (t_str) {
+      text_ = *t_str;
+    }
   }
 
   bool IsText() const override { return true; }
@@ -360,35 +364,32 @@ AttrPosition NodeList::PickRandomAttribute(Random* rnd) {
 
 std::unique_ptr<Node> Node::CreateRandom(Random* rnd) {
   switch ((*rnd)() % 2) {
-    default:
-      LOG(FATAL) << "SHOULD NOT HAPPEN";
-      return nullptr;
     case 0:
       return Element::CreateRandom(rnd);
     case 1:
       return Text::CreateRandom(rnd);
+    default:
+      NOTREACHED_NORETURN() << "SHOULD NOT HAPPEN";
   }
 }
 
-std::unique_ptr<Node> Node::ParseJson(const base::Value& value) {
-  const base::DictionaryValue* dict;
-  if (!value.GetAsDictionary(&dict)) {
+std::unique_ptr<Node> Node::FromValue(const base::Value& value) {
+  if (!value.is_dict()) {
     return nullptr;
   }
 
+  const base::Value::Dict& dict = value.GetDict();
   std::unique_ptr<Node> node;
-
-  if (dict->FindKey("t")) {
+  if (dict.Find("t")) {
     node.reset(new Text());
-  } else if (dict->FindKey("e")) {
+  } else if (dict.Find("e")) {
     node.reset(new Element());
   } else {
     LOG(ERROR) << "Bad node";
+    return nullptr;
   }
 
-  if (node)
-    node->ParseJson(*dict);
-
+  node->ParseJson(dict);
   return node;
 }
 

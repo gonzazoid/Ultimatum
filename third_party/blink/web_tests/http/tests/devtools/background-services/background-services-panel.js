@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Application from 'devtools/panels/application/application.js';
+
 function dumpPreviewPanel() {
   TestRunner.addResult('Panel view:');
 
-  const treeElement = UI.panels.resources.sidebar.backgroundFetchTreeElement;
+  const treeElement = Application.ResourcesPanel.ResourcesPanel.instance().sidebar.backgroundFetchTreeElement;
   treeElement.onselect(false);
 
   const preview = treeElement.view.preview;
@@ -24,7 +28,7 @@ function dumpPreviewPanel() {
 };
 
 async function toggleRecord(model) {
-  const treeElement = UI.panels.resources.sidebar.backgroundFetchTreeElement;
+  const treeElement = Application.ResourcesPanel.ResourcesPanel.instance().sidebar.backgroundFetchTreeElement;
   treeElement.onselect(false);
 
   // Simulate click.
@@ -32,7 +36,7 @@ async function toggleRecord(model) {
 
   // Wait for the view to be aware of the change.
   await new Promise(r => {
-    model.addEventListener(Resources.BackgroundServiceModel.Events.RecordingStateChanged, r);
+    model.addEventListener(Application.BackgroundServiceModel.Events.RecordingStateChanged, r);
   });
 
   // Yield thread in case this listener was called before the UI's listener.
@@ -40,13 +44,10 @@ async function toggleRecord(model) {
 }
 
 (async function() {
-  Root.Runtime.experiments.setEnabled('backgroundServices', true);
-
   TestRunner.addResult(`Tests the bottom panel shows information as expected.\n`);
-  await TestRunner.loadLegacyModule('resources');
   await TestRunner.showPanel('resources');
 
-  const backgroundServiceModel = TestRunner.mainTarget.model(Resources.BackgroundServiceModel);
+  const backgroundServiceModel = TestRunner.mainTarget.model(Application.BackgroundServiceModel.BackgroundServiceModel);
   backgroundServiceModel.enable(Protocol.BackgroundService.ServiceName.BackgroundFetch);
 
   dumpPreviewPanel();
@@ -79,14 +80,14 @@ async function toggleRecord(model) {
   });
   dumpPreviewPanel();
 
-  const dataGrid = UI.panels.resources.sidebar.backgroundFetchTreeElement.view.dataGrid;
+  const dataGrid = Application.ResourcesPanel.ResourcesPanel.instance().sidebar.backgroundFetchTreeElement.view.dataGrid;
   dataGrid.rootNode().children[0].select();
   dumpPreviewPanel();
   dataGrid.rootNode().children[1].select();
   dumpPreviewPanel();
 
   // Simulate clicking the clear button.
-  UI.panels.resources.sidebar.backgroundFetchTreeElement.view.clearEvents();
+  Application.ResourcesPanel.ResourcesPanel.instance().sidebar.backgroundFetchTreeElement.view.clearEvents();
   dumpPreviewPanel();
 
   TestRunner.completeTest();

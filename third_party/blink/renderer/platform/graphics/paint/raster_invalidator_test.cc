@@ -5,7 +5,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/raster_invalidator.h"
 
 #include <utility>
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
@@ -19,13 +19,18 @@ using testing::ElementsAre;
 
 namespace blink {
 
+enum { kOnePassRasterInvalidation = 1 << 20 };
+
 static constexpr gfx::Vector2dF kDefaultLayerOffset(-9999, -7777);
 static constexpr gfx::Size kDefaultLayerBounds(18888, 16666);
 
 class RasterInvalidatorTest : public testing::Test,
-                              public PaintTestConfigurations {
+                              public PaintTestConfigurations,
+                              private ScopedOnePassRasterInvalidationForTest {
  public:
-  RasterInvalidatorTest() = default;
+  RasterInvalidatorTest()
+      : ScopedOnePassRasterInvalidationForTest(GetParam() &
+                                               kOnePassRasterInvalidation) {}
 
   static PropertyTreeState DefaultPropertyTreeState() {
     return PropertyTreeState::Root();
@@ -57,7 +62,10 @@ class RasterInvalidatorTest : public testing::Test,
   int sequence_number_ = 1;
 };
 
-INSTANTIATE_PAINT_TEST_SUITE_P(RasterInvalidatorTest);
+INSTANTIATE_TEST_SUITE_P(All,
+                         RasterInvalidatorTest,
+                         ::testing::Values(PAINT_TEST_SUITE_P_VALUES,
+                                           kOnePassRasterInvalidation));
 
 using MapFunction = base::RepeatingCallback<void(gfx::Rect&)>;
 static gfx::Rect ChunkRectToLayer(
@@ -79,7 +87,7 @@ static bool CheckChunkInvalidation(
     const gfx::Vector2dF& layer_offset,
     const absl::optional<gfx::Rect>& chunk_rect = absl::nullopt,
     const MapFunction& mapper = base::DoNothing()) {
-  const auto& chunk = *(chunks.begin() + index);
+  const auto& chunk = chunks[index];
   return ChunkRectToLayer(chunk_rect ? *chunk_rect : chunk.drawable_bounds,
                           layer_offset, mapper) == info.rect &&
          chunk.id.client_id == info.client_id && reason == info.reason;
@@ -220,14 +228,25 @@ TEST_P(RasterInvalidatorTest, ReorderChunks) {
                                   .Build());
   invalidator_.Generate(base::DoNothing(), new_chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, DefaultPropertyTreeState());
-  // Invalidated new chunk 2's old (as chunks[{0, 1]) and new
-  // (as new_chunks[{0, 2]) bounds.
-  EXPECT_THAT(
-      TrackedRasterInvalidations(),
-      ElementsAre(ChunkInvalidation(chunks, 1,
-                                    PaintInvalidationReason::kChunkReordered),
-                  ChunkInvalidation(new_chunks, 2,
-                                    PaintInvalidationReason::kChunkReordered)));
+  if (RuntimeEnabledFeatures::OnePassRasterInvalidationEnabled()) {
+    EXPECT_THAT(
+        TrackedRasterInvalidations(),
+        ElementsAre(
+            ChunkInvalidation(new_chunks, 2,
+                              PaintInvalidationReason::kChunkAppeared),
+            ChunkInvalidation(chunks, 1,
+                              PaintInvalidationReason::kChunkDisappeared)));
+  } else {
+    // Invalidated new chunk 2's old (as chunks[{0, 1]) and new
+    // (as new_chunks[{0, 2]) bounds.
+    EXPECT_THAT(
+        TrackedRasterInvalidations(),
+        ElementsAre(
+            ChunkInvalidation(chunks, 1,
+                              PaintInvalidationReason::kChunkReordered),
+            ChunkInvalidation(new_chunks, 2,
+                              PaintInvalidationReason::kChunkReordered)));
+  }
   FinishCycle(new_chunks);
 }
 
@@ -253,18 +272,33 @@ TEST_P(RasterInvalidatorTest, ReorderChunkSubsequences) {
                                   .Build());
   invalidator_.Generate(base::DoNothing(), new_chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, DefaultPropertyTreeState());
-  // Invalidated new chunk 3's old (as chunks[{0, 1] and new
-  // (as new_chunks[{0, 3]) bounds.
-  // Invalidated new chunk 4's new bounds. Didn't invalidate old bounds because
-  // it's the same as the new bounds.
-  EXPECT_THAT(
-      TrackedRasterInvalidations(),
-      ElementsAre(ChunkInvalidation(chunks, 1,
-                                    PaintInvalidationReason::kChunkReordered),
-                  ChunkInvalidation(new_chunks, 3,
-                                    PaintInvalidationReason::kChunkReordered),
-                  ChunkInvalidation(new_chunks, 4,
-                                    PaintInvalidationReason::kChunkReordered)));
+  if (RuntimeEnabledFeatures::OnePassRasterInvalidationEnabled()) {
+    EXPECT_THAT(
+        TrackedRasterInvalidations(),
+        ElementsAre(
+            ChunkInvalidation(new_chunks, 3,
+                              PaintInvalidationReason::kChunkAppeared),
+            ChunkInvalidation(new_chunks, 4,
+                              PaintInvalidationReason::kChunkAppeared),
+            ChunkInvalidation(chunks, 1,
+                              PaintInvalidationReason::kChunkDisappeared),
+            ChunkInvalidation(chunks, 2,
+                              PaintInvalidationReason::kChunkDisappeared)));
+  } else {
+    // Invalidated new chunk 3's old (as chunks[{0, 1] and new
+    // (as new_chunks[{0, 3]) bounds.
+    // Invalidated new chunk 4's new bounds. Didn't invalidate old bounds
+    // because it's the same as the new bounds.
+    EXPECT_THAT(
+        TrackedRasterInvalidations(),
+        ElementsAre(
+            ChunkInvalidation(chunks, 1,
+                              PaintInvalidationReason::kChunkReordered),
+            ChunkInvalidation(new_chunks, 3,
+                              PaintInvalidationReason::kChunkReordered),
+            ChunkInvalidation(new_chunks, 4,
+                              PaintInvalidationReason::kChunkReordered)));
+  }
   FinishCycle(new_chunks);
 }
 
@@ -569,8 +603,8 @@ TEST_P(RasterInvalidatorTest, ClipPropertyChangeWithOutsetForRasterEffects) {
 }
 
 TEST_P(RasterInvalidatorTest, ClipLocalTransformSpaceChange) {
-  auto t1 = CreateTransform(t0(), TransformationMatrix());
-  auto t2 = CreateTransform(*t1, TransformationMatrix());
+  auto t1 = CreateTransform(t0(), gfx::Transform());
+  auto t2 = CreateTransform(*t1, gfx::Transform());
 
   FloatRoundedRect::Radii radii(gfx::SizeF(1, 2), gfx::SizeF(2, 3),
                                 gfx::SizeF(3, 4), gfx::SizeF(4, 5));
@@ -588,8 +622,10 @@ TEST_P(RasterInvalidatorTest, ClipLocalTransformSpaceChange) {
   // Change both t1 and t2 but keep t1*t2 unchanged, to test change of
   // LocalTransformSpace of c1.
   invalidator_.SetTracksRasterInvalidations(true);
-  t1->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(-10, -20)});
-  t2->Update(*t1, TransformPaintPropertyNode::State{gfx::Vector2dF(10, 20)});
+  t1->Update(t0(), TransformPaintPropertyNode::State{
+                       {MakeTranslationMatrix(-10, -20)}});
+  t2->Update(
+      *t1, TransformPaintPropertyNode::State{{MakeTranslationMatrix(10, 20)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -603,8 +639,8 @@ TEST_P(RasterInvalidatorTest, ClipLocalTransformSpaceChange) {
 // path by letting the clip's LocalTransformSpace be the same as the chunk's
 // transform.
 TEST_P(RasterInvalidatorTest, ClipLocalTransformSpaceChangeNoInvalidation) {
-  auto t1 = CreateTransform(t0(), TransformationMatrix());
-  auto t2 = CreateTransform(*t1, TransformationMatrix());
+  auto t1 = CreateTransform(t0(), gfx::Transform());
+  auto t2 = CreateTransform(*t1, gfx::Transform());
 
   FloatRoundedRect::Radii radii(gfx::SizeF(1, 2), gfx::SizeF(2, 3),
                                 gfx::SizeF(3, 4), gfx::SizeF(4, 5));
@@ -622,8 +658,10 @@ TEST_P(RasterInvalidatorTest, ClipLocalTransformSpaceChangeNoInvalidation) {
 
   // Change both t1 and t2 but keep t1*t2 unchanged.
   invalidator_.SetTracksRasterInvalidations(true);
-  t1->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(-10, -20)});
-  t2->Update(*t1, TransformPaintPropertyNode::State{gfx::Vector2dF(10, 20)});
+  t1->Update(t0(), TransformPaintPropertyNode::State{
+                       {MakeTranslationMatrix(-10, -20)}});
+  t2->Update(
+      *t1, TransformPaintPropertyNode::State{{MakeTranslationMatrix(10, 20)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -652,7 +690,7 @@ TEST_P(RasterInvalidatorTest, TransformPropertyChange) {
   invalidator_.SetTracksRasterInvalidations(true);
   layer_transform->Update(
       *layer_transform->Parent(),
-      TransformPaintPropertyNode::State{MakeScaleMatrix(10)});
+      TransformPaintPropertyNode::State{{MakeScaleMatrix(10)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -665,8 +703,8 @@ TEST_P(RasterInvalidatorTest, TransformPropertyChange) {
   // scrolled from its original location.
   auto new_layer_transform = Create2DTranslation(*layer_transform, -100, -200);
   layer_state = PropertyTreeState(*new_layer_transform, c0(), e0());
-  transform0->Update(*new_layer_transform, TransformPaintPropertyNode::State{
-                                               transform0->Translation2D()});
+  transform0->Update(*new_layer_transform,
+                     TransformPaintPropertyNode::State{{transform0->Matrix()}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -676,8 +714,8 @@ TEST_P(RasterInvalidatorTest, TransformPropertyChange) {
   // Removing transform nodes above the layer state should not cause raster
   // invalidation in the layer.
   layer_state = DefaultPropertyTreeState();
-  transform0->Update(layer_state.Transform(), TransformPaintPropertyNode::State{
-                                                  transform0->Translation2D()});
+  transform0->Update(layer_state.Transform(),
+                     TransformPaintPropertyNode::State{{transform0->Matrix()}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -687,12 +725,13 @@ TEST_P(RasterInvalidatorTest, TransformPropertyChange) {
   // Change transform0 and transform1, while keeping the combined transform0
   // and transform1 unchanged for chunk 2. We should invalidate only chunk 0
   // for changed paint property.
-  transform0->Update(layer_state.Transform(),
-                     TransformPaintPropertyNode::State{
-                         transform0->Translation2D() + gfx::Vector2dF(20, 30)});
-  transform1->Update(
-      *transform0, TransformPaintPropertyNode::State{
-                       transform1->Translation2D() + gfx::Vector2dF(-20, -30)});
+  transform0->Update(
+      layer_state.Transform(),
+      TransformPaintPropertyNode::State{
+          {transform0->Matrix() * MakeTranslationMatrix(20, 30)}});
+  transform1->Update(*transform0, TransformPaintPropertyNode::State{
+                                      {transform1->Matrix() *
+                                       MakeTranslationMatrix(-20, -30)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -727,18 +766,18 @@ TEST_P(RasterInvalidatorTest, TransformPropertyTinyChange) {
   // Change chunk_transform by tiny difference, which should be ignored.
   invalidator_.SetTracksRasterInvalidations(true);
 
-  auto matrix_with_tiny_change = [](const TransformationMatrix matrix) {
-    TransformationMatrix m = matrix;
-    m.Translate(0.0000001, -0.0000001);
-    m.Scale(1.0000001);
-    m.Rotate(0.0000001);
+  auto matrix_with_tiny_change = [](const gfx::Transform matrix) {
+    gfx::Transform m = matrix;
+    m.Translate(0.0001, -0.0001);
+    m.Scale(1.000001);
+    m.Rotate(0.000001);
     return m;
   };
 
   chunk_transform->Update(
       layer_state.Transform(),
       TransformPaintPropertyNode::State{
-          matrix_with_tiny_change(chunk_transform->SlowMatrix())});
+          {matrix_with_tiny_change(chunk_transform->Matrix())}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -752,7 +791,7 @@ TEST_P(RasterInvalidatorTest, TransformPropertyTinyChange) {
     chunk_transform->Update(
         layer_state.Transform(),
         TransformPaintPropertyNode::State{
-            matrix_with_tiny_change(chunk_transform->SlowMatrix())});
+            {matrix_with_tiny_change(chunk_transform->Matrix())}});
     invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                           kDefaultLayerBounds, layer_state);
     invalidated = !TrackedRasterInvalidations().empty();
@@ -783,7 +822,7 @@ TEST_P(RasterInvalidatorTest, TransformPropertyTinyChangeScale) {
   invalidator_.SetTracksRasterInvalidations(true);
   chunk_transform->Update(
       layer_state.Transform(),
-      TransformPaintPropertyNode::State{MakeScaleMatrix(2e-6)});
+      TransformPaintPropertyNode::State{{MakeScaleMatrix(2e-6)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -795,7 +834,7 @@ TEST_P(RasterInvalidatorTest, TransformPropertyTinyChangeScale) {
   invalidator_.SetTracksRasterInvalidations(true);
   chunk_transform->Update(
       layer_state.Transform(),
-      TransformPaintPropertyNode::State{MakeScaleMatrix(2e-6 + 1e-15)});
+      TransformPaintPropertyNode::State{{MakeScaleMatrix(2e-6 + 1e-15)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -805,8 +844,8 @@ TEST_P(RasterInvalidatorTest, TransformPropertyTinyChangeScale) {
 }
 
 TEST_P(RasterInvalidatorTest, EffectLocalTransformSpaceChange) {
-  auto t1 = CreateTransform(t0(), TransformationMatrix());
-  auto t2 = CreateTransform(*t1, TransformationMatrix());
+  auto t1 = CreateTransform(t0(), gfx::Transform());
+  auto t2 = CreateTransform(*t1, gfx::Transform());
   CompositorFilterOperations filter;
   filter.AppendBlurFilter(20);
   auto e1 = CreateFilterEffect(e0(), *t1, &c0(), filter);
@@ -825,8 +864,10 @@ TEST_P(RasterInvalidatorTest, EffectLocalTransformSpaceChange) {
   // Change both t1 and t2 but keep t1*t2 unchanged, to test change of
   // LocalTransformSpace of e1.
   invalidator_.SetTracksRasterInvalidations(true);
-  t1->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(-10, -20)});
-  t2->Update(*t1, TransformPaintPropertyNode::State{gfx::Vector2dF(10, 20)});
+  t1->Update(t0(), TransformPaintPropertyNode::State{
+                       {MakeTranslationMatrix(-10, -20)}});
+  t2->Update(
+      *t1, TransformPaintPropertyNode::State{{MakeTranslationMatrix(10, 20)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);
@@ -843,8 +884,8 @@ TEST_P(RasterInvalidatorTest, EffectLocalTransformSpaceChange) {
 // invalidation path by letting the effect's LocalTransformSpace be the same as
 // the chunk's transform.
 TEST_P(RasterInvalidatorTest, EffectLocalTransformSpaceChangeNoInvalidation) {
-  auto t1 = CreateTransform(t0(), TransformationMatrix());
-  auto t2 = CreateTransform(*t1, TransformationMatrix());
+  auto t1 = CreateTransform(t0(), gfx::Transform());
+  auto t2 = CreateTransform(*t1, gfx::Transform());
   // This setup is different from EffectLocalTransformSpaceChange.
   CompositorFilterOperations filter;
   filter.AppendBlurFilter(20);
@@ -860,8 +901,10 @@ TEST_P(RasterInvalidatorTest, EffectLocalTransformSpaceChangeNoInvalidation) {
 
   // Change both t1 and t2 but keep t1*t2 unchanged.
   invalidator_.SetTracksRasterInvalidations(true);
-  t1->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(-10, -20)});
-  t2->Update(*t1, TransformPaintPropertyNode::State{gfx::Vector2dF(10, 20)});
+  t1->Update(t0(), TransformPaintPropertyNode::State{
+                       {MakeTranslationMatrix(-10, -20)}});
+  t2->Update(
+      *t1, TransformPaintPropertyNode::State{{MakeTranslationMatrix(10, 20)}});
 
   invalidator_.Generate(base::DoNothing(), chunks, kDefaultLayerOffset,
                         kDefaultLayerBounds, layer_state);

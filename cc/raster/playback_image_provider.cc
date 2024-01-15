@@ -5,7 +5,7 @@
 #include "cc/raster/playback_image_provider.h"
 
 #include <utility>
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "cc/tiles/image_decode_cache.h"
 #include "gpu/command_buffer/common/mailbox.h"
 
@@ -22,7 +22,7 @@ void UnrefImageFromCache(DrawImage draw_image,
 PlaybackImageProvider::PlaybackImageProvider(
     ImageDecodeCache* cache,
     const TargetColorParams& target_color_params,
-    absl::optional<Settings>&& settings)
+    std::optional<Settings>&& settings)
     : cache_(cache),
       target_color_params_(target_color_params),
       settings_(std::move(settings)) {

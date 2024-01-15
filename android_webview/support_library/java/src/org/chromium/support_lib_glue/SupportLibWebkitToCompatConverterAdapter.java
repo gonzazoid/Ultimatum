@@ -53,7 +53,6 @@ class SupportLibWebkitToCompatConverterAdapter implements WebkitToCompatConverte
 
     // ServiceWorkerWebSettingsBoundaryInterface
     @Override
-    @RequiresApi(Build.VERSION_CODES.N)
     public InvocationHandler convertServiceWorkerSettings(
             /* ServiceWorkerWebSettings */ Object serviceWorkerWebSettings) {
         return BoundaryInterfaceReflectionUtil.createInvocationHandlerFor(
@@ -63,12 +62,12 @@ class SupportLibWebkitToCompatConverterAdapter implements WebkitToCompatConverte
     }
 
     @Override
-    @RequiresApi(Build.VERSION_CODES.N)
     public /* ServiceWorkerWebSettings */ Object convertServiceWorkerSettings(
             /* SupportLibServiceWorkerSettings */ InvocationHandler serviceWorkerSettings) {
         SupportLibServiceWorkerSettingsAdapter supportLibWebSettings =
-                (SupportLibServiceWorkerSettingsAdapter) BoundaryInterfaceReflectionUtil
-                        .getDelegateFromInvocationHandler(serviceWorkerSettings);
+                (SupportLibServiceWorkerSettingsAdapter)
+                        BoundaryInterfaceReflectionUtil.getDelegateFromInvocationHandler(
+                                serviceWorkerSettings);
         return new ServiceWorkerSettingsAdapter(supportLibWebSettings.getAwServiceWorkerSettings());
     }
 
@@ -76,16 +75,18 @@ class SupportLibWebkitToCompatConverterAdapter implements WebkitToCompatConverte
     public /* SupportLibWebResourceError */ InvocationHandler convertWebResourceError(
             /* WebResourceError */ Object webResourceError) {
         return BoundaryInterfaceReflectionUtil.createInvocationHandlerFor(
-                new SupportLibWebResourceError(WebkitToSharedGlueConverter.getAwWebResourceError(
-                        (WebResourceError) webResourceError)));
+                new SupportLibWebResourceError(
+                        WebkitToSharedGlueConverter.getAwWebResourceError(
+                                (WebResourceError) webResourceError)));
     }
 
     @Override
     public /* WebResourceError */ Object convertWebResourceError(
             /* SupportLibWebResourceError */ InvocationHandler webResourceError) {
         SupportLibWebResourceError supportLibError =
-                (SupportLibWebResourceError) BoundaryInterfaceReflectionUtil
-                        .getDelegateFromInvocationHandler(webResourceError);
+                (SupportLibWebResourceError)
+                        BoundaryInterfaceReflectionUtil.getDelegateFromInvocationHandler(
+                                webResourceError);
         return new WebResourceErrorAdapter(supportLibError.getAwWebResourceError());
     }
 
@@ -104,8 +105,9 @@ class SupportLibWebkitToCompatConverterAdapter implements WebkitToCompatConverte
     public /* SafeBrowsingResponse */ Object convertSafeBrowsingResponse(
             /* SupportLibSafeBrowsingResponse */ InvocationHandler safeBrowsingResponse) {
         SupportLibSafeBrowsingResponse supportLibResponse =
-                (SupportLibSafeBrowsingResponse) BoundaryInterfaceReflectionUtil
-                        .getDelegateFromInvocationHandler(safeBrowsingResponse);
+                (SupportLibSafeBrowsingResponse)
+                        BoundaryInterfaceReflectionUtil.getDelegateFromInvocationHandler(
+                                safeBrowsingResponse);
         return new SafeBrowsingResponseAdapter(
                 supportLibResponse.getAwSafeBrowsingResponseCallback());
     }
@@ -114,16 +116,18 @@ class SupportLibWebkitToCompatConverterAdapter implements WebkitToCompatConverte
     public /* SupportLibWebMessagePort */ InvocationHandler convertWebMessagePort(
             /* WebMessagePort */ Object webMessagePort) {
         return BoundaryInterfaceReflectionUtil.createInvocationHandlerFor(
-                new SupportLibWebMessagePortAdapter(WebkitToSharedGlueConverter.getMessagePort(
-                        (WebMessagePort) webMessagePort)));
+                new SupportLibWebMessagePortAdapter(
+                        WebkitToSharedGlueConverter.getMessagePort(
+                                (WebMessagePort) webMessagePort)));
     }
 
     @Override
     public /* WebMessagePort */ Object convertWebMessagePort(
             /* SupportLibWebMessagePort */ InvocationHandler webMessagePort) {
         SupportLibWebMessagePortAdapter supportLibMessagePort =
-                (SupportLibWebMessagePortAdapter) BoundaryInterfaceReflectionUtil
-                        .getDelegateFromInvocationHandler(webMessagePort);
+                (SupportLibWebMessagePortAdapter)
+                        BoundaryInterfaceReflectionUtil.getDelegateFromInvocationHandler(
+                                webMessagePort);
         return new WebMessagePortAdapter(supportLibMessagePort.getPort());
     }
 

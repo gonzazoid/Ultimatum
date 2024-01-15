@@ -121,10 +121,12 @@ EffectNode& CreateEffectNodeInternal(LayerType* layer,
   auto* node = effect_tree.Node(id);
   if (layer) {
     layer->SetEffectTreeIndex(id);
-    node->stable_id = layer->id();
+    node->element_id = layer->element_id()
+                           ? layer->element_id()
+                           : LayerIdToElementIdForTesting(layer->id());
     if (layer->element_id()) {
       property_trees->effect_tree_mutable().SetElementIdForNodeId(
-          node->id, layer->element_id());
+          node->id, node->element_id);
     }
   }
   node->transform_id =
@@ -459,7 +461,7 @@ void SetupViewport(LayerImpl* root,
   std::unique_ptr<LayerImpl> inner_viewport_scroll_layer =
       LayerImpl::Create(layer_tree_impl, 10000);
   inner_viewport_scroll_layer->SetBounds(outer_viewport_size);
-  inner_viewport_scroll_layer->SetHitTestable(true);
+  inner_viewport_scroll_layer->SetHitTestOpaqueness(HitTestOpaqueness::kOpaque);
   inner_viewport_scroll_layer->SetElementId(
       LayerIdToElementIdForTesting(inner_viewport_scroll_layer->id()));
 
@@ -467,7 +469,7 @@ void SetupViewport(LayerImpl* root,
       LayerImpl::Create(layer_tree_impl, 10001);
   outer_viewport_scroll_layer->SetBounds(content_size);
   outer_viewport_scroll_layer->SetDrawsContent(true);
-  outer_viewport_scroll_layer->SetHitTestable(true);
+  outer_viewport_scroll_layer->SetHitTestOpaqueness(HitTestOpaqueness::kOpaque);
   outer_viewport_scroll_layer->SetElementId(
       LayerIdToElementIdForTesting(outer_viewport_scroll_layer->id()));
 

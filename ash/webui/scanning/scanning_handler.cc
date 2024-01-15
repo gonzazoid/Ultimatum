@@ -8,11 +8,11 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/webui/scanning/scanning_app_delegate.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -22,6 +22,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/shell_dialogs/select_file_policy.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 
 namespace {
 
@@ -90,14 +91,14 @@ void ScanningHandler::RegisterMessages() {
                           base::Unretained(this)));
 }
 
-void ScanningHandler::FileSelected(const base::FilePath& path,
+void ScanningHandler::FileSelected(const ui::SelectedFileInfo& file,
                                    int index,
                                    void* params) {
   DCHECK(IsJavascriptAllowed());
 
   select_file_dialog_ = nullptr;
   ResolveJavascriptCallback(base::Value(scan_location_callback_id_),
-                            CreateSelectedPathValue(path));
+                            CreateSelectedPathValue(file.path()));
 }
 
 void ScanningHandler::FileSelectionCanceled(void* params) {
@@ -136,7 +137,6 @@ void ScanningHandler::HandleOpenFilesInMediaApp(const base::Value::List& args) {
     return;
 
   CHECK_EQ(1U, args.size());
-  DCHECK(args[0].is_list());
   const base::Value::List& value_list = args[0].GetList();
   DCHECK(!value_list.empty());
 
@@ -163,7 +163,7 @@ void ScanningHandler::HandleRequestScanToLocation(
   content::WebContents* web_contents = web_ui()->GetWebContents();
   gfx::NativeWindow owning_window =
       web_contents ? web_contents->GetTopLevelNativeWindow()
-                   : gfx::kNullNativeWindow;
+                   : gfx::NativeWindow();
   select_file_dialog_ = ui::SelectFileDialog::Create(
       this, scanning_app_delegate_->CreateChromeSelectFilePolicy());
   select_file_dialog_->SelectFile(

@@ -21,12 +21,12 @@
 #include "components/viz/common/quads/video_hole_draw_quad.h"
 #include "components/viz/common/quads/yuv_video_draw_quad.h"
 #include "components/viz/common/resources/resource_id.h"
-#include "components/viz/common/shared_element_resource_id.h"
+#include "components/viz/common/view_transition_element_resource_id.h"
 #include "services/viz/public/cpp/compositing/filter_operation_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/filter_operations_mojom_traits.h"
-#include "services/viz/public/cpp/compositing/shared_element_resource_id_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/shared_quad_state_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/surface_range_mojom_traits.h"
+#include "services/viz/public/cpp/compositing/view_transition_element_resource_id_mojom_traits.h"
 #include "services/viz/public/mojom/compositing/quads.mojom-shared.h"
 #include "skia/public/mojom/skcolor4f_mojom_traits.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -108,6 +108,23 @@ struct EnumTraits<viz::mojom::OverlayPriority, viz::OverlayPriority> {
     NOTREACHED();
     return false;
   }
+};
+
+template <>
+struct StructTraits<viz::mojom::RoundedDisplayMasksInfoDataView,
+                    viz::TextureDrawQuad::RoundedDisplayMasksInfo> {
+  static bool is_horizontally_positioned(
+      const viz::TextureDrawQuad::RoundedDisplayMasksInfo& input) {
+    return input.is_horizontally_positioned;
+  }
+
+  static base::span<const uint8_t> radii(
+      const viz::TextureDrawQuad::RoundedDisplayMasksInfo& input) {
+    return input.radii;
+  }
+
+  static bool Read(viz::mojom::RoundedDisplayMasksInfoDataView data,
+                   viz::TextureDrawQuad::RoundedDisplayMasksInfo* out);
 };
 
 template <>
@@ -217,7 +234,7 @@ struct UnionTraits<viz::mojom::DrawQuadStateDataView, viz::DrawQuad> {
 
 template <>
 struct StructTraits<viz::mojom::SharedElementQuadStateDataView, viz::DrawQuad> {
-  static const viz::SharedElementResourceId& resource_id(
+  static const viz::ViewTransitionElementResourceId& resource_id(
       const viz::DrawQuad& input) {
     const viz::SharedElementDrawQuad* quad =
         viz::SharedElementDrawQuad::MaterialCast(&input);
@@ -396,6 +413,13 @@ struct StructTraits<viz::mojom::TextureQuadStateDataView, viz::DrawQuad> {
     return quad->resource_size_in_pixels();
   }
 
+  static viz::TextureDrawQuad::RoundedDisplayMasksInfo
+  rounded_display_masks_info(const viz::DrawQuad& input) {
+    const viz::TextureDrawQuad* quad =
+        viz::TextureDrawQuad::MaterialCast(&input);
+    return quad->rounded_display_masks_info;
+  }
+
   static bool premultiplied_alpha(const viz::DrawQuad& input) {
     const viz::TextureDrawQuad* quad =
         viz::TextureDrawQuad::MaterialCast(&input);
@@ -432,6 +456,12 @@ struct StructTraits<viz::mojom::TextureQuadStateDataView, viz::DrawQuad> {
     return quad->y_flipped;
   }
 
+  static bool force_rgbx(const viz::DrawQuad& input) {
+    const viz::TextureDrawQuad* quad =
+        viz::TextureDrawQuad::MaterialCast(&input);
+    return quad->force_rgbx;
+  }
+
   static bool nearest_neighbor(const viz::DrawQuad& input) {
     const viz::TextureDrawQuad* quad =
         viz::TextureDrawQuad::MaterialCast(&input);
@@ -456,8 +486,7 @@ struct StructTraits<viz::mojom::TextureQuadStateDataView, viz::DrawQuad> {
     return quad->is_video_frame;
   }
 
-  static const absl::optional<gfx::HDRMetadata> hdr_metadata(
-      const viz::DrawQuad& input) {
+  static const gfx::HDRMetadata& hdr_metadata(const viz::DrawQuad& input) {
     const viz::TextureDrawQuad* quad =
         viz::TextureDrawQuad::MaterialCast(&input);
     return quad->hdr_metadata;
@@ -621,8 +650,8 @@ struct StructTraits<viz::mojom::YUVVideoQuadStateDataView, viz::DrawQuad> {
 };
 
 struct DrawQuadWithSharedQuadState {
-  const viz::DrawQuad* quad;
-  const viz::SharedQuadState* shared_quad_state;
+  raw_ptr<const viz::DrawQuad> quad;
+  raw_ptr<const viz::SharedQuadState, DanglingUntriaged> shared_quad_state;
 };
 
 template <>
@@ -641,7 +670,7 @@ struct StructTraits<viz::mojom::DrawQuadDataView, DrawQuadWithSharedQuadState> {
   }
 
   static OptSharedQuadState sqs(const DrawQuadWithSharedQuadState& input) {
-    return {input.shared_quad_state};
+    return {input.shared_quad_state.get()};
   }
 
   static const viz::DrawQuad& draw_quad_state(

@@ -2,11 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Sources from 'devtools/panels/sources/sources.js';
+
 (async function() {
   TestRunner.addResult(
       `Test that watch expressions expansion state is restored after update.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       var globalObject = {
@@ -29,9 +34,9 @@
       }());
   `);
 
-  var watchExpressionsPane = Sources.WatchExpressionsSidebarPane.instance();
-  UI.panels.sources.sidebarPaneStack
-      .showView(UI.panels.sources.watchSidebarPane)
+  var watchExpressionsPane = Sources.WatchExpressionsSidebarPane.WatchExpressionsSidebarPane.instance();
+  Sources.SourcesPanel.SourcesPanel.instance().sidebarPaneStack
+      .showView(Sources.SourcesPanel.SourcesPanel.instance().watchSidebarPane)
       .then(() => {
         watchExpressionsPane.doUpdate();
         watchExpressionsPane.createWatchExpression('globalObject');
@@ -64,7 +69,7 @@
   }
 
   function dumpWatchExpressions() {
-    var pane = Sources.WatchExpressionsSidebarPane.instance();
+    var pane = Sources.WatchExpressionsSidebarPane.WatchExpressionsSidebarPane.instance();
 
     for (var i = 0; i < pane.watchExpressions.length; i++) {
       var watch = pane.watchExpressions[i];
@@ -119,7 +124,7 @@
   }
 
   function expandWatchExpression(path, callback) {
-    var pane = Sources.WatchExpressionsSidebarPane.instance();
+    var pane = Sources.WatchExpressionsSidebarPane.WatchExpressionsSidebarPane.instance();
     var expression = path.shift();
     for (var i = 0; i < pane.watchExpressions.length; i++) {
       var watch = pane.watchExpressions[i];

@@ -4,19 +4,54 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
+#include "base/barrier_closure.h"
 #include "base/containers/contains.h"
+#include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/time/time.h"
+#include "components/attribution_reporting/aggregatable_dedup_key.h"
+#include "components/attribution_reporting/aggregatable_trigger_data.h"
+#include "components/attribution_reporting/aggregation_keys.h"
+#include "components/attribution_reporting/destination_set.h"
+#include "components/attribution_reporting/event_trigger_data.h"
+#include "components/attribution_reporting/filters.h"
+#include "components/attribution_reporting/os_registration.h"
+#include "components/attribution_reporting/registration_eligibility.mojom.h"
+#include "components/attribution_reporting/source_registration.h"
+#include "components/attribution_reporting/source_registration_time_config.mojom.h"
+#include "components/attribution_reporting/source_type.mojom.h"
+#include "components/attribution_reporting/suitable_origin.h"
+#include "components/attribution_reporting/test_utils.h"
+#include "components/attribution_reporting/trigger_registration.h"
+#include "content/browser/attribution_reporting/attribution_constants.h"
+#include "content/browser/attribution_reporting/attribution_data_host_manager_impl.h"
+#include "content/browser/attribution_reporting/attribution_manager.h"
 #include "content/browser/attribution_reporting/attribution_manager_impl.h"
+#include "content/browser/attribution_reporting/attribution_os_level_manager.h"
 #include "content/browser/attribution_reporting/attribution_test_utils.h"
+#include "content/browser/attribution_reporting/attribution_trigger.h"
+#include "content/browser/attribution_reporting/os_registration.h"
+#include "content/browser/attribution_reporting/test/mock_attribution_host.h"
+#include "content/browser/attribution_reporting/test/mock_attribution_manager.h"
+#include "content/browser/attribution_reporting/test/mock_content_browser_client.h"
+#include "content/browser/attribution_reporting/test/mock_data_host.h"
+#include "content/browser/attribution_reporting/test/source_observer.h"
+#include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/storage_partition_impl.h"
+#include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/prerender_test_util.h"
@@ -24,14 +59,15 @@
 #include "content/shell/browser/shell.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "net/base/net_errors.h"
+#include "net/base/schemeful_site.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/controllable_http_response.h"
 #include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "services/network/public/cpp/features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/numeric/int128.h"
-#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/mojom/conversions/attribution_data_host.mojom.h"
 #include "third_party/blink/public/mojom/fenced_frame/fenced_frame.mojom.h"
@@ -41,35 +77,24 @@ namespace content {
 
 namespace {
 
+using ::attribution_reporting::AggregationKeys;
+using ::attribution_reporting::DestinationSet;
+using ::attribution_reporting::EventTriggerData;
+using ::attribution_reporting::FilterData;
+using ::attribution_reporting::SourceRegistration;
+using ::attribution_reporting::SuitableOrigin;
+using ::attribution_reporting::TriggerRegistration;
+using ::attribution_reporting::mojom::RegistrationEligibility;
+using ::attribution_reporting::mojom::SourceType;
+using ::net::test_server::EmbeddedTestServer;
+using ::testing::_;
 using ::testing::AllOf;
 using ::testing::ElementsAre;
 using ::testing::Field;
-using ::testing::HasSubstr;
 using ::testing::IsEmpty;
-using ::testing::Pair;
-using ::testing::Pointee;
+using ::testing::Property;
 using ::testing::SizeIs;
-using ::testing::UnorderedElementsAre;
-
-MATCHER_P(AggregationKeyPieceIs, matcher, "") {
-  return ExplainMatchResult(matcher, arg.key_piece, result_listener);
-}
-
-MATCHER_P(SourceKeysAre, matcher, "") {
-  return ExplainMatchResult(matcher, arg.source_keys, result_listener);
-}
-
-MATCHER_P(FiltersAre, matcher, "") {
-  return ExplainMatchResult(matcher, arg.filters, result_listener);
-}
-
-MATCHER_P(NotFiltersAre, matcher, "") {
-  return ExplainMatchResult(matcher, arg.not_filters, result_listener);
-}
-
-MATCHER_P(FilterValuesAre, matcher, "") {
-  return ExplainMatchResult(matcher, arg.filter_values, result_listener);
-}
+using ::testing::StrictMock;
 
 }  // namespace
 
@@ -80,16 +105,16 @@ class AttributionSrcBrowserTest : public ContentBrowserTest {
   void SetUpOnMainThread() override {
     host_resolver()->AddRule("*", "127.0.0.1");
 
-    https_server_ = std::make_unique<net::EmbeddedTestServer>(
-        net::EmbeddedTestServer::TYPE_HTTPS);
-    https_server_->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-    net::test_server::RegisterDefaultHandlers(https_server_.get());
-    https_server_->ServeFilesFromSourceDirectory(
-        "content/test/data/attribution_reporting");
-    https_server_->ServeFilesFromSourceDirectory("content/test/data");
+    https_server_ = CreateAttributionTestHttpsServer();
     ASSERT_TRUE(https_server_->Start());
 
-    MockAttributionHost::Override(web_contents());
+    auto mock_manager = std::make_unique<StrictMock<MockAttributionManager>>();
+    auto data_host_manager =
+        std::make_unique<AttributionDataHostManagerImpl>(mock_manager.get());
+    mock_manager->SetDataHostManager(std::move(data_host_manager));
+    static_cast<StoragePartitionImpl*>(
+        web_contents()->GetBrowserContext()->GetDefaultStoragePartition())
+        ->OverrideAttributionManagerForTesting(std::move(mock_manager));
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -100,15 +125,44 @@ class AttributionSrcBrowserTest : public ContentBrowserTest {
 
   WebContents* web_contents() { return shell()->web_contents(); }
 
+ protected:
   net::EmbeddedTestServer* https_server() { return https_server_.get(); }
 
+  StrictMock<MockAttributionManager>& mock_attribution_manager() {
+    return *static_cast<StrictMock<MockAttributionManager>*>(
+        AttributionManager::FromWebContents(web_contents()));
+  }
+
+  // By default, the attribution_host isn't mocked. A real attribution host will
+  // be used and assertions should be on the `mock_attribution_manager`. If a
+  // test case wants to ensure that the attribution_host isn't reached, it can
+  // setup the mock attribution host with this method.
+  void SetupMockAttributionHost() {
+    MockAttributionHost::Override(web_contents());
+    attribution_host_mocked_ = true;
+  }
   MockAttributionHost& mock_attribution_host() {
+    CHECK(attribution_host_mocked_);
     AttributionHost* attribution_host =
         AttributionHost::FromWebContents(web_contents());
     return *static_cast<MockAttributionHost*>(attribution_host);
   }
 
+  std::unique_ptr<EmbeddedTestServer> CreateAttributionTestHttpsServer() {
+    auto https_server =
+        std::make_unique<EmbeddedTestServer>(EmbeddedTestServer::TYPE_HTTPS);
+
+    https_server->SetSSLConfig(EmbeddedTestServer::CERT_TEST_NAMES);
+    RegisterDefaultHandlers(https_server.get());
+    https_server->ServeFilesFromSourceDirectory(
+        "content/test/data/attribution_reporting");
+    https_server->ServeFilesFromSourceDirectory("content/test/data");
+
+    return https_server;
+  }
+
  private:
+  bool attribution_host_mocked_ = false;
   AttributionManagerImpl::ScopedUseInMemoryStorageForTesting
       attribution_manager_in_memory_setting_;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
@@ -119,35 +173,39 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest, SourceRegistered) {
       https_server()->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
   GURL register_url =
       https_server()->GetURL("c.test", "/register_source_headers.html");
 
+  base::RunLoop run_loop;
+  // TODO: These checks are redundant with a variety of unit and/or WPT tests.
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleSource(
+          AllOf(SourceRegistrationIs(AllOf(
+                    Field(&SourceRegistration::source_event_id, 5u),
+                    Field(&SourceRegistration::priority, 0),
+                    Field(&SourceRegistration::debug_key, std::nullopt),
+                    Field(&SourceRegistration::debug_reporting, false),
+                    Field(&SourceRegistration::expiry, base::Days(30)),
+                    Field(&SourceRegistration::filter_data,
+                          Property(&FilterData::filter_values, IsEmpty())),
+                    Field(&SourceRegistration::aggregation_keys,
+                          Property(&AggregationKeys::keys, IsEmpty())),
+                    Field(&SourceRegistration::destination_set,
+                          Property(&DestinationSet::destinations,
+                                   ElementsAre(net::SchemefulSite::Deserialize(
+                                       "https://d.test")))))),
+                SourceTypeIs(SourceType::kEvent),
+                ImpressionOriginIs(*SuitableOrigin::Create(page_url)),
+                ReportingOriginIs(*SuitableOrigin::Create(register_url))),
+          web_contents()->GetPrimaryMainFrame()->GetGlobalId()))
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
+
   EXPECT_TRUE(ExecJs(web_contents(),
                      JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
 
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.front()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.front()->destination,
-            url::Origin::Create(GURL("https://d.test")));
-  EXPECT_EQ(source_data.front()->priority, 0);
-  EXPECT_EQ(source_data.front()->expiry, absl::nullopt);
-  EXPECT_FALSE(source_data.front()->debug_key);
-  EXPECT_THAT(source_data.front()->filter_data->filter_values, IsEmpty());
-  EXPECT_THAT(source_data.front()->aggregation_keys, IsEmpty());
-  EXPECT_FALSE(source_data.front()->debug_reporting);
+  run_loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
@@ -161,193 +219,70 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
 
   for (const char* registration_js : kTestCases) {
     EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-    std::unique_ptr<MockDataHost> data_host;
-    base::RunLoop loop, disconnect_loop;
-    EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-        .WillOnce(
-            [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-              data_host = GetRegisteredDataHost(std::move(host));
-              data_host->receiver().set_disconnect_handler(
-                  disconnect_loop.QuitClosure());
-              loop.Quit();
-            });
-
     GURL register_url =
         https_server()->GetURL("c.test", "/register_source_headers.html");
-
+    base::RunLoop run_loop;
+    // TODO: These checks are redundant with a variety of unit and/or WPT tests.
+    EXPECT_CALL(
+        mock_attribution_manager(),
+        HandleSource(
+            AllOf(
+                SourceRegistrationIs(AllOf(
+                    Field(&SourceRegistration::source_event_id, 5u),
+                    Field(&SourceRegistration::priority, 0),
+                    Field(&SourceRegistration::debug_key, std::nullopt),
+                    Field(&SourceRegistration::debug_reporting, false),
+                    Field(&SourceRegistration::expiry, base::Days(30)),
+                    Field(&SourceRegistration::filter_data,
+                          Property(&FilterData::filter_values, IsEmpty())),
+                    Field(&SourceRegistration::aggregation_keys,
+                          Property(&AggregationKeys::keys, IsEmpty())),
+                    Field(&SourceRegistration::destination_set,
+                          Property(&DestinationSet::destinations,
+                                   ElementsAre(net::SchemefulSite::Deserialize(
+                                       "https://d.test")))))),
+                SourceTypeIs(SourceType::kEvent),
+                ImpressionOriginIs(*SuitableOrigin::Create(page_url)),
+                ReportingOriginIs(*SuitableOrigin::Create(register_url))),
+            web_contents()->GetPrimaryMainFrame()->GetGlobalId()))
+        .Times(1)
+        .WillOnce([&run_loop]() { run_loop.Quit(); });
     EXPECT_TRUE(
         ExecJs(web_contents(), JsReplace(registration_js, register_url)));
-    if (!data_host)
-      loop.Run();
-    data_host->WaitForSourceData(/*num_source_data=*/1);
-    const auto& source_data = data_host->source_data();
-    // Regression test for crbug.com/1336797. This will timeout flakily if the
-    // data host isn't disconnected promptly.
-    disconnect_loop.Run();
 
-    EXPECT_EQ(source_data.size(), 1u);
-    EXPECT_EQ(source_data.front()->source_event_id, 5UL);
-    EXPECT_EQ(source_data.front()->destination,
-              url::Origin::Create(GURL("https://d.test")));
-    EXPECT_EQ(source_data.front()->priority, 0);
-    EXPECT_EQ(source_data.front()->expiry, absl::nullopt);
-    EXPECT_FALSE(source_data.front()->debug_key);
-    EXPECT_THAT(source_data.front()->filter_data->filter_values, IsEmpty());
-    EXPECT_THAT(source_data.front()->aggregation_keys, IsEmpty());
-    EXPECT_FALSE(source_data.front()->debug_reporting);
+    run_loop.Run();
   }
 }
 
-// TODO(johnidel): Remove when redirect chains consistently register sources or
-// triggers. Currently, responses not handled via attributionsrc="url" use
-// their own independent data host, so we do not enforce consistency on
-// these redirect chains.
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       SourceTriggerRegistered_ImgSrc) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
+                       AttributionSrcWindowOpen_MultipleFeatures_RequestsAll) {
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
-  std::unique_ptr<MockDataHost> source_data_host;
-  std::unique_ptr<MockDataHost> trigger_data_host;
-  base::RunLoop source_loop;
-  base::RunLoop trigger_loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillRepeatedly(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            if (!source_data_host) {
-              source_data_host = GetRegisteredDataHost(std::move(host));
-              source_loop.Quit();
-            } else {
-              trigger_data_host = GetRegisteredDataHost(std::move(host));
-              trigger_loop.Quit();
-            }
-          });
+  auto register_response1 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/source1");
+  auto register_response2 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/source2");
+  ASSERT_TRUE(https_server->Start());
 
-  GURL register_url = https_server()->GetURL(
-      "c.test", "/register_source_trigger_redirect_chain.html");
-
-  EXPECT_TRUE(
-      ExecJs(web_contents(),
-             JsReplace("createAttributionEligibleImgSrc($1);", register_url)));
-  if (!source_data_host)
-    source_loop.Run();
-  source_data_host->WaitForSourceData(/*num_source_data=*/1);
-
-  if (!trigger_data_host)
-    trigger_loop.Run();
-  trigger_data_host->WaitForTriggerData(/*num_trigger_data=*/1);
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcAnchor_SourceRegistered) {
   SourceObserver source_observer(web_contents());
   GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  blink::AttributionSrcToken expected_token;
-  EXPECT_CALL(mock_attribution_host(), RegisterNavigationDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host,
-              const blink::AttributionSrcToken& attribution_src_token) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            expected_token = attribution_src_token;
-          });
+  ASSERT_TRUE(ExecJs(web_contents(), R"(
+    window.open("page_with_conversion_redirect.html", "_top",
+                "attributionsrc=/source1 attributionsrc=/source2");
+  )"));
 
-  GURL register_url =
-      https_server()->GetURL("c.test", "/register_source_headers.html");
-  EXPECT_TRUE(ExecJs(web_contents(), JsReplace(R"(
-  createAndClickAttributionSrcAnchor({url: 'page_with_conversion_redirect.html',
-                                      attributionsrc: $1});)",
-                                               register_url)));
-
-  // Wait for the impression to be seen by the observer.
-  blink::Impression last_impression = source_observer.Wait();
-
-  // Verify we received the correct token for this source.
-  EXPECT_EQ(last_impression.attribution_src_token, expected_token);
-
-  // Verify the attributionsrc data was registered with the browser process.
-  EXPECT_TRUE(data_host);
-
-  // TODO(johnidel): Verify that the data host receives the correct callback.
-  // Direct use of MockDataHost flakes rarely. See
-  // AttributionSrcNavigationSourceAndTrigger_ReportSent in
-  // AttributionsBrowserTest.
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcWindowOpen_SourceRegistered) {
-  SourceObserver source_observer(web_contents());
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  blink::AttributionSrcToken expected_token;
-  EXPECT_CALL(mock_attribution_host(), RegisterNavigationDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host,
-              const blink::AttributionSrcToken& attribution_src_token) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            expected_token = attribution_src_token;
-          });
-
-  GURL register_url =
-      https_server()->GetURL("c.test", "/register_source_headers.html");
-  EXPECT_TRUE(ExecJs(web_contents(), JsReplace(R"(
-  window.open("page_with_conversion_redirect.html", "_top",
-  "attributionsrc="+$1);)",
-                                               register_url)));
-
-  blink::Impression last_impression = source_observer.Wait();
-
-  // Verify we received the correct token for this source.
-  EXPECT_EQ(last_impression.attribution_src_token, expected_token);
-
-  // Verify the attributionsrc data was registered with the browser process.
-  EXPECT_TRUE(data_host);
-
-  // TODO(johnidel): Verify that the data host receives the correct callback.
-  // Direct use of MockDataHost flakes rarely. See
-  // AttributionSrcNavigationSourceAndTrigger_ReportSent in
-  // AttributionsBrowserTest.
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AnchorClickEmptyAttributionSrc_ImpressionReceived) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  EXPECT_CALL(mock_attribution_host(), RegisterNavigationDataHost).Times(0);
-
-  SourceObserver source_observer(web_contents());
-  EXPECT_TRUE(ExecJs(web_contents(), R"(
-  createAndClickAttributionSrcAnchor({url: 'page_with_conversion_redirect.html',
-                                      attributionsrc: ''});)"));
-
-  // Wait for the impression to be seen by the observer.
-  source_observer.Wait();
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       WindowOpenAttributionSrc_ImpressionReceived) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  EXPECT_CALL(mock_attribution_host(), RegisterNavigationDataHost).Times(0);
-
-  SourceObserver source_observer(web_contents());
-  EXPECT_TRUE(ExecJs(web_contents(), R"(
-  window.open("page_with_conversion_redirect.html", "_top",
-  "attributionsrc=");)"));
-
-  // Wait for the impression to be seen by the observer.
-  source_observer.Wait();
+  register_response1->WaitForRequest();
+  register_response2->WaitForRequest();
+  register_response1->Done();
+  register_response2->Done();
 }
 
 // See crbug.com/1322450
@@ -355,11 +290,8 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        AttributionSrcWindowOpen_URLEncoded_SourceRegistered) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -370,8 +302,6 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
       https_server->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  TestNavigationObserver observer(web_contents());
-
   // This attributionsrc will only be handled properly if the value is
   // URL-decoded before being passed to the attributionsrc loader.
   EXPECT_TRUE(ExecJs(web_contents(), R"(
@@ -380,9 +310,6 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
 
   register_response->WaitForRequest();
   register_response->Done();
-
-  // TODO(crbug.com/1322525): Remove this once we use a pure mock.
-  observer.Wait();
 
   EXPECT_EQ(register_response->http_request()->relative_url,
             "/register_source?a=b&c=d");
@@ -393,11 +320,8 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        AttributionSrcWindowOpen_RetainsOriginalURLCase) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -408,8 +332,6 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
       https_server->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  TestNavigationObserver observer(web_contents());
-
   // This attributionsrc will only be handled properly if the URL's original
   // case is retained before being passed to the attributionsrc loader.
   EXPECT_TRUE(ExecJs(web_contents(), R"(
@@ -418,9 +340,6 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
 
   register_response->WaitForRequest();
   register_response->Done();
-
-  // TODO(crbug.com/1322525): Remove this once we use a pure mock.
-  observer.Wait();
 
   EXPECT_EQ(register_response->http_request()->relative_url,
             "/register_source?a=B&C=d");
@@ -431,11 +350,8 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        AttributionSrcWindowOpen_NonAsciiUrl) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -446,8 +362,6 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
       https_server->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  TestNavigationObserver observer(web_contents());
-
   // Ensure that the special handling of the original case for attributionsrc
   // features works with non-ASCII characters.
   EXPECT_TRUE(ExecJs(web_contents(), R"(
@@ -457,118 +371,42 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
   register_response->WaitForRequest();
   register_response->Done();
 
-  // TODO(crbug.com/1322525): Remove this once we use a pure mock.
-  observer.Wait();
-
   EXPECT_EQ(register_response->http_request()->relative_url, "/%F0%9F%98%80");
 }
 
 IN_PROC_BROWSER_TEST_F(
     AttributionSrcBrowserTest,
-    AttributionSrcWindowOpenNoUserGesture_SourceNotRegistered) {
+    AttributionSrcWindowOpenNoUserGesture_NoBackgroundRequestNoImpression) {
+  SetupMockAttributionHost();
+
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/source");
+  ASSERT_TRUE(https_server->Start());
+
   SourceObserver source_observer(web_contents());
   GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  blink::AttributionSrcToken expected_token;
-  EXPECT_CALL(mock_attribution_host(), RegisterNavigationDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host,
-              const blink::AttributionSrcToken& attribution_src_token) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            expected_token = attribution_src_token;
-          });
+  EXPECT_CALL(mock_attribution_host(), RegisterNavigationDataHost).Times(0);
+  EXPECT_CALL(mock_attribution_host(),
+              NotifyNavigationWithBackgroundRegistrationsWillStart)
+      .Times(0);
 
-  GURL register_url =
-      https_server()->GetURL("c.test", "/register_source_headers.html");
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace(R"(
-  window.open("page_with_conversion_redirect.html", "_top",
-  "attributionsrc="+$1);)",
-                               register_url),
+  ASSERT_TRUE(ExecJs(web_contents(), R"(
+    window.open("page_with_conversion_redirect.html", "_top",
+      "attributionsrc=/source");
+  )",
                      EXECUTE_SCRIPT_NO_USER_GESTURE));
 
   EXPECT_TRUE(source_observer.WaitForNavigationWithNoImpression());
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcImg_SourceRegisteredWithOptionalParams) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
-  GURL register_url = https_server()->GetURL(
-      "c.test", "/register_source_headers_all_params.html");
-
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
-
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.front()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.front()->destination,
-            url::Origin::Create(GURL("https://d.test")));
-  EXPECT_EQ(source_data.front()->priority, 10);
-  EXPECT_EQ(source_data.front()->expiry, base::Seconds(1000));
-  EXPECT_EQ(source_data.front()->debug_key,
-            blink::mojom::AttributionDebugKey::New(789));
-  EXPECT_THAT(source_data.front()->filter_data->filter_values,
-              UnorderedElementsAre(Pair("a", IsEmpty()),
-                                   Pair("b", ElementsAre("1", "2"))));
-  EXPECT_TRUE(source_data.front()->debug_reporting);
-}
-
-IN_PROC_BROWSER_TEST_F(
-    AttributionSrcBrowserTest,
-    AttributionSrcImg_SourceRegisteredWithAggregatableSource) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
-  GURL register_url = https_server()->GetURL(
-      "c.test", "/register_aggregatable_source_headers.html");
-
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
-
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.front()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.front()->destination,
-            url::Origin::Create(GURL("https://d.test")));
-  EXPECT_EQ(source_data.front()->priority, 0);
-  EXPECT_EQ(source_data.front()->expiry, absl::nullopt);
-  EXPECT_FALSE(source_data.front()->debug_key);
-  EXPECT_THAT(source_data.front()->aggregation_keys,
-              UnorderedElementsAre(
-                  Pair("key1", absl::MakeUint128(/*high=*/0, /*low=*/5)),
-                  Pair("key2", absl::MakeUint128(/*high=*/0, /*low=*/345))));
+  EXPECT_FALSE(register_response->has_received_request());
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
@@ -577,32 +415,40 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
       https_server()->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  base::RunLoop run_loop;
+  const auto on_source = base::BarrierClosure(2, run_loop.QuitClosure());
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleSource(
+          SourceRegistrationIs(
+              AllOf(Field(&SourceRegistration::source_event_id, 1u),
+                    Field(&SourceRegistration::destination_set,
+                          Property(&DestinationSet::destinations,
+                                   ElementsAre(net::SchemefulSite::Deserialize(
+                                       "https://d.test")))))),
+          _))
+      .Times(1)
+      .WillOnce([&on_source]() { on_source.Run(); });
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleSource(
+          SourceRegistrationIs(
+              AllOf(Field(&SourceRegistration::source_event_id, 5u),
+                    Field(&SourceRegistration::destination_set,
+                          Property(&DestinationSet::destinations,
+                                   ElementsAre(net::SchemefulSite::Deserialize(
+                                       "https://d.test")))))),
+          _))
+      .Times(1)
+      .WillOnce([&on_source]() { on_source.Run(); });
 
   GURL register_url = https_server()->GetURL(
       "c.test", "/register_source_headers_and_redirect.html");
 
   EXPECT_TRUE(ExecJs(web_contents(),
                      JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/2);
-  const auto& source_data = data_host->source_data();
 
-  EXPECT_EQ(source_data.size(), 2u);
-  EXPECT_EQ(source_data.front()->source_event_id, 1UL);
-  EXPECT_EQ(source_data.front()->destination,
-            url::Origin::Create(GURL("https://d.test")));
-  EXPECT_EQ(source_data.back()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.back()->destination,
-            url::Origin::Create(GURL("https://d.test")));
+  run_loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
@@ -611,43 +457,36 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
       https_server()->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  base::RunLoop run_loop;
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleSource(
+          SourceRegistrationIs(
+              AllOf(Field(&SourceRegistration::source_event_id, 5u),
+                    Field(&SourceRegistration::destination_set,
+                          Property(&DestinationSet::destinations,
+                                   ElementsAre(net::SchemefulSite::Deserialize(
+                                       "https://d.test")))))),
+          _))
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
 
   GURL register_url = https_server()->GetURL(
       "c.test", "/register_source_headers_and_redirect_invalid.html");
 
   EXPECT_TRUE(ExecJs(web_contents(),
                      JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
 
   // Only the second source is registered.
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.back()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.back()->destination,
-            url::Origin::Create(GURL("https://d.test")));
+  run_loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        AttributionSrcImgSlowResponse_SourceRegistered) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -658,14 +497,19 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
       https_server->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  base::RunLoop run_loop;
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleSource(
+          SourceRegistrationIs(
+              AllOf(Field(&SourceRegistration::source_event_id, 5u),
+                    Field(&SourceRegistration::destination_set,
+                          Property(&DestinationSet::destinations,
+                                   ElementsAre(net::SchemefulSite::Deserialize(
+                                       "https://d.test")))))),
+          _))
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
 
   GURL register_url = https_server->GetURL("d.test", "/register_source");
   EXPECT_TRUE(ExecJs(web_contents(),
@@ -681,34 +525,21 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
   http_response->set_code(net::HTTP_OK);
   http_response->AddCustomHeader("Access-Control-Allow-Origin", "*");
   http_response->AddCustomHeader(
-      "Attribution-Reporting-Register-Source",
+      kAttributionReportingRegisterSourceHeader,
       R"({"source_event_id":"5", "destination":"https://d.test"})");
   register_response->Send(http_response->ToResponseString());
   register_response->Done();
 
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
-
   // Only the second source is registered.
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.back()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.back()->destination,
-            url::Origin::Create(GURL("https://d.test")));
+  run_loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        NoReferrerPolicy_UsesDefault) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -733,13 +564,8 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        Img_SetsAttributionReportingEligibleHeader) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response1 =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -758,9 +584,9 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                      JsReplace("createAttributionSrcImg($1);", register_url)));
 
   register_response1->WaitForRequest();
-  ASSERT_EQ(register_response1->http_request()->headers.at(
-                "Attribution-Reporting-Eligible"),
-            "event-source, trigger");
+  ExpectValidAttributionReportingEligibleHeaderForImg(
+      register_response1->http_request()->headers.at(
+          "Attribution-Reporting-Eligible"));
   ASSERT_FALSE(base::Contains(register_response1->http_request()->headers,
                               "Attribution-Reporting-Support"));
 
@@ -772,44 +598,10 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
 
   // Ensure that redirect requests also contain the header.
   register_response2->WaitForRequest();
-  ASSERT_EQ(register_response2->http_request()->headers.at(
-                "Attribution-Reporting-Eligible"),
-            "event-source, trigger");
+  ExpectValidAttributionReportingEligibleHeaderForImg(
+      register_response2->http_request()->headers.at(
+          "Attribution-Reporting-Eligible"));
   ASSERT_FALSE(base::Contains(register_response2->http_request()->headers,
-                              "Attribution-Reporting-Support"));
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       ImgSrcWithAttributionSrc_SetsEligibleHeader) {
-  // Create a separate server as we cannot register a `ControllableHttpResponse`
-  // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
-
-  auto register_response1 =
-      std::make_unique<net::test_server::ControllableHttpResponse>(
-          https_server.get(), "/register_source1");
-  ASSERT_TRUE(https_server->Start());
-
-  GURL page_url =
-      https_server->GetURL("b.test", "/page_with_impression_creator.html");
-  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  GURL register_url = https_server->GetURL("d.test", "/register_source1");
-  ASSERT_TRUE(
-      ExecJs(web_contents(),
-             JsReplace("createAttributionEligibleImgSrc($1);", register_url)));
-
-  register_response1->WaitForRequest();
-  ASSERT_EQ(register_response1->http_request()->headers.at(
-                "Attribution-Reporting-Eligible"),
-            "event-source, trigger");
-  ASSERT_FALSE(base::Contains(register_response1->http_request()->headers,
                               "Attribution-Reporting-Support"));
 }
 
@@ -856,13 +648,8 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        ReferrerPolicy_RespectsDocument) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -880,7 +667,7 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
   register_response->WaitForRequest();
   const net::test_server::HttpRequest* request =
       register_response->http_request();
-  EXPECT_TRUE(request->headers.find("Referer") == request->headers.end());
+  EXPECT_FALSE(base::Contains(request->headers, "Referer"));
 }
 
 class AttributionSrcBasicTriggerBrowserTest
@@ -902,45 +689,23 @@ IN_PROC_BROWSER_TEST_P(AttributionSrcBasicTriggerBrowserTest,
       https_server()->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
+  base::RunLoop run_loop;
+  EXPECT_CALL(mock_attribution_manager(), HandleTrigger)
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
   GURL register_url =
       https_server()->GetURL("c.test", "/register_trigger_headers.html");
 
   const std::string& js_template = GetParam().second;
   EXPECT_TRUE(ExecJs(web_contents(), JsReplace(js_template, register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForTriggerData(/*num_trigger_data=*/1);
-  const auto& trigger_data = data_host->trigger_data();
 
-  EXPECT_EQ(trigger_data.size(), 1u);
-  EXPECT_EQ(trigger_data.front()->reporting_origin,
-            url::Origin::Create(register_url));
-  EXPECT_THAT(trigger_data.front()->filters->filter_values, IsEmpty());
-  EXPECT_FALSE(trigger_data.front()->debug_key);
-  EXPECT_EQ(trigger_data.front()->event_triggers.size(), 1u);
-  EXPECT_EQ(trigger_data.front()->event_triggers.front()->data, 7u);
-  EXPECT_THAT(
-      trigger_data.front()->event_triggers.front()->filters->filter_values,
-      IsEmpty());
-  EXPECT_THAT(
-      trigger_data.front()->event_triggers.front()->not_filters->filter_values,
-      IsEmpty());
-  EXPECT_THAT(trigger_data.front()->aggregatable_trigger_data, IsEmpty());
-  EXPECT_THAT(trigger_data.front()->aggregatable_values, IsEmpty());
-  EXPECT_FALSE(trigger_data.front()->aggregatable_dedup_key);
+  run_loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        PermissionsPolicyDisabled_SourceNotRegistered) {
+  SetupMockAttributionHost();
+
   GURL page_url = https_server()->GetURL(
       "b.test", "/page_with_conversion_measurement_disabled.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
@@ -959,260 +724,48 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcImg_TriggerRegisteredAllParams) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
-  GURL register_url = https_server()->GetURL(
-      "c.test", "/register_trigger_headers_all_params.html");
-
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForTriggerData(/*num_trigger_data=*/1);
-  const auto& trigger_data = data_host->trigger_data();
-
-  EXPECT_EQ(trigger_data.size(), 1u);
-  EXPECT_EQ(trigger_data.front()->reporting_origin,
-            url::Origin::Create(register_url));
-  EXPECT_THAT(
-      trigger_data.front()->filters->filter_values,
-      ElementsAre(Pair("w", IsEmpty()), Pair("x", ElementsAre("y", "z"))));
-  EXPECT_EQ(trigger_data.front()->debug_key,
-            blink::mojom::AttributionDebugKey::New(789));
-  EXPECT_EQ(trigger_data.front()->event_triggers.size(), 2u);
-
-  // Verify first trigger.
-  const auto& event_trigger_datas = trigger_data.front()->event_triggers;
-  EXPECT_EQ(event_trigger_datas.front()->data, 1u);
-  EXPECT_EQ(event_trigger_datas.front()->priority, 5);
-  EXPECT_EQ(event_trigger_datas.front()->dedup_key->value, 1024u);
-  EXPECT_THAT(event_trigger_datas.front()->filters->filter_values,
-              ElementsAre(Pair("a", ElementsAre("b"))));
-  EXPECT_THAT(event_trigger_datas.front()->not_filters->filter_values,
-              ElementsAre(Pair("c", IsEmpty())));
-
-  // Verify second trigger.
-  EXPECT_EQ(event_trigger_datas.back()->data, 2u);
-  EXPECT_EQ(event_trigger_datas.back()->priority, 10);
-  EXPECT_FALSE(event_trigger_datas.back()->dedup_key);
-  EXPECT_THAT(event_trigger_datas.back()->filters->filter_values, IsEmpty());
-  EXPECT_THAT(
-      event_trigger_datas.back()->not_filters->filter_values,
-      ElementsAre(Pair("d", ElementsAre("e", "f")), Pair("g", IsEmpty())));
-
-  EXPECT_THAT(trigger_data.front()->aggregatable_trigger_data,
-              ElementsAre(Pointee(AllOf(AggregationKeyPieceIs(absl::MakeUint128(
-                                            /*high=*/0, /*low=*/1)),
-                                        SourceKeysAre(ElementsAre("key"))))));
-
-  EXPECT_THAT(trigger_data.front()->aggregatable_values,
-              ElementsAre(Pair("key", 123)));
-  EXPECT_EQ(trigger_data.front()->aggregatable_dedup_key,
-            blink::mojom::AttributionTriggerDedupKey::New(123));
-}
-
-IN_PROC_BROWSER_TEST_F(
-    AttributionSrcBrowserTest,
-    AttributionSrcImg_TriggerRegisteredWithAggregatableTrigger) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
-  GURL register_url = https_server()->GetURL(
-      "c.test", "/register_aggregatable_trigger_data_headers.html");
-
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForTriggerData(/*num_trigger_data=*/1);
-  const auto& trigger_data = data_host->trigger_data();
-
-  EXPECT_EQ(trigger_data.size(), 1u);
-  EXPECT_EQ(trigger_data.front()->reporting_origin,
-            url::Origin::Create(register_url));
-  EXPECT_THAT(trigger_data.front()->event_triggers, IsEmpty());
-
-  EXPECT_THAT(
-      trigger_data.front()->aggregatable_trigger_data,
-      ElementsAre(
-          Pointee(AllOf(
-              AggregationKeyPieceIs(absl::MakeUint128(/*high=*/0, /*low=*/1)),
-              SourceKeysAre(ElementsAre("key1")),
-              FiltersAre(Pointee(
-                  FilterValuesAre(ElementsAre(Pair("a", ElementsAre("b")))))),
-              NotFiltersAre(Pointee(
-                  FilterValuesAre(ElementsAre(Pair("c", IsEmpty()))))))),
-          Pointee(AllOf(
-              AggregationKeyPieceIs(absl::MakeUint128(/*high=*/0, /*low=*/0)),
-              SourceKeysAre(IsEmpty()),
-              FiltersAre(Pointee(FilterValuesAre(IsEmpty()))),
-              NotFiltersAre(Pointee(
-                  FilterValuesAre(ElementsAre(Pair("d", ElementsAre("e", "f")),
-                                              Pair("g", IsEmpty())))))))));
-
-  EXPECT_THAT(trigger_data.front()->aggregatable_values,
-              ElementsAre(Pair("key1", 123), Pair("key2", 456)));
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
                        AttributionSrcImg_InvalidTriggerJsonIgnored) {
   GURL page_url =
       https_server()->GetURL("b.test", "/page_with_impression_creator.html");
   EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  base::RunLoop run_loop;
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleTrigger(
+          Property(&AttributionTrigger::registration,
+                   Field(&TriggerRegistration::event_triggers,
+                         ElementsAre(Field(&EventTriggerData::data, 7u)))),
+          _))
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
 
   GURL register_url = https_server()->GetURL(
       "c.test", "/register_trigger_headers_then_redirect_invalid.html");
 
   EXPECT_TRUE(ExecJs(web_contents(),
                      JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForTriggerData(/*num_trigger_data=*/1);
-  const auto& trigger_data = data_host->trigger_data();
 
-  EXPECT_EQ(trigger_data.size(), 1u);
-  EXPECT_EQ(trigger_data.front()->reporting_origin,
-            url::Origin::Create(register_url));
-  EXPECT_EQ(trigger_data.front()->event_triggers.size(), 1u);
-  EXPECT_EQ(trigger_data.front()->event_triggers.front()->data, 7u);
+  run_loop.Run();
 }
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcImg_InvalidAggregatableTriggerDropped) {
+                       ImgNoneSupported_EligibleHeaderNotSet) {
+  MockAttributionReportingContentBrowserClientBase<
+      ContentBrowserTestContentBrowserClient>
+      browser_client;
+  EXPECT_CALL(
+      browser_client,
+      GetAttributionSupport(
+          ContentBrowserClient::AttributionReportingOsApiState::kDisabled,
+          testing::_))
+      .WillRepeatedly(
+          testing::Return(network::mojom::AttributionSupport::kNone));
+
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
-
-  auto register_response =
-      std::make_unique<net::test_server::ControllableHttpResponse>(
-          https_server.get(), "/register_trigger");
-  ASSERT_TRUE(https_server->Start());
-
-  GURL page_url =
-      https_server->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
-  GURL register_url = https_server->GetURL("d.test", "/register_trigger");
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
-
-  register_response->WaitForRequest();
-  auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
-  http_response->set_code(net::HTTP_MOVED_PERMANENTLY);
-  http_response->AddCustomHeader(
-      "Attribution-Reporting-Register-Aggregatable-Trigger-Data", "");
-  http_response->AddCustomHeader(
-      "Attribution-Reporting-Register-Aggregatable-Values", "");
-  http_response->AddCustomHeader(
-      "Location", "/register_aggregatable_trigger_data_headers.html");
-  register_response->Send(http_response->ToResponseString());
-  register_response->Done();
-
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForTriggerData(/*num_trigger_data=*/1);
-  const auto& trigger_data = data_host->trigger_data();
-
-  // Only the second trigger is registered.
-  EXPECT_EQ(trigger_data.size(), 1u);
-  EXPECT_THAT(trigger_data.front()->aggregatable_trigger_data, SizeIs(2));
-  EXPECT_THAT(trigger_data.front()->aggregatable_values, SizeIs(2));
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcImgTriggerThenSource_SourceIgnored) {
-  GURL page_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
-
-  GURL register_url =
-      https_server()->GetURL("c.test", "/register_trigger_source_trigger.html");
-
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForTriggerData(/*num_trigger_data=*/2);
-  const auto& trigger_data = data_host->trigger_data();
-
-  EXPECT_EQ(trigger_data.size(), 2u);
-  EXPECT_EQ(trigger_data.front()->reporting_origin,
-            url::Origin::Create(register_url));
-
-  // Both triggers should be processed.
-  EXPECT_EQ(trigger_data.front()->event_triggers.front()->data, 5u);
-  EXPECT_EQ(trigger_data.back()->event_triggers.front()->data, 7u);
-
-  // Middle redirect source should be ignored.
-  EXPECT_EQ(data_host->source_data().size(), 0u);
-}
-
-IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
-                       AttributionSrcImg_InvalidAggregatableSourceDropped) {
-  // Create a separate server as we cannot register a `ControllableHttpResponse`
-  // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -1221,43 +774,141 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
 
   GURL page_url =
       https_server->GetURL("b.test", "/page_with_impression_creator.html");
-  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
-
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
 
   GURL register_url = https_server->GetURL("d.test", "/register_source");
-  EXPECT_TRUE(ExecJs(web_contents(),
-                     JsReplace("createAttributionSrcImg($1);", register_url)));
+  ASSERT_TRUE(
+      ExecJs(web_contents(),
+             JsReplace("createAttributionEligibleImgSrc($1);", register_url)));
 
   register_response->WaitForRequest();
+  EXPECT_FALSE(base::Contains(register_response->http_request()->headers,
+                              "Attribution-Reporting-Eligible"));
+  EXPECT_FALSE(base::Contains(register_response->http_request()->headers,
+                              "Attribution-Reporting-Support"));
+}
+
+// Regression test for https://crbug.com/1498717.
+IN_PROC_BROWSER_TEST_F(AttributionSrcBrowserTest,
+                       ResponseReceivedInDetachedFrame_NoCrash) {
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source");
+  ASSERT_TRUE(https_server->Start());
+
+  GURL page_url = https_server->GetURL("b.test", "/page_with_iframe.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  GURL subframe_url =
+      https_server->GetURL("c.test", "/page_with_impression_creator.html");
+  NavigateIframeToURL(web_contents(), "test_iframe", subframe_url);
+
+  base::RunLoop run_loop;
+  EXPECT_CALL(mock_attribution_manager(), HandleSource)
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
+
+  RenderFrameHost* subframe =
+      ChildFrameAt(web_contents()->GetPrimaryMainFrame(), 0);
+
+  GURL register_url = https_server->GetURL("d.test", "/register_source");
+  ASSERT_TRUE(ExecJs(subframe,
+                     JsReplace("createAttributionSrcImg($1);", register_url)));
+  register_response->WaitForRequest();
+
+  ASSERT_TRUE(ExecJs(web_contents(),
+                     R"(
+                       const iframe = document.getElementById('test_iframe');
+                       iframe.remove();
+                     )"));
+
   auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
-  http_response->set_code(net::HTTP_MOVED_PERMANENTLY);
-  http_response->AddCustomHeader(
-      "Attribution-Reporting-Register-Source",
-      R"({"source_event_id":"9", "destination":"https://d.test", "aggregation_keys":""})");
-  http_response->AddCustomHeader("Location",
-                                 "/register_aggregatable_source_headers.html");
+  http_response->set_code(net::HTTP_OK);
+  http_response->AddCustomHeader(kAttributionReportingRegisterSourceHeader,
+                                 R"({"destination":"https://d.test"})");
   register_response->Send(http_response->ToResponseString());
   register_response->Done();
 
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
+  run_loop.Run();
+}
 
-  // Only the second source is registered.
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.back()->source_event_id, 5UL);
-  EXPECT_EQ(source_data.back()->destination,
-            url::Origin::Create(GURL("https://d.test")));
-  EXPECT_THAT(source_data.back()->aggregation_keys, SizeIs(2));
+class AttributionSrcMultipleBackgroundRequestTest
+    : public AttributionSrcBrowserTest,
+      public ::testing::WithParamInterface<
+          std::pair<std::string, std::string>> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    AttributionSrcMultipleBackgroundRequestTest,
+    ::testing::Values(std::make_pair("createAttributionSrcImg",
+                                     "createAttributionSrcImg($1)"),
+                      std::make_pair("createAttributionSrcScript",
+                                     "createAttributionSrcScript($1)")),
+    [](const auto& info) { return info.param.first; });  // test name generator
+
+IN_PROC_BROWSER_TEST_P(AttributionSrcMultipleBackgroundRequestTest,
+                       AllRegistered) {
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response1 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/source1");
+  auto register_response2 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/trigger1");
+  ASSERT_TRUE(https_server->Start());
+
+  base::RunLoop run_loop;
+  const auto receive_registration =
+      base::BarrierClosure(2, run_loop.QuitClosure());
+  EXPECT_CALL(mock_attribution_manager(), HandleSource)
+      .Times(1)
+      .WillOnce([&]() { receive_registration.Run(); });
+  EXPECT_CALL(mock_attribution_manager(), HandleTrigger)
+      .Times(1)
+      .WillOnce([&]() { receive_registration.Run(); });
+
+  SourceObserver source_observer(web_contents());
+  GURL page_url =
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  ASSERT_TRUE(ExecJs(
+      web_contents(),
+      JsReplace(GetParam().second, "/source1 http://invalid.test /trigger1")));
+
+  register_response1->WaitForRequest();
+  register_response2->WaitForRequest();
+
+  {
+    auto http_response =
+        std::make_unique<net::test_server::BasicHttpResponse>();
+    http_response->set_code(net::HTTP_OK);
+    http_response->AddCustomHeader(kAttributionReportingRegisterSourceHeader,
+                                   R"({"destination":"https://d.test"})");
+    register_response1->Send(http_response->ToResponseString());
+    register_response1->Done();
+  }
+
+  {
+    auto http_response =
+        std::make_unique<net::test_server::BasicHttpResponse>();
+    http_response->set_code(net::HTTP_OK);
+    http_response->AddCustomHeader("Attribution-Reporting-Register-Trigger",
+                                   R"({})");
+    register_response2->Send(http_response->ToResponseString());
+    register_response2->Done();
+  }
+
+  run_loop.Run();
 }
 
 class AttributionSrcPrerenderBrowserTest : public AttributionSrcBrowserTest {
@@ -1275,6 +926,7 @@ class AttributionSrcPrerenderBrowserTest : public AttributionSrcBrowserTest {
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcPrerenderBrowserTest,
                        SourceNotRegisteredOnPrerender) {
+  SetupMockAttributionHost();
   EXPECT_CALL(mock_attribution_host(), RegisterDataHost).Times(0);
 
   const GURL kInitialUrl =
@@ -1303,14 +955,13 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcPrerenderBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(AttributionSrcPrerenderBrowserTest,
                        SourceRegisteredOnActivatedPrerender) {
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  base::RunLoop run_loop;
+  EXPECT_CALL(mock_attribution_manager(),
+              HandleSource(SourceRegistrationIs(
+                               Field(&SourceRegistration::source_event_id, 5u)),
+                           _))
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
 
   const GURL kInitialUrl =
       https_server()->GetURL("b.test", "/page_with_impression_creator.html");
@@ -1334,31 +985,88 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcPrerenderBrowserTest,
   prerender_helper_.NavigatePrimaryPage(page_url);
   ASSERT_EQ(page_url, web_contents()->GetLastCommittedURL());
 
-  if (!data_host)
-    loop.Run();
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  const auto& source_data = data_host->source_data();
-
-  EXPECT_EQ(source_data.size(), 1u);
-  EXPECT_EQ(source_data.front()->source_event_id, 5UL);
+  run_loop.Run();
 }
 
-class AttributionSrcFencedFrameBrowserTest
-    : public AttributionSrcBrowserTest,
-      public ::testing::WithParamInterface<
-          blink::features::FencedFramesImplementationType> {
+IN_PROC_BROWSER_TEST_F(AttributionSrcPrerenderBrowserTest,
+                       SubresourceTriggerNotRegisteredOnPrerender) {
+  SetupMockAttributionHost();
+  EXPECT_CALL(mock_attribution_host(), RegisterDataHost).Times(0);
+
+  const GURL kInitialUrl =
+      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
+  EXPECT_TRUE(NavigateToURL(web_contents(), kInitialUrl));
+
+  GURL page_url =
+      https_server()->GetURL("b.test", "/page_with_conversion_redirect.html");
+  int host_id = prerender_helper_.AddPrerender(page_url);
+  content::test::PrerenderHostObserver host_observer(*web_contents(), host_id);
+
+  prerender_helper_.WaitForPrerenderLoadCompletion(page_url);
+  content::RenderFrameHost* prerender_rfh =
+      prerender_helper_.GetPrerenderedMainFrameHost(host_id);
+
+  EXPECT_TRUE(ExecJs(
+      prerender_rfh,
+      JsReplace(
+          "createTrackingPixel($1);",
+          https_server()->GetURL("c.test", "/register_trigger_headers.html"))));
+
+  // If a data host were registered, it would arrive in the browser process
+  // before the navigation finished.
+  EXPECT_TRUE(NavigateToURL(web_contents(), kInitialUrl));
+}
+
+IN_PROC_BROWSER_TEST_F(AttributionSrcPrerenderBrowserTest,
+                       SubresourceTriggerRegisteredOnActivatedPrerender) {
+  base::RunLoop loop;
+  EXPECT_CALL(
+      mock_attribution_manager(),
+      HandleTrigger(
+          Property(&AttributionTrigger::registration,
+                   Field(&TriggerRegistration::event_triggers,
+                         ElementsAre(Field(&EventTriggerData::data, 7u)))),
+          _))
+      .Times(1)
+      .WillOnce([&loop]() { loop.Quit(); });
+
+  const GURL kInitialUrl =
+      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
+  EXPECT_TRUE(NavigateToURL(web_contents(), kInitialUrl));
+
+  GURL page_url =
+      https_server()->GetURL("b.test", "/page_with_conversion_redirect.html");
+  int host_id = prerender_helper_.AddPrerender(page_url);
+  content::test::PrerenderHostObserver host_observer(*web_contents(), host_id);
+
+  prerender_helper_.WaitForPrerenderLoadCompletion(page_url);
+  content::RenderFrameHost* prerender_rfh =
+      prerender_helper_.GetPrerenderedMainFrameHost(host_id);
+
+  EXPECT_TRUE(ExecJs(
+      prerender_rfh,
+      JsReplace(
+          "createTrackingPixel($1);",
+          https_server()->GetURL("c.test", "/register_trigger_headers.html"))));
+
+  // Delay prerender activation so that subresource response is received
+  // earlier than that.
+  base::RunLoop run_loop;
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(100));
+  run_loop.Run();
+
+  prerender_helper_.NavigatePrimaryPage(page_url);
+  ASSERT_EQ(page_url, web_contents()->GetLastCommittedURL());
+  ASSERT_TRUE(host_observer.was_activated());
+
+  loop.Run();
+}
+
+class AttributionSrcFencedFrameBrowserTest : public AttributionSrcBrowserTest {
  public:
   AttributionSrcFencedFrameBrowserTest() {
-    switch (GetParam()) {
-      case blink::features::FencedFramesImplementationType::kMPArch:
-        fenced_frame_helper_ = std::make_unique<test::FencedFrameTestHelper>(
-            test::FencedFrameTestHelper::FencedFrameType::kMPArch);
-        break;
-      case blink::features::FencedFramesImplementationType::kShadowDOM:
-        fenced_frame_helper_ = std::make_unique<test::FencedFrameTestHelper>(
-            test::FencedFrameTestHelper::FencedFrameType::kShadowDOM);
-        break;
-    }
+    fenced_frame_helper_ = std::make_unique<test::FencedFrameTestHelper>();
   }
 
   ~AttributionSrcFencedFrameBrowserTest() override = default;
@@ -1367,15 +1075,9 @@ class AttributionSrcFencedFrameBrowserTest
   std::unique_ptr<test::FencedFrameTestHelper> fenced_frame_helper_;
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    AttributionSrcFencedFrameBrowserTest,
-    ::testing::Values(
-        blink::features::FencedFramesImplementationType::kShadowDOM,
-        blink::features::FencedFramesImplementationType::kMPArch));
-
-IN_PROC_BROWSER_TEST_P(AttributionSrcFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(AttributionSrcFencedFrameBrowserTest,
                        DefaultMode_SourceNotRegistered) {
+  SetupMockAttributionHost();
   GURL main_url = https_server()->GetURL("b.test", "/title1.html");
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
 
@@ -1403,67 +1105,85 @@ IN_PROC_BROWSER_TEST_P(AttributionSrcFencedFrameBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
 }
 
-IN_PROC_BROWSER_TEST_P(AttributionSrcFencedFrameBrowserTest,
+IN_PROC_BROWSER_TEST_F(AttributionSrcFencedFrameBrowserTest,
                        OpaqueAdsMode_SourceRegistered) {
   GURL main_url = https_server()->GetURL("b.test", "/title1.html");
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
 
-  GURL fenced_frame_url =
-      https_server()->GetURL("b.test", "/page_with_impression_creator.html");
+  RenderFrameHostImpl* root_rfh =
+      static_cast<RenderFrameHostImpl*>(web_contents()->GetPrimaryMainFrame());
+  GURL fenced_frame_url(https_server()->GetURL(
+      "b.test", "/attribution_reporting/page_with_impression_creator.html"));
+  FencedFrameURLMapping& url_mapping =
+      root_rfh->GetPage().fenced_frame_urls_map();
+  auto fenced_frame_urn =
+      test::AddAndVerifyFencedFrameURL(&url_mapping, fenced_frame_url);
 
-  RenderFrameHost* parent = web_contents()->GetPrimaryMainFrame();
+  RenderFrameHostWrapper fenced_frame_host(
+      fenced_frame_helper_->CreateFencedFrame(
+          root_rfh, GURL(url::kAboutBlankURL), net::OK,
+          blink::FencedFrame::DeprecatedFencedFrameMode::kOpaqueAds));
+  bool rfh_should_change =
+      fenced_frame_host->ShouldChangeRenderFrameHostOnSameSiteNavigation();
+  TestFrameNavigationObserver observer(fenced_frame_host.get());
 
-  RenderFrameHost* fenced_frame_host = fenced_frame_helper_->CreateFencedFrame(
-      parent, fenced_frame_url, net::OK,
-      blink::mojom::FencedFrameMode::kOpaqueAds);
+  EXPECT_TRUE(ExecJs(root_rfh, JsReplace("document.querySelector('fencedframe')"
+                                         ".config = new FencedFrameConfig($1);",
+                                         fenced_frame_urn.spec())));
 
-  ASSERT_NE(fenced_frame_host, nullptr);
-  EXPECT_TRUE(fenced_frame_host->IsFencedFrameRoot());
+  observer.Wait();
 
-  std::unique_ptr<MockDataHost> data_host;
-  base::RunLoop loop;
+  if (rfh_should_change) {
+    EXPECT_TRUE(fenced_frame_host.WaitUntilRenderFrameDeleted());
+  } else {
+    ASSERT_NE(fenced_frame_host.get(), nullptr);
+  }
 
-  EXPECT_CALL(mock_attribution_host(), RegisterDataHost)
-      .WillOnce(
-          [&](mojo::PendingReceiver<blink::mojom::AttributionDataHost> host) {
-            data_host = GetRegisteredDataHost(std::move(host));
-            loop.Quit();
-          });
+  RenderFrameHostWrapper fenced_frame_host2(
+      content::test::FencedFrameTestHelper::GetMostRecentlyAddedFencedFrame(
+          root_rfh));
+
+  EXPECT_TRUE(fenced_frame_host2->IsFencedFrameRoot());
+
+  base::RunLoop run_loop;
+  EXPECT_CALL(mock_attribution_manager(), HandleSource)
+      .Times(1)
+      .WillOnce([&run_loop]() { run_loop.Quit(); });
 
   EXPECT_TRUE(ExecJs(
-      fenced_frame_host,
+      fenced_frame_host2.get(),
       JsReplace(
           "createAttributionSrcImg($1);",
           https_server()->GetURL("c.test", "/register_source_headers.html"))));
 
-  if (!data_host)
-    loop.Run();
-
-  data_host->WaitForSourceData(/*num_source_data=*/1);
-  EXPECT_EQ(data_host->source_data().size(), 1u);
+  run_loop.Run();
 }
 
-class AttributionSrcCrossAppWebEnabledBrowserTest
+// Tests to verify that cross app web is not enabled when base::Feature is
+// enabled but runtime feature is disabled (without
+// `features::kPrivacySandboxAdsAPIsOverride` override).
+class AttributionSrcCrossAppWebRuntimeDisabledBrowserTest
     : public AttributionSrcBrowserTest {
  public:
-  AttributionSrcCrossAppWebEnabledBrowserTest() = default;
+  AttributionSrcCrossAppWebRuntimeDisabledBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{network::features::
+                                  kAttributionReportingCrossAppWeb},
+        /*disabled_features=*/{});
+  }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list{
-      blink::features::kAttributionReportingCrossAppWeb};
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_F(AttributionSrcCrossAppWebEnabledBrowserTest,
-                       Img_SetsSupportHeader) {
+// Verify that the Attribution-Reporting-Support header setting is gated by the
+// runtime feature.
+IN_PROC_BROWSER_TEST_F(AttributionSrcCrossAppWebRuntimeDisabledBrowserTest,
+                       Img_SupportHeaderNotSet) {
   // Create a separate server as we cannot register a `ControllableHttpResponse`
   // after the server starts.
-  auto https_server = std::make_unique<net::EmbeddedTestServer>(
-      net::EmbeddedTestServer::TYPE_HTTPS);
-  https_server->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
-  net::test_server::RegisterDefaultHandlers(https_server.get());
-  https_server->ServeFilesFromSourceDirectory(
-      "content/test/data/attribution_reporting");
-  https_server->ServeFilesFromSourceDirectory("content/test/data");
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
 
   auto register_response1 =
       std::make_unique<net::test_server::ControllableHttpResponse>(
@@ -1482,9 +1202,72 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcCrossAppWebEnabledBrowserTest,
                      JsReplace("createAttributionSrcImg($1);", register_url)));
 
   register_response1->WaitForRequest();
-  ASSERT_EQ(register_response1->http_request()->headers.at(
-                "Attribution-Reporting-Support"),
-            "web");
+  ExpectValidAttributionReportingEligibleHeaderForImg(
+      register_response1->http_request()->headers.at(
+          "Attribution-Reporting-Eligible"));
+  ASSERT_FALSE(base::Contains(register_response1->http_request()->headers,
+                              "Attribution-Reporting-Support"));
+
+  auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
+  http_response->set_code(net::HTTP_MOVED_PERMANENTLY);
+  http_response->AddCustomHeader("Location", "/register_source2");
+  register_response1->Send(http_response->ToResponseString());
+  register_response1->Done();
+
+  // Ensure that redirect requests also don't contain the
+  // Attribution-Reporting-Support header.
+  register_response2->WaitForRequest();
+  ExpectValidAttributionReportingEligibleHeaderForImg(
+      register_response2->http_request()->headers.at(
+          "Attribution-Reporting-Eligible"));
+  ASSERT_FALSE(base::Contains(register_response2->http_request()->headers,
+                              "Attribution-Reporting-Support"));
+}
+
+class AttributionSrcCrossAppWebEnabledBrowserTest
+    : public AttributionSrcBrowserTest {
+ public:
+  AttributionSrcCrossAppWebEnabledBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{network::features::
+                                  kAttributionReportingCrossAppWeb,
+                              features::kPrivacySandboxAdsAPIsOverride},
+        /*disabled_features=*/{});
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(AttributionSrcCrossAppWebEnabledBrowserTest,
+                       Img_SetsSupportHeader) {
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response1 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source1");
+  auto register_response2 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source2");
+  ASSERT_TRUE(https_server->Start());
+
+  GURL page_url =
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  GURL register_url = https_server->GetURL("d.test", "/register_source1");
+  ASSERT_TRUE(ExecJs(web_contents(),
+                     JsReplace("createAttributionSrcImg($1);", register_url)));
+
+  register_response1->WaitForRequest();
+  ExpectValidAttributionReportingSupportHeader(
+      register_response1->http_request()->headers.at(
+          "Attribution-Reporting-Support"),
+      /*web_expected=*/true,
+      /*os_expected=*/false);
 
   auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
   http_response->set_code(net::HTTP_MOVED_PERMANENTLY);
@@ -1494,9 +1277,264 @@ IN_PROC_BROWSER_TEST_F(AttributionSrcCrossAppWebEnabledBrowserTest,
 
   // Ensure that redirect requests also contain the headers.
   register_response2->WaitForRequest();
-  ASSERT_EQ(register_response2->http_request()->headers.at(
-                "Attribution-Reporting-Support"),
-            "web");
+  ExpectValidAttributionReportingSupportHeader(
+      register_response2->http_request()->headers.at(
+          "Attribution-Reporting-Support"),
+      /*web_expected=*/true,
+      /*os_expected=*/false);
+}
+
+class AttributionSrcCrossAppWebEnabledSubresourceBrowserTest
+    : public AttributionSrcCrossAppWebEnabledBrowserTest,
+      public ::testing::WithParamInterface<
+          std::pair<std::string, std::string>> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    AttributionSrcCrossAppWebEnabledSubresourceBrowserTest,
+    ::testing::Values(
+        std::make_pair("attributionsrcimg", "createAttributionSrcImg($1)"),
+        std::make_pair("attributionsrcscript",
+                       "createAttributionSrcScript($1)"),
+        std::make_pair("img", "createAttributionEligibleImgSrc($1)"),
+        std::make_pair("script", "createAttributionSrcScript($1)"),
+        std::make_pair("fetch", "doAttributionEligibleFetch($1)"),
+        std::make_pair("xhr", "doAttributionEligibleXHR($1)")),
+    [](const auto& info) { return info.param.first; });  // test name generator
+
+IN_PROC_BROWSER_TEST_P(AttributionSrcCrossAppWebEnabledSubresourceBrowserTest,
+                       Register) {
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response1 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source1");
+  auto register_response2 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source2");
+  ASSERT_TRUE(https_server->Start());
+
+  AttributionOsLevelManager::ScopedApiStateForTesting scoped_api_state_setting(
+      AttributionOsLevelManager::ApiState::kEnabled);
+
+  GURL page_url =
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  const std::string& js_template = GetParam().second;
+
+  GURL register_url = https_server->GetURL("b.test", "/register_source1");
+  ASSERT_TRUE(ExecJs(web_contents(), JsReplace(js_template, register_url)));
+
+  register_response1->WaitForRequest();
+  ExpectValidAttributionReportingSupportHeader(
+      register_response1->http_request()->headers.at(
+          "Attribution-Reporting-Support"),
+      /*web_expected=*/true,
+      /*os_expected=*/true);
+
+  auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
+  http_response->set_code(net::HTTP_MOVED_PERMANENTLY);
+  http_response->AddCustomHeader("Location", "/register_source2");
+  register_response1->Send(http_response->ToResponseString());
+  register_response1->Done();
+
+  // Ensure that redirect requests also contain the header.
+  register_response2->WaitForRequest();
+  ExpectValidAttributionReportingSupportHeader(
+      register_response2->http_request()->headers.at(
+          "Attribution-Reporting-Support"),
+      /*web_expected=*/true,
+      /*os_expected=*/true);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    AttributionSrcCrossAppWebEnabledBrowserTest,
+    OsLevelEnabledPostRendererInitialization_SetsSupportHeader) {
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response1 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source1");
+  auto register_response2 =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source2");
+  ASSERT_TRUE(https_server->Start());
+
+  GURL page_url =
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  AttributionOsLevelManager::ScopedApiStateForTesting scoped_api_state_setting(
+      AttributionOsLevelManager::ApiState::kEnabled);
+
+  GURL register_url = https_server->GetURL("d.test", "/register_source1");
+  ASSERT_TRUE(ExecJs(web_contents(),
+                     JsReplace("createAttributionSrcImg($1);", register_url)));
+
+  register_response1->WaitForRequest();
+  ExpectValidAttributionReportingSupportHeader(
+      register_response1->http_request()->headers.at(
+          "Attribution-Reporting-Support"),
+      /*web_expected=*/true,
+      /*os_expected=*/true);
+
+  auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
+  http_response->set_code(net::HTTP_MOVED_PERMANENTLY);
+  http_response->AddCustomHeader("Location", "/register_source2");
+  register_response1->Send(http_response->ToResponseString());
+  register_response1->Done();
+
+  // Ensure that redirect requests also contain the header.
+  register_response2->WaitForRequest();
+  ExpectValidAttributionReportingSupportHeader(
+      register_response2->http_request()->headers.at(
+          "Attribution-Reporting-Support"),
+      /*web_expected=*/true,
+      /*os_expected=*/true);
+}
+
+struct OsRegistrationTestCase {
+  const char* name;
+  const char* header;
+  std::vector<attribution_reporting::OsRegistrationItem>
+      expected_os_registrations;
+};
+
+class AttributionSrcCrossAppWebEnabledOsRegistrationBrowserTest
+    : public AttributionSrcCrossAppWebEnabledBrowserTest,
+      public ::testing::WithParamInterface<OsRegistrationTestCase> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    AttributionSrcCrossAppWebEnabledOsRegistrationBrowserTest,
+    ::testing::Values(
+        OsRegistrationTestCase{
+            .name = "source",
+            .header = "Attribution-Reporting-Register-OS-Source",
+            .expected_os_registrations =
+                {
+                    attribution_reporting::OsRegistrationItem{
+                        .url = GURL("https://r1.test/x")},
+                    attribution_reporting::OsRegistrationItem{
+                        .url = GURL("https://r2.test/y"),
+                        .debug_reporting = true,
+                    },
+                },
+        },
+        OsRegistrationTestCase{
+            .name = "trigger",
+            .header = "Attribution-Reporting-Register-OS-Trigger",
+            .expected_os_registrations =
+                {
+                    attribution_reporting::OsRegistrationItem{
+                        .url = GURL("https://r1.test/x")},
+                    attribution_reporting::OsRegistrationItem{
+                        .url = GURL("https://r2.test/y"),
+                        .debug_reporting = true,
+                    },
+                },
+        }),
+    [](const auto& info) { return info.param.name; });  // test name generator
+
+IN_PROC_BROWSER_TEST_P(
+    AttributionSrcCrossAppWebEnabledOsRegistrationBrowserTest,
+    Register) {
+  const auto& test_case = GetParam();
+
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  base::RunLoop run_loop;
+  const auto on_registration = base::BarrierClosure(
+      test_case.expected_os_registrations.size(), run_loop.QuitClosure());
+  for (auto item : test_case.expected_os_registrations) {
+    EXPECT_CALL(mock_attribution_manager(),
+                HandleOsRegistration(
+                    AllOf(Field(&OsRegistration::registration_url, item.url))))
+        .Times(1)
+        .WillOnce([&on_registration]() { on_registration.Run(); });
+  }
+
+  auto register_response =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register");
+  ASSERT_TRUE(https_server->Start());
+
+  AttributionOsLevelManager::ScopedApiStateForTesting scoped_api_state_setting(
+      AttributionOsLevelManager::ApiState::kEnabled);
+
+  GURL page_url =
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  ASSERT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  GURL register_url = https_server->GetURL("d.test", "/register");
+  ASSERT_TRUE(ExecJs(web_contents(),
+                     JsReplace("createAttributionSrcImg($1);", register_url)));
+
+  register_response->WaitForRequest();
+
+  auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
+  http_response->AddCustomHeader(
+      test_case.header,
+      R"("https://r1.test/x", "https://r2.test/y"; debug-reporting)");
+  register_response->Send(http_response->ToResponseString());
+  register_response->Done();
+
+  run_loop.Run();
+}
+
+class AttributionSrcInBrowserMigrationEnabledBrowserTest
+    : public AttributionSrcBrowserTest {
+ public:
+  AttributionSrcInBrowserMigrationEnabledBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {blink::features::kKeepAliveInBrowserMigration,
+         blink::features::kAttributionReportingInBrowserMigration},
+        {});
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(AttributionSrcInBrowserMigrationEnabledBrowserTest,
+                       BackgroundSourceRegistrationRequestSent) {
+  SetupMockAttributionHost();
+
+  // Create a separate server as we cannot register a `ControllableHttpResponse`
+  // after the server starts.
+  std::unique_ptr<EmbeddedTestServer> https_server =
+      CreateAttributionTestHttpsServer();
+
+  auto register_response =
+      std::make_unique<net::test_server::ControllableHttpResponse>(
+          https_server.get(), "/register_source");
+  ASSERT_TRUE(https_server->Start());
+
+  GURL page_url =
+      https_server->GetURL("b.test", "/page_with_impression_creator.html");
+  EXPECT_TRUE(NavigateToURL(web_contents(), page_url));
+
+  // There should be no attempt to register a data host as it won't be needed.
+  EXPECT_CALL(mock_attribution_host(), RegisterDataHost).Times(0);
+
+  GURL register_url = https_server->GetURL("d.test", "/register_source");
+  EXPECT_TRUE(ExecJs(web_contents(),
+                     JsReplace("createAttributionSrcImg($1);", register_url)));
+
+  register_response->WaitForRequest();
+  ASSERT_TRUE(register_response->has_received_request());
+  EXPECT_TRUE(register_response->http_request()->headers.contains(
+      "Attribution-Reporting-Eligible"));
 }
 
 }  // namespace content

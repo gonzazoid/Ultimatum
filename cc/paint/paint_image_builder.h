@@ -33,6 +33,7 @@ class CC_PAINT_EXPORT PaintImageBuilder {
   static PaintImageBuilder WithProperties(PaintImage image);
 
   PaintImageBuilder(PaintImageBuilder&& other);
+  PaintImageBuilder& operator=(PaintImageBuilder&& other);
   ~PaintImageBuilder();
 
   PaintImageBuilder&& set_id(PaintImage::Id id) {
@@ -56,7 +57,7 @@ class CC_PAINT_EXPORT PaintImageBuilder {
     paint_image_.content_id_ = content_id;
     return std::move(*this);
   }
-  PaintImageBuilder&& set_paint_record(sk_sp<PaintRecord> paint_record,
+  PaintImageBuilder&& set_paint_record(PaintRecord paint_record,
                                        const gfx::Rect& rect,
                                        PaintImage::ContentId content_id) {
     DCHECK_NE(content_id, PaintImage::kInvalidContentId);
@@ -75,6 +76,20 @@ class CC_PAINT_EXPORT PaintImageBuilder {
     paint_image_.animation_type_ = type;
     return std::move(*this);
   }
+  PaintImageBuilder&& set_gainmap_paint_image_generator(
+      sk_sp<PaintImageGenerator> generator,
+      const SkGainmapInfo& gainmap_info) {
+    // Setting SkGainmapInfo with no gainmap image is an error.
+    DCHECK(generator);
+    paint_image_.gainmap_paint_image_generator_ = std::move(generator);
+    paint_image_.gainmap_info_ = gainmap_info;
+    return std::move(*this);
+  }
+  PaintImageBuilder&& set_hdr_metadata(
+      std::optional<gfx::HDRMetadata> hdr_metadata) {
+    paint_image_.hdr_metadata_ = hdr_metadata;
+    return std::move(*this);
+  }
   PaintImageBuilder&& set_completion_state(PaintImage::CompletionState state) {
     paint_image_.completion_state_ = state;
     return std::move(*this);
@@ -89,6 +104,10 @@ class CC_PAINT_EXPORT PaintImageBuilder {
   }
   PaintImageBuilder&& set_may_be_lcp_candidate(bool may_be_lcp_candidate) {
     paint_image_.may_be_lcp_candidate_ = may_be_lcp_candidate;
+    return std::move(*this);
+  }
+  PaintImageBuilder&& set_no_cache(bool no_cache) {
+    paint_image_.no_cache_ = no_cache;
     return std::move(*this);
   }
   PaintImageBuilder&& set_repetition_count(int count) {

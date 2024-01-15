@@ -20,8 +20,8 @@ import org.chromium.content_public.browser.SelectionPopupController;
  * model and notifies whether the current selection popup controller is going to intercept the
  * back press.
  */
-public class SelectionPopupBackPressHandler
-        extends EmptyTabObserver implements BackPressHandler, TabModelObserver, Destroyable {
+public class SelectionPopupBackPressHandler extends EmptyTabObserver
+        implements BackPressHandler, TabModelObserver, Destroyable {
     private final ObservableSupplierImpl<Boolean> mBackPressChangedSupplier =
             new ObservableSupplierImpl<>();
     private final Callback<Boolean> mCallback = this::onActionBarShowingChanged;
@@ -38,9 +38,14 @@ public class SelectionPopupBackPressHandler
     }
 
     @Override
-    public void handleBackPress() {
+    public @BackPressResult int handleBackPress() {
         assert mPopupController != null;
+        int res =
+                mPopupController.isSelectActionBarShowing()
+                        ? BackPressResult.SUCCESS
+                        : BackPressResult.FAILURE;
         mPopupController.clearSelection();
+        return res;
     }
 
     @Override
@@ -51,35 +56,45 @@ public class SelectionPopupBackPressHandler
     @Override
     public void didSelectTab(Tab tab, int type, int lastId) {
         mBackPressChangedSupplier.set(false);
-        if (mPopupController != null) {
-            mPopupController.isSelectActionBarShowingSupplier().removeObserver(mCallback);
-        }
-        if (tab.getWebContents() == null) return;
-        if (mTab != null) tab.removeObserver(this);
-        tab.addObserver(this);
-        mTab = tab;
-        mPopupController = SelectionPopupController.fromWebContents(tab.getWebContents());
-        mPopupController.isSelectActionBarShowingSupplier().addObserver(mCallback);
+        updatePopupControllerObserving(tab);
     }
 
     @Override
     public void onWebContentsSwapped(Tab tab, boolean didStartLoad, boolean didFinishLoad) {
-        mPopupController.isSelectActionBarShowingSupplier().removeObserver(mCallback);
-        mPopupController = SelectionPopupController.fromWebContents(tab.getWebContents());
-        mPopupController.isSelectActionBarShowingSupplier().addObserver(mCallback);
+        updatePopupControllerObserving(tab);
+    }
+
+    @Override
+    public void onContentChanged(Tab tab) {
+        updatePopupControllerObserving(tab);
     }
 
     @Override
     public void destroy() {
-        if (mTab != null) mTab.removeObserver(this);
-        mTab = null;
+        updatePopupControllerObserving(null);
+        mBackPressChangedSupplier.set(false);
+    }
+
+    private void updatePopupControllerObserving(Tab tab) {
         if (mPopupController != null) {
             mPopupController.isSelectActionBarShowingSupplier().removeObserver(mCallback);
             mPopupController = null;
         }
+        if (mTab != null) mTab.removeObserver(this);
+        mTab = tab;
+        if (tab == null) return;
+        var webContents = tab.getWebContents();
+        if (webContents == null) return;
+        tab.addObserver(this);
+        mPopupController = SelectionPopupController.fromWebContents(webContents);
+        mPopupController.isSelectActionBarShowingSupplier().addObserver(mCallback);
     }
 
     private void onActionBarShowingChanged(boolean isShowing) {
         mBackPressChangedSupplier.set(isShowing);
+    }
+
+    SelectionPopupController getPopupControllerForTesting() {
+        return mPopupController;
     }
 }

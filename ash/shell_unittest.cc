@@ -8,8 +8,11 @@
 #include <queue>
 #include <vector>
 
+#include "ash/accelerators//accelerator_tracker.h"
 #include "ash/accessibility/chromevox/key_accessibility_enabler.h"
 #include "ash/accessibility/magnifier/fullscreen_magnifier_controller.h"
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_switches.h"
 #include "ash/display/mouse_cursor_event_filter.h"
 #include "ash/drag_drop/drag_drop_controller.h"
 #include "ash/drag_drop/drag_drop_controller_test_api.h"
@@ -32,14 +35,14 @@
 #include "ash/test/ash_test_helper.h"
 #include "ash/test/test_widget_builder.h"
 #include "ash/test_shell_delegate.h"
-#include "ash/wallpaper/wallpaper_widget_controller.h"
+#include "ash/wallpaper/views/wallpaper_widget_controller.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/account_id/account_id.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
@@ -55,6 +58,7 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/window/dialog_delegate.h"
+#include "ui/wm/core/accelerator_filter.h"
 
 using aura::RootWindow;
 
@@ -446,6 +450,23 @@ TEST_F(ShellTest, TestPreTargetHandlerOrder) {
   EXPECT_GT(drag_drop, cursor_filter);
 }
 
+// Tests that the accelerator_tracker is ahead of the accelerator_filter in the
+// pre-target list to make sure the accelerators won't be filtered out before
+// getting AcceleratorTracker.
+TEST_F(ShellTest, AcceleratorPreTargetHandlerOrder) {
+  Shell* shell = Shell::Get();
+  ui::EventTargetTestApi test_api(shell);
+
+  ui::EventHandlerList handlers = test_api.GetPreTargetHandlers();
+  ui::EventHandlerList::const_iterator accelerator_tracker =
+      base::ranges::find(handlers, shell->accelerator_tracker());
+  ui::EventHandlerList::const_iterator accelerator_filter =
+      base::ranges::find(handlers, shell->accelerator_filter());
+  EXPECT_NE(handlers.end(), accelerator_tracker);
+  EXPECT_NE(handlers.end(), accelerator_filter);
+  EXPECT_GT(accelerator_filter, accelerator_tracker);
+}
+
 TEST_F(ShellTest, TestAccessibilityHandlerOrder) {
   Shell* shell = Shell::Get();
   ui::EventTargetTestApi test_api(shell);
@@ -572,6 +593,21 @@ TEST_F(ShellTest, NoWindowTabFocus) {
   // Hit shift tab and expect that focus is on status widget.
   PressAndReleaseKey(ui::VKEY_TAB, ui::EF_SHIFT_DOWN);
   EXPECT_TRUE(status_area_widget->GetNativeView()->HasFocus());
+}
+
+class ShellPickerDisabledTest : public AshTestBase {
+ public:
+  ShellPickerDisabledTest() {
+    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+    command_line->AppendSwitchASCII(switches::kPickerFeatureKey, "hello");
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_{features::kPicker};
+};
+
+TEST_F(ShellPickerDisabledTest, NoPickerControllerIfFeatureKeyIsWrong) {
+  EXPECT_FALSE(Shell::Get()->picker_controller());
 }
 
 // This verifies WindowObservers are removed when a window is destroyed after

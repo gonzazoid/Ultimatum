@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -31,7 +32,8 @@ class WebAudioMediaStreamAudioSinkTest : public testing::Test {
     sink_bus_ = media::AudioBus::Create(sink_params_);
     auto* audio_source = MakeGarbageCollected<MediaStreamSource>(
         String::FromUTF8("dummy_source_id"), MediaStreamSource::kTypeAudio,
-        String::FromUTF8("dummy_source_name"), false /* remote */);
+        String::FromUTF8("dummy_source_name"), /*remote=*/false,
+        /*platform_source=*/nullptr);
     component_ = MakeGarbageCollected<MediaStreamComponentImpl>(
         String::FromUTF8("audio_track"), audio_source,
         std::make_unique<MediaStreamAudioTrack>(true));
@@ -47,6 +49,7 @@ class WebAudioMediaStreamAudioSinkTest : public testing::Test {
     WebHeap::CollectAllGarbageForTesting();
   }
 
+  test::TaskEnvironment task_environment_;
   media::AudioParameters source_params_;
   media::AudioParameters sink_params_;
   std::unique_ptr<media::AudioBus> sink_bus_;

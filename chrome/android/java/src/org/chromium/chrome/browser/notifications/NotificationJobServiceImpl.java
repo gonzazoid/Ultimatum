@@ -6,12 +6,9 @@ package org.chromium.chrome.browser.notifications;
 
 import android.app.job.JobParameters;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.PersistableBundle;
 import android.os.SystemClock;
-
-import androidx.annotation.RequiresApi;
 
 import org.chromium.base.ThreadUtils;
 
@@ -19,32 +16,41 @@ import org.chromium.base.ThreadUtils;
  * Processes jobs scheduled when user actions are issued on web notifications.
  * We use this instead of starting the NotificationService on N+.
  */
-@RequiresApi(Build.VERSION_CODES.N)
 public class NotificationJobServiceImpl extends NotificationJobService.Impl {
     static PersistableBundle getJobExtrasFromIntent(Intent intent) {
         PersistableBundle bundle = new PersistableBundle();
-        bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_ID,
+        bundle.putString(
+                NotificationConstants.EXTRA_NOTIFICATION_ID,
                 intent.getStringExtra(NotificationConstants.EXTRA_NOTIFICATION_ID));
-        bundle.putInt(NotificationConstants.EXTRA_NOTIFICATION_TYPE,
-                intent.getIntExtra(NotificationConstants.EXTRA_NOTIFICATION_TYPE,
+        bundle.putInt(
+                NotificationConstants.EXTRA_NOTIFICATION_TYPE,
+                intent.getIntExtra(
+                        NotificationConstants.EXTRA_NOTIFICATION_TYPE,
                         NotificationType.WEB_PERSISTENT));
-        bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_INFO_ORIGIN,
+        bundle.putString(
+                NotificationConstants.EXTRA_NOTIFICATION_INFO_ORIGIN,
                 intent.getStringExtra(NotificationConstants.EXTRA_NOTIFICATION_INFO_ORIGIN));
-        bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_INFO_SCOPE,
+        bundle.putString(
+                NotificationConstants.EXTRA_NOTIFICATION_INFO_SCOPE,
                 intent.getStringExtra(NotificationConstants.EXTRA_NOTIFICATION_INFO_SCOPE));
-        bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_INFO_PROFILE_ID,
+        bundle.putString(
+                NotificationConstants.EXTRA_NOTIFICATION_INFO_PROFILE_ID,
                 intent.getStringExtra(NotificationConstants.EXTRA_NOTIFICATION_INFO_PROFILE_ID));
-        bundle.putBoolean(NotificationConstants.EXTRA_NOTIFICATION_INFO_PROFILE_INCOGNITO,
+        bundle.putBoolean(
+                NotificationConstants.EXTRA_NOTIFICATION_INFO_PROFILE_INCOGNITO,
                 intent.getBooleanExtra(
                         NotificationConstants.EXTRA_NOTIFICATION_INFO_PROFILE_INCOGNITO, false));
-        bundle.putInt(NotificationConstants.EXTRA_NOTIFICATION_INFO_ACTION_INDEX,
+        bundle.putInt(
+                NotificationConstants.EXTRA_NOTIFICATION_INFO_ACTION_INDEX,
                 intent.getIntExtra(NotificationConstants.EXTRA_NOTIFICATION_INFO_ACTION_INDEX, -1));
-        bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_INFO_WEBAPK_PACKAGE,
+        bundle.putString(
+                NotificationConstants.EXTRA_NOTIFICATION_INFO_WEBAPK_PACKAGE,
                 intent.getStringExtra(
                         NotificationConstants.EXTRA_NOTIFICATION_INFO_WEBAPK_PACKAGE));
         bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_ACTION, intent.getAction());
         // Only primitives can be set on a persistable bundle, so extract the raw reply.
-        bundle.putString(NotificationConstants.EXTRA_NOTIFICATION_REPLY,
+        bundle.putString(
+                NotificationConstants.EXTRA_NOTIFICATION_REPLY,
                 NotificationPlatformBridge.getNotificationReply(intent));
         return bundle;
     }

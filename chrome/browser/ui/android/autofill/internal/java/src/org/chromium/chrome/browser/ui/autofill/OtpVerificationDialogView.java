@@ -7,8 +7,6 @@ package org.chromium.chrome.browser.ui.autofill;
 import static org.chromium.chrome.browser.ui.autofill.OtpVerificationDialogProperties.ANIMATION_DURATION_MS;
 
 import android.content.Context;
-import android.os.Build.VERSION_CODES;
-import android.text.Editable;
 import android.text.SpannableString;
 import android.text.TextWatcher;
 import android.text.method.LinkMovementMethod;
@@ -18,10 +16,9 @@ import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-import androidx.annotation.RequiresApi;
-
 import org.chromium.chrome.browser.ui.autofill.OtpVerificationDialogProperties.ViewDelegate;
 import org.chromium.chrome.browser.ui.autofill.internal.R;
+import org.chromium.ui.text.EmptyTextWatcher;
 import org.chromium.ui.text.NoUnderlineClickableSpan;
 import org.chromium.ui.text.SpanApplier;
 import org.chromium.ui.text.SpanApplier.SpanInfo;
@@ -72,7 +69,6 @@ public class OtpVerificationDialogView extends RelativeLayout {
      *
      * @param viewDelegate The view delegate for this specific view.
      */
-    @RequiresApi(api = VERSION_CODES.N)
     void setViewDelegate(ViewDelegate viewDelegate) {
         mOtpEditText.addTextChangedListener(buildTextWatcher(viewDelegate));
         mOtpResendMessageTextView.setText(buildOtpResendMessageLink(getContext(), viewDelegate));
@@ -107,7 +103,6 @@ public class OtpVerificationDialogView extends RelativeLayout {
      * @param errorMessage The error message that gets displayed to the user. Can be empty,
      * indicating there should be no error message shown on the dialog (so we hide it).
      */
-    @RequiresApi(api = VERSION_CODES.N)
     void showOtpErrorMessage(Optional<String> errorMessage) {
         mOtpErrorMessageTextView.setVisibility(View.VISIBLE);
         mOtpErrorMessageTextView.setText(errorMessage.get());
@@ -136,29 +131,28 @@ public class OtpVerificationDialogView extends RelativeLayout {
     }
 
     private TextWatcher buildTextWatcher(ViewDelegate viewDelegate) {
-        return new TextWatcher() {
+        return new EmptyTextWatcher() {
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 viewDelegate.onTextChanged(s);
             }
-
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void afterTextChanged(Editable s) {}
         };
     }
 
     /** Builds Otp Resend Message Link **/
-    @RequiresApi(api = VERSION_CODES.N)
     private SpannableString buildOtpResendMessageLink(Context context, ViewDelegate viewDelegate) {
         return SpanApplier.applySpans(
-                context.getResources().getString(
-                        org.chromium.chrome.browser.ui.autofill.internal.R.string
-                                .autofill_payments_otp_verification_dialog_cant_find_code_message),
-                new SpanInfo("<link>", "</link>",
+                context.getResources()
+                        .getString(
+                                org.chromium.chrome.browser.ui.autofill.internal.R.string
+                                        .autofill_payments_otp_verification_dialog_cant_find_code_message),
+                new SpanInfo(
+                        "<link>",
+                        "</link>",
                         new NoUnderlineClickableSpan(
-                                context, textView -> { viewDelegate.onResendLinkClicked(); })));
+                                context,
+                                textView -> {
+                                    viewDelegate.onResendLinkClicked();
+                                })));
     }
 }

@@ -25,6 +25,11 @@
 namespace variations {
 class VariationsClient;
 
+namespace cros_early_boot::evaluate_seed {
+// For friend purposes (for DestroyInstanceForTesting().)
+class VariationsCrosEvaluateSeedMainTest;
+}  // namespace cros_early_boot::evaluate_seed
+
 // The key for a VariationsIdsProvider's |variations_headers_map_|. A
 // VariationsHeaderKey provides more details about the VariationsIDs included in
 // a particular header. For example, the header associated with a key with true
@@ -110,6 +115,10 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // apps.
   std::string GetGoogleAppVariationsString();
 
+  // Same as GetVariationString(), but returns all triggering IDs.
+  // IMPORTANT: This string should only be used for debugging and diagnostics.
+  std::string GetTriggerVariationsString();
+
   // Returns the collection of VariationIDs associated with |keys|. Each entry
   // in the returned vector is unique.
   std::vector<VariationID> GetVariationsVector(
@@ -157,6 +166,9 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   typedef std::pair<VariationID, IDCollectionKey> VariationIDEntry;
 
   friend class ScopedVariationsIdsProvider;
+  // For DestroyInstanceForTesting
+  friend class cros_early_boot::evaluate_seed::
+      VariationsCrosEvaluateSeedMainTest;
 
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest, ForceVariationIds_Valid);
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
@@ -167,11 +179,11 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
                            ForceDisableVariationIds_ValidCommandLine);
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            ForceDisableVariationIds_Invalid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTestWithRestrictedVisibility,
+  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            OnFieldTrialGroupFinalized);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTestWithRestrictedVisibility,
+  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            LowEntropySourceValue_Valid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTestWithRestrictedVisibility,
+  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            LowEntropySourceValue_Null);
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            GetGoogleAppVariationsString);
@@ -195,11 +207,13 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // base::FieldTrialList::Observer:
   // This will add the variation ID associated with |trial_name| and
   // |group_name| to the variation ID cache.
-  void OnFieldTrialGroupFinalized(const std::string& trial_name,
+  void OnFieldTrialGroupFinalized(const base::FieldTrial& trial,
                                   const std::string& group_name) override;
 
   // metrics::SyntheticTrialObserver:
   void OnSyntheticTrialsChanged(
+      const std::vector<SyntheticTrialGroup>& trials_updated,
+      const std::vector<SyntheticTrialGroup>& trials_removed,
       const std::vector<SyntheticTrialGroup>& groups) override;
 
   // Prepares the variation IDs cache with initial values if not already done.

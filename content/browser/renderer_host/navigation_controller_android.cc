@@ -10,11 +10,12 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_map.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "content/browser/android/additional_navigation_params_utils.h"
 #include "content/browser/renderer_host/navigation_controller_impl.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/public/android/content_jni_headers/NavigationControllerImpl_jni.h"
@@ -61,20 +62,17 @@ JNI_NavigationControllerImpl_CreateJavaNavigationEntry(
       url::GURLAndroid::FromNativeGURL(env, entry->GetOriginalRequestURL()));
   ScopedJavaLocalRef<jstring> j_title(
       ConvertUTF16ToJavaString(env, entry->GetTitle()));
-  ScopedJavaLocalRef<jobject> j_referrer_url(
-      url::GURLAndroid::FromNativeGURL(env, entry->GetReferrer().url));
   ScopedJavaLocalRef<jobject> j_bitmap;
   const content::FaviconStatus& status = entry->GetFavicon();
   if (status.valid && status.image.ToSkBitmap()->computeByteSize() > 0) {
     j_bitmap = gfx::ConvertToJavaBitmap(*status.image.ToSkBitmap(),
                                         gfx::OomBehavior::kReturnNullOnOom);
   }
-  jlong j_timestamp = entry->GetTimestamp().ToJavaTime();
+  jlong j_timestamp = entry->GetTimestamp().InMillisecondsSinceUnixEpoch();
 
   return content::Java_NavigationControllerImpl_createNavigationEntry(
-      env, index, j_url, j_virtual_url, j_original_url, j_referrer_url, j_title,
-      j_bitmap, entry->GetTransitionType(), j_timestamp,
-      entry->IsInitialEntry());
+      env, index, j_url, j_virtual_url, j_original_url, j_title, j_bitmap,
+      entry->GetTransitionType(), j_timestamp, entry->IsInitialEntry());
 }
 
 static void JNI_NavigationControllerImpl_AddNavigationEntryToHistory(
@@ -237,8 +235,7 @@ void NavigationControllerAndroid::GoToNavigationIndex(
   navigation_controller_->GoToIndex(index);
 }
 
-base::android::ScopedJavaGlobalRef<jobject>
-NavigationControllerAndroid::LoadUrl(
+base::android::ScopedJavaLocalRef<jobject> NavigationControllerAndroid::LoadUrl(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj,
     const JavaParamRef<jstring>& url,
@@ -258,6 +255,7 @@ NavigationControllerAndroid::LoadUrl(
     const JavaParamRef<jobject>& j_initiator_origin,
     jboolean has_user_gesture,
     jboolean should_clear_history_list,
+    const base::android::JavaParamRef<jobject>& j_additional_navigation_params,
     jlong input_start,
     jlong navigation_ui_data_ptr) {
   DCHECK(url);
@@ -277,6 +275,31 @@ NavigationControllerAndroid::LoadUrl(
   params.should_replace_current_entry = should_replace_current_entry;
   params.has_user_gesture = has_user_gesture;
   params.should_clear_history_list = should_clear_history_list;
+
+  if (j_additional_navigation_params) {
+    params.initiator_frame_token =
+        GetInitiatorFrameTokenFromJavaAdditionalNavigationParams(
+            env, j_additional_navigation_params);
+    params.initiator_process_id =
+        GetInitiatorProcessIdFromJavaAdditionalNavigationParams(
+            env, j_additional_navigation_params);
+
+    // If the attribution src token exists, then an impression exists with this
+    // navigation.
+    if (GetAttributionSrcTokenFromJavaAdditionalNavigationParams(
+            env, j_additional_navigation_params)
+            .has_value()) {
+      blink::Impression impression;
+      impression.attribution_src_token =
+          GetAttributionSrcTokenFromJavaAdditionalNavigationParams(
+              env, j_additional_navigation_params)
+              .value();
+      impression.runtime_features =
+          GetAttributionRuntimeFeaturesFromJavaAdditionalNavigationParams(
+              env, j_additional_navigation_params);
+      params.impression = impression;
+    }
+  }
 
   if (extra_headers)
     params.extra_headers = ConvertJavaStringToUTF8(env, extra_headers);
@@ -334,7 +357,7 @@ NavigationControllerAndroid::LoadUrl(
     return nullptr;
   }
 
-  return base::android::ScopedJavaGlobalRef<jobject>(
+  return base::android::ScopedJavaLocalRef<jobject>(
       handle->GetJavaNavigationHandle());
 }
 
@@ -438,8 +461,18 @@ void NavigationControllerAndroid::SetUseDesktopUserAgentInternal(
     bool reload_on_state_change) {
   // Make sure the navigation entry actually exists.
   NavigationEntry* entry = navigation_controller_->GetLastCommittedEntry();
-  if (!entry)
+  // TODO(crbug.com/1414625): Early return for initial NavigationEntries as a
+  // workaround. Currently, doing a reload while on the initial NavigationEntry
+  // might result in committing an unrelated pending NavigationEntry and
+  // mistakenly marking that entry as an initial NavigationEntry. That will
+  // cause problems, such as the URL bar showing about:blank instead of the URL
+  // of the NavigationEntry. To prevent that happening in this case, skip
+  // reloading initial NavigationEntries entirely. This is a short-term fix,
+  // while we work on a long-term fix to no longer mistakenly mark the unrelated
+  // pending NavigationEntry as the initial NavigationEntry.
+  if (!entry || entry->IsInitialEntry()) {
     return;
+  }
 
   // Set the flag in the NavigationEntry.
   entry->SetIsOverridingUserAgent(enabled);
@@ -449,7 +482,7 @@ void NavigationControllerAndroid::SetUseDesktopUserAgentInternal(
   if (reload_on_state_change) {
     // Reloading the page will send the override down as part of the
     // navigation IPC message.
-    navigation_controller_->Reload(ReloadType::ORIGINAL_REQUEST_URL, true);
+    navigation_controller_->LoadOriginalRequestURL();
   }
 }
 
@@ -538,13 +571,6 @@ void NavigationControllerAndroid::SetEntryExtraData(
   MapData* map_data =
       MapData::Get(navigation_controller_->GetEntryAtIndex(index));
   map_data->map()[key] = value;
-}
-
-jboolean NavigationControllerAndroid::IsEntryMarkedToBeSkipped(
-    JNIEnv* env,
-    const base::android::JavaParamRef<jobject>& obj,
-    jint index) {
-  return navigation_controller_->IsEntryMarkedToBeSkipped(index);
 }
 
 }  // namespace content

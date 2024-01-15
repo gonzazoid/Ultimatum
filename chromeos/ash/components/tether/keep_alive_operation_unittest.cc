@@ -5,22 +5,23 @@
 #include "chromeos/ash/components/tether/keep_alive_operation.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/tether/message_wrapper.h"
 #include "chromeos/ash/components/tether/proto_test_util.h"
 #include "chromeos/ash/components/tether/test_timer_factory.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_client_channel.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_connection_attempt.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_secure_channel_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using testing::_;
 using testing::Invoke;
@@ -113,7 +114,8 @@ class KeepAliveOperationTest : public testing::Test {
   const multidevice::RemoteDeviceRef local_device_;
   const multidevice::RemoteDeviceRef remote_device_;
 
-  secure_channel::FakeConnectionAttempt* connection_attempt_;
+  raw_ptr<secure_channel::FakeConnectionAttempt, DanglingUntriaged>
+      connection_attempt_;
   std::unique_ptr<device_sync::FakeDeviceSyncClient> fake_device_sync_client_;
   std::unique_ptr<secure_channel::FakeSecureChannelClient>
       fake_secure_channel_client_;

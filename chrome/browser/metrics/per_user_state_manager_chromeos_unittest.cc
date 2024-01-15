@@ -56,6 +56,10 @@ class TestPerUserStateManager : public PerUserStateManagerChromeOS {
     is_device_owned_ = is_device_owned;
   }
 
+  void SetIsDeviceStatusKnown(bool is_device_status_known) {
+    is_device_status_known_ = is_device_status_known;
+  }
+
   bool is_log_store_set() const { return is_log_store_set_; }
   bool is_client_id_reset() const { return is_client_id_reset_; }
 
@@ -74,10 +78,15 @@ class TestPerUserStateManager : public PerUserStateManagerChromeOS {
 
   bool IsDeviceOwned() const override { return is_device_owned_; }
 
+  bool IsDeviceStatusKnown() const override { return is_device_status_known_; }
+
   void WaitForOwnershipStatus() override {
-    InitializeProfileMetricsState(
-        is_device_owned_ ? ash::DeviceSettingsService::OWNERSHIP_TAKEN
-                         : ash::DeviceSettingsService::OWNERSHIP_NONE);
+    if (IsDeviceStatusKnown()) {
+      InitializeProfileMetricsState(
+          is_device_owned_
+              ? ash::DeviceSettingsService::OwnershipStatus::kOwnershipTaken
+              : ash::DeviceSettingsService::OwnershipStatus::kOwnershipNone);
+    }
   }
 
  private:
@@ -86,6 +95,7 @@ class TestPerUserStateManager : public PerUserStateManagerChromeOS {
   bool is_managed_ = false;
   bool device_metrics_consent_ = true;
   bool is_device_owned_ = true;
+  bool is_device_status_known_ = true;
 };
 
 }  // namespace
@@ -184,9 +194,21 @@ class PerUserStateManagerChromeOSTest : public testing::Test {
 
  protected:
   void SetUp() override {
-    storage_limits_.min_ongoing_log_queue_count = 5;
-    storage_limits_.min_ongoing_log_queue_size = 10000;
-    storage_limits_.max_ongoing_log_size = 0;
+    // Limits to ensure at least some logs will be persisted for the tests.
+    storage_limits_ = {
+        // Log store that can hold up to 5 logs. Set so that logs are not
+        // dropped in the tests.
+        .initial_log_queue_limits =
+            UnsentLogStore::UnsentLogStoreLimits{
+                .min_log_count = 5,
+            },
+        // Log store that can hold up to 5 logs. Set so that logs are not
+        // dropped in the tests.
+        .ongoing_log_queue_limits =
+            UnsentLogStore::UnsentLogStoreLimits{
+                .min_log_count = 5,
+            },
+    };
 
     test_user_manager_ = std::make_unique<ash::FakeChromeUserManager>();
 
@@ -383,14 +405,13 @@ TEST_F(PerUserStateManagerChromeOSTest, OwnerCannotUsePerUser) {
   EXPECT_TRUE(GetPerUserStateManager()->is_log_store_set());
 }
 
-TEST_F(PerUserStateManagerChromeOSTest,
-       NewOrMigratingUserInheritsOwnerConsent) {
+TEST_F(PerUserStateManagerChromeOSTest, NewUserInheritsOwnerConsent) {
   auto* test_user =
       RegisterUser(AccountId::FromUserEmailGaiaId("test@example.com", "1"));
   InitializeProfileState(/*user_id=*/"", /*metrics_consent=*/false,
                          /*has_consented_to_metrics=*/false);
 
-  // User should inherit owner consent if migrating or new user.
+  // User should inherit owner consent if new user.
   SetShouldInheritOwnerConsent(true);
 
   GetPerUserStateManager()->SetIsManaged(false);
@@ -483,6 +504,30 @@ TEST_F(PerUserStateManagerChromeOSTest, MultiUserUsesPrimaryUser) {
 
   // Profiles must be destructed on the UI thread.
   test_user2_profile.reset();
+}
+
+TEST_F(PerUserStateManagerChromeOSTest,
+       PerUserDisabledWhenOwnershipStatusUnknown) {
+  auto* test_user =
+      RegisterUser(AccountId::FromUserEmailGaiaId("test1@example.com", "1"));
+  InitializeProfileState(/*user_id=*/"", /*metrics_consent=*/true,
+                         /*has_consented_to_metrics=*/true);
+
+  // Ownership status of device is unknown.
+  GetPerUserStateManager()->SetIsDeviceStatusKnown(false);
+
+  // Simulate user login.
+  LoginRegularUser(test_user);
+
+  // User log store is created async. Ensure that the log store loading
+  // finishes.
+  RunUntilIdle();
+
+  // Per-user should not run if ownership status is unknown.
+  EXPECT_FALSE(GetPerUserStateManager()
+                   ->GetCurrentUserReportingConsentIfApplicable()
+                   .has_value());
+  EXPECT_FALSE(GetPerUserStateManager()->is_log_store_set());
 }
 
 }  // namespace metrics

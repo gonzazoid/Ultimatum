@@ -6,11 +6,14 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
+#include "components/permissions/features.h"
 #include "components/permissions/permission_request.h"
 #include "components/resources/android/theme_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/elide_url.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/strings/grit/ui_strings.h"
 
 namespace permissions {
 
@@ -33,12 +36,25 @@ PermissionPromptAndroid::GetTabSwitchingBehavior() {
   return TabSwitchingBehavior::kKeepPromptAlive;
 }
 
+absl::optional<gfx::Rect> PermissionPromptAndroid::GetViewBoundsInScreen()
+    const {
+  return absl::nullopt;
+}
+
+bool PermissionPromptAndroid::ShouldFinalizeRequestAfterDecided() const {
+  return true;
+}
+
 void PermissionPromptAndroid::Closing() {
   delegate_->Dismiss();
 }
 
 void PermissionPromptAndroid::Accept() {
   delegate_->Accept();
+}
+
+void PermissionPromptAndroid::AcceptThisTime() {
+  delegate_->AcceptThisTime();
 }
 
 void PermissionPromptAndroid::Deny() {
@@ -68,13 +84,15 @@ size_t PermissionPromptAndroid::PermissionCount() const {
 
 ContentSettingsType PermissionPromptAndroid::GetContentSettingType(
     size_t position) const {
-  const std::vector<PermissionRequest*>& requests = delegate_->Requests();
+  const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>& requests =
+      delegate_->Requests();
   CHECK_LT(position, requests.size());
   return requests[position]->GetContentSettingsType();
 }
 
 static bool IsValidMediaRequestGroup(
-    const std::vector<PermissionRequest*>& requests) {
+    const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>&
+        requests) {
   if (requests.size() < 2)
     return false;
   return ((requests[0]->request_type() == RequestType::kMicStream &&
@@ -85,23 +103,56 @@ static bool IsValidMediaRequestGroup(
 
 // Grouped permission requests can only be Mic+Camera, Camera+Mic.
 static void CheckValidRequestGroup(
-    const std::vector<PermissionRequest*>& requests) {
+    const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>&
+        requests) {
   DCHECK_EQ(static_cast<size_t>(2u), requests.size());
   DCHECK((IsValidMediaRequestGroup(requests)));
 }
 
 int PermissionPromptAndroid::GetIconId() const {
-  const std::vector<PermissionRequest*>& requests = delegate_->Requests();
-  if (requests.size() == 1)
+  const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>& requests =
+      delegate_->Requests();
+  if (requests.size() == 1) {
+    if (requests[0]->request_type() == RequestType::kStorageAccess &&
+        base::FeatureList::IsEnabled(
+            permissions::features::kPermissionStorageAccessAPI)) {
+      return IDR_ANDROID_GLOBE;
+    }
     return permissions::GetIconId(requests[0]->request_type());
+  }
   CheckValidRequestGroup(requests);
   return IDR_ANDROID_INFOBAR_MEDIA_STREAM_CAMERA;
 }
 
 std::u16string PermissionPromptAndroid::GetMessageText() const {
-  const std::vector<PermissionRequest*>& requests = delegate_->Requests();
+  const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>& requests =
+      delegate_->Requests();
   if (requests.size() == 1) {
     if (requests[0]->request_type() == RequestType::kStorageAccess) {
+      if (base::FeatureList::IsEnabled(
+              permissions::features::kPermissionStorageAccessAPI)) {
+        auto patterns =
+            HostContentSettingsMap::GetPatternsForContentSettingsType(
+                delegate_->GetRequestingOrigin(),
+                delegate_->GetEmbeddingOrigin(),
+                ContentSettingsType::STORAGE_ACCESS);
+
+        auto requesting_origin = url_formatter::FormatUrlForSecurityDisplay(
+            patterns.first.ToRepresentativeUrl(),
+            url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC);
+        auto embedding_origin = url_formatter::FormatUrlForSecurityDisplay(
+            patterns.second.ToRepresentativeUrl(),
+            url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC);
+
+        return l10n_util::GetStringFUTF16(
+            IDS_CONCAT_TWO_STRINGS_WITH_PERIODS,
+            l10n_util::GetStringFUTF16(
+                IDS_STORAGE_ACCESS_PERMISSION_TWO_ORIGIN_PROMPT_TITLE,
+                requesting_origin),
+            l10n_util::GetStringFUTF16(
+                IDS_STORAGE_ACCESS_PERMISSION_TWO_ORIGIN_EXPLANATION,
+                requesting_origin, embedding_origin));
+      }
       return l10n_util::GetStringFUTF16(
           IDS_STORAGE_ACCESS_INFOBAR_TEXT,
           url_formatter::FormatUrlForSecurityDisplay(
@@ -110,9 +161,8 @@ std::u16string PermissionPromptAndroid::GetMessageText() const {
           url_formatter::FormatUrlForSecurityDisplay(
               delegate_->GetEmbeddingOrigin(),
               url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC));
-    } else {
-      return requests[0]->GetDialogMessageText();
     }
+    return requests[0]->GetDialogMessageText();
   }
   CheckValidRequestGroup(requests);
   return l10n_util::GetStringFUTF16(
@@ -120,6 +170,20 @@ std::u16string PermissionPromptAndroid::GetMessageText() const {
       url_formatter::FormatUrlForSecurityDisplay(
           delegate_->GetRequestingOrigin(),
           url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC));
+}
+
+bool PermissionPromptAndroid::ShouldUseRequestingOriginFavicon() const {
+  const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>& requests =
+      delegate_->Requests();
+  CHECK_GT(requests.size(), 0U);
+
+  return requests[0]->request_type() == RequestType::kStorageAccess &&
+         base::FeatureList::IsEnabled(
+             permissions::features::kPermissionStorageAccessAPI);
+}
+
+GURL PermissionPromptAndroid::GetRequestingOrigin() const {
+  return delegate_->GetRequestingOrigin();
 }
 
 }  // namespace permissions

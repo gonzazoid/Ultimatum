@@ -4,8 +4,9 @@
 
 #include "content/browser/media/android/browser_gpu_video_accelerator_factories.h"
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/public/browser/android/gpu_video_accelerator_factories_provider.h"
 #include "content/public/common/gpu_stream_constants.h"
@@ -20,39 +21,39 @@ namespace content {
 
 namespace {
 
+// Controls if browser compositor context can be backed by raster decoder.
+// TODO(crbug.com/1505425): Remove kill switch once rolled out to stable.
+BASE_FEATURE(kUseRasterDecoderForAndroidBrowserMediaContext,
+             "UseRasterDecoderForAndroidBrowserMediaContext",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 void OnGpuChannelEstablished(
     GpuVideoAcceleratorFactoriesCallback callback,
     scoped_refptr<gpu::GpuChannelHost> gpu_channel_host) {
+  const bool use_raster_decoder = base::FeatureList::IsEnabled(
+      kUseRasterDecoderForAndroidBrowserMediaContext);
+
   gpu::ContextCreationAttribs attributes;
-  attributes.alpha_size = -1;
-  attributes.red_size = 8;
-  attributes.green_size = 8;
-  attributes.blue_size = 8;
-  attributes.stencil_size = 0;
-  attributes.depth_size = 0;
-  attributes.samples = 0;
-  attributes.sample_buffers = 0;
   attributes.bind_generates_resource = false;
   attributes.enable_raster_interface = true;
-
-  gpu::GpuChannelEstablishFactory* factory =
-      BrowserMainLoop::GetInstance()->gpu_channel_establish_factory();
+  attributes.enable_oop_rasterization = use_raster_decoder;
+  attributes.enable_gles2_interface = !use_raster_decoder;
+  attributes.enable_grcontext = !use_raster_decoder;
 
   int32_t stream_id = kGpuStreamIdDefault;
   gpu::SchedulingPriority stream_priority = kGpuStreamPriorityUI;
 
   constexpr bool automatic_flushes = false;
   constexpr bool support_locking = false;
-  constexpr bool support_grcontext = true;
 
   auto context_provider =
       base::MakeRefCounted<viz::ContextProviderCommandBuffer>(
-          std::move(gpu_channel_host), factory->GetGpuMemoryBufferManager(),
-          stream_id, stream_priority, gpu::kNullSurfaceHandle,
+          std::move(gpu_channel_host), stream_id, stream_priority,
+          gpu::kNullSurfaceHandle,
           GURL(std::string("chrome://gpu/"
                            "BrowserGpuVideoAcceleratorFactories::"
                            "CreateGpuVideoAcceleratorFactories")),
-          automatic_flushes, support_locking, support_grcontext,
+          automatic_flushes, support_locking,
           gpu::SharedMemoryLimits::ForMailboxContext(), attributes,
           viz::command_buffer_metrics::ContextType::UNKNOWN);
   context_provider->BindToCurrentSequence();
@@ -136,8 +137,8 @@ bool BrowserGpuVideoAcceleratorFactories::IsDecoderSupportKnown() {
 
 void BrowserGpuVideoAcceleratorFactories::NotifyDecoderSupportKnown(
     base::OnceClosure callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 }
 
 std::unique_ptr<media::VideoDecoder>
@@ -178,14 +179,12 @@ BrowserGpuVideoAcceleratorFactories::VideoFrameOutputFormat(
 
 gpu::SharedImageInterface*
 BrowserGpuVideoAcceleratorFactories::SharedImageInterface() {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 gpu::GpuMemoryBufferManager*
 BrowserGpuVideoAcceleratorFactories::GpuMemoryBufferManager() {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 base::UnsafeSharedMemoryRegion
@@ -198,7 +197,7 @@ BrowserGpuVideoAcceleratorFactories::GetTaskRunner() {
   return nullptr;
 }
 
-absl::optional<media::VideoEncodeAccelerator::SupportedProfiles>
+std::optional<media::VideoEncodeAccelerator::SupportedProfiles>
 BrowserGpuVideoAcceleratorFactories::
     GetVideoEncodeAcceleratorSupportedProfiles() {
   return media::VideoEncodeAccelerator::SupportedProfiles();
@@ -210,8 +209,8 @@ bool BrowserGpuVideoAcceleratorFactories::IsEncoderSupportKnown() {
 
 void BrowserGpuVideoAcceleratorFactories::NotifyEncoderSupportKnown(
     base::OnceClosure callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 }
 
 viz::RasterContextProvider*

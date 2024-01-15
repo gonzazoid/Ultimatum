@@ -7,13 +7,12 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/qrcode_generator/qrcode_generator_bubble_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
+#include "chrome/services/qrcode_generator/public/cpp/qrcode_generator_service.h"
 #include "chrome/services/qrcode_generator/public/mojom/qrcode_generator.mojom.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
@@ -40,10 +39,11 @@ namespace qrcode_generator {
 class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
                               public LocationBarBubbleDelegateView,
                               public views::TextfieldController {
+  METADATA_HEADER(QRCodeGeneratorBubble, LocationBarBubbleDelegateView)
+
  public:
-  METADATA_HEADER(QRCodeGeneratorBubble);
   QRCodeGeneratorBubble(views::View* anchor_view,
-                        content::WebContents* web_contents,
+                        base::WeakPtr<content::WebContents> web_contents,
                         base::OnceClosure on_closing,
                         base::OnceClosure on_back_button_pressed,
                         const GURL& url);
@@ -75,7 +75,9 @@ class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
   views::LabelButton* download_button_for_testing() { return download_button_; }
 
   void SetQRCodeServiceForTesting(
-      mojo::Remote<mojom::QRCodeGeneratorService>&& remote);
+      base::RepeatingCallback<void(mojom::GenerateQRCodeRequestPtr request,
+                                   QRImageGenerator::ResponseCallback callback)>
+          qrcode_service_override);
 
  private:
   // Updates and formats QR code, text, and controls.
@@ -113,6 +115,10 @@ class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
   bool HandleMouseEvent(views::Textfield* sender,
                         const ui::MouseEvent& mouse_event) override;
 
+  const SkBitmap GetBitmap();
+
+  void CopyButtonPressed();
+
   void DownloadButtonPressed();
 
   void BackButtonPressed();
@@ -120,24 +126,41 @@ class QRCodeGeneratorBubble : public QRCodeGeneratorBubbleView,
   // Callback for the request to the OOP service to generate a new image.
   void OnCodeGeneratorResponse(const mojom::GenerateQRCodeResponsePtr response);
 
-  // Remote to service instance to generate QR code images.
-  mojo::Remote<mojom::QRCodeGeneratorService> qr_code_service_remote_;
+  // TODO(https://crbug.com/1431991): Remove this field once there is no
+  // internal state (e.g. no `mojo::Remote`) that needs to be maintained by the
+  // `QRImageGenerator` class.
+  std::unique_ptr<QRImageGenerator> qrcode_service_;
+
+  // Unit tests can set `qr_code_service_override_` to intercept QR code
+  // requests and inject test-controlled QR code responses.
+  //
+  // Rationale for using a `RepeatingCallback` instead of implementing
+  // dependency injection using virtual methods: 1) `GenerateQRCode` will become
+  // a free function after shipping https://crbug.com/1431991, 2) in general
+  // `RepeatingCallback` is equivalent to a pure interface with a single method,
+  // (note that `RepeatingCallback` below has the same signature as
+  // `GenerateQRCode`).
+  base::RepeatingCallback<void(mojom::GenerateQRCodeRequestPtr request,
+                               QRImageGenerator::ResponseCallback callback)>
+      qrcode_service_override_;
 
   // URL for which the QR code is being generated.
   // Used for validation.
   GURL url_;
 
-  // Pointers to view widgets; weak.
-  raw_ptr<views::ImageView, DanglingUntriaged> qr_code_image_ = nullptr;
-  raw_ptr<views::Textfield, DanglingUntriaged> textfield_url_ = nullptr;
-  raw_ptr<views::LabelButton, DanglingUntriaged> download_button_ = nullptr;
-  raw_ptr<views::TooltipIcon, DanglingUntriaged> tooltip_icon_ = nullptr;
-  raw_ptr<views::Label, DanglingUntriaged> center_error_label_ = nullptr;
-  raw_ptr<views::Label, DanglingUntriaged> bottom_error_label_ = nullptr;
+  // Pointers to subviews that we need to update the contents or visibility of
+  // after creation.
+  raw_ptr<views::ImageView> qr_code_image_ = nullptr;
+  raw_ptr<views::Textfield> textfield_url_ = nullptr;
+  raw_ptr<views::LabelButton> copy_button_ = nullptr;
+  raw_ptr<views::LabelButton> download_button_ = nullptr;
+  raw_ptr<views::TooltipIcon> tooltip_icon_ = nullptr;
+  raw_ptr<views::Label> center_error_label_ = nullptr;
+  raw_ptr<views::Label> bottom_error_label_ = nullptr;
 
   base::OnceClosure on_closing_;
   base::OnceClosure on_back_button_pressed_;
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;  // weak.
+  base::WeakPtr<content::WebContents> web_contents_;
 };
 
 }  // namespace qrcode_generator

@@ -8,12 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/guest_view/web_view/web_ui/web_ui_url_fetcher.h"
 #include "extensions/common/mojom/host_id.mojom.h"
@@ -23,10 +22,10 @@ namespace {
 
 void SerializeOnBlockingTask(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
-    std::unique_ptr<extensions::UserScriptList> user_scripts,
+    extensions::UserScriptList user_scripts,
     extensions::UserScriptLoader::LoadScriptsCallback callback) {
   base::ReadOnlySharedMemoryRegion memory =
-      extensions::UserScriptLoader::Serialize(*user_scripts);
+      extensions::UserScriptLoader::Serialize(user_scripts);
 
   task_runner->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(user_scripts),
@@ -58,25 +57,25 @@ WebUIUserScriptLoader::WebUIUserScriptLoader(
 WebUIUserScriptLoader::~WebUIUserScriptLoader() {
 }
 
-void WebUIUserScriptLoader::AddScripts(
-    std::unique_ptr<extensions::UserScriptList> scripts,
-    int render_process_id,
-    int render_frame_id,
-    ScriptsLoadedCallback callback) {
+void WebUIUserScriptLoader::AddScripts(extensions::UserScriptList scripts,
+                                       int render_process_id,
+                                       int render_frame_id,
+                                       ScriptsLoadedCallback callback) {
   UserScriptRenderInfo info(render_process_id, render_frame_id);
-  for (const std::unique_ptr<extensions::UserScript>& script : *scripts)
+  for (const std::unique_ptr<extensions::UserScript>& script : scripts) {
     script_render_info_map_.emplace(script->id(), info);
+  }
 
   extensions::UserScriptLoader::AddScripts(std::move(scripts),
                                            std::move(callback));
 }
 
 void WebUIUserScriptLoader::LoadScripts(
-    std::unique_ptr<extensions::UserScriptList> user_scripts,
+    extensions::UserScriptList user_scripts,
     const std::set<std::string>& added_script_ids,
     LoadScriptsCallback callback) {
-  DCHECK(!user_scripts_cache_) << "Loading scripts in flight.";
-  user_scripts_cache_.swap(user_scripts);
+  DCHECK(user_scripts_cache_.empty()) << "Loading scripts in flight.";
+  user_scripts_cache_ = std::move(user_scripts);
   scripts_loaded_callback_ = std::move(callback);
 
   // The total number of the tasks is used to trace whether all the fetches
@@ -86,7 +85,7 @@ void WebUIUserScriptLoader::LoadScripts(
   DCHECK_EQ(0u, complete_fetchers_);
 
   for (const std::unique_ptr<extensions::UserScript>& script :
-       *user_scripts_cache_) {
+       user_scripts_cache_) {
     if (added_script_ids.count(script->id()) == 0)
       continue;
 
@@ -113,41 +112,38 @@ void WebUIUserScriptLoader::LoadScripts(
 }
 
 void WebUIUserScriptLoader::CreateWebUIURLFetchers(
-    const extensions::UserScript::FileList& script_files,
+    const extensions::UserScript::ContentList& contents,
     int render_process_id,
     int render_frame_id) {
-  for (const std::unique_ptr<extensions::UserScript::File>& script_file :
-       script_files) {
-    if (script_file->GetContent().empty()) {
+  for (const std::unique_ptr<extensions::UserScript::Content>& content :
+       contents) {
+    if (content->GetContent().empty()) {
       // The WebUIUserScriptLoader owns these WebUIURLFetchers. Once the
       // loader is destroyed, all the fetchers will be destroyed. Therefore,
       // we are sure it is safe to use base::Unretained(this) here.
-      // |user_scripts_cache_| retains ownership of the scripts while they are
-      // being loaded, so passing a raw pointer to |script_file| below to
+      // `user_scripts_cache_` retains ownership of the scripts while they are
+      // being loaded, so passing a raw pointer to `content` below to
       // WebUIUserScriptLoader is also safe.
       std::unique_ptr<WebUIURLFetcher> fetcher(new WebUIURLFetcher(
-          render_process_id, render_frame_id, script_file->url(),
+          render_process_id, render_frame_id, content->url(),
           base::BindOnce(&WebUIUserScriptLoader::OnSingleWebUIURLFetchComplete,
-                         base::Unretained(this), script_file.get())));
+                         base::Unretained(this), content.get())));
       fetchers_.push_back(std::move(fetcher));
     }
   }
 }
 
 void WebUIUserScriptLoader::OnSingleWebUIURLFetchComplete(
-    extensions::UserScript::File* script_file,
+    extensions::UserScript::Content* content,
     bool success,
     std::unique_ptr<std::string> data) {
   if (success) {
     // Remove BOM from |data|.
     if (base::StartsWith(*data, base::kUtf8ByteOrderMark,
                          base::CompareCase::SENSITIVE)) {
-      script_file->set_content(data->substr(strlen(base::kUtf8ByteOrderMark)));
-    } else {
-      // TODO(lazyboy): Script files should take ownership of |data|, i.e. the
-      // content of the script.
-      script_file->set_content(*data);
+      data->erase(0, strlen(base::kUtf8ByteOrderMark));
     }
+    content->set_content(std::move(*data));
   }
 
   ++complete_fetchers_;
@@ -161,7 +157,9 @@ void WebUIUserScriptLoader::OnSingleWebUIURLFetchComplete(
 void WebUIUserScriptLoader::OnWebUIURLFetchComplete() {
   base::ThreadPool::PostTask(
       FROM_HERE, {base::MayBlock()},
-      base::BindOnce(
-          &SerializeOnBlockingTask, base::SequencedTaskRunnerHandle::Get(),
-          std::move(user_scripts_cache_), std::move(scripts_loaded_callback_)));
+      base::BindOnce(&SerializeOnBlockingTask,
+                     base::SequencedTaskRunner::GetCurrentDefault(),
+                     std::move(user_scripts_cache_),
+                     std::move(scripts_loaded_callback_)));
+  user_scripts_cache_.clear();
 }

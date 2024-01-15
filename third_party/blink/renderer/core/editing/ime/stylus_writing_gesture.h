@@ -5,10 +5,11 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_IME_STYLUS_WRITING_GESTURE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EDITING_IME_STYLUS_WRITING_GESTURE_H_
 
+#include "third_party/blink/public/mojom/input/handwriting_gesture_result.mojom-blink.h"
 #include "third_party/blink/public/mojom/input/stylus_writing_gesture.mojom-blink.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
-#include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace blink {
 
@@ -18,11 +19,12 @@ class StylusWritingGesture {
  public:
   virtual ~StylusWritingGesture() = default;
 
-  static void ApplyGesture(LocalFrame*,
-                           mojom::blink::StylusWritingGestureDataPtr);
+  static mojom::blink::HandwritingGestureResult ApplyGesture(
+      LocalFrame*,
+      mojom::blink::StylusWritingGestureDataPtr);
 
  protected:
-  StylusWritingGesture(const gfx::Point& start_point,
+  StylusWritingGesture(const gfx::Rect& start_rect,
                        const String& text_alternative);
 
   // Apply this gesture in the current focused input element from the set
@@ -35,8 +37,8 @@ class StylusWritingGesture {
   // input.
   wtf_size_t GetStartTextIndex(LocalFrame*);
 
-  // Start point of the gesture.
-  gfx::Point start_point_;
+  // Start rectangle of the gesture.
+  gfx::Rect start_rect_;
   // Alternate text to be inserted in case the gesture could not be applied.
   String text_alternative_;
 };

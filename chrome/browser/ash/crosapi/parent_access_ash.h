@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/browser/ui/webui/ash/parent_access/parent_access_dialog.h"
 #include "chrome/browser/ui/webui/ash/parent_access/parent_access_ui.mojom.h"
 #include "chromeos/crosapi/mojom/parent_access.mojom.h"
@@ -41,6 +42,14 @@ class ParentAccessAsh : public mojom::ParentAccess {
       const std::u16string& child_display_name,
       const gfx::ImageSkia& favicon,
       GetWebsiteParentApprovalCallback callback) override;
+
+  void GetExtensionParentApproval(
+      const std::u16string& extension_name,
+      const std::u16string& child_display_name,
+      const gfx::ImageSkia& icon,
+      const std::vector<crosapi::mojom::ExtensionPermissionPtr> permissions,
+      bool requests_disabled,
+      GetExtensionParentApprovalCallback callback) override;
 
   using ParentAccessCallback =
       base::OnceCallback<void(crosapi::mojom::ParentAccessResultPtr)>;

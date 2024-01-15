@@ -13,9 +13,9 @@ namespace content {
 
 namespace {
 
-absl::optional<blink::InspectorPlayerError> ErrorFromParams(
+std::optional<blink::InspectorPlayerError> ErrorFromParams(
     const base::Value::Dict& param) {
-  absl::optional<int> code = param.FindInt(media::StatusConstants::kCodeKey);
+  std::optional<int> code = param.FindInt(media::StatusConstants::kCodeKey);
   const std::string* group =
       param.FindString(media::StatusConstants::kGroupKey);
   const std::string* message =
@@ -34,10 +34,11 @@ absl::optional<blink::InspectorPlayerError> ErrorFromParams(
   blink::WebVector<blink::InspectorPlayerError::SourceLocation> stack_vec;
   if (const auto* vec = param.FindList(media::StatusConstants::kStackKey)) {
     for (const auto& loc : *vec) {
+      const auto& loc_dict = loc.GetDict();
       const std::string* file =
-          loc.FindStringKey(media::StatusConstants::kFileKey);
-      absl::optional<int> line =
-          loc.FindIntKey(media::StatusConstants::kLineKey);
+          loc_dict.FindString(media::StatusConstants::kFileKey);
+      std::optional<int> line =
+          loc_dict.FindInt(media::StatusConstants::kLineKey);
       if (!file || !line.has_value())
         continue;
       blink::InspectorPlayerError::SourceLocation entry = {
@@ -93,10 +94,8 @@ blink::InspectorPlayerMessage::Level LevelFromString(const std::string& level) {
     return blink::InspectorPlayerMessage::Level::kWarning;
   if (level == "info")
     return blink::InspectorPlayerMessage::Level::kInfo;
-  if (level == "debug")
-    return blink::InspectorPlayerMessage::Level::kDebug;
-  NOTREACHED();
-  return blink::InspectorPlayerMessage::Level::kError;
+  CHECK_EQ(level, "debug");
+  return blink::InspectorPlayerMessage::Level::kDebug;
 }
 
 }  // namespace
@@ -145,7 +144,7 @@ void InspectorMediaEventHandler::SendQueuedMediaEvents(
         break;
       }
       case media::MediaLogRecord::Type::kMediaStatus: {
-        absl::optional<blink::InspectorPlayerError> error =
+        std::optional<blink::InspectorPlayerError> error =
             ErrorFromParams(event.params);
         if (error.has_value())
           errors.emplace_back(std::move(*error));

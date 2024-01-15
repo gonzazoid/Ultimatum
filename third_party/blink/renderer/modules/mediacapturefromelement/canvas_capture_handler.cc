@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/rand_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "media/base/limits.h"
@@ -23,6 +24,9 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/mediastream/webrtc_uma_histograms.h"
+#include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/base64.h"
 #include "ui/gfx/color_space.h"
@@ -59,7 +63,10 @@ class CanvasVideoCapturerSource : public VideoCapturerSource {
   }
   void StartCapture(const media::VideoCaptureParams& params,
                     const blink::VideoCaptureDeliverFrameCB& frame_callback,
-                    const VideoCaptureCropVersionCB& crop_version_callback,
+                    const VideoCaptureSubCaptureTargetVersionCB&
+                        sub_capture_target_version_callback,
+                    // Canvas capture does not report frame drops.
+                    const VideoCaptureNotifyFrameDroppedCB&,
                     const RunningCallback& running_callback) override {
     DCHECK_CALLED_ON_VALID_THREAD(main_render_thread_checker_);
     if (canvas_handler_.get()) {
@@ -114,7 +121,7 @@ class CanvasCaptureHandler::CanvasCaptureHandlerDelegate {
   void SendNewFrameOnIOThread(scoped_refptr<media::VideoFrame> video_frame,
                               base::TimeTicks current_time) {
     DCHECK_CALLED_ON_VALID_THREAD(io_thread_checker_);
-    new_frame_callback_.Run(std::move(video_frame), {}, current_time);
+    new_frame_callback_.Run(std::move(video_frame), current_time);
   }
 
   base::WeakPtr<CanvasCaptureHandlerDelegate> GetWeakPtrForIOThread() {
@@ -263,12 +270,12 @@ void CanvasCaptureHandler::SendFrame(
     video_frame->set_color_space(color_space);
 
   last_frame_ = video_frame;
-  io_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&CanvasCaptureHandler::CanvasCaptureHandlerDelegate::
-                         SendNewFrameOnIOThread,
-                     delegate_->GetWeakPtrForIOThread(), std::move(video_frame),
-                     this_frame_ticks));
+  PostCrossThreadTask(*io_task_runner_, FROM_HERE,
+                      WTF::CrossThreadBindOnce(
+                          &CanvasCaptureHandler::CanvasCaptureHandlerDelegate::
+                              SendNewFrameOnIOThread,
+                          delegate_->GetWeakPtrForIOThread(),
+                          std::move(video_frame), this_frame_ticks));
 }
 
 void CanvasCaptureHandler::AddVideoCapturerSourceToVideoTrack(
@@ -288,7 +295,7 @@ void CanvasCaptureHandler::AddVideoCapturerSourceToVideoTrack(
       track_id, MediaStreamSource::kTypeVideo, track_id, false,
       std::move(stream_video_source));
   stream_source->SetCapabilities(ComputeCapabilitiesForVideoSource(
-      track_id, preferred_formats, mojom::blink::FacingMode::NONE,
+      track_id, preferred_formats, mojom::blink::FacingMode::kNone,
       false /* is_device_capture */));
 
   *component = MakeGarbageCollected<MediaStreamComponentImpl>(

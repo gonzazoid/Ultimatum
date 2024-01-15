@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -64,11 +64,11 @@ bool RemoveUsersIfNeeded() {
   // change underneath us if we used a reference).
   const user_manager::UserList user_list = user_manager->GetUsers();
 
-  for (user_manager::User* user : user_list)
+  for (user_manager::User* user : user_list) {
     user_manager->RemoveUser(
         user->GetAccountId(),
-        user_manager::UserRemovalReason::REMOTE_ADMIN_INITIATED,
-        /*delegate=*/nullptr);
+        user_manager::UserRemovalReason::REMOTE_ADMIN_INITIATED);
+  }
 
   // Revert to default value after removal is done.
   local_state->ClearPref(prefs::kRemoveUsersRemoteCommand);
@@ -98,7 +98,7 @@ void InitiateUserRemoval(base::OnceClosure on_pref_persisted_callback) {
   local_state->CommitPendingWrite(base::BindOnce(
       [](base::OnceClosure on_pref_persisted_callback) {
         // Start the failsafe timer.
-        base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE, base::BindOnce(&LogOut), kFailsafeTimerTimeout);
 
         if (on_pref_persisted_callback)

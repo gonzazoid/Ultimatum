@@ -4,8 +4,8 @@
 
 #include "chrome/browser/sharing/sharing_message_sender.h"
 
-#include "base/guid.h"
 #include "base/trace_event/trace_event.h"
+#include "base/uuid.h"
 #include "chrome/browser/sharing/sharing_constants.h"
 #include "chrome/browser/sharing/sharing_fcm_sender.h"
 #include "chrome/browser/sharing/sharing_metrics.h"
@@ -22,7 +22,7 @@ SharingMessageSender::SharingMessageSender(
 SharingMessageSender::~SharingMessageSender() = default;
 
 base::OnceClosure SharingMessageSender::SendMessageToDevice(
-    const syncer::DeviceInfo& device,
+    const SharingTargetDeviceInfo& device,
     base::TimeDelta response_timeout,
     chrome_browser_sharing::SharingMessage message,
     DelegateType delegate_type,
@@ -37,15 +37,14 @@ base::OnceClosure SharingMessageSender::SendMessageToDevice(
       SharingMessageTypeToString(
           SharingPayloadCaseToMessageType(message.payload_case())));
 
-  std::string message_guid = base::GenerateGUID();
+  std::string message_guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   chrome_browser_sharing::MessageType message_type =
       SharingPayloadCaseToMessageType(message.payload_case());
-  SharingDevicePlatform receiver_device_platform = GetDevicePlatform(device);
 
   auto [it, inserted] = message_metadata_.insert_or_assign(
       message_guid, SentMessageMetadata(
                         std::move(callback), base::TimeTicks::Now(),
-                        message_type, receiver_device_platform, trace_id,
+                        message_type, device.platform(), trace_id,
                         SharingChannelType::kUnknown, device.pulse_interval()));
   DCHECK(inserted);
 
@@ -140,11 +139,6 @@ void SharingMessageSender::OnAckReceived(
 
   auto metadata_iter = message_metadata_.find(message_guid);
   DCHECK(metadata_iter != message_metadata_.end());
-  const SentMessageMetadata& metadata = metadata_iter->second;
-
-  LogSharingMessageAckTime(metadata.type, metadata.receiver_device_platform,
-                           metadata.channel_type,
-                           base::TimeTicks::Now() - metadata.timestamp);
 
   InvokeSendMessageCallback(message_guid, SharingSendMessageResult::kSuccessful,
                             std::move(response));

@@ -5,17 +5,16 @@
 #include "chrome/browser/android/compositor/layer/toolbar_layer.h"
 
 #include "base/feature_list.h"
-#include "cc/layers/nine_patch_layer.h"
-#include "cc/layers/solid_color_layer.h"
-#include "cc/layers/ui_resource_layer.h"
 #include "cc/resources/scoped_ui_resource.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/nine_patch_layer.h"
+#include "cc/slim/solid_color_layer.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "chrome/browser/android/compositor/resources/toolbar_resource.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/android/resources/nine_patch_resource.h"
 #include "ui/android/resources/resource_manager.h"
-
-using chrome::android::kDisableCompositedProgressBar;
 
 namespace android {
 
@@ -25,7 +24,7 @@ scoped_refptr<ToolbarLayer> ToolbarLayer::Create(
   return base::WrapRefCounted(new ToolbarLayer(resource_manager));
 }
 
-scoped_refptr<cc::Layer> ToolbarLayer::layer() {
+scoped_refptr<cc::slim::Layer> ToolbarLayer::layer() {
   return layer_;
 }
 
@@ -35,7 +34,7 @@ void ToolbarLayer::PushResource(int toolbar_resource_id,
                                 int toolbar_textbox_background_color,
                                 int url_bar_background_resource_id,
                                 float x_offset,
-                                float y_offset,
+                                float content_offset,
                                 bool show_debug,
                                 bool clip_shadow) {
   ToolbarResource* resource =
@@ -113,10 +112,12 @@ void ToolbarLayer::PushResource(int toolbar_resource_id,
   else if (!show_debug && debug_layer_->parent())
     debug_layer_->RemoveFromParent();
 
-  layer_->SetPosition(gfx::PointF(x_offset, y_offset));
+  // Position the toolbar at the bottom of the space available for top controls.
+  layer_->SetPosition(
+      gfx::PointF(x_offset, content_offset - layer_->bounds().height()));
 }
 
-int ToolbarLayer::GetIndexOfLayer(scoped_refptr<cc::Layer> layer) {
+int ToolbarLayer::GetIndexOfLayer(scoped_refptr<cc::slim::Layer> layer) {
   for (unsigned int i = 0; i < layer_->children().size(); ++i) {
     if (layer_->children()[i] == layer)
       return i;
@@ -134,9 +135,6 @@ void ToolbarLayer::UpdateProgressBar(int progress_bar_x,
                                      int progress_bar_background_width,
                                      int progress_bar_background_height,
                                      int progress_bar_background_color) {
-  if (base::FeatureList::IsEnabled(kDisableCompositedProgressBar))
-    return;
-
   bool is_progress_bar_background_visible = SkColorGetA(
       progress_bar_background_color);
   progress_bar_background_layer_->SetHideLayerAndSubtree(
@@ -170,22 +168,19 @@ void ToolbarLayer::SetOpacity(float opacity) {
   url_bar_background_layer_->SetOpacity(opacity);
   bitmap_layer_->SetOpacity(opacity);
 
-  if (base::FeatureList::IsEnabled(kDisableCompositedProgressBar))
-    return;
-
   progress_bar_layer_->SetOpacity(opacity);
   progress_bar_background_layer_->SetOpacity(opacity);
 }
 
 ToolbarLayer::ToolbarLayer(ui::ResourceManager* resource_manager)
     : resource_manager_(resource_manager),
-      layer_(cc::Layer::Create()),
-      toolbar_background_layer_(cc::SolidColorLayer::Create()),
-      url_bar_background_layer_(cc::NinePatchLayer::Create()),
-      bitmap_layer_(cc::UIResourceLayer::Create()),
-      progress_bar_layer_(cc::SolidColorLayer::Create()),
-      progress_bar_background_layer_(cc::SolidColorLayer::Create()),
-      debug_layer_(cc::SolidColorLayer::Create()) {
+      layer_(cc::slim::Layer::Create()),
+      toolbar_background_layer_(cc::slim::SolidColorLayer::Create()),
+      url_bar_background_layer_(cc::slim::NinePatchLayer::Create()),
+      bitmap_layer_(cc::slim::UIResourceLayer::Create()),
+      progress_bar_layer_(cc::slim::SolidColorLayer::Create()),
+      progress_bar_background_layer_(cc::slim::SolidColorLayer::Create()),
+      debug_layer_(cc::slim::SolidColorLayer::Create()) {
   toolbar_background_layer_->SetIsDrawable(true);
   layer_->AddChild(toolbar_background_layer_);
 
@@ -196,15 +191,13 @@ ToolbarLayer::ToolbarLayer(ui::ResourceManager* resource_manager)
   bitmap_layer_->SetIsDrawable(true);
   layer_->AddChild(bitmap_layer_);
 
-  if (!base::FeatureList::IsEnabled(kDisableCompositedProgressBar)) {
-    progress_bar_background_layer_->SetIsDrawable(true);
-    progress_bar_background_layer_->SetHideLayerAndSubtree(true);
-    layer_->AddChild(progress_bar_background_layer_);
+  progress_bar_background_layer_->SetIsDrawable(true);
+  progress_bar_background_layer_->SetHideLayerAndSubtree(true);
+  layer_->AddChild(progress_bar_background_layer_);
 
-    progress_bar_layer_->SetIsDrawable(true);
-    progress_bar_layer_->SetHideLayerAndSubtree(true);
-    layer_->AddChild(progress_bar_layer_);
-  }
+  progress_bar_layer_->SetIsDrawable(true);
+  progress_bar_layer_->SetHideLayerAndSubtree(true);
+  layer_->AddChild(progress_bar_layer_);
 
   debug_layer_->SetIsDrawable(true);
   debug_layer_->SetBackgroundColor(SkColors::kGreen);

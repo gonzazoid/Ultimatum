@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import time
 import os
@@ -395,4 +395,3 @@ if libxml2.debugMemory(1) == 0:
         print("OK")
 else:
     print("Memory leak %d bytes" % (libxml2.debugMemory(1)))
-    libxml2.dumpMemory()

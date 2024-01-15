@@ -8,11 +8,11 @@
 #include <list>
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/browsing_data/content/service_worker_helper.h"
 
 namespace content {
-class BrowserContext;
+class StoragePartition;
 }
 
 namespace browsing_data {
@@ -22,7 +22,8 @@ namespace browsing_data {
 // call Notify().
 class MockServiceWorkerHelper : public ServiceWorkerHelper {
  public:
-  explicit MockServiceWorkerHelper(content::BrowserContext* browser_context);
+  explicit MockServiceWorkerHelper(
+      content::StoragePartition* storage_partition);
 
   MockServiceWorkerHelper(const MockServiceWorkerHelper&) = delete;
   MockServiceWorkerHelper& operator=(const MockServiceWorkerHelper&) = delete;

@@ -89,6 +89,7 @@ enum class DOMExceptionCode : ExceptionCode {
   kVersionError,
   kOperationError,
   kNotAllowedError,
+  kOptOutError,
 
   // The rest of entries are defined out of scope of Web IDL.
 
@@ -111,6 +112,21 @@ enum class DOMExceptionCode : ExceptionCode {
 
   // WebTransport - https://w3c.github.io/webtransport/
   kWebTransportError,
+
+  // Smart Card API
+  // https://wicg.github.io/web-smart-card/#smartcarderror-interface
+  kSmartCardError,
+
+  // WebGPU https://www.w3.org/TR/webgpu/
+  kGPUPipelineError,
+
+  // Media Capture and Streams API
+  // https://w3c.github.io/mediacapture-main/#overconstrainederror-interface
+  kOverconstrainedError,
+
+  // FedCM API
+  // https://fedidcg.github.io/FedCM/#browser-api-identity-credential-error-interface
+  kIdentityCredentialError,
 
   kNumOfCodes,
 };

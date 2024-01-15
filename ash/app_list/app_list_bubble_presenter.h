@@ -8,15 +8,16 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display_observer.h"
 #include "ui/views/widget/widget_observer.h"
 #include "ui/wm/public/activation_change_observer.h"
@@ -80,7 +81,7 @@ class ASH_EXPORT AppListBubblePresenter : public views::WidgetObserver,
   // Handles `AppListController::UpdateAppListWithNewSortingOrder()` for the
   // bubble launcher.
   void UpdateForNewSortingOrder(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool animate,
       base::OnceClosure update_position_closure);
 
@@ -102,6 +103,9 @@ class ASH_EXPORT AppListBubblePresenter : public views::WidgetObserver,
   // ShelfObserver:
   void OnShelfShuttingDown() override;
 
+  // Returns the preferred width for the bubble launcher for the |root_window|.
+  int GetPreferredBubbleWidth(aura::Window* root_window) const;
+
   views::Widget* bubble_widget_for_test() { return bubble_widget_; }
   AppListBubbleView* bubble_view_for_test() { return bubble_view_; }
 
@@ -121,7 +125,7 @@ class ASH_EXPORT AppListBubblePresenter : public views::WidgetObserver,
   // Callback for the hide animation.
   void OnHideAnimationEnded();
 
-  AppListControllerImpl* const controller_;
+  const raw_ptr<AppListControllerImpl> controller_;
 
   // Whether the view is showing or animating to show. Note that the
   // `bubble_widget_` may be null during the zero state search called in
@@ -129,10 +133,10 @@ class ASH_EXPORT AppListBubblePresenter : public views::WidgetObserver,
   bool is_target_visibility_show_ = false;
 
   // Owned by native widget.
-  views::Widget* bubble_widget_ = nullptr;
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
 
   // Owned by views.
-  AppListBubbleView* bubble_view_ = nullptr;
+  raw_ptr<AppListBubbleView> bubble_view_ = nullptr;
 
   // The page to show after the views are constructed.
   AppListBubblePage target_page_ = AppListBubblePage::kApps;

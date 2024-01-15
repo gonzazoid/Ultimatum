@@ -16,6 +16,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 
 namespace base {
 class FilePath;
@@ -24,6 +25,8 @@ class FilePath;
 namespace userfeedback {
 class ExtensionSubmit;
 }
+
+inline constexpr int kOrcaFeedbackProductId = 5314436;
 
 // This is the base class for FeedbackData. It primarily knows about
 // data common to all feedback reports and how to zip things.
@@ -53,11 +56,18 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   // CompressLogs() must have already been called.
   void PrepareReport(userfeedback::ExtensionSubmit* feedback_data) const;
 
+  void RedactDescription(redaction::RedactionTool& redactor);
+
   // Return true if we want to include the feedback item with a key of |key| in
   // the feedback report's system logs.
   static bool IncludeInSystemLogs(const std::string& key, bool is_google_email);
 
+  static int GetChromeBrowserProductId();
+
   // Getters
+  const absl::optional<std::string>& mac_address() const {
+    return mac_address_;
+  }
   const std::string& category_tag() const { return category_tag_; }
   const std::string& page_url() const { return page_url_; }
   const std::string& description() const { return description_; }
@@ -67,11 +77,20 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   int32_t product_id() const { return product_id_; }
   std::string user_agent() const { return user_agent_; }
   std::string locale() const { return locale_; }
+  std::string& autofill_metadata() { return autofill_metadata_; }
+  bool include_chrome_platform() const { return include_chrome_platform_; }
+  const absl::optional<bool>& is_offensive_or_unsafe() {
+    return is_offensive_or_unsafe_;
+  }
+  std::string& ai_metadata() { return ai_metadata_; }
 
   const AttachedFile* attachment(size_t i) const { return &attachments_[i]; }
   size_t attachments() const { return attachments_.size(); }
 
   // Setters
+  void set_mac_address(const absl::optional<std::string>& mac_address) {
+    mac_address_ = mac_address;
+  }
   void set_category_tag(const std::string& category_tag) {
     category_tag_ = category_tag;
   }
@@ -88,6 +107,18 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
     user_agent_ = user_agent;
   }
   void set_locale(const std::string& locale) { locale_ = locale; }
+  void set_autofill_metadata(const std::string& autofill_metadata) {
+    autofill_metadata_ = autofill_metadata;
+  }
+  // If true, includes whether the report is from ChromeOS or Chrome on another
+  // platform.
+  void set_include_chrome_platform(bool include_chrome_platform) {
+    include_chrome_platform_ = include_chrome_platform;
+  }
+  void set_is_offensive_or_unsafe(const absl::optional<bool>& value) {
+    is_offensive_or_unsafe_ = value;
+  }
+  void set_ai_metadata(const std::string& value) { ai_metadata_ = value; }
 
  protected:
   virtual ~FeedbackCommon();
@@ -111,6 +142,7 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   // Returns true if a product ID was set in the feedback report.
   bool HasProductId() const { return product_id_ != -1; }
 
+  absl::optional<std::string> mac_address_;
   std::string category_tag_;
   std::string page_url_;
   std::string description_;
@@ -118,6 +150,10 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   int32_t product_id_;
   std::string user_agent_;
   std::string locale_;
+  std::string autofill_metadata_;
+  bool include_chrome_platform_ = true;
+  absl::optional<bool> is_offensive_or_unsafe_;
+  std::string ai_metadata_;
 
   std::string image_;
 

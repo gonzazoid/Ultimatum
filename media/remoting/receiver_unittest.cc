@@ -8,16 +8,17 @@
 
 #include "base/check.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
-#include "components/cast_streaming/public/remoting_proto_enum_utils.h"
-#include "components/cast_streaming/public/remoting_proto_utils.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/media_util.h"
 #include "media/base/mock_filters.h"
 #include "media/base/renderer.h"
 #include "media/base/test_helpers.h"
 #include "media/base/video_decoder_config.h"
+#include "media/cast/openscreen/remoting_proto_enum_utils.h"
+#include "media/cast/openscreen/remoting_proto_utils.h"
 #include "media/remoting/mock_receiver_controller.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -82,7 +83,7 @@ class MockSender {
       }
       case openscreen::cast::RpcMessage::RPC_RC_ONBUFFERINGSTATECHANGE: {
         absl::optional<BufferingState> state =
-            cast_streaming::remoting::ToMediaBufferingState(
+            media::cast::ToMediaBufferingState(
                 message->rendererclient_onbufferingstatechange_rpc().state());
         if (state.has_value())
           OnBufferingStateChange(state.value());
@@ -101,8 +102,8 @@ class MockSender {
         const openscreen::cast::AudioDecoderConfig pb_audio_config =
             audio_config_message->audio_decoder_config();
         AudioDecoderConfig out_audio_config;
-        cast_streaming::remoting::ConvertProtoToAudioDecoderConfig(
-            pb_audio_config, &out_audio_config);
+        media::cast::ConvertProtoToAudioDecoderConfig(pb_audio_config,
+                                                      &out_audio_config);
         DCHECK(out_audio_config.IsValidConfig());
         OnAudioConfigChange(out_audio_config);
         break;
@@ -114,8 +115,8 @@ class MockSender {
         const openscreen::cast::VideoDecoderConfig pb_video_config =
             video_config_message->video_decoder_config();
         VideoDecoderConfig out_video_config;
-        cast_streaming::remoting::ConvertProtoToVideoDecoderConfig(
-            pb_video_config, &out_video_config);
+        media::cast::ConvertProtoToVideoDecoderConfig(pb_video_config,
+                                                      &out_video_config);
         DCHECK(out_video_config.IsValidConfig());
 
         OnVideoConfigChange(out_video_config);
@@ -275,7 +276,7 @@ class ReceiverTest : public ::testing::Test {
     mock_renderer_ = renderer.get();
     receiver_ = std::make_unique<Receiver>(
         receiver_renderer_handle_, sender_renderer_handle_, mock_controller_,
-        base::ThreadTaskRunnerHandle::Get(), std::move(renderer),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(renderer),
         base::BindOnce(&ReceiverTest::OnAcquireRendererDone,
                        weak_factory_.GetWeakPtr()));
   }
@@ -300,13 +301,12 @@ class ReceiverTest : public ::testing::Test {
   int receiver_renderer_handle_ = RpcMessenger::kInvalidHandle;
 
   MockMediaResource mock_media_resource_;
-  raw_ptr<MockRenderer> mock_renderer_ = nullptr;
   std::unique_ptr<MockSender> mock_sender_;
-
   raw_ptr<RpcMessenger> rpc_messenger_ = nullptr;
   raw_ptr<MockRemotee> mock_remotee_;
   raw_ptr<MockReceiverController> mock_controller_ = nullptr;
   std::unique_ptr<Receiver> receiver_;
+  raw_ptr<MockRenderer> mock_renderer_ = nullptr;
 
   base::WeakPtrFactory<ReceiverTest> weak_factory_{this};
 };

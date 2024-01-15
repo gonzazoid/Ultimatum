@@ -7,7 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/badging/badge_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "components/webapps/common/web_app_id.h"
 #include "url/gurl.h"
 
 class Profile;
@@ -27,7 +27,7 @@ class BadgeManagerDelegate {
   virtual ~BadgeManagerDelegate() = default;
 
   // Called when the badge for |app_id| has changed.
-  virtual void OnAppBadgeUpdated(const web_app::AppId& app_id) = 0;
+  virtual void OnAppBadgeUpdated(const webapps::AppId& app_id) = 0;
 
  protected:
   Profile* profile() { return profile_; }
@@ -35,7 +35,7 @@ class BadgeManagerDelegate {
 
  private:
   // The profile the badge manager delegate is associated with.
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
   // The badge manager that owns this delegate.
   raw_ptr<BadgeManager> badge_manager_;
 };

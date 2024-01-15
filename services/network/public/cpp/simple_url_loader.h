@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -45,7 +45,6 @@ class URLLoaderFactory;
 namespace network {
 
 class SimpleURLLoaderStreamConsumer;
-class SimpleURLLoaderThrottle;
 
 // Creates and wraps a URLLoader, and runs it to completion. It's recommended
 // that consumers use this class instead of URLLoader directly, due to the
@@ -98,8 +97,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // like HTTP_OK, which could happen if there's an interruption before the
   // full response body is received. It is safe to delete the SimpleURLLoader
   // during the callback.
-  using BodyAsStringCallback =
+  using BodyAsStringCallbackDeprecated =
       base::OnceCallback<void(std::unique_ptr<std::string> response_body)>;
+  using BodyAsStringCallback =
+      base::OnceCallback<void(std::optional<std::string> response_body)>;
 
   // Callback used when ignoring the response body. |headers| are the received
   // HTTP headers, or nullptr if none were received. It is safe to delete the
@@ -115,10 +116,12 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
 
   // Callback used when a redirect is being followed. It is safe to delete the
   // SimpleURLLoader during the callback.
+  // |url_before_redirect| is the url before redirect that sent the response.
   // |removed_headers| is used to set variations headers that need to be
   // removed for requests when a redirect to a non-Google URL occurs.
   using OnRedirectCallback =
-      base::RepeatingCallback<void(const net::RedirectInfo& redirect_info,
+      base::RepeatingCallback<void(const GURL& url_before_redirect,
+                                   const net::RedirectInfo& redirect_info,
                                    const mojom::URLResponseHead& response_head,
                                    std::vector<std::string>* removed_headers)>;
 
@@ -171,6 +174,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // invoked on completion. Deleting the SimpleURLLoader before the callback is
   // invoked will result in cancelling the request, and the callback will not be
   // called.
+  virtual void DownloadToString(
+      mojom::URLLoaderFactory* url_loader_factory,
+      BodyAsStringCallbackDeprecated body_as_string_callback,
+      size_t max_body_size) = 0;
   virtual void DownloadToString(mojom::URLLoaderFactory* url_loader_factory,
                                 BodyAsStringCallback body_as_string_callback,
                                 size_t max_body_size) = 0;
@@ -180,6 +187,9 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // exceeded. It's recommended consumers use one of the other download methods
   // instead (DownloadToString if the body is expected to be of reasonable
   // length, or DownloadToFile otherwise).
+  virtual void DownloadToStringOfUnboundedSizeUntilCrashAndDie(
+      mojom::URLLoaderFactory* url_loader_factory,
+      BodyAsStringCallbackDeprecated body_as_string_callback) = 0;
   virtual void DownloadToStringOfUnboundedSizeUntilCrashAndDie(
       mojom::URLLoaderFactory* url_loader_factory,
       BodyAsStringCallback body_as_string_callback) = 0;
@@ -353,13 +363,6 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // as much time as it wants.
   virtual void SetTimeoutDuration(base::TimeDelta timeout_duration) = 0;
 
-  // Allows this SimpleURLLoader to be batched when sending a network request
-  // impacts on battery consumption. This should be called before the request
-  // is started.
-  // NOTE: This is for an experimental use. Please contact bashi@chromium.org
-  // before starting using this function.
-  virtual void SetAllowBatching() = 0;
-
   // Returns the net::Error representing the final status of the request. May
   // only be called once the loader has informed the caller of completion.
   virtual int NetError() const = 0;
@@ -398,8 +401,6 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
 
   // Returns the number of times retry has been attempted.
   virtual int GetNumRetries() const = 0;
-
-  virtual SimpleURLLoaderThrottle* GetThrottleForTesting() = 0;
 
  protected:
   SimpleURLLoader();

@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_APP_RESTORE_ARC_GHOST_WINDOW_HANDLER_H_
 
 #include "ash/components/arc/mojom/app.mojom.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -46,7 +47,8 @@ class ArcGhostWindowHandler : public exo::WMHelper::LifetimeManager::Observer {
   };
 
  public:
-  // This class is used to notify observers that AppInstance is connected.
+  // This class is used to notify observers that App and ghost window handler
+  // states change.
   class Observer : public base::CheckedObserver {
    public:
     // Observer for app instance connection ready.
@@ -60,6 +62,9 @@ class ArcGhostWindowHandler : public exo::WMHelper::LifetimeManager::Observer {
                                    bool ready,
                                    bool need_fixup) {}
 
+    // Observer for ghost window handler destroy.
+    virtual void OnGhostWindowHandlerDestroy() {}
+
    protected:
     ~Observer() override = default;
   };
@@ -70,7 +75,7 @@ class ArcGhostWindowHandler : public exo::WMHelper::LifetimeManager::Observer {
   ~ArcGhostWindowHandler() override;
 
   // ArcGhostWindowHandler is created and destroyed with the
-  // ash::AppRestore::AppRestoreArcTaskHandler.
+  // `AppRestore::AppRestoreArcTaskHandler`.
   // ArcGhostWindowHandler::Get may be nullptr if accessed outside the expected
   // lifetime.
   static ArcGhostWindowHandler* Get();
@@ -105,6 +110,12 @@ class ArcGhostWindowHandler : public exo::WMHelper::LifetimeManager::Observer {
 
   // exo::WMHelper::LifetimeManager::Observer:
   void OnDestroyed() override;
+
+ protected:
+  FRIEND_TEST_ALL_PREFIXES(ArcGhostWindowHandlerTest,
+                           UpdateOverrideBoundsIfGeneralState);
+  FRIEND_TEST_ALL_PREFIXES(ArcGhostWindowHandlerTest,
+                           NotUpdateOverrideBoundsIfStateIsDefault);
 
  private:
   bool is_app_instance_connected_ = false;

@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_SERVICES_CELLULAR_SETUP_ESIM_PROFILE_H_
 #define CHROMEOS_ASH_SERVICES_CELLULAR_SETUP_ESIM_PROFILE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_profile_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_response_status.h"
@@ -75,6 +76,11 @@ class ESimProfile : public mojom::ESimProfile {
   void OnRequestInstalledProfiles(
       EnsureProfileExistsOnEuiccCallback callback,
       std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock);
+  void OnRefreshSmdxProfiles(
+      EnsureProfileExistsOnEuiccCallback callback,
+      std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock,
+      HermesResponseStatus status,
+      const std::vector<dbus::ObjectPath>& profile_paths);
   void OnRequestPendingProfiles(
       EnsureProfileExistsOnEuiccCallback callback,
       std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock,
@@ -94,7 +100,8 @@ class ESimProfile : public mojom::ESimProfile {
   void OnPendingProfileInstallResult(
       std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock,
       HermesResponseStatus status);
-  void OnNewProfileEnableSuccess(const std::string& service_path);
+  void OnNewProfileEnableSuccess(const std::string& service_path,
+                                 bool auto_connected);
   void OnPrepareCellularNetworkForConnectionFailure(
       const std::string& service_path,
       const std::string& error_name);
@@ -107,9 +114,9 @@ class ESimProfile : public mojom::ESimProfile {
   bool IsProfileManaged();
 
   // Reference to Euicc that owns this profile.
-  Euicc* euicc_;
+  raw_ptr<Euicc> euicc_;
   // Reference to ESimManager that owns Euicc of this profile.
-  ESimManager* esim_manager_;
+  raw_ptr<ESimManager> esim_manager_;
   UninstallProfileCallback uninstall_callback_;
   SetProfileNicknameCallback set_profile_nickname_callback_;
   InstallProfileCallback install_callback_;

@@ -8,6 +8,7 @@ import android.accounts.Account;
 import android.accounts.AuthenticatorDescription;
 import android.app.Activity;
 import android.content.Intent;
+import android.os.Bundle;
 
 import androidx.annotation.GuardedBy;
 import androidx.annotation.Nullable;
@@ -16,6 +17,7 @@ import org.chromium.base.Callback;
 import org.chromium.base.ThreadUtils;
 import org.chromium.components.signin.AccessTokenData;
 import org.chromium.components.signin.AccountManagerDelegate;
+import org.chromium.components.signin.AccountManagerDelegateException;
 import org.chromium.components.signin.AccountUtils;
 import org.chromium.components.signin.AccountsChangeObserver;
 import org.chromium.components.signin.AuthException;
@@ -28,17 +30,18 @@ import java.util.UUID;
 /**
  * The FakeAccountManagerDelegate is intended for testing components that use AccountManagerFacade.
  *
- * You should provide a set of accounts as a constructor argument, or use the more direct approach
- * and provide an array of AccountHolder objects.
+ * <p>You should provide a set of accounts as a constructor argument, or use the more direct
+ * approach and provide an array of AccountHolder objects.
  *
- * Currently, this implementation supports adding and removing accounts, handling credentials
- * (including confirming them), and handling of dummy auth tokens.
+ * <p>Currently, this implementation supports adding and removing accounts, handling credentials
+ * (including confirming them), and handling of placeholder auth tokens.
  */
 public class FakeAccountManagerDelegate implements AccountManagerDelegate {
     private final Object mLock = new Object();
 
     @GuardedBy("mLock")
     private final Set<AccountHolder> mAccounts = new LinkedHashSet<>();
+
     private AccountsChangeObserver mObserver;
 
     public FakeAccountManagerDelegate() {
@@ -57,7 +60,7 @@ public class FakeAccountManagerDelegate implements AccountManagerDelegate {
     }
 
     @Override
-    public Account[] getAccounts() {
+    public Account[] getAccountsSynchronous() throws AccountManagerDelegateException {
         ArrayList<Account> result = new ArrayList<>();
         synchronized (mLock) {
             for (AccountHolder ah : mAccounts) {
@@ -67,33 +70,34 @@ public class FakeAccountManagerDelegate implements AccountManagerDelegate {
         return result.toArray(new Account[0]);
     }
 
-    /**
-     * Adds an AccountHolder.
-     */
+    /** Adds an AccountHolder. */
     public void addAccount(AccountHolder accountHolder) {
         synchronized (mLock) {
             boolean added = mAccounts.add(accountHolder);
             assert added : "Account already added";
         }
-        ThreadUtils.runOnUiThreadBlocking(mObserver::onAccountsChanged);
+        ThreadUtils.runOnUiThreadBlocking(mObserver::onCoreAccountInfosChanged);
     }
 
-    /**
-     * Removes an AccountHolder.
-     */
+    /** Removes an AccountHolder. */
     public void removeAccount(AccountHolder accountHolder) {
         synchronized (mLock) {
             boolean removed = mAccounts.remove(accountHolder);
             assert removed : "Can't find account";
         }
-        ThreadUtils.runOnUiThreadBlocking(mObserver::onAccountsChanged);
+        ThreadUtils.runOnUiThreadBlocking(mObserver::onCoreAccountInfosChanged);
+    }
+
+    public void callOnCoreAccountInfoChanged() {
+        ThreadUtils.runOnUiThreadBlocking(mObserver::onCoreAccountInfosChanged);
     }
 
     @Override
     public AccessTokenData getAuthToken(Account account, String scope) throws AuthException {
         AccountHolder accountHolder = tryGetAccountHolder(account);
         if (accountHolder == null) {
-            throw new AuthException(AuthException.NONTRANSIENT,
+            throw new AuthException(
+                    AuthException.NONTRANSIENT,
                     "Cannot get auth token for unknown account '" + account + "'");
         }
         synchronized (mLock) {
@@ -150,6 +154,11 @@ public class FakeAccountManagerDelegate implements AccountManagerDelegate {
         if (callback != null) {
             ThreadUtils.postOnUiThread(callback.bind(true));
         }
+    }
+
+    @Override
+    public void confirmCredentials(Account account, Activity activity, Callback<Bundle> callback) {
+        callback.onResult(null);
     }
 
     private AccountHolder tryGetAccountHolder(Account account) {

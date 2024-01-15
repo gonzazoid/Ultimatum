@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/test/scoped_feature_list.h"
+#include "build/build_config.h"
 #include "content/browser/fenced_frame/fenced_frame.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/common/content_features.h"
@@ -18,6 +19,7 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_tree.h"
 
@@ -66,8 +68,16 @@ void DumpRolesAndNamesAsText(const ui::AXNode* node,
 
 class SnapshotAXTreeBrowserTest : public ContentBrowserTest {
  public:
-  SnapshotAXTreeBrowserTest() {}
-  ~SnapshotAXTreeBrowserTest() override {}
+  SnapshotAXTreeBrowserTest() {
+#if BUILDFLAG(IS_ANDROID)
+    scoped_feature_list_.InitAndDisableFeature(
+        features::kAccessibilitySnapshotStressTests);
+#endif
+  }
+  ~SnapshotAXTreeBrowserTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
@@ -83,7 +93,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       ui::kAXModeComplete,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter.Wait();
@@ -107,7 +116,9 @@ class SnapshotAXTreeFencedFrameBrowserTest : public SnapshotAXTreeBrowserTest {
   SnapshotAXTreeFencedFrameBrowserTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{blink::features::kFencedFrames, {{"implementation_type", "mparch"}}},
-         {features::kPrivacySandboxAdsAPIsOverride, {}}},
+         {features::kPrivacySandboxAdsAPIsOverride, {}},
+         {blink::features::kFencedFramesAPIChanges, {}},
+         {blink::features::kFencedFramesDefaultMode, {}}},
         {/* disabled_features */});
   }
 
@@ -142,9 +153,10 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeFencedFrameBrowserTest,
 
   const GURL fenced_frame_url =
       https_server()->GetURL("a.test", "/fenced_frames/title1.html");
-  EXPECT_TRUE(ExecJs(
-      primary_rfh, JsReplace("document.querySelector('fencedframe').src = $1;",
-                             fenced_frame_url.spec())));
+  EXPECT_TRUE(
+      ExecJs(primary_rfh, JsReplace("document.querySelector('fencedframe')."
+                                    "config = new FencedFrameConfig($1);",
+                                    fenced_frame_url.spec())));
   EXPECT_TRUE(WaitForLoadStop(web_contents));
 
   AXTreeSnapshotWaiter waiter;
@@ -152,7 +164,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeFencedFrameBrowserTest,
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       ui::kAXModeComplete,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter.Wait();
@@ -198,7 +209,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       ui::kAXModeComplete,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter.Wait();
@@ -218,7 +228,7 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       "      staticText 'Before'\n"
       "    iframe\n"
       "      rootWebArea\n"
-      "        pre\n"
+      "        genericContainer\n"
       "          staticText 'Alpha'\n"
       "    button 'Middle'\n"
       "      staticText 'Middle'\n"
@@ -265,7 +275,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       ui::kAXModeComplete,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter.Wait();
@@ -285,7 +294,7 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       "      staticText 'Before'\n"
       "    iframe\n"
       "      rootWebArea\n"
-      "        pre\n"
+      "        genericContainer\n"
       "          staticText 'Alpha'\n"
       "    button 'Middle'\n"
       "      staticText 'Middle'\n"
@@ -320,7 +329,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter_complete)),
       ui::kAXModeComplete,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter_complete.Wait();
@@ -336,7 +344,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest,
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter_contents)),
       ui::AXMode::kWebContents,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter_contents.Wait();
@@ -394,7 +401,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, SnapshotPDFMode) {
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       ui::AXMode::kPDF,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter.Wait();
@@ -466,44 +472,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, SnapshotPDFMode) {
   EXPECT_EQ(2, *td->GetTableCellColSpan());
 }
 
-IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, ExcludeOffscreen) {
-  GURL url(R"HTML(data:text/html,<body>
-                  <style> p { margin: 50px; } </style>
-                  <script>
-                    for (let i = 0; i < 100; i++) {
-                      let p = document.createElement('p');
-                      p.innerHTML = i;
-                      document.body.append(p);
-                    }
-                  </script>
-                  </body>)HTML");
-  EXPECT_TRUE(NavigateToURL(shell(), url));
-
-  WebContentsImpl* web_contents =
-      static_cast<WebContentsImpl*>(shell()->web_contents());
-
-  AXTreeSnapshotWaiter waiter;
-  web_contents->RequestAXTreeSnapshot(
-      base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
-                     base::Unretained(&waiter)),
-      ui::kAXModeComplete,
-      /* exclude_offscreen= */ true,
-      /* max_nodes= */ 0,
-      /* timeout= */ {});
-  waiter.Wait();
-
-  // Dump the whole tree if one of the assertions below fails
-  // to aid in debugging why it failed.
-  SCOPED_TRACE(waiter.snapshot().ToString());
-
-  // If we didn't exclude offscreen nodes, thee would be at least 200 nodes on
-  // the page (2 for every paragraph). By excluding offscreen nodes, we should
-  // get between 20 and 40 total, depending on the platform and screen
-  // size.. Allow the test to pass if there are anything fewer than 60
-  // nodes to add a bit of buffer.
-  EXPECT_LT(waiter.snapshot().nodes.size(), 60U);
-}
-
 IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, MaxNodes) {
   GURL url(R"HTML(data:text/html,<body>
                   <style> p { margin: 50px; } </style>
@@ -529,7 +497,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, MaxNodes) {
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       ui::kAXModeComplete,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 10,
       /* timeout= */ {});
   waiter.Wait();
@@ -570,7 +537,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, Timeout) {
         base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                        base::Unretained(&waiter)),
         ui::kAXModeComplete,
-        /* exclude_offscreen= */ false,
         /* max_nodes= */ 0,
         /* timeout= */ {});
     waiter.Wait();
@@ -588,7 +554,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, Timeout) {
         base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                        base::Unretained(&waiter)),
         ui::kAXModeComplete,
-        /* exclude_offscreen= */ false,
         /* max_nodes= */ 0,
         /* timeout= */ base::Milliseconds(1));
     waiter.Wait();
@@ -624,7 +589,6 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, Metadata) {
       base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
                      base::Unretained(&waiter)),
       mode,
-      /* exclude_offscreen= */ false,
       /* max_nodes= */ 0,
       /* timeout= */ {});
   waiter.Wait();
@@ -637,4 +601,58 @@ IN_PROC_BROWSER_TEST_F(SnapshotAXTreeBrowserTest, Metadata) {
           "<script type=\"application/ld+json\">{}</script>"));
 }
 
+// For Android, test the field trial param to change the number of max nodes.
+#if BUILDFLAG(IS_ANDROID)
+class SnapshotAXTreeMaxNodesParamBrowserTest : public ContentBrowserTest {
+ public:
+  SnapshotAXTreeMaxNodesParamBrowserTest() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kAccessibilitySnapshotStressTests,
+        {{"AccessibilitySnapshotStressTestsMaxNodes", "500"}});
+  }
+  ~SnapshotAXTreeMaxNodesParamBrowserTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(SnapshotAXTreeMaxNodesParamBrowserTest, MaxNodes) {
+  GURL url(R"HTML(data:text/html,<body>
+                  <style> p { margin: 50px; } </style>
+                  <script>
+                    let outerDiv = document.createElement('div');
+                    for (let i = 0; i < 200; i++) {
+                      let div = document.createElement('div');
+                      for (let j = 0; j < 20; j++) {
+                        let p = document.createElement('p');
+                        p.innerHTML = j;
+                        div.appendChild(p);
+                      }
+                      outerDiv.appendChild(div);
+                    }
+                    document.body.appendChild(outerDiv);
+                  </script>
+                  </body>)HTML");
+  EXPECT_TRUE(NavigateToURL(shell(), url));
+
+  WebContentsImpl* web_contents =
+      static_cast<WebContentsImpl*>(shell()->web_contents());
+
+  AXTreeSnapshotWaiter waiter;
+  web_contents->RequestAXTreeSnapshot(
+      base::BindOnce(&AXTreeSnapshotWaiter::ReceiveSnapshot,
+                     base::Unretained(&waiter)),
+      ui::kAXModeComplete,
+      /* max_nodes= */ 10,
+      /* timeout= */ {});
+  waiter.Wait();
+
+  // If the feature flag and param was honored, we should see more than 100
+  // nodes (which was the value set on the method call), but less than all the
+  // possible nodes.
+  EXPECT_GT(waiter.snapshot().nodes.size(), 100U);
+  EXPECT_LT(waiter.snapshot().nodes.size(), 800U);
+}
+
+#endif
 }  // namespace content

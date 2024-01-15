@@ -7,15 +7,15 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/idle_detector.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_state_informer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/offline_login_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/network_state_informer.h"
 
 namespace ash {
+
+class OfflineLoginView;
 
 // This class represents offline login screen: that handles login in offline
 // mode with provided username and password checked against cryptohome.
@@ -78,11 +78,5 @@ class OfflineLoginScreen
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OfflineLoginScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_OFFLINE_LOGIN_SCREEN_H_

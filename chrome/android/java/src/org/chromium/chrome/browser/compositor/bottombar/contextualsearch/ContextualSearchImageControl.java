@@ -11,7 +11,6 @@ import android.view.animation.Interpolator;
 import androidx.core.view.animation.PathInterpolatorCompat;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanelAnimation;
 import org.chromium.chrome.browser.layouts.animation.CompositorAnimator;
 
@@ -35,29 +34,9 @@ public class ContextualSearchImageControl {
      * @param percentage The percentage to the more opened state.
      */
     public void onUpdateFromPeekToExpand(float percentage) {
-        updateVisibilityForState(OverlayPanel.PanelState.EXPANDED, percentage);
-    }
-
-    /**
-     * Updates the Bar image when in transition between expanded and maximized states.
-     * @param percentage The percentage to the more opened state.
-     */
-    public void onUpdateFromExpandToMaximize(float percentage) {
-        updateVisibilityForState(OverlayPanel.PanelState.MAXIMIZED, percentage);
-    }
-
-    /**
-     * Updates the visibility based on the panel state that we're moving to and the percent moved.
-     * @param toState The Panel state we are moving to.
-     * @param percentage The fraction from 0 to 1 that represents how close we are to that state.
-     */
-    void updateVisibilityForState(@OverlayPanel.PanelState int toState, float percentage) {
-        if (mPanel.isDelayedIntelligenceActive()
-                == (toState == OverlayPanel.PanelState.MAXIMIZED)) {
-            if (mCardIconVisible || mThumbnailVisible) {
-                mCustomImageVisibilityPercentage = 1.f - percentage;
-                mVisibilityPercentageBasedOnPanelPosition = percentage;
-            }
+        if (mCardIconVisible || mThumbnailVisible) {
+            mCustomImageVisibilityPercentage = 1.f - percentage;
+            mVisibilityPercentageBasedOnPanelPosition = percentage;
         }
     }
 
@@ -65,14 +44,10 @@ public class ContextualSearchImageControl {
     // Card Icon
     // ============================================================================================
 
-    /**
-     * The resource id of the card icon to display.
-     */
+    /** The resource id of the card icon to display. */
     private int mCardIconResourceId;
 
-    /**
-     * Whether the card icon is visible.
-     */
+    /** Whether the card icon is visible. */
     private boolean mCardIconVisible;
 
     /**
@@ -102,14 +77,10 @@ public class ContextualSearchImageControl {
     // Thumbnail
     // ============================================================================================
 
-    /**
-     * The URL of the thumbnail to display.
-     */
+    /** The URL of the thumbnail to display. */
     private String mThumbnailUrl;
 
-    /**
-     * Whether the thumbnail is visible.
-     */
+    /** Whether the thumbnail is visible. */
     private boolean mThumbnailVisible;
 
     /**
@@ -182,8 +153,10 @@ public class ContextualSearchImageControl {
      */
     public int getBarImageSize() {
         if (mBarImageSize == 0) {
-            mBarImageSize = mPanel.getContext().getResources().getDimensionPixelSize(
-                    R.dimen.contextual_search_bar_image_size);
+            mBarImageSize =
+                    mPanel.getContext()
+                            .getResources()
+                            .getDimensionPixelSize(R.dimen.contextual_search_bar_image_size);
         }
         return mBarImageSize;
     }
@@ -197,9 +170,7 @@ public class ContextualSearchImageControl {
         return mCustomImageVisibilityPercentage;
     }
 
-    /**
-     * Called when the custom image finishes hiding to reset thumbnail and card icon values.
-     */
+    /** Called when the custom image finishes hiding to reset thumbnail and card icon values. */
     private void onCustomImageHidden() {
         mCardIconResourceId = 0;
         mCardIconVisible = false;
@@ -229,21 +200,26 @@ public class ContextualSearchImageControl {
 
         if (mImageVisibilityAnimator != null) mImageVisibilityAnimator.cancel();
 
-        mImageVisibilityAnimator = CompositorAnimator.ofFloat(mPanel.getAnimationHandler(),
-                mCustomImageVisibilityPercentage, visible ? 1.f : 0.f,
-                OverlayPanelAnimation.BASE_ANIMATION_DURATION_MS, animator -> {
-                    if (mVisibilityPercentageBasedOnPanelPosition > 0.f) return;
-                    mCustomImageVisibilityPercentage = animator.getAnimatedValue();
-                });
+        mImageVisibilityAnimator =
+                CompositorAnimator.ofFloat(
+                        mPanel.getAnimationHandler(),
+                        mCustomImageVisibilityPercentage,
+                        visible ? 1.f : 0.f,
+                        OverlayPanelAnimation.BASE_ANIMATION_DURATION_MS,
+                        animator -> {
+                            if (mVisibilityPercentageBasedOnPanelPosition > 0.f) return;
+                            mCustomImageVisibilityPercentage = animator.getAnimatedValue();
+                        });
         mImageVisibilityAnimator.setInterpolator(mCustomImageVisibilityInterpolator);
-        mImageVisibilityAnimator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                if (mCustomImageVisibilityPercentage == 0.f) onCustomImageHidden();
-                mImageVisibilityAnimator.removeAllListeners();
-                mImageVisibilityAnimator = null;
-            }
-        });
+        mImageVisibilityAnimator.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        if (mCustomImageVisibilityPercentage == 0.f) onCustomImageHidden();
+                        mImageVisibilityAnimator.removeAllListeners();
+                        mImageVisibilityAnimator = null;
+                    }
+                });
         mImageVisibilityAnimator.start();
     }
 }

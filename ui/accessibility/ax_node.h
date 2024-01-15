@@ -115,7 +115,8 @@ class AX_EXPORT AXNode final {
   // trees that are part of the same webpage, PDF or window into a large global
   // tree.
 
-  const std::vector<AXNode*>& GetAllChildren() const;
+  const std::vector<raw_ptr<AXNode, VectorExperimental>>& GetAllChildren()
+      const;
   size_t GetChildCount() const;
   size_t GetChildCountCrossingTreeBoundary() const;
   size_t GetUnignoredChildCount() const;
@@ -141,16 +142,14 @@ class AX_EXPORT AXNode final {
   AXNode* GetLastUnignoredChild() const;
   AXNode* GetLastUnignoredChildCrossingTreeBoundary() const;
 
-  // TODO(accessibility): Consider renaming all "GetDeepest...Child" methods to
-  // "GetDeepest...Descendant".
-  AXNode* GetDeepestFirstChild() const;
-  AXNode* GetDeepestFirstChildCrossingTreeBoundary() const;
-  AXNode* GetDeepestFirstUnignoredChild() const;
-  AXNode* GetDeepestFirstUnignoredChildCrossingTreeBoundary() const;
-  AXNode* GetDeepestLastChild() const;
-  AXNode* GetDeepestLastChildCrossingTreeBoundary() const;
-  AXNode* GetDeepestLastUnignoredChild() const;
-  AXNode* GetDeepestLastUnignoredChildCrossingTreeBoundary() const;
+  AXNode* GetDeepestFirstDescendant() const;
+  AXNode* GetDeepestFirstDescendantCrossingTreeBoundary() const;
+  AXNode* GetDeepestFirstUnignoredDescendant() const;
+  AXNode* GetDeepestFirstUnignoredDescendantCrossingTreeBoundary() const;
+  AXNode* GetDeepestLastDescendant() const;
+  AXNode* GetDeepestLastDescendantCrossingTreeBoundary() const;
+  AXNode* GetDeepestLastUnignoredDescendant() const;
+  AXNode* GetDeepestLastUnignoredDescendantCrossingTreeBoundary() const;
 
   AXNode* GetNextSibling() const;
   AXNode* GetNextUnignoredSibling() const;
@@ -165,7 +164,9 @@ class AX_EXPORT AXNode final {
   // Deprecated methods for walking the tree.
   //
 
-  const std::vector<AXNode*>& children() const { return children_; }
+  const std::vector<raw_ptr<AXNode, VectorExperimental>>& children() const {
+    return children_;
+  }
   AXNode* parent() const { return parent_; }
   size_t index_in_parent() const { return index_in_parent_; }
 
@@ -270,7 +271,7 @@ class AX_EXPORT AXNode final {
 
   // Swap the internal children vector with |children|. This instance
   // now owns all of the passed children.
-  void SwapChildren(std::vector<AXNode*>* children);
+  void SwapChildren(std::vector<raw_ptr<AXNode, VectorExperimental>>* children);
 
   // Returns true if this node is equal to or a descendant of |ancestor|.
   bool IsDescendantOf(const AXNode* ancestor) const;
@@ -426,6 +427,10 @@ class AX_EXPORT AXNode final {
 
   ax::mojom::NameFrom GetNameFrom() const { return data().GetNameFrom(); }
 
+  ax::mojom::DescriptionFrom GetDescriptionFrom() const {
+    return data().GetDescriptionFrom();
+  }
+
   ax::mojom::InvalidState GetInvalidState() const {
     return data().GetInvalidState();
   }
@@ -436,8 +441,8 @@ class AX_EXPORT AXNode final {
   // PosInSet and SetSize public methods.
   bool IsOrderedSetItem() const;
   bool IsOrderedSet() const;
-  absl::optional<int> GetPosInSet();
-  absl::optional<int> GetSetSize();
+  absl::optional<int> GetPosInSet() const;
+  absl::optional<int> GetSetSize() const;
 
   // Helpers for GetPosInSet and GetSetSize.
   // Returns true if the role of ordered set matches the role of item.
@@ -471,13 +476,9 @@ class AX_EXPORT AXNode final {
   // TODO(nektar): Consider changing the return value to std::string.
   const std::u16string& GetHypertext() const;
 
-  // Temporary method that marks `hypertext_` dirty. This will eventually be
-  // handled by the AX tree in a followup patch.
-  void SetNeedsToUpdateHypertext();
   // Temporary accessor methods until hypertext is fully migrated to this class.
   // Hypertext won't eventually need to be accessed outside this class.
   const std::map<int, int>& GetHypertextOffsetToHyperlinkChildIndex() const;
-  const AXHypertext& GetOldHypertext() const;
 
   // Returns the text that is found inside this node and all its descendants;
   // including text found in embedded objects.
@@ -561,7 +562,6 @@ class AX_EXPORT AXNode final {
   absl::optional<int> GetTableAriaColCount() const;
   absl::optional<int> GetTableAriaRowCount() const;
   absl::optional<int> GetTableCellCount() const;
-  absl::optional<bool> GetTableHasColumnOrRowHeaderNode() const;
   AXNode* GetTableCaption() const;
   AXNode* GetTableCellFromIndex(int index) const;
   AXNode* GetTableCellFromCoords(int row_index, int col_index) const;
@@ -575,7 +575,8 @@ class AX_EXPORT AXNode final {
   // Extra computed nodes for the accessibility tree for macOS:
   // one column node for each table column, followed by one
   // table header container node, or nullptr if not applicable.
-  const std::vector<AXNode*>* GetExtraMacNodes() const;
+  const std::vector<raw_ptr<AXNode, VectorExperimental>>* GetExtraMacNodes()
+      const;
 
   // Return true for mock nodes added to the map, such as extra mac nodes.
   bool IsGenerated() const;
@@ -596,10 +597,12 @@ class AX_EXPORT AXNode final {
   bool IsTableCellOrHeader() const;
   absl::optional<int> GetTableCellIndex() const;
   absl::optional<int> GetTableCellColIndex() const;
+  // The row index of a cell. If a row is passed in, use the first cell.
   absl::optional<int> GetTableCellRowIndex() const;
   absl::optional<int> GetTableCellColSpan() const;
   absl::optional<int> GetTableCellRowSpan() const;
   absl::optional<int> GetTableCellAriaColIndex() const;
+  // The ARIA row index of a cell. If a row is passed in, use the first cell.
   absl::optional<int> GetTableCellAriaRowIndex() const;
   std::vector<AXNodeID> GetTableCellColHeaderNodeIds() const;
   std::vector<AXNodeID> GetTableCellRowHeaderNodeIds() const;
@@ -682,6 +685,16 @@ class AX_EXPORT AXNode final {
   // that might send notifications.
   bool IsLeaf() const;
 
+  // Helper to determine if the node is focusable. This does more than just
+  // use HasState(ax::mojom::State::kFocusable) -- it also checks whether the
+  // object is a likely activedescendant.
+  bool IsFocusable() const;
+
+  // Helper to determine whether the node can be an active descendant, and is a
+  // likely candidate to be one. An id and an ARIA role are required, and the
+  // role must be item-like.
+  bool IsLikelyARIAActiveDescendant() const;
+
   // Returns true if this node is a list marker or if it's a descendant
   // of a list marker node. Returns false otherwise.
   bool IsInListMarker() const;
@@ -741,6 +754,9 @@ class AX_EXPORT AXNode final {
   // all nodes that can't be edited are read-only.
   bool IsReadOnlyOrDisabled() const;
 
+  // Returns true if node is from Views (and not web content).
+  bool IsView() const;
+
  private:
   AXTableInfo* GetAncestorTableInfo() const;
   void IdVectorToNodeVector(const std::vector<AXNodeID>& ids,
@@ -767,7 +783,7 @@ class AX_EXPORT AXNode final {
   size_t unignored_index_in_parent_;
   size_t unignored_child_count_ = 0;
   const raw_ptr<AXNode> parent_;
-  std::vector<AXNode*> children_;
+  std::vector<raw_ptr<AXNode, VectorExperimental>> children_;
 
   // Stores information about this node that is immutable and which has been
   // computed by the tree's source, such as `content::BlinkAXTreeSource`.
@@ -776,7 +792,6 @@ class AX_EXPORT AXNode final {
   // See the class comment in "ax_hypertext.h" for an explanation of this
   // member.
   mutable AXHypertext hypertext_;
-  mutable AXHypertext old_hypertext_;
 
   // Stores information about this node that can be computed on demand and
   // cached.
@@ -787,6 +802,7 @@ class AX_EXPORT AXNode final {
 };
 
 AX_EXPORT std::ostream& operator<<(std::ostream& stream, const AXNode& node);
+AX_EXPORT std::ostream& operator<<(std::ostream& stream, const AXNode* node);
 
 template <typename NodeType,
           NodeType* (NodeType::*NextSibling)() const,
@@ -861,10 +877,10 @@ AXNode::ChildIteratorBase<NodeType,
   // increment the iterator past the end, we remain at the past-the-end iterator
   // condition.
   if (child_ && parent_) {
-    if (child_ == (parent_.get()->*LastChild)())
+    if (child_ == (parent_->*LastChild)())
       child_ = nullptr;
     else
-      child_ = (child_.get()->*NextSibling)();
+      child_ = (child_->*NextSibling)();
   }
 
   return *this;
@@ -889,12 +905,12 @@ AXNode::ChildIteratorBase<NodeType,
     // If the iterator is past the end, |child_=nullptr|, decrement the iterator
     // gives us the last iterator element.
     if (!child_)
-      child_ = (parent_.get()->*LastChild)();
+      child_ = (parent_->*LastChild)();
     // Decrement the iterator gives us the previous element, except when the
     // iterator is at the beginning; in which case, decrementing the iterator
     // remains at the beginning.
-    else if (child_ != (parent_.get()->*FirstChild)())
-      child_ = (child_.get()->*PreviousSibling)();
+    else if (child_ != (parent_->*FirstChild)())
+      child_ = (child_->*PreviousSibling)();
   }
 
   return *this;

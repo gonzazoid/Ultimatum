@@ -5,17 +5,28 @@
 #ifndef CC_PAINT_PAINT_OP_READER_H_
 #define CC_PAINT_PAINT_OP_READER_H_
 
+#include <optional>
+#include "base/bits.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "cc/paint/paint_export.h"
 #include "cc/paint/paint_filter.h"
 #include "cc/paint/paint_op_writer.h"
 #include "cc/paint/transfer_cache_deserialize_helper.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
+struct SkGainmapInfo;
+struct SkHighContrastConfig;
 class SkColorSpace;
+namespace sktext::gpu {
+class Slug;
+}
 
 namespace gpu {
 struct Mailbox;
+}
+
+namespace gfx {
+struct HDRMetadata;
 }
 
 namespace cc {
@@ -29,30 +40,22 @@ class CC_PAINT_EXPORT PaintOpReader {
  public:
   // The DeserializeOptions passed to the reader must set all fields if it can
   // be used to for deserializing images, paint records or text blobs.
+  // See PaintOpWriter for the alignment requirement for `memory`.
   PaintOpReader(const volatile void* memory,
                 size_t size,
                 const PaintOp::DeserializeOptions& options,
-                bool enable_security_constraints = false)
-      : memory_(static_cast<const volatile char*>(memory) +
-                PaintOpWriter::HeaderBytes()),
-        remaining_bytes_(
-            base::bits::AlignDown(size, PaintOpWriter::Alignment())),
-        options_(options),
-        enable_security_constraints_(enable_security_constraints) {
-    DCHECK_EQ(memory_,
-              base::bits::AlignUp(memory_, PaintOpWriter::Alignment()));
-    if (remaining_bytes_ < PaintOpWriter::HeaderBytes()) {
-      valid_ = false;
-      return;
-    }
-    remaining_bytes_ -= PaintOpWriter::HeaderBytes();
-  }
+                bool enable_security_constraints = false);
 
   static void FixupMatrixPostSerialization(SkMatrix* matrix);
-  static bool ReadAndValidateOpHeader(const volatile void* input,
-                                      size_t input_size,
-                                      uint8_t* type,
-                                      uint32_t* skip);
+
+  // This should be called before before reading PaintOp data. This function
+  // should not be called if this PaintOpReader is used to read specific data
+  // instead of a whole PaintOp.
+  bool ReadAndValidateOpHeader(uint8_t* op_type, size_t* serialized_size);
+
+  size_t BufferAlignment() const {
+    return PaintOpWriter::BufferAlignment(enable_security_constraints_);
+  }
 
   bool valid() const { return valid_; }
   size_t remaining_bytes() const { return remaining_bytes_; }
@@ -72,9 +75,10 @@ class CC_PAINT_EXPORT PaintOpReader {
 
   void Read(SkPath* path);
   void Read(PaintFlags* flags);
-  void Read(PaintImage* image);
+  void Read(PaintImage* image,
+            PaintFlags::DynamicRangeLimitMixture dynamic_range_limit);
   void Read(sk_sp<SkData>* data);
-  void Read(sk_sp<GrSlug>* slug);
+  void Read(sk_sp<sktext::gpu::Slug>* slug);
   void Read(sk_sp<PaintFilter>* filter);
   void Read(sk_sp<PaintShader>* shader);
   void Read(SkMatrix* matrix);
@@ -82,17 +86,20 @@ class CC_PAINT_EXPORT PaintOpReader {
   void Read(SkImageInfo* info);
   void Read(SkSamplingOptions* sampling);
   void Read(sk_sp<SkColorSpace>* color_space);
+  void Read(SkGainmapInfo* gainmap_info);
   void Read(SkYUVColorSpace* yuv_color_space);
   void Read(SkYUVAInfo::PlaneConfig* plane_config);
   void Read(SkYUVAInfo::Subsampling* subsampling);
   void Read(gpu::Mailbox* mailbox);
+  void Read(SkHighContrastConfig* config);
+  void Read(gfx::HDRMetadata* hdr_metadata);
 
   void Read(scoped_refptr<SkottieWrapper>* skottie);
 
   void Read(SkClipOp* op) { ReadEnum<SkClipOp, SkClipOp::kMax_EnumValue>(op); }
   void Read(PaintCanvas::AnnotationType* type) {
     ReadEnum<PaintCanvas::AnnotationType,
-             PaintCanvas::AnnotationType::LINK_TO_DESTINATION>(type);
+             PaintCanvas::AnnotationType::kLinkToDestination>(type);
   }
   void Read(SkCanvas::SrcRectConstraint* constraint) {
     ReadEnum<SkCanvas::SrcRectConstraint, SkCanvas::kFast_SrcRectConstraint>(
@@ -129,13 +136,13 @@ class CC_PAINT_EXPORT PaintOpReader {
   // would exceed the available budfer.
   const volatile void* ExtractReadableMemory(size_t bytes);
 
-  // Aligns the memory to the given alignment.
+  // Aligns the memory to the given `alignment` which must be within the range
+  // of [PaintOpWriter::kDefaultAlignment, BufferAlignment()].
   void AlignMemory(size_t alignment);
 
-  void AssertAlignment(size_t alignment) {
+  void AssertFieldAlignment() {
 #if DCHECK_IS_ON()
-    uintptr_t memory = reinterpret_cast<uintptr_t>(memory_);
-    DCHECK_EQ(base::bits::AlignUp(memory, alignment), memory);
+    PaintOpWriter::AssertAlignment(memory_, PaintOpWriter::kDefaultAlignment);
 #endif
   }
 
@@ -155,7 +162,7 @@ class CC_PAINT_EXPORT PaintOpReader {
     kInsufficientRemainingBytes_Read_SkData = 9,
     kInsufficientRemainingBytes_Read_SkPath = 10,
     kInsufficientRemainingBytes_Read_SkRegion = 11,
-    kInsufficientRemainingBytes_Read_GrSlug = 12,
+    kInsufficientRemainingBytes_Read_Slug = 12,
     kInsufficientRemainingBytes_ReadData = 13,
     kInsufficientRemainingBytes_ReadFlattenable = 14,
     kInsufficientRemainingBytes_ReadMatrixConvolutionPaintFilter = 15,
@@ -186,7 +193,7 @@ class CC_PAINT_EXPORT PaintOpReader {
     kSkPathEffectUnflattenFailure = 40,
     kSkPathReadFromMemoryFailure = 41,
     kSkRegionReadFromMemoryFailure = 42,
-    kGrSlugDeserializeFailure = 43,
+    kSlugDeserializeFailure = 43,
     kUnexpectedPaintShaderType = 44,
     kUnexpectedSerializedImageType = 45,
     kZeroMailbox = 46,
@@ -197,8 +204,11 @@ class CC_PAINT_EXPORT PaintOpReader {
     kSharedImageProviderSkImageCreationFailed = 51,
     kZeroSkColorFilterBytes = 52,
     kInsufficientPixelData = 53,
+    kSkGainmapInfoDeserializationFailure = 54,
+    kHdrMetadataDeserializeFailure = 55,
+    kNonFiniteSkColor4f = 56,
 
-    kMaxValue = kInsufficientPixelData
+    kMaxValue = kNonFiniteSkColor4f
   };
 
   template <typename T>
@@ -229,80 +239,79 @@ class CC_PAINT_EXPORT PaintOpReader {
 
   void SetInvalid(DeserializationError error);
 
+  void Read(sk_sp<ColorFilter>* filter);
+
   // The main entry point is Read(sk_sp<PaintFilter>* filter) which calls one of
   // the following functions depending on read type.
   void ReadColorFilterPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadBlurPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadDropShadowPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadMagnifierPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadComposePaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadAlphaThresholdPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadXfermodePaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadArithmeticPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadMatrixConvolutionPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadDisplacementMapEffectPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadImagePaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadRecordPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadMergePaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadMorphologyPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadOffsetPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadTilePaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadTurbulencePaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadShaderPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadMatrixPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadLightingDistantPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadLightingPointPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
   void ReadLightingSpotPaintFilter(
       sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
-  void ReadStretchPaintFilter(
-      sk_sp<PaintFilter>* filter,
-      const absl::optional<PaintFilter::CropRect>& crop_rect);
+      const std::optional<PaintFilter::CropRect>& crop_rect);
 
   // Returns the size of the read record, 0 if error.
-  size_t Read(sk_sp<PaintRecord>* record);
+  size_t Read(std::optional<PaintRecord>* record);
 
   void Read(SkRegion* region);
   uint8_t* CopyScratchSpace(size_t bytes);
@@ -311,7 +320,7 @@ class CC_PAINT_EXPORT PaintOpReader {
   const volatile char* memory_ = nullptr;
   size_t remaining_bytes_ = 0u;
   bool valid_ = true;
-  const PaintOp::DeserializeOptions& options_;
+  const raw_ref<const PaintOp::DeserializeOptions> options_;
 
   // Indicates that the data was serialized with the following constraints:
   // 1) PaintRecords and SkDrawLoopers are ignored.

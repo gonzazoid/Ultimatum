@@ -11,9 +11,11 @@
 #include <utility>
 
 #include "base/compiler_specific.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/associated_interface_ptr_info.h"
 #include "mojo/public/cpp/bindings/lib/multiplex_router.h"
+#include "mojo/public/cpp/bindings/runtime_features.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 
@@ -97,11 +99,11 @@ class PendingAssociatedRemote {
     scoped_refptr<internal::MultiplexRouter> router0 =
         internal::MultiplexRouter::CreateAndStartReceiving(
             std::move(pipe.handle0), internal::MultiplexRouter::MULTI_INTERFACE,
-            false, base::SequencedTaskRunnerHandle::Get());
+            false, base::SequencedTaskRunner::GetCurrentDefault());
     scoped_refptr<internal::MultiplexRouter> router1 =
         internal::MultiplexRouter::CreateAndStartReceiving(
             std::move(pipe.handle1), internal::MultiplexRouter::MULTI_INTERFACE,
-            true, base::SequencedTaskRunnerHandle::Get());
+            true, base::SequencedTaskRunner::GetCurrentDefault());
 
     InterfaceId id = router1->AssociateInterface(PassHandle());
     set_handle(router0->CreateLocalEndpointHandle(id));
@@ -131,6 +133,9 @@ namespace mojo {
 template <typename Interface>
 PendingAssociatedReceiver<Interface>
 PendingAssociatedRemote<Interface>::InitWithNewEndpointAndPassReceiver() {
+  if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+    return PendingAssociatedReceiver<Interface>();
+  }
   ScopedInterfaceEndpointHandle receiver_handle;
   ScopedInterfaceEndpointHandle::CreatePairPendingAssociation(&handle_,
                                                               &receiver_handle);

@@ -148,7 +148,7 @@ class SimulatorTestRunnerTest(TestCase):
       return
 
     @staticmethod
-    def _run(cmd, shards=None):
+    def _run(cmd, clones=None):
       if not any('retry_after_crash' in cmd_arg for cmd_arg in cmd):
         # First run, has no test filter supplied. Mock a crash.
         result = ResultCollection(
@@ -276,6 +276,23 @@ class SimulatorTestRunnerTest(TestCase):
     self.assertFalse(tr.test_results['interrupted'])
     self.assertEquals(tr.test_results['tests']['test1']['actual'],
                       'FAIL FAIL FAIL SKIP')
+    self.assertTrue(tr.logs)
+
+  @mock.patch('test_runner.SimulatorTestRunner.tear_down')
+  @mock.patch('test_runner.SimulatorTestRunner.set_up')
+  @mock.patch('test_runner.TestRunner._run')
+  def test_crashed_spawning_launcher_no_retry(self, mock_run, _1, _2):
+    test1_crash_result = TestResult('test1', TestStatus.CRASH)
+    initial_result = ResultCollection(test_results=[test1_crash_result])
+    initial_result.crashed = True
+    initial_result.spawning_test_launcher = True
+    mock_run.side_effect = [initial_result]
+    tr = test_runner.SimulatorTestRunner(
+        'fake-app', 'fake-iossim', 'iPhone X', '11.4', 'out-dir', retries=3)
+    tr.launch()
+    self.assertEquals(len(mock_run.mock_calls), 1)
+    self.assertTrue(tr.test_results['interrupted'])
+    self.assertIn('test suite crash', tr.logs)
     self.assertTrue(tr.logs)
 
 

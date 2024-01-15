@@ -16,7 +16,12 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "ui/webui/mojo_bubble_web_ui_controller.h"
+#include "ui/webui/resources/cr_components/color_change_listener/color_change_listener.mojom.h"
 #include "ui/webui/resources/js/metrics_reporter/metrics_reporter.mojom.h"
+
+namespace ui {
+class ColorChangeHandler;
+}
 
 class TabSearchUI : public ui::MojoBubbleWebUIController,
                     public tab_search::mojom::PageHandlerFactory {
@@ -25,6 +30,10 @@ class TabSearchUI : public ui::MojoBubbleWebUIController,
   TabSearchUI(const TabSearchUI&) = delete;
   TabSearchUI& operator=(const TabSearchUI&) = delete;
   ~TabSearchUI() override;
+
+  void BindInterface(
+      mojo::PendingReceiver<color_change_listener::mojom::PageHandler>
+          pending_receiver);
 
   // Instantiates the implementor of the mojom::PageHandlerFactory mojo
   // interface passing the pending receiver that will be internally bound.
@@ -37,12 +46,18 @@ class TabSearchUI : public ui::MojoBubbleWebUIController,
     return page_handler_.get();
   }
 
+  static constexpr std::string GetWebUIName() { return "TabSearch"; }
+
  private:
   // tab_search::mojom::PageHandlerFactory
   void CreatePageHandler(
       mojo::PendingRemote<tab_search::mojom::Page> page,
       mojo::PendingReceiver<tab_search::mojom::PageHandler> receiver) override;
 
+  bool ShowTabOrganizationFRE();
+  int TabIndex();
+
+  std::unique_ptr<ui::ColorChangeHandler> color_provider_handler_;
   std::unique_ptr<TabSearchPageHandler> page_handler_;
   MetricsReporter metrics_reporter_;
 
@@ -53,7 +68,7 @@ class TabSearchUI : public ui::MojoBubbleWebUIController,
 
   // A timer used to track the duration between when the WebUI is constructed
   // and when the TabSearchPageHandler is constructed.
-  absl::optional<base::ElapsedTimer> page_handler_timer_;
+  std::optional<base::ElapsedTimer> page_handler_timer_;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
 };

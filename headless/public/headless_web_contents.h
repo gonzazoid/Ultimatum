@@ -5,13 +5,8 @@
 #ifndef HEADLESS_PUBLIC_HEADLESS_WEB_CONTENTS_H_
 #define HEADLESS_PUBLIC_HEADLESS_WEB_CONTENTS_H_
 
-#include <string>
-#include <utility>
-
-#include "base/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/kill.h"
-#include "headless/public/headless_devtools_channel.h"
 #include "headless/public/headless_export.h"
 #include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
@@ -19,7 +14,6 @@
 namespace headless {
 class HeadlessBrowserContextImpl;
 class HeadlessBrowserImpl;
-class HeadlessDevToolsTarget;
 
 // Class representing contents of a browser tab. Should be accessed from browser
 // main thread.
@@ -40,19 +34,9 @@ class HEADLESS_EXPORT HeadlessWebContents {
     // All the following notifications will be called on browser main thread.
 
     // Indicates that this HeadlessWebContents instance is now ready to be
-    // inspected using a HeadlessDevToolsClient.
-    //
+    // inspected.
     // TODO(altimin): Support this event for pages that aren't created by us.
     virtual void DevToolsTargetReady() {}
-
-    // Indicates that a DevTools client attached to this HeadlessWebContents
-    // instance.
-    virtual void DevToolsClientAttached() {}
-
-    // Indicates that a DevTools client detached from this HeadlessWebContents
-    // instance.
-    virtual void DevToolsClientDetached() {}
-
     // This method is invoked when the process of the observed RenderProcessHost
     // exits (either normally or with a crash). To determine if the process
     // closed normally or crashed, examine the |status| parameter.
@@ -62,9 +46,6 @@ class HEADLESS_EXPORT HeadlessWebContents {
     // contain the exit code for the process.
     virtual void RenderProcessExited(base::TerminationStatus status,
                                      int exit_code) {}
-
-    // Invoked when HeadlessWebContents is being destroyed.
-    virtual void HeadlessWebContentsDestroyed() {}
 
    protected:
     Observer() {}
@@ -76,27 +57,8 @@ class HEADLESS_EXPORT HeadlessWebContents {
   virtual void AddObserver(Observer* observer) = 0;
   virtual void RemoveObserver(Observer* observer) = 0;
 
-  // Return a DevTools target corresponding to this tab. Note that this method
-  // won't return a valid value until Observer::DevToolsTargetReady has been
-  // signaled.
-  virtual HeadlessDevToolsTarget* GetDevToolsTarget() = 0;
-
-  // Creates a DevTools channel corresponding to this tab. Note that this method
-  // won't return a valid value until Observer::DevToolsTargetReady has been
-  // signaled.
-  virtual std::unique_ptr<HeadlessDevToolsChannel> CreateDevToolsChannel() = 0;
-
   // Close this page. |HeadlessWebContents| object will be destroyed.
   virtual void Close() = 0;
-
-  // Returns the main frame's process id or -1 if there's no main frame.
-  virtual int GetMainFrameRenderProcessId() const = 0;
-
-  // Returns the main frame's node id or -1 if there's no main frame.
-  virtual int GetMainFrameTreeNodeId() const = 0;
-
-  // Returns the main frame's devtools id or "" if there's no main frame.
-  virtual std::string GetMainFrameDevToolsId() const = 0;
 
  protected:
   HeadlessWebContents() {}
@@ -122,6 +84,9 @@ class HEADLESS_EXPORT HeadlessWebContents::Builder {
   // Specify whether BeginFrames should be controlled via DevTools commands.
   Builder& SetEnableBeginFrameControl(bool enable_begin_frame_control);
 
+  // Specify whether to create the CDP target of type "tab".
+  Builder& SetUseTabTarget(bool use_tab_target);
+
   // The returned object is owned by HeadlessBrowser. Call
   // HeadlessWebContents::Close() to dispose it.
   HeadlessWebContents* Build();
@@ -133,11 +98,13 @@ class HEADLESS_EXPORT HeadlessWebContents::Builder {
 
   explicit Builder(HeadlessBrowserContextImpl* browser_context);
 
-  raw_ptr<HeadlessBrowserContextImpl, DanglingUntriaged> browser_context_;
+  raw_ptr<HeadlessBrowserContextImpl, AcrossTasksDanglingUntriaged>
+      browser_context_;
 
   GURL initial_url_ = GURL("about:blank");
   gfx::Size window_size_;
   bool enable_begin_frame_control_ = false;
+  bool use_tab_target_ = false;
 };
 
 }  // namespace headless

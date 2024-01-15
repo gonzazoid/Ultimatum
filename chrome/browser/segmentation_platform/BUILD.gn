@@ -5,21 +5,42 @@
 if (is_android) {
   import("//build/config/android/config.gni")
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 if (is_android) {
   android_library("factory_java") {
+    srcjar_deps = [ ":jni_headers" ]
     sources = [ "android/java/src/org/chromium/chrome/browser/segmentation_platform/SegmentationPlatformServiceFactory.java" ]
 
     deps = [
-      "//base:jni_java",
+      "//base:base_java",
       "//build/android:build_java",
       "//chrome/browser/profiles/android:java",
       "//components/segmentation_platform/public:public_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
+  }
 
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+  android_library("javatests") {
+    testonly = true
+
+    sources = [ "android/javatests/src/org/chromium/chrome/browser/segmentation_platform/SegmentationPlatformServiceFactoryTest.java" ]
+    deps = [
+      "//base:base_java",
+      "//base:base_java_test_support",
+      "//chrome/browser/flags:java",
+      "//chrome/browser/profiles/android:java",
+      "//chrome/browser/segmentation_platform:factory_java",
+      "//chrome/test/android:chrome_java_integration_test_support",
+      "//components/segmentation_platform/public:public_java",
+      "//third_party/androidx:androidx_test_runner_java",
+      "//third_party/hamcrest:hamcrest_core_java",
+      "//third_party/hamcrest:hamcrest_library_java",
+      "//third_party/junit:junit",
+      "//url:gurl_java",
+    ]
   }
 
   generate_jni("jni_headers") {

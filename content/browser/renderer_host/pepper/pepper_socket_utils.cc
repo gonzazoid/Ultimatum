@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_util.h"
@@ -24,8 +23,7 @@
 #include "ppapi/c/private/ppb_net_address_private.h"
 #include "ppapi/shared_impl/private/net_address_private_impl.h"
 
-namespace content {
-namespace pepper_socket_utils {
+namespace content::pepper_socket_utils {
 
 SocketPermissionRequest CreateSocketPermissionRequest(
     SocketPermissionRequest::OperationType type,
@@ -34,8 +32,8 @@ SocketPermissionRequest CreateSocketPermissionRequest(
       ppapi::NetAddressPrivateImpl::DescribeNetAddress(net_addr, false);
   uint16_t port = 0;
   net::IPAddressBytes address;
-  ppapi::NetAddressPrivateImpl::NetAddressToIPEndPoint(
-      net_addr, &address, &port);
+  ppapi::NetAddressPrivateImpl::NetAddressToIPEndPoint(net_addr, &address,
+                                                       &port);
   return SocketPermissionRequest(type, host, port);
 }
 
@@ -54,16 +52,16 @@ bool CanUseSocketAPIs(bool external_plugin,
 
   RenderFrameHost* render_frame_host =
       RenderFrameHost::FromID(render_process_id, render_frame_id);
-  if (!render_frame_host)
+  if (!render_frame_host) {
     return false;
+  }
   SiteInstance* site_instance = render_frame_host->GetSiteInstance();
-  if (!site_instance)
+  if (!site_instance) {
     return false;
+  }
   if (!GetContentClient()->browser()->AllowPepperSocketAPI(
-          site_instance->GetBrowserContext(),
-          site_instance->GetSiteURL(),
-          private_api,
-          params)) {
+          site_instance->GetBrowserContext(), site_instance->GetSiteURL(),
+          private_api, params)) {
     LOG(ERROR) << "Host " << site_instance->GetSiteURL().host()
                << " cannot use socket API or destination is not allowed";
     return false;
@@ -72,7 +70,7 @@ bool CanUseSocketAPIs(bool external_plugin,
   return true;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 namespace {
 
 // The entire IPv4 subnet 127.0.0.0/8 is for loopback. See RFC3330.
@@ -90,35 +88,28 @@ bool IsLoopbackAddress(const net::IPAddress& address) {
 
 }  // namespace
 
-void OpenFirewallHole(const net::IPEndPoint& address,
-                      ash::FirewallHole::PortType type,
-                      ash::FirewallHole::OpenCallback callback) {
+void OpenTCPFirewallHole(const net::IPEndPoint& address,
+                         chromeos::FirewallHole::OpenCallback callback) {
   if (IsLoopbackAddress(address.address())) {
     std::move(callback).Run(nullptr);
     return;
   }
-
-  // TODO(sergeyu): Currently an empty string is passed as interface name, which
-  // means the port will be opened on all network interfaces. Interface name
-  // can be resolved by the address, but the best solution would be to update
-  // firewalld to allow filtering by destination address, not just destination
-  // port. iptables already support it.
-  ash::FirewallHole::Open(type, address.port(), std::string(),
-                          std::move(callback));
-}
-
-void OpenTCPFirewallHole(const net::IPEndPoint& address,
-                         ash::FirewallHole::OpenCallback callback) {
-  OpenFirewallHole(address, ash::FirewallHole::PortType::TCP,
-                   std::move(callback));
+  chromeos::FirewallHole::Open(chromeos::FirewallHole::PortType::kTcp,
+                               address.port(), "" /*all interfaces*/,
+                               std::move(callback));
 }
 
 void OpenUDPFirewallHole(const net::IPEndPoint& address,
-                         ash::FirewallHole::OpenCallback callback) {
-  OpenFirewallHole(address, ash::FirewallHole::PortType::UDP,
-                   std::move(callback));
+                         chromeos::FirewallHole::OpenCallback callback) {
+  if (IsLoopbackAddress(address.address())) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+  chromeos::FirewallHole::Open(chromeos::FirewallHole::PortType::kUdp,
+                               address.port(), "" /*all interfaces*/,
+                               std::move(callback));
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 net::MutableNetworkTrafficAnnotationTag PepperTCPNetworkAnnotationTag() {
   return net::MutableNetworkTrafficAnnotationTag(
@@ -209,5 +200,4 @@ net::MutableNetworkTrafficAnnotationTag PepperUDPNetworkAnnotationTag() {
         })"));
 }
 
-}  // namespace pepper_socket_utils
-}  // namespace content
+}  // namespace content::pepper_socket_utils

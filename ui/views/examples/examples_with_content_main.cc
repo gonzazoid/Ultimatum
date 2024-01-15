@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_context.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/views/examples/examples_color_mixer.h"
 #include "ui/views/examples/examples_window.h"
 #include "ui/views/examples/examples_window_with_content.h"
@@ -16,7 +17,6 @@
 
 #if BUILDFLAG(IS_MAC)
 #include "sandbox/mac/seatbelt_exec.h"
-#include "ui/display/screen.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -52,7 +52,7 @@ void ShowContentExampleWindow(ui::ViewsContentClient* views_content_client,
   // sandbox::InitLibcUrandomOverrides(). See http://crbug.com/374712.
   if (!browser_context) {
     browser_context->SaveSessionState();
-    NOTREACHED();
+    NOTREACHED_NORETURN();
   }
 }
 
@@ -68,9 +68,6 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, wchar_t*, int) {
 int main(int argc, const char** argv) {
   base::CommandLine::Init(argc, argv);
 
-#if BUILDFLAG(IS_MAC)
-  display::ScopedNativeScreen desktop_screen;
-#endif
   ui::ColorProviderManager::Get().AppendColorProviderInitializer(
       base::BindRepeating(&views::examples::AddExamplesColorMixers));
 

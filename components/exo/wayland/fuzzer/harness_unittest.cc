@@ -7,10 +7,8 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
-#include "build/chromeos_buildflags.h"
 #include "components/exo/display.h"
 #include "components/exo/test/exo_test_base.h"
-#include "components/exo/test/exo_test_base_views.h"
 #include "components/exo/wayland/fuzzer/actions.pb.h"
 #include "components/exo/wayland/server.h"
 

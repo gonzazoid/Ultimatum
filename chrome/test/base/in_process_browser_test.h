@@ -9,20 +9,24 @@
 #include <memory>
 #include <string>
 
+#include "base/callback_list.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/feature_engagement/test/scoped_iph_feature_list.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test_base.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/page_transition_types.h"
 
 #if BUILDFLAG(IS_MAC)
+#include "base/apple/scoped_nsautorelease_pool.h"
+#include "base/memory/stack_allocated.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/test/scoped_fake_full_keyboard_access.h"
 #endif
 
@@ -34,17 +38,16 @@ namespace base {
 
 class CommandLine;
 
-#if BUILDFLAG(IS_MAC)
-namespace mac {
-class ScopedNSAutoreleasePool;
-}  // namespace mac
-#endif  // BUILDFLAG(IS_MAC)
-
 #if BUILDFLAG(IS_WIN)
 namespace win {
 class ScopedCOMInitializer;
 }
 #endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+class Process;
+class Version;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 }  // namespace base
 
 #if defined(TOOLKIT_VIEWS)
@@ -62,6 +65,7 @@ class Browser;
 class FakeAccountManagerUI;
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 class MainThreadStackSamplingProfiler;
+class PrefService;
 class Profile;
 #if BUILDFLAG(IS_MAC)
 class ScopedBundleSwizzlerMac;
@@ -145,6 +149,9 @@ class InProcessBrowserTest : public content::BrowserTestBase {
   InProcessBrowserTest& operator=(const InProcessBrowserTest&) = delete;
   ~InProcessBrowserTest() override;
 
+  // Returns the currently running InProcessBrowserTest.
+  static InProcessBrowserTest* GetCurrent();
+
   // Configures everything for an in process browser test, then invokes
   // BrowserMain(). BrowserMain() ends up invoking RunTestOnMainThreadLoop().
   void SetUp() override;
@@ -172,6 +179,9 @@ class InProcessBrowserTest : public content::BrowserTestBase {
   // If no browser is created in BrowserMain(), this will return nullptr unless
   // another browser instance is created at a later time and
   // SelectFirstBrowser() is called.
+  // In Lacros only mode, ash web browser is disabled, therefore, browser()
+  // is not created and should not be accessed from the tests in
+  // browser_tests_require_lacros test suite.
   Browser* browser() const { return browser_; }
 
   // Set |browser_| to the first browser on the browser list.
@@ -186,6 +196,51 @@ class InProcessBrowserTest : public content::BrowserTestBase {
   // https://crbug.com/1365899
   // The final value of the result is the format of key1=value1;key2=value2.
   void RecordPropertyFromMap(const std::map<std::string, std::string>& tags);
+
+  // Tests can override this to customize the initial local_state.
+  virtual void SetUpLocalStatePrefService(PrefService* local_state);
+
+  // Start ash-chrome with specific flags.
+  // In general, there is a shared ash chrome started and a lacros chrome
+  // started before a test case. But for some tests, you may need a special
+  // ash chrome. 2 common use cases:
+  //   1. you need to enable a feature in ash chrome then your test can verify
+  //      some behavior. In this case you need to call this function to start
+  //      a unique ash chrome with the feature enabled.
+  //   2. your test case will pollute ash and cause following test cases fail or
+  //      flaky. Instead of implementing cleanup in TearDown(), using a
+  //      unique ash just for the test is better.
+  // Call this function in the test SetUp() function before invoking
+  // InProcessBrowserTest::SetUp().
+  // This function has negative performance impact:
+  //   1. Start additional ash chrome uses more time.
+  //   2. Additional ash chrome uses more resources.
+  //      The shared ash chrome is still running. By calling this function,
+  //      you start another ash chrome.
+  // Args:
+  //   enabled_features: Additional features to be enabled in ash chrome.
+  //   disabled_features: Additional features to be disabled in ash chrome.
+  //   additional_cmdline_switches: Additional cmdline switches.
+  //       e.g. {"enable-pixel-outputs-in-tests"}
+  //   bug_number_and_reason: Not used in code. But please provide information
+  //       about why you need unique ash chrome. Hopefully this can help reduce
+  //       the usage of unique ash.
+  //       e.g. "crbug.com/11. Switch to shared ash when feature XX is default."
+  //
+  // After you call this function in SetUp(), before the test case test body,
+  // a unique ash chrome will be started and a lacros chrome will be connected
+  // to it. After the test case finishes, the unique ash chrome will be
+  // terminated and the next test case will use the default shared ash chrome.
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void StartUniqueAshChrome(
+      const std::vector<std::string>& enabled_features,
+      const std::vector<std::string>& disabled_features,
+      const std::vector<std::string>& additional_cmdline_switches,
+      const std::string& bug_number_and_reason);
+#endif
+
+  // Returns true if crosapi is enabled for the test.
+  static bool IsCrosapiEnabled();
 
  protected:
   // Closes the given browser and waits for it to release all its resources.
@@ -233,7 +288,7 @@ class InProcessBrowserTest : public content::BrowserTestBase {
   // after creating the user data directory, but before any browser is launched.
   // If a test wishes to set up some initial non-empty state in the user data
   // directory before the browser starts up, it can do so here. Returns true if
-  // successful.
+  // successful. To set initial prefs, see SetUpLocalStatePrefService.
   [[nodiscard]] virtual bool SetUpUserDataDirectory();
 
   // Initializes the display::Screen instance.
@@ -294,13 +349,49 @@ class InProcessBrowserTest : public content::BrowserTestBase {
 
 #if BUILDFLAG(IS_MAC)
   // Returns the autorelease pool in use inside RunTestOnMainThreadLoop().
-  base::mac::ScopedNSAutoreleasePool* AutoreleasePool() const {
-    return autorelease_pool_;
+  base::apple::ScopedNSAutoreleasePool* AutoreleasePool() {
+    return &autorelease_pool_.value();
   }
 #endif  // BUILDFLAG(IS_MAC)
 
   // Returns the test data path used by the embedded test server.
   base::FilePath GetChromeTestDataDir() const;
+
+  // Returns the HTTPS embedded test server.
+  // By default, the HTTPS test server is configured to have a valid
+  // certificate for the set of hostnames:
+  //   - [*.]example.com
+  //   - [*.]foo.com
+  //   - [*.]bar.com
+  //   - [*.]a.com
+  //   - [*.]b.com
+  //   - [*.]c.com
+  //
+  // After starting the server, you can get a working HTTPS URL for any of
+  // those hostnames. For example:
+  //
+  //   ```
+  //   ASSERT_TRUE(embedded_https_test_server().Start());
+  //   embedded_https_test_server().GetURL("foo.com", "/simple.html");
+  //   ```
+  //
+  // Tests can override the set of valid hostnames by calling
+  // `net::EmbeddedTestServer::SetCertHostnames()` before starting the test
+  // server, and a valid test certificate will be automatically generated for
+  // the hostnames passed in. For example:
+  //
+  //   ```
+  //   embedded_https_test_server().SetCertHostnames(
+  //       {"example.com", "example.org"});
+  //   ASSERT_TRUE(embedded_https_test_server().Start());
+  //   embedded_https_test_server().GetURL("example.org", "/simple.html");
+  //   ```
+  const net::EmbeddedTestServer& embedded_https_test_server() const {
+    return *embedded_https_test_server_;
+  }
+  net::EmbeddedTestServer& embedded_https_test_server() {
+    return *embedded_https_test_server_;
+  }
 
   void set_exit_when_last_browser_closes(bool value) {
     exit_when_last_browser_closes_ = value;
@@ -324,6 +415,21 @@ class InProcessBrowserTest : public content::BrowserTestBase {
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   FakeAccountManagerUI* GetFakeAccountManagerUI() const;
+
+  // Return the Ash chrome version hooked with Lacros. This API does not
+  // depend on crosapi. So it is safe to call when crosapi is disabled and
+  // as early as in test SetUp().
+  static base::Version GetAshChromeVersion();
+
+  // The following are the helper functions to manage Ash browser based windows
+  // from Lacros browser tests. When running with Ash, Lacros browser tests can
+  // create some Ash browser based UIs, such as SWA, Web UI, etc. These UIs
+  // must be cleaned up when the test tears down, so that they won't pollute
+  // the tests running after, since Lacros browser tests are running with the
+  // shared Ash instance by default.
+  void VerifyNoAshBrowserWindowOpenRightNow();
+  void CloseAllAshBrowserWindows();
+  void WaitUntilAtLeastOneAshBrowserWindowOpen();
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -331,10 +437,18 @@ class InProcessBrowserTest : public content::BrowserTestBase {
 #endif
 
  private:
+  friend class StartUniqueAshBrowserTest;
+
   void Initialize();
 
   // Quits all open browsers and waits until there are no more browsers.
   void QuitBrowsers();
+
+  // This is called to set up the test factories for each browser context.
+  // It ensures that ProtocolHandlerRegistry instances use
+  // TestProtocolHandlerRegistryDelegate, which prevents browser tests
+  // from changing the OS integration of protocols.
+  void SetupProtocolHandlerTestFactories(content::BrowserContext* context);
 
   static SetUpBrowserFunction* global_browser_set_up_function_;
 
@@ -342,10 +456,7 @@ class InProcessBrowserTest : public content::BrowserTestBase {
   // If no browser is created in BrowserMain(), then |browser_| will remain
   // nullptr unless SelectFirstBrowser() is called after the creation of the
   // first browser instance at a later time.
-  //
-  // TODO(crbug.com/1298696): browser_tests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<Browser, DanglingUntriagedDegradeToNoOpWhenMTE> browser_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_ = nullptr;
 
   // Used to run the process until the BrowserProcess signals the test to quit.
   std::unique_ptr<base::RunLoop> run_loop_;
@@ -366,8 +477,19 @@ class InProcessBrowserTest : public content::BrowserTestBase {
 
   base::test::ScopedFeatureList scoped_feature_list_;
 
+  // In-product help can conflict with tests' expected window activation and
+  // focus. This disables all IPH by default.
+  //
+  // This was previously done by disabling all IPH features, but that destroyed
+  // all field trials that included an IPH because overriding any feature
+  // touched by a field trial disables the field trial (see crbug.com/1381669).
+  //
+  // Individual tests can re-enable IPH using another ScopedIphFeatureList.
+  feature_engagement::test::ScopedIphFeatureList block_all_iph_feature_list_;
+
 #if BUILDFLAG(IS_MAC)
-  raw_ptr<base::mac::ScopedNSAutoreleasePool> autorelease_pool_ = nullptr;
+  STACK_ALLOCATED_IGNORE("https://crbug.com/1424190")
+  absl::optional<base::apple::ScopedNSAutoreleasePool> autorelease_pool_;
   std::unique_ptr<ScopedBundleSwizzlerMac> bundle_swizzler_;
 
   // Enable fake full keyboard access by default, so that tests don't depend on
@@ -387,6 +509,12 @@ class InProcessBrowserTest : public content::BrowserTestBase {
 
   std::unique_ptr<MainThreadStackSamplingProfiler> sampling_profiler_;
 
+  // Used to set up test factories for each browser context.
+  base::CallbackListSubscription create_services_subscription_;
+
+  // Embedded HTTPS test server, cheap to create, started on demand.
+  std::unique_ptr<net::EmbeddedTestServer> embedded_https_test_server_;
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // ChromeOS does not create a browser by default when the full restore feature
   // is enabled. However almost all existing browser tests assume a browser is
@@ -394,6 +522,11 @@ class InProcessBrowserTest : public content::BrowserTestBase {
   // testing, when the full restore feature is enabled.
   std::unique_ptr<ash::full_restore::ScopedLaunchBrowserForTesting>
       launch_browser_for_testing_;
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  base::ScopedTempDir unique_ash_user_data_dir_;
+  base::Process ash_process_;
 #endif
 };
 

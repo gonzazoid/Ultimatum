@@ -22,7 +22,11 @@ import {AnchorAlignment, CrActionMenuElement} from 'chrome://resources/cr_elemen
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {FittingType} from '../constants.js';
-import {record, UserAction} from '../metrics.js';
+import {record, recordPdfOcrUserSelection, UserAction} from '../metrics.js';
+// <if expr="enable_screen_ai_service">
+import {PdfOcrPrefCallback, PdfViewerPrivateProxyImpl} from '../pdf_viewer_private_proxy.js';
+
+// </if>
 
 import {getTemplate} from './viewer-toolbar.html.js';
 
@@ -38,6 +42,7 @@ export interface ViewerToolbarElement {
   $: {
     sidenavToggle: HTMLElement,
     menu: CrActionMenuElement,
+    'present-button': HTMLButtonElement,
     'two-page-view-button': HTMLButtonElement,
   };
 }
@@ -61,8 +66,10 @@ export class ViewerToolbarElement extends PolymerElement {
         reflectToAttribute: true,
       },
       // </if>
+
       docTitle: String,
       docLength: Number,
+      embeddedViewer: Boolean,
       hasEdits: Boolean,
       hasEnteredAnnotationMode: Boolean,
       isFormFieldFocused: Boolean,
@@ -79,6 +86,21 @@ export class ViewerToolbarElement extends PolymerElement {
 
       pageNo: Number,
       pdfAnnotationsEnabled: Boolean,
+      // <if expr="enable_screen_ai_service">
+      pdfOcrEnabled: Boolean,
+      // </if>
+
+      presentationModeAvailable_: {
+        type: Boolean,
+        // <if expr="enable_ink">
+        computed: 'computePresentationModeAvailable_(' +
+            'annotationMode, embeddedViewer)',
+        // </if>
+        // <if expr="not enable_ink">
+        computed: 'computePresentationModeAvailable_(embeddedViewer)',
+        //</if>
+      },
+
       printingEnabled: Boolean,
       rotated: Boolean,
       viewportZoom: Number,
@@ -98,6 +120,13 @@ export class ViewerToolbarElement extends PolymerElement {
         type: String,
         computed: 'computeFitToButtonIcon_(fittingType_)',
       },
+
+      // <if expr="enable_screen_ai_service">
+      pdfOcrAlwaysActive_: {
+        type: Boolean,
+        value: false,
+      },
+      // </if>
 
       viewportZoomPercent_: {
         type: Number,
@@ -122,6 +151,7 @@ export class ViewerToolbarElement extends PolymerElement {
 
   docTitle: string;
   docLength: number;
+  embeddedViewer: boolean;
   hasEdits: boolean;
   hasEnteredAnnotationMode: boolean;
   isFormFieldFocused: boolean;
@@ -138,6 +168,7 @@ export class ViewerToolbarElement extends PolymerElement {
   private fittingType_: FittingType = FittingType.FIT_TO_PAGE;
   private fitToButtonIcon_: string;
   private moreMenuOpen_: boolean = false;
+  private presentationModeAvailable_: boolean;
   private loading_: boolean = true;
   private viewportZoomPercent_: number;
 
@@ -146,6 +177,28 @@ export class ViewerToolbarElement extends PolymerElement {
   annotationMode: boolean;
   private showAnnotationsModeDialog_: boolean;
   private showAnnotationsBar_: boolean;
+  // </if>
+
+  // <if expr="enable_screen_ai_service">
+  pdfOcrEnabled: boolean;
+  private pdfOcrAlwaysActive_: boolean;
+  private pdfOcrPrefChanged_: PdfOcrPrefCallback = null;
+
+  override async connectedCallback() {
+    super.connectedCallback();
+    this.pdfOcrAlwaysActive_ =
+        await PdfViewerPrivateProxyImpl.getInstance().isPdfOcrAlwaysActive();
+    this.pdfOcrPrefChanged_ = this.onPdfOcrPrefChanged.bind(this);
+    PdfViewerPrivateProxyImpl.getInstance().addPdfOcrPrefChangedListener(
+        this.pdfOcrPrefChanged_);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    PdfViewerPrivateProxyImpl.getInstance().removePdfOcrPrefChangedListener(
+        this.pdfOcrPrefChanged_);
+    this.pdfOcrPrefChanged_ = null;
+  }
   // </if>
 
   private onSidenavToggleClick_() {
@@ -217,15 +270,7 @@ export class ViewerToolbarElement extends PolymerElement {
     this.dispatchEvent(new CustomEvent('properties-click'));
   }
 
-  private getSinglePageAriaChecked_(checked: boolean): string {
-    return checked ? 'false' : 'true';
-  }
-
-  private getTwoPageViewAriaChecked_(checked: boolean): string {
-    return checked ? 'true' : 'false';
-  }
-
-  private getShowAnnotationsAriaChecked_(checked: boolean): string {
+  private getAriaChecked_(checked: boolean): string {
     return checked ? 'true' : 'false';
   }
 
@@ -361,6 +406,40 @@ export class ViewerToolbarElement extends PolymerElement {
     }
   }
   // </if>
+
+  // <if expr="enable_screen_ai_service">
+  private async onPdfOcrClick_() {
+    // Use `this.pdfOcrAlwaysActive_`, which is the PDF OCR pref currently
+    // shown on the more action menu. The PDF OCR pref can be changed by the
+    // user from outside the PDF Viewer, but `this.pdfOcrAlwaysActive_` is the
+    // value that the user sees from the more action menu when clicking the
+    // button to turn on/off the PDF OCR.
+    const valueToSet = !this.pdfOcrAlwaysActive_;
+    const success =
+        await PdfViewerPrivateProxyImpl.getInstance().setPdfOcrPref(valueToSet);
+    if (success) {
+      this.pdfOcrAlwaysActive_ = valueToSet;
+      recordPdfOcrUserSelection(this.pdfOcrAlwaysActive_);
+    }
+  }
+
+  private onPdfOcrPrefChanged(isPdfOcrAlwaysActive: boolean) {
+    this.pdfOcrAlwaysActive_ = isPdfOcrAlwaysActive;
+  }
+  // </if>
+
+  /**
+   * Updates the toolbar's presentation mode available flag depending on current
+   * conditions.
+   */
+  private computePresentationModeAvailable_() {
+    // <if expr="enable_ink">
+    return !this.annotationMode && !this.embeddedViewer;
+    // </if>
+    // <if expr="not enable_ink">
+    return !this.embeddedViewer;
+    // </if>
+  }
 }
 
 declare global {

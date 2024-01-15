@@ -7,10 +7,12 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/omnibox/browser/actions/omnibox_action_concepts.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/buildflags.h"
 #include "components/search_engines/template_url.h"
@@ -44,13 +46,20 @@ class AutocompleteProviderClient;
 //    destroyed when the match is destroyed, so matches have the only reference.
 //  - Some actions (like Pedals) are fixed and expensive to copy, so matches
 //    should merely hold one of the references to the action.
-class OmniboxAction : public base::RefCounted<OmniboxAction> {
+// Note: `RefCountedThreadSafe` is used instead of `RefCounted` because
+//  AutocompleteMatch instances are passed across thread boundaries to
+//  different sequences and they contain `scoped_refptr<OmniboxAction>`.
+class OmniboxAction : public base::RefCountedThreadSafe<OmniboxAction> {
  public:
   struct LabelStrings {
     LabelStrings(int id_hint,
                  int id_suggestion_contents,
                  int id_accessibility_suffix,
                  int id_accessibility_hint);
+    LabelStrings(std::u16string hint,
+                 std::u16string suggestion_contents,
+                 std::u16string accessibility_suffix,
+                 std::u16string accessibility_hint);
     LabelStrings();
     LabelStrings(const LabelStrings&);
     ~LabelStrings();
@@ -109,6 +118,7 @@ class OmniboxAction : public base::RefCounted<OmniboxAction> {
                                 AutocompleteMatchType::Type match_type,
                                 base::TimeTicks match_selection_timestamp,
                                 bool destination_url_entered_without_scheme,
+                                bool destination_url_entered_with_http_scheme,
                                 const std::u16string&,
                                 const AutocompleteMatch&,
                                 const AutocompleteMatch&,
@@ -119,7 +129,7 @@ class OmniboxAction : public base::RefCounted<OmniboxAction> {
                      base::TimeTicks match_selection_timestamp,
                      WindowOpenDisposition disposition);
     ~ExecutionContext();
-    Client& client_;
+    const raw_ref<Client, FlakyDanglingUntriaged> client_;
     OpenUrlCallback open_url_callback_;
     base::TimeTicks match_selection_timestamp_;
     WindowOpenDisposition disposition_;
@@ -138,8 +148,8 @@ class OmniboxAction : public base::RefCounted<OmniboxAction> {
   // `executed` is set to true if the action was also executed by the user.
   virtual void RecordActionShown(size_t position, bool executed) const {}
 
-  // Takes the action associated with this Action.  Non-navigation
-  // Actions must override the default, but Navigation Actions don't need to.
+  // Takes the action associated with this OmniboxAction. Non-navigation
+  // actions must override the default, but navigation actions don't need to.
   virtual void Execute(ExecutionContext& context) const;
 
   // Returns true if this Action is ready to be used now, or false if
@@ -157,14 +167,19 @@ class OmniboxAction : public base::RefCounted<OmniboxAction> {
   virtual size_t EstimateMemoryUsage() const;
 
   // Returns an ID used to identify the action.
-  virtual int32_t GetID() const;
+  virtual OmniboxActionId ActionId() const;
 
 #if BUILDFLAG(IS_ANDROID)
-  virtual base::android::ScopedJavaGlobalRef<jobject> GetJavaObject() const;
+  virtual base::android::ScopedJavaLocalRef<jobject> GetOrCreateJavaObject(
+      JNIEnv* env) const;
+
+  void RecordActionShown(JNIEnv* env, int position, bool executed) {
+    RecordActionShown(position, executed);
+  }
 #endif
 
  protected:
-  friend class base::RefCounted<OmniboxAction>;
+  friend class base::RefCountedThreadSafe<OmniboxAction>;
   virtual ~OmniboxAction();
 
   // Use this for the common case of navigating to a URL.
@@ -174,6 +189,10 @@ class OmniboxAction : public base::RefCounted<OmniboxAction> {
 
   // For navigation Actions, this holds the destination URL. Otherwise, empty.
   GURL url_;
+
+#if BUILDFLAG(IS_ANDROID)
+  mutable base::android::ScopedJavaGlobalRef<jobject> j_omnibox_action_;
+#endif
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_ACTIONS_OMNIBOX_ACTION_H_

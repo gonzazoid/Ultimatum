@@ -49,8 +49,8 @@ class CC_PAINT_EXPORT FilterOperation {
     REFERENCE,
     SATURATING_BRIGHTNESS,  // Not used in CSS/SVG.
     ALPHA_THRESHOLD,        // Not used in CSS/SVG.
-    STRETCH,                // Not used in CSS/SVG.
-    FILTER_TYPE_LAST = STRETCH
+    OFFSET,                 // Not used in CSS/SVG.
+    FILTER_TYPE_LAST = OFFSET
   };
 
   FilterOperation();
@@ -62,19 +62,15 @@ class CC_PAINT_EXPORT FilterOperation {
   FilterType type() const { return type_; }
 
   float amount() const {
+    DCHECK_NE(type_, ALPHA_THRESHOLD);
     DCHECK_NE(type_, COLOR_MATRIX);
     DCHECK_NE(type_, REFERENCE);
     return amount_;
   }
 
-  float outer_threshold() const {
-    DCHECK(type_ == ALPHA_THRESHOLD || type_ == STRETCH);
-    return outer_threshold_;
-  }
-
-  gfx::Point drop_shadow_offset() const {
-    DCHECK_EQ(type_, DROP_SHADOW);
-    return drop_shadow_offset_;
+  gfx::Point offset() const {
+    DCHECK(type_ == DROP_SHADOW || type_ == OFFSET);
+    return offset_;
   }
 
   SkColor4f drop_shadow_color() const {
@@ -168,15 +164,12 @@ class CC_PAINT_EXPORT FilterOperation {
     return FilterOperation(SATURATING_BRIGHTNESS, amount);
   }
 
-  static FilterOperation CreateAlphaThresholdFilter(const ShapeRects& shape,
-                                                    float inner_threshold,
-                                                    float outer_threshold) {
-    return FilterOperation(ALPHA_THRESHOLD, shape, inner_threshold,
-                           outer_threshold);
+  static FilterOperation CreateAlphaThresholdFilter(const ShapeRects& shape) {
+    return FilterOperation(ALPHA_THRESHOLD, shape);
   }
 
-  static FilterOperation CreateStretchFilter(float amount_x, float amount_y) {
-    return FilterOperation(STRETCH, amount_x, amount_y);
+  static FilterOperation CreateOffsetFilter(const gfx::Point& offset) {
+    return FilterOperation(OFFSET, offset);
   }
 
   bool operator==(const FilterOperation& other) const;
@@ -193,19 +186,15 @@ class CC_PAINT_EXPORT FilterOperation {
   void set_type(FilterType type) { type_ = type; }
 
   void set_amount(float amount) {
+    DCHECK_NE(type_, ALPHA_THRESHOLD);
     DCHECK_NE(type_, COLOR_MATRIX);
     DCHECK_NE(type_, REFERENCE);
     amount_ = amount;
   }
 
-  void set_outer_threshold(float outer_threshold) {
-    DCHECK(type_ == ALPHA_THRESHOLD || type_ == STRETCH);
-    outer_threshold_ = outer_threshold;
-  }
-
-  void set_drop_shadow_offset(const gfx::Point& offset) {
-    DCHECK_EQ(type_, DROP_SHADOW);
-    drop_shadow_offset_ = offset;
+  void set_offset(const gfx::Point& offset) {
+    DCHECK(type_ == DROP_SHADOW || type_ == OFFSET);
+    offset_ = offset;
   }
 
   void set_drop_shadow_color(SkColor4f color) {
@@ -273,19 +262,15 @@ class CC_PAINT_EXPORT FilterOperation {
 
   FilterOperation(FilterType type, float amount, int inset);
 
-  FilterOperation(FilterType type, float amount, float outer_threshold);
+  FilterOperation(FilterType type, const gfx::Point& offset);
 
   FilterOperation(FilterType type, sk_sp<PaintFilter> image_filter);
 
-  FilterOperation(FilterType type,
-                  const ShapeRects& shape,
-                  float inner_threshold,
-                  float outer_threshold);
+  FilterOperation(FilterType type, const ShapeRects& shape);
 
   FilterType type_;
   float amount_;
-  float outer_threshold_;
-  gfx::Point drop_shadow_offset_;
+  gfx::Point offset_;
   SkColor4f drop_shadow_color_;
   sk_sp<PaintFilter> image_filter_;
   Matrix matrix_;

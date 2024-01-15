@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -61,7 +61,7 @@ namespace content {
 struct ShellPlatformDelegate::ShellData {
   gfx::Size content_size;
   // Self-owned Widget, destroyed through CloseNow().
-  views::Widget* window_widget = nullptr;
+  raw_ptr<views::Widget> window_widget = nullptr;
 };
 
 struct ShellPlatformDelegate::PlatformData {
@@ -360,7 +360,8 @@ void ShellPlatformDelegate::CreatePlatformWindow(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   shell_data.window_widget = views::Widget::CreateWindowWithContext(
       std::move(delegate),
-      platform_->wm_test_helper->GetDefaultParent(nullptr, gfx::Rect()),
+      platform_->wm_test_helper->GetDefaultParent(nullptr, gfx::Rect(),
+                                                  display::kInvalidDisplayId),
       gfx::Rect(initial_size));
 #else
   shell_data.window_widget = new views::Widget();

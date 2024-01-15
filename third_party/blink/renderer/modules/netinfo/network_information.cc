@@ -65,6 +65,10 @@ bool NetworkInformation::IsObserving() const {
 }
 
 String NetworkInformation::type() const {
+  if (RuntimeEnabledFeatures::NetInfoConstantTypeEnabled()) {
+    return ConnectionTypeToString(kWebConnectionTypeUnknown);
+  }
+
   // type_ is only updated when listening for events, so ask
   // networkStateNotifier if not listening (crbug.com/379841).
   if (!IsObserving())
@@ -75,6 +79,10 @@ String NetworkInformation::type() const {
 }
 
 double NetworkInformation::downlinkMax() const {
+  if (RuntimeEnabledFeatures::NetInfoConstantTypeEnabled()) {
+    return std::numeric_limits<double>::infinity();
+  }
+
   if (!IsObserving())
     return GetNetworkStateNotifier().MaxBandwidth();
 
@@ -208,8 +216,7 @@ ExecutionContext* NetworkInformation::GetExecutionContext() const {
 void NetworkInformation::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   MaybeShowWebHoldbackConsoleMsg();
   StartObserving();
 }
@@ -217,14 +224,13 @@ void NetworkInformation::AddedEventListener(
 void NetworkInformation::RemovedEventListener(
     const AtomicString& event_type,
     const RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::RemovedEventListener(event_type,
-                                                  registered_listener);
+  EventTarget::RemovedEventListener(event_type, registered_listener);
   if (!HasEventListeners())
     StopObserving();
 }
 
 void NetworkInformation::RemoveAllEventListeners() {
-  EventTargetWithInlineData::RemoveAllEventListeners();
+  EventTarget::RemoveAllEventListeners();
   DCHECK(!HasEventListeners());
   StopObserving();
 }
@@ -273,7 +279,8 @@ NetworkInformation* NetworkInformation::connection(NavigatorBase& navigator) {
 }
 
 NetworkInformation::NetworkInformation(NavigatorBase& navigator)
-    : Supplement<NavigatorBase>(navigator),
+    : ActiveScriptWrappable<NetworkInformation>({}),
+      Supplement<NavigatorBase>(navigator),
       ExecutionContextLifecycleObserver(navigator.GetExecutionContext()),
       web_holdback_console_message_shown_(false),
       context_stopped_(false) {
@@ -292,7 +299,7 @@ NetworkInformation::NetworkInformation(NavigatorBase& navigator)
 }
 
 void NetworkInformation::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   Supplement<NavigatorBase>::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }

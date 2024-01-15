@@ -9,9 +9,6 @@
 
 #include "chrome/updater/policy/manager.h"
 
-// TODO: crbug/1073980
-//     Add a doc link for the managed preferences dictionary format.
-//
 // An example of the managed preferences policy dictionary in plist format:
 //  <dict>
 //    <key>updatePolicies</key>
@@ -47,7 +44,7 @@ using CRUUpdatePolicyDictionary =
 @interface CRUManagedPreferencePolicyManager : NSObject
 
 @property(nonatomic, readonly, nullable) NSString* source;
-@property(nonatomic, readonly) BOOL managed;
+@property(nonatomic, readonly) BOOL hasActivePolicy;
 
 // Global-level policies.
 @property(nonatomic, readonly) int lastCheckPeriodMinutes;
@@ -64,6 +61,8 @@ using CRUUpdatePolicyDictionary =
 - (nullable NSString*)targetChannel:(nonnull NSString*)appid;
 - (nullable NSString*)targetVersionPrefix:(nonnull NSString*)appid;
 - (int)rollbackToTargetVersion:(nonnull NSString*)appid;
+
+- (nullable NSArray<NSString*>*)appsWithPolicy;
 
 // |policies| should be the dictionary value read from managed preferences
 // under the key "updatePolicies".

@@ -7,16 +7,14 @@
 #include <cstddef>
 #include <string>
 
-#include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
-#include "base/containers/queue.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/sparse_histogram.h"
 #include "base/numerics/safe_conversions.h"
-#include "ui/display/manager/display_manager_util.h"
+#include "ui/display/manager/util/display_manager_util.h"
 #include "ui/display/types/display_configuration_params.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/types/display_mode.h"
@@ -175,12 +173,14 @@ void UpdateAttemptSucceededUma(
     VLOG(2) << "Configured status=" << display_success
             << " display=" << request.display->display_id()
             << " origin=" << request.origin.ToString()
-            << " mode=" << (request.mode ? request.mode->ToString() : "null");
+            << " mode=" << (request.mode ? request.mode->ToString() : "null")
+            << " enable_vrr=" << request.enable_vrr;
   }
 }
 
 void UpdateFinalStatusUma(
-    const std::vector<RequestAndStatusList>& requests_and_statuses) {
+    const std::vector<RequestAndStatusList>& requests_and_statuses,
+    ConfigureDisplaysTask::Status status) {
   int mst_external_displays = 0;
   size_t total_external_displays = requests_and_statuses.size();
   for (auto& request_and_status : requests_and_statuses) {
@@ -204,6 +204,9 @@ void UpdateFinalStatusUma(
                               request_and_status.second);
   }
 
+  base::UmaHistogramEnumeration("ConfigureDisplays.Modeset.FinalTaskStatus",
+                                status);
+
   base::UmaHistogramExactLinear(
       "ConfigureDisplays.Modeset.TotalExternalDisplaysCount",
       base::checked_cast<int>(total_external_displays), kMaxDisplaysCount);
@@ -225,8 +228,14 @@ void UpdateFinalStatusUma(
 
 DisplayConfigureRequest::DisplayConfigureRequest(DisplaySnapshot* display,
                                                  const DisplayMode* mode,
+                                                 const gfx::Point& origin,
+                                                 bool enable_vrr)
+    : display(display), mode(mode), origin(origin), enable_vrr(enable_vrr) {}
+
+DisplayConfigureRequest::DisplayConfigureRequest(DisplaySnapshot* display,
+                                                 const DisplayMode* mode,
                                                  const gfx::Point& origin)
-    : display(display), mode(mode), origin(origin) {}
+    : DisplayConfigureRequest(display, mode, origin, /*enable_vrr=*/false) {}
 
 ConfigureDisplaysTask::ConfigureDisplaysTask(
     NativeDisplayDelegate* delegate,
@@ -259,7 +268,7 @@ void ConfigureDisplaysTask::Run() {
     LogIfInvalidRequestForInternalDisplay(request);
 
     config_requests.emplace_back(request.display->display_id(), request.origin,
-                                 request.mode);
+                                 request.mode, request.enable_vrr);
 
     if (is_first_attempt) {
       const std::string uma_name_prefix = GetUmaNamePrefixForRequest(request);
@@ -315,7 +324,7 @@ void ConfigureDisplaysTask::OnFirstAttemptConfigured(bool config_success) {
     final_requests_status_.emplace_back(&request, true);
 
     config_requests.emplace_back(request.display->display_id(), request.origin,
-                                 request.mode);
+                                 request.mode, request.enable_vrr);
   }
 
   uint32_t modeset_flags = display::kCommitModeset;
@@ -353,7 +362,8 @@ void ConfigureDisplaysTask::OnRetryConfigured(bool config_success) {
     last_successful_config_parameters_.clear();
     for (const auto& request : requests_) {
       last_successful_config_parameters_.emplace_back(
-          request.display->display_id(), request.origin, request.mode);
+          request.display->display_id(), request.origin, request.mode,
+          request.enable_vrr);
     }
   }
 
@@ -380,7 +390,7 @@ void ConfigureDisplaysTask::OnRetryConfigured(bool config_success) {
     if (last_successful_config_parameters_.empty()) {
       LOG(ERROR) << "Display configuration failed. No modeset was attempted.";
 
-      UpdateFinalStatusUma(final_requests_status_);
+      UpdateFinalStatusUma(final_requests_status_, task_status_);
       std::move(callback_).Run(task_status_);
       return;
     }
@@ -402,10 +412,14 @@ void ConfigureDisplaysTask::OnConfigured(bool config_success) {
     for (const DisplayConfigureRequest& request : requests_) {
       request.display->set_current_mode(request.mode);
       request.display->set_origin(request.origin);
+      if (request.display->IsVrrCapable()) {
+        request.display->set_variable_refresh_rate_state(
+            request.enable_vrr ? display::kVrrEnabled : display::kVrrDisabled);
+      }
     }
   }
 
-  UpdateFinalStatusUma(final_requests_status_);
+  UpdateFinalStatusUma(final_requests_status_, task_status_);
   std::move(callback_).Run(task_status_);
 }
 

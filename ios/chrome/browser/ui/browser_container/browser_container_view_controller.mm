@@ -5,16 +5,15 @@
 #import "ios/chrome/browser/ui/browser_container/browser_container_view_controller.h"
 
 #import "base/check.h"
-#import "ios/chrome/browser/ui/link_to_text/link_to_text_mediator.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "base/feature_list.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/browser_container/browser_edit_menu_handler.h"
+#import "ios/chrome/browser/ui/link_to_text/link_to_text_delegate.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface BrowserContainerViewController ()
 // Properties backing public setters.
@@ -36,8 +35,12 @@
   [super viewDidLoad];
   self.view.autoresizingMask =
       UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-
-  [self addLinkToTextInEditMenu];
+#if !defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0
+  if (@available(iOS 16, *)) {
+  } else {
+    [self addLinkToTextInEditMenu];
+  }
+#endif
 }
 
 - (void)viewDidLayoutSubviews {
@@ -69,6 +72,13 @@
     return;
   }
   [super dismissViewControllerAnimated:animated completion:completion];
+}
+
+- (void)buildMenuWithBuilder:(id<UIMenuBuilder>)builder {
+  [super buildMenuWithBuilder:builder];
+
+  DCHECK(self.browserEditMenuHandler);
+  [self.browserEditMenuHandler buildMenuWithBuilder:builder];
 }
 
 #pragma mark - Public
@@ -137,6 +147,7 @@
   }
 }
 
+#if !defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0
 #pragma mark - Link to Text methods
 
 - (void)addLinkToTextInEditMenu {
@@ -151,9 +162,13 @@
 }
 
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
-  if (action == @selector(linkToText:) && self.linkToTextDelegate) {
-    return [self.linkToTextDelegate shouldOfferLinkToText];
+  if (@available(iOS 16, *)) {
+  } else {
+    if (action == @selector(linkToText:) && self.linkToTextDelegate) {
+      return [self.linkToTextDelegate shouldOfferLinkToText];
+    }
   }
+
   return [super canPerformAction:action withSender:sender];
 }
 
@@ -162,6 +177,7 @@
   DCHECK(self.linkToTextDelegate);
   [self.linkToTextDelegate handleLinkToTextSelection];
 }
+#endif
 
 #pragma mark - Private
 

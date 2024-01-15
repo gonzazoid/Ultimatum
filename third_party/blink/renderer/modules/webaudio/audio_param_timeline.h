@@ -29,6 +29,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_PARAM_TIMELINE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_PARAM_TIMELINE_H_
 
+#include <tuple>
+
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_destination_node.h"
@@ -36,8 +39,6 @@
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
-
-#include <tuple>
 
 namespace blink {
 
@@ -106,9 +107,6 @@ class AudioParamTimeline {
   bool HasValues(size_t current_frame,
                  double sample_rate,
                  unsigned render_quantum_frames) const;
-
-  float SmoothedValue() { return smoothed_value_; }
-  void SetSmoothedValue(float v) { smoothed_value_ = v; }
 
  private:
   class ParamEvent {
@@ -299,8 +297,8 @@ class AudioParamTimeline {
     const float value2;
     const double time2;
 
-    // The current event, and it's index in the event vector.
-    const ParamEvent* event;
+    // The current event, and its index in the event vector.
+    raw_ptr<const ParamEvent, ExperimentalRenderer> event;
     const int event_index;
   };
 
@@ -485,9 +483,6 @@ class AudioParamTimeline {
   HashSet<ParamEvent*> new_events_ GUARDED_BY(events_lock_);
 
   mutable base::Lock events_lock_;
-
-  // Smoothing (de-zippering)
-  float smoothed_value_;
 };
 
 }  // namespace blink

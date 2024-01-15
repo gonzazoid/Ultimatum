@@ -52,20 +52,13 @@ void PrefetchNetworkContextClient::OnGenerateHttpNegotiateAuthToken(
 void PrefetchNetworkContextClient::OnTrustAnchorUsed() {}
 #endif
 
-void PrefetchNetworkContextClient::OnTrustTokenIssuanceDivertedToSystem(
-    network::mojom::FulfillTrustTokenIssuanceRequestPtr request,
-    OnTrustTokenIssuanceDivertedToSystemCallback callback) {
-  auto response = network::mojom::FulfillTrustTokenIssuanceAnswer::New();
-  response->status =
-      network::mojom::FulfillTrustTokenIssuanceAnswer::Status::kNotFound;
-  std::move(callback).Run(std::move(response));
-}
-
+#if BUILDFLAG(IS_CT_SUPPORTED)
 void PrefetchNetworkContextClient::OnCanSendSCTAuditingReport(
     OnCanSendSCTAuditingReportCallback callback) {
   std::move(callback).Run(false);
 }
 
 void PrefetchNetworkContextClient::OnNewSCTAuditingReportSent() {}
+#endif
 
 }  // namespace content

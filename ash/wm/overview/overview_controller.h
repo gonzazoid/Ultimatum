@@ -13,22 +13,23 @@
 #include "ash/wm/overview/overview_delegate.h"
 #include "ash/wm/overview/overview_metrics.h"
 #include "ash/wm/overview/overview_observer.h"
-#include "ash/wm/overview/overview_session.h"
 #include "ash/wm/overview/overview_types.h"
+#include "base/cancelable_callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "ui/aura/window_occlusion_tracker.h"
 #include "ui/views/widget/widget.h"
+#include "ui/wm/public/activation_change_observer.h"
 
 namespace ash {
 
-class OverviewWallpaperController;
+class OverviewSession;
 
 // Manages a overview session which displays an overview of all windows and
 // allows selecting a window to activate it.
 class ASH_EXPORT OverviewController : public OverviewDelegate,
-                                      public ::wm::ActivationChangeObserver {
+                                      public wm::ActivationChangeObserver {
  public:
   OverviewController();
 
@@ -36,6 +37,10 @@ class ASH_EXPORT OverviewController : public OverviewDelegate,
   OverviewController& operator=(const OverviewController&) = delete;
 
   ~OverviewController() override;
+
+  // Convenience function to get the overview controller instance, which is
+  // created and owned by Shell.
+  static OverviewController* Get();
 
   // Starts/Ends overview with `type`. Returns true if enter or exit overview
   // successful. Depending on `type` the enter/exit animation will look
@@ -49,6 +54,12 @@ class ASH_EXPORT OverviewController : public OverviewDelegate,
 
   // Returns true if overview mode is active.
   bool InOverviewSession() const;
+
+  // Receives a continuous scroll event from the gesture handler and either
+  // initializes overview mode in preparation for future continuous scrolls, or
+  // immediately calls `OverviewGrid::PositionWindowsForContinuousScrolls()` if
+  // overview mode has already been initialized.
+  bool HandleContinuousScroll(float y_offset, OverviewEnterExitType type);
 
   // Moves the current selection forward or backward.
   void IncrementSelection(bool forward);
@@ -95,12 +106,12 @@ class ASH_EXPORT OverviewController : public OverviewDelegate,
 
   OverviewSession* overview_session() { return overview_session_.get(); }
 
-  OverviewWallpaperController* overview_wallpaper_controller() {
-    return overview_wallpaper_controller_.get();
+  bool disable_app_id_check_for_saved_desks() const {
+    return disable_app_id_check_for_saved_desks_;
   }
 
-  bool disable_app_id_check_for_saved_desks() {
-    return disable_app_id_check_for_saved_desks_;
+  bool is_continuous_scroll_in_progress() const {
+    return is_continuous_scroll_in_progress_;
   }
 
   void set_occlusion_pause_duration_for_end_for_test(base::TimeDelta duration) {
@@ -110,27 +121,23 @@ class ASH_EXPORT OverviewController : public OverviewDelegate,
     delayed_animation_task_delay_ = delta;
   }
 
-  // Gets the windows list that are shown in the overview windows grids if the
-  // overview mode is active for testing.
-  std::vector<aura::Window*> GetWindowsListInOverviewGridsForTest();
+  // Returns true if it's possible to enter overview mode in the current
+  // configuration. This can be false at certain times, such as when the lock
+  // screen is visible we can't overview mode.
+  bool CanEnterOverview() const;
 
  private:
   friend class SavedDeskTest;
-
-  void set_disable_app_id_check_for_saved_desks(bool val) {
-    disable_app_id_check_for_saved_desks_ = val;
-  }
 
   // Toggle overview mode. Depending on |type| the enter/exit animation will
   // look different.
   void ToggleOverview(
       OverviewEnterExitType type = OverviewEnterExitType::kNormal);
 
-  // Returns true if it's possible to enter or exit overview mode in the current
-  // configuration. This can be false at certain times, such as when the lock
-  // screen is visible we can't overview mode.
-  bool CanEnterOverview();
-  bool CanEndOverview(OverviewEnterExitType type);
+  // Returns true if it's possible to exit overview mode in the current
+  // configuration. This can be false at certain times, such as when the divider
+  // or desks are animating.
+  bool CanEndOverview(OverviewEnterExitType type) const;
 
   void OnStartingAnimationComplete(bool canceled);
   void OnEndingAnimationComplete(bool canceled);
@@ -151,6 +158,13 @@ class ASH_EXPORT OverviewController : public OverviewDelegate,
   // completed.
   bool should_focus_overview_ = false;
 
+  // Used when feature ContinuousOverviewScrollAnimation is enabled to
+  // determine the start/end positions of overview items as well as their shadow
+  // bounds and corner radii during a continuous scroll. It's true only if the
+  // last scroll event was the start of a continuous scroll or a continuous
+  // scroll update that is within the threshold.
+  bool is_continuous_scroll_in_progress_ = false;
+
   std::unique_ptr<aura::WindowOcclusionTracker::ScopedPause>
       occlusion_tracker_pauser_;
 
@@ -158,10 +172,6 @@ class ASH_EXPORT OverviewController : public OverviewDelegate,
   base::Time last_overview_session_time_;
 
   base::TimeDelta occlusion_pause_duration_for_end_;
-
-  // Handles blurring and dimming of the wallpaper when entering or exiting
-  // overview mode. Animates the blurring and dimming if necessary.
-  std::unique_ptr<OverviewWallpaperController> overview_wallpaper_controller_;
 
   base::CancelableOnceClosure reset_pauser_task_;
 

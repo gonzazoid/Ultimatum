@@ -10,7 +10,6 @@
 #include <memory>
 
 #include "base/files/scoped_file.h"
-#include "base/memory/ref_counted.h"
 #include "ui/gfx/client_native_pixmap.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_pixmap.h"
@@ -18,8 +17,6 @@
 namespace gfx {
 
 // This class converts a gfx::NativePixmapHandle to a gfx::NativePixmap.
-// It is useful because gl::GLImageNativePixmap::Initialize only takes
-// a gfx::NativePixmap as input.
 class GFX_EXPORT NativePixmapDmaBuf : public gfx::NativePixmap {
  public:
   NativePixmapDmaBuf(const gfx::Size& size,

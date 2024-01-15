@@ -11,11 +11,11 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/check.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -39,9 +39,16 @@ namespace download {
 // Detach().
 class COMPONENTS_DOWNLOAD_EXPORT BaseFile {
  public:
+  // Given a source and a referrer, determines the "safest" URL that can be used
+  // to determine the authority of the download source. Returns an empty URL if
+  // no HTTP/S URL can be determined for the <|source_url|, |referrer_url|>
+  // pair.
+  static GURL GetEffectiveAuthorityURL(const GURL& source_url,
+                                       const GURL& referrer_url);
+
   // May be constructed on any thread.  All other routines (including
   // destruction) must occur on the same sequence.
-  BaseFile(uint32_t download_id);
+  explicit BaseFile(uint32_t download_id);
 
   BaseFile(const BaseFile&) = delete;
   BaseFile& operator=(const BaseFile&) = delete;
@@ -265,8 +272,7 @@ class COMPONENTS_DOWNLOAD_EXPORT BaseFile {
 
   // Callback invoked by quarantine service. Also called by
   // OnQuarantineServiceError after manually applying mark-of-the-web.
-  void OnFileQuarantined(bool connection_error,
-                         quarantine::mojom::QuarantineFileResult result);
+  void OnFileQuarantined(quarantine::mojom::QuarantineFileResult result);
 
   // Full path to the file including the file name.
   base::FilePath full_path_;

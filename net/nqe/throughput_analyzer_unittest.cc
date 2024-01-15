@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -24,7 +24,6 @@
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -73,7 +72,7 @@ class TestThroughputAnalyzer : public internal::ThroughputAnalyzer {
       : internal::ThroughputAnalyzer(
             network_quality_estimator,
             params,
-            base::ThreadTaskRunnerHandle::Get(),
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
             base::BindRepeating(
                 &TestThroughputAnalyzer::OnNewThroughputObservationAvailable,
                 base::Unretained(this)),
@@ -190,9 +189,11 @@ TEST_F(ThroughputAnalyzerTest, MAYBE_MaximumRequests) {
 TEST_F(ThroughputAnalyzerTest,
        MAYBE_MaximumRequestsWithNetworkAnonymizationKey) {
   const SchemefulSite kSite(GURL("https://foo.test/"));
-  const net::NetworkAnonymizationKey kNetworkAnonymizationKey(kSite, kSite);
+  const auto kNetworkAnonymizationKey =
+      NetworkAnonymizationKey::CreateSameSite(kSite);
   const net::NetworkIsolationKey kNetworkIsolationKey(kSite, kSite);
   const GURL kUrl = GURL("http://foo.test/test.html");
+  const url::Origin kSiteOrigin = url::Origin::Create(kSite.GetURL());
 
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeature(
@@ -240,9 +241,11 @@ TEST_F(ThroughputAnalyzerTest,
       std::unique_ptr<URLRequest> request(
           context->CreateRequest(kUrl, DEFAULT_PRIORITY, &test_delegate,
                                  TRAFFIC_ANNOTATION_FOR_TESTS));
-      if (use_network_isolation_key)
-        request->set_isolation_info(IsolationInfo::CreatePartial(
-            IsolationInfo::RequestType::kOther, kNetworkIsolationKey));
+      if (use_network_isolation_key) {
+        request->set_isolation_info(net::IsolationInfo::Create(
+            net::IsolationInfo::RequestType::kOther, kSiteOrigin, kSiteOrigin,
+            net::SiteForCookies()));
+      }
       throughput_analyzer.NotifyStartTransaction(*(request.get()));
       requests.push_back(std::move(request));
     }
@@ -936,21 +939,9 @@ TEST_F(ThroughputAnalyzerTest, TestHangingWindow) {
 
   for (const auto& test : tests) {
     base::HistogramTester histogram_tester;
-    double kbps = test.bits_received / test.window_duration.InMillisecondsF();
     EXPECT_EQ(test.expected_hanging,
               throughput_analyzer.IsHangingWindow(test.bits_received,
-                                                  test.window_duration, kbps));
-
-    if (test.expected_hanging) {
-      histogram_tester.ExpectUniqueSample("NQE.ThroughputObservation.Hanging",
-                                          kbps, 1);
-      histogram_tester.ExpectTotalCount("NQE.ThroughputObservation.NotHanging",
-                                        0);
-    } else {
-      histogram_tester.ExpectTotalCount("NQE.ThroughputObservation.Hanging", 0);
-      histogram_tester.ExpectUniqueSample(
-          "NQE.ThroughputObservation.NotHanging", kbps, 1);
-    }
+                                                  test.window_duration));
   }
 }
 

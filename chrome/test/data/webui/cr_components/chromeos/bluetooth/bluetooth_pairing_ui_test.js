@@ -15,8 +15,8 @@ import {setBluetoothConfigForTesting} from 'chrome://resources/ash/common/blueto
 import {AudioOutputCapability, BluetoothDeviceProperties, BluetoothSystemState, DeviceConnectionState, DeviceType} from 'chrome://resources/mojo/chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom-webui.js';
 import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../../chai_assert.js';
-import {eventToPromise} from '../../../test_util.js';
+import {assertEquals, assertFalse, assertTrue} from '../../../chromeos/chai_assert.js';
+import {eventToPromise} from '../../../chromeos/test_util.js';
 
 import {createDefaultBluetoothDevice, FakeBluetoothConfig} from './fake_bluetooth_config.js';
 
@@ -416,11 +416,40 @@ suite('CrComponentsBluetoothPairingUiTest', function() {
         deviceHandler.completePairDevice(/*success=*/ false);
         await flushTasks();
 
-        // Simulate pairing cancelation.
+        // Simulate clicking cancel button.
         await simulateCancelation();
         // Finish event is fired when canceling from device selection page.
         await finishedPromise;
       });
+
+  test('Cancel pairing without completing pairing', async function() {
+    await init();
+    assertTrue(!!getDeviceSelectionPage());
+    const finishedPromise = eventToPromise('finished', bluetoothPairingUi);
+
+    const device = createDefaultBluetoothDevice(
+        /*id=*/ '123456',
+        /*publicName=*/ 'BeatsX',
+        /*connectionState=*/
+        DeviceConnectionState.kConnected,
+        /*opt_nickname=*/ 'device1',
+        /*opt_audioCapability=*/
+        AudioOutputCapability.kCapableOfAudioOutput,
+        /*opt_deviceType=*/ DeviceType.kMouse);
+
+    bluetoothConfig.appendToDiscoveredDeviceList([device.deviceProperties]);
+    await flushTasks();
+    await selectDevice(device.deviceProperties);
+    await flushTasks();
+
+    // Cancel pairing before it finishes, this should cancel pairing.
+    await simulateCancelation();
+
+    // Clicking cancel again should close the UI.
+    await simulateCancelation();
+    // Finish event is fired when canceling from device selection page.
+    await finishedPromise;
+  });
 
   test('Confirm code', async function() {
     await init();

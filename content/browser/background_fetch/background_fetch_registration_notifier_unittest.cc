@@ -10,7 +10,6 @@
 
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/background_fetch/background_fetch_registration_service_impl.h"
 #include "content/common/background_fetch/background_fetch_types.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -273,7 +272,6 @@ TEST_F(BackgroundFetchRegistrationNotifierTest, NotifyWithoutObservers) {
 TEST_F(BackgroundFetchRegistrationNotifierTest, NotifyRecordsUnavailable) {
   auto observer = std::make_unique<TestRegistrationObserver>();
 
-  notifier_->NoteTotalRequests(kPrimaryUniqueId, /* num_total_requests= */ 1);
   notifier_->AddObserver(kPrimaryUniqueId, observer->GetRemote());
   ASSERT_TRUE(observer->records_available());
 
@@ -285,7 +283,6 @@ TEST_F(BackgroundFetchRegistrationNotifierTest, NotifyRequestCompleted) {
   auto observer = std::make_unique<TestRegistrationObserver>();
 
   notifier_->AddObserver(kPrimaryUniqueId, observer->GetRemote());
-  notifier_->NoteTotalRequests(kPrimaryUniqueId, /* num_total_requests= */ 1);
 
   // No observed URLs. Observers shouldn't have been notified.
   ASSERT_EQ(observer->completed_requests().size(), 0u);

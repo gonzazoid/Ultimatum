@@ -7,9 +7,9 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/callback_forward.h"
+#include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/platform/inspect/ax_inspect.h"
 #include "ui/accessibility/platform/inspect/ax_optional.h"
 
@@ -18,8 +18,8 @@ namespace ui {
 // Optional tri-state id object.
 using AXOptionalNSObject = AXOptional<id>;
 
-// A wrapper around AXUIElement or NSAccessibilityElement object.
-class AX_EXPORT AXElementWrapper final {
+// A wrapper around either AXUIElement or NSAccessibilityElement object.
+class COMPONENT_EXPORT(AX_PLATFORM) AXElementWrapper final {
  public:
   // Returns true if the object is either NSAccessibilityElement or
   // AXUIElement.
@@ -39,7 +39,7 @@ class AX_EXPORT AXElementWrapper final {
   // BrowserAccessibilityCocoa).
   static std::string DOMIdOf(const id node);
 
-  AXElementWrapper(const id node) : node_(node) {}
+  explicit AXElementWrapper(const id node) : node_(node) {}
 
   // Returns true if the object is either an NSAccessibilityElement or
   // AXUIElement.
@@ -150,7 +150,7 @@ class AX_EXPORT AXElementWrapper final {
   // Converts the given value and the error object into AXOptional object.
   AXOptionalNSObject ToOptional(id, AXError, const std::string& message) const;
 
-  const id node_;
+  id __strong node_;
 };
 
 }  // namespace ui

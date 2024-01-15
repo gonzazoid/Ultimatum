@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 
 class GURL;
@@ -69,14 +70,14 @@ class TranslateDriver {
   virtual void RevertTranslation(int page_seq_no) = 0;
 
   // Returns whether the user is currently operating in incognito mode.
-  virtual bool IsIncognito() = 0;
+  virtual bool IsIncognito() const = 0;
 
   // Returns the mime type of the current page.
   virtual const std::string& GetContentsMimeType() = 0;
 
   // Returns the last committed URL, or an empty GURL if there is no committed
   // URL.
-  virtual const GURL& GetLastCommittedURL() = 0;
+  virtual const GURL& GetLastCommittedURL() const = 0;
 
   // Returns the visible URL, or an empty GURL if there is no visible URL.
   virtual const GURL& GetVisibleURL() = 0;
@@ -85,7 +86,7 @@ class TranslateDriver {
   virtual ukm::SourceId GetUkmSourceId() = 0;
 
   // Returns whether the driver has access to the current page.
-  virtual bool HasCurrentPage() = 0;
+  virtual bool HasCurrentPage() const = 0;
 
   // Opens |url| in a new tab.
   virtual void OpenUrlInNewTab(const GURL& url) = 0;
@@ -102,5 +103,25 @@ class TranslateDriver {
 };
 
 }  // namespace translate
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    translate::TranslateDriver,
+    translate::TranslateDriver::LanguageDetectionObserver> {
+  static void AddObserver(
+      translate::TranslateDriver* source,
+      translate::TranslateDriver::LanguageDetectionObserver* observer) {
+    source->AddLanguageDetectionObserver(observer);
+  }
+  static void RemoveObserver(
+      translate::TranslateDriver* source,
+      translate::TranslateDriver::LanguageDetectionObserver* observer) {
+    source->RemoveLanguageDetectionObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // COMPONENTS_TRANSLATE_CORE_BROWSER_TRANSLATE_DRIVER_H_

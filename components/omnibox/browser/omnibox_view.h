@@ -29,10 +29,10 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/range/range.h"
 
-class GURL;
-class OmniboxEditController;
-class OmniboxViewMacTest;
+class LocationBarModel;
+class OmniboxController;
 class OmniboxEditModel;
+class OmniboxViewMacTest;
 
 class OmniboxView {
  public:
@@ -43,8 +43,8 @@ class OmniboxView {
   // state changes.  See OmniboxEditModel::OnAfterPossibleChange().
   struct StateChanges {
     // |old_text| and |new_text| are not owned.
-    const std::u16string* old_text;
-    const std::u16string* new_text;
+    raw_ptr<const std::u16string> old_text;
+    raw_ptr<const std::u16string> new_text;
     size_t new_sel_start;
     size_t new_sel_end;
     bool selection_differs;
@@ -57,30 +57,14 @@ class OmniboxView {
   OmniboxView(const OmniboxView&) = delete;
   OmniboxView& operator=(const OmniboxView&) = delete;
 
-  // Used by the automation system for getting at the model from the view.
-  OmniboxEditModel* model() { return model_.get(); }
-  const OmniboxEditModel* model() const { return model_.get(); }
+  OmniboxEditModel* model();
+  const OmniboxEditModel* model() const;
+
+  OmniboxController* controller();
+  const OmniboxController* controller() const;
 
   // Called when any relevant state changes other than changing tabs.
   virtual void Update() = 0;
-
-  // Asks the browser to load the specified match, using the supplied
-  // disposition. |alternate_nav_url|, if non-empty, contains the
-  // alternate navigation URL for for this match. See comments on
-  // AutocompleteResult::GetAlternateNavURL().
-  //
-  // |pasted_text| should only be set if this call is due to a
-  // Paste-And-Go/Search action.
-  //
-  // |selected_line| is passed to SendOpenNotification(); see comments there.
-  //
-  // This may close the popup.
-  virtual void OpenMatch(const AutocompleteMatch& match,
-                         WindowOpenDisposition disposition,
-                         const GURL& alternate_nav_url,
-                         const std::u16string& pasted_text,
-                         size_t selected_line,
-                         base::TimeTicks match_selection_timestamp);
 
   // Returns the current text of the edit control, which could be the
   // "temporary" text set by the popup, the "permanent" text set by the
@@ -92,10 +76,25 @@ class OmniboxView {
   bool IsEditingOrEmpty() const;
 
   // Returns the icon to display as the location icon. If a favicon is
-  // available, |on_icon_fetched| may be called later asynchronously.
+  // available, `on_icon_fetched` may be called later asynchronously.
+  // `color_current_page_icon` is used for the page icon (i.e. when the popup is
+  // closed, there is no input in progress, and there's a URL displayed) (e.g.
+  // the secure page lock). `color_vectors` is used for vector icons e.g. the
+  // history clock or bookmark star. `color_bright_vectors` is used for special
+  // vector icons e.g. the history cluster squiggle.
+  // `color_vectors_with_background` is used for vector icons that are drawn
+  // atop a background e.g. action suggestions. Favicons aren't custom-colored.
+  // `dark_mode` returns the dark_mode version of an icon. This should usually
+  // be handled by `color_current_page_icon` but in cases where the icon has
+  // hardcoded colors this can be used to return a different icon. E.g., the
+  // SuperGIcon will return different icons in dark and light modes.
   ui::ImageModel GetIcon(int dip_size,
-                         SkColor color,
-                         IconFetchedCallback on_icon_fetched) const;
+                         SkColor color_current_page_icon,
+                         SkColor color_vectors,
+                         SkColor color_bright_vectors,
+                         SkColor color_vectors_with_background,
+                         IconFetchedCallback on_icon_fetched,
+                         bool dark_mode) const;
 
   // The user text is the text the user has manually keyed in.  When present,
   // this is shown in preference to the permanent text; hitting escape will
@@ -274,15 +273,15 @@ class OmniboxView {
     State(const State& state);
   };
 
-  OmniboxView(OmniboxEditController* controller,
-              std::unique_ptr<OmniboxClient> client);
+  explicit OmniboxView(std::unique_ptr<OmniboxClient> client);
+
+  const LocationBarModel* GetLocationBarModel() const;
 
   // Fills |state| with the current text state.
   void GetState(State* state);
 
   // Returns the delta between |before| and |after|.
-  StateChanges GetStateChanges(const State& before,
-                                          const State& after);
+  StateChanges GetStateChanges(const State& before, const State& after);
 
   // Internally invoked whenever the text changes in some way.
   virtual void TextChanged();
@@ -294,9 +293,6 @@ class OmniboxView {
 
   // Try to parse the current text as a URL and colorize the components.
   virtual void EmphasizeURLComponents() = 0;
-
-  OmniboxEditController* controller() { return controller_; }
-  const OmniboxEditController* controller() const { return controller_; }
 
   // Marks part (or, if |range| is invalid, all) of the current text as
   // emphasized or de-emphasized, by changing its color.
@@ -321,9 +317,7 @@ class OmniboxView {
   friend class OmniboxViewMacTest;
   friend class TestOmniboxView;
 
-  // |model_| can be NULL in tests.
-  std::unique_ptr<OmniboxEditModel> model_;
-  raw_ptr<OmniboxEditController> controller_;
+  std::unique_ptr<OmniboxController> controller_;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_OMNIBOX_VIEW_H_

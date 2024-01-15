@@ -4,11 +4,13 @@
 
 #include "content/app/android/library_loader_hooks.h"
 
-#include "base/android/reached_code_profiler.h"
+#include "base/i18n/icu_util.h"
 #include "base/logging.h"
+#include "base/process/current_process.h"
 #include "base/trace_event/trace_event.h"
 #include "content/common/content_constants_internal.h"
 #include "content/common/url_schemes.h"
+#include "content/public/browser/browser_thread.h"
 #include "services/tracing/public/cpp/trace_startup.h"
 
 namespace content {
@@ -16,20 +18,14 @@ namespace content {
 bool LibraryLoaded(JNIEnv* env,
                    jclass clazz,
                    base::android::LibraryProcessType library_process_type) {
-  if (library_process_type ==
-          base::android::LibraryProcessType::PROCESS_BROWSER ||
-      library_process_type ==
-          base::android::LibraryProcessType::PROCESS_CHILD) {
-    base::android::InitReachedCodeProfilerAtStartup(library_process_type);
-  }
-
   // Android's main browser loop is custom so we set the browser name here as
   // early as possible if this is the browser process or main webview process.
   if (library_process_type ==
           base::android::LibraryProcessType::PROCESS_BROWSER ||
       library_process_type ==
           base::android::LibraryProcessType::PROCESS_WEBVIEW) {
-    base::trace_event::TraceLog::GetInstance()->set_process_name("Browser");
+    base::CurrentProcess::GetInstance().SetProcessType(
+        base::CurrentProcessType::PROCESS_BROWSER);
   }
   base::trace_event::TraceLog::GetInstance()->SetProcessSortIndex(
       kTraceEventBrowserProcessSortIndex);
@@ -51,6 +47,13 @@ bool LibraryLoaded(JNIEnv* env,
     VLOG(0) << "Chromium logging enabled: level = " << logging::GetMinLogLevel()
             << ", default verbosity = " << logging::GetVlogVerbosity();
   }
+
+#if ICU_UTIL_DATA_IMPL == ICU_UTIL_DATA_FILE
+  // Initialize ICU early so that it can be used by JNI calls before
+  // ContentMain() is called.
+  TRACE_EVENT0("startup", "InitializeICU");
+  CHECK(base::i18n::InitializeICU());
+#endif
 
   // Content Schemes need to be registered as early as possible after the
   // CommandLine has been initialized to allow java and tests to use GURL before

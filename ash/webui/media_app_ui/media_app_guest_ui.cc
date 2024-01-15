@@ -4,16 +4,16 @@
 
 #include "ash/webui/media_app_ui/media_app_guest_ui.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/webui/grit/ash_media_app_resources.h"
 #include "ash/webui/media_app_ui/url_constants.h"
 #include "ash/webui/web_applications/webui_test_prod_util.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "chromeos/grit/chromeos_media_app_bundle_resources.h"
 #include "chromeos/grit/chromeos_media_app_bundle_resources_map.h"
@@ -106,11 +106,11 @@ void FontLoaded(content::WebUIDataSource::GotDataCallback got_data_callback,
   }
 }
 
-content::WebUIDataSource* CreateMediaAppUntrustedDataSource(
+content::WebUIDataSource* CreateAndAddMediaAppUntrustedDataSource(
     content::WebUI* web_ui,
     MediaAppGuestUIDelegate* delegate) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(kChromeUIMediaAppGuestURL);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      web_ui->GetWebContents()->GetBrowserContext(), kChromeUIMediaAppGuestURL);
   // Add resources from ash_media_app_resources.pak.
   source->AddResourcePath("app.html", IDR_MEDIA_APP_APP_HTML);
   source->AddResourcePath("receiver.js", IDR_MEDIA_APP_RECEIVER_JS);
@@ -149,20 +149,21 @@ content::WebUIDataSource* CreateMediaAppUntrustedDataSource(
   // Allow images to also handle data urls.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ImgSrc, "img-src blob: data: 'self';");
-  // Allow styles to include inline styling needed for Polymer elements.
+  // Allow styles to include inline styling needed for Polymer elements and
+  // the material 3 dynamic palette.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::StyleSrc,
-      "style-src 'self' 'unsafe-inline';");
+      "style-src 'self' 'unsafe-inline' chrome-untrusted://theme;");
   // Allow loading PDFs as blob URLs.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ObjectSrc, "object-src blob:;");
   // Required to successfully load PDFs in the `<embed>` element.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::FrameSrc, "frame-src blob:;");
-  // Allow wasm.
+  // Allow wasm and mojo.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src 'self' 'wasm-eval';");
+      "script-src 'self' 'wasm-eval' chrome-untrusted://resources;");
   // Allow calls to Maps reverse geocoding API for loading metadata.
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ConnectSrc,
@@ -182,25 +183,24 @@ content::WebUIDataSource* CreateMediaAppUntrustedDataSource(
 
 }  // namespace
 
-MediaAppGuestUI::MediaAppGuestUI(content::WebUI* web_ui,
-                                 MediaAppGuestUIDelegate* delegate)
+MediaAppGuestUI::MediaAppGuestUI(
+    content::WebUI* web_ui,
+    std::unique_ptr<MediaAppGuestUIDelegate> delegate)
     : UntrustedWebUIController(web_ui),
-      WebContentsObserver(web_ui->GetWebContents()) {
+      WebContentsObserver(web_ui->GetWebContents()),
+      delegate_(std::move(delegate)) {
   task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
       {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
        base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
 
   content::WebUIDataSource* untrusted_source =
-      CreateMediaAppUntrustedDataSource(web_ui, delegate);
+      CreateAndAddMediaAppUntrustedDataSource(web_ui, delegate_.get());
 
   MaybeConfigureTestableDataSource(
       untrusted_source, "media_app/untrusted",
       base::BindRepeating(&IsFontRequest),
       base::BindRepeating(&MediaAppGuestUI::StartFontDataRequest,
                           weak_factory_.GetWeakPtr()));
-
-  auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, untrusted_source);
 }
 
 MediaAppGuestUI::~MediaAppGuestUI() {
@@ -248,9 +248,8 @@ void MediaAppGuestUI::StartFontDataRequestAfterPathExists(
   if (path_exists) {
     auto font_data = std::make_unique<std::string>();
     std::string* data = font_data.get();
-    base::PostTaskAndReplyWithResult(
-        task_runner_.get(), FROM_HERE,
-        base::BindOnce(&base::ReadFileToString, font_path, data),
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE, base::BindOnce(&base::ReadFileToString, font_path, data),
         base::BindOnce(&FontLoaded, std::move(got_data_callback),
                        std::move(font_data)));
 
@@ -259,8 +258,38 @@ void MediaAppGuestUI::StartFontDataRequestAfterPathExists(
   }
 }
 
+void MediaAppGuestUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
+}
+
+void MediaAppGuestUI::BindInterface(
+    mojo::PendingReceiver<media_app_ui::mojom::UntrustedPageHandlerFactory>
+        receiver) {
+  if (!base::FeatureList::IsEnabled(ash::features::kMediaAppPdfA11yOcr)) {
+    return;
+  }
+
+  if (untrusted_page_handler_factory_.is_bound()) {
+    untrusted_page_handler_factory_.reset();
+  }
+  untrusted_page_handler_factory_.Bind(std::move(receiver));
+}
+
+void MediaAppGuestUI::CreateOcrUntrustedPageHandler(
+    mojo::PendingReceiver<media_app_ui::mojom::OcrUntrustedPageHandler>
+        receiver,
+    mojo::PendingRemote<media_app_ui::mojom::OcrUntrustedPage> page) {
+  ocr_handler_ = delegate_->CreateAndBindOcrHandler(
+      *web_ui()->GetWebContents()->GetBrowserContext(), std::move(receiver),
+      std::move(page));
+}
+
 MediaAppUserActions GetMediaAppUserActionsForHappinessTracking() {
   return MediaAppMetricsHelper::actions;
 }
+
+WEB_UI_CONTROLLER_TYPE_IMPL(MediaAppGuestUI)
 
 }  // namespace ash

@@ -7,63 +7,110 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
+import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.AppPresence;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.FactorySpeed;
-import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
+import org.chromium.components.autofill.AutofillProfile;
 import org.chromium.components.payments.Event;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * A payment integration test for a merchant that requests email address and a phone number.
- */
+/** A payment integration test for a merchant that requests email address and a phone number. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-public class PaymentRequestEmailAndPhoneTest implements MainActivityStartCallback {
+@Batch(Batch.PER_CLASS)
+public class PaymentRequestEmailAndPhoneTest {
     @Rule
     public PaymentRequestTestRule mPaymentRequestTestRule =
-            new PaymentRequestTestRule("payment_request_email_and_phone_test.html", this);
+            new PaymentRequestTestRule("payment_request_email_and_phone_test.html");
 
-    @Override
-    public void onMainActivityStarted() throws TimeoutException {
+    @Before
+    public void setUp() throws TimeoutException {
         AutofillTestHelper helper = new AutofillTestHelper();
         // The user has a valid email address and phone number on disk.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA", "Los Angeles",
-                "", "90291", "", "US", "555-555-5555", "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Jon Doe")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but with a different address.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "", "Google", "999 Main St", "CA", "Los Angeles", "",
-                "90291", "", "US", "555-555-5555", "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setCompanyName("Google")
+                        .setStreetAddress("999 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but without a phone number.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA", "Los Angeles",
-                "", "90291", "", "US", "" /* phoneNumber */, "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Jon Doe")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber(/* phoneNumber= */ "")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but without an email.
-        helper.setProfile(new AutofillProfile("", "https://example.com", true,
-                "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA", "Los Angeles",
-                "", "90291", "", "US", "555-555-5555", "" /* emailAddress */, "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setFullName("Jon Doe")
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress(/* emailAddress= */ "")
+                        .setLanguageCode("en-US")
+                        .build());
 
         // Add the same profile but without a name.
-        helper.setProfile(new AutofillProfile("" /* name */, "https://example.com", true,
-                "" /* honorific prefix */, "", "Google", "340 Main St", "CA", "Los Angeles", "",
-                "90291", "", "US", "555-555-5555", "jon.doe@google.com", "en-US"));
+        helper.setProfile(
+                AutofillProfile.builder()
+                        .setCompanyName("Google")
+                        .setStreetAddress("340 Main St")
+                        .setRegion("CA")
+                        .setLocality("Los Angeles")
+                        .setPostalCode("90291")
+                        .setCountryCode("US")
+                        .setPhoneNumber("555-555-5555")
+                        .setEmailAddress("jon.doe@google.com")
+                        .setLanguageCode("en-US")
+                        .build());
 
         mPaymentRequestTestRule.addPaymentAppFactory(
                 AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
@@ -72,10 +119,10 @@ public class PaymentRequestEmailAndPhoneTest implements MainActivityStartCallbac
     /** Provide the existing valid email address and phone number to the merchant. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testPay() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buy();", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.button_primary, mPaymentRequestTestRule.getDismissed());
         mPaymentRequestTestRule.expectResultContains(
@@ -85,10 +132,10 @@ public class PaymentRequestEmailAndPhoneTest implements MainActivityStartCallbac
     /** Attempt to add an invalid email address and phone number and cancel the transaction. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testAddInvalidEmailAndCancel() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buy();", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
@@ -108,10 +155,10 @@ public class PaymentRequestEmailAndPhoneTest implements MainActivityStartCallbac
     /** Add a new email address and phone number and provide that to the merchant. */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testAddEmailAndPhoneAndPay() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buy();", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
@@ -133,37 +180,45 @@ public class PaymentRequestEmailAndPhoneTest implements MainActivityStartCallbac
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testSuggestionsDeduped() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buy();", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         Assert.assertEquals(1, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
     }
 
     /**
-     * Test that ending a payment request that requires only the user's email address results in
-     * the appropriate metric being logged in PaymentRequest.Events.
+     * Test that ending a payment request that requires only the user's email address results in the
+     * appropriate metric being logged in PaymentRequest.Events.
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testPaymentRequestEventsMetric() throws TimeoutException {
+        int expectedSample =
+                Event.SHOWN
+                        | Event.USER_ABORTED
+                        | Event.HAD_INITIAL_FORM_OF_PAYMENT
+                        | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS
+                        | Event.REQUEST_PAYER_EMAIL
+                        | Event.REQUEST_PAYER_PHONE
+                        | Event.REQUEST_METHOD_OTHER
+                        | Event.AVAILABLE_METHOD_OTHER;
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("PaymentRequest.Events", expectedSample)
+                        .build();
+
         // Start and cancel the Payment Request.
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buy();", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.close_button, mPaymentRequestTestRule.getDismissed());
         mPaymentRequestTestRule.expectResultContains(
                 new String[] {"User closed the Payment Request UI."});
 
-        int expectedSample = Event.SHOWN | Event.USER_ABORTED | Event.HAD_INITIAL_FORM_OF_PAYMENT
-                | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.REQUEST_PAYER_EMAIL
-                | Event.REQUEST_PAYER_PHONE | Event.REQUEST_METHOD_BASIC_CARD
-                | Event.REQUEST_METHOD_OTHER | Event.AVAILABLE_METHOD_OTHER;
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        "PaymentRequest.Events", expectedSample));
+        histogramWatcher.pollInstrumentationThreadUntilSatisfied();
     }
 }

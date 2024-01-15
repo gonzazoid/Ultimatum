@@ -10,8 +10,9 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "components/user_manager/common_types.h"
 #include "components/user_manager/user_manager_export.h"
@@ -21,10 +22,6 @@ class AccountId;
 enum class AccountType;
 class PrefRegistrySimple;
 class PrefService;
-
-namespace base {
-class Value;
-}
 
 namespace user_manager {
 
@@ -124,7 +121,7 @@ class USER_MANAGER_EXPORT KnownUser final {
   // This is a temporary call while migrating to AccountId.
   AccountId GetAccountId(const std::string& user_email,
                          const std::string& id,
-                         const AccountType& account_type);
+                         const AccountType& account_type) const;
 
   AccountId GetAccountIdByCryptohomeId(const CryptohomeId& cryptohome_id);
 
@@ -144,7 +141,7 @@ class USER_MANAGER_EXPORT KnownUser final {
   // Setter and getter for DeviceId known user string preference.
   void SetDeviceId(const AccountId& account_id, const std::string& device_id);
 
-  std::string GetDeviceId(const AccountId& account_id);
+  std::string GetDeviceId(const AccountId& account_id) const;
 
   // Setter and getter for GAPSCookie known user string preference.
   void SetGAPSCookie(const AccountId& account_id,
@@ -191,9 +188,10 @@ class USER_MANAGER_EXPORT KnownUser final {
   // can be used by this user to authenticate. The getter returns a null value
   // when the property isn't present. For the format of the value, refer to
   // chromeos/ash/components/login/auth/challenge_response/known_user_pref_utils.h.
-  void SetChallengeResponseKeys(const AccountId& account_id, base::Value value);
+  void SetChallengeResponseKeys(const AccountId& account_id,
+                                base::Value::List value);
 
-  base::Value GetChallengeResponseKeys(const AccountId& account_id);
+  base::Value::List GetChallengeResponseKeys(const AccountId& account_id);
 
   void SetLastOnlineSignin(const AccountId& account_id, base::Time time);
 
@@ -232,12 +230,20 @@ class USER_MANAGER_EXPORT KnownUser final {
   void PinAutosubmitSetBackfillNotNeeded(const AccountId& account_id);
   void PinAutosubmitSetBackfillNeededForTests(const AccountId& account_id);
 
+  base::Value::Dict GetAuthFactorCache(const AccountId& account_id);
+  void SetAuthFactorCache(const AccountId& account_id,
+                          const base::Value::Dict cache);
+
   // Setter and getter for password sync token used for syncing SAML passwords
   // across multiple user devices.
   void SetPasswordSyncToken(const AccountId& account_id,
                             const std::string& token);
 
   const std::string* GetPasswordSyncToken(const AccountId& account_id) const;
+
+  // Removes password sync token associated with the user. Can be relevant e.g.
+  // if user switches from SAML to GAIA.
+  void ClearPasswordSyncToken(const AccountId& account_id);
 
   // Saves the current major version as the version in which the user completed
   // the onboarding flow.
@@ -257,6 +263,12 @@ class USER_MANAGER_EXPORT KnownUser final {
 
   std::string GetPendingOnboardingScreen(const AccountId& account_id);
 
+  // Records whether Lacros is enabled for the user.
+  void SetLacrosEnabled(const AccountId& account_id, bool enabled);
+  // Returns true if at least one user has Lacros enabled, false otherwise.
+  // It defaults to false for users for which there's no information.
+  bool GetLacrosEnabledForAnyUser();
+
   bool UserExists(const AccountId& account_id);
 
   // Register known user prefs.
@@ -273,7 +285,7 @@ class USER_MANAGER_EXPORT KnownUser final {
 
   // Performs a lookup of properties associated with |account_id|. Returns
   // nullptr if not found.
-  const base::Value* FindPrefs(const AccountId& account_id) const;
+  const base::Value::Dict* FindPrefs(const AccountId& account_id) const;
 
   // Removes all user preferences associated with |account_id|.
   // Not exported as code should not be calling this outside this component
@@ -288,7 +300,7 @@ class USER_MANAGER_EXPORT KnownUser final {
   // Removes all obsolete prefs from all users.
   void CleanObsoletePrefs();
 
-  const base::raw_ptr<PrefService> local_state_;
+  const raw_ptr<PrefService> local_state_;
 };
 
 }  // namespace user_manager

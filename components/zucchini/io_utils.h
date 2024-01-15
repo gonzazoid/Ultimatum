@@ -7,11 +7,13 @@
 
 #include <stdint.h>
 
-#include <cctype>
 #include <istream>
 #include <ostream>
 #include <sstream>
 #include <string>
+
+#include "base/memory/raw_ref.h"
+#include "base/strings/string_util.h"
 
 namespace zucchini {
 
@@ -35,7 +37,7 @@ class LimitedOutputStream : public std::ostream {
     bool full() const { return counter_ >= limit_; }
 
    private:
-    std::ostream& os_;
+    const raw_ref<std::ostream> os_;
     const int limit_;
     int counter_ = 0;
   };
@@ -124,15 +126,15 @@ class StrictUInt {
   StrictUInt(const StrictUInt&) = default;
 
   friend std::istream& operator>>(std::istream& istr, StrictUInt<T> obj) {
-    if (!istr.fail() && !::isdigit(istr.peek())) {
+    if (!istr.fail() && !base::IsAsciiDigit(istr.peek())) {
       istr.setstate(std::ios_base::failbit);
       return istr;
     }
-    return istr >> obj.var_;
+    return istr >> *obj.var_;
   }
 
  private:
-  T& var_;
+  const raw_ref<T> var_;
 };
 
 // Stub out uint8_t: istream treats it as char, and value won't be read as int!

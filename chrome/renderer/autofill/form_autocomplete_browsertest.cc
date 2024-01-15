@@ -5,7 +5,7 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -13,9 +13,13 @@
 #include "build/build_config.h"
 #include "chrome/test/base/chrome_render_view_test.h"
 #include "components/autofill/content/renderer/autofill_agent.h"
+#include "components/autofill/content/renderer/autofill_agent_test_api.h"
 #include "components/autofill/content/renderer/focus_test_utils.h"
+#include "components/autofill/content/renderer/form_autofill_util.h"
+#include "components/autofill/content/renderer/form_tracker_test_api.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/form_data.h"
+#include "components/autofill/core/common/mojom/autofill_types.mojom-shared.h"
 #include "content/public/renderer/render_frame.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
@@ -43,7 +47,7 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
  public:
   FakeContentAutofillDriver() = default;
 
-  ~FakeContentAutofillDriver() override {}
+  ~FakeContentAutofillDriver() override = default;
 
   void BindReceiver(
       mojo::PendingAssociatedReceiver<mojom::AutofillDriver> receiver) {
@@ -104,9 +108,7 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
       const FormData& form,
       const FormFieldData& field,
       const gfx::RectF& bounding_box,
-      int32_t query_id,
-      AutoselectFirstSuggestion autoselect_first_field,
-      FormElementWasClicked form_element_was_clicked) override {}
+      AutofillSuggestionTriggerSource trigger_source) override {}
 
   void HidePopup() override {}
 
@@ -122,11 +124,10 @@ class FakeContentAutofillDriver : public mojom::AutofillDriver {
   void DidFillAutofillFormData(const FormData& form,
                                base::TimeTicks timestamp) override {}
 
-  void DidPreviewAutofillFormData() override {}
-
   void DidEndTextFieldEditing() override {}
 
-  void SelectFieldOptionsDidChange(const autofill::FormData& form) override {}
+  void SelectOrSelectListFieldOptionsDidChange(
+      const autofill::FormData& form) override {}
 
   // Records whether FocusNoLongerOnForm() get called.
   bool did_unfocus_form_{false};
@@ -213,18 +214,17 @@ FormData CreateAutofillFormData(blink::WebLocalFrame* main_frame) {
   field_data.name = u"fname";
   field_data.value = u"John";
   field_data.is_autofilled = true;
-  field_data.unique_renderer_id =
-      FieldRendererId(fname_element.UniqueRendererFormControlId());
+  field_data.unique_renderer_id = form_util::GetFieldRendererId(fname_element);
   data.fields.push_back(field_data);
 
-  field_data.name = u"lname";
-  field_data.value = u"Smith";
-  field_data.is_autofilled = true;
   if (!lname_element.IsNull()) {
+    field_data.name = u"lname";
+    field_data.value = u"Smith";
+    field_data.is_autofilled = true;
     field_data.unique_renderer_id =
-        FieldRendererId(lname_element.UniqueRendererFormControlId());
+        form_util::GetFieldRendererId(lname_element);
+    data.fields.push_back(field_data);
   }
-  data.fields.push_back(field_data);
 
   return data;
 }
@@ -243,8 +243,9 @@ void SimulateFillForm(const FormData& form_data,
   autofill_agent->FormControlElementClicked(
       fname_element.To<WebInputElement>());
 
-  autofill_agent->FillOrPreviewForm(0, form_data,
-                                    mojom::RendererFormDataAction::kFill);
+  autofill_agent->ApplyFormAction(
+      mojom::ActionType::kFill, mojom::ActionPersistence::kFill,
+      form_data.unique_renderer_id, form_data.fields);
 }
 
 // Simulates receiving a message from the browser to fill a form.
@@ -273,54 +274,48 @@ void SimulateFillFormWithNonFillableFields(
           .To<WebFormControlElement>();
   ASSERT_FALSE(lname_element.IsNull());
 
-  FormData data;
-  data.name = u"name";
-  data.url = GURL("http://example.com/");
-  data.action = GURL("http://example.com/blade.php");
-  data.is_form_tag = true;  // Default value.
+  FormData form;
+  form.name = u"name";
+  form.url = GURL("http://example.com/");
+  form.action = GURL("http://example.com/blade.php");
+  form.is_form_tag = true;  // Default value.
 
-  FormFieldData field_data;
-  field_data.name = u"fname";
-  field_data.value = u"John";
-  field_data.is_autofilled = true;
-  field_data.unique_renderer_id =
-      FieldRendererId(fname_element.UniqueRendererFormControlId());
-  data.fields.push_back(field_data);
+  FormFieldData field;
+  field.name = u"fname";
+  field.value = u"John";
+  field.is_autofilled = true;
+  field.unique_renderer_id = form_util::GetFieldRendererId(fname_element);
+  form.fields.push_back(field);
 
-  field_data.name = u"lname";
-  field_data.value = u"Smith";
-  field_data.is_autofilled = true;
-  field_data.unique_renderer_id =
-      FieldRendererId(lname_element.UniqueRendererFormControlId());
-  data.fields.push_back(field_data);
+  field.name = u"lname";
+  field.value = u"Smith";
+  field.is_autofilled = true;
+  field.unique_renderer_id = form_util::GetFieldRendererId(lname_element);
+  form.fields.push_back(field);
 
   // Additional non-autofillable field.
-  field_data.name = u"mname";
-  field_data.value = u"James";
-  field_data.is_autofilled = false;
-  field_data.unique_renderer_id =
-      FieldRendererId(mname_element.UniqueRendererFormControlId());
-  data.fields.push_back(field_data);
+  field.name = u"mname";
+  field.value = u"James";
+  field.is_autofilled = false;
+  field.unique_renderer_id = form_util::GetFieldRendererId(mname_element);
+  form.fields.push_back(field);
 
   // This call is necessary to setup the autofill agent appropriate for the
   // user selection; simulates the menu actually popping up.
   autofill_agent->FormControlElementClicked(
       fname_element.To<WebInputElement>());
 
-  autofill_agent->FillOrPreviewForm(0, data,
-                                    mojom::RendererFormDataAction::kFill);
+  autofill_agent->ApplyFormAction(mojom::ActionType::kFill,
+                                  mojom::ActionPersistence::kFill,
+                                  form.unique_renderer_id, form.fields);
 }
-
-}  // end namespace
 
 class FormAutocompleteTest : public ChromeRenderViewTest {
  public:
-  FormAutocompleteTest() {}
-
+  FormAutocompleteTest() = default;
   FormAutocompleteTest(const FormAutocompleteTest&) = delete;
   FormAutocompleteTest& operator=(const FormAutocompleteTest&) = delete;
-
-  ~FormAutocompleteTest() override {}
+  ~FormAutocompleteTest() override = default;
 
  protected:
   void SetUp() override {
@@ -825,16 +820,17 @@ TEST_F(FormAutocompleteTest, CollectFormlessElements) {
       "<form><input type='text' name='excluded'/></form>"
       "</html>");
 
-  FormData result;
-  autofill_agent_->CollectFormlessElements(&result);
+  std::optional<FormData> result =
+      test_api(*autofill_agent_).CollectFormlessElements();
+  ASSERT_TRUE(result);
 
   // Asserting size 4 also ensures that 'excluded' field inside <form> is not
   // collected.
-  ASSERT_EQ(4U, result.fields.size());
-  EXPECT_EQ(u"text_input", result.fields[0].name);
-  EXPECT_EQ(u"check_input", result.fields[1].name);
-  EXPECT_EQ(u"number_input", result.fields[2].name);
-  EXPECT_EQ(u"select_input", result.fields[3].name);
+  ASSERT_EQ(4U, result->fields.size());
+  EXPECT_EQ(u"text_input", result->fields[0].name);
+  EXPECT_EQ(u"check_input", result->fields[1].name);
+  EXPECT_EQ(u"number_input", result->fields[2].name);
+  EXPECT_EQ(u"select_input", result->fields[3].name);
 }
 
 // Unit test for AutofillAgent::AcceptDataListSuggestion.
@@ -879,11 +875,11 @@ TEST_F(FormAutocompleteTest, AcceptDataListSuggestion) {
     WebElement element = document.GetElementById(WebString::FromUTF8(c.id));
     ASSERT_FALSE(element.IsNull());
     WebInputElement input_element = element.To<WebInputElement>();
-    FieldRendererId field_id(input_element.UniqueRendererFormControlId());
     // Select this element in |autofill_agent_|.
     autofill_agent_->FormControlElementClicked(input_element);
 
-    autofill_agent_->AcceptDataListSuggestion(field_id, kSuggestion);
+    autofill_agent_->AcceptDataListSuggestion(
+        form_util::GetFieldRendererId(input_element), kSuggestion);
     EXPECT_EQ(c.expected, input_element.Value().Utf8()) << "Case id: " << c.id;
   }
 }
@@ -1101,9 +1097,9 @@ TEST_F(FormAutocompleteTest, FormSubmittedByDOMMutationAfterXHR) {
   ExecuteJavaScriptForTests(hide_elements.c_str());
   base::RunLoop().RunUntilIdle();
 
-  VerifyReceivedAddressRendererMessages(
-      fake_driver_, "City", true /* expect_known_success */,
-      SubmissionSource::DOM_MUTATION_AFTER_XHR);
+  VerifyReceivedAddressRendererMessages(fake_driver_, "City",
+                                        true /* expect_known_success */,
+                                        SubmissionSource::XHR_SUCCEEDED);
 }
 
 TEST_F(FormAutocompleteTest, FormSubmittedBySameDocumentNavigation) {
@@ -1122,8 +1118,8 @@ TEST_F(FormAutocompleteTest, FormSubmittedBySameDocumentNavigation) {
   ExecuteJavaScriptForTests(hide_elements.c_str());
 
   // Simulate same document navigation.
-  autofill_agent_->form_tracker_for_testing()
-      ->DidFinishSameDocumentNavigation();
+  test_api(test_api(*autofill_agent_).form_tracker())
+      .DidFinishSameDocumentNavigation();
   base::RunLoop().RunUntilIdle();
 
   VerifyReceivedAddressRendererMessages(
@@ -1151,8 +1147,8 @@ TEST_F(FormAutocompleteTest, FormSubmittedByProbablyFormSubmitted) {
   ExecuteJavaScriptForTests(hide_elements.c_str());
 
   // Simulate navigation.
-  autofill_agent_->form_tracker_for_testing()
-      ->FireProbablyFormSubmittedForTesting();
+  test_api(test_api(*autofill_agent_).form_tracker())
+      .FireProbablyFormSubmitted();
 
   base::RunLoop().RunUntilIdle();
 
@@ -1187,5 +1183,7 @@ TEST_F(FormAutocompleteTest, SelectControlChanged) {
   EXPECT_EQ(u"color", field->name);
   EXPECT_EQ(u"blue", field->value);
 }
+
+}  // namespace
 
 }  // namespace autofill

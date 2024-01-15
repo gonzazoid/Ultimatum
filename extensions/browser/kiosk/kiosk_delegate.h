@@ -10,15 +10,14 @@
 namespace extensions {
 
 // Delegate to provide various Kiosk mode functionality. At some point, we'll
-// have the KioskAppManager outside of Chrome. We can then directly use it as
-// a delegate but till then, this class is mostly a wrapper to it.
-// Note: Kiosk mode is not supported on other platforms but this delegate
-// needs to exist since on AppShell, KioskMode will exist on multiple
-// platforms.
+// have the KioskChromeAppManager outside of Chrome. We can then directly use it
+// as a delegate but till then, this class is mostly a wrapper to it. Note:
+// Kiosk mode is not supported on other platforms but this delegate needs to
+// exist since on AppShell, KioskMode will exist on multiple platforms.
 class KioskDelegate {
  public:
-  KioskDelegate();
-  virtual ~KioskDelegate();
+  KioskDelegate() = default;
+  virtual ~KioskDelegate() = default;
 
   virtual bool IsAutoLaunchedKioskApp(const ExtensionId& id) const = 0;
 };

@@ -73,10 +73,6 @@ bool HTMLScriptElement::HasLegalLinkAttribute(const QualifiedName& name) const {
          HTMLElement::HasLegalLinkAttribute(name);
 }
 
-const QualifiedName& HTMLScriptElement::SubResourceAttributeName() const {
-  return html_names::kSrcAttr;
-}
-
 void HTMLScriptElement::ChildrenChanged(const ChildrenChange& change) {
   HTMLElement::ChildrenChanged(change);
   if (change.IsChildInsertion())
@@ -98,27 +94,23 @@ void HTMLScriptElement::ParseAttribute(
     // flag is set has an async content attribute added, the element's
     // |non-blocking| flag must be unset."
     loader_->HandleAsyncAttribute();
-  } else if (params.name == html_names::kFetchpriorityAttr &&
-             RuntimeEnabledFeatures::PriorityHintsEnabled(
-                 GetExecutionContext())) {
+  } else if (params.name == html_names::kFetchpriorityAttr) {
     // The only thing we need to do for the the fetchPriority attribute/Priority
     // Hints is count usage upon parsing. Processing the value happens when the
     // element loads.
     UseCounter::Count(GetDocument(), WebFeature::kPriorityHints);
-  } else if (params.name == html_names::kBlockingAttr &&
-             RuntimeEnabledFeatures::BlockingAttributeEnabled()) {
-    blocking_attribute_->DidUpdateAttributeValue(params.old_value,
+  } else if (params.name == html_names::kBlockingAttr) {
+    blocking_attribute_->OnAttributeValueChanged(params.old_value,
                                                  params.new_value);
-    blocking_attribute_->CountTokenUsage();
     if (GetDocument().GetRenderBlockingResourceManager() &&
         !IsPotentiallyRenderBlocking()) {
       GetDocument().GetRenderBlockingResourceManager()->RemovePendingScript(
           *this);
     }
   } else if (params.name == html_names::kAttributionsrcAttr) {
-    if (!params.new_value.empty() && GetDocument().GetFrame()) {
+    if (GetDocument().GetFrame()) {
       GetDocument().GetFrame()->GetAttributionSrcLoader()->Register(
-          GetDocument().CompleteURL(params.new_value), this);
+          params.new_value, /*element=*/this);
     }
   } else {
     HTMLElement::ParseAttribute(params);
@@ -158,7 +150,7 @@ void HTMLScriptElement::setText(const String& string) {
 }
 
 void HTMLScriptElement::setInnerTextForBinding(
-    const V8UnionStringTreatNullAsEmptyStringOrTrustedScript*
+    const V8UnionStringLegacyNullToEmptyStringOrTrustedScript*
         string_or_trusted_script,
     ExceptionState& exception_state) {
   const String& value = TrustedTypesCheckForScript(
@@ -298,10 +290,18 @@ bool HTMLScriptElement::AllowInlineScriptForCSP(
     const AtomicString& nonce,
     const WTF::OrdinalNumber& context_line,
     const String& script_content) {
+  // Support 'inline-speculation-rules' source.
+  // https://wicg.github.io/nav-speculation/speculation-rules.html#content-security-policy
+  DCHECK(loader_);
+  ContentSecurityPolicy::InlineType inline_type =
+      loader_->GetScriptType() ==
+              ScriptLoader::ScriptTypeAtPrepare::kSpeculationRules
+          ? ContentSecurityPolicy::InlineType::kScriptSpeculationRules
+          : ContentSecurityPolicy::InlineType::kScript;
   return GetExecutionContext()
       ->GetContentSecurityPolicyForCurrentWorld()
-      ->AllowInline(ContentSecurityPolicy::InlineType::kScript, this,
-                    script_content, nonce, GetDocument().Url(), context_line);
+      ->AllowInline(inline_type, this, script_content, nonce,
+                    GetDocument().Url(), context_line);
 }
 
 Document& HTMLScriptElement::GetDocument() const {
@@ -319,7 +319,7 @@ V8HTMLOrSVGScriptElement* HTMLScriptElement::AsV8HTMLOrSVGScriptElement() {
 }
 
 DOMNodeId HTMLScriptElement::GetDOMNodeId() {
-  return DOMNodeIds::IdForNode(this);
+  return this->GetDomNodeId();
 }
 
 void HTMLScriptElement::DispatchLoadEvent() {
@@ -362,9 +362,7 @@ bool HTMLScriptElement::IsPotentiallyRenderBlocking() const {
 }
 
 // static
-bool HTMLScriptElement::supports(ScriptState* script_state,
-                                 const AtomicString& type) {
-  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+bool HTMLScriptElement::supports(const AtomicString& type) {
   if (type == script_type_names::kClassic)
     return true;
   if (type == script_type_names::kModule)
@@ -372,8 +370,7 @@ bool HTMLScriptElement::supports(ScriptState* script_state,
   if (type == script_type_names::kImportmap)
     return true;
 
-  if ((type == script_type_names::kSpeculationrules) &&
-      RuntimeEnabledFeatures::SpeculationRulesEnabled(execution_context)) {
+  if (type == script_type_names::kSpeculationrules) {
     return true;
   }
   if (type == script_type_names::kWebbundle)

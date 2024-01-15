@@ -5,9 +5,10 @@
 #ifndef CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_HOST_STATUS_PROVIDER_IMPL_H_
 #define CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_HOST_STATUS_PROVIDER_IMPL_H_
 
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/host_backend_delegate.h"
 #include "chromeos/ash/services/multidevice_setup/host_status_provider.h"
 #include "chromeos/ash/services/multidevice_setup/host_verifier.h"
@@ -81,10 +82,10 @@ class HostStatusProviderImpl : public HostStatusProvider,
   // The latter is necessary to capture users who stay logged in for days.
   void RecordMultiDeviceHostStatus();
 
-  EligibleHostDevicesProvider* eligible_host_devices_provider_;
-  HostBackendDelegate* host_backend_delegate_;
-  HostVerifier* host_verifier_;
-  device_sync::DeviceSyncClient* device_sync_client_;
+  raw_ptr<EligibleHostDevicesProvider> eligible_host_devices_provider_;
+  raw_ptr<HostBackendDelegate> host_backend_delegate_;
+  raw_ptr<HostVerifier> host_verifier_;
+  raw_ptr<device_sync::DeviceSyncClient> device_sync_client_;
   HostStatusWithDevice current_status_and_device_;
   base::RepeatingTimer host_status_metric_timer_;
 };

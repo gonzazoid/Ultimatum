@@ -29,7 +29,6 @@ mojom("mojom") {
     "demuxer_stream.mojom",
     "display_media_information.mojom",
     "frame_interface_factory.mojom",
-    "gpu_accelerated_video_decoder.mojom",
     "interface_factory.mojom",
     "key_system_support.mojom",
     "media_log.mojom",
@@ -47,6 +46,7 @@ mojom("mojom") {
     "video_decoder.mojom",
     "video_encode_accelerator.mojom",
     "video_encoder_info.mojom",
+    "video_encoder_metrics_provider.mojom",
     "watch_time_recorder.mojom",
     "webrtc_video_perf.mojom",
   ]
@@ -70,6 +70,7 @@ mojom("mojom") {
   if (is_win) {
     sources += [
       "dcomp_surface_registry.mojom",
+      "media_foundation_preferences.mojom",
       "media_foundation_service.mojom",
     ]
   }
@@ -88,6 +89,7 @@ mojom("mojom") {
     "//services/service_manager/public/mojom",
     "//ui/gfx/geometry/mojom",
     "//ui/gfx/mojom",
+    "//ui/gfx/mojom:hdr_metadata",
     "//ui/gl/mojom",
     "//url/mojom:url_mojom_gurl",
     "//url/mojom:url_mojom_origin",
@@ -104,6 +106,9 @@ mojom("mojom") {
   }
 
   enabled_features = []
+  if (is_linux || is_chromeos) {
+    enabled_features += [ "is_linux_or_chromeos" ]
+  }
 
   # Help select ServiceSandbox for media_service.mojom.
   if (mojo_media_host == "browser") {
@@ -232,21 +237,6 @@ mojom("mojom") {
         "//base",
         "//media",
       ]
-    },
-    {
-      types = [
-        {
-          mojom = "media.mojom.BitstreamBuffer"
-          cpp = "::media::BitstreamBuffer"
-          move_only = true
-        },
-        {
-          mojom = "media.mojom.VideoDecodeAcceleratorConfig"
-          cpp = "::media::VideoDecodeAccelerator::Config"
-        },
-      ]
-      traits_headers = [ "//media/gpu/ipc/common/media_param_traits.h" ]
-      traits_public_deps = [ "//media/gpu/ipc/common" ]
     },
     {
       types = [
@@ -463,12 +453,16 @@ mojom("mojom") {
           cpp = "::media::VideoEncodeAccelerator::Error"
         },
         {
+          mojom = "media.mojom.VideoEncodeOptions"
+          cpp = "::media::VideoEncoder::EncodeOptions"
+        },
+        {
           mojom = "media.mojom.VideoEncodeAcceleratorConfig"
           cpp = "::media::VideoEncodeAccelerator::Config"
         },
         {
-          mojom = "media.mojom.InterLayerPredMode"
-          cpp = "::media::VideoEncodeAccelerator::Config::InterLayerPredMode"
+          mojom = "media.mojom.SVCInterLayerPredMode"
+          cpp = "::media::SVCInterLayerPredMode"
         },
         {
           mojom = "media.mojom.SpatialLayer"
@@ -696,6 +690,33 @@ mojom("mojom") {
     ]
   }
 
+  if (is_fuchsia) {
+    sources += [ "fuchsia_media.mojom" ]
+
+    shared_typemaps += [
+      {
+        types = [
+          {
+            mojom = "media.mojom.CdmRequest"
+            cpp = "::fidl::InterfaceRequest<::fuchsia::media::drm::ContentDecryptionModule>"
+            move_only = true
+          },
+          {
+            mojom = "media.mojom.StreamProcessorRequest"
+            cpp = "::fidl::InterfaceRequest<::fuchsia::media::StreamProcessor>"
+            move_only = true
+          },
+        ]
+        traits_headers = [ "fuchsia_media_mojom_traits.h" ]
+        traits_public_deps = [
+          "//mojo/public/cpp/base/fuchsia:traits",
+          "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media:fuchsia.media_hlcpp",
+          "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media.drm:fuchsia.media.drm_hlcpp",
+        ]
+      },
+    ]
+  }
+
   cpp_typemaps += shared_typemaps
   blink_cpp_typemaps = shared_typemaps
 
@@ -765,6 +786,7 @@ mojom("speech_recognition") {
     ":audio_data",
     "//mojo/public/mojom/base",
     "//sandbox/policy/mojom",
+    "//ui/gfx/geometry/mojom",
   ]
 }
 

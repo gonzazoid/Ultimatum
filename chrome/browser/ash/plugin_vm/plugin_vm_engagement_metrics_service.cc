@@ -27,15 +27,22 @@ PluginVmEngagementMetricsService::Factory::GetInstance() {
 }
 
 PluginVmEngagementMetricsService::Factory::Factory()
-    : ProfileKeyedServiceFactory("PluginVmEngagementMetricsService") {}
+    : ProfileKeyedServiceFactory(
+          "PluginVmEngagementMetricsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 PluginVmEngagementMetricsService::Factory::~Factory() = default;
 
-KeyedService*
-PluginVmEngagementMetricsService::Factory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
+std::unique_ptr<KeyedService> PluginVmEngagementMetricsService::Factory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new PluginVmEngagementMetricsService(profile);
+  return std::make_unique<PluginVmEngagementMetricsService>(profile);
 }
 
 bool PluginVmEngagementMetricsService::Factory::

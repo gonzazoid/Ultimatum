@@ -5,6 +5,7 @@
 #include "puffin/src/puff_reader.h"
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,7 +46,6 @@ bool BufferPuffReader::GetNext(PuffData* data) {
       if (length == 259) {
         pd.type = PuffData::Type::kEndOfBlock;
         state_ = State::kReadingBlockMetadata;
-        DVLOG(2) << "Read end of block";
         return true;
       }
 
@@ -61,7 +61,6 @@ bool BufferPuffReader::GetNext(PuffData* data) {
       pd.type = PuffData::Type::kLenDist;
       pd.length = length;
       pd.distance = distance;
-      DVLOG(2) << "Read length: " << length << " distance: " << distance;
       return true;
     } else {  // Reading literals.
       // Boundary check
@@ -77,7 +76,6 @@ bool BufferPuffReader::GetNext(PuffData* data) {
         index_ += 2;
       }
       length++;
-      DVLOG(2) << "Read literals length: " << length;
       // Boundary check
       TEST_AND_RETURN_FALSE(index_ + length <= puff_size_);
       pd.type = PuffData::Type::kLiterals;
@@ -97,7 +95,6 @@ bool BufferPuffReader::GetNext(PuffData* data) {
     TEST_AND_RETURN_FALSE(index_ + 2 < puff_size_);
     length = ReadByteArrayToUint16(&puff_buf_in_[index_]) + 1;
     index_ += 2;
-    DVLOG(2) << "Read block metadata length: " << length;
     // Boundary check
     TEST_AND_RETURN_FALSE(index_ + length <= puff_size_);
     TEST_AND_RETURN_FALSE(length <= sizeof(pd.block_metadata));

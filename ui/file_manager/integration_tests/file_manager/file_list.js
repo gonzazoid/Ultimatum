@@ -145,6 +145,56 @@ testcase.fileListSelectLastFocusedItem = async () => {
 };
 
 /**
+ * Tests that after a multiple selection, canceling the selection and using
+ * Tab to focus the files list it selects the item that was last focused.
+ */
+testcase.fileListSortWithKeyboard = async () => {
+  const appId = await setupAndWaitUntilReady(
+      RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
+
+  // Send shift-Tab key to tab into sort button.
+  const result = await sendTestMessage({name: 'dispatchTabKey', shift: true});
+  chrome.test.assertEq(result, 'tabKeyDispatched', 'Tab key dispatch failed');
+  // Check: sort button has focus.
+  let focusedElement =
+      await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
+  // Check: button is showing down arrow.
+  chrome.test.assertTrue(
+      focusedElement['attributes']['iron-icon'] === 'files16:arrow_down_small');
+  // Check: aria-label tells us to click to sort ascending.
+  chrome.test.assertTrue(
+      focusedElement['attributes']['aria-label'] ===
+      'Click to sort the column in ascending order.');
+  // Press 'enter' on the sort button.
+  const key = ['cr-icon-button[tabindex="0"]', 'Enter', false, false, false];
+  chrome.test.assertTrue(
+      await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, key));
+  // Get the state of the (focused) sort button.
+  focusedElement =
+      await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
+  // Check: button is showing up arrow.
+  chrome.test.assertTrue(
+      focusedElement['attributes']['iron-icon'] === 'files16:arrow_up_small');
+  // Check: aria-label tells us to click to sort descending.
+  chrome.test.assertTrue(
+      focusedElement['attributes']['aria-label'] ===
+      'Click to sort the column in descending order.');
+  // Press 'enter' key on the sort button again.
+  chrome.test.assertTrue(
+      await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, key));
+  // Get the state of the (focused) sort button.
+  focusedElement =
+      await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
+  // Check: button is showing up arrow.
+  chrome.test.assertTrue(
+      focusedElement['attributes']['iron-icon'] === 'files16:arrow_down_small');
+  // Check: aria-label tells us to click to sort descending.
+  chrome.test.assertTrue(
+      focusedElement['attributes']['aria-label'] ===
+      'Click to sort the column in ascending order.');
+};
+
+/**
  * Verifies the total number of a11y messages and asserts the latest message
  * is the expected one.
  *
@@ -161,9 +211,11 @@ export async function countAndCheckLatestA11yMessage(
     return '';
   }
   const latestMessage = a11yMessages[a11yMessages.length - 1];
+
   chrome.test.assertEq(
       expectedCount, a11yMessages.length,
-      'Wrong number of a11y messages: latest message: ' + latestMessage);
+      `Wrong number of a11y messages: latest message: ${
+          latestMessage} \nAll messages:\n ${a11yMessages.join('\n-')}`);
   chrome.test.assertEq(expectedMessage, latestMessage);
   return latestMessage;
 }
@@ -317,14 +369,8 @@ testcase.fileListDeleteMultipleFiles = async () => {
   await remoteCall.waitAndClickElement(
       appId, '#file-list [file-name="hello.txt"]', {shift: true});
 
-  // Delete item and confirm delete.
-  if (await sendTestMessage({name: 'isTrashEnabled'}) === 'true') {
-    await remoteCall.waitAndClickElement(appId, '#move-to-trash-button');
-  } else {
-    await remoteCall.waitAndClickElement(appId, '#delete-button');
-    await remoteCall.waitAndClickElement(
-        appId, '.files-confirm-dialog .cr-dialog-ok');
-  }
+  // Press move to trash button.
+  await remoteCall.waitAndClickElement(appId, '#move-to-trash-button');
 
   // Wait for completion of file deletion.
   await remoteCall.waitForElementLost(
@@ -343,16 +389,10 @@ testcase.fileListDeleteMultipleFiles = async () => {
   // Check: selected state of last item.
   chrome.test.assertTrue('selected' in item.attributes);
 
-  // Select and delete first item.
+  // Select and move the first item to trash.
   await remoteCall.waitAndClickElement(
       appId, '#file-list [file-name="photos"]');
-  if (await sendTestMessage({name: 'isTrashEnabled'}) === 'true') {
-    await remoteCall.waitAndClickElement(appId, '#move-to-trash-button');
-  } else {
-    await remoteCall.waitAndClickElement(appId, '#delete-button');
-    await remoteCall.waitAndClickElement(
-        appId, '.files-confirm-dialog .cr-dialog-ok');
-  }
+  await remoteCall.waitAndClickElement(appId, '#move-to-trash-button');
 
   // Wait for file deletion.
   await remoteCall.waitForElementLost(appId, '#file-list [file-name="photos"]');

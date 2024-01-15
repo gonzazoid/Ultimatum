@@ -10,8 +10,9 @@
 namespace blink {
 
 CSSMathOperator ParseCSSArithmeticOperator(const CSSParserToken& token) {
-  if (token.GetType() != kDelimiterToken)
+  if (token.GetType() != kDelimiterToken) {
     return CSSMathOperator::kInvalid;
+  }
   switch (token.Delimiter()) {
     case '+':
       return CSSMathOperator::kAdd;
@@ -42,6 +43,26 @@ String ToString(CSSMathOperator op) {
       return "max";
     case CSSMathOperator::kClamp:
       return "clamp";
+    case CSSMathOperator::kRoundNearest:
+      return "round";
+    case CSSMathOperator::kRoundUp:
+      return "round(up, ";
+    case CSSMathOperator::kRoundDown:
+      return "round(down, ";
+    case CSSMathOperator::kRoundToZero:
+      return "round(to-zero, ";
+    case CSSMathOperator::kMod:
+      return "mod";
+    case CSSMathOperator::kRem:
+      return "rem";
+    case CSSMathOperator::kHypot:
+      return "hypot";
+    case CSSMathOperator::kAbs:
+      return "abs";
+    case CSSMathOperator::kSign:
+      return "sign";
+    case CSSMathOperator::kProgress:
+      return "progress";
     default:
       NOTREACHED();
       return String();

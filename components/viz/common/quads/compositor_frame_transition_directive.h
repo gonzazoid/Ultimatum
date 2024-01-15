@@ -11,7 +11,7 @@
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
-#include "components/viz/common/shared_element_resource_id.h"
+#include "components/viz/common/view_transition_element_resource_id.h"
 #include "components/viz/common/viz_common_export.h"
 
 namespace viz {
@@ -21,8 +21,8 @@ using NavigationID = base::UnguessableToken;
 // This is a transition directive that can be associated with a compositor
 // frame. The intent is to be able to animate a compositor frame into the right
 // place instead of simply drawing the final result at the final destination.
-// This is used by a JavaScript-exposed document transitions API. See
-// third_party/blink/renderer/core/document_transition/README.md for more
+// This is used by a JavaScript-exposed view transitions API. See
+// third_party/blink/renderer/core/view_transition/README.md for more
 // information.
 class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
  public:
@@ -60,19 +60,22 @@ class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
 
     // An identifier to tag the cached texture for this shared element in the
     // Viz process.
-    SharedElementResourceId shared_element_resource_id;
+    ViewTransitionElementResourceId view_transition_element_resource_id;
   };
 
+  // This is public only for mojo deserialization.
   CompositorFrameTransitionDirective();
 
-  // Constructs a new directive. Note that if type is `kSave`, the effect should
-  // be specified for a desired effect. These are ignored for the `kAnimate`
-  // type.
-  CompositorFrameTransitionDirective(
+  static CompositorFrameTransitionDirective CreateSave(
       NavigationID navigation_id,
       uint32_t sequence_id,
-      Type type,
-      std::vector<SharedElement> shared_elements = {});
+      std::vector<SharedElement> shared_elements);
+  static CompositorFrameTransitionDirective CreateAnimate(
+      NavigationID navigation_id,
+      uint32_t sequence_id);
+  static CompositorFrameTransitionDirective CreateRelease(
+      NavigationID navigation_id,
+      uint32_t sequence_id);
 
   CompositorFrameTransitionDirective(const CompositorFrameTransitionDirective&);
   ~CompositorFrameTransitionDirective();
@@ -96,6 +99,12 @@ class VIZ_COMMON_EXPORT CompositorFrameTransitionDirective {
   }
 
  private:
+  CompositorFrameTransitionDirective(
+      NavigationID navigation_id,
+      uint32_t sequence_id,
+      Type type,
+      std::vector<SharedElement> shared_elements = {});
+
   NavigationID navigation_id_;
 
   uint32_t sequence_id_ = 0;

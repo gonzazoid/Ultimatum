@@ -4,29 +4,16 @@
 
 package org.chromium.components.background_task_scheduler.internal;
 
-import android.os.Build;
-
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 import org.chromium.components.background_task_scheduler.BackgroundTask;
 import org.chromium.components.background_task_scheduler.BackgroundTaskFactory;
 import org.chromium.components.background_task_scheduler.BackgroundTaskScheduler;
 
-/**
- * A factory for {@link BackgroundTaskScheduler} that ensures there is only ever a single instance.
- */
+/** A factory for {@link BackgroundTaskScheduler} that ensures there is only ever a single instance. */
 public final class BackgroundTaskSchedulerFactoryInternal {
     private static BackgroundTaskScheduler sBackgroundTaskScheduler;
     private static BackgroundTaskFactory sBackgroundTaskFactory;
-
-    static BackgroundTaskSchedulerDelegate getSchedulerDelegateForSdk(int sdkInt) {
-        if (sdkInt >= Build.VERSION_CODES.M) {
-            return new BackgroundTaskSchedulerJobService();
-        } else {
-            return new BackgroundTaskSchedulerGcmNetworkManager();
-        }
-    }
 
     /**
      * @return the current instance of the {@link BackgroundTaskScheduler}. Creates one if none
@@ -35,16 +22,16 @@ public final class BackgroundTaskSchedulerFactoryInternal {
     public static BackgroundTaskScheduler getScheduler() {
         ThreadUtils.assertOnUiThread();
         if (sBackgroundTaskScheduler == null) {
-            sBackgroundTaskScheduler = new BackgroundTaskSchedulerImpl(
-                    getSchedulerDelegateForSdk(Build.VERSION.SDK_INT),
-                    new BackgroundTaskSchedulerAlarmManager());
+            sBackgroundTaskScheduler =
+                    new BackgroundTaskSchedulerImpl(new BackgroundTaskSchedulerJobService());
         }
         return sBackgroundTaskScheduler;
     }
 
-    @VisibleForTesting
     public static void setSchedulerForTesting(BackgroundTaskScheduler backgroundTaskScheduler) {
+        var oldValue = sBackgroundTaskScheduler;
         sBackgroundTaskScheduler = backgroundTaskScheduler;
+        ResettersForTesting.register(() -> sBackgroundTaskScheduler = oldValue);
     }
 
     /** See {@code BackgroundTaskSchedulerFactory#getBackgroundTaskFromTaskId}. */

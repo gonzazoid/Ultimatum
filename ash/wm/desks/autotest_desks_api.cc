@@ -11,8 +11,9 @@
 #include "ash/wm/desks/desks_histogram_enums.h"
 #include "ash/wm/desks/root_window_desk_switch_animator.h"
 #include "ash/wm/overview/overview_controller.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_animation_sequence.h"
@@ -118,7 +119,7 @@ class ChainedDeskAnimationObserver : public ui::LayerAnimationObserver,
   const bool going_left_;
   const int target_index_;
   base::OnceClosure on_desk_animation_complete_;
-  ui::Layer* animation_layer_ = nullptr;
+  raw_ptr<ui::Layer> animation_layer_ = nullptr;
 };
 
 }  // namespace
@@ -126,6 +127,12 @@ class ChainedDeskAnimationObserver : public ui::LayerAnimationObserver,
 AutotestDesksApi::AutotestDesksApi() = default;
 
 AutotestDesksApi::~AutotestDesksApi() = default;
+
+AutotestDesksApi::DesksInfo::DesksInfo() = default;
+
+AutotestDesksApi::DesksInfo::DesksInfo(const DesksInfo&) = default;
+
+AutotestDesksApi::DesksInfo::~DesksInfo() = default;
 
 bool AutotestDesksApi::CreateNewDesk() {
   if (!DesksController::Get()->CanCreateDesks())
@@ -207,10 +214,21 @@ bool AutotestDesksApi::IsWindowInDesk(aura::Window* window, int desk_index) {
 
 AutotestDesksApi::DesksInfo AutotestDesksApi::GetDesksInfo() const {
   auto* controller = DesksController::Get();
+
   DesksInfo info;
   info.active_desk_index = controller->GetActiveDeskIndex();
   info.num_desks = controller->desks().size();
   info.is_animating = !!controller->animation();
+
+  // Get the names of all desk containers. We just need any root window here
+  // since desks and their corresponding containers are laid out the same for
+  // all roots.
+  aura::Window* root = Shell::GetPrimaryRootWindow();
+  for (const auto& desk : controller->desks()) {
+    aura::Window* container = desk->GetDeskContainerForRoot(root);
+    info.desk_containers.push_back(container->GetName());
+  }
+
   return info;
 }
 

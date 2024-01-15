@@ -10,18 +10,18 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/values_util.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/observer_list.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/download/chrome_download_manager_delegate.h"
 #include "chrome/browser/download/download_confirmation_result.h"
@@ -44,6 +44,7 @@
 #include "components/safe_browsing/content/common/file_type_policies.h"
 #include "components/safe_browsing/content/common/file_type_policies_test_util.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
+#include "components/user_manager/scoped_user_manager.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -66,6 +67,15 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/common/extension.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chrome/browser/ash/policy/dlp/dlp_files_controller_ash.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_file_destination.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager_factory.h"
+#include "chrome/browser/chromeos/policy/dlp/test/mock_dlp_rules_manager.h"
 #endif
 
 using download::DownloadItem;
@@ -115,12 +125,12 @@ class NullWebContentsDelegate : public content::WebContentsDelegate {
 //   EXPECT_CALL(mock_fooclass_instance, Foo(callback))
 //     .WillOnce(ScheduleCallback(false));
 ACTION_P(ScheduleCallback, result0) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(arg0), result0));
 }
 
 ACTION_P2(ScheduleCallback2, result0, result1) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(arg0), result0, result1));
 }
 
@@ -181,15 +191,16 @@ struct DownloadTestCase {
 class MockDownloadTargetDeterminerDelegate
     : public DownloadTargetDeterminerDelegate {
  public:
-  void GetMixedContentStatus(download::DownloadItem* item,
-                             const base::FilePath& path,
-                             GetMixedContentStatusCallback cb) override {
-    GetMixedContentStatus_(item, path, cb);
+  void GetInsecureDownloadStatus(
+      download::DownloadItem* item,
+      const base::FilePath& path,
+      GetInsecureDownloadStatusCallback cb) override {
+    GetInsecureDownloadStatus_(item, path, cb);
   }
-  MOCK_METHOD3(GetMixedContentStatus_,
+  MOCK_METHOD3(GetInsecureDownloadStatus_,
                void(download::DownloadItem*,
                     const base::FilePath&,
-                    GetMixedContentStatusCallback&));
+                    GetInsecureDownloadStatusCallback&));
   void CheckDownloadUrl(download::DownloadItem* item,
                         const base::FilePath& path,
                         CheckDownloadUrlCallback cb) override {
@@ -258,9 +269,9 @@ class MockDownloadTargetDeterminerDelegate
                void(const base::FilePath&, GetFileMimeTypeCallback&));
 
   void SetupDefaults() {
-    ON_CALL(*this, GetMixedContentStatus_(_, _, _))
+    ON_CALL(*this, GetInsecureDownloadStatus_(_, _, _))
         .WillByDefault(WithArg<2>(ScheduleCallback(
-            download::DownloadItem::MixedContentStatus::UNKNOWN)));
+            download::DownloadItem::InsecureDownloadStatus::UNKNOWN)));
     ON_CALL(*this, CheckDownloadUrl_(_, _, _))
         .WillByDefault(WithArg<2>(
             ScheduleCallback(download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS)));
@@ -511,7 +522,8 @@ void CompletionCallbackWrapper(
     std::unique_ptr<DownloadTargetInfo>* target_info_receiver,
     std::unique_ptr<DownloadTargetInfo> target_info) {
   target_info_receiver->swap(target_info);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(closure));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(closure));
 }
 
 std::unique_ptr<DownloadTargetInfo>
@@ -1130,6 +1142,8 @@ TEST_F(DownloadTargetDeterminerTest, ReservationFailed_Confirmation) {
     DownloadConfirmationReason expected_confirmation_reason;
   } kTestCases[] = {{download::PathValidationResult::SUCCESS,
                      DownloadConfirmationReason::NONE},
+                    {download::PathValidationResult::SUCCESS_RESOLVED_CONFLICT,
+                     DownloadConfirmationReason::NONE},
                     {download::PathValidationResult::CONFLICT,
                      DownloadConfirmationReason::TARGET_CONFLICT},
                     {download::PathValidationResult::PATH_NOT_WRITABLE,
@@ -1304,17 +1318,17 @@ TEST_F(DownloadTargetDeterminerTest, TransitionType) {
   const struct {
     ui::PageTransition page_transition;
     download::DownloadDangerType expected_danger_type;
-    const DownloadTestCase& template_download_test_case;
+    const raw_ref<const DownloadTestCase> template_download_test_case;
   } kTestCases[] = {
       {// Benign file type. Results in a danger type of NOT_DANGEROUS. Page
        // transition type is irrelevant.
        ui::PAGE_TRANSITION_LINK, download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-       kSafeFile},
+       ToRawRef(kSafeFile)},
 
       {// File type is ALLOW_ON_USER_GESTURE. PAGE_TRANSITION_LINK doesn't
        // cause file to be marked as safe.
        ui::PAGE_TRANSITION_LINK, download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
-       kAllowOnUserGesture},
+       ToRawRef(kAllowOnUserGesture)},
 
       {// File type is ALLOW_ON_USER_GESTURE. PAGE_TRANSITION_TYPED doesn't
        // cause file to be marked as safe. TYPED can be used for certain
@@ -1322,29 +1336,32 @@ TEST_F(DownloadTargetDeterminerTest, TransitionType) {
        // initiated by a user. Hence a resulting download may not be
        // intentional.
        ui::PAGE_TRANSITION_TYPED, download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
-       kAllowOnUserGesture},
+       ToRawRef(kAllowOnUserGesture)},
 
       {// File type is ALLOW_ON_USER_GESTURE.
        // PAGE_TRANSITION_FROM_ADDRESS_BAR causes file to be marked as safe.
        static_cast<ui::PageTransition>(ui::PAGE_TRANSITION_TYPED |
                                        ui::PAGE_TRANSITION_FROM_ADDRESS_BAR),
-       download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS, kAllowOnUserGesture},
+       download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       ToRawRef(kAllowOnUserGesture)},
 
       {// File type is ALLOW_ON_USER_GESTURE.
        // PAGE_TRANSITION_FROM_ADDRESS_BAR causes file to be marked as safe.
        static_cast<ui::PageTransition>(ui::PAGE_TRANSITION_GENERATED |
                                        ui::PAGE_TRANSITION_FROM_ADDRESS_BAR),
-       download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS, kAllowOnUserGesture},
+       download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       ToRawRef(kAllowOnUserGesture)},
 
       {// File type is ALLOW_ON_USER_GESTURE.
        // PAGE_TRANSITION_FROM_ADDRESS_BAR causes file to be marked as safe.
        ui::PAGE_TRANSITION_FROM_ADDRESS_BAR,
-       download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS, kAllowOnUserGesture},
+       download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       ToRawRef(kAllowOnUserGesture)},
 
       {// File type is DANGEROUS. PageTransition is irrelevant.
        static_cast<ui::PageTransition>(ui::PAGE_TRANSITION_TYPED |
                                        ui::PAGE_TRANSITION_FROM_ADDRESS_BAR),
-       download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE, kDangerousFile},
+       download::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE, ToRawRef(kDangerousFile)},
   };
 
   // Test assumptions:
@@ -1364,7 +1381,8 @@ TEST_F(DownloadTargetDeterminerTest, TransitionType) {
     // transition was LINK. If the expectation is that the page transition type
     // causes the download to be considered safe, then download_test_case needs
     // to be adjusted accordingly.
-    DownloadTestCase download_test_case = test_case.template_download_test_case;
+    DownloadTestCase download_test_case =
+        *test_case.template_download_test_case;
     download_test_case.expected_danger_type = test_case.expected_danger_type;
     if (test_case.expected_danger_type ==
         download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS) {
@@ -1618,7 +1636,7 @@ TEST_F(DownloadTargetDeterminerTest, ManagedPath) {
                              std::size(kManagedPathTestCases));
 }
 
-// Test basic blocking functionality via GetMixedContentStatus.
+// Test basic blocking functionality via GetInsecureDownloadStatus.
 TEST_F(DownloadTargetDeterminerTest, BlockDownloads) {
   const DownloadTestCase kBlockDownloadsTestCases[] = {
       {AUTOMATIC, download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
@@ -1627,9 +1645,9 @@ TEST_F(DownloadTargetDeterminerTest, BlockDownloads) {
        DownloadItem::TARGET_DISPOSITION_OVERWRITE, EXPECT_EMPTY},
   };
 
-  ON_CALL(*delegate(), GetMixedContentStatus_(_, _, _))
+  ON_CALL(*delegate(), GetInsecureDownloadStatus_(_, _, _))
       .WillByDefault(WithArg<2>(ScheduleCallback(
-          download::DownloadItem::MixedContentStatus::SILENT_BLOCK)));
+          download::DownloadItem::InsecureDownloadStatus::SILENT_BLOCK)));
   RunTestCasesWithActiveItem(kBlockDownloadsTestCases,
                              std::size(kBlockDownloadsTestCases));
 }
@@ -1812,6 +1830,31 @@ TEST_F(DownloadTargetDeterminerTest, NotifyExtensionsDefaultPath) {
       .WillOnce(WithArg<2>(ScheduleCallback2(
           overridden_path, DownloadPathReservationTracker::UNIQUIFY)));
   RunTestCase(test_case, base::FilePath(), item.get());
+}
+
+// Test that relative paths returned by extensions are always relative to the
+// default downloads path.
+TEST_F(DownloadTargetDeterminerTest, NotifyExtensionsLocalFile) {
+  const DownloadTestCase kNotifyExtensionsTestCases[] = {
+      {AUTOMATIC, download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       DownloadFileType::NOT_DANGEROUS,
+#if BUILDFLAG(IS_WIN)
+       "file:///usr/local/xyz",
+#else
+       "file:///c:/usr/local/xyz",
+#endif  // BUILDFLAG(IS_WIN)
+       "text/plain", FILE_PATH_LITERAL(""),
+
+       FILE_PATH_LITERAL("xyz.txt"), DownloadItem::TARGET_DISPOSITION_OVERWRITE,
+
+       EXPECT_CRDOWNLOAD}};
+
+  base::FilePath overridden_path(FILE_PATH_LITERAL("overridden/foo.txt"));
+  EXPECT_CALL(*delegate(), NotifyExtensions_(_, _, _))
+      .WillRepeatedly(WithArg<2>(ScheduleCallback2(
+          overridden_path, DownloadPathReservationTracker::UNIQUIFY)));
+  RunTestCasesWithActiveItem(kNotifyExtensionsTestCases,
+                             std::size(kNotifyExtensionsTestCases));
 }
 
 TEST_F(DownloadTargetDeterminerTest, InitialVirtualPathUnsafe) {
@@ -2478,6 +2521,43 @@ TEST_F(DownloadTargetDeterminerTest, TransientDownloadResumption) {
   histogram_tester.ExpectTotalCount(kTransientPathValidationHistogram, 1);
 }
 
+#if BUILDFLAG(IS_WIN)
+// Test that env variables will be removed from file name before prompting Save
+// As dialog.
+TEST_F(DownloadTargetDeterminerTest, TestSanitizeEnvVariable) {
+  const DownloadTestCase kSaveEnvPathTestCases[] = {
+      {// 0: File name contains env var delimits.
+       SAVE_AS, download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       DownloadFileType::NOT_DANGEROUS, "http://example.com/f%oo%.tx%xyz%t",
+       "text/plain", FILE_PATH_LITERAL(""),
+
+       FILE_PATH_LITERAL("f.txt"), DownloadItem::TARGET_DISPOSITION_PROMPT,
+
+       EXPECT_CRDOWNLOAD},
+
+      {// 1: File name contains dangerous extensions after removing env var.
+       SAVE_AS, download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       DownloadFileType::NOT_DANGEROUS, "http://example.com/foo.ln%xyz%k",
+       "application/octet-stream", FILE_PATH_LITERAL(""),
+
+       FILE_PATH_LITERAL("foo.download"),
+       DownloadItem::TARGET_DISPOSITION_PROMPT,
+
+       EXPECT_CRDOWNLOAD},
+      {// 2: File name is an env var.
+       SAVE_AS, download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+       DownloadFileType::NOT_DANGEROUS, "http://example.com/%foo.txt%",
+       "text/plain", FILE_PATH_LITERAL(""),
+
+       FILE_PATH_LITERAL("download"), DownloadItem::TARGET_DISPOSITION_PROMPT,
+
+       EXPECT_CRDOWNLOAD}};
+
+  RunTestCasesWithActiveItem(kSaveEnvPathTestCases,
+                             std::size(kSaveEnvPathTestCases));
+}
+#endif  // BUILDFLAG(IS_WIN)
+
 #if BUILDFLAG(ENABLE_PLUGINS)
 
 void DummyGetPluginsCallback(
@@ -2751,5 +2831,171 @@ TEST_F(DownloadTargetDeterminerTest, DetermineLocalPathReturnsContentUri) {
   EXPECT_EQ(target_info->target_path.value(), "content://media/123");
 }
 #endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Tests that DLP policies are checked before determining the download path.
+class DownloadTargetDeterminerDlpTest : public DownloadTargetDeterminerTest {
+ protected:
+  DownloadTargetDeterminerDlpTest()
+      : profile_(std::make_unique<TestingProfile>()),
+        user_manager_(new ash::FakeChromeUserManager()),
+        scoped_user_manager_(std::make_unique<user_manager::ScopedUserManager>(
+            base::WrapUnique(user_manager_.get()))) {}
+
+  class MockFilesController : public policy::DlpFilesControllerAsh {
+   public:
+    explicit MockFilesController(const policy::DlpRulesManager& rules_manager,
+                                 Profile* profile)
+        : DlpFilesControllerAsh(rules_manager, profile) {}
+    ~MockFilesController() override = default;
+
+    MOCK_METHOD(bool,
+                ShouldPromptBeforeDownload,
+                (const policy::DlpFileDestination&, const base::FilePath&),
+                (override));
+  };
+
+  void SetUp() override {
+    DownloadTargetDeterminerTest::SetUp();
+
+    AccountId account_id =
+        AccountId::FromUserEmailGaiaId("test@example.com", "12345");
+    profile_->SetIsNewProfile(true);
+    user_manager::User* user =
+        user_manager_->AddUserWithAffiliationAndTypeAndProfile(
+            account_id, /*is_affiliated=*/false,
+            user_manager::USER_TYPE_REGULAR, profile_.get());
+    user_manager_->UserLoggedIn(account_id, user->username_hash(),
+                                /*browser_restart=*/false,
+                                /*is_child=*/false);
+    user_manager_->SimulateUserProfileLoad(account_id);
+  }
+
+  void TearDown() override {
+    mock_files_controller_.reset();
+    scoped_user_manager_.reset();
+    profile_.reset();
+
+    DownloadTargetDeterminerTest::TearDown();
+  }
+
+  std::unique_ptr<KeyedService> SetDlpRulesManager(
+      content::BrowserContext* context) {
+    auto dlp_rules_manager =
+        std::make_unique<testing::NiceMock<policy::MockDlpRulesManager>>(
+            Profile::FromBrowserContext(context));
+    rules_manager_ = dlp_rules_manager.get();
+    return dlp_rules_manager;
+  }
+
+  void SetupRulesManager() {
+    policy::DlpRulesManagerFactory::GetInstance()->SetTestingFactory(
+        profile_.get(),
+        base::BindRepeating(
+            &DownloadTargetDeterminerDlpTest::SetDlpRulesManager,
+            base::Unretained(this)));
+    ASSERT_TRUE(policy::DlpRulesManagerFactory::GetForPrimaryProfile());
+
+    ON_CALL(*rules_manager_, IsFilesPolicyEnabled)
+        .WillByDefault(testing::Return(true));
+    mock_files_controller_ =
+        std::make_unique<MockFilesController>(*rules_manager_, profile_.get());
+    ON_CALL(*rules_manager_, GetDlpFilesController)
+        .WillByDefault(testing::Return(mock_files_controller_.get()));
+  }
+
+  std::unique_ptr<TestingProfile> profile_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  raw_ptr<policy::MockDlpRulesManager, DanglingUntriaged> rules_manager_ =
+      nullptr;
+  std::unique_ptr<MockFilesController> mock_files_controller_ = nullptr;
+};
+
+// Download URL might be invalid. Dlp must not crash in that case
+// (b/300605501).
+TEST_F(DownloadTargetDeterminerDlpTest, InvalidUrl) {
+  SetupRulesManager();
+
+  const DownloadTestCase kManagedPathTestCase = {
+      AUTOMATIC,
+      download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+      DownloadFileType::NOT_DANGEROUS,
+      "",
+      "text/plain",
+      FILE_PATH_LITERAL(""),
+
+      FILE_PATH_LITERAL("download.txt"),
+      DownloadItem::TARGET_DISPOSITION_PROMPT,
+
+      EXPECT_CRDOWNLOAD};
+
+  SetManagedDownloadPath(test_download_dir());
+  ASSERT_TRUE(download_prefs()->IsDownloadPathManaged());
+  EXPECT_CALL(*delegate(),
+              RequestConfirmation_(
+                  _, GetPathInDownloadDir(FILE_PATH_LITERAL("download.txt")),
+                  DownloadConfirmationReason::DLP_BLOCKED, _));
+  EXPECT_CALL(*mock_files_controller_, ShouldPromptBeforeDownload).Times(0);
+  RunTestCasesWithActiveItem(&kManagedPathTestCase, 1);
+}
+
+// Even if the download path is managed, we should prompt if the download path
+// is blocked by DLP.
+TEST_F(DownloadTargetDeterminerDlpTest, ManagedPath_ShouldPrompt) {
+  SetupRulesManager();
+
+  const DownloadTestCase kManagedPathTestCase = {
+      AUTOMATIC,
+      download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+      DownloadFileType::NOT_DANGEROUS,
+      "http://example.com/foo.txt",
+      "text/plain",
+      FILE_PATH_LITERAL(""),
+
+      FILE_PATH_LITERAL("foo.txt"),
+      DownloadItem::TARGET_DISPOSITION_PROMPT,
+
+      EXPECT_CRDOWNLOAD};
+
+  SetManagedDownloadPath(test_download_dir());
+  ASSERT_TRUE(download_prefs()->IsDownloadPathManaged());
+  EXPECT_CALL(*delegate(),
+              RequestConfirmation_(
+                  _, GetPathInDownloadDir(FILE_PATH_LITERAL("foo.txt")),
+                  DownloadConfirmationReason::DLP_BLOCKED, _));
+  EXPECT_CALL(*mock_files_controller_, ShouldPromptBeforeDownload)
+      .WillOnce(testing::Return(true));
+  RunTestCasesWithActiveItem(&kManagedPathTestCase, 1);
+}
+
+// Even if "Prompt for download" user preference is set to false, we should
+// prompt if the download path is blocked by DLP.
+TEST_F(DownloadTargetDeterminerDlpTest, PromptAlways_SafeAutomatic) {
+  SetupRulesManager();
+
+  const DownloadTestCase kSafeAutomatic = {
+      AUTOMATIC,
+      download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+      DownloadFileType::NOT_DANGEROUS,
+      "http://example.com/automatic.txt",
+      "text/plain",
+      FILE_PATH_LITERAL(""),
+
+      FILE_PATH_LITERAL("automatic.txt"),
+      DownloadItem::TARGET_DISPOSITION_PROMPT,
+
+      EXPECT_CRDOWNLOAD};
+
+  SetPromptForDownload(false);
+  EXPECT_CALL(*mock_files_controller_, ShouldPromptBeforeDownload)
+      .WillOnce(testing::Return(true));
+  EXPECT_CALL(*delegate(),
+              RequestConfirmation_(
+                  _, GetPathInDownloadDir(FILE_PATH_LITERAL("automatic.txt")),
+                  DownloadConfirmationReason::DLP_BLOCKED, _));
+  RunTestCasesWithActiveItem(&kSafeAutomatic, 1);
+}
+#endif
 
 }  // namespace

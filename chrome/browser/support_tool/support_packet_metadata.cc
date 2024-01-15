@@ -10,11 +10,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/i18n/time_formatting.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
@@ -23,16 +22,17 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "chrome/browser/policy/policy_ui_utils.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/feedback/pii_types.h"
+#include "components/feedback/redaction_tool/pii_types.h"
 #include "components/policy/core/browser/webui/json_generation.h"
 
-using feedback::PIIType;
+using redaction::PIIType;
 
 namespace {
 
@@ -51,7 +51,7 @@ const char kSerialNumberKey[] = "Serial Number";
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 const char kErrorMessagesKey[] = "Support Tool Errors";
 
-const std::pair<const char* const, feedback::PIIType> kMetadataKeys[] = {
+const std::pair<const char* const, redaction::PIIType> kMetadataKeys[] = {
     {kTimestampKey, PIIType::kNone},
     {kIssueDescriptionKey, PIIType::kNone},
     {kSupportCaseIdKey, PIIType::kNone},
@@ -68,7 +68,7 @@ const std::pair<const char* const, feedback::PIIType> kMetadataKeys[] = {
     {kErrorMessagesKey, PIIType::kNone}};
 
 void WriteContentsOnFile(base::FilePath metadata_file,
-                         std::set<feedback::PIIType> pii_to_keep,
+                         std::set<redaction::PIIType> pii_to_keep,
                          std::map<std::string, std::string> metadata_contents) {
   // Create the file with write permissions.
   base::WriteFile(metadata_file, "");
@@ -134,7 +134,7 @@ void SupportPacketMetadata::PopulateMetadataContents(
       GetDataCollectorsListString(data_collectors_included);
   metadata_[kTimestampKey] = GetTimestampString(timestamp);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::system::StatisticsProvider::GetInstance()
+  ash::system::StatisticsProvider::GetInstance()
       ->ScheduleOnMachineStatisticsLoaded(
           base::BindOnce(&SupportPacketMetadata::OnMachineStatisticsLoaded,
                          weak_ptr_factory_.GetWeakPtr(),
@@ -147,12 +147,11 @@ void SupportPacketMetadata::PopulateMetadataContents(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void SupportPacketMetadata::OnMachineStatisticsLoaded(
     base::OnceClosure on_metadata_contents_populated) {
-  std::string machine_serial =
-      chromeos::system::StatisticsProvider::GetInstance()
-          ->GetEnterpriseMachineID();
-  if (!machine_serial.empty()) {
-    pii_[PIIType::kSerial].insert(machine_serial);
-    metadata_[kSerialNumberKey] = machine_serial;
+  const absl::optional<base::StringPiece> machine_serial =
+      ash::system::StatisticsProvider::GetInstance()->GetMachineID();
+  if (machine_serial && !machine_serial->empty()) {
+    pii_[PIIType::kSerial].insert(std::string(machine_serial.value()));
+    metadata_[kSerialNumberKey] = std::string(machine_serial.value());
   }
   std::move(on_metadata_contents_populated).Run();
 }
@@ -189,7 +188,7 @@ std::string SupportPacketMetadata::GetDataCollectorsListString(
 }
 
 std::string SupportPacketMetadata::GetGUIDForSupportPacket() {
-  return base::GUID::GenerateRandomV4().AsLowercaseString();
+  return base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 void SupportPacketMetadata::AddErrorMessagesToMetadata() {
@@ -198,7 +197,7 @@ void SupportPacketMetadata::AddErrorMessagesToMetadata() {
 
 void SupportPacketMetadata::WriteMetadataFile(
     base::FilePath target_path,
-    std::set<feedback::PIIType> pii_to_keep,
+    std::set<redaction::PIIType> pii_to_keep,
     base::OnceClosure on_metadata_file_written) {
   AddErrorMessagesToMetadata();
   base::FilePath metadata_file =

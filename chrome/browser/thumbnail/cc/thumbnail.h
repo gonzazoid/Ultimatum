@@ -25,6 +25,8 @@ namespace ui {
 class UIResourceProvider;
 }
 
+namespace thumbnail {
+
 typedef int TabId;
 
 class Thumbnail;
@@ -41,7 +43,7 @@ class Thumbnail : public cc::UIResourceClient {
       TabId tab_id,
       const base::Time& time_stamp,
       float scale,
-      ui::UIResourceProvider* ui_resource_provider,
+      base::WeakPtr<ui::UIResourceProvider> ui_resource_provider,
       ThumbnailDelegate* thumbnail_delegate);
 
   Thumbnail(const Thumbnail&) = delete;
@@ -55,6 +57,7 @@ class Thumbnail : public cc::UIResourceClient {
   cc::UIResourceId ui_resource_id() const { return ui_resource_id_; }
   const gfx::SizeF& scaled_content_size() const { return scaled_content_size_; }
   const gfx::SizeF& scaled_data_size() const { return scaled_data_size_; }
+  size_t size_in_bytes() const { return size_in_bytes_; }
 
   void SetBitmap(const SkBitmap& bitmap);
   void SetCompressedBitmap(sk_sp<SkPixelRef> compressed_bitmap,
@@ -69,7 +72,7 @@ class Thumbnail : public cc::UIResourceClient {
   Thumbnail(TabId tab_id,
             const base::Time& time_stamp,
             float scale,
-            ui::UIResourceProvider* ui_resource_provider,
+            base::WeakPtr<ui::UIResourceProvider> ui_resource_provider,
             ThumbnailDelegate* thumbnail_delegate);
 
   void ClearUIResourceId();
@@ -82,15 +85,18 @@ class Thumbnail : public cc::UIResourceClient {
   gfx::SizeF scaled_content_size_;
   gfx::SizeF scaled_data_size_;
 
+  size_t size_in_bytes_ = 1U;
   cc::UIResourceBitmap bitmap_;
   cc::UIResourceId ui_resource_id_;
 
   bool retrieved_;
 
-  raw_ptr<ui::UIResourceProvider, DanglingUntriaged> ui_resource_provider_;
+  base::WeakPtr<ui::UIResourceProvider> ui_resource_provider_;
   raw_ptr<ThumbnailDelegate> thumbnail_delegate_;
 
   base::WeakPtrFactory<Thumbnail> weak_factory_{this};
 };
+
+}  // namespace thumbnail
 
 #endif  // CHROME_BROWSER_THUMBNAIL_CC_THUMBNAIL_H_

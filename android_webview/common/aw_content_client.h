@@ -9,6 +9,7 @@
 #include "content/public/common/content_client.h"
 
 #include "base/compiler_specific.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace embedder_support {
 class OriginTrialPolicyImpl;
@@ -33,6 +34,9 @@ class AwContentClient : public content::ContentClient {
   base::RefCountedMemory* GetDataResourceBytes(int resource_id) override;
   std::string GetDataResourceString(int resource_id) override;
   void SetGpuInfo(const gpu::GPUInfo& gpu_info) override;
+  void AddContentDecryptionModules(
+      std::vector<content::CdmInfo>* cdms,
+      std::vector<media::CdmHostFilePath>* cdm_host_file_paths) override;
   bool UsingSynchronousCompositing() override;
   media::MediaDrmBridgeClient* GetMediaDrmBridgeClient() override;
   void ExposeInterfacesToBrowser(
@@ -45,6 +49,8 @@ class AwContentClient : public content::ContentClient {
   base::Lock origin_trial_policy_lock_;
   std::unique_ptr<embedder_support::OriginTrialPolicyImpl> origin_trial_policy_;
 };
+
+bool IsDisableOriginTrialsSafeModeActionOn();
 
 }  // namespace android_webview
 

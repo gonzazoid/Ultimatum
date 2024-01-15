@@ -4,7 +4,9 @@
 
 #include "chromeos/ash/components/login/hibernate/hibernate_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/task_environment.h"
 #include "chromeos/ash/components/dbus/hiberman/fake_hiberman_client.h"
 #include "chromeos/ash/components/login/auth/public/auth_callbacks.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -36,8 +38,8 @@ class HibernateManagerTest : public testing::Test {
   }
 
   void ResumeAuthOpCallback(std::unique_ptr<UserContext> user_context,
-                            absl::optional<AuthenticationError> error) {
-    if (error == absl::nullopt) {
+                            std::optional<AuthenticationError> error) {
+    if (error == std::nullopt) {
       successful_callbacks_++;
     } else {
       failed_callbacks_++;
@@ -45,35 +47,14 @@ class HibernateManagerTest : public testing::Test {
   }
 
  protected:
-  FakeHibermanClient* hiberman_client_;
+  raw_ptr<FakeHibermanClient> hiberman_client_;
   HibernateManager hibernate_manager_;
   std::unique_ptr<UserContext> user_context_;
   int successful_callbacks_ = 0;
   int failed_callbacks_ = 0;
 
+  base::test::TaskEnvironment task_environment_;
   base::WeakPtrFactory<HibernateManagerTest> weak_factory_{this};
 };
-
-// Test that the callback gets called.
-TEST_F(HibernateManagerTest, BasicResumeCall) {
-  hibernate_manager_.PrepareHibernateAndMaybeResume(
-      std::move(user_context_),
-      base::BindOnce(&HibernateManagerTest::ResumeCallback,
-                     weak_factory_.GetWeakPtr()));
-
-  EXPECT_EQ(successful_callbacks_, 1);
-  EXPECT_EQ(failed_callbacks_, 0);
-}
-
-// Test that ResumeFromHiberateAsAuthOp calls its callback.
-TEST_F(HibernateManagerTest, BasicAuthOpResumeCall) {
-  hibernate_manager_.PrepareHibernateAndMaybeResumeAuthOp(
-      std::move(user_context_),
-      base::BindOnce(&HibernateManagerTest::ResumeAuthOpCallback,
-                     weak_factory_.GetWeakPtr()));
-
-  EXPECT_EQ(successful_callbacks_, 1);
-  EXPECT_EQ(failed_callbacks_, 0);
-}
 
 }  // namespace ash

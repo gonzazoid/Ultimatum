@@ -4,14 +4,10 @@
 
 #import "ios/chrome/browser/ui/default_promo/default_browser_string_util.h"
 
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
-#import "ios/chrome/grit/ios_google_chrome_strings.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 #import <UIKit/UIKit.h>
 
@@ -22,9 +18,6 @@ NSString* GetDefaultBrowserPromoTitle() {
 }
 
 NSString* GetDefaultBrowserLearnMoreText() {
-  if (IsInModifiedStringsGroup()) {
-    return GetNSString(IDS_IOS_DEFAULT_BROWSER_LEARN_MORE_INSTRUCTIONS_MESSAGE);
-  }
     return GetNSString(
         IDS_IOS_DEFAULT_BROWSER_LEARN_MORE_INSTRUCTIONS_MESSAGE_CTA_EXPERIMENT);
 }

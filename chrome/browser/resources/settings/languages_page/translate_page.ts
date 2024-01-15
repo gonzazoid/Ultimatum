@@ -16,22 +16,22 @@ import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classe
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import './add_languages_dialog.js';
 import './languages.js';
-import '../controls/settings_toggle_button.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 
 import {LanguageSettingsActionType, LanguageSettingsMetricsProxy, LanguageSettingsMetricsProxyImpl} from './languages_settings_metrics_proxy.js';
 import {LanguageHelper, LanguagesModel} from './languages_types.js';
 import {getTemplate} from './translate_page.html.js';
 
-const SettingsTranslatePageElementBase = PrefsMixin(PolymerElement);
+const SettingsTranslatePageElementBase = PrefsMixin(I18nMixin(PolymerElement));
 
 export class SettingsTranslatePageElement extends
     SettingsTranslatePageElementBase {
@@ -81,8 +81,8 @@ export class SettingsTranslatePageElement extends
 
   private onTargetLanguageChange_() {
     this.languageHelper.setTranslateTargetLanguage(
-        this.shadowRoot!.querySelector<HTMLSelectElement>('#targetLanguage')!
-            .value);
+        this.shadowRoot!.querySelector<HTMLSelectElement>(
+                            '#targetLanguage')!.value);
     this.languageSettingsMetricsProxy_.recordSettingsMetric(
         LanguageSettingsActionType.CHANGE_TRANSLATE_TARGET);
   }
@@ -91,27 +91,39 @@ export class SettingsTranslatePageElement extends
    * Helper function to get the text to display in the target language drop down
    * list. Returns the display name in the current UI language and the native
    * name of the language.
-  */
+   */
   private getTargetLanguageDisplayOption_(
-        item: chrome.languageSettingsPrivate.Language): string {
+      item: chrome.languageSettingsPrivate.Language): string {
     return this.languageHelper.getFullName(item);
   }
 
   /**
+   * Checks if a Chrome language code is equal to the translate language code.
    * Used in the translate language selector. If the item matches the translate
    * target language, it will set that item as selected.
    */
-  private translateLanguageEqual_(itemCode: string, translateTarget: string):
-      boolean {
-    return itemCode === translateTarget;
+  private translateLanguageEqual_(
+      chromeItemCode: string, translateTarget: string): boolean {
+    return chromeItemCode ===
+        this.languageHelper.convertLanguageCodeForChrome(translateTarget);
   }
 
   /**
    * A function used for sorting languages alphabetically by display name.
    */
-  private alphabeticalSort_(first: chrome.languageSettingsPrivate.Language,
+  private alphabeticalSort_(
+      first: chrome.languageSettingsPrivate.Language,
       second: chrome.languageSettingsPrivate.Language) {
     return first.displayName.localeCompare(second.displayName);
+  }
+
+  /**
+   * A filter function to return true if language is not undefined and has a
+   * displayName.
+   */
+  private hasDisplayName_(language: chrome.languageSettingsPrivate.Language|
+                          undefined): boolean {
+    return !!language && !!language!.displayName;
   }
 
   /**
@@ -143,6 +155,8 @@ export class SettingsTranslatePageElement extends
     const languagesToAdd = e.detail;
     languagesToAdd.forEach(languageCode => {
       this.languageHelper.setLanguageAlwaysTranslateState(languageCode, true);
+      this.languageSettingsMetricsProxy_.recordSettingsMetric(
+          LanguageSettingsActionType.ADD_TO_ALWAYS_TRANSLATE);
     });
   }
 
@@ -153,6 +167,8 @@ export class SettingsTranslatePageElement extends
       e: DomRepeatEvent<chrome.languageSettingsPrivate.Language>) {
     const languageCode = e.model.item.code;
     this.languageHelper.setLanguageAlwaysTranslateState(languageCode, false);
+    this.languageSettingsMetricsProxy_.recordSettingsMetric(
+        LanguageSettingsActionType.REMOVE_FROM_ALWAYS_TRANSLATE);
   }
 
   /**
@@ -180,6 +196,8 @@ export class SettingsTranslatePageElement extends
     const languagesToAdd = e.detail;
     languagesToAdd.forEach(languageCode => {
       this.languageHelper.disableTranslateLanguage(languageCode);
+      this.languageSettingsMetricsProxy_.recordSettingsMetric(
+          LanguageSettingsActionType.ADD_TO_NEVER_TRANSLATE);
     });
   }
 
@@ -190,6 +208,8 @@ export class SettingsTranslatePageElement extends
       e: DomRepeatEvent<chrome.languageSettingsPrivate.Language>) {
     const languageCode = e.model.item.code;
     this.languageHelper.enableTranslateLanguage(languageCode);
+    this.languageSettingsMetricsProxy_.recordSettingsMetric(
+        LanguageSettingsActionType.REMOVE_FROM_NEVER_TRANSLATE);
   }
 
   private onTranslateToggleChange_(e: Event) {

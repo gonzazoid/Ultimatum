@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "storage/browser/file_system/async_file_util.h"
 
 namespace arc {
@@ -50,7 +50,7 @@ class ArcDocumentsProviderAsyncFileUtil : public storage::AsyncFileUtil {
       StatusCallback callback) override;
   void GetFileInfo(std::unique_ptr<storage::FileSystemOperationContext> context,
                    const storage::FileSystemURL& url,
-                   int fields,
+                   GetMetadataFieldSet fields,
                    GetFileInfoCallback callback) override;
   void ReadDirectory(
       std::unique_ptr<storage::FileSystemOperationContext> context,

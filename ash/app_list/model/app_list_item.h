@@ -18,10 +18,10 @@
 #include "base/observer_list.h"
 #include "components/sync/model/string_ordinal.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/views/view.h"
 
 namespace ash {
 enum class AppListConfigType;
+class AppListFolderItem;
 class AppListItemList;
 class AppListItemListTest;
 class AppListItemObserver;
@@ -44,7 +44,8 @@ class APP_LIST_MODEL_EXPORT AppListItem {
   // for the config has not been set using `SetIcon()`. The icon color is
   // associated with the icon so set the icon color when the icon is set.
   void SetDefaultIconAndColor(const gfx::ImageSkia& icon,
-                              const IconColor& color);
+                              const IconColor& color,
+                              bool is_placeholder_icon);
   const gfx::ImageSkia& GetDefaultIcon() const;
 
   // Returns the icon color associated with the default icon.
@@ -58,22 +59,34 @@ class APP_LIST_MODEL_EXPORT AppListItem {
   // and UI would be updated since it also observe ItemIconChanged.
   void SetIconVersion(int icon_version);
 
-  SkColor GetNotificationBadgeColor(views::View* view) const;
+  const gfx::ImageSkia& GetHostBadgeIcon() const;
+  void SetHostBadgeIcon(const gfx::ImageSkia bage_icon);
+
+  SkColor GetNotificationBadgeColor() const;
   void SetNotificationBadgeColor(const SkColor color);
 
-  const std::string& GetDisplayName() const {
-    return short_name_.empty() ? name() : short_name_;
+  // TODO(b/306077411): Refactor all calls to this method to just use the name
+  // directly then delete this method.
+  const std::string& GetDisplayName() const { return name(); }
+
+  // Returns the name to be used as the accessible label for the item.
+  const std::string& GetAccessibleName() {
+    return accessible_name().empty() ? name() : accessible_name();
   }
 
   const std::string& name() const { return metadata_->name; }
-  // Should only be used in tests; otherwise use GetDisplayName().
-  const std::string& short_name() const { return short_name_; }
+  const std::string& accessible_name() const {
+    return metadata_->accessible_name;
+  }
 
   bool IsInFolder() const { return !folder_id().empty(); }
 
   const std::string& id() const { return metadata_->id; }
   const std::string& folder_id() const { return metadata_->folder_id; }
   const syncer::StringOrdinal& position() const { return metadata_->position; }
+  float progress() const { return metadata_->progress; }
+
+  void SetProgress(float progress);
 
   void SetMetadata(std::unique_ptr<AppListItemMetadata> metadata) {
     metadata_ = std::move(metadata);
@@ -85,6 +98,10 @@ class APP_LIST_MODEL_EXPORT AppListItem {
 
   void AddObserver(AppListItemObserver* observer);
   void RemoveObserver(AppListItemObserver* observer);
+
+  // Overrides this function in the child AppListFolderItem class to return
+  // `this`.
+  virtual AppListFolderItem* AsFolderItem();
 
   // Returns a static const char* identifier for the subclass (defaults to "").
   // Pointers can be compared for quick type checking.
@@ -111,14 +128,15 @@ class APP_LIST_MODEL_EXPORT AppListItem {
 
   bool is_folder() const { return metadata_->is_folder; }
 
-  bool is_page_break() const { return metadata_->is_page_break; }
-
   bool has_notification_badge() const { return has_notification_badge_; }
 
   bool is_new_install() const { return metadata_->is_new_install; }
 
   // Sets the `is_new_install` metadata field and notifies observers.
   void SetIsNewInstall(bool is_new_install);
+
+  // Sets the `app_status` metadata field and notifies observers.
+  void SetAppStatus(AppStatus app_status);
 
   AppStatus app_status() const { return metadata_->app_status; }
 
@@ -130,6 +148,10 @@ class APP_LIST_MODEL_EXPORT AppListItem {
     metadata_->app_status = app_status;
   }
 
+  void UpdateAppHostBadgeForTesting(const gfx::ImageSkia fake_badge_icon) {
+    metadata_->badge_icon = fake_badge_icon;
+  }
+
  protected:
   // Subclasses also have mutable access to the metadata ptr.
   AppListItemMetadata* metadata() { return metadata_.get(); }
@@ -137,6 +159,8 @@ class APP_LIST_MODEL_EXPORT AppListItem {
   friend class AppListBadgeController;
   friend class AppListItemList;
   friend class AppListItemListTest;
+  friend class AppListItemViewPixelTestBase;
+  friend class AppListItemViewPixelTest;
   friend class AppListItemViewTest;
   friend class AppListModel;
 
@@ -146,10 +170,8 @@ class APP_LIST_MODEL_EXPORT AppListItem {
   // Sets the full name of the item. Clears any shortened name.
   void SetName(const std::string& name);
 
-  // Sets the full name and an optional shortened name of the item (e.g. to use
-  // if the full name is too long to fit in a view).
-  void SetNameAndShortName(const std::string& name,
-                           const std::string& short_name);
+  // Sets the name to be used as the accessible name for the item.
+  void SetAccessibleName(const std::string& accessible_name);
 
   // Updates whether the notification badge is shown on the view.
   void UpdateNotificationBadge(bool has_badge);
@@ -175,9 +197,6 @@ class APP_LIST_MODEL_EXPORT AppListItem {
   // This is currently used for folder icons only (which are all generated in
   // ash).
   std::map<AppListConfigType, gfx::ImageSkia> per_config_icons_;
-
-  // A shortened name for the item, used for display.
-  std::string short_name_;
 
   // Whether this item currently has a notification badge that should be shown.
   bool has_notification_badge_ = false;

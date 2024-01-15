@@ -7,10 +7,15 @@
 
 #include <windows.h>
 
+#include <optional>
+
 #include "base/command_line.h"
 #include "chrome/updater/win/installer/exit_code.h"
 #include "chrome/updater/win/installer/string.h"
-#include "chrome/updater/win/ui/l10n_util.h"
+
+namespace base {
+class FilePath;
+}  // namespace base
 
 namespace updater {
 
@@ -27,9 +32,18 @@ struct ProcessExitResult {
   bool IsSuccess() const { return exit_code == SUCCESS_EXIT_CODE; }
 };
 
+inline constexpr size_t kInstallerMaxCommandString = MAX_PATH * 4;
+
 // A stack-based string large enough to hold an executable to run
 // (which is a path), plus a few extra arguments.
-using CommandString = StackString<MAX_PATH * 4>;
+using CommandString = StackString<kInstallerMaxCommandString>;
+
+std::optional<base::FilePath> FindOfflineDir(const base::FilePath& unpack_path);
+
+ProcessExitResult BuildInstallerCommandLineArguments(
+    const wchar_t* cmd_line,
+    wchar_t* cmd_line_args,
+    size_t cmd_line_args_capacity);
 
 // Handles elevating the installer, waiting for the installer process, and
 // returning the resulting process exit code.

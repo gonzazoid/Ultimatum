@@ -4,32 +4,76 @@
 
 #include "media/gpu/chromeos/mailbox_video_frame_converter.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/scheduler.h"
-#include "gpu/ipc/common/gpu_client_ids.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "media/base/format_utils.h"
-#include "media/base/video_frame.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_util.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/gpu/macros.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gl/gl_bindings.h"
 
-namespace media {
-
 namespace {
 
-constexpr GLenum kTextureTarget = GL_TEXTURE_EXTERNAL_OES;
+// Based on `buffer_format` support by VideoPixelFormatToGfxBufferFormat.
+viz::SharedImageFormat GetSharedImageFormat(gfx::BufferFormat buffer_format) {
+  viz::SharedImageFormat format;
+  switch (buffer_format) {
+    case gfx::BufferFormat::RGBA_8888:
+      format = viz::SinglePlaneFormat::kRGBA_8888;
+      break;
+    case gfx::BufferFormat::RGBX_8888:
+      format = viz::SinglePlaneFormat::kRGBX_8888;
+      break;
+    case gfx::BufferFormat::BGRA_8888:
+      format = viz::SinglePlaneFormat::kBGRA_8888;
+      break;
+    case gfx::BufferFormat::BGRX_8888:
+      format = viz::SinglePlaneFormat::kBGRX_8888;
+      break;
+    case gfx::BufferFormat::YVU_420:
+      format = viz::MultiPlaneFormat::kYV12;
+      break;
+    case gfx::BufferFormat::YUV_420_BIPLANAR:
+      format = viz::MultiPlaneFormat::kNV12;
+      break;
+    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
+      format = viz::MultiPlaneFormat::kNV12A;
+      break;
+    case gfx::BufferFormat::P010:
+      format = viz::MultiPlaneFormat::kP010;
+      break;
+    default:
+      DLOG(WARNING) << "Unsupported buffer_format: "
+                    << static_cast<int>(buffer_format);
+      NOTREACHED_NORETURN();
+  }
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+  // If format is true multiplanar format, we prefer external sampler on
+  // ChromeOS and Linux.
+  if (format.is_multi_plane()) {
+    format.SetPrefersExternalSampler();
+  }
+#endif
+  return format;
+}
 
-}  // anonymous namespace
+}  // namespace
+
+namespace media {
 
 class GpuDelegateImpl : public MailboxVideoFrameConverter::GpuDelegate {
  public:
@@ -55,12 +99,24 @@ class GpuDelegateImpl : public MailboxVideoFrameConverter::GpuDelegate {
     return !!gpu_channel_;
   }
 
+  absl::optional<gpu::SharedImageCapabilities> GetCapabilities() override {
+    DCHECK(gpu_task_runner_->BelongsToCurrentThread());
+    if (!gpu_channel_) {
+      return absl::nullopt;
+    }
+
+    gpu::SharedImageStub* shared_image_stub = gpu_channel_->shared_image_stub();
+    DCHECK(shared_image_stub);
+    gpu::SharedImageFactory* factory = shared_image_stub->factory();
+    CHECK(factory);
+    return factory->MakeCapabilities();
+  }
+
   gpu::SharedImageStub::SharedImageDestructionCallback CreateSharedImage(
       const gpu::Mailbox& mailbox,
       gfx::GpuMemoryBufferHandle handle,
       gfx::BufferFormat format,
       gfx::BufferPlane plane,
-      gpu::SurfaceHandle surface_handle,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
@@ -75,9 +131,35 @@ class GpuDelegateImpl : public MailboxVideoFrameConverter::GpuDelegate {
     DCHECK(shared_image_stub);
 
     if (!shared_image_stub->CreateSharedImage(
-            mailbox, gpu::kPlatformVideoFramePoolClientId, std::move(handle),
-            format, plane, surface_handle, size, color_space, surface_origin,
-            alpha_type, usage)) {
+            mailbox, std::move(handle), format, plane, size, color_space,
+            surface_origin, alpha_type, usage, "MailboxVideoFrameConverter")) {
+      return base::NullCallback();
+    }
+
+    return shared_image_stub->GetSharedImageDestructionCallback(mailbox);
+  }
+
+  gpu::SharedImageStub::SharedImageDestructionCallback CreateSharedImage(
+      const gpu::Mailbox& mailbox,
+      gfx::GpuMemoryBufferHandle handle,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage) override {
+    DCHECK(gpu_task_runner_->BelongsToCurrentThread());
+
+    if (!gpu_channel_) {
+      return base::NullCallback();
+    }
+
+    gpu::SharedImageStub* shared_image_stub = gpu_channel_->shared_image_stub();
+    DCHECK(shared_image_stub);
+
+    if (!shared_image_stub->CreateSharedImage(
+            mailbox, std::move(handle), format, size, color_space,
+            surface_origin, alpha_type, usage, "MailboxVideoFrameConverter")) {
       return base::NullCallback();
     }
 
@@ -180,11 +262,9 @@ class MailboxVideoFrameConverter::ScopedSharedImage {
 };
 
 // static
-std::unique_ptr<VideoFrameConverter> MailboxVideoFrameConverter::Create(
-    UnwrapFrameCB unwrap_frame_cb,
+std::unique_ptr<MailboxVideoFrameConverter> MailboxVideoFrameConverter::Create(
     scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner,
-    GetCommandBufferStubCB get_stub_cb,
-    bool enable_unsafe_webgpu) {
+    GetCommandBufferStubCB get_stub_cb) {
   DCHECK(gpu_task_runner);
   DCHECK(get_stub_cb);
 
@@ -200,24 +280,26 @@ std::unique_ptr<VideoFrameConverter> MailboxVideoFrameConverter::Create(
   auto gpu_delegate = std::make_unique<GpuDelegateImpl>(
       gpu_task_runner, std::move(get_gpu_channel_cb));
 
-  return base::WrapUnique<VideoFrameConverter>(new MailboxVideoFrameConverter(
-      std::move(unwrap_frame_cb), std::move(gpu_task_runner),
-      std::move(gpu_delegate), enable_unsafe_webgpu));
+  return base::WrapUnique(new MailboxVideoFrameConverter(
+      std::move(gpu_task_runner), std::move(gpu_delegate)));
 }
 
 MailboxVideoFrameConverter::MailboxVideoFrameConverter(
-    UnwrapFrameCB unwrap_frame_cb,
     scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner,
-    std::unique_ptr<GpuDelegate> gpu_delegate,
-    bool enable_unsafe_webgpu)
-    : unwrap_frame_cb_(std::move(unwrap_frame_cb)),
-      gpu_task_runner_(std::move(gpu_task_runner)),
-      gpu_delegate_(std::move(gpu_delegate)),
-      enable_unsafe_webgpu_(enable_unsafe_webgpu) {
+    std::unique_ptr<GpuDelegate> gpu_delegate)
+    : gpu_task_runner_(std::move(gpu_task_runner)),
+      gpu_delegate_(std::move(gpu_delegate)) {
   DVLOGF(2);
 
   parent_weak_this_ = parent_weak_this_factory_.GetWeakPtr();
   gpu_weak_this_ = gpu_weak_this_factory_.GetWeakPtr();
+}
+
+void MailboxVideoFrameConverter::Initialize(
+    scoped_refptr<base::SequencedTaskRunner> parent_task_runner,
+    OutputCB output_cb) {
+  parent_task_runner_ = std::move(parent_task_runner);
+  output_cb_ = std::move(output_cb);
 }
 
 void MailboxVideoFrameConverter::Destroy() {
@@ -271,10 +353,11 @@ void MailboxVideoFrameConverter::ConvertFrame(scoped_refptr<VideoFrame> frame) {
 
   input_frame_queue_.emplace(frame, origin_frame_id);
 
-  // |frame| keeps a refptr of |origin_frame|. |origin_frame| is guaranteed
-  // alive by carrying |frame|. |origin_frame| owns the SharedImage, so as long
-  // as |frame| lives, |shared_image| is valid. Hence, it's safe to use
-  // base::Unretained here.
+  // Either |frame| keeps a refptr of |origin_frame| or |origin_frame| points to
+  // the same thing as |frame|. Therefore, |origin_frame| is guaranteed to be
+  // valid by carrying |frame|. Additionally, |origin_frame| owns the
+  // SharedImage, so as long as |frame| lives, |shared_image| is valid. Hence,
+  // it's safe to use base::Unretained here.
   gpu_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&MailboxVideoFrameConverter::ConvertFrameOnGPUThread,
@@ -300,14 +383,29 @@ void MailboxVideoFrameConverter::WrapMailboxAndVideoFrameAndOutput(
     return;
   input_frame_queue_.pop();
 
+  const auto buffer_format = VideoPixelFormatToGfxBufferFormat(frame->format());
+  // GenerateSharedImageOnGPUThread() should have checked the |origin_frame|'s
+  // format (which should be the same as the |frame|'s format).
+  CHECK_EQ(frame->format(), origin_frame->format());
+  CHECK(buffer_format);
+
   gpu::MailboxHolder mailbox_holders[VideoFrame::kMaxPlanes];
+
   mailbox_holders[0] =
-      gpu::MailboxHolder(mailbox, gpu::SyncToken(), kTextureTarget);
+      gpu::MailboxHolder(mailbox, gpu::SyncToken(),
+                         gpu::NativeBufferNeedsPlatformSpecificTextureTarget(
+                             *buffer_format, gfx::BufferPlane::DEFAULT)
+                             ? gpu::GetPlatformSpecificTextureTarget()
+                             : GL_TEXTURE_2D);
 
   VideoFrame::ReleaseMailboxCB release_mailbox_cb = base::BindOnce(
       [](scoped_refptr<base::SequencedTaskRunner> gpu_task_runner,
          base::WeakPtr<MailboxVideoFrameConverter> gpu_weak_ptr,
          scoped_refptr<VideoFrame> frame, const gpu::SyncToken& sync_token) {
+        if (!sync_token.HasData()) {
+          return;
+        }
+
         if (gpu_task_runner->RunsTasksInCurrentSequence()) {
           if (gpu_weak_ptr) {
             gpu_weak_ptr->WaitOnSyncTokenAndReleaseFrameOnGPUThread(
@@ -340,12 +438,18 @@ void MailboxVideoFrameConverter::WrapMailboxAndVideoFrameAndOutput(
   mailbox_frame->set_hdr_metadata(frame->hdr_metadata());
   mailbox_frame->set_metadata(frame->metadata());
   mailbox_frame->set_ycbcr_info(frame->ycbcr_info());
+  if (IsMultiPlaneFormatForHardwareVideoEnabled()) {
+    auto si_format = GetSharedImageFormat(*buffer_format);
+    mailbox_frame->set_shared_image_format_type(
+        media::SharedImageFormatType::kSharedImageFormat);
+    if (si_format.PrefersExternalSampler()) {
+      mailbox_frame->set_shared_image_format_type(
+          media::SharedImageFormatType::kSharedImageFormatExternalSampler);
+    }
+  }
   mailbox_frame->metadata().read_lock_fences_enabled = true;
-  // We use origin_frame->metadata().is_webgpu_compatible instead of
-  // frame->metadata().is_webgpu_compatible because the PlatformVideoFramePool
-  // clears the metadata of the outer frame.
   mailbox_frame->metadata().is_webgpu_compatible =
-      enable_unsafe_webgpu_ && origin_frame->metadata().is_webgpu_compatible;
+      frame->metadata().is_webgpu_compatible;
 
   output_cb_.Run(mailbox_frame);
 }
@@ -360,7 +464,7 @@ void MailboxVideoFrameConverter::ConvertFrameOnGPUThread(
   const gfx::ColorSpace src_color_space = frame->ColorSpace();
   const gfx::Rect visible_rect = frame->visible_rect();
 
-  // |origin_frame| is kept alive by |frame|.
+  // |origin_frame| is valid as long as |frame| is carried.
   auto wrap_mailbox_and_video_frame_and_output_cb = base::BindOnce(
       &MailboxVideoFrameConverter::WrapMailboxAndVideoFrameAndOutput,
       parent_weak_this_, base::Unretained(origin_frame), std::move(frame));
@@ -399,7 +503,7 @@ void MailboxVideoFrameConverter::ConvertFrameOnGPUThread(
   DCHECK(new_shared_image->HasData());
 
   const gpu::Mailbox mailbox = new_shared_image->mailbox();
-  // |origin_frame| is kept alive by |frame| in
+  // |origin_frame| is valid as long as |frame| lives. |frame| is kept alive in
   // |wrap_mailbox_and_video_frame_and_output_cb|.
   parent_task_runner_->PostTask(
       FROM_HERE,
@@ -451,19 +555,36 @@ bool MailboxVideoFrameConverter::GenerateSharedImageOnGPUThread(
   const gfx::Size shared_image_size =
       GetRectSizeFromOrigin(destination_visible_rect);
 
+  const absl::optional<gpu::SharedImageCapabilities> shared_image_caps =
+      gpu_delegate_->GetCapabilities();
+
+  if (!shared_image_caps.has_value()) {
+    OnError(FROM_HERE, "Can't get the SharedImageCapabilities");
+    return false;
+  }
+
   // The allocated SharedImages should be usable for the (Display) compositor
   // and, potentially, for overlays (Scanout).
   uint32_t shared_image_usage =
       gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_SCANOUT;
-  if (enable_unsafe_webgpu_ && video_frame->metadata().is_webgpu_compatible)
+  if (video_frame->metadata().is_webgpu_compatible &&
+      !shared_image_caps->disable_webgpu_shared_images) {
     shared_image_usage |= gpu::SHARED_IMAGE_USAGE_WEBGPU;
+  }
 
-  gpu::SharedImageStub::SharedImageDestructionCallback destroy_shared_image_cb =
-      gpu_delegate_->CreateSharedImage(
-          mailbox, std::move(gpu_memory_buffer_handle), *buffer_format,
-          gfx::BufferPlane::DEFAULT, gpu::kNullSurfaceHandle, shared_image_size,
-          src_color_space, kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-          shared_image_usage);
+  gpu::SharedImageStub::SharedImageDestructionCallback destroy_shared_image_cb;
+  if (IsMultiPlaneFormatForHardwareVideoEnabled()) {
+    destroy_shared_image_cb = gpu_delegate_->CreateSharedImage(
+        mailbox, std::move(gpu_memory_buffer_handle),
+        GetSharedImageFormat(*buffer_format), shared_image_size,
+        src_color_space, kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
+        shared_image_usage);
+  } else {
+    destroy_shared_image_cb = gpu_delegate_->CreateSharedImage(
+        mailbox, std::move(gpu_memory_buffer_handle), *buffer_format,
+        gfx::BufferPlane::DEFAULT, shared_image_size, src_color_space,
+        kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, shared_image_usage);
+  }
   if (destroy_shared_image_cb.is_null()) {
     OnError(FROM_HERE, "Failed to create shared image.");
     return false;
@@ -553,6 +674,12 @@ bool MailboxVideoFrameConverter::HasPendingFrames() const {
   return !input_frame_queue_.empty();
 }
 
+void MailboxVideoFrameConverter::set_unwrap_frame_cb(
+    UnwrapFrameCB unwrap_frame_cb) {
+  DCHECK(parent_task_runner_->RunsTasksInCurrentSequence());
+  unwrap_frame_cb_ = std::move(unwrap_frame_cb);
+}
+
 void MailboxVideoFrameConverter::OnError(const base::Location& location,
                                          const std::string& msg) {
   VLOGF(1) << "(" << location.ToString() << ") " << msg;
@@ -567,3 +694,12 @@ void MailboxVideoFrameConverter::OnError(const base::Location& location,
 }
 
 }  // namespace media
+
+namespace std {
+
+void default_delete<media::MailboxVideoFrameConverter>::operator()(
+    media::MailboxVideoFrameConverter* ptr) const {
+  ptr->Destroy();
+}
+
+}  // namespace std

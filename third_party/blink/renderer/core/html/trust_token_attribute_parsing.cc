@@ -3,19 +3,18 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/trust_token_attribute_parsing.h"
+#include "base/logging.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_trust_token.h"
 #include "third_party/blink/renderer/core/fetch/trust_token_to_mojom.h"
 #include "third_party/blink/renderer/platform/json/json_values.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
-namespace blink {
-
-namespace internal {
+namespace blink::internal {
 
 namespace {
-bool ParseType(const String& in, network::mojom::TrustTokenOperationType* out) {
+bool ParseOperation(const String& in,
+                    network::mojom::TrustTokenOperationType* out) {
   if (in == "token-request") {
     *out = network::mojom::TrustTokenOperationType::kIssuance;
     return true;
@@ -54,12 +53,27 @@ network::mojom::blink::TrustTokenParamsPtr TrustTokenParamsFromJson(
 
   auto ret = network::mojom::blink::TrustTokenParams::New();
 
-  // |type| is required.
-  String type;
-  if (!object->GetString("type", &type))
+  // |version| is required, though unused.
+  int version;
+  if (!object->GetInteger("version", &version)) {
+    LOG(WARNING) << "expected integer trust token version, got none";
     return nullptr;
-  if (!ParseType(type, &ret->type))
+  }
+  // Although we don't use the version number internally, it's still the case
+  // that we only understand version 1.
+  if (version != 1) {
+    LOG(WARNING) << "expected trust token version 1, got " << version;
     return nullptr;
+  }
+
+  // |operation| is required.
+  String operation;
+  if (!object->GetString("operation", &operation)) {
+    return nullptr;
+  }
+  if (!ParseOperation(operation, &ret->operation)) {
+    return nullptr;
+  }
 
   // |refreshPolicy| is optional.
   if (JSONValue* refresh_policy = object->Get("refreshPolicy")) {
@@ -98,5 +112,4 @@ network::mojom::blink::TrustTokenParamsPtr TrustTokenParamsFromJson(
   return ret;
 }
 
-}  // namespace internal
-}  // namespace blink
+}  // namespace blink::internal

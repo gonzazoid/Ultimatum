@@ -6,12 +6,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
@@ -20,7 +20,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -411,7 +410,7 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest, DNSError_DoReload) {
 
   // Clicking the reload button should load the error page again.
   content::TestNavigationObserver nav_observer(web_contents, 1);
-  // Can't use content::ExecuteScript because it waits for scripts to send
+  // Can't use content::ExecJs because it waits for scripts to send
   // notification that they've run, and scripts that trigger a navigation may
   // not send that notification.
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
@@ -444,7 +443,7 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest,
 
   // Clicking the reload button should load the error page again.
   content::TestNavigationObserver nav_observer2(web_contents);
-  // Can't use content::ExecuteScript because it waits for scripts to send
+  // Can't use content::ExecJs because it waits for scripts to send
   // notification that they've run, and scripts that trigger a navigation may
   // not send that notification.
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
@@ -698,7 +697,7 @@ class ErrorPageAutoReloadTest : public InProcessBrowserTest {
     web_contents->GetController().LoadURL(url, content::Referrer(),
                                           ui::PAGE_TRANSITION_TYPED,
                                           /*extra_headers=*/std::string());
-    first_navigation.WaitForNavigationFinished();
+    ASSERT_TRUE(first_navigation.WaitForNavigationFinished());
     EXPECT_TRUE(first_navigation.was_committed());
     EXPECT_FALSE(first_navigation.was_successful());
 
@@ -706,7 +705,7 @@ class ErrorPageAutoReloadTest : public InProcessBrowserTest {
     // This should not be committed.
     content::TestNavigationManager failed_auto_reload_navigation(web_contents,
                                                                  url);
-    failed_auto_reload_navigation.WaitForNavigationFinished();
+    ASSERT_TRUE(failed_auto_reload_navigation.WaitForNavigationFinished());
     EXPECT_FALSE(failed_auto_reload_navigation.was_committed());
   }
 

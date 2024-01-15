@@ -12,17 +12,12 @@
 #import "ios/chrome/app/application_delegate/startup_information.h"
 #import "ios/chrome/app/enterprise_loading_screen_view_controller.h"
 #import "ios/chrome/app/tests_hook.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/policy/browser_policy_connector_ios.h"
-#import "ios/chrome/browser/policy/chrome_browser_cloud_management_controller_ios.h"
-#import "ios/chrome/browser/policy/chrome_browser_cloud_management_controller_observer_bridge.h"
-#import "ios/chrome/browser/policy/cloud_policy_client_observer_bridge.h"
-#import "ios/chrome/browser/ui/first_run/first_run_util.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/policy/model/browser_policy_connector_ios.h"
+#import "ios/chrome/browser/policy/model/chrome_browser_cloud_management_controller_ios.h"
+#import "ios/chrome/browser/policy/model/chrome_browser_cloud_management_controller_observer_bridge.h"
+#import "ios/chrome/browser/policy/model/cloud_policy_client_observer_bridge.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
 
 namespace {
 
@@ -74,17 +69,6 @@ constexpr CGFloat kTimeout = 30;
 }
 
 #pragma mark - AppStateObserver
-
-- (void)appState:(AppState*)appState
-    willTransitionToInitStage:(InitStage)nextInitStage {
-  if (nextInitStage != InitStageEnterprise) {
-    return;
-  }
-
-  // Ensure to have the information available on time.
-  self.appState.startupInformation.isFirstRun =
-      ShouldPresentFirstRunExperience();
-}
 
 - (void)appState:(AppState*)appState sceneConnected:(SceneState*)sceneState {
   [sceneState addObserver:self];

@@ -10,10 +10,6 @@
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 // This test fixture creates an IOSSecurityStateTabHelper, then loads a
 // non-secure HTML document.
 class SecurityStateUtilsTest : public web::WebTestWithWebState {
@@ -42,8 +38,7 @@ TEST_F(SecurityStateUtilsTest, GetMaliciousContentStatus) {
             safe_browsing::SB_THREAT_TYPE_URL_PHISHING,
             safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING}},
           {security_state::MALICIOUS_CONTENT_STATUS_MALWARE,
-           {safe_browsing::SB_THREAT_TYPE_URL_MALWARE,
-            safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE}},
+           {safe_browsing::SB_THREAT_TYPE_URL_MALWARE}},
           {security_state::MALICIOUS_CONTENT_STATUS_UNWANTED_SOFTWARE,
            {safe_browsing::SB_THREAT_TYPE_URL_UNWANTED}},
           {security_state::MALICIOUS_CONTENT_STATUS_BILLING,

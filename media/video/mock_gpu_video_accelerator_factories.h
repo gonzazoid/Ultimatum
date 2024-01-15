@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "media/video/gpu_video_accelerator_factories.h"
@@ -99,7 +99,8 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
   std::unique_ptr<VideoEncodeAccelerator> CreateVideoEncodeAccelerator()
       override;
 
-  const std::vector<gfx::GpuMemoryBuffer*>& created_memory_buffers() {
+  const std::vector<raw_ptr<gfx::GpuMemoryBuffer, VectorExperimental>>&
+  created_memory_buffers() {
     return created_memory_buffers_;
   }
 
@@ -113,7 +114,8 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
 
   raw_ptr<gpu::SharedImageInterface> sii_;
 
-  std::vector<gfx::GpuMemoryBuffer*> created_memory_buffers_;
+  std::vector<raw_ptr<gfx::GpuMemoryBuffer, VectorExperimental>>
+      created_memory_buffers_;
 };
 
 }  // namespace media

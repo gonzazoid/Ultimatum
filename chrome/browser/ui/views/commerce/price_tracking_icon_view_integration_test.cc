@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/bookmarks/managed_bookmark_service_factory.h"
 #include "chrome/browser/commerce/shopping_service_factory.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/commerce/price_tracking/mock_shopping_list_ui_tab_helper.h"
+#include "chrome/browser/ui/commerce/mock_commerce_ui_tab_helper.h"
 #include "chrome/browser/ui/views/commerce/price_tracking_bubble_dialog_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
@@ -22,6 +22,7 @@
 #include "components/bookmarks/test/bookmark_test_helpers.h"
 #include "components/commerce/core/commerce_feature_list.h"
 #include "components/commerce/core/mock_shopping_service.h"
+#include "components/commerce/core/price_tracking_utils.h"
 #include "components/commerce/core/test_utils.h"
 #include "components/omnibox/browser/vector_icons.h"
 #include "components/strings/grit/components_strings.h"
@@ -93,6 +94,11 @@ class PriceTrackingIconViewIntegrationTest : public TestWithBrowserView {
   }
 
   void SimulateServerPriceTrackState(bool is_price_tracked) {
+    // Ensure the tab helper has the correct value from the "server" before the
+    // meta event is triggered.
+    ON_CALL(*GetTabHelper(), IsPriceTracking)
+        .WillByDefault(testing::Return(is_price_tracked));
+
     bookmarks::BookmarkModel* bookmark_model =
         BookmarkModelFactory::GetForBrowserContext(browser()->profile());
     bookmarks::test::WaitForBookmarkModelToLoad(bookmark_model);
@@ -102,6 +108,16 @@ class PriceTrackingIconViewIntegrationTest : public TestWithBrowserView {
 
     commerce::AddProductBookmark(bookmark_model, u"title", GURL(kTrackableUrl),
                                  0, is_price_tracked);
+  }
+
+  void SimulateSubscriptionChangeEvent(bool is_subscribed) {
+    if (is_subscribed) {
+      GetTabHelper()->GetPriceTrackingControllerForTesting()->OnSubscribe(
+          commerce::BuildUserSubscriptionForClusterId(0L), true);
+    } else {
+      GetTabHelper()->GetPriceTrackingControllerForTesting()->OnUnsubscribe(
+          commerce::BuildUserSubscriptionForClusterId(0L), true);
+    }
   }
 
   void VerifyIconState(PriceTrackingIconView* icon_view,
@@ -124,20 +140,20 @@ class PriceTrackingIconViewIntegrationTest : public TestWithBrowserView {
     }
   }
 
-  MockShoppingListUiTabHelper* GetTabHelper() { return mock_tab_helper_.get(); }
+  MockCommerceUiTabHelper* GetTabHelper() { return mock_tab_helper_.get(); }
 
  protected:
-  raw_ptr<MockShoppingListUiTabHelper> mock_tab_helper_;
+  raw_ptr<MockCommerceUiTabHelper, DanglingUntriaged> mock_tab_helper_;
   base::UserActionTester user_action_tester_;
 
  private:
   base::test::ScopedFeatureList test_features_;
 
-  MockShoppingListUiTabHelper* AttachTabHelperToWebContents(
+  MockCommerceUiTabHelper* AttachTabHelperToWebContents(
       content::WebContents* web_contents) {
-    MockShoppingListUiTabHelper::CreateForWebContents(web_contents);
-    return static_cast<MockShoppingListUiTabHelper*>(
-        MockShoppingListUiTabHelper::FromWebContents(web_contents));
+    MockCommerceUiTabHelper::CreateForWebContents(web_contents);
+    return static_cast<MockCommerceUiTabHelper*>(
+        MockCommerceUiTabHelper::FromWebContents(web_contents));
   }
 };
 
@@ -180,29 +196,13 @@ TEST_F(PriceTrackingIconViewIntegrationTest,
   EXPECT_FALSE(icon_view->GetVisible());
 }
 
-TEST_F(PriceTrackingIconViewIntegrationTest, IconUpdatedWhenRemoveBookmark) {
+TEST_F(PriceTrackingIconViewIntegrationTest,
+       IconUpdatedWhenSubscriptionChanged) {
   SimulateServerPriceTrackState(/*is_price_tracked=*/true);
 
   ON_CALL(*GetTabHelper(), ShouldShowPriceTrackingIconView)
       .WillByDefault(testing::Return(true));
-
-  NavigateAndCommitActiveTab(GURL(kTrackableUrl));
-
-  auto* icon_view = GetChip();
-  VerifyIconState(icon_view, /*is_price_tracked=*/true);
-
-  // Simulate removed bookmark.
-  bookmarks::BookmarkModel* bookmark_model =
-      BookmarkModelFactory::GetForBrowserContext(browser()->profile());
-  bookmarks::RemoveAllBookmarks(bookmark_model, GURL(kTrackableUrl));
-
-  VerifyIconState(icon_view, /*is_price_tracked=*/false);
-}
-
-TEST_F(PriceTrackingIconViewIntegrationTest, IconUpdatedWhenMetaDataChanged) {
-  SimulateServerPriceTrackState(/*is_price_tracked=*/true);
-
-  ON_CALL(*GetTabHelper(), ShouldShowPriceTrackingIconView)
+  ON_CALL(*GetTabHelper(), IsPriceTracking)
       .WillByDefault(testing::Return(true));
 
   NavigateAndCommitActiveTab(GURL(kTrackableUrl));
@@ -212,6 +212,7 @@ TEST_F(PriceTrackingIconViewIntegrationTest, IconUpdatedWhenMetaDataChanged) {
 
   // Simulate meta data changed.
   SimulateServerPriceTrackState(false);
+  SimulateSubscriptionChangeEvent(false);
 
   VerifyIconState(icon_view, /*is_price_tracked=*/false);
 }

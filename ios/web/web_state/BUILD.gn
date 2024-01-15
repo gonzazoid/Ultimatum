@@ -9,10 +9,13 @@ source_set("web_state") {
     ":policy_decision_state_tracker",
     ":web_state_impl_header",
     "//base",
+    "//build:blink_buildflags",
+    "//components/security_state/core",
     "//ios/third_party/webkit",
     "//ios/web/common",
     "//ios/web/js_messaging",
     "//ios/web/js_messaging:java_script_feature",
+    "//ios/web/js_messaging:web_view_js_utils",
     "//ios/web/navigation",
     "//ios/web/navigation:core",
     "//ios/web/navigation:wk_navigation_util",
@@ -21,8 +24,9 @@ source_set("web_state") {
     "//ios/web/public/js_messaging",
     "//ios/web/public/security",
     "//ios/web/public/session",
+    "//ios/web/public/session/proto",
+    "//ios/web/public/session/proto:proto_util",
     "//ios/web/public/webui",
-    "//ios/web/security",
     "//ios/web/security",
     "//ios/web/session",
     "//ios/web/web_state/ui",
@@ -33,6 +37,10 @@ source_set("web_state") {
     "//ui/gfx",
   ]
 
+  if (use_blink) {
+    deps += [ "//ios/web/content" ]
+  }
+
   sources = [
     "global_web_state_event_tracker.h",
     "global_web_state_event_tracker.mm",
@@ -40,6 +48,8 @@ source_set("web_state") {
     "web_state.mm",
     "web_state_delegate.mm",
     "web_state_delegate_bridge.mm",
+    "web_state_factory.mm",
+    "web_state_id.cc",
     "web_state_impl.mm",
     "web_state_impl_realized_web_state.h",
     "web_state_impl_realized_web_state.mm",
@@ -52,35 +62,16 @@ source_set("web_state") {
   ]
 
   frameworks = [ "QuartzCore.framework" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("web_state_impl_header") {
   deps = [
     "//base",
-    "//ios/web/js_messaging:web_frames_manager_impl_header",
     "//ios/web/navigation:core",
     "//ios/web/public",
   ]
 
   sources = [ "web_state_impl.h" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
-}
-
-source_set("page_viewport_state") {
-  deps = [
-    "//base",
-    "//net",
-  ]
-
-  sources = [
-    "page_viewport_state.h",
-    "page_viewport_state.mm",
-  ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("web_view_internal_creation_util") {
@@ -99,8 +90,6 @@ source_set("web_view_internal_creation_util") {
     "web_view_internal_creation_util.h",
     "web_view_internal_creation_util.mm",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("user_interaction") {
@@ -115,8 +104,6 @@ source_set("user_interaction") {
     "//ios/third_party/webkit",
     "//url",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("policy_decision_state_tracker") {
@@ -129,8 +116,6 @@ source_set("policy_decision_state_tracker") {
     "//base",
     "//ios/web/public",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("test_util") {
@@ -142,6 +127,4 @@ source_set("test_util") {
   ]
 
   deps = [ "//ios/web/public/navigation" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

@@ -7,8 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_errors.h"
 #include "net/base/net_export.h"
@@ -24,6 +23,7 @@ class NET_EXPORT_PRIVATE SourceStream {
     TYPE_BROTLI,
     TYPE_DEFLATE,
     TYPE_GZIP,
+    TYPE_ZSTD,
     TYPE_UNKNOWN,
     TYPE_NONE,
   };

@@ -11,8 +11,8 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
@@ -80,7 +80,6 @@ class COMPONENTS_PREFS_EXPORT SegregatedPrefStore : public PersistentPrefStore {
       base::OnceClosure synchronous_done_callback =
           base::OnceClosure()) override;
   void SchedulePendingLossyWrites() override;
-  void ClearMutableValues() override;
   void OnStoreDeletionFromDisk() override;
 
  protected:

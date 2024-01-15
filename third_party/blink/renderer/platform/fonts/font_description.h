@@ -36,22 +36,25 @@
 #include "third_party/blink/renderer/platform/fonts/font_orientation.h"
 #include "third_party/blink/renderer/platform/fonts/font_palette.h"
 #include "third_party/blink/renderer/platform/fonts/font_selection_types.h"
+#include "third_party/blink/renderer/platform/fonts/font_size_adjust.h"
 #include "third_party/blink/renderer/platform/fonts/font_smoothing_mode.h"
+#include "third_party/blink/renderer/platform/fonts/font_variant_alternates.h"
 #include "third_party/blink/renderer/platform/fonts/font_variant_east_asian.h"
 #include "third_party/blink/renderer/platform/fonts/font_variant_numeric.h"
 #include "third_party/blink/renderer/platform/fonts/font_width_variant.h"
 #include "third_party/blink/renderer/platform/fonts/opentype/font_settings.h"
+#include "third_party/blink/renderer/platform/fonts/shaping/text_spacing_trim.h"
 #include "third_party/blink/renderer/platform/fonts/text_rendering_mode.h"
 #include "third_party/blink/renderer/platform/fonts/typesetting_features.h"
 #include "third_party/blink/renderer/platform/text/layout_locale.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/skia/include/core/SkFontStyle.h"
 
 namespace blink {
 
-const float kFontSizeAdjustNone = -1;
 typedef struct { uint32_t parts[2]; } FieldsAsUnsignedType;
 
 class PLATFORM_EXPORT FontDescription {
@@ -115,6 +118,13 @@ class PLATFORM_EXPORT FontDescription {
   };
   static String ToString(FontSynthesisSmallCaps);
 
+  enum FontVariantPosition {
+    kNormalVariantPosition,
+    kSubVariantPosition,
+    kSuperVariantPosition
+  };
+  static String ToString(FontVariantPosition);
+
   FontDescription();
   FontDescription(const FontDescription&);
 
@@ -144,6 +154,11 @@ class PLATFORM_EXPORT FontDescription {
     unsigned discretionary : 2;
     unsigned historical : 2;
     unsigned contextual : 2;
+
+    bool operator==(const VariantLigatures& other) const {
+      return common == other.common && discretionary == other.discretionary
+        && historical == other.historical && contextual == other.contextual;
+    }
   };
 
   struct Size {
@@ -198,8 +213,8 @@ class PLATFORM_EXPORT FontDescription {
   // them for better clarity.
 
   // For CSS font-size-adjust property
-  float SizeAdjust() const { return size_adjust_; }
-  bool HasSizeAdjust() const { return size_adjust_ != kFontSizeAdjustNone; }
+  FontSizeAdjust SizeAdjust() const { return size_adjust_; }
+  bool HasSizeAdjust() const { return !!size_adjust_; }
 
   // Return a copy with the size-adjust descriptor applied.
   // https://drafts.csswg.org/css-fonts-5/#descdef-font-face-size-adjust
@@ -233,6 +248,9 @@ class PLATFORM_EXPORT FontDescription {
            Family().FamilyName() == font_family_names::kMonospace;
   }
   Kerning GetKerning() const { return static_cast<Kerning>(fields_.kerning_); }
+  TextSpacingTrim GetTextSpacingTrim() const {
+    return static_cast<TextSpacingTrim>(fields_.text_spacing_trim_);
+  }
   FontVariantEastAsian VariantEastAsian() const {
     return FontVariantEastAsian::InitializeFromUnsigned(
         fields_.variant_east_asian_);
@@ -261,6 +279,9 @@ class PLATFORM_EXPORT FontDescription {
     return static_cast<OpticalSizing>(fields_.font_optical_sizing_);
   }
   FontPalette* GetFontPalette() const { return font_palette_.get(); }
+  FontVariantAlternates* GetFontVariantAlternates() const {
+    return font_variant_alternates_.get();
+  }
   TextRenderingMode TextRendering() const {
     return static_cast<TextRenderingMode>(fields_.text_rendering_);
   }
@@ -319,6 +340,9 @@ class PLATFORM_EXPORT FontDescription {
   FontVariationSettings* VariationSettings() const {
     return variation_settings_.get();
   }
+  FontVariantPosition VariantPosition() const {
+    return static_cast<FontVariantPosition>(fields_.variant_position_);
+  }
 
   float EffectiveFontSize()
       const;  // Returns either the computedSize or the computedPixelSize
@@ -329,7 +353,9 @@ class PLATFORM_EXPORT FontDescription {
   void SetComputedSize(float s) { computed_size_ = ClampTo<float>(s); }
   void SetSpecifiedSize(float s) { specified_size_ = ClampTo<float>(s); }
   void SetAdjustedSize(float s) { adjusted_size_ = ClampTo<float>(s); }
-  void SetSizeAdjust(float aspect) { size_adjust_ = ClampTo<float>(aspect); }
+  void SetSizeAdjust(const FontSizeAdjust& size_adjust) {
+    size_adjust_ = size_adjust;
+  }
 
   void SetStyle(FontSelectionValue i);
   void SetWeight(FontSelectionValue w) { font_selection_request_.weight = w; }
@@ -348,6 +374,9 @@ class PLATFORM_EXPORT FontDescription {
     fields_.kerning_ = kerning;
     UpdateTypesettingFeatures();
   }
+  void SetTextSpacingTrim(TextSpacingTrim text_spacing_trim) {
+    fields_.text_spacing_trim_ = static_cast<unsigned>(text_spacing_trim);
+  }
   void SetKeywordSize(unsigned s) { fields_.keyword_size_ = s; }
   void SetFontSmoothing(FontSmoothingMode smoothing) {
     fields_.font_smoothing_ = smoothing;
@@ -357,6 +386,10 @@ class PLATFORM_EXPORT FontDescription {
   }
   void SetFontPalette(scoped_refptr<FontPalette> palette) {
     font_palette_ = std::move(palette);
+  }
+  void SetFontVariantAlternates(
+      scoped_refptr<FontVariantAlternates> alternates) {
+    font_variant_alternates_ = std::move(alternates);
   }
   void SetTextRendering(TextRenderingMode rendering) {
     fields_.text_rendering_ = rendering;
@@ -390,6 +423,9 @@ class PLATFORM_EXPORT FontDescription {
   }
   void SetVariationSettings(scoped_refptr<FontVariationSettings> settings) {
     variation_settings_ = std::move(settings);
+  }
+  void SetVariantPosition(FontVariantPosition variant_position) {
+    fields_.variant_position_ = variant_position;
   }
   void SetWordSpacing(float s) { word_spacing_ = s; }
   void SetLetterSpacing(float s) {
@@ -459,6 +495,7 @@ class PLATFORM_EXPORT FontDescription {
   scoped_refptr<FontVariationSettings> variation_settings_;
   scoped_refptr<const LayoutLocale> locale_;
   scoped_refptr<FontPalette> font_palette_;
+  scoped_refptr<FontVariantAlternates> font_variant_alternates_;
 
   void UpdateTypesettingFeatures();
 
@@ -473,11 +510,10 @@ class PLATFORM_EXPORT FontDescription {
   // as well as a computed size is.
   float adjusted_size_;
 
-  // Given aspect value, i.e. font-size-adjust.
-  float size_adjust_;
-
   float letter_spacing_;
   float word_spacing_;
+
+  FontSizeAdjust size_adjust_;
 
   // Covers stretch, style, weight.
   FontSelectionRequest font_selection_request_;
@@ -527,6 +563,8 @@ class PLATFORM_EXPORT FontDescription {
     unsigned subpixel_ascent_descent_ : 1;
     unsigned font_optical_sizing_ : 1;
     unsigned has_size_adjust_descriptor_ : 1;
+    unsigned variant_position_ : 2;
+    unsigned text_spacing_trim_ : kTextSpacingTrimBitCount;
 
     unsigned hash_category_ : 2;  // HashCategory
   };
@@ -547,24 +585,6 @@ class PLATFORM_EXPORT FontDescription {
 
 namespace WTF {
 
-template <>
-struct DefaultHash<blink::FontDescription> {
-  static unsigned GetHash(const blink::FontDescription& description) {
-    return description.GetHash();
-  }
-
-  static bool Equal(const blink::FontDescription& a,
-                    const blink::FontDescription& b) {
-    return a == b;
-  }
-
-  // Empty and deleted FontDescriptions have different HashCategory flag values
-  // from all regular FontDescriptions.
-  static const bool safe_to_compare_to_empty_or_deleted = true;
-};
-
-template <typename T>
-struct HashTraits;
 template <>
 struct HashTraits<blink::FontDescription>
     : SimpleClassHashTraits<blink::FontDescription> {

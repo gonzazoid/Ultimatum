@@ -4,6 +4,7 @@
 
 #include "components/policy/core/common/management/management_service.h"
 
+#include <ostream>
 #include <tuple>
 
 #include "base/barrier_closure.h"
@@ -106,9 +107,6 @@ void ManagementService::RefreshCache(CacheRefreshCallback callback) {
 
     ManagementAuthorityTrustworthiness next =
         GetManagementAuthorityTrustworthiness();
-    base::UmaHistogramBoolean(
-        "Enterprise.ManagementAuthorityTrustworthiness.Cache.ValueChange",
-        previous != next);
     if (callback)
       std::move(callback).Run(previous, next);
   }
@@ -179,6 +177,21 @@ bool ManagementService::IsManaged() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return GetManagementAuthorityTrustworthiness() >
          ManagementAuthorityTrustworthiness::NONE;
+}
+
+bool ManagementService::IsAccountManaged() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return HasManagementAuthority(policy::EnterpriseManagementAuthority::CLOUD);
+}
+
+bool ManagementService::IsBrowserManaged() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return HasManagementAuthority(
+             policy::EnterpriseManagementAuthority::CLOUD_DOMAIN) ||
+         HasManagementAuthority(
+             policy::EnterpriseManagementAuthority::DOMAIN_LOCAL) ||
+         HasManagementAuthority(
+             policy::EnterpriseManagementAuthority::COMPUTER_LOCAL);
 }
 
 void ManagementService::SetManagementStatusProvider(

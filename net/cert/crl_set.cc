@@ -10,10 +10,10 @@
 #include "base/json/json_reader.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
-#include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "crypto/sha2.h"
 #include "net/base/trace_constants.h"
+#include "net/base/tracing.h"
 #include "third_party/boringssl/src/include/openssl/bytestring.h"
 #include "third_party/boringssl/src/include/openssl/mem.h"
 
@@ -54,27 +54,28 @@ namespace {
 // ReadHeader reads the header (including length prefix) from |data| and
 // updates |data| to remove the header on return. Caller takes ownership of the
 // returned pointer.
-std::unique_ptr<base::Value> ReadHeader(base::StringPiece* data) {
+absl::optional<base::Value> ReadHeader(base::StringPiece* data) {
   uint16_t header_len;
-  if (data->size() < sizeof(header_len))
-    return nullptr;
+  if (data->size() < sizeof(header_len)) {
+    return absl::nullopt;
+  }
   // Assumes little-endian.
   memcpy(&header_len, data->data(), sizeof(header_len));
   data->remove_prefix(sizeof(header_len));
 
-  if (data->size() < header_len)
-    return nullptr;
+  if (data->size() < header_len) {
+    return absl::nullopt;
+  }
 
   const base::StringPiece header_bytes = data->substr(0, header_len);
   data->remove_prefix(header_len);
 
-  std::unique_ptr<base::Value> header = base::JSONReader::ReadDeprecated(
-      header_bytes, base::JSON_ALLOW_TRAILING_COMMAS);
-  if (header.get() == nullptr)
-    return nullptr;
+  absl::optional<base::Value> header =
+      base::JSONReader::Read(header_bytes, base::JSON_ALLOW_TRAILING_COMMAS);
+  if (!header || !header->is_dict()) {
+    return absl::nullopt;
+  }
 
-  if (!header->is_dict())
-    return nullptr;
   return header;
 }
 
@@ -214,9 +215,10 @@ bool CRLSet::Parse(base::StringPiece data, scoped_refptr<CRLSet>* out_crl_set) {
 #error assumes little endian
 #endif
 
-  std::unique_ptr<base::Value> header_value(ReadHeader(&data));
-  if (!header_value.get())
+  absl::optional<base::Value> header_value = ReadHeader(&data);
+  if (!header_value) {
     return false;
+  }
 
   const base::Value::Dict& header_dict = header_value->GetDict();
 
@@ -294,15 +296,6 @@ bool CRLSet::Parse(base::StringPiece data, scoped_refptr<CRLSet>* out_crl_set) {
   return true;
 }
 
-// static
-bool CRLSet::ParseAndStoreUnparsedData(std::string data,
-                                       scoped_refptr<CRLSet>* out_crl_set) {
-  if (!Parse(data, out_crl_set))
-    return false;
-  (*out_crl_set)->unparsed_crl_set_ = std::move(data);
-  return true;
-}
-
 CRLSet::Result CRLSet::CheckSPKI(base::StringPiece spki_hash) const {
   if (std::binary_search(blocked_spkis_.begin(), blocked_spkis_.end(),
                          spki_hash))
@@ -368,10 +361,6 @@ bool CRLSet::IsExpired() const {
 
 uint32_t CRLSet::sequence() const {
   return sequence_;
-}
-
-const std::string& CRLSet::unparsed_crl_set() const {
-  return unparsed_crl_set_;
 }
 
 const CRLSet::CRLList& CRLSet::CrlsForTesting() const {

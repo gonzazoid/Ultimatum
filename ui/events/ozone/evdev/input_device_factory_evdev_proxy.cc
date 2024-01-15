@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/events/devices/stylus_state.h"
 #include "ui/events/ozone/evdev/input_device_factory_evdev.h"
 
@@ -39,6 +39,14 @@ void ForwardGetStylusSwitchStateReply(
     ui::StylusState state) {
   // Thread hop back to UI for reply.
   reply_runner->PostTask(FROM_HERE, base::BindOnce(std::move(reply), state));
+}
+
+void ForwardDescribeForLogReply(
+    scoped_refptr<base::SingleThreadTaskRunner> reply_runner,
+    InputController::DescribeForLogReply reply,
+    const std::string& result) {
+  // Thread hop back to UI for reply.
+  reply_runner->PostTask(FROM_HERE, base::BindOnce(std::move(reply), result));
 }
 
 }  // namespace
@@ -82,11 +90,11 @@ void InputDeviceFactoryEvdevProxy::GetStylusSwitchState(
     InputController::GetStylusSwitchStateReply reply) {
   task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&InputDeviceFactoryEvdev::GetStylusSwitchState,
-                     input_device_factory_,
-                     base::BindOnce(&ForwardGetStylusSwitchStateReply,
-                                    base::ThreadTaskRunnerHandle::Get(),
-                                    std::move(reply))));
+      base::BindOnce(
+          &InputDeviceFactoryEvdev::GetStylusSwitchState, input_device_factory_,
+          base::BindOnce(&ForwardGetStylusSwitchStateReply,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(reply))));
 }
 
 void InputDeviceFactoryEvdevProxy::UpdateInputDeviceSettings(
@@ -101,11 +109,11 @@ void InputDeviceFactoryEvdevProxy::GetTouchDeviceStatus(
     InputController::GetTouchDeviceStatusReply reply) {
   task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&InputDeviceFactoryEvdev::GetTouchDeviceStatus,
-                     input_device_factory_,
-                     base::BindOnce(&ForwardGetTouchDeviceStatusReply,
-                                    base::ThreadTaskRunnerHandle::Get(),
-                                    std::move(reply))));
+      base::BindOnce(
+          &InputDeviceFactoryEvdev::GetTouchDeviceStatus, input_device_factory_,
+          base::BindOnce(&ForwardGetTouchDeviceStatusReply,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(reply))));
 }
 
 void InputDeviceFactoryEvdevProxy::GetTouchEventLog(
@@ -113,11 +121,23 @@ void InputDeviceFactoryEvdevProxy::GetTouchEventLog(
     InputController::GetTouchEventLogReply reply) {
   task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&InputDeviceFactoryEvdev::GetTouchEventLog,
-                     input_device_factory_, out_dir,
-                     base::BindOnce(&ForwardGetTouchEventLogReply,
-                                    base::ThreadTaskRunnerHandle::Get(),
-                                    std::move(reply))));
+      base::BindOnce(
+          &InputDeviceFactoryEvdev::GetTouchEventLog, input_device_factory_,
+          out_dir,
+          base::BindOnce(&ForwardGetTouchEventLogReply,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(reply))));
+}
+
+void InputDeviceFactoryEvdevProxy::DescribeForLog(
+    InputController::DescribeForLogReply reply) const {
+  task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          &InputDeviceFactoryEvdev::DescribeForLog, input_device_factory_,
+          base::BindOnce(&ForwardDescribeForLogReply,
+                         base::SingleThreadTaskRunner::GetCurrentDefault(),
+                         std::move(reply))));
 }
 
 void InputDeviceFactoryEvdevProxy::GetGesturePropertiesService(

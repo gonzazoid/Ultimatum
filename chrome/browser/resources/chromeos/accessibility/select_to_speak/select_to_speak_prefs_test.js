@@ -25,12 +25,14 @@ SelectToSpeakPrefsTest = class extends SelectToSpeakE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'selectToSpeak', '/select_to_speak/select_to_speak_main.js');
-    await importModule(
-        'SelectToSpeakConstants',
-        '/select_to_speak/select_to_speak_constants.js');
-    await importModule('PrefsManager', '/select_to_speak/prefs_manager.js');
+
+    await Promise.all([
+      importModule('selectToSpeak', '/select_to_speak/select_to_speak_main.js'),
+      importModule(
+          'SelectToSpeakConstants',
+          '/select_to_speak/select_to_speak_constants.js'),
+      importModule('PrefsManager', '/select_to_speak/prefs_manager.js'),
+    ]);
     await this.resetStorage();
   }
 
@@ -42,7 +44,6 @@ SelectToSpeakPrefsTest = class extends SelectToSpeakE2ETest {
   // This must be done before setting STS rate and pitch for tests to work
   // properly.
   setGlobalRateAndPitch(rate, pitch) {
-    const unused = () => {};
     chrome.settingsPrivate.setPref('settings.tts.speech_rate', rate);
     chrome.settingsPrivate.setPref('settings.tts.speech_pitch', pitch);
   }

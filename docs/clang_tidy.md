@@ -69,13 +69,13 @@ solutions = [
 Your next run of `gclient runhooks` should cause clang-tidy to be synced.
 
 To run clang-tidy across all of Chromium, you'll need a checkout of Chromium's
-[build/](https://chromium.googlesource.com/chromium/tools/build) repository.
+[tools/build/](https://chromium.googlesource.com/chromium/tools/build) repository.
 Once you have that and a Chromium `out/` dir with an `args.gn`, running
 clang-tidy across all of Chromium is a single command:
 
 ```
 $ cd ${chromium}/src
-$ ${chromium_build}/recipes/recipe_modules/tricium_clang_tidy/resources/tricium_clang_tidy_script.py \
+$ ${chromium_tools_build}/recipes/recipe_modules/tricium_clang_tidy/resources/tricium_clang_tidy_script.py \
     --base_path $PWD \
     --out_dir out/Linux \
     --findings_file all_findings.json \
@@ -104,7 +104,7 @@ $ ${chromium_build}/recipes/recipe_modules/tricium_clang_tidy/resources/tricium_
     --out_dir out/Linux \
     --findings_file all_findings.json \
     --clang_tidy_binary $PWD/third_party/llvm-build/Release+Asserts/bin/clang-tidy \
-    --tidy_checks '-*,YOUR-NEW-CHECK-NAME-HERE'
+    --tidy_checks='-*,YOUR-NEW-CHECK-NAME-HERE'
     --all
 ```
 
@@ -229,13 +229,13 @@ Running clang-tidy is then (hopefully) simple.
 ```
 ninja -C out/Release chrome
 ```
-2.  Enter the build directory
+2.  Export Chrome's compile command database
+```
+gn gen out/Release --export-compile-commands
+```
+3.  Enter the build directory
 ```
 cd out/Release
-```
-3.  Export Chrome's compile command database
-```
-gn gen . --export-compile-commands
 ```
 4.  Run clang-tidy.
 ```
@@ -276,6 +276,6 @@ thakis@chromium.org, or gbiv@chromium.org.
 
 Questions about the Gerrit flow? Email tricium-dev@google.com or
 infra-dev+tricium@chromium.org, or file a bug against `Infra>LUCI>BuildService>PreSubmit>Tricium`.
-Please CC gbiv@chromium.org on any of these.
+Please CC gbiv@chromium.org and dcheng@chromium.org on any of these.
 
 Discoveries? Update the doc!

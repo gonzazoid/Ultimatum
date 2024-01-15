@@ -7,15 +7,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/animation/ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop_state.h"
@@ -25,6 +28,8 @@
 namespace ash {
 
 class LockScreenActionBackgroundView::NoteBackground : public views::View {
+  METADATA_HEADER(NoteBackground, views::View)
+
  public:
   explicit NoteBackground(views::InkDropObserver* observer)
       : observer_(observer) {
@@ -48,8 +53,8 @@ class LockScreenActionBackgroundView::NoteBackground : public views::View {
                                         : host->GetLocalBounds().top_right();
           auto ink_drop_ripple =
               std::make_unique<views::FloodFillInkDropRipple>(
-                  host->size(), gfx::Insets(), center,
-                  views::InkDrop::Get(host)->GetBaseColor(), 1);
+                  views::InkDrop::Get(host), host->size(), gfx::Insets(),
+                  center, views::InkDrop::Get(host)->GetBaseColor(), 1);
           ink_drop_ripple->set_use_hide_transform_duration_for_hide_fade_out(
               true);
           ink_drop_ripple->set_duration_factor(1.5);
@@ -65,11 +70,15 @@ class LockScreenActionBackgroundView::NoteBackground : public views::View {
   ~NoteBackground() override = default;
 
  private:
-  views::InkDropObserver* observer_;
+  raw_ptr<views::InkDropObserver> observer_;
 };
+
+BEGIN_METADATA(LockScreenActionBackgroundView, NoteBackground, views::View)
+END_METADATA
 
 LockScreenActionBackgroundView::LockScreenActionBackgroundView() {
   SetCanMaximize(true);
+  SetCanFullscreen(true);
 
   auto layout_manager = std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical);
@@ -78,7 +87,7 @@ LockScreenActionBackgroundView::LockScreenActionBackgroundView() {
   auto* layout_ptr = SetLayoutManager(std::move(layout_manager));
 
   background_ = new NoteBackground(this);
-  AddChildView(background_);
+  AddChildView(background_.get());
   // Make background view flexible - the constant does not really matter given
   // that |background_| is the only child, as long as it's greater than 0.
   layout_ptr->SetFlexForView(background_, 1 /*flex_weight*/);
@@ -123,5 +132,8 @@ bool LockScreenActionBackgroundView::CanActivate() const {
 views::View* LockScreenActionBackgroundView::GetBackgroundView() {
   return background_;
 }
+
+BEGIN_METADATA(LockScreenActionBackgroundView)
+END_METADATA
 
 }  // namespace ash

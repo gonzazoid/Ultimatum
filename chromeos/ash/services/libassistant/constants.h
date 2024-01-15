@@ -19,19 +19,13 @@ extern const base::FilePath::CharType kAssistantBaseDirPath[];
 COMPONENT_EXPORT(LIBASSISTANT_CONSTANTS)
 extern const char kLibAssistantDlcRootPath[];
 
-// Libassistant v1 library DLC path.
-COMPONENT_EXPORT(LIBASSISTANT_CONSTANTS)
-extern const base::FilePath::CharType kLibAssistantV1DlcPath[];
-
 // Libassistant v2 library DLC path.
 COMPONENT_EXPORT(LIBASSISTANT_CONSTANTS)
 extern const base::FilePath::CharType kLibAssistantV2DlcPath[];
 
-#if !BUILDFLAG(IS_CHROMEOS_DEVICE)
 // A directory to save Libassistant socket files.
 COMPONENT_EXPORT(LIBASSISTANT_CONSTANTS)
 extern const base::FilePath::CharType kLibAssistantSocketPath[];
-#endif
 }  // namespace ash::libassistant
 
 #endif  // CHROMEOS_ASH_SERVICES_LIBASSISTANT_CONSTANTS_H_

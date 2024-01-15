@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 """Class for interacting with the Skia Gold image diffing service."""
 
+import enum
 import logging
 import os
 import platform
@@ -11,6 +12,8 @@ import sys
 import tempfile
 import time
 from typing import Any, Dict, List, Optional, Tuple
+
+import dataclasses  # Built-in, but pylint gives an ordering false positive.
 
 from skia_gold_common import skia_gold_properties
 
@@ -34,7 +37,8 @@ StepRetVal = Tuple[int, Optional[str]]
 
 
 class SkiaGoldSession():
-  class StatusCodes():
+  @enum.unique
+  class StatusCodes(enum.IntEnum):
     """Status codes for RunComparison."""
     SUCCESS = 0
     AUTH_FAILURE = 1
@@ -44,16 +48,15 @@ class SkiaGoldSession():
     LOCAL_DIFF_FAILURE = 5
     NO_OUTPUT_MANAGER = 6
 
+  @dataclasses.dataclass
   class ComparisonResults():
     """Struct-like object for storing results of an image comparison."""
-
-    def __init__(self):
-      self.public_triage_link: Optional[str] = None
-      self.internal_triage_link: Optional[str] = None
-      self.triage_link_omission_reason: Optional[str] = None
-      self.local_diff_given_image: Optional[str] = None
-      self.local_diff_closest_image: Optional[str] = None
-      self.local_diff_diff_image: Optional[str] = None
+    public_triage_link: Optional[str] = None
+    internal_triage_link: Optional[str] = None
+    triage_link_omission_reason: Optional[str] = None
+    local_diff_given_image: Optional[str] = None
+    local_diff_closest_image: Optional[str] = None
+    local_diff_diff_image: Optional[str] = None
 
   def __init__(self,
                working_dir: str,
@@ -90,8 +93,8 @@ class SkiaGoldSession():
                                      dir=working_dir,
                                      delete=False) as triage_link_file:
       self._triage_link_file = triage_link_file.name
-    # A map of image name (string) to ComparisonResults for that image.
-    self._comparison_results = {}
+    # A map of image name to ComparisonResults for that image.
+    self._comparison_results: Dict[str, SkiaGoldSession.ComparisonResults] = {}
     self._authenticated = False
     self._initialized = False
 
@@ -103,9 +106,10 @@ class SkiaGoldSession():
   def RunComparison(self,
                     name: str,
                     png_file: str,
-                    output_manager: Any,
+                    output_manager: Optional[Any] = None,
                     inexact_matching_args: Optional[List[str]] = None,
                     use_luci: bool = True,
+                    service_account: Optional[str] = None,
                     optional_keys: Optional[Dict[str, str]] = None,
                     force_dryrun: bool = False) -> StepRetVal:
     """Helper method to run all steps to compare a produced image.
@@ -126,6 +130,8 @@ class SkiaGoldSession():
       use_luci: If true, authentication will use the service account provided by
           the LUCI context. If false, will attempt to use whatever is set up in
           gsutil, which is only supported for local runs.
+      service_account: If set, uses the provided service account instead of
+          LUCI_CONTEXT or whatever is set in gsutil.
       optional_keys: A dict containing optional key/value pairs to pass to Gold
           for this comparison. Optional keys are keys unrelated to the
           configuration the image was produced on, e.g. a comment or whether
@@ -138,20 +144,33 @@ class SkiaGoldSession():
       SkiaGoldSession.StatusCodes signifying the result of the comparison.
       |error| is an error message describing the status if not successful.
     """
-    auth_rc, auth_stdout = self.Authenticate(use_luci=use_luci)
+    # TODO(b/295350872): Remove this and other timestamp logging in this code
+    # once the source of flaky slowness is tracked down.
+    logging.info('Starting Gold auth')
+    start_time = time.time()
+    auth_rc, auth_stdout = self.Authenticate(use_luci=use_luci,
+                                             service_account=service_account)
+    logging.info('Gold auth took %fs', time.time() - start_time)
     if auth_rc:
       return self.StatusCodes.AUTH_FAILURE, auth_stdout
 
+    logging.info('Starting Gold initialization')
+    start_time = time.time()
     init_rc, init_stdout = self.Initialize()
+    logging.info('Gold initialization took %fs', time.time() - start_time)
     if init_rc:
       return self.StatusCodes.INIT_FAILURE, init_stdout
 
+    logging.info('Starting Gold comparison in shared code')
+    start_time = time.time()
     compare_rc, compare_stdout = self.Compare(
         name=name,
         png_file=png_file,
         inexact_matching_args=inexact_matching_args,
         optional_keys=optional_keys,
         force_dryrun=force_dryrun)
+    logging.info('Gold comparison in shared code took %fs',
+                 time.time() - start_time)
     if not compare_rc:
       return self.StatusCodes.SUCCESS, None
 
@@ -159,7 +178,7 @@ class SkiaGoldSession():
     if not self._gold_properties.local_pixel_tests:
       return self.StatusCodes.COMPARISON_FAILURE_REMOTE, compare_stdout
 
-    if not output_manager:
+    if self._RequiresOutputManager() and not output_manager:
       return (self.StatusCodes.NO_OUTPUT_MANAGER,
               'No output manager for local diff images')
 
@@ -170,13 +189,17 @@ class SkiaGoldSession():
       return self.StatusCodes.LOCAL_DIFF_FAILURE, diff_stdout
     return self.StatusCodes.COMPARISON_FAILURE_LOCAL, compare_stdout
 
-  def Authenticate(self, use_luci: bool = True) -> StepRetVal:
+  def Authenticate(self,
+                   use_luci: bool = True,
+                   service_account: Optional[str] = None) -> StepRetVal:
     """Authenticates with Skia Gold for this session.
 
     Args:
       use_luci: If true, authentication will use the service account provided
           by the LUCI context. If false, will attempt to use whatever is set up
           in gsutil, which is only supported for local runs.
+      service_account: If set, uses the provided service account instead of
+          LUCI_CONTEXT or whatever is set in gsutil.
 
     Returns:
       A tuple (return_code, output). |return_code| is the return code of the
@@ -189,14 +212,17 @@ class SkiaGoldSession():
       logging.warning('Not actually authenticating with Gold due to '
                       '--bypass-skia-gold-functionality being present.')
       return 0, None
+    assert not (use_luci and service_account)
 
     auth_cmd = [GOLDCTL_BINARY, 'auth', '--work-dir', self._working_dir]
     if use_luci:
       auth_cmd.append('--luci')
+    elif service_account:
+      auth_cmd.extend(['--service-account', service_account])
     elif not self._gold_properties.local_pixel_tests:
       raise RuntimeError(
-          'Cannot authenticate to Skia Gold with use_luci=False unless running '
-          'local pixel tests')
+          'Cannot authenticate to Skia Gold with use_luci=False without a '
+          'service account unless running local pixel tests')
 
     rc, stdout = self._RunCmdForRcAndOutput(auth_cmd)
     if rc == 0:
@@ -320,8 +346,15 @@ class SkiaGoldSession():
           '%s:%s' % (k, v),
       ])
 
+    logging.info('Starting Gold triage link file clear')
+    start_time = time.time()
     self._ClearTriageLinkFile()
+    logging.info('Gold triage link file clear took %fs',
+                 time.time() - start_time)
+    logging.info('Starting Gold comparison command')
+    start_time = time.time()
     rc, stdout = self._RunCmdForRcAndOutput(compare_cmd)
+    logging.info('Gold comparison command took %fs', time.time() - start_time)
 
     self._comparison_results[name] = self.ComparisonResults()
     if rc == 0:
@@ -338,8 +371,11 @@ class SkiaGoldSession():
           self._GeneratePublicTriageLink(cl_triage_link)
     else:
       try:
+        logging.info('Starting triage link file read')
+        start_time = time.time()
         with open(self._triage_link_file) as tlf:
           triage_link = tlf.read().strip()
+        logging.info('Triage link file read took %fs', time.time() - start_time)
         if not triage_link:
           self._comparison_results[name].triage_link_omission_reason = (
               'Gold did not provide a triage link. This is likely a bug on '
@@ -550,6 +586,10 @@ class SkiaGoldSession():
           output image files where saved.
     """
     raise NotImplementedError()
+
+  def _RequiresOutputManager(self) -> bool:
+    """Whether this session implementation requires an output manager."""
+    return True
 
   @staticmethod
   def _RunCmdForRcAndOutput(cmd: List[str]) -> Tuple[int, str]:

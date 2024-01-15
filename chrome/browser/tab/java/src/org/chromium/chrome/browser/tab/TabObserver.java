@@ -17,9 +17,7 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.mojom.VirtualKeyboardMode;
 import org.chromium.url.GURL;
 
-/**
- * An observer that is notified of changes to a {@link Tab} object.
- */
+/** An observer that is notified of changes to a {@link Tab} object. */
 public interface TabObserver {
     /**
      * Called when a {@link Tab} finished initialization. The {@link TabState} contains,
@@ -218,11 +216,11 @@ public interface TabObserver {
     void onDidStartNavigationInPrimaryMainFrame(Tab tab, NavigationHandle navigationHandle);
 
     /**
-     * TODO(crbug.com/1351884) Remove when NotifyJavaSpuriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling didStartNavigation in only the primary main
-     * frame vs calling it in all frames.
+     * TODO(crbug.com/1434461) Temporary fix for LocationBarModel not properly
+     * caching same document navigation state. Will be removed later, see bug for more
+     * details.
      */
-    void onDidStartNavigationNoop(Tab tab, NavigationHandle navigationHandle);
+    void onDidFinishNavigationEnd();
 
     /**
      * Called when a navigation is redirected in the WebContents.
@@ -240,13 +238,6 @@ public interface TabObserver {
      *                         Its lifetime end at the end of this function.
      */
     void onDidFinishNavigationInPrimaryMainFrame(Tab tab, NavigationHandle navigation);
-
-    /**
-     * TODO(crbug.com/1351884) Remove when NotifyJavaSpuriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling didFinishNavigation in only the primary main
-     * frame vs calling it in all frames.
-     */
-    void onDidFinishNavigationNoop(Tab tab, NavigationHandle navigationHandle);
 
     /**
      * Called when the page has painted something non-empty.
@@ -335,8 +326,12 @@ public interface TabObserver {
      * @param topControlsMinHeightOffsetY The Y offset of the current top controls min-height.
      * @param bottomControlsMinHeightOffsetY The Y offset of the current bottom controls min-height.
      */
-    void onBrowserControlsOffsetChanged(Tab tab, int topControlsOffsetY, int bottomControlsOffsetY,
-            int contentOffsetY, int topControlsMinHeightOffsetY,
+    void onBrowserControlsOffsetChanged(
+            Tab tab,
+            int topControlsOffsetY,
+            int bottomControlsOffsetY,
+            int contentOffsetY,
+            int topControlsMinHeightOffsetY,
             int bottomControlsMinHeightOffsetY);
 
     /**
@@ -345,10 +340,28 @@ public interface TabObserver {
      */
     void onContentViewScrollingStateChanged(boolean scrolling);
 
+    /** Back press refactor related. Called when navigation state is invalidated. */
+    void onNavigationStateChanged();
+
     /**
-     * Called when the Tab stops scrolling.
-     * @param verticalScrollDelta The delta between the vertical offsets when the scroll started and
-     *         currently. It is negative when the tab scrolled down and positive when scrolled up.
+     * CloseWatcher web API support. If the currently focused frame has a CloseWatcher registered in
+     * JavaScript, the CloseWatcher should receive the next "close" operation, based on what the OS
+     * convention for closing is. This function is called when the focused frame changes or a
+     * CloseWatcher registered/unregistered to update whether the CloseWatcher should intercept.
      */
-    void onContentViewScrollingEnded(int verticalScrollDelta);
+    void onDidChangeCloseSignalInterceptStatus();
+
+    /**
+     * Broadcast that the timestamp on a {@link Tab} has changed
+     * @param tab {@link Tab} timestamp has changed on
+     * @param timestampMillis new value of the timestamp
+     */
+    default void onTimestampChanged(Tab tab, long timestampMillis) {}
+
+    /**
+     * Broadcast that root identifier on a {@link Tab} has changed
+     * @param tab {@link Tab} root identifier has changed on
+     * @param newRootId new value of new root id
+     */
+    default void onRootIdChanged(Tab tab, int newRootId) {}
 }

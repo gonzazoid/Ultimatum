@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
@@ -30,24 +30,9 @@
 #include "ui/views/widget/native_widget_mac.h"
 #endif
 
-#if defined(USE_OZONE)
-#include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/platform_gl_egl_utility.h"
-#endif
-
 namespace views {
 
 namespace {
-
-bool DoesVisualHaveAlphaForTest() {
-#if defined(USE_OZONE)
-  const auto* const egl_utility =
-      ui::OzonePlatform::GetInstance()->GetPlatformGLEGLUtility();
-  return egl_utility ? egl_utility->X11DoesVisualHaveAlphaForTest() : false;
-#else
-  return false;
-#endif
-}
 
 }  // namespace
 
@@ -67,8 +52,6 @@ ViewsTestBase::~ViewsTestBase() {
 }
 
 void ViewsTestBase::SetUp() {
-  has_compositing_manager_ = DoesVisualHaveAlphaForTest();
-
   testing::Test::SetUp();
   setup_called_ = true;
 
@@ -92,6 +75,7 @@ void ViewsTestBase::TearDown() {
   teardown_called_ = true;
   testing::Test::TearDown();
   test_helper_.reset();
+  ax_platform_.reset();
 }
 
 void ViewsTestBase::SetUpForInteractiveTests() {
@@ -108,6 +92,7 @@ void ViewsTestBase::SetUpForInteractiveTests() {
   base::FilePath ui_test_pak_path;
   ASSERT_TRUE(base::PathService::Get(ui::UI_TEST_PAK, &ui_test_pak_path));
   ui::ResourceBundle::InitSharedInstanceWithPakPath(ui_test_pak_path);
+  ax_platform_.emplace();
 }
 
 void ViewsTestBase::RunPendingMessages() {
@@ -133,13 +118,15 @@ std::unique_ptr<Widget> ViewsTestBase::CreateTestWidget(
   return widget;
 }
 
-bool ViewsTestBase::HasCompositingManager() const {
-  return has_compositing_manager_;
-}
-
 void ViewsTestBase::SimulateNativeDestroy(Widget* widget) {
   test_helper_->SimulateNativeDestroy(widget);
 }
+
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+void ViewsTestBase::SimulateDesktopNativeDestroy(Widget* widget) {
+  test_helper_->SimulateDesktopNativeDestroy(widget);
+}
+#endif
 
 #if !BUILDFLAG(IS_MAC)
 int ViewsTestBase::GetSystemReservedHeightAtTopOfScreen() {
@@ -180,8 +167,7 @@ NativeWidget* ViewsTestBase::CreateNativeWidgetForTest(
   return new test::TestPlatformNativeWidget<NativeWidgetAura>(delegate, true,
                                                               nullptr);
 #else
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 #endif
 }
 
@@ -195,11 +181,6 @@ Widget::InitParams ViewsTestBase::CreateParamsForTestWidget(
   params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.bounds = gfx::Rect(0, 0, 400, 400);
   return params;
-}
-
-void ViewsTestBaseWithNativeWidgetType::SetUp() {
-  set_native_widget_type(GetParam());
-  ViewsTestBase::SetUp();
 }
 
 void ViewsTestWithDesktopNativeWidget::SetUp() {

@@ -32,8 +32,8 @@
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_WINDOW_FEATURES_H_
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-#include "third_party/blink/public/common/navigation/impression.h"
+#include "third_party/blink/public/platform/web_string.h"
+#include "third_party/blink/public/platform/web_vector.h"
 
 namespace blink {
 
@@ -47,12 +47,12 @@ struct WebWindowFeatures {
   int height = 0;
   bool height_set = false;
 
-  bool menu_bar_visible = true;
-  bool status_bar_visible = true;
-  // This can be set based on "locationbar" or "toolbar" in a window features
-  // string, we don't distinguish between the two.
-  bool tool_bar_visible = true;
-  bool scrollbars_visible = true;
+  bool is_popup = false;
+
+  // True if the new window was requested to be shown fullscreen.
+  // Window management permission must be granted on the opener.
+  // See: https://chromestatus.com/feature/6002307972464640
+  bool is_fullscreen = false;
 
   // The members above this line are transferred through mojo
   // in the form of |struct WindowFeatures| defined in window_features.mojom,
@@ -65,9 +65,14 @@ struct WebWindowFeatures {
   bool background = false;
   bool persistent = false;
 
-  // Represents the attribution source declared by Attribution Reporting related
-  // window features, if any.
-  absl::optional<Impression> impression;
+  // If `absl::nullopt`, no impression should be set on the navigation.
+  // If `WebVector::empty()`, an impression should be set but no background
+  // request should be made. Otherwise, an impression should be set and a
+  // background request should be made to the contained relative URL.
+  //
+  // TODO(apaseltiner): Investigate moving this field to a non-public struct
+  // since it is only needed within //third_party/blink.
+  absl::optional<WebVector<WebString>> attribution_srcs;
 };
 
 }  // namespace blink

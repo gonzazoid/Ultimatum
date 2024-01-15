@@ -7,16 +7,16 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "ios/web/common/user_agent.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 
 namespace base {
 class RefCountedMemory;
@@ -24,9 +24,11 @@ class RefCountedMemory;
 
 class GURL;
 
+@protocol CRWFindSession;
 @protocol UITraitEnvironment;
-@class UIWebView;
 @class NSString;
+@class NSData;
+@class UIView;
 
 namespace net {
 class SSLInfo;
@@ -84,9 +86,6 @@ class WebClient {
   // browser would return true for "chrome://about" URL.
   virtual bool IsAppSpecificURL(const GURL& url) const;
 
-  // Returns text to be displayed for an unsupported plugin.
-  virtual std::u16string GetPluginNotSupportedText() const;
-
   // Returns the user agent string for the specified type.
   virtual std::string GetUserAgent(UserAgentType type) const;
 
@@ -118,24 +117,6 @@ class WebClient {
   virtual std::vector<JavaScriptFeature*> GetJavaScriptFeatures(
       BrowserState* browser_state) const;
 
-  // Gives the embedder a chance to provide the JavaScript to be injected into
-  // the web view as early as possible. Result must not be nil.
-  // The script returned will be injected in all frames (main and subframes).
-  //
-  // TODO(crbug.com/703964): Change the return value to NSArray<NSString*> to
-  // improve performance.
-  virtual NSString* GetDocumentStartScriptForAllFrames(
-      BrowserState* browser_state) const;
-
-  // Gives the embedder a chance to provide the JavaScript to be injected into
-  // the web view as early as possible. Result must not be nil.
-  // The script returned will only be injected in the main frame.
-  //
-  // TODO(crbug.com/703964): Change the return value to NSArray<NSString*> to
-  // improve performance.
-  virtual NSString* GetDocumentStartScriptForMainFrame(
-      BrowserState* browser_state) const;
-
   // Allows the embedder to bind an interface request for a WebState-scoped
   // interface that originated from the main frame of `web_state`. Called if
   // `web_state` could not bind the receiver itself.
@@ -156,15 +137,21 @@ class WebClient {
                                 NSError* error,
                                 bool is_post,
                                 bool is_off_the_record,
-                                const absl::optional<net::SSLInfo>& info,
+                                const std::optional<net::SSLInfo>& info,
                                 int64_t navigation_id,
                                 base::OnceCallback<void(NSString*)> callback);
 
   // Instructs the embedder to return a container that is attached to a window.
   virtual UIView* GetWindowedContainer();
 
+  // Enables the web-exposed Fullscreen API.
+  virtual bool EnableFullscreenAPI() const;
+
   // Enables the logic to handle long press context menu with UIContextMenu.
   virtual bool EnableLongPressUIContextMenu() const;
+
+  // Allows WKWebViews to be inspected using Safari's Web Inspector.
+  virtual bool EnableWebInspector(web::BrowserState* browser_state) const;
 
   // Returns the UserAgentType that should be used by default for the web
   // content, based on the `web_state`.
@@ -176,20 +163,39 @@ class WebClient {
   virtual void LogDefaultUserAgent(web::WebState* web_state,
                                    const GURL& url) const;
 
-  // Returns true if URL was restored via session restoration cache.
-  virtual bool RestoreSessionFromCache(web::WebState* web_state) const;
+  // Fetches the session data blob from cache for `web_state`. Returns nil if
+  // the blob could not be loaded (missing, feature disabled, ...).
+  virtual NSData* FetchSessionFromCache(web::WebState* web_state) const;
 
   // Correct missing NTP and reading list virtualURLs and titles. Native session
   // restoration may not properly restore these items.
   virtual void CleanupNativeRestoreURLs(web::WebState* web_state) const;
 
   // Notify the embedder that `web_state` will display a prompt for the user.
+  // Note that the implementation of this method may destroy `web state`.
   virtual void WillDisplayMediaCapturePermissionPrompt(
       web::WebState* web_state) const;
 
   // Returns whether `url1` and `url2` are actually pointing to the same page.
   virtual bool IsPointingToSameDocument(const GURL& url1,
                                         const GURL& url2) const;
+
+  // Returns true if mixed content on HTTPS documents should be upgraded if
+  // possible.
+  virtual bool IsMixedContentAutoupgradeEnabled(
+      web::BrowserState* browser_state) const;
+
+  // Returns true if browser lockdown mode is enabled. Default return value is
+  // false.
+  virtual bool IsBrowserLockdownModeEnabled(web::BrowserState* browser_state);
+
+  // Sets OS lockdown mode preference value. By default, no preference value is
+  // set.
+  virtual void SetOSLockdownModeEnabled(web::BrowserState* browser_state,
+                                        bool enabled);
+
+  virtual bool IsInsecureFormWarningEnabled(
+      web::BrowserState* browser_state) const;
 };
 
 }  // namespace web

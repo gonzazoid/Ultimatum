@@ -8,9 +8,9 @@
 #include <string>
 
 #include "base/android/jni_android.h"
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "net/base/net_export.h"
 #include "net/proxy_resolution/proxy_config_service.h"
 

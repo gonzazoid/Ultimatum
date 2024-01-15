@@ -11,9 +11,9 @@
 #include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/usb/usb_host_ui_delegate.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/strings/stringprintf.h"
@@ -170,7 +170,7 @@ void ArcUsbHostBridge::RequestPermission(const std::string& guid,
 }
 
 void ArcUsbHostBridge::OpenDevice(const std::string& guid,
-                                  const absl::optional<std::string>& package,
+                                  const std::optional<std::string>& package,
                                   OpenDeviceCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_);
 
@@ -382,6 +382,11 @@ void ArcUsbHostBridge::OnDeviceRemoved(
 
   DCHECK(ui_delegate_);
   ui_delegate_->DeviceRemoved(device_info->guid);
+}
+
+// static
+void ArcUsbHostBridge::EnsureFactoryBuilt() {
+  ArcUsbHostBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

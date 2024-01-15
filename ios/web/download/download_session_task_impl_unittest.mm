@@ -9,9 +9,9 @@
 
 #import <memory>
 
-#import "base/bind.h"
 #import "base/files/file_util.h"
 #import "base/files/scoped_temp_dir.h"
+#import "base/functional/bind.h"
 #import "base/task/task_traits.h"
 #import "base/task/thread_pool.h"
 #import "ios/web/net/cookies/wk_cookie_util.h"
@@ -29,10 +29,6 @@
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -411,7 +407,7 @@ TEST_F(DownloadSessionTaskImplTest, Cookie) {
           /*last_update=*/now,
           /*secure=*/false,
           /*httponly=*/false, net::CookieSameSite::UNSPECIFIED,
-          net::COOKIE_PRIORITY_DEFAULT, /*same_party=*/false);
+          net::COOKIE_PRIORITY_DEFAULT);
   ASSERT_TRUE(expected_cookie);
   cookie_store()->SetAllCookies({*expected_cookie});
 

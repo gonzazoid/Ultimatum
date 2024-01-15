@@ -5,11 +5,12 @@
 #ifndef CONTENT_BROWSER_DEVTOOLS_WEB_CONTENTS_DEVTOOLS_AGENT_HOST_H_
 #define CONTENT_BROWSER_DEVTOOLS_WEB_CONTENTS_DEVTOOLS_AGENT_HOST_H_
 
+#include <optional>
+
 #include "content/browser/devtools/devtools_agent_host_impl.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "content/public/browser/web_contents_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -26,6 +27,8 @@ class CONTENT_EXPORT WebContentsDevToolsAgentHost
   static WebContentsDevToolsAgentHost* GetOrCreateFor(
       WebContents* web_contents);
 
+  static bool IsDebuggerAttached(WebContents* web_contents);
+
   WebContentsDevToolsAgentHost(const WebContentsDevToolsAgentHost&) = delete;
   WebContentsDevToolsAgentHost& operator=(const WebContentsDevToolsAgentHost&) =
       delete;
@@ -40,12 +43,16 @@ class CONTENT_EXPORT WebContentsDevToolsAgentHost
   void WillInitiatePrerender(FrameTreeNode* ftn);
   // TODO(caseq): do we need more specific signals here?
   void UpdateChildFrameTrees(bool update_target_info);
+  void InspectElement(RenderFrameHost* frame_host, int x, int y) override;
 
  private:
   class AutoAttacher;
 
   explicit WebContentsDevToolsAgentHost(WebContents* wc);
   ~WebContentsDevToolsAgentHost() override;
+
+  void InnerAttach(WebContents* web_contents);
+  void InnerDetach();
 
   // DevToolsAgentHost overrides.
   void DisconnectWebContents() override;
@@ -67,9 +74,9 @@ class CONTENT_EXPORT WebContentsDevToolsAgentHost
   bool Close() override;
   base::TimeTicks GetLastActivityTime() override;
 
-  absl::optional<network::CrossOriginEmbedderPolicy>
+  std::optional<network::CrossOriginEmbedderPolicy>
   cross_origin_embedder_policy(const std::string& id) override;
-  absl::optional<network::CrossOriginOpenerPolicy> cross_origin_opener_policy(
+  std::optional<network::CrossOriginOpenerPolicy> cross_origin_opener_policy(
       const std::string& id) override;
 
   // DevToolsAgentHostImpl overrides.
@@ -78,10 +85,20 @@ class CONTENT_EXPORT WebContentsDevToolsAgentHost
 
   // WebContentsObserver overrides.
   void WebContentsDestroyed() override;
+  void RenderFrameHostChanged(RenderFrameHost* old_host,
+                              RenderFrameHost* new_host) override;
+  void ReadyToCommitNavigation(NavigationHandle* navigation_handle) override;
+  void FrameDeleted(int frame_tree_node_id) override;
 
   DevToolsAgentHostImpl* GetPrimaryFrameAgent();
+  scoped_refptr<DevToolsAgentHost> GetOrCreatePrimaryFrameAgent();
 
-  std::unique_ptr<AutoAttacher> auto_attacher_;
+  // The method returns a pointer retaining this. Once the pointer goes
+  // out of scope, this may be destroyed.
+  [[nodiscard]] scoped_refptr<WebContentsDevToolsAgentHost>
+  RevalidateSessionAccess();
+
+  std::unique_ptr<AutoAttacher> const auto_attacher_;
 };
 
 }  // namespace content

@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_INSTALL_FRICTION_DIALOG_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_INSTALL_FRICTION_DIALOG_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -26,9 +26,10 @@ class Profile;
 // allowlist.
 class ExtensionInstallFrictionDialogView
     : public views::BubbleDialogDelegateView {
- public:
-  METADATA_HEADER(ExtensionInstallFrictionDialogView);
+  METADATA_HEADER(ExtensionInstallFrictionDialogView,
+                  views::BubbleDialogDelegateView)
 
+ public:
   // `web_contents` ownership is not passed, `callback` will be invoked with
   // `true` if the user accepts or `false` if the user cancels.
   ExtensionInstallFrictionDialogView(content::WebContents* web_contents,

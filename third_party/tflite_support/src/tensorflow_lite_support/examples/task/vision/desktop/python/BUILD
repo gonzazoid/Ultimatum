@@ -1,3 +1,5 @@
+# Placeholder: load py_binary
+
 package(
     licenses = ["notice"],  # Apache 2.0
 )
@@ -13,6 +15,7 @@ py_binary(
     srcs = ["image_classifier_demo.py"],
     data = ["//tensorflow_lite_support/examples/task/vision/desktop:image_classifier_demo"],
     deps = [
+        # build rule placeholder: tensorflow dep,
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
     ],
@@ -30,6 +33,7 @@ py_binary(
     srcs = ["object_detector_demo.py"],
     data = ["//tensorflow_lite_support/examples/task/vision/desktop:object_detector_demo"],
     deps = [
+        # build rule placeholder: tensorflow dep,
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
     ],
@@ -46,6 +50,7 @@ py_binary(
     srcs = ["image_segmenter_demo.py"],
     data = ["//tensorflow_lite_support/examples/task/vision/desktop:image_segmenter_demo"],
     deps = [
+        # build rule placeholder: tensorflow dep,
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
     ],

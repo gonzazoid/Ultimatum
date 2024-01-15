@@ -23,23 +23,23 @@
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/simple_dependency_manager.h"
 #include "components/keyed_service/core/simple_keyed_service_factory.h"
 #include "components/policy/core/common/cloud/cloud_policy_manager.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_value_store.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "components/sync_preferences/pref_service_syncable.h"
+#include "components/variations/service/variations_service.h"
 #include "content/public/browser/network_service_instance.h"
 #include "services/preferences/public/mojom/tracked_preference_validation_delegate.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/content_settings/content_settings_supervised_provider.h"
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
-#include "chrome/browser/supervised_user/supervised_user_settings_service.h"
 #include "chrome/browser/supervised_user/supervised_user_settings_service_factory.h"
+#include "components/supervised_user/core/browser/supervised_user_settings_service.h"
 #endif
 
 namespace {
@@ -61,8 +61,7 @@ void CreateProfileReadme(const base::FilePath& profile_path) {
   std::string product_name = l10n_util::GetStringUTF8(IDS_PRODUCT_NAME);
   std::string readme_text = base::StringPrintf(
       kReadmeText, product_name.c_str(), product_name.c_str());
-  if (base::WriteFile(readme_path, readme_text.data(), readme_text.size()) ==
-      -1) {
+  if (!base::WriteFile(readme_path, readme_text)) {
     LOG(ERROR) << "Could not create README file.";
   }
 }
@@ -72,7 +71,7 @@ void RegisterProfilePrefs(bool is_signin_profile,
                           user_prefs::PrefRegistrySyncable* pref_registry) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (is_signin_profile)
-    RegisterSigninProfilePrefs(pref_registry);
+    RegisterSigninProfilePrefs(pref_registry, GetCountry());
   else
 #endif
     RegisterUserProfilePrefs(pref_registry, locale);
@@ -94,11 +93,12 @@ std::unique_ptr<sync_preferences::PrefServiceSyncable> CreatePrefService(
     SimpleFactoryKey* key,
     const base::FilePath& path,
     bool async_prefs) {
-  SupervisedUserSettingsService* supervised_user_settings = nullptr;
+  supervised_user::SupervisedUserSettingsService* supervised_user_settings =
+      nullptr;
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
   supervised_user_settings =
       SupervisedUserSettingsServiceFactory::GetForKey(key);
-  supervised_user_settings->Init(path, io_task_runner.get(), !async_prefs);
+  supervised_user_settings->Init(path, io_task_runner, !async_prefs);
 #endif
   {
     return chrome_prefs::CreateProfilePrefs(

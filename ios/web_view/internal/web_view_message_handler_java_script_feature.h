@@ -6,12 +6,18 @@
 #define IOS_WEB_VIEW_INTERNAL_WEB_VIEW_MESSAGE_HANDLER_JAVA_SCRIPT_FEATURE_H_
 
 #import <map>
+#import <optional>
 #import <string>
 
-#import "base/callback.h"
+#import "base/functional/callback.h"
 #import "base/no_destructor.h"
+#import "base/supports_user_data.h"
 #import "base/values.h"
 #import "ios/web/public/js_messaging/java_script_feature.h"
+
+namespace web {
+class BrowserState;
+}  // namespace web
 
 // A feature which listens for messages sent from the webpage to the
 // 'CWVWebViewMessage' message handler and routes them to the callback for the
@@ -28,9 +34,25 @@
 //  }
 //  window.webkit.messageHandlers['CWVWebViewMessage'].postMessage(message);
 //
-class WebViewMessageHandlerJavaScriptFeature : public web::JavaScriptFeature {
+class WebViewMessageHandlerJavaScriptFeature
+    : public base::SupportsUserData::Data,
+      public web::JavaScriptFeature {
  public:
+  WebViewMessageHandlerJavaScriptFeature();
+  ~WebViewMessageHandlerJavaScriptFeature() override;
+
+  WebViewMessageHandlerJavaScriptFeature(
+      const WebViewMessageHandlerJavaScriptFeature&) = delete;
+  WebViewMessageHandlerJavaScriptFeature& operator=(
+      const WebViewMessageHandlerJavaScriptFeature&) = delete;
+
   static WebViewMessageHandlerJavaScriptFeature* GetInstance();
+
+  // Returns the WebViewMessageHandlerJavaScriptFeature associated with
+  // `browser_state`, creating one if necessary. `browser_state` must not be
+  // null.
+  static WebViewMessageHandlerJavaScriptFeature* FromBrowserState(
+      web::BrowserState* browser_state);
 
   using WebViewMessageHandlerCallback =
       base::RepeatingCallback<void(const base::Value::Dict& payload)>;
@@ -42,17 +64,13 @@ class WebViewMessageHandlerJavaScriptFeature : public web::JavaScriptFeature {
   friend class base::NoDestructor<WebViewMessageHandlerJavaScriptFeature>;
 
   // JavaScriptFeature overrides
-  absl::optional<std::string> GetScriptMessageHandlerName() const override;
+  std::optional<std::string> GetScriptMessageHandlerName() const override;
   void ScriptMessageReceived(web::WebState* web_state,
                              const web::ScriptMessage& script_message) override;
 
-  WebViewMessageHandlerJavaScriptFeature();
-  ~WebViewMessageHandlerJavaScriptFeature() override;
-
-  WebViewMessageHandlerJavaScriptFeature(
-      const WebViewMessageHandlerJavaScriptFeature&) = delete;
-  WebViewMessageHandlerJavaScriptFeature& operator=(
-      const WebViewMessageHandlerJavaScriptFeature&) = delete;
+  // Notifies any handler registered in `handlers_` for the command specified in
+  // `message_body`.
+  void NotifyHandlers(const base::Value::Dict& message_body);
 
   std::map<std::string, WebViewMessageHandlerCallback> handlers_;
 };

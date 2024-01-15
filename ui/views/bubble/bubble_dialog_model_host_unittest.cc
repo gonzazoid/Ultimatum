@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/gtest_util.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/element_tracker.h"
@@ -89,17 +89,18 @@ TEST_F(BubbleDialogModelHostTest, ElementIDsReportedCorrectly) {
   menu_item_params.SetId(kMenuItemId);
   // TODO(crbug.com/1324298): Remove after addressing this issue.
   menu_item_params.SetIsEnabled(false);
-  ui::DialogModelButton::Params ok_button_params;
+  ui::DialogModel::Button::Params ok_button_params;
   ok_button_params.SetId(kOkButtonId);
-  ui::DialogModelButton::Params extra_button_params;
+  ok_button_params.SetLabel(kOkButtonText);
+  ui::DialogModel::Button::Params extra_button_params;
   extra_button_params.SetId(kExtraButtonId);
+  extra_button_params.SetLabel(kExtraButtonText);
   auto host = std::make_unique<BubbleDialogModelHost>(
       ui::DialogModel::Builder()
           .AddMenuItem(ui::ImageModel(), kMenuItemText, base::DoNothing(),
                        menu_item_params)
-          .AddOkButton(base::DoNothing(), kOkButtonText, ok_button_params)
-          .AddExtraButton(base::DoNothing(), kExtraButtonText,
-                          extra_button_params)
+          .AddOkButton(base::DoNothing(), ok_button_params)
+          .AddExtraButton(base::DoNothing(), extra_button_params)
           .Build(),
       anchor_widget->GetContentsView(), BubbleBorder::Arrow::TOP_RIGHT);
 
@@ -118,10 +119,18 @@ TEST_F(BubbleDialogModelHostTest, ElementIDsReportedCorrectly) {
   bubble_widget->CloseNow();
 }
 
+TEST_F(BubbleDialogModelHostTest, DefaultButtonWithoutOverride) {
+  auto host = std::make_unique<BubbleDialogModelHost>(
+      ui::DialogModel::Builder().AddCancelButton(base::DoNothing()).Build(),
+      /*anchor_view=*/nullptr, BubbleBorder::Arrow::TOP_RIGHT);
+  EXPECT_EQ(host->GetDefaultDialogButton(),
+            ui::DialogButton::DIALOG_BUTTON_CANCEL);
+}
+
 TEST_F(BubbleDialogModelHostTest, OverrideDefaultButton) {
   auto host = std::make_unique<BubbleDialogModelHost>(
       ui::DialogModel::Builder()
-          .AddCancelButton(base::OnceClosure())
+          .AddCancelButton(base::DoNothing())
           .OverrideDefaultButton(ui::DialogButton::DIALOG_BUTTON_CANCEL)
           .Build(),
       /*anchor_view=*/nullptr, BubbleBorder::Arrow::TOP_RIGHT);
@@ -129,10 +138,21 @@ TEST_F(BubbleDialogModelHostTest, OverrideDefaultButton) {
             ui::DialogButton::DIALOG_BUTTON_CANCEL);
 }
 
+TEST_F(BubbleDialogModelHostTest, OverrideNoneDefaultButton) {
+  auto host = std::make_unique<BubbleDialogModelHost>(
+      ui::DialogModel::Builder()
+          .AddCancelButton(base::DoNothing())
+          .OverrideDefaultButton(ui::DialogButton::DIALOG_BUTTON_NONE)
+          .Build(),
+      /*anchor_view=*/nullptr, BubbleBorder::Arrow::TOP_RIGHT);
+  EXPECT_EQ(host->GetDefaultDialogButton(),
+            ui::DialogButton::DIALOG_BUTTON_NONE);
+}
+
 TEST_F(BubbleDialogModelHostTest, OverrideDefaultButtonDeathTest) {
   EXPECT_DCHECK_DEATH(std::make_unique<BubbleDialogModelHost>(
       ui::DialogModel::Builder()
-          .AddCancelButton(base::OnceClosure())
+          .AddCancelButton(base::DoNothing())
           .OverrideDefaultButton(ui::DialogButton::DIALOG_BUTTON_OK)
           .Build(),
       /*anchor_view=*/nullptr, BubbleBorder::Arrow::TOP_RIGHT))
@@ -146,7 +166,7 @@ TEST_F(BubbleDialogModelHostTest,
 
   auto host = std::make_unique<BubbleDialogModelHost>(
       ui::DialogModel::Builder()
-          .AddCancelButton(base::OnceClosure())
+          .AddCancelButton(base::DoNothing())
           .OverrideDefaultButton(ui::DialogButton::DIALOG_BUTTON_CANCEL)
           .AddTextfield(kFocusedField, u"label", u"text")
           .SetInitiallyFocusedField(kFocusedField)
@@ -156,6 +176,166 @@ TEST_F(BubbleDialogModelHostTest,
             ui::DialogButton::DIALOG_BUTTON_CANCEL);
   EXPECT_EQ(host->GetInitiallyFocusedView()->GetProperty(kElementIdentifierKey),
             kFocusedField);
+}
+
+TEST_F(BubbleDialogModelHostTest, SetEnabledButtons) {
+  constexpr char16_t kExtraButtonText[] = u"Button";
+
+  std::unique_ptr<Widget> anchor_widget =
+      CreateTestWidget(Widget::InitParams::TYPE_WINDOW);
+  anchor_widget->Show();
+
+  auto host_unique = std::make_unique<BubbleDialogModelHost>(
+      ui::DialogModel::Builder()
+          .AddOkButton(base::DoNothing())
+          .AddCancelButton(base::DoNothing(),
+                           ui::DialogModel::Button::Params().SetEnabled(false))
+          .AddExtraButton(base::DoNothing(), ui::DialogModel::Button::Params()
+                                                 .SetLabel(kExtraButtonText)
+                                                 .SetEnabled(true))
+          .Build(),
+      anchor_widget->GetContentsView(), BubbleBorder::Arrow::TOP_RIGHT);
+
+  auto* host = host_unique.get();
+  Widget* const bubble_widget =
+      BubbleDialogDelegate::CreateBubble(std::move(host_unique));
+  test::WidgetVisibleWaiter waiter(bubble_widget);
+  bubble_widget->Show();
+  waiter.Wait();
+
+  EXPECT_EQ(host->GetOkButton()->GetEnabled(), true);
+  EXPECT_EQ(host->GetCancelButton()->GetEnabled(), false);
+  EXPECT_EQ(host->GetExtraView()->GetEnabled(), true);
+
+  bubble_widget->CloseNow();
+}
+
+TEST_F(BubbleDialogModelHostTest, TestFieldVisibility) {
+  DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kField);
+
+  std::unique_ptr<Widget> anchor_widget =
+      CreateTestWidget(Widget::InitParams::TYPE_WINDOW);
+  anchor_widget->Show();
+  const ui::ElementContext context =
+      views::ElementTrackerViews::GetContextForWidget(anchor_widget.get());
+
+  std::unique_ptr<ui::DialogModel> dialog_model =
+      ui::DialogModel::Builder()
+          .AddTextfield(kField, u"label", u"text",
+                        ui::DialogModelTextfield::Params().SetVisible(false))
+          .Build();
+
+  // Get a raw pointer to the model before we move ownership so it can be
+  // changed after the host is created.
+  ui::DialogModel* model = dialog_model.get();
+
+  auto host = std::make_unique<BubbleDialogModelHost>(
+      std::move(dialog_model), anchor_widget->GetContentsView(),
+      BubbleBorder::Arrow::TOP_RIGHT);
+
+  Widget* const bubble_widget =
+      BubbleDialogDelegate::CreateBubble(std::move(host));
+  test::WidgetVisibleWaiter waiter(bubble_widget);
+  bubble_widget->Show();
+  waiter.Wait();
+
+  ASSERT_TRUE(bubble_widget->IsVisible());
+
+  // Since the view is invisible, the tracker shouldn't know about it.
+  // TODO(1455549): It would be nice to have a means of accessing fields
+  //                regardless of state.
+  EXPECT_EQ(
+      views::ElementTrackerViews::GetInstance()->GetUniqueView(kField, context),
+      nullptr);
+
+  model->SetVisible(kField, true);
+
+  // Now that the field is visible, we should be able to access it.
+  views::View* const text_field =
+      views::ElementTrackerViews::GetInstance()->GetUniqueView(kField, context);
+
+  ASSERT_NE(text_field, nullptr);
+  EXPECT_TRUE(text_field->GetVisible());
+
+  bubble_widget->CloseNow();
+}
+
+TEST_F(BubbleDialogModelHostTest, TestButtonLabelUpdate) {
+  DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kButtonId);
+
+  constexpr char16_t kStartingButtonLabel[] = u"Starting";
+  constexpr char16_t kFinalButtonLabel[] = u"Final";
+
+  std::unique_ptr<Widget> anchor_widget =
+      CreateTestWidget(Widget::InitParams::TYPE_WINDOW);
+  anchor_widget->Show();
+
+  std::unique_ptr<ui::DialogModel> dialog_model =
+      ui::DialogModel::Builder()
+          .AddOkButton(base::DoNothing(), ui::DialogModel::Button::Params()
+                                              .SetLabel(kStartingButtonLabel)
+                                              .SetEnabled(true)
+                                              .SetId(kButtonId))
+          .Build();
+
+  // Get a raw pointer to the model before we move ownership so it can be
+  // changed after the host is created.
+  ui::DialogModel* model = dialog_model.get();
+
+  auto host_unique = std::make_unique<BubbleDialogModelHost>(
+      std::move(dialog_model), anchor_widget->GetContentsView(),
+      BubbleBorder::Arrow::TOP_RIGHT);
+
+  auto* host = host_unique.get();
+  Widget* const bubble_widget =
+      BubbleDialogDelegate::CreateBubble(std::move(host_unique));
+  test::WidgetVisibleWaiter waiter(bubble_widget);
+  bubble_widget->Show();
+  waiter.Wait();
+
+  model->SetButtonLabel(model->GetButtonByUniqueId(kButtonId),
+                        kFinalButtonLabel);
+
+  EXPECT_EQ(host->GetOkButton()->GetEnabled(), true);
+  EXPECT_EQ(host->GetOkButton()->GetText(), kFinalButtonLabel);
+
+  bubble_widget->CloseNow();
+}
+
+TEST_F(BubbleDialogModelHostTest, TestAddButtonsWithCloseCallback) {
+  std::unique_ptr<Widget> anchor_widget =
+      CreateTestWidget(Widget::InitParams::TYPE_WINDOW);
+  anchor_widget->Show();
+
+  std::unique_ptr<ui::DialogModel> dialog_model =
+      ui::DialogModel::Builder()
+          .AddOkButton(
+              base::BindRepeating([] { return false; }),
+              ui::DialogModel::Button::Params().SetLabel(u"button").SetEnabled(
+                  true))
+          .AddCancelButton(
+              base::BindRepeating([] { return false; }),
+              ui::DialogModel::Button::Params().SetLabel(u"button").SetEnabled(
+                  true))
+          .Build();
+
+  auto host_unique = std::make_unique<BubbleDialogModelHost>(
+      std::move(dialog_model), anchor_widget->GetContentsView(),
+      BubbleBorder::Arrow::TOP_RIGHT);
+
+  auto* host = host_unique.get();
+  Widget* const bubble_widget =
+      BubbleDialogDelegate::CreateBubble(std::move(host_unique));
+  test::WidgetVisibleWaiter shown_waiter(bubble_widget);
+  bubble_widget->Show();
+  shown_waiter.Wait();
+
+  EXPECT_FALSE(host->Accept());
+  EXPECT_FALSE(host->Cancel());
+
+  EXPECT_FALSE(bubble_widget->IsClosed());
+
+  bubble_widget->CloseNow();
 }
 
 }  // namespace views

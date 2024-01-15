@@ -11,9 +11,10 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/icon_button.h"
 #include "ash/style/style_util.h"
+#include "ash/style/typography.h"
 #include "ash/system/channel_indicator/channel_indicator_utils.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/tray/tray_constants.h"
@@ -23,6 +24,8 @@
 #include "base/ranges/algorithm.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkScalar.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
@@ -41,15 +44,20 @@ namespace ash {
 
 namespace {
 
-constexpr int kVersionButtonHeight = 24;
-constexpr int kVersionButtonRevampHeight = 32;
-constexpr int kVersionButtonImageLabelSpacing = 8;
-
-constexpr int kVersionButtonMarginVertical = 3;
-constexpr int kVersionButtonMarginHorizontal = 16;
-
+constexpr int kVersionButtonHeight = 32;
 constexpr int kVersionButtonLargeCornerRadius = 16;
 constexpr int kVersionButtonSmallCornerRadius = 4;
+constexpr int kSubmitFeedbackButtonMarginTop = 5;
+constexpr int kSubmitFeedbackButtonMarginBottom = 3;
+constexpr int kSubmitFeedbackButtonMarginLeft = 6;
+constexpr int kSubmitFeedbackButtonMarginRight = 8;
+constexpr int kSubmitFeedbackButtonLargeCornerRadius = 16;
+constexpr int kSubmitFeedbackButtonSmallCornerRadius = 4;
+constexpr int kSubmitFeedbackButtonHeight = 32;
+constexpr int kSubmitFeedbackButtonWidth = 40;
+constexpr int kSubmitFeedbackButtonIconSize = 20;
+constexpr int kButtonSpacing = 6;
+constexpr float kVersionButtonStrokeWidth = 1.0f;
 
 // Corners for the `VersionButton` contents. If it's shown alongside its
 // "partner" (the `SubmitFeedbackButton`) then only one side is rounded,
@@ -88,22 +96,6 @@ constexpr gfx::RoundedCornersF kStandaloneVersionButtonInkDropCorners(
     kVersionButtonLargeCornerRadius,
     kVersionButtonLargeCornerRadius);
 
-constexpr int kSubmitFeedbackButtonMarginTop = 5;
-constexpr int kSubmitFeedbackButtonMarginBottom = 3;
-constexpr int kSubmitFeedbackButtonMarginLeft = 6;
-constexpr int kSubmitFeedbackButtonMarginRight = 8;
-
-constexpr int kSubmitFeedbackButtonLargeCornerRadius = 16;
-constexpr int kSubmitFeedbackButtonSmallCornerRadius = 4;
-
-constexpr int kSubmitFeedbackButtonHeight = 24;
-constexpr int kSubmitFeedbackButtonWidth = 30;
-constexpr int kSubmitFeedbackButtonIconSize = 16;
-
-constexpr int kSubmitFeedbackButtonRevampHeight = 32;
-constexpr int kSubmitFeedbackButtonRevampWidth = 40;
-constexpr int kSubmitFeedbackButtonRevampIconSize = 20;
-
 // Corners for the `SubmitFeedbackButton` contents.
 constexpr SkScalar kSubmitFeedbackButtonCorners[] = {
     kSubmitFeedbackButtonSmallCornerRadius,
@@ -127,9 +119,6 @@ constexpr gfx::RoundedCornersF kSubmitFeedbackButtonInkDropCornersRToL(
     kSubmitFeedbackButtonSmallCornerRadius,
     kSubmitFeedbackButtonSmallCornerRadius,
     kSubmitFeedbackButtonLargeCornerRadius);
-
-constexpr int kButtonSpacing = 2;
-constexpr int kButtonSpacingRevamp = 6;
 
 // Returns an array of `SkScalar` used to generate the rounded rect that's
 // painted for the button, the same regardless of RTL/LTR but may be different
@@ -156,53 +145,20 @@ const gfx::RoundedCornersF& GetSubmitFeedbackButtonInkDropCorners() {
                              : kSubmitFeedbackButtonInkDropCornersLToR;
 }
 
-// A `HighlightPathGenerator` that uses caller-supplied rounded rect corners.
-class VIEWS_EXPORT RoundedCornerHighlightPathGenerator
-    : public views::HighlightPathGenerator {
- public:
-  explicit RoundedCornerHighlightPathGenerator(
-      const gfx::RoundedCornersF& corners)
-      : corners_(corners) {}
-
-  RoundedCornerHighlightPathGenerator(
-      const RoundedCornerHighlightPathGenerator&) = delete;
-  RoundedCornerHighlightPathGenerator& operator=(
-      const RoundedCornerHighlightPathGenerator&) = delete;
-
-  // views::HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
-    return gfx::RRectF(rect, corners_);
-  }
-
- private:
-  // The user-supplied rounded rect corners.
-  const gfx::RoundedCornersF corners_;
-};
-
-void InstallRoundedCornerHighlightPathGenerator(
-    views::View* view,
-    const gfx::RoundedCornersF& corners) {
-  views::HighlightPathGenerator::Install(
-      view, std::make_unique<RoundedCornerHighlightPathGenerator>(corners));
-}
-
-SkColor GetInkDropBaseColor(version_info::Channel channel) {
-  if (features::IsQsRevampEnabled()) {
-    const std::pair<SkColor, float> base_color_and_opacity =
-        AshColorProvider::Get()->GetInkDropBaseColorAndOpacity();
-    return base_color_and_opacity.first;
-  }
-  return channel_indicator_utils::GetBgColor(channel);
-}
-
 // VersionButton is a base class that provides a styled button, for devices on a
 // non-stable release track, that has a label for the channel and ChromeOS
 // version.
 class VersionButton : public views::LabelButton {
  public:
+  METADATA_HEADER(VersionButton);
   VersionButton(version_info::Channel channel, bool allow_user_feedback)
       : LabelButton(
             base::BindRepeating([](const ui::Event& event) {
+              // Do nothing if it's shown on non-logged-in screen.
+              if (Shell::Get()->session_controller()->GetSessionState() !=
+                  session_manager::SessionState::ACTIVE) {
+                return;
+              }
               quick_settings_metrics_util::RecordQsButtonActivated(
                   QsButtonCatalogName::kVersionButton);
               Shell::Get()
@@ -211,37 +167,38 @@ class VersionButton : public views::LabelButton {
                   ->ShowChannelInfoAdditionalDetails();
             }),
             channel_indicator_utils::GetFullReleaseTrackString(channel)),
-        channel_(channel),
         allow_user_feedback_(allow_user_feedback) {
     SetID(VIEW_ID_QS_VERSION_BUTTON);
     SetFlipCanvasOnPaintForRTLUI(true);
     const auto& content_corners =
         GetVersionButtonContentCorners(allow_user_feedback);
     base::ranges::copy(content_corners, content_corners_);
-    if (features::IsQsRevampEnabled()) {
-      SetHorizontalAlignment(gfx::ALIGN_CENTER);
-      SetMinSize(gfx::Size(0, kVersionButtonRevampHeight));
-    } else {
-      SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(
-          kVersionButtonMarginVertical, kVersionButtonMarginHorizontal)));
-      SetImageLabelSpacing(kVersionButtonImageLabelSpacing);
-      SetMinSize(gfx::Size(0, kVersionButtonHeight));
+    SetHorizontalAlignment(gfx::ALIGN_CENTER);
+    SetMinSize(gfx::Size(0, kVersionButtonHeight));
+
+    StyleUtil::InstallRoundedCornerHighlightPathGenerator(
+        this, GetVersionButtonInkDropCorners(allow_user_feedback));
+    views::FocusRing::Get(this)->SetColorId(cros_tokens::kCrosSysFocusRing);
+
+    // The button is not focusable and with no clickable effect if it's shown on
+    // non-logged-in screen.
+    if (Shell::Get()->session_controller()->GetSessionState() !=
+        session_manager::SessionState::ACTIVE) {
+      SetFocusBehavior(FocusBehavior::NEVER);
+      return;
     }
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-    InstallRoundedCornerHighlightPathGenerator(
-        this, GetVersionButtonInkDropCorners(allow_user_feedback));
   }
   VersionButton(const VersionButton&) = delete;
   VersionButton& operator=(const VersionButton&) = delete;
   ~VersionButton() override = default;
 
   void SetNarrowLayout(bool narrow) {
-    DCHECK(features::IsQsRevampEnabled());
     if (allow_user_feedback_ && !narrow) {
       // Visually center the label by adding an empty border on the left side
       // that is the same width as the feedback button on the right.
       SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
-          0, kButtonSpacingRevamp + kSubmitFeedbackButtonRevampWidth, 0, 0)));
+          0, kButtonSpacing + kSubmitFeedbackButtonWidth, 0, 0)));
     } else {
       // No special centering.
       SetBorder(nullptr);
@@ -251,43 +208,34 @@ class VersionButton : public views::LabelButton {
   // views::LabelButton:
   void PaintButtonContents(gfx::Canvas* canvas) override {
     cc::PaintFlags flags;
-    if (features::IsQsRevampEnabled()) {
-      flags.setColor(AshColorProvider::Get()->GetContentLayerColor(
-          ColorProvider::ContentLayerType::kSeparatorColor));
-      flags.setStyle(cc::PaintFlags::kStroke_Style);
-    } else {
-      flags.setColor(channel_indicator_utils::GetBgColor(channel_));
-      flags.setStyle(cc::PaintFlags::kFill_Style);
-    }
+    gfx::RectF bounds(GetLocalBounds());
+    flags.setColor(
+        GetColorProvider()->GetColor(cros_tokens::kCrosSysSeparator));
+    flags.setStyle(cc::PaintFlags::kStroke_Style);
+    const float half_stroke_width = kVersionButtonStrokeWidth / 2.0f;
+    bounds.Inset(half_stroke_width);
+
     flags.setAntiAlias(true);
+    flags.setStrokeWidth(kVersionButtonStrokeWidth);
     canvas->DrawPath(
-        SkPath().addRoundRect(gfx::RectToSkRect(GetLocalBounds()),
-                              content_corners_, SkPathDirection::kCW),
+        SkPath().addRoundRect(gfx::RectFToSkRect(bounds), content_corners_),
         flags);
   }
 
   void OnThemeChanged() override {
     views::LabelButton::OnThemeChanged();
-    views::InkDrop::Get(this)->SetBaseColor(GetInkDropBaseColor(channel_));
+    views::InkDrop::Get(this)->SetBaseColor(
+        GetColorProvider()->GetColor(kColorAshInkDropOpaqueColor));
     SetBackgroundAndFont();
   }
 
  private:
   void SetBackgroundAndFont() {
-    if (features::IsQsRevampEnabled()) {
-      // TODO(b/252873172): Revisit font style and color. For now use the
-      // default size (which is obviously too small).
-      SetEnabledTextColors(AshColorProvider::Get()->GetContentLayerColor(
-          ColorProvider::ContentLayerType::kTextColorSecondary));
-    } else {
-      label()->SetFontList(
-          gfx::FontList().DeriveWithWeight(gfx::Font::Weight::MEDIUM));
-      SetEnabledTextColors(channel_indicator_utils::GetFgColor(channel_));
-    }
+    SetEnabledTextColorIds(cros_tokens::kCrosSysOnSurfaceVariant);
+    label()->SetFontList(ash::TypographyProvider::Get()->ResolveTypographyToken(
+        ash::TypographyToken::kCrosBody2));
+    label()->SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(0, 6)));
   }
-
-  // The channel itself, BETA, DEV, or CANARY.
-  const version_info::Channel channel_;
 
   // Whether the user is allowed to send feedback.
   const bool allow_user_feedback_;
@@ -296,10 +244,14 @@ class VersionButton : public views::LabelButton {
   SkScalar content_corners_[kNumVersionButtonCornerRadii];
 };
 
+BEGIN_METADATA(VersionButton, views::LabelButton)
+END_METADATA
+
 // SubmitFeedbackButton provides a styled button, for devices on a
 // non-stable release track, that allows the user to submit feedback.
 class SubmitFeedbackButton : public IconButton {
  public:
+  METADATA_HEADER(SubmitFeedbackButton);
   // `content_corners` - an array of `SkScalar` used to generate the rounded
   // rect that's painted for the button, the same regardless of RTL/LTR.
   // `highlight_corners` - a `gfx::RoundedCornersF` used to generate the
@@ -316,36 +268,22 @@ class SubmitFeedbackButton : public IconButton {
                          ->client()
                          ->ShowChannelInfoGiveFeedback();
                    }),
-                   features::IsQsRevampEnabled()
-                       ? IconButton::Type::kSmallFloating
-                       : IconButton::Type::kSmall,
+                   IconButton::Type::kMediumFloating,
                    &kRequestFeedbackIcon,
-                   IDS_ASH_STATUS_TRAY_REPORT_FEEDBACK),
-        channel_(channel) {
+                   IDS_ASH_STATUS_TRAY_REPORT_FEEDBACK) {
     SetID(VIEW_ID_QS_FEEDBACK_BUTTON);
     base::ranges::copy(content_corners, content_corners_);
     SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
         kSubmitFeedbackButtonMarginTop, kSubmitFeedbackButtonMarginLeft,
         kSubmitFeedbackButtonMarginBottom, kSubmitFeedbackButtonMarginRight)));
-    if (features::IsQsRevampEnabled()) {
-      SetIconSize(kSubmitFeedbackButtonRevampIconSize);
-      SetPreferredSize(gfx::Size(kSubmitFeedbackButtonRevampWidth,
-                                 kSubmitFeedbackButtonRevampHeight));
-      // Enable ink drop on hover.
-      StyleUtil::SetUpInkDropForButton(this, gfx::Insets(),
-                                       /*highlight_on_hover=*/true,
-                                       /*highlight_on_focus=*/false,
-                                       GetInkDropBaseColor(channel_));
-    } else {
-      SetIconSize(kSubmitFeedbackButtonIconSize);
-      SetPreferredSize(
-          gfx::Size(kSubmitFeedbackButtonWidth, kSubmitFeedbackButtonHeight));
-    }
-    // Icon colors are set in OnThemeChanged().
+    SetIconSize(kSubmitFeedbackButtonIconSize);
+    SetPreferredSize(
+        gfx::Size(kSubmitFeedbackButtonWidth, kSubmitFeedbackButtonHeight));
 
+    // Icon colors are set in OnThemeChanged().
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-    views::InkDrop::Get(this)->SetBaseColor(GetInkDropBaseColor(channel_));
-    InstallRoundedCornerHighlightPathGenerator(this, highlight_corners);
+    StyleUtil::InstallRoundedCornerHighlightPathGenerator(this,
+                                                          highlight_corners);
   }
   SubmitFeedbackButton(const SubmitFeedbackButton&) = delete;
   SubmitFeedbackButton& operator=(const SubmitFeedbackButton&) = delete;
@@ -354,41 +292,44 @@ class SubmitFeedbackButton : public IconButton {
   // views::LabelButton:
   void PaintButtonContents(gfx::Canvas* canvas) override {
     cc::PaintFlags flags;
-    if (features::IsQsRevampEnabled()) {
-      flags.setColor(AshColorProvider::Get()->GetContentLayerColor(
-          ColorProvider::ContentLayerType::kSeparatorColor));
-      flags.setStyle(cc::PaintFlags::kStroke_Style);
-    } else {
-      flags.setColor(channel_indicator_utils::GetBgColor(channel_));
-      flags.setStyle(cc::PaintFlags::kFill_Style);
-    }
+    gfx::RectF bounds(GetLocalBounds());
+    flags.setColor(
+        GetColorProvider()->GetColor(cros_tokens::kCrosSysSeparator));
+    flags.setStyle(cc::PaintFlags::kStroke_Style);
+    const float half_stroke_width = kVersionButtonStrokeWidth / 2.0f;
+    bounds.Inset(half_stroke_width);
+
     flags.setAntiAlias(true);
+    flags.setStrokeWidth(kVersionButtonStrokeWidth);
     canvas->DrawPath(
-        SkPath().addRoundRect(gfx::RectToSkRect(GetLocalBounds()),
-                              content_corners_, SkPathDirection::kCW),
+        SkPath().addRoundRect(gfx::RectFToSkRect(bounds), content_corners_),
         flags);
     IconButton::PaintButtonContents(canvas);
   }
 
   void OnThemeChanged() override {
-    if (features::IsQsRevampEnabled()) {
-      // TODO(b/252873172): Revisit icon color.
-      SetIconColor(AshColorProvider::Get()->GetContentLayerColor(
-          ColorProvider::ContentLayerType::kIconColorSecondary));
-    } else {
-      SetIconColor(channel_indicator_utils::GetFgColor(channel_));
-      SetBackgroundColor(channel_indicator_utils::GetBgColor(channel_));
-    }
+    auto* color_provider = GetColorProvider();
+    SetIconColor(cros_tokens::kCrosSysOnSurfaceVariant);
+
+    const SkColor ink_drop_base_color =
+        color_provider->GetColor(kColorAshInkDropOpaqueColor);
+    // Enable ink drop on hover.
+    StyleUtil::SetUpInkDropForButton(this, gfx::Insets(),
+                                     /*highlight_on_hover=*/true,
+                                     /*highlight_on_focus=*/false,
+                                     ink_drop_base_color);
+    views::InkDrop::Get(this)->SetBaseColor(ink_drop_base_color);
+
     IconButton::OnThemeChanged();
   }
 
  private:
-  // The channel itself, BETA, DEV, or CANARY.
-  const version_info::Channel channel_;
-
   // Array of values that represents the content rounded rect corners.
   SkScalar content_corners_[kNumVersionButtonCornerRadii];
 };
+
+BEGIN_METADATA(SubmitFeedbackButton, IconButton)
+END_METADATA
 
 }  // namespace
 
@@ -404,19 +345,13 @@ ChannelIndicatorQuickSettingsView::ChannelIndicatorQuickSettingsView(
 
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
-  if (features::IsQsRevampEnabled()) {
-    layout->set_between_child_spacing(kButtonSpacingRevamp);
-  } else {
-    layout->set_between_child_spacing(kButtonSpacing);
-  }
+  layout->set_between_child_spacing(kButtonSpacing);
 
   version_button_ = AddChildView(
       std::make_unique<VersionButton>(channel, allow_user_feedback));
 
-  if (features::IsQsRevampEnabled()) {
-    // Stretch version button horizontally.
-    layout->SetFlexForView(version_button_, 1);
-  }
+  // Stretch version button horizontally.
+  layout->SetFlexForView(version_button_, 1);
 
   if (allow_user_feedback) {
     feedback_button_ = AddChildView(std::make_unique<SubmitFeedbackButton>(
@@ -429,5 +364,8 @@ void ChannelIndicatorQuickSettingsView::SetNarrowLayout(bool narrow) {
   DCHECK(views::IsViewClass<VersionButton>(version_button_));
   views::AsViewClass<VersionButton>(version_button_)->SetNarrowLayout(narrow);
 }
+
+BEGIN_METADATA(ChannelIndicatorQuickSettingsView, views::View)
+END_METADATA
 
 }  // namespace ash

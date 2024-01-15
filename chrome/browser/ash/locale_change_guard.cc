@@ -6,14 +6,13 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/ash/base/locale_util.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -22,8 +21,6 @@
 #include "components/language/core/browser/pref_names.h"
 #include "components/language/core/common/locale_util.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_source.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -54,14 +51,16 @@ LocaleChangeGuard::~LocaleChangeGuard() {
 }
 
 void LocaleChangeGuard::OnLogin() {
-  if (session_observation_.IsObserving()) {
-    DCHECK(session_observation_.IsObservingSource(
-        session_manager::SessionManager::Get()));
-    return;
+  if (session_manager::SessionManager::Get()->IsSessionStarted()) {
+    Check();
+  } else {
+    if (session_observation_.IsObserving()) {
+      DCHECK(session_observation_.IsObservingSource(
+          session_manager::SessionManager::Get()));
+      return;
+    }
+    session_observation_.Observe(session_manager::SessionManager::Get());
   }
-  session_observation_.Observe(session_manager::SessionManager::Get());
-  registrar_.Add(this, content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
-                 content::NotificationService::AllBrowserContextsAndSources());
 }
 
 void LocaleChangeGuard::RevertLocaleChange() {
@@ -78,25 +77,9 @@ void LocaleChangeGuard::RevertLocaleChange() {
   chrome::AttemptUserExit();
 }
 
-void LocaleChangeGuard::Observe(int type,
-                                const content::NotificationSource& source,
-                                const content::NotificationDetails& details) {
-  DCHECK_EQ(type, content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME);
-  if (profile_ != content::Source<WebContents>(source)->GetBrowserContext())
-    return;
-
-  main_frame_loaded_ = true;
-  // We need to perform locale change check only once, so unsubscribe.
-  registrar_.Remove(this, content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
-                    content::NotificationService::AllSources());
-  if (session_manager::SessionManager::Get()->IsSessionStarted())
-    Check();
-}
-
 void LocaleChangeGuard::OnUserSessionStarted(bool is_primary_user) {
   session_observation_.Reset();
-  if (main_frame_loaded_)
-    Check();
+  Check();
 }
 
 void LocaleChangeGuard::OwnershipStatusChanged() {
@@ -164,7 +147,8 @@ void LocaleChangeGuard::Check() {
 
   LocaleUpdateController::Get()->ConfirmLocaleChange(
       cur_locale, from_locale_, to_locale_,
-      base::BindOnce(&LocaleChangeGuard::OnResult, AsWeakPtr()));
+      base::BindOnce(&LocaleChangeGuard::OnResult,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void LocaleChangeGuard::OnResult(LocaleNotificationResult result) {

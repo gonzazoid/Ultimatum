@@ -6,7 +6,7 @@
 
 #import <WebKit/WebKit.h>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/web/js_messaging/java_script_content_world.h"
@@ -20,10 +20,6 @@
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForJSCompletionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -31,7 +27,8 @@ namespace {
 // Returns the first WebFrame found which is not the main frame in the given
 // `web_state`. Does not wait and returns null if such a frame is not found.
 web::WebFrame* GetChildWebFrameForWebState(web::WebState* web_state) {
-  __block web::WebFramesManager* manager = web_state->GetWebFramesManager();
+  __block web::WebFramesManager* manager =
+      web_state->GetPageWorldWebFramesManager();
   web::WebFrame* iframe = nullptr;
   for (web::WebFrame* frame : manager->GetAllWebFrames()) {
     if (!frame->IsMainFrame()) {
@@ -53,13 +50,14 @@ typedef WebTestWithWebState WebFrameImplIntTest;
 TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionOnMainFrame) {
   ASSERT_TRUE(LoadHtml("<p>"));
 
-  WebFrame* main_frame = web_state()->GetWebFramesManager()->GetMainWebFrame();
+  WebFrame* main_frame =
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   ASSERT_TRUE(main_frame);
 
   __block bool called = false;
-  std::vector<base::Value> params;
   main_frame->CallJavaScriptFunction(
-      "message.getFrameId", params, base::BindOnce(^(const base::Value* value) {
+      "message.getFrameId", base::Value::List(),
+      base::BindOnce(^(const base::Value* value) {
         ASSERT_TRUE(value->is_string());
         EXPECT_EQ(value->GetString(), main_frame->GetFrameId());
         called = true;
@@ -75,7 +73,8 @@ TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionOnMainFrame) {
 TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionOnIframe) {
   ASSERT_TRUE(LoadHtml("<p><iframe srcdoc='<p>'/>"));
 
-  __block WebFramesManager* manager = web_state()->GetWebFramesManager();
+  __block WebFramesManager* manager =
+      web_state()->GetPageWorldWebFramesManager();
   ASSERT_TRUE(WaitUntilConditionOrTimeout(
       base::test::ios::kWaitForJSCompletionTimeout, ^bool {
         return manager->GetAllWebFrames().size() == 2;
@@ -85,9 +84,9 @@ TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionOnIframe) {
   ASSERT_TRUE(iframe);
 
   __block bool called = false;
-  std::vector<base::Value> params;
   iframe->CallJavaScriptFunction(
-      "message.getFrameId", params, base::BindOnce(^(const base::Value* value) {
+      "message.getFrameId", base::Value::List(),
+      base::BindOnce(^(const base::Value* value) {
         ASSERT_TRUE(value->is_string());
         EXPECT_EQ(value->GetString(), iframe->GetFrameId());
         called = true;
@@ -108,13 +107,13 @@ TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionTimeout) {
                      "  while(true) {}"
                      "};");
 
-  WebFrame* main_frame = web_state()->GetWebFramesManager()->GetMainWebFrame();
+  WebFrame* main_frame =
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   ASSERT_TRUE(main_frame);
 
   __block bool called = false;
-  std::vector<base::Value> params;
   main_frame->CallJavaScriptFunction(
-      "testFunctionNeverReturns", params,
+      "testFunctionNeverReturns", base::Value::List(),
       base::BindOnce(^(const base::Value* value) {
         EXPECT_FALSE(value);
         called = true;
@@ -131,68 +130,6 @@ TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionTimeout) {
   }));
 }
 
-// Tests that the main WebFrame is passed to the callback when sending a
-// JS -> native message.
-TEST_F(WebFrameImplIntTest, JavaScriptMessageFromMainFrame) {
-  ASSERT_TRUE(LoadHtml("<p>"));
-  __block bool command_received = false;
-  // The callback doesn't care about any of the parameters not related to
-  // frames.
-  auto callback = base::BindRepeating(
-      ^(const base::Value& /* json */, const GURL& /* origin_url */,
-        bool /* user_is_interacting */, WebFrame* sender_frame) {
-        command_received = true;
-        EXPECT_TRUE(sender_frame->IsMainFrame());
-        EXPECT_EQ(web_state()->GetWebFramesManager()->GetMainWebFrame(),
-                  sender_frame);
-      });
-
-  auto subscription =
-      web_state()->AddScriptCommandCallback(callback, "senderFrameTestCommand");
-  EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
-    return web_state()->GetWebFramesManager()->GetAllWebFrames().size() == 1;
-  }));
-
-  base::Value message_dict(base::Value::Type::DICTIONARY);
-  message_dict.SetKey("command",
-                      base::Value("senderFrameTestCommand.mainframe"));
-  std::vector<base::Value> params;
-  params.push_back(std::move(message_dict));
-  CallJavaScriptFunction("message.invokeOnHost", params);
-
-  EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
-    return command_received;
-  }));
-}
-
-// Tests that an iframe WebFrame is passed to the callback when sending a
-// JS -> native message.
-TEST_F(WebFrameImplIntTest, JavaScriptMessageFromFrame) {
-  ASSERT_TRUE(LoadHtml("<p><iframe>"));
-  __block bool command_received = false;
-  // The callback doesn't care about any of the parameters not related to
-  // frames.
-  auto callback = base::BindRepeating(
-      ^(const base::Value& /* json */, const GURL& /* origin_url */,
-        bool /* user_is_interacting */, WebFrame* sender_frame) {
-        command_received = true;
-        EXPECT_FALSE(sender_frame->IsMainFrame());
-        EXPECT_EQ(GetChildWebFrameForWebState(web_state()), sender_frame);
-      });
-
-  auto subscription =
-      web_state()->AddScriptCommandCallback(callback, "senderFrameTestCommand");
-  EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
-    return web_state()->GetWebFramesManager()->GetAllWebFrames().size() == 2;
-  }));
-  ExecuteJavaScript(
-      @"window.frames[0].__gCrWeb.message.invokeOnHost({'command':'"
-      @"senderFrameTestCommand.iframe'});");
-  EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
-    return command_received;
-  }));
-}
-
 // Tests that the expected result is received from executing a JavaScript
 // function via `CallJavaScriptFunction` on the main frame in the page content
 // world.
@@ -204,20 +141,19 @@ TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionMainFramePageContentWorld) {
                     @"}");
 
   web::WebFrameImpl* main_frame_impl = static_cast<web::WebFrameImpl*>(
-      web_state()->GetWebFramesManager()->GetMainWebFrame());
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame());
   ASSERT_TRUE(main_frame_impl);
 
   JavaScriptContentWorld world(GetBrowserState(), WKContentWorld.pageWorld);
   __block bool called = false;
 
-  std::vector<base::Value> function_params;
   auto block = ^(const base::Value* value) {
     ASSERT_TRUE(value->is_string());
     EXPECT_EQ(value->GetString(), "10");
     called = true;
   };
   EXPECT_TRUE(main_frame_impl->CallJavaScriptFunctionInContentWorld(
-      "fakeFunction", function_params, &world, base::BindOnce(block),
+      "fakeFunction", base::Value::List(), &world, base::BindOnce(block),
       // Increase feature timeout in order to fail on test specific timeout.
       2 * kWaitForJSCompletionTimeout));
 
@@ -240,20 +176,19 @@ TEST_F(WebFrameImplIntTest, CallJavaScriptFunctionMainFrameIsolatedWorld) {
                           @"}");
 
   web::WebFrameImpl* main_frame_impl = static_cast<web::WebFrameImpl*>(
-      web_state()->GetWebFramesManager()->GetMainWebFrame());
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame());
   ASSERT_TRUE(main_frame_impl);
 
   JavaScriptContentWorld world(GetBrowserState(),
                                WKContentWorld.defaultClientWorld);
   __block bool called = false;
-  std::vector<base::Value> function_params;
   auto block = ^(const base::Value* value) {
     ASSERT_TRUE(value->is_string());
     EXPECT_EQ(value->GetString(), "10");
     called = true;
   };
   EXPECT_TRUE(main_frame_impl->CallJavaScriptFunctionInContentWorld(
-      "fakeFunction", function_params, &world, base::BindOnce(block),
+      "fakeFunction", base::Value::List(), &world, base::BindOnce(block),
       // Increase feature timeout in order to fail on test specific timeout.
       2 * kWaitForJSCompletionTimeout));
 

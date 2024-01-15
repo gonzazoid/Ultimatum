@@ -38,8 +38,8 @@ function assertMatchErrorStack(
  * @return {!Promise<!Object>}
  */
 async function sendTestMessage(messageType, message = {}) {
-  await testMessageHandlersReady;
-  return untrustedMessagePipe.sendMessage(messageType, message);
+  await window['testMessageHandlersReady'];
+  return window['untrustedMessagePipe'].sendMessage(messageType, message);
 }
 
 // js2gtest fixtures require var here (https://crbug.com/1033337).
@@ -96,7 +96,7 @@ TEST_F('MessagePipeBrowserTest', 'IgnoresMessagesWithNoType', async () => {
 
 // Tests that we receive an error if our message is unhandled.
 TEST_F('MessagePipeBrowserTest', 'ReceivesNoHandlerError', async () => {
-  untrustedMessagePipe.logClientError = error =>
+  window['untrustedMessagePipe'].logClientError = error =>
       console.log(JSON.stringify(error));
   let caughtError = {};
 
@@ -119,14 +119,14 @@ TEST_F('MessagePipeBrowserTest', 'ReceivesNoHandlerError', async () => {
     'Error from chrome-untrusted://system-app-test',
     'Error: No handler registered for message type \'unknown-message\'',
     'at MessagePipe.receiveMessage_ \\(chrome-untrusted://system-app-test/',
-    'at MessagePipe.messageListener_ \\(chrome-untrusted://system-app-test/',
+    'at messageListener_ \\(chrome-untrusted://system-app-test/',
   ]);
   testDone();
 });
 
 // Tests that we receive an error if the handler fails.
 TEST_F('MessagePipeBrowserTest', 'ReceivesProxiedError', async () => {
-  untrustedMessagePipe.logClientError = error =>
+  window['untrustedMessagePipe'].logClientError = error =>
       console.log(JSON.stringify(error));
   let caughtError = {};
 
@@ -150,7 +150,7 @@ TEST_F('MessagePipeBrowserTest', 'ReceivesProxiedError', async () => {
     'at chrome-untrusted://system-app-test/test_data/message_pipe_browsertest_untrusted.js',
     'at MessagePipe.callHandlerForMessageType_ \\(chrome-untrusted://system-app-test/',
     'at MessagePipe.receiveMessage_ \\(chrome-untrusted://system-app-test/',
-    'at MessagePipe.messageListener_ \\(chrome-untrusted://system-app-test/',
+    'at messageListener_ \\(chrome-untrusted://system-app-test/',
   ]);
   testDone();
 });
@@ -158,6 +158,8 @@ TEST_F('MessagePipeBrowserTest', 'ReceivesProxiedError', async () => {
 // Tests `MessagePipe.sendMessage()` properly propagates errors and appends
 // stacktraces.
 TEST_F('MessagePipeBrowserTest', 'CrossContextErrors', async () => {
+  const untrustedMessagePipe = window['untrustedMessagePipe'];
+
   untrustedMessagePipe.logClientError = error =>
       console.log(JSON.stringify(error));
   untrustedMessagePipe.rethrowErrors = false;
@@ -194,7 +196,7 @@ TEST_F('MessagePipeBrowserTest', 'CrossContextErrors', async () => {
     'at .*message_pipe_browsertest.js',
     'at MessagePipe.callHandlerForMessageType_',
     'at MessagePipe.receiveMessage_',
-    'at MessagePipe.messageListener_',
+    'at messageListener_',
   ]);
   testDone();
 });

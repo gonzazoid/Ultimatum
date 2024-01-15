@@ -8,8 +8,9 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/values_util.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -122,7 +123,8 @@ bool GetCreationTimeFromDict(const base::Value::Dict& dict, base::Time* time) {
   if (!time_value)
     return false;
 
-  base::Time time_maybe_null = base::Time::FromDoubleT(*time_value);
+  base::Time time_maybe_null =
+      base::Time::FromSecondsSinceUnixEpoch(*time_value);
   if (time_maybe_null.is_null())
     return false;
 
@@ -146,7 +148,8 @@ class OriginData {
     base::Value::Dict dict;
 
     dict.Set(kOriginId, base::UnguessableTokenToValue(origin_id_));
-    dict.Set(kCreationTime, base::Value(provision_time_.ToDoubleT()));
+    dict.Set(kCreationTime,
+             base::Value(provision_time_.InSecondsFSinceUnixEpoch()));
 
     return dict;
   }
@@ -198,7 +201,8 @@ class SessionData {
                             key_set_id_.size())));
     dict.Set(kMimeType, base::Value(mime_type_));
     dict.Set(kKeyType, base::Value(static_cast<int>(key_type_)));
-    dict.Set(kCreationTime, base::Value(creation_time_.ToDoubleT()));
+    dict.Set(kCreationTime,
+             base::Value(creation_time_.InSecondsFSinceUnixEpoch()));
 
     return dict;
   }
@@ -331,14 +335,14 @@ void ClearSessionDataForTimePeriod(base::Value::Dict& sessions_dict,
 // 2. Removes the origin data if all of the sessions are removed.
 // 3. Returns a list of origin IDs to unprovision.
 std::vector<base::UnguessableToken> ClearMatchingLicenseData(
-    base::Value* storage_dict,
+    base::Value::Dict& storage_dict,
     base::Time start,
     base::Time end,
-    const base::RepeatingCallback<bool(const GURL&)>& filter) {
+    const MediaDrmStorageImpl::ClearMatchingLicensesFilterCB& filter) {
   std::vector<std::string> origins_to_delete;
   std::vector<base::UnguessableToken> origin_ids_to_unprovision;
 
-  for (const auto key_value : storage_dict->DictItems()) {
+  for (const auto key_value : storage_dict) {
     const std::string& origin_str = key_value.first;
 
     if (filter && !filter.Run(GURL(origin_str)))
@@ -383,7 +387,7 @@ std::vector<base::UnguessableToken> ClearMatchingLicenseData(
 
   // Remove origin data.
   for (const auto& origin_str : origins_to_delete)
-    storage_dict->RemoveKey(origin_str);
+    storage_dict.Remove(origin_str);
 
   return origin_ids_to_unprovision;
 }
@@ -403,9 +407,11 @@ void ClearMediaDrmLicensesBlocking(
             media::MediaDrmBridge::SECURITY_LEVEL_DEFAULT,
             base::NullCallback());
 
-    DCHECK(media_drm_bridge);
-
-    media_drm_bridge->Unprovision();
+    if (media_drm_bridge) {
+      media_drm_bridge->Unprovision();
+    } else {
+      base::debug::DumpWithoutCrashing();
+    }
   }
 }
 #endif  // BUILDFLAG(IS_ANDROID)
@@ -547,8 +553,8 @@ class InitializationSerializer {
 
     // Save the origin ID in the preference as long as it is not null.
     if (origin_id) {
-      DictionaryPrefUpdate update(pref_service, prefs::kMediaDrmStorage);
-      CreateOriginDictAndReturnSessionsDict(update->GetDict(), origin,
+      ScopedDictPrefUpdate update(pref_service, prefs::kMediaDrmStorage);
+      CreateOriginDictAndReturnSessionsDict(update.Get(), origin,
                                             origin_id.value());
     }
 
@@ -658,11 +664,11 @@ void MediaDrmStorageImpl::ClearMatchingLicenses(
     PrefService* pref_service,
     base::Time start,
     base::Time end,
-    const base::RepeatingCallback<bool(const GURL&)>& filter,
+    const MediaDrmStorageImpl::ClearMatchingLicensesFilterCB& filter,
     base::OnceClosure complete_cb) {
   DVLOG(1) << __func__ << ": Clear licenses [" << start << ", " << end << "]";
 
-  DictionaryPrefUpdate update(pref_service, prefs::kMediaDrmStorage);
+  ScopedDictPrefUpdate update(pref_service, prefs::kMediaDrmStorage);
 
   std::vector<base::UnguessableToken> no_license_origin_ids =
       ClearMatchingLicenseData(update.Get(), start, end, filter);
@@ -784,13 +790,12 @@ void MediaDrmStorageImpl::OnProvisioned(OnProvisionedCallback callback) {
     return;
   }
 
-  DictionaryPrefUpdate update(pref_service_, prefs::kMediaDrmStorage);
-  base::Value::Dict& storage_dict = update->GetDict();
+  ScopedDictPrefUpdate update(pref_service_, prefs::kMediaDrmStorage);
 
   // Update origin dict once origin provisioning completes. There may be
   // orphaned session info from a previous provisioning. Clear them by
   // recreating the dicts.
-  CreateOriginDictAndReturnSessionsDict(storage_dict, origin(),
+  CreateOriginDictAndReturnSessionsDict(update.Get(), origin(),
                                         origin_id_.value());
   std::move(callback).Run(true);
 }
@@ -815,8 +820,8 @@ void MediaDrmStorageImpl::SavePersistentSession(
     return;
   }
 
-  DictionaryPrefUpdate update(pref_service_, prefs::kMediaDrmStorage);
-  base::Value::Dict& storage_dict = update->GetDict();
+  ScopedDictPrefUpdate update(pref_service_, prefs::kMediaDrmStorage);
+  base::Value::Dict& storage_dict = update.Get();
 
   base::Value::Dict* sessions_dict =
       GetSessionsDictFromStorageDict(storage_dict, origin().Serialize());
@@ -912,10 +917,10 @@ void MediaDrmStorageImpl::RemovePersistentSession(
     return;
   }
 
-  DictionaryPrefUpdate update(pref_service_, prefs::kMediaDrmStorage);
+  ScopedDictPrefUpdate update(pref_service_, prefs::kMediaDrmStorage);
 
   base::Value::Dict* sessions_dict =
-      GetSessionsDictFromStorageDict(update->GetDict(), origin().Serialize());
+      GetSessionsDictFromStorageDict(update.Get(), origin().Serialize());
 
   if (!sessions_dict) {
     std::move(callback).Run(true);

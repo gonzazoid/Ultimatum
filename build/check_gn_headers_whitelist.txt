@@ -16,12 +16,10 @@ cc/cc_export.h
 cc/input/browser_controls_state.h
 cc/input/event_listener_properties.h
 cc/input/scrollbar.h
-cc/input/scroller_size_metrics.h
 cc/layers/performance_properties.h
 chrome/browser/android/android_theme_resources.h
 chrome/browser/android/resource_id.h
 chrome/browser/ash/login/signin/oauth2_login_manager.h
-chrome/browser/ash/login/signin/oauth2_login_verifier.h
 chrome/browser/ash/login/signin/oauth2_token_fetcher.h
 chrome/browser/ash/profiles/profile_helper.h
 chrome/browser/ash/settings/cros_settings.h
@@ -43,7 +41,7 @@ chrome/browser/media/webrtc/rtp_dump_type.h
 chrome/browser/media_galleries/media_file_system_context.h
 chrome/browser/notifications/displayed_notifications_dispatch_callback.h
 chrome/browser/ui/app_icon_loader_delegate.h
-chrome/browser/ui/app_list/app_list_syncable_service_factory.h
+chrome/browser/ash/app_list/app_list_syncable_service_factory.h
 chrome/browser/ui/ash/ash_util.h
 chrome/browser/ui/ash/multi_user/multi_user_util.h
 chrome/browser/ui/network_profile_bubble.h
@@ -55,9 +53,6 @@ chrome/install_static/install_modes.h
 chrome/install_static/install_util.h
 chrome/install_static/test/scoped_install_details.h
 chrome/installer/util/google_update_settings.h
-components/browser_watcher/features.h
-components/browser_watcher/stability_paths.h
-components/cdm/browser/cdm_message_filter_android.h
 components/device_event_log/device_event_log_export.h
 components/login/login_export.h
 components/media_router/common/providers/cast/certificate/cast_crl_root_ca_cert_der-inc.h

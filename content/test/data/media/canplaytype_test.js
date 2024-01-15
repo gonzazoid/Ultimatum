@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -256,9 +256,9 @@ const BAD_OGG_CODEC_LIST = [
 
   // Codecs are case sensitive.
   'Theora',
-  'Opus',
+  'OpuS',
   'Vorbis',
-  'Theora, Opus',
+  'Theora, OpuS',
   'Theora, Vorbis',
 
   // Unknown codecs.
@@ -313,9 +313,9 @@ const BAD_WEBM_CODEC_LIST = [
 
   // Codecs are case sensitive.
   'VP8, Vorbis',
-  'VP8.0, Opus',
+  'VP8.0, OpuS',
   'VP9, Vorbis',
-  'VP9.0, Opus',
+  'VP9.0, OpuS',
 
   // Unknown codec.
   'unknown',
@@ -663,10 +663,13 @@ function testFlacVariants() {
     'probably': [
       'audio/flac',
       'audio/ogg; codecs="flac"',
+      'audio/ogg; codecs="fLaC"',
 
       // See CodecSupportTest_mp4 for more flac Variants.
       'audio/mp4; codecs="flac"',
       'video/mp4; codecs="flac"',
+      'audio/mp4; codecs="fLaC"',
+      'video/mp4; codecs="fLaC"',
     ],
     'not': [
       'video/flac',
@@ -740,14 +743,19 @@ function testMp3Variants() {
       testMimeCodecMap(MP3_CODEC_MAP, false);
 }
 
-function testMp4Variants(has_proprietary_codecs, platform_guarantees_hevc) {
+function testMp4Variants(
+    has_proprietary_codecs, platform_guarantees_hevc,
+    platform_guarantees_ac3_eac3) {
   const MP4_CODEC_MAP = {
     'probably': [
       'audio/mp4; codecs="flac"',
+      'audio/mp4; codecs="fLaC"',
       'audio/mp4; codecs="mp4a.69"',
       'audio/mp4; codecs="mp4a.6B"',
       'audio/mp4; codecs="opus"',
+      'audio/mp4; codecs="Opus"',
       'video/mp4; codecs="flac"',
+      'video/mp4; codecs="fLaC"',
       'video/mp4; codecs="mp4a.69"',
       'video/mp4; codecs="mp4a.6B"',
       'video/mp4; codecs="opus"',
@@ -787,26 +795,6 @@ function testMp4Variants(has_proprietary_codecs, platform_guarantees_hevc) {
       'video/x-m4v; codecs="hev1.1.6.L93.B0"',
       'video/x-m4v; codecs="hvc1.1.6.L93.B0, mp4a.40.5"',
       'video/x-m4v; codecs="hvc1.1.6.L93.B0"',
-
-      // AC3 and EAC3 (aka Dolby Digital Plus, DD+) audio codecs. These are not
-      // supported by Chrome by default. TODO(servolk): Strictly speaking only
-      // mp4a.A5 and mp4a.A6 codec ids are valid according to RFC 6381 section
-      // 3.3, 3.4. Lower-case oti (mp4a.a5 and mp4a.a6) should be rejected. But
-      // we used to allow those in older versions of Chromecast firmware and
-      // some apps (notably MPL) depend on those codec types being supported, so
-      // they should be allowed for now (crbug.com/564960)
-      'video/mp4; codecs="ac-3"',
-      'video/mp4; codecs="mp4a.a5"',
-      'video/mp4; codecs="mp4a.A5"',
-      'video/mp4; codecs="ec-3"',
-      'video/mp4; codecs="mp4a.a6"',
-      'video/mp4; codecs="mp4a.A6"',
-      'video/mp4; codecs="avc1.640028,ac-3"',
-      'video/mp4; codecs="avc1.640028,mp4a.a5"',
-      'video/mp4; codecs="avc1.640028,mp4a.A5"',
-      'video/mp4; codecs="avc1.640028,ec-3"',
-      'video/mp4; codecs="avc1.640028,mp4a.a6"',
-      'video/mp4; codecs="avc1.640028,mp4a.A6"',
     ],
   };
 
@@ -826,9 +814,35 @@ function testMp4Variants(has_proprietary_codecs, platform_guarantees_hevc) {
     ])
   }
 
+  // AC3 and EAC3 (aka Dolby Digital Plus, DD+) audio codecs.
+  // TODO(servolk): Strictly speaking only
+  // mp4a.A5 and mp4a.A6 codec ids are valid according to RFC 6381 section
+  // 3.3, 3.4. Lower-case oti (mp4a.a5 and mp4a.a6) should be rejected. But
+  // we used to allow those in older versions of Chromecast firmware and
+  // some apps (notably MPL) depend on those codec types being supported, so
+  // they should be allowed for now (crbug.com/564960)
+  let ac3_eac3_codecs = [
+    'video/mp4; codecs="ac-3"',
+    'video/mp4; codecs="mp4a.a5"',
+    'video/mp4; codecs="mp4a.A5"',
+    'video/mp4; codecs="ec-3"',
+    'video/mp4; codecs="mp4a.a6"',
+    'video/mp4; codecs="mp4a.A6"',
+    'video/mp4; codecs="avc1.640028,ac-3"',
+    'video/mp4; codecs="avc1.640028,mp4a.a5"',
+    'video/mp4; codecs="avc1.640028,mp4a.A5"',
+    'video/mp4; codecs="avc1.640028,ec-3"',
+    'video/mp4; codecs="avc1.640028,mp4a.a6"',
+    'video/mp4; codecs="avc1.640028,mp4a.A6"',
+  ];
+  if (platform_guarantees_ac3_eac3) {
+    MP4_CODEC_MAP['probably'] =
+        MP4_CODEC_MAP['probably'].concat(ac3_eac3_codecs);
+  } else {
+    MP4_CODEC_MAP['not'] = MP4_CODEC_MAP['not'].concat(ac3_eac3_codecs);
+  }
 
   const MP4A_BAD_CODEC_LIST = [
-    'ac-3',
     'avc1, mp4a.40',
     'avc1, mp4a',
     'avc1.4D401E',
@@ -837,15 +851,10 @@ function testMp4Variants(has_proprietary_codecs, platform_guarantees_hevc) {
     'avc3, mp4a',
     'avc3.64001F',
     'avc3',
-    'ec-3',
     'hev1.1.6.L93.B0,mp4a.40.5',
     'hev1.1.6.L93.B0',
     'hvc1.1.6.L93.B0,mp4a.40.5',
     'hvc1.1.6.L93.B0',
-    'mp4a.A5',
-    'mp4a.A6',
-    'mp4a.a5',
-    'mp4a.a6',
     'vp09.00.10.08',
   ];
 

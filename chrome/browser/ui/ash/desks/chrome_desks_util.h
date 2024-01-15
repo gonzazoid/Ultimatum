@@ -15,16 +15,20 @@ struct TabGroupInfo;
 
 namespace chrome_desks_util {
 
+// Name for app not available toast.
+constexpr char kAppNotAvailableTemplateToastName[] =
+    "AppNotAvailableTemplateToast";
+
 // Given a TabGroupModel that contains at least a single TabGroup this method
-// returns a populated optional vector that contains app_Restore::TabGroupInfo
-// representations of the TabGroups contained within the model.
-absl::optional<std::vector<app_restore::TabGroupInfo>>
-ConvertTabGroupsToTabGroupInfos(const TabGroupModel* group_model);
+// returns a vector that contains tab_groups::TabGroupInfo representations of
+// the TabGroups contained within the model.
+std::vector<tab_groups::TabGroupInfo> ConvertTabGroupsToTabGroupInfos(
+    const TabGroupModel* group_model);
 
 // Given a vector of TabGroupInfo this function attaches tab groups to the
 // out_browser instance passed as the second parameter.
 void AttachTabGroupsToBrowserInstance(
-    const std::vector<app_restore::TabGroupInfo>& tab_groups,
+    const std::vector<tab_groups::TabGroupInfo>& tab_groups,
     Browser* browser);
 
 // Sets tabs in `browser` to be pinned up to the `first_non_pinned_tab_index`.
@@ -32,4 +36,4 @@ void SetBrowserPinnedTabs(int32_t first_non_pinned_tab_index, Browser* browser);
 
 }  // namespace chrome_desks_util
 
-#endif
+#endif  // CHROME_BROWSER_UI_ASH_DESKS_CHROME_DESKS_UTIL_H_

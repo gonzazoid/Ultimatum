@@ -64,9 +64,6 @@ class FakeRemoteFrame : public blink::mojom::RemoteFrame {
       const base::UnguessableToken& embedding_token) override;
   void SetPageFocus(bool is_focused) override;
   void RenderFallbackContent() override;
-  void RenderFallbackContentWithResourceTiming(
-      blink::mojom::ResourceTimingInfoPtr,
-      const std::string& server_timing_value) override;
   void AddResourceTimingFromChild(
       blink::mojom::ResourceTimingInfoPtr timing) override;
 
@@ -83,7 +80,7 @@ class FakeRemoteFrame : public blink::mojom::RemoteFrame {
           parsed_permissions_policy) override {}
   void DidUpdateFramePolicy(const blink::FramePolicy& frame_policy) override {}
   void UpdateOpener(
-      const absl::optional<blink::FrameToken>& opener_frame_token) override;
+      const std::optional<blink::FrameToken>& opener_frame_token) override;
   void DetachAndDispose() override;
   void EnableAutoResize(const gfx::Size& min_size,
                         const gfx::Size& max_size) override;
@@ -94,12 +91,16 @@ class FakeRemoteFrame : public blink::mojom::RemoteFrame {
   void ChildProcessGone() override;
   void CreateRemoteChild(
       const blink::RemoteFrameToken& token,
-      const absl::optional<blink::FrameToken>& opener_frame_token,
+      const std::optional<blink::FrameToken>& opener_frame_token,
       blink::mojom::TreeScopeType tree_scope_type,
       blink::mojom::FrameReplicationStatePtr replication_state,
+      blink::mojom::FrameOwnerPropertiesPtr owner_properties,
+      bool is_loading,
       const base::UnguessableToken& devtools_frame_token,
       blink::mojom::RemoteFrameInterfacesFromBrowserPtr remote_frame_interfaces)
       override;
+  void CreateRemoteChildren(
+      std::vector<blink::mojom::CreateRemoteChildParamsPtr> params) override;
 
  private:
   mojo::AssociatedReceiver<blink::mojom::RemoteFrame> receiver_{this};

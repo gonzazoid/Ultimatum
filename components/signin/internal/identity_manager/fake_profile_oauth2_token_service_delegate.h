@@ -7,10 +7,12 @@
 
 #include <list>
 #include <memory>
+#include <vector>
 
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "components/signin/internal/identity_manager/profile_oauth2_token_service_delegate.h"
+#include "components/signin/public/base/signin_buildflags.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -34,7 +36,8 @@ class FakeProfileOAuth2TokenServiceDelegate
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const CoreAccountId& account_id,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      OAuth2AccessTokenConsumer* consumer) override;
+      OAuth2AccessTokenConsumer* consumer,
+      const std::string& token_binding_challenge) override;
 
   // Overriden to make sure it works on Android.
   bool RefreshTokenIsAvailable(const CoreAccountId& account_id) const override;
@@ -43,8 +46,14 @@ class FakeProfileOAuth2TokenServiceDelegate
   void RevokeAllCredentials() override;
   void LoadCredentials(const CoreAccountId& primary_account_id,
                        bool is_syncing) override;
-  void UpdateCredentials(const CoreAccountId& account_id,
-                         const std::string& refresh_token) override;
+  void UpdateCredentials(
+      const CoreAccountId& account_id,
+      const std::string& refresh_token
+#if BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+      ,
+      const std::vector<uint8_t>& wrapped_binding_key = std::vector<uint8_t>()
+#endif  // BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+          ) override;
   void RevokeCredentials(const CoreAccountId& account_id) override;
   void ExtractCredentials(ProfileOAuth2TokenService* to_service,
                           const CoreAccountId& account_id) override;

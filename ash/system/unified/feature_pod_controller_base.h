@@ -5,25 +5,25 @@
 #ifndef ASH_SYSTEM_UNIFIED_FEATURE_POD_CONTROLLER_BASE_H_
 #define ASH_SYSTEM_UNIFIED_FEATURE_POD_CONTROLLER_BASE_H_
 
+#include <memory>
+
 #include "ash/ash_export.h"
 #include "ash/constants/quick_settings_catalogs.h"
 
 namespace ash {
 
-class FeaturePodButton;
+class FeatureTile;
 
 // Base class for controllers of feature pod buttons.
 // To add a new feature pod button, implement this class, and add to the list in
-// UnifiedSystemTrayController::InitFeaturePods().
+// UnifiedSystemTrayController::InitFeatureTiles().
 class ASH_EXPORT FeaturePodControllerBase {
  public:
   virtual ~FeaturePodControllerBase() {}
 
-  // Create the view. Subclasses instantiate FeaturePodButton.
-  // The view will be owned by views hierarchy. The view will be always deleted
-  // after the controller is destructed (UnifiedSystemTrayBubble guarantees
-  // this).
-  virtual FeaturePodButton* CreateButton() = 0;
+  // Creates FeatureTile view. `compact` determines whether to present a Primary
+  // or Compact tile.
+  virtual std::unique_ptr<FeatureTile> CreateTile(bool compact) = 0;
 
   // Returns the feature catalog name which is used for UMA tracking. Please
   // remember to call the corresponding tracking method (`TrackToggleUMA` and
@@ -50,6 +50,10 @@ class ASH_EXPORT FeaturePodControllerBase {
   // Tracks the navigating to detailed page behavior, usually happens
   // `OnLabelPressed`, sometimes also happens `OnIconPressed`.
   void TrackDiveInUMA();
+
+  // Tracks the visibility of this feature pod. Call this method if the
+  // visibility is set from `false` to `true`.
+  void TrackVisibilityUMA();
 };
 
 }  // namespace ash

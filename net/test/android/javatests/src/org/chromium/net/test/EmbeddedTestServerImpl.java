@@ -10,10 +10,12 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.RemoteException;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.library_loader.LibraryProcessType;
 import org.chromium.base.test.util.UrlUtils;
@@ -75,16 +77,21 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper());
 
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                if (mNativeEmbeddedTestServer == 0) {
-                    nativeInit(UrlUtils.getIsolatedTestRoot(), https);
-                }
-                assert mNativeEmbeddedTestServer != 0;
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        if (mNativeEmbeddedTestServer == 0) {
+                            EmbeddedTestServerImplJni.get()
+                                    .init(
+                                            EmbeddedTestServerImpl.this,
+                                            UrlUtils.getIsolatedTestRoot(),
+                                            https);
+                        }
+                        assert mNativeEmbeddedTestServer != 0;
+                        return null;
+                    }
+                });
         return true;
     }
 
@@ -99,12 +106,14 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public boolean start(int port) {
-        return runOnHandlerThread(new Callable<Boolean>() {
-            @Override
-            public Boolean call() {
-                return nativeStart(mNativeEmbeddedTestServer, port);
-            }
-        });
+        return runOnHandlerThread(
+                new Callable<Boolean>() {
+                    @Override
+                    public Boolean call() {
+                        return EmbeddedTestServerImplJni.get()
+                                .start(mNativeEmbeddedTestServer, port);
+                    }
+                });
     }
 
     /** Returns the path to a PEM file containing the server's root certificate.
@@ -113,12 +122,14 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public String getRootCertPemPath() {
-        return runOnHandlerThread(new Callable<String>() {
-            @Override
-            public String call() {
-                return nativeGetRootCertPemPath(mNativeEmbeddedTestServer);
-            }
-        });
+        return runOnHandlerThread(
+                new Callable<String>() {
+                    @Override
+                    public String call() {
+                        return EmbeddedTestServerImplJni.get()
+                                .getRootCertPemPath(mNativeEmbeddedTestServer);
+                    }
+                });
     }
 
     /** Add the default handlers and serve files from the provided directory relative to the
@@ -129,13 +140,15 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public void addDefaultHandlers(final String directoryPath) {
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                nativeAddDefaultHandlers(mNativeEmbeddedTestServer, directoryPath);
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        EmbeddedTestServerImplJni.get()
+                                .addDefaultHandlers(mNativeEmbeddedTestServer, directoryPath);
+                        return null;
+                    }
+                });
     }
 
     /** Configure the server to use a particular type of SSL certificate.
@@ -144,13 +157,15 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public void setSSLConfig(final int serverCertificate) {
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                nativeSetSSLConfig(mNativeEmbeddedTestServer, serverCertificate);
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        EmbeddedTestServerImplJni.get()
+                                .setSSLConfig(mNativeEmbeddedTestServer, serverCertificate);
+                        return null;
+                    }
+                });
     }
 
     /** Register multiple request handlers.
@@ -159,13 +174,15 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      *  @param handler The pointer of handler to be registered.
      */
     public void registerRequestHandler(final long handler) {
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                nativeRegisterRequestHandler(mNativeEmbeddedTestServer, handler);
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        EmbeddedTestServerImplJni.get()
+                                .registerRequestHandler(mNativeEmbeddedTestServer, handler);
+                        return null;
+                    }
+                });
     }
 
     /** Serve files from the provided directory.
@@ -174,13 +191,15 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public void serveFilesFromDirectory(final String directoryPath) {
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                nativeServeFilesFromDirectory(mNativeEmbeddedTestServer, directoryPath);
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        EmbeddedTestServerImplJni.get()
+                                .serveFilesFromDirectory(mNativeEmbeddedTestServer, directoryPath);
+                        return null;
+                    }
+                });
     }
 
     /** Sets a connection listener to be notified of new connections and socket reads.
@@ -191,13 +210,14 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public void setConnectionListener(final IConnectionListener listener) {
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                mConnectionListener = listener;
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        mConnectionListener = listener;
+                        return null;
+                    }
+                });
     }
 
     /** Get the full URL for the given relative URL.
@@ -207,12 +227,14 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public String getURL(final String relativeUrl) {
-        return runOnHandlerThread(new Callable<String>() {
-            @Override
-            public String call() {
-                return nativeGetURL(mNativeEmbeddedTestServer, relativeUrl);
-            }
-        });
+        return runOnHandlerThread(
+                new Callable<String>() {
+                    @Override
+                    public String call() {
+                        return EmbeddedTestServerImplJni.get()
+                                .getURL(mNativeEmbeddedTestServer, relativeUrl);
+                    }
+                });
     }
 
     /** Get the full URL for the given relative URL. Similar to the above method but uses the given
@@ -224,12 +246,15 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public String getURLWithHostName(final String hostName, final String relativeUrl) {
-        return runOnHandlerThread(new Callable<String>() {
-            @Override
-            public String call() {
-                return nativeGetURLWithHostName(mNativeEmbeddedTestServer, hostName, relativeUrl);
-            }
-        });
+        return runOnHandlerThread(
+                new Callable<String>() {
+                    @Override
+                    public String call() {
+                        return EmbeddedTestServerImplJni.get()
+                                .getURLWithHostName(
+                                        mNativeEmbeddedTestServer, hostName, relativeUrl);
+                    }
+                });
     }
 
     /** Shut down the server.
@@ -238,37 +263,41 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
      */
     @Override
     public boolean shutdownAndWaitUntilComplete() {
-        return runOnHandlerThread(new Callable<Boolean>() {
-            @Override
-            public Boolean call() {
-                return nativeShutdownAndWaitUntilComplete(mNativeEmbeddedTestServer);
-            }
-        });
+        return runOnHandlerThread(
+                new Callable<Boolean>() {
+                    @Override
+                    public Boolean call() {
+                        return EmbeddedTestServerImplJni.get()
+                                .shutdownAndWaitUntilComplete(mNativeEmbeddedTestServer);
+                    }
+                });
     }
 
     /** Destroy the native EmbeddedTestServer object. */
     @Override
     public void destroy() {
-        runOnHandlerThread(new Callable<Void>() {
-            @Override
-            public Void call() {
-                assert mNativeEmbeddedTestServer != 0;
-                nativeDestroy(mNativeEmbeddedTestServer);
-                assert mNativeEmbeddedTestServer == 0;
-                return null;
-            }
-        });
+        runOnHandlerThread(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() {
+                        assert mNativeEmbeddedTestServer != 0;
+                        EmbeddedTestServerImplJni.get().destroy(mNativeEmbeddedTestServer);
+                        assert mNativeEmbeddedTestServer == 0;
+                        return null;
+                    }
+                });
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
             mHandlerThread.quitSafely();
         } else {
-            runOnHandlerThread(new Callable<Void>() {
-                @Override
-                public Void call() {
-                    mHandlerThread.quit();
-                    return null;
-                }
-            });
+            runOnHandlerThread(
+                    new Callable<Void>() {
+                        @Override
+                        public Void call() {
+                            mHandlerThread.quit();
+                            return null;
+                        }
+                    });
         }
 
         try {
@@ -309,20 +338,29 @@ public class EmbeddedTestServerImpl extends IEmbeddedTestServerImpl.Stub {
         mNativeEmbeddedTestServer = 0;
     }
 
-    private native void nativeInit(String testDataDir, boolean https);
-    private native void nativeDestroy(long nativeEmbeddedTestServerAndroid);
-    private native boolean nativeStart(long nativeEmbeddedTestServerAndroid, int port);
-    private native String nativeGetRootCertPemPath(long nativeEmbeddedTestServerAndroid);
-    private native boolean nativeShutdownAndWaitUntilComplete(long nativeEmbeddedTestServerAndroid);
-    private native void nativeAddDefaultHandlers(
-            long nativeEmbeddedTestServerAndroid, String directoryPath);
-    private native void nativeSetSSLConfig(
-            long nativeEmbeddedTestServerAndroid, int serverCertificate);
-    private native void nativeRegisterRequestHandler(
-            long nativeEmbeddedTestServerAndroid, long handler);
-    private native String nativeGetURL(long nativeEmbeddedTestServerAndroid, String relativeUrl);
-    private native String nativeGetURLWithHostName(
-            long nativeEmbeddedTestServerAndroid, String hostName, String relativeUrl);
-    private native void nativeServeFilesFromDirectory(
-            long nativeEmbeddedTestServerAndroid, String directoryPath);
+    @NativeMethods
+    interface Natives {
+        void init(EmbeddedTestServerImpl obj, String testDataDir, boolean https);
+
+        void destroy(long nativeEmbeddedTestServerAndroid);
+
+        boolean start(long nativeEmbeddedTestServerAndroid, int port);
+
+        String getRootCertPemPath(long nativeEmbeddedTestServerAndroid);
+
+        boolean shutdownAndWaitUntilComplete(long nativeEmbeddedTestServerAndroid);
+
+        void addDefaultHandlers(long nativeEmbeddedTestServerAndroid, String directoryPath);
+
+        void setSSLConfig(long nativeEmbeddedTestServerAndroid, int serverCertificate);
+
+        void registerRequestHandler(long nativeEmbeddedTestServerAndroid, long handler);
+
+        String getURL(long nativeEmbeddedTestServerAndroid, String relativeUrl);
+
+        String getURLWithHostName(
+                long nativeEmbeddedTestServerAndroid, String hostName, String relativeUrl);
+
+        void serveFilesFromDirectory(long nativeEmbeddedTestServerAndroid, String directoryPath);
+    }
 }

@@ -44,7 +44,7 @@
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
-#include "third_party/blink/renderer/platform/weborigin/security_origin_hash.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_operators.h"
@@ -478,7 +478,7 @@ TEST_F(SecurityOriginTest, CanonicalizeHost) {
       {"example.test", "example.test", true},
       {"EXAMPLE.TEST", "example.test", true},
       {"eXaMpLe.TeSt/path", "example.test%2Fpath", false},
-      {",", "%2C", true},
+      {",", ",", true},
       {"💩", "xn--ls8h", true},
       {"[]", "[]", false},
       {"%yo", "%25yo", false},
@@ -719,9 +719,9 @@ TEST_F(SecurityOriginTest, OpaqueIsolatedCopy) {
   scoped_refptr<const SecurityOrigin> copied = origin->IsolatedCopy();
   EXPECT_TRUE(origin->CanAccess(copied.get()));
   EXPECT_TRUE(origin->IsSameOriginWith(copied.get()));
-  EXPECT_EQ(SecurityOriginHash::GetHash(origin),
-            SecurityOriginHash::GetHash(copied));
-  EXPECT_TRUE(SecurityOriginHash::Equal(origin, copied));
+  EXPECT_EQ(WTF::GetHash(origin), WTF::GetHash(copied));
+  EXPECT_TRUE(
+      HashTraits<scoped_refptr<const SecurityOrigin>>::Equal(origin, copied));
 }
 
 TEST_F(SecurityOriginTest, EdgeCases) {
@@ -1099,11 +1099,11 @@ TEST_F(SecurityOriginTest, IsSameSiteWithWithLocalScheme) {
 TEST_F(SecurityOriginTest, PercentEncodesHost) {
   EXPECT_EQ(
       SecurityOrigin::CreateFromString("http://foo,.example.test/")->Host(),
-      "foo%2C.example.test");
+      "foo,.example.test");
 
   EXPECT_EQ(
       SecurityOrigin::CreateFromString("http://foo%2C.example.test/")->Host(),
-      "foo%2C.example.test");
+      "foo,.example.test");
 }
 
 TEST_F(SecurityOriginTest, NewOpaqueOriginLazyInitsNonce) {

@@ -28,7 +28,7 @@ struct POLICY_EXPORT PropertiesNode;
 // The error path, which leads to an error occurred. Members of the
 // error path can either be ints in case of list items or strings in case of
 // dictionary keys.
-typedef std::vector<absl::variant<int, std::string>> PolicyErrorPath;
+using PolicyErrorPath = std::vector<absl::variant<int, std::string>>;
 
 // Returns a formatted string for a given error path |error_path|, consisting
 // of list indices and dict keys.
@@ -119,8 +119,8 @@ class POLICY_EXPORT Schema {
   static Schema Parse(const std::string& schema, std::string* error);
 
   // Verifies if |schema| is a valid JSON v3 schema. When this validation passes
-  // then |schema| is valid JSON that can be parsed into a Value, and that Value
-  // can be used to build a |Schema|. Returns the parsed Value when |schema|
+  // then |schema| is valid JSON that can be parsed into a Value::Dict which can
+  // be used to build a |Schema|. Returns the parsed Value::Dict when |schema|
   // validated, otherwise returns nullopt. In that case, |error| contains an
   // error description. For performance reasons, currently IsValidSchema() won't
   // check the correctness of regular expressions used in "pattern" and
@@ -128,7 +128,7 @@ class POLICY_EXPORT Schema {
   // accept any strings.
   // |options| is a bitwise-OR combination of the options above (see
   // |kSchemaOptions*| above).
-  static absl::optional<base::Value> ParseToDictAndValidate(
+  static absl::optional<base::Value::Dict> ParseToDictAndValidate(
       const std::string& schema,
       int options,
       std::string* error);
@@ -173,7 +173,7 @@ class POLICY_EXPORT Schema {
   // types may not correspond to this Schema anymore.
   void MaskSensitiveValues(base::Value* value) const;
 
-  // Used to iterate over the known properties of Type::DICTIONARY schemas.
+  // Used to iterate over the known properties of Type::DICT schemas.
   class POLICY_EXPORT Iterator {
    public:
     Iterator(const scoped_refptr<const InternalStorage>& storage,
@@ -197,11 +197,11 @@ class POLICY_EXPORT Schema {
 
    private:
     scoped_refptr<const InternalStorage> storage_;
-    raw_ptr<const internal::PropertyNode> it_;
-    raw_ptr<const internal::PropertyNode> end_;
+    raw_ptr<const internal::PropertyNode, AllowPtrArithmetic> it_;
+    raw_ptr<const internal::PropertyNode, AllowPtrArithmetic> end_;
   };
 
-  // These methods should be called only if type() == Type::DICTIONARY,
+  // These methods should be called only if type() == Type::DICT,
   // otherwise invalid memory will be read. A CHECK is currently enforcing this.
 
   // Returns an iterator that goes over the named properties of this schema.
@@ -269,7 +269,8 @@ class POLICY_EXPORT Schema {
   void MaskSensitiveValuesRecursive(base::Value* value) const;
 
   scoped_refptr<const InternalStorage> storage_;
-  const internal::SchemaNode* node_;
+  raw_ptr<const internal::SchemaNode, DanglingUntriaged | AllowPtrArithmetic>
+      node_;
 };
 
 }  // namespace policy

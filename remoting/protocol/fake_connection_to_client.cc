@@ -23,10 +23,6 @@ void FakeVideoStream::SetEventTimestampsSource(
 
 void FakeVideoStream::Pause(bool pause) {}
 
-void FakeVideoStream::SetLosslessEncode(bool want_lossless) {}
-
-void FakeVideoStream::SetLosslessColor(bool want_lossless) {}
-
 void FakeVideoStream::SetObserver(Observer* observer) {
   observer_ = observer;
 }
@@ -42,6 +38,8 @@ void FakeVideoStream::SetMouseCursor(
 
 void FakeVideoStream::SetMouseCursorPosition(
     const webrtc::DesktopVector& position) {}
+
+void FakeVideoStream::SetTargetFramerate(int framerate) {}
 
 webrtc::ScreenId FakeVideoStream::selected_source() const {
   return selected_source_;
@@ -95,8 +93,9 @@ void FakeConnectionToClient::Disconnect(ErrorCode disconnect_error) {
 
   is_connected_ = false;
   disconnect_error_ = disconnect_error;
-  if (event_handler_)
+  if (event_handler_) {
     event_handler_->OnConnectionClosed(disconnect_error_);
+  }
 }
 
 Session* FakeConnectionToClient::session() {

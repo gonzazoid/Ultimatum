@@ -10,7 +10,7 @@
 
 #include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
@@ -68,10 +68,11 @@ class MEDIA_EXPORT RendererImpl final : public Renderer {
   base::TimeDelta GetMediaTime() final;
   void OnSelectedVideoTracksChanged(
       const std::vector<DemuxerStream*>& enabled_tracks,
-      base::OnceClosure change_completed_cb) override;
+      base::OnceClosure change_completed_cb) final;
   void OnEnabledAudioTracksChanged(
       const std::vector<DemuxerStream*>& enabled_tracks,
-      base::OnceClosure change_completed_cb) override;
+      base::OnceClosure change_completed_cb) final;
+  RendererType GetRendererType() final;
 
   // Helper functions for testing purposes. Must be called before Initialize().
   void DisableUnderflowForTesting();

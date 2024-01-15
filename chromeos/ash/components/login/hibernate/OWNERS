@@ -1,3 +1,6 @@
-file://chromeos/login/OWNERS
-evgreen@chromium.org
+file://chromeos/ash/components/login/OWNERS
+allenwebb@google.com
 asavery@chromium.org
+bgeffon@chromium.org
+mka@chromium.org
+vovoy@chromium.org

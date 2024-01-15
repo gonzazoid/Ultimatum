@@ -8,17 +8,14 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/public/cpp/default_user_image.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/resource/resource_bundle.h"
 #include "url/gurl.h"
-
-namespace gfx {
-class ImageSkia;
-}
 
 namespace ash::default_user_image {
 
@@ -53,16 +50,26 @@ extern const int kHistogramSpecialImagesMaxCount;
 // Number of possible histogram values for user images.
 extern const int kHistogramImagesCount;
 
+// Returns the effective scale factor for a default user image with the
+// specified index. This accounts for some default user images only being
+// available in limited resolutions.
+ui::ResourceScaleFactor GetAdjustedScaleFactorForDefaultImage(
+    int index,
+    ui::ResourceScaleFactor scale_factor);
+
 // Returns the URL to a default user image with the specified index. If the
 // index is invalid, returns the default user image for index 0 (anonymous
-// avatar image).
-GURL GetDefaultImageUrl(int index);
-
-// Returns bitmap of default user image with specified index.
-const gfx::ImageSkia& GetDefaultImageDeprecated(int index);
+// avatar image). The resource URL will take into account the `scale_factor`
+// requested and the available resolutions for the image index. The image
+// resolution default is 2x except for images without available 2x versions.
+GURL GetDefaultImageUrl(int index,
+                        ui::ResourceScaleFactor scale_factor = ui::k200Percent);
 
 // Returns ID of default user image with specified index.
 int GetDefaultImageResourceId(int index);
+
+// Returns bitmap of the stub default user image.
+const gfx::ImageSkia& GetStubDefaultImage();
 
 // Returns a random default image index.
 int GetRandomDefaultImageIndex();
@@ -73,7 +80,12 @@ bool IsValidIndex(int index);
 // Returns true if `index` is a in the current set of default images.
 bool IsInCurrentImageSet(int index);
 
-DefaultUserImage GetDefaultUserImage(int index);
+// Returns the default user image at the specified `index` with the
+// specified `scale_factor` when possible (otherwise, with the max
+// available resolution).
+DefaultUserImage GetDefaultUserImage(
+    int index,
+    ui::ResourceScaleFactor scale_factor = ui::k200Percent);
 
 // Returns a vector of current |DefaultUserImage|.
 std::vector<DefaultUserImage> GetCurrentImageSet();
@@ -84,14 +96,9 @@ base::Value::List GetCurrentImageSetAsListValue();
 // Returns nullopt if there is no source info.
 // Only a small number of deprecated user images have associated
 // |DeprecatedSourceInfo|, and none of them can be selected by users now.
-absl::optional<DeprecatedSourceInfo> GetDeprecatedDefaultImageSourceInfo(
+std::optional<DeprecatedSourceInfo> GetDeprecatedDefaultImageSourceInfo(
     size_t index);
 
 }  // namespace ash::default_user_image
-
-// TODO(https://crbug.com/1164001): remove once the migration is finished.
-namespace chromeos {
-namespace default_user_image = ::ash::default_user_image;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_USERS_DEFAULT_USER_IMAGE_DEFAULT_USER_IMAGES_H_

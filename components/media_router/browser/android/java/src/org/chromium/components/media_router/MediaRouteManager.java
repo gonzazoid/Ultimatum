@@ -37,8 +37,12 @@ public interface MediaRouteManager {
      * @param wasLaunched whether the presentation on the other end of the route was launched or
      *                    just joined.
      */
-    public void onRouteCreated(String mediaRouteId, String mediaSinkId, int requestId,
-            MediaRouteProvider provider, boolean wasLaunched);
+    public void onRouteCreated(
+            String mediaRouteId,
+            String mediaSinkId,
+            int requestId,
+            MediaRouteProvider provider,
+            boolean wasLaunched);
 
     /**
      * Called when the router failed to create a route.
@@ -76,4 +80,11 @@ public interface MediaRouteManager {
      * @param message The message contents.
      */
     public void onMessage(String mediaRouteId, String message);
+
+    /**
+     * Called when a specified media route updates its media source.
+     * @param mediaRouteId The identifier of the media route.
+     * @param mediaSourceId The media source id.
+     */
+    public void onRouteMediaSourceUpdated(String mediaRouteId, String mediaSourceId);
 }

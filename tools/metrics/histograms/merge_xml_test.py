@@ -12,11 +12,19 @@ import merge_xml
 
 class MergeXmlTest(unittest.TestCase):
 
+  def setUp(self):
+    super().setUp()
+    # Make assertMultiLineEqual() produce useful diffs.
+    self.maxDiff = None
+
   def testMergeFiles(self):
-    """Checks that enums.xml and histograms.xml can merge successfully."""
+    """Checks that the different XML files can merge successfully."""
+    # Note: See the test files under src/tools/metrics/histograms/test_data.
     merged = merge_xml.PrettyPrintMergedFiles([
-        histogram_paths.TEST_ENUMS_XML, histogram_paths.TEST_HISTOGRAMS_XML,
-        histogram_paths.TEST_SUFFIXES_XML
+        histogram_paths.TEST_ENUMS_XML,  # Defines Enum_A and Enum_X.
+        histogram_paths.TEST_ENUMS2_XML,  # Defines Enum_B.
+        histogram_paths.TEST_HISTOGRAMS_XML,
+        histogram_paths.TEST_SUFFIXES_XML,
     ])
     # If ukm.xml is not provided, there is no need to populate the
     # UkmEventNameHash enum.
@@ -25,12 +33,17 @@ class MergeXmlTest(unittest.TestCase):
 
 <enums>
 
-<enum name="Enum1">
+<enum name="Enum_A">
   <int value="0" label="Value0"/>
   <int value="1" label="Value1"/>
 </enum>
 
-<enum name="TestEnum">
+<enum name="Enum_B">
+  <int value="5" label="five"/>
+  <int value="6" label="six"/>
+</enum>
+
+<enum name="Enum_X">
   <int value="0" label="Value0"/>
   <int value="1" label="Value1"/>
 </enum>
@@ -60,26 +73,17 @@ class MergeXmlTest(unittest.TestCase):
 </histogram>
 
 <histogram name="Test.EnumHistogram" enum="TestEnum" expires_after="M81">
-  <obsolete>
-    Obsolete message
-  </obsolete>
   <owner>uma@chromium.org</owner>
   <summary>A enum histogram.</summary>
 </histogram>
 
 <histogram name="Test.Histogram" units="microseconds" expires_after="M85">
-  <obsolete>
-    Removed 6/2020.
-  </obsolete>
   <owner>person@chromium.org</owner>
   <summary>Summary 2</summary>
 </histogram>
 
 <histogram name="Test.TokenHistogram{TestToken}" units="microseconds"
     expires_after="M85">
-  <obsolete>
-    Removed 6/2020.
-  </obsolete>
   <owner>person@chromium.org</owner>
   <summary>Summary 2</summary>
   <token key="TestToken" variants="TestToken"/>
@@ -104,7 +108,6 @@ class MergeXmlTest(unittest.TestCase):
 
 </histogram-configuration>
 """
-    self.maxDiff = None
     self.assertMultiLineEqual(expected_merged_xml.strip(), merged.strip())
 
   def testMergeFiles_WithXmlEvents(self):
@@ -120,12 +123,17 @@ class MergeXmlTest(unittest.TestCase):
 
 <enums>
 
-<enum name="Enum1">
+<enum name="Enum_A">
   <int value="0" label="Value0"/>
   <int value="1" label="Value1"/>
 </enum>
 
-<enum name="TestEnum">
+<enum name="Enum_B">
+  <int value="5" label="five"/>
+  <int value="6" label="six"/>
+</enum>
+
+<enum name="Enum_X">
   <int value="0" label="Value0"/>
   <int value="1" label="Value1"/>
 </enum>
@@ -160,26 +168,17 @@ class MergeXmlTest(unittest.TestCase):
 </histogram>
 
 <histogram name="Test.EnumHistogram" enum="TestEnum" expires_after="M81">
-  <obsolete>
-    Obsolete message
-  </obsolete>
   <owner>uma@chromium.org</owner>
   <summary>A enum histogram.</summary>
 </histogram>
 
 <histogram name="Test.Histogram" units="microseconds" expires_after="M85">
-  <obsolete>
-    Removed 6/2020.
-  </obsolete>
   <owner>person@chromium.org</owner>
   <summary>Summary 2</summary>
 </histogram>
 
 <histogram name="Test.TokenHistogram{TestToken}" units="microseconds"
     expires_after="M85">
-  <obsolete>
-    Removed 6/2020.
-  </obsolete>
   <owner>person@chromium.org</owner>
   <summary>Summary 2</summary>
   <token key="TestToken" variants="TestToken"/>
@@ -204,7 +203,6 @@ class MergeXmlTest(unittest.TestCase):
 
 </histogram-configuration>
 """
-    self.maxDiff = None
     self.assertMultiLineEqual(expected_merged_xml.strip(), merged.strip())
 
 
@@ -235,6 +233,8 @@ class MergeXmlTest(unittest.TestCase):
         [histogram_paths.TEST_XML_WITH_COMPONENTS_RELATIVE])
     expected_merged_xml = """
 <histogram-configuration>
+
+<enums/>
 
 <histograms>
 

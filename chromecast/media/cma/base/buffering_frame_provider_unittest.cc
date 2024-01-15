@@ -11,14 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/media/cma/test/frame_generator_for_test.h"
 #include "chromecast/media/cma/test/mock_frame_consumer.h"
@@ -51,6 +50,9 @@ class BufferingFrameProviderTest : public testing::Test {
   // Start the test.
   void Start();
 
+  // Run the RunLoop and process messages
+  void Run();
+
  protected:
   std::unique_ptr<BufferingFrameProvider> buffering_frame_provider_;
   std::unique_ptr<MockFrameConsumer> frame_consumer_;
@@ -58,6 +60,8 @@ class BufferingFrameProviderTest : public testing::Test {
  private:
   void OnTestTimeout();
   void OnTestCompleted();
+
+  base::OnceClosure quit_closure_;
 };
 
 BufferingFrameProviderTest::BufferingFrameProviderTest() {
@@ -65,7 +69,11 @@ BufferingFrameProviderTest::BufferingFrameProviderTest() {
 
 BufferingFrameProviderTest::~BufferingFrameProviderTest() {
 }
-
+void BufferingFrameProviderTest::Run() {
+  base::RunLoop loop;
+  quit_closure_ = loop.QuitWhenIdleClosure();
+  loop.Run();
+}
 void BufferingFrameProviderTest::Configure(
     size_t frame_count,
     const std::vector<bool>& provider_delayed_pattern,
@@ -110,12 +118,11 @@ void BufferingFrameProviderTest::Start() {
 
 void BufferingFrameProviderTest::OnTestTimeout() {
   ADD_FAILURE() << "Test timed out";
-  if (base::CurrentThread::Get())
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  std::move(quit_closure_).Run();
 }
 
 void BufferingFrameProviderTest::OnTestCompleted() {
-  base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  std::move(quit_closure_).Run();
 }
 
 TEST_F(BufferingFrameProviderTest, FastProviderSlowConsumer) {
@@ -132,10 +139,10 @@ TEST_F(BufferingFrameProviderTest, FastProviderSlowConsumer) {
                                   std::size(consumer_delayed_pattern)));
 
   base::test::SingleThreadTaskEnvironment task_environment;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BufferingFrameProviderTest::Start,
                                 base::Unretained(this)));
-  base::RunLoop().Run();
+  Run();
 }
 
 TEST_F(BufferingFrameProviderTest, SlowProviderFastConsumer) {
@@ -152,10 +159,10 @@ TEST_F(BufferingFrameProviderTest, SlowProviderFastConsumer) {
                                   std::size(consumer_delayed_pattern)));
 
   base::test::SingleThreadTaskEnvironment task_environment;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BufferingFrameProviderTest::Start,
                                 base::Unretained(this)));
-  base::RunLoop().Run();
+  Run();
 }
 
 TEST_F(BufferingFrameProviderTest, SlowFastProducerConsumer) {
@@ -179,10 +186,10 @@ TEST_F(BufferingFrameProviderTest, SlowFastProducerConsumer) {
                                   std::size(consumer_delayed_pattern)));
 
   base::test::SingleThreadTaskEnvironment task_environment;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BufferingFrameProviderTest::Start,
                                 base::Unretained(this)));
-  base::RunLoop().Run();
+  Run();
 }
 
 }  // namespace media

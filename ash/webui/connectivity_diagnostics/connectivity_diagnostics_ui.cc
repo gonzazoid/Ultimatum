@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "ash/webui/common/trusted_types_util.h"
 #include "ash/webui/connectivity_diagnostics/url_constants.h"
 #include "ash/webui/grit/connectivity_diagnostics_resources.h"
 #include "ash/webui/grit/connectivity_diagnostics_resources_map.h"
@@ -17,7 +18,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/browser/web_ui_message_handler.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 
 namespace ash {
 
@@ -30,7 +31,7 @@ void SetUpWebUIDataSource(content::WebUIDataSource* source,
                           int default_resource) {
   source->AddResourcePaths(resources);
   source->SetDefaultResource(default_resource);
-  source->AddResourcePath("test_loader.html", IDR_WEBUI_HTML_TEST_LOADER_HTML);
+  source->AddResourcePath("test_loader.html", IDR_WEBUI_TEST_LOADER_HTML);
   source->AddResourcePath("test_loader.js", IDR_WEBUI_JS_TEST_LOADER_JS);
   source->AddResourcePath("test_loader_util.js",
                           IDR_WEBUI_JS_TEST_LOADER_UTIL_JS);
@@ -108,10 +109,9 @@ ConnectivityDiagnosticsUI::ConnectivityDiagnosticsUI(
       kChromeUIConnectivityDiagnosticsHost);
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://test chrome://webui-test "
-      "'self';");
+      "script-src chrome://resources chrome://webui-test 'self';");
 
-  source->DisableTrustedTypesCSP();
+  ash::EnableTrustedTypesCSP(source);
   source->UseStringsJs();
   source->EnableReplaceI18nInJS();
 
@@ -133,8 +133,8 @@ ConnectivityDiagnosticsUI::ConnectivityDiagnosticsUI(
   source->AddLocalizedString("closeBtn", IDS_CONNECTIVITY_DIAGNOSTICS_CLOSE);
   source->AddLocalizedString("sendFeedbackBtn",
                              IDS_CONNECTIVITY_DIAGNOSTICS_SEND_FEEDBACK);
-  chromeos::network_diagnostics::AddResources(source);
-  chromeos::network_health::AddResources(source);
+  network_diagnostics::AddResources(source);
+  network_health::AddResources(source);
 }
 
 ConnectivityDiagnosticsUI::~ConnectivityDiagnosticsUI() = default;

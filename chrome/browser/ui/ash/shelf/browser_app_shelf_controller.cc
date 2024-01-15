@@ -6,8 +6,11 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/window_properties.h"
+#include "ash/root_window_controller.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/strings/string_util.h"
 #include "chrome/browser/apps/app_service/browser_app_instance.h"
 #include "chrome/browser/apps/app_service/browser_app_instance_registry.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
@@ -15,7 +18,6 @@
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_item_factory.h"
-#include "chrome/browser/ui/ash/shelf/shelf_controller_helper.h"
 #include "chrome/browser/ui/ash/shelf/shelf_spinner_controller.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "components/app_constants/constants.h"
@@ -52,7 +54,7 @@ BrowserAppShelfController::BrowserAppShelfController(
       shelf_spinner_controller_(shelf_spinner_controller),
       browser_app_instance_registry_(browser_app_instance_registry) {
   CHECK(web_app::IsWebAppsCrosapiEnabled());
-  registry_observation_.Observe(&browser_app_instance_registry_);
+  registry_observation_.Observe(&*browser_app_instance_registry_);
   shelf_model_observation_.Observe(&model);
 }
 
@@ -69,8 +71,8 @@ void BrowserAppShelfController::OnBrowserWindowRemoved(
     const apps::BrowserWindowInstance& instance) {
   bool is_running =
       crosapi::browser_util::IsLacrosWindow(instance.window)
-          ? browser_app_instance_registry_.IsLacrosBrowserRunning()
-          : browser_app_instance_registry_.IsAshBrowserRunning();
+          ? browser_app_instance_registry_->IsLacrosBrowserRunning()
+          : browser_app_instance_registry_->IsAshBrowserRunning();
   if (!is_running) {
     ash::ShelfID id(instance.GetAppId());
     SetShelfItemClosed(id);
@@ -82,13 +84,16 @@ void BrowserAppShelfController::OnBrowserAppAdded(
   ash::ShelfID id(instance.app_id);
   switch (instance.type) {
     case apps::BrowserAppInstance::Type::kAppWindow: {
-      shelf_spinner_controller_.CloseSpinner(instance.app_id);
+      shelf_spinner_controller_->CloseSpinner(instance.app_id);
       CreateOrUpdateShelfItem(id, ash::STATUS_RUNNING);
+      if (ash::features::IsStandaloneWindowMigrationUxEnabled()) {
+        MaybeShowStandaloneMigrationNudge(instance.app_id, profile_);
+      }
       break;
     }
     case apps::BrowserAppInstance::Type::kAppTab:
       // New shelf item is not automatically created for unpinned tabbed apps.
-      if (const ash::ShelfItem* item = model_.ItemByID(id)) {
+      if (const ash::ShelfItem* item = model_->ItemByID(id)) {
         UpdateShelfItemStatus(*item, ash::STATUS_RUNNING);
       }
       break;
@@ -109,21 +114,21 @@ void BrowserAppShelfController::OnBrowserAppRemoved(
     // properties updated.
     MaybeUpdateWindowProperties(instance.window);
   }
-  if (!browser_app_instance_registry_.IsAppRunning(instance.app_id)) {
+  if (!browser_app_instance_registry_->IsAppRunning(instance.app_id)) {
     ash::ShelfID id(instance.app_id);
     SetShelfItemClosed(id);
   }
 }
 
 void BrowserAppShelfController::ShelfItemAdded(int index) {
-  const ash::ShelfItem& item = model_.items()[index];
+  const ash::ShelfItem& item = model_->items()[index];
   const std::string& app_id = item.id.app_id;
   if (!BrowserAppShelfControllerShouldHandleApp(app_id, profile_)) {
     return;
   }
   bool running = (app_id == app_constants::kLacrosAppId)
-                     ? browser_app_instance_registry_.IsLacrosBrowserRunning()
-                     : browser_app_instance_registry_.IsAppRunning(app_id);
+                     ? browser_app_instance_registry_->IsLacrosBrowserRunning()
+                     : browser_app_instance_registry_->IsAppRunning(app_id);
   UpdateShelfItemStatus(item,
                         running ? ash::STATUS_RUNNING : ash::STATUS_CLOSED);
   MaybeUpdateWindowPropertiesForApp(app_id);
@@ -134,30 +139,29 @@ void BrowserAppShelfController::UpdateShelfItemStatus(
     ash::ShelfItemStatus status) {
   auto new_item = item;
   new_item.status = status;
-  model_.Set(model_.ItemIndexByID(item.id), new_item);
+  model_->Set(model_->ItemIndexByID(item.id), new_item);
 }
 
 void BrowserAppShelfController::CreateOrUpdateShelfItem(
     const ash::ShelfID& id,
     ash::ShelfItemStatus status) {
-  const ash::ShelfItem* item = model_.ItemByID(id);
+  const ash::ShelfItem* item = model_->ItemByID(id);
   if (item) {
     UpdateShelfItemStatus(*item, status);
     return;
   }
 
-  ash::ShelfItem new_item;
-  std::unique_ptr<ash::ShelfItemDelegate> delegate;
-  shelf_item_factory_.CreateShelfItemForAppId(id.app_id, &new_item, &delegate);
-  new_item.type = ash::TYPE_APP;
-  new_item.status = status;
-  new_item.app_status =
-      ShelfControllerHelper::GetAppStatus(profile_, id.app_id);
-  model_.AddAt(model_.item_count(), new_item, std::move(delegate));
+  std::unique_ptr<ash::ShelfItemDelegate> delegate =
+      shelf_item_factory_->CreateShelfItemDelegateForAppId(id.app_id);
+  std::unique_ptr<ash::ShelfItem> new_item =
+      shelf_item_factory_->CreateShelfItemForApp(
+          id, status, ash::TYPE_APP,
+          /*title=*/base::EmptyString16());
+  model_->AddAt(model_->item_count(), *new_item, std::move(delegate));
 }
 
 void BrowserAppShelfController::SetShelfItemClosed(const ash::ShelfID& id) {
-  const ash::ShelfItem* item = model_.ItemByID(id);
+  const ash::ShelfItem* item = model_->ItemByID(id);
   if (!item) {
     // There is no shelf item for unpinned apps running in a browser tab.
     return;
@@ -166,8 +170,8 @@ void BrowserAppShelfController::SetShelfItemClosed(const ash::ShelfID& id) {
   if (ash::IsPinnedShelfItemType(item->type)) {
     UpdateShelfItemStatus(*item, ash::STATUS_CLOSED);
   } else {
-    int index = model_.ItemIndexByID(id);
-    model_.RemoveItemAt(index);
+    int index = model_->ItemIndexByID(id);
+    model_->RemoveItemAt(index);
   }
 }
 
@@ -191,13 +195,13 @@ void BrowserAppShelfController::MaybeUpdateWindowProperties(
   ash::ShelfID shelf_id;
 
   const apps::BrowserAppInstance* active_instance =
-      browser_app_instance_registry_.FindAppInstanceIf(
+      browser_app_instance_registry_->FindAppInstanceIf(
           [window](const apps::BrowserAppInstance& instance) {
             return instance.window == window && instance.is_web_contents_active;
           });
   if (active_instance) {
     app_id = active_instance->app_id;
-    if (const ash::ShelfItem* item = model_.ItemByID(ash::ShelfID(app_id))) {
+    if (const ash::ShelfItem* item = model_->ItemByID(ash::ShelfID(app_id))) {
       shelf_id = item->id;
     }
   } else {
@@ -213,7 +217,7 @@ void BrowserAppShelfController::MaybeUpdateWindowProperties(
 void BrowserAppShelfController::MaybeUpdateWindowPropertiesForApp(
     const std::string& app_id) {
   std::set<const apps::BrowserAppInstance*> instances =
-      browser_app_instance_registry_.SelectAppInstances(
+      browser_app_instance_registry_->SelectAppInstances(
           [&app_id](const apps::BrowserAppInstance& instance) {
             return instance.app_id == app_id;
           });

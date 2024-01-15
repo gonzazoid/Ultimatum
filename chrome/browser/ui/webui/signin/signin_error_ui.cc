@@ -18,12 +18,13 @@
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/signin/signin_ui_util.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
 #include "chrome/browser/ui/webui/signin/signin_error_handler.h"
 #include "chrome/browser/ui/webui/signin/signin_ui_error.h"
 #include "chrome/browser/ui/webui/signin/signin_url_utils.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/signin_resources.h"
@@ -60,9 +61,9 @@ void SigninErrorUI::Initialize(Browser* browser, bool from_profile_picker) {
   std::unique_ptr<SigninErrorHandler> handler =
       std::make_unique<SigninErrorHandler>(browser, from_profile_picker);
 
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUISigninErrorHost);
-  source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      webui_profile, chrome::kChromeUISigninErrorHost);
+  webui::EnableTrustedTypesCSP(source);
   source->UseStringsJs();
   source->EnableReplaceI18nInJS();
   source->SetDefaultResource(IDR_SIGNIN_SIGNIN_ERROR_SIGNIN_ERROR_HTML);
@@ -137,7 +138,7 @@ void SigninErrorUI::Initialize(Browser* browser, bool from_profile_picker) {
             .GetProfileAttributesWithPath(
                 last_login_error.another_profile_path());
     DCHECK(entry);
-    DCHECK(entry->IsAuthenticated());
+    DCHECK(entry->IsAuthenticated() || entry->CanBeManaged());
     handler->set_duplicate_profile_path(entry->GetPath());
     existing_name = entry->GetName();
     source->AddString("signinErrorMessage",
@@ -164,7 +165,5 @@ void SigninErrorUI::Initialize(Browser* browser, bool from_profile_picker) {
   webui::SetLoadTimeDataDefaults(g_browser_process->GetApplicationLocale(),
                                  &strings);
   source->AddLocalizedStrings(strings);
-
-  content::WebUIDataSource::Add(webui_profile, source);
   web_ui()->AddMessageHandler(std::move(handler));
 }

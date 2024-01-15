@@ -27,10 +27,6 @@ namespace settings {
 //  2) 'Powerwash' dialog (ChromeOS only)
 class ResetSettingsHandler : public SettingsPageUIHandler {
  public:
-  // Hash used by the Chrome Cleanup Tool when launching chrome with the reset
-  // profile settings URL.
-  static const char kCctResetSettingsHash[];
-
   static bool ShouldShowResetProfileBanner(Profile* profile);
 
   explicit ResetSettingsHandler(Profile* profile);
@@ -86,11 +82,6 @@ class ResetSettingsHandler : public SettingsPageUIHandler {
       std::string callback_id,
       bool send_feedback,
       reset_report::ChromeResetReport::ResetRequestOrigin request_origin);
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Will be called when powerwash dialog is shown.
-  void OnShowPowerwashDialog(const base::Value::List& args);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   const raw_ptr<Profile> profile_;
 

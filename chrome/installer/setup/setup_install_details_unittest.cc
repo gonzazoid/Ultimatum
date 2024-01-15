@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include "base/command_line.h"
+#include "base/memory/raw_ref.h"
 #include "base/test/test_reg_util_win.h"
 #include "build/branding_buildflags.h"
 #include "chrome/chrome_elf/nt_registry/nt_registry.h"
@@ -430,6 +431,26 @@ constexpr TestData kTestData[] = {
         L"extended",                   // Expect the channel override.
     },
 };
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+constexpr TestData kTestData[] = {
+    // User-level test cases.
+    {
+        L"setup.exe",  // User-level, primary mode.
+        L"",           // New install.
+        install_static::GOOGLE_CHROME_FOR_TESTING_INDEX,  // Expect primary
+                                                          // mode.
+        false,                                            // Expect user-level.
+        L"",  // Expect empty channel.
+    },
+    {
+        L"setup.exe",    // User-level, primary mode.
+        L"--uninstall",  // Updating an existing install.
+        install_static::GOOGLE_CHROME_FOR_TESTING_INDEX,  // Expect primary
+                                                          // mode.
+        false,                                            // Expect user-level.
+        L"",  // Expect empty channel.
+    },
+};
 #else   // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 constexpr TestData kTestData[] = {
     // User-level test cases.
@@ -474,12 +495,12 @@ class MakeInstallDetailsTest : public testing::TestWithParam<TestData> {
  protected:
   MakeInstallDetailsTest()
       : test_data_(GetParam()),
-        root_key_(test_data_.system_level ? HKEY_LOCAL_MACHINE
-                                          : HKEY_CURRENT_USER),
-        nt_root_key_(test_data_.system_level ? nt::HKLM : nt::HKCU),
+        root_key_(test_data_->system_level ? HKEY_LOCAL_MACHINE
+                                           : HKEY_CURRENT_USER),
+        nt_root_key_(test_data_->system_level ? nt::HKLM : nt::HKCU),
         command_line_(base::CommandLine::NO_PROGRAM) {
     // Prepare the inputs from the process command line.
-    command_line_.ParseFromString(test_data_.command_line);
+    command_line_.ParseFromString(test_data_->command_line);
     initial_preferences_ =
         std::make_unique<installer::InitialPreferences>(command_line_);
   }
@@ -492,15 +513,15 @@ class MakeInstallDetailsTest : public testing::TestWithParam<TestData> {
 
     // Prepare the inputs from the machine's state.
     ASSERT_NO_FATAL_FAILURE(SetUninstallArguments(
-        root_key_, install_static::kInstallModes[test_data_.index].app_guid,
-        test_data_.uninstall_args));
+        root_key_, install_static::kInstallModes[test_data_->index].app_guid,
+        test_data_->uninstall_args));
   }
 
   void TearDown() override {
     nt::SetTestingOverride(nt_root_key_, std::wstring());
   }
 
-  const TestData& test_data() const { return test_data_; }
+  const TestData& test_data() const { return *test_data_; }
 
   const base::CommandLine& command_line() const { return command_line_; }
 
@@ -532,7 +553,7 @@ class MakeInstallDetailsTest : public testing::TestWithParam<TestData> {
   }
 
   registry_util::RegistryOverrideManager override_manager_;
-  const TestData& test_data_;
+  const raw_ref<const TestData> test_data_;
   HKEY root_key_;
   nt::ROOT_KEY nt_root_key_;
   base::CommandLine command_line_;

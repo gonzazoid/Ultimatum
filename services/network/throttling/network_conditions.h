@@ -14,8 +14,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkConditions {
  public:
   NetworkConditions();
 
-  NetworkConditions(const NetworkConditions&) = delete;
-  NetworkConditions& operator=(const NetworkConditions&) = delete;
+  NetworkConditions(const NetworkConditions&);
+  NetworkConditions& operator=(const NetworkConditions&);
 
   ~NetworkConditions();
 
@@ -28,15 +28,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkConditions {
   bool IsThrottling() const;
 
   bool offline() const { return offline_; }
+
+  // These are 0 if the corresponding throttle is disabled, >0 otherwise.
   double latency() const { return latency_; }
   double download_throughput() const { return download_throughput_; }
   double upload_throughput() const { return upload_throughput_; }
 
  private:
-  const bool offline_;
-  const double latency_;
-  const double download_throughput_;
-  const double upload_throughput_;
+  bool offline_;
+  double latency_;
+  double download_throughput_;
+  double upload_throughput_;
 };
 
 }  // namespace network

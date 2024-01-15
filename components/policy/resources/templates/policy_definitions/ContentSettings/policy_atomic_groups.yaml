@@ -59,6 +59,11 @@ SensorsSettings:
   - DefaultSensorsSetting
   - SensorsAllowedForUrls
   - SensorsBlockedForUrls
+ThirdPartyStoragePartitioningSettings:
+  caption: Third-party storage partitioning settings
+  policies:
+  - DefaultThirdPartyStoragePartitioningSetting
+  - ThirdPartyStoragePartitioningBlockedForOrigins
 WebUsbSettings:
   caption: Web USB settings
   policies:
@@ -67,9 +72,18 @@ WebUsbSettings:
   - WebUsbAllowDevicesForUrls
   - WebUsbAskForUrls
   - WebUsbBlockedForUrls
-WindowPlacementSettings:
-  caption: Window Placement settings
+WindowManagementSettings:
+  caption: Window Management settings
   policies:
+  - DefaultWindowManagementSetting
+  - WindowManagementAllowedForUrls
+  - WindowManagementBlockedForUrls
   - DefaultWindowPlacementSetting
   - WindowPlacementAllowedForUrls
   - WindowPlacementBlockedForUrls
+MidiSettings:
+  caption: MIDI settings
+  policies:
+  - DefaultMidiSetting
+  - MidiAllowedForUrls
+  - MidiBlockedForUrls

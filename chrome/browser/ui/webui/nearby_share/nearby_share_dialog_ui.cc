@@ -31,6 +31,7 @@
 #include "chrome/grit/nearby_share_dialog_resources_map.h"
 #include "chrome/grit/theme_resources.h"
 #include "chromeos/components/sharesheet/constants.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -41,6 +42,7 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/views/controls/webview/webview.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
 
 namespace nearby_share {
 
@@ -54,6 +56,14 @@ enum class CloseReason {
   kMax = kRejected
 };
 
+bool NearbyShareDialogUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  if (browser_context->IsOffTheRecord())
+    return false;
+  return NearbySharingServiceFactory::IsNearbyShareSupportedForBrowserContext(
+      browser_context);
+}
+
 NearbyShareDialogUI::NearbyShareDialogUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui, /*enable_chrome_send=*/true) {
   Profile* profile = Profile::FromWebUI(web_ui);
@@ -63,7 +73,8 @@ NearbyShareDialogUI::NearbyShareDialogUI(content::WebUI* web_ui)
   nearby_service_ = NearbySharingServiceFactory::GetForBrowserContext(profile);
 
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUINearbyShareHost);
+      content::WebUIDataSource::CreateAndAdd(profile,
+                                             chrome::kChromeUINearbyShareHost);
 
   content::URLDataSource::Add(profile,
                               std::make_unique<SanitizedImageSource>(profile));
@@ -79,12 +90,28 @@ NearbyShareDialogUI::NearbyShareDialogUI(content::WebUI* web_ui)
   // increases, set this as the default so manual override is no longer
   // required.
   html_source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::WorkerSrc, "worker-src blob: 'self';");
+      network::mojom::CSPDirectiveName::WorkerSrc,
+      "worker-src blob: chrome://resources 'self';");
+
+  html_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::TrustedTypes,
+      "trusted-types static-types "
+      // Required by lottie.
+      "cros-lottie-worker-script-loader "
+      "lottie-worker-script-loader webui-test-script "
+      // Required by parse-html-subset.
+      "parse-html-subset sanitize-inner-html "
+      // Required by lit-html.
+      "lit-html "
+      // Required by polymer.
+      "polymer-html-literal polymer-template-event-attribute-policy;");
 
   html_source->AddBoolean(
       "isOnePageOnboardingEnabled",
       base::FeatureList::IsEnabled(features::kNearbySharingOnePageOnboarding));
   RegisterNearbySharedStrings(html_source);
+  html_source->AddBoolean("isJellyEnabled",
+                          chromeos::features::IsJellyEnabled());
   html_source->UseStringsJs();
 
   // Register callback to handle "cancel-button-event" from nearby_*.html files.
@@ -95,15 +122,17 @@ NearbyShareDialogUI::NearbyShareDialogUI(content::WebUI* web_ui)
   auto plural_string_handler = std::make_unique<PluralStringHandler>();
   plural_string_handler->AddLocalizedString(
       "nearbyShareContactVisibilityNumUnreachable",
-      IDS_NEARBY_CONTACT_VISIBILITY_NUM_UNREACHABLE);
+      IDS_NEARBY_CONTACT_VISIBILITY_NUM_UNREACHABLE_PH);
   web_ui->AddMessageHandler(std::move(plural_string_handler));
   // Add the metrics handler to write uma stats.
   web_ui->AddMessageHandler(std::make_unique<MetricsHandler>());
 
-  content::WebUIDataSource::Add(profile, html_source);
-
   const GURL& url = web_ui->GetWebContents()->GetVisibleURL();
   SetAttachmentFromQueryParameter(url);
+
+  html_source->AddBoolean(
+      "isSelfShareEnabled",
+      base::FeatureList::IsEnabled(features::kNearbySharingSelfShare));
 }
 
 NearbyShareDialogUI::~NearbyShareDialogUI() = default;
@@ -141,6 +170,12 @@ void NearbyShareDialogUI::BindInterface(
       NearbySharingServiceFactory::GetForBrowserContext(
           Profile::FromWebUI(web_ui()));
   nearby_sharing_service->GetContactManager()->Bind(std::move(receiver));
+}
+
+void NearbyShareDialogUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
 }
 
 bool NearbyShareDialogUI::HandleKeyboardEvent(
@@ -207,8 +242,8 @@ void NearbyShareDialogUI::SetAttachmentFromQueryParameter(const GURL& url) {
            {"text", TextAttachment::Type::kText}}) {
     if (net::GetValueForKeyInQuery(url, text_type.first, &value)) {
       attachments.push_back(std::make_unique<TextAttachment>(
-          text_type.second, value, /*title=*/absl::nullopt,
-          /*mime_type=*/absl::nullopt));
+          text_type.second, value, /*title=*/std::nullopt,
+          /*mime_type=*/std::nullopt));
       SetAttachments(std::move(attachments));
       return;
     }

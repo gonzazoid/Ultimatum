@@ -4,9 +4,11 @@
 
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("aw_net_java_test_support") {
   testonly = true
+  srcjar_deps = [ ":aw_net_jni_headers" ]
   sources = [
     "java/src/org/chromium/android_webview/test/AwEmbeddedTestServer.java",
     "java/src/org/chromium/android_webview/test/AwEmbeddedTestServerImpl.java",
@@ -14,11 +16,11 @@ android_library("aw_net_java_test_support") {
   ]
   deps = [
     "//base:base_java_test_support",
-    "//base:jni_java",
     "//net/android:embedded_test_server_aidl_java",
     "//net/android:net_java",
     "//net/android:net_java_test_support",
-    "//net/android:net_java_test_support_provider",
+    "//net/android:net_test_support_provider_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
 }
 
@@ -37,14 +39,17 @@ source_set("aw_java_test_native_support") {
     "aw_embedded_test_server.cc",
     "aw_test_entry_point.cc",
   ]
-  deps = [ "//net:test_support" ]
+  deps = [
+    "//net:test_support",
+    "//services/network/public/cpp",
+  ]
   public_deps = [
     ":aw_net_jni_headers",
-    "//net:net_test_jni_headers",
+    "//net/android:net_test_support_provider_jni",
   ]
 }
 
-shared_library("aw_net_java_test_native_support") {
+shared_library_with_jni("aw_net_java_test_native_support") {
   testonly = true
   deps = [
     ":aw_java_test_native_support",
@@ -52,6 +57,7 @@ shared_library("aw_net_java_test_native_support") {
   ]
   configs -= [ "//build/config/android:hide_all_but_jni_onload" ]
   configs += [ "//build/config/android:hide_all_but_jni" ]
+  java_targets = [ ":aw_net_test_support_apk" ]
 }
 
 android_apk("aw_net_test_support_apk") {
@@ -60,12 +66,9 @@ android_apk("aw_net_test_support_apk") {
   # Used as an additional_apk in test scripts.
   never_incremental = true
 
-  # Multidex requires a custom Application class to initialize it. Simpler to
-  # just disable it.
-  enable_multidex = false
-
   deps = [ ":aw_net_java_test_support" ]
   android_manifest = "java/AndroidManifest.xml"
   apk_name = "ChromiumNetTestAwSupport"
   shared_libraries = [ ":aw_net_java_test_native_support" ]
+  srcjar_deps = [ ":aw_net_java_test_native_support__jni_registration" ]
 }

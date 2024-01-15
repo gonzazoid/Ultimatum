@@ -6,15 +6,13 @@
 
 #include <utility>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/json/json_writer.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/values.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/policy/core/common/cloud/cloud_external_data_manager.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
@@ -30,35 +28,23 @@
 namespace policy {
 
 namespace {
-// Keys for 'DictionaryValue' objects
+// Keys for 'Value::Dict' objects
 const char kUrlKey[] = "url";
 const char kHashKey[] = "hash";
 }  // namespace
 
 namespace test {
 
-void ExternalDataFetchCallback(std::unique_ptr<std::string>* data_destination,
-                               base::FilePath* file_path_destination,
-                               base::OnceClosure done_callback,
-                               std::unique_ptr<std::string> data,
-                               const base::FilePath& file_path) {
-  *data_destination = std::move(data);
-  *file_path_destination = file_path;
-  std::move(done_callback).Run();
-}
-
-std::unique_ptr<base::DictionaryValue> ConstructExternalDataReference(
-    const std::string& url,
-    const std::string& data) {
+base::Value::Dict ConstructExternalDataReference(const std::string& url,
+                                                 const std::string& data) {
   const std::string hash = crypto::SHA256HashString(data);
-  std::unique_ptr<base::DictionaryValue> metadata(new base::DictionaryValue);
-  metadata->SetKey(kUrlKey, base::Value(url));
-  metadata->SetKey(kHashKey,
-                   base::Value(base::HexEncode(hash.c_str(), hash.size())));
+  base::Value::Dict metadata;
+  metadata.Set(kUrlKey, url);
+  metadata.Set(kHashKey, base::HexEncode(hash.c_str(), hash.size()));
   return metadata;
 }
 
-std::string ConstructExternalDataPolicy(
+base::Value::Dict ConstructExternalDataPolicy(
     const net::test_server::EmbeddedTestServer& test_server,
     const std::string& external_data_path) {
   std::string url =
@@ -72,11 +58,7 @@ std::string ConstructExternalDataPolicy(
     EXPECT_TRUE(base::ReadFileToString(
         test_data_dir.AppendASCII(external_data_path), &external_data));
   }
-
-  std::string policy;
-  EXPECT_TRUE(base::JSONWriter::Write(
-      *ConstructExternalDataReference(url, external_data), &policy));
-  return policy;
+  return ConstructExternalDataReference(url, external_data);
 }
 
 }  // namespace test

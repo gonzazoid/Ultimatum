@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/discardable_shared_memory.h"
 #include "base/memory/page_size.h"
 #include "base/strings/stringprintf.h"
@@ -329,7 +329,7 @@ TEST(DiscardableSharedMemoryHeapTest, CreateMemoryAllocatorDumpTest) {
   // Check if allocator dump is created when span exists.
   std::unique_ptr<base::trace_event::ProcessMemoryDump> pmd(
       new base::trace_event::ProcessMemoryDump(
-          {base::trace_event::MemoryDumpLevelOfDetail::DETAILED}));
+          {base::trace_event::MemoryDumpLevelOfDetail::kDetailed}));
   EXPECT_TRUE(heap.CreateMemoryAllocatorDump(span.get(), "discardable/test1",
                                              pmd.get()));
 
@@ -354,7 +354,7 @@ TEST(DiscardableSharedMemoryHeapTest, OnMemoryDumpTest) {
   int next_discardable_shared_memory_id = 0;
 
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND};
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground};
   {
     base::trace_event::ProcessMemoryDump pmd(args);
     heap.OnMemoryDump(args, &pmd);
@@ -423,7 +423,7 @@ TEST(DiscardableSharedMemoryHeapTest, DetailedDumpsDontContainRedundantData) {
   DiscardableSharedMemoryHeap heap;
 
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   size_t block_size = base::GetPageSize();
 
   auto memory = std::make_unique<base::DiscardableSharedMemory>();
@@ -449,10 +449,6 @@ TEST(DiscardableSharedMemoryHeapTest, DetailedDumpsDontContainRedundantData) {
 }
 
 TEST(DiscardableSharedMemoryHeapTest, MarkSpans) {
-  base::test::ScopedFeatureList fl;
-  fl.InitAndDisableFeature(
-      discardable_memory::kReleaseDiscardableFreeListPages);
-
   DiscardableSharedMemoryHeap heap;
 
   const size_t block_size = base::GetPageSize();

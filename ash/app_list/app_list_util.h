@@ -17,6 +17,7 @@ class Point;
 }  // namespace gfx
 
 namespace ui {
+class ColorProvider;
 class KeyEvent;
 }  // namespace ui
 
@@ -65,25 +66,15 @@ ASH_EXPORT bool ProcessLeftRightKeyTraversalForTextfield(
 // Returns a new image with the `icon` atop a circle background with
 // `background_color`.
 ASH_EXPORT gfx::ImageSkia CreateIconWithCircleBackground(
-    const gfx::ImageSkia& icon);
+    const gfx::ImageSkia& icon,
+    const ui::ColorProvider* color_provider);
 
 // Paints a rounded focus bar on `canvas` starting at `content_origin` extending
-// `height` dips vertically. The given `widget` is the widget of the view which
-// calls this function and it's used to get the color provider to retrieve the
-// correct color.
+// `height` dips vertically.
 ASH_EXPORT void PaintFocusBar(gfx::Canvas* canvas,
                               const gfx::Point& content_origin,
                               int height,
-                              const views::Widget* widget);
-
-// Paints a circle on `canvas` centered at `content_origin` with inner radius
-// `radius`. The given `widget` is the widget of the view which calls this
-// function and it's used to get the color provider to retrieve the correct
-// color.
-ASH_EXPORT void PaintFocusRing(gfx::Canvas* canvas,
-                               const gfx::Point& content_origin,
-                               int outer_radius,
-                               const views::Widget* widget);
+                              SkColor color);
 
 // Sets a view as an ignored leaf node, so that it and its child views will be
 // ignored by ChromeVox.

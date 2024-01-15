@@ -20,16 +20,15 @@
 #include "ash/components/arc/arc_util.h"
 #include "ash/components/arc/mojom/process.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/singleton.h"
 #include "base/process/process.h"
 #include "base/process/process_iterator.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -44,7 +43,8 @@ using ::base::ProcessId;
 
 namespace {
 
-static constexpr char kInitName[] = "/init";
+static constexpr char kInitNameP[] = "/init";
+static constexpr char kInitNameR[] = "/system/bin/init";
 static constexpr bool kNotFocused = false;
 static constexpr int64_t kNoActivityTimeInfo = 0L;
 
@@ -58,7 +58,7 @@ base::ProcessId GetArcInitProcessId(
     }
     // TODO(nya): Add more constraints to avoid mismatches.
     const std::string& process_name = entry.cmd_line_args()[0];
-    if (process_name == kInitName) {
+    if (process_name == kInitNameP || process_name == kInitNameR) {
       return entry.pid();
     }
   }
@@ -144,8 +144,9 @@ void UpdateNspidToPidMap(
       if (nspid != kNullProcessId && pid_map->find(nspid) != pid_map->end())
         (*pid_map)[nspid] = pid;
 
-      for (ProcessId child_pid : process_tree[pid])
+      for (ProcessId child_pid : process_tree[pid]) {
         queue.push(child_pid);
+      }
     }
   }
 }
@@ -372,8 +373,8 @@ void ArcProcessService::OnReceiveProcessList(
     RequestProcessListCallback callback,
     std::vector<mojom::RunningAppProcessInfoPtr> processes) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&UpdateAndReturnProcessList, cached_process_snapshot_,
                      nspid_to_pid_, std::move(processes)),
       std::move(callback));
@@ -385,8 +386,8 @@ void ArcProcessService::OnReceiveMemoryInfo(
     RequestMemoryInfoCallback callback,
     std::vector<mojom::ArcMemoryDumpPtr> process_dumps) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&UpdateAndReturnMemoryInfo, cached_process_snapshot_,
                      nspid_to_pid_, std::move(process_dumps)),
       std::move(callback));
@@ -475,14 +476,14 @@ void ArcProcessService::ContinueAppProcessListRequest(
   // but the user has not opted into ARC. This redundant check avoids that
   // logspam.
   if (!connection_ready_) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
   mojom::ProcessInstance* process_instance = ARC_GET_INSTANCE_FOR_METHOD(
       arc_bridge_service_->process(), RequestProcessList);
   if (!process_instance) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -494,8 +495,8 @@ void ArcProcessService::ContinueAppProcessListRequest(
 void ArcProcessService::ContinueSystemProcessListRequest(
     RequestProcessListCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&GetArcSystemProcessList, cached_process_snapshot_),
       std::move(callback));
 
@@ -532,11 +533,16 @@ void ArcProcessService::ContinueSystemMemoryInfoRequest(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&GetArcSystemProcessList, cached_process_snapshot_),
       base::BindOnce(&ArcProcessService::OnGetSystemProcessList,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+// static
+void ArcProcessService::EnsureFactoryBuilt() {
+  ArcProcessServiceFactory::GetInstance();
 }
 
 // -----------------------------------------------------------------------------

@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
@@ -70,17 +71,26 @@ class HostDrmDevice : public base::RefCountedThreadSafe<HostDrmDevice>,
       const std::vector<display::DisplayConfigurationParams>& config_requests,
       display::ConfigureCallback callback,
       uint32_t modeset_flag) override;
+  bool GpuSetHdcpKeyProp(int64_t display_id, const std::string& key) override;
   bool GpuGetHDCPState(int64_t display_id) override;
   bool GpuSetHDCPState(
       int64_t display_id,
       display::HDCPState state,
       display::ContentProtectionMethod protection_method) override;
+  void GpuSetColorTemperatureAdjustment(
+      int64_t display_id,
+      const display::ColorTemperatureAdjustment& cta) override;
+  void GpuSetColorCalibration(
+      int64_t display_id,
+      const display::ColorCalibration& calibration) override;
+  void GpuSetGammaAdjustment(
+      int64_t display_id,
+      const display::GammaAdjustment& adjustment) override;
   bool GpuSetColorMatrix(int64_t display_id,
                          const std::vector<float>& color_matrix) override;
-  bool GpuSetGammaCorrection(
-      int64_t display_id,
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut) override;
+  bool GpuSetGammaCorrection(int64_t display_id,
+                             const display::GammaCurve& degamma,
+                             const display::GammaCurve& gamma) override;
   void GpuSetPrivacyScreen(int64_t display_id,
                            bool enabled,
                            display::SetPrivacyScreenCallback callback) override;
@@ -105,6 +115,7 @@ class HostDrmDevice : public base::RefCountedThreadSafe<HostDrmDevice>,
   void GpuRelinquishDisplayControlCallback(bool success) const;
   void GpuShouldDisplayEventTriggerConfigurationCallback(
       bool should_trigger) const;
+  void GpuSetHdcpKeyPropCallback(int64_t display_id, bool success) const;
   void GpuGetHDCPStateCallback(
       int64_t display_id,
       bool success,
@@ -115,8 +126,8 @@ class HostDrmDevice : public base::RefCountedThreadSafe<HostDrmDevice>,
   // Mojo implementation of the DrmDevice. Will be bound on the "main" thread.
   mojo::Remote<ui::ozone::mojom::DrmDevice> drm_device_;
 
-  DrmDisplayHostManager* display_manager_;  // Not owned.
-  DrmCursor* const cursor_;                 // Not owned.
+  raw_ptr<DrmDisplayHostManager> display_manager_;  // Not owned.
+  const raw_ptr<DrmCursor> cursor_;                 // Not owned.
 
   std::unique_ptr<HostCursorProxy> cursor_proxy_;
 

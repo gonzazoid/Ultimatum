@@ -2,34 +2,101 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {AcceleratorInfo, AcceleratorState, AcceleratorType} from 'chrome://shortcut-customization/js/shortcut_types.js';
+import {Accelerator, AcceleratorKeyState, AcceleratorState, AcceleratorType, StandardAcceleratorInfo, TextAcceleratorInfo, TextAcceleratorPart} from 'chrome://shortcut-customization/js/shortcut_types.js';
 
-export function createDefaultAccelerator(
+
+export function createStandardAcceleratorInfo(
     modifier: number, keycode: number, keyDisplay: string,
-    locked = false): AcceleratorInfo {
+    locked = false): StandardAcceleratorInfo {
   return {
-    accelerator: {
-      modifiers: modifier,
-      key: keycode,
-      keyDisplay: keyDisplay,
+    layoutProperties: {
+      standardAccelerator: {
+        keyDisplay: keyDisplay,
+        accelerator: {
+          modifiers: modifier,
+          keyCode: keycode,
+          keyState: AcceleratorKeyState.PRESSED,
+        },
+      },
     },
-    type: AcceleratorType.kDefault,
-    state: AcceleratorState.kEnabled,
     locked: locked,
+    state: AcceleratorState.kEnabled,
+    type: AcceleratorType.kDefault,
   };
 }
 
-export function createUserAccelerator(
-    modifier: number, keycode: number, keyDisplay: string,
-    locked = false): AcceleratorInfo {
+export function createTextAcceleratorInfo(
+    parts: TextAcceleratorPart[], locked = false): TextAcceleratorInfo {
   return {
-    accelerator: {
-      modifiers: modifier,
-      key: keycode,
-      keyDisplay: keyDisplay,
+    layoutProperties: {
+      textAccelerator: {
+        parts,
+      },
     },
-    type: AcceleratorType.kUser,
+    locked,
     state: AcceleratorState.kEnabled,
+    type: AcceleratorType.kDefault,
+  };
+}
+
+export function createUserAcceleratorInfo(
+    modifier: number, keycode: number, keyDisplay: string,
+    locked = false): StandardAcceleratorInfo {
+  return {
+    layoutProperties: {
+      standardAccelerator: {
+        keyDisplay: keyDisplay,
+        accelerator: {
+          modifiers: modifier,
+          keyCode: keycode,
+          keyState: AcceleratorKeyState.PRESSED,
+        },
+      },
+    },
     locked: locked,
+    state: AcceleratorState.kEnabled,
+    type: AcceleratorType.kUser,
+  };
+}
+
+export function createCustomStandardAcceleratorInfo(
+    modifier: number, keycode: number, keyDisplay: string,
+    state: AcceleratorState, locked = false): StandardAcceleratorInfo {
+  return {
+    layoutProperties: {
+      standardAccelerator: {
+        keyDisplay: keyDisplay,
+        accelerator: {
+          modifiers: modifier,
+          keyCode: keycode,
+          keyState: AcceleratorKeyState.PRESSED,
+        },
+      },
+    },
+    locked: locked,
+    state: state,
+    type: AcceleratorType.kUser,
+  };
+}
+
+export function createAliasedStandardAcceleratorInfo(
+    modifier: number, keyCode: number, keyDisplay: string,
+    state: AcceleratorState,
+    originalAccelerator: Accelerator): StandardAcceleratorInfo {
+  return {
+    layoutProperties: {
+      standardAccelerator: {
+        keyDisplay: keyDisplay,
+        accelerator: {
+          modifiers: modifier,
+          keyCode: keyCode,
+          keyState: AcceleratorKeyState.PRESSED,
+        },
+        originalAccelerator: originalAccelerator,
+      },
+    },
+    locked: false,
+    state: state,
+    type: AcceleratorType.kUser,
   };
 }

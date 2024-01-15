@@ -8,12 +8,17 @@
 
 #import <memory>
 
+#import "base/apple/bundle_locations.h"
+#import "base/base_paths.h"
 #import "base/command_line.h"
 #import "base/ios/ios_util.h"
+#import "base/path_service.h"
+#import "base/strings/string_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "ios/chrome/browser/policy/model/policy_earl_grey_utils.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_feature.h"
-#import "ios/chrome/browser/web/features.h"
+#import "ios/chrome/browser/web/model/features.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
@@ -25,10 +30,6 @@
 #import "ios/web/common/features.h"
 #import "net/test/embedded_test_server/default_handlers.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -46,56 +47,67 @@ NSString* const kFlakyEarlGreyTestTargetSuffix =
 NSString* const kMultitaskingEarlGreyTestTargetName =
     @"ios_chrome_multitasking_eg2tests_module-Runner";
 
-// Contains a list of test names that run in multitasking test suite.
-NSArray* multitaskingTests = @[
-  // Integration tests
-  @"testContextMenuOpenInNewTab",        // ContextMenuTestCase
-  @"testContextMenuOpenInNewWindow",     // ContextMenuTestCase
-  @"testSwitchToMain",                   // CookiesTestCase
-  @"testSwitchToIncognito",              // CookiesTestCase
-  @"testFindDefaultFormAssistControls",  // FormInputTestCase
-  @"testTabDeletion",                    // TabUsageRecorderTestCase
-  @"testAutoTranslate",                  // TranslateTestCase
+// Returns a list of test names that run in multitasking test suite.
+NSArray* multitaskingTests() {
+  NSMutableArray* tests = [NSMutableArray arrayWithArray:@[
+    // Integration tests
+    @"testContextMenuOpenInNewTab",     // ContextMenuTestCase
+    @"testContextMenuOpenInNewWindow",  // ContextMenuTestCase
+    @"testSwitchToMain",                // CookiesTestCase
+    // TODO(crbug.com/1422238) Re-enable this flaky test on multitasking.
+    // @"testSwitchToIncognito",              // CookiesTestCase
+    @"testFindDefaultFormAssistControls",  // FormInputTestCase
+    @"testTabDeletion",                    // TabUsageRecorderTestCase
+    @"testAutoTranslate",                  // TranslateTestCase
 
-  // Settings tests
-  @"testSignInPopUpAccountOnSyncSettings",   // AccountCollectionsTestCase
-  @"testAutofillProfileEditing",             // AutofillSettingsTestCase
-  @"testAccessibilityOfBlockPopupSettings",  // BlockPopupsTestCase
-  @"testClearCookies",                       // SettingsTestCase
-  @"testAccessibilityOfTranslateSettings",   // TranslateUITestCase
+    // Settings tests
+    @"testSignInPopUpAccountOnSyncSettings",   // AccountCollectionsTestCase
+    @"testAutofillProfileEditing",             // AutofillSettingsTestCase
+    @"testAccessibilityOfBlockPopupSettings",  // BlockPopupsTestCase
+    // TODO(crbug.com/1485297): Failing on ios-simulator-full-configs.
+    // @"testClearCookies",                       // SettingsTestCase
+    @"testAccessibilityOfTranslateSettings",  // TranslateUITestCase
 
-  // UI tests
-  @"testActivityServiceControllerPrintAfterRedirectionToUnprintablePage",
-  // ActivityServiceControllerTestCase
-  @"testDismissOnDestroy",           // AlertCoordinatorTestCase
-  @"testAddRemoveBookmark",          // BookmarksTestCase
-  @"testJavaScriptInOmnibox",        // BrowserViewControllerTestCase
-  @"testChooseCastReceiverChooser",  // CastReceiverTestCase
-  @"testErrorPage",                  // ErrorPageTestCase
-  @"testFindInPage",                 // FindInPageTestCase
-  @"testDismissFirstRun",            // FirstRunTestCase
-  // TODO(crbug.com/872788) Failing after move to Xcode 10.
-  // @"testLongPDFScroll",                         // FullscreenTestCase
-  @"testDeleteHistory",                         // HistoryUITestCase
-  @"testInfobarsDismissOnNavigate",             // InfobarTestCase
-  @"testShowJavaScriptAlert",                   // JavaScriptDialogTestCase
-  @"testKeyboardCommands_RecentTabsPresented",  // KeyboardCommandsTestCase
-  @"testAccessibilityOnMostVisited",            // NewTabPageTestCase
-  @"testPrintNormalPage",                       // PrintControllerTestCase
-  @"testQRScannerUIIsShown",                 // QRScannerViewControllerTestCase
-  @"testMarkMixedEntriesRead",               // ReadingListTestCase
-  @"testClosedTabAppearsInRecentTabsPanel",  // RecentTabsTableTestCase
-  @"testSafeModeSendingCrashReport",         // SafeModeTestCase
-  @"testSignInOneUser",          // SigninInteractionControllerTestCase
-  @"testSwitchTabs",             // StackViewTestCase
-  @"testTabStripSwitchTabs",     // TabStripTestCase
-  @"testTabHistoryMenu",         // TabHistoryPopupControllerTestCase
-  @"testEnteringTabSwitcher",    // TabSwitcherControllerTestCase
-  @"testEnterURL",               // ToolbarTestCase
-  @"testOpenAndCloseToolsMenu",  // ToolsPopupMenuTestCase
-  @"testUserFeedbackPageOpenPrivacyPolicy",  // UserFeedbackTestCase
-  @"testVersion",                            // WebUITestCase
-];
+    // UI tests
+    @"testActivityServiceControllerPrintAfterRedirectionToUnprintablePage",
+    // ActivityServiceControllerTestCase
+    @"testDismissOnDestroy",  // AlertCoordinatorTestCase
+    // TODO(crbug.com/1475206): Re-enable this test.
+    // @"testAddRemoveBookmark",       // BookmarksTestCase
+    @"testJavaScriptInOmnibox",        // BrowserViewControllerTestCase
+    @"testChooseCastReceiverChooser",  // CastReceiverTestCase
+    @"testErrorPage",                  // ErrorPageTestCase
+    @"testFindInPage",                 // FindInPageTestCase
+    @"testDismissFirstRun",            // FirstRunTestCase
+    // TODO(crbug.com/872788) Failing after move to Xcode 10.
+    // @"testLongPDFScroll",                         // FullscreenTestCase
+    @"testDeleteHistory",                         // HistoryUITestCase
+    @"testInfobarsDismissOnNavigate",             // InfobarTestCase
+    @"testShowJavaScriptAlert",                   // JavaScriptDialogTestCase
+    @"testKeyboardCommands_RecentTabsPresented",  // KeyboardCommandsTestCase
+    @"testAccessibilityOnMostVisited",            // NewTabPageTestCase
+    @"testPrintNormalPage",                       // PrintCoordinatorTestCase
+    @"testQRScannerUIIsShown",    // QRScannerViewControllerTestCase
+    @"testMarkMixedEntriesRead",  // ReadingListTestCase
+    @"testClosedTabAppearsInRecentTabsPanel",  // RecentTabsTableTestCase
+    @"testSafeModeSendingCrashReport",         // SafeModeTestCase
+    @"testSignInOneUser",          // SigninInteractionControllerTestCase
+    @"testSwitchTabs",             // StackViewTestCase
+    @"testTabStripSwitchTabs",     // TabStripTestCase
+    @"testTabHistoryMenu",         // TabHistoryPopupControllerTestCase
+    @"testEnteringTabSwitcher",    // TabSwitcherControllerTestCase
+    @"testEnterURL",               // ToolbarTestCase
+    @"testOpenAndCloseToolsMenu",  // ToolsPopupMenuTestCase
+    @"testUserFeedbackPageOpenPrivacyPolicy",  // UserFeedbackTestCase
+    @"testVersion",                            // WebUITestCase
+  ]];
+
+  if (base::ios::IsRunningOnIOS17OrLater()) {
+    // TODO(crbug.com/1469233): Test is failing on iOS17.
+    [tests removeObject:@"testQRScannerUIIsShown"];
+  }
+  return tests;
+}
 
 const CFTimeInterval kDrainTimeout = 5;
 
@@ -189,9 +201,8 @@ void ResetAuthentication() {
 - (net::EmbeddedTestServer*)testServer {
   if (!_testServer) {
     _testServer = std::make_unique<net::EmbeddedTestServer>();
-    NSString* bundlePath = [NSBundle bundleForClass:[self class]].resourcePath;
     _testServer->ServeFilesFromDirectory(
-        base::FilePath(base::SysNSStringToUTF8(bundlePath))
+        base::PathService::CheckedGet(base::DIR_ASSETS)
             .AppendASCII("ios/testing/data/http_server_files/"));
     net::test_server::RegisterDefaultHandlers(_testServer.get());
   }
@@ -253,6 +264,10 @@ void ResetAuthentication() {
       [[self class] removeAnyOpenMenusAndInfoBars];
     }
     [[self class] closeAllTabs];
+
+    // Clear testing policies to make sure they don't change the browser's
+    // behavior in follow-up tests.
+    policy_test_utils::ClearPolicies();
   }
 
   if ([[GREY_REMOTE_CLASS_IN_APP(UIDevice) currentDevice] orientation] !=
@@ -304,7 +319,14 @@ void ResetAuthentication() {
 }
 
 - (BOOL)isRunningTest:(SEL)selector {
-  return [[self currentTestMethodName] isEqual:NSStringFromSelector(selector)];
+  return [[self currentTestMethodName]
+      isEqualToString:NSStringFromSelector(selector)];
+}
+
+- (void)triggerRestoreByRestartingApplication {
+  AppLaunchConfiguration config = [self appConfigurationForTestCase];
+  config.relaunch_policy = ForceRelaunchByCleanShutdown;
+  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
 }
 
 + (void)testForStartup {
@@ -331,6 +353,10 @@ void ResetAuthentication() {
   // where data may be sent to real servers.
   // Remove all identities in FakeChromeIdentityService.
   [ChromeEarlGrey signOutAndClearIdentities];
+  // Make sure any data on the fake sync server is cleared between tests, or
+  // when explicitly resetting app data. This should happen after signout (to
+  // avoid lots of "data was deleted" invalidations arriving on the client).
+  [ChromeEarlGrey clearFakeSyncServerData];
   [ChromeEarlGrey tearDownFakeSyncServer];
   // Switch from FakeChromeIdentityService to ChromeIdentityServiceImpl.
   TearDownMockAuthentication();
@@ -357,7 +383,7 @@ void ResetAuthentication() {
   NSMutableArray* flakyTestNames = [NSMutableArray array];
   for (unsigned int i = 0; i < count; i++) {
     SEL selector = method_getName(methods[i]);
-    if (std::string(sel_getName(selector)).find(kFlakyTestPrefix) == 0) {
+    if (base::StartsWith(sel_getName(selector), kFlakyTestPrefix)) {
       NSMethodSignature* methodSignature =
           [self instanceMethodSignatureForSelector:selector];
       NSInvocation* invocation =
@@ -376,7 +402,7 @@ void ResetAuthentication() {
   NSMutableArray* multitaskingTestNames = [NSMutableArray array];
   for (unsigned int i = 0; i < count; i++) {
     SEL selector = method_getName(methods[i]);
-    if ([multitaskingTests
+    if ([multitaskingTests()
             containsObject:base::SysUTF8ToNSString(sel_getName(selector))]) {
       NSMethodSignature* methodSignature =
           [self instanceMethodSignatureForSelector:selector];
@@ -398,8 +424,6 @@ void ResetAuthentication() {
                  @"Unable to load custom WebKit");
 
   [[self class] enableMockAuthentication];
-
-  [ChromeEarlGreyAppInterface disableDefaultBrowserPromo];
 
   // Sometimes on start up there can be infobars (e.g. restore session), so
   // ensure the UI is in a clean state.
@@ -428,8 +452,7 @@ void ResetAuthentication() {
 
   gIsMockAuthenticationDisabled = NO;
   _tearDownHandler = nil;
-  _originalOrientation =
-      [[GREY_REMOTE_CLASS_IN_APP(UIDevice) currentDevice] orientation];
+  _originalOrientation = [[XCUIDevice sharedDevice] orientation];
 }
 
 // Returns the method name, e.g. "testSomething" of the test that is currently

@@ -5,13 +5,21 @@
 #ifndef CHROME_BROWSER_ASH_PRINTING_PRINT_MANAGEMENT_PRINTING_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_ASH_PRINTING_PRINT_MANAGEMENT_PRINTING_MANAGER_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/ash/printing/print_management/printing_manager.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
+
+namespace content {
+class WebUI;
+class WebUIController;
+}  // namespace content
 
 namespace user_prefs {
 class PrefRegistrySyncable;
 }  // namespace user_prefs
 
+class GURL;
 class Profile;
 
 namespace ash {
@@ -25,10 +33,18 @@ class PrintingManagerFactory : public ProfileKeyedServiceFactory {
  public:
   static PrintingManager* GetForProfile(Profile* profile);
   static PrintingManagerFactory* GetInstance();
-  static KeyedService* BuildInstanceFor(content::BrowserContext* profile);
+  static std::unique_ptr<KeyedService> BuildInstanceFor(
+      content::BrowserContext* profile);
+  static void MaybeBindPrintManagementForWebUI(
+      Profile* profile,
+      mojo::PendingReceiver<
+          chromeos::printing::printing_manager::mojom::PrintingMetadataProvider>
+          receiver);
+  static std::unique_ptr<content::WebUIController>
+  CreatePrintManagementUIController(content::WebUI* web_ui, const GURL& url);
 
  private:
-  friend struct base::DefaultSingletonTraits<PrintingManagerFactory>;
+  friend base::NoDestructor<PrintingManagerFactory>;
 
   PrintingManagerFactory();
   ~PrintingManagerFactory() override;
@@ -37,7 +53,7 @@ class PrintingManagerFactory : public ProfileKeyedServiceFactory {
   PrintingManagerFactory& operator=(const PrintingManagerFactory&) = delete;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;

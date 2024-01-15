@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/client_channel.h"
@@ -49,7 +50,7 @@ class ConnectionManagerImpl : public ConnectionManager,
 
   // ConnectionManager:
   ConnectionManager::Status GetStatus() const override;
-  void AttemptNearbyConnection() override;
+  bool AttemptNearbyConnection() override;
   void Disconnect() override;
   void SendMessage(const std::string& payload) override;
   void RegisterPayloadFile(
@@ -59,7 +60,7 @@ class ConnectionManagerImpl : public ConnectionManager,
           file_transfer_update_callback,
       base::OnceCallback<void(bool)> registration_result_callback) override;
   void GetHostLastSeenTimestamp(
-      base::OnceCallback<void(absl::optional<base::Time>)> callback) override;
+      base::OnceCallback<void(std::optional<base::Time>)> callback) override;
 
  private:
   friend class ConnectionManagerImplTest;
@@ -88,9 +89,9 @@ class ConnectionManagerImpl : public ConnectionManager,
   void OnStatusChanged();
   void RecordMetrics();
 
-  multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client_;
-  device_sync::DeviceSyncClient* device_sync_client_;
-  SecureChannelClient* secure_channel_client_;
+  raw_ptr<multidevice_setup::MultiDeviceSetupClient> multidevice_setup_client_;
+  raw_ptr<device_sync::DeviceSyncClient> device_sync_client_;
+  raw_ptr<SecureChannelClient> secure_channel_client_;
   std::unique_ptr<ConnectionAttempt> connection_attempt_;
   std::unique_ptr<ClientChannel> channel_;
   std::unique_ptr<base::OneShotTimer> timer_;
@@ -98,7 +99,7 @@ class ConnectionManagerImpl : public ConnectionManager,
   std::unique_ptr<NearbyMetricsRecorder> metrics_recorder_;
   Status last_status_;
   base::Time status_change_timestamp_;
-  base::Clock* clock_;
+  raw_ptr<base::Clock, DanglingUntriaged> clock_;
   base::WeakPtrFactory<ConnectionManagerImpl> weak_ptr_factory_{this};
 };
 

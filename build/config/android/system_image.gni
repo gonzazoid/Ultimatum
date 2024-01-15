@@ -8,10 +8,17 @@ import("//build/config/android/rules.gni")
 #
 # Variables:
 #   package_name: Package name to use for the stub.
-#   package_name_from_target: Use the package name from this apk/bundle target.
+#   version_code: Version code for the stub.
+#   version_name: Version name for the stub.
+#   package_info_from_target: Use the package name and version_code from this
+#       apk/bundle target.
+#   static_library_name: For static library apks, name for the <static-library>.
+#   static_library_version: For static library apks, version for the
+#       <static-library> tag (for TrichromeLibrary, we set this to be the same
+#       as the package's version_code)
 #   stub_output: Path to output stub apk (default: do not create a stub).
 #
-# package_name and package_name_from_target are mutually exclusive.
+# package_name and package_info_from_target are mutually exclusive.
 template("system_image_stub_apk") {
   # Android requires stubs end with -Stub.apk.
   assert(filter_exclude([ invoker.stub_output ], [ "*-Stub.apk" ]) == [],
@@ -19,8 +26,35 @@ template("system_image_stub_apk") {
 
   _resource_apk_path = "${target_out_dir}/$target_name.ap_"
   _resource_apk_target_name = "${target_name}__compile_resources"
+
+  _manifest_target_name = "${target_name}__manifest"
+  _manifest_path = "$target_gen_dir/$_manifest_target_name.xml"
+  action("$_manifest_target_name") {
+    outputs = [ _manifest_path ]
+    script = "//build/android/gyp/create_stub_manifest.py"
+    args = [
+      "--output",
+      rebase_path(_manifest_path, root_build_dir),
+    ]
+    if (defined(invoker.static_library_name)) {
+      args += [
+        "--static-library-name",
+        invoker.static_library_name,
+      ]
+
+      # TODO(crbug.com/1408164): Make static_library_version mandatory.
+      if (defined(invoker.static_library_version)) {
+        args += [
+          "--static-library-version",
+          invoker.static_library_version,
+        ]
+      } else {
+        args += [ "--static-library-version=1" ]
+      }
+    }
+  }
+
   action_with_pydeps(_resource_apk_target_name) {
-    _manifest_path = "//build/android/AndroidManifest.xml"
     script = "//build/android/gyp/compile_resources.py"
     inputs = [
       _manifest_path,
@@ -31,26 +65,50 @@ template("system_image_stub_apk") {
       "--aapt2-path",
       rebase_path(android_sdk_tools_bundle_aapt2, root_build_dir),
       "--min-sdk-version=$default_min_sdk_version",
-      "--target-sdk-version=$default_min_sdk_version",
+      "--target-sdk-version=$default_android_sdk_version",
       "--android-manifest",
       rebase_path(_manifest_path, root_build_dir),
       "--arsc-path",
       rebase_path(_resource_apk_path, root_build_dir),
     ]
+    deps = [ ":$_manifest_target_name" ]
     if (defined(invoker.package_name)) {
       _package_name = invoker.package_name
+      _version_code = invoker.version_code
+      _version_name = invoker.version_name
+
+      # TODO(crbug.com/1408164): Make static_library_version mandatory.
+      if (defined(invoker.static_library_version)) {
+        assert(invoker.static_library_version == _version_code,
+               "$invoker.static_library_version must equal $_version_code.")
+      }
     } else {
-      _target = invoker.package_name_from_target
-      deps = [ "${_target}$build_config_target_suffix" ]
+      _target = invoker.package_info_from_target
+      deps += [ "${_target}$build_config_target_suffix" ]
       _build_config = get_label_info(_target, "target_gen_dir") + "/" +
                       get_label_info(_target, "name") + ".build_config.json"
       inputs += [ _build_config ]
       _rebased_build_config = rebase_path(_build_config, root_build_dir)
       _package_name = "@FileArg($_rebased_build_config:deps_info:package_name)"
+      _version_code = "@FileArg($_rebased_build_config:deps_info:version_code)"
+      _version_name = "@FileArg($_rebased_build_config:deps_info:version_name)"
+
+      # TODO(crbug.com/1408164): Make static_library_version mandatory.
+      # Pass this through to ensure that the version code in the build config is
+      # the same as the static library version.
+      if (defined(invoker.static_library_version)) {
+        args += [
+          "--static-library-version",
+          invoker.static_library_version,
+        ]
+      }
     }
+
     args += [
       "--rename-manifest-package=$_package_name",
       "--arsc-package-name=$_package_name",
+      "--version-code=$_version_code",
+      "--version-name=$_version_name",
       "--include-resources",
       rebase_path(android_sdk_jar, root_build_dir),
     ]
@@ -76,6 +134,10 @@ template("system_image_stub_apk") {
 # Variables:
 #   apk_or_bundle_target: Target that creates input bundle or apk.
 #   input_apk_or_bundle: Path to input .apk or .aab.
+#   static_library_name: For static library apks, name for the <static-library>.
+#   static_library_version: For static library apks, version for the
+#       <static-library> tag (for TrichromeLibrary, we set this to be the same
+#       as the package's version_code)
 #   output: Path to the output system .apk or .zip.
 #   fuse_apk: Fuse all apk splits into a single .apk (default: false).
 #   stub_output: Path to output stub apk (default: do not create a stub).
@@ -84,7 +146,12 @@ template("system_image_apks") {
   if (defined(invoker.stub_output)) {
     _stub_apk_target_name = "${target_name}__stub"
     system_image_stub_apk(_stub_apk_target_name) {
-      package_name_from_target = invoker.apk_or_bundle_target
+      forward_variables_from(invoker,
+                             [
+                               "static_library_name",
+                               "static_library_version",
+                             ])
+      package_info_from_target = invoker.apk_or_bundle_target
       stub_output = invoker.stub_output
     }
   }

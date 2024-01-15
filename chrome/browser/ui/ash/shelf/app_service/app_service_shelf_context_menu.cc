@@ -6,23 +6,23 @@
 
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/public/cpp/new_window_delegate.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/strings/string_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/extension_apps_utils.h"
 #include "chrome/browser/apps/app_service/menu_util.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/extension_app_utils.h"
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
-#include "chrome/browser/ash/arc/app_shortcuts/arc_app_shortcuts_menu_builder.h"
 #include "chrome/browser/ash/borealis/borealis_window_manager.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
-#include "chrome/browser/ash/crostini/crostini_shelf_utils.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
+#include "chrome/browser/ash/guest_os/guest_os_shelf_utils.h"
 #include "chrome/browser/ash/guest_os/guest_os_terminal.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager_factory.h"
@@ -30,24 +30,20 @@
 #include "chrome/browser/extensions/context_menu_matcher.h"
 #include "chrome/browser/extensions/launch_util.h"
 #include "chrome/browser/extensions/menu_manager.h"
-#include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_context_menu_delegate.h"
-#include "chrome/browser/ui/app_list/app_list_controller_delegate.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/extension_app_utils.h"
 #include "chrome/browser/ui/ash/shelf/arc_app_shelf_id.h"
 #include "chrome/browser/ui/ash/shelf/browser_shortcut_shelf_item_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
-#include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/views/crostini/crostini_app_restart_dialog.h"
-#include "chrome/browser/ui/webui/settings/ash/app_management/app_management_uma.h"
+#include "chrome/browser/ui/webui/ash/settings/app_management/app_management_uma.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/app_constants/constants.h"
-#include "components/services/app_service/public/cpp/features.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "content/public/browser/context_menu_params.h"
 #include "extensions/browser/extension_prefs.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/display/scoped_display_for_new_windows.h"
 #include "ui/gfx/vector_icon_types.h"
 
@@ -73,15 +69,18 @@ apps::WindowMode ConvertLaunchTypeCommandToWindowMode(int command_id) {
 extensions::LaunchType ConvertLaunchTypeCommandToExtensionLaunchType(
     int command_id) {
   switch (command_id) {
-    case ash::USE_LAUNCH_TYPE_PINNED:
-      return extensions::LAUNCH_TYPE_PINNED;
     case ash::USE_LAUNCH_TYPE_REGULAR:
       return extensions::LAUNCH_TYPE_REGULAR;
     case ash::USE_LAUNCH_TYPE_WINDOW:
       return extensions::LAUNCH_TYPE_WINDOW;
-    case ash::USE_LAUNCH_TYPE_FULLSCREEN:
-      return extensions::LAUNCH_TYPE_FULLSCREEN;
+    case ash::USE_LAUNCH_TYPE_TABBED_WINDOW:
+      // Not supported for extensions.
+      [[fallthrough]];
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_PINNED:
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_FULLSCREEN:
+      [[fallthrough]];
     default:
+      NOTREACHED();
       return extensions::LAUNCH_TYPE_INVALID;
   }
 }
@@ -103,7 +102,7 @@ AppServiceShelfContextMenu::AppServiceShelfContextMenu(
     const ash::ShelfItem* item,
     int64_t display_id)
     : ShelfContextMenu(controller, item, display_id) {
-  if (crostini::IsUnmatchedCrostiniShelfAppId(item->id.app_id) ||
+  if (guest_os::IsUnregisteredCrostiniShelfAppId(item->id.app_id) ||
       borealis::BorealisWindowManager::IsAnonymousAppId(item->id.app_id)) {
     // Sometimes GuestOS runs applications that are not registered with the apps
     // service. These "anonymous" apps should not be pinnable, so we set type
@@ -119,22 +118,35 @@ AppServiceShelfContextMenu::AppServiceShelfContextMenu(
 
 AppServiceShelfContextMenu::~AppServiceShelfContextMenu() = default;
 
-void AppServiceShelfContextMenu::GetMenuModel(GetMenuModelCallback callback) {
-  if (base::FeatureList::IsEnabled(apps::kAppServiceGetMenuWithoutMojom)) {
-    apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
-        ->GetMenuModel(
-            item().id.app_id, apps::MenuType::kShelf, display_id(),
-            base::BindOnce(&AppServiceShelfContextMenu::OnGetMenuModel,
-                           weak_ptr_factory_.GetWeakPtr(),
-                           std::move(callback)));
-  } else {
-    apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
-        ->GetMenuModel(
-            item().id.app_id, apps::mojom::MenuType::kShelf, display_id(),
-            base::BindOnce(&AppServiceShelfContextMenu::OnGetMojomMenuModel,
-                           weak_ptr_factory_.GetWeakPtr(),
-                           std::move(callback)));
+ui::ImageModel AppServiceShelfContextMenu::GetIconForCommandId(
+    int command_id) const {
+  if (command_id == ash::LAUNCH_NEW) {
+    const gfx::VectorIcon& icon =
+        GetCommandIdVectorIcon(command_id, launch_new_string_id_);
+    return ui::ImageModel::FromVectorIcon(
+        icon, apps::GetColorIdForMenuItemIcon(), ash::kAppContextMenuIconSize);
   }
+  return ShelfContextMenu::GetIconForCommandId(command_id);
+}
+
+std::u16string AppServiceShelfContextMenu::GetLabelForCommandId(
+    int command_id) const {
+  if (command_id == ash::LAUNCH_NEW) {
+    CHECK_GT(launch_new_string_id_, 0)
+        << "Unexpected `launch_new_string_id_` value. App id = "
+        << item().id.app_id << "; app type = " << apps::EnumToString(app_type_)
+        << "; submenu items count = " << submenu_->GetItemCount();
+    return l10n_util::GetStringUTF16(launch_new_string_id_);
+  }
+  return ShelfContextMenu::GetLabelForCommandId(command_id);
+}
+
+void AppServiceShelfContextMenu::GetMenuModel(GetMenuModelCallback callback) {
+  apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
+      ->GetMenuModel(
+          item().id.app_id, apps::MenuType::kShelf, display_id(),
+          base::BindOnce(&AppServiceShelfContextMenu::OnGetMenuModel,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void AppServiceShelfContextMenu::ExecuteCommand(int command_id,
@@ -152,11 +164,12 @@ void AppServiceShelfContextMenu::ExecuteCommand(int command_id,
       break;
 
     case ash::APP_CONTEXT_MENU_NEW_WINDOW:
-      if (app_type_ == apps::AppType::kCrostini) {
+      if (app_type_ == apps::AppType::kCrostini ||
+          app_type_ == apps::AppType::kBruschetta) {
         ShelfContextMenu::ExecuteCommand(ash::LAUNCH_NEW, event_flags);
       } else if (app_type_ == apps::AppType::kStandaloneBrowser) {
         crosapi::BrowserManager::Get()->NewWindow(
-            /*incongnito=*/false, /*should_trigger_session_restore=*/false);
+            /*incognito=*/false, /*should_trigger_session_restore=*/false);
       } else {
         ash::NewWindowDelegate::GetInstance()->NewWindow(
             /*incognito=*/false,
@@ -182,7 +195,7 @@ void AppServiceShelfContextMenu::ExecuteCommand(int command_id,
     case ash::SHUTDOWN_GUEST_OS:
       if (item().id.app_id == guest_os::kTerminalSystemAppId) {
         crostini::CrostiniManager::GetForProfile(controller()->profile())
-            ->StopVm(crostini::kCrostiniDefaultVmName, base::DoNothing());
+            ->StopRunningVms(base::DoNothing());
       } else if (item().id.app_id == plugin_vm::kPluginVmShelfAppId) {
         plugin_vm::PluginVmManagerFactory::GetForProfile(
             controller()->profile())
@@ -195,14 +208,16 @@ void AppServiceShelfContextMenu::ExecuteCommand(int command_id,
 
     case ash::USE_LAUNCH_TYPE_TABBED_WINDOW:
       [[fallthrough]];
-    case ash::USE_LAUNCH_TYPE_PINNED:
-      [[fallthrough]];
     case ash::USE_LAUNCH_TYPE_REGULAR:
       [[fallthrough]];
     case ash::USE_LAUNCH_TYPE_WINDOW:
-      [[fallthrough]];
-    case ash::USE_LAUNCH_TYPE_FULLSCREEN:
+      launch_new_string_id_ = apps::StringIdForUseLaunchTypeCommand(command_id);
       SetLaunchType(command_id);
+      break;
+
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_FULLSCREEN:
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_PINNED:
+      NOTREACHED();
       break;
 
     case ash::CROSTINI_USE_LOW_DENSITY:
@@ -299,17 +314,23 @@ bool AppServiceShelfContextMenu::IsCommandIdEnabled(int command_id) const {
   return true;
 }
 
+bool AppServiceShelfContextMenu::IsItemForCommandIdDynamic(
+    int command_id) const {
+  return command_id == ash::LAUNCH_NEW ||
+         ShelfContextMenu::IsItemForCommandIdDynamic(command_id);
+}
+
 void AppServiceShelfContextMenu::OnGetMenuModel(GetMenuModelCallback callback,
                                                 apps::MenuItems menu_items) {
   auto menu_model = GetBaseMenuModel();
   submenu_ = std::make_unique<ui::SimpleMenuModel>(this);
   size_t index = 0;
-  // Unretained is safe here because PopulateNewItemFromMojoMenuItems should
-  // call GetVectorIcon synchronously.
-  if (apps::PopulateNewItemFromMenuItems(
-          menu_items, menu_model.get(), submenu_.get(),
-          base::BindOnce(&AppServiceShelfContextMenu::GetCommandIdVectorIcon,
-                         base::Unretained(this)))) {
+
+  if (!menu_items.items.empty() &&
+      menu_items.items[0]->command_id == ash::LAUNCH_NEW) {
+    apps::PopulateLaunchNewItemFromMenuItem(menu_items.items[0],
+                                            menu_model.get(), submenu_.get(),
+                                            &launch_new_string_id_);
     ++index;
   }
 
@@ -330,8 +351,9 @@ void AppServiceShelfContextMenu::OnGetMenuModel(GetMenuModelCallback callback,
     ++index;
   }
 
-  if (ShouldAddPinMenu())
+  if (IsAppPinEditable(app_type_, item().id.app_id, controller()->profile())) {
     AddPinMenu(menu_model.get());
+  }
 
   size_t shortcut_index = menu_items.items.size();
   for (size_t i = index; i < menu_items.items.size(); i++) {
@@ -342,7 +364,12 @@ void AppServiceShelfContextMenu::OnGetMenuModel(GetMenuModelCallback callback,
       BuildChromeAppMenu(menu_model.get());
     }
 
-    if (menu_items.items[i]->type == apps::MenuItemType::kCommand) {
+    if (menu_items.items[i]->command_id == ash::LAUNCH_NEW) {
+      // Crostini apps have `LAUNCH_NEW` menu item at non-0 position.
+      apps::PopulateLaunchNewItemFromMenuItem(menu_items.items[i],
+                                              menu_model.get(), submenu_.get(),
+                                              &launch_new_string_id_);
+    } else if (menu_items.items[i]->type == apps::MenuItemType::kCommand) {
       AddContextMenuOption(
           menu_model.get(),
           static_cast<ash::CommandId>(menu_items.items[i]->command_id),
@@ -376,18 +403,11 @@ void AppServiceShelfContextMenu::OnGetMenuModel(GetMenuModelCallback callback,
   // When Crostini generates shelf id with the prefix "crostini:", AppService
   // can't generate the menu items, because the app_id doesn't match, so add the
   // menu items at UI side, based on the app running status.
-  if (crostini::IsUnmatchedCrostiniShelfAppId(item().id.app_id)) {
+  if (guest_os::IsUnregisteredCrostiniShelfAppId(item().id.app_id)) {
     BuildCrostiniAppMenu(menu_model.get());
   }
 
   std::move(callback).Run(std::move(menu_model));
-}
-
-void AppServiceShelfContextMenu::OnGetMojomMenuModel(
-    GetMenuModelCallback callback,
-    apps::mojom::MenuItemsPtr menu_items) {
-  OnGetMenuModel(std::move(callback),
-                 apps::ConvertMojomMenuItemsToMenuItems(menu_items));
 }
 
 void AppServiceShelfContextMenu::BuildExtensionAppShortcutsMenu(
@@ -444,6 +464,7 @@ void AppServiceShelfContextMenu::BuildArcAppShortcutsMenu(
       DCHECK(app_info->launchable);
       AddContextMenuOption(menu_model.get(), ash::LAUNCH_NEW,
                            IDS_APP_CONTEXT_MENU_ACTIVATE_ARC);
+      launch_new_string_id_ = IDS_APP_CONTEXT_MENU_ACTIVATE_ARC;
     }
 
     if (app_is_open) {
@@ -464,6 +485,7 @@ void AppServiceShelfContextMenu::BuildCrostiniAppMenu(
   } else {
     AddContextMenuOption(menu_model, ash::LAUNCH_NEW,
                          IDS_APP_CONTEXT_MENU_ACTIVATE_ARC);
+    launch_new_string_id_ = IDS_APP_CONTEXT_MENU_ACTIVATE_ARC;
   }
 }
 
@@ -495,7 +517,7 @@ void AppServiceShelfContextMenu::ShowAppInfo() {
   // registered. This is short term workaround to keep the relative
   // compatibility for Lacros Primary. We should figure out what should be shown
   // by this.
-  controller()->DoShowAppInfoFlow(controller()->profile(), item().id.app_id);
+  controller()->DoShowAppInfoFlow(item().id.app_id);
 }
 
 void AppServiceShelfContextMenu::SetLaunchType(int command_id) {
@@ -507,15 +529,8 @@ void AppServiceShelfContextMenu::SetLaunchType(int command_id) {
       apps::WindowMode user_window_mode =
           ConvertLaunchTypeCommandToWindowMode(command_id);
       if (user_window_mode != apps::WindowMode::kUnknown) {
-        if (base::FeatureList::IsEnabled(apps::kAppServiceWithoutMojom)) {
-          apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
-              ->SetWindowMode(item().id.app_id, user_window_mode);
-        } else {
-          apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
-              ->SetWindowMode(
-                  item().id.app_id,
-                  apps::ConvertWindowModeToMojomWindowMode(user_window_mode));
-        }
+        apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
+            ->SetWindowMode(item().id.app_id, user_window_mode);
       }
       return;
     }
@@ -539,10 +554,6 @@ void AppServiceShelfContextMenu::SetLaunchType(int command_id) {
 
 void AppServiceShelfContextMenu::SetExtensionLaunchType(int command_id) {
   switch (static_cast<ash::CommandId>(command_id)) {
-    case ash::USE_LAUNCH_TYPE_PINNED:
-      extensions::SetLaunchType(controller()->profile(), item().id.app_id,
-                                extensions::LAUNCH_TYPE_PINNED);
-      break;
     case ash::USE_LAUNCH_TYPE_REGULAR:
       extensions::SetLaunchType(controller()->profile(), item().id.app_id,
                                 extensions::LAUNCH_TYPE_REGULAR);
@@ -558,9 +569,10 @@ void AppServiceShelfContextMenu::SetExtensionLaunchType(int command_id) {
                                 launch_type);
       break;
     }
-    case ash::USE_LAUNCH_TYPE_FULLSCREEN:
-      extensions::SetLaunchType(controller()->profile(), item().id.app_id,
-                                extensions::LAUNCH_TYPE_FULLSCREEN);
+    case ash::USE_LAUNCH_TYPE_TABBED_WINDOW:
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_FULLSCREEN:
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_PINNED:
+      NOTREACHED();
       break;
     default:
       return;
@@ -578,57 +590,6 @@ extensions::LaunchType AppServiceShelfContextMenu::GetExtensionLaunchType()
 
   return extensions::GetLaunchType(
       extensions::ExtensionPrefs::Get(controller()->profile()), extension);
-}
-
-bool AppServiceShelfContextMenu::ShouldAddPinMenu() {
-  switch (app_type_) {
-    case apps::AppType::kArc: {
-      const arc::ArcAppShelfId& arc_shelf_id =
-          arc::ArcAppShelfId::FromString(item().id.app_id);
-      DCHECK(arc_shelf_id.valid());
-      const ArcAppListPrefs* arc_list_prefs =
-          ArcAppListPrefs::Get(controller()->profile());
-      DCHECK(arc_list_prefs);
-      std::unique_ptr<ArcAppListPrefs::AppInfo> app_info =
-          arc_list_prefs->GetApp(arc_shelf_id.app_id());
-      if (!arc_shelf_id.has_shelf_group_id() && app_info->launchable)
-        return true;
-      return false;
-    }
-    case apps::AppType::kPluginVm:
-    case apps::AppType::kBuiltIn: {
-      bool show_in_launcher = false;
-      apps::AppServiceProxyFactory::GetForProfile(controller()->profile())
-          ->AppRegistryCache()
-          .ForOneApp(item().id.app_id,
-                     [&show_in_launcher](const apps::AppUpdate& update) {
-                       show_in_launcher =
-                           update.ShowInLauncher().value_or(false);
-                     });
-      return show_in_launcher;
-    }
-    case apps::AppType::kCrostini:
-    case apps::AppType::kBorealis:
-    case apps::AppType::kChromeApp:
-    case apps::AppType::kWeb:
-    case apps::AppType::kSystemWeb:
-    case apps::AppType::kStandaloneBrowserChromeApp:
-      return true;
-    case apps::AppType::kStandaloneBrowser:
-      // Lacros behaves like the Chrome browser icon and cannot be unpinned.
-      return false;
-    case apps::AppType::kUnknown:
-      // Type kUnknown is used for "unregistered" Crostini apps, which do not
-      // have a .desktop file and can only be closed, not pinned.
-      return false;
-    case apps::AppType::kMacOs:
-    case apps::AppType::kRemote:
-    case apps::AppType::kExtension:
-    case apps::AppType::kStandaloneBrowserExtension:
-      NOTREACHED() << "Type " << (int)app_type_
-                   << " should not appear in shelf.";
-      return false;
-  }
 }
 
 void AppServiceShelfContextMenu::ExecutePublisherContextMenuCommand(

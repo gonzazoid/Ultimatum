@@ -7,8 +7,8 @@
 #include <string>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "media/base/test_helpers.h"
@@ -37,7 +37,7 @@ class ReadCBHandler {
 // chars so just return the string from the base::FilePath.
 base::FilePath TestFileURL() {
   base::FilePath data_dir;
-  EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &data_dir));
+  EXPECT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &data_dir));
   data_dir = data_dir.Append(FILE_PATH_LITERAL("media"))
                      .Append(FILE_PATH_LITERAL("test"))
                      .Append(FILE_PATH_LITERAL("data"))

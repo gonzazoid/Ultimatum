@@ -8,14 +8,22 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ui {
+
 namespace {
 
 class TestNativeTheme : public NativeTheme {
  public:
-  TestNativeTheme() : NativeTheme(false) {}
+  TestNativeTheme()
+      : NativeTheme(/*should_only_use_dark_colors=*/false,
+                    /*system_theme=*/ui::SystemTheme::kDefault,
+                    /*theme_to_update=*/nullptr) {}
   TestNativeTheme(const TestNativeTheme&) = delete;
   TestNativeTheme& operator=(const TestNativeTheme&) = delete;
   ~TestNativeTheme() override = default;
+
+  ColorProviderKey::ForcedColors GetForcedColorsKey() const {
+    return GetColorProviderKey(/*custom_theme=*/nullptr).forced_colors;
+  }
 
   // NativeTheme:
   gfx::Size GetPartSize(Part part,
@@ -65,6 +73,31 @@ TEST(NativeThemeTest, TestOnNativeThemeUpdatedMetricsEmitted) {
   histogram_tester.ExpectUniqueSample(
       "Views.Browser.NumColorProvidersInitializedDuringOnNativeThemeUpdated", 0,
       2);
+}
+
+TEST(NativeThemeTest, TestColorProviderKeyForcedColors) {
+  TestNativeTheme theme;
+
+  theme.set_forced_colors(true);
+  theme.set_page_colors(NativeTheme::PageColors::kDusk);
+  EXPECT_EQ(theme.GetForcedColorsKey(), ColorProviderKey::ForcedColors::kDusk);
+
+  theme.set_page_colors(NativeTheme::PageColors::kOff);
+  EXPECT_EQ(theme.GetForcedColorsKey(), ColorProviderKey::ForcedColors::kNone);
+
+  theme.set_page_colors(NativeTheme::PageColors::kHighContrast);
+  EXPECT_EQ(theme.GetForcedColorsKey(),
+            ColorProviderKey::ForcedColors::kActive);
+
+  theme.set_forced_colors(false);
+  theme.set_page_colors(NativeTheme::PageColors::kOff);
+  EXPECT_EQ(theme.GetForcedColorsKey(), ColorProviderKey::ForcedColors::kNone);
+
+  theme.set_page_colors(NativeTheme::PageColors::kHighContrast);
+  EXPECT_EQ(theme.GetForcedColorsKey(), ColorProviderKey::ForcedColors::kNone);
+
+  theme.set_page_colors(NativeTheme::PageColors::kDusk);
+  EXPECT_EQ(theme.GetForcedColorsKey(), ColorProviderKey::ForcedColors::kNone);
 }
 
 }  // namespace ui

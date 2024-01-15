@@ -4,8 +4,8 @@
 
 #include "chromeos/ash/components/dbus/resourced/fake_resourced_client.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -16,14 +16,14 @@ void FakeResourcedClient::SetGameModeWithTimeout(
     GameMode state,
     uint32_t refresh_seconds,
     chromeos::DBusMethodCallback<GameMode> callback) {
-  absl::optional<GameMode> response = previous_game_mode_state_;
+  std::optional<GameMode> response = previous_game_mode_state_;
   if (state == GameMode::OFF) {
     exit_game_mode_count_++;
   } else {
     enter_game_mode_count_++;
   }
   previous_game_mode_state_ = state;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), response));
 }
 
@@ -38,9 +38,33 @@ void FakeResourcedClient::SetMemoryMarginsBps(
       total_system_memory_kb_ * ((critical_margin_bps_ / 100.0) / 100.0));
   uint32_t moderate_kb = static_cast<uint32_t>(
       total_system_memory_kb_ * ((moderate_margin_bps_ / 100.0) / 100.0));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), true, critical_kb, moderate_kb));
+}
+
+void FakeResourcedClient::ReportBackgroundProcesses(
+    Component component,
+    const std::vector<int32_t>& pids) {
+  if (component == ResourcedClient::Component::kAsh) {
+    ash_background_pids_ = pids;
+  } else if (component == ResourcedClient::Component::kLacros) {
+    lacros_background_pids_ = pids;
+  } else {
+    NOTREACHED();
+  }
+}
+
+void FakeResourcedClient::ReportBrowserProcesses(
+    Component component,
+    const std::vector<Process>& processes) {
+  if (component == ResourcedClient::Component::kAsh) {
+    ash_browser_processes_ = processes;
+  } else if (component == ResourcedClient::Component::kLacros) {
+    lacros_browser_processes_ = processes;
+  } else {
+    NOTREACHED();
+  }
 }
 
 void FakeResourcedClient::AddObserver(Observer* observer) {
@@ -64,6 +88,16 @@ void FakeResourcedClient::FakeArcVmMemoryPressure(PressureLevelArcVm level,
   for (auto& observer : arcvm_observers_) {
     observer.OnMemoryPressure(level, reclaim_target_kb);
   }
+}
+
+void FakeResourcedClient::AddArcContainerObserver(
+    ArcContainerObserver* observer) {
+  arc_container_observers_.AddObserver(observer);
+}
+
+void FakeResourcedClient::RemoveArcContainerObserver(
+    ArcContainerObserver* observer) {
+  arc_container_observers_.RemoveObserver(observer);
 }
 
 }  // namespace ash

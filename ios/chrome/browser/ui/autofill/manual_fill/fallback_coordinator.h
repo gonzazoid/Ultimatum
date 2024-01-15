@@ -5,9 +5,9 @@
 #ifndef IOS_CHROME_BROWSER_UI_AUTOFILL_MANUAL_FILL_FALLBACK_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_AUTOFILL_MANUAL_FILL_FALLBACK_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
-@class ChromeTableViewController;
+@class LegacyChromeTableViewController;
 @class FallbackCoordinator;
 @class ManualFillInjectionHandler;
 

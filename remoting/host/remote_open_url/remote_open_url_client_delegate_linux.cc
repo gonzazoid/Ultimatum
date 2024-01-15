@@ -6,7 +6,10 @@
 
 #include <gtk/gtk.h>
 
+#include <string_view>
+
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/containers/fixed_flat_set.h"
 #include "base/environment.h"
 #include "base/logging.h"
@@ -44,7 +47,7 @@ void ShowMessageDialog(const std::string& message) {
 
 bool IsBrowserValid(const std::string& browser) {
   static constexpr auto invalid_browsers =
-      base::MakeFixedFlatSet<base::StringPiece>({
+      base::MakeFixedFlatSet<std::string_view>({
           // This is the chromoting forwarder itself.
           "crd-url-forwarder.desktop",
 
@@ -115,11 +118,11 @@ void RemoteOpenUrlClientDelegateLinux::OpenUrlOnFallbackBrowser(
   environment_->GetVar(kXdgCurrentDesktopEnvVar, &current_desktop);
 
   const char* host_setting_key = kLinuxPreviousDefaultWebBrowserGeneric;
-  if (current_desktop.find("Cinnamon") != std::string::npos) {
+  if (base::Contains(current_desktop, "Cinnamon")) {
     host_setting_key = kLinuxPreviousDefaultWebBrowserCinnamon;
-  } else if (current_desktop.find("XFCE") != std::string::npos) {
+  } else if (base::Contains(current_desktop, "XFCE")) {
     host_setting_key = kLinuxPreviousDefaultWebBrowserXfce;
-  } else if (current_desktop.find("GNOME") != std::string::npos) {
+  } else if (base::Contains(current_desktop, "GNOME")) {
     host_setting_key = kLinuxPreviousDefaultWebBrowserGnome;
   } else {
     LOG(WARNING) << "Unknown desktop environment: " << current_desktop

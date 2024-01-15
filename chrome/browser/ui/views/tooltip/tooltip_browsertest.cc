@@ -6,10 +6,9 @@
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -20,6 +19,7 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/hit_test_region_observer.h"
 #include "net/dns/mock_host_resolver.h"
+#include "ui/base/test/ui_controls.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/native_widget_types.h"
@@ -28,28 +28,74 @@
 #include "ui/views/corewm/tooltip_controller_test_helper.h"
 #include "ui/views/widget/any_widget_observer.h"
 #include "ui/views/widget/widget.h"
+#include "ui/wm/public/tooltip_observer.h"
 
 using content::RenderFrameHost;
 using content::RenderWidgetHostView;
 using content::WebContents;
-using views::corewm::TooltipAura;
 using views::corewm::TooltipController;
-using views::corewm::TooltipStateManager;
 using views::corewm::test::TooltipControllerTestHelper;
 
-class TooltipWidgetMonitor {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+class TooltipMonitor : public wm::TooltipObserver {
  public:
-  TooltipWidgetMonitor() {
+  TooltipMonitor() = default;
+  TooltipMonitor(const TooltipMonitor&) = delete;
+  TooltipMonitor& operator=(const TooltipMonitor&) = delete;
+  ~TooltipMonitor() override = default;
+
+  bool IsWidgetActive() const { return is_tooltip_active_; }
+
+  void WaitUntilTooltipShown() {
+    if (!is_tooltip_active_) {
+      run_loop_ = std::make_unique<base::RunLoop>();
+      run_loop_->Run();
+    }
+  }
+
+  void WaitUntilTooltipClosed() {
+    if (is_tooltip_active_) {
+      run_loop_ = std::make_unique<base::RunLoop>();
+      run_loop_->Run();
+    }
+  }
+
+  void OnTooltipShown(aura::Window* window,
+                      const std::u16string& text,
+                      const gfx::Rect& bounds) override {
+    is_tooltip_active_ = true;
+    if (run_loop_ && run_loop_->running()) {
+      run_loop_->Quit();
+    }
+  }
+
+  void OnTooltipHidden(aura::Window* window) override {
+    is_tooltip_active_ = false;
+    if (run_loop_ && run_loop_->running()) {
+      run_loop_->Quit();
+    }
+  }
+
+ private:
+  bool is_tooltip_active_ = false;
+  std::unique_ptr<base::RunLoop> run_loop_;
+};
+#else
+using views::corewm::TooltipAura;
+
+class TooltipMonitor {
+ public:
+  TooltipMonitor() {
     observer_ = std::make_unique<views::AnyWidgetObserver>(
         views::test::AnyWidgetTestPasskey());
     observer_->set_shown_callback(base::BindRepeating(
-        &TooltipWidgetMonitor::OnTooltipShown, base::Unretained(this)));
+        &TooltipMonitor::OnTooltipShown, base::Unretained(this)));
     observer_->set_closing_callback(base::BindRepeating(
-        &TooltipWidgetMonitor::OnTooltipClosed, base::Unretained(this)));
+        &TooltipMonitor::OnTooltipClosed, base::Unretained(this)));
   }
-  TooltipWidgetMonitor(const TooltipWidgetMonitor&) = delete;
-  TooltipWidgetMonitor& operator=(const TooltipWidgetMonitor&) = delete;
-  ~TooltipWidgetMonitor() = default;
+  TooltipMonitor(const TooltipMonitor&) = delete;
+  TooltipMonitor& operator=(const TooltipMonitor&) = delete;
+  ~TooltipMonitor() = default;
 
   bool IsWidgetActive() const { return active_widget_; }
 
@@ -90,7 +136,8 @@ class TooltipWidgetMonitor {
   raw_ptr<views::Widget> active_widget_ = nullptr;
   std::unique_ptr<views::AnyWidgetObserver> observer_;
   std::unique_ptr<base::RunLoop> run_loop_;
-};  // class TooltipWidgetMonitor
+};  // class TooltipMonitor
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 // Browser tests for tooltips on platforms that use TooltipAura to display the
 // tooltip.
@@ -106,9 +153,11 @@ class TooltipBrowserTest : public InProcessBrowserTest {
     gfx::NativeWindow root_window =
         browser()->window()->GetNativeWindow()->GetRootWindow();
     event_generator_ = std::make_unique<ui::test::EventGenerator>(root_window);
-    helper_ = std::make_unique<TooltipControllerTestHelper>(
-        static_cast<TooltipController*>(wm::GetTooltipClient(root_window)));
-    tooltip_monitor_ = std::make_unique<TooltipWidgetMonitor>();
+    helper_ = std::make_unique<TooltipControllerTestHelper>(root_window);
+    tooltip_monitor_ = std::make_unique<TooltipMonitor>();
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    helper()->AddObserver(tooltip_monitor_.get());
+#endif
   }
 
   content::WebContents* web_contents() { return web_contents_; }
@@ -140,28 +189,6 @@ class TooltipBrowserTest : public InProcessBrowserTest {
     return ChildFrameAt(web_contents_->GetPrimaryMainFrame(), index);
   }
 
-  bool SkipTestForOldWinVersion() const {
-#if BUILDFLAG(IS_WIN)
-    // On older Windows version, tooltips are displayed with TooltipWin instead
-    // of TooltipAura. For TooltipAura, a tooltip is displayed using a Widget
-    // and a Label and for TooltipWin, it is displayed using a native win32
-    // control. Since the observer we use in this class is the
-    // AnyWidgetObserver, we don't receive any update from non-Widget tooltips.
-    // This doesn't mean that no tooltip is displayed on older platforms, but
-    // that we are unable to execute the browser test successfully because the
-    // tooltip displayed is not displayed using a Widget.
-    //
-    // For now, we can simply skip the tests on older platforms, but it might be
-    // a good idea to eventually implement a custom observer (e.g.,
-    // TooltipStateObserver) that would work for both TooltipAura and
-    // TooltipWin, or remove once and for all TooltipWin. For more information
-    // on why we still need TooltipWin on Win7, see https://crbug.com/1201440.
-    if (base::win::GetVersion() <= base::win::Version::WIN7)
-      return true;
-#endif  // BUILDFLAG(IS_WIN)
-    return false;
-  }
-
   gfx::Point WebContentPositionToScreenCoordinate(int x, int y) {
     return gfx::Point(x, y) + rwhv_->GetViewBounds().OffsetFromOrigin();
   }
@@ -175,24 +202,21 @@ class TooltipBrowserTest : public InProcessBrowserTest {
 
   ui::test::EventGenerator* event_generator() { return event_generator_.get(); }
   TooltipControllerTestHelper* helper() { return helper_.get(); }
-  TooltipWidgetMonitor* tooltip_monitor() { return tooltip_monitor_.get(); }
+  TooltipMonitor* tooltip_monitor() { return tooltip_monitor_.get(); }
 
  private:
   std::unique_ptr<ui::test::EventGenerator> event_generator_ = nullptr;
-  raw_ptr<RenderWidgetHostView, DanglingUntriaged> rwhv_ = nullptr;
-  raw_ptr<WebContents, DanglingUntriaged> web_contents_ = nullptr;
+  raw_ptr<RenderWidgetHostView, AcrossTasksDanglingUntriaged> rwhv_ = nullptr;
+  raw_ptr<WebContents, AcrossTasksDanglingUntriaged> web_contents_ = nullptr;
 
   std::unique_ptr<TooltipControllerTestHelper> helper_;
-  std::unique_ptr<TooltipWidgetMonitor> tooltip_monitor_ = nullptr;
+  std::unique_ptr<TooltipMonitor> tooltip_monitor_ = nullptr;
 
   base::test::ScopedFeatureList scoped_feature_list_;
 };  // class TooltipBrowserTest
 
 IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
                        ShowTooltipFromWebContentWithCursor) {
-  if (SkipTestForOldWinVersion())
-    return;
-
   NavigateToURL("/tooltip.html");
   std::u16string expected_text = u"my tooltip";
 
@@ -200,16 +224,25 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
   // This will position the cursor right above a button with the title attribute
   // set and will show the tooltip.
   gfx::Point position = WebContentPositionToScreenCoordinate(10, 10);
+
   event_generator()->MoveMouseTo(position);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Sends mouse move event to Ash as well to make server side tooltip work.
+  EXPECT_TRUE(ui_controls::SendMouseMove(
+      position.x(), position.y(), browser()->window()->GetNativeWindow()));
+#endif
   tooltip_monitor()->WaitUntilTooltipShown();
   EXPECT_TRUE(helper()->IsTooltipVisible());
   EXPECT_EQ(expected_text, helper()->GetTooltipText());
 
   helper()->HideAndReset();
+  tooltip_monitor()->WaitUntilTooltipClosed();
 }
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
 // https://crbug.com/1212403. Flaky on linux-chromeos-rel and other linux bots.
+// TODO(elkurin): Keyboard triggered tooltip needs command line switch on server
+// side while Lacros cannot set Ash flag.
 #define MAYBE_ShowTooltipFromWebContentWithKeyboard \
   DISABLED_ShowTooltipFromWebContentWithKeyboard
 #else
@@ -218,9 +251,6 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
 #endif
 IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
                        MAYBE_ShowTooltipFromWebContentWithKeyboard) {
-  if (SkipTestForOldWinVersion())
-    return;
-
   NavigateToURL("/tooltip.html");
   std::u16string expected_text = u"my tooltip";
 
@@ -237,6 +267,8 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
 // https://crbug.com/1212403. Flaky on linux-chromeos-rel.
 // https://crbug.com/1241736. Flaky on Win.
+// TODO(elkurin): Keyboard triggered tooltip needs command line switch on server
+// side while Lacros cannot set Ash flag.
 #define MAYBE_ShowTooltipFromIFrameWithKeyboard \
   DISABLED_ShowTooltipFromIFrameWithKeyboard
 #else
@@ -245,9 +277,6 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
 #endif
 IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
                        MAYBE_ShowTooltipFromIFrameWithKeyboard) {
-  if (SkipTestForOldWinVersion())
-    return;
-
   // There are two tooltips in this file: one above the iframe and one inside
   // the iframe.
   NavigateToURL("/tooltip_in_iframe.html");
@@ -284,36 +313,59 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
             helper()->GetTooltipPosition());
 
   helper()->HideAndReset();
+  tooltip_monitor()->WaitUntilTooltipClosed();
 }
 
-#if BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
 // https://crbug.com/1212403. Flaky on linux-chromeos-rel.
-#define MAYBE_HideTooltipOnKeyPress DISABLED_HideTooltipOnKeyPress
+// https://crbug.com/1241736. Flaky on Win.
+#define MAYBE_HideTooltipOnKeyPressTriggeredByCursor \
+  DISABLED_HideTooltipOnKeyPressTriggeredByCursor
 #else
-#define MAYBE_HideTooltipOnKeyPress HideTooltipOnKeyPress
+#define MAYBE_HideTooltipOnKeyPressTriggeredByCursor \
+  HideTooltipOnKeyPressTriggeredByCursor
 #endif
-IN_PROC_BROWSER_TEST_F(TooltipBrowserTest, MAYBE_HideTooltipOnKeyPress) {
-  if (SkipTestForOldWinVersion())
-    return;
-
+IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
+                       MAYBE_HideTooltipOnKeyPressTriggeredByCursor) {
   NavigateToURL("/tooltip.html");
   std::u16string expected_text = u"my tooltip";
 
   // First, trigger the tooltip from the cursor.
   gfx::Point position = WebContentPositionToScreenCoordinate(10, 10);
   event_generator()->MoveMouseTo(position);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Sends mouse move event to Ash as well to make server side tooltip work.
+  EXPECT_TRUE(ui_controls::SendMouseMove(
+      position.x(), position.y(), browser()->window()->GetNativeWindow()));
+#endif
   tooltip_monitor()->WaitUntilTooltipShown();
   EXPECT_TRUE(helper()->IsTooltipVisible());
   EXPECT_EQ(expected_text, helper()->GetTooltipText());
 
   // Second, send a key press event to test whether the tooltip gets hidden.
   EXPECT_TRUE(tooltip_monitor()->IsWidgetActive());
-  event_generator()->PressKey(ui::VKEY_A, ui::EF_NONE);
-  event_generator()->ReleaseKey(ui::VKEY_A, ui::EF_NONE);
+  ui_controls::SendKeyPress(browser()->window()->GetNativeWindow(), ui::VKEY_A,
+                            false, false, false, false);
   tooltip_monitor()->WaitUntilTooltipClosed();
   EXPECT_FALSE(helper()->IsTooltipVisible());
+}
 
-  // Try the same thing with a keyboard-triggered tooltip.
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+// https://crbug.com/1212403. Flaky on linux-chromeos-rel.
+// https://crbug.com/1241736. Flaky on Win.
+// TODO(elkurin): Keyboard triggered tooltip needs command line switch on server
+// side while Lacros cannot set Ash flag.
+#define MAYBE_HideTooltipOnKeyPressTriggeredByKeyboard \
+  DISABLED_HideTooltipOnKeyPressTriggeredByKeyboard
+#else
+#define MAYBE_HideTooltipOnKeyPressTriggeredByKeyboard \
+  HideTooltipOnKeyPressTriggeredByKeyboard
+#endif
+IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
+                       MAYBE_HideTooltipOnKeyPressTriggeredByKeyboard) {
+  NavigateToURL("/tooltip.html");
+  std::u16string expected_text = u"my tooltip";
+
   // Trigger the tooltip from the keyboard with a TAB keypress.
   event_generator()->PressKey(ui::VKEY_TAB, ui::EF_NONE);
   event_generator()->ReleaseKey(ui::VKEY_TAB, ui::EF_NONE);
@@ -329,8 +381,10 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest, MAYBE_HideTooltipOnKeyPress) {
   EXPECT_FALSE(helper()->IsTooltipVisible());
 }
 
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
-// https://crbug.com/1212403. Flaky on linux-chromeos-rel, windows.
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+// https://crbug.com/1212403. Flaky on linux-chromeos-rel, windows, linux.
+// TODO(elkurin): Keyboard triggered tooltip needs command line switch on server
+// side while Lacros cannot set Ash flag.
 #define MAYBE_ScriptFocusHidesKeyboardTriggeredTooltip \
   DISABLED_ScriptFocusHidesKeyboardTriggeredTooltip
 #else
@@ -339,9 +393,6 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest, MAYBE_HideTooltipOnKeyPress) {
 #endif
 IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
                        MAYBE_ScriptFocusHidesKeyboardTriggeredTooltip) {
-  if (SkipTestForOldWinVersion())
-    return;
-
   NavigateToURL("/tooltip_two_buttons.html");
   std::u16string expected_text_1 = u"my tooltip 1";
   std::u16string expected_text_2 = u"my tooltip 2";
@@ -357,7 +408,7 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
   // Validate that a blur event on another element than our focused one doesn't
   // hide the tooltip.
   std::string javascript = "document.getElementById('b2').blur();";
-  EXPECT_TRUE(content::ExecuteScript(web_contents(), javascript));
+  EXPECT_TRUE(content::ExecJs(web_contents(), javascript));
 
   EXPECT_TRUE(helper()->IsTooltipVisible());
   EXPECT_EQ(expected_text_1, helper()->GetTooltipText());
@@ -365,8 +416,8 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
 
   // Validate that a focus on another element will hide the tooltip.
   javascript = "document.getElementById('b2').focus();";
-  EXPECT_TRUE(content::ExecuteScript(web_contents(), javascript));
 
+  EXPECT_TRUE(content::ExecJs(web_contents(), javascript));
   tooltip_monitor()->WaitUntilTooltipClosed();
   EXPECT_FALSE(tooltip_monitor()->IsWidgetActive());
   EXPECT_FALSE(helper()->IsTooltipVisible());
@@ -382,8 +433,35 @@ IN_PROC_BROWSER_TEST_F(TooltipBrowserTest,
 
   // Validate that the blur call hides the tooltip.
   javascript = "document.getElementById('b1').blur();";
-  EXPECT_TRUE(content::ExecuteScript(web_contents(), javascript));
+  EXPECT_TRUE(content::ExecJs(web_contents(), javascript));
 
   EXPECT_FALSE(tooltip_monitor()->IsWidgetActive());
   EXPECT_FALSE(helper()->IsTooltipVisible());
+}
+
+IN_PROC_BROWSER_TEST_F(TooltipBrowserTest, ResetTooltipOnClosingWindow) {
+  NavigateToURL("/tooltip.html");
+
+  // Trigger the tooltip from the cursor.
+  gfx::Point position = WebContentPositionToScreenCoordinate(10, 10);
+  event_generator()->MoveMouseTo(position);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Sends mouse move event to Ash as well to make server side tooltip work.
+  EXPECT_TRUE(ui_controls::SendMouseMove(
+      position.x(), position.y(), browser()->window()->GetNativeWindow()));
+#endif
+  tooltip_monitor()->WaitUntilTooltipShown();
+  EXPECT_TRUE(helper()->IsTooltipVisible());
+
+  // Tooltip should be hidden on closing window.
+  chrome::CloseWindow(browser());
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Verify tooltip is closed.
+  // This is skipped on Lacros since tooltip_controller is destructed before
+  // receiving OnTooltipHiddenOnServer.
+  tooltip_monitor()->WaitUntilTooltipClosed();
+#endif
+
+  // Make sure Chrome won't crash during window destruction.
+  ui_test_utils::WaitForBrowserToClose();
 }

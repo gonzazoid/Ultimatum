@@ -4,6 +4,7 @@
 
 import("//build/config/features.gni")
 import("//components/safe_browsing/buildflags.gni")
+import("//extensions/buildflags/buildflags.gni")
 
 source_set("renderer") {
   if (safe_browsing_mode != 0) {
@@ -11,6 +12,9 @@ source_set("renderer") {
       "threat_dom_details.cc",
       "threat_dom_details.h",
     ]
+
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
     deps = [
       "//base",
       "//components/safe_browsing/content/common:interfaces",
@@ -31,6 +35,8 @@ source_set("throttles") {
     "websocket_sb_handshake_throttle.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base:base",
     "//components/safe_browsing/content/common:interfaces",
@@ -38,6 +44,7 @@ source_set("throttles") {
     "//components/safe_browsing/core/common:interfaces",
     "//content/public/common:common",
     "//content/public/renderer:renderer",
+    "//extensions/buildflags",
     "//ipc",
     "//net",
     "//services/network/public/mojom",
@@ -45,6 +52,10 @@ source_set("throttles") {
     "//third_party/blink/public:blink",
     "//url:url",
   ]
+
+  if (enable_extensions) {
+    deps += [ "//extensions/common:common_constants" ]
+  }
 }
 
 source_set("throttles_unittest") {
@@ -59,6 +70,7 @@ source_set("throttles_unittest") {
     "//base:base",
     "//base/test:test_support",
     "//components/safe_browsing/content/common:interfaces",
+    "//components/safe_browsing/core/common",
     "//components/safe_browsing/core/common:interfaces",
     "//content/public/common",
     "//ipc",

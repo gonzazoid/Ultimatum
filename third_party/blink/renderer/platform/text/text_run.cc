@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/platform/text/text_run.h"
 
+#include "third_party/blink/renderer/platform/text/bidi_paragraph.h"
 #include "third_party/blink/renderer/platform/text/character.h"
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
@@ -33,11 +34,11 @@ namespace blink {
 
 struct SameSizeAsTextRun {
   DISALLOW_NEW();
-  const void* pointer;
-  int integers[2];
-  float floats[2];
-  uint32_t bitfields : 10;
-  TabSize tab_size;
+  union {
+    const void* pointer;
+  };
+  int integer;
+  uint32_t bitfields : 4;
 };
 
 ASSERT_SIZE(TextRun, SameSizeAsTextRun);
@@ -102,6 +103,10 @@ unsigned TextRun::IndexOfSubRun(const TextRun& sub_run) const {
       return static_cast<unsigned>(start_index);
   }
   return std::numeric_limits<unsigned>::max();
+}
+
+void TextRun::SetDirectionFromText() {
+  SetDirection(BidiParagraph::BaseDirectionForStringOrLtr(ToStringView()));
 }
 
 }  // namespace blink

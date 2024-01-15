@@ -11,9 +11,11 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/common/extension_id.h"
 #include "extensions/common/features/feature.h"
+#include "extensions/common/mojom/context_type.mojom-forward.h"
 #include "extensions/common/mojom/view_type.mojom.h"
 #include "extensions/renderer/renderer_extension_registry.h"
 #include "extensions/renderer/script_context_set_iterable.h"
@@ -60,7 +62,8 @@ class ScriptContextSet : public ScriptContextSetIterable {
   // Returns a weak reference to the new ScriptContext.
   ScriptContext* Register(blink::WebLocalFrame* frame,
                           const v8::Local<v8::Context>& v8_context,
-                          int32_t world_id);
+                          int32_t world_id,
+                          bool is_webview);
 
   // If the specified context is contained in this set, remove it, then delete
   // it asynchronously. After this call returns the context object will still
@@ -93,11 +96,17 @@ class ScriptContextSet : public ScriptContextSetIterable {
   static ScriptContext* GetMainWorldContextForFrame(
       content::RenderFrame* render_frame);
 
-  // ScriptContextIterable:
+  // ScriptContextSetIterable:
   void ForEach(
-      const std::string& extension_id,
+      const mojom::HostID& host_id,
       content::RenderFrame* render_frame,
       const base::RepeatingCallback<void(ScriptContext*)>& callback) override;
+
+  // Runs |callback| after verifying |render_frame| matches context's.
+  void ExecuteCallbackWithContext(
+      ScriptContext* context,
+      content::RenderFrame* render_frame,
+      const base::RepeatingCallback<void(ScriptContext*)>& callback);
 
   // Cleans up contexts belonging to an unloaded extension.
   void OnExtensionUnloaded(const std::string& extension_id);
@@ -118,17 +127,18 @@ class ScriptContextSet : public ScriptContextSetIterable {
                                                  int32_t world_id,
                                                  bool use_effective_url);
 
-  // Returns the Feature::Context type of context for a JavaScript context.
-  Feature::Context ClassifyJavaScriptContext(
+  // Returns the mojom::ContextType type of context for a JavaScript context.
+  mojom::ContextType ClassifyJavaScriptContext(
       const Extension* extension,
       int32_t world_id,
       const GURL& url,
       const blink::WebSecurityOrigin& origin,
-      mojom::ViewType view_type);
+      mojom::ViewType view_type,
+      bool is_webview);
 
   // Weak reference to all installed Extensions that are also active in this
   // process.
-  ExtensionIdSet* active_extension_ids_;
+  raw_ptr<ExtensionIdSet, ExperimentalRenderer> active_extension_ids_;
 
   // The set of all ScriptContexts we own.
   std::set<ScriptContext*> contexts_;

@@ -14,13 +14,11 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "content/public/browser/browser_thread.h"
 #include "content/public/common/socket_permission_request.h"
 #include "extensions/browser/api/api_resource_manager.h"
-#include "extensions/browser/api/async_api_function.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/common/api/socket.h"
 #include "extensions/common/permissions/api_permission.h"
@@ -34,27 +32,20 @@
 #include "net/socket/tcp_client_socket.h"
 #include "services/network/public/cpp/resolve_host_client_base.h"
 #include "services/network/public/mojom/host_resolver.mojom.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/udp_socket.mojom.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "extensions/browser/api/socket/app_firewall_hole_manager.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace content {
 class BrowserContext;
-}
+}  // namespace content
 
 namespace net {
 class IOBuffer;
 }  // namespace net
 
-namespace network {
-namespace mojom {
+namespace network::mojom {
 class TLSClientSocket;
 class TCPConnectedSocket;
-}  // namespace mojom
-}  // namespace network
+}  // namespace network::mojom
 
 namespace extensions {
 
@@ -191,8 +182,8 @@ class SocketExtensionWithDnsLookupFunction
   // network::mojom::ResolveHostClient implementation:
   void OnComplete(int result,
                   const net::ResolveErrorInfo& resolve_error_info,
-                  const absl::optional<net::AddressList>& resolved_addresses,
-                  const absl::optional<net::HostResolverEndpointResults>&
+                  const std::optional<net::AddressList>& resolved_addresses,
+                  const std::optional<net::HostResolverEndpointResults>&
                       endpoint_results_with_metadata) override;
 
   mojo::PendingRemote<network::mojom::HostResolver> pending_host_resolver_;
@@ -297,7 +288,7 @@ class SocketListenFunction : public SocketApiFunction {
 
  private:
   void OnCompleted(int result, const std::string& error_msg);
-  std::unique_ptr<api::socket::Listen::Params> params_;
+  std::optional<api::socket::Listen::Params> params_;
 };
 
 class SocketAcceptFunction : public SocketApiFunction {
@@ -315,7 +306,7 @@ class SocketAcceptFunction : public SocketApiFunction {
  private:
   void OnAccept(int result_code,
                 mojo::PendingRemote<network::mojom::TCPConnectedSocket> socket,
-                const absl::optional<net::IPEndPoint>& remote_addr,
+                const std::optional<net::IPEndPoint>& remote_addr,
                 mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
                 mojo::ScopedDataPipeProducerHandle send_pipe_handle);
 };
@@ -425,7 +416,7 @@ class SocketSetNoDelayFunction : public SocketApiFunction {
  private:
   void OnCompleted(bool success);
 
-  std::unique_ptr<api::socket::SetNoDelay::Params> params_;
+  std::optional<api::socket::SetNoDelay::Params> params_;
 };
 
 class SocketGetInfoFunction : public SocketApiFunction {
@@ -453,7 +444,7 @@ class SocketGetNetworkListFunction : public ExtensionFunction {
 
  private:
   void GotNetworkList(
-      const absl::optional<net::NetworkInterfaceList>& interface_list);
+      const std::optional<net::NetworkInterfaceList>& interface_list);
 };
 
 class SocketJoinGroupFunction : public SocketApiFunction {
@@ -553,7 +544,7 @@ class SocketSecureFunction : public SocketApiFunction {
       mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
       mojo::ScopedDataPipeProducerHandle send_pipe_handle);
 
-  std::unique_ptr<api::socket::Secure::Params> params_;
+  std::optional<api::socket::Secure::Params> params_;
 };
 
 }  // namespace extensions

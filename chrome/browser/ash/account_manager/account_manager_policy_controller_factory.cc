@@ -6,13 +6,14 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/account_manager/account_manager_policy_controller.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/account_manager/account_manager_factory.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
 #include "components/account_manager_core/account_manager_facade.h"
 #include "components/account_manager_core/chromeos/account_manager_facade_factory.h"
+#include "components/user_manager/user.h"
 
 namespace ash {
 
@@ -32,12 +33,20 @@ AccountManagerPolicyControllerFactory::GetInstance() {
 }
 
 AccountManagerPolicyControllerFactory::AccountManagerPolicyControllerFactory()
-    : ProfileKeyedServiceFactory("AccountManagerPolicyController") {}
+    : ProfileKeyedServiceFactory(
+          "AccountManagerPolicyController",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 AccountManagerPolicyControllerFactory::
     ~AccountManagerPolicyControllerFactory() = default;
 
-KeyedService* AccountManagerPolicyControllerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AccountManagerPolicyControllerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* const profile = Profile::FromBrowserContext(context);
   auto* factory =
@@ -54,15 +63,15 @@ KeyedService* AccountManagerPolicyControllerFactory::BuildServiceInstanceFor(
   if (!account_manager_facade)
     return nullptr;
 
-  user_manager::User* const user =
-      ProfileHelper::Get()->GetUserByProfile(profile);
+  const user_manager::User* const user =
+      BrowserContextHelper::Get()->GetUserByBrowserContext(profile);
   if (!user)
     return nullptr;
 
-  AccountManagerPolicyController* const service =
-      new AccountManagerPolicyController(profile, account_manager,
-                                         account_manager_facade,
-                                         user->GetAccountId());
+  std::unique_ptr<AccountManagerPolicyController> service =
+      std::make_unique<AccountManagerPolicyController>(profile, account_manager,
+                                                       account_manager_facade,
+                                                       user->GetAccountId());
   // Auto-start the Service.
   service->Start();
 

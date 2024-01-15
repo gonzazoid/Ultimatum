@@ -10,8 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/values.h"
@@ -102,7 +103,7 @@ class DeviceEmulatorMessageHandler::BluetoothObserver
   void DeviceRemoved(const dbus::ObjectPath& object_path) override;
 
  private:
-  DeviceEmulatorMessageHandler* owner_;
+  raw_ptr<DeviceEmulatorMessageHandler> owner_;
 };
 
 void DeviceEmulatorMessageHandler::BluetoothObserver::DeviceAdded(
@@ -133,17 +134,17 @@ class DeviceEmulatorMessageHandler::CrasAudioObserver
  public:
   explicit CrasAudioObserver(DeviceEmulatorMessageHandler* owner)
       : owner_(owner) {
-    chromeos::FakeCrasAudioClient::Get()->AddObserver(this);
+    FakeCrasAudioClient::Get()->AddObserver(this);
   }
 
   CrasAudioObserver(const CrasAudioObserver&) = delete;
   CrasAudioObserver& operator=(const CrasAudioObserver&) = delete;
 
   ~CrasAudioObserver() override {
-    chromeos::FakeCrasAudioClient::Get()->RemoveObserver(this);
+    FakeCrasAudioClient::Get()->RemoveObserver(this);
   }
 
-  // chromeos::CrasAudioClient::Observer.
+  // CrasAudioClient::Observer.
   void NodesChanged() override {
     if (!owner_->IsJavascriptAllowed()) {
       return;
@@ -152,7 +153,7 @@ class DeviceEmulatorMessageHandler::CrasAudioObserver
   }
 
  private:
-  DeviceEmulatorMessageHandler* owner_;
+  raw_ptr<DeviceEmulatorMessageHandler> owner_;
 };
 
 class DeviceEmulatorMessageHandler::PowerObserver
@@ -172,7 +173,7 @@ class DeviceEmulatorMessageHandler::PowerObserver
   void PowerChanged(const power_manager::PowerSupplyProperties& proto) override;
 
  private:
-  DeviceEmulatorMessageHandler* owner_;
+  raw_ptr<DeviceEmulatorMessageHandler> owner_;
 };
 
 void DeviceEmulatorMessageHandler::PowerObserver::PowerChanged(
@@ -319,7 +320,7 @@ void DeviceEmulatorMessageHandler::HandleInsertAudioNode(
   CHECK(GetString(device_dict, "id", &tmp_id));
   CHECK(base::StringToUint64(tmp_id, &audio_node.id));
 
-  chromeos::FakeCrasAudioClient::Get()->InsertAudioNodeToList(audio_node);
+  FakeCrasAudioClient::Get()->InsertAudioNodeToList(audio_node);
 }
 
 void DeviceEmulatorMessageHandler::HandleRemoveAudioNode(
@@ -329,7 +330,7 @@ void DeviceEmulatorMessageHandler::HandleRemoveAudioNode(
   uint64_t id;
   CHECK(base::StringToUint64(tmp_id, &id));
 
-  chromeos::FakeCrasAudioClient::Get()->RemoveAudioNodeFromList(id);
+  FakeCrasAudioClient::Get()->RemoveAudioNodeFromList(id);
 }
 
 void DeviceEmulatorMessageHandler::HandleSetHasTouchpad(
@@ -425,7 +426,7 @@ void DeviceEmulatorMessageHandler::UpdatePowerSources(
     source->set_active_by_default(!dual_role);
     if (dual_role)
       props.set_supports_dual_role_devices(true);
-    absl::optional<int> port = val.GetDict().FindInt("port");
+    std::optional<int> port = val.GetDict().FindInt("port");
     CHECK(port.has_value());
     source->set_port(
         static_cast<power_manager::PowerSupplyProperties_PowerSource_Port>(
@@ -570,7 +571,7 @@ std::string DeviceEmulatorMessageHandler::CreateBluetoothDeviceFromListValue(
   CHECK(GetString(device_dict, "pairingAuthToken", &props.pairing_auth_token));
   CHECK(GetString(device_dict, "pairingAction", &props.pairing_action));
 
-  absl::optional<int> class_value = device_dict.FindInt("classValue");
+  std::optional<int> class_value = device_dict.FindInt("classValue");
   CHECK(class_value);
   props.device_class = *class_value;
 
@@ -662,8 +663,7 @@ void DeviceEmulatorMessageHandler::UpdateAudioNodes() {
   // Get every active audio node and create a dictionary to
   // send it to JavaScript.
   base::Value::List audio_nodes;
-  for (const AudioNode& node :
-       chromeos::FakeCrasAudioClient::Get()->node_list()) {
+  for (const AudioNode& node : FakeCrasAudioClient::Get()->node_list()) {
     base::Value::Dict audio_node;
 
     audio_node.Set("isInput", node.is_input);

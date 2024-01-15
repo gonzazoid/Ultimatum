@@ -8,19 +8,20 @@
 
 #include "ash/public/cpp/style/dark_light_mode_controller.h"
 #include "ash/test/ash_test_helper.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/constants/chromeos_features.h"
 #include "testing/gtest/include/gtest/gtest-param-test.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/color/color_provider_manager.h"
+#include "ui/color/color_provider_key.h"
 
 namespace ash {
 
 namespace {
 
-using ColorMode = ui::ColorProviderManager::ColorMode;
+using ColorMode = ui::ColorProviderKey::ColorMode;
 
 template <class LayerType>
 struct ColorsTestCase {
@@ -58,8 +59,11 @@ class AshColorProviderBase
     : public testing::TestWithParam<ColorsTestCase<LayerType>> {
  public:
   AshColorProviderBase()
-      : scoped_feature_list_({chromeos::features::kDarkLightMode}),
-        task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {}
+      : task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {
+    // Disable when Jelly is enabled since it changes all the colors (and
+    // this test verifies the old colors).
+    features_.InitAndDisableFeature(chromeos::features::kJelly);
+  }
 
   void SetUp() override {
     ash_test_helper_.SetUp();
@@ -72,66 +76,11 @@ class AshColorProviderBase
   }
 
  protected:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  base::test::ScopedFeatureList features_;
   base::test::TaskEnvironment task_environment_;
   AshTestHelper ash_test_helper_;
-  AshColorProvider* color_provider_;
+  raw_ptr<AshColorProvider, DanglingUntriaged> color_provider_;
 };
-
-using AshColorProviderBaseLayerTest =
-    AshColorProviderBase<ColorProvider::BaseLayerType>;
-
-TEST_P(AshColorProviderBaseLayerTest, TestBaseColors) {
-  const auto& test_case = GetParam();
-  bool dark = test_case.color_mode == ColorMode::kDark;
-  DarkLightModeController::Get()->SetDarkModeEnabledForTest(dark);
-  EXPECT_EQ(test_case.expected_color,
-            color_provider_->GetBaseLayerColor(test_case.type))
-      << "Colors do not match. Expected " << test_case << " Actual: "
-      << ColorToString(color_provider_->GetBaseLayerColor(test_case.type));
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    AshColorProviderTests,
-    AshColorProviderBaseLayerTest,
-    testing::ValuesIn<ColorsTestCase<ColorProvider::BaseLayerType>>(
-        {// Light mode values
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent20,
-          SkColorSetARGB(0x33, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent40,
-          SkColorSetARGB(0x66, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent60,
-          SkColorSetARGB(0x99, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent80,
-          SkColorSetARGB(0xCC, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight,
-          ColorProvider::BaseLayerType::kInvertedTransparent80,
-          SkColorSetARGB(0xCC, 0x00, 0x00, 0x00)},
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent90,
-          SkColorSetARGB(0xE5, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kTransparent95,
-          SkColorSetARGB(0xF2, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::BaseLayerType::kOpaque,
-          SkColorSetARGB(0xFF, 0xFF, 0xFF, 0xFF)},
-
-         // Dark mode values
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent20,
-          SkColorSetARGB(0x33, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent40,
-          SkColorSetARGB(0x66, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent60,
-          SkColorSetARGB(0x99, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent80,
-          SkColorSetARGB(0xCC, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark,
-          ColorProvider::BaseLayerType::kInvertedTransparent80,
-          SkColorSetARGB(0xCC, 0xDF, 0xDE, 0xDB)},
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent90,
-          SkColorSetARGB(0xE5, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kTransparent95,
-          SkColorSetARGB(0xF2, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::BaseLayerType::kOpaque,
-          SkColorSetARGB(0xFF, 0x20, 0x21, 0x24)}}));
 
 using AshColorProviderControlsLayerTest =
     AshColorProviderBase<ColorProvider::ControlsLayerType>;
@@ -173,18 +122,6 @@ INSTANTIATE_TEST_SUITE_P(
           SkColorSetARGB(0x3D, 0x8A, 0xB4, 0xF8)},
          {ColorMode::kDark, ColorProvider::ControlsLayerType::kFocusRingColor,
           SkColorSetRGB(0x8A, 0xB4, 0xF8)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kHighlightColor1,
-          SkColorSetARGB(0x14, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kHighlightColor2,
-          SkColorSetARGB(0x0F, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kHighlightColor3,
-          SkColorSetARGB(0x14, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kBorderColor1,
-          SkColorSetARGB(0xCC, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kBorderColor2,
-          SkColorSetARGB(0x99, 0x20, 0x21, 0x24)},
-         {ColorMode::kDark, ColorProvider::ControlsLayerType::kBorderColor3,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)},
 
          // Light mode
          {ColorMode::kLight,
@@ -208,19 +145,7 @@ INSTANTIATE_TEST_SUITE_P(
          {ColorMode::kLight, ColorProvider::ControlsLayerType::kFocusAuraColor,
           SkColorSetARGB(0x3D, 0x1A, 0x73, 0xE8)},
          {ColorMode::kLight, ColorProvider::ControlsLayerType::kFocusRingColor,
-          SkColorSetRGB(0x1A, 0x73, 0xE8)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kHighlightColor1,
-          SkColorSetARGB(0x4C, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kHighlightColor2,
-          SkColorSetARGB(0x33, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kHighlightColor3,
-          SkColorSetARGB(0x4C, 0xFF, 0xFF, 0xFF)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kBorderColor1,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kBorderColor2,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)},
-         {ColorMode::kLight, ColorProvider::ControlsLayerType::kBorderColor3,
-          SkColorSetARGB(0x0F, 0x0, 0x0, 0x0)}}));
+          SkColorSetRGB(0x1A, 0x73, 0xE8)}}));
 
 class AshColorProviderContentTest
     : public AshColorProviderBase<ColorProvider::ContentLayerType> {};
@@ -308,9 +233,6 @@ INSTANTIATE_TEST_SUITE_P(
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kAppStateIndicatorColorInactive,
           SkColorSetARGB(0x60, 0x20, 0x21, 0x24)},
-
-         {ColorMode::kLight, ColorProvider::ContentLayerType::kShelfHandleColor,
-          SkColorSetARGB(0x24, 0x0, 0x0, 0x0)},
 
          {ColorMode::kLight,
           ColorProvider::ContentLayerType::kSliderColorActive,
@@ -442,9 +364,6 @@ INSTANTIATE_TEST_SUITE_P(
          {ColorMode::kDark,
           ColorProvider::ContentLayerType::kAppStateIndicatorColorInactive,
           SkColorSetARGB(0x60, 0xE8, 0xEA, 0xED)},
-
-         {ColorMode::kDark, ColorProvider::ContentLayerType::kShelfHandleColor,
-          SkColorSetARGB(0x24, 0xFF, 0xFF, 0xFF)},
 
          {ColorMode::kDark, ColorProvider::ContentLayerType::kSliderColorActive,
           SkColorSetRGB(0x8A, 0xB4, 0xF8)},

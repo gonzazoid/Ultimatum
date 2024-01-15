@@ -18,6 +18,8 @@
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "net/cookies/cookie_partition_key.h"
+#include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_loader_completion_status.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -77,25 +79,28 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkServiceMemoryCache {
                      std::vector<unsigned char> data);
 
   // Returns a cache key if `this` has a fresh response for `resource_request`.
-  // The returned cache key is valid only for the current call stack. It must be
-  // used synchronously.
+  // `factory_client_security_state` should come from
+  // mojom::URLLoaderFactoryParams. The returned cache key is valid only for the
+  // current call stack. It must be used synchronously.
   absl::optional<std::string> CanServe(
       uint32_t load_options,
       const ResourceRequest& resource_request,
       const net::NetworkIsolationKey& network_isolation_key,
       const CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
-      const mojom::ClientSecurityState* client_security_state);
+      const mojom::ClientSecurityState* factory_client_security_state);
 
   // Creates and starts a custom URLLoader that serves a response from the
   // in-memory cache, instead of creating a network::URLLoader. Must be called
   // immediately after CanServe().
-  void CreateLoaderAndStart(mojo::PendingReceiver<mojom::URLLoader> receiver,
-                            int32_t request_id,
-                            uint32_t options,
-                            const std::string& cache_key,
-                            const ResourceRequest& resource_request,
-                            const net::NetLogWithSource net_log,
-                            mojo::PendingRemote<mojom::URLLoaderClient> client);
+  void CreateLoaderAndStart(
+      mojo::PendingReceiver<mojom::URLLoader> receiver,
+      int32_t request_id,
+      uint32_t options,
+      const std::string& cache_key,
+      const ResourceRequest& resource_request,
+      const net::NetLogWithSource net_log,
+      const absl::optional<net::CookiePartitionKey> cookie_partition_key,
+      mojo::PendingRemote<mojom::URLLoaderClient> client);
 
   // Returns a suitable capacity for a data pipe that is used to serve a
   // response from `this`.

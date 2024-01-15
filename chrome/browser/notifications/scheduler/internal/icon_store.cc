@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "chrome/browser/notifications/scheduler/internal/icon_entry.h"
 #include "chrome/browser/notifications/scheduler/internal/proto_conversion.h"
 #include "chrome/browser/notifications/scheduler/internal/stats.h"
@@ -61,7 +61,7 @@ void IconProtoDbStore::AddIcons(IconTypeBundleMap icons, AddCallback callback) {
 
   std::vector<std::string> icons_uuid;
   for (size_t i = 0; i < icons.size(); i++) {
-    icons_uuid.emplace_back(base::GenerateGUID());
+    icons_uuid.emplace_back(base::Uuid::GenerateRandomV4().AsLowercaseString());
   }
 
   std::vector<IconType> icons_type;
@@ -155,7 +155,6 @@ void IconProtoDbStore::OnIconsEncoded(
     std::vector<IconType> icons_type,
     std::vector<std::string> icons_uuid,
     std::unique_ptr<EncodeResult> encode_result) {
-  stats::LogPngIconConverterEncodeResult(encode_result->success);
   IconTypeUuidMap icons_uuid_map;
   if (!encode_result->success) {
     std::move(callback).Run(std::move(icons_uuid_map), false);
@@ -181,7 +180,6 @@ void IconProtoDbStore::OnIconsDecoded(
     LoadIconsCallback callback,
     std::vector<std::string> icons_uuid,
     std::unique_ptr<DecodeResult> decoded_result) {
-  stats::LogPngIconConverterDecodeResult(decoded_result->success);
   if (!decoded_result->success) {
     std::move(callback).Run(false, LoadedIconsMap{});
     return;

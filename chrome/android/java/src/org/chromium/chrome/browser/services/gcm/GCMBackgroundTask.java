@@ -5,11 +5,9 @@
 package org.chromium.chrome.browser.services.gcm;
 
 import android.content.Context;
-import android.os.Build;
-import android.os.Bundle;
+import android.os.PersistableBundle;
 
 import androidx.annotation.MainThread;
-import androidx.annotation.RequiresApi;
 
 import org.chromium.base.Log;
 import org.chromium.components.background_task_scheduler.BackgroundTask;
@@ -20,7 +18,6 @@ import org.chromium.components.gcm_driver.GCMMessage;
  * Processes jobs that have been scheduled for delivering GCM messages to the native GCM Driver,
  * processing for which may exceed the lifetime of the GcmListenerService.
  */
-@RequiresApi(Build.VERSION_CODES.N)
 public class GCMBackgroundTask implements BackgroundTask {
     private static final String TAG = "GCMBackgroundTask";
 
@@ -35,8 +32,8 @@ public class GCMBackgroundTask implements BackgroundTask {
     @Override
     public boolean onStartTask(
             Context context, TaskParameters taskParameters, TaskFinishedCallback callback) {
-        Bundle extras = taskParameters.getExtras();
-        GCMMessage message = GCMMessage.createFromBundle(extras);
+        PersistableBundle extras = taskParameters.getExtras();
+        GCMMessage message = GCMMessage.createFromPersistableBundle(extras);
         if (message == null) {
             Log.e(TAG, "The received bundle containing message data could not be validated.");
             return false;
@@ -56,11 +53,5 @@ public class GCMBackgroundTask implements BackgroundTask {
     public boolean onStopTask(Context context, TaskParameters taskParameters) {
         // The GCM Driver has no mechanism for aborting previously dispatched messages.
         return false;
-    }
-
-    @MainThread
-    @Override
-    public void reschedule(Context context) {
-        // Needs appropriate implementation.
     }
 }

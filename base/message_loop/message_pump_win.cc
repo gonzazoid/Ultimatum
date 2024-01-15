@@ -9,10 +9,10 @@
 #include <type_traits>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/check.h"
 #include "base/debug/alias.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/base_tracing.h"
@@ -51,7 +51,7 @@ DWORD GetSleepTimeoutMs(TimeTicks next_task_time,
 
   // A saturated_cast with an unsigned destination automatically clamps negative
   // values at zero.
-  static_assert(!std::is_signed<DWORD>::value, "DWORD is unexpectedly signed");
+  static_assert(!std::is_signed_v<DWORD>, "DWORD is unexpectedly signed");
   return saturated_cast<DWORD>(timeout_ms);
 }
 
@@ -91,7 +91,7 @@ void MessagePumpWin::Quit() {
 MessagePumpForUI::MessagePumpForUI() {
   bool succeeded = message_window_.Create(
       BindRepeating(&MessagePumpForUI::MessageCallback, Unretained(this)));
-  DCHECK(succeeded);
+  CHECK(succeeded);
 }
 
 MessagePumpForUI::~MessagePumpForUI() = default;
@@ -120,8 +120,6 @@ void MessagePumpForUI::ScheduleWork() {
 
   // Clarify that we didn't really insert.
   work_scheduled_ = false;
-  UMA_HISTOGRAM_ENUMERATION("Chrome.MessageLoopProblem", MESSAGE_POST_ERROR,
-                            MESSAGE_LOOP_PROBLEM_MAX);
   TRACE_EVENT_INSTANT0("base", "Chrome.MessageLoopProblem.MESSAGE_POST_ERROR",
                        TRACE_EVENT_SCOPE_THREAD);
 }
@@ -249,10 +247,14 @@ void MessagePumpForUI::WaitForWork(Delegate::NextWorkInfo next_work_info) {
   // Wait until a message is available, up to the time needed by the timer
   // manager to fire the next set of timers.
   DWORD wait_flags = MWMO_INPUTAVAILABLE;
+  bool last_wakeup_was_spurious = false;
   for (DWORD delay = GetSleepTimeoutMs(next_work_info.delayed_run_time,
                                        next_work_info.recent_now);
        delay != 0; delay = GetSleepTimeoutMs(next_work_info.delayed_run_time)) {
-    run_state_->delegate->BeforeWait();
+    if (!last_wakeup_was_spurious) {
+      run_state_->delegate->BeforeWait();
+    }
+    last_wakeup_was_spurious = false;
 
     // Tell the optimizer to retain these values to simplify analyzing hangs.
     base::debug::Alias(&delay);
@@ -295,6 +297,11 @@ void MessagePumpForUI::WaitForWork(Delegate::NextWorkInfo next_work_info) {
       // has returned false. Reset |wait_flags| so that we wait for a *new*
       // message.
       wait_flags = 0;
+    } else {
+      last_wakeup_was_spurious = true;
+      TRACE_EVENT_INSTANT("base",
+                          "MessagePumpForUI::WaitForWork Spurious Wakeup",
+                          "reason: ", result);
     }
 
     DCHECK_NE(WAIT_FAILED, result) << GetLastError();
@@ -408,8 +415,8 @@ void MessagePumpForUI::ScheduleNativeTimer(
   } else {
     // TODO(gab): ::SetTimer()'s documentation claims it does this for us.
     // Consider removing this safety net.
-    delay_msec =
-        clamp(delay_msec, UINT(USER_TIMER_MINIMUM), UINT(USER_TIMER_MAXIMUM));
+    delay_msec = std::clamp(delay_msec, static_cast<UINT>(USER_TIMER_MINIMUM),
+                            static_cast<UINT>(USER_TIMER_MAXIMUM));
 
     // Tell the optimizer to retain the delay to simplify analyzing hangs.
     base::debug::Alias(&delay_msec);
@@ -425,8 +432,6 @@ void MessagePumpForUI::ScheduleNativeTimer(
     // full). Since we only use ScheduleNativeTimer() in native nested loops
     // this likely means this pump will not be given a chance to run application
     // tasks until the nested loop completes.
-    UMA_HISTOGRAM_ENUMERATION("Chrome.MessageLoopProblem", SET_TIMER_ERROR,
-                              MESSAGE_LOOP_PROBLEM_MAX);
     TRACE_EVENT_INSTANT0("base", "Chrome.MessageLoopProblem.SET_TIMER_ERROR",
                          TRACE_EVENT_SCOPE_THREAD);
   }
@@ -507,8 +512,9 @@ bool MessagePumpForUI::ProcessMessageHelper(const MSG& msg) {
     // WM_QUIT is the standard way to exit a ::GetMessage() loop. Our
     // MessageLoop has its own quit mechanism, so WM_QUIT is generally
     // unexpected.
-    UMA_HISTOGRAM_ENUMERATION("Chrome.MessageLoopProblem",
-                              RECEIVED_WM_QUIT_ERROR, MESSAGE_LOOP_PROBLEM_MAX);
+    TRACE_EVENT_INSTANT0("base",
+                         "Chrome.MessageLoopProblem.RECEIVED_WM_QUIT_ERROR",
+                         TRACE_EVENT_SCOPE_THREAD);
     return true;
   }
 
@@ -516,6 +522,7 @@ bool MessagePumpForUI::ProcessMessageHelper(const MSG& msg) {
   if (msg.message == kMsgHaveWork && msg.hwnd == message_window_.hwnd())
     return ProcessPumpReplacementMessage();
 
+  run_state_->delegate->BeginNativeWorkBeforeDoWork();
   auto scoped_do_work_item = run_state_->delegate->BeginWorkItem();
 
   TRACE_EVENT("base,toplevel", "MessagePumpForUI DispatchMessage",
@@ -654,8 +661,6 @@ void MessagePumpForIO::ScheduleWork() {
   // See comment in MessagePumpForUI::ScheduleWork() for this error recovery.
 
   work_scheduled_ = false;  // Clarify that we didn't succeed.
-  UMA_HISTOGRAM_ENUMERATION("Chrome.MessageLoopProblem", COMPLETION_POST_ERROR,
-                            MESSAGE_LOOP_PROBLEM_MAX);
   TRACE_EVENT_INSTANT0("base",
                        "Chrome.MessageLoopProblem.COMPLETION_POST_ERROR",
                        TRACE_EVENT_SCOPE_THREAD);
@@ -712,7 +717,6 @@ void MessagePumpForIO::DoRunLoop() {
     if (run_state_->should_quit)
       break;
 
-    run_state_->delegate->BeforeWait();
     more_work_is_plausible |= WaitForIOCompletion(0);
     if (run_state_->should_quit)
       break;
@@ -759,6 +763,7 @@ bool MessagePumpForIO::WaitForIOCompletion(DWORD timeout) {
   if (ProcessInternalIOItem(item))
     return true;
 
+  run_state_->delegate->BeginNativeWorkBeforeDoWork();
   auto scoped_do_work_item = run_state_->delegate->BeginWorkItem();
 
   TRACE_EVENT(

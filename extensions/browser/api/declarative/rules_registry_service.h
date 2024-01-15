@@ -11,11 +11,12 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "extensions/browser/api/declarative/rules_cache_delegate.h"
 #include "extensions/browser/api/declarative/rules_registry.h"
+#include "extensions/browser/api/web_request/web_request_event_router_factory.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
@@ -170,7 +171,8 @@ class RulesRegistryService : public BrowserContextKeyedAPI,
 
   // Weak pointer into rule_registries_ to make it easier to handle content rule
   // conditions.
-  raw_ptr<ContentRulesRegistry, DanglingUntriaged> content_rules_registry_;
+  raw_ptr<ContentRulesRegistry, AcrossTasksDanglingUntriaged>
+      content_rules_registry_;
 
   // Listen to extension load, unloaded notification.
   base::ScopedObservation<ExtensionRegistry, ExtensionRegistryObserver>
@@ -179,6 +181,16 @@ class RulesRegistryService : public BrowserContextKeyedAPI,
   raw_ptr<content::BrowserContext> browser_context_;
 
   base::ObserverList<Observer>::Unchecked observers_;
+};
+
+template <>
+struct BrowserContextFactoryDependencies<RulesRegistryService> {
+  static void DeclareFactoryDependencies(
+      BrowserContextKeyedAPIFactory<RulesRegistryService>* factory) {
+    factory->DependsOn(
+        ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+    factory->DependsOn(WebRequestEventRouterFactory::GetInstance());
+  }
 };
 
 }  // namespace extensions

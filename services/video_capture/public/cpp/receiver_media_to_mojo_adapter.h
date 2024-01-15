@@ -21,18 +21,18 @@ class ReceiverMediaToMojoAdapter : public mojom::VideoFrameHandler {
   ~ReceiverMediaToMojoAdapter() override;
 
   // video_capture::mojom::VideoFrameHandler:
+  void OnCaptureConfigurationChanged() override;
   void OnNewBuffer(int32_t buffer_id,
                    media::mojom::VideoBufferHandlePtr buffer_handle) override;
   void OnFrameAccessHandlerReady(
       mojo::PendingRemote<video_capture::mojom::VideoFrameAccessHandler>
           pending_frame_access_handler) override;
-  void OnFrameReadyInBuffer(
-      mojom::ReadyFrameInBufferPtr buffer,
-      std::vector<mojom::ReadyFrameInBufferPtr> scaled_buffers) override;
+  void OnFrameReadyInBuffer(mojom::ReadyFrameInBufferPtr buffer) override;
   void OnBufferRetired(int32_t buffer_id) override;
   void OnError(media::VideoCaptureError error) override;
   void OnFrameDropped(media::VideoCaptureFrameDropReason reason) override;
-  void OnNewCropVersion(uint32_t crop_version) override;
+  void OnNewSubCaptureTargetVersion(
+      uint32_t sub_capture_target_version) override;
   void OnFrameWithEmptyRegionCapture() override;
   void OnLog(const std::string& message) override;
   void OnStarted() override;

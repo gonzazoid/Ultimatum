@@ -18,10 +18,6 @@
 
 class Profile;
 
-namespace extensions {
-class Extension;
-}
-
 namespace settings {
 
 class SearchEnginesHandler : public SettingsPageUIHandler,
@@ -53,6 +49,8 @@ class SearchEnginesHandler : public SettingsPageUIHandler,
   void OnJavascriptDisallowed() override;
 
  private:
+  friend class SearchEnginesHandlerTestBase;
+
   // Retrieves all search engines and returns them to WebUI.
   void HandleGetSearchEnginesList(const base::Value::List& args);
 
@@ -90,12 +88,13 @@ class SearchEnginesHandler : public SettingsPageUIHandler,
   // Called from WebUI.
   void HandleSearchEngineEditCompleted(const base::Value::List& args);
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Request the browser to open its search settings.
+  void HandleOpenBrowserSearchSettings(const base::Value::List& args);
+#endif
+
   // Returns a dictionary to pass to WebUI representing the given search engine.
   base::Value::Dict CreateDictionaryForEngine(size_t index, bool is_default);
-
-  // Returns a dictionary to pass to WebUI representing the extension.
-  base::DictionaryValue* CreateDictionaryForExtension(
-      const extensions::Extension& extension);
 
   const raw_ptr<Profile> profile_;
 

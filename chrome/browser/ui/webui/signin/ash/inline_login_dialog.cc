@@ -8,11 +8,10 @@
 #include <string>
 
 #include "ash/public/cpp/window_backdrop.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/ui/webui/ash/system_web_dialog_delegate.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/account_manager_core/account_addition_options.h"
@@ -75,8 +74,8 @@ GURL GetInlineLoginUrl(const std::string& email) {
 
   // Addition of secondary Google Accounts is allowed.
   if (ProfileManager::GetActiveUserProfile()->IsChild()) {
-    return GetUrlWithEmailParam(
-        SupervisedUserService::GetEduCoexistenceLoginUrl(), email);
+    return GetUrlWithEmailParam(chrome::kChromeUIEDUCoexistenceLoginURLV2,
+                                email);
   }
   return GetUrlWithEmailParam(chrome::kChromeUIChromeSigninURL, email);
 }
@@ -85,11 +84,11 @@ GURL GetInlineLoginUrl(const std::string& email) {
 // chrome/browser/resources/inline_login/inline_login_app.js
 base::Value AccountAdditionOptionsToValue(
     const account_manager::AccountAdditionOptions& options) {
-  base::Value args(base::Value::Type::DICTIONARY);
-  args.SetKey("isAvailableInArc", base::Value(options.is_available_in_arc));
-  args.SetKey("showArcAvailabilityPicker",
-              base::Value(options.show_arc_availability_picker));
-  return args;
+  base::Value::Dict args;
+  args.Set("isAvailableInArc", base::Value(options.is_available_in_arc));
+  args.Set("showArcAvailabilityPicker",
+           base::Value(options.show_arc_availability_picker));
+  return base::Value(std::move(args));
 }
 
 }  // namespace
@@ -159,11 +158,11 @@ InlineLoginDialog::InlineLoginDialog()
     : InlineLoginDialog(GetInlineLoginUrl(std::string())) {}
 
 InlineLoginDialog::InlineLoginDialog(const GURL& url)
-    : InlineLoginDialog(url, absl::nullopt, base::DoNothing()) {}
+    : InlineLoginDialog(url, std::nullopt, base::DoNothing()) {}
 
 InlineLoginDialog::InlineLoginDialog(
     const GURL& url,
-    absl::optional<account_manager::AccountAdditionOptions> options,
+    std::optional<account_manager::AccountAdditionOptions> options,
     base::OnceClosure close_dialog_closure)
     : SystemWebDialogDelegate(url, std::u16string() /* title */),
       delegate_(this),
@@ -248,14 +247,14 @@ void InlineLoginDialog::Show(
 // static
 void InlineLoginDialog::Show(const std::string& email,
                              base::OnceClosure close_dialog_closure) {
-  ShowInternal(email, /*options=*/absl::nullopt,
+  ShowInternal(email, /*options=*/std::nullopt,
                std::move(close_dialog_closure));
 }
 
 // static
 void InlineLoginDialog::ShowInternal(
     const std::string& email,
-    absl::optional<account_manager::AccountAdditionOptions> options,
+    std::optional<account_manager::AccountAdditionOptions> options,
     base::OnceClosure close_dialog_closure) {
   // If the dialog was triggered as a response to background request, it could
   // get displayed on the lock screen. In this case it is safe to ignore it,

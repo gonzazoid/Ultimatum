@@ -25,7 +25,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_DOCUMENT_PARSER_H_
 
 #include <memory>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document_encoding_data.h"
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
@@ -80,12 +80,12 @@ class CORE_EXPORT DocumentParser : public GarbageCollected<DocumentParser>,
   // document() will return 0 after detach() is called.
   Document* GetDocument() const {
     DCHECK(document_);
-    return document_;
+    return document_.Get();
   }
 
   bool IsParsing() const { return state_ == kParsingState; }
   bool IsStopping() const { return state_ == kStoppingState; }
-  bool IsStopped() const { return state_ >= kStoppedState; }
+  ALWAYS_INLINE bool IsStopped() const { return state_ >= kStoppedState; }
   bool IsDetached() const { return state_ == kDetachedState; }
 
   // prepareToStop() is used when the EOF token is encountered and parsing is to

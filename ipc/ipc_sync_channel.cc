@@ -7,10 +7,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -18,15 +18,16 @@
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_local.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_factory.h"
 #include "ipc/ipc_logging.h"
+#include "ipc/ipc_message.h"
 #include "ipc/ipc_message_macros.h"
 #include "ipc/ipc_sync_message.h"
 #include "mojo/public/cpp/bindings/sync_event_watcher.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 #if !BUILDFLAG(IPC_MESSAGE_LOG_ENABLED)
 #include "ipc/trace_ipc_message.h"
@@ -43,6 +44,10 @@ namespace {
 void OnEventReady(bool* signal) {
   *signal = true;
 }
+
+// Holds a pointer to the per-thread ReceivedSyncMsgQueue object.
+ABSL_CONST_INIT thread_local SyncChannel::ReceivedSyncMsgQueue* received_queue =
+    nullptr;
 
 }  // namespace
 
@@ -71,13 +76,11 @@ class SyncChannel::ReceivedSyncMsgQueue :
   static ReceivedSyncMsgQueue* AddContext() {
     // We want one ReceivedSyncMsgQueue per listener thread (i.e. since multiple
     // SyncChannel objects can block the same thread).
-    ReceivedSyncMsgQueue* rv = lazy_tls_ptr_.Pointer()->Get();
-    if (!rv) {
-      rv = new ReceivedSyncMsgQueue();
-      ReceivedSyncMsgQueue::lazy_tls_ptr_.Pointer()->Set(rv);
+    if (!received_queue) {
+      received_queue = new ReceivedSyncMsgQueue();
     }
-    rv->listener_count_++;
-    return rv;
+    ++received_queue->listener_count_;
+    return received_queue;
   }
 
   // Prevents messages from being dispatched immediately when the dispatch event
@@ -99,7 +102,7 @@ class SyncChannel::ReceivedSyncMsgQueue :
 
       // We set the event in case the listener thread is blocked (or is about
       // to). In case it's not, the PostTask dispatches the messages.
-      message_queue_.push_back(QueuedMessage(new Message(msg), context));
+      message_queue_.push_back({std::make_unique<Message>(msg), context});
       message_queue_version_++;
     }
 
@@ -112,7 +115,7 @@ class SyncChannel::ReceivedSyncMsgQueue :
   }
 
   void QueueReply(const Message &msg, SyncChannel::SyncContext* context) {
-    received_replies_.push_back(QueuedMessage(new Message(msg), context));
+    received_replies_.push_back({std::make_unique<Message>(msg), context});
   }
 
   // Called on the listener's thread to process any queues synchronous
@@ -135,7 +138,7 @@ class SyncChannel::ReceivedSyncMsgQueue :
     uint32_t expected_version = 0;
     SyncMessageQueue::iterator it;
     while (true) {
-      Message* message = nullptr;
+      std::unique_ptr<Message> message;
       scoped_refptr<SyncChannel::SyncContext> context;
       {
         base::AutoLock auto_lock(message_lock_);
@@ -149,8 +152,8 @@ class SyncChannel::ReceivedSyncMsgQueue :
               (dispatching_context &&
                message_group ==
                    dispatching_context->restrict_dispatch_group())) {
-            message = it->message;
-            context = it->context;
+            message = std::move(it->message);
+            context = std::move(it->context);
             it = message_queue_.erase(it);
             message_queue_version_++;
             expected_version = message_queue_version_;
@@ -158,11 +161,10 @@ class SyncChannel::ReceivedSyncMsgQueue :
           }
         }
       }
-
-      if (message == nullptr)
+      if (!message) {
         break;
+      }
       context->OnDispatchMessage(*message);
-      delete message;
     }
   }
 
@@ -173,7 +175,6 @@ class SyncChannel::ReceivedSyncMsgQueue :
     SyncMessageQueue::iterator iter = message_queue_.begin();
     while (iter != message_queue_.end()) {
       if (iter->context.get() == context) {
-        delete iter->message;
         iter = message_queue_.erase(iter);
         message_queue_version_++;
       } else {
@@ -182,8 +183,8 @@ class SyncChannel::ReceivedSyncMsgQueue :
     }
 
     if (--listener_count_ == 0) {
-      DCHECK(lazy_tls_ptr_.Pointer()->Get());
-      lazy_tls_ptr_.Pointer()->Set(nullptr);
+      DCHECK(received_queue);
+      received_queue = nullptr;
       sync_dispatch_watcher_.reset();
     }
   }
@@ -193,17 +194,12 @@ class SyncChannel::ReceivedSyncMsgQueue :
     return listener_task_runner_.get();
   }
 
-  // Holds a pointer to the per-thread ReceivedSyncMsgQueue object.
-  static base::LazyInstance<base::ThreadLocalPointer<ReceivedSyncMsgQueue>>::
-      DestructorAtExit lazy_tls_ptr_;
-
   // Called on the ipc thread to check if we can unblock any current Send()
   // calls based on a queued reply.
   void DispatchReplies() {
     for (size_t i = 0; i < received_replies_.size(); ++i) {
-      Message* message = received_replies_[i].message;
+      Message* message = received_replies_[i].message.get();
       if (received_replies_[i].context->TryToUnblockListener(message)) {
-        delete message;
         received_replies_.erase(received_replies_.begin() + i);
         return;
       }
@@ -219,7 +215,8 @@ class SyncChannel::ReceivedSyncMsgQueue :
       : message_queue_version_(0),
         dispatch_event_(base::WaitableEvent::ResetPolicy::MANUAL,
                         base::WaitableEvent::InitialState::NOT_SIGNALED),
-        listener_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+        listener_task_runner_(
+            base::SingleThreadTaskRunner::GetCurrentDefault()),
         sync_dispatch_watcher_(std::make_unique<mojo::SyncEventWatcher>(
             &dispatch_event_,
             base::BindRepeating(&ReceivedSyncMsgQueue::OnDispatchEventReady,
@@ -245,8 +242,7 @@ class SyncChannel::ReceivedSyncMsgQueue :
 
   // Holds information about a queued synchronous message or reply.
   struct QueuedMessage {
-    QueuedMessage(Message* m, SyncContext* c) : message(m), context(c) { }
-    raw_ptr<Message> message;
+    std::unique_ptr<Message> message;
     scoped_refptr<SyncChannel::SyncContext> context;
   };
 
@@ -276,11 +272,6 @@ class SyncChannel::ReceivedSyncMsgQueue :
   // Watches |dispatch_event_| during all sync handle watches on this thread.
   std::unique_ptr<mojo::SyncEventWatcher> sync_dispatch_watcher_;
 };
-
-base::LazyInstance<base::ThreadLocalPointer<
-    SyncChannel::ReceivedSyncMsgQueue>>::DestructorAtExit
-    SyncChannel::ReceivedSyncMsgQueue::lazy_tls_ptr_ =
-        LAZY_INSTANCE_INITIALIZER;
 
 SyncChannel::SyncContext::SyncContext(
     Listener* listener,
@@ -319,11 +310,13 @@ bool SyncChannel::SyncContext::Push(SyncMessage* sync_msg) {
   base::AutoLock auto_lock(deserializers_lock_);
   if (reject_new_deserializers_)
     return false;
-  PendingSyncMsg pending(
-      SyncMessage::GetMessageId(*sync_msg), sync_msg->GetReplyDeserializer(),
-      new base::WaitableEvent(base::WaitableEvent::ResetPolicy::MANUAL,
-                              base::WaitableEvent::InitialState::NOT_SIGNALED));
-  deserializers_.push_back(pending);
+
+  PendingSyncMsg pending(SyncMessage::GetMessageId(*sync_msg),
+                         sync_msg->TakeReplyDeserializer(),
+                         std::make_unique<base::WaitableEvent>(
+                             base::WaitableEvent::ResetPolicy::MANUAL,
+                             base::WaitableEvent::InitialState::NOT_SIGNALED));
+  deserializers_.push_back(std::move(pending));
   return true;
 }
 
@@ -331,12 +324,8 @@ bool SyncChannel::SyncContext::Pop() {
   bool result;
   {
     base::AutoLock auto_lock(deserializers_lock_);
-    PendingSyncMsg msg = deserializers_.back();
-    delete msg.deserializer;
-    delete msg.done_event;
-    msg.done_event = nullptr;
+    result = deserializers_.back().send_result;
     deserializers_.pop_back();
-    result = msg.send_result;
   }
 
   // We got a reply to a synchronous Send() call that's blocking the listener
@@ -353,7 +342,7 @@ bool SyncChannel::SyncContext::Pop() {
 
 base::WaitableEvent* SyncChannel::SyncContext::GetSendDoneEvent() {
   base::AutoLock auto_lock(deserializers_lock_);
-  return deserializers_.back().done_event;
+  return deserializers_.back().done_event.get();
 }
 
 base::WaitableEvent* SyncChannel::SyncContext::GetDispatchEvent() {
@@ -380,7 +369,7 @@ bool SyncChannel::SyncContext::TryToUnblockListener(const Message* msg) {
     DVLOG(1) << "Received error reply";
   }
 
-  base::WaitableEvent* done_event = deserializers_.back().done_event;
+  base::WaitableEvent* done_event = deserializers_.back().done_event.get();
   TRACE_EVENT_WITH_FLOW0("toplevel.flow",
                          "SyncChannel::SyncContext::TryToUnblockListener",
                          done_event, TRACE_EVENT_FLAG_FLOW_OUT);
@@ -429,7 +418,7 @@ void SyncChannel::SyncContext::OnChannelOpened() {
         shutdown_event_,
         base::BindOnce(&SyncChannel::SyncContext::OnShutdownEventSignaled,
                        base::Unretained(this)),
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
   }
   Context::OnChannelOpened();
 }
@@ -448,7 +437,7 @@ void SyncChannel::SyncContext::CancelPendingSends() {
   for (iter = deserializers_.begin(); iter != deserializers_.end(); iter++) {
     TRACE_EVENT_WITH_FLOW0("toplevel.flow",
                            "SyncChannel::SyncContext::CancelPendingSends",
-                           iter->done_event, TRACE_EVENT_FLAG_FLOW_OUT);
+                           iter->done_event.get(), TRACE_EVENT_FLAG_FLOW_OUT);
     iter->done_event->Signal();
   }
 }
@@ -503,7 +492,8 @@ SyncChannel::SyncChannel(
       sync_handle_registry_(mojo::SyncHandleRegistry::current()) {
   // The current (listener) thread must be distinct from the IPC thread, or else
   // sending synchronous messages will deadlock.
-  DCHECK_NE(ipc_task_runner.get(), base::ThreadTaskRunnerHandle::Get().get());
+  DCHECK_NE(ipc_task_runner.get(),
+            base::SingleThreadTaskRunner::GetCurrentDefault().get());
   StartWatching();
 }
 

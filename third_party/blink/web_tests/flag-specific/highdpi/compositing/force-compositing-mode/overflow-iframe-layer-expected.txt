@@ -7,6 +7,12 @@
       "backgroundColor": "#FFFFFF"
     },
     {
+      "name": "LayoutNGBlockFlow HTML",
+      "bounds": [762, 774],
+      "backgroundColor": "#0000FF",
+      "transform": 1
+    },
+    {
       "name": "HorizontalScrollbar",
       "position": [0, 203],
       "bounds": [203, 22],
@@ -25,13 +31,6 @@
       "position": [203, 203],
       "bounds": [22, 22],
       "contentsOpaque": true,
-      "transform": 1
-    },
-    {
-      "name": "LayoutNGBlockFlow HTML",
-      "bounds": [762, 774],
-      "contentsOpaqueForText": true,
-      "backgroundColor": "#0000FF",
       "transform": 1
     }
   ],

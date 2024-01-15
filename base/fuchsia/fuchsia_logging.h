@@ -5,13 +5,18 @@
 #ifndef BASE_FUCHSIA_FUCHSIA_LOGGING_H_
 #define BASE_FUCHSIA_FUCHSIA_LOGGING_H_
 
+#include <lib/fidl/cpp/wire/connect_service.h>
+#include <lib/fidl/cpp/wire/traits.h>
 #include <lib/fit/function.h>
+#include <lib/zx/result.h>
 #include <zircon/types.h>
 
+#include <string>
+
 #include "base/base_export.h"
+#include "base/check.h"
 #include "base/logging.h"
-#include "base/strings/string_piece_forward.h"
-#include "build/build_config.h"
+#include "base/strings/string_piece.h"
 
 // Use the ZX_LOG family of macros along with a zx_status_t containing a Zircon
 // error. The error value will be decoded so that logged messages explain the
@@ -31,8 +36,17 @@ class BASE_EXPORT ZxLogMessage : public logging::LogMessage {
 
   ~ZxLogMessage() override;
 
+ protected:
+  void AppendError();
+
  private:
   zx_status_t zx_status_;
+};
+
+class BASE_EXPORT ZxLogMessageFatal final : public ZxLogMessage {
+ public:
+  using ZxLogMessage::ZxLogMessage;
+  [[noreturn]] ~ZxLogMessageFatal() override;
 };
 
 }  // namespace logging
@@ -68,6 +82,18 @@ class BASE_EXPORT ZxLogMessage : public logging::LogMessage {
 
 namespace base {
 
+namespace internal {
+
+BASE_EXPORT std::string FidlMethodResultErrorMessage(
+    const base::StringPiece& formatted_error,
+    const base::StringPiece& method_name);
+
+BASE_EXPORT std::string FidlConnectionErrorMessage(
+    const base::StringPiece& protocol_name,
+    const base::StringPiece& status_string);
+
+}  // namespace internal
+
 class Location;
 
 // Returns a function suitable for use as error-handler for a FIDL binding or
@@ -79,6 +105,37 @@ class Location;
 BASE_EXPORT fit::function<void(zx_status_t)> LogFidlErrorAndExitProcess(
     const Location& from_here,
     StringPiece protocol_name);
+
+template <typename Protocol>
+BASE_EXPORT std::string FidlConnectionErrorMessage(
+    const zx::result<fidl::ClientEnd<Protocol>>& result) {
+  CHECK(result.is_error());
+  return internal::FidlConnectionErrorMessage(
+      fidl::DiscoverableProtocolName<Protocol>, result.status_string());
+}
+
+template <typename FidlMethod>
+BASE_EXPORT std::string FidlMethodResultErrorMessage(
+    const fidl::Result<FidlMethod>& result,
+    const base::StringPiece& method_name) {
+  CHECK(result.is_error());
+  return internal::FidlMethodResultErrorMessage(
+      result.error_value().FormatDescription(), method_name);
+}
+
+BASE_EXPORT std::string FidlMethodResultErrorMessage(
+    const fit::result<fidl::OneWayError>& result,
+    const base::StringPiece& method_name);
+
+BASE_EXPORT fit::function<void(fidl::UnbindInfo)>
+FidlBindingClosureWarningLogger(base::StringPiece protocol_name);
+
+template <typename Protocol>
+BASE_EXPORT fit::function<void(fidl::UnbindInfo)>
+FidlBindingClosureWarningLogger() {
+  return FidlBindingClosureWarningLogger(
+      fidl::DiscoverableProtocolName<Protocol>);
+}
 
 }  // namespace base
 

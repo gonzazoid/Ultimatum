@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,6 +24,7 @@
 #include "extensions/common/feature_switch.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/logging_constants.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -95,7 +96,7 @@ void ErrorConsole::SetReportingForExtension(const std::string& extension_id,
     mask &= ~(1 << type);
 
   prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref,
-                              std::make_unique<base::Value>(mask));
+                              base::Value(mask));
 }
 
 void ErrorConsole::SetReportingAllForExtension(
@@ -107,7 +108,7 @@ void ErrorConsole::SetReportingAllForExtension(
   int mask = enabled ? (1 << ExtensionError::NUM_ERROR_TYPES) - 1 : 0;
 
   prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref,
-                              std::make_unique<base::Value>(mask));
+                              base::Value(mask));
 }
 
 bool ErrorConsole::IsReportingEnabledForExtension(
@@ -125,7 +126,8 @@ void ErrorConsole::UseDefaultReportingForExtension(
   if (!enabled_ || !crx_file::id_util::IdIsValid(extension_id))
     return;
 
-  prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref, nullptr);
+  prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref,
+                              absl::nullopt);
 }
 
 void ErrorConsole::ReportError(std::unique_ptr<ExtensionError> error) {
@@ -252,10 +254,10 @@ void ErrorConsole::OnExtensionUninstalled(
 void ErrorConsole::AddManifestErrorsForExtension(const Extension* extension) {
   const std::vector<InstallWarning>& warnings =
       extension->install_warnings();
-  for (auto iter = warnings.begin(); iter != warnings.end(); ++iter) {
-    ReportError(std::unique_ptr<ExtensionError>(new ManifestError(
-        extension->id(), base::UTF8ToUTF16(iter->message),
-        base::UTF8ToUTF16(iter->key), base::UTF8ToUTF16(iter->specific))));
+  for (const auto& warning : warnings) {
+    ReportError(std::make_unique<ManifestError>(
+        extension->id(), base::UTF8ToUTF16(warning.message), warning.key,
+        base::UTF8ToUTF16(warning.specific)));
   }
 }
 

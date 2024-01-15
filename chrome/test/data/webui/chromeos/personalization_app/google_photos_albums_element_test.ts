@@ -3,19 +3,19 @@
 // found in the LICENSE file.
 
 import 'chrome://personalization/strings.m.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
 
-import {fetchGooglePhotosAlbums, getCountText, GooglePhotosAlbum, GooglePhotosAlbums, initializeGooglePhotosData, PersonalizationActionName, PersonalizationRouter, SetErrorAction, WallpaperGridItem} from 'chrome://personalization/js/personalization_app.js';
+import {fetchGooglePhotosAlbums, fetchGooglePhotosEnabled, fetchGooglePhotosSharedAlbums, getCountText, GooglePhotosAlbum, GooglePhotosAlbumsElement, PersonalizationActionName, PersonalizationRouterElement, SetErrorAction, WallpaperGridItemElement} from 'chrome://personalization/js/personalization_app.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertDeepEquals, assertEquals, assertGT, assertNotEquals} from 'chrome://webui-test/chai_assert.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 
 import {baseSetup, createSvgDataUrl, initElement, teardownElement} from './personalization_app_test_utils.js';
 import {TestPersonalizationStore} from './test_personalization_store.js';
 import {TestWallpaperProvider} from './test_wallpaper_interface_provider.js';
 
-suite('GooglePhotosAlbumsTest', function() {
-  let googlePhotosAlbumsElement: GooglePhotosAlbums|null;
+suite('GooglePhotosAlbumsElementTest', function() {
+  let googlePhotosAlbumsElement: GooglePhotosAlbumsElement|null;
   let personalizationStore: TestPersonalizationStore;
   let wallpaperProvider: TestWallpaperProvider;
 
@@ -27,6 +27,17 @@ suite('GooglePhotosAlbumsTest', function() {
     const matches =
         googlePhotosAlbumsElement!.shadowRoot!.querySelectorAll(selector);
     return matches ? [...matches] : null;
+  }
+
+  function getAlbumAriaLabel(album: GooglePhotosAlbum|undefined): string {
+    if (!album) {
+      return '';
+    }
+    const primaryText = album.title;
+    const secondaryText = album.isShared ?
+        loadTimeData.getString('googlePhotosAlbumShared') :
+        getCountText(album.photoCount);
+    return `${primaryText} ${secondaryText}`;
   }
 
   /** Scrolls the window to the bottom. */
@@ -56,6 +67,8 @@ suite('GooglePhotosAlbumsTest', function() {
         preview: {
           url: createSvgDataUrl('svg-0'),
         },
+        timestamp: {internalValue: BigInt(`13318040939308000`)},
+        isShared: false,
       },
       {
         id: '0ec40478-9712-42e1-b5bf-3e75870ca042',
@@ -64,6 +77,8 @@ suite('GooglePhotosAlbumsTest', function() {
         preview: {
           url: createSvgDataUrl('svg-1'),
         },
+        timestamp: {internalValue: BigInt(`13318040939307000`)},
+        isShared: false,
       },
       {
         id: '0a268a37-877a-4936-81d4-38cc84b0f596',
@@ -72,6 +87,8 @@ suite('GooglePhotosAlbumsTest', function() {
         preview: {
           url: createSvgDataUrl('svg-2'),
         },
+        timestamp: {internalValue: BigInt(`13318040939306000`)},
+        isShared: false,
       },
     ];
 
@@ -80,7 +97,7 @@ suite('GooglePhotosAlbumsTest', function() {
 
     // Initialize |googlePhotosAlbumsElement|.
     googlePhotosAlbumsElement =
-        initElement(GooglePhotosAlbums, {hidden: false});
+        initElement(GooglePhotosAlbumsElement, {hidden: false});
     await waitAfterNextRender(googlePhotosAlbumsElement);
 
     // The |personalizationStore| should be empty, so no albums should be
@@ -92,7 +109,7 @@ suite('GooglePhotosAlbumsTest', function() {
         'no wallpaper grid items yet');
 
     // Initialize Google Photos data in the |personalizationStore|.
-    await initializeGooglePhotosData(wallpaperProvider, personalizationStore);
+    await fetchGooglePhotosEnabled(wallpaperProvider, personalizationStore);
     await fetchGooglePhotosAlbums(wallpaperProvider, personalizationStore);
     await waitAfterNextRender(googlePhotosAlbumsElement);
 
@@ -100,7 +117,8 @@ suite('GooglePhotosAlbumsTest', function() {
     albums.forEach(album => album.preview.url += '=s512');
 
     // Verify that the expected |albums| are rendered.
-    const albumEls = querySelectorAll(albumSelector) as WallpaperGridItem[];
+    const albumEls =
+        querySelectorAll(albumSelector) as WallpaperGridItemElement[];
 
     assertEquals(
         albumEls.length, albums.length, 'one wallpaper grid item per album');
@@ -117,18 +135,20 @@ suite('GooglePhotosAlbumsTest', function() {
            boolean) => test('displays error when albums fail to load', async () => {
         // Set values returned by |wallpaperProvider|.
         wallpaperProvider.setGooglePhotosAlbums(undefined);
+        wallpaperProvider.setGooglePhotosSharedAlbums(undefined);
 
         // Initialize |googlePhotosAlbumsElement|.
         googlePhotosAlbumsElement =
-            initElement(GooglePhotosAlbums, {hidden: false});
+            initElement(GooglePhotosAlbumsElement, {hidden: false});
         await waitAfterNextRender(googlePhotosAlbumsElement);
 
         // Initialize Google Photos data in the |personalizationStore| and
         // expect an |error|.
         personalizationStore.expectAction(PersonalizationActionName.SET_ERROR);
-        await initializeGooglePhotosData(
-            wallpaperProvider, personalizationStore);
+        await fetchGooglePhotosEnabled(wallpaperProvider, personalizationStore);
         await fetchGooglePhotosAlbums(wallpaperProvider, personalizationStore);
+        await fetchGooglePhotosSharedAlbums(
+            wallpaperProvider, personalizationStore);
         const {error} =
             await personalizationStore.waitForAction(
                 PersonalizationActionName.SET_ERROR) as SetErrorAction;
@@ -168,16 +188,19 @@ suite('GooglePhotosAlbumsTest', function() {
     // Prepare Google Photos data.
     const photosCount = 5;
     const albums: GooglePhotosAlbum[] = Array.from(
-        {length: photosCount}, (_, i) => ({
-                                 id: `id-${i}`,
-                                 title: `title-${i}`,
-                                 photoCount: 1,
-                                 preview: {url: createSvgDataUrl(`svg-${i}`)},
-                               }));
+        {length: photosCount},
+        (_, i) => ({
+          id: `id-${i}`,
+          title: `title-${i}`,
+          photoCount: 1,
+          preview: {url: createSvgDataUrl(`svg-${i}`)},
+          timestamp: {internalValue: BigInt(`${photosCount - i}`)},
+          isShared: false,
+        }));
 
     // Initialize |googlePhotosAlbumsElement|.
     googlePhotosAlbumsElement =
-        initElement(GooglePhotosAlbums, {hidden: false});
+        initElement(GooglePhotosAlbumsElement, {hidden: false});
     await waitAfterNextRender(googlePhotosAlbumsElement);
 
     // Initially only placeholders should be present.
@@ -200,8 +223,8 @@ suite('GooglePhotosAlbumsTest', function() {
     });
 
     // Mock singleton |PersonalizationRouter|.
-    const router = TestBrowserProxy.fromClass(PersonalizationRouter);
-    PersonalizationRouter.instance = () => router;
+    const router = TestMock.fromClass(PersonalizationRouterElement);
+    PersonalizationRouterElement.instance = () => router;
 
     // Mock |PersonalizationRouter.selectGooglePhotosAlbum()|.
     let selectedGooglePhotosAlbum: GooglePhotosAlbum|undefined;
@@ -234,7 +257,8 @@ suite('GooglePhotosAlbumsTest', function() {
 
     // Albums should be aria-labeled.
     albumEls!.forEach((albumEl, i) => {
-      assertEquals(albumEl.getAttribute('aria-label'), albums[i]!.title);
+      assertEquals(
+          albumEl.getAttribute('aria-label'), getAlbumAriaLabel(albums[i]));
       assertEquals(albumEl.getAttribute('aria-posinset'), (i + 1).toString());
     });
 
@@ -254,6 +278,8 @@ suite('GooglePhotosAlbumsTest', function() {
             title: `title-${nextAlbumId}`,
             photoCount: 1,
             preview: {url: `url-${nextAlbumId++}`},
+            timestamp: {internalValue: BigInt(`${nextAlbumId}`)},
+            isShared: false,
           };
         }));
 
@@ -263,7 +289,7 @@ suite('GooglePhotosAlbumsTest', function() {
     wallpaperProvider.setGooglePhotosAlbumsResumeToken(resumeToken);
 
     // Initialize Google Photos data in |personalizationStore|.
-    await initializeGooglePhotosData(wallpaperProvider, personalizationStore);
+    await fetchGooglePhotosEnabled(wallpaperProvider, personalizationStore);
     await fetchGooglePhotosAlbums(wallpaperProvider, personalizationStore);
     assertEquals(
         await wallpaperProvider.whenCalled('fetchGooglePhotosAlbums'),
@@ -280,6 +306,8 @@ suite('GooglePhotosAlbumsTest', function() {
             title: `title-${nextAlbumId}`,
             photoCount: 1,
             preview: {url: `url-${nextAlbumId++}`},
+            timestamp: {internalValue: BigInt(`${nextAlbumId}`)},
+            isShared: false,
           };
         }));
 
@@ -301,7 +329,7 @@ suite('GooglePhotosAlbumsTest', function() {
 
     // Initialize |googlePhotosAlbumsElement|.
     googlePhotosAlbumsElement =
-        initElement(GooglePhotosAlbums, {hidden: false});
+        initElement(GooglePhotosAlbumsElement, {hidden: false});
     await waitAfterNextRender(googlePhotosAlbumsElement);
 
     // Scroll to the bottom of the grid.

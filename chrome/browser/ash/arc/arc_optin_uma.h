@@ -88,7 +88,13 @@ enum class OptInNetworkErrorActionType {
   // User wants to diagnose network.
   CHECK_NETWORK = 3,
 
-  kMaxValue = CHECK_NETWORK,
+  // Network error page was shown. This bucket encompasses all others and works
+  // as a total count for network-related errors (instead of the histogram's
+  // total sample count which doesn't reflect that information). This enum
+  // value was added on 2023 Dec 21. The data before this date is missing.
+  ERROR_SHOWN = 4,
+
+  kMaxValue = ERROR_SHOWN,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -274,8 +280,6 @@ void UpdateAuthTiming(const char* histogram_name,
 void UpdateAuthCheckinAttempts(int32_t num_attempts, const Profile* profile);
 void UpdateAuthAccountCheckStatus(mojom::AccountCheckStatus status,
                                   const Profile* profile);
-void UpdateAuthCodeFetcherProxyBypassUMA(bool proxy_bypassed,
-                                         const Profile* profile);
 void UpdateAccountReauthReason(mojom::ReauthReason reason,
                                const Profile* profile);
 void UpdateMainAccountResolutionStatus(

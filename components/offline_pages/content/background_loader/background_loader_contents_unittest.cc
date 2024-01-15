@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/window_container_type.mojom-shared.h"
@@ -116,7 +116,7 @@ TEST_F(BackgroundLoaderContentsTest, SuppressDialogs) {
 }
 
 TEST_F(BackgroundLoaderContentsTest, DoesNotFocusAfterCrash) {
-  ASSERT_FALSE(contents()->ShouldFocusPageAfterCrash());
+  ASSERT_FALSE(contents()->ShouldFocusPageAfterCrash(nullptr));
 }
 
 TEST_F(BackgroundLoaderContentsTest, CannotDownloadNoDelegate) {
@@ -163,7 +163,8 @@ TEST_F(BackgroundLoaderContentsTest, ShouldNotAddNewContents) {
 TEST_F(BackgroundLoaderContentsTest, DoesNotGiveMediaAccessPermission) {
   content::MediaStreamRequest request(
       0 /* render_process_id */, 0 /* render_frame_id */,
-      0 /* page_request_id */, GURL::EmptyGURL() /* security_origin */,
+      0 /* page_request_id */,
+      url::Origin::Create(GURL::EmptyGURL()) /* url_origin */,
       false /* user_gesture */,
       blink::MediaStreamRequestType::MEDIA_DEVICE_ACCESS /* request_type */,
       std::string() /* requested_audio_device_id */,
@@ -188,7 +189,7 @@ TEST_F(BackgroundLoaderContentsTest, DoesNotGiveMediaAccessPermission) {
 
 TEST_F(BackgroundLoaderContentsTest, CheckMediaAccessPermissionFalse) {
   ASSERT_FALSE(contents()->CheckMediaAccessPermission(
-      nullptr /* contents */, GURL::EmptyGURL() /* security_origin */,
+      nullptr /* contents */, url::Origin() /* security_origin */,
       blink::mojom::MediaStreamType::GUM_TAB_VIDEO_CAPTURE /* type */));
 }
 

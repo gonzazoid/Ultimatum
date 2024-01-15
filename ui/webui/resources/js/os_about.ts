@@ -2,10 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.js';
+import {getRequiredElement} from './util.js';
 
-$('os-link-href').onclick = crosUrlAboutRedirect;
+getRequiredElement('os-link-href').onclick = crosUrlAboutRedirect;
 
-function crosUrlAboutRedirect() {
+// trigger the click handler for middle-button clicks
+getRequiredElement('os-link-href').onauxclick = ((event: MouseEvent) => {
+                                                  if (event.button === 1) {
+                                                    crosUrlAboutRedirect(event);
+                                                  }
+                                                }) as EventListener;
+
+function crosUrlAboutRedirect(event: Event) {
+  event.preventDefault();
   chrome.send('crosUrlAboutRedirect');
 }

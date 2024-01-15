@@ -18,7 +18,10 @@
 @interface UserSigninCoordinator : SigninCoordinator
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
-                                   browser:(Browser*)browser NS_UNAVAILABLE;
+                                   browser:(Browser*)browser
+                               accessPoint:
+                                   (signin_metrics::AccessPoint)accessPoint
+    NS_UNAVAILABLE;
 
 // Designated initializer.
 // `viewController` presents the sign-in.
@@ -30,14 +33,9 @@
                                   identity:(id<SystemIdentity>)identity
                               signinIntent:(UserSigninIntent)signinIntent
                                     logger:(UserSigninLogger*)logger
+                               accessPoint:
+                                   (signin_metrics::AccessPoint)accessPoint
     NS_DESIGNATED_INITIALIZER;
-
-// Convenience initializer using UINavigationController.
-- (instancetype)initWithBaseNavigationController:
-                    (UINavigationController*)navigationController
-                                         browser:(Browser*)browser
-                                    signinIntent:(UserSigninIntent)signinIntent
-                                          logger:(UserSigninLogger*)logger;
 
 @end
 

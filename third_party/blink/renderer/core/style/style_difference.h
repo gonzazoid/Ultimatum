@@ -39,22 +39,22 @@ class StyleDifference {
   };
 
   StyleDifference()
-      : needs_paint_invalidation_(false),
+      : paint_invalidation_type_(
+            static_cast<unsigned>(PaintInvalidationType::kNone)),
         layout_type_(kNoLayout),
         needs_reshape_(false),
         recompute_visual_overflow_(false),
-        visual_rect_update_(false),
         property_specific_differences_(0),
         scroll_anchor_disabling_property_changed_(false),
         compositing_reasons_changed_(false),
         compositable_paint_effect_changed_(false) {}
 
   void Merge(StyleDifference other) {
-    needs_paint_invalidation_ |= other.needs_paint_invalidation_;
+    paint_invalidation_type_ =
+        std::max(paint_invalidation_type_, other.paint_invalidation_type_);
     layout_type_ = std::max(layout_type_, other.layout_type_);
     needs_reshape_ |= other.needs_reshape_;
     recompute_visual_overflow_ |= other.recompute_visual_overflow_;
-    visual_rect_update_ |= other.visual_rect_update_;
     property_specific_differences_ |= other.property_specific_differences_;
     scroll_anchor_disabling_property_changed_ |=
         other.scroll_anchor_disabling_property_changed_;
@@ -64,21 +64,42 @@ class StyleDifference {
   }
 
   bool HasDifference() const {
-    return needs_paint_invalidation_ || layout_type_ || needs_reshape_ ||
-           property_specific_differences_ || recompute_visual_overflow_ ||
-           visual_rect_update_ || scroll_anchor_disabling_property_changed_ ||
+    return (paint_invalidation_type_ !=
+            static_cast<unsigned>(PaintInvalidationType::kNone)) ||
+           layout_type_ || needs_reshape_ || property_specific_differences_ ||
+           recompute_visual_overflow_ ||
+           scroll_anchor_disabling_property_changed_ ||
            compositing_reasons_changed_ || compositable_paint_effect_changed_;
   }
 
   bool HasAtMostPropertySpecificDifferences(
       unsigned property_differences) const {
-    return !needs_paint_invalidation_ && !layout_type_ &&
-           !compositing_reasons_changed_ &&
+    return (paint_invalidation_type_ ==
+            static_cast<unsigned>(PaintInvalidationType::kNone)) &&
+           !layout_type_ && !compositing_reasons_changed_ &&
            !(property_specific_differences_ & ~property_differences);
   }
 
-  bool NeedsPaintInvalidation() const { return needs_paint_invalidation_; }
-  void SetNeedsPaintInvalidation() { needs_paint_invalidation_ = true; }
+  // For simple paint invalidation, we can directly invalidate the
+  // DisplayItemClients during style update, without paint invalidation during
+  // PrePaintTreeWalk.
+  bool NeedsSimplePaintInvalidation() const {
+    return paint_invalidation_type_ ==
+           static_cast<unsigned>(PaintInvalidationType::kSimple);
+  }
+  bool NeedsNormalPaintInvalidation() const {
+    return paint_invalidation_type_ ==
+           static_cast<unsigned>(PaintInvalidationType::kNormal);
+  }
+  void SetNeedsSimplePaintInvalidation() {
+    DCHECK(!NeedsNormalPaintInvalidation());
+    paint_invalidation_type_ =
+        static_cast<unsigned>(PaintInvalidationType::kSimple);
+  }
+  void SetNeedsNormalPaintInvalidation() {
+    paint_invalidation_type_ =
+        static_cast<unsigned>(PaintInvalidationType::kNormal);
+  }
 
   bool NeedsLayout() const { return layout_type_ != kNoLayout; }
   void ClearNeedsLayout() { layout_type_ = kNoLayout; }
@@ -102,9 +123,6 @@ class StyleDifference {
     return recompute_visual_overflow_;
   }
   void SetNeedsRecomputeVisualOverflow() { recompute_visual_overflow_ = true; }
-
-  bool NeedsVisualRectUpdate() const { return visual_rect_update_; }
-  void SetNeedsVisualRectUpdate() { visual_rect_update_ = true; }
 
   // True if the transform property itself changed, or properties related to
   // transform changed (e.g., individual transform properties, motion path,
@@ -203,13 +221,13 @@ class StyleDifference {
   friend CORE_EXPORT std::ostream& operator<<(std::ostream&,
                                               const StyleDifference&);
 
-  unsigned needs_paint_invalidation_ : 1;
+  enum class PaintInvalidationType { kNone, kSimple, kNormal };
+  unsigned paint_invalidation_type_ : 2;
 
   enum LayoutType { kNoLayout = 0, kPositionedMovement, kFullLayout };
   unsigned layout_type_ : 2;
   unsigned needs_reshape_ : 1;
   unsigned recompute_visual_overflow_ : 1;
-  unsigned visual_rect_update_ : 1;
   unsigned property_specific_differences_ : kPropertyDifferenceCount;
   unsigned scroll_anchor_disabling_property_changed_ : 1;
   unsigned compositing_reasons_changed_ : 1;

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
@@ -13,6 +13,10 @@
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/base/dragdrop/os_exchange_data.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/compositor/layer_tree_owner.h"
+#include "ui/gfx/native_widget_types.h"
 #include "ui/views/controls/menu/menu_controller.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -29,6 +33,8 @@ const char16_t kTestTopLevelDragData[] = u"test_top_level_drag_data";
 
 // A simple view which can be dragged.
 class TestDragView : public views::View {
+  METADATA_HEADER(TestDragView, views::View)
+
  public:
   TestDragView();
 
@@ -59,8 +65,13 @@ void TestDragView::WriteDragData(const gfx::Point& point,
   data->SetString(kTestNestedDragData);
 }
 
+BEGIN_METADATA(TestDragView)
+END_METADATA
+
 // A simple view to serve as a drop target.
 class TestTargetView : public views::View {
+  METADATA_HEADER(TestTargetView, views::View)
+
  public:
   TestTargetView() = default;
 
@@ -89,7 +100,8 @@ class TestTargetView : public views::View {
 
   // Performs the drop operation and updates |output_drag_op| accordingly.
   void PerformDrop(const ui::DropTargetEvent& event,
-                   ui::mojom::DragOperation& output_drag_op);
+                   ui::mojom::DragOperation& output_drag_op,
+                   std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner);
 
   // Whether or not we are currently dragging.
   bool dragging_ = false;
@@ -146,11 +158,16 @@ void TestTargetView::OnDragExited() {
   dragging_ = false;
 }
 
-void TestTargetView::PerformDrop(const ui::DropTargetEvent& event,
-                                 ui::mojom::DragOperation& output_drag_op) {
+void TestTargetView::PerformDrop(
+    const ui::DropTargetEvent& event,
+    ui::mojom::DragOperation& output_drag_op,
+    std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
   dropped_ = true;
   output_drag_op = DragOperation::kMove;
 }
+
+BEGIN_METADATA(TestTargetView)
+END_METADATA
 
 }  // namespace
 
@@ -205,10 +222,11 @@ class MenuViewDragAndDropTest : public MenuTestBase,
 
   // Performs the drop operation and updates |output_drag_op| accordingly.
   void PerformDrop(const ui::DropTargetEvent& event,
-                   ui::mojom::DragOperation& output_drag_op);
+                   ui::mojom::DragOperation& output_drag_op,
+                   std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner);
 
   // The special view in the menu, which supports its own drag and drop.
-  raw_ptr<TestTargetView> target_view_ = nullptr;
+  raw_ptr<TestTargetView, DanglingUntriaged> target_view_ = nullptr;
 
   // Whether or not we have been asked to close on drag complete.
   bool asked_to_close_ = false;
@@ -264,7 +282,7 @@ void MenuViewDragAndDropTest::OnDragEntered() {
       FROM_HERE,
       base::BindOnce(base::IgnoreResult(&ui_controls::SendMouseEvents),
                      ui_controls::LEFT, ui_controls::UP,
-                     ui_controls::kNoAccelerator));
+                     ui_controls::kNoAccelerator, ui_controls::kNoWindowHint));
 }
 
 bool MenuViewDragAndDropTest::GetDropFormats(
@@ -320,7 +338,8 @@ bool MenuViewDragAndDropTest::ShouldCloseOnDragComplete() {
 
 void MenuViewDragAndDropTest::PerformDrop(
     const ui::DropTargetEvent& event,
-    ui::mojom::DragOperation& output_drag_op) {
+    ui::mojom::DragOperation& output_drag_op,
+    std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
   performed_in_menu_drop_ = true;
   output_drag_op = DragOperation::kMove;
 }
@@ -350,8 +369,9 @@ void MenuViewDragAndDropTestTestInMenuDrag::OnWidgetDragWillStart(
   const gfx::Point target =
       ui_test_utils::GetCenterInScreenCoordinates(drop_target_view);
   GetDragTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(base::IgnoreResult(&ui_controls::SendMouseMove),
-                                target.x(), target.y()));
+      FROM_HERE,
+      base::BindOnce(base::IgnoreResult(&ui_controls::SendMouseMove),
+                     target.x(), target.y(), ui_controls::kNoWindowHint));
 }
 
 void MenuViewDragAndDropTestTestInMenuDrag::OnWidgetDragComplete(
@@ -397,7 +417,8 @@ void MenuViewDragAndDropTestTestInMenuDrag::StartDrag() {
 // menu automatically once the drag is complete, and does not ask the delegate
 // to stay open.
 // TODO(pkasting): https://crbug.com/939621 Fails on Mac.
-#if BUILDFLAG(IS_MAC)
+// TODO(crbug.com/1443197): Re-enable this test for linux.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 #define MAYBE_TestInMenuDrag DISABLED_TestInMenuDrag
 #else
 #define MAYBE_TestInMenuDrag TestInMenuDrag
@@ -430,8 +451,9 @@ void MenuViewDragAndDropTestNestedDrag::OnWidgetDragWillStart(
   const gfx::Point target =
       ui_test_utils::GetCenterInScreenCoordinates(drop_target_view);
   GetDragTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(base::IgnoreResult(&ui_controls::SendMouseMove),
-                                target.x(), target.y()));
+      FROM_HERE,
+      base::BindOnce(base::IgnoreResult(&ui_controls::SendMouseMove),
+                     target.x(), target.y(), ui_controls::kNoWindowHint));
 }
 
 void MenuViewDragAndDropTestNestedDrag::OnWidgetDragComplete(

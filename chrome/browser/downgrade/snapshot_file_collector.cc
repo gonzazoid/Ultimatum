@@ -10,7 +10,7 @@
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/common/chrome_constants.h"
-#include "components/autofill/core/browser/strike_database.h"
+#include "components/autofill/core/browser/strike_databases/strike_database.h"
 #include "components/bookmarks/common/bookmark_constants.h"
 #include "components/history/core/browser/history_constants.h"
 #include "components/password_manager/core/browser/password_manager_constants.h"
@@ -88,10 +88,15 @@ std::vector<SnapshotItemDetails> CollectProfileItems() {
                           chrome_browsing_data_remover::DATA_TYPE_HISTORY,
                           SnapshotItemId::kTopSites),
       // Bookmarks
-      SnapshotItemDetails(base::FilePath(bookmarks::kBookmarksFileName),
+      SnapshotItemDetails(
+          base::FilePath(bookmarks::kLocalOrSyncableBookmarksFileName),
+          SnapshotItemDetails::ItemType::kFile,
+          chrome_browsing_data_remover::DATA_TYPE_BOOKMARKS,
+          SnapshotItemId::kLocalOrSyncableBookmarks),
+      SnapshotItemDetails(base::FilePath(bookmarks::kAccountBookmarksFileName),
                           SnapshotItemDetails::ItemType::kFile,
                           chrome_browsing_data_remover::DATA_TYPE_BOOKMARKS,
-                          SnapshotItemId::kBookmarks),
+                          SnapshotItemId::kAccountBookmarks),
       // Tab Restore and sessions
       // TODO(crbug.com/1103458): Remove legacy snapshots in M89
       SnapshotItemDetails(

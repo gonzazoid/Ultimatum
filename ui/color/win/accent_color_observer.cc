@@ -4,8 +4,10 @@
 
 #include "ui/color/win/accent_color_observer.h"
 
+#include <utility>
+
 #include "base/no_destructor.h"
-#include "base/win/windows_version.h"
+#include "base/task/sequenced_task_runner.h"
 #include "skia/ext/skia_utils_win.h"
 #include "ui/gfx/color_utils.h"
 
@@ -18,13 +20,12 @@ AccentColorObserver* AccentColorObserver::Get() {
 }
 
 AccentColorObserver::AccentColorObserver() {
-  if (base::win::GetVersion() >= base::win::Version::WIN8) {
-    dwm_key_ = std::make_unique<base::win::RegKey>(
-        HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\DWM", KEY_READ);
-    if (dwm_key_->Valid())
-      OnDwmKeyUpdated();
-    else
-      dwm_key_.reset();
+  dwm_key_ = std::make_unique<base::win::RegKey>(
+      HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\DWM", KEY_READ);
+  if (dwm_key_->Valid()) {
+    OnDwmKeyUpdated();
+  } else {
+    dwm_key_.reset();
   }
 }
 
@@ -33,6 +34,18 @@ AccentColorObserver::~AccentColorObserver() = default;
 base::CallbackListSubscription AccentColorObserver::Subscribe(
     base::RepeatingClosure callback) {
   return callbacks_.Add(std::move(callback));
+}
+
+void AccentColorObserver::SetAccentColorForTesting(
+    absl::optional<SkColor> accent_color) {
+  accent_color_ = accent_color;
+  callbacks_.Notify();
+}
+
+void AccentColorObserver::SetUseDwmFrameColorForTesting(
+    bool use_dwm_frame_color) {
+  use_dwm_frame_color_ = use_dwm_frame_color;
+  callbacks_.Notify();
 }
 
 void AccentColorObserver::OnDwmKeyUpdated() {
@@ -65,27 +78,29 @@ void AccentColorObserver::OnDwmKeyUpdated() {
 
   accent_color_ = absl::nullopt;
   accent_color_inactive_ = absl::nullopt;
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    DWORD accent_color, color_prevalence;
-    bool use_dwm_frame_color =
-        dwm_key_->ReadValueDW(L"AccentColor", &accent_color) == ERROR_SUCCESS &&
-        dwm_key_->ReadValueDW(L"ColorPrevalence", &color_prevalence) ==
-            ERROR_SUCCESS &&
-        color_prevalence == 1;
-    if (use_dwm_frame_color) {
-      accent_color_ = skia::COLORREFToSkColor(accent_color);
-      DWORD accent_color_inactive;
-      if (dwm_key_->ReadValueDW(L"AccentColorInactive",
-                                &accent_color_inactive) == ERROR_SUCCESS) {
-        accent_color_inactive_ = skia::COLORREFToSkColor(accent_color_inactive);
-      }
+  DWORD accent_color = 0;
+  if (dwm_key_->ReadValueDW(L"AccentColor", &accent_color) == ERROR_SUCCESS) {
+    accent_color_ = skia::COLORREFToSkColor(accent_color);
+    DWORD accent_color_inactive = 0;
+    if (dwm_key_->ReadValueDW(L"AccentColorInactive", &accent_color_inactive) ==
+        ERROR_SUCCESS) {
+      accent_color_inactive_ = skia::COLORREFToSkColor(accent_color_inactive);
     }
   }
 
+  DWORD color_prevalence;
+  use_dwm_frame_color_ =
+      accent_color_.has_value() &&
+      (dwm_key_->ReadValueDW(L"ColorPrevalence", &color_prevalence) ==
+       ERROR_SUCCESS) &&
+      color_prevalence == 1;
+
   callbacks_.Notify();
 
-  // Watch for future changes.
-  if (!dwm_key_->StartWatching(base::BindOnce(
+  // Watch for future changes. If there is no task runner, this is a test or
+  // tool context and watching is unnecessary.
+  if (!base::SequencedTaskRunner::HasCurrentDefault() ||
+      !dwm_key_->StartWatching(base::BindOnce(
           &AccentColorObserver::OnDwmKeyUpdated, base::Unretained(this)))) {
     dwm_key_.reset();
   }

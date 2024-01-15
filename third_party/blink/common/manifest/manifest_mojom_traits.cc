@@ -11,6 +11,7 @@
 #include "mojo/public/cpp/base/string16_mojom_traits.h"
 #include "mojo/public/cpp/bindings/type_converter.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
 #include "url/mojom/url_gurl_mojom_traits.h"
 #include "url/url_util.h"
@@ -217,7 +218,15 @@ bool StructTraits<blink::mojom::HomeTabParamsDataView,
                   ::blink::Manifest::HomeTabParams>::
     Read(blink::mojom::HomeTabParamsDataView data,
          ::blink::Manifest::HomeTabParams* out) {
-  return data.ReadIcons(&out->icons);
+  if (!data.ReadIcons(&out->icons)) {
+    return false;
+  }
+
+  if (!data.ReadScopePatterns(&out->scope_patterns)) {
+    return false;
+  }
+
+  return true;
 }
 
 bool StructTraits<blink::mojom::NewTabButtonParamsDataView,
@@ -225,6 +234,17 @@ bool StructTraits<blink::mojom::NewTabButtonParamsDataView,
     Read(blink::mojom::NewTabButtonParamsDataView data,
          ::blink::Manifest::NewTabButtonParams* out) {
   return data.ReadUrl(&out->url);
+}
+
+blink::mojom::HomeTabUnionDataView::Tag
+UnionTraits<blink::mojom::HomeTabUnionDataView,
+            ::blink::Manifest::TabStrip::HomeTab>::
+    GetTag(const ::blink::Manifest::TabStrip::HomeTab& value) {
+  if (absl::holds_alternative<blink::mojom::TabStripMemberVisibility>(value)) {
+    return blink::mojom::HomeTabUnion::Tag::kVisibility;
+  } else {
+    return blink::mojom::HomeTabUnion::Tag::kParams;
+  }
 }
 
 bool UnionTraits<blink::mojom::HomeTabUnionDataView,
@@ -240,27 +260,6 @@ bool UnionTraits<blink::mojom::HomeTabUnionDataView,
       return true;
     case blink::mojom::HomeTabUnionDataView::Tag::kParams:
       ::blink::Manifest::HomeTabParams params;
-      if (!data.ReadParams(&params))
-        return false;
-      *out = params;
-      return true;
-  }
-  return false;
-}
-
-bool UnionTraits<blink::mojom::NewTabButtonUnionDataView,
-                 ::blink::Manifest::TabStrip::NewTabButton>::
-    Read(blink::mojom::NewTabButtonUnionDataView data,
-         ::blink::Manifest::TabStrip::NewTabButton* out) {
-  switch (data.tag()) {
-    case blink::mojom::NewTabButtonUnionDataView::Tag::kVisibility:
-      ::blink::mojom::TabStripMemberVisibility visibility;
-      if (!data.ReadVisibility(&visibility))
-        return false;
-      *out = visibility;
-      return true;
-    case blink::mojom::NewTabButtonUnionDataView::Tag::kParams:
-      ::blink::Manifest::NewTabButtonParams params;
       if (!data.ReadParams(&params))
         return false;
       *out = params;

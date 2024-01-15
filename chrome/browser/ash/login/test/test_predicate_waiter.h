@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_TEST_TEST_PREDICATE_WAITER_H_
 #define CHROME_BROWSER_ASH_LOGIN_TEST_TEST_PREDICATE_WAITER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/run_loop.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/test/test_condition_waiter.h"
@@ -44,13 +44,5 @@ class TestPredicateWaiter : public TestConditionWaiter {
 
 }  // namespace test
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace test {
-using ::ash::test::TestPredicateWaiter;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_TEST_PREDICATE_WAITER_H_

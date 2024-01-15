@@ -10,9 +10,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/time/time.h"
@@ -199,7 +199,8 @@ TEST_F(ComponentCloudPolicyStoreTest, ValidatePolicyWrongTimestamp) {
                             CreatePolicyData().get(), TestPolicyHash(),
                             kTestPolicy));
 
-  const int64_t kPastTimestamp = (base::Time() + base::Days(1)).ToJavaTime();
+  const int64_t kPastTimestamp =
+      (base::Time() + base::Days(1)).InMillisecondsSinceUnixEpoch();
   CHECK_GT(PolicyBuilder::kFakeTimestamp, kPastTimestamp);
   builder_.policy_data().set_timestamp(kPastTimestamp);
   std::string error;

@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -28,6 +28,7 @@
 #include "device/bluetooth/dbus/fake_bluetooth_input_client.h"
 #include "device/bluetooth/dbus/fake_bluetooth_profile_manager_client.h"
 #include "device/bluetooth/dbus/fake_bluetooth_profile_service_provider.h"
+#include "device/bluetooth/floss/floss_features.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -76,6 +77,10 @@ class BluetoothSocketBlueZTest : public testing::Test {
         last_reason_(BluetoothSocket::kSystemError) {}
 
   void SetUp() override {
+    // TODO(b/266989920) Remove when Floss fake implementation is completed.
+    if (floss::features::IsFlossEnabled()) {
+      GTEST_SKIP();
+    }
     dbus_setter_ = bluez::BluezDBusManager::GetSetterForTesting();
 
     dbus_setter_->SetBluetoothAdapterClient(
@@ -115,6 +120,9 @@ class BluetoothSocketBlueZTest : public testing::Test {
   }
 
   void TearDown() override {
+    if (floss::features::IsFlossEnabled()) {
+      return;
+    }
     adapter_ = nullptr;
     BluetoothSocketThread::CleanupForTesting();
     bluez::BluezDBusManager::Shutdown();
@@ -197,7 +205,7 @@ class BluetoothSocketBlueZTest : public testing::Test {
   int last_bytes_received_;
   scoped_refptr<net::IOBuffer> last_io_buffer_;
   BluetoothSocket::ErrorReason last_reason_;
-  raw_ptr<const BluetoothDevice> last_device_;
+  raw_ptr<const BluetoothDevice, DanglingUntriaged> last_device_;
 };
 
 TEST_F(BluetoothSocketBlueZTest, Connect) {

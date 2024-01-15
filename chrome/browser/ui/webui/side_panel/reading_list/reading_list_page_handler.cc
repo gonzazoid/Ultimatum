@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/utf_string_conversions.h"
@@ -17,17 +18,19 @@
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/reading_list/reading_list_model_factory.h"
 #include "chrome/browser/ui/bookmarks/bookmark_stats.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/read_later/reading_list_model_factory.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/webui/side_panel/reading_list/reading_list_ui.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/profile_metrics/browser_profile_type.h"
 #include "components/reading_list/core/reading_list_entry.h"
 #include "components/url_formatter/url_formatter.h"
@@ -112,10 +115,10 @@ class ReadLaterItemContextMenu : public ui::SimpleMenuModel,
       }
 
       case kMarkAsRead:
-        reading_list_model_->SetReadStatus(url_, true);
+        reading_list_model_->SetReadStatusIfExists(url_, true);
         break;
       case kMarkAsUnread:
-        reading_list_model_->SetReadStatus(url_, false);
+        reading_list_model_->SetReadStatusIfExists(url_, false);
         break;
       case kDelete:
         reading_list_model_->RemoveEntryByURL(url_);
@@ -124,6 +127,18 @@ class ReadLaterItemContextMenu : public ui::SimpleMenuModel,
         NOTREACHED();
         break;
     }
+  }
+
+  bool IsCommandIdEnabled(int command_id) const override {
+    PrefService* prefs = browser_->profile()->GetPrefs();
+    policy::IncognitoModeAvailability incognito_avail =
+        IncognitoModePrefs::GetAvailability(prefs);
+    switch (command_id) {
+      case IDC_CONTENT_CONTEXT_OPENLINKOFFTHERECORD:
+        return !browser_->profile()->IsOffTheRecord() &&
+               incognito_avail != policy::IncognitoModeAvailability::kDisabled;
+    }
+    return true;
   }
 
  private:
@@ -182,7 +197,8 @@ void ReadingListPageHandler::OpenURL(
                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK, false);
   browser->OpenURL(params);
 
-  const ReadingListEntry* entry = reading_list_model_->GetEntryByURL(url);
+  scoped_refptr<const ReadingListEntry> entry =
+      reading_list_model_->GetEntryByURL(url);
   if (entry) {
     base::RecordAction(base::UserMetricsAction(
         entry->IsRead() ? "DesktopReadingList.Navigation.FromReadList"
@@ -197,7 +213,7 @@ void ReadingListPageHandler::OpenURL(
 }
 
 void ReadingListPageHandler::UpdateReadStatus(const GURL& url, bool read) {
-  reading_list_model_->SetReadStatus(url, read);
+  reading_list_model_->SetReadStatusIfExists(url, read);
   base::RecordAction(
       base::UserMetricsAction(read ? "DesktopReadingList.MarkAsRead"
                                    : "DesktopReadingList.MarkAsUnread"));
@@ -288,7 +304,7 @@ void ReadingListPageHandler::ReadingListDidApplyChanges(
   reading_list_model_->MarkAllSeen();
 }
 
-const absl::optional<GURL> ReadingListPageHandler::GetActiveTabURL() {
+const std::optional<GURL> ReadingListPageHandler::GetActiveTabURL() {
   if (active_tab_url_)
     return active_tab_url_.value();
   Browser* browser = chrome::FindLastActive();
@@ -296,7 +312,7 @@ const absl::optional<GURL> ReadingListPageHandler::GetActiveTabURL() {
     return chrome::GetURLToBookmark(
         browser->tab_strip_model()->GetActiveWebContents());
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void ReadingListPageHandler::SetActiveTabURL(const GURL& url) {
@@ -332,13 +348,14 @@ reading_list::mojom::ReadLaterEntriesByStatusPtr
 ReadingListPageHandler::CreateReadLaterEntriesByStatusData() {
   auto entries = reading_list::mojom::ReadLaterEntriesByStatus::New();
 
-  for (const auto& url : reading_list_model_->Keys()) {
-    const ReadingListEntry* entry = reading_list_model_->GetEntryByURL(url);
+  for (const auto& url : reading_list_model_->GetKeys()) {
+    scoped_refptr<const ReadingListEntry> entry =
+        reading_list_model_->GetEntryByURL(url);
     DCHECK(entry);
     if (entry->IsRead()) {
-      entries->read_entries.push_back(GetEntryData(entry));
+      entries->read_entries.push_back(GetEntryData(entry.get()));
     } else {
-      entries->unread_entries.push_back(GetEntryData(entry));
+      entries->unread_entries.push_back(GetEntryData(entry.get()));
     }
   }
 
@@ -367,7 +384,7 @@ void ReadingListPageHandler::UpdateCurrentPageActionButton() {
       Profile::FromWebUI(web_ui_)->IsGuestSession())
     return;
 
-  const absl::optional<GURL> url = GetActiveTabURL();
+  const std::optional<GURL> url = GetActiveTabURL();
   if (!url.has_value())
     return;
 
@@ -385,4 +402,13 @@ void ReadingListPageHandler::UpdateCurrentPageActionButton() {
     page_->CurrentPageActionButtonStateChanged(
         current_page_action_button_state_);
   }
+}
+
+std::unique_ptr<ui::SimpleMenuModel>
+ReadingListPageHandler::GetItemContextMenuModelForTesting(
+    Browser* browser,
+    ReadingListModel* reading_list_model,
+    GURL url) {
+  return std::make_unique<ReadLaterItemContextMenu>(browser, reading_list_model,
+                                                    url);
 }

@@ -8,6 +8,7 @@
 
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/i18n/case_conversion.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/browser/accessibility/browser_accessibility.h"
@@ -46,7 +47,7 @@ OneShotAccessibilityTreeSearch::OneShotAccessibilityTreeSearch(
       onscreen_only_(false),
       did_search_(false) {}
 
-OneShotAccessibilityTreeSearch::~OneShotAccessibilityTreeSearch() {}
+OneShotAccessibilityTreeSearch::~OneShotAccessibilityTreeSearch() = default;
 
 void OneShotAccessibilityTreeSearch::SetStartNode(
     BrowserAccessibility* start_node) {
@@ -217,7 +218,7 @@ bool OneShotAccessibilityTreeSearch::Matches(BrowserAccessibility* node) {
     bool found_text_match = false;
     for (auto node_string : node_strings) {
       std::u16string node_string_lower = base::i18n::ToLower(node_string);
-      if (node_string_lower.find(search_text_lower) != std::u16string::npos) {
+      if (base::Contains(node_string_lower, search_text_lower)) {
         found_text_match = true;
         break;
       }
@@ -414,6 +415,14 @@ bool AccessibilityMediaPredicate(BrowserAccessibility* start,
   const std::string& tag =
       node->GetStringAttribute(ax::mojom::StringAttribute::kHtmlTag);
   return tag == "audio" || tag == "video";
+}
+
+bool AccessibilityParagraphPredicate(BrowserAccessibility* start,
+                                     BrowserAccessibility* node) {
+  // Since paragraphs can contain other nodes, we exclude ancestors of the start
+  // node from the search
+  return node->GetRole() == ax::mojom::Role::kParagraph &&
+         !start->IsDescendantOf(node);
 }
 
 bool AccessibilityRadioButtonPredicate(BrowserAccessibility* start,

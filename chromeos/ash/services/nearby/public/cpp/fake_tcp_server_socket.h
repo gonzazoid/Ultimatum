@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_ASH_SERVICES_NEARBY_PUBLIC_CPP_FAKE_TCP_SERVER_SOCKET_H_
 #define CHROMEOS_ASH_SERVICES_NEARBY_PUBLIC_CPP_FAKE_TCP_SERVER_SOCKET_H_
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/ip_endpoint.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
@@ -42,7 +42,7 @@ class FakeTcpServerSocket : public network::mojom::TCPServerSocket {
   // FakeTcpConnectedSocket will be used in the AcceptCallback. For errors, null
   // or trivial values are used for the AcceptCallback.
   void FinishNextAccept(int32_t net_error,
-                        const absl::optional<::net::IPEndPoint>& remote_addr);
+                        const std::optional<::net::IPEndPoint>& remote_addr);
 
  private:
   // network::mojom::TCPServerSocket:

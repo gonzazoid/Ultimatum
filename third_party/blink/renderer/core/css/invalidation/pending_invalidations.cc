@@ -7,6 +7,7 @@
 #include "third_party/blink/renderer/core/css/invalidation/invalidation_set.h"
 #include "third_party/blink/renderer/core/css/invalidation/style_invalidator.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
+#include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
@@ -46,18 +47,25 @@ void PendingInvalidations::ScheduleInvalidationSetsForNode(
                                      style_change_reason::kStyleInvalidator));
       }
 
-      if (!invalidation_set->IsEmpty())
+      if (invalidation_set->InvalidatesNth()) {
+        PossiblyScheduleNthPseudoInvalidations(node);
+      }
+
+      if (!invalidation_set->IsEmpty()) {
         requires_descendant_invalidation = true;
+      }
     }
     // No need to schedule descendant invalidations on display:none elements.
-    if (requires_descendant_invalidation && !node.GetComputedStyle() &&
-        !node.IsShadowRoot()) {
+    if (requires_descendant_invalidation && node.IsElementNode() &&
+        !To<Element>(node).GetComputedStyle()) {
       requires_descendant_invalidation = false;
     }
   }
 
-  if (!requires_descendant_invalidation && invalidation_lists.siblings.empty())
+  if (!requires_descendant_invalidation &&
+      invalidation_lists.siblings.empty()) {
     return;
+  }
 
   // For SiblingInvalidationSets we can skip scheduling if there is no
   // nextSibling() to invalidate, but NthInvalidationSets are scheduled on the
@@ -67,26 +75,35 @@ void PendingInvalidations::ScheduleInvalidationSetsForNode(
   NodeInvalidationSets& pending_invalidations =
       EnsurePendingInvalidations(node);
   for (auto& invalidation_set : invalidation_lists.siblings) {
-    if (nth_only && !invalidation_set->IsNthSiblingInvalidationSet())
+    if (nth_only && !invalidation_set->IsNthSiblingInvalidationSet()) {
       continue;
-    if (pending_invalidations.Siblings().Contains(invalidation_set))
+    }
+    if (pending_invalidations.Siblings().Contains(invalidation_set)) {
       continue;
+    }
+    if (invalidation_set->InvalidatesNth()) {
+      PossiblyScheduleNthPseudoInvalidations(node);
+    }
     pending_invalidations.Siblings().push_back(invalidation_set);
     requires_sibling_invalidation = true;
   }
 
-  if (requires_sibling_invalidation || requires_descendant_invalidation)
+  if (requires_sibling_invalidation || requires_descendant_invalidation) {
     node.SetNeedsStyleInvalidation();
+  }
 
-  if (!requires_descendant_invalidation)
+  if (!requires_descendant_invalidation) {
     return;
+  }
 
   for (auto& invalidation_set : invalidation_lists.descendants) {
     DCHECK(!invalidation_set->WholeSubtreeInvalid());
-    if (invalidation_set->IsEmpty())
+    if (invalidation_set->IsEmpty()) {
       continue;
-    if (pending_invalidations.Descendants().Contains(invalidation_set))
+    }
+    if (pending_invalidations.Descendants().Contains(invalidation_set)) {
       continue;
+    }
     pending_invalidations.Descendants().push_back(invalidation_set);
   }
 }
@@ -96,8 +113,9 @@ void PendingInvalidations::ScheduleSiblingInvalidationsAsDescendants(
     ContainerNode& scheduling_parent) {
   DCHECK(invalidation_lists.descendants.empty());
 
-  if (invalidation_lists.siblings.empty())
+  if (invalidation_lists.siblings.empty()) {
     return;
+  }
 
   NodeInvalidationSets& pending_invalidations =
       EnsurePendingInvalidations(scheduling_parent);
@@ -105,8 +123,9 @@ void PendingInvalidations::ScheduleSiblingInvalidationsAsDescendants(
   scheduling_parent.SetNeedsStyleInvalidation();
 
   Element* subtree_root = DynamicTo<Element>(scheduling_parent);
-  if (!subtree_root)
+  if (!subtree_root) {
     subtree_root = &To<ShadowRoot>(scheduling_parent).host();
+  }
 
   for (auto& invalidation_set : invalidation_lists.siblings) {
     DescendantInvalidationSet* descendants =
@@ -135,13 +154,15 @@ void PendingInvalidations::RescheduleSiblingInvalidationsAsDescendants(
     Element& element) {
   auto* parent = element.parentNode();
   DCHECK(parent);
-  if (parent->IsDocumentNode())
+  if (parent->IsDocumentNode()) {
     return;
+  }
   auto pending_invalidations_iterator =
       pending_invalidation_map_.find(&element);
   if (pending_invalidations_iterator == pending_invalidation_map_.end() ||
-      pending_invalidations_iterator->value.Siblings().empty())
+      pending_invalidations_iterator->value.Siblings().empty()) {
     return;
+  }
   NodeInvalidationSets& pending_invalidations =
       pending_invalidations_iterator->value;
 
@@ -166,8 +187,9 @@ void PendingInvalidations::ClearInvalidation(ContainerNode& node) {
 NodeInvalidationSets& PendingInvalidations::EnsurePendingInvalidations(
     ContainerNode& node) {
   auto it = pending_invalidation_map_.find(&node);
-  if (it != pending_invalidation_map_.end())
+  if (it != pending_invalidation_map_.end()) {
     return it->value;
+  }
   PendingInvalidationMap::AddResult add_result =
       pending_invalidation_map_.insert(&node, NodeInvalidationSets());
   return add_result.stored_value->value;

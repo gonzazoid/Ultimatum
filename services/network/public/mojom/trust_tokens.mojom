@@ -10,9 +10,10 @@ import "mojo/public/mojom/base/time.mojom";
 // TrustTokenProtocolVersion enumerates the versions of Trust Token that the
 // client knows about. Different versions represent different configuration
 // flows, data structure meanings, etc and may require clearing the database
-// due to incompatibilities. kTrustTokenV3Pmb and kTrustTokenV3Voprf can
-// safely be supported at the same time, as they use the same underlying data
-// model; they just use different cryptosystems to generate tokens' signatures.
+// due to incompatibilities. kPrivateStateTokenV1Pmb, kPrivateStateTokenV1Voprf,
+// kTrustTokenV3Pmb, and kTrustTokenV3Voprf can safely be supported at the same
+// time, as they use the same underlying data model; they just use different
+// cryptosystems to generate tokens' signatures.
 // TODO(crbug/1133969): Schema versioning needs to be implemented for future
 // versions that need to clear the database on schema changes.
 //
@@ -21,6 +22,8 @@ import "mojo/public/mojom/base/time.mojom";
 enum TrustTokenProtocolVersion {
   kTrustTokenV3Pmb,
   kTrustTokenV3Voprf,
+  kPrivateStateTokenV1Pmb,
+  kPrivateStateTokenV1Voprf,
 };
 
 
@@ -35,8 +38,11 @@ enum TrustTokenOperationStatus {
   // A client-provided argument was malformed or otherwise invalid.
   kInvalidArgument,
 
-  // A precondition failed (for instance, no verification key was available for
-  // an issuer when executing an operation required such a key to be present).
+  // There are no key commitments registered for the issuer.
+  kMissingIssuerKeys,
+
+  // A precondition failed (for instance, there was an error parsing the
+  // verification keys for an issuer).
   kFailedPrecondition,
 
   // No inputs for the given operation available, or a quota on the operation's
@@ -49,6 +55,9 @@ enum TrustTokenOperationStatus {
   // Internal storage has not yet initialized, or the system is unavailable in
   // some other general, probably transient, manner.
   kUnavailable,
+
+  // The operation was unauthorized due to some sort of policy.
+  kUnauthorized,
 
   // The server response was malformed or otherwise invalid.
   kBadResponse,
@@ -116,9 +125,9 @@ enum TrustTokenSignRequestData {
 // operation.
 struct TrustTokenParams {
   // Required.
-  TrustTokenOperationType type;
+  TrustTokenOperationType operation;
 
-  // Required exactly when "type" is "kRedemption"; specifies whether the
+  // Required exactly when "operation" is "kRedemption"; specifies whether the
   // caller wishes to use a cached Redemption Record (RR) if available or
   // redeem a new token, evicting the RR currently stored.
   TrustTokenRefreshPolicy refresh_policy = kUseCached;
@@ -130,7 +139,7 @@ struct TrustTokenParams {
   // "custom_issuer" specifies what issuer to use for this operation if set.
   url.mojom.Origin? custom_issuer;
 
-  // The remaining members are used only when "type" is "kSigning": these
+  // The remaining members are used only when "operation" is "kSigning": these
   // parameters specify the manner in which the outgoing request should be
   // signed, including optionally specifying additional data to add in
   // browser-provided request headers (for instance, a timestamp or custom
@@ -293,10 +302,10 @@ struct FulfillTrustTokenIssuanceAnswer {
 };
 
 // TrustTokenOperationResult contains all the information required by
-// DevTools. Which fields are set depend on |type| and |status|.
+// DevTools. Which fields are set depend on |operation| and |status|.
 struct TrustTokenOperationResult {
   // Required.
-  TrustTokenOperationType type;
+  TrustTokenOperationType operation;
   TrustTokenOperationStatus status;
 
   // Shared among the different operation types.

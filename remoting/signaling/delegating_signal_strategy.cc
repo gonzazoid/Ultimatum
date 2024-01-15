@@ -4,12 +4,11 @@
 
 #include "remoting/signaling/delegating_signal_strategy.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "remoting/signaling/xmpp_constants.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
@@ -20,7 +19,7 @@ DelegatingSignalStrategy::DelegatingSignalStrategy(
     scoped_refptr<base::SingleThreadTaskRunner> client_task_runner,
     const IqCallback& send_iq_callback)
     : local_address_(local_address),
-      delegate_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      delegate_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       client_task_runner_(client_task_runner),
       send_iq_callback_(send_iq_callback) {
   incoming_iq_callback_ =
@@ -52,22 +51,25 @@ void DelegatingSignalStrategy::OnIncomingMessageFromDelegate(
 
 void DelegatingSignalStrategy::OnIncomingMessage(const std::string& message) {
   DCHECK(client_task_runner_->BelongsToCurrentThread());
-  std::unique_ptr<jingle_xmpp::XmlElement> stanza(jingle_xmpp::XmlElement::ForStr(message));
+  std::unique_ptr<jingle_xmpp::XmlElement> stanza(
+      jingle_xmpp::XmlElement::ForStr(message));
   if (!stanza.get()) {
     LOG(WARNING) << "Malformed XMPP stanza received: " << message;
     return;
   }
 
   for (auto& listener : listeners_) {
-    if (listener.OnSignalStrategyIncomingStanza(stanza.get()))
+    if (listener.OnSignalStrategyIncomingStanza(stanza.get())) {
       break;
+    }
   }
 }
 
 void DelegatingSignalStrategy::Connect() {
   DCHECK(client_task_runner_->BelongsToCurrentThread());
-  for (auto& observer : listeners_)
+  for (auto& observer : listeners_) {
     observer.OnSignalStrategyStateChange(CONNECTED);
+  }
 }
 
 void DelegatingSignalStrategy::Disconnect() {

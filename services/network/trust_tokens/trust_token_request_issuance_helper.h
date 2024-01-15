@@ -8,31 +8,22 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "net/log/net_log_with_source.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
-#include "services/network/trust_tokens/local_trust_token_operation_delegate.h"
 #include "services/network/trust_tokens/proto/public.pb.h"
 #include "services/network/trust_tokens/suitable_trust_token_origin.h"
 #include "services/network/trust_tokens/trust_token_key_commitment_getter.h"
 #include "services/network/trust_tokens/trust_token_request_helper.h"
 #include "url/origin.h"
 
-namespace net {
-class URLRequest;
-}  // namespace net
-
 namespace network {
 class TrustTokenStore;
-
-namespace mojom {
-class URLResponseHead;
-}  // namespace mojom
 
 // Class TrustTokenRequestIssuanceHelper handles a single trust token issuance
 // operation (https://github.com/wicg/trust-token-api): it generates blinded,
@@ -79,7 +70,7 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
     // forbid adding duplicates; however, duplicates might contribute to an
     // overall limit on the number of permitted keys, so the caller may wish to
     // ensure this is called at most once per distinct key.
-    virtual bool AddKey(base::StringPiece key) = 0;
+    virtual bool AddKey(std::string_view key) = 0;
 
     // On success, returns a base64-encoded string representing |num_tokens|
     // many blinded, unsigned trust tokens; on error, returns nullopt. The
@@ -104,17 +95,7 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
     // with the key (from the issuer's key commitment registry) that
     // successfully validated the signed tokens. Otherwise, returns nullptr.
     virtual std::unique_ptr<UnblindedTokens> ConfirmIssuance(
-        base::StringPiece response_header) = 0;
-  };
-
-  class MetricsDelegate {
-   public:
-    virtual ~MetricsDelegate() = default;
-
-    // Indicates that this delegate is about to attempt to execute its
-    // issuance operation through a call to the provided
-    // LocalTrustTokenOperationDelegate.
-    virtual void WillExecutePlatformProvidedOperation() = 0;
+        std::string_view response_header) = 0;
   };
 
   // Creates a new issuance helper.
@@ -149,21 +130,16 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
       absl::optional<std::string> custom_key_commitment,
       absl::optional<url::Origin> custom_issuer,
       std::unique_ptr<Cryptographer> cryptographer,
-      std::unique_ptr<LocalTrustTokenOperationDelegate>
-          local_operation_delegate,
-      base::RepeatingCallback<bool(mojom::TrustTokenKeyCommitmentResult::Os)>
-          is_current_os_callback,
-      MetricsDelegate* metrics_delegate,
       net::NetLogWithSource net_log = net::NetLogWithSource());
   ~TrustTokenRequestIssuanceHelper() override;
 
   // Executes the outbound part of a Trust Tokens issuance operation,
-  // interpreting |request|'s URL's origin as the token issuer origin;
+  // interpreting |url|'s origin as the token issuer origin;
   // 1. Checks preconditions (see "Returns" below); if unsuccessful, fails
   // 2. Executes a Trust Tokens key commitment request against the issuer; if
   //    unsuccessful, fails
-  // 3. In a request header, adds a number of signed, unblinded tokens equal to
-  //    the lesser of:
+  // 3. Returns headers containing a number of signed, unblinded tokens equal
+  //    to the lesser of:
   //    * the issuer's configured batch size
   //    * a fixed limit on maximum number of tokens to send per request (see
   //      trust_token_parameterization.h).
@@ -175,29 +151,32 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
   // * kResourceExhausted if there is no space to store more tokens
   //   corresponding to this issuer, or if the top-level origin provided to this
   //   object's constructor has already reached its number-of-issuers limit
+  // * kMissingIssuerKeys if there are no valid keys for the issuer
   // * kFailedPrecondition if preconditions fail, including receiving a
-  //   malformed or otherwise invalid key commitmetment record from the issuer
+  //   malformed or otherwise invalid key commitment record from the issuer
   //
-  // |request|'s initiator, and its destination URL's origin, must be both (1)
-  // HTTP or HTTPS and (2) "potentially trustworthy" in the sense of
+  // The |top_level_origin_|, and its destination |url|'s origin, must be both
+  // (1) HTTP or HTTPS and (2) "potentially trustworthy" in the sense of
   // network::IsOriginPotentiallyTrustworthy. (See the justification in the
   // constructor's comment.)
   void Begin(
-      net::URLRequest* request,
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done) override;
+      const GURL& url,
+      base::OnceCallback<void(absl::optional<net::HttpRequestHeaders>,
+                              mojom::TrustTokenOperationStatus)> done) override;
 
   // Performs the second half of Trust Token issuance's client side,
   // corresponding to the "To process an issuance response" section in the
   // normative pseudocode:
-  // 1. Checks |response| for an issuance response header.
-  // 2. If the header is present, strips it from the response and passes its
-  // value to an underlying cryptographic library, which parses and validates
-  // the header and splits it into a number of signed, unblinded tokens.
+  // 1. Checks |response_headers| for an issuance response header.
+  // 2. If the header is present, strips it from |response_headers| and passes
+  // its value to an underlying cryptographic library, which parses and
+  // validates the header and splits it into a number of signed, unblinded
+  // tokens.
   //
   // If both of these steps are successful, stores the tokens in |token_store_|
   // and returns kOk. Otherwise, returns kBadResponse.
   void Finalize(
-      mojom::URLResponseHead* response,
+      net::HttpResponseHeaders& response_headers,
       base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done) override;
 
   // These internal structs are in the public namespace so that
@@ -216,8 +195,9 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
   // continuation; |commitment_result| is the result of the key commitment
   // fetch.
   void OnGotKeyCommitment(
-      net::URLRequest* request,
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done,
+      const GURL& url,
+      base::OnceCallback<void(absl::optional<net::HttpRequestHeaders>,
+                              mojom::TrustTokenOperationStatus)> done,
       mojom::TrustTokenKeyCommitmentResultPtr commitment_result);
 
   // Continuation of |Begin| after a call to the cryptography delegate to
@@ -226,8 +206,9 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
   // should store the cryptographer back in |cryptographer_| to reuse during
   // |Finalize|.
   void OnDelegateBeginIssuanceCallComplete(
-      net::URLRequest* request,
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done,
+      const GURL& url,
+      base::OnceCallback<void(absl::optional<net::HttpRequestHeaders>,
+                              mojom::TrustTokenOperationStatus)> done,
       CryptographerAndBlindedTokens cryptographer_and_blinded_tokens);
 
   // Continuation of |Finalize| after extracting the base64-encoded issuance
@@ -246,25 +227,6 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
       base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done,
       CryptographerAndUnblindedTokens cryptographer_and_unblinded_tokens);
 
-  // DoneRequestingLocallyFulfilledIssuance proceeds with a locally fulfilled
-  // issuance operation by handling the operation's response |answer|,
-  // either terminating the operation with an error passed to |done| (if
-  // |answer| contains an error) or continuing to finalize the operation (if
-  // |answer| contains an issuance response).
-  void DoneRequestingLocallyFulfilledIssuance(
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done,
-      mojom::FulfillTrustTokenIssuanceAnswerPtr answer);
-
-  // DoneFinalizingLocallyFulfilledIssuance determines a final response status
-  // to pass to the caller via |done|, then calls the callback.
-  //
-  // If the operation succeeded, calls |done| with
-  // kOperationSuccessfullyFulfilledLocally. Otherwise, calls |done| with
-  // |status|.
-  void DoneFinalizingLocallyFulfilledIssuance(
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done,
-      mojom::TrustTokenOperationStatus status);
-
   // |issuer_| needs to be a nullable type because it is initialized in |Begin|,
   // but, once initialized, it will never be empty over the course of the
   // operation's execution.
@@ -277,28 +239,11 @@ class TrustTokenRequestIssuanceHelper : public TrustTokenRequestHelper {
 
   mojom::TrustTokenProtocolVersion protocol_version_;
 
-  // Set once we read the issuer's key commitment,
-  // |should_divert_issuance_request_to_os_| specifies whether, at the time we
-  // would return from an otherwise successful Begin half of this issuance
-  // operation, we should pass the issuance request to
-  // |local_operation_delegate_| rather than returning to the caller.
-  bool should_divert_issuance_request_to_os_ = false;
-
   // Relinquishes ownership during posted tasks for the potentially
   // computationally intensive cryptographic operations
   // (Cryptographer::BeginIssuance, Cryptographer::ConfirmIssuance); repopulated
   // when regaining ownership upon receiving each operation's results.
   std::unique_ptr<Cryptographer> cryptographer_;
-
-  // |local_operation_delegate_| is responsible for attempting to satisfying
-  // "platform-provided" issuance operations (e.g. by talking to a system
-  // service capable of replying to an issuance request).
-  std::unique_ptr<LocalTrustTokenOperationDelegate> local_operation_delegate_;
-
-  base::RepeatingCallback<bool(mojom::TrustTokenKeyCommitmentResult::Os)>
-      is_current_os_callback_;
-
-  const raw_ptr<MetricsDelegate> metrics_delegate_;
 
   net::NetLogWithSource net_log_;
   absl::optional<size_t> num_obtained_tokens_;

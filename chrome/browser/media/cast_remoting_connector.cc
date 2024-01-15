@@ -7,16 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/router/media_router_feature.h"
-#include "components/media_router/browser/media_router.h"
-#include "components/media_router/browser/media_router_factory.h"
 #include "components/media_router/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/sessions/content/session_tab_helper.h"
@@ -99,6 +97,11 @@ class CastRemotingConnector::RemotingBridge final
     if (connector_)
       connector_->StartRemoting(this);
   }
+  void StartWithPermissionAlreadyGranted() final {
+    if (connector_) {
+      connector_->StartWithPermissionAlreadyGranted(this);
+    }
+  }
   void StartDataStreams(
       mojo::ScopedDataPipeConsumerHandle audio_pipe,
       mojo::ScopedDataPipeConsumerHandle video_pipe,
@@ -150,8 +153,6 @@ CastRemotingConnector* CastRemotingConnector::Get(
     if (!media_router::MediaRouterEnabled(contents->GetBrowserContext()))
       return nullptr;
     connector = new CastRemotingConnector(
-        media_router::MediaRouterFactory::GetApiForBrowserContext(
-            contents->GetBrowserContext()),
         user_prefs::UserPrefs::Get(contents->GetBrowserContext()),
         sessions::SessionTabHelper::IdForTab(contents),
 #if defined(TOOLKIT_VIEWS)
@@ -182,12 +183,10 @@ void CastRemotingConnector::CreateMediaRemoter(
 }
 
 CastRemotingConnector::CastRemotingConnector(
-    media_router::MediaRouter* router,
     PrefService* pref_service,
     SessionID tab_id,
     std::unique_ptr<MediaRemotingDialogCoordinator> dialog_coordinator)
-    : media_router_(router),
-      pref_service_(pref_service),
+    : pref_service_(pref_service),
       tab_id_(tab_id),
       dialog_coordinator_(std::move(dialog_coordinator)) {
   StartObservingPref();
@@ -267,6 +266,29 @@ void CastRemotingConnector::DeregisterBridge(RemotingBridge* bridge,
 }
 
 void CastRemotingConnector::StartRemoting(RemotingBridge* bridge) {
+  if (!StartRemotingCommon(bridge)) {
+    return;
+  }
+
+  if (remoting_allowed_.has_value()) {
+    StartRemotingIfPermitted();
+    return;
+  }
+  dialog_coordinator_->Show(base::BindOnce(
+      &CastRemotingConnector::OnDialogClosed, weak_factory_.GetWeakPtr()));
+}
+
+void CastRemotingConnector::StartWithPermissionAlreadyGranted(
+    RemotingBridge* bridge) {
+  if (!StartRemotingCommon(bridge)) {
+    return;
+  }
+
+  DCHECK(remoter_);
+  remoter_->Start();
+}
+
+bool CastRemotingConnector::StartRemotingCommon(RemotingBridge* bridge) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(bridges_.find(bridge) != bridges_.end());
 
@@ -275,12 +297,12 @@ void CastRemotingConnector::StartRemoting(RemotingBridge* bridge) {
   if (!remoter_) {
     DVLOG(2) << "Remoting start failed: Invalid ANSWER message.";
     bridge->OnStartFailed(RemotingStartFailReason::INVALID_ANSWER_MESSAGE);
-    return;
+    return false;
   }
   if (active_bridge_) {
     DVLOG(2) << "Remoting start failed: Cannot start multiple.";
     bridge->OnStartFailed(RemotingStartFailReason::CANNOT_START_MULTIPLE);
-    return;
+    return false;
   }
 
   // Notify all other sources that the sink is no longer available for remoting.
@@ -294,13 +316,7 @@ void CastRemotingConnector::StartRemoting(RemotingBridge* bridge) {
   }
 
   active_bridge_ = bridge;
-
-  if (remoting_allowed_.has_value()) {
-    StartRemotingIfPermitted();
-    return;
-  }
-  dialog_coordinator_->Show(base::BindOnce(
-      &CastRemotingConnector::OnDialogClosed, weak_factory_.GetWeakPtr()));
+  return true;
 }
 
 void CastRemotingConnector::OnDialogClosed(bool remoting_allowed) {
@@ -457,9 +473,8 @@ void CastRemotingConnector::OnSinkAvailable(
       media::mojom::RemotingSinkFeature::RENDERING);
 #endif
 
-  if (remoting_allowed_.value_or(true)) {
-    for (RemotingBridge* notifyee : bridges_)
-      notifyee->OnSinkAvailable(sink_metadata_);
+  for (RemotingBridge* notifyee : bridges_) {
+    notifyee->OnSinkAvailable(sink_metadata_);
   }
 }
 

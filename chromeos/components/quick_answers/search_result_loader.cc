@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/strings/escape.h"
 #include "chromeos/components/quick_answers/quick_answers_model.h"
@@ -57,22 +58,22 @@ constexpr base::StringPiece kRequestContextKey = "requestContext";
 
 std::string BuildSearchRequestPayload(const std::string& selected_text,
                                       const std::string& device_language) {
-  Value payload(Value::Type::DICTIONARY);
+  Value::Dict payload;
 
-  Value query(Value::Type::DICTIONARY);
-  query.SetStringKey(kRawQueryKey, selected_text);
-  payload.SetKey(kQueryKey, std::move(query));
+  Value::Dict query;
+  query.Set(kRawQueryKey, selected_text);
+  payload.Set(kQueryKey, std::move(query));
 
   // TODO(llin): Change the client type.
-  Value client_id(Value::Type::DICTIONARY);
-  client_id.SetKey(kClientTypeKey, Value(kClientType));
-  payload.SetKey(kClientIdKey, std::move(client_id));
+  Value::Dict client_id;
+  client_id.Set(kClientTypeKey, kClientType);
+  payload.Set(kClientIdKey, std::move(client_id));
 
-  Value request_context(Value::Type::DICTIONARY);
-  Value language_context(Value::Type::DICTIONARY);
-  language_context.SetKey(kLanguageCodeKey, Value(device_language));
-  request_context.SetKey(kLanguageContextKey, std::move(language_context));
-  payload.SetKey(kRequestContextKey, std::move(request_context));
+  Value::Dict request_context;
+  Value::Dict language_context;
+  language_context.Set(kLanguageCodeKey, device_language);
+  request_context.Set(kLanguageContextKey, std::move(language_context));
+  payload.Set(kRequestContextKey, std::move(request_context));
 
   std::string request_payload_str;
   base::JSONWriter::Write(payload, &request_payload_str);
@@ -92,11 +93,11 @@ SearchResultLoader::~SearchResultLoader() = default;
 void SearchResultLoader::BuildRequest(
     const PreprocessedOutput& preprocessed_output,
     BuildRequestCallback callback) const {
-  GURL url = GURL(ash::assistant::kKnowledgeApiEndpoint);
+  GURL url = GURL(chromeos::assistant::kKnowledgeApiEndpoint);
 
   // Add encoded request payload.
   url = net::AppendOrReplaceQueryParameter(
-      url, ash::assistant::kPayloadParamName,
+      url, chromeos::assistant::kPayloadParamName,
       BuildSearchRequestPayload(
           preprocessed_output.query,
           preprocessed_output.intent_info.device_language));

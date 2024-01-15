@@ -6,18 +6,19 @@
 #define CHROME_BROWSER_ASH_CROSAPI_MOVE_MIGRATOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/elapsed_timer.h"
 #include "chrome/browser/ash/crosapi/browser_data_migrator.h"
 #include "chrome/browser/ash/crosapi/browser_data_migrator_util.h"
 #include "chrome/browser/ash/crosapi/migration_progress_tracker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefService;
 class PrefRegistrySimple;
@@ -46,22 +47,33 @@ constexpr char kMoveMigratorResumeCount[] =
     "Ash.BrowserDataMigrator.MoveMigrator.ResumeCount";
 constexpr char kMoveMigratorResumeStepUMA[] =
     "Ash.BrowserDataMigrator.MoveMigrator.ResumeStep";
+constexpr char kMoveMigratorMaxResumeReached[] =
+    "Ash.BrowserDataMigrator.MoveMigrator.MaxResumeReached";
 constexpr char kMoveMigratorTaskStatusUMA[] =
     "Ash.BrowserDataMigrator.MoveMigrator.TaskStatus";
 constexpr char kMoveMigratorExtraSpaceRequiredMB[] =
     "Ash.BrowserDataMigrator.MoveMigrator.ExtraSpaceRequiredMB";
 constexpr char kMoveMigratorPreMigrationCleanUpTimeUMA[] =
-    "Ash.BrowserDataMigrator.MoveMigrator.PreMigrationCleanUpTimeMS";
+    "Ash.BrowserDataMigrator.MoveMigrator.PreMigrationCleanUpTime";
 constexpr char kMoveMigratorSetupLacrosDirCopyTargetItemsTimeUMA[] =
-    "Ash.BrowserDataMigrator.MoveMigrator.SetupLacrosDirCopyTargetItemsTimeMS";
+    "Ash.BrowserDataMigrator.MoveMigrator.SetupLacrosDirCopyTargetItemsTime";
 constexpr char kMoveMigratorCancelledMigrationTimeUMA[] =
-    "Ash.BrowserDataMigrator.MoveMigrator.CancelledMigrationTimeMS";
+    "Ash.BrowserDataMigrator.MoveMigrator.CancelledMigrationTime";
 constexpr char kMoveMigratorSuccessfulMigrationTimeUMA[] =
-    "Ash.BrowserDataMigrator.MoveMigrator.SuccessfulMigrationTimeMS";
+    "Ash.BrowserDataMigrator.MoveMigrator.SuccessfulMigrationTime";
 constexpr char kMoveMigratorMoveLacrosItemsTimeUMA[] =
-    "Ash.BrowserDataMigrator.MoveMigrator.MoveLacrosItemsTimeMS";
+    "Ash.BrowserDataMigrator.MoveMigrator.MoveLacrosItemsTime";
 constexpr char kMoveMigratorPosixErrnoUMA[] =
     "Ash.BrowserDataMigrator.MoveMigrator.PosixErrno.";
+constexpr char kMoveMigratorTmpProfileDirSize[] =
+    "Ash.BrowserDataMigrator.MoveMigrator.TmpProfileDirSize";
+constexpr char kMoveMigratorTmpSplitDirSize[] =
+    "Ash.BrowserDataMigrator.MoveMigrator.TmpSplitDirSize";
+constexpr char kMoveMigratorExtraDiskSpaceOccupied[] =
+    "Ash.BrowserDataMigrator.MoveMigrator.ExtraDiskSpaceOccupied";
+constexpr char kMoveMigratorExtraDiskSpaceOccupiedDiffWithEst[] =
+    "Ash.BrowserDataMigrator.MoveMigrator.ExtraDiskSpaceOccupied."
+    "DiffWithEstimate";
 
 // This class "moves" Lacros data from Ash to Lacros. It migrates user data from
 // `original_profile_dir` (/home/user/<hash>/), denoted as <Ash PDD> from here
@@ -183,12 +195,17 @@ class MoveMigrator : public BrowserDataMigratorImpl::MigratorDelegate {
     TaskStatus status;
 
     // Value of `errno` set after a task has failed.
-    absl::optional<int> posix_errno;
+    std::optional<int> posix_errno;
 
     // Extra bytes required to be freed if the migrator requires more space to
     // be carried out. Only set if `status` is
     // `kPreMigrationCleanUpNotEnoughSpace`.
-    absl::optional<uint64_t> extra_bytes_required_to_be_freed;
+    std::optional<uint64_t> extra_bytes_required_to_be_freed;
+
+    // Extra bytes that are estimated to be created due to the migration. It
+    // will later be used to calculate the diff between this estimate and the
+    // actual value.
+    std::optional<int64_t> estimated_extra_bytes_created;
   };
 
   // Called to determine where to start the migration. Returns
@@ -242,7 +259,8 @@ class MoveMigrator : public BrowserDataMigratorImpl::MigratorDelegate {
   // Set up a temporary directory to hold items that need to be split between
   // ash and lacros. This folder will hold ash's version of the items.
   static TaskResult SetupAshSplitDir(
-      const base::FilePath& original_profile_dir);
+      const base::FilePath& original_profile_dir,
+      const int64_t estimated_extra_bytes_created);
 
   // Called as a reply to `SetupAshSplitDir()`. Posts `MoveLacrosItemsToNewDir`
   // as the next step.
@@ -323,7 +341,7 @@ class MoveMigrator : public BrowserDataMigratorImpl::MigratorDelegate {
   scoped_refptr<browser_data_migrator_util::CancelFlag> cancel_flag_;
 
   // Local state prefs, not owned.
-  PrefService* const local_state_;
+  const raw_ptr<PrefService> local_state_;
 
   // `finished_callback_` should be called once migration is completed/failed.
   // Call this on UI thread.
@@ -332,6 +350,9 @@ class MoveMigrator : public BrowserDataMigratorImpl::MigratorDelegate {
   // Timer to count time since the initialization of the class. Used to get UMA
   // data on how long the migration takes.
   const base::ElapsedTimer timer_;
+
+  // Extra bytes that are estimated to be created due to the migration.
+  std::optional<int64_t> estimated_extra_bytes_created_;
 
   base::WeakPtrFactory<MoveMigrator> weak_factory_{this};
 };

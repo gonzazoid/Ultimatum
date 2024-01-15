@@ -9,7 +9,8 @@
 
 #include "ash/components/arc/mojom/volume_mounter.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
@@ -22,6 +23,9 @@ class BrowserContext;
 }  // namespace content
 
 namespace arc {
+
+constexpr char kArcppMediaSharingServicesJobName[] =
+    "arcpp_2dmedia_2dsharing_2dservices";
 
 class ArcBridgeService;
 
@@ -58,8 +62,6 @@ class ArcVolumeMounterBridge
   // or nullptr if the browser |context| is not allowed to use ARC.
   static ArcVolumeMounterBridge* GetForBrowserContext(
       content::BrowserContext* context);
-  static ArcVolumeMounterBridge* GetForBrowserContextForTesting(
-      content::BrowserContext* context);
 
   // Returns Factory instance for ArcVolumeMounterBridge.
   static KeyedServiceBaseFactory* GetFactory();
@@ -83,7 +85,6 @@ class ArcVolumeMounterBridge
 
   // mojom::VolumeMounterHost overrides:
   void RequestAllMountPoints() override;
-  void ReportMountFailureCount(uint16_t count) override;
   void SetUpExternalStorageMountPoints(
       uint32_t media_provider_uid,
       SetUpExternalStorageMountPointsCallback callback) override;
@@ -93,6 +94,8 @@ class ArcVolumeMounterBridge
 
   // Send all existing mount events. Usually is called around service startup.
   void SendAllMountEvents();
+
+  static void EnsureFactoryBuilt();
 
  private:
   void SendMountEventForMyFiles();
@@ -111,19 +114,21 @@ class ArcVolumeMounterBridge
   bool IsReadyToSendMountingEvents();
 
   void OnSetUpExternalStorageMountPoints(
+      const std::string& job_name,
       SetUpExternalStorageMountPointsCallback callback,
       bool result,
-      absl::optional<std::string> error_name,
-      absl::optional<std::string> error_message);
+      std::optional<std::string> error_name,
+      std::optional<std::string> error_message);
 
-  Delegate* delegate_ = nullptr;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_ = nullptr;
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService> pref_service_;
   PrefChangeRegistrar change_registerar_;
 
-  bool arcvm_external_storage_mount_points_are_ready_ = false;
+  bool external_storage_mount_points_are_ready_ = false;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

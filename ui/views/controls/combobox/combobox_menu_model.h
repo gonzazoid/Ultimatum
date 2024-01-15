@@ -20,14 +20,34 @@ class VIEWS_EXPORT ComboboxMenuModel : public ui::MenuModel {
   ComboboxMenuModel& operator&(const ComboboxMenuModel&) = delete;
   ~ComboboxMenuModel() override;
 
+  absl::optional<ui::ColorId> GetForegroundColorId(size_t index) override;
+  absl::optional<ui::ColorId> GetSubmenuBackgroundColorId(
+      size_t index) override;
+  absl::optional<ui::ColorId> GetSelectedBackgroundColorId(
+      size_t index) override;
+
+  void SetForegroundColorId(absl::optional<ui::ColorId> foreground_color) {
+    foreground_color_id_ = foreground_color;
+  }
+
+  void SetSubmenuBackgroundColorId(
+      absl::optional<ui::ColorId> background_color) {
+    submenu_background_color_id_ = background_color;
+  }
+
+  void SetSelectedBackgroundColorId(
+      absl::optional<ui::ColorId> selected_color) {
+    selected_background_color_id_ = selected_color;
+  }
+
  protected:
   ui::ComboboxModel* GetModel() const { return model_; }
+  const gfx::FontList* GetLabelFontListAt(size_t index) const override;
 
  private:
   bool UseCheckmarks() const;
 
-  // Overridden from MenuModel:
-  bool HasIcons() const override;
+  // ui::MenuModel:
   size_t GetItemCount() const override;
   ui::MenuModel::ItemType GetTypeAt(size_t index) const override;
   ui::MenuSeparatorType GetSeparatorTypeAt(size_t index) const override;
@@ -35,7 +55,6 @@ class VIEWS_EXPORT ComboboxMenuModel : public ui::MenuModel {
   std::u16string GetLabelAt(size_t index) const override;
   std::u16string GetSecondaryLabelAt(size_t index) const override;
   bool IsItemDynamicAt(size_t index) const override;
-  const gfx::FontList* GetLabelFontListAt(size_t index) const override;
   bool GetAcceleratorAt(size_t index,
                         ui::Accelerator* accelerator) const override;
   bool IsItemCheckedAt(size_t index) const override;
@@ -46,6 +65,10 @@ class VIEWS_EXPORT ComboboxMenuModel : public ui::MenuModel {
   void ActivatedAt(size_t index) override;
   void ActivatedAt(size_t index, int event_flags) override;
   ui::MenuModel* GetSubmenuModelAt(size_t index) const override;
+
+  absl::optional<ui::ColorId> foreground_color_id_;
+  absl::optional<ui::ColorId> submenu_background_color_id_;
+  absl::optional<ui::ColorId> selected_background_color_id_;
 
   raw_ptr<views::Combobox> owner_;    // Weak. Owns this.
   raw_ptr<ui::ComboboxModel> model_;  // Weak.

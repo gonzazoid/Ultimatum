@@ -8,13 +8,12 @@
 
 #include "base/i18n/rtl.h"
 #include "base/numerics/safe_conversions.h"
-#include "cc/layers/layer.h"
-#include "cc/layers/layer_collections.h"
-#include "cc/layers/nine_patch_layer.h"
-#include "cc/layers/solid_color_layer.h"
 #include "cc/resources/scoped_ui_resource.h"
+#include "cc/slim/filter.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/nine_patch_layer.h"
+#include "cc/slim/solid_color_layer.h"
 #include "chrome/browser/android/compositor/layer/content_layer.h"
-#include "chrome/browser/android/compositor/layer/tabgroup_content_layer.h"
 #include "chrome/browser/android/compositor/layer/toolbar_layer.h"
 #include "chrome/browser/android/compositor/tab_content_manager.h"
 #include "ui/android/resources/nine_patch_resource.h"
@@ -64,12 +63,13 @@ void TabLayer::ComputePaddingPositions(const gfx::Size& content_size,
   }
 }
 
-static void PositionPadding(scoped_refptr<cc::SolidColorLayer> padding_layer,
-                            gfx::Rect padding_rect,
-                            float content_scale,
-                            float alpha,
-                            gfx::PointF content_position,
-                            gfx::RectF descaled_local_content_area) {
+static void PositionPadding(
+    scoped_refptr<cc::slim::SolidColorLayer> padding_layer,
+    gfx::Rect padding_rect,
+    float content_scale,
+    float alpha,
+    gfx::PointF content_position,
+    gfx::RectF descaled_local_content_area) {
   if (padding_rect.IsEmpty()) {
     padding_layer->SetHideLayerAndSubtree(true);
     return;
@@ -90,7 +90,6 @@ static void PositionPadding(scoped_refptr<cc::SolidColorLayer> padding_layer,
 }
 
 void TabLayer::SetProperties(int id,
-                             const std::vector<int>& ids,
                              bool can_use_live_layer,
                              int toolbar_resource_id,
                              int shadow_resource_id,
@@ -102,8 +101,6 @@ void TabLayer::SetProperties(int id,
                              float y,
                              float width,
                              float height,
-                             float shadow_x,
-                             float shadow_y,
                              float shadow_width,
                              float shadow_height,
                              float alpha,
@@ -113,7 +110,6 @@ void TabLayer::SetProperties(int id,
                              float shadow_alpha,
                              float border_scale,
                              float saturation,
-                             float brightness,
                              float static_to_view_blend,
                              float content_width,
                              float content_height,
@@ -124,11 +120,7 @@ void TabLayer::SetProperties(int id,
                              bool anonymize_toolbar,
                              int toolbar_textbox_resource_id,
                              int toolbar_textbox_background_color,
-                             float toolbar_alpha,
-                             float toolbar_y_offset,
-                             float content_offset,
-                             float side_border_scale,
-                             bool inset_border) {
+                             float content_offset) {
   if (alpha <= 0) {
     layer_->SetHideLayerAndSubtree(true);
     return;
@@ -155,8 +147,6 @@ void TabLayer::SetProperties(int id,
   //----------------------------------------------------------------------------
   width /= border_scale;
   height /= border_scale;
-  shadow_x /= border_scale;
-  shadow_y /= border_scale;
   shadow_width /= border_scale;
   shadow_height /= border_scale;
 
@@ -171,8 +161,7 @@ void TabLayer::SetProperties(int id,
 
   const float content_scale = width / content_width;
   gfx::RectF content_area(0.f, 0.f, content_width, content_height);
-  gfx::RectF scaled_local_content_area(shadow_x, shadow_y, shadow_width,
-                                       shadow_height);
+  gfx::RectF scaled_local_content_area(0.f, 0.f, shadow_width, shadow_height);
   gfx::RectF descaled_local_content_area(
       scaled_local_content_area.x() / content_scale,
       scaled_local_content_area.y() / content_scale,
@@ -202,7 +191,7 @@ void TabLayer::SetProperties(int id,
   toolbar_layer_->PushResource(
       toolbar_resource_id, toolbar_background_color, anonymize_toolbar,
       toolbar_textbox_background_color, toolbar_textbox_resource_id, 0,
-      toolbar_y_offset, false, false);
+      content_offset, false, false);
   toolbar_layer_->UpdateProgressBar(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
   float toolbar_impact_height = 0;
@@ -215,7 +204,7 @@ void TabLayer::SetProperties(int id,
   border_alpha *= alpha;
   contour_alpha *= alpha;
   shadow_alpha *= alpha;
-  toolbar_alpha *= alpha;
+  float toolbar_alpha = alpha;
 
   bool border_visible = border_alpha > 0.f;
   bool border_inner_shadow_visible = border_inner_shadow_alpha > 0.f;
@@ -225,16 +214,15 @@ void TabLayer::SetProperties(int id,
   //----------------------------------------------------------------------------
   // Compute Layer Sizes
   //----------------------------------------------------------------------------
-  gfx::Size shadow_size(width + shadow_padding_size.width() * side_border_scale,
+  gfx::Size shadow_size(width + shadow_padding_size.width(),
                         height + shadow_padding_size.height());
-  gfx::Size border_size(width + border_padding_size.width() * side_border_scale,
+  gfx::Size border_size(width + border_padding_size.width(),
                         height + border_padding_size.height());
   gfx::Size border_inner_shadow_size(
       width + border_inner_shadow_padding_size.width(),
       height + border_inner_shadow_padding_size.height());
-  gfx::Size contour_size(
-      width + contour_padding_size.width() * side_border_scale,
-      height + contour_padding_size.height());
+  gfx::Size contour_size(width + contour_padding_size.width(),
+                         height + contour_padding_size.height());
 
   // Store this size at a point as it might go negative during the inset
   // calculations.
@@ -249,52 +237,14 @@ void TabLayer::SetProperties(int id,
   //----------------------------------------------------------------------------
   // Compute Layer Positions
   //----------------------------------------------------------------------------
-  gfx::PointF shadow_position(-shadow_padding.x() * side_border_scale,
-                              -shadow_padding.y());
-  gfx::PointF border_position(-border_padding.x() * side_border_scale,
-                              -border_padding.y());
+  gfx::PointF shadow_position(-shadow_padding.x(), -shadow_padding.y());
+  gfx::PointF border_position(-border_padding.x(), -border_padding.y());
   gfx::PointF border_inner_shadow_position(-border_inner_shadow_padding.x(),
                                            -border_inner_shadow_padding.y());
-  gfx::PointF contour_position(-contour_padding.x() * side_border_scale,
-                               -contour_padding.y());
+  gfx::PointF contour_position(-contour_padding.x(), -contour_padding.y());
   gfx::PointF toolbar_position(
       0.f, toolbar_layer_->layer()->bounds().height() - toolbar_size.height());
   gfx::PointF content_position(0.f, toolbar_impact_height);
-
-  //----------------------------------------------------------------------------
-  // Handle Insetting the Top Border Component
-  //----------------------------------------------------------------------------
-  if (inset_border) {
-    float inset_diff = inset_border ? border_padding.y() : 0.f;
-    descaled_local_content_area.set_height(
-        descaled_local_content_area.height() - inset_diff);
-    scaled_local_content_area.set_height(scaled_local_content_area.height() -
-                                         inset_diff * content_scale);
-    shadow_size.set_height(shadow_size.height() - inset_diff);
-    border_size.set_height(border_size.height() - inset_diff);
-    border_inner_shadow_size.set_height(border_inner_shadow_size.height() -
-                                        inset_diff);
-    contour_size.set_height(contour_size.height() - inset_diff);
-    shadow_position.set_y(shadow_position.y() + inset_diff);
-    border_position.set_y(border_position.y() + inset_diff);
-    border_inner_shadow_position.set_y(border_inner_shadow_position.y() +
-                                       inset_diff);
-    contour_position.set_y(contour_position.y() + inset_diff);
-
-    // Scaled eventually, so have to descale the size difference first.
-    toolbar_position.set_y(toolbar_position.y() + inset_diff / content_scale);
-    content_position.set_y(content_position.y() + inset_diff / content_scale);
-    desired_content_size_pt.set_y(desired_content_size_pt.y() -
-                                  inset_diff / content_scale);
-  }
-
-  const bool inset_toolbar = !inset_border;
-  if (!inset_toolbar) {
-    float inset_diff = toolbar_impact_height;
-    toolbar_position.set_y(toolbar_position.y() - inset_diff);
-    content_position.set_y(content_position.y() - inset_diff);
-    desired_content_size_pt.set_y(desired_content_size_pt.y() + inset_diff);
-  }
 
   // Finally build the sizes that might have calculations that go negative.
   gfx::Size desired_content_size(desired_content_size_pt.x(),
@@ -336,8 +286,7 @@ void TabLayer::SetProperties(int id,
   front_border_->SetUIResourceId(border_resource->ui_resource()->id());
   front_border_->SetAperture(border_resource->aperture());
   front_border_->SetBorder(border_resource->Border(
-      border_size,
-      gfx::InsetsF::TLBR(1.f, side_border_scale, 1.f, side_border_scale)));
+      border_size, gfx::InsetsF::TLBR(1.f, 1.f, 1.f, 1.f)));
 
   front_border_inner_shadow_->SetUIResourceId(
       border_inner_shadow_resource->ui_resource()->id());
@@ -357,9 +306,9 @@ void TabLayer::SetProperties(int id,
       base::ClampRound(descaled_local_content_area.y()),
       desired_content_size.width(), desired_content_size.height());
 
-  SetContentProperties(id, ids, can_use_live_layer, static_to_view_blend, true,
-                       alpha, saturation, true, rounded_descaled_content_area,
-                       border_inner_shadow_resource, border_inner_shadow_alpha);
+  content_->SetProperties(id, can_use_live_layer, static_to_view_blend, true,
+                          alpha, saturation, true,
+                          rounded_descaled_content_area);
 
   //----------------------------------------------------------------------------
   // Push Size, Position, Alpha and Transformations to Layers
@@ -456,19 +405,9 @@ void TabLayer::SetProperties(int id,
     transform.Scale(border_scale, border_scale);
     layer_->SetTransform(transform);
   }
-
-  // Only applies the brightness filter if the value has changed and is less
-  // than 1.
-  if (brightness != brightness_) {
-    brightness_ = brightness;
-    cc::FilterOperations filters;
-    if (brightness_ < 1.f)
-      filters.Append(cc::FilterOperation::CreateBrightnessFilter(brightness_));
-    layer_->SetFilters(filters);
-  }
 }
 
-scoped_refptr<cc::Layer> TabLayer::layer() {
+scoped_refptr<cc::slim::Layer> TabLayer::layer() {
   return layer_;
 }
 
@@ -478,16 +417,15 @@ TabLayer::TabLayer(bool incognito,
     : incognito_(incognito),
       resource_manager_(resource_manager),
       tab_content_manager_(tab_content_manager),
-      layer_(cc::Layer::Create()),
+      layer_(cc::slim::Layer::Create()),
       toolbar_layer_(ToolbarLayer::Create(resource_manager)),
       content_(ContentLayer::Create(tab_content_manager)),
-      side_padding_(cc::SolidColorLayer::Create()),
-      bottom_padding_(cc::SolidColorLayer::Create()),
-      front_border_(cc::NinePatchLayer::Create()),
-      front_border_inner_shadow_(cc::NinePatchLayer::Create()),
-      contour_shadow_(cc::NinePatchLayer::Create()),
-      shadow_(cc::NinePatchLayer::Create()),
-      brightness_(1.f) {
+      side_padding_(cc::slim::SolidColorLayer::Create()),
+      bottom_padding_(cc::slim::SolidColorLayer::Create()),
+      front_border_(cc::slim::NinePatchLayer::Create()),
+      front_border_inner_shadow_(cc::slim::NinePatchLayer::Create()),
+      contour_shadow_(cc::slim::NinePatchLayer::Create()),
+      shadow_(cc::slim::NinePatchLayer::Create()) {
   layer_->AddChild(shadow_);
   layer_->AddChild(contour_shadow_);
   layer_->AddChild(side_padding_);
@@ -508,39 +446,6 @@ TabLayer::TabLayer(bool incognito,
 }
 
 TabLayer::~TabLayer() {
-}
-
-void TabLayer::SetContentProperties(
-    int id,
-    const std::vector<int>& tab_ids,
-    bool can_use_live_layer,
-    float static_to_view_blend,
-    bool should_override_content_alpha,
-    float content_alpha_override,
-    float saturation,
-    bool should_clip,
-    const gfx::Rect& clip,
-    ui::NinePatchResource* inner_shadow_resource,
-    float inner_shadow_alpha) {
-  if (tab_ids.size() == 0) {
-    content_->SetProperties(id, can_use_live_layer, static_to_view_blend,
-                            should_override_content_alpha,
-                            content_alpha_override, saturation, should_clip,
-                            clip);
-  } else {
-    scoped_refptr<TabGroupContentLayer> tabgroup_content_layer =
-        TabGroupContentLayer::Create(tab_content_manager_);
-    layer_->ReplaceChild(content_->layer().get(),
-                         tabgroup_content_layer->layer());
-    content_ = tabgroup_content_layer;
-
-    tabgroup_content_layer->SetProperties(
-        id, tab_ids, can_use_live_layer, static_to_view_blend,
-        should_override_content_alpha, content_alpha_override, saturation,
-        should_clip, clip, inner_shadow_resource, inner_shadow_alpha);
-
-    front_border_inner_shadow_->SetIsDrawable(false);
-  }
 }
 
 }  //  namespace android

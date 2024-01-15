@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/webui/ash/manage_mirrorsync/manage_mirrorsync_ui.h"
 
+#include "ash/constants/ash_features.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
@@ -14,17 +15,19 @@
 
 namespace ash {
 
+bool ManageMirrorSyncUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  return ash::features::IsDriveFsMirroringEnabled();
+}
+
 ManageMirrorSyncUI::ManageMirrorSyncUI(content::WebUI* web_ui)
     : ui::MojoWebDialogUI{web_ui} {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIManageMirrorSyncHost);
-  auto* profile = Profile::FromWebUI(web_ui);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUIManageMirrorSyncHost);
   webui::SetupWebUIDataSource(source,
                               base::make_span(kManageMirrorsyncResources,
                                               kManageMirrorsyncResourcesSize),
                               IDR_MANAGE_MIRRORSYNC_INDEX_HTML);
-
-  content::WebUIDataSource::Add(profile, source);
 }
 
 ManageMirrorSyncUI::~ManageMirrorSyncUI() = default;

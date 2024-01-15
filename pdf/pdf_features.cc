@@ -17,20 +17,24 @@ BASE_FEATURE(kPdfIncrementalLoading,
              "PdfIncrementalLoading",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+BASE_FEATURE(kPdfOopif, "PdfOopif", base::FEATURE_DISABLED_BY_DEFAULT);
+
 // "Partial loading" refers to loading only specific parts of the PDF.
 // TODO(crbug.com/1064175): Remove this once partial loading is fixed.
 BASE_FEATURE(kPdfPartialLoading,
              "PdfPartialLoading",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+BASE_FEATURE(kPdfPortfolio, "PdfPortfolio", base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPdfUseSkiaRenderer,
+             "PdfUseSkiaRenderer",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 // Feature has no effect if Chrome is built with no XFA support.
 BASE_FEATURE(kPdfXfaSupport,
              "PdfXfaSupport",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kTabAcrossPDFAnnotations,
-             "TabAcrossPDFAnnotations",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace features
 }  // namespace chrome_pdf

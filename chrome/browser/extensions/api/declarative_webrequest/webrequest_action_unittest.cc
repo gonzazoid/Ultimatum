@@ -34,8 +34,6 @@
 namespace helpers = extension_web_request_api_helpers;
 namespace keys = extensions::declarative_webrequest_constants;
 
-using base::DictionaryValue;
-using base::ListValue;
 using extension_test_util::LoadManifestUnchecked;
 using helpers::EventResponseDeltas;
 using testing::HasSubstr;
@@ -49,10 +47,10 @@ const char kUnknownActionType[] = "unknownType";
 std::unique_ptr<WebRequestActionSet> CreateSetOfActions(const char* json) {
   base::Value::List parsed_value = base::test::ParseJsonList(json);
 
-  WebRequestActionSet::Values actions;
-  for (const base::Value& entry : parsed_value) {
+  base::Value::List actions;
+  for (base::Value& entry : parsed_value) {
     CHECK(entry.is_dict());
-    actions.push_back(entry.Clone());
+    actions.Append(std::move(entry));
   }
 
   std::string error;
@@ -128,7 +126,7 @@ bool WebRequestActionWithThreadsTest::ActionWorksOnRequest(
   WebRequestData request_data(&request_info, stage, headers.get());
   std::set<std::string> ignored_tags;
   WebRequestAction::ApplyInfo apply_info = {
-      PermissionHelper::Get(browser_context()), request_data,
+      PermissionHelper::Get(browser_context()), raw_ref(request_data),
       false /*crosses_incognito*/, &deltas, &ignored_tags};
   action_set->Apply(extension_id, base::Time(), &apply_info);
   return (1u == deltas.size() || !ignored_tags.empty());
@@ -150,10 +148,17 @@ void WebRequestActionWithThreadsTest::CheckActionNeedsAllUrls(
 
   const std::string& webstore_url =
       ExtensionsClient::Get()->GetWebstoreBaseURL().spec();
+  const std::string& new_webstore_url =
+      ExtensionsClient::Get()->GetNewWebstoreBaseURL().spec();
   // The protected URLs should not be touched at all.
   EXPECT_FALSE(ActionWorksOnRequest(webstore_url.c_str(), extension_->id(),
                                     action_set.get(), stage));
   EXPECT_FALSE(ActionWorksOnRequest(webstore_url.c_str(),
+                                    extension_all_urls_->id(), action_set.get(),
+                                    stage));
+  EXPECT_FALSE(ActionWorksOnRequest(new_webstore_url.c_str(), extension_->id(),
+                                    action_set.get(), stage));
+  EXPECT_FALSE(ActionWorksOnRequest(new_webstore_url.c_str(),
                                     extension_all_urls_->id(), action_set.get(),
                                     stage));
 }
@@ -163,16 +168,8 @@ TEST(WebRequestActionTest, CreateAction) {
   bool bad_message = false;
   scoped_refptr<const WebRequestAction> result;
 
-  // Test wrong data type passed.
-  error.clear();
-  base::ListValue empty_list;
-  result = WebRequestAction::Create(nullptr, nullptr, empty_list, &error,
-                                    &bad_message);
-  EXPECT_TRUE(bad_message);
-  EXPECT_FALSE(result.get());
-
   // Test missing instanceType element.
-  base::DictionaryValue input;
+  base::Value::Dict input;
   error.clear();
   result =
       WebRequestAction::Create(nullptr, nullptr, input, &error, &bad_message);
@@ -180,7 +177,7 @@ TEST(WebRequestActionTest, CreateAction) {
   EXPECT_FALSE(result.get());
 
   // Test wrong instanceType element.
-  input.SetStringKey(keys::kInstanceTypeKey, kUnknownActionType);
+  input.Set(keys::kInstanceTypeKey, kUnknownActionType);
   error.clear();
   result =
       WebRequestAction::Create(nullptr, nullptr, input, &error, &bad_message);
@@ -188,7 +185,7 @@ TEST(WebRequestActionTest, CreateAction) {
   EXPECT_FALSE(result.get());
 
   // Test success
-  input.SetStringKey(keys::kInstanceTypeKey, keys::kCancelRequestType);
+  input.Set(keys::kInstanceTypeKey, keys::kCancelRequestType);
   error.clear();
   result =
       WebRequestAction::Create(nullptr, nullptr, input, &error, &bad_message);
@@ -203,7 +200,7 @@ TEST(WebRequestActionTest, CreateActionSet) {
   bool bad_message = false;
   std::unique_ptr<WebRequestActionSet> result;
 
-  WebRequestActionSet::Values input;
+  base::Value::List input;
 
   // Test empty input.
   error.clear();
@@ -215,14 +212,15 @@ TEST(WebRequestActionTest, CreateActionSet) {
   EXPECT_TRUE(result->actions().empty());
   EXPECT_EQ(std::numeric_limits<int>::min(), result->GetMinimumPriority());
 
-  base::DictionaryValue correct_action;
-  correct_action.SetStringKey(keys::kInstanceTypeKey, keys::kIgnoreRulesType);
-  correct_action.SetIntKey(keys::kLowerPriorityThanKey, 10);
-  base::DictionaryValue incorrect_action;
-  incorrect_action.SetStringKey(keys::kInstanceTypeKey, kUnknownActionType);
+  base::Value::Dict correct_action;
+  correct_action.Set(keys::kInstanceTypeKey, keys::kIgnoreRulesType);
+  correct_action.Set(keys::kLowerPriorityThanKey, 10);
+  base::Value::Dict incorrect_action;
+  incorrect_action.Set(keys::kInstanceTypeKey, kUnknownActionType);
+  base::Value::List wrong_format_action;
 
   // Test success.
-  input.push_back(correct_action.Clone());
+  input.Append(std::move(correct_action));
   error.clear();
   result = WebRequestActionSet::Create(nullptr, nullptr, input, &error,
                                        &bad_message);
@@ -235,7 +233,15 @@ TEST(WebRequestActionTest, CreateActionSet) {
   EXPECT_EQ(10, result->GetMinimumPriority());
 
   // Test failure.
-  input.push_back(incorrect_action.Clone());
+  input.Append(std::move(incorrect_action));
+  error.clear();
+  result = WebRequestActionSet::Create(nullptr, nullptr, input, &error,
+                                       &bad_message);
+  EXPECT_NE("", error);
+  EXPECT_FALSE(result.get());
+
+  // Test wrong data type passed.
+  input.Append(std::move(wrong_format_action));
   error.clear();
   result = WebRequestActionSet::Create(nullptr, nullptr, input, &error,
                                        &bad_message);
@@ -342,6 +348,13 @@ TEST_F(WebRequestActionWithThreadsTest, PermissionsToSendMessageToExtension) {
   EXPECT_FALSE(ActionWorksOnRequest(webstore_url.c_str(), extension_->id(),
                                     action_set.get(), ON_BEFORE_REQUEST));
   EXPECT_FALSE(ActionWorksOnRequest(webstore_url.c_str(),
+                                    extension_all_urls_->id(), action_set.get(),
+                                    ON_BEFORE_REQUEST));
+  const std::string& new_webstore_url =
+      ExtensionsClient::Get()->GetNewWebstoreBaseURL().spec();
+  EXPECT_FALSE(ActionWorksOnRequest(new_webstore_url.c_str(), extension_->id(),
+                                    action_set.get(), ON_BEFORE_REQUEST));
+  EXPECT_FALSE(ActionWorksOnRequest(new_webstore_url.c_str(),
                                     extension_all_urls_->id(), action_set.get(),
                                     ON_BEFORE_REQUEST));
 }

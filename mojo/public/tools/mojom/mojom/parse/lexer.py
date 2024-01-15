@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import imp
 import os.path
 import sys
 
@@ -56,6 +55,7 @@ class Lexer:
       'PENDING_RECEIVER',
       'PENDING_ASSOCIATED_REMOTE',
       'PENDING_ASSOCIATED_RECEIVER',
+      'FEATURE',
   )
 
   keyword_map = {}

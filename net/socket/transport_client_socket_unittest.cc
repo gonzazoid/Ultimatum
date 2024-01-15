@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -81,7 +81,9 @@ void TransportClientSocketTest::SetUp() {
   // Open a server socket on an ephemeral port.
   listen_sock_ = std::make_unique<TCPServerSocket>(nullptr, NetLogSource());
   IPEndPoint local_address(IPAddress::IPv4Localhost(), 0);
-  ASSERT_THAT(listen_sock_->Listen(local_address, 1), IsOk());
+  ASSERT_THAT(
+      listen_sock_->Listen(local_address, 1, /*ipv6_only=*/absl::nullopt),
+      IsOk());
   // Get the server's address (including the actual port number).
   ASSERT_THAT(listen_sock_->GetLocalAddress(&local_address), IsOk());
   listen_port_ = local_address.port();
@@ -135,7 +137,7 @@ TEST_F(TransportClientSocketTest, Connect) {
 }
 
 TEST_F(TransportClientSocketTest, IsConnected) {
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(4096);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(4096);
   TestCompletionCallback callback;
   uint32_t bytes_read;
 
@@ -201,7 +203,7 @@ TEST_F(TransportClientSocketTest, Read) {
 
   SendRequestAndResponse(sock_.get(), connected_sock_.get());
 
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(4096);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(4096);
   uint32_t bytes_read = DrainStreamSocket(sock_.get(), buf.get(), 4096,
                                           strlen(kServerReply), &callback);
   ASSERT_EQ(bytes_read, strlen(kServerReply));
@@ -222,7 +224,7 @@ TEST_F(TransportClientSocketTest, Read_SmallChunks) {
 
   SendRequestAndResponse(sock_.get(), connected_sock_.get());
 
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(1);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(1);
   uint32_t bytes_read = 0;
   while (bytes_read < strlen(kServerReply)) {
     int rv = sock_->Read(buf.get(), 1, callback.callback());
@@ -250,7 +252,7 @@ TEST_F(TransportClientSocketTest, Read_Interrupted) {
   SendRequestAndResponse(sock_.get(), connected_sock_.get());
 
   // Do a partial read and then exit.  This test should not crash!
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(16);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(16);
   int rv = sock_->Read(buf.get(), 16, callback.callback());
   EXPECT_TRUE(rv >= 0 || rv == ERR_IO_PENDING);
 
@@ -265,13 +267,12 @@ TEST_F(TransportClientSocketTest, FullDuplex_ReadFirst) {
 
   // Read first.  There's no data, so it should return ERR_IO_PENDING.
   const int kBufLen = 4096;
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(kBufLen);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(kBufLen);
   int rv = sock_->Read(buf.get(), kBufLen, callback.callback());
   EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
 
   const int kWriteBufLen = 64 * 1024;
-  scoped_refptr<IOBuffer> request_buffer =
-      base::MakeRefCounted<IOBuffer>(kWriteBufLen);
+  auto request_buffer = base::MakeRefCounted<IOBufferWithSize>(kWriteBufLen);
   char* request_data = request_buffer->data();
   memset(request_data, 'A', kWriteBufLen);
   TestCompletionCallback write_callback;
@@ -303,8 +304,7 @@ TEST_F(TransportClientSocketTest, FullDuplex_WriteFirst) {
   EstablishConnection(&callback);
 
   const int kWriteBufLen = 64 * 1024;
-  scoped_refptr<IOBuffer> request_buffer =
-      base::MakeRefCounted<IOBuffer>(kWriteBufLen);
+  auto request_buffer = base::MakeRefCounted<IOBufferWithSize>(kWriteBufLen);
   char* request_data = request_buffer->data();
   memset(request_data, 'A', kWriteBufLen);
   TestCompletionCallback write_callback;
@@ -325,7 +325,7 @@ TEST_F(TransportClientSocketTest, FullDuplex_WriteFirst) {
   // Read() to block on ERR_IO_PENDING too.
 
   const int kBufLen = 4096;
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(kBufLen);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(kBufLen);
   while (true) {
     int rv = sock_->Read(buf.get(), kBufLen, callback.callback());
     ASSERT_TRUE(rv >= 0 || rv == ERR_IO_PENDING);

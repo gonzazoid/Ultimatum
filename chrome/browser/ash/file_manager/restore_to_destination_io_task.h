@@ -8,7 +8,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -45,9 +44,17 @@ class RestoreToDestinationIOTask : public IOTask {
   void Execute(ProgressCallback progress_callback,
                CompleteCallback complete_callback) override;
 
-  // Passes the Cancel on to the underlying `move_io_task_` in the event one has
-  // been kicked off.
+  // Passes the Pause on to the underlying `move_io_task_` if it exists.
+  void Pause(PauseParams params) override;
+
+  // Passes the Resume on to the underlying `move_io_task_` if it exists.
+  void Resume(ResumeParams params) override;
+
+  // Passes the Cancel on to the underlying `move_io_task_` if it exists.
   void Cancel() override;
+
+  // Returns a pointer to the underlying `move_io_task_`.
+  CopyOrMoveIOTask* GetMoveTaskForTesting();
 
  private:
   // Finalises the RestoreToDestinationIOTask with the `state`.
@@ -65,7 +72,7 @@ class RestoreToDestinationIOTask : public IOTask {
   // `move_io_task`
   void OnTrashInfoParsed(
       size_t idx,
-      base::FileErrorOr<trash::ParsedTrashInfoData> parsed_data);
+      trash::ParsedTrashInfoDataOrError parsed_data_or_error);
 
   // Used to intercept the `move_io_task_` ProgressCallback and ensure the
   // progress is coming from the current task with the relevant task_id.

@@ -9,11 +9,11 @@
 #include <string>
 #include <vector>
 
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
+class FakeGaiaMixin;
 class GURL;
 
 namespace net {
@@ -55,7 +55,7 @@ class TestClientCertSamlIdpMixin final : public InProcessBrowserTestMixin {
   HandleSamlWithClientCertsServerRequest(
       const net::test_server::HttpRequest& request);
 
-  FakeGaiaMixin* const gaia_mixin_;
+  const raw_ptr<FakeGaiaMixin> gaia_mixin_;
   net::EmbeddedTestServer saml_server_{net::EmbeddedTestServer::TYPE_HTTPS};
   net::EmbeddedTestServer saml_with_client_certs_server_{
       net::EmbeddedTestServer::TYPE_HTTPS};

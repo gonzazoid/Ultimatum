@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//chromeos/ash/components/assistant/assistant.gni")
@@ -35,6 +35,20 @@ component("policy") {
     "//sandbox/policy/mojom",
   ]
   public_deps = [ "//sandbox:common" ]
+  if (is_android) {
+    sources += [
+      "linux/bpf_base_policy_linux.cc",
+      "linux/bpf_base_policy_linux.h",
+      "linux/bpf_renderer_policy_linux.cc",
+      "linux/bpf_renderer_policy_linux.h",
+    ]
+    deps += [
+      "//sandbox:sandbox_buildflags",
+      "//sandbox/linux:sandbox_services",
+      "//sandbox/linux:seccomp_bpf",
+      "//third_party/jni_zero",
+    ]
+  }
   if (is_linux || is_chromeos) {
     sources += [
       "linux/bpf_audio_policy_linux.cc",
@@ -49,6 +63,8 @@ component("policy") {
       "linux/bpf_cros_amd_gpu_policy_linux.h",
       "linux/bpf_cros_arm_gpu_policy_linux.cc",
       "linux/bpf_cros_arm_gpu_policy_linux.h",
+      "linux/bpf_cros_intel_gpu_policy_linux.cc",
+      "linux/bpf_cros_intel_gpu_policy_linux.h",
       "linux/bpf_gpu_policy_linux.cc",
       "linux/bpf_gpu_policy_linux.h",
       "linux/bpf_network_policy_linux.cc",
@@ -72,6 +88,16 @@ component("policy") {
       "linux/sandbox_seccomp_bpf_linux.cc",
       "linux/sandbox_seccomp_bpf_linux.h",
     ]
+    if (is_linux || is_chromeos_ash) {
+      sources += [
+        "linux/bpf_hardware_video_decoding_policy_linux.cc",
+        "linux/bpf_hardware_video_decoding_policy_linux.h",
+      ]
+      deps += [ "//media/gpu:buildflags" ]
+    }
+    if (is_linux) {
+      deps += [ "//net" ]  # TODO(crbug.com/1312226): remove this.
+    }
     if (enable_oop_printing) {
       sources += [
         "linux/bpf_print_backend_policy_linux.cc",
@@ -129,10 +155,11 @@ component("policy") {
   }
   if (is_win) {
     sources += [
-      "win/lpac_capability.cc",
       "win/lpac_capability.h",
       "win/sandbox_diagnostics.cc",
       "win/sandbox_diagnostics.h",
+      "win/sandbox_warmup.cc",
+      "win/sandbox_warmup.h",
       "win/sandbox_win.cc",
       "win/sandbox_win.h",
     ]
@@ -145,28 +172,29 @@ component("policy") {
     ]
 
     public_deps += [
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/fidl",
       "//third_party/fuchsia-sdk/sdk/pkg/zx",
     ]
 
     deps += [
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.buildinfo",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.fonts",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.hwinfo",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.intl",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.kernel",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.logger",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.buildinfo:fuchsia.buildinfo_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3:fuchsia.camera3_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.fonts:fuchsia.fonts_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.hwinfo:fuchsia.hwinfo_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.intl:fuchsia.intl_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.kernel:fuchsia.kernel_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.logger:fuchsia.logger_hlcpp",
 
       # TODO(crbug.com/1224707): Remove after switching to fuchsia.scheduler API.
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.net.interfaces",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.tracing.perfetto",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.tracing.provider",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.scenic",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media:fuchsia.media_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.mediacodec:fuchsia.mediacodec_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure:fuchsia.memorypressure_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.net.interfaces:fuchsia.net.interfaces_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.tracing.perfetto:fuchsia.tracing.perfetto_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.tracing.provider:fuchsia.tracing.provider_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.composition:fuchsia.ui.composition_hlcpp",
     ]
   }
 }
@@ -217,8 +245,6 @@ source_set("sandbox_test_utils") {
     sources = [
       "win/sandbox_policy_feature_test.cc",
       "win/sandbox_policy_feature_test.h",
-      "win/sandbox_test_utils.cc",
-      "win/sandbox_test_utils.h",
     ]
 
     deps = [

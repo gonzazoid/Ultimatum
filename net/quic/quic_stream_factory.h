@@ -17,7 +17,9 @@
 #include "base/containers/lru_cache.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "net/base/address_list.h"
@@ -65,10 +67,10 @@ class QuicRandom;
 
 namespace net {
 
-class CTPolicyEnforcer;
 class CertVerifier;
 class ClientSocketFactory;
 class HostResolver;
+struct HostResolverEndpointResult;
 class HttpServerProperties;
 class NetLog;
 class NetworkAnonymizationKey;
@@ -107,7 +109,17 @@ enum QuicPlatformNotification {
 enum AllActiveSessionsGoingAwayReason {
   kClockSkewDetected,
   kIPAddressChanged,
-  kCertDBChanged
+  kCertDBChanged,
+  kCertVerifierChanged
+};
+
+enum CreateSessionFailure {
+  CREATION_ERROR_CONNECTING_SOCKET,
+  CREATION_ERROR_SETTING_RECEIVE_BUFFER,
+  CREATION_ERROR_SETTING_SEND_BUFFER,
+  CREATION_ERROR_SETTING_DO_NOT_FRAGMENT,
+  CREATION_ERROR_SETTING_RECEIVE_ECN,
+  CREATION_ERROR_MAX
 };
 
 // Encapsulates a pending request for a QuicChromiumClientSession.
@@ -163,6 +175,22 @@ class NET_EXPORT_PRIVATE QuicStreamRequest {
   // resolution completes asynchronously after Request().
   void OnHostResolutionComplete(int rv);
 
+  // This function must be called after Request() returns ERR_IO_PENDING.
+  // Returns true if no QUIC session has been created yet. If true is returned,
+  // `callback` will be run when the QUIC session has been created and will be
+  // called with the result of OnCreateSessionComplete. For example, if session
+  // creation returned OK but CryptoConnect returns ERR_IO_PENDING then
+  // `callback` will be run with ERR_IO_PENDING.
+  bool WaitForQuicSessionCreation(CompletionOnceCallback callback);
+
+  // Tells QuicStreamRequest it should expect OnQuicSessionCreationComplete()
+  // to be called in the future.
+  void ExpectQuicSessionCreation();
+
+  // Will be called by the associated QuicStreamFactory::Job when session
+  // creation completes asynchronously after Request().
+  void OnQuicSessionCreationComplete(int rv);
+
   void OnRequestComplete(int rv);
 
   // Called when the original connection created on the default network for
@@ -211,15 +239,20 @@ class NET_EXPORT_PRIVATE QuicStreamRequest {
   // Set in Request(). If true, then OnHostResolutionComplete() is expected to
   // be called in the future.
   bool expect_on_host_resolution_ = false;
+
+  bool expect_on_quic_session_creation_ = false;
   // Callback passed to WaitForHostResolution().
   CompletionOnceCallback host_resolution_callback_;
+
+  CompletionOnceCallback create_session_callback_;
 };
 
 // A factory for fetching QuicChromiumClientSessions.
 class NET_EXPORT_PRIVATE QuicStreamFactory
     : public NetworkChangeNotifier::IPAddressObserver,
       public NetworkChangeNotifier::NetworkObserver,
-      public CertDatabase::Observer {
+      public CertDatabase::Observer,
+      public CertVerifier::Observer {
  public:
   // This class encompasses |destination| and |server_id|.
   // |destination| is a HostPortPair which is resolved
@@ -258,7 +291,6 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
       ClientSocketFactory* client_socket_factory,
       HttpServerProperties* http_server_properties,
       CertVerifier* cert_verifier,
-      CTPolicyEnforcer* ct_policy_enforcer,
       TransportSecurityState* transport_security_state,
       SCTAuditingDelegate* sct_auditing_delegate,
       SocketPerformanceWatcherFactory* socket_performance_watcher_factory,
@@ -321,10 +353,38 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   void ClearCachedStatesInCryptoConfig(
       const base::RepeatingCallback<bool(const GURL&)>& origin_filter);
 
+  // Helper method that connects a DatagramClientSocket. Socket is
+  // bound to the default network if the |network| param is
+  // handles::kInvalidNetworkHandle. This method calls
+  // DatagramClientSocket::ConnectAsync and completes asynchronously. Returns
+  // ERR_IO_PENDING.
+  int ConnectAndConfigureSocket(CompletionOnceCallback callback,
+                                DatagramClientSocket* socket,
+                                IPEndPoint addr,
+                                handles::NetworkHandle network,
+                                const SocketTag& socket_tag);
+
+  // Helper method that configures a DatagramClientSocket once
+  // DatagramClientSocket::ConnectAsync completes. Posts a task to run
+  // `callback` with a net_error code.
+  virtual void FinishConnectAndConfigureSocket(CompletionOnceCallback callback,
+                                               DatagramClientSocket* socket,
+                                               const SocketTag& socket_tag,
+                                               int rv);
+
+  void OnFinishConnectAndConfigureSocketError(CompletionOnceCallback callback,
+                                              enum CreateSessionFailure error,
+                                              int rv);
+
+  void DoCallback(CompletionOnceCallback callback, int rv);
+
   // Helper method that configures a DatagramClientSocket. Socket is
   // bound to the default network if the |network| param is
-  // handles::kInvalidNetworkHandle.
-  // Returns net_error code.
+  // handles::kInvalidNetworkHandle. This method calls
+  // DatagramClientSocket::Connect and completes synchronously. Returns
+  // net_error code.
+  // TODO(liza): Remove this once QuicStreamFactory::Job calls
+  // ConnectAndConfigureSocket.
   int ConfigureSocket(DatagramClientSocket* socket,
                       IPEndPoint addr,
                       handles::NetworkHandle network,
@@ -357,7 +417,11 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // CertDatabase::Observer methods:
 
   // We close all sessions when certificate database is changed.
-  void OnCertDBChanged() override;
+  void OnTrustStoreChanged() override;
+
+  // CertVerifier::Observer:
+  // We close all sessions when certificate verifier settings have changed.
+  void OnCertVerifierChanged() override;
 
   bool is_quic_known_to_work_on_current_network() const {
     return is_quic_known_to_work_on_current_network_;
@@ -380,10 +444,6 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
 
   quic::QuicAlarmFactory* alarm_factory() { return alarm_factory_.get(); }
 
-  void set_server_push_delegate(ServerPushDelegate* push_delegate) {
-    push_delegate_ = push_delegate;
-  }
-
   handles::NetworkHandle default_network() const { return default_network_; }
 
   // Returns the stored DNS aliases for the session key.
@@ -394,6 +454,7 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   class Job;
   class QuicCryptoClientConfigOwner;
   class CryptoClientConfigHandle;
+  friend class MockQuicStreamFactory;
   friend class test::QuicStreamFactoryPeer;
 
   using SessionMap = std::map<QuicSessionKey, QuicChromiumClientSession*>;
@@ -418,16 +479,51 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   void OnJobComplete(Job* job, int rv);
   bool HasActiveSession(const QuicSessionKey& session_key) const;
   bool HasActiveJob(const QuicSessionKey& session_key) const;
-  int CreateSession(const QuicSessionAliasKey& key,
-                    quic::ParsedQuicVersion quic_version,
-                    int cert_verify_flags,
-                    bool require_confirmation,
-                    const AddressList& address_list,
-                    base::TimeTicks dns_resolution_start_time,
-                    base::TimeTicks dns_resolution_end_time,
-                    const NetLogWithSource& net_log,
-                    QuicChromiumClientSession** session,
-                    handles::NetworkHandle* network);
+  int CreateSessionSync(const QuicSessionAliasKey& key,
+                        quic::ParsedQuicVersion quic_version,
+                        int cert_verify_flags,
+                        bool require_confirmation,
+                        const HostResolverEndpointResult& endpoint_result,
+                        base::TimeTicks dns_resolution_start_time,
+                        base::TimeTicks dns_resolution_end_time,
+                        const NetLogWithSource& net_log,
+                        raw_ptr<QuicChromiumClientSession>* session,
+                        handles::NetworkHandle* network);
+  int CreateSessionAsync(CompletionOnceCallback callback,
+                         const QuicSessionAliasKey& key,
+                         quic::ParsedQuicVersion quic_version,
+                         int cert_verify_flags,
+                         bool require_confirmation,
+                         const HostResolverEndpointResult& endpoint_result,
+                         base::TimeTicks dns_resolution_start_time,
+                         base::TimeTicks dns_resolution_end_time,
+                         const NetLogWithSource& net_log,
+                         raw_ptr<QuicChromiumClientSession>* session,
+                         handles::NetworkHandle* network);
+  void FinishCreateSession(CompletionOnceCallback callback,
+                           const QuicSessionAliasKey& key,
+                           quic::ParsedQuicVersion quic_version,
+                           int cert_verify_flags,
+                           bool require_confirmation,
+                           const HostResolverEndpointResult& endpoint_result,
+                           base::TimeTicks dns_resolution_start_time,
+                           base::TimeTicks dns_resolution_end_time,
+                           const NetLogWithSource& net_log,
+                           raw_ptr<QuicChromiumClientSession>* session,
+                           handles::NetworkHandle* network,
+                           std::unique_ptr<DatagramClientSocket> socket,
+                           int rv);
+  bool CreateSessionHelper(const QuicSessionAliasKey& key,
+                           quic::ParsedQuicVersion quic_version,
+                           int cert_verify_flags,
+                           bool require_confirmation,
+                           const HostResolverEndpointResult& endpoint_result,
+                           base::TimeTicks dns_resolution_start_time,
+                           base::TimeTicks dns_resolution_end_time,
+                           const NetLogWithSource& net_log,
+                           raw_ptr<QuicChromiumClientSession>* session,
+                           handles::NetworkHandle* network,
+                           std::unique_ptr<DatagramClientSocket> socket);
   void ActivateSession(const QuicSessionAliasKey& key,
                        QuicChromiumClientSession* session,
                        std::set<std::string> dns_aliases);
@@ -529,25 +625,25 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // the broken alternative service map in HttpServerProperties.
   bool is_quic_known_to_work_on_current_network_ = false;
 
-  raw_ptr<NetLog> net_log_;
-  raw_ptr<HostResolver> host_resolver_;
-  raw_ptr<ClientSocketFactory> client_socket_factory_;
-  raw_ptr<HttpServerProperties> http_server_properties_;
-  raw_ptr<ServerPushDelegate> push_delegate_ = nullptr;
+  NetLogWithSource net_log_;
+  const raw_ptr<HostResolver> host_resolver_;
+  const raw_ptr<ClientSocketFactory> client_socket_factory_;
+  const raw_ptr<HttpServerProperties> http_server_properties_;
   const raw_ptr<CertVerifier> cert_verifier_;
-  const raw_ptr<CTPolicyEnforcer> ct_policy_enforcer_;
   const raw_ptr<TransportSecurityState> transport_security_state_;
   const raw_ptr<SCTAuditingDelegate> sct_auditing_delegate_;
-  raw_ptr<QuicCryptoClientStreamFactory> quic_crypto_client_stream_factory_;
-  raw_ptr<quic::QuicRandom> random_generator_;  // Unowned.
-  raw_ptr<const quic::QuicClock> clock_;        // Unowned.
+  const raw_ptr<QuicCryptoClientStreamFactory>
+      quic_crypto_client_stream_factory_;
+  const raw_ptr<quic::QuicRandom> random_generator_;  // Unowned.
+  const raw_ptr<const quic::QuicClock> clock_;        // Unowned.
   QuicParams params_;
   QuicClockSkewDetector clock_skew_detector_;
 
   // Factory which is used to create socket performance watcher. A new watcher
   // is created for every QUIC connection.
   // |socket_performance_watcher_factory_| may be null.
-  raw_ptr<SocketPerformanceWatcherFactory> socket_performance_watcher_factory_;
+  const raw_ptr<SocketPerformanceWatcherFactory>
+      socket_performance_watcher_factory_;
 
   // The helper used for all connections.
   std::unique_ptr<QuicChromiumConnectionHelper> helper_;
@@ -616,24 +712,22 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
 
   NetworkConnection network_connection_;
 
-  int num_push_streams_created_ = 0;
-
   QuicConnectivityMonitor connectivity_monitor_;
 
-  raw_ptr<const base::TickClock> tick_clock_ = nullptr;
+  raw_ptr<const base::TickClock, DanglingUntriaged> tick_clock_ = nullptr;
 
-  raw_ptr<base::SequencedTaskRunner> task_runner_ = nullptr;
+  scoped_refptr<base::SequencedTaskRunner> task_runner_ = nullptr;
 
   const raw_ptr<SSLConfigService> ssl_config_service_;
 
   // Whether NetworkAnonymizationKeys should be used for
-  // |active_crypto_config_map_|. If false, there will just be one config with
+  // `active_crypto_config_map_`. If false, there will just be one config with
   // an empty NetworkAnonymizationKey. Whether QuicSessionAliasKeys all have an
-  // empty NIK is based on whether socket pools are respecting NIKs, but whether
-  // those NIKs are also used when accessing |active_crypto_config_map_| is also
+  // empty NAK is based on whether socket pools are respecting NAKs, but whether
+  // those NAKs are also used when accessing `active_crypto_config_map_` is also
   // gated this, which is set based on whether HttpServerProperties is
-  // respecting NIKs, as that data is fed into the crypto config map using the
-  // corresponding NIK.
+  // respecting NAKs, as that data is fed into the crypto config map using the
+  // corresponding NAK.
   const bool use_network_anonymization_key_for_crypto_configs_;
 
   quic::DeterministicConnectionIdGenerator connection_id_generator_{

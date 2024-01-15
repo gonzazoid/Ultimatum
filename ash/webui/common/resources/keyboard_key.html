@@ -1,32 +1,104 @@
-<style>
-  :root {
-    --background-color-pressed: hsl(214deg 82% 51%);
-    --background-color-unpressed: hsl(218deg 92% 95%);
-    --background-color-tested: hsl(214deg 82% 85%);
-    --border-color: hsl(214deg 82% 51%);
-    --border-radius:
-        var(--keyboard-key-top-radii, 3px)
-        var(--keyboard-key-top-radii, 3px)
-        var(--keyboard-key-bottom-right-radius, 3px)
-        3px;
-    --icon-size: var(--keyboard-key-icon-size, 100%);
-    --travel: var(--keyboard-key-travel, 3px);
-    --foreground-color-unpressed: hsl(214deg 82% 51%);
-    --foreground-color-pressed: hsl(213deg 23% 91%);
-  }
+<style include="cr-shared-style">
+    @media (min-width: 600px) {
+      :host {
+        --keyboard-key-icon-size: 10px;
+      }
+      #key {
+        font-size: 10px;
+        line-height: 10px;
+      }
+    }
+
+    @media (min-width: 768px) {
+      :host {
+        --keyboard-key-icon-size: 12px;
+      }
+      #key {
+        font-size: 11px;
+        line-height: 16px;
+      }
+    }
+
+    @media (min-width: 960px) {
+      :host {
+        --keyboard-key-icon-size: 14px;
+      }
+      #key {
+        font-size: 12px;
+        line-height: 18px;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      :host {
+        --keyboard-key-icon-size: 20px;
+      }
+      #key {
+        font-size: 13px;
+        line-height: 20px;
+      }
+    }
 
   :host {
+    --background-color-disabled: var(--cros-bg-color-dropped-elevation-2);
+    --background-color-pressed: var(--google-blue-800);
+    --background-color-unpressed: var(--cros-highlight-color);
+    --background-color-tested: rgba(var(--cros-icon-color-selection-rgb),
+        .85);
+    --border-color: var(--cros-text-color-selection);
+    --border-radius:
+        var(--keyboard-key-top-radii, 4px)
+        var(--keyboard-key-top-radii, 4px)
+        var(--keyboard-key-bottom-right-radius, 4px)
+        4px;
+    --host-bg-color: var(--diagram-bg-color);
+    --icon-size: min(100%, var(--keyboard-key-icon-size, 100%));
+    --travel: var(--keyboard-key-travel, 4px);
+    --text-color-unpressed: var(--cros-text-color-selection);
+    --text-color-pressed: var(--cros-button-icon-color-primary);
+    --text-color-tested: var(--cros-button-icon-color-primary);
     position: relative;
   }
 
-  #foreground {
+  /* TODO(276493287): Remove host-context and replace default colors with jelly
+                      colors once experiment launches. */
+  :host-context(body.jelly-enabled) {
+    --background-color-disabled: var(--cros-sys-disabled_container);
+    --background-color-pressed: var(--cros-button-background-color-primary);
+    --background-color-unpressed: var(--cros-sys-highlight_shape);
+    --background-color-tested: var(--cros-sys-highlight_text);
+    --border-color: var(--cros-icon-color-prominent);
+    --text-color-unpressed: var(--cros-icon-color-prominent);
+    --text-color-pressed: var(--cros-button-icon-color-primary);
+    --text-color-tested: var(--cros-icon-color-prominent);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :host {
+      --background-color-disabled: var(--cros-bg-color-elevation-4);
+      --background-color-pressed: var(--cros-icon-color-selection);
+      --background-color-unpressed: var(--cros-button-active-shadow-color-ambient-primary);
+      --background-color-tested: rgba(var(--cros-icon-color-selection-rgb),
+        .65);
+    }
+
+    /* TODO(276493287): Remove host-context and replace default colors with
+                        jelly colors once experiment launches. */
+    :host-context(body.jelly-enabled) {
+      --background-color-disabled: var(--cros-sys-disabled_container);
+      --background-color-tested: var(--cros-sys-highlight_text);
+    }
+  }
+
+  #key {
     background-color: var(--background-color-unpressed);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     border-top-width: var(--keyboard-key-border-top-width, 1px);
     bottom: var(--travel);
-    color: var(--foreground-color-unpressed);
+    color: var(--text-color-unpressed);
     display: grid;
+    font-family: 'Google Sans', sans-serif;
     grid-auto-columns: 1fr;
     grid-auto-flow: column;
     grid-template-columns: 1fr;
@@ -38,8 +110,21 @@
     transition: all 150ms ease-in-out;
   }
 
+  #key-background {
+    background-color: var(--host-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    border-top-width: var(--keyboard-key-border-top-width, 1px);
+    bottom: var(--travel);
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: all 150ms ease-in-out;
+  }
+
   iron-icon {
-    --iron-icon-fill-color: var(--foreground-color-unpressed);
+    --iron-icon-fill-color: var(--text-color-unpressed);
     --iron-icon-height: var(--icon-size);
     --iron-icon-width: var(--icon-size);
     align-self: center;
@@ -63,7 +148,7 @@
 
   #mainGlyph {
     left: 0;
-    overflow: hidden;
+    overflow: clip visible;
     position: absolute;
     right: 0;
     text-overflow: ellipsis;
@@ -88,26 +173,33 @@
     text-align: center;
   }
 
-  /*
-   * TODO(crbug.com/1207678): Apply this styling when the key is pressed,
-   * instead of on hover.
-   */
-  :host([state='pressed']) #foreground {
+  :host([state='pressed']) #key {
     background-color: var(--background-color-pressed);
+    border-color: var(--background-color-pressed);
     bottom: 0;
-    color: var(--foreground-color-pressed);
+    color: var(--text-color-pressed);
+    top: var(--travel);
+  }
+
+  :host([state='pressed']) #key-background {
+    bottom: 0;
     top: var(--travel);
   }
 
   :host([state='pressed']) iron-icon {
-    --iron-icon-fill-color: var(--foreground-color-pressed);
+    --iron-icon-fill-color: var(--text-color-pressed);
   }
 
-  :host([state='tested']) #foreground {
+  :host([state='tested']) #key {
     background-color: var(--background-color-tested);
+    color: var(--text-color-tested);
   }
 
-  #background {
+  :host([state='tested']) iron-icon {
+    --iron-icon-fill-color: var(--text-color-tested);
+  }
+
+  #shadow {
     background-color: var(--border-color);
     border-radius: var(--border-radius);
     bottom: 0;
@@ -117,39 +209,31 @@
     top: var(--travel);
   }
 
-  :host(.disabled) #foreground {
-    background-color: var(--google-grey-200);
-    border-color: var(--google-grey-700);
-    color: var(--google-grey-600);
+  :host(.disabled) {
+    --travel: 0;
   }
 
-  :host(.disabled) #background {
-    background-color: hsl(0deg 0% 59%);
+  :host(.disabled) #key {
+    background-color: var(--background-color-disabled);
+    border-color: transparent;
+    bottom: 0;
+    color: var(--cros-icon-color-disabled);
+    top: var(--travel);
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background-color-pressed: hsl(217deg 87% 76%);
-      --background-color-unpressed: hsl(218deg 20% 32%);
-      --border-color: hsl(217deg 87% 76%);
-      --foreground-color-pressed: hsl(225deg 6% 13%);
-      --foreground-color-unpressed: hsl(217deg 87% 76%);
-    }
+  :host(.disabled) #key-background {
+    border-color: transparent;
+    bottom: 0;
+    top: var(--travel);
+  }
 
-    :host(.disabled) #foreground {
-      --foreground-color-unpressed: var(--cros-button-label-color-primary-disabled);
-      background-color: var(--cros-button-background-color-primary-disabled);
-      border-color: var(--cros-button-background-color-primary-disabled);
-      color: var(--foreground-color-unpressed);
-    }
-
-    :host(.disabled) #background {
-      background-color: hsl(192deg 4% 25%);
-    }
+  :host(.disabled) #shadow {
+    background-color: var(--background-color-disabled);
   }
 </style>
-<div id="background"></div>
-<div id="foreground" aria-label="[[ariaLabel_]]">
+<div id="shadow"></div>
+<div id="key-background"></div>
+<div id="key" aria-label="[[ariaLabel_]]">
   <!--
     Child elements are aria-hidden to make ChromeVox treat the whole key as
     one unit with an aria-label, rather than individual labels that don't

@@ -37,7 +37,7 @@ bool StructTraits<autofill::mojom::FrameTokenWithPredecessorDataView,
   if (!data.ReadToken(&out->token))
     return false;
   out->predecessor = data.predecessor();
-  return true;
+  return out->predecessor >= -1;
 }
 
 // static
@@ -177,6 +177,9 @@ bool StructTraits<
     return false;
   if (!data.ReadValue(&out->value))
     return false;
+  if (!data.ReadSelectedText(&out->selected_text)) {
+    return false;
+  }
 
   if (!data.ReadFormControlType(&out->form_control_type))
     return false;
@@ -210,6 +213,7 @@ bool StructTraits<
 
   out->form_control_ax_id = data.form_control_ax_id();
   out->max_length = data.max_length();
+  out->is_user_edited = data.is_user_edited();
   out->is_autofilled = data.is_autofilled();
 
   if (!data.ReadCheckStatus(&out->check_status))
@@ -239,10 +243,9 @@ bool StructTraits<
   if (!data.ReadBounds(&out->bounds))
     return false;
 
-  if (!data.ReadDatalistValues(&out->datalist_values))
+  if (!data.ReadDatalistOptions(&out->datalist_options)) {
     return false;
-  if (!data.ReadDatalistLabels(&out->datalist_labels))
-    return false;
+  }
 
   out->force_override = data.force_override();
 
@@ -293,7 +296,13 @@ bool StructTraits<autofill::mojom::FormDataDataView, autofill::FormData>::Read(
   out->is_gaia_with_skip_save_password_form =
       data.is_gaia_with_skip_save_password_form();
 
-  return true;
+  return base::ranges::all_of(
+      out->child_frames,
+      [&](int predecessor) {
+        return predecessor == -1 ||
+               base::checked_cast<size_t>(predecessor) < out->fields.size();
+      },
+      &autofill::FrameTokenWithPredecessor::predecessor);
 }
 
 // static
@@ -309,12 +318,20 @@ bool StructTraits<autofill::mojom::FormFieldDataPredictionsDataView,
     return false;
   if (!data.ReadServerType(&out->server_type))
     return false;
+  if (!data.ReadHtmlType(&out->html_type)) {
+    return false;
+  }
   if (!data.ReadOverallType(&out->overall_type))
     return false;
   if (!data.ReadParseableName(&out->parseable_name))
     return false;
   if (!data.ReadSection(&out->section))
     return false;
+  out->rank = data.rank();
+  out->rank_in_signature_group = data.rank_in_signature_group();
+  out->rank_in_host_form = data.rank_in_host_form();
+  out->rank_in_host_form_signature_group =
+      data.rank_in_host_form_signature_group();
 
   return true;
 }
@@ -328,6 +345,9 @@ bool StructTraits<autofill::mojom::FormDataPredictionsDataView,
     return false;
   if (!data.ReadSignature(&out->signature))
     return false;
+  if (!data.ReadAlternativeSignature(&out->alternative_signature)) {
+    return false;
+  }
   if (!data.ReadFields(&out->fields))
     return false;
 
@@ -339,10 +359,12 @@ bool StructTraits<autofill::mojom::PasswordAndMetadataDataView,
                   autofill::PasswordAndMetadata>::
     Read(autofill::mojom::PasswordAndMetadataDataView data,
          autofill::PasswordAndMetadata* out) {
-  if (!data.ReadUsername(&out->username))
+  if (!data.ReadUsernameValue(&out->username_value)) {
     return false;
-  if (!data.ReadPassword(&out->password))
+  }
+  if (!data.ReadPasswordValue(&out->password_value)) {
     return false;
+  }
   if (!data.ReadRealm(&out->realm))
     return false;
 
@@ -357,14 +379,14 @@ bool StructTraits<autofill::mojom::PasswordFormFillDataDataView,
     Read(autofill::mojom::PasswordFormFillDataDataView data,
          autofill::PasswordFormFillData* out) {
   if (!data.ReadFormRendererId(&out->form_renderer_id) ||
-      !data.ReadUrl(&out->url) || !data.ReadAction(&out->action) ||
-      !data.ReadUsernameField(&out->username_field) ||
-      !data.ReadPasswordField(&out->password_field) ||
-      !data.ReadPreferredRealm(&out->preferred_realm) ||
-      !data.ReadAdditionalLogins(&out->additional_logins))
+      !data.ReadUrl(&out->url) ||
+      !data.ReadUsernameElementRendererId(&out->username_element_renderer_id) ||
+      !data.ReadPasswordElementRendererId(&out->password_element_renderer_id) ||
+      !data.ReadPreferredLogin(&out->preferred_login) ||
+      !data.ReadAdditionalLogins(&out->additional_logins)) {
     return false;
+  }
 
-  out->uses_account_store = data.uses_account_store();
   out->wait_for_username = data.wait_for_username();
   out->username_may_use_prefilled_placeholder =
       data.username_may_use_prefilled_placeholder();
@@ -393,10 +415,10 @@ bool StructTraits<autofill::mojom::PasswordGenerationUIDataDataView,
   out->max_length = data.max_length();
   out->is_generation_element_password_type =
       data.is_generation_element_password_type();
+  out->input_field_empty = data.input_field_empty();
 
   return data.ReadGenerationElementId(&out->generation_element_id) &&
          data.ReadGenerationElement(&out->generation_element) &&
-         data.ReadUserTypedPassword(&out->user_typed_password) &&
          data.ReadTextDirection(&out->text_direction) &&
          data.ReadFormData(&out->form_data);
 }
@@ -409,23 +431,6 @@ bool StructTraits<
          data.ReadPasswordRendererId(&out->password_renderer_id) &&
          data.ReadNewPasswordRendererId(&out->new_password_renderer_id) &&
          data.ReadConfirmPasswordRendererId(&out->confirm_password_renderer_id);
-}
-
-bool StructTraits<autofill::mojom::AutoselectFirstSuggestionDataView,
-                  autofill::AutoselectFirstSuggestion>::
-    Read(autofill::mojom::AutoselectFirstSuggestionDataView data,
-         autofill::AutoselectFirstSuggestion* out) {
-  *out =
-      autofill::AutoselectFirstSuggestion(data.autoselect_first_suggestion());
-  return true;
-}
-
-bool StructTraits<autofill::mojom::FormElementWasClickedDataView,
-                  autofill::FormElementWasClicked>::
-    Read(autofill::mojom::FormElementWasClickedDataView data,
-         autofill::FormElementWasClicked* out) {
-  *out = autofill::FormElementWasClicked(data.form_element_was_clicked());
-  return true;
 }
 
 }  // namespace mojo

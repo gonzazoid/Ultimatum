@@ -8,29 +8,28 @@
 
 #include "extensions/browser/event_router.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
-namespace util {
+namespace ash::file_system_provider::operations::util {
 
 LoggingDispatchEventImpl::LoggingDispatchEventImpl(bool dispatch_reply)
     : dispatch_reply_(dispatch_reply) {
 }
 
-LoggingDispatchEventImpl::~LoggingDispatchEventImpl() {
-}
+LoggingDispatchEventImpl::~LoggingDispatchEventImpl() = default;
 
-bool LoggingDispatchEventImpl::OnDispatchEventImpl(
+bool LoggingDispatchEventImpl::DispatchRequest(
+    int request_id,
+    std::optional<std::string> file_system_id,
     std::unique_ptr<extensions::Event> event) {
   events_.push_back(std::move(event));
   return dispatch_reply_;
 }
 
+void LoggingDispatchEventImpl::CancelRequest(
+    int request_id,
+    std::optional<std::string> file_system_id) {}
+
 void LogStatusCallback(StatusCallbackLog* log, base::File::Error result) {
   log->push_back(result);
 }
 
-}  // namespace util
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations::util

@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/threading/thread.h"
 #include "base/unguessable_token.h"
@@ -60,8 +59,8 @@ class CONTENT_EXPORT AudioInputDeviceManager : public MediaStreamProvider {
   void OpenedOnIOThread(
       const base::UnguessableToken& session_id,
       const blink::MediaStreamDevice& device,
-      const absl::optional<media::AudioParameters>& input_params,
-      const absl::optional<std::string>& matched_output_device_id);
+      const std::optional<media::AudioParameters>& input_params,
+      const std::optional<std::string>& matched_output_device_id);
 
   // Callback called on IO thread with the session_id referencing the closed
   // device.

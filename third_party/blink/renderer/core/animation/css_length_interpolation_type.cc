@@ -14,7 +14,6 @@
 #include "third_party/blink/renderer/core/css/resolver/style_builder.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
-#include "third_party/blink/renderer/core/css/scoped_css_value.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/geometry/length_functions.h"
 
@@ -24,14 +23,9 @@ CSSLengthInterpolationType::CSSLengthInterpolationType(
     PropertyHandle property,
     const PropertyRegistration* registration)
     : CSSInterpolationType(property, registration),
-      value_range_(LengthPropertyFunctions::GetValueRange(CssProperty())) {}
-
-float CSSLengthInterpolationType::EffectiveZoom(
-    const ComputedStyle& style) const {
-  return LengthPropertyFunctions::IsZoomedLength(CssProperty())
-             ? style.EffectiveZoom()
-             : 1;
-}
+      value_range_(LengthPropertyFunctions::GetValueRange(CssProperty())),
+      is_zoomed_length_(
+          LengthPropertyFunctions::IsZoomedLength(CssProperty())) {}
 
 class InheritedLengthChecker
     : public CSSInterpolationType::CSSConversionChecker {
@@ -86,7 +80,7 @@ InterpolationValue CSSLengthInterpolationType::MaybeConvertInherit(
     return nullptr;
   }
   return InterpolationValue(InterpolableLength::MaybeConvertLength(
-      inherited_length, EffectiveZoom(*state.ParentStyle())));
+      inherited_length, EffectiveZoom(state.ParentStyle()->EffectiveZoom())));
 }
 
 InterpolationValue CSSLengthInterpolationType::MaybeConvertValue(
@@ -120,7 +114,7 @@ CSSLengthInterpolationType::MaybeConvertStandardPropertyUnderlyingValue(
                                           underlying_length))
     return nullptr;
   return InterpolationValue(InterpolableLength::MaybeConvertLength(
-      underlying_length, EffectiveZoom(style)));
+      underlying_length, EffectiveZoom(style.EffectiveZoom())));
 }
 
 const CSSValue* CSSLengthInterpolationType::CreateCSSValue(
@@ -135,17 +129,15 @@ void CSSLengthInterpolationType::ApplyStandardPropertyValue(
     const InterpolableValue& interpolable_value,
     const NonInterpolableValue* non_interpolable_value,
     StyleResolverState& state) const {
-  ComputedStyle& style = *state.Style();
   ComputedStyleBuilder& builder = state.StyleBuilder();
-  float zoom = EffectiveZoom(style);
+  float zoom = EffectiveZoom(builder.EffectiveZoom());
   CSSToLengthConversionData conversion_data =
       state.CssToLengthConversionData().CopyWithAdjustedZoom(zoom);
   Length length = To<InterpolableLength>(interpolable_value)
                       .CreateLength(conversion_data, value_range_);
-  if (LengthPropertyFunctions::SetLength(CssProperty(), style, builder,
-                                         length)) {
+  if (LengthPropertyFunctions::SetLength(CssProperty(), builder, length)) {
 #if DCHECK_IS_ON()
-    scoped_refptr<const ComputedStyle> before_style = builder.ToStyle();
+    const ComputedStyle* before_style = builder.CloneStyle();
     // Assert that setting the length on ComputedStyle directly is identical to
     // the StyleBuilder code path. This check is useful for catching differences
     // in clamping behavior.
@@ -153,10 +145,9 @@ void CSSLengthInterpolationType::ApplyStandardPropertyValue(
     Length after;
     DCHECK(LengthPropertyFunctions::GetLength(CssProperty(), *before_style,
                                               before));
-    StyleBuilder::ApplyProperty(
-        GetProperty().GetCSSProperty(), state,
-        ScopedCSSValue(*CSSValue::Create(length, zoom), nullptr));
-    scoped_refptr<const ComputedStyle> after_style = builder.ToStyle();
+    StyleBuilder::ApplyProperty(GetProperty().GetCSSProperty(), state,
+                                *CSSValue::Create(length, zoom));
+    const ComputedStyle* after_style = builder.CloneStyle();
     DCHECK(
         LengthPropertyFunctions::GetLength(CssProperty(), *after_style, after));
     DCHECK(before.IsSpecified());
@@ -183,9 +174,8 @@ void CSSLengthInterpolationType::ApplyStandardPropertyValue(
 #endif
     return;
   }
-  StyleBuilder::ApplyProperty(
-      GetProperty().GetCSSProperty(), state,
-      ScopedCSSValue(*CSSValue::Create(length, zoom), nullptr));
+  StyleBuilder::ApplyProperty(GetProperty().GetCSSProperty(), state,
+                              *CSSValue::Create(length, zoom));
 }
 
 }  // namespace blink

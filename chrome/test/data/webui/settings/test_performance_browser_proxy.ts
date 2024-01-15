@@ -7,15 +7,27 @@ import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 export class TestPerformanceBrowserProxy extends TestBrowserProxy implements
     PerformanceBrowserProxy {
-  private validationResult_: boolean = true;
+  private currentSites_: string[] = [];
+  private validationResults_: Record<string, boolean> = {};
 
   constructor() {
     super([
+      'getCurrentOpenSites',
       'getDeviceHasBattery',
       'openBatterySaverFeedbackDialog',
-      'openHighEfficiencyFeedbackDialog',
+      'openMemorySaverFeedbackDialog',
+      'openSpeedFeedbackDialog',
       'validateTabDiscardExceptionRule',
     ]);
+  }
+
+  setCurrentOpenSites(currentSites: string[]) {
+    this.currentSites_ = currentSites;
+  }
+
+  getCurrentOpenSites() {
+    this.methodCalled('getCurrentOpenSites');
+    return Promise.resolve(this.currentSites_);
   }
 
   getDeviceHasBattery() {
@@ -27,16 +39,20 @@ export class TestPerformanceBrowserProxy extends TestBrowserProxy implements
     this.methodCalled('openBatterySaverFeedbackDialog');
   }
 
-  openHighEfficiencyFeedbackDialog() {
-    this.methodCalled('openHighEfficiencyFeedbackDialog');
+  openMemorySaverFeedbackDialog() {
+    this.methodCalled('openMemorySaverFeedbackDialog');
   }
 
-  setValidationResult(result: boolean) {
-    this.validationResult_ = result;
+  openSpeedFeedbackDialog() {
+    this.methodCalled('openSpeedFeedbackDialog');
+  }
+
+  setValidationResults(results: Record<string, boolean>) {
+    this.validationResults_ = results;
   }
 
   validateTabDiscardExceptionRule(rule: string) {
     this.methodCalled('validateTabDiscardExceptionRule', rule);
-    return Promise.resolve(this.validationResult_);
+    return Promise.resolve(this.validationResults_[rule] ?? true);
   }
 }

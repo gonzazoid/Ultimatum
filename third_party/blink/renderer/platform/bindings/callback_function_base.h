@@ -5,12 +5,13 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_CALLBACK_FUNCTION_BASE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_CALLBACK_FUNCTION_BASE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/public/common/scheduler/task_attribution_id.h"
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/scheduler/public/task_attribution_info.h"
 
 namespace blink {
 
@@ -19,6 +20,10 @@ namespace blink {
 // overload resolutions, SFINAE technique, etc.) so that it's possible to
 // distinguish callback functions from anything else. Also it provides a common
 // implementation of callback functions.
+//
+// This base class does not provide support for task attribution, so the
+// callback that require such a functionality should inherit from
+// CallbackFunctionWithTaskAttributionBase class.
 //
 // As the signatures of callback functions vary, this class does not implement
 // |Invoke| member function that performs "invoke" steps. Subclasses will
@@ -45,7 +50,7 @@ class PLATFORM_EXPORT CallbackFunctionBase
   // callback object is the same origin-domain. Otherwise,
   // |CallbackRelevantScriptStateOrReportError| or
   // |CallbackRelevantScriptStateOrThrowException| must be used instead.
-  ScriptState* CallbackRelevantScriptState() {
+  ScriptState* CallbackRelevantScriptState() const {
     DCHECK(callback_relevant_script_state_);
     return callback_relevant_script_state_;
   }
@@ -55,16 +60,16 @@ class PLATFORM_EXPORT CallbackFunctionBase
   // returns nullptr.
   ScriptState* CallbackRelevantScriptStateOrReportError(
       const char* interface_name,
-      const char* operation_name);
+      const char* operation_name) const;
 
   // Returns the ScriptState of the relevant realm of the callback object iff
   // the callback is the same origin-domain. Otherwise, throws an exception and
   // returns nullptr.
   ScriptState* CallbackRelevantScriptStateOrThrowException(
       const char* interface_name,
-      const char* operation_name);
+      const char* operation_name) const;
 
-  ScriptState* IncumbentScriptState() { return incumbent_script_state_; }
+  ScriptState* IncumbentScriptState() const { return incumbent_script_state_; }
 
   DOMWrapperWorld& GetWorld() const { return incumbent_script_state_->World(); }
 
@@ -77,7 +82,7 @@ class PLATFORM_EXPORT CallbackFunctionBase
   //
   // NOTE: Do not abuse this function.  Let |Invoke| method defined in a
   // subclass do the right thing.  This function is rarely needed.
-  void EvaluateAsPartOfCallback(base::OnceCallback<void()> closure);
+  void EvaluateAsPartOfCallback(base::OnceCallback<void(ScriptState*)> closure);
 
   // Makes the underlying V8 function collectable by V8 Scavenger GC.  Do not
   // use this function unless you really need a hacky performance optimization.
@@ -87,14 +92,6 @@ class PLATFORM_EXPORT CallbackFunctionBase
   // runs.
   void DisposeV8FunctionImmediatelyToReduceMemoryFootprint() {
     callback_function_.Reset();
-  }
-
-  absl::optional<scheduler::TaskAttributionId> GetParentTaskId() const {
-    return parent_task_id_;
-  }
-
-  void SetParentTaskId(absl::optional<scheduler::TaskAttributionId> task_id) {
-    parent_task_id_ = task_id;
   }
 
  protected:
@@ -108,6 +105,8 @@ class PLATFORM_EXPORT CallbackFunctionBase
   // The "callback function type" value.
   // Use v8::Object instead of v8::Function in order to handle
   // [LegacyTreatNonObjectAsNull].
+  // TODO(1420942): consider storing either v8::Function or v8::Context in this
+  // field in order to simplify lazy creation of CachedData object.
   TraceWrapperV8Reference<v8::Object> callback_function_;
   // The associated Realm of the callback function type value iff it's the same
   // origin-domain. Otherwise, nullptr.
@@ -116,8 +115,36 @@ class PLATFORM_EXPORT CallbackFunctionBase
   // converted to an IDL value.
   // https://webidl.spec.whatwg.org/#dfn-callback-context
   Member<ScriptState> incumbent_script_state_;
+};
 
-  absl::optional<scheduler::TaskAttributionId> parent_task_id_;
+// CallbackFunctionWithTaskAttributionBase is the common base class of callback
+// function that require task attribution support.
+// Callbacks that require such a functionality should be defined with
+// [SupportsTaskAttribution] IDL extended attribute.
+class PLATFORM_EXPORT CallbackFunctionWithTaskAttributionBase
+    : public CallbackFunctionBase {
+ public:
+  ~CallbackFunctionWithTaskAttributionBase() override = default;
+
+  scheduler::TaskAttributionInfo* GetParentTask() const {
+    return parent_task_.Get();
+  }
+
+  void SetParentTask(scheduler::TaskAttributionInfo* task) {
+    parent_task_ = task;
+  }
+
+  void Trace(Visitor* visitor) const override {
+    CallbackFunctionBase::Trace(visitor);
+    visitor->Trace(parent_task_);
+  }
+
+ protected:
+  explicit CallbackFunctionWithTaskAttributionBase(v8::Local<v8::Object> object)
+      : CallbackFunctionBase(object) {}
+
+ private:
+  Member<scheduler::TaskAttributionInfo> parent_task_;
 };
 
 }  // namespace blink

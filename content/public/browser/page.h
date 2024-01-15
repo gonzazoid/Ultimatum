@@ -5,11 +5,12 @@
 #ifndef CONTENT_PUBLIC_BROWSER_PAGE_H_
 #define CONTENT_PUBLIC_BROWSER_PAGE_H_
 
-#include "base/callback.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "base/supports_user_data.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_frame_host.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "url/gurl.h"
@@ -47,6 +48,7 @@ namespace content {
 // additional FrameTrees which will have their own associated Page. Please take
 // into consideration when assuming that Page is appropriate for storing
 // something that's common for all frames you see on a tab.
+// See docs/frame_trees.md for more details.
 
 // NOTE: Depending on the process model, the cross-origin iframes are likely to
 // be hosted in a different renderer process than the main document, so a given
@@ -62,7 +64,7 @@ class CONTENT_EXPORT Page : public base::SupportsUserData {
 
   // The GURL for the page's web application manifest.
   // See https://w3c.github.io/manifest/#web-application-manifest
-  virtual const absl::optional<GURL>& GetManifestUrl() const = 0;
+  virtual const std::optional<GURL>& GetManifestUrl() const = 0;
 
   // The callback invoked when the renderer responds to a request for the main
   // frame document's manifest. The url will be empty if the document specifies
@@ -81,7 +83,7 @@ class CONTENT_EXPORT Page : public base::SupportsUserData {
   // include pages in bfcache, portal, prerendering, fenced frames, pending
   // commit and pending deletion pages. See WebContents::GetPrimaryPage for more
   // details.
-  virtual bool IsPrimary() = 0;
+  virtual bool IsPrimary() const = 0;
 
   // Returns the main RenderFrameHost associated with this Page.
   RenderFrameHost& GetMainDocument() { return GetMainDocumentHelper(); }
@@ -94,6 +96,17 @@ class CONTENT_EXPORT Page : public base::SupportsUserData {
   // Whether the most recent page scale factor sent by the main frame's renderer
   // is 1 (i.e. no magnification).
   virtual bool IsPageScaleFactorOne() = 0;
+
+  // Returns the MIME type bound to the Page contents after a navigation.
+  virtual const std::string& GetContentsMimeType() const = 0;
+
+  // Test version of `PageImpl::SetResizable` to allow tests outside of
+  // //content to simulate the value normally set by the
+  // window.setResizable(bool) API.
+  virtual void SetResizableForTesting(std::optional<bool> resizable) = 0;
+  // Returns the value set by `window.setResizable(bool)` API or `std::nullopt`
+  // if unset which can override `BrowserView::CanResize`.
+  virtual std::optional<bool> GetResizable() = 0;
 
  private:
   // This method is needed to ensure that PageImpl can both implement a Page's

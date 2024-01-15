@@ -4,8 +4,10 @@
 
 #include "media/base/media_url_demuxer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/demuxer.h"
 
@@ -16,18 +18,19 @@ MediaUrlDemuxer::MediaUrlDemuxer(
     const GURL& media_url,
     const net::SiteForCookies& site_for_cookies,
     const url::Origin& top_frame_origin,
+    bool has_storage_access,
     bool allow_credentials,
     bool is_hls)
-    : params_{media_url, site_for_cookies, top_frame_origin, allow_credentials,
-              is_hls},
+    : params_{media_url,          site_for_cookies,  top_frame_origin,
+              has_storage_access, allow_credentials, is_hls},
       task_runner_(task_runner) {}
 
 MediaUrlDemuxer::~MediaUrlDemuxer() = default;
 
 // Should never be called since MediaResource::Type is URL.
-std::vector<DemuxerStream*> MediaUrlDemuxer::GetAllStreams() {
-  NOTREACHED();
-  return std::vector<DemuxerStream*>();
+std::vector<raw_ptr<DemuxerStream, VectorExperimental>>
+MediaUrlDemuxer::GetAllStreams() {
+  NOTREACHED_NORETURN();
 }
 
 const MediaUrlParams& MediaUrlDemuxer::GetMediaUrlParams() const {
@@ -35,7 +38,7 @@ const MediaUrlParams& MediaUrlDemuxer::GetMediaUrlParams() const {
 }
 
 MediaResource::Type MediaUrlDemuxer::GetType() const {
-  return MediaResource::Type::URL;
+  return MediaResource::Type::KUrl;
 }
 
 std::string MediaUrlDemuxer::GetDisplayName() const {
@@ -51,6 +54,11 @@ void MediaUrlDemuxer::ForwardDurationChangeToDemuxerHost(
   DCHECK(host_);
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   host_->SetDuration(duration);
+}
+
+void MediaUrlDemuxer::SetHeaders(
+    const base::flat_map<std::string, std::string>& headers) {
+  params_.headers = std::move(headers);
 }
 
 void MediaUrlDemuxer::Initialize(DemuxerHost* host,
@@ -69,6 +77,11 @@ void MediaUrlDemuxer::Seek(base::TimeDelta time,
                            PipelineStatusCallback status_cb) {
   task_runner_->PostTask(FROM_HERE,
                          base::BindOnce(std::move(status_cb), PIPELINE_OK));
+}
+
+bool MediaUrlDemuxer::IsSeekable() const {
+  // While the demuxer itself is not seekable, the underlying player is.
+  return true;
 }
 
 void MediaUrlDemuxer::Stop() {}

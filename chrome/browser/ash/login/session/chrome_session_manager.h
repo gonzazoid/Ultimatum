@@ -9,6 +9,7 @@
 
 #include "chrome/browser/ash/login/oobe_configuration.h"
 #include "chrome/browser/ash/login/session/user_session_initializer.h"
+#include "chromeos/ash/components/login/integrity/misconfigured_user_cleaner.h"
 #include "components/session_manager/core/session_manager.h"
 
 namespace base {
@@ -51,11 +52,5 @@ class ChromeSessionManager : public session_manager::SessionManager {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::ChromeSessionManager;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SESSION_CHROME_SESSION_MANAGER_H_

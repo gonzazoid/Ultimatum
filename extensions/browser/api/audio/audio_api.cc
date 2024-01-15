@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/types/optional_util.h"
 #include "base/values.h"
@@ -54,7 +54,7 @@ AudioAPI::AudioAPI(content::BrowserContext* context)
   audio_service_observation_.Observe(service_.get());
 }
 
-AudioAPI::~AudioAPI() {}
+AudioAPI::~AudioAPI() = default;
 
 AudioService* AudioAPI::GetService() const {
   return service_.get();
@@ -84,7 +84,7 @@ void AudioAPI::OnMuteChanged(bool is_input, bool is_muted) {
   // Dispatch onMuteChanged event.
   audio::MuteChangedEvent raw_event;
   raw_event.stream_type =
-      is_input ? audio::STREAM_TYPE_INPUT : audio::STREAM_TYPE_OUTPUT;
+      is_input ? audio::StreamType::kInput : audio::StreamType::kOutput;
   raw_event.is_muted = is_muted;
   auto event_args = audio::OnMuteChanged::Create(raw_event);
   auto event = std::make_unique<Event>(events::AUDIO_ON_MUTE_CHANGED,
@@ -108,9 +108,9 @@ void AudioAPI::OnDevicesChanged(const DeviceInfoList& devices) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ExtensionFunction::ResponseAction AudioGetDevicesFunction::Run() {
-  std::unique_ptr<audio::GetDevices::Params> params(
-      audio::GetDevices::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<audio::GetDevices::Params> params =
+      audio::GetDevices::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   AudioService* service =
       AudioAPI::GetFactoryInstance()->Get(browser_context())->GetService();
@@ -137,9 +137,9 @@ void AudioGetDevicesFunction::OnResponse(
 ///////////////////////////////////////////////////////////////////////////////
 
 ExtensionFunction::ResponseAction AudioSetActiveDevicesFunction::Run() {
-  std::unique_ptr<audio::SetActiveDevices::Params> params(
-      audio::SetActiveDevices::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<audio::SetActiveDevices::Params> params =
+      audio::SetActiveDevices::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   AudioService* service =
       AudioAPI::GetFactoryInstance()->Get(browser_context())->GetService();
@@ -164,9 +164,9 @@ void AudioSetActiveDevicesFunction::OnResponse(bool success) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ExtensionFunction::ResponseAction AudioSetPropertiesFunction::Run() {
-  std::unique_ptr<audio::SetProperties::Params> params(
-      audio::SetProperties::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<audio::SetProperties::Params> params =
+      audio::SetProperties::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   AudioService* service =
       AudioAPI::GetFactoryInstance()->Get(browser_context())->GetService();
@@ -195,15 +195,15 @@ void AudioSetPropertiesFunction::OnResponse(bool success) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ExtensionFunction::ResponseAction AudioSetMuteFunction::Run() {
-  std::unique_ptr<audio::SetMute::Params> params(
-      audio::SetMute::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<audio::SetMute::Params> params =
+      audio::SetMute::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   AudioService* service =
       AudioAPI::GetFactoryInstance()->Get(browser_context())->GetService();
   DCHECK(service);
 
-  const bool is_input = (params->stream_type == audio::STREAM_TYPE_INPUT);
+  const bool is_input = (params->stream_type == audio::StreamType::kInput);
 
   service->SetMute(is_input, params->is_muted,
                    base::BindOnce(&AudioSetMuteFunction::OnResponse, this));
@@ -222,14 +222,14 @@ void AudioSetMuteFunction::OnResponse(bool success) {
 ///////////////////////////////////////////////////////////////////////////////
 
 ExtensionFunction::ResponseAction AudioGetMuteFunction::Run() {
-  std::unique_ptr<audio::GetMute::Params> params(
-      audio::GetMute::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<audio::GetMute::Params> params =
+      audio::GetMute::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   AudioService* service =
       AudioAPI::GetFactoryInstance()->Get(browser_context())->GetService();
   DCHECK(service);
-  const bool is_input = (params->stream_type == audio::STREAM_TYPE_INPUT);
+  const bool is_input = (params->stream_type == audio::StreamType::kInput);
 
   service->GetMute(is_input,
                    base::BindOnce(&AudioGetMuteFunction::OnResponse, this));

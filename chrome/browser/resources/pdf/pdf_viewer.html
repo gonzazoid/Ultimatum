@@ -129,7 +129,8 @@
 </style>
 
 <viewer-toolbar id="toolbar" annotation-mode="[[annotationMode_]]"
-    doc-title="[[title_]]" doc-length="[[docLength_]]" page-no="[[pageNo_]]"
+    doc-title="[[title_]]" doc-length="[[docLength_]]"
+    embedded-viewer="[[embedded_]]" page-no="[[pageNo_]]"
     load-progress="[[loadProgress_]]" has-edits="[[hasEdits_]]"
     has-entered-annotation-mode="[[hasEnteredAnnotationMode_]]"
     printing-enabled="[[printingEnabled_]]"
@@ -141,6 +142,9 @@
 <if expr="enable_ink">
     annotation-available="[[annotationAvailable_]]"
     pdf-annotations-enabled="[[pdfAnnotationsEnabled_]]"
+</if>
+<if expr="enable_screen_ai_service">
+    pdf-ocr-enabled="[[pdfOcrEnabled_]]"
 </if>
     on-change-page="onChangePage_"
     on-display-annotations-changed="onDisplayAnnotationsChanged_"
@@ -162,10 +166,11 @@
   <div id="sidenav-container" closed$="[[sidenavCollapsed_]]"
       hidden$="[[!toolbarEnabled_]]">
     <viewer-pdf-sidenav id="sidenav"
-        active-page="[[pageNo_]]" bookmarks="[[bookmarks_]]"
-        clockwise-rotations="[[clockwiseRotations_]]"
+        active-page="[[pageNo_]]" attachments="[[attachments_]]"
+        bookmarks="[[bookmarks_]]" clockwise-rotations="[[clockwiseRotations_]]"
         doc-length="[[docLength_]]" on-change-page="onChangePage_"
-        on-change-page-and-xy="onChangePageAndXy_" on-navigate="onNavigate_">
+        on-change-page-and-xy="onChangePageAndXy_" on-navigate="onNavigate_"
+        on-save-attachment="onSaveAttachment_">
     </viewer-pdf-sidenav>
   </div>
   <div id="main">

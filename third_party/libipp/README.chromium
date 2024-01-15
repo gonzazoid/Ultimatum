@@ -1,9 +1,10 @@
 Name: libipp
 URL: https://chromium.googlesource.com/chromiumos/platform2/libipp
-Version: 6c45a4f3a05cb5dd700414fe4d94cf685159d3ce
+Version: 2209bb84a8e122dab7c02fe66cc61a7b42873d7f
 License: BSD
 License File: LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
 ChromeOS library for bulding/parsing IPP frames.
@@ -12,6 +13,6 @@ Modifications:
 - None
 
 To import a new snapshot of libipp:
-- Checkout the latest version: git checkout 6c45a4f3a05cb5dd700414fe4d94cf685159d3ce
-- Change the chromium/src/DEPS entry to the newly checked out commit.
+- roll-dep src/third_party/libipp/libipp.
 - Update this README to reflect the new version number.
+- Update BUILD.gn if needed.

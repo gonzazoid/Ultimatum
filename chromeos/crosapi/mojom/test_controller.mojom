@@ -7,8 +7,25 @@ module crosapi.mojom;
 import "chromeos/crosapi/mojom/app_service_types.mojom";
 import "chromeos/crosapi/mojom/extension_keeplist.mojom";
 import "chromeos/crosapi/mojom/tts.mojom";
+import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/values.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
+import "ui/gfx/range/mojom/range.mojom";
+import "url/mojom/url.mojom";
+
+// The enum of possible states for a shelf item.
+// Each value must be a power of 2.
+[Stable, Extensible]
+enum ShelfItemState {
+  // Usually represents an app with no running instance.
+  [Default] kNormal = 0,
+  // Shelf item has a running instance.
+  kRunning = 1,
+  // Shelf item owns the window that is currently active.
+  kActive = 2,
+  // App has at least 1 notification.
+  kNotification = 4
+};
 
 [Stable, Extensible]
 enum TouchEventType {
@@ -31,11 +48,38 @@ enum OptionalBoolean {
   kTrue,
 };
 
+// Dev mode IWAs are either installed from a proxy origin, or from a Web Bundle
+// file.
+[Stable]
+union IsolatedWebAppLocation {
+  url.mojom.Url proxy_origin;
+  mojo_base.mojom.FilePath bundle_path;
+};
+
+[Stable]
+union InstallWebAppResult {
+  string app_id;
+  string error_message;
+};
+
+[Stable]
+struct AppListItemAttributes {
+  string item_position@0;
+  string pin_position@1;
+};
+
+// For use with StandaloneBrowserTestController's ObserveDomMessages method.
+[Stable]
+interface DomMessageObserver {
+  // Invoked when a message arrived.
+  OnMessage@0(string message);
+};
+
 // Implemented in lacros-chrome.
 // Lets the Ash browser tests that require Lacros to send commands to this
 // lacros-chrome instance.
-// Next version: 4
-// Next method id: 4
+// Next version: 10
+// Next method id: 12
 [Stable, Uuid="20e7f031-f4e1-4ad9-bd91-ad59eb8b1504"]
 interface StandaloneBrowserTestController {
   // Installs a test web app in lacros-chrome given a start URL and mode (open
@@ -55,6 +99,48 @@ interface StandaloneBrowserTestController {
   // Returns Ash extension keeplist data from Lacros.
   [MinVersion=3]
   GetExtensionKeeplist@3() => (ExtensionKeepList keep_list);
+
+  // Requests Tts(text to speech) to speak an utterance from Lacros browser.
+  [MinVersion=4]
+  TtsSpeak@4(TtsUtterance utterance,
+             pending_remote<TtsUtteranceClient> utterance_client);
+
+  // Installs an app with the start URL "parent_app_origin/'sub_app_path'" as a
+  // sub app of the given parent app in Lacros.
+  [MinVersion=5]
+  InstallSubApp@5(string parent_app_id, string sub_app_path)
+    => (string sub_app_id);
+
+  // Installs the isolated web app hosted at 'location' in lacros-chrome and
+  // returns the ID of the installed app or the error message if the install
+  // failed.
+  [MinVersion=6]
+  InstallIsolatedWebApp@6(IsolatedWebAppLocation location, bool dev_mode)
+    => (InstallWebAppResult result);
+
+  // Sets WebAppSettings pref for a primary user profile.
+  [MinVersion=7]
+  SetWebAppSettingsPref@7(string policy) => (bool success);
+
+  // Installs an unpacked extension located at the given directory in Lacros and
+  // returns its id once the extensions registry signals loading is complete
+  // (which does NOT guarantee that any background script or views have finished
+  // loading). If installation/loading fails, the callback is never run.
+  [MinVersion=8]
+  InstallUnpackedExtension@8(string path) => (string extension_id);
+
+  // Removes the given component extension from Lacros.
+  [MinVersion=8]
+  RemoveComponentExtension@9(string extension_id) => ();
+
+  // Informs the given observer of future messages from the
+  // DOMAutomationController.
+  [MinVersion=8]
+  ObserveDomMessages@10(pending_remote<DomMessageObserver> observer) => ();
+
+  // Sets WebAppInstallForceList pref for a primary user profile.
+  [MinVersion=9]
+  SetWebAppInstallForceListPref@11(string policy) => (bool success);
 };
 
 // Allows callers running in lacros to trigger test events that are passed to
@@ -123,28 +209,124 @@ interface ShillClientTestInterface {
   AddIPConfig@9(string ip_config_path, mojo_base.mojom.Value properties) => ();
 };
 
+[Stable, Extensible]
+enum KeyEventType {
+  [Default] kKeyPress = 0,
+  kKeyRelease = 1
+};
+
+// Next version: 2
+// Next id: 5
+[Stable]
+struct KeyEvent {
+  KeyEventType type@0;
+  int32 dom_key@1;
+  int32 dom_code@2;
+  int32 key_code@3;
+  // This corresponds to ui::EventFlags from:
+  // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/event_constants.h;l=16;drc=19f3c214cd4f78e0fe47b2ccafaca406aaacd42f
+  [MinVersion=1] int32 flags@4;
+};
+
+// Next version: 2
+// Next id: 1
+[Stable]
+struct InputMethod {
+  string xkb_layout@0;
+};
+
 // This interface is implemented by Ash-Chrome.
 // It enables tests in Lacros-Chrome to send commands as an input method.
-// Next version: 2
-// Next method id: 3
+// By default, this changes Ash to use a US keyboard layout, but this can be
+// changed with `InstallAndSwitchToInputMethod` during a test.
+// Next version: 9
+// Next method id: 10
 [Stable, Uuid="c214f4f5-c583-44d1-9547-bb2456d9e70b"]
 interface InputMethodTestInterface {
   // Calls the callback when the input method has focused on some input field.
   WaitForFocus@0() => ();
 
-  // Calls ui::InputMethodAsh::CommitText with
+  // Calls `ash::InputMethodAsh::CommitText` with
   // InsertTextCursorBehavior::kMoveCursorAfterText.
   CommitText@1(string text) => ();
 
-  // Calls ui::InputMethodAsh::UpdateComposition.
+  // Calls `ash::InputMethodAsh::UpdateComposition`.
   [MinVersion=1] SetComposition@2(string text, uint32 index) => ();
+
+  // Calls `ash::InputMethodAsh::SendKeyEvent`.
+  //
+  // The key will be stuck in a pending state until KeyEventHandled is called.
+  // While the key is pending, other methods in this test interface can be
+  // called to simulate the input method performing input operations as a
+  // result of the key events.
+  //
+  // The key event is resolved once KeyEventHandled is called with the
+  // corresponding `key_event_id` that is returned by this call.
+  //
+  // For example, this will simulate a Korean input method for the key 'g':
+  //
+  //   SendKeyEventAsync(KeyEvent('g'),
+  //     base::BindLambdaForTesting([&](uint64 key_event_id){
+  //       SetComposition("ㅎ", 1);
+  //       KeyEventHandled(key_event_id, true);
+  //     });
+  [MinVersion=2] SendKeyEvent@3(KeyEvent event)
+      => ([MinVersion=3] uint64 key_event_id);
+
+  // Calls `ash::InputMethodAsh::SendKeyEvent`.
+  // Handle the pending key event with ID `key_event_id` with result of
+  // `handled`.
+  [MinVersion=3] KeyEventHandled@4(uint64 key_event_id, bool handled) => ();
+
+  // Waits for the next surrounding text change since the last
+  // WaitForNextSurroundingTextChange call (or since InputMethodTestInterface
+  // was instantiated if there are no previous calls to
+  // WaitForNextSurroundingTextChange).
+  //
+  // In other words, starting from when InputMethodTestInterface is created, any
+  // surrounding text changes are queued. WaitForNextSurroundingTextChange
+  // pops the front of the queue, or waits for a new surrounding text change if
+  // the queue is empty.
+  //
+  // This avoids timing issues so that calling WaitForNextSurroundingTextChange
+  // always returns the same set of values for the same set of operations.
+  [MinVersion=4] WaitForNextSurroundingTextChange@5() =>
+      (string surrounding_text, gfx.mojom.Range selection_range);
+
+  // Returns whether every capability in `capabilities` is supported by Ash.
+  // Capabilities are listed as string constants in
+  // //chromeos/crosapi/cpp/input_method_test_interface_constants.h
+  [MinVersion=5] HasCapabilities@6(array<string> capabilities)
+      => (bool has_capabilities);
+
+  // Calls `ash::InputMethodAsh::ConfirmCompositionText`.
+  [MinVersion=6] ConfirmComposition@7() => ();
+
+  // Calls `ash::InputMethodAsh::DeleteSurroundingText`.
+  [MinVersion=7] DeleteSurroundingText@8(uint32 length_before_selection,
+                                         uint32 length_after_selection) => ();
+
+  // Installs a new input method `input_method` in Ash and switches to it.
+  [MinVersion=8] InstallAndSwitchToInputMethod@9(InputMethod input_method)
+      => ();
+};
+
+// Types of accessibility features in Ash that Lacros needs to be able
+// to set for testing.
+[Stable, Extensible]
+enum AssistiveTechnologyType {
+  [Default] kUnknown = 0,
+  kChromeVox = 1,
+  kSelectToSpeak = 2,
+  kSwitchAccess = 3,
+  [MinVersion=1] kFocusHighlight = 4,
 };
 
 // This interface is implemented by Ash-Chrome.
 // This interface provides tests a mechanism to mutate or query ash.
 // In the future, this interface may merge with an automation or a11y interface.
-// Next version: 21
-// Next method id: 32
+// Next version: 32
+// Next method id: 46
 [Stable, Uuid="1f93f9d7-e466-466c-a675-c21b48cf30d3"]
 interface TestController {
   // Clicks the middle of the views element identified by |element_name|.
@@ -319,4 +501,77 @@ interface TestController {
   // Clear App Service state, including from any previously installed apps.
   [MinVersion=20]
   ReinitializeAppService@31() => ();
+
+  // Reads state of Shelf item. Returns a bitmask of `ShelfItemState` values.
+  [MinVersion=21]
+  GetShelfItemState@32(string app_id) => (uint32 state);
+
+  // Returns the size of the Tts utterance queue of the TtsController running in
+  // Ash.
+  [MinVersion=22]
+  GetTtsUtteranceQueueSize@33() => (int32 size);
+
+  // Returns true is desk is being created or removed or desk animation is in
+  // progress. The result is only accurate on `false` result. Even if it returns
+  // `true`, given the async nature of CrosAPI the desk oepration might have
+  // been finished already.
+  [MinVersion=23]
+  AreDesksBeingModified@34()=>(bool are_desks_being_modified);
+
+  // Returns all available voices in ash-chrome.
+  [MinVersion=24]
+  GetTtsVoices@35() => (array<TtsVoice> voices);
+
+  // Requests Tts(text to speech) to speak an utterance from Ash.
+  [MinVersion=24]
+  TtsSpeak@36(TtsUtterance utterance,
+              pending_remote<TtsUtteranceClient> utterance_client);
+
+  // Checks whether local cache for saved desks is still loading.
+  [MinVersion=25]
+  IsSavedDeskStorageReady@37() => (bool is_saved_desk_storage_ready);
+
+  // Sets enabled state for the given Accessibility feature.
+  [MinVersion=26]
+  SetAssistiveTechnologyEnabled@38(AssistiveTechnologyType at_type,
+      bool enabled);
+
+  // Gets an app's shelf attributes.
+  [MinVersion=27]
+  GetAppListItemAttributes@39(string item_id)
+      => (AppListItemAttributes attributes);
+
+  // Sets an app's shelf attributes.
+  [MinVersion=27]
+  SetAppListItemAttributes@40(string item_id,
+                              AppListItemAttributes attributes) => ();
+
+  // Closes all Ash browser windows and confirms the result in callback
+  // asynchronously.
+  // The callback will be run as soon as it observes all ash browser windows are
+  // closed, or fails to do so when it times out.
+  // Returns true if all windows are closed; false if it fails to close
+  // all windows.
+  [MinVersion=28]
+  CloseAllAshBrowserWindowsAndConfirm@41() => (bool success);
+
+  // Checks if there is at least one ash browser window open asynchronously.
+  // The result is passed back in callback.
+  // The callback will be run as soon as at least 1 ash browser window is
+  // observed, or no ash browser window is open when it times out.
+  [MinVersion=28]
+  CheckAtLeastOneAshBrowserWindowOpen@42() => (bool has_open_window);
+
+  // Gets the last committed URL for each browser tab currently open in Ash.
+  [MinVersion=29]
+  GetAllOpenTabURLs@43() => (array<url.mojom.Url> urls);
+
+  // Overrides the Almanac endpoint URL for testing, override is removed if
+  // nullopt is given.
+  [MinVersion=30]
+  SetAlmanacEndpointUrlForTesting@44(string? override) => ();
+
+  // Checks if a toast with a given `toast_id` is shown.
+  [MinVersion=31]
+  IsToastShown@45(string toast_id) => (bool toast_shown);
 };

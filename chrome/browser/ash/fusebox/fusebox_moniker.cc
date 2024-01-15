@@ -13,17 +13,12 @@ namespace fusebox {
 // static
 MonikerMap::ExtractTokenResult MonikerMap::ExtractToken(
     const std::string& fs_url_as_string) {
-  size_t n = 0;
-  if (base::StartsWith(fs_url_as_string, fusebox::kMonikerSubdir)) {
-    n = strlen(fusebox::kMonikerSubdir);
-  } else if (base::StartsWith(fs_url_as_string,
-                              fusebox::kMonikerFileSystemURL)) {
-    n = strlen(fusebox::kMonikerFileSystemURL);
-  } else {
+  if (!base::StartsWith(fs_url_as_string, fusebox::kMonikerSubdir)) {
     ExtractTokenResult result;
     result.result_type = ExtractTokenResult::ResultType::NOT_A_MONIKER_FS_URL;
     return result;
   }
+  size_t n = strlen(fusebox::kMonikerSubdir);
   if (fs_url_as_string.size() <= n) {
     ExtractTokenResult result;
     result.result_type =
@@ -56,12 +51,12 @@ std::string MonikerMap::GetFilename(const Moniker& moniker) {
 MonikerMap::MonikerMap() = default;
 MonikerMap::~MonikerMap() = default;
 
-Moniker MonikerMap::CreateMoniker(storage::FileSystemURL target,
+Moniker MonikerMap::CreateMoniker(const storage::FileSystemURL& target,
                                   bool read_only) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   Moniker moniker = base::Token::CreateRandom();
-  map_.insert({moniker, std::make_pair(std::move(target), read_only)});
+  map_.insert({moniker, std::make_pair(target, read_only)});
   return moniker;
 }
 
@@ -74,7 +69,8 @@ void MonikerMap::DestroyMoniker(const Moniker& moniker) {
   }
 }
 
-MonikerMap::FSURLAndReadOnlyState MonikerMap::Resolve(const Moniker& moniker) {
+MonikerMap::FSURLAndReadOnlyState MonikerMap::Resolve(
+    const Moniker& moniker) const {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   auto iter = map_.find(moniker);

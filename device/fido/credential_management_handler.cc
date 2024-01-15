@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "device/fido/fido_authenticator.h"
 #include "device/fido/fido_constants.h"
@@ -53,9 +53,8 @@ void CredentialManagementHandler::OnTouch(FidoAuthenticator* authenticator) {
   CancelActiveAuthenticators(authenticator->GetId());
 
   if (authenticator->SupportedProtocol() != ProtocolVersion::kCtap2 ||
-      !authenticator->Options() ||
-      !(authenticator->Options()->supports_credential_management ||
-        authenticator->Options()->supports_credential_management_preview)) {
+      !(authenticator->Options().supports_credential_management ||
+        authenticator->Options().supports_credential_management_preview)) {
     state_ = State::kFinished;
     std::move(finished_callback_)
         .Run(CredentialManagementStatus::
@@ -63,7 +62,7 @@ void CredentialManagementHandler::OnTouch(FidoAuthenticator* authenticator) {
     return;
   }
 
-  if (authenticator->Options()->client_pin_availability !=
+  if (authenticator->Options().client_pin_availability !=
       AuthenticatorSupportedOptions::ClientPinAvailability::
           kSupportedAndPinSet) {
     // The authenticator doesn't have a PIN/UV set up or doesn't support PINs.
@@ -93,9 +92,7 @@ void CredentialManagementHandler::OnRetriesResponse(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(state_, State::kGettingRetries);
   if (status != CtapDeviceResponseCode::kSuccess) {
-    state_ = State::kFinished;
-    std::move(finished_callback_)
-        .Run(CredentialManagementStatus::kAuthenticatorResponseInvalid);
+    OnInitFinished(status);
     return;
   }
   if (response->retries == 0) {
@@ -125,8 +122,13 @@ void CredentialManagementHandler::OnHavePIN(std::string pin) {
   }
 
   state_ = State::kGettingPINToken;
+  std::vector<pin::Permissions> permissions = {
+      pin::Permissions::kCredentialManagement};
+  if (authenticator_->Options().large_blob_type == LargeBlobSupportType::kKey) {
+    permissions.push_back(pin::Permissions::kLargeBlobWrite);
+  }
   authenticator_->GetPINToken(
-      std::move(pin), {pin::Permissions::kCredentialManagement},
+      std::move(pin), std::move(permissions),
       /*rp_id=*/absl::nullopt,
       base::BindOnce(&CredentialManagementHandler::OnHavePINToken,
                      weak_factory_.GetWeakPtr()));
@@ -164,9 +166,28 @@ void CredentialManagementHandler::OnHavePINToken(
     return;
   }
 
-  state_ = State::kReady;
   pin_token_ = response;
-  std::move(ready_callback_).Run();
+  if (authenticator_->Options().large_blob_type == LargeBlobSupportType::kKey) {
+    authenticator_->GarbageCollectLargeBlob(
+        *pin_token_,
+        base::BindOnce(&CredentialManagementHandler::OnInitFinished,
+                       weak_factory_.GetWeakPtr()));
+    return;
+  }
+
+  OnInitFinished(status);
+}
+
+void CredentialManagementHandler::OnInitFinished(
+    CtapDeviceResponseCode status) {
+  if (status == CtapDeviceResponseCode::kSuccess) {
+    state_ = State::kReady;
+    std::move(ready_callback_).Run();
+    return;
+  }
+  state_ = State::kFinished;
+  std::move(finished_callback_)
+      .Run(CredentialManagementStatus::kAuthenticatorResponseInvalid);
 }
 
 void CredentialManagementHandler::GetCredentials(
@@ -186,36 +207,22 @@ void CredentialManagementHandler::GetCredentials(
                      weak_factory_.GetWeakPtr()));
 }
 
-static void OnDeleteCredential(
-    CredentialManagementHandler::DeleteCredentialCallback callback,
-    CtapDeviceResponseCode status,
-    absl::optional<DeleteCredentialResponse> response) {
-  std::move(callback).Run(status);
-}
-
-void CredentialManagementHandler::DeleteCredential(
-    const PublicKeyCredentialDescriptor& credential_id,
-    DeleteCredentialCallback callback) {
-  DCHECK(state_ == State::kReady && !get_credentials_callback_);
-  if (!authenticator_) {
-    // AuthenticatorRemoved() may have been called, but the observer would have
-    // seen a FidoAuthenticatorRemoved() call.
-    NOTREACHED();
-    return;
-  }
-  DCHECK(pin_token_);
-  authenticator_->DeleteCredential(
-      *pin_token_, credential_id,
-      base::BindOnce(&OnDeleteCredential, std::move(callback)));
-}
-
 void CredentialManagementHandler::OnDeleteCredentials(
     std::vector<device::PublicKeyCredentialDescriptor> remaining_credential_ids,
     CredentialManagementHandler::DeleteCredentialCallback callback,
     CtapDeviceResponseCode status,
     absl::optional<DeleteCredentialResponse> response) {
-  if (status != CtapDeviceResponseCode::kSuccess ||
-      remaining_credential_ids.empty()) {
+  if (status != CtapDeviceResponseCode::kSuccess) {
+    std::move(callback).Run(status);
+    return;
+  }
+
+  if (remaining_credential_ids.empty()) {
+    if (authenticator_->Options().large_blob_type ==
+        LargeBlobSupportType::kKey) {
+      authenticator_->GarbageCollectLargeBlob(*pin_token_, std::move(callback));
+      return;
+    }
     std::move(callback).Run(status);
     return;
   }

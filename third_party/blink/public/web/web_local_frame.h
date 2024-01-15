@@ -8,8 +8,8 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/pass_key.h"
@@ -34,9 +34,9 @@
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-shared.h"
 #include "third_party/blink/public/mojom/frame/media_player_action.mojom-shared.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-shared.h"
+#include "third_party/blink/public/mojom/lcp_critical_path_predictor/lcp_critical_path_predictor.mojom-forward.h"
 #include "third_party/blink/public/mojom/page/widget.mojom-shared.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-shared.h"
-#include "third_party/blink/public/mojom/portal/portal.mojom-shared.h"
 #include "third_party/blink/public/mojom/script/script_evaluation_params.mojom-shared.h"
 #include "third_party/blink/public/mojom/selection_menu/selection_menu_behavior.mojom-shared.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
@@ -55,6 +55,10 @@
 #include "ui/base/ime/ime_text_span.h"
 #include "ui/gfx/range/range.h"
 #include "v8/include/v8-forward.h"
+
+namespace base {
+class SingleThreadTaskRunner;
+}
 
 namespace cc {
 class PaintCanvas;
@@ -87,7 +91,8 @@ class WebFrameWidget;
 class WebHistoryItem;
 class WebHitTestResult;
 class WebInputMethodController;
-class WebPerformance;
+class WebPerformanceMetricsForReporting;
+class WebPerformanceMetricsForNestedContexts;
 class WebPlugin;
 class WebPrintClient;
 class WebRange;
@@ -134,7 +139,8 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
       std::unique_ptr<blink::WebPolicyContainer> policy_container,
       WebFrame* opener = nullptr,
       const WebString& name = WebString(),
-      network::mojom::WebSandboxFlags = network::mojom::WebSandboxFlags::kNone);
+      network::mojom::WebSandboxFlags = network::mojom::WebSandboxFlags::kNone,
+      const WebURL& base_url = WebURL());
 
   // Used to create a provisional local frame. Currently, it's possible for a
   // provisional navigation not to commit (i.e. it might turn into a download),
@@ -163,7 +169,8 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
                                           const LocalFrameToken& frame_token,
                                           WebFrame* previous_web_frame,
                                           const FramePolicy&,
-                                          const WebString& name);
+                                          const WebString& name,
+                                          WebView* web_view);
 
   // Creates a new local child of this frame. Similar to the other methods that
   // create frames, the returned frame should be freed by calling Close() when
@@ -220,8 +227,11 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
   // Sets BackForwardCache NotRestoredReasons for the current frame.
   virtual void SetNotRestoredReasons(
       const mojom::BackForwardCacheNotRestoredReasonsPtr&) = 0;
-  // Returns if the current frame's NotRestoredReasons has any blocking reasons.
-  virtual bool HasBlockingReasons() = 0;
+
+  // Sets LCP Critical Path Detector hint for the current frame that was
+  // available at the navigation commit timing.
+  virtual void SetLCPPHint(
+      const mojom::LCPCriticalPathPredictorNavigationTimeHintPtr&) = 0;
 
   // Hierarchy ----------------------------------------------------------
 
@@ -446,6 +456,18 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
     AddInspectorIssueImpl(code);
   }
 
+  void AddGenericIssue(mojom::GenericIssueErrorType error_type,
+                       int violating_node_id,
+                       const WebString& violating_node_attribute) {
+    AddGenericIssueImpl(error_type, violating_node_id,
+                        violating_node_attribute);
+  }
+
+  void AddGenericIssue(mojom::GenericIssueErrorType error_type,
+                       int violating_node_id) {
+    AddGenericIssueImpl(error_type, violating_node_id);
+  }
+
   // Expose modal dialog methods to avoid having to go through JavaScript.
   virtual void Alert(const WebString& message) = 0;
   virtual bool Confirm(const WebString& message) = 0;
@@ -488,6 +510,7 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
       base::i18n::TextDirection direction) = 0;
 
   // Selection -----------------------------------------------------------
+  virtual void CenterSelection() = 0;
 
   virtual bool HasSelection() const = 0;
 
@@ -513,9 +536,17 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
     kPreserveHandleVisibility,
   };
 
+  enum SelectionSetFocusBehavior {
+    // Set Focus in the new selection.
+    kSelectionSetFocus,
+    // Not set focus in the new selection.
+    kSelectionDoNotSetFocus,
+  };
+
   virtual void SelectRange(const WebRange&,
                            HandleVisibilityBehavior,
-                           mojom::SelectionMenuBehavior) = 0;
+                           mojom::SelectionMenuBehavior,
+                           SelectionSetFocusBehavior) = 0;
 
   virtual WebString RangeAsText(const WebRange&) = 0;
 
@@ -543,6 +574,9 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
       int composition_end,
       const WebVector<ui::ImeTextSpan>& ime_text_spans) = 0;
   virtual void ExtendSelectionAndDelete(int before, int after) = 0;
+  virtual void ExtendSelectionAndReplace(int before,
+                                         int after,
+                                         const WebString& replacement_text) = 0;
 
   // Moves the selection extent point. This function does not allow the
   // selection to collapse. If the new extent is set to the same position as
@@ -653,6 +687,10 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
   // This will be removed following the deprecation. See: crbug.com/621512
   virtual void UsageCountChromeLoadTimes(const WebString& metric) = 0;
 
+  // Usage count for chrome.csi deprecation.
+  // This will be removed following the deprecation. See: crbug.com/113048
+  virtual void UsageCountChromeCSI(const WebString& metric) = 0;
+
   // Whether we've dispatched "pagehide" on the current document in this frame
   // previously, and haven't dispatched the "pageshow" event after the last time
   // we dispatched "pagehide". This means that we've navigated away from the
@@ -743,15 +781,8 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
   // printing. It returns whether any resources will need to load.
   virtual bool WillPrintSoon() = 0;
 
-  // Returns the page shrinking factor calculated by webkit (usually
-  // between 1/1.33 and 1/2). Returns 0 if the page number is invalid or
-  // not in printing mode.
-  virtual float GetPrintPageShrink(uint32_t page) = 0;
-
-  // Prints one page, and returns the calculated page shrinking factor
-  // (usually between 1/1.33 and 1/2).  Returns 0 if the page number is
-  // invalid or not in printing mode.
-  virtual float PrintPage(uint32_t page_to_print, cc::PaintCanvas*) = 0;
+  // Prints one page.
+  virtual void PrintPage(uint32_t page_to_print, cc::PaintCanvas*) = 0;
 
   // Reformats the WebFrame for screen display.
   virtual void PrintEnd() = 0;
@@ -787,7 +818,10 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
 
   // Performance --------------------------------------------------------
 
-  virtual WebPerformance Performance() const = 0;
+  virtual WebPerformanceMetricsForReporting PerformanceMetricsForReporting()
+      const = 0;
+  virtual WebPerformanceMetricsForNestedContexts
+  PerformanceMetricsForNestedContexts() const = 0;
 
   // Ad Tagging ---------------------------------------------------------
 
@@ -841,22 +875,19 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
   // Testing ------------------------------------------------------------------
 
   // Get the total spool size (the bounding box of all the pages placed after
-  // oneanother vertically), when printing for testing. Even if we still only
-  // support a uniform page size, some pages may be rotated using
-  // page-orientation.
+  // oneanother vertically), when printing for testing.
   virtual gfx::Size SpoolSizeInPixelsForTesting(
-      const gfx::Size& page_size_in_pixels,
+      const WebPrintParams&,
       const WebVector<uint32_t>& pages) = 0;
-  virtual gfx::Size SpoolSizeInPixelsForTesting(
-      const gfx::Size& page_size_in_pixels,
-      uint32_t page_count) = 0;
+  virtual gfx::Size SpoolSizeInPixelsForTesting(const WebPrintParams&,
+                                                uint32_t page_count) = 0;
 
   // Prints the given pages of the frame into the canvas, with page boundaries
   // drawn as one pixel wide blue lines. By default, all pages are printed. This
   // method exists to support web tests.
   virtual void PrintPagesForTesting(
       cc::PaintCanvas*,
-      const gfx::Size& page_size_in_pixels,
+      const WebPrintParams&,
       const gfx::Size& spool_size_in_pixels,
       const WebVector<uint32_t>* pages = nullptr) = 0;
 
@@ -882,7 +913,7 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
   virtual void SetTargetToCurrentHistoryItem(const WebString& target) = 0;
   virtual void UpdateCurrentHistoryItem() = 0;
   virtual PageState CurrentHistoryItemToPageState() = 0;
-  virtual const WebHistoryItem& GetCurrentHistoryItem() const = 0;
+  virtual WebHistoryItem GetCurrentHistoryItem() const = 0;
   // Reset TextFinder state for the web test runner in between two tests.
   virtual void ClearActiveFindMatchForTesting() = 0;
 
@@ -908,6 +939,16 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
       base::RepeatingCallback<void(const blink::WebHitTestResult&)>
           callback) = 0;
 
+  // Used to block and resume parsing of the current document in the frame.
+  virtual void BlockParserForTesting() {}
+  virtual void ResumeParserForTesting() {}
+
+  // Processes all pending input in the widget associated with this frame.
+  // This is an asynchronous operation since it processes the compositor queue
+  // as well. The passed closure is invoked when queues of both threads have
+  // been processed.
+  virtual void FlushInputForTesting(base::OnceClosure) {}
+
  protected:
   explicit WebLocalFrame(mojom::TreeScopeType scope,
                          const LocalFrameToken& frame_token)
@@ -923,7 +964,13 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
   virtual void AddMessageToConsoleImpl(const WebConsoleMessage&,
                                        bool discard_duplicates) = 0;
   virtual void AddInspectorIssueImpl(blink::mojom::InspectorIssueCode code) = 0;
-
+  virtual void AddGenericIssueImpl(
+      blink::mojom::GenericIssueErrorType error_type,
+      int violating_node_id) = 0;
+  virtual void AddGenericIssueImpl(
+      blink::mojom::GenericIssueErrorType error_type,
+      int violating_node_id,
+      const WebString& violating_node_attribute) = 0;
   virtual void CreateFrameWidgetInternal(
       base::PassKey<WebLocalFrame> pass_key,
       CrossVariantMojoAssociatedRemote<mojom::FrameWidgetHostInterfaceBase>

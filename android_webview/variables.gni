@@ -4,7 +4,6 @@
 
 import("//build/config/android/channel.gni")
 import("//build/config/android/config.gni")
-import("//weblayer/variables.gni")
 
 declare_args() {
   # Show a launcher icon to open WebView developer UI. This is enabled by
@@ -14,27 +13,10 @@ declare_args() {
   webview_devui_show_icon = android_channel != "stable"
 }
 
-system_webview_android_manifest =
-    "$root_gen_dir/android_webview/system_webview_apk/AndroidManifest.xml"
-system_webview_64_android_manifest =
-    "$root_gen_dir/android_webview/system_webview_64_apk/AndroidManifest.xml"
-trichrome_webview_android_manifest =
-    "$root_gen_dir/android_webview/trichrome_webview_apk/AndroidManifest.xml"
-trichrome_webview_64_android_manifest =
-    "$root_gen_dir/android_webview/trichrome_webview_64_apk/AndroidManifest.xml"
-trichrome_webview_64_32_android_manifest = "$root_gen_dir/android_webview/trichrome_webview_64_32_apk/AndroidManifest.xml"
-trichrome_webview_32_android_manifest =
-    "$root_gen_dir/android_webview/trichrome_webview_32_apk/AndroidManifest.xml"
-
 upstream_only_webview_deps = [
   "//android_webview:platform_service_bridge_upstream_implementation_java",
   "//android_webview/nonembedded:icon_resources",
+  "//content/public/android:identity_credentials_public_impl_java",
 ]
-
-if (webview_includes_weblayer) {
-  upstream_only_webview_deps += [ "//weblayer/browser/java:upstream_java" ]
-}
-
-webview_jinja_variables = [ "use_isolated_splits=$weblayer_in_split" ]
 
 webview_product_config_java_package = "org.chromium.android_webview"

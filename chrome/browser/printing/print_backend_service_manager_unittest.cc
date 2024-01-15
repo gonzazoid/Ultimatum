@@ -15,34 +15,51 @@
 
 namespace printing {
 
+using ClientId = PrintBackendServiceManager::ClientId;
 using ClientsSet = PrintBackendServiceManager::ClientsSet;
 using PrintClientsMap = PrintBackendServiceManager::PrintClientsMap;
+using QueryWithUiClientsMap = PrintBackendServiceManager::QueryWithUiClientsMap;
+using RemoteId = PrintBackendServiceManager::RemoteId;
 
 namespace {
 
-constexpr char kRemoteIdEmpty[] = "";
-constexpr char kRemoteIdTestPrinter[] = "test-printer";
+const RemoteId kRemoteIdEmpty{1};
+const RemoteId kRemoteIdTestPrinter{2};
+
+// ClientId values should not repeat for different types.
+const ClientId kClientIdQuery1{1};
+const ClientId kClientIdQuery2{2};
+const ClientId kClientIdQueryWithUi1{5};
+#if BUILDFLAG(ENABLE_CONCURRENT_BASIC_PRINT_DIALOGS)
+const ClientId kClientIdQueryWithUi2{6};
+#endif
+const ClientId kClientIdPrintDocument1{10};
+const ClientId kClientIdPrintDocument2{11};
+const ClientId kClientIdPrintDocument3{20};
 
 const ClientsSet kTestQueryNoClients;
-const ClientsSet kTestQueryWithOneClient{1};
-const ClientsSet kTestQueryWithTwoClients{1, 2};
+const ClientsSet kTestQueryWithOneClient{kClientIdQuery1};
+const ClientsSet kTestQueryWithTwoClients{kClientIdQuery1, kClientIdQuery2};
 
-const ClientsSet kTestQueryWithUiNoClients;
-const ClientsSet kTestQueryWithUiOneClient{5};
-#if BUILDFLAG(IS_LINUX)
-const ClientsSet kTestQueryWithUiTwoClients{5, 6};
+const QueryWithUiClientsMap kTestQueryWithUiNoClients;
+const QueryWithUiClientsMap kTestQueryWithUiOneClient{
+    {kClientIdQueryWithUi1, kRemoteIdEmpty}};
+#if BUILDFLAG(ENABLE_CONCURRENT_BASIC_PRINT_DIALOGS)
+const QueryWithUiClientsMap kTestQueryWithUiTwoClients{
+    {kClientIdQueryWithUi1, kRemoteIdEmpty},
+    {kClientIdQueryWithUi2, kRemoteIdEmpty}};
 #endif
 
 const PrintClientsMap kTestPrintDocumentNoClients;
 const PrintClientsMap kTestPrintDocumentOnePrinterWithOneClient{
-    {kRemoteIdEmpty, {10}},
+    {kRemoteIdEmpty, {kClientIdPrintDocument1}},
 };
 const PrintClientsMap kTestPrintDocumentOnePrinterWithTwoClients{
-    {kRemoteIdEmpty, {10, 11}},
+    {kRemoteIdEmpty, {kClientIdPrintDocument1, kClientIdPrintDocument2}},
 };
 const PrintClientsMap kTestPrintDocumentTwoPrintersWithOneClientEach{
-    {kRemoteIdEmpty, {10}},
-    {kRemoteIdTestPrinter, {20}},
+    {kRemoteIdEmpty, {kClientIdPrintDocument1}},
+    {kRemoteIdTestPrinter, {kClientIdPrintDocument3}},
 };
 
 constexpr absl::optional<base::TimeDelta> kNoNewTimeoutNeeded;
@@ -54,7 +71,7 @@ TEST(PrintBackendServiceManagerTest,
      IsIdleTimeoutUpdateNeededForRegisteredClient) {
   const struct TestData {
     ClientsSet query_clients;
-    ClientsSet query_with_ui_client;
+    QueryWithUiClientsMap query_with_ui_client;
     PrintClientsMap print_document_clients;
     PrintBackendServiceManager::ClientType modified_client_type;
     absl::optional<base::TimeDelta> new_timeout;
@@ -115,7 +132,7 @@ TEST(PrintBackendServiceManagerTest,
         PrintBackendServiceManager::ClientType::kQueryWithUi,
         kMaxTimeout,
     },
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(ENABLE_CONCURRENT_BASIC_PRINT_DIALOGS)
     // A new query with UI client with an existing query with UI client
     // should yield no new timeout needed.
     {
@@ -201,7 +218,7 @@ TEST(PrintBackendServiceManagerTest,
      IsIdleTimeoutUpdateNeededForUnregisteredClient) {
   const struct TestData {
     ClientsSet query_clients;
-    ClientsSet query_with_ui_client;
+    QueryWithUiClientsMap query_with_ui_client;
     PrintClientsMap print_document_clients;
     PrintBackendServiceManager::ClientType modified_client_type;
     absl::optional<base::TimeDelta> new_timeout;
@@ -260,7 +277,7 @@ TEST(PrintBackendServiceManagerTest,
         PrintBackendServiceManager::ClientType::kQueryWithUi,
         PrintBackendServiceManager::kClientsRegisteredResetOnIdleTimeout,
     },
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(ENABLE_CONCURRENT_BASIC_PRINT_DIALOGS)
     // Any remaining query with UI client should yield no new timeout needed.
     {
         kTestQueryNoClients,

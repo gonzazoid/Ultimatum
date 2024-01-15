@@ -7,6 +7,7 @@
 #include "ash/public/cpp/holding_space/holding_space_controller_observer.h"
 #include "ash/public/cpp/session/session_controller.h"
 #include "base/check.h"
+#include "base/check_is_test.h"
 
 namespace ash {
 
@@ -16,21 +17,62 @@ HoldingSpaceController* g_instance = nullptr;
 
 }  // namespace
 
+// HoldingSpaceController::ScopedForceShowInShelf ------------------------------
+
+HoldingSpaceController::ScopedForceShowInShelf::ScopedForceShowInShelf() {
+  auto* controller = HoldingSpaceController::Get();
+  CHECK(controller);
+  ++controller->force_show_in_shelf_count_;
+  if (controller->force_show_in_shelf_count_ == 1) {
+    for (auto& observer : controller->observers_) {
+      observer.OnHoldingSpaceForceShowInShelfChanged();
+    }
+  }
+}
+
+HoldingSpaceController::ScopedForceShowInShelf::~ScopedForceShowInShelf() {
+  if (auto* controller = HoldingSpaceController::Get()) {
+    --controller->force_show_in_shelf_count_;
+    CHECK_GE(controller->force_show_in_shelf_count_, 0);
+    if (controller->force_show_in_shelf_count_ == 0) {
+      for (auto& observer : controller->observers_) {
+        observer.OnHoldingSpaceForceShowInShelfChanged();
+      }
+    }
+  }
+}
+
+// HoldingSpaceController ------------------------------------------------------
+
 HoldingSpaceController::HoldingSpaceController() {
   CHECK(!g_instance);
   g_instance = this;
 
-  SessionController::Get()->AddObserver(this);
+  // `SessionController` may not exist during tests.
+  if (auto* session_controller = SessionController::Get()) {
+    session_controller->AddObserver(this);
+  } else {
+    CHECK_IS_TEST();
+  }
 }
 
 HoldingSpaceController::~HoldingSpaceController() {
   CHECK_EQ(g_instance, this);
 
+  for (auto& observer : observers_) {
+    observer.OnHoldingSpaceControllerDestroying();
+  }
+
   SetClient(nullptr);
   SetModel(nullptr);
   g_instance = nullptr;
 
-  SessionController::Get()->RemoveObserver(this);
+  // `SessionController` may not exist during tests.
+  if (auto* session_controller = SessionController::Get()) {
+    session_controller->RemoveObserver(this);
+  } else {
+    CHECK_IS_TEST();
+  }
 }
 
 // static
@@ -46,6 +88,14 @@ void HoldingSpaceController::AddObserver(
 void HoldingSpaceController::RemoveObserver(
     HoldingSpaceControllerObserver* observer) {
   observers_.RemoveObserver(observer);
+}
+
+void HoldingSpaceController::OnHoldingSpaceTrayBubbleVisibilityChanged(
+    const HoldingSpaceTray* tray,
+    bool visible) {
+  for (auto& observer : observers_) {
+    observer.OnHoldingSpaceTrayBubbleVisibilityChanged(tray, visible);
+  }
 }
 
 void HoldingSpaceController::RegisterClientAndModelForUser(

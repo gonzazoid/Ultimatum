@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_SYNC_ENGINE_SYNC_SCHEDULER_H_
 #define COMPONENTS_SYNC_ENGINE_SYNC_SCHEDULER_H_
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "components/sync/base/sync_invalidation.h"
 #include "components/sync/engine/cycle/sync_cycle.h"
@@ -34,10 +34,10 @@ class SyncScheduler : public SyncCycle::Delegate {
   SyncScheduler() = default;
   ~SyncScheduler() override = default;
 
-  // Start the scheduler with the given mode.  If the scheduler is
-  // already started, switch to the given mode, although some
-  // scheduled tasks from the old mode may still run. |last_poll_time| will
-  // be used to decide what the poll timer should be initialized with.
+  // Start the scheduler with the given mode.  If the scheduler is already
+  // started, switch to the given mode, although some scheduled tasks from the
+  // old mode may still run. |last_poll_time| is used to schedule the initial
+  // poll timer.
   virtual void Start(Mode mode, base::Time last_poll_time) = 0;
 
   // Schedules the configuration task. |ready_task| is invoked when the
@@ -70,6 +70,12 @@ class SyncScheduler : public SyncCycle::Delegate {
   // uses is to fetch the latest tab sync data when it's relevant to the UI on
   // platforms where tab sync is not registered for invalidations.
   virtual void ScheduleLocalRefreshRequest(ModelTypeSet types) = 0;
+
+  // Invalidations are notifications the server sends to let us know when other
+  // clients have committed data.  We need to contact the sync server (being
+  // careful to pass along the "hints" delivered with those invalidations) in
+  // order to fetch the update.
+  virtual void ScheduleInvalidationNudge(ModelType type) = 0;
 
   // Requests a non-blocking initial sync request for the specified type.
   //

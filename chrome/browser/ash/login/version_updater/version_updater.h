@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -35,11 +36,11 @@ class VersionUpdater : public UpdateEngineClient::Observer,
     UPDATE_ERROR,
     UPDATE_SKIPPED,
     UPDATE_OPT_OUT_INFO_SHOWN,
+    UPDATE_CHECK_TIMEOUT,
   };
 
   enum class State {
     STATE_IDLE = 0,
-    STATE_FIRST_PORTAL_CHECK,
     STATE_REQUESTING_USER_PERMISSION,
     STATE_UPDATE,
     STATE_ERROR
@@ -123,6 +124,9 @@ class VersionUpdater : public UpdateEngineClient::Observer,
   void StartNetworkCheck();
   void StartUpdateCheck();
 
+  // Cleans up observer registrations for this object.
+  void StopObserving();
+
   void RefreshTimeLeftEstimation();
 
   void SetUpdateOverCellularOneTimePermission();
@@ -145,11 +149,22 @@ class VersionUpdater : public UpdateEngineClient::Observer,
     wait_for_reboot_time_ = wait_for_reboot_time;
   }
 
-  base::OneShotTimer* GetRebootTimerForTesting();
+  base::OneShotTimer* get_retry_check_timer_for_testing() {
+    return &retry_check_timer_;
+  }
+
+  bool get_non_idle_status_received_for_testing() {
+    return non_idle_status_received_;
+  }
+
+  base::OneShotTimer* get_reboot_timer_for_testing() { return &reboot_timer_; }
+
   void UpdateStatusChangedForTesting(const update_engine::StatusResult& status);
 
  private:
   void RequestUpdateCheck();
+  void TriggerUpdateCheck();
+  void OnRetryCheckElapsed();
 
   void OnGetEolInfo(EolInfoCallback cb, UpdateEngineClient::EolInfo info);
 
@@ -178,7 +193,7 @@ class VersionUpdater : public UpdateEngineClient::Observer,
   void OnUpdateCheckStarted(UpdateEngineClient::UpdateCheckResult result);
 
   // Pointer to delegate that owns this VersionUpdater instance.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   std::unique_ptr<base::RepeatingTimer> refresh_timer_;
 
@@ -190,8 +205,23 @@ class VersionUpdater : public UpdateEngineClient::Observer,
   // reboot device manually.
   base::TimeDelta wait_for_reboot_time_;
 
-  // Ignore fist IDLE status that is sent before VersionUpdater initiated check.
-  bool ignore_idle_status_ = true;
+  // True once we have received a non-IDLE status. If we first receive an IDLE
+  // status, then we are getting a signal from a previous request which may have
+  // been in-progress when our update was sent, and we should resend the update.
+  // Once we have received a non-IDLE, then IDLE means we can exit.
+  bool non_idle_status_received_ = false;
+
+  // Timer for the interval to wait trying reaching to the update screen before
+  // exiting the screen.
+  base::OneShotTimer retry_check_timer_;
+
+  // Time to retry reaching to update_engine before exit.
+  base::TimeDelta retry_check_timeout_ = base::Seconds(180);
+
+  // Current count of retiries to request `checking of update`.
+  int num_retries_ = 0;
+
+  base::TimeTicks checking_for_update_start_;
 
   // Stores information about current downloading process, update progress and
   // state. It is sent to Delegate on each UpdateInfoChanged call, and also can
@@ -200,16 +230,11 @@ class VersionUpdater : public UpdateEngineClient::Observer,
 
   UpdateTimeEstimator time_estimator_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   base::WeakPtrFactory<VersionUpdater> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when migration is finished.
-namespace chromeos {
-using ::ash::VersionUpdater;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_VERSION_UPDATER_VERSION_UPDATER_H_

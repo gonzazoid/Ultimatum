@@ -8,9 +8,10 @@
 #include <string>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/content_settings/core/browser/content_settings_info.h"
@@ -24,6 +25,7 @@
 #include "components/content_settings/core/common/content_settings_utils.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
+#include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -35,8 +37,6 @@ namespace {
 
 // These settings are no longer used, and should be deleted on profile startup.
 #if !BUILDFLAG(IS_IOS)
-const char kObsoleteFullscreenDefaultPref[] =
-    "profile.default_content_setting_values.fullscreen";
 // The "nfc" preference was superseded by "nfc-devices" once Web NFC gained the
 // ability to make NFC tags permanently read-only. See crbug.com/1275576
 const char kObsoleteNfcDefaultPref[] =
@@ -58,11 +58,8 @@ const char kObsoletePpapiBrokerDefaultPref[] =
     "profile.default_content_setting_values.ppapi_broker";
 #endif  // !BUILDFLAG(IS_ANDROID)
 #endif  // !BUILDFLAG(IS_IOS)
-
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
-// This setting was moved and should be migrated on profile startup.
-const char kDeprecatedEnableDRM[] = "settings.privacy.drm_enabled";
-#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+constexpr char kObsoleteFederatedIdentityDefaultPref[] =
+    "profile.default_content_setting_values.fedcm_active_session";
 
 ContentSetting GetDefaultValue(const WebsiteSettingsInfo* info) {
   const base::Value& initial_default = info->initial_default_value();
@@ -95,11 +92,12 @@ class DefaultRuleIterator : public RuleIterator {
 
   bool HasNext() const override { return !is_done_; }
 
-  Rule Next() override {
+  std::unique_ptr<Rule> Next() override {
     DCHECK(HasNext());
     is_done_ = true;
-    return Rule(ContentSettingsPattern::Wildcard(),
-                ContentSettingsPattern::Wildcard(), std::move(value_), {});
+    return std::make_unique<Rule>(ContentSettingsPattern::Wildcard(),
+                                  ContentSettingsPattern::Wildcard(),
+                                  std::move(value_), RuleMetaData{});
   }
 
  private:
@@ -126,9 +124,6 @@ void DefaultProvider::RegisterProfilePrefs(
   // These prefs have been deprecated, but need to be registered so they can
   // be deleted on startup (see DiscardOrMigrateObsoletePreferences).
 #if !BUILDFLAG(IS_IOS)
-  registry->RegisterIntegerPref(
-      kObsoleteFullscreenDefaultPref, 0,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(kObsoleteNfcDefaultPref, 0);
 #if !BUILDFLAG(IS_ANDROID)
   registry->RegisterIntegerPref(
@@ -142,10 +137,7 @@ void DefaultProvider::RegisterProfilePrefs(
   registry->RegisterIntegerPref(kObsoletePpapiBrokerDefaultPref, 0);
 #endif  // !BUILDFLAG(IS_ANDROID)
 #endif  // !BUILDFLAG(IS_IOS)
-
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
-  registry->RegisterBooleanPref(kDeprecatedEnableDRM, true);
-#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+  registry->RegisterIntegerPref(kObsoleteFederatedIdentityDefaultPref, 0);
 }
 
 DefaultProvider::DefaultProvider(PrefService* prefs,
@@ -165,23 +157,26 @@ DefaultProvider::DefaultProvider(PrefService* prefs,
   if (should_record_metrics)
     RecordHistogramMetrics();
 
-  pref_change_registrar_.Init(prefs_);
+  pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
+  pref_change_registrar_->Init(prefs_);
   PrefChangeRegistrar::NamedChangeCallback callback = base::BindRepeating(
       &DefaultProvider::OnPreferenceChanged, base::Unretained(this));
   WebsiteSettingsRegistry* website_settings =
       WebsiteSettingsRegistry::GetInstance();
   for (const WebsiteSettingsInfo* info : *website_settings)
-    pref_change_registrar_.Add(info->default_value_pref_name(), callback);
+    pref_change_registrar_->Add(info->default_value_pref_name(), callback);
 }
 
 DefaultProvider::~DefaultProvider() = default;
 
+// TODO(b/307193732): handle the PartitionKey in all relevant methods.
 bool DefaultProvider::SetWebsiteSetting(
     const ContentSettingsPattern& primary_pattern,
     const ContentSettingsPattern& secondary_pattern,
     ContentSettingsType content_type,
     base::Value&& in_value,
-    const ContentSettingConstraints& constraints) {
+    const ContentSettingConstraints& constraints,
+    const PartitionKey& partition_key) {
   DCHECK(CalledOnValidThread());
   DCHECK(prefs_);
 
@@ -221,7 +216,8 @@ bool DefaultProvider::SetWebsiteSetting(
 
 std::unique_ptr<RuleIterator> DefaultProvider::GetRuleIterator(
     ContentSettingsType content_type,
-    bool off_the_record) const {
+    bool off_the_record,
+    const PartitionKey& partition_key) const {
   // The default provider never has off-the-record-specific settings.
   if (off_the_record)
     return nullptr;
@@ -235,8 +231,36 @@ std::unique_ptr<RuleIterator> DefaultProvider::GetRuleIterator(
   return std::make_unique<DefaultRuleIterator>(it->second.Clone());
 }
 
+std::unique_ptr<Rule> DefaultProvider::GetRule(
+    const GURL& primary_url,
+    const GURL& secondary_url,
+    ContentSettingsType content_type,
+    bool off_the_record,
+    const PartitionKey& partition_key) const {
+  // The default provider never has off-the-record-specific settings.
+  if (off_the_record) {
+    return nullptr;
+  }
+
+  base::AutoLock lock(lock_);
+  const auto it = default_settings_.find(content_type);
+  if (it == default_settings_.end()) {
+    NOTREACHED();
+    return nullptr;
+  }
+
+  if (it->second.is_none()) {
+    return nullptr;
+  }
+
+  return std::make_unique<Rule>(ContentSettingsPattern::Wildcard(),
+                                ContentSettingsPattern::Wildcard(),
+                                it->second.Clone(), RuleMetaData{});
+}
+
 void DefaultProvider::ClearAllContentSettingsRules(
-    ContentSettingsType content_type) {
+    ContentSettingsType content_type,
+    const PartitionKey& partition_key) {
   // TODO(markusheintz): This method is only called when the
   // |DesktopNotificationService| calls |ClearAllSettingsForType| method on the
   // |HostContentSettingsMap|. Don't implement this method yet, otherwise the
@@ -247,7 +271,7 @@ void DefaultProvider::ShutdownOnUIThread() {
   DCHECK(CalledOnValidThread());
   DCHECK(prefs_);
   RemoveAllObservers();
-  pref_change_registrar_.RemoveAll();
+  pref_change_registrar_.reset();
   prefs_ = nullptr;
 }
 
@@ -337,7 +361,6 @@ void DefaultProvider::DiscardOrMigrateObsoletePreferences() {
   // These prefs were never stored on iOS/Android so they don't need to be
   // deleted.
 #if !BUILDFLAG(IS_IOS)
-  prefs_->ClearPref(kObsoleteFullscreenDefaultPref);
   prefs_->ClearPref(kObsoleteNfcDefaultPref);
 #if !BUILDFLAG(IS_ANDROID)
   prefs_->ClearPref(kObsoleteMouseLockDefaultPref);
@@ -349,22 +372,7 @@ void DefaultProvider::DiscardOrMigrateObsoletePreferences() {
   prefs_->ClearPref(kObsoletePpapiBrokerDefaultPref);
 #endif  // !BUILDFLAG(IS_ANDROID)
 #endif  // !BUILDFLAG(IS_IOS)
-
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
-  // TODO(crbug.com/1191642): Remove this migration logic in M100.
-  WebsiteSettingsRegistry* website_settings =
-      WebsiteSettingsRegistry::GetInstance();
-  const base::Value* deprecated_enable_drm_value =
-      prefs_->GetUserPrefValue(kDeprecatedEnableDRM);
-  if (deprecated_enable_drm_value) {
-    prefs_->SetInteger(
-        website_settings->Get(ContentSettingsType::PROTECTED_MEDIA_IDENTIFIER)
-            ->default_value_pref_name(),
-        deprecated_enable_drm_value->GetBool() ? CONTENT_SETTING_ALLOW
-                                               : CONTENT_SETTING_BLOCK);
-  }
-  prefs_->ClearPref(kDeprecatedEnableDRM);
-#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+  prefs_->ClearPref(kObsoleteFederatedIdentityDefaultPref);
 }
 
 void DefaultProvider::RecordHistogramMetrics() {
@@ -378,6 +386,15 @@ void DefaultProvider::RecordHistogramMetrics() {
       IntToContentSetting(
           prefs_->GetInteger(GetPrefName(ContentSettingsType::POPUPS))),
       CONTENT_SETTING_NUM_SETTINGS);
+
+#if BUILDFLAG(USE_BLINK)
+  base::UmaHistogramEnumeration(
+      "ContentSettings.RegularProfile.DefaultSubresourceFilterSetting",
+      IntToContentSetting(
+          prefs_->GetInteger(GetPrefName(ContentSettingsType::ADS))),
+      CONTENT_SETTING_NUM_SETTINGS);
+#endif
+
 #if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   base::UmaHistogramEnumeration(
       "ContentSettings.RegularProfile.DefaultImagesSetting",
@@ -425,14 +442,14 @@ void DefaultProvider::RecordHistogramMetrics() {
           GetPrefName(ContentSettingsType::BLUETOOTH_GUARD))),
       CONTENT_SETTING_NUM_SETTINGS);
   base::UmaHistogramEnumeration(
+      "ContentSettings.RegularProfile.DefaultBackgroundSyncSetting",
+      IntToContentSetting(prefs_->GetInteger(
+          GetPrefName(ContentSettingsType::BACKGROUND_SYNC))),
+      CONTENT_SETTING_NUM_SETTINGS);
+  base::UmaHistogramEnumeration(
       "ContentSettings.RegularProfile.DefaultAutoplaySetting",
       IntToContentSetting(
           prefs_->GetInteger(GetPrefName(ContentSettingsType::AUTOPLAY))),
-      CONTENT_SETTING_NUM_SETTINGS);
-  base::UmaHistogramEnumeration(
-      "ContentSettings.RegularProfile.DefaultSubresourceFilterSetting",
-      IntToContentSetting(
-          prefs_->GetInteger(GetPrefName(ContentSettingsType::ADS))),
       CONTENT_SETTING_NUM_SETTINGS);
   base::UmaHistogramEnumeration(
       "ContentSettings.RegularProfile.DefaultSoundSetting",
@@ -448,6 +465,16 @@ void DefaultProvider::RecordHistogramMetrics() {
       "ContentSettings.RegularProfile.DefaultIdleDetectionSetting",
       IntToContentSetting(
           prefs_->GetInteger(GetPrefName(ContentSettingsType::IDLE_DETECTION))),
+      CONTENT_SETTING_NUM_SETTINGS);
+  base::UmaHistogramEnumeration(
+      "ContentSettings.RegularProfile.DefaultStorageAccessSetting",
+      IntToContentSetting(
+          prefs_->GetInteger(GetPrefName(ContentSettingsType::STORAGE_ACCESS))),
+      CONTENT_SETTING_NUM_SETTINGS);
+  base::UmaHistogramEnumeration(
+      "ContentSettings.RegularProfile.DefaultAutoVerifySetting",
+      IntToContentSetting(
+          prefs_->GetInteger(GetPrefName(ContentSettingsType::ANTI_ABUSE))),
       CONTENT_SETTING_NUM_SETTINGS);
 #endif
 

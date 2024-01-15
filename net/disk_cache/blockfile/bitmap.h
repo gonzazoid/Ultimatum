@@ -10,6 +10,7 @@
 
 #include <memory>
 
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/net_export.h"
 
@@ -75,6 +76,11 @@ class NET_EXPORT_PRIVATE Bitmap {
   // Gets a pointer to the internal map.
   const uint32_t* GetMap() const { return map_; }
 
+  // Gets a span describing the internal map.
+  base::span<const uint32_t> GetSpan() const {
+    return base::make_span(GetMap(), static_cast<size_t>(ArraySize()));
+  }
+
   // Sets a range of bits to |value|.
   void SetRange(int begin, int end, bool value);
 
@@ -134,7 +140,7 @@ class NET_EXPORT_PRIVATE Bitmap {
   int num_bits_ = 0;    // The upper bound of the bitmap.
   int array_size_ = 0;  // The physical size (in uint32s) of the bitmap.
   std::unique_ptr<uint32_t[]> allocated_map_;  // The allocated data.
-  raw_ptr<uint32_t> map_ = nullptr;            // The bitmap.
+  raw_ptr<uint32_t, AllowPtrArithmetic> map_ = nullptr;  // The bitmap.
 };
 
 }  // namespace disk_cache

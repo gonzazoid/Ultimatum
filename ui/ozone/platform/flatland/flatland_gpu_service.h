@@ -5,13 +5,13 @@
 #ifndef UI_OZONE_PLATFORM_FLATLAND_FLATLAND_GPU_SERVICE_H_
 #define UI_OZONE_PLATFORM_FLATLAND_FLATLAND_GPU_SERVICE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
-#include "ui/ozone/platform/scenic/mojom/scenic_gpu_host.mojom.h"
-#include "ui/ozone/platform/scenic/mojom/scenic_gpu_service.mojom.h"
+#include "ui/ozone/platform/flatland/mojom/scenic_gpu_host.mojom.h"
+#include "ui/ozone/platform/flatland/mojom/scenic_gpu_service.mojom.h"
 
 namespace ui {
 

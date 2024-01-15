@@ -5,6 +5,7 @@ accelerometer
 ambient-light-sensor
 attribution-reporting
 autoplay
+browsing-topics
 camera
 ch-device-memory
 ch-downlink
@@ -12,11 +13,13 @@ ch-dpr
 ch-ect
 ch-prefers-color-scheme
 ch-prefers-reduced-motion
+ch-prefers-reduced-transparency
 ch-rtt
 ch-save-data
 ch-ua
 ch-ua-arch
 ch-ua-bitness
+ch-ua-form-factor
 ch-ua-full-version
 ch-ua-full-version-list
 ch-ua-mobile
@@ -33,7 +36,6 @@ compute-pressure
 cross-origin-isolated
 direct-sockets
 display-capture
-document-domain
 encrypted-media
 execution-while-not-rendered
 execution-while-out-of-viewport
@@ -45,6 +47,8 @@ gyroscope
 hid
 identity-credentials-get
 idle-detection
+interest-cohort
+join-ad-interest-group
 keyboard-map
 local-fonts
 magnetometer
@@ -53,15 +57,26 @@ midi
 otp-credentials
 payment
 picture-in-picture
+private-aggregation
+private-state-token-issuance
+private-state-token-redemption
+publickey-credentials-create
 publickey-credentials-get
+run-ad-auction
 screen-wake-lock
 serial
 shared-autofill
+shared-storage
+shared-storage-select-url
+smart-card
 storage-access
+sub-apps
 sync-xhr
 unload
 usb
+usb-unrestricted
 vertical-scroll
-window-placement
+web-printing
+window-management
 xr-spatial-tracking
 

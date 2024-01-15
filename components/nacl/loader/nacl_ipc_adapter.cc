@@ -12,10 +12,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/tuple.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel.h"
@@ -114,7 +116,9 @@ struct QuotaInterface {
   // object, so the "vtable" and other base class fields must be first.
   struct NaClDescQuotaInterface base NACL_IS_REFCOUNT_SUBCLASS;
 
-  NaClMessageScanner::FileIO* file_io;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #reinterpret-cast-trivial-type
+  RAW_PTR_EXCLUSION NaClMessageScanner::FileIO* file_io;
 };
 
 static void QuotaInterfaceDtor(NaClRefCount* nrcp) {
@@ -248,13 +252,7 @@ std::unique_ptr<NaClDescWrapper> MakeShmRegionNaClDesc(
   base::subtle::ScopedPlatformSharedMemoryHandle handle =
       region.PassPlatformHandle();
   return std::make_unique<NaClDescWrapper>(
-#if BUILDFLAG(IS_APPLE)
-      NaClDescImcShmMachMake(handle.release(),
-#elif BUILDFLAG(IS_WIN)
-      NaClDescImcShmMake(handle.Take(),
-#else
       NaClDescImcShmMake(handle.fd.release(),
-#endif
                              size));
 }
 
@@ -566,11 +564,7 @@ bool NaClIPCAdapter::RewriteMessage(const IPC::Message& msg, uint32_t type) {
         }
         case ppapi::proxy::SerializedHandle::SOCKET: {
           nacl_desc = std::make_unique<NaClDescWrapper>(NaClDescSyncSocketMake(
-#if BUILDFLAG(IS_WIN)
-              handle.descriptor().GetHandle()
-#else
               handle.descriptor().fd
-#endif
                   ));
           break;
         }
@@ -578,11 +572,7 @@ bool NaClIPCAdapter::RewriteMessage(const IPC::Message& msg, uint32_t type) {
           // Create the NaClDesc for the file descriptor. If quota checking is
           // required, wrap it in a NaClDescQuota.
           NaClDesc* desc = NaClDescIoMakeFromHandle(
-#if BUILDFLAG(IS_WIN)
-              handle.descriptor().GetHandle(),
-#else
               handle.descriptor().fd,
-#endif
               TranslatePepperFileReadWriteOpenFlags(handle.open_flags()));
           if (desc && handle.file_io()) {
             desc = MakeNaClDescQuota(
@@ -657,11 +647,7 @@ void NaClIPCAdapter::SaveOpenResourceMessage(
 
     std::unique_ptr<NaClDescWrapper> desc_wrapper(
         new NaClDescWrapper(NaClDescIoMakeFromHandle(
-#if BUILDFLAG(IS_WIN)
-            orig_sh.descriptor().GetHandle(),
-#else
             orig_sh.descriptor().fd,
-#endif
             NACL_ABI_O_RDONLY)));
 
     // The file token didn't resolve successfully, so we give the

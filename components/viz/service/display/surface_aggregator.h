@@ -14,7 +14,6 @@
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
 #include "components/viz/common/quads/draw_quad.h"
@@ -106,9 +105,6 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   void set_output_is_secure(bool secure) { output_is_secure_ = secure; }
   void set_take_copy_requests(bool value) { take_copy_requests_ = value; }
 
-  // Only used with experimental de-jelly effect.
-  bool last_frame_had_jelly() const { return last_frame_had_jelly_; }
-
   // Set the color spaces for the created RenderPasses, which is propagated
   // to the output surface.
   void SetDisplayColorSpaces(const gfx::DisplayColorSpaces& color_spaces);
@@ -127,7 +123,15 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   struct AggregateStatistics {
     int prewalked_surface_count = 0;
     int copied_surface_count = 0;
+    // True if the current frame contains a pixel-moving foreground filter
+    // render pass.
+    bool has_pixel_moving_filter = false;
+    // True if the current frame contains a unembedded render pass.
+    bool has_unembedded_pass = false;
 
+    // The number of render passes in the final frame that are not embedded from
+    // root render pass or needed to fulfill a CopyOutputRequest.
+    int orphaned_render_pass = 0;
     base::TimeDelta prewalk_time;
     base::TimeDelta copy_time;
     base::TimeDelta declare_resources_time;
@@ -143,6 +147,8 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   ResolvedFrameData* GetResolvedFrame(const SurfaceId& surface_id);
 
   // - |source_pass| is the render pass that contains |surface_quad|.
+  // - |embedder_client_namespace_id| is portion of layer_id that uniquely
+  //   identifies the client which contains |surface_quad|.
   // - |target_transform| is the transform from the coordinate space of
   //   |source_pass| to |dest_pass|.
   // - |added_clip_rect| is an added clip rect in the |dest_pass| coordinate
@@ -154,10 +160,11 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   void HandleSurfaceQuad(
       const CompositorRenderPass& source_pass,
       const SurfaceDrawQuad* surface_quad,
+      uint32_t embedder_client_namespace_id,
       float parent_device_scale_factor,
       const gfx::Transform& target_transform,
-      const absl::optional<gfx::Rect>& added_clip_rect,
-      const absl::optional<gfx::Rect>& dest_root_target_clip_rect,
+      const absl::optional<gfx::Rect> added_clip_rect,
+      const absl::optional<gfx::Rect> dest_root_target_clip_rect,
       AggregatedRenderPass* dest_pass,
       bool ignore_undamaged,
       gfx::Rect* damage_rect_in_quad_space,
@@ -165,12 +172,13 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
       const MaskFilterInfoExt& mask_filter_info_pair);
 
   void EmitSurfaceContent(
-      const ResolvedFrameData& resolved_frame,
+      ResolvedFrameData& resolved_frame,
       float parent_device_scale_factor,
       const SurfaceDrawQuad* surface_quad,
+      uint32_t embedder_client_namespace_id,
       const gfx::Transform& target_transform,
-      const absl::optional<gfx::Rect>& added_clip_rect,
-      const absl::optional<gfx::Rect>& dest_root_target_clip_rect,
+      const absl::optional<gfx::Rect> added_clip_rect,
+      const absl::optional<gfx::Rect> dest_root_target_clip_rect,
       AggregatedRenderPass* dest_pass,
       bool ignore_undamaged,
       gfx::Rect* damage_rect_in_quad_space,
@@ -179,8 +187,9 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
 
   void EmitDefaultBackgroundColorQuad(
       const SurfaceDrawQuad* surface_quad,
+      uint32_t embedder_client_namespace_id,
       const gfx::Transform& target_transform,
-      const absl::optional<gfx::Rect>& clip_rect,
+      const absl::optional<gfx::Rect> clip_rect,
       AggregatedRenderPass* dest_pass,
       const MaskFilterInfoExt& mask_filter_info_pair);
 
@@ -188,20 +197,21 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
       const gfx::Rect& primary_rect,
       const gfx::Rect& fallback_rect,
       const SharedQuadState* primary_shared_quad_state,
+      uint32_t embedder_client_namespace_id,
       const gfx::Transform& target_transform,
-      const absl::optional<gfx::Rect>& clip_rect,
+      const absl::optional<gfx::Rect> clip_rect,
       SkColor4f background_color,
       AggregatedRenderPass* dest_pass,
       const MaskFilterInfoExt& mask_filter_info_pair);
 
   void CopyQuadsToPass(
-      const ResolvedFrameData& resolved_frame,
-      const ResolvedPassData& resolved_pass,
+      ResolvedFrameData& resolved_frame,
+      ResolvedPassData& resolved_pass,
       AggregatedRenderPass* dest_pass,
       float parent_device_scale_factor,
       const gfx::Transform& target_transform,
-      const absl::optional<gfx::Rect>& clip_rect,
-      const absl::optional<gfx::Rect>& dest_root_target_clip_rect,
+      const absl::optional<gfx::Rect> clip_rect,
+      const absl::optional<gfx::Rect> dest_root_target_clip_rect,
       const Surface* surface,
       const MaskFilterInfoExt& mask_filter_info_pair);
 
@@ -252,7 +262,7 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   void ProcessResolvedFrame(ResolvedFrameData& resolved_frame);
 
   void CopyUndrawnSurfaces(PrewalkResult* prewalk);
-  void CopyPasses(const ResolvedFrameData& resolved_frame);
+  void CopyPasses(ResolvedFrameData& resolved_frame);
   void AddColorConversionPass();
   void AddRootReadbackPass();
   void AddDisplayTransformPass();
@@ -291,15 +301,15 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   void AddSurfaceDamageToDamageList(
       const gfx::Rect& default_damage_rect,
       const gfx::Transform& parent_target_transform,
-      const absl::optional<gfx::Rect>& dest_root_target_clip_rect,
+      const absl::optional<gfx::Rect> dest_root_target_clip_rect,
       const gfx::Transform& dest_transform_to_root_target,
-      const ResolvedFrameData* resolved_frame);
+      ResolvedFrameData* resolved_frame);
 
   void AddRenderPassFilterDamageToDamageList(
       const ResolvedFrameData& resolved_frame,
       const CompositorRenderPassDrawQuad* render_pass_quad,
       const gfx::Transform& parent_target_transform,
-      const absl::optional<gfx::Rect>& dest_root_target_clip_rect,
+      const absl::optional<gfx::Rect> dest_root_target_clip_rect,
       const gfx::Transform& dest_transform_to_root_target);
 
   // Determine the overlay damage and location in the surface damage list.
@@ -325,42 +335,6 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   // potentially merge its root render pass. If so, returns true.
   static bool CanPotentiallyMergePass(const SurfaceDrawQuad& surface_quad);
 
-  // De-Jelly Effect:
-  // HandleDeJelly applies a de-jelly transform to quads in the root render
-  // pass.
-  void HandleDeJelly(Surface* surface);
-  // CreateDeJellyRenderPassQuads promotes skewed quads from the root render
-  // pass into |render_pass|. Skew is applied when |render_pass| is drawn.
-  void CreateDeJellyRenderPassQuads(
-      cc::ListContainer<DrawQuad>::Iterator* quad_iterator,
-      const cc::ListContainer<DrawQuad>::Iterator& end,
-      const gfx::Rect& jelly_clip,
-      float skew,
-      AggregatedRenderPass* render_pass);
-  // Appends quads directly to |root_pass|, applying |skew|.
-  void CreateDeJellyNormalQuads(
-      cc::ListContainer<DrawQuad>::Iterator* quad_iterator,
-      const cc::ListContainer<DrawQuad>::Iterator& end,
-      AggregatedRenderPass* root_pass,
-      float skew);
-  // Appends |render_pass| to |root_pass|, applying |skew|, |jelly_clip|,
-  // |opacity|, and |blend_mode|.
-  void AppendDeJellyRenderPass(
-      float skew,
-      const gfx::Rect& jelly_clip,
-      float opacity,
-      SkBlendMode blend_mode,
-      AggregatedRenderPass* root_pass,
-      std::unique_ptr<AggregatedRenderPass> render_pass);
-  // Appends quads from |quad_iterator| to |render_pass| for |state|.
-  void AppendDeJellyQuadsForSharedQuadState(
-      cc::ListContainer<DrawQuad>::Iterator* quad_iterator,
-      const cc::ListContainer<DrawQuad>::Iterator& end,
-      AggregatedRenderPass* render_pass,
-      const SharedQuadState* state);
-  // Update |last_frame_had_jelly_|, should be called once per frame.
-  void SetLastFrameHadJelly(bool had_jelly);
-
   // Logs the surface information for debugging purposes.
   void DebugLogSurface(const Surface* surface, bool will_draw);
 
@@ -370,6 +344,9 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   // Resets member variables that were used during Aggregate().
   void ResetAfterAggregate();
 
+  void SetRenderPassDamageRect(AggregatedRenderPass* copy_pass,
+                               ResolvedPassData& resolved_pass);
+
   const raw_ptr<SurfaceManager> manager_;
   const raw_ptr<DisplayResourceProvider> provider_;
 
@@ -377,9 +354,6 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
 
   // If true, per-surface damage rect list will be produced.
   const bool needs_surface_damage_rect_list_;
-
-  // Whether de-jelly may be active.
-  const bool de_jelly_enabled_;
 
   const ExtraPassForReadbackOption extra_pass_for_readback_option_;
 
@@ -469,13 +443,6 @@ class VIZ_SERVICE_EXPORT SurfaceAggregator : public SurfaceObserver {
   // Used to annotate the aggregated frame for debugging.
   std::unique_ptr<FrameAnnotator> frame_annotator_;
 
-  // Variables used for de-jelly:
-  // The set of surfacees being drawn for the first time. Used to determine if
-  // de-jelly skew should be applied to a surface.
-  base::flat_set<SurfaceId> new_surfaces_;
-  // Whether the last drawn frame had de-jelly skew applied. Used in production
-  // on Android only.
-  bool last_frame_had_jelly_ = false;
   // Whether the last drawn frame had a color conversion pass applied. Used in
   // production on Windows only (does not interact with jelly).
   bool last_frame_had_color_conversion_pass_ = false;

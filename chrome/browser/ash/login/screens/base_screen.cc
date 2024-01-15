@@ -10,6 +10,7 @@
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/values.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 
 namespace ash {
 
@@ -42,12 +43,6 @@ bool BaseScreen::ShouldBeSkipped(const WizardContext& context) const {
   return false;
 }
 
-void BaseScreen::HandleUserActionDeprecated(const std::string& action) {
-  base::Value::List args;
-  args.Append(action);
-  HandleUserAction(args);
-}
-
 void BaseScreen::HandleUserAction(const base::Value::List& args) {
   CHECK(!args.empty());
   if (is_hidden_) {
@@ -69,13 +64,14 @@ bool BaseScreen::HandleAccelerator(LoginAcceleratorAction action) {
   return false;
 }
 
-void BaseScreen::OnUserActionDeprecated(const std::string& action_id) {
-  NOTREACHED() << "Unhandled user action: action_id=" << action_id;
+void BaseScreen::OnUserAction(const base::Value::List& args) {
+  CHECK_GE(args.size(), 1u);
+  NOTREACHED() << "Unhandled user action: action_id=" << args[0];
 }
 
-void BaseScreen::OnUserAction(const base::Value::List& args) {
-  CHECK_EQ(args.size(), 1u);
-  OnUserActionDeprecated(args[0].GetString());
+ScreenSummary BaseScreen::GetScreenSummary() {
+  NOTIMPLEMENTED();
+  return {};
 }
 
 }  // namespace ash

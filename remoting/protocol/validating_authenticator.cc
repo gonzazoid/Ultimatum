@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/authenticator.h"
@@ -67,7 +67,8 @@ void ValidatingAuthenticator::ProcessMessage(
                      weak_factory_.GetWeakPtr(), std::move(resume_callback)));
 }
 
-std::unique_ptr<jingle_xmpp::XmlElement> ValidatingAuthenticator::GetNextMessage() {
+std::unique_ptr<jingle_xmpp::XmlElement>
+ValidatingAuthenticator::GetNextMessage() {
   if (pending_auth_message_) {
     DCHECK(state_ == ACCEPTED || state_ == WAITING_MESSAGE);
     return std::move(pending_auth_message_);
@@ -105,6 +106,10 @@ void ValidatingAuthenticator::OnValidateComplete(base::OnceClosure callback,
 
     case Result::ERROR_REJECTED_BY_USER:
       rejection_reason_ = RejectionReason::REJECTED_BY_USER;
+      break;
+
+    case Result::ERROR_UNAUTHORIZED_ACCOUNT:
+      rejection_reason_ = RejectionReason::UNAUTHORIZED_ACCOUNT;
       break;
   }
 

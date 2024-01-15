@@ -4,10 +4,12 @@
 
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_controller.h"
 
+#include <optional>
+
 #include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/components/arc/test/fake_app_instance.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -18,13 +20,13 @@
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_registry.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limits_policy_builder.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_test_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
@@ -36,7 +38,6 @@
 #include "components/services/app_service/public/cpp/icon_loader.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_rep.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -85,8 +86,7 @@ class AppTimeControllerTest : public testing::Test {
     ~FakeIconLoader() override = default;
 
     std::unique_ptr<apps::IconLoader::Releaser> LoadIconFromIconKey(
-        apps::AppType app_type,
-        const std::string& app_id,
+        const std::string& id,
         const apps::IconKey& icon_key,
         apps::IconType icon_type,
         int32_t size_hint_in_dip,
@@ -240,7 +240,7 @@ bool AppTimeControllerTest::HasNotificationFor(
 
   notification_id = base::StrCat({notification_id, app_name});
 
-  absl::optional<message_center::Notification> message_center_notification =
+  std::optional<message_center::Notification> message_center_notification =
       notification_tester_.GetNotification(notification_id);
   return message_center_notification.has_value();
 }
@@ -450,7 +450,7 @@ TEST_F(AppTimeControllerTest, RestoreLastResetTime) {
                                         kOneHour / 2, base::Time::Now()));
     builder.SetResetTime(6, 0);
     profile().GetPrefs()->SetDict(prefs::kPerAppTimeLimitsPolicy,
-                                  builder.value().GetDict().Clone());
+                                  builder.value().Clone());
   }
 
   // If there was no valid last reset time stored in user pref,
@@ -525,14 +525,14 @@ TEST_F(AppTimeControllerTest, MetricsTest) {
     AppTimeLimitsPolicyBuilder builder;
     AppId absent_app(apps::AppType::kArc, "absent_app");
     AppLimit app_limit(AppRestriction::kTimeLimit, kOneHour, base::Time::Now());
-    AppLimit blocked_app(AppRestriction::kBlocked, absl::nullopt,
+    AppLimit blocked_app(AppRestriction::kBlocked, std::nullopt,
                          base::Time::Now());
     builder.AddAppLimit(kApp1, app_limit);
     builder.AddAppLimit(absent_app, app_limit);
     builder.AddAppLimit(kApp2, blocked_app);
     builder.SetResetTime(6, 0);
     profile().GetPrefs()->SetDict(prefs::kPerAppTimeLimitsPolicy,
-                                  builder.value().GetDict().Clone());
+                                  builder.value().Clone());
   }
 
   // Enagagement is recorded at the beginning of the session when

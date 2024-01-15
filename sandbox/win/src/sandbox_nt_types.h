@@ -9,6 +9,7 @@
 
 namespace sandbox {
 
+// clang-format off
 struct NtExports {
   bool                                   Initialized;
   NtAllocateVirtualMemoryFunction        AllocateVirtualMemory;
@@ -18,10 +19,7 @@ struct NtExports {
   NtDuplicateObjectFunction              DuplicateObject;
   NtFreeVirtualMemoryFunction            FreeVirtualMemory;
   NtMapViewOfSectionFunction             MapViewOfSection;
-  NtOpenFileFunction                     OpenFile;
   NtOpenThreadFunction                   OpenThread;
-  NtOpenProcessFunction                  OpenProcess;
-  NtOpenProcessTokenFunction             OpenProcessToken;
   NtOpenProcessTokenExFunction           OpenProcessTokenEx;
   NtProtectVirtualMemoryFunction         ProtectVirtualMemory;
   NtQueryAttributesFileFunction          QueryAttributesFile;
@@ -31,7 +29,6 @@ struct NtExports {
   NtQuerySectionFunction                 QuerySection;
   NtQueryVirtualMemoryFunction           QueryVirtualMemory;
   NtSetInformationFileFunction           SetInformationFile;
-  NtSetInformationProcessFunction        SetInformationProcess;
   NtSignalAndWaitForSingleObjectFunction SignalAndWaitForSingleObject;
   NtUnmapViewOfSectionFunction           UnmapViewOfSection;
   NtWaitForSingleObjectFunction          WaitForSingleObject;
@@ -39,7 +36,6 @@ struct NtExports {
   RtlAnsiStringToUnicodeStringFunction   RtlAnsiStringToUnicodeString;
   RtlCompareUnicodeStringFunction        RtlCompareUnicodeString;
   RtlCreateHeapFunction                  RtlCreateHeap;
-  RtlCreateUserThreadFunction            RtlCreateUserThread;
   RtlDestroyHeapFunction                 RtlDestroyHeap;
   RtlFreeHeapFunction                    RtlFreeHeap;
   RtlNtStatusToDosErrorFunction          RtlNtStatusToDosError;
@@ -48,6 +44,7 @@ struct NtExports {
   wcslenFunction                         wcslen;
   memcpyFunction                         memcpy;
 };
+// clang-format on
 
 // This is the value used for the ntdll level allocator.
 enum AllocationType {

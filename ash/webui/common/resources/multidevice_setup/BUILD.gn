@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -33,19 +33,21 @@ js_library("button_bar") {
 
 js_library("fake_mojo_service") {
   deps = [
+    "//ash/webui/common/resources:cr.m",
     "//chromeos/ash/services/multidevice_setup/public/mojom:mojom_webui_js",
-    "//ui/webui/resources/js:cr.m",
   ]
 }
 
 js_library("mojo_api") {
   deps = [
+    "//ash/webui/common/resources:cr_deprecated",
     "//chromeos/ash/services/multidevice_setup/public/mojom:mojom_webui_js",
-    "//ui/webui/resources/js:cr.m",
   ]
 }
 
 js_library("multidevice_setup") {
+  extra_deps =
+      [ "//ui/webui/resources/cr_components/color_change_listener:build_ts" ]
   deps = [
     ":button_bar",
     ":fake_mojo_service",
@@ -54,18 +56,20 @@ js_library("multidevice_setup") {
     ":password_page",
     ":setup_succeeded_page",
     ":start_setup_page",
+    "//ash/webui/common/resources:cr.m",
+    "//ash/webui/common/resources:cr_deprecated",
     "//ash/webui/common/resources:web_ui_listener_behavior",
     "//chromeos/ash/services/multidevice_setup/public/mojom:mojom_webui_js",
-    "//ui/webui/resources/js:cr.m",
   ]
 }
 
 js_library("multidevice_setup_browser_proxy") {
-  deps = [ "//ui/webui/resources/js:cr.m" ]
+  deps = [ "//ash/webui/common/resources:cr.m" ]
+  externs_list = [ "$externs_path/chrome_send.js" ]
 }
 
 js_library("multidevice_setup_delegate") {
-  deps = [ "//ui/webui/resources/js:cr.m" ]
+  deps = [ "//ash/webui/common/resources:cr.m" ]
 }
 
 js_library("password_page") {
@@ -76,6 +80,8 @@ js_library("password_page") {
 }
 
 js_library("setup_succeeded_page") {
+  extra_deps =
+      [ "//ui/webui/resources/cr_components/color_change_listener:build_ts" ]
   deps = [
     ":multidevice_setup_browser_proxy",
     ":ui_page_container_behavior",
@@ -83,22 +89,28 @@ js_library("setup_succeeded_page") {
 }
 
 js_library("start_setup_page") {
+  extra_deps = [
+    "//third_party/cros-components:cros_components_ts",
+    "//third_party/material_web_components:library",
+    "//ui/webui/resources/cr_components/color_change_listener:build_ts",
+  ]
   deps = [
     ":mojo_api",
     ":multidevice_setup_delegate",
     ":ui_page_container_behavior",
-    "//ash/services/device_sync/public/mojom:mojom_webui_js",
     "//ash/webui/common/resources:web_ui_listener_behavior",
+    "//chromeos/ash/services/device_sync/public/mojom:mojom_webui_js",
     "//chromeos/ash/services/multidevice_setup/public/mojom:mojom_webui_js",
   ]
-  externs_list =
-      [ "//ui/webui/resources/cr_elements/cr_lottie/cr_lottie_externs.js" ]
+  externs_list = [
+    "//third_party/cros-components/externs/cros_lottie_renderer_externs.js",
+  ]
 }
 
 js_library("ui_page_container_behavior") {
   deps = [
+    "//ash/webui/common/resources:cr.m",
     "//ash/webui/common/resources:i18n_behavior",
-    "//ui/webui/resources/js:cr.m",
   ]
 }
 

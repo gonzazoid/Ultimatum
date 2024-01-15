@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "base/functional/bind.h"
+#include "content/public/browser/browser_thread.h"
 #include "crypto/nss_util_internal.h"
 #include "crypto/scoped_nss_types.h"
 #include "net/cert/nss_profile_filter_chromeos.h"

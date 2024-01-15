@@ -5,8 +5,9 @@
 #include "chrome/browser/password_manager/android/password_sync_controller_delegate_bridge_impl.h"
 
 #include "base/android/jni_android.h"
+#include "base/android/jni_string.h"
 #include "chrome/browser/password_manager/android/jni_headers/PasswordSyncControllerDelegateBridgeImpl_jni.h"
-#include "components/password_manager/core/browser/android_backend_error.h"
+#include "components/password_manager/core/browser/password_store/android_backend_error.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 
 using password_manager::AndroidBackendError;
@@ -14,10 +15,8 @@ using password_manager::AndroidBackendErrorType;
 
 PasswordSyncControllerDelegateBridgeImpl::
     PasswordSyncControllerDelegateBridgeImpl() {
-  if (password_manager::features::UsesUnifiedPasswordManagerUi()) {
-    java_object_ = Java_PasswordSyncControllerDelegateBridgeImpl_create(
-        base::android::AttachCurrentThread(), reinterpret_cast<intptr_t>(this));
-  }
+  java_object_ = Java_PasswordSyncControllerDelegateBridgeImpl_create(
+      base::android::AttachCurrentThread(), reinterpret_cast<intptr_t>(this));
 }
 
 PasswordSyncControllerDelegateBridgeImpl::
@@ -29,10 +28,12 @@ void PasswordSyncControllerDelegateBridgeImpl::SetConsumer(
 }
 
 void PasswordSyncControllerDelegateBridgeImpl::
-    NotifyCredentialManagerWhenSyncing() {
+    NotifyCredentialManagerWhenSyncing(const std::string& account_email) {
   if (java_object_) {
     Java_PasswordSyncControllerDelegateBridgeImpl_notifyCredentialManagerWhenSyncing(
-        base::android::AttachCurrentThread(), java_object_);
+        base::android::AttachCurrentThread(), java_object_,
+        base::android::ConvertUTF8ToJavaString(
+            base::android::AttachCurrentThread(), account_email));
   }
 }
 

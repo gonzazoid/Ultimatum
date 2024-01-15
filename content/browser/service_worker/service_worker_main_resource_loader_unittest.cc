@@ -7,30 +7,31 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
+#include "content/browser/loader/response_head_update_params.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/fake_embedded_worker_instance_client.h"
 #include "content/browser/service_worker/fake_service_worker.h"
 #include "content/browser/service_worker/service_worker_container_host.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
+#include "content/browser/service_worker/service_worker_fetch_dispatcher.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
 #include "content/browser/service_worker/service_worker_version.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
-#include "net/ssl/ssl_info.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/test/test_url_loader_client.h"
@@ -49,9 +50,27 @@
 namespace content {
 namespace service_worker_main_resource_loader_unittest {
 
+class ScopedOverrideToDisableHighPriorityFetchResponseCallback {
+ public:
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback() {
+    ServiceWorkerFetchDispatcher::
+        ForceDisableHighPriorityFetchResponseCallbackForTesting(
+            /*force_disable=*/true);
+  }
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback(
+      const ScopedOverrideToDisableHighPriorityFetchResponseCallback&) = delete;
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback& operator=(
+      const ScopedOverrideToDisableHighPriorityFetchResponseCallback&) = delete;
+  ~ScopedOverrideToDisableHighPriorityFetchResponseCallback() {
+    ServiceWorkerFetchDispatcher::
+        ForceDisableHighPriorityFetchResponseCallbackForTesting(
+            /*force_disable=*/false);
+  }
+};
+
 void ReceiveRequestHandler(
-    SingleRequestURLLoaderFactory::RequestHandler* out_handler,
-    SingleRequestURLLoaderFactory::RequestHandler handler) {
+    network::SingleRequestURLLoaderFactory::RequestHandler* out_handler,
+    network::SingleRequestURLLoaderFactory::RequestHandler handler) {
   *out_handler = std::move(handler);
 }
 
@@ -290,7 +309,7 @@ class FetchEventServiceWorker : public FakeServiceWorker {
             .Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED);
         break;
       case ResponseMode::kFallbackResponse:
-        response_callback->OnFallback(/*request_body=*/absl::nullopt,
+        response_callback->OnFallback(/*request_body=*/std::nullopt,
                                       std::move(timing));
         std::move(finish_callback)
             .Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED);
@@ -434,7 +453,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
     options.scope = GURL("https://example.com/");
     registration_ = CreateNewServiceWorkerRegistration(
         helper_->context()->registry(), options,
-        blink::StorageKey(url::Origin::Create(options.scope)));
+        blink::StorageKey::CreateFirstParty(
+            url::Origin::Create(options.scope)));
     version_ = CreateNewServiceWorkerVersion(
         helper_->context()->registry(), registration_.get(),
         GURL("https://example.com/service_worker.js"),
@@ -451,7 +471,7 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
 
     // Make the registration findable via storage functions.
     registration_->set_last_update_check(base::Time::Now());
-    absl::optional<blink::ServiceWorkerStatusCode> status;
+    std::optional<blink::ServiceWorkerStatusCode> status;
     base::RunLoop run_loop;
     registry()->StoreRegistration(
         registration_.get(), version_.get(),
@@ -501,9 +521,10 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
                                   /*mock frame_routing_id=*/1),
           /*is_parent_frame_secure=*/true, helper_->context()->AsWeakPtr(),
           &container_endpoints_);
-      container_host_->UpdateUrls(
-          request->url, url::Origin::Create(request->url),
-          blink::StorageKey(url::Origin::Create(request->url)));
+      container_host_->UpdateUrls(request->url,
+                                  url::Origin::Create(request->url),
+                                  blink::StorageKey::CreateFirstParty(
+                                      url::Origin::Create(request->url)));
       container_host_->AddMatchingRegistration(registration_.get());
       container_host_->SetControllerRegistration(
           registration_, /*notify_controllerchange=*/false);
@@ -514,7 +535,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
         base::BindOnce(&ServiceWorkerMainResourceLoaderTest::Fallback,
                        base::Unretained(this)),
         container_host_,
-        /*frame_tree_node_id=*/RenderFrameHost::kNoFrameTreeNodeId);
+        /*frame_tree_node_id=*/RenderFrameHost::kNoFrameTreeNodeId,
+        /*find_registration_start_time=*/base::TimeTicks::Now());
 
     // Load |request.url|.
     loader_->StartRequest(*request, loader_remote_.BindNewPipeAndPassReceiver(),
@@ -523,7 +545,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
 
   // The |fallback_callback| passed to the ServiceWorkerMainResourceLoader in
   // StartRequest().
-  void Fallback(bool reset_subresource_loader_params) {
+  void Fallback(bool reset_subresource_loader_params,
+                const ResponseHeadUpdateParams& head_update_params) {
     did_call_fallback_callback_ = true;
     reset_subresource_loader_params_ = reset_subresource_loader_params;
     if (quit_closure_for_fallback_callback_)
@@ -567,6 +590,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
               info.cache_storage_cache_name);
     EXPECT_EQ(expected_info.did_service_worker_navigation_preload,
               info.did_service_worker_navigation_preload);
+    // TODO(crbug.com/1504040): Write tests about Static Routing API, in
+    // particular, checking the correctness of `service_worker_router_info`.
   }
 
   std::unique_ptr<network::ResourceRequest> CreateRequest() {
@@ -642,7 +667,7 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, NoActiveWorker) {
   container_host_->UpdateUrls(
       GURL("https://example.com/"),
       url::Origin::Create(GURL("https://example.com/")),
-      blink::StorageKey(url::Origin::Create(GURL("https://example.com/"))));
+      blink::StorageKey::CreateFromStringForTesting("https://example.com/"));
 
   // Perform the request.
   StartRequest(CreateRequest());
@@ -992,6 +1017,15 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, ErrorResponse) {
 
 // Test when dispatching the fetch event to the service worker failed.
 TEST_F(ServiceWorkerMainResourceLoaderTest, FailFetchDispatch) {
+  // This test simulates failure to dispatch the fetch event to the
+  // service worker by calling
+  // `service_worker_->FailToDispatchFetchEvent()`. But without
+  // disabling high priority fetch response callback, request processing
+  // comes earlier, and doesn't fail to fetch dispatch.  This test is
+  // still valid after introducing HighPriorityFetchResponseCallback.
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback
+      disable_high_priority_fetch_response_callback;
+
   base::HistogramTester histogram_tester;
   service_worker_->FailToDispatchFetchEvent();
 
@@ -1102,6 +1136,16 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, ConnectionErrorDuringFetchEvent) {
 }
 
 TEST_F(ServiceWorkerMainResourceLoaderTest, CancelNavigationDuringFetchEvent) {
+  // This test simulates failure by resetting
+  // ServiceWorkerContainerHost.  But without disabling
+  // HighPriorityFetchResponseCallback,
+  // `container_endpoints_.host_remote()->reset()` comes later than
+  // request processing, and doesn't cancel navigation during the fetch
+  // event.  This test is still valid after introducing
+  // HighPriorityFetchResponseCallback.
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback
+      disable_high_priority_fetch_response_callback;
+
   StartRequest(CreateRequest());
 
   // Delete the container host during the request. The load should abort without

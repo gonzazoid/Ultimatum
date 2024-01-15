@@ -41,9 +41,11 @@ namespace blink {
 class DocumentFragment;
 class TemplateContentDocumentFragment;
 
-// TODO(crbug.com/1379513) Only three of these should be needed at a time,
-// depending on the state of the StreamingDeclarativeShadowDOM feature. That
-// feature flips between kOpen/kClosed and kStreamingOpen/kStreamingClosed.
+// TODO(crbug.com/1379513, crbug.com/1396384) Only three of these should be
+// needed at a time, depending on the state of the StreamingDeclarativeShadowDOM
+// feature and whether the `shadowroot` or `shadowrootmode` attribute is used.
+// For a given template, either kNone/kOpen/kClosed or
+// kNone/kStreamingOpen/kStreamingClosed are used.
 enum class DeclarativeShadowRootType {
   kNone,
   kOpen,
@@ -69,13 +71,16 @@ class CORE_EXPORT HTMLTemplateElement final : public HTMLElement {
   // be used by HTMLConstructionSite.
   DocumentFragment* TemplateContentForHTMLConstructionSite() const {
     if (declarative_shadow_root_) {
-      DCHECK(RuntimeEnabledFeatures::StreamingDeclarativeShadowDOMEnabled());
       return declarative_shadow_root_.Get();
     }
     return ContentInternal();
   }
 
+  // TODO(crbug.com/1396384) Eventually remove this.
+  bool IsNonStreamingDeclarativeShadowRoot() const;
+  // TODO(crbug.com/1396384) Eventually remove this.
   DocumentFragment* DeclarativeShadowContent() const;
+
   void SetDeclarativeShadowRootType(DeclarativeShadowRootType val) {
     declarative_shadow_root_type_ = val;
   }
@@ -87,7 +92,6 @@ class CORE_EXPORT HTMLTemplateElement final : public HTMLElement {
   }
 
   void SetDeclarativeShadowRoot(ShadowRoot& shadow) {
-    DCHECK(RuntimeEnabledFeatures::StreamingDeclarativeShadowDOMEnabled());
     DCHECK(declarative_shadow_root_type_ ==
                DeclarativeShadowRootType::kStreamingOpen ||
            declarative_shadow_root_type_ ==
@@ -97,7 +101,7 @@ class CORE_EXPORT HTMLTemplateElement final : public HTMLElement {
 
  private:
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
   void DidMoveToNewDocument(Document& old_document) override;
 
   DocumentFragment* ContentInternal() const;
@@ -107,6 +111,25 @@ class CORE_EXPORT HTMLTemplateElement final : public HTMLElement {
   Member<ShadowRoot> declarative_shadow_root_;
   DeclarativeShadowRootType declarative_shadow_root_type_;
 };
+
+// TODO(crbug.com/1396384) Remove this entire function when the older version
+// of declarative shadow DOM is removed.
+ALWAYS_INLINE bool HTMLTemplateElement::IsNonStreamingDeclarativeShadowRoot()
+    const {
+  switch (declarative_shadow_root_type_) {
+    case DeclarativeShadowRootType::kNone:
+      return false;
+    case DeclarativeShadowRootType::kOpen:
+    case DeclarativeShadowRootType::kClosed:
+      DCHECK(!declarative_shadow_root_);
+      CHECK(RuntimeEnabledFeatures::
+                DeprecatedNonStreamingDeclarativeShadowDOMEnabled());
+      return true;
+    case DeclarativeShadowRootType::kStreamingOpen:
+    case DeclarativeShadowRootType::kStreamingClosed:
+      return false;
+  }
+}
 
 }  // namespace blink
 

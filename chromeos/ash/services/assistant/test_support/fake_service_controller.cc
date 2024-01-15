@@ -4,6 +4,7 @@
 
 #include "chromeos/ash/services/assistant/test_support/fake_service_controller.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash::assistant {
@@ -75,7 +76,7 @@ std::string FakeServiceController::gaia_id() {
 void FakeServiceController::Initialize(
     libassistant::mojom::BootupConfigPtr config,
     mojo::PendingRemote<network::mojom::URLLoaderFactory> url_loader_factory) {
-  mojom_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  mojom_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   libassistant_config_ = std::move(config);
 
   authentication_tokens_ =
@@ -91,7 +92,13 @@ void FakeServiceController::Start() {
 }
 
 void FakeServiceController::Stop() {
-  SetState(State::kStopped);
+  // Post a delayed task to make it possible to set other state between
+  // kStopping and kStopped.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&FakeServiceController::SetState,
+                     weak_factory_.GetWeakPtr(), State::kStopped),
+      base::Milliseconds(1));
 }
 
 void FakeServiceController::ResetAllDataAndStop() {

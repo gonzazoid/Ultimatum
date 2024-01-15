@@ -4,36 +4,79 @@
 
 #include "chrome/browser/ash/arc/input_overlay/arc_input_overlay_manager.h"
 
+#include <memory>
+
+#include "ash/components/arc/test/fake_compatibility_mode_instance.h"
 #include "ash/shell.h"
+#include "ash/test/ash_test_base.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
 #include "ash/wm/window_util.h"
+#include "base/test/scoped_feature_list.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/arc/input_overlay/actions/action.h"
+#include "chrome/browser/ash/arc/input_overlay/display_overlay_controller.h"
 #include "chrome/browser/ash/arc/input_overlay/test/arc_test_window.h"
 #include "chrome/browser/ash/arc/input_overlay/test/event_capturer.h"
-#include "components/exo/test/exo_test_base.h"
-#include "components/exo/test/exo_test_helper.h"
+#include "chrome/browser/ash/arc/input_overlay/test/test_utils.h"
+#include "chrome/test/base/testing_profile.h"
+#include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/window.h"
 #include "ui/base/ime/dummy_text_input_client.h"
 #include "ui/base/ime/init/input_method_factory.h"
+#include "ui/gfx/geometry/test/geometry_util.h"
 #include "ui/views/widget/widget.h"
 
-namespace arc {
+namespace arc::input_overlay {
 namespace {
-// I/O time to wait.
-constexpr base::TimeDelta kIORead = base::Milliseconds(50);
-
 // Package names for testing.
-constexpr char kEnabledPackageName[] = "org.chromium.arc.testapp.inputoverlay";
 constexpr char kRandomPackageName[] =
     "org.chromium.arc.testapp.inputoverlay_no_data";
+constexpr char kRandomGamePackageName[] =
+    "org.chromium.arc.testapp.inputoverlay_game";
+constexpr char kGameControlsOptOutPackageName[] =
+    "org.chromium.arc.testapp.inputoverlay_opt_out";
+
+constexpr const float kTolerance = 0.999f;
+
+constexpr const float kAction0PositionRatio = 0.5f;
+constexpr const float kAction1PositionRatio = 0.9f;
+
+constexpr const gfx::Rect window_bounds = gfx::Rect(10, 10, 100, 100);
 
 }  // namespace
-class ArcInputOverlayManagerTest : public exo::test::ExoTestBase {
+
+class TestArcInputOverlayManager : public ArcInputOverlayManager {
+ public:
+  TestArcInputOverlayManager()
+      : ArcInputOverlayManager(
+            /*BrowserContext=*/TestingProfile::Builder().Build().get(),
+            /*ArcBridgeService=*/nullptr) {}
+  ~TestArcInputOverlayManager() override = default;
+
+ private:
+  // ArcInputOverlayManager:
+  void AddDisplayOverlayController(TouchInjector* touch_injector) override {
+    DCHECK(registered_top_level_window_);
+    DCHECK(touch_injector);
+    if (!registered_top_level_window_ || !touch_injector) {
+      return;
+    }
+    DCHECK(!display_overlay_controller_);
+    display_overlay_controller_ = std::make_unique<DisplayOverlayController>(
+        touch_injector, /*first_launch=*/false);
+  }
+};
+
+// ArcInputOverlayManagerTest needs to run on MainThread when involving with
+// profile and mojo connection.
+class ArcInputOverlayManagerTest : public ash::AshTestBase {
  public:
   ArcInputOverlayManagerTest()
-      : exo::test::ExoTestBase(
-            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+      : ash::AshTestBase(std::unique_ptr<base::test::TaskEnvironment>(
+            std::make_unique<content::BrowserTaskEnvironment>(
+                base::test::TaskEnvironment::TimeSource::MOCK_TIME))) {}
 
   bool IsInputOverlayEnabled(const aura::Window* window) const {
     return arc_test_input_overlay_manager_->input_overlay_enabled_windows_
@@ -53,7 +96,7 @@ class ArcInputOverlayManagerTest : public exo::test::ExoTestBase {
         .size();
   }
 
-  input_overlay::TouchInjector* GetTouchInjector(aura::Window* window) {
+  TouchInjector* GetTouchInjector(aura::Window* window) {
     auto it =
         arc_test_input_overlay_manager_->input_overlay_enabled_windows_.find(
             window);
@@ -72,69 +115,119 @@ class ArcInputOverlayManagerTest : public exo::test::ExoTestBase {
     return arc_test_input_overlay_manager_->key_event_source_rewriter_.get();
   }
 
-  input_overlay::DisplayOverlayController* GetDisplayOverlayController() {
+  DisplayOverlayController* GetDisplayOverlayController() {
     return arc_test_input_overlay_manager_->display_overlay_controller_.get();
   }
 
-  // TODO(djacobo): Maybe move all tests inside input_overlay namespace.
-  void DismissEducationalDialog(input_overlay::TouchInjector* injector) {
-    injector->GetControllerForTesting()->DismissEducationalViewForTesting();
+  bool IsObserving(aura::Window* window) const {
+    return arc_test_input_overlay_manager_->window_observations_
+        .IsObservingSource(window);
   }
 
  protected:
-  std::unique_ptr<ArcInputOverlayManager> arc_test_input_overlay_manager_;
-
- private:
-  aura::test::TestWindowDelegate dummy_delegate_;
-
+  // ash::AshTestBase:
   void SetUp() override {
-    exo::test::ExoTestBase::SetUp();
+    ash::AshTestBase::SetUp();
     arc_test_input_overlay_manager_ =
-        base::WrapUnique(new ArcInputOverlayManager(nullptr, nullptr));
+        base::WrapUnique(new TestArcInputOverlayManager());
   }
 
   void TearDown() override {
     arc_test_input_overlay_manager_->Shutdown();
     arc_test_input_overlay_manager_.reset();
-    exo::test::ExoTestBase::TearDown();
+    ash::AshTestBase::TearDown();
   }
+
+  std::unique_ptr<ArcInputOverlayManager> arc_test_input_overlay_manager_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-TEST_F(ArcInputOverlayManagerTest, TestPropertyChangeAndWindowDestroy) {
+// -----------------------------------------------------------------------------
+// VersionArcInputOverlayManagerTest:
+// Test fixture to test both pre-beta and beta version depending on the test
+// param (true for beta version, false for pre-beta version).
+class VersionArcInputOverlayManagerTest
+    : public ArcInputOverlayManagerTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  VersionArcInputOverlayManagerTest() = default;
+  ~VersionArcInputOverlayManagerTest() override = default;
+
+  // ArcInputOverlayManagerTest:
+  void SetUp() override {
+    ArcInputOverlayManagerTest::SetUp();
+    if (IsBetaVersion()) {
+      scoped_feature_list_.InitWithFeatures(
+          {ash::features::kGameDashboard, ash::features::kArcInputOverlayBeta},
+          {});
+    } else {
+      scoped_feature_list_.InitWithFeatures({}, {});
+    }
+
+    profile_ = std::make_unique<TestingProfile>();
+    arc_app_test_.set_wait_compatibility_mode(true);
+    arc_app_test_.SetUp(profile_.get());
+
+    SimulatedAppInstalled(task_environment(), arc_app_test_,
+                          kEnabledPackageName,
+                          /*is_gc_opt_out=*/false,
+                          /*is_game=*/true);
+    SimulatedAppInstalled(task_environment(), arc_app_test_,
+                          kRandomGamePackageName,
+                          /*is_gc_opt_out=*/false,
+                          /*is_game=*/true);
+  }
+
+  void TearDown() override {
+    arc_app_test_.TearDown();
+    profile_.reset();
+    ArcInputOverlayManagerTest::TearDown();
+  }
+
+ protected:
+  bool IsBetaVersion() const { return GetParam(); }
+
+  ArcAppTest arc_app_test_;
+
+ private:
+  std::unique_ptr<TestingProfile> profile_;
+};
+
+TEST_P(VersionArcInputOverlayManagerTest, TestPropertyChangeAndWindowDestroy) {
   aura::client::FocusClient* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
   // Test app with input overlay data.
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
+  auto arc_window = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
       kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
-  EXPECT_TRUE(IsInputOverlayEnabled(arc_window->GetWindow()));
+  auto* arc_window_ptr = arc_window->GetNativeWindow();
+  EXPECT_TRUE(IsObserving(arc_window_ptr));
+  EXPECT_TRUE(IsInputOverlayEnabled(arc_window_ptr));
   // Input overlay registers the window after reading the data when the window
   // is still focused. In the test, the arc_window is considered as focused now.
   EXPECT_TRUE(GetRegisteredWindow());
-  focus_client->FocusWindow(arc_window->GetWindow());
+  focus_client->FocusWindow(arc_window_ptr);
   EXPECT_TRUE(GetRegisteredWindow());
 
   // Test app with input overlay data when window is destroyed.
-  auto* arc_window_ptr = arc_window->GetWindow();
   arc_window.reset();
+  EXPECT_FALSE(IsObserving(arc_window_ptr));
   EXPECT_FALSE(IsInputOverlayEnabled(arc_window_ptr));
 
   // Test app without input overlay data.
-  auto arc_window_no_data =
-      std::make_unique<input_overlay::test::ArcTestWindow>(
-          exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
-          kRandomPackageName);
-  EXPECT_FALSE(IsInputOverlayEnabled(arc_window_no_data->GetWindow()));
+  auto arc_window_no_data = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
+      kRandomPackageName);
+  EXPECT_FALSE(IsObserving(arc_window_ptr));
+  EXPECT_FALSE(IsInputOverlayEnabled(arc_window_no_data->GetNativeWindow()));
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestWindowDestroyNoWait) {
+TEST_P(VersionArcInputOverlayManagerTest, TestWindowDestroyNoWait) {
   // This test is to check UAF issue reported in crbug.com/1363030.
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
-      kEnabledPackageName);
-  const auto* arc_window_ptr = arc_window->GetWindow();
+  task_environment()->RunUntilIdle();
+  auto arc_window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                    window_bounds, kEnabledPackageName);
+  const auto* arc_window_ptr = arc_window->GetNativeWindow();
 
   // Destroy window before finishing I/O reading. The window can't be destroyed
   // during ReadDefaultData(), but it can be destroyed before
@@ -145,17 +238,15 @@ TEST_F(ArcInputOverlayManagerTest, TestWindowDestroyNoWait) {
   EXPECT_FALSE(IsInputOverlayEnabled(arc_window_ptr));
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestInputMethodObsever) {
+TEST_P(VersionArcInputOverlayManagerTest, TestInputMethodObsever) {
   ASSERT_FALSE(GetInputMethod());
   ASSERT_FALSE(IsTextInputActive());
   aura::client::FocusClient* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
+  auto arc_window = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
       kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
-  focus_client->FocusWindow(arc_window->GetWindow());
+  focus_client->FocusWindow(arc_window->GetNativeWindow());
   ui::InputMethod* input_method = GetInputMethod();
   EXPECT_TRUE(GetInputMethod());
   input_method->SetFocusedTextInputClient(nullptr);
@@ -170,43 +261,38 @@ TEST_F(ArcInputOverlayManagerTest, TestInputMethodObsever) {
   input_method->SetFocusedTextInputClient(nullptr);
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestWindowFocusChange) {
+TEST_P(VersionArcInputOverlayManagerTest, TestWindowFocusChange) {
   aura::client::FocusClient* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
+  auto arc_window = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
       kEnabledPackageName);
-  // Add a deley until I/O operations finish.
-  task_environment()->FastForwardBy(kIORead);
-  auto arc_window_no_data =
-      std::make_unique<input_overlay::test::ArcTestWindow>(
-          exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
-          kRandomPackageName);
+  auto arc_window_no_data = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
+      kRandomPackageName);
   EXPECT_EQ(1, EnabledWindows());
 
-  auto* injector = GetTouchInjector(arc_window->GetWindow());
+  auto* injector = GetTouchInjector(arc_window->GetNativeWindow());
   EXPECT_TRUE(injector);
   // The action number should be adjusted with the data in the
   // org.chromium.arc.testapp.inputoverlay.json.
-  EXPECT_EQ(3, (int)injector->actions().size());
+  EXPECT_EQ(3u, injector->actions().size());
 
   EXPECT_TRUE(!GetRegisteredWindow() && !GetDisplayOverlayController());
-  focus_client->FocusWindow(arc_window->GetWindow());
-  EXPECT_EQ(arc_window->GetWindow(), GetRegisteredWindow());
+  focus_client->FocusWindow(arc_window->GetNativeWindow());
+  EXPECT_EQ(arc_window->GetNativeWindow(), GetRegisteredWindow());
   EXPECT_TRUE(GetDisplayOverlayController());
-  focus_client->FocusWindow(arc_window_no_data->GetWindow());
+  focus_client->FocusWindow(arc_window_no_data->GetNativeWindow());
   EXPECT_TRUE(!GetRegisteredWindow() && !GetDisplayOverlayController());
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestTabletMode) {
+TEST_P(VersionArcInputOverlayManagerTest, TestTabletMode) {
   // Launch app in tablet mode and switch to desktop mode.
   ash::TabletModeControllerTestApi().EnterTabletMode();
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
+  auto arc_window = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
       kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
-  EXPECT_TRUE(IsInputOverlayEnabled(arc_window->GetWindow()));
+  EXPECT_TRUE(IsInputOverlayEnabled(arc_window->GetNativeWindow()));
   EXPECT_FALSE(GetRegisteredWindow());
   ash::TabletModeControllerTestApi().LeaveTabletMode();
   EXPECT_TRUE(GetRegisteredWindow());
@@ -214,18 +300,17 @@ TEST_F(ArcInputOverlayManagerTest, TestTabletMode) {
 
   // Launch app in desktop mode and switch to tablet mode.
   ash::TabletModeControllerTestApi().LeaveTabletMode();
-  arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
-      kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
-  EXPECT_TRUE(IsInputOverlayEnabled(arc_window->GetWindow()));
+  arc_window = CreateArcWindowSyncAndWait(task_environment(),
+                                          ash::Shell::GetPrimaryRootWindow(),
+                                          window_bounds, kEnabledPackageName);
+  EXPECT_TRUE(IsInputOverlayEnabled(arc_window->GetNativeWindow()));
   EXPECT_TRUE(GetRegisteredWindow());
   ash::TabletModeControllerTestApi().EnterTabletMode();
   EXPECT_FALSE(GetRegisteredWindow());
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestKeyEventSourceRewriterForMultiDisplay) {
+TEST_P(VersionArcInputOverlayManagerTest,
+       TestKeyEventSourceRewriterForMultiDisplay) {
   aura::client::FocusClient* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
   UpdateDisplay("1000x900,1000x900");
@@ -236,25 +321,29 @@ TEST_F(ArcInputOverlayManagerTest, TestKeyEventSourceRewriterForMultiDisplay) {
       root_windows[1]->GetBoundsInScreen());
 
   // Test when launching input overlay window on the secondary display, there
-  // should be |key_event_source_rewriter_| registered on the primary root
+  // should be `key_event_source_rewriter_` registered on the primary root
   // window.
   EXPECT_FALSE(GetKeyEventSourceRewriter());
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), root_windows[1], kEnabledPackageName);
+  task_environment()->RunUntilIdle();
+  auto screen_bounds = window_bounds;
+  const auto& display_bounds = display1.bounds();
+  screen_bounds.Offset(display_bounds.x(), display_bounds.y());
+  auto arc_window =
+      CreateArcWindow(root_windows[1], screen_bounds, kEnabledPackageName);
+  arc_window->GetNativeWindow()->SetBoundsInScreen(screen_bounds, display1);
   // I/O takes time here.
   task_environment()->FastForwardBy(kIORead);
   // Make sure to dismiss the educational dialog in beforehand.
-  auto* injector = GetTouchInjector(arc_window->GetWindow());
+  auto* injector = GetTouchInjector(arc_window->GetNativeWindow());
   EXPECT_TRUE(injector);
-  focus_client->FocusWindow(arc_window->GetWindow());
-  DismissEducationalDialog(injector);
+  focus_client->FocusWindow(arc_window->GetNativeWindow());
   EXPECT_TRUE(GetKeyEventSourceRewriter());
   // Simulate the fact that key events are only sent to primary root window
   // when there is no text input focus. Make sure the input overlay window can
   // receive simulated touch events on the secondary window.
   auto event_generator =
       std::make_unique<ui::test::EventGenerator>(root_windows[0]);
-  input_overlay::test::EventCapturer event_capturer;
+  test::EventCapturer event_capturer;
   root_windows[1]->AddPostTargetHandler(&event_capturer);
   event_generator->PressKey(ui::VKEY_A, ui::EF_NONE, /*source_device_id=*/1);
   EXPECT_TRUE(event_capturer.key_events().empty());
@@ -265,35 +354,34 @@ TEST_F(ArcInputOverlayManagerTest, TestKeyEventSourceRewriterForMultiDisplay) {
   event_capturer.Clear();
   root_windows[1]->RemovePostTargetHandler(&event_capturer);
   // Move to the primary display.
-  arc_window->SetBounds(display0, gfx::Rect(10, 10, 100, 100));
+  arc_window->GetNativeWindow()->SetBoundsInScreen(window_bounds, display0);
   EXPECT_FALSE(GetKeyEventSourceRewriter());
   // Move back to the secondary display.
-  arc_window->SetBounds(display1, gfx::Rect(1010, 910, 100, 100));
+  arc_window->GetNativeWindow()->SetBoundsInScreen(screen_bounds, display1);
   EXPECT_TRUE(GetKeyEventSourceRewriter());
   arc_window.reset();
 
   // Test when launching input overlay window on the primary display, there
-  // shouldn't be |key_event_source_rewriter_|.
+  // shouldn't be `key_event_source_rewriter_`.
   EXPECT_FALSE(GetKeyEventSourceRewriter());
-  arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), root_windows[0], kEnabledPackageName);
-  // Add a deley until I/O operations finish.
-  task_environment()->FastForwardBy(kIORead);
+  arc_window = CreateArcWindowSyncAndWait(task_environment(),
+                                          ash::Shell::GetPrimaryRootWindow(),
+                                          window_bounds, kEnabledPackageName);
   EXPECT_FALSE(GetKeyEventSourceRewriter());
   // Move to the secondary display.
-  arc_window->SetBounds(display1, gfx::Rect(10, 10, 100, 100));
+  arc_window->GetNativeWindow()->SetBoundsInScreen(window_bounds, display1);
   EXPECT_TRUE(GetKeyEventSourceRewriter());
-  // When losing focus, |key_event_source_rewriter_| should be destroyed too.
+  // When losing focus, `key_event_source_rewriter_` should be destroyed too.
   focus_client->FocusWindow(nullptr);
   EXPECT_FALSE(GetKeyEventSourceRewriter());
   arc_window.reset();
 
   // Test when this is non input overlay window launched on the secondry
-  // display, there shouldn't be |key_event_source_rewriter_|.
-  auto arc_window_no_data =
-      std::make_unique<input_overlay::test::ArcTestWindow>(
-          exo_test_helper(), root_windows[1], kRandomPackageName);
-  focus_client->FocusWindow(arc_window_no_data->GetWindow());
+  // display, there shouldn't be `key_event_source_rewriter_`.
+  auto arc_window_no_data = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
+      kRandomPackageName);
+  focus_client->FocusWindow(arc_window_no_data->GetNativeWindow());
   EXPECT_FALSE(GetKeyEventSourceRewriter());
   arc_window_no_data.reset();
 
@@ -302,20 +390,20 @@ TEST_F(ArcInputOverlayManagerTest, TestKeyEventSourceRewriterForMultiDisplay) {
   // events. When input overlay window on the secondary root window is not
   // registered/not focused, primary window should receive key events.
   root_windows[0]->AddPostTargetHandler(&event_capturer);
-  arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), root_windows[1], kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
-  arc_window_no_data = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), root_windows[0], kRandomPackageName);
+  arc_window = CreateArcWindowSyncAndWait(task_environment(), root_windows[1],
+                                          screen_bounds, kEnabledPackageName);
+  arc_window->GetNativeWindow()->SetBoundsInScreen(screen_bounds, display1);
+  arc_window_no_data = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
+      kRandomPackageName);
   // Focus on window without input overlay.
-  focus_client->FocusWindow(arc_window_no_data->GetWindow());
+  focus_client->FocusWindow(arc_window_no_data->GetNativeWindow());
   event_generator->PressKey(ui::VKEY_A, ui::EF_NONE, 1 /* keyboard id */);
   event_generator->ReleaseKey(ui::VKEY_A, ui::EF_NONE, 1 /* keyboard id */);
   EXPECT_EQ(2u, event_capturer.key_events().size());
   event_capturer.Clear();
   // Focus input overlay window.
-  focus_client->FocusWindow(arc_window->GetWindow());
+  focus_client->FocusWindow(arc_window->GetNativeWindow());
   EXPECT_TRUE(GetKeyEventSourceRewriter());
   event_generator->PressKey(ui::VKEY_A, ui::EF_NONE, 1 /* keyboard id */);
   event_generator->ReleaseKey(ui::VKEY_A, ui::EF_NONE, 1 /* keyboard id */);
@@ -324,67 +412,231 @@ TEST_F(ArcInputOverlayManagerTest, TestKeyEventSourceRewriterForMultiDisplay) {
   root_windows[0]->RemovePostTargetHandler(&event_capturer);
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestWindowBoundsChanged) {
+TEST_P(VersionArcInputOverlayManagerTest, TestWindowBoundsChanged) {
   auto* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
+  auto arc_window = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
       kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
   // Make sure to dismiss the educational dialog in beforehand.
-  auto* injector = GetTouchInjector(arc_window->GetWindow());
+  auto* injector = GetTouchInjector(arc_window->GetNativeWindow());
   DCHECK(injector);
-  focus_client->FocusWindow(arc_window->GetWindow());
-  DismissEducationalDialog(injector);
-  EXPECT_EQ(injector->content_bounds(), gfx::RectF(10, 10, 100, 100));
-  EXPECT_EQ(injector->actions()[0]->touch_down_positions()[0],
-            gfx::PointF(60, 60));
-  EXPECT_EQ(injector->actions()[1]->touch_down_positions()[0],
-            gfx::PointF(100, 100));
+  focus_client->FocusWindow(arc_window->GetNativeWindow());
+  int caption_height = -arc_window->non_client_view()
+                            ->frame_view()
+                            ->GetWindowBoundsForClientBounds(gfx::Rect())
+                            .y();
+  auto expected_content_bounds = gfx::RectF(
+      window_bounds.x(), window_bounds.y() + caption_height,
+      window_bounds.width(), window_bounds.height() - caption_height);
+  EXPECT_EQ(injector->content_bounds_f(), expected_content_bounds);
+  EXPECT_POINTF_NEAR(
+      injector->actions()[0]->touch_down_positions()[0],
+      gfx::PointF(expected_content_bounds.x() +
+                      expected_content_bounds.width() * kAction0PositionRatio,
+                  expected_content_bounds.y() +
+                      expected_content_bounds.height() * kAction0PositionRatio),
+      kTolerance);
+  EXPECT_POINTF_NEAR(
+      injector->actions()[1]->touch_down_positions()[0],
+      gfx::PointF(expected_content_bounds.x() +
+                      expected_content_bounds.width() * kAction1PositionRatio,
+                  expected_content_bounds.y() +
+                      expected_content_bounds.height() * kAction1PositionRatio),
+      kTolerance);
 
   // Confirm the content bounds and touch down positions are updated after
   // window bounds changed.
   auto display = display::Screen::GetScreen()->GetDisplayMatching(
       ash::Shell::GetPrimaryRootWindow()->GetBoundsInScreen());
-  arc_window->SetBounds(display, gfx::Rect(10, 10, 150, 150));
-  EXPECT_EQ(injector->content_bounds(), gfx::RectF(10, 10, 150, 150));
-  EXPECT_EQ(injector->actions()[0]->touch_down_positions()[0],
-            gfx::PointF(85, 85));
-  EXPECT_EQ(injector->actions()[1]->touch_down_positions()[0],
-            gfx::PointF(145, 145));
+  auto new_window_bounds = gfx::Rect(10, 10, 150, 150);
+  arc_window->GetNativeWindow()->SetBoundsInScreen(new_window_bounds, display);
+  expected_content_bounds = gfx::RectF(
+      new_window_bounds.x(), new_window_bounds.y() + caption_height,
+      new_window_bounds.width(), new_window_bounds.height() - caption_height);
+  EXPECT_EQ(injector->content_bounds_f(), expected_content_bounds);
+  EXPECT_POINTF_NEAR(
+      injector->actions()[0]->touch_down_positions()[0],
+      gfx::PointF(expected_content_bounds.x() +
+                      expected_content_bounds.width() * kAction0PositionRatio,
+                  expected_content_bounds.y() +
+                      expected_content_bounds.height() * kAction0PositionRatio),
+      kTolerance);
+  EXPECT_POINTF_NEAR(
+      injector->actions()[1]->touch_down_positions()[0],
+      gfx::PointF(expected_content_bounds.x() +
+                      expected_content_bounds.width() * kAction1PositionRatio,
+                  expected_content_bounds.y() +
+                      expected_content_bounds.height() * kAction1PositionRatio),
+      kTolerance);
 }
 
-TEST_F(ArcInputOverlayManagerTest, TestDisplayRotationChanged) {
+TEST_P(VersionArcInputOverlayManagerTest, TestDisplayRotationChanged) {
   aura::client::FocusClient* focus_client =
       aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
-  auto arc_window = std::make_unique<input_overlay::test::ArcTestWindow>(
-      exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
+  auto arc_window = CreateArcWindowSyncAndWait(
+      task_environment(), ash::Shell::GetPrimaryRootWindow(), window_bounds,
       kEnabledPackageName);
-  // I/O takes time here.
-  task_environment()->FastForwardBy(kIORead);
   // Make sure to dismiss the educational dialog in beforehand.
-  auto* injector = GetTouchInjector(arc_window->GetWindow());
+  auto* injector = GetTouchInjector(arc_window->GetNativeWindow());
   DCHECK(injector);
-  focus_client->FocusWindow(arc_window->GetWindow());
-  DismissEducationalDialog(injector);
+  focus_client->FocusWindow(arc_window->GetNativeWindow());
   EXPECT_FALSE(injector->rotation_transform());
-  EXPECT_EQ(injector->content_bounds(), gfx::RectF(10, 10, 100, 100));
-  EXPECT_EQ(injector->actions()[0]->touch_down_positions()[0],
-            gfx::PointF(60, 60));
-  EXPECT_EQ(injector->actions()[1]->touch_down_positions()[0],
-            gfx::PointF(100, 100));
+  int caption_height = -arc_window->non_client_view()
+                            ->frame_view()
+                            ->GetWindowBoundsForClientBounds(gfx::Rect())
+                            .y();
+  auto expected_content_bounds = gfx::RectF(
+      window_bounds.x(), window_bounds.y() + caption_height,
+      window_bounds.width(), window_bounds.height() - caption_height);
+  EXPECT_EQ(injector->content_bounds_f(), expected_content_bounds);
+  auto expect_touch_a =
+      gfx::PointF(expected_content_bounds.x() +
+                      expected_content_bounds.width() * kAction0PositionRatio,
+                  expected_content_bounds.y() +
+                      expected_content_bounds.height() * kAction0PositionRatio);
+  EXPECT_POINTF_NEAR(injector->actions()[0]->touch_down_positions()[0],
+                     expect_touch_a, kTolerance);
+  auto expect_touch_b =
+      gfx::PointF(expected_content_bounds.x() +
+                      expected_content_bounds.width() * kAction1PositionRatio,
+                  expected_content_bounds.y() +
+                      expected_content_bounds.height() * kAction1PositionRatio);
+  EXPECT_POINTF_NEAR(injector->actions()[1]->touch_down_positions()[0],
+                     expect_touch_b, kTolerance);
 
   // Confirm the touch down positions are updated after display rotated.
   UpdateDisplay("800x600/r");
   EXPECT_TRUE(injector->rotation_transform());
-  EXPECT_EQ(injector->content_bounds(), gfx::RectF(10, 10, 100, 100));
-  auto expected_pos = gfx::PointF(60, 60);
-  expected_pos = injector->rotation_transform()->MapPoint(expected_pos);
-  EXPECT_EQ(injector->actions()[0]->touch_down_positions()[0], expected_pos);
-  expected_pos = gfx::PointF(100, 100);
-  expected_pos = injector->rotation_transform()->MapPoint(expected_pos);
-  EXPECT_EQ(injector->actions()[1]->touch_down_positions()[0], expected_pos);
+  EXPECT_EQ(injector->content_bounds_f(), expected_content_bounds);
+  expect_touch_a = injector->rotation_transform()->MapPoint(expect_touch_a);
+  EXPECT_POINTF_NEAR(injector->actions()[0]->touch_down_positions()[0],
+                     expect_touch_a, kTolerance);
+  expect_touch_b = injector->rotation_transform()->MapPoint(expect_touch_b);
+  EXPECT_POINTF_NEAR(injector->actions()[1]->touch_down_positions()[0],
+                     expect_touch_b, kTolerance);
 }
 
-}  // namespace arc
+TEST_P(VersionArcInputOverlayManagerTest, TestNonGameApp) {
+  // Test a random non-game app.
+  auto window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                window_bounds, kRandomPackageName);
+  task_environment()->FastForwardBy(kIORead);
+  auto* injector = GetTouchInjector(window->GetNativeWindow());
+  EXPECT_FALSE(injector);
+  window.reset();
+}
+
+TEST_P(VersionArcInputOverlayManagerTest, TestGameWithDefaultMapping) {
+  // Test with a game with default mapping.
+  auto window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                window_bounds, kEnabledPackageName);
+  task_environment()->FastForwardBy(kIORead);
+  auto* injector = GetTouchInjector(window->GetNativeWindow());
+  EXPECT_TRUE(injector);
+  size_t actions_size = injector->actions().size();
+
+  const auto center =
+      gfx::Point(window_bounds.width() / 2, window_bounds.height() / 2);
+  if (IsBetaVersion()) {
+    // Add two new actions.
+    injector->AddNewAction(ActionType::TAP, center);
+    injector->AddNewAction(ActionType::TAP, center);
+    EXPECT_EQ(actions_size + 2, injector->actions().size());
+  }
+
+  // Relaunch the game to check whether previous customized data is loaded.
+  window.reset();
+  window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(), window_bounds,
+                           kEnabledPackageName);
+  task_environment()->FastForwardBy(kIORead);
+  injector = GetTouchInjector(window->GetNativeWindow());
+  EXPECT_TRUE(injector);
+  if (IsBetaVersion()) {
+    EXPECT_EQ(actions_size + 2, injector->actions().size());
+  } else {
+    EXPECT_EQ(actions_size, injector->actions().size());
+  }
+
+  window.reset();
+}
+
+TEST_P(VersionArcInputOverlayManagerTest, TestGameWithoutDefaultMapping) {
+  // Test with a random non-O4C game.
+  auto game_window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                     window_bounds, kRandomGamePackageName);
+  task_environment()->FastForwardBy(kIORead);
+  auto* injector = GetTouchInjector(game_window->GetNativeWindow());
+  if (IsBetaVersion()) {
+    EXPECT_TRUE(injector);
+    EXPECT_EQ(0u, injector->actions().size());
+    // Add two new actions.
+    const auto center =
+        gfx::Point(window_bounds.width() / 2, window_bounds.height() / 2);
+    injector->AddNewAction(ActionType::TAP, center);
+    injector->AddNewAction(ActionType::TAP, center);
+    injector->OnBindingSave();
+  } else {
+    EXPECT_FALSE(injector);
+  }
+
+  // Relaunch the game to check whether previous customized_data is loaded.
+  game_window.reset();
+  task_environment()->RunUntilIdle();
+  game_window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                window_bounds, kRandomGamePackageName);
+  task_environment()->FastForwardBy(kIORead);
+  injector = GetTouchInjector(game_window->GetNativeWindow());
+  if (IsBetaVersion()) {
+    EXPECT_TRUE(injector);
+    EXPECT_EQ(2u, injector->actions().size());
+  } else {
+    EXPECT_FALSE(injector);
+  }
+
+  game_window.reset();
+}
+
+TEST_P(VersionArcInputOverlayManagerTest, TestGameControlsOptOut) {
+  SimulatedAppInstalled(task_environment(), arc_app_test_,
+                        kGameControlsOptOutPackageName,
+                        /*is_gc_opt_out=*/true,
+                        /*is_game=*/true);
+  auto game_window =
+      CreateArcWindow(ash::Shell::GetPrimaryRootWindow(), window_bounds,
+                      kGameControlsOptOutPackageName);
+  EXPECT_FALSE(GetTouchInjector(game_window->GetNativeWindow()));
+}
+
+TEST_P(VersionArcInputOverlayManagerTest, TestO4CGame) {
+  // Test an O4C game without any input mapping.
+  arc_app_test_.compatibility_mode_instance()->set_o4c_pkg(
+      kRandomGamePackageName);
+  auto game_window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                     window_bounds, kRandomGamePackageName);
+  task_environment()->FastForwardBy(kIORead);
+  auto* injector = GetTouchInjector(game_window->GetNativeWindow());
+  if (IsBetaVersion()) {
+    EXPECT_TRUE(injector);
+  } else {
+    EXPECT_FALSE(injector);
+  }
+  game_window.reset();
+  task_environment()->RunUntilIdle();
+
+  // Test an O4C game with input mappings.
+  arc_app_test_.compatibility_mode_instance()->set_o4c_pkg(kEnabledPackageName);
+  game_window = CreateArcWindow(ash::Shell::GetPrimaryRootWindow(),
+                                window_bounds, kEnabledPackageName);
+  task_environment()->FastForwardBy(kIORead);
+  injector = GetTouchInjector(game_window->GetNativeWindow());
+  EXPECT_TRUE(injector);
+  EXPECT_EQ(3u, injector->actions().size());
+  game_window.reset();
+}
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         VersionArcInputOverlayManagerTest,
+                         ::testing::Bool());
+
+}  // namespace arc::input_overlay

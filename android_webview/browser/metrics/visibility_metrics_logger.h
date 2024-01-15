@@ -9,11 +9,15 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 
 namespace android_webview {
 
+// Records how much of the screen is covered by WebViews. This helps us
+// determine what WebView is being used for.
+//
+// Lifetime: Singleton
 class VisibilityMetricsLogger {
  public:
   // These values are persisted to logs and must match the WebViewUrlScheme enum
@@ -60,6 +64,13 @@ class VisibilityMetricsLogger {
     virtual VisibilityInfo GetVisibilityInfo() = 0;
   };
 
+  enum class ClientAction {
+    kAdded = 0,
+    kRemoved = 1,
+    kVisibilityChanged = 2,
+    kMaxValue = kVisibilityChanged,
+  };
+
   VisibilityMetricsLogger();
   virtual ~VisibilityMetricsLogger();
 
@@ -84,7 +95,9 @@ class VisibilityMetricsLogger {
 
  private:
   void UpdateDurations();
-  void ProcessClientUpdate(Client* client, const VisibilityInfo& info);
+  void ProcessClientUpdate(Client* client,
+                           const VisibilityInfo& info,
+                           ClientAction action);
   void RecordVisibilityMetrics();
   void RecordVisibleSchemeMetrics();
   void RecordScreenCoverageMetrics();

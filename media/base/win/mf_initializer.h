@@ -5,12 +5,16 @@
 #ifndef MEDIA_BASE_WIN_MF_INITIALIZER_H_
 #define MEDIA_BASE_WIN_MF_INITIALIZER_H_
 
-#include "media/base/win/mf_util_export.h"
+#include "media/base/media_export.h"
 
 namespace media {
 
 // Must be called before any code that needs MediaFoundation.
-[[nodiscard]] MF_UTIL_EXPORT bool InitializeMediaFoundation();
+[[nodiscard]] MEDIA_EXPORT bool InitializeMediaFoundation();
+
+// Preloads DLLs required for MediaFoundation; returns false if DLLs fail to
+// load. InitializeMediaFoundation() will also return false if load fails.
+MEDIA_EXPORT bool PreSandboxMediaFoundationInitialization();
 
 }  // namespace media
 

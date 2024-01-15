@@ -216,8 +216,7 @@ void InitializeFeatureList(const base::Value::Dict& dcs_features,
 
   // Initialize the FeatureList from the command line.
   auto feature_list = std::make_unique<base::FeatureList>();
-  feature_list->InitializeFromCommandLine(all_enable_features,
-                                          all_disable_features);
+  feature_list->InitFromCommandLine(all_enable_features, all_disable_features);
 
   // Override defaults from the DCS config.
   for (const auto kv : dcs_features) {
@@ -268,7 +267,7 @@ void InitializeFeatureList(const base::Value::Dict& dcs_features,
         // Build a map of the FieldTrial parameters and associate it to the
         // FieldTrial.
         base::FieldTrialParams params;
-        for (const auto params_kv : kv.second.DictItems()) {
+        for (const auto params_kv : kv.second.GetDict()) {
           if (params_kv.second.is_string()) {
             params[params_kv.first] = params_kv.second.GetString();
           } else {

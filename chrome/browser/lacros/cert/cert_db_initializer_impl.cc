@@ -10,10 +10,10 @@
 #include "base/files/file_path.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "cert_db_initializer_io_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/crosapi/cpp/crosapi_constants.h"
@@ -67,7 +67,7 @@ void CertDbInitializerImpl::Start() {
     return InitializeReadOnlyCertDb();
   }
 
-  if (lacros_service->GetInterfaceVersion(CrosapiCertDb::Uuid_) >=
+  if (lacros_service->GetInterfaceVersion<CrosapiCertDb>() >=
       kAddAshCertDatabaseObserverMinVersion) {
     lacros_service->GetRemote<CrosapiCertDb>()->AddAshCertDatabaseObserver(
         receiver_.BindNewPipeAndPassRemote());
@@ -85,7 +85,7 @@ base::CallbackListSubscription CertDbInitializerImpl::WaitUntilReady(
     // We still want to support returning a CallbackListSubscription, so this
     // code goes through callbacks_ in that case too, which will be notified in
     // OnCertDbInitializationFinished.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&CertDbInitializerImpl::OnCertDbInitializationFinished,
                        weak_factory_.GetWeakPtr()));
@@ -97,8 +97,7 @@ base::CallbackListSubscription CertDbInitializerImpl::WaitUntilReady(
 void CertDbInitializerImpl::InitializeReadOnlyCertDb() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  auto init_database_callback = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
+  auto init_database_callback = base::BindPostTaskToCurrentDefault(
       base::BindOnce(&CertDbInitializerImpl::OnCertDbInitializationFinished,
                      weak_factory_.GetWeakPtr()));
 
@@ -111,8 +110,7 @@ void CertDbInitializerImpl::InitializeReadOnlyCertDb() {
 }
 
 void CertDbInitializerImpl::InitializeForMainProfile() {
-  auto software_db_loaded_callback = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
+  auto software_db_loaded_callback = base::BindPostTaskToCurrentDefault(
       base::BindOnce(&CertDbInitializerImpl::DidLoadSoftwareNssDb,
                      weak_factory_.GetWeakPtr()));
 
@@ -142,8 +140,7 @@ void CertDbInitializerImpl::OnCertDbInfoReceived(
     crosapi::mojom::GetCertDatabaseInfoResultPtr cert_db_info) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  auto init_database_callback = base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(),
+  auto init_database_callback = base::BindPostTaskToCurrentDefault(
       base::BindOnce(&CertDbInitializerImpl::OnCertDbInitializationFinished,
                      weak_factory_.GetWeakPtr()));
 
@@ -168,7 +165,19 @@ CertDbInitializerImpl::CreateNssCertDatabaseGetterForIOThread() {
                         base::Unretained(cert_db_initializer_io_.get()));
 }
 
-void CertDbInitializerImpl::OnCertsChangedInAsh() {
+void CertDbInitializerImpl::OnCertsChangedInAsh(
+    crosapi::mojom::CertDatabaseChangeType change_type) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  net::CertDatabase::GetInstance()->NotifyObserversCertDBChanged();
+  switch (change_type) {
+    case crosapi::mojom::CertDatabaseChangeType::kUnknown:
+      net::CertDatabase::GetInstance()->NotifyObserversTrustStoreChanged();
+      net::CertDatabase::GetInstance()->NotifyObserversClientCertStoreChanged();
+      break;
+    case crosapi::mojom::CertDatabaseChangeType::kTrustStore:
+      net::CertDatabase::GetInstance()->NotifyObserversTrustStoreChanged();
+      break;
+    case crosapi::mojom::CertDatabaseChangeType::kClientCertStore:
+      net::CertDatabase::GetInstance()->NotifyObserversClientCertStoreChanged();
+      break;
+  }
 }

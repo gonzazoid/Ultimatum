@@ -26,7 +26,7 @@ TEST(MediaConditionParserTest, Basic) {
       {"screen and (color)", "not all"},
       {"all and (min-width:500px)", "not all"},
       {"(min-width:500px)", "(min-width: 500px)"},
-      {"(min-width : -100px)", "(min-width : -100px)"},  // <general-enclosed>
+      {"(min-width : -100px)", "(min-width: -100px)"},
       {"(min-width: 100px) and print", "not all"},
       {"(min-width: 100px) and (max-width: 900px)", nullptr},
       {"(min-width: [100px) and (max-width: 900px)", "not all"},
@@ -49,34 +49,17 @@ TEST(MediaConditionParserTest, Basic) {
 
   for (unsigned i = 0; test_cases[i].input; ++i) {
     SCOPED_TRACE(test_cases[i].input);
-    CSSTokenizer tokenizer(test_cases[i].input);
-    const auto tokens = tokenizer.TokenizeToEOF();
+    StringView str(test_cases[i].input);
+    CSSTokenizer tokenizer(str);
+    const auto [tokens, offsets] = tokenizer.TokenizeToEOFWithOffsets();
     MediaQuerySet* media_condition_query_set =
-        MediaQueryParser::ParseMediaCondition(CSSParserTokenRange(tokens),
-                                              nullptr);
+        MediaQueryParser::ParseMediaCondition(
+            CSSParserTokenRange(tokens),
+            CSSParserTokenOffsets(tokens, std::move(offsets), str), nullptr);
     String query_text = media_condition_query_set->MediaText();
     const char* expected_text =
         test_cases[i].output ? test_cases[i].output : test_cases[i].input;
     EXPECT_EQ(String(expected_text), query_text);
-  }
-}
-
-// Support for the 'not' keyword for ParseMediaCondition predates the
-// CSSMediaQueries4 flag, so enabling/disabling that flag must not affect
-// 'not' parsing.
-TEST(MediaConditionParserTest, NotKeyword_CSSMediaQueries4) {
-  String input = "not (min-width: 500px)";
-  CSSTokenizer tokenizer(input);
-  const auto tokens = tokenizer.TokenizeToEOF();
-
-  Vector<bool> flag_values = {true, false};
-  for (bool flag : flag_values) {
-    ScopedCSSMediaQueries4ForTest media_queries_4_flag(flag);
-
-    MediaQuerySet* media_condition_query_set =
-        MediaQueryParser::ParseMediaCondition(CSSParserTokenRange(tokens),
-                                              nullptr);
-    EXPECT_EQ(input, media_condition_query_set->MediaText());
   }
 }
 

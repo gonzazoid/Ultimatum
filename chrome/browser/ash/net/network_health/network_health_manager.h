@@ -9,10 +9,6 @@
 #include "chromeos/services/network_health/public/mojom/network_health.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
-namespace chromeos::network_health {
-class NetworkHealthService;
-}
-
 namespace ash {
 
 namespace network_diagnostics {
@@ -21,9 +17,22 @@ class NetworkDiagnostics;
 
 namespace network_health {
 
+class NetworkHealthHelper;
+class NetworkHealthService;
+
 class NetworkHealthManager {
  public:
   static NetworkHealthManager* GetInstance();
+
+  // These functions create or retrieve an existing NetworkHealthManager
+  // instance and bind a `receiver` to it.
+  static void NetworkDiagnosticsServiceCallback(
+      mojo::PendingReceiver<
+          chromeos::network_diagnostics::mojom::NetworkDiagnosticsRoutines>
+          receiver);
+  static void NetworkHealthServiceCallback(
+      mojo::PendingReceiver<
+          chromeos::network_health::mojom::NetworkHealthService> receiver);
 
   NetworkHealthManager();
   ~NetworkHealthManager() = delete;
@@ -46,8 +55,11 @@ class NetworkHealthManager {
       mojo::PendingRemote<
           chromeos::network_health::mojom::NetworkEventsObserver> observer);
 
+  NetworkHealthHelper* helper() { return helper_.get(); }
+
  private:
   std::unique_ptr<network_diagnostics::NetworkDiagnostics> network_diagnostics_;
+  std::unique_ptr<NetworkHealthHelper> helper_;
 };
 
 }  // namespace network_health

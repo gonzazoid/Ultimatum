@@ -9,33 +9,39 @@
 
 #include "services/device/geolocation/fake_location_provider.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace device {
 
 FakeLocationProvider::FakeLocationProvider()
-    : provider_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : provider_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
+}
 
 FakeLocationProvider::~FakeLocationProvider() = default;
 
 void FakeLocationProvider::HandlePositionChanged(
-    const mojom::Geoposition& position) {
+    mojom::GeopositionResultPtr result) {
   if (provider_task_runner_->BelongsToCurrentThread()) {
     // The location arbitrator unit tests rely on this method running
     // synchronously.
-    position_ = position;
+    result_ = std::move(result);
     if (!callback_.is_null())
-      callback_.Run(this, position_);
+      callback_.Run(this, result_.Clone());
   } else {
     provider_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&FakeLocationProvider::HandlePositionChanged,
-                                  base::Unretained(this), position));
+                                  base::Unretained(this), std::move(result)));
   }
+}
+
+void FakeLocationProvider::FillDiagnostics(
+    mojom::GeolocationDiagnostics& diagnostics) {
+  diagnostics.provider_state = state_;
 }
 
 void FakeLocationProvider::SetUpdateCallback(
@@ -44,15 +50,17 @@ void FakeLocationProvider::SetUpdateCallback(
 }
 
 void FakeLocationProvider::StartProvider(bool high_accuracy) {
-  state_ = high_accuracy ? HIGH_ACCURACY : LOW_ACCURACY;
+  state_ = high_accuracy
+               ? mojom::GeolocationDiagnostics::ProviderState::kHighAccuracy
+               : mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy;
 }
 
 void FakeLocationProvider::StopProvider() {
-  state_ = STOPPED;
+  state_ = mojom::GeolocationDiagnostics::ProviderState::kStopped;
 }
 
-const mojom::Geoposition& FakeLocationProvider::GetPosition() {
-  return position_;
+const mojom::GeopositionResult* FakeLocationProvider::GetPosition() {
+  return result_.get();
 }
 
 void FakeLocationProvider::OnPermissionGranted() {

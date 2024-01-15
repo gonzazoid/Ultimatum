@@ -3,14 +3,15 @@
 // found in the LICENSE file.
 
 import 'chrome://nearby/strings.m.js';
+import 'chrome://nearby/shared/nearby_onboarding_one_page.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
-import {setContactManagerForTesting} from 'chrome://nearby/shared/nearby_contact_manager.js';
-import {NearbyOnboardingOnePageElement} from 'chrome://nearby/shared/nearby_onboarding_one_page.js';
 import {setNearbyShareSettingsForTesting} from 'chrome://nearby/shared/nearby_share_settings.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {DataUsage, DeviceNameValidationResult, FastInitiationNotificationState, Visibility} from 'chrome://resources/mojo/chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom-webui.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
+import {assertEquals, assertFalse, assertTrue} from '../../chromeos/chai_assert.js';
 
 import {FakeNearbyShareSettings} from './fake_nearby_share_settings.js';
 
@@ -26,18 +27,17 @@ suite('nearby-onboarding-one-page', function() {
     fakeSettings = new FakeNearbyShareSettings();
     setNearbyShareSettingsForTesting(fakeSettings);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
 
     element = /** @type {!NearbyOnboardingOnePageElement} */ (
         document.createElement('nearby-onboarding-one-page'));
     element.settings = {
       enabled: false,
-      fastInitiationNotificationState:
-          nearbyShare.mojom.FastInitiationNotificationState.kEnabled,
+      fastInitiationNotificationState: FastInitiationNotificationState.kEnabled,
       isFastInitiationHardwareSupported: true,
       deviceName: deviceName,
-      dataUsage: nearbyShare.mojom.DataUsage.kOnline,
-      visibility: nearbyShare.mojom.Visibility.kUnknown,
+      dataUsage: DataUsage.kOnline,
+      visibility: Visibility.kUnknown,
       isOnboardingComplete: false,
       allowedContacts: [],
     };
@@ -79,11 +79,11 @@ suite('nearby-onboarding-one-page', function() {
 
     const input = /** @type {!CrInputElement} */ (
         element.shadowRoot.querySelector('#deviceName'));
-    const pageTemplate =
-        element.shadowRoot.querySelector('nearby-page-template');
+    const pageTemplate = /** @type {!NearbyPageTemplateElement} */ (
+        element.shadowRoot.querySelector('nearby-page-template'));
 
     fakeSettings.setNextDeviceNameResult(
-        nearbyShare.mojom.DeviceNameValidationResult.kErrorEmpty);
+        DeviceNameValidationResult.kErrorEmpty);
     input.dispatchEvent(
         new CustomEvent('input', {bubbles: true, composed: true}));
     // Allow the validation promise to resolve.
@@ -91,8 +91,7 @@ suite('nearby-onboarding-one-page', function() {
     assertTrue(input.invalid);
     assertTrue(pageTemplate.actionDisabled);
 
-    fakeSettings.setNextDeviceNameResult(
-        nearbyShare.mojom.DeviceNameValidationResult.kValid);
+    fakeSettings.setNextDeviceNameResult(DeviceNameValidationResult.kValid);
     input.dispatchEvent(
         new CustomEvent('input', {bubbles: true, composed: true}));
     await waitAfterNextRender(/** @type {!HTMLElement} */ (input));

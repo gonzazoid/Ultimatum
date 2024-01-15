@@ -32,12 +32,16 @@ id<GREYAction> ScrollElementToVisible(ElementSelector* selector);
 // Action to turn the switch of a TableViewSwitchCell to the given `on` state.
 id<GREYAction> TurnTableViewSwitchOn(BOOL on);
 
-// Action to turn the switch of a SyncSwitchCell to the given `on` state.
-id<GREYAction> TurnSyncSwitchOn(BOOL on);
+// Action to tap a web element described by the given `selector` on the current
+// web state.
+// Checks the effect of the tap using JavaScript.
+id<GREYAction> TapWebElement(ElementSelector* selector);
 
 // Action to tap a web element described by the given `selector` on the current
 // web state.
-id<GREYAction> TapWebElement(ElementSelector* selector);
+// Does not check the effect of the tap. This function is expected to be use
+// when the effect of the tap is on the browser side (e.g. showing a popup).
+id<GREYAction> TapWebElementUnverified(ElementSelector* selector);
 
 // Action to tap a web element with id equal to `element_id` on the current web
 // state.
@@ -61,6 +65,16 @@ id<GREYAction> ScrollToTop();
 // height. Percentages are between 0 and 1, where 1 is 100%.
 id<GREYAction> TapAtPointPercentage(CGFloat xOriginStartPercentage,
                                     CGFloat yOriginStartPercentage);
+
+// Action to swipe a TableViewCell enough to display the "Delete" button and
+// not too much to have the cell being deleted right away.
+id<GREYAction> SwipeToShowDeleteButton();
+
+// Action to simulate the behaviour of swiping right using the 3-finger gesture
+// with VoiceOver. This gesture "jump" to the next screen of the scroll view. To
+// simulate it, it is changing the content offset and triggering scroll view
+// delegate methods as there is no way to actually trigger the gesture.
+id<GREYAction> AccessibilitySwipeRight();
 
 }  // namespace chrome_test_util
 

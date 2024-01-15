@@ -9,6 +9,8 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
@@ -25,8 +27,7 @@
 #include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -45,6 +46,8 @@ void SetFlagFromCheckbox(Checkbox* checkbox, int* flags, int flag) {
 
 // TextExample's content view, which draws stylized string.
 class TextExample::TextExampleView : public View {
+  METADATA_HEADER(TextExampleView, View)
+
  public:
   TextExampleView() = default;
   TextExampleView(const TextExampleView&) = delete;
@@ -112,6 +115,9 @@ class TextExample::TextExampleView : public View {
   // The eliding, fading, or truncating behavior.
   gfx::ElideBehavior elide_ = gfx::NO_ELIDE;
 };
+
+BEGIN_METADATA(TextExample, TextExampleView, View)
+END_METADATA
 
 TextExample::TextExample()
     : ExampleBase(l10n_util::GetStringUTF8(IDS_TEXT_STYLE_LABEL).c_str()) {}
@@ -200,6 +206,7 @@ void TextExample::CreateExampleView(View* container) {
   break_checkbox_ = AddCheckbox(table_container, "Character Break");
   italic_checkbox_ = AddCheckbox(table_container, "Italic");
   underline_checkbox_ = AddCheckbox(table_container, "Underline");
+  strike_checkbox_ = AddCheckbox(table_container, "Strike");
 
   auto* fill_container = container->AddChildView(std::make_unique<View>());
   box_layout->SetFlexForView(fill_container, 1);
@@ -220,6 +227,7 @@ void TextExample::UpdateStyle() {
                       gfx::Canvas::CHARACTER_BREAKABLE);
   SetFlagFromCheckbox(italic_checkbox_, &style, gfx::Font::ITALIC);
   SetFlagFromCheckbox(underline_checkbox_, &style, gfx::Font::UNDERLINE);
+  SetFlagFromCheckbox(strike_checkbox_, &style, gfx::Font::STRIKE_THROUGH);
   text_view_->SetFlags(flags);
   text_view_->SetStyle(style);
 }
@@ -316,5 +324,4 @@ void TextExample::WeightComboboxChanged() {
   text_view_->SetWeight(kFontWeights[weight_cb_->GetSelectedIndex().value()]);
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

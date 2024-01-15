@@ -7,7 +7,8 @@
  * pure function that returns a new state object if anything has changed.
  * @see [redux tutorial]{@link https://redux.js.org/tutorials/fundamentals/part-3-state-actions-reducers}
  */
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {isNonEmptyArray} from 'chrome://resources/ash/common/sea_pen/sea_pen_utils.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {ambientReducers} from './ambient/ambient_reducers.js';
 import {AmbientState} from './ambient/ambient_state.js';
@@ -19,7 +20,6 @@ import {themeReducers} from './theme/theme_reducers.js';
 import {ThemeState} from './theme/theme_state.js';
 import {userReducers} from './user/user_reducers.js';
 import {UserState} from './user/user_state.js';
-import {isNonEmptyArray} from './utils.js';
 import {WallpaperActionName} from './wallpaper/wallpaper_actions.js';
 import {wallpaperReducers} from './wallpaper/wallpaper_reducers.js';
 import {WallpaperState} from './wallpaper/wallpaper_state.js';
@@ -31,8 +31,9 @@ export type ReducerFunction<State> =
  * Combines reducers into a single top level reducer. Inspired by Redux's
  * |combineReducers| functions.
  */
-function combineReducers<T>(mapping: {[K in keyof T]: ReducerFunction<T[K]>}): (
-    state: T, action: Actions, globalState: PersonalizationState) => T {
+function combineReducers<T extends {}>(
+    mapping: {[K in keyof T]: ReducerFunction<T[K]>}):
+    (state: T, action: Actions, globalState: PersonalizationState) => T {
   function reduce(
       state: T, action: Actions, globalState: PersonalizationState): T {
     const newState: T =
@@ -57,13 +58,13 @@ function errorReducer(
       if (success) {
         return null;
       }
-      return state || {message: loadTimeData.getString('setWallpaperError')};
+      return {message: loadTimeData.getString('setWallpaperError')};
     case WallpaperActionName.SET_SELECTED_IMAGE:
       const {image} = action;
       if (image) {
         return state;
       }
-      return state || {message: loadTimeData.getString('loadWallpaperError')};
+      return {message: loadTimeData.getString('loadWallpaperError')};
     // Show network error toast if local images are available but online
     // collections are failed to load. As local images include at least
     // the default image, we only need to check the status of online
@@ -71,8 +72,7 @@ function errorReducer(
     case WallpaperActionName.SET_COLLECTIONS:
       const {collections} = action;
       if (!isNonEmptyArray(collections)) {
-        return state ||
-            {message: loadTimeData.getString('wallpaperNetworkError')};
+        return {message: loadTimeData.getString('wallpaperNetworkError')};
       }
       return state;
     case PersonalizationActionName.SET_ERROR:

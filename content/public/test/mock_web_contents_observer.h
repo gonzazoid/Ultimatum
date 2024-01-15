@@ -87,11 +87,6 @@ class MockWebContentsObserver : public WebContentsObserver {
               DidFinishNavigation,
               (NavigationHandle* navigation_handle),
               (override));
-  MOCK_METHOD(void,
-              DidActivatePortal,
-              (WebContents* predecessor_web_contents,
-               base::TimeTicks activation_time),
-              (override));
   MOCK_METHOD(void, DidStartLoading, (), (override));
   MOCK_METHOD(void, DidStopLoading, (), (override));
   MOCK_METHOD(void, LoadProgressChanged, (double progress), (override));
@@ -257,10 +252,7 @@ class MockWebContentsObserver : public WebContentsObserver {
               (viz::VerticalScrollDirection scroll_direction),
               (override));
   MOCK_METHOD(void, BeforeFormRepostWarningShow, (), (override));
-  MOCK_METHOD(void,
-              BeforeUnloadFired,
-              (bool proceed, const base::TimeTicks& proceed_time),
-              (override));
+  MOCK_METHOD(void, BeforeUnloadFired, (bool proceed), (override));
   MOCK_METHOD(void, BeforeUnloadDialogCancelled, (), (override));
   MOCK_METHOD(void, AXTreeIDForMainFrameHasChanged, (), (override));
   MOCK_METHOD(void,
@@ -280,7 +272,7 @@ class MockWebContentsObserver : public WebContentsObserver {
                const std::u16string& message,
                int32_t line_no,
                const std::u16string& source_id,
-               const absl::optional<std::u16string>& untrusted_stack_trace),
+               const std::optional<std::u16string>& untrusted_stack_trace),
               (override));
   MOCK_METHOD(void,
               MediaStartedPlaying,

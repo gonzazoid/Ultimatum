@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "chrome/test/base/web_ui_browser_test.h"
+#include "chrome/test/base/web_ui_mocha_browser_test.h"
 
-class IdentityInternalsUIBrowserTest : public WebUIBrowserTest {
+class IdentityInternalsUIBrowserTest : public WebUIMochaBrowserTest {
  public:
   IdentityInternalsUIBrowserTest();
 
@@ -29,7 +29,7 @@ class IdentityInternalsUIBrowserTest : public WebUIBrowserTest {
  private:
   void AddTokenToCache(const std::string& token_id,
                        const std::string& extension_id,
-                       const std::string& account_id,
+                       const std::string& gaia_id,
                        const std::vector<std::string>& scopes,
                        int time_to_live);
 };

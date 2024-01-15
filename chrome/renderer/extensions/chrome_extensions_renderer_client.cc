@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/features.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/types/optional_util.h"
 #include "chrome/common/chrome_isolated_world_ids.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -30,12 +29,14 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_set.h"
 #include "extensions/common/manifest_handlers/background_info.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/common/switches.h"
 #include "extensions/renderer/dispatcher.h"
 #include "extensions/renderer/extension_frame_helper.h"
 #include "extensions/renderer/extension_web_view_helper.h"
 #include "extensions/renderer/extensions_render_frame_observer.h"
+#include "extensions/renderer/extensions_renderer_api_provider.h"
 #include "extensions/renderer/extensions_renderer_client.h"
 #include "extensions/renderer/guest_view/mime_handler_view/mime_handler_view_container_manager.h"
 #include "extensions/renderer/renderer_extension_registry.h"
@@ -138,7 +139,8 @@ void ChromeExtensionsRendererClient::RenderThreadStarted() {
   // injects it using SetExtensionDispatcher(). Don't overwrite it.
   if (!extension_dispatcher_) {
     extension_dispatcher_ = std::make_unique<extensions::Dispatcher>(
-        std::make_unique<ChromeExtensionsDispatcherDelegate>());
+        std::make_unique<ChromeExtensionsDispatcherDelegate>(),
+        std::move(api_providers_));
   }
   extension_dispatcher_->OnRenderThreadStarted(thread);
   permissions_policy_delegate_ =
@@ -188,19 +190,20 @@ bool ChromeExtensionsRendererClient::AllowPopup() {
 
   // See http://crbug.com/117446 for the subtlety of this check.
   switch (current_context->context_type()) {
-    case extensions::Feature::UNSPECIFIED_CONTEXT:
-    case extensions::Feature::WEB_PAGE_CONTEXT:
-    case extensions::Feature::UNBLESSED_EXTENSION_CONTEXT:
-    case extensions::Feature::WEBUI_CONTEXT:
-    case extensions::Feature::WEBUI_UNTRUSTED_CONTEXT:
-    case extensions::Feature::OFFSCREEN_EXTENSION_CONTEXT:
-    case extensions::Feature::LOCK_SCREEN_EXTENSION_CONTEXT:
+    case extensions::mojom::ContextType::kUnspecified:
+    case extensions::mojom::ContextType::kWebPage:
+    case extensions::mojom::ContextType::kUnprivilegedExtension:
+    case extensions::mojom::ContextType::kWebUi:
+    case extensions::mojom::ContextType::kUntrustedWebUi:
+    case extensions::mojom::ContextType::kOffscreenExtension:
+    case extensions::mojom::ContextType::kUserScript:
+    case extensions::mojom::ContextType::kLockscreenExtension:
       return false;
-    case extensions::Feature::BLESSED_EXTENSION_CONTEXT:
+    case extensions::mojom::ContextType::kPrivilegedExtension:
       return !current_context->IsForServiceWorker();
-    case extensions::Feature::CONTENT_SCRIPT_CONTEXT:
+    case extensions::mojom::ContextType::kContentScript:
       return true;
-    case extensions::Feature::BLESSED_WEB_PAGE_CONTEXT:
+    case extensions::mojom::ContextType::kPrivilegedWebPage:
       return current_context->web_frame()->IsOutermostMainFrame();
   }
 }
@@ -215,17 +218,18 @@ ChromeExtensionsRendererClient::GetProtocolHandlerSecurityLevel() {
     return blink::ProtocolHandlerSecurityLevel::kStrict;
 
   switch (current_context->context_type()) {
-    case extensions::Feature::BLESSED_WEB_PAGE_CONTEXT:
-    case extensions::Feature::CONTENT_SCRIPT_CONTEXT:
-    case extensions::Feature::LOCK_SCREEN_EXTENSION_CONTEXT:
-    case extensions::Feature::OFFSCREEN_EXTENSION_CONTEXT:
-    case extensions::Feature::UNBLESSED_EXTENSION_CONTEXT:
-    case extensions::Feature::UNSPECIFIED_CONTEXT:
-    case extensions::Feature::WEBUI_CONTEXT:
-    case extensions::Feature::WEBUI_UNTRUSTED_CONTEXT:
-    case extensions::Feature::WEB_PAGE_CONTEXT:
+    case extensions::mojom::ContextType::kPrivilegedWebPage:
+    case extensions::mojom::ContextType::kContentScript:
+    case extensions::mojom::ContextType::kLockscreenExtension:
+    case extensions::mojom::ContextType::kOffscreenExtension:
+    case extensions::mojom::ContextType::kUnprivilegedExtension:
+    case extensions::mojom::ContextType::kUnspecified:
+    case extensions::mojom::ContextType::kUserScript:
+    case extensions::mojom::ContextType::kWebUi:
+    case extensions::mojom::ContextType::kUntrustedWebUi:
+    case extensions::mojom::ContextType::kWebPage:
       return blink::ProtocolHandlerSecurityLevel::kStrict;
-    case extensions::Feature::BLESSED_EXTENSION_CONTEXT:
+    case extensions::mojom::ContextType::kPrivilegedExtension:
       return blink::ProtocolHandlerSecurityLevel::kExtensionFeatures;
   }
 }
@@ -268,8 +272,7 @@ void ChromeExtensionsRendererClient::WillSendRequest(
 
   if (url.ProtocolIs(extensions::kExtensionScheme) &&
       !resource_request_policy_->CanRequestResource(
-          GURL(url), frame, transition_type,
-          base::OptionalFromPtr(initiator_origin))) {
+          GURL(url), frame, transition_type, initiator_origin)) {
     *new_url = GURL(chrome::kExtensionInvalidRequestURL);
   }
 
@@ -278,11 +281,10 @@ void ChromeExtensionsRendererClient::WillSendRequest(
   if (url.ProtocolIs(extensions::kExtensionScheme) &&
       request_url.host_piece() == extension_misc::kDocsOfflineExtensionId) {
     if (!ukm_recorder_) {
-      mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+      mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
       content::RenderThread::Get()->BindHostReceiver(
-          recorder.InitWithNewPipeAndPassReceiver());
-      ukm_recorder_ =
-          std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+          factory.BindNewPipeAndPassReceiver());
+      ukm_recorder_ = ukm::MojoUkmRecorder::Create(*factory);
     }
 
     const ukm::SourceId source_id = frame->GetDocument().GetUkmSourceId();

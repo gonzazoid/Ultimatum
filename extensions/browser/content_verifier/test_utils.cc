@@ -5,20 +5,20 @@
 #include "extensions/browser/content_verifier/test_utils.h"
 
 #include "base/base64url.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/values.h"
+#include "content/public/browser/browser_thread.h"
 #include "crypto/sha2.h"
 #include "crypto/signature_creator.h"
 #include "extensions/browser/extension_file_task_runner.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/file_util.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/zlib/google/zip.h"
 
@@ -309,7 +309,7 @@ ContentHashResult::~ContentHashResult() = default;
 
 // ContentHashWaiter ----------------------------------------------------------
 ContentHashWaiter::ContentHashWaiter()
-    : reply_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : reply_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 ContentHashWaiter::~ContentHashWaiter() = default;
 
 std::unique_ptr<ContentHashResult> ContentHashWaiter::CreateAndWaitForCallback(
@@ -354,20 +354,22 @@ namespace content_verifier_test_utils {
 
 // TestExtensionBuilder -------------------------------------------------------
 TestExtensionBuilder::TestExtensionBuilder()
+    // We have to provide explicit extension id in verified_contents.json.
+    : TestExtensionBuilder(ExtensionId(32, 'a')) {}
+
+TestExtensionBuilder::TestExtensionBuilder(const ExtensionId& extension_id)
     : test_content_verifier_key_(crypto::RSAPrivateKey::Create(2048)),
-      // We have to provide explicit extension id in verified_contents.json.
-      extension_id_(32, 'a') {
+      extension_id_(extension_id) {
   base::CreateDirectory(extension_dir_.UnpackedPath().Append(kMetadataFolder));
 }
 
 TestExtensionBuilder::~TestExtensionBuilder() = default;
 
 void TestExtensionBuilder::WriteManifest() {
-  extension_dir_.WriteManifest(DictionaryBuilder()
+  extension_dir_.WriteManifest(base::Value::Dict()
                                    .Set("manifest_version", 2)
                                    .Set("name", "Test extension")
-                                   .Set("version", "1.0")
-                                   .ToJSON());
+                                   .Set("version", "1.0"));
 }
 
 void TestExtensionBuilder::WriteResource(
@@ -422,30 +424,23 @@ std::string TestExtensionBuilder::CreateVerifiedContents() const {
       std::string(signature_value.begin(), signature_value.end()),
       base::Base64UrlEncodePolicy::OMIT_PADDING, &signature_b64);
 
-  std::unique_ptr<base::Value> signatures =
-      ListBuilder()
-          .Append(DictionaryBuilder()
-                      .Set("header",
-                           DictionaryBuilder().Set("kid", "webstore").Build())
-                      .Set("protected", "")
-                      .Set("signature", signature_b64)
-                      .Build())
-          .Build();
-  std::unique_ptr<base::Value> verified_contents =
-      ListBuilder()
-          .Append(DictionaryBuilder()
-                      .Set("description", "treehash per file")
-                      .Set("signed_content",
-                           DictionaryBuilder()
-                               .Set("payload", payload_b64)
-                               .Set("signatures", std::move(signatures))
-                               .Build())
-                      .Build())
-          .Build();
+  base::Value::List signatures = base::Value::List().Append(
+      base::Value::Dict()
+          .Set("header", base::Value::Dict().Set("kid", "webstore"))
+          .Set("protected", "")
+          .Set("signature", signature_b64));
+  base::Value::List verified_contents = base::Value::List().Append(
+      base::Value::Dict()
+          .Set("description", "treehash per file")
+          .Set("signed_content",
+               base::Value::Dict()
+                   .Set("payload", payload_b64)
+                   .Set("signatures", std::move(signatures))));
 
   std::string json;
-  if (!base::JSONWriter::Write(*verified_contents, &json))
+  if (!base::JSONWriter::Write(verified_contents, &json)) {
     return "";
+  }
 
   return json;
 }
@@ -456,12 +451,11 @@ void TestExtensionBuilder::WriteVerifiedContents() {
 
   base::FilePath verified_contents_path =
       file_util::GetVerifiedContentsPath(extension_dir_.UnpackedPath());
-  ASSERT_EQ(static_cast<int>(verified_contents.size()),
-            base::WriteFile(verified_contents_path, verified_contents.data(),
-                            verified_contents.size()));
+  ASSERT_TRUE(base::WriteFile(verified_contents_path, verified_contents));
 }
 
-std::vector<uint8_t> TestExtensionBuilder::GetTestContentVerifierPublicKey() {
+std::vector<uint8_t> TestExtensionBuilder::GetTestContentVerifierPublicKey()
+    const {
   std::vector<uint8_t> public_key;
   test_content_verifier_key_->ExportPublicKey(&public_key);
   return public_key;
@@ -471,7 +465,7 @@ std::unique_ptr<base::Value>
 TestExtensionBuilder::CreateVerifiedContentsPayload() const {
   int block_size = extension_misc::kContentVerificationDefaultBlockSize;
 
-  ListBuilder files;
+  base::Value::List files;
   for (const auto& resource : extension_resources_) {
     std::string path = base::FilePath(resource.relative_path).AsUTF8Unsafe();
     std::string tree_hash =
@@ -481,24 +475,22 @@ TestExtensionBuilder::CreateVerifiedContentsPayload() const {
     base::Base64UrlEncode(tree_hash, base::Base64UrlEncodePolicy::OMIT_PADDING,
                           &tree_hash_b64);
 
-    files.Append(DictionaryBuilder()
-                     .Set("path", path)
-                     .Set("root_hash", tree_hash_b64)
-                     .Build());
+    files.Append(
+        base::Value::Dict().Set("path", path).Set("root_hash", tree_hash_b64));
   }
 
-  return DictionaryBuilder()
-      .Set("item_id", extension_id_)
-      .Set("item_version", "1.0")
-      .Set("content_hashes", ListBuilder()
-                                 .Append(DictionaryBuilder()
-                                             .Set("format", "treehash")
-                                             .Set("block_size", block_size)
-                                             .Set("hash_block_size", block_size)
-                                             .Set("files", files.Build())
-                                             .Build())
-                                 .Build())
-      .Build();
+  base::Value::Dict result =
+      base::Value::Dict()
+          .Set("item_id", extension_id_)
+          .Set("item_version", "1.0")
+          .Set("content_hashes", base::Value::List().Append(
+                                     base::Value::Dict()
+                                         .Set("format", "treehash")
+                                         .Set("block_size", block_size)
+                                         .Set("hash_block_size", block_size)
+                                         .Set("files", std::move(files))));
+
+  return std::make_unique<base::Value>(std::move(result));
 }
 
 // Other stuff ----------------------------------------------------------------

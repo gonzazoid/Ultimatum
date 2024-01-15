@@ -41,8 +41,8 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui),
       profile_(Profile::FromWebUI(web_ui)),
       web_contents_(web_ui->GetWebContents()) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUICastFeedbackHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile_, chrome::kChromeUICastFeedbackHost);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"additionalComments", IDS_MEDIA_ROUTER_FEEDBACK_ADDITIONAL_COMMENTS},
@@ -131,13 +131,27 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
 
   JSONStringValueSerializer serializer(&log_data);
   serializer.set_pretty_print(true);
-  if (!serializer.Serialize(router->GetState()))
+  if (!serializer.Serialize(router->GetState())) {
     log_data.clear();
+  }
 
   LoggerImpl* const logger = router->GetLogger();
   if (logger) {
     log_data += logger->GetLogsAsJson();
+  }
 
+  MediaRouterDebugger& debugger = router->GetDebugger();
+  if (debugger.ShouldFetchMirroringStats()) {
+    std::string mirroring_stats_json;
+    JSONStringValueSerializer mirroring_stats_serializer(&mirroring_stats_json);
+    mirroring_stats_serializer.set_pretty_print(true);
+    if (mirroring_stats_serializer.Serialize(debugger.GetMirroringStats())) {
+      log_data += mirroring_stats_json;
+    }
+  }
+
+  // If there is any log data, add it to the `source`.
+  if (!log_data.empty()) {
     source->AddString("logData", log_data);
   }
 
@@ -172,8 +186,6 @@ CastFeedbackUI::CastFeedbackUI(content::WebUI* web_ui)
       base::make_span(kMediaRouterFeedbackResources,
                       kMediaRouterFeedbackResourcesSize),
       IDR_MEDIA_ROUTER_FEEDBACK_FEEDBACK_HTML);
-
-  content::WebUIDataSource::Add(profile_, source);
 
   web_ui->RegisterMessageCallback(
       "close", base::BindRepeating(&CastFeedbackUI::OnCloseMessage,

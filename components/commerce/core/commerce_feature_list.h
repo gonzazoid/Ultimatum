@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_COMMERCE_CORE_COMMERCE_FEATURE_LIST_H_
 #define COMPONENTS_COMMERCE_CORE_COMMERCE_FEATURE_LIST_H_
 
+#include <string>
+
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
@@ -22,6 +24,7 @@ extern const char kEnableChromeCart[];
 }
 
 BASE_DECLARE_FEATURE(kCommercePriceTracking);
+BASE_DECLARE_FEATURE(kCommercePriceTrackingRegionLaunched);
 
 // Price tracking variations for Android.
 constexpr flags_ui::FeatureEntry::FeatureParam
@@ -62,15 +65,54 @@ constexpr flags_ui::FeatureEntry::FeatureVariation
         {"Price Tracking Notifications", kCommercePriceTrackingNotifications,
          std::size(kCommercePriceTrackingNotifications), nullptr}};
 
+BASE_DECLARE_FEATURE(kCommerceAllowChipExpansion);
 BASE_DECLARE_FEATURE(kCommerceAllowLocalImages);
 BASE_DECLARE_FEATURE(kCommerceAllowOnDemandBookmarkUpdates);
+BASE_DECLARE_FEATURE(kCommerceAllowOnDemandBookmarkBatchUpdates);
 BASE_DECLARE_FEATURE(kCommerceAllowServerImages);
-BASE_DECLARE_FEATURE(kCommerceCoupons);
+BASE_DECLARE_FEATURE(kCommerceLocalPDPDetection);
 BASE_DECLARE_FEATURE(kCommerceMerchantViewer);
+BASE_DECLARE_FEATURE(kCommerceMerchantViewerRegionLaunched);
 extern const base::FeatureParam<bool> kDeleteAllMerchantsOnClearBrowsingHistory;
+
+// Feature flag for Price Insights.
+BASE_DECLARE_FEATURE(kPriceInsights);
+BASE_DECLARE_FEATURE(kPriceInsightsRegionLaunched);
+extern const char kPriceInsightsDelayChipParam[];
+extern const base::FeatureParam<bool> kPriceInsightsDelayChip;
+extern const char kPriceInsightsChipLabelExpandOnHighPriceParam[];
+extern const base::FeatureParam<bool> kPriceInsightsChipLabelExpandOnHighPrice;
+extern const char kPriceInsightsShowFeedbackParam[];
+extern const base::FeatureParam<bool> kPriceInsightsShowFeedback;
+extern const char kPriceInsightsUseCacheParam[];
+extern const base::FeatureParam<bool> kPriceInsightsUseCache;
+BASE_DECLARE_FEATURE(kPriceTrackingIconColors);
+BASE_DECLARE_FEATURE(kShoppingCollection);
+BASE_DECLARE_FEATURE(kShoppingIconColorVariant);
 BASE_DECLARE_FEATURE(kShoppingList);
-BASE_DECLARE_FEATURE(kShoppingListEnableDesyncResolution);
+BASE_DECLARE_FEATURE(kShoppingListRegionLaunched);
+BASE_DECLARE_FEATURE(kShoppingPageTypes);
+BASE_DECLARE_FEATURE(kShoppingPageTypesRegionLaunched);
 BASE_DECLARE_FEATURE(kShoppingPDPMetrics);
+BASE_DECLARE_FEATURE(kShoppingPDPMetricsRegionLaunched);
+
+// Feature flag for Discounts on navigation.
+enum class DiscountDialogAutoPopupBehavior {
+  // Only popup for the first time
+  kAutoPopupOnce = 0,
+  kAlwaysAutoPopup = 1,
+  kNoAutoPopup = 2
+};
+BASE_DECLARE_FEATURE(kEnableDiscountInfoApi);
+BASE_DECLARE_FEATURE(kEnableDiscountInfoApiRegionLaunched);
+BASE_DECLARE_FEATURE(kDiscountDialogAutoPopupBehaviorSetting);
+extern const char kHistoryClustersBehaviorParam[];
+extern const base::FeatureParam<int> kHistoryClustersBehavior;
+extern const char kMerchantWideBehaviorParam[];
+extern const base::FeatureParam<int> kMerchantWideBehavior;
+extern const char kNonMerchantWideBehaviorParam[];
+extern const base::FeatureParam<int> kNonMerchantWideBehavior;
+
 BASE_DECLARE_FEATURE(kRetailCoupons);
 BASE_DECLARE_FEATURE(kCommerceDeveloper);
 // Parameter for enabling feature variation of coupons with code.
@@ -82,11 +124,21 @@ BASE_DECLARE_FEATURE(kDiscountConsentV2);
 // Feature flag for exposing commerce hint on Android.
 BASE_DECLARE_FEATURE(kCommerceHintAndroid);
 
-// Feature flag for Merchant Wide promotion.
-BASE_DECLARE_FEATURE(kMerchantWidePromotion);
-
 // Feature flag for Code-based RBD.
 BASE_DECLARE_FEATURE(kCodeBasedRBD);
+
+// Feature flag for DOM-based heuristics for ChromeCart.
+BASE_DECLARE_FEATURE(kChromeCartDomBasedHeuristics);
+
+// Feature flag for parcel tracking.
+BASE_DECLARE_FEATURE(kParcelTracking);
+BASE_DECLARE_FEATURE(kParcelTrackingRegionLaunched);
+BASE_DECLARE_FEATURE(kParcelTrackingTestData);
+
+extern const char kParcelTrackingTestDataParam[];
+extern const char kParcelTrackingTestDataParamDelivered[];
+extern const char kParcelTrackingTestDataParamInProgress[];
+extern const char kParcelTrackingTestDataParamOutForDelivery[];
 
 // Shopping list update interval.
 constexpr base::FeatureParam<base::TimeDelta>
@@ -95,22 +147,18 @@ constexpr base::FeatureParam<base::TimeDelta>
         "shopping-list-bookmark-update-interval",
         base::Hours(6));
 
+// The maximum number of products to update per update cycle for the shopping
+// list.
+constexpr base::FeatureParam<int> kShoppingListBookmarkpdateBatchMaxParam(
+    &kCommerceAllowOnDemandBookmarkBatchUpdates,
+    "shopping-list-bookmark-update-batch-max",
+    150);
+
 // Shopping list revert page action icon on failure.
 extern const char kRevertIconOnFailureParam[];
 extern const base::FeatureParam<bool> kRevertIconOnFailure;
 
 // Feature parameters for ChromeCart on Desktop.
-
-// Whether to use OptimizationGuide to optimize renderer signal collection.
-constexpr base::FeatureParam<bool> kOptimizeRendererSignal(
-#if !BUILDFLAG(IS_ANDROID)
-    &ntp_features::kNtpChromeCartModule,
-#else
-    &kCommerceHintAndroid,
-#endif
-    "optimize-renderer-signal",
-    true);
-
 constexpr base::FeatureParam<base::TimeDelta> kDiscountFetchDelayParam(
     &ntp_features::kNtpChromeCartModule,
     "discount-fetch-delay",
@@ -178,7 +226,7 @@ constexpr base::FeatureParam<std::string> kCheckoutPattern{
     ")"
     "|"
     "(\\w+(checkout|chkout)(s)?)"
-    ")(/|\\.|$|\\?)"
+    ")(#|/|\\.|$|\\?)"
   // clang-format on
 };
 
@@ -192,6 +240,38 @@ constexpr base::FeatureParam<std::string> kCheckoutPatternMapping{
       // Empty JSON string.
       ""
 };
+
+// The following are Feature parameters for DOM-based heuristics for ChromeCart.
+constexpr base::FeatureParam<std::string> kAddToCartButtonTextPattern{
+    &kChromeCartDomBasedHeuristics, "add-to-cart-text-pattern",
+    "(add(ed|ing)?( \\w+)* (to (shopping )?(cart|bag|basket))|(for "
+    "shipping))|(^add$)|(buy now)"};
+
+constexpr base::FeatureParam<std::string> kAddToCartButtonTagPattern{
+    &kChromeCartDomBasedHeuristics, "add-to-cart-tag-pattern",
+    "BUTTON, INPUT, A, SPAN"};
+
+constexpr base::FeatureParam<int> kAddToCartButtonWidthLimit{
+    &kChromeCartDomBasedHeuristics, "add-to-cart-button-width", 700};
+
+constexpr base::FeatureParam<int> kAddToCartButtonHeightLimit{
+    &kChromeCartDomBasedHeuristics, "add-to-cart-button-height", 100};
+
+constexpr base::FeatureParam<base::TimeDelta> kAddToCartButtonActiveTime{
+    &kChromeCartDomBasedHeuristics, "add-to-cart-button-active-time",
+    base::Seconds(5)};
+
+constexpr base::FeatureParam<bool> kAddToCartProductImage{
+    &kChromeCartDomBasedHeuristics, "add-to-cart-product-image", true};
+
+constexpr base::FeatureParam<std::string> kSkipHeuristicsDomainPattern{
+    &kChromeCartDomBasedHeuristics, "skip-heuristics-domain-pattern",
+    // This regex does not match anything.
+    "\\b\\B"};
+
+constexpr base::FeatureParam<base::TimeDelta> kHeuristicsExecutionGapTime{
+    &kChromeCartDomBasedHeuristics, "heuristics-execution-gap-time",
+    base::Seconds(1)};
 
 // The following are Feature params for Discount user consent v2.
 // This indicates the Discount Consent v2 variation on the NTP Cart module.
@@ -293,13 +373,12 @@ extern const base::FeatureParam<bool> kContextualConsentShowOnSRP;
 // Feature params for enabling the cart heuristics improvement on Android.
 extern const char kCommerceHintAndroidHeuristicsImprovementParam[];
 
-// Feature params for merchant wide promotion.
-extern const char kReadyToFetchMerchantWidePromotionParam[];
-extern const base::FeatureParam<bool> kReadyToFetchMerchantWidePromotion;
-
 // Feature params for code-based Rule-based Discount (RBD).
 extern const char kCodeBasedRuleDiscountParam[];
 extern const base::FeatureParam<bool> kCodeBasedRuleDiscount;
+extern const char kCodeBasedRuleDiscountCouponDeletionTimeParam[];
+extern const base::FeatureParam<base::TimeDelta>
+    kCodeBasedRuleDiscountCouponDeletionTime;
 
 // Check if a URL belongs to a partner merchant of any type of discount.
 bool IsPartnerMerchant(const GURL& url);
@@ -317,6 +396,20 @@ bool IsFakeDataEnabled();
 bool isContextualConsentEnabled();
 // Check if the shopping list feature is allowed for enterprise.
 bool IsShoppingListAllowedForEnterprise(PrefService* prefs);
+
+// Check if commerce features are allowed to run for the specified country
+// and locale.
+bool IsEnabledForCountryAndLocale(const base::Feature& feature,
+                                  std::string country,
+                                  std::string locale);
+
+// A feature check for the specified |feature|, which will return true if the
+// user has the feature flag enabled or (if applicable) is in an enabled
+// country and locale.
+bool IsRegionLockedFeatureEnabled(const base::Feature& feature,
+                                  const base::Feature& feature_region_launched,
+                                  const std::string& country_code,
+                                  const std::string& locale);
 
 #if !BUILDFLAG(IS_ANDROID)
 // Get the time delay between discount fetches.

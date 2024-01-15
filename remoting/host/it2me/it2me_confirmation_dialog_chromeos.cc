@@ -8,8 +8,8 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/message_formatter.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
@@ -63,7 +63,7 @@ class It2MeConfirmationDialogChromeOS : public It2MeConfirmationDialog {
  private:
   void ShowConfirmationNotification(const std::string& remote_user_email);
 
-  void OnConfirmationNotificationResult(absl::optional<int> button_index);
+  void OnConfirmationNotificationResult(std::optional<int> button_index);
 
   const gfx::VectorIcon& GetIcon() const {
     switch (style_) {
@@ -109,7 +109,7 @@ void It2MeConfirmationDialogChromeOS::ShowConfirmationNotification(
       l10n_util::GetStringUTF16(IDS_SHARE_CONFIRM_DIALOG_CONFIRM));
 
   std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
+      ash::CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE, kConfirmationNotificationId,
           l10n_util::GetStringUTF16(IDS_MODE_IT2ME),
           FormatMessage(remote_user_email, style_), u"", GURL(),
@@ -136,9 +136,10 @@ void It2MeConfirmationDialogChromeOS::ShowConfirmationNotification(
 }
 
 void It2MeConfirmationDialogChromeOS::OnConfirmationNotificationResult(
-    absl::optional<int> button_index) {
-  if (!button_index.has_value())
+    std::optional<int> button_index) {
+  if (!button_index.has_value()) {
     return;  // This happens when the user clicks the notification itself.
+  }
 
   // Note: |by_user| must be false, otherwise the notification will not actually
   // be removed but instead it will be moved into the message center bubble

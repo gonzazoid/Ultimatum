@@ -10,7 +10,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
 
 namespace syncer {
 
@@ -25,12 +24,24 @@ void FakeSyncMojoService::BindExplicitPassphraseClient(
 
 void FakeSyncMojoService::BindUserSettingsClient(
     mojo::PendingReceiver<crosapi::mojom::SyncUserSettingsClient> receiver) {
-  fake_sync_user_settings_client_ash_.BindReceiver(std::move(receiver));
+  if (fake_sync_user_settings_client_ash_available_) {
+    fake_sync_user_settings_client_ash_.BindReceiver(std::move(receiver));
+  }
 }
 
-void FakeSyncMojoService::BindReceiver(
-    mojo::PendingReceiver<crosapi::mojom::SyncService> receiver) {
-  receivers_.Add(this, std::move(receiver));
+void FakeSyncMojoService::DEPRECATED_BindSyncedSessionClient(
+    mojo::PendingReceiver<crosapi::mojom::SyncedSessionClient> receiver) {
+  fake_synced_session_client_ash_.BindReceiver(std::move(receiver));
+}
+
+void FakeSyncMojoService::CreateSyncedSessionClient(
+    CreateSyncedSessionClientCallback callback) {
+  std::move(callback).Run(fake_synced_session_client_ash_.CreateRemote());
+}
+
+mojo::PendingRemote<crosapi::mojom::SyncService>
+FakeSyncMojoService::BindNewPipeAndPassRemote() {
+  return receiver_.BindNewPipeAndPassRemote();
 }
 
 FakeSyncExplicitPassphraseClientAsh&

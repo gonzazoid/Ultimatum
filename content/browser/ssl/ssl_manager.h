@@ -68,7 +68,13 @@ class SSLManager {
   NavigationControllerImpl* controller() { return controller_; }
 
   void DidCommitProvisionalLoad(const LoadCommittedDetails& details);
-  void DidStartResourceResponse(const url::SchemeHostPort& final_response_url,
+
+  // TODO(crbug.com/1385424): Revert function DidStartResourceResponse to return
+  // void after expiry of histogram SSL.Experimental.SubresourceResponse.
+  // Return true when a good certificate is seen and any exceptions that were
+  // made by the user for bad certificates are cleared out, returns false
+  // otherwise without processing anything.
+  bool DidStartResourceResponse(const url::SchemeHostPort& final_response_url,
                                 bool has_certificate_errors);
 
   // The following methods are called when a page includes insecure
@@ -85,6 +91,10 @@ class SSLManager {
 
   // An error occurred with the certificate in an SSL connection.
   void OnCertError(std::unique_ptr<SSLErrorHandler> handler);
+
+  // Returns true if any HTTPS-related warning exceptions has been allowed by
+  // the user for any host.
+  bool HasAllowExceptionForAnyHost();
 
  private:
   // Helper method for handling certificate errors.

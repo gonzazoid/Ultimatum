@@ -4,16 +4,16 @@
 
 #include "third_party/blink/renderer/modules/peerconnection/transceiver_state_surfacer.h"
 
-#include "third_party/blink/renderer/platform/peerconnection/webrtc_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/webrtc/api/rtp_transceiver_interface.h"
 #include "third_party/webrtc/api/sctp_transport_interface.h"
 
 namespace blink {
 namespace {
 
-Vector<webrtc::RtpHeaderExtensionCapability> GetHeaderExtensionsNegotiated(
+Vector<webrtc::RtpHeaderExtensionCapability> GetNegotiatedHeaderExtensions(
     const webrtc::RtpTransceiverInterface* webrtc_transceiver) {
-  auto std_extensions = webrtc_transceiver->HeaderExtensionsNegotiated();
+  auto std_extensions = webrtc_transceiver->GetNegotiatedHeaderExtensions();
   Vector<webrtc::RtpHeaderExtensionCapability> extensions;
   std::move(std_extensions.begin(), std_extensions.end(),
             std::back_inserter(extensions));
@@ -27,8 +27,7 @@ TransceiverStateSurfacer::TransceiverStateSurfacer(
     scoped_refptr<base::SingleThreadTaskRunner> signaling_task_runner)
     : main_task_runner_(std::move(main_task_runner)),
       signaling_task_runner_(std::move(signaling_task_runner)),
-      is_initialized_(false),
-      states_obtained_(false) {
+      is_initialized_(false) {
   DCHECK(main_task_runner_);
   DCHECK(signaling_task_runner_);
 }
@@ -38,7 +37,6 @@ TransceiverStateSurfacer::TransceiverStateSurfacer(
     : main_task_runner_(other.main_task_runner_),
       signaling_task_runner_(other.signaling_task_runner_),
       is_initialized_(other.is_initialized_),
-      states_obtained_(other.states_obtained_),
       sctp_transport_snapshot_(other.sctp_transport_snapshot_),
       transceiver_states_(std::move(other.transceiver_states_)) {
   // Explicitly null |other|'s task runners for use in destructor.
@@ -52,21 +50,8 @@ TransceiverStateSurfacer::~TransceiverStateSurfacer() {
   DCHECK(!main_task_runner_ || main_task_runner_->BelongsToCurrentThread());
 }
 
-TransceiverStateSurfacer& TransceiverStateSurfacer::operator=(
-    TransceiverStateSurfacer&& other) {
-  main_task_runner_ = other.main_task_runner_;
-  signaling_task_runner_ = other.signaling_task_runner_;
-  states_obtained_ = other.states_obtained_;
-  sctp_transport_snapshot_ = other.sctp_transport_snapshot_;
-  transceiver_states_ = std::move(other.transceiver_states_);
-  // Explicitly null |other|'s task runners for use in destructor.
-  other.main_task_runner_ = nullptr;
-  other.signaling_task_runner_ = nullptr;
-  return *this;
-}
-
 void TransceiverStateSurfacer::Initialize(
-    scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
+    rtc::scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
     scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_adapter_map,
     std::vector<rtc::scoped_refptr<webrtc::RtpTransceiverInterface>>
         webrtc_transceivers) {
@@ -129,11 +114,10 @@ void TransceiverStateSurfacer::Initialize(
     transceiver_states_.emplace_back(
         main_task_runner_, signaling_task_runner_, webrtc_transceiver.get(),
         std::move(sender_state), std::move(receiver_state),
-        blink::ToAbslOptional(webrtc_transceiver->mid()),
-        webrtc_transceiver->direction(),
-        blink::ToAbslOptional(webrtc_transceiver->current_direction()),
-        blink::ToAbslOptional(webrtc_transceiver->fired_direction()),
-        GetHeaderExtensionsNegotiated(webrtc_transceiver.get()));
+        webrtc_transceiver->mid(), webrtc_transceiver->direction(),
+        webrtc_transceiver->current_direction(),
+        webrtc_transceiver->fired_direction(),
+        GetNegotiatedHeaderExtensions(webrtc_transceiver.get()));
   }
   is_initialized_ = true;
 }
@@ -151,7 +135,6 @@ TransceiverStateSurfacer::ObtainStates() {
   DCHECK(is_initialized_);
   for (auto& transceiver_state : transceiver_states_)
     transceiver_state.Initialize();
-  states_obtained_ = true;
   return std::move(transceiver_states_);
 }
 

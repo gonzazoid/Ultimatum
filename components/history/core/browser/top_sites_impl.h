@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -233,10 +233,6 @@ class TopSitesImpl : public TopSites, public HistoryServiceObserver {
 
   // Are we loaded?
   bool loaded_;
-
-  // Have the SetTopSites execution time related histograms been recorded?
-  // The histogram should only be recorded once for each Chrome execution.
-  static bool histogram_recorded_;
 
   base::ScopedObservation<HistoryService, HistoryServiceObserver>
       history_service_observation_{this};

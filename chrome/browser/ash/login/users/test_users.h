@@ -7,8 +7,7 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_USERS_TEST_USERS_H_
 #define CHROME_BROWSER_ASH_LOGIN_USERS_TEST_USERS_H_
 
-namespace ash {
-namespace saml_test_users {
+namespace ash::saml_test_users {
 
 // Note that the "corp.example.com" and the "example.test" domains are
 // important, since they're hardcoded in embedded_setup_chromeos.html.
@@ -19,12 +18,6 @@ extern const char kFourthUserCorpExampleTestEmail[];
 extern const char kFifthUserExampleTestEmail[];
 extern const char kSixthUserCorpExampleTestEmail[];
 
-}  // namespace saml_test_users
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove once the migration is finished.
-namespace chromeos {
-namespace saml_test_users = ::ash::saml_test_users;
-}
+}  // namespace ash::saml_test_users
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_USERS_TEST_USERS_H_

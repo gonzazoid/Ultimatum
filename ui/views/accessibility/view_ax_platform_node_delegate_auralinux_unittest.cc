@@ -7,13 +7,13 @@
 #include <atk/atk.h>
 #include <memory>
 
+#include "base/test/gtest_util.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/test/views_test_base.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 class ViewAXPlatformNodeDelegateAuraLinuxTest : public ViewsTestBase {
  public:
@@ -100,6 +100,17 @@ TEST_F(ViewAXPlatformNodeDelegateAuraLinuxTest, TextfieldAccessibility) {
   text_insert_events.clear();
 }
 
+TEST_F(ViewAXPlatformNodeDelegateAuraLinuxTest,
+       ExpandedChangedNotFiredOnNonExpandableViews) {
+  UniqueWidgetPtr widget = std::make_unique<Widget>();
+  Widget::InitParams init_params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  widget->Init(std::move(init_params));
+
+  View* content = widget->SetContentsView(std::make_unique<View>());
+  EXPECT_DCHECK_DEATH(content->NotifyAccessibilityEvent(
+      ax::mojom::Event::kExpandedChanged, true));
+}
+
 TEST_F(ViewAXPlatformNodeDelegateAuraLinuxTest, AuraChildWidgets) {
   // Create the parent widget->
   UniqueWidgetPtr widget = std::make_unique<Widget>();
@@ -170,5 +181,4 @@ TEST_F(ViewAXPlatformNodeDelegateAuraLinuxTest, IndexInParent) {
   EXPECT_EQ(-1, atk_object_get_index_in_parent(atk_object));
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

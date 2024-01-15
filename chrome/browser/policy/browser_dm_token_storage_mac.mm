@@ -6,16 +6,16 @@
 
 #include <string>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/base64url.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
-#include "base/mac/foundation_util.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/mac/scoped_ioobject.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -26,7 +26,6 @@
 #include "base/syslog_logging.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/common/chrome_paths.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -107,7 +106,7 @@ bool DeleteDMTokenFromAppDataDir(const std::string& client_id) {
 bool GetEnrollmentTokenFromPolicy(std::string* enrollment_token) {
   // Since the configuration management infrastructure is not initialized when
   // this code runs, read the policy preference directly.
-  base::ScopedCFTypeRef<CFPropertyListRef> value(
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
       CFPreferencesCopyAppValue(kEnrollmentTokenPolicyName, kBundleId));
 
   // Read the enrollment token from the new location. If that fails, try the old
@@ -117,7 +116,7 @@ bool GetEnrollmentTokenFromPolicy(std::string* enrollment_token) {
       !CFPreferencesAppValueIsForced(kEnrollmentTokenPolicyName, kBundleId)) {
     return false;
   }
-  CFStringRef value_string = base::mac::CFCast<CFStringRef>(value);
+  CFStringRef value_string = base::apple::CFCast<CFStringRef>(value.get());
   if (!value_string)
     return false;
 
@@ -139,15 +138,16 @@ bool GetEnrollmentTokenFromFile(std::string* enrollment_token) {
 }
 
 absl::optional<bool> IsEnrollmentMandatoryByPolicy() {
-  base::ScopedCFTypeRef<CFPropertyListRef> value(CFPreferencesCopyAppValue(
-      kEnrollmentMandatoryOptionPolicyName, kBundleId));
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
+      CFPreferencesCopyAppValue(kEnrollmentMandatoryOptionPolicyName,
+                                kBundleId));
 
   if (!value || !CFPreferencesAppValueIsForced(
                     kEnrollmentMandatoryOptionPolicyName, kBundleId)) {
     return absl::optional<bool>();
   }
 
-  CFBooleanRef value_bool = base::mac::CFCast<CFBooleanRef>(value);
+  CFBooleanRef value_bool = base::apple::CFCast<CFBooleanRef>(value.get());
   if (!value_bool)
     return absl::optional<bool>();
   return value_bool == kCFBooleanTrue;
@@ -214,6 +214,10 @@ bool BrowserDMTokenStorageMac::InitEnrollmentErrorOption() {
     return is_mandatory.value();
 
   return IsEnrollmentMandatoryByFile().value_or(false);
+}
+
+bool BrowserDMTokenStorageMac::CanInitEnrollmentToken() const {
+  return true;
 }
 
 BrowserDMTokenStorage::StoreTask BrowserDMTokenStorageMac::SaveDMTokenTask(

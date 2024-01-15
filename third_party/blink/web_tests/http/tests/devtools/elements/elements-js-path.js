@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(`Tests DOMNode.jsPath()\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <!DOCTYPE html>
@@ -138,7 +142,7 @@
       TestRunner.completeTest();
       return;
     }
-    var jsPath = Elements.DOMPath.jsPath(entry.node, true);
+    var jsPath = ElementsModule.DOMPath.jsPath(entry.node, true);
     var result = entry.prefix + jsPath;
     TestRunner.addResult(result.replace(/\n/g, '\\n'));
     TestRunner.evaluateInPage('matchingElements(' + jsPath + ')', callback);

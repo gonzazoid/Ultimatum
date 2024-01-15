@@ -4,69 +4,21 @@
  * found in the LICENSE file.
  */
 
-let methodName = window.location.origin + '/pay';
+let methodName = window.location.origin;
 let request = undefined;
-
-/** Switches to the basic-card method name. */
-function basicCardMethodName() {
-  methodName = 'basic-card';
-}
-
-/** Installs the payment handler. */
-function install() {
-  navigator.serviceWorker
-    .getRegistration('change_payment_method_app.js')
-    .then((registration) => {
-      if (registration) {
-        output(
-            'serviceWorker.getRegistration()',
-            'The ServiceWorker is already installed.',
-        );
-        return;
-      }
-      navigator.serviceWorker
-        .register('change_payment_method_app.js')
-        .then(() => {
-          return navigator.serviceWorker.ready;
-        })
-        .then((registration) => {
-          if (!registration.paymentManager) {
-            output('serviceWorker.register()', 'PaymentManager API not found.');
-            return;
-          }
-
-          registration.paymentManager.instruments
-            .set('instrument-id', {
-              name: 'Instrument Name',
-              method: methodName,
-            })
-            .then(() => {
-              output('instruments.set()', 'Payment handler installed.');
-            })
-            .catch((error) => {
-              output('instruments.set() rejected with', error);
-            });
-        })
-        .catch((error) => {
-          output('serviceWorker.register() rejected with', error);
-        });
-    })
-    .catch((error) => {
-      output('serviceWorker.getRegistration() rejected with', error);
-    });
-}
 
 /**
  * Shows the payment sheet and outputs the return value of
  * PaymentRequestEvent.changePaymentMethod().
  * @param {PaymentRequest} request - The PaymentRequest object for showing the
  *                                   payment sheet.
+ * @return {String} The output.
  */
 function outputChangePaymentMethodReturnValue(request) {
-  request.show()
+  return request.show()
       .then((response) => {
-        response.complete('success').then(() => {
-          output(
+        return response.complete('success').then(() => {
+          return output(
               'PaymentRequest.show()',
               'changePaymentMethod() returned: ' +
                   JSON.stringify(response.details.changePaymentMethodReturned),
@@ -74,7 +26,7 @@ function outputChangePaymentMethodReturnValue(request) {
         });
       })
       .catch((error) => {
-        output('PaymentRequest.show() rejected with', error);
+        return output('PaymentRequest.show() rejected with', error);
       });
 }
 
@@ -162,7 +114,7 @@ function initTestDetails() {
           ],
         },
         {
-          supportedMethods: methodName + '2',
+          supportedMethods: methodName + '/other',
           data: {soup: 'tomato'},
           total: {
             label: 'Modified total #2',

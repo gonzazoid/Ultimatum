@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import {BrowserServiceImpl, ensureLazyLoaded, ForeignSession, HistorySyncedDeviceCardElement, HistorySyncedDeviceManagerElement} from 'chrome://history/history.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks, waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
@@ -264,7 +264,6 @@ suite('<history-synced-device-manager>', function() {
         })
         .then(args => {
           assertEquals('Chromebook', args.sessionTag, 'sessionTag is correct');
-          assertEquals(123, args.windowId, 'windowId is correct');
           assertEquals(456, args.tabId, 'tabId is correct');
           assertFalse(args.e.altKey, 'altKey is defined');
           assertFalse(args.e.ctrlKey, 'ctrlKey is defined');

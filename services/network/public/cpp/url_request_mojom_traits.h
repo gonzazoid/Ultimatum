@@ -10,6 +10,7 @@
 
 #include "base/component_export.h"
 #include "base/memory/scoped_refptr.h"
+#include "build/buildflag.h"
 #include "mojo/public/cpp/base/big_buffer_mojom_traits.h"
 #include "mojo/public/cpp/base/file_mojom_traits.h"
 #include "mojo/public/cpp/base/file_path_mojom_traits.h"
@@ -20,17 +21,20 @@
 #include "mojo/public/cpp/bindings/union_traits.h"
 #include "net/base/request_priority.h"
 #include "net/url_request/referrer_policy.h"
+#include "services/network/public/cpp/attribution_mojom_traits.h"
 #include "services/network/public/cpp/cookie_manager_shared_mojom_traits.h"
 #include "services/network/public/cpp/data_element.h"
 #include "services/network/public/cpp/network_isolation_key_mojom_traits.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/resource_request_body.h"
+#include "services/network/public/mojom/attribution.mojom-forward.h"
 #include "services/network/public/mojom/chunked_data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "services/network/public/mojom/cookie_access_observer.mojom-forward.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/devtools_observer.mojom-forward.h"
 #include "services/network/public/mojom/ip_address_space.mojom-forward.h"
+#include "services/network/public/mojom/trust_token_access_observer.mojom-forward.h"
 #include "services/network/public/mojom/trust_tokens.mojom-forward.h"
 #include "services/network/public/mojom/url_loader.mojom-forward.h"
 #include "services/network/public/mojom/url_loader_network_service_observer.mojom-forward.h"
@@ -65,20 +69,36 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
       const network::ResourceRequest::TrustedParams& trusted_params) {
     return trusted_params.has_user_activation;
   }
+  static bool allow_cookies_from_browser(
+      const network::ResourceRequest::TrustedParams& trusted_params) {
+    return trusted_params.allow_cookies_from_browser;
+  }
   static mojo::PendingRemote<network::mojom::CookieAccessObserver>
   cookie_observer(
       const network::ResourceRequest::TrustedParams& trusted_params) {
-    if (!trusted_params.cookie_observer)
+    if (!trusted_params.cookie_observer) {
       return mojo::NullRemote();
+    }
     return std::move(
         const_cast<network::ResourceRequest::TrustedParams&>(trusted_params)
             .cookie_observer);
   }
+  static mojo::PendingRemote<network::mojom::TrustTokenAccessObserver>
+  trust_token_observer(
+      const network::ResourceRequest::TrustedParams& trusted_params) {
+    if (!trusted_params.trust_token_observer) {
+      return mojo::NullRemote();
+    }
+    return std::move(
+        const_cast<network::ResourceRequest::TrustedParams&>(trusted_params)
+            .trust_token_observer);
+  }
   static mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
   url_loader_network_observer(
       const network::ResourceRequest::TrustedParams& trusted_params) {
-    if (!trusted_params.url_loader_network_observer)
+    if (!trusted_params.url_loader_network_observer) {
       return mojo::NullRemote();
+    }
     return std::move(
         const_cast<network::ResourceRequest::TrustedParams&>(trusted_params)
             .url_loader_network_observer);
@@ -86,8 +106,9 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   static mojo::PendingRemote<network::mojom::DevToolsObserver>
   devtools_observer(
       const network::ResourceRequest::TrustedParams& trusted_params) {
-    if (!trusted_params.devtools_observer)
+    if (!trusted_params.devtools_observer) {
       return mojo::NullRemote();
+    }
     return std::move(
         const_cast<network::ResourceRequest::TrustedParams&>(trusted_params)
             .devtools_observer);
@@ -99,11 +120,22 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   static mojo::PendingRemote<network::mojom::AcceptCHFrameObserver>
   accept_ch_frame_observer(
       const network::ResourceRequest::TrustedParams& trusted_params) {
-    if (!trusted_params.accept_ch_frame_observer)
+    if (!trusted_params.accept_ch_frame_observer) {
       return mojo::NullRemote();
+    }
     return std::move(
         const_cast<network::ResourceRequest::TrustedParams&>(trusted_params)
             .accept_ch_frame_observer);
+  }
+  static mojo::PendingRemote<network::mojom::SharedDictionaryAccessObserver>
+  shared_dictionary_observer(
+      const network::ResourceRequest::TrustedParams& trusted_params) {
+    if (!trusted_params.shared_dictionary_observer) {
+      return mojo::NullRemote();
+    }
+    return std::move(
+        const_cast<network::ResourceRequest::TrustedParams&>(trusted_params)
+            .shared_dictionary_observer);
   }
 
   static bool Read(network::mojom::TrustedUrlRequestParamsDataView data,
@@ -124,8 +156,9 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   }
   static mojo::PendingRemote<network::mojom::WebBundleHandle> web_bundle_handle(
       const network::ResourceRequest::WebBundleTokenParams& params) {
-    if (!params.handle)
+    if (!params.handle) {
       return mojo::NullRemote();
+    }
     return std::move(
         const_cast<network::ResourceRequest::WebBundleTokenParams&>(params)
             .handle);
@@ -137,23 +170,6 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
 
   static bool Read(network::mojom::WebBundleTokenParamsDataView data,
                    network::ResourceRequest::WebBundleTokenParams* out);
-};
-
-template <>
-struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
-    StructTraits<network::mojom::NetLogSourceDataView, net::NetLogSource> {
-  static uint32_t source_id(const net::NetLogSource& params) {
-    return params.id;
-  }
-  static uint32_t source_type(const net::NetLogSource& params) {
-    return static_cast<uint32_t>(params.type);
-  }
-  static base::TimeTicks start_time(const net::NetLogSource& params) {
-    return params.start_time;
-  }
-
-  static bool Read(network::mojom::NetLogSourceDataView data,
-                   net::NetLogSource* out);
 };
 
 template <>
@@ -210,6 +226,9 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
       const network::ResourceRequest& request) {
     return request.priority;
   }
+  static bool priority_incremental(const network::ResourceRequest& request) {
+    return request.priority_incremental;
+  }
   static network::mojom::CorsPreflightPolicy cors_preflight_policy(
       const network::ResourceRequest& request) {
     return request.cors_preflight_policy;
@@ -250,6 +269,16 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   }
   static bool keepalive(const network::ResourceRequest& request) {
     return request.keepalive;
+  }
+  static bool browsing_topics(const network::ResourceRequest& request) {
+    return request.browsing_topics;
+  }
+  static bool ad_auction_headers(const network::ResourceRequest& request) {
+    return request.ad_auction_headers;
+  }
+  static bool shared_storage_writable_eligible(
+      const network::ResourceRequest& request) {
+    return request.shared_storage_writable_eligible;
   }
   static bool has_user_gesture(const network::ResourceRequest& request) {
     return request.has_user_gesture;
@@ -305,6 +334,9 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   static bool is_fetch_like_api(const network::ResourceRequest& request) {
     return request.is_fetch_like_api;
   }
+  static bool is_fetch_later_api(const network::ResourceRequest& request) {
+    return request.is_fetch_later_api;
+  }
   static bool is_favicon(const network::ResourceRequest& request) {
     return request.is_favicon;
   }
@@ -344,6 +376,44 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
       const network::ResourceRequest& request) {
     return request.target_ip_address_space;
   }
+  static bool has_storage_access(const network::ResourceRequest& request) {
+    return request.has_storage_access;
+  }
+  static network::mojom::AttributionSupport attribution_reporting_support(
+      const network::ResourceRequest& request) {
+    return request.attribution_reporting_support;
+  }
+  static network::mojom::AttributionReportingEligibility
+  attribution_reporting_eligibility(const network::ResourceRequest& request) {
+    return request.attribution_reporting_eligibility;
+  }
+  static const network::AttributionReportingRuntimeFeatures&
+  attribution_reporting_runtime_features(
+      const network::ResourceRequest& request) {
+    return request.attribution_reporting_runtime_features;
+  }
+  static const absl::optional<base::UnguessableToken>&
+  attribution_reporting_src_token(const network::ResourceRequest& request) {
+    return request.attribution_reporting_src_token;
+  }
+  static bool is_ad_tagged(const network::ResourceRequest& request) {
+    return request.is_ad_tagged;
+  }
+  static bool shared_dictionary_writer_enabled(
+      const network::ResourceRequest& request) {
+    return request.shared_dictionary_writer_enabled;
+  }
+  static network::mojom::IPAddressSpace required_ip_address_space(
+      const network::ResourceRequest& request) {
+    return request.required_ip_address_space;
+  }
+
+#if BUILDFLAG(IS_ANDROID)
+  static const std::string& created_location(
+      const network::ResourceRequest& request) {
+    return request.created_location;
+  }
+#endif
 
   static bool Read(network::mojom::URLRequestDataView data,
                    network::ResourceRequest* out);

@@ -9,18 +9,17 @@ import android.app.Application;
 import android.app.Application.ActivityLifecycleCallbacks;
 import android.os.Bundle;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.ImmutableWeakReference;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Installs AR DFM and ArCore runtimes.
- */
+/** Installs AR DFM and ArCore runtimes. */
 @JNINamespace("webxr")
 public class ArCoreInstallUtils {
     /**
@@ -99,8 +98,9 @@ public class ArCoreInstallUtils {
 
         try {
             sArCoreInstance =
-                    (ArCoreShim) Class.forName("org.chromium.components.webxr.ArCoreShimImpl")
-                            .newInstance();
+                    (ArCoreShim)
+                            Class.forName("org.chromium.components.webxr.ArCoreShimImpl")
+                                    .newInstance();
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         } catch (InstantiationException e) {
@@ -120,6 +120,10 @@ public class ArCoreInstallUtils {
     @CalledByNative
     private void onNativeDestroy() {
         mNativeArCoreInstallUtils = 0;
+        if (sInstallRequest != null) {
+            sInstallRequest.dispose();
+            sInstallRequest = null;
+        }
     }
 
     private ArCoreInstallUtils(long nativeArCoreInstallUtils) {
@@ -138,8 +142,7 @@ public class ArCoreInstallUtils {
 
     @CalledByNative
     private static boolean shouldRequestInstallSupportedArCore() {
-        @ArCoreAvailability
-        int availability = getArCoreInstallStatus();
+        @ArCoreAvailability int availability = getArCoreInstallStatus();
         // Skip ARCore installation if we are certain that it is already installed.
         // In all other cases, we might as well try to install it and handle installation failures.
         return availability != ArCoreAvailability.SUPPORTED_INSTALLED;
@@ -188,31 +191,18 @@ public class ArCoreInstallUtils {
         }
     }
 
-    /**
-     * Helper used to notify native code about the result of the request to install ARCore.
-     */
+    /** Helper used to notify native code about the result of the request to install ARCore. */
     private void maybeNotifyNativeOnRequestInstallSupportedArCoreResult(boolean success) {
         if (mNativeArCoreInstallUtils != 0) {
-            ArCoreInstallUtilsJni.get().onRequestInstallSupportedArCoreResult(
-                    mNativeArCoreInstallUtils, success);
+            ArCoreInstallUtilsJni.get()
+                    .onRequestInstallSupportedArCoreResult(mNativeArCoreInstallUtils, success);
         }
     }
 
     private void onArCoreRequestInstallReturned(Activity activity) {
         assert sInstallRequest != null;
-        try {
-            // Since |userRequestedInstall| parameter is false, the below call should
-            // throw if ARCore is still not installed - no need to check the result.
-            getArCoreShimInstance().requestInstall(activity, false);
-            maybeNotifyNativeOnRequestInstallSupportedArCoreResult(true);
-        } catch (ArCoreShim.UnavailableDeviceNotCompatibleException e) {
-            Log.w(TAG, "Exception thrown when trying to validate install state of ARCore: %s",
-                    e.toString());
-            maybeNotifyNativeOnRequestInstallSupportedArCoreResult(false);
-        } catch (ArCoreShim.UnavailableUserDeclinedInstallationException e) {
-            maybeNotifyNativeOnRequestInstallSupportedArCoreResult(false);
-        }
-
+        maybeNotifyNativeOnRequestInstallSupportedArCoreResult(
+                getArCoreInstallStatus() == ArCoreAvailability.SUPPORTED_INSTALLED);
         sInstallRequest.dispose();
         sInstallRequest = null;
     }

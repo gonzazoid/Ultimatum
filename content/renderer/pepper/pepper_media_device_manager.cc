@@ -4,14 +4,13 @@
 
 #include "content/renderer/pepper/pepper_media_device_manager.h"
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/common/content_features.h"
 #include "content/renderer/pepper/renderer_ppapi_host_impl.h"
 #include "content/renderer/render_frame_impl.h"
@@ -34,11 +33,11 @@ const char kPepperInsecureOriginMessage[] =
 
 PP_DeviceType_Dev FromMediaDeviceType(MediaDeviceType type) {
   switch (type) {
-    case MediaDeviceType::MEDIA_AUDIO_INPUT:
+    case MediaDeviceType::kMediaAudioInput:
       return PP_DEVICETYPE_DEV_AUDIOCAPTURE;
-    case MediaDeviceType::MEDIA_VIDEO_INPUT:
+    case MediaDeviceType::kMediaVideoInput:
       return PP_DEVICETYPE_DEV_VIDEOCAPTURE;
-    case MediaDeviceType::MEDIA_AUDIO_OUTPUT:
+    case MediaDeviceType::kMediaAudioOuput:
       return PP_DEVICETYPE_DEV_AUDIOOUTPUT;
     default:
       NOTREACHED();
@@ -49,14 +48,14 @@ PP_DeviceType_Dev FromMediaDeviceType(MediaDeviceType type) {
 MediaDeviceType ToMediaDeviceType(PP_DeviceType_Dev type) {
   switch (type) {
     case PP_DEVICETYPE_DEV_AUDIOCAPTURE:
-      return MediaDeviceType::MEDIA_AUDIO_INPUT;
+      return MediaDeviceType::kMediaAudioInput;
     case PP_DEVICETYPE_DEV_VIDEOCAPTURE:
-      return MediaDeviceType::MEDIA_VIDEO_INPUT;
+      return MediaDeviceType::kMediaVideoInput;
     case PP_DEVICETYPE_DEV_AUDIOOUTPUT:
-      return MediaDeviceType::MEDIA_AUDIO_OUTPUT;
+      return MediaDeviceType::kMediaAudioOuput;
     default:
       NOTREACHED();
-      return MediaDeviceType::MEDIA_AUDIO_OUTPUT;
+      return MediaDeviceType::kMediaAudioOuput;
   }
 }
 
@@ -167,7 +166,7 @@ int PepperMediaDeviceManager::OpenDevice(PP_DeviceType_Dev type,
           blink::mojom::ConsoleMessageLevel::kWarning,
           kPepperInsecureOriginMessage);
     }
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&PepperMediaDeviceManager::OnDeviceOpened,
                                   AsWeakPtr(), request_id, false, std::string(),
                                   blink::MediaStreamDevice()));

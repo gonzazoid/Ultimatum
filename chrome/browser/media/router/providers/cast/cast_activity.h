@@ -20,6 +20,7 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/presentation/presentation.mojom.h"
 
 namespace cast_channel {
 class CastMessageHandler;
@@ -31,6 +32,10 @@ class AppActivity;
 class MirroringActivity;
 class CastSessionTracker;
 
+using OnSourceChangedCallback =
+    base::RepeatingCallback<void(int old_frame_tree_node_id,
+                                 int frame_tree_node_id)>;
+
 class CastActivityFactoryForTest {
  public:
   virtual std::unique_ptr<AppActivity> MakeAppActivity(
@@ -39,7 +44,8 @@ class CastActivityFactoryForTest {
   virtual std::unique_ptr<MirroringActivity> MakeMirroringActivity(
       const MediaRoute& route,
       const std::string& app_id,
-      base::OnceClosure on_stop) = 0;
+      base::OnceClosure on_stop,
+      OnSourceChangedCallback on_source_changed) = 0;
 };
 
 class CastActivity {
@@ -101,7 +107,9 @@ class CastActivity {
       blink::mojom::PresentationConnectionCloseReason close_reason);
   virtual void TerminatePresentationConnections();
 
-  virtual void CreateMediaController(
+  // Binds the given |media_controller| and |observer| to the activity to
+  // receive media commands and notify observers.
+  virtual void BindMediaController(
       mojo::PendingReceiver<mojom::MediaController> media_controller,
       mojo::PendingRemote<mojom::MediaStatusObserver> observer) = 0;
 
@@ -130,7 +138,9 @@ class CastActivity {
 
   // Closes any virtual connection between |client_id| and this session on the
   // receiver.
-  virtual void CloseConnectionOnReceiver(const std::string& client_id);
+  virtual void CloseConnectionOnReceiver(
+      const std::string& client_id,
+      blink::mojom::PresentationConnectionCloseReason reason);
 
   // Called when the client given by |client_id| requests to leave the session.
   // This will also cause all clients within the session with matching origin

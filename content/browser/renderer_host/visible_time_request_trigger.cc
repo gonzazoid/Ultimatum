@@ -7,16 +7,12 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/feature_list.h"
 #include "base/time/time.h"
-#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom.h"
 
 namespace content {
 
-VisibleTimeRequestTrigger::VisibleTimeRequestTrigger()
-    : is_tab_switch_metrics2_feature_enabled_(
-          base::FeatureList::IsEnabled(blink::features::kTabSwitchMetrics2)) {}
+VisibleTimeRequestTrigger::VisibleTimeRequestTrigger() = default;
 
 VisibleTimeRequestTrigger::~VisibleTimeRequestTrigger() = default;
 
@@ -56,7 +52,7 @@ void VisibleTimeRequestTrigger::UpdateRequest(
     bool show_reason_bfcache_restore) {
   auto new_request = blink::mojom::RecordContentToVisibleTimeRequest::New(
       start_time, destination_is_loaded, show_reason_tab_switching,
-      show_reason_bfcache_restore);
+      show_reason_bfcache_restore, /*show_reason_unfold=*/false);
   // If `last_request_` is null, this will return `new_request` unchanged.
   last_request_ =
       ConsumeAndMergeRequests(std::move(last_request_), std::move(new_request));

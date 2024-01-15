@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@ module device.mojom;
 
 import "mojo/public/mojom/base/time.mojom";
 
-enum PressureFactor {
-  // Current pressure factor is thermal.
-  kThermal,
-  // Current pressure factor is power supply.
-  kPowerSupply,
+enum PressureSource {
+  // TODO(crbug.com/1342184): Consider other sources.
+  // For now, "cpu" is the only source.
+  kCpu,
 };
 
 enum PressureState {
@@ -31,7 +30,7 @@ enum PressureState {
 
 // Represents availability of compute resources.
 struct PressureUpdate {
+  PressureSource source;
   PressureState state;
-  array<PressureFactor> factors;
   mojo_base.mojom.Time timestamp;
 };

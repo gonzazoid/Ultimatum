@@ -8,8 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -86,6 +87,9 @@ class KerberosCredentialsManager : public KeyedService,
 
   // Helper method for ignoring the results of method calls.
   static ResultCallback EmptyResultCallback();
+
+  // Returns the default Kerberos configuration (krb5.conf).
+  static const char* GetDefaultKerberosConfig();
 
   // Returns true if the Kerberos feature is enabled.
   bool IsKerberosEnabled() const;
@@ -168,9 +172,6 @@ class KerberosCredentialsManager : public KeyedService,
   // a managed account.
   void SetAddManagedAccountCallbackForTesting(
       base::RepeatingCallback<void(kerberos::ErrorType)> callback);
-
-  // Used on tests. Returns the default Kerberos configuration (krb5.conf).
-  static const char* GetDefaultKerberosConfigForTesting();
 
  private:
   friend class KerberosAddAccountRunner;
@@ -264,13 +265,13 @@ class KerberosCredentialsManager : public KeyedService,
   void OnTicketExpiryNotificationClick(const std::string& principal_name);
 
   // Local state prefs, not owned.
-  PrefService* local_state_ = nullptr;
+  raw_ptr<PrefService> local_state_ = nullptr;
 
   // Primary profile, not owned.
-  Profile* primary_profile_ = nullptr;
+  raw_ptr<Profile> primary_profile_ = nullptr;
 
   // Policy service of the primary profile, not owned.
-  policy::PolicyService* policy_service_ = nullptr;
+  raw_ptr<policy::PolicyService> policy_service_ = nullptr;
 
   // Called by OnSignalConnected(), puts Kerberos files where GSSAPI finds them.
   std::unique_ptr<KerberosFilesHandler> kerberos_files_handler_;
@@ -306,10 +307,5 @@ class KerberosCredentialsManager : public KeyedService,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::KerberosCredentialsManager;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_KERBEROS_KERBEROS_CREDENTIALS_MANAGER_H_

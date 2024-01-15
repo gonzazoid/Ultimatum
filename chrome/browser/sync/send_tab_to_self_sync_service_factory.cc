@@ -4,8 +4,8 @@
 
 #include "chrome/browser/sync/send_tab_to_self_sync_service_factory.h"
 
-#include "base/bind.h"
-#include "base/memory/singleton.h"
+#include "base/functional/bind.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/device_info_sync_service_factory.h"
@@ -25,11 +25,19 @@ SendTabToSelfSyncServiceFactory::GetForProfile(Profile* profile) {
 // static
 SendTabToSelfSyncServiceFactory*
 SendTabToSelfSyncServiceFactory::GetInstance() {
-  return base::Singleton<SendTabToSelfSyncServiceFactory>::get();
+  static base::NoDestructor<SendTabToSelfSyncServiceFactory> instance;
+  return instance.get();
 }
 
 SendTabToSelfSyncServiceFactory::SendTabToSelfSyncServiceFactory()
-    : ProfileKeyedServiceFactory("SendTabToSelfSyncService") {
+    : ProfileKeyedServiceFactory(
+          "SendTabToSelfSyncService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ModelTypeStoreServiceFactory::GetInstance());
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(DeviceInfoSyncServiceFactory::GetInstance());
@@ -54,5 +62,5 @@ KeyedService* SendTabToSelfSyncServiceFactory::BuildServiceInstanceFor(
 
   return new send_tab_to_self::SendTabToSelfSyncService(
       chrome::GetChannel(), std::move(store_factory), history_service,
-      device_info_tracker);
+      profile->GetPrefs(), device_info_tracker);
 }

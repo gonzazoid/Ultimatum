@@ -79,6 +79,10 @@ void NativeWebContentsModalDialogManagerViews::ManageDialog() {
 
 // SingleWebContentsDialogManager:
 
+bool NativeWebContentsModalDialogManagerViews::IsActive() const {
+  return GetWidget(dialog_)->IsActive();
+}
+
 void NativeWebContentsModalDialogManagerViews::Show() {
   // The host destroying means the dialogs will be destroyed in short order.
   // Avoid showing dialogs at this point as the necessary native window
@@ -171,6 +175,14 @@ void NativeWebContentsModalDialogManagerViews::OnWidgetClosing(
 void NativeWebContentsModalDialogManagerViews::OnWidgetDestroying(
     views::Widget* widget) {
   WidgetClosing(widget);
+}
+
+void NativeWebContentsModalDialogManagerViews::OnWidgetActivationChanged(
+    views::Widget* widget,
+    bool active) {
+  if (active) {
+    native_delegate_->OnDialogActivated();
+  }
 }
 
 void NativeWebContentsModalDialogManagerViews::HostChanged(

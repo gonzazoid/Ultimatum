@@ -14,19 +14,17 @@
 #include <shobjidl.h>
 #include <wininet.h>
 
-
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/scoped_blocking_call.h"
+#include "base/uuid.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "components/services/quarantine/common.h"
 #include "components/services/quarantine/common_win.h"
 #include "url/gurl.h"
@@ -201,18 +199,16 @@ QuarantineFileResult SetInternetZoneIdentifierDirectly(
   static const char kHostUrlFormat[] = "HostUrl=%s\r\n";
 
   std::string identifier = "[ZoneTransfer]\r\nZoneId=3\r\n";
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    // Match what the InvokeAttachmentServices() function will output, including
-    // the order of the values.
-    if (IsValidUrlForAttachmentServices(referrer_url)) {
-      identifier.append(
-          base::StringPrintf(kReferrerUrlFormat, referrer_url.spec().c_str()));
-    }
-    identifier.append(base::StringPrintf(
-        kHostUrlFormat, IsValidUrlForAttachmentServices(source_url)
-                            ? source_url.spec().c_str()
-                            : "about:internet"));
+  // Match what the InvokeAttachmentServices() function will output, including
+  // the order of the values.
+  if (IsValidUrlForAttachmentServices(referrer_url)) {
+    identifier.append(
+        base::StringPrintf(kReferrerUrlFormat, referrer_url.spec().c_str()));
   }
+  identifier.append(base::StringPrintf(
+      kHostUrlFormat, IsValidUrlForAttachmentServices(source_url)
+                          ? source_url.spec().c_str()
+                          : "about:internet"));
 
   // Don't include trailing null in data written.
   DWORD written = 0;
@@ -241,7 +237,7 @@ void QuarantineFile(const base::FilePath& file,
 
   std::string braces_guid = "{" + client_guid + "}";
   GUID guid = GUID_NULL;
-  if (base::IsValidGUID(client_guid)) {
+  if (base::Uuid::ParseCaseInsensitive(client_guid).is_valid()) {
     HRESULT hr = CLSIDFromString(base::UTF8ToWide(braces_guid).c_str(), &guid);
     if (FAILED(hr))
       guid = GUID_NULL;

@@ -29,7 +29,7 @@ class DummySampleCountIterator : public SampleCountIterator {
   void Next() override { NOTREACHED(); }
   void Get(HistogramBase::Sample* min,
            int64_t* max,
-           HistogramBase::Count* count) const override {
+           HistogramBase::Count* count) override {
     NOTREACHED();
   }
 };
@@ -52,6 +52,13 @@ class DummyHistogramSamples : public HistogramSamples {
   }
   std::unique_ptr<SampleCountIterator> Iterator() const override {
     return std::make_unique<DummySampleCountIterator>();
+  }
+  std::unique_ptr<SampleCountIterator> ExtractingIterator() override {
+    return std::make_unique<DummySampleCountIterator>();
+  }
+  bool IsDefinitelyEmpty() const override {
+    NOTREACHED();
+    return true;
   }
   bool AddSubtractImpl(SampleCountIterator* iter, Operator op) override {
     return true;
@@ -86,6 +93,11 @@ bool DummyHistogram::AddSamplesFromPickle(PickleIterator* iter) {
 }
 
 std::unique_ptr<HistogramSamples> DummyHistogram::SnapshotSamples() const {
+  return std::make_unique<DummyHistogramSamples>();
+}
+
+std::unique_ptr<HistogramSamples> DummyHistogram::SnapshotUnloggedSamples()
+    const {
   return std::make_unique<DummyHistogramSamples>();
 }
 

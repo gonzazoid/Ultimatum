@@ -5,7 +5,6 @@
 #include "services/viz/privileged/mojom/compositing/renderer_settings_mojom_traits.h"
 
 #include "build/build_config.h"
-#include "services/viz/public/cpp/compositing/resource_settings_mojom_traits.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "ui/gfx/mojom/color_space_mojom_traits.h"
@@ -31,8 +30,6 @@ bool StructTraits<viz::mojom::DebugRendererSettingsDataView,
 bool StructTraits<viz::mojom::RendererSettingsDataView, viz::RendererSettings>::
     Read(viz::mojom::RendererSettingsDataView data,
          viz::RendererSettings* out) {
-  out->apply_simple_frame_rate_throttling =
-      data.apply_simple_frame_rate_throttling();
   out->allow_antialiasing = data.allow_antialiasing();
   out->force_antialiasing = data.force_antialiasing();
   out->force_blending_with_shaders = data.force_blending_with_shaders();
@@ -54,9 +51,13 @@ bool StructTraits<viz::mojom::RendererSettingsDataView, viz::RendererSettings>::
     return false;
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   if (!data.ReadOverlayStrategies(&out->overlay_strategies))
     return false;
+#endif
+
+#if BUILDFLAG(IS_MAC)
+  out->display_id = data.display_id();
 #endif
 
   return true;

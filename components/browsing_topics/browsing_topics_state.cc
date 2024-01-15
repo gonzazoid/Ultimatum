@@ -8,12 +8,12 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_file_value_serializer.h"
-#include "base/json/json_string_value_serializer.h"
+#include "base/json/json_writer.h"
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "components/browsing_topics/common/common_types.h"
 #include "components/browsing_topics/util.h"
 #include "third_party/blink/public/common/features.h"
 
@@ -28,7 +28,8 @@ const char kEpochsNameKey[] = "epochs";
 const char kNextScheduledCalculationTimeNameKey[] =
     "next_scheduled_calculation_time";
 const char kHexEncodedHmacKeyNameKey[] = "hex_encoded_hmac_key";
-const char kConfigVersionNameKey[] = "config_version";
+
+// `config_version` is a deprecated key. Do not reuse.
 
 std::unique_ptr<BrowsingTopicsState::LoadResult> LoadFileOnBackendTaskRunner(
     const base::FilePath& file_path) {
@@ -48,6 +49,37 @@ std::unique_ptr<BrowsingTopicsState::LoadResult> LoadFileOnBackendTaskRunner(
                                                            std::move(value));
 }
 
+bool AreConfigVersionsCompatible(int preexisting, int current) {
+  // The config version can be 0 for a failed topics calculation.
+  CHECK_GE(preexisting, 0);
+  CHECK_GE(current, 1);
+  CHECK_LE(current, ConfigVersion::kMaxValue);
+
+  // This could happen in rare case when Chrome rolls back to an earlier
+  // version.
+  if (preexisting > ConfigVersion::kMaxValue) {
+    return false;
+  }
+
+  // Epoch from a failed calculation is compatible with any version.
+  if (preexisting == 0) {
+    return true;
+  }
+
+  if (preexisting == current) {
+    return true;
+  }
+
+  if ((preexisting == ConfigVersion::kInitial &&
+       current == ConfigVersion::kUsePrioritizedTopicsList) ||
+      (preexisting == ConfigVersion::kUsePrioritizedTopicsList &&
+       current == ConfigVersion::kInitial)) {
+    // Versions 1 and 2 are forward and backward compatible.
+    return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 BrowsingTopicsState::LoadResult::LoadResult(bool file_exists,
@@ -65,17 +97,17 @@ BrowsingTopicsState::BrowsingTopicsState(const base::FilePath& profile_path,
               backend_task_runner_,
               kSaveDelay,
               /*histogram_suffix=*/"BrowsingTopicsState") {
-  base::PostTaskAndReplyWithResult(
-      backend_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&LoadFileOnBackendTaskRunner, writer_.path()),
+  backend_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&LoadFileOnBackendTaskRunner, writer_.path()),
       base::BindOnce(&BrowsingTopicsState::DidLoadFile,
                      weak_ptr_factory_.GetWeakPtr(),
                      std::move(loaded_callback)));
 }
 
 BrowsingTopicsState::~BrowsingTopicsState() {
-  if (writer_.HasPendingWrite())
+  if (writer_.HasPendingWrite()) {
     writer_.DoScheduledWrite();
+  }
 }
 
 void BrowsingTopicsState::ClearAllTopics() {
@@ -94,13 +126,8 @@ void BrowsingTopicsState::ClearOneEpoch(size_t epoch_index) {
   ScheduleSave();
 }
 
-void BrowsingTopicsState::ClearTopic(Topic topic, int taxonomy_version) {
+void BrowsingTopicsState::ClearTopic(Topic topic) {
   for (EpochTopics& epoch : epochs_) {
-    // TODO(crbug.com/1310951): this Chrome version only supports a single
-    // taxonomy version. When we start writing taxonomy conversion code, we may
-    // revisit this constraint.
-    DCHECK_EQ(epoch.taxonomy_version(), taxonomy_version);
-
     epoch.ClearTopic(topic);
   }
 
@@ -116,20 +143,24 @@ void BrowsingTopicsState::ClearContextDomain(
   ScheduleSave();
 }
 
-void BrowsingTopicsState::AddEpoch(EpochTopics epoch_topics) {
+absl::optional<EpochTopics> BrowsingTopicsState::AddEpoch(
+    EpochTopics epoch_topics) {
   DCHECK(loaded_);
 
   epochs_.push_back(std::move(epoch_topics));
 
   // Remove the epoch data that is no longer useful.
+  absl::optional<EpochTopics> removed_epoch_topics;
   if (epochs_.size() >
       static_cast<size_t>(
           blink::features::kBrowsingTopicsNumberOfEpochsToExpose.Get()) +
           1) {
+    removed_epoch_topics = std::move(epochs_[0]);
     epochs_.pop_front();
   }
 
   ScheduleSave();
+  return removed_epoch_topics;
 }
 
 void BrowsingTopicsState::UpdateNextScheduledCalculationTime() {
@@ -152,24 +183,28 @@ std::vector<const EpochTopics*> BrowsingTopicsState::EpochsForSite(
   DCHECK_GT(kNumberOfEpochsToExpose, 0u);
 
   // Derive a per-user per-site time delta in the range of
-  // [0, kBrowsingTopicsTimePeriodPerEpoch). The latest epoch will be switched
-  // to use when the current time is within `site_sticky_time_delta` apart from
-  // the `next_scheduled_calculation_time_`. This way, each site will see a
+  // [0, `kBrowsingTopicsMaxEpochIntroductionDelay`). The latest epoch will only
+  // be used after `site_sticky_time_delta` has elapsed since the last
+  // calculation finish time (i.e. `next_scheduled_calculation_time_` -
+  // `kBrowsingTopicsTimePeriodPerEpoch`). This way, each site will see a
   // different epoch switch time.
   base::TimeDelta site_sticky_time_delta =
       CalculateSiteStickyTimeDelta(top_domain);
 
   size_t end_epoch_index = 0;
-
-  if (base::Time::Now() + site_sticky_time_delta <
-      next_scheduled_calculation_time_) {
-    if (epochs_.size() < 2)
+  if (base::Time::Now() <=
+      next_scheduled_calculation_time_ -
+          blink::features::kBrowsingTopicsTimePeriodPerEpoch.Get() +
+          site_sticky_time_delta) {
+    if (epochs_.size() < 2) {
       return {};
+    }
 
     end_epoch_index = epochs_.size() - 2;
   } else {
-    if (epochs_.empty())
+    if (epochs_.empty()) {
       return {};
+    }
 
     end_epoch_index = epochs_.size() - 1;
   }
@@ -196,9 +231,32 @@ base::TimeDelta BrowsingTopicsState::CalculateSiteStickyTimeDelta(
   uint64_t epoch_switch_time_decision_hash =
       HashTopDomainForEpochSwitchTimeDecision(hmac_key_, top_domain);
 
+  // Currently the browser can only reasonably support configurations where the
+  // random-over period is less or equal to an epoch, because 1) we only store
+  // one more epoch in addition to the number to expose to sites, and that would
+  // not be sufficient. 2) the calculation finish times (i.e. the actual epoch
+  // delimitation times) for previous epochs aren't stored, so we wouldn't be
+  // able to know when to use a previous epoch (or we'd need to approximate
+  // the delimitation time with the calculation start time, or based on its
+  // position in `epochs_`).
+  DCHECK_LE(blink::features::kBrowsingTopicsMaxEpochIntroductionDelay.Get(),
+            blink::features::kBrowsingTopicsTimePeriodPerEpoch.Get());
+
+  DCHECK_GT(blink::features::kBrowsingTopicsMaxEpochIntroductionDelay.Get()
+                .InSeconds(),
+            0);
+
+  // If the latest epoch was manually triggered, make the latest epoch
+  // immediately available for testing purposes.
+  if (!epochs_.empty() &&
+      epochs_.back().from_manually_triggered_calculation()) {
+    return base::Seconds(0);
+  }
+
   return base::Seconds(
       epoch_switch_time_decision_hash %
-      blink::features::kBrowsingTopicsTimePeriodPerEpoch.Get().InSeconds());
+      blink::features::kBrowsingTopicsMaxEpochIntroductionDelay.Get()
+          .InSeconds());
 }
 
 base::ImportantFileWriter::BackgroundDataProducerCallback
@@ -206,11 +264,14 @@ BrowsingTopicsState::GetSerializedDataProducerForBackgroundSequence() {
   DCHECK(loaded_);
 
   return base::BindOnce(
-      [](base::Value value, std::string* output) {
+      [](base::Value value) -> absl::optional<std::string> {
         // This runs on the background sequence.
-        JSONStringValueSerializer serializer(output);
-        serializer.set_pretty_print(true);
-        return serializer.Serialize(value);
+        std::string output;
+        if (!base::JSONWriter::WriteWithOptions(
+                value, base::JSONWriter::OPTIONS_PRETTY_PRINT, &output)) {
+          return absl::nullopt;
+        }
+        return output;
       },
       base::Value(ToDictValue()));
 }
@@ -231,9 +292,6 @@ base::Value::Dict BrowsingTopicsState::ToDictValue() const {
 
   std::string hex_encoded_hmac_key = base::HexEncode(hmac_key_);
   result_dict.Set(kHexEncodedHmacKeyNameKey, base::HexEncode(hmac_key_));
-
-  result_dict.Set(kConfigVersionNameKey,
-                  blink::features::kBrowsingTopicsConfigVersion.Get());
 
   return result_dict;
 }
@@ -276,8 +334,9 @@ void BrowsingTopicsState::DidLoadFile(base::OnceClosure loaded_callback,
 
   loaded_ = true;
 
-  if (should_save_state_to_file)
+  if (should_save_state_to_file) {
     ScheduleSave();
+  }
 
   std::move(loaded_callback).Run();
 }
@@ -287,13 +346,15 @@ BrowsingTopicsState::ParseResult BrowsingTopicsState::ParseValue(
   DCHECK(!loaded_);
 
   const base::Value::Dict* dict_value = value.GetIfDict();
-  if (!dict_value)
+  if (!dict_value) {
     return ParseResult{.success = false, .should_save_state_to_file = true};
+  }
 
   const std::string* hex_encoded_hmac_key =
       dict_value->FindString(kHexEncodedHmacKeyNameKey);
-  if (!hex_encoded_hmac_key)
+  if (!hex_encoded_hmac_key) {
     return ParseResult{.success = false, .should_save_state_to_file = true};
+  }
 
   if (!base::HexStringToSpan(*hex_encoded_hmac_key, hmac_key_)) {
     // `HexStringToSpan` may partially fill the `hmac_key_` up until the
@@ -302,33 +363,35 @@ BrowsingTopicsState::ParseResult BrowsingTopicsState::ParseValue(
     return ParseResult{.success = false, .should_save_state_to_file = true};
   }
 
-  absl::optional<int> config_version_in_storage =
-      dict_value->FindInt(kConfigVersionNameKey);
-  if (!config_version_in_storage)
-    return ParseResult{.success = false, .should_save_state_to_file = true};
-
-  // If the config is has been updated, start with a fresh `epoch_`.
-  if (*config_version_in_storage !=
-      blink::features::kBrowsingTopicsConfigVersion.Get()) {
-    return ParseResult{.success = true, .should_save_state_to_file = true};
-  }
-
   const base::Value::List* epochs_value = dict_value->FindList(kEpochsNameKey);
-  if (!epochs_value)
+  if (!epochs_value) {
     return ParseResult{.success = false, .should_save_state_to_file = true};
+  }
 
   for (const base::Value& epoch_value : *epochs_value) {
     const base::Value::Dict* epoch_dict_value = epoch_value.GetIfDict();
-    if (!epoch_dict_value)
+    if (!epoch_dict_value) {
       return ParseResult{.success = false, .should_save_state_to_file = true};
+    }
 
     epochs_.push_back(EpochTopics::FromDictValue(*epoch_dict_value));
   }
 
+  for (const EpochTopics& epoch : epochs_) {
+    // If any preexisting epoch's version is incompatible with the current
+    // version, start with a fresh `epoch_`.
+    if (!AreConfigVersionsCompatible(epoch.config_version(),
+                                     CurrentConfigVersion())) {
+      epochs_.clear();
+      return ParseResult{.success = true, .should_save_state_to_file = true};
+    }
+  }
+
   const base::Value* next_scheduled_calculation_time_value =
       dict_value->Find(kNextScheduledCalculationTimeNameKey);
-  if (!next_scheduled_calculation_time_value)
+  if (!next_scheduled_calculation_time_value) {
     return ParseResult{.success = false, .should_save_state_to_file = true};
+  }
 
   next_scheduled_calculation_time_ =
       base::ValueToTime(next_scheduled_calculation_time_value).value();

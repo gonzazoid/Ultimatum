@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {BookmarksToolbarElement, Command} from 'chrome://bookmarks/bookmarks.js';
-import {isMac} from 'chrome://resources/js/cr.m.js';
+import {BookmarkManagerApiProxyImpl, BookmarksToolbarElement, Command} from 'chrome://bookmarks/bookmarks.js';
+import {isMac} from 'chrome://resources/js/platform.js';
 import {pressAndReleaseKeyOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
+import {TestBookmarkManagerApiProxy} from './test_bookmark_manager_api_proxy.js';
 import {TestCommandManager} from './test_command_manager.js';
 import {TestStore} from './test_store.js';
 import {createFolder, createItem, getAllFoldersOpenState, replaceBody, testTree} from './test_util.js';
@@ -18,7 +19,8 @@ suite('<bookmarks-toolbar>', function() {
   let testCommandManager: TestCommandManager;
 
   suiteSetup(function() {
-    chrome.bookmarkManagerPrivate.removeTrees = function() {};
+    const bookmarkManagerApi = new TestBookmarkManagerApiProxy();
+    BookmarkManagerApiProxyImpl.setInstance(bookmarkManagerApi);
   });
 
   setup(function() {
@@ -51,6 +53,9 @@ suite('<bookmarks-toolbar>', function() {
 
     testCommandManager = new TestCommandManager();
     document.body.appendChild(testCommandManager.getCommandManager());
+
+    const toastManager = document.createElement('cr-toast-manager');
+    document.body.appendChild(toastManager);
   });
 
   test('selecting multiple items shows toolbar overlay', function() {
@@ -78,8 +83,8 @@ suite('<bookmarks-toolbar>', function() {
 
     flush();
     const button =
-        toolbar.shadowRoot!.querySelector(
-                               'cr-toolbar-selection-overlay')!.deleteButton;
+        toolbar.shadowRoot!.querySelector('cr-toolbar-selection-overlay')!
+            .querySelector('cr-button')!;
     assertFalse(button.disabled);
     button.click();
 
@@ -108,6 +113,6 @@ suite('<bookmarks-toolbar>', function() {
     assertTrue(toolbar.showSelectionOverlay);
     assertTrue(
         toolbar.shadowRoot!.querySelector('cr-toolbar-selection-overlay')!
-            .deleteButton.disabled);
+            .querySelector('cr-button')!.disabled);
   });
 });

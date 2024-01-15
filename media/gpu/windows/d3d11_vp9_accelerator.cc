@@ -4,7 +4,6 @@
 
 #include "media/gpu/windows/d3d11_vp9_accelerator.h"
 
-#include <windows.h>
 #include <string>
 #include <utility>
 
@@ -16,56 +15,20 @@ namespace media {
 
 using DecodeStatus = VP9Decoder::VP9Accelerator::Status;
 
-#define RETURN_ON_HR_FAILURE(expr_name, expr, code)                           \
-  do {                                                                        \
-    HRESULT expr_value = (expr);                                              \
-    if (FAILED(expr_value)) {                                                 \
-      RecordFailure(#expr_name, logging::SystemErrorCodeToString(expr_value), \
-                    code);                                                    \
-      return false;                                                           \
-    }                                                                         \
+#define RETURN_ON_HR_FAILURE(expr_name, expr, code) \
+  do {                                              \
+    HRESULT expr_value = (expr);                    \
+    if (FAILED(expr_value)) {                       \
+      RecordFailure(#expr_name, code, expr_value);  \
+      return false;                                 \
+    }                                               \
   } while (0)
 
-std::vector<D3D11_VIDEO_DECODER_SUB_SAMPLE_MAPPING_BLOCK>
-CreateSubsampleMappingBlock(const std::vector<SubsampleEntry>& from) {
-  std::vector<D3D11_VIDEO_DECODER_SUB_SAMPLE_MAPPING_BLOCK> to(from.size());
-  for (const auto& entry : from) {
-    D3D11_VIDEO_DECODER_SUB_SAMPLE_MAPPING_BLOCK subsample = {
-        .ClearSize = entry.clear_bytes, .EncryptedSize = entry.cypher_bytes};
-    to.push_back(subsample);
-  }
-  return to;
-}
+D3D11VP9Accelerator::D3D11VP9Accelerator(D3D11VideoDecoderClient* client,
+                                         MediaLog* media_log)
+    : D3DAccelerator(client, media_log), status_feedback_(0) {}
 
-D3D11VP9Accelerator::D3D11VP9Accelerator(
-    D3D11VideoDecoderClient* client,
-    MediaLog* media_log,
-    ComD3D11VideoDevice video_device,
-    std::unique_ptr<VideoContextWrapper> video_context)
-    : client_(client),
-      media_log_(media_log),
-      status_feedback_(0),
-      video_device_(std::move(video_device)),
-      video_context_(std::move(video_context)) {
-  DCHECK(client);
-  DCHECK(media_log_);
-  client->SetDecoderCB(base::BindRepeating(
-      &D3D11VP9Accelerator::SetVideoDecoder, base::Unretained(this)));
-}
-
-D3D11VP9Accelerator::~D3D11VP9Accelerator() {}
-
-void D3D11VP9Accelerator::RecordFailure(const std::string& fail_type,
-                                        D3D11Status error) {
-  RecordFailure(fail_type, error.message(), error.code());
-}
-
-void D3D11VP9Accelerator::RecordFailure(const std::string& fail_type,
-                                        const std::string& reason,
-                                        D3D11Status::Codes code) {
-  MEDIA_LOG(ERROR, media_log_)
-      << "DX11VP9Failure(" << fail_type << ")=" << reason;
-}
+D3D11VP9Accelerator::~D3D11VP9Accelerator() = default;
 
 scoped_refptr<VP9Picture> D3D11VP9Accelerator::CreateVP9Picture() {
   D3D11PictureBuffer* picture_buffer = client_->GetPicture();
@@ -75,37 +38,7 @@ scoped_refptr<VP9Picture> D3D11VP9Accelerator::CreateVP9Picture() {
 }
 
 bool D3D11VP9Accelerator::BeginFrame(const D3D11VP9Picture& pic) {
-  const bool is_encrypted = pic.decrypt_config();
-  if (is_encrypted) {
-    RecordFailure("crypto_config",
-                  "Cannot find the decrypt context for the frame.",
-                  D3D11Status::Codes::kCryptoConfigFailed);
-    return false;
-  }
-
-  HRESULT hr;
-  do {
-    ID3D11VideoDecoderOutputView* output_view = nullptr;
-    auto result = pic.picture_buffer()->AcquireOutputView();
-    if (result.has_value()) {
-      output_view = std::move(result).value();
-    } else {
-      D3D11Status error = std::move(result).error();
-      RecordFailure("AcquireOutputView", error.message(), error.code());
-      return false;
-    }
-
-    hr = video_context_->DecoderBeginFrame(video_decoder_.Get(), output_view, 0,
-                                           nullptr);
-  } while (hr == E_PENDING || hr == D3DERR_WASSTILLDRAWING);
-
-  if (FAILED(hr)) {
-    RecordFailure("DecoderBeginFrame", logging::SystemErrorCodeToString(hr),
-                  D3D11Status::Codes::kDecoderBeginFrameFailed);
-    return false;
-  }
-
-  return true;
+  return video_decoder_wrapper_->WaitForFrameBegins(pic.picture_buffer());
 }
 
 void D3D11VP9Accelerator::CopyFrameParams(const D3D11VP9Picture& pic,
@@ -272,103 +205,33 @@ void D3D11VP9Accelerator::CopyHeaderSizeAndID(DXVA_PicParams_VP9* pic_params,
 bool D3D11VP9Accelerator::SubmitDecoderBuffer(
     const DXVA_PicParams_VP9& pic_params,
     const D3D11VP9Picture& pic) {
-#define GET_BUFFER(type, code)                                                 \
-  RETURN_ON_HR_FAILURE(GetDecoderBuffer,                                       \
-                       video_context_->GetDecoderBuffer(                       \
-                           video_decoder_.Get(), type, &buffer_size, &buffer), \
-                       code)
-#define RELEASE_BUFFER(type, code) \
-  RETURN_ON_HR_FAILURE(            \
-      ReleaseDecoderBuffer,        \
-      video_context_->ReleaseDecoderBuffer(video_decoder_.Get(), type), code)
-
-  UINT buffer_size;
-  void* buffer;
-
-  GET_BUFFER(D3D11_VIDEO_DECODER_BUFFER_PICTURE_PARAMETERS,
-             D3D11Status::Codes::kGetPicParamBufferFailed);
-  memcpy(buffer, &pic_params, sizeof(pic_params));
-  RELEASE_BUFFER(D3D11_VIDEO_DECODER_BUFFER_PICTURE_PARAMETERS,
-                 D3D11Status::Codes::kReleasePicParamBufferFailed);
-
-  size_t buffer_offset = 0;
-  while (buffer_offset < pic.frame_hdr->frame_size) {
-    GET_BUFFER(D3D11_VIDEO_DECODER_BUFFER_BITSTREAM,
-               D3D11Status::Codes::kGetBitstreamBufferFailed);
-    size_t copy_size = pic.frame_hdr->frame_size - buffer_offset;
-    bool contains_end = true;
-    if (copy_size > buffer_size) {
-      copy_size = buffer_size;
-      contains_end = false;
-    }
-    memcpy(buffer, pic.frame_hdr->data + buffer_offset, copy_size);
-    RELEASE_BUFFER(D3D11_VIDEO_DECODER_BUFFER_BITSTREAM,
-                   D3D11Status::Codes::kReleaseBitstreamBufferFailed);
-
-    DXVA_Slice_VPx_Short slice_info;
-
-    GET_BUFFER(D3D11_VIDEO_DECODER_BUFFER_SLICE_CONTROL,
-               D3D11Status::Codes::kGetSliceControlBufferFailed);
-    slice_info.BSNALunitDataLocation = 0;
-    slice_info.SliceBytesInBuffer = (UINT)copy_size;
-
-    // See the DXVA header specification for values of wBadSliceChopping:
-    // https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/content/dxva/ns-dxva-_dxva_sliceinfo#wBadSliceChopping
-    if (buffer_offset == 0 && contains_end)
-      slice_info.wBadSliceChopping = 0;
-    else if (buffer_offset == 0 && !contains_end)
-      slice_info.wBadSliceChopping = 1;
-    else if (buffer_offset != 0 && contains_end)
-      slice_info.wBadSliceChopping = 2;
-    else if (buffer_offset != 0 && !contains_end)
-      slice_info.wBadSliceChopping = 3;
-
-    memcpy(buffer, &slice_info, sizeof(slice_info));
-    RELEASE_BUFFER(D3D11_VIDEO_DECODER_BUFFER_SLICE_CONTROL,
-                   D3D11Status::Codes::kReleaseSliceControlBufferFailed);
-
-    constexpr int buffers_count = 3;
-    VideoContextWrapper::VideoBufferWrapper buffers[buffers_count] = {};
-    buffers[0].BufferType = D3D11_VIDEO_DECODER_BUFFER_PICTURE_PARAMETERS;
-    buffers[0].DataOffset = 0;
-    buffers[0].DataSize = sizeof(pic_params);
-    buffers[1].BufferType = D3D11_VIDEO_DECODER_BUFFER_SLICE_CONTROL;
-    buffers[1].DataOffset = 0;
-    buffers[1].DataSize = sizeof(slice_info);
-    buffers[2].BufferType = D3D11_VIDEO_DECODER_BUFFER_BITSTREAM;
-    buffers[2].DataOffset = 0;
-    buffers[2].DataSize = copy_size;
-
-    const DecryptConfig* config = pic.decrypt_config();
-    if (config) {
-      buffers[2].pIV = const_cast<char*>(config->iv().data());
-      buffers[2].IVSize = config->iv().size();
-      // Subsamples matter iff there is IV, for decryption.
-      if (!config->subsamples().empty()) {
-        buffers[2].pSubSampleMappingBlock =
-            CreateSubsampleMappingBlock(config->subsamples()).data();
-        buffers[2].SubSampleMappingCount = config->subsamples().size();
-      }
-    }
-
-    RETURN_ON_HR_FAILURE(SubmitDecoderBuffers,
-                         video_context_->SubmitDecoderBuffers(
-                             video_decoder_.Get(), buffers_count, buffers),
-                         D3D11Status::Codes::kSubmitDecoderBuffersFailed);
-    buffer_offset += copy_size;
+  auto pic_params_buffer =
+      video_decoder_wrapper_->GetPictureParametersBuffer(sizeof(pic_params));
+  if (pic_params_buffer.size() < sizeof(pic_params)) {
+    RecordFailure("Insufficient picture parameter buffer size",
+                  D3D11StatusCode::kGetPicParamBufferFailed);
+    return false;
   }
 
-  return true;
-#undef GET_BUFFER
-#undef RELEASE_BUFFER
+  memcpy(pic_params_buffer.data(), &pic_params, sizeof(pic_params));
+
+  if (!pic_params_buffer.Commit()) {
+    return false;
+  }
+
+  bool ok =
+      video_decoder_wrapper_
+          ->AppendBitstreamAndSliceDataWithStartCode<DXVA_Slice_VPx_Short>(
+              {pic.frame_hdr->data, pic.frame_hdr->frame_size});
+
+  return ok && video_decoder_wrapper_->SubmitSlice();
 }
 
 DecodeStatus D3D11VP9Accelerator::SubmitDecode(
     scoped_refptr<VP9Picture> picture,
     const Vp9SegmentationParams& segmentation_params,
     const Vp9LoopFilterParams& loop_filter_params,
-    const Vp9ReferenceFrameVector& reference_frames,
-    base::OnceClosure on_finished_cb) {
+    const Vp9ReferenceFrameVector& reference_frames) {
   D3D11VP9Picture* pic = static_cast<D3D11VP9Picture*>(picture.get());
 
   if (!BeginFrame(*pic))
@@ -386,15 +249,10 @@ DecodeStatus D3D11VP9Accelerator::SubmitDecode(
   if (!SubmitDecoderBuffer(pic_params, *pic))
     return DecodeStatus::kFail;
 
-  HRESULT hr = video_context_->DecoderEndFrame(video_decoder_.Get());
-  if (FAILED(hr)) {
-    RecordFailure("DecoderEndFrame", logging::SystemErrorCodeToString(hr),
-                  D3D11Status::Codes::kDecoderEndFrameFailed);
+  if (!video_decoder_wrapper_->SubmitDecode()) {
     return DecodeStatus::kFail;
   }
 
-  if (on_finished_cb)
-    std::move(on_finished_cb).Run();
   return DecodeStatus::kOk;
 }
 
@@ -405,15 +263,6 @@ bool D3D11VP9Accelerator::OutputPicture(scoped_refptr<VP9Picture> picture) {
 
 bool D3D11VP9Accelerator::NeedsCompressedHeaderParsed() const {
   return false;
-}
-
-bool D3D11VP9Accelerator::GetFrameContext(scoped_refptr<VP9Picture> picture,
-                                          Vp9FrameContext* frame_context) {
-  return false;
-}
-
-void D3D11VP9Accelerator::SetVideoDecoder(ComD3D11VideoDecoder video_decoder) {
-  video_decoder_ = std::move(video_decoder);
 }
 
 }  // namespace media

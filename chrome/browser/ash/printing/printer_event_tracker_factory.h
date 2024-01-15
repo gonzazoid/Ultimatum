@@ -34,15 +34,10 @@ class PrinterEventTrackerFactory : public ProfileKeyedServiceFactory {
   bool logging_enabled_ = true;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::PrinterEventTrackerFactory;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_PRINTER_EVENT_TRACKER_FACTORY_H_

@@ -17,16 +17,16 @@ var test = {
 };
 
 // Registers a service worker and stores it in registeredServiceWorker.
-// Intended to be called from content::ExecuteScript.
+// Intended to be called from content::ExecJs.
 test.registerServiceWorker = function(path) {
-  navigator.serviceWorker.register(path).then(function() {
+  return navigator.serviceWorker.register(path).then(function() {
     // Wait until the service worker is active.
     return navigator.serviceWorker.ready;
   }).then(function(r) {
     test.registeredServiceWorker = r.active;
-    window.domAutomationController.send('');
+    return '';
   }).catch(function(err) {
-    window.domAutomationController.send(err.message);
+    return err.message;
   });
 };
 

@@ -7,10 +7,10 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
-#include "base/lazy_instance.h"
+#include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/scoped_clear_last_error.h"
@@ -19,24 +19,39 @@
 #include "base/task/thread_pool/environment_config.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_local.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 namespace base {
 namespace internal {
 
 namespace {
 
-// The first 8 characters of sha1 of "ScopedBlockingCall".
-// echo -n "ScopedBlockingCall" | sha1sum
-constexpr uint32_t kActivityTrackerId = 0x11be9915;
-
-LazyInstance<ThreadLocalPointer<BlockingObserver>>::Leaky
-    tls_blocking_observer = LAZY_INSTANCE_INITIALIZER;
+ABSL_CONST_INIT thread_local BlockingObserver* blocking_observer = nullptr;
 
 // Last ScopedBlockingCall instantiated on this thread.
-LazyInstance<ThreadLocalPointer<UncheckedScopedBlockingCall>>::Leaky
-    tls_last_scoped_blocking_call = LAZY_INSTANCE_INITIALIZER;
+ABSL_CONST_INIT thread_local UncheckedScopedBlockingCall*
+    last_scoped_blocking_call = nullptr;
+
+// These functions can be removed, and the calls below replaced with direct
+// variable accesses, once the MSAN workaround is not necessary.
+BlockingObserver* GetBlockingObserver() {
+  // Workaround false-positive MSAN use-of-uninitialized-value on
+  // thread_local storage for loaded libraries:
+  // https://github.com/google/sanitizers/issues/1265
+  MSAN_UNPOISON(&blocking_observer, sizeof(BlockingObserver*));
+
+  return blocking_observer;
+}
+UncheckedScopedBlockingCall* GetLastScopedBlockingCall() {
+  // Workaround false-positive MSAN use-of-uninitialized-value on
+  // thread_local storage for loaded libraries:
+  // https://github.com/google/sanitizers/issues/1265
+  MSAN_UNPOISON(&last_scoped_blocking_call,
+                sizeof(UncheckedScopedBlockingCall*));
+
+  return last_scoped_blocking_call;
+}
 
 // Set to true by scoped_blocking_call_unittest to ensure unrelated threads
 // entering ScopedBlockingCalls don't affect test outcomes.
@@ -49,13 +64,14 @@ bool IsBackgroundPriorityWorker() {
 
 }  // namespace
 
-void SetBlockingObserverForCurrentThread(BlockingObserver* blocking_observer) {
-  DCHECK(!tls_blocking_observer.Get().Get());
-  tls_blocking_observer.Get().Set(blocking_observer);
+void SetBlockingObserverForCurrentThread(
+    BlockingObserver* new_blocking_observer) {
+  DCHECK(!GetBlockingObserver());
+  blocking_observer = new_blocking_observer;
 }
 
 void ClearBlockingObserverForCurrentThread() {
-  tls_blocking_observer.Get().Set(nullptr);
+  blocking_observer = nullptr;
 }
 
 IOJankMonitoringWindow::ScopedMonitoredCall::ScopedMonitoredCall()
@@ -300,17 +316,14 @@ IOJankReportingCallback& IOJankMonitoringWindow::reporting_callback_storage() {
 }
 
 UncheckedScopedBlockingCall::UncheckedScopedBlockingCall(
-    const Location& from_here,
     BlockingType blocking_type,
     BlockingCallType blocking_call_type)
-    : blocking_observer_(tls_blocking_observer.Get().Get()),
-      previous_scoped_blocking_call_(tls_last_scoped_blocking_call.Get().Get()),
+    : blocking_observer_(GetBlockingObserver()),
+      previous_scoped_blocking_call_(GetLastScopedBlockingCall()),
+      resetter_(&last_scoped_blocking_call, this),
       is_will_block_(blocking_type == BlockingType::WILL_BLOCK ||
                      (previous_scoped_blocking_call_ &&
-                      previous_scoped_blocking_call_->is_will_block_)),
-      scoped_activity_(from_here, 0, kActivityTrackerId, 0) {
-  tls_last_scoped_blocking_call.Get().Set(this);
-
+                      previous_scoped_blocking_call_->is_will_block_)) {
   // Only monitor non-nested ScopedBlockingCall(MAY_BLOCK) calls on foreground
   // threads. Cancels() any pending monitored call when a WILL_BLOCK or
   // ScopedBlockingCallWithBaseSyncPrimitives nests into a
@@ -335,23 +348,13 @@ UncheckedScopedBlockingCall::UncheckedScopedBlockingCall(
       blocking_observer_->BlockingTypeUpgraded();
     }
   }
-
-  if (scoped_activity_.IsRecorded()) {
-    // Also record the data for extended crash reporting.
-    const TimeTicks now = TimeTicks::Now();
-    auto& user_data = scoped_activity_.user_data();
-    user_data.SetUint("timestamp_us", static_cast<uint64_t>(
-                                          now.since_origin().InMicroseconds()));
-    user_data.SetUint("blocking_type", static_cast<uint64_t>(blocking_type));
-  }
 }
 
 UncheckedScopedBlockingCall::~UncheckedScopedBlockingCall() {
   // TLS affects result of GetLastError() on Windows. ScopedClearLastError
   // prevents side effect.
   ScopedClearLastError save_last_error;
-  DCHECK_EQ(this, tls_last_scoped_blocking_call.Get().Get());
-  tls_last_scoped_blocking_call.Get().Set(previous_scoped_blocking_call_.get());
+  DCHECK_EQ(this, GetLastScopedBlockingCall());
   if (blocking_observer_ && !previous_scoped_blocking_call_)
     blocking_observer_->BlockingEnded();
 }

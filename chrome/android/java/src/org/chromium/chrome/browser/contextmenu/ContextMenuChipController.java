@@ -10,11 +10,9 @@ import android.graphics.drawable.ColorDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 
-import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.R;
 import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.ui.text.SpanApplier;
@@ -22,11 +20,7 @@ import org.chromium.ui.text.SpanApplier.SpanInfo;
 import org.chromium.ui.widget.AnchoredPopupWindow;
 import org.chromium.ui.widget.ViewRectProvider;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-/**
- * A controller to handle chip construction and cross-app communication.
- */
+/** A controller to handle chip construction and cross-app communication. */
 class ContextMenuChipController implements View.OnClickListener {
     private boolean mFakeLensQueryResultForTesting;
     private View mAnchorView;
@@ -35,21 +29,6 @@ class ContextMenuChipController implements View.OnClickListener {
     private Context mContext;
     private ChipRenderParams mChipRenderParams;
     private final Runnable mDismissContextMenuCallback;
-
-    @VisibleForTesting
-    @IntDef({ChipEvent.SHOWN, ChipEvent.CLICKED, ChipEvent.DISMISSED})
-    @Retention(RetentionPolicy.SOURCE)
-    protected @interface ChipEvent {
-        int SHOWN = 0;
-        int CLICKED = 1;
-        int DISMISSED = 2;
-        int NUM_ENTRIES = 3;
-    }
-
-    private void recordChipEvent(@ChipEvent int chipEvent) {
-        RecordHistogram.recordEnumeratedHistogram(
-                "ContextMenu.LensChip.Event", chipEvent, ChipEvent.NUM_ENTRIES);
-    }
 
     ContextMenuChipController(
             Context context, View anchorView, final Runnable dismissContextMenuCallback) {
@@ -64,8 +43,8 @@ class ContextMenuChipController implements View.OnClickListener {
      */
     int getVerticalPxNeededForChip() {
         return 2
-                * mContext.getResources().getDimensionPixelSize(
-                        R.dimen.context_menu_chip_vertical_margin)
+                        * mContext.getResources()
+                                .getDimensionPixelSize(R.dimen.context_menu_chip_vertical_margin)
                 + mContext.getResources().getDimensionPixelSize(R.dimen.chip_default_height);
     }
 
@@ -77,26 +56,30 @@ class ContextMenuChipController implements View.OnClickListener {
     int getChipTextMaxWidthPx(boolean isRemoveIconHidden) {
         int maxWidthPx =
                 mContext.getResources().getDimensionPixelSize(R.dimen.context_menu_chip_max_width)
-                // Padding before primary icon
-                - mContext.getResources().getDimensionPixelSize(
-                        R.dimen.chip_element_extended_leading_padding)
-                // Padding after primary icon
-                - mContext.getResources().getDimensionPixelSize(
-                        R.dimen.chip_element_leading_padding)
-                // Primary icon width.
-                - mContext.getResources().getDimensionPixelSize(
-                        R.dimen.context_menu_chip_icon_size);
+                        // Padding before primary icon
+                        - mContext.getResources()
+                                .getDimensionPixelSize(
+                                        R.dimen.chip_element_extended_leading_padding)
+                        // Padding after primary icon
+                        - mContext.getResources()
+                                .getDimensionPixelSize(R.dimen.chip_element_leading_padding)
+                        // Primary icon width.
+                        - mContext.getResources()
+                                .getDimensionPixelSize(R.dimen.context_menu_chip_icon_size);
         if (!isRemoveIconHidden) {
-            maxWidthPx = maxWidthPx
-                    // Padding before close icon.
-                    - mContext.getResources().getDimensionPixelSize(
-                            R.dimen.chip_end_icon_extended_margin_start)
-                    // End icon width.
-                    - mContext.getResources().getDimensionPixelSize(
-                            R.dimen.context_menu_chip_icon_size)
-                    // Padding after close icon.
-                    - mContext.getResources().getDimensionPixelSize(
-                            R.dimen.chip_extended_end_padding_with_end_icon);
+            maxWidthPx =
+                    maxWidthPx
+                            // Padding before close icon.
+                            - mContext.getResources()
+                                    .getDimensionPixelSize(
+                                            R.dimen.chip_end_icon_extended_margin_start)
+                            // End icon width.
+                            - mContext.getResources()
+                                    .getDimensionPixelSize(R.dimen.context_menu_chip_icon_size)
+                            // Padding after close icon.
+                            - mContext.getResources()
+                                    .getDimensionPixelSize(
+                                            R.dimen.chip_extended_end_padding_with_end_icon);
         }
 
         return maxWidthPx;
@@ -112,7 +95,6 @@ class ContextMenuChipController implements View.OnClickListener {
     @Override
     public void onClick(View v) {
         if (v == mChipView) {
-            recordChipEvent(ChipEvent.CLICKED);
             // The onClick callback may result in a cross-app switch so dismiss the menu before
             // executing that logic. Also note that dismissing the menu will also dismiss the chip.
             mDismissContextMenuCallback.run();
@@ -147,8 +129,13 @@ class ContextMenuChipController implements View.OnClickListener {
 
         ViewRectProvider rectProvider = new ViewRectProvider(mAnchorView);
         // Draw a clear background to avoid blocking context menu items.
-        mPopupWindow = new AnchoredPopupWindow(mContext, mAnchorView,
-                new ColorDrawable(Color.TRANSPARENT), mChipView, rectProvider);
+        mPopupWindow =
+                new AnchoredPopupWindow(
+                        mContext,
+                        mAnchorView,
+                        new ColorDrawable(Color.TRANSPARENT),
+                        mChipView,
+                        rectProvider);
         mPopupWindow.setAnimationStyle(R.style.ChipAnimation);
         mPopupWindow.setPreferredHorizontalOrientation(
                 AnchoredPopupWindow.HorizontalOrientation.CENTER);
@@ -161,13 +148,17 @@ class ContextMenuChipController implements View.OnClickListener {
         mPopupWindow.setMaxWidth(
                 mContext.getResources().getDimensionPixelSize(R.dimen.context_menu_chip_max_width));
 
-        mChipView.getPrimaryTextView().setText(
-                SpanApplier.removeSpanText(mContext.getString(chipRenderParams.titleResourceId),
-                        new SpanInfo("<new>", "</new>")));
+        mChipView
+                .getPrimaryTextView()
+                .setText(
+                        SpanApplier.removeSpanText(
+                                mContext.getString(chipRenderParams.titleResourceId),
+                                new SpanInfo("<new>", "</new>")));
         // TODO(benwgold): Consult with Chrome UX owners to see if Chip UI hierarchy should be
         // refactored.
-        mChipView.getPrimaryTextView().setMaxWidth(
-                getChipTextMaxWidthPx(chipRenderParams.isRemoveIconHidden));
+        mChipView
+                .getPrimaryTextView()
+                .setMaxWidth(getChipTextMaxWidthPx(chipRenderParams.isRemoveIconHidden));
 
         if (chipRenderParams.iconResourceId != 0) {
             mChipView.setIcon(chipRenderParams.iconResourceId, false);
@@ -175,16 +166,15 @@ class ContextMenuChipController implements View.OnClickListener {
 
         if (!chipRenderParams.isRemoveIconHidden) {
             mChipView.addRemoveIcon();
-            mChipView.setRemoveIconClickListener(v -> {
-                dismissChipIfShowing();
-                recordChipEvent(ChipEvent.DISMISSED);
-            });
+            mChipView.setRemoveIconClickListener(
+                    v -> {
+                        dismissChipIfShowing();
+                    });
         }
 
         mChipView.setOnClickListener(this);
 
         mPopupWindow.show();
-        recordChipEvent(ChipEvent.SHOWN);
         if (mChipRenderParams.onShowCallback != null) {
             mChipRenderParams.onShowCallback.run();
         }

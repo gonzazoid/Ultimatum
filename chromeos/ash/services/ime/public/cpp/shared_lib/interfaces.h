@@ -121,13 +121,10 @@ class ImeCrosPlatform {
   // required to run in the thread creating its remote.
   virtual void RunInMainSequence(ImeSequencedTask task, int task_id) = 0;
 
-  // Returns whether a Chrome OS experimental feature is enabled or not. Only a
-  // subset of CrOS features are considered (features not considered appear as
-  // disabled), |feature_name| may or may not correspond to base::Feature::name
-  // of the CrOS feature, and there could be extra logic (see impl for details).
-  // TODO(b/218815885): Use consistent feature flag names as in CrOS
-  // base::Feature::name (instead of slightly-different bespoke names), and
-  // always wire 1:1 to CrOS feature flags (instead of having any extra logic).
+  // Returns whether a CrOS experimental feature is enabled. Only a subset of
+  // CrOS features are considered (features not considered appear as disabled).
+  // |feature_name| corresponds to base::Feature::name of the CrOS feature as
+  // defined in ash/constants/ash_features.cc in the Chromium repo.
   virtual bool IsFeatureEnabled(const char* feature_name) = 0;
 
   // Start a download using |SimpleURLLoader|. Each SimpleDownloadToFileV2 can
@@ -169,9 +166,8 @@ class ImeClientDelegate {
   virtual ~ImeClientDelegate() = default;
 
  public:
-  // Returns the c_str() of the internal IME specification of ImeClientDelegate.
-  // The IME specification will be invalidated by its `Destroy` method.
-  virtual const char* ImeSpec() = 0;
+  // Obsolete, thus deprecated and must not be used. Kept for ABI vtable compat.
+  virtual void Unused1() = 0;
 
   // Process response data from the IME shared lib in the connected IME client.
   // The data will be invalidated by the engine soon after this call.
@@ -246,20 +242,6 @@ __attribute__((visibility("default"))) bool ImeDecoderActivateIme(
 __attribute__((visibility("default"))) void ImeDecoderProcess(
     const uint8_t* data,
     size_t size);
-
-// ****************************************************************************
-// ************************* DEPRECATED MOJO MODE *****************************
-// ****************************************************************************
-// DEPRECATED: This method of bootstrapping a Mojo connection has been
-// deprecated in favor of the InitializeConnectionFactory method below.
-//
-// Bootstraps a direct Mojo connection with an input method in this IME shared
-// lib. Returns false if the connection attempt was unsuccessful.
-__attribute__((visibility("default"))) bool ConnectToInputMethod(
-    const char* ime_spec,
-    uint32_t receiver_input_method_handle,
-    uint32_t remote_input_method_host_handle,
-    uint32_t remote_input_method_host_version);
 
 // ****************************************************************************
 // ***************************** MOJO MODE ************************************

@@ -175,14 +175,6 @@ void LogSharingMessageReceived(
                                 chrome_browser_sharing::MessageType_ARRAYSIZE);
 }
 
-void LogSharingRegistrationResult(SharingDeviceRegistrationResult result) {
-  base::UmaHistogramEnumeration("Sharing.DeviceRegistrationResult", result);
-}
-
-void LogSharingUnregistrationResult(SharingDeviceRegistrationResult result) {
-  base::UmaHistogramEnumeration("Sharing.DeviceUnregistrationResult", result);
-}
-
 void LogSharingDevicesToShow(SharingFeatureName feature,
                              const char* histogram_suffix,
                              int count) {
@@ -236,61 +228,6 @@ void LogSharingSelectedIndex(SharingFeatureName feature,
                                 /*value_max=*/20);
 }
 
-void LogSharingMessageAckTime(chrome_browser_sharing::MessageType message_type,
-                              SharingDevicePlatform receiver_device_platform,
-                              SharingChannelType channel_type,
-                              base::TimeDelta time) {
-  std::string type_suffixed_name = base::StrCat(
-      {"Sharing.MessageAckTime.", SharingMessageTypeToString(message_type)});
-  std::string platform_suffixed_name =
-      base::StrCat({"Sharing.MessageAckTime.",
-                    DevicePlatformToString(receiver_device_platform), ".",
-                    SharingMessageTypeToString(message_type)});
-  std::string channel_suffixed_name = base::StrCat(
-      {"Sharing.MessageAckTime.", SharingChannelTypeToString(channel_type)});
-  switch (message_type) {
-    case chrome_browser_sharing::MessageType::UNKNOWN_MESSAGE:
-    case chrome_browser_sharing::MessageType::PING_MESSAGE:
-    case chrome_browser_sharing::MessageType::CLICK_TO_CALL_MESSAGE:
-    case chrome_browser_sharing::MessageType::SHARED_CLIPBOARD_MESSAGE:
-    case chrome_browser_sharing::MessageType::PEER_CONNECTION_OFFER_MESSAGE:
-    case chrome_browser_sharing::MessageType::
-        PEER_CONNECTION_ICE_CANDIDATES_MESSAGE:
-      base::UmaHistogramMediumTimes(type_suffixed_name, time);
-      base::UmaHistogramMediumTimes(platform_suffixed_name, time);
-      base::UmaHistogramMediumTimes(channel_suffixed_name, time);
-      break;
-    case chrome_browser_sharing::MessageType::SMS_FETCH_REQUEST:
-    case chrome_browser_sharing::MessageType::DISCOVERY_REQUEST:
-    case chrome_browser_sharing::MessageType::WEB_RTC_SIGNALING_FRAME:
-      base::UmaHistogramCustomTimes(type_suffixed_name, time,
-                                    /*min=*/base::Milliseconds(1),
-                                    /*max=*/base::Minutes(10), /*buckets=*/50);
-      base::UmaHistogramCustomTimes(platform_suffixed_name, time,
-                                    /*min=*/base::Milliseconds(1),
-                                    /*max=*/base::Minutes(10), /*buckets=*/50);
-      base::UmaHistogramCustomTimes(channel_suffixed_name, time,
-                                    /*min=*/base::Milliseconds(1),
-                                    /*max=*/base::Minutes(10), /*buckets=*/50);
-      break;
-    case chrome_browser_sharing::MessageType::ACK_MESSAGE:
-    default:
-      // For proto3 enums unrecognized enum values are kept, so message_type may
-      // not fall into any switch case. However, as an ack message, original
-      // message type should always be known.
-      NOTREACHED();
-  }
-}
-
-void LogSharingMessageHandlerTime(
-    chrome_browser_sharing::MessageType message_type,
-    base::TimeDelta time_taken) {
-  base::UmaHistogramMediumTimes(
-      base::StrCat({"Sharing.MessageHandlerTime.",
-                    SharingMessageTypeToString(message_type)}),
-      time_taken);
-}
-
 void LogSharingDialogShown(SharingFeatureName feature, SharingDialogType type) {
   base::UmaHistogramEnumeration(
       base::StrCat({"Sharing.", GetEnumStringValue(feature), "DialogShown"}),
@@ -340,85 +277,4 @@ void LogSendSharingMessageResult(
                       PulseIntervalToString(pulse_interval)}),
         result);
   }
-}
-
-void LogSendSharingAckMessageResult(
-    chrome_browser_sharing::MessageType message_type,
-    SharingDevicePlatform ack_receiver_device_type,
-    SharingChannelType channel_type,
-    SharingSendMessageResult result) {
-  const std::string metric_prefix = "Sharing.SendAckMessageResult";
-
-  base::UmaHistogramEnumeration(metric_prefix, result);
-
-  base::UmaHistogramEnumeration(
-      base::StrCat(
-          {metric_prefix, ".", SharingMessageTypeToString(message_type)}),
-      result);
-
-  base::UmaHistogramEnumeration(
-      base::StrCat({metric_prefix, ".",
-                    DevicePlatformToString(ack_receiver_device_type)}),
-      result);
-
-  base::UmaHistogramEnumeration(
-      base::StrCat({metric_prefix, ".",
-                    DevicePlatformToString(ack_receiver_device_type), ".",
-                    SharingMessageTypeToString(message_type)}),
-      result);
-
-  base::UmaHistogramEnumeration(
-      base::StrCat(
-          {metric_prefix, ".", SharingChannelTypeToString(channel_type)}),
-      result);
-}
-
-void LogSharedClipboardSelectedTextSize(size_t size) {
-  base::UmaHistogramCounts100000("Sharing.SharedClipboardSelectedTextSize",
-                                 size);
-}
-
-void LogRemoteCopyHandleMessageResult(RemoteCopyHandleMessageResult result) {
-  base::UmaHistogramEnumeration("Sharing.RemoteCopyHandleMessageResult",
-                                result);
-}
-
-void LogRemoteCopyReceivedTextSize(size_t size) {
-  base::UmaHistogramCounts100000("Sharing.RemoteCopyReceivedTextSize", size);
-}
-
-void LogRemoteCopyReceivedImageSizeBeforeDecode(size_t size) {
-  base::UmaHistogramCounts10M("Sharing.RemoteCopyReceivedImageSizeBeforeDecode",
-                              size);
-}
-
-void LogRemoteCopyReceivedImageSizeAfterDecode(size_t size) {
-  base::UmaHistogramCustomCounts(
-      "Sharing.RemoteCopyReceivedImageSizeAfterDecode", size, 1, 100000000, 50);
-}
-
-void LogRemoteCopyLoadImageStatusCode(int code) {
-  base::UmaHistogramSparse("Sharing.RemoteCopyLoadImageStatusCode", code);
-}
-
-void LogRemoteCopyLoadImageTime(base::TimeDelta time) {
-  base::UmaHistogramMediumTimes("Sharing.RemoteCopyLoadImageTime", time);
-}
-
-void LogRemoteCopyDecodeImageTime(base::TimeDelta time) {
-  base::UmaHistogramMediumTimes("Sharing.RemoteCopyDecodeImageTime", time);
-}
-
-void LogRemoteCopyWriteTime(base::TimeDelta time, bool is_image) {
-  if (is_image)
-    base::UmaHistogramMediumTimes("Sharing.RemoteCopyWriteImageTime", time);
-  else
-    base::UmaHistogramMediumTimes("Sharing.RemoteCopyWriteTextTime", time);
-}
-
-void LogRemoteCopyWriteDetectionTime(base::TimeDelta time, bool is_image) {
-  if (is_image)
-    base::UmaHistogramTimes("Sharing.RemoteCopyWriteImageDetectionTime", time);
-  else
-    base::UmaHistogramTimes("Sharing.RemoteCopyWriteTextDetectionTime", time);
 }

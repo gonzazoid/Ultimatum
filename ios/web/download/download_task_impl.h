@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -104,7 +104,7 @@ class DownloadTaskImpl : public DownloadTask {
   SEQUENCE_CHECKER(sequence_checker_);
 
   // A list of observers. Weak references.
-  base::ObserverList<DownloadTaskObserver, true>::Unchecked observers_;
+  base::ObserverList<DownloadTaskObserver, true> observers_;
 
   // Back up corresponding public methods of DownloadTask interface.
   State state_ = State::kNotStarted;

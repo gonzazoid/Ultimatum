@@ -9,7 +9,7 @@
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_functions.h"
@@ -103,19 +103,6 @@ ArcEnterpriseReportingService::~ArcEnterpriseReportingService() {
   arc_bridge_service_->enterprise_reporting()->SetHost(nullptr);
 }
 
-void ArcEnterpriseReportingService::ReportManagementState(
-    mojom::ManagementState state) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  VLOG(1) << "ReportManagementState state=" << state;
-
-  if (state == mojom::ManagementState::MANAGED_DO_LOST) {
-    DCHECK(ArcServiceManager::Get());
-    VLOG(1) << "Management state lost. Removing ARC user data.";
-    ArcSessionManager::Get()->RequestArcDataRemoval();
-    ArcSessionManager::Get()->StopAndEnableArc();
-  }
-}
-
 void ArcEnterpriseReportingService::ReportCloudDpcOperationTime(
     int64_t time_ms,
     mojom::TimedCloudDpcOp op,
@@ -133,6 +120,11 @@ void ArcEnterpriseReportingService::ReportCloudDpcOperationTime(
   } else {
     DLOG(ERROR) << "Attempted to record time for unknown op";
   }
+}
+
+// static
+void ArcEnterpriseReportingService::EnsureFactoryBuilt() {
+  ArcEnterpriseReportingServiceFactory::GetInstance();
 }
 
 }  // namespace arc

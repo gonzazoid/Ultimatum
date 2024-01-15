@@ -9,9 +9,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/components/network/cellular_metrics_logger.h"
@@ -117,6 +118,9 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   // Applies the wake-on-wifi-allowed feature flag to WiFi devices.
   void ApplyWakeOnWifiAllowedToShill();
 
+  // Applies the passpoint-arc-support feature flag to WiFi devices.
+  void ApplyPasspointInterworkingSelectEnabledToShill();
+
   // Applies the current value of |usb_ethernet_mac_address_source_| to primary
   // enabled USB Ethernet device. Does nothing if MAC address source is not
   // specified yet.
@@ -148,7 +152,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
       std::string support_property_name,
       WifiFeatureSupport* feature_support_to_set,
       const std::string& device_path,
-      absl::optional<base::Value> properties);
+      std::optional<base::Value::Dict> properties);
 
   // Callback to be called on MAC address source change request failure.
   // The request was called on device with |device_path| path and
@@ -181,7 +185,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   // Get the DeviceState for the wifi device, if any.
   const DeviceState* GetWifiDeviceState();
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
   base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
   bool allow_cellular_sim_lock_ = true;
@@ -192,6 +196,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkDeviceHandlerImpl
   WifiFeatureSupport wake_on_wifi_supported_ =
       WifiFeatureSupport::NOT_REQUESTED;
   bool wake_on_wifi_allowed_ = false;
+  WifiFeatureSupport passpoint_supported_ = WifiFeatureSupport::SUPPORTED;
+  bool passpoint_allowed_ = false;
 
   std::string usb_ethernet_mac_address_source_;
   std::string primary_enabled_usb_ethernet_device_path_;

@@ -7,9 +7,10 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/unguessable_token.h"
+#include "base/uuid.h"
 #include "chrome/browser/extensions/api/streams_private/streams_private_api.h"
 #include "chrome/browser/plugins/plugin_utils.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -19,17 +20,23 @@
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_attach_helper.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/manifest_handlers/mime_types_handler.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
+#include "pdf/buildflags.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/mojom/loader/transferrable_url_loader.mojom.h"
 
+#if BUILDFLAG(ENABLE_PDF)
+#include "pdf/pdf_features.h"
+#endif  // BUILDFLAG(ENABLE_PDF)
+
 namespace {
+
+constexpr uint32_t kFullPageMimeHandlerDataPipeSize = 512U;
 
 void ClearAllButFrameAncestors(network::mojom::URLResponseHead* response_head) {
   response_head->headers->RemoveHeader("Content-Security-Policy");
@@ -97,22 +104,31 @@ void PluginResponseInterceptorURLLoaderThrottle::WillProcessResponse(
     network::mojom::URLResponseHead* response_head,
     bool* defer) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (content::download_utils::MustDownload(response_url,
-                                            response_head->headers.get(),
-                                            response_head->mime_type)) {
-    return;
-  }
 
   content::WebContents* web_contents =
       content::WebContents::FromFrameTreeNodeId(frame_tree_node_id_);
   if (!web_contents)
     return;
 
+  if (content::download_utils::MustDownload(
+          web_contents->GetBrowserContext(), response_url,
+          response_head->headers.get(), response_head->mime_type)) {
+    return;
+  }
+
   std::string extension_id = PluginUtils::GetExtensionIdForMimeType(
       web_contents->GetBrowserContext(), response_head->mime_type);
 
   if (extension_id.empty())
     return;
+
+  // TODO(1205920): Support prerendering of MimeHandlerViews.
+  if (web_contents->IsPrerenderedFrame(frame_tree_node_id_)) {
+    delegate_->CancelWithError(
+        net::Error::ERR_BLOCKED_BY_CLIENT,
+        "MimeHandler prerendering support not implemented.");
+    return;
+  }
 
   // Chrome's PDF Extension does not work properly in the face of a restrictive
   // Content-Security-Policy, and does not currently respect the policy anyway.
@@ -124,11 +140,10 @@ void PluginResponseInterceptorURLLoaderThrottle::WillProcessResponse(
     ClearAllButFrameAncestors(response_head);
   }
 
-  MimeTypesHandler::ReportUsedHandler(extension_id);
-
   // TODO(mcnee): Could this id just be an int instead? This is only used
   // internally.
-  const std::string stream_id = base::GenerateGUID();
+  const std::string stream_id =
+      base::Uuid::GenerateRandomV4().AsLowercaseString();
 
   mojo::PendingRemote<network::mojom::URLLoader> dummy_new_loader;
   std::ignore = dummy_new_loader.InitWithNewPipeAndPassReceiver();
@@ -136,24 +151,39 @@ void PluginResponseInterceptorURLLoaderThrottle::WillProcessResponse(
   mojo::PendingReceiver<network::mojom::URLLoaderClient> new_client_receiver =
       new_client.BindNewPipeAndPassReceiver();
 
-  uint32_t data_pipe_size = 64U;
-  // The string passed down to the original client with the response body.
   std::string payload;
-  // Provide the MimeHandlerView code a chance to override the payload. This is
-  // the case where the resource is handled by frame-based MimeHandlerView.
-  *defer = extensions::MimeHandlerViewAttachHelper::
-      OverrideBodyForInterceptedResponse(
-          frame_tree_node_id_, response_url, response_head->mime_type,
-          stream_id, &payload, &data_pipe_size,
-          base::BindOnce(
-              &PluginResponseInterceptorURLLoaderThrottle::ResumeLoad,
-              weak_factory_.GetWeakPtr()));
+  const std::string internal_id = base::UnguessableToken::Create().ToString();
+
+#if BUILDFLAG(ENABLE_PDF)
+  const bool is_for_oopif_pdf =
+      base::FeatureList::IsEnabled(chrome_pdf::features::kPdfOopif) &&
+      response_head->mime_type == "application/pdf";
+#else
+  constexpr bool is_for_oopif_pdf = false;
+#endif
+  if (is_for_oopif_pdf) {
+    // For the PDF viewer, set the payload without creating a MimeHandlerView.
+    payload =
+        extensions::MimeHandlerViewAttachHelper::CreateTemplateMimeHandlerPage(
+            response_url, response_head->mime_type, internal_id);
+  } else {
+    // The resource is handled by frame-based MimeHandlerView, so let the
+    // MimeHandlerView code set the payload.
+    payload = extensions::MimeHandlerViewAttachHelper::
+        OverrideBodyForInterceptedResponse(
+            frame_tree_node_id_, response_url, response_head->mime_type,
+            stream_id, internal_id,
+            base::BindOnce(
+                &PluginResponseInterceptorURLLoaderThrottle::ResumeLoad,
+                weak_factory_.GetWeakPtr()));
+  }
+  *defer = true;
 
   mojo::ScopedDataPipeProducerHandle producer_handle;
   mojo::ScopedDataPipeConsumerHandle consumer_handle;
-  CHECK_EQ(
-      mojo::CreateDataPipe(data_pipe_size, producer_handle, consumer_handle),
-      MOJO_RESULT_OK);
+  CHECK_EQ(mojo::CreateDataPipe(kFullPageMimeHandlerDataPipeSize,
+                                producer_handle, consumer_handle),
+           MOJO_RESULT_OK);
 
   uint32_t len = static_cast<uint32_t>(payload.size());
   CHECK_EQ(MOJO_RESULT_OK,
@@ -181,7 +211,7 @@ void PluginResponseInterceptorURLLoaderThrottle::WillProcessResponse(
   auto transferrable_loader = blink::mojom::TransferrableURLLoader::New();
   transferrable_loader->url = GURL(
       extensions::Extension::GetBaseURLFromExtensionId(extension_id).spec() +
-      base::GenerateGUID());
+      base::Uuid::GenerateRandomV4().AsLowercaseString());
   transferrable_loader->url_loader = std::move(original_loader);
   transferrable_loader->url_loader_client = std::move(original_client);
   transferrable_loader->head = std::move(deep_copied_response);
@@ -195,7 +225,19 @@ void PluginResponseInterceptorURLLoaderThrottle::WillProcessResponse(
       base::BindOnce(
           &extensions::StreamsPrivateAPI::SendExecuteMimeTypeHandlerEvent,
           extension_id, stream_id, embedded, frame_tree_node_id_,
-          std::move(transferrable_loader), response_url));
+          std::move(transferrable_loader), response_url, internal_id));
+
+#if BUILDFLAG(ENABLE_PDF)
+  if (is_for_oopif_pdf) {
+    // Schedule `ResumeLoad()` for after the SendExecuteMimeTypeHandlerEvent()
+    // call, to ensure the work in SendExecuteMimeTypeHandlerEvent() does not
+    // race against subsequent network events.
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(&PluginResponseInterceptorURLLoaderThrottle::ResumeLoad,
+                       weak_factory_.GetWeakPtr()));
+  }
+#endif
 }
 
 void PluginResponseInterceptorURLLoaderThrottle::ResumeLoad() {

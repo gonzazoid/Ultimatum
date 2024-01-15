@@ -8,10 +8,11 @@
 #include <deque>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/attestation/interface.pb.h"
+#include "chromeos/dbus/common/dbus_method_call_status.h"
 
 namespace dbus {
 class Bus;
@@ -42,6 +43,8 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) AttestationClient {
       const ::attestation::RegisterKeyWithChapsTokenReply&)>;
   using GetEnrollmentPreparationsCallback = base::OnceCallback<void(
       const ::attestation::GetEnrollmentPreparationsReply&)>;
+  using GetFeaturesCallback =
+      base::OnceCallback<void(const ::attestation::GetFeaturesReply&)>;
   using GetStatusCallback =
       base::OnceCallback<void(const ::attestation::GetStatusReply&)>;
   using VerifyCallback =
@@ -92,6 +95,9 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) AttestationClient {
     // calls, call ConfigureEnrollmentPreparations(Sequence)?.
     virtual void ConfigureEnrollmentPreparationsStatus(
         ::attestation::AttestationStatus status) = 0;
+
+    // Gets the mutable |GetFeaturesReply| that is returned when queried.
+    virtual ::attestation::GetFeaturesReply* mutable_features_reply() = 0;
 
     // Gets the mutable |GetStatusReply| that is returned when queried.
     virtual ::attestation::GetStatusReply* mutable_status_reply() = 0;
@@ -266,6 +272,9 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) AttestationClient {
       const ::attestation::GetEnrollmentPreparationsRequest& request,
       GetEnrollmentPreparationsCallback callback) = 0;
 
+  virtual void GetFeatures(const ::attestation::GetFeaturesRequest& request,
+                           GetFeaturesCallback callback) = 0;
+
   virtual void GetStatus(const ::attestation::GetStatusRequest& request,
                          GetStatusCallback callback) = 0;
 
@@ -318,6 +327,10 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) AttestationClient {
   virtual void GetCertifiedNvIndex(
       const ::attestation::GetCertifiedNvIndexRequest& request,
       GetCertifiedNvIndexCallback callback) = 0;
+
+  // Runs the callback as soon as the service becomes available.
+  virtual void WaitForServiceToBeAvailable(
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
   // Returns an interface for testing (fake only), or returns nullptr.
   virtual TestInterface* GetTestInterface() = 0;

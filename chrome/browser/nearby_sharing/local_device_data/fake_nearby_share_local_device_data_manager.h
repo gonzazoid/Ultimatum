@@ -9,11 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager_impl.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 class NearbyShareClientFactory;
 class NearbyShareProfileInfoProvider;
@@ -34,7 +35,9 @@ class FakeNearbyShareLocalDeviceDataManager
 
     // Returns all FakeNearbyShareLocalDeviceDataManager instances created by
     // CreateInstance().
-    std::vector<FakeNearbyShareLocalDeviceDataManager*>& instances() {
+    std::vector<
+        raw_ptr<FakeNearbyShareLocalDeviceDataManager, VectorExperimental>>&
+    instances() {
       return instances_;
     }
 
@@ -55,30 +58,34 @@ class FakeNearbyShareLocalDeviceDataManager
         NearbyShareProfileInfoProvider* profile_info_provider) override;
 
    private:
-    std::vector<FakeNearbyShareLocalDeviceDataManager*> instances_;
-    PrefService* latest_pref_service_ = nullptr;
-    NearbyShareClientFactory* latest_http_client_factory_ = nullptr;
-    NearbyShareProfileInfoProvider* latest_profile_info_provider_ = nullptr;
+    std::vector<
+        raw_ptr<FakeNearbyShareLocalDeviceDataManager, VectorExperimental>>
+        instances_;
+    raw_ptr<PrefService> latest_pref_service_ = nullptr;
+    raw_ptr<NearbyShareClientFactory, DanglingUntriaged>
+        latest_http_client_factory_ = nullptr;
+    raw_ptr<NearbyShareProfileInfoProvider, DanglingUntriaged>
+        latest_profile_info_provider_ = nullptr;
   };
 
   struct UploadContactsCall {
-    UploadContactsCall(std::vector<nearbyshare::proto::Contact> contacts,
+    UploadContactsCall(std::vector<nearby::sharing::proto::Contact> contacts,
                        UploadCompleteCallback callback);
     UploadContactsCall(UploadContactsCall&&);
     ~UploadContactsCall();
 
-    std::vector<nearbyshare::proto::Contact> contacts;
+    std::vector<nearby::sharing::proto::Contact> contacts;
     UploadCompleteCallback callback;
   };
 
   struct UploadCertificatesCall {
     UploadCertificatesCall(
-        std::vector<nearbyshare::proto::PublicCertificate> certificates,
+        std::vector<nearby::sharing::proto::PublicCertificate> certificates,
         UploadCompleteCallback callback);
     UploadCertificatesCall(UploadCertificatesCall&&);
     ~UploadCertificatesCall();
 
-    std::vector<nearbyshare::proto::PublicCertificate> certificates;
+    std::vector<nearby::sharing::proto::PublicCertificate> certificates;
     UploadCompleteCallback callback;
   };
 
@@ -96,10 +103,10 @@ class FakeNearbyShareLocalDeviceDataManager
   nearby_share::mojom::DeviceNameValidationResult SetDeviceName(
       const std::string& name) override;
   void DownloadDeviceData() override;
-  void UploadContacts(std::vector<nearbyshare::proto::Contact> contacts,
+  void UploadContacts(std::vector<nearby::sharing::proto::Contact> contacts,
                       UploadCompleteCallback callback) override;
   void UploadCertificates(
-      std::vector<nearbyshare::proto::PublicCertificate> certificates,
+      std::vector<nearby::sharing::proto::PublicCertificate> certificates,
       UploadCompleteCallback callback) override;
 
   // Make protected observer-notification methods from base class public in this

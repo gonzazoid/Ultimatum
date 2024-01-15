@@ -2,16 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/features_generated.h"
 #include "third_party/blink/public/common/origin_trials/scoped_test_origin_trial_policy.h"
+#include "third_party/blink/public/platform/web_url_response.h"
+#include "third_party/blink/public/web/web_navigation_params.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -20,9 +23,12 @@
 #include "third_party/blink/renderer/core/html/html_meta_element.h"
 #include "third_party/blink/renderer/core/html/html_script_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/speculation_rules/document_speculation_rules.h"
 #include "third_party/blink/renderer/core/speculation_rules/stub_speculation_host.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
+#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
+#include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -89,25 +95,18 @@ namespace {
 
   HTMLMetaElement* meta =
       MakeGarbageCollected<HTMLMetaElement>(document, CreateElementFlags());
-  meta->setAttribute(html_names::kHttpEquivAttr, "Origin-Trial");
-  meta->setAttribute(html_names::kContentAttr, trial_token);
+  meta->setAttribute(html_names::kHttpEquivAttr, AtomicString("Origin-Trial"));
+  meta->setAttribute(html_names::kContentAttr, AtomicString(trial_token));
   document.head()->appendChild(meta);
 
   HTMLScriptElement* script =
       MakeGarbageCollected<HTMLScriptElement>(document, CreateElementFlags());
-  script->setAttribute(html_names::kTypeAttr, "speculationrules");
+  script->setAttribute(html_names::kTypeAttr, AtomicString("speculationrules"));
   script->setText(json);
   document.head()->appendChild(script);
 
-  if (!RuntimeEnabledFeatures::SpeculationRulesEnabled(frame.DomWindow())) {
-    // When the SpeculationRules is disabled, the host is never bound and
-    // doesn't receive candidates. Run the loop until idle to make sure that.
-    run_loop.RunUntilIdle();
-    EXPECT_FALSE(speculation_host.is_bound());
-  } else {
-    // Wait until UpdateSpeculationCandidates() is dispatched via mojo.
-    run_loop.Run();
-  }
+  // Wait until UpdateSpeculationCandidates() is dispatched via mojo.
+  run_loop.Run();
 
   // Reset the interface binder.
   broker.SetBinderForTesting(mojom::blink::SpeculationHost::Name_, {});
@@ -117,45 +116,262 @@ namespace {
              : ::testing::AssertionSuccess() << "a rule set was found";
 }
 
-// These tests only work on platforms where the feature is not already enabled
-// by default -- at which point an origin trial token is not required.
-#if !BUILDFLAG(IS_ANDROID)
+class ScopedRegisterMockedURLLoads {
+ public:
+  ScopedRegisterMockedURLLoads() {
+    url_test_helpers::RegisterMockedURLLoad(
+        KURL("https://thirdparty-speculationrules.test/"
+             "single_url_prefetch.json"),
+        test::CoreTestDataPath("speculation_rules/single_url_prefetch.json"),
+        "application/speculationrules+json");
+  }
 
-// Without the corresponding base::Feature, this trial token should not be
-// accepted.
-TEST(SpeculationRulesOriginTrialTest, RequiresBaseFeature) {
-  base::test::ScopedFeatureList scoped_features;
-  scoped_features.InitAndDisableFeature(
-      features::kSpeculationRulesPrefetchProxy);
-  ScopedTestOriginTrialPolicy using_test_keys;
+  ~ScopedRegisterMockedURLLoads() {
+    url_test_helpers::UnregisterAllURLsAndClearMemoryCache();
+  }
+};
 
-  EXPECT_FALSE(DocumentAcceptsRuleSet(kSpeculationRulesPrefetchToken,
-                                      kSimplePrefetchProxyRuleSet));
+void CommitTestNavigation(
+    LocalFrame& frame,
+    const KURL& url,
+    const Vector<std::pair<String, String>>& response_headers) {
+  auto navigation_params = std::make_unique<WebNavigationParams>();
+  navigation_params->url = url;
+  WebNavigationParams::FillStaticResponse(navigation_params.get(), "text/html",
+                                          "UTF-8", "<!DOCTYPE html>");
+  for (const auto& [header, value] : response_headers)
+    navigation_params->response.AddHttpHeaderField(header, value);
+  frame.Loader().CommitNavigation(std::move(navigation_params), nullptr);
 }
 
-// Without a valid origin trial token, this feature should not be exposed.
-TEST(SpeculationRulesOriginTrialTest, RequiresValidToken) {
-  base::test::ScopedFeatureList scoped_features;
-  scoped_features.InitAndEnableFeature(
-      features::kSpeculationRulesPrefetchProxy);
-  ScopedTestOriginTrialPolicy using_test_keys;
+// Generated by:
+//  tools/origin_trials/generate_token.py --version 3 --expire-days 3650 \
+//      https://speculationrules.test SpeculationRulesPrefetchFuture
+// Token details:
+//  Version: 3
+//  Origin: https://speculationrules.test:443
+//  Is Subdomain: None
+//  Is Third Party: None
+//  Usage Restriction: None
+//  Feature: SpeculationRulesPrefetchFuture
+//  Expiry: 1984756547 (2032-11-22 17:15:47 UTC)
+//  Signature (Base64):
+//  rnDep07eDfunGZCJ7Czq4/VuMhHmpvhRfRHDHtIfdVhsXetfeGLgRSqpDujMb+R8TlYw6sGWBgeOws+YeNa7Ag==
+[[maybe_unused]] constexpr char kSpeculationRulesPrefetchFutureToken[] =
+    "A65w3qdO3g37pxmQiews6uP1bjIR5qb4UX0Rwx7SH3VYbF3rX3hi4EUqqQ7ozG/kfE"
+    "5WMOrBlgYHjsLPmHjWuwIAAAByeyJvcmlnaW4iOiAiaHR0cHM6Ly9zcGVjdWxhdGlv"
+    "bnJ1bGVzLnRlc3Q6NDQzIiwgImZlYXR1cmUiOiAiU3BlY3VsYXRpb25SdWxlc1ByZW"
+    "ZldGNoRnV0dXJlIiwgImV4cGlyeSI6IDE5ODQ3NTY1NDd9";
 
-  EXPECT_FALSE(
-      DocumentAcceptsRuleSet("invalid token", kSimplePrefetchProxyRuleSet));
+// Generated by:
+//  tools/origin_trials/generate_token.py --version 3 --expire-days 3650 \
+//      --is-third-party https://thirdparty-speculationrules.test \
+//      SpeculationRulesPrefetchFuture
+// Token details:
+//  Version: 3
+//  Origin: https://thirdparty-speculationrules.test:443
+//  Is Subdomain: None
+//  Is Third Party: True
+//  Usage Restriction: None
+//  Feature: SpeculationRulesPrefetchFuture
+//  Expiry: 1984756868 (2032-11-22 17:21:08 UTC)
+//  Signature (Base64):
+//  BaklAC9xb6XDHDwozGbcO3mIMmJSu/lFTud/Kn3bvJsGjX7zHFgzCEQolDUTlrzn1V0zI4cxdQvr+Qb24vupBw==
+[[maybe_unused]] constexpr char
+    kThirdPartySpeculationRulesPrefetchFutureToken[] =
+        "AwWpJQAvcW+lwxw8KMxm3Dt5iDJiUrv5RU7nfyp927ybBo1+8xxYMwhEKJQ1E5a859"
+        "VdMyOHMXUL6/kG9uL7qQcAAACTeyJvcmlnaW4iOiAiaHR0cHM6Ly90aGlyZHBhcnR5"
+        "LXNwZWN1bGF0aW9ucnVsZXMudGVzdDo0NDMiLCAiZmVhdHVyZSI6ICJTcGVjdWxhdG"
+        "lvblJ1bGVzUHJlZmV0Y2hGdXR1cmUiLCAiZXhwaXJ5IjogMTk4NDc1Njg2OCwgImlz"
+        "VGhpcmRQYXJ0eSI6IHRydWV9";
+
+// Generated by:
+//  tools/origin_trials/generate_token.py --version 3 --expire-days 3650 \
+//      --is-third-party https://thirdparty-speculationrules.test \
+//      FrobulateThirdParty
+// Token details:
+//  Version: 3
+//  Origin: https://thirdparty-speculationrules.test:443
+//  Is Subdomain: None
+//  Is Third Party: True
+//  Usage Restriction: None
+//  Feature: FrobulateThirdParty
+//  Expiry: 1984783548 (2032-11-23 00:45:48 UTC)
+//  Signature (Base64):
+//  aL+ckkDgVSSRsRVtaPTGmEzxl8a4CmXJbUJRDILfDFgWlZfUIL5nQhNPkWflgRn2EWHMqPp+xKoh3ZhP2IbhDA==
+[[maybe_unused]] constexpr char kFrobulateThirdPartyToken[] =
+    "A2i/nJJA4FUkkbEVbWj0xphM8ZfGuAplyW1CUQyC3wxYFpWX1CC+Z0ITT5Fn5YEZ9hF"
+    "hzKj6fsSqId2YT9iG4QwAAACIeyJvcmlnaW4iOiAiaHR0cHM6Ly90aGlyZHBhcnR5LX"
+    "NwZWN1bGF0aW9ucnVsZXMudGVzdDo0NDMiLCAiZmVhdHVyZSI6ICJGcm9idWxhdGVUa"
+    "GlyZFBhcnR5IiwgImV4cGlyeSI6IDE5ODQ3ODM1NDgsICJpc1RoaXJkUGFydHkiOiB0"
+    "cnVlfQ==";
+
+TEST(SpeculationRulesPrefetchFutureOriginTrialTest,
+     CanEnableFromThirdPartyToken) {
+  test::TaskEnvironment task_environment;
+  base::test::ScopedFeatureList scoped_features;
+  scoped_features.InitWithFeatures(
+      {// Allow a third-party origin trial to be enabled if it's linked to the
+       // Speculation-Rules header.
+       features::kSpeculationRulesHeaderEnableThirdPartyOriginTrial,
+
+       // Allow the SpeculationRulesPrefetchFuture trial itself to be enabled.
+       features::kSpeculationRulesPrefetchFuture},
+      {});
+  ScopedTestOriginTrialPolicy using_test_keys;
+  ScopedRegisterMockedURLLoads mock_url_loads;
+  DummyPageHolder page_holder;
+  LocalFrame& frame = page_holder.GetFrame();
+
+  CommitTestNavigation(
+      frame, KURL("https://speculationrules.test/"),
+      {{"Origin-Trial", kThirdPartySpeculationRulesPrefetchFutureToken},
+       {"Speculation-Rules",
+        "\"//thirdparty-speculationrules.test/single_url_prefetch.json\""}});
+
+  // This should have enabled the origin trial and all its dependent features.
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesPrefetchFutureEnabled(
+      frame.DomWindow()));
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesDocumentRulesEnabled(
+      frame.DomWindow()));
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesFetchFromHeaderEnabled(
+      frame.DomWindow()));
 }
 
-// With the feature and a matching token, speculation rules should be turned on.
-TEST(SpeculationRulesOriginTrialTest, BaseFeatureAndValidTokenSuffice) {
+TEST(SpeculationRulesPrefetchFutureOriginTrialTest,
+     CannotEnableTrialNotInAllowList) {
+  test::TaskEnvironment task_environment;
   base::test::ScopedFeatureList scoped_features;
-  scoped_features.InitAndEnableFeature(
-      features::kSpeculationRulesPrefetchProxy);
+  scoped_features.InitWithFeatures(
+      {// Allow a third-party origin trial to be enabled if it's linked to the
+       // Speculation-Rules header.
+       features::kSpeculationRulesHeaderEnableThirdPartyOriginTrial},
+      {});
   ScopedTestOriginTrialPolicy using_test_keys;
+  ScopedRegisterMockedURLLoads mock_url_loads;
+  DummyPageHolder page_holder;
+  LocalFrame& frame = page_holder.GetFrame();
 
-  EXPECT_TRUE(DocumentAcceptsRuleSet(kSpeculationRulesPrefetchToken,
-                                     kSimplePrefetchProxyRuleSet));
+  CommitTestNavigation(
+      frame, KURL("https://speculationrules.test/"),
+      {{"Origin-Trial", kFrobulateThirdPartyToken},
+       {"Speculation-Rules",
+        "\"//thirdparty-speculationrules.test/single_url_prefetch.json\""}});
+
+  // This should not have enabled the feature.
+  EXPECT_FALSE(RuntimeEnabledFeatures::OriginTrialsSampleAPIThirdPartyEnabled(
+      frame.DomWindow()));
 }
 
-#endif  // !BUILDFLAG(IS_ANDROID)
+TEST(SpeculationRulesPrefetchFutureOriginTrialTest,
+     CannotEnableOriginTrialWhenFeatureIsDisabled) {
+  test::TaskEnvironment task_environment;
+  base::test::ScopedFeatureList scoped_features;
+  scoped_features.InitWithFeatures(
+      {
+          // Allow the SpeculationRulesPrefetchFuture trial itself to be
+          // enabled.
+          features::kSpeculationRulesPrefetchFuture,
+      },
+      {
+          // With this disabled, we shouldn't enable the feature. This makes
+          // sure we can revoke this capability if it turns out to be an issue.
+          features::kSpeculationRulesHeaderEnableThirdPartyOriginTrial,
+      });
+  ScopedTestOriginTrialPolicy using_test_keys;
+  DummyPageHolder page_holder;
+  LocalFrame& frame = page_holder.GetFrame();
+
+  // If SpeculationRulesFetchFromHeader is enabled by default (i.e., it doesn't
+  // require an origin trial token), then the speculation rules JSON is always
+  // fetched, so the mock URLs need to be registered. Otherwise it shouldn't be
+  // fetched (and the lack of a registration will cause  an error if it is
+  // fetched).
+  absl::optional<ScopedRegisterMockedURLLoads> mock_url_loads;
+  if (RuntimeEnabledFeatures::SpeculationRulesFetchFromHeaderEnabled(
+          frame.DomWindow())) {
+    mock_url_loads.emplace();
+  }
+
+  CommitTestNavigation(
+      frame, KURL("https://speculationrules.test/"),
+      {{"Origin-Trial", kThirdPartySpeculationRulesPrefetchFutureToken},
+       {"Speculation-Rules",
+        "\"//thirdparty-speculationrules.test/single_url_prefetch.json\""}});
+
+  // This should not have enabled SpeculationRulesPrefetchFuture.
+  EXPECT_FALSE(RuntimeEnabledFeatures::SpeculationRulesPrefetchFutureEnabled(
+      frame.DomWindow()));
+}
+
+TEST(SpeculationRulesPrefetchFutureOriginTrialTest,
+     FirstPartyTrialTokenStillWorks) {
+  test::TaskEnvironment task_environment;
+  base::test::ScopedFeatureList scoped_features;
+  scoped_features.InitWithFeatures(
+      {
+          // Allow the SpeculationRulesPrefetchFuture trial itself to be
+          // enabled.
+          features::kSpeculationRulesPrefetchFuture,
+          // Enable the third-party trial code path, to check that it doesn't
+          // break the normal code path.
+          features::kSpeculationRulesHeaderEnableThirdPartyOriginTrial,
+      },
+      {});
+  ScopedTestOriginTrialPolicy using_test_keys;
+  ScopedRegisterMockedURLLoads mock_url_loads;
+  DummyPageHolder page_holder;
+  LocalFrame& frame = page_holder.GetFrame();
+
+  CommitTestNavigation(
+      frame, KURL("https://speculationrules.test/"),
+      {{"Origin-Trial", kSpeculationRulesPrefetchFutureToken},
+       {"Speculation-Rules",
+        "\"//thirdparty-speculationrules.test/single_url_prefetch.json\""}});
+
+  // This should have enabled the origin trial and all its dependent features.
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesPrefetchFutureEnabled(
+      frame.DomWindow()));
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesDocumentRulesEnabled(
+      frame.DomWindow()));
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesFetchFromHeaderEnabled(
+      frame.DomWindow()));
+}
+
+TEST(SpeculationRulesPrefetchFutureOriginTrialTest,
+     FirstPartyTrialTokenDoesNotRequireSpecialSupport) {
+  test::TaskEnvironment task_environment;
+  base::test::ScopedFeatureList scoped_features;
+  scoped_features.InitWithFeatures(
+      {
+          // Allow the SpeculationRulesPrefetchFuture trial itself to be
+          // enabled.
+          features::kSpeculationRulesPrefetchFuture,
+      },
+      {
+          // Even though this is off, a first-party token should still work via
+          // the general-purpose code path.
+          features::kSpeculationRulesHeaderEnableThirdPartyOriginTrial,
+      });
+  ScopedTestOriginTrialPolicy using_test_keys;
+  ScopedRegisterMockedURLLoads mock_url_loads;
+  DummyPageHolder page_holder;
+  LocalFrame& frame = page_holder.GetFrame();
+
+  CommitTestNavigation(
+      frame, KURL("https://speculationrules.test/"),
+      {{"Origin-Trial", kSpeculationRulesPrefetchFutureToken},
+       {"Speculation-Rules",
+        "\"//thirdparty-speculationrules.test/single_url_prefetch.json\""}});
+
+  // This should have enabled the origin trial and all its dependent features.
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesPrefetchFutureEnabled(
+      frame.DomWindow()));
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesDocumentRulesEnabled(
+      frame.DomWindow()));
+  EXPECT_TRUE(RuntimeEnabledFeatures::SpeculationRulesFetchFromHeaderEnabled(
+      frame.DomWindow()));
+}
 
 }  // namespace
 }  // namespace blink

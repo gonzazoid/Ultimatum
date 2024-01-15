@@ -7,8 +7,8 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
-
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -20,7 +20,6 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/mojom/host_id.mojom-forward.h"
 #include "extensions/common/user_script.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -49,6 +48,11 @@ class UserScriptManager : public ExtensionRegistryObserver {
 
   WebUIUserScriptLoader* GetUserScriptLoaderForWebUI(const GURL& url);
 
+  // Sets whether scripts of the given `source` should be enabled for
+  // (all) extensions. Does not affect WebUI script loaders.
+  void SetUserScriptSourceEnabledForExtensions(UserScript::Source source,
+                                               bool enabled);
+
  private:
   // ExtensionRegistryObserver implementation.
   void OnExtensionWillBeInstalled(content::BrowserContext* browser_context,
@@ -64,7 +68,7 @@ class UserScriptManager : public ExtensionRegistryObserver {
   // Called when `loader` has finished loading its initial set of scripts. This
   // is only fired for extension script loaders.
   void OnInitialExtensionLoadComplete(UserScriptLoader* loader,
-                                      const absl::optional<std::string>& error);
+                                      const std::optional<std::string>& error);
 
   // Removes the given ID from `pending_initial_extension_loads_` and if there
   // are no more pending initial loads, signal to the UserScriptListener.

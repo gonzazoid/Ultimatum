@@ -3,24 +3,26 @@
 # found in the LICENSE file.
 
 import("//third_party/closure_compiler/compile_js.gni")
-import("//ui/webui/resources/tools/js_modulizer.gni")
 
 js_type_check("closure_compile") {
-  deps = [ ":test_api.m" ]
+  is_polymer3 = true
+  deps = [ ":test_api" ]
 }
 
-js_library("test_api.m") {
-  sources = [ "$root_gen_dir/chrome/browser/resources/chromeos/login/test_api/test_api.m.js" ]
+js_library("test_api") {
   deps = [
-    "//ui/webui/resources/js:load_time_data.m",
-    "//ui/webui/resources/js:util",
+    "../:cr_ui",
+    "//ash/webui/common/resources:load_time_data.m",
+    "//ash/webui/common/resources:util",
   ]
-  extra_deps = [ ":modulize" ]
+  externs_list = [ "$externs_path/chrome_send.js" ]
 }
 
-js_modulizer("modulize") {
-  input_files = [
-    "test_api.js",
+# Copy existing files to output directory.
+copy("copy_js") {
+  sources = [
     "no_test_api.js",
+    "test_api.js",
   ]
+  outputs = [ "$target_gen_dir/{{source_file_part}}" ]
 }

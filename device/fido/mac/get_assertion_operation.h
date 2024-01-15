@@ -7,8 +7,8 @@
 
 #include <os/availability.h>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "device/fido/authenticator_get_assertion_response.h"
 #include "device/fido/ctap_get_assertion_request.h"
@@ -16,9 +16,7 @@
 #include "device/fido/mac/operation.h"
 #include "device/fido/mac/touch_id_context.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 // GetAssertionOperation implements the authenticatorGetAssertion operation. The
 // operation can be invoked via its |Run| method, which must only be called
@@ -31,9 +29,9 @@ namespace mac {
 // |MakeCredentialOperation|.
 class COMPONENT_EXPORT(DEVICE_FIDO) GetAssertionOperation : public Operation {
  public:
-  using Callback = base::OnceCallback<void(
-      CtapDeviceResponseCode,
-      absl::optional<AuthenticatorGetAssertionResponse>)>;
+  using Callback =
+      base::OnceCallback<void(CtapDeviceResponseCode,
+                              std::vector<AuthenticatorGetAssertionResponse>)>;
 
   GetAssertionOperation(CtapGetAssertionRequest request,
                         TouchIdCredentialStore* credential_store,
@@ -47,14 +45,12 @@ class COMPONENT_EXPORT(DEVICE_FIDO) GetAssertionOperation : public Operation {
   // Operation:
   void Run() override;
 
-  // GetNextAssertion() may be called for a request with an empty allowList
-  // after the initial callback has returned.
-  void GetNextAssertion(Callback callback);
-
  private:
   void PromptTouchIdDone(bool success);
+  void GenerateResponses(std::list<Credential> credentials, bool has_uv);
   absl::optional<AuthenticatorGetAssertionResponse> ResponseForCredential(
-      const Credential& credential);
+      const Credential& credential,
+      bool has_uv);
 
   const std::unique_ptr<TouchIdContext> touch_id_context_ =
       TouchIdContext::Create();
@@ -62,11 +58,8 @@ class COMPONENT_EXPORT(DEVICE_FIDO) GetAssertionOperation : public Operation {
   const CtapGetAssertionRequest request_;
   const raw_ptr<TouchIdCredentialStore> credential_store_;
   Callback callback_;
-  std::list<Credential> matching_credentials_;
 };
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac
 
 #endif  // DEVICE_FIDO_MAC_GET_ASSERTION_OPERATION_H_

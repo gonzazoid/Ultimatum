@@ -16,8 +16,8 @@ import {RoutineResultListElement} from 'chrome://diagnostics/routine_result_list
 import {RoutineSectionElement} from 'chrome://diagnostics/routine_section.js';
 import {WifiInfoElement} from 'chrome://diagnostics/wifi_info.js';
 
-import {assertEquals, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {assertEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {isVisible} from '../test_util.js';
 
 /**
  * Helper function for getting a data-point element.

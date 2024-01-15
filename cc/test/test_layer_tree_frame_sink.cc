@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
 #include "cc/trees/layer_tree_frame_sink_client.h"
 #include "cc/trees/single_thread_proxy.h"
 #include "cc/trees/task_runner_provider.h"
+#include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/resources/bitmap_allocation.h"
 #include "components/viz/service/display/direct_renderer.h"
@@ -22,6 +23,7 @@
 #include "components/viz/service/display/overlay_processor_stub.h"
 #include "components/viz/service/display/skia_output_surface.h"
 #include "components/viz/service/frame_sinks/compositor_frame_sink_support.h"
+#include "gpu/ipc/client/client_shared_image_interface.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 
 namespace cc {
@@ -29,7 +31,7 @@ namespace cc {
 static constexpr viz::FrameSinkId kLayerTreeFrameSinkId(1, 1);
 
 TestLayerTreeFrameSink::TestLayerTreeFrameSink(
-    scoped_refptr<viz::ContextProvider> compositor_context_provider,
+    scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
     scoped_refptr<viz::RasterContextProvider> worker_context_provider,
     gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
     const viz::RendererSettings& renderer_settings,
@@ -51,13 +53,16 @@ TestLayerTreeFrameSink::TestLayerTreeFrameSink(
           task_runner_provider->HasImplThread()
               ? task_runner_provider->ImplThreadTaskRunner()
               : task_runner_provider->MainThreadTaskRunner(),
-          gpu_memory_buffer_manager),
+          gpu_memory_buffer_manager,
+          /*shared_image_interface=*/nullptr),
       synchronous_composite_(synchronous_composite),
       disable_display_vsync_(disable_display_vsync),
       renderer_settings_(renderer_settings),
       debug_settings_(debug_settings),
       refresh_rate_(refresh_rate),
       frame_sink_id_(kLayerTreeFrameSinkId),
+      shared_image_manager_(std::make_unique<gpu::SharedImageManager>()),
+      sync_point_manager_(std::make_unique<gpu::SyncPointManager>()),
       parent_local_surface_id_allocator_(
           new viz::ParentLocalSurfaceIdAllocator),
       client_provided_begin_frame_source_(begin_frame_source),
@@ -127,8 +132,10 @@ bool TestLayerTreeFrameSink::BindToClient(LayerTreeFrameSinkClient* client) {
   // processor is only a stub, and viz::TestGpuServiceHolder will keep a
   // gpu::GpuTaskSchedulerHelper alive for output surface to use, so there is no
   // need to pass in an gpu::GpuTaskSchedulerHelper here.
+
   display_ = std::make_unique<viz::Display>(
-      shared_bitmap_manager_.get(), renderer_settings_, debug_settings_,
+      shared_bitmap_manager_.get(), shared_image_manager_.get(),
+      sync_point_manager_.get(), renderer_settings_, debug_settings_,
       frame_sink_id_, std::move(display_controller),
       std::move(display_output_surface), std::move(overlay_processor),
       std::move(scheduler), compositor_task_runner_);
@@ -264,7 +271,18 @@ void TestLayerTreeFrameSink::DidReceiveCompositorFrameAck(
 
 void TestLayerTreeFrameSink::OnBeginFrame(
     const viz::BeginFrameArgs& args,
-    const viz::FrameTimingDetailsMap& timing_details) {
+    const viz::FrameTimingDetailsMap& timing_details,
+    bool frame_ack,
+    std::vector<viz::ReturnedResource> resources) {
+  // We do not want to Ack the first OnBeginFrame. Only deliver Acks once there
+  // is a valid activated surface, and we have pending frames.
+  if (features::IsOnBeginFrameAcksEnabled()) {
+    if (frame_ack) {
+      DidReceiveCompositorFrameAck(std::move(resources));
+    } else if (!resources.empty()) {
+      ReclaimResources(std::move(resources));
+    }
+  }
   DebugScopedSetImplThread impl(task_runner_provider_);
   for (const auto& pair : timing_details)
     client_->DidPresentCompositorFrame(pair.first, pair.second);
@@ -303,6 +321,9 @@ void TestLayerTreeFrameSink::DisplayDidReceiveCALayerParams(
 
 void TestLayerTreeFrameSink::DisplayDidCompleteSwapWithSize(
     const gfx::Size& pixel_Size) {}
+
+void TestLayerTreeFrameSink::DisplayAddChildWindowToBrowser(
+    gpu::SurfaceHandle child_window) {}
 
 void TestLayerTreeFrameSink::OnNeedsBeginFrames(bool needs_begin_frames) {
   support_->SetNeedsBeginFrame(needs_begin_frames);

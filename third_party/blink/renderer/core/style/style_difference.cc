@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/core/style/style_difference.h"
 
+#include <ostream>
+
 #include "base/notreached.h"
 
 namespace blink {
@@ -27,17 +29,33 @@ std::ostream& operator<<(std::ostream& out, const StyleDifference& diff) {
   }
 
   out << ", reshape=" << diff.needs_reshape_;
-  out << ", paintInvalidation=" << diff.needs_paint_invalidation_;
+
+  out << ", paintInvalidationType=";
+  switch (diff.paint_invalidation_type_) {
+    case static_cast<unsigned>(StyleDifference::PaintInvalidationType::kNone):
+      out << "None";
+      break;
+    case static_cast<unsigned>(StyleDifference::PaintInvalidationType::kSimple):
+      out << "Simple";
+      break;
+    case static_cast<unsigned>(StyleDifference::PaintInvalidationType::kNormal):
+      out << "Normal";
+      break;
+    default:
+      NOTREACHED();
+      break;
+  }
+
   out << ", recomputeVisualOverflow=" << diff.recompute_visual_overflow_;
-  out << ", visualRectUpdate=" << diff.visual_rect_update_;
 
   out << ", propertySpecificDifferences=";
   int diff_count = 0;
   for (int i = 0; i < StyleDifference::kPropertyDifferenceCount; i++) {
     unsigned bit_test = 1 << i;
     if (diff.property_specific_differences_ & bit_test) {
-      if (diff_count++ > 0)
+      if (diff_count++ > 0) {
         out << "|";
+      }
       switch (bit_test) {
         case StyleDifference::kTransformPropertyChanged:
           out << "TransformPropertyChanged";

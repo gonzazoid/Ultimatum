@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/dcheck_is_on.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/dependency_graph.h"
 #include "components/keyed_service/core/keyed_service_export.h"
 
@@ -45,6 +46,14 @@ class KEYED_SERVICE_EXPORT DependencyManager {
   // Returns the dependency graph for Keyed Services Factory testing purposes.
   DependencyGraph& GetDependencyGraphForTesting();
 
+  // After this function is called, any KeyedServiceFactory trying to register
+  // itself will cause a DCHECK. It should have been registered in the
+  // appropriate `EnsureBrowserContextKeyedServiceFactoriesBuilt()` function.
+  // `registration_function_name` param is used to display the right
+  // registration method in the error message.
+  void DisallowKeyedServiceFactoryRegistration(
+      const std::string& registration_function_name_error_message);
+
  protected:
   DependencyManager();
   virtual ~DependencyManager();
@@ -78,7 +87,7 @@ class KEYED_SERVICE_EXPORT DependencyManager {
   void DestroyContextServices(void* context);
 
   // Runtime assertion called as a part of GetServiceForContext() to check if
-  // |context| is considered stale. This will CHECK(false) to avoid a potential 
+  // |context| is considered stale. This will CHECK(false) to avoid a potential
   // use-after-free from services created after context destruction.
   void AssertContextWasntDestroyed(void* context) const;
 
@@ -109,11 +118,14 @@ class KEYED_SERVICE_EXPORT DependencyManager {
   virtual void DumpContextDependencies(void* context) const = 0;
 #endif  // NDEBUG
 
-  std::vector<DependencyNode*> GetDestructionOrder();
-  static void ShutdownFactoriesInOrder(void* context,
-                                       std::vector<DependencyNode*>& order);
-  static void DestroyFactoriesInOrder(void* context,
-                                      std::vector<DependencyNode*>& order);
+  std::vector<raw_ptr<DependencyNode, VectorExperimental>>
+  GetDestructionOrder();
+  static void ShutdownFactoriesInOrder(
+      void* context,
+      std::vector<raw_ptr<DependencyNode, VectorExperimental>>& order);
+  static void DestroyFactoriesInOrder(
+      void* context,
+      std::vector<raw_ptr<DependencyNode, VectorExperimental>>& order);
 
   DependencyGraph dependency_graph_;
 
@@ -126,6 +138,8 @@ class KEYED_SERVICE_EXPORT DependencyManager {
 #if DCHECK_IS_ON()
   bool context_services_created_ = false;
 #endif
+  bool disallow_factory_registration_ = false;
+  std::string registration_function_name_error_message_;
 };
 
 #endif  // COMPONENTS_KEYED_SERVICE_CORE_DEPENDENCY_MANAGER_H_

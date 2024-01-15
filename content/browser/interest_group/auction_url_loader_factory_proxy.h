@@ -7,18 +7,28 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
-#include "base/strings/string_piece_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
+#include "base/strings/string_piece.h"
+#include "content/browser/interest_group/subresource_url_authorizations.h"
 #include "content/common/content_export.h"
+#include "content/services/auction_worklet/public/mojom/auction_network_events_handler.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "net/base/isolation_info.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
+#include "services/network/public/mojom/devtools_observer.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+
+namespace net {
+class NetworkAnonymizationKey;
+}
 
 namespace content {
 
@@ -30,6 +40,14 @@ class CONTENT_EXPORT AuctionURLLoaderFactoryProxy
   using GetUrlLoaderFactoryCallback =
       base::RepeatingCallback<network::mojom::URLLoaderFactory*()>;
 
+  // Callback to preconnect a single socket with the given info.
+  using PreconnectSocketCallback = base::OnceCallback<void(
+      const GURL& url,
+      const net::NetworkAnonymizationKey& network_anonymization_key)>;
+
+  using GetCookieDeprecationLabelCallback =
+      base::RepeatingCallback<std::optional<std::string>()>;
+
   // Passed in callbacks must be safe to call at any time during the lifetime of
   // the AuctionURLLoaderFactoryProxy.
   //
@@ -39,6 +57,14 @@ class CONTENT_EXPORT AuctionURLLoaderFactoryProxy
   //
   // `get_trusted_url_loader_factory` returns a trusted URLLoaderFactory. Used
   // for bidder worklet script and trusted selling signals fetches.
+  //
+  // `preconnect_socket_callback` is used to issue a preconnect if there's a
+  // non-empty trusted signals URL. No preconnect is made for the JS and web
+  // assembly, since they should be cacheable, and currently erring on the side
+  // of not making unnecessary connections. Invoked immediately, if it's going
+  // to be invoked at all.
+  //
+  // `force_reload` if true, the request will be made bypassing the cache.
   //
   // `frame_origin` is the origin of the frame running the auction. Used as the
   // initiator.
@@ -57,21 +83,35 @@ class CONTENT_EXPORT AuctionURLLoaderFactoryProxy
   // for an optional WASM helper for the worklet, and `trusted_signals_url` is
   // the optional JSON url for additional input to the script. No other URLs may
   // be requested.
+  //
+  // `needs_cors_for_additional_bid` should be set if this is a bidder resource
+  // that's not been verifiably selected by the bidder itself, but indirectly
+  // via an additional bid, so additional checks are needed.
   AuctionURLLoaderFactoryProxy(
       mojo::PendingReceiver<network::mojom::URLLoaderFactory> pending_receiver,
       GetUrlLoaderFactoryCallback get_frame_url_loader_factory,
       GetUrlLoaderFactoryCallback get_trusted_url_loader_factory,
+      PreconnectSocketCallback preconnect_socket_callback,
+      GetCookieDeprecationLabelCallback get_cookie_deprecation_label,
+      bool force_reload,
       const url::Origin& top_frame_origin,
       const url::Origin& frame_origin,
+      std::optional<int> renderer_process_id,
       bool is_for_seller,
       network::mojom::ClientSecurityStatePtr client_security_state,
       const GURL& script_url,
-      const absl::optional<GURL>& wasm_url,
-      const absl::optional<GURL>& trusted_signals_base_url);
+      const std::optional<GURL>& wasm_url,
+      const std::optional<GURL>& trusted_signals_base_url,
+      bool needs_cors_for_additional_bid,
+      int frame_tree_node_id);
   AuctionURLLoaderFactoryProxy(const AuctionURLLoaderFactoryProxy&) = delete;
   AuctionURLLoaderFactoryProxy& operator=(const AuctionURLLoaderFactoryProxy&) =
       delete;
   ~AuctionURLLoaderFactoryProxy() override;
+
+  SubresourceUrlAuthorizations& subresource_url_authorizations() {
+    return subresource_url_authorizations_;
+  }
 
   // mojom::URLLoaderFactory implementation.
   void CreateLoaderAndStart(
@@ -93,23 +133,69 @@ class CONTENT_EXPORT AuctionURLLoaderFactoryProxy
   //     form: &, #, =.
   bool CouldBeTrustedSignalsUrl(const GURL& url) const;
 
+  mojo::PendingRemote<network::mojom::DevToolsObserver>
+  CreateDevtoolsObserver();
+
   mojo::Receiver<network::mojom::URLLoaderFactory> receiver_;
 
   const GetUrlLoaderFactoryCallback get_frame_url_loader_factory_;
   const GetUrlLoaderFactoryCallback get_trusted_url_loader_factory_;
+  const GetCookieDeprecationLabelCallback get_cookie_deprecation_label_;
+
+  // Manages the bundle subresource URLs that may be accessed by the worklet.
+  SubresourceUrlAuthorizations subresource_url_authorizations_;
 
   const url::Origin top_frame_origin_;
   const url::Origin frame_origin_;
+  const std::optional<int> renderer_process_id_;
   const bool is_for_seller_;
+  const bool force_reload_;
   const network::mojom::ClientSecurityStatePtr client_security_state_;
 
-  // Transient IsolationInfo used for all seller requests to trusted bidding
-  // signals URLs. Populated on first fetch it applies to.
-  net::IsolationInfo isolation_info_for_seller_signals_;
+  // IsolationInfo used for requests using the trusted URLLoaderFactory. A
+  // Transient IsolationInfo for sellers, the bidder's IsolationInfo for
+  // bidders.
+  const net::IsolationInfo isolation_info_;
 
+  const int owner_frame_tree_node_id_;
   const GURL script_url_;
-  const absl::optional<GURL> wasm_url_;
-  const absl::optional<GURL> trusted_signals_base_url_;
+  const std::optional<GURL> wasm_url_;
+  const std::optional<GURL> trusted_signals_base_url_;
+  const bool needs_cors_for_additional_bid_;
+};
+
+// This forwards network events from worklets to devtools.
+class AuctionNetworkEventsProxy
+    : public auction_worklet::mojom::AuctionNetworkEventsHandler {
+ public:
+  explicit AuctionNetworkEventsProxy(int owner_frame_tree_node_id);
+  AuctionNetworkEventsProxy(const AuctionURLLoaderFactoryProxy&) = delete;
+  AuctionNetworkEventsProxy& operator=(const AuctionURLLoaderFactoryProxy&) =
+      delete;
+  ~AuctionNetworkEventsProxy() override;
+
+  // auction_worklet::mojom::AuctionNetworkEventsHandler implementation.
+  void Clone(
+      mojo::PendingReceiver<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          receiver) override;
+
+  void OnNetworkSendRequest(const ::network::ResourceRequest& request,
+                            ::base::TimeTicks timestamp) override;
+
+  void OnNetworkResponseReceived(
+      const std::string& request_id,
+      const std::string& loader_id,
+      const ::GURL& request_url,
+      ::network::mojom::URLResponseHeadPtr headers) override;
+
+  void OnNetworkRequestComplete(
+      const std::string& request_id,
+      const ::network::URLLoaderCompletionStatus& status) override;
+
+ private:
+  const int owner_frame_tree_node_id_;
+  mojo::ReceiverSet<auction_worklet::mojom::AuctionNetworkEventsHandler>
+      auction_network_events_handlers_;
 };
 
 }  // namespace content

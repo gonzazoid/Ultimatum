@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "extensions/common/extension_id.h"
@@ -173,21 +172,12 @@ class PermissionsData {
   // active tab permissions for.
   URLPatternSet GetEffectiveHostPermissions() const;
 
-  // TODO(rdevlin.cronin): HasHostPermission() and
-  // HasEffectiveAccessToAllHosts() are just forwards for the active
-  // permissions. We should either get rid of these, and have callers use
+  // TODO(rdevlin.cronin): HasHostPermission() is just a forward for the active
+  // permissions. We should either get rid of it, and have callers use
   // active_permissions(), or should get rid of active_permissions(), and make
   // callers use PermissionsData for everything. We should not do both.
-
   // Whether the extension has access to the given |url|.
   bool HasHostPermission(const GURL& url) const;
-
-  // Whether the extension has effective access to all hosts. This is true if
-  // there is a content script that matches all hosts, if there is a host
-  // permission grants access to all hosts (like <all_urls>) or an api
-  // permission that effectively grants access to all hosts (e.g. proxy,
-  // network, etc.)
-  bool HasEffectiveAccessToAllHosts() const;
 
   // Returns the full list of permission details for messages that should
   // display at install time, in a nested format ready for display.
@@ -325,7 +315,7 @@ class PermissionsData {
   bool IsPolicyBlockedHostUnsafe(const GURL& url) const;
 
   // The associated extension's id.
-  std::string extension_id_;
+  ExtensionId extension_id_;
 
   // The associated extension's manifest type.
   Manifest::Type manifest_type_;
@@ -364,7 +354,7 @@ class PermissionsData {
   // default policy-level and user-level settings.
   // If empty, these settings are ignored. This should mostly only be the case
   // in unittests.
-  mutable absl::optional<int> context_id_;
+  mutable std::optional<int> context_id_;
 
   // Whether the extension uses the default policy host restrictions.
   mutable bool uses_default_policy_host_restrictions_ = true;

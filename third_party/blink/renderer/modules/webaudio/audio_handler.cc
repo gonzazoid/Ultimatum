@@ -94,7 +94,7 @@ AudioNode* AudioHandler::GetNode() const {
 }
 
 BaseAudioContext* AudioHandler::Context() const {
-  return context_;
+  return context_.Get();
 }
 
 String AudioHandler::NodeTypeName() const {
@@ -315,7 +315,8 @@ void AudioHandler::ProcessIfNecessary(uint32_t frames_to_process) {
 
   TRACE_EVENT2(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
                "AudioHandler::ProcessIfNecessary", "this",
-               static_cast<void*>(this), "node type", NodeTypeName().Ascii());
+               reinterpret_cast<void*>(this), "node type",
+               NodeTypeName().Ascii());
 
   // Ensure that we only process once per rendering quantum.
   // This handles the "fanout" problem where an output is connected to multiple

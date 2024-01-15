@@ -7,10 +7,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 
 #include "base/base_export.h"
 #include "base/check.h"
-#include "base/memory/weak_ptr.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/tasks.h"
@@ -35,20 +35,24 @@ namespace sequence_manager {
 using QueueName = ::perfetto::protos::pbzero::SequenceManagerTask::QueueName;
 
 namespace internal {
-class AssociatedThreadId;
 class SequenceManagerImpl;
 class TaskQueueImpl;
 }  // namespace internal
 
-// TODO(kraynov): Make TaskQueue to actually be an interface for TaskQueueImpl
-// and stop using ref-counting because we're no longer tied to task runner
-// lifecycle and there's no other need for ref-counting either.
-// NOTE: When TaskQueue gets automatically deleted on zero ref-count,
-// TaskQueueImpl gets gracefully shutdown. It means that it doesn't get
-// unregistered immediately and might accept some last minute tasks until
-// SequenceManager will unregister it at some point. It's done to ensure that
-// task queue always gets unregistered on the main thread.
-class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
+// A `TaskQueue` represents an ordered list of tasks sharing common properties,
+// e.g. priority, throttling, etc. `TaskQueue`s are associated with a
+// `SequenceManager` instance, which chooses the next task from its set of
+// queues. `TaskQueue`s should typically be used on a single thread since most
+// methods are not thread safe (enforeced via CHECKs), but cross-thread task
+// posting is supported with thread-safe task runners.
+//
+// A `TaskQueue` is unregistered (stops accepting and running tasks) when either
+// its associated `TaskQueue::Handle` or `SequenceManager` is destroyed. If the
+// handle is destroyed while the `SequenceManager` is still alive, the
+// `SequenceManager` takes ownership of the queue and schedules it for deletion
+// after the current task finishes. Otherwise, if the handle outlives the
+// sequence manager, the queue is destroyed when the handle is destroyed.
+class BASE_EXPORT TaskQueue {
  public:
   // Interface that lets a task queue be throttled by changing the wake up time
   // and optionally, by inserting fences. A wake up in this context is a
@@ -93,41 +97,49 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
     ~Throttler() = default;
   };
 
-  // Shuts down the queue. All tasks currently queued will be discarded.
-  virtual void ShutdownTaskQueue();
+  // Wrapper around a `TaskQueue`, exposed by `SequenceManager` when creating a
+  // task queue. The handle owns the underlying queue and exposes it through a
+  // unique_ptr-like interface, and it's responsible for managing the queue's
+  // lifetime, ensuring the queue is properly unregistered with the queue's
+  // `SequenceManager` when the handle is destroyed.
+  class BASE_EXPORT Handle {
+   public:
+    Handle();
 
-  // Shuts down the queue when there are no more tasks queued.
-  void ShutdownTaskQueueGracefully();
+    Handle(Handle&&);
+    Handle& operator=(Handle&&);
 
-  // Queues with higher priority are selected to run before queues of lower
-  // priority. Note that there is no starvation protection, i.e., a constant
-  // stream of high priority work can mean that tasks in lower priority queues
-  // won't get to run.
-  // TODO(scheduler-dev): Could we define a more clear list of priorities?
-  // See https://crbug.com/847858.
-  enum QueuePriority : uint8_t {
-    // Queues with control priority will run before any other queue, and will
-    // explicitly starve other queues. Typically this should only be used for
-    // private queues which perform control operations.
-    kControlPriority = 0,
+    ~Handle();
 
-    kHighestPriority = 1,
-    kVeryHighPriority = 2,
-    kHighPriority = 3,
-    kNormalPriority = 4,  // Queues with normal priority are the default.
-    kLowPriority = 5,
+    void reset();
+    TaskQueue* get() const;
+    TaskQueue* operator->() const;
 
-    // Queues with best effort priority will only be run if all other queues are
-    // empty.
-    kBestEffortPriority = 6,
+    explicit operator bool() const { return !!task_queue_; }
 
-    // Must be the last entry.
-    kQueuePriorityCount = 7,
-    kFirstQueuePriority = kControlPriority,
+   private:
+    friend class internal::SequenceManagerImpl;
+    explicit Handle(std::unique_ptr<internal::TaskQueueImpl> task_queue);
+
+    std::unique_ptr<internal::TaskQueueImpl> task_queue_;
+    WeakPtr<internal::SequenceManagerImpl> sequence_manager_;
   };
 
-  // Can be called on any thread.
-  static const char* PriorityToString(QueuePriority priority);
+  // Queues with higher priority (smaller number) are selected to run before
+  // queues of lower priority. Note that there is no starvation protection,
+  // i.e., a constant stream of high priority work can mean that tasks in lower
+  // priority queues won't get to run.
+  using QueuePriority = uint8_t;
+
+  // By default there is only a single priority. Sequences making use of
+  // priorities should parameterize the `SequenceManager` with the appropriate
+  // `SequenceManager::PrioritySettings`.
+  enum class DefaultQueuePriority : QueuePriority {
+    kNormalPriority = 0,
+
+    // Must be the last entry.
+    kQueuePriorityCount = 1,
+  };
 
   // Options for constructing a TaskQueue.
   struct Spec {
@@ -161,12 +173,6 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
     bool delayed_fence_allowed = false;
     bool non_waking = false;
   };
-
-  // TODO(altimin): Make this private after TaskQueue/TaskQueueImpl refactoring.
-  TaskQueue(std::unique_ptr<internal::TaskQueueImpl> impl,
-            const TaskQueue::Spec& spec);
-  TaskQueue(const TaskQueue&) = delete;
-  TaskQueue& operator=(const TaskQueue&) = delete;
 
   // Information about task execution.
   //
@@ -241,7 +247,7 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
 
     // Votes to enable or disable the associated TaskQueue. The TaskQueue will
     // only be enabled if all the voters agree it should be enabled, or if there
-    // are no voters.
+    // are no voters. Voters don't keep the queue alive.
     // NOTE this must be called on the thread the associated TaskQueue was
     // created on.
     void SetVoteToEnable(bool enabled);
@@ -249,58 +255,68 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
     bool IsVotingToEnable() const { return enabled_; }
 
    private:
-    friend class TaskQueue;
-    explicit QueueEnabledVoter(scoped_refptr<TaskQueue> task_queue);
+    friend class internal::TaskQueueImpl;
+    explicit QueueEnabledVoter(WeakPtr<internal::TaskQueueImpl> task_queue);
 
-    scoped_refptr<TaskQueue> const task_queue_;
-    bool enabled_;
+    WeakPtr<internal::TaskQueueImpl> task_queue_;
+    bool enabled_ = true;
   };
+
+  TaskQueue(const TaskQueue&) = delete;
+  TaskQueue& operator=(const TaskQueue&) = delete;
+  virtual ~TaskQueue() = default;
 
   // Returns an interface that allows the caller to vote on whether or not this
   // TaskQueue is enabled. The TaskQueue will be enabled if there are no voters
   // or if all agree it should be enabled.
   // NOTE this must be called on the thread this TaskQueue was created by.
-  std::unique_ptr<QueueEnabledVoter> CreateQueueEnabledVoter();
+  virtual std::unique_ptr<QueueEnabledVoter> CreateQueueEnabledVoter() = 0;
 
   // NOTE this must be called on the thread this TaskQueue was created by.
-  bool IsQueueEnabled() const;
+  virtual bool IsQueueEnabled() const = 0;
 
   // Returns true if the queue is completely empty.
-  bool IsEmpty() const;
+  virtual bool IsEmpty() const = 0;
 
   // Returns the number of pending tasks in the queue.
-  size_t GetNumberOfPendingTasks() const;
+  virtual size_t GetNumberOfPendingTasks() const = 0;
 
   // Returns true iff this queue has immediate tasks or delayed tasks that are
   // ripe for execution. Ignores the queue's enabled state and fences.
   // NOTE: this must be called on the thread this TaskQueue was created by.
   // TODO(etiennep): Rename to HasReadyTask() and add LazyNow parameter.
-  bool HasTaskToRunImmediatelyOrReadyDelayedTask() const;
+  virtual bool HasTaskToRunImmediatelyOrReadyDelayedTask() const = 0;
 
   // Returns a wake-up for the next pending delayed task (pending delayed tasks
   // that are ripe may be ignored), ignoring Throttler is any. If there are no
   // such tasks (immediate tasks don't count) or the queue is disabled it
   // returns nullopt.
   // NOTE: this must be called on the thread this TaskQueue was created by.
-  absl::optional<WakeUp> GetNextDesiredWakeUp();
+  virtual absl::optional<WakeUp> GetNextDesiredWakeUp() = 0;
 
   // Can be called on any thread.
-  virtual const char* GetName() const;
-
-  // Serialise this object into a trace.
-  void WriteIntoTrace(perfetto::TracedValue context) const;
+  virtual const char* GetName() const = 0;
 
   // Set the priority of the queue to |priority|. NOTE this must be called on
   // the thread this TaskQueue was created by.
-  void SetQueuePriority(QueuePriority priority);
+  virtual void SetQueuePriority(QueuePriority priority) = 0;
+
+  // Same as above but with an enum value as the priority.
+  template <typename T, typename = typename std::enable_if_t<std::is_enum_v<T>>>
+  void SetQueuePriority(T priority) {
+    static_assert(std::is_same_v<std::underlying_type_t<T>, QueuePriority>,
+                  "Enumerated priorites must have the same underlying type as "
+                  "TaskQueue::QueuePriority");
+    SetQueuePriority(static_cast<QueuePriority>(priority));
+  }
 
   // Returns the current queue priority.
-  QueuePriority GetQueuePriority() const;
+  virtual QueuePriority GetQueuePriority() const = 0;
 
   // These functions can only be called on the same thread that the task queue
   // manager executes its tasks on.
-  void AddTaskObserver(TaskObserver* task_observer);
-  void RemoveTaskObserver(TaskObserver* task_observer);
+  virtual void AddTaskObserver(TaskObserver* task_observer) = 0;
+  virtual void RemoveTaskObserver(TaskObserver* task_observer) = 0;
 
   enum class InsertFencePosition {
     kNow,  // Tasks posted on the queue up till this point further may run.
@@ -324,60 +340,54 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
   //
   // Only one fence can be scheduled at a time. Inserting a new fence
   // will automatically remove the previous one, regardless of fence type.
-  void InsertFence(InsertFencePosition position);
+  virtual void InsertFence(InsertFencePosition position) = 0;
 
   // Delayed fences are only allowed for queues created with
   // SetDelayedFencesAllowed(true) because this feature implies sampling Now()
   // (which isn't free) for every PostTask, even those with zero delay.
-  void InsertFenceAt(TimeTicks time);
+  virtual void InsertFenceAt(TimeTicks time) = 0;
 
   // Removes any previously added fence and unblocks execution of any tasks
   // blocked by it.
-  void RemoveFence();
+  virtual void RemoveFence() = 0;
 
   // Returns true if the queue has a fence but it isn't necessarily blocking
   // execution of tasks (it may be the case if tasks enqueue order hasn't
   // reached the number set for a fence).
-  bool HasActiveFence();
+  virtual bool HasActiveFence() = 0;
 
   // Returns true if the queue has a fence which is blocking execution of tasks.
-  bool BlockedByFence() const;
+  virtual bool BlockedByFence() const = 0;
 
   // Associates |throttler| to this queue. Only one throttler can be associated
   // with this queue. |throttler| must outlive this TaskQueue, or remain valid
   // until ResetThrottler().
-  void SetThrottler(Throttler* throttler);
+  virtual void SetThrottler(Throttler* throttler) = 0;
   // Disassociates the current throttler from this queue, if any.
-  void ResetThrottler();
+  virtual void ResetThrottler() = 0;
 
   // Updates the task queue's next wake up time in its time domain, taking into
   // account the desired run time of queued tasks and policies enforced by the
   // throttler if any.
-  void UpdateWakeUp(LazyNow* lazy_now);
+  virtual void UpdateWakeUp(LazyNow* lazy_now) = 0;
 
   // Controls whether or not the queue will emit traces events when tasks are
   // posted to it while disabled. This only applies for the current or next
   // period during which the queue is disabled. When the queue is re-enabled
   // this will revert back to the default value of false.
-  void SetShouldReportPostedTasksWhenDisabled(bool should_report);
+  virtual void SetShouldReportPostedTasksWhenDisabled(bool should_report) = 0;
 
   // Create a task runner for this TaskQueue which will annotate all
   // posted tasks with the given task type.
-  // May be called on any thread.
-  // NOTE: Task runners don't hold a reference to a TaskQueue, hence,
-  // it's required to retain that reference to prevent automatic graceful
-  // shutdown. Unique ownership of task queues will fix this issue soon.
-  scoped_refptr<SingleThreadTaskRunner> CreateTaskRunner(TaskType task_type);
+  // Must be called on the thread this task queue is associated with.
+  //
+  // NOTE: Task runners don't keep the TaskQueue alive, so task queues can be
+  // deleted with valid task runners. Posting a task in that case will fail.
+  virtual scoped_refptr<SingleThreadTaskRunner> CreateTaskRunner(
+      TaskType task_type) const = 0;
 
   // Default task runner which doesn't annotate tasks with a task type.
-  const scoped_refptr<SingleThreadTaskRunner>& task_runner() const {
-    return default_task_runner_;
-  }
-
-  // Checks whether or not this TaskQueue has a TaskQueueImpl.
-  // TODO(crbug.com/1143007): Remove this method when TaskQueueImpl inherits
-  // from TaskQueue and TaskQueue no longer owns an Impl.
-  bool HasImpl() { return !!impl_; }
+  virtual const scoped_refptr<SingleThreadTaskRunner>& task_runner() const = 0;
 
   using OnTaskStartedHandler =
       RepeatingCallback<void(const Task&, const TaskQueue::TaskTiming&)>;
@@ -389,14 +399,14 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
 
   // Sets a handler to subscribe for notifications about started and completed
   // tasks.
-  void SetOnTaskStartedHandler(OnTaskStartedHandler handler);
+  virtual void SetOnTaskStartedHandler(OnTaskStartedHandler handler) = 0;
 
   // |task_timing| may be passed in Running state and may not have the end time,
   // so that the handler can run an additional task that is counted as a part of
   // the main task.
   // The handler can call TaskTiming::RecordTaskEnd, which is optional, to
   // finalize the task, and use the resulting timing.
-  void SetOnTaskCompletedHandler(OnTaskCompletedHandler handler);
+  virtual void SetOnTaskCompletedHandler(OnTaskCompletedHandler handler) = 0;
 
   // RAII handle associated with an OnTaskPostedHandler. Unregisters the handler
   // upon destruction.
@@ -419,59 +429,15 @@ class BASE_EXPORT TaskQueue : public RefCountedThreadSafe<TaskQueue> {
   // not be a null callback. Must be called on the thread this task queue is
   // associated with, and the handle returned must be destroyed on the same
   // thread.
-  [[nodiscard]] std::unique_ptr<OnTaskPostedCallbackHandle>
-  AddOnTaskPostedHandler(OnTaskPostedHandler handler);
+  [[nodiscard]] virtual std::unique_ptr<OnTaskPostedCallbackHandle>
+  AddOnTaskPostedHandler(OnTaskPostedHandler handler) = 0;
 
   // Set a callback to fill trace event arguments associated with the task
   // execution.
-  void SetTaskExecutionTraceLogger(TaskExecutionTraceLogger logger);
-
-  base::WeakPtr<TaskQueue> AsWeakPtr() {
-    return weak_ptr_factory_.GetWeakPtr();
-  }
+  virtual void SetTaskExecutionTraceLogger(TaskExecutionTraceLogger logger) = 0;
 
  protected:
-  virtual ~TaskQueue();
-
-  internal::TaskQueueImpl* GetTaskQueueImpl() const { return impl_.get(); }
-
- private:
-  friend class RefCountedThreadSafe<TaskQueue>;
-  friend class internal::SequenceManagerImpl;
-  friend class internal::TaskQueueImpl;
-
-  void AddQueueEnabledVoter(bool voter_is_enabled);
-  void RemoveQueueEnabledVoter(bool voter_is_enabled);
-  bool AreAllQueueEnabledVotersEnabled() const;
-  void OnQueueEnabledVoteChanged(bool enabled);
-
-  bool IsOnMainThread() const;
-
-  // TaskQueue has ownership of an underlying implementation but in certain
-  // cases (e.g. detached frames) their lifetime may diverge.
-  // This method should be used to take away the impl for graceful shutdown.
-  // TaskQueue will disregard any calls or posting tasks thereafter.
-  std::unique_ptr<internal::TaskQueueImpl> TakeTaskQueueImpl();
-
-  // |impl_| can be written to on the main thread but can be read from
-  // any thread.
-  // |impl_lock_| must be acquired when writing to |impl_| or when accessing
-  // it from non-main thread. Reading from the main thread does not require
-  // a lock.
-  mutable base::internal::CheckedLock impl_lock_{
-      base::internal::UniversalPredecessor{}};
-  std::unique_ptr<internal::TaskQueueImpl> impl_;
-
-  const WeakPtr<internal::SequenceManagerImpl> sequence_manager_;
-
-  const scoped_refptr<const internal::AssociatedThreadId> associated_thread_;
-  const scoped_refptr<SingleThreadTaskRunner> default_task_runner_;
-
-  int enabled_voter_count_ = 0;
-  int voter_count_ = 0;
-  QueueName name_;
-
-  base::WeakPtrFactory<TaskQueue> weak_ptr_factory_{this};
+  TaskQueue() = default;
 };
 
 }  // namespace sequence_manager

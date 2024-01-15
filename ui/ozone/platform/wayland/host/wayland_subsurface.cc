@@ -55,28 +55,50 @@ gfx::AcceleratedWidget WaylandSubsurface::GetWidget() const {
   return wayland_surface_.get_widget();
 }
 
-void WaylandSubsurface::Show() {
-  if (!subsurface_)
-    CreateSubsurface();
+bool WaylandSubsurface::Show() {
+  if (visible_) {
+    return false;
+  }
+
+  if (subsurface_) {
+    ResetSubsurface();
+  }
+
+  CreateSubsurface();
+  visible_ = true;
+  return true;
 }
 
 void WaylandSubsurface::Hide() {
-  if (!subsurface_)
+  if (!IsVisible() || !subsurface_) {
     return;
+  }
 
   // Remove it from the stack.
   RemoveFromList();
+  visible_ = false;
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // On Lacros, subsurfaces need to be reset when hide to avoid glitches
+  // (crbug.com/1408073). On Linux, however, we need to keep the subsurfaces to
+  // make sure the window closing animation works well (crbug.com/1324548).
+  ResetSubsurface();
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+}
+
+void WaylandSubsurface::ResetSubsurface() {
   augmented_subsurface_.reset();
   subsurface_.reset();
+  wayland_surface_.UnsetRootWindow();
 }
 
 bool WaylandSubsurface::IsVisible() const {
-  return !!subsurface_;
+  return visible_;
 }
 
 void WaylandSubsurface::CreateSubsurface() {
   DCHECK(parent_);
+  wayland_surface_.SetRootWindow(parent_);
 
   wl_subcompositor* subcompositor = connection_->subcompositor();
   DCHECK(subcompositor);
@@ -93,7 +115,7 @@ void WaylandSubsurface::CreateSubsurface() {
   // contained in |parent_|'s. Setting input_region to empty allows |parent_| to
   // dispatch all of the input to platform window.
   gfx::Rect region_px;
-  wayland_surface()->set_input_region(&region_px);
+  wayland_surface()->set_input_region(region_px);
 
   if (connection_->surface_augmenter()) {
     // |augmented_subsurface| might be null if the protocol's version is not
@@ -104,14 +126,15 @@ void WaylandSubsurface::CreateSubsurface() {
   }
 }
 
-void WaylandSubsurface::ConfigureAndShowSurface(
+bool WaylandSubsurface::ConfigureAndShowSurface(
     const gfx::RectF& bounds_px,
     const gfx::RectF& parent_bounds_px,
     const absl::optional<gfx::Rect>& clip_rect_px,
+    const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform,
     float buffer_scale,
     WaylandSubsurface* new_below,
     WaylandSubsurface* new_above) {
-  Show();
+  bool needs_commit = Show();
 
   // Chromium positions quads in display::Display coordinates in physical
   // pixels, but Wayland requires them to be in local surface coordinates a.k.a
@@ -135,10 +158,16 @@ void WaylandSubsurface::ConfigureAndShowSurface(
       wl_subsurface_set_position(subsurface_.get(), enclosed_rect_in_parent.x(),
                                  enclosed_rect_in_parent.y());
     }
+    // TODO(crbug.com/1506309): This commit might not be needed. Changes to the
+    // position depend on the sync mode of the parent surface.
+    needs_commit = true;
   }
 
+  // If augmented_surface_set_clip_rect is supported, clip rect is handled
+  // inside WaylandSurface, so skip sending clip rect on sub surface.
   if (augmented_subsurface_ &&
-      connection_->surface_augmenter()->SupportsClipRect()) {
+      connection_->surface_augmenter()->SupportsClipRect() &&
+      !connection_->surface_augmenter()->SupportsClipRectOnAugmentedSurface()) {
     absl::optional<gfx::RectF> clip_dip_in_parent_surface;
     if (clip_rect_px) {
       clip_dip_in_parent_surface = AdjustSubsurfaceBounds(
@@ -161,6 +190,27 @@ void WaylandSubsurface::ConfigureAndShowSurface(
                                             kMinusOne, kMinusOne, kMinusOne,
                                             kMinusOne);
       }
+      needs_commit = true;
+    }
+  }
+
+  if (augmented_subsurface_ &&
+      connection_->surface_augmenter()->SupportsTransform()) {
+    // If the old and new transforms are both enums, there's no need to update
+    // the matrix transform.
+    if ((absl::holds_alternative<gfx::Transform>(transform_) ||
+         absl::holds_alternative<gfx::Transform>(transform)) &&
+        transform_ != transform) {
+      transform_ = transform;
+      wl_array transform_data;
+      wl_array_init(&transform_data);
+      wl::TransformToWlArray(transform_, transform_data);
+
+      augmented_sub_surface_set_transform(augmented_subsurface_.get(),
+                                          &transform_data);
+      needs_commit = true;
+
+      wl_array_release(&transform_data);
     }
   }
 
@@ -171,12 +221,20 @@ void WaylandSubsurface::ConfigureAndShowSurface(
     RemoveFromList();
     InsertAfter(new_below);
     wl_subsurface_place_above(subsurface_.get(), new_below->surface());
+    // TODO(crbug.com/1506309): This commit might not be needed. Changes to the
+    // stacking order depend on the sync mode of the parent surface.
+    needs_commit = true;
   } else if (new_above && new_above != next()) {
     DCHECK_EQ(parent_, new_above->parent_);
     RemoveFromList();
     InsertBefore(new_above);
     wl_subsurface_place_below(subsurface_.get(), new_above->surface());
+    // TODO(crbug.com/1506309): This commit might not be needed. Changes to the
+    // stacking order depend on the sync mode of the parent surface.
+    needs_commit = true;
   }
+
+  return needs_commit;
 }
 
 }  // namespace ui

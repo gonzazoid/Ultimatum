@@ -16,8 +16,8 @@
 #include "ash/shell_observer.h"
 #include "ash/system/session/logout_confirmation_dialog.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/metrics/user_metrics.h"
 #include "base/time/default_tick_clock.h"
@@ -217,7 +217,7 @@ void LogoutConfirmationController::OnLogoutConfirmed() {
 
 void LogoutConfirmationController::OnDialogClosed() {
   logout_time_ = base::TimeTicks();
-  dialog_ = NULL;
+  dialog_ = nullptr;
   logout_timer_.Stop();
 }
 

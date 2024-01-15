@@ -9,7 +9,8 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "chromecast/browser/jni_headers/CastContentWindowAndroid_jni.h"
+#include "chromecast/browser/android/jni_headers/CastContentWindowAndroid_jni.h"
+#include "components/media_control/browser/media_blocker.h"
 #include "content/public/browser/web_contents_observer.h"
 
 namespace chromecast {
@@ -21,14 +22,25 @@ namespace {
 base::android::ScopedJavaLocalRef<jobject> CreateJavaWindow(
     jlong native_window,
     bool enable_touch_input,
-    bool is_remote_control_mode,
     bool turn_on_screen,
     bool keep_screen_on,
-    const std::string& session_id) {
+    const std::string& session_id,
+    const int display_id) {
   JNIEnv* env = base::android::AttachCurrentThread();
   return Java_CastContentWindowAndroid_create(
-      env, native_window, enable_touch_input, is_remote_control_mode,
-      turn_on_screen, keep_screen_on, ConvertUTF8ToJavaString(env, session_id));
+      env, native_window, enable_touch_input, turn_on_screen, keep_screen_on,
+      ConvertUTF8ToJavaString(env, session_id), static_cast<jint>(display_id));
+}
+
+bool ShouldRequestAudioFocus(bool is_remote_control_mode,
+                             const media_control::MediaBlocker* media_blocker) {
+  if (is_remote_control_mode) {
+    return false;
+  }
+  if (!media_blocker) {
+    return true;
+  }
+  return !media_blocker->media_loading_blocked();
 }
 
 }  // namespace
@@ -39,10 +51,10 @@ CastContentWindowAndroid::CastContentWindowAndroid(
       web_contents_attached_(false),
       java_window_(CreateJavaWindow(reinterpret_cast<jlong>(this),
                                     params_->enable_touch_input,
-                                    params_->is_remote_control_mode,
                                     params_->turn_on_screen,
                                     params_->keep_screen_on,
-                                    params_->session_id)) {}
+                                    params_->session_id,
+                                    params_->display_id)) {}
 
 CastContentWindowAndroid::~CastContentWindowAndroid() {
   JNIEnv* env = base::android::AttachCurrentThread();
@@ -64,7 +76,9 @@ void CastContentWindowAndroid::CreateWindow(
 
   Java_CastContentWindowAndroid_createWindowForWebContents(
       env, java_window_, java_web_contents,
-      ConvertUTF8ToJavaString(env, params_->activity_id));
+      ConvertUTF8ToJavaString(env, params_->activity_id),
+      ShouldRequestAudioFocus(params_->is_remote_control_mode,
+                              cast_web_contents()->media_blocker()));
   web_contents_attached_ = true;
   cast_web_contents()->web_contents()->Focus();
 }
@@ -88,11 +102,13 @@ void CastContentWindowAndroid::EnableTouchInput(bool enabled) {
 void CastContentWindowAndroid::MediaStartedPlaying(
     const content::WebContentsObserver::MediaPlayerInfo& video_type,
     const content::MediaPlayerId& id) {
+  JNIEnv* env = base::android::AttachCurrentThread();
   if (video_type.has_video) {
-    JNIEnv* env = base::android::AttachCurrentThread();
     Java_CastContentWindowAndroid_setAllowPictureInPicture(
         env, java_window_, static_cast<jboolean>(true));
   }
+  Java_CastContentWindowAndroid_setMediaPlaying(env, java_window_,
+                                                static_cast<jboolean>(true));
 }
 
 void CastContentWindowAndroid::MediaStoppedPlaying(
@@ -102,6 +118,8 @@ void CastContentWindowAndroid::MediaStoppedPlaying(
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_CastContentWindowAndroid_setAllowPictureInPicture(
       env, java_window_, static_cast<jboolean>(false));
+  Java_CastContentWindowAndroid_setMediaPlaying(env, java_window_,
+                                                static_cast<jboolean>(false));
 }
 
 void CastContentWindowAndroid::OnActivityStopped(
@@ -114,11 +132,6 @@ void CastContentWindowAndroid::OnActivityStopped(
 
 void CastContentWindowAndroid::RequestVisibility(
     VisibilityPriority visibility_priority) {}
-
-void CastContentWindowAndroid::SetActivityContext(
-    base::Value activity_context) {}
-
-void CastContentWindowAndroid::SetHostContext(base::Value host_context) {}
 
 void CastContentWindowAndroid::OnVisibilityChange(
     JNIEnv* env,

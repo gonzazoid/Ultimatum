@@ -6,7 +6,7 @@
 #define IOS_CHROME_BROWSER_UI_BOOKMARKS_BOOKMARK_EARL_GREY_UI_H_
 
 #import <Foundation/Foundation.h>
-#include "base/compiler_specific.h"
+
 #import "ios/testing/earl_grey/base_eg_test_helper_impl.h"
 
 @protocol GREYMatcher;
@@ -38,7 +38,7 @@ id<GREYMatcher> BookmarksContextMenuEditButton();
 id<GREYMatcher> BookmarksDeleteSwipeButton();
 
 // Matcher for the DONE button on the bookmarks UI.
-id<GREYMatcher> BookmarkHomeDoneButton();
+id<GREYMatcher> BookmarksHomeDoneButton();
 
 // Matcher for the DONE button on the bookmarks edit UI.
 id<GREYMatcher> BookmarksSaveEditDoneButton();
@@ -169,7 +169,7 @@ id<GREYMatcher> SearchIconButton();
 
 // Bookmarks the current tab using `title` as Bookmark title. Make sure the
 // Bookmark loaded is loaded before by calling [BookmarkEarlGrey
-// waitForBookmarkModelLoaded:YES];
+// waitForBookmarkModelsLoaded];
 - (void)bookmarkCurrentTabWithTitle:(NSString*)title;
 
 @end

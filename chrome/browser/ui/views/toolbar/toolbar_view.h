@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_TOOLBAR_TOOLBAR_VIEW_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -15,17 +16,16 @@
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/toolbar/app_menu_icon_controller.h"
 #include "chrome/browser/ui/toolbar/back_forward_menu_model.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
 #include "chrome/browser/ui/views/frame/browser_root_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "chrome/browser/ui/views/intent_picker_bubble_view.h"
 #include "chrome/browser/ui/views/location_bar/custom_tab_bar_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view_model.h"
+#include "chrome/browser/ui/views/toolbar/overflow_button.h"
 #include "chrome/browser/ui/views/toolbar/side_panel_toolbar_button.h"
-#include "chrome/browser/upgrade_detector/upgrade_observer.h"
 #include "components/prefs/pref_member.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/pointer/touch_ui_controller.h"
@@ -51,15 +51,14 @@ class ExtensionsToolbarContainer;
 class ChromeLabsButton;
 class HomeButton;
 class IntentChipButton;
+class ExtensionsToolbarCoordinator;
 class MediaToolbarButtonView;
 class ReloadButton;
+class SidePanelToolbarContainer;
+class PinnedToolbarActionsContainer;
 class ToolbarButton;
-class ToolbarAccountIconContainerView;
 class AvatarToolbarButtonBrowserTest;
-
-namespace bookmarks {
-class BookmarkBubbleObserver;
-}
+class ToolbarController;
 
 namespace media_router {
 class CastToolbarButton;
@@ -80,12 +79,11 @@ class ToolbarView : public views::AccessiblePaneView,
                     public LocationBarView::Delegate,
                     public CommandObserver,
                     public AppMenuIconController::Delegate,
-                    public UpgradeObserver,
                     public ToolbarButtonProvider,
                     public BrowserRootView::DropTarget {
- public:
-  METADATA_HEADER(ToolbarView);
+  METADATA_HEADER(ToolbarView, views::AccessiblePaneView)
 
+ public:
   // Types of display mode this toolbar can have.
   enum class DisplayMode {
     NORMAL,     // Normal toolbar with buttons, etc.
@@ -133,18 +131,16 @@ class ToolbarView : public views::AccessiblePaneView,
       bool show_stay_in_chrome,
       bool show_remember_selection,
       IntentPickerBubbleView::BubbleType bubble_type,
-      const absl::optional<url::Origin>& initiating_origin,
+      const std::optional<url::Origin>& initiating_origin,
       IntentPickerResponse callback);
 
   // Shows a bookmark bubble and anchors it appropriately.
-  void ShowBookmarkBubble(const GURL& url,
-                          bool already_bookmarked,
-                          bookmarks::BookmarkBubbleObserver* observer);
+  void ShowBookmarkBubble(const GURL& url, bool already_bookmarked);
 
   // Accessors.
   Browser* browser() const { return browser_; }
   ChromeLabsButton* chrome_labs_button() const { return chrome_labs_button_; }
-  ChromeLabsBubbleViewModel* chrome_labs_model() const {
+  ChromeLabsModel* chrome_labs_model() const {
     return chrome_labs_model_.get();
   }
   DownloadToolbarButtonView* download_button() const {
@@ -155,29 +151,34 @@ class ToolbarView : public views::AccessiblePaneView,
   }
   ExtensionsToolbarButton* GetExtensionsButton() const;
   ReloadButton* reload_button() const { return reload_; }
-  ToolbarButton* left_side_panel_button() { return left_side_panel_button_; }
   LocationBarView* location_bar() const { return location_bar_; }
   CustomTabBarView* custom_tab_bar() { return custom_tab_bar_; }
   BatterySaverButton* battery_saver_button() const {
     return battery_saver_button_;
   }
   media_router::CastToolbarButton* cast_button() const { return cast_; }
-  SidePanelToolbarButton* side_panel_button() const {
-    return side_panel_button_;
+  SidePanelToolbarContainer* side_panel_container() const {
+    return side_panel_container_;
   }
+  PinnedToolbarActionsContainer* pinned_toolbar_actions_container() const {
+    return pinned_toolbar_actions_container_;
+  }
+  SidePanelToolbarButton* GetSidePanelButton() override;
   MediaToolbarButtonView* media_button() const { return media_button_; }
   send_tab_to_self::SendTabToSelfToolbarIconView* send_tab_to_self_button()
       const {
     return send_tab_to_self_button_;
-  }
-  ToolbarAccountIconContainerView* toolbar_account_icon_container() const {
-    return toolbar_account_icon_container_;
   }
   BrowserAppMenuButton* app_menu_button() const { return app_menu_button_; }
   HomeButton* home_button() const { return home_; }
   AppMenuIconController* app_menu_icon_controller() {
     return &app_menu_icon_controller_;
   }
+  const ToolbarController* toolbar_controller() const {
+    return toolbar_controller_.get();
+  }
+
+  views::View* new_tab_button_for_testing() { return new_tab_button_; }
 
   // LocationBarView::Delegate:
   content::WebContents* GetWebContents() override;
@@ -188,11 +189,6 @@ class ToolbarView : public views::AccessiblePaneView,
 
   // CommandObserver:
   void EnabledStateChangedForCommand(int id, bool enabled) override;
-
-  // UpgradeObserver toolbar_button_view_provider.
-  void OnOutdatedInstall() override;
-  void OnOutdatedInstallNoAutoUpdate() override;
-  void OnCriticalUpgradeInstalled() override;
 
   // ui::AcceleratorProvider:
   bool GetAcceleratorForCommandId(int command_id,
@@ -215,6 +211,9 @@ class ToolbarView : public views::AccessiblePaneView,
   void SetToolbarVisibility(bool visible);
 
  private:
+  // Forwards view overrides to this class.
+  class ContainerView;
+
   // AccessiblePaneView:
   views::View* GetDefaultFocusableChild() override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
@@ -246,7 +245,6 @@ class ToolbarView : public views::AccessiblePaneView,
   views::AccessiblePaneView* GetAsAccessiblePaneView() override;
   views::View* GetAnchorView(PageActionIconType type) override;
   void ZoomChangedForActiveTab(bool can_show_bubble) override;
-  SidePanelToolbarButton* GetSidePanelButton() override;
   AvatarToolbarButton* GetAvatarToolbarButton() override;
   ToolbarButton* GetBackButton() override;
   ReloadButton* GetReloadButton() override;
@@ -266,23 +264,22 @@ class ToolbarView : public views::AccessiblePaneView,
   // Loads the images for all the child views.
   void LoadImages();
 
-  // Shows the critical notification bubble against the app menu.
-  void ShowCriticalNotification();
-
-  // Shows the outdated install notification bubble against the app menu.
-  // |auto_update_enabled| is set to true when auto-upate is on.
-  void ShowOutdatedInstallNotification(bool auto_update_enabled);
-
   void OnShowHomeButtonChanged();
 
   void OnTouchUiChanged();
+
+  void UpdateClipPath();
+
+  // Called when active state for the window changes.
+  void ActiveStateChanged();
+
+  void NewTabButtonPressed(const ui::Event& event);
 
   gfx::SlideAnimation size_animation_{this};
 
   // Controls. Most of these can be null, e.g. in popup windows. Only
   // |location_bar_| is guaranteed to exist. These pointers are owned by the
   // view hierarchy.
-  raw_ptr<ToolbarButton> left_side_panel_button_ = nullptr;
   raw_ptr<ToolbarButton> back_ = nullptr;
   raw_ptr<ToolbarButton> forward_ = nullptr;
   raw_ptr<ReloadButton> reload_ = nullptr;
@@ -290,18 +287,21 @@ class ToolbarView : public views::AccessiblePaneView,
   raw_ptr<CustomTabBarView> custom_tab_bar_ = nullptr;
   raw_ptr<LocationBarView> location_bar_ = nullptr;
   raw_ptr<ExtensionsToolbarContainer> extensions_container_ = nullptr;
+  raw_ptr<views::View> toolbar_divider_ = nullptr;
   raw_ptr<ChromeLabsButton> chrome_labs_button_ = nullptr;
   raw_ptr<BatterySaverButton> battery_saver_button_ = nullptr;
   raw_ptr<media_router::CastToolbarButton> cast_ = nullptr;
-  raw_ptr<SidePanelToolbarButton> side_panel_button_ = nullptr;
-  raw_ptr<ToolbarAccountIconContainerView> toolbar_account_icon_container_ =
+  raw_ptr<SidePanelToolbarContainer> side_panel_container_ = nullptr;
+  raw_ptr<PinnedToolbarActionsContainer> pinned_toolbar_actions_container_ =
       nullptr;
+  raw_ptr<SidePanelToolbarButton> side_panel_button_ = nullptr;
   raw_ptr<AvatarToolbarButton> avatar_ = nullptr;
   raw_ptr<MediaToolbarButtonView> media_button_ = nullptr;
   raw_ptr<send_tab_to_self::SendTabToSelfToolbarIconView>
       send_tab_to_self_button_ = nullptr;
   raw_ptr<BrowserAppMenuButton> app_menu_button_ = nullptr;
   raw_ptr<DownloadToolbarButtonView> download_button_ = nullptr;
+  raw_ptr<views::View> new_tab_button_ = nullptr;
 
   const raw_ptr<Browser> browser_;
   const raw_ptr<BrowserView> browser_view_;
@@ -310,7 +310,9 @@ class ToolbarView : public views::AccessiblePaneView,
 
   AppMenuIconController app_menu_icon_controller_;
 
-  std::unique_ptr<ChromeLabsBubbleViewModel> chrome_labs_model_;
+  std::unique_ptr<ChromeLabsModel> chrome_labs_model_;
+  std::unique_ptr<ExtensionsToolbarCoordinator>
+      extensions_toolbar_coordinator_ = nullptr;
 
   // Controls whether or not a home button should be shown on the toolbar.
   BooleanPrefMember show_home_button_;
@@ -320,6 +322,8 @@ class ToolbarView : public views::AccessiblePaneView,
   // The display mode used when laying out the toolbar.
   const DisplayMode display_mode_;
 
+  std::unique_ptr<ToolbarController> toolbar_controller_;
+
   base::CallbackListSubscription subscription_ =
       ui::TouchUiController::Get()->RegisterCallback(
           base::BindRepeating(&ToolbarView::OnTouchUiChanged,
@@ -327,6 +331,31 @@ class ToolbarView : public views::AccessiblePaneView,
 
   // Whether this toolbar has been initialized.
   bool initialized_ = false;
+
+  // container_view_ is transparent with the same dimensions as ToolbarView.
+  // All children are added to container_view_ and layout_manager_ applies to
+  // container_view_. The reason for this layer of indiretion is because
+  // container_view_ has a clip path set in UpdateClipPath() which adds rounded
+  // corners. This leaves some unpainted pixels, which are painted by
+  // background_view_left_ and background_view_right_.
+  // the future.
+  raw_ptr<ContainerView> container_view_ = nullptr;
+
+  // A chevron button that indicates some toolbar elements have overflowed
+  // due to small toolbar view width. Visibility controlled by
+  // `toolbar_controller_`.
+  raw_ptr<OverflowButton> overflow_button_ = nullptr;
+
+  // There are two situations where background_view_left_ and
+  // background_view_right_ need be repainted: window active state change and
+  // theme change. active_state_subscription_ handles the former, and the latter
+  // causes the whole toolbar to be repainted so not special logic is necessary.
+  raw_ptr<View> background_view_left_ = nullptr;
+  raw_ptr<View> background_view_right_ = nullptr;
+
+  // Listens to changes to active state to update background_view_right_ and
+  // background_view_left_, as their background depends on active state.
+  base::CallbackListSubscription active_state_subscription_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TOOLBAR_TOOLBAR_VIEW_H_

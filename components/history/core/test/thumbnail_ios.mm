@@ -22,8 +22,7 @@ gfx::Image CreateGoogleThumbnailForTest() {
                                 static_cast<const void*>(kGoogleThumbnail))
                      length:sizeof(kGoogleThumbnail)
                freeWhenDone:NO];
-    UIImage* image = [UIImage imageWithData:data scale:1];
-    return gfx::Image([image retain]);
+    return gfx::Image([UIImage imageWithData:data scale:1]);
   }
 }
 

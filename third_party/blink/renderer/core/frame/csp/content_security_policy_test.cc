@@ -6,6 +6,7 @@
 
 #include "base/test/scoped_feature_list.h"
 #include "services/network/public/cpp/features.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/security_context/insecure_request_policy.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
@@ -13,6 +14,7 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/frame/csp/csp_directive_list.h"
+#include "third_party/blink/renderer/core/frame/csp/test_util.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/html_script_element.h"
@@ -25,14 +27,21 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/network/content_security_policy_parsers.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 namespace blink {
 
+namespace {
+
 using network::mojom::ContentSecurityPolicySource;
 using network::mojom::ContentSecurityPolicyType;
+using testing::Contains;
+using testing::SizeIs;
+
+}  // namespace
 
 class ContentSecurityPolicyTest : public testing::Test {
  public:
@@ -56,6 +65,7 @@ class ContentSecurityPolicyTest : public testing::Test {
         secure_origin);
   }
 
+  test::TaskEnvironment task_environment;
   Persistent<ContentSecurityPolicy> csp;
   KURL secure_url;
   scoped_refptr<SecurityOrigin> secure_origin;
@@ -132,6 +142,10 @@ TEST_F(ContentSecurityPolicyTest, ParseInsecureRequestPolicy) {
   }
 }
 
+MATCHER_P(HasSubstr, s, "") {
+  return arg.Contains(s);
+}
+
 TEST_F(ContentSecurityPolicyTest, AddPolicies) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "script-src 'none'", ContentSecurityPolicyType::kReport,
@@ -144,21 +158,35 @@ TEST_F(ContentSecurityPolicyTest, AddPolicies) {
   const KURL not_example_url("http://not-example.com");
 
   auto* csp2 = MakeGarbageCollected<ContentSecurityPolicy>();
+  TestCSPDelegate* test_delegate = MakeGarbageCollected<TestCSPDelegate>();
+  csp2->BindToDelegate(*test_delegate);
   csp2->AddPolicies(mojo::Clone(csp->GetParsedPolicies()));
-  EXPECT_FALSE(csp2->AllowScriptFromSource(
+
+  EXPECT_TRUE(csp2->AllowScriptFromSource(
       example_url, String(), IntegrityMetadataSet(), kParserInserted,
       example_url, ResourceRequest::RedirectStatus::kNoRedirect,
-      ReportingDisposition::kSuppressReporting,
+      ReportingDisposition::kReport,
       ContentSecurityPolicy::CheckHeaderType::kCheckReportOnly));
+  EXPECT_THAT(
+      test_delegate->console_messages(),
+      Contains(HasSubstr("Refused to load the script 'http://example.com/'")));
+
+  test_delegate->console_messages().clear();
   EXPECT_TRUE(csp2->AllowImageFromSource(
       example_url, example_url, ResourceRequest::RedirectStatus::kNoRedirect,
-      ReportingDisposition::kSuppressReporting,
+      ReportingDisposition::kReport,
       ContentSecurityPolicy::CheckHeaderType::kCheckReportOnly));
-  EXPECT_FALSE(csp2->AllowImageFromSource(
+  EXPECT_THAT(test_delegate->console_messages(), SizeIs(0));
+
+  test_delegate->console_messages().clear();
+  EXPECT_TRUE(csp2->AllowImageFromSource(
       not_example_url, not_example_url,
       ResourceRequest::RedirectStatus::kNoRedirect,
-      ReportingDisposition::kSuppressReporting,
+      ReportingDisposition::kReport,
       ContentSecurityPolicy::CheckHeaderType::kCheckReportOnly));
+  EXPECT_THAT(test_delegate->console_messages(),
+              Contains(HasSubstr(
+                  "Refused to load the image 'http://not-example.com/'")));
 }
 
 TEST_F(ContentSecurityPolicyTest, IsActiveForConnectionsWithConnectSrc) {
@@ -1180,9 +1208,9 @@ TEST_F(ContentSecurityPolicyTest, EmptyCSPIsNoOp) {
       CSPDirectiveName::FontSrc,       CSPDirectiveName::FormAction,
       CSPDirectiveName::FrameSrc,      CSPDirectiveName::ImgSrc,
       CSPDirectiveName::ManifestSrc,   CSPDirectiveName::MediaSrc,
-      CSPDirectiveName::ObjectSrc,     CSPDirectiveName::PrefetchSrc,
-      CSPDirectiveName::ScriptSrcElem, CSPDirectiveName::StyleSrcElem,
-      CSPDirectiveName::WorkerSrc,     CSPDirectiveName::FencedFrameSrc};
+      CSPDirectiveName::ObjectSrc,     CSPDirectiveName::ScriptSrcElem,
+      CSPDirectiveName::StyleSrcElem,  CSPDirectiveName::WorkerSrc,
+      CSPDirectiveName::FencedFrameSrc};
   for (auto type : types_to_test) {
     EXPECT_TRUE(
         csp->AllowFromSource(type, example_url, example_url,
@@ -1235,49 +1263,17 @@ TEST_F(ContentSecurityPolicyTest, EmptyCSPIsNoOp) {
   EXPECT_FALSE(csp->HasPolicyFromSource(ContentSecurityPolicySource::kHTTP));
 }
 
-// Tests that WasmCSP runtime feature properly governs support for WasmEval.
-TEST_F(ContentSecurityPolicyTest, WasmEvalCSPEnable) {
-  auto test_wasm_eval_enabled = [&](bool enabled) {
-    ScopedWebAssemblyCSPForTest enable_wasp(enabled);
-
-    csp = MakeGarbageCollected<ContentSecurityPolicy>();
-    csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
-
-    csp->AddPolicies(ParseContentSecurityPolicies(
-        "script-src 'wasm-unsafe-eval'", ContentSecurityPolicyType::kEnforce,
-        ContentSecurityPolicySource::kHTTP, *secure_origin));
-
-    EXPECT_EQ(enabled, csp->AllowWasmCodeGeneration(
-                           ReportingDisposition::kReport,
-                           ContentSecurityPolicy::kWillNotThrowException,
-                           g_empty_string));
-  };
-
-  test_wasm_eval_enabled(true);
-  test_wasm_eval_enabled(false);
-}
-
-// Tests that WasmCSP runtime feature properly governs support for
-// WasmUnsafeEval.
 TEST_F(ContentSecurityPolicyTest, WasmUnsafeEvalCSPEnable) {
-  auto test_wasm_unsafe_eval_enabled = [&](bool enabled) {
-    ScopedWebAssemblyCSPForTest enable_wasp(enabled);
+  csp = MakeGarbageCollected<ContentSecurityPolicy>();
+  csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
 
-    csp = MakeGarbageCollected<ContentSecurityPolicy>();
-    csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      "script-src 'wasm-unsafe-eval'", ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
 
-    csp->AddPolicies(ParseContentSecurityPolicies(
-        "script-src 'wasm-unsafe-eval'", ContentSecurityPolicyType::kEnforce,
-        ContentSecurityPolicySource::kHTTP, *secure_origin));
-
-    EXPECT_EQ(enabled, csp->AllowWasmCodeGeneration(
-                           ReportingDisposition::kReport,
-                           ContentSecurityPolicy::kWillNotThrowException,
-                           g_empty_string));
-  };
-
-  test_wasm_unsafe_eval_enabled(true);
-  test_wasm_unsafe_eval_enabled(false);
+  EXPECT_TRUE(csp->AllowWasmCodeGeneration(
+      ReportingDisposition::kReport,
+      ContentSecurityPolicy::kWillNotThrowException, g_empty_string));
 }
 
 TEST_F(ContentSecurityPolicyTest, OpaqueOriginBeforeBind) {

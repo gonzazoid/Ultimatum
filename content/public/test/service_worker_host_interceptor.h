@@ -5,7 +5,7 @@
 #ifndef CONTENT_PUBLIC_TEST_SERVICE_WORKER_HOST_INTERCEPTOR_H_
 #define CONTENT_PUBLIC_TEST_SERVICE_WORKER_HOST_INTERCEPTOR_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "content/public/browser/browser_thread.h"
@@ -73,9 +73,9 @@ class ServiceWorkerHostInterceptor
   blink::ServiceWorkerStatusCode status_ =
       blink::ServiceWorkerStatusCode::kErrorFailed;
   int service_worker_process_id_ = -1;
-  raw_ptr<ServiceWorkerVersion, DanglingUntriaged> service_worker_version_ =
-      nullptr;
-  raw_ptr<blink::mojom::ServiceWorkerHost, DanglingUntriaged>
+  raw_ptr<ServiceWorkerVersion, AcrossTasksDanglingUntriaged>
+      service_worker_version_ = nullptr;
+  raw_ptr<blink::mojom::ServiceWorkerHost, AcrossTasksDanglingUntriaged>
       forwarding_interface_ = nullptr;
 };
 

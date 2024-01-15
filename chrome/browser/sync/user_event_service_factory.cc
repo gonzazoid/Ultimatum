@@ -7,16 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/model_type_store_service_factory.h"
 #include "chrome/browser/sync/session_sync_service_factory.h"
 #include "chrome/common/channel_info.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/report_unrecoverable_error.h"
-#include "components/sync/driver/sync_service.h"
 #include "components/sync/model/client_tag_based_model_type_processor.h"
 #include "components/sync/model/model_type_store_service.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync_sessions/session_sync_service.h"
 #include "components/sync_user_events/no_op_user_event_service.h"
 #include "components/sync_user_events/user_event_service_impl.h"
@@ -26,7 +26,8 @@ namespace browser_sync {
 
 // static
 UserEventServiceFactory* UserEventServiceFactory::GetInstance() {
-  return base::Singleton<UserEventServiceFactory>::get();
+  static base::NoDestructor<UserEventServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -39,7 +40,12 @@ syncer::UserEventService* UserEventServiceFactory::GetForProfile(
 UserEventServiceFactory::UserEventServiceFactory()
     : ProfileKeyedServiceFactory(
           "UserEventService",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(ModelTypeStoreServiceFactory::GetInstance());
   DependsOn(SessionSyncServiceFactory::GetInstance());
 }

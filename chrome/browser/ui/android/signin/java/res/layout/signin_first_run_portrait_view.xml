@@ -16,8 +16,9 @@ found in the LICENSE file.
         android:layout_height="0dp"
         android:layout_alignParentTop="true"
         android:layout_above="@id/fre_footer_viewgroup"
+        android:fadeScrollbars="false"
         android:fillViewport="true"
-        android:requiresFadingEdge="vertical">
+        android:scrollIndicators="bottom">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -62,18 +63,20 @@ found in the LICENSE file.
                 android:gravity="center"
                 android:paddingHorizontal="60dp"
                 android:paddingTop="8dp"
+                android:text="@string/signin_fre_subtitle"
                 android:textAppearance="@style/TextAppearance.TextMedium.Secondary"
                 android:visibility="gone"
                 app:leading="@dimen/text_size_medium_leading" />
 
             <FrameLayout
-                android:id="@+id/fre_browser_managed_by_organization"
+                android:id="@+id/fre_browser_managed_by"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp">
 
                 <include
                     layout="@layout/fre_tos_privacy_disclaimer"
+                    android:id="@+id/privacy_disclaimer"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal" />

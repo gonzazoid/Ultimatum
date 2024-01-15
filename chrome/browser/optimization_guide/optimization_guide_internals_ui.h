@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_OPTIMIZATION_GUIDE_OPTIMIZATION_GUIDE_INTERNALS_UI_H_
 #define CHROME_BROWSER_OPTIMIZATION_GUIDE_OPTIMIZATION_GUIDE_INTERNALS_UI_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/optimization_guide/optimization_guide_internals/webui/optimization_guide_internals.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/base/webui/resource_path.h"
@@ -51,6 +51,8 @@ class OptimizationGuideInternalsUI
       override;
   void RequestDownloadedModelsInfo(
       RequestDownloadedModelsInfoCallback callback) override;
+  void RequestLoggedModelQualityClientIds(
+      RequestLoggedModelQualityClientIdsCallback callback) override;
 
   std::unique_ptr<OptimizationGuideInternalsPageHandlerImpl>
       optimization_guide_internals_page_handler_;

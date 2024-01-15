@@ -9,7 +9,8 @@
 
 #include "base/base_export.h"
 #include "base/check_op.h"
-#include "base/win/variant_util.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/win/variant_conversions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -32,7 +33,8 @@ class BASE_EXPORT ScopedSafearray {
    public:
     // Type declarations to support std::iterator_traits
     using iterator_category = std::random_access_iterator_tag;
-    using value_type = typename internal::VariantUtil<ElementVartype>::Type;
+    using value_type =
+        typename internal::VariantConverter<ElementVartype>::Type;
     using difference_type = ptrdiff_t;
     using reference = value_type&;
     using const_reference = const value_type&;
@@ -105,7 +107,10 @@ class BASE_EXPORT ScopedSafearray {
       array_size_ = 0U;
     }
 
-    SAFEARRAY* safearray_ = nullptr;
+    // Cannot rewrite this pointer to raw_ptr<>, because this pointer
+    // comes from the operating system and may have been laundered
+    // if rewritten it may generate incorrect DPD error.
+    RAW_PTR_EXCLUSION SAFEARRAY* safearray_ = nullptr;
     VARTYPE vartype_ = VT_EMPTY;
     pointer array_ = nullptr;
     size_t array_size_ = 0U;
@@ -142,7 +147,7 @@ class BASE_EXPORT ScopedSafearray {
     VARTYPE vartype;
     HRESULT hr = SafeArrayGetVartype(safearray_, &vartype);
     if (FAILED(hr) ||
-        !internal::VariantUtil<ElementVartype>::IsConvertibleTo(vartype)) {
+        !internal::VariantConverter<ElementVartype>::IsConvertibleTo(vartype)) {
       return absl::nullopt;
     }
 
@@ -217,7 +222,9 @@ class BASE_EXPORT ScopedSafearray {
   bool operator!=(const ScopedSafearray& safearray2) const = delete;
 
  private:
-  SAFEARRAY* safearray_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION SAFEARRAY* safearray_;
 };
 
 }  // namespace win

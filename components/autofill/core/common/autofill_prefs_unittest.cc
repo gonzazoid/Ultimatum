@@ -8,7 +8,9 @@
 
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/pref_service_factory.h"
@@ -20,8 +22,8 @@ namespace prefs {
 
 class AutofillPrefsTest : public testing::Test {
  protected:
-  AutofillPrefsTest() {}
-  ~AutofillPrefsTest() override {}
+  AutofillPrefsTest() = default;
+  ~AutofillPrefsTest() override = default;
 
   void SetUp() override { pref_service_ = CreatePrefServiceAndRegisterPrefs(); }
 
@@ -47,8 +49,8 @@ class AutofillPrefsTest : public testing::Test {
 // user is always considered opted-in and thus this test doesn't make sense.
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(AutofillPrefsTest, WalletSyncTransportPref_GetAndSet) {
-  const CoreAccountId account1("account1");
-  const CoreAccountId account2("account2");
+  const CoreAccountId account1 = CoreAccountId::FromGaiaId("account1");
+  const CoreAccountId account2 = CoreAccountId::FromGaiaId("account2");
 
   // There should be no opt-in recorded at first.
   ASSERT_FALSE(IsUserOptedInWalletSyncTransport(pref_service(), account1));
@@ -94,7 +96,7 @@ TEST_F(AutofillPrefsTest, WalletSyncTransportPref_GetAndSet) {
 // Tests that AutofillSyncTransportOptIn is not stored using the plain text
 // account id.
 TEST_F(AutofillPrefsTest, WalletSyncTransportPref_UsesHashAccountId) {
-  const CoreAccountId account1("account1");
+  const CoreAccountId account1 = CoreAccountId::FromGaiaId("account1");
 
   // There should be no opt-in recorded at first.
   EXPECT_TRUE(
@@ -108,13 +110,13 @@ TEST_F(AutofillPrefsTest, WalletSyncTransportPref_UsesHashAccountId) {
   // Make sure that the dictionary keys don't contain the account id.
   const auto& dictionary =
       pref_service()->GetDict(prefs::kAutofillSyncTransportOptIn);
-  EXPECT_EQ(absl::nullopt, dictionary.FindInt(account1.ToString()));
+  EXPECT_EQ(std::nullopt, dictionary.FindInt(account1.ToString()));
 }
 
 // Tests that clearing the AutofillSyncTransportOptIn works as expected.
 TEST_F(AutofillPrefsTest, WalletSyncTransportPref_Clear) {
-  const CoreAccountId account1("account1");
-  const CoreAccountId account2("account2");
+  const CoreAccountId account1 = CoreAccountId::FromGaiaId("account1");
+  const CoreAccountId account2 = CoreAccountId::FromGaiaId("account2");
 
   // There should be no opt-in recorded at first.
   EXPECT_TRUE(
@@ -139,7 +141,7 @@ TEST_F(AutofillPrefsTest, WalletSyncTransportPref_Clear) {
 // Tests that the account id hash that we generate can be written and read from
 // JSON properly.
 TEST_F(AutofillPrefsTest, WalletSyncTransportPref_CanBeSetAndReadFromJSON) {
-  const CoreAccountId account1("account1");
+  const CoreAccountId account1 = CoreAccountId::FromGaiaId("account1");
 
   // Set the opt-in for the first account.
   SetUserOptedInWalletSyncTransport(pref_service(), account1, true);
@@ -153,6 +155,22 @@ TEST_F(AutofillPrefsTest, WalletSyncTransportPref_CanBeSetAndReadFromJSON) {
   ASSERT_TRUE(base::JSONWriter::Write(dictionary, &output_js));
   EXPECT_EQ(dictionary, *base::JSONReader::Read(output_js));
 }
+
+// Tests that the generic viewstructure provider is restricted to Android.
+#if BUILDFLAG(IS_ANDROID)
+TEST_F(AutofillPrefsTest, AutofillWithVirtualViewsAffectsAndroidOnly) {
+  base::test::ScopedFeatureList scoped_feature_list(
+      features::kAutofillVirtualViewStructureAndroid);
+  EXPECT_FALSE(UsesVirtualViewStructureForAutofill(pref_service()));
+
+  pref_service()->SetBoolean(prefs::kAutofillUsingVirtualViewStructure, true);
+  EXPECT_TRUE(UsesVirtualViewStructureForAutofill(pref_service()));
+}
+#else   // not BUILDFLAG(IS_ANDROID)
+TEST_F(AutofillPrefsTest, AutofillWithVirtualViewsAffectsAndroidOnly) {
+  EXPECT_FALSE(UsesVirtualViewStructureForAutofill(pref_service()));
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace prefs
 }  // namespace autofill

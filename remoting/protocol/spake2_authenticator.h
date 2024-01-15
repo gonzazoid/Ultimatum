@@ -12,7 +12,7 @@
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "remoting/protocol/authenticator.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
 
@@ -84,7 +84,7 @@ class Spake2Authenticator : public Authenticator {
   std::string remote_cert_;
 
   // Used for both host and client authenticators.
-  raw_ptr<SPAKE2_CTX> spake2_context_;
+  raw_ptr<SPAKE2_CTX, DanglingUntriaged> spake2_context_;
   State state_;
   bool started_ = false;
   RejectionReason rejection_reason_ = RejectionReason::INVALID_CREDENTIALS;

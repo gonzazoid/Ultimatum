@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "content/browser/background_fetch/storage/database_task.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -48,8 +48,6 @@ class GetDeveloperIdsTask : public DatabaseTask {
       const base::flat_map<std::string, std::string>& data_map);
 
   void FinishWithError(blink::mojom::BackgroundFetchError error) override;
-
-  std::string HistogramName() const override;
 
   int64_t service_worker_registration_id_;
   blink::StorageKey storage_key_;

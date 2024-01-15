@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -22,6 +22,7 @@
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -76,7 +77,7 @@ class CellularInhibitorTest : public testing::Test {
 
   void TearDown() override {
     cellular_inhibitor_.RemoveObserver(&observer_);
-    helper_.device_test()->SetPropertyChangeDelay(absl::nullopt);
+    helper_.device_test()->SetPropertyChangeDelay(std::nullopt);
   }
 
   void AddCellularDevice() {
@@ -125,24 +126,25 @@ class CellularInhibitorTest : public testing::Test {
   }
 
   GetInhibitedPropertyResult GetInhibitedProperty() {
-    properties_ = {};
+    properties_.reset();
     helper_.network_device_handler()->GetDeviceProperties(
         kDefaultCellularDevicePath,
         base::BindOnce(&CellularInhibitorTest::GetPropertiesCallback,
                        base::Unretained(this)));
     base::RunLoop().RunUntilIdle();
 
-    if (properties_.is_none())
+    if (!properties_.has_value()) {
       return GetInhibitedPropertyResult::kOperationFailed;
+    }
 
-    absl::optional<bool> inhibited =
-        properties_.FindBoolKey(shill::kInhibitedProperty);
+    std::optional<bool> inhibited =
+        properties_->FindBool(shill::kInhibitedProperty);
     EXPECT_TRUE(inhibited.has_value());
     return inhibited.value() ? GetInhibitedPropertyResult::kTrue
                              : GetInhibitedPropertyResult::kFalse;
   }
 
-  absl::optional<CellularInhibitor::InhibitReason> GetInhibitReason() const {
+  std::optional<CellularInhibitor::InhibitReason> GetInhibitReason() const {
     return cellular_inhibitor_.GetInhibitReason();
   }
 
@@ -168,8 +170,8 @@ class CellularInhibitorTest : public testing::Test {
 
  private:
   void GetPropertiesCallback(const std::string& device_path,
-                             absl::optional<base::Value> properties) {
-    properties_ = properties ? std::move(*properties) : base::Value();
+                             std::optional<base::Value::Dict> properties) {
+    properties_ = std::move(properties);
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
@@ -178,7 +180,7 @@ class CellularInhibitorTest : public testing::Test {
   CellularInhibitor cellular_inhibitor_;
   TestObserver observer_;
 
-  base::Value properties_;
+  std::optional<base::Value::Dict> properties_;
 };
 
 TEST_F(CellularInhibitorTest, SuccessSingleRequest) {

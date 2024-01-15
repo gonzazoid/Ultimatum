@@ -29,16 +29,6 @@ BASE_DECLARE_FEATURE(kClearOldNavigationRecordsWorkaround);
 // Feature flag enabling persistent downloads.
 BASE_DECLARE_FEATURE(kEnablePersistentDownloads);
 
-// When enabled, preserves properties of the UIScrollView using CRWPropertyStore
-// when the scroll view is recreated. When disabled, only preserve a small set
-// of properties using hard coded logic.
-BASE_DECLARE_FEATURE(kPreserveScrollViewProperties);
-
-// Records snapshot size of image (IOS.Snapshots.ImageSize histogram) and PDF
-// (IOS.Snapshots.PDFSize histogram) if enabled. Enabling this flag will
-// generate PDF when Page Snapshot is taken just to record PDF size.
-BASE_DECLARE_FEATURE(kRecordSnapshotSize);
-
 // When enabled, the `attribution` property of NSMutableURLRequests passed to
 // WKWebView is set as NSURLRequestAttributionUser on iOS 15.
 BASE_DECLARE_FEATURE(kSetRequestAttribution);
@@ -46,40 +36,67 @@ BASE_DECLARE_FEATURE(kSetRequestAttribution);
 // Feature flag that enable Shared Highlighting color change in iOS.
 BASE_DECLARE_FEATURE(kIOSSharedHighlightingColorChange);
 
-// Feature flag that enables native session restoration with a synthesized
-// interaction state.
-BASE_DECLARE_FEATURE(kSynthesizedRestoreSession);
-
-// Enables user control for camera and/or microphone access for a specific site
-// through site settings during its lifespan. When enabled, each web state will
-// keep track of whether camera and/or microphone access is granted by the user
-// for its current site.
-BASE_DECLARE_FEATURE(kMediaPermissionsControl);
-
-// Enables the Fullscreen API in WebKit (supported on iOS 16.0+). This API
-// allows web sites to enter fullscreen mode, with all browser UI hidden.
-BASE_DECLARE_FEATURE(kEnableFullscreenAPI);
-
 // Feature flag enabling use of new iOS 15
 // loadSimulatedRequest:responseHTMLString: API to display error pages in
 // CRWWKNavigationHandler. The helper method IsLoadSimulatedRequestAPIEnabled()
 // should be used instead of directly checking this feature.
 BASE_DECLARE_FEATURE(kUseLoadSimulatedRequestForOfflinePage);
 
-// Feature flag that enable web page detected intents annotations.
-BASE_DECLARE_FEATURE(kEnableWebPageAnnotations);
+// Feature flag to enable Phone Numbers detection.
+BASE_DECLARE_FEATURE(kEnablePhoneNumbers);
 
-// Feature flag that enables getting more of the surrounding text when the user
-// long presses at a certain location.
-BASE_DECLARE_FEATURE(kLongPressSurroundingText);
+// Feature flag to enable Measurements detection.
+BASE_DECLARE_FEATURE(kEnableMeasurements);
 
-// When true, user control for camera and/or microphone access should be
-// enabled.
-bool IsMediaPermissionsControlEnabled();
+// Feature param under kOneTapForMaps to select consent behavior.
+extern const char kOneTapForMapsConsentModeParamTitle[];
+extern const char kOneTapForMapsConsentModeDefaultParam[];
+extern const char kOneTapForMapsConsentModeForcedParam[];
+extern const char kOneTapForMapsConsentModeDisabledParam[];
+extern const char kOneTapForMapsConsentModeIPHParam[];
+extern const char kOneTapForMapsConsentModeIPHForcedParam[];
+// Feature flag to enable One tap experience for Maps.
+BASE_DECLARE_FEATURE(kOneTapForMaps);
+
+// Feature flag that enables using web::AnnotationsTextManager for fetching web
+// page text for language detection.
+BASE_DECLARE_FEATURE(kUseAnnotationsForLanguageDetection);
+
+// When enabled, CRWWebViewScrollViewProxy's `scrollEnabled` state is not
+// restored if the new instance already has the same `scrollEnabled` state as
+// the old one.
+BASE_DECLARE_FEATURE(kScrollViewProxyScrollEnabledWorkaround);
+
+// Feature flag to prevent navigation without user interaction.
+BASE_DECLARE_FEATURE(kPreventNavigationWithoutUserInteraction);
+
+// Feature flag to enable Web Inspector support.
+BASE_DECLARE_FEATURE(kEnableWebInspector);
+
+// Feature used by finch config to enable smooth scrolling when the default
+// viewport adjustment experiment is selected via command line switches.
+BASE_DECLARE_FEATURE(kSmoothScrollingDefault);
+
+// Feature flag to enable the session serialization optimizations.
+BASE_DECLARE_FEATURE(kEnableSessionSerializationOptimizations);
+
+// Feature flag that force the use of the synthesized native WKWebView
+// session instead of the (maybe inexistent) saved native session. The
+// purpose of this flag it to allow to testing this code path.
+BASE_DECLARE_FEATURE(kForceSynthesizedRestoreSession);
+
+// Feature flag to remove the UnsafeRestore code path.
+BASE_DECLARE_FEATURE(kRemoveOldWebStateRestoration);
 
 // When true, the new loadSimulatedRequest API should be used when displaying
 // error pages.
 bool IsLoadSimulatedRequestAPIEnabled();
+
+// When true, an option to enable Web Inspector should be present in Settings.
+bool IsWebInspectorSupportEnabled();
+
+// When true, session serialization optimizations should be enabled.
+bool UseSessionSerializationOptimizations();
 
 }  // namespace features
 }  // namespace web

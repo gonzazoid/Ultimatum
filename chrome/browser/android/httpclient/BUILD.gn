@@ -3,24 +3,25 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/chrome/browser/android/httpclient/AnnotatedSimpleHttpClient.java",
     "java/src/org/chromium/chrome/browser/android/httpclient/SimpleHttpClient.java",
   ]
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//chrome/browser/android/httpclient/public:java",
     "//chrome/browser/profiles/android:java",
     "//content/public/android:content_java",
     "//net/android:net_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//url:gurl_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 }
 
 generate_jni("jni_headers") {
@@ -96,6 +97,7 @@ java_library("junit_tests") {
     "//base:base_junit_test_support",
     "//chrome/browser/profiles/android:java",
     "//net/android:net_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//third_party/junit:junit",
     "//third_party/mockito:mockito_java",
     "//url:gurl_java",

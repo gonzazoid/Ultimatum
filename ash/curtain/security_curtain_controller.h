@@ -5,8 +5,15 @@
 #ifndef ASH_CURTAIN_SECURITY_CURTAIN_CONTROLLER_H_
 #define ASH_CURTAIN_SECURITY_CURTAIN_CONTROLLER_H_
 
+#include <memory>
+
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/time/time.h"
+
+namespace views {
+class View;
+}  // namespace views
 
 namespace ui {
 class Event;
@@ -16,6 +23,8 @@ namespace ash::curtain {
 
 enum class FilterResult { kKeepEvent, kSuppressEvent };
 using EventFilter = base::RepeatingCallback<FilterResult(const ui::Event&)>;
+
+using ViewFactory = base::RepeatingCallback<std::unique_ptr<views::View>()>;
 
 // Controller for enabling/disabling the security curtain.
 // The security curtain is an overlay that is displayed over all monitors,
@@ -29,7 +38,7 @@ class ASH_EXPORT SecurityCurtainController {
   // tweak the behavior of the security curtain.
   struct InitParams {
     InitParams();
-    explicit InitParams(EventFilter filter);
+    InitParams(EventFilter event_filter, ViewFactory curtain_factory);
 
     InitParams(const InitParams&);
     InitParams& operator=(const InitParams&);
@@ -37,9 +46,20 @@ class ASH_EXPORT SecurityCurtainController {
     InitParams& operator=(InitParams&&);
     ~InitParams();
 
-    // Filter to specify which input |ui::Event|s should or should not be
+    // Filter to specify which input `ui::Event`s should or should not be
     // suppressed. If unspecified all input events will be suppressed.
     EventFilter event_filter;
+
+    // Factory that creates the view that will be shown as the curtain overlay.
+    // Will be invoked multiple times, once for each monitor.
+    ViewFactory curtain_factory;
+
+    // The delay until muting audio output. Can be `base::TimeDelta()` to mute
+    // immediately, `base::TimeDelta::Max()` to never mute, or any delay.
+    base::TimeDelta mute_audio_output_after;
+
+    bool mute_audio_input = true;
+    bool disable_camera_access = true;
   };
 
   virtual ~SecurityCurtainController() = default;

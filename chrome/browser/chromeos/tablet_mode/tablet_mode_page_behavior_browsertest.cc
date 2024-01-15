@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_forward.h"
 #include "base/command_line.h"
+#include "base/functional/callback_forward.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/browser_features.h"
@@ -13,22 +13,21 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/ui/base/tablet_state.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
+#include "ui/display/screen.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/test/shell_test_api.h"
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/crosapi/mojom/test_controller.mojom-test-utils.h"
+#include "chromeos/crosapi/mojom/test_controller.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "ui/display/display_observer.h"
-#include "ui/display/screen.h"
 #endif
 
 namespace {
@@ -97,23 +96,22 @@ class TabletModePageBehaviorTest : public InProcessBrowserTest {
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
     base::RunLoop run_loop;
     TabletModeWatcher watcher(run_loop.QuitClosure(),
-                              chromeos::TabletState::Get()->state());
+                              display::Screen::GetScreen()->GetTabletState());
     display::Screen::GetScreen()->AddObserver(&watcher);
-    crosapi::mojom::TestControllerAsyncWaiter controller(
-        chromeos::LacrosService::Get()
-            ->GetRemote<crosapi::mojom::TestController>()
-            .get());
-    if (enable)
-      controller.EnterTabletMode();
-    else
-      controller.ExitTabletMode();
+    auto& test_controller = chromeos::LacrosService::Get()
+                                ->GetRemote<crosapi::mojom::TestController>();
+    if (enable) {
+      test_controller->EnterTabletMode(base::DoNothing());
+    } else {
+      test_controller->ExitTabletMode(base::DoNothing());
+    }
     run_loop.Run();
     display::Screen::GetScreen()->RemoveObserver(&watcher);
 #endif
   }
 
   bool InTabletMode() const {
-    return chromeos::TabletState::Get()->InTabletMode();
+    return display::Screen::GetScreen()->InTabletMode();
   }
 
   content::WebContents* GetActiveWebContents(Browser* browser) const {

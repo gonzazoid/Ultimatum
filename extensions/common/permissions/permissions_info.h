@@ -11,11 +11,11 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 #include "extensions/common/permissions/api_permission.h"
@@ -74,12 +74,11 @@ class PermissionsInfo {
   void RegisterPermission(std::unique_ptr<APIPermissionInfo> permission);
 
   // Maps permission ids to permissions. Owns the permissions.
-  typedef std::unordered_map<mojom::APIPermissionID,
-                             std::unique_ptr<APIPermissionInfo>>
-      IDMap;
+  using IDMap = base::flat_map<mojom::APIPermissionID,
+                               std::unique_ptr<APIPermissionInfo>>;
 
   // Maps names and aliases to permissions. Doesn't own the permissions.
-  typedef std::map<std::string, APIPermissionInfo*> NameMap;
+  using NameMap = std::map<std::string, APIPermissionInfo*>;
 
   IDMap id_map_;
   NameMap name_map_;

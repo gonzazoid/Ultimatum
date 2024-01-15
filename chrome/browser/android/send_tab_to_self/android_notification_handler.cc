@@ -11,10 +11,10 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "chrome/android/chrome_jni_headers/NotificationManager_jni.h"
 #include "chrome/android/chrome_jni_headers/SendTabToSelfNotificationReceiver_jni.h"
 #include "chrome/browser/android/android_theme_resources.h"
 #include "chrome/browser/android/resource_mapper.h"
-#include "chrome/browser/share/android/jni_headers/NotificationManager_jni.h"
 #include "chrome/browser/share/share_features.h"
 #include "chrome/browser/sync/send_tab_to_self_sync_service_factory.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
@@ -107,8 +107,7 @@ void AndroidNotificationHandler::DisplayNewEntries(
 void AndroidNotificationHandler::DisplayNewEntriesOnUIThread(
     const std::vector<const SendTabToSelfEntry>& new_entries) {
   for (const SendTabToSelfEntry& entry : new_entries) {
-    if (base::FeatureList::IsEnabled(send_tab_to_self::kSendTabToSelfV2) ||
-        share::AreUpcomingSharingFeaturesEnabled()) {
+    if (base::FeatureList::IsEnabled(send_tab_to_self::kSendTabToSelfV2)) {
       if (profile_ != nullptr &&
           GetWebContentsForProfile(profile_) != nullptr) {
         web_contents_ = GetWebContentsForProfile(profile_)->GetWeakPtr();
@@ -161,7 +160,7 @@ void AndroidNotificationHandler::DisplayNewEntriesOnUIThread(
           ConvertUTF8ToJavaString(env, entry.GetURL().spec()),
           ConvertUTF8ToJavaString(env, entry.GetTitle()),
           ConvertUTF8ToJavaString(env, entry.GetDeviceName()),
-          expiraton_time.ToJavaTime(),
+          expiraton_time.InMillisecondsSinceUnixEpoch(),
           send_tab_to_self_notification_receiver_class);
     }
   }

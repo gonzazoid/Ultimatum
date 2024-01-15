@@ -10,10 +10,6 @@
 #import "ios/web/public/init/web_main_parts.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 
 static WebClient* g_client;
@@ -45,10 +41,6 @@ bool WebClient::IsAppSpecificURL(const GURL& url) const {
   return false;
 }
 
-std::u16string WebClient::GetPluginNotSupportedText() const {
-  return std::u16string();
-}
-
 std::string WebClient::GetUserAgent(UserAgentType type) const {
   return std::string();
 }
@@ -72,22 +64,12 @@ std::vector<JavaScriptFeature*> WebClient::GetJavaScriptFeatures(
   return std::vector<JavaScriptFeature*>();
 }
 
-NSString* WebClient::GetDocumentStartScriptForAllFrames(
-    BrowserState* browser_state) const {
-  return @"";
-}
-
-NSString* WebClient::GetDocumentStartScriptForMainFrame(
-    BrowserState* browser_state) const {
-  return @"";
-}
-
 void WebClient::PrepareErrorPage(WebState* web_state,
                                  const GURL& url,
                                  NSError* error,
                                  bool is_post,
                                  bool is_off_the_record,
-                                 const absl::optional<net::SSLInfo>& info,
+                                 const std::optional<net::SSLInfo>& info,
                                  int64_t navigation_id,
                                  base::OnceCallback<void(NSString*)> callback) {
   DCHECK(error);
@@ -98,12 +80,20 @@ UIView* WebClient::GetWindowedContainer() {
   return nullptr;
 }
 
+bool WebClient::EnableFullscreenAPI() const {
+  return false;
+}
+
 bool WebClient::EnableLongPressUIContextMenu() const {
   return false;
 }
 
-bool WebClient::RestoreSessionFromCache(web::WebState* web_state) const {
+bool WebClient::EnableWebInspector(BrowserState* browser_state) const {
   return false;
+}
+
+NSData* WebClient::FetchSessionFromCache(web::WebState* web_state) const {
+  return nil;
 }
 
 void WebClient::CleanupNativeRestoreURLs(web::WebState* web_state) const {}
@@ -122,6 +112,23 @@ void WebClient::LogDefaultUserAgent(web::WebState* web_state,
 bool WebClient::IsPointingToSameDocument(const GURL& url1,
                                          const GURL& url2) const {
   return url1 == url2;
+}
+
+bool WebClient::IsMixedContentAutoupgradeEnabled(
+    web::BrowserState* browser_state) const {
+  return true;
+}
+
+bool WebClient::IsBrowserLockdownModeEnabled(web::BrowserState* browser_state) {
+  return false;
+}
+
+void WebClient::SetOSLockdownModeEnabled(web::BrowserState* browser_state,
+                                         bool enabled) {}
+
+bool WebClient::IsInsecureFormWarningEnabled(
+    web::BrowserState* browser_state) const {
+  return true;
 }
 
 }  // namespace web

@@ -4,35 +4,35 @@
 
 #import "ios/chrome/browser/ui/settings/privacy/safe_browsing/safe_browsing_standard_protection_mediator.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/notreached.h"
-#import "components/password_manager/core/common/password_manager_features.h"
+#import "build/branding_buildflags.h"
 #import "components/password_manager/core/common/password_manager_pref_names.h"
 #import "components/prefs/pref_service.h"
+#import "components/safe_browsing/core/browser/hashprefix_realtime/hash_realtime_utils.h"
+#import "components/safe_browsing/core/common/features.h"
 #import "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #import "components/signin/public/identity_manager/objc/identity_manager_observer_bridge.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_backed_boolean.h"
+#import "ios/chrome/browser/shared/model/utils/observable_boolean.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/ui/settings/cells/safe_browsing_header_item.h"
 #import "ios/chrome/browser/ui/settings/cells/sync_switch_item.h"
 #import "ios/chrome/browser/ui/settings/privacy/safe_browsing/safe_browsing_constants.h"
 #import "ios/chrome/browser/ui/settings/privacy/safe_browsing/safe_browsing_standard_protection_consumer.h"
-#import "ios/chrome/browser/ui/settings/utils/observable_boolean.h"
-#import "ios/chrome/browser/ui/settings/utils/pref_backed_boolean.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#import "ios/chrome/grit/ios_google_chrome_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using ItemArray = NSArray<TableViewItem*>*;
 
 namespace {
+
 // List of item types.
 typedef NS_ENUM(NSInteger, ItemType) {
   ItemTypeShieldIcon = kItemTypeEnumZero,
@@ -41,6 +41,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
   ItemTypeSafeBrowsingExtendedReporting,
   ItemTypeSafeBrowsingManagedExtendedReporting,
 };
+
+// The size of the symbols.
+const CGFloat kSymbolSize = 20;
+
 }  // namespace
 
 @interface SafeBrowsingStandardProtectionMediator () <
@@ -179,13 +183,13 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 - (SafeBrowsingHeaderItem*)shieldIconHeader {
   if (!_shieldIconHeader) {
+    UIImage* shieldIcon;
+    shieldIcon = CustomSymbolWithPointSize(kPrivacySymbol, kSymbolSize);
     SafeBrowsingHeaderItem* shieldIconItem = [self
              detailItemWithType:ItemTypeShieldIcon
                      detailText:
                          IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_BULLET_ONE
-                          image:[[UIImage imageNamed:@"shield"]
-                                    imageWithRenderingMode:
-                                        UIImageRenderingModeAlwaysTemplate]
+                          image:shieldIcon
         accessibilityIdentifier:kSafeBrowsingStandardProtectionShieldCellId];
     _shieldIconHeader = shieldIconItem;
   }
@@ -194,13 +198,21 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 - (SafeBrowsingHeaderItem*)metricIconHeader {
   if (!_metricIconHeader) {
+    UIImage* metricIcon =
+        DefaultSymbolWithPointSize(kCheckmarkCircleSymbol, kSymbolSize);
+    NSInteger detailText = IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_BULLET_TWO;
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+    if (safe_browsing::hash_realtime_utils::
+            IsHashRealTimeLookupEligibleInSession()) {
+      detailText = IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_BULLET_TWO_PROXY;
+    }
+#endif
+
     SafeBrowsingHeaderItem* metricIconItem = [self
              detailItemWithType:ItemTypeMetricIcon
-                     detailText:
-                         IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_BULLET_TWO
-                          image:[[UIImage imageNamed:@"bar_chart"]
-                                    imageWithRenderingMode:
-                                        UIImageRenderingModeAlwaysTemplate]
+                     detailText:detailText
+                          image:metricIcon
         accessibilityIdentifier:kSafeBrowsingStandardProtectionMetricCellId];
     _metricIconHeader = metricIconItem;
   }
@@ -270,11 +282,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
   if (!status) {
     managedItem.iconTintColor = [UIColor colorNamed:kGrey300Color];
 
-    // This item is not controllable, then set the color opacity to 40%.
-    managedItem.textColor =
-        [[UIColor colorNamed:kTextPrimaryColor] colorWithAlphaComponent:0.4f];
-    managedItem.detailTextColor =
-        [[UIColor colorNamed:kTextSecondaryColor] colorWithAlphaComponent:0.4f];
+    // This item is not controllable; set to lighter colors.
+    managedItem.textColor = [UIColor colorNamed:kTextSecondaryColor];
+    managedItem.detailTextColor = [UIColor colorNamed:kTextTertiaryColor];
 
     managedItem.accessibilityHint = l10n_util::GetNSString(
         IDS_IOS_TOGGLE_SETTING_MANAGED_ACCESSIBILITY_HINT);
@@ -307,14 +317,14 @@ typedef NS_ENUM(NSInteger, ItemType) {
         break;
       case ItemTypeSafeBrowsingExtendedReporting: {
         SyncSwitchItem* syncSwitchItem =
-            base::mac::ObjCCastStrict<SyncSwitchItem>(item);
+            base::apple::ObjCCastStrict<SyncSwitchItem>(item);
         syncSwitchItem.on =
             safe_browsing::IsExtendedReportingEnabled(*self.userPrefService);
         syncSwitchItem.enabled = self.inSafeBrowsingStandardProtection;
         break;
       }
       case ItemTypeSafeBrowsingManagedExtendedReporting:
-        base::mac::ObjCCastStrict<TableViewInfoButtonItem>(item).statusText =
+        base::apple::ObjCCastStrict<TableViewInfoButtonItem>(item).statusText =
             self.safeBrowsingExtendedReportingPreference.value
                 ? l10n_util::GetNSString(IDS_IOS_SETTING_ON)
                 : l10n_util::GetNSString(IDS_IOS_SETTING_OFF);
@@ -327,49 +337,36 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [self.consumer reloadCellsForItems];
 }
 
-// Returns a boolean indicating whether leak detection feature is enabled.
-- (BOOL)isPasswordLeakCheckEnabled {
-  return self.authService->HasPrimaryIdentity(signin::ConsentLevel::kSignin) ||
-         base::FeatureList::IsEnabled(
-             password_manager::features::kLeakDetectionUnauthenticated);
-}
-
 // Returns a boolean indicating if the switch should appear as "On" or "Off"
 // based on the sync preference, the sign in status, and if the user has
 // selected Standard Protection as the Safe Browsing option.
 - (BOOL)passwordLeakCheckItemOnState {
-  return [self isPasswordLeakCheckEnabled] &&
-         (self.safeBrowsingEnhancedProtectionPreference.value ||
-          (self.safeBrowsingStandardProtectionPreference.value &&
-           self.passwordLeakCheckPreference.value));
+  return self.safeBrowsingEnhancedProtectionPreference.value ||
+         (self.safeBrowsingStandardProtectionPreference.value &&
+          self.passwordLeakCheckPreference.value);
 }
 
 // Updates the detail text and on state of the leak check item based on the
 // state.
 - (void)configureLeakCheckItem:(TableViewItem*)item {
   TableViewSwitchItem* leakCheckItem =
-      base::mac::ObjCCastStrict<TableViewSwitchItem>(item);
-  leakCheckItem.enabled = self.inSafeBrowsingStandardProtection &&
-                          [self isPasswordLeakCheckEnabled];
+      base::apple::ObjCCastStrict<TableViewSwitchItem>(item);
+  leakCheckItem.enabled = self.inSafeBrowsingStandardProtection;
   leakCheckItem.on = [self passwordLeakCheckItemOnState];
-
-  if (self.passwordLeakCheckPreference.value &&
-      ![self isPasswordLeakCheckEnabled] &&
-      self.safeBrowsingStandardProtectionPreference.value) {
-    // If the user is signed out and the sync preference is enabled, this
-    // informs that it will be turned on on sign in.
-    leakCheckItem.detailText =
-        l10n_util::GetNSString(IDS_IOS_LEAK_CHECK_SIGNED_OUT_ENABLED_DESC);
-    return;
+  if (base::FeatureList::IsEnabled(
+          safe_browsing::kFriendlierSafeBrowsingSettingsStandardProtection)) {
+    leakCheckItem.detailText = l10n_util::GetNSString(
+        IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_LEAK_CHECK_FRIENDLIER_SUMMARY);
+  } else {
+    leakCheckItem.detailText = l10n_util::GetNSString(
+        IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_LEAK_CHECK_SUMMARY);
   }
-  leakCheckItem.detailText = l10n_util::GetNSString(
-      IDS_IOS_SAFE_BROWSING_STANDARD_PROTECTION_LEAK_CHECK_SUMMARY);
 }
 
 #pragma mark - SafeBrowsingStandardProtectionViewControllerDelegate
 
 - (void)toggleSwitchItem:(TableViewItem*)item withValue:(BOOL)value {
-  SyncSwitchItem* syncSwitchItem = base::mac::ObjCCast<SyncSwitchItem>(item);
+  SyncSwitchItem* syncSwitchItem = base::apple::ObjCCast<SyncSwitchItem>(item);
   syncSwitchItem.on = value;
   ItemType type = static_cast<ItemType>(item.type);
   switch (type) {

@@ -9,9 +9,10 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "content/common/content_export.h"
@@ -86,7 +87,7 @@ class CONTENT_EXPORT IndexedDBPreCloseTaskQueue {
 
     bool set_metadata_was_called_ = false;
     // Raw pointer is safe because `database_` is owned by the
-    // IndexedDBBucketState.
+    // IndexedDBBucketContext.
     const raw_ptr<leveldb::DB> database_;
   };
 

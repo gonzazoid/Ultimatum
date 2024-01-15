@@ -6,18 +6,15 @@
 
 #import <UIKit/UIKit.h>
 
-#import "base/bind.h"
-#import "base/callback.h"
+#import "base/containers/contains.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
 #import "base/memory/ptr_util.h"
-#import "ios/chrome/browser/overlays/public/overlay_presentation_context_observer.h"
-#import "ios/chrome/browser/overlays/public/overlay_presenter.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_presentation_context_observer.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_presenter.h"
 #import "ios/chrome/browser/ui/overlays/overlay_coordinator_factory.h"
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_coordinator.h"
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_impl_delegate.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // static
 OverlayPresentationContextImpl* OverlayPresentationContextImpl::FromBrowser(
@@ -59,8 +56,8 @@ OverlayPresentationContextImpl::Container::PresentationContextForModality(
   auto& ui_delegate = ui_delegates_[modality];
   if (!ui_delegate) {
     OverlayRequestCoordinatorFactory* factory =
-        [OverlayRequestCoordinatorFactory factoryForBrowser:browser_
-                                                   modality:modality];
+        [[OverlayRequestCoordinatorFactory alloc] initWithBrowser:browser_
+                                                         modality:modality];
     ui_delegate = base::WrapUnique(
         new OverlayPresentationContextImpl(browser_, modality, factory));
   }
@@ -145,6 +142,10 @@ void OverlayPresentationContextImpl::SetUIDisabled(bool disabled) {
       observer.OverlayPresentationContextDidEnableUI(this);
     }
   }
+}
+
+bool OverlayPresentationContextImpl::IsUIDisabled() {
+  return ui_disabled_;
 }
 
 #pragma mark OverlayPresentationContext
@@ -293,8 +294,9 @@ UIViewController* OverlayPresentationContextImpl::GetBaseViewController(
 
 OverlayRequestUIState* OverlayPresentationContextImpl::GetRequestUIState(
     OverlayRequest* request) const {
-  if (!request || states_.find(request) == states_.end())
+  if (!request || !base::Contains(states_, request)) {
     return nullptr;
+  }
   return states_.at(request).get();
 }
 

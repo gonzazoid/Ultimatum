@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "cc/animation/animation_delegate.h"
@@ -198,7 +197,7 @@ void ElementAnimations::OnFloatAnimated(const float& value,
             target_property_id);
       break;
     case TargetProperty::OPACITY: {
-      float opacity = base::clamp(value, 0.0f, 1.0f);
+      float opacity = std::clamp(value, 0.0f, 1.0f);
       if (KeyframeModelAffectsActiveElements(keyframe_model))
         OnOpacityAnimated(ElementListType::ACTIVE, opacity, keyframe_model);
       if (KeyframeModelAffectsPendingElements(keyframe_model))
@@ -306,8 +305,9 @@ void ElementAnimations::UpdateClientAnimationState() {
   // For a custom property animation, or an animation that uses paint worklet,
   // it is not associated with any property node, and thus this function is not
   // needed.
-  if (element_id().GetStableId() == ElementId::kReservedElementId)
+  if (element_id() == kReservedElementIdForPaintWorklet) {
     return;
+  }
   DCHECK(animation_host_);
   if (!animation_host_->mutator_host_client())
     return;
@@ -502,7 +502,7 @@ void ElementAnimations::OnCustomPropertyAnimated(
   DCHECK(animation_host_->mutator_host_client());
   // No-op background-color animations can have no unique_id. See
   // CompositorAnimations::IsNoOpBackgroundColorAnimation for details.
-  if (!ElementId::IsValid(keyframe_model->element_id().GetStableId())) {
+  if (!keyframe_model->element_id()) {
     return;
   }
   ElementId id = CalculateTargetElementId(this, keyframe_model);
@@ -540,11 +540,10 @@ void ElementAnimations::OnScrollOffsetAnimated(
       target_element_id, list_type, scroll_offset);
 }
 
-absl::optional<gfx::PointF> ElementAnimations::ScrollOffsetForAnimation()
-    const {
+std::optional<gfx::PointF> ElementAnimations::ScrollOffsetForAnimation() const {
   if (animation_host_)
     return animation_host_->GetScrollOffsetForAnimation(element_id());
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 PropertyToElementIdMap ElementAnimations::GetPropertyToElementIdMap() const {

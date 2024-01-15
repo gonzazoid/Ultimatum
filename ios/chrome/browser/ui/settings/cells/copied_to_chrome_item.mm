@@ -5,16 +5,12 @@
 #import "ios/chrome/browser/ui/settings/cells/copied_to_chrome_item.h"
 
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation CopiedToChromeItem
 
@@ -57,7 +53,7 @@
 
     _button.translatesAutoresizingMaskIntoConstraints = NO;
     [_button
-        setTitle:l10n_util::GetNSString(IDS_AUTOFILL_CLEAR_LOCAL_COPY_BUTTON)
+        setTitle:l10n_util::GetNSString(IDS_AUTOFILL_REMOVE_LOCAL_COPY_BUTTON)
         forState:UIControlStateNormal];
     [contentView addSubview:_button];
 

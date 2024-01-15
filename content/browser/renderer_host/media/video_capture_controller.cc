@@ -10,10 +10,10 @@
 #include <map>
 #include <set>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -30,6 +30,8 @@
 #include "media/capture/video/video_capture_buffer_pool.h"
 #include "media/capture/video/video_capture_buffer_tracker_factory_impl.h"
 #include "media/capture/video/video_capture_device_client.h"
+#include "media/capture/video/video_capture_metrics.h"
+#include "services/video_capture/public/mojom/video_effects_manager.mojom.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "content/browser/compositor/image_transport_factory.h"
@@ -51,95 +53,6 @@ static const int kInfiniteRatio = 99999;
 #define UMA_HISTOGRAM_ASPECT_RATIO(name, width, height) \
   base::UmaHistogramSparse(                             \
       name, (height) ? ((width)*100) / (height) : kInfiniteRatio);
-
-void LogVideoFrameDrop(media::VideoCaptureFrameDropReason reason,
-                       blink::mojom::MediaStreamType stream_type) {
-  const int kEnumCount =
-      static_cast<int>(media::VideoCaptureFrameDropReason::kMaxValue) + 1;
-  UMA_HISTOGRAM_ENUMERATION("Media.VideoCapture.FrameDrop", reason, kEnumCount);
-  switch (stream_type) {
-    case blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION("Media.VideoCapture.FrameDrop.DeviceCapture",
-                                reason, kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::GUM_TAB_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION("Media.VideoCapture.FrameDrop.GumTabCapture",
-                                reason, kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.FrameDrop.GumDesktopCapture", reason, kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION("Media.VideoCapture.FrameDrop.DisplayCapture",
-                                reason, kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE_THIS_TAB:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.FrameDrop.DisplayCaptureCurrentTab", reason,
-          kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE_SET:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.FrameDrop.DisplayCaptureSet", reason, kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::NO_SERVICE:
-    case blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::GUM_TAB_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::GUM_DESKTOP_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::DISPLAY_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::NUM_MEDIA_TYPES:
-      break;
-  }
-}
-
-void LogMaxConsecutiveVideoFrameDropCountExceeded(
-    media::VideoCaptureFrameDropReason reason,
-    blink::mojom::MediaStreamType stream_type) {
-  const int kEnumCount =
-      static_cast<int>(media::VideoCaptureFrameDropReason::kMaxValue) + 1;
-  UMA_HISTOGRAM_ENUMERATION("Media.VideoCapture.MaxFrameDropExceeded", reason,
-                            kEnumCount);
-  switch (stream_type) {
-    case blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.MaxFrameDropExceeded.DeviceCapture", reason,
-          kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::GUM_TAB_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.MaxFrameDropExceeded.GumTabCapture", reason,
-          kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.MaxFrameDropExceeded.GumDesktopCapture", reason,
-          kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.MaxFrameDropExceeded.DisplayCapture", reason,
-          kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE_THIS_TAB:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.MaxFrameDropExceeded.DisplayCaptureCurrentTab",
-          reason, kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE_SET:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Media.VideoCapture.MaxFrameDropExceeded.DisplayCaptureSet", reason,
-          kEnumCount);
-      break;
-    case blink::mojom::MediaStreamType::NO_SERVICE:
-    case blink::mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::GUM_TAB_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::GUM_DESKTOP_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::DISPLAY_AUDIO_CAPTURE:
-    case blink::mojom::MediaStreamType::NUM_MEDIA_TYPES:
-      break;
-  }
-}
 
 void CallOnError(media::VideoCaptureError error,
                  VideoCaptureControllerEventHandler* client,
@@ -273,12 +186,6 @@ VideoCaptureController::BufferContext::CloneBufferHandle() {
   }
 }
 
-VideoCaptureController::FrameDropLogState::FrameDropLogState(
-    media::VideoCaptureFrameDropReason reason)
-    : drop_count((reason == media::VideoCaptureFrameDropReason::kNone) ? 0 : 1),
-      drop_reason(reason),
-      max_log_count_exceeded(false) {}
-
 VideoCaptureController::VideoCaptureController(
     const std::string& device_id,
     blink::mojom::MediaStreamType stream_type,
@@ -317,22 +224,24 @@ void VideoCaptureController::AddClient(
                 << media::VideoCaptureFormat::ToString(params.requested_format);
   EmitLogMessage(string_stream.str(), 1);
 
-  // Check that requested VideoCaptureParams are valid and supported.  If not,
-  // report an error immediately and punt.
-  if (!params.IsValid() ||
-      !(params.requested_format.pixel_format == media::PIXEL_FORMAT_I420 ||
+  // Params received from a renderer will have been validated by
+  // VideoCaptureHost, so here we can just require validity.
+  DCHECK(params.IsValid());
+
+  // Check that requested VideoCaptureParams are supported.  If not, report an
+  // error immediately and punt.
+  if (!(params.requested_format.pixel_format == media::PIXEL_FORMAT_I420 ||
         params.requested_format.pixel_format == media::PIXEL_FORMAT_Y16 ||
         params.requested_format.pixel_format == media::PIXEL_FORMAT_ARGB ||
         params.requested_format.pixel_format == media::PIXEL_FORMAT_NV12 ||
         params.requested_format.pixel_format == media::PIXEL_FORMAT_UNKNOWN)) {
     // Crash in debug builds since the renderer should not have asked for
-    // invalid or unsupported parameters.
-    LOG(DFATAL) << "Invalid or unsupported video capture parameters requested: "
+    // unsupported parameters.
+    LOG(DFATAL) << "Unsupported video capture parameters requested: "
                 << media::VideoCaptureFormat::ToString(params.requested_format);
-    event_handler->OnError(
-        id,
-        media::VideoCaptureError::
-            kVideoCaptureControllerInvalidOrUnsupportedVideoCaptureParametersRequested);
+    event_handler->OnError(id,
+                           media::VideoCaptureError::
+                               kVideoCaptureControllerUnsupportedPixelFormat);
     return;
   }
 
@@ -362,8 +271,6 @@ void VideoCaptureController::AddClient(
   // client.
   if (state_ != blink::VIDEO_CAPTURE_STATE_ERROR) {
     controller_clients_.push_back(std::move(client));
-    base::UmaHistogramCounts100("Media.VideoCapture.NumberOfClients",
-                                controller_clients_.size());
   }
 }
 
@@ -475,28 +382,31 @@ void VideoCaptureController::ReturnBuffer(
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
   ControllerClient* client = FindClient(id, event_handler, controller_clients_);
+  CHECK(client);
 
-  // If this buffer is not held by this client, or this client doesn't exist
-  // in controller, do nothing.
-  if (!client) {
-    NOTREACHED();
-    return;
-  }
   auto buffers_in_use_entry_iter =
       base::ranges::find(client->buffers_in_use, buffer_id);
-  if (buffers_in_use_entry_iter == std::end(client->buffers_in_use)) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(buffers_in_use_entry_iter != std::end(client->buffers_in_use));
   client->buffers_in_use.erase(buffers_in_use_entry_iter);
 
   OnClientFinishedConsumingBuffer(client, buffer_id, feedback);
 }
 
-const absl::optional<media::VideoCaptureFormat>
+const std::optional<media::VideoCaptureFormat>
 VideoCaptureController::GetVideoCaptureFormat() const {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   return video_capture_format_;
+}
+
+void VideoCaptureController::OnCaptureConfigurationChanged() {
+  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  EmitLogMessage(__func__, 3);
+  for (const auto& client : controller_clients_) {
+    if (client->session_closed) {
+      continue;
+    }
+    client->event_handler->OnCaptureConfigurationChanged(client->controller_id);
+  }
 }
 
 void VideoCaptureController::OnNewBuffer(
@@ -511,14 +421,11 @@ void VideoCaptureController::OnNewBuffer(
 }
 
 void VideoCaptureController::OnFrameReadyInBuffer(
-    media::ReadyFrameInBuffer frame,
-    std::vector<media::ReadyFrameInBuffer> scaled_frames) {
+    media::ReadyFrameInBuffer frame) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK_NE(frame.buffer_id, media::VideoCaptureBufferPool::kInvalidId);
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
                "VideoCaptureController::OnFrameReadyInBuffer");
-
-  frame_drop_log_state_ = FrameDropLogState();
 
   // Make ready buffers, get frame contexts and set their feedback IDs.
   // Transfer ownership of all the frame infos.
@@ -527,45 +434,33 @@ void VideoCaptureController::OnFrameReadyInBuffer(
       frame.buffer_id, frame.frame_feedback_id, std::move(frame.frame_info),
       &frame_context);
 
-  std::vector<BufferContext*> scaled_frame_contexts;
-  scaled_frame_contexts.reserve(scaled_frames.size());
-  std::vector<ReadyBuffer> scaled_frame_ready_buffers;
-  scaled_frame_ready_buffers.reserve(scaled_frames.size());
-  for (auto& scaled_frame : scaled_frames) {
-    BufferContext* scaled_frame_context;
-    scaled_frame_ready_buffers.push_back(MakeReadyBufferAndSetContextFeedbackId(
-        scaled_frame.buffer_id, scaled_frame.frame_feedback_id,
-        std::move(scaled_frame.frame_info), &scaled_frame_context));
-    scaled_frame_contexts.push_back(scaled_frame_context);
-  }
-
   if (state_ != blink::VIDEO_CAPTURE_STATE_ERROR) {
     // Inform all active clients of the frames.
     for (const auto& client : controller_clients_) {
       if (client->session_closed || client->paused)
         continue;
       MakeClientUseBufferContext(frame_context, client.get());
-      for (auto* scaled_frame_context : scaled_frame_contexts) {
-        MakeClientUseBufferContext(scaled_frame_context, client.get());
-      }
       client->event_handler->OnBufferReady(client->controller_id,
-                                           frame_ready_buffer,
-                                           scaled_frame_ready_buffers);
+                                           frame_ready_buffer);
     }
     // Transfer buffer read permissions to any contexts that now have consumers.
     if (frame_context->HasConsumers()) {
       frame_context->set_read_permission(
           std::move(frame.buffer_read_permission));
     }
-    for (size_t i = 0; i < scaled_frames.size(); ++i) {
-      if (!scaled_frame_contexts[i]->HasConsumers())
-        continue;
-      scaled_frame_contexts[i]->set_read_permission(
-          std::move(scaled_frames[i].buffer_read_permission));
-    }
   }
 
   if (!has_received_frames_) {
+    // Check the following group of metrics is captured only for cameras.
+    if (stream_type() == blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE) {
+      // This metric combines width and height into a single UMA metric.
+      media::LogCaptureCurrentDeviceResolution(
+          frame_ready_buffer.frame_info->coded_size.width(),
+          frame_ready_buffer.frame_info->coded_size.height());
+
+      media::LogCaptureCurrentDevicePixelFormat(
+          frame_ready_buffer.frame_info->pixel_format);
+    }
     UMA_HISTOGRAM_COUNTS_1M("Media.VideoCapture.Width",
                             frame_ready_buffer.frame_info->coded_size.width());
     UMA_HISTOGRAM_COUNTS_1M("Media.VideoCapture.Height",
@@ -650,37 +545,28 @@ void VideoCaptureController::OnError(media::VideoCaptureError error) {
 
 void VideoCaptureController::OnFrameDropped(
     media::VideoCaptureFrameDropReason reason) {
-  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
-               "VideoCaptureController::OnFrameDropped");
-
-  MaybeEmitFrameDropLogMessage(reason);
-
-  if (reason == frame_drop_log_state_.drop_reason) {
-    if (frame_drop_log_state_.max_log_count_exceeded)
-      return;
-
-    if (++frame_drop_log_state_.drop_count >
-        kMaxConsecutiveFrameDropForSameReasonCount) {
-      frame_drop_log_state_.max_log_count_exceeded = true;
-      LogMaxConsecutiveVideoFrameDropCountExceeded(reason, stream_type_);
-      return;
-    }
-  } else {
-    frame_drop_log_state_ = FrameDropLogState(reason);
-  }
-
-  LogVideoFrameDrop(reason, stream_type_);
-}
-
-void VideoCaptureController::OnNewCropVersion(uint32_t crop_version) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  EmitLogMessage(base::StringPrintf("%s(%u)", __func__, crop_version), 3);
+  // This method implements media::VideoFrameReceiver, which implements signals
+  // between the capture process and browser process. We forward this call to
+  // the renderer process where it eventually reached the MediaStreamVideoTrack.
   for (const auto& client : controller_clients_) {
     if (client->session_closed) {
       continue;
     }
-    client->event_handler->OnNewCropVersion(client->controller_id,
-                                            crop_version);
+    client->event_handler->OnFrameDropped(client->controller_id, reason);
+  }
+}
+
+void VideoCaptureController::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {
+  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  EmitLogMessage(
+      base::StringPrintf("%s(%u)", __func__, sub_capture_target_version), 3);
+  for (const auto& client : controller_clients_) {
+    if (client->session_closed) {
+      continue;
+    }
+    client->event_handler->OnNewSubCaptureTargetVersion(
+        client->controller_id, sub_capture_target_version);
   }
 }
 
@@ -767,7 +653,9 @@ void VideoCaptureController::OnDeviceConnectionLost() {
 void VideoCaptureController::CreateAndStartDeviceAsync(
     const media::VideoCaptureParams& params,
     VideoCaptureDeviceLaunchObserver* observer,
-    base::OnceClosure done_cb) {
+    base::OnceClosure done_cb,
+    mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+        video_effects_manager) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
                "VideoCaptureController::CreateAndStartDeviceAsync");
@@ -782,7 +670,7 @@ void VideoCaptureController::CreateAndStartDeviceAsync(
       device_id_, stream_type_, params, GetWeakPtrForIOThread(),
       base::BindOnce(&VideoCaptureController::OnDeviceConnectionLost,
                      GetWeakPtrForIOThread()),
-      this, std::move(done_cb));
+      this, std::move(done_cb), std::move(video_effects_manager));
 }
 
 void VideoCaptureController::ReleaseDeviceAsync(base::OnceClosure done_cb) {
@@ -848,10 +736,12 @@ void VideoCaptureController::Resume() {
   launched_device_->ResumeDevice();
 }
 
-void VideoCaptureController::Crop(
-    const base::Token& crop_id,
-    uint32_t crop_version,
-    base::OnceCallback<void(media::mojom::CropRequestResult)> callback) {
+void VideoCaptureController::ApplySubCaptureTarget(
+    media::mojom::SubCaptureTargetType type,
+    const base::Token& target,
+    uint32_t sub_capture_target_version,
+    base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+        callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK(launched_device_);
 
@@ -860,11 +750,13 @@ void VideoCaptureController::Crop(
   was_crop_ever_called_ = true;
 
   if (controller_clients_.size() != 1) {
-    std::move(callback).Run(media::mojom::CropRequestResult::kNotImplemented);
+    std::move(callback).Run(
+        media::mojom::ApplySubCaptureTargetResult::kNotImplemented);
     return;
   }
 
-  launched_device_->Crop(crop_id, crop_version, std::move(callback));
+  launched_device_->ApplySubCaptureTarget(
+      type, target, sub_capture_target_version, std::move(callback));
 }
 
 void VideoCaptureController::RequestRefreshFrame() {
@@ -965,36 +857,6 @@ void VideoCaptureController::EmitLogMessage(const std::string& message,
                                             int verbose_log_level) {
   DVLOG(verbose_log_level) << message;
   emit_log_message_cb_.Run(message);
-}
-
-void VideoCaptureController::MaybeEmitFrameDropLogMessage(
-    media::VideoCaptureFrameDropReason reason) {
-  using Type = std::underlying_type<media::VideoCaptureFrameDropReason>::type;
-  static_assert(
-      static_cast<Type>(media::VideoCaptureFrameDropReason::kMaxValue) <= 100,
-      "Risk of memory overuse.");
-
-  static_assert(kMaxEmittedLogsForDroppedFramesBeforeSuppressing <
-                    kFrequencyForSuppressedLogs,
-                "");
-
-  DCHECK_GE(static_cast<Type>(reason), 0);
-  DCHECK_LE(reason, media::VideoCaptureFrameDropReason::kMaxValue);
-
-  int& occurrences = frame_drop_log_counters_[reason];
-  if (++occurrences > kMaxEmittedLogsForDroppedFramesBeforeSuppressing &&
-      occurrences % kFrequencyForSuppressedLogs != 0) {
-    return;
-  }
-
-  std::ostringstream string_stream;
-  string_stream << "Frame dropped with reason code "
-                << static_cast<Type>(reason) << ".";
-  if (occurrences == kMaxEmittedLogsForDroppedFramesBeforeSuppressing) {
-    string_stream << " Additional logs will be partially suppressed.";
-  }
-
-  EmitLogMessage(string_stream.str(), 1);
 }
 
 }  // namespace content

@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <vector>
 
-#include <dawn/dawn_proc.h>
-
 #include "base/numerics/checked_math.h"
 #include "base/run_loop.h"
 #include "base/trace_event/trace_event.h"
@@ -23,61 +21,60 @@ namespace gpu {
 namespace webgpu {
 
 #if BUILDFLAG(USE_DAWN)
-class DawnWireServices : public APIChannel {
- private:
-  friend class base::RefCounted<DawnWireServices>;
-  ~DawnWireServices() override { GetProcs().instanceRelease(wgpu_instance_); }
+DawnWireServices::~DawnWireServices() {
+  GetProcs().instanceRelease(wgpu_instance_);
+}
 
- public:
-  DawnWireServices(WebGPUImplementation* webgpu_implementation,
-                   WebGPUCmdHelper* helper,
-                   MappedMemoryManager* mapped_memory,
-                   std::unique_ptr<TransferBuffer> transfer_buffer)
-      : memory_transfer_service_(mapped_memory),
-        serializer_(webgpu_implementation,
-                    helper,
-                    &memory_transfer_service_,
-                    std::move(transfer_buffer)),
-        wire_client_(dawn::wire::WireClientDescriptor{
-            &serializer_,
-            &memory_transfer_service_,
-        }),
-        wgpu_instance_(wire_client_.ReserveInstance().instance) {
-    DCHECK(wgpu_instance_);
-  }
+DawnWireServices::DawnWireServices(
+    WebGPUImplementation* webgpu_implementation,
+    WebGPUCmdHelper* helper,
+    MappedMemoryManager* mapped_memory,
+    std::unique_ptr<TransferBuffer> transfer_buffer)
+    : memory_transfer_service_(mapped_memory),
+      serializer_(webgpu_implementation,
+                  helper,
+                  &memory_transfer_service_,
+                  std::move(transfer_buffer)),
+      wire_client_(dawn::wire::WireClientDescriptor{
+          &serializer_,
+          &memory_transfer_service_,
+      }),
+      wgpu_instance_(wire_client_.ReserveInstance().instance) {
+  DCHECK(wgpu_instance_);
+}
 
-  const DawnProcTable& GetProcs() const override {
-    return dawn::wire::client::GetProcs();
-  }
+const DawnProcTable& DawnWireServices::GetProcs() const {
+  return dawn::wire::client::GetProcs();
+}
 
-  WGPUInstance GetWGPUInstance() const override { return wgpu_instance_; }
+WGPUInstance DawnWireServices::GetWGPUInstance() const {
+  return wgpu_instance_;
+}
 
-  dawn::wire::WireClient* wire_client() { return &wire_client_; }
-  DawnClientSerializer* serializer() { return &serializer_; }
-  DawnClientMemoryTransferService* memory_transfer_service() {
-    return &memory_transfer_service_;
-  }
+dawn::wire::WireClient* DawnWireServices::wire_client() {
+  return &wire_client_;
+}
+DawnClientSerializer* DawnWireServices::serializer() {
+  return &serializer_;
+}
+DawnClientMemoryTransferService* DawnWireServices::memory_transfer_service() {
+  return &memory_transfer_service_;
+}
 
-  void Disconnect() override {
-    disconnected_ = true;
-    wire_client_.Disconnect();
-    serializer_.Disconnect();
-    memory_transfer_service_.Disconnect();
-  }
+void DawnWireServices::Disconnect() {
+  disconnected_ = true;
+  wire_client_.Disconnect();
+  serializer_.Disconnect();
+  memory_transfer_service_.Disconnect();
+}
 
-  bool IsDisconnected() const { return disconnected_; }
+bool DawnWireServices::IsDisconnected() const {
+  return disconnected_;
+}
 
-  void FreeMappedResources(WebGPUCmdHelper* helper) {
-    memory_transfer_service_.FreeHandles(helper);
-  }
-
- private:
-  bool disconnected_ = false;
-  DawnClientMemoryTransferService memory_transfer_service_;
-  DawnClientSerializer serializer_;
-  dawn::wire::WireClient wire_client_;
-  WGPUInstance wgpu_instance_;
-};
+void DawnWireServices::FreeMappedResources(WebGPUCmdHelper* helper) {
+  memory_transfer_service_.FreeHandles(helper);
+}
 #endif
 
 // Include the auto-generated part of this file. We split this because it means
@@ -102,7 +99,9 @@ WebGPUImplementation::~WebGPUImplementation() {
   // memory blocks are in use. Calling |FreeMappedResources| marks all
   // blocks that are no longer in use as free.
 #if BUILDFLAG(USE_DAWN)
-  dawn_wire_->FreeMappedResources(helper_);
+  if (dawn_wire_) {
+    dawn_wire_->FreeMappedResources(helper_);
+  }
 #endif
 
   // Wait for commands to finish before we continue destruction.
@@ -115,7 +114,9 @@ WebGPUImplementation::~WebGPUImplementation() {
 void WebGPUImplementation::LoseContext() {
   lost_ = true;
 #if BUILDFLAG(USE_DAWN)
-  dawn_wire_->Disconnect();
+  if (dawn_wire_) {
+    dawn_wire_->Disconnect();
+  }
 #endif
 }
 
@@ -129,22 +130,16 @@ gpu::ContextResult WebGPUImplementation::Initialize(
 
   std::unique_ptr<TransferBuffer> transfer_buffer =
       std::make_unique<TransferBuffer>(helper_);
-  if (!transfer_buffer->Initialize(limits.start_transfer_buffer_size,
-                                   /* start offset */ 0,
-                                   limits.min_transfer_buffer_size,
-                                   limits.max_transfer_buffer_size,
-                                   /* alignment */ 8)) {
+  if (!transfer_buffer->Initialize(
+          limits.start_transfer_buffer_size,
+          /* start offset */ 0, limits.min_transfer_buffer_size,
+          limits.max_transfer_buffer_size, kAlignment)) {
     return gpu::ContextResult::kFatalFailure;
   }
 
 #if BUILDFLAG(USE_DAWN)
   dawn_wire_ = base::MakeRefCounted<DawnWireServices>(
       this, helper_, mapped_memory_.get(), std::move(transfer_buffer));
-
-  // TODO(senorblanco): Do this only once per process. Doing it once per
-  // WebGPUImplementation is non-optimal but valid, since the returned
-  // procs are always the same.
-  dawnProcSetProcs(&dawn::wire::client::GetProcs());
 #endif
 
   return gpu::ContextResult::kSuccess;
@@ -297,11 +292,6 @@ void WebGPUImplementation::OnGpuControlReturnData(
   }
 #if BUILDFLAG(USE_DAWN)
 
-  static uint32_t return_trace_id = 0;
-  TRACE_EVENT_WITH_FLOW0(TRACE_DISABLED_BY_DEFAULT("gpu.dawn"),
-                         "DawnReturnCommands", return_trace_id++,
-                         TRACE_EVENT_FLAG_FLOW_IN);
-
   TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("gpu.dawn"),
                "WebGPUImplementation::OnGpuControlReturnData", "bytes",
                data.size());
@@ -320,6 +310,12 @@ void WebGPUImplementation::OnGpuControlReturnData(
       if (dawn_wire_->IsDisconnected()) {
         break;
       }
+
+      TRACE_EVENT_WITH_FLOW0(
+          TRACE_DISABLED_BY_DEFAULT("gpu.dawn"), "DawnReturnCommands",
+          dawn_return_commands_info->header.return_data_header.trace_id,
+          TRACE_EVENT_FLAG_FLOW_IN);
+
       // TODO(enga): Instead of a CHECK, this could generate a device lost
       // event on just that device. It doesn't seem worth doing right now
       // since a failure here is likely not recoverable.
@@ -410,21 +406,43 @@ WGPUDevice WebGPUImplementation::DeprecatedEnsureDefaultDeviceSync() {
   return nullptr;
 }
 
-void WebGPUImplementation::AssociateMailbox(GLuint device_id,
-                                            GLuint device_generation,
-                                            GLuint texture_id,
-                                            GLuint texture_generation,
-                                            GLuint usage,
-                                            MailboxFlags flags,
-                                            const GLbyte* mailbox) {
+void WebGPUImplementation::AssociateMailbox(
+    GLuint device_id,
+    GLuint device_generation,
+    GLuint texture_id,
+    GLuint texture_generation,
+    GLuint usage,
+    const WGPUTextureFormat* view_formats,
+    GLuint view_format_count,
+    MailboxFlags flags,
+    const Mailbox& mailbox) {
 #if BUILDFLAG(USE_DAWN)
   // Commit previous Dawn commands as they may manipulate texture object IDs
   // and need to be resolved prior to the AssociateMailbox command. Otherwise
   // the service side might not know, for example that the previous texture
   // using that ID has been released.
   dawn_wire_->serializer()->Commit();
-  helper_->AssociateMailboxImmediate(device_id, device_generation, texture_id,
-                                     texture_generation, usage, flags, mailbox);
+
+  // The command buffer transfer data in 4-byte "entries". So the array of data
+  // we pass must have a byte-length that's a multiple of 4.
+  constexpr size_t kEntrySize = 4u;
+  static_assert(sizeof(mailbox.name) % kEntrySize == 0u);
+  static_assert(sizeof(WGPUTextureFormat) % kEntrySize == 0u);
+
+  size_t num_bytes =
+      sizeof(mailbox.name) + sizeof(WGPUTextureFormat) * view_format_count;
+  std::vector<char> immediate_data(num_bytes);
+
+  uint32_t num_entries = ComputeNumEntries(immediate_data.size());
+
+  memcpy(immediate_data.data(), mailbox.name, sizeof(mailbox.name));
+  memcpy(immediate_data.data() + sizeof(mailbox.name), view_formats,
+         sizeof(WGPUTextureFormat) * view_format_count);
+
+  helper_->AssociateMailboxImmediate(
+      device_id, device_generation, texture_id, texture_generation, usage,
+      flags, view_format_count, num_entries,
+      reinterpret_cast<GLuint*>(immediate_data.data()));
 #endif
 }
 

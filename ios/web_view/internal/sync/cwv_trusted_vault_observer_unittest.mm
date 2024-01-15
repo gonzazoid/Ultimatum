@@ -6,19 +6,16 @@
 
 #import <Foundation/Foundation.h>
 
-#include "components/sync/driver/trusted_vault_client.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "components/trusted_vault/trusted_vault_client.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 namespace ios_web_view {
 
 // Concrete observer just for testing.
-class TrustedVaultObserver : public syncer::TrustedVaultClient::Observer {
+class TrustedVaultObserver
+    : public trusted_vault::TrustedVaultClient::Observer {
   void OnTrustedVaultKeysChanged() override {}
   void OnTrustedVaultRecoverabilityChanged() override {}
 };

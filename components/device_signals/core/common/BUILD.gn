@@ -4,6 +4,7 @@
 
 static_library("common") {
   public = [
+    "cached_signal.h",
     "common_types.h",
     "platform_utils.h",
     "signals_constants.h",
@@ -13,6 +14,11 @@ static_library("common") {
     "common_types.cc",
     "signals_constants.cc",
   ]
+
+  public_deps = [ "//third_party/abseil-cpp:absl" ]
+
+  deps = [ "//base" ]
+
   if (is_win) {
     sources += [ "win/platform_utils_win.cc" ]
   }
@@ -21,9 +27,9 @@ static_library("common") {
     sources += [ "posix/platform_utils_posix.cc" ]
   }
 
-  public_deps = [ "//third_party/abseil-cpp:absl" ]
-
-  deps = [ "//base" ]
+  if (is_mac) {
+    sources += [ "mac/platform_utils_mac.cc" ]
+  }
 }
 
 source_set("features") {

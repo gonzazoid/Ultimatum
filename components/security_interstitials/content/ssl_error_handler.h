@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -17,7 +17,6 @@
 #include "components/captive_portal/core/buildflags.h"
 #include "components/security_interstitials/content/common_name_mismatch_handler.h"
 #include "components/security_interstitials/content/security_interstitial_page.h"
-#include "components/security_interstitials/content/ssl_cert_reporter.h"
 #include "components/security_interstitials/content/ssl_error_assistant.pb.h"
 #include "components/ssl_errors/error_classification.h"
 #include "content/public/browser/certificate_request_result_type.h"
@@ -155,7 +154,6 @@ class SSLErrorHandler : public content::WebContentsUserData<SSLErrorHandler>,
       int cert_error,
       const net::SSLInfo& ssl_info,
       const GURL& request_url,
-      std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
       BlockingPageReadyCallback blocking_page_ready_callback,
       network_time::NetworkTimeTracker* network_time_tracker,
       captive_portal::CaptivePortalService* captive_portal_service,
@@ -256,7 +254,8 @@ class SSLErrorHandler : public content::WebContentsUserData<SSLErrorHandler>,
   // The below field is unused if captive portal detection is not enabled,
   // which causes a compiler error.
 #if BUILDFLAG(ENABLE_CAPTIVE_PORTAL_DETECTION)
-  raw_ptr<captive_portal::CaptivePortalService> captive_portal_service_;
+  raw_ptr<captive_portal::CaptivePortalService, DanglingUntriaged>
+      captive_portal_service_;
 #endif
 
   base::CallbackListSubscription subscription_;

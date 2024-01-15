@@ -10,16 +10,23 @@
 #include <vector>
 
 #include "base/check_is_test.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "components/permissions/permission_prompt.h"
 #include "components/permissions/permission_request_queue.h"
 #include "components/permissions/permission_ui_selector.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/permissions/request_type.h"
+#include "content/public/browser/global_routing_id.h"
+#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/rect.h"
 
 class GURL;
 
@@ -70,10 +77,18 @@ class PermissionRequestManager
       public content::WebContentsUserData<PermissionRequestManager>,
       public PermissionPrompt::Delegate {
  public:
-  class Observer {
+  class Observer : public base::CheckedObserver {
    public:
+    virtual void OnTabVisibilityChanged(content::Visibility visibility) {}
     virtual void OnPromptAdded() {}
     virtual void OnPromptRemoved() {}
+    // Called when recreation of the permission prompt is not possible. It means
+    // that `PermissionRequestManager` is ready to display a prompt but the UI
+    // layer was not able to display it.
+    virtual void OnPromptRecreateViewFailed() {}
+    // Called when permission prompt creation was aborted because the current
+    // tab is no longer visible, hance it is not possible to display a prompt.
+    virtual void OnPromptCreationFailedHiddenTab() {}
     // Called when the current batch of requests have been handled and the
     // prompt is no longer visible. Note that there might be some queued
     // permission requests that will get shown after this. This differs from
@@ -86,9 +101,6 @@ class PermissionRequestManager
     virtual void OnNavigation(content::NavigationHandle* navigation_handle) {}
 
     virtual void OnRequestDecided(permissions::PermissionAction action) {}
-
-   protected:
-    virtual ~Observer() = default;
   };
 
   enum AutoResponseType { NONE, ACCEPT_ONCE, ACCEPT_ALL, DENY_ALL, DISMISS };
@@ -118,6 +130,13 @@ class PermissionRequestManager
 
   bool IsRequestInProgress() const;
 
+  // Returns `true` if a permission request is in progress but a prompt view is
+  // nullptr.
+  bool CanRestorePrompt();
+
+  // Recreates a permission prompt.
+  void RestorePrompt();
+
   // Do NOT use this methods in production code. Use this methods in browser
   // tests that need to accept or deny permissions when requested in
   // JavaScript. Your test needs to set this appropriately, and then the bubble
@@ -137,7 +156,8 @@ class PermissionRequestManager
   void OnVisibilityChanged(content::Visibility visibility) override;
 
   // PermissionPrompt::Delegate:
-  const std::vector<PermissionRequest*>& Requests() override;
+  const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>& Requests()
+      override;
   GURL GetRequestingOrigin() const override;
   GURL GetEmbeddingOrigin() const override;
   void Accept() override;
@@ -145,6 +165,9 @@ class PermissionRequestManager
   void Deny() override;
   void Dismiss() override;
   void Ignore() override;
+  void FinalizeCurrentRequests() override;
+  void OpenHelpCenterLink(const ui::Event& event) override;
+  void PreIgnoreQuietPrompt() override;
   bool WasCurrentRequestAlreadyDisplayed() override;
   bool ShouldDropCurrentRequestIfCannotShowQuietly() const override;
   bool ShouldCurrentRequestUseQuietUI() const override;
@@ -156,7 +179,12 @@ class PermissionRequestManager
   void SetManageClicked() override;
   void SetLearnMoreClicked() override;
   base::WeakPtr<PermissionPrompt::Delegate> GetWeakPtr() override;
+  content::WebContents* GetAssociatedWebContents() override;
   bool RecreateView() override;
+
+  // Returns the bounds of the active permission prompt view if we're
+  // displaying one.
+  absl::optional<gfx::Rect> GetPromptBubbleViewBoundsInScreen() const;
 
   void set_manage_clicked() { did_click_manage_ = true; }
   void set_learn_more_clicked() { did_click_learn_more_ = true; }
@@ -187,6 +215,12 @@ class PermissionRequestManager
     permission_ui_selectors_.clear();
   }
 
+  // Getter for testing.
+  const std::vector<std::unique_ptr<PermissionUiSelector>>&
+  get_permission_ui_selectors_for_testing() {
+    return permission_ui_selectors_;
+  }
+
   void set_view_factory_for_testing(PermissionPrompt::Factory view_factory) {
     view_factory_ = std::move(view_factory);
   }
@@ -215,7 +249,11 @@ class PermissionRequestManager
     enabled_app_level_notification_permission_for_testing_ = enabled;
   }
 
-  base::ObserverList<Observer>::Unchecked* get_observer_list_for_testing() {
+  void set_embedding_origin_for_testing(const GURL& embedding_origin) {
+    embedding_origin_for_testing_ = embedding_origin;
+  }
+
+  base::ObserverList<Observer>* get_observer_list_for_testing() {
     CHECK_IS_TEST();
     return &observer_list_;
   }
@@ -224,9 +262,14 @@ class PermissionRequestManager
     return !pending_permission_requests_.IsEmpty();
   }
 
+  void SetHatsShownCallback(base::OnceCallback<void()> callback) override;
+
  private:
   friend class test::PermissionRequestManagerTestApi;
   friend class content::WebContentsUserData<PermissionRequestManager>;
+  FRIEND_TEST_ALL_PREFIXES(PermissionRequestManagerTest, WeakDuplicateRequests);
+  FRIEND_TEST_ALL_PREFIXES(PermissionRequestManagerTest,
+                           WeakDuplicateRequestsAccept);
 
   explicit PermissionRequestManager(content::WebContents* web_contents);
 
@@ -253,10 +296,10 @@ class PermissionRequestManager
   // Return true if we keep showing the current request, otherwise return false
   bool ReprioritizeCurrentRequestIfNeeded();
 
-  // Validate the input request. If the request is invalid, cancel and remove it
-  // from *_map_ and *_set_.
+  // Validate the input request. If the request is invalid and |should_finalize|
+  // is set, cancel and remove it from *_map_ and *_set_.
   // Return true if the request is valid, otherwise false.
-  bool ValidateRequest(PermissionRequest* request);
+  bool ValidateRequest(PermissionRequest* request, bool should_finalize = true);
 
   // Adds `request` into `pending_permission_requests_`, and request's
   // `source_frame` into `request_sources_map_`.
@@ -286,9 +329,11 @@ class PermissionRequestManager
   // Finalize request.
   void ResetViewStateForCurrentRequest();
 
-  // Delete the view object, finalize requests, asynchronously show a queued
-  // request if present.
-  void FinalizeCurrentRequests(PermissionAction permission_action);
+  // Records metrics and informs embargo and autoblocker about the requests
+  // being decided. Based on |view_->ShouldFinalizeRequestAfterDecided()| it
+  // will also call |FinalizeCurrentRequests()|. Otherwise a separate
+  // |FinalizeCurrentRequests()| call must be made to release the |view_|.
+  void CurrentRequestsDecided(PermissionAction permission_action);
 
   // Cancel all pending or active requests and destroy the PermissionPrompt if
   // one exists. This is called if the WebContents is destroyed or navigates its
@@ -301,18 +346,41 @@ class PermissionRequestManager
   // may or may not be the same object as |request|.
   PermissionRequest* GetExistingRequest(PermissionRequest* request) const;
 
+  // Returns an iterator into |duplicate_requests_|, points the matching list,
+  // or duplicate_requests_.end() if no match. The matching list contains all
+  // the weak requests which are duplicate of the given |request| (see
+  // |IsDuplicateOf|)
+  using WeakPermissionRequestList =
+      std::list<std::list<base::WeakPtr<PermissionRequest>>>;
+  WeakPermissionRequestList::iterator FindDuplicateRequestList(
+      PermissionRequest* request);
+
+  // Trigger |visitor| for each live weak request which matches the given
+  // request (see |IsDuplicateOf|) in the |duplicate_requests_|. Returns an
+  // iterator into |duplicate_requests_|, points the matching list, or
+  // duplicate_requests_.end() if no match.
+  using DuplicateRequestVisitor =
+      base::RepeatingCallback<void(const base::WeakPtr<PermissionRequest>&)>;
+  WeakPermissionRequestList::iterator VisitDuplicateRequests(
+      DuplicateRequestVisitor visitor,
+      PermissionRequest* request);
+
   // Calls PermissionGranted on a request and all its duplicates.
   void PermissionGrantedIncludingDuplicates(PermissionRequest* request,
                                             bool is_one_time);
   // Calls PermissionDenied on a request and all its duplicates.
   void PermissionDeniedIncludingDuplicates(PermissionRequest* request);
   // Calls Cancelled on a request and all its duplicates.
-  void CancelledIncludingDuplicates(PermissionRequest* request);
+  void CancelledIncludingDuplicates(PermissionRequest* request,
+                                    bool is_final_decision = true);
   // Calls RequestFinished on a request and all its duplicates.
   void RequestFinishedIncludingDuplicates(PermissionRequest* request);
 
+  void NotifyTabVisibilityChanged(content::Visibility visibility);
   void NotifyPromptAdded();
   void NotifyPromptRemoved();
+  void NotifyPromptRecreateFailed();
+  void NotifyPromptCreationFailedHiddenTab();
   void NotifyRequestDecided(permissions::PermissionAction permission_action);
 
   void StorePermissionActionForUMA(const GURL& origin,
@@ -329,6 +397,16 @@ class PermissionRequestManager
   void LogWarningToConsole(const char* message);
 
   void DoAutoResponseForTesting();
+
+  void PreIgnoreQuietPromptInternal();
+
+  // Returns true if there is a request in progress that is initiated by an
+  // embedded permission element.
+  bool IsCurrentRequestEmbeddedPermissionElementInitiated() const;
+
+  // Returns true when the current request should be finalized together with the
+  // permission decision.
+  bool ShouldFinalizeRequestAfterDecided(PermissionAction action) const;
 
   // Factory to be used to create views when needed.
   PermissionPrompt::Factory view_factory_;
@@ -351,21 +429,18 @@ class PermissionRequestManager
   // The request (or requests) that the user is currently being prompted for.
   // When this is non-empty, the |view_| is generally non-null as long as the
   // tab is visible.
-  std::vector<PermissionRequest*> requests_;
+  std::vector<raw_ptr<PermissionRequest, VectorExperimental>> requests_;
 
   struct PermissionRequestSource {
-    int render_process_id;
-    int render_frame_id;
+    content::GlobalRenderFrameHostId requesting_frame_id;
 
     bool IsSourceFrameInactiveAndDisallowActivation() const;
   };
 
   PermissionRequestQueue pending_permission_requests_;
 
-  // Maps from the first request of a kind to subsequent requests that were
-  // duped against it.
-  std::unordered_multimap<PermissionRequest*, PermissionRequest*>
-      duplicate_requests_;
+  // Stores the weak pointers of duplicated requests in a 2D list.
+  WeakPermissionRequestList duplicate_requests_;
 
   // Maps each PermissionRequest currently in |requests_| or
   // |pending_permission_requests_| to which RenderFrameHost it originated from.
@@ -378,8 +453,8 @@ class PermissionRequestManager
   // not prempt a request if the incoming request is already validated.
   std::set<PermissionRequest*> validated_requests_set_;
 
-  base::ObserverList<Observer>::Unchecked observer_list_;
-  AutoResponseType auto_response_for_test_;
+  base::ObserverList<Observer> observer_list_;
+  AutoResponseType auto_response_for_test_ = NONE;
 
   // Suppress notification permission prompts in this tab, regardless of the
   // origin requesting the permission.
@@ -445,6 +520,14 @@ class PermissionRequestManager
   absl::optional<base::TimeDelta> time_to_decision_for_test_;
 
   absl::optional<bool> enabled_app_level_notification_permission_for_testing_;
+
+  absl::optional<GURL> embedding_origin_for_testing_;
+
+  // A timer is used to pre-ignore the permission request if it's been displayed
+  // as a quiet chip.
+  base::OneShotTimer preignore_timer_;
+
+  absl::optional<base::OnceCallback<void()>> hats_shown_callback_;
 
   base::WeakPtrFactory<PermissionRequestManager> weak_factory_{this};
   WEB_CONTENTS_USER_DATA_KEY_DECL();

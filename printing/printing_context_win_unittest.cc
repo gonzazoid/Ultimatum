@@ -9,7 +9,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/win/scoped_handle.h"
@@ -31,7 +31,7 @@ class PrintingContextTest : public PrintingTest<testing::Test>,
   void PrintSettingsCallback(mojom::ResultCode result) { result_ = result; }
 
   // PrintingContext::Delegate methods.
-  gfx::NativeView GetParentView() override { return nullptr; }
+  gfx::NativeView GetParentView() override { return gfx::NativeView(); }
   std::string GetAppLocale() override { return std::string(); }
 
  protected:
@@ -58,8 +58,10 @@ using ScopedGlobalAlloc =
 
 class MockPrintingContextWin : public PrintingContextSystemDialogWin {
  public:
-  explicit MockPrintingContextWin(Delegate* delegate)
-      : PrintingContextSystemDialogWin(delegate) {}
+  MockPrintingContextWin(Delegate* delegate)
+      : PrintingContextSystemDialogWin(
+            delegate,
+            PrintingContext::ProcessBehavior::kOopDisabled) {}
 
  protected:
   // This is a fake PrintDlgEx implementation that sets the right fields in
@@ -183,7 +185,8 @@ TEST_F(PrintingContextTest, DISABLED_Base) {
   auto settings = std::make_unique<PrintSettings>();
   settings->set_device_name(base::WideToUTF16(GetDefaultPrinter()));
   // Initialize it.
-  PrintingContextWin context(this);
+  PrintingContextWin context(this,
+                             PrintingContext::ProcessBehavior::kOopDisabled);
   EXPECT_EQ(mojom::ResultCode::kSuccess,
             context.InitWithSettingsForTest(std::move(settings)));
 

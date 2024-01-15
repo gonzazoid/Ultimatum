@@ -73,13 +73,14 @@ const DeviceState* ManagedState::AsDeviceState() const {
   return nullptr;
 }
 
-bool ManagedState::InitialPropertiesReceived(const base::Value& properties) {
+bool ManagedState::InitialPropertiesReceived(
+    const base::Value::Dict& properties) {
   return false;
 }
 
-void ManagedState::GetStateProperties(base::Value* dictionary) const {
-  dictionary->SetKey(shill::kNameProperty, base::Value(name()));
-  dictionary->SetKey(shill::kTypeProperty, base::Value(type()));
+void ManagedState::GetStateProperties(base::Value::Dict* dictionary) const {
+  dictionary->Set(shill::kNameProperty, name());
+  dictionary->Set(shill::kTypeProperty, type());
 }
 
 bool ManagedState::ManagedStatePropertyChanged(const std::string& key,

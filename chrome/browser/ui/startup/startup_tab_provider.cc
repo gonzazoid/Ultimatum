@@ -7,8 +7,8 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -23,6 +23,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/signin/signin_features.h"
 #include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/ui/browser.h"
@@ -50,11 +51,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/shell_integration.h"
 #endif  // BUILDFLAG(IS_WIN)
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/crosapi/mojom/crosapi.mojom.h"
-#include "chromeos/startup/browser_params_proxy.h"
-#endif
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
@@ -98,14 +94,6 @@ bool ValidateUrl(const GURL& url) {
   const GURL reset_settings_url =
       settings_url.Resolve(chrome::kResetProfileSettingsSubPage);
   url_points_to_an_approved_settings_page = url == reset_settings_url;
-#if BUILDFLAG(IS_WIN)
-  // On Windows, also allow a hash for the Chrome Cleanup Tool.
-  const GURL reset_settings_url_with_cct_hash = reset_settings_url.Resolve(
-      std::string("#") + settings::ResetSettingsHandler::kCctResetSettingsHash);
-  url_points_to_an_approved_settings_page =
-      url_points_to_an_approved_settings_page ||
-      url == reset_settings_url_with_cct_hash;
-#endif  // BUILDFLAG(IS_WIN)
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
   auto* policy = content::ChildProcessSecurityPolicy::GetInstance();
@@ -152,8 +140,9 @@ StartupTabs StartupTabProviderImpl::GetOnboardingTabs(Profile* profile) const {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   return StartupTabs();
 #else
-  if (!profile)
+  if (!profile || base::FeatureList::IsEnabled(kForYouFre)) {
     return StartupTabs();
+  }
 
   StandardOnboardingTabsParams standard_params;
   standard_params.is_first_run = first_run::IsChromeFirstRun();
@@ -172,25 +161,6 @@ StartupTabs StartupTabProviderImpl::GetOnboardingTabs(Profile* profile) const {
   return GetStandardOnboardingTabsForState(standard_params);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
-
-#if BUILDFLAG(IS_WIN)
-StartupTabs StartupTabProviderImpl::GetWelcomeBackTabs(
-    Profile* profile,
-    StartupBrowserCreator* browser_creator,
-    chrome::startup::IsProcessStartup process_startup) const {
-  StartupTabs tabs;
-  if (process_startup == chrome::startup::IsProcessStartup::kNo ||
-      !browser_creator) {
-    return tabs;
-  }
-  if (browser_creator->welcome_back_page() &&
-      CanShowWelcome(SyncServiceFactory::IsSyncAllowed(profile),
-                     profile->IsChild(), signin_util::IsForceSigninEnabled())) {
-    tabs.emplace_back(GetWelcomePageUrl(false));
-  }
-  return tabs;
-}
-#endif  // BUILDFLAG(IS_WIN)
 
 StartupTabs StartupTabProviderImpl::GetDistributionFirstRunTabs(
     StartupBrowserCreator* browser_creator) const {
@@ -281,24 +251,6 @@ CommandLineTabsPresent StartupTabProviderImpl::HasCommandLineTabs(
                     : CommandLineTabsPresent::kNo;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-StartupTabs StartupTabProviderImpl::GetCrosapiTabs() const {
-  auto* init_params = chromeos::BrowserParamsProxy::Get();
-  if (init_params->InitialBrowserAction() !=
-          crosapi::mojom::InitialBrowserAction::kOpenWindowWithUrls ||
-      !init_params->StartupUrls().has_value()) {
-    return {};
-  }
-
-  StartupTabs result;
-  for (const GURL& url : *init_params->StartupUrls()) {
-    if (ValidateUrl(url))
-      result.emplace_back(url);
-  }
-  return result;
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
 #if !BUILDFLAG(IS_ANDROID)
 StartupTabs StartupTabProviderImpl::GetNewFeaturesTabs(
     bool whats_new_enabled) const {
@@ -315,6 +267,7 @@ StartupTabs StartupTabProviderImpl::GetPrivacySandboxTabs(
 
 #endif  // !BUILDFLAG(IS_ANDROID)
 
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
 // static
 bool StartupTabProviderImpl::CanShowWelcome(bool is_signin_allowed,
                                             bool is_child_account,
@@ -328,17 +281,24 @@ bool StartupTabProviderImpl::ShouldShowWelcomeForOnboarding(
     bool is_signed_in) {
   return !has_seen_welcome_page && !is_signed_in;
 }
+#endif
 
 // static
 StartupTabs StartupTabProviderImpl::GetStandardOnboardingTabsForState(
     const StandardOnboardingTabsParams& params) {
   StartupTabs tabs;
+
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+  DCHECK(!base::FeatureList::IsEnabled(kForYouFre));
+
   if (CanShowWelcome(params.is_signin_allowed, params.is_child_account,
                      params.is_force_signin_enabled) &&
       ShouldShowWelcomeForOnboarding(params.has_seen_welcome_page,
                                      params.is_signed_in)) {
     tabs.emplace_back(GetWelcomePageUrl(!params.is_first_run));
   }
+#endif
+
   return tabs;
 }
 
@@ -355,10 +315,18 @@ StartupTabs StartupTabProviderImpl::GetInitialPrefsTabsForState(
   if (is_first_run) {
     tabs.reserve(first_run_tabs.size());
     for (GURL url : first_run_tabs) {
-      if (url.host_piece() == kNewTabUrlHost)
+      if (url.host_piece() == kNewTabUrlHost) {
         url = GURL(chrome::kChromeUINewTabURL);
-      else if (url.host_piece() == kWelcomePageUrlHost)
-        url = GetWelcomePageUrl(false);
+      } else if (url.host_piece() == kWelcomePageUrlHost) {
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
+        if (base::FeatureList::IsEnabled(kForYouFre)) {
+          // Do not show the in-tab welcome experience when the FRE is enabled.
+          continue;
+        } else {
+          url = GetWelcomePageUrl(false);
+        }
+#endif
+      }
       tabs.emplace_back(url);
     }
   }
@@ -465,6 +433,7 @@ StartupTabs StartupTabProviderImpl::GetPrivacySandboxTabsForState(
 
 #endif
 
+#if BUILDFLAG(ENABLE_DICE_SUPPORT)
 // static
 GURL StartupTabProviderImpl::GetWelcomePageUrl(bool use_later_run_variant) {
   GURL url(chrome::kChromeUIWelcomeURL);
@@ -472,11 +441,11 @@ GURL StartupTabProviderImpl::GetWelcomePageUrl(bool use_later_run_variant) {
              ? net::AppendQueryParameter(url, "variant", "everywhere")
              : url;
 }
+#endif
 
 // static
 void StartupTabProviderImpl::AddIncompatibleApplicationsUrl(StartupTabs* tabs) {
 #if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  UMA_HISTOGRAM_BOOLEAN("IncompatibleApplicationsPage.AddedPostCrash", true);
   GURL url(chrome::kChromeUISettingsURL);
   tabs->emplace_back(url.Resolve("incompatibleApplications"));
 #endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)

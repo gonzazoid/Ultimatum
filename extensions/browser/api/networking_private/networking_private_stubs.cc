@@ -19,9 +19,6 @@ NetworkingPrivateEventRouterFactory::GetInstance() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetPropertiesFunction
 
-NetworkingPrivateGetPropertiesFunction::
-    ~NetworkingPrivateGetPropertiesFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetPropertiesFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -29,9 +26,6 @@ NetworkingPrivateGetPropertiesFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetManagedPropertiesFunction
-
-NetworkingPrivateGetManagedPropertiesFunction::
-    ~NetworkingPrivateGetManagedPropertiesFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetManagedPropertiesFunction::Run() {
@@ -41,17 +35,12 @@ NetworkingPrivateGetManagedPropertiesFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetStateFunction
 
-NetworkingPrivateGetStateFunction::~NetworkingPrivateGetStateFunction() {}
-
 ExtensionFunction::ResponseAction NetworkingPrivateGetStateFunction::Run() {
   return RespondNow(Error(kStubError));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateSetPropertiesFunction
-
-NetworkingPrivateSetPropertiesFunction::
-    ~NetworkingPrivateSetPropertiesFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateSetPropertiesFunction::Run() {
@@ -61,9 +50,6 @@ NetworkingPrivateSetPropertiesFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateCreateNetworkFunction
 
-NetworkingPrivateCreateNetworkFunction::
-    ~NetworkingPrivateCreateNetworkFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateCreateNetworkFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -71,9 +57,6 @@ NetworkingPrivateCreateNetworkFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateForgetNetworkFunction
-
-NetworkingPrivateForgetNetworkFunction::
-    ~NetworkingPrivateForgetNetworkFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateForgetNetworkFunction::Run() {
@@ -83,17 +66,12 @@ NetworkingPrivateForgetNetworkFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetNetworksFunction
 
-NetworkingPrivateGetNetworksFunction::~NetworkingPrivateGetNetworksFunction() {}
-
 ExtensionFunction::ResponseAction NetworkingPrivateGetNetworksFunction::Run() {
   return RespondNow(Error(kStubError));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetVisibleNetworksFunction
-
-NetworkingPrivateGetVisibleNetworksFunction::
-    ~NetworkingPrivateGetVisibleNetworksFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetVisibleNetworksFunction::Run() {
@@ -103,9 +81,6 @@ NetworkingPrivateGetVisibleNetworksFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetEnabledNetworkTypesFunction
 
-NetworkingPrivateGetEnabledNetworkTypesFunction::
-    ~NetworkingPrivateGetEnabledNetworkTypesFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetEnabledNetworkTypesFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -113,9 +88,6 @@ NetworkingPrivateGetEnabledNetworkTypesFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetDeviceStatesFunction
-
-NetworkingPrivateGetDeviceStatesFunction::
-    ~NetworkingPrivateGetDeviceStatesFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetDeviceStatesFunction::Run() {
@@ -125,9 +97,6 @@ NetworkingPrivateGetDeviceStatesFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateEnableNetworkTypeFunction
 
-NetworkingPrivateEnableNetworkTypeFunction::
-    ~NetworkingPrivateEnableNetworkTypeFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateEnableNetworkTypeFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -135,9 +104,6 @@ NetworkingPrivateEnableNetworkTypeFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateDisableNetworkTypeFunction
-
-NetworkingPrivateDisableNetworkTypeFunction::
-    ~NetworkingPrivateDisableNetworkTypeFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateDisableNetworkTypeFunction::Run() {
@@ -147,9 +113,6 @@ NetworkingPrivateDisableNetworkTypeFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateRequestNetworkScanFunction
 
-NetworkingPrivateRequestNetworkScanFunction::
-    ~NetworkingPrivateRequestNetworkScanFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateRequestNetworkScanFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -158,18 +121,12 @@ NetworkingPrivateRequestNetworkScanFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateStartConnectFunction
 
-NetworkingPrivateStartConnectFunction::
-    ~NetworkingPrivateStartConnectFunction() {}
-
 ExtensionFunction::ResponseAction NetworkingPrivateStartConnectFunction::Run() {
   return RespondNow(Error(kStubError));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateStartDisconnectFunction
-
-NetworkingPrivateStartDisconnectFunction::
-    ~NetworkingPrivateStartDisconnectFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateStartDisconnectFunction::Run() {
@@ -179,9 +136,6 @@ NetworkingPrivateStartDisconnectFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateStartActivateFunction
 
-NetworkingPrivateStartActivateFunction::
-    ~NetworkingPrivateStartActivateFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateStartActivateFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -189,9 +143,6 @@ NetworkingPrivateStartActivateFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetCaptivePortalStatusFunction
-
-NetworkingPrivateGetCaptivePortalStatusFunction::
-    ~NetworkingPrivateGetCaptivePortalStatusFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetCaptivePortalStatusFunction::Run() {
@@ -201,9 +152,6 @@ NetworkingPrivateGetCaptivePortalStatusFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateUnlockCellularSimFunction
 
-NetworkingPrivateUnlockCellularSimFunction::
-    ~NetworkingPrivateUnlockCellularSimFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateUnlockCellularSimFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -211,9 +159,6 @@ NetworkingPrivateUnlockCellularSimFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateSetCellularSimStateFunction
-
-NetworkingPrivateSetCellularSimStateFunction::
-    ~NetworkingPrivateSetCellularSimStateFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateSetCellularSimStateFunction::Run() {
@@ -223,9 +168,6 @@ NetworkingPrivateSetCellularSimStateFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateSelectCellularMobileNetworkFunction
 
-NetworkingPrivateSelectCellularMobileNetworkFunction::
-    ~NetworkingPrivateSelectCellularMobileNetworkFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateSelectCellularMobileNetworkFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -234,9 +176,6 @@ NetworkingPrivateSelectCellularMobileNetworkFunction::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetGlobalPolicyFunction
 
-NetworkingPrivateGetGlobalPolicyFunction::
-    ~NetworkingPrivateGetGlobalPolicyFunction() {}
-
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetGlobalPolicyFunction::Run() {
   return RespondNow(Error(kStubError));
@@ -244,9 +183,6 @@ NetworkingPrivateGetGlobalPolicyFunction::Run() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // NetworkingPrivateGetCertificateListsFunction
-
-NetworkingPrivateGetCertificateListsFunction::
-    ~NetworkingPrivateGetCertificateListsFunction() {}
 
 ExtensionFunction::ResponseAction
 NetworkingPrivateGetCertificateListsFunction::Run() {

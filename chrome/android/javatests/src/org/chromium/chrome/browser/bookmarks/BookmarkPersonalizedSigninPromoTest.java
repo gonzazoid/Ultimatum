@@ -12,18 +12,14 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 
 import static org.hamcrest.core.AllOf.allOf;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import static org.chromium.components.browser_ui.widget.RecyclerViewTestUtils.activeInRecyclerView;
 
 import android.app.Activity;
-import android.content.Context;
 
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.filters.MediumTest;
 
 import org.junit.After;
@@ -34,32 +30,40 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.MetricsUtils.HistogramDelta;
-import org.chromium.chrome.R;
+import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.signin.SyncConsentActivityLauncherImpl;
 import org.chromium.chrome.browser.ui.signin.SyncConsentActivityLauncher;
 import org.chromium.chrome.browser.ui.signin.SyncPromoController.SyncPromoState;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.chrome.test.util.BookmarkTestRule;
 import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
+import org.chromium.components.browser_ui.widget.RecyclerViewTestUtils;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
+import org.chromium.ui.test.util.DeviceRestriction;
 
-/**
- * Tests for the personalized signin promo on the Bookmarks page.
- */
+/** Tests for the personalized signin promo on the Bookmarks page. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Batch(Batch.PER_CLASS)
 public class BookmarkPersonalizedSigninPromoTest {
+    private static final String CONTINUED_HISTOGRAM_NAME =
+            "Signin.SyncPromo.Continued.Count.Bookmarks";
+    private static final String SHOWN_HISTOGRAM_NAME = "Signin.SyncPromo.Shown.Count.Bookmarks";
+
     private final AccountManagerTestRule mAccountManagerTestRule = new AccountManagerTestRule();
 
     private final BookmarkTestRule mBookmarkTestRule = new BookmarkTestRule();
@@ -79,82 +83,106 @@ public class BookmarkPersonalizedSigninPromoTest {
     public final RuleChain chain =
             RuleChain.outerRule(mAccountManagerTestRule).around(mBookmarkTestRule);
 
-    private final SyncConsentActivityLauncher mMockSyncConsentActivityLauncher =
-            mock(SyncConsentActivityLauncher.class);
+    @Mock private SyncConsentActivityLauncher mMockSyncConsentActivityLauncher;
 
     @Before
     public void setUp() {
-        BookmarkPromoHeader.forcePromoStateForTests(SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE);
+        MockitoAnnotations.initMocks(this);
+        BookmarkPromoHeader.forcePromoStateForTesting(SyncPromoState.PROMO_FOR_SIGNED_OUT_STATE);
         SyncConsentActivityLauncherImpl.setLauncherForTest(mMockSyncConsentActivityLauncher);
     }
 
     @After
     public void tearDown() {
-        SharedPreferencesManager.getInstance().removeKey(
-                ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT);
-        SyncConsentActivityLauncherImpl.setLauncherForTest(null);
-        BookmarkPromoHeader.forcePromoStateForTests(null);
+        ChromeSharedPreferences.getInstance()
+                .removeKey(ChromePreferenceKeys.SYNC_PROMO_TOTAL_SHOW_COUNT);
+        BookmarkPromoHeader.forcePromoStateForTesting(null);
     }
 
     @Test
     @MediumTest
+    @DisabledTest(message = "https://crbug.com/1406333")
     public void testSigninButtonDefaultAccount() {
+        var continuedHistogram =
+                HistogramWatcher.newSingleRecordWatcher(CONTINUED_HISTOGRAM_NAME, 1);
         final CoreAccountInfo accountInfo =
                 mAccountManagerTestRule.addAccount(AccountManagerTestRule.TEST_ACCOUNT_EMAIL);
-        HistogramDelta signinHistogram =
-                new HistogramDelta("Signin.SyncPromo.Continued.Count.Bookmarks", 1);
-        doNothing()
-                .when(SyncConsentActivityLauncherImpl.get())
-                .launchActivityForPromoDefaultFlow(any(Context.class), anyInt(), anyString());
         showBookmarkManagerAndCheckSigninPromoIsDisplayed();
 
         onView(allOf(withId(R.id.sync_promo_signin_button), activeInRecyclerView()))
                 .perform(click());
-
+        continuedHistogram.assertExpected();
+        Assert.assertEquals(
+                mMockSyncConsentActivityLauncher, SyncConsentActivityLauncherImpl.get());
         verify(mMockSyncConsentActivityLauncher)
-                .launchActivityForPromoDefaultFlow(any(Activity.class),
-                        eq(SigninAccessPoint.BOOKMARK_MANAGER), eq(accountInfo.getEmail()));
-        Assert.assertEquals(1, signinHistogram.getDelta());
+                .launchActivityForPromoDefaultFlow(
+                        any(Activity.class),
+                        eq(SigninAccessPoint.BOOKMARK_MANAGER),
+                        eq(accountInfo.getEmail()));
     }
 
     @Test
     @MediumTest
+    // Signing in with a non-default account is disabled on automotive, which only supports one
+    // account per OS profile.
+    @Restriction(DeviceRestriction.RESTRICTION_TYPE_NON_AUTO)
     public void testSigninButtonNotDefaultAccount() {
-        HistogramDelta signinHistogram =
-                new HistogramDelta("Signin.SyncPromo.Continued.Count.Bookmarks", 1);
-        doNothing()
-                .when(SyncConsentActivityLauncherImpl.get())
-                .launchActivityForPromoChooseAccountFlow(any(Context.class), anyInt(), anyString());
-        CoreAccountInfo accountInfo =
+        var continuedHistogram =
+                HistogramWatcher.newSingleRecordWatcher(CONTINUED_HISTOGRAM_NAME, 1);
+        final CoreAccountInfo accountInfo =
                 mAccountManagerTestRule.addAccount(AccountManagerTestRule.TEST_ACCOUNT_EMAIL);
         showBookmarkManagerAndCheckSigninPromoIsDisplayed();
+
         onView(allOf(withId(R.id.sync_promo_choose_account_button), activeInRecyclerView()))
                 .perform(click());
+        continuedHistogram.assertExpected();
+        Assert.assertEquals(
+                mMockSyncConsentActivityLauncher, SyncConsentActivityLauncherImpl.get());
         verify(mMockSyncConsentActivityLauncher)
-                .launchActivityForPromoChooseAccountFlow(any(Activity.class),
-                        eq(SigninAccessPoint.BOOKMARK_MANAGER), eq(accountInfo.getEmail()));
-        Assert.assertEquals(1, signinHistogram.getDelta());
+                .launchActivityForPromoChooseAccountFlow(
+                        any(Activity.class),
+                        eq(SigninAccessPoint.BOOKMARK_MANAGER),
+                        eq(accountInfo.getEmail()));
     }
 
     @Test
     @MediumTest
     public void testSigninButtonNewAccount() {
-        HistogramDelta signinHistogram =
-                new HistogramDelta("Signin.SyncPromo.Continued.Count.Bookmarks", 1);
-        doNothing()
-                .when(SyncConsentActivityLauncherImpl.get())
-                .launchActivityForPromoAddAccountFlow(any(Context.class), anyInt());
+        var continuedHistogram =
+                HistogramWatcher.newSingleRecordWatcher(CONTINUED_HISTOGRAM_NAME, 1);
         showBookmarkManagerAndCheckSigninPromoIsDisplayed();
+
         onView(allOf(withId(R.id.sync_promo_signin_button), activeInRecyclerView()))
                 .perform(click());
+        continuedHistogram.assertExpected();
+        Assert.assertEquals(
+                mMockSyncConsentActivityLauncher, SyncConsentActivityLauncherImpl.get());
         verify(mMockSyncConsentActivityLauncher)
                 .launchActivityForPromoAddAccountFlow(
                         any(Activity.class), eq(SigninAccessPoint.BOOKMARK_MANAGER));
-        Assert.assertEquals(1, signinHistogram.getDelta());
+    }
+
+    // Get the activity that hosts the bookmark UI - on phones, this is a BookmarkActivity, on
+    // tablets this is a native page.
+    private Activity getBookmarkHostActivity() {
+        if (sActivityTestRule.getActivity().isTablet()) {
+            return sActivityTestRule.getActivity();
+        } else {
+            return mBookmarkTestRule.getBookmarkActivity();
+        }
     }
 
     private void showBookmarkManagerAndCheckSigninPromoIsDisplayed() {
+        var shownHistogram = HistogramWatcher.newSingleRecordWatcher(SHOWN_HISTOGRAM_NAME, 1);
         mBookmarkTestRule.showBookmarkManager(sActivityTestRule.getActivity());
+        shownHistogram.assertExpected();
+
+        // TODO(https://cbug.com/1383638): If this stops the flakes, consider removing
+        // activeInRecyclerView.
+        RecyclerView recyclerView =
+                getBookmarkHostActivity().findViewById(R.id.selectable_list_recycler_view);
+        Assert.assertNotNull(recyclerView);
+        RecyclerViewTestUtils.waitForStableRecyclerView(recyclerView);
 
         // Profile data updates cause the signin promo to be recreated at the given index. The
         // RecyclerView's ViewGroup children may be stale, use activeInRecyclerView to filter to

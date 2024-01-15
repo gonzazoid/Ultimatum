@@ -14,18 +14,20 @@
 #include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/base/histograms.h"
 #include "cc/base/math_util.h"
-#include "components/viz/common/gpu/context_provider.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/common/resources/platform_color.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/resources/resource_sizes.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "gpu/command_buffer/client/raster_interface.h"
@@ -43,12 +45,8 @@ namespace {
 // default batch size for copy operations.
 const int kMaxBytesPerCopyOperation = 1024 * 1024 * 4;
 
-// When enabled, OneCopyRasterBufferProvider::RasterBufferImpl::Playback() runs
-// at normal thread priority.
-// TODO(crbug.com/1072756): Cleanup the feature when the Stable experiment is
-// complete, on November 25, 2020.
-BASE_FEATURE(kOneCopyRasterBufferPlaybackNormalThreadPriority,
-             "OneCopyRasterBufferPlaybackNormalThreadPriority",
+BASE_FEATURE(kAlwaysUseMappableSIForOneCopyRaster,
+             "AlwaysUseMappableSIForOneCopyRaster",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace
@@ -59,13 +57,14 @@ class OneCopyRasterBufferProvider::OneCopyGpuBacking
     : public ResourcePool::GpuBacking {
  public:
   ~OneCopyGpuBacking() override {
-    if (mailbox.IsZero())
+    if (!shared_image) {
       return;
+    }
     auto* sii = worker_context_provider->SharedImageInterface();
     if (returned_sync_token.HasData())
-      sii->DestroySharedImage(returned_sync_token, mailbox);
+      sii->DestroySharedImage(returned_sync_token, std::move(shared_image));
     else if (mailbox_sync_token.HasData())
-      sii->DestroySharedImage(mailbox_sync_token, mailbox);
+      sii->DestroySharedImage(mailbox_sync_token, std::move(shared_image));
   }
 
   void OnMemoryDump(
@@ -73,15 +72,16 @@ class OneCopyRasterBufferProvider::OneCopyGpuBacking
       const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
       uint64_t tracing_process_id,
       int importance) const override {
-    if (mailbox.IsZero())
+    if (!shared_image) {
       return;
+    }
 
-    auto tracing_guid = gpu::GetSharedImageGUIDForTracing(mailbox);
+    auto tracing_guid = shared_image->GetGUIDForTracing();
     pmd->CreateSharedGlobalAllocatorDump(tracing_guid);
     pmd->AddOwnershipEdge(buffer_dump_guid, tracing_guid, importance);
   }
 
-  // The ContextProvider used to clean up the mailbox
+  // The context used to clean up the mailbox
   raw_ptr<viz::RasterContextProvider> worker_context_provider = nullptr;
 };
 
@@ -94,11 +94,11 @@ OneCopyRasterBufferProvider::RasterBufferImpl::RasterBufferImpl(
     : client_(client),
       backing_(backing),
       resource_size_(in_use_resource.size()),
-      resource_format_(in_use_resource.format()),
+      format_(in_use_resource.format()),
       color_space_(in_use_resource.color_space()),
       previous_content_id_(previous_content_id),
       before_raster_sync_token_(backing->returned_sync_token),
-      mailbox_(backing->mailbox),
+      shared_image_(backing->shared_image),
       mailbox_texture_target_(backing->texture_target),
       mailbox_texture_is_overlay_candidate_(backing->overlay_candidate) {}
 
@@ -111,7 +111,12 @@ OneCopyRasterBufferProvider::RasterBufferImpl::~RasterBufferImpl() {
     // happened if the |after_raster_sync_token_| was set.
     backing_->returned_sync_token = gpu::SyncToken();
   }
-  backing_->mailbox = mailbox_;
+  backing_->shared_image = std::move(shared_image_);
+  if (should_destroy_shared_image_ && backing_->shared_image) {
+    backing_->worker_context_provider->SharedImageInterface()
+        ->DestroySharedImage(before_raster_sync_token_,
+                             std::move(backing_->shared_image));
+  }
 }
 
 void OneCopyRasterBufferProvider::RasterBufferImpl::Playback(
@@ -128,10 +133,11 @@ void OneCopyRasterBufferProvider::RasterBufferImpl::Playback(
   // returns another SyncToken generated on the worker thread to synchronize
   // with after the raster is complete.
   after_raster_sync_token_ = client_->PlaybackAndCopyOnWorkerThread(
-      &mailbox_, mailbox_texture_target_, mailbox_texture_is_overlay_candidate_,
-      before_raster_sync_token_, raster_source, raster_full_rect,
-      raster_dirty_rect, transform, resource_size_, resource_format_,
-      color_space_, playback_settings, previous_content_id_, new_content_id);
+      shared_image_, mailbox_texture_target_,
+      mailbox_texture_is_overlay_candidate_, before_raster_sync_token_,
+      raster_source, raster_full_rect, raster_dirty_rect, transform,
+      resource_size_, format_, color_space_, playback_settings,
+      previous_content_id_, new_content_id, should_destroy_shared_image_);
 }
 
 bool OneCopyRasterBufferProvider::RasterBufferImpl::
@@ -140,20 +146,18 @@ bool OneCopyRasterBufferProvider::RasterBufferImpl::
   // the GpuChannelHost lock, which is acquired at normal thread priority by
   // other code. Acquiring it at background thread priority can cause a priority
   // inversion. https://crbug.com/1072756
-  return !base::FeatureList::IsEnabled(
-      kOneCopyRasterBufferPlaybackNormalThreadPriority);
+  return false;
 }
 
 OneCopyRasterBufferProvider::OneCopyRasterBufferProvider(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
-    viz::ContextProvider* compositor_context_provider,
+    viz::RasterContextProvider* compositor_context_provider,
     viz::RasterContextProvider* worker_context_provider,
     gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
     int max_copy_texture_chromium_size,
     bool use_partial_raster,
-    bool use_gpu_memory_buffer_resources,
     int max_staging_buffer_usage_in_bytes,
-    viz::ResourceFormat tile_format)
+    const RasterCapabilities& raster_caps)
     : compositor_context_provider_(compositor_context_provider),
       worker_context_provider_(worker_context_provider),
       gpu_memory_buffer_manager_(gpu_memory_buffer_manager),
@@ -163,19 +167,20 @@ OneCopyRasterBufferProvider::OneCopyRasterBufferProvider(
                          max_copy_texture_chromium_size)
               : kMaxBytesPerCopyOperation),
       use_partial_raster_(use_partial_raster),
-      use_gpu_memory_buffer_resources_(use_gpu_memory_buffer_resources),
       bytes_scheduled_since_last_flush_(0),
-      tile_format_(tile_format),
+      tile_format_(raster_caps.tile_format),
+      tile_overlay_candidate_(raster_caps.tile_overlay_candidate),
+      tile_texture_target_(raster_caps.tile_texture_target),
       staging_pool_(std::move(task_runner),
                     worker_context_provider,
                     use_partial_raster,
                     max_staging_buffer_usage_in_bytes) {
   DCHECK(compositor_context_provider);
   DCHECK(worker_context_provider);
-  DCHECK(!IsResourceFormatCompressed(tile_format));
+  DCHECK(!tile_format_.IsCompressed());
 }
 
-OneCopyRasterBufferProvider::~OneCopyRasterBufferProvider() {}
+OneCopyRasterBufferProvider::~OneCopyRasterBufferProvider() = default;
 
 std::unique_ptr<RasterBuffer>
 OneCopyRasterBufferProvider::AcquireBufferForRaster(
@@ -188,9 +193,8 @@ OneCopyRasterBufferProvider::AcquireBufferForRaster(
   if (!resource.gpu_backing()) {
     auto backing = std::make_unique<OneCopyGpuBacking>();
     backing->worker_context_provider = worker_context_provider_;
-    backing->InitOverlayCandidateAndTextureTarget(
-        resource.format(), compositor_context_provider_->ContextCapabilities(),
-        use_gpu_memory_buffer_resources_);
+    backing->overlay_candidate = tile_overlay_candidate_;
+    backing->texture_target = tile_texture_target_;
     resource.set_gpu_backing(std::move(backing));
   }
   OneCopyGpuBacking* backing =
@@ -210,7 +214,7 @@ void OneCopyRasterBufferProvider::Flush() {
   compositor_context_provider_->ContextSupport()->FlushPendingWork();
 }
 
-viz::ResourceFormat OneCopyRasterBufferProvider::GetResourceFormat() const {
+viz::SharedImageFormat OneCopyRasterBufferProvider::GetFormat() const {
   return tile_format_;
 }
 
@@ -228,7 +232,8 @@ bool OneCopyRasterBufferProvider::CanPartialRasterIntoProvidedResource() const {
 }
 
 bool OneCopyRasterBufferProvider::IsResourceReadyToDraw(
-    const ResourcePool::InUsePoolResource& resource) const {
+    const ResourcePool::InUsePoolResource& resource) {
+  FlushIfNeeded();
   const gpu::SyncToken& sync_token = resource.gpu_backing()->mailbox_sync_token;
   // This SyncToken() should have been set by calling OrderingBarrier() before
   // calling this.
@@ -242,7 +247,8 @@ bool OneCopyRasterBufferProvider::IsResourceReadyToDraw(
 uint64_t OneCopyRasterBufferProvider::SetReadyToDrawCallback(
     const std::vector<const ResourcePool::InUsePoolResource*>& resources,
     base::OnceClosure callback,
-    uint64_t pending_callback_id) const {
+    uint64_t pending_callback_id) {
+  FlushIfNeeded();
   gpu::SyncToken latest_sync_token;
   for (const auto* in_use : resources) {
     const gpu::SyncToken& sync_token =
@@ -276,7 +282,7 @@ void OneCopyRasterBufferProvider::Shutdown() {
 }
 
 gpu::SyncToken OneCopyRasterBufferProvider::PlaybackAndCopyOnWorkerThread(
-    gpu::Mailbox* mailbox,
+    scoped_refptr<gpu::ClientSharedImage>& shared_image,
     GLenum mailbox_texture_target,
     bool mailbox_texture_is_overlay_candidate,
     const gpu::SyncToken& sync_token,
@@ -285,68 +291,117 @@ gpu::SyncToken OneCopyRasterBufferProvider::PlaybackAndCopyOnWorkerThread(
     const gfx::Rect& raster_dirty_rect,
     const gfx::AxisTransform2d& transform,
     const gfx::Size& resource_size,
-    viz::ResourceFormat resource_format,
+    viz::SharedImageFormat format,
     const gfx::ColorSpace& color_space,
     const RasterSource::PlaybackSettings& playback_settings,
     uint64_t previous_content_id,
-    uint64_t new_content_id) {
+    uint64_t new_content_id,
+    bool& should_destroy_shared_image) {
   std::unique_ptr<StagingBuffer> staging_buffer =
-      staging_pool_.AcquireStagingBuffer(resource_size, resource_format,
+      staging_pool_.AcquireStagingBuffer(resource_size, format,
                                          previous_content_id);
   DCHECK(staging_buffer->size.width() >= raster_full_rect.width() &&
          staging_buffer->size.height() >= raster_full_rect.height());
 
-  PlaybackToStagingBuffer(staging_buffer.get(), raster_source, raster_full_rect,
-                          raster_dirty_rect, transform, resource_format,
-                          color_space, playback_settings, previous_content_id,
-                          new_content_id);
+  bool put_data_in_staging_buffer = PlaybackToStagingBuffer(
+      staging_buffer.get(), raster_source, raster_full_rect, raster_dirty_rect,
+      transform, format, color_space, playback_settings, previous_content_id,
+      new_content_id);
 
-  gpu::SyncToken sync_token_after_upload = CopyOnWorkerThread(
-      staging_buffer.get(), raster_source, raster_full_rect, resource_format,
-      resource_size, mailbox, mailbox_texture_target,
-      mailbox_texture_is_overlay_candidate, sync_token, color_space);
+  gpu::SyncToken sync_token_after_upload;
+
+  if (put_data_in_staging_buffer) {
+    sync_token_after_upload = CopyOnWorkerThread(
+        staging_buffer.get(), raster_source, raster_full_rect, format,
+        resource_size, shared_image, mailbox_texture_target,
+        mailbox_texture_is_overlay_candidate, sync_token, color_space);
+  } else if (shared_image) {
+    // If we failed to put data in the staging buffer
+    // (https://crbug.com/554541), then we don't have anything to give to copy
+    // into the resource. We report a zero mailbox that will result in
+    // checkerboarding, and be treated as OOM which should retry.
+    should_destroy_shared_image = true;
+  }
+
   staging_pool_.ReleaseStagingBuffer(std::move(staging_buffer));
   return sync_token_after_upload;
 }
 
-void OneCopyRasterBufferProvider::PlaybackToStagingBuffer(
+bool OneCopyRasterBufferProvider::PlaybackToStagingBuffer(
     StagingBuffer* staging_buffer,
     const RasterSource* raster_source,
     const gfx::Rect& raster_full_rect,
     const gfx::Rect& raster_dirty_rect,
     const gfx::AxisTransform2d& transform,
-    viz::ResourceFormat format,
+    viz::SharedImageFormat format,
     const gfx::ColorSpace& dst_color_space,
     const RasterSource::PlaybackSettings& playback_settings,
     uint64_t previous_content_id,
     uint64_t new_content_id) {
-  // Allocate GpuMemoryBuffer if necessary.
-  if (!staging_buffer->gpu_memory_buffer) {
-    staging_buffer->gpu_memory_buffer =
-        gpu_memory_buffer_manager_->CreateGpuMemoryBuffer(
-            staging_buffer->size, BufferFormat(format),
-            gfx::BufferUsage::GPU_READ_CPU_READ_WRITE, gpu::kNullSurfaceHandle,
-            shutdown_event_);
-  }
+  std::unique_ptr<gpu::ClientSharedImage::ScopedMapping> mapping;
+  gfx::GpuMemoryBuffer* buffer = nullptr;
+  void* memory = nullptr;
+  size_t stride = 0;
 
   gfx::Rect playback_rect = raster_full_rect;
   if (use_partial_raster_ && previous_content_id) {
     // Reduce playback rect to dirty region if the content id of the staging
-    // buffer matches the prevous content id.
-    if (previous_content_id == staging_buffer->content_id)
+    // buffer matches the previous content id.
+    if (previous_content_id == staging_buffer->content_id) {
       playback_rect.Intersect(raster_dirty_rect);
+    }
   }
 
   float full_rect_size = raster_full_rect.size().GetArea();
-  if (staging_buffer->gpu_memory_buffer) {
-    gfx::GpuMemoryBuffer* buffer = staging_buffer->gpu_memory_buffer.get();
-    DCHECK_EQ(1u,
-              gfx::NumberOfPlanesForLinearBufferFormat(buffer->GetFormat()));
+
+  if (base::FeatureList::IsEnabled(kAlwaysUseMappableSIForOneCopyRaster)) {
+    CHECK(!staging_buffer->gpu_memory_buffer);
+
+    auto* sii = worker_context_provider_->SharedImageInterface();
+
+    // Allocate MappableSharedImage if necessary.
+    if (!staging_buffer->client_shared_image) {
+      staging_buffer->client_shared_image = sii->CreateSharedImage(
+          format, staging_buffer->size, dst_color_space,
+          kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
+          gpu::SHARED_IMAGE_USAGE_CPU_WRITE, "OneCopyRasterStaging",
+          gpu::kNullSurfaceHandle, gfx::BufferUsage::GPU_READ_CPU_READ_WRITE);
+      if (!staging_buffer->client_shared_image) {
+        LOG(ERROR) << "Creation of MappableSharedImage failed.";
+        return false;
+      }
+    }
+
+    mapping = staging_buffer->client_shared_image->Map();
+    if (!mapping) {
+      LOG(ERROR) << "MapSharedImage Failed.";
+      return false;
+    }
+    memory = mapping->Memory(0);
+    stride = mapping->Stride(0);
+    staging_buffer->is_shared_memory = mapping->IsSharedMemory();
+  } else {
+    // Allocate GpuMemoryBuffer if necessary.
+    if (!staging_buffer->gpu_memory_buffer) {
+      staging_buffer->gpu_memory_buffer =
+          gpu_memory_buffer_manager_->CreateGpuMemoryBuffer(
+              staging_buffer->size,
+              viz::SinglePlaneSharedImageFormatToBufferFormat(format),
+              gfx::BufferUsage::GPU_READ_CPU_READ_WRITE,
+              gpu::kNullSurfaceHandle, shutdown_event_);
+    }
+
+    buffer = staging_buffer->gpu_memory_buffer.get();
+    if (!buffer) {
+      return false;
+    }
+
+    CHECK_EQ(1u, gfx::NumberOfPlanesForLinearBufferFormat(buffer->GetFormat()));
     bool rv = buffer->Map();
-    DCHECK(rv);
-    DCHECK(buffer->memory(0));
+    CHECK(rv);
+    CHECK(buffer->memory(0));
     // RasterBufferProvider::PlaybackToMemory only supports unsigned strides.
-    DCHECK_GE(buffer->stride(0), 0);
+    CHECK_GE(buffer->stride(0), 0);
 
     // TODO(https://crbug.com/870663): Temporary diagnostics.
     base::debug::Alias(&playback_rect);
@@ -359,24 +414,33 @@ void OneCopyRasterBufferProvider::PlaybackToStagingBuffer(
     gfx::Size buffer_size = buffer->GetSize();
     base::debug::Alias(&buffer_size);
 
-    DCHECK(!playback_rect.IsEmpty())
-        << "Why are we rastering a tile that's not dirty?";
-    RasterBufferProvider::PlaybackToMemory(
-        buffer->memory(0), format, staging_buffer->size, buffer->stride(0),
-        raster_source, raster_full_rect, playback_rect, transform,
-        dst_color_space, /*gpu_compositing=*/true, playback_settings);
-    buffer->Unmap();
-    staging_buffer->content_id = new_content_id;
+    memory = buffer->memory(0);
+    stride = buffer->stride(0);
+    staging_buffer->is_shared_memory =
+        buffer->GetType() == gfx::GpuMemoryBufferType::SHARED_MEMORY_BUFFER;
   }
+
+  DCHECK(!playback_rect.IsEmpty())
+      << "Why are we rastering a tile that's not dirty?";
+  RasterBufferProvider::PlaybackToMemory(
+      memory, format, staging_buffer->size, stride, raster_source,
+      raster_full_rect, playback_rect, transform, dst_color_space,
+      /*gpu_compositing=*/true, playback_settings);
+  base::FeatureList::IsEnabled(kAlwaysUseMappableSIForOneCopyRaster)
+      ? mapping.reset()
+      : buffer->Unmap();
+  staging_buffer->content_id = new_content_id;
+
+  return true;
 }
 
 gpu::SyncToken OneCopyRasterBufferProvider::CopyOnWorkerThread(
     StagingBuffer* staging_buffer,
     const RasterSource* raster_source,
     const gfx::Rect& rect_to_copy,
-    viz::ResourceFormat resource_format,
+    viz::SharedImageFormat format,
     const gfx::Size& resource_size,
-    gpu::Mailbox* mailbox,
+    scoped_refptr<gpu::ClientSharedImage>& shared_image,
     GLenum mailbox_texture_target,
     bool mailbox_texture_is_overlay_candidate,
     const gpu::SyncToken& sync_token,
@@ -384,41 +448,40 @@ gpu::SyncToken OneCopyRasterBufferProvider::CopyOnWorkerThread(
   auto* sii = worker_context_provider_->SharedImageInterface();
   DCHECK(sii);
 
-  if (!staging_buffer->gpu_memory_buffer.get()) {
-    // If GpuMemoryBuffer allocation failed (https://crbug.com/554541), then
-    // we don't have anything to give to copy into the resource. We report a
-    // zero mailbox that will result in checkerboarding, and be treated as OOM
-    // which should retry.
-    if (!mailbox->IsZero()) {
-      sii->DestroySharedImage(sync_token, *mailbox);
-      mailbox->SetZero();
-    }
-    return gpu::SyncToken();
+  if (base::FeatureList::IsEnabled(kAlwaysUseMappableSIForOneCopyRaster)) {
+    CHECK(staging_buffer->client_shared_image);
+  } else {
+    CHECK(staging_buffer->gpu_memory_buffer.get());
   }
 
   bool needs_clear = false;
 
-  if (mailbox->IsZero()) {
+  if (!shared_image) {
     uint32_t usage =
         gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_RASTER;
     if (mailbox_texture_is_overlay_candidate)
       usage |= gpu::SHARED_IMAGE_USAGE_SCANOUT;
-    *mailbox = sii->CreateSharedImage(
-        resource_format, resource_size, color_space, kTopLeft_GrSurfaceOrigin,
-        kPremul_SkAlphaType, usage, gpu::kNullSurfaceHandle);
+    shared_image = sii->CreateSharedImage(
+        format, resource_size, color_space, kTopLeft_GrSurfaceOrigin,
+        kPremul_SkAlphaType, usage, "OneCopyRasterTile",
+        gpu::kNullSurfaceHandle);
+    CHECK(shared_image);
     // Clear the resource if we're not going to initialize it fully from the
     // copy due to non-exact resource reuse.  See https://crbug.com/1313091
     needs_clear = rect_to_copy.size() != resource_size;
   }
 
   // Create staging shared image.
-  if (staging_buffer->mailbox.IsZero()) {
+  if (!staging_buffer->client_shared_image) {
     const uint32_t usage = gpu::SHARED_IMAGE_USAGE_CPU_WRITE;
-    staging_buffer->mailbox = sii->CreateSharedImage(
-        staging_buffer->gpu_memory_buffer.get(), gpu_memory_buffer_manager_,
-        color_space, kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, usage);
+    staging_buffer->client_shared_image = sii->CreateSharedImage(
+        format, resource_size, color_space, kTopLeft_GrSurfaceOrigin,
+        kPremul_SkAlphaType, usage, "OneCopyRasterStaging",
+        staging_buffer->gpu_memory_buffer.get()->CloneHandle());
+    CHECK(staging_buffer->client_shared_image);
   } else {
-    sii->UpdateSharedImage(staging_buffer->sync_token, staging_buffer->mailbox);
+    sii->UpdateSharedImage(staging_buffer->sync_token,
+                           staging_buffer->client_shared_image->mailbox());
   }
 
   viz::RasterContextProvider::ScopedRasterContextLock scoped_context(
@@ -445,11 +508,8 @@ gpu::SyncToken OneCopyRasterBufferProvider::CopyOnWorkerThread(
   query_target = GL_COMMANDS_ISSUED_CHROMIUM;
 #endif
 
-  // COMMANDS_ISSUED is sufficient for shared memory GpuMemoryBuffers because
-  // they're uploaded using glTexImage2D (see gl::GLImageMemory::CopyTexImage).
-  const auto* buffer = staging_buffer->gpu_memory_buffer.get();
-  if (buffer &&
-      buffer->GetType() == gfx::GpuMemoryBufferType::SHARED_MEMORY_BUFFER) {
+  // COMMANDS_ISSUED is sufficient for shared memory resources.
+  if (staging_buffer->is_shared_memory) {
     query_target = GL_COMMANDS_ISSUED_CHROMIUM;
   }
 
@@ -463,7 +523,7 @@ gpu::SyncToken OneCopyRasterBufferProvider::CopyOnWorkerThread(
   // Clear to ensure the resource is fully initialized and BeginAccess succeeds.
   if (needs_clear) {
     int clear_bytes_per_row = viz::ResourceSizes::UncheckedWidthInBytes<int>(
-        resource_size.width(), resource_format);
+        resource_size.width(), format);
     SkImageInfo dst_info = SkImageInfo::MakeN32Premul(resource_size.width(),
                                                       resource_size.height());
     SkBitmap bitmap;
@@ -471,8 +531,9 @@ gpu::SyncToken OneCopyRasterBufferProvider::CopyOnWorkerThread(
       // SkBitmap.cpp doesn't yet have an interface for SkColor4fs
       // https://bugs.chromium.org/p/skia/issues/detail?id=13329
       bitmap.eraseColor(raster_source->background_color().toSkColor());
-      ri->WritePixels(*mailbox, 0, 0, mailbox_texture_target,
-                      clear_bytes_per_row, dst_info, bitmap.getPixels());
+      ri->WritePixels(
+          shared_image->mailbox(), /*dst_x_offset=*/0, /*dst_y_offset=*/0,
+          /*dst_plane_index=*/0, mailbox_texture_target, bitmap.pixmap());
     }
   }
 
@@ -489,10 +550,10 @@ gpu::SyncToken OneCopyRasterBufferProvider::CopyOnWorkerThread(
     int rows_to_copy = std::min(chunk_size_in_rows, height - y);
     DCHECK_GT(rows_to_copy, 0);
 
-    ri->CopySubTexture(staging_buffer->mailbox, *mailbox,
-                       mailbox_texture_target, 0, y, 0, y, rect_to_copy.width(),
-                       rows_to_copy, false /* unpack_flip_y */,
-                       false /* unpack_premultiply_alpha */);
+    ri->CopySharedImage(
+        staging_buffer->client_shared_image->mailbox(), shared_image->mailbox(),
+        mailbox_texture_target, 0, y, 0, y, rect_to_copy.width(), rows_to_copy,
+        false /* unpack_flip_y */, false /* unpack_premultiply_alpha */);
     y += rows_to_copy;
 
     // Increment |bytes_scheduled_since_last_flush_| by the amount of memory

@@ -12,7 +12,7 @@ declare namespace chrome {
       data?: Blob;
     }
 
-    export interface SystemInformation {
+    export interface LogsMapEntry {
       key: string;
       value: string;
     }
@@ -22,6 +22,7 @@ declare namespace chrome {
       LOGIN = 'login',
       SAD_TAB_CRASH = 'sadTabCrash',
       GOOGLE_INTERNAL = 'googleInternal',
+      AI = 'ai',
     }
 
     export interface FeedbackInfo {
@@ -34,18 +35,23 @@ declare namespace chrome {
       productId?: number;
       screenshot?: Blob;
       traceId?: number;
-      systemInformation?: SystemInformation[];
+      systemInformation?: LogsMapEntry[];
       sendHistograms?: boolean;
       flow?: FeedbackFlow;
       attachedFileBlobUuid?: string;
       screenshotBlobUuid?: string;
       useSystemWindowFrame?: boolean;
+      sendAutofillMetadata?: boolean;
       sendBluetoothLogs?: boolean;
       sendTabTitles?: boolean;
       assistantDebugInfoAllowed?: boolean;
       fromAssistant?: boolean;
       includeBluetoothLogs?: boolean;
       showQuestionnaire?: boolean;
+      fromAutofill?: boolean;
+      autofillMetadata?: string;
+      isOffensiveOrUnsafe?: boolean;
+      aiMetadata?: string;
     }
 
     enum Status {
@@ -86,14 +92,18 @@ declare namespace chrome {
       logLines: string[];
     }
 
+    export interface SendFeedbackResult {
+      status: Status;
+      landingPageType: LandingPageType;
+    }
+
     export function getUserEmail(callback: (email: string) => void): void;
 
     export function sendFeedback(
-        feedback: FeedbackInfo, loadSystemInfo?: boolean, formOpenTime?: number,
-        callback?: (status: Status, landingPage: LandingPageType) => void):
-        void;
+        feedback: FeedbackInfo, loadSystemInfo?: boolean,
+        formOpenTime?: number): Promise<SendFeedbackResult>;
 
     export function getSystemInformation(
-        callback: (info: SystemInformation[]) => void): void;
+      callback: (info: LogsMapEntry[]) => void): void;
   }
 }

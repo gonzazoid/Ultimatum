@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/windows_version.h"
@@ -138,7 +138,8 @@ SoftwareOutputDeviceWinProxy::SoftwareOutputDeviceWinProxy(
 SoftwareOutputDeviceWinProxy::~SoftwareOutputDeviceWinProxy() = default;
 
 void SoftwareOutputDeviceWinProxy::OnSwapBuffers(
-    SwapBuffersCallback swap_ack_callback) {
+    SwapBuffersCallback swap_ack_callback,
+    gfx::FrameData data) {
   DCHECK(swap_ack_callback_.is_null());
 
   // We aren't waiting on DrawAck() and can immediately run the callback.
@@ -157,8 +158,9 @@ void SoftwareOutputDeviceWinProxy::ResizeDelegated() {
   canvas_.reset();
 
   size_t required_bytes;
-  if (!ResourceSizes::MaybeSizeInBytes(
-          viewport_pixel_size_, ResourceFormat::RGBA_8888, &required_bytes)) {
+  if (!ResourceSizes::MaybeSizeInBytes(viewport_pixel_size_,
+                                       SinglePlaneFormat::kRGBA_8888,
+                                       &required_bytes)) {
     DLOG(ERROR) << "Invalid viewport size " << viewport_pixel_size_.ToString();
     return;
   }

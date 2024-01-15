@@ -56,6 +56,12 @@ message HistorySpecifics {
   optional bool redirect_chain_start_incomplete = 19;
   optional bool redirect_chain_end_incomplete = 20;
 
+  // If this is set to true, then the redirect chain was too long and some
+  // entries were trimmed from the middle, so `redirect_entries` only
+  // corresponds to some of the first plus some of the last entries of the
+  // actual redirect chain.
+  optional bool redirect_chain_middle_trimmed = 21;
+
   message PageTransition {
     // The core transition type.
     optional SyncEnums.PageTransition core_transition = 1 [default = LINK];
@@ -78,6 +84,10 @@ message HistorySpecifics {
   // The ID of the visit, on the originator client, that opened this one, or 0
   // if no opener exists.
   optional int64 originator_opener_visit_id = 6;
+  // The ID of the cluster that this visit belongs to on the originator client,
+  // or 0 if the originator client does not support setting this field or the
+  // visit does not belong to any cluster.
+  optional int64 originator_cluster_id = 22;
 
   // The duration of the visit, in microseconds. Zero if the visit hasn't been
   // finished (or the duration wasn't updated for some other reason).
@@ -117,4 +127,22 @@ message HistorySpecifics {
   // The URL of the referrer (indicated by `originator_referring_visit_id`), if
   // any.
   optional string referrer_url = 18;
+
+  // Visit has an image derived from public version of the page. This can be
+  // used to provide more visual experience.
+  optional bool has_url_keyed_image = 23;
+
+  message Category {
+    // ID of the category, this typically is an MID.
+    optional string id = 1;
+    // Weight of the category, this is an integer value informing the confidence
+    // of a visit belonging to this category.
+    optional int32 weight = 2;
+  }
+
+  // Categories tagged for the visit.
+  repeated Category categories = 24;
+
+  // Related search URLs for a Google SRP visit, to provide next steps to user.
+  repeated string related_searches = 25;
 }

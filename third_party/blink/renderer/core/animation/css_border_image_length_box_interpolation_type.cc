@@ -47,20 +47,20 @@ const BorderImageLengthBox& GetBorderImageLengthBox(
 }
 
 void SetBorderImageLengthBox(const CSSProperty& property,
-                             ComputedStyle& style,
+                             ComputedStyleBuilder& builder,
                              const BorderImageLengthBox& box) {
   switch (property.PropertyID()) {
     case CSSPropertyID::kBorderImageOutset:
-      style.SetBorderImageOutset(box);
+      builder.SetBorderImageOutset(box);
       break;
     case CSSPropertyID::kWebkitMaskBoxImageOutset:
-      style.SetMaskBoxImageOutset(box);
+      builder.SetMaskBoxImageOutset(box);
       break;
     case CSSPropertyID::kBorderImageWidth:
-      style.SetBorderImageWidth(box);
+      builder.SetBorderImageWidth(box);
       break;
     case CSSPropertyID::kWebkitMaskBoxImageWidth:
-      style.SetMaskBoxImageWidth(box);
+      builder.SetMaskBoxImageWidth(box);
       break;
     default:
       NOTREACHED();
@@ -219,20 +219,19 @@ class InheritedSideTypesChecker
 
 InterpolationValue ConvertBorderImageNumberSide(double number) {
   return InterpolationValue(
-      std::make_unique<InterpolableNumber>(number),
+      MakeGarbageCollected<InterpolableNumber>(number),
       CSSBorderImageLengthBoxSideNonInterpolableValue::Create(
           SideType::kNumber));
 }
 
 InterpolationValue ConvertBorderImageAutoSide() {
   return InterpolationValue(
-      std::make_unique<InterpolableList>(0),
+      MakeGarbageCollected<InterpolableList>(0),
       CSSBorderImageLengthBoxSideNonInterpolableValue::Create(SideType::kAuto));
 }
 
 InterpolationValue ConvertBorderImageLengthBox(const BorderImageLengthBox& box,
                                                double zoom) {
-  auto list = std::make_unique<InterpolableList>(kSideIndexCount);
   Vector<scoped_refptr<const NonInterpolableValue>> non_interpolable_values(
       kSideIndexCount);
   const BorderImageLength* sides[kSideIndexCount] = {};
@@ -319,7 +318,6 @@ InterpolationValue CSSBorderImageLengthBoxInterpolationType::MaybeConvertValue(
   if (!quad)
     return nullptr;
 
-  auto list = std::make_unique<InterpolableList>(kSideIndexCount);
   Vector<scoped_refptr<const NonInterpolableValue>> non_interpolable_values(
       kSideIndexCount);
   const CSSValue* sides[kSideIndexCount] = {};
@@ -408,7 +406,7 @@ void CSSBorderImageLengthBoxInterpolationType::ApplyStandardPropertyValue(
   };
   BorderImageLengthBox box(convert_side(kSideTop), convert_side(kSideRight),
                            convert_side(kSideBottom), convert_side(kSideLeft));
-  SetBorderImageLengthBox(CssProperty(), *state.Style(), box);
+  SetBorderImageLengthBox(CssProperty(), state.StyleBuilder(), box);
 }
 
 }  // namespace blink

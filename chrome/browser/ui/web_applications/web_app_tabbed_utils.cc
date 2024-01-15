@@ -4,37 +4,33 @@
 
 #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
 
 namespace web_app {
 
-bool HasPinnedHomeTab(TabStripModel* tab_strip_model) {
+bool HasPinnedHomeTab(const TabStripModel* tab_strip_model) {
   if (!tab_strip_model->ContainsIndex(0))
     return false;
-  return tab_strip_model->IsTabPinned(0);
+  return tab_strip_model->delegate()->IsForWebApp() &&
+         tab_strip_model->IsTabPinned(0);
 }
 
-bool IsPinnedHomeTab(TabStripModel* tab_strip_model, int index) {
+bool IsPinnedHomeTab(const TabStripModel* tab_strip_model, int index) {
   return HasPinnedHomeTab(tab_strip_model) && index == 0;
 }
 
-bool IsPinnedHomeTabUrl(const WebAppRegistrar& registrar,
-                        const AppId& app_id,
-                        GURL launch_url) {
-  if (!registrar.IsTabbedWindowModeEnabled(app_id))
-    return false;
+bool IsTabClosable(const TabStripModel* tab_strip_model, int index) {
+  return !IsPinnedHomeTab(tab_strip_model, index) ||
+         tab_strip_model->count() == 1;
+}
 
-  absl::optional<GURL> pinned_home_url =
-      registrar.GetAppPinnedHomeTabUrl(app_id);
-  if (!pinned_home_url)
-    return false;
-
-  // A launch URL which is the home tab URL with query params and
-  // hash ref should be opened as the home tab.
-  GURL::Replacements replacements;
-  replacements.ClearQuery();
-  replacements.ClearRef();
-  return launch_url.ReplaceComponents(replacements) == pinned_home_url.value();
+bool IsHomeTabUrl(const Browser* browser, const GURL& url) {
+  return browser && browser->app_controller() &&
+         HasPinnedHomeTab(browser->tab_strip_model()) &&
+         browser->app_controller()->IsUrlInHomeTabScope(url);
 }
 
 }  // namespace web_app

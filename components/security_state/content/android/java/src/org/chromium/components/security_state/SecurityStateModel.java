@@ -6,12 +6,11 @@ package org.chromium.components.security_state;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Provides a way of accessing helpers for page security state.
- */
+/** Provides a way of accessing helpers for page security state. */
 public class SecurityStateModel {
     /**
      * Fetch the security level for a given web contents.
@@ -33,7 +32,7 @@ public class SecurityStateModel {
     private SecurityStateModel() {}
 
     @NativeMethods
-    @VisibleForTesting
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public interface Natives {
         int getSecurityLevelForWebContents(WebContents webContents);
     }

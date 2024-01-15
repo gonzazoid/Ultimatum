@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace arc::input_overlay {
 constexpr bool kCustomizationUsed = true;
 
 void InputOverlayUkm::RecordInputOverlayFeatureStateUkm(
-    const std::string& package_name,
+    std::string package_name,
     bool enable) {
   ukm::builders::GamingInputOverlay_Feature(
       ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
@@ -22,7 +22,7 @@ void InputOverlayUkm::RecordInputOverlayFeatureStateUkm(
 }
 
 void InputOverlayUkm::RecordInputOverlayMappingHintStateUkm(
-    const std::string& package_name,
+    std::string package_name,
     bool enable) {
   ukm::builders::GamingInputOverlay_MappingHint(
       ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
@@ -31,10 +31,52 @@ void InputOverlayUkm::RecordInputOverlayMappingHintStateUkm(
 }
 
 void InputOverlayUkm::RecordInputOverlayCustomizedUsageUkm(
-    const std::string& package_name) {
+    std::string package_name) {
   ukm::builders::GamingInputOverlay_Customization(
       ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
       .SetCustomizationUsed(kCustomizationUsed)
+      .Record(ukm::UkmRecorder::Get());
+}
+
+void InputOverlayUkm::RecordInputOverlayActionReposition(
+    const std::string& package_name,
+    RepositionType reposition_type,
+    InputOverlayWindowStateType state_type) {
+  ukm::builders::GamingInputOverlay_ActionRepositionOperationType(
+      ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
+      .SetOperationType(static_cast<int64_t>(reposition_type))
+      .Record(ukm::UkmRecorder::Get());
+  ukm::builders::GamingInputOverlay_ActionRepositionWindowStateType(
+      ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
+      .SetWindowStateType(static_cast<int64_t>(state_type))
+      .Record(ukm::UkmRecorder::Get());
+}
+
+void InputOverlayUkm::RecordInputOverlayMenuEntryReposition(
+    const std::string& package_name,
+    RepositionType reposition_type,
+    InputOverlayWindowStateType state_type) {
+  ukm::builders::GamingInputOverlay_MenuEntryRepositionOperationType(
+      ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
+      .SetOperationType(static_cast<int64_t>(reposition_type))
+      .Record(ukm::UkmRecorder::Get());
+  ukm::builders::GamingInputOverlay_MenuEntryRepositionWindowStateType(
+      ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
+      .SetWindowStateType(static_cast<int64_t>(state_type))
+      .Record(ukm::UkmRecorder::Get());
+}
+
+void InputOverlayUkm::RecordInputOverlayButtonGroupReposition(
+    const std::string& package_name,
+    RepositionType reposition_type,
+    InputOverlayWindowStateType state_type) {
+  ukm::builders::GamingInputOverlay_ButtonGroupRepositionOperationType(
+      ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
+      .SetOperationType(static_cast<int64_t>(reposition_type))
+      .Record(ukm::UkmRecorder::Get());
+  ukm::builders::GamingInputOverlay_ButtonGroupRepositionWindowStateType(
+      ukm::AppSourceUrlRecorder::GetSourceIdForArcPackageName(package_name))
+      .SetWindowStateType(static_cast<int64_t>(state_type))
       .Record(ukm::UkmRecorder::Get());
 }
 

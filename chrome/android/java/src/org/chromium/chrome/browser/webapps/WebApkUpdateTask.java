@@ -8,9 +8,11 @@ import android.content.Context;
 
 import org.chromium.base.StrictModeContext;
 import org.chromium.chrome.browser.customtabs.BaseCustomTabActivity;
+import org.chromium.chrome.browser.customtabs.CustomTabLocator;
 import org.chromium.components.background_task_scheduler.NativeBackgroundTask;
 import org.chromium.components.background_task_scheduler.TaskIds;
 import org.chromium.components.background_task_scheduler.TaskParameters;
+import org.chromium.components.webapps.WebappsUtils;
 
 import java.lang.ref.WeakReference;
 import java.util.List;
@@ -27,8 +29,7 @@ public class WebApkUpdateTask extends NativeBackgroundTask {
     private boolean mMoreToUpdate;
 
     @Override
-    @StartBeforeNativeResult
-    protected int onStartTaskBeforeNativeLoaded(
+    protected @StartBeforeNativeResult int onStartTaskBeforeNativeLoaded(
             Context context, TaskParameters taskParameters, TaskFinishedCallback callback) {
         assert taskParameters.getTaskId() == TaskIds.WEBAPK_UPDATE_JOB_ID;
 
@@ -36,11 +37,13 @@ public class WebApkUpdateTask extends NativeBackgroundTask {
             WebappRegistry.warmUpSharedPrefs();
         }
 
+        WebappsUtils.prepareIsRequestPinShortcutSupported();
+
         List<String> ids = WebappRegistry.getInstance().findWebApksWithPendingUpdate();
         for (String id : ids) {
             WebappDataStorage storage = WebappRegistry.getInstance().getWebappDataStorage(id);
             WeakReference<BaseCustomTabActivity> activity =
-                    WebappLocator.findRunningWebappActivityWithId(storage.getId());
+                    CustomTabLocator.findRunningWebappActivityWithId(storage.getId());
             if (activity == null || activity.get() == null) {
                 mStorageToUpdate = storage;
                 mMoreToUpdate = ids.size() > 1;
@@ -76,7 +79,4 @@ public class WebApkUpdateTask extends NativeBackgroundTask {
         // WebAPKs that we need to update.
         return true;
     }
-
-    @Override
-    public void reschedule(Context context) {}
 }

@@ -11,7 +11,6 @@
 #include "skia/ext/image_operations.h"
 
 #include "base/check.h"
-#include "base/containers/stack_container.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/numerics/math_constants.h"
@@ -19,6 +18,7 @@
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "skia/ext/convolver.h"
+#include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 #include "third_party/skia/include/core/SkColorPriv.h"
 #include "third_party/skia/include/core/SkRect.h"
 
@@ -217,8 +217,8 @@ void ResizeFilter::ComputeFilters(int src_size,
   // Speed up the divisions below by turning them into multiplies.
   float inv_scale = 1.0f / scale;
 
-  base::StackVector<float, 64> filter_values;
-  base::StackVector<int16_t, 64> fixed_filter_values;
+  absl::InlinedVector<float, 64> filter_values;
+  absl::InlinedVector<int16_t, 64> fixed_filter_values;
 
   // Loop over all pixels in the output range. We will generate one set of
   // filter values for each one. Those values will tell us how to blend the
@@ -226,9 +226,10 @@ void ResizeFilter::ComputeFilters(int src_size,
   for (int dest_subset_i = dest_subset_lo; dest_subset_i < dest_subset_hi;
        dest_subset_i++) {
     // Reset the arrays. We don't declare them inside so they can re-use the
-    // same malloc-ed buffer.
-    filter_values->clear();
-    fixed_filter_values->clear();
+    // same malloc-ed buffer. absl::InlinedVector::clear() frees the backing
+    // storage, so use resize(0) instead.
+    filter_values.resize(0);
+    fixed_filter_values.resize(0);
 
     // This is the pixel in the source directly under the pixel in the dest.
     // Note that we base computations on the "center" of the pixels. To see
@@ -242,6 +243,7 @@ void ResizeFilter::ComputeFilters(int src_size,
     int src_begin = std::max(0, FloorInt(src_pixel - src_support));
     int src_end = std::min(src_size - 1, CeilInt(src_pixel + src_support));
 
+    filter_values.reserve(src_end + 1 - src_begin);
     // Compute the unnormalized filter value at each location of the source
     // it covers.
     float filter_sum = 0.0f;  // Sub of the filter values for normalizing.
@@ -261,19 +263,20 @@ void ResizeFilter::ComputeFilters(int src_size,
 
       // Compute the filter value at that location.
       float filter_value = ComputeFilter(dest_filter_dist);
-      filter_values->push_back(filter_value);
+      filter_values.push_back(filter_value);
 
       filter_sum += filter_value;
     }
-    DCHECK(!filter_values->empty()) << "We should always get a filter!";
+    DCHECK(!filter_values.empty()) << "We should always get a filter!";
 
+    fixed_filter_values.reserve(filter_values.size());
     // The filter must be normalized so that we don't affect the brightness of
     // the image. Convert to normalized fixed point.
     int16_t fixed_sum = 0;
-    for (size_t i = 0; i < filter_values->size(); i++) {
-      int16_t cur_fixed = output->FloatToFixed(filter_values[i] / filter_sum);
+    for (float filter_value : filter_values) {
+      int16_t cur_fixed = output->FloatToFixed(filter_value / filter_sum);
       fixed_sum += cur_fixed;
-      fixed_filter_values->push_back(cur_fixed);
+      fixed_filter_values.push_back(cur_fixed);
     }
 
     // The conversion to fixed point will leave some rounding errors, which
@@ -282,11 +285,11 @@ void ResizeFilter::ComputeFilters(int src_size,
     // be the center of the filter function since it could get clipped on the
     // edges, but it doesn't matter enough to worry about that case).
     int16_t leftovers = output->FloatToFixed(1.0f) - fixed_sum;
-    fixed_filter_values[fixed_filter_values->size() / 2] += leftovers;
+    fixed_filter_values[fixed_filter_values.size() / 2] += leftovers;
 
     // Now it's ready to go.
     output->AddFilter(src_begin, &fixed_filter_values[0],
-                      static_cast<int>(fixed_filter_values->size()));
+                      static_cast<int>(fixed_filter_values.size()));
   }
 
   output->PaddingForSIMD();
@@ -341,9 +344,6 @@ SkBitmap ImageOperations::Resize(const SkPixmap& source,
            ((RESIZE_FIRST_ALGORITHM_METHOD <= method) &&
             (method <= RESIZE_LAST_ALGORITHM_METHOD)));
 
-  // Time how long this takes to see if it's a problem for users.
-  base::TimeTicks resize_start = base::TimeTicks::Now();
-
   // If the size of source or destination is 0, i.e. 0x0, 0xN or Nx0, just
   // return empty.
   if (source.width() < 1 || source.height() < 1 ||
@@ -383,9 +383,6 @@ SkBitmap ImageOperations::Resize(const SkPixmap& source,
                  static_cast<int>(result.rowBytes()),
                  static_cast<unsigned char*>(result.getPixels()),
                  true);
-
-  base::TimeDelta delta = base::TimeTicks::Now() - resize_start;
-  UMA_HISTOGRAM_TIMES("Image.ResampleMS", delta);
 
   return result;
 }

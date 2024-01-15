@@ -4,6 +4,7 @@
 
 #include "gpu/command_buffer/client/client_font_manager.h"
 
+#include <bit>
 #include <type_traits>
 
 #include "base/bits.h"
@@ -40,7 +41,7 @@ class Serializer {
  private:
   void AlignMemory(uint32_t size, size_t alignment) {
     // Due to the math below, alignment must be a power of two.
-    DCHECK(base::bits::IsPowerOfTwo(alignment));
+    DCHECK(std::has_single_bit(alignment));
 
     size_t memory = reinterpret_cast<size_t>(memory_.get());
     size_t padding = base::bits::AlignUp(memory, alignment) - memory;
@@ -50,7 +51,7 @@ class Serializer {
     bytes_written_ += padding;
   }
 
-  raw_ptr<char> memory_ = nullptr;
+  raw_ptr<char, AllowPtrArithmetic> memory_ = nullptr;
   uint32_t memory_size_ = 0u;
   uint32_t bytes_written_ = 0u;
 };

@@ -4,12 +4,32 @@
 
 #include "ui/views/win/pen_event_processor.h"
 
+#include "base/test/task_environment.h"
+#include "base/win/scoped_winrt_initializer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/sequential_id_generator.h"
 
 namespace views {
 
-TEST(PenProcessorTest, TypicalCaseDMDisabled) {
+class PenProcessorTest : public ::testing::Test {
+ public:
+  PenProcessorTest() = default;
+  ~PenProcessorTest() override = default;
+
+  // testing::Test overrides.
+  void SetUp() override;
+
+ private:
+  base::win::ScopedWinrtInitializer scoped_winrt_initializer_;
+  base::test::TaskEnvironment task_environment_;
+};
+
+void PenProcessorTest::SetUp() {
+  ASSERT_TRUE(scoped_winrt_initializer_.Succeeded());
+}
+
+TEST_F(PenProcessorTest, TypicalCaseDMDisabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ false);
@@ -63,7 +83,8 @@ TEST(PenProcessorTest, TypicalCaseDMDisabled) {
   EXPECT_EQ(ui::ET_MOUSE_EXITED, event->AsMouseEvent()->type());
 }
 
-TEST(PenProcessorTest, TypicalCaseDMEnabled) {
+TEST_F(PenProcessorTest, TypicalCaseDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
@@ -128,7 +149,8 @@ TEST(PenProcessorTest, TypicalCaseDMEnabled) {
   EXPECT_EQ(ui::ET_MOUSE_EXITED, event->AsMouseEvent()->type());
 }
 
-TEST(PenProcessorTest, UnpairedPointerDownTouchDMEnabled) {
+TEST_F(PenProcessorTest, UnpairedPointerDownTouchDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
@@ -146,7 +168,8 @@ TEST(PenProcessorTest, UnpairedPointerDownTouchDMEnabled) {
   EXPECT_EQ(nullptr, event.get());
 }
 
-TEST(PenProcessorTest, UnpairedPointerDownMouseDMEnabled) {
+TEST_F(PenProcessorTest, UnpairedPointerDownMouseDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
@@ -163,7 +186,8 @@ TEST(PenProcessorTest, UnpairedPointerDownMouseDMEnabled) {
   EXPECT_EQ(nullptr, event.get());
 }
 
-TEST(PenProcessorTest, TouchFlagDMEnabled) {
+TEST_F(PenProcessorTest, TouchFlagDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
@@ -193,7 +217,8 @@ TEST(PenProcessorTest, TouchFlagDMEnabled) {
   EXPECT_FALSE(event->flags() & ui::EF_LEFT_MOUSE_BUTTON);
 }
 
-TEST(PenProcessorTest, MouseFlagDMEnabled) {
+TEST_F(PenProcessorTest, MouseFlagDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
@@ -226,7 +251,8 @@ TEST(PenProcessorTest, MouseFlagDMEnabled) {
             event->AsMouseEvent()->changed_button_flags());
 }
 
-TEST(PenProcessorTest, PenEraserFlagDMEnabled) {
+TEST_F(PenProcessorTest, PenEraserFlagDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
@@ -259,15 +285,17 @@ TEST(PenProcessorTest, PenEraserFlagDMEnabled) {
             event->AsTouchEvent()->pointer_details().pointer_type);
 }
 
-TEST(PenProcessorTest, MultiPenDMEnabled) {
+TEST_F(PenProcessorTest, MultiPenDMEnabled) {
+  views::PenIdHandler::ScopedPenIdStaticsForTesting scoper(nullptr, nullptr);
   ui::SequentialIDGenerator id_generator(0);
   PenEventProcessor processor(&id_generator,
                               /*direct_manipulation_enabled*/ true);
 
   const int kPenCount = 3;
   POINTER_PEN_INFO pen_info[kPenCount];
-  for (int i = 0; i < kPenCount; i++)
-    memset(&pen_info[i], 0, sizeof(POINTER_PEN_INFO));
+  for (auto& i : pen_info) {
+    memset(&i, 0, sizeof(POINTER_PEN_INFO));
+  }
 
   gfx::Point point(100, 100);
 

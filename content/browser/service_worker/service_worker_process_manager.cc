@@ -15,24 +15,20 @@
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/site_isolation_policy.h"
-#include "content/public/common/child_process_host.h"
 #include "url/gurl.h"
 
 namespace content {
 
-ServiceWorkerProcessManager::ServiceWorkerProcessManager(
-    BrowserContext* browser_context)
-    : browser_context_(browser_context),
-      storage_partition_(nullptr),
+ServiceWorkerProcessManager::ServiceWorkerProcessManager()
+    : storage_partition_(nullptr),
       process_id_for_test_(ChildProcessHost::kInvalidUniqueID),
       new_process_id_for_test_(ChildProcessHost::kInvalidUniqueID),
       force_new_process_for_test_(false) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(browser_context);
-  weak_this_ = weak_this_factory_.GetWeakPtr();
 }
 
 ServiceWorkerProcessManager::~ServiceWorkerProcessManager() {
@@ -46,22 +42,11 @@ ServiceWorkerProcessManager::~ServiceWorkerProcessManager() {
   CHECK(worker_process_map_.empty());
 }
 
-BrowserContext* ServiceWorkerProcessManager::browser_context() {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  // This is safe because reading |browser_context_| on the UI thread doesn't
-  // need locking (while modifying does).
-  return browser_context_;
-}
-
 void ServiceWorkerProcessManager::Shutdown() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   // `StoragePartitionImpl` might be destroyed before `this` is destroyed. Set
   // `storage_partition_` to nullptr to avoid holding a dangling ptr.
   storage_partition_ = nullptr;
-  {
-    base::AutoLock lock(browser_context_lock_);
-    browser_context_ = nullptr;
-  }
 
   // In single-process mode, Shutdown() is called when deleting the default
   // browser context, which is itself destroyed after the RenderProcessHost.
@@ -77,11 +62,12 @@ void ServiceWorkerProcessManager::Shutdown() {
     }
   }
   worker_process_map_.clear();
+  is_shutdown_ = true;
 }
 
 bool ServiceWorkerProcessManager::IsShutdown() {
-  base::AutoLock lock(browser_context_lock_);
-  return !browser_context_;
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  return is_shutdown_;
 }
 
 blink::ServiceWorkerStatusCode
@@ -136,9 +122,9 @@ ServiceWorkerProcessManager::AllocateWorkerProcess(
                         url::Origin::Create(script_url))
                   : WebExposedIsolationInfo::CreateNonIsolated()));
   scoped_refptr<SiteInstanceImpl> site_instance =
-      SiteInstanceImpl::CreateForServiceWorker(browser_context_, url_info,
-                                               can_use_existing_process,
-                                               is_guest, is_fenced);
+      SiteInstanceImpl::CreateForServiceWorker(
+          storage_partition_->browser_context(), url_info,
+          can_use_existing_process, is_guest, is_fenced);
 
   // Get the process from the SiteInstance.
   RenderProcessHost* rph = site_instance->GetProcess();
@@ -198,6 +184,12 @@ void ServiceWorkerProcessManager::ReleaseWorkerProcess(int embedded_worker_id) {
       process->DecrementWorkerRefCount();
   }
   worker_process_map_.erase(it);
+}
+
+base::WeakPtr<ServiceWorkerProcessManager>
+ServiceWorkerProcessManager::GetWeakPtr() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 SiteInstance* ServiceWorkerProcessManager::GetSiteInstanceForWorker(

@@ -5,9 +5,10 @@
 #ifndef GPU_COMMAND_BUFFER_SERVICE_VALIDATING_ABSTRACT_TEXTURE_IMPL_H_
 #define GPU_COMMAND_BUFFER_SERVICE_VALIDATING_ABSTRACT_TEXTURE_IMPL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "build/build_config.h"
 #include "gpu/command_buffer/service/abstract_texture.h"
 #include "gpu/gpu_gles2_export.h"
 
@@ -35,9 +36,7 @@ class GPU_GLES2_EXPORT ValidatingAbstractTextureImpl : public AbstractTexture {
   // AbstractTexture
   TextureBase* GetTextureBase() const override;
   void SetParameteri(GLenum pname, GLint param) override;
-  void BindStreamTextureImage(gl::GLImage* image, GLuint service_id) override;
-  void BindImage(gl::GLImage* image, bool client_managed) override;
-  gl::GLImage* GetImageForTesting() const override;
+
   void SetCleared() override;
   void SetCleanupCallback(CleanupCallback cb) override;
   void NotifyOnContextLost() override;
@@ -57,7 +56,6 @@ class GPU_GLES2_EXPORT ValidatingAbstractTextureImpl : public AbstractTexture {
   void SetLevelInfo();
 
   scoped_refptr<TextureRef> texture_ref_;
-  bool decoder_managed_image_ = false;
 
   raw_ptr<DecoderContext> decoder_context_ = nullptr;
   DestructionCB destruction_cb_;

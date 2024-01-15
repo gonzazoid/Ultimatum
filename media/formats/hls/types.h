@@ -44,6 +44,8 @@ struct MEDIA_EXPORT DecimalResolution {
 
   types::DecimalInteger width;
   types::DecimalInteger height;
+
+  types::DecimalInteger Area() const { return width * height; }
 };
 
 // A `ByteRangeExpression` represents the 'length[@offset]' syntax that appears
@@ -189,6 +191,9 @@ class MEDIA_EXPORT VariableName {
 class MEDIA_EXPORT StableId {
  public:
   static ParseStatus::Or<StableId> Parse(ResolvedSourceString str);
+  static StableId CreateForTesting(base::StringPiece str) {
+    return Parse(ResolvedSourceString::CreateForTesting(str)).value();
+  }
 
   const std::string& Str() const { return id_; }
 
@@ -197,6 +202,19 @@ class MEDIA_EXPORT StableId {
 
   std::string id_;
 };
+
+inline bool operator==(const StableId& lhs, const StableId& rhs) {
+  return lhs.Str() == rhs.Str();
+}
+inline bool operator!=(const StableId& lhs, const StableId& rhs) {
+  return lhs.Str() != rhs.Str();
+}
+inline bool operator<(const StableId& lhs, const StableId& rhs) {
+  return lhs.Str() < rhs.Str();
+}
+inline bool operator>(const StableId& lhs, const StableId& rhs) {
+  return lhs.Str() > rhs.Str();
+}
 
 // Represents the contents of the 'INSTREAM-ID' attribute on the 'EXT-X-MEDIA'
 // tag.

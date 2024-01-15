@@ -6,7 +6,7 @@
 #define SERVICES_NETWORK_URL_LOADER_CONTEXT_H_
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "services/network/public/cpp/corb/corb_api.h"
 
 namespace net {
@@ -27,6 +27,7 @@ class CrossOriginEmbedderPolicyReporter;
 class DevToolsObserver;
 class NetworkContextClient;
 class TrustedURLLoaderHeaderClient;
+class TrustTokenAccessObserver;
 class URLLoaderFactoryParams;
 class URLLoaderNetworkServiceObserver;
 }  // namespace mojom
@@ -35,10 +36,12 @@ class URLLoaderNetworkServiceObserver;
 // by URLLoaderContextForTests in unit tests).
 class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoaderContext {
  public:
-  virtual bool ShouldRequireNetworkIsolationKey() const = 0;
+  virtual bool ShouldRequireIsolationInfo() const = 0;
   virtual const cors::OriginAccessList& GetOriginAccessList() const = 0;
   virtual const mojom::URLLoaderFactoryParams& GetFactoryParams() const = 0;
   virtual mojom::CookieAccessObserver* GetCookieAccessObserver() const = 0;
+  virtual mojom::TrustTokenAccessObserver* GetTrustTokenAccessObserver()
+      const = 0;
   virtual mojom::CrossOriginEmbedderPolicyReporter* GetCoepReporter() const = 0;
   virtual mojom::DevToolsObserver* GetDevToolsObserver() const = 0;
   virtual mojom::NetworkContextClient* GetNetworkContextClient() const = 0;
@@ -50,6 +53,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoaderContext {
   virtual scoped_refptr<ResourceSchedulerClient> GetResourceSchedulerClient()
       const = 0;
   virtual corb::PerFactoryState& GetMutableCorbState() = 0;
+  virtual bool DataUseUpdatesEnabled() = 0;
 
  protected:
   // `protected` destructor = can only destruct via concrete implementations

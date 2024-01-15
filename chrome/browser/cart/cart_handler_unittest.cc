@@ -9,13 +9,18 @@
 #include "build/build_config.h"
 #include "chrome/browser/cart/cart_service.h"
 #include "chrome/browser/cart/cart_service_factory.h"
+#include "chrome/browser/commerce/shopping_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/commerce/core/commerce_constants.h"
 #include "components/commerce/core/commerce_feature_list.h"
 #include "components/commerce/core/commerce_heuristics_data.h"
+#include "components/commerce/core/mock_shopping_service.h"
 #include "components/commerce/core/proto/cart_db_content.pb.h"
+#include "components/commerce/core/shopping_service.h"
 #include "components/prefs/pref_service.h"
+#include "components/prefs/scoped_user_pref_update.h"
 #include "components/search/ntp_features.h"
 #include "components/session_proto_db/session_proto_db.h"
 #include "content/public/test/browser_task_environment.h"
@@ -50,7 +55,8 @@ void GetEvaluationMerchantCartWithUtmSource(
     std::vector<chrome_cart::mojom::MerchantCartPtr> found) {
   EXPECT_EQ(1U, found.size());
   EXPECT_EQ(expected_has_utm_source,
-            found[0]->cart_url.spec().find("utm_source") != std::string::npos);
+            found[0]->cart_url.spec().find(commerce::kUTMSourceLabel) !=
+                std::string::npos);
   if (expected_has_utm_source) {
     EXPECT_EQ(expected_has_utm_source,
               found[0]->cart_url.spec().find(
@@ -66,16 +72,20 @@ cart_db::ChromeCartContentProto BuildProto(const char* key,
   proto.set_key(domain);
   proto.set_merchant(domain);
   proto.set_merchant_cart_url(merchant_url);
-  proto.set_timestamp(base::Time::Now().ToDoubleT());
+  proto.set_timestamp(base::Time::Now().InSecondsFSinceUnixEpoch());
   return proto;
 }
 
 const char kFakeMerchantKey[] = "Fake:foo.com";
 const char kFakeMerchant[] = "foo.com";
-const char kFakeMerchantURL[] = "https://www.foo.com";
+const char kFakeMerchantURL[] =
+    "https://www.foo.com/"
+    "?utm_source=chrome&utm_medium=app&utm_campaign=chrome-cart";
 const char kMockMerchantBKey[] = "bar.com";
 const char kMockMerchantB[] = "bar.com";
-const char kMockMerchantURLB[] = "https://www.bar.com";
+const char kMockMerchantURLB[] =
+    "https://www.bar.com/"
+    "?utm_source=chrome&utm_medium=app&utm_campaign=chrome-cart";
 const cart_db::ChromeCartContentProto kFakeProto =
     BuildProto(kFakeMerchantKey, kFakeMerchant, kFakeMerchantURL);
 const cart_db::ChromeCartContentProto kMockProtoB =
@@ -92,11 +102,10 @@ const std::vector<SessionProtoDB<cart_db::ChromeCartContentProto>::KeyAndValue>
 class CartHandlerTest : public testing::Test {
  public:
   CartHandlerTest()
-      : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP) {
-    feature_list_.InitAndEnableFeatureWithParameters(
-        ntp_features::kNtpChromeCartModule,
-        {{ntp_features::kNtpChromeCartModuleAbandonedCartDiscountUseUtmParam,
-          "false"}});
+      : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP),
+        fake_merchant_url_(kFakeMerchantURL),
+        mock_merchant_url_(kMockMerchantURLB) {
+    feature_list_.InitAndEnableFeature(ntp_features::kNtpChromeCartModule);
   }
 
   void SetUp() override {
@@ -105,6 +114,11 @@ class CartHandlerTest : public testing::Test {
     profile_builder.AddTestingFactory(
         HistoryServiceFactory::GetInstance(),
         HistoryServiceFactory::GetDefaultFactory());
+    profile_builder.AddTestingFactory(
+        commerce::ShoppingServiceFactory::GetInstance(),
+        base::BindRepeating([](content::BrowserContext* context) {
+          return commerce::MockShoppingService::Build();
+        }));
     profile_ = profile_builder.Build();
     web_contents_ = web_contents_factory_.CreateWebContents(profile_.get());
 
@@ -169,7 +183,34 @@ class CartHandlerTest : public testing::Test {
   std::unique_ptr<CartHandler> handler_;
   raw_ptr<CartService> service_;
   base::HistogramTester histogram_tester_;
+  const GURL fake_merchant_url_;
+  const GURL mock_merchant_url_;
 };
+
+// Verifies that the ChromeCart feature status is correctly retrieved.
+TEST_F(CartHandlerTest, TestGetCartFeatureEnabled) {
+  base::RunLoop run_loop[2];
+  const std::string cart_key = "chrome_cart";
+
+  ScopedListPrefUpdate update(profile_->GetPrefs(), prefs::kNtpDisabledModules);
+  base::Value::List& disabled_list = update.Get();
+
+  disabled_list.Append(base::Value(cart_key));
+
+  ASSERT_TRUE(base::Contains(disabled_list, base::Value(cart_key)));
+  handler_->GetCartFeatureEnabled(
+      base::BindOnce(&CartHandlerTest::GetEvaluationBoolResult,
+                     base::Unretained(this), run_loop[0].QuitClosure(), false));
+  run_loop[0].Run();
+
+  disabled_list.EraseValue(base::Value(cart_key));
+
+  ASSERT_FALSE(base::Contains(disabled_list, base::Value(cart_key)));
+  handler_->GetCartFeatureEnabled(
+      base::BindOnce(&CartHandlerTest::GetEvaluationBoolResult,
+                     base::Unretained(this), run_loop[1].QuitClosure(), true));
+  run_loop[1].Run();
+}
 
 // Verifies the hide status is flipped by hiding and restoring.
 TEST_F(CartHandlerTest, TestHideStatusChange) {
@@ -267,10 +308,19 @@ TEST_F(CartHandlerTest, TestRemoveCart) {
 // Verifies GetMerchantCarts loads real data without fake data parameter.
 // Flaky, see crbug.com/1185497.
 TEST_F(CartHandlerTest, DISABLED_TestDisableFakeData) {
-  base::RunLoop run_loop;
-  service_->AddCart(kFakeMerchantKey, absl::nullopt, kFakeProto);
-  service_->AddCart(kMockMerchantBKey, absl::nullopt, kMockProtoB);
-  task_environment_.RunUntilIdle();
+  base::RunLoop run_loop[3];
+  CartDB* cart_db = service_->GetDB();
+
+  cart_db->AddCart(
+      kFakeMerchantKey, kFakeProto,
+      base::BindOnce(&CartHandlerTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[0].QuitClosure(), true));
+  run_loop[0].Run();
+  cart_db->AddCart(
+      kMockMerchantBKey, kMockProtoB,
+      base::BindOnce(&CartHandlerTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[1].QuitClosure(), true));
+  run_loop[1].Run();
 
   std::vector<chrome_cart::mojom::MerchantCartPtr> carts;
   auto dummy_cart1 = chrome_cart::mojom::MerchantCart::New();
@@ -282,9 +332,10 @@ TEST_F(CartHandlerTest, DISABLED_TestDisableFakeData) {
   carts.push_back(std::move(dummy_cart2));
   carts.push_back(std::move(dummy_cart1));
 
-  handler_->GetMerchantCarts(base::BindOnce(
-      &GetEvaluationMerchantCarts, run_loop.QuitClosure(), std::move(carts)));
-  run_loop.Run();
+  handler_->GetMerchantCarts(base::BindOnce(&GetEvaluationMerchantCarts,
+                                            run_loop[2].QuitClosure(),
+                                            std::move(carts)));
+  run_loop[2].Run();
 }
 
 // Tests show welcome surface for first three appearances of cart module.
@@ -364,7 +415,7 @@ TEST_F(CartHandlerTest, TestDiscountDataWithoutFeature) {
   cart_db::ChromeCartContentProto merchant_proto =
       BuildProto(kMockMerchantBKey, kMockMerchantB, kMockMerchantURLB);
   merchant_proto.mutable_discount_info()->set_discount_text("15% off");
-  service_->AddCart(kMockMerchantBKey, absl::nullopt, merchant_proto);
+  service_->AddCart(mock_merchant_url_, absl::nullopt, merchant_proto);
   task_environment_.RunUntilIdle();
 
   // Skip the welcome surface stage as discount is not showing for welcome
@@ -395,9 +446,7 @@ class CartHandlerNtpModuleFakeDataTest : public CartHandlerTest {
     // if a feature is enabled.
     feature_list_.InitAndEnableFeatureWithParameters(
         ntp_features::kNtpChromeCartModule,
-        {{"NtpChromeCartModuleDataParam", "fake"},
-         {ntp_features::kNtpChromeCartModuleAbandonedCartDiscountUseUtmParam,
-          "false"}});
+        {{"NtpChromeCartModuleDataParam", "fake"}});
   }
 
  private:
@@ -408,10 +457,19 @@ class CartHandlerNtpModuleFakeDataTest : public CartHandlerTest {
 TEST_F(CartHandlerNtpModuleFakeDataTest, TestEnableFakeData) {
   // Remove fake data loaded by CartService::CartService.
   service_->DeleteCartsWithFakeData();
+  base::RunLoop run_loop[3];
+  CartDB* cart_db = service_->GetDB();
 
-  service_->AddCart(kFakeMerchantKey, absl::nullopt, kFakeProto);
-  service_->AddCart(kMockMerchantBKey, absl::nullopt, kMockProtoB);
-  task_environment_.RunUntilIdle();
+  cart_db->AddCart(
+      kFakeMerchantKey, kFakeProto,
+      base::BindOnce(&CartHandlerTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[0].QuitClosure(), true));
+  run_loop[0].Run();
+  cart_db->AddCart(
+      kMockMerchantBKey, kMockProtoB,
+      base::BindOnce(&CartHandlerTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[1].QuitClosure(), true));
+  run_loop[1].Run();
 
   std::vector<chrome_cart::mojom::MerchantCartPtr> carts;
   auto dummy_cart1 = chrome_cart::mojom::MerchantCart::New();
@@ -419,10 +477,10 @@ TEST_F(CartHandlerNtpModuleFakeDataTest, TestEnableFakeData) {
   dummy_cart1->cart_url = GURL(kFakeMerchantURL);
   carts.push_back(std::move(dummy_cart1));
 
-  base::RunLoop run_loop;
-  handler_->GetMerchantCarts(base::BindOnce(
-      &GetEvaluationMerchantCarts, run_loop.QuitClosure(), std::move(carts)));
-  run_loop.Run();
+  handler_->GetMerchantCarts(base::BindOnce(&GetEvaluationMerchantCarts,
+                                            run_loop[2].QuitClosure(),
+                                            std::move(carts)));
+  run_loop[2].Run();
 }
 
 // Override CartHandlerTest so that we can initialize feature_list_ in our
@@ -434,9 +492,7 @@ class CartHandlerNtpModuleDiscountTest : public CartHandlerTest {
     // if a feature is enabled.
     feature_list_.InitAndEnableFeatureWithParameters(
         ntp_features::kNtpChromeCartModule,
-        {{"NtpChromeCartModuleAbandonedCartDiscountParam", "true"},
-         {ntp_features::kNtpChromeCartModuleAbandonedCartDiscountUseUtmParam,
-          "false"}});
+        {{"NtpChromeCartModuleAbandonedCartDiscountParam", "true"}});
   }
 
   void SetUp() override {
@@ -571,7 +627,7 @@ TEST_F(CartHandlerNtpModuleDiscountTest, TestDiscountDataWithFeature) {
   cart_db::RuleDiscountInfoProto* rule_discount_info =
       merchant_proto.mutable_discount_info()->add_rule_discount_info();
   rule_discount_info->set_rule_id("123");
-  service_->AddCart(kMockMerchantBKey, absl::nullopt, merchant_proto);
+  service_->AddCart(mock_merchant_url_, absl::nullopt, merchant_proto);
   task_environment_.RunUntilIdle();
   profile_->GetPrefs()->SetInteger(prefs::kCartModuleWelcomeSurfaceShownTimes,
                                    0);
@@ -621,7 +677,7 @@ TEST_F(CartHandlerNtpModuleDiscountTest, TestDiscountDataShows) {
       BuildProto(kMockMerchantBKey, kMockMerchantB, kMockMerchantURLB);
   merchant_proto.mutable_discount_info()->set_discount_text("15% off");
   merchant_proto.mutable_discount_info()->set_has_coupons(true);
-  service_->AddCart(kMockMerchantBKey, absl::nullopt, merchant_proto);
+  service_->AddCart(mock_merchant_url_, absl::nullopt, merchant_proto);
   task_environment_.RunUntilIdle();
 
   // Discount should show.
@@ -645,9 +701,7 @@ class CartHandlerCartURLUTMTest : public CartHandlerTest {
     // if a feature is enabled.
     feature_list_.InitAndEnableFeatureWithParameters(
         ntp_features::kNtpChromeCartModule,
-        {{"NtpChromeCartModuleAbandonedCartDiscountParam", "true"},
-         {ntp_features::kNtpChromeCartModuleAbandonedCartDiscountUseUtmParam,
-          "true"}});
+        {{"NtpChromeCartModuleAbandonedCartDiscountParam", "true"}});
   }
 
   void SetUp() override {
@@ -668,7 +722,7 @@ class CartHandlerCartURLUTMTest : public CartHandlerTest {
 // Verifies UTM tags are correctly appended to partner merchant's cart.
 TEST_F(CartHandlerCartURLUTMTest, TestAppendUTMToPartnerMerchant) {
   base::RunLoop run_loop[2];
-  service_->AddCart(kFakeMerchantKey, absl::nullopt, kFakeProto);
+  service_->AddCart(fake_merchant_url_, absl::nullopt, kFakeProto);
   task_environment_.RunUntilIdle();
 
   // Verifies UTM tags for when discount is disabled.
@@ -691,7 +745,7 @@ TEST_F(CartHandlerCartURLUTMTest, TestAppendUTMToPartnerMerchant) {
 // Verifies UTM tags are correctly appended to non-partner merchant's cart.
 TEST_F(CartHandlerCartURLUTMTest, TestAppendUTMToNonPartnerMerchant) {
   base::RunLoop run_loop[2];
-  service_->AddCart(kMockMerchantBKey, absl::nullopt, kMockProtoB);
+  service_->AddCart(mock_merchant_url_, absl::nullopt, kMockProtoB);
   task_environment_.RunUntilIdle();
 
   // UTM tags are the same for non-partner merchants regardless of discount

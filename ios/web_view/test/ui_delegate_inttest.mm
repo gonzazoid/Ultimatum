@@ -14,10 +14,6 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #include "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForUIElementTimeout;
 
 namespace ios_web_view {
@@ -101,8 +97,8 @@ TEST_F(UIDelegateTest, RunJavaScriptConfirmPanel) {
 
   ASSERT_TRUE(test::LoadUrl(web_view_, GetEchoURL()));
   NSError* error = nil;
-  EXPECT_NSEQ(@(YES), test::EvaluateJavaScript(web_view_, @"confirm('message')",
-                                               &error));
+  EXPECT_TRUE([test::EvaluateJavaScript(web_view_, @"confirm('message')",
+                                        &error) boolValue]);
   EXPECT_FALSE(error);
 
   [(id)mock_delegate_ verify];

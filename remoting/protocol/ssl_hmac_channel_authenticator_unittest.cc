@@ -8,9 +8,9 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
@@ -44,11 +44,12 @@ class MockChannelDoneCallback {
   MOCK_METHOD2(OnDone, void(int error, P2PStreamSocket* socket));
 };
 
-ACTION_P(QuitThreadOnCounter, counter) {
+ACTION_P2(QuitThreadOnCounter, quit_closure, counter) {
   --(*counter);
   EXPECT_GE(*counter, 0);
-  if (*counter == 0)
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  if (*counter == 0) {
+    std::move(quit_closure).Run();
+  }
 }
 
 }  // namespace
@@ -74,8 +75,7 @@ class SslHmacChannelAuthenticatorTest : public testing::Test {
     base::FilePath key_path = certs_dir.AppendASCII("unittest.key.bin");
     std::string key_string;
     ASSERT_TRUE(base::ReadFileToString(key_path, &key_string));
-    std::string key_base64;
-    base::Base64Encode(key_string, &key_base64);
+    std::string key_base64 = base::Base64Encode(key_string);
     key_pair_ = RsaKeyPair::FromString(key_base64);
     ASSERT_TRUE(key_pair_.get());
   }
@@ -99,29 +99,33 @@ class SslHmacChannelAuthenticatorTest : public testing::Test {
     // Expect two callbacks to be called - the client callback and the host
     // callback.
     int callback_counter = 2;
-
+    base::RunLoop run_loop;
     if (expected_client_error != net::OK) {
       EXPECT_CALL(client_callback_, OnDone(expected_client_error, nullptr))
-          .WillOnce(QuitThreadOnCounter(&callback_counter));
+          .WillOnce(QuitThreadOnCounter(run_loop.QuitWhenIdleClosure(),
+                                        &callback_counter));
     } else {
       EXPECT_CALL(client_callback_, OnDone(net::OK, NotNull()))
-          .WillOnce(QuitThreadOnCounter(&callback_counter));
+          .WillOnce(QuitThreadOnCounter(run_loop.QuitWhenIdleClosure(),
+                                        &callback_counter));
     }
 
     if (expected_host_error != net::OK) {
       EXPECT_CALL(host_callback_, OnDone(expected_host_error, nullptr))
-          .WillOnce(QuitThreadOnCounter(&callback_counter));
+          .WillOnce(QuitThreadOnCounter(run_loop.QuitWhenIdleClosure(),
+                                        &callback_counter));
     } else {
       EXPECT_CALL(host_callback_, OnDone(net::OK, NotNull()))
-          .WillOnce(QuitThreadOnCounter(&callback_counter));
+          .WillOnce(QuitThreadOnCounter(run_loop.QuitWhenIdleClosure(),
+                                        &callback_counter));
     }
 
     // Ensure that .Run() does not run unbounded if the callbacks are never
     // called.
     base::OneShotTimer shutdown_timer;
     shutdown_timer.Start(FROM_HERE, TestTimeouts::action_timeout(),
-                         base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
-    base::RunLoop().Run();
+                         run_loop.QuitWhenIdleClosure());
+    run_loop.Run();
   }
 
   void OnHostConnected(const std::string& ref_argument,
@@ -160,16 +164,16 @@ class SslHmacChannelAuthenticatorTest : public testing::Test {
 TEST_F(SslHmacChannelAuthenticatorTest, SuccessfulAuth) {
   client_auth_ = SslHmacChannelAuthenticator::CreateForClient(
       host_cert_, kTestSharedSecret);
-  host_auth_ = SslHmacChannelAuthenticator::CreateForHost(
-      host_cert_, key_pair_, kTestSharedSecret);
+  host_auth_ = SslHmacChannelAuthenticator::CreateForHost(host_cert_, key_pair_,
+                                                          kTestSharedSecret);
 
   RunChannelAuth(net::OK, net::OK);
 
   ASSERT_TRUE(client_socket_.get() != nullptr);
   ASSERT_TRUE(host_socket_.get() != nullptr);
 
-  StreamConnectionTester tester(host_socket_.get(), client_socket_.get(),
-                                100, 2);
+  StreamConnectionTester tester(host_socket_.get(), client_socket_.get(), 100,
+                                2);
 
   base::RunLoop run_loop;
   tester.Start(run_loop.QuitClosure());
@@ -181,8 +185,8 @@ TEST_F(SslHmacChannelAuthenticatorTest, SuccessfulAuth) {
 TEST_F(SslHmacChannelAuthenticatorTest, InvalidChannelSecret) {
   client_auth_ = SslHmacChannelAuthenticator::CreateForClient(
       host_cert_, kTestSharedSecretBad);
-  host_auth_ = SslHmacChannelAuthenticator::CreateForHost(
-      host_cert_, key_pair_, kTestSharedSecret);
+  host_auth_ = SslHmacChannelAuthenticator::CreateForHost(host_cert_, key_pair_,
+                                                          kTestSharedSecret);
 
   RunChannelAuth(net::ERR_FAILED, net::ERR_FAILED);
 
@@ -199,8 +203,8 @@ TEST_F(SslHmacChannelAuthenticatorTest, InvalidCertificate) {
       std::string(
           net::x509_util::CryptoBufferAsStringPiece(host_cert2->cert_buffer())),
       kTestSharedSecret);
-  host_auth_ = SslHmacChannelAuthenticator::CreateForHost(
-      host_cert_, key_pair_, kTestSharedSecret);
+  host_auth_ = SslHmacChannelAuthenticator::CreateForHost(host_cert_, key_pair_,
+                                                          kTestSharedSecret);
 
   // TODO(https://crbug.com/912383): The server sees
   // ERR_BAD_SSL_CLIENT_AUTH_CERT because its peer (the client) alerts it with

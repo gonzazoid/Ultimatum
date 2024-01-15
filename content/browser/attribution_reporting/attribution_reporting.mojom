@@ -11,35 +11,22 @@ enum ReportType {
   // An aggregatable report.
   // https://github.com/WICG/attribution-reporting-api/blob/main/AGGREGATE.md
   kAggregatableAttribution = 1,
+  // A null aggregatable report.
+  kNullAggregatable = 2,
 };
 
-enum SourceType {
-  // A source that was associated with a top-level navigation.
-  kNavigation = 0,
-  // A source that was not associated with a top-level navigation.
-  kEvent = 1,
+enum RegistrationType {
+  kSource = 0,
+  kTrigger = 1,
 };
 
-enum SourceRegistrationError {
-  kInvalidJson,
-  kRootWrongType,
-
-  kDestinationMissing,
-  kDestinationWrongType,
-  kDestinationUntrustworthy,
-
-  kFilterDataWrongType,
-  kFilterDataTooManyKeys,
-  kFilterDataHasSourceTypeKey,
-  kFilterDataKeyTooLong,
-  kFilterDataListWrongType,
-  kFilterDataListTooLong,
-  kFilterDataValueWrongType,
-  kFilterDataValueTooLong,
-
-  kAggregationKeysWrongType,
-  kAggregationKeysTooManyKeys,
-  kAggregationKeysKeyTooLong,
-  kAggregationKeysValueWrongType,
-  kAggregationKeysValueWrongFormat,
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum OsRegistrationResult {
+  kPassedToOs = 0,
+  kUnsupported = 1,
+  kInvalidRegistrationUrl = 2,
+  kProhibitedByBrowserPolicy = 3,
+  kExcessiveQueueSize = 4,
+  kRejectedByOs = 5,
 };

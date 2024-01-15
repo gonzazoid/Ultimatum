@@ -4,32 +4,126 @@
 
 #include "chrome/browser/ash/input_method/longpress_diacritics_suggester.h"
 
-#include <algorithm>
 #include <string>
 
+#include "ash/constants/ash_features.h"
+#include "ash/constants/notifier_catalogs.h"
+#include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/system/tray/system_nudge.h"
+#include "ash/system/tray/system_nudge_controller.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "ash/webui/settings/public/constants/setting.mojom.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/containers/flat_map.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
+#include "chrome/browser/ash/input_method/native_input_method_engine_observer.h"
+#include "chrome/browser/ash/input_method/suggestion_handler_interface.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/ime/ash/ime_bridge.h"
+#include "ui/base/ime/ash/text_input_target.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/chromeos/strings/grit/ui_chromeos_strings.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 
-namespace ash {
-namespace input_method {
+namespace content {
+class WebContents;
+}
+namespace ash::input_method {
 
 namespace {
+// The size of the clipboard icon in px.
+constexpr int kIconSize = 20;
+
+// The minimum width of the label in px.
+constexpr int kMinLabelWidth = 200;
+
+// The spacing between the icon and label in the nudge view in px.
+constexpr int kIconLabelSpacing = 16;
+
+// The padding which separates the nudge's border with its inner contents in px.
+constexpr int kNudgePadding = 16;
+
+class DiacriticsNudge : public ash::SystemNudge {
+ public:
+  DiacriticsNudge()
+      : SystemNudge("DiacriticsNudge",
+                    ash::NudgeCatalogName::kDisableDiacritics,
+                    kIconSize,
+                    kIconLabelSpacing,
+                    kNudgePadding) {}
+  DiacriticsNudge(const DiacriticsNudge&) = delete;
+  DiacriticsNudge& operator=(const DiacriticsNudge&) = delete;
+  ~DiacriticsNudge() override = default;
+
+ protected:
+  // SystemNudge:
+  std::unique_ptr<SystemNudgeLabel> CreateLabelView() const override {
+    std::u16string label_text =
+        l10n_util::GetStringUTF16(IDS_CHROMEOS_DIACRITIC_NUDGE_TEXT);
+    // Set the label's text.
+    auto label = std::make_unique<SystemNudgeLabel>(label_text, kMinLabelWidth);
+    label->set_font_size_delta(2);
+
+    return label;
+  }
+  const gfx::VectorIcon& GetIcon() const override {
+    return kNotificationKeyboardIcon;
+  }
+  std::u16string GetAccessibilityText() const override { return u""; }
+};
 
 using AssistiveWindowButton = ui::ime::AssistiveWindowButton;
 
 std::vector<std::u16string> SplitDiacritics(base::StringPiece16 diacritics) {
   return base::SplitString(diacritics, kDiacriticsSeperator,
                            base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+}
+
+std::vector<std::u16string> GetDiacriticsFor(char key_character,
+                                             base::StringPiece engine_id) {
+  // Currently only supporting US English.
+  // TODO(b/260915965): Add support for other engines.
+  if (engine_id != "xkb:us::eng") {
+    return {};
+  }
+
+  // Current diacritics ordering is based on the Gboard ordering so it keeps
+  // distance from target key consistent.
+  // TODO(b/260915965): Add more sets here for other engines.
+  static constexpr auto kUSEnglishDiacriticsMap =
+      base::MakeFixedFlatMap<char, base::StringPiece16>(
+          {{'a', u"à;á;â;ä;æ;ã;å;ā"},
+           {'A', u"À;Á;Â;Ä;Æ;Ã;Å;Ā"},
+           {'c', u"ç"},
+           {'C', u"Ç"},
+           {'e', u"é;è;ê;ë;ē"},
+           {'E', u"É;È;Ê;Ë;Ē"},
+           {'i', u"í;î;ï;ī;ì"},
+           {'I', u"Í;Î;Ï;Ī;Ì"},
+           {'n', u"ñ"},
+           {'N', u"Ñ"},
+           {'o', u"ó;ô;ö;ò;œ;ø;ō;õ"},
+           {'O', u"Ó;Ô;Ö;Ò;Œ;Ø;Ō;Õ"},
+           {'s', u"ß"},
+           {'S', u"ẞ"},
+           {'u', u"ú;û;ü;ù;ū"},
+           {'U', u"Ú;Û;Ü;Ù;Ū"}});
+
+  if (const auto* it = kUSEnglishDiacriticsMap.find(key_character);
+      it != kUSEnglishDiacriticsMap.end()) {
+    return SplitDiacritics(it->second);
+  }
+  return {};
 }
 
 AssistiveWindowButton CreateButtonFor(size_t index,
@@ -47,6 +141,15 @@ AssistiveWindowButton CreateButtonFor(size_t index,
 void RecordActionMetric(IMEPKLongpressDiacriticAction action) {
   base::UmaHistogramEnumeration(
       "InputMethod.PhysicalKeyboard.LongpressDiacritics.Action", action);
+  TextInputTarget* input_context = IMEBridge::Get()->GetInputContextHandler();
+  if (!input_context) {
+    return;
+  }
+
+  auto sourceId = input_context->GetClientSourceForMetrics();
+  ukm::builders::InputMethod_LongpressDiacritics(sourceId)
+      .SetActions(static_cast<long>(action))
+      .Record(ukm::UkmRecorder::Get());
 }
 
 void RecordAcceptanceCharCodeMetric(const std::u16string diacritic) {
@@ -66,9 +169,13 @@ void RecordAcceptanceCharCodeMetric(const std::u16string diacritic) {
 
 }  // namespace
 
+std::unique_ptr<SystemNudge> DiacriticsNudgeController::CreateSystemNudge() {
+  return std::make_unique<DiacriticsNudge>();
+}
+
 LongpressDiacriticsSuggester::LongpressDiacriticsSuggester(
     SuggestionHandlerInterface* suggestion_handler)
-    : suggestion_handler_(suggestion_handler) {}
+    : LongpressSuggester(suggestion_handler) {}
 
 LongpressDiacriticsSuggester::~LongpressDiacriticsSuggester() = default;
 
@@ -77,44 +184,39 @@ bool LongpressDiacriticsSuggester::TrySuggestOnLongpress(char key_character) {
     LOG(ERROR) << "Unable to suggest diacritics on longpress, no context_id";
     return false;
   }
-
-  if (const auto* it = kDefaultDiacriticsMap.find(key_character);
-      it != kDefaultDiacriticsMap.end()) {
-    AssistiveWindowProperties properties;
-    properties.type =
-        ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion;
-    properties.visible = true;
-    properties.candidates = SplitDiacritics(it->second);
-    properties.announce_string =
-        l10n_util::GetStringUTF16(IDS_SUGGESTION_DIACRITICS_OPEN);
-
-    std::string error;
-    suggestion_handler_->SetAssistiveWindowProperties(
-        focused_context_id_.value(), properties, &error);
-    if (error.empty()) {
-      displayed_window_base_character_ = key_character;
-      RecordActionMetric(IMEPKLongpressDiacriticAction::kShowWindow);
-      return true;
-    }
-    LOG(ERROR) << "Unable to suggest diacritics on longpress: " << error;
+  std::vector<std::u16string> diacritics_candidates =
+      GetDiacriticsFor(key_character, engine_id_);
+  if (diacritics_candidates.empty()) {
+    nudge_controller_.ShowNudge();
+    return false;
   }
+  AssistiveWindowProperties properties;
+  properties.type =
+      ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion;
+  properties.visible = true;
+  properties.candidates = diacritics_candidates;
+  properties.announce_string =
+      l10n_util::GetStringUTF16(IDS_SUGGESTION_DIACRITICS_OPEN);
+  properties.show_setting_link = true;
+
+  std::string error;
+  suggestion_handler_->SetAssistiveWindowProperties(focused_context_id_.value(),
+                                                    properties, &error);
+  if (error.empty()) {
+    displayed_window_base_character_ = key_character;
+    RecordActionMetric(IMEPKLongpressDiacriticAction::kShowWindow);
+    return true;
+  }
+  LOG(ERROR) << "Unable to suggest diacritics on longpress: " << error;
   return false;
 }
 
-void LongpressDiacriticsSuggester::OnFocus(int context_id) {
-  Reset();
-  focused_context_id_ = context_id;
+void LongpressDiacriticsSuggester::SetEngineId(const std::string& engine_id) {
+  engine_id_ = engine_id;
 }
 
-void LongpressDiacriticsSuggester::OnBlur() {
-  focused_context_id_ = absl::nullopt;
-  Reset();
-}
-
-void LongpressDiacriticsSuggester::OnExternalSuggestionsUpdated(
-    const std::vector<ime::AssistiveSuggestion>& suggestions) {
-  // Relevant since suggestions are not updated externally.
-  return;
+bool LongpressDiacriticsSuggester::HasDiacriticSuggestions(char c) {
+  return !GetDiacriticsFor(c, engine_id_).empty();
 }
 
 SuggestionStatus LongpressDiacriticsSuggester::HandleKeyEvent(
@@ -153,16 +255,17 @@ SuggestionStatus LongpressDiacriticsSuggester::HandleKeyEvent(
       if (highlighted_index_ == absl::nullopt) {
         // We want the cursor to start at the end if you press back, and at the
         // beginning if you press next.
-        new_index = move_next ? 0 : GetCurrentShownDiacritics().size() - 1;
+        new_index = move_next ? 0 : GetCurrentShownDiacritics().size();
       } else {
         SetButtonHighlighted(*highlighted_index_, false);
+        // Size+1 since we include the highlight button add 1 to size.
         if (move_next) {
-          new_index =
-              (*highlighted_index_ + 1) % GetCurrentShownDiacritics().size();
+          new_index = (*highlighted_index_ + 1) %
+                      (GetCurrentShownDiacritics().size() + 1);
         } else {
           new_index = (*highlighted_index_ > 0)
                           ? *highlighted_index_ - 1
-                          : GetCurrentShownDiacritics().size() - 1;
+                          : GetCurrentShownDiacritics().size();
         }
       }
       SetButtonHighlighted(new_index, true);
@@ -200,9 +303,8 @@ SuggestionStatus LongpressDiacriticsSuggester::HandleKeyEvent(
 
 bool LongpressDiacriticsSuggester::TrySuggestWithSurroundingText(
     const std::u16string& text,
-    int cursor_pos,
-    int anchor_pos) {
-  // Should dismiss on text change.
+    const gfx::Range selection_range) {
+  // Suggestions should dismiss on text change.
   return false;
 }
 
@@ -219,7 +321,10 @@ bool LongpressDiacriticsSuggester::AcceptSuggestion(size_t index) {
   std::string error;
   suggestion_handler_->AcceptSuggestionCandidate(
       *focused_context_id_, current_suggestions[index],
-      /* delete_previous_utf16_len=*/1, &error);
+      /* delete_previous_utf16_len=*/1, /*use_replace_surrounding_text=*/
+      base::FeatureList::IsEnabled(
+          features::kDiacriticsUseReplaceSurroundingText),
+      &error);
   if (error.empty()) {
     suggestion_handler_->Announce(
         l10n_util::GetStringUTF16(IDS_SUGGESTION_DIACRITICS_INSERTED));
@@ -261,17 +366,6 @@ AssistiveType LongpressDiacriticsSuggester::GetProposeActionType() {
   return AssistiveType::kLongpressDiacritics;
 }
 
-bool LongpressDiacriticsSuggester::HasSuggestions() {
-  // Unused.
-  return false;
-}
-
-std::vector<ime::AssistiveSuggestion>
-LongpressDiacriticsSuggester::GetSuggestions() {
-  // Unused.
-  return {};
-}
-
 void LongpressDiacriticsSuggester::SetButtonHighlighted(size_t index,
                                                         bool highlighted) {
   if (!focused_context_id_.has_value()) {
@@ -279,10 +373,22 @@ void LongpressDiacriticsSuggester::SetButtonHighlighted(size_t index,
     return;
   }
   std::string error;
-  suggestion_handler_->SetButtonHighlighted(
-      *focused_context_id_,
-      CreateButtonFor(index, GetCurrentShownDiacritics()[index]),
-      /* highlighted=*/highlighted, &error);
+  if (index == GetCurrentShownDiacritics().size()) {
+    suggestion_handler_->SetButtonHighlighted(
+        *focused_context_id_,
+        {
+            .id = ui::ime::ButtonId::kLearnMore,
+            .window_type =
+                ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion,
+        },
+        highlighted, &error);
+
+  } else {
+    suggestion_handler_->SetButtonHighlighted(
+        *focused_context_id_,
+        CreateButtonFor(index, GetCurrentShownDiacritics()[index]),
+        /* highlighted=*/highlighted, &error);
+  }
 
   if (!error.empty()) {
     LOG(ERROR) << "suggest: Failed to set button highlighted. " << error;
@@ -294,19 +400,11 @@ LongpressDiacriticsSuggester::GetCurrentShownDiacritics() {
   if (displayed_window_base_character_ == absl::nullopt) {
     return {};
   }
-
-  if (const auto* it =
-          kDefaultDiacriticsMap.find(*displayed_window_base_character_);
-      it != kDefaultDiacriticsMap.end()) {
-    return SplitDiacritics(it->second);
-  } else {
-    return {};
-  }
+  return GetDiacriticsFor(*displayed_window_base_character_, engine_id_);
 }
 
 void LongpressDiacriticsSuggester::Reset() {
   displayed_window_base_character_ = absl::nullopt;
   highlighted_index_ = absl::nullopt;
 }
-}  // namespace input_method
-}  // namespace ash
+}  // namespace ash::input_method
